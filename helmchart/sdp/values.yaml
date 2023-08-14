@@ -1,0 +1,269 @@
+# EXAMPLE values for the Stellar Disbursement Platform (SDP) Backend.
+# Repo: https://github.com/stellar/stellar-disbursement-platform-backend
+#
+# This is a YAML-formatted file where you declare the variables to be passed into your templates.
+
+
+# =========================== START Router ===========================
+---
+router:
+  sdp:
+    schema: "https"
+    # The domain is the public address of that service. For localhost you will want to include the port as part of the domain.
+    # domain: "localhost:8000"
+    domain: sdp.localhost.com
+    port: "8000"
+    metricsPort: "8002"
+  tss:
+    schema: "https"
+    port: "9000"
+    metricsPort: "9002"
+    metricsType: "TSS_PROMETHEUS"
+    maxBaseFee: "100"
+    mock: "false"
+    numChannelAccounts: 1
+  ap:
+    schema: "https"
+    # The domain is the public address of that service. For localhost you will want to include the port as part of the domain.
+    # domain: "localhost:8080"
+    domain: "ap.localhost.com"
+    sepPort: "8080"
+    platformPort: "8085"
+
+isPubnet: false
+
+# =========================== START Image ===========================
+# replicaCount is used only if autoscaling.enabled is set to false:
+replicaCount: 1
+
+image:
+  # replace the `repository` with the actual image name.
+  repository: stellar/sdp-v2
+  # for locally built images, use `pullPolicy: Never or IfNotPresent`.
+  pullPolicy: IfNotPresent
+  # If `tag` is set, it'll override the default value set in `.Chart.AppVersion`.
+  tag: "latest"
+
+imagePullSecrets: []
+
+# =========================== START ConfigMap ===========================
+# ConfigMap is used to configure the SDP:
+configMap:
+  # Annotations to add to the ConfigMap
+  annotations:
+    fluxcd.io/ignore: "true"
+  # The data to be stored in the ConfigMap
+  data:
+    # auth
+    EC256_PUBLIC_KEY: "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEJ3HNphPAEKHvtRjsl5Kjwc9tTMqS\n2pmYNybrLsxZ6cuQvg2yiEoXZixP2cJ77csHClXC6cb1wQp/BNGDvGKoPg==\n-----END PUBLIC KEY-----"
+    # general
+    ENVIRONMENT: "localhost"
+    LOG_LEVEL: "TRACE"
+    # serve
+    SEP10_SIGNING_PUBLIC_KEY: GDA34JZ26FZY64XCSY46CUNSHLX762LHJXQHWWHGL5HSFRWSGBVHUFNI
+    DISTRIBUTION_PUBLIC_KEY: GBC2HVWFIFN7WJHFORVBCDKJORG6LWTW3O2QBHOURL3KHZPM4KMWTUSA
+    # serve metrics
+    METRICS_TYPE: "PROMETHEUS"
+    # message senders
+    EMAIL_SENDER_TYPE: DRY_RUN
+    SMS_SENDER_TYPE: DRY_RUN
+    # reCaptcha
+    RECAPTCHA_SITE_KEY: reCaptchaSiteKey
+    # CORS Allowed Origins - "*" value for PR preview purpose
+    CORS_ALLOWED_ORIGINS: "*"
+    # enable recaptcha for login and forget password
+    ENABLE_RECAPTCHA: "false"
+    # enable email-based MFA during login
+    ENABLE_MFA: "false"
+
+
+# =========================== START Secret ===========================
+secretName: "stellar-disbursement-platform-backend"   # You need to create this secret manually
+# Secrets used to configure the SDP:
+# - ANCHOR_PLATFORM_OUTGOING_JWT_SECRET
+# - AWS_ACCESS_KEY_ID
+# - AWS_REGION
+# - AWS_SECRET_ACCESS_KEY
+# - AWS_SES_SENDER_ID
+# - DATABASE_URL
+# - DISTRIBUTION_SEED # TSS distribution account seed
+# - EC256_PRIVATE_KEY
+# - RECAPTCHA_SITE_SECRET_KEY
+# - SEP10_SIGNING_PRIVATE_KEY
+# - SEP24_JWT_SECRET
+# - TWILIO_ACCOUNT_SID
+# - TWILIO_AUTH_TOKEN
+# - TWILIO_SERVICE_SID
+
+# =========================== START Service ===========================
+
+service:
+  type: ClusterIP
+
+
+# =========================== START serviceAccount ===========================
+
+# Not used in SDF's deployment:
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: false
+  # Annotations to add to the service account
+  annotations:
+    fluxcd.io/ignore: "true"
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
+
+# =========================== START Deployment ===========================
+deployment:
+  annotations:
+    fluxcd.io/ignore: "true"
+  podAnnotations:
+    prometheus.io/path: /metrics
+    prometheus.io/port: '{{ include "sdp.metricsPort" . }}'
+    prometheus.io/scrape: "true"
+  tssPodAnnotations:
+    prometheus.io/path: /metrics
+    prometheus.io/port: '{{ include "tss.metricsPort" . }}'
+    prometheus.io/scrape: "true"
+  podSecurityContext: {}
+    # fsGroup: 2000
+  securityContext: {}
+    # capabilities:
+    #   drop:
+    #   - ALL
+    # readOnlyRootFilesystem: true
+    # runAsNonRoot: true
+    # runAsUser: 1000
+  strategy:
+    # Ensure we upgrade 1 pod at a time to avoid migration races
+    type: "RollingUpdate"
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+
+  nodeSelector: {}
+
+  tolerations: []
+
+  affinity: {}
+
+resources: {}
+  # We usually recommend not to specify default resources and to leave this as a conscious
+  # choice for the user. This also increases chances charts run on environments with little
+  # resources, such as Minikube. If you do want to specify resources, uncomment the following
+  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+  # limits:
+  #   cpu: 250m
+  #   memory: 512Mi
+  # requests:
+  #   cpu: 50m
+  #   memory: 256Mi
+
+
+# =========================== START Autoscaling ===========================
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 4
+  targetCPUUtilizationPercentage: 80
+  targetMemoryUtilizationPercentage: 80
+
+
+# =========================== START Postgres (TESTING database) ===========================
+
+# `ephemeralDatabase` will create an ephemeral database for testing purposes.
+# If this option is enabled, make sure to set the `DATABASE_URL` environment variable to:
+# postgres://postgres:postgres@{{ include "sdp.fullname" . }}-psql:5432/postgres-sdp?sslmode=disable
+# The AP database URL will be set automatically to:
+# postgres://postgres:postgres@{{ include "sdp.fullname" . }}-psql:5433/postgres-ap?sslmode=disable
+ephemeralDatabase: true
+
+
+# =========================== START Ingress ===========================
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    fluxcd.io/ignore: "true"  # Doesn't rely on flux to update the images from stellar/kube
+    # kubernetes.io/ingress.class: "public"
+    nginx.ingress.kubernetes.io/custom-response-headers: "X-XSS-Protection: 1; mode=block || X-Frame-Options: DENY || X-Content-Type-Options: nosniff || Strict-Transport-Security: max-age=31536000; includeSubDomains"
+  tls:
+  - hosts:
+    - '{{ include "sdp.domain" . }}'
+    - '{{ include "sdp.ap.domain" . }}'
+    secretName: stellar-disbursement-platform-backend-tls-cert    # You need to create this secret manually. For more instructions, plz refer to helmchart/docs/README.md
+  # NOTE: the hosts to be used here will be the same ones as in the router section, at the top of this file.
+
+
+# =========================== START AnchorPlatform ===========================
+anchorPlatform:
+  deployment:
+    annotations:
+      fluxcd.io/ignore: "true"
+    podAnnotations:
+      prometheus.io/path: /metrics
+      prometheus.io/port: '{{ include "sdp.ap.metricsPort" . }}'
+      prometheus.io/scrape: "true"
+    strategy:
+      # Ensure we upgrade 1 pod at a time to avoid migration races
+      type: "RollingUpdate"
+      rollingUpdate:
+        maxUnavailable: 0
+        maxSurge: 1
+    podSecurityContext:
+      {}
+    securityContext:
+      {}
+    resources:
+      {}
+
+
+  # =========================== START anchorPlatform.configMap ===========================
+  configMap:
+    # Annotations to add to the ConfigMap
+    annotations:
+      fluxcd.io/ignore: "true"
+    # The data to be stored in the ConfigMap
+    data:
+      APP_LOGGING_LEVEL: INFO
+      # DATA_DATABASE:  # will be automatically populated in the development helm chart when we have `ephemeralDatabase` enabled.
+      # DATA_SERVER:    # will be automatically populated in the development helm chart when we have `ephemeralDatabase` enabled.
+      # DATA_FLYWAY_ENABLED: true  # TODO: test this later
+      DATA_DDL_AUTO: update
+      METRICS_ENABLED: "false"  # Metrics would be available at port 8082
+      METRICS_EXTRAS_ENABLED: "false"
+      ASSETS_VALUE: |   # TODO: update this later
+        {
+          "assets": [
+            {
+              "sep24_enabled": true,
+              "schema": "stellar",
+              "code": "USDC",
+              "issuer": "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+              "distribution_account": "GDDSLDRLMIYZJOXPBWVTRU267TPXIJEYW6PSV7FMDBLFVZZI5AI4QV4F",
+              "significant_decimals": 7,
+              "deposit": {
+                "enabled": true,
+                "fee_minimum": 0,
+                "fee_percent": 0,
+                "min_amount": 1,
+                "max_amount": 10000
+              },
+              "withdraw": {"enabled": false}
+            }
+          ]
+        }
+  
+  # =========================== START anchorPlatform.secretName ===========================
+  secretName: "stellar-disbursement-platform-backend-ap"  # you need to create this secret manually
+  # Secrets used to configure the AP:
+  # - SECRET_DATA_USERNAME
+  # - SECRET_DATA_PASSWORD
+  # - SECRET_SEP10_JWT_SECRET
+  # - SECRET_SEP10_SIGNING_SEED
+  # - SECRET_SEP24_INTERACTIVE_URL_JWT_SECRET
+  # - SECRET_SEP24_MORE_INFO_URL_JWT_SECRET
+  # - SECRET_PLATFORM_API_AUTH_SECRET

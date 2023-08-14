@@ -1,0 +1,56 @@
+{{- if .Values.ingress.enabled -}}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "sdp.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "sdp.labels" . | nindent 4 }}
+  annotations:
+    {{- toYaml .Values.ingress.annotations | nindent 4 }}
+    # This is a way to block the stellar.toml file from being served on the "sdp.domain":
+    nginx.ingress.kubernetes.io/server-snippet: |
+      location ~ /.well-known/stellar.toml {
+        if ($host = {{ include "sdp.domain" . | quote }}) {
+          return 404;
+        }
+        if ($host = {{ include "sdp.ap.domain" . | quote }}) {
+          proxy_pass {{ include "sdp.ap.sepServiceAddress" . }};
+        }
+      }
+spec:
+  {{- if .Values.ingress.className }}
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- end }}
+  {{- if .Values.ingress.tls }}
+  tls:
+    {{- tpl (toYaml .Values.ingress.tls) . | nindent 4 }}
+  {{- end }}
+  rules:
+    - host: {{ include "sdp.domain" . | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "sdp.fullname" . }}
+                port:
+                  number: {{ include "sdp.port" . }}
+    - host: {{ include "sdp.ap.domain" . | quote }}
+      http:
+        paths:
+          # Only enable the AP endpints that are needed for this application:
+          {{- $service_name := printf "%s-ap" (include "sdp.fullname" .) }}
+          {{- $service_sep_port := include "sdp.ap.sepPort" . }}
+          {{- $paths := list "/health" "/.well-known" "/auth" "/sep24" -}}
+          {{- range $path := $paths }}
+          - path: {{ $path }}
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ $service_name }}
+                port:
+                  number: {{ $service_sep_port }}
+          {{- end }}
+{{- end }}

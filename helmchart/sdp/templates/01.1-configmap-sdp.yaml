@@ -1,0 +1,30 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "sdp.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "sdp.labels" . | nindent 4 }}
+
+  {{- if .Values.configMap.annotations }}
+  annotations:
+    {{- toYaml .Values.configMap.annotations | nindent 4 }}
+  {{- end }}
+
+{{- if .Values.configMap.data }}
+data:
+  {{- if eq (include "isPubnet" .) "true" }}
+  NETWORK_PASSPHRASE: "Public Global Stellar Network ; September 2015"
+  HORIZON_URL: "https://horizon.stellar.org"
+  {{- else }}
+  NETWORK_PASSPHRASE: "Test SDF Network ; September 2015"
+  HORIZON_URL: "https://horizon-testnet.stellar.org"
+  {{- end }}
+  BASE_URL: {{ include "sdp.schema" . }}://{{ include "sdp.domain" . }}
+  PORT: {{ include "sdp.port" . | quote }}
+  METRICS_PORT: {{ include "sdp.metricsPort" . | quote }}
+  ANCHOR_PLATFORM_BASE_SEP_URL: {{ include "sdp.ap.schema" . }}://{{ include "sdp.ap.domain" . }}
+  ANCHOR_PLATFORM_BASE_PLATFORM_URL: {{ include "sdp.ap.platformServiceAddress" . }}
+  {{- tpl (toYaml .Values.configMap.data | nindent 2) . }}
+{{- end }}

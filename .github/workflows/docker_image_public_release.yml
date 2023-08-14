@@ -1,0 +1,107 @@
+# This workflow publishes a new docker image to 'https://hub.docker.com/r/stellar/stellar-disbursement-platform-backend'
+# when a new release is created or when we merge something to the develop branch.
+name: Docker Image Public Release
+
+on:
+  release:
+    types:
+      - published
+  push:
+    branches:
+      - develop
+
+jobs:
+  tests:
+    uses: ./.github/workflows/ci.yml # execute the callable ci.yml
+    secrets: inherit # pass all secrets
+
+  anchor_platform_integration_check:
+    uses: ./.github/workflows/anchor_platform_integration_check.yml # execute the callable anchor_platform_integration_check.yml
+    needs:
+      - tests
+    secrets: inherit # pass all secrets
+
+  e2e_integration_test:
+    uses: ./.github/workflows/e2e_integration_test.yml # execute the callable e2e_integration_test.yml
+    needs:
+      - tests
+    secrets: inherit # pass all secrets
+
+  build_and_push_docker_image_on_release:
+    if: github.event_name == 'release'
+    name: Push to DockerHub (release prd) # stellar/stellar-disbursement-platform-backend:{VERSION}
+    runs-on: ubuntu-latest
+    needs:
+      - tests
+      - anchor_platform_integration_check
+      - e2e_integration_test
+    steps:
+      - name: Check if tag is not empty
+        run: |
+          if [[ -z "${{ github.event.release.tag_name }}" ]]; then
+            echo "Release tag name cannot be empty."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v3
+
+      - name: Login to DockerHub
+        uses: docker/login-action@v2.2.0
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push to DockerHub (release prd)
+        uses: docker/build-push-action@v4.1.1
+        with:
+          push: true
+          build-args: |
+            GIT_COMMIT=${{ github.event.release.tag_name }}
+          tags: stellar/stellar-disbursement-platform-backend:${{ github.event.release.tag_name }},stellar/stellar-disbursement-platform-backend:latest
+          file: Dockerfile
+
+  build_and_push_docker_image_on_dev_push:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    name: Push to DockerHub (release develop branch) # stellar/stellar-disbursement-platform-backend:edge-{DATE}-{SHA}
+    runs-on: ubuntu-latest
+    needs:
+      - tests
+      - anchor_platform_integration_check
+      - e2e_integration_test
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Login to DockerHub
+        uses: docker/login-action@v2.2.0
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Get current date
+        id: get_date
+        run: echo "DATE=$(date +'%Y-%m-%d')" >> $GITHUB_OUTPUT
+
+      - name: Get SHA
+        shell: bash
+        id: get_sha
+        run: echo "SHA=$(git rev-parse --short ${{ github.sha }} )" >> $GITHUB_OUTPUT
+
+      - name: Build and push to DockerHub (develop branch)
+        uses: docker/build-push-action@v4.1.1
+        with:
+          push: true
+          build-args: |
+            GIT_COMMIT=${{ steps.get_sha.outputs.SHA }}
+          tags: stellar/stellar-disbursement-platform-backend:edge,stellar/stellar-disbursement-platform-backend:edge-${{ steps.get_date.outputs.DATE }}-${{ steps.get_sha.outputs.SHA }}
+          file: Dockerfile
+
+  complete:
+    if: always()
+    needs:
+      - build_and_push_docker_image_on_release
+      - build_and_push_docker_image_on_dev_push
+    runs-on: ubuntu-latest
+    steps:
+      - if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        run: exit 1
+        # TODO: figure out which job failed and print the logs

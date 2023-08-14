@@ -1,0 +1,126 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "sdp.fullname" . }}-ap
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "sdp.labelsWithSuffix" (list . "-ap") | nindent 4 }}
+  {{- if .Values.anchorPlatform.deployment.annotations }}
+  annotations:
+    {{- tpl (toYaml .Values.anchorPlatform.deployment.annotations) . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "sdp.selectorLabelsWithSuffix" (list . "-ap") | nindent 6 }}
+
+  {{- if .Values.anchorPlatform.deployment.strategy }}
+  strategy:
+    {{- toYaml .Values.anchorPlatform.deployment.strategy | nindent 4 }}
+  {{- end }}
+  
+  template:
+    metadata:
+      {{- if .Values.anchorPlatform.deployment.podAnnotations }}
+      annotations:
+        {{- tpl (toYaml .Values.anchorPlatform.deployment.podAnnotations) . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "sdp.selectorLabelsWithSuffix" (list . "-ap") | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      # {{- if .Values.serviceAccount.name }}
+      # serviceAccountName: {{ tpl .Values.serviceAccount.name $ }}
+      # {{- end }}
+      securityContext:
+        {{- tpl (toYaml .Values.anchorPlatform.deployment.podSecurityContext) . | nindent 8 }}
+      
+      containers:
+      # ============================= Anchor Platform: =============================
+        - name: {{ .Chart.Name }}-ap
+          securityContext:
+            {{- tpl (toYaml .Values.anchorPlatform.deployment.securityContext) . | nindent 12 }}
+          image: "stellar/anchor-platform:2.1.3"
+          imagePullPolicy: "IfNotPresent"
+          {{- if .Values.ephemeralDatabase }}
+          env:
+            - name: DATA_TYPE
+              value: 'postgres'
+            - name: DATA_SERVER
+              value: '{{ include "sdp.fullname" . }}-psql.{{ .Release.Namespace }}.svc.cluster.local:5433'
+            - name: DATA_DATABASE
+              value: 'postgres-ap'
+            - name: SECRET_DATA_USERNAME
+              value: 'postgres'
+            - name: SECRET_DATA_PASSWORD
+              value: 'postgres'
+            - name: SDP_IMAGE_TAG  # This env is used to force the AP to be redeployed every time the SDP is deployed. This is used to force the SDP to re-fetch the toml file and assets to ensure the latest ones are used.
+              value: {{ .Values.image.tag }}
+          {{- end }}
+          args:
+            - "--sep-server"
+            - "--platform-server"
+          ports:
+            - name: ap-sep
+              containerPort: {{ include "sdp.ap.sepPort" . }}
+              protocol: TCP
+            - name: ap-platform
+              containerPort: {{ include "sdp.ap.platformPort" . }}
+              protocol: TCP
+            - name: ap-metrics
+              containerPort: {{ include "sdp.ap.metricsPort" . }}
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /health?checks=config
+              port: ap-sep
+            initialDelaySeconds: 60
+            periodSeconds: 15
+            failureThreshold: 10
+          readinessProbe:
+            httpGet:
+              path: /health?checks=config
+              port: ap-sep
+            initialDelaySeconds: 60
+            periodSeconds: 15
+            failureThreshold: 10
+          startupProbe:
+            httpGet:
+              path: /health?checks=config
+              port: ap-sep
+            initialDelaySeconds: 60
+            periodSeconds: 15
+            failureThreshold: 10
+
+          {{- if .Values.anchorPlatform.deployment.resources }}
+          resources:
+            {{- tpl (toYaml .Values.anchorPlatform.deployment.resources) . | nindent 12 }}
+          {{- end }}
+
+          envFrom:
+          - configMapRef:
+              name: {{ include "sdp.fullname" . }}-ap
+          
+          {{- if .Values.anchorPlatform.secretName }}
+          - secretRef:
+              name: {{ .Values.anchorPlatform.secretName }}
+          {{ end }}
+
+      {{- with .Values.deployment.nodeSelector }}
+      nodeSelector:
+        {{- tpl (toYaml .) . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.deployment.affinity }}
+      affinity:
+        {{- tpl (toYaml .) . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.deployment.tolerations }}
+      tolerations:
+        {{- tpl (toYaml .) . | nindent 8 }}
+      {{- end }}

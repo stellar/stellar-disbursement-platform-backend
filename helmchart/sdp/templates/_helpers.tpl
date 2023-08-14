@@ -1,0 +1,178 @@
+{{/*
+Expand the name of the chart.
+*/}}
+{{- define "sdp.name" -}}
+{{- default .Chart.Name .Release.Name | trunc 63 | trimSuffix "-" }}
+{{- end }}
+
+{{/*
+Create a default fully qualified app name.
+We truncate at 63 chars because some Kubernetes name fields are limited to this (by the DNS naming spec).
+If release name contains chart name it will be used as a full name.
+*/}}
+{{- define "sdp.fullname" -}}
+{{- default .Chart.Name .Release.Name | trunc 63 | trimSuffix "-" }}
+{{- end }}
+
+{{/*
+Create chart name and version as used by the chart label.
+*/}}
+{{- define "sdp.chart" -}}
+{{- printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" }}
+{{- end }}
+
+{{/*
+Common labels with suffix
+*/}}
+{{- define "sdp.labelsWithSuffix" -}}
+{{- $ctx := index . 0 -}}
+{{- $suffix := index . 1 | default "" -}}
+helm.sh/chart: {{ include "sdp.chart" $ctx }}
+{{ include "sdp.selectorLabelsWithSuffix" (list $ctx $suffix) }}
+{{- if $ctx.Chart.AppVersion }}
+app.kubernetes.io/version: {{ $ctx.Chart.AppVersion | quote }}
+{{- end }}
+app.kubernetes.io/managed-by: {{ $ctx.Release.Service }}
+{{- end }}
+
+{{/*
+Common labels
+*/}}
+{{- define "sdp.labels" -}}
+helm.sh/chart: {{ include "sdp.chart" . }}
+{{ include "sdp.selectorLabels" . }}
+{{- if .Chart.AppVersion }}
+app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
+{{- end }}
+app.kubernetes.io/managed-by: {{ .Release.Service }}
+{{- end }}
+
+{{/*
+Selector labels with suffix
+*/}}
+{{- define "sdp.selectorLabelsWithSuffix" -}}
+{{- $ctx := index . 0 -}}
+{{- $suffix := index . 1 | default "" -}}
+app.kubernetes.io/name: {{ include "sdp.name" $ctx }}{{ $suffix }}
+app.kubernetes.io/instance: {{ $ctx.Release.Name }}{{ $suffix }}
+{{- end }}
+
+{{/*
+Selector labels
+*/}}
+{{- define "sdp.selectorLabels" -}}
+{{ include "sdp.selectorLabelsWithSuffix" (list . "") }}
+{{- end }}
+
+{{/*
+SDP domain
+*/}}
+{{- define "sdp.domain" -}}
+{{- .Values.router.sdp.domain | default "localhost" }}
+{{- end }}
+
+{{/*
+SDP domain schema
+*/}}
+{{- define "sdp.schema" -}}
+{{- .Values.router.sdp.schema | default "https" }}
+{{- end }}
+
+{{/*
+SDP port
+*/}}
+{{- define "sdp.port" -}}
+{{- .Values.router.sdp.port | default "8000" }}
+{{- end }}
+
+{{/*
+SDP Metrics port
+*/}}
+{{- define "sdp.metricsPort" -}}
+{{- .Values.router.sdp.metricsPort | default "8002" }}
+{{- end }}
+
+{{/*
+Define the full address to the SDP service.
+*/}}
+{{- define "sdp.serviceAddress" -}}
+http://{{ include "sdp.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local:{{ include "sdp.port" . }}
+{{- end -}}
+
+{{/*
+TSS port
+*/}}
+{{- define "tss.port" -}}
+{{- .Values.router.tss.port | default "9000" }}
+{{- end }}
+
+{{/*
+TSS Metrics port
+*/}}
+{{- define "tss.metricsPort" -}}
+{{- .Values.router.tss.metricsPort | default "9002" }}
+{{- end }}
+
+{{/*
+Anchor Platform domain
+*/}}
+{{- define "sdp.ap.domain" -}}
+{{- .Values.router.ap.domain | default "localhost" }}
+{{- end }}
+
+{{/*
+SDP domain schema
+*/}}
+{{- define "sdp.ap.schema" -}}
+{{- .Values.router.ap.schema | default "https" }}
+{{- end }}
+
+{{/*
+Anchor SEP port
+*/}}
+{{- define "sdp.ap.sepPort" -}}
+{{- .Values.router.ap.sepPort | default "8080" }}
+{{- end }}
+
+{{/*
+Anchor Platform port
+*/}}
+{{- define "sdp.ap.platformPort" -}}
+{{- .Values.router.ap.platformPort | default "8085" }}
+{{- end }}
+
+
+{{/*
+Anchor Platform metrics port
+*/}}
+{{- define "sdp.ap.metricsPort" -}}
+{{- 8082 }}
+{{- end }}
+
+{{/*
+Define the full address to the AP SEP service.
+*/}}
+{{- define "sdp.ap.sepServiceAddress" -}}
+http://{{ include "sdp.fullname" . }}-ap.{{ .Release.Namespace }}.svc.cluster.local:{{ include "sdp.ap.sepPort" . }}
+{{- end -}}
+
+{{/*
+Define the full address to the AP Platform service.
+*/}}
+{{- define "sdp.ap.platformServiceAddress" -}}
+http://{{ include "sdp.fullname" . }}-ap.{{ .Release.Namespace }}.svc.cluster.local:{{ include "sdp.ap.platformPort" . }}
+{{- end -}}
+
+{{/*
+Is Pubnet?
+*/}}
+{{- define "isPubnet" -}}
+{{- eq .Values.isPubnet true | default false }}
+{{- end }}
+
+{{/*
+Image Tag
+*/}}
+{{- define "imageTag" -}}
+{{- .Values.image.tag | default .Chart.AppVersion }}
+{{- end }}

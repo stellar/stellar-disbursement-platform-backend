@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Welcome to Stellar Disbursement Platform</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+        }
+        a {
+            color: #3498db;
+            text-decoration: none;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
+        .button {
+            display: inline-block;
+            padding: 10px 20px;
+            background-color: #3498db;
+            color: #ffffff;
+            text-decoration: none;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        .button:hover {
+            background-color: #3cb0fd;
+        }
+    </style>
+</head>
+<body>
+    <p>Hello, {{.FirstName}}!</p>
+    <p>You have been added to your organization's Stellar Disbursement Platform as a {{.Role}}. Please click the link below to set up your password and let your organization administrator know if you have any questions.</p>
+    <p>
+        <a href="{{.ForgotPasswordLink}}" class="button">Set up my password</a>
+    </p>
+    <p>Best regards,</p>
+    <p>The {{.OrganizationName}} Team</p>
+</body>
+</html>

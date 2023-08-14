@@ -1,0 +1,111 @@
+name: Go
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+      - "release/**"
+      - "releases/**"
+      - "hotfix/**"
+  pull_request:
+  workflow_call: # allows this workflow to be called from another workflow
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: 1.19
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@08e2f20817b15149a52b5b3ebe7de50aff2ba8c5 # version v3.4.0
+        with:
+          version: v1.52.2 # this is the golangci-lint version
+          args: --timeout 5m0s
+
+      - name: Run ./gomod.sh
+        run: ./gomod.sh
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: 1.19
+
+      - name: Build Project
+        run: go build ./...
+
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:12-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_DB: postgres
+          POSTGRES_PASSWORD: postgres
+          PGHOST: localhost
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: postgres
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Setup Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: 1.19
+
+      - name: Run tests
+        run: go test -race -coverpkg=./... -coverprofile=c.out ./...
+
+      - name: Validate Test Coverage Threshold
+        env:
+          TESTCOVERAGE_THRESHOLD: 83 # percentage
+        run: |
+          echo "Quality Gate:   Checking if test coverage is above threshold..."
+          echo "Threshold:      $TESTCOVERAGE_THRESHOLD%"
+          totalCoverage=`./scripts/exclude_from_coverage.sh && go tool cover -func=c.out  | grep total: | grep -Eo '[0-9]+\.[0-9]+'`
+          echo "Test Coverage:  $totalCoverage%"
+          echo "-------------------------"
+          if (( $(echo "$totalCoverage $TESTCOVERAGE_THRESHOLD" | awk '{print ($1 >= $2)}') )); then
+            echo "        $totalCoverage% > $TESTCOVERAGE_THRESHOLD%"
+            echo "Current test coverage is above threshold 🎉🎉🎉! Please keep up the good work!"
+          else
+            echo "        $totalCoverage% < $TESTCOVERAGE_THRESHOLD%"
+            echo "🚨 Current test coverage is below threshold 😱! Please add more unit tests or adjust threshold to a lower value."
+            echo "Failed 😭"
+            exit 1
+          fi
+
+  complete:
+    if: always()
+    needs: [check, build, test]
+    runs-on: ubuntu-latest
+    steps:
+      - if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        run: exit 1

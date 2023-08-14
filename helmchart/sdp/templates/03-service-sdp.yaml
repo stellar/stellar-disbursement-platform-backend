@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "sdp.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "sdp.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - port: {{ include "sdp.port" . }}
+      targetPort: http
+      protocol: TCP
+      name: http
+    
+  selector:
+    {{- include "sdp.selectorLabels" . | nindent 4 }}

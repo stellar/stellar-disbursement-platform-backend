@@ -1,0 +1,12 @@
+version: '3.8'
+services:
+  sdp-frontend:
+    container_name: sdp-frontend
+    image: stellar/stellar-disbursement-platform-frontend:edge
+    ports:
+      - "3000:80"
+    volumes:
+      - ./env-config.js:/usr/share/nginx/html/settings/env-config.js
+    depends_on:
+      - db
+      - sdp-api

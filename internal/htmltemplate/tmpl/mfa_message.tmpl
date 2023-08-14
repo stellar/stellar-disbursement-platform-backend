@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Your verification code</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+        }
+        strong {
+            color: #3498db;
+            text-decoration: none;
+        }
+    </style>
+</head>
+<body>
+    <p>Here is the 6-digit verification code you requested. Please enter it into the two-factor authentication prompt to sign-in.</p>
+    <p>Your verification code is: <strong>{{.MFACode}}</strong>.</p>
+    <p>If you did not request this code, please ignore this message and consider changing your password to ensure the security of your account. If you have any questions or concerns, please reach out to your organization's administrator.</p>
+    <p>Best regards,</p>
+    <p>The {{.OrganizationName}} Team</p>
+</body>
+</html>

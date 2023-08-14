@@ -1,0 +1,85 @@
+{{- if .Values.ephemeralDatabase -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "sdp.fullname" . }}-psql
+  namespace: {{ .Release.Namespace }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ include "sdp.fullname" . }}-psql
+  template:
+    metadata:
+      labels:
+        app: {{ include "sdp.fullname" . }}-psql
+    spec:
+      containers:
+      # =================== SDP Ephemeral Postgres DB ===================
+        - name: {{ include "sdp.fullname" . }}-psql-sdp
+          image: postgres:12-alpine
+          imagePullPolicy: "IfNotPresent"
+          ports:
+            - name: postgres-sdp
+              containerPort: 5432  # Exposes container port
+              protocol: TCP
+          env:
+          - name: POSTGRES_DB
+            value: "postgres-sdp"
+          - name: POSTGRES_USER
+            value: "postgres"
+          - name: POSTGRES_PASSWORD
+            value: "postgres"
+          - name: PGPORT
+            value: "5432"
+          volumeMounts:
+            - mountPath: /var/lib/postgresql/data-sdp
+              name: postgredb-sdp
+
+      # =================== AP Ephemeral Postgres DB ===================
+        - name: {{ include "sdp.fullname" . }}-psql-ap
+          image: postgres:12-alpine
+          imagePullPolicy: "IfNotPresent"
+          ports:
+            - name: postgres-ap
+              containerPort: 5433  # Exposes container port
+              protocol: TCP
+          env:
+          - name: POSTGRES_DB
+            value: "postgres-ap"
+          - name: POSTGRES_USER
+            value: "postgres"
+          - name: POSTGRES_PASSWORD
+            value: "postgres"
+          - name: PGPORT
+            value: "5433"
+          volumeMounts:
+            - mountPath: /var/lib/postgresql/data-ap
+              name: postgredb-ap
+      
+      # =================== Volumes ===================
+      volumes:
+        - name: postgredb-sdp
+        - name: postgredb-ap
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "sdp.fullname" . }}-psql
+  namespace: {{ .Release.Namespace }}
+spec:
+  selector:
+    app: {{ include "sdp.fullname" . }}-psql
+  ports:
+    # =================== SDP ===================
+    - port: 5432
+      targetPort: postgres-sdp
+      name: postgres-sdp
+      protocol: TCP
+    # =================== AP ===================
+    - port: 5433
+      targetPort: postgres-ap
+      name: postgres-ap
+      protocol: TCP
+  type: ClusterIP
+{{- end }}

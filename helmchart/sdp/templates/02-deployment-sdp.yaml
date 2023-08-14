@@ -1,0 +1,141 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "sdp.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "sdp.labels" . | nindent 4 }}
+  {{- if .Values.deployment.annotations }}
+  annotations:
+    {{- tpl (toYaml .Values.deployment.annotations) . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "sdp.selectorLabels" . | nindent 6 }}
+
+  {{- if .Values.deployment.strategy }}
+  strategy:
+    {{- toYaml .Values.deployment.strategy | nindent 4 }}
+  {{- end }}
+  
+  template:
+    metadata:
+      {{- if .Values.deployment.podAnnotations }}
+      annotations:
+        {{- tpl (toYaml .Values.deployment.podAnnotations) . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "sdp.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if .Values.serviceAccount.name }}
+      serviceAccountName: {{ tpl .Values.serviceAccount.name $ }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.deployment.podSecurityContext | nindent 8 }}
+      
+      initContainers:
+      # ============================= SDP Migrations: =============================
+      - name: db-migrations
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        envFrom:
+          - configMapRef:
+              name: {{ include "sdp.fullname" . }}
+          
+          {{- if .Values.secretName }}
+          - secretRef:
+              name: {{ .Values.secretName }}
+          {{ end }}
+        {{- if .Values.ephemeralDatabase }}
+        env:
+          - name: DATABASE_URL
+            value: 'postgres://postgres:postgres@{{ include "sdp.fullname" . }}-psql.{{ .Release.Namespace }}.svc.cluster.local:5432/postgres-sdp?sslmode=disable'
+        {{- end }}
+        command:
+        - sh
+        - -c
+        - |
+          ./stellar-disbursement-platform db migrate up &&
+          ./stellar-disbursement-platform db auth migrate up &&
+          ./stellar-disbursement-platform db setup-for-network &&
+          ./stellar-disbursement-platform channel-accounts verify --delete-invalid-accounts &&
+          ./stellar-disbursement-platform channel-accounts ensure --num-channel-accounts-ensure {{ .Values.configMap.data.NUM_CHANNEL_ACCOUNTS | default 1 }}
+
+      containers:
+      # ============================= Stellar Disbursement Platform: =============================
+        - name: {{ .Chart.Name }}
+          securityContext:
+            {{- toYaml .Values.deployment.securityContext | nindent 12 }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- if .Values.ephemeralDatabase }}
+          env:
+            - name: DATABASE_URL
+              value: 'postgres://postgres:postgres@{{ include "sdp.fullname" . }}-psql.{{ .Release.Namespace }}.svc.cluster.local:5432/postgres-sdp?sslmode=disable'
+          {{- end }}
+          args:
+            - "serve"
+          ports:
+            - name: http
+              containerPort: {{ include "sdp.port" . }}
+              protocol: TCP
+            - name: metrics
+              containerPort: {{ include "sdp.metricsPort" . }}
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 15
+            failureThreshold: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 15
+            failureThreshold: 10
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 15
+            failureThreshold: 10
+
+          {{- if .Values.resources }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          {{- end }}
+
+          envFrom:
+          - configMapRef:
+              name: {{ include "sdp.fullname" . }}
+          
+          {{- if .Values.secretName }}
+          - secretRef:
+              name: {{ .Values.secretName }}
+          {{ end }}
+          
+
+      {{- with .Values.deployment.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.deployment.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.deployment.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

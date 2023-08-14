@@ -1,0 +1,12 @@
+linters:
+  # Enable these linters in addition to the default linters that golangci-lint starts with.
+  enable:
+    - gofmt
+    - gofumpt
+    - govet
+
+linters-settings:
+  gofmt:
+    simplify: true
+  govet:
+    check-shadowing: true

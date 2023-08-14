@@ -1,0 +1,27 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "sdp.fullname" . }}-tss
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "sdp.labels" . | nindent 4 }}
+
+  {{- if .Values.configMap.annotations }}
+  annotations:
+    {{- toYaml .Values.configMap.annotations | nindent 4 }}
+  {{- end }}
+
+data:
+  {{- if eq (include "isPubnet" .) "true" }}
+  NETWORK_PASSPHRASE: "Public Global Stellar Network ; September 2015"
+  HORIZON_URL: "https://horizon.stellar.org"
+  {{- else }}
+  NETWORK_PASSPHRASE: "Test SDF Network ; September 2015"
+  HORIZON_URL: "https://horizon-testnet.stellar.org"
+  {{- end }}
+  NUM_CHANNEL_ACCOUNTS: "{{ .Values.router.tss.numChannelAccounts }}"
+  MAX_BASE_FEE: "{{ .Values.router.tss.maxBaseFee }}"
+  MOCK: "{{ .Values.router.tss.mock }}"
+  TSS_METRICS_PORT: {{ include "tss.metricsPort" . | quote }}
+  TSS_METRICS_TYPE: {{ .Values.router.tss.metricsType | default "TSS_PROMETHEUS" | quote }}

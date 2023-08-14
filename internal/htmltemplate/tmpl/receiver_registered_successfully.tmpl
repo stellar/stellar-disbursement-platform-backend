@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Wallet Registration Confirmation</title>
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter+Tight&family=Inter:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+
+    <!-- Styles -->
+    <link rel="stylesheet" href="/static/css/receiver_registration.css" />
+  </head>
+  <body>
+    <div class="WalletRegistration">
+      <!-- Confirmation -->
+      <section data-section="confirmation" style="display: flex">
+        <div class="WalletRegistration__MainContent">
+          <h2>Your information has been successfully verified!</h2>
+
+          <p>
+            Click the button below to be taken back to home and receive your
+            disbursement.
+          </p>
+
+          <div class="Form__buttons">
+            <button id="backToHomeButton"
+              type="button"
+              class="Button--primary"
+            >
+              Back to home
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- 👋 Injecting info for the JS here: -->
+      <span data-jwt-token style="display: none">{{.JWTToken}}</span>
+    </div>
+
+    <!-- Scripts -->
+    <script src="/static/js/receiver_registered_successfully.js" defer></script>
+  </body>
+</html>

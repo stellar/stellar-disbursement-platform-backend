@@ -1,0 +1,44 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "sdp.fullname" . }}-ap
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "sdp.labelsWithSuffix" (list . "-ap") | nindent 4 }}
+
+  {{- if .Values.anchorPlatform.configMap.annotations }}
+  annotations:
+    {{- toYaml .Values.anchorPlatform.configMap.annotations | nindent 4 }}
+  {{- end }}
+
+{{- if .Values.anchorPlatform.configMap.data }}
+data:
+  # if {{ include "isPubnet" . }} is true, then the network is set to PUBNET, else it's all TESTNET
+  {{- if eq (include "isPubnet" .) "true" }}
+  STELLAR_NETWORK_NETWORK: "PUBNET"
+  STELLAR_NETWORK_NETWORK_PASSPHRASE: "Public Global Stellar Network ; September 2015"
+  STELLAR_NETWORK_HORIZON_URL: "https://horizon.stellar.org"
+  {{- else }}
+  STELLAR_NETWORK_NETWORK: "TESTNET"
+  STELLAR_NETWORK_NETWORK_PASSPHRASE: "Test SDF Network ; September 2015"
+  STELLAR_NETWORK_HORIZON_URL: "https://horizon-testnet.stellar.org"
+  {{- end }}
+  HOST_URL: {{ include "sdp.ap.schema" . }}://{{ include "sdp.ap.domain" . }}
+  SEP_SERVER_PORT: {{ include "sdp.ap.sepPort" . | quote }}
+  CALLBACK_API_BASE_URL: 'http://{{ include "sdp.fullname" . }}.{{ .Release.Namespace }}:{{ include "sdp.port" . }}'
+  DATA_TYPE: postgres
+  SEP1_ENABLED: "true"
+  SEP1_TOML_TYPE: url
+  SEP1_TOML_VALUE: 'http://{{ include "sdp.fullname" . }}.{{ .Release.Namespace }}:{{ include "sdp.port" . }}/.well-known/stellar.toml'
+  SEP10_ENABLED: "true"
+  SEP10_HOME_DOMAIN: {{ include "sdp.ap.domain" . }}
+  SEP24_ENABLED: "true"
+  SEP24_INTERACTIVE_URL_JWT_EXPIRATION: "1800"  # 1800 seconds is 30 minutes
+  ASSETS_TYPE: json
+  SEP24_INTERACTIVE_URL_BASE_URL: {{ include "sdp.schema" . }}://{{ include "sdp.domain" . }}/wallet-registration/start
+  SEP24_MORE_INFO_URL_BASE_URL: {{ include "sdp.schema" . }}://{{ include "sdp.domain" . }}/wallet-registration/start
+  CALLBACK_API_AUTH_TYPE: none  # TODO: update to jwt later
+  PLATFORM_SERVER_AUTH_TYPE: JWT
+  {{- tpl (toYaml .Values.anchorPlatform.configMap.data | nindent 2) . }}
+{{- end }}

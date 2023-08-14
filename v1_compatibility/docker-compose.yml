@@ -1,0 +1,52 @@
+version: '3'
+services:
+  db:
+    image: postgres:14-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+      PGPORT: 5432
+    ports:
+    - "5432:5432"
+
+  sdp-v1:
+    image: stellar/sdp-v1:latest
+    build:
+      context: ./stellar-relief-backoffice-backend/
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@db:5432/postgres?sslmode=disable
+      DJANGO_SECRET_KEY: xxx
+      CIRCLE_API_KEY: foo
+      CIRCLE_WALLET_ID: foo
+      FILE_SERVER_HOST: foo
+      FILE_SERVER_UNREAD_PATH: foo
+      FILE_SERVER_READ_PATH: foo
+      FILE_SERVER_RECEIPTS_PATH: foo
+    command:
+    - sh
+    - -c
+    - |
+      pipenv run python manage.py migrate --settings payments.settings
+      sleep 30
+    depends_on:
+    - db
+
+  sdp-v2:
+    image: stellar/sdp-v2:latest
+    build:
+      context: ../
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@db:5432/postgres?sslmode=disable
+    entrypoint: ""
+    command:
+    - sh
+    - -c
+    - |
+      sleep 5
+      ./stellar-disbursement-platform db migrate up
+    depends_on:
+    - db
+    - sdp-v1

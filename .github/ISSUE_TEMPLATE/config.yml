@@ -1,0 +1,14 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Frontend Project
+    url: https://github.com/stellar/stellar-disbursement-platform-frontend
+    about: The frontend project for this application.
+  - name: Stellar Laboratory
+    url: https://laboratory.stellar.org/#?network=test
+    about: The best place to experiment with the Stellar network.
+  - name: Docker Images
+    url: https://hub.docker.com/r/stellar/stellar-disbursement-platform-backend
+    about: Where to check the available Docker images that have been published.
+  - name: Stellar Ecosystem Proposals (SEPs)
+    url: https://github.com/stellar/stellar-protocol
+    about: The SEPs implemented in this project are defined here.
