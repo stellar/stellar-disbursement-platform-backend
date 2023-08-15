@@ -49,14 +49,18 @@ func Test_SetupAssetsForProperNetwork(t *testing.T) {
 		assets, err := models.Assets.GetAll(ctx)
 		require.NoError(t, err)
 
-		assert.Len(t, assets, 1)
+		assert.Len(t, assets, 2)
 		assert.Equal(t, "USDC", assets[0].Code)
 		assert.Equal(t, "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5", assets[0].Issuer)
+		assert.Equal(t, "XLM", assets[1].Code)
+		assert.Empty(t, assets[1].Issuer)
 
 		expectedLogs := []string{
 			"updating/inserting assets for the 'testnet' network",
 			"Code: USDC",
 			"Issuer: GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+			"Code: XLM",
+			"Issuer: ",
 		}
 
 		logs := buf.String()

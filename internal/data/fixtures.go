@@ -9,6 +9,7 @@ import (
 	"image"
 	"image/color"
 	"math/big"
+	"strings"
 	"testing"
 	"time"
 
@@ -29,7 +30,7 @@ const (
 func CreateAssetFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, code, issuer string) *Asset {
 	issuerAddress := issuer
 
-	if issuerAddress == "" {
+	if issuerAddress == "" && strings.ToUpper(code) != "XLM" {
 		issuer, err := utils.RandomString(56)
 		require.NoError(t, err)
 		issuerAddress = issuer

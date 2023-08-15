@@ -127,6 +127,61 @@ func Test_SendPaymentsService_SendBatchPayments(t *testing.T) {
 			require.Equal(t, expectedPayments[tx.ExternalID].ID, tx.ExternalID)
 		}
 	})
+
+	t.Run("send payments with native asset", func(t *testing.T) {
+		nativeAsset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "XLM", "")
+
+		startedDisbursementNA := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
+			Name:    "started disbursement Native Asset",
+			Status:  data.StartedDisbursementStatus,
+			Asset:   nativeAsset,
+			Wallet:  wallet,
+			Country: country,
+		})
+
+		paymentNA1 := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+			ReceiverWallet: rw1,
+			Disbursement:   startedDisbursementNA,
+			Asset:          *nativeAsset,
+			Amount:         "100",
+			Status:         data.ReadyPaymentStatus,
+		})
+
+		paymentNA2 := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+			ReceiverWallet: rw2,
+			Disbursement:   startedDisbursementNA,
+			Asset:          *nativeAsset,
+			Amount:         "100",
+			Status:         data.ReadyPaymentStatus,
+		})
+
+		err = service.SendBatchPayments(ctx, 5)
+		require.NoError(t, err)
+
+		for _, p := range []*data.Payment{paymentNA1, paymentNA2} {
+			payment, err := models.Payment.Get(ctx, p.ID, dbConnectionPool)
+			require.NoError(t, err)
+			assert.Equal(t, data.PendingPaymentStatus, payment.Status)
+		}
+
+		transactions, err := tssModel.GetAllByPaymentIDs(ctx, []string{paymentNA1.ID, paymentNA2.ID})
+		require.NoError(t, err)
+		require.Len(t, transactions, 2)
+
+		expectedPayments := map[string]*data.Payment{
+			paymentNA1.ID: paymentNA1,
+			paymentNA2.ID: paymentNA2,
+		}
+
+		for _, tx := range transactions {
+			assert.Equal(t, txSubStore.TransactionStatusPending, tx.Status)
+			assert.Equal(t, expectedPayments[tx.ExternalID].Asset.Code, tx.AssetCode)
+			assert.Empty(t, tx.AssetIssuer)
+			assert.Equal(t, expectedPayments[tx.ExternalID].Amount, strconv.FormatFloat(tx.Amount, 'f', 7, 32))
+			assert.Equal(t, expectedPayments[tx.ExternalID].ReceiverWallet.StellarAddress, tx.Destination)
+			assert.Equal(t, expectedPayments[tx.ExternalID].ID, tx.ExternalID)
+		}
+	})
 }
 
 func Test_SendPaymentsService_ValidatePaymentReadyForSending(t *testing.T) {
