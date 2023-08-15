@@ -96,19 +96,21 @@ func Test_SendPaymentsService_SendBatchPayments(t *testing.T) {
 		require.NoError(t, err)
 
 		// payments that can be sent
+		var payment *data.Payment
 		for _, p := range []*data.Payment{payment1, payment2, payment3} {
-			payment, err := models.Payment.Get(ctx, p.ID, dbConnectionPool)
+			payment, err = models.Payment.Get(ctx, p.ID, dbConnectionPool)
 			require.NoError(t, err)
 			require.Equal(t, data.PendingPaymentStatus, payment.Status)
 		}
 
 		// payments that can't be sent (rw status is not REGISTERED)
-		payment, err := models.Payment.Get(ctx, payment4.ID, dbConnectionPool)
+		payment, err = models.Payment.Get(ctx, payment4.ID, dbConnectionPool)
 		require.NoError(t, err)
 		require.Equal(t, data.ReadyPaymentStatus, payment.Status)
 
 		// validate transactions
-		transactions, err := tssModel.GetAllByPaymentIDs(ctx, []string{payment1.ID, payment2.ID, payment3.ID, payment4.ID})
+		var transactions []*txSubStore.Transaction
+		transactions, err = tssModel.GetAllByPaymentIDs(ctx, []string{payment1.ID, payment2.ID, payment3.ID, payment4.ID})
 		require.NoError(t, err)
 		require.Len(t, transactions, 3)
 
