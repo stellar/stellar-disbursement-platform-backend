@@ -799,6 +799,7 @@ func Test_ProfileHandler_GetProfile(t *testing.T) {
 
 		wantsBody := `
 			{
+				"id":"user-id",
 				"email": "email@email.com",
 				"first_name": "First",
 				"last_name": "Last",
