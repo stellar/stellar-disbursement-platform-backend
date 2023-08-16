@@ -61,6 +61,7 @@ type PatchUserProfileRequest struct {
 }
 
 type GetProfileResponse struct {
+	ID               string   `json:"id"`
 	FirstName        string   `json:"first_name"`
 	LastName         string   `json:"last_name"`
 	Email            string   `json:"email"`
@@ -235,6 +236,7 @@ func (h ProfileHandler) GetProfile(rw http.ResponseWriter, req *http.Request) {
 	}
 
 	resp := &GetProfileResponse{
+		ID:               user.ID,
 		FirstName:        user.FirstName,
 		LastName:         user.LastName,
 		Email:            user.Email,
