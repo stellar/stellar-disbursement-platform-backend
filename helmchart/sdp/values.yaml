@@ -310,7 +310,7 @@ frontend:
     annotations:
       fluxcd.io/ignore: "true"  # Doesn't rely on flux to update the images from stellar/kube
       # kubernetes.io/ingress.class: "public"
-      nginx.ingress.kubernetes.io/custom-response-headers: "X-XSS-Protection: 1; mode=block || X-Frame-Options: DENY || X-Content-Type-Options: nosniff || Strict-Transport-Security: max-age=31536000; includeSubDomains"
+      nginx.ingress.kubernetes.io/custom-response-headers: "X-XSS-Protection: 1; mode=block || X-Frame-Options: SAMEORIGIN || X-Content-Type-Options: nosniff || Strict-Transport-Security: max-age=31536000; includeSubDomains || Cache-Control:no-cache"
     tls:
     - hosts:
       - '{{ include "frontend.domain" . }}'
