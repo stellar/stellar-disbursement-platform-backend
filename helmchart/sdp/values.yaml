@@ -275,7 +275,7 @@ anchorPlatform:
 
 # =========================== FRONTEND ===========================
 frontend:
-  enabled: false
+  enabled: true
   image:
     fullName: stellar/stellar-disbursement-platform-frontend:1.0.0-rc1
     pullPolicy: IfNotPresent
