@@ -37,6 +37,7 @@ spec:
                 name: {{ include "sdp.fullname" . }}
                 port:
                   number: {{ include "sdp.port" . }}
+
     - host: {{ include "sdp.ap.domain" . | quote }}
       http:
         paths:
@@ -53,4 +54,5 @@ spec:
                 port:
                   number: {{ $service_sep_port }}
           {{- end }}
+
 {{- end }}

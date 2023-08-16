@@ -31,7 +31,7 @@ router:
     platformPort: "8085"
   frontend:
     schema: "https"
-    domain: sdp-frontend.localhost.com
+    domain: "sdp-frontend.localhost.com"
     port: "80"
 
 isPubnet: false
