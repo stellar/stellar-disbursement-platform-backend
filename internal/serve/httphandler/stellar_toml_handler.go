@@ -57,7 +57,8 @@ func (s *StellarTomlHandler) buildOrganizationDocumentation(organization data.Or
 func (s *StellarTomlHandler) buildCurrencyInformation(assets []data.Asset) string {
 	strAssets := ""
 	for _, asset := range assets {
-		strAssets += fmt.Sprintf(`
+		if asset.Code != "XLM" {
+			strAssets += fmt.Sprintf(`
 		[[CURRENCIES]]
 		code = %q
 		issuer = %q
@@ -66,6 +67,16 @@ func (s *StellarTomlHandler) buildCurrencyInformation(assets []data.Asset) strin
 		status = "live"
 		desc = "%s"
 	`, asset.Code, asset.Issuer, asset.Code)
+		} else {
+			strAssets += `
+		[[CURRENCIES]]
+		code = "native"
+		status = "live"
+		is_asset_anchored = true
+		anchor_asset_type = "crypto"
+		desc = "XLM, the native token of the Stellar Network."
+	`
+		}
 	}
 
 	return strAssets
