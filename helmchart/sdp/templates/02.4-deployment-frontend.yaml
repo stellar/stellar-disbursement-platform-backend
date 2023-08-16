@@ -26,12 +26,12 @@ spec:
 
   template:
     metadata:
-      {{- if .Values.deployment.tssPodAnnotations }}
+      {{- if .Values.frontend.deployment.podAnnotations }}
       annotations:
-        {{- tpl (toYaml .Values.deployment.tssPodAnnotations) . | nindent 8 }}
+        {{- tpl (toYaml .Values.frontend.deployment.podAnnotations) . | nindent 8 }}
       {{- end }}
       labels:
-        {{- include "sdp.selectorLabels" . | nindent 8 }}
+        {{- include "sdp.selectorLabelsWithSuffix" (list . "-frontend") | nindent 8 }}
     spec:
       {{- if .Values.serviceAccount.name }}
       serviceAccountName: {{ tpl .Values.serviceAccount.name $ }}
