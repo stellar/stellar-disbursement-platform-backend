@@ -284,13 +284,27 @@ func (s *ChannelAccountsService) ViewChannelAccounts(ctx context.Context) error 
 }
 
 func (s *ChannelAccountsService) deleteChannelAccounts(ctx context.Context, opts ChannelAccountServiceOptions, numAccountsToDelete int) error {
-	for i := 0; i < numAccountsToDelete; i++ {
+	for numAccountsToDelete > 0 {
 		currLedgerNum, err := s.ledgerNumberTracker.GetLedgerNumber()
 		if err != nil {
-			return fmt.Errorf("retrieving current ledger number in DeleteChannelAccount: %w", err)
+			return fmt.Errorf("retrieving current ledger number: %w", err)
 		}
 
 		lockedUntilLedgerNumber := currLedgerNum + engine.IncrementForMaxLedgerBounds
+
+		// if there are concurrent requests running to delete multiple accounts, we want to check whether the
+		// number of accounts managed is currently less than the count that was determined prior so we don't
+		// attempt to call logic to delete more accounts than necessary
+		newCount, err := s.caStore.Count(ctx)
+		if err != nil {
+			return fmt.Errorf("cannot retrieve new count of channel accounts: %w", err)
+		}
+
+		if newCount < numAccountsToDelete {
+			numAccountsToDelete = newCount
+			log.Ctx(ctx).Infof("Adjusting deletion count to %d...", newCount)
+		}
+
 		accounts, err := s.caStore.GetAndLockAll(ctx, currLedgerNum, lockedUntilLedgerNumber, 1)
 		if err != nil {
 			return fmt.Errorf("cannot retrieve free channel account: %w", err)
@@ -306,6 +320,8 @@ func (s *ChannelAccountsService) deleteChannelAccounts(ctx context.Context, opts
 		if err != nil {
 			return fmt.Errorf("cannot delete account %s: %w", accountToDelete.PublicKey, err)
 		}
+
+		numAccountsToDelete--
 	}
 
 	return nil
