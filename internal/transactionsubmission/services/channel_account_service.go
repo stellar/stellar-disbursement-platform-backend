@@ -300,6 +300,16 @@ func (s *ChannelAccountsService) deleteChannelAccounts(ctx context.Context, opts
 			return fmt.Errorf("cannot retrieve new count of channel accounts: %w", err)
 		}
 
+		// we must maintain the specified number of accounts if we are deleting them through the ensure command
+		if opts.NumChannelAccounts != 0 && opts.NumChannelAccounts <= newCount {
+			log.Ctx(ctx).Warnf(
+				"Ensure count is set to %d, there are currently %d accounts being managed. Exiting...",
+				opts.NumChannelAccounts,
+				newCount,
+			)
+			return nil
+		}
+
 		if newCount < numAccountsToDelete {
 			numAccountsToDelete = newCount
 			log.Ctx(ctx).Infof("Adjusting deletion count to %d...", newCount)
