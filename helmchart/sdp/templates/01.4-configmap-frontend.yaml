@@ -1,0 +1,32 @@
+{{- if .Values.frontend.enabled -}}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "sdp.fullname" . }}-frontend
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "sdp.labelsWithSuffix" (list . "-frontend") | nindent 4 }}
+
+  {{- if .Values.frontend.configMap.annotations }}
+  annotations:
+    {{- toYaml .Values.frontend.configMap.annotations | nindent 4 }}
+  {{- end }}
+
+data:
+  env-config.js: |-
+    window._env_ = {
+      {{- with .Values.frontend.configMap.data }}
+      {{- range $key, $value := . }}
+      {{ $key }}: "{{ tpl ($value) $ }}",
+      {{- end }}
+      {{- end }}
+      {{- if eq (include "isPubnet" .) "true" }}
+      HORIZON_URL: "https://horizon.stellar.org",
+      STELLAR_EXPERT_URL: "https://stellar.expert/explorer/pubnet"
+      {{- else }}
+      HORIZON_URL: "https://horizon-testnet.stellar.org",
+      STELLAR_EXPERT_URL: "https://stellar.expert/explorer/testnet"
+      {{- end }}
+    };
+{{- end }}

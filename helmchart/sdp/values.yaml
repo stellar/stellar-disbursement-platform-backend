@@ -267,3 +267,36 @@ anchorPlatform:
   # - SECRET_SEP24_INTERACTIVE_URL_JWT_SECRET
   # - SECRET_SEP24_MORE_INFO_URL_JWT_SECRET
   # - SECRET_PLATFORM_API_AUTH_SECRET
+
+
+# =========================== FRONTEND ===========================
+frontend:
+  enabled: false
+  image:
+    fullName: stellar/stellar-disbursement-platform-frontend:1.0.0-rc1
+    pullPolicy: IfNotPresent
+  deployment:
+    annotations:
+      fluxcd.io/ignore: "true"
+    podAnnotations:
+      {}
+    strategy:
+      # Ensure we upgrade 1 pod at a time to avoid migration races
+      type: "RollingUpdate"
+      rollingUpdate:
+        maxUnavailable: 0
+        maxSurge: 1
+    podSecurityContext:
+      {}
+    securityContext:
+      {}
+    resources:
+      {}
+  configMap:
+    # Annotations to add to the ConfigMap
+    annotations:
+      fluxcd.io/ignore: "true"
+    # The data to be stored in the ConfigMap
+    data:
+      API_URL: "{{ include \"sdp.schema\" . }}://{{ include \"sdp.domain\" . }}"
+      RECAPTCHA_SITE_KEY: "reCaptchaSiteKey"
