@@ -1,0 +1,72 @@
+{{- if .Values.frontend.enabled -}}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "sdp.fullname" . }}-frontend
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "sdp.labelsWithSuffix" (list . "-frontend") | nindent 4 }}
+  {{- if .Values.frontend.deployment.annotations }}
+  annotations:
+    {{- tpl (toYaml .Values.deployment.annotations) . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "sdp.selectorLabelsWithSuffix" (list . "-frontend") | nindent 6 }}
+
+  {{- if .Values.frontend.deployment.strategy }}
+  strategy:
+    {{- toYaml .Values.frontend.deployment.strategy | nindent 4 }}
+  {{- end }}
+
+  template:
+    metadata:
+      {{- if .Values.deployment.tssPodAnnotations }}
+      annotations:
+        {{- tpl (toYaml .Values.deployment.tssPodAnnotations) . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "sdp.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- if .Values.serviceAccount.name }}
+      serviceAccountName: {{ tpl .Values.serviceAccount.name $ }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.frontend.deployment.podSecurityContext | nindent 8 }}
+
+      containers:
+      # ============================= Stellar Disbursement Platform: =============================
+        - name: {{ .Chart.Name }}-frontend
+          securityContext:
+            {{- toYaml .Values.frontend.deployment.securityContext | nindent 12 }}
+          image: "{{ .Values.frontend.image.fullName }}"
+          imagePullPolicy: {{ .Values.frontend.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ include "frontend.port" . }}
+              protocol: TCP
+
+          {{- if .Values.resources }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          {{- end }}
+
+          envFrom:
+          - configMapRef:
+              name: {{ include "sdp.fullname" . }}-frontend
+
+          volumeMounts:
+            - name: env-config
+              mountPath: /usr/share/nginx/html/settings
+              readOnly: true
+
+      volumes:
+        - name: env-config
+          configMap:
+            name: {{ include "sdp.fullname" . }}-frontend
+{{- end }}

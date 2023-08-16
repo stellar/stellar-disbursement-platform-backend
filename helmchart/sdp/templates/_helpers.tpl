@@ -150,6 +150,27 @@ Anchor Platform metrics port
 {{- end }}
 
 {{/*
+Frontend domain
+*/}}
+{{- define "frontend.domain" -}}
+{{- .Values.router.frontend.domain | default "localhost" }}
+{{- end }}
+
+{{/*
+Frontend domain schema
+*/}}
+{{- define "frontend.schema" -}}
+{{- .Values.router.frontend.schema | default "https" }}
+{{- end }}
+
+{{/*
+Frontend port
+*/}}
+{{- define "frontend.port" -}}
+{{- .Values.router.frontend.port | default "3000" }}
+{{- end }}
+
+{{/*
 Define the full address to the AP SEP service.
 */}}
 {{- define "sdp.ap.sepServiceAddress" -}}
@@ -161,6 +182,13 @@ Define the full address to the AP Platform service.
 */}}
 {{- define "sdp.ap.platformServiceAddress" -}}
 http://{{ include "sdp.fullname" . }}-ap.{{ .Release.Namespace }}.svc.cluster.local:{{ include "sdp.ap.platformPort" . }}
+{{- end -}}
+
+{{/*
+Define the full address to the Frontend service.
+*/}}
+{{- define "frontend.sepServiceAddress" -}}
+http://{{ include "sdp.fullname" . }}-dashboard.{{ .Release.Namespace }}.svc.cluster.local:{{ include "frontend.port" . }}
 {{- end -}}
 
 {{/*

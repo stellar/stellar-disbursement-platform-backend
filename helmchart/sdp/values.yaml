@@ -29,6 +29,10 @@ router:
     domain: "ap.localhost.com"
     sepPort: "8080"
     platformPort: "8085"
+  frontend:
+    schema: "https"
+    domain: sdp-frontend.localhost.com
+    port: "80"
 
 isPubnet: false
 
