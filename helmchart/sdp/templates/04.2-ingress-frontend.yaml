@@ -1,0 +1,31 @@
+{{- if and (eq .Values.frontend.enabled true) (eq .Values.frontend.ingress.enabled true) -}}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "sdp.fullname" . }}-frontend
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "sdp.labelsWithSuffix" (list . "-frontend") | nindent 4 }}
+  annotations:
+    {{- toYaml .Values.frontend.ingress.annotations | nindent 4 }}
+spec:
+  {{- if .Values.frontend.ingress.className }}
+  ingressClassName: {{ .Values.frontend.ingress.className }}
+  {{- end }}
+  {{- if .Values.frontend.ingress.tls }}
+  tls:
+    {{- tpl (toYaml .Values.frontend.ingress.tls) . | nindent 4 }}
+  {{- end }}
+  rules:
+    - host: {{ include "frontend.domain" . | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "sdp.fullname" . }}-frontend
+                port:
+                  number: {{ include "frontend.port" . }}
+
+{{- end }}

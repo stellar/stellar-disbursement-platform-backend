@@ -153,21 +153,21 @@ Anchor Platform metrics port
 Frontend domain
 */}}
 {{- define "frontend.domain" -}}
-{{- .Values.router.frontend.domain | default "localhost" }}
+{{- .Values.frontend.route.domain | default "localhost" }}
 {{- end }}
 
 {{/*
 Frontend domain schema
 */}}
 {{- define "frontend.schema" -}}
-{{- .Values.router.frontend.schema | default "https" }}
+{{- .Values.frontend.route.schema | default "https" }}
 {{- end }}
 
 {{/*
 Frontend port
 */}}
 {{- define "frontend.port" -}}
-{{- .Values.router.frontend.port | default "3000" }}
+{{- .Values.frontend.route.port | default "3000" }}
 {{- end }}
 
 {{/*

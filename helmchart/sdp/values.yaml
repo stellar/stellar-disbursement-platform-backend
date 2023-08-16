@@ -29,10 +29,6 @@ router:
     domain: "ap.localhost.com"
     sepPort: "8080"
     platformPort: "8085"
-  frontend:
-    schema: "https"
-    domain: "sdp-frontend.localhost.com"
-    port: "80"
 
 isPubnet: false
 
@@ -304,3 +300,19 @@ frontend:
     data:
       API_URL: "{{ include \"sdp.schema\" . }}://{{ include \"sdp.domain\" . }}"
       RECAPTCHA_SITE_KEY: "reCaptchaSiteKey"
+  route:
+    schema: "https"
+    domain: "sdp-frontend.localhost.com"
+    port: "80"
+  ingress:
+    enabled: true
+    className: "nginx"
+    annotations:
+      fluxcd.io/ignore: "true"  # Doesn't rely on flux to update the images from stellar/kube
+      # kubernetes.io/ingress.class: "public"
+      nginx.ingress.kubernetes.io/custom-response-headers: "X-XSS-Protection: 1; mode=block || X-Frame-Options: DENY || X-Content-Type-Options: nosniff || Strict-Transport-Security: max-age=31536000; includeSubDomains"
+    tls:
+    - hosts:
+      - '{{ include "frontend.domain" . }}'
+      secretName: stellar-disbursement-platform-frontend-cert    # You need to create this secret manually. For more instructions, plz refer to helmchart/docs/README.md
+  # NOTE: the hosts to be used here will be the same ones as in the router section, at the top of this file.
