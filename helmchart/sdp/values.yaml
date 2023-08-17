@@ -78,7 +78,7 @@ configMap:
 
 
 # =========================== START Secret ===========================
-secretName: "stellar-disbursement-platform-backend"   # You need to create this secret manually
+secretName: "sdp-backend-secret-name"   # You need to create this secret manually
 # Secrets used to configure the SDP:
 # - ANCHOR_PLATFORM_OUTGOING_JWT_SECRET
 # - AWS_ACCESS_KEY_ID
@@ -194,7 +194,7 @@ ingress:
   - hosts:
     - '{{ include "sdp.domain" . }}'
     - '{{ include "sdp.ap.domain" . }}'
-    secretName: stellar-disbursement-platform-backend-tls-cert    # You need to create this secret manually. For more instructions, plz refer to helmchart/docs/README.md
+    secretName: backend-tls-cert-name    # You need to create this secret manually. For more instructions, plz refer to helmchart/docs/README.md
   # NOTE: the hosts to be used here will be the same ones as in the router section, at the top of this file.
 
 
@@ -258,7 +258,7 @@ anchorPlatform:
         }
   
   # =========================== START anchorPlatform.secretName ===========================
-  secretName: "stellar-disbursement-platform-backend-ap"  # you need to create this secret manually
+  secretName: "anchor-platform-secret-name"  # you need to create this secret manually
   # Secrets used to configure the AP:
   # - SECRET_DATA_USERNAME
   # - SECRET_DATA_PASSWORD
@@ -314,5 +314,5 @@ frontend:
     tls:
     - hosts:
       - '{{ include "frontend.domain" . }}'
-      secretName: stellar-disbursement-platform-frontend-cert    # You need to create this secret manually. For more instructions, plz refer to helmchart/docs/README.md
+      secretName: frontend-tls-cert-name    # You need to create this secret manually. For more instructions, plz refer to helmchart/docs/README.md
   # NOTE: the hosts to be used here will be the same ones as in the router section, at the top of this file.
