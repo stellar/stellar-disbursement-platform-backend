@@ -167,7 +167,7 @@ Frontend domain schema
 Frontend port
 */}}
 {{- define "frontend.port" -}}
-{{- .Values.frontend.route.port | default "3000" }}
+{{- .Values.frontend.route.port | default "80" }}
 {{- end }}
 
 {{/*

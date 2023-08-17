@@ -10,7 +10,6 @@ router:
   sdp:
     schema: "https"
     # The domain is the public address of that service. For localhost you will want to include the port as part of the domain.
-    # domain: "localhost:8000"
     domain: sdp.localhost.com
     port: "8000"
     metricsPort: "8002"
@@ -25,7 +24,6 @@ router:
   ap:
     schema: "https"
     # The domain is the public address of that service. For localhost you will want to include the port as part of the domain.
-    # domain: "localhost:8080"
     domain: "ap.localhost.com"
     sepPort: "8080"
     platformPort: "8085"
@@ -281,7 +279,6 @@ frontend:
     podAnnotations:
       {}
     strategy:
-      # Ensure we upgrade 1 pod at a time to avoid migration races
       type: "RollingUpdate"
       rollingUpdate:
         maxUnavailable: 0
@@ -293,11 +290,9 @@ frontend:
     resources:
       {}
   configMap:
-    # Annotations to add to the ConfigMap
     annotations:
       fluxcd.io/ignore: "true"
-    # The data to be stored in the ConfigMap
-    data:
+    data:   # The data to be stored in the ConfigMap:
       API_URL: "{{ include \"sdp.schema\" . }}://{{ include \"sdp.domain\" . }}"
       RECAPTCHA_SITE_KEY: "reCaptchaSiteKey"
   route:
@@ -309,10 +304,8 @@ frontend:
     className: "nginx"
     annotations:
       fluxcd.io/ignore: "true"  # Doesn't rely on flux to update the images from stellar/kube
-      # kubernetes.io/ingress.class: "public"
       nginx.ingress.kubernetes.io/custom-response-headers: "X-XSS-Protection: 1; mode=block || X-Frame-Options: SAMEORIGIN || X-Content-Type-Options: nosniff || Strict-Transport-Security: max-age=31536000; includeSubDomains || Cache-Control:no-cache"
     tls:
     - hosts:
       - '{{ include "frontend.domain" . }}'
       secretName: frontend-tls-cert-name    # You need to create this secret manually. For more instructions, plz refer to helmchart/docs/README.md
-  # NOTE: the hosts to be used here will be the same ones as in the router section, at the top of this file.
