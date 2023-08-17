@@ -21,6 +21,7 @@ Create chart name and version as used by the chart label.
 {{- printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
+
 {{/*
 Common labels with suffix
 */}}
@@ -47,6 +48,7 @@ app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- end }}
 
+
 {{/*
 Selector labels with suffix
 */}}
@@ -63,6 +65,7 @@ Selector labels
 {{- define "sdp.selectorLabels" -}}
 {{ include "sdp.selectorLabelsWithSuffix" (list . "") }}
 {{- end }}
+
 
 {{/*
 SDP domain
@@ -99,6 +102,7 @@ Define the full address to the SDP service.
 http://{{ include "sdp.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local:{{ include "sdp.port" . }}
 {{- end -}}
 
+
 {{/*
 TSS port
 */}}
@@ -113,6 +117,7 @@ TSS Metrics port
 {{- .Values.router.tss.metricsPort | default "9002" }}
 {{- end }}
 
+
 {{/*
 Anchor Platform domain
 */}}
@@ -121,26 +126,25 @@ Anchor Platform domain
 {{- end }}
 
 {{/*
-SDP domain schema
+Anchor Platform schema
 */}}
 {{- define "sdp.ap.schema" -}}
 {{- .Values.router.ap.schema | default "https" }}
 {{- end }}
 
 {{/*
-Anchor SEP port
+Anchor Platform SEP/public port
 */}}
 {{- define "sdp.ap.sepPort" -}}
 {{- .Values.router.ap.sepPort | default "8080" }}
 {{- end }}
 
 {{/*
-Anchor Platform port
+Anchor Platform internal communication port
 */}}
 {{- define "sdp.ap.platformPort" -}}
 {{- .Values.router.ap.platformPort | default "8085" }}
 {{- end }}
-
 
 {{/*
 Anchor Platform metrics port
@@ -148,6 +152,7 @@ Anchor Platform metrics port
 {{- define "sdp.ap.metricsPort" -}}
 {{- 8082 }}
 {{- end }}
+
 
 {{/*
 Dashboard domain
@@ -170,6 +175,7 @@ Dashboard port
 {{- .Values.dashboard.route.port | default "80" }}
 {{- end }}
 
+
 {{/*
 Define the full address to the AP SEP service.
 */}}
@@ -190,6 +196,7 @@ Define the full address to the Dashboard service.
 {{- define "dashboard.sepServiceAddress" -}}
 http://{{ include "sdp.fullname" . }}-dashboard.{{ .Release.Namespace }}.svc.cluster.local:{{ include "dashboard.port" . }}
 {{- end -}}
+
 
 {{/*
 Is Pubnet?
