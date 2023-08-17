@@ -36,7 +36,7 @@ replicaCount: 1
 
 image:
   # replace the `repository` with the actual image name.
-  repository: stellar/sdp-v2
+  repository: stellar/stellar-disbursement-platform-backend
   # for locally built images, use `pullPolicy: Never or IfNotPresent`.
   pullPolicy: IfNotPresent
   # If `tag` is set, it'll override the default value set in `.Chart.AppVersion`.
@@ -185,7 +185,7 @@ ingress:
   enabled: true
   className: "nginx"
   annotations:
-    fluxcd.io/ignore: "true"  # Doesn't rely on flux to update the images from stellar/kube
+    fluxcd.io/ignore: "true"  # Doesn't rely on flux to update the images
     # kubernetes.io/ingress.class: "public"
     nginx.ingress.kubernetes.io/custom-response-headers: "X-XSS-Protection: 1; mode=block || X-Frame-Options: DENY || X-Content-Type-Options: nosniff || Strict-Transport-Security: max-age=31536000; includeSubDomains"
   tls:
@@ -275,7 +275,7 @@ frontend:
     domain: "sdp-dashboard.localhost.com"
     port: "80"
   image:
-    fullName: stellar/stellar-disbursement-platform-frontend:1.0.0-rc1
+    fullName: stellar/stellar-disbursement-platform-frontend:latest
     pullPolicy: IfNotPresent
   deployment:
     annotations:
@@ -303,7 +303,7 @@ frontend:
     enabled: false
     className: "nginx"
     annotations:
-      fluxcd.io/ignore: "true"  # Doesn't rely on flux to update the images from stellar/kube
+      fluxcd.io/ignore: "true"  # Doesn't rely on flux to update the images
       nginx.ingress.kubernetes.io/custom-response-headers: "X-XSS-Protection: 1; mode=block || X-Frame-Options: SAMEORIGIN || X-Content-Type-Options: nosniff || Strict-Transport-Security: max-age=31536000; includeSubDomains || Cache-Control:no-cache"
     tls:
     - hosts:
