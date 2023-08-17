@@ -271,7 +271,7 @@ anchorPlatform:
 
 # =========================== FRONTEND ===========================
 frontend:
-  enabled: true
+  enabled: false
   image:
     fullName: stellar/stellar-disbursement-platform-frontend:1.0.0-rc1
     pullPolicy: IfNotPresent
@@ -305,7 +305,7 @@ frontend:
     domain: "sdp-frontend.localhost.com"
     port: "80"
   ingress:
-    enabled: true
+    enabled: false
     className: "nginx"
     annotations:
       fluxcd.io/ignore: "true"  # Doesn't rely on flux to update the images from stellar/kube
