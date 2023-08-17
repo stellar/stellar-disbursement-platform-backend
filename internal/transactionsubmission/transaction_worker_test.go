@@ -712,6 +712,12 @@ func Test_TransactionWorker_buildAndSignTransaction(t *testing.T) {
 			assetIssuer:           "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
 			getAccountResponseObj: horizon.Account{Sequence: accountSequence},
 		},
+		{
+			name:                  "🎉 successfully build and sign a transaction with native asset",
+			assetCode:             "XLM",
+			assetIssuer:           "",
+			getAccountResponseObj: horizon.Account{Sequence: accountSequence},
+		},
 	}
 
 	for _, tc := range testCases {

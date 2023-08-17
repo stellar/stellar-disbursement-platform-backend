@@ -176,6 +176,37 @@ func Test_AssetModelInsert(t *testing.T) {
 		assert.EqualError(t, err, "error inserting asset: sql: no rows in result set")
 		assert.Nil(t, duplicatedAsset)
 	})
+
+	t.Run("creates the stellar native asset successfully", func(t *testing.T) {
+		DeleteAllAssetFixtures(t, ctx, dbConnectionPool.SqlxDB())
+
+		asset, err := assetModel.Insert(ctx, dbConnectionPool, "XLM", "")
+		require.NoError(t, err)
+		assert.NotNil(t, asset)
+
+		assert.Equal(t, "XLM", asset.Code)
+		assert.Empty(t, asset.Issuer)
+	})
+
+	t.Run("does not create an asset with empty issuer", func(t *testing.T) {
+		DeleteAllAssetFixtures(t, ctx, dbConnectionPool.SqlxDB())
+
+		asset, err := assetModel.Insert(ctx, dbConnectionPool, "USDC", "")
+		assert.EqualError(t, err, `error inserting asset: pq: new row for relation "assets" violates check constraint "asset_issuer_length_check"`)
+		assert.Nil(t, asset)
+	})
+
+	t.Run("does not create an asset with a invalid issuer", func(t *testing.T) {
+		DeleteAllAssetFixtures(t, ctx, dbConnectionPool.SqlxDB())
+
+		asset, err := assetModel.Insert(ctx, dbConnectionPool, "USDC", "INVALID")
+		assert.EqualError(t, err, `error inserting asset: pq: new row for relation "assets" violates check constraint "asset_issuer_length_check"`)
+		assert.Nil(t, asset)
+
+		asset, err = assetModel.Insert(ctx, dbConnectionPool, "XLM", "INVALID")
+		assert.EqualError(t, err, `error inserting asset: pq: new row for relation "assets" violates check constraint "asset_issuer_length_check"`)
+		assert.Nil(t, asset)
+	})
 }
 
 func Test_AssetModelGetOrCreate(t *testing.T) {

@@ -164,6 +164,46 @@ func Test_AssetHandlerAddAsset(t *testing.T) {
 		assert.Equal(t, "adding trustline for asset USDT:GBHC5ADV2XYITXCYC5F6X6BM2OYTYHV4ZU2JF6QWJORJQE2O7RKH2LAQ", entries[0].Message)
 	})
 
+	t.Run("successfully create the native asset", func(t *testing.T) {
+		data.DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
+
+		getEntries := log.DefaultLogger.StartTest(log.WarnLevel)
+
+		horizonClientMock.
+			On("AccountDetail", horizonclient.AccountRequest{
+				AccountID: distributionKP.Address(),
+			}).
+			Return(horizon.Account{
+				AccountID: distributionKP.Address(),
+				Sequence:  123,
+				Balances: []horizon.Balance{
+					{
+						Balance: "10000",
+						Asset: base.Asset{
+							Type: "native",
+							Code: "XLM",
+						},
+					},
+				},
+			}, nil).
+			Once()
+
+		rr := httptest.NewRecorder()
+
+		requestBody, _ := json.Marshal(AssetRequest{Code: "XLM"})
+
+		req, _ := http.NewRequest(http.MethodPost, "/assets", strings.NewReader(string(requestBody)))
+		http.HandlerFunc(handler.CreateAsset).ServeHTTP(rr, req)
+
+		resp := rr.Result()
+
+		assert.Equal(t, http.StatusCreated, resp.StatusCode)
+
+		entries := getEntries()
+		assert.Len(t, entries, 1)
+		assert.Equal(t, "not performing either add or remove trustline", entries[0].Message)
+	})
+
 	t.Run("successfully create an asset with a trustline already set", func(t *testing.T) {
 		data.DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
 
@@ -891,6 +931,37 @@ func Test_AssetHandler_handleUpdateAssetTrustlineForDistributionAccount(t *testi
 		assert.EqualError(t, err, errCouldNotRemoveTrustline.Error())
 	})
 
+	t.Run("doesn't remove the trustline in case it's already removed", func(t *testing.T) {
+		getEntries := log.DefaultLogger.StartTest(log.WarnLevel)
+
+		horizonClientMock.
+			On("AccountDetail", horizonclient.AccountRequest{
+				AccountID: distributionKP.Address(),
+			}).
+			Return(horizon.Account{
+				AccountID: distributionKP.Address(),
+				Sequence:  123,
+				Balances: []horizon.Balance{
+					{
+						Balance: "100",
+						Asset: base.Asset{
+							Type:   "",
+							Code:   "XLM",
+							Issuer: "",
+						},
+					},
+				},
+			}, nil).
+			Once()
+
+		err := handler.handleUpdateAssetTrustlineForDistributionAccount(ctx, nil, assetToRemoveTrustline)
+		assert.NoError(t, err)
+
+		entries := getEntries()
+		assert.Len(t, entries, 2)
+		assert.Equal(t, "not removing trustline for the asset USDT:GA24LJXFG73JGARIBG2GP6V5TNUUOS6BD23KOFCW3INLDY5KPKS7GACZ because it could not be found on the blockchain", entries[0].Message)
+	})
+
 	t.Run("doesn't add new trustline if distribution account already have trustline for the asset", func(t *testing.T) {
 		horizonClientMock.
 			On("AccountDetail", horizonclient.AccountRequest{
@@ -922,6 +993,61 @@ func Test_AssetHandler_handleUpdateAssetTrustlineForDistributionAccount(t *testi
 
 		err := handler.handleUpdateAssetTrustlineForDistributionAccount(ctx, assetToAddTrustline, nil)
 		assert.NoError(t, err)
+	})
+
+	t.Run("does not perform either add or remove for the native asset", func(t *testing.T) {
+		horizonClientMock.
+			On("AccountDetail", horizonclient.AccountRequest{
+				AccountID: distributionKP.Address(),
+			}).
+			Return(horizon.Account{
+				AccountID: distributionKP.Address(),
+				Sequence:  123,
+				Balances: []horizon.Balance{
+					{
+						Balance: "100",
+						Asset: base.Asset{
+							Type:   "",
+							Code:   "XLM",
+							Issuer: "",
+						},
+					},
+					{
+						Balance: "100",
+						Asset: base.Asset{
+							Type:   "",
+							Code:   assetToAddTrustline.Code,
+							Issuer: assetToAddTrustline.Issuer,
+						},
+					},
+				},
+			}, nil).
+			Twice()
+
+		nativeAsset := &txnbuild.CreditAsset{
+			Code:   "XLM",
+			Issuer: "",
+		}
+
+		// add trustline
+		getEntries := log.DefaultLogger.StartTest(log.WarnLevel)
+
+		err := handler.handleUpdateAssetTrustlineForDistributionAccount(ctx, nativeAsset, nil)
+		require.NoError(t, err)
+
+		entries := getEntries()
+		assert.Len(t, entries, 1)
+		assert.Equal(t, "not performing either add or remove trustline", entries[0].Message)
+
+		// remove trustline
+		getEntries = log.DefaultLogger.StartTest(log.WarnLevel)
+
+		err = handler.handleUpdateAssetTrustlineForDistributionAccount(ctx, nil, nativeAsset)
+		require.NoError(t, err)
+
+		entries = getEntries()
+		assert.Len(t, entries, 1)
+		assert.Equal(t, "not performing either add or remove trustline", entries[0].Message)
 	})
 
 	horizonClientMock.AssertExpectations(t)

@@ -162,10 +162,28 @@ func Test_StellarTomlHandler_buildCurrencyInformation(t *testing.T) {
 		assert.Equal(t, wantStr, currencyInformation)
 	})
 
+	t.Run("build currency information with native asset", func(t *testing.T) {
+		data.DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
+		asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "XLM", "")
+
+		currencyInformation := s.buildCurrencyInformation([]data.Asset{*asset})
+		wantStr := `
+		[[CURRENCIES]]
+		code = "native"
+		status = "live"
+		is_asset_anchored = true
+		anchor_asset_type = "crypto"
+		desc = "XLM, the native token of the Stellar Network."
+	`
+
+		assert.Equal(t, wantStr, currencyInformation)
+	})
+
 	t.Run("build currency information with multiple assets", func(t *testing.T) {
 		assets := data.ClearAndCreateAssetFixtures(t, ctx, dbConnectionPool)
+		xlm := data.CreateAssetFixture(t, ctx, dbConnectionPool, "XLM", "")
 
-		currencyInformation := s.buildCurrencyInformation(assets)
+		currencyInformation := s.buildCurrencyInformation(append(assets, *xlm))
 		wantStr := `
 		[[CURRENCIES]]
 		code = "EURT"
@@ -182,6 +200,13 @@ func Test_StellarTomlHandler_buildCurrencyInformation(t *testing.T) {
 		anchor_asset_type = "fiat"
 		status = "live"
 		desc = "USDC"
+	
+		[[CURRENCIES]]
+		code = "native"
+		status = "live"
+		is_asset_anchored = true
+		anchor_asset_type = "crypto"
+		desc = "XLM, the native token of the Stellar Network."
 	`
 
 		assert.Equal(t, wantStr, currencyInformation)
