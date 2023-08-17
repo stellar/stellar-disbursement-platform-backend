@@ -270,6 +270,10 @@ anchorPlatform:
 # =========================== FRONTEND ===========================
 frontend:
   enabled: false
+  route:
+    schema: "https"
+    domain: "sdp-frontend.localhost.com"
+    port: "80"
   image:
     fullName: stellar/stellar-disbursement-platform-frontend:1.0.0-rc1
     pullPolicy: IfNotPresent
@@ -295,10 +299,6 @@ frontend:
     data:   # The data to be stored in the ConfigMap:
       API_URL: "{{ include \"sdp.schema\" . }}://{{ include \"sdp.domain\" . }}"
       RECAPTCHA_SITE_KEY: "reCaptchaSiteKey"
-  route:
-    schema: "https"
-    domain: "sdp-frontend.localhost.com"
-    port: "80"
   ingress:
     enabled: false
     className: "nginx"
