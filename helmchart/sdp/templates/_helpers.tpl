@@ -153,6 +153,20 @@ Anchor Platform metrics port
 {{- 8082 }}
 {{- end }}
 
+{{/*
+AP SEP full service address
+*/}}
+{{- define "sdp.ap.sepServiceAddress" -}}
+http://{{ include "sdp.fullname" . }}-ap.{{ .Release.Namespace }}.svc.cluster.local:{{ include "sdp.ap.sepPort" . }}
+{{- end -}}
+
+{{/*
+AP Platform full service address
+*/}}
+{{- define "sdp.ap.platformServiceAddress" -}}
+http://{{ include "sdp.fullname" . }}-ap.{{ .Release.Namespace }}.svc.cluster.local:{{ include "sdp.ap.platformPort" . }}
+{{- end -}}
+
 
 {{/*
 Dashboard domain
@@ -174,28 +188,6 @@ Dashboard port
 {{- define "dashboard.port" -}}
 {{- .Values.dashboard.route.port | default "80" }}
 {{- end }}
-
-
-{{/*
-Define the full address to the AP SEP service.
-*/}}
-{{- define "sdp.ap.sepServiceAddress" -}}
-http://{{ include "sdp.fullname" . }}-ap.{{ .Release.Namespace }}.svc.cluster.local:{{ include "sdp.ap.sepPort" . }}
-{{- end -}}
-
-{{/*
-Define the full address to the AP Platform service.
-*/}}
-{{- define "sdp.ap.platformServiceAddress" -}}
-http://{{ include "sdp.fullname" . }}-ap.{{ .Release.Namespace }}.svc.cluster.local:{{ include "sdp.ap.platformPort" . }}
-{{- end -}}
-
-{{/*
-Define the full address to the Dashboard service.
-*/}}
-{{- define "dashboard.sepServiceAddress" -}}
-http://{{ include "sdp.fullname" . }}-dashboard.{{ .Release.Namespace }}.svc.cluster.local:{{ include "dashboard.port" . }}
-{{- end -}}
 
 
 {{/*
