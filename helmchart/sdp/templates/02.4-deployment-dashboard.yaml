@@ -3,10 +3,10 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "sdp.fullname" . }}-frontend
+  name: {{ include "sdp.fullname" . }}-dashboard
   namespace: {{ .Release.Namespace }}
   labels:
-    {{- include "sdp.labelsWithSuffix" (list . "-frontend") | nindent 4 }}
+    {{- include "sdp.labelsWithSuffix" (list . "-dashboard") | nindent 4 }}
   {{- if .Values.frontend.deployment.annotations }}
   annotations:
     {{- tpl (toYaml .Values.deployment.annotations) . | nindent 4 }}
@@ -17,7 +17,7 @@ spec:
   {{- end }}
   selector:
     matchLabels:
-      {{- include "sdp.selectorLabelsWithSuffix" (list . "-frontend") | nindent 6 }}
+      {{- include "sdp.selectorLabelsWithSuffix" (list . "-dashboard") | nindent 6 }}
 
   {{- if .Values.frontend.deployment.strategy }}
   strategy:
@@ -31,7 +31,7 @@ spec:
         {{- tpl (toYaml .Values.frontend.deployment.podAnnotations) . | nindent 8 }}
       {{- end }}
       labels:
-        {{- include "sdp.selectorLabelsWithSuffix" (list . "-frontend") | nindent 8 }}
+        {{- include "sdp.selectorLabelsWithSuffix" (list . "-dashboard") | nindent 8 }}
     spec:
       {{- if .Values.serviceAccount.name }}
       serviceAccountName: {{ tpl .Values.serviceAccount.name $ }}
@@ -41,7 +41,7 @@ spec:
 
       containers:
       # ============================= Stellar Disbursement Platform: =============================
-        - name: {{ .Chart.Name }}-frontend
+        - name: {{ .Chart.Name }}-dashboard
           securityContext:
             {{- toYaml .Values.frontend.deployment.securityContext | nindent 12 }}
           image: "{{ .Values.frontend.image.fullName }}"
@@ -58,7 +58,7 @@ spec:
 
           envFrom:
           - configMapRef:
-              name: {{ include "sdp.fullname" . }}-frontend
+              name: {{ include "sdp.fullname" . }}-dashboard
 
           volumeMounts:
             - name: env-config
@@ -68,5 +68,5 @@ spec:
       volumes:
         - name: env-config
           configMap:
-            name: {{ include "sdp.fullname" . }}-frontend
+            name: {{ include "sdp.fullname" . }}-dashboard
 {{- end }}

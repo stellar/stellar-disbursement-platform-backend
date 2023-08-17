@@ -2,10 +2,10 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: {{ include "sdp.fullname" . }}-frontend
+  name: {{ include "sdp.fullname" . }}-dashboard
   namespace: {{ .Release.Namespace }}
   labels:
-    {{- include "sdp.labelsWithSuffix" (list . "-frontend") | nindent 4 }}
+    {{- include "sdp.labelsWithSuffix" (list . "-dashboard") | nindent 4 }}
   annotations:
     {{- toYaml .Values.frontend.ingress.annotations | nindent 4 }}
 spec:
@@ -24,7 +24,7 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: {{ include "sdp.fullname" . }}-frontend
+                name: {{ include "sdp.fullname" . }}-dashboard
                 port:
                   number: {{ include "frontend.port" . }}
 

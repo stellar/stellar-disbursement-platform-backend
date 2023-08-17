@@ -272,7 +272,7 @@ frontend:
   enabled: false
   route:
     schema: "https"
-    domain: "sdp-frontend.localhost.com"
+    domain: "sdp-dashboard.localhost.com"
     port: "80"
   image:
     fullName: stellar/stellar-disbursement-platform-frontend:1.0.0-rc1

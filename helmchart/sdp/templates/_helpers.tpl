@@ -188,7 +188,7 @@ http://{{ include "sdp.fullname" . }}-ap.{{ .Release.Namespace }}.svc.cluster.lo
 Define the full address to the Frontend service.
 */}}
 {{- define "frontend.sepServiceAddress" -}}
-http://{{ include "sdp.fullname" . }}-frontend.{{ .Release.Namespace }}.svc.cluster.local:{{ include "frontend.port" . }}
+http://{{ include "sdp.fullname" . }}-dashboard.{{ .Release.Namespace }}.svc.cluster.local:{{ include "frontend.port" . }}
 {{- end -}}
 
 {{/*
