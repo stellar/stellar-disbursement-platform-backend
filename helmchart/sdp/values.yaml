@@ -267,8 +267,8 @@ anchorPlatform:
   # - SECRET_PLATFORM_API_AUTH_SECRET
 
 
-# =========================== FRONTEND ===========================
-frontend:
+# =========================== FRONTEND DASHBOARD ===========================
+dashboard:
   enabled: false
   route:
     schema: "https"
@@ -307,5 +307,5 @@ frontend:
       nginx.ingress.kubernetes.io/custom-response-headers: "X-XSS-Protection: 1; mode=block || X-Frame-Options: SAMEORIGIN || X-Content-Type-Options: nosniff || Strict-Transport-Security: max-age=31536000; includeSubDomains || Cache-Control:no-cache"
     tls:
     - hosts:
-      - '{{ include "frontend.domain" . }}'
-      secretName: frontend-tls-cert-name    # You need to create this secret manually. For more instructions, plz refer to helmchart/docs/README.md
+      - '{{ include "dashboard.domain" . }}'
+      secretName: dashboard-tls-cert-name    # You need to create this secret manually. For more instructions, plz refer to helmchart/docs/README.md

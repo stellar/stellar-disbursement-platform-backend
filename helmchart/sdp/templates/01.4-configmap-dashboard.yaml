@@ -1,4 +1,4 @@
-{{- if .Values.frontend.enabled -}}
+{{- if .Values.dashboard.enabled -}}
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -8,15 +8,15 @@ metadata:
   labels:
     {{- include "sdp.labelsWithSuffix" (list . "-dashboard") | nindent 4 }}
 
-  {{- if .Values.frontend.configMap.annotations }}
+  {{- if .Values.dashboard.configMap.annotations }}
   annotations:
-    {{- toYaml .Values.frontend.configMap.annotations | nindent 4 }}
+    {{- toYaml .Values.dashboard.configMap.annotations | nindent 4 }}
   {{- end }}
 
 data:
   env-config.js: |-
     window._env_ = {
-      {{- with .Values.frontend.configMap.data }}
+      {{- with .Values.dashboard.configMap.data }}
       {{- range $key, $value := . }}
       {{ $key }}: "{{ tpl ($value) $ }}",
       {{- end }}

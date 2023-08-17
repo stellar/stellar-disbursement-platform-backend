@@ -1,4 +1,4 @@
-{{- if .Values.frontend.enabled -}}
+{{- if .Values.dashboard.enabled -}}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -7,7 +7,7 @@ metadata:
   namespace: {{ .Release.Namespace }}
   labels:
     {{- include "sdp.labelsWithSuffix" (list . "-dashboard") | nindent 4 }}
-  {{- if .Values.frontend.deployment.annotations }}
+  {{- if .Values.dashboard.deployment.annotations }}
   annotations:
     {{- tpl (toYaml .Values.deployment.annotations) . | nindent 4 }}
   {{- end }}
@@ -19,16 +19,16 @@ spec:
     matchLabels:
       {{- include "sdp.selectorLabelsWithSuffix" (list . "-dashboard") | nindent 6 }}
 
-  {{- if .Values.frontend.deployment.strategy }}
+  {{- if .Values.dashboard.deployment.strategy }}
   strategy:
-    {{- toYaml .Values.frontend.deployment.strategy | nindent 4 }}
+    {{- toYaml .Values.dashboard.deployment.strategy | nindent 4 }}
   {{- end }}
 
   template:
     metadata:
-      {{- if .Values.frontend.deployment.podAnnotations }}
+      {{- if .Values.dashboard.deployment.podAnnotations }}
       annotations:
-        {{- tpl (toYaml .Values.frontend.deployment.podAnnotations) . | nindent 8 }}
+        {{- tpl (toYaml .Values.dashboard.deployment.podAnnotations) . | nindent 8 }}
       {{- end }}
       labels:
         {{- include "sdp.selectorLabelsWithSuffix" (list . "-dashboard") | nindent 8 }}
@@ -37,18 +37,18 @@ spec:
       serviceAccountName: {{ tpl .Values.serviceAccount.name $ }}
       {{- end }}
       securityContext:
-        {{- toYaml .Values.frontend.deployment.podSecurityContext | nindent 8 }}
+        {{- toYaml .Values.dashboard.deployment.podSecurityContext | nindent 8 }}
 
       containers:
       # ============================= Stellar Disbursement Platform: =============================
         - name: {{ .Chart.Name }}-dashboard
           securityContext:
-            {{- toYaml .Values.frontend.deployment.securityContext | nindent 12 }}
-          image: "{{ .Values.frontend.image.fullName }}"
-          imagePullPolicy: {{ .Values.frontend.image.pullPolicy }}
+            {{- toYaml .Values.dashboard.deployment.securityContext | nindent 12 }}
+          image: "{{ .Values.dashboard.image.fullName }}"
+          imagePullPolicy: {{ .Values.dashboard.image.pullPolicy }}
           ports:
             - name: http
-              containerPort: {{ include "frontend.port" . }}
+              containerPort: {{ include "dashboard.port" . }}
               protocol: TCP
 
           {{- if .Values.resources }}

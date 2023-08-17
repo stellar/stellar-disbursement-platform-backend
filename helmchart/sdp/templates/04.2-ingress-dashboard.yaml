@@ -1,4 +1,4 @@
-{{- if and (eq .Values.frontend.enabled true) (eq .Values.frontend.ingress.enabled true) -}}
+{{- if and (eq .Values.dashboard.enabled true) (eq .Values.dashboard.ingress.enabled true) -}}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -7,17 +7,17 @@ metadata:
   labels:
     {{- include "sdp.labelsWithSuffix" (list . "-dashboard") | nindent 4 }}
   annotations:
-    {{- toYaml .Values.frontend.ingress.annotations | nindent 4 }}
+    {{- toYaml .Values.dashboard.ingress.annotations | nindent 4 }}
 spec:
-  {{- if .Values.frontend.ingress.className }}
-  ingressClassName: {{ .Values.frontend.ingress.className }}
+  {{- if .Values.dashboard.ingress.className }}
+  ingressClassName: {{ .Values.dashboard.ingress.className }}
   {{- end }}
-  {{- if .Values.frontend.ingress.tls }}
+  {{- if .Values.dashboard.ingress.tls }}
   tls:
-    {{- tpl (toYaml .Values.frontend.ingress.tls) . | nindent 4 }}
+    {{- tpl (toYaml .Values.dashboard.ingress.tls) . | nindent 4 }}
   {{- end }}
   rules:
-    - host: {{ include "frontend.domain" . | quote }}
+    - host: {{ include "dashboard.domain" . | quote }}
       http:
         paths:
           - path: /
@@ -26,6 +26,6 @@ spec:
               service:
                 name: {{ include "sdp.fullname" . }}-dashboard
                 port:
-                  number: {{ include "frontend.port" . }}
+                  number: {{ include "dashboard.port" . }}
 
 {{- end }}

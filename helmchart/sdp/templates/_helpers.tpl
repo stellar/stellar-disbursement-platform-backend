@@ -150,24 +150,24 @@ Anchor Platform metrics port
 {{- end }}
 
 {{/*
-Frontend domain
+Dashboard domain
 */}}
-{{- define "frontend.domain" -}}
-{{- .Values.frontend.route.domain | default "localhost" }}
+{{- define "dashboard.domain" -}}
+{{- .Values.dashboard.route.domain | default "localhost" }}
 {{- end }}
 
 {{/*
-Frontend domain schema
+Dashboard domain schema
 */}}
-{{- define "frontend.schema" -}}
-{{- .Values.frontend.route.schema | default "https" }}
+{{- define "dashboard.schema" -}}
+{{- .Values.dashboard.route.schema | default "https" }}
 {{- end }}
 
 {{/*
-Frontend port
+Dashboard port
 */}}
-{{- define "frontend.port" -}}
-{{- .Values.frontend.route.port | default "80" }}
+{{- define "dashboard.port" -}}
+{{- .Values.dashboard.route.port | default "80" }}
 {{- end }}
 
 {{/*
@@ -185,10 +185,10 @@ http://{{ include "sdp.fullname" . }}-ap.{{ .Release.Namespace }}.svc.cluster.lo
 {{- end -}}
 
 {{/*
-Define the full address to the Frontend service.
+Define the full address to the Dashboard service.
 */}}
-{{- define "frontend.sepServiceAddress" -}}
-http://{{ include "sdp.fullname" . }}-dashboard.{{ .Release.Namespace }}.svc.cluster.local:{{ include "frontend.port" . }}
+{{- define "dashboard.sepServiceAddress" -}}
+http://{{ include "sdp.fullname" . }}-dashboard.{{ .Release.Namespace }}.svc.cluster.local:{{ include "dashboard.port" . }}
 {{- end -}}
 
 {{/*

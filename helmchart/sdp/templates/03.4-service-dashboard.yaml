@@ -1,4 +1,4 @@
-{{- if .Values.frontend.enabled -}}
+{{- if .Values.dashboard.enabled -}}
 ---
 apiVersion: v1
 kind: Service
@@ -10,7 +10,7 @@ metadata:
 spec:
   type: {{ .Values.service.type }}
   ports:
-    - port: {{ include "frontend.port" . }}
+    - port: {{ include "dashboard.port" . }}
       targetPort: http
       protocol: TCP
       name: http
