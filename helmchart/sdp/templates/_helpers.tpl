@@ -21,6 +21,7 @@ Create chart name and version as used by the chart label.
 {{- printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
+
 {{/*
 Common labels with suffix
 */}}
@@ -47,6 +48,7 @@ app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- end }}
 
+
 {{/*
 Selector labels with suffix
 */}}
@@ -63,6 +65,7 @@ Selector labels
 {{- define "sdp.selectorLabels" -}}
 {{ include "sdp.selectorLabelsWithSuffix" (list . "") }}
 {{- end }}
+
 
 {{/*
 SDP domain
@@ -99,6 +102,7 @@ Define the full address to the SDP service.
 http://{{ include "sdp.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local:{{ include "sdp.port" . }}
 {{- end -}}
 
+
 {{/*
 TSS port
 */}}
@@ -113,6 +117,7 @@ TSS Metrics port
 {{- .Values.router.tss.metricsPort | default "9002" }}
 {{- end }}
 
+
 {{/*
 Anchor Platform domain
 */}}
@@ -121,26 +126,25 @@ Anchor Platform domain
 {{- end }}
 
 {{/*
-SDP domain schema
+Anchor Platform schema
 */}}
 {{- define "sdp.ap.schema" -}}
 {{- .Values.router.ap.schema | default "https" }}
 {{- end }}
 
 {{/*
-Anchor SEP port
+Anchor Platform SEP/public port
 */}}
 {{- define "sdp.ap.sepPort" -}}
 {{- .Values.router.ap.sepPort | default "8080" }}
 {{- end }}
 
 {{/*
-Anchor Platform port
+Anchor Platform internal communication port
 */}}
 {{- define "sdp.ap.platformPort" -}}
 {{- .Values.router.ap.platformPort | default "8085" }}
 {{- end }}
-
 
 {{/*
 Anchor Platform metrics port
@@ -150,18 +154,41 @@ Anchor Platform metrics port
 {{- end }}
 
 {{/*
-Define the full address to the AP SEP service.
+AP SEP full service address
 */}}
 {{- define "sdp.ap.sepServiceAddress" -}}
 http://{{ include "sdp.fullname" . }}-ap.{{ .Release.Namespace }}.svc.cluster.local:{{ include "sdp.ap.sepPort" . }}
 {{- end -}}
 
 {{/*
-Define the full address to the AP Platform service.
+AP Platform full service address
 */}}
 {{- define "sdp.ap.platformServiceAddress" -}}
 http://{{ include "sdp.fullname" . }}-ap.{{ .Release.Namespace }}.svc.cluster.local:{{ include "sdp.ap.platformPort" . }}
 {{- end -}}
+
+
+{{/*
+Dashboard domain
+*/}}
+{{- define "dashboard.domain" -}}
+{{- .Values.dashboard.route.domain | default "localhost" }}
+{{- end }}
+
+{{/*
+Dashboard domain schema
+*/}}
+{{- define "dashboard.schema" -}}
+{{- .Values.dashboard.route.schema | default "https" }}
+{{- end }}
+
+{{/*
+Dashboard port
+*/}}
+{{- define "dashboard.port" -}}
+{{- .Values.dashboard.route.port | default "80" }}
+{{- end }}
+
 
 {{/*
 Is Pubnet?
