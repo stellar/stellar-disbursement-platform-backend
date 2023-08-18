@@ -120,7 +120,7 @@ func validatePaymentReadyForSending(p *data.Payment) error {
 		return fmt.Errorf("payment asset code is empty for payment %s", p.ID)
 	}
 	// 3. payment.asset.Issuer is used as transaction.AssetIssuer
-	if strings.TrimSpace(p.Asset.Issuer) == "" {
+	if strings.TrimSpace(p.Asset.Issuer) == "" && strings.TrimSpace(strings.ToUpper(p.Asset.Code)) != "XLM" {
 		return fmt.Errorf("payment asset issuer is empty for payment %s", p.ID)
 	}
 	// 4. payment.Amount is used as transaction.Amount

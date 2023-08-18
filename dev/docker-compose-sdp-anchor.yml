@@ -133,6 +133,22 @@ services:
                 "max_amount": 10000
               },
               "withdraw": {"enabled": false}
+            },
+            {
+              "sep24_enabled": true,
+              "schema": "stellar",
+              "code": "native",
+              "issuer": "",
+              "distribution_account": "${DISTRIBUTION_PUBLIC_KEY}",
+              "significant_decimals": 7,
+              "deposit": {
+                "enabled": true,
+                "fee_minimum": 0,
+                "fee_percent": 0,
+                "min_amount": 1,
+                "max_amount": 10000
+              },
+              "withdraw": {"enabled": false}
             }
           ]
         }
