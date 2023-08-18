@@ -420,7 +420,7 @@ func Test_ChannelAccounts_DeleteAccount_All_Success(t *testing.T) {
 	currLedgerNum := 1000
 
 	ctx := context.Background()
-	mChannelAccountStore.On("Count", ctx).Return(len(channelAccounts), nil).Times(len(channelAccounts) + 1)
+	mChannelAccountStore.On("Count", ctx).Return(len(channelAccounts), nil).Once()
 	mLedgerNumberTracker.On("GetLedgerNumber").Return(currLedgerNum, nil).Times(len(channelAccounts))
 	for _, acc := range channelAccounts {
 		mChannelAccountStore.
@@ -750,7 +750,7 @@ func Test_ChannelAccounts_EnsureChannelAccounts_Delete_Success(t *testing.T) {
 	currLedgerNum := 1000
 
 	ctx := context.Background()
-	mChannelAccountStore.On("Count", ctx).Return(currChannelAccountsCount, nil).Times(currChannelAccountsCount - opts.NumChannelAccounts + 1)
+	mChannelAccountStore.On("Count", ctx).Return(currChannelAccountsCount, nil).Once()
 	mLedgerNumberTracker.On("GetLedgerNumber").Return(currLedgerNum, nil).Times(currChannelAccountsCount - opts.NumChannelAccounts)
 	mHorizonClient.On("AccountDetail", horizonclient.AccountRequest{AccountID: rootAccount.Address()}).
 		Return(horizon.Account{AccountID: rootAccount.Address()}, nil).Times(currChannelAccountsCount - opts.NumChannelAccounts)
