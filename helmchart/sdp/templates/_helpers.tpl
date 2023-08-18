@@ -194,12 +194,12 @@ Dashboard port
 Is Pubnet?
 */}}
 {{- define "isPubnet" -}}
-{{- eq .Values.isPubnet true | default false }}
+{{- eq .Values.global.isPubnet true | default false }}
 {{- end }}
 
 {{/*
 Image Tag
 */}}
 {{- define "imageTag" -}}
-{{- .Values.image.tag | default .Chart.AppVersion }}
+{{- .Values.sdp.image.tag | default .Chart.AppVersion }}
 {{- end }}

@@ -10,6 +10,7 @@ router:
   sdp:
     schema: "https"
     # The domain is the public address of that service. For localhost you will want to include the port as part of the domain.
+    # domain: "localhost:8000"
     domain: sdp.localhost.com
     port: "8000"
     metricsPort: "8002"
@@ -17,81 +18,130 @@ router:
     schema: "https"
     port: "9000"
     metricsPort: "9002"
-    metricsType: "TSS_PROMETHEUS"
-    maxBaseFee: "100"
-    mock: "false"
-    numChannelAccounts: 1
   ap:
     schema: "https"
     # The domain is the public address of that service. For localhost you will want to include the port as part of the domain.
+    # domain: "localhost:8080"
     domain: "ap.localhost.com"
     sepPort: "8080"
     platformPort: "8085"
 
-isPubnet: false
-
-# =========================== START Image ===========================
-# replicaCount is used only if autoscaling.enabled is set to false:
-replicaCount: 1
-
-image:
-  # replace the `repository` with the actual image name.
-  repository: stellar/stellar-disbursement-platform-backend
-  # for locally built images, use `pullPolicy: Never or IfNotPresent`.
-  pullPolicy: IfNotPresent
-  # If `tag` is set, it'll override the default value set in `.Chart.AppVersion`.
-  tag: "latest"
-
-imagePullSecrets: []
-
-# =========================== START ConfigMap ===========================
-# ConfigMap is used to configure the SDP:
-configMap:
-  # Annotations to add to the ConfigMap
-  annotations:
-    fluxcd.io/ignore: "true"
-  # The data to be stored in the ConfigMap
-  data:
-    # auth
-    EC256_PUBLIC_KEY: "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEJ3HNphPAEKHvtRjsl5Kjwc9tTMqS\n2pmYNybrLsxZ6cuQvg2yiEoXZixP2cJ77csHClXC6cb1wQp/BNGDvGKoPg==\n-----END PUBLIC KEY-----"
-    # general
-    ENVIRONMENT: "localhost"
-    LOG_LEVEL: "TRACE"
-    # serve
-    SEP10_SIGNING_PUBLIC_KEY: GDA34JZ26FZY64XCSY46CUNSHLX762LHJXQHWWHGL5HSFRWSGBVHUFNI
-    DISTRIBUTION_PUBLIC_KEY: GBC2HVWFIFN7WJHFORVBCDKJORG6LWTW3O2QBHOURL3KHZPM4KMWTUSA
-    # serve metrics
-    METRICS_TYPE: "PROMETHEUS"
-    # message senders
-    EMAIL_SENDER_TYPE: DRY_RUN
-    SMS_SENDER_TYPE: DRY_RUN
-    # reCaptcha
-    RECAPTCHA_SITE_KEY: reCaptchaSiteKey
-    # CORS Allowed Origins - "*" value for PR preview purpose
-    CORS_ALLOWED_ORIGINS: "*"
-    # enable recaptcha for login and forget password
-    ENABLE_RECAPTCHA: "false"
-    # enable email-based MFA during login
-    ENABLE_MFA: "false"
 
 
-# =========================== START Secret ===========================
-secretName: "sdp-backend-secret-name"   # You need to create this secret manually
-# Secrets used to configure the SDP:
-# - ANCHOR_PLATFORM_OUTGOING_JWT_SECRET
-# - AWS_ACCESS_KEY_ID
-# - AWS_REGION
-# - AWS_SECRET_ACCESS_KEY
-# - AWS_SES_SENDER_ID
-# - DATABASE_URL
-# - DISTRIBUTION_SEED # TSS distribution account seed
-# - EC256_PRIVATE_KEY
-# - RECAPTCHA_SITE_SECRET_KEY
-# - SEP10_SIGNING_PRIVATE_KEY
-# - SEP24_JWT_SECRET
-# - TWILIO_ACCOUNT_SID
-# - TWILIO_AUTH_TOKEN
-# - TWILIO_SERVICE_SID
+## @section Global parameters
+## These parameters are shared by all charts
+
+## @param global.isPubnet Network to use: true for pubnet (mainnet), false for testnet
+## @param global.replicaCount Global number of replicas to use. This is used only if autoscaling.enabled is set to false
+global:
+  isPubnet: false
+  replicaCount: 1
+  resources: { }
+    # We usually recommend not to specify default resources and to leave this as a conscious
+    # choice for the user. This also increases chances charts run on environments with little
+    # resources, such as Minikube. If you do want to specify resources, uncomment the following
+    # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+    # limits:
+    #   cpu: 250m
+    #   memory: 512Mi
+    # requests:
+    #   cpu: 50m
+    #   memory: 256Mi
+
+sdp:
+  # =========================== START sdp.image ===========================
+  image:
+    # replace the `repository` with the actual image name.
+    repository: stellar/stellar-disbursement-platform-backend
+    # for locally built images, use `pullPolicy: Never or IfNotPresent`.
+    pullPolicy: IfNotPresent
+    # If `tag` is set, it'll override the default value set in `.Chart.AppVersion`.
+    tag: "latest"
+
+  # =========================== START sdp.deployment ===========================
+  deployment:
+    annotations:
+      fluxcd.io/ignore: "true"
+    podAnnotations:
+      prometheus.io/path: /metrics
+      prometheus.io/port: '{{ include "sdp.metricsPort" . }}'
+      prometheus.io/scrape: "true"
+    podSecurityContext: { }
+    # fsGroup: 2000
+    securityContext: { }
+      # capabilities:
+      #   drop:
+      #   - ALL
+      # readOnlyRootFilesystem: true
+    # runAsNonRoot: true
+    # runAsUser: 1000
+    strategy:
+      # Ensure we upgrade 1 pod at a time to avoid migration races
+      type: "RollingUpdate"
+      rollingUpdate:
+        maxUnavailable: 0
+        maxSurge: 1
+
+    nodeSelector: { }
+
+    tolerations: [ ]
+
+    affinity: { }
+
+  # =========================== START sdp.configMap ===========================
+  # ConfigMap is used to configure the SDP:
+  configMap:
+    # Annotations to add to the ConfigMap
+    annotations:
+
+    # The data to be stored in the ConfigMap
+    data:
+      # auth
+      EC256_PUBLIC_KEY: "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEJ3HNphPAEKHvtRjsl5Kjwc9tTMqS\n2pmYNybrLsxZ6cuQvg2yiEoXZixP2cJ77csHClXC6cb1wQp/BNGDvGKoPg==\n-----END PUBLIC KEY-----"
+      # general
+      ENVIRONMENT: "localhost"
+      LOG_LEVEL: "TRACE"
+      # serve
+      SEP10_SIGNING_PUBLIC_KEY: #required
+      DISTRIBUTION_PUBLIC_KEY: #required
+      # serve metrics
+      METRICS_TYPE: "PROMETHEUS"
+      # message senders
+      EMAIL_SENDER_TYPE: DRY_RUN
+      SMS_SENDER_TYPE: DRY_RUN
+      # reCaptcha
+      RECAPTCHA_SITE_KEY: #required
+      # CORS Allowed Origins - "*" value for PR preview purpose
+      CORS_ALLOWED_ORIGINS: "*"
+      # enable recaptcha for login and forget password
+      ENABLE_RECAPTCHA: "false"
+      # enable email-based MFA during login
+      ENABLE_MFA: "false"
+
+  # =========================== START sdp.kubeSecrets ===========================
+  kubeSecrets:
+    secretName: "sdp-backend-secret-name"
+    # Create
+    create: false
+
+    # Annotations to add to the secret
+    annotations:
+
+    # The data to be stored in the secret
+    data:
+      AWS_ACCESS_KEY_ID: MY_AWS_ACCESS_KEY_ID
+      AWS_REGION: MY_AWS_REGION
+      AWS_SECRET_ACCESS_KEY: MY_AWS_SECRET_ACCESS_KEY
+      AWS_SES_SENDER_ID: MY_AWS_SES_SENDER_ID
+      TWILIO_ACCOUNT_SID: MY_TWILIO_ACCOUNT_SID
+      TWILIO_AUTH_TOKEN: MY_TWILIO_AUTH_TOKEN
+      TWILIO_SERVICE_SID: MY_TWILIO_SERVICE_SID
+      EC256_PRIVATE_KEY: "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgdo6o+tdFkF94B7z8\nnoybH6/zO3PryLLjLbj54/zOi4WhRANCAAQncc2mE8AQoe+1GOyXkqPBz21MypLa\nmZg3JusuzFnpy5C+DbKIShdmLE/ZwnvtywcKVcLpxvXBCn8E0YO8Yqg+\n-----END PRIVATE KEY-----"
+      SEP10_SIGNING_PRIVATE_KEY: #required
+      SEP24_JWT_SECRET: jwt_secret_1234567890
+      RECAPTCHA_SITE_SECRET_KEY:  #required
+      ANCHOR_PLATFORM_OUTGOING_JWT_SECRET: mySdpToAnchorPlatformSecret
+
 
 # =========================== START Service ===========================
 
@@ -107,57 +157,10 @@ serviceAccount:
   create: false
   # Annotations to add to the service account
   annotations:
-    fluxcd.io/ignore: "true"
+
   # The name of the service account to use.
   # If not set and create is true, a name is generated using the fullname template
   name: ""
-
-
-# =========================== START Deployment ===========================
-deployment:
-  annotations:
-    fluxcd.io/ignore: "true"
-  podAnnotations:
-    prometheus.io/path: /metrics
-    prometheus.io/port: '{{ include "sdp.metricsPort" . }}'
-    prometheus.io/scrape: "true"
-  tssPodAnnotations:
-    prometheus.io/path: /metrics
-    prometheus.io/port: '{{ include "tss.metricsPort" . }}'
-    prometheus.io/scrape: "true"
-  podSecurityContext: {}
-    # fsGroup: 2000
-  securityContext: {}
-    # capabilities:
-    #   drop:
-    #   - ALL
-    # readOnlyRootFilesystem: true
-    # runAsNonRoot: true
-    # runAsUser: 1000
-  strategy:
-    # Ensure we upgrade 1 pod at a time to avoid migration races
-    type: "RollingUpdate"
-    rollingUpdate:
-      maxUnavailable: 0
-      maxSurge: 1
-
-  nodeSelector: {}
-
-  tolerations: []
-
-  affinity: {}
-
-resources: {}
-  # We usually recommend not to specify default resources and to leave this as a conscious
-  # choice for the user. This also increases chances charts run on environments with little
-  # resources, such as Minikube. If you do want to specify resources, uncomment the following
-  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
-  # limits:
-  #   cpu: 250m
-  #   memory: 512Mi
-  # requests:
-  #   cpu: 50m
-  #   memory: 256Mi
 
 
 # =========================== START Autoscaling ===========================
@@ -185,7 +188,7 @@ ingress:
   enabled: true
   className: "nginx"
   annotations:
-    fluxcd.io/ignore: "true"  # Doesn't rely on flux to update the images
+
     # kubernetes.io/ingress.class: "public"
     nginx.ingress.kubernetes.io/custom-response-headers: "X-XSS-Protection: 1; mode=block || X-Frame-Options: DENY || X-Content-Type-Options: nosniff || Strict-Transport-Security: max-age=31536000; includeSubDomains"
   tls:
@@ -196,11 +199,13 @@ ingress:
   # NOTE: the hosts to be used here will be the same ones as in the router section, at the top of this file.
 
 
-# =========================== START AnchorPlatform ===========================
+# =========================== START anchorPlatform ===========================
 anchorPlatform:
+
+  # =========================== START anchorPlatform.deployment ===========================
   deployment:
     annotations:
-      fluxcd.io/ignore: "true"
+
     podAnnotations:
       prometheus.io/path: /metrics
       prometheus.io/port: '{{ include "sdp.ap.metricsPort" . }}'
@@ -217,13 +222,18 @@ anchorPlatform:
       {}
     resources:
       {}
+    nodeSelector: { }
+
+    tolerations: [ ]
+
+    affinity: { }
 
 
   # =========================== START anchorPlatform.configMap ===========================
   configMap:
     # Annotations to add to the ConfigMap
     annotations:
-      fluxcd.io/ignore: "true"
+
     # The data to be stored in the ConfigMap
     data:
       APP_LOGGING_LEVEL: INFO
@@ -271,17 +281,80 @@ anchorPlatform:
           ]
         }
   
-  # =========================== START anchorPlatform.secretName ===========================
-  secretName: "anchor-platform-secret-name"  # you need to create this secret manually
-  # Secrets used to configure the AP:
-  # - SECRET_DATA_USERNAME
-  # - SECRET_DATA_PASSWORD
-  # - SECRET_SEP10_JWT_SECRET
-  # - SECRET_SEP10_SIGNING_SEED
-  # - SECRET_SEP24_INTERACTIVE_URL_JWT_SECRET
-  # - SECRET_SEP24_MORE_INFO_URL_JWT_SECRET
-  # - SECRET_PLATFORM_API_AUTH_SECRET
+  # =========================== START anchorPlatform.kubeSecrets ===========================
+  kubeSecrets:
+    secretName: "anchor-platform-secret-name"
+    # Create the secret for anchor platform
+    create: false
 
+    # Annotations to add to the secret
+    annotations:
+
+    # The data to be stored in the secret
+    data:
+      SECRET_DATA_PASSWORD: postgres                                                                                                                                                                                                                                                                                                                             │
+      SECRET_DATA_USERNAME: postgres                                                                                                                                                                                                                                                                                                                                  │
+      SECRET_PLATFORM_API_AUTH_SECRET: mySdpToAnchorPlatformSecret                                                                                                                                                                                                                                                                                                                   │
+      SECRET_SEP10_JWT_SECRET: jwt_secret_1234567890                                                                                                                                                                                                                                                                                                                           │
+      SECRET_SEP10_SIGNING_SEED: #required                                                                                                                                                                                                                                                                                      │
+      SECRET_SEP24_INTERACTIVE_URL_JWT_SECRET: jwt_secret_1234567890                                                                                                                                                                                                                                                                                                           │
+      SECRET_SEP24_MORE_INFO_URL_JWT_SECRET: jwt_secret_1234567890
+
+
+
+# =========================== START tss ===========================
+tss:
+
+  # =========================== START tss.deployment ===========================
+  deployment:
+    # Annotations to add to the Deployment
+    annotations:
+
+    podAnnotations:
+      prometheus.io/path: /metrics
+      prometheus.io/port: '{{ include "tss.metricsPort" . }}'
+      prometheus.io/scrape: "true"
+
+    strategy:
+      # Ensure we upgrade 1 pod at a time to avoid migration races
+      type: "RollingUpdate"
+      rollingUpdate:
+        maxUnavailable: 0
+        maxSurge: 1
+    podSecurityContext:
+      { }
+    securityContext:
+      { }
+    resources:
+      { }
+    nodeSelector: { }
+
+    tolerations: [ ]
+
+    affinity: { }
+  # =========================== START tss.configMap ===========================
+  configMap:
+    # Annotations to add to the ConfigMap
+    annotations:
+
+    data:
+      NUM_CHANNEL_ACCOUNTS: 1
+      MAX_BASE_FEE: 100
+      MOCK: "false"
+      TSS_METRICS_TYPE: "TSS_PROMETHEUS"
+
+  # =========================== START tss.kubeSecrets ===========================
+  kubeSecrets:
+    secretName: "tss-secret-name"
+    # Create the secret for tss
+    create: false
+
+    # Annotations to add to the secret
+    annotations:
+
+    # The data to be stored in the secret
+    data:
+      DISTRIBUTION_SEED: #required
 
 # =========================== FRONTEND DASHBOARD ===========================
 dashboard:
