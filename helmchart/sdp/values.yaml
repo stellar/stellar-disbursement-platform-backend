@@ -279,7 +279,7 @@ dashboard:
     pullPolicy: IfNotPresent
   deployment:
     annotations:
-      fluxcd.io/ignore: "true"
+      {}
     podAnnotations:
       {}
     strategy:
@@ -295,16 +295,17 @@ dashboard:
       {}
   configMap:
     annotations:
-      fluxcd.io/ignore: "true"
+      {}
     data:   # The data to be stored in the ConfigMap:
       API_URL: "{{ include \"sdp.schema\" . }}://{{ include \"sdp.domain\" . }}"
       RECAPTCHA_SITE_KEY: "reCaptchaSiteKey"
+  service:
+    type: ClusterIP
   ingress:
     enabled: false
     className: "nginx"
     annotations:
-      fluxcd.io/ignore: "true"  # Doesn't rely on flux to update the images
-      nginx.ingress.kubernetes.io/custom-response-headers: "X-XSS-Protection: 1; mode=block || X-Frame-Options: SAMEORIGIN || X-Content-Type-Options: nosniff || Strict-Transport-Security: max-age=31536000; includeSubDomains || Cache-Control:no-cache"
+      {}
     tls:
     - hosts:
       - '{{ include "dashboard.domain" . }}'

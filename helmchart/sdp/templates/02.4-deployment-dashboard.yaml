@@ -9,7 +9,7 @@ metadata:
     {{- include "sdp.labelsWithSuffix" (list . "-dashboard") | nindent 4 }}
   {{- if .Values.dashboard.deployment.annotations }}
   annotations:
-    {{- tpl (toYaml .Values.deployment.annotations) . | nindent 4 }}
+    {{- tpl (toYaml .Values.dashboard.deployment.annotations) . | nindent 4 }}
   {{- end }}
 spec:
   {{- if not .Values.autoscaling.enabled }}
@@ -51,9 +51,9 @@ spec:
               containerPort: {{ include "dashboard.port" . }}
               protocol: TCP
 
-          {{- if .Values.resources }}
+          {{- if .Values.dashboard.deployment.resources }}
           resources:
-            {{- toYaml .Values.resources | nindent 12 }}
+            {{- toYaml .Values.dashboard.deployment.resources | nindent 12 }}
           {{- end }}
 
           envFrom:
