@@ -56,6 +56,47 @@ func Test_ReceiverVerificationModel_GetByReceiverIdsAndVerificationField(t *test
 	}
 }
 
+func Test_ReceiverVerificationModel_GetAllByReceiverId(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+
+	receiver := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
+
+	verification1 := CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, ReceiverVerificationInsert{
+		ReceiverID:        receiver.ID,
+		VerificationField: VerificationFieldDateOfBirth,
+		VerificationValue: "1990-01-01",
+	})
+	verification2 := CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, ReceiverVerificationInsert{
+		ReceiverID:        receiver.ID,
+		VerificationField: VerificationFieldPin,
+		VerificationValue: "1234",
+	})
+	verification3 := CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, ReceiverVerificationInsert{
+		ReceiverID:        receiver.ID,
+		VerificationField: VerificationFieldNationalID,
+		VerificationValue: "5678",
+	})
+	verifieldFields := []VerificationField{verification1.VerificationField, verification2.VerificationField, verification3.VerificationField}
+	verifieldValues := []string{verification1.HashedValue, verification2.HashedValue, verification3.HashedValue}
+	receiverVerificationModel := ReceiverVerificationModel{}
+
+	actualVerifications, err := receiverVerificationModel.GetAllByReceiverId(ctx, dbConnectionPool, receiver.ID)
+	require.NoError(t, err)
+	assert.Equal(t, 3, len(actualVerifications))
+	for _, v := range actualVerifications {
+		assert.Contains(t, receiver.ID, v.ReceiverID)
+		assert.Contains(t, verifieldFields, v.VerificationField)
+		assert.Contains(t, verifieldValues, v.HashedValue)
+	}
+}
+
 func Test_ReceiverVerificationModel_Insert(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
