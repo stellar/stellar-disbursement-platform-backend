@@ -9,6 +9,8 @@ import (
 	sdpUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
+const AdvisoryLock = int(2172398390434160)
+
 // GetHorizonErrorString returns a string representation of a horizonclient.Error.
 func GetHorizonErrorString(hError horizonclient.Error) string {
 	hProblem := hError.Problem
