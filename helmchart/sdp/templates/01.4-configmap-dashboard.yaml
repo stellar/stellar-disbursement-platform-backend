@@ -1,0 +1,32 @@
+{{- if .Values.dashboard.enabled -}}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "sdp.fullname" . }}-dashboard
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "sdp.labelsWithSuffix" (list . "-dashboard") | nindent 4 }}
+
+  {{- if .Values.dashboard.configMap.annotations }}
+  annotations:
+    {{- toYaml .Values.dashboard.configMap.annotations | nindent 4 }}
+  {{- end }}
+
+data:
+  env-config.js: |-
+    window._env_ = {
+      {{- with .Values.dashboard.configMap.data }}
+      {{- range $key, $value := . }}
+      {{ $key }}: "{{ tpl ($value) $ }}",
+      {{- end }}
+      {{- end }}
+      {{- if eq (include "isPubnet" .) "true" }}
+      HORIZON_URL: "https://horizon.stellar.org",
+      STELLAR_EXPERT_URL: "https://stellar.expert/explorer/pubnet"
+      {{- else }}
+      HORIZON_URL: "https://horizon-testnet.stellar.org",
+      STELLAR_EXPERT_URL: "https://stellar.expert/explorer/testnet"
+      {{- end }}
+    };
+{{- end }}
