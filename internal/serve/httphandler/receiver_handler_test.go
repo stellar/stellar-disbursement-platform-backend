@@ -355,7 +355,7 @@ func Test_ReceiverHandlerGet(t *testing.T) {
 		}`
 		assert.JSONEq(t, wantJson, rr.Body.String())
 	})
-} 
+}
 
 func Test_ReceiverHandler_GetReceivers_Errors(t *testing.T) {
 	dbt := dbtest.Open(t)
@@ -461,7 +461,7 @@ func Test_ReceiverHandler_GetReceivers_Errors(t *testing.T) {
 			assert.JSONEq(t, tc.expectedResponse, string(respBody))
 		})
 	}
-} 
+}
 
 func Test_ReceiverHandler_GetReceivers_Success(t *testing.T) {
 	dbt := dbtest.Open(t)
