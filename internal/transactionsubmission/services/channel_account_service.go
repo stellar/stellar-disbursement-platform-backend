@@ -145,7 +145,7 @@ func createAccountsInBatch(
 func (s *ChannelAccountsService) VerifyChannelAccounts(ctx context.Context, opts ChannelAccountServiceOptions) error {
 	err := s.acquireAdvisoryLockForCommand(ctx)
 	if err != nil {
-		return fmt.Errorf("failed getting db advisory lock in CreateChannelAccounts: %w", err)
+		return fmt.Errorf("failed getting db advisory lock in VerifyChannelAccounts: %w", err)
 	}
 
 	log.Ctx(ctx).Infof("DeleteInvalidAccounts?: %t", opts.DeleteInvalidAcccounts)
@@ -199,7 +199,7 @@ func (s *ChannelAccountsService) EnsureChannelAccountsCount(
 ) error {
 	err := s.acquireAdvisoryLockForCommand(ctx)
 	if err != nil {
-		return fmt.Errorf("failed getting db advisory lock in CreateChannelAccounts: %w", err)
+		return fmt.Errorf("failed getting db advisory lock in EnsureChannelAccounts: %w", err)
 	}
 
 	log.Ctx(ctx).Infof("Desired Accounts Count: %d", opts.NumChannelAccounts)
@@ -250,7 +250,7 @@ func (s *ChannelAccountsService) DeleteChannelAccount(
 ) error {
 	err := s.acquireAdvisoryLockForCommand(ctx)
 	if err != nil {
-		return fmt.Errorf("failed getting db advisory lock in CreateChannelAccounts: %w", err)
+		return fmt.Errorf("failed getting db advisory lock in DeleteChannelAccounts: %w", err)
 	}
 
 	if opts.ChannelAccountID != "" { // delete specified accounts
