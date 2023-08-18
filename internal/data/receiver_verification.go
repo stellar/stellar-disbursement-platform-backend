@@ -75,6 +75,31 @@ func (m ReceiverVerificationModel) GetByReceiverIdsAndVerificationField(ctx cont
 	return receiverVerifications, nil
 }
 
+// GetAllByReceiverId returns all receiver verifications by receiver id.
+func (m ReceiverVerificationModel) GetAllByReceiverId(ctx context.Context, sqlExec db.SQLExecuter, receiverId string) ([]*ReceiverVerification, error) {
+	receiverVerifications := []*ReceiverVerification{}
+	query := `
+		SELECT 
+		    receiver_id, 
+		    verification_field, 
+		    hashed_value,
+		    attempts,
+		    created_at,
+		    updated_at,
+		    confirmed_at,
+		    failed_at
+		FROM 
+		    receiver_verifications
+		WHERE 
+		    receiver_id = $1
+	`
+	err := sqlExec.SelectContext(ctx, &receiverVerifications, query, receiverId)
+	if err != nil {
+		return nil, fmt.Errorf("error querying receiver verifications: %w", err)
+	}
+	return receiverVerifications, nil
+}
+
 // Insert inserts a new receiver verification
 func (m ReceiverVerificationModel) Insert(ctx context.Context, sqlExec db.SQLExecuter, verificationInsert ReceiverVerificationInsert) (string, error) {
 	err := verificationInsert.Validate()

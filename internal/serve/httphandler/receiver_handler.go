@@ -21,7 +21,8 @@ type ReceiverHandler struct {
 
 type GetReceiverResponse struct {
 	data.Receiver
-	Wallets []data.ReceiverWallet `json:"wallets"`
+	Wallets       []data.ReceiverWallet        `json:"wallets"`
+	Verifications []*data.ReceiverVerification `json:"verifications"`
 }
 
 func (rh ReceiverHandler) buildReceiversResponse(receivers []data.Receiver, receiversWallets []data.ReceiverWallet) []GetReceiverResponse {
@@ -58,9 +59,15 @@ func (rh ReceiverHandler) GetReceiver(w http.ResponseWriter, r *http.Request) {
 			return nil, fmt.Errorf("getting receiver wallets with receiver IDs: %w", innerErr)
 		}
 
+		receiverVerifications, innerErr := rh.Models.ReceiverVerification.GetAllByReceiverId(ctx, dbTx, receiver.ID)
+		if innerErr != nil {
+			return nil, fmt.Errorf("getting receiver verifications for receiver ID: %w", innerErr)
+		}
+
 		return &GetReceiverResponse{
-			Receiver: *receiver,
-			Wallets:  receiverWallets,
+			Receiver:      *receiver,
+			Wallets:       receiverWallets,
+			Verifications: receiverVerifications,
 		}, nil
 	})
 	if err != nil {
