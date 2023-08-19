@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
+	"github.com/google/uuid"
 	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/protocols/horizon"
 	"github.com/stellar/go/strkey"
@@ -14,7 +16,9 @@ import (
 	"github.com/stellar/go/txnbuild"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
+	tssMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
 	tssUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
@@ -24,6 +28,10 @@ import (
 // Review these TODOs originally created by Stephen:
 // TODO - memo/memoType not supported yet - [SDP-463]
 // TODO - re-enable metrics/observer – [SDP-772]
+
+const (
+	paymentLoggerStr = "Payment event received %s: %s"
+)
 
 type TxJob store.ChannelTransactionBundle
 
@@ -40,6 +48,7 @@ type TransactionWorker struct {
 	maxBaseFee          int
 	crashTrackerClient  crashtracker.CrashTrackerClient
 	txProcessingLimiter *engine.TransactionProcessingLimiter
+	monitorSvc          monitor.MonitorService
 }
 
 func NewTransactionWorker(
@@ -495,6 +504,45 @@ func (tw *TransactionWorker) saveResponseXDRIfPresent(ctx context.Context, txJob
 	txJob.Transaction = *updatedTx
 
 	return nil
+}
+
+// monitorPayment sends a metric about a payment tx to the observer, linking it to a entry in the logs that contains
+// specific metadata about said tx.
+func (s *TransactionWorker) monitorPayment(ctx context.Context, tx *store.Transaction, metricTag monitor.MetricTag, metadata map[string]string) {
+	eventID := uuid.New().String()
+	labels := map[string]string{
+		"id":         eventID,
+		"tx_id":      tx.ID,
+		"updated_at": tx.UpdatedAt.String(),
+	}
+
+	err := s.monitorSvc.MonitorHistogram(time.Since(*tx.CreatedAt).Seconds(), metricTag, labels)
+	if err != nil {
+		log.Ctx(ctx).Errorf("Cannot create metric with information about the payment %s: %s", tx.ID, err.Error())
+		return
+	}
+
+	paymentLog := log.Ctx(ctx).
+		WithField("id", eventID).
+		WithField("tx_id", tx.ID).
+		WithField("destination_account", tx.Destination).
+		WithField("tx_xdr", metadata["tx_xdr"])
+
+	if metricTag == tssMonitor.PaymentProcessingStartedTag {
+		paymentLog.Debugf(paymentLoggerStr, eventID, metricTag)
+	} else if metricTag == tssMonitor.PaymentReconciliationSuccessfulTag || metricTag == tssMonitor.PaymentReprocessingSuccessfulTag {
+		paymentLog.Infof(paymentLoggerStr, eventID, metricTag)
+	} else if metricTag == tssMonitor.PaymentFailedTag {
+		paymentLog.
+			WithField("error", metadata["err_stack"]).
+			Errorf(paymentLoggerStr, eventID, metricTag)
+	} else if metricTag == tssMonitor.PaymentMarkedForReprocessing {
+		paymentLog.
+			WithField("error", metadata["err_stack"]).
+			Warnf(paymentLoggerStr, eventID, metricTag)
+	} else {
+		log.Ctx(ctx).Errorf("Cannot recognize metric tag %s for event %s", metricTag, eventID)
+	}
 }
 
 // TODO: possibly use this code as a reference when addressing [SDP-772].
