@@ -15,6 +15,8 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
 )
 
+const advisoryLock = int(2172398390434160)
+
 type ChannelAccountsService struct {
 	dbConnectionPool    db.DBConnectionPool
 	caStore             store.ChannelAccountStore
@@ -373,7 +375,7 @@ func (s *ChannelAccountsService) deleteChannelAccount(
 }
 
 func (s *ChannelAccountsService) acquireAdvisoryLockForCommand(ctx context.Context) error {
-	locked, err := utils.AcquireAdvisoryLock(ctx, s.dbConnectionPool, utils.AdvisoryLock)
+	locked, err := utils.AcquireAdvisoryLock(ctx, s.dbConnectionPool, advisoryLock)
 	if err != nil {
 		return fmt.Errorf("problem retrieving db advisory lock: %w", err)
 	}
