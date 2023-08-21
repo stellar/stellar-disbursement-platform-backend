@@ -89,7 +89,7 @@ func Test_ReceiverVerificationModel_GetAllByReceiverId(t *testing.T) {
 
 	actualVerifications, err := receiverVerificationModel.GetAllByReceiverId(ctx, dbConnectionPool, receiver.ID)
 	require.NoError(t, err)
-	assert.Equal(t, 3, len(actualVerifications))
+	assert.Len(t, actualVerifications, 3)
 	for _, v := range actualVerifications {
 		assert.Contains(t, receiver.ID, v.ReceiverID)
 		assert.Contains(t, verifieldFields, v.VerificationField)
