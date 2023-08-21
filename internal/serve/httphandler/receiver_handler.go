@@ -22,7 +22,7 @@ type ReceiverHandler struct {
 type GetReceiverResponse struct {
 	data.Receiver
 	Wallets       []data.ReceiverWallet       `json:"wallets"`
-	Verifications []data.ReceiverVerification `json:"verifications"`
+	Verifications []data.ReceiverVerification `json:"verifications,omitempty"`
 }
 
 func (rh ReceiverHandler) buildReceiversResponse(receivers []data.Receiver, receiversWallets []data.ReceiverWallet) []GetReceiverResponse {
