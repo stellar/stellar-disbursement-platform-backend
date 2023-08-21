@@ -525,13 +525,20 @@ func (s *TransactionWorker) monitorPayment(ctx context.Context, tx *store.Transa
 	paymentLog := log.Ctx(ctx).
 		WithField("id", eventID).
 		WithField("tx_id", tx.ID).
-		WithField("destination_account", tx.Destination).
-		WithField("tx_xdr", metadata["tx_xdr"])
+		WithField("xdr_sent", tx.XDRSent).
+		WithField("destination_account", tx.Destination)
 
 	if metricTag == tssMonitor.PaymentProcessingStartedTag {
 		paymentLog.Debugf(paymentLoggerStr, eventID, metricTag)
-	} else if metricTag == tssMonitor.PaymentReconciliationSuccessfulTag || metricTag == tssMonitor.PaymentReprocessingSuccessfulTag {
-		paymentLog.Infof(paymentLoggerStr, eventID, metricTag)
+		return
+	}
+
+	paymentLog.
+		WithField("xdr_received", tx.XDRReceived)
+
+	if metricTag == tssMonitor.PaymentReconciliationSuccessfulTag || metricTag == tssMonitor.PaymentReprocessingSuccessfulTag {
+		paymentLog.
+			Infof(paymentLoggerStr, eventID, metricTag)
 	} else if metricTag == tssMonitor.PaymentFailedTag {
 		paymentLog.
 			WithField("error", metadata["err_stack"]).
