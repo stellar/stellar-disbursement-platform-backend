@@ -76,18 +76,11 @@ func (m ReceiverVerificationModel) GetByReceiverIdsAndVerificationField(ctx cont
 }
 
 // GetAllByReceiverId returns all receiver verifications by receiver id.
-func (m ReceiverVerificationModel) GetAllByReceiverId(ctx context.Context, sqlExec db.SQLExecuter, receiverId string) ([]*ReceiverVerification, error) {
-	receiverVerifications := []*ReceiverVerification{}
+func (m ReceiverVerificationModel) GetAllByReceiverId(ctx context.Context, sqlExec db.SQLExecuter, receiverId string) ([]ReceiverVerification, error) {
+	receiverVerifications := []ReceiverVerification{}
 	query := `
 		SELECT 
-		    receiver_id, 
-		    verification_field, 
-		    hashed_value,
-		    attempts,
-		    created_at,
-		    updated_at,
-		    confirmed_at,
-		    failed_at
+		    *
 		FROM 
 		    receiver_verifications
 		WHERE 
