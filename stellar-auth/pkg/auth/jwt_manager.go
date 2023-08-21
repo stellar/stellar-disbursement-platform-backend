@@ -9,7 +9,7 @@ import (
 	jwtgo "github.com/golang-jwt/jwt/v4"
 )
 
-const defaultRefreshTimeout = 30
+const defaultRefreshTimeoutInMinutes = 2
 
 type JWTManager interface {
 	GenerateToken(ctx context.Context, user *User, expiresAt time.Time) (string, error)
@@ -86,7 +86,7 @@ func (m *defaultJWTManager) RefreshToken(ctx context.Context, tokenString string
 
 	// We only generate new tokens when enough time
 	// is elapsed.
-	if time.Until(c.ExpiresAt.Time) > defaultRefreshTimeout*time.Second {
+	if time.Until(c.ExpiresAt.Time) > defaultRefreshTimeoutInMinutes*time.Minute {
 		return tokenString, nil
 	}
 

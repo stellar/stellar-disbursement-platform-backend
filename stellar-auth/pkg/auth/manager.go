@@ -95,7 +95,7 @@ func WithCustomJWTManagerOption(jwtManager JWTManager) AuthManagerOption {
 	}
 }
 
-// WithExpirationTimeInMinutesOption sets the JWT token expiration time in minutes. Default is `5 minutes`.
+// WithExpirationTimeInMinutesOption sets the JWT token expiration time in minutes. Default is `15 minutes`.
 func WithExpirationTimeInMinutesOption(minutes int) AuthManagerOption {
 	return func(am *defaultAuthManager) {
 		am.expirationTimeInMinutes = time.Minute * time.Duration(minutes)
