@@ -61,7 +61,7 @@ sdp:
   # =========================== START sdp.deployment ===========================
   deployment:
     annotations:
-      fluxcd.io/ignore: "true"
+
     podAnnotations:
       prometheus.io/path: /metrics
       prometheus.io/port: '{{ include "sdp.metricsPort" . }}'
