@@ -74,7 +74,7 @@ func Test_ReceiverVerificationModel_GetAllByReceiverId(t *testing.T) {
 		require.NoError(t, err)
 		assert.Len(t, actualVerifications, 0)
 
-		assert.Equal(t, []*ReceiverVerification{}, actualVerifications)
+		assert.Equal(t, []ReceiverVerification{}, actualVerifications)
 	})
 
 	t.Run("returns all when the receiver has verifications registered", func(t *testing.T) {
@@ -99,7 +99,7 @@ func Test_ReceiverVerificationModel_GetAllByReceiverId(t *testing.T) {
 		require.NoError(t, err)
 		assert.Len(t, actualVerifications, 3)
 
-		assert.Equal(t, []*ReceiverVerification{
+		assert.Equal(t, []ReceiverVerification{
 			{
 				ReceiverID:        receiver.ID,
 				VerificationField: VerificationFieldDateOfBirth,
