@@ -89,7 +89,6 @@ func Test_ReceiverHandlerGet(t *testing.T) {
 			"failed_payments": "0",
     		"remaining_payments": "0",
 			"registered_wallets": "0",
-			"verifications": [],
 			"wallets": []
 		}`, receiver.ID, receiver.ExternalID, *receiver.Email, receiver.PhoneNumber, receiver.CreatedAt.Format(time.RFC3339Nano), receiver.UpdatedAt.Format(time.RFC3339Nano))
 
@@ -157,7 +156,6 @@ func Test_ReceiverHandlerGet(t *testing.T) {
 					"received_amount": "50.0000000"
 				}
 			],
-			"verifications": [],
 			"wallets": [
 				{
 					"id": %q,
@@ -262,7 +260,6 @@ func Test_ReceiverHandlerGet(t *testing.T) {
 					"received_amount": "50.0000000"
 				}
 			],
-			"verifications": [],
 			"wallets": [
 				{
 					"id": %q,
@@ -660,7 +657,6 @@ func Test_ReceiverHandler_GetReceivers_Success(t *testing.T) {
 						"failed_payments": "0",
 						"remaining_payments": "0",
 						"registered_wallets":"0",
-						"verifications": null,
 						"wallets": [
 							{
 								"id": %q,
@@ -707,7 +703,6 @@ func Test_ReceiverHandler_GetReceivers_Success(t *testing.T) {
 							}
 						],
 						"registered_wallets":"1",
-						"verifications": null,
 						"wallets": [
 							{
 								"id": %q,
@@ -761,7 +756,6 @@ func Test_ReceiverHandler_GetReceivers_Success(t *testing.T) {
 							}
 						],
 						"registered_wallets":"1",
-						"verifications": null,
 						"wallets": [
 							{
 								"id": %q,
@@ -808,7 +802,6 @@ func Test_ReceiverHandler_GetReceivers_Success(t *testing.T) {
 						"failed_payments": "0",
 						"remaining_payments": "0",
 						"registered_wallets":"0",
-						"verifications": null,
 						"wallets": []
 					}
 				]
@@ -858,7 +851,6 @@ func Test_ReceiverHandler_GetReceivers_Success(t *testing.T) {
 						"failed_payments": "0",
 						"remaining_payments": "0",
 						"registered_wallets":"0",
-						"verifications": null,
 						"wallets": []
 					}
 				]
@@ -900,7 +892,6 @@ func Test_ReceiverHandler_GetReceivers_Success(t *testing.T) {
 							}
 						],
 						"registered_wallets":"1",
-						"verifications": null,
 						"wallets": [
 							{
 								"id": %q,
@@ -970,7 +961,6 @@ func Test_ReceiverHandler_GetReceivers_Success(t *testing.T) {
 						"failed_payments": "0",
 						"remaining_payments": "0",
 						"registered_wallets":"0",
-						"verifications": null,
 						"wallets": [
 							{
 								"id": %q,
@@ -1029,7 +1019,6 @@ func Test_ReceiverHandler_GetReceivers_Success(t *testing.T) {
 						"failed_payments": "0",
 						"remaining_payments": "0",
 						"registered_wallets":"0",
-						"verifications": null,
 						"wallets": [
 							{
 								"id": %q,
@@ -1088,7 +1077,6 @@ func Test_ReceiverHandler_GetReceivers_Success(t *testing.T) {
 						"failed_payments": "0",
 						"remaining_payments": "0",
 						"registered_wallets":"0",
-						"verifications": null,
 						"wallets": []
 					}
 				]
@@ -1118,7 +1106,6 @@ func Test_ReceiverHandler_GetReceivers_Success(t *testing.T) {
 						"failed_payments": "0",
 						"remaining_payments": "0",
 						"registered_wallets":"0",
-						"verifications": null,
 						"wallets": [
 							{
 								"id": %q,
@@ -1188,7 +1175,6 @@ func Test_ReceiverHandler_GetReceivers_Success(t *testing.T) {
 							}
 						],
 						"registered_wallets":"1",
-						"verifications": null,
 						"wallets": [
 							{
 								"id": %q,
@@ -1242,7 +1228,6 @@ func Test_ReceiverHandler_GetReceivers_Success(t *testing.T) {
 							}
 						],
 						"registered_wallets":"1",
-						"verifications": null,
 						"wallets": [
 							{
 								"id": %q,
@@ -1313,7 +1298,6 @@ func Test_ReceiverHandler_GetReceivers_Success(t *testing.T) {
 						"failed_payments": "0",
 						"remaining_payments": "0",
 						"registered_wallets":"0",
-						"verifications": null,
 						"wallets": []
 					}
 				]
@@ -1343,7 +1327,6 @@ func Test_ReceiverHandler_GetReceivers_Success(t *testing.T) {
 						"failed_payments": "0",
 						"remaining_payments": "0",
 						"registered_wallets":"0",
-						"verifications": null,
 						"wallets": []
 					}
 				]
@@ -1476,7 +1459,6 @@ func Test_ReceiverHandler_BuildReceiversResponse(t *testing.T) {
 			"failed_payments": "0",
 			"remaining_payments": "0",
 			"registered_wallets":"0",
-			"verifications": null,
 			"wallets": [
 				{
 					"id": %q,
@@ -1516,7 +1498,6 @@ func Test_ReceiverHandler_BuildReceiversResponse(t *testing.T) {
 			"failed_payments": "0",
 			"remaining_payments": "0",
 			"registered_wallets":"0",
-			"verifications": null,
 			"wallets": [
 				{
 					"id": %q,
