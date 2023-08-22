@@ -55,6 +55,7 @@ type TxMetadata struct {
 	srcChannelAcc string
 	commitHash    string
 	horizonErr    bool
+	errStack      string
 }
 
 func NewTransactionWorker(
@@ -146,11 +147,31 @@ func (tw *TransactionWorker) handleFailedTransaction(ctx context.Context, txJob 
 	}
 
 	var shouldMarkAsError bool
+	var isHorizonErr bool
 	var hErrWrapper *utils.HorizonErrorWrapper
+	defer func() {
+		metricTag := tssMonitor.PaymentFailedTag
+		if !shouldMarkAsError {
+			metricTag = tssMonitor.PaymentMarkedForReprocessing
+		}
+
+		tw.monitorPayment(
+			ctx,
+			&txJob.Transaction,
+			metricTag,
+			&TxMetadata{
+				srcChannelAcc: txJob.ChannelAccount.PublicKey,
+				commitHash:    hTxResp.ResultXdr,
+				horizonErr:    isHorizonErr,
+			},
+		)
+	}()
+
 	if errors.As(hErr, &hErrWrapper) {
 		tw.txProcessingLimiter.AdjustLimitIfNeeded(hErrWrapper)
 
 		if hErrWrapper.ResultCodes != nil {
+			isHorizonErr = true
 			// TODO: move this logic inside the HorizonErrorWrapper
 			// ref: https://developers.stellar.org/api/horizon/errors/result-codes/
 			failedTxErrCodes := []string{
@@ -283,6 +304,14 @@ func (tw *TransactionWorker) handleSuccessfulTransaction(ctx context.Context, tx
 	}
 
 	log.Ctx(ctx).Infof("🎉 Successfully processed transaction job %v", txJob)
+
+	metricTag := tssMonitor.PaymentProcessingSuccessfulTag
+	if txJob.Transaction.AttemptsCount > 1 {
+		metricTag = tssMonitor.PaymentReprocessingSuccessfulTag
+	}
+
+	tw.monitorPayment(ctx, &txJob.Transaction, metricTag, nil)
+
 	return nil
 }
 
@@ -326,11 +355,14 @@ func (tw *TransactionWorker) reconcileSubmittedTransaction(ctx context.Context, 
 		return fmt.Errorf("unexpected error: %w", hWrapperErr)
 	}
 
+	tw.monitorPayment(ctx, &txJob.Transaction, tssMonitor.PaymentReconciliationSuccessfulTag, nil)
 	return nil
 }
 
 func (tw *TransactionWorker) processTransactionSubmission(ctx context.Context, txJob *TxJob) error {
 	log.Ctx(ctx).Infof("🚧 Processing transaction submission for job %v...", txJob)
+
+	tw.monitorPayment(ctx, &txJob.Transaction, tssMonitor.PaymentProcessingStartedTag, nil)
 
 	// STEP 1: validate bundle
 	err := tw.validateJob(txJob)
@@ -494,20 +526,6 @@ func (tw *TransactionWorker) submit(ctx context.Context, txJob *TxJob, feeBumpTx
 		}
 	}
 
-	defer func() {
-		tw.monitorPayment(
-			ctx,
-			&txJob.Transaction,
-			"PLACEHOLDER",
-			map[string]string{},
-			&TxMetadata{
-				srcChannelAcc: txJob.ChannelAccount.PublicKey,
-				commitHash:    resp.ResultXdr,
-				horizonErr:    true,
-			},
-		)
-	}()
-
 	return nil
 }
 
@@ -528,10 +546,10 @@ func (tw *TransactionWorker) saveResponseXDRIfPresent(ctx context.Context, txJob
 
 // monitorPayment sends a metric about a payment tx to the observer, linking it to a entry in the logs that contains
 // specific metadata about said tx.
-func (tw *TransactionWorker) monitorPayment(ctx context.Context, tx *store.Transaction, metricTag monitor.MetricTag, metadata map[string]string, txMetadata *TxMetadata) {
+func (tw *TransactionWorker) monitorPayment(ctx context.Context, tx *store.Transaction, metricTag monitor.MetricTag, txMetadata *TxMetadata) {
 	eventID := uuid.New().String()
 	labels := map[string]string{
-		"id":         eventID,
+		"event_id":   eventID,
 		"tx_id":      tx.ID,
 		"updated_at": tx.UpdatedAt.String(),
 	}
@@ -545,11 +563,10 @@ func (tw *TransactionWorker) monitorPayment(ctx context.Context, tx *store.Trans
 	paymentLog := log.Ctx(ctx).
 		WithFields(
 			log.F{
-				"id":                  eventID,
+				"event_id":            eventID,
 				"tx_id":               tx.ID,
 				"created_at":          tx.CreatedAt,
 				"updated_at":          tx.UpdatedAt,
-				"xdr_sent":            tx.XDRSent,
 				"assset":              tx.AssetCode,
 				"channel_account":     txMetadata.srcChannelAcc,
 				"destination_account": tx.Destination,
@@ -565,6 +582,7 @@ func (tw *TransactionWorker) monitorPayment(ctx context.Context, tx *store.Trans
 		WithFields(
 			log.F{
 				"xdr_received": tx.XDRReceived,
+				"xdr_sent":     tx.XDRSent,
 				"commit_hash":  txMetadata.commitHash,
 			},
 		)
@@ -590,7 +608,7 @@ func (tw *TransactionWorker) monitorPayment(ctx context.Context, tx *store.Trans
 		}
 
 		paymentLog.
-			WithField("error", metadata["err_stack"]).
+			WithField("error", txMetadata.errStack).
 			Errorf(paymentLoggerStr, eventID, metricTag)
 	} else {
 		log.Ctx(ctx).Errorf("Cannot recognize metric tag %s for event %s", metricTag, eventID)

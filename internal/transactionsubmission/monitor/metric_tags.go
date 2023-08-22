@@ -7,6 +7,7 @@ import "github.com/stellar/stellar-disbursement-platform-backend/internal/monito
 const (
 	// payments
 	PaymentProcessingStartedTag        monitor.MetricTag = "tss_payment_processing_started"
+	PaymentProcessingSuccessfulTag     monitor.MetricTag = "tss_payment_processing_successful"
 	PaymentReprocessingSuccessfulTag   monitor.MetricTag = "tss_payment_reprocessing_successful"
 	PaymentReconciliationSuccessfulTag monitor.MetricTag = "tss_payment_reconciliation_successful"
 	PaymentMarkedForReprocessing       monitor.MetricTag = "tss_payment_marked_for_retry"
