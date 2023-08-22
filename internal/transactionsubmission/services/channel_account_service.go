@@ -48,7 +48,7 @@ type ChannelAccountServiceOptions struct {
 	RootSeed               string
 }
 
-func NewChannelAccountService(opts ChannelAccountServiceOptions) (*ChannelAccountsService, error) {
+func NewChannelAccountService(ctx context.Context, opts ChannelAccountServiceOptions) (*ChannelAccountsService, error) {
 	dbConnectionPool, err := db.OpenDBConnectionPool(opts.DatabaseDSN)
 	if err != nil {
 		return nil, fmt.Errorf("opening db connection pool: %w", err)
@@ -65,6 +65,11 @@ func NewChannelAccountService(opts ChannelAccountServiceOptions) (*ChannelAccoun
 		return nil, fmt.Errorf("cannot create new ledger number tracker")
 	}
 
+	err = acquireAdvisoryLockForCommand(ctx, dbConnectionPool)
+	if err != nil {
+		return nil, fmt.Errorf("failed getting db advisory lock: %w", err)
+	}
+
 	return &ChannelAccountsService{
 		dbConnectionPool:    dbConnectionPool,
 		caStore:             caModel,
@@ -75,14 +80,9 @@ func NewChannelAccountService(opts ChannelAccountServiceOptions) (*ChannelAccoun
 
 // CreateChannelAccountsOnChain creates a specified count of sponsored channel accounts onchain and internally in the database.
 func (s *ChannelAccountsService) CreateChannelAccountsOnChain(ctx context.Context, opts ChannelAccountServiceOptions) error {
-	err := s.acquireAdvisoryLockForCommand(ctx)
-	if err != nil {
-		return fmt.Errorf("failed getting db advisory lock in CreateChannelAccounts: %w", err)
-	}
-
 	log.Ctx(ctx).Infof("NumChannelAccounts: %d, Horizon: %s, Passphrase: %s, EncryptKey?: %t", opts.NumChannelAccounts, opts.HorizonUrl, opts.NetworkPassphrase, opts.EncryptKey)
 	// createAccountsInBatch creates count number of channel accounts in batches of MaxBatchSize or less per loop
-	err = createAccountsInBatch(ctx, s.dbConnectionPool, opts, s.horizonClient, s.caStore, s.ledgerNumberTracker)
+	err := createAccountsInBatch(ctx, s.dbConnectionPool, opts, s.horizonClient, s.caStore, s.ledgerNumberTracker)
 	if err != nil {
 		return fmt.Errorf("creating channel accounts in batch in CreateChannelAccountsOnChain: %w", err)
 	}
@@ -145,11 +145,6 @@ func createAccountsInBatch(
 
 // VerifyChannelAccounts verifies the existance of all channel accounts in the data store onchain.
 func (s *ChannelAccountsService) VerifyChannelAccounts(ctx context.Context, opts ChannelAccountServiceOptions) error {
-	err := s.acquireAdvisoryLockForCommand(ctx)
-	if err != nil {
-		return fmt.Errorf("failed getting db advisory lock in VerifyChannelAccounts: %w", err)
-	}
-
 	log.Ctx(ctx).Infof("DeleteInvalidAccounts?: %t", opts.DeleteInvalidAcccounts)
 	accounts, err := s.caStore.GetAll(ctx, s.dbConnectionPool, 0, 0)
 	if err != nil {
@@ -199,11 +194,6 @@ func (s *ChannelAccountsService) EnsureChannelAccountsCount(
 	ctx context.Context,
 	opts ChannelAccountServiceOptions,
 ) error {
-	err := s.acquireAdvisoryLockForCommand(ctx)
-	if err != nil {
-		return fmt.Errorf("failed getting db advisory lock in EnsureChannelAccounts: %w", err)
-	}
-
 	log.Ctx(ctx).Infof("Desired Accounts Count: %d", opts.NumChannelAccounts)
 
 	numAccountsToEnsure := opts.NumChannelAccounts
@@ -250,11 +240,6 @@ func (s *ChannelAccountsService) DeleteChannelAccount(
 	ctx context.Context,
 	opts ChannelAccountServiceOptions,
 ) error {
-	err := s.acquireAdvisoryLockForCommand(ctx)
-	if err != nil {
-		return fmt.Errorf("failed getting db advisory lock in DeleteChannelAccounts: %w", err)
-	}
-
 	if opts.ChannelAccountID != "" { // delete specified accounts
 		currLedgerNum, err := s.ledgerNumberTracker.GetLedgerNumber()
 		if err != nil {
@@ -374,8 +359,8 @@ func (s *ChannelAccountsService) deleteChannelAccount(
 	return nil
 }
 
-func (s *ChannelAccountsService) acquireAdvisoryLockForCommand(ctx context.Context) error {
-	locked, err := utils.AcquireAdvisoryLock(ctx, s.dbConnectionPool, advisoryLock)
+func acquireAdvisoryLockForCommand(ctx context.Context, dbConnectionPool db.DBConnectionPool) error {
+	locked, err := utils.AcquireAdvisoryLock(ctx, dbConnectionPool, advisoryLock)
 	if err != nil {
 		return fmt.Errorf("problem retrieving db advisory lock: %w", err)
 	}

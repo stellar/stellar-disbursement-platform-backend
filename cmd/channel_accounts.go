@@ -61,7 +61,7 @@ func (c *ChannelAccountsCommand) Command() *cobra.Command {
 			svcOpts.DatabaseDSN = globalOptions.databaseURL
 			svcOpts.NetworkPassphrase = globalOptions.networkPassphrase
 
-			c.Service, err = txSubSvc.NewChannelAccountService(*svcOpts)
+			c.Service, err = txSubSvc.NewChannelAccountService(ctx, *svcOpts)
 			if err != nil {
 				log.Ctx(ctx).Fatalf("Error creating channel account service: %s", err.Error())
 			}
