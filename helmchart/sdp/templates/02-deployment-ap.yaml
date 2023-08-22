@@ -11,7 +11,7 @@ metadata:
   {{- end }}
 spec:
   {{- if not .Values.autoscaling.enabled }}
-  replicas: {{ .Values.replicaCount }}
+  replicas: {{ .Values.global.replicaCount }}
   {{- end }}
   selector:
     matchLabels:
@@ -31,10 +31,6 @@ spec:
       labels:
         {{- include "sdp.selectorLabelsWithSuffix" (list . "-ap") | nindent 8 }}
     spec:
-      {{- with .Values.imagePullSecrets }}
-      imagePullSecrets:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
       # {{- if .Values.serviceAccount.name }}
       # serviceAccountName: {{ tpl .Values.serviceAccount.name $ }}
       # {{- end }}
@@ -61,7 +57,7 @@ spec:
             - name: SECRET_DATA_PASSWORD
               value: 'postgres'
             - name: SDP_IMAGE_TAG  # This env is used to force the AP to be redeployed every time the SDP is deployed. This is used to force the SDP to re-fetch the toml file and assets to ensure the latest ones are used.
-              value: {{ .Values.image.tag }}
+              value: {{ .Values.sdp.image.tag }}
           {{- end }}
           args:
             - "--sep-server"
@@ -107,20 +103,20 @@ spec:
           - configMapRef:
               name: {{ include "sdp.fullname" . }}-ap
           
-          {{- if .Values.anchorPlatform.secretName }}
+          {{- if .Values.anchorPlatform.kubeSecrets.secretName }}
           - secretRef:
-              name: {{ .Values.anchorPlatform.secretName }}
+              name: {{ .Values.anchorPlatform.kubeSecrets.secretName }}
           {{ end }}
 
-      {{- with .Values.deployment.nodeSelector }}
+      {{- with .Values.anchorPlatform.deployment.nodeSelector }}
       nodeSelector:
         {{- tpl (toYaml .) . | nindent 8 }}
       {{- end }}
-      {{- with .Values.deployment.affinity }}
+      {{- with .Values.anchorPlatform.deployment.affinity }}
       affinity:
         {{- tpl (toYaml .) . | nindent 8 }}
       {{- end }}
-      {{- with .Values.deployment.tolerations }}
+      {{- with .Values.anchorPlatform.deployment.tolerations }}
       tolerations:
         {{- tpl (toYaml .) . | nindent 8 }}
       {{- end }}
