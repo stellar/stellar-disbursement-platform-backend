@@ -308,7 +308,7 @@ tss:
 
     data:
       NUM_CHANNEL_ACCOUNTS: "1"
-      MAX_BASE_FEE: "100"
+      MAX_BASE_FEE: "100000"
       MOCK: "false"
       TSS_METRICS_TYPE: "TSS_PROMETHEUS"
 

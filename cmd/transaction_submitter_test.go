@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/spf13/cobra"
+	"github.com/stellar/go/txnbuild"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve"
@@ -77,7 +78,7 @@ func Test_tss(t *testing.T) {
 		HorizonURL:           "https://horizon-testnet.stellar.org",
 		DistributionSeed:     "SBQ3ZNC2SE3FV43HZ2KW3FCXQMMIQ33LZB745KTMCHDS6PNQOVXMV5NC",
 		NetworkPassphrase:    "Test SDF Network ; September 2015",
-		MaxBaseFee:           100,
+		MaxBaseFee:           100 * txnbuild.MinBaseFee,
 		NumChannelAccounts:   2,
 		QueuePollingInterval: 6,
 		MonitorService:       &mMonitorService,
