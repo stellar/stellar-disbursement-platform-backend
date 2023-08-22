@@ -12,7 +12,7 @@ metadata:
     {{- tpl (toYaml .Values.dashboard.deployment.annotations) . | nindent 4 }}
   {{- end }}
 spec:
-  {{- if not .Values.autoscaling.enabled }}
+  {{- if not .Values.global.autoscaling.enabled }}
   replicas: {{ .Values.replicaCount }}
   {{- end }}
   selector:

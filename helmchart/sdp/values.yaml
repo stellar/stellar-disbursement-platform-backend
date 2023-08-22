@@ -26,6 +26,13 @@ global:
   service:
     type: ClusterIP
 
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 4
+    targetCPUUtilizationPercentage: 80
+    targetMemoryUtilizationPercentage: 80
+
 sdp:
   # =========================== START sdp.route ===========================
   route:
@@ -392,11 +399,3 @@ serviceAccount:
   name: ""
 
 
-# =========================== START Autoscaling ===========================
-
-autoscaling:
-  enabled: false
-  minReplicas: 1
-  maxReplicas: 4
-  targetCPUUtilizationPercentage: 80
-  targetMemoryUtilizationPercentage: 80
