@@ -357,8 +357,6 @@ dashboard:
     data:   # The data to be stored in the ConfigMap:
       API_URL: "{{ include \"sdp.schema\" . }}://{{ include \"sdp.domain\" . }}"
       RECAPTCHA_SITE_KEY: "reCaptchaSiteKey"
-  service:
-    type: ClusterIP
   ingress:
     enabled: false
     className: "nginx"

@@ -8,7 +8,7 @@ metadata:
   labels:
     {{- include "sdp.labelsWithSuffix" (list . "-dashboard") | nindent 4 }}
 spec:
-  type: {{ .Values.dashboard.service.type }}
+  type: {{ .Values.global.service.type }}
   ports:
     - port: {{ include "dashboard.port" . }}
       targetPort: http
