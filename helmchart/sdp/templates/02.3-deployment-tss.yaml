@@ -44,7 +44,7 @@ spec:
             {{- toYaml .Values.tss.deployment.securityContext | nindent 12 }}
           image: "{{ .Values.sdp.image.repository }}:{{ .Values.sdp.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.sdp.image.pullPolicy }}
-          {{- if .Values.ephemeralDatabase }}
+          {{- if .Values.global.ephemeralDatabase }}
           env:
             - name: DATABASE_URL
               value: 'postgres://postgres:postgres@{{ include "sdp.fullname" . }}-psql.{{ .Release.Namespace }}.svc.cluster.local:5432/postgres-sdp?sslmode=disable'
