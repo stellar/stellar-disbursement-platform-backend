@@ -5,27 +5,38 @@
 
 
 ## @section Global parameters
-## These parameters are shared by all charts
-
-## @param global.isPubnet Network to use: true for pubnet (mainnet), false for testnet
-## @param global.replicaCount Global number of replicas to use. This is used only if autoscaling.enabled is set to false
+## @descriptionStart
+##  These parameters are shared by all charts
+## @descriptionEnd
 global:
+  ## @param global.isPubnet Determines if the network is public. Set this to true for public networks.
   isPubnet: false
+
+  ## @param global.replicaCount Number of replicas for the application.
   replicaCount: 1
+
+  ## @param global.resources Resource limits and requests for the application pods.
+  ## By default, we recommend not specifying default resources to ensure the chart can run on environments with minimal resources, such as Minikube.
+  ## If you wish to specify resources, uncomment the resource fields and adjust them as necessary.
   resources: { }
-    # We usually recommend not to specify default resources and to leave this as a conscious
-    # choice for the user. This also increases chances charts run on environments with little
-    # resources, such as Minikube. If you do want to specify resources, uncomment the following
-    # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
     # limits:
     #   cpu: 250m
     #   memory: 512Mi
     # requests:
-    #   cpu: 50m
-    #   memory: 256Mi
+  #   cpu: 50m
+  #   memory: 256Mi
+
+  ## @param global.service.type Kubernetes Service type for the application.
   service:
     type: ClusterIP
 
+
+  ## Configuration related to the horizontal pod autoscaling of the application.
+  ## @param global.autoscaling.enabled Determines if autoscaling is enabled for the application.
+  ## @param global.autoscaling.minReplicas Minimum number of replicas when autoscaling is enabled.
+  ## @param global.autoscaling.maxReplicas Maximum number of replicas when autoscaling is enabled.
+  ## @param global.autoscaling.targetCPUUtilizationPercentage Target CPU utilization percentage for autoscaling.
+  ## @param global.autoscaling.targetMemoryUtilizationPercentage Target memory utilization percentage for autoscaling.
   autoscaling:
     enabled: false
     minReplicas: 1
@@ -33,21 +44,20 @@ global:
     targetCPUUtilizationPercentage: 80
     targetMemoryUtilizationPercentage: 80
 
+  ## Configuration related to the Kubernetes Service Account used by the application.
+  ## @param global.serviceAccount.create Determines if a new service account should be created.
+  ## @param global.serviceAccount.annotations Annotations to be added to the service account.
+  ## @param global.serviceAccount.name Name of the service account to be used. If not set and create is set to true, a name will be generated using the fullname template.
   serviceAccount:
-    # Specifies whether a service account should be created
     create: false
-    # Annotations to add to the service account
     annotations:
-
-    # The name of the service account to use.
-    # If not set and create is true, a name is generated using the fullname template
     name: ""
 
-  # `ephemeralDatabase` will create an ephemeral database for testing purposes.
-  # If this option is enabled, make sure to set the `DATABASE_URL` environment variable to:
-  # postgres://postgres:postgres@{{ include "sdp.fullname" . }}-psql:5432/postgres-sdp?sslmode=disable
-  # The AP database URL will be set automatically to:
-  # postgres://postgres:postgres@{{ include "sdp.fullname" . }}-psql:5433/postgres-ap?sslmode=disable
+  ## @param global.ephemeralDatabase Enables or disables the creation of an ephemeral database for testing purposes.
+  ## If this option is enabled, make sure to set the `DATABASE_URL` environment variable to:
+  ##   - postgres://postgres:postgres@{{ include "sdp.fullname" . }}-psql:5432/postgres-sdp?sslmode=disable
+  ## The AP database URL will be set automatically to:
+  ##   - postgres://postgres:postgres@{{ include "sdp.fullname" . }}-psql:5433/postgres-ap?sslmode=disable
   ephemeralDatabase: true
 
 
