@@ -588,7 +588,7 @@ func (tw *TransactionWorker) monitorPayment(ctx context.Context, tx *store.Trans
 		)
 
 	// successful transactions
-	if metricTag == tssMonitor.PaymentReconciliationSuccessfulTag || metricTag == tssMonitor.PaymentReprocessingSuccessfulTag {
+	if metricTag == tssMonitor.PaymentReconciliationSuccessfulTag || metricTag == tssMonitor.PaymentReprocessingSuccessfulTag || metricTag == tssMonitor.PaymentProcessingSuccessfulTag {
 		paymentLog.
 			WithFields(
 				log.F{
