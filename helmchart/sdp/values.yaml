@@ -4,30 +4,6 @@
 # This is a YAML-formatted file where you declare the variables to be passed into your templates.
 
 
-# =========================== START Router ===========================
----
-router:
-  sdp:
-    schema: "https"
-    # The domain is the public address of that service. For localhost you will want to include the port as part of the domain.
-    # domain: "localhost:8000"
-    domain: sdp.localhost.com
-    port: "8000"
-    metricsPort: "8002"
-  tss:
-    schema: "https"
-    port: "9000"
-    metricsPort: "9002"
-  ap:
-    schema: "https"
-    # The domain is the public address of that service. For localhost you will want to include the port as part of the domain.
-    # domain: "localhost:8080"
-    domain: "ap.localhost.com"
-    sepPort: "8080"
-    platformPort: "8085"
-
-
-
 ## @section Global parameters
 ## These parameters are shared by all charts
 
@@ -47,8 +23,18 @@ global:
     # requests:
     #   cpu: 50m
     #   memory: 256Mi
+  service:
+    type: ClusterIP
 
 sdp:
+  # =========================== START sdp.route ===========================
+  route:
+    schema: "https"
+    # The domain is the public address of that service. For localhost you will want to include the port as part of the domain.
+    # domain: "localhost:8000"
+    domain: sdp.localhost.com
+    port: "8000"
+    metricsPort: "8002"
   # =========================== START sdp.image ===========================
   image:
     # replace the `repository` with the actual image name.
@@ -142,66 +128,32 @@ sdp:
       RECAPTCHA_SITE_SECRET_KEY:  #required
       ANCHOR_PLATFORM_OUTGOING_JWT_SECRET: mySdpToAnchorPlatformSecret
 
+  # =========================== START sdp.ingress ===========================
+  ingress:
+    enabled: true
+    className: "nginx"
+    annotations:
 
-# =========================== START Service ===========================
-
-service:
-  type: ClusterIP
-
-
-# =========================== START serviceAccount ===========================
-
-# Not used in SDF's deployment:
-serviceAccount:
-  # Specifies whether a service account should be created
-  create: false
-  # Annotations to add to the service account
-  annotations:
-
-  # The name of the service account to use.
-  # If not set and create is true, a name is generated using the fullname template
-  name: ""
-
-
-# =========================== START Autoscaling ===========================
-
-autoscaling:
-  enabled: false
-  minReplicas: 1
-  maxReplicas: 4
-  targetCPUUtilizationPercentage: 80
-  targetMemoryUtilizationPercentage: 80
-
-
-# =========================== START Postgres (TESTING database) ===========================
-
-# `ephemeralDatabase` will create an ephemeral database for testing purposes.
-# If this option is enabled, make sure to set the `DATABASE_URL` environment variable to:
-# postgres://postgres:postgres@{{ include "sdp.fullname" . }}-psql:5432/postgres-sdp?sslmode=disable
-# The AP database URL will be set automatically to:
-# postgres://postgres:postgres@{{ include "sdp.fullname" . }}-psql:5433/postgres-ap?sslmode=disable
-ephemeralDatabase: true
-
-
-# =========================== START Ingress ===========================
-ingress:
-  enabled: true
-  className: "nginx"
-  annotations:
-
-    # kubernetes.io/ingress.class: "public"
-    nginx.ingress.kubernetes.io/custom-response-headers: "X-XSS-Protection: 1; mode=block || X-Frame-Options: DENY || X-Content-Type-Options: nosniff || Strict-Transport-Security: max-age=31536000; includeSubDomains"
-  tls:
-  - hosts:
-    - '{{ include "sdp.domain" . }}'
-    - '{{ include "sdp.ap.domain" . }}'
-    secretName: backend-tls-cert-name    # You need to create this secret manually. For more instructions, plz refer to helmchart/docs/README.md
-  # NOTE: the hosts to be used here will be the same ones as in the router section, at the top of this file.
+      # kubernetes.io/ingress.class: "public"
+      nginx.ingress.kubernetes.io/custom-response-headers: "X-XSS-Protection: 1; mode=block || X-Frame-Options: DENY || X-Content-Type-Options: nosniff || Strict-Transport-Security: max-age=31536000; includeSubDomains"
+    tls:
+      - hosts:
+          - '{{ include "sdp.domain" . }}'
+        secretName: backend-tls-cert-name    # You need to create this secret manually. For more instructions, plz refer to helmchart/docs/README.md
+        # NOTE: the hosts to be used here will be the same ones as in the sdp.route section.
 
 
 # =========================== START anchorPlatform ===========================
 anchorPlatform:
 
+  # =========================== START anchorPlatform.route ===========================
+  route:
+    schema: "https"
+    # The domain is the public address of that service. For localhost you will want to include the port as part of the domain.
+    # domain: "localhost:8080"
+    domain: "ap.localhost.com"
+    sepPort: "8080"
+    platformPort: "8085"
   # =========================== START anchorPlatform.deployment ===========================
   deployment:
     annotations:
@@ -300,11 +252,28 @@ anchorPlatform:
       SECRET_SEP24_INTERACTIVE_URL_JWT_SECRET: jwt_secret_1234567890                                                                                                                                                                                                                                                                                                           │
       SECRET_SEP24_MORE_INFO_URL_JWT_SECRET: jwt_secret_1234567890
 
+  # =========================== START anchorPlatform.ingress ===========================
+  ingress:
+    enabled: true
+    className: "nginx"
+    annotations:
+
+      # kubernetes.io/ingress.class: "public"
+      nginx.ingress.kubernetes.io/custom-response-headers: "X-XSS-Protection: 1; mode=block || X-Frame-Options: DENY || X-Content-Type-Options: nosniff || Strict-Transport-Security: max-age=31536000; includeSubDomains"
+    tls:
+      - hosts:
+          - '{{ include "sdp.ap.domain" . }}'
+        secretName: backend-tls-cert-name    # You need to create this secret manually. For more instructions, plz refer to helmchart/docs/README.md
+        # NOTE: the hosts to be used here will be the same ones as in the anchorPlatform.route section.
 
 
 # =========================== START tss ===========================
 tss:
-
+  # =========================== START tss.route ===========================
+  route:
+    schema: "https"
+    port: "9000"
+    metricsPort: "9002"
   # =========================== START tss.deployment ===========================
   deployment:
     # Annotations to add to the Deployment
@@ -399,3 +368,37 @@ dashboard:
     - hosts:
       - '{{ include "dashboard.domain" . }}'
       secretName: dashboard-tls-cert-name    # You need to create this secret manually. For more instructions, plz refer to helmchart/docs/README.md
+
+
+# =========================== START Postgres (TESTING database) ===========================
+
+# `ephemeralDatabase` will create an ephemeral database for testing purposes.
+# If this option is enabled, make sure to set the `DATABASE_URL` environment variable to:
+# postgres://postgres:postgres@{{ include "sdp.fullname" . }}-psql:5432/postgres-sdp?sslmode=disable
+# The AP database URL will be set automatically to:
+# postgres://postgres:postgres@{{ include "sdp.fullname" . }}-psql:5433/postgres-ap?sslmode=disable
+ephemeralDatabase: true
+
+
+# =========================== START serviceAccount ===========================
+
+# Not used in SDF's deployment:
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: false
+  # Annotations to add to the service account
+  annotations:
+
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
+
+# =========================== START Autoscaling ===========================
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 4
+  targetCPUUtilizationPercentage: 80
+  targetMemoryUtilizationPercentage: 80
