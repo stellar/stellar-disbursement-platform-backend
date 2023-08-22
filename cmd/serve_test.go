@@ -83,31 +83,32 @@ func Test_serve(t *testing.T) {
 	mMonitorService := monitor.MockMonitorService{}
 
 	serveOpts := serve.ServeOptions{
-		Environment:                   "test",
-		GitCommit:                     "1234567890abcdef",
-		Port:                          8000,
-		Version:                       "x.y.z",
-		MonitorService:                &mMonitorService,
-		DatabaseDSN:                   randomDatabaseDSN,
-		EC256PublicKey:                "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAER88h7AiQyVDysRTxKvBB6CaiO/kS\ncvGyimApUE/12gFhNTRf37SE19CSCllKxstnVFOpLLWB7Qu5OJ0Wvcz3hg==\n-----END PUBLIC KEY-----",
-		EC256PrivateKey:               "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgIqI1MzMZIw2pQDLx\nJn0+FcNT/hNjwtn2TW43710JKZqhRANCAARHzyHsCJDJUPKxFPEq8EHoJqI7+RJy\n8bKKYClQT/XaAWE1NF/ftITX0JIKWUrGy2dUU6kstYHtC7k4nRa9zPeG\n-----END PRIVATE KEY-----",
-		CorsAllowedOrigins:            []string{"*"},
-		SEP24JWTSecret:                "jwt_secret_1234567890",
-		BaseURL:                       "https://sdp.com",
-		UIBaseURL:                     "http://localhost:3000",
-		ResetTokenExpirationHours:     24,
-		NetworkPassphrase:             network.TestNetworkPassphrase,
-		HorizonURL:                    horizonclient.DefaultTestNetClient.HorizonURL,
-		Sep10SigningPublicKey:         "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
-		Sep10SigningPrivateKey:        "SBUSPEKAZKLZSWHRSJ2HWDZUK6I3IVDUWA7JJZSGBLZ2WZIUJI7FPNB5",
-		AnchorPlatformBaseSepURL:      "localhost:8080",
-		AnchorPlatformBasePlatformURL: "localhost:8085",
-		DistributionPublicKey:         "GBC2HVWFIFN7WJHFORVBCDKJORG6LWTW3O2QBHOURL3KHZPM4KMWTUSA",
-		DistributionSeed:              "SBHQEYSACD5DOK5I656NKLAMOHC6VT64ATOWWM2VJ3URGDGMVGNPG4ON",
-		ReCAPTCHASiteKey:              "reCAPTCHASiteKey",
-		ReCAPTCHASiteSecretKey:        "reCAPTCHASiteSecretKey",
-		EnableMFA:                     true,
-		EnableReCAPTCHA:               true,
+		Environment:                     "test",
+		GitCommit:                       "1234567890abcdef",
+		Port:                            8000,
+		Version:                         "x.y.z",
+		MonitorService:                  &mMonitorService,
+		DatabaseDSN:                     randomDatabaseDSN,
+		EC256PublicKey:                  "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAER88h7AiQyVDysRTxKvBB6CaiO/kS\ncvGyimApUE/12gFhNTRf37SE19CSCllKxstnVFOpLLWB7Qu5OJ0Wvcz3hg==\n-----END PUBLIC KEY-----",
+		EC256PrivateKey:                 "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgIqI1MzMZIw2pQDLx\nJn0+FcNT/hNjwtn2TW43710JKZqhRANCAARHzyHsCJDJUPKxFPEq8EHoJqI7+RJy\n8bKKYClQT/XaAWE1NF/ftITX0JIKWUrGy2dUU6kstYHtC7k4nRa9zPeG\n-----END PRIVATE KEY-----",
+		CorsAllowedOrigins:              []string{"*"},
+		SEP24JWTSecret:                  "jwt_secret_1234567890",
+		BaseURL:                         "https://sdp.com",
+		UIBaseURL:                       "http://localhost:3000",
+		ResetTokenExpirationHours:       24,
+		NetworkPassphrase:               network.TestNetworkPassphrase,
+		HorizonURL:                      horizonclient.DefaultTestNetClient.HorizonURL,
+		Sep10SigningPublicKey:           "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
+		Sep10SigningPrivateKey:          "SBUSPEKAZKLZSWHRSJ2HWDZUK6I3IVDUWA7JJZSGBLZ2WZIUJI7FPNB5",
+		AnchorPlatformBaseSepURL:        "localhost:8080",
+		AnchorPlatformBasePlatformURL:   "localhost:8085",
+		AnchorPlatformOutgoingJWTSecret: "jwt_secret_1234567890",
+		DistributionPublicKey:           "GBC2HVWFIFN7WJHFORVBCDKJORG6LWTW3O2QBHOURL3KHZPM4KMWTUSA",
+		DistributionSeed:                "SBHQEYSACD5DOK5I656NKLAMOHC6VT64ATOWWM2VJ3URGDGMVGNPG4ON",
+		ReCAPTCHASiteKey:                "reCAPTCHASiteKey",
+		ReCAPTCHASiteSecretKey:          "reCAPTCHASiteSecretKey",
+		EnableMFA:                       true,
+		EnableReCAPTCHA:                 true,
 	}
 
 	crashTrackerClient, err := di.NewCrashTracker(ctx, crashtracker.CrashTrackerOptions{
@@ -178,6 +179,7 @@ func Test_serve(t *testing.T) {
 	t.Setenv("SEP10_SIGNING_PRIVATE_KEY", serveOpts.Sep10SigningPrivateKey)
 	t.Setenv("ANCHOR_PLATFORM_BASE_SEP_URL", serveOpts.AnchorPlatformBaseSepURL)
 	t.Setenv("ANCHOR_PLATFORM_BASE_PLATFORM_URL", serveOpts.AnchorPlatformBasePlatformURL)
+	t.Setenv("ANCHOR_PLATFORM_OUTGOING_JWT_SECRET", serveOpts.AnchorPlatformOutgoingJWTSecret)
 	t.Setenv("DISTRIBUTION_PUBLIC_KEY", serveOpts.DistributionPublicKey)
 	t.Setenv("DISTRIBUTION_SEED", serveOpts.DistributionSeed)
 	t.Setenv("BASE_URL", serveOpts.BaseURL)

@@ -184,7 +184,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			Usage:     "The JWT secret used to create a JWT token used to send requests to the anchor platform.",
 			OptType:   types.String,
 			ConfigKey: &serveOpts.AnchorPlatformOutgoingJWTSecret,
-			Required:  false,
+			Required:  true,
 		},
 		{
 			Name:        "reset-token-expiration-hours",
