@@ -14,9 +14,65 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func Test_NewAnchorPlatformAPIService(t *testing.T) {
+	testCases := []struct {
+		name                          string
+		httpClient                    httpclient.HttpClientInterface
+		anchorPlatformBasePlatformURL string
+		anchorPlatformOutgoingJWT     string
+		wantErrContains               string
+	}{
+		{
+			name:                          "returns error when http client is nil",
+			httpClient:                    nil,
+			anchorPlatformBasePlatformURL: "",
+			wantErrContains:               "http client cannot be nil",
+		},
+		{
+			name:                          "returns error when anchor platform base platform url is empty",
+			httpClient:                    &http.Client{},
+			anchorPlatformBasePlatformURL: "",
+			wantErrContains:               "anchor platform base platform url cannot be empty",
+		},
+		{
+			name:                          "returns error when anchor platform outgoing jwt secret is empty",
+			httpClient:                    &http.Client{},
+			anchorPlatformBasePlatformURL: "https://test.com",
+			anchorPlatformOutgoingJWT:     "",
+			wantErrContains:               "anchor platform outgoing jwt secret cannot be empty",
+		},
+		{
+			name:                          "returns error when jwt manager cannot be created due to a small jwt secret",
+			httpClient:                    &http.Client{},
+			anchorPlatformBasePlatformURL: "https://test.com",
+			anchorPlatformOutgoingJWT:     "small",
+			wantErrContains:               "creating jwt manager: secret is required to have at least 12 characteres",
+		},
+		{
+			name:                          "🎉 successfully creates Anchor Platform API service",
+			httpClient:                    &http.Client{},
+			anchorPlatformBasePlatformURL: "https://test.com",
+			anchorPlatformOutgoingJWT:     "jwt_secret_1234567890",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			apService, err := NewAnchorPlatformAPIService(tc.httpClient, tc.anchorPlatformBasePlatformURL, tc.anchorPlatformOutgoingJWT)
+			if tc.wantErrContains == "" {
+				require.NoError(t, err)
+				require.NotNil(t, apService)
+			} else {
+				require.EqualError(t, err, tc.wantErrContains)
+				require.Nil(t, apService)
+			}
+		})
+	}
+}
+
 func Test_UpdateAnchorTransactions(t *testing.T) {
 	httpClientMock := httpclient.HttpClientMock{}
-	anchorPlatformAPIService, err := NewAnchorPlatformAPIService(&httpClientMock, "http://mock_anchor.com/", "")
+	anchorPlatformAPIService, err := NewAnchorPlatformAPIService(&httpClientMock, "http://mock_anchor.com/", "jwt_secret_1234567890")
 	require.NoError(t, err)
 	ctx := context.Background()
 

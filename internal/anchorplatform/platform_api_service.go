@@ -3,13 +3,11 @@ package anchorplatform
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
 
-	"github.com/stellar/go/support/log"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
 )
 
@@ -45,21 +43,28 @@ type TransactionRecords struct {
 }
 
 func NewAnchorPlatformAPIService(httpClient httpclient.HttpClientInterface, anchorPlatformBasePlatformURL, anchorPlatformOutgoingJWTSecret string) (*AnchorPlatformAPIService, error) {
-	apService := AnchorPlatformAPIService{
+	// validation
+	if httpClient == nil {
+		return nil, fmt.Errorf("http client cannot be nil")
+	}
+	if anchorPlatformBasePlatformURL == "" {
+		return nil, fmt.Errorf("anchor platform base platform url cannot be empty")
+	}
+	if anchorPlatformOutgoingJWTSecret == "" {
+		return nil, fmt.Errorf("anchor platform outgoing jwt secret cannot be empty")
+	}
+
+	const expirationMiliseconds = 5000
+	jwtManager, err := NewJWTManager(anchorPlatformOutgoingJWTSecret, expirationMiliseconds)
+	if err != nil {
+		return nil, fmt.Errorf("creating jwt manager: %w", err)
+	}
+
+	return &AnchorPlatformAPIService{
 		HttpClient:                    httpClient,
 		AnchorPlatformBasePlatformURL: anchorPlatformBasePlatformURL,
-	}
-
-	if anchorPlatformOutgoingJWTSecret != "" {
-		const expirationMiliseconds = 5000
-		jwtManager, err := NewJWTManager(anchorPlatformOutgoingJWTSecret, expirationMiliseconds)
-		if err != nil {
-			return nil, fmt.Errorf("error creating jwt manager: %w", err)
-		}
-		apService.jwtManager = jwtManager
-	}
-
-	return &apService, nil
+		jwtManager:                    jwtManager,
+	}, nil
 }
 
 func (a *AnchorPlatformAPIService) UpdateAnchorTransactions(ctx context.Context, transactions []Transaction) error {
@@ -80,13 +85,9 @@ func (a *AnchorPlatformAPIService) UpdateAnchorTransactions(ctx context.Context,
 	}
 	request.Header.Set("Content-Type", "application/json")
 
-	// If the service is configured with an outgoing JWT secret, we'll generate a JWT token and add it to the request.
 	token, err := a.GetJWTToken(transactions)
 	if err != nil {
-		if !errors.Is(err, ErrJWTManagerNotSet) {
-			return fmt.Errorf("error getting jwt token in UpdateAnchorTransactions: %w", err)
-		}
-		log.Ctx(ctx).Warn("JWT secret not set, skipping JWT token generation")
+		return fmt.Errorf("getting jwt token in UpdateAnchorTransactions: %w", err)
 	} else {
 		request.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
 	}
