@@ -103,7 +103,7 @@ func Test_ChannelAccountsCommand_CreateCommand(t *testing.T) {
 		caServiceMock.
 			On("CreateChannelAccountsOnChain", context.Background(), txSubSvc.ChannelAccountServiceOptions{
 				NumChannelAccounts: 2,
-				MaxBaseFee:         txnbuild.MinBaseFee,
+				MaxBaseFee:         100 * txnbuild.MinBaseFee,
 				RootSeed:           distributionSeed,
 				EncryptKey:         encryptKey,
 			}).
@@ -235,7 +235,7 @@ func Test_ChannelAccountsCommand_EnsureCommand(t *testing.T) {
 	t.Run("executs the ensure command successfully", func(t *testing.T) {
 		caServiceMock.
 			On("EnsureChannelAccountsCount", context.Background(), txSubSvc.ChannelAccountServiceOptions{
-				MaxBaseFee:         txnbuild.MinBaseFee,
+				MaxBaseFee:         100 * txnbuild.MinBaseFee,
 				NumChannelAccounts: 2,
 				RootSeed:           distributionSeed,
 				EncryptKey:         encryptKey,
@@ -309,7 +309,7 @@ func Test_ChannelAccountsCommand_DeleteCommand(t *testing.T) {
 		parentCmdMock.SetArgs(args)
 		caServiceMock.
 			On("DeleteChannelAccount", context.Background(), txSubSvc.ChannelAccountServiceOptions{
-				MaxBaseFee:       txnbuild.MinBaseFee,
+				MaxBaseFee:       100 * txnbuild.MinBaseFee,
 				ChannelAccountID: "acc-id",
 				RootSeed:         distributionSeed,
 			}).

@@ -118,7 +118,7 @@ func (c *ChannelAccountsCommand) CreateCommand(toolOpts *txSubSvc.ChannelAccount
 			Usage:       "The max base fee for submitting a stellar transaction",
 			OptType:     types.Int,
 			ConfigKey:   &toolOpts.MaxBaseFee,
-			FlagDefault: txnbuild.MinBaseFee,
+			FlagDefault: 100 * txnbuild.MinBaseFee,
 			Required:    true,
 		},
 		{
@@ -235,7 +235,7 @@ func (c *ChannelAccountsCommand) EnsureCommand(toolOpts *txSubSvc.ChannelAccount
 			Usage:       "The max base fee for submitting a stellar transaction",
 			OptType:     types.Int,
 			ConfigKey:   &toolOpts.MaxBaseFee,
-			FlagDefault: txnbuild.MinBaseFee,
+			FlagDefault: 100 * txnbuild.MinBaseFee,
 			Required:    true,
 		},
 		{
@@ -311,7 +311,7 @@ func (c *ChannelAccountsCommand) DeleteCommand(toolOpts *txSubSvc.ChannelAccount
 			Usage:       "The max base fee for submitting a stellar transaction",
 			OptType:     types.Int,
 			ConfigKey:   &toolOpts.MaxBaseFee,
-			FlagDefault: txnbuild.MinBaseFee,
+			FlagDefault: 100 * txnbuild.MinBaseFee,
 			Required:    true,
 		},
 	}

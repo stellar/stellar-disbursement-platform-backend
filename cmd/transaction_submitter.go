@@ -123,7 +123,7 @@ func (c *TxSubmitterCommand) Command(submitterService TxSubmitterServiceInterfac
 			Usage:       "The max base fee for submitting a Stellar transaction",
 			OptType:     types.Int,
 			ConfigKey:   &submitterOpts.MaxBaseFee,
-			FlagDefault: txnbuild.MinBaseFee,
+			FlagDefault: 100 * txnbuild.MinBaseFee,
 			Required:    true,
 		},
 		{
