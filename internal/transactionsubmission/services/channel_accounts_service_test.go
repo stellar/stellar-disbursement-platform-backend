@@ -225,11 +225,18 @@ func Test_ChannelAccounts_VerifyAccounts_Success(t *testing.T) {
 }
 
 func Test_ChannelAccounts_VerifyAccounts_LoadChannelAccountsError_Failure(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
 	mChannelAccountStore := &storeMocks.MockChannelAccountStore{}
 
 	cas := ChannelAccountsService{
-		caStore:       mChannelAccountStore,
-		horizonClient: &horizonclient.MockClient{},
+		caStore:          mChannelAccountStore,
+		horizonClient:    &horizonclient.MockClient{},
+		dbConnectionPool: dbConnectionPool,
 	}
 
 	opts := ChannelAccountServiceOptions{
@@ -238,11 +245,11 @@ func Test_ChannelAccounts_VerifyAccounts_LoadChannelAccountsError_Failure(t *tes
 
 	ctx := context.Background()
 	mChannelAccountStore.
-		On("GetAll", ctx, nil, 0, 0).
+		On("GetAll", ctx, dbConnectionPool, 0, 0).
 		Return(nil, errors.New("cannot load channel accounts from database")).
 		Once()
 
-	err := cas.VerifyChannelAccounts(ctx, opts)
+	err = cas.VerifyChannelAccounts(ctx, opts)
 	require.EqualError(
 		t,
 		err,
@@ -252,12 +259,19 @@ func Test_ChannelAccounts_VerifyAccounts_LoadChannelAccountsError_Failure(t *tes
 }
 
 func Test_ChannelAccounts_VerifyAccounts_NotFound(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
 	mChannelAccountStore := &storeMocks.MockChannelAccountStore{}
 	mHorizonClient := &horizonclient.MockClient{}
 
 	cas := ChannelAccountsService{
-		caStore:       mChannelAccountStore,
-		horizonClient: mHorizonClient,
+		caStore:          mChannelAccountStore,
+		horizonClient:    mHorizonClient,
+		dbConnectionPool: dbConnectionPool,
 	}
 
 	opts := ChannelAccountServiceOptions{
@@ -274,7 +288,7 @@ func Test_ChannelAccounts_VerifyAccounts_NotFound(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	mChannelAccountStore.On("GetAll", ctx, nil, 0, 0).Return(channelAccounts, nil).Once()
+	mChannelAccountStore.On("GetAll", ctx, dbConnectionPool, 0, 0).Return(channelAccounts, nil).Once()
 	for _, acc := range channelAccounts {
 		mHorizonClient.On(
 			"AccountDetail",
@@ -284,12 +298,12 @@ func Test_ChannelAccounts_VerifyAccounts_NotFound(t *testing.T) {
 				Type: "https://stellar.org/horizon-errors/not_found",
 			},
 		}).Once()
-		mChannelAccountStore.On("Delete", ctx, nil, acc.PublicKey).Return(nil).Once()
+		mChannelAccountStore.On("Delete", ctx, dbConnectionPool, acc.PublicKey).Return(nil).Once()
 	}
 
 	getEntries := log.DefaultLogger.StartTest(log.WarnLevel)
 
-	err := cas.VerifyChannelAccounts(ctx, opts)
+	err = cas.VerifyChannelAccounts(ctx, opts)
 	require.NoError(t, err)
 
 	entries := getEntries()

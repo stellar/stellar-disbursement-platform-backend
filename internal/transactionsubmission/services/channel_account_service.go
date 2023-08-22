@@ -15,6 +15,8 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
 )
 
+const advisoryLock = int(2172398390434160)
+
 type ChannelAccountsService struct {
 	dbConnectionPool    db.DBConnectionPool
 	caStore             store.ChannelAccountStore
@@ -46,7 +48,7 @@ type ChannelAccountServiceOptions struct {
 	RootSeed               string
 }
 
-func NewChannelAccountService(opts ChannelAccountServiceOptions) (*ChannelAccountsService, error) {
+func NewChannelAccountService(ctx context.Context, opts ChannelAccountServiceOptions) (*ChannelAccountsService, error) {
 	dbConnectionPool, err := db.OpenDBConnectionPool(opts.DatabaseDSN)
 	if err != nil {
 		return nil, fmt.Errorf("opening db connection pool: %w", err)
@@ -61,6 +63,11 @@ func NewChannelAccountService(opts ChannelAccountServiceOptions) (*ChannelAccoun
 	ledgerNumberTracker, err := engine.NewLedgerNumberTracker(horizonClient)
 	if err != nil {
 		return nil, fmt.Errorf("cannot create new ledger number tracker")
+	}
+
+	err = acquireAdvisoryLockForCommand(ctx, dbConnectionPool)
+	if err != nil {
+		return nil, fmt.Errorf("failed getting db advisory lock: %w", err)
 	}
 
 	return &ChannelAccountsService{
@@ -137,9 +144,9 @@ func createAccountsInBatch(
 }
 
 // VerifyChannelAccounts verifies the existance of all channel accounts in the data store onchain.
-func (c *ChannelAccountsService) VerifyChannelAccounts(ctx context.Context, opts ChannelAccountServiceOptions) error {
+func (s *ChannelAccountsService) VerifyChannelAccounts(ctx context.Context, opts ChannelAccountServiceOptions) error {
 	log.Ctx(ctx).Infof("DeleteInvalidAccounts?: %t", opts.DeleteInvalidAcccounts)
-	accounts, err := c.caStore.GetAll(ctx, c.dbConnectionPool, 0, 0)
+	accounts, err := s.caStore.GetAll(ctx, s.dbConnectionPool, 0, 0)
 	if err != nil {
 		return fmt.Errorf("loading channel accounts from database in VerifyChannelAccounts: %w", err)
 	}
@@ -148,12 +155,12 @@ func (c *ChannelAccountsService) VerifyChannelAccounts(ctx context.Context, opts
 
 	invalidAccountsCount := 0
 	for _, account := range accounts {
-		_, err := c.horizonClient.AccountDetail(horizonclient.AccountRequest{AccountID: account.PublicKey})
+		_, err := s.horizonClient.AccountDetail(horizonclient.AccountRequest{AccountID: account.PublicKey})
 		if err != nil {
 			if horizonclient.IsNotFoundError(err) {
 				log.Ctx(ctx).Warnf("Account %s does not exist on the network", account.PublicKey)
 				if opts.DeleteInvalidAcccounts {
-					deleteErr := c.caStore.Delete(ctx, c.dbConnectionPool, account.PublicKey)
+					deleteErr := s.caStore.Delete(ctx, s.dbConnectionPool, account.PublicKey)
 					if deleteErr != nil {
 						return fmt.Errorf(
 							"deleting %s from database in VerifyChannelAccounts: %w",
@@ -348,6 +355,18 @@ func (s *ChannelAccountsService) deleteChannelAccount(
 	}
 
 	log.Ctx(ctx).Infof("Successfully deleted channel account %q", chAccAddress)
+
+	return nil
+}
+
+func acquireAdvisoryLockForCommand(ctx context.Context, dbConnectionPool db.DBConnectionPool) error {
+	locked, err := utils.AcquireAdvisoryLock(ctx, dbConnectionPool, advisoryLock)
+	if err != nil {
+		return fmt.Errorf("problem retrieving db advisory lock: %w", err)
+	}
+	if !locked {
+		return fmt.Errorf("cannot retrieve unavailable db advisory lock")
+	}
 
 	return nil
 }
