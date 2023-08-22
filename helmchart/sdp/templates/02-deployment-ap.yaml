@@ -31,8 +31,8 @@ spec:
       labels:
         {{- include "sdp.selectorLabelsWithSuffix" (list . "-ap") | nindent 8 }}
     spec:
-      # {{- if .Values.serviceAccount.name }}
-      # serviceAccountName: {{ tpl .Values.serviceAccount.name $ }}
+      # {{- if .Values.global.serviceAccount.name }}
+      # serviceAccountName: {{ tpl .Values.global.serviceAccount.name $ }}
       # {{- end }}
       securityContext:
         {{- tpl (toYaml .Values.anchorPlatform.deployment.podSecurityContext) . | nindent 8 }}

@@ -33,6 +33,16 @@ global:
     targetCPUUtilizationPercentage: 80
     targetMemoryUtilizationPercentage: 80
 
+  serviceAccount:
+    # Specifies whether a service account should be created
+    create: false
+    # Annotations to add to the service account
+    annotations:
+
+    # The name of the service account to use.
+    # If not set and create is true, a name is generated using the fullname template
+    name: ""
+
 sdp:
   # =========================== START sdp.route ===========================
   route:
@@ -383,19 +393,5 @@ dashboard:
 # The AP database URL will be set automatically to:
 # postgres://postgres:postgres@{{ include "sdp.fullname" . }}-psql:5433/postgres-ap?sslmode=disable
 ephemeralDatabase: true
-
-
-# =========================== START serviceAccount ===========================
-
-# Not used in SDF's deployment:
-serviceAccount:
-  # Specifies whether a service account should be created
-  create: false
-  # Annotations to add to the service account
-  annotations:
-
-  # The name of the service account to use.
-  # If not set and create is true, a name is generated using the fullname template
-  name: ""
 
 
