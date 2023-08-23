@@ -111,12 +111,12 @@ func (a *AnchorPlatformAPIService) UpdateAnchorTransactions(ctx context.Context,
 }
 
 type GetTransactionsQueryParams struct {
-	SEP        string   `schema:"sep,required"`
-	Order      string   `schema:"order"`
-	OrderBy    string   `schema:"order_by"`
-	PageNumber int      `schema:"page_number"`
-	PageSize   int      `schema:"page_size"`
-	Statuses   []string `schema:"statuses"`
+	SEP        string   `schema:"sep,required,omitempty"`
+	Order      string   `schema:"order,omitempty"`
+	OrderBy    string   `schema:"order_by,omitempty"`
+	PageNumber int      `schema:"page_number,omitempty"`
+	PageSize   int      `schema:"page_size,omitempty"`
+	Statuses   []string `schema:"statuses,omitempty"`
 }
 
 func (a *AnchorPlatformAPIService) getAnchorTransactions(ctx context.Context, skipAuthentication bool, queryParams GetTransactionsQueryParams) (*http.Response, error) {
@@ -132,12 +132,12 @@ func (a *AnchorPlatformAPIService) getAnchorTransactions(ctx context.Context, sk
 	params := url.Values{}
 	err = queryParamsEncoder.Encode(queryParams, params)
 	if err != nil {
-		return nil, fmt.Errorf("encoding query params in GetAnchorTransactions: %w", err)
+		return nil, fmt.Errorf("encoding query params in getAnchorTransactions: %w", err)
 	}
 	u.RawQuery = params.Encode()
 
 	// request
-	request, err := http.NewRequestWithContext(ctx, http.MethodPatch, u.String(), nil)
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	if err != nil {
 		return nil, fmt.Errorf("creating request to GET anchor transactions: %w", err)
 	}
@@ -148,7 +148,7 @@ func (a *AnchorPlatformAPIService) getAnchorTransactions(ctx context.Context, sk
 		var token string
 		token, err = a.GetJWTToken(nil)
 		if err != nil {
-			return nil, fmt.Errorf("getting jwt token in GetAnchorTransactions: %w", err)
+			return nil, fmt.Errorf("getting jwt token in getAnchorTransactions: %w", err)
 		}
 		request.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
 	}
@@ -156,7 +156,7 @@ func (a *AnchorPlatformAPIService) getAnchorTransactions(ctx context.Context, sk
 	// Do request
 	response, err := a.HttpClient.Do(request)
 	if err != nil {
-		return nil, fmt.Errorf("making GetAnchorTransactions to anchor platform: %w", err)
+		return nil, fmt.Errorf("making getAnchorTransactions request to anchor platform: %w", err)
 	}
 
 	return response, nil
