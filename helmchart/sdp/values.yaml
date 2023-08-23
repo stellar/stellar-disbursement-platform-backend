@@ -89,43 +89,31 @@ sdp:
   ## @param sdp.image.tag Docker image tag for the SDP service. If set, this overrides the default value from `.Chart.AppVersion`.
   image:
     repository: stellar/stellar-disbursement-platform-backend
-    pullPolicy: IfNotPresent
+    pullPolicy: Always
     tag: "latest"
 
   ## @extra sdp.deployment Configuration related to the deployment of the SDP service.
   ## @param sdp.deployment.annotations Annotations to be added to the deployment.
-  ## @extra sdp.deployment.podAnnotations Annotations specific to the pods, mainly for integration with monitoring tools like Prometheus.
-  ## @param sdp.deployment.podAnnotations.prometheus.io/path The path where Prometheus metrics are exposed.
-  ## @param sdp.deployment.podAnnotations.prometheus.io/port The port on which Prometheus metrics are exposed. This should match the SDP metrics port.
-  ## @param sdp.deployment.podAnnotations.prometheus.io/scrape Indicates if Prometheus should scrape metrics from this pod.
+  ## @param sdp.deployment.podAnnotations Annotations specific to the pods.
   ## @param sdp.deployment.podSecurityContext Security settings for the pods.
   ## @param sdp.deployment.securityContext Security settings for the container within the pod.
-  ## @extra sdp.deployment.strategy Configuration related to the deployment strategy, ensuring smooth updates and minimal downtime.
-  ## @param sdp.deployment.strategy.type Specifies the deployment strategy, RollingUpdate is preferred for minimal downtime.
-  ## @param sdp.deployment.strategy.rollingUpdate.maxUnavailable The maximum number of pods that can be unavailable during an update.
-  ## @param sdp.deployment.strategy.rollingUpdate.maxSurge The maximum number of pods that can be created over the desired number of pods.
+  ## @param sdp.deployment.strategy Configuration related to the deployment strategy, ensuring smooth updates and minimal downtime.
   ## @param sdp.deployment.nodeSelector Node selector to determine which nodes should run the pods.
   ## @param sdp.deployment.tolerations Tolerations to ensure pods aren't scheduled on unsuitable nodes.
   ## @param sdp.deployment.affinity Affinity rules to determine where pods get scheduled based on node conditions.
   deployment:
     annotations:
-    podAnnotations:
-      prometheus.io/path: /metrics
-      prometheus.io/port: '{{ include "sdp.metricsPort" . }}'
-      prometheus.io/scrape: "true"
-    podSecurityContext: { }
-    securityContext: { }
-    strategy:
-      type: "RollingUpdate"
-      rollingUpdate:
-        maxUnavailable: 0
-        maxSurge: 1
-    nodeSelector: { }
-    tolerations: [ ]
-    affinity: { }
+    podAnnotations: {}
+    podSecurityContext: {}
+    securityContext: {}
+    strategy: {}
+    nodeSelector: {}
+    tolerations: []
+    affinity: {}
 
   ## @extra sdp.configMap Configuration for the ConfigMap used by the SDP service.
   ## @param sdp.configMap.annotations Annotations to be added to the ConfigMap.
+  ## @extra sdp.configMap.data Used to inject non-sensitive environment variables into the SDP deployment; for the latest variables, consult the application's CLI `-h` command.
   ## @param sdp.configMap.data.EC256_PUBLIC_KEY [string] The EC256 public key used for authentication purposes.
   ## @param sdp.configMap.data.ENVIRONMENT Specifies the environment SDP is running in (e.g. "localhost").
   ## @param sdp.configMap.data.LOG_LEVEL Determines the verbosity level of logs (e.g. "TRACE").
@@ -232,14 +220,8 @@ anchorPlatform:
 
   ## @extra anchorPlatform.deployment Configuration related to the deployment of the Anchor Platform.
   ## @param anchorPlatform.deployment.annotations Annotations to be added to the deployment.
-  ## @extra anchorPlatform.deployment.podAnnotations Annotations specific to the pods, mainly for integration with monitoring tools like Prometheus.
-  ## @param anchorPlatform.deployment.podAnnotations.prometheus.io/path The path where Prometheus metrics are exposed.
-  ## @param anchorPlatform.deployment.podAnnotations.prometheus.io/port The port on which Prometheus metrics are exposed. This should match the SDP metrics port.
-  ## @param anchorPlatform.deployment.podAnnotations.prometheus.io/scrape Indicates if Prometheus should scrape metrics from this pod.
-  ## @extra anchorPlatform.deployment.strategy Configuration related to the deployment strategy, ensuring smooth updates and minimal downtime.
-  ## @param anchorPlatform.deployment.strategy.type Specifies the deployment strategy, RollingUpdate is preferred for minimal downtime.
-  ## @param anchorPlatform.deployment.strategy.rollingUpdate.maxUnavailable The maximum number of pods that can be unavailable during an update.
-  ## @param anchorPlatform.deployment.strategy.rollingUpdate.maxSurge The maximum number of pods that can be created over the desired number of pods.
+  ## @param anchorPlatform.deployment.podAnnotations Annotations specific to the pods.
+  ## @param anchorPlatform.deployment.strategy Configuration related to the deployment strategy, ensuring smooth updates and minimal downtime.
   ## @param anchorPlatform.deployment.podSecurityContext Security settings for the pods.
   ## @param anchorPlatform.deployment.securityContext Security settings for the container within the pod.
   ## @param anchorPlatform.deployment.resources Resource limits and requests for the application pods.
@@ -247,30 +229,20 @@ anchorPlatform:
   ## @param anchorPlatform.deployment.tolerations Tolerations to ensure pods aren't scheduled on unsuitable nodes.
   ## @param anchorPlatform.deployment.affinity Affinity rules to determine where pods get scheduled based on node conditions.
   deployment:
-    annotations:
-    podAnnotations:
-      prometheus.io/path: /metrics
-      prometheus.io/port: '{{ include "sdp.ap.metricsPort" . }}'
-      prometheus.io/scrape: "true"
-    strategy:
-      # Ensure we upgrade 1 pod at a time to avoid migration races
-      type: "RollingUpdate"
-      rollingUpdate:
-        maxUnavailable: 0
-        maxSurge: 1
-    podSecurityContext:
-      { }
-    securityContext:
-      { }
-    resources:
-      { }
-    nodeSelector: { }
-    tolerations: [ ]
-    affinity: { }
+    annotations: {}
+    podAnnotations: {}
+    strategy: {}
+    podSecurityContext: {}
+    securityContext: {}
+    resources: {}
+    nodeSelector: {}
+    tolerations: []
+    affinity: {}
 
 
   ## @extra anchorPlatform.configMap Configuration for the ConfigMap used by the anchorPlatform service.
   ## @param anchorPlatform.configMap.annotations Annotations to be added to the ConfigMap.
+  ## @extra anchorPlatform.configMap.data Used to inject non-sensitive environment variables into the Anchor Platform deployment; for the latest variables, consult Anchor Platform's public documentation.
   ## @param anchorPlatform.configMap.data.APP_LOGGING_LEVEL Specifies the logging level for the application (e.g. "INFO", "DEBUG", "ERROR").
   ## @extra anchorPlatform.configMap.data.DATA_DATABASE Specifies the database connection details for the platform. Will be auto-populated in the development helm chart when `ephemeralDatabase` is enabled.
   ## @extra anchorPlatform.configMap.data.DATA_SERVER Specifies the server connection details for the platform. Will be auto-populated in the development helm chart when `ephemeralDatabase` is enabled.
@@ -340,12 +312,12 @@ anchorPlatform:
     create: false
     annotations:
     data:
-      SECRET_DATA_PASSWORD: postgres                                                                                                                                                                                                                                                                                                                             │
-      SECRET_DATA_USERNAME: postgres                                                                                                                                                                                                                                                                                                                                  │
-      SECRET_PLATFORM_API_AUTH_SECRET: mySdpToAnchorPlatformSecret                                                                                                                                                                                                                                                                                                                   │
-      SECRET_SEP10_JWT_SECRET: jwt_secret_1234567890                                                                                                                                                                                                                                                                                                                           │
-      SECRET_SEP10_SIGNING_SEED: #required                                                                                                                                                                                                                                                                                      │
-      SECRET_SEP24_INTERACTIVE_URL_JWT_SECRET: jwt_secret_1234567890                                                                                                                                                                                                                                                                                                           │
+      SECRET_DATA_PASSWORD: postgres
+      SECRET_DATA_USERNAME: postgres
+      SECRET_PLATFORM_API_AUTH_SECRET: mySdpToAnchorPlatformSecret
+      SECRET_SEP10_JWT_SECRET: jwt_secret_1234567890
+      SECRET_SEP10_SIGNING_SEED: #required
+      SECRET_SEP24_INTERACTIVE_URL_JWT_SECRET: jwt_secret_1234567890
       SECRET_SEP24_MORE_INFO_URL_JWT_SECRET: jwt_secret_1234567890
 
   ## @extra anchorPlatform.ingress Configuration for the ingress controller for the Anchor Platform.
@@ -385,44 +357,28 @@ tss:
 
   ## @extra tss.deployment Configuration related to the deployment of the TSS.
   ## @param tss.deployment.annotations Annotations to be added to the deployment.
-  ## @extra tss.deployment.podAnnotations Annotations specific to the pods, mainly for integration with monitoring tools like Prometheus.
-  ## @param tss.deployment.podAnnotations.prometheus.io/path The path where Prometheus metrics are exposed.
-  ## @param tss.deployment.podAnnotations.prometheus.io/port The port on which Prometheus metrics are exposed. This should match the TSS metrics port.
-  ## @param tss.deployment.podAnnotations.prometheus.io/scrape Indicates if Prometheus should scrape metrics from this pod.
-  ## @extra tss.deployment.strategy Configuration related to the deployment strategy, ensuring smooth updates and minimal downtime.
-  ## @param tss.deployment.strategy.type Specifies the deployment strategy, RollingUpdate is preferred for minimal downtime.
-  ## @param tss.deployment.strategy.rollingUpdate.maxUnavailable The maximum number of pods that can be unavailable during an update.
-  ## @param tss.deployment.strategy.rollingUpdate.maxSurge The maximum number of pods that can be created over the desired number of pods.
+  ## @param tss.deployment.podAnnotations Annotations specific to the pods.
+  ## @param tss.deployment.strategy Configuration related to the deployment strategy, ensuring smooth updates and minimal downtime.
   ## @param tss.deployment.podSecurityContext Security settings for the pods.
   ## @param tss.deployment.securityContext Security settings for the container within the pod.
-  ## @param tss.deployment.resources Resource limits and requests for the application pods.
   ## @param tss.deployment.resources Resource limits and requests for the application pods.
   ## @param tss.deployment.nodeSelector Node selector to determine which nodes should run the pods.
   ## @param tss.deployment.tolerations Tolerations to ensure pods aren't scheduled on unsuitable nodes.
   ## @param tss.deployment.affinity Affinity rules to determine where pods get scheduled based on node conditions.
   deployment:
     annotations:
-    podAnnotations:
-      prometheus.io/path: /metrics
-      prometheus.io/port: '{{ include "tss.metricsPort" . }}'
-      prometheus.io/scrape: "true"
-    strategy:
-      type: "RollingUpdate"
-      rollingUpdate:
-        maxUnavailable: 0
-        maxSurge: 1
-    podSecurityContext:
-      { }
-    securityContext:
-      { }
-    resources:
-      { }
+    podAnnotations: { }
+    strategy: { }
+    podSecurityContext: { }
+    securityContext: { }
+    resources: { }
     nodeSelector: { }
     tolerations: [ ]
     affinity: { }
 
   ## @extra tss.configMap Configuration settings for the Transaction Submission Service (TSS) ConfigMap.
   ## @param tss.configMap.annotations Annotations to be added to the ConfigMap.
+  ## @extra tss.configMap.data Used to inject non-sensitive environment variables into the TSS deployment; for the latest variables, consult the application's CLI `-h` command.
   ## @param tss.configMap.data.NUM_CHANNEL_ACCOUNTS The number of channel accounts the TSS will create/use. Channel accounts provide a method for submitting transactions to the network at a high rate.
   ## @param tss.configMap.data.MAX_BASE_FEE Specifies the maximum base fee (in stroops) the TSS is willing to pay per transaction. This helps to control costs and ensures transactions are economically feasible.
   ## @param tss.configMap.data.TSS_METRICS_TYPE Defines the type of metrics system that the TSS should use. Options: "TSS_PROMETHEUS".
@@ -472,42 +428,30 @@ dashboard:
   ## @param dashboard.image.pullPolicy Image pull policy for the dashboard. For locally built images, consider using "Never" or "IfNotPresent".
   image:
     fullName: stellar/stellar-disbursement-platform-frontend:latest
-    pullPolicy: IfNotPresent
+    pullPolicy: Always
 
   ## @extra dashboard.deployment Configuration related to the deployment of the Dashboard.
   ## @param dashboard.deployment.annotations Annotations to be added to the deployment.
-  ## @param dashboard.deployment.podAnnotations Annotations specific to the pods, mainly for integration with monitoring tools like Prometheus.
-  ## @extra dashboard.deployment.strategy Configuration related to the deployment strategy, ensuring smooth updates and minimal downtime.
-  ## @param dashboard.deployment.strategy.type Specifies the deployment strategy, RollingUpdate is preferred for minimal downtime.
-  ## @param dashboard.deployment.strategy.rollingUpdate.maxUnavailable The maximum number of pods that can be unavailable during an update.
-  ## @param dashboard.deployment.strategy.rollingUpdate.maxSurge The maximum number of pods that can be created over the desired number of pods.
+  ## @param dashboard.deployment.podAnnotations Annotations specific to the pods.
+  ## @param dashboard.deployment.strategy Configuration related to the deployment strategy, ensuring smooth updates and minimal downtime.
   ## @param dashboard.deployment.podSecurityContext Security settings for the pods.
   ## @param dashboard.deployment.securityContext Security settings for the container within the pod.
   ## @param dashboard.deployment.resources Resource limits and requests for the application pods.
   deployment:
-    annotations:
-      {}
-    podAnnotations:
-      {}
-    strategy:
-      type: "RollingUpdate"
-      rollingUpdate:
-        maxUnavailable: 0
-        maxSurge: 1
-    podSecurityContext:
-      {}
-    securityContext:
-      {}
-    resources:
-      {}
+    annotations: {}
+    podAnnotations: {}
+    strategy: {}
+    podSecurityContext: {}
+    securityContext: {}
+    resources: {}
 
   ## @extra dashboard.configMap Configuration settings for the Dashboard ConfigMap.
   ## @param dashboard.configMap.annotations Annotations to be added to the ConfigMap.
+  ## @extra dashboard.configMap.data Used to inject non-sensitive environment variables into the Dashboard deployment.
   ## @param dashboard.configMap.data.API_URL The URL for the API the dashboard should interact with.
   ## @param dashboard.configMap.data.RECAPTCHA_SITE_KEY The site key for Google reCAPTCHA service.
   configMap:
-    annotations:
-      {}
+    annotations: {}
     data:   # The data to be stored in the ConfigMap:
       API_URL: "{{ include \"sdp.schema\" . }}://{{ include \"sdp.domain\" . }}"
       RECAPTCHA_SITE_KEY: "reCaptchaSiteKey"
@@ -521,8 +465,7 @@ dashboard:
   ingress:
     enabled: false
     className: "nginx"
-    annotations:
-      {}
+    annotations: {}
     tls:
     - hosts:
       - '{{ include "dashboard.domain" . }}'
