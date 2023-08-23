@@ -158,7 +158,7 @@ func Test_UpdateAnchorTransactions(t *testing.T) {
 
 func Test_getAnchorTransactions(t *testing.T) {
 	httpClientMock := httpclient.HttpClientMock{}
-	anchorPlatformAPIService, err := NewAnchorPlatformAPIService(&httpClientMock, "https://test.com/", "jwt_secret_1234567890")
+	apService, err := NewAnchorPlatformAPIService(&httpClientMock, "https://test.com/", "jwt_secret_1234567890")
 	require.NoError(t, err)
 	ctx := context.Background()
 
@@ -168,7 +168,7 @@ func Test_getAnchorTransactions(t *testing.T) {
 			Return(nil, fmt.Errorf("error calling the request")).
 			Once()
 
-		resp, err := anchorPlatformAPIService.getAnchorTransactions(ctx, false, GetTransactionsQueryParams{})
+		resp, err := apService.getAnchorTransactions(ctx, false, GetTransactionsQueryParams{})
 		require.EqualError(t, err, "making getAnchorTransactions request to anchor platform: error calling the request")
 		require.Nil(t, resp)
 
@@ -176,14 +176,14 @@ func Test_getAnchorTransactions(t *testing.T) {
 	})
 
 	t.Run("🎉 successfully return the http response to the caller even when a non 2xx is returned", func(t *testing.T) {
-		wantBody := `{"error": "'sep' is required."}`
+		wantBody := `{"error": "authentication is required."}`
 		response := &http.Response{
 			Body:       io.NopCloser(strings.NewReader(wantBody)),
 			StatusCode: http.StatusUnauthorized,
 		}
 		httpClientMock.On("Do", mock.AnythingOfType("*http.Request")).Return(response, nil).Once()
 
-		resp, err := anchorPlatformAPIService.getAnchorTransactions(ctx, false, GetTransactionsQueryParams{})
+		resp, err := apService.getAnchorTransactions(ctx, false, GetTransactionsQueryParams{})
 		require.NoError(t, err)
 		require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 
@@ -202,7 +202,7 @@ func Test_getAnchorTransactions(t *testing.T) {
 		}
 		httpClientMock.On("Do", mock.AnythingOfType("*http.Request")).Return(response, nil).Once()
 
-		resp, err := anchorPlatformAPIService.getAnchorTransactions(ctx, false, GetTransactionsQueryParams{})
+		resp, err := apService.getAnchorTransactions(ctx, false, GetTransactionsQueryParams{})
 		require.NoError(t, err)
 		require.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -234,7 +234,7 @@ func Test_getAnchorTransactions(t *testing.T) {
 				require.True(t, strings.HasPrefix(gotRequest.Header.Get("Authorization"), "Bearer "))
 			}).Once()
 
-		_, err := anchorPlatformAPIService.getAnchorTransactions(ctx, false, GetTransactionsQueryParams{SEP: "24"})
+		_, err := apService.getAnchorTransactions(ctx, false, GetTransactionsQueryParams{SEP: "24"})
 		require.NoError(t, err)
 
 		// authentication OFF:
@@ -251,8 +251,82 @@ func Test_getAnchorTransactions(t *testing.T) {
 				require.Empty(t, gotRequest.Header.Get("Authorization"))
 			}).Once()
 
-		_, err = anchorPlatformAPIService.getAnchorTransactions(ctx, true, GetTransactionsQueryParams{SEP: "24"})
+		_, err = apService.getAnchorTransactions(ctx, true, GetTransactionsQueryParams{SEP: "24"})
 		require.NoError(t, err)
+
+		httpClientMock.AssertExpectations(t)
+	})
+}
+
+func Test_IsAnchorProtectedByAuth(t *testing.T) {
+	httpClientMock := httpclient.HttpClientMock{}
+	anchorPlatformAPIService, err := NewAnchorPlatformAPIService(&httpClientMock, "https://test.com/", "jwt_secret_1234567890")
+	require.NoError(t, err)
+	ctx := context.Background()
+
+	t.Run("error calling httpClient.Do", func(t *testing.T) {
+		httpClientMock.
+			On("Do", mock.AnythingOfType("*http.Request")).
+			Return(nil, fmt.Errorf("error calling the request")).
+			Once()
+
+		isProtected, err := anchorPlatformAPIService.IsAnchorProtectedByAuth(ctx)
+		require.EqualError(t, err, "verifying if AP's PlatformAPI is auth protected: making getAnchorTransactions request to anchor platform: error calling the request")
+		require.False(t, isProtected)
+
+		httpClientMock.AssertExpectations(t)
+	})
+
+	t.Run("🎉 successfully identifies an unprotected 🔴 anchor platform server", func(t *testing.T) {
+		wantBody := `{"records": []}`
+		response := &http.Response{
+			Body:       io.NopCloser(strings.NewReader(wantBody)),
+			StatusCode: http.StatusOK,
+		}
+		httpClientMock.
+			On("Do", mock.AnythingOfType("*http.Request")).
+			Return(response, nil).
+			Run(func(args mock.Arguments) {
+				gotRequest, ok := args.Get(0).(*http.Request)
+				require.True(t, ok)
+				require.NotNil(t, gotRequest)
+				require.Equal(t, "https://test.com/transactions?sep=24", gotRequest.URL.String())
+				require.Equal(t, "GET", gotRequest.Method)
+				require.Equal(t, "application/json", gotRequest.Header.Get("Content-Type"))
+				require.Empty(t, gotRequest.Header.Get("Authorization"))
+			}).
+			Once()
+
+		isProtected, err := anchorPlatformAPIService.IsAnchorProtectedByAuth(ctx)
+		require.NoError(t, err)
+		require.False(t, isProtected)
+
+		httpClientMock.AssertExpectations(t)
+	})
+
+	t.Run("🎉 successfully identifies a protected 🟢 anchor platform server", func(t *testing.T) {
+		wantBody := `{"error": "authentication is required."}`
+		response := &http.Response{
+			Body:       io.NopCloser(strings.NewReader(wantBody)),
+			StatusCode: http.StatusUnauthorized,
+		}
+		httpClientMock.
+			On("Do", mock.AnythingOfType("*http.Request")).
+			Return(response, nil).
+			Run(func(args mock.Arguments) {
+				gotRequest, ok := args.Get(0).(*http.Request)
+				require.True(t, ok)
+				require.NotNil(t, gotRequest)
+				require.Equal(t, "https://test.com/transactions?sep=24", gotRequest.URL.String())
+				require.Equal(t, "GET", gotRequest.Method)
+				require.Equal(t, "application/json", gotRequest.Header.Get("Content-Type"))
+				require.Empty(t, gotRequest.Header.Get("Authorization"))
+			}).
+			Once()
+
+		isProtected, err := anchorPlatformAPIService.IsAnchorProtectedByAuth(ctx)
+		require.NoError(t, err)
+		require.True(t, isProtected)
 
 		httpClientMock.AssertExpectations(t)
 	})

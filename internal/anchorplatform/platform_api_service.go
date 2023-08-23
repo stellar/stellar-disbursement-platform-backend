@@ -17,6 +17,7 @@ import (
 var (
 	ErrJWTManagerNotSet    = fmt.Errorf("jwt manager not set")
 	ErrAuthNotEnforcedOnAP = fmt.Errorf("anchor platform is not enforcing authentication")
+	ErrServiceUnavailable  = fmt.Errorf("anchor platform service is unavailable")
 )
 
 // TODO update with the PlatformAPI endpoints
@@ -143,7 +144,7 @@ func (a *AnchorPlatformAPIService) getAnchorTransactions(ctx context.Context, sk
 	}
 	request.Header.Set("Content-Type", "application/json")
 
-	// (optional) JWT token
+	// (skippable) JWT token
 	if !skipAuthentication {
 		var token string
 		token, err = a.GetJWTToken(nil)
@@ -163,19 +164,21 @@ func (a *AnchorPlatformAPIService) getAnchorTransactions(ctx context.Context, sk
 }
 
 func (a *AnchorPlatformAPIService) IsAnchorProtectedByAuth(ctx context.Context) (bool, error) {
-	if a.jwtManager == nil {
-		return false, ErrJWTManagerNotSet
-	}
+	const errMsgPrefix = "verifying if AP's PlatformAPI is auth protected"
 
 	queryParams := GetTransactionsQueryParams{SEP: "24"}
 	resp, err := a.getAnchorTransactions(ctx, true, queryParams)
 	if err != nil {
-		return false, fmt.Errorf("getting anchor transactions unauthenticated: %w", err)
+		return false, fmt.Errorf("%s: %w", errMsgPrefix, err)
+	}
+
+	if resp.StatusCode >= 500 {
+		return false, fmt.Errorf("%s (response.StatusCode=%d): %w", errMsgPrefix, resp.StatusCode, ErrServiceUnavailable)
 	}
 
 	if resp.StatusCode != http.StatusUnauthorized {
-		log.Ctx(ctx).Errorf("getting anchor transactions unauthenticated, response.StatusCode: %d", resp.StatusCode)
-		return false, ErrAuthNotEnforcedOnAP
+		log.Ctx(ctx).Errorf("%s (response.StatusCode=%d): %v", errMsgPrefix, resp.StatusCode, ErrAuthNotEnforcedOnAP)
+		return false, nil
 	}
 
 	return true, nil
