@@ -172,11 +172,11 @@ sdp:
       TWILIO_ACCOUNT_SID: MY_TWILIO_ACCOUNT_SID
       TWILIO_AUTH_TOKEN: MY_TWILIO_AUTH_TOKEN
       TWILIO_SERVICE_SID: MY_TWILIO_SERVICE_SID
-      EC256_PRIVATE_KEY: "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgdo6o+tdFkF94B7z8\nnoybH6/zO3PryLLjLbj54/zOi4WhRANCAAQncc2mE8AQoe+1GOyXkqPBz21MypLa\nmZg3JusuzFnpy5C+DbKIShdmLE/ZwnvtywcKVcLpxvXBCn8E0YO8Yqg+\n-----END PRIVATE KEY-----"
+      EC256_PRIVATE_KEY: #required
       SEP10_SIGNING_PRIVATE_KEY: #required
-      SEP24_JWT_SECRET: jwt_secret_1234567890
+      SEP24_JWT_SECRET: #required
       RECAPTCHA_SITE_SECRET_KEY:  #required
-      ANCHOR_PLATFORM_OUTGOING_JWT_SECRET: mySdpToAnchorPlatformSecret
+      ANCHOR_PLATFORM_OUTGOING_JWT_SECRET: #required for mySdpToAnchorPlatformSecret
       DATABASE_URL: #required
       DISTRIBUTION_SEED: #required
 
@@ -312,13 +312,13 @@ anchorPlatform:
     create: false
     annotations:
     data:
-      SECRET_DATA_PASSWORD: postgres
-      SECRET_DATA_USERNAME: postgres
-      SECRET_PLATFORM_API_AUTH_SECRET: mySdpToAnchorPlatformSecret
-      SECRET_SEP10_JWT_SECRET: jwt_secret_1234567890
+      SECRET_DATA_PASSWORD: #required
+      SECRET_DATA_USERNAME: #required
+      SECRET_PLATFORM_API_AUTH_SECRET: #required for mySdpToAnchorPlatformSecret
+      SECRET_SEP10_JWT_SECRET: #required
       SECRET_SEP10_SIGNING_SEED: #required
-      SECRET_SEP24_INTERACTIVE_URL_JWT_SECRET: jwt_secret_1234567890
-      SECRET_SEP24_MORE_INFO_URL_JWT_SECRET: jwt_secret_1234567890
+      SECRET_SEP24_INTERACTIVE_URL_JWT_SECRET: #required
+      SECRET_SEP24_MORE_INFO_URL_JWT_SECRET: #required
 
   ## @extra anchorPlatform.ingress Configuration for the ingress controller for the Anchor Platform.
   ## @param anchorPlatform.ingress.enabled If true, an ingress controller will be created for the Anchor Platform.
