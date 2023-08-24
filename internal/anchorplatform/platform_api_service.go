@@ -9,8 +9,8 @@ import (
 	"strings"
 
 	"github.com/gorilla/schema"
+	"golang.org/x/exp/slices"
 
-	"github.com/stellar/go/support/log"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
 )
 
@@ -164,20 +164,17 @@ func (a *AnchorPlatformAPIService) getAnchorTransactions(ctx context.Context, sk
 }
 
 func (a *AnchorPlatformAPIService) IsAnchorProtectedByAuth(ctx context.Context) (bool, error) {
-	const errMsgPrefix = "verifying if AP's PlatformAPI is auth protected"
-
 	queryParams := GetTransactionsQueryParams{SEP: "24"}
 	resp, err := a.getAnchorTransactions(ctx, true, queryParams)
 	if err != nil {
-		return false, fmt.Errorf("%s: %w", errMsgPrefix, err)
+		return false, fmt.Errorf("gettinhg anchor transactions from platform API: %w", err)
 	}
 
 	if resp.StatusCode >= 500 {
-		return false, fmt.Errorf("%s (response.StatusCode=%d): %w", errMsgPrefix, resp.StatusCode, ErrServiceUnavailable)
+		return false, fmt.Errorf("platform API is returning an unexpected response statusCode=%d: %w", resp.StatusCode, ErrServiceUnavailable)
 	}
 
-	if resp.StatusCode != http.StatusUnauthorized {
-		log.Ctx(ctx).Errorf("%s (response.StatusCode=%d): %v", errMsgPrefix, resp.StatusCode, ErrAuthNotEnforcedOnAP)
+	if !slices.Contains([]int{http.StatusUnauthorized, http.StatusForbidden}, resp.StatusCode) {
 		return false, nil
 	}
 
