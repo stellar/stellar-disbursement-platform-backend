@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/stellar/go/support/log"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 )
@@ -16,7 +15,7 @@ type PaymentsProcessorJob struct {
 
 const (
 	PaymentJobName             = "payments_processor_job"
-	PaymentsJobIntervalSeconds = 60
+	PaymentsJobIntervalSeconds = 10
 	PaymentsBatchSize          = 100
 )
 
@@ -33,7 +32,6 @@ func (d PaymentsProcessorJob) GetName() string {
 }
 
 func (d PaymentsProcessorJob) Execute(ctx context.Context) error {
-	log.Ctx(ctx).Infof("executing PaymentsProcessorJob ...")
 	err := d.service.SendBatchPayments(ctx, PaymentsBatchSize)
 	if err != nil {
 		return fmt.Errorf("error executing PaymentsProcessorJob: %w", err)
