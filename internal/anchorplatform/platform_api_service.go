@@ -167,7 +167,7 @@ func (a *AnchorPlatformAPIService) IsAnchorProtectedByAuth(ctx context.Context) 
 	queryParams := GetTransactionsQueryParams{SEP: "24"}
 	resp, err := a.getAnchorTransactions(ctx, true, queryParams)
 	if err != nil {
-		return false, fmt.Errorf("gettinhg anchor transactions from platform API: %w", err)
+		return false, fmt.Errorf("getting anchor transactions from platform API: %w", err)
 	}
 
 	if resp.StatusCode >= 500 {

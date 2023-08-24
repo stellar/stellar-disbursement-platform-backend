@@ -271,7 +271,7 @@ func Test_IsAnchorProtectedByAuth(t *testing.T) {
 			Once()
 
 		isProtected, err := anchorPlatformAPIService.IsAnchorProtectedByAuth(ctx)
-		require.EqualError(t, err, "verifying if AP's PlatformAPI is auth protected: making getAnchorTransactions request to anchor platform: error calling the request")
+		require.EqualError(t, err, "getting anchor transactions from platform API: making getAnchorTransactions request to anchor platform: error calling the request")
 		require.False(t, isProtected)
 
 		httpClientMock.AssertExpectations(t)

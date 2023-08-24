@@ -204,7 +204,7 @@ func Test_PrometheusClient_MonitorCounters(t *testing.T) {
 
 		mPrometheusClient.MonitorCounters(MetricTag("counter_vec_mock_tag"), labelsMock)
 
-		require.Contains(t, buf.String(), `level=error msg="metric not registered in prometheus metrics: counter_vec_mock_tag`)
+		require.Contains(t, buf.String(), `level=error msg="metric not registered in Prometheus CounterVecMetrics: counter_vec_mock_tag`)
 
 		req, err := http.NewRequest("GET", "/metrics", nil)
 		require.NoError(t, err)
@@ -225,7 +225,7 @@ func Test_PrometheusClient_MonitorCounters(t *testing.T) {
 
 		mPrometheusClient.MonitorCounters(MetricTag("counter_mock_tag"), nil)
 
-		require.Contains(t, buf.String(), `level=error msg="metric not registered in prometheus metrics: counter_mock_tag`)
+		require.Contains(t, buf.String(), `level=error msg="metric not registered in Prometheus CounterMetrics: counter_mock_tag`)
 
 		req, err := http.NewRequest("GET", "/metrics", nil)
 		require.NoError(t, err)

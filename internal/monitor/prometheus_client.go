@@ -47,13 +47,13 @@ func (p *prometheusClient) MonitorCounters(tag MetricTag, labels map[string]stri
 		if counterVecMetric, ok := CounterVecMetrics[tag]; ok {
 			counterVecMetric.With(labels).Inc()
 		} else {
-			log.Errorf("CounterVecMetrics not registered in prometheus: %s", tag)
+			log.Errorf("metric not registered in Prometheus CounterVecMetrics: %s", tag)
 		}
 	} else {
 		if counterMetric, ok := CounterMetrics[tag]; ok {
 			counterMetric.Inc()
 		} else {
-			log.Errorf("CounterMetrics not registered in prometheus: %s", tag)
+			log.Errorf("metric not registered in Prometheus CounterMetrics: %s", tag)
 		}
 	}
 }
