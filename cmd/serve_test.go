@@ -9,6 +9,7 @@ import (
 	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/network"
 	cmdUtils "github.com/stellar/stellar-disbursement-platform-backend/cmd/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/db/dbtest"
 	di "github.com/stellar/stellar-disbursement-platform-backend/internal/dependencyinjection"
@@ -39,8 +40,8 @@ func (m *mockServer) StartMetricsServe(opts serve.MetricsServeOptions, httpServe
 	m.wg.Done()
 }
 
-func (m *mockServer) GetSchedulerJobRegistrars(ctx context.Context, serveOpts serve.ServeOptions, schedulerOptions scheduler.SchedulerOptions) ([]scheduler.SchedulerJobRegisterOption, error) {
-	args := m.Called(ctx, serveOpts, schedulerOptions)
+func (m *mockServer) GetSchedulerJobRegistrars(ctx context.Context, serveOpts serve.ServeOptions, schedulerOptions scheduler.SchedulerOptions, apAPIService anchorplatform.AnchorPlatformAPIServiceInterface) ([]scheduler.SchedulerJobRegisterOption, error) {
+	args := m.Called(ctx, serveOpts, schedulerOptions, apAPIService)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -151,7 +152,7 @@ func Test_serve(t *testing.T) {
 	mServer.On("StartMetricsServe", serveMetricOpts, mock.AnythingOfType("*serve.HTTPServer")).Once()
 	mServer.On("StartServe", serveOpts, mock.AnythingOfType("*serve.HTTPServer")).Once()
 	mServer.
-		On("GetSchedulerJobRegistrars", mock.AnythingOfType("*context.emptyCtx"), serveOpts, schedulerOptions).
+		On("GetSchedulerJobRegistrars", mock.AnythingOfType("*context.emptyCtx"), serveOpts, schedulerOptions, mock.Anything).
 		Return([]scheduler.SchedulerJobRegisterOption{}, nil).
 		Once()
 	mServer.wg.Add(1)
