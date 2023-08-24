@@ -19,5 +19,7 @@ func (m MetricTag) ListAll() []MetricTag {
 		FailureQueryDurationTag,
 		HttpRequestDurationTag,
 		DisbursementsCounterTag,
+		AnchorPlatformAuthProtectionEnsuredCounterTag,
+		AnchorPlatformAuthProtectionMissingCounterTag,
 	}
 }

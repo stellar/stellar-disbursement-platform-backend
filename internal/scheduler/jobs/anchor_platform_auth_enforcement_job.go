@@ -14,7 +14,6 @@ import (
 const (
 	apAuthMonitoringJobName            = "anchor_platform_auth_monitoring_job"
 	apAuthMonitoringJobIntervalSeconds = 300
-	apAuthMonitoringJobBatchSize       = 1
 )
 
 type AnchorPlatformAuthMonitoringJob struct {
@@ -64,6 +63,7 @@ func (job AnchorPlatformAuthMonitoringJob) Execute(ctx context.Context) error {
 			log.Ctx(ctx).Errorf("Error trying to monitor disbursement counter: %s", err)
 		}
 	} else {
+		log.Ctx(ctx).Info("🎉 Anchor platform authentication was ensured successfully")
 		err = job.monitorService.MonitorCounters(monitor.AnchorPlatformAuthProtectionEnsuredCounterTag, nil)
 		if err != nil {
 			log.Ctx(ctx).Errorf("Error trying to monitor disbursement counter: %s", err)
