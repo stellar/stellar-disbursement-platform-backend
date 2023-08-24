@@ -380,7 +380,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			if err != nil {
 				log.Ctx(ctx).Fatalf("error creating SMS client: %s", err.Error())
 			}
-			serveOpts.SMSMessengerClient = smsMessengerClient
+			serveOpts.AnchorPlatformAPIService = apAPIService
 
 			// Starting Scheduler Service (background job)
 			log.Ctx(ctx).Info("Starting Scheduler Service...")
