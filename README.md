@@ -43,7 +43,7 @@ To quickly test the SDP using preconfigured values, see the [Quick Start Guide](
 
 ![high_level_architecture](./docs/images/high_level_architecture.png)
 
-The [SDP Dashboard][sdp-dashboard] and [Anchor Platform](https://github.com/stellar/java-stellar-anchor-sdk) components are separate projects that must be installed and configured alongside the services included in this project.
+The [SDP Dashboard][sdp-dashboard] and [Anchor Platform] components are separate projects that must be installed and configured alongside the services included in this project.
 
 In a future iteration of this project, the Transaction Submission Service (TSS) will also be moved to its own repository to be used as an independent service. At that point, this project will include the services contained in the Core module shown in the diagram above.
 
@@ -77,7 +77,7 @@ If you're using the `AWS_EMAIL` sender type, you'll need to verify the email add
 
 #### Wallet Registration UI
 
-The Wallet Registration UI is also hosted by the core server, and enables recipients to confirm their phone number and other information used to verify their identity. Once recipients have registered through this UI, the Transaction Submission Server (TSS) immediately makes the payment to the recpients registered Stellar account.
+The Wallet Registration UI is also hosted by the Core server, and enables recipients to confirm their phone number and other information used to verify their identity. Once recipients have registered through this UI, the Transaction Submission Server (TSS) immediately makes the payment to the recpients registered Stellar account.
 
 ### Transaction Submission Service
 
@@ -300,3 +300,4 @@ stateDiagram-v2
 [SEP-10]: https://stellar.org/protocol/sep-10
 [SEP-24]: https://stellar.org/protocol/sep-24
 [sdp-dashboard]: https://github.com/stellar/stellar-disbursement-platform-frontend
+[Anchor Platform]: https://github.com/stellar/java-stellar-anchor-sdk
