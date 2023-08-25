@@ -375,7 +375,7 @@ func Test_SEP24HeaderTokenAuthenticateMiddleware(t *testing.T) {
 		respBody, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
 		require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
-		require.JSONEq(t, `{"error":"Invalid Authorization header provided."}`, string(respBody))
+		require.JSONEq(t, `{"error":"Not authorized."}`, string(respBody))
 
 		// validate logs
 		require.Contains(t, buf.String(), "invalid Authorization header provided")

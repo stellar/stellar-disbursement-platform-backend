@@ -116,7 +116,7 @@ func SEP24HeaderTokenAuthenticateMiddleware(jwtManager *JWTManager, networkPassp
 			// check if the Authorization header has two parts ['Bearer', token]
 			if !strings.HasPrefix(authHeader, "Bearer ") {
 				log.Ctx(ctx).Error("invalid Authorization header provided")
-				httperror.Unauthorized("Invalid Authorization header provided.", nil, nil).Render(rw)
+				httperror.Unauthorized("", nil, nil).Render(rw)
 				return
 			}
 
