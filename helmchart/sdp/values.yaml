@@ -258,7 +258,9 @@ anchorPlatform:
       DATA_DDL_AUTO: update
       METRICS_ENABLED: "false"  # Metrics would be available at port 8082
       METRICS_EXTRAS_ENABLED: "false"
-      ASSETS_VALUE: |   # TODO: update this later
+      # SEP10_CLIENT_ATTRIBUTION_REQUIRED: true  # RECOMMENDED
+      # SEP10_CLIENT_ATTRIBUTION_ALLOW_LIST: "demo-wallet-server.stellar.org,https://example.com"  # RECOMMENDED
+      ASSETS_VALUE: |   # TODO: keep this up to date with the latest assets supported by the SDP
         {
           "assets": [
             {
