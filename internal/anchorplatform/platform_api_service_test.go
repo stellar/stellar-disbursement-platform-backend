@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
+	httpclientMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient/mocks"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -71,7 +72,7 @@ func Test_NewAnchorPlatformAPIService(t *testing.T) {
 }
 
 func Test_UpdateAnchorTransactions(t *testing.T) {
-	httpClientMock := httpclient.HttpClientMock{}
+	httpClientMock := httpclientMocks.HttpClientMock{}
 	anchorPlatformAPIService, err := NewAnchorPlatformAPIService(&httpClientMock, "http://mock_anchor.com/", "jwt_secret_1234567890")
 	require.NoError(t, err)
 	ctx := context.Background()
@@ -157,7 +158,7 @@ func Test_UpdateAnchorTransactions(t *testing.T) {
 }
 
 func Test_getAnchorTransactions(t *testing.T) {
-	httpClientMock := httpclient.HttpClientMock{}
+	httpClientMock := httpclientMocks.HttpClientMock{}
 	apService, err := NewAnchorPlatformAPIService(&httpClientMock, "https://test.com/", "jwt_secret_1234567890")
 	require.NoError(t, err)
 	ctx := context.Background()
@@ -259,7 +260,7 @@ func Test_getAnchorTransactions(t *testing.T) {
 }
 
 func Test_IsAnchorProtectedByAuth(t *testing.T) {
-	httpClientMock := httpclient.HttpClientMock{}
+	httpClientMock := httpclientMocks.HttpClientMock{}
 	anchorPlatformAPIService, err := NewAnchorPlatformAPIService(&httpClientMock, "https://test.com/", "jwt_secret_1234567890")
 	require.NoError(t, err)
 	ctx := context.Background()
