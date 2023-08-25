@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	"github.com/stretchr/testify/assert"
@@ -84,7 +85,7 @@ func Test_AnchorPlatformAuthMonitoringJob_GetName(t *testing.T) {
 }
 
 func Test_AnchorPlatformAuthMonitoringJob_Execute(t *testing.T) {
-	apService := &anchorplatform.AnchorPlatformAPIServiceMock{}
+	apService := &mocks.AnchorPlatformAPIServiceMock{}
 	monitorService := &monitor.MockMonitorService{}
 	crashTrackerClient := &crashtracker.MockCrashTrackerClient{}
 

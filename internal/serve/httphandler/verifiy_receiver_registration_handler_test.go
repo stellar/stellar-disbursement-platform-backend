@@ -16,6 +16,7 @@ import (
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/db/dbtest"
@@ -36,7 +37,7 @@ func Test_VerifyReceiverRegistration(t *testing.T) {
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
-	mockAnchorPlatformService := anchorplatform.AnchorPlatformAPIServiceMock{}
+	mockAnchorPlatformService := mocks.AnchorPlatformAPIServiceMock{}
 	reCAPTCHAValidator := &validators.ReCAPTCHAValidatorMock{}
 	handler := &VerifyReceiverRegistrationHandler{
 		Models:                   models,
