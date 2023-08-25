@@ -135,7 +135,7 @@ func AnyRoleMiddleware(authManager auth.AuthManager, requiredRoles ...data.UserR
 			}
 
 			isValid, err := authManager.AnyRolesInTokenUser(ctx, token, data.FromUserRoleArrayToStringArray(requiredRoles))
-			if err != nil && !errors.Is(err, auth.ErrInvalidToken) {
+			if err != nil && !errors.Is(err, auth.ErrInvalidToken) && !errors.Is(err, auth.ErrUserNotFound) {
 				httperror.InternalError(ctx, "", err, nil).Render(rw)
 				return
 			}

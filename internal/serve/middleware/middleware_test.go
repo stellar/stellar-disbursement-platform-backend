@@ -349,27 +349,7 @@ func Test_AnyRoleMiddleware(t *testing.T) {
 		assert.JSONEq(t, `{"error":"Not authorized."}`, string(respBody))
 	})
 
-	t.Run("returns Unauthorized when no token is in the request context", func(t *testing.T) {
-		ctx := context.Background()
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-		require.NoError(t, err)
-
-		w := httptest.NewRecorder()
-
-		r := chi.NewRouter()
-		setRestrictedEndpoint(ctx, r, "role1", "role2")
-
-		r.ServeHTTP(w, req)
-
-		resp := w.Result()
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-
-		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
-		assert.JSONEq(t, `{"error":"Not authorized."}`, string(respBody))
-	})
-
-	t.Run("returns Unauthorized when the token is expired", func(t *testing.T) {
+	t.Run("returns Unauthorized when the token is expired and (no error is returned)", func(t *testing.T) {
 		token := "mytoken"
 		ctx := context.WithValue(context.Background(), TokenContextKey, token)
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
@@ -395,7 +375,59 @@ func Test_AnyRoleMiddleware(t *testing.T) {
 		assert.JSONEq(t, `{"error":"Not authorized."}`, string(respBody))
 	})
 
-	t.Run("returns Internal Server error when an error occurs", func(t *testing.T) {
+	t.Run("returns Unauthorized when the token is expired and (no auth.ErrInvalidToken error is returned)", func(t *testing.T) {
+		token := "mytoken"
+		ctx := context.WithValue(context.Background(), TokenContextKey, token)
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+		require.NoError(t, err)
+
+		w := httptest.NewRecorder()
+
+		r := chi.NewRouter()
+		setRestrictedEndpoint(ctx, r, "role1", "role2")
+
+		jwtManagerMock.
+			On("ValidateToken", mock.Anything, token).
+			Return(false, auth.ErrInvalidToken).
+			Once()
+
+		r.ServeHTTP(w, req)
+
+		resp := w.Result()
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+		assert.JSONEq(t, `{"error":"Not authorized."}`, string(respBody))
+	})
+
+	t.Run("returns Unauthorized when the token is expired and (no auth.ErrUserNotFound error is returned)", func(t *testing.T) {
+		token := "mytoken"
+		ctx := context.WithValue(context.Background(), TokenContextKey, token)
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+		require.NoError(t, err)
+
+		w := httptest.NewRecorder()
+
+		r := chi.NewRouter()
+		setRestrictedEndpoint(ctx, r, "role1", "role2")
+
+		jwtManagerMock.
+			On("ValidateToken", mock.Anything, token).
+			Return(false, auth.ErrUserNotFound).
+			Once()
+
+		r.ServeHTTP(w, req)
+
+		resp := w.Result()
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+		assert.JSONEq(t, `{"error":"Not authorized."}`, string(respBody))
+	})
+
+	t.Run("returns Internal Server Error when an unexpected error occurs", func(t *testing.T) {
 		token := "mytoken"
 		ctx := context.WithValue(context.Background(), TokenContextKey, token)
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
