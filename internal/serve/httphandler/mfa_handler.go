@@ -71,7 +71,7 @@ func (h MFAHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 
 	token, err := h.AuthManager.AuthenticateMFA(ctx, deviceID, reqBody.MFACode, reqBody.RememberMe)
 	if err != nil {
-		if errors.Is(err, auth.ErrInvalidMFACode) {
+		if errors.Is(err, auth.ErrMFACodeInvalid) {
 			httperror.Unauthorized("", err, nil).Render(rw)
 			return
 		}
