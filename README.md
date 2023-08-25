@@ -77,7 +77,22 @@ If you're using the `AWS_EMAIL` sender type, you'll need to verify the email add
 
 #### Wallet Registration UI
 
-The Wallet Registration UI is also hosted by the Core server, and enables recipients to confirm their phone number and other information used to verify their identity. Once recipients have registered through this UI, the Transaction Submission Server (TSS) immediately makes the payment to the recpients registered Stellar account.
+The Wallet Registration UI is also hosted by the Core server, and enables recipients to confirm their phone number and other information used to verify their identity. Once recipients have registered through this UI, the Transaction Submission Server (TSS) immediately makes the payment to the recipients registered Stellar account.
+
+#### Core + Anchor Platform Integration
+
+The Wallet Registration flow kicks off within the recipient's wallet app. This app interacts with the [Anchor Platform] to initiate the [SEP-24] deposit process through the SDP (Stellar Disbursement Platform). The SDP collects the necessary recipient information to ultimately execute the payment to them.
+
+Note that the [Anchor Platform] is a distinct project that is being deployed alongside the SDP and is needed for the receiver registration. It handles the implementation of interoperability protocols such as [SEP-1], [SEP-10], and [SEP-24], making their endpoints available to wallet apps. The [Anchor Platform] is pre-configured in both the Docker Compose file in the `dev` directory, and the helm chart.
+
+To ensure a seamless integration between the SDP and the Anchor Platform, follow these steps:
+
+1. 🚨 **Critical Step**: Configure the Anchor Platform with `PLATFORM_SERVER_AUTH_TYPE: JWT`. This setting is crucial for securing your Anchor Platform's backoffice API via JWT token authentication.
+1. **Shared Secrets for API Authentication**: The `SECRET_PLATFORM_API_AUTH_SECRET` in the Anchor Platform should match `ANCHOR_PLATFORM_OUTGOING_JWT_SECRET` in the SDP.
+1. **Shared Secrets for SEP-24**: The secrets `SECRET_SEP24_INTERACTIVE_URL_JWT_SECRET` and `SECRET_SEP24_MORE_INFO_URL_JWT_SECRET` in the Anchor Platform need to align with `SEP24_JWT_SECRET` in the SDP.
+1. **SEP-10 Configuration**: The `SECRET_SEP10_SIGNING_SEED` in the Anchor Platform should be consistent with the `SEP10_SIGNING_PRIVATE_KEY` in the SDP.
+
+By following these steps, you'll ensure a secure and efficient integration between your SDP and Anchor Platform systems.
 
 ### Transaction Submission Service
 
@@ -297,6 +312,7 @@ stateDiagram-v2
 
 [deferred deep linking]: https://en.wikipedia.org/wiki/Mobile_deep_linking#Deferred_deep_linking
 [deep link]: https://en.wikipedia.org/wiki/Mobile_deep_linking
+[SEP-1]: https://stellar.org/protocol/sep-1
 [SEP-10]: https://stellar.org/protocol/sep-10
 [SEP-24]: https://stellar.org/protocol/sep-24
 [sdp-dashboard]: https://github.com/stellar/stellar-disbursement-platform-frontend
