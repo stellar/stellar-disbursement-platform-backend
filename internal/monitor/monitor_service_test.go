@@ -44,6 +44,8 @@ func (m *mockMonitorClient) MonitorHistogram(value float64, tag MetricTag, label
 	m.Called(value, tag, labels)
 }
 
+var _ MonitorClient = &mockMonitorClient{}
+
 func Test_MetricsService_Start(t *testing.T) {
 	monitorService := &MonitorService{}
 	metricOptions := MetricOptions{}

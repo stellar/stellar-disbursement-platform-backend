@@ -74,7 +74,7 @@ func Test_NewAnchorPlatformAPIService_existingInstanceIsReturned(t *testing.T) {
 	storedAPService, ok := dependenciesStoreMap[anchorPlatformAPIServiceInstanceName]
 	require.True(t, ok)
 	require.NotNil(t, storedAPService)
-	require.Equal(t, apService1, storedAPService)
+	require.True(t, apService1 == storedAPService)
 
 	// STEP 4: create a new instance
 	apService2, err := NewAnchorPlatformAPIService(anchorPlatformBasePlatformURL, anchorPlatformOutgoingJWTSecret)
