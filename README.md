@@ -94,6 +94,17 @@ To ensure a seamless integration between the SDP and the Anchor Platform, follow
 
 By following these steps, you'll ensure a secure and efficient integration between your SDP and Anchor Platform systems.
 
+##### Keeping the AP and SDP in Sync
+
+Currently, some configurations within the Anchor Platform are static and loaded via environment variables. On the other hand, the SDP reads these same configurations from its database and allows an owner user to modify them. This dynamic pertains particularly to the lists of supported assets and wallets.
+
+While we are actively exploring ways to automate this synchronization process, manual updates to the Anchor Platform configuration is currently required when when registering or unregistering an asset or wallet on the SDP.
+
+1. **(Required) Update Supported Assets**: Whenever you change the list of supported assets in the SDP, it's essential to update the Anchor Platform's `ASSETS_VALUE` configuration to reflect these changes. Consult the Docker Compose file or the helm values file for examples.
+1. **(Recommended) Wallets and SEP-10 Domains**: If you employ the `SEP10_CLIENT_ATTRIBUTION_REQUIRED: true` setting in the Anchor Platform – a recommended best practice – you must also update the `SEP10_CLIENT_ATTRIBUTION_ALLOW_LIST` to include trusted wallet domains. This ensures that the Anchor Platform will process SEP-10 requests only from trusted wallets.
+
+By following these steps, you'll maintain a consistent and secure state between your SDP and Anchor Platform instances.
+
 ### Transaction Submission Service
 
 Refer to documentation [here](/internal/transactionsubmission/README.md).
