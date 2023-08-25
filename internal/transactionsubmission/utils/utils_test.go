@@ -2,36 +2,12 @@ package utils
 
 import (
 	"context"
-	"net/http"
 	"testing"
 
-	"github.com/stellar/go/clients/horizonclient"
-	"github.com/stellar/go/support/render/problem"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/db/dbtest"
 	"github.com/stretchr/testify/require"
 )
-
-func Test_GetHorizonErrorString(t *testing.T) {
-	hError := horizonclient.Error{
-		Problem: problem.P{
-			Title:  "Transaction Failed",
-			Type:   "transaction_failed",
-			Status: http.StatusBadRequest,
-			Detail: "",
-			Extras: map[string]interface{}{
-				"result_codes": map[string]interface{}{
-					"transaction": "tx_failed",
-					"operations":  []string{"op_underfunded"},
-				},
-			},
-		},
-	}
-
-	errStr := GetHorizonErrorString(hError)
-	wantErrStr := "Type: transaction_failed, Title: Transaction Failed, Status: 400, Detail: , Extras: map[result_codes:map[operations:[op_underfunded] transaction:tx_failed]]"
-	require.Equal(t, wantErrStr, errStr)
-}
 
 func TestAdvisoryLockAndRelease(t *testing.T) {
 	ctx := context.Background()
