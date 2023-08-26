@@ -260,8 +260,8 @@ anchorPlatform:
       DATA_DDL_AUTO: update
       METRICS_ENABLED: "false"  # Metrics would be available at port 8082
       METRICS_EXTRAS_ENABLED: "false"
-      # SEP10_CLIENT_ATTRIBUTION_REQUIRED: true  # RECOMMENDED
-      # SEP10_CLIENT_ATTRIBUTION_ALLOW_LIST: "demo-wallet-server.stellar.org,https://example.com"  # RECOMMENDED
+      SEP10_CLIENT_ATTRIBUTION_REQUIRED: "false"  # RECOMMENDED value is `true`
+      SEP10_CLIENT_ATTRIBUTION_ALLOW_LIST: ""     # RECOMMENDED value is a comma-separated list of client domains allowed to make SEP-10 requests.
       ASSETS_VALUE: |   # TODO: keep this up to date with the latest assets supported by the SDP
         {
           "assets": [
