@@ -168,7 +168,7 @@ func (c *TxSubmitterCommand) Command(submitterService TxSubmitterServiceInterfac
 			submitterOpts.DatabaseDSN = globalOptions.databaseURL
 			submitterOpts.NetworkPassphrase = globalOptions.networkPassphrase
 			submitterOpts.Version = globalOptions.version
-			submitterOpts.GitCommit = globalOptions.gitCommit
+			submitterOpts.GitCommitHash = globalOptions.gitCommit
 			submitterOpts.PrivateKeyEncrypter = tssUtils.DefaultPrivateKeyEncrypter{}
 
 			// Inject crash tracker options dependencies

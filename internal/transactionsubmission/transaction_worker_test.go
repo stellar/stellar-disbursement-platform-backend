@@ -18,6 +18,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/db/dbtest"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	engineMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/mocks"
@@ -124,6 +125,8 @@ func Test_NewTransactionWorker(t *testing.T) {
 	wantMaxBaseFee := 100
 	wantTxProcessingLimiter := engine.NewTransactionProcessingLimiter(20)
 
+	mMonitorService := monitor.MockMonitorService{}
+
 	wantWorker := TransactionWorker{
 		dbConnectionPool:    dbConnectionPool,
 		txModel:             txModel,
@@ -133,9 +136,10 @@ func Test_NewTransactionWorker(t *testing.T) {
 		maxBaseFee:          wantMaxBaseFee,
 		crashTrackerClient:  &crashtracker.MockCrashTrackerClient{},
 		txProcessingLimiter: wantTxProcessingLimiter,
+		monitorSvc:          &mMonitorService,
+		gitCommitHash:       "gitCommitHash0x",
+		version:             "version123",
 	}
-
-	wantMonitorSvc, _ := monitor.GetClient(monitor.MetricOptions{MetricType: monitor.MetricTypeTSSPrometheus})
 
 	testCases := []struct {
 		name                string
@@ -219,8 +223,8 @@ func Test_NewTransactionWorker(t *testing.T) {
 			sigService:          wantSigService,
 			maxBaseFee:          wantMaxBaseFee,
 			crashTrackerClient:  &crashtracker.MockCrashTrackerClient{},
-			monitorSvc:          wantMonitorSvc,
 			txProcessingLimiter: wantTxProcessingLimiter,
+			monitorSvc:          &mMonitorService,
 		},
 	}
 

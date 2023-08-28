@@ -34,8 +34,10 @@ type SubmitterOptions struct {
 	NumChannelAccounts   int
 	QueuePollingInterval int
 	MaxBaseFee           int
+	// TODO: Make these fields of the Monitor Service client, instead of passing them all the way to the
+	// transaction worker level
 	Version              string
-	GitCommit            string
+	GitCommitHash        string
 	MonitorService       monitor.MonitorServiceInterface
 	PrivateKeyEncrypter  utils.PrivateKeyEncrypter
 	CrashTrackerClient   crashtracker.CrashTrackerClient
@@ -195,7 +197,7 @@ func NewManager(ctx context.Context, opts SubmitterOptions) (m *Manager, err err
 		monitorService:     opts.MonitorService,
 
 		version:       opts.Version,
-		gitCommitHash: opts.GitCommit,
+		gitCommitHash: opts.GitCommitHash,
 	}, nil
 }
 

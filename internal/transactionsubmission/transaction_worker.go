@@ -589,12 +589,6 @@ func (tw *TransactionWorker) monitorPayment(ctx context.Context, tx *store.Trans
 		"git_commit_hash": tw.gitCommitHash,
 	}
 
-	fmt.Println("-----")
-	fmt.Println(metricTag)
-	fmt.Println(labels)
-
-	fmt.Println("-----")
-
 	err := tw.monitorSvc.MonitorCounters(metricTag, labels)
 	if err != nil {
 		fmt.Println(err)

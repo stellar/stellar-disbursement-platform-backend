@@ -448,6 +448,9 @@ func Test_Manager_ProcessTransactions(t *testing.T) {
 			chTxBundleModel, err := store.NewChannelTransactionBundleModel(dbConnectionPool)
 			require.NoError(t, err)
 
+			mMonitorService := monitor.MockMonitorService{}
+			mMonitorService.On("MonitorCounters", mock.Anything, mock.Anything).Return(nil)
+
 			manager := &Manager{
 				dbConnectionPool:    dbConnectionPool,
 				chTxBundleModel:     chTxBundleModel,
@@ -459,6 +462,9 @@ func Test_Manager_ProcessTransactions(t *testing.T) {
 				sigService:          sigService,
 				maxBaseFee:          txnbuild.MinBaseFee,
 				txProcessingLimiter: engine.NewTransactionProcessingLimiter(queueService.numChannelAccounts),
+				monitorService:      &mMonitorService,
+				gitCommitHash:       "gitCommitHash0x",
+				version:             "version123",
 			}
 
 			go manager.ProcessTransactions(ctx)
