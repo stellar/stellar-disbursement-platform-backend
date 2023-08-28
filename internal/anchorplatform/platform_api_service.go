@@ -3,21 +3,27 @@ package anchorplatform
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
 
-	"github.com/stellar/go/support/log"
+	"github.com/gorilla/schema"
+	"golang.org/x/exp/slices"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
 )
 
-var ErrJWTManagerNotSet = fmt.Errorf("jwt manager not set")
+var (
+	ErrJWTManagerNotSet    = fmt.Errorf("jwt manager not set")
+	ErrAuthNotEnforcedOnAP = fmt.Errorf("anchor platform is not enforcing authentication")
+	ErrServiceUnavailable  = fmt.Errorf("anchor platform service is unavailable")
+)
 
 // TODO update with the PlatformAPI endpoints
 type AnchorPlatformAPIServiceInterface interface {
 	UpdateAnchorTransactions(ctx context.Context, transactions []Transaction) error
+	IsAnchorProtectedByAuth(ctx context.Context) (bool, error)
 }
 
 type AnchorPlatformAPIService struct {
@@ -45,21 +51,28 @@ type TransactionRecords struct {
 }
 
 func NewAnchorPlatformAPIService(httpClient httpclient.HttpClientInterface, anchorPlatformBasePlatformURL, anchorPlatformOutgoingJWTSecret string) (*AnchorPlatformAPIService, error) {
-	apService := AnchorPlatformAPIService{
+	// validation
+	if httpClient == nil {
+		return nil, fmt.Errorf("http client cannot be nil")
+	}
+	if anchorPlatformBasePlatformURL == "" {
+		return nil, fmt.Errorf("anchor platform base platform url cannot be empty")
+	}
+	if anchorPlatformOutgoingJWTSecret == "" {
+		return nil, fmt.Errorf("anchor platform outgoing jwt secret cannot be empty")
+	}
+
+	const expirationMiliseconds = 5000
+	jwtManager, err := NewJWTManager(anchorPlatformOutgoingJWTSecret, expirationMiliseconds)
+	if err != nil {
+		return nil, fmt.Errorf("creating jwt manager: %w", err)
+	}
+
+	return &AnchorPlatformAPIService{
 		HttpClient:                    httpClient,
 		AnchorPlatformBasePlatformURL: anchorPlatformBasePlatformURL,
-	}
-
-	if anchorPlatformOutgoingJWTSecret != "" {
-		const expirationMiliseconds = 5000
-		jwtManager, err := NewJWTManager(anchorPlatformOutgoingJWTSecret, expirationMiliseconds)
-		if err != nil {
-			return nil, fmt.Errorf("error creating jwt manager: %w", err)
-		}
-		apService.jwtManager = jwtManager
-	}
-
-	return &apService, nil
+		jwtManager:                    jwtManager,
+	}, nil
 }
 
 func (a *AnchorPlatformAPIService) UpdateAnchorTransactions(ctx context.Context, transactions []Transaction) error {
@@ -80,16 +93,11 @@ func (a *AnchorPlatformAPIService) UpdateAnchorTransactions(ctx context.Context,
 	}
 	request.Header.Set("Content-Type", "application/json")
 
-	// If the service is configured with an outgoing JWT secret, we'll generate a JWT token and add it to the request.
 	token, err := a.GetJWTToken(transactions)
 	if err != nil {
-		if !errors.Is(err, ErrJWTManagerNotSet) {
-			return fmt.Errorf("error getting jwt token in UpdateAnchorTransactions: %w", err)
-		}
-		log.Ctx(ctx).Warn("JWT secret not set, skipping JWT token generation")
-	} else {
-		request.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
+		return fmt.Errorf("getting jwt token in UpdateAnchorTransactions: %w", err)
 	}
+	request.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
 
 	response, err := a.HttpClient.Do(request)
 	if err != nil {
@@ -101,6 +109,77 @@ func (a *AnchorPlatformAPIService) UpdateAnchorTransactions(ctx context.Context,
 	}
 
 	return nil
+}
+
+type GetTransactionsQueryParams struct {
+	SEP        string   `schema:"sep,required,omitempty"`
+	Order      string   `schema:"order,omitempty"`
+	OrderBy    string   `schema:"order_by,omitempty"`
+	PageNumber int      `schema:"page_number,omitempty"`
+	PageSize   int      `schema:"page_size,omitempty"`
+	Statuses   []string `schema:"statuses,omitempty"`
+}
+
+func (a *AnchorPlatformAPIService) getAnchorTransactions(ctx context.Context, skipAuthentication bool, queryParams GetTransactionsQueryParams) (*http.Response, error) {
+	// Path
+	u, err := url.Parse(a.AnchorPlatformBasePlatformURL)
+	if err != nil {
+		return nil, fmt.Errorf("creating url to GET anchor transactions: %w", err)
+	}
+	u = u.JoinPath("transactions")
+
+	// Query parameters
+	queryParamsEncoder := schema.NewEncoder()
+	params := url.Values{}
+	err = queryParamsEncoder.Encode(queryParams, params)
+	if err != nil {
+		return nil, fmt.Errorf("encoding query params in getAnchorTransactions: %w", err)
+	}
+	u.RawQuery = params.Encode()
+
+	// request
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
+	if err != nil {
+		return nil, fmt.Errorf("creating request to GET anchor transactions: %w", err)
+	}
+	request.Header.Set("Content-Type", "application/json")
+
+	// (skippable) JWT token
+	if !skipAuthentication {
+		var token string
+		token, err = a.GetJWTToken(nil)
+		if err != nil {
+			return nil, fmt.Errorf("getting jwt token in getAnchorTransactions: %w", err)
+		}
+		request.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
+	}
+
+	// Do request
+	response, err := a.HttpClient.Do(request)
+	if err != nil {
+		return nil, fmt.Errorf("making getAnchorTransactions request to anchor platform: %w", err)
+	}
+
+	return response, nil
+}
+
+func (a *AnchorPlatformAPIService) IsAnchorProtectedByAuth(ctx context.Context) (bool, error) {
+	queryParams := GetTransactionsQueryParams{SEP: "24"}
+	resp, err := a.getAnchorTransactions(ctx, true, queryParams)
+	if err != nil {
+		return false, fmt.Errorf("getting anchor transactions from platform API: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 500 {
+		return false, fmt.Errorf("platform API is returning an unexpected response statusCode=%d: %w", resp.StatusCode, ErrServiceUnavailable)
+	}
+
+	if !slices.Contains([]int{http.StatusUnauthorized, http.StatusForbidden}, resp.StatusCode) {
+		return false, nil
+	}
+
+	return true, nil
 }
 
 // GetJWTToken will generate a JWT token if the service is configured with an outgoing JWT secret.
