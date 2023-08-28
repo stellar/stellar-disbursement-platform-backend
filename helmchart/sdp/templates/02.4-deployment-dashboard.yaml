@@ -12,7 +12,7 @@ metadata:
     {{- tpl (toYaml .Values.dashboard.deployment.annotations) . | nindent 4 }}
   {{- end }}
 spec:
-  {{- if not .Values.autoscaling.enabled }}
+  {{- if not .Values.global.autoscaling.enabled }}
   replicas: {{ .Values.replicaCount }}
   {{- end }}
   selector:
@@ -33,8 +33,8 @@ spec:
       labels:
         {{- include "sdp.selectorLabelsWithSuffix" (list . "-dashboard") | nindent 8 }}
     spec:
-      {{- if .Values.serviceAccount.name }}
-      serviceAccountName: {{ tpl .Values.serviceAccount.name $ }}
+      {{- if .Values.global.serviceAccount.name }}
+      serviceAccountName: {{ tpl .Values.global.serviceAccount.name $ }}
       {{- end }}
       securityContext:
         {{- toYaml .Values.dashboard.deployment.podSecurityContext | nindent 8 }}

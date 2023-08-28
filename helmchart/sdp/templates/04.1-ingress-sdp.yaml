@@ -1,0 +1,35 @@
+{{- if .Values.sdp.ingress.enabled -}}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "sdp.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "sdp.labels" . | nindent 4 }}
+  annotations:
+    {{- toYaml .Values.sdp.ingress.annotations | nindent 4 }}
+    # This is a way to block the stellar.toml file from being served on the "sdp.domain":
+    nginx.ingress.kubernetes.io/server-snippet: |
+      location ~ /.well-known/stellar.toml {
+        return 404;
+      }
+spec:
+  {{- if .Values.sdp.ingress.className }}
+  ingressClassName: {{ .Values.sdp.ingress.className }}
+  {{- end }}
+  {{- if .Values.sdp.ingress.tls }}
+  tls:
+    {{- tpl (toYaml .Values.sdp.ingress.tls) . | nindent 4 }}
+  {{- end }}
+  rules:
+    - host: {{ include "sdp.domain" . | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "sdp.fullname" . }}
+                port:
+                  number: {{ include "sdp.port" . }}
+{{- end }}

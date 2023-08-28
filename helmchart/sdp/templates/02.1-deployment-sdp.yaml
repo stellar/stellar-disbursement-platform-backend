@@ -5,56 +5,52 @@ metadata:
   namespace: {{ .Release.Namespace }}
   labels:
     {{- include "sdp.labels" . | nindent 4 }}
-  {{- if .Values.deployment.annotations }}
+  {{- if .Values.sdp.deployment.annotations }}
   annotations:
-    {{- tpl (toYaml .Values.deployment.annotations) . | nindent 4 }}
+    {{- tpl (toYaml .Values.sdp.deployment.annotations) . | nindent 4 }}
   {{- end }}
 spec:
-  {{- if not .Values.autoscaling.enabled }}
-  replicas: {{ .Values.replicaCount }}
+  {{- if not .Values.global.autoscaling.enabled }}
+  replicas: {{ .Values.global.replicaCount }}
   {{- end }}
   selector:
     matchLabels:
       {{- include "sdp.selectorLabels" . | nindent 6 }}
 
-  {{- if .Values.deployment.strategy }}
+  {{- if .Values.sdp.deployment.strategy }}
   strategy:
-    {{- toYaml .Values.deployment.strategy | nindent 4 }}
+    {{- toYaml .Values.sdp.deployment.strategy | nindent 4 }}
   {{- end }}
   
   template:
     metadata:
-      {{- if .Values.deployment.podAnnotations }}
+      {{- if .Values.sdp.deployment.podAnnotations }}
       annotations:
-        {{- tpl (toYaml .Values.deployment.podAnnotations) . | nindent 8 }}
+        {{- tpl (toYaml .Values.sdp.deployment.podAnnotations) . | nindent 8 }}
       {{- end }}
       labels:
         {{- include "sdp.selectorLabels" . | nindent 8 }}
     spec:
-      {{- with .Values.imagePullSecrets }}
-      imagePullSecrets:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-      {{- if .Values.serviceAccount.name }}
-      serviceAccountName: {{ tpl .Values.serviceAccount.name $ }}
+      {{- if .Values.global.serviceAccount.name }}
+      serviceAccountName: {{ tpl .Values.global.serviceAccount.name $ }}
       {{- end }}
       securityContext:
-        {{- toYaml .Values.deployment.podSecurityContext | nindent 8 }}
+        {{- toYaml .Values.sdp.deployment.podSecurityContext | nindent 8 }}
       
       initContainers:
       # ============================= SDP Migrations: =============================
       - name: db-migrations
-        image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
-        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        image: "{{ .Values.sdp.image.repository }}:{{ .Values.sdp.image.tag | default .Chart.AppVersion }}"
+        imagePullPolicy: {{ .Values.sdp.image.pullPolicy }}
         envFrom:
           - configMapRef:
               name: {{ include "sdp.fullname" . }}
           
-          {{- if .Values.secretName }}
+          {{- if .Values.sdp.kubeSecrets.secretName }}
           - secretRef:
-              name: {{ .Values.secretName }}
+              name: {{ .Values.sdp.kubeSecrets.secretName }}
           {{ end }}
-        {{- if .Values.ephemeralDatabase }}
+        {{- if .Values.global.ephemeralDatabase }}
         env:
           - name: DATABASE_URL
             value: 'postgres://postgres:postgres@{{ include "sdp.fullname" . }}-psql.{{ .Release.Namespace }}.svc.cluster.local:5432/postgres-sdp?sslmode=disable'
@@ -67,16 +63,16 @@ spec:
           ./stellar-disbursement-platform db auth migrate up &&
           ./stellar-disbursement-platform db setup-for-network &&
           ./stellar-disbursement-platform channel-accounts verify --delete-invalid-accounts
-          ./stellar-disbursement-platform channel-accounts ensure --num-channel-accounts-ensure {{ .Values.configMap.data.NUM_CHANNEL_ACCOUNTS | default 1 }}
+          ./stellar-disbursement-platform channel-accounts ensure --num-channel-accounts-ensure {{ .Values.tss.configMap.data.NUM_CHANNEL_ACCOUNTS | default 1 }}
 
       containers:
       # ============================= Stellar Disbursement Platform: =============================
         - name: {{ .Chart.Name }}
           securityContext:
-            {{- toYaml .Values.deployment.securityContext | nindent 12 }}
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
-          imagePullPolicy: {{ .Values.image.pullPolicy }}
-          {{- if .Values.ephemeralDatabase }}
+            {{- toYaml .Values.sdp.deployment.securityContext | nindent 12 }}
+          image: "{{ .Values.sdp.image.repository }}:{{ .Values.sdp.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.sdp.image.pullPolicy }}
+          {{- if .Values.global.ephemeralDatabase }}
           env:
             - name: DATABASE_URL
               value: 'postgres://postgres:postgres@{{ include "sdp.fullname" . }}-psql.{{ .Release.Namespace }}.svc.cluster.local:5432/postgres-sdp?sslmode=disable'
@@ -112,30 +108,30 @@ spec:
             periodSeconds: 15
             failureThreshold: 10
 
-          {{- if .Values.resources }}
+          {{- if .Values.global.resources }}
           resources:
-            {{- toYaml .Values.resources | nindent 12 }}
+            {{- toYaml .Values.global.resources | nindent 12 }}
           {{- end }}
 
           envFrom:
           - configMapRef:
               name: {{ include "sdp.fullname" . }}
           
-          {{- if .Values.secretName }}
+          {{- if .Values.sdp.kubeSecrets.secretName }}
           - secretRef:
-              name: {{ .Values.secretName }}
+              name: {{ .Values.sdp.kubeSecrets.secretName }}
           {{ end }}
           
 
-      {{- with .Values.deployment.nodeSelector }}
+      {{- with .Values.sdp.deployment.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- with .Values.deployment.affinity }}
+      {{- with .Values.sdp.deployment.affinity }}
       affinity:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- with .Values.deployment.tolerations }}
+      {{- with .Values.sdp.deployment.tolerations }}
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}

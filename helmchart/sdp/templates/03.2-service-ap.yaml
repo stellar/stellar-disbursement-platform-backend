@@ -6,7 +6,7 @@ metadata:
   labels:
     {{- include "sdp.labelsWithSuffix" (list . "-ap") | nindent 4 }}
 spec:
-  type: {{ .Values.service.type }}
+  type: {{ .Values.global.service.type }}
   ports:
     - port: {{ include "sdp.ap.sepPort" . }}
       targetPort: ap-sep
