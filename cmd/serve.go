@@ -378,7 +378,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			// Setup default AP Auth enforcer
 			apAPIService, err := di.NewAnchorPlatformAPIService(serveOpts.AnchorPlatformBasePlatformURL, serveOpts.AnchorPlatformOutgoingJWTSecret)
 			if err != nil {
-				log.Ctx(ctx).Fatalf("error creating SMS client: %s", err.Error())
+				log.Ctx(ctx).Fatalf("error creating Anchor Platform API Service: %v", err)
 			}
 			serveOpts.AnchorPlatformAPIService = apAPIService
 

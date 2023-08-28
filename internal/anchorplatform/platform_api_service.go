@@ -169,6 +169,7 @@ func (a *AnchorPlatformAPIService) IsAnchorProtectedByAuth(ctx context.Context) 
 	if err != nil {
 		return false, fmt.Errorf("getting anchor transactions from platform API: %w", err)
 	}
+	defer resp.Body.Close()
 
 	if resp.StatusCode >= 500 {
 		return false, fmt.Errorf("platform API is returning an unexpected response statusCode=%d: %w", resp.StatusCode, ErrServiceUnavailable)

@@ -50,7 +50,7 @@ func (job AnchorPlatformAuthMonitoringJob) GetName() string {
 }
 
 func (job AnchorPlatformAuthMonitoringJob) Execute(ctx context.Context) error {
-	log.Ctx(ctx).Infof("executing AnchorPlatformAuthMonitoringJob ...")
+	log.Ctx(ctx).Debugf("executing AnchorPlatformAuthMonitoringJob ...")
 	isProtected, err := job.apService.IsAnchorProtectedByAuth(ctx)
 	if err != nil {
 		return fmt.Errorf("executing AnchorPlatformAuthMonitoringJob: %w", err)
