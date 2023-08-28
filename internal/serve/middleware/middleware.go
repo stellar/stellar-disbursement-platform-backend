@@ -87,7 +87,7 @@ func AuthenticateMiddleware(authManager auth.AuthManager) func(http.Handler) htt
 
 			authHeaderParts := strings.Split(authHeader, " ")
 			if len(authHeaderParts) != 2 {
-				httperror.Unauthorized("Invalid Authorization header provided.", nil, nil).Render(rw)
+				httperror.Unauthorized("", nil, nil).Render(rw)
 				return
 			}
 
@@ -102,7 +102,7 @@ func AuthenticateMiddleware(authManager auth.AuthManager) func(http.Handler) htt
 			}
 
 			if !isValid {
-				httperror.Unauthorized("Invalid token provided.", nil, nil).Render(rw)
+				httperror.Unauthorized("", nil, nil).Render(rw)
 				return
 			}
 

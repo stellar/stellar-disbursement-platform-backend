@@ -147,7 +147,7 @@ func Test_MFAHandler_ServeHTTP(t *testing.T) {
 		mfaHandler.ServeHTTP(rw, req)
 
 		require.Equal(t, http.StatusUnauthorized, rw.Code)
-		require.Contains(t, rw.Body.String(), "MFA Code is invalid")
+		require.Contains(t, rw.Body.String(), "Not authorized.")
 	})
 
 	t.Run("Test MFA validation failed", func(t *testing.T) {
