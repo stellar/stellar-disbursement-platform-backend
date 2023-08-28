@@ -7,8 +7,8 @@ import (
 
 	"github.com/stellar/go/support/render/httpjson"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
+	authUtils "github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/utils"
 )
 
 // ResetPasswordHandler resets the user password by receiving a valid reset token
@@ -32,20 +32,27 @@ func (h ResetPasswordHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// validate request
-	v := validators.NewValidator()
-
-	v.Check(resetPasswordRequest.Password != "", "password", "password is required")
-	v.Check(resetPasswordRequest.ResetToken != "", "reset_token", "reset token is required")
-
-	if v.HasErrors() {
-		httperror.BadRequest("request invalid", err, v.Errors).Render(w)
+	// validate password
+	payloadErrorExtras := map[string]interface{}{}
+	var validatePasswordError *authUtils.ValidatePasswordError
+	err = authUtils.ValidatePassword(resetPasswordRequest.Password)
+	if err != nil && errors.As(err, &validatePasswordError) {
+		for k, v := range validatePasswordError.FailedValidations() {
+			payloadErrorExtras[k] = v
+		}
+	}
+	// validate reset token
+	if resetPasswordRequest.ResetToken == "" {
+		payloadErrorExtras["reset_token"] = "reset token is required"
+	}
+	// return 400 if there are any errors
+	if len(payloadErrorExtras) > 0 {
+		httperror.BadRequest("request invalid", err, payloadErrorExtras).Render(w)
 		return
 	}
 
+	// Reset password with a valid token
 	ctx := r.Context()
-
-	// Reset password email with a valid token
 	err = h.AuthManager.ResetPassword(ctx, resetPasswordRequest.ResetToken, resetPasswordRequest.Password)
 	if err != nil {
 		if errors.Is(err, auth.ErrInvalidResetPasswordToken) {
