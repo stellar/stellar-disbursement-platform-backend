@@ -20,6 +20,8 @@ type PasswordPromptInterface interface {
 	Run() (string, error)
 }
 
+var _ PasswordPromptInterface = &promptui.Prompt{}
+
 var (
 	isOwner      = false
 	passwordFlag = false

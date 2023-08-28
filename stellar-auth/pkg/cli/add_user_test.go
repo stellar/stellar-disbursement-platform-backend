@@ -20,6 +20,8 @@ func (m *PasswordPromptMock) Run() (string, error) {
 	return "mockpassword", nil
 }
 
+var _ PasswordPromptInterface = (*PasswordPromptMock)(nil)
+
 func Test_authAddUserCommand(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
