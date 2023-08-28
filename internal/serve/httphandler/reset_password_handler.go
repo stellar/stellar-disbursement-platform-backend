@@ -33,21 +33,21 @@ func (h ResetPasswordHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// validate password
-	payloadErrorExtras := map[string]interface{}{}
+	badRequestExtras := map[string]interface{}{}
 	var validatePasswordError *authUtils.ValidatePasswordError
 	err = authUtils.ValidatePassword(resetPasswordRequest.Password)
 	if err != nil && errors.As(err, &validatePasswordError) {
 		for k, v := range validatePasswordError.FailedValidations() {
-			payloadErrorExtras[k] = v
+			badRequestExtras[k] = v
 		}
 	}
 	// validate reset token
 	if resetPasswordRequest.ResetToken == "" {
-		payloadErrorExtras["reset_token"] = "reset token is required"
+		badRequestExtras["reset_token"] = "reset token is required"
 	}
 	// return 400 if there are any errors
-	if len(payloadErrorExtras) > 0 {
-		httperror.BadRequest("request invalid", err, payloadErrorExtras).Render(w)
+	if len(badRequestExtras) > 0 {
+		httperror.BadRequest("request invalid", err, badRequestExtras).Render(w)
 		return
 	}
 
