@@ -14,11 +14,11 @@ func (s *dryRunClient) LogAndReportErrors(ctx context.Context, err error, msg st
 	if msg != "" {
 		err = fmt.Errorf("%s: %w", msg, err)
 	}
-	log.Ctx(ctx).Errorf("%+v", err)
+	log.Ctx(ctx).Errorf("[DRY_RUN Crash Reporter] %+v", err)
 }
 
 func (s *dryRunClient) LogAndReportMessages(ctx context.Context, msg string) {
-	log.Ctx(ctx).Info(msg)
+	log.Ctx(ctx).Infof("[DRY_RUN Crash Reporter] %s", msg)
 }
 
 func (s *dryRunClient) FlushEvents(waitTime time.Duration) bool {

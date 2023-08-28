@@ -8,8 +8,10 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/scheduler/jobs"
 
@@ -147,6 +149,17 @@ func worker(ctx context.Context, workerID int, crashTrackerClient crashtracker.C
 func WithPaymentsProcessorJobOption(models *data.Models) SchedulerJobRegisterOption {
 	return func(s *Scheduler) {
 		j := jobs.NewPaymentsProcessorJob(models)
+		log.Infof("registering %s job to scheduler", j.GetName())
+		s.addJob(j)
+	}
+}
+
+func WithAPAuthEnforcementJob(apService anchorplatform.AnchorPlatformAPIServiceInterface, monitorService monitor.MonitorServiceInterface, crashTrackerClient crashtracker.CrashTrackerClient) SchedulerJobRegisterOption {
+	return func(s *Scheduler) {
+		j, err := jobs.NewAnchorPlatformAuthMonitoringJob(apService, monitorService, crashTrackerClient)
+		if err != nil {
+			log.Errorf("error creating %s job: %s", j.GetName(), err)
+		}
 		log.Infof("registering %s job to scheduler", j.GetName())
 		s.addJob(j)
 	}
