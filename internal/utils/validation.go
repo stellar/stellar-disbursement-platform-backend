@@ -68,7 +68,7 @@ func ValidateEmail(email string) error {
 	return nil
 }
 
-// IsDNSName will validate the given string as a DNS name
+// ValidateDNS will validate the given string as a DNS name
 func ValidateDNS(domain string) error {
 	isDNS := govalidator.IsDNSName(domain)
 	if !isDNS {

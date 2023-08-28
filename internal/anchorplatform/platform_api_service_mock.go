@@ -15,4 +15,9 @@ func (a *AnchorPlatformAPIServiceMock) UpdateAnchorTransactions(ctx context.Cont
 	return args.Error(0)
 }
 
+func (a *AnchorPlatformAPIServiceMock) IsAnchorProtectedByAuth(ctx context.Context) (bool, error) {
+	args := a.Called(ctx)
+	return args.Bool(0), args.Error(1)
+}
+
 var _ AnchorPlatformAPIServiceInterface = (*AnchorPlatformAPIServiceMock)(nil)

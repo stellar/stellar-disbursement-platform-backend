@@ -250,7 +250,9 @@ anchorPlatform:
   ## @param anchorPlatform.configMap.data.DATA_DDL_AUTO Specifies the strategy Hibernate should use for the database schema initialization. The standard Hibernate property values are `none`, `validate`, `update`, `create-drop`.
   ## @param anchorPlatform.configMap.data.METRICS_ENABLED Determines if metrics collection is enabled for the platform. If enabled, metrics would be available at port 8082.
   ## @param anchorPlatform.configMap.data.METRICS_EXTRAS_ENABLED Determines if additional metrics (beyond the standard set) are enabled for collection.
-  ## @param anchorPlatform.configMap.data.ASSETS_VALUE [string] Specifies the details and configuration of assets supported by the anchor platform. This includes SEP-24 enabled assets, schema type, code, issuer details, distribution account, precision details, and deposit and withdrawal configurations.
+  ## @param anchorPlatform.configMap.data.ASSETS_VALUE [string] Specifies the details and configuration of assets supported by the anchor platform. This includes SEP-24 enabled assets, schema type, code, issuer details, distribution account, precision details, and deposit and withdrawal configurations. Currently, it needs to be *manually* kept up to date with the SDP state.
+  ## @param anchorPlatform.configMap.data.SEP10_CLIENT_ATTRIBUTION_REQUIRED When set to `true`, only SEP-10 requests from known clients listed in `SEP10_CLIENT_ATTRIBUTION_ALLOW_LIST` will be accepted.
+  ## @param anchorPlatform.configMap.data.SEP10_CLIENT_ATTRIBUTION_ALLOW_LIST The comma-separated list of client domains allowed to make SEP-10 requests.
   configMap:
     annotations:
     data:
@@ -258,7 +260,9 @@ anchorPlatform:
       DATA_DDL_AUTO: update
       METRICS_ENABLED: "false"  # Metrics would be available at port 8082
       METRICS_EXTRAS_ENABLED: "false"
-      ASSETS_VALUE: |   # TODO: update this later
+      SEP10_CLIENT_ATTRIBUTION_REQUIRED: "false"  # RECOMMENDED value is `true`
+      SEP10_CLIENT_ATTRIBUTION_ALLOW_LIST: ""     # RECOMMENDED value is a comma-separated list of client domains allowed to make SEP-10 requests.
+      ASSETS_VALUE: |   # TODO: keep this up to date with the latest assets supported by the SDP
         {
           "assets": [
             {

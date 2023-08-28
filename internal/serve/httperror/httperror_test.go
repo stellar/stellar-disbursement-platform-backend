@@ -89,9 +89,9 @@ func TestUnauthorized(t *testing.T) {
 	assert.Equal(t, originalErr, err.Err)
 	assert.Equal(t, map[string]interface{}{"foo": "invalid token"}, err.Extras)
 
-	err = Unauthorized("Invalid token provided.", nil, nil)
+	err = Unauthorized("Not authorized.", nil, nil)
 	assert.Equal(t, http.StatusUnauthorized, err.StatusCode)
-	assert.Equal(t, "Invalid token provided.", err.Message)
+	assert.Equal(t, "Not authorized.", err.Message)
 	assert.Nil(t, err.Err)
 	assert.Nil(t, err.Extras)
 }

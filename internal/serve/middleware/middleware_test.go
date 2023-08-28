@@ -203,7 +203,7 @@ func Test_AuthenticateMiddleware(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
-		assert.JSONEq(t, `{"error":"Invalid Authorization header provided."}`, string(respBody))
+		assert.JSONEq(t, `{"error":"Not authorized."}`, string(respBody))
 
 		req, err = http.NewRequest(http.MethodGet, "/authenticated", nil)
 		require.NoError(t, err)
@@ -219,7 +219,7 @@ func Test_AuthenticateMiddleware(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
-		assert.JSONEq(t, `{"error":"Invalid Authorization header provided."}`, string(respBody))
+		assert.JSONEq(t, `{"error":"Not authorized."}`, string(respBody))
 	})
 
 	t.Run("returns Unauthorized when a unexpected error occurs validating the token", func(t *testing.T) {
@@ -269,7 +269,7 @@ func Test_AuthenticateMiddleware(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
-		assert.JSONEq(t, `{"error":"Invalid token provided."}`, string(respBody))
+		assert.JSONEq(t, `{"error":"Not authorized."}`, string(respBody))
 	})
 
 	t.Run("returns the response successfully", func(t *testing.T) {
