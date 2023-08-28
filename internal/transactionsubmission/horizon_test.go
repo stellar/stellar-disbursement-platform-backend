@@ -121,7 +121,7 @@ func Test_CreateChannelAccountsOnChain(t *testing.T) {
 					}).
 					Once()
 			},
-			wantErrContains: "creating sponsored channel accounts: Type: https://stellar.org/horizon-errors/timeout, Title: Timeout, Status: 408, Detail: Foo bar detail, Extras: map[foo:bar]",
+			wantErrContains: "creating sponsored channel accounts: horizon response error: StatusCode=408, Type=https://stellar.org/horizon-errors/timeout, Title=Timeout, Detail=Foo bar detail",
 		},
 		{
 			name:                 "🎉 successfully creates channel accounts on-chain (UNENCRYPTED)",
@@ -294,7 +294,7 @@ func Test_DeleteChannelAccountOnChain(t *testing.T) {
 					Once()
 			},
 			wantErrContains: fmt.Sprintf(
-				`submitting remove account transaction to the network for account %s: horizon error: "Timeout" - check horizon.Error.Problem for more information`,
+				`submitting remove account transaction to the network for account %s: horizon response error: StatusCode=408, Type=https://stellar.org/horizon-errors/timeout, Title=Timeout`,
 				chAccAddress,
 			),
 		},

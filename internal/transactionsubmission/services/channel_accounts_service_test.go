@@ -599,14 +599,14 @@ func Test_ChannelAccounts_DeleteAccount_SubmitTransaction_Failure(t *testing.T) 
 		"SubmitTransactionWithOptions",
 		mock.Anything,
 		horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true},
-	).Return(horizon.Transaction{}, errors.New("horizon client error")).Once()
+	).Return(horizon.Transaction{}, errors.New("foo bar")).Once()
 
 	err = cas.DeleteChannelAccount(ctx, opts)
 	assert.ErrorContains(
 		t,
 		err,
 		fmt.Sprintf(
-			"deleting account %[1]s in DeleteChannelAccount: deleting account %[1]s onchain: submitting remove account transaction to the network for account %[1]s: horizon client error",
+			"deleting account %[1]s in DeleteChannelAccount: deleting account %[1]s onchain: submitting remove account transaction to the network for account %[1]s: horizon response error: foo bar",
 			opts.ChannelAccountID,
 		),
 	)
