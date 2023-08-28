@@ -866,3 +866,107 @@ func Test_DefaultAuthenticator_GetUser(t *testing.T) {
 		assert.Equal(t, randUser.Email, u.Email)
 	})
 }
+
+func Test_DefaultAuthenticator_UpdatePassword(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	passwordEncrypterMock := &PasswordEncrypterMock{}
+	authenticator := newDefaultAuthenticator(withAuthenticatorDatabaseConnectionPool(dbConnectionPool), withPasswordEncrypter(passwordEncrypterMock))
+
+	ctx := context.Background()
+
+	type dbUser struct {
+		ID                string `db:"id"`
+		FirstName         string `db:"first_name"`
+		LastName          string `db:"last_name"`
+		Email             string `db:"email"`
+		EncryptedPassword string `db:"encrypted_password"`
+	}
+
+	getUser := func(t *testing.T, ctx context.Context, ID string) *dbUser {
+		const query = `
+			SELECT id, first_name, last_name, email, encrypted_password FROM auth_users WHERE id = $1
+		`
+		var u dbUser
+		err := dbConnectionPool.GetContext(ctx, &u, query, ID)
+		require.NoError(t, err)
+
+		return &u
+	}
+
+	t.Run("returns error when no value is provided", func(t *testing.T) {
+		encryptedPassword := "encryptedpassword"
+		passwordEncrypterMock.
+			On("Encrypt", ctx, mock.AnythingOfType("string")).
+			Return(encryptedPassword, nil).
+			Once()
+		randUser := CreateRandomAuthUserFixture(t, ctx, dbConnectionPool, passwordEncrypterMock, false)
+		err := authenticator.UpdatePassword(ctx, randUser.ToUser(), "", "")
+		assert.EqualError(t, err, "provide currentPassword and newPassword values.")
+	})
+
+	t.Run("returns error when credentials are invalid", func(t *testing.T) {
+		encryptedPassword := "encryptedpassword"
+		passwordEncrypterMock.
+			On("Encrypt", ctx, mock.AnythingOfType("string")).
+			Return(encryptedPassword, nil).
+			Once()
+		randUser := CreateRandomAuthUserFixture(t, ctx, dbConnectionPool, passwordEncrypterMock, false)
+		passwordEncrypterMock.
+			On("ComparePassword", ctx, randUser.EncryptedPassword, randUser.Password).
+			Return(false, nil).
+			Once()
+		err := authenticator.UpdatePassword(ctx, randUser.ToUser(), randUser.Password, "newpassword")
+		assert.EqualError(t, err, "error validating credentials: invalid credentials")
+	})
+
+	t.Run("returns error when encrypting new password fails", func(t *testing.T) {
+		encryptedPassword := "encryptedpassword"
+		newPassword := "new_not_encrypted_pass"
+		passwordEncrypterMock.
+			On("Encrypt", ctx, mock.AnythingOfType("string")).
+			Return(encryptedPassword, nil).
+			Once().
+			On("Encrypt", ctx, newPassword).
+			Return("", errUnexpectedError).
+			Once()
+		randUser := CreateRandomAuthUserFixture(t, ctx, dbConnectionPool, passwordEncrypterMock, false)
+		passwordEncrypterMock.
+			On("ComparePassword", ctx, randUser.EncryptedPassword, randUser.Password).
+			Return(true, nil).
+			Once()
+
+		err := authenticator.UpdatePassword(ctx, randUser.ToUser(), randUser.Password, newPassword)
+		assert.EqualError(t, err, "error encrypting password: unexpected error")
+	})
+
+	t.Run("updates password successfully", func(t *testing.T) {
+		encryptedPassword := "encryptedpassword"
+		newPassword := "new_not_encrypted_pass"
+		newEncryptedPassword := "newencryptedpassword"
+		passwordEncrypterMock.
+			On("Encrypt", ctx, mock.AnythingOfType("string")).
+			Return(encryptedPassword, nil).
+			Once().
+			On("Encrypt", ctx, newPassword).
+			Return(newEncryptedPassword, nil).
+			Once()
+		randUser := CreateRandomAuthUserFixture(t, ctx, dbConnectionPool, passwordEncrypterMock, false)
+		assert.NotEqual(t, newEncryptedPassword, randUser.EncryptedPassword)
+
+		passwordEncrypterMock.
+			On("ComparePassword", ctx, randUser.EncryptedPassword, randUser.Password).
+			Return(true, nil).
+			Once()
+
+		err := authenticator.UpdatePassword(ctx, randUser.ToUser(), randUser.Password, newPassword)
+		require.NoError(t, err)
+
+		u := getUser(t, ctx, randUser.ID)
+		assert.Equal(t, newEncryptedPassword, u.EncryptedPassword)
+	})
+}
