@@ -42,9 +42,6 @@ func DBConnectionPoolFromSqlDB(sqlDB *sql.DB, driverName string) db.DBConnection
 
 func (am *defaultAuthManager) Authenticate(ctx context.Context, email, pass string) (string, error) {
 	user, err := am.authenticator.ValidateCredentials(ctx, email, pass)
-	if errors.Is(err, ErrInvalidCredentials) {
-		return "", err
-	}
 	if err != nil {
 		return "", fmt.Errorf("validating credentials: %w", err)
 	}
