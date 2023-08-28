@@ -115,14 +115,67 @@ func CreateWalletFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecut
 	return GetWalletFixture(t, ctx, sqlExec, name)
 }
 
+func CreateWalletCountries(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, walletID string, countriesCodes []string) {
+	const query = `
+		WITH countries_cte AS (
+			SELECT UNNEST($1::varchar(3)[]) AS code
+		)
+		INSERT INTO wallets_countries
+			(wallet_id, country_code)
+		SELECT
+			$2, c.code
+		FROM
+			countries_cte c
+	`
+
+	_, err := sqlExec.ExecContext(ctx, query, pq.Array(countriesCodes), walletID)
+	require.NoError(t, err)
+}
+
+func CreateWalletAssets(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, walletID string, assetsIDs []string) {
+	const query = `
+		WITH assets_cte AS (
+			SELECT UNNEST($1::text[]) AS asset_id
+		)
+		INSERT INTO wallets_assets
+			(wallet_id, asset_id)
+		SELECT
+			$2, a.asset_id
+		FROM
+			assets_cte a
+	`
+
+	_, err := sqlExec.ExecContext(ctx, query, pq.Array(assetsIDs), walletID)
+	require.NoError(t, err)
+}
+
 func GetWalletFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, name string) *Wallet {
 	const query = `
 		SELECT
-			*
+			w.*,
+			jsonb_agg(
+				DISTINCT jsonb_build_object(
+					'code', c.code,
+					'name', c.name
+				)
+			) FILTER (WHERE c.code IS NOT NULL) AS countries,
+			jsonb_agg(
+				DISTINCT jsonb_build_object(
+					'id', a.id,
+					'code', a.code,
+					'issuer', a.issuer 
+				)
+			) FILTER (WHERE a.id IS NOT NULL) AS assets
 		FROM
 			wallets w
-		WHERE
-			w.name = $1
+			LEFT JOIN wallets_countries wc ON w.id = wc.wallet_id
+			LEFT JOIN countries c ON c.code = wc.country_code
+			LEFT JOIN wallets_assets wa ON w.id = wa.wallet_id
+			LEFT JOIN assets a ON a.id = wa.asset_id
+		WHERE 
+		    w.name = $1
+		GROUP BY
+			w.id
 	`
 
 	wallet := &Wallet{}
@@ -134,8 +187,16 @@ func GetWalletFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter,
 
 // DeleteAllWalletFixtures deletes all wallets in the database
 func DeleteAllWalletFixtures(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter) {
-	const query = "DELETE FROM wallets"
+	query := "DELETE FROM wallets_countries"
 	_, err := sqlExec.ExecContext(ctx, query)
+	require.NoError(t, err)
+
+	query = "DELETE FROM wallets_assets"
+	_, err = sqlExec.ExecContext(ctx, query)
+	require.NoError(t, err)
+
+	query = "DELETE FROM wallets"
+	_, err = sqlExec.ExecContext(ctx, query)
 	require.NoError(t, err)
 }
 
