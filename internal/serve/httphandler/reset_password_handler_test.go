@@ -69,7 +69,7 @@ func Test_ResetPasswordHandlerPost(t *testing.T) {
 	})
 
 	t.Run("Should require both password and reset_token params", func(t *testing.T) {
-		requestBody := `{"password":""}`
+		requestBody := `{}`
 
 		rr := httptest.NewRecorder()
 		req, _ := http.NewRequest(method, url, strings.NewReader(requestBody))

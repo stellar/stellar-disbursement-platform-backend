@@ -36,7 +36,7 @@ func (h ResetPasswordHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 	v := validators.NewValidator()
 
 	v.Check(resetPasswordRequest.Password != "", "password", "password is required")
-	v.Check(resetPasswordRequest.Password != "", "reset_token", "reset token is required")
+	v.Check(resetPasswordRequest.ResetToken != "", "reset_token", "reset token is required")
 
 	if v.HasErrors() {
 		httperror.BadRequest("request invalid", err, v.Errors).Render(w)
@@ -52,7 +52,7 @@ func (h ResetPasswordHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 			httperror.BadRequest("invalid reset password token", err, nil).Render(w)
 			return
 		}
-		httperror.InternalError(ctx, "Cannot reset password", err, v.Errors).Render(w)
+		httperror.InternalError(ctx, "Cannot reset password", err, nil).Render(w)
 		return
 	}
 
