@@ -8,6 +8,19 @@ const (
 	TransactionRetryCountTag                MetricTag = "retry_count"
 	TransactionProcessedCounterTag          MetricTag = "processed_count"
 
+	// Payment metric tags
+	PaymentProcessingStartedTag        MetricTag = "payment_processing_started"
+	PaymentTransactionSuccessfulTag    MetricTag = "payment_transaction_successful"
+	PaymentReconciliationSuccessfulTag MetricTag = "payment_reconciliation_successful"
+	PaymentErrorTag                    MetricTag = "payment_error"
+
+	PaymentProcessingStartedLabel        string = "payment_processing_started"
+	PaymentProcessingSuccessfulLabel     string = "payment_processing_successful"
+	PaymentReprocessingSuccessfulLabel   string = "payment_reprocessing_successful"
+	PaymentReconciliationSuccessfulLabel string = "payment_reconciliation_successful"
+	PaymentMarkedForReprocessingLabel    string = "payment_marked_for_reprocessing"
+	PaymentFailedLabel                   string = "payment_failed"
+
 	// Metric Labels
 	TransactionStatusSuccessLabel string = "success"
 	TransactionStatusErrorLabel   string = "error"
@@ -29,5 +42,10 @@ func (m MetricTag) ListAllTSSMetricTags() []MetricTag {
 		TransactionStartedToCompletedLatencyTag,
 		TransactionRetryCountTag,
 		TransactionProcessedCounterTag,
+
+		PaymentProcessingStartedTag,
+		PaymentTransactionSuccessfulTag,
+		PaymentReconciliationSuccessfulTag,
+		PaymentErrorTag,
 	}
 }

@@ -135,6 +135,8 @@ func Test_NewTransactionWorker(t *testing.T) {
 		txProcessingLimiter: wantTxProcessingLimiter,
 	}
 
+	wantMonitorSvc, _ := monitor.GetClient(monitor.MetricOptions{MetricType: monitor.MetricTypeTSSPrometheus})
+
 	testCases := []struct {
 		name                string
 		dbConnectionPool    db.DBConnectionPool
@@ -145,6 +147,7 @@ func Test_NewTransactionWorker(t *testing.T) {
 		maxBaseFee          int
 		crashTrackerClient  crashtracker.CrashTrackerClient
 		txProcessingLimiter *engine.TransactionProcessingLimiter
+		monitorSvc          monitor.MonitorServiceInterface
 		wantError           error
 	}{
 		{
@@ -216,6 +219,7 @@ func Test_NewTransactionWorker(t *testing.T) {
 			sigService:          wantSigService,
 			maxBaseFee:          wantMaxBaseFee,
 			crashTrackerClient:  &crashtracker.MockCrashTrackerClient{},
+			monitorSvc:          wantMonitorSvc,
 			txProcessingLimiter: wantTxProcessingLimiter,
 		},
 	}
@@ -231,6 +235,9 @@ func Test_NewTransactionWorker(t *testing.T) {
 				tc.maxBaseFee,
 				tc.crashTrackerClient,
 				tc.txProcessingLimiter,
+				tc.monitorSvc,
+				"version123",
+				"gitCommitHash0x",
 			)
 
 			if tc.wantError != nil {

@@ -34,6 +34,8 @@ type SubmitterOptions struct {
 	NumChannelAccounts   int
 	QueuePollingInterval int
 	MaxBaseFee           int
+	Version              string
+	GitCommit            string
 	MonitorService       monitor.MonitorServiceInterface
 	PrivateKeyEncrypter  utils.PrivateKeyEncrypter
 	CrashTrackerClient   crashtracker.CrashTrackerClient
@@ -95,6 +97,8 @@ type Manager struct {
 	// crash & metrics monitoring:
 	monitorService     monitor.MonitorServiceInterface
 	crashTrackerClient crashtracker.CrashTrackerClient
+	version            string
+	gitCommitHash      string
 }
 
 func NewManager(ctx context.Context, opts SubmitterOptions) (m *Manager, err error) {
@@ -189,6 +193,9 @@ func NewManager(ctx context.Context, opts SubmitterOptions) (m *Manager, err err
 
 		crashTrackerClient: crashTrackerClient,
 		monitorService:     opts.MonitorService,
+
+		version:       opts.Version,
+		gitCommitHash: opts.GitCommit,
 	}, nil
 }
 
@@ -246,6 +253,9 @@ func (m *Manager) ProcessTransactions(ctx context.Context) {
 					m.maxBaseFee,
 					m.crashTrackerClient,
 					m.txProcessingLimiter,
+					m.monitorService,
+					m.version,
+					m.gitCommitHash,
 				)
 				if err != nil {
 					m.crashTrackerClient.LogAndReportErrors(ctx, err, "")

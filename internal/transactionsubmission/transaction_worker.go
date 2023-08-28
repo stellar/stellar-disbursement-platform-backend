@@ -14,15 +14,15 @@ import (
 	"github.com/stellar/go/strkey"
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/txnbuild"
+	"golang.org/x/exp/slices"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
-	tssMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
 	tssUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
-	"golang.org/x/exp/slices"
 )
 
 // Review these TODOs originally created by Stephen:
@@ -48,14 +48,16 @@ type TransactionWorker struct {
 	maxBaseFee          int
 	crashTrackerClient  crashtracker.CrashTrackerClient
 	txProcessingLimiter *engine.TransactionProcessingLimiter
-	monitorSvc          monitor.MonitorService
+	monitorSvc          monitor.MonitorServiceInterface
+	version             string
+	gitCommitHash       string
 }
 
 type TxMetadata struct {
-	srcChannelAcc string
-	commitHash    string
-	horizonErr    bool
-	errStack      string
+	srcChannelAcc    string
+	paymentEventType string
+	horizonErr       bool
+	errStack         string
 }
 
 func NewTransactionWorker(
@@ -67,6 +69,9 @@ func NewTransactionWorker(
 	maxBaseFee int,
 	crashTrackerClient crashtracker.CrashTrackerClient,
 	txProcessingLimiter *engine.TransactionProcessingLimiter,
+	monitorSvc monitor.MonitorServiceInterface,
+	version string,
+	gitCommitHash string,
 ) (TransactionWorker, error) {
 	if dbConnectionPool == nil {
 		return TransactionWorker{}, fmt.Errorf("dbConnectionPool cannot be nil")
@@ -100,6 +105,18 @@ func NewTransactionWorker(
 		return TransactionWorker{}, fmt.Errorf("txProcessingLimiter cannot be nil")
 	}
 
+	if monitorSvc == nil {
+		return TransactionWorker{}, fmt.Errorf("monitorSvc cannot be nil")
+	}
+
+	if version == "" {
+		return TransactionWorker{}, fmt.Errorf("version cannot be empty string")
+	}
+
+	/*if gitCommitHash == "" {
+		return TransactionWorker{}, fmt.Errorf("gitCommitHash cannot be empty string")
+	}*/
+
 	return TransactionWorker{
 		dbConnectionPool:    dbConnectionPool,
 		txModel:             txModel,
@@ -109,6 +126,9 @@ func NewTransactionWorker(
 		maxBaseFee:          maxBaseFee,
 		crashTrackerClient:  crashTrackerClient,
 		txProcessingLimiter: txProcessingLimiter,
+		monitorSvc:          monitorSvc,
+		version:             version,
+		gitCommitHash:       gitCommitHash,
 	}, nil
 }
 
@@ -150,9 +170,10 @@ func (tw *TransactionWorker) handleFailedTransaction(ctx context.Context, txJob 
 	var isHorizonErr bool
 	var hErrWrapper *utils.HorizonErrorWrapper
 	defer func() {
-		metricTag := tssMonitor.PaymentFailedTag
+		metricTag := monitor.PaymentErrorTag
+		eventType := monitor.PaymentFailedLabel
 		if !shouldMarkAsError {
-			metricTag = tssMonitor.PaymentMarkedForReprocessing
+			eventType = monitor.PaymentMarkedForReprocessingLabel
 		}
 
 		tw.monitorPayment(
@@ -160,9 +181,9 @@ func (tw *TransactionWorker) handleFailedTransaction(ctx context.Context, txJob 
 			&txJob.Transaction,
 			metricTag,
 			&TxMetadata{
-				srcChannelAcc: txJob.ChannelAccount.PublicKey,
-				commitHash:    hTxResp.ResultXdr,
-				horizonErr:    isHorizonErr,
+				srcChannelAcc:    txJob.ChannelAccount.PublicKey,
+				horizonErr:       isHorizonErr,
+				paymentEventType: eventType,
 			},
 		)
 	}()
@@ -305,12 +326,16 @@ func (tw *TransactionWorker) handleSuccessfulTransaction(ctx context.Context, tx
 
 	log.Ctx(ctx).Infof("🎉 Successfully processed transaction job %v", txJob)
 
-	metricTag := tssMonitor.PaymentProcessingSuccessfulTag
+	eventType := monitor.PaymentProcessingSuccessfulLabel
 	if txJob.Transaction.AttemptsCount > 1 {
-		metricTag = tssMonitor.PaymentReprocessingSuccessfulTag
+		eventType = monitor.PaymentReprocessingSuccessfulLabel
 	}
 
-	tw.monitorPayment(ctx, &txJob.Transaction, metricTag, nil)
+	tw.monitorPayment(ctx, &txJob.Transaction, monitor.PaymentTransactionSuccessfulTag, &TxMetadata{
+		srcChannelAcc:    txJob.ChannelAccount.PublicKey,
+		horizonErr:       false,
+		paymentEventType: eventType,
+	})
 
 	return nil
 }
@@ -355,14 +380,22 @@ func (tw *TransactionWorker) reconcileSubmittedTransaction(ctx context.Context, 
 		return fmt.Errorf("unexpected error: %w", hWrapperErr)
 	}
 
-	tw.monitorPayment(ctx, &txJob.Transaction, tssMonitor.PaymentReconciliationSuccessfulTag, nil)
+	tw.monitorPayment(ctx, &txJob.Transaction, monitor.PaymentReconciliationSuccessfulTag, &TxMetadata{
+		srcChannelAcc:    txJob.ChannelAccount.PublicKey,
+		horizonErr:       false,
+		paymentEventType: monitor.PaymentReconciliationSuccessfulLabel,
+	})
 	return nil
 }
 
 func (tw *TransactionWorker) processTransactionSubmission(ctx context.Context, txJob *TxJob) error {
 	log.Ctx(ctx).Infof("🚧 Processing transaction submission for job %v...", txJob)
 
-	tw.monitorPayment(ctx, &txJob.Transaction, tssMonitor.PaymentProcessingStartedTag, nil)
+	tw.monitorPayment(ctx, &txJob.Transaction, monitor.PaymentProcessingStartedTag, &TxMetadata{
+		srcChannelAcc:    txJob.ChannelAccount.PublicKey,
+		horizonErr:       false,
+		paymentEventType: monitor.PaymentProcessingStartedLabel,
+	})
 
 	// STEP 1: validate bundle
 	err := tw.validateJob(txJob)
@@ -544,36 +577,47 @@ func (tw *TransactionWorker) saveResponseXDRIfPresent(ctx context.Context, txJob
 	return nil
 }
 
-// monitorPayment sends a metric about a payment tx to the observer, linking it to a entry in the logs that contains
-// specific metadata about said tx.
+// monitorPayment sends a metric about a payment tx to the observer, linking it to a entry in the logs that contains specific metadata about said tx.
 func (tw *TransactionWorker) monitorPayment(ctx context.Context, tx *store.Transaction, metricTag monitor.MetricTag, txMetadata *TxMetadata) {
 	eventID := uuid.New().String()
 	labels := map[string]string{
-		"event_id":   eventID,
-		"tx_id":      tx.ID,
-		"updated_at": tx.UpdatedAt.String(),
+		"event_id":        eventID,
+		"event_type":      txMetadata.paymentEventType,
+		"tx_id":           tx.ID,
+		"event_time":      time.Now().String(),
+		"app_version":     tw.version,
+		"git_commit_hash": tw.gitCommitHash,
 	}
 
-	err := tw.monitorSvc.MonitorHistogram(time.Since(*tx.CreatedAt).Seconds(), metricTag, labels)
+	fmt.Println("-----")
+	fmt.Println(metricTag)
+	fmt.Println(labels)
+
+	fmt.Println("-----")
+
+	err := tw.monitorSvc.MonitorCounters(metricTag, labels)
 	if err != nil {
-		log.Ctx(ctx).Errorf("Cannot create metric with information about the payment %s: %s", tx.ID, err.Error())
-		return
+		fmt.Println(err)
 	}
 
-	paymentLog := log.Ctx(ctx).
-		WithFields(
-			log.F{
-				"event_id":            eventID,
-				"tx_id":               tx.ID,
-				"created_at":          tx.CreatedAt,
-				"updated_at":          tx.UpdatedAt,
-				"assset":              tx.AssetCode,
-				"channel_account":     txMetadata.srcChannelAcc,
-				"destination_account": tx.Destination,
-			},
-		)
+	paymentLog := log.Ctx(ctx)
+	for label_name, value := range labels {
+		paymentLog.WithField(label_name, value)
+	}
 
-	if metricTag == tssMonitor.PaymentProcessingStartedTag {
+	paymentLog.WithFields(
+		log.F{
+			"event_id":            eventID,
+			"tx_id":               tx.ID,
+			"created_at":          tx.CreatedAt,
+			"updated_at":          tx.UpdatedAt,
+			"assset":              tx.AssetCode,
+			"channel_account":     txMetadata.srcChannelAcc,
+			"destination_account": tx.Destination,
+		},
+	)
+
+	if metricTag == monitor.PaymentProcessingStartedTag {
 		paymentLog.Debugf(paymentLoggerStr, eventID, metricTag)
 		return
 	}
@@ -583,12 +627,11 @@ func (tw *TransactionWorker) monitorPayment(ctx context.Context, tx *store.Trans
 			log.F{
 				"xdr_received": tx.XDRReceived,
 				"xdr_sent":     tx.XDRSent,
-				"commit_hash":  txMetadata.commitHash,
 			},
 		)
 
 	// successful transactions
-	if metricTag == tssMonitor.PaymentReconciliationSuccessfulTag || metricTag == tssMonitor.PaymentReprocessingSuccessfulTag || metricTag == tssMonitor.PaymentProcessingSuccessfulTag {
+	if metricTag == monitor.PaymentReconciliationSuccessfulTag || metricTag == monitor.PaymentTransactionSuccessfulTag {
 		paymentLog.
 			WithFields(
 				log.F{
@@ -600,9 +643,9 @@ func (tw *TransactionWorker) monitorPayment(ctx context.Context, tx *store.Trans
 		return
 	}
 
-	// failed transactions
-	if metricTag == tssMonitor.PaymentFailedTag || metricTag == tssMonitor.PaymentMarkedForReprocessing {
-		if metricTag == tssMonitor.PaymentFailedTag {
+	// unsuccessful transactions
+	if metricTag == monitor.PaymentErrorTag {
+		if txMetadata.paymentEventType == monitor.PaymentFailedLabel {
 			// payment could fail because of internal error too
 			paymentLog.WithField("horizon_error?", txMetadata.horizonErr)
 		}
