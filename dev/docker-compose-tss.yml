@@ -27,7 +27,7 @@ services:
       - -c
       - |
         sleep 10
-        ./stellar-disbursement-platform channel-accounts verify --delete-invalid-accounts &&
+        ./stellar-disbursement-platform channel-accounts verify --delete-invalid-accounts
         ./stellar-disbursement-platform channel-accounts ensure --num-channel-accounts-ensure 1
         ./stellar-disbursement-platform tss
 

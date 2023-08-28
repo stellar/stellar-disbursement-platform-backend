@@ -1,0 +1,255 @@
+# Stellar Disbursement Platform Helm Chart
+
+## Introduction
+This chart bootstraps a Stellar Disbursement Platform (SDP) deployment on a [Kubernetes](http://kubernetes.io) cluster using the [Helm](https://helm.sh) package manager.
+
+The SDP is a set of services that enable organizations to disburse funds to recipients using the Stellar network. The SDP is comprised of the following services:
+- Stellar Disbursement Platform (SDP) Core Service: the core backend service that performs several functions.
+- Anchor Platform: the API server that the wallet uses to authenticate and initiate the recipient’s registration process through the SEP-24 deposit flow.
+- Transaction Submission Service (TSS): the service that submits all payment transactions to the Stellar network.
+- Dashboard: the user interface administrators use to initiate and track the progress of disbursements.
+
+## Prerequisites
+- Kubernetes 1.19+
+- Helm 3.2.0+
+
+## Installing the Chart
+
+The chart can be installed either from a packaged chart or directly from the git repository.
+
+### From a packaged chart
+
+- Add the Stellar Helm repository to Helm
+```shell
+helm repo add stellar https://helm.stellar.org/charts
+```
+- Install the chart
+```shell
+helm install sdp -f myvalues.yaml stellar/stellar-disbursement-platform
+```
+
+### From the git repository
+
+- Clone the git repository
+```
+git clone git@github.com:stellar/stellar-disbursement-platform-backend.git
+```
+
+- Install the chart
+```shell
+helm install sdp -f myvalues.yaml ./stellar-disbursement-platform-backend/helmchart/sdp
+```
+
+## Uninstalling the Chart
+
+To uninstall/delete the `sdp` deployment:
+
+```shell
+helm delete sdp
+```
+
+## Parameters
+
+### Global parameters
+
+These parameters are shared by all charts.
+
+| Name                                                   | Description                                                                                                                         | Value       |
+| ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- | ----------- |
+| `global.isPubnet`                                      | Determines if the network is public. Set this to true for public networks.                                                          | `false`     |
+| `global.replicaCount`                                  | Number of replicas for the application.                                                                                             | `1`         |
+| `global.resources`                                     | Resource limits and requests for the application pods.                                                                              | `{}`        |
+| `global.service.type`                                  | Kubernetes Service type for the application.                                                                                        | `ClusterIP` |
+| `global.autoscaling`                                   | Configuration related to the horizontal pod autoscaling of the application.                                                         |             |
+| `global.autoscaling.enabled`                           | Determines if autoscaling is enabled for the application.                                                                           | `false`     |
+| `global.autoscaling.minReplicas`                       | Minimum number of replicas when autoscaling is enabled.                                                                             | `1`         |
+| `global.autoscaling.maxReplicas`                       | Maximum number of replicas when autoscaling is enabled.                                                                             | `4`         |
+| `global.autoscaling.targetCPUUtilizationPercentage`    | Target CPU utilization percentage for autoscaling.                                                                                  | `80`        |
+| `global.autoscaling.targetMemoryUtilizationPercentage` | Target memory utilization percentage for autoscaling.                                                                               | `80`        |
+| `global.serviceAccount`                                | Configuration related to the Kubernetes Service Account used by the application.                                                    |             |
+| `global.serviceAccount.create`                         | Determines if a new service account should be created.                                                                              | `false`     |
+| `global.serviceAccount.annotations`                    | Annotations to be added to the service account.                                                                                     | `nil`       |
+| `global.serviceAccount.name`                           | Name of the service account to be used. If not set and create is set to true, a name will be generated using the fullname template. | `""`        |
+| `global.ephemeralDatabase`                             | Enables or disables the creation of an ephemeral database for testing purposes.                                                     | `true`      |
+
+### Stellar Disbursement Platform (SDP) parameters
+
+Configuration parameters for the SDP Core Service which is the core backend service that performs several functions:
+- Dashboard API: the API used by the front-end UI for all disbursement requests.
+- Messaging Service: a recurring process that sends text messages to users prompting them to download the wallet selected for a particular disbursement and verify their phone with an OTP
+- Wallet Registration UI: a web application that collects and verifies the recipient’s OTP code and verification information via Stellar’s SEP-24: Hosted Deposit and Withdrawal protocol
+
+| Name                                                       | Description                                                                                                                                       | Value                                           |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| `sdp.route`                                                | Configuration related to the routing of the SDP service.                                                                                          |                                                 |
+| `sdp.route.schema`                                         | Protocol scheme used for the service. Can be "http" or "https".                                                                                   | `https`                                         |
+| `sdp.route.domain`                                         | Public domain/address of the SDP service. If using localhost, consider including the port as part of the domain.                                  | `sdp.localhost.com`                             |
+| `sdp.route.port`                                           | Primary port on which the SDP service listens.                                                                                                    | `8000`                                          |
+| `sdp.route.metricsPort`                                    | Port dedicated to metrics collection for the SDP service.                                                                                         | `8002`                                          |
+| `sdp.image`                                                | Configuration related to the Docker image used by the SDP service.                                                                                |                                                 |
+| `sdp.image.repository`                                     | Docker image repository for the SDP backend service.                                                                                              | `stellar/stellar-disbursement-platform-backend` |
+| `sdp.image.pullPolicy`                                     | Image pull policy for the SDP service. For locally built images, consider using "Never" or "IfNotPresent".                                        | `Always`                                        |
+| `sdp.image.tag`                                            | Docker image tag for the SDP service. If set, this overrides the default value from `.Chart.AppVersion`.                                          | `latest`                                        |
+| `sdp.deployment`                                           | Configuration related to the deployment of the SDP service.                                                                                       |                                                 |
+| `sdp.deployment.annotations`                               | Annotations to be added to the deployment.                                                                                                        | `nil`                                           |
+| `sdp.deployment.podAnnotations`                            | Annotations specific to the pods.                                                                                                                 | `{}`                                            |
+| `sdp.deployment.podSecurityContext`                        | Security settings for the pods.                                                                                                                   | `{}`                                            |
+| `sdp.deployment.securityContext`                           | Security settings for the container within the pod.                                                                                               | `{}`                                            |
+| `sdp.deployment.strategy`                                  | Configuration related to the deployment strategy, ensuring smooth updates and minimal downtime.                                                   | `{}`                                            |
+| `sdp.deployment.nodeSelector`                              | Node selector to determine which nodes should run the pods.                                                                                       | `{}`                                            |
+| `sdp.deployment.tolerations`                               | Tolerations to ensure pods aren't scheduled on unsuitable nodes.                                                                                  | `[]`                                            |
+| `sdp.deployment.affinity`                                  | Affinity rules to determine where pods get scheduled based on node conditions.                                                                    | `{}`                                            |
+| `sdp.configMap`                                            | Configuration for the ConfigMap used by the SDP service.                                                                                          |                                                 |
+| `sdp.configMap.annotations`                                | Annotations to be added to the ConfigMap.                                                                                                         | `nil`                                           |
+| `sdp.configMap.data`                                       | Used to inject non-sensitive environment variables into the SDP deployment; for the latest variables, consult the application's CLI `-h` command. |                                                 |
+| `sdp.configMap.data.EC256_PUBLIC_KEY`                      | The EC256 public key used for authentication purposes.                                                                                            | `""`                                            |
+| `sdp.configMap.data.ENVIRONMENT`                           | Specifies the environment SDP is running in (e.g. "localhost").                                                                                   | `localhost`                                     |
+| `sdp.configMap.data.LOG_LEVEL`                             | Determines the verbosity level of logs (e.g. "TRACE").                                                                                            | `TRACE`                                         |
+| `sdp.configMap.data.SEP10_SIGNING_PUBLIC_KEY`              | Anchor platform SEP10 signing public key.                                                                                                         | `nil`                                           |
+| `sdp.configMap.data.DISTRIBUTION_PUBLIC_KEY`               | The public key of the Stellar distribution account that sends the Stellar payments.                                                               | `nil`                                           |
+| `sdp.configMap.data.METRICS_TYPE`                          | Defines the type of metrics system in use. Options: "PROMETHEUS".                                                                                 | `PROMETHEUS`                                    |
+| `sdp.configMap.data.EMAIL_SENDER_TYPE`                     | The messenger type used to send invitations to new dashboard users. Options: "DRY_RUN", "AWS_EMAIL".                                              | `DRY_RUN`                                       |
+| `sdp.configMap.data.SMS_SENDER_TYPE`                       | The messenger type used to send text messages to recipients. Options: "DRY_RUN", "TWILIO_SMS".                                                    | `DRY_RUN`                                       |
+| `sdp.configMap.data.RECAPTCHA_SITE_KEY`                    | Site key for ReCaptcha. Required if using ReCaptcha.                                                                                              | `nil`                                           |
+| `sdp.configMap.data.CORS_ALLOWED_ORIGINS`                  | Specifies the domains allowed to make cross-origin requests. "*" means all domains are allowed.                                                   | `*`                                             |
+| `sdp.configMap.data.ENABLE_RECAPTCHA`                      | Determines if ReCaptcha should be enabled for login ("true" or "false").                                                                          | `false`                                         |
+| `sdp.configMap.data.ENABLE_MFA`                            | Determines if email-based MFA should be enabled during login ("true" or "false").                                                                 | `false`                                         |
+| `sdp.kubeSecrets`                                          | Kubernetes secrets are used to manage sensitive information, such as API keys and private keys. It's crucial that these details are kept private. |                                                 |
+| `sdp.kubeSecrets.secretName`                               | The name of the Kubernetes secret object. Only use this if create is false.                                                                       | `sdp-backend-secret-name`                       |
+| `sdp.kubeSecrets.create`                                   | If true, the secret will be created. If false, it is assumed the secret already exists.                                                           | `false`                                         |
+| `sdp.kubeSecrets.annotations`                              | Annotations to be added to the secret.                                                                                                            | `nil`                                           |
+| `sdp.kubeSecrets.data.AWS_ACCESS_KEY_ID`                   | AWS IAM user's access key ID for authenticating to AWS services.                                                                                  | `MY_AWS_ACCESS_KEY_ID`                          |
+| `sdp.kubeSecrets.data.AWS_REGION`                          | AWS region where services (like SES for email sending) are provisioned.                                                                           | `MY_AWS_REGION`                                 |
+| `sdp.kubeSecrets.data.AWS_SECRET_ACCESS_KEY`               | AWS IAM user's secret access key for authenticating to AWS services.                                                                              | `MY_AWS_SECRET_ACCESS_KEY`                      |
+| `sdp.kubeSecrets.data.AWS_SES_SENDER_ID`                   | Identifier for the AWS SES service used for sending emails.                                                                                       | `MY_AWS_SES_SENDER_ID`                          |
+| `sdp.kubeSecrets.data.TWILIO_ACCOUNT_SID`                  | Account SID for authenticating to the Twilio service, used for sending text messages.                                                             | `MY_TWILIO_ACCOUNT_SID`                         |
+| `sdp.kubeSecrets.data.TWILIO_AUTH_TOKEN`                   | Authentication token for the Twilio service.                                                                                                      | `MY_TWILIO_AUTH_TOKEN`                          |
+| `sdp.kubeSecrets.data.TWILIO_SERVICE_SID`                  | Service SID for the specific Twilio service being utilized.                                                                                       | `MY_TWILIO_SERVICE_SID`                         |
+| `sdp.kubeSecrets.data.EC256_PRIVATE_KEY`                   | The EC256 Private Key. This key is used to sign the authentication token.                                                                         | `""`                                            |
+| `sdp.kubeSecrets.data.SEP10_SIGNING_PRIVATE_KEY`           | The public key of the Stellar account that signs the SEP-10 transactions. It's also used to sign URLs.                                            | `nil`                                           |
+| `sdp.kubeSecrets.data.SEP24_JWT_SECRET`                    | The JWT secret that's used by the Anchor Platform to sign the SEP-24 JWT token.                                                                   | `jwt_secret_1234567890`                         |
+| `sdp.kubeSecrets.data.RECAPTCHA_SITE_SECRET_KEY`           | Secret key for Google reCAPTCHA service to verify user's non-robotic behavior.                                                                    | `nil`                                           |
+| `sdp.kubeSecrets.data.ANCHOR_PLATFORM_OUTGOING_JWT_SECRET` | The JWT secret used to create a JWT token used to send requests to the anchor platform.                                                           | `mySdpToAnchorPlatformSecret`                   |
+| `sdp.kubeSecrets.data.DATABASE_URL`                        | URL of the database used by the SDP.                                                                                                              | `nil`                                           |
+| `sdp.kubeSecrets.data.DISTRIBUTION_SEED`                   | The private key of the Stellar account used to disburse funds. This is needed for the init container                                              | `nil`                                           |
+| `sdp.ingress`                                              | Configuration for the ingress controller for the SDP service.                                                                                     |                                                 |
+| `sdp.ingress.enabled`                                      | If true, an ingress controller will be created for the SDP service.                                                                               | `true`                                          |
+| `sdp.ingress.className`                                    | Name of the IngressClass to be used for the ingress controller.                                                                                   | `nginx`                                         |
+| `sdp.ingress.tls[0].hosts`                                 | List of hosts covered by the TLS certificate.                                                                                                     | `["{{ include \"sdp.domain\" . }}"]`            |
+| `sdp.ingress.tls[0].secretName`                            | The name of the Kubernetes TLS secret. You need to create this secret manually.                                                                   | `backend-tls-cert-name`                         |
+
+### Anchor Platform
+
+Configuration parameters for the Anchor Platform which is the API server that the wallet uses to authenticate and initiate
+the recipient’s registration process through the SEP-24 deposit flow.
+
+| Name                                                                      | Description                                                                                                                                                                                                                                     | Value                                   |
+| ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
+| `anchorPlatform.route`                                                    | Configuration related to the routing of the Anchor Platform service.                                                                                                                                                                            |                                         |
+| `anchorPlatform.route.schema`                                             | Protocol scheme used for the service. Can be "http" or "https".                                                                                                                                                                                 | `https`                                 |
+| `anchorPlatform.route.domain`                                             | Public domain/address of the Anchor Platform service. If using localhost, consider including the port as part of the domain.                                                                                                                    | `ap.localhost.com`                      |
+| `anchorPlatform.route.sepPort`                                            | The port of the sep server of the anchor platform. This is the public API that is meant to be reached by a client application, such as the stellar.toml file."                                                                                  | `8080`                                  |
+| `anchorPlatform.route.platformPort`                                       | The port of the platform server of the anchor platform. This is the private API that is meant to be reached only by the SDP server, such as the PATCH /sep24/transactions endpoint.",                                                           | `8085`                                  |
+| `anchorPlatform.deployment`                                               | Configuration related to the deployment of the Anchor Platform.                                                                                                                                                                                 |                                         |
+| `anchorPlatform.deployment.annotations`                                   | Annotations to be added to the deployment.                                                                                                                                                                                                      | `{}`                                    |
+| `anchorPlatform.deployment.podAnnotations`                                | Annotations specific to the pods.                                                                                                                                                                                                               | `{}`                                    |
+| `anchorPlatform.deployment.strategy`                                      | Configuration related to the deployment strategy, ensuring smooth updates and minimal downtime.                                                                                                                                                 | `{}`                                    |
+| `anchorPlatform.deployment.podSecurityContext`                            | Security settings for the pods.                                                                                                                                                                                                                 | `{}`                                    |
+| `anchorPlatform.deployment.securityContext`                               | Security settings for the container within the pod.                                                                                                                                                                                             | `{}`                                    |
+| `anchorPlatform.deployment.resources`                                     | Resource limits and requests for the application pods.                                                                                                                                                                                          | `{}`                                    |
+| `anchorPlatform.deployment.nodeSelector`                                  | Node selector to determine which nodes should run the pods.                                                                                                                                                                                     | `{}`                                    |
+| `anchorPlatform.deployment.tolerations`                                   | Tolerations to ensure pods aren't scheduled on unsuitable nodes.                                                                                                                                                                                | `[]`                                    |
+| `anchorPlatform.deployment.affinity`                                      | Affinity rules to determine where pods get scheduled based on node conditions.                                                                                                                                                                  | `{}`                                    |
+| `anchorPlatform.configMap`                                                | Configuration for the ConfigMap used by the anchorPlatform service.                                                                                                                                                                             |                                         |
+| `anchorPlatform.configMap.annotations`                                    | Annotations to be added to the ConfigMap.                                                                                                                                                                                                       | `nil`                                   |
+| `anchorPlatform.configMap.data`                                           | Used to inject non-sensitive environment variables into the Anchor Platform deployment; for the latest variables, consult Anchor Platform's public documentation.                                                                               |                                         |
+| `anchorPlatform.configMap.data.APP_LOGGING_LEVEL`                         | Specifies the logging level for the application (e.g. "INFO", "DEBUG", "ERROR").                                                                                                                                                                | `INFO`                                  |
+| `anchorPlatform.configMap.data.DATA_DATABASE`                             | Specifies the database connection details for the platform. Will be auto-populated in the development helm chart when `ephemeralDatabase` is enabled.                                                                                           |                                         |
+| `anchorPlatform.configMap.data.DATA_SERVER`                               | Specifies the server connection details for the platform. Will be auto-populated in the development helm chart when `ephemeralDatabase` is enabled.                                                                                             |                                         |
+| `anchorPlatform.configMap.data.DATA_FLYWAY_ENABLED`                       | Determines if Flyway, the database migration tool, is enabled.                                                                                                                                                                                  |                                         |
+| `anchorPlatform.configMap.data.DATA_DDL_AUTO`                             | Specifies the strategy Hibernate should use for the database schema initialization. The standard Hibernate property values are `none`, `validate`, `update`, `create-drop`.                                                                     | `update`                                |
+| `anchorPlatform.configMap.data.METRICS_ENABLED`                           | Determines if metrics collection is enabled for the platform. If enabled, metrics would be available at port 8082.                                                                                                                              | `false`                                 |
+| `anchorPlatform.configMap.data.METRICS_EXTRAS_ENABLED`                    | Determines if additional metrics (beyond the standard set) are enabled for collection.                                                                                                                                                          | `false`                                 |
+| `anchorPlatform.configMap.data.ASSETS_VALUE`                              | Specifies the details and configuration of assets supported by the anchor platform. This includes SEP-24 enabled assets, schema type, code, issuer details, distribution account, precision details, and deposit and withdrawal configurations. | `""`                                    |
+| `anchorPlatform.kubeSecrets`                                              | secrets are used to manage sensitive information, such as API keys and private keys. It's crucial that these details are kept private.                                                                                                          |                                         |
+| `anchorPlatform.kubeSecrets.secretName`                                   | The name of the Kubernetes secret object. Only use this if create is false.                                                                                                                                                                     | `anchor-platform-secret-name`           |
+| `anchorPlatform.kubeSecrets.create`                                       | If true, the secret will be created. If false, it is assumed the secret already exists.                                                                                                                                                         | `false`                                 |
+| `anchorPlatform.kubeSecrets.annotations`                                  | Annotations to be added to the secret.                                                                                                                                                                                                          | `nil`                                   |
+| `anchorPlatform.kubeSecrets.data.SECRET_DATA_PASSWORD`                    | Database password for the anchor platform.                                                                                                                                                                                                      | `postgres`                              |
+| `anchorPlatform.kubeSecrets.data.SECRET_DATA_USERNAME`                    | Database username for the anchor platform.                                                                                                                                                                                                      | `postgres`                              |
+| `anchorPlatform.kubeSecrets.data.SECRET_PLATFORM_API_AUTH_SECRET`         | The secret used for authenticating API requests between the SDP and the Anchor Platform.                                                                                                                                                        | `mySdpToAnchorPlatformSecret`           |
+| `anchorPlatform.kubeSecrets.data.SECRET_SEP10_JWT_SECRET`                 | The JWT secret used by the Anchor Platform to sign SEP-10 JWT tokens. These tokens are used for various authentication and transaction-related purposes.                                                                                        | `jwt_secret_1234567890`                 |
+| `anchorPlatform.kubeSecrets.data.SECRET_SEP10_SIGNING_SEED`               | The seed for the SEP-10 signing process. It's essential for ensuring the security and authenticity of SEP-10 transactions.                                                                                                                      | `nil`                                   |
+| `anchorPlatform.kubeSecrets.data.SECRET_SEP24_INTERACTIVE_URL_JWT_SECRET` | The JWT secret used by the Anchor Platform to sign SEP-24 interactive URLs. These URLs typically initiate user-interactive processes like deposits and withdrawals.                                                                             | `jwt_secret_1234567890`                 |
+| `anchorPlatform.kubeSecrets.data.SECRET_SEP24_MORE_INFO_URL_JWT_SECRET`   | The JWT secret used by the Anchor Platform to sign SEP-24 'More Info' URLs. These URLs provide users with additional details or steps related to their transactions.                                                                            | `jwt_secret_1234567890`                 |
+| `anchorPlatform.ingress`                                                  | Configuration for the ingress controller for the Anchor Platform.                                                                                                                                                                               |                                         |
+| `anchorPlatform.ingress.enabled`                                          | If true, an ingress controller will be created for the Anchor Platform.                                                                                                                                                                         | `true`                                  |
+| `anchorPlatform.ingress.className`                                        | Name of the IngressClass to be used for the ingress controller.                                                                                                                                                                                 | `nginx`                                 |
+| `anchorPlatform.ingress.tls[0].hosts`                                     | List of hosts covered by the TLS certificate.                                                                                                                                                                                                   | `["{{ include \"sdp.ap.domain\" . }}"]` |
+| `anchorPlatform.ingress.tls[0].secretName`                                | The name of the Kubernetes TLS secret. You need to create this secret manually. For more instructions, please refer to helmchart/docs/README.md                                                                                                 | `backend-tls-cert-name`                 |
+
+### Transaction Submission Service
+
+Configuration parameters for the Transaction Submission Service. This is the service that submits all payment transactions to the Stellar network.
+This service is designed to maximize payment throughput, handle queuing, and graceful resubmission/error handling
+
+| Name                                      | Description                                                                                                                                                            | Value             |
+| ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------- |
+| `tss.route`                               | Configuration related to the routing of the TSS.                                                                                                                       |                   |
+| `tss.route.schema`                        | Protocol scheme used for the service. Can be "http" or "https".                                                                                                        | `https`           |
+| `tss.route.port`                          | Primary port on which the TSS listens.                                                                                                                                 | `9000`            |
+| `tss.route.metricsPort`                   | Port dedicated to metrics collection for the TSS.                                                                                                                      | `9002`            |
+| `tss.deployment`                          | Configuration related to the deployment of the TSS.                                                                                                                    |                   |
+| `tss.deployment.annotations`              | Annotations to be added to the deployment.                                                                                                                             | `nil`             |
+| `tss.deployment.podAnnotations`           | Annotations specific to the pods.                                                                                                                                      | `{}`              |
+| `tss.deployment.strategy`                 | Configuration related to the deployment strategy, ensuring smooth updates and minimal downtime.                                                                        | `{}`              |
+| `tss.deployment.podSecurityContext`       | Security settings for the pods.                                                                                                                                        | `{}`              |
+| `tss.deployment.securityContext`          | Security settings for the container within the pod.                                                                                                                    | `{}`              |
+| `tss.deployment.resources`                | Resource limits and requests for the application pods.                                                                                                                 | `{}`              |
+| `tss.deployment.nodeSelector`             | Node selector to determine which nodes should run the pods.                                                                                                            | `{}`              |
+| `tss.deployment.tolerations`              | Tolerations to ensure pods aren't scheduled on unsuitable nodes.                                                                                                       | `[]`              |
+| `tss.deployment.affinity`                 | Affinity rules to determine where pods get scheduled based on node conditions.                                                                                         | `{}`              |
+| `tss.configMap`                           | Configuration settings for the Transaction Submission Service (TSS) ConfigMap.                                                                                         |                   |
+| `tss.configMap.annotations`               | Annotations to be added to the ConfigMap.                                                                                                                              | `nil`             |
+| `tss.configMap.data`                      | Used to inject non-sensitive environment variables into the TSS deployment; for the latest variables, consult the application's CLI `-h` command.                      |                   |
+| `tss.configMap.data.NUM_CHANNEL_ACCOUNTS` | The number of channel accounts the TSS will create/use. Channel accounts provide a method for submitting transactions to the network at a high rate.                   | `1`               |
+| `tss.configMap.data.MAX_BASE_FEE`         | Specifies the maximum base fee (in stroops) the TSS is willing to pay per transaction. This helps to control costs and ensures transactions are economically feasible. | `100000`          |
+| `tss.configMap.data.TSS_METRICS_TYPE`     | Defines the type of metrics system that the TSS should use. Options: "TSS_PROMETHEUS".                                                                                 | `TSS_PROMETHEUS`  |
+| `tss.kubeSecrets`                         | Kubernetes secrets are used to manage sensitive information, such as API keys and private keys. It's crucial that these details are kept private.                      |                   |
+| `tss.kubeSecrets.secretName`              | The name of the Kubernetes secret object. Only use this if create is false.                                                                                            | `tss-secret-name` |
+| `tss.kubeSecrets.create`                  | If true, the secret will be created. If false, it is assumed the secret already exists.                                                                                | `false`           |
+| `tss.kubeSecrets.annotations`             | Annotations to be added to the secret.                                                                                                                                 | `nil`             |
+| `tss.kubeSecrets.data.DATABASE_URL`       | URL of the database used by the TSS.                                                                                                                                   | `nil`             |
+| `tss.kubeSecrets.data.DISTRIBUTION_SEED`  | The private key of the Stellar account used to disburse funds.                                                                                                         | `nil`             |
+
+### Dashboard
+
+Configuration parameters for the Dashboard. This is the user interface administrators use to initiate and track the progress of disbursements.
+
+| Name                                          | Description                                                                                              | Value                                                         |
+| --------------------------------------------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| `dashboard.enabled`                           | If true, the dashboard will be deployed.                                                                 | `false`                                                       |
+| `dashboard.route`                             | Configuration related to the routing of the Dashboard.                                                   |                                                               |
+| `dashboard.route.schema`                      | Protocol scheme used for the service. Can be "http" or "https".                                          | `https`                                                       |
+| `dashboard.route.domain`                      | Public domain/address of the Dashboard.                                                                  | `sdp-dashboard.localhost.com`                                 |
+| `dashboard.route.port`                        | Primary port on which the Dashboard listens.                                                             | `80`                                                          |
+| `dashboard.image`                             | Configuration related to the Docker image used by the Dashboard.                                         |                                                               |
+| `dashboard.image.fullName`                    | Full name of the Docker image.                                                                           | `stellar/stellar-disbursement-platform-frontend:latest`       |
+| `dashboard.image.pullPolicy`                  | Image pull policy for the dashboard. For locally built images, consider using "Never" or "IfNotPresent". | `Always`                                                      |
+| `dashboard.deployment`                        | Configuration related to the deployment of the Dashboard.                                                |                                                               |
+| `dashboard.deployment.annotations`            | Annotations to be added to the deployment.                                                               | `{}`                                                          |
+| `dashboard.deployment.podAnnotations`         | Annotations specific to the pods.                                                                        | `{}`                                                          |
+| `dashboard.deployment.strategy`               | Configuration related to the deployment strategy, ensuring smooth updates and minimal downtime.          | `{}`                                                          |
+| `dashboard.deployment.podSecurityContext`     | Security settings for the pods.                                                                          | `{}`                                                          |
+| `dashboard.deployment.securityContext`        | Security settings for the container within the pod.                                                      | `{}`                                                          |
+| `dashboard.deployment.resources`              | Resource limits and requests for the application pods.                                                   | `{}`                                                          |
+| `dashboard.configMap`                         | Configuration settings for the Dashboard ConfigMap.                                                      |                                                               |
+| `dashboard.configMap.annotations`             | Annotations to be added to the ConfigMap.                                                                | `{}`                                                          |
+| `dashboard.configMap.data`                    | Used to inject non-sensitive environment variables into the Dashboard deployment.                        |                                                               |
+| `dashboard.configMap.data.API_URL`            | The URL for the API the dashboard should interact with.                                                  | `{{ include "sdp.schema" . }}://{{ include "sdp.domain" . }}` |
+| `dashboard.configMap.data.RECAPTCHA_SITE_KEY` | The site key for Google reCAPTCHA service.                                                               | `reCaptchaSiteKey`                                            |
+| `dashboard.ingress`                           | Configuration for the ingress controller for the dashboard.                                              |                                                               |
+| `dashboard.ingress.enabled`                   | If true, an ingress controller will be created for the dashboard.                                        | `false`                                                       |
+| `dashboard.ingress.className`                 | Name of the IngressClass to be used for the ingress controller.                                          | `nginx`                                                       |
+| `dashboard.ingress.tls[0].hosts`              | List of hosts covered by the TLS certificate.                                                            | `["{{ include \"dashboard.domain\" . }}"]`                    |
+| `dashboard.ingress.tls[0].secretName`         | The name of the Kubernetes TLS secret. You need to create this secret manually.                          | `dashboard-tls-cert-name`                                     |

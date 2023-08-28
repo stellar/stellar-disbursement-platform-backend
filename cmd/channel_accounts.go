@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"go/types"
 
 	"github.com/spf13/cobra"
@@ -49,6 +50,9 @@ func (c *ChannelAccountsCommand) Command() *cobra.Command {
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
 			cmd.Parent().PersistentPreRun(cmd.Parent(), args)
 			ctx := cmd.Context()
+			if ctx == nil {
+				ctx = context.Background()
+			}
 
 			// Validate & ingest input parameters
 			configOpts.Require()
@@ -60,8 +64,7 @@ func (c *ChannelAccountsCommand) Command() *cobra.Command {
 			// Inject server dependencies
 			svcOpts.DatabaseDSN = globalOptions.databaseURL
 			svcOpts.NetworkPassphrase = globalOptions.networkPassphrase
-
-			c.Service, err = txSubSvc.NewChannelAccountService(*svcOpts)
+			c.Service, err = txSubSvc.NewChannelAccountService(ctx, *svcOpts)
 			if err != nil {
 				log.Ctx(ctx).Fatalf("Error creating channel account service: %s", err.Error())
 			}
@@ -115,7 +118,7 @@ func (c *ChannelAccountsCommand) CreateCommand(toolOpts *txSubSvc.ChannelAccount
 			Usage:       "The max base fee for submitting a stellar transaction",
 			OptType:     types.Int,
 			ConfigKey:   &toolOpts.MaxBaseFee,
-			FlagDefault: txnbuild.MinBaseFee,
+			FlagDefault: 100 * txnbuild.MinBaseFee,
 			Required:    true,
 		},
 		{
@@ -232,7 +235,7 @@ func (c *ChannelAccountsCommand) EnsureCommand(toolOpts *txSubSvc.ChannelAccount
 			Usage:       "The max base fee for submitting a stellar transaction",
 			OptType:     types.Int,
 			ConfigKey:   &toolOpts.MaxBaseFee,
-			FlagDefault: txnbuild.MinBaseFee,
+			FlagDefault: 100 * txnbuild.MinBaseFee,
 			Required:    true,
 		},
 		{
@@ -308,7 +311,7 @@ func (c *ChannelAccountsCommand) DeleteCommand(toolOpts *txSubSvc.ChannelAccount
 			Usage:       "The max base fee for submitting a stellar transaction",
 			OptType:     types.Int,
 			ConfigKey:   &toolOpts.MaxBaseFee,
-			FlagDefault: txnbuild.MinBaseFee,
+			FlagDefault: 100 * txnbuild.MinBaseFee,
 			Required:    true,
 		},
 	}

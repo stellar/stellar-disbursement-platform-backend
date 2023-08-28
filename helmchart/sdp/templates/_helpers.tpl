@@ -71,28 +71,28 @@ Selector labels
 SDP domain
 */}}
 {{- define "sdp.domain" -}}
-{{- .Values.router.sdp.domain | default "localhost" }}
+{{- .Values.sdp.route.domain | default "localhost" }}
 {{- end }}
 
 {{/*
 SDP domain schema
 */}}
 {{- define "sdp.schema" -}}
-{{- .Values.router.sdp.schema | default "https" }}
+{{- .Values.sdp.route.schema | default "https" }}
 {{- end }}
 
 {{/*
 SDP port
 */}}
 {{- define "sdp.port" -}}
-{{- .Values.router.sdp.port | default "8000" }}
+{{- .Values.sdp.route.port | default "8000" }}
 {{- end }}
 
 {{/*
 SDP Metrics port
 */}}
 {{- define "sdp.metricsPort" -}}
-{{- .Values.router.sdp.metricsPort | default "8002" }}
+{{- .Values.sdp.route.metricsPort | default "8002" }}
 {{- end }}
 
 {{/*
@@ -107,14 +107,14 @@ http://{{ include "sdp.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local
 TSS port
 */}}
 {{- define "tss.port" -}}
-{{- .Values.router.tss.port | default "9000" }}
+{{- .Values.tss.route.port | default "9000" }}
 {{- end }}
 
 {{/*
 TSS Metrics port
 */}}
 {{- define "tss.metricsPort" -}}
-{{- .Values.router.tss.metricsPort | default "9002" }}
+{{- .Values.tss.route.metricsPort | default "9002" }}
 {{- end }}
 
 
@@ -122,28 +122,28 @@ TSS Metrics port
 Anchor Platform domain
 */}}
 {{- define "sdp.ap.domain" -}}
-{{- .Values.router.ap.domain | default "localhost" }}
+{{- .Values.anchorPlatform.route.domain | default "localhost" }}
 {{- end }}
 
 {{/*
 Anchor Platform schema
 */}}
 {{- define "sdp.ap.schema" -}}
-{{- .Values.router.ap.schema | default "https" }}
+{{- .Values.anchorPlatform.route.schema | default "https" }}
 {{- end }}
 
 {{/*
 Anchor Platform SEP/public port
 */}}
 {{- define "sdp.ap.sepPort" -}}
-{{- .Values.router.ap.sepPort | default "8080" }}
+{{- .Values.anchorPlatform.route.sepPort | default "8080" }}
 {{- end }}
 
 {{/*
 Anchor Platform internal communication port
 */}}
 {{- define "sdp.ap.platformPort" -}}
-{{- .Values.router.ap.platformPort | default "8085" }}
+{{- .Values.anchorPlatform.route.platformPort | default "8085" }}
 {{- end }}
 
 {{/*
@@ -194,12 +194,12 @@ Dashboard port
 Is Pubnet?
 */}}
 {{- define "isPubnet" -}}
-{{- eq .Values.isPubnet true | default false }}
+{{- eq .Values.global.isPubnet true | default false }}
 {{- end }}
 
 {{/*
 Image Tag
 */}}
 {{- define "imageTag" -}}
-{{- .Values.image.tag | default .Chart.AppVersion }}
+{{- .Values.sdp.image.tag | default .Chart.AppVersion }}
 {{- end }}
