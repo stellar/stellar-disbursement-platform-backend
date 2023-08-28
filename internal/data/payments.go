@@ -386,15 +386,15 @@ func (p *PaymentModel) GetBatchForUpdate(ctx context.Context, dbTx db.DBTransact
 	return payments, nil
 }
 
-func (p *PaymentModel) UpdateStatuses(ctx context.Context, sqlExec db.SQLExecuter, payments []*Payment, toStatus PaymentStatus) error {
+func (p *PaymentModel) UpdateStatuses(ctx context.Context, sqlExec db.SQLExecuter, payments []*Payment, toStatus PaymentStatus) (int64, error) {
 	if len(payments) == 0 {
-		log.Ctx(ctx).Info("No payments to update")
-		return nil
+		log.Ctx(ctx).Debugf("No payments to update")
+		return 0, nil
 	}
 	// Validate transition
 	for _, payment := range payments {
 		if err := payment.Status.TransitionTo(toStatus); err != nil {
-			return fmt.Errorf("cannot transition from %s to %s for payment %s: %w", payment.Status, toStatus, payment.ID, err)
+			return 0, fmt.Errorf("cannot transition from %s to %s for payment %s: %w", payment.Status, toStatus, payment.ID, err)
 		}
 	}
 	var paymentIDs []string
@@ -411,16 +411,14 @@ func (p *PaymentModel) UpdateStatuses(ctx context.Context, sqlExec db.SQLExecute
 
 	result, err := sqlExec.ExecContext(ctx, query, toStatus, pq.Array(paymentIDs))
 	if err != nil {
-		return fmt.Errorf("error updating payment statuses: %w", err)
+		return 0, fmt.Errorf("error updating payment statuses: %w", err)
 	}
 	numRowsAffected, err := result.RowsAffected()
 	if err != nil {
-		return fmt.Errorf("error getting number of rows affected: %w", err)
+		return 0, fmt.Errorf("error getting number of rows affected: %w", err)
 	}
 
-	log.Ctx(ctx).Infof("Set %d payments to %s", numRowsAffected, toStatus)
-
-	return nil
+	return numRowsAffected, nil
 }
 
 // Update updates a payment's fields with the given update.
