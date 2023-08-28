@@ -30,7 +30,7 @@ type Wallet struct {
 	Assets            WalletAssets    `json:"assets,omitempty" db:"assets"`
 	CreatedAt         *time.Time      `json:"created_at,omitempty" db:"created_at"`
 	UpdatedAt         *time.Time      `json:"updated_at,omitempty" db:"updated_at"`
-	DeletedAt         *time.Time      `json:"-" db:"deleted_at"`
+	DeletedAt         *time.Time      `json:"deleted_at" db:"deleted_at"`
 }
 
 type WalletInsert struct {
@@ -87,6 +87,7 @@ func (w *WalletModel) Get(ctx context.Context, id string) (*Wallet, error) {
 		    w.deep_link_schema,
 		    w.created_at,
 		    w.updated_at,
+			w.deleted_at,
 			jsonb_agg(
 				DISTINCT jsonb_build_object(
 					'code', c.code,
@@ -134,6 +135,7 @@ func (w *WalletModel) GetByWalletName(ctx context.Context, name string) (*Wallet
 		    w.deep_link_schema,
 		    w.created_at,
 		    w.updated_at,
+			w.deleted_at,
 			jsonb_agg(
 				DISTINCT jsonb_build_object(
 					'code', c.code,
@@ -181,6 +183,7 @@ func (w *WalletModel) GetAll(ctx context.Context) ([]Wallet, error) {
 		    w.deep_link_schema,
 		    w.created_at,
 		    w.updated_at,
+			w.deleted_at,
 			jsonb_agg(
 				DISTINCT jsonb_build_object(
 					'code', c.code,
@@ -367,4 +370,28 @@ func (w *WalletModel) GetAssets(ctx context.Context, walletID string) ([]Asset, 
 	}
 
 	return assets, nil
+}
+
+func (w *WalletModel) SoftDelete(ctx context.Context, walletID string) (*Wallet, error) {
+	const query = `
+		UPDATE
+			wallets
+		SET
+			deleted_at = NOW()
+		WHERE
+			id = $1
+			AND deleted_at IS NULL
+		RETURNING *
+	`
+
+	var wallet Wallet
+	err := w.dbConnectionPool.GetContext(ctx, &wallet, query, walletID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrRecordNotFound
+		}
+		return nil, fmt.Errorf("soft deleting wallet ID %s: %w", walletID, err)
+	}
+
+	return &wallet, nil
 }

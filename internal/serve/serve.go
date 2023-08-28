@@ -296,9 +296,14 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 
 		r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...)).Route("/wallets", func(r chi.Router) {
 			walletsHandler := httphandler.WalletsHandler{Models: o.Models}
+
 			r.Get("/", walletsHandler.GetWallets)
+
 			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole)).
 				Post("/", walletsHandler.PostWallets)
+
+			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole)).
+				Post("/{id}", walletsHandler.DeleteWallet)
 		})
 
 		profileHandler := httphandler.ProfileHandler{
