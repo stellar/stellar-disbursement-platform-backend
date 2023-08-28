@@ -104,7 +104,7 @@ func (s *Scheduler) start(ctx context.Context) {
 			for {
 				select {
 				case <-ticker.C:
-					log.Infof("Enqueuing job: %s", job.GetName())
+					log.Debugf("Enqueuing job: %s", job.GetName())
 					s.jobQueue <- job
 				case <-ctx.Done():
 					ticker.Stop()
@@ -131,7 +131,7 @@ func worker(ctx context.Context, workerID int, crashTrackerClient crashtracker.C
 	for {
 		select {
 		case job := <-jobQueue:
-			log.Infof("Worker %d processing job: %s", workerID, job.GetName())
+			log.Debugf("Worker %d processing job: %s", workerID, job.GetName())
 			if err := job.Execute(ctx); err != nil {
 				msg := fmt.Sprintf("error processing job %s on worker %d", job.GetName(), workerID)
 				// call crash tracker client to log and report error

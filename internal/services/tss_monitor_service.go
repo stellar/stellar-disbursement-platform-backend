@@ -36,7 +36,7 @@ func (s TSSMonitorService) monitorTransactions(ctx context.Context, dbTx db.DBTr
 		return fmt.Errorf("error getting transactions for update: %w", err)
 	}
 	if len(transactions) == 0 {
-		log.Ctx(ctx).Infof("No transactions to sync")
+		log.Ctx(ctx).Debug("No transactions to sync")
 		return nil
 	}
 
@@ -81,6 +81,7 @@ func (s TSSMonitorService) monitorTransactions(ctx context.Context, dbTx db.DBTr
 	if err != nil {
 		return fmt.Errorf("error updating transactions as synced: %w", err)
 	}
+	log.Ctx(ctx).Infof("Updated %d transactions as synced", len(transactions))
 
 	return nil
 }
