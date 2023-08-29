@@ -9,12 +9,9 @@ import (
 const (
 	passwordMinLength = 12
 	passwordMaxLength = 36
-	lowercasePattern  = `[a-z]`
-	uppercasePattern  = `[A-Z]`
-	digitsPattern     = `[0-9]`
-	symbolsPattern    = `[!@#$%^&*]`
 )
 
+// ValidatePasswordError is an error type that contains the failed validations specified under a map.
 type ValidatePasswordError struct {
 	Err                  error
 	FailedValidationsMap map[string]string
@@ -40,11 +37,11 @@ func (e *ValidatePasswordError) FailedValidations() map[string]string {
 // ValidatePassword returns an error if the password does not meet the requirements.
 func ValidatePassword(input string) error {
 	var (
-		hasLength          = false
-		hasLower           = false
-		hasUpper           = false
-		hasDigit           = false
-		hasSpecial         = false
+		hasLength          bool
+		hasLower           bool
+		hasUpper           bool
+		hasDigit           bool
+		hasSpecial         bool
 		invalidCharacteres []string
 	)
 
@@ -67,10 +64,6 @@ func ValidatePassword(input string) error {
 		}
 	}
 
-	if hasLength && hasLower && hasUpper && hasDigit && hasSpecial && len(invalidCharacteres) == 0 {
-		return nil
-	}
-
 	failedValidations := map[string]string{}
 	if !hasLength {
 		failedValidations["length"] = fmt.Sprintf("password length must be between %d and %d characters", passwordMinLength, passwordMaxLength)
@@ -89,6 +82,10 @@ func ValidatePassword(input string) error {
 	}
 	if len(invalidCharacteres) > 0 {
 		failedValidations["invalid character"] = fmt.Sprintf("password cannot contain any invalid characters ('%s')", strings.Join(invalidCharacteres, "', '"))
+	}
+
+	if len(failedValidations) == 0 {
+		return nil
 	}
 
 	return &ValidatePasswordError{FailedValidationsMap: failedValidations}
