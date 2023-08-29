@@ -131,7 +131,7 @@ sdp:
     data:
       EC256_PUBLIC_KEY: "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEJ3HNphPAEKHvtRjsl5Kjwc9tTMqS\n2pmYNybrLsxZ6cuQvg2yiEoXZixP2cJ77csHClXC6cb1wQp/BNGDvGKoPg==\n-----END PUBLIC KEY-----"
       ENVIRONMENT: "localhost"
-      LOG_LEVEL: "TRACE"
+      LOG_LEVEL: "INFO"
       SEP10_SIGNING_PUBLIC_KEY: #required
       DISTRIBUTION_PUBLIC_KEY: #required
       METRICS_TYPE: "PROMETHEUS"

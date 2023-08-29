@@ -1,0 +1,106 @@
+
+## @section Minimal Values
+## @descriptionStart
+##  These are the minimal values required to deploy the SDP helm chart.
+## @descriptionEnd
+
+sdp:
+
+  ## @param sdp.route.domain Public domain/address of the SDP service.
+  route:
+    domain: #required
+
+  ## @param sdp.configMap.data.EC256_PUBLIC_KEY [string] The EC256 public key used for authentication purposes.
+  ## @param sdp.configMap.data.SEP10_SIGNING_PUBLIC_KEY Anchor platform SEP10 signing public key.
+  ## @param sdp.configMap.data.DISTRIBUTION_PUBLIC_KEY The public key of the Stellar distribution account that sends the Stellar payments.
+  ## @param sdp.configMap.data.RECAPTCHA_SITE_KEY Site key for ReCaptcha. Required if using ReCaptcha.
+  configMap:
+    annotations:
+    data:
+      EC256_PUBLIC_KEY: #required
+      SEP10_SIGNING_PUBLIC_KEY: #required
+      DISTRIBUTION_PUBLIC_KEY: #required
+      RECAPTCHA_SITE_KEY: #required
+
+  ## @param sdp.kubeSecrets.data.EC256_PRIVATE_KEY [string] The EC256 Private Key. This key is used to sign the authentication token.
+  ## @param sdp.kubeSecrets.data.SEP10_SIGNING_PRIVATE_KEY The public key of the Stellar account that signs the SEP-10 transactions. It's also used to sign URLs.
+  ## @param sdp.kubeSecrets.data.SEP24_JWT_SECRET The JWT secret that's used by the Anchor Platform to sign the SEP-24 JWT token.
+  ## @param sdp.kubeSecrets.data.RECAPTCHA_SITE_SECRET_KEY Secret key for Google reCAPTCHA service to verify user's non-robotic behavior.
+  ## @param sdp.kubeSecrets.data.ANCHOR_PLATFORM_OUTGOING_JWT_SECRET The JWT secret used to create a JWT token used to send requests to the anchor platform.
+  ## @param sdp.kubeSecrets.data.DATABASE_URL URL of the database used by the SDP.
+  ## @param sdp.kubeSecrets.data.DISTRIBUTION_SEED The private key of the Stellar account used to disburse funds. This is needed for the init container
+  kubeSecrets:
+    create: true
+    data:
+      EC256_PRIVATE_KEY: #required
+      SEP10_SIGNING_PRIVATE_KEY: #required
+      SEP24_JWT_SECRET: #required
+      RECAPTCHA_SITE_SECRET_KEY:  #required
+      ANCHOR_PLATFORM_OUTGOING_JWT_SECRET: #required for mySdpToAnchorPlatformSecret
+      DATABASE_URL: #required
+      DISTRIBUTION_SEED: #required
+
+  ## @extra sdp.ingress Configuration for the ingress controller for the SDP service.
+  ingress: #required
+
+
+anchorPlatform:
+
+  ## @param anchorPlatform.route.domain Public domain/address of the Anchor Platform service. If using localhost, consider including the port as part of the domain.
+  route:
+    domain: #required
+
+  ## @param anchorPlatform.configMap.data.ASSETS_VALUE [string] Specifies the details and configuration of assets supported by the anchor platform. This includes SEP-24 enabled assets, schema type, code, issuer details, distribution account, precision details, and deposit and withdrawal configurations. Currently, it needs to be *manually* kept up to date with the SDP state.
+  configMap:
+    data:
+      ASSETS_VALUE: #required
+
+  ## @param anchorPlatform.kubeSecrets.data.SECRET_DATA_PASSWORD Database password for the anchor platform.
+  ## @param anchorPlatform.kubeSecrets.data.SECRET_DATA_USERNAME Database username for the anchor platform.
+  ## @param anchorPlatform.kubeSecrets.data.SECRET_PLATFORM_API_AUTH_SECRET The secret used for authenticating API requests between the SDP and the Anchor Platform.
+  ## @param anchorPlatform.kubeSecrets.data.SECRET_SEP10_JWT_SECRET The JWT secret used by the Anchor Platform to sign SEP-10 JWT tokens. These tokens are used for various authentication and transaction-related purposes.
+  ## @param anchorPlatform.kubeSecrets.data.SECRET_SEP10_SIGNING_SEED The seed for the SEP-10 signing process. It's essential for ensuring the security and authenticity of SEP-10 transactions.
+  ## @param anchorPlatform.kubeSecrets.data.SECRET_SEP24_INTERACTIVE_URL_JWT_SECRET The JWT secret used by the Anchor Platform to sign SEP-24 interactive URLs. These URLs typically initiate user-interactive processes like deposits and withdrawals.
+  ## @param anchorPlatform.kubeSecrets.data.SECRET_SEP24_MORE_INFO_URL_JWT_SECRET The JWT secret used by the Anchor Platform to sign SEP-24 'More Info' URLs. These URLs provide users with additional details or steps related to their transactions.
+  kubeSecrets:
+    create: true
+    data:
+      SECRET_DATA_PASSWORD: #required
+      SECRET_DATA_USERNAME: #required
+      SECRET_PLATFORM_API_AUTH_SECRET: #required for mySdpToAnchorPlatformSecret
+      SECRET_SEP10_JWT_SECRET: #required
+      SECRET_SEP10_SIGNING_SEED: #required
+      SECRET_SEP24_INTERACTIVE_URL_JWT_SECRET: #required
+      SECRET_SEP24_MORE_INFO_URL_JWT_SECRET: #required
+
+  ## @extra anchorPlatform.ingress Configuration for the ingress controller for the Anchor Platform.
+  ingress: #required
+
+tss:
+
+  ## @param tss.kubeSecrets.data.DATABASE_URL URL of the database used by the TSS.
+  ## @param tss.kubeSecrets.data.DISTRIBUTION_SEED The private key of the Stellar account used to disburse funds.
+  kubeSecrets:
+    create: true
+    data:
+      DATABASE_URL: #required
+      DISTRIBUTION_SEED: #required
+
+dashboard:
+
+  ## @param dashboard.enabled If true, the dashboard will be deployed.
+  enabled: true
+
+  ## @param dashboard.route.domain Public domain/address of the Dashboard.
+  route:
+    domain: #required
+
+  ## @param dashboard.configMap.data.RECAPTCHA_SITE_KEY The site key for Google reCAPTCHA service.
+  configMap:
+    data:
+      RECAPTCHA_SITE_KEY: #required
+
+  ## @extra dashboard.ingress Configuration for the ingress controller for the dashboard.
+  ingress: #required
+
+

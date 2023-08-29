@@ -12,6 +12,7 @@ The SDP is a set of services that enable organizations to disburse funds to reci
 ## Prerequisites
 - Kubernetes 1.19+
 - Helm 3.2.0+
+- Postgres 14.0+ database deployed in the same Kubernetes cluster
 
 ## Installing the Chart
 
@@ -23,6 +24,12 @@ The chart can be installed either from a packaged chart or directly from the git
 ```shell
 helm repo add stellar https://helm.stellar.org/charts
 ```
+
+- Customize the chart by downloading and modifying `minimal-values.yaml`. This chart contains the minimum set of values required to deploy the SDP. For a complete list of values, refer to the [Parameters](#parameters) section below.
+```shell
+curl -LJO https://raw.githubusercontent.com/stellar/stellar-disbursement-platform-backend/develop/helmchart/sdp/minimal-values.yaml
+```
+
 - Install the chart
 ```shell
 helm install sdp -f myvalues.yaml stellar/stellar-disbursement-platform
