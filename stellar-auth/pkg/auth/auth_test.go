@@ -693,7 +693,7 @@ func Test_AuthManager_UpdateUser(t *testing.T) {
 
 		err = authManager.UpdateUser(ctx, token, "First", "Last", "email@email.com", "mysecret")
 
-		assert.EqualError(t, err, "error getting user from token: unexpected error")
+		assert.EqualError(t, err, "getting user from token: unexpected error")
 	})
 
 	t.Run("returns error when token is expired", func(t *testing.T) {
