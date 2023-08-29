@@ -4,16 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
 	sdpUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
-
-// GetHorizonErrorString returns a string representation of a horizonclient.Error.
-func GetHorizonErrorString(hError horizonclient.Error) string {
-	hProblem := hError.Problem
-	return fmt.Sprintf("Type: %s, Title: %s, Status: %d, Detail: %s, Extras: %v", hProblem.Type, hProblem.Title, hProblem.Status, hProblem.Detail, hProblem.Extras)
-}
 
 // AcquireAdvisoryLock attempt to acquire an advisory lock on the provided lockKey, returns true if acquired, or false
 // not.

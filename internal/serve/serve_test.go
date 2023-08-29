@@ -58,19 +58,21 @@ func Test_Serve(t *testing.T) {
 	mockCrashTrackerClient := &crashtracker.MockCrashTrackerClient{}
 
 	opts := ServeOptions{
-		CrashTrackerClient:        mockCrashTrackerClient,
-		DatabaseDSN:               dbt.DSN,
-		EC256PrivateKey:           privateKeyStr,
-		EC256PublicKey:            publicKeyStr,
-		Environment:               "test",
-		GitCommit:                 "1234567890abcdef",
-		Models:                    models,
-		Port:                      8000,
-		ResetTokenExpirationHours: 1,
-		SEP24JWTSecret:            "jwt_secret_1234567890",
-		Version:                   "x.y.z",
-		NetworkPassphrase:         network.TestNetworkPassphrase,
-		DistributionSeed:          keypair.MustRandom().Seed(),
+		CrashTrackerClient:              mockCrashTrackerClient,
+		DatabaseDSN:                     dbt.DSN,
+		EC256PrivateKey:                 privateKeyStr,
+		EC256PublicKey:                  publicKeyStr,
+		Environment:                     "test",
+		GitCommit:                       "1234567890abcdef",
+		Models:                          models,
+		Port:                            8000,
+		ResetTokenExpirationHours:       1,
+		SEP24JWTSecret:                  "jwt_secret_1234567890",
+		AnchorPlatformBasePlatformURL:   "https://test.com",
+		AnchorPlatformOutgoingJWTSecret: "jwt_secret_1234567890",
+		Version:                         "x.y.z",
+		NetworkPassphrase:               network.TestNetworkPassphrase,
+		DistributionSeed:                keypair.MustRandom().Seed(),
 	}
 
 	// Mock supportHTTPRun
@@ -196,20 +198,22 @@ func getServeOptionsForTests(t *testing.T, databaseDSN string) ServeOptions {
 	require.NoError(t, err)
 
 	serveOptions := ServeOptions{
-		CrashTrackerClient:        crasTrackerClient,
-		DatabaseDSN:               databaseDSN,
-		EC256PrivateKey:           privateKeyStr,
-		EC256PublicKey:            publicKeyStr,
-		EmailMessengerClient:      &messengerClientMock,
-		Environment:               "test",
-		GitCommit:                 "1234567890abcdef",
-		MonitorService:            mMonitorService,
-		ResetTokenExpirationHours: 1,
-		SEP24JWTSecret:            "jwt_secret_1234567890",
-		SMSMessengerClient:        &messengerClientMock,
-		Version:                   "x.y.z",
-		NetworkPassphrase:         network.TestNetworkPassphrase,
-		DistributionSeed:          keypair.MustRandom().Seed(),
+		CrashTrackerClient:              crasTrackerClient,
+		DatabaseDSN:                     databaseDSN,
+		EC256PrivateKey:                 privateKeyStr,
+		EC256PublicKey:                  publicKeyStr,
+		EmailMessengerClient:            &messengerClientMock,
+		Environment:                     "test",
+		GitCommit:                       "1234567890abcdef",
+		MonitorService:                  mMonitorService,
+		ResetTokenExpirationHours:       1,
+		SEP24JWTSecret:                  "jwt_secret_1234567890",
+		AnchorPlatformOutgoingJWTSecret: "jwt_secret_1234567890",
+		AnchorPlatformBasePlatformURL:   "https://test.com",
+		SMSMessengerClient:              &messengerClientMock,
+		Version:                         "x.y.z",
+		NetworkPassphrase:               network.TestNetworkPassphrase,
+		DistributionSeed:                keypair.MustRandom().Seed(),
 	}
 	err = serveOptions.SetupDependencies()
 	require.NoError(t, err)

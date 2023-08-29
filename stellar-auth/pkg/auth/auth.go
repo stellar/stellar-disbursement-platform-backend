@@ -10,6 +10,8 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/internal/db"
 )
 
+var ErrInvalidToken = errors.New("invalid token")
+
 type AuthManager interface {
 	Authenticate(ctx context.Context, email, pass string) (string, error)
 	RefreshToken(ctx context.Context, tokenString string) (string, error)
@@ -39,16 +41,8 @@ func DBConnectionPoolFromSqlDB(sqlDB *sql.DB, driverName string) db.DBConnection
 	return db.DBConnectionPoolFromSqlDB(sqlDB, driverName)
 }
 
-var (
-	ErrInvalidToken   = errors.New("invalid token")
-	ErrInvalidMFACode = errors.New("invalid MFA code")
-)
-
 func (am *defaultAuthManager) Authenticate(ctx context.Context, email, pass string) (string, error) {
 	user, err := am.authenticator.ValidateCredentials(ctx, email, pass)
-	if errors.Is(err, ErrInvalidCredentials) {
-		return "", err
-	}
 	if err != nil {
 		return "", fmt.Errorf("validating credentials: %w", err)
 	}
@@ -359,9 +353,6 @@ func (am *defaultAuthManager) AuthenticateMFA(ctx context.Context, deviceID, cod
 
 	userID, err := am.mfaManager.ValidateMFACode(ctx, deviceID, code)
 	if err != nil {
-		if errors.Is(err, ErrMFACodeInvalid) {
-			return "", ErrInvalidMFACode
-		}
 		return "", fmt.Errorf("error validating MFA code: %w", err)
 	}
 

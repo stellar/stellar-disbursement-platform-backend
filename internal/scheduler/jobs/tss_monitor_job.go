@@ -7,7 +7,6 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 
-	"github.com/stellar/go/support/log"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 )
 
@@ -17,7 +16,7 @@ type TSSMonitorJob struct {
 
 const (
 	TSSMonitorJobName            = "tss_monitor_job"
-	TSSMonitorJobIntervalSeconds = 60
+	TSSMonitorJobIntervalSeconds = 10
 	TSSMonitorBatchSize          = 100
 )
 
@@ -34,7 +33,6 @@ func (d TSSMonitorJob) GetName() string {
 }
 
 func (d TSSMonitorJob) Execute(ctx context.Context) error {
-	log.Ctx(ctx).Infof("executing TSSMonitorJob ...")
 	err := d.service.MonitorTransactions(ctx, TSSMonitorBatchSize)
 	if err != nil {
 		return fmt.Errorf("error executing TSSMonitorJob: %w", err)
