@@ -234,11 +234,17 @@ func (h ProfileHandler) PatchUserPassword(rw http.ResponseWriter, req *http.Requ
 
 	// validate if the password format attends the requirements
 	badRequestExtras := map[string]interface{}{}
-	var validatePasswordError *authUtils.ValidatePasswordError
 	err := authUtils.ValidatePassword(reqBody.NewPassword)
-	if err != nil && errors.As(err, &validatePasswordError) {
-		for k, v := range validatePasswordError.FailedValidations() {
-			badRequestExtras[k] = v
+	if err != nil {
+		var validatePasswordError *authUtils.ValidatePasswordError
+		if errors.As(err, &validatePasswordError) {
+			for k, v := range validatePasswordError.FailedValidations() {
+				badRequestExtras[k] = v
+			}
+			log.Ctx(ctx).Errorf("validating password in PatchUserPassword: %v", err)
+		} else {
+			httperror.InternalError(ctx, "Cannot update user password", err, nil).Render(rw)
+			return
 		}
 	}
 	if len(badRequestExtras) > 0 {

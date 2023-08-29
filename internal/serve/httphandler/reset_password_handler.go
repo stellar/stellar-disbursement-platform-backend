@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/support/render/httpjson"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
@@ -24,6 +25,7 @@ type ResetPasswordRequest struct {
 
 // ServeHTTP implements the http.Handler interface.
 func (h ResetPasswordHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	var resetPasswordRequest ResetPasswordRequest
 
 	err := json.NewDecoder(r.Body).Decode(&resetPasswordRequest)
@@ -34,11 +36,17 @@ func (h ResetPasswordHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 
 	// validate password
 	badRequestExtras := map[string]interface{}{}
-	var validatePasswordError *authUtils.ValidatePasswordError
 	err = authUtils.ValidatePassword(resetPasswordRequest.Password)
-	if err != nil && errors.As(err, &validatePasswordError) {
-		for k, v := range validatePasswordError.FailedValidations() {
-			badRequestExtras[k] = v
+	if err != nil {
+		var validatePasswordError *authUtils.ValidatePasswordError
+		if errors.As(err, &validatePasswordError) {
+			for k, v := range validatePasswordError.FailedValidations() {
+				badRequestExtras[k] = v
+			}
+			log.Ctx(ctx).Errorf("validating password in ResetPasswordHandler.ServeHTTP: %v", err)
+		} else {
+			httperror.InternalError(ctx, "Cannot update user password", err, nil).Render(w)
+			return
 		}
 	}
 	// validate reset token
@@ -52,7 +60,6 @@ func (h ResetPasswordHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Reset password with a valid token
-	ctx := r.Context()
 	err = h.AuthManager.ResetPassword(ctx, resetPasswordRequest.ResetToken, resetPasswordRequest.Password)
 	if err != nil {
 		if errors.Is(err, auth.ErrInvalidResetPasswordToken) {
