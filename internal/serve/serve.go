@@ -305,6 +305,9 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 
 			r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...)).
 				Patch("/", profileHandler.PatchUserProfile)
+
+			r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...)).
+				Patch("/reset-password", profileHandler.PatchUserPassword)
 		})
 
 		r.Route("/organization", func(r chi.Router) {

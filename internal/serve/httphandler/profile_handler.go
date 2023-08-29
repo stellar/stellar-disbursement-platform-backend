@@ -69,6 +69,11 @@ type GetProfileResponse struct {
 	OrganizationName string   `json:"organization_name"`
 }
 
+type PatchUserPasswordRequest struct {
+	CurrentPassword string `json:"current_password"`
+	NewPassword     string `json:"new_password"`
+}
+
 func (h ProfileHandler) PatchOrganizationProfile(rw http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 
@@ -198,6 +203,46 @@ func (h ProfileHandler) PatchUserProfile(rw http.ResponseWriter, req *http.Reque
 	}
 
 	httpjson.RenderStatus(rw, http.StatusOK, map[string]string{"message": "user profile updated successfully"}, httpjson.JSON)
+}
+
+func (h ProfileHandler) PatchUserPassword(rw http.ResponseWriter, req *http.Request) {
+	ctx := req.Context()
+
+	token, ok := ctx.Value(middleware.TokenContextKey).(string)
+	if !ok {
+		httperror.Unauthorized("", nil, nil).Render(rw)
+		return
+	}
+
+	var reqBody PatchUserPasswordRequest
+	if err := httpdecode.DecodeJSON(req, &reqBody); err != nil {
+		err = fmt.Errorf("decoding the request body: %w", err)
+		log.Ctx(ctx).Error(err)
+		httperror.BadRequest("", err, nil).Render(rw)
+		return
+	}
+
+	if reqBody.CurrentPassword == "" || reqBody.NewPassword == "" {
+		httperror.BadRequest("", nil, map[string]interface{}{
+			"details": "provide current_password and new_password.",
+		}).Render(rw)
+		return
+	}
+
+	if len(reqBody.CurrentPassword) < 8 || len(reqBody.NewPassword) < 8 {
+		httperror.BadRequest("", nil, map[string]interface{}{
+			"password": "passwords should have at least 8 characters.",
+		}).Render(rw)
+		return
+	}
+
+	err := h.AuthManager.UpdatePassword(ctx, token, reqBody.CurrentPassword, reqBody.NewPassword)
+	if err != nil {
+		httperror.InternalError(ctx, "Cannot update user password", err, nil).Render(rw)
+		return
+	}
+
+	httpjson.RenderStatus(rw, http.StatusOK, map[string]string{"message": "user password updated successfully"}, httpjson.JSON)
 }
 
 func (h ProfileHandler) GetProfile(rw http.ResponseWriter, req *http.Request) {

@@ -992,6 +992,107 @@ func Test_AuthManager_ResetPassword(t *testing.T) {
 	authenticatorMock.AssertExpectations(t)
 }
 
+func Test_AuthManager_UpdatePassword(t *testing.T) {
+	authenticatorMock := &AuthenticatorMock{}
+	jwtManagerMock := &JWTManagerMock{}
+	authManager := NewAuthManager(WithCustomJWTManagerOption(jwtManagerMock), WithCustomAuthenticatorOption(authenticatorMock))
+
+	ctx := context.Background()
+
+	user := &User{
+		ID:        "user-id",
+		FirstName: "First",
+		LastName:  "Last",
+		Email:     "email@email.com",
+	}
+
+	t.Run("returns error when JWT Manager fails validating token", func(t *testing.T) {
+		jwtManagerMock.
+			On("ValidateToken", ctx, "token").
+			Return(false, errUnexpectedError).
+			Once()
+
+		err := authManager.UpdatePassword(ctx, "token", "currentpassword", "newpassword")
+
+		assert.EqualError(t, err, "validating token: validating token: unexpected error")
+
+		jwtManagerMock.
+			On("ValidateToken", ctx, "token").
+			Return(true, nil).
+			Once().
+			On("GetUserFromToken", ctx, "token").
+			Return(nil, errUnexpectedError).
+			Once()
+
+		err = authManager.UpdatePassword(ctx, "token", "currentpassword", "newpassword")
+
+		assert.EqualError(t, err, "getting user from token: unexpected error")
+	})
+
+	t.Run("returns error when token is invalid", func(t *testing.T) {
+		jwtManagerMock.
+			On("ValidateToken", ctx, "token").
+			Return(false, nil).
+			Once()
+
+		err := authManager.UpdatePassword(ctx, "token", "currentpassword", "newpassword")
+
+		assert.EqualError(t, err, "invalid token")
+	})
+
+	t.Run("returns error when GetUserFromToken fails", func(t *testing.T) {
+		jwtManagerMock.
+			On("ValidateToken", ctx, "token").
+			Return(true, nil).
+			Once().
+			On("GetUserFromToken", ctx, "token").
+			Return(nil, errUnexpectedError).
+			Once()
+
+		err := authManager.UpdatePassword(ctx, "token", "currentpassword", "newpassword")
+
+		assert.EqualError(t, err, "getting user from token: unexpected error")
+	})
+
+	t.Run("returns error when Authenticator fails", func(t *testing.T) {
+		jwtManagerMock.
+			On("ValidateToken", ctx, "token").
+			Return(true, nil).
+			Once().
+			On("GetUserFromToken", ctx, "token").
+			Return(user, nil).
+			Once()
+
+		authenticatorMock.
+			On("UpdatePassword", ctx, user, "currentpassword", "newpassword").
+			Return(errUnexpectedError).
+			Once()
+
+		err := authManager.UpdatePassword(ctx, "token", "currentpassword", "newpassword")
+
+		assert.EqualError(t, err, "updating password: unexpected error")
+	})
+
+	t.Run("updates password successfully", func(t *testing.T) {
+		jwtManagerMock.
+			On("ValidateToken", ctx, "token").
+			Return(true, nil).
+			Once().
+			On("GetUserFromToken", ctx, "token").
+			Return(user, nil).
+			Once()
+
+		authenticatorMock.
+			On("UpdatePassword", ctx, user, "currentpassword", "newpassword").
+			Return(nil).
+			Once()
+
+		err := authManager.UpdatePassword(ctx, "token", "currentpassword", "newpassword")
+
+		assert.Nil(t, err)
+	})
+}
+
 func Test_AuthManager_GetAllUsers(t *testing.T) {
 	jwtManagerMock := &JWTManagerMock{}
 	authenticatorMock := &AuthenticatorMock{}

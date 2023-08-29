@@ -22,6 +22,7 @@ type AuthManager interface {
 	UpdateUser(ctx context.Context, tokenString, firstName, lastName, email, password string) error
 	ForgotPassword(ctx context.Context, email string) (string, error)
 	ResetPassword(ctx context.Context, tokenString, password string) error
+	UpdatePassword(ctx context.Context, token, currentPassword, newPassword string) error
 	GetUser(ctx context.Context, tokenString string) (*User, error)
 	GetAllUsers(ctx context.Context, tokenString string) ([]User, error)
 	UpdateUserRoles(ctx context.Context, tokenString, userID string, roles []string) error
@@ -198,6 +199,29 @@ func (am *defaultAuthManager) ResetPassword(ctx context.Context, resetToken, new
 			return fmt.Errorf("invalid token in auth reset password: %w", err)
 		}
 		return fmt.Errorf("error on reset password: %w", err)
+	}
+
+	return nil
+}
+
+func (am *defaultAuthManager) UpdatePassword(ctx context.Context, tokenString, currentPassword, newPassword string) error {
+	isValid, err := am.ValidateToken(ctx, tokenString)
+	if err != nil {
+		return fmt.Errorf("validating token: %w", err)
+	}
+
+	if !isValid {
+		return ErrInvalidToken
+	}
+
+	user, err := am.jwtManager.GetUserFromToken(ctx, tokenString)
+	if err != nil {
+		return fmt.Errorf("getting user from token: %w", err)
+	}
+
+	err = am.authenticator.UpdatePassword(ctx, user, currentPassword, newPassword)
+	if err != nil {
+		return fmt.Errorf("updating password: %w", err)
 	}
 
 	return nil
