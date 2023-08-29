@@ -5,6 +5,11 @@
 ## @descriptionEnd
 
 sdp:
+
+  ## @param sdp.route.domain Public domain/address of the SDP service.
+  route:
+    domain: #required
+
   ## @param sdp.configMap.data.EC256_PUBLIC_KEY [string] The EC256 public key used for authentication purposes.
   ## @param sdp.configMap.data.SEP10_SIGNING_PUBLIC_KEY Anchor platform SEP10 signing public key.
   ## @param sdp.configMap.data.DISTRIBUTION_PUBLIC_KEY The public key of the Stellar distribution account that sends the Stellar payments.
@@ -35,7 +40,21 @@ sdp:
       DATABASE_URL: #required
       DISTRIBUTION_SEED: #required
 
+  ## @extra sdp.ingress Configuration for the ingress controller for the SDP service.
+  ingress: #required
+
+
 anchorPlatform:
+
+  ## @param anchorPlatform.route.domain Public domain/address of the Anchor Platform service. If using localhost, consider including the port as part of the domain.
+  route:
+    domain: #required
+
+  ## @param anchorPlatform.configMap.data.ASSETS_VALUE [string] Specifies the details and configuration of assets supported by the anchor platform. This includes SEP-24 enabled assets, schema type, code, issuer details, distribution account, precision details, and deposit and withdrawal configurations. Currently, it needs to be *manually* kept up to date with the SDP state.
+  configMap:
+    data:
+      ASSETS_VALUE: #required
+
   ## @param anchorPlatform.kubeSecrets.data.SECRET_DATA_PASSWORD Database password for the anchor platform.
   ## @param anchorPlatform.kubeSecrets.data.SECRET_DATA_USERNAME Database username for the anchor platform.
   ## @param anchorPlatform.kubeSecrets.data.SECRET_PLATFORM_API_AUTH_SECRET The secret used for authenticating API requests between the SDP and the Anchor Platform.
@@ -54,7 +73,11 @@ anchorPlatform:
       SECRET_SEP24_INTERACTIVE_URL_JWT_SECRET: #required
       SECRET_SEP24_MORE_INFO_URL_JWT_SECRET: #required
 
+  ## @extra anchorPlatform.ingress Configuration for the ingress controller for the Anchor Platform.
+  ingress: #required
+
 tss:
+
   ## @param tss.kubeSecrets.data.DATABASE_URL URL of the database used by the TSS.
   ## @param tss.kubeSecrets.data.DISTRIBUTION_SEED The private key of the Stellar account used to disburse funds.
   kubeSecrets:
@@ -67,3 +90,17 @@ dashboard:
 
   ## @param dashboard.enabled If true, the dashboard will be deployed.
   enabled: true
+
+  ## @param dashboard.route.domain Public domain/address of the Dashboard.
+  route:
+    domain: #required
+
+  ## @param dashboard.configMap.data.RECAPTCHA_SITE_KEY The site key for Google reCAPTCHA service.
+  configMap:
+    data:
+      RECAPTCHA_SITE_KEY: #required
+
+  ## @extra dashboard.ingress Configuration for the ingress controller for the dashboard.
+  ingress: #required
+
+
