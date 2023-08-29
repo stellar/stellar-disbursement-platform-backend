@@ -104,6 +104,11 @@ func AddUserCmd(databaseURLFlagName string, passwordPrompt PasswordPromptInterfa
 				if err != nil {
 					log.Fatalf("add-user error prompting password: %s", err)
 				}
+
+				err = utils.ValidatePassword(result)
+				if err != nil {
+					log.Fatalf("password is not valid: %v", err)
+				}
 				password = result
 			}
 
@@ -125,9 +130,8 @@ func AddUserCmd(databaseURLFlagName string, passwordPrompt PasswordPromptInterfa
 // NewDefaultPasswordPrompt returns the default password prompt used in add-user command.
 func NewDefaultPasswordPrompt() *promptui.Prompt {
 	prompt := promptui.Prompt{
-		Label:    "Password",
-		Validate: utils.ValidatePassword,
-		Mask:     ' ',
+		Label: "Password",
+		Mask:  ' ',
 	}
 
 	return &prompt

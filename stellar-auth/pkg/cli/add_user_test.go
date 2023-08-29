@@ -17,7 +17,7 @@ import (
 type PasswordPromptMock struct{}
 
 func (m *PasswordPromptMock) Run() (string, error) {
-	return "mockpassword", nil
+	return "!1Az?2By.3Cx", nil
 }
 
 var _ PasswordPromptInterface = (*PasswordPromptMock)(nil)
