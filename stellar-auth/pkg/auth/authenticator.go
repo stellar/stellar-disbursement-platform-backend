@@ -359,7 +359,7 @@ func (a *defaultAuthenticator) UpdatePassword(ctx context.Context, user *User, c
 
 	_, err := a.ValidateCredentials(ctx, user.Email, currentPassword)
 	if err != nil {
-		return fmt.Errorf("error validating credentials: %w", err)
+		return fmt.Errorf("validating credentials: %w", err)
 	}
 
 	query := `
@@ -373,19 +373,19 @@ func (a *defaultAuthenticator) UpdatePassword(ctx context.Context, user *User, c
 	encryptedPassword, err := a.passwordEncrypter.Encrypt(ctx, newPassword)
 	if err != nil {
 		if !errors.Is(err, ErrPasswordTooShort) {
-			return fmt.Errorf("error encrypting password: %w", err)
+			return fmt.Errorf("encrypting password: %w", err)
 		}
 		return err
 	}
 
 	res, err := a.dbConnectionPool.ExecContext(ctx, query, encryptedPassword, user.ID)
 	if err != nil {
-		return fmt.Errorf("error updating user password in the database: %w", err)
+		return fmt.Errorf("updating user password in the database: %w", err)
 	}
 
 	numRowsAffected, err := res.RowsAffected()
 	if err != nil {
-		return fmt.Errorf("error getting the number of rows affected: %w", err)
+		return fmt.Errorf("getting the number of rows affected: %w", err)
 	}
 	if numRowsAffected == 0 {
 		return ErrNoRowsAffected

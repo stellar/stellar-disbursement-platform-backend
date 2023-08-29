@@ -299,6 +299,7 @@ func Test_handleHTTP_authenticatedEndpoints(t *testing.T) {
 		// Profile
 		{http.MethodGet, "/profile"},
 		{http.MethodPatch, "/profile"},
+		{http.MethodPatch, "/profile/reset-password"},
 		// Organization
 		{http.MethodGet, "/organization"},
 		{http.MethodPatch, "/organization"},

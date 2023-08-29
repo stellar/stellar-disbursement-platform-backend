@@ -222,12 +222,12 @@ func (am *defaultAuthManager) UpdatePassword(ctx context.Context, tokenString, c
 
 	user, err := am.jwtManager.GetUserFromToken(ctx, tokenString)
 	if err != nil {
-		return fmt.Errorf("error getting user from token: %w", err)
+		return fmt.Errorf("getting user from token: %w", err)
 	}
 
 	err = am.authenticator.UpdatePassword(ctx, user, currentPassword, newPassword)
 	if err != nil {
-		return fmt.Errorf("error updating password: %w", err)
+		return fmt.Errorf("updating password: %w", err)
 	}
 
 	return nil

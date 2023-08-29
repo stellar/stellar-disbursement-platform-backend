@@ -921,7 +921,7 @@ func Test_DefaultAuthenticator_UpdatePassword(t *testing.T) {
 			Return(false, nil).
 			Once()
 		err := authenticator.UpdatePassword(ctx, randUser.ToUser(), randUser.Password, "newpassword")
-		assert.EqualError(t, err, "error validating credentials: invalid credentials")
+		assert.EqualError(t, err, "validating credentials: invalid credentials")
 	})
 
 	t.Run("returns error when encrypting new password fails", func(t *testing.T) {
@@ -941,7 +941,7 @@ func Test_DefaultAuthenticator_UpdatePassword(t *testing.T) {
 			Once()
 
 		err := authenticator.UpdatePassword(ctx, randUser.ToUser(), randUser.Password, newPassword)
-		assert.EqualError(t, err, "error encrypting password: unexpected error")
+		assert.EqualError(t, err, "encrypting password: unexpected error")
 	})
 
 	t.Run("updates password successfully", func(t *testing.T) {

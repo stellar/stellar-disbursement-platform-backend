@@ -1026,7 +1026,7 @@ func Test_AuthManager_UpdatePassword(t *testing.T) {
 
 		err = authManager.UpdatePassword(ctx, "token", "currentpassword", "newpassword")
 
-		assert.EqualError(t, err, "error getting user from token: unexpected error")
+		assert.EqualError(t, err, "getting user from token: unexpected error")
 	})
 
 	t.Run("returns error when token is invalid", func(t *testing.T) {
@@ -1051,7 +1051,7 @@ func Test_AuthManager_UpdatePassword(t *testing.T) {
 
 		err := authManager.UpdatePassword(ctx, "token", "currentpassword", "newpassword")
 
-		assert.EqualError(t, err, "error getting user from token: unexpected error")
+		assert.EqualError(t, err, "getting user from token: unexpected error")
 	})
 
 	t.Run("returns error when Authenticator fails", func(t *testing.T) {
@@ -1070,7 +1070,7 @@ func Test_AuthManager_UpdatePassword(t *testing.T) {
 
 		err := authManager.UpdatePassword(ctx, "token", "currentpassword", "newpassword")
 
-		assert.EqualError(t, err, "error updating password: unexpected error")
+		assert.EqualError(t, err, "updating password: unexpected error")
 	})
 
 	t.Run("updates password successfully", func(t *testing.T) {
