@@ -167,7 +167,7 @@ func (am *defaultAuthManager) UpdateUser(ctx context.Context, tokenString, first
 
 	user, err := am.jwtManager.GetUserFromToken(ctx, tokenString)
 	if err != nil {
-		return fmt.Errorf("error getting user from token: %w", err)
+		return fmt.Errorf("getting user from token: %w", err)
 	}
 
 	err = am.authenticator.UpdateUser(ctx, user.ID, firstName, lastName, email, password)
