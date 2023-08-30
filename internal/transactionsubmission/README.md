@@ -1,10 +1,24 @@
 # Transaction Submission Service
 
-The Transaction Submission Service (TSS) is a component that is responsible for submitting payment transactions to the Stellar Network.
+The Transaction Submission Service (TSS) allows for transaction submission at scale to the Stellar network from a single source/distribution account, which is made possible through the use of [channel accounts](https://developers.stellar.org/docs/encyclopedia/channel-accounts) spawned from said distribution account. In the context of SDP, the TSS is responsible for submitting transactions to the network for each respective payment read from a shared database table that is "queued" by the SDP. It works seamlessly by way of graceful error handling and transaction retries alongside mechanisms such as transaction fee bumps and adjustment of the rate at which new transactions are polled when certain errors are encountered.
 
-The SDP will directly 'queue' transactions (create transactions in the database) and the Transaction Submission Service will read these transactions and submit them to the Stellar Network.
+Use of the Transaction Submission Service requires at least a single of the aforementioned channel accounts to be seeded in storage in advanced. We provide a set of CLI's that can be used to create, delete, and change the number of channel accounts the service manages with ease. To learn how to use these commands, please refer to the [Channel Accounts Management](#channel-accounts-management) section below.
 
-The Transaction Submission Service requires channel accounts to be seeded in storage in advanced. To learn how to fulfill this prerequisite, please refer to the [Channel Accounts Management](#channel-accounts-management) section below.
+## Distribution Account
+Though the transaction submitter and channel account management commands allow the distribution private key to be specified upfront through the `distribution-seed` flag, we recommend users to configure it through the environment variable `DISTRIBUTION_SEED` in a one and done way to mitigate risks of exposing this information. For the distribution seed to be valid, the account associated with it must contain a balance of the asset that is specified by the payment/transaction records.
+
+## TSS Flow
+![transaction_orchestration](./docs/images/tss_tx_flow.png)
+
+Running the transaction submitter command [detailed below](#transaction-submitter) spawns a worker that continously polls the database for any 'queued' payments that have not yet reached some terminal state at a configured polling interval. 
+
+When such a payment is found, the worker attempts to look for any free channel accounts and locks the payment and account records to the same ledger number as a bundle so to prevent the occurence of race conditions that gurantee failed transactions (i.e. attempting to submit multiple per channel account concurrently resulting in `tx_bad_seq` errors, etc...), then kicks off a job for the payment to create, sign, and broadcast a transaction via Horizon.
+
+### Horizon Error Handling
+Instead of each Horizon error code being handled in a bespoke manner, they are categorized into 2 buckets - ones that result in transactions that are and are not eligible for resubmission. Errors received from Horizon that allow the transaction retriable are as listed:
+- `429`: Too Many Requests
+- `504`: Timeouts
+- `400`'s with error code `tx_insufficient_fee`, `tx_too_late`, `tx_bad_seq`
 
 ## Transaction Submitter
 ### CLI Usage: `tss`
@@ -37,7 +51,7 @@ Global Flags:
 
 ## Channel Accounts Management
 
-Channel Accounts are used to increase throughput when submitting transaction to the Stellar Network, and are a prerequisite for using TSS. This CLI tools should enable all use cases for management of Channel Accounts (both onchain and in the database).
+Channel Accounts are used to increase throughput when submitting transaction to the Stellar Network, and are a prerequisite for using TSS. This set of CLI tools should enable almost all use cases for management of Channel Accounts (both onchain and in the database).
 
 ### CLI Usage: `channel-accounts`
 ```sh
