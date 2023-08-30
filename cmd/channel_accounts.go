@@ -121,23 +121,6 @@ func (c *ChannelAccountsCommand) CreateCommand(toolOpts *txSubSvc.ChannelAccount
 			FlagDefault: 100 * txnbuild.MinBaseFee,
 			Required:    true,
 		},
-		{
-			Name:        "encrypt-key",
-			Usage:       "Whether or not to encrypt the private key for storage",
-			OptType:     types.Bool,
-			ConfigKey:   &toolOpts.EncryptKey,
-			FlagDefault: true,
-			Required:    true,
-		},
-		// { // TODO - actually use this  - not needed for SDP's TSS
-		// 	Name:           "output",
-		// 	Usage:          "where to output the channel accounts (database or csv file)",
-		// 	OptType:        types.String,
-		// 	CustomSetValue: ?,
-		// 	ConfigKey:      &submitterOpts.DistributionPublicKey,
-		// 	FlagDefault:    "database",
-		// 	Required:       false,
-		// },
 	}
 	createCmd := &cobra.Command{
 		Use:   "create",
@@ -236,14 +219,6 @@ func (c *ChannelAccountsCommand) EnsureCommand(toolOpts *txSubSvc.ChannelAccount
 			OptType:     types.Int,
 			ConfigKey:   &toolOpts.MaxBaseFee,
 			FlagDefault: 100 * txnbuild.MinBaseFee,
-			Required:    true,
-		},
-		{
-			Name:        "encrypt-key",
-			Usage:       "Whether or not to encrypt the private key for storage",
-			OptType:     types.Bool,
-			ConfigKey:   &toolOpts.EncryptKey,
-			FlagDefault: true,
 			Required:    true,
 		},
 	}
