@@ -48,7 +48,6 @@ func Test_ChannelAccounts_CreateAccount_Success(t *testing.T) {
 		MaxBaseFee:         100,
 		NetworkPassphrase:  "Test SDF Network ; September 2015",
 		RootSeed:           "SBMW2WDSVTGT2N2PCBF3PV7WBOIKVTGGIEBUUYMDX3CKTDD5HY3UIHV4",
-		EncryptKey:         true,
 	}
 
 	rootAccount := keypair.MustParseFull(opts.RootSeed)
@@ -107,7 +106,6 @@ func Test_ChannelAccounts_CreateAccount_CannotFindRootAccount_Failure(t *testing
 		MaxBaseFee:         100,
 		NetworkPassphrase:  "Test SDF Network ; September 2015",
 		RootSeed:           "SDL4E4RF6BHX77DBKE63QC4H4LQG7S7D2PB4TSF64LTHDIHP7UUJHH2V",
-		EncryptKey:         true,
 	}
 
 	rootAccount := keypair.MustParseFull(opts.RootSeed)
@@ -151,7 +149,6 @@ func Test_ChannelAccounts_CreateAccount_Insert_Failure(t *testing.T) {
 		MaxBaseFee:         100,
 		NetworkPassphrase:  "Test SDF Network ; September 2015",
 		RootSeed:           "SBMW2WDSVTGT2N2PCBF3PV7WBOIKVTGGIEBUUYMDX3CKTDD5HY3UIHV4",
-		EncryptKey:         true,
 	}
 
 	rootAccount := keypair.MustParseFull(opts.RootSeed)

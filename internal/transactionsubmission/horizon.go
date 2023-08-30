@@ -35,7 +35,7 @@ const DefaultRevokeSponsorshipReserveAmount = "1.5"
 // CreateChannelAccountsOnChain will create up to 19 accounts per Transaction due to the 20 signatures per tx limit This
 // is also a good opportunity to periodically write the generated accounts to persistent storage if generating large
 // amounts of channel accounts.
-func CreateChannelAccountsOnChain(ctx context.Context, horizonClient horizonclient.ClientInterface, numOfChanAccToCreate int, maxBaseFee int, shouldEncryptSeed bool, sigService engine.SignatureService, currLedgerNumber int) (newAccountAddresses []string, err error) {
+func CreateChannelAccountsOnChain(ctx context.Context, horizonClient horizonclient.ClientInterface, numOfChanAccToCreate int, maxBaseFee int, sigService engine.SignatureService, currLedgerNumber int) (newAccountAddresses []string, err error) {
 	defer func() {
 		// If we failed to create the accounts, we should delete the accounts that were added to the signature service.
 		if err != nil && sigService != nil {
@@ -103,7 +103,7 @@ func CreateChannelAccountsOnChain(ctx context.Context, horizonClient horizonclie
 		newAccountAddresses = append(newAccountAddresses, channelAccountKP.Address())
 	}
 
-	err = sigService.BatchInsert(ctx, kpsToCreate, shouldEncryptSeed, currLedgerNumber)
+	err = sigService.BatchInsert(ctx, kpsToCreate, true, currLedgerNumber)
 	if err != nil {
 		return nil, fmt.Errorf("failed to insert channel accounts into signature service: %w", err)
 	}
