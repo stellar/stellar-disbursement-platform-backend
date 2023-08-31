@@ -1221,7 +1221,7 @@ func Test_AuthManager_GetUser(t *testing.T) {
 
 		user, err := authManager.GetUser(ctx, token)
 
-		assert.EqualError(t, err, "validating token: validating token: unexpected error")
+		assert.EqualError(t, err, "getting user from token: validating token: validating token: unexpected error")
 		assert.Nil(t, user)
 	})
 
@@ -1235,7 +1235,7 @@ func Test_AuthManager_GetUser(t *testing.T) {
 
 		user, err := authManager.GetUser(ctx, token)
 
-		assert.EqualError(t, err, "invalid token")
+		assert.EqualError(t, err, "getting user from token: invalid token")
 		assert.Nil(t, user)
 	})
 
@@ -1252,7 +1252,7 @@ func Test_AuthManager_GetUser(t *testing.T) {
 
 		user, err := authManager.GetUser(ctx, token)
 
-		assert.EqualError(t, err, "error getting user from token: unexpected error")
+		assert.EqualError(t, err, "getting user from token: getting user from token: unexpected error")
 		assert.Nil(t, user)
 	})
 
@@ -1279,7 +1279,7 @@ func Test_AuthManager_GetUser(t *testing.T) {
 
 		user, err := authManager.GetUser(ctx, token)
 
-		assert.EqualError(t, err, "error getting user ID user-id: unexpected error")
+		assert.EqualError(t, err, "getting user ID user-id: unexpected error")
 		assert.Nil(t, user)
 	})
 
@@ -1313,7 +1313,7 @@ func Test_AuthManager_GetUser(t *testing.T) {
 
 		user, err := authManager.GetUser(ctx, token)
 
-		assert.EqualError(t, err, "error getting user ID user-id roles: unexpected error")
+		assert.EqualError(t, err, "getting user ID user-id roles: unexpected error")
 		assert.Nil(t, user)
 	})
 
@@ -1353,6 +1353,91 @@ func Test_AuthManager_GetUser(t *testing.T) {
 		assert.Equal(t, u.LastName, user.LastName)
 		assert.Equal(t, u.Email, user.Email)
 		assert.Equal(t, []string{"role1", "role2"}, user.Roles)
+	})
+
+	authenticatorMock.AssertExpectations(t)
+	jwtManagerMock.AssertExpectations(t)
+	roleManagerMock.AssertExpectations(t)
+}
+
+func Test_AuthManager_GetUserID(t *testing.T) {
+	jwtManagerMock := &JWTManagerMock{}
+	authenticatorMock := &AuthenticatorMock{}
+	roleManagerMock := &RoleManagerMock{}
+	authManager := NewAuthManager(
+		WithCustomJWTManagerOption(jwtManagerMock),
+		WithCustomAuthenticatorOption(authenticatorMock),
+		WithCustomRoleManagerOption(roleManagerMock),
+	)
+
+	ctx := context.Background()
+
+	t.Run("returns error when JWT Manager fails validating token", func(t *testing.T) {
+		token := "mytoken"
+
+		jwtManagerMock.
+			On("ValidateToken", ctx, token).
+			Return(false, errUnexpectedError).
+			Once()
+
+		userID, err := authManager.GetUserID(ctx, token)
+
+		require.EqualError(t, err, "validating token: validating token: unexpected error")
+		require.Empty(t, userID)
+	})
+
+	t.Run("returns error when token is expired", func(t *testing.T) {
+		token := "myoldtoken"
+
+		jwtManagerMock.
+			On("ValidateToken", ctx, token).
+			Return(false, nil).
+			Once()
+
+		userID, err := authManager.GetUserID(ctx, token)
+
+		require.EqualError(t, err, "invalid token")
+		require.Empty(t, userID)
+	})
+
+	t.Run("returns error when JWT Manager fails getting user from token", func(t *testing.T) {
+		token := "mytoken"
+
+		jwtManagerMock.
+			On("ValidateToken", ctx, token).
+			Return(true, nil).
+			Once().
+			On("GetUserFromToken", ctx, token).
+			Return(nil, errUnexpectedError).
+			Once()
+
+		userID, err := authManager.GetUserID(ctx, token)
+
+		require.EqualError(t, err, "getting user from token: unexpected error")
+		require.Empty(t, userID)
+	})
+
+	t.Run("gets user ID successfully", func(t *testing.T) {
+		token := "mytoken"
+
+		u := &User{
+			ID:        "user-id",
+			FirstName: "First",
+			LastName:  "Last",
+			Email:     "email@email.com",
+		}
+
+		jwtManagerMock.
+			On("ValidateToken", ctx, token).
+			Return(true, nil).
+			Once().
+			On("GetUserFromToken", ctx, token).
+			Return(u, nil).
+			Once()
+
+		userID, err := authManager.GetUserID(ctx, token)
+		require.NoError(t, err)
+		require.Equal(t, u.ID, userID)
 	})
 
 	authenticatorMock.AssertExpectations(t)
