@@ -1,0 +1,72 @@
+{{- if .Values.dashboard.enabled -}}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "sdp.fullname" . }}-dashboard
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "sdp.labelsWithSuffix" (list . "-dashboard") | nindent 4 }}
+  {{- if .Values.dashboard.deployment.annotations }}
+  annotations:
+    {{- tpl (toYaml .Values.dashboard.deployment.annotations) . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if not .Values.global.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "sdp.selectorLabelsWithSuffix" (list . "-dashboard") | nindent 6 }}
+
+  {{- if .Values.dashboard.deployment.strategy }}
+  strategy:
+    {{- toYaml .Values.dashboard.deployment.strategy | nindent 4 }}
+  {{- end }}
+
+  template:
+    metadata:
+      {{- if .Values.dashboard.deployment.podAnnotations }}
+      annotations:
+        {{- tpl (toYaml .Values.dashboard.deployment.podAnnotations) . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "sdp.selectorLabelsWithSuffix" (list . "-dashboard") | nindent 8 }}
+    spec:
+      {{- if .Values.global.serviceAccount.name }}
+      serviceAccountName: {{ tpl .Values.global.serviceAccount.name $ }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.dashboard.deployment.podSecurityContext | nindent 8 }}
+
+      containers:
+      # ============================= Stellar Disbursement Platform: =============================
+        - name: {{ .Chart.Name }}-dashboard
+          securityContext:
+            {{- toYaml .Values.dashboard.deployment.securityContext | nindent 12 }}
+          image: "{{ .Values.dashboard.image.fullName }}"
+          imagePullPolicy: {{ .Values.dashboard.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ include "dashboard.port" . }}
+              protocol: TCP
+
+          {{- if .Values.dashboard.deployment.resources }}
+          resources:
+            {{- toYaml .Values.dashboard.deployment.resources | nindent 12 }}
+          {{- end }}
+
+          envFrom:
+          - configMapRef:
+              name: {{ include "sdp.fullname" . }}-dashboard
+
+          volumeMounts:
+            - name: env-config
+              mountPath: /usr/share/nginx/html/settings
+              readOnly: true
+
+      volumes:
+        - name: env-config
+          configMap:
+            name: {{ include "sdp.fullname" . }}-dashboard
+{{- end }}

@@ -10,6 +10,8 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/internal/db"
 )
 
+var ErrInvalidToken = errors.New("invalid token")
+
 type AuthManager interface {
 	Authenticate(ctx context.Context, email, pass string) (string, error)
 	RefreshToken(ctx context.Context, tokenString string) (string, error)
@@ -20,6 +22,7 @@ type AuthManager interface {
 	UpdateUser(ctx context.Context, tokenString, firstName, lastName, email, password string) error
 	ForgotPassword(ctx context.Context, email string) (string, error)
 	ResetPassword(ctx context.Context, tokenString, password string) error
+	UpdatePassword(ctx context.Context, token, currentPassword, newPassword string) error
 	GetUser(ctx context.Context, tokenString string) (*User, error)
 	GetAllUsers(ctx context.Context, tokenString string) ([]User, error)
 	UpdateUserRoles(ctx context.Context, tokenString, userID string, roles []string) error
@@ -38,16 +41,8 @@ func DBConnectionPoolFromSqlDB(sqlDB *sql.DB, driverName string) db.DBConnection
 	return db.DBConnectionPoolFromSqlDB(sqlDB, driverName)
 }
 
-var (
-	ErrInvalidToken   = errors.New("invalid token")
-	ErrInvalidMFACode = errors.New("invalid MFA code")
-)
-
 func (am *defaultAuthManager) Authenticate(ctx context.Context, email, pass string) (string, error) {
 	user, err := am.authenticator.ValidateCredentials(ctx, email, pass)
-	if errors.Is(err, ErrInvalidCredentials) {
-		return "", err
-	}
 	if err != nil {
 		return "", fmt.Errorf("validating credentials: %w", err)
 	}
@@ -172,7 +167,7 @@ func (am *defaultAuthManager) UpdateUser(ctx context.Context, tokenString, first
 
 	user, err := am.jwtManager.GetUserFromToken(ctx, tokenString)
 	if err != nil {
-		return fmt.Errorf("error getting user from token: %w", err)
+		return fmt.Errorf("getting user from token: %w", err)
 	}
 
 	err = am.authenticator.UpdateUser(ctx, user.ID, firstName, lastName, email, password)
@@ -204,6 +199,29 @@ func (am *defaultAuthManager) ResetPassword(ctx context.Context, resetToken, new
 			return fmt.Errorf("invalid token in auth reset password: %w", err)
 		}
 		return fmt.Errorf("error on reset password: %w", err)
+	}
+
+	return nil
+}
+
+func (am *defaultAuthManager) UpdatePassword(ctx context.Context, tokenString, currentPassword, newPassword string) error {
+	isValid, err := am.ValidateToken(ctx, tokenString)
+	if err != nil {
+		return fmt.Errorf("validating token: %w", err)
+	}
+
+	if !isValid {
+		return ErrInvalidToken
+	}
+
+	user, err := am.jwtManager.GetUserFromToken(ctx, tokenString)
+	if err != nil {
+		return fmt.Errorf("getting user from token: %w", err)
+	}
+
+	err = am.authenticator.UpdatePassword(ctx, user, currentPassword, newPassword)
+	if err != nil {
+		return fmt.Errorf("updating password: %w", err)
 	}
 
 	return nil
@@ -335,9 +353,6 @@ func (am *defaultAuthManager) AuthenticateMFA(ctx context.Context, deviceID, cod
 
 	userID, err := am.mfaManager.ValidateMFACode(ctx, deviceID, code)
 	if err != nil {
-		if errors.Is(err, ErrMFACodeInvalid) {
-			return "", ErrInvalidMFACode
-		}
 		return "", fmt.Errorf("error validating MFA code: %w", err)
 	}
 

@@ -642,6 +642,207 @@ func Test_ProfileHandler_PatchUserProfile(t *testing.T) {
 	jwtManagerMock.AssertExpectations(t)
 }
 
+func Test_ProfileHandler_PatchUserPassword(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	authenticatorMock := &auth.AuthenticatorMock{}
+	jwtManagerMock := &auth.JWTManagerMock{}
+	authManager := auth.NewAuthManager(
+		auth.WithCustomAuthenticatorOption(authenticatorMock),
+		auth.WithCustomJWTManagerOption(jwtManagerMock),
+	)
+	handler := &ProfileHandler{AuthManager: authManager}
+
+	url := "/profile/reset-password"
+	ctx := context.Background()
+
+	user := &auth.User{
+		ID:        "user-id",
+		FirstName: "First",
+		LastName:  "Last",
+		Email:     "email@email.com",
+	}
+
+	t.Run("returns Unauthorized error when no token is found", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, url, nil)
+		require.NoError(t, err)
+
+		http.HandlerFunc(handler.PatchUserPassword).ServeHTTP(w, req)
+
+		resp := w.Result()
+		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+		assert.JSONEq(t, `{"error": "Not authorized."}`, string(respBody))
+	})
+
+	t.Run("returns BadRequest error when JSON decoding fails", func(t *testing.T) {
+		ctx = context.WithValue(ctx, middleware.TokenContextKey, "token")
+
+		w := httptest.NewRecorder()
+		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, url, strings.NewReader(`invalid`))
+		require.NoError(t, err)
+
+		http.HandlerFunc(handler.PatchUserPassword).ServeHTTP(w, req)
+
+		resp := w.Result()
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+		assert.JSONEq(t, `{"error": "The request was invalid in some way."}`, string(respBody))
+	})
+
+	t.Run("returns BadRequest error when current_password and new_password are not provided", func(t *testing.T) {
+		ctx = context.WithValue(ctx, middleware.TokenContextKey, "token")
+
+		w := httptest.NewRecorder()
+		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, url, strings.NewReader(`{}`))
+		require.NoError(t, err)
+
+		http.HandlerFunc(handler.PatchUserPassword).ServeHTTP(w, req)
+
+		resp := w.Result()
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+		wantBody := `{
+			"error": "The request was invalid in some way.",
+			"extras": {
+				"current_password":"current_password is required",
+				"new_password":"new_password should be different from current_password"
+			}
+		}`
+		assert.JSONEq(t, wantBody, string(respBody))
+	})
+
+	t.Run("returns BadRequest error when current_password and new_password are equal", func(t *testing.T) {
+		ctx = context.WithValue(ctx, middleware.TokenContextKey, "token")
+		reqBody := `{"current_password": "currentpassword", "new_password": "currentpassword"}`
+
+		w := httptest.NewRecorder()
+		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, url, strings.NewReader(reqBody))
+		require.NoError(t, err)
+
+		http.HandlerFunc(handler.PatchUserPassword).ServeHTTP(w, req)
+
+		resp := w.Result()
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+		wantBody := `{
+			"error": "The request was invalid in some way.",
+			"extras": {
+				"new_password":"new_password should be different from current_password"
+			}
+		}`
+		assert.JSONEq(t, wantBody, string(respBody))
+	})
+
+	t.Run("returns BadRequest error when password does not match all the criteria", func(t *testing.T) {
+		ctx = context.WithValue(ctx, middleware.TokenContextKey, "token")
+		reqBody := `{"current_password": "currentpassword", "new_password": "1Az2By3Cx"}`
+
+		w := httptest.NewRecorder()
+		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, url, strings.NewReader(reqBody))
+		require.NoError(t, err)
+
+		http.HandlerFunc(handler.PatchUserPassword).ServeHTTP(w, req)
+
+		resp := w.Result()
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+		wantBody := `{
+			"error": "The request was invalid in some way.",
+			"extras": {
+				"length":"password length must be between 12 and 36 characters",
+				"special character":"password must contain at least one special character"
+			}
+		}`
+		assert.JSONEq(t, wantBody, string(respBody))
+	})
+
+	t.Run("returns InternalServerError when AuthManager fails", func(t *testing.T) {
+		ctx = context.WithValue(ctx, middleware.TokenContextKey, "token")
+		reqBody := `{"current_password": "currentpassword", "new_password": "!1Az?2By.3Cx"}`
+
+		w := httptest.NewRecorder()
+		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, url, strings.NewReader(reqBody))
+		require.NoError(t, err)
+
+		jwtManagerMock.
+			On("ValidateToken", req.Context(), "token").
+			Return(true, nil).
+			Once().
+			On("GetUserFromToken", req.Context(), "token").
+			Return(user, nil).
+			Once()
+
+		authenticatorMock.
+			On("UpdatePassword", req.Context(), user, "currentpassword", "!1Az?2By.3Cx").
+			Return(errors.New("unexpected error")).
+			Once()
+
+		http.HandlerFunc(handler.PatchUserPassword).ServeHTTP(w, req)
+
+		resp := w.Result()
+		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		assert.JSONEq(t, `{"error":"Cannot update user password"}`, string(respBody))
+	})
+
+	t.Run("updates the user password successfully", func(t *testing.T) {
+		ctx = context.WithValue(ctx, middleware.TokenContextKey, "token")
+		reqBody := `{"current_password": "currentpassword", "new_password": "!1Az?2By.3Cx"}`
+
+		w := httptest.NewRecorder()
+		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, url, strings.NewReader(reqBody))
+		require.NoError(t, err)
+
+		jwtManagerMock.
+			On("ValidateToken", req.Context(), "token").
+			Return(true, nil).
+			Once().
+			On("GetUserFromToken", req.Context(), "token").
+			Return(user, nil).
+			Once()
+
+		authenticatorMock.
+			On("UpdatePassword", req.Context(), user, "currentpassword", "!1Az?2By.3Cx").
+			Return(nil).
+			Once()
+
+		http.HandlerFunc(handler.PatchUserPassword).ServeHTTP(w, req)
+
+		resp := w.Result()
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		assert.JSONEq(t, `{"message": "user password updated successfully"}`, string(respBody))
+	})
+
+	authenticatorMock.AssertExpectations(t)
+	jwtManagerMock.AssertExpectations(t)
+}
+
 func Test_ProfileHandler_GetProfile(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
@@ -799,6 +1000,7 @@ func Test_ProfileHandler_GetProfile(t *testing.T) {
 
 		wantsBody := `
 			{
+				"id":"user-id",
 				"email": "email@email.com",
 				"first_name": "First",
 				"last_name": "Last",

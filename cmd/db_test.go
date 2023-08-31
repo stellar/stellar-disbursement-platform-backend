@@ -199,10 +199,12 @@ func Test_DatabaseCommand_db_setup_for_network(t *testing.T) {
 	assets, err = models.Assets.GetAll(ctx)
 	require.NoError(t, err)
 
-	assert.Len(t, assets, 1)
+	assert.Len(t, assets, 2)
 	assert.Equal(t, "USDC", assets[0].Code)
 	assert.NotEqual(t, testnetUSDCIssuer, assets[0].Issuer)
 	assert.Equal(t, services.DefaultAssetsNetworkMap[utils.PubnetNetworkType]["USDC"], assets[0].Issuer)
+	assert.Equal(t, "XLM", assets[1].Code)
+	assert.Empty(t, assets[1].Issuer)
 
 	// Validating wallets
 	wallets, err = models.Wallets.GetAll(ctx)
@@ -222,6 +224,8 @@ func Test_DatabaseCommand_db_setup_for_network(t *testing.T) {
 		"updating/inserting assets for the 'pubnet' network",
 		"Code: USDC",
 		fmt.Sprintf("Issuer: %s", services.DefaultAssetsNetworkMap[utils.PubnetNetworkType]["USDC"]),
+		"Code: XLM",
+		"Issuer: ",
 		"updating/inserting wallets for the 'pubnet' network",
 		"Name: Vibrant Assist",
 		"Homepage: https://vibrantapp.com/assist",

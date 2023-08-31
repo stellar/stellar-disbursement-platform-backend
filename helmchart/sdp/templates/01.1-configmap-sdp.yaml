@@ -7,12 +7,12 @@ metadata:
   labels:
     {{- include "sdp.labels" . | nindent 4 }}
 
-  {{- if .Values.configMap.annotations }}
+  {{- if .Values.sdp.configMap.annotations }}
   annotations:
-    {{- toYaml .Values.configMap.annotations | nindent 4 }}
+    {{- toYaml .Values.sdp.configMap.annotations | nindent 4 }}
   {{- end }}
 
-{{- if .Values.configMap.data }}
+{{- if .Values.sdp.configMap.data }}
 data:
   {{- if eq (include "isPubnet" .) "true" }}
   NETWORK_PASSPHRASE: "Public Global Stellar Network ; September 2015"
@@ -26,5 +26,5 @@ data:
   METRICS_PORT: {{ include "sdp.metricsPort" . | quote }}
   ANCHOR_PLATFORM_BASE_SEP_URL: {{ include "sdp.ap.schema" . }}://{{ include "sdp.ap.domain" . }}
   ANCHOR_PLATFORM_BASE_PLATFORM_URL: {{ include "sdp.ap.platformServiceAddress" . }}
-  {{- tpl (toYaml .Values.configMap.data | nindent 2) . }}
+  {{- tpl (toYaml .Values.sdp.configMap.data | nindent 2) . }}
 {{- end }}

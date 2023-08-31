@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/stellar/go/amount"
@@ -16,14 +17,19 @@ import (
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/support/render/httpjson"
 	"github.com/stellar/go/txnbuild"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
+	tssUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
 )
 
-const feeMultiplierInStroops = 10_000
+const (
+	feeMultiplierInStroops = 10_000
+	stellarNativeAssetCode = "XLM"
+)
 
 var errCouldNotRemoveTrustline = errors.New("could not remove trustline")
 
@@ -58,11 +64,12 @@ func (c AssetsHandler) CreateAsset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO: add support for the Stellar Native Asset (XLM)
 	v := validators.NewValidator()
 	v.Check(assetRequest.Code != "", "code", "code is required")
-	v.Check(assetRequest.Issuer != "", "issuer", "issuer is required")
-	v.Check(strkey.IsValidEd25519PublicKey(assetRequest.Issuer), "issuer", "issuer is invalid")
+	if strings.ToUpper(assetRequest.Code) != stellarNativeAssetCode {
+		v.Check(assetRequest.Issuer != "", "issuer", "issuer is required")
+		v.Check(strkey.IsValidEd25519PublicKey(assetRequest.Issuer), "issuer", "issuer is invalid")
+	}
 
 	if v.HasErrors() {
 		httperror.BadRequest("Request invalid", err, v.Errors).Render(w)
@@ -171,7 +178,7 @@ func (c AssetsHandler) handleUpdateAssetTrustlineForDistributionAccount(ctx cont
 
 	changeTrustOperations := make([]*txnbuild.ChangeTrust, 0)
 	// remove asset
-	if assetToRemoveTrustline != nil {
+	if assetToRemoveTrustline != nil && strings.ToUpper(assetToRemoveTrustline.Code) != stellarNativeAssetCode {
 		for _, balance := range acc.Balances {
 			if balance.Asset.Code == assetToRemoveTrustline.Code && balance.Asset.Issuer == assetToRemoveTrustline.Issuer {
 				assetToRemoveTrustlineBalance, err := amount.ParseInt64(balance.Balance)
@@ -209,7 +216,7 @@ func (c AssetsHandler) handleUpdateAssetTrustlineForDistributionAccount(ctx cont
 	}
 
 	// add asset
-	if assetToAddTrustline != nil {
+	if assetToAddTrustline != nil && strings.ToUpper(assetToAddTrustline.Code) != stellarNativeAssetCode {
 		var assetToAddTrustlineFound bool
 		for _, balance := range acc.Balances {
 			if balance.Asset.Code == assetToAddTrustline.Code && balance.Asset.Issuer == assetToAddTrustline.Issuer {
@@ -277,7 +284,7 @@ func (c AssetsHandler) submitChangeTrustTransaction(ctx context.Context, acc *ho
 
 	_, err = c.HorizonClient.SubmitTransactionWithOptions(tx, horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true})
 	if err != nil {
-		return fmt.Errorf("submitting change trust transaction to network: %w", err)
+		return fmt.Errorf("submitting change trust transaction to network: %w", tssUtils.NewHorizonErrorWrapper(err))
 	}
 
 	return nil

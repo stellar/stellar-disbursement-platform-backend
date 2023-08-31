@@ -1,0 +1,31 @@
+{{- if and (eq .Values.dashboard.enabled true) (eq .Values.dashboard.ingress.enabled true) -}}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "sdp.fullname" . }}-dashboard
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "sdp.labelsWithSuffix" (list . "-dashboard") | nindent 4 }}
+  annotations:
+    {{- toYaml .Values.dashboard.ingress.annotations | nindent 4 }}
+spec:
+  {{- if .Values.dashboard.ingress.className }}
+  ingressClassName: {{ .Values.dashboard.ingress.className }}
+  {{- end }}
+  {{- if .Values.dashboard.ingress.tls }}
+  tls:
+    {{- tpl (toYaml .Values.dashboard.ingress.tls) . | nindent 4 }}
+  {{- end }}
+  rules:
+    - host: {{ include "dashboard.domain" . | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "sdp.fullname" . }}-dashboard
+                port:
+                  number: {{ include "dashboard.port" . }}
+
+{{- end }}

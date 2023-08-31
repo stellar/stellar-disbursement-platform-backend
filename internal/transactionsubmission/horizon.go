@@ -35,7 +35,7 @@ const DefaultRevokeSponsorshipReserveAmount = "1.5"
 // CreateChannelAccountsOnChain will create up to 19 accounts per Transaction due to the 20 signatures per tx limit This
 // is also a good opportunity to periodically write the generated accounts to persistent storage if generating large
 // amounts of channel accounts.
-func CreateChannelAccountsOnChain(ctx context.Context, horizonClient horizonclient.ClientInterface, numOfChanAccToCreate int, maxBaseFee int, shouldEncryptSeed bool, sigService engine.SignatureService, currLedgerNumber int) (newAccountAddresses []string, err error) {
+func CreateChannelAccountsOnChain(ctx context.Context, horizonClient horizonclient.ClientInterface, numOfChanAccToCreate int, maxBaseFee int, sigService engine.SignatureService, currLedgerNumber int) (newAccountAddresses []string, err error) {
 	defer func() {
 		// If we failed to create the accounts, we should delete the accounts that were added to the signature service.
 		if err != nil && sigService != nil {
@@ -103,7 +103,7 @@ func CreateChannelAccountsOnChain(ctx context.Context, horizonClient horizonclie
 		newAccountAddresses = append(newAccountAddresses, channelAccountKP.Address())
 	}
 
-	err = sigService.BatchInsert(ctx, kpsToCreate, shouldEncryptSeed, currLedgerNumber)
+	err = sigService.BatchInsert(ctx, kpsToCreate, true, currLedgerNumber)
 	if err != nil {
 		return nil, fmt.Errorf("failed to insert channel accounts into signature service: %w", err)
 	}
@@ -130,11 +130,9 @@ func CreateChannelAccountsOnChain(ctx context.Context, horizonClient horizonclie
 	}
 
 	_, err = horizonClient.SubmitTransactionWithOptions(tx, horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true})
-	if hError := horizonclient.GetError(err); hError != nil {
-		hErrorStr := utils.GetHorizonErrorString(*hError)
-		return newAccountAddresses, fmt.Errorf("creating sponsored channel accounts: %v", hErrorStr)
-	} else if err != nil {
-		return newAccountAddresses, fmt.Errorf("creating sponsored channel accounts: %w", err)
+	if err != nil {
+		hError := utils.NewHorizonErrorWrapper(err)
+		return newAccountAddresses, fmt.Errorf("creating sponsored channel accounts: %w", hError)
 	}
 	log.Ctx(ctx).Infof("🎉 Successfully created %d sponsored channel accounts", len(newAccountAddresses))
 
@@ -200,12 +198,10 @@ func DeleteChannelAccountOnChain(
 		return fmt.Errorf("signing remove account transaction for account %s: %w", chAccAddress, err)
 	}
 
-	_, err = horizonClient.SubmitTransactionWithOptions(
-		tx,
-		horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true},
-	)
+	_, err = horizonClient.SubmitTransactionWithOptions(tx, horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true})
 	if err != nil {
-		return fmt.Errorf("submitting remove account transaction to the network for account %s: %w", chAccAddress, err)
+		hError := utils.NewHorizonErrorWrapper(err)
+		return fmt.Errorf("submitting remove account transaction to the network for account %s: %w", chAccAddress, hError)
 	}
 
 	err = sigService.Delete(ctx, chAccAddress, lockedUntilLedgerNumber)

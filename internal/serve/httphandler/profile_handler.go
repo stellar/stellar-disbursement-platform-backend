@@ -28,6 +28,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
+	authUtils "github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/utils"
 )
 
 // DefaultMaxMemoryAllocation limits the max of memory allocation up to 2MB
@@ -61,11 +62,17 @@ type PatchUserProfileRequest struct {
 }
 
 type GetProfileResponse struct {
+	ID               string   `json:"id"`
 	FirstName        string   `json:"first_name"`
 	LastName         string   `json:"last_name"`
 	Email            string   `json:"email"`
 	Roles            []string `json:"roles"`
 	OrganizationName string   `json:"organization_name"`
+}
+
+type PatchUserPasswordRequest struct {
+	CurrentPassword string `json:"current_password"`
+	NewPassword     string `json:"new_password"`
 }
 
 func (h ProfileHandler) PatchOrganizationProfile(rw http.ResponseWriter, req *http.Request) {
@@ -199,6 +206,61 @@ func (h ProfileHandler) PatchUserProfile(rw http.ResponseWriter, req *http.Reque
 	httpjson.RenderStatus(rw, http.StatusOK, map[string]string{"message": "user profile updated successfully"}, httpjson.JSON)
 }
 
+func (h ProfileHandler) PatchUserPassword(rw http.ResponseWriter, req *http.Request) {
+	ctx := req.Context()
+
+	token, ok := ctx.Value(middleware.TokenContextKey).(string)
+	if !ok {
+		httperror.Unauthorized("", nil, nil).Render(rw)
+		return
+	}
+
+	var reqBody PatchUserPasswordRequest
+	if err := httpdecode.DecodeJSON(req, &reqBody); err != nil {
+		err = fmt.Errorf("decoding the request body: %w", err)
+		log.Ctx(ctx).Error(err)
+		httperror.BadRequest("", err, nil).Render(rw)
+		return
+	}
+
+	// basic incoming parameters validation
+	v := validators.NewValidator()
+	v.Check(reqBody.CurrentPassword != "", "current_password", "current_password is required")
+	v.Check(reqBody.CurrentPassword != reqBody.NewPassword, "new_password", "new_password should be different from current_password")
+	if v.HasErrors() {
+		httperror.BadRequest("", nil, v.Errors).Render(rw)
+		return
+	}
+
+	// validate if the password format attends the requirements
+	badRequestExtras := map[string]interface{}{}
+	err := authUtils.ValidatePassword(reqBody.NewPassword)
+	if err != nil {
+		var validatePasswordError *authUtils.ValidatePasswordError
+		if errors.As(err, &validatePasswordError) {
+			for k, v := range validatePasswordError.FailedValidations() {
+				badRequestExtras[k] = v
+			}
+			log.Ctx(ctx).Errorf("validating password in PatchUserPassword: %v", err)
+		} else {
+			httperror.InternalError(ctx, "Cannot update user password", err, nil).Render(rw)
+			return
+		}
+	}
+	if len(badRequestExtras) > 0 {
+		httperror.BadRequest("", nil, badRequestExtras).Render(rw)
+		return
+	}
+
+	err = h.AuthManager.UpdatePassword(ctx, token, reqBody.CurrentPassword, reqBody.NewPassword)
+	if err != nil {
+		httperror.InternalError(ctx, "Cannot update user password", err, nil).Render(rw)
+		return
+	}
+
+	httpjson.RenderStatus(rw, http.StatusOK, map[string]string{"message": "user password updated successfully"}, httpjson.JSON)
+}
+
 func (h ProfileHandler) GetProfile(rw http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 
@@ -235,6 +297,7 @@ func (h ProfileHandler) GetProfile(rw http.ResponseWriter, req *http.Request) {
 	}
 
 	resp := &GetProfileResponse{
+		ID:               user.ID,
 		FirstName:        user.FirstName,
 		LastName:         user.LastName,
 		Email:            user.Email,

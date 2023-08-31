@@ -75,22 +75,30 @@ func (s SendPaymentsService) sendBatchPayments(ctx context.Context, dbTx db.DBTr
 	}
 
 	// 3. Persist data in Transactions table
-	_, err = s.tssModel.BulkInsert(ctx, dbTx, transactions)
+	insertedTransactions, err := s.tssModel.BulkInsert(ctx, dbTx, transactions)
 	if err != nil {
 		return fmt.Errorf("error inserting transactions: %w", err)
 	}
+	if len(insertedTransactions) > 0 {
+		log.Ctx(ctx).Infof("Submitted %d transaction(s) to TSS", len(insertedTransactions))
+	}
+
 	// 4. Update payment statuses to `Pending`
-	err = s.sdpModels.Payment.UpdateStatuses(ctx, dbTx, pendingPayments, data.PendingPaymentStatus)
-	if err != nil {
-		return fmt.Errorf("error updating payment statuses to Pending: %w", err)
+	if len(pendingPayments) > 0 {
+		numUpdated, innerErr := s.sdpModels.Payment.UpdateStatuses(ctx, dbTx, pendingPayments, data.PendingPaymentStatus)
+		if innerErr != nil {
+			return fmt.Errorf("error updating payment statuses to Pending: %w", innerErr)
+		}
+		log.Ctx(ctx).Infof("Updated %d payments to Pending", numUpdated)
 	}
 
 	// 5. Update failed payments statuses to `Failed`
 	if len(failedPayments) != 0 {
-		err = s.sdpModels.Payment.UpdateStatuses(ctx, dbTx, failedPayments, data.FailedPaymentStatus)
-		if err != nil {
-			return fmt.Errorf("error updating payment statuses to Failed: %w", err)
+		numUpdated, innerErr := s.sdpModels.Payment.UpdateStatuses(ctx, dbTx, failedPayments, data.FailedPaymentStatus)
+		if innerErr != nil {
+			return fmt.Errorf("error updating payment statuses to Failed: %w", innerErr)
 		}
+		log.Ctx(ctx).Infof("Updated %d payments to Failed", numUpdated)
 	}
 	return nil
 }
@@ -120,7 +128,7 @@ func validatePaymentReadyForSending(p *data.Payment) error {
 		return fmt.Errorf("payment asset code is empty for payment %s", p.ID)
 	}
 	// 3. payment.asset.Issuer is used as transaction.AssetIssuer
-	if strings.TrimSpace(p.Asset.Issuer) == "" {
+	if strings.TrimSpace(p.Asset.Issuer) == "" && strings.TrimSpace(strings.ToUpper(p.Asset.Code)) != "XLM" {
 		return fmt.Errorf("payment asset issuer is empty for payment %s", p.ID)
 	}
 	// 4. payment.Amount is used as transaction.Amount

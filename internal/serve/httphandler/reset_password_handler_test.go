@@ -26,13 +26,14 @@ func Test_ResetPasswordHandlerPost(t *testing.T) {
 	}
 
 	t.Run("Should return http status 200 on a valid request", func(t *testing.T) {
-		requestBody := `{ "password": "password123", "reset_token": "goodtoken" }`
+		requestBody := `{ "password": "!1Az?2By.3Cx", "reset_token": "goodtoken" }`
 
 		rr := httptest.NewRecorder()
-		req, _ := http.NewRequest(method, url, strings.NewReader(requestBody))
+		req, err := http.NewRequest(method, url, strings.NewReader(requestBody))
+		require.NoError(t, err)
 
 		authenticatorMock.
-			On("ResetPassword", req.Context(), "goodtoken", "password123").
+			On("ResetPassword", req.Context(), "goodtoken", "!1Az?2By.3Cx").
 			Return(nil).
 			Once()
 
@@ -43,13 +44,13 @@ func Test_ResetPasswordHandlerPost(t *testing.T) {
 	})
 
 	t.Run("Should return an error with an invalid token", func(t *testing.T) {
-		requestBody := `{"password":"password123","reset_token":"badtoken"}`
+		requestBody := `{"password":"!1Az?2By.3Cx","reset_token":"badtoken"}`
 
 		rr := httptest.NewRecorder()
 		req, _ := http.NewRequest(method, url, strings.NewReader(requestBody))
 
 		authenticatorMock.
-			On("ResetPassword", req.Context(), "badtoken", "password123").
+			On("ResetPassword", req.Context(), "badtoken", "!1Az?2By.3Cx").
 			Return(auth.ErrInvalidResetPasswordToken).
 			Once()
 
@@ -59,17 +60,13 @@ func Test_ResetPasswordHandlerPost(t *testing.T) {
 		respBody, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
-		expectedBody := `
-			{
-				"error": "invalid reset password token"
-			}
-		`
+		expectedBody := `{"error": "invalid reset password token"}`
 		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 		assert.JSONEq(t, expectedBody, string(respBody))
 	})
 
 	t.Run("Should require both password and reset_token params", func(t *testing.T) {
-		requestBody := `{"password":""}`
+		requestBody := `{}`
 
 		rr := httptest.NewRecorder()
 		req, _ := http.NewRequest(method, url, strings.NewReader(requestBody))
@@ -84,7 +81,12 @@ func Test_ResetPasswordHandlerPost(t *testing.T) {
 			{
 				"error":"request invalid",
 				"extras": {
-					"password":"password is required",
+					"digit":"password must contain at least one numberical digit",
+					"length":"password length must be between 12 and 36 characters",
+					"lowercase":"password must contain at least one lowercase letter",
+					"reset_token":"reset token is required",
+					"special character":"password must contain at least one special character",
+					"uppercase":"password must contain at least one uppercase letter",
 					"reset_token":"reset token is required"
 				}
 			}

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"strconv"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -55,7 +54,6 @@ func Test_ChannelAccountsCommand_CreateCommand(t *testing.T) {
 	parentCmdMock.AddCommand(cmd)
 
 	distributionSeed := keypair.MustRandom().Seed()
-	encryptKey := true
 
 	parentCmdMock.SetArgs([]string{
 		"create",
@@ -63,8 +61,6 @@ func Test_ChannelAccountsCommand_CreateCommand(t *testing.T) {
 		distributionSeed,
 		"--num-channel-accounts-create",
 		"2",
-		"--encrypt-key",
-		strconv.FormatBool(encryptKey),
 	})
 
 	t.Run("exit with status 1 when ChannelAccountsService fails", func(t *testing.T) {
@@ -75,7 +71,6 @@ func Test_ChannelAccountsCommand_CreateCommand(t *testing.T) {
 					NumChannelAccounts: 2,
 					MaxBaseFee:         txnbuild.MinBaseFee,
 					RootSeed:           distributionSeed,
-					EncryptKey:         encryptKey,
 				}).
 				Return(customErr)
 			crashTrackerMock.On("LogAndReportErrors", context.Background(), customErr, "Cmd channel-accounts create crash")
@@ -103,9 +98,8 @@ func Test_ChannelAccountsCommand_CreateCommand(t *testing.T) {
 		caServiceMock.
 			On("CreateChannelAccountsOnChain", context.Background(), txSubSvc.ChannelAccountServiceOptions{
 				NumChannelAccounts: 2,
-				MaxBaseFee:         txnbuild.MinBaseFee,
+				MaxBaseFee:         100 * txnbuild.MinBaseFee,
 				RootSeed:           distributionSeed,
-				EncryptKey:         encryptKey,
 			}).
 			Return(nil)
 
@@ -187,7 +181,6 @@ func Test_ChannelAccountsCommand_EnsureCommand(t *testing.T) {
 	parentCmdMock.AddCommand(cmd)
 
 	distributionSeed := keypair.MustRandom().Seed()
-	encryptKey := true
 
 	parentCmdMock.SetArgs([]string{
 		"ensure",
@@ -195,8 +188,6 @@ func Test_ChannelAccountsCommand_EnsureCommand(t *testing.T) {
 		distributionSeed,
 		"--num-channel-accounts-ensure",
 		"2",
-		"--encrypt-key",
-		strconv.FormatBool(encryptKey),
 	})
 
 	t.Run("exit with status 1 when ChannelAccountsService fails", func(t *testing.T) {
@@ -207,7 +198,6 @@ func Test_ChannelAccountsCommand_EnsureCommand(t *testing.T) {
 					MaxBaseFee:         txnbuild.MinBaseFee,
 					NumChannelAccounts: 2,
 					RootSeed:           distributionSeed,
-					EncryptKey:         encryptKey,
 				}).
 				Return(customErr)
 			crashTrackerMock.On("LogAndReportErrors", context.Background(), customErr, "Cmd channel-accounts ensure crash")
@@ -235,10 +225,9 @@ func Test_ChannelAccountsCommand_EnsureCommand(t *testing.T) {
 	t.Run("executs the ensure command successfully", func(t *testing.T) {
 		caServiceMock.
 			On("EnsureChannelAccountsCount", context.Background(), txSubSvc.ChannelAccountServiceOptions{
-				MaxBaseFee:         txnbuild.MinBaseFee,
+				MaxBaseFee:         100 * txnbuild.MinBaseFee,
 				NumChannelAccounts: 2,
 				RootSeed:           distributionSeed,
-				EncryptKey:         encryptKey,
 			}).
 			Return(nil)
 
@@ -309,7 +298,7 @@ func Test_ChannelAccountsCommand_DeleteCommand(t *testing.T) {
 		parentCmdMock.SetArgs(args)
 		caServiceMock.
 			On("DeleteChannelAccount", context.Background(), txSubSvc.ChannelAccountServiceOptions{
-				MaxBaseFee:       txnbuild.MinBaseFee,
+				MaxBaseFee:       100 * txnbuild.MinBaseFee,
 				ChannelAccountID: "acc-id",
 				RootSeed:         distributionSeed,
 			}).

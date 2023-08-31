@@ -23,7 +23,8 @@ type ReceiverSendOTPHandler struct {
 }
 
 type ReceiverSendOTPData struct {
-	OTP string
+	OTP              string
+	OrganizationName string
 }
 
 type ReceiverSendOTPRequest struct {
@@ -93,6 +94,12 @@ func (h ReceiverSendOTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	organization, err := h.Models.Organizations.Get(ctx)
+	if err != nil {
+		httperror.InternalError(ctx, "Cannot get organization", err, nil).Render(w)
+		return
+	}
+
 	numberOfUpdatedRows, err := h.Models.ReceiverWallet.UpdateOTPByReceiverPhoneNumberAndWalletDomain(ctx, receiverSendOTPRequest.PhoneNumber, sep24Claims.ClientDomainClaim, newOTP)
 	if err != nil {
 		httperror.InternalError(ctx, "Cannot update OTP for receiver wallet", err, nil).Render(w)
@@ -104,7 +111,8 @@ func (h ReceiverSendOTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request
 	} else {
 		// Build the data object that will be injected in message template
 		sendOTPData := ReceiverSendOTPData{
-			OTP: newOTP,
+			OTP:              newOTP,
+			OrganizationName: organization.Name,
 		}
 
 		sendOTPMessage, err := htmlTpl.ExecuteHTMLTemplate("receiver_otp_message.tmpl", sendOTPData)

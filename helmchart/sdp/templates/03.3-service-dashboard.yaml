@@ -1,0 +1,20 @@
+{{- if .Values.dashboard.enabled -}}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "sdp.fullname" . }}-dashboard
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "sdp.labelsWithSuffix" (list . "-dashboard") | nindent 4 }}
+spec:
+  type: {{ .Values.global.service.type }}
+  ports:
+    - port: {{ include "dashboard.port" . }}
+      targetPort: http
+      protocol: TCP
+      name: http
+
+  selector:
+    {{- include "sdp.selectorLabelsWithSuffix" (list . "-dashboard") | nindent 4 }}
+{{- end }}
