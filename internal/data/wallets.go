@@ -13,9 +13,9 @@ import (
 )
 
 var (
-	ErrWalletNameAlreadyExists           = errors.New("wallet with this name already exists")
-	ErrWalletHomepageAlreadyExists       = errors.New("wallet with this homepage already exists")
-	ErrWalletDeepLinkSchemaAlreadyExists = errors.New("wallet with this deep link schema already exists")
+	ErrWalletNameAlreadyExists           = errors.New("a wallet with this name already exists")
+	ErrWalletHomepageAlreadyExists       = errors.New("a wallet with this homepage already exists")
+	ErrWalletDeepLinkSchemaAlreadyExists = errors.New("a wallet with this deep link schema already exists")
 	ErrInvalidAssetID                    = errors.New("invalid asset ID")
 	ErrInvalidCountryCode                = errors.New("invalid country code")
 )
@@ -80,13 +80,7 @@ func (w *WalletModel) Get(ctx context.Context, id string) (*Wallet, error) {
 	var wallet Wallet
 	query := `
 		SELECT 
-		    w.id, 
-		    w.name, 
-		    w.homepage,
-		    w.sep_10_client_domain,
-		    w.deep_link_schema,
-		    w.created_at,
-		    w.updated_at,
+		    w.*, 
 			jsonb_agg(
 				DISTINCT jsonb_build_object(
 					'code', c.code,
@@ -347,10 +341,7 @@ func (w *WalletModel) GetCountries(ctx context.Context, walletID string) ([]Coun
 func (w *WalletModel) GetAssets(ctx context.Context, walletID string) ([]Asset, error) {
 	const query = `
 		SELECT
-			a.id,
-			a.code,
-			a.issuer,
-			a.deleted_at
+			a.*
 		FROM
 			wallets_assets wa
 			INNER JOIN assets a ON a.id = wa.asset_id
