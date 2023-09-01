@@ -48,7 +48,6 @@ func Test_ChannelAccounts_CreateAccount_Success(t *testing.T) {
 		MaxBaseFee:         100,
 		NetworkPassphrase:  "Test SDF Network ; September 2015",
 		RootSeed:           "SBMW2WDSVTGT2N2PCBF3PV7WBOIKVTGGIEBUUYMDX3CKTDD5HY3UIHV4",
-		EncryptKey:         true,
 	}
 
 	rootAccount := keypair.MustParseFull(opts.RootSeed)
@@ -107,7 +106,6 @@ func Test_ChannelAccounts_CreateAccount_CannotFindRootAccount_Failure(t *testing
 		MaxBaseFee:         100,
 		NetworkPassphrase:  "Test SDF Network ; September 2015",
 		RootSeed:           "SDL4E4RF6BHX77DBKE63QC4H4LQG7S7D2PB4TSF64LTHDIHP7UUJHH2V",
-		EncryptKey:         true,
 	}
 
 	rootAccount := keypair.MustParseFull(opts.RootSeed)
@@ -151,7 +149,6 @@ func Test_ChannelAccounts_CreateAccount_Insert_Failure(t *testing.T) {
 		MaxBaseFee:         100,
 		NetworkPassphrase:  "Test SDF Network ; September 2015",
 		RootSeed:           "SBMW2WDSVTGT2N2PCBF3PV7WBOIKVTGGIEBUUYMDX3CKTDD5HY3UIHV4",
-		EncryptKey:         true,
 	}
 
 	rootAccount := keypair.MustParseFull(opts.RootSeed)
@@ -599,14 +596,14 @@ func Test_ChannelAccounts_DeleteAccount_SubmitTransaction_Failure(t *testing.T) 
 		"SubmitTransactionWithOptions",
 		mock.Anything,
 		horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true},
-	).Return(horizon.Transaction{}, errors.New("horizon client error")).Once()
+	).Return(horizon.Transaction{}, errors.New("foo bar")).Once()
 
 	err = cas.DeleteChannelAccount(ctx, opts)
 	assert.ErrorContains(
 		t,
 		err,
 		fmt.Sprintf(
-			"deleting account %[1]s in DeleteChannelAccount: deleting account %[1]s onchain: submitting remove account transaction to the network for account %[1]s: horizon client error",
+			"deleting account %[1]s in DeleteChannelAccount: deleting account %[1]s onchain: submitting remove account transaction to the network for account %[1]s: horizon response error: foo bar",
 			opts.ChannelAccountID,
 		),
 	)

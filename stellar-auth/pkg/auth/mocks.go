@@ -100,6 +100,11 @@ func (am *AuthenticatorMock) ResetPassword(ctx context.Context, resetToken, pass
 	return args.Error(0)
 }
 
+func (am *AuthenticatorMock) UpdatePassword(ctx context.Context, user *User, currentPassword, newPassword string) error {
+	args := am.Called(ctx, user, currentPassword, newPassword)
+	return args.Error(0)
+}
+
 func (am *AuthenticatorMock) GetAllUsers(ctx context.Context) ([]User, error) {
 	args := am.Called(ctx)
 	if args.Get(0) == nil {
@@ -229,6 +234,11 @@ func (am *AuthManagerMock) ForgotPassword(ctx context.Context, email string) (st
 
 func (am *AuthManagerMock) ResetPassword(ctx context.Context, tokenString, password string) error {
 	args := am.Called(ctx, tokenString, password)
+	return args.Error(0)
+}
+
+func (am *AuthManagerMock) UpdatePassword(ctx context.Context, token, currentPassword, newPassword string) error {
+	args := am.Called(ctx, token, currentPassword, newPassword)
 	return args.Error(0)
 }
 

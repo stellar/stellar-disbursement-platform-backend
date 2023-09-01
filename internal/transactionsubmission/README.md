@@ -77,7 +77,6 @@ Usage:
 
 Flags:
       --distribution-seed string          The private key of the Stellar account that will be used to sponsor the channel accounts (DISTRIBUTION_SEED)
-      --encrypt-key                       Whether or not to encrypt the private key for storage (ENCRYPT_KEY) (default true)
   -h, --help                              help for create
       --max-base-fee int                  The max base fee for submitting a stellar transaction (MAX_BASE_FEE) (default 100)
       --num-channel-accounts-create int   The desired number of channel accounts to be created (NUM_CHANNEL_ACCOUNTS_CREATE) (default 1)
@@ -91,7 +90,6 @@ Usage:
 
 Flags:
       --distribution-seed string          The private key of the Stellar account used to sponsor existing channel accounts (DISTRIBUTION_SEED)
-      --encrypt-key                       Whether or not to encrypt the private key for storage (ENCRYPT_KEY) (default true)
   -h, --help                              help for ensure
       --max-base-fee int                  The max base fee for submitting a stellar transaction (MAX_BASE_FEE) (default 100)
       --num-channel-accounts-ensure int   The desired number of channel accounts to manage (NUM_CHANNEL_ACCOUNTS_ENSURE) (default 1)

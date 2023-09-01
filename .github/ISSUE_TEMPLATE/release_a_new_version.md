@@ -23,8 +23,7 @@ labels: release
   - [ ] Update `version` and `appVersion` in [helmchart/sdp/Chart.yaml].
   - [ ] Update the constant `Version` in [main.go]
 - [ ] Update the [CHANGELOG.md] file with the new version number and release notes.
-- [ ] Update the version and optionally the status in the header of the [README.md] file.
-- [ ] Run tests and linting, and make sure the version running in the nain branch is working end-to-end. At least the minimal end-to-end manual tests is mandatory.
+- [ ] Run tests and linting, and make sure the version running in the default branch is working end-to-end. At least the minimal end-to-end manual tests is mandatory.
 - [ ] 🚨 DO NOT RELEASE before holidays or weekends! Mondays and Tuesdays are preferred.
 
 ### Merging the Branches
@@ -37,8 +36,8 @@ labels: release
 
 - [ ] After the release branch is merged to `main`, create a new release on GitHub with the name `x.y.z` and the use the same changes from the [CHANGELOG.md] file.
   - [ ] The release should automatically publish a new version of the docker image to Docker Hub. Double check if that happened.
+- [ ] Propagate the helmchart version update to the https://github.com/stellar/helm-charts repository.
 
-[main.go]: ../../main.go
-[README.md]: ../../README.md
-[helmchart/sdp/Chart.yaml]: ../../helmchart/sdp/Chart.yaml
-[CHANGELOG.md]: ../../CHANGELOG.md
+[main.go]: https://github.com/stellar/stellar-disbursement-platform-backend/blob/develop/main.go
+[helmchart/sdp/Chart.yaml]: https://github.com/stellar/stellar-disbursement-platform-backend/blob/develop/helmchart/sdp/Chart.yaml
+[CHANGELOG.md]: https://github.com/stellar/stellar-disbursement-platform-backend/blob/develop/CHANGELOG.md

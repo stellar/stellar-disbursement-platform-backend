@@ -119,7 +119,7 @@ func (s *DisbursementService) StartDisbursement(ctx context.Context, disbursemen
 		}
 		user, err := s.authManager.GetUser(ctx, token)
 		if err != nil {
-			return fmt.Errorf("error getting user from token: %w", err)
+			return fmt.Errorf("getting user from token: %w", err)
 		}
 		if organization.IsApprovalRequired {
 			// check that the user starting the disbursement isn't the same as the one who created it
@@ -183,7 +183,7 @@ func (s *DisbursementService) PauseDisbursement(ctx context.Context, disbursemen
 		}
 		user, err := s.authManager.GetUser(ctx, token)
 		if err != nil {
-			return fmt.Errorf("error getting user from token: %w", err)
+			return fmt.Errorf("getting user from token: %w", err)
 		}
 		err = s.models.Disbursements.UpdateStatus(ctx, dbTx, user.ID, disbursementID, data.PausedDisbursementStatus)
 		if err != nil {

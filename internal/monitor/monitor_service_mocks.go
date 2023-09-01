@@ -50,3 +50,5 @@ func (m *MockMonitorService) MonitorHistogram(value float64, tag MetricTag, labe
 func (m *MockMonitorService) Start(opts MetricOptions) error {
 	return m.Called(opts).Error(0)
 }
+
+var _ MonitorServiceInterface = &MockMonitorService{}

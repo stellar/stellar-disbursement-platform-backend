@@ -2,6 +2,8 @@ package auth
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 
 	"github.com/lib/pq"
@@ -31,13 +33,14 @@ type defaultRoleManager struct {
 }
 
 func (rm *defaultRoleManager) getUserRolesInfo(ctx context.Context, user *User) (*userRolesInfo, error) {
-	const query = `
-		SELECT roles, is_owner FROM auth_users WHERE id = $1
-	`
+	const query = "SELECT roles, is_owner FROM auth_users WHERE id = $1"
 
 	var ur userRolesInfo
 	err := rm.dbConnectionPool.GetContext(ctx, &ur, query, user.ID)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			err = ErrUserNotFound
+		}
 		return nil, fmt.Errorf("error querying user ID %s roles: %w", user.ID, err)
 	}
 
@@ -47,7 +50,7 @@ func (rm *defaultRoleManager) getUserRolesInfo(ctx context.Context, user *User) 
 func (rm *defaultRoleManager) GetUserRoles(ctx context.Context, user *User) ([]string, error) {
 	ur, err := rm.getUserRolesInfo(ctx, user)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("getting user roles info from the database, %w", err)
 	}
 
 	if ur.IsOwner {
@@ -60,7 +63,7 @@ func (rm *defaultRoleManager) GetUserRoles(ctx context.Context, user *User) ([]s
 func (rm *defaultRoleManager) HasAllRoles(ctx context.Context, user *User, roleNames []string) (bool, error) {
 	userRoles, err := rm.GetUserRoles(ctx, user)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("getting user roles: %w", err)
 	}
 
 	userRolesMap := make(map[string]struct{}, len(userRoles))
@@ -80,7 +83,7 @@ func (rm *defaultRoleManager) HasAllRoles(ctx context.Context, user *User, roleN
 func (rm *defaultRoleManager) HasAnyRoles(ctx context.Context, user *User, roleNames []string) (bool, error) {
 	userRoles, err := rm.GetUserRoles(ctx, user)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("getting user roles: %w", err)
 	}
 
 	userRolesMap := make(map[string]struct{}, len(userRoles))
@@ -100,7 +103,7 @@ func (rm *defaultRoleManager) HasAnyRoles(ctx context.Context, user *User, roleN
 func (rm *defaultRoleManager) IsSuperUser(ctx context.Context, user *User) (bool, error) {
 	ur, err := rm.getUserRolesInfo(ctx, user)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("getting user roles info from the database, %w", err)
 	}
 
 	return ur.IsOwner, nil

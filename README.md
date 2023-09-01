@@ -43,7 +43,7 @@ To quickly test the SDP using preconfigured values, see the [Quick Start Guide](
 
 ![high_level_architecture](./docs/images/high_level_architecture.png)
 
-The [SDP Dashboard][sdp-dashboard] and [Anchor Platform](https://github.com/stellar/java-stellar-anchor-sdk) components are separate projects that must be installed and configured alongside the services included in this project.
+The [SDP Dashboard][sdp-dashboard] and [Anchor Platform] components are separate projects that must be installed and configured alongside the services included in this project.
 
 In a future iteration of this project, the Transaction Submission Service (TSS) will also be moved to its own repository to be used as an independent service. At that point, this project will include the services contained in the Core module shown in the diagram above.
 
@@ -77,7 +77,33 @@ If you're using the `AWS_EMAIL` sender type, you'll need to verify the email add
 
 #### Wallet Registration UI
 
-The Wallet Registration UI is also hosted by the core server, and enables recipients to confirm their phone number and other information used to verify their identity. Once recipients have registered through this UI, the Transaction Submission Server (TSS) immediately makes the payment to the recpients registered Stellar account.
+The Wallet Registration UI is also hosted by the Core server, and enables recipients to confirm their phone number and other information used to verify their identity. Once recipients have registered through this UI, the Transaction Submission Server (TSS) immediately makes the payment to the recipients registered Stellar account.
+
+#### Core + Anchor Platform Integration
+
+The Wallet Registration flow kicks off within the recipient's wallet app. This app interacts with the [Anchor Platform] to initiate the [SEP-24] deposit process through the SDP (Stellar Disbursement Platform). The SDP collects the necessary recipient information to ultimately execute the payment to them.
+
+Note that the [Anchor Platform] is a distinct project that is being deployed alongside the SDP and is needed for the receiver registration. It handles the implementation of interoperability protocols such as [SEP-1], [SEP-10], and [SEP-24], making their endpoints available to wallet apps. The [Anchor Platform] is pre-configured in both the Docker Compose file in the `dev` directory, and the helm chart.
+
+To ensure a seamless integration between the SDP and the Anchor Platform, follow these steps:
+
+1. 🚨 **Critical Step**: Configure the Anchor Platform with `PLATFORM_SERVER_AUTH_TYPE: JWT`. This setting is crucial for securing your Anchor Platform's backoffice API via JWT token authentication.
+1. **Shared Secrets for API Authentication**: The `SECRET_PLATFORM_API_AUTH_SECRET` in the Anchor Platform should match `ANCHOR_PLATFORM_OUTGOING_JWT_SECRET` in the SDP.
+1. **Shared Secrets for SEP-24**: The secrets `SECRET_SEP24_INTERACTIVE_URL_JWT_SECRET` and `SECRET_SEP24_MORE_INFO_URL_JWT_SECRET` in the Anchor Platform need to align with `SEP24_JWT_SECRET` in the SDP.
+1. **SEP-10 Configuration**: The `SECRET_SEP10_SIGNING_SEED` in the Anchor Platform should be consistent with the `SEP10_SIGNING_PRIVATE_KEY` in the SDP.
+
+By following these steps, you'll ensure a secure and efficient integration between your SDP and Anchor Platform systems.
+
+##### Keeping the AP and SDP in Sync
+
+Currently, some configurations within the Anchor Platform are static and loaded via environment variables. On the other hand, the SDP reads these same configurations from its database and allows an owner user to modify them. This dynamic pertains particularly to the lists of supported assets and wallets.
+
+While we are actively exploring ways to automate this synchronization process, manual updates to the Anchor Platform configuration is currently required when registering or unregistering an asset or wallet on the SDP.
+
+1. **(Required) Update Supported Assets**: Whenever you change the list of supported assets in the SDP, it's essential to update the Anchor Platform's `ASSETS_VALUE` configuration to reflect these changes. Consult the Docker Compose file or the helm values file for examples.
+1. **(Recommended) Wallets and SEP-10 Domains**: If you employ the `SEP10_CLIENT_ATTRIBUTION_REQUIRED: true` setting in the Anchor Platform – a recommended best practice – you must also update the `SEP10_CLIENT_ATTRIBUTION_ALLOW_LIST` to include trusted wallet domains. This ensures that the Anchor Platform will process SEP-10 requests only from trusted wallets.
+
+By following these steps, you'll maintain a consistent and secure state between your SDP and Anchor Platform instances.
 
 ### Transaction Submission Service
 
@@ -297,6 +323,8 @@ stateDiagram-v2
 
 [deferred deep linking]: https://en.wikipedia.org/wiki/Mobile_deep_linking#Deferred_deep_linking
 [deep link]: https://en.wikipedia.org/wiki/Mobile_deep_linking
+[SEP-1]: https://stellar.org/protocol/sep-1
 [SEP-10]: https://stellar.org/protocol/sep-10
 [SEP-24]: https://stellar.org/protocol/sep-24
 [sdp-dashboard]: https://github.com/stellar/stellar-disbursement-platform-frontend
+[Anchor Platform]: https://github.com/stellar/java-stellar-anchor-sdk

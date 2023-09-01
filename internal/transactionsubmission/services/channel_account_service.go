@@ -40,7 +40,6 @@ type ChannelAccountServiceOptions struct {
 	DatabaseDSN            string
 	DeleteAllAccounts      bool
 	DeleteInvalidAcccounts bool
-	EncryptKey             bool
 	HorizonUrl             string
 	MaxBaseFee             int
 	NetworkPassphrase      string
@@ -80,7 +79,7 @@ func NewChannelAccountService(ctx context.Context, opts ChannelAccountServiceOpt
 
 // CreateChannelAccountsOnChain creates a specified count of sponsored channel accounts onchain and internally in the database.
 func (s *ChannelAccountsService) CreateChannelAccountsOnChain(ctx context.Context, opts ChannelAccountServiceOptions) error {
-	log.Ctx(ctx).Infof("NumChannelAccounts: %d, Horizon: %s, Passphrase: %s, EncryptKey?: %t", opts.NumChannelAccounts, opts.HorizonUrl, opts.NetworkPassphrase, opts.EncryptKey)
+	log.Ctx(ctx).Infof("NumChannelAccounts: %d, Horizon: %s, Passphrase: %s", opts.NumChannelAccounts, opts.HorizonUrl, opts.NetworkPassphrase)
 	// createAccountsInBatch creates count number of channel accounts in batches of MaxBatchSize or less per loop
 	err := createAccountsInBatch(ctx, s.dbConnectionPool, opts, s.horizonClient, s.caStore, s.ledgerNumberTracker)
 	if err != nil {
@@ -121,7 +120,6 @@ func createAccountsInBatch(
 			horizonClient,
 			batchSize,
 			opts.MaxBaseFee,
-			opts.EncryptKey,
 			sigService,
 			currLedgerNumber,
 		)
