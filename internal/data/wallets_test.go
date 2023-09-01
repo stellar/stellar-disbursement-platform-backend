@@ -253,17 +253,17 @@ func Test_WalletModelInsert(t *testing.T) {
 		assert.Len(t, assetsDB, 2)
 		assert.ElementsMatch(t, []Asset{
 			{
-				ID:     usdc.ID,
-				Code:   usdc.Code,
-				Issuer: usdc.Issuer,
+				ID:        usdc.ID,
+				Code:      usdc.Code,
+				Issuer:    usdc.Issuer,
 				CreatedAt: usdc.CreatedAt,
 				UpdatedAt: usdc.UpdatedAt,
 				DeletedAt: usdc.DeletedAt,
 			},
 			{
-				ID:     xlm.ID,
-				Code:   xlm.Code,
-				Issuer: xlm.Issuer,
+				ID:        xlm.ID,
+				Code:      xlm.Code,
+				Issuer:    xlm.Issuer,
 				CreatedAt: xlm.CreatedAt,
 				UpdatedAt: xlm.UpdatedAt,
 				DeletedAt: xlm.DeletedAt,
@@ -315,17 +315,17 @@ func Test_WalletModelInsert(t *testing.T) {
 		assert.Len(t, assetsDB, 2)
 		assert.ElementsMatch(t, []Asset{
 			{
-				ID:     usdc.ID,
-				Code:   usdc.Code,
-				Issuer: usdc.Issuer,
+				ID:        usdc.ID,
+				Code:      usdc.Code,
+				Issuer:    usdc.Issuer,
 				CreatedAt: usdc.CreatedAt,
 				UpdatedAt: usdc.UpdatedAt,
 				DeletedAt: usdc.DeletedAt,
 			},
 			{
-				ID:     xlm.ID,
-				Code:   xlm.Code,
-				Issuer: xlm.Issuer,
+				ID:        xlm.ID,
+				Code:      xlm.Code,
+				Issuer:    xlm.Issuer,
 				CreatedAt: xlm.CreatedAt,
 				UpdatedAt: xlm.UpdatedAt,
 				DeletedAt: xlm.DeletedAt,
@@ -593,17 +593,17 @@ func Test_WalletModelGetAssets(t *testing.T) {
 
 		assert.ElementsMatch(t, []Asset{
 			{
-				ID:     usdc.ID,
-				Code:   usdc.Code,
-				Issuer: usdc.Issuer,
+				ID:        usdc.ID,
+				Code:      usdc.Code,
+				Issuer:    usdc.Issuer,
 				CreatedAt: usdc.CreatedAt,
 				UpdatedAt: usdc.UpdatedAt,
 				DeletedAt: usdc.DeletedAt,
 			},
 			{
-				ID:     xlm.ID,
-				Code:   xlm.Code,
-				Issuer: xlm.Issuer,
+				ID:        xlm.ID,
+				Code:      xlm.Code,
+				Issuer:    xlm.Issuer,
 				CreatedAt: xlm.CreatedAt,
 				UpdatedAt: xlm.UpdatedAt,
 				DeletedAt: xlm.DeletedAt,

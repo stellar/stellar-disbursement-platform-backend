@@ -3,6 +3,7 @@ package validators
 import (
 	"net/url"
 	"strings"
+
 	"github.com/stellar/go/support/log"
 )
 
