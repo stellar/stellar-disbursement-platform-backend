@@ -809,6 +809,10 @@ func Test_ProfileHandler_PatchUserPassword(t *testing.T) {
 	})
 
 	t.Run("updates the user password successfully", func(t *testing.T) {
+		buf := new(strings.Builder)
+		log.DefaultLogger.SetOutput(buf)
+		log.SetLevel(log.InfoLevel)
+
 		ctx = context.WithValue(ctx, middleware.TokenContextKey, "token")
 		reqBody := `{"current_password": "currentpassword", "new_password": "!1Az?2By.3Cx"}`
 
@@ -819,10 +823,10 @@ func Test_ProfileHandler_PatchUserPassword(t *testing.T) {
 		jwtManagerMock.
 			On("ValidateToken", req.Context(), "token").
 			Return(true, nil).
-			Once().
+			Twice().
 			On("GetUserFromToken", req.Context(), "token").
 			Return(user, nil).
-			Once()
+			Twice()
 
 		authenticatorMock.
 			On("UpdatePassword", req.Context(), user, "currentpassword", "!1Az?2By.3Cx").
@@ -837,6 +841,9 @@ func Test_ProfileHandler_PatchUserPassword(t *testing.T) {
 		respBody, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
 		assert.JSONEq(t, `{"message": "user password updated successfully"}`, string(respBody))
+
+		// validate logs
+		require.Contains(t, buf.String(), "[UpdateUserPassword] - Updated password for user with account ID user-id")
 	})
 
 	authenticatorMock.AssertExpectations(t)

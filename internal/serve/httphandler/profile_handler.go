@@ -258,6 +258,13 @@ func (h ProfileHandler) PatchUserPassword(rw http.ResponseWriter, req *http.Requ
 		return
 	}
 
+	userID, err := h.AuthManager.GetUserID(ctx, token)
+	if err != nil {
+		httperror.InternalError(ctx, "Cannot get user ID", err, nil).Render(rw)
+		return
+	}
+	log.Ctx(ctx).Infof("[UpdateUserPassword] - Updated password for user with account ID %s", userID)
+
 	httpjson.RenderStatus(rw, http.StatusOK, map[string]string{"message": "user password updated successfully"}, httpjson.JSON)
 }
 

@@ -121,8 +121,10 @@ func (h UserHandler) UserActivation(rw http.ResponseWriter, req *http.Request) {
 
 	var activationErr error
 	if *reqBody.IsActive {
+		log.Ctx(ctx).Infof("[ActivateUserAccount] - Activating user with account ID %s", reqBody.UserID)
 		activationErr = h.AuthManager.ActivateUser(ctx, token, reqBody.UserID)
 	} else {
+		log.Ctx(ctx).Infof("[DeactivateUserAccount] - Deactivating user with account ID %s", reqBody.UserID)
 		activationErr = h.AuthManager.DeactivateUser(ctx, token, reqBody.UserID)
 	}
 
@@ -215,6 +217,7 @@ func (h UserHandler) CreateUser(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	log.Ctx(ctx).Infof("[CreateUserAccount] - Created user with account ID %s", u.ID)
 	httpjson.RenderStatus(rw, http.StatusCreated, u, httpjson.JSON)
 }
 

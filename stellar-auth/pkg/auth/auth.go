@@ -24,6 +24,7 @@ type AuthManager interface {
 	ResetPassword(ctx context.Context, tokenString, password string) error
 	UpdatePassword(ctx context.Context, token, currentPassword, newPassword string) error
 	GetUser(ctx context.Context, tokenString string) (*User, error)
+	GetUserID(ctx context.Context, tokenString string) (string, error)
 	GetAllUsers(ctx context.Context, tokenString string) ([]User, error)
 	UpdateUserRoles(ctx context.Context, tokenString, userID string, roles []string) error
 	DeactivateUser(ctx context.Context, tokenString, userID string) error
@@ -300,7 +301,7 @@ func (am *defaultAuthManager) GetAllUsers(ctx context.Context, tokenString strin
 	return users, nil
 }
 
-func (am *defaultAuthManager) GetUser(ctx context.Context, tokenString string) (*User, error) {
+func (am *defaultAuthManager) getUserFromToken(ctx context.Context, tokenString string) (*User, error) {
 	isValid, err := am.ValidateToken(ctx, tokenString)
 	if err != nil {
 		return nil, fmt.Errorf("validating token: %w", err)
@@ -310,20 +311,38 @@ func (am *defaultAuthManager) GetUser(ctx context.Context, tokenString string) (
 		return nil, ErrInvalidToken
 	}
 
-	tokenUser, err := am.jwtManager.GetUserFromToken(ctx, tokenString)
+	user, err := am.jwtManager.GetUserFromToken(ctx, tokenString)
 	if err != nil {
-		return nil, fmt.Errorf("error getting user from token: %w", err)
+		return nil, fmt.Errorf("getting user from token: %w", err)
+	}
+
+	return user, nil
+}
+
+func (am *defaultAuthManager) GetUserID(ctx context.Context, tokenString string) (string, error) {
+	tokenUser, err := am.getUserFromToken(ctx, tokenString)
+	if err != nil {
+		return "", err
+	}
+
+	return tokenUser.ID, nil
+}
+
+func (am *defaultAuthManager) GetUser(ctx context.Context, tokenString string) (*User, error) {
+	tokenUser, err := am.getUserFromToken(ctx, tokenString)
+	if err != nil {
+		return nil, fmt.Errorf("getting user from token: %w", err)
 	}
 
 	// We get the user latest state
 	user, err := am.authenticator.GetUser(ctx, tokenUser.ID)
 	if err != nil {
-		return nil, fmt.Errorf("error getting user ID %s: %w", tokenUser.ID, err)
+		return nil, fmt.Errorf("getting user ID %s: %w", tokenUser.ID, err)
 	}
 
 	roles, err := am.roleManager.GetUserRoles(ctx, user)
 	if err != nil {
-		return nil, fmt.Errorf("error getting user ID %s roles: %w", tokenUser.ID, err)
+		return nil, fmt.Errorf("getting user ID %s roles: %w", tokenUser.ID, err)
 	}
 
 	user.Roles = roles
