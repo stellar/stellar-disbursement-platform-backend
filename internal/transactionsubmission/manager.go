@@ -276,5 +276,7 @@ func (m *Manager) loadReadyForProcessingBundles(ctx context.Context) ([]*store.C
 		return nil, fmt.Errorf("loading channel transaction bundles: %w", err)
 	}
 
+	log.Ctx(ctx).Infof("loaded %d bundles from the database", len(chTxBundles))
+
 	return chTxBundles, nil
 }

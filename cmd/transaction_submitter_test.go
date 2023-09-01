@@ -102,7 +102,13 @@ func Test_tss(t *testing.T) {
 	mTSS := mockSubmitter{}
 	rootCmd := SetupCLI(version, gitCommitHash)
 
-	mTSS.On("StartMetricsServe", mock.Anything, mock.AnythingOfType("serve.MetricsServeOptions"), mock.AnythingOfType("*serve.HTTPServer"), dryRunClient).Once()
+	serveMetricOpts := serve.MetricsServeOptions{
+		Port:           9002,
+		MetricType:     monitor.MetricTypeTSSPrometheus,
+		MonitorService: &mMonitorService,
+	}
+
+	mTSS.On("StartMetricsServe", mock.Anything, serveMetricOpts, mock.AnythingOfType("*serve.HTTPServer"), dryRunClient).Once()
 	mTSS.On("StartSubmitter", mock.Anything, wantSubmitterOptions).Once()
 	mTSS.wg.Add(1)
 	// setup

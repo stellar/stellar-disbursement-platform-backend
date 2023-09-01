@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"context"
-	//"fmt"
 	"go/types"
 	"os"
 	"os/signal"
@@ -162,6 +161,7 @@ func (c *TxSubmitterCommand) Command(submitterService TxSubmitterServiceInterfac
 			if err != nil {
 				log.Ctx(ctx).Fatalf("Error creating new TSS monitor service: %s", err.Error())
 			}
+			metricsServeOpts.MonitorService = tssMonitorSvc.MonitorClient
 
 			// Inject server dependencies
 			submitterOpts.MonitorService = tssMonitorSvc

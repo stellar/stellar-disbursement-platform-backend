@@ -304,10 +304,6 @@ func (tw *TransactionWorker) handleSuccessfulTransaction(ctx context.Context, tx
 		eventType = monitor.PaymentReprocessingSuccessfulLabel
 	}
 
-	fmt.Println("-----")
-	fmt.Println(tw.monitorSvc)
-	fmt.Println("-----")
-
 	tw.monitorSvc.MonitorPayment(ctx, txJob.Transaction, monitor.PaymentTransactionSuccessfulTag, tssMonitor.TxMetadata{
 		SrcChannelAcc:    txJob.ChannelAccount.PublicKey,
 		IsHorizonErr:     false,
