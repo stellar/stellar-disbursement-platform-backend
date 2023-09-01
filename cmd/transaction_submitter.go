@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	//"fmt"
 	"go/types"
 	"os"
 	"os/signal"
@@ -19,6 +20,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve"
 	txSub "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission"
+	tssMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/monitor"
 	tssUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
 )
 
@@ -156,19 +158,15 @@ func (c *TxSubmitterCommand) Command(submitterService TxSubmitterServiceInterfac
 				Environment: globalOptions.environment,
 			}
 
-			// Inject metrics dependencies
-			err = monitorService.Start(metricOptions)
+			tssMonitorSvc, err := tssMonitor.NewMonitorService(ctx, monitorService, metricOptions, globalOptions.version, globalOptions.gitCommit)
 			if err != nil {
-				log.Ctx(ctx).Fatalf("Error creating monitor service: %s", err.Error())
+				log.Ctx(ctx).Fatalf("Error creating new TSS monitor service: %s", err.Error())
 			}
-			metricsServeOpts.MonitorService = monitorService
 
 			// Inject server dependencies
-			submitterOpts.MonitorService = monitorService
+			submitterOpts.MonitorService = tssMonitorSvc
 			submitterOpts.DatabaseDSN = globalOptions.databaseURL
 			submitterOpts.NetworkPassphrase = globalOptions.networkPassphrase
-			submitterOpts.Version = globalOptions.version
-			submitterOpts.GitCommitHash = globalOptions.gitCommit
 			submitterOpts.PrivateKeyEncrypter = tssUtils.DefaultPrivateKeyEncrypter{}
 
 			// Inject crash tracker options dependencies

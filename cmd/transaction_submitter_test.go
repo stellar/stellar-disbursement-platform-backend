@@ -14,6 +14,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve"
 	txSub "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission"
+	tssMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/monitor"
 	tssUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
 
 	"github.com/stretchr/testify/assert"
@@ -72,7 +73,14 @@ func Test_tss(t *testing.T) {
 	dryRunClient, err := crashtracker.NewDryRunClient()
 	require.NoError(t, err)
 
+	version := "x.y.z"
+	gitCommitHash := "1234567890abcdef"
 	mMonitorService := monitor.MockMonitorService{}
+	tssMonitorService := tssMonitor.MonitorService{
+		MonitorClient: &mMonitorService,
+		GitCommitHash: gitCommitHash,
+		Version:       version,
+	}
 	wantSubmitterOptions := txSub.SubmitterOptions{
 		DatabaseDSN:          "postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable",
 		HorizonURL:           "https://horizon-testnet.stellar.org",
@@ -81,7 +89,7 @@ func Test_tss(t *testing.T) {
 		MaxBaseFee:           100 * txnbuild.MinBaseFee,
 		NumChannelAccounts:   2,
 		QueuePollingInterval: 6,
-		MonitorService:       &mMonitorService,
+		MonitorService:       tssMonitorService,
 		CrashTrackerClient:   dryRunClient,
 		PrivateKeyEncrypter:  tssUtils.DefaultPrivateKeyEncrypter{},
 	}
@@ -91,17 +99,10 @@ func Test_tss(t *testing.T) {
 		Environment: "test",
 	}
 	mMonitorService.On("Start", metricOptions).Return(nil).Once()
-
-	serveMetricOpts := serve.MetricsServeOptions{
-		Port:           9002,
-		MetricType:     monitor.MetricTypeTSSPrometheus,
-		MonitorService: &mMonitorService,
-	}
-
 	mTSS := mockSubmitter{}
-	rootCmd := SetupCLI("x.y.z", "1234567890abcdef")
+	rootCmd := SetupCLI(version, gitCommitHash)
 
-	mTSS.On("StartMetricsServe", mock.Anything, serveMetricOpts, mock.AnythingOfType("*serve.HTTPServer"), dryRunClient).Once()
+	mTSS.On("StartMetricsServe", mock.Anything, mock.AnythingOfType("serve.MetricsServeOptions"), mock.AnythingOfType("*serve.HTTPServer"), dryRunClient).Once()
 	mTSS.On("StartSubmitter", mock.Anything, wantSubmitterOptions).Once()
 	mTSS.wg.Add(1)
 	// setup

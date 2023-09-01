@@ -25,14 +25,16 @@ const (
 	PaymentProcessingStartedTag        MetricTag = "payment_processing_started"
 	PaymentTransactionSuccessfulTag    MetricTag = "payment_transaction_successful"
 	PaymentReconciliationSuccessfulTag MetricTag = "payment_reconciliation_successful"
+	PaymentReconciliationFailureTag    MetricTag = "payment_reconciliation_failure"
 	PaymentErrorTag                    MetricTag = "payment_error"
 
-	PaymentProcessingStartedLabel        string = "payment_processing_started"
-	PaymentProcessingSuccessfulLabel     string = "payment_processing_successful"
-	PaymentReprocessingSuccessfulLabel   string = "payment_reprocessing_successful"
-	PaymentReconciliationSuccessfulLabel string = "payment_reconciliation_successful"
-	PaymentMarkedForReprocessingLabel    string = "payment_marked_for_reprocessing"
-	PaymentFailedLabel                   string = "payment_failed"
+	PaymentProcessingStartedLabel             string = "payment_processing_started"
+	PaymentProcessingSuccessfulLabel          string = "payment_processing_successful"
+	PaymentReprocessingSuccessfulLabel        string = "payment_reprocessing_successful"
+	PaymentReconciliationSuccessfulLabel      string = "payment_reconciliation_successful"
+	PaymentReconciliationUnexpectedErrorLabel string = "payment_reconciliation_unexpected_error"
+	PaymentMarkedForReprocessingLabel         string = "payment_marked_for_reprocessing"
+	PaymentFailedLabel                        string = "payment_failed"
 )
 
 func (m MetricTag) ListAllTSSMetricTags() []MetricTag {

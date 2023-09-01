@@ -6,9 +6,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"time"
 
-	"github.com/google/uuid"
 	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/protocols/horizon"
 	"github.com/stellar/go/strkey"
@@ -20,6 +18,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
+	tssMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
 	tssUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
@@ -27,11 +26,6 @@ import (
 
 // Review these TODOs originally created by Stephen:
 // TODO - memo/memoType not supported yet - [SDP-463]
-// TODO - re-enable metrics/observer – [SDP-772]
-
-const (
-	paymentLoggerStr = "Payment event received %s: %s"
-)
 
 type TxJob store.ChannelTransactionBundle
 
@@ -48,16 +42,7 @@ type TransactionWorker struct {
 	maxBaseFee          int
 	crashTrackerClient  crashtracker.CrashTrackerClient
 	txProcessingLimiter *engine.TransactionProcessingLimiter
-	monitorSvc          monitor.MonitorServiceInterface
-	version             string
-	gitCommitHash       string
-}
-
-type TxMetadata struct {
-	srcChannelAcc    string
-	paymentEventType string
-	horizonErr       bool
-	errStack         string
+	monitorSvc          tssMonitor.MonitorService
 }
 
 func NewTransactionWorker(
@@ -69,9 +54,7 @@ func NewTransactionWorker(
 	maxBaseFee int,
 	crashTrackerClient crashtracker.CrashTrackerClient,
 	txProcessingLimiter *engine.TransactionProcessingLimiter,
-	monitorSvc monitor.MonitorServiceInterface,
-	version string,
-	gitCommitHash string,
+	monitorSvc tssMonitor.MonitorService,
 ) (TransactionWorker, error) {
 	if dbConnectionPool == nil {
 		return TransactionWorker{}, fmt.Errorf("dbConnectionPool cannot be nil")
@@ -105,17 +88,9 @@ func NewTransactionWorker(
 		return TransactionWorker{}, fmt.Errorf("txProcessingLimiter cannot be nil")
 	}
 
-	if monitorSvc == nil {
+	if tssUtils.IsEmpty(monitorSvc) {
 		return TransactionWorker{}, fmt.Errorf("monitorSvc cannot be nil")
 	}
-
-	if version == "" {
-		return TransactionWorker{}, fmt.Errorf("version cannot be empty string")
-	}
-
-	/*if gitCommitHash == "" {
-		return TransactionWorker{}, fmt.Errorf("gitCommitHash cannot be empty string")
-	}*/
 
 	return TransactionWorker{
 		dbConnectionPool:    dbConnectionPool,
@@ -127,8 +102,6 @@ func NewTransactionWorker(
 		crashTrackerClient:  crashTrackerClient,
 		txProcessingLimiter: txProcessingLimiter,
 		monitorSvc:          monitorSvc,
-		version:             version,
-		gitCommitHash:       gitCommitHash,
 	}, nil
 }
 
@@ -176,14 +149,14 @@ func (tw *TransactionWorker) handleFailedTransaction(ctx context.Context, txJob 
 			eventType = monitor.PaymentMarkedForReprocessingLabel
 		}
 
-		tw.monitorPayment(
+		tw.monitorSvc.MonitorPayment(
 			ctx,
-			&txJob.Transaction,
+			txJob.Transaction,
 			metricTag,
-			&TxMetadata{
-				srcChannelAcc:    txJob.ChannelAccount.PublicKey,
-				horizonErr:       isHorizonErr,
-				paymentEventType: eventType,
+			tssMonitor.TxMetadata{
+				SrcChannelAcc:    txJob.ChannelAccount.PublicKey,
+				IsHorizonErr:     isHorizonErr,
+				PaymentEventType: eventType,
 			},
 		)
 	}()
@@ -331,10 +304,14 @@ func (tw *TransactionWorker) handleSuccessfulTransaction(ctx context.Context, tx
 		eventType = monitor.PaymentReprocessingSuccessfulLabel
 	}
 
-	tw.monitorPayment(ctx, &txJob.Transaction, monitor.PaymentTransactionSuccessfulTag, &TxMetadata{
-		srcChannelAcc:    txJob.ChannelAccount.PublicKey,
-		horizonErr:       false,
-		paymentEventType: eventType,
+	fmt.Println("-----")
+	fmt.Println(tw.monitorSvc)
+	fmt.Println("-----")
+
+	tw.monitorSvc.MonitorPayment(ctx, txJob.Transaction, monitor.PaymentTransactionSuccessfulTag, tssMonitor.TxMetadata{
+		SrcChannelAcc:    txJob.ChannelAccount.PublicKey,
+		IsHorizonErr:     false,
+		PaymentEventType: eventType,
 	})
 
 	return nil
@@ -357,44 +334,55 @@ func (tw *TransactionWorker) reconcileSubmittedTransaction(ctx context.Context, 
 	if err == nil && txDetail.Successful {
 		err = tw.handleSuccessfulTransaction(ctx, txJob, txDetail)
 		if err != nil {
+			tw.monitorSvc.MonitorPayment(ctx, txJob.Transaction, monitor.PaymentReconciliationFailureTag, tssMonitor.TxMetadata{
+				SrcChannelAcc:    txJob.ChannelAccount.PublicKey,
+				IsHorizonErr:     false,
+				ErrStack:         err.Error(),
+				PaymentEventType: monitor.PaymentReconciliationUnexpectedErrorLabel,
+			})
 			return fmt.Errorf("handling successful transaction: %w", err)
 		}
+
+		tw.monitorSvc.MonitorPayment(ctx, txJob.Transaction, monitor.PaymentReconciliationSuccessfulTag, tssMonitor.TxMetadata{
+			SrcChannelAcc:    txJob.ChannelAccount.PublicKey,
+			IsHorizonErr:     false,
+			PaymentEventType: monitor.PaymentReconciliationSuccessfulLabel,
+		})
 		return nil
-	} else if (err == nil && !txDetail.Successful) || hWrapperErr.IsNotFound() {
-		// Unsuccesful hash: 98d3549076b119dbda42c17c2310d04666ef35524397ad3decb773ef1cebab1e
-		// Nonexistent hash: 3389e9f0f1a65f19736cacf544c2e825313e8447f569233bb8db39aa607c8889
-		log.Ctx(ctx).Warnf("Previous transaction didn't make through, marking %v for resubmission...", txJob)
-
-		_, err = tw.txModel.PrepareTransactionForReprocessing(ctx, tw.dbConnectionPool, txJob.Transaction.ID)
-		if err != nil {
-			return fmt.Errorf("pushing back transaction to queue: %w", err)
-		}
-
-		err = tw.unlockJob(ctx, txJob)
-		if err != nil {
-			return fmt.Errorf("unlocking job: %w", err)
-		}
-	} else {
-		// Invalid hash: 123
+	} else if (err != nil || txDetail.Successful) && !hWrapperErr.IsNotFound() {
 		log.Ctx(ctx).Warnf("received unexpected horizon error: %v", hWrapperErr)
+
+		tw.monitorSvc.MonitorPayment(ctx, txJob.Transaction, monitor.PaymentReconciliationFailureTag, tssMonitor.TxMetadata{
+			SrcChannelAcc:    txJob.ChannelAccount.PublicKey,
+			IsHorizonErr:     true,
+			ErrStack:         hWrapperErr.Error(),
+			PaymentEventType: monitor.PaymentReconciliationUnexpectedErrorLabel,
+		})
 		return fmt.Errorf("unexpected error: %w", hWrapperErr)
 	}
 
-	tw.monitorPayment(ctx, &txJob.Transaction, monitor.PaymentReconciliationSuccessfulTag, &TxMetadata{
-		srcChannelAcc:    txJob.ChannelAccount.PublicKey,
-		horizonErr:       false,
-		paymentEventType: monitor.PaymentReconciliationSuccessfulLabel,
-	})
+	log.Ctx(ctx).Warnf("Previous transaction didn't make through, marking %v for resubmission...", txJob)
+
+	_, err = tw.txModel.PrepareTransactionForReprocessing(ctx, tw.dbConnectionPool, txJob.Transaction.ID)
+	if err != nil {
+		return fmt.Errorf("pushing back transaction to queue: %w", err)
+	}
+
+	err = tw.unlockJob(ctx, txJob)
+	if err != nil {
+		return fmt.Errorf("unlocking job: %w", err)
+	}
+
 	return nil
 }
 
 func (tw *TransactionWorker) processTransactionSubmission(ctx context.Context, txJob *TxJob) error {
 	log.Ctx(ctx).Infof("🚧 Processing transaction submission for job %v...", txJob)
 
-	tw.monitorPayment(ctx, &txJob.Transaction, monitor.PaymentProcessingStartedTag, &TxMetadata{
-		srcChannelAcc:    txJob.ChannelAccount.PublicKey,
-		horizonErr:       false,
-		paymentEventType: monitor.PaymentProcessingStartedLabel,
+	tw.monitorSvc.MonitorPayment(ctx, txJob.Transaction, monitor.PaymentProcessingStartedTag, tssMonitor.TxMetadata{
+		SrcChannelAcc:    txJob.ChannelAccount.PublicKey,
+		IsHorizonErr:     false,
+		PaymentEventType: monitor.PaymentProcessingStartedLabel,
 	})
 
 	// STEP 1: validate bundle
@@ -575,81 +563,6 @@ func (tw *TransactionWorker) saveResponseXDRIfPresent(ctx context.Context, txJob
 	txJob.Transaction = *updatedTx
 
 	return nil
-}
-
-// monitorPayment sends a metric about a payment tx to the observer, linking it to a entry in the logs that contains specific metadata about said tx.
-func (tw *TransactionWorker) monitorPayment(ctx context.Context, tx *store.Transaction, metricTag monitor.MetricTag, txMetadata *TxMetadata) {
-	eventID := uuid.New().String()
-	labels := map[string]string{
-		"event_id":        eventID,
-		"event_type":      txMetadata.paymentEventType,
-		"tx_id":           tx.ID,
-		"event_time":      time.Now().String(),
-		"app_version":     tw.version,
-		"git_commit_hash": tw.gitCommitHash,
-	}
-
-	err := tw.monitorSvc.MonitorCounters(metricTag, labels)
-	if err != nil {
-		fmt.Println(err)
-	}
-
-	paymentLog := log.Ctx(ctx)
-	for label_name, value := range labels {
-		paymentLog.WithField(label_name, value)
-	}
-
-	paymentLog.WithFields(
-		log.F{
-			"event_id":            eventID,
-			"tx_id":               tx.ID,
-			"created_at":          tx.CreatedAt,
-			"updated_at":          tx.UpdatedAt,
-			"assset":              tx.AssetCode,
-			"channel_account":     txMetadata.srcChannelAcc,
-			"destination_account": tx.Destination,
-		},
-	)
-
-	if metricTag == monitor.PaymentProcessingStartedTag {
-		paymentLog.Debugf(paymentLoggerStr, eventID, metricTag)
-		return
-	}
-
-	paymentLog.
-		WithFields(
-			log.F{
-				"xdr_received": tx.XDRReceived,
-				"xdr_sent":     tx.XDRSent,
-			},
-		)
-
-	// successful transactions
-	if metricTag == monitor.PaymentReconciliationSuccessfulTag || metricTag == monitor.PaymentTransactionSuccessfulTag {
-		paymentLog.
-			WithFields(
-				log.F{
-					"tx_hash":      tx.StellarTransactionHash,
-					"completed_at": tx.CompletedAt,
-				},
-			).Infof(paymentLoggerStr, eventID, metricTag)
-
-		return
-	}
-
-	// unsuccessful transactions
-	if metricTag == monitor.PaymentErrorTag {
-		if txMetadata.paymentEventType == monitor.PaymentFailedLabel {
-			// payment could fail because of internal error too
-			paymentLog.WithField("horizon_error?", txMetadata.horizonErr)
-		}
-
-		paymentLog.
-			WithField("error", txMetadata.errStack).
-			Errorf(paymentLoggerStr, eventID, metricTag)
-	} else {
-		log.Ctx(ctx).Errorf("Cannot recognize metric tag %s for event %s", metricTag, eventID)
-	}
 }
 
 // TODO: possibly use this code as a reference when addressing [SDP-772].
