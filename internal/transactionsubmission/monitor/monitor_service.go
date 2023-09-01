@@ -108,17 +108,9 @@ func (ms *MonitorService) MonitorPayment(ctx context.Context, tx store.Transacti
 	}
 
 	// unsuccessful transactions
-	if metricTag == monitor.PaymentErrorTag {
-		if txMetadata.PaymentEventType == monitor.PaymentFailedLabel {
-			// payment could fail because of internal error too
-			paymentLog.WithField("horizon_error?", txMetadata.IsHorizonErr)
-		}
-
+	if metricTag == monitor.PaymentErrorTag || metricTag == monitor.PaymentReconciliationFailureTag {
 		paymentLog.
-			WithField("error", txMetadata.ErrStack).
-			Errorf(paymentLogMessage)
-	} else if metricTag == monitor.PaymentReconciliationFailureTag {
-		paymentLog.WithField("horizon_error?", txMetadata.IsHorizonErr).
+			WithField("horizon_error?", txMetadata.IsHorizonErr).
 			WithField("error", txMetadata.ErrStack).
 			Errorf(paymentLogMessage)
 	} else {

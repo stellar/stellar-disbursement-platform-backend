@@ -48,6 +48,7 @@ func (m MetricTag) ListAllTSSMetricTags() []MetricTag {
 		PaymentProcessingStartedTag,
 		PaymentTransactionSuccessfulTag,
 		PaymentReconciliationSuccessfulTag,
+		PaymentReconciliationFailureTag,
 		PaymentErrorTag,
 	}
 }

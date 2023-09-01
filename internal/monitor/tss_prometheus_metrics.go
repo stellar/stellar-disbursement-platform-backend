@@ -93,7 +93,15 @@ var CounterTSSVecMetrics = map[MetricTag]*prometheus.CounterVec{
 		prometheus.CounterOpts{
 			Namespace: "tss",
 			Name:      string(PaymentReconciliationSuccessfulTag),
-			Help:      "Count of payments that have processed successfully",
+			Help:      "Count of payments that have completed reconciliation successfully",
+		},
+		paymentLabelNames,
+	),
+	PaymentReconciliationFailureTag: prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "tss",
+			Name:      string(PaymentReconciliationFailureTag),
+			Help:      "Count of payments that have failed reconciliation",
 		},
 		paymentLabelNames,
 	),
@@ -101,7 +109,7 @@ var CounterTSSVecMetrics = map[MetricTag]*prometheus.CounterVec{
 		prometheus.CounterOpts{
 			Namespace: "tss",
 			Name:      string(PaymentErrorTag),
-			Help:      "Count of payments that have been marked for processing retry",
+			Help:      "Count of payments that have failed onchain",
 		},
 		paymentLabelNames,
 	),
