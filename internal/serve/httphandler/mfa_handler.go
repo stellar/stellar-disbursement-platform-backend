@@ -79,5 +79,12 @@ func (h MFAHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		httperror.InternalError(ctx, "Cannot authenticate user", err, nil).Render(rw)
 		return
 	}
+
+	userID, err := h.AuthManager.GetUserID(ctx, token)
+	if err != nil {
+		httperror.InternalError(ctx, "Cannot get user ID", err, nil).Render(rw)
+		return
+	}
+	log.Ctx(ctx).Infof("[UserLogin] - Logged in user with account ID %s", userID)
 	httpjson.RenderStatus(rw, http.StatusOK, MFAResponse{Token: token}, httpjson.JSON)
 }

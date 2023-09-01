@@ -95,12 +95,6 @@ func (h LoginHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	if !h.MFAEnabled {
-		httpjson.RenderStatus(rw, http.StatusOK, LoginResponse{Token: token}, httpjson.JSON)
-		return
-	}
-
-	// 🔒 Handling MFA
 	user, err := h.AuthManager.GetUser(ctx, token)
 	if err != nil {
 		log.Ctx(ctx).Errorf("error getting user with email %s: %s", utils.TruncateString(reqBody.Email, 3), err)
@@ -108,6 +102,13 @@ func (h LoginHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	if !h.MFAEnabled {
+		log.Ctx(ctx).Infof("[UserLogin] - Logged in user with account ID %s", user.ID)
+		httpjson.RenderStatus(rw, http.StatusOK, LoginResponse{Token: token}, httpjson.JSON)
+		return
+	}
+
+	// 🔒 Handling MFA
 	deviceID := req.Header.Get(DeviceIDHeader)
 	if deviceID == "" {
 		httperror.BadRequest("Device-ID header is required", nil, nil).Render(rw)
@@ -122,6 +123,7 @@ func (h LoginHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	}
 
 	if isRemembered {
+		log.Ctx(ctx).Infof("[UserLogin] - Logged in user with account ID %s", user.ID)
 		httpjson.RenderStatus(rw, http.StatusOK, LoginResponse{Token: token}, httpjson.JSON)
 		return
 	}
@@ -142,9 +144,7 @@ func (h LoginHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 
 	organization, err := h.Models.Organizations.Get(ctx)
 	if err != nil {
-		err = fmt.Errorf("error getting organization data: %w", err)
-		log.Ctx(ctx).Error(err)
-		httperror.InternalError(ctx, "", err, nil).Render(rw)
+		httperror.InternalError(ctx, "Cannot fetch organization", err, nil).Render(rw)
 		return
 	}
 
@@ -154,9 +154,7 @@ func (h LoginHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	}
 	msgContent, err := htmltemplate.ExecuteHTMLTemplateForMFAMessage(msgTemplate)
 	if err != nil {
-		err = fmt.Errorf("error executing mfa message template: %w", err)
-		log.Ctx(ctx).Error(err)
-		httperror.InternalError(ctx, "", err, nil).Render(rw)
+		httperror.InternalError(ctx, "Cannot execute mfa message template", err, nil).Render(rw)
 		return
 	}
 

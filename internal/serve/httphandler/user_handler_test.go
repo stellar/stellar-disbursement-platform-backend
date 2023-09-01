@@ -313,6 +313,10 @@ func Test_UserHandler_UserActivation(t *testing.T) {
 	})
 
 	t.Run("updates the user activation correctly", func(t *testing.T) {
+		buf := new(strings.Builder)
+		log.DefaultLogger.SetOutput(buf)
+		log.SetLevel(log.InfoLevel)
+
 		token := "mytoken"
 
 		jwtManagerMock.
@@ -373,6 +377,9 @@ func Test_UserHandler_UserActivation(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.JSONEq(t, `{"message": "user activation was updated successfully"}`, string(respBody))
+
+		// validate logs
+		require.Contains(t, buf.String(), "[ActivateUserAccount] - Activating user with account ID user-id")
 	})
 }
 
@@ -776,6 +783,10 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 	})
 
 	t.Run("creates user successfully", func(t *testing.T) {
+		buf := new(strings.Builder)
+		log.DefaultLogger.SetOutput(buf)
+		log.SetLevel(log.InfoLevel)
+
 		u := &auth.User{
 			FirstName: "First",
 			LastName:  "Last",
@@ -851,6 +862,9 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 
 		assert.Equal(t, http.StatusCreated, resp.StatusCode)
 		assert.JSONEq(t, wantsBody, string(respBody))
+
+		// validate logs
+		require.Contains(t, buf.String(), "[CreateUserAccount] - Created user with account ID user-id")
 	})
 
 	authenticatorMock.AssertExpectations(t)

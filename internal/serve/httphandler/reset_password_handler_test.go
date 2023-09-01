@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stellar/go/support/log"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -26,6 +28,10 @@ func Test_ResetPasswordHandlerPost(t *testing.T) {
 	}
 
 	t.Run("Should return http status 200 on a valid request", func(t *testing.T) {
+		buf := new(strings.Builder)
+		log.DefaultLogger.SetOutput(buf)
+		log.SetLevel(log.InfoLevel)
+
 		requestBody := `{ "password": "!1Az?2By.3Cx", "reset_token": "goodtoken" }`
 
 		rr := httptest.NewRecorder()
@@ -41,6 +47,9 @@ func Test_ResetPasswordHandlerPost(t *testing.T) {
 
 		resp := rr.Result()
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+		// validate logs
+		require.Contains(t, buf.String(), "[ResetUserPassword] - Reset password for user with token go...en")
 	})
 
 	t.Run("Should return an error with an invalid token", func(t *testing.T) {
