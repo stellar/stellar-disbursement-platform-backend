@@ -122,10 +122,30 @@ func (tw *TransactionWorker) runJob(ctx context.Context, txJob *TxJob) error {
 	if txJob == nil {
 		return fmt.Errorf("received nil transaction job")
 	} else if txJob.Transaction.StellarTransactionHash.Valid {
-		return tw.reconcileSubmittedTransaction(ctx, txJob)
+		err = tw.reconcileSubmittedTransaction(ctx, txJob)
+		if err != nil {
+			return err
+		}
+
 	} else {
-		return tw.processTransactionSubmission(ctx, txJob)
+		err = tw.processTransactionSubmission(ctx, txJob)
+		if err != nil {
+			return err
+		}
+
+		eventType := monitor.PaymentProcessingSuccessfulLabel
+		if txJob.Transaction.AttemptsCount > 1 {
+			eventType = monitor.PaymentReprocessingSuccessfulLabel
+		}
+
+		tw.monitorSvc.MonitorPayment(ctx, txJob.Transaction, monitor.PaymentTransactionSuccessfulTag, tssMonitor.TxMetadata{
+			SrcChannelAcc:    txJob.ChannelAccount.PublicKey,
+			IsHorizonErr:     false,
+			PaymentEventType: eventType,
+		})
 	}
+
+	return nil
 }
 
 // TODO: add tests
@@ -299,17 +319,6 @@ func (tw *TransactionWorker) handleSuccessfulTransaction(ctx context.Context, tx
 
 	log.Ctx(ctx).Infof("🎉 Successfully processed transaction job %v", txJob)
 
-	eventType := monitor.PaymentProcessingSuccessfulLabel
-	if txJob.Transaction.AttemptsCount > 1 {
-		eventType = monitor.PaymentReprocessingSuccessfulLabel
-	}
-
-	tw.monitorSvc.MonitorPayment(ctx, txJob.Transaction, monitor.PaymentTransactionSuccessfulTag, tssMonitor.TxMetadata{
-		SrcChannelAcc:    txJob.ChannelAccount.PublicKey,
-		IsHorizonErr:     false,
-		PaymentEventType: eventType,
-	})
-
 	return nil
 }
 
@@ -341,8 +350,7 @@ func (tw *TransactionWorker) reconcileSubmittedTransaction(ctx context.Context, 
 
 		tw.monitorSvc.MonitorPayment(ctx, txJob.Transaction, monitor.PaymentReconciliationSuccessfulTag, tssMonitor.TxMetadata{
 			SrcChannelAcc:    txJob.ChannelAccount.PublicKey,
-			IsHorizonErr:     false,
-			PaymentEventType: monitor.PaymentReconciliationSuccessfulLabel,
+			PaymentEventType: monitor.PaymentReconciliationTransactionSuccessfulLabel,
 		})
 		return nil
 	} else if (err != nil || txDetail.Successful) && !hWrapperErr.IsNotFound() {
@@ -368,6 +376,11 @@ func (tw *TransactionWorker) reconcileSubmittedTransaction(ctx context.Context, 
 	if err != nil {
 		return fmt.Errorf("unlocking job: %w", err)
 	}
+
+	tw.monitorSvc.MonitorPayment(ctx, txJob.Transaction, monitor.PaymentReconciliationSuccessfulTag, tssMonitor.TxMetadata{
+		SrcChannelAcc:    txJob.ChannelAccount.PublicKey,
+		PaymentEventType: monitor.PaymentReconciliationMarkedForReprocessingLabel,
+	})
 
 	return nil
 }
