@@ -126,9 +126,7 @@ func Test_NewTransactionWorker(t *testing.T) {
 	wantMaxBaseFee := 100
 	wantTxProcessingLimiter := engine.NewTransactionProcessingLimiter(20)
 
-	mMonitorSvc := monitor.MockMonitorService{}
-	tssMonitorSvc := tssMonitor.MonitorService{
-		MonitorClient: &mMonitorSvc,
+	tssMonitorSvc := tssMonitor.TSSMonitorService{
 		GitCommitHash: "gitCommitHash0x",
 		Version:       "version123",
 	}
@@ -155,7 +153,7 @@ func Test_NewTransactionWorker(t *testing.T) {
 		maxBaseFee          int
 		crashTrackerClient  crashtracker.CrashTrackerClient
 		txProcessingLimiter *engine.TransactionProcessingLimiter
-		monitorSvc          tssMonitor.MonitorService
+		monitorSvc          tssMonitor.TSSMonitorService
 		wantError           error
 	}{
 		{
@@ -294,8 +292,7 @@ func Test_TransactionWorker_handleSuccessfulTransaction(t *testing.T) {
 		transactionWorker.txModel = mockTxStore
 
 		mMonitorService := monitor.MockMonitorService{}
-		tssMonitorService := tssMonitor.MonitorService{
-			MonitorClient: &mMonitorService,
+		tssMonitorService := tssMonitor.TSSMonitorService{
 			Version:       "0.01",
 			GitCommitHash: "0xABC",
 		}
@@ -402,8 +399,7 @@ func Test_TransactionWorker_handleSuccessfulTransaction(t *testing.T) {
 		require.NotEmpty(t, transactionWorker)
 
 		mMonitorService := monitor.MockMonitorService{}
-		tssMonitorService := tssMonitor.MonitorService{
-			MonitorClient: &mMonitorService,
+		tssMonitorService := tssMonitor.TSSMonitorService{
 			Version:       "0.01",
 			GitCommitHash: "0xABC",
 		}
@@ -529,8 +525,7 @@ func Test_TransactionWorker_reconcileSubmittedTransaction(t *testing.T) {
 			transactionWorker.engine.HorizonClient = hMock
 
 			mMonitorService := monitor.MockMonitorService{}
-			tssMonitorService := tssMonitor.MonitorService{
-				MonitorClient: &mMonitorService,
+			tssMonitorService := tssMonitor.TSSMonitorService{
 				Version:       "0.01",
 				GitCommitHash: "0xABC",
 			}
@@ -925,8 +920,7 @@ func Test_TransactionWorker_submit(t *testing.T) {
 			}
 
 			mMonitorService := monitor.MockMonitorService{}
-			tssMonitorService := tssMonitor.MonitorService{
-				MonitorClient: &mMonitorService,
+			tssMonitorService := tssMonitor.TSSMonitorService{
 				Version:       "0.01",
 				GitCommitHash: "0xABC",
 			}

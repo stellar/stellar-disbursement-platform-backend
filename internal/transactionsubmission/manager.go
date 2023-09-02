@@ -35,7 +35,7 @@ type SubmitterOptions struct {
 	NumChannelAccounts   int
 	QueuePollingInterval int
 	MaxBaseFee           int
-	MonitorService       tssMonitor.MonitorService
+	MonitorService       tssMonitor.TSSMonitorService
 	PrivateKeyEncrypter  utils.PrivateKeyEncrypter
 	CrashTrackerClient   crashtracker.CrashTrackerClient
 }
@@ -94,7 +94,7 @@ type Manager struct {
 	sigService engine.SignatureService
 	maxBaseFee int
 	// crash & metrics monitoring:
-	monitorService     tssMonitor.MonitorService
+	monitorService     tssMonitor.TSSMonitorService
 	crashTrackerClient crashtracker.CrashTrackerClient
 }
 
@@ -275,8 +275,6 @@ func (m *Manager) loadReadyForProcessingBundles(ctx context.Context) ([]*store.C
 	if err != nil {
 		return nil, fmt.Errorf("loading channel transaction bundles: %w", err)
 	}
-
-	log.Ctx(ctx).Infof("loaded %d bundles from the database", len(chTxBundles))
 
 	return chTxBundles, nil
 }

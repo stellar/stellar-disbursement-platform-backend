@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"os"
 	"strings"
 	"sync"
@@ -75,9 +76,11 @@ func Test_tss(t *testing.T) {
 
 	version := "x.y.z"
 	gitCommitHash := "1234567890abcdef"
-	mMonitorService := monitor.MockMonitorService{}
-	tssMonitorService := tssMonitor.MonitorService{
-		MonitorClient: &mMonitorService,
+	monitorClient, err := monitor.NewTSSPrometheusClient()
+	require.NoError(t, err)
+
+	tssMonitorService := tssMonitor.TSSMonitorService{
+		Client: monitorClient,
 		GitCommitHash: gitCommitHash,
 		Version:       version,
 	}
@@ -94,18 +97,12 @@ func Test_tss(t *testing.T) {
 		PrivateKeyEncrypter:  tssUtils.DefaultPrivateKeyEncrypter{},
 	}
 
-	metricOptions := monitor.MetricOptions{
-		MetricType:  monitor.MetricTypeTSSPrometheus,
-		Environment: "test",
-	}
-	mMonitorService.On("Start", metricOptions).Return(nil).Once()
 	mTSS := mockSubmitter{}
 	rootCmd := SetupCLI(version, gitCommitHash)
 
 	serveMetricOpts := serve.MetricsServeOptions{
 		Port:           9002,
 		MetricType:     monitor.MetricTypeTSSPrometheus,
-		MonitorService: &mMonitorService,
 	}
 
 	mTSS.On("StartMetricsServe", mock.Anything, serveMetricOpts, mock.AnythingOfType("*serve.HTTPServer"), dryRunClient).Once()
@@ -113,12 +110,16 @@ func Test_tss(t *testing.T) {
 	mTSS.wg.Add(1)
 	// setup
 	var commandToRemove *cobra.Command
-	commandToAdd := (&TxSubmitterCommand{}).Command(&mTSS, &mMonitorService)
+	commandToAdd := (&TxSubmitterCommand{}).Command(&mTSS)
 	for _, cmd := range rootCmd.Commands() {
 		if cmd.Use == "tss" {
 			commandToRemove = cmd
 		}
 	}
+	fmt.Println("-----")
+	fmt.Println()
+	fmt.Println("-----")
+
 	require.NotNil(t, commandToRemove, "tss command not found")
 	rootCmd.RemoveCommand(commandToRemove)
 	rootCmd.AddCommand(commandToAdd)
@@ -139,5 +140,4 @@ func Test_tss(t *testing.T) {
 
 	// assert
 	mTSS.AssertExpectations(t)
-	mMonitorService.AssertExpectations(t)
 }

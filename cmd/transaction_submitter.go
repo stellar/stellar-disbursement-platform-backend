@@ -64,7 +64,7 @@ func (s *TxSubmitterService) StartMetricsServe(ctx context.Context, opts serve.M
 	}
 }
 
-func (c *TxSubmitterCommand) Command(submitterService TxSubmitterServiceInterface, monitorService monitor.MonitorServiceInterface) *cobra.Command {
+func (c *TxSubmitterCommand) Command(submitterService TxSubmitterServiceInterface) *cobra.Command {
 	submitterOpts := txSub.SubmitterOptions{}
 	metricsServeOpts := serve.MetricsServeOptions{}
 	crashTrackerOptions := crashtracker.CrashTrackerOptions{}
@@ -157,11 +157,10 @@ func (c *TxSubmitterCommand) Command(submitterService TxSubmitterServiceInterfac
 				Environment: globalOptions.environment,
 			}
 
-			tssMonitorSvc, err := tssMonitor.NewMonitorService(ctx, monitorService, metricOptions, globalOptions.version, globalOptions.gitCommit)
+			tssMonitorSvc, err := tssMonitor.NewTSSMonitorService(metricOptions, globalOptions.gitCommit, globalOptions.version)
 			if err != nil {
-				log.Ctx(ctx).Fatalf("Error creating new TSS monitor service: %s", err.Error())
+				log.Ctx(ctx).Fatalf("Error creating monitor client: %s", err.Error())
 			}
-			metricsServeOpts.MonitorService = tssMonitorSvc.MonitorClient
 
 			// Inject server dependencies
 			submitterOpts.MonitorService = tssMonitorSvc

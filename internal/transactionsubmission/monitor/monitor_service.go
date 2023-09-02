@@ -12,10 +12,11 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 )
 
-type MonitorService struct {
+type TSSMonitorService struct {
+	Client monitor.MonitorClient
+	monitor.MonitorServiceInterface
 	GitCommitHash string
 	Version       string
-	MonitorClient monitor.MonitorServiceInterface
 }
 
 type TxMetadata struct {
@@ -25,26 +26,21 @@ type TxMetadata struct {
 	ErrStack         string
 }
 
-func NewMonitorService(
-	tx context.Context,
-	monitorService monitor.MonitorServiceInterface,
-	metricOptions monitor.MetricOptions,
-	version, gitCommitHash string,
-) (MonitorService, error) {
-	err := monitorService.Start(metricOptions)
+func NewTSSMonitorService(opts monitor.MetricOptions, gitCommitHash, version string) (TSSMonitorService, error) {
+	monitorClient, err := monitor.GetClient(opts)
 	if err != nil {
-		return MonitorService{}, fmt.Errorf("cannot start monitor service: %w", err)
+		return TSSMonitorService{}, nil
 	}
 
-	return MonitorService{
-		MonitorClient: monitorService,
+	return TSSMonitorService{
+		Client: monitorClient,
 		GitCommitHash: gitCommitHash,
-		Version:       version,
+		Version: version,
 	}, nil
 }
 
 // monitorPayment sends a metric about a payment tx to the observer, linking it to a entry in the logs that contains specific metadata about said tx.
-func (ms *MonitorService) MonitorPayment(ctx context.Context, tx store.Transaction, metricTag monitor.MetricTag, txMetadata TxMetadata) {
+func (ms *TSSMonitorService) MonitorPayment(ctx context.Context, tx store.Transaction, metricTag monitor.MetricTag, txMetadata TxMetadata) {
 	eventID := uuid.New().String()
 	paymentLogMessage := paymentLogMessage(eventID, metricTag)
 
@@ -57,7 +53,7 @@ func (ms *MonitorService) MonitorPayment(ctx context.Context, tx store.Transacti
 		"git_commit_hash": ms.GitCommitHash,
 	}
 
-	err := ms.MonitorClient.MonitorCounters(metricTag, labels)
+	err := ms.MonitorCounters(metricTag, labels)
 	if err != nil {
 		log.Ctx(ctx).Errorf(
 			"cannot send counters metric for event id with event type: %s, %s",
@@ -110,12 +106,25 @@ func (ms *MonitorService) MonitorPayment(ctx context.Context, tx store.Transacti
 	// unsuccessful transactions
 	if metricTag == monitor.PaymentErrorTag || metricTag == monitor.PaymentReconciliationFailureTag {
 		paymentLog.
-			WithField("horizon_error?", txMetadata.IsHorizonErr).
-			WithField("error", txMetadata.ErrStack).
-			Errorf(paymentLogMessage)
+			WithFields(
+				log.F{
+					"horizon_error?": txMetadata.IsHorizonErr,
+					"error":          txMetadata.ErrStack,
+				},
+			).Errorf(paymentLogMessage)
 	} else {
 		log.Ctx(ctx).Errorf("Cannot recognize metric tag %s for event %s", metricTag, eventID)
 	}
+}
+
+func (ms *TSSMonitorService) MonitorCounters(metricTag monitor.MetricTag, labels map[string]string) error {
+	if ms.Client == nil {
+		return fmt.Errorf("client was not initialized")
+	}
+
+	ms.Client.MonitorCounters(metricTag, labels)
+
+	return nil
 }
 
 func paymentLogMessage(eventID string, metricTag monitor.MetricTag) string {

@@ -42,7 +42,7 @@ type TransactionWorker struct {
 	maxBaseFee          int
 	crashTrackerClient  crashtracker.CrashTrackerClient
 	txProcessingLimiter *engine.TransactionProcessingLimiter
-	monitorSvc          tssMonitor.MonitorService
+	monitorSvc          tssMonitor.TSSMonitorService
 }
 
 func NewTransactionWorker(
@@ -54,7 +54,7 @@ func NewTransactionWorker(
 	maxBaseFee int,
 	crashTrackerClient crashtracker.CrashTrackerClient,
 	txProcessingLimiter *engine.TransactionProcessingLimiter,
-	monitorSvc tssMonitor.MonitorService,
+	monitorSvc tssMonitor.TSSMonitorService,
 ) (TransactionWorker, error) {
 	if dbConnectionPool == nil {
 		return TransactionWorker{}, fmt.Errorf("dbConnectionPool cannot be nil")
@@ -390,7 +390,6 @@ func (tw *TransactionWorker) processTransactionSubmission(ctx context.Context, t
 
 	tw.monitorSvc.MonitorPayment(ctx, txJob.Transaction, monitor.PaymentProcessingStartedTag, tssMonitor.TxMetadata{
 		SrcChannelAcc:    txJob.ChannelAccount.PublicKey,
-		IsHorizonErr:     false,
 		PaymentEventType: monitor.PaymentProcessingStartedLabel,
 	})
 

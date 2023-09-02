@@ -16,7 +16,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/db/dbtest"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
+	monitorMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/mocks"
@@ -130,8 +130,8 @@ func Test_SubmitterOptions_validate(t *testing.T) {
 			name: "🎉 successfully finishes validation with nil crash tracker client",
 			submitterOptions: SubmitterOptions{
 				DatabaseDSN: dbt.DSN,
-				MonitorService: tssMonitor.MonitorService{
-					MonitorClient: &monitor.MockMonitorService{},
+				MonitorService: tssMonitor.TSSMonitorService{
+					Client:        &monitorMocks.MockMonitorClient{},
 					GitCommitHash: "0xABC",
 					Version:       "0.01",
 				},
@@ -148,7 +148,7 @@ func Test_SubmitterOptions_validate(t *testing.T) {
 			name: "validate monitorService",
 			submitterOptions: SubmitterOptions{
 				DatabaseDSN:          dbt.DSN,
-				MonitorService:       tssMonitor.MonitorService{},
+				MonitorService:       tssMonitor.TSSMonitorService{},
 				HorizonURL:           "https://horizon-testnet.stellar.org",
 				NetworkPassphrase:    network.TestNetworkPassphrase,
 				PrivateKeyEncrypter:  &utils.PrivateKeyEncrypterMock{},
@@ -163,8 +163,8 @@ func Test_SubmitterOptions_validate(t *testing.T) {
 			name: "🎉 successfully finishes validation with existing crash tracker client",
 			submitterOptions: SubmitterOptions{
 				DatabaseDSN: dbt.DSN,
-				MonitorService: tssMonitor.MonitorService{
-					MonitorClient: &monitor.MockMonitorService{},
+				MonitorService: tssMonitor.TSSMonitorService{
+					Client:        &monitorMocks.MockMonitorClient{},
 					GitCommitHash: "0xABC",
 					Version:       "0.01",
 				},
@@ -203,8 +203,8 @@ func Test_NewManager(t *testing.T) {
 	ctx := context.Background()
 	validSubmitterOptions := SubmitterOptions{
 		DatabaseDSN: dbt.DSN,
-		MonitorService: tssMonitor.MonitorService{
-			MonitorClient: &monitor.MockMonitorService{},
+		MonitorService: tssMonitor.TSSMonitorService{
+			Client:        &monitorMocks.MockMonitorClient{},
 			GitCommitHash: "0xABC",
 			Version:       "0.01",
 		},
@@ -461,8 +461,8 @@ func Test_Manager_ProcessTransactions(t *testing.T) {
 			chTxBundleModel, err := store.NewChannelTransactionBundleModel(dbConnectionPool)
 			require.NoError(t, err)
 
-			mMonitorService := monitor.MockMonitorService{}
-			mMonitorService.On("MonitorCounters", mock.Anything, mock.Anything).Return(nil)
+			mMonitorClient := &monitorMocks.MockMonitorClient{}
+			mMonitorClient.On("MonitorCounters", mock.Anything, mock.Anything).Return(nil)
 
 			manager := &Manager{
 				dbConnectionPool:    dbConnectionPool,
@@ -475,8 +475,8 @@ func Test_Manager_ProcessTransactions(t *testing.T) {
 				sigService:          sigService,
 				maxBaseFee:          txnbuild.MinBaseFee,
 				txProcessingLimiter: engine.NewTransactionProcessingLimiter(queueService.numChannelAccounts),
-				monitorService: tssMonitor.MonitorService{
-					MonitorClient: &mMonitorService,
+				monitorService: tssMonitor.TSSMonitorService{
+					Client:        mMonitorClient,
 					GitCommitHash: "gitCommitHash0x",
 					Version:       "version123",
 				},
