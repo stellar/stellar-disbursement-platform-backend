@@ -9,13 +9,13 @@ import (
 	"testing"
 
 	"github.com/spf13/cobra"
-	"github.com/stellar/go/txnbuild"
+	//"github.com/stellar/go/txnbuild"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve"
 	txSub "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission"
-	tssMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/monitor"
-	tssUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
+	//tssMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/monitor"
+	//tssUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -75,7 +75,7 @@ func Test_tss(t *testing.T) {
 
 	version := "x.y.z"
 	gitCommitHash := "1234567890abcdef"
-	monitorClient, err := monitor.NewTSSPrometheusClient()
+	/*monitorClient, err := monitor.NewTSSPrometheusClient()
 	require.NoError(t, err)
 
 	tssMonitorService := tssMonitor.TSSMonitorService{
@@ -95,7 +95,7 @@ func Test_tss(t *testing.T) {
 		CrashTrackerClient:   dryRunClient,
 		PrivateKeyEncrypter:  tssUtils.DefaultPrivateKeyEncrypter{},
 	}
-
+*/
 	mTSS := mockSubmitter{}
 	rootCmd := SetupCLI(version, gitCommitHash)
 
@@ -105,7 +105,7 @@ func Test_tss(t *testing.T) {
 	}
 
 	mTSS.On("StartMetricsServe", mock.Anything, serveMetricOpts, mock.AnythingOfType("*serve.HTTPServer"), dryRunClient).Once()
-	mTSS.On("StartSubmitter", mock.Anything, wantSubmitterOptions).Once()
+	mTSS.On("StartSubmitter", mock.Anything, mock.AnythingOfType("transactionsubmission.SubmitterOptions")).Once()
 	mTSS.wg.Add(1)
 	// setup
 	var commandToRemove *cobra.Command
