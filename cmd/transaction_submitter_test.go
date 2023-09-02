@@ -3,7 +3,6 @@ package cmd
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"os"
 	"strings"
 	"sync"
@@ -116,9 +115,6 @@ func Test_tss(t *testing.T) {
 			commandToRemove = cmd
 		}
 	}
-	fmt.Println("-----")
-	fmt.Println()
-	fmt.Println("-----")
 
 	require.NotNil(t, commandToRemove, "tss command not found")
 	rootCmd.RemoveCommand(commandToRemove)
