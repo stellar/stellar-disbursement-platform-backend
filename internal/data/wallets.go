@@ -44,7 +44,9 @@ type WalletInsert struct {
 
 type WalletCountries []Country
 
-func (wc *WalletCountries) Scan(src any) error {
+var _ sql.Scanner = (*WalletCountries)(nil)
+
+func (wc *WalletCountries) Scan(src interface{}) error {
 	if src == nil {
 		*wc = make(WalletCountries, 0)
 		return nil
@@ -59,7 +61,9 @@ func (wc *WalletCountries) Scan(src any) error {
 
 type WalletAssets []Asset
 
-func (wa *WalletAssets) Scan(src any) error {
+var _ sql.Scanner = (*WalletAssets)(nil)
+
+func (wa *WalletAssets) Scan(src interface{}) error {
 	if src == nil {
 		*wa = make(WalletAssets, 0)
 		return nil
