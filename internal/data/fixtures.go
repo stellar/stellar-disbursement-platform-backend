@@ -184,7 +184,7 @@ func GetWalletFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter,
 	return wallet
 }
 
-func GetWalletCountriesFixture (t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, walletID string) []Country {
+func GetWalletCountriesFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, walletID string) []Country {
 	const query = `
 		SELECT
 			c.*

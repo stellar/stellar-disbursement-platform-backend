@@ -499,7 +499,7 @@ func Test_WalletModelGetCountries(t *testing.T) {
 			"newwallet.com",
 			"newalletapp://")
 
-		walletCountries:= CreateWalletCountries(t, ctx, dbConnectionPool, wallet.ID, []string{"UKR", "USA"})
+		walletCountries := CreateWalletCountries(t, ctx, dbConnectionPool, wallet.ID, []string{"UKR", "USA"})
 
 		countries, err := walletModel.GetCountries(ctx, wallet.ID)
 		require.NoError(t, err)
