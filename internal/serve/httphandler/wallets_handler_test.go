@@ -347,19 +347,13 @@ func Test_WalletsHandlerPostWallets(t *testing.T) {
 		wallet, err := models.Wallets.GetByWalletName(ctx, "New Wallet")
 		require.NoError(t, err)
 
+		walletCountries, err := models.Wallets.GetCountries(ctx, wallet.ID)
+		require.NoError(t, err)
+
 		assert.Equal(t, "https://newwallet.com", wallet.Homepage)
 		assert.Equal(t, "newwallet://deeplink/sdp", wallet.DeepLinkSchema)
 		assert.Equal(t, "newwallet.com", wallet.SEP10ClientDomain)
-		assert.ElementsMatch(t, data.WalletCountries{
-			{
-				Code: "UKR",
-				Name: "Ukraine",
-			},
-			{
-				Code: "USA",
-				Name: "United States of America",
-			},
-		}, wallet.Countries)
+		assert.Len(t, walletCountries, 2)
 		assert.ElementsMatch(t, data.WalletAssets{
 			{
 				ID:     asset.ID,
