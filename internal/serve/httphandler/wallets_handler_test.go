@@ -214,7 +214,7 @@ func Test_WalletsHandlerPostWallets(t *testing.T) {
 		defer resp.Body.Close()
 
 		assert.Equal(t, http.StatusConflict, resp.StatusCode)
-		assert.JSONEq(t, `{"error": "wallet with this name already exists"}`, string(respBody))
+		assert.JSONEq(t, `{"error": "a wallet with this name already exists"}`, string(respBody))
 
 		// Duplicated Homepage
 		payload = fmt.Sprintf(`
@@ -240,7 +240,7 @@ func Test_WalletsHandlerPostWallets(t *testing.T) {
 		defer resp.Body.Close()
 
 		assert.Equal(t, http.StatusConflict, resp.StatusCode)
-		assert.JSONEq(t, `{"error": "wallet with this homepage already exists"}`, string(respBody))
+		assert.JSONEq(t, `{"error": "a wallet with this homepage already exists"}`, string(respBody))
 
 		// Duplicated Deep Link Schema
 		payload = fmt.Sprintf(`
@@ -266,7 +266,7 @@ func Test_WalletsHandlerPostWallets(t *testing.T) {
 		defer resp.Body.Close()
 
 		assert.Equal(t, http.StatusConflict, resp.StatusCode)
-		assert.JSONEq(t, `{"error": "wallet with this deep link schema already exists"}`, string(respBody))
+		assert.JSONEq(t, `{"error": "a wallet with this deep link schema already exists"}`, string(respBody))
 
 		// Invalid country code
 		payload = fmt.Sprintf(`
