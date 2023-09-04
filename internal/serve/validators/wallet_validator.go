@@ -24,11 +24,11 @@ func NewWalletValidator() *WalletValidator {
 	return &WalletValidator{Validator: NewValidator()}
 }
 
-func (wv *WalletValidator) ValidateCreateWalletRequest(reqBody *WalletRequest) {
+func (wv *WalletValidator) ValidateCreateWalletRequest(reqBody *WalletRequest) *WalletRequest {
 	wv.Check(reqBody != nil, "body", "request body is empty")
 
 	if wv.HasErrors() {
-		return
+		return nil
 	}
 
 	name := strings.TrimSpace(reqBody.Name)
@@ -44,7 +44,7 @@ func (wv *WalletValidator) ValidateCreateWalletRequest(reqBody *WalletRequest) {
 	wv.Check(len(reqBody.CountriesCodes) != 0, "countries_codes", "provide at least one country code")
 
 	if wv.HasErrors() {
-		return
+		return nil
 	}
 
 	homepageURL, err := url.ParseRequestURI(homepage)
@@ -66,7 +66,7 @@ func (wv *WalletValidator) ValidateCreateWalletRequest(reqBody *WalletRequest) {
 	}
 
 	if wv.HasErrors() {
-		return
+		return nil
 	}
 
 	sep10Host := sep10URL.Host
@@ -74,8 +74,14 @@ func (wv *WalletValidator) ValidateCreateWalletRequest(reqBody *WalletRequest) {
 		sep10Host = sep10URL.String()
 	}
 
-	reqBody.Name = name
-	reqBody.Homepage = homepageURL.String()
-	reqBody.DeepLinkSchema = deepLinkSchemaURL.String()
-	reqBody.SEP10ClientDomain = sep10Host
+	modifiedReq := &WalletRequest{
+		Name:              name,
+		Homepage:          homepageURL.String(),
+		DeepLinkSchema:    deepLinkSchemaURL.String(),
+		SEP10ClientDomain: sep10Host,
+		AssetsIDs:         reqBody.AssetsIDs,
+		CountriesCodes:    reqBody.CountriesCodes,
+	}
+
+	return modifiedReq
 }

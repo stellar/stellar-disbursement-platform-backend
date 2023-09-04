@@ -123,17 +123,17 @@ func TestWalletValidator_ValidateCreateWalletRequest(t *testing.T) {
 			CountriesCodes:    []string{"UKR"},
 		}
 
-		wv.ValidateCreateWalletRequest(reqBody)
+		reqBody = wv.ValidateCreateWalletRequest(reqBody)
 		assert.False(t, wv.HasErrors())
 		assert.Equal(t, "sep-10-client-domain.com", reqBody.SEP10ClientDomain)
 
 		reqBody.SEP10ClientDomain = "https://sep-10-client-domain.com/sdp?redirect=true"
-		wv.ValidateCreateWalletRequest(reqBody)
+		reqBody = wv.ValidateCreateWalletRequest(reqBody)
 		assert.False(t, wv.HasErrors())
 		assert.Equal(t, "sep-10-client-domain.com", reqBody.SEP10ClientDomain)
 
 		reqBody.SEP10ClientDomain = "http://localhost:8000"
-		wv.ValidateCreateWalletRequest(reqBody)
+		reqBody = wv.ValidateCreateWalletRequest(reqBody)
 		assert.False(t, wv.HasErrors())
 		assert.Equal(t, "localhost:8000", reqBody.SEP10ClientDomain)
 	})
