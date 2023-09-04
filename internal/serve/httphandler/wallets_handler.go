@@ -28,7 +28,7 @@ func (c WalletsHandler) GetWallets(w http.ResponseWriter, r *http.Request) {
 func (c WalletsHandler) PostWallets(rw http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 
-	var reqBody validators.CreateWalletRequest
+	var reqBody validators.WalletRequest
 	if err := httpdecode.DecodeJSON(req, &reqBody); err != nil {
 		httperror.BadRequest("", err, nil).Render(rw)
 		return

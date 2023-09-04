@@ -18,7 +18,7 @@ func TestWalletValidator_ValidateCreateWalletRequest(t *testing.T) {
 
 	t.Run("returns error when request body has empty fields", func(t *testing.T) {
 		wv := NewWalletValidator()
-		reqBody := &CreateWalletRequest{}
+		reqBody := &WalletRequest{}
 
 		wv.ValidateCreateWalletRequest(reqBody)
 		assert.True(t, wv.HasErrors())
@@ -48,7 +48,7 @@ func TestWalletValidator_ValidateCreateWalletRequest(t *testing.T) {
 		getEntries := log.DefaultLogger.StartTest(log.ErrorLevel)
 
 		wv := NewWalletValidator()
-		reqBody := &CreateWalletRequest{
+		reqBody := &WalletRequest{
 			Name:              "Wallet Provider",
 			Homepage:          "no-schema-homepage.com",
 			DeepLinkSchema:    "no-schema-deep-link",
@@ -75,7 +75,7 @@ func TestWalletValidator_ValidateCreateWalletRequest(t *testing.T) {
 
 	t.Run("validates the homepage successfully", func(t *testing.T) {
 		wv := NewWalletValidator()
-		reqBody := &CreateWalletRequest{
+		reqBody := &WalletRequest{
 			Name:              "Wallet Provider",
 			Homepage:          "https://homepage.com",
 			DeepLinkSchema:    "wallet://deeplinkschema/sdp",
@@ -95,7 +95,7 @@ func TestWalletValidator_ValidateCreateWalletRequest(t *testing.T) {
 
 	t.Run("validates the deep link schema successfully", func(t *testing.T) {
 		wv := NewWalletValidator()
-		reqBody := &CreateWalletRequest{
+		reqBody := &WalletRequest{
 			Name:              "Wallet Provider",
 			Homepage:          "https://homepage.com",
 			DeepLinkSchema:    "wallet://deeplinkschema/sdp",
@@ -114,7 +114,7 @@ func TestWalletValidator_ValidateCreateWalletRequest(t *testing.T) {
 
 	t.Run("validates the SEP-10 Client Domain successfully", func(t *testing.T) {
 		wv := NewWalletValidator()
-		reqBody := &CreateWalletRequest{
+		reqBody := &WalletRequest{
 			Name:              "Wallet Provider",
 			Homepage:          "https://homepage.com",
 			DeepLinkSchema:    "wallet://deeplinkschema/sdp",

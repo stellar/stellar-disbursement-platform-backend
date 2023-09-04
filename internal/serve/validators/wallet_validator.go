@@ -7,7 +7,7 @@ import (
 	"github.com/stellar/go/support/log"
 )
 
-type CreateWalletRequest struct {
+type WalletRequest struct {
 	Name              string   `json:"name"`
 	Homepage          string   `json:"homepage"`
 	DeepLinkSchema    string   `json:"deep_link_schema"`
@@ -24,7 +24,7 @@ func NewWalletValidator() *WalletValidator {
 	return &WalletValidator{Validator: NewValidator()}
 }
 
-func (wv *WalletValidator) ValidateCreateWalletRequest(reqBody *CreateWalletRequest) {
+func (wv *WalletValidator) ValidateCreateWalletRequest(reqBody *WalletRequest) {
 	wv.Check(reqBody != nil, "body", "request body is empty")
 
 	if wv.HasErrors() {
