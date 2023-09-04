@@ -105,10 +105,15 @@ func Test_WalletModelGetAll(t *testing.T) {
 		CreateWalletAssets(t, ctx, dbConnectionPool, wallet1.ID, []string{usdc.ID, xlm.ID})
 		CreateWalletAssets(t, ctx, dbConnectionPool, wallet2.ID, []string{usdc.ID})
 
-		CreateWalletCountries(t, ctx, dbConnectionPool, wallet1.ID, []string{"UKR", "COL", "USA"})
-		CreateWalletCountries(t, ctx, dbConnectionPool, wallet2.ID, []string{"UKR", "BRA", "ARG", "MEX"})
+		walletCountries1 := CreateWalletCountries(t, ctx, dbConnectionPool, wallet1.ID, []string{"UKR", "COL", "USA"})
+		walletCountries2 := CreateWalletCountries(t, ctx, dbConnectionPool, wallet2.ID, []string{"UKR", "BRA", "ARG", "MEX"})
 
 		actual, err := walletModel.GetAll(ctx)
+		require.NoError(t, err)
+
+		actualCountries1, err := walletModel.GetCountries(ctx, actual[0].ID)
+		require.NoError(t, err)
+		actualCountries2, err := walletModel.GetCountries(ctx, actual[1].ID)
 		require.NoError(t, err)
 
 		assert.Equal(t, wallet1.ID, actual[0].ID)
@@ -118,20 +123,7 @@ func Test_WalletModelGetAll(t *testing.T) {
 		assert.Equal(t, wallet1.SEP10ClientDomain, actual[0].SEP10ClientDomain)
 		assert.Len(t, actual[0].Countries, 3)
 		assert.Len(t, actual[0].Assets, 2)
-		assert.ElementsMatch(t, WalletCountries{
-			{
-				Code: "COL",
-				Name: "Colombia",
-			},
-			{
-				Code: "UKR",
-				Name: "Ukraine",
-			},
-			{
-				Code: "USA",
-				Name: "United States of America",
-			},
-		}, actual[0].Countries)
+		assert.ElementsMatch(t, walletCountries1, actualCountries1)
 		assert.ElementsMatch(t, WalletAssets{
 			{
 				ID:     usdc.ID,
@@ -150,24 +142,9 @@ func Test_WalletModelGetAll(t *testing.T) {
 		assert.Equal(t, wallet2.Homepage, actual[1].Homepage)
 		assert.Equal(t, wallet2.DeepLinkSchema, actual[1].DeepLinkSchema)
 		assert.Equal(t, wallet2.SEP10ClientDomain, actual[1].SEP10ClientDomain)
-		// assert.ElementsMatch(t, WalletCountries{
-		// 	{
-		// 		Code: "UKR",
-		// 		Name: "Ukraine",
-		// 	},
-		// 	{
-		// 		Code: "BRA",
-		// 		Name: "Brazil",
-		// 	},
-		// 	{
-		// 		Code: "ARG",
-		// 		Name: "Argentina",
-		// 	},
-		// 	{
-		// 		Code: "MEX",
-		// 		Name: "Mexico",
-		// 	},
-		// }, actual[1].Countries)
+		assert.Len(t, actual[1].Countries, 4)
+		assert.Len(t, actual[1].Assets, 1)
+		assert.ElementsMatch(t, walletCountries2, actualCountries2)
 		assert.ElementsMatch(t, WalletAssets{
 			{
 				ID:     usdc.ID,
@@ -233,20 +210,11 @@ func Test_WalletModelInsert(t *testing.T) {
 		countriesDB, err := walletModel.GetCountries(ctx, wallet.ID)
 		require.NoError(t, err)
 		assert.Len(t, countriesDB, 3)
-		assert.ElementsMatch(t, []Country{
-			{
-				Code: "BRA",
-				Name: "Brazil",
-			},
-			{
-				Code: "UKR",
-				Name: "Ukraine",
-			},
-			{
-				Code: "USA",
-				Name: "United States of America",
-			},
-		}, countriesDB)
+
+		insertedWalletCountries, err := walletModel.GetCountries(ctx, insertedWallet.ID)
+		require.NoError(t, err)
+		assert.Len(t, insertedWalletCountries, 3)
+		assert.ElementsMatch(t, insertedWalletCountries, countriesDB)
 
 		assetsDB, err := walletModel.GetAssets(ctx, wallet.ID)
 		require.NoError(t, err)
@@ -303,12 +271,11 @@ func Test_WalletModelInsert(t *testing.T) {
 		countriesDB, err := walletModel.GetCountries(ctx, wallet.ID)
 		require.NoError(t, err)
 		assert.Len(t, countriesDB, 1)
-		assert.ElementsMatch(t, []Country{
-			{
-				Code: "UKR",
-				Name: "Ukraine",
-			},
-		}, countriesDB)
+
+		insertedWalletCountries, err := walletModel.GetCountries(ctx, insertedWallet.ID)
+		require.NoError(t, err)
+		assert.Len(t, insertedWalletCountries, 1)
+		assert.ElementsMatch(t, insertedWalletCountries, countriesDB)
 
 		assetsDB, err := walletModel.GetAssets(ctx, wallet.ID)
 		require.NoError(t, err)
@@ -532,21 +499,12 @@ func Test_WalletModelGetCountries(t *testing.T) {
 			"newwallet.com",
 			"newalletapp://")
 
-		CreateWalletCountries(t, ctx, dbConnectionPool, wallet.ID, []string{"UKR", "USA"})
+		walletCountries:= CreateWalletCountries(t, ctx, dbConnectionPool, wallet.ID, []string{"UKR", "USA"})
 
 		countries, err := walletModel.GetCountries(ctx, wallet.ID)
 		require.NoError(t, err)
 
-		assert.ElementsMatch(t, []Country{
-			{
-				Code: "UKR",
-				Name: "Ukraine",
-			},
-			{
-				Code: "USA",
-				Name: "United States of America",
-			},
-		}, countries)
+		assert.ElementsMatch(t, walletCountries, countries)
 	})
 }
 

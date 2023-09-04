@@ -115,7 +115,7 @@ func CreateWalletFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecut
 	return GetWalletFixture(t, ctx, sqlExec, name)
 }
 
-func CreateWalletCountries(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, walletID string, countriesCodes []string) {
+func CreateWalletCountries(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, walletID string, countriesCodes []string) []Country {
 	const query = `
 		WITH countries_cte AS (
 			SELECT UNNEST($1::varchar(3)[]) AS code
@@ -130,6 +130,8 @@ func CreateWalletCountries(t *testing.T, ctx context.Context, sqlExec db.SQLExec
 
 	_, err := sqlExec.ExecContext(ctx, query, pq.Array(countriesCodes), walletID)
 	require.NoError(t, err)
+
+	return GetWalletCountriesFixture(t, ctx, sqlExec, walletID)
 }
 
 func CreateWalletAssets(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, walletID string, assetsIDs []string) {
@@ -154,10 +156,7 @@ func GetWalletFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter,
 		SELECT
 			w.*,
 			jsonb_agg(
-				DISTINCT jsonb_build_object(
-					'code', c.code,
-					'name', c.name
-				)
+				DISTINCT to_jsonb(c)
 			) FILTER (WHERE c.code IS NOT NULL) AS countries,
 			jsonb_agg(
 				DISTINCT jsonb_build_object(
@@ -183,6 +182,26 @@ func GetWalletFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter,
 	require.NoError(t, err)
 
 	return wallet
+}
+
+func GetWalletCountriesFixture (t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, walletID string) []Country {
+	const query = `
+		SELECT
+			c.*
+		FROM
+			wallets_countries wc
+			INNER JOIN countries c ON c.code = wc.country_code
+		WHERE
+			wc.wallet_id = $1
+		ORDER BY
+			name
+	`
+
+	countries := make([]Country, 0)
+	err := sqlExec.SelectContext(ctx, &countries, query, walletID)
+	require.NoError(t, err)
+
+	return countries
 }
 
 // DeleteAllWalletFixtures deletes all wallets in the database

@@ -76,16 +76,11 @@ type WalletModel struct {
 	dbConnectionPool db.DBConnectionPool
 }
 
-func (w *WalletModel) Get(ctx context.Context, id string) (*Wallet, error) {
-	var wallet Wallet
-	query := `
+const getQuery = `
 		SELECT 
 		    w.*, 
 			jsonb_agg(
-				DISTINCT jsonb_build_object(
-					'code', c.code,
-					'name', c.name
-				)
+				DISTINCT to_jsonb(c)
 			) FILTER (WHERE c.code IS NOT NULL) AS countries,
 			jsonb_agg(
 				DISTINCT jsonb_build_object(
@@ -100,11 +95,12 @@ func (w *WalletModel) Get(ctx context.Context, id string) (*Wallet, error) {
 			LEFT JOIN countries c ON c.code = wc.country_code
 			LEFT JOIN wallets_assets wa ON w.id = wa.wallet_id
 			LEFT JOIN assets a ON a.id = wa.asset_id
-		WHERE 
-		    w.id = $1
-		GROUP BY
-			w.id
+		%s
 	`
+
+func (w *WalletModel) Get(ctx context.Context, id string) (*Wallet, error) {
+	var wallet Wallet
+	query := fmt.Sprintf(getQuery, `WHERE w.id = $1 GROUP BY w.id`)
 
 	err := w.dbConnectionPool.GetContext(ctx, &wallet, query, id)
 	if err != nil {
@@ -119,39 +115,7 @@ func (w *WalletModel) Get(ctx context.Context, id string) (*Wallet, error) {
 // GetByWalletName returns wallet filtering by wallet name.
 func (w *WalletModel) GetByWalletName(ctx context.Context, name string) (*Wallet, error) {
 	var wallet Wallet
-	query := `
-		SELECT 
-		    w.id, 
-		    w.name, 
-		    w.homepage,
-		    w.sep_10_client_domain,
-		    w.deep_link_schema,
-		    w.created_at,
-		    w.updated_at,
-			jsonb_agg(
-				DISTINCT jsonb_build_object(
-					'code', c.code,
-					'name', c.name
-				)
-			) FILTER (WHERE c.code IS NOT NULL) AS countries,
-			jsonb_agg(
-				DISTINCT jsonb_build_object(
-					'id', a.id,
-					'code', a.code,
-					'issuer', a.issuer 
-				)
-			) FILTER (WHERE a.id IS NOT NULL) AS assets
-		FROM 
-		    wallets w
-			LEFT JOIN wallets_countries wc ON w.id = wc.wallet_id
-			LEFT JOIN countries c ON c.code = wc.country_code
-			LEFT JOIN wallets_assets wa ON w.id = wa.wallet_id
-			LEFT JOIN assets a ON a.id = wa.asset_id
-		WHERE 
-		    w.name = $1
-		GROUP BY
-			w.id
-	`
+	query := fmt.Sprintf(getQuery, `WHERE w.name = $1 GROUP BY w.id`)
 
 	err := w.dbConnectionPool.GetContext(ctx, &wallet, query, name)
 	if err != nil {
@@ -166,39 +130,7 @@ func (w *WalletModel) GetByWalletName(ctx context.Context, name string) (*Wallet
 // GetAll returns all wallets in the database
 func (w *WalletModel) GetAll(ctx context.Context) ([]Wallet, error) {
 	wallets := []Wallet{}
-	query := `
-		SELECT 
-		    w.id, 
-		    w.name, 
-		    w.homepage,
-			w.sep_10_client_domain,
-		    w.deep_link_schema,
-		    w.created_at,
-		    w.updated_at,
-			jsonb_agg(
-				DISTINCT jsonb_build_object(
-					'code', c.code,
-					'name', c.name
-				)
-			) FILTER (WHERE c.code IS NOT NULL) AS countries,
-			jsonb_agg(
-				DISTINCT jsonb_build_object(
-					'id', a.id,
-					'code', a.code,
-					'issuer', a.issuer 
-				)
-			) FILTER (WHERE a.id IS NOT NULL) AS assets
-		FROM 
-		    wallets w
-			LEFT JOIN wallets_countries wc ON w.id = wc.wallet_id
-			LEFT JOIN countries c ON c.code = wc.country_code
-			LEFT JOIN wallets_assets wa ON w.id = wa.wallet_id
-			LEFT JOIN assets a ON a.id = wa.asset_id
-		GROUP BY
-			w.id
-		ORDER BY
-			w.name
-	`
+	query := fmt.Sprintf(getQuery, `GROUP BY w.id ORDER BY w.name`)
 
 	err := w.dbConnectionPool.SelectContext(ctx, &wallets, query)
 	if err != nil {
@@ -318,8 +250,7 @@ func (w *WalletModel) GetOrCreate(ctx context.Context, name, homepage, deepLink,
 func (w *WalletModel) GetCountries(ctx context.Context, walletID string) ([]Country, error) {
 	const query = `
 		SELECT
-			c.code,
-			c.name
+			c.*
 		FROM
 			wallets_countries wc
 			INNER JOIN countries c ON c.code = wc.country_code
