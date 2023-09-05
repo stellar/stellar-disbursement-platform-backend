@@ -8,14 +8,13 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/stellar/go/support/log"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
-
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/scheduler/jobs"
-
-	"github.com/stellar/go/support/log"
 )
 
 // Scheduler manages a list of jobs and executes them at their specified intervals.
