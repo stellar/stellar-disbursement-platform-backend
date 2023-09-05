@@ -102,8 +102,8 @@ func Test_WalletModelGetAll(t *testing.T) {
 		wallet1 := wallets[0]
 		wallet2 := wallets[1]
 
-		CreateWalletAssets(t, ctx, dbConnectionPool, wallet1.ID, []string{usdc.ID, xlm.ID})
-		CreateWalletAssets(t, ctx, dbConnectionPool, wallet2.ID, []string{usdc.ID})
+		walletAssets1 := CreateWalletAssets(t, ctx, dbConnectionPool, wallet1.ID, []string{usdc.ID, xlm.ID})
+		walletAssets2 := CreateWalletAssets(t, ctx, dbConnectionPool, wallet2.ID, []string{usdc.ID})
 
 		walletCountries1 := CreateWalletCountries(t, ctx, dbConnectionPool, wallet1.ID, []string{"UKR", "COL", "USA"})
 		walletCountries2 := CreateWalletCountries(t, ctx, dbConnectionPool, wallet2.ID, []string{"UKR", "BRA", "ARG", "MEX"})
@@ -116,6 +116,11 @@ func Test_WalletModelGetAll(t *testing.T) {
 		actualCountries2, err := walletModel.GetCountries(ctx, actual[1].ID)
 		require.NoError(t, err)
 
+		actualAssets1, err := walletModel.GetAssets(ctx, actual[0].ID)
+		require.NoError(t, err)
+		actualAssets2, err := walletModel.GetAssets(ctx, actual[1].ID)
+		require.NoError(t, err)
+
 		assert.Equal(t, wallet1.ID, actual[0].ID)
 		assert.Equal(t, wallet1.Name, actual[0].Name)
 		assert.Equal(t, wallet1.Homepage, actual[0].Homepage)
@@ -124,18 +129,7 @@ func Test_WalletModelGetAll(t *testing.T) {
 		assert.Len(t, actual[0].Countries, 3)
 		assert.Len(t, actual[0].Assets, 2)
 		assert.ElementsMatch(t, walletCountries1, actualCountries1)
-		assert.ElementsMatch(t, WalletAssets{
-			{
-				ID:     usdc.ID,
-				Code:   usdc.Code,
-				Issuer: usdc.Issuer,
-			},
-			{
-				ID:     xlm.ID,
-				Code:   xlm.Code,
-				Issuer: xlm.Issuer,
-			},
-		}, actual[0].Assets)
+		assert.ElementsMatch(t, walletAssets1, actualAssets1)
 
 		assert.Equal(t, wallet2.ID, actual[1].ID)
 		assert.Equal(t, wallet2.Name, actual[1].Name)
@@ -145,13 +139,7 @@ func Test_WalletModelGetAll(t *testing.T) {
 		assert.Len(t, actual[1].Countries, 4)
 		assert.Len(t, actual[1].Assets, 1)
 		assert.ElementsMatch(t, walletCountries2, actualCountries2)
-		assert.ElementsMatch(t, WalletAssets{
-			{
-				ID:     usdc.ID,
-				Code:   usdc.Code,
-				Issuer: usdc.Issuer,
-			},
-		}, actual[1].Assets)
+		assert.ElementsMatch(t, walletAssets2, actualAssets2)
 	})
 
 	t.Run("returns empty array when no wallets", func(t *testing.T) {

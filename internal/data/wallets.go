@@ -87,11 +87,7 @@ const getQuery = `
 				DISTINCT to_jsonb(c)
 			) FILTER (WHERE c.code IS NOT NULL) AS countries,
 			jsonb_agg(
-				DISTINCT jsonb_build_object(
-					'id', a.id,
-					'code', a.code,
-					'issuer', a.issuer 
-				)
+				DISTINCT to_jsonb(a)
 			) FILTER (WHERE a.id IS NOT NULL) AS assets
 		FROM 
 		    wallets w
