@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func Test_DisbursementService_GetDisbursementsWithCount(t *testing.T) {
+func Test_DisbursementManagementService_GetDisbursementsWithCount(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 
@@ -24,7 +24,7 @@ func Test_DisbursementService_GetDisbursementsWithCount(t *testing.T) {
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
-	service := NewDisbursementService(models, models.DBConnectionPool, nil)
+	service := NewDisbursementManagementService(models, models.DBConnectionPool, nil)
 
 	ctx := context.Background()
 	t.Run("disbursements list empty", func(t *testing.T) {
@@ -52,7 +52,7 @@ func Test_DisbursementService_GetDisbursementsWithCount(t *testing.T) {
 	})
 }
 
-func Test_DisbursementService_GetDisbursementReceiversWithCount(t *testing.T) {
+func Test_DisbursementManagementService_GetDisbursementReceiversWithCount(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 
@@ -63,7 +63,7 @@ func Test_DisbursementService_GetDisbursementReceiversWithCount(t *testing.T) {
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
-	service := NewDisbursementService(models, models.DBConnectionPool, nil)
+	service := NewDisbursementManagementService(models, models.DBConnectionPool, nil)
 	disbursement := data.CreateDisbursementFixture(t, context.Background(), dbConnectionPool, models.Disbursements, &data.Disbursement{})
 
 	ctx := context.Background()
@@ -111,7 +111,7 @@ func Test_DisbursementService_GetDisbursementReceiversWithCount(t *testing.T) {
 	})
 }
 
-func Test_DisbursementService_StartDisbursement(t *testing.T) {
+func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 
@@ -126,7 +126,7 @@ func Test_DisbursementService_StartDisbursement(t *testing.T) {
 	ctx := context.WithValue(context.Background(), middleware.TokenContextKey, token)
 
 	authManagerMock := &auth.AuthManagerMock{}
-	service := NewDisbursementService(models, models.DBConnectionPool, authManagerMock)
+	service := NewDisbursementManagementService(models, models.DBConnectionPool, authManagerMock)
 
 	// create fixtures
 	wallet := data.CreateDefaultWalletFixture(t, ctx, dbConnectionPool)
@@ -348,7 +348,7 @@ func Test_DisbursementService_StartDisbursement(t *testing.T) {
 	authManagerMock.AssertExpectations(t)
 }
 
-func Test_DisbursementService_PauseDisbursement(t *testing.T) {
+func Test_DisbursementManagementService_PauseDisbursement(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 
@@ -371,7 +371,7 @@ func Test_DisbursementService_PauseDisbursement(t *testing.T) {
 		On("GetUser", ctx, token).
 		Return(user, nil)
 
-	service := NewDisbursementService(models, models.DBConnectionPool, authManagerMock)
+	service := NewDisbursementManagementService(models, models.DBConnectionPool, authManagerMock)
 
 	// create fixtures
 	wallet := data.CreateDefaultWalletFixture(t, ctx, dbConnectionPool)

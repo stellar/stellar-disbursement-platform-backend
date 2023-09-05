@@ -6,14 +6,14 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
-
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 )
 
-type DisbursementService struct {
+// DisbursementManagementService is a service for managing disbursements.
+type DisbursementManagementService struct {
 	models           *data.Models
 	dbConnectionPool db.DBConnectionPool
 	authManager      auth.AuthManager
@@ -28,16 +28,16 @@ var (
 	ErrDisbursementStartedByCreator    = errors.New("disbursement can't be started by its creator")
 )
 
-// NewDisbursementService creates a new DisbursementService
-func NewDisbursementService(models *data.Models, dbConnectionPool db.DBConnectionPool, authManager auth.AuthManager) *DisbursementService {
-	return &DisbursementService{
+// NewDisbursementManagementService is a factory function for creating a new DisbursementManagementService.
+func NewDisbursementManagementService(models *data.Models, dbConnectionPool db.DBConnectionPool, authManager auth.AuthManager) *DisbursementManagementService {
+	return &DisbursementManagementService{
 		models:           models,
 		dbConnectionPool: dbConnectionPool,
 		authManager:      authManager,
 	}
 }
 
-func (s *DisbursementService) GetDisbursementsWithCount(ctx context.Context, queryParams *data.QueryParams) (*ResultWithTotal, error) {
+func (s *DisbursementManagementService) GetDisbursementsWithCount(ctx context.Context, queryParams *data.QueryParams) (*ResultWithTotal, error) {
 	return db.RunInTransactionWithResult(ctx,
 		s.dbConnectionPool,
 		&sql.TxOptions{Isolation: sql.LevelReadCommitted, ReadOnly: true},
@@ -59,7 +59,7 @@ func (s *DisbursementService) GetDisbursementsWithCount(ctx context.Context, que
 		})
 }
 
-func (s *DisbursementService) GetDisbursementReceiversWithCount(ctx context.Context, disbursementID string, queryParams *data.QueryParams) (*ResultWithTotal, error) {
+func (s *DisbursementManagementService) GetDisbursementReceiversWithCount(ctx context.Context, disbursementID string, queryParams *data.QueryParams) (*ResultWithTotal, error) {
 	return db.RunInTransactionWithResult(ctx,
 		s.dbConnectionPool,
 		&sql.TxOptions{Isolation: sql.LevelReadCommitted, ReadOnly: true},
@@ -90,8 +90,8 @@ func (s *DisbursementService) GetDisbursementReceiversWithCount(ctx context.Cont
 		})
 }
 
-// StartDisbursement starts a disbursement and all its payments and receivers wallets
-func (s *DisbursementService) StartDisbursement(ctx context.Context, disbursementID string) error {
+// StartDisbursement starts a disbursement and all its payments and receivers wallets.
+func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, disbursementID string) error {
 	return db.RunInTransaction(ctx, s.dbConnectionPool, nil, func(dbTx db.DBTransaction) error {
 		disbursement, err := s.models.Disbursements.Get(ctx, dbTx, disbursementID)
 		if err != nil {
@@ -152,8 +152,8 @@ func (s *DisbursementService) StartDisbursement(ctx context.Context, disbursemen
 	})
 }
 
-// PauseDisbursement pauses a disbursement and all its payments
-func (s *DisbursementService) PauseDisbursement(ctx context.Context, disbursementID string) error {
+// PauseDisbursement pauses a disbursement and all its payments.
+func (s *DisbursementManagementService) PauseDisbursement(ctx context.Context, disbursementID string) error {
 	return db.RunInTransaction(ctx, s.dbConnectionPool, nil, func(dbTx db.DBTransaction) error {
 		disbursement, err := s.models.Disbursements.Get(ctx, dbTx, disbursementID)
 		if err != nil {
