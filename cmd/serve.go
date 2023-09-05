@@ -62,7 +62,7 @@ func (s *ServerService) GetSchedulerJobRegistrars(ctx context.Context, serveOpts
 	}
 
 	return []scheduler.SchedulerJobRegisterOption{
-		scheduler.WithPaymentsProcessorJobOption(models),
+		scheduler.WithPaymentToSubmitterJobOption(models),
 		scheduler.WithTSSMonitorJobOption(models),
 		scheduler.WithSendReceiverWalletsSMSInvitationJobOption(jobs.SendReceiverWalletsSMSInvitationJobOptions{
 			AnchorPlatformBaseSepURL: serveOpts.AnchorPlatformBaseSepURL,

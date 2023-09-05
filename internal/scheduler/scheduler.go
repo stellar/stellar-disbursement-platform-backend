@@ -146,9 +146,9 @@ func worker(ctx context.Context, workerID int, crashTrackerClient crashtracker.C
 	}
 }
 
-func WithPaymentsProcessorJobOption(models *data.Models) SchedulerJobRegisterOption {
+func WithPaymentToSubmitterJobOption(models *data.Models) SchedulerJobRegisterOption {
 	return func(s *Scheduler) {
-		j := jobs.NewPaymentsProcessorJob(models)
+		j := jobs.NewPaymentToSubmitterJob(models)
 		log.Infof("registering %s job to scheduler", j.GetName())
 		s.addJob(j)
 	}

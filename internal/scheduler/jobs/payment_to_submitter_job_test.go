@@ -12,17 +12,17 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func Test_PaymentsProcessorJob_GetInterval(t *testing.T) {
-	p := NewPaymentsProcessorJob(&data.Models{})
+func Test_PaymentToSubmitterJob_GetInterval(t *testing.T) {
+	p := NewPaymentToSubmitterJob(&data.Models{})
 	require.Equal(t, PaymentsJobIntervalSeconds*time.Second, p.GetInterval())
 }
 
-func Test_PaymentsProcessorJob_GetName(t *testing.T) {
-	p := NewPaymentsProcessorJob(&data.Models{})
+func Test_PaymentToSubmitterJob_GetName(t *testing.T) {
+	p := NewPaymentToSubmitterJob(&data.Models{})
 	require.Equal(t, PaymentJobName, p.GetName())
 }
 
-func Test_PaymentsProcessorJob_Execute(t *testing.T) {
+func Test_PaymentToSubmitterJob_Execute(t *testing.T) {
 	tests := []struct {
 		name         string
 		sendPayments func(ctx context.Context, batchSize int) error
@@ -50,13 +50,13 @@ func Test_PaymentsProcessorJob_Execute(t *testing.T) {
 			mockPaymentToSubmitterService.On("SendBatchPayments", mock.Anything, PaymentsBatchSize).
 				Return(tt.sendPayments(nil, PaymentsBatchSize))
 
-			p := PaymentsProcessorJob{
+			p := PaymentToSubmitterJob{
 				service: mockPaymentToSubmitterService,
 			}
 
 			err := p.Execute(context.Background())
 			if (err != nil) != tt.wantErr {
-				t.Errorf("PaymentsProcessorJob.Execute() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("PaymentToSubmitterJob.Execute() error = %v, wantErr %v", err, tt.wantErr)
 			}
 
 			mockPaymentToSubmitterService.AssertExpectations(t)

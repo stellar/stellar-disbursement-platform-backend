@@ -14,6 +14,8 @@ type TSSMonitorJob struct {
 	service *services.TSSMonitorService
 }
 
+var _ Job = (*TSSMonitorJob)(nil)
+
 const (
 	TSSMonitorJobName            = "tss_monitor_job"
 	TSSMonitorJobIntervalSeconds = 10
@@ -39,5 +41,3 @@ func (d TSSMonitorJob) Execute(ctx context.Context) error {
 	}
 	return nil
 }
-
-var _ Job = new(PaymentsProcessorJob)
