@@ -3,18 +3,19 @@ package monitor
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/stellar/go/support/log"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
+	sdpMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 )
 
 type TSSMonitorService struct {
-	Client monitor.MonitorClient
-	monitor.MonitorServiceInterface
+	Client sdpMonitor.MonitorClient
+	sdpMonitor.MonitorServiceInterface
 	GitCommitHash string
 	Version       string
 }
@@ -26,21 +27,8 @@ type TxMetadata struct {
 	ErrStack         string
 }
 
-func NewTSSMonitorService(opts monitor.MetricOptions, gitCommitHash, version string) (TSSMonitorService, error) {
-	monitorClient, err := monitor.GetClient(opts)
-	if err != nil {
-		return TSSMonitorService{}, nil
-	}
-
-	return TSSMonitorService{
-		Client: monitorClient,
-		GitCommitHash: gitCommitHash,
-		Version: version,
-	}, nil
-}
-
 // monitorPayment sends a metric about a payment tx to the observer, linking it to a entry in the logs that contains specific metadata about said tx.
-func (ms *TSSMonitorService) MonitorPayment(ctx context.Context, tx store.Transaction, metricTag monitor.MetricTag, txMetadata TxMetadata) {
+func (ms *TSSMonitorService) MonitorPayment(ctx context.Context, tx store.Transaction, metricTag sdpMonitor.MetricTag, txMetadata TxMetadata) {
 	eventID := uuid.New().String()
 	paymentLogMessage := paymentLogMessage(eventID, metricTag)
 
@@ -64,60 +52,73 @@ func (ms *TSSMonitorService) MonitorPayment(ctx context.Context, tx store.Transa
 
 	paymentLog := log.Ctx(ctx)
 	for label_name, value := range labels {
-		paymentLog.WithField(label_name, value)
+		paymentLog = paymentLog.WithField(label_name, value)
 	}
 
-	paymentLog.WithFields(
+	paymentLog = paymentLog.WithFields(
 		log.F{
-			"created_at":          tx.CreatedAt,
-			"updated_at":          tx.UpdatedAt,
+			"created_at":          tx.CreatedAt.String(),
+			"updated_at":          tx.UpdatedAt.String(),
 			"asset":               tx.AssetCode,
 			"channel_account":     txMetadata.SrcChannelAcc,
 			"destination_account": tx.Destination,
 		},
 	)
 
-	if metricTag == monitor.PaymentProcessingStartedTag {
-		paymentLog.Debugf(paymentLogMessage)
+	if metricTag == sdpMonitor.PaymentProcessingStartedTag {
+		paymentLog.Debug(paymentLogMessage)
 		return
 	}
 
-	paymentLog.
-		WithFields(
-			log.F{
-				"xdr_received": tx.XDRReceived,
-				"xdr_sent":     tx.XDRSent,
-			},
-		)
+	// reconciliation - marked for reprocessing
+	if metricTag == sdpMonitor.PaymentReconciliationSuccessfulTag && txMetadata.PaymentEventType == sdpMonitor.PaymentReconciliationMarkedForReprocessingLabel {
+		paymentLog.Info(paymentLogMessage)
+	}
+
+	if tx.XDRSent.Valid {
+		paymentLog = paymentLog.WithField("xdr_sent", tx.XDRSent.String)
+	}
+	if tx.XDRReceived.Valid {
+		paymentLog = paymentLog.WithField("xdr_received", tx.XDRReceived.String)
+	}
 
 	// successful transactions
-	if metricTag == monitor.PaymentReconciliationSuccessfulTag || metricTag == monitor.PaymentTransactionSuccessfulTag {
+	if (metricTag == sdpMonitor.PaymentReconciliationSuccessfulTag && txMetadata.PaymentEventType == sdpMonitor.PaymentReconciliationTransactionSuccessfulLabel) ||
+		metricTag == sdpMonitor.PaymentTransactionSuccessfulTag {
 		paymentLog.
 			WithFields(
 				log.F{
-					"tx_hash":      tx.StellarTransactionHash,
-					"completed_at": tx.CompletedAt,
+					"tx_hash":      tx.StellarTransactionHash.String,
+					"completed_at": tx.CompletedAt.String(),
 				},
-			).Infof(paymentLogMessage)
+			).Info(paymentLogMessage)
 
 		return
 	}
 
 	// unsuccessful transactions
-	if metricTag == monitor.PaymentErrorTag || metricTag == monitor.PaymentReconciliationFailureTag {
+	if metricTag == sdpMonitor.PaymentErrorTag || metricTag == sdpMonitor.PaymentReconciliationFailureTag {
 		paymentLog.
 			WithFields(
 				log.F{
 					"horizon_error?": txMetadata.IsHorizonErr,
 					"error":          txMetadata.ErrStack,
 				},
-			).Errorf(paymentLogMessage)
+			).Error(paymentLogMessage)
 	} else {
 		log.Ctx(ctx).Errorf("Cannot recognize metric tag %s for event %s", metricTag, eventID)
 	}
 }
 
-func (ms *TSSMonitorService) MonitorCounters(metricTag monitor.MetricTag, labels map[string]string) error {
+func (ms *TSSMonitorService) GetMetricHttpHandler() (http.Handler, error) {
+	if ms.Client == nil {
+		return nil, fmt.Errorf("client was not initialized")
+	}
+
+	return ms.Client.GetMetricHttpHandler(), nil
+}
+
+func (ms *TSSMonitorService) MonitorCounters(metricTag sdpMonitor.MetricTag, labels map[string]string) error {
 	if ms.Client == nil {
 		return fmt.Errorf("client was not initialized")
 	}
@@ -127,6 +128,6 @@ func (ms *TSSMonitorService) MonitorCounters(metricTag monitor.MetricTag, labels
 	return nil
 }
 
-func paymentLogMessage(eventID string, metricTag monitor.MetricTag) string {
+func paymentLogMessage(eventID string, metricTag sdpMonitor.MetricTag) string {
 	return fmt.Sprintf("Payment event received %s: %s", eventID, metricTag)
 }

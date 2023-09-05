@@ -307,10 +307,11 @@ func (tw *TransactionWorker) handleSuccessfulTransaction(ctx context.Context, tx
 		return fmt.Errorf("transaction was not successful for some reason")
 	}
 
-	_, err = tw.txModel.UpdateStatusToSuccess(ctx, txJob.Transaction)
+	updatedTx, err := tw.txModel.UpdateStatusToSuccess(ctx, txJob.Transaction)
 	if err != nil {
 		return utils.NewTransactionStatusUpdateError("SUCCESS", txJob.Transaction.ID, false, err)
 	}
+	txJob.Transaction = *updatedTx
 
 	err = tw.unlockJob(ctx, txJob)
 	if err != nil {
