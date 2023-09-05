@@ -15,7 +15,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/db/dbtest"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 	txSubStore "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 	"github.com/stretchr/testify/require"
 )
@@ -242,12 +241,12 @@ func Test_PaymentFromSubmitterService_MonitorTransactions(t *testing.T) {
 
 		tx, err = testCtx.tssModel.UpdateStatusToSuccess(ctx, *tx)
 		require.NoError(t, err)
-		assert.Equal(t, store.TransactionStatusSuccess, tx.Status)
+		assert.Equal(t, txSubStore.TransactionStatusSuccess, tx.Status)
 		assert.NotEmpty(t, tx.CompletedAt)
 
 		err = monitorService.MonitorTransactions(ctx, 10)
 		require.NoError(t, err)
-		expectedError := fmt.Sprintf("orphaned transaction - Unable to sync transaction %s because the associated payment %s was deleted", tx.ID, paymentID)
+		expectedError := fmt.Sprintf("orphaned transaction, unable to sync transaction %s because the associated payment %s was deleted", tx.ID, paymentID)
 		assert.Contains(t, buf.String(), expectedError)
 	})
 }
@@ -272,7 +271,7 @@ func prepareTxsForSync(t *testing.T, testCtx *testContext, transactions []*txSub
 		if tx.Status == txSubStore.TransactionStatusProcessing {
 			tx, err = testCtx.tssModel.UpdateStatusToSuccess(testCtx.ctx, *tx)
 			require.NoError(t, err)
-			assert.Equal(t, store.TransactionStatusSuccess, tx.Status)
+			assert.Equal(t, txSubStore.TransactionStatusSuccess, tx.Status)
 			assert.NotEmpty(t, tx.CompletedAt)
 		}
 	}

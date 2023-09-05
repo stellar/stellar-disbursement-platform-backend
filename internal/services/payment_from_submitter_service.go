@@ -31,7 +31,7 @@ func (s PaymentFromSubmitterService) MonitorTransactions(ctx context.Context, ba
 		return s.monitorTransactions(ctx, dbTx, batchSize)
 	})
 	if err != nil {
-		return fmt.Errorf("error sending payments: %w", err)
+		return fmt.Errorf("synching payments from submitter: %w", err)
 	}
 
 	return nil
@@ -44,10 +44,10 @@ func (s PaymentFromSubmitterService) monitorTransactions(ctx context.Context, db
 	//     this operation will lock the rows.
 	transactions, err := s.tssModel.GetTransactionBatchForUpdate(ctx, dbTx, batchSize)
 	if err != nil {
-		return fmt.Errorf("error getting transactions for update: %w", err)
+		return fmt.Errorf("getting transactions for update: %w", err)
 	}
 	if len(transactions) == 0 {
-		log.Ctx(ctx).Debug("No transactions to sync")
+		log.Ctx(ctx).Debug("No transactions to sync from submitter to SDP")
 		return nil
 	}
 
@@ -72,14 +72,14 @@ func (s PaymentFromSubmitterService) monitorTransactions(ctx context.Context, db
 		log.Ctx(ctx).Infof("Syncing payments for %d successful transactions", len(successfulTransactions))
 		errPayments := s.syncPaymentsWithTransactions(ctx, dbTx, successfulTransactions, data.SuccessPaymentStatus)
 		if errPayments != nil {
-			return fmt.Errorf("error syncing payments for successful transactions: %w", errPayments)
+			return fmt.Errorf("syncing payments for successful transactions: %w", errPayments)
 		}
 	}
 	if len(failedTransactions) > 0 {
 		log.Ctx(ctx).Infof("Syncing payments for %d failed transactions", len(failedTransactions))
 		errPayments := s.syncPaymentsWithTransactions(ctx, dbTx, failedTransactions, data.FailedPaymentStatus)
 		if errPayments != nil {
-			return fmt.Errorf("error syncing payments for failed transactions: %w", errPayments)
+			return fmt.Errorf("syncing payments for failed transactions: %w", errPayments)
 		}
 	}
 
@@ -90,7 +90,7 @@ func (s PaymentFromSubmitterService) monitorTransactions(ctx context.Context, db
 	}
 	err = s.tssModel.UpdateSyncedTransactions(ctx, dbTx, transactionIDs)
 	if err != nil {
-		return fmt.Errorf("error updating transactions as synced: %w", err)
+		return fmt.Errorf("updating transactions as synced: %w", err)
 	}
 	log.Ctx(ctx).Infof("Updated %d transactions as synced", len(transactions))
 
@@ -105,7 +105,7 @@ func (s PaymentFromSubmitterService) syncPaymentsWithTransactions(ctx context.Co
 	}
 	payments, errPayments := s.sdpModels.Payment.GetByIDs(ctx, dbTx, paymentIDs)
 	if errPayments != nil {
-		return fmt.Errorf("error getting payments by ids: %w", errPayments)
+		return fmt.Errorf("getting payments by IDs: %w", errPayments)
 	}
 
 	// Create a map of disbursement id from payment
@@ -114,7 +114,7 @@ func (s PaymentFromSubmitterService) syncPaymentsWithTransactions(ctx context.Co
 
 	for _, payment := range payments {
 		if payment.Status != data.PendingPaymentStatus {
-			return fmt.Errorf("error getting payments by ids: expected payment %s to be in pending status but got %s", payment.ID, payment.Status)
+			return fmt.Errorf("getting payments by IDs, expected payment %s to be in pending status but got %s", payment.ID, payment.Status)
 		}
 		paymentMap[payment.ID] = payment
 		disbursementMap[payment.Disbursement.ID] = struct{}{}
@@ -125,7 +125,7 @@ func (s PaymentFromSubmitterService) syncPaymentsWithTransactions(ctx context.Co
 		payment := paymentMap[transaction.ExternalID]
 		if payment == nil {
 			// The payment associated with this transaction was deleted.
-			log.Ctx(ctx).Errorf("orphaned transaction - Unable to sync transaction %s because the associated payment %s was deleted",
+			log.Ctx(ctx).Errorf("orphaned transaction, unable to sync transaction %s because the associated payment %s was deleted",
 				transaction.ID,
 				transaction.ExternalID)
 			continue
@@ -137,7 +137,7 @@ func (s PaymentFromSubmitterService) syncPaymentsWithTransactions(ctx context.Co
 		}
 		errUpdate := s.sdpModels.Payment.Update(ctx, dbTx, payment, paymentUpdate)
 		if errUpdate != nil {
-			return fmt.Errorf("error updating payment id %s for transaction id %s: %w", payment.ID, transaction.ID, errUpdate)
+			return fmt.Errorf("updating payment ID %s for transaction id %s: %w", payment.ID, transaction.ID, errUpdate)
 		}
 	}
 
@@ -147,7 +147,7 @@ func (s PaymentFromSubmitterService) syncPaymentsWithTransactions(ctx context.Co
 	}
 	err := s.sdpModels.Disbursements.CompleteDisbursements(ctx, dbTx, disbursementIDs)
 	if err != nil {
-		return fmt.Errorf("error completing disbursement: %w", err)
+		return fmt.Errorf("completing disbursement: %w", err)
 	}
 
 	return nil
