@@ -1,6 +1,7 @@
 package httphandler
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -77,16 +78,15 @@ func (p PaymentsHandler) GetPayments(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
 
-	paymentService := services.NewPaymentService(p.Models, p.DBConnectionPool)
-	response, err := paymentService.GetPaymentsWithCount(ctx, queryParams)
+	response, err := p.getPaymentsWithCount(ctx, queryParams)
 	if err != nil {
 		httperror.InternalError(ctx, "Cannot retrieve payments", err, nil).Render(w)
 		return
 	}
-	if response.TotalPayments == 0 {
+	if response.Total == 0 {
 		httpjson.RenderStatus(w, http.StatusOK, httpresponse.NewEmptyPaginatedResponse(), httpjson.JSON)
 	} else {
-		response, errGet := httpresponse.NewPaginatedResponse(r, response.Payments, queryParams.Page, queryParams.PageLimit, response.TotalPayments)
+		response, errGet := httpresponse.NewPaginatedResponse(r, response.Result, queryParams.Page, queryParams.PageLimit, response.Total)
 		if errGet != nil {
 			httperror.InternalError(ctx, "Cannot create paginated payments response", errGet, nil).Render(w)
 			return
@@ -133,4 +133,23 @@ func (p PaymentsHandler) RetryPayments(rw http.ResponseWriter, req *http.Request
 	}
 
 	httpjson.RenderStatus(rw, http.StatusOK, map[string]string{"message": "Payments retried successfully"}, httpjson.JSON)
+}
+
+func (p PaymentsHandler) getPaymentsWithCount(ctx context.Context, queryParams *data.QueryParams) (*services.ResultWithTotal, error) {
+	return db.RunInTransactionWithResult(ctx, p.DBConnectionPool, nil, func(dbTx db.DBTransaction) (response *services.ResultWithTotal, innerErr error) {
+		totalPayments, innerErr := p.Models.Payment.Count(ctx, queryParams, dbTx)
+		if innerErr != nil {
+			return nil, fmt.Errorf("error counting payments: %w", innerErr)
+		}
+
+		var payments []data.Payment
+		if totalPayments != 0 {
+			payments, innerErr = p.Models.Payment.GetAll(ctx, queryParams, dbTx)
+			if innerErr != nil {
+				return nil, fmt.Errorf("error querying payments: %w", innerErr)
+			}
+		}
+
+		return services.NewResultWithTotal(totalPayments, payments), nil
+	})
 }
