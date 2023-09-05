@@ -7,19 +7,10 @@ import (
 	"time"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/mocks"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
-
-// MockSendPaymentsService mocks SendPaymentsService
-type MockSendPaymentsService struct {
-	mock.Mock
-}
-
-func (m *MockSendPaymentsService) SendBatchPayments(ctx context.Context, batchSize int) error {
-	args := m.Called(ctx, batchSize)
-	return args.Error(0)
-}
 
 func Test_PaymentsProcessorJob_GetInterval(t *testing.T) {
 	p := NewPaymentsProcessorJob(&data.Models{})
@@ -55,12 +46,12 @@ func Test_PaymentsProcessorJob_Execute(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockSendPaymentsService := &MockSendPaymentsService{}
-			mockSendPaymentsService.On("SendBatchPayments", mock.Anything, PaymentsBatchSize).
+			mockPaymentToSubmitterService := &mocks.MockPaymentToSubmitterService{}
+			mockPaymentToSubmitterService.On("SendBatchPayments", mock.Anything, PaymentsBatchSize).
 				Return(tt.sendPayments(nil, PaymentsBatchSize))
 
 			p := PaymentsProcessorJob{
-				service: mockSendPaymentsService,
+				service: mockPaymentToSubmitterService,
 			}
 
 			err := p.Execute(context.Background())
@@ -68,7 +59,7 @@ func Test_PaymentsProcessorJob_Execute(t *testing.T) {
 				t.Errorf("PaymentsProcessorJob.Execute() error = %v, wantErr %v", err, tt.wantErr)
 			}
 
-			mockSendPaymentsService.AssertExpectations(t)
+			mockPaymentToSubmitterService.AssertExpectations(t)
 		})
 	}
 }

@@ -51,7 +51,7 @@ func Test_TSSMonitorService_MonitorTransactions(t *testing.T) {
 	testCtx := setupTestContext(t, dbConnectionPool)
 	ctx := testCtx.ctx
 
-	paymentService := NewSendPaymentsService(testCtx.sdpModel)
+	paymentService := NewPaymentToSubmitterService(testCtx.sdpModel)
 	monitorService := NewTSSMonitorService(testCtx.sdpModel)
 
 	// create fixtures
@@ -348,7 +348,7 @@ func Test_TSSMonitorService_RetryingPayment(t *testing.T) {
 	testCtx := setupTestContext(t, dbConnectionPool)
 	ctx := testCtx.ctx
 
-	paymentService := NewSendPaymentsService(testCtx.sdpModel)
+	paymentService := NewPaymentToSubmitterService(testCtx.sdpModel)
 	monitorService := NewTSSMonitorService(testCtx.sdpModel)
 
 	// clean test db
@@ -475,7 +475,7 @@ func Test_TSSMonitorService_CompleteDisbursements(t *testing.T) {
 	testCtx := setupTestContext(t, dbConnectionPool)
 	ctx := testCtx.ctx
 
-	paymentService := NewSendPaymentsService(testCtx.sdpModel)
+	paymentService := NewPaymentToSubmitterService(testCtx.sdpModel)
 	monitorService := NewTSSMonitorService(testCtx.sdpModel)
 
 	// clean test db

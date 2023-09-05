@@ -10,7 +10,7 @@ import (
 )
 
 type PaymentsProcessorJob struct {
-	service services.SendPaymentsServiceInterface
+	service services.PaymentToSubmitterServiceInterface
 }
 
 const (
@@ -20,7 +20,7 @@ const (
 )
 
 func NewPaymentsProcessorJob(models *data.Models) *PaymentsProcessorJob {
-	return &PaymentsProcessorJob{service: services.NewSendPaymentsService(models)}
+	return &PaymentsProcessorJob{service: services.NewPaymentToSubmitterService(models)}
 }
 
 func (d PaymentsProcessorJob) GetInterval() time.Duration {

@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func Test_SendPaymentsService_SendBatchPayments(t *testing.T) {
+func Test_PaymentToSubmitterService_SendBatchPayments(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 
@@ -26,7 +26,7 @@ func Test_SendPaymentsService_SendBatchPayments(t *testing.T) {
 	require.NoError(t, err)
 	tssModel := txSubStore.NewTransactionModel(models.DBConnectionPool)
 
-	service := NewSendPaymentsService(models)
+	service := NewPaymentToSubmitterService(models)
 	ctx := context.Background()
 
 	// create fixtures
@@ -186,7 +186,7 @@ func Test_SendPaymentsService_SendBatchPayments(t *testing.T) {
 	})
 }
 
-func Test_SendPaymentsService_ValidatePaymentReadyForSending(t *testing.T) {
+func Test_PaymentToSubmitterService_ValidatePaymentReadyForSending(t *testing.T) {
 	testCases := []struct {
 		name          string
 		payment       *data.Payment
@@ -342,7 +342,7 @@ func Test_SendPaymentsService_ValidatePaymentReadyForSending(t *testing.T) {
 	}
 }
 
-func Test_SendPaymentsService_RetryPayment(t *testing.T) {
+func Test_PaymentToSubmitterService_RetryPayment(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 
@@ -356,7 +356,7 @@ func Test_SendPaymentsService_RetryPayment(t *testing.T) {
 	require.NoError(t, err)
 	tssModel := txSubStore.NewTransactionModel(models.DBConnectionPool)
 
-	service := NewSendPaymentsService(models)
+	service := NewPaymentToSubmitterService(models)
 
 	// clean test db
 	data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
