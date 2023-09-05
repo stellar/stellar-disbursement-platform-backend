@@ -16,7 +16,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpresponse"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 )
 
@@ -135,8 +135,8 @@ func (p PaymentsHandler) RetryPayments(rw http.ResponseWriter, req *http.Request
 	httpjson.RenderStatus(rw, http.StatusOK, map[string]string{"message": "Payments retried successfully"}, httpjson.JSON)
 }
 
-func (p PaymentsHandler) getPaymentsWithCount(ctx context.Context, queryParams *data.QueryParams) (*services.ResultWithTotal, error) {
-	return db.RunInTransactionWithResult(ctx, p.DBConnectionPool, nil, func(dbTx db.DBTransaction) (response *services.ResultWithTotal, innerErr error) {
+func (p PaymentsHandler) getPaymentsWithCount(ctx context.Context, queryParams *data.QueryParams) (*utils.ResultWithTotal, error) {
+	return db.RunInTransactionWithResult(ctx, p.DBConnectionPool, nil, func(dbTx db.DBTransaction) (response *utils.ResultWithTotal, innerErr error) {
 		totalPayments, innerErr := p.Models.Payment.Count(ctx, queryParams, dbTx)
 		if innerErr != nil {
 			return nil, fmt.Errorf("error counting payments: %w", innerErr)
@@ -150,6 +150,6 @@ func (p PaymentsHandler) getPaymentsWithCount(ctx context.Context, queryParams *
 			}
 		}
 
-		return services.NewResultWithTotal(totalPayments, payments), nil
+		return utils.NewResultWithTotal(totalPayments, payments), nil
 	})
 }

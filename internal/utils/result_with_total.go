@@ -1,4 +1,4 @@
-package services
+package utils
 
 type ResultWithTotal struct {
 	Total  int

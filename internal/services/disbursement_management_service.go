@@ -9,6 +9,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 )
 
@@ -37,11 +38,11 @@ func NewDisbursementManagementService(models *data.Models, dbConnectionPool db.D
 	}
 }
 
-func (s *DisbursementManagementService) GetDisbursementsWithCount(ctx context.Context, queryParams *data.QueryParams) (*ResultWithTotal, error) {
+func (s *DisbursementManagementService) GetDisbursementsWithCount(ctx context.Context, queryParams *data.QueryParams) (*utils.ResultWithTotal, error) {
 	return db.RunInTransactionWithResult(ctx,
 		s.dbConnectionPool,
 		&sql.TxOptions{Isolation: sql.LevelReadCommitted, ReadOnly: true},
-		func(dbTx db.DBTransaction) (*ResultWithTotal, error) {
+		func(dbTx db.DBTransaction) (*utils.ResultWithTotal, error) {
 			totalDisbursements, err := s.models.Disbursements.Count(ctx, dbTx, queryParams)
 			if err != nil {
 				return nil, fmt.Errorf("error counting disbursements: %w", err)
@@ -55,15 +56,15 @@ func (s *DisbursementManagementService) GetDisbursementsWithCount(ctx context.Co
 				}
 			}
 
-			return NewResultWithTotal(totalDisbursements, disbursements), nil
+			return utils.NewResultWithTotal(totalDisbursements, disbursements), nil
 		})
 }
 
-func (s *DisbursementManagementService) GetDisbursementReceiversWithCount(ctx context.Context, disbursementID string, queryParams *data.QueryParams) (*ResultWithTotal, error) {
+func (s *DisbursementManagementService) GetDisbursementReceiversWithCount(ctx context.Context, disbursementID string, queryParams *data.QueryParams) (*utils.ResultWithTotal, error) {
 	return db.RunInTransactionWithResult(ctx,
 		s.dbConnectionPool,
 		&sql.TxOptions{Isolation: sql.LevelReadCommitted, ReadOnly: true},
-		func(dbTx db.DBTransaction) (*ResultWithTotal, error) {
+		func(dbTx db.DBTransaction) (*utils.ResultWithTotal, error) {
 			_, err := s.models.Disbursements.Get(ctx, dbTx, disbursementID)
 			if err != nil {
 				if errors.Is(err, data.ErrRecordNotFound) {
@@ -86,7 +87,7 @@ func (s *DisbursementManagementService) GetDisbursementReceiversWithCount(ctx co
 				}
 			}
 
-			return NewResultWithTotal(totalReceivers, receivers), nil
+			return utils.NewResultWithTotal(totalReceivers, receivers), nil
 		})
 }
 
