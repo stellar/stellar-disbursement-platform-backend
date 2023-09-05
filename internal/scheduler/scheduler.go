@@ -165,9 +165,9 @@ func WithAPAuthEnforcementJob(apService anchorplatform.AnchorPlatformAPIServiceI
 	}
 }
 
-func WithTSSMonitorJobOption(models *data.Models) SchedulerJobRegisterOption {
+func WithPaymentFromSubmitterJobOption(models *data.Models) SchedulerJobRegisterOption {
 	return func(s *Scheduler) {
-		j := jobs.NewTSSMonitorJob(models)
+		j := jobs.NewPaymentFromSubmitterJob(models)
 		log.Infof("registering %s job to scheduler", j.GetName())
 		s.addJob(j)
 	}

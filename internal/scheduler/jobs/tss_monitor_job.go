@@ -10,34 +10,36 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 )
 
-type TSSMonitorJob struct {
+const (
+	PaymentFromSubmitterJobName            = "payment_from_submitter_job"
+	PaymentFromSubmitterJobIntervalSeconds = 10
+	PaymentFromSubmitterBatchSize          = 100
+)
+
+// PaymentFromSubmitterJob is a job that periodically monitors TSS transactions that were complete and sync their status
+// with SDP.
+type PaymentFromSubmitterJob struct {
 	service *services.PaymentFromSubmitterService
 }
 
-var _ Job = (*TSSMonitorJob)(nil)
+var _ Job = (*PaymentFromSubmitterJob)(nil)
 
-const (
-	TSSMonitorJobName            = "tss_monitor_job"
-	TSSMonitorJobIntervalSeconds = 10
-	TSSMonitorBatchSize          = 100
-)
-
-func NewTSSMonitorJob(models *data.Models) *TSSMonitorJob {
-	return &TSSMonitorJob{service: services.NewPaymentFromSubmitterService(models)}
+func NewPaymentFromSubmitterJob(models *data.Models) *PaymentFromSubmitterJob {
+	return &PaymentFromSubmitterJob{service: services.NewPaymentFromSubmitterService(models)}
 }
 
-func (d TSSMonitorJob) GetInterval() time.Duration {
-	return TSSMonitorJobIntervalSeconds * time.Second
+func (d PaymentFromSubmitterJob) GetInterval() time.Duration {
+	return PaymentFromSubmitterJobIntervalSeconds * time.Second
 }
 
-func (d TSSMonitorJob) GetName() string {
-	return TSSMonitorJobName
+func (d PaymentFromSubmitterJob) GetName() string {
+	return PaymentFromSubmitterJobName
 }
 
-func (d TSSMonitorJob) Execute(ctx context.Context) error {
-	err := d.service.MonitorTransactions(ctx, TSSMonitorBatchSize)
+func (d PaymentFromSubmitterJob) Execute(ctx context.Context) error {
+	err := d.service.MonitorTransactions(ctx, PaymentFromSubmitterBatchSize)
 	if err != nil {
-		return fmt.Errorf("error executing TSSMonitorJob: %w", err)
+		return fmt.Errorf("error executing PaymentFromSubmitterJob: %w", err)
 	}
 	return nil
 }
