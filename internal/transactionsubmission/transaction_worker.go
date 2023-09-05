@@ -126,8 +126,6 @@ func (tw *TransactionWorker) runJob(ctx context.Context, txJob *TxJob) error {
 	} else {
 		return tw.processTransactionSubmission(ctx, txJob)
 	}
-
-	return nil
 }
 
 // TODO: add tests
