@@ -14,12 +14,12 @@ import (
 
 func Test_PaymentToSubmitterJob_GetInterval(t *testing.T) {
 	p := NewPaymentToSubmitterJob(&data.Models{})
-	require.Equal(t, PaymentsJobIntervalSeconds*time.Second, p.GetInterval())
+	require.Equal(t, PaymentToSubmitterJobIntervalSeconds*time.Second, p.GetInterval())
 }
 
 func Test_PaymentToSubmitterJob_GetName(t *testing.T) {
 	p := NewPaymentToSubmitterJob(&data.Models{})
-	require.Equal(t, PaymentJobName, p.GetName())
+	require.Equal(t, PaymentToSubmitterJobName, p.GetName())
 }
 
 func Test_PaymentToSubmitterJob_Execute(t *testing.T) {
@@ -47,8 +47,8 @@ func Test_PaymentToSubmitterJob_Execute(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mockPaymentToSubmitterService := &mocks.MockPaymentToSubmitterService{}
-			mockPaymentToSubmitterService.On("SendBatchPayments", mock.Anything, PaymentsBatchSize).
-				Return(tt.sendPayments(nil, PaymentsBatchSize))
+			mockPaymentToSubmitterService.On("SendBatchPayments", mock.Anything, PaymentToSubmitterBatchSize).
+				Return(tt.sendPayments(nil, PaymentToSubmitterBatchSize))
 
 			p := PaymentToSubmitterJob{
 				service: mockPaymentToSubmitterService,

@@ -10,9 +10,9 @@ import (
 )
 
 const (
-	PaymentJobName             = "payment_to_submitter_job"
-	PaymentsJobIntervalSeconds = 10
-	PaymentsBatchSize          = 100
+	PaymentToSubmitterJobName            = "payment_to_submitter_job"
+	PaymentToSubmitterJobIntervalSeconds = 10
+	PaymentToSubmitterBatchSize          = 100
 )
 
 // PaymentToSubmitterJob is a job that periodically sends any ready-to-pay SDP payments to the transaction submission
@@ -28,15 +28,15 @@ func NewPaymentToSubmitterJob(models *data.Models) *PaymentToSubmitterJob {
 }
 
 func (d PaymentToSubmitterJob) GetInterval() time.Duration {
-	return PaymentsJobIntervalSeconds * time.Second
+	return PaymentToSubmitterJobIntervalSeconds * time.Second
 }
 
 func (d PaymentToSubmitterJob) GetName() string {
-	return PaymentJobName
+	return PaymentToSubmitterJobName
 }
 
 func (d PaymentToSubmitterJob) Execute(ctx context.Context) error {
-	err := d.service.SendBatchPayments(ctx, PaymentsBatchSize)
+	err := d.service.SendBatchPayments(ctx, PaymentToSubmitterBatchSize)
 	if err != nil {
 		return fmt.Errorf("error executing PaymentToSubmitterJob: %w", err)
 	}
