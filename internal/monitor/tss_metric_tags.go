@@ -20,6 +20,22 @@ const (
 	TransactionErrorInvalidStateLabel string = "invalid_state"
 	TransactionErrorHashingTxnLabel   string = "hashing_txn"
 	TransactionErrorSavingHashLabel   string = "saving_hash"
+
+	// Payment metric tags
+	PaymentProcessingStartedTag        MetricTag = "payment_processing_started"
+	PaymentTransactionSuccessfulTag    MetricTag = "payment_transaction_successful"
+	PaymentReconciliationSuccessfulTag MetricTag = "payment_reconciliation_successful"
+	PaymentReconciliationFailureTag    MetricTag = "payment_reconciliation_failure"
+	PaymentErrorTag                    MetricTag = "payment_error"
+
+	PaymentProcessingStartedLabel                   string = "payment_processing_started"
+	PaymentProcessingSuccessfulLabel                string = "payment_processing_successful"
+	PaymentReprocessingSuccessfulLabel              string = "payment_reprocessing_successful"
+	PaymentReconciliationTransactionSuccessfulLabel string = "payment_reconciliation_transaction_successful"
+	PaymentReconciliationMarkedForReprocessingLabel string = "payment_reconciliation_marked_for_reprocessing"
+	PaymentReconciliationUnexpectedErrorLabel       string = "payment_reconciliation_unexpected_error"
+	PaymentMarkedForReprocessingLabel               string = "payment_marked_for_reprocessing"
+	PaymentFailedLabel                              string = "payment_failed"
 )
 
 func (m MetricTag) ListAllTSSMetricTags() []MetricTag {
@@ -29,5 +45,11 @@ func (m MetricTag) ListAllTSSMetricTags() []MetricTag {
 		TransactionStartedToCompletedLatencyTag,
 		TransactionRetryCountTag,
 		TransactionProcessedCounterTag,
+
+		PaymentProcessingStartedTag,
+		PaymentTransactionSuccessfulTag,
+		PaymentReconciliationSuccessfulTag,
+		PaymentReconciliationFailureTag,
+		PaymentErrorTag,
 	}
 }

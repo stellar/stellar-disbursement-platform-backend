@@ -18,9 +18,11 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/db/dbtest"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	engineMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/mocks"
+	tssMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 	storeMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
@@ -124,6 +126,11 @@ func Test_NewTransactionWorker(t *testing.T) {
 	wantMaxBaseFee := 100
 	wantTxProcessingLimiter := engine.NewTransactionProcessingLimiter(20)
 
+	tssMonitorSvc := tssMonitor.TSSMonitorService{
+		GitCommitHash: "gitCommitHash0x",
+		Version:       "version123",
+	}
+
 	wantWorker := TransactionWorker{
 		dbConnectionPool:    dbConnectionPool,
 		txModel:             txModel,
@@ -133,6 +140,7 @@ func Test_NewTransactionWorker(t *testing.T) {
 		maxBaseFee:          wantMaxBaseFee,
 		crashTrackerClient:  &crashtracker.MockCrashTrackerClient{},
 		txProcessingLimiter: wantTxProcessingLimiter,
+		monitorSvc:          tssMonitorSvc,
 	}
 
 	testCases := []struct {
@@ -145,6 +153,7 @@ func Test_NewTransactionWorker(t *testing.T) {
 		maxBaseFee          int
 		crashTrackerClient  crashtracker.CrashTrackerClient
 		txProcessingLimiter *engine.TransactionProcessingLimiter
+		monitorSvc          tssMonitor.TSSMonitorService
 		wantError           error
 	}{
 		{
@@ -217,6 +226,7 @@ func Test_NewTransactionWorker(t *testing.T) {
 			maxBaseFee:          wantMaxBaseFee,
 			crashTrackerClient:  &crashtracker.MockCrashTrackerClient{},
 			txProcessingLimiter: wantTxProcessingLimiter,
+			monitorSvc:          tssMonitorSvc,
 		},
 	}
 
@@ -231,6 +241,7 @@ func Test_NewTransactionWorker(t *testing.T) {
 				tc.maxBaseFee,
 				tc.crashTrackerClient,
 				tc.txProcessingLimiter,
+				tc.monitorSvc,
 			)
 
 			if tc.wantError != nil {
@@ -279,6 +290,15 @@ func Test_TransactionWorker_handleSuccessfulTransaction(t *testing.T) {
 			Return(&txJob.Transaction, nil).
 			Once()
 		transactionWorker.txModel = mockTxStore
+
+		mMonitorService := monitor.MockMonitorService{}
+		tssMonitorService := tssMonitor.TSSMonitorService{
+			Version:       "0.01",
+			GitCommitHash: "0xABC",
+		}
+		mMonitorService.On("MonitorCounters", mock.Anything, mock.Anything).Return(nil)
+
+		transactionWorker.monitorSvc = tssMonitorService
 
 		// Run test:
 		err := transactionWorker.handleSuccessfulTransaction(ctx, &txJob, horizon.Transaction{Successful: true})
@@ -377,6 +397,15 @@ func Test_TransactionWorker_handleSuccessfulTransaction(t *testing.T) {
 
 		transactionWorker := getTransactionWorkerInstance(t, dbConnectionPool)
 		require.NotEmpty(t, transactionWorker)
+
+		mMonitorService := monitor.MockMonitorService{}
+		tssMonitorService := tssMonitor.TSSMonitorService{
+			Version:       "0.01",
+			GitCommitHash: "0xABC",
+		}
+		mMonitorService.On("MonitorCounters", mock.Anything, mock.Anything).Return(nil)
+
+		transactionWorker.monitorSvc = tssMonitorService
 
 		txJob := createTxJobFixture(t, ctx, dbConnectionPool, true, currentLedger, lockedToLedger)
 		require.NotEmpty(t, txJob)
@@ -494,6 +523,15 @@ func Test_TransactionWorker_reconcileSubmittedTransaction(t *testing.T) {
 			hMock := &horizonclient.MockClient{}
 			hMock.On("TransactionDetail", txHash).Return(tc.horizonTxResponse, tc.horizonTxError).Once()
 			transactionWorker.engine.HorizonClient = hMock
+
+			mMonitorService := monitor.MockMonitorService{}
+			tssMonitorService := tssMonitor.TSSMonitorService{
+				Version:       "0.01",
+				GitCommitHash: "0xABC",
+			}
+			mMonitorService.On("MonitorCounters", mock.Anything, mock.Anything).Return(nil)
+
+			transactionWorker.monitorSvc = tssMonitorService
 
 			// Run test:
 			err = transactionWorker.reconcileSubmittedTransaction(ctx, &txJob)
@@ -880,6 +918,15 @@ func Test_TransactionWorker_submit(t *testing.T) {
 				},
 				txProcessingLimiter: txProcessingLimiter,
 			}
+
+			mMonitorService := monitor.MockMonitorService{}
+			tssMonitorService := tssMonitor.TSSMonitorService{
+				Version:       "0.01",
+				GitCommitHash: "0xABC",
+			}
+			mMonitorService.On("MonitorCounters", mock.Anything, mock.Anything).Return(nil)
+
+			transactionWorker.monitorSvc = tssMonitorService
 
 			// make sure the tx's initial status is PROCESSING:
 			refreshedTx, err := txModel.Get(ctx, txJob.Transaction.ID)

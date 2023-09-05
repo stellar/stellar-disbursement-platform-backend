@@ -17,11 +17,12 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
+	tssMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
+	sdpUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
 const serviceName = "Transaction Submission Service"
@@ -34,7 +35,7 @@ type SubmitterOptions struct {
 	NumChannelAccounts   int
 	QueuePollingInterval int
 	MaxBaseFee           int
-	MonitorService       monitor.MonitorServiceInterface
+	MonitorService       tssMonitor.TSSMonitorService
 	PrivateKeyEncrypter  utils.PrivateKeyEncrypter
 	CrashTrackerClient   crashtracker.CrashTrackerClient
 }
@@ -42,10 +43,6 @@ type SubmitterOptions struct {
 func (so *SubmitterOptions) validate() error {
 	if so.DatabaseDSN == "" {
 		return fmt.Errorf("database DSN cannot be empty")
-	}
-
-	if so.MonitorService == nil {
-		return fmt.Errorf("monitor service cannot be nil")
 	}
 
 	if so.HorizonURL == "" {
@@ -76,6 +73,10 @@ func (so *SubmitterOptions) validate() error {
 		return fmt.Errorf("max base fee must be greater than or equal to %d", txnbuild.MinBaseFee)
 	}
 
+	if sdpUtils.IsEmpty(so.MonitorService) {
+		return fmt.Errorf("monitor service cannot be nil")
+	}
+
 	return nil
 }
 
@@ -93,7 +94,7 @@ type Manager struct {
 	sigService engine.SignatureService
 	maxBaseFee int
 	// crash & metrics monitoring:
-	monitorService     monitor.MonitorServiceInterface
+	monitorService     tssMonitor.TSSMonitorService
 	crashTrackerClient crashtracker.CrashTrackerClient
 }
 
@@ -246,6 +247,7 @@ func (m *Manager) ProcessTransactions(ctx context.Context) {
 					m.maxBaseFee,
 					m.crashTrackerClient,
 					m.txProcessingLimiter,
+					m.monitorService,
 				)
 				if err != nil {
 					m.crashTrackerClient.LogAndReportErrors(ctx, err, "")
