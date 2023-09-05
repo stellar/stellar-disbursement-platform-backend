@@ -17,9 +17,20 @@ type SendPaymentsServiceInterface interface {
 	SendBatchPayments(ctx context.Context, batchSize int) error
 }
 
+// Making sure that ServerService implements ServerServiceInterface
+var _ SendPaymentsServiceInterface = (*SendPaymentsService)(nil)
+
+// SendPaymentsService is a service that sends payments to the transaction submitter.
 type SendPaymentsService struct {
 	sdpModels *data.Models
 	tssModel  *txSubStore.TransactionModel
+}
+
+func NewSendPaymentsService(models *data.Models) *SendPaymentsService {
+	return &SendPaymentsService{
+		sdpModels: models,
+		tssModel:  txSubStore.NewTransactionModel(models.DBConnectionPool),
+	}
 }
 
 // SendBatchPayments sends payments in batches
@@ -142,13 +153,3 @@ func validatePaymentReadyForSending(p *data.Payment) error {
 
 	return nil
 }
-
-func NewSendPaymentsService(models *data.Models) *SendPaymentsService {
-	return &SendPaymentsService{
-		sdpModels: models,
-		tssModel:  txSubStore.NewTransactionModel(models.DBConnectionPool),
-	}
-}
-
-// Making sure that ServerService implements ServerServiceInterface
-var _ SendPaymentsServiceInterface = (*SendPaymentsService)(nil)

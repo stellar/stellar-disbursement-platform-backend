@@ -15,6 +15,14 @@ type TSSMonitorService struct {
 	tssModel  *txSubStore.TransactionModel
 }
 
+// NewTSSMonitorService creates a new TSSMonitorService instance.
+func NewTSSMonitorService(models *data.Models) *TSSMonitorService {
+	return &TSSMonitorService{
+		sdpModels: models,
+		tssModel:  txSubStore.NewTransactionModel(models.DBConnectionPool),
+	}
+}
+
 // MonitorTransactions monitors TSS transactions and updates payments accordingly.
 func (s TSSMonitorService) MonitorTransactions(ctx context.Context, batchSize int) error {
 	err := db.RunInTransaction(ctx, s.sdpModels.DBConnectionPool, nil, func(dbTx db.DBTransaction) error {
@@ -140,12 +148,4 @@ func (s TSSMonitorService) syncPaymentsWithTransactions(ctx context.Context, dbT
 	}
 
 	return nil
-}
-
-// NewTSSMonitorService creates a new TSSMonitorService instance.
-func NewTSSMonitorService(models *data.Models) *TSSMonitorService {
-	return &TSSMonitorService{
-		sdpModels: models,
-		tssModel:  txSubStore.NewTransactionModel(models.DBConnectionPool),
-	}
 }
