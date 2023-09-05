@@ -73,7 +73,7 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 
 	// setup fixtures
 	wallet := data.CreateDefaultWalletFixture(t, ctx, dbConnectionPool)
-	wallet.Assets, wallet.Countries = nil, nil
+	wallet.Assets = nil
 	asset := data.GetAssetFixture(t, ctx, dbConnectionPool, data.FixtureAssetUSDC)
 	country := data.GetCountryFixture(t, ctx, dbConnectionPool, data.FixtureCountryUKR)
 

@@ -34,7 +34,7 @@ func Test_WalletsHandlerGetWallets(t *testing.T) {
 		Models: models,
 	}
 
-	t.Run("successfully returns a list of countries", func(t *testing.T) {
+	t.Run("successfully returns a list of wallets", func(t *testing.T) {
 		expected := data.ClearAndCreateWalletFixtures(t, ctx, dbConnectionPool)
 		expectedJSON, err := json.Marshal(expected)
 		require.NoError(t, err)
@@ -110,8 +110,7 @@ func Test_WalletsHandlerPostWallets(t *testing.T) {
 					"homepage": "homepage is required",
 					"deep_link_schema": "deep_link_schema is required",
 					"sep_10_client_domain": "sep_10_client_domain is required",
-					"assets_ids": "provide at least one asset ID",
-					"countries_codes": "provide at least one country code"
+					"assets_ids": "provide at least one asset ID"
 				}
 			}
 		`
@@ -142,8 +141,7 @@ func Test_WalletsHandlerPostWallets(t *testing.T) {
 			{
 				"error": "invalid request body",
 				"extras": {
-					"assets_ids": "provide at least one asset ID",
-					"countries_codes": "provide at least one country code"
+					"assets_ids": "provide at least one asset ID"
 				}
 			}
 		`
@@ -158,7 +156,6 @@ func Test_WalletsHandlerPostWallets(t *testing.T) {
 				"homepage": "newwallet.com",
 				"deep_link_schema": "deeplink/sdp",
 				"sep_10_client_domain": "https://newwallet.com",
-				"countries_codes": ["UKR", "USA"],
 				"assets_ids": [%q]
 			}
 		`, asset.ID)
@@ -197,7 +194,6 @@ func Test_WalletsHandlerPostWallets(t *testing.T) {
 				"homepage": %q,
 				"deep_link_schema": %q,
 				"sep_10_client_domain": %q,
-				"countries_codes": ["UKR"],
 				"assets_ids": [%q]
 			}
 		`, wallet.Name, wallet.Homepage, wallet.DeepLinkSchema, wallet.SEP10ClientDomain, asset.ID)
@@ -223,7 +219,6 @@ func Test_WalletsHandlerPostWallets(t *testing.T) {
 				"homepage": %q,
 				"deep_link_schema": %q,
 				"sep_10_client_domain": %q,
-				"countries_codes": ["UKR"],
 				"assets_ids": [%q]
 			}
 		`, wallet.Homepage, wallet.DeepLinkSchema, wallet.SEP10ClientDomain, asset.ID)
@@ -249,7 +244,6 @@ func Test_WalletsHandlerPostWallets(t *testing.T) {
 				"homepage": "https://newwallet.com",
 				"deep_link_schema": %q,
 				"sep_10_client_domain": %q,
-				"countries_codes": ["UKR"],
 				"assets_ids": [%q]
 			}
 		`, wallet.DeepLinkSchema, wallet.SEP10ClientDomain, asset.ID)
@@ -268,32 +262,6 @@ func Test_WalletsHandlerPostWallets(t *testing.T) {
 		assert.Equal(t, http.StatusConflict, resp.StatusCode)
 		assert.JSONEq(t, `{"error": "a wallet with this deep link schema already exists"}`, string(respBody))
 
-		// Invalid country code
-		payload = fmt.Sprintf(`
-			{
-				"name": "New Wallet",
-				"homepage": "https://newwallet.com",
-				"deep_link_schema": "newwallet://sdp",
-				"sep_10_client_domain": %q,
-				"countries_codes": ["AAA"],
-				"assets_ids": [%q]
-			}
-		`, wallet.SEP10ClientDomain, asset.ID)
-		rr = httptest.NewRecorder()
-		req, err = http.NewRequestWithContext(ctx, http.MethodPost, "/wallets", strings.NewReader(payload))
-		require.NoError(t, err)
-
-		http.HandlerFunc(handler.PostWallets).ServeHTTP(rr, req)
-
-		resp = rr.Result()
-
-		respBody, err = io.ReadAll(resp.Body)
-		require.NoError(t, err)
-		defer resp.Body.Close()
-
-		assert.Equal(t, http.StatusConflict, resp.StatusCode)
-		assert.JSONEq(t, `{"error": "invalid country code"}`, string(respBody))
-
 		// Invalid asset ID
 		payload = fmt.Sprintf(`
 			{
@@ -301,7 +269,6 @@ func Test_WalletsHandlerPostWallets(t *testing.T) {
 				"homepage": "https://newwallet.com",
 				"deep_link_schema": "newwallet://sdp",
 				"sep_10_client_domain": %q,
-				"countries_codes": ["UKR"],
 				"assets_ids": ["asset-id"]
 			}
 		`, wallet.SEP10ClientDomain)
@@ -330,7 +297,6 @@ func Test_WalletsHandlerPostWallets(t *testing.T) {
 				"homepage": "https://newwallet.com",
 				"deep_link_schema": "newwallet://deeplink/sdp",
 				"sep_10_client_domain": "https://newwallet.com",
-				"countries_codes": ["UKR", "USA"],
 				"assets_ids": [%q]
 			}
 		`, asset.ID)
@@ -347,16 +313,12 @@ func Test_WalletsHandlerPostWallets(t *testing.T) {
 		wallet, err := models.Wallets.GetByWalletName(ctx, "New Wallet")
 		require.NoError(t, err)
 
-		walletCountries, err := models.Wallets.GetCountries(ctx, wallet.ID)
-		require.NoError(t, err)
-
 		walletAssets, err := models.Wallets.GetAssets(ctx, wallet.ID)
 		require.NoError(t, err)
 
 		assert.Equal(t, "https://newwallet.com", wallet.Homepage)
 		assert.Equal(t, "newwallet://deeplink/sdp", wallet.DeepLinkSchema)
 		assert.Equal(t, "newwallet.com", wallet.SEP10ClientDomain)
-		assert.Len(t, walletCountries, 2)
 		assert.Len(t, walletAssets, 1)
 	})
 }

@@ -41,7 +41,6 @@ func Test_WalletModelGet(t *testing.T) {
 		assert.Equal(t, expected.Name, actual.Name)
 		assert.Equal(t, expected.DeepLinkSchema, actual.DeepLinkSchema)
 		assert.Equal(t, expected.SEP10ClientDomain, actual.SEP10ClientDomain)
-		assert.Empty(t, actual.Countries)
 		assert.Empty(t, actual.Assets)
 	})
 }
@@ -77,7 +76,6 @@ func Test_WalletModelGetByWalletName(t *testing.T) {
 		assert.Equal(t, expected.Name, actual.Name)
 		assert.Equal(t, expected.DeepLinkSchema, actual.DeepLinkSchema)
 		assert.Equal(t, expected.SEP10ClientDomain, actual.SEP10ClientDomain)
-		assert.Empty(t, actual.Countries)
 		assert.Empty(t, actual.Assets)
 	})
 }
@@ -105,15 +103,7 @@ func Test_WalletModelGetAll(t *testing.T) {
 		walletAssets1 := CreateWalletAssets(t, ctx, dbConnectionPool, wallet1.ID, []string{usdc.ID, xlm.ID})
 		walletAssets2 := CreateWalletAssets(t, ctx, dbConnectionPool, wallet2.ID, []string{usdc.ID})
 
-		walletCountries1 := CreateWalletCountries(t, ctx, dbConnectionPool, wallet1.ID, []string{"UKR", "COL", "USA"})
-		walletCountries2 := CreateWalletCountries(t, ctx, dbConnectionPool, wallet2.ID, []string{"UKR", "BRA", "ARG", "MEX"})
-
 		actual, err := walletModel.GetAll(ctx)
-		require.NoError(t, err)
-
-		actualCountries1, err := walletModel.GetCountries(ctx, actual[0].ID)
-		require.NoError(t, err)
-		actualCountries2, err := walletModel.GetCountries(ctx, actual[1].ID)
 		require.NoError(t, err)
 
 		actualAssets1, err := walletModel.GetAssets(ctx, actual[0].ID)
@@ -126,9 +116,7 @@ func Test_WalletModelGetAll(t *testing.T) {
 		assert.Equal(t, wallet1.Homepage, actual[0].Homepage)
 		assert.Equal(t, wallet1.DeepLinkSchema, actual[0].DeepLinkSchema)
 		assert.Equal(t, wallet1.SEP10ClientDomain, actual[0].SEP10ClientDomain)
-		assert.Len(t, actual[0].Countries, 3)
 		assert.Len(t, actual[0].Assets, 2)
-		assert.ElementsMatch(t, walletCountries1, actualCountries1)
 		assert.ElementsMatch(t, walletAssets1, actualAssets1)
 
 		assert.Equal(t, wallet2.ID, actual[1].ID)
@@ -136,9 +124,7 @@ func Test_WalletModelGetAll(t *testing.T) {
 		assert.Equal(t, wallet2.Homepage, actual[1].Homepage)
 		assert.Equal(t, wallet2.DeepLinkSchema, actual[1].DeepLinkSchema)
 		assert.Equal(t, wallet2.SEP10ClientDomain, actual[1].SEP10ClientDomain)
-		assert.Len(t, actual[1].Countries, 4)
 		assert.Len(t, actual[1].Assets, 1)
-		assert.ElementsMatch(t, walletCountries2, actualCountries2)
 		assert.ElementsMatch(t, walletAssets2, actualAssets2)
 	})
 
@@ -175,7 +161,6 @@ func Test_WalletModelInsert(t *testing.T) {
 		deep_link_schema := "test_wallet://"
 		sep_10_client_domain := "www.test_wallet.com"
 		assets := []string{xlm.ID, usdc.ID}
-		countries := []string{"UKR", "USA", "BRA"}
 
 		wallet, err := walletModel.Insert(ctx, WalletInsert{
 			Name:              name,
@@ -183,7 +168,6 @@ func Test_WalletModelInsert(t *testing.T) {
 			SEP10ClientDomain: sep_10_client_domain,
 			DeepLinkSchema:    deep_link_schema,
 			AssetsIDs:         assets,
-			CountriesCodes:    countries,
 		})
 		require.NoError(t, err)
 		assert.NotNil(t, wallet)
@@ -194,15 +178,6 @@ func Test_WalletModelInsert(t *testing.T) {
 		assert.Equal(t, insertedWallet.Homepage, wallet.Homepage)
 		assert.Equal(t, insertedWallet.DeepLinkSchema, wallet.DeepLinkSchema)
 		assert.Equal(t, insertedWallet.SEP10ClientDomain, wallet.SEP10ClientDomain)
-
-		countriesDB, err := walletModel.GetCountries(ctx, wallet.ID)
-		require.NoError(t, err)
-		assert.Len(t, countriesDB, 3)
-
-		insertedWalletCountries, err := walletModel.GetCountries(ctx, insertedWallet.ID)
-		require.NoError(t, err)
-		assert.Len(t, insertedWalletCountries, 3)
-		assert.ElementsMatch(t, insertedWalletCountries, countriesDB)
 
 		assetsDB, err := walletModel.GetAssets(ctx, wallet.ID)
 		require.NoError(t, err)
@@ -236,7 +211,6 @@ func Test_WalletModelInsert(t *testing.T) {
 		deep_link_schema := "test_wallet://"
 		sep_10_client_domain := "www.test_wallet.com"
 		assets := []string{xlm.ID, xlm.ID, usdc.ID, usdc.ID}
-		countries := []string{"UKR", "UKR"}
 
 		wallet, err := walletModel.Insert(ctx, WalletInsert{
 			Name:              name,
@@ -244,7 +218,6 @@ func Test_WalletModelInsert(t *testing.T) {
 			SEP10ClientDomain: sep_10_client_domain,
 			DeepLinkSchema:    deep_link_schema,
 			AssetsIDs:         assets,
-			CountriesCodes:    countries,
 		})
 		require.NoError(t, err)
 		assert.NotNil(t, wallet)
@@ -255,15 +228,6 @@ func Test_WalletModelInsert(t *testing.T) {
 		assert.Equal(t, insertedWallet.Homepage, wallet.Homepage)
 		assert.Equal(t, insertedWallet.DeepLinkSchema, wallet.DeepLinkSchema)
 		assert.Equal(t, insertedWallet.SEP10ClientDomain, wallet.SEP10ClientDomain)
-
-		countriesDB, err := walletModel.GetCountries(ctx, wallet.ID)
-		require.NoError(t, err)
-		assert.Len(t, countriesDB, 1)
-
-		insertedWalletCountries, err := walletModel.GetCountries(ctx, insertedWallet.ID)
-		require.NoError(t, err)
-		assert.Len(t, insertedWalletCountries, 1)
-		assert.ElementsMatch(t, insertedWalletCountries, countriesDB)
 
 		assetsDB, err := walletModel.GetAssets(ctx, wallet.ID)
 		require.NoError(t, err)
@@ -296,7 +260,6 @@ func Test_WalletModelInsert(t *testing.T) {
 		deep_link_schema := "test_wallet://"
 		sep_10_client_domain := "www.test_wallet.com"
 		assets := []string{xlm.ID, usdc.ID}
-		countries := []string{"UKR", "USA", "BRA"}
 
 		wallet, err := walletModel.Insert(ctx, WalletInsert{
 			Name:              name,
@@ -304,7 +267,6 @@ func Test_WalletModelInsert(t *testing.T) {
 			SEP10ClientDomain: sep_10_client_domain,
 			DeepLinkSchema:    deep_link_schema,
 			AssetsIDs:         assets,
-			CountriesCodes:    countries,
 		})
 		require.NoError(t, err)
 		assert.NotNil(t, wallet)
@@ -323,7 +285,6 @@ func Test_WalletModelInsert(t *testing.T) {
 			SEP10ClientDomain: sep_10_client_domain,
 			DeepLinkSchema:    deep_link_schema,
 			AssetsIDs:         assets,
-			CountriesCodes:    countries,
 		})
 		assert.ErrorIs(t, err, ErrWalletNameAlreadyExists)
 		assert.Nil(t, wallet)
@@ -335,7 +296,6 @@ func Test_WalletModelInsert(t *testing.T) {
 			SEP10ClientDomain: sep_10_client_domain,
 			DeepLinkSchema:    deep_link_schema,
 			AssetsIDs:         assets,
-			CountriesCodes:    countries,
 		})
 		assert.ErrorIs(t, err, ErrWalletHomepageAlreadyExists)
 		assert.Nil(t, wallet)
@@ -347,7 +307,6 @@ func Test_WalletModelInsert(t *testing.T) {
 			DeepLinkSchema:    deep_link_schema,
 			SEP10ClientDomain: sep_10_client_domain,
 			AssetsIDs:         assets,
-			CountriesCodes:    countries,
 		})
 		assert.ErrorIs(t, err, ErrWalletDeepLinkSchemaAlreadyExists)
 		assert.Nil(t, wallet)
@@ -359,7 +318,6 @@ func Test_WalletModelInsert(t *testing.T) {
 			DeepLinkSchema:    deep_link_schema,
 			SEP10ClientDomain: sep_10_client_domain,
 			AssetsIDs:         assets,
-			CountriesCodes:    countries,
 		})
 		assert.ErrorIs(t, err, ErrWalletDeepLinkSchemaAlreadyExists)
 		assert.Nil(t, wallet)
@@ -371,21 +329,8 @@ func Test_WalletModelInsert(t *testing.T) {
 			DeepLinkSchema:    "wallet://another-wallet/sdp",
 			SEP10ClientDomain: sep_10_client_domain,
 			AssetsIDs:         []string{"invalid-id"},
-			CountriesCodes:    countries,
 		})
 		assert.ErrorIs(t, err, ErrInvalidAssetID)
-		assert.Nil(t, wallet)
-
-		// Invalid Country Code error
-		wallet, err = walletModel.Insert(ctx, WalletInsert{
-			Name:              "Another Wallet",
-			Homepage:          "https://another-wallet.com",
-			DeepLinkSchema:    "wallet://another-wallet/sdp",
-			SEP10ClientDomain: sep_10_client_domain,
-			AssetsIDs:         assets,
-			CountriesCodes:    []string{"AAA"},
-		})
-		assert.ErrorIs(t, err, ErrInvalidCountryCode)
 		assert.Nil(t, wallet)
 	})
 }
@@ -451,48 +396,6 @@ func Test_WalletModelGetOrCreate(t *testing.T) {
 		wallet, err := walletModel.GetOrCreate(ctx, name, homepage, deep_link_schema, sep_10_client_domain)
 		require.NoError(t, err)
 		assert.Equal(t, expected.ID, wallet.ID)
-	})
-}
-
-func Test_WalletModelGetCountries(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
-
-	ctx := context.Background()
-
-	walletModel := &WalletModel{dbConnectionPool: dbConnectionPool}
-
-	t.Run("return empty when wallet doesn't have countries", func(t *testing.T) {
-		DeleteAllWalletFixtures(t, ctx, dbConnectionPool)
-		wallet := CreateWalletFixture(t, ctx, dbConnectionPool.SqlxDB(),
-			"NewWallet",
-			"https://newwallet.com",
-			"newwallet.com",
-			"newalletapp://")
-
-		countries, err := walletModel.GetCountries(ctx, wallet.ID)
-		require.NoError(t, err)
-		assert.Empty(t, countries)
-	})
-
-	t.Run("return wallet's countries", func(t *testing.T) {
-		DeleteAllWalletFixtures(t, ctx, dbConnectionPool)
-		wallet := CreateWalletFixture(t, ctx, dbConnectionPool.SqlxDB(),
-			"NewWallet",
-			"https://newwallet.com",
-			"newwallet.com",
-			"newalletapp://")
-
-		walletCountries := CreateWalletCountries(t, ctx, dbConnectionPool, wallet.ID, []string{"UKR", "USA"})
-
-		countries, err := walletModel.GetCountries(ctx, wallet.ID)
-		require.NoError(t, err)
-
-		assert.ElementsMatch(t, walletCountries, countries)
 	})
 }
 

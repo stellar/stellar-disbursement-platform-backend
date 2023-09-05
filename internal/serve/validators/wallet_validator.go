@@ -13,7 +13,6 @@ type WalletRequest struct {
 	DeepLinkSchema    string   `json:"deep_link_schema"`
 	SEP10ClientDomain string   `json:"sep_10_client_domain"`
 	AssetsIDs         []string `json:"assets_ids"`
-	CountriesCodes    []string `json:"countries_codes"`
 }
 
 type WalletValidator struct {
@@ -41,7 +40,6 @@ func (wv *WalletValidator) ValidateCreateWalletRequest(reqBody *WalletRequest) *
 	wv.Check(deepLinkSchema != "", "deep_link_schema", "deep_link_schema is required")
 	wv.Check(sep10ClientDomain != "", "sep_10_client_domain", "sep_10_client_domain is required")
 	wv.Check(len(reqBody.AssetsIDs) != 0, "assets_ids", "provide at least one asset ID")
-	wv.Check(len(reqBody.CountriesCodes) != 0, "countries_codes", "provide at least one country code")
 
 	if wv.HasErrors() {
 		return nil
@@ -80,7 +78,6 @@ func (wv *WalletValidator) ValidateCreateWalletRequest(reqBody *WalletRequest) *
 		DeepLinkSchema:    deepLinkSchemaURL.String(),
 		SEP10ClientDomain: sep10Host,
 		AssetsIDs:         reqBody.AssetsIDs,
-		CountriesCodes:    reqBody.CountriesCodes,
 	}
 
 	return modifiedReq

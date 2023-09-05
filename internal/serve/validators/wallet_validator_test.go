@@ -28,7 +28,6 @@ func TestWalletValidator_ValidateCreateWalletRequest(t *testing.T) {
 			"name":                 "name is required",
 			"sep_10_client_domain": "sep_10_client_domain is required",
 			"assets_ids":           "provide at least one asset ID",
-			"countries_codes":      "provide at least one country code",
 		}, wv.Errors)
 
 		reqBody.Name = "Wallet Provider"
@@ -40,7 +39,6 @@ func TestWalletValidator_ValidateCreateWalletRequest(t *testing.T) {
 			"homepage":             "homepage is required",
 			"sep_10_client_domain": "sep_10_client_domain is required",
 			"assets_ids":           "provide at least one asset ID",
-			"countries_codes":      "provide at least one country code",
 		}, wv.Errors)
 	})
 
@@ -54,7 +52,6 @@ func TestWalletValidator_ValidateCreateWalletRequest(t *testing.T) {
 			DeepLinkSchema:    "no-schema-deep-link",
 			SEP10ClientDomain: "sep-10-client-domain.com",
 			AssetsIDs:         []string{"asset-id"},
-			CountriesCodes:    []string{"UKR"},
 		}
 
 		wv.ValidateCreateWalletRequest(reqBody)
@@ -81,7 +78,6 @@ func TestWalletValidator_ValidateCreateWalletRequest(t *testing.T) {
 			DeepLinkSchema:    "wallet://deeplinkschema/sdp",
 			SEP10ClientDomain: "sep-10-client-domain.com",
 			AssetsIDs:         []string{"asset-id"},
-			CountriesCodes:    []string{"UKR"},
 		}
 
 		wv.ValidateCreateWalletRequest(reqBody)
@@ -101,7 +97,6 @@ func TestWalletValidator_ValidateCreateWalletRequest(t *testing.T) {
 			DeepLinkSchema:    "wallet://deeplinkschema/sdp",
 			SEP10ClientDomain: "sep-10-client-domain.com",
 			AssetsIDs:         []string{"asset-id"},
-			CountriesCodes:    []string{"UKR"},
 		}
 
 		wv.ValidateCreateWalletRequest(reqBody)
@@ -120,7 +115,6 @@ func TestWalletValidator_ValidateCreateWalletRequest(t *testing.T) {
 			DeepLinkSchema:    "wallet://deeplinkschema/sdp",
 			SEP10ClientDomain: "https://sep-10-client-domain.com",
 			AssetsIDs:         []string{"asset-id"},
-			CountriesCodes:    []string{"UKR"},
 		}
 
 		reqBody = wv.ValidateCreateWalletRequest(reqBody)
