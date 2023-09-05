@@ -16,7 +16,7 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
+	sdpMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	tssMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
@@ -122,27 +122,9 @@ func (tw *TransactionWorker) runJob(ctx context.Context, txJob *TxJob) error {
 	if txJob == nil {
 		return fmt.Errorf("received nil transaction job")
 	} else if txJob.Transaction.StellarTransactionHash.Valid {
-		err = tw.reconcileSubmittedTransaction(ctx, txJob)
-		if err != nil {
-			return err
-		}
-
+		return tw.reconcileSubmittedTransaction(ctx, txJob)
 	} else {
-		err = tw.processTransactionSubmission(ctx, txJob)
-		if err != nil {
-			return err
-		}
-
-		eventType := monitor.PaymentProcessingSuccessfulLabel
-		if txJob.Transaction.AttemptsCount > 1 {
-			eventType = monitor.PaymentReprocessingSuccessfulLabel
-		}
-
-		tw.monitorSvc.MonitorPayment(ctx, txJob.Transaction, monitor.PaymentTransactionSuccessfulTag, tssMonitor.TxMetadata{
-			SrcChannelAcc:    txJob.ChannelAccount.PublicKey,
-			IsHorizonErr:     false,
-			PaymentEventType: eventType,
-		})
+		return tw.processTransactionSubmission(ctx, txJob)
 	}
 
 	return nil
@@ -163,10 +145,10 @@ func (tw *TransactionWorker) handleFailedTransaction(ctx context.Context, txJob 
 	var isHorizonErr bool
 	var hErrWrapper *utils.HorizonErrorWrapper
 	defer func() {
-		metricTag := monitor.PaymentErrorTag
-		eventType := monitor.PaymentFailedLabel
+		metricTag := sdpMonitor.PaymentErrorTag
+		eventType := sdpMonitor.PaymentFailedLabel
 		if !shouldMarkAsError {
-			eventType = monitor.PaymentMarkedForReprocessingLabel
+			eventType = sdpMonitor.PaymentMarkedForReprocessingLabel
 		}
 
 		tw.monitorSvc.MonitorPayment(
@@ -340,28 +322,28 @@ func (tw *TransactionWorker) reconcileSubmittedTransaction(ctx context.Context, 
 	if err == nil && txDetail.Successful {
 		err = tw.handleSuccessfulTransaction(ctx, txJob, txDetail)
 		if err != nil {
-			tw.monitorSvc.MonitorPayment(ctx, txJob.Transaction, monitor.PaymentReconciliationFailureTag, tssMonitor.TxMetadata{
+			tw.monitorSvc.MonitorPayment(ctx, txJob.Transaction, sdpMonitor.PaymentReconciliationFailureTag, tssMonitor.TxMetadata{
 				SrcChannelAcc:    txJob.ChannelAccount.PublicKey,
 				IsHorizonErr:     false,
 				ErrStack:         err.Error(),
-				PaymentEventType: monitor.PaymentReconciliationUnexpectedErrorLabel,
+				PaymentEventType: sdpMonitor.PaymentReconciliationUnexpectedErrorLabel,
 			})
 			return fmt.Errorf("handling successful transaction: %w", err)
 		}
 
-		tw.monitorSvc.MonitorPayment(ctx, txJob.Transaction, monitor.PaymentReconciliationSuccessfulTag, tssMonitor.TxMetadata{
+		tw.monitorSvc.MonitorPayment(ctx, txJob.Transaction, sdpMonitor.PaymentReconciliationSuccessfulTag, tssMonitor.TxMetadata{
 			SrcChannelAcc:    txJob.ChannelAccount.PublicKey,
-			PaymentEventType: monitor.PaymentReconciliationTransactionSuccessfulLabel,
+			PaymentEventType: sdpMonitor.PaymentReconciliationTransactionSuccessfulLabel,
 		})
 		return nil
 	} else if (err != nil || txDetail.Successful) && !hWrapperErr.IsNotFound() {
 		log.Ctx(ctx).Warnf("received unexpected horizon error: %v", hWrapperErr)
 
-		tw.monitorSvc.MonitorPayment(ctx, txJob.Transaction, monitor.PaymentReconciliationFailureTag, tssMonitor.TxMetadata{
+		tw.monitorSvc.MonitorPayment(ctx, txJob.Transaction, sdpMonitor.PaymentReconciliationFailureTag, tssMonitor.TxMetadata{
 			SrcChannelAcc:    txJob.ChannelAccount.PublicKey,
 			IsHorizonErr:     true,
 			ErrStack:         hWrapperErr.Error(),
-			PaymentEventType: monitor.PaymentReconciliationUnexpectedErrorLabel,
+			PaymentEventType: sdpMonitor.PaymentReconciliationUnexpectedErrorLabel,
 		})
 		return fmt.Errorf("unexpected error: %w", hWrapperErr)
 	}
@@ -378,9 +360,9 @@ func (tw *TransactionWorker) reconcileSubmittedTransaction(ctx context.Context, 
 		return fmt.Errorf("unlocking job: %w", err)
 	}
 
-	tw.monitorSvc.MonitorPayment(ctx, txJob.Transaction, monitor.PaymentReconciliationSuccessfulTag, tssMonitor.TxMetadata{
+	tw.monitorSvc.MonitorPayment(ctx, txJob.Transaction, sdpMonitor.PaymentReconciliationSuccessfulTag, tssMonitor.TxMetadata{
 		SrcChannelAcc:    txJob.ChannelAccount.PublicKey,
-		PaymentEventType: monitor.PaymentReconciliationMarkedForReprocessingLabel,
+		PaymentEventType: sdpMonitor.PaymentReconciliationMarkedForReprocessingLabel,
 	})
 
 	return nil
@@ -389,9 +371,9 @@ func (tw *TransactionWorker) reconcileSubmittedTransaction(ctx context.Context, 
 func (tw *TransactionWorker) processTransactionSubmission(ctx context.Context, txJob *TxJob) error {
 	log.Ctx(ctx).Infof("🚧 Processing transaction submission for job %v...", txJob)
 
-	tw.monitorSvc.MonitorPayment(ctx, txJob.Transaction, monitor.PaymentProcessingStartedTag, tssMonitor.TxMetadata{
+	tw.monitorSvc.MonitorPayment(ctx, txJob.Transaction, sdpMonitor.PaymentProcessingStartedTag, tssMonitor.TxMetadata{
 		SrcChannelAcc:    txJob.ChannelAccount.PublicKey,
-		PaymentEventType: monitor.PaymentProcessingStartedLabel,
+		PaymentEventType: sdpMonitor.PaymentProcessingStartedLabel,
 	})
 
 	// STEP 1: validate bundle
@@ -554,6 +536,17 @@ func (tw *TransactionWorker) submit(ctx context.Context, txJob *TxJob, feeBumpTx
 		if err != nil {
 			return fmt.Errorf("handling successful transaction: %w", err)
 		}
+
+		eventType := sdpMonitor.PaymentProcessingSuccessfulLabel
+		if txJob.Transaction.AttemptsCount > 1 {
+			eventType = sdpMonitor.PaymentReprocessingSuccessfulLabel
+		}
+
+		tw.monitorSvc.MonitorPayment(ctx, txJob.Transaction, sdpMonitor.PaymentTransactionSuccessfulTag, tssMonitor.TxMetadata{
+			SrcChannelAcc:    txJob.ChannelAccount.PublicKey,
+			IsHorizonErr:     false,
+			PaymentEventType: eventType,
+		})
 	}
 
 	return nil

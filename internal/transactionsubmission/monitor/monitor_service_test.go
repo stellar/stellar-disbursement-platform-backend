@@ -3,7 +3,6 @@ package monitor
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"testing"
 	"time"
 
@@ -136,7 +135,6 @@ func Test_TSSMonitorService_MonitorPayment(t *testing.T) {
 			assert.NotEmpty(t, logEntries[0])
 
 			data := logEntries[0].Data
-			fmt.Println(data)
 			for k, v := range tc.fieldsMap {
 				assert.Equal(t, v, data[k])
 			}

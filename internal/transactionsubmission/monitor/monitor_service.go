@@ -73,6 +73,7 @@ func (ms *TSSMonitorService) MonitorPayment(ctx context.Context, tx store.Transa
 	// reconciliation - marked for reprocessing
 	if metricTag == sdpMonitor.PaymentReconciliationSuccessfulTag && txMetadata.PaymentEventType == sdpMonitor.PaymentReconciliationMarkedForReprocessingLabel {
 		paymentLog.Info(paymentLogMessage)
+		return
 	}
 
 	if tx.XDRSent.Valid {
@@ -105,9 +106,10 @@ func (ms *TSSMonitorService) MonitorPayment(ctx context.Context, tx store.Transa
 					"error":          txMetadata.ErrStack,
 				},
 			).Error(paymentLogMessage)
-	} else {
-		log.Ctx(ctx).Errorf("Cannot recognize metric tag %s for event %s", metricTag, eventID)
+		return
 	}
+
+	log.Ctx(ctx).Errorf("Cannot recognize metric tag %s for event %s", metricTag, eventID)
 }
 
 func (ms *TSSMonitorService) GetMetricHttpHandler() (http.Handler, error) {
