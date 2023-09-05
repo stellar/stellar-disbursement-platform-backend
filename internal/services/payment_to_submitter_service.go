@@ -39,7 +39,7 @@ func (s PaymentToSubmitterService) SendBatchPayments(ctx context.Context, batchS
 		return s.sendBatchPayments(ctx, dbTx, batchSize)
 	})
 	if err != nil {
-		return fmt.Errorf("error sending payments: %w", err)
+		return fmt.Errorf("sending payments: %w", err)
 	}
 
 	return nil
@@ -55,7 +55,7 @@ func (s PaymentToSubmitterService) sendBatchPayments(ctx context.Context, dbTx d
 	//    c. Disbursement is in `STARTED` status
 	payments, err := s.sdpModels.Payment.GetBatchForUpdate(ctx, dbTx, batchSize)
 	if err != nil {
-		return fmt.Errorf("error getting payments ready to be sent: %w", err)
+		return fmt.Errorf("getting payments ready to be sent: %w", err)
 	}
 
 	var transactions []txSubStore.Transaction
@@ -73,7 +73,7 @@ func (s PaymentToSubmitterService) sendBatchPayments(ctx context.Context, dbTx d
 		// TODO: change TSS to use string amount [SDP-483]
 		amount, parseErr := strconv.ParseFloat(payment.Amount, 64)
 		if parseErr != nil {
-			return fmt.Errorf("error parsing payment amount %s for payment %s: %w", payment.Amount, payment.ID, parseErr)
+			return fmt.Errorf("parsing payment amount %s for payment ID %s: %w", payment.Amount, payment.ID, parseErr)
 		}
 		transaction := txSubStore.Transaction{
 			ExternalID:  payment.ID,
@@ -89,7 +89,7 @@ func (s PaymentToSubmitterService) sendBatchPayments(ctx context.Context, dbTx d
 	// 3. Persist data in Transactions table
 	insertedTransactions, err := s.tssModel.BulkInsert(ctx, dbTx, transactions)
 	if err != nil {
-		return fmt.Errorf("error inserting transactions: %w", err)
+		return fmt.Errorf("inserting transactions: %w", err)
 	}
 	if len(insertedTransactions) > 0 {
 		log.Ctx(ctx).Infof("Submitted %d transaction(s) to TSS", len(insertedTransactions))
@@ -99,7 +99,7 @@ func (s PaymentToSubmitterService) sendBatchPayments(ctx context.Context, dbTx d
 	if len(pendingPayments) > 0 {
 		numUpdated, innerErr := s.sdpModels.Payment.UpdateStatuses(ctx, dbTx, pendingPayments, data.PendingPaymentStatus)
 		if innerErr != nil {
-			return fmt.Errorf("error updating payment statuses to Pending: %w", innerErr)
+			return fmt.Errorf("updating payment statuses to Pending: %w", innerErr)
 		}
 		log.Ctx(ctx).Infof("Updated %d payments to Pending", numUpdated)
 	}
@@ -108,9 +108,9 @@ func (s PaymentToSubmitterService) sendBatchPayments(ctx context.Context, dbTx d
 	if len(failedPayments) != 0 {
 		numUpdated, innerErr := s.sdpModels.Payment.UpdateStatuses(ctx, dbTx, failedPayments, data.FailedPaymentStatus)
 		if innerErr != nil {
-			return fmt.Errorf("error updating payment statuses to Failed: %w", innerErr)
+			return fmt.Errorf("updating payment statuses to Failed: %w", innerErr)
 		}
-		log.Ctx(ctx).Infof("Updated %d payments to Failed", numUpdated)
+		log.Ctx(ctx).Warnf("Updated %d payments to Failed", numUpdated)
 	}
 	return nil
 }
