@@ -5,9 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
-
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 )
 
 const (

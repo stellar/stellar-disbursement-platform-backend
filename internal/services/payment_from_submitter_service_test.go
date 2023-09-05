@@ -7,16 +7,15 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/lib/pq"
 	"github.com/stellar/go/support/log"
 	"github.com/stretchr/testify/assert"
-
-	"github.com/lib/pq"
+	"github.com/stretchr/testify/require"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/db/dbtest"
 	txSubStore "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
-	"github.com/stretchr/testify/require"
 )
 
 type testContext struct {

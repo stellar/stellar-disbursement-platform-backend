@@ -5,13 +5,13 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/db/dbtest"
 	txSubStore "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func Test_PaymentToSubmitterService_SendBatchPayments(t *testing.T) {
