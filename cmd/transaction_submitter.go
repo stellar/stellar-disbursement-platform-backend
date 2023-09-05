@@ -157,10 +157,17 @@ func (c *TxSubmitterCommand) Command(submitterService TxSubmitterServiceInterfac
 				Environment: globalOptions.environment,
 			}
 
-			tssMonitorSvc, err := tssMonitor.NewTSSMonitorService(metricOptions, globalOptions.gitCommit, globalOptions.version)
+			monitorClient, err := monitor.GetClient(metricOptions)
 			if err != nil {
 				log.Ctx(ctx).Fatalf("Error creating monitor client: %s", err.Error())
 			}
+
+			tssMonitorSvc := tssMonitor.TSSMonitorService{
+				Client:        monitorClient,
+				GitCommitHash: globalOptions.gitCommit,
+				Version:       globalOptions.version,
+			}
+			metricsServeOpts.MonitorService = &tssMonitorSvc
 
 			// Inject server dependencies
 			submitterOpts.MonitorService = tssMonitorSvc

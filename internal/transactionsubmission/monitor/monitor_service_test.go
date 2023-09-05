@@ -79,7 +79,7 @@ func Test_TSSMonitorService_MonitorPayment(t *testing.T) {
 				Destination:            destAcc,
 				XDRSent:                xdr,
 				XDRReceived:            xdr,
-				StellarTransactionHash: xdr,
+				StellarTransactionHash: sql.NullString{String: txHash, Valid: true},
 			},
 			logLevel: log.InfoLevel,
 			fieldsMap: map[string]string{
