@@ -16,6 +16,8 @@ const (
 	apAuthMonitoringJobIntervalSeconds = 300
 )
 
+// AnchorPlatformAuthMonitoringJob is a job that periodically monitors the Anchor Platform's to make sure it has the
+// authentication enforcement enabled.
 type AnchorPlatformAuthMonitoringJob struct {
 	apService          anchorplatform.AnchorPlatformAPIServiceInterface
 	monitorService     monitor.MonitorServiceInterface
