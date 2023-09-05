@@ -10,21 +10,23 @@ import (
 	txSubStore "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 )
 
-type TSSMonitorService struct {
+// PaymentFromSubmitterService is a service that monitors TSS transactions that were complete and sync their completion
+// state with the SDP payments.
+type PaymentFromSubmitterService struct {
 	sdpModels *data.Models
 	tssModel  *txSubStore.TransactionModel
 }
 
-// NewTSSMonitorService creates a new TSSMonitorService instance.
-func NewTSSMonitorService(models *data.Models) *TSSMonitorService {
-	return &TSSMonitorService{
+// NewPaymentFromSubmitterService is a PaymentFromSubmitterService constructor.
+func NewPaymentFromSubmitterService(models *data.Models) *PaymentFromSubmitterService {
+	return &PaymentFromSubmitterService{
 		sdpModels: models,
 		tssModel:  txSubStore.NewTransactionModel(models.DBConnectionPool),
 	}
 }
 
-// MonitorTransactions monitors TSS transactions and updates payments accordingly.
-func (s TSSMonitorService) MonitorTransactions(ctx context.Context, batchSize int) error {
+// MonitorTransactions monitors TSS transactions that were complete and sync their completion state with the SDP payments.
+func (s PaymentFromSubmitterService) MonitorTransactions(ctx context.Context, batchSize int) error {
 	err := db.RunInTransaction(ctx, s.sdpModels.DBConnectionPool, nil, func(dbTx db.DBTransaction) error {
 		return s.monitorTransactions(ctx, dbTx, batchSize)
 	})
@@ -35,8 +37,9 @@ func (s TSSMonitorService) MonitorTransactions(ctx context.Context, batchSize in
 	return nil
 }
 
-// monitorTransactions monitors TSS transactions and updates payments accordingly.
-func (s TSSMonitorService) monitorTransactions(ctx context.Context, dbTx db.DBTransaction, batchSize int) error {
+// MonitorTransactions monitors TSS transactions that were complete and sync their completion state with the SDP payments. It
+// should be called within a DB transaction.
+func (s PaymentFromSubmitterService) monitorTransactions(ctx context.Context, dbTx db.DBTransaction, batchSize int) error {
 	// 1. Get transactions that are in a final state (status=SUCCESS or status=ERROR)
 	//     this operation will lock the rows.
 	transactions, err := s.tssModel.GetTransactionBatchForUpdate(ctx, dbTx, batchSize)
@@ -95,7 +98,7 @@ func (s TSSMonitorService) monitorTransactions(ctx context.Context, dbTx db.DBTr
 }
 
 // syncPaymentsWithTransactions updates the status of the payments based on the status of the transactions.
-func (s TSSMonitorService) syncPaymentsWithTransactions(ctx context.Context, dbTx db.DBTransaction, transactions []*txSubStore.Transaction, toStatus data.PaymentStatus) error {
+func (s PaymentFromSubmitterService) syncPaymentsWithTransactions(ctx context.Context, dbTx db.DBTransaction, transactions []*txSubStore.Transaction, toStatus data.PaymentStatus) error {
 	paymentIDs := make([]string, len(transactions))
 	for i, transaction := range transactions {
 		paymentIDs[i] = transaction.ExternalID

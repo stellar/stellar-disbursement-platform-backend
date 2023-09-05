@@ -11,7 +11,7 @@ import (
 )
 
 type TSSMonitorJob struct {
-	service *services.TSSMonitorService
+	service *services.PaymentFromSubmitterService
 }
 
 var _ Job = (*TSSMonitorJob)(nil)
@@ -23,7 +23,7 @@ const (
 )
 
 func NewTSSMonitorJob(models *data.Models) *TSSMonitorJob {
-	return &TSSMonitorJob{service: services.NewTSSMonitorService(models)}
+	return &TSSMonitorJob{service: services.NewPaymentFromSubmitterService(models)}
 }
 
 func (d TSSMonitorJob) GetInterval() time.Duration {

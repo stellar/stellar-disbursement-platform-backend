@@ -40,7 +40,7 @@ func setupTestContext(t *testing.T, dbConnectionPool db.DBConnectionPool) *testC
 	}
 }
 
-func Test_TSSMonitorService_MonitorTransactions(t *testing.T) {
+func Test_PaymentFromSubmitterService_MonitorTransactions(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 
@@ -52,7 +52,7 @@ func Test_TSSMonitorService_MonitorTransactions(t *testing.T) {
 	ctx := testCtx.ctx
 
 	paymentService := NewPaymentToSubmitterService(testCtx.sdpModel)
-	monitorService := NewTSSMonitorService(testCtx.sdpModel)
+	monitorService := NewPaymentFromSubmitterService(testCtx.sdpModel)
 
 	// create fixtures
 	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool,
@@ -337,7 +337,7 @@ func updateTSSTransactionsToError(t *testing.T, testCtx *testContext, txDataSlic
 	return updatedTransactions
 }
 
-func Test_TSSMonitorService_RetryingPayment(t *testing.T) {
+func Test_PaymentFromSubmitterService_RetryingPayment(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 
@@ -349,7 +349,7 @@ func Test_TSSMonitorService_RetryingPayment(t *testing.T) {
 	ctx := testCtx.ctx
 
 	paymentService := NewPaymentToSubmitterService(testCtx.sdpModel)
-	monitorService := NewTSSMonitorService(testCtx.sdpModel)
+	monitorService := NewPaymentFromSubmitterService(testCtx.sdpModel)
 
 	// clean test db
 	data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
@@ -464,7 +464,7 @@ func Test_TSSMonitorService_RetryingPayment(t *testing.T) {
 	assert.Empty(t, paymentDB.StatusHistory[5].StatusMessage)
 }
 
-func Test_TSSMonitorService_CompleteDisbursements(t *testing.T) {
+func Test_PaymentFromSubmitterService_CompleteDisbursements(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 
@@ -476,7 +476,7 @@ func Test_TSSMonitorService_CompleteDisbursements(t *testing.T) {
 	ctx := testCtx.ctx
 
 	paymentService := NewPaymentToSubmitterService(testCtx.sdpModel)
-	monitorService := NewTSSMonitorService(testCtx.sdpModel)
+	monitorService := NewPaymentFromSubmitterService(testCtx.sdpModel)
 
 	// clean test db
 	data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
