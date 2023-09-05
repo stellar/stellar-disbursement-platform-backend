@@ -13,6 +13,8 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 )
 
+// TSSMonitorService wraps the generic monitoring service from the SDP and provides additional monitoring capability for
+// tracking payments that are processed by the TSS.
 type TSSMonitorService struct {
 	Client sdpMonitor.MonitorClient
 	sdpMonitor.MonitorServiceInterface
@@ -27,7 +29,7 @@ type TxMetadata struct {
 	ErrStack         string
 }
 
-// monitorPayment sends a metric about a payment tx to the observer, linking it to a entry in the logs that contains specific metadata about said tx.
+// MonitorPayment sends a metric about a payment tx to the observer, linking it to a entry in the logs that contains specific metadata about said tx.
 func (ms *TSSMonitorService) MonitorPayment(ctx context.Context, tx store.Transaction, metricTag sdpMonitor.MetricTag, txMetadata TxMetadata) {
 	eventID := uuid.New().String()
 	paymentLogMessage := paymentLogMessage(eventID, metricTag)

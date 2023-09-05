@@ -127,6 +127,21 @@ func Test_SubmitterOptions_validate(t *testing.T) {
 			wantErrContains: "max base fee must be greater than or equal to 100",
 		},
 		{
+			name: "validate monitorService",
+			submitterOptions: SubmitterOptions{
+				DatabaseDSN:          dbt.DSN,
+				MonitorService:       tssMonitor.TSSMonitorService{},
+				HorizonURL:           "https://horizon-testnet.stellar.org",
+				NetworkPassphrase:    network.TestNetworkPassphrase,
+				PrivateKeyEncrypter:  &utils.PrivateKeyEncrypterMock{},
+				DistributionSeed:     "SBDBQFZIIZ53A7JC2X23LSQLI5RTKV5YWDRT33YXW5LRMPKRSJYXS2EW",
+				NumChannelAccounts:   1,
+				QueuePollingInterval: 10,
+				MaxBaseFee:           txnbuild.MinBaseFee,
+			},
+			wantErrContains: "monitor service cannot be nil",
+		},
+		{
 			name: "🎉 successfully finishes validation with nil crash tracker client",
 			submitterOptions: SubmitterOptions{
 				DatabaseDSN: dbt.DSN,
@@ -143,21 +158,6 @@ func Test_SubmitterOptions_validate(t *testing.T) {
 				QueuePollingInterval: 10,
 				MaxBaseFee:           txnbuild.MinBaseFee,
 			},
-		},
-		{
-			name: "validate monitorService",
-			submitterOptions: SubmitterOptions{
-				DatabaseDSN:          dbt.DSN,
-				MonitorService:       tssMonitor.TSSMonitorService{},
-				HorizonURL:           "https://horizon-testnet.stellar.org",
-				NetworkPassphrase:    network.TestNetworkPassphrase,
-				PrivateKeyEncrypter:  &utils.PrivateKeyEncrypterMock{},
-				DistributionSeed:     "SBDBQFZIIZ53A7JC2X23LSQLI5RTKV5YWDRT33YXW5LRMPKRSJYXS2EW",
-				NumChannelAccounts:   1,
-				QueuePollingInterval: 10,
-				MaxBaseFee:           txnbuild.MinBaseFee,
-			},
-			wantErrContains: "monitor service cannot be nil",
 		},
 		{
 			name: "🎉 successfully finishes validation with existing crash tracker client",
@@ -461,8 +461,9 @@ func Test_Manager_ProcessTransactions(t *testing.T) {
 			chTxBundleModel, err := store.NewChannelTransactionBundleModel(dbConnectionPool)
 			require.NoError(t, err)
 
-			mMonitorClient := &monitorMocks.MockMonitorClient{}
-			mMonitorClient.On("MonitorCounters", mock.Anything, mock.Anything).Return(nil)
+			mMonitorClient := monitorMocks.MockMonitorClient{}
+			mMonitorClient.On("MonitorCounters", mock.Anything, mock.Anything).Return(nil).Times(3)
+			defer mMonitorClient.AssertExpectations(t)
 
 			manager := &Manager{
 				dbConnectionPool:    dbConnectionPool,
@@ -476,7 +477,7 @@ func Test_Manager_ProcessTransactions(t *testing.T) {
 				maxBaseFee:          txnbuild.MinBaseFee,
 				txProcessingLimiter: engine.NewTransactionProcessingLimiter(queueService.numChannelAccounts),
 				monitorService: tssMonitor.TSSMonitorService{
-					Client:        mMonitorClient,
+					Client:        &mMonitorClient,
 					GitCommitHash: "gitCommitHash0x",
 					Version:       "version123",
 				},
@@ -484,7 +485,6 @@ func Test_Manager_ProcessTransactions(t *testing.T) {
 
 			go manager.ProcessTransactions(ctx)
 			time.Sleep(750 * time.Millisecond) // <--- this time.Sleep is used wait for the manager (QueuePollingInterval) to start and load the transactions.
-
 			// cancel()
 			switch tc.signalType {
 			case signalTypeOSSigterm:
