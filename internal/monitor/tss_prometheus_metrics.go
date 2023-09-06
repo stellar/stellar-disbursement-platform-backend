@@ -53,6 +53,8 @@ var SummaryTSSVecMetrics = map[MetricTag]*prometheus.SummaryVec{
 
 var CounterTSSMetrics = map[MetricTag]prometheus.Counter{}
 
+var paymentLabelNames = []string{"event_id", "event_type", "tx_id", "event_time", "app_version", "git_commit_hash"}
+
 var CounterTSSVecMetrics = map[MetricTag]*prometheus.CounterVec{
 	TransactionProcessedCounterTag: prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace: "tss",
@@ -69,5 +71,46 @@ var CounterTSSVecMetrics = map[MetricTag]*prometheus.CounterVec{
 		Help:      "Count of Horizon related errors",
 	},
 		[]string{"status_code", "result_code"},
+	),
+
+	PaymentProcessingStartedTag: prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "tss",
+			Name:      string(PaymentProcessingStartedTag),
+			Help:      "Count of payments that are starting to process",
+		},
+		paymentLabelNames,
+	),
+	PaymentTransactionSuccessfulTag: prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "tss",
+			Name:      string(PaymentTransactionSuccessfulTag),
+			Help:      "Count of payments that have processed successfully",
+		},
+		paymentLabelNames,
+	),
+	PaymentReconciliationSuccessfulTag: prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "tss",
+			Name:      string(PaymentReconciliationSuccessfulTag),
+			Help:      "Count of payments that have completed reconciliation successfully",
+		},
+		paymentLabelNames,
+	),
+	PaymentReconciliationFailureTag: prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "tss",
+			Name:      string(PaymentReconciliationFailureTag),
+			Help:      "Count of payments that have failed reconciliation",
+		},
+		paymentLabelNames,
+	),
+	PaymentErrorTag: prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "tss",
+			Name:      string(PaymentErrorTag),
+			Help:      "Count of payments that have failed onchain",
+		},
+		paymentLabelNames,
 	),
 }

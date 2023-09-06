@@ -7,17 +7,15 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/lib/pq"
 	"github.com/stellar/go/support/log"
 	"github.com/stretchr/testify/assert"
-
-	"github.com/lib/pq"
+	"github.com/stretchr/testify/require"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/db/dbtest"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 	txSubStore "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
-	"github.com/stretchr/testify/require"
 )
 
 type testContext struct {
@@ -40,7 +38,7 @@ func setupTestContext(t *testing.T, dbConnectionPool db.DBConnectionPool) *testC
 	}
 }
 
-func Test_TSSMonitorService_MonitorTransactions(t *testing.T) {
+func Test_PaymentFromSubmitterService_MonitorTransactions(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 
@@ -51,8 +49,8 @@ func Test_TSSMonitorService_MonitorTransactions(t *testing.T) {
 	testCtx := setupTestContext(t, dbConnectionPool)
 	ctx := testCtx.ctx
 
-	paymentService := NewSendPaymentsService(testCtx.sdpModel)
-	monitorService := NewTSSMonitorService(testCtx.sdpModel)
+	paymentService := NewPaymentToSubmitterService(testCtx.sdpModel)
+	monitorService := NewPaymentFromSubmitterService(testCtx.sdpModel)
 
 	// create fixtures
 	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool,
@@ -242,12 +240,12 @@ func Test_TSSMonitorService_MonitorTransactions(t *testing.T) {
 
 		tx, err = testCtx.tssModel.UpdateStatusToSuccess(ctx, *tx)
 		require.NoError(t, err)
-		assert.Equal(t, store.TransactionStatusSuccess, tx.Status)
+		assert.Equal(t, txSubStore.TransactionStatusSuccess, tx.Status)
 		assert.NotEmpty(t, tx.CompletedAt)
 
 		err = monitorService.MonitorTransactions(ctx, 10)
 		require.NoError(t, err)
-		expectedError := fmt.Sprintf("orphaned transaction - Unable to sync transaction %s because the associated payment %s was deleted", tx.ID, paymentID)
+		expectedError := fmt.Sprintf("orphaned transaction, unable to sync transaction %s because the associated payment %s was deleted", tx.ID, paymentID)
 		assert.Contains(t, buf.String(), expectedError)
 	})
 }
@@ -272,7 +270,7 @@ func prepareTxsForSync(t *testing.T, testCtx *testContext, transactions []*txSub
 		if tx.Status == txSubStore.TransactionStatusProcessing {
 			tx, err = testCtx.tssModel.UpdateStatusToSuccess(testCtx.ctx, *tx)
 			require.NoError(t, err)
-			assert.Equal(t, store.TransactionStatusSuccess, tx.Status)
+			assert.Equal(t, txSubStore.TransactionStatusSuccess, tx.Status)
 			assert.NotEmpty(t, tx.CompletedAt)
 		}
 	}
@@ -337,7 +335,7 @@ func updateTSSTransactionsToError(t *testing.T, testCtx *testContext, txDataSlic
 	return updatedTransactions
 }
 
-func Test_TSSMonitorService_RetryingPayment(t *testing.T) {
+func Test_PaymentFromSubmitterService_RetryingPayment(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 
@@ -348,8 +346,8 @@ func Test_TSSMonitorService_RetryingPayment(t *testing.T) {
 	testCtx := setupTestContext(t, dbConnectionPool)
 	ctx := testCtx.ctx
 
-	paymentService := NewSendPaymentsService(testCtx.sdpModel)
-	monitorService := NewTSSMonitorService(testCtx.sdpModel)
+	paymentService := NewPaymentToSubmitterService(testCtx.sdpModel)
+	monitorService := NewPaymentFromSubmitterService(testCtx.sdpModel)
 
 	// clean test db
 	data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
@@ -464,7 +462,7 @@ func Test_TSSMonitorService_RetryingPayment(t *testing.T) {
 	assert.Empty(t, paymentDB.StatusHistory[5].StatusMessage)
 }
 
-func Test_TSSMonitorService_CompleteDisbursements(t *testing.T) {
+func Test_PaymentFromSubmitterService_CompleteDisbursements(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 
@@ -475,8 +473,8 @@ func Test_TSSMonitorService_CompleteDisbursements(t *testing.T) {
 	testCtx := setupTestContext(t, dbConnectionPool)
 	ctx := testCtx.ctx
 
-	paymentService := NewSendPaymentsService(testCtx.sdpModel)
-	monitorService := NewTSSMonitorService(testCtx.sdpModel)
+	paymentService := NewPaymentToSubmitterService(testCtx.sdpModel)
+	monitorService := NewPaymentFromSubmitterService(testCtx.sdpModel)
 
 	// clean test db
 	data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)

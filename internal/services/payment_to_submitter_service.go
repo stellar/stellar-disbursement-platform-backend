@@ -7,35 +7,48 @@ import (
 	"strings"
 
 	"github.com/stellar/go/support/log"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
 	txSubStore "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
-type SendPaymentsServiceInterface interface {
+type PaymentToSubmitterServiceInterface interface {
 	SendBatchPayments(ctx context.Context, batchSize int) error
 }
 
-type SendPaymentsService struct {
+// Making sure that ServerService implements ServerServiceInterface:
+var _ PaymentToSubmitterServiceInterface = (*PaymentToSubmitterService)(nil)
+
+// PaymentToSubmitterService is a service that pushes SDP's ready-to-pay payments to the transaction submission service.
+type PaymentToSubmitterService struct {
 	sdpModels *data.Models
 	tssModel  *txSubStore.TransactionModel
 }
 
-// SendBatchPayments sends payments in batches
-func (s SendPaymentsService) SendBatchPayments(ctx context.Context, batchSize int) error {
+func NewPaymentToSubmitterService(models *data.Models) *PaymentToSubmitterService {
+	return &PaymentToSubmitterService{
+		sdpModels: models,
+		tssModel:  txSubStore.NewTransactionModel(models.DBConnectionPool),
+	}
+}
+
+// SendBatchPayments sends SDP's ready-to-pay payments (in batches) to the transaction submission service.
+func (s PaymentToSubmitterService) SendBatchPayments(ctx context.Context, batchSize int) error {
 	err := db.RunInTransaction(ctx, s.sdpModels.DBConnectionPool, nil, func(dbTx db.DBTransaction) error {
 		return s.sendBatchPayments(ctx, dbTx, batchSize)
 	})
 	if err != nil {
-		return fmt.Errorf("error sending payments: %w", err)
+		return fmt.Errorf("sending payments: %w", err)
 	}
 
 	return nil
 }
 
-// sendBatchPayments sends payments in batches in a transaction
-func (s SendPaymentsService) sendBatchPayments(ctx context.Context, dbTx db.DBTransaction, batchSize int) error {
+// sendBatchPayments sends SDP's ready-to-pay payments (in batches) to the transaction submission service, inside a DB
+// transaction.
+func (s PaymentToSubmitterService) sendBatchPayments(ctx context.Context, dbTx db.DBTransaction, batchSize int) error {
 	// 1. Get payments that are ready to be sent. This will lock the rows.
 	// Payments Ready to be sent means:
 	//    a. Payment is in `READY` status
@@ -43,7 +56,7 @@ func (s SendPaymentsService) sendBatchPayments(ctx context.Context, dbTx db.DBTr
 	//    c. Disbursement is in `STARTED` status
 	payments, err := s.sdpModels.Payment.GetBatchForUpdate(ctx, dbTx, batchSize)
 	if err != nil {
-		return fmt.Errorf("error getting payments ready to be sent: %w", err)
+		return fmt.Errorf("getting payments ready to be sent: %w", err)
 	}
 
 	var transactions []txSubStore.Transaction
@@ -61,7 +74,7 @@ func (s SendPaymentsService) sendBatchPayments(ctx context.Context, dbTx db.DBTr
 		// TODO: change TSS to use string amount [SDP-483]
 		amount, parseErr := strconv.ParseFloat(payment.Amount, 64)
 		if parseErr != nil {
-			return fmt.Errorf("error parsing payment amount %s for payment %s: %w", payment.Amount, payment.ID, parseErr)
+			return fmt.Errorf("parsing payment amount %s for payment ID %s: %w", payment.Amount, payment.ID, parseErr)
 		}
 		transaction := txSubStore.Transaction{
 			ExternalID:  payment.ID,
@@ -77,7 +90,7 @@ func (s SendPaymentsService) sendBatchPayments(ctx context.Context, dbTx db.DBTr
 	// 3. Persist data in Transactions table
 	insertedTransactions, err := s.tssModel.BulkInsert(ctx, dbTx, transactions)
 	if err != nil {
-		return fmt.Errorf("error inserting transactions: %w", err)
+		return fmt.Errorf("inserting transactions: %w", err)
 	}
 	if len(insertedTransactions) > 0 {
 		log.Ctx(ctx).Infof("Submitted %d transaction(s) to TSS", len(insertedTransactions))
@@ -87,7 +100,7 @@ func (s SendPaymentsService) sendBatchPayments(ctx context.Context, dbTx db.DBTr
 	if len(pendingPayments) > 0 {
 		numUpdated, innerErr := s.sdpModels.Payment.UpdateStatuses(ctx, dbTx, pendingPayments, data.PendingPaymentStatus)
 		if innerErr != nil {
-			return fmt.Errorf("error updating payment statuses to Pending: %w", innerErr)
+			return fmt.Errorf("updating payment statuses to Pending: %w", innerErr)
 		}
 		log.Ctx(ctx).Infof("Updated %d payments to Pending", numUpdated)
 	}
@@ -96,16 +109,16 @@ func (s SendPaymentsService) sendBatchPayments(ctx context.Context, dbTx db.DBTr
 	if len(failedPayments) != 0 {
 		numUpdated, innerErr := s.sdpModels.Payment.UpdateStatuses(ctx, dbTx, failedPayments, data.FailedPaymentStatus)
 		if innerErr != nil {
-			return fmt.Errorf("error updating payment statuses to Failed: %w", innerErr)
+			return fmt.Errorf("updating payment statuses to Failed: %w", innerErr)
 		}
-		log.Ctx(ctx).Infof("Updated %d payments to Failed", numUpdated)
+		log.Ctx(ctx).Warnf("Updated %d payments to Failed", numUpdated)
 	}
 	return nil
 }
 
-// ValidateReadyForSending validate that payment is ready for sending
-//  1. Check Statuses of Payment, Receiver Wallet, and Disbursement
-//  2. Check required fields are not empty.
+// validatePaymentReadyForSending validates that a payment is ready for sending, by:
+//  1. checking the statuses of Payment, Receiver Wallet, and Disbursement.
+//  2. checking that the required fields are not empty.
 func validatePaymentReadyForSending(p *data.Payment) error {
 	// check statuses
 	if p.Status != data.ReadyPaymentStatus {
@@ -142,13 +155,3 @@ func validatePaymentReadyForSending(p *data.Payment) error {
 
 	return nil
 }
-
-func NewSendPaymentsService(models *data.Models) *SendPaymentsService {
-	return &SendPaymentsService{
-		sdpModels: models,
-		tssModel:  txSubStore.NewTransactionModel(models.DBConnectionPool),
-	}
-}
-
-// Making sure that ServerService implements ServerServiceInterface
-var _ SendPaymentsServiceInterface = (*SendPaymentsService)(nil)

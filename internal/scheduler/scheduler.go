@@ -8,14 +8,13 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/stellar/go/support/log"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
-
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/scheduler/jobs"
-
-	"github.com/stellar/go/support/log"
 )
 
 // Scheduler manages a list of jobs and executes them at their specified intervals.
@@ -146,9 +145,9 @@ func worker(ctx context.Context, workerID int, crashTrackerClient crashtracker.C
 	}
 }
 
-func WithPaymentsProcessorJobOption(models *data.Models) SchedulerJobRegisterOption {
+func WithPaymentToSubmitterJobOption(models *data.Models) SchedulerJobRegisterOption {
 	return func(s *Scheduler) {
-		j := jobs.NewPaymentsProcessorJob(models)
+		j := jobs.NewPaymentToSubmitterJob(models)
 		log.Infof("registering %s job to scheduler", j.GetName())
 		s.addJob(j)
 	}
@@ -165,9 +164,9 @@ func WithAPAuthEnforcementJob(apService anchorplatform.AnchorPlatformAPIServiceI
 	}
 }
 
-func WithTSSMonitorJobOption(models *data.Models) SchedulerJobRegisterOption {
+func WithPaymentFromSubmitterJobOption(models *data.Models) SchedulerJobRegisterOption {
 	return func(s *Scheduler) {
-		j := jobs.NewTSSMonitorJob(models)
+		j := jobs.NewPaymentFromSubmitterJob(models)
 		log.Infof("registering %s job to scheduler", j.GetName())
 		s.addJob(j)
 	}

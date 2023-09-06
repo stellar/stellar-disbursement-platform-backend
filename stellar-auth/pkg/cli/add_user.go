@@ -20,7 +20,7 @@ type PasswordPromptInterface interface {
 	Run() (string, error)
 }
 
-var _ PasswordPromptInterface = &promptui.Prompt{}
+var _ PasswordPromptInterface = (*promptui.Prompt)(nil)
 
 var (
 	isOwner      = false
