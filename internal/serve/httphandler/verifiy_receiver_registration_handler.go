@@ -88,6 +88,7 @@ func (v VerifyReceiverRegistrationHandler) validate(r *http.Request) (reqObj dat
 func (v VerifyReceiverRegistrationHandler) VerifyReceiverRegistration(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
+	// STEP 1: Validate request
 	receiverRegistrationRequest, sep24Claims, httpErr := v.validate(r)
 	if httpErr != nil {
 		httpErr.Render(w)
@@ -95,19 +96,19 @@ func (v VerifyReceiverRegistrationHandler) VerifyReceiverRegistration(w http.Res
 	}
 
 	atomicFnErr := db.RunInTransaction(ctx, v.Models.DBConnectionPool, nil, func(dbTx db.DBTransaction) error {
-		// get receiver with the phone number present in the payload
-		receiver, err := v.Models.Receiver.GetByPhoneNumbers(ctx, dbTx, []string{receiverRegistrationRequest.PhoneNumber})
+		// STEP 2: find the receivers with the given phone number
+		receivers, err := v.Models.Receiver.GetByPhoneNumbers(ctx, dbTx, []string{receiverRegistrationRequest.PhoneNumber})
 		if err != nil {
 			log.Ctx(ctx).Errorf("error retrieving receiver with phone number %s: %s", utils.TruncateString(receiverRegistrationRequest.PhoneNumber, 3), err.Error())
 			return err
 		}
-		if len(receiver) == 0 {
+		if len(receivers) == 0 {
 			err = fmt.Errorf("receiver with phone number %s not found in our server", receiverRegistrationRequest.PhoneNumber)
 			return &ErrorInformationNotFound{cause: err}
 		}
 
-		// get receiverVerification using receiver ID and the verification type
-		receiverVerifications, err := v.Models.ReceiverVerification.GetByReceiverIDsAndVerificationField(ctx, dbTx, []string{receiver[0].ID}, receiverRegistrationRequest.VerificationType)
+		// STEP 3: find the receiverVerification entry that matches the pair [receiverID, verificationType]
+		receiverVerifications, err := v.Models.ReceiverVerification.GetByReceiverIDsAndVerificationField(ctx, dbTx, []string{receivers[0].ID}, receiverRegistrationRequest.VerificationType)
 		if err != nil {
 			log.Ctx(ctx).Errorf("error retrieving receiver verification for verification type %s", receiverRegistrationRequest.VerificationType)
 			return err
@@ -116,13 +117,13 @@ func (v VerifyReceiverRegistrationHandler) VerifyReceiverRegistration(w http.Res
 			err = fmt.Errorf("%s not found for receiver with phone number %s", receiverRegistrationRequest.VerificationType, receiverRegistrationRequest.PhoneNumber)
 			return &ErrorInformationNotFound{cause: err}
 		}
-
 		if len(receiverVerifications) > 1 {
-			log.Ctx(ctx).Warnf("receiver with id %s has more than one verification saved in the database for type %s", receiver[0].ID, receiverRegistrationRequest.VerificationType)
+			log.Ctx(ctx).Warnf("receiver with id %s has more than one verification saved in the database for type %s", receivers[0].ID, receiverRegistrationRequest.VerificationType)
 		}
-
 		receiverVerification := receiverVerifications[0]
 
+		// STEP 4: check if the number of attempts to confirm the verification value exceeded the max value
+		// TODO: the application currently can't recover from a max attempts exceeded error.
 		if v.Models.ReceiverVerification.ExceededAttempts(receiverVerification.Attempts) {
 			err = fmt.Errorf("number of attempts to confirm the verification value exceeded max attempts value %d", data.MaxAttemptsAllowed)
 			return &ErrorInformationNotFound{cause: err}
@@ -157,9 +158,9 @@ func (v VerifyReceiverRegistrationHandler) VerifyReceiverRegistration(w http.Res
 			}
 		}
 
-		receiverWallet, err := v.Models.ReceiverWallet.GetByReceiverIDAndWalletDomain(ctx, receiver[0].ID, sep24Claims.ClientDomain(), dbTx)
+		receiverWallet, err := v.Models.ReceiverWallet.GetByReceiverIDAndWalletDomain(ctx, receivers[0].ID, sep24Claims.ClientDomain(), dbTx)
 		if err != nil {
-			err = fmt.Errorf("receiver wallet not found for receiver with id %s and client domain %s: %w", receiver[0].ID, sep24Claims.ClientDomain(), err)
+			err = fmt.Errorf("receiver wallet not found for receiver with id %s and client domain %s: %w", receivers[0].ID, sep24Claims.ClientDomain(), err)
 			return &ErrorInformationNotFound{cause: err}
 		}
 
@@ -172,7 +173,7 @@ func (v VerifyReceiverRegistrationHandler) VerifyReceiverRegistration(w http.Res
 		// check if receiver wallet status can transition to RegisteredReceiversWalletStatus
 		err = receiverWallet.Status.TransitionTo(data.RegisteredReceiversWalletStatus)
 		if err != nil {
-			err = fmt.Errorf("transitioning status for receiver[ID=%s], receiverWallet[ID=%s]: %w", receiver[0].ID, receiverWallet.ID, err)
+			err = fmt.Errorf("transitioning status for receiver[ID=%s], receiverWallet[ID=%s]: %w", receivers[0].ID, receiverWallet.ID, err)
 			return &ErrorInformationNotFound{cause: err}
 		}
 
