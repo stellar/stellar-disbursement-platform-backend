@@ -6,11 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/stellar/go/support/log"
-
-	"golang.org/x/crypto/bcrypt"
-
 	"github.com/lib/pq"
+	"github.com/stellar/go/support/log"
+	"golang.org/x/crypto/bcrypt"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
 )

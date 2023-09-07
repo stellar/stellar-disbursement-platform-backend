@@ -151,7 +151,7 @@ func Test_VerifyReceiverRegistration(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
-		assert.JSONEq(t, `{"error": "request invalid"}`, string(respBody))
+		assert.JSONEq(t, `{"error": "The request was invalid in some way."}`, string(respBody))
 
 		entries := getEntries()
 		assert.NotEmpty(t, entries)
@@ -175,7 +175,7 @@ func Test_VerifyReceiverRegistration(t *testing.T) {
 				},
 				want: `
 				{
-					"error": "request invalid",
+					"error": "The request was invalid in some way.",
 					"extras": {
 					  "phone_number": "phone cannot be empty"
 					}
@@ -193,7 +193,7 @@ func Test_VerifyReceiverRegistration(t *testing.T) {
 				},
 				want: `
 				{
-					"error": "request invalid",
+					"error": "The request was invalid in some way.",
 					"extras": {
 					  "phone_number": "invalid phone format. Correct format: +380445555555"
 					}
@@ -211,7 +211,7 @@ func Test_VerifyReceiverRegistration(t *testing.T) {
 				},
 				want: `
 				{
-					"error": "request invalid",
+					"error": "The request was invalid in some way.",
 					"extras": {
 					  "otp": "invalid otp format. Needs to be a 6 digit value"
 					}
@@ -229,7 +229,7 @@ func Test_VerifyReceiverRegistration(t *testing.T) {
 				},
 				want: `
 				{
-					"error": "request invalid",
+					"error": "The request was invalid in some way.",
 					"extras": {
 					  "verification_type": "invalid parameter. valid values are: DATE_OF_BIRTH, PIN, NATIONAL_ID_NUMBER"
 					}
@@ -247,7 +247,7 @@ func Test_VerifyReceiverRegistration(t *testing.T) {
 				},
 				want: `
 				{
-					"error": "request invalid",
+					"error": "The request was invalid in some way.",
 					"extras": {
 					  "verification": "invalid date of birth format. Correct format: 1990-01-01"
 					}

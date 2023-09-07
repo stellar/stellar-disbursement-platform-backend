@@ -37,52 +37,64 @@ type VerifyReceiverRegistrationHandler struct {
 	NetworkPassphrase        string
 }
 
-// VerifyReceiverRegistration implements the http.Handler interface.
-func (v VerifyReceiverRegistrationHandler) VerifyReceiverRegistration(w http.ResponseWriter, r *http.Request) {
+// validate validates the request [header, body, body.reCAPTCHA_token], and returns the decoded payload, or an http error.
+func (v VerifyReceiverRegistrationHandler) validate(r *http.Request) (reqObj data.ReceiverRegistrationRequest, sep24Claims *anchorplatform.SEP24JWTClaims, httpErr *httperror.HTTPError) {
 	ctx := r.Context()
 
-	// claims sep24 Token
-	sep24Claims := anchorplatform.GetSEP24Claims(ctx)
+	// STEP 1: Validate SEP-24 JWT token
+	sep24Claims = anchorplatform.GetSEP24Claims(ctx)
 	if sep24Claims == nil {
 		err := fmt.Errorf("no SEP-24 claims found in the request context")
 		log.Ctx(ctx).Error(err)
-		httperror.Unauthorized("", err, nil).Render(w)
-		return
+		return reqObj, nil, httperror.Unauthorized("", err, nil)
 	}
 
-	// decode request payload into ReceiverRegistrationRequest
+	// STEP 2: Decode request body
+	if r.Body == nil {
+		log.Ctx(ctx).Error("request body is empty")
+		return reqObj, nil, httperror.BadRequest("", nil, nil)
+	}
 	receiverRegistrationRequest := data.ReceiverRegistrationRequest{}
 	err := json.NewDecoder(r.Body).Decode(&receiverRegistrationRequest)
 	if err != nil {
-		log.Ctx(ctx).Errorf("invalid request body: %s", err.Error())
-		httperror.BadRequest("invalid request body", err, nil).Render(w)
-		return
+		err = fmt.Errorf("invalid request body: %w", err)
+		log.Ctx(ctx).Error(err)
+		return reqObj, nil, httperror.BadRequest("", err, nil)
 	}
 
-	// validating reCAPTCHA Token
+	// STEP 3: Validate reCAPTCHA Token
 	isValid, err := v.ReCAPTCHAValidator.IsTokenValid(ctx, receiverRegistrationRequest.ReCAPTCHAToken)
 	if err != nil {
-		httperror.InternalError(ctx, "Cannot validate reCAPTCHA token", err, nil).Render(w)
-		return
+		return reqObj, nil, httperror.InternalError(ctx, "Cannot validate reCAPTCHA token", err, nil)
 	}
-
 	if !isValid {
 		log.Ctx(ctx).Errorf("reCAPTCHA token is invalid for request with OTP %s and Phone Number %s",
 			utils.TruncateString(receiverRegistrationRequest.OTP, 2), utils.TruncateString(receiverRegistrationRequest.PhoneNumber, 4))
-		httperror.BadRequest("request invalid", nil, nil).Render(w)
-		return
+		return reqObj, nil, httperror.BadRequest("", nil, nil)
 	}
 
-	// validate request payload
+	// STEP 4: Validate request body
 	validator := validators.NewReceiverRegistrationValidator()
 	validator.ValidateReceiver(&receiverRegistrationRequest)
 	if validator.HasErrors() {
 		log.Ctx(ctx).Errorf("request invalid: %s", validator.Errors)
-		httperror.BadRequest("request invalid", nil, validator.Errors).Render(w)
+		return reqObj, nil, httperror.BadRequest("", nil, validator.Errors)
+	}
+
+	return receiverRegistrationRequest, sep24Claims, nil
+}
+
+// VerifyReceiverRegistration implements the http.Handler interface.
+func (v VerifyReceiverRegistrationHandler) VerifyReceiverRegistration(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	receiverRegistrationRequest, sep24Claims, httpErr := v.validate(r)
+	if httpErr != nil {
+		httpErr.Render(w)
 		return
 	}
 
-	err = db.RunInTransaction(ctx, v.Models.DBConnectionPool, nil, func(dbTx db.DBTransaction) error {
+	err := db.RunInTransaction(ctx, v.Models.DBConnectionPool, nil, func(dbTx db.DBTransaction) error {
 		// get receiver with the phone number present in the payload
 		receiver, innerErr := v.Models.Receiver.GetByPhoneNumbers(ctx, dbTx, []string{receiverRegistrationRequest.PhoneNumber})
 		if innerErr != nil {
@@ -145,8 +157,7 @@ func (v VerifyReceiverRegistrationHandler) VerifyReceiverRegistration(w http.Res
 			receiverVerification.ConfirmedAt = &now
 			innerErr = v.Models.ReceiverVerification.UpdateReceiverVerification(ctx, *receiverVerification, dbTx)
 			if innerErr != nil {
-				log.Ctx(ctx).Error(innerErr)
-				return &ErrorInformationNotFound{cause: innerErr}
+				return fmt.Errorf("updating successfully verified user: %w", innerErr)
 			}
 		}
 
@@ -211,7 +222,6 @@ func (v VerifyReceiverRegistrationHandler) VerifyReceiverRegistration(w http.Res
 
 		return nil
 	})
-
 	if err != nil {
 		var errorInformationNotFound *ErrorInformationNotFound
 		if errors.As(err, &errorInformationNotFound) {
