@@ -19,22 +19,166 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/db/dbtest"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
 
-func Test_VerifyReceiverRegistration(t *testing.T) {
+func Test_VerifyReceiverRegistrationHandler_validate(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
-
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
 
+	ctx := context.Background()
+
+	// create valid sep24 token
+	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "testWallet", "https://home.page", "home.page", "wallet123://")
+	sep24JWTClaims := &anchorplatform.SEP24JWTClaims{
+		ClientDomainClaim: wallet.SEP10ClientDomain,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ID:        "test-transaction-id",
+			Subject:   "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444",
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(5 * time.Minute)),
+		},
+	}
+
+	testCases := []struct {
+		name                       string
+		contextSep24Claims         *anchorplatform.SEP24JWTClaims
+		requestBody                string
+		isRecaptchaValidFnResponse []interface{}
+		wantHTTPErr                *httperror.HTTPError
+		wantSep24Claims            *anchorplatform.SEP24JWTClaims
+		wantResult                 data.ReceiverRegistrationRequest
+	}{
+		{
+			name:        "returns a 401 response if SEP24 token is missing",
+			wantHTTPErr: httperror.Unauthorized("", fmt.Errorf("no SEP-24 claims found in the request context"), nil),
+		},
+		{
+			name:               "returns a 400 response if the request body is empty",
+			contextSep24Claims: sep24JWTClaims,
+			wantHTTPErr:        httperror.BadRequest("", nil, nil),
+		},
+		{
+			name:               "returns a 400 response if the request body is invalid",
+			contextSep24Claims: sep24JWTClaims,
+			requestBody:        "invalid",
+			wantHTTPErr:        httperror.BadRequest("", nil, nil),
+		},
+		{
+			name:                       "returns a 500 response if the reCAPTCHA validation returns an error",
+			contextSep24Claims:         sep24JWTClaims,
+			requestBody:                `{"reCAPTCHA_token": "token"}`,
+			isRecaptchaValidFnResponse: []interface{}{false, errors.New("unexpected error")},
+			wantHTTPErr:                httperror.InternalError(ctx, "Cannot validate reCAPTCHA token", errors.New("unexpected error"), nil),
+		},
+		{
+			name:                       "returns a 400 response if the reCAPTCHA token is invalid",
+			contextSep24Claims:         sep24JWTClaims,
+			requestBody:                `{"reCAPTCHA_token": "token"}`,
+			isRecaptchaValidFnResponse: []interface{}{false, nil},
+			wantHTTPErr:                httperror.BadRequest("", nil, nil),
+		},
+		{
+			name:               "returns a 400 response if a body field is invalid",
+			contextSep24Claims: sep24JWTClaims,
+			requestBody: `{
+				"phone_number": "+380445555555",
+				"otp": "",
+				"verification": "1990-01-01",
+				"verification_type": "date_of_birth",
+				"reCAPTCHA_token": "token"
+			}`,
+			isRecaptchaValidFnResponse: []interface{}{true, nil},
+			wantHTTPErr:                httperror.BadRequest("", nil, map[string]interface{}{"otp": "invalid otp format. Needs to be a 6 digit value"}),
+		},
+		{
+			name:               "🎉 successfully parses the body into an object if the SEP24 token, recaptcha token and reqquest body are all valid",
+			contextSep24Claims: sep24JWTClaims,
+			requestBody: `{
+				"phone_number": "+380445555555",
+				"otp": "123456",
+				"verification": "1990-01-01",
+				"verification_type": "date_of_birth",
+				"reCAPTCHA_token": "token"
+			}`,
+			isRecaptchaValidFnResponse: []interface{}{true, nil},
+			wantSep24Claims:            sep24JWTClaims,
+			wantResult: data.ReceiverRegistrationRequest{
+				PhoneNumber:       "+380445555555",
+				OTP:               "123456",
+				VerificationValue: "1990-01-01",
+				VerificationType:  data.VerificationFieldDateOfBirth,
+				ReCAPTCHAToken:    "token",
+			},
+		},
+	}
+
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
+	mockAnchorPlatformService := anchorplatform.AnchorPlatformAPIServiceMock{}
+	handler := &VerifyReceiverRegistrationHandler{
+		Models:                   models,
+		AnchorPlatformAPIService: &mockAnchorPlatformService,
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			var requestBody io.Reader
+			if tc.requestBody != "" {
+				requestBody = strings.NewReader(tc.requestBody)
+			}
+
+			req, err := http.NewRequest("POST", "/wallet-registration/verification", requestBody)
+			require.NoError(t, err)
+
+			if tc.contextSep24Claims != nil {
+				req = req.WithContext(context.WithValue(req.Context(), anchorplatform.SEP24ClaimsContextKey, tc.contextSep24Claims))
+			}
+
+			if tc.isRecaptchaValidFnResponse != nil {
+				reCAPTCHAValidatorMock := &validators.ReCAPTCHAValidatorMock{}
+				handler.ReCAPTCHAValidator = reCAPTCHAValidatorMock
+				reCAPTCHAValidatorMock.
+					On("IsTokenValid", mock.Anything, "token").
+					Return(tc.isRecaptchaValidFnResponse...).
+					Once()
+				defer reCAPTCHAValidatorMock.AssertExpectations(t)
+			}
+
+			gotReceiverRegistrationRequest, gotSep24Claims, httpErr := handler.validate(req)
+			if tc.wantHTTPErr == nil {
+				require.Nil(t, httpErr)
+				assert.Equal(t, tc.wantSep24Claims, gotSep24Claims)
+				assert.Equal(t, tc.wantResult, gotReceiverRegistrationRequest)
+			} else {
+				require.NotNil(t, httpErr)
+				assert.Equal(t, tc.wantHTTPErr.StatusCode, httpErr.StatusCode)
+				assert.Equal(t, tc.wantHTTPErr.Message, httpErr.Message)
+				assert.Equal(t, tc.wantHTTPErr.Extras, httpErr.Extras)
+				assert.Nil(t, gotSep24Claims)
+				assert.Empty(t, gotReceiverRegistrationRequest)
+			}
+		})
+	}
+}
+
+func Test_VerifyReceiverRegistration(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+	models, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "testWallet", "https://home.page", "home.page", "wallet123://")
 
 	mockAnchorPlatformService := anchorplatform.AnchorPlatformAPIServiceMock{}
 	reCAPTCHAValidator := &validators.ReCAPTCHAValidatorMock{}
@@ -44,252 +188,9 @@ func Test_VerifyReceiverRegistration(t *testing.T) {
 		ReCAPTCHAValidator:       reCAPTCHAValidator,
 	}
 
-	// setup
+	// setup router
 	r := chi.NewRouter()
 	r.Post("/wallet-registration/verification", handler.VerifyReceiverRegistration)
-
-	t.Run("error unauthorized sep24 token not found", func(t *testing.T) {
-		req, err := http.NewRequest("POST", "/wallet-registration/verification", nil)
-		require.NoError(t, err)
-		rr := httptest.NewRecorder()
-		r.ServeHTTP(rr, req)
-
-		resp := rr.Result()
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-
-		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
-		assert.JSONEq(t, `{"error":"Not authorized."}`, string(respBody))
-	})
-
-	ctx := context.Background()
-	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "testWallet", "https://home.page", "home.page", "wallet123://")
-
-	t.Run("error internal server error when the reCAPTCHA validator fails", func(t *testing.T) {
-		reqBody := `
-			{
-				"phone_number": "+380445555555",
-				"otp": "123456",
-				"verification_value": "1990-01-01",
-				"verification_type": "date_of_birth",
-				"reCAPTCHA_token": "token"
-			}
-		`
-
-		w := httptest.NewRecorder()
-		req, err := http.NewRequest(http.MethodPost, "/wallet-registration/verification", strings.NewReader(reqBody))
-		require.NoError(t, err)
-
-		reCAPTCHAValidator.
-			On("IsTokenValid", mock.Anything, "token").
-			Return(false, errors.New("unexpected error")).
-			Once()
-
-		// create valid sep24 token
-		validClaims := &anchorplatform.SEP24JWTClaims{
-			ClientDomainClaim: wallet.SEP10ClientDomain,
-			RegisteredClaims: jwt.RegisteredClaims{
-				ID:        "test-transaction-id",
-				Subject:   "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444",
-				ExpiresAt: jwt.NewNumericDate(time.Now().Add(5 * time.Minute)),
-			},
-		}
-
-		getEntries := log.DefaultLogger.StartTest(log.ErrorLevel)
-
-		req = req.WithContext(context.WithValue(req.Context(), anchorplatform.SEP24ClaimsContextKey, validClaims))
-		r.ServeHTTP(w, req)
-
-		resp := w.Result()
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-
-		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
-		assert.JSONEq(t, `{"error": "Cannot validate reCAPTCHA token"}`, string(respBody))
-
-		entries := getEntries()
-		assert.NotEmpty(t, entries)
-		assert.Equal(t, "Cannot validate reCAPTCHA token: unexpected error", entries[0].Message)
-	})
-
-	t.Run("error bad request when the reCAPTCHA token is invalid", func(t *testing.T) {
-		reqBody := `
-			{
-				"phone_number": "+380445555555",
-				"otp": "123456",
-				"verification_value": "1990-01-01",
-				"verification_type": "date_of_birth",
-				"reCAPTCHA_token": "token"
-			}
-		`
-
-		w := httptest.NewRecorder()
-		req, err := http.NewRequest(http.MethodPost, "/wallet-registration/verification", strings.NewReader(reqBody))
-		require.NoError(t, err)
-
-		reCAPTCHAValidator.
-			On("IsTokenValid", mock.Anything, "token").
-			Return(false, nil).
-			Once()
-
-		getEntries := log.DefaultLogger.StartTest(log.ErrorLevel)
-
-		// create valid sep24 token
-		validClaims := &anchorplatform.SEP24JWTClaims{
-			ClientDomainClaim: wallet.SEP10ClientDomain,
-			RegisteredClaims: jwt.RegisteredClaims{
-				ID:        "test-transaction-id",
-				Subject:   "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444",
-				ExpiresAt: jwt.NewNumericDate(time.Now().Add(5 * time.Minute)),
-			},
-		}
-		req = req.WithContext(context.WithValue(req.Context(), anchorplatform.SEP24ClaimsContextKey, validClaims))
-		r.ServeHTTP(w, req)
-
-		resp := w.Result()
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-
-		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
-		assert.JSONEq(t, `{"error": "The request was invalid in some way."}`, string(respBody))
-
-		entries := getEntries()
-		assert.NotEmpty(t, entries)
-		assert.Equal(t, "reCAPTCHA token is invalid for request with OTP 12...56 and Phone Number +380...5555", entries[0].Message)
-	})
-
-	t.Run("error invalid request body", func(t *testing.T) {
-		testCases := []struct {
-			name    string
-			request data.ReceiverRegistrationRequest
-			want    string
-		}{
-			{
-				name: "empty phone number",
-				request: data.ReceiverRegistrationRequest{
-					PhoneNumber:       "",
-					OTP:               "123456",
-					VerificationValue: "1990-01-01",
-					VerificationType:  "date_of_birth",
-					ReCAPTCHAToken:    "token",
-				},
-				want: `
-				{
-					"error": "The request was invalid in some way.",
-					"extras": {
-					  "phone_number": "phone cannot be empty"
-					}
-				  }
-				`,
-			},
-			{
-				name: "invalid phone number",
-				request: data.ReceiverRegistrationRequest{
-					PhoneNumber:       "invalid_phone",
-					OTP:               "123456",
-					VerificationValue: "1990-01-01",
-					VerificationType:  "date_of_birth",
-					ReCAPTCHAToken:    "token",
-				},
-				want: `
-				{
-					"error": "The request was invalid in some way.",
-					"extras": {
-					  "phone_number": "invalid phone format. Correct format: +380445555555"
-					}
-				  }
-				`,
-			},
-			{
-				name: "invalid otp",
-				request: data.ReceiverRegistrationRequest{
-					PhoneNumber:       "+380445555555",
-					OTP:               "12mock",
-					VerificationValue: "1990-01-01",
-					VerificationType:  "date_of_birth",
-					ReCAPTCHAToken:    "token",
-				},
-				want: `
-				{
-					"error": "The request was invalid in some way.",
-					"extras": {
-					  "otp": "invalid otp format. Needs to be a 6 digit value"
-					}
-				  }
-				`,
-			},
-			{
-				name: "invalid verification type",
-				request: data.ReceiverRegistrationRequest{
-					PhoneNumber:       "+380445555555",
-					OTP:               "123456",
-					VerificationValue: "1990-01-01",
-					VerificationType:  "invalid",
-					ReCAPTCHAToken:    "token",
-				},
-				want: `
-				{
-					"error": "The request was invalid in some way.",
-					"extras": {
-					  "verification_type": "invalid parameter. valid values are: DATE_OF_BIRTH, PIN, NATIONAL_ID_NUMBER"
-					}
-				  }
-				`,
-			},
-			{
-				name: "invalid verification value",
-				request: data.ReceiverRegistrationRequest{
-					PhoneNumber:       "+380445555555",
-					OTP:               "123456",
-					VerificationValue: "90/01/01",
-					VerificationType:  "date_of_birth",
-					ReCAPTCHAToken:    "token",
-				},
-				want: `
-				{
-					"error": "The request was invalid in some way.",
-					"extras": {
-					  "verification": "invalid date of birth format. Correct format: 1990-01-01"
-					}
-				  }
-				`,
-			},
-		}
-		for _, tc := range testCases {
-			t.Run(tc.name, func(t *testing.T) {
-				reqBody, err := json.Marshal(tc.request)
-				require.NoError(t, err)
-				req, err := http.NewRequest("POST", "/wallet-registration/verification", strings.NewReader(string(reqBody)))
-				require.NoError(t, err)
-
-				reCAPTCHAValidator.
-					On("IsTokenValid", mock.Anything, "token").
-					Return(true, nil).
-					Once()
-
-				rr := httptest.NewRecorder()
-
-				// create valid sep24 token
-				validClaims := &anchorplatform.SEP24JWTClaims{
-					ClientDomainClaim: wallet.SEP10ClientDomain,
-					RegisteredClaims: jwt.RegisteredClaims{
-						ID:        "test-transaction-id",
-						Subject:   "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444",
-						ExpiresAt: jwt.NewNumericDate(time.Now().Add(5 * time.Minute)),
-					},
-				}
-				req = req.WithContext(context.WithValue(req.Context(), anchorplatform.SEP24ClaimsContextKey, validClaims))
-				r.ServeHTTP(rr, req)
-
-				resp := rr.Result()
-				respBody, err := io.ReadAll(resp.Body)
-				require.NoError(t, err)
-
-				assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
-				assert.JSONEq(t, tc.want, string(respBody))
-			})
-		}
-	})
 
 	t.Run("error receiver not found in our server", func(t *testing.T) {
 		// set the logger to a buffer so we can check the error message
