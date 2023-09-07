@@ -152,7 +152,7 @@ Note that the `submitter_transactions` table is used by the TSS and will be mana
 
 ## Wallets
 
-Please check the [Making Your Wallet SDP-Ready](https://developers.stellar.org/docs/stellar-disbursement-platform/making-your-wallet-sdp-ready) section of the Stellar Docs for more information on how to integrate your wallet with the SDP.
+Please check the [Making Your Wallet SDP-Ready](https://docs.stellar.org/stellar-disbursement-platform/making-your-wallet-sdp-ready) section of the Stellar Docs for more information on how to integrate your wallet with the SDP.
 
 ## Contributors
 
