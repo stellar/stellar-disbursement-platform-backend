@@ -103,7 +103,6 @@ func (v VerifyReceiverRegistrationHandler) VerifyReceiverRegistration(w http.Res
 		}
 		if len(receiver) == 0 {
 			innerErr = fmt.Errorf("receiver with phone number %s not found in our server", receiverRegistrationRequest.PhoneNumber)
-			log.Ctx(ctx).Error(innerErr)
 			return &ErrorInformationNotFound{cause: innerErr}
 		}
 
@@ -115,7 +114,6 @@ func (v VerifyReceiverRegistrationHandler) VerifyReceiverRegistration(w http.Res
 		}
 		if len(receiverVerifications) == 0 {
 			innerErr = fmt.Errorf("%s not found for receiver with phone number %s", receiverRegistrationRequest.VerificationType, receiverRegistrationRequest.PhoneNumber)
-			log.Ctx(ctx).Error(innerErr)
 			return &ErrorInformationNotFound{cause: innerErr}
 		}
 
@@ -127,14 +125,13 @@ func (v VerifyReceiverRegistrationHandler) VerifyReceiverRegistration(w http.Res
 
 		if v.Models.ReceiverVerification.ExceededAttempts(receiverVerification.Attempts) {
 			innerErr = fmt.Errorf("number of attempts to confirm the verification value exceeded max attempts value %d", data.MaxAttemptsAllowed)
-			log.Ctx(ctx).Error(innerErr)
 			return &ErrorInformationNotFound{cause: innerErr}
 		}
 
 		now := time.Now()
 		// check if verification value match with value saved in the database
 		if !data.CompareVerificationValue(receiverVerification.HashedValue, receiverRegistrationRequest.VerificationValue) {
-			baseErr := fmt.Sprintf("%s value does not match for user with phone number %s", receiverRegistrationRequest.VerificationType, receiverRegistrationRequest.PhoneNumber)
+			baseErrMsg := fmt.Sprintf("%s value does not match for user with phone number %s", receiverRegistrationRequest.VerificationType, receiverRegistrationRequest.PhoneNumber)
 			// update the receiver verification with the confirmation that the value was checked
 			receiverVerification.Attempts = receiverVerification.Attempts + 1
 			receiverVerification.FailedAt = &now
@@ -143,12 +140,11 @@ func (v VerifyReceiverRegistrationHandler) VerifyReceiverRegistration(w http.Res
 			// this update is done using the DBConnectionPool and not dbTx because we don't want to roolback these changes after returning the error
 			updateErr := v.Models.ReceiverVerification.UpdateReceiverVerification(ctx, *receiverVerification, v.Models.DBConnectionPool)
 			if updateErr != nil {
-				innerErr = fmt.Errorf("%s: %w", baseErr, updateErr)
+				innerErr = fmt.Errorf("%s: %w", baseErrMsg, updateErr)
 			} else {
-				innerErr = fmt.Errorf("%s", baseErr)
+				innerErr = fmt.Errorf("%s", baseErrMsg)
 			}
 
-			log.Ctx(ctx).Error(innerErr)
 			return &ErrorInformationNotFound{cause: innerErr}
 		}
 
@@ -163,7 +159,7 @@ func (v VerifyReceiverRegistrationHandler) VerifyReceiverRegistration(w http.Res
 
 		receiverWallet, innerErr := v.Models.ReceiverWallet.GetByReceiverIDAndWalletDomain(ctx, receiver[0].ID, sep24Claims.ClientDomain(), dbTx)
 		if innerErr != nil {
-			log.Ctx(ctx).Errorf("receiver wallet not found for receiver with id %s and client domain %s", receiver[0].ID, sep24Claims.ClientDomain())
+			innerErr = fmt.Errorf("receiver wallet not found for receiver with id %s and client domain %s: %w", receiver[0].ID, sep24Claims.ClientDomain(), innerErr)
 			return &ErrorInformationNotFound{cause: innerErr}
 		}
 
@@ -176,28 +172,15 @@ func (v VerifyReceiverRegistrationHandler) VerifyReceiverRegistration(w http.Res
 		// check if receiver wallet status can transition to RegisteredReceiversWalletStatus
 		innerErr = receiverWallet.Status.TransitionTo(data.RegisteredReceiversWalletStatus)
 		if innerErr != nil {
-			log.Ctx(ctx).Errorf("receiver wallet for receiver with id %s has an invalid status %s, can not transaction to REGISTERED", receiver[0].ID, receiverWallet.Status)
+			innerErr = fmt.Errorf("transitioning status for receiver[ID=%s], receiverWallet[ID=%s]: %w", receiver[0].ID, receiverWallet.ID, innerErr)
 			return &ErrorInformationNotFound{cause: innerErr}
 		}
 
 		// check if receiver_wallet OTP is valid and not expired
 		innerErr = v.Models.ReceiverWallet.VerifyReceiverWalletOTP(ctx, v.NetworkPassphrase, *receiverWallet, receiverRegistrationRequest.OTP)
 		if innerErr != nil {
-			log.Ctx(ctx).Errorf("receiver wallet otp is not valid: %s", innerErr.Error())
+			innerErr = fmt.Errorf("receiver wallet otp is not valid: %w", innerErr)
 			return &ErrorInformationNotFound{cause: innerErr}
-		}
-
-		// update transaction on AnchorPlatform using AnchorPlatformAPIService
-		transaction := &anchorplatform.Transaction{
-			TransactionValues: anchorplatform.TransactionValues{
-				ID:                 sep24Claims.TransactionID(),
-				Status:             "pending_anchor",
-				Sep:                "24",
-				Kind:               "deposit",
-				DestinationAccount: sep24Claims.SEP10StellarAccount(),
-				Memo:               sep24Claims.SEP10StellarMemo(),
-				KYCVerified:        true,
-			},
 		}
 
 		// update receiver wallet
@@ -210,13 +193,26 @@ func (v VerifyReceiverRegistrationHandler) VerifyReceiverRegistration(w http.Res
 
 		innerErr = v.Models.ReceiverWallet.UpdateReceiverWallet(ctx, *receiverWallet, dbTx)
 		if innerErr != nil {
-			log.Ctx(ctx).Errorf("error updating receiver wallet status to registered for receiver with phone number %s", utils.TruncateString(receiverRegistrationRequest.PhoneNumber, 3))
+			innerErr = fmt.Errorf("completing receiver wallet registration for phone number %s: %w", utils.TruncateString(receiverRegistrationRequest.PhoneNumber, 3), innerErr)
 			return innerErr
 		}
 
+		// TODO: find the oldest payment that touches that receiver wallet, then save the AP txID there.
+		// PATCH transaction on the AnchorPlatform
+		transaction := &anchorplatform.Transaction{
+			TransactionValues: anchorplatform.TransactionValues{
+				ID:                 sep24Claims.TransactionID(),
+				Status:             "pending_anchor",
+				Sep:                "24",
+				Kind:               "deposit",
+				DestinationAccount: sep24Claims.SEP10StellarAccount(),
+				Memo:               sep24Claims.SEP10StellarMemo(),
+				KYCVerified:        true,
+			},
+		}
 		innerErr = v.AnchorPlatformAPIService.UpdateAnchorTransactions(ctx, []anchorplatform.Transaction{*transaction})
 		if innerErr != nil {
-			innerErr = fmt.Errorf("error updating transaction with ID %s on anchor platform API: %w", sep24Claims.TransactionID(), innerErr)
+			innerErr = fmt.Errorf("updating transaction with ID %s on anchor platform API: %w", sep24Claims.TransactionID(), innerErr)
 			return innerErr
 		}
 
@@ -225,6 +221,7 @@ func (v VerifyReceiverRegistrationHandler) VerifyReceiverRegistration(w http.Res
 	if err != nil {
 		var errorInformationNotFound *ErrorInformationNotFound
 		if errors.As(err, &errorInformationNotFound) {
+			log.Ctx(ctx).Error(errorInformationNotFound.cause)
 			httperror.BadRequest(InformationNotFoundOnServer, err, nil).Render(w)
 			return
 		}
@@ -232,5 +229,5 @@ func (v VerifyReceiverRegistrationHandler) VerifyReceiverRegistration(w http.Res
 		return
 	}
 
-	httpjson.RenderStatus(w, http.StatusOK, map[string]string{"message": "ok"}, httpjson.JSON)
+	httpjson.Render(w, map[string]string{"message": "ok"}, httpjson.JSON)
 }

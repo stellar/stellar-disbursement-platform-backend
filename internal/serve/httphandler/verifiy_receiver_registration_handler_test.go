@@ -810,7 +810,7 @@ func Test_VerifyReceiverRegistration(t *testing.T) {
 		require.Empty(t, receiverWalletUpdated.OTPConfirmedAt)
 
 		// validate logs
-		require.Contains(t, buf.String(), "error updating transaction with ID test-transaction-id on anchor platform API")
+		require.Contains(t, buf.String(), "updating transaction with ID test-transaction-id on anchor platform API")
 		mockAnchorPlatformService.AssertExpectations(t)
 	})
 
@@ -905,7 +905,7 @@ func Test_VerifyReceiverRegistration(t *testing.T) {
 			VerificationValue: "1990-01-01",
 		})
 
-		data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.DraftReceiversWalletStatus)
+		receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.DraftReceiversWalletStatus)
 		_, err := models.ReceiverWallet.UpdateOTPByReceiverPhoneNumberAndWalletDomain(ctx, "+380445555555", wallet.SEP10ClientDomain, "123456")
 		require.NoError(t, err)
 
@@ -953,7 +953,7 @@ func Test_VerifyReceiverRegistration(t *testing.T) {
 		assert.JSONEq(t, want, string(respBody))
 
 		// validate logs
-		msg := fmt.Sprintf("receiver wallet for receiver with id %s has an invalid status DRAFT, can not transaction to REGISTERED", receiver.ID)
+		msg := fmt.Sprintf("transitioning status for receiver[ID=%s], receiverWallet[ID=%s]", receiver.ID, receiverWallet.ID)
 		require.Contains(t, buf.String(), msg)
 	})
 
