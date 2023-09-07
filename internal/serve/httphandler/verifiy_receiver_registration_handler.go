@@ -96,7 +96,7 @@ func (v VerifyReceiverRegistrationHandler) VerifyReceiverRegistration(w http.Res
 		}
 
 		// get receiverVerification using receiver ID and the verification type
-		receiverVerifications, innerErr := v.Models.ReceiverVerification.GetByReceiverIdsAndVerificationField(ctx, dbTx, []string{receiver[0].ID}, receiverRegistrationRequest.VerificationType)
+		receiverVerifications, innerErr := v.Models.ReceiverVerification.GetByReceiverIDsAndVerificationField(ctx, dbTx, []string{receiver[0].ID}, receiverRegistrationRequest.VerificationType)
 		if innerErr != nil {
 			log.Ctx(ctx).Errorf("error retrieving receiver verification for verification type %s", receiverRegistrationRequest.VerificationType)
 			return innerErr

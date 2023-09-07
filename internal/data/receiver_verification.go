@@ -49,8 +49,8 @@ func (rvi *ReceiverVerificationInsert) Validate() error {
 	return nil
 }
 
-// GetByReceiverIdsAndVerificationField returns receiver verifications by receiver ids and verification type
-func (m ReceiverVerificationModel) GetByReceiverIdsAndVerificationField(ctx context.Context, sqlExec db.SQLExecuter, receiverIds []string, verificationField VerificationField) ([]*ReceiverVerification, error) {
+// GetByReceiverIDsAndVerificationField returns receiver verifications by receiver IDs and verification type.
+func (m ReceiverVerificationModel) GetByReceiverIDsAndVerificationField(ctx context.Context, sqlExec db.SQLExecuter, receiverIds []string, verificationField VerificationField) ([]*ReceiverVerification, error) {
 	receiverVerifications := []*ReceiverVerification{}
 	query := `
 		SELECT 
