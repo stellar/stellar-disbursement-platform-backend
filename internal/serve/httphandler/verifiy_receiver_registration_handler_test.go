@@ -450,7 +450,7 @@ func Test_VerifyReceiverRegistration(t *testing.T) {
 		assert.JSONEq(t, want, string(respBody))
 
 		// validate logs
-		msg := fmt.Sprintf("receiver wallet not found for receiver with id %s and client domain home.page", receiver.ID)
+		msg := fmt.Sprintf("processing OTP for receiver with phone number +38...555: receiver wallet not found for receiverID=%s and clientDomain=home.page", receiver.ID)
 		require.Contains(t, buf.String(), msg)
 	})
 
@@ -521,7 +521,7 @@ func Test_VerifyReceiverRegistration(t *testing.T) {
 		assert.JSONEq(t, want, string(respBody))
 
 		// validate logs
-		require.Contains(t, buf.String(), "receiver wallet otp is not valid: otp does not match with value saved in the database")
+		require.Contains(t, buf.String(), "processing OTP for receiver with phone number +38...555: receiver wallet OTP is not valid")
 	})
 
 	t.Run("error receiver wallet otp is expired", func(t *testing.T) {
@@ -601,7 +601,7 @@ func Test_VerifyReceiverRegistration(t *testing.T) {
 		assert.JSONEq(t, want, string(respBody))
 
 		// validate logs
-		require.Contains(t, buf.String(), "receiver wallet otp is not valid: otp is expired")
+		require.Contains(t, buf.String(), "receiver wallet OTP is not valid: otp is expired")
 	})
 
 	t.Run("error anchor platform service API", func(t *testing.T) {
@@ -868,7 +868,7 @@ func Test_VerifyReceiverRegistration(t *testing.T) {
 		assert.JSONEq(t, want, string(respBody))
 
 		// validate logs
-		msg := fmt.Sprintf("transitioning status for receiver[ID=%s], receiverWallet[ID=%s]", receiver.ID, receiverWallet.ID)
+		msg := fmt.Sprintf("processing OTP for receiver with phone number +38...555: transitioning status for receiverWallet[ID=%s]", receiverWallet.ID)
 		require.Contains(t, buf.String(), msg)
 	})
 
