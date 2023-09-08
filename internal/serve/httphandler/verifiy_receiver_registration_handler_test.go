@@ -15,15 +15,16 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/stellar/go/support/log"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
-	"github.com/stretchr/testify/require"
 )
 
 func Test_VerifyReceiverRegistrationHandler_validate(t *testing.T) {
@@ -37,6 +38,7 @@ func Test_VerifyReceiverRegistrationHandler_validate(t *testing.T) {
 
 	// create valid sep24 token
 	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "testWallet", "https://home.page", "home.page", "wallet123://")
+	defer data.DeleteAllWalletFixtures(t, ctx, dbConnectionPool)
 	sep24JWTClaims := &anchorplatform.SEP24JWTClaims{
 		ClientDomainClaim: wallet.SEP10ClientDomain,
 		RegisteredClaims: jwt.RegisteredClaims{
@@ -168,6 +170,151 @@ func Test_VerifyReceiverRegistrationHandler_validate(t *testing.T) {
 	}
 }
 
+func Test_VerifyReceiverRegistrationHandler_processReceiverVerificationEntry(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+	models, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+
+	mockAnchorPlatformService := anchorplatform.AnchorPlatformAPIServiceMock{}
+	reCAPTCHAValidator := &validators.ReCAPTCHAValidatorMock{}
+	handler := &VerifyReceiverRegistrationHandler{
+		Models:                   models,
+		AnchorPlatformAPIService: &mockAnchorPlatformService,
+		ReCAPTCHAValidator:       reCAPTCHAValidator,
+	}
+
+	// receiver without receiver_verification row:
+	receiverMissingReceiverVerification := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{PhoneNumber: "+380443333333"})
+
+	// receiver with a receiverVerification row that's exceeded the maximum number of attempts:
+	receiverWithExceededAttempts := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{PhoneNumber: "+380446666666"})
+	receiverVerificationExceededAttempts := data.CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, data.ReceiverVerificationInsert{
+		ReceiverID:        receiverWithExceededAttempts.ID,
+		VerificationField: data.VerificationFieldDateOfBirth,
+		VerificationValue: "1990-01-01",
+	})
+	receiverVerificationExceededAttempts.Attempts = data.MaxAttemptsAllowed
+	err = models.ReceiverVerification.UpdateReceiverVerification(ctx, *receiverVerificationExceededAttempts, dbConnectionPool)
+	require.NoError(t, err)
+
+	// receiver with receiver_verification row:
+	receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{PhoneNumber: "+380445555555"})
+	_ = data.CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, data.ReceiverVerificationInsert{
+		ReceiverID:        receiver.ID,
+		VerificationField: data.VerificationFieldDateOfBirth,
+		VerificationValue: "1990-01-01",
+	})
+
+	defer data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
+	defer data.DeleteAllReceiverVerificationFixtures(t, ctx, dbConnectionPool)
+
+	testCases := []struct {
+		name                      string
+		receiver                  data.Receiver
+		registrationRequest       data.ReceiverRegistrationRequest
+		shouldAssertAttemptsCount bool
+		wantErrContains           string
+	}{
+		{
+			name:     "returns an error if the receiver does not have any receiverVerification row",
+			receiver: *receiverMissingReceiverVerification,
+			registrationRequest: data.ReceiverRegistrationRequest{
+				PhoneNumber:       receiverMissingReceiverVerification.PhoneNumber,
+				VerificationType:  data.VerificationFieldDateOfBirth,
+				VerificationValue: "1990-01-01",
+			},
+			wantErrContains: "DATE_OF_BIRTH not found for receiver with phone number +38...333",
+		},
+		{
+			name:     "returns an error if the receiver does not have any receiverVerification row with the given verification type",
+			receiver: *receiver,
+			registrationRequest: data.ReceiverRegistrationRequest{
+				PhoneNumber:       receiver.PhoneNumber,
+				VerificationType:  data.VerificationFieldNationalID,
+				VerificationValue: "123456",
+			},
+			wantErrContains: "NATIONAL_ID_NUMBER not found for receiver with phone number +38...555",
+		},
+		{
+			name:     "returns an error if the receiver has exceeded their max attempts to confirm the verification value",
+			receiver: *receiverWithExceededAttempts,
+			registrationRequest: data.ReceiverRegistrationRequest{
+				PhoneNumber:       receiverWithExceededAttempts.PhoneNumber,
+				VerificationType:  data.VerificationFieldDateOfBirth,
+				VerificationValue: "1990-01-01",
+			},
+			wantErrContains: "the number of attempts to confirm the verification value exceededs the max attempts limit of 6",
+		},
+		{
+			name:     "returns an error if the varification value provided in the payload is different from the DB one",
+			receiver: *receiver,
+			registrationRequest: data.ReceiverRegistrationRequest{
+				PhoneNumber:       receiver.PhoneNumber,
+				VerificationType:  data.VerificationFieldDateOfBirth,
+				VerificationValue: "1990-11-11", // <--- different from the DB one (1990-01-01)
+			},
+			shouldAssertAttemptsCount: true,
+			wantErrContains:           "DATE_OF_BIRTH value does not match for user with phone number +38...555",
+		},
+		{
+			name:     "🎉 successfully process the verification value and updates it accordingly in the DB",
+			receiver: *receiver,
+			registrationRequest: data.ReceiverRegistrationRequest{
+				PhoneNumber:       receiver.PhoneNumber,
+				VerificationType:  data.VerificationFieldDateOfBirth,
+				VerificationValue: "1990-01-01",
+			},
+			shouldAssertAttemptsCount: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			dbTx, err := dbConnectionPool.BeginTxx(ctx, nil)
+			require.NoError(t, err)
+			defer func() {
+				err = dbTx.Rollback()
+				require.NoError(t, err)
+			}()
+
+			var receiverVerifications []*data.ReceiverVerification
+			var receiverVerificationInitial *data.ReceiverVerification
+			if tc.shouldAssertAttemptsCount {
+				receiverVerifications, err = models.ReceiverVerification.GetByReceiverIDsAndVerificationField(ctx, dbTx, []string{tc.receiver.ID}, tc.registrationRequest.VerificationType)
+				require.NoError(t, err)
+				require.Len(t, receiverVerifications, 1)
+				receiverVerificationInitial = receiverVerifications[0]
+			}
+
+			err = handler.processReceiverVerificationEntry(ctx, dbTx, tc.receiver, tc.registrationRequest)
+
+			if tc.wantErrContains == "" {
+				receiverVerifications, err = models.ReceiverVerification.GetByReceiverIDsAndVerificationField(ctx, dbTx, []string{tc.receiver.ID}, tc.registrationRequest.VerificationType)
+				require.NoError(t, err)
+				require.Len(t, receiverVerifications, 1)
+				receiverVerification := receiverVerifications[0]
+				assert.NotEmpty(t, receiverVerification.ConfirmedAt)
+				assert.Equal(t, receiverVerificationInitial.Attempts, receiverVerification.Attempts, "attempts should not have been incremented")
+			} else {
+				require.ErrorContains(t, err, tc.wantErrContains)
+				if tc.shouldAssertAttemptsCount {
+					receiverVerifications, err = models.ReceiverVerification.GetByReceiverIDsAndVerificationField(ctx, dbTx, []string{tc.receiver.ID}, tc.registrationRequest.VerificationType)
+					require.NoError(t, err)
+					require.Len(t, receiverVerifications, 1)
+					receiverVerification := receiverVerifications[0]
+					assert.Equal(t, receiverVerificationInitial.Attempts+1, receiverVerification.Attempts, "attempts should have been incremented")
+				}
+			}
+		})
+	}
+}
+
 func Test_VerifyReceiverRegistration(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
@@ -239,239 +386,7 @@ func Test_VerifyReceiverRegistration(t *testing.T) {
 		assert.JSONEq(t, want, string(respBody))
 
 		// validate logs
-		require.Contains(t, buf.String(), "receiver with phone number +380445555555 not found in our server")
-	})
-
-	t.Run("error receiver verification not found in our server", func(t *testing.T) {
-		// set the logger to a buffer so we can check the error message
-		buf := new(strings.Builder)
-		log.DefaultLogger.SetOutput(buf)
-
-		_ = data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{
-			PhoneNumber: "+380445555555",
-		})
-
-		request := data.ReceiverRegistrationRequest{
-			PhoneNumber:       "+380445555555",
-			OTP:               "123456",
-			VerificationValue: "1990-01-01",
-			VerificationType:  "date_of_birth",
-			ReCAPTCHAToken:    "token",
-		}
-		reqBody, err := json.Marshal(request)
-		require.NoError(t, err)
-		req, err := http.NewRequest("POST", "/wallet-registration/verification", strings.NewReader(string(reqBody)))
-		require.NoError(t, err)
-
-		rr := httptest.NewRecorder()
-
-		reCAPTCHAValidator.
-			On("IsTokenValid", mock.Anything, "token").
-			Return(true, nil).
-			Once()
-
-		// create valid sep24 token
-		validClaims := &anchorplatform.SEP24JWTClaims{
-			ClientDomainClaim: wallet.SEP10ClientDomain,
-			RegisteredClaims: jwt.RegisteredClaims{
-				ID:        "test-transaction-id",
-				Subject:   "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444",
-				ExpiresAt: jwt.NewNumericDate(time.Now().Add(5 * time.Minute)),
-			},
-		}
-		req = req.WithContext(context.WithValue(req.Context(), anchorplatform.SEP24ClaimsContextKey, validClaims))
-		r.ServeHTTP(rr, req)
-
-		resp := rr.Result()
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-
-		want := fmt.Sprintf(`{
-			"error": "%s"
-		  }`, InformationNotFoundOnServer)
-
-		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
-		assert.JSONEq(t, want, string(respBody))
-
-		// validate logs
-		require.Contains(t, buf.String(), "DATE_OF_BIRTH not found for receiver with phone number +380445555555")
-	})
-
-	t.Run("error comparing verification values exceeded attempts", func(t *testing.T) {
-		// set the logger to a buffer so we can check the error message
-		buf := new(strings.Builder)
-		log.DefaultLogger.SetOutput(buf)
-
-		data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
-		receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{
-			PhoneNumber: "+380445555555",
-		})
-
-		receiverVerification := data.CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, data.ReceiverVerificationInsert{
-			ReceiverID:        receiver.ID,
-			VerificationField: data.VerificationFieldDateOfBirth,
-			VerificationValue: "1990-01-01",
-		})
-
-		request := data.ReceiverRegistrationRequest{
-			PhoneNumber:       "+380445555555",
-			OTP:               "123456",
-			VerificationValue: "2000-01-01",
-			VerificationType:  "date_of_birth",
-			ReCAPTCHAToken:    "token",
-		}
-
-		// create valid sep24 token
-		validClaims := &anchorplatform.SEP24JWTClaims{
-			ClientDomainClaim: wallet.SEP10ClientDomain,
-			RegisteredClaims: jwt.RegisteredClaims{
-				ID:        "test-transaction-id",
-				Subject:   "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444",
-				ExpiresAt: jwt.NewNumericDate(time.Now().Add(5 * time.Minute)),
-			},
-		}
-
-		reqBody, err := json.Marshal(request)
-		require.NoError(t, err)
-
-		attempts := 0
-
-		const totalAttempts = data.MaxAttemptsAllowed + 1
-		for range [totalAttempts]interface{}{} {
-			buf.Reset()
-
-			req, err := http.NewRequest("POST", "/wallet-registration/verification", strings.NewReader(string(reqBody)))
-			require.NoError(t, err)
-
-			rr := httptest.NewRecorder()
-			req = req.WithContext(context.WithValue(req.Context(), anchorplatform.SEP24ClaimsContextKey, validClaims))
-
-			reCAPTCHAValidator.
-				On("IsTokenValid", mock.Anything, "token").
-				Return(true, nil).
-				Once()
-
-			r.ServeHTTP(rr, req)
-
-			attempts += 1
-
-			resp := rr.Result()
-			respBody, err := io.ReadAll(resp.Body)
-			require.NoError(t, err)
-
-			want := fmt.Sprintf(`{
-				"error": "%s"
-			  }`, InformationNotFoundOnServer)
-
-			assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
-			assert.JSONEq(t, want, string(respBody))
-
-			// validate the number of attempts
-			query := `
-				SELECT
-					rv.attempts
-				FROM
-					receiver_verifications rv
-				WHERE
-					rv.receiver_id = $1 AND rv.verification_field = $2
-			`
-			receiverVerificationUpdated := data.ReceiverVerification{}
-			err = dbConnectionPool.GetContext(ctx, &receiverVerificationUpdated, query, receiverVerification.ReceiverID, receiverVerification.VerificationField)
-			require.NoError(t, err)
-
-			expectedLog := ""
-			if attempts == totalAttempts {
-				expectedLog = "number of attempts to confirm the verification value exceeded max attempts value 6"
-				assert.Equal(t, data.MaxAttemptsAllowed, receiverVerificationUpdated.Attempts)
-			} else {
-				expectedLog = "DATE_OF_BIRTH value does not match for user with phone number +380445555555"
-				assert.Equal(t, attempts, receiverVerificationUpdated.Attempts)
-			}
-
-			// validate logs
-			require.Contains(t, buf.String(), expectedLog)
-		}
-	})
-
-	t.Run("error comparing verification values", func(t *testing.T) {
-		// set the logger to a buffer so we can check the error message
-		buf := new(strings.Builder)
-		log.DefaultLogger.SetOutput(buf)
-
-		data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
-		receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{
-			PhoneNumber: "+380445555555",
-		})
-
-		receiverVerification := data.CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, data.ReceiverVerificationInsert{
-			ReceiverID:        receiver.ID,
-			VerificationField: data.VerificationFieldDateOfBirth,
-			VerificationValue: "1990-01-01",
-		})
-
-		request := data.ReceiverRegistrationRequest{
-			PhoneNumber:       "+380445555555",
-			OTP:               "123456",
-			VerificationValue: "2000-01-01",
-			VerificationType:  "date_of_birth",
-			ReCAPTCHAToken:    "token",
-		}
-		reqBody, err := json.Marshal(request)
-		require.NoError(t, err)
-		req, err := http.NewRequest("POST", "/wallet-registration/verification", strings.NewReader(string(reqBody)))
-		require.NoError(t, err)
-
-		rr := httptest.NewRecorder()
-
-		reCAPTCHAValidator.
-			On("IsTokenValid", mock.Anything, "token").
-			Return(true, nil).
-			Once()
-
-		// create valid sep24 token
-		validClaims := &anchorplatform.SEP24JWTClaims{
-			ClientDomainClaim: wallet.SEP10ClientDomain,
-			RegisteredClaims: jwt.RegisteredClaims{
-				ID:        "test-transaction-id",
-				Subject:   "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444",
-				ExpiresAt: jwt.NewNumericDate(time.Now().Add(5 * time.Minute)),
-			},
-		}
-		req = req.WithContext(context.WithValue(req.Context(), anchorplatform.SEP24ClaimsContextKey, validClaims))
-		r.ServeHTTP(rr, req)
-
-		resp := rr.Result()
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-
-		want := fmt.Sprintf(`{
-			"error": "%s"
-		  }`, InformationNotFoundOnServer)
-
-		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
-		assert.JSONEq(t, want, string(respBody))
-
-		// validate if the receiver verification has been updated
-		query := `
-			SELECT
-				rv.attempts,
-				rv.confirmed_at,
-				rv.failed_at
-			FROM
-				receiver_verifications rv
-			WHERE
-				rv.receiver_id = $1 AND rv.verification_field = $2
-		`
-		receiverVerificationUpdated := data.ReceiverVerification{}
-		err = dbConnectionPool.GetContext(ctx, &receiverVerificationUpdated, query, receiverVerification.ReceiverID, receiverVerification.VerificationField)
-		require.NoError(t, err)
-
-		assert.Empty(t, receiverVerificationUpdated.ConfirmedAt)
-		assert.NotEmpty(t, receiverVerificationUpdated.FailedAt)
-		assert.Equal(t, 1, receiverVerificationUpdated.Attempts)
-
-		// validate logs
-		require.Contains(t, buf.String(), "DATE_OF_BIRTH value does not match for user with phone number +380445555555")
+		require.Contains(t, buf.String(), "receiver with phone number +38...555 not found in our server")
 	})
 
 	t.Run("error getting receiver wallet", func(t *testing.T) {
