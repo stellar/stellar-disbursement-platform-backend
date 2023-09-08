@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/wallets"
+
 	"github.com/lib/pq"
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
@@ -12,35 +14,11 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
-type WalletInfo struct {
-	Name, Homepage, DeepLinkSchema, SEP10ClientDomain string
-}
-
-type WalletsNetworkMapType map[utils.NetworkType][]WalletInfo
+type WalletsNetworkMapType map[utils.NetworkType][]data.Wallet
 
 var DefaultWalletsNetworkMap = WalletsNetworkMapType{
-	utils.PubnetNetworkType: {
-		{
-			Name:              "Vibrant Assist",
-			Homepage:          "https://vibrantapp.com/assist",
-			DeepLinkSchema:    "https://vibrantapp.com/sdp",
-			SEP10ClientDomain: "api.vibrantapp.com",
-		},
-		// {
-		// 	Name:              "Beans App",
-		// 	Homepage:          "https://www.beansapp.com/disbursements",
-		// 	DeepLinkSchema:    "https://www.beansapp.com/disbursements/registration?redirect=true",
-		// 	SEP10ClientDomain: "api.beansapp.com",
-		// },
-	},
-	utils.TestnetNetworkType: {
-		{
-			Name:              "Demo Wallet",
-			Homepage:          "https://demo-wallet.stellar.org",
-			DeepLinkSchema:    "https://demo-wallet.stellar.org",
-			SEP10ClientDomain: "demo-wallet-server.stellar.org",
-		},
-	},
+	utils.PubnetNetworkType:  wallets.PubnetWallets,
+	utils.TestnetNetworkType: wallets.TestnetWallets,
 }
 
 // SetupWalletsForProperNetwork updates and inserts wallets for the given Network Passphrase (`network`). So it avoids the application having
@@ -70,6 +48,7 @@ func SetupWalletsForProperNetwork(ctx context.Context, dbConnectionPool db.DBCon
 	log.Ctx(ctx).Info(buf.String())
 
 	err := db.RunInTransaction(ctx, dbConnectionPool, nil, func(dbTx db.DBTransaction) error {
+		// 1. Upsert Wallets
 		query := `
 			WITH wallets_to_update_or_insert AS (
 				-- gather all wallets passed as parameters for the query and turn into SQL rows
@@ -117,10 +96,68 @@ func SetupWalletsForProperNetwork(ctx context.Context, dbConnectionPool db.DBCon
 			return fmt.Errorf("error upserting wallets: %w", err)
 		}
 
+		// 2. Upsert Wallet Assets (if any)
+		models, err := data.NewModels(dbConnectionPool)
+		if err != nil {
+			return fmt.Errorf("getting models: %w", err)
+		}
+
+		// 2.1. Fetch all assets and populate a map for quick lookup
+		assets, err := models.Assets.GetAll(ctx)
+		if err != nil {
+			return fmt.Errorf("getting all available assets on database: %w", err)
+		}
+		existingAssets := make(map[string]string)
+		for _, asset := range assets {
+			existingAssets[asset.Code+":"+asset.Issuer] = asset.ID
+		}
+
+		// 2.2. Populate assets
+		walletNames := []string{}
+		assetCodes := []string{}
+		assetIssuers := []string{}
+
+		for _, wallet := range wallets {
+			for _, asset := range wallet.Assets {
+				if _, exists := existingAssets[asset.Code+":"+asset.Issuer]; exists {
+					walletNames = append(walletNames, wallet.Name)
+					assetCodes = append(assetCodes, asset.Code)
+					assetIssuers = append(assetIssuers, asset.Issuer)
+				}
+			}
+		}
+
+		if len(walletNames) == 0 {
+			log.Ctx(ctx).Info("no assets to be inserted for the given wallets")
+			return nil
+		}
+
+		query = `
+			WITH wallets_assets_to_insert AS (
+				SELECT 
+					UNNEST($1::TEXT[]) as wallet_name, 
+					UNNEST($2::TEXT[]) as asset_code, 
+					UNNEST($3::TEXT[]) as asset_issuer
+			)
+			, wallet_asset_ids AS (
+				SELECT w.id as wallet_id, a.id as asset_id
+				FROM wallets_assets_to_insert wa
+				JOIN wallets w ON wa.wallet_name = w.name
+				JOIN assets a ON wa.asset_code = a.code AND wa.asset_issuer = a.issuer
+			)
+			INSERT INTO wallets_assets(wallet_id, asset_id)
+			SELECT wallet_id, asset_id FROM wallet_asset_ids
+			ON CONFLICT(wallet_id, asset_id) DO NOTHING;
+		`
+
+		_, err = dbTx.ExecContext(ctx, query, pq.Array(walletNames), pq.Array(assetCodes), pq.Array(assetIssuers))
+		if err != nil {
+			return fmt.Errorf("upserting wallet assets: %w", err)
+		}
 		return nil
 	})
 	if err != nil {
-		return fmt.Errorf("error upserting wallets for the proper network: %w", err)
+		return fmt.Errorf("upserting wallets for the proper network: %w", err)
 	}
 
 	models, err := data.NewModels(dbConnectionPool)
@@ -136,7 +173,11 @@ func SetupWalletsForProperNetwork(ctx context.Context, dbConnectionPool db.DBCon
 	buf.Reset()
 	buf.WriteString(fmt.Sprintf("Registered wallets for network %s:\n\n", network))
 	for _, wallet := range allWallets {
-		buf.WriteString(fmt.Sprintf("Name: %s\nHomepage: %s\nDeep Link Schema: %s\nSEP-10 Client Domain: %s\n%s\n\n", wallet.Name, wallet.Homepage, wallet.DeepLinkSchema, wallet.SEP10ClientDomain, separator))
+		buf.WriteString(fmt.Sprintf("Name: %s\nHomepage: %s\nDeep Link Schema: %s\nSEP-10 Client Domain: %s\n%s\nAssets:", wallet.Name, wallet.Homepage, wallet.DeepLinkSchema, wallet.SEP10ClientDomain, separator))
+		for _, asset := range wallet.Assets {
+			buf.WriteString(fmt.Sprintf("\t\t * %s - %s\n", asset.Code, asset.Issuer))
+		}
+		buf.WriteString("\n")
 	}
 
 	log.Ctx(ctx).Info(buf.String())
