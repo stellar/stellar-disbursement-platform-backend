@@ -52,35 +52,35 @@ func (v VerifyReceiverRegistrationHandler) validate(r *http.Request) (reqObj dat
 
 	// STEP 2: Decode request body
 	if r.Body == nil {
-		log.Ctx(ctx).Error("request body is empty")
-		return reqObj, nil, httperror.BadRequest("", nil, nil)
+		err := fmt.Errorf("request body is empty")
+		return reqObj, nil, httperror.BadRequest("", err, nil)
 	}
 	receiverRegistrationRequest := data.ReceiverRegistrationRequest{}
 	err := json.NewDecoder(r.Body).Decode(&receiverRegistrationRequest)
 	if err != nil {
 		err = fmt.Errorf("invalid request body: %w", err)
-		log.Ctx(ctx).Error(err)
 		return reqObj, nil, httperror.BadRequest("", err, nil)
 	}
 
 	// STEP 3: Validate reCAPTCHA Token
 	isValid, err := v.ReCAPTCHAValidator.IsTokenValid(ctx, receiverRegistrationRequest.ReCAPTCHAToken)
 	if err != nil {
+		err = fmt.Errorf("validating reCAPTCHA token: %w", err)
 		return reqObj, nil, httperror.InternalError(ctx, "Cannot validate reCAPTCHA token", err, nil)
 	}
 	if !isValid {
 		truncatedPhoneNumber := utils.TruncateString(receiverRegistrationRequest.PhoneNumber, 3)
 		truncatedOTP := utils.TruncateString(receiverRegistrationRequest.OTP, 2)
-		log.Ctx(ctx).Errorf("reCAPTCHA token is invalid for request with OTP %s and Phone Number %s", truncatedOTP, truncatedPhoneNumber)
-		return reqObj, nil, httperror.BadRequest("", nil, nil)
+		err = fmt.Errorf("reCAPTCHA token is invalid for request with OTP %s and Phone Number %s", truncatedOTP, truncatedPhoneNumber)
+		return reqObj, nil, httperror.BadRequest("", err, nil)
 	}
 
 	// STEP 4: Validate request body
 	validator := validators.NewReceiverRegistrationValidator()
 	validator.ValidateReceiver(&receiverRegistrationRequest)
 	if validator.HasErrors() {
-		log.Ctx(ctx).Errorf("request invalid: %s", validator.Errors)
-		return reqObj, nil, httperror.BadRequest("", nil, validator.Errors)
+		err = fmt.Errorf("request invalid: %s", validator.Errors)
+		return reqObj, nil, httperror.BadRequest("", err, validator.Errors)
 	}
 
 	return receiverRegistrationRequest, sep24Claims, nil
@@ -98,8 +98,7 @@ func (v VerifyReceiverRegistrationHandler) processReceiverVerificationEntry(ctx 
 	// STEP 1: find the receiverVerification entry that matches the pair [receiverID, verificationType]
 	receiverVerifications, err := v.Models.ReceiverVerification.GetByReceiverIDsAndVerificationField(ctx, dbTx, []string{receiver.ID}, receiverRegistrationRequest.VerificationType)
 	if err != nil {
-		log.Ctx(ctx).Errorf("error retrieving receiver verification for verification type %s", receiverRegistrationRequest.VerificationType)
-		return err
+		return fmt.Errorf("error retrieving receiver verification for verification type %s: %w", receiverRegistrationRequest.VerificationType, err)
 	}
 	if len(receiverVerifications) == 0 {
 		err = fmt.Errorf("%s not found for receiver with phone number %s", receiverRegistrationRequest.VerificationType, truncatedPhoneNumber)
@@ -155,6 +154,9 @@ func (v VerifyReceiverRegistrationHandler) VerifyReceiverRegistration(w http.Res
 	// STEP 1: Validate request
 	receiverRegistrationRequest, sep24Claims, httpErr := v.validate(r)
 	if httpErr != nil {
+		if httpErr.Err != nil {
+			log.Ctx(ctx).Error(httpErr.Err)
+		}
 		httpErr.Render(w)
 		return
 	}
@@ -165,7 +167,7 @@ func (v VerifyReceiverRegistrationHandler) VerifyReceiverRegistration(w http.Res
 		// STEP 2: find the receivers with the given phone number
 		receivers, err := v.Models.Receiver.GetByPhoneNumbers(ctx, dbTx, []string{receiverRegistrationRequest.PhoneNumber})
 		if err != nil {
-			log.Ctx(ctx).Errorf("error retrieving receiver with phone number %s: %s", truncatedPhoneNumber, err.Error())
+			err = fmt.Errorf("error retrieving receiver with phone number %s: %w", truncatedPhoneNumber, err)
 			return err
 		}
 		if len(receivers) == 0 {
