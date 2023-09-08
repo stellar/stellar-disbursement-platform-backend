@@ -148,7 +148,7 @@ func (v VerifyReceiverRegistrationHandler) processReceiverVerificationEntry(ctx 
 }
 
 // processOTP processes the OTP provided by the user and updates the receiver wallet status to "REGISTERED" if the OTP is valid.
-func (v VerifyReceiverRegistrationHandler) processOTP(ctx context.Context, dbTx db.DBTransaction, sep24Claims *anchorplatform.SEP24JWTClaims, receiver data.Receiver, receiverRegistrationRequest data.ReceiverRegistrationRequest) (bool, error) {
+func (v VerifyReceiverRegistrationHandler) processOTP(ctx context.Context, dbTx db.DBTransaction, sep24Claims *anchorplatform.SEP24JWTClaims, receiver data.Receiver, otp string) (wasAlreadyRegistered bool, err error) {
 	// STEP 1: find the receiver wallet for the given [receiverID, clientDomain]
 	receiverWallet, err := v.Models.ReceiverWallet.GetByReceiverIDAndWalletDomain(ctx, receiver.ID, sep24Claims.ClientDomain(), dbTx)
 	if err != nil {
@@ -170,7 +170,7 @@ func (v VerifyReceiverRegistrationHandler) processOTP(ctx context.Context, dbTx 
 	}
 
 	// STEP 4: verify receiver wallet OTP
-	err = v.Models.ReceiverWallet.VerifyReceiverWalletOTP(ctx, v.NetworkPassphrase, *receiverWallet, receiverRegistrationRequest.OTP)
+	err = v.Models.ReceiverWallet.VerifyReceiverWalletOTP(ctx, v.NetworkPassphrase, *receiverWallet, otp)
 	if err != nil {
 		err = fmt.Errorf("receiver wallet OTP is not valid: %w", err)
 		return false, &ErrorInformationNotFound{cause: err}
@@ -228,7 +228,7 @@ func (v VerifyReceiverRegistrationHandler) VerifyReceiverRegistration(w http.Res
 		}
 
 		// STEP 4: process OTP
-		wasAlreadyRegistered, err := v.processOTP(ctx, dbTx, sep24Claims, *receiver, receiverRegistrationRequest)
+		wasAlreadyRegistered, err := v.processOTP(ctx, dbTx, sep24Claims, *receiver, receiverRegistrationRequest.OTP)
 		if err != nil {
 			return fmt.Errorf("processing OTP for receiver with phone number %s: %w", truncatedPhoneNumber, err)
 		}

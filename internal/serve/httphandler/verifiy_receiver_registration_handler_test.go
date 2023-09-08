@@ -2,6 +2,7 @@ package httphandler
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -310,6 +311,140 @@ func Test_VerifyReceiverRegistrationHandler_processReceiverVerificationEntry(t *
 					receiverVerification := receiverVerifications[0]
 					assert.Equal(t, receiverVerificationInitial.Attempts+1, receiverVerification.Attempts, "attempts should have been incremented")
 				}
+			}
+		})
+	}
+}
+
+func Test_VerifyReceiverRegistrationHandler_processOTP(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+
+	models, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+	mockAnchorPlatformService := anchorplatform.AnchorPlatformAPIServiceMock{}
+	handler := &VerifyReceiverRegistrationHandler{
+		Models:                   models,
+		AnchorPlatformAPIService: &mockAnchorPlatformService,
+	}
+
+	// create valid sep24 token
+	defer data.DeleteAllWalletFixtures(t, ctx, dbConnectionPool)
+	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "testWallet", "https://home.page", "home.page", "wallet123://")
+	sep24JWTClaims := &anchorplatform.SEP24JWTClaims{
+		ClientDomainClaim: wallet.SEP10ClientDomain,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ID:        "test-transaction-id",
+			Subject:   "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444",
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(5 * time.Minute)),
+		},
+	}
+
+	testCases := []struct {
+		name                        string
+		sep24Claims                 *anchorplatform.SEP24JWTClaims
+		currentReceiverWalletStatus data.ReceiversWalletStatus
+		// shouldOTPMatch is used to simulate the case where the OTP provided in the request body is equals or different from the one saved in the DB
+		shouldOTPMatch           bool
+		wantWasAlreadyRegistered bool
+		wantErrContains          []string
+	}{
+		{
+			name:                        "returns an error if the receiver wallet cannot be found",
+			sep24Claims:                 sep24JWTClaims,
+			currentReceiverWalletStatus: "", // <--- no receiver wallet exists
+			wantErrContains:             []string{"receiver wallet not found for receiverID=", " and clientDomain=home.page: error querying receiver wallet: sql: no rows in result set"},
+		},
+		{
+			name:                        "🎉 successfully identifies a receiverWallet that has already been marked as REGISTERED",
+			sep24Claims:                 sep24JWTClaims,
+			currentReceiverWalletStatus: data.RegisteredReceiversWalletStatus,
+			wantWasAlreadyRegistered:    true,
+		},
+		{
+			name:                        "returns an error if the receiver wallet is in a status that cannot be transitioned to REGISTERED",
+			sep24Claims:                 sep24JWTClaims,
+			currentReceiverWalletStatus: data.DraftReceiversWalletStatus,
+			wantErrContains:             []string{"transitioning status for receiverWallet[ID=", "cannot transition from DRAFT to REGISTERED"},
+		},
+		{
+			name:                        "returns an error if the OTPs don't match",
+			sep24Claims:                 sep24JWTClaims,
+			currentReceiverWalletStatus: data.ReadyReceiversWalletStatus,
+			wantErrContains:             []string{"receiver wallet OTP is not valid: otp does not match with value saved in the database"},
+		},
+		{
+			name:                        "🎉 successfully updates a receiverWallet to REGISTERED",
+			sep24Claims:                 sep24JWTClaims,
+			currentReceiverWalletStatus: data.ReadyReceiversWalletStatus,
+			shouldOTPMatch:              true,
+			wantWasAlreadyRegistered:    false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// dbTX
+			dbTx, err := dbConnectionPool.BeginTxx(ctx, nil)
+			require.NoError(t, err)
+			defer func() {
+				err = dbTx.Rollback()
+				require.NoError(t, err)
+			}()
+
+			// OTP
+			const correctOTP = "123456"
+			const wrongOTP = "111111"
+			otp := correctOTP
+			if !tc.shouldOTPMatch {
+				otp = wrongOTP
+			}
+
+			// receiver & receiver wallet
+			receiver := data.CreateReceiverFixture(t, ctx, dbTx, &data.Receiver{PhoneNumber: "+380445555555"})
+			var receiverWallet *data.ReceiverWallet
+			if tc.currentReceiverWalletStatus.State() != "" {
+				receiverWallet = data.CreateReceiverWalletFixture(t, ctx, dbTx, receiver.ID, wallet.ID, tc.currentReceiverWalletStatus)
+				var stellarAddress string
+				var otpConfirmedAt *time.Time
+				if tc.wantWasAlreadyRegistered {
+					stellarAddress = "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444"
+					now := time.Now()
+					otpConfirmedAt = &now
+				}
+
+				const q = `
+					UPDATE receiver_wallets
+					SET otp = $1, otp_created_at = NOW(), stellar_address = $2, otp_confirmed_at = $3
+					WHERE id = $4
+				`
+				_, err = dbTx.ExecContext(ctx, q, correctOTP, sql.NullString{String: stellarAddress, Valid: stellarAddress != ""}, otpConfirmedAt, receiverWallet.ID)
+				require.NoError(t, err)
+			}
+
+			// assertions
+			wasAlreadyRegistered, err := handler.processOTP(ctx, dbTx, tc.sep24Claims, *receiver, otp)
+			if tc.wantErrContains == nil {
+				require.NoError(t, err)
+				assert.Equal(t, tc.wantWasAlreadyRegistered, wasAlreadyRegistered)
+
+				// get receiverWallet from DB
+				var rw data.ReceiverWallet
+				err = dbTx.GetContext(ctx, &rw, "SELECT id, status, stellar_address, otp_confirmed_at FROM receiver_wallets WHERE id = $1", receiverWallet.ID)
+				require.NoError(t, err)
+				assert.Equal(t, data.RegisteredReceiversWalletStatus, rw.Status)
+				assert.NotEmpty(t, rw.StellarAddress)
+				assert.NotNil(t, rw.OTPConfirmedAt)
+			} else {
+				for _, wantErrContain := range tc.wantErrContains {
+					assert.ErrorContains(t, err, wantErrContain)
+				}
+				require.False(t, wasAlreadyRegistered)
 			}
 		})
 	}
