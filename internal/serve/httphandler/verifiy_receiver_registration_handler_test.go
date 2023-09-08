@@ -171,7 +171,7 @@ func Test_VerifyReceiverRegistrationHandler_validate(t *testing.T) {
 	}
 }
 
-func Test_VerifyReceiverRegistrationHandler_processReceiverVerificationEntry(t *testing.T) {
+func Test_VerifyReceiverRegistrationHandler_processReceiverVerificationPII(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
@@ -293,7 +293,7 @@ func Test_VerifyReceiverRegistrationHandler_processReceiverVerificationEntry(t *
 				receiverVerificationInitial = receiverVerifications[0]
 			}
 
-			err = handler.processReceiverVerificationEntry(ctx, dbTx, tc.receiver, tc.registrationRequest)
+			err = handler.processReceiverVerificationPII(ctx, dbTx, tc.receiver, tc.registrationRequest)
 
 			if tc.wantErrContains == "" {
 				receiverVerifications, err = models.ReceiverVerification.GetByReceiverIDsAndVerificationField(ctx, dbTx, []string{tc.receiver.ID}, tc.registrationRequest.VerificationType)
@@ -316,7 +316,7 @@ func Test_VerifyReceiverRegistrationHandler_processReceiverVerificationEntry(t *
 	}
 }
 
-func Test_VerifyReceiverRegistrationHandler_processOTP(t *testing.T) {
+func Test_VerifyReceiverRegistrationHandler_processReceiverWalletOTP(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
@@ -428,7 +428,7 @@ func Test_VerifyReceiverRegistrationHandler_processOTP(t *testing.T) {
 			}
 
 			// assertions
-			wasAlreadyRegistered, err := handler.processOTP(ctx, dbTx, tc.sep24Claims, *receiver, otp)
+			wasAlreadyRegistered, err := handler.processReceiverWalletOTP(ctx, dbTx, tc.sep24Claims, *receiver, otp)
 			if tc.wantErrContains == nil {
 				require.NoError(t, err)
 				assert.Equal(t, tc.wantWasAlreadyRegistered, wasAlreadyRegistered)
