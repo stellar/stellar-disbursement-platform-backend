@@ -450,7 +450,179 @@ func Test_VerifyReceiverRegistrationHandler_processReceiverWalletOTP(t *testing.
 	}
 }
 
-func Test_VerifyReceiverRegistration(t *testing.T) {
+func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+	models, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+
+	// create valid sep24 token
+	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "testWallet", "https://home.page", "home.page", "wallet123://")
+	validClaims := &anchorplatform.SEP24JWTClaims{
+		ClientDomainClaim: wallet.SEP10ClientDomain,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ID:        "test-transaction-id",
+			Subject:   "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444",
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(5 * time.Minute)),
+		},
+	}
+
+	mockAnchorPlatformService := anchorplatform.AnchorPlatformAPIServiceMock{}
+	handler := &VerifyReceiverRegistrationHandler{
+		Models:                   models,
+		AnchorPlatformAPIService: &mockAnchorPlatformService,
+	}
+
+	const phoneNumber = "+380445555555"
+	receiverRegistrationRequest := data.ReceiverRegistrationRequest{
+		PhoneNumber:       phoneNumber,
+		OTP:               "123456",
+		VerificationValue: "1990-01-01",
+		VerificationType:  "date_of_birth",
+		ReCAPTCHAToken:    "token",
+	}
+	reqBody, err := json.Marshal(receiverRegistrationRequest)
+	require.NoError(t, err)
+	r := chi.NewRouter()
+
+	t.Run("returns an error when validate() fails - testing case where a SEP24 claims are missing from the context", func(t *testing.T) {
+		// set the logger to a buffer so we can check the error message
+		buf := new(strings.Builder)
+		log.DefaultLogger.SetOutput(buf)
+
+		// setup router and execute request
+		r.Post("/wallet-registration/verification", handler.VerifyReceiverRegistration)
+		req, err := http.NewRequest("POST", "/wallet-registration/verification", nil)
+		require.NoError(t, err)
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+
+		// execute and validate response
+		resp := rr.Result()
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+		assert.JSONEq(t, `{"error": "Not authorized."}`, string(respBody))
+
+		// validate logs
+		require.Contains(t, buf.String(), "validating request in VerifyReceiverRegistrationHandler: no SEP-24 claims found in the request context")
+	})
+
+	t.Run("returns an error if the receiver cannot be found", func(t *testing.T) {
+		// mocks
+		reCAPTCHAValidator := &validators.ReCAPTCHAValidatorMock{}
+		defer reCAPTCHAValidator.AssertExpectations(t)
+		handler.ReCAPTCHAValidator = reCAPTCHAValidator
+		reCAPTCHAValidator.On("IsTokenValid", mock.Anything, "token").Return(true, nil).Once()
+
+		// set the logger to a buffer so we can check the error message
+		buf := new(strings.Builder)
+		log.DefaultLogger.SetOutput(buf)
+
+		// setup router and execute request
+		r.Post("/wallet-registration/verification", handler.VerifyReceiverRegistration)
+		req, err := http.NewRequest("POST", "/wallet-registration/verification", strings.NewReader(string(reqBody)))
+		require.NoError(t, err)
+		req = req.WithContext(context.WithValue(req.Context(), anchorplatform.SEP24ClaimsContextKey, validClaims))
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+
+		// execute and validate response
+		resp := rr.Result()
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+		wantBody := fmt.Sprintf(`{"error": "%s"}`, InformationNotFoundOnServer)
+		assert.JSONEq(t, wantBody, string(respBody))
+
+		// validate logs
+		require.Contains(t, buf.String(), "receiver with phone number +38...555 not found in our server")
+	})
+
+	t.Run("returns an error when processReceiverVerificationPII() fails - testing case where no receiverVerification is found", func(t *testing.T) {
+		// mocks
+		reCAPTCHAValidator := &validators.ReCAPTCHAValidatorMock{}
+		defer reCAPTCHAValidator.AssertExpectations(t)
+		handler.ReCAPTCHAValidator = reCAPTCHAValidator
+		reCAPTCHAValidator.On("IsTokenValid", mock.Anything, "token").Return(true, nil).Once()
+
+		// update database with the entries needed
+		defer data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
+		_ = data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{PhoneNumber: phoneNumber})
+
+		// set the logger to a buffer so we can check the error message
+		buf := new(strings.Builder)
+		log.DefaultLogger.SetOutput(buf)
+
+		// setup router and execute request
+		r.Post("/wallet-registration/verification", handler.VerifyReceiverRegistration)
+		req, err := http.NewRequest("POST", "/wallet-registration/verification", strings.NewReader(string(reqBody)))
+		require.NoError(t, err)
+		req = req.WithContext(context.WithValue(req.Context(), anchorplatform.SEP24ClaimsContextKey, validClaims))
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+
+		// execute and validate response
+		resp := rr.Result()
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+		wantBody := fmt.Sprintf(`{"error": "%s"}`, InformationNotFoundOnServer)
+		assert.JSONEq(t, wantBody, string(respBody))
+
+		// validate logs
+		require.Contains(t, buf.String(), "processing receiver verification entry for receiver with phone number +38...555: DATE_OF_BIRTH not found for receiver with phone number +38...555")
+	})
+
+	t.Run("returns an error when processReceiverWalletOTP() fails - testing case where no receiverWallet is found", func(t *testing.T) {
+		// mocks
+		reCAPTCHAValidator := &validators.ReCAPTCHAValidatorMock{}
+		defer reCAPTCHAValidator.AssertExpectations(t)
+		handler.ReCAPTCHAValidator = reCAPTCHAValidator
+		reCAPTCHAValidator.On("IsTokenValid", mock.Anything, "token").Return(true, nil).Once()
+
+		// update database with the entries needed
+		defer data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
+		defer data.DeleteAllReceiverVerificationFixtures(t, ctx, dbConnectionPool)
+		receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{PhoneNumber: phoneNumber})
+		_ = data.CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, data.ReceiverVerificationInsert{
+			ReceiverID:        receiver.ID,
+			VerificationField: data.VerificationFieldDateOfBirth,
+			VerificationValue: "1990-01-01",
+		})
+
+		// set the logger to a buffer so we can check the error message
+		buf := new(strings.Builder)
+		log.DefaultLogger.SetOutput(buf)
+
+		// setup router and execute request
+		r.Post("/wallet-registration/verification", handler.VerifyReceiverRegistration)
+		req, err := http.NewRequest("POST", "/wallet-registration/verification", strings.NewReader(string(reqBody)))
+		require.NoError(t, err)
+		req = req.WithContext(context.WithValue(req.Context(), anchorplatform.SEP24ClaimsContextKey, validClaims))
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+
+		// execute and validate response
+		resp := rr.Result()
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+		wantBody := fmt.Sprintf(`{"error": "%s"}`, InformationNotFoundOnServer)
+		assert.JSONEq(t, wantBody, string(respBody))
+
+		// validate logs
+		wantErrContains := fmt.Sprintf("processing OTP for receiver with phone number +38...555: receiver wallet not found for receiverID=%s and clientDomain=home.page", receiver.ID)
+		require.Contains(t, buf.String(), wantErrContains)
+	})
+}
+
+func Test_VerifyReceiverRegistrationHandler(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)

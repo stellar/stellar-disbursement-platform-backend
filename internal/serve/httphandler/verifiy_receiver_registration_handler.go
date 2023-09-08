@@ -200,7 +200,7 @@ func (v VerifyReceiverRegistrationHandler) VerifyReceiverRegistration(w http.Res
 	receiverRegistrationRequest, sep24Claims, httpErr := v.validate(r)
 	if httpErr != nil {
 		if httpErr.Err != nil {
-			log.Ctx(ctx).Error(httpErr.Err)
+			log.Ctx(ctx).Errorf("validating request in VerifyReceiverRegistrationHandler: %v", httpErr.Err)
 		}
 		httpErr.Render(w)
 		return
