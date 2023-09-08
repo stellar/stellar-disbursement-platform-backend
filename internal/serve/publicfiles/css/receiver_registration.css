@@ -114,6 +114,16 @@ input#phone_number {
   width: 100%;
 }
 
+.iti__flag {
+  background-image: url("/static/img/flags.png");
+}
+
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+  .iti__flag {
+    background-image: url("/static/img/flags@2x.png");
+  }
+}
+
 .Form__item {
   display: flex;
   flex-direction: column;

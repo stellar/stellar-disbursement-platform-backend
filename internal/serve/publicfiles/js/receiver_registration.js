@@ -326,8 +326,7 @@ function phoneNumberInit() {
   const buttonEls = phoneNumberSectionEl.querySelectorAll("[data-button]");
 
   const intlTelInput = window.intlTelInput(phoneNumberInput, {
-    utilsScript:
-      "https://cdn.jsdelivr.net/npm/intl-tel-input@18.2.1/build/js/utils.js",
+    utilsScript: "/static/js/intl-tel-input-v18.2.1-utils.min.js",
     preferredCountries: [],
     separateDialCode: true,
   });
