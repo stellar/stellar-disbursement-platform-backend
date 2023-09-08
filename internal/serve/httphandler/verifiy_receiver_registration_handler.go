@@ -69,8 +69,9 @@ func (v VerifyReceiverRegistrationHandler) validate(r *http.Request) (reqObj dat
 		return reqObj, nil, httperror.InternalError(ctx, "Cannot validate reCAPTCHA token", err, nil)
 	}
 	if !isValid {
-		log.Ctx(ctx).Errorf("reCAPTCHA token is invalid for request with OTP %s and Phone Number %s",
-			utils.TruncateString(receiverRegistrationRequest.OTP, 2), utils.TruncateString(receiverRegistrationRequest.PhoneNumber, 4))
+		truncatedPhoneNumber := utils.TruncateString(receiverRegistrationRequest.PhoneNumber, 3)
+		truncatedOTP := utils.TruncateString(receiverRegistrationRequest.OTP, 2)
+		log.Ctx(ctx).Errorf("reCAPTCHA token is invalid for request with OTP %s and Phone Number %s", truncatedOTP, truncatedPhoneNumber)
 		return reqObj, nil, httperror.BadRequest("", nil, nil)
 	}
 
@@ -92,6 +93,7 @@ func (v VerifyReceiverRegistrationHandler) validate(r *http.Request) (reqObj dat
 // - the payload verification value does not match the one saved in the database
 func (v VerifyReceiverRegistrationHandler) processReceiverVerificationEntry(ctx context.Context, dbTx db.DBTransaction, receiver data.Receiver, receiverRegistrationRequest data.ReceiverRegistrationRequest) error {
 	now := time.Now()
+	truncatedPhoneNumber := utils.TruncateString(receiver.PhoneNumber, 3)
 
 	// STEP 1: find the receiverVerification entry that matches the pair [receiverID, verificationType]
 	receiverVerifications, err := v.Models.ReceiverVerification.GetByReceiverIDsAndVerificationField(ctx, dbTx, []string{receiver.ID}, receiverRegistrationRequest.VerificationType)
@@ -100,7 +102,7 @@ func (v VerifyReceiverRegistrationHandler) processReceiverVerificationEntry(ctx 
 		return err
 	}
 	if len(receiverVerifications) == 0 {
-		err = fmt.Errorf("%s not found for receiver with phone number %s", receiverRegistrationRequest.VerificationType, receiverRegistrationRequest.PhoneNumber)
+		err = fmt.Errorf("%s not found for receiver with phone number %s", receiverRegistrationRequest.VerificationType, truncatedPhoneNumber)
 		return &ErrorInformationNotFound{cause: err}
 	}
 	if len(receiverVerifications) > 1 {
@@ -111,13 +113,13 @@ func (v VerifyReceiverRegistrationHandler) processReceiverVerificationEntry(ctx 
 	// STEP 2: check if the number of attempts to confirm the verification value has already exceeded the max value
 	if v.Models.ReceiverVerification.ExceededAttempts(receiverVerification.Attempts) {
 		// TODO: the application currently can't recover from a max attempts exceeded error.
-		err = fmt.Errorf("number of attempts to confirm the verification value exceeded max attempts value %d", data.MaxAttemptsAllowed)
+		err = fmt.Errorf("the number of attempts to confirm the verification value exceededs the max attempts limit of %d", data.MaxAttemptsAllowed)
 		return &ErrorInformationNotFound{cause: err}
 	}
 
 	// STEP 3: check if the payload verification value matches the one saved in the database
 	if !data.CompareVerificationValue(receiverVerification.HashedValue, receiverRegistrationRequest.VerificationValue) {
-		baseErrMsg := fmt.Sprintf("%s value does not match for user with phone number %s", receiverRegistrationRequest.VerificationType, receiverRegistrationRequest.PhoneNumber)
+		baseErrMsg := fmt.Sprintf("%s value does not match for user with phone number %s", receiverRegistrationRequest.VerificationType, truncatedPhoneNumber)
 		// update the receiver verification with the confirmation that the value was checked
 		receiverVerification.Attempts = receiverVerification.Attempts + 1
 		receiverVerification.FailedAt = &now
@@ -157,15 +159,17 @@ func (v VerifyReceiverRegistrationHandler) VerifyReceiverRegistration(w http.Res
 		return
 	}
 
+	truncatedPhoneNumber := utils.TruncateString(receiverRegistrationRequest.PhoneNumber, 3)
+
 	atomicFnErr := db.RunInTransaction(ctx, v.Models.DBConnectionPool, nil, func(dbTx db.DBTransaction) error {
 		// STEP 2: find the receivers with the given phone number
 		receivers, err := v.Models.Receiver.GetByPhoneNumbers(ctx, dbTx, []string{receiverRegistrationRequest.PhoneNumber})
 		if err != nil {
-			log.Ctx(ctx).Errorf("error retrieving receiver with phone number %s: %s", utils.TruncateString(receiverRegistrationRequest.PhoneNumber, 3), err.Error())
+			log.Ctx(ctx).Errorf("error retrieving receiver with phone number %s: %s", truncatedPhoneNumber, err.Error())
 			return err
 		}
 		if len(receivers) == 0 {
-			err = fmt.Errorf("receiver with phone number %s not found in our server", receiverRegistrationRequest.PhoneNumber)
+			err = fmt.Errorf("receiver with phone number %s not found in our server", truncatedPhoneNumber)
 			return &ErrorInformationNotFound{cause: err}
 		}
 
@@ -212,7 +216,7 @@ func (v VerifyReceiverRegistrationHandler) VerifyReceiverRegistration(w http.Res
 
 		err = v.Models.ReceiverWallet.UpdateReceiverWallet(ctx, *receiverWallet, dbTx)
 		if err != nil {
-			err = fmt.Errorf("completing receiver wallet registration for phone number %s: %w", utils.TruncateString(receiverRegistrationRequest.PhoneNumber, 3), err)
+			err = fmt.Errorf("completing receiver wallet registration for phone number %s: %w", truncatedPhoneNumber, err)
 			return err
 		}
 
