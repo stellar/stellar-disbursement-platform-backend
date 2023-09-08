@@ -24,7 +24,7 @@ var DefaultWalletsNetworkMap = WalletsNetworkMapType{
 // SetupWalletsForProperNetwork updates and inserts wallets for the given Network Passphrase (`network`). So it avoids the application having
 // wallets that doesn't support the given network.
 func SetupWalletsForProperNetwork(ctx context.Context, dbConnectionPool db.DBConnectionPool, network utils.NetworkType, walletsNetworkMap WalletsNetworkMapType) error {
-	log.Ctx(ctx).Infof("updating/inserting wallets for the '%s' network\n\n", network)
+	log.Ctx(ctx).Infof("updating/inserting wallets for the '%s' network", network)
 
 	wallets, ok := walletsNetworkMap[network]
 	if !ok {
@@ -127,7 +127,7 @@ func SetupWalletsForProperNetwork(ctx context.Context, dbConnectionPool db.DBCon
 			}
 		}
 
-		if len(walletNames) == 0 {
+		if len(assetCodes) == 0 {
 			log.Ctx(ctx).Info("no assets to be inserted for the given wallets")
 			return nil
 		}
@@ -150,10 +150,15 @@ func SetupWalletsForProperNetwork(ctx context.Context, dbConnectionPool db.DBCon
 			ON CONFLICT(wallet_id, asset_id) DO NOTHING;
 		`
 
-		_, err = dbTx.ExecContext(ctx, query, pq.Array(walletNames), pq.Array(assetCodes), pq.Array(assetIssuers))
+		rowNum, err := dbTx.ExecContext(ctx, query, pq.Array(walletNames), pq.Array(assetCodes), pq.Array(assetIssuers))
 		if err != nil {
-			return fmt.Errorf("upserting wallet assets: %w", err)
+			return fmt.Errorf("inserting wallet assets: %w", err)
 		}
+		rowsAffected, err := rowNum.RowsAffected()
+		if err != nil {
+			return fmt.Errorf("getting rows affected for inserted wallet assets: %w", err)
+		}
+		log.Ctx(ctx).Infof("associated %d wallet assets", rowsAffected)
 		return nil
 	})
 	if err != nil {
@@ -173,11 +178,12 @@ func SetupWalletsForProperNetwork(ctx context.Context, dbConnectionPool db.DBCon
 	buf.Reset()
 	buf.WriteString(fmt.Sprintf("Registered wallets for network %s:\n\n", network))
 	for _, wallet := range allWallets {
-		buf.WriteString(fmt.Sprintf("Name: %s\nHomepage: %s\nDeep Link Schema: %s\nSEP-10 Client Domain: %s\n%s\nAssets:", wallet.Name, wallet.Homepage, wallet.DeepLinkSchema, wallet.SEP10ClientDomain, separator))
+		buf.WriteString(fmt.Sprintf("Name: %s\nHomepage: %s\nDeep Link Schema: %s\nSEP-10 Client Domain: %s\n", wallet.Name, wallet.Homepage, wallet.DeepLinkSchema, wallet.SEP10ClientDomain))
+		buf.WriteString("Assets:\n")
 		for _, asset := range wallet.Assets {
-			buf.WriteString(fmt.Sprintf("\t\t * %s - %s\n", asset.Code, asset.Issuer))
+			buf.WriteString(fmt.Sprintf("\t * %s - %s\n", asset.Code, asset.Issuer))
 		}
-		buf.WriteString("\n")
+		buf.WriteString(fmt.Sprintf("%s\n", separator))
 	}
 
 	log.Ctx(ctx).Info(buf.String())
