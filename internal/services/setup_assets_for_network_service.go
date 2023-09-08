@@ -28,7 +28,7 @@ var DefaultAssetsNetworkMap = AssetsNetworkMapType{
 // SetupAssetsForProperNetwork updates and inserts assets for the given Network Passphrase (`network`). So it avoids the application having
 // same asset code with multiple issuers.
 func SetupAssetsForProperNetwork(ctx context.Context, dbConnectionPool db.DBConnectionPool, network utils.NetworkType, assetsNetworkMap AssetsNetworkMapType) error {
-	log.Ctx(ctx).Infof("updating/inserting assets for the '%s' network\n\n", network)
+	log.Ctx(ctx).Infof("updating/inserting assets for the '%s' network", network)
 
 	assets, ok := assetsNetworkMap[network]
 	if !ok {
