@@ -450,6 +450,78 @@ func Test_VerifyReceiverRegistrationHandler_processReceiverWalletOTP(t *testing.
 	}
 }
 
+func Test_VerifyReceiverRegistrationHandler_processAnchorPlatformID(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+	models, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+	handler := &VerifyReceiverRegistrationHandler{Models: models}
+
+	// create valid sep24 token
+	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "testWallet", "https://home.page", "home.page", "wallet123://")
+	sep24Claims := &anchorplatform.SEP24JWTClaims{
+		ClientDomainClaim: wallet.SEP10ClientDomain,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ID:        "test-transaction-id",
+			Subject:   "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444",
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(5 * time.Minute)),
+		},
+	}
+
+	// mocks
+	transaction := anchorplatform.Transaction{
+		TransactionValues: anchorplatform.TransactionValues{
+			ID:                 "test-transaction-id",
+			Status:             "pending_anchor",
+			Sep:                "24",
+			Kind:               "deposit",
+			DestinationAccount: sep24Claims.SEP10StellarAccount(),
+			Memo:               sep24Claims.SEP10StellarMemo(),
+			KYCVerified:        true,
+		},
+	}
+
+	testCases := []struct {
+		name            string
+		mockReturnError error
+		wantErrContains string
+	}{
+		{
+			name:            "returns an error if the Anchor Platdorm API returns an error",
+			mockReturnError: fmt.Errorf("error updating transaction on anchor platform"),
+			wantErrContains: "error updating transaction on anchor platform",
+		},
+		{
+			name: "🎉 successfully updates the transaction on the Anchor Platform",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// mocks
+			mockAnchorPlatformService := anchorplatform.AnchorPlatformAPIServiceMock{}
+			defer mockAnchorPlatformService.AssertExpectations(t)
+			handler.AnchorPlatformAPIService = &mockAnchorPlatformService
+			mockAnchorPlatformService.
+				On("UpdateAnchorTransactions", mock.Anything, []anchorplatform.Transaction{transaction}).
+				Return(tc.mockReturnError).Once()
+
+			// assertions
+			err := handler.processAnchorPlatformID(ctx, sep24Claims)
+			if tc.wantErrContains == "" {
+				require.NoError(t, err)
+			} else {
+				require.ErrorContains(t, err, tc.wantErrContains)
+			}
+		})
+	}
+}
+
 func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
