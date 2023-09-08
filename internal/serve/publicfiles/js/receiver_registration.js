@@ -327,8 +327,18 @@ function phoneNumberInit() {
 
   const intlTelInput = window.intlTelInput(phoneNumberInput, {
     utilsScript: "/static/js/intl-tel-input-v18.2.1-utils.min.js",
-    preferredCountries: [],
     separateDialCode: true,
+    preferredCountries: [],
+    // Excluding Cuba, Iran, North Korea, and Syria
+    excludeCountries: ["cu", "ir", "kp", "sy"],
+    // Setting default country based on user's IP address
+    initialCountry: "auto",
+    geoIpLookup: (callback) => {
+      fetch("https://ipapi.co/json")
+        .then((res) => res.json())
+        .then((data) => callback(data.country_code))
+        .catch(() => callback(""));
+    },
   });
 
   // Clear phone number error message
