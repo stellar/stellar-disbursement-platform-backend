@@ -1,6 +1,6 @@
 # Stellar Disbursement Platform Backend
 
-> Note: you can find a more thorough and user-friendly documentation of this project at [Stelar docs](https://docs.stellar.org/category/use-the-stellar-disbursement-platform).
+> Note: you can find a more thorough and user-friendly documentation of this project at [Stelar Docs](https://docs.stellar.org/category/use-the-stellar-disbursement-platform).
 
 ## Table of Contents
 
@@ -78,7 +78,7 @@ The Wallet Registration UI is also hosted by the Core server, and enables recipi
 
 #### Core + Anchor Platform Integration
 
-For a full understanding on how the Core and Anchor Platform components interact, as well as the best security and configuration practices, please refer to the [Anchor Platform Integration Points](https://docs.stellar.org/stellar-disbursement-platform/anchor-platform-integration-points)
+For a full understanding on how the Core and Anchor Platform components interact, as well as the best security and configuration practices, please refer to the [Anchor Platform Integration Points](https://docs.stellar.org/stellar-disbursement-platform/anchor-platform-integration-points) section of the Stellar Docs.
 
 ### Transaction Submission Service
 
