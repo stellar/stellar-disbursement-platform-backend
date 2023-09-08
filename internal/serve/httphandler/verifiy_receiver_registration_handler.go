@@ -192,6 +192,27 @@ func (v VerifyReceiverRegistrationHandler) processReceiverWalletOTP(ctx context.
 	return false, nil
 }
 
+func (v VerifyReceiverRegistrationHandler) processAnchorPlatformID(ctx context.Context, sep24Claims *anchorplatform.SEP24JWTClaims) error {
+	transaction := &anchorplatform.Transaction{
+		TransactionValues: anchorplatform.TransactionValues{
+			ID:                 sep24Claims.TransactionID(),
+			Status:             "pending_anchor",
+			Sep:                "24",
+			Kind:               "deposit",
+			DestinationAccount: sep24Claims.SEP10StellarAccount(),
+			Memo:               sep24Claims.SEP10StellarMemo(),
+			KYCVerified:        true,
+		},
+	}
+
+	err := v.AnchorPlatformAPIService.UpdateAnchorTransactions(ctx, []anchorplatform.Transaction{*transaction})
+	if err != nil {
+		return fmt.Errorf("updating transaction with ID %s on anchor platform API: %w", sep24Claims.TransactionID(), err)
+	}
+
+	return nil
+}
+
 // VerifyReceiverRegistration implements the http.Handler interface.
 func (v VerifyReceiverRegistrationHandler) VerifyReceiverRegistration(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
@@ -237,21 +258,9 @@ func (v VerifyReceiverRegistrationHandler) VerifyReceiverRegistration(w http.Res
 		}
 
 		// STEP 5: PATCH transaction on the AnchorPlatform
-		transaction := &anchorplatform.Transaction{
-			TransactionValues: anchorplatform.TransactionValues{
-				ID:                 sep24Claims.TransactionID(),
-				Status:             "pending_anchor",
-				Sep:                "24",
-				Kind:               "deposit",
-				DestinationAccount: sep24Claims.SEP10StellarAccount(),
-				Memo:               sep24Claims.SEP10StellarMemo(),
-				KYCVerified:        true,
-			},
-		}
-		err = v.AnchorPlatformAPIService.UpdateAnchorTransactions(ctx, []anchorplatform.Transaction{*transaction})
+		err = v.processAnchorPlatformID(ctx, sep24Claims)
 		if err != nil {
-			err = fmt.Errorf("updating transaction with ID %s on anchor platform API: %w", sep24Claims.TransactionID(), err)
-			return err
+			return fmt.Errorf("processing anchor platform transaction ID: %w", err)
 		}
 
 		return nil

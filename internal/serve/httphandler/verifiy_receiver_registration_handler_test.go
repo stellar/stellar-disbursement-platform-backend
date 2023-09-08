@@ -460,6 +460,7 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 	ctx := context.Background()
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
+	handler := &VerifyReceiverRegistrationHandler{Models: models}
 
 	// create valid sep24 token
 	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "testWallet", "https://home.page", "home.page", "wallet123://")
@@ -470,12 +471,6 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 			Subject:   "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444",
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(5 * time.Minute)),
 		},
-	}
-
-	mockAnchorPlatformService := anchorplatform.AnchorPlatformAPIServiceMock{}
-	handler := &VerifyReceiverRegistrationHandler{
-		Models:                   models,
-		AnchorPlatformAPIService: &mockAnchorPlatformService,
 	}
 
 	const phoneNumber = "+380445555555"
@@ -619,6 +614,227 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 		// validate logs
 		wantErrContains := fmt.Sprintf("processing OTP for receiver with phone number +38...555: receiver wallet not found for receiverID=%s and clientDomain=home.page", receiver.ID)
 		require.Contains(t, buf.String(), wantErrContains)
+	})
+
+	t.Run("returns an error when processAnchorPlatformID() fails - anchor platform returns an error", func(t *testing.T) {
+		// mocks
+		reCAPTCHAValidator := &validators.ReCAPTCHAValidatorMock{}
+		defer reCAPTCHAValidator.AssertExpectations(t)
+		handler.ReCAPTCHAValidator = reCAPTCHAValidator
+		reCAPTCHAValidator.On("IsTokenValid", mock.Anything, "token").Return(true, nil).Once()
+
+		transaction := anchorplatform.Transaction{
+			TransactionValues: anchorplatform.TransactionValues{
+				ID:                 "test-transaction-id",
+				Status:             "pending_anchor",
+				Sep:                "24",
+				Kind:               "deposit",
+				DestinationAccount: validClaims.SEP10StellarAccount(),
+				Memo:               validClaims.SEP10StellarMemo(),
+				KYCVerified:        true,
+			},
+		}
+		mockAnchorPlatformService := anchorplatform.AnchorPlatformAPIServiceMock{}
+		defer mockAnchorPlatformService.AssertExpectations(t)
+		handler.AnchorPlatformAPIService = &mockAnchorPlatformService
+		mockAnchorPlatformService.
+			On("UpdateAnchorTransactions", mock.Anything, []anchorplatform.Transaction{transaction}).
+			Return(fmt.Errorf("error updating transaction on anchor platform")).Once()
+
+		// update database with the entries needed
+		defer data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
+		defer data.DeleteAllReceiverVerificationFixtures(t, ctx, dbConnectionPool)
+		defer data.DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
+		receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{PhoneNumber: phoneNumber})
+		_ = data.CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, data.ReceiverVerificationInsert{
+			ReceiverID:        receiver.ID,
+			VerificationField: data.VerificationFieldDateOfBirth,
+			VerificationValue: "1990-01-01",
+		})
+		_ = data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.ReadyReceiversWalletStatus)
+		_, err := models.ReceiverWallet.UpdateOTPByReceiverPhoneNumberAndWalletDomain(ctx, "+380445555555", wallet.SEP10ClientDomain, "123456")
+		require.NoError(t, err)
+
+		// set the logger to a buffer so we can check the error message
+		buf := new(strings.Builder)
+		log.DefaultLogger.SetOutput(buf)
+
+		// setup router and execute request
+		r.Post("/wallet-registration/verification", handler.VerifyReceiverRegistration)
+		req, err := http.NewRequest("POST", "/wallet-registration/verification", strings.NewReader(string(reqBody)))
+		require.NoError(t, err)
+		req = req.WithContext(context.WithValue(req.Context(), anchorplatform.SEP24ClaimsContextKey, validClaims))
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+
+		// execute and validate response
+		resp := rr.Result()
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+		wantBody := `{"error": "An internal error occurred while processing this request."}`
+		assert.JSONEq(t, wantBody, string(respBody))
+
+		// validate logs
+		wantErrContains := fmt.Sprintf("processing anchor platform transaction ID: updating transaction with ID %s on anchor platform API", validClaims.TransactionID())
+		require.Contains(t, buf.String(), wantErrContains)
+	})
+
+	t.Run("🎉 successfully registers receiver's stellar address (without memo)", func(t *testing.T) {
+		// mocks
+		reCAPTCHAValidator := &validators.ReCAPTCHAValidatorMock{}
+		defer reCAPTCHAValidator.AssertExpectations(t)
+		handler.ReCAPTCHAValidator = reCAPTCHAValidator
+		reCAPTCHAValidator.On("IsTokenValid", mock.Anything, "token").Return(true, nil).Once()
+
+		transaction := anchorplatform.Transaction{
+			TransactionValues: anchorplatform.TransactionValues{
+				ID:                 "test-transaction-id",
+				Status:             "pending_anchor",
+				Sep:                "24",
+				Kind:               "deposit",
+				DestinationAccount: validClaims.SEP10StellarAccount(),
+				Memo:               validClaims.SEP10StellarMemo(),
+				KYCVerified:        true,
+			},
+		}
+		mockAnchorPlatformService := anchorplatform.AnchorPlatformAPIServiceMock{}
+		defer mockAnchorPlatformService.AssertExpectations(t)
+		handler.AnchorPlatformAPIService = &mockAnchorPlatformService
+		mockAnchorPlatformService.On("UpdateAnchorTransactions", mock.Anything, []anchorplatform.Transaction{transaction}).Return(nil).Once()
+
+		// update database with the entries needed
+		defer data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
+		defer data.DeleteAllReceiverVerificationFixtures(t, ctx, dbConnectionPool)
+		defer data.DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
+		receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{PhoneNumber: phoneNumber})
+		_ = data.CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, data.ReceiverVerificationInsert{
+			ReceiverID:        receiver.ID,
+			VerificationField: data.VerificationFieldDateOfBirth,
+			VerificationValue: "1990-01-01",
+		})
+		receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.ReadyReceiversWalletStatus)
+		_, err := models.ReceiverWallet.UpdateOTPByReceiverPhoneNumberAndWalletDomain(ctx, "+380445555555", wallet.SEP10ClientDomain, "123456")
+		require.NoError(t, err)
+
+		// setup router and execute request
+		r.Post("/wallet-registration/verification", handler.VerifyReceiverRegistration)
+		req, err := http.NewRequest("POST", "/wallet-registration/verification", strings.NewReader(string(reqBody)))
+		require.NoError(t, err)
+		req = req.WithContext(context.WithValue(req.Context(), anchorplatform.SEP24ClaimsContextKey, validClaims))
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+
+		// execute and validate response
+		resp := rr.Result()
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		wantBody := `{"message": "ok"}`
+		assert.JSONEq(t, wantBody, string(respBody))
+
+		// validate if the receiver wallet has been updated
+		query := `
+			SELECT
+				rw.status,
+				rw.stellar_address,
+				COALESCE(rw.stellar_memo, '') as "stellar_memo",
+				COALESCE(rw.stellar_memo_type, '') as "stellar_memo_type",
+				otp_confirmed_at
+			FROM
+				receiver_wallets rw
+			WHERE
+				rw.id = $1
+		`
+		receiverWalletUpdated := data.ReceiverWallet{}
+		err = dbConnectionPool.GetContext(ctx, &receiverWalletUpdated, query, receiverWallet.ID)
+		require.NoError(t, err)
+
+		assert.Equal(t, data.RegisteredReceiversWalletStatus, receiverWalletUpdated.Status)
+		assert.Equal(t, "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444", receiverWalletUpdated.StellarAddress)
+		assert.Empty(t, receiverWalletUpdated.StellarMemo)
+		assert.Empty(t, receiverWalletUpdated.StellarMemoType)
+		require.NotEmpty(t, receiverWalletUpdated.OTPConfirmedAt)
+	})
+
+	t.Run("🎉 successfully registers receiver's stellar address (with memo)", func(t *testing.T) {
+		// update claims by adding memo
+		validClaims.RegisteredClaims.Subject += ":123456"
+
+		// mocks
+		reCAPTCHAValidator := &validators.ReCAPTCHAValidatorMock{}
+		defer reCAPTCHAValidator.AssertExpectations(t)
+		handler.ReCAPTCHAValidator = reCAPTCHAValidator
+		reCAPTCHAValidator.On("IsTokenValid", mock.Anything, "token").Return(true, nil).Once()
+
+		transaction := anchorplatform.Transaction{
+			TransactionValues: anchorplatform.TransactionValues{
+				ID:                 "test-transaction-id",
+				Status:             "pending_anchor",
+				Sep:                "24",
+				Kind:               "deposit",
+				DestinationAccount: validClaims.SEP10StellarAccount(),
+				Memo:               validClaims.SEP10StellarMemo(),
+				KYCVerified:        true,
+			},
+		}
+		mockAnchorPlatformService := anchorplatform.AnchorPlatformAPIServiceMock{}
+		defer mockAnchorPlatformService.AssertExpectations(t)
+		handler.AnchorPlatformAPIService = &mockAnchorPlatformService
+		mockAnchorPlatformService.On("UpdateAnchorTransactions", mock.Anything, []anchorplatform.Transaction{transaction}).Return(nil).Once()
+
+		// update database with the entries needed
+		defer data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
+		defer data.DeleteAllReceiverVerificationFixtures(t, ctx, dbConnectionPool)
+		defer data.DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
+		receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{PhoneNumber: phoneNumber})
+		_ = data.CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, data.ReceiverVerificationInsert{
+			ReceiverID:        receiver.ID,
+			VerificationField: data.VerificationFieldDateOfBirth,
+			VerificationValue: "1990-01-01",
+		})
+		receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.ReadyReceiversWalletStatus)
+		_, err := models.ReceiverWallet.UpdateOTPByReceiverPhoneNumberAndWalletDomain(ctx, "+380445555555", wallet.SEP10ClientDomain, "123456")
+		require.NoError(t, err)
+
+		// setup router and execute request
+		r.Post("/wallet-registration/verification", handler.VerifyReceiverRegistration)
+		req, err := http.NewRequest("POST", "/wallet-registration/verification", strings.NewReader(string(reqBody)))
+		require.NoError(t, err)
+		req = req.WithContext(context.WithValue(req.Context(), anchorplatform.SEP24ClaimsContextKey, validClaims))
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+
+		// execute and validate response
+		resp := rr.Result()
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		wantBody := `{"message": "ok"}`
+		assert.JSONEq(t, wantBody, string(respBody))
+
+		// validate if the receiver wallet has been updated
+		query := `
+			SELECT
+				rw.status,
+				rw.stellar_address,
+				COALESCE(rw.stellar_memo, '') as "stellar_memo",
+				COALESCE(rw.stellar_memo_type, '') as "stellar_memo_type",
+				otp_confirmed_at
+			FROM
+				receiver_wallets rw
+			WHERE
+				rw.id = $1
+		`
+		receiverWalletUpdated := data.ReceiverWallet{}
+		err = dbConnectionPool.GetContext(ctx, &receiverWalletUpdated, query, receiverWallet.ID)
+		require.NoError(t, err)
+
+		assert.Equal(t, data.RegisteredReceiversWalletStatus, receiverWalletUpdated.Status)
+		assert.Equal(t, "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444", receiverWalletUpdated.StellarAddress)
+		assert.Equal(t, "123456", receiverWalletUpdated.StellarMemo)
+		assert.Equal(t, "id", receiverWalletUpdated.StellarMemoType)
+		require.NotEmpty(t, receiverWalletUpdated.OTPConfirmedAt)
 	})
 }
 
