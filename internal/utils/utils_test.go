@@ -147,3 +147,30 @@ func Test_MapSlice(t *testing.T) {
 		})
 	}
 }
+
+func Test_ConvertType(t *testing.T) {
+	t.Run("converts a struct to another struct", func(t *testing.T) {
+		type srcStruct struct {
+			Name string
+			Foo  string
+		}
+		type dstStruct struct {
+			Name string
+			Bar  string
+		}
+
+		src := srcStruct{Name: "test"}
+		wantDst := dstStruct{Name: "test"}
+		dst, err := ConvertType[srcStruct, dstStruct](src)
+		require.NoError(t, err)
+		assert.Equal(t, wantDst, dst)
+	})
+
+	t.Run("converts int into float", func(t *testing.T) {
+		src := 1
+		wantDst := float32(1)
+		dst, err := ConvertType[int, float32](src)
+		require.NoError(t, err)
+		assert.Equal(t, wantDst, dst)
+	})
+}

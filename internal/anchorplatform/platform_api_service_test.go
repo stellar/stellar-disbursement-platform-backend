@@ -1,6 +1,7 @@
 package anchorplatform
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -70,26 +71,48 @@ func Test_NewAnchorPlatformAPIService(t *testing.T) {
 	}
 }
 
-func Test_UpdateAnchorTransactions(t *testing.T) {
+func Test_updateAnchorTransactions(t *testing.T) {
 	httpClientMock := httpclient.HttpClientMock{}
 	anchorPlatformAPIService, err := NewAnchorPlatformAPIService(&httpClientMock, "http://mock_anchor.com/", "jwt_secret_1234567890")
 	require.NoError(t, err)
 	ctx := context.Background()
 
+	apTxPatch := APSep24TransactionPatch{
+		ID:     "test-transaction-id",
+		Status: "pending_anchor",
+		SEP:    "24",
+	}
+	mockMatchedByFn := func(req *http.Request) bool {
+		assert := assert.New(t)
+
+		// STEP 1: check method type and URL
+		assert.Equal("PATCH", req.Method)
+		assert.Equal("http://mock_anchor.com/transactions", req.URL.String())
+
+		// STEP2: check request body
+		bodyBytes, err := io.ReadAll(req.Body)
+		assert.NoError(err)
+		// Restore the io.ReadCloser to its original state
+		req.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+		expectedJSON := `{
+				"records": [
+					{
+						"transaction": {
+							"id": "test-transaction-id",
+							"status": "pending_anchor",
+							"sep": "24"
+						}
+					}
+				]
+			}`
+		assert.JSONEq(expectedJSON, string(bodyBytes))
+
+		return true
+	}
+
 	t.Run("error calling httpClient.Do", func(t *testing.T) {
-		httpClientMock.On("Do", mock.AnythingOfType("*http.Request")).Return(nil, fmt.Errorf("error calling the request")).Once()
-		transaction := &Transaction{
-			TransactionValues: TransactionValues{
-				ID:                 "test-transaction-id",
-				Status:             "pending_anchor",
-				Sep:                "24",
-				Kind:               "deposit",
-				DestinationAccount: "stellar_address",
-				Memo:               "stellar_memo",
-				KYCVerified:        true,
-			},
-		}
-		err := anchorPlatformAPIService.UpdateAnchorTransactions(ctx, []Transaction{*transaction})
+		httpClientMock.On("Do", mock.MatchedBy(mockMatchedByFn)).Return(nil, fmt.Errorf("error calling the request")).Once()
+		err := anchorPlatformAPIService.updateAnchorTransactions(ctx, apTxPatch)
 		require.EqualError(t, err, "error making request to anchor platform: error calling the request")
 
 		httpClientMock.AssertExpectations(t)
@@ -101,20 +124,9 @@ func Test_UpdateAnchorTransactions(t *testing.T) {
 			Body:       io.NopCloser(strings.NewReader(transactionResponse)),
 			StatusCode: http.StatusBadRequest,
 		}
-		httpClientMock.On("Do", mock.AnythingOfType("*http.Request")).Return(response, nil).Once()
+		httpClientMock.On("Do", mock.MatchedBy(mockMatchedByFn)).Return(response, nil).Once()
 
-		transaction := &Transaction{
-			TransactionValues: TransactionValues{
-				ID:                 "test-transaction-id",
-				Status:             "pending_anchor",
-				Sep:                "24",
-				Kind:               "deposit",
-				DestinationAccount: "stellar_address",
-				Memo:               "stellar_memo",
-				KYCVerified:        true,
-			},
-		}
-		err := anchorPlatformAPIService.UpdateAnchorTransactions(ctx, []Transaction{*transaction})
+		err := anchorPlatformAPIService.updateAnchorTransactions(ctx, apTxPatch)
 		require.EqualError(t, err, "error updating transaction on anchor platform, response.StatusCode: 400")
 
 		httpClientMock.AssertExpectations(t)
@@ -128,7 +140,6 @@ func Test_UpdateAnchorTransactions(t *testing.T) {
 				"sep": "24",
 				"kind": "deposit",
 				"destination_account": "stellar_address",
-				"memo": "stellar_memo"
 				"kyc_verified": true,
 			}
 		}`
@@ -136,20 +147,77 @@ func Test_UpdateAnchorTransactions(t *testing.T) {
 			Body:       io.NopCloser(strings.NewReader(transactionResponse)),
 			StatusCode: http.StatusOK,
 		}
-		httpClientMock.On("Do", mock.AnythingOfType("*http.Request")).Return(response, nil).Once()
+		httpClientMock.On("Do", mock.MatchedBy(mockMatchedByFn)).Return(response, nil).Once()
 
-		transaction := &Transaction{
-			TransactionValues: TransactionValues{
-				ID:                 "test-transaction-id",
-				Status:             "pending_anchor",
-				Sep:                "24",
-				Kind:               "deposit",
-				DestinationAccount: "stellar_address",
-				Memo:               "stellar_memo",
-				KYCVerified:        true,
-			},
+		err := anchorPlatformAPIService.updateAnchorTransactions(ctx, apTxPatch)
+		require.NoError(t, err)
+
+		httpClientMock.AssertExpectations(t)
+	})
+}
+
+func Test_PatchAnchorTransactionsPostRegistration(t *testing.T) {
+	httpClientMock := httpclient.HttpClientMock{}
+	anchorPlatformAPIService, err := NewAnchorPlatformAPIService(&httpClientMock, "http://mock_anchor.com/", "jwt_secret_1234567890")
+	require.NoError(t, err)
+	ctx := context.Background()
+
+	t.Run("succesfully update transaction on anchor platform", func(t *testing.T) {
+		transactionResponse := `{
+			"transaction":{
+				"id": "test-transaction-id",
+				"status": "pending_anchor",
+				"sep": "24",
+				"kind": "deposit",
+				"destination_account": "stellar_address",
+				"kyc_verified": true,
+			}
+		}`
+		response := &http.Response{
+			Body:       io.NopCloser(strings.NewReader(transactionResponse)),
+			StatusCode: http.StatusOK,
 		}
-		err := anchorPlatformAPIService.UpdateAnchorTransactions(ctx, []Transaction{*transaction})
+		httpClientMock.On("Do", mock.MatchedBy(func(req *http.Request) bool {
+			assert := assert.New(t)
+
+			// STEP 1: check method type and URL
+			assert.Equal("PATCH", req.Method)
+			assert.Equal("http://mock_anchor.com/transactions", req.URL.String())
+
+			// STEP2: check request body
+			bodyBytes, err := io.ReadAll(req.Body)
+			assert.NoError(err)
+			// Restore the io.ReadCloser to its original state
+			req.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+			expectedJSON := `{
+				"records": [
+					{
+						"transaction": {
+							"id": "test-transaction-id",
+							"status": "pending_anchor",
+							"sep": "24"
+						}
+					}
+				]
+			}`
+			assert.JSONEq(expectedJSON, string(bodyBytes))
+
+			return true
+		})).Return(response, nil).Twice()
+
+		// PatchAnchorTransactionsPostRegistration and updateAnchorTransactions should result in the same request:
+		err := anchorPlatformAPIService.PatchAnchorTransactionsPostRegistration(ctx, APSep24TransactionPatchPostRegistration{
+			ID:     "test-transaction-id",
+			Status: "pending_anchor",
+			SEP:    "24",
+		})
+		require.NoError(t, err)
+
+		err = anchorPlatformAPIService.updateAnchorTransactions(ctx, APSep24TransactionPatch{
+			ID:     "test-transaction-id",
+			Status: "pending_anchor",
+			SEP:    "24",
+		})
 		require.NoError(t, err)
 
 		httpClientMock.AssertExpectations(t)
@@ -335,11 +403,8 @@ func Test_IsAnchorProtectedByAuth(t *testing.T) {
 func Test_GetJWTToken(t *testing.T) {
 	t.Run("returns ErrJWTSecretNotSet when a JWT secret is not set", func(t *testing.T) {
 		apService := AnchorPlatformAPIService{}
-		transactions := []Transaction{
-			{TransactionValues{ID: "1"}},
-			{TransactionValues{ID: "2"}},
-		}
-		token, err := apService.GetJWTToken(transactions)
+		transactions := []APSep24TransactionPatch{{ID: "1"}, {ID: "2"}}
+		token, err := apService.GetJWTToken(transactions...)
 		require.ErrorIs(t, err, ErrJWTManagerNotSet)
 		require.Empty(t, token)
 	})
@@ -349,11 +414,8 @@ func Test_GetJWTToken(t *testing.T) {
 		require.NoError(t, err)
 
 		apService := AnchorPlatformAPIService{jwtManager: jwtManager}
-		transactions := []Transaction{
-			{TransactionValues{ID: "1"}},
-			{TransactionValues{ID: "2"}},
-		}
-		token, err := apService.GetJWTToken(transactions)
+		transactions := []APSep24TransactionPatch{{ID: "1"}, {ID: "2"}}
+		token, err := apService.GetJWTToken(transactions...)
 		require.NoError(t, err)
 		require.NotEmpty(t, token)
 
@@ -362,6 +424,23 @@ func Test_GetJWTToken(t *testing.T) {
 		require.NoError(t, err)
 		assert.Nil(t, claims.Valid())
 		assert.Equal(t, "1,2", claims.ID)
+		assert.Equal(t, "stellar-disbursement-platform-backend", claims.Subject)
+	})
+
+	t.Run("returns token successfully (zero transactions passed) 🎉", func(t *testing.T) {
+		jwtManager, err := NewJWTManager("1234567890ab", 5000)
+		require.NoError(t, err)
+
+		apService := AnchorPlatformAPIService{jwtManager: jwtManager}
+		token, err := apService.GetJWTToken()
+		require.NoError(t, err)
+		require.NotEmpty(t, token)
+
+		// verify the token
+		claims, err := jwtManager.ParseDefaultTokenClaims(token)
+		require.NoError(t, err)
+		assert.Nil(t, claims.Valid())
+		assert.Empty(t, claims.ID)
 		assert.Equal(t, "stellar-disbursement-platform-backend", claims.Subject)
 	})
 }

@@ -12,6 +12,7 @@ import (
 	"golang.org/x/exp/slices"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
 var (
@@ -20,9 +21,16 @@ var (
 	ErrServiceUnavailable  = fmt.Errorf("anchor platform service is unavailable")
 )
 
-// TODO update with the PlatformAPI endpoints
+type APTransactionStatus string
+
+const (
+	APTransactionStatusCompleted     APTransactionStatus = "completed"
+	APTransactionStatusError         APTransactionStatus = "error"
+	APTransactionStatusPendingAnchor APTransactionStatus = "pending_anchor"
+)
+
 type AnchorPlatformAPIServiceInterface interface {
-	UpdateAnchorTransactions(ctx context.Context, transactions []Transaction) error
+	PatchAnchorTransactionsPostRegistration(ctx context.Context, apTxPatch ...APSep24TransactionPatchPostRegistration) error
 	IsAnchorProtectedByAuth(ctx context.Context) (bool, error)
 }
 
@@ -30,24 +38,6 @@ type AnchorPlatformAPIService struct {
 	HttpClient                    httpclient.HttpClientInterface
 	AnchorPlatformBasePlatformURL string
 	jwtManager                    *JWTManager
-}
-
-type TransactionValues struct {
-	ID                 string `json:"id"`
-	Status             string `json:"status,omitempty"`
-	Sep                string `json:"sep,omitempty"`
-	Kind               string `json:"kind,omitempty"`
-	DestinationAccount string `json:"destination_account,omitempty"`
-	Memo               string `json:"memo,omitempty"`
-	KYCVerified        bool   `json:"kyc_verified,omitempty"`
-}
-
-type Transaction struct {
-	TransactionValues TransactionValues `json:"transaction"`
-}
-
-type TransactionRecords struct {
-	Transactions []Transaction `json:"records"`
 }
 
 func NewAnchorPlatformAPIService(httpClient httpclient.HttpClientInterface, anchorPlatformBasePlatformURL, anchorPlatformOutgoingJWTSecret string) (*AnchorPlatformAPIService, error) {
@@ -75,8 +65,21 @@ func NewAnchorPlatformAPIService(httpClient httpclient.HttpClientInterface, anch
 	}, nil
 }
 
-func (a *AnchorPlatformAPIService) UpdateAnchorTransactions(ctx context.Context, transactions []Transaction) error {
-	records := TransactionRecords{transactions}
+func (a *AnchorPlatformAPIService) PatchAnchorTransactionsPostRegistration(ctx context.Context, apTxPostRegistrationPatch ...APSep24TransactionPatchPostRegistration) error {
+	var apTxPatches []APSep24TransactionPatch
+	for _, patch := range apTxPostRegistrationPatch {
+		apTxPatch, err := utils.ConvertType[APSep24TransactionPatchPostRegistration, APSep24TransactionPatch](patch)
+		if err != nil {
+			return fmt.Errorf("converting apTxPostRegistrationPatch into apTxPatch: %w", err)
+		}
+		apTxPatches = append(apTxPatches, APSep24TransactionPatch(apTxPatch))
+	}
+
+	return a.updateAnchorTransactions(ctx, apTxPatches...)
+}
+
+func (a *AnchorPlatformAPIService) updateAnchorTransactions(ctx context.Context, apTxPatch ...APSep24TransactionPatch) error {
+	records := NewAPSep24TransactionRecordsFromPatches(apTxPatch...)
 
 	recordsJSON, err := json.Marshal(records)
 	if err != nil {
@@ -93,9 +96,9 @@ func (a *AnchorPlatformAPIService) UpdateAnchorTransactions(ctx context.Context,
 	}
 	request.Header.Set("Content-Type", "application/json")
 
-	token, err := a.GetJWTToken(transactions)
+	token, err := a.GetJWTToken(apTxPatch...)
 	if err != nil {
-		return fmt.Errorf("getting jwt token in UpdateAnchorTransactions: %w", err)
+		return fmt.Errorf("getting jwt token in updateAnchorTransactions: %w", err)
 	}
 	request.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
 
@@ -109,15 +112,6 @@ func (a *AnchorPlatformAPIService) UpdateAnchorTransactions(ctx context.Context,
 	}
 
 	return nil
-}
-
-type GetTransactionsQueryParams struct {
-	SEP        string   `schema:"sep,required,omitempty"`
-	Order      string   `schema:"order,omitempty"`
-	OrderBy    string   `schema:"order_by,omitempty"`
-	PageNumber int      `schema:"page_number,omitempty"`
-	PageSize   int      `schema:"page_size,omitempty"`
-	Statuses   []string `schema:"statuses,omitempty"`
 }
 
 func (a *AnchorPlatformAPIService) getAnchorTransactions(ctx context.Context, skipAuthentication bool, queryParams GetTransactionsQueryParams) (*http.Response, error) {
@@ -147,7 +141,7 @@ func (a *AnchorPlatformAPIService) getAnchorTransactions(ctx context.Context, sk
 	// (skippable) JWT token
 	if !skipAuthentication {
 		var token string
-		token, err = a.GetJWTToken(nil)
+		token, err = a.GetJWTToken()
 		if err != nil {
 			return nil, fmt.Errorf("getting jwt token in getAnchorTransactions: %w", err)
 		}
@@ -183,14 +177,14 @@ func (a *AnchorPlatformAPIService) IsAnchorProtectedByAuth(ctx context.Context) 
 }
 
 // GetJWTToken will generate a JWT token if the service is configured with an outgoing JWT secret.
-func (a *AnchorPlatformAPIService) GetJWTToken(transactions []Transaction) (string, error) {
+func (a *AnchorPlatformAPIService) GetJWTToken(apTx ...APSep24TransactionPatch) (string, error) {
 	if a.jwtManager == nil {
 		return "", ErrJWTManagerNotSet
 	}
 
 	var txIDs []string
-	for _, tx := range transactions {
-		txIDs = append(txIDs, tx.TransactionValues.ID)
+	for _, tx := range apTx {
+		txIDs = append(txIDs, tx.ID)
 	}
 
 	token, err := a.jwtManager.GenerateDefaultToken(strings.Join(txIDs, ","))
