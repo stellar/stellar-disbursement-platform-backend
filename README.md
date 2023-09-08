@@ -193,8 +193,5 @@ stateDiagram-v2
     Failed --> Pending:Retry
 ```
 
-[SEP-1]: https://stellar.org/protocol/sep-1
-[SEP-10]: https://stellar.org/protocol/sep-10
-[SEP-24]: https://stellar.org/protocol/sep-24
 [sdp-dashboard]: https://github.com/stellar/stellar-disbursement-platform-frontend
 [Anchor Platform]: https://github.com/stellar/java-stellar-anchor-sdk
