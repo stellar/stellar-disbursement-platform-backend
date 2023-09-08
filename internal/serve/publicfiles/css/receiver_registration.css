@@ -110,6 +110,10 @@ input {
   padding: 0.5rem 0.75rem;
 }
 
+input#phone_number {
+  width: 100%;
+}
+
 .Form__item {
   display: flex;
   flex-direction: column;
