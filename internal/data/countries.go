@@ -13,8 +13,8 @@ import (
 type Country struct {
 	Code      string     `json:"code" db:"code"`
 	Name      string     `json:"name" db:"name"`
-	CreatedAt time.Time  `json:"created_at" db:"created_at"`
-	UpdatedAt time.Time  `json:"updated_at" db:"updated_at"`
+	CreatedAt time.Time  `json:"created_at,omitempty" db:"created_at"`
+	UpdatedAt time.Time  `json:"updated_at,omitempty" db:"updated_at"`
 	DeletedAt *time.Time `json:"-" db:"deleted_at"`
 }
 

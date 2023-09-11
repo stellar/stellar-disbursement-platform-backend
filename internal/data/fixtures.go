@@ -115,14 +115,40 @@ func CreateWalletFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecut
 	return GetWalletFixture(t, ctx, sqlExec, name)
 }
 
+func CreateWalletAssets(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, walletID string, assetsIDs []string) []Asset {
+	const query = `
+		WITH assets_cte AS (
+			SELECT UNNEST($1::text[]) AS asset_id
+		)
+		INSERT INTO wallets_assets
+			(wallet_id, asset_id)
+		SELECT
+			$2, a.asset_id
+		FROM
+			assets_cte a
+	`
+
+	_, err := sqlExec.ExecContext(ctx, query, pq.Array(assetsIDs), walletID)
+	require.NoError(t, err)
+
+	return GetWalletAssetsFixture(t, ctx, sqlExec, walletID)
+}
+
 func GetWalletFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, name string) *Wallet {
 	const query = `
 		SELECT
-			*
+			w.*,
+			jsonb_agg(
+				DISTINCT to_jsonb(a)
+			) FILTER (WHERE a.id IS NOT NULL) AS assets
 		FROM
 			wallets w
-		WHERE
-			w.name = $1
+			LEFT JOIN wallets_assets wa ON w.id = wa.wallet_id
+			LEFT JOIN assets a ON a.id = wa.asset_id
+		WHERE 
+		    w.name = $1
+		GROUP BY
+			w.id
 	`
 
 	wallet := &Wallet{}
@@ -132,10 +158,34 @@ func GetWalletFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter,
 	return wallet
 }
 
+func GetWalletAssetsFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, walletID string) []Asset {
+	const query = `
+		SELECT
+			a.*
+		FROM
+			wallets_assets wa
+			INNER JOIN assets a ON a.id = wa.asset_id
+		WHERE
+			wa.wallet_id = $1
+		ORDER BY
+			code
+	`
+
+	assets := make([]Asset, 0)
+	err := sqlExec.SelectContext(ctx, &assets, query, walletID)
+	require.NoError(t, err)
+
+	return assets
+}
+
 // DeleteAllWalletFixtures deletes all wallets in the database
 func DeleteAllWalletFixtures(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter) {
-	const query = "DELETE FROM wallets"
+	query := "DELETE FROM wallets_assets"
 	_, err := sqlExec.ExecContext(ctx, query)
+	require.NoError(t, err)
+
+	query = "DELETE FROM wallets"
+	_, err = sqlExec.ExecContext(ctx, query)
 	require.NoError(t, err)
 }
 
