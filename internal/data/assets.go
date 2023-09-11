@@ -24,31 +24,6 @@ type AssetModel struct {
 	dbConnectionPool db.DBConnectionPool
 }
 
-func (a *AssetModel) GetByIDAndWalletID(ctx context.Context, assetID, walletID string) (*Asset, error) {
-	var asset Asset
-	query := `
-		SELECT 
-			a.*
-		FROM 
-			assets a
-		JOIN 
-			wallets_assets wa ON a.id = wa.asset_id
-		WHERE 
-		    deleted_at IS NULL
-			AND a.id = $1
-			AND wa.wallet_id = $2
-	`
-
-	err := a.dbConnectionPool.GetContext(ctx, &asset, query, assetID, walletID)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, ErrRecordNotFound
-		}
-		return nil, fmt.Errorf("querying asset ID %s and wallet ID %s: %w", assetID, walletID, err)
-	}
-	return &asset, nil
-}
-
 func (a *AssetModel) Get(ctx context.Context, id string) (*Asset, error) {
 	var asset Asset
 	query := `
@@ -107,16 +82,16 @@ func (a *AssetModel) GetByWalletID(ctx context.Context, walletID string) ([]Asse
 	assets := []Asset{}
 	query := `
 		SELECT 
-			a.*
+		    a.*
 		FROM 
-			assets a
+		    assets a
 		JOIN 
-			wallets_assets wa ON a.id = wa.asset_id
+		    wallets_assets wa ON a.id = wa.asset_id
 		WHERE 
-		    deleted_at IS NULL
-			AND wa.wallet_id = $1
+		    deleted_at IS NULL 
+		    AND wa.wallet_id = $1
 		ORDER BY 
-			a.code ASC
+		    a.code ASC
 	`
 
 	err := a.dbConnectionPool.SelectContext(ctx, &assets, query, walletID)

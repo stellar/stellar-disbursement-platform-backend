@@ -21,7 +21,7 @@ var TestnetWallets = []data.Wallet{
 	},
 	{
 		Name:              "Vibrant Assist",
-		Homepage:          "https://vibrantapp.com",
+		Homepage:          "https://vibrantapp.com/vibrant-assist",
 		DeepLinkSchema:    "https://vibrantapp.com/sdp-dev",
 		SEP10ClientDomain: "api.vibrantapp.com",
 		Assets: []data.Asset{
