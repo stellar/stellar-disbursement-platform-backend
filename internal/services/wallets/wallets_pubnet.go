@@ -5,7 +5,7 @@ import "github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 var PubnetWallets = []data.Wallet{
 	{
 		Name:              "Vibrant Assist",
-		Homepage:          "https://vibrantapp.com/assist",
+		Homepage:          "https://vibrantapp.com/vibrant-assist",
 		DeepLinkSchema:    "https://vibrantapp.com/sdp",
 		SEP10ClientDomain: "api.vibrantapp.com",
 		Assets: []data.Asset{

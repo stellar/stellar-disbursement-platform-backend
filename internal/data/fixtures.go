@@ -73,6 +73,19 @@ func GetAssetFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, 
 	return asset
 }
 
+// AssociateAssetWithWalletFixture associates an asset with a wallet
+func AssociateAssetWithWalletFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, assetID, walletID string) {
+	const query = `
+		INSERT INTO wallets_assets
+			(wallet_id, asset_id)
+		VALUES
+			($1, $2)
+	`
+
+	_, err := sqlExec.ExecContext(ctx, query, walletID, assetID)
+	require.NoError(t, err)
+}
+
 // DeleteAllAssetFixtures deletes all assets in the database
 func DeleteAllAssetFixtures(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter) {
 	const query = "DELETE FROM assets"

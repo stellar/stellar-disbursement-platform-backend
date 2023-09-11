@@ -57,7 +57,7 @@ func Test_SetupWalletsForProperNetwork(t *testing.T) {
 			// "Deep Link Schema: https://www.beansapp.com/disbursements/registration?redirect=true",
 			// "SEP-10 Client Domain: api.beansapp.com",
 			"Name: Vibrant Assist",
-			"Homepage: https://vibrantapp.com/assist",
+			"Homepage: https://vibrantapp.com/vibrant-assist",
 			"Deep Link Schema: https://vibrantapp.com/sdp",
 			"SEP-10 Client Domain: api.vibrantapp.com",
 		}
