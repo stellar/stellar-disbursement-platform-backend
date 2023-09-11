@@ -19,4 +19,16 @@ var TestnetWallets = []data.Wallet{
 			},
 		},
 	},
+	{
+		Name:              "Vibrant Assist",
+		Homepage:          "https://vibrantapp.com",
+		DeepLinkSchema:    "https://vibrantapp.com/sdp-dev",
+		SEP10ClientDomain: "api.vibrantapp.com",
+		Assets: []data.Asset{
+			{
+				Code:   "USDC",
+				Issuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+			},
+		},
+	},
 }
