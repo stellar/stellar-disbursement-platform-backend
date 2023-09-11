@@ -25,6 +25,7 @@ const (
 	FixtureCountryUSA = "USA"
 	FixtureCountryUKR = "UKR"
 	FixtureAssetUSDC  = "USDC"
+	FixtureAssetEURT  = "EURT"
 )
 
 func CreateAssetFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, code, issuer string) *Asset {

@@ -68,17 +68,29 @@ func (d DisbursementHandler) PostDisbursement(w http.ResponseWriter, r *http.Req
 	ctx := r.Context()
 	wallet, err := d.Models.Wallets.Get(ctx, disbursementRequest.WalletID)
 	if err != nil {
-		httperror.BadRequest("wallet ID is invalid", err, nil).Render(w)
+		if errors.Is(err, data.ErrRecordNotFound) {
+			httperror.BadRequest("wallet ID is invalid", err, nil).Render(w)
+			return
+		}
+		httperror.InternalError(ctx, "Cannot retrieve wallet", err, nil).Render(w)
 		return
 	}
-	asset, err := d.Models.Assets.Get(ctx, disbursementRequest.AssetID)
+	asset, err := d.Models.Assets.GetByIDAndWalletID(ctx, disbursementRequest.AssetID, wallet.ID)
 	if err != nil {
-		httperror.BadRequest("asset ID is invalid", err, nil).Render(w)
+		if errors.Is(err, data.ErrRecordNotFound) {
+			httperror.BadRequest("asset ID is invalid for current wallet selection", err, nil).Render(w)
+			return
+		}
+		httperror.InternalError(ctx, "Cannot retrieve asset", err, nil).Render(w)
 		return
 	}
 	country, err := d.Models.Countries.Get(ctx, disbursementRequest.CountryCode)
 	if err != nil {
-		httperror.BadRequest("country code is invalid", err, nil).Render(w)
+		if errors.Is(err, data.ErrRecordNotFound) {
+			httperror.BadRequest("country code is invalid", err, nil).Render(w)
+			return
+		}
+		httperror.InternalError(ctx, "Cannot retrieve country", err, nil).Render(w)
 		return
 	}
 

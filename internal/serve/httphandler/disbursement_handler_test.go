@@ -74,8 +74,10 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 	// setup fixtures
 	wallet := data.CreateDefaultWalletFixture(t, ctx, dbConnectionPool)
 	wallet.Assets = nil
+	data.ClearAndCreateAssetFixtures(t, ctx, dbConnectionPool)
 	asset := data.GetAssetFixture(t, ctx, dbConnectionPool, data.FixtureAssetUSDC)
 	country := data.GetCountryFixture(t, ctx, dbConnectionPool, data.FixtureCountryUKR)
+	data.AssociateAssetWithWalletFixture(t, ctx, dbConnectionPool, asset.ID, wallet.ID)
 
 	t.Run("returns error when body is invalid", func(t *testing.T) {
 		requestBody := `
@@ -169,7 +171,7 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		want := `{"error":"asset ID is invalid"}`
+		want := `{"error":"asset ID is invalid for current wallet selection"}`
 
 		assertPOSTResponse(t, ctx, handler, method, url, string(requestBody), want, http.StatusBadRequest)
 	})
@@ -212,6 +214,21 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 		mMonitorService.AssertExpectations(t)
 		// try creating again
 		assertPOSTResponse(t, ctx, handler, method, url, string(requestBody), want, http.StatusConflict)
+	})
+
+	t.Run("returns error when asset isn't supported by wallet", func(t *testing.T) {
+		otherAsset := data.GetAssetFixture(t, ctx, dbConnectionPool, data.FixtureAssetEURT)
+		expectedName := "disbursement 1"
+		requestBody, err := json.Marshal(PostDisbursementRequest{
+			Name:        expectedName,
+			CountryCode: country.Code,
+			AssetID:     otherAsset.ID,
+			WalletID:    wallet.ID,
+		})
+		require.NoError(t, err)
+
+		want := `{"error":"asset ID is invalid for current wallet selection"}`
+		assertPOSTResponse(t, ctx, handler, method, url, string(requestBody), want, http.StatusBadRequest)
 	})
 
 	t.Run("successfully create a disbursement", func(t *testing.T) {
