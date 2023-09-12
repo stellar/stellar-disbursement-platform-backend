@@ -267,7 +267,7 @@ func Test_LoginHandler(t *testing.T) {
 				"error": "Cannot validate reCAPTCHA token"
 			}
 		`
-		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 		assert.JSONEq(t, wantsBody, string(respBody))
 	})
 
