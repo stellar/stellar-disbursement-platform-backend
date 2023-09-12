@@ -25,6 +25,7 @@ type Wallet struct {
 	Homepage          string       `json:"homepage,omitempty" db:"homepage"`
 	SEP10ClientDomain string       `json:"sep_10_client_domain,omitempty" db:"sep_10_client_domain"`
 	DeepLinkSchema    string       `json:"deep_link_schema,omitempty" db:"deep_link_schema"`
+	Enabled           bool         `json:"enabled" db:"enabled"`
 	Assets            WalletAssets `json:"assets,omitempty" db:"assets"`
 	CreatedAt         *time.Time   `json:"created_at,omitempty" db:"created_at"`
 	UpdatedAt         *time.Time   `json:"updated_at,omitempty" db:"updated_at"`
@@ -231,4 +232,30 @@ func (wm *WalletModel) GetAssets(ctx context.Context, walletID string) ([]Asset,
 	}
 
 	return assets, nil
+}
+
+func (wm *WalletModel) SetEnabled(ctx context.Context, walletID string, enabled bool) error {
+	const query = `
+		UPDATE
+			wallets
+		SET
+			enabled = $1
+		WHERE
+			id = $2
+	`
+	result, err := wm.dbConnectionPool.ExecContext(ctx, query, enabled, walletID)
+	if err != nil {
+		return fmt.Errorf("updating wallet enabled status: %w", err)
+	}
+
+	numRowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("getting number of rows affected: %w", err)
+	}
+
+	if numRowsAffected == 0 {
+		return ErrRecordNotFound
+	}
+
+	return nil
 }

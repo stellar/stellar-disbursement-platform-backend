@@ -460,3 +460,43 @@ func Test_WalletModelGetAssets(t *testing.T) {
 		}, assets)
 	})
 }
+
+func Test_WalletModelSetEnabled(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+
+	walletModel := &WalletModel{dbConnectionPool: dbConnectionPool}
+
+	DeleteAllWalletFixtures(t, ctx, dbConnectionPool)
+
+	err = walletModel.SetEnabled(ctx, "unknown", true)
+	assert.EqualError(t, err, ErrRecordNotFound.Error())
+
+	wallet := CreateWalletFixture(t, ctx, dbConnectionPool.SqlxDB(),
+		"NewWallet",
+		"https://newwallet.com",
+		"newwallet.com",
+		"newalletapp://")
+
+	assert.True(t, wallet.Enabled)
+
+	err = walletModel.SetEnabled(ctx, wallet.ID, false)
+	require.NoError(t, err)
+
+	wallet, err = walletModel.Get(ctx, wallet.ID)
+	require.NoError(t, err)
+	assert.False(t, wallet.Enabled)
+
+	err = walletModel.SetEnabled(ctx, wallet.ID, true)
+	require.NoError(t, err)
+
+	wallet, err = walletModel.Get(ctx, wallet.ID)
+	require.NoError(t, err)
+	assert.True(t, wallet.Enabled)
+}

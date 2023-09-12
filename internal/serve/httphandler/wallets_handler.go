@@ -2,8 +2,10 @@ package httphandler
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/stellar/go/support/http/httpdecode"
 	"github.com/stellar/go/support/render/httpjson"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
@@ -16,8 +18,8 @@ type WalletsHandler struct {
 }
 
 // GetWallets returns a list of wallets
-func (c WalletsHandler) GetWallets(w http.ResponseWriter, r *http.Request) {
-	wallets, err := c.Models.Wallets.GetAll(r.Context())
+func (h WalletsHandler) GetWallets(w http.ResponseWriter, r *http.Request) {
+	wallets, err := h.Models.Wallets.GetAll(r.Context())
 	if err != nil {
 		httperror.InternalError(r.Context(), "Cannot retrieve list of wallets", err, nil).Render(w)
 		return
@@ -25,7 +27,7 @@ func (c WalletsHandler) GetWallets(w http.ResponseWriter, r *http.Request) {
 	httpjson.Render(w, wallets, httpjson.JSON)
 }
 
-func (c WalletsHandler) PostWallets(rw http.ResponseWriter, req *http.Request) {
+func (h WalletsHandler) PostWallets(rw http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 
 	var reqBody *validators.WalletRequest
@@ -41,7 +43,7 @@ func (c WalletsHandler) PostWallets(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	wallet, err := c.Models.Wallets.Insert(ctx, data.WalletInsert{
+	wallet, err := h.Models.Wallets.Insert(ctx, data.WalletInsert{
 		Name:              reqBody.Name,
 		Homepage:          reqBody.Homepage,
 		SEP10ClientDomain: reqBody.SEP10ClientDomain,
@@ -68,11 +70,43 @@ func (c WalletsHandler) PostWallets(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	wallet.Assets, err = c.Models.Wallets.GetAssets(ctx, wallet.ID)
+	wallet.Assets, err = h.Models.Wallets.GetAssets(ctx, wallet.ID)
 	if err != nil {
 		httperror.InternalError(ctx, "", err, nil).Render(rw)
 		return
 	}
 
 	httpjson.RenderStatus(rw, http.StatusCreated, wallet, httpjson.JSON)
+}
+
+func (h WalletsHandler) PatchWallets(rw http.ResponseWriter, req *http.Request) {
+	ctx := req.Context()
+
+	var reqBody *validators.PatchWalletRequest
+	if err := httpdecode.DecodeJSON(req, &reqBody); err != nil {
+		httperror.BadRequest("", err, nil).Render(rw)
+		return
+	}
+
+	validator := validators.NewWalletValidator()
+	validator.ValidatePatchWalletRequest(reqBody)
+	if validator.HasErrors() {
+		httperror.BadRequest("invalid request body", nil, validator.Errors).Render(rw)
+		return
+	}
+
+	walletID := chi.URLParam(req, "id")
+
+	err := h.Models.Wallets.SetEnabled(ctx, walletID, *reqBody.Enabled)
+	if err != nil {
+		if errors.Is(err, data.ErrRecordNotFound) {
+			httperror.NotFound("", err, nil).Render(rw)
+			return
+		}
+		err = fmt.Errorf("setting wallet enabled status: %w", err)
+		httperror.InternalError(ctx, "", err, nil).Render(rw)
+		return
+	}
+
+	httpjson.Render(rw, map[string]string{"message": "wallet enabled status updated successfully"}, httpjson.JSON)
 }
