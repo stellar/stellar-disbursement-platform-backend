@@ -869,6 +869,7 @@ func Test_TransactionWorker_submit(t *testing.T) {
 		horizonError               error
 		wantFinalTransactionStatus store.TransactionStatus
 		wantFinalResultXDR         string
+		txMarkAsError              bool
 	}{
 		{
 			name:            "unrecoverable horizon error is handled and tx status is marked as ERROR",
@@ -885,6 +886,7 @@ func Test_TransactionWorker_submit(t *testing.T) {
 				},
 			},
 			wantFinalTransactionStatus: store.TransactionStatusError,
+			txMarkAsError:              true,
 		},
 		{
 			name:                       "successful horizon error is handled and tx status is marked as SUCCESS",
@@ -904,6 +906,11 @@ func Test_TransactionWorker_submit(t *testing.T) {
 			feeBumpTx := &txnbuild.FeeBumpTransaction{}
 
 			mockHorizonClient := &horizonclient.MockClient{}
+			mockCrashTrackerClient := &crashtracker.MockCrashTrackerClient{}
+			if tc.txMarkAsError {
+				mockCrashTrackerClient.On("LogAndReportErrors", ctx, utils.NewHorizonErrorWrapper(tc.horizonError), "transaction error - cannot be retried")
+			}
+
 			txProcessingLimiter := engine.NewTransactionProcessingLimiter(15)
 			mockHorizonClient.
 				On("SubmitFeeBumpTransactionWithOptions", feeBumpTx, horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true}).
@@ -916,6 +923,7 @@ func Test_TransactionWorker_submit(t *testing.T) {
 				engine: &engine.SubmitterEngine{
 					HorizonClient: mockHorizonClient,
 				},
+				crashTrackerClient:  mockCrashTrackerClient,
 				txProcessingLimiter: txProcessingLimiter,
 			}
 

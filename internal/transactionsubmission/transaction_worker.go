@@ -228,10 +228,6 @@ func (tw *TransactionWorker) handleFailedTransaction(ctx context.Context, txJob 
 	return nil
 }
 
-func (tw *TransactionWorker) handleAuthorizationError() error {
-	return nil
-}
-
 // TODO: add tests
 // unlockJob will unlock the channel account and transaction instantaneously, so they can be made available ASAP. If
 // this method is not called, the algorithm will fall back to get these resources qutomatically unlocked when their
