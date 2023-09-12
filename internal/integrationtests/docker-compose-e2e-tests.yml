@@ -149,6 +149,8 @@ services:
       METRICS_EXTRAS_ENABLED: "false"
       SEP10_ENABLED: "true"
       SEP10_HOME_DOMAIN: localhost:8080
+      # SEP10_CLIENT_ATTRIBUTION_REQUIRED: true  # RECOMMENDED
+      # SEP10_CLIENT_ATTRIBUTION_ALLOW_LIST: "demo-wallet-server.stellar.org,https://example.com"  # RECOMMENDED
       SEP24_ENABLED: "true"
       SEP24_INTERACTIVE_URL_BASE_URL: http://sdp-api:8000/wallet-registration/start
       SEP24_INTERACTIVE_URL_JWT_EXPIRATION: 1800  # 1800 seconds is 30 minutes
@@ -157,7 +159,7 @@ services:
       SEP1_TOML_TYPE: url
       SEP1_TOML_VALUE: http://sdp-api:8000/.well-known/stellar.toml
       ASSETS_TYPE: json
-      ASSETS_VALUE: |
+      ASSETS_VALUE: |   # TODO: keep this up to date with the latest assets supported by the SDP
         {
           "assets": [
             {

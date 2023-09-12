@@ -9,12 +9,9 @@ import (
 	"testing"
 
 	"github.com/spf13/cobra"
-	"github.com/stellar/go/txnbuild"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve"
 	txSub "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission"
-	tssUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -72,46 +69,24 @@ func Test_tss(t *testing.T) {
 	dryRunClient, err := crashtracker.NewDryRunClient()
 	require.NoError(t, err)
 
-	mMonitorService := monitor.MockMonitorService{}
-	wantSubmitterOptions := txSub.SubmitterOptions{
-		DatabaseDSN:          "postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable",
-		HorizonURL:           "https://horizon-testnet.stellar.org",
-		DistributionSeed:     "SBQ3ZNC2SE3FV43HZ2KW3FCXQMMIQ33LZB745KTMCHDS6PNQOVXMV5NC",
-		NetworkPassphrase:    "Test SDF Network ; September 2015",
-		MaxBaseFee:           100 * txnbuild.MinBaseFee,
-		NumChannelAccounts:   2,
-		QueuePollingInterval: 6,
-		MonitorService:       &mMonitorService,
-		CrashTrackerClient:   dryRunClient,
-		PrivateKeyEncrypter:  tssUtils.DefaultPrivateKeyEncrypter{},
-	}
-
-	metricOptions := monitor.MetricOptions{
-		MetricType:  monitor.MetricTypeTSSPrometheus,
-		Environment: "test",
-	}
-	mMonitorService.On("Start", metricOptions).Return(nil).Once()
-
-	serveMetricOpts := serve.MetricsServeOptions{
-		Port:           9002,
-		MetricType:     monitor.MetricTypeTSSPrometheus,
-		MonitorService: &mMonitorService,
-	}
+	version := "x.y.z"
+	gitCommitHash := "1234567890abcdef"
 
 	mTSS := mockSubmitter{}
-	rootCmd := SetupCLI("x.y.z", "1234567890abcdef")
+	rootCmd := SetupCLI(version, gitCommitHash)
 
-	mTSS.On("StartMetricsServe", mock.Anything, serveMetricOpts, mock.AnythingOfType("*serve.HTTPServer"), dryRunClient).Once()
-	mTSS.On("StartSubmitter", mock.Anything, wantSubmitterOptions).Once()
+	mTSS.On("StartMetricsServe", mock.Anything, mock.AnythingOfType("serve.MetricsServeOptions"), mock.AnythingOfType("*serve.HTTPServer"), dryRunClient).Once()
+	mTSS.On("StartSubmitter", mock.Anything, mock.AnythingOfType("transactionsubmission.SubmitterOptions")).Once()
 	mTSS.wg.Add(1)
 	// setup
 	var commandToRemove *cobra.Command
-	commandToAdd := (&TxSubmitterCommand{}).Command(&mTSS, &mMonitorService)
+	commandToAdd := (&TxSubmitterCommand{}).Command(&mTSS)
 	for _, cmd := range rootCmd.Commands() {
 		if cmd.Use == "tss" {
 			commandToRemove = cmd
 		}
 	}
+
 	require.NotNil(t, commandToRemove, "tss command not found")
 	rootCmd.RemoveCommand(commandToRemove)
 	rootCmd.AddCommand(commandToAdd)
@@ -132,5 +107,4 @@ func Test_tss(t *testing.T) {
 
 	// assert
 	mTSS.AssertExpectations(t)
-	mMonitorService.AssertExpectations(t)
 }

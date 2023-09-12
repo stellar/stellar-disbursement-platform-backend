@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"go/types"
-	"regexp"
 	"strings"
 
 	"github.com/manifoldco/promptui"
@@ -14,19 +13,14 @@ import (
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/internal/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/utils"
 )
 
 type PasswordPromptInterface interface {
 	Run() (string, error)
 }
 
-const (
-	passwordMinLength = 8
-	lowercasePattern  = `[a-z]`
-	uppercasePattern  = `[A-Z]`
-	digitsPattern     = `[0-9]`
-	symbolsPattern    = `[!@#$%^&*]`
-)
+var _ PasswordPromptInterface = (*promptui.Prompt)(nil)
 
 var (
 	isOwner      = false
@@ -110,6 +104,11 @@ func AddUserCmd(databaseURLFlagName string, passwordPrompt PasswordPromptInterfa
 				if err != nil {
 					log.Fatalf("add-user error prompting password: %s", err)
 				}
+
+				err = utils.ValidatePassword(result)
+				if err != nil {
+					log.Fatalf("password is not valid: %v", err)
+				}
 				password = result
 			}
 
@@ -131,59 +130,11 @@ func AddUserCmd(databaseURLFlagName string, passwordPrompt PasswordPromptInterfa
 // NewDefaultPasswordPrompt returns the default password prompt used in add-user command.
 func NewDefaultPasswordPrompt() *promptui.Prompt {
 	prompt := promptui.Prompt{
-		Label:    "Password",
-		Validate: PasswordPromptValidate,
-		Mask:     ' ',
+		Label: "Password",
+		Mask:  ' ',
 	}
 
 	return &prompt
-}
-
-// PasswordPromptValidate validates the password input for add-user command.
-func PasswordPromptValidate(input string) error {
-	if len(input) < passwordMinLength {
-		return fmt.Errorf("password must have more than %d characters", passwordMinLength)
-	}
-
-	return validatePasswordCombination(input)
-}
-
-// validatePasswordCombination returns an error if it does not consist of the four types of character requirements
-func validatePasswordCombination(input string) error {
-	matchingPatterns := map[string]string{
-		lowercasePattern: "lowercase letter",
-		uppercasePattern: "uppercase letter",
-		digitsPattern:    "digit",
-		symbolsPattern:   "symbol",
-	}
-
-	const prefixErrStr = "password must contain at least one: "
-	errorStr := prefixErrStr
-
-	for pattern, patternErr := range matchingPatterns {
-		matched, err := regexp.MatchString(pattern, input)
-		if err != nil {
-			return fmt.Errorf("error matching pattern %s", pattern)
-		}
-		if !matched {
-			errorStr += patternErr + ", "
-		}
-	}
-
-	if errorStr != prefixErrStr {
-		return fmt.Errorf(strings.Trim(errorStr, ", "))
-	} else { // even if password meets the above requirements, we still have to check for invalid characters
-		matchInvalidCharacters := fmt.Sprintf("^(.*%s.*%s.*%s.*%s.*)$", lowercasePattern, uppercasePattern, digitsPattern, symbolsPattern)
-		match, err := regexp.MatchString(matchInvalidCharacters, input)
-		if err != nil {
-			return fmt.Errorf("cannot match password to invalid characters regex: %w", err)
-		}
-		if !match {
-			return fmt.Errorf("password contains invalid characters")
-		}
-	}
-
-	return nil
 }
 
 // execAddUser creates a new user and inserts it into the database, the user will have

@@ -71,13 +71,20 @@ func (h MFAHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 
 	token, err := h.AuthManager.AuthenticateMFA(ctx, deviceID, reqBody.MFACode, reqBody.RememberMe)
 	if err != nil {
-		if errors.Is(err, auth.ErrInvalidMFACode) {
-			httperror.Unauthorized("MFA Code is invalid", err, nil).Render(rw)
+		if errors.Is(err, auth.ErrMFACodeInvalid) {
+			httperror.Unauthorized("", err, nil).Render(rw)
 			return
 		}
 		log.Ctx(ctx).Errorf("error authenticating user: %s", err.Error())
 		httperror.InternalError(ctx, "Cannot authenticate user", err, nil).Render(rw)
 		return
 	}
+
+	userID, err := h.AuthManager.GetUserID(ctx, token)
+	if err != nil {
+		httperror.InternalError(ctx, "Cannot get user ID", err, nil).Render(rw)
+		return
+	}
+	log.Ctx(ctx).Infof("[UserLogin] - Logged in user with account ID %s", userID)
 	httpjson.RenderStatus(rw, http.StatusOK, MFAResponse{Token: token}, httpjson.JSON)
 }

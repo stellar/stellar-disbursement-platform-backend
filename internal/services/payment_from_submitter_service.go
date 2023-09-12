@@ -5,38 +5,50 @@ import (
 	"fmt"
 
 	"github.com/stellar/go/support/log"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
 	txSubStore "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 )
 
-type TSSMonitorService struct {
+// PaymentFromSubmitterService is a service that monitors TSS transactions that were complete and sync their completion
+// state with the SDP payments.
+type PaymentFromSubmitterService struct {
 	sdpModels *data.Models
 	tssModel  *txSubStore.TransactionModel
 }
 
-// MonitorTransactions monitors TSS transactions and updates payments accordingly.
-func (s TSSMonitorService) MonitorTransactions(ctx context.Context, batchSize int) error {
+// NewPaymentFromSubmitterService is a PaymentFromSubmitterService constructor.
+func NewPaymentFromSubmitterService(models *data.Models) *PaymentFromSubmitterService {
+	return &PaymentFromSubmitterService{
+		sdpModels: models,
+		tssModel:  txSubStore.NewTransactionModel(models.DBConnectionPool),
+	}
+}
+
+// MonitorTransactions monitors TSS transactions that were complete and sync their completion state with the SDP payments.
+func (s PaymentFromSubmitterService) MonitorTransactions(ctx context.Context, batchSize int) error {
 	err := db.RunInTransaction(ctx, s.sdpModels.DBConnectionPool, nil, func(dbTx db.DBTransaction) error {
 		return s.monitorTransactions(ctx, dbTx, batchSize)
 	})
 	if err != nil {
-		return fmt.Errorf("error sending payments: %w", err)
+		return fmt.Errorf("synching payments from submitter: %w", err)
 	}
 
 	return nil
 }
 
-// monitorTransactions monitors TSS transactions and updates payments accordingly.
-func (s TSSMonitorService) monitorTransactions(ctx context.Context, dbTx db.DBTransaction, batchSize int) error {
+// MonitorTransactions monitors TSS transactions that were complete and sync their completion state with the SDP payments. It
+// should be called within a DB transaction.
+func (s PaymentFromSubmitterService) monitorTransactions(ctx context.Context, dbTx db.DBTransaction, batchSize int) error {
 	// 1. Get transactions that are in a final state (status=SUCCESS or status=ERROR)
 	//     this operation will lock the rows.
 	transactions, err := s.tssModel.GetTransactionBatchForUpdate(ctx, dbTx, batchSize)
 	if err != nil {
-		return fmt.Errorf("error getting transactions for update: %w", err)
+		return fmt.Errorf("getting transactions for update: %w", err)
 	}
 	if len(transactions) == 0 {
-		log.Ctx(ctx).Infof("No transactions to sync")
+		log.Ctx(ctx).Debug("No transactions to sync from submitter to SDP")
 		return nil
 	}
 
@@ -61,14 +73,14 @@ func (s TSSMonitorService) monitorTransactions(ctx context.Context, dbTx db.DBTr
 		log.Ctx(ctx).Infof("Syncing payments for %d successful transactions", len(successfulTransactions))
 		errPayments := s.syncPaymentsWithTransactions(ctx, dbTx, successfulTransactions, data.SuccessPaymentStatus)
 		if errPayments != nil {
-			return fmt.Errorf("error syncing payments for successful transactions: %w", errPayments)
+			return fmt.Errorf("syncing payments for successful transactions: %w", errPayments)
 		}
 	}
 	if len(failedTransactions) > 0 {
 		log.Ctx(ctx).Infof("Syncing payments for %d failed transactions", len(failedTransactions))
 		errPayments := s.syncPaymentsWithTransactions(ctx, dbTx, failedTransactions, data.FailedPaymentStatus)
 		if errPayments != nil {
-			return fmt.Errorf("error syncing payments for failed transactions: %w", errPayments)
+			return fmt.Errorf("syncing payments for failed transactions: %w", errPayments)
 		}
 	}
 
@@ -79,21 +91,22 @@ func (s TSSMonitorService) monitorTransactions(ctx context.Context, dbTx db.DBTr
 	}
 	err = s.tssModel.UpdateSyncedTransactions(ctx, dbTx, transactionIDs)
 	if err != nil {
-		return fmt.Errorf("error updating transactions as synced: %w", err)
+		return fmt.Errorf("updating transactions as synced: %w", err)
 	}
+	log.Ctx(ctx).Infof("Updated %d transactions as synced", len(transactions))
 
 	return nil
 }
 
 // syncPaymentsWithTransactions updates the status of the payments based on the status of the transactions.
-func (s TSSMonitorService) syncPaymentsWithTransactions(ctx context.Context, dbTx db.DBTransaction, transactions []*txSubStore.Transaction, toStatus data.PaymentStatus) error {
+func (s PaymentFromSubmitterService) syncPaymentsWithTransactions(ctx context.Context, dbTx db.DBTransaction, transactions []*txSubStore.Transaction, toStatus data.PaymentStatus) error {
 	paymentIDs := make([]string, len(transactions))
 	for i, transaction := range transactions {
 		paymentIDs[i] = transaction.ExternalID
 	}
 	payments, errPayments := s.sdpModels.Payment.GetByIDs(ctx, dbTx, paymentIDs)
 	if errPayments != nil {
-		return fmt.Errorf("error getting payments by ids: %w", errPayments)
+		return fmt.Errorf("getting payments by IDs: %w", errPayments)
 	}
 
 	// Create a map of disbursement id from payment
@@ -102,7 +115,7 @@ func (s TSSMonitorService) syncPaymentsWithTransactions(ctx context.Context, dbT
 
 	for _, payment := range payments {
 		if payment.Status != data.PendingPaymentStatus {
-			return fmt.Errorf("error getting payments by ids: expected payment %s to be in pending status but got %s", payment.ID, payment.Status)
+			return fmt.Errorf("getting payments by IDs, expected payment %s to be in pending status but got %s", payment.ID, payment.Status)
 		}
 		paymentMap[payment.ID] = payment
 		disbursementMap[payment.Disbursement.ID] = struct{}{}
@@ -113,7 +126,7 @@ func (s TSSMonitorService) syncPaymentsWithTransactions(ctx context.Context, dbT
 		payment := paymentMap[transaction.ExternalID]
 		if payment == nil {
 			// The payment associated with this transaction was deleted.
-			log.Ctx(ctx).Errorf("orphaned transaction - Unable to sync transaction %s because the associated payment %s was deleted",
+			log.Ctx(ctx).Errorf("orphaned transaction, unable to sync transaction %s because the associated payment %s was deleted",
 				transaction.ID,
 				transaction.ExternalID)
 			continue
@@ -125,7 +138,7 @@ func (s TSSMonitorService) syncPaymentsWithTransactions(ctx context.Context, dbT
 		}
 		errUpdate := s.sdpModels.Payment.Update(ctx, dbTx, payment, paymentUpdate)
 		if errUpdate != nil {
-			return fmt.Errorf("error updating payment id %s for transaction id %s: %w", payment.ID, transaction.ID, errUpdate)
+			return fmt.Errorf("updating payment ID %s for transaction id %s: %w", payment.ID, transaction.ID, errUpdate)
 		}
 	}
 
@@ -135,16 +148,8 @@ func (s TSSMonitorService) syncPaymentsWithTransactions(ctx context.Context, dbT
 	}
 	err := s.sdpModels.Disbursements.CompleteDisbursements(ctx, dbTx, disbursementIDs)
 	if err != nil {
-		return fmt.Errorf("error completing disbursement: %w", err)
+		return fmt.Errorf("completing disbursement: %w", err)
 	}
 
 	return nil
-}
-
-// NewTSSMonitorService creates a new TSSMonitorService instance.
-func NewTSSMonitorService(models *data.Models) *TSSMonitorService {
-	return &TSSMonitorService{
-		sdpModels: models,
-		tssModel:  txSubStore.NewTransactionModel(models.DBConnectionPool),
-	}
 }

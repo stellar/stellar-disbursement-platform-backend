@@ -70,10 +70,10 @@ type ServeOptions struct {
 	signatureService                engine.SignatureService
 	Sep10SigningPublicKey           string
 	Sep10SigningPrivateKey          string
-	AnchorPlatformBasePlatformURL   string
 	AnchorPlatformBaseSepURL        string
+	AnchorPlatformBasePlatformURL   string
 	AnchorPlatformOutgoingJWTSecret string
-	anchorPlatformAPIService        anchorplatform.AnchorPlatformAPIServiceInterface
+	AnchorPlatformAPIService        anchorplatform.AnchorPlatformAPIServiceInterface
 	CrashTrackerClient              crashtracker.CrashTrackerClient
 	DistributionPublicKey           string
 	DistributionSeed                string
@@ -118,12 +118,6 @@ func (opts *ServeOptions) SetupDependencies() error {
 		return fmt.Errorf("error creating SEP-24 JWT manager: %w", err)
 	}
 	opts.sep24JWTManager = sep24JWTManager
-
-	// Setup Anchor Platform API Service
-	opts.anchorPlatformAPIService, err = anchorplatform.NewAnchorPlatformAPIService(httpclient.DefaultClient(), opts.AnchorPlatformBasePlatformURL, opts.AnchorPlatformOutgoingJWTSecret)
-	if err != nil {
-		return fmt.Errorf("error creating Anchor Platform API service: %w", err)
-	}
 
 	// Setup Horizon Client
 	opts.horizonClient = &horizonclient.Client{
@@ -296,14 +290,9 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 
 		r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...)).Route("/wallets", func(r chi.Router) {
 			walletsHandler := httphandler.WalletsHandler{Models: o.Models}
-
 			r.Get("/", walletsHandler.GetWallets)
-
-			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole)).
+			r.With(middleware.AnyRoleMiddleware(authManager, data.DeveloperUserRole)).
 				Post("/", walletsHandler.PostWallets)
-
-			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole)).
-				Post("/{id}", walletsHandler.DeleteWallet)
 		})
 
 		profileHandler := httphandler.ProfileHandler{
@@ -319,6 +308,9 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 
 			r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...)).
 				Patch("/", profileHandler.PatchUserProfile)
+
+			r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...)).
+				Patch("/reset-password", profileHandler.PatchUserPassword)
 		})
 
 		r.Route("/organization", func(r chi.Router) {
@@ -381,7 +373,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 		sep24HeaderTokenAuthenticationMiddleware := anchorplatform.SEP24HeaderTokenAuthenticateMiddleware(o.sep24JWTManager, o.NetworkPassphrase)
 		r.With(sep24HeaderTokenAuthenticationMiddleware).Post("/otp", httphandler.ReceiverSendOTPHandler{Models: o.Models, SMSMessengerClient: o.SMSMessengerClient, ReCAPTCHAValidator: reCAPTCHAValidator}.ServeHTTP)
 		r.With(sep24HeaderTokenAuthenticationMiddleware).Post("/verification", httphandler.VerifyReceiverRegistrationHandler{
-			AnchorPlatformAPIService: o.anchorPlatformAPIService,
+			AnchorPlatformAPIService: o.AnchorPlatformAPIService,
 			Models:                   o.Models,
 			ReCAPTCHAValidator:       reCAPTCHAValidator,
 			NetworkPassphrase:        o.NetworkPassphrase,

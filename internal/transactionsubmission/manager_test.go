@@ -16,10 +16,11 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/db/dbtest"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
+	monitorMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/mocks"
+	tssMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 	storeMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
@@ -43,26 +44,17 @@ func Test_SubmitterOptions_validate(t *testing.T) {
 			wantErrContains:  "database DSN cannot be empty",
 		},
 		{
-			name: "validate monitorService",
-			submitterOptions: SubmitterOptions{
-				DatabaseDSN: dbt.DSN,
-			},
-			wantErrContains: "monitor service cannot be nil",
-		},
-		{
 			name: "validate horizonURL",
 			submitterOptions: SubmitterOptions{
-				DatabaseDSN:    dbt.DSN,
-				MonitorService: &monitor.MonitorService{},
+				DatabaseDSN: dbt.DSN,
 			},
 			wantErrContains: "horizon url cannot be empty",
 		},
 		{
 			name: "validate networkPassphrase",
 			submitterOptions: SubmitterOptions{
-				DatabaseDSN:    dbt.DSN,
-				MonitorService: &monitor.MonitorService{},
-				HorizonURL:     "https://horizon-testnet.stellar.org",
+				DatabaseDSN: dbt.DSN,
+				HorizonURL:  "https://horizon-testnet.stellar.org",
 			},
 			wantErrContains: "network passphrase \"\" is invalid",
 		},
@@ -70,7 +62,6 @@ func Test_SubmitterOptions_validate(t *testing.T) {
 			name: "validate PrivateKeyEncrypter",
 			submitterOptions: SubmitterOptions{
 				DatabaseDSN:       dbt.DSN,
-				MonitorService:    &monitor.MonitorService{},
 				HorizonURL:        "https://horizon-testnet.stellar.org",
 				NetworkPassphrase: network.TestNetworkPassphrase,
 			},
@@ -80,7 +71,6 @@ func Test_SubmitterOptions_validate(t *testing.T) {
 			name: "validate DistributionSeed",
 			submitterOptions: SubmitterOptions{
 				DatabaseDSN:         dbt.DSN,
-				MonitorService:      &monitor.MonitorService{},
 				HorizonURL:          "https://horizon-testnet.stellar.org",
 				NetworkPassphrase:   network.TestNetworkPassphrase,
 				PrivateKeyEncrypter: &utils.PrivateKeyEncrypterMock{},
@@ -91,7 +81,6 @@ func Test_SubmitterOptions_validate(t *testing.T) {
 			name: "validate NumChannelAccounts (min)",
 			submitterOptions: SubmitterOptions{
 				DatabaseDSN:         dbt.DSN,
-				MonitorService:      &monitor.MonitorService{},
 				HorizonURL:          "https://horizon-testnet.stellar.org",
 				NetworkPassphrase:   network.TestNetworkPassphrase,
 				PrivateKeyEncrypter: &utils.PrivateKeyEncrypterMock{},
@@ -104,7 +93,6 @@ func Test_SubmitterOptions_validate(t *testing.T) {
 			name: "validate NumChannelAccounts (min)",
 			submitterOptions: SubmitterOptions{
 				DatabaseDSN:         dbt.DSN,
-				MonitorService:      &monitor.MonitorService{},
 				HorizonURL:          "https://horizon-testnet.stellar.org",
 				NetworkPassphrase:   network.TestNetworkPassphrase,
 				PrivateKeyEncrypter: &utils.PrivateKeyEncrypterMock{},
@@ -117,7 +105,6 @@ func Test_SubmitterOptions_validate(t *testing.T) {
 			name: "validate QueuePollingInterval",
 			submitterOptions: SubmitterOptions{
 				DatabaseDSN:         dbt.DSN,
-				MonitorService:      &monitor.MonitorService{},
 				HorizonURL:          "https://horizon-testnet.stellar.org",
 				NetworkPassphrase:   network.TestNetworkPassphrase,
 				PrivateKeyEncrypter: &utils.PrivateKeyEncrypterMock{},
@@ -130,7 +117,6 @@ func Test_SubmitterOptions_validate(t *testing.T) {
 			name: "validate MaxBaseFee",
 			submitterOptions: SubmitterOptions{
 				DatabaseDSN:          dbt.DSN,
-				MonitorService:       &monitor.MonitorService{},
 				HorizonURL:           "https://horizon-testnet.stellar.org",
 				NetworkPassphrase:    network.TestNetworkPassphrase,
 				PrivateKeyEncrypter:  &utils.PrivateKeyEncrypterMock{},
@@ -141,10 +127,29 @@ func Test_SubmitterOptions_validate(t *testing.T) {
 			wantErrContains: "max base fee must be greater than or equal to 100",
 		},
 		{
-			name: "🎉 successfully finishes validation with nil crash tracker client",
+			name: "validate monitorService",
 			submitterOptions: SubmitterOptions{
 				DatabaseDSN:          dbt.DSN,
-				MonitorService:       &monitor.MonitorService{},
+				MonitorService:       tssMonitor.TSSMonitorService{},
+				HorizonURL:           "https://horizon-testnet.stellar.org",
+				NetworkPassphrase:    network.TestNetworkPassphrase,
+				PrivateKeyEncrypter:  &utils.PrivateKeyEncrypterMock{},
+				DistributionSeed:     "SBDBQFZIIZ53A7JC2X23LSQLI5RTKV5YWDRT33YXW5LRMPKRSJYXS2EW",
+				NumChannelAccounts:   1,
+				QueuePollingInterval: 10,
+				MaxBaseFee:           txnbuild.MinBaseFee,
+			},
+			wantErrContains: "monitor service cannot be nil",
+		},
+		{
+			name: "🎉 successfully finishes validation with nil crash tracker client",
+			submitterOptions: SubmitterOptions{
+				DatabaseDSN: dbt.DSN,
+				MonitorService: tssMonitor.TSSMonitorService{
+					Client:        &monitorMocks.MockMonitorClient{},
+					GitCommitHash: "0xABC",
+					Version:       "0.01",
+				},
 				HorizonURL:           "https://horizon-testnet.stellar.org",
 				NetworkPassphrase:    network.TestNetworkPassphrase,
 				PrivateKeyEncrypter:  &utils.PrivateKeyEncrypterMock{},
@@ -157,8 +162,12 @@ func Test_SubmitterOptions_validate(t *testing.T) {
 		{
 			name: "🎉 successfully finishes validation with existing crash tracker client",
 			submitterOptions: SubmitterOptions{
-				DatabaseDSN:          dbt.DSN,
-				MonitorService:       &monitor.MonitorService{},
+				DatabaseDSN: dbt.DSN,
+				MonitorService: tssMonitor.TSSMonitorService{
+					Client:        &monitorMocks.MockMonitorClient{},
+					GitCommitHash: "0xABC",
+					Version:       "0.01",
+				},
 				HorizonURL:           "https://horizon-testnet.stellar.org",
 				NetworkPassphrase:    network.TestNetworkPassphrase,
 				PrivateKeyEncrypter:  &utils.PrivateKeyEncrypterMock{},
@@ -193,8 +202,12 @@ func Test_NewManager(t *testing.T) {
 
 	ctx := context.Background()
 	validSubmitterOptions := SubmitterOptions{
-		DatabaseDSN:          dbt.DSN,
-		MonitorService:       &monitor.MonitorService{},
+		DatabaseDSN: dbt.DSN,
+		MonitorService: tssMonitor.TSSMonitorService{
+			Client:        &monitorMocks.MockMonitorClient{},
+			GitCommitHash: "0xABC",
+			Version:       "0.01",
+		},
 		HorizonURL:           "https://horizon-testnet.stellar.org",
 		NetworkPassphrase:    network.TestNetworkPassphrase,
 		PrivateKeyEncrypter:  &utils.PrivateKeyEncrypterMock{},
@@ -448,6 +461,10 @@ func Test_Manager_ProcessTransactions(t *testing.T) {
 			chTxBundleModel, err := store.NewChannelTransactionBundleModel(dbConnectionPool)
 			require.NoError(t, err)
 
+			mMonitorClient := monitorMocks.MockMonitorClient{}
+			mMonitorClient.On("MonitorCounters", mock.Anything, mock.Anything).Return(nil).Times(3)
+			defer mMonitorClient.AssertExpectations(t)
+
 			manager := &Manager{
 				dbConnectionPool:    dbConnectionPool,
 				chTxBundleModel:     chTxBundleModel,
@@ -459,11 +476,15 @@ func Test_Manager_ProcessTransactions(t *testing.T) {
 				sigService:          sigService,
 				maxBaseFee:          txnbuild.MinBaseFee,
 				txProcessingLimiter: engine.NewTransactionProcessingLimiter(queueService.numChannelAccounts),
+				monitorService: tssMonitor.TSSMonitorService{
+					Client:        &mMonitorClient,
+					GitCommitHash: "gitCommitHash0x",
+					Version:       "version123",
+				},
 			}
 
 			go manager.ProcessTransactions(ctx)
 			time.Sleep(750 * time.Millisecond) // <--- this time.Sleep is used wait for the manager (QueuePollingInterval) to start and load the transactions.
-
 			// cancel()
 			switch tc.signalType {
 			case signalTypeOSSigterm:

@@ -77,20 +77,41 @@ func (a *AssetModel) GetByCodeAndIssuer(ctx context.Context, code, issuer string
 	return &asset, nil
 }
 
+// GetByWalletID returns all assets associated with a wallet.
+func (a *AssetModel) GetByWalletID(ctx context.Context, walletID string) ([]Asset, error) {
+	assets := []Asset{}
+	query := `
+		SELECT 
+		    a.*
+		FROM 
+		    assets a
+		JOIN 
+		    wallets_assets wa ON a.id = wa.asset_id
+		WHERE 
+		    deleted_at IS NULL 
+		    AND wa.wallet_id = $1
+		ORDER BY 
+		    a.code ASC
+	`
+
+	err := a.dbConnectionPool.SelectContext(ctx, &assets, query, walletID)
+	if err != nil {
+		return nil, fmt.Errorf("querying assets: %w", err)
+	}
+	return assets, nil
+}
+
 // GetAll returns all assets in the database.
 func (a *AssetModel) GetAll(ctx context.Context) ([]Asset, error) {
 	// TODO: We will want to filter out "deleted" assets at some point
 	assets := []Asset{}
 	query := `
 		SELECT 
-			a.id, 
-			a.code, 
-			a.issuer,
-			a.created_at,
-			a.updated_at,
-			a.deleted_at
+			a.*
 		FROM 
 			assets a
+		WHERE 
+		    deleted_at IS NULL
 		ORDER BY 
 			a.code ASC
 	`

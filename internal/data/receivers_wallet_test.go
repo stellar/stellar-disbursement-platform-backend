@@ -617,7 +617,7 @@ func Test_ReceiverWallet_UpdateOTPByReceiverPhoneNumberAndWalletHomePage(t *test
 		assert.Equal(t, testingOTP, dbOTP)
 	})
 
-	t.Run("returns 0 updated rows when when the receiver wallet is confirmed", func(t *testing.T) {
+	t.Run("returns 0 updated rows when the receiver wallet is confirmed", func(t *testing.T) {
 		receiver1 := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
 		wallet1 := CreateWalletFixture(t, ctx, dbConnectionPool, "testWalletD", "http://home4.page", "home4.page", "wallet4://")
 		_ = CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver1.ID, wallet1.ID, RegisteredReceiversWalletStatus)

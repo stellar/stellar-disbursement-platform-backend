@@ -47,7 +47,6 @@ func Test_CreateChannelAccountsOnChain(t *testing.T) {
 	testCases := []struct {
 		name                 string
 		numOfChanAccToCreate int
-		shouldEncryptSeed    bool
 		prepareMocksFn       func()
 		wantErrContains      string
 	}{
@@ -82,7 +81,6 @@ func Test_CreateChannelAccountsOnChain(t *testing.T) {
 		{
 			name:                 "returns error when fails encrypting private key",
 			numOfChanAccToCreate: 2,
-			shouldEncryptSeed:    true,
 			prepareMocksFn: func() {
 				horizonClientMock.
 					On("AccountDetail", horizonclient.AccountRequest{AccountID: sigService.DistributionAccount()}).
@@ -120,30 +118,16 @@ func Test_CreateChannelAccountsOnChain(t *testing.T) {
 						},
 					}).
 					Once()
+
+				privateKeyEncrypterMock.
+					On("Encrypt", mock.AnythingOfType("string"), encrypterPass).Return("encryptedkey", nil).Twice().
+					On("Decrypt", mock.AnythingOfType("string"), encrypterPass).Return(keypair.MustRandom().Seed(), nil).Twice()
 			},
-			wantErrContains: "creating sponsored channel accounts: Type: https://stellar.org/horizon-errors/timeout, Title: Timeout, Status: 408, Detail: Foo bar detail, Extras: map[foo:bar]",
-		},
-		{
-			name:                 "🎉 successfully creates channel accounts on-chain (UNENCRYPTED)",
-			numOfChanAccToCreate: 2,
-			shouldEncryptSeed:    false,
-			prepareMocksFn: func() {
-				horizonClientMock.
-					On("AccountDetail", horizonclient.AccountRequest{AccountID: distributionKP.Address()}).
-					Return(horizon.Account{
-						AccountID: distributionKP.Address(),
-						Sequence:  1,
-					}, nil).
-					Once().
-					On("SubmitTransactionWithOptions", mock.AnythingOfType("*txnbuild.Transaction"), horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true}).
-					Return(horizon.Transaction{}, nil).
-					Once()
-			},
+			wantErrContains: "creating sponsored channel accounts: horizon response error: StatusCode=408, Type=https://stellar.org/horizon-errors/timeout, Title=Timeout, Detail=Foo bar detail",
 		},
 		{
 			name:                 "🎉 successfully creates channel accounts on-chain (ENCRYPTED)",
 			numOfChanAccToCreate: 3,
-			shouldEncryptSeed:    true,
 			prepareMocksFn: func() {
 				horizonClientMock.
 					On("AccountDetail", horizonclient.AccountRequest{AccountID: distributionKP.Address()}).
@@ -172,7 +156,7 @@ func Test_CreateChannelAccountsOnChain(t *testing.T) {
 				tc.prepareMocksFn()
 			}
 
-			channelAccountAddresses, err := CreateChannelAccountsOnChain(ctx, horizonClientMock, tc.numOfChanAccToCreate, txnbuild.MinBaseFee, tc.shouldEncryptSeed, sigService, currLedgerNumber)
+			channelAccountAddresses, err := CreateChannelAccountsOnChain(ctx, horizonClientMock, tc.numOfChanAccToCreate, txnbuild.MinBaseFee, sigService, currLedgerNumber)
 			if tc.wantErrContains != "" {
 				require.Error(t, err)
 				assert.Empty(t, channelAccountAddresses)
@@ -193,14 +177,8 @@ func Test_CreateChannelAccountsOnChain(t *testing.T) {
 				require.NoError(t, err)
 				assert.Len(t, allChAcc, tc.numOfChanAccToCreate)
 
-				if !tc.shouldEncryptSeed {
-					for _, chAcc := range allChAcc {
-						assert.True(t, strkey.IsValidEd25519SecretSeed(chAcc.PrivateKey))
-					}
-				} else {
-					for _, chAcc := range allChAcc {
-						assert.False(t, strkey.IsValidEd25519SecretSeed(chAcc.PrivateKey))
-					}
+				for _, chAcc := range allChAcc {
+					assert.False(t, strkey.IsValidEd25519SecretSeed(chAcc.PrivateKey))
 				}
 			}
 
@@ -294,7 +272,7 @@ func Test_DeleteChannelAccountOnChain(t *testing.T) {
 					Once()
 			},
 			wantErrContains: fmt.Sprintf(
-				`submitting remove account transaction to the network for account %s: horizon error: "Timeout" - check horizon.Error.Problem for more information`,
+				`submitting remove account transaction to the network for account %s: horizon response error: StatusCode=408, Type=https://stellar.org/horizon-errors/timeout, Title=Timeout`,
 				chAccAddress,
 			),
 		},

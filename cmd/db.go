@@ -97,12 +97,12 @@ func (c *DatabaseCommand) Command() *cobra.Command {
 				log.Ctx(ctx).Fatalf("error getting network type: %s", err.Error())
 			}
 
-			if err := services.SetupWalletsForProperNetwork(ctx, dbConnectionPool, networkType, services.DefaultWalletsNetworkMap); err != nil {
-				log.Ctx(ctx).Fatalf("error upserting wallets for proper network: %s", err.Error())
-			}
-
 			if err := services.SetupAssetsForProperNetwork(ctx, dbConnectionPool, networkType, services.DefaultAssetsNetworkMap); err != nil {
 				log.Ctx(ctx).Fatalf("error upserting assets for proper network: %s", err.Error())
+			}
+
+			if err := services.SetupWalletsForProperNetwork(ctx, dbConnectionPool, networkType, services.DefaultWalletsNetworkMap); err != nil {
+				log.Ctx(ctx).Fatalf("error upserting wallets for proper network: %s", err.Error())
 			}
 		},
 	}

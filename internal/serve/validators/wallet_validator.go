@@ -7,13 +7,12 @@ import (
 	"github.com/stellar/go/support/log"
 )
 
-type CreateWalletRequest struct {
+type WalletRequest struct {
 	Name              string   `json:"name"`
 	Homepage          string   `json:"homepage"`
 	DeepLinkSchema    string   `json:"deep_link_schema"`
 	SEP10ClientDomain string   `json:"sep_10_client_domain"`
 	AssetsIDs         []string `json:"assets_ids"`
-	CountriesCodes    []string `json:"countries_codes"`
 }
 
 type WalletValidator struct {
@@ -24,11 +23,11 @@ func NewWalletValidator() *WalletValidator {
 	return &WalletValidator{Validator: NewValidator()}
 }
 
-func (wv *WalletValidator) ValidateCreateWalletRequest(reqBody *CreateWalletRequest) {
+func (wv *WalletValidator) ValidateCreateWalletRequest(reqBody *WalletRequest) *WalletRequest {
 	wv.Check(reqBody != nil, "body", "request body is empty")
 
 	if wv.HasErrors() {
-		return
+		return nil
 	}
 
 	name := strings.TrimSpace(reqBody.Name)
@@ -41,32 +40,31 @@ func (wv *WalletValidator) ValidateCreateWalletRequest(reqBody *CreateWalletRequ
 	wv.Check(deepLinkSchema != "", "deep_link_schema", "deep_link_schema is required")
 	wv.Check(sep10ClientDomain != "", "sep_10_client_domain", "sep_10_client_domain is required")
 	wv.Check(len(reqBody.AssetsIDs) != 0, "assets_ids", "provide at least one asset ID")
-	wv.Check(len(reqBody.CountriesCodes) != 0, "countries_codes", "provide at least one country code")
 
 	if wv.HasErrors() {
-		return
+		return nil
 	}
 
 	homepageURL, err := url.ParseRequestURI(homepage)
 	if err != nil {
-		log.Errorf("parsing homepage URL: %s", err.Error())
+		log.Errorf("parsing homepage URL: %v", err)
 		wv.Check(false, "homepage", "invalid homepage URL provided")
 	}
 
 	deepLinkSchemaURL, err := url.ParseRequestURI(deepLinkSchema)
 	if err != nil {
-		log.Errorf("parsing deep link schema: %s", err.Error())
+		log.Errorf("parsing deep link schema: %v", err)
 		wv.Check(false, "deep_link_schema", "invalid deep link schema provided")
 	}
 
 	sep10URL, err := url.Parse(sep10ClientDomain)
 	if err != nil {
-		log.Errorf("parsing SEP-10 client domain URL: %s", err.Error())
+		log.Errorf("parsing SEP-10 client domain URL: %v", err)
 		wv.Check(false, "sep_10_client_domain", "invalid SEP-10 client domain URL provided")
 	}
 
 	if wv.HasErrors() {
-		return
+		return nil
 	}
 
 	sep10Host := sep10URL.Host
@@ -74,8 +72,13 @@ func (wv *WalletValidator) ValidateCreateWalletRequest(reqBody *CreateWalletRequ
 		sep10Host = sep10URL.String()
 	}
 
-	reqBody.Name = name
-	reqBody.Homepage = homepageURL.String()
-	reqBody.DeepLinkSchema = deepLinkSchemaURL.String()
-	reqBody.SEP10ClientDomain = sep10Host
+	modifiedReq := &WalletRequest{
+		Name:              name,
+		Homepage:          homepageURL.String(),
+		DeepLinkSchema:    deepLinkSchemaURL.String(),
+		SEP10ClientDomain: sep10Host,
+		AssetsIDs:         reqBody.AssetsIDs,
+	}
+
+	return modifiedReq
 }

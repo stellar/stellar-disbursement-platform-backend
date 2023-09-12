@@ -6,6 +6,7 @@ import (
 	"go/types"
 
 	cmdUtils "github.com/stellar/stellar-disbursement-platform-backend/cmd/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
@@ -27,7 +28,7 @@ type ServeCommand struct{}
 type ServerServiceInterface interface {
 	StartServe(opts serve.ServeOptions, httpServer serve.HTTPServerInterface)
 	StartMetricsServe(opts serve.MetricsServeOptions, httpServer serve.HTTPServerInterface)
-	GetSchedulerJobRegistrars(ctx context.Context, serveOpts serve.ServeOptions, schedulerOptions scheduler.SchedulerOptions) ([]scheduler.SchedulerJobRegisterOption, error)
+	GetSchedulerJobRegistrars(ctx context.Context, serveOpts serve.ServeOptions, schedulerOptions scheduler.SchedulerOptions, apAPIService anchorplatform.AnchorPlatformAPIServiceInterface) ([]scheduler.SchedulerJobRegisterOption, error)
 }
 
 type ServerService struct{}
@@ -49,7 +50,7 @@ func (s *ServerService) StartMetricsServe(opts serve.MetricsServeOptions, httpSe
 	}
 }
 
-func (s *ServerService) GetSchedulerJobRegistrars(ctx context.Context, serveOpts serve.ServeOptions, schedulerOptions scheduler.SchedulerOptions) ([]scheduler.SchedulerJobRegisterOption, error) {
+func (s *ServerService) GetSchedulerJobRegistrars(ctx context.Context, serveOpts serve.ServeOptions, schedulerOptions scheduler.SchedulerOptions, apAPIService anchorplatform.AnchorPlatformAPIServiceInterface) ([]scheduler.SchedulerJobRegisterOption, error) {
 	// TODO: inject these in the server options, to do the Dependency Injection properly.
 	dbConnectionPool, err := db.OpenDBConnectionPool(globalOptions.databaseURL)
 	if err != nil {
@@ -61,8 +62,8 @@ func (s *ServerService) GetSchedulerJobRegistrars(ctx context.Context, serveOpts
 	}
 
 	return []scheduler.SchedulerJobRegisterOption{
-		scheduler.WithPaymentsProcessorJobOption(models),
-		scheduler.WithTSSMonitorJobOption(models),
+		scheduler.WithPaymentToSubmitterJobOption(models),
+		scheduler.WithPaymentFromSubmitterJobOption(models),
 		scheduler.WithSendReceiverWalletsSMSInvitationJobOption(jobs.SendReceiverWalletsSMSInvitationJobOptions{
 			AnchorPlatformBaseSepURL: serveOpts.AnchorPlatformBaseSepURL,
 			Models:                   models,
@@ -72,6 +73,7 @@ func (s *ServerService) GetSchedulerJobRegistrars(ctx context.Context, serveOpts
 			Sep10SigningPrivateKey:   serveOpts.Sep10SigningPrivateKey,
 			CrashTrackerClient:       serveOpts.CrashTrackerClient.Clone(),
 		}),
+		scheduler.WithAPAuthEnforcementJob(apAPIService, serveOpts.MonitorService, serveOpts.CrashTrackerClient.Clone()),
 	}, nil
 }
 
@@ -184,7 +186,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			Usage:     "The JWT secret used to create a JWT token used to send requests to the anchor platform.",
 			OptType:   types.String,
 			ConfigKey: &serveOpts.AnchorPlatformOutgoingJWTSecret,
-			Required:  false,
+			Required:  true,
 		},
 		{
 			Name:        "reset-token-expiration-hours",
@@ -373,13 +375,20 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			}
 			serveOpts.SMSMessengerClient = smsMessengerClient
 
+			// Setup default AP Auth enforcer
+			apAPIService, err := di.NewAnchorPlatformAPIService(serveOpts.AnchorPlatformBasePlatformURL, serveOpts.AnchorPlatformOutgoingJWTSecret)
+			if err != nil {
+				log.Ctx(ctx).Fatalf("error creating Anchor Platform API Service: %v", err)
+			}
+			serveOpts.AnchorPlatformAPIService = apAPIService
+
 			// Starting Scheduler Service (background job)
 			log.Ctx(ctx).Info("Starting Scheduler Service...")
-			schedulerJobRegistrats, err := serverService.GetSchedulerJobRegistrars(ctx, serveOpts, schedulerOptions)
+			schedulerJobRegistrars, err := serverService.GetSchedulerJobRegistrars(ctx, serveOpts, schedulerOptions, apAPIService)
 			if err != nil {
-				log.Ctx(ctx).Fatalf("Error getting scheduler job registrars: %s", err.Error())
+				log.Ctx(ctx).Fatalf("Error getting scheduler job registrars: %v", err)
 			}
-			go scheduler.StartScheduler(crashTrackerClient.Clone(), schedulerJobRegistrats...)
+			go scheduler.StartScheduler(crashTrackerClient.Clone(), schedulerJobRegistrars...)
 
 			// Starting Metrics Server (background job)
 			log.Ctx(ctx).Info("Starting Metrics Server...")

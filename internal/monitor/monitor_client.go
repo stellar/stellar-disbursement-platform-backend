@@ -5,6 +5,7 @@ import (
 	"time"
 )
 
+//go:generate mockery --name=MonitorClient --case=underscore --structname=MockMonitorClient
 type MonitorClient interface {
 	GetMetricHttpHandler() http.Handler
 	GetMetricType() MetricType

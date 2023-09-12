@@ -29,14 +29,14 @@ func (c WalletsHandler) GetWallets(w http.ResponseWriter, r *http.Request) {
 func (c WalletsHandler) PostWallets(rw http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 
-	var reqBody validators.CreateWalletRequest
+	var reqBody *validators.WalletRequest
 	if err := httpdecode.DecodeJSON(req, &reqBody); err != nil {
 		httperror.BadRequest("", err, nil).Render(rw)
 		return
 	}
 
 	validator := validators.NewWalletValidator()
-	validator.ValidateCreateWalletRequest(&reqBody)
+	reqBody = validator.ValidateCreateWalletRequest(reqBody)
 	if validator.HasErrors() {
 		httperror.BadRequest("invalid request body", nil, validator.Errors).Render(rw)
 		return
@@ -48,7 +48,6 @@ func (c WalletsHandler) PostWallets(rw http.ResponseWriter, req *http.Request) {
 		SEP10ClientDomain: reqBody.SEP10ClientDomain,
 		DeepLinkSchema:    reqBody.DeepLinkSchema,
 		AssetsIDs:         reqBody.AssetsIDs,
-		CountriesCodes:    reqBody.CountriesCodes,
 	})
 	if err != nil {
 		switch {
@@ -61,20 +60,11 @@ func (c WalletsHandler) PostWallets(rw http.ResponseWriter, req *http.Request) {
 		case errors.Is(err, data.ErrWalletDeepLinkSchemaAlreadyExists):
 			httperror.Conflict(data.ErrWalletDeepLinkSchemaAlreadyExists.Error(), err, nil).Render(rw)
 			return
-		case errors.Is(err, data.ErrInvalidCountryCode):
-			httperror.Conflict(data.ErrInvalidCountryCode.Error(), err, nil).Render(rw)
-			return
 		case errors.Is(err, data.ErrInvalidAssetID):
 			httperror.Conflict(data.ErrInvalidAssetID.Error(), err, nil).Render(rw)
 			return
 		}
 
-		httperror.InternalError(ctx, "", err, nil).Render(rw)
-		return
-	}
-
-	wallet.Countries, err = c.Models.Wallets.GetCountries(ctx, wallet.ID)
-	if err != nil {
 		httperror.InternalError(ctx, "", err, nil).Render(rw)
 		return
 	}

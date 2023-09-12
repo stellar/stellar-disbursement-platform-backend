@@ -37,6 +37,7 @@ type Authenticator interface {
 	DeactivateUser(ctx context.Context, userID string) error
 	ForgotPassword(ctx context.Context, email string) (string, error)
 	ResetPassword(ctx context.Context, resetToken, password string) error
+	UpdatePassword(ctx context.Context, user *User, currentPassword, newPassword string) error
 	GetAllUsers(ctx context.Context) ([]User, error)
 	GetUser(ctx context.Context, userID string) (*User, error)
 }
@@ -349,6 +350,48 @@ func (a *defaultAuthenticator) ResetPassword(ctx context.Context, resetToken, pa
 
 		return nil
 	})
+}
+
+func (a *defaultAuthenticator) UpdatePassword(ctx context.Context, user *User, currentPassword, newPassword string) error {
+	if currentPassword == "" || newPassword == "" {
+		return fmt.Errorf("provide currentPassword and newPassword values.")
+	}
+
+	_, err := a.ValidateCredentials(ctx, user.Email, currentPassword)
+	if err != nil {
+		return fmt.Errorf("validating credentials: %w", err)
+	}
+
+	query := `
+		UPDATE
+			auth_users
+		SET
+			encrypted_password = $1
+		WHERE id = $2
+	`
+
+	encryptedPassword, err := a.passwordEncrypter.Encrypt(ctx, newPassword)
+	if err != nil {
+		if !errors.Is(err, ErrPasswordTooShort) {
+			return fmt.Errorf("encrypting password: %w", err)
+		}
+		return err
+	}
+
+	res, err := a.dbConnectionPool.ExecContext(ctx, query, encryptedPassword, user.ID)
+	if err != nil {
+		return fmt.Errorf("updating user password in the database: %w", err)
+	}
+
+	numRowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("getting the number of rows affected: %w", err)
+	}
+	if numRowsAffected == 0 {
+		return ErrNoRowsAffected
+	}
+
+	return nil
 }
 
 func (a *defaultAuthenticator) invalidateResetPasswordToken(ctx context.Context, dbTx db.DBTransaction, resetToken string) error {

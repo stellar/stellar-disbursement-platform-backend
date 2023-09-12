@@ -65,6 +65,27 @@ func Test_AssetsHandlerGetAssets(t *testing.T) {
 
 		assert.JSONEq(t, string(expectedJSON), string(respBody))
 	})
+
+	t.Run("successfully returns a list of assets by wallet ID", func(t *testing.T) {
+		assets := data.ClearAndCreateAssetFixtures(t, ctx, dbConnectionPool)
+		require.Equal(t, 2, len(assets))
+
+		wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "walletA", "https://www.a.com", "www.a.com", "a://")
+		require.NotNil(t, wallet)
+
+		data.AssociateAssetWithWalletFixture(t, ctx, dbConnectionPool, assets[0].ID, wallet.ID)
+
+		rr := httptest.NewRecorder()
+		req, _ := http.NewRequest("GET", fmt.Sprintf("/assets?wallet=%s", wallet.ID), nil)
+		http.HandlerFunc(handler.GetAssets).ServeHTTP(rr, req)
+
+		var assetsResponse []data.Asset
+		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &assetsResponse))
+		require.Len(t, assetsResponse, 1)
+		require.Equal(t, assets[0].ID, assetsResponse[0].ID)
+		require.Equal(t, assets[0].Code, assetsResponse[0].Code)
+		require.Equal(t, assets[0].Issuer, assetsResponse[0].Issuer)
+	})
 }
 
 func Test_AssetHandlerAddAsset(t *testing.T) {
@@ -816,7 +837,7 @@ func Test_AssetHandler_handleUpdateAssetTrustlineForDistributionAccount(t *testi
 			Once()
 
 		err = handler.handleUpdateAssetTrustlineForDistributionAccount(ctx, assetToAddTrustline, assetToRemoveTrustline)
-		assert.EqualError(t, err, "submitting change trust transaction: submitting change trust transaction to network: horizon error: \"\" (tx_failed, op_no_issuer) - check horizon.Error.Problem for more information")
+		assert.EqualError(t, err, "submitting change trust transaction: submitting change trust transaction to network: horizon response error: StatusCode=0, Extras=transaction: tx_failed - operation codes: [ op_no_issuer ]")
 	})
 
 	t.Run("adds and removes the trustlines successfully", func(t *testing.T) {
@@ -1188,6 +1209,7 @@ func Test_AssetHandler_submitChangeTrustTransaction(t *testing.T) {
 					StatusCode: http.StatusBadRequest,
 				},
 				Problem: problem.P{
+					Status: http.StatusBadRequest,
 					Extras: map[string]interface{}{
 						"result_codes": map[string]interface{}{
 							"transaction": "tx_failed",
@@ -1210,7 +1232,7 @@ func Test_AssetHandler_submitChangeTrustTransaction(t *testing.T) {
 				SourceAccount: distributionKP.Address(),
 			},
 		})
-		assert.EqualError(t, err, "submitting change trust transaction to network: horizon error: \"\" (tx_failed, op_no_issuer) - check horizon.Error.Problem for more information")
+		assert.EqualError(t, err, "submitting change trust transaction to network: horizon response error: StatusCode=400, Extras=transaction: tx_failed - operation codes: [ op_no_issuer ]")
 	})
 
 	t.Run("submits transaction correctly", func(t *testing.T) {

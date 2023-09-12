@@ -18,7 +18,7 @@ func TestWalletValidator_ValidateCreateWalletRequest(t *testing.T) {
 
 	t.Run("returns error when request body has empty fields", func(t *testing.T) {
 		wv := NewWalletValidator()
-		reqBody := &CreateWalletRequest{}
+		reqBody := &WalletRequest{}
 
 		wv.ValidateCreateWalletRequest(reqBody)
 		assert.True(t, wv.HasErrors())
@@ -28,7 +28,6 @@ func TestWalletValidator_ValidateCreateWalletRequest(t *testing.T) {
 			"name":                 "name is required",
 			"sep_10_client_domain": "sep_10_client_domain is required",
 			"assets_ids":           "provide at least one asset ID",
-			"countries_codes":      "provide at least one country code",
 		}, wv.Errors)
 
 		reqBody.Name = "Wallet Provider"
@@ -40,7 +39,6 @@ func TestWalletValidator_ValidateCreateWalletRequest(t *testing.T) {
 			"homepage":             "homepage is required",
 			"sep_10_client_domain": "sep_10_client_domain is required",
 			"assets_ids":           "provide at least one asset ID",
-			"countries_codes":      "provide at least one country code",
 		}, wv.Errors)
 	})
 
@@ -48,13 +46,12 @@ func TestWalletValidator_ValidateCreateWalletRequest(t *testing.T) {
 		getEntries := log.DefaultLogger.StartTest(log.ErrorLevel)
 
 		wv := NewWalletValidator()
-		reqBody := &CreateWalletRequest{
+		reqBody := &WalletRequest{
 			Name:              "Wallet Provider",
 			Homepage:          "no-schema-homepage.com",
 			DeepLinkSchema:    "no-schema-deep-link",
 			SEP10ClientDomain: "sep-10-client-domain.com",
 			AssetsIDs:         []string{"asset-id"},
-			CountriesCodes:    []string{"UKR"},
 		}
 
 		wv.ValidateCreateWalletRequest(reqBody)
@@ -75,13 +72,12 @@ func TestWalletValidator_ValidateCreateWalletRequest(t *testing.T) {
 
 	t.Run("validates the homepage successfully", func(t *testing.T) {
 		wv := NewWalletValidator()
-		reqBody := &CreateWalletRequest{
+		reqBody := &WalletRequest{
 			Name:              "Wallet Provider",
 			Homepage:          "https://homepage.com",
 			DeepLinkSchema:    "wallet://deeplinkschema/sdp",
 			SEP10ClientDomain: "sep-10-client-domain.com",
 			AssetsIDs:         []string{"asset-id"},
-			CountriesCodes:    []string{"UKR"},
 		}
 
 		wv.ValidateCreateWalletRequest(reqBody)
@@ -95,13 +91,12 @@ func TestWalletValidator_ValidateCreateWalletRequest(t *testing.T) {
 
 	t.Run("validates the deep link schema successfully", func(t *testing.T) {
 		wv := NewWalletValidator()
-		reqBody := &CreateWalletRequest{
+		reqBody := &WalletRequest{
 			Name:              "Wallet Provider",
 			Homepage:          "https://homepage.com",
 			DeepLinkSchema:    "wallet://deeplinkschema/sdp",
 			SEP10ClientDomain: "sep-10-client-domain.com",
 			AssetsIDs:         []string{"asset-id"},
-			CountriesCodes:    []string{"UKR"},
 		}
 
 		wv.ValidateCreateWalletRequest(reqBody)
@@ -114,26 +109,25 @@ func TestWalletValidator_ValidateCreateWalletRequest(t *testing.T) {
 
 	t.Run("validates the SEP-10 Client Domain successfully", func(t *testing.T) {
 		wv := NewWalletValidator()
-		reqBody := &CreateWalletRequest{
+		reqBody := &WalletRequest{
 			Name:              "Wallet Provider",
 			Homepage:          "https://homepage.com",
 			DeepLinkSchema:    "wallet://deeplinkschema/sdp",
 			SEP10ClientDomain: "https://sep-10-client-domain.com",
 			AssetsIDs:         []string{"asset-id"},
-			CountriesCodes:    []string{"UKR"},
 		}
 
-		wv.ValidateCreateWalletRequest(reqBody)
+		reqBody = wv.ValidateCreateWalletRequest(reqBody)
 		assert.False(t, wv.HasErrors())
 		assert.Equal(t, "sep-10-client-domain.com", reqBody.SEP10ClientDomain)
 
 		reqBody.SEP10ClientDomain = "https://sep-10-client-domain.com/sdp?redirect=true"
-		wv.ValidateCreateWalletRequest(reqBody)
+		reqBody = wv.ValidateCreateWalletRequest(reqBody)
 		assert.False(t, wv.HasErrors())
 		assert.Equal(t, "sep-10-client-domain.com", reqBody.SEP10ClientDomain)
 
 		reqBody.SEP10ClientDomain = "http://localhost:8000"
-		wv.ValidateCreateWalletRequest(reqBody)
+		reqBody = wv.ValidateCreateWalletRequest(reqBody)
 		assert.False(t, wv.HasErrors())
 		assert.Equal(t, "localhost:8000", reqBody.SEP10ClientDomain)
 	})
