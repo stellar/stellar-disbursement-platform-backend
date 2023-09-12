@@ -277,6 +277,38 @@ func (e *HorizonErrorWrapper) IsDestinationAccountNotReady() bool {
 		e.IsLineFull())
 }
 
+// ShouldMarkAsError determines whether a transaction neeeds to be marked as an error based on the
+// transaction error code or failed op code so that TSS can determine whether it needs
+// to be retried.
+func (e *HorizonErrorWrapper) ShouldMarkAsError() bool {
+	failedTxErrCodes := []string{
+		"tx_bad_auth",
+		"tx_bad_auth_extra",
+		"tx_insufficient_balance",
+	}
+	if slices.Contains(failedTxErrCodes, e.ResultCodes.TransactionCode) || slices.Contains(failedTxErrCodes, e.ResultCodes.InnerTransactionCode) {
+		return true
+	}
+
+	failedOpCodes := []string{
+		"op_bad_auth",
+		"op_underfunded",
+		"op_src_not_authorized",
+		"op_no_destination",
+		"op_no_trust",
+		"op_line_full",
+		"op_not_authorized",
+		"op_no_issuer",
+	}
+	for _, opResult := range e.ResultCodes.OperationCodes {
+		if slices.Contains(failedOpCodes, opResult) {
+			return true
+		}
+	}
+
+	return false
+}
+
 func (e *HorizonErrorWrapper) handleExtrasResultCodes(msgBuilder *strings.Builder) {
 	if !e.HasResultCodes() {
 		return
