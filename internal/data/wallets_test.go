@@ -460,3 +460,50 @@ func Test_WalletModelGetAssets(t *testing.T) {
 		}, assets)
 	})
 }
+
+func Test_WalletModelSoftDelete(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+
+	walletModel := &WalletModel{dbConnectionPool: dbConnectionPool}
+
+	t.Run("soft deletes a wallet successfully", func(t *testing.T) {
+		wallet := &ClearAndCreateWalletFixtures(t, ctx, dbConnectionPool)[0]
+
+		assert.Nil(t, wallet.DeletedAt)
+
+		wallet, err = walletModel.SoftDelete(ctx, wallet.ID)
+		require.NoError(t, err)
+
+		assert.NotNil(t, wallet.DeletedAt)
+	})
+
+	t.Run("doesn't delete an already deleted wallet", func(t *testing.T) {
+		wallet := &ClearAndCreateWalletFixtures(t, ctx, dbConnectionPool)[0]
+
+		assert.Nil(t, wallet.DeletedAt)
+
+		wallet, err = walletModel.SoftDelete(ctx, wallet.ID)
+		require.NoError(t, err)
+
+		assert.NotNil(t, wallet.DeletedAt)
+
+		wallet, err = walletModel.SoftDelete(ctx, wallet.ID)
+		assert.EqualError(t, err, ErrRecordNotFound.Error())
+		assert.Nil(t, wallet)
+	})
+
+	t.Run("returns error when wallet doesn't exists", func(t *testing.T) {
+		DeleteAllWalletFixtures(t, ctx, dbConnectionPool)
+
+		wallet, err := walletModel.SoftDelete(ctx, "unknown")
+		assert.EqualError(t, err, ErrRecordNotFound.Error())
+		assert.Nil(t, wallet)
+	})
+}

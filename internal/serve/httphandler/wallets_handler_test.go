@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/db/dbtest"
@@ -320,5 +321,84 @@ func Test_WalletsHandlerPostWallets(t *testing.T) {
 		assert.Equal(t, "newwallet://deeplink/sdp", wallet.DeepLinkSchema)
 		assert.Equal(t, "newwallet.com", wallet.SEP10ClientDomain)
 		assert.Len(t, walletAssets, 1)
+	})
+}
+
+func Test_WalletsHandlerDeleteWallet(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	models, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+
+	handler := &WalletsHandler{
+		Models: models,
+	}
+
+	data.DeleteAllWalletFixtures(t, ctx, dbConnectionPool)
+
+	r := chi.NewRouter()
+	r.Delete("/wallets/{id}", handler.DeleteWallet)
+
+	t.Run("returns NotFound when wallet doesn't exist", func(t *testing.T) {
+		rr := httptest.NewRecorder()
+		req, err := http.NewRequestWithContext(ctx, http.MethodDelete, "/wallets/unknown", nil)
+		require.NoError(t, err)
+
+		r.ServeHTTP(rr, req)
+
+		resp := rr.Result()
+
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+		assert.JSONEq(t, `{"error": "Resource not found."}`, string(respBody))
+	})
+
+	t.Run("deletes wallet successfully", func(t *testing.T) {
+		data.DeleteAllWalletFixtures(t, ctx, dbConnectionPool)
+		wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "My Wallet", "https://mywallet.com", "mywallet.com", "mywallet://")
+
+		rr := httptest.NewRecorder()
+		req, err := http.NewRequestWithContext(ctx, http.MethodDelete, fmt.Sprintf("/wallets/%s", wallet.ID), nil)
+		require.NoError(t, err)
+
+		r.ServeHTTP(rr, req)
+
+		resp := rr.Result()
+
+		assert.Equal(t, http.StatusNoContent, resp.StatusCode)
+	})
+
+	t.Run("returns NotFound when tries to delete a wallet already deleted", func(t *testing.T) {
+		data.DeleteAllWalletFixtures(t, ctx, dbConnectionPool)
+		wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "My Wallet", "https://mywallet.com", "mywallet.com", "mywallet://")
+
+		q := `UPDATE wallets SET deleted_at = NOW() WHERE id = $1`
+		_, err := dbConnectionPool.ExecContext(ctx, q, wallet.ID)
+		require.NoError(t, err)
+
+		rr := httptest.NewRecorder()
+		req, err := http.NewRequestWithContext(ctx, http.MethodDelete, fmt.Sprintf("/wallets/%s", wallet.ID), nil)
+		require.NoError(t, err)
+
+		r.ServeHTTP(rr, req)
+
+		resp := rr.Result()
+
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+		assert.JSONEq(t, `{"error": "Resource not found."}`, string(respBody))
 	})
 }
