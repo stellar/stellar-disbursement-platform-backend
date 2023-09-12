@@ -178,10 +178,11 @@ func CSPMiddleware() func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 			selfSrc := "'self'"
 			recaptchaSrc := "https://www.google.com/recaptcha/"
+			ipapiSrc := "https://ipapi.co/json"
 			cspItems := []cspItem{
 				{"script-src", []string{selfSrc, recaptchaSrc, "https://www.gstatic.com/recaptcha/"}},
 				{"style-src", []string{selfSrc, recaptchaSrc, "https://fonts.googleapis.com/css2", "'unsafe-inline'"}},
-				{"connect-src", []string{selfSrc, recaptchaSrc}},
+				{"connect-src", []string{selfSrc, recaptchaSrc, ipapiSrc}},
 				{"font-src", []string{selfSrc, "https://fonts.gstatic.com"}},
 				{"default-src", []string{selfSrc}},
 
