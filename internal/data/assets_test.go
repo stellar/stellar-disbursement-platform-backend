@@ -92,6 +92,45 @@ func Test_AssetModelGetAll(t *testing.T) {
 	})
 }
 
+func Test_AssetModelGetByWalletID(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+
+	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, outerErr)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+
+	assetModel := &AssetModel{dbConnectionPool: dbConnectionPool}
+
+	t.Run("returns all assets associated with a walletID successfully", func(t *testing.T) {
+		assets := ClearAndCreateAssetFixtures(t, ctx, dbConnectionPool)
+		require.Equal(t, 2, len(assets))
+
+		wallet := CreateWalletFixture(t, ctx, dbConnectionPool, "walletA", "https://www.a.com", "www.a.com", "a://")
+		require.NotNil(t, wallet)
+
+		AssociateAssetWithWalletFixture(t, ctx, dbConnectionPool, assets[0].ID, wallet.ID)
+
+		actual, err := assetModel.GetByWalletID(ctx, wallet.ID)
+		require.NoError(t, err)
+		require.Len(t, actual, 1)
+		require.Equal(t, assets[0].ID, actual[0].ID)
+		require.Equal(t, assets[0].Code, actual[0].Code)
+		require.Equal(t, assets[0].Issuer, actual[0].Issuer)
+	})
+
+	t.Run("returns empty array when no assets associated with walletID", func(t *testing.T) {
+		wallet := CreateWalletFixture(t, ctx, dbConnectionPool, "walletB", "https://www.b.com", "www.b.com", "b://")
+
+		actual, err := assetModel.GetByWalletID(ctx, wallet.ID)
+		require.NoError(t, err)
+
+		assert.Equal(t, []Asset{}, actual)
+	})
+}
+
 func Test_AssetModelInsert(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()

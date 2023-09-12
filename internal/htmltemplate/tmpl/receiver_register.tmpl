@@ -15,6 +15,9 @@
 
     <!-- Styles -->
     <link rel="stylesheet" href="/static/css/receiver_registration.css" />
+
+    <!-- Phone number input styles -->
+    <link rel="stylesheet" href="/static/css/intl-tel-input-v18.2.1.css" />
   </head>
   <body>
     <div class="WalletRegistration">
@@ -25,9 +28,7 @@
 
           <p>
             Enter your phone number below. If you are pre-approved, you will
-            receive a one-time passcode.<br />
-            Include + sign and country code in your phone number. Do not enter
-            spaces or dashes.
+            receive a one-time passcode.
           </p>
 
           <form id="submitPhoneNumberForm">
@@ -98,7 +99,8 @@
 
           <p>
             <em>
-              Do not share your OTP or verification data with anyone. People who ask for this information could be trying to access your account.
+              Do not share your OTP or verification data with anyone. People who
+              ask for this information could be trying to access your account.
             </em>
           </p>
 
@@ -218,6 +220,8 @@
 
     <!-- Scripts -->
     <script src="https://www.google.com/recaptcha/api.js" async defer></script>
+    <!-- Phone number input script -->
+    <script src="/static/js/intl-tel-input-v18.2.1.min.js" async defer></script>
     <script src="/static/js/receiver_registration.js" defer></script>
   </body>
 </html>
