@@ -73,7 +73,7 @@ func (h LoginHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		// validating reCAPTCHA Token
 		isValid, err := h.ReCAPTCHAValidator.IsTokenValid(ctx, reqBody.ReCAPTCHAToken)
 		if err != nil {
-			httperror.InternalError(ctx, "Cannot validate reCAPTCHA token", err, nil).Render(rw)
+			httperror.Unauthorized("Cannot validate reCAPTCHA token", err, nil).Render(rw)
 			return
 		}
 

@@ -336,7 +336,7 @@ func CreateReceiverVerificationFixture(t *testing.T, ctx context.Context, sqlExe
 		VALUES
 			($1, $2, $3)
 		RETURNING
-			receiver_id, verification_field, hashed_value, attempts, created_at, confirmed_at, updated_at, failed_at
+			*
 	`
 
 	var verification ReceiverVerification

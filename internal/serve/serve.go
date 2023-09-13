@@ -13,6 +13,7 @@ import (
 	"github.com/stellar/go/network"
 	supporthttp "github.com/stellar/go/support/http"
 	"github.com/stellar/go/support/log"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
@@ -293,6 +294,8 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			r.Get("/", walletsHandler.GetWallets)
 			r.With(middleware.AnyRoleMiddleware(authManager, data.DeveloperUserRole)).
 				Post("/", walletsHandler.PostWallets)
+			r.With(middleware.AnyRoleMiddleware(authManager, data.DeveloperUserRole)).
+				Delete("/{id}", walletsHandler.DeleteWallet)
 		})
 
 		profileHandler := httphandler.ProfileHandler{

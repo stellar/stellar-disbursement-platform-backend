@@ -1,6 +1,8 @@
 package utils
 
 import (
+	"encoding/json"
+	"fmt"
 	"net/http"
 	"reflect"
 
@@ -49,4 +51,19 @@ func MapSlice[T any, M any](a []T, f func(T) M) []M {
 		n[i] = f(e)
 	}
 	return n
+}
+
+func ConvertType[S any, D any](src S) (D, error) {
+	jsonBody, err := json.Marshal(src)
+	if err != nil {
+		return *new(D), fmt.Errorf("converting source into json: %w", err)
+	}
+
+	var dst D
+	err = json.Unmarshal(jsonBody, &dst)
+	if err != nil {
+		return *new(D), fmt.Errorf("converting json into destination: %w", err)
+	}
+
+	return dst, nil
 }

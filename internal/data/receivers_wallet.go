@@ -357,11 +357,11 @@ func (rw *ReceiverWalletModel) VerifyReceiverWalletOTP(ctx context.Context, netw
 		return fmt.Errorf("otp does not have a valid created_at time")
 	}
 
-	// TODO: use the commented out version deppending on the conclusion from https://stellarfoundation.slack.com/archives/C04C9MLM9UZ/p1686692315222719
 	otpExpirationTime := receiverWallet.OTPCreatedAt.Add(time.Minute * OTPExpirationTimeMinutes)
 	if otpExpirationTime.Before(time.Now()) {
 		return fmt.Errorf("otp is expired")
 	}
+
 	return nil
 }
 
