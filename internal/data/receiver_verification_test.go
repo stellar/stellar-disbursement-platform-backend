@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func Test_ReceiverVerificationModel_GetByReceiverIdsAndVerificationField(t *testing.T) {
+func Test_ReceiverVerificationModel_GetByReceiverIDsAndVerificationField(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 
@@ -46,7 +46,7 @@ func Test_ReceiverVerificationModel_GetByReceiverIdsAndVerificationField(t *test
 
 	receiverVerificationModel := ReceiverVerificationModel{}
 
-	actualVerifications, err := receiverVerificationModel.GetByReceiverIdsAndVerificationField(ctx, dbConnectionPool, []string{receiver1.ID, receiver2.ID, receiver3.ID}, VerificationFieldDateOfBirth)
+	actualVerifications, err := receiverVerificationModel.GetByReceiverIDsAndVerificationField(ctx, dbConnectionPool, []string{receiver1.ID, receiver2.ID, receiver3.ID}, VerificationFieldDateOfBirth)
 	require.NoError(t, err)
 	assert.Equal(t, 2, len(actualVerifications))
 	for _, v := range actualVerifications {
@@ -148,7 +148,7 @@ func Test_ReceiverVerificationModel_Insert(t *testing.T) {
 	_, err = receiverVerificationModel.Insert(ctx, dbConnectionPool, verification)
 	require.NoError(t, err)
 
-	actualVerification, err := receiverVerificationModel.GetByReceiverIdsAndVerificationField(ctx, dbConnectionPool, []string{receiver.ID}, VerificationFieldDateOfBirth)
+	actualVerification, err := receiverVerificationModel.GetByReceiverIDsAndVerificationField(ctx, dbConnectionPool, []string{receiver.ID}, VerificationFieldDateOfBirth)
 	require.NoError(t, err)
 	verified := CompareVerificationValue(actualVerification[0].HashedValue, verification.VerificationValue)
 	assert.True(t, verified)
@@ -185,7 +185,7 @@ func Test_ReceiverVerificationModel_UpdateVerificationValue(t *testing.T) {
 	err = receiverVerificationModel.UpdateVerificationValue(ctx, dbConnectionPool, receiver.ID, VerificationFieldDateOfBirth, newExpectedValue)
 	require.NoError(t, err)
 
-	actualAfterUpdate, err := receiverVerificationModel.GetByReceiverIdsAndVerificationField(ctx, dbConnectionPool, []string{receiver.ID}, VerificationFieldDateOfBirth)
+	actualAfterUpdate, err := receiverVerificationModel.GetByReceiverIDsAndVerificationField(ctx, dbConnectionPool, []string{receiver.ID}, VerificationFieldDateOfBirth)
 	require.NoError(t, err)
 	verified = CompareVerificationValue(actualAfterUpdate[0].HashedValue, newExpectedValue)
 	assert.True(t, verified)

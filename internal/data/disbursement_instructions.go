@@ -108,7 +108,7 @@ func (di DisbursementInstructionModel) ProcessAll(ctx context.Context, userID st
 		for _, receiver := range receiverMap {
 			receiverIDs = append(receiverIDs, receiver.ID)
 		}
-		verifications, err := di.receiverVerificationModel.GetByReceiverIdsAndVerificationField(ctx, dbTx, receiverIDs, disbursement.VerificationField)
+		verifications, err := di.receiverVerificationModel.GetByReceiverIDsAndVerificationField(ctx, dbTx, receiverIDs, disbursement.VerificationField)
 		if err != nil {
 			return fmt.Errorf("error fetching receiver verifications: %w", err)
 		}

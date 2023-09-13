@@ -234,6 +234,30 @@ func (wm *WalletModel) GetAssets(ctx context.Context, walletID string) ([]Asset,
 	return assets, nil
 }
 
+func (w *WalletModel) SoftDelete(ctx context.Context, walletID string) (*Wallet, error) {
+	const query = `
+		UPDATE
+			wallets
+		SET
+			deleted_at = NOW()
+		WHERE
+			id = $1
+			AND deleted_at IS NULL
+		RETURNING *
+	`
+
+	var wallet Wallet
+	err := w.dbConnectionPool.GetContext(ctx, &wallet, query, walletID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrRecordNotFound
+		}
+		return nil, fmt.Errorf("soft deleting wallet ID %s: %w", walletID, err)
+	}
+
+	return &wallet, nil
+}
+
 func (wm *WalletModel) SetEnabled(ctx context.Context, walletID string, enabled bool) error {
 	const query = `
 		UPDATE
