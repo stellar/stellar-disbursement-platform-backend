@@ -474,11 +474,11 @@ func Test_VerifyReceiverRegistrationHandler_processAnchorPlatformID(t *testing.T
 	}
 
 	// mocks
-	apTxPatches := []anchorplatform.APSep24TransactionPatchPostRegistration{{
+	apTxPatch := anchorplatform.APSep24TransactionPatchPostRegistration{
 		ID:     "test-transaction-id",
 		Status: "pending_anchor",
 		SEP:    "24",
-	}}
+	}
 
 	testCases := []struct {
 		name            string
@@ -502,7 +502,7 @@ func Test_VerifyReceiverRegistrationHandler_processAnchorPlatformID(t *testing.T
 			defer mockAnchorPlatformService.AssertExpectations(t)
 			handler.AnchorPlatformAPIService = &mockAnchorPlatformService
 			mockAnchorPlatformService.
-				On("PatchAnchorTransactionsPostRegistration", mock.Anything, apTxPatches).
+				On("PatchAnchorTransactionsPostRegistration", mock.Anything, apTxPatch).
 				Return(tc.mockReturnError).Once()
 
 			// assertions
@@ -689,16 +689,16 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 		handler.ReCAPTCHAValidator = reCAPTCHAValidator
 		reCAPTCHAValidator.On("IsTokenValid", mock.Anything, "token").Return(true, nil).Once()
 
-		apTxPatches := []anchorplatform.APSep24TransactionPatchPostRegistration{{
+		apTxPatche := anchorplatform.APSep24TransactionPatchPostRegistration{
 			ID:     "test-transaction-id",
 			Status: "pending_anchor",
 			SEP:    "24",
-		}}
+		}
 		mockAnchorPlatformService := anchorplatform.AnchorPlatformAPIServiceMock{}
 		defer mockAnchorPlatformService.AssertExpectations(t)
 		handler.AnchorPlatformAPIService = &mockAnchorPlatformService
 		mockAnchorPlatformService.
-			On("PatchAnchorTransactionsPostRegistration", mock.Anything, apTxPatches).
+			On("PatchAnchorTransactionsPostRegistration", mock.Anything, apTxPatche).
 			Return(fmt.Errorf("error updating transaction on anchor platform")).Once()
 
 		// update database with the entries needed
@@ -766,15 +766,15 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 				handler.ReCAPTCHAValidator = reCAPTCHAValidator
 				reCAPTCHAValidator.On("IsTokenValid", mock.Anything, "token").Return(true, nil).Once()
 
-				apTxPatches := []anchorplatform.APSep24TransactionPatchPostRegistration{{
+				apTxPatch := anchorplatform.APSep24TransactionPatchPostRegistration{
 					ID:     "test-transaction-id",
 					Status: "pending_anchor",
 					SEP:    "24",
-				}}
+				}
 				mockAnchorPlatformService := anchorplatform.AnchorPlatformAPIServiceMock{}
 				defer mockAnchorPlatformService.AssertExpectations(t)
 				handler.AnchorPlatformAPIService = &mockAnchorPlatformService
-				mockAnchorPlatformService.On("PatchAnchorTransactionsPostRegistration", mock.Anything, apTxPatches).Return(nil).Once()
+				mockAnchorPlatformService.On("PatchAnchorTransactionsPostRegistration", mock.Anything, apTxPatch).Return(nil).Once()
 
 				// update database with the entries needed
 				defer data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
