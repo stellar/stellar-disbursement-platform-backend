@@ -70,10 +70,10 @@ func (h ReceiverSendOTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	if err := utils.ValidatePhoneNumber(receiverSendOTPRequest.PhoneNumber); err != nil {
-		err = fmt.Errorf("validating phone number %s: %w", utils.TruncateString(receiverSendOTPRequest.PhoneNumber, len(receiverSendOTPRequest.PhoneNumber)/4), err)
-		log.Ctx(ctx).Error(err)
-		httperror.BadRequest("request invalid", err, map[string]interface{}{"phone_number": "invalid phone number provided"}).Render(w)
+	if phoneValidateErr := utils.ValidatePhoneNumber(receiverSendOTPRequest.PhoneNumber); phoneValidateErr != nil {
+		phoneValidateErr = fmt.Errorf("validating phone number %s: %w", utils.TruncateString(receiverSendOTPRequest.PhoneNumber, len(receiverSendOTPRequest.PhoneNumber)/4), phoneValidateErr)
+		log.Ctx(ctx).Error(phoneValidateErr)
+		httperror.BadRequest("request invalid", phoneValidateErr, map[string]interface{}{"phone_number": "invalid phone number provided"}).Render(w)
 		return
 	}
 
