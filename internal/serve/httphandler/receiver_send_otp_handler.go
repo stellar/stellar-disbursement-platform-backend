@@ -73,6 +73,13 @@ func (h ReceiverSendOTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	if err := utils.ValidatePhoneNumber(receiverSendOTPRequest.PhoneNumber); err != nil {
+		err = fmt.Errorf("validating phone number %s: %w", utils.TruncateString(receiverSendOTPRequest.PhoneNumber, len(receiverSendOTPRequest.PhoneNumber)/4), err)
+		log.Ctx(ctx).Error(err)
+		httperror.BadRequest("request invalid", err, map[string]interface{}{"phone_number": "invalid phone number provided"}).Render(w)
+		return
+	}
+
 	// Get clains from SEP24 JWT
 	sep24Claims := anchorplatform.GetSEP24Claims(ctx)
 	if sep24Claims == nil {
