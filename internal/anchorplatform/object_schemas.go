@@ -116,19 +116,21 @@ type APSep24TransactionPatchPostRegistration struct {
 // 	SEP                 string                 `json:"sep,omitempty"`
 // 	Status              APTransactionStatus    `json:"status,omitempty"` // Success
 // 	StellarTransactions []APStellarTransaction `json:"stellar_transactions,omitempty"`
-// 	SourceAccount       string                 `json:"source_account,omitempty"`
 // 	Message             string                 `json:"message,omitempty"`
 // 	CompletedAt         *time.Time             `json:"completed_at,omitempty"`
 // 	AmountOut           APAmount               `json:"amount_out,omitempty"`
+// 	// TODO: update the AP version when source_account becomes patchable
+// 	SourceAccount string `json:"source_account,omitempty"`
 // }
 
 // type APSep24TransactionPatchPostError struct {
 // 	ID                  string                 `json:"id"`
 // 	SEP                 string                 `json:"sep,omitempty"`
-// 	Status              APTransactionStatus    `json:"status,omitempty"` // Error
-// 	SourceAccount       string                 `json:"source_account,omitempty"`
 // 	StellarTransactions []APStellarTransaction `json:"stellar_transactions,omitempty"`
 // 	Message             string                 `json:"message,omitempty"` // Error message
+// 	Status              APTransactionStatus    `json:"status,omitempty"`  // Error
+// 	// TODO: update the AP version when source_account becomes patchable
+// 	SourceAccount string `json:"source_account,omitempty"`
 // }
 
 // APTransactionStatus is the body of the Stellar transaction stored in the Anchor Platform.
