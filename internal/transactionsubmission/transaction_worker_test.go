@@ -908,7 +908,7 @@ func Test_TransactionWorker_submit(t *testing.T) {
 			mockHorizonClient := &horizonclient.MockClient{}
 			mockCrashTrackerClient := &crashtracker.MockCrashTrackerClient{}
 			if tc.txMarkAsError {
-				mockCrashTrackerClient.On("LogAndReportErrors", ctx, utils.NewHorizonErrorWrapper(tc.horizonError), "transaction error - cannot be retried")
+				mockCrashTrackerClient.On("LogAndReportErrors", ctx, utils.NewHorizonErrorWrapper(tc.horizonError), "transaction error - cannot be retried").Once()
 			}
 
 			txProcessingLimiter := engine.NewTransactionProcessingLimiter(15)
@@ -957,6 +957,7 @@ func Test_TransactionWorker_submit(t *testing.T) {
 			assert.False(t, refreshedChAcc.IsLocked(int32(txJob.LockedUntilLedgerNumber)))
 
 			mockHorizonClient.AssertExpectations(t)
+			mockCrashTrackerClient.AssertExpectations(t)
 		})
 	}
 }
