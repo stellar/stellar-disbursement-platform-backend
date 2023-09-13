@@ -175,7 +175,10 @@ func (tw *TransactionWorker) handleFailedTransaction(ctx context.Context, txJob 
 				}
 
 				txJob.Transaction = *updatedTx
-				tw.crashTrackerClient.LogAndReportErrors(ctx, hErrWrapper, "transaction error - cannot be retried")
+				// report any terminal errors, excluding those caused by the external account not being valid
+				if !hErrWrapper.IsDestinationAccountNotReady() {
+					tw.crashTrackerClient.LogAndReportErrors(ctx, hErrWrapper, "transaction error - cannot be retried")
+				}
 			}
 		}
 	}

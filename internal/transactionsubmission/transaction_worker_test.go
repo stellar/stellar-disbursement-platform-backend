@@ -880,7 +880,7 @@ func Test_TransactionWorker_submit(t *testing.T) {
 					Extras: map[string]interface{}{
 						"result_codes": map[string]interface{}{
 							"transaction": "tx_failed",
-							"operations":  []string{"op_no_trust"}, // <--- this should make the transaction be marked as ERROR
+							"operations":  []string{"op_underfunded"}, // <--- this should make the transaction be marked as ERROR
 						},
 					},
 				},
