@@ -53,9 +53,6 @@ type APSep24Transaction struct {
 	Kind           string    `json:"kind,omitempty"`
 	AmountExpected *APAmount `json:"amount_expected,omitempty"`
 
-	SourceAccount      string `json:"source_account,omitempty"`
-	DestinationAccount string `json:"destination_account,omitempty"`
-
 	// These fields are patchable but they are already set by the AP, so I'm leaving them out of the patch:
 	UpdatedAt *time.Time `json:"updated_at,omitempty"`
 	StartedAt *time.Time `json:"started_at,omitempty"`
@@ -94,6 +91,10 @@ type APSep24TransactionPatch struct {
 	AmountOut *APAmount `json:"amount_out,omitempty"`
 	AmountFee *APAmount `json:"amount_fee,omitempty"`
 
+	// Accounts
+	SourceAccount      string `json:"source_account,omitempty"`
+	DestinationAccount string `json:"destination_account,omitempty"`
+
 	// Dates
 	CompletedAt        *time.Time `json:"completed_at,omitempty"`
 	TransferReceivedAt *time.Time `json:"transfer_received_at,omitempty"`
@@ -115,6 +116,7 @@ type APSep24TransactionPatchPostRegistration struct {
 // 	SEP                 string                 `json:"sep,omitempty"`
 // 	Status              APTransactionStatus    `json:"status,omitempty"` // Success
 // 	StellarTransactions []APStellarTransaction `json:"stellar_transactions,omitempty"`
+// 	SourceAccount       string                 `json:"source_account,omitempty"`
 // 	Message             string                 `json:"message,omitempty"`
 // 	CompletedAt         *time.Time             `json:"completed_at,omitempty"`
 // 	AmountOut           APAmount               `json:"amount_out,omitempty"`
@@ -124,6 +126,7 @@ type APSep24TransactionPatchPostRegistration struct {
 // 	ID                  string                 `json:"id"`
 // 	SEP                 string                 `json:"sep,omitempty"`
 // 	Status              APTransactionStatus    `json:"status,omitempty"` // Error
+// 	SourceAccount       string                 `json:"source_account,omitempty"`
 // 	StellarTransactions []APStellarTransaction `json:"stellar_transactions,omitempty"`
 // 	Message             string                 `json:"message,omitempty"` // Error message
 // }
