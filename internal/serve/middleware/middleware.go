@@ -196,7 +196,6 @@ func CSPMiddleware() func(http.Handler) http.Handler {
 				cspStr += fmt.Sprintf("%v", item)
 			}
 
-			// policyStr := "default-src 'self'; script-src 'self'; frame-ancestors 'self'; form-action 'self';"
 			rw.Header().Set("Content-Security-Policy", cspStr)
 			next.ServeHTTP(rw, req)
 		})
