@@ -474,14 +474,10 @@ func Test_VerifyReceiverRegistrationHandler_processAnchorPlatformID(t *testing.T
 	}
 
 	// mocks
-	apTxPatches := []anchorplatform.APSep24Transaction{{
-		ID:                 "test-transaction-id",
-		Status:             "pending_anchor",
-		SEP:                "24",
-		Kind:               "deposit",
-		DestinationAccount: sep24Claims.SEP10StellarAccount(),
-		Memo:               sep24Claims.SEP10StellarMemo(),
-		KYCVerified:        true,
+	apTxPatches := []anchorplatform.APSep24TransactionPatchPostRegistration{{
+		ID:     "test-transaction-id",
+		Status: "pending_anchor",
+		SEP:    "24",
 	}}
 
 	testCases := []struct {
@@ -693,14 +689,10 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 		handler.ReCAPTCHAValidator = reCAPTCHAValidator
 		reCAPTCHAValidator.On("IsTokenValid", mock.Anything, "token").Return(true, nil).Once()
 
-		apTxPatches := []anchorplatform.APSep24Transaction{{
-			ID:                 "test-transaction-id",
-			Status:             "pending_anchor",
-			SEP:                "24",
-			Kind:               "deposit",
-			DestinationAccount: validClaims.SEP10StellarAccount(),
-			Memo:               validClaims.SEP10StellarMemo(),
-			KYCVerified:        true,
+		apTxPatches := []anchorplatform.APSep24TransactionPatchPostRegistration{{
+			ID:     "test-transaction-id",
+			Status: "pending_anchor",
+			SEP:    "24",
 		}}
 		mockAnchorPlatformService := anchorplatform.AnchorPlatformAPIServiceMock{}
 		defer mockAnchorPlatformService.AssertExpectations(t)
@@ -774,14 +766,10 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 				handler.ReCAPTCHAValidator = reCAPTCHAValidator
 				reCAPTCHAValidator.On("IsTokenValid", mock.Anything, "token").Return(true, nil).Once()
 
-				apTxPatches := []anchorplatform.APSep24Transaction{{
-					ID:                 "test-transaction-id",
-					Status:             "pending_anchor",
-					SEP:                "24",
-					Kind:               "deposit",
-					DestinationAccount: sep24Claims.SEP10StellarAccount(),
-					Memo:               sep24Claims.SEP10StellarMemo(),
-					KYCVerified:        true,
+				apTxPatches := []anchorplatform.APSep24TransactionPatchPostRegistration{{
+					ID:     "test-transaction-id",
+					Status: "pending_anchor",
+					SEP:    "24",
 				}}
 				mockAnchorPlatformService := anchorplatform.AnchorPlatformAPIServiceMock{}
 				defer mockAnchorPlatformService.AssertExpectations(t)

@@ -48,9 +48,7 @@ type APSep24TransactionWrapper struct {
 
 // APSep24Transaction is the transaction object used in the `{PlatformAPIBaseURL}/transactions` requests.
 type APSep24Transaction struct {
-	ID          string `json:"id"`
-	KYCVerified bool   `json:"kyc_verified,omitempty"`
-
+	APSep24TransactionPatch
 	// Kind can be "deposit" or "withdrawal". It's a read-only field.
 	Kind           string    `json:"kind,omitempty"`
 	AmountExpected *APAmount `json:"amount_expected,omitempty"`
@@ -64,8 +62,26 @@ type APSep24Transaction struct {
 	Memo      string     `json:"memo,omitempty"`
 	MemoType  string     `json:"memo_type,omitempty"`
 	AmountIn  *APAmount  `json:"amount_in,omitempty"`
+}
 
-	// These fields are patchable:
+func NewAPSep24TransactionRecordsFromPatches(patches ...APSep24TransactionPatch) APSep24TransactionRecords {
+	var records APSep24TransactionRecords
+	for _, patch := range patches {
+		newEntry := APSep24TransactionWrapper{
+			APSep24Transaction: APSep24Transaction{
+				APSep24TransactionPatch: patch,
+			},
+		}
+		records.Records = append(records.Records, newEntry)
+	}
+
+	return records
+}
+
+// APSep24TransactionPatch is the transaction object used in the `PATCH {PlatformAPIBaseURL}/transactions` request. It's be used to update the transaction data.
+type APSep24TransactionPatch struct {
+	// Identifiers:
+	ID                    string `json:"id"`
 	ExternalTransactionID string `json:"external_transaction_id,omitempty"`
 
 	// Status
@@ -83,19 +99,18 @@ type APSep24Transaction struct {
 	TransferReceivedAt *time.Time `json:"transfer_received_at,omitempty"`
 }
 
-func NewAPSep24TransactionRecordsFromPatches(patches ...APSep24Transaction) APSep24TransactionRecords {
-	var records APSep24TransactionRecords
-	for _, patch := range patches {
-		newEntry := APSep24TransactionWrapper{
-			APSep24Transaction: patch,
-		}
-		records.Records = append(records.Records, newEntry)
-	}
-
-	return records
+// APSep24TransactionPatchPostRegistration is a subset of APSep24TransactionPatch that can be used to update the
+// transaction data after the registration.
+type APSep24TransactionPatchPostRegistration struct {
+	ID                    string              `json:"id"`
+	ExternalTransactionID string              `json:"external_transaction_id,omitempty"`
+	SEP                   string              `json:"sep,omitempty"`
+	Status                APTransactionStatus `json:"status,omitempty"`
+	Message               string              `json:"message,omitempty"`
+	TransferReceivedAt    *time.Time          `json:"transfer_received_at,omitempty"`
 }
 
-// type APSep24TransactionPostSuccess struct {
+// type APSep24TransactionPatchPostSuccess struct {
 // 	ID                  string                 `json:"id"`
 // 	SEP                 string                 `json:"sep,omitempty"`
 // 	Status              APTransactionStatus    `json:"status,omitempty"` // Success
@@ -105,7 +120,7 @@ func NewAPSep24TransactionRecordsFromPatches(patches ...APSep24Transaction) APSe
 // 	AmountOut           APAmount               `json:"amount_out,omitempty"`
 // }
 
-// type APSep24TransactionPostError struct {
+// type APSep24TransactionPatchPostError struct {
 // 	ID                  string                 `json:"id"`
 // 	SEP                 string                 `json:"sep,omitempty"`
 // 	Status              APTransactionStatus    `json:"status,omitempty"` // Error
