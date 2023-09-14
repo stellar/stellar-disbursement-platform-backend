@@ -689,7 +689,7 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 		handler.ReCAPTCHAValidator = reCAPTCHAValidator
 		reCAPTCHAValidator.On("IsTokenValid", mock.Anything, "token").Return(true, nil).Once()
 
-		apTxPatche := anchorplatform.APSep24TransactionPatchPostRegistration{
+		apTxPatch := anchorplatform.APSep24TransactionPatchPostRegistration{
 			ID:     "test-transaction-id",
 			Status: "pending_anchor",
 			SEP:    "24",
@@ -698,7 +698,7 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 		defer mockAnchorPlatformService.AssertExpectations(t)
 		handler.AnchorPlatformAPIService = &mockAnchorPlatformService
 		mockAnchorPlatformService.
-			On("PatchAnchorTransactionsPostRegistration", mock.Anything, apTxPatche).
+			On("PatchAnchorTransactionsPostRegistration", mock.Anything, apTxPatch).
 			Return(fmt.Errorf("error updating transaction on anchor platform")).Once()
 
 		// update database with the entries needed
