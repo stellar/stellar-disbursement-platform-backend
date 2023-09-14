@@ -14,12 +14,13 @@ var (
 	rxPhone                   = regexp.MustCompile(`^\+[1-9]{1}[0-9]{9,14}$`)
 	rxOTP                     = regexp.MustCompile(`^\d{6}$`)
 	ErrInvalidE164PhoneNumber = fmt.Errorf("the provided phone number is not a valid E.164 number")
+	ErrEmptyPhoneNumber       = fmt.Errorf("phone number cannot be empty")
 )
 
 // https://github.com/firebase/firebase-admin-go/blob/cef91acd46f2fc5d0b3408d8154a0005db5bdb0b/auth/user_mgt.go#L449-L457
 func ValidatePhoneNumber(phoneNumberStr string) error {
 	if phoneNumberStr == "" {
-		return fmt.Errorf("phone number cannot be empty")
+		return ErrEmptyPhoneNumber
 	}
 
 	if !rxPhone.MatchString(phoneNumberStr) {

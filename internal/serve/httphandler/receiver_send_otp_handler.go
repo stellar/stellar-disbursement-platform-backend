@@ -2,6 +2,7 @@ package httphandler
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 
@@ -60,13 +61,14 @@ func (h ReceiverSendOTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// validate request
-	v := validators.NewValidator()
-
-	v.Check(receiverSendOTPRequest.PhoneNumber != "", "phone_number", "phone_number is required")
-
-	if v.HasErrors() {
-		httperror.BadRequest("request invalid", err, v.Errors).Render(w)
+	if phoneValidateErr := utils.ValidatePhoneNumber(receiverSendOTPRequest.PhoneNumber); phoneValidateErr != nil {
+		extras := map[string]interface{}{"phone_number": "phone_number is required"}
+		if !errors.Is(phoneValidateErr, utils.ErrEmptyPhoneNumber) {
+			phoneValidateErr = fmt.Errorf("validating phone number %s: %w", utils.TruncateString(receiverSendOTPRequest.PhoneNumber, len(receiverSendOTPRequest.PhoneNumber)/4), phoneValidateErr)
+			log.Ctx(ctx).Error(phoneValidateErr)
+			extras["phone_number"] = "invalid phone number provided"
+		}
+		httperror.BadRequest("request invalid", phoneValidateErr, extras).Render(w)
 		return
 	}
 
