@@ -12,7 +12,7 @@ func Test_ValidatePhoneNumber(t *testing.T) {
 		phoneNumber string
 		wantErr     error
 	}{
-		{"", fmt.Errorf("phone number cannot be empty")},
+		{"", ErrEmptyPhoneNumber},
 		{"notvalidphone", ErrInvalidE164PhoneNumber},
 		{"14155555555", ErrInvalidE164PhoneNumber},
 		{"+380445555555", nil},
