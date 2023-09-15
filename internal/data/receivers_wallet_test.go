@@ -531,6 +531,8 @@ func Test_UpdateReceiverWallet(t *testing.T) {
 		receiverWallet.StellarMemo = "123456"
 		receiverWallet.StellarMemoType = "id"
 		receiverWallet.Status = RegisteredReceiversWalletStatus
+		now := time.Now()
+		receiverWallet.OTPConfirmedAt = &now
 
 		err := receiverWalletModel.UpdateReceiverWallet(ctx, *receiverWallet, dbConnectionPool)
 		require.NoError(t, err)
@@ -556,7 +558,7 @@ func Test_UpdateReceiverWallet(t *testing.T) {
 		assert.Equal(t, "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444", receiverWalletUpdated.StellarAddress)
 		assert.Equal(t, "123456", receiverWalletUpdated.StellarMemo)
 		assert.Equal(t, "id", receiverWalletUpdated.StellarMemoType)
-		require.NotEmpty(t, receiverWalletUpdated.OTPConfirmedAt)
+		assert.WithinDuration(t, now, *receiverWalletUpdated.OTPConfirmedAt, 100*time.Millisecond)
 	})
 }
 

@@ -183,6 +183,8 @@ func (v VerifyReceiverRegistrationHandler) processReceiverWalletOTP(ctx context.
 		receiverWallet.StellarMemoType = "id"
 	}
 	receiverWallet.Status = data.RegisteredReceiversWalletStatus
+	now := time.Now()
+	receiverWallet.OTPConfirmedAt = &now
 	err = v.Models.ReceiverWallet.UpdateReceiverWallet(ctx, *receiverWallet, dbTx)
 	if err != nil {
 		err = fmt.Errorf("completing receiver wallet registration: %w", err)
