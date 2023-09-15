@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lib/pq"
 	"github.com/stellar/go/network"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/db/dbtest"
@@ -773,55 +772,6 @@ func Test_VerifyReceiverWalletOTP(t *testing.T) {
 			}
 		})
 	}
-}
-
-func Test_ReceiverWallet_statusHistoryFromByteArray(t *testing.T) {
-	var receiverWallet ReceiverWallet
-
-	t.Run("returns error when status history is invalid", func(t *testing.T) {
-		err := receiverWallet.statusHistoryFromByteArray(pq.ByteaArray{[]byte("invalid")})
-		require.Error(t, err, "error unmarshaling status_history column:")
-	})
-
-	t.Run("returns status history successfully", func(t *testing.T) {
-		statusHistory := pq.ByteaArray{[]byte(`{"status": "DRAFT", "timestamp": "2023-03-11T01:20:39.363154Z"}`)}
-		expected := []ReceiversWalletStatusHistoryEntry{
-			{
-				Status:    DraftReceiversWalletStatus,
-				Timestamp: time.Date(2023, 0o3, 11, 0o1, 20, 39, 363154000, time.UTC),
-			},
-		}
-		err := receiverWallet.statusHistoryFromByteArray(statusHistory)
-		require.NoError(t, err)
-		assert.Equal(t, expected, receiverWallet.StatusHistory)
-	})
-}
-
-func Test_ReceiverWallet_statusHistoryJson(t *testing.T) {
-	entry1 := ReceiversWalletStatusHistoryEntry{
-		Status:    "READY",
-		Timestamp: time.Now(),
-	}
-	entry2 := ReceiversWalletStatusHistoryEntry{
-		Status:    "REGISTERED",
-		Timestamp: time.Now().Add(1 * time.Hour),
-	}
-
-	receiverWallet := &ReceiverWallet{
-		StatusHistory: []ReceiversWalletStatusHistoryEntry{entry1, entry2},
-	}
-
-	t.Run("returns status history successfully", func(t *testing.T) {
-		statusHistoryJSON, err := receiverWallet.statusHistoryJson()
-		require.NoError(t, err)
-
-		expectedJSON1 := `{"status":"READY","timestamp":"` + entry1.Timestamp.Format(time.RFC3339Nano) + `"}`
-		expectedJSON2 := `{"status":"REGISTERED","timestamp":"` + entry2.Timestamp.Format(time.RFC3339Nano) + `"}`
-
-		assert.Equal(t, 2, len(receiverWallet.StatusHistory))
-		assert.Contains(t, statusHistoryJSON, expectedJSON1)
-		assert.Contains(t, statusHistoryJSON, expectedJSON2)
-	})
 }
 
 func Test_ReceiverWallet_GetAllPendingRegistration(t *testing.T) {

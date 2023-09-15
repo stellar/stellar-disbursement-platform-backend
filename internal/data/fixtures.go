@@ -385,7 +385,6 @@ func CreateReceiverWalletFixture(t *testing.T, ctx context.Context, sqlExec db.S
 			JOIN wallets AS w ON rw.wallet_id = w.id
 	`
 
-	var statusHistoryJSON pq.ByteaArray
 	var receiverWallet ReceiverWallet
 	err = sqlExec.QueryRowxContext(ctx, query, receiverID, walletID, stellarAddress, stellarMemo, stellarMemoType, status).Scan(
 		&receiverWallet.ID,
@@ -393,7 +392,7 @@ func CreateReceiverWalletFixture(t *testing.T, ctx context.Context, sqlExec db.S
 		&receiverWallet.StellarMemo,
 		&receiverWallet.StellarMemoType,
 		&receiverWallet.Status,
-		&statusHistoryJSON,
+		&receiverWallet.StatusHistory,
 		&receiverWallet.CreatedAt,
 		&receiverWallet.UpdatedAt,
 		&receiverWallet.Receiver.ID,
@@ -409,9 +408,6 @@ func CreateReceiverWalletFixture(t *testing.T, ctx context.Context, sqlExec db.S
 		&receiverWallet.Wallet.CreatedAt,
 		&receiverWallet.Wallet.UpdatedAt,
 	)
-	require.NoError(t, err)
-
-	err = receiverWallet.statusHistoryFromByteArray(statusHistoryJSON)
 	require.NoError(t, err)
 
 	return &receiverWallet
