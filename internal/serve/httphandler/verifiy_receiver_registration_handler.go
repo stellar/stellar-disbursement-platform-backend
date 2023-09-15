@@ -194,14 +194,10 @@ func (v VerifyReceiverRegistrationHandler) processReceiverWalletOTP(ctx context.
 
 // processAnchorPlatformID PATCHes the transaction on the AnchorPlatform with the status "pending_anchor" and updates the local database accordingly.
 func (v VerifyReceiverRegistrationHandler) processAnchorPlatformID(ctx context.Context, sep24Claims *anchorplatform.SEP24JWTClaims) error {
-	apTxPatch := anchorplatform.APSep24Transaction{
-		ID:                 sep24Claims.TransactionID(),
-		SEP:                "24",
-		Status:             anchorplatform.APTransactionStatusPendingAnchor,
-		Kind:               "deposit",
-		DestinationAccount: sep24Claims.SEP10StellarAccount(),
-		Memo:               sep24Claims.SEP10StellarMemo(),
-		KYCVerified:        true,
+	apTxPatch := anchorplatform.APSep24TransactionPatchPostRegistration{
+		ID:     sep24Claims.TransactionID(),
+		SEP:    "24",
+		Status: anchorplatform.APTransactionStatusPendingAnchor,
 	}
 
 	err := v.AnchorPlatformAPIService.PatchAnchorTransactionsPostRegistration(ctx, apTxPatch)
