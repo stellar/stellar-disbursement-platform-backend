@@ -363,7 +363,7 @@ func (rw *ReceiverWalletModel) UpdateReceiverWallet(ctx context.Context, receive
 		WHERE rw.id = $6
 	`
 
-	_, err := sqlExec.ExecContext(ctx, query,
+	result, err := sqlExec.ExecContext(ctx, query,
 		receiverWallet.Status,
 		receiverWallet.StellarAddress,
 		sql.NullString{String: receiverWallet.StellarMemo, Valid: receiverWallet.StellarMemo != ""},
@@ -371,7 +371,16 @@ func (rw *ReceiverWalletModel) UpdateReceiverWallet(ctx context.Context, receive
 		receiverWallet.OTPConfirmedAt,
 		receiverWallet.ID)
 	if err != nil {
-		return fmt.Errorf("error updating receiver wallet: %w", err)
+		return fmt.Errorf("updating receiver wallet: %w", err)
+	}
+
+	numRowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("getting number of rows affected: %w", err)
+	}
+
+	if numRowsAffected == 0 {
+		return fmt.Errorf("no receiver wallet could be found in UpdateReceiverWallet: %w", ErrRecordNotFound)
 	}
 
 	return nil

@@ -502,18 +502,16 @@ func Test_GetByReceiverIDAndWalletDomain(t *testing.T) {
 func Test_UpdateReceiverWallet(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
-
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
 
 	ctx := context.Background()
-
 	receiverWalletModel := ReceiverWalletModel{dbConnectionPool: dbConnectionPool}
 
 	t.Run("returns error when receiver wallet does not exist", func(t *testing.T) {
 		err := receiverWalletModel.UpdateReceiverWallet(ctx, ReceiverWallet{ID: "invalid_id", Status: DraftReceiversWalletStatus}, dbConnectionPool)
-		require.NoError(t, err)
+		require.ErrorIs(t, err, ErrRecordNotFound)
 	})
 
 	receiver := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
@@ -523,7 +521,7 @@ func Test_UpdateReceiverWallet(t *testing.T) {
 	t.Run("returns error when status is not valid", func(t *testing.T) {
 		receiverWallet.Status = "invalid_status"
 		err := receiverWalletModel.UpdateReceiverWallet(ctx, *receiverWallet, dbConnectionPool)
-		require.Error(t, err, "error querying receiver wallet: sql: no rows in result set")
+		require.Error(t, err, "querying receiver wallet: sql: no rows in result set")
 	})
 
 	t.Run("successfuly update receiver wallet", func(t *testing.T) {
