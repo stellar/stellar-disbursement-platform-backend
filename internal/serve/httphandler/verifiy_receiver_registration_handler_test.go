@@ -428,7 +428,7 @@ func Test_VerifyReceiverRegistrationHandler_processReceiverWalletOTP(t *testing.
 			}
 
 			// assertions
-			rwUpdated, wasAlreadyRegistered, err := handler.processReceiverWalletOTP(ctx, dbTx, tc.sep24Claims, *receiver, otp)
+			rwUpdated, wasAlreadyRegistered, err := handler.processReceiverWalletOTP(ctx, dbTx, *tc.sep24Claims, *receiver, otp)
 			if tc.wantErrContains == nil {
 				require.NoError(t, err)
 				assert.Equal(t, tc.wantWasAlreadyRegistered, wasAlreadyRegistered)
@@ -511,7 +511,7 @@ func Test_VerifyReceiverRegistrationHandler_processAnchorPlatformID(t *testing.T
 				Return(tc.mockReturnError).Once()
 
 			// assertions
-			err := handler.processAnchorPlatformID(ctx, sep24Claims)
+			err := handler.processAnchorPlatformID(ctx, *sep24Claims)
 			if tc.wantErrContains == "" {
 				require.NoError(t, err)
 			} else {
