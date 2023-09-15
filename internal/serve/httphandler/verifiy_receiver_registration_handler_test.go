@@ -428,7 +428,7 @@ func Test_VerifyReceiverRegistrationHandler_processReceiverWalletOTP(t *testing.
 			}
 
 			// assertions
-			wasAlreadyRegistered, err := handler.processReceiverWalletOTP(ctx, dbTx, tc.sep24Claims, *receiver, otp)
+			rwUpdated, wasAlreadyRegistered, err := handler.processReceiverWalletOTP(ctx, dbTx, tc.sep24Claims, *receiver, otp)
 			if tc.wantErrContains == nil {
 				require.NoError(t, err)
 				assert.Equal(t, tc.wantWasAlreadyRegistered, wasAlreadyRegistered)
@@ -438,8 +438,13 @@ func Test_VerifyReceiverRegistrationHandler_processReceiverWalletOTP(t *testing.
 				err = dbTx.GetContext(ctx, &rw, "SELECT id, status, stellar_address, otp_confirmed_at FROM receiver_wallets WHERE id = $1", receiverWallet.ID)
 				require.NoError(t, err)
 				assert.Equal(t, data.RegisteredReceiversWalletStatus, rw.Status)
+				assert.Equal(t, rwUpdated.Status, rw.Status)
 				assert.NotEmpty(t, rw.StellarAddress)
+				assert.Equal(t, rwUpdated.StellarAddress, rw.StellarAddress)
 				assert.NotNil(t, rw.OTPConfirmedAt)
+				assert.NotNil(t, rwUpdated.OTPConfirmedAt)
+				assert.WithinDuration(t, *rwUpdated.OTPConfirmedAt, *rw.OTPConfirmedAt, time.Millisecond)
+
 			} else {
 				for _, wantErrContain := range tc.wantErrContains {
 					assert.ErrorContains(t, err, wantErrContain)

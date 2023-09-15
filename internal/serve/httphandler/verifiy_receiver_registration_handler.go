@@ -148,50 +148,57 @@ func (v VerifyReceiverRegistrationHandler) processReceiverVerificationPII(ctx co
 }
 
 // processReceiverWalletOTP processes the OTP provided by the user and updates the receiver wallet status to "REGISTERED" if the OTP is valid.
-func (v VerifyReceiverRegistrationHandler) processReceiverWalletOTP(ctx context.Context, dbTx db.DBTransaction, sep24Claims *anchorplatform.SEP24JWTClaims, receiver data.Receiver, otp string) (wasAlreadyRegistered bool, err error) {
+func (v VerifyReceiverRegistrationHandler) processReceiverWalletOTP(
+	ctx context.Context,
+	dbTx db.DBTransaction,
+	sep24Claims *anchorplatform.SEP24JWTClaims,
+	receiver data.Receiver, otp string,
+) (receiverWallet data.ReceiverWallet, wasAlreadyRegistered bool, err error) {
 	// STEP 1: find the receiver wallet for the given [receiverID, clientDomain]
-	receiverWallet, err := v.Models.ReceiverWallet.GetByReceiverIDAndWalletDomain(ctx, receiver.ID, sep24Claims.ClientDomain(), dbTx)
+	rw, err := v.Models.ReceiverWallet.GetByReceiverIDAndWalletDomain(ctx, receiver.ID, sep24Claims.ClientDomain(), dbTx)
 	if err != nil {
 		err = fmt.Errorf("receiver wallet not found for receiverID=%s and clientDomain=%s: %w", receiver.ID, sep24Claims.ClientDomain(), err)
-		return false, &ErrorInformationNotFound{cause: err}
+		return receiverWallet, false, &ErrorInformationNotFound{cause: err}
 	}
 
 	// STEP 2: check if receiver wallet status is already "REGISTERED"
-	if receiverWallet.Status == data.RegisteredReceiversWalletStatus {
+	if rw.Status == data.RegisteredReceiversWalletStatus {
 		log.Ctx(ctx).Info("receiver already registered in the SDP")
-		return true, nil
+		return *rw, true, nil
 	}
 
 	// STEP 3: check if receiver wallet status can be transitioned to "REGISTERED"
-	err = receiverWallet.Status.TransitionTo(data.RegisteredReceiversWalletStatus)
+	err = rw.Status.TransitionTo(data.RegisteredReceiversWalletStatus)
 	if err != nil {
-		err = fmt.Errorf("transitioning status for receiverWallet[ID=%s]: %w", receiverWallet.ID, err)
-		return false, &ErrorInformationNotFound{cause: err}
+		err = fmt.Errorf("transitioning status for receiverWallet[ID=%s]: %w", rw.ID, err)
+		return receiverWallet, false, &ErrorInformationNotFound{cause: err}
 	}
 
 	// STEP 4: verify receiver wallet OTP
-	err = v.Models.ReceiverWallet.VerifyReceiverWalletOTP(ctx, v.NetworkPassphrase, *receiverWallet, otp)
+	err = v.Models.ReceiverWallet.VerifyReceiverWalletOTP(ctx, v.NetworkPassphrase, *rw, otp)
 	if err != nil {
 		err = fmt.Errorf("receiver wallet OTP is not valid: %w", err)
-		return false, &ErrorInformationNotFound{cause: err}
+		return receiverWallet, false, &ErrorInformationNotFound{cause: err}
 	}
 
 	// STEP 5: update receiver wallet status to "REGISTERED"
-	receiverWallet.StellarAddress = sep24Claims.SEP10StellarAccount()
-	if sep24Claims.SEP10StellarMemo() != "" {
-		receiverWallet.StellarMemo = sep24Claims.SEP10StellarMemo()
-		receiverWallet.StellarMemoType = "id"
-	}
-	receiverWallet.Status = data.RegisteredReceiversWalletStatus
 	now := time.Now()
-	receiverWallet.OTPConfirmedAt = &now
-	err = v.Models.ReceiverWallet.UpdateReceiverWallet(ctx, *receiverWallet, dbTx)
+	rw.OTPConfirmedAt = &now
+	rw.Status = data.RegisteredReceiversWalletStatus
+	rw.StellarAddress = sep24Claims.SEP10StellarAccount()
+	rw.StellarMemo = sep24Claims.SEP10StellarMemo()
+	if sep24Claims.SEP10StellarMemo() != "" {
+		rw.StellarMemoType = "id"
+	} else {
+		rw.StellarMemoType = ""
+	}
+	err = v.Models.ReceiverWallet.UpdateReceiverWallet(ctx, *rw, dbTx)
 	if err != nil {
 		err = fmt.Errorf("completing receiver wallet registration: %w", err)
-		return false, err
+		return receiverWallet, false, err
 	}
 
-	return false, nil
+	return *rw, false, nil
 }
 
 // processAnchorPlatformID PATCHes the transaction on the AnchorPlatform with the status "pending_anchor" and updates the local database accordingly.
@@ -246,7 +253,7 @@ func (v VerifyReceiverRegistrationHandler) VerifyReceiverRegistration(w http.Res
 		}
 
 		// STEP 4: process OTP
-		wasAlreadyRegistered, err := v.processReceiverWalletOTP(ctx, dbTx, sep24Claims, *receiver, receiverRegistrationRequest.OTP)
+		_, wasAlreadyRegistered, err := v.processReceiverWalletOTP(ctx, dbTx, sep24Claims, *receiver, receiverRegistrationRequest.OTP)
 		if err != nil {
 			return fmt.Errorf("processing OTP for receiver with phone number %s: %w", truncatedPhoneNumber, err)
 		}
