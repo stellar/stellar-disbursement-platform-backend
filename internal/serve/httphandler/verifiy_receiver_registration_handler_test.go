@@ -467,8 +467,22 @@ func Test_VerifyReceiverRegistrationHandler_processAnchorPlatformID(t *testing.T
 	require.NoError(t, err)
 	handler := &VerifyReceiverRegistrationHandler{Models: models}
 
-	// create valid sep24 token
+	// creeate fixtures
+	const phoneNumber = "+380445555555"
+	defer data.DeleteAllWalletFixtures(t, ctx, dbConnectionPool)
+	defer data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
+	defer data.DeleteAllReceiverVerificationFixtures(t, ctx, dbConnectionPool)
+	defer data.DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
 	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "testWallet", "https://home.page", "home.page", "wallet123://")
+	receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{PhoneNumber: phoneNumber})
+	_ = data.CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, data.ReceiverVerificationInsert{
+		ReceiverID:        receiver.ID,
+		VerificationField: data.VerificationFieldDateOfBirth,
+		VerificationValue: "1990-01-01",
+	})
+	receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.ReadyReceiversWalletStatus)
+
+	// create valid sep24 token
 	sep24Claims := &anchorplatform.SEP24JWTClaims{
 		ClientDomainClaim: wallet.SEP10ClientDomain,
 		RegisteredClaims: jwt.RegisteredClaims{
@@ -502,6 +516,14 @@ func Test_VerifyReceiverRegistrationHandler_processAnchorPlatformID(t *testing.T
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			// dbTX
+			dbTx, err := dbConnectionPool.BeginTxx(ctx, nil)
+			require.NoError(t, err)
+			defer func() {
+				err = dbTx.Rollback()
+				require.NoError(t, err)
+			}()
+
 			// mocks
 			mockAnchorPlatformService := anchorplatform.AnchorPlatformAPIServiceMock{}
 			defer mockAnchorPlatformService.AssertExpectations(t)
@@ -511,7 +533,7 @@ func Test_VerifyReceiverRegistrationHandler_processAnchorPlatformID(t *testing.T
 				Return(tc.mockReturnError).Once()
 
 			// assertions
-			err := handler.processAnchorPlatformID(ctx, *sep24Claims)
+			err = handler.processAnchorPlatformID(ctx, dbTx, *sep24Claims, *receiverWallet)
 			if tc.wantErrContains == "" {
 				require.NoError(t, err)
 			} else {

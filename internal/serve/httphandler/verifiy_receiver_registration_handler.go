@@ -202,7 +202,7 @@ func (v VerifyReceiverRegistrationHandler) processReceiverWalletOTP(
 }
 
 // processAnchorPlatformID PATCHes the transaction on the AnchorPlatform with the status "pending_anchor" and updates the local database accordingly.
-func (v VerifyReceiverRegistrationHandler) processAnchorPlatformID(ctx context.Context, sep24Claims anchorplatform.SEP24JWTClaims) error {
+func (v VerifyReceiverRegistrationHandler) processAnchorPlatformID(ctx context.Context, dbTx db.DBTransaction, sep24Claims anchorplatform.SEP24JWTClaims, receiverWallet data.ReceiverWallet) error {
 	apTxPatch := anchorplatform.APSep24TransactionPatchPostRegistration{
 		ID:     sep24Claims.TransactionID(),
 		SEP:    "24",
@@ -253,7 +253,7 @@ func (v VerifyReceiverRegistrationHandler) VerifyReceiverRegistration(w http.Res
 		}
 
 		// STEP 4: process OTP
-		_, wasAlreadyRegistered, err := v.processReceiverWalletOTP(ctx, dbTx, *sep24Claims, *receiver, receiverRegistrationRequest.OTP)
+		receiverWallet, wasAlreadyRegistered, err := v.processReceiverWalletOTP(ctx, dbTx, *sep24Claims, *receiver, receiverRegistrationRequest.OTP)
 		if err != nil {
 			return fmt.Errorf("processing OTP for receiver with phone number %s: %w", truncatedPhoneNumber, err)
 		}
@@ -262,7 +262,7 @@ func (v VerifyReceiverRegistrationHandler) VerifyReceiverRegistration(w http.Res
 		}
 
 		// STEP 5: PATCH transaction on the AnchorPlatform
-		err = v.processAnchorPlatformID(ctx, *sep24Claims)
+		err = v.processAnchorPlatformID(ctx, dbTx, *sep24Claims, receiverWallet)
 		if err != nil {
 			return fmt.Errorf("processing anchor platform transaction ID: %w", err)
 		}
