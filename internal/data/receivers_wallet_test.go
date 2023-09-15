@@ -490,9 +490,13 @@ func Test_GetByReceiverIDAndWalletDomain(t *testing.T) {
 				Name:              wallet.Name,
 				SEP10ClientDomain: wallet.SEP10ClientDomain,
 			},
-			Status:       receiverWallet.Status,
-			OTP:          "123456",
-			OTPCreatedAt: receiverWallet.OTPCreatedAt,
+			Status:          receiverWallet.Status,
+			StellarAddress:  receiverWallet.StellarAddress,
+			StellarMemo:     receiverWallet.StellarMemo,
+			StellarMemoType: receiverWallet.StellarMemoType,
+			OTP:             "123456",
+			OTPCreatedAt:    receiverWallet.OTPCreatedAt,
+			OTPConfirmedAt:  nil,
 		}
 
 		assert.Equal(t, expected, *actual)

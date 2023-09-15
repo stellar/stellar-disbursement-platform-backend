@@ -326,8 +326,12 @@ func (rw *ReceiverWalletModel) GetByReceiverIDAndWalletDomain(ctx context.Contex
 			rw.id,
 			rw.receiver_id as "receiver.id",
 			rw.status,
+			COALESCE(rw.stellar_address, '') as stellar_address,
+			COALESCE(rw.stellar_memo, '') as stellar_memo,
+			COALESCE(rw.stellar_memo_type, '') as stellar_memo_type,
 			COALESCE(rw.otp, '') as otp,
 			rw.otp_created_at,
+			rw.otp_confirmed_at,
 			w.id as "wallet.id",
 			w.name as "wallet.name",
 			w.sep_10_client_domain as "wallet.sep_10_client_domain"
