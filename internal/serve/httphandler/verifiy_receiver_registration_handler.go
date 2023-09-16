@@ -206,7 +206,8 @@ func (v VerifyReceiverRegistrationHandler) processReceiverWalletOTP(
 	return *rw, false, nil
 }
 
-// processAnchorPlatformID PATCHes the transaction on the AnchorPlatform with the status "pending_anchor".
+// processAnchorPlatformID PATCHes the transaction on the AnchorPlatform with the "pending_anchor" status, and updates
+// the receiver wallet with the anchor platform transaction ID.
 func (v VerifyReceiverRegistrationHandler) processAnchorPlatformID(ctx context.Context, dbTx db.DBTransaction, sep24Claims anchorplatform.SEP24JWTClaims, receiverWallet data.ReceiverWallet) error {
 	// STEP 1: update receiver wallet with the anchor platform transaction ID.
 	receiverWallet.AnchorPlatformTransactionID = sep24Claims.TransactionID()

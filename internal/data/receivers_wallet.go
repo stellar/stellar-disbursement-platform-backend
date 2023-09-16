@@ -358,7 +358,8 @@ func (rw *ReceiverWalletModel) GetByReceiverIDAndWalletDomain(ctx context.Contex
 	return &receiverWallet, nil
 }
 
-// UpdateReceiverWallet updates the status, address and OTP confirmation date of a receiver wallet.
+// UpdateReceiverWallet updates the status, address, OTP confirmation time, and anchor platform transaction ID of a
+// receiver wallet.
 func (rw *ReceiverWalletModel) UpdateReceiverWallet(ctx context.Context, receiverWallet ReceiverWallet, sqlExec db.SQLExecuter) error {
 	query := `
 		UPDATE 

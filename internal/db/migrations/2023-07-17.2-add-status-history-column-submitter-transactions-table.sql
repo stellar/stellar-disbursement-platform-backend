@@ -1,4 +1,4 @@
--- This migration updates the submitter_transactions table by addring the status_history table, for increased debuggability.
+-- This migration updates the submitter_transactions table by adding the status_history column, for increased debuggability.
 
 -- +migrate Up
 
