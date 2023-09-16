@@ -91,7 +91,12 @@ func (v VerifyReceiverRegistrationHandler) validate(r *http.Request) (reqObj dat
 // - there is no receiver verification entry for the given receiverID and verificationType
 // - the number of attempts to confirm the verification value has already exceeded the max value
 // - the payload verification value does not match the one saved in the database
-func (v VerifyReceiverRegistrationHandler) processReceiverVerificationPII(ctx context.Context, dbTx db.DBTransaction, receiver data.Receiver, receiverRegistrationRequest data.ReceiverRegistrationRequest) error {
+func (v VerifyReceiverRegistrationHandler) processReceiverVerificationPII(
+	ctx context.Context,
+	dbTx db.DBTransaction,
+	receiver data.Receiver,
+	receiverRegistrationRequest data.ReceiverRegistrationRequest,
+) error {
 	now := time.Now()
 	truncatedPhoneNumber := utils.TruncateString(receiver.PhoneNumber, 3)
 
@@ -201,14 +206,18 @@ func (v VerifyReceiverRegistrationHandler) processReceiverWalletOTP(
 	return *rw, false, nil
 }
 
-// processAnchorPlatformID PATCHes the transaction on the AnchorPlatform with the status "pending_anchor" and updates the local database accordingly.
+// processAnchorPlatformID PATCHes the transaction on the AnchorPlatform with the status "pending_anchor" and updates
+// the local database accordingly.
 func (v VerifyReceiverRegistrationHandler) processAnchorPlatformID(ctx context.Context, dbTx db.DBTransaction, sep24Claims anchorplatform.SEP24JWTClaims, receiverWallet data.ReceiverWallet) error {
+	// STEP 1: update receiver wallet with the anchor platform transaction ID
+	// TODO: implement
+
+	// STEP 2: PATCH transaction on the AnchorPlatform, signaling that it is pending anchor
 	apTxPatch := anchorplatform.APSep24TransactionPatchPostRegistration{
 		ID:     sep24Claims.TransactionID(),
 		SEP:    "24",
 		Status: anchorplatform.APTransactionStatusPendingAnchor,
 	}
-
 	err := v.AnchorPlatformAPIService.PatchAnchorTransactionsPostRegistration(ctx, apTxPatch)
 	if err != nil {
 		return fmt.Errorf("updating transaction with ID %s on anchor platform API: %w", sep24Claims.TransactionID(), err)
@@ -217,7 +226,9 @@ func (v VerifyReceiverRegistrationHandler) processAnchorPlatformID(ctx context.C
 	return nil
 }
 
-// VerifyReceiverRegistration implements the http.Handler interface.
+// VerifyReceiverRegistration is the handler for the SEP-24 `POST /wallet-registration/verification` endpoint. It is
+// where the SDP verifies the receiver's PII & OTP, update the receiver wallet with the Stellar account and memo, found
+// in the JWT token, and PATCH the transaction on the AnchorPlatform.
 func (v VerifyReceiverRegistrationHandler) VerifyReceiverRegistration(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
