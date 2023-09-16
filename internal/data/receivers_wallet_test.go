@@ -529,6 +529,7 @@ func Test_UpdateReceiverWallet(t *testing.T) {
 	})
 
 	t.Run("successfuly update receiver wallet", func(t *testing.T) {
+		receiverWallet.AnchorPlatformTransactionID = "test-anchor-tx-platform-id"
 		receiverWallet.StellarAddress = "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444"
 		receiverWallet.StellarMemo = "123456"
 		receiverWallet.StellarMemoType = "id"
@@ -543,6 +544,7 @@ func Test_UpdateReceiverWallet(t *testing.T) {
 		query := `
 			SELECT
 				rw.status,
+				rw.anchor_platform_transaction_id,
 				rw.stellar_address,
 				rw.stellar_memo,
 				rw.stellar_memo_type,
@@ -557,6 +559,7 @@ func Test_UpdateReceiverWallet(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Equal(t, RegisteredReceiversWalletStatus, receiverWalletUpdated.Status)
+		assert.Equal(t, "test-anchor-tx-platform-id", receiverWalletUpdated.AnchorPlatformTransactionID)
 		assert.Equal(t, "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444", receiverWalletUpdated.StellarAddress)
 		assert.Equal(t, "123456", receiverWalletUpdated.StellarMemo)
 		assert.Equal(t, "id", receiverWalletUpdated.StellarMemoType)

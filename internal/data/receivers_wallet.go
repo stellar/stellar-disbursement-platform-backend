@@ -76,8 +76,10 @@ type ReceiverWallet struct {
 	OTP             string                       `json:"-" db:"otp"`
 	OTPCreatedAt    *time.Time                   `json:"-" db:"otp_created_at"`
 	OTPConfirmedAt  *time.Time                   `json:"otp_confirmed_at,omitempty" db:"otp_confirmed_at"`
-	InvitedAt       *time.Time                   `json:"invited_at,omitempty" db:"invited_at"`
-	LastSmsSent     *time.Time                   `json:"last_sms_sent,omitempty" db:"last_sms_sent"`
+	// AnchorPlatformAccountID is the ID of the SEP24 transaction initiated by the Anchor Platform where the receiver wallet was registered.
+	AnchorPlatformTransactionID string     `json:"anchor_platform_transaction_id,omitempty" db:"anchor_platform_transaction_id"`
+	InvitedAt                   *time.Time `json:"invited_at,omitempty" db:"invited_at"`
+	LastSmsSent                 *time.Time `json:"last_sms_sent,omitempty" db:"last_sms_sent"`
 	ReceiverWalletStats
 }
 
@@ -105,6 +107,7 @@ func (rw *ReceiverWalletModel) GetWithReceiverIds(ctx context.Context, sqlExec d
 		SELECT 
 			rw.id,
 			rw.receiver_id,
+			rw.anchor_platform_transaction_id,
 			rw.stellar_address,
 			rw.stellar_memo,
 			rw.stellar_memo_type,
@@ -156,6 +159,7 @@ func (rw *ReceiverWalletModel) GetWithReceiverIds(ctx context.Context, sqlExec d
 	SELECT 
 		rwc.id,
 		rwc.receiver_id as "receiver.id",
+		COALESCE(rwc.anchor_platform_transaction_id, '') as anchor_platform_transaction_id,
 		COALESCE(rwc.stellar_address, '') as stellar_address,
 		COALESCE(rwc.stellar_memo, '') as stellar_memo,
 		COALESCE(rwc.stellar_memo_type, '') as stellar_memo_type,
@@ -326,6 +330,7 @@ func (rw *ReceiverWalletModel) GetByReceiverIDAndWalletDomain(ctx context.Contex
 			rw.id,
 			rw.receiver_id as "receiver.id",
 			rw.status,
+			COALESCE(rw.anchor_platform_transaction_id, '') as anchor_platform_transaction_id,
 			COALESCE(rw.stellar_address, '') as stellar_address,
 			COALESCE(rw.stellar_memo, '') as stellar_memo,
 			COALESCE(rw.stellar_memo_type, '') as stellar_memo_type,
@@ -360,15 +365,17 @@ func (rw *ReceiverWalletModel) UpdateReceiverWallet(ctx context.Context, receive
 			receiver_wallets rw
 		SET 
 			status = $1,
-			stellar_address = $2,
-			stellar_memo = $3,
-			stellar_memo_type = $4,
-			otp_confirmed_at = $5
-		WHERE rw.id = $6
+			anchor_platform_transaction_id = $2,
+			stellar_address = $3,
+			stellar_memo = $4,
+			stellar_memo_type = $5,
+			otp_confirmed_at = $6
+		WHERE rw.id = $7
 	`
 
 	result, err := sqlExec.ExecContext(ctx, query,
 		receiverWallet.Status,
+		sql.NullString{String: receiverWallet.AnchorPlatformTransactionID, Valid: receiverWallet.AnchorPlatformTransactionID != ""},
 		receiverWallet.StellarAddress,
 		sql.NullString{String: receiverWallet.StellarMemo, Valid: receiverWallet.StellarMemo != ""},
 		sql.NullString{String: receiverWallet.StellarMemoType, Valid: receiverWallet.StellarMemoType != ""},
@@ -458,6 +465,7 @@ func (rw *ReceiverWalletModel) GetByStellarAccountAndMemo(ctx context.Context, s
 			rw.id,
 			rw.receiver_id as "receiver.id",
 			rw.status,
+			COALESCE(rw.anchor_platform_transaction_id, '') as anchor_platform_transaction_id,
 			COALESCE(rw.stellar_address, '') as stellar_address,
 			COALESCE(rw.stellar_memo, '') as stellar_memo,
 			COALESCE(rw.stellar_memo_type, '') as stellar_memo_type,
