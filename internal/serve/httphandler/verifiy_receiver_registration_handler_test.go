@@ -536,6 +536,12 @@ func Test_VerifyReceiverRegistrationHandler_processAnchorPlatformID(t *testing.T
 			err = handler.processAnchorPlatformID(ctx, dbTx, *sep24Claims, *receiverWallet)
 			if tc.wantErrContains == "" {
 				require.NoError(t, err)
+
+				// make sure the receiverWallet was updated in the DB with the anchor platform transaction ID
+				var rw data.ReceiverWallet
+				err = dbTx.GetContext(ctx, &rw, "SELECT id, anchor_platform_transaction_id FROM receiver_wallets WHERE id = $1", receiverWallet.ID)
+				require.NoError(t, err)
+				assert.Equal(t, "test-transaction-id", rw.AnchorPlatformTransactionID)
 			} else {
 				require.ErrorContains(t, err, tc.wantErrContains)
 			}

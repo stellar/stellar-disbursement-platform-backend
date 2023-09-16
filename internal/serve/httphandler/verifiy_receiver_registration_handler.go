@@ -206,11 +206,14 @@ func (v VerifyReceiverRegistrationHandler) processReceiverWalletOTP(
 	return *rw, false, nil
 }
 
-// processAnchorPlatformID PATCHes the transaction on the AnchorPlatform with the status "pending_anchor" and updates
-// the local database accordingly.
+// processAnchorPlatformID PATCHes the transaction on the AnchorPlatform with the status "pending_anchor".
 func (v VerifyReceiverRegistrationHandler) processAnchorPlatformID(ctx context.Context, dbTx db.DBTransaction, sep24Claims anchorplatform.SEP24JWTClaims, receiverWallet data.ReceiverWallet) error {
 	// STEP 1: update receiver wallet with the anchor platform transaction ID.
-	// receiverWallet.AnchorPlatformTransactionID = sep24Claims.TransactionID()
+	receiverWallet.AnchorPlatformTransactionID = sep24Claims.TransactionID()
+	err := v.Models.ReceiverWallet.UpdateReceiverWallet(ctx, receiverWallet, dbTx)
+	if err != nil {
+		return fmt.Errorf("updating receiver wallet with anchor platform transaction ID: %w", err)
+	}
 
 	// STEP 2: PATCH transaction on the AnchorPlatform, signaling that it is pending anchor
 	apTxPatch := anchorplatform.APSep24TransactionPatchPostRegistration{
@@ -218,7 +221,7 @@ func (v VerifyReceiverRegistrationHandler) processAnchorPlatformID(ctx context.C
 		SEP:    "24",
 		Status: anchorplatform.APTransactionStatusPendingAnchor,
 	}
-	err := v.AnchorPlatformAPIService.PatchAnchorTransactionsPostRegistration(ctx, apTxPatch)
+	err = v.AnchorPlatformAPIService.PatchAnchorTransactionsPostRegistration(ctx, apTxPatch)
 	if err != nil {
 		return fmt.Errorf("updating transaction with ID %s on anchor platform API: %w", sep24Claims.TransactionID(), err)
 	}
