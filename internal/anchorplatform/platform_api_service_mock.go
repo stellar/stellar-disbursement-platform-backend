@@ -10,8 +10,12 @@ type AnchorPlatformAPIServiceMock struct {
 	mock.Mock
 }
 
-func (a *AnchorPlatformAPIServiceMock) PatchAnchorTransactionsPostRegistration(ctx context.Context, apTxPatch ...APSep24Transaction) error {
-	args := a.Called(ctx, apTxPatch)
+func (a *AnchorPlatformAPIServiceMock) PatchAnchorTransactionsPostRegistration(ctx context.Context, apTxPatch ...APSep24TransactionPatchPostRegistration) error {
+	inputArgs := []interface{}{ctx}
+	for _, patch := range apTxPatch {
+		inputArgs = append(inputArgs, patch)
+	}
+	args := a.Called(inputArgs...)
 	return args.Error(0)
 }
 
