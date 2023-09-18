@@ -284,7 +284,7 @@ anchorPlatform:
             {
               "sep24_enabled": true,
               "schema": "stellar",
-              "code": "native",
+              "code": "XLM",
               "issuer": "",
               "distribution_account": "GDDSLDRLMIYZJOXPBWVTRU267TPXIJEYW6PSV7FMDBLFVZZI5AI4QV4F",
               "significant_decimals": 7,

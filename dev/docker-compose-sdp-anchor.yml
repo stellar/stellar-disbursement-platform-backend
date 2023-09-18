@@ -139,7 +139,7 @@ services:
             {
               "sep24_enabled": true,
               "schema": "stellar",
-              "code": "native",
+              "code": "XLM",
               "issuer": "",
               "distribution_account": "${DISTRIBUTION_PUBLIC_KEY}",
               "significant_decimals": 7,
