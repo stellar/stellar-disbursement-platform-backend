@@ -359,7 +359,123 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 	})
 }
 
-func Test_WalletDeepLink_BaseURL(t *testing.T) {
+func Test_WalletDeepLink_isNativeAsset(t *testing.T) {
+	testCases := []struct {
+		name        string
+		assetCode   string
+		assetIssuer string
+		wantResult  bool
+	}{
+		{
+			name:        "🟢 XLM without issuer should be native asset",
+			assetCode:   "XLM",
+			assetIssuer: "",
+			wantResult:  true,
+		},
+		{
+			name:        "🟢 xLm without issuer should be native asset (case insensitive)",
+			assetCode:   "XLM",
+			assetIssuer: "",
+			wantResult:  true,
+		},
+		{
+			name:        "🔴 XLM with issuer should NOT be native asset",
+			assetCode:   "XLM",
+			assetIssuer: "GCKGCKZ2PFSCRQXREJMTHAHDMOZQLS2R4V5LZ6VLU53HONH5FI6ACBSX",
+			wantResult:  false,
+		},
+		{
+			name:        "🟢 native without issuer should be native asset",
+			assetCode:   "native",
+			assetIssuer: "",
+			wantResult:  true,
+		},
+		{
+			name:        "🟢 NaTiVe without issuer should be native asset (case insensitive)",
+			assetCode:   "NaTiVe",
+			assetIssuer: "",
+			wantResult:  true,
+		},
+		{
+			name:        "🔴 native with issuer should NOT be native asset",
+			assetCode:   "native",
+			assetIssuer: "GCKGCKZ2PFSCRQXREJMTHAHDMOZQLS2R4V5LZ6VLU53HONH5FI6ACBSX",
+			wantResult:  false,
+		},
+		{
+			name:        "🔴 USDC with issuer should NOT be native asset",
+			assetCode:   "USDC",
+			assetIssuer: "GCKGCKZ2PFSCRQXREJMTHAHDMOZQLS2R4V5LZ6VLU53HONH5FI6ACBSX",
+			wantResult:  false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			wdl := WalletDeepLink{
+				AssetCode:   tc.assetCode,
+				AssetIssuer: tc.assetIssuer,
+			}
+
+			gotResult := wdl.isNativeAsset()
+			assert.Equal(t, tc.wantResult, gotResult)
+		})
+	}
+}
+
+func Test_WalletDeepLink_assetName(t *testing.T) {
+	testCases := []struct {
+		name        string
+		assetCode   string
+		assetIssuer string
+		wantResult  string
+	}{
+		{
+			name:        "'XLM' native asset",
+			assetCode:   "XLM",
+			assetIssuer: "",
+			wantResult:  "native",
+		},
+		{
+			name:        "'XLM' with an issuer",
+			assetCode:   "XLM",
+			assetIssuer: "GCKGCKZ2PFSCRQXREJMTHAHDMOZQLS2R4V5LZ6VLU53HONH5FI6ACBSX",
+			wantResult:  "XLM-GCKGCKZ2PFSCRQXREJMTHAHDMOZQLS2R4V5LZ6VLU53HONH5FI6ACBSX",
+		},
+		{
+			name:        "'native' native asset",
+			assetCode:   "native",
+			assetIssuer: "",
+			wantResult:  "native",
+		},
+		{
+			name:        "'native' with an issuer",
+			assetCode:   "native",
+			assetIssuer: "GCKGCKZ2PFSCRQXREJMTHAHDMOZQLS2R4V5LZ6VLU53HONH5FI6ACBSX",
+			wantResult:  "native-GCKGCKZ2PFSCRQXREJMTHAHDMOZQLS2R4V5LZ6VLU53HONH5FI6ACBSX",
+		},
+		{
+			name:        "USDC",
+			assetCode:   "USDC",
+			assetIssuer: "GCKGCKZ2PFSCRQXREJMTHAHDMOZQLS2R4V5LZ6VLU53HONH5FI6ACBSX",
+			wantResult:  "USDC-GCKGCKZ2PFSCRQXREJMTHAHDMOZQLS2R4V5LZ6VLU53HONH5FI6ACBSX",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			wdl := WalletDeepLink{
+				AssetCode:   tc.assetCode,
+				AssetIssuer: tc.assetIssuer,
+			}
+
+			gotResult := wdl.assetName()
+			assert.Equal(t, tc.wantResult, gotResult)
+		})
+	}
+}
+
+func Test_WalletDeepLink_BaseURLWithRoute(t *testing.T) {
 	testCases := []struct {
 		name       string
 		deepLink   string
@@ -553,13 +669,8 @@ func Test_WalletDeepLink_validate(t *testing.T) {
 	err = wdl.validate()
 	require.NoError(t, err)
 
-	// asset issuer needs to be empty if it's native (XLM)
-	wdl.AssetCode = "XLM"
-	wdl.AssetIssuer = "GCKGCKZ2PFSCRQXREJMTHAHDMOZQLS2R4V5LZ6VLU53HONH5FI6ACBSX"
-	err = wdl.validate()
-	require.EqualError(t, err, "asset issuer should be empty for XLM, but is GCKGCKZ2PFSCRQXREJMTHAHDMOZQLS2R4V5LZ6VLU53HONH5FI6ACBSX")
-
 	// Successful for native (XLM) assets 🎉
+	wdl.AssetCode = "XLM"
 	wdl.AssetIssuer = ""
 	err = wdl.validate()
 	require.NoError(t, err)
@@ -596,7 +707,7 @@ func Test_WalletDeepLink_GetUnsignedRegistrationLink(t *testing.T) {
 				OrganizationName:         "Foo Bar Org",
 				AssetCode:                "XLM",
 			},
-			wantResult: "wallet://sdp?asset=XLM&domain=foo.bar&name=Foo+Bar+Org",
+			wantResult: "wallet://sdp?asset=native&domain=foo.bar&name=Foo+Bar+Org",
 		},
 		{
 			name: "🎉 successful for deeplink with query params",
@@ -679,7 +790,7 @@ func Test_WalletDeepLink_GetSignedRegistrationLink(t *testing.T) {
 			AssetCode:                "XLM",
 		}
 
-		expected := "wallet://sdp?asset=XLM&domain=foo.bar&name=Foo+Bar+Org&signature=d3ffb7c9f78d2131b5be4e3a1302cfe87685706e36f6f1115e4b28bb940cc75532d56ab1d5c5f3481f210021811510290735858ea35b88e26cd5a115f7ea450b"
+		expected := "wallet://sdp?asset=native&domain=foo.bar&name=Foo+Bar+Org&signature=972a3012e18f107e0bf951f5acc757df953c3bbbe668a2d2652bf2445a759132f6af303df063f69d1a862b7ab419813554b201837795648f6175c9d9d72cf60f"
 		actual, err := wdl.GetSignedRegistrationLink(stellarSecretKey)
 		require.NoError(t, err)
 		require.Equal(t, expected, actual)
@@ -697,7 +808,7 @@ func Test_WalletDeepLink_GetSignedRegistrationLink(t *testing.T) {
 			AssetCode:                "XLM",
 		}
 
-		expected := "wallet://sdp?asset=XLM&domain=foo.bar&name=Foo+Bar+Org&signature=d3ffb7c9f78d2131b5be4e3a1302cfe87685706e36f6f1115e4b28bb940cc75532d56ab1d5c5f3481f210021811510290735858ea35b88e26cd5a115f7ea450b"
+		expected := "wallet://sdp?asset=native&domain=foo.bar&name=Foo+Bar+Org&signature=972a3012e18f107e0bf951f5acc757df953c3bbbe668a2d2652bf2445a759132f6af303df063f69d1a862b7ab419813554b201837795648f6175c9d9d72cf60f"
 		actual, err := wdl.GetSignedRegistrationLink(stellarSecretKey)
 		require.NoError(t, err)
 		require.Equal(t, expected, actual)

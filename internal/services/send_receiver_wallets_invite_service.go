@@ -14,6 +14,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+	"golang.org/x/exp/slices"
 )
 
 type SendReceiverWalletInviteService struct {
@@ -181,6 +182,19 @@ type WalletDeepLink struct {
 	AssetIssuer string
 }
 
+func (wdl WalletDeepLink) isNativeAsset() bool {
+	return wdl.AssetIssuer == "" &&
+		slices.Contains([]string{"XLM", "NATIVE"}, strings.ToUpper(wdl.AssetCode))
+}
+
+func (wdl WalletDeepLink) assetName() string {
+	if wdl.isNativeAsset() {
+		return "native"
+	}
+
+	return wdl.AssetCode + "-" + wdl.AssetIssuer
+}
+
 // BaseURLWithRoute returns the base URL of the deep link with the route appended.
 func (wdl WalletDeepLink) BaseURLWithRoute() (string, error) {
 	if wdl.DeepLink == "" {
@@ -253,7 +267,7 @@ func (wdl WalletDeepLink) validate() error {
 	}
 
 	// not XLM:
-	if strings.ToUpper(wdl.AssetCode) != "XLM" {
+	if !wdl.isNativeAsset() {
 		if wdl.AssetIssuer == "" {
 			return fmt.Errorf("asset issuer can't be empty unless the asset code is XLM")
 		}
@@ -265,11 +279,6 @@ func (wdl WalletDeepLink) validate() error {
 		return nil
 	}
 
-	// XLM:
-	if wdl.AssetIssuer != "" {
-		return fmt.Errorf("asset issuer should be empty for XLM, but is %s", wdl.AssetIssuer)
-	}
-
 	return nil
 }
 
@@ -278,11 +287,6 @@ func (wdl WalletDeepLink) validate() error {
 func (wdl WalletDeepLink) GetUnsignedRegistrationLink() (string, error) {
 	if err := wdl.validate(); err != nil {
 		return "", fmt.Errorf("validating WalletDeepLink: %w", err)
-	}
-
-	assetName := wdl.AssetCode
-	if wdl.AssetIssuer != "" {
-		assetName += "-" + wdl.AssetIssuer
 	}
 
 	tomlFileDomain, err := wdl.TomlFileDomain()
@@ -303,7 +307,7 @@ func (wdl WalletDeepLink) GetUnsignedRegistrationLink() (string, error) {
 	q := u.Query()
 	q.Add("domain", tomlFileDomain)
 	q.Add("name", wdl.OrganizationName)
-	q.Add("asset", assetName)
+	q.Add("asset", wdl.assetName())
 
 	u.RawQuery = q.Encode()
 
