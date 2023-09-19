@@ -116,7 +116,7 @@ func Test_Organizations_ArePaymentsEnabled(t *testing.T) {
 func Test_OrganizationUpdate_validate(t *testing.T) {
 	ou := &OrganizationUpdate{}
 	err := ou.validate()
-	assert.EqualError(t, err, "name, timezone UTC offset, approval workflow flag or logo is required")
+	assert.EqualError(t, err, "name, timezone UTC offset, approval workflow flag, SMS invite template, OTP message template or logo is required")
 
 	ou.Name = "My Org Name"
 	err = ou.validate()
@@ -220,7 +220,12 @@ func Test_Organizations_Update(t *testing.T) {
 	ctx := context.Background()
 
 	resetOrganizationInfo := func(t *testing.T, ctx context.Context) {
-		const q = "UPDATE organizations SET name = 'MyCustomAid', logo = NULL, timezone_utc_offset = '+00:00'"
+		const q = `
+			UPDATE
+				organizations
+			SET
+				name = 'MyCustomAid', logo = NULL, timezone_utc_offset = '+00:00',
+				sms_registration_message_template = DEFAULT, otp_message_template = DEFAULT`
 		_, err := dbConnectionPool.ExecContext(ctx, q)
 		require.NoError(t, err)
 	}
@@ -230,7 +235,7 @@ func Test_Organizations_Update(t *testing.T) {
 	t.Run("returns error with invalid OrganizationUpdate", func(t *testing.T) {
 		ou := &OrganizationUpdate{}
 		err := organizationModel.Update(ctx, ou)
-		assert.EqualError(t, err, "invalid organization update: name, timezone UTC offset, approval workflow flag or logo is required")
+		assert.EqualError(t, err, "invalid organization update: name, timezone UTC offset, approval workflow flag, SMS invite template, OTP message template or logo is required")
 	})
 
 	t.Run("updates only organization's name successfully", func(t *testing.T) {
@@ -349,5 +354,79 @@ func Test_Organizations_Update(t *testing.T) {
 		assert.Equal(t, "My Org Name", o.Name)
 		assert.Equal(t, "+02:00", o.TimezoneUTCOffset)
 		assert.Equal(t, ou.Logo, o.Logo)
+	})
+
+	t.Run("updates the organization's SMSRegistrationMessageTemplate", func(t *testing.T) {
+		resetOrganizationInfo(t, ctx)
+
+		defaultMessage := "You have a payment waiting for you from the {{.OrganizationName}}. Click {{.RegistrationLink}} to register."
+		o, err := organizationModel.Get(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, defaultMessage, o.SMSRegistrationMessageTemplate)
+
+		// Setting custom message
+		m := "My custom receiver wallet registration invite. MyOrg 👋"
+		ou := &OrganizationUpdate{SMSRegistrationMessageTemplate: &m}
+
+		err = organizationModel.Update(ctx, ou)
+		require.NoError(t, err)
+
+		o, err = organizationModel.Get(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, m, o.SMSRegistrationMessageTemplate)
+
+		// Don't update the message
+		err = organizationModel.Update(ctx, &OrganizationUpdate{Name: "My Org Name", SMSRegistrationMessageTemplate: nil})
+		require.NoError(t, err)
+
+		o, err = organizationModel.Get(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, m, o.SMSRegistrationMessageTemplate)
+
+		// Back to the default value
+		ou.SMSRegistrationMessageTemplate = new(string)
+		err = organizationModel.Update(ctx, ou)
+		require.NoError(t, err)
+
+		o, err = organizationModel.Get(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, defaultMessage, o.SMSRegistrationMessageTemplate)
+	})
+
+	t.Run("updates the organization's OTPMessageTemplate", func(t *testing.T) {
+		resetOrganizationInfo(t, ctx)
+
+		defaultMessage := "{{.OTP}} is your {{.OrganizationName}} phone verification code."
+		o, err := organizationModel.Get(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, defaultMessage, o.OTPMessageTemplate)
+
+		// Setting custom message
+		m := "Here's your OTP Code to complete your registration. MyOrg 👋"
+		ou := &OrganizationUpdate{OTPMessageTemplate: &m}
+
+		err = organizationModel.Update(ctx, ou)
+		require.NoError(t, err)
+
+		o, err = organizationModel.Get(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, m, o.OTPMessageTemplate)
+
+		// Don't update the message
+		err = organizationModel.Update(ctx, &OrganizationUpdate{Name: "My Org Name", OTPMessageTemplate: nil})
+		require.NoError(t, err)
+
+		o, err = organizationModel.Get(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, m, o.OTPMessageTemplate)
+
+		// Back to the default value
+		ou.OTPMessageTemplate = new(string)
+		err = organizationModel.Update(ctx, ou)
+		require.NoError(t, err)
+
+		o, err = organizationModel.Get(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, defaultMessage, o.OTPMessageTemplate)
 	})
 }

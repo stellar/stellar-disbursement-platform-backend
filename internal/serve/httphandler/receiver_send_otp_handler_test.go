@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -26,9 +27,11 @@ import (
 
 type mockMessengerClient struct {
 	mock.Mock
+	message message.Message
 }
 
 func (m *mockMessengerClient) SendMessage(message message.Message) error {
+	m.message = message
 	return m.Called(message).Error(0)
 }
 
@@ -188,6 +191,52 @@ func Test_ReceiverSendOTPHandler_ServeHTTP(t *testing.T) {
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.Contains(t, resp.Header.Get("Content-Type"), "/json; charset=utf-8")
 		assert.JSONEq(t, string(respBody), `{"message":"if your phone number is registered, you'll receive an OTP"}`)
+
+		assert.Contains(t, mockMessenger.message.Message, "is your MyCustomAid phone verification code.")
+		assert.Regexp(t, regexp.MustCompile(`^\d{6}\s.+$`), mockMessenger.message.Message)
+	})
+
+	t.Run("returns 200 - parses a custom OTP message template successfully", func(t *testing.T) {
+		reCAPTCHAValidator.
+			On("IsTokenValid", mock.Anything, "XyZ").
+			Return(true, nil).
+			Once()
+		req, err := http.NewRequest(http.MethodPost, "/wallet-registration/otp", strings.NewReader(string(reqBody)))
+		require.NoError(t, err)
+
+		validClaims := &anchorplatform.SEP24JWTClaims{
+			ClientDomainClaim: wallet1.SEP10ClientDomain,
+			RegisteredClaims: jwt.RegisteredClaims{
+				ID:        "test-transaction-id",
+				Subject:   "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444",
+				ExpiresAt: jwt.NewNumericDate(time.Now().Add(5 * time.Minute)),
+			},
+		}
+		req = req.WithContext(context.WithValue(req.Context(), anchorplatform.SEP24ClaimsContextKey, validClaims))
+
+		// Set a custom message for the OTP message
+		customOTPMessage := "Here's your code to complete your registration. MyOrg 👋"
+		err = models.Organizations.Update(ctx, &data.OrganizationUpdate{OTPMessageTemplate: &customOTPMessage})
+		require.NoError(t, err)
+
+		mockMessenger.On("SendMessage", mock.AnythingOfType("message.Message")).
+			Return(nil).
+			Once()
+
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+
+		resp := rr.Result()
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.Contains(t, resp.Header.Get("Content-Type"), "/json; charset=utf-8")
+		assert.JSONEq(t, string(respBody), `{"message":"if your phone number is registered, you'll receive an OTP"}`)
+
+		// Validating message
+		assert.Contains(t, mockMessenger.message.Message, customOTPMessage)
+		assert.Regexp(t, regexp.MustCompile(`^\d{6}\s.+$`), mockMessenger.message.Message)
 	})
 
 	t.Run("returns 500 - InternalServerError when something goes wrong when sending the SMS", func(t *testing.T) {
