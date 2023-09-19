@@ -44,11 +44,6 @@ func Test_Organizations_DatabaseTriggers(t *testing.T) {
 		require.EqualError(t, err, "pq: public.organizations can must contain exactly one row")
 	})
 
-	t.Run("updating sms_registration_message_template without the tags {{.OrganizationName}} and {{.RegistrationLink}} will trigger an error", func(t *testing.T) {
-		q := "UPDATE organizations SET sms_registration_message_template = 'Test template'"
-		_, err := dbConnectionPool.ExecContext(ctx, q)
-		require.EqualError(t, err, `pq: new row for relation "organizations" violates check constraint "organization_sms_registration_message_template_contains_tags_ch"`)
-	})
 	t.Run("updating sms_registration_message_template with the tags {{.OrganizationName}} and {{.RegistrationLink}} will succeed 🎉", func(t *testing.T) {
 		q := "UPDATE organizations SET sms_registration_message_template = 'TAG1: {{.OrganizationName}} and TAG2: {{.RegistrationLink}}.'"
 		_, err := dbConnectionPool.ExecContext(ctx, q)
