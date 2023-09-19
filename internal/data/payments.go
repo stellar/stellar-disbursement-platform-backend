@@ -79,6 +79,8 @@ func (psh PaymentStatusHistory) Value() (driver.Value, error) {
 	return pq.Array(statusHistoryJSON).Value()
 }
 
+var _ driver.Valuer = (*PaymentStatusHistory)(nil)
+
 // Scan implements the sql.Scanner interface.
 func (psh *PaymentStatusHistory) Scan(src interface{}) error {
 	var statusHistoryJSON []string
@@ -97,6 +99,8 @@ func (psh *PaymentStatusHistory) Scan(src interface{}) error {
 
 	return nil
 }
+
+var _ sql.Scanner = (*PaymentStatusHistory)(nil)
 
 func (p *PaymentInsert) Validate() error {
 	if strings.TrimSpace(p.ReceiverID) == "" {

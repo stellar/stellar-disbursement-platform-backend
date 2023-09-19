@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lib/pq"
 	"github.com/stellar/go/network"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/db/dbtest"
@@ -491,9 +490,13 @@ func Test_GetByReceiverIDAndWalletDomain(t *testing.T) {
 				Name:              wallet.Name,
 				SEP10ClientDomain: wallet.SEP10ClientDomain,
 			},
-			Status:       receiverWallet.Status,
-			OTP:          "123456",
-			OTPCreatedAt: receiverWallet.OTPCreatedAt,
+			Status:          receiverWallet.Status,
+			StellarAddress:  receiverWallet.StellarAddress,
+			StellarMemo:     receiverWallet.StellarMemo,
+			StellarMemoType: receiverWallet.StellarMemoType,
+			OTP:             "123456",
+			OTPCreatedAt:    receiverWallet.OTPCreatedAt,
+			OTPConfirmedAt:  nil,
 		}
 
 		assert.Equal(t, expected, *actual)
@@ -503,18 +506,16 @@ func Test_GetByReceiverIDAndWalletDomain(t *testing.T) {
 func Test_UpdateReceiverWallet(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
-
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
 
 	ctx := context.Background()
-
 	receiverWalletModel := ReceiverWalletModel{dbConnectionPool: dbConnectionPool}
 
 	t.Run("returns error when receiver wallet does not exist", func(t *testing.T) {
 		err := receiverWalletModel.UpdateReceiverWallet(ctx, ReceiverWallet{ID: "invalid_id", Status: DraftReceiversWalletStatus}, dbConnectionPool)
-		require.NoError(t, err)
+		require.ErrorIs(t, err, ErrRecordNotFound)
 	})
 
 	receiver := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
@@ -524,14 +525,17 @@ func Test_UpdateReceiverWallet(t *testing.T) {
 	t.Run("returns error when status is not valid", func(t *testing.T) {
 		receiverWallet.Status = "invalid_status"
 		err := receiverWalletModel.UpdateReceiverWallet(ctx, *receiverWallet, dbConnectionPool)
-		require.Error(t, err, "error querying receiver wallet: sql: no rows in result set")
+		require.Error(t, err, "querying receiver wallet: sql: no rows in result set")
 	})
 
 	t.Run("successfuly update receiver wallet", func(t *testing.T) {
+		receiverWallet.AnchorPlatformTransactionID = "test-anchor-tx-platform-id"
 		receiverWallet.StellarAddress = "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444"
 		receiverWallet.StellarMemo = "123456"
 		receiverWallet.StellarMemoType = "id"
 		receiverWallet.Status = RegisteredReceiversWalletStatus
+		now := time.Now()
+		receiverWallet.OTPConfirmedAt = &now
 
 		err := receiverWalletModel.UpdateReceiverWallet(ctx, *receiverWallet, dbConnectionPool)
 		require.NoError(t, err)
@@ -540,6 +544,7 @@ func Test_UpdateReceiverWallet(t *testing.T) {
 		query := `
 			SELECT
 				rw.status,
+				rw.anchor_platform_transaction_id,
 				rw.stellar_address,
 				rw.stellar_memo,
 				rw.stellar_memo_type,
@@ -554,10 +559,11 @@ func Test_UpdateReceiverWallet(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Equal(t, RegisteredReceiversWalletStatus, receiverWalletUpdated.Status)
+		assert.Equal(t, "test-anchor-tx-platform-id", receiverWalletUpdated.AnchorPlatformTransactionID)
 		assert.Equal(t, "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444", receiverWalletUpdated.StellarAddress)
 		assert.Equal(t, "123456", receiverWalletUpdated.StellarMemo)
 		assert.Equal(t, "id", receiverWalletUpdated.StellarMemoType)
-		require.NotEmpty(t, receiverWalletUpdated.OTPConfirmedAt)
+		assert.WithinDuration(t, now, *receiverWalletUpdated.OTPConfirmedAt, 100*time.Millisecond)
 	})
 }
 
@@ -773,55 +779,6 @@ func Test_VerifyReceiverWalletOTP(t *testing.T) {
 			}
 		})
 	}
-}
-
-func Test_ReceiverWallet_statusHistoryFromByteArray(t *testing.T) {
-	var receiverWallet ReceiverWallet
-
-	t.Run("returns error when status history is invalid", func(t *testing.T) {
-		err := receiverWallet.statusHistoryFromByteArray(pq.ByteaArray{[]byte("invalid")})
-		require.Error(t, err, "error unmarshaling status_history column:")
-	})
-
-	t.Run("returns status history successfully", func(t *testing.T) {
-		statusHistory := pq.ByteaArray{[]byte(`{"status": "DRAFT", "timestamp": "2023-03-11T01:20:39.363154Z"}`)}
-		expected := []ReceiversWalletStatusHistoryEntry{
-			{
-				Status:    DraftReceiversWalletStatus,
-				Timestamp: time.Date(2023, 0o3, 11, 0o1, 20, 39, 363154000, time.UTC),
-			},
-		}
-		err := receiverWallet.statusHistoryFromByteArray(statusHistory)
-		require.NoError(t, err)
-		assert.Equal(t, expected, receiverWallet.StatusHistory)
-	})
-}
-
-func Test_ReceiverWallet_statusHistoryJson(t *testing.T) {
-	entry1 := ReceiversWalletStatusHistoryEntry{
-		Status:    "READY",
-		Timestamp: time.Now(),
-	}
-	entry2 := ReceiversWalletStatusHistoryEntry{
-		Status:    "REGISTERED",
-		Timestamp: time.Now().Add(1 * time.Hour),
-	}
-
-	receiverWallet := &ReceiverWallet{
-		StatusHistory: []ReceiversWalletStatusHistoryEntry{entry1, entry2},
-	}
-
-	t.Run("returns status history successfully", func(t *testing.T) {
-		statusHistoryJSON, err := receiverWallet.statusHistoryJson()
-		require.NoError(t, err)
-
-		expectedJSON1 := `{"status":"READY","timestamp":"` + entry1.Timestamp.Format(time.RFC3339Nano) + `"}`
-		expectedJSON2 := `{"status":"REGISTERED","timestamp":"` + entry2.Timestamp.Format(time.RFC3339Nano) + `"}`
-
-		assert.Equal(t, 2, len(receiverWallet.StatusHistory))
-		assert.Contains(t, statusHistoryJSON, expectedJSON1)
-		assert.Contains(t, statusHistoryJSON, expectedJSON2)
-	})
 }
 
 func Test_ReceiverWallet_GetAllPendingRegistration(t *testing.T) {
