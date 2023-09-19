@@ -166,39 +166,8 @@ func (tw *TransactionWorker) handleFailedTransaction(ctx context.Context, txJob 
 
 		if hErrWrapper.ResultCodes != nil {
 			isHorizonErr = true
-			// TODO: move this logic inside the HorizonErrorWrapper
-			// ref: https://developers.stellar.org/api/horizon/errors/result-codes/
-			failedTxErrCodes := []string{
-				"tx_bad_auth",
-				"tx_bad_auth_extra",
-				"tx_insufficient_balance",
-			}
-			if slices.Contains(failedTxErrCodes, hErrWrapper.ResultCodes.TransactionCode) || slices.Contains(failedTxErrCodes, hErrWrapper.ResultCodes.InnerTransactionCode) {
-				shouldMarkAsError = true
-			}
 
-			// TODO: move this logic inside the HorizonErrorWrapper
-			// ref: https://developers.stellar.org/api/horizon/errors/result-codes/
-			failedOpCodes := []string{
-				"op_bad_auth",
-				"op_underfunded",
-				"op_src_not_authorized",
-				"op_no_destination",
-				"op_no_trust",
-				"op_line_full",
-				"op_not_authorized",
-				"op_no_issuer",
-			}
-			if !shouldMarkAsError {
-				for _, opResult := range hErrWrapper.ResultCodes.OperationCodes {
-					if slices.Contains(failedOpCodes, opResult) {
-						shouldMarkAsError = true
-						break
-					}
-				}
-			}
-
-			if shouldMarkAsError {
+			if hErrWrapper.ShouldMarkAsError() {
 				var updatedTx *store.Transaction
 				updatedTx, err = tw.txModel.UpdateStatusToError(ctx, txJob.Transaction, hErrWrapper.Error())
 				if err != nil {
@@ -206,12 +175,14 @@ func (tw *TransactionWorker) handleFailedTransaction(ctx context.Context, txJob 
 				}
 
 				txJob.Transaction = *updatedTx
+				// report any terminal errors, excluding those caused by the external account not being valid
+				if !hErrWrapper.IsDestinationAccountNotReady() {
+					tw.crashTrackerClient.LogAndReportErrors(ctx, hErrWrapper, "transaction error - cannot be retried")
+				}
 			}
 		}
 	}
 
-	// TODO: call MonitorService if needed
-	// TODO: call crashTrackerClient if needed
 	// TODO: op_bad_auth, tx_bad_auth, tx_bad_auth_extra are big problems that need to be reported accordingly
 	// TODO: tx_bad_seq is a big problem that needs to be reported accordingly
 
