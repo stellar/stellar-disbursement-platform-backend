@@ -869,6 +869,7 @@ func Test_TransactionWorker_submit(t *testing.T) {
 		horizonError               error
 		wantFinalTransactionStatus store.TransactionStatus
 		wantFinalResultXDR         string
+		txMarkAsError              bool
 	}{
 		{
 			name:            "unrecoverable horizon error is handled and tx status is marked as ERROR",
@@ -879,12 +880,13 @@ func Test_TransactionWorker_submit(t *testing.T) {
 					Extras: map[string]interface{}{
 						"result_codes": map[string]interface{}{
 							"transaction": "tx_failed",
-							"operations":  []string{"op_no_trust"}, // <--- this should make the transaction be marked as ERROR
+							"operations":  []string{"op_underfunded"}, // <--- this should make the transaction be marked as ERROR
 						},
 					},
 				},
 			},
 			wantFinalTransactionStatus: store.TransactionStatusError,
+			txMarkAsError:              true,
 		},
 		{
 			name:                       "successful horizon error is handled and tx status is marked as SUCCESS",
@@ -904,6 +906,11 @@ func Test_TransactionWorker_submit(t *testing.T) {
 			feeBumpTx := &txnbuild.FeeBumpTransaction{}
 
 			mockHorizonClient := &horizonclient.MockClient{}
+			mockCrashTrackerClient := &crashtracker.MockCrashTrackerClient{}
+			if tc.txMarkAsError {
+				mockCrashTrackerClient.On("LogAndReportErrors", ctx, utils.NewHorizonErrorWrapper(tc.horizonError), "transaction error - cannot be retried").Once()
+			}
+
 			txProcessingLimiter := engine.NewTransactionProcessingLimiter(15)
 			mockHorizonClient.
 				On("SubmitFeeBumpTransactionWithOptions", feeBumpTx, horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true}).
@@ -916,6 +923,7 @@ func Test_TransactionWorker_submit(t *testing.T) {
 				engine: &engine.SubmitterEngine{
 					HorizonClient: mockHorizonClient,
 				},
+				crashTrackerClient:  mockCrashTrackerClient,
 				txProcessingLimiter: txProcessingLimiter,
 			}
 
@@ -949,6 +957,7 @@ func Test_TransactionWorker_submit(t *testing.T) {
 			assert.False(t, refreshedChAcc.IsLocked(int32(txJob.LockedUntilLedgerNumber)))
 
 			mockHorizonClient.AssertExpectations(t)
+			mockCrashTrackerClient.AssertExpectations(t)
 		})
 	}
 }

@@ -1515,3 +1515,61 @@ func Test_HorizonErrorWrapper_IsDestinationAccountNotReady(t *testing.T) {
 		})
 	}
 }
+
+func Test_HorizonErrorWrapper_ShouldMarkAsError(t *testing.T) {
+	testCases := []struct {
+		name       string
+		hErr       error
+		wantResult bool
+	}{
+		{
+			name: "returns true if tx code in failed tx codes",
+			hErr: horizonclient.Error{
+				Problem: problem.P{
+					Status: http.StatusBadRequest,
+					Extras: map[string]interface{}{
+						"result_codes": map[string]interface{}{
+							"transaction": "tx_bad_auth",
+						},
+					},
+				},
+			},
+			wantResult: true,
+		},
+		{
+			name: "returns true if op code in failed op codes",
+			hErr: horizonclient.Error{
+				Problem: problem.P{
+					Status: http.StatusBadRequest,
+					Extras: map[string]interface{}{
+						"result_codes": map[string]interface{}{
+							"transaction": "tx_fee_bump_inner_failed",
+							"operations":  []string{"op_no_destination"},
+						},
+					},
+				},
+			},
+			wantResult: true,
+		},
+		{
+			name: "returns false if tx code not in failed tx codes",
+			hErr: horizonclient.Error{
+				Problem: problem.P{
+					Status: http.StatusBadRequest,
+					Extras: map[string]interface{}{
+						"result_codes": map[string]interface{}{
+							"transaction": "tx_insufficient_fee",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			wrapper := NewHorizonErrorWrapper(tc.hErr)
+			assert.Equal(t, tc.wantResult, wrapper.ShouldMarkAsError())
+		})
+	}
+}
