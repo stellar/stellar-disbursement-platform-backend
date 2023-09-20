@@ -389,6 +389,7 @@ tss:
   ## @param tss.configMap.data.NUM_CHANNEL_ACCOUNTS The number of channel accounts the TSS will create/use. Channel accounts provide a method for submitting transactions to the network at a high rate.
   ## @param tss.configMap.data.MAX_BASE_FEE Specifies the maximum base fee (in stroops) the TSS is willing to pay per transaction. This helps to control costs and ensures transactions are economically feasible.
   ## @param tss.configMap.data.TSS_METRICS_TYPE Defines the type of metrics system that the TSS should use. Options: "TSS_PROMETHEUS".
+  ## @param tss.configMap.data.QUEUE_POLLING_INTERVAL Specifies the interval (in seconds) at which the TSS should poll the queue.
   configMap:
     annotations:
     data:
@@ -396,6 +397,7 @@ tss:
       NUM_CHANNEL_ACCOUNTS: "1"
       MAX_BASE_FEE: "100000"
       TSS_METRICS_TYPE: "TSS_PROMETHEUS"
+      QUEUE_POLLING_INTERVAL: "6"
 
   ## @extra tss.kubeSecrets Kubernetes secrets are used to manage sensitive information, such as API keys and private keys. It's crucial that these details are kept private.
   ## @param tss.kubeSecrets.secretName The name of the Kubernetes secret object. Only use this if create is false.
