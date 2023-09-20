@@ -27,7 +27,7 @@ func (a *AuthCommand) Command() *cobra.Command {
 	authCmdConfigOpts := config.ConfigOptions{
 		{
 			Name:           "sdp-ui-base-url",
-			Usage:          "The SDP UI Base URL used to send the invitation link when a new user is created.",
+			Usage:          "The SDP UI/dashboard Base URL used to send the invitation link when a new user is created.",
 			OptType:        types.String,
 			ConfigKey:      &uiBaseURL,
 			FlagDefault:    "http://localhost:3000",

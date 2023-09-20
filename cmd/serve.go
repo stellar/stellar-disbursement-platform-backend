@@ -244,7 +244,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 		},
 		{
 			Name:           "sdp-ui-base-url",
-			Usage:          "The SDP UI Base URL.",
+			Usage:          "The SDP UI/dashboard Base URL.",
 			OptType:        types.String,
 			ConfigKey:      &serveOpts.UIBaseURL,
 			FlagDefault:    "http://localhost:3000",
