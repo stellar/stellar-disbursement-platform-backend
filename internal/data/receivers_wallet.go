@@ -3,16 +3,17 @@ package data
 import (
 	"context"
 	"database/sql"
+	"database/sql/driver"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
 
+	"github.com/lib/pq"
+
 	"github.com/stellar/go/network"
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
-
-	"github.com/lib/pq"
 )
 
 const OTPExpirationTimeMinutes = 30
@@ -22,22 +23,63 @@ type ReceiversWalletStatusHistoryEntry struct {
 	Timestamp time.Time             `json:"timestamp"`
 }
 
+type ReceiversWalletStatusHistory []ReceiversWalletStatusHistoryEntry
+
+// Value implements the driver.Valuer interface.
+func (rwsh ReceiversWalletStatusHistory) Value() (driver.Value, error) {
+	var statusHistoryJSON []string
+	for _, sh := range rwsh {
+		shJSONBytes, err := json.Marshal(sh)
+		if err != nil {
+			return nil, fmt.Errorf("converting receiver status history to json for message: %w", err)
+		}
+		statusHistoryJSON = append(statusHistoryJSON, string(shJSONBytes))
+	}
+
+	return pq.Array(statusHistoryJSON).Value()
+}
+
+var _ driver.Valuer = (*ReceiversWalletStatusHistory)(nil)
+
+// Scan implements the sql.Scanner interface.
+func (rwsh *ReceiversWalletStatusHistory) Scan(src interface{}) error {
+	var statusHistoryJSON []string
+	if err := pq.Array(&statusHistoryJSON).Scan(src); err != nil {
+		return fmt.Errorf("error scanning status history value: %w", err)
+	}
+
+	for _, sh := range statusHistoryJSON {
+		var shEntry ReceiversWalletStatusHistoryEntry
+		err := json.Unmarshal([]byte(sh), &shEntry)
+		if err != nil {
+			return fmt.Errorf("error unmarshaling status_history column: %w", err)
+		}
+		*rwsh = append(*rwsh, shEntry)
+	}
+
+	return nil
+}
+
+var _ sql.Scanner = (*ReceiversWalletStatusHistory)(nil)
+
 type ReceiverWallet struct {
-	ID              string                              `json:"id" db:"id"`
-	Receiver        Receiver                            `json:"receiver" db:"receiver"`
-	Wallet          Wallet                              `json:"wallet" db:"wallet"`
-	StellarAddress  string                              `json:"stellar_address,omitempty" db:"stellar_address"`
-	StellarMemo     string                              `json:"stellar_memo,omitempty" db:"stellar_memo"`
-	StellarMemoType string                              `json:"stellar_memo_type,omitempty" db:"stellar_memo_type"`
-	Status          ReceiversWalletStatus               `json:"status" db:"status"`
-	StatusHistory   []ReceiversWalletStatusHistoryEntry `json:"status_history,omitempty" db:"status_history"`
-	CreatedAt       time.Time                           `json:"created_at" db:"created_at"`
-	UpdatedAt       time.Time                           `json:"updated_at" db:"updated_at"`
-	OTP             string                              `json:"-" db:"otp"`
-	OTPCreatedAt    *time.Time                          `json:"-" db:"otp_created_at"`
-	OTPConfirmedAt  *time.Time                          `json:"otp_confirmed_at,omitempty" db:"otp_confirmed_at"`
-	InvitedAt       *time.Time                          `json:"invited_at,omitempty" db:"invited_at"`
-	LastSmsSent     *time.Time                          `json:"last_sms_sent,omitempty" db:"last_sms_sent"`
+	ID              string                       `json:"id" db:"id"`
+	Receiver        Receiver                     `json:"receiver" db:"receiver"`
+	Wallet          Wallet                       `json:"wallet" db:"wallet"`
+	StellarAddress  string                       `json:"stellar_address,omitempty" db:"stellar_address"`
+	StellarMemo     string                       `json:"stellar_memo,omitempty" db:"stellar_memo"`
+	StellarMemoType string                       `json:"stellar_memo_type,omitempty" db:"stellar_memo_type"`
+	Status          ReceiversWalletStatus        `json:"status" db:"status"`
+	StatusHistory   ReceiversWalletStatusHistory `json:"status_history,omitempty" db:"status_history"`
+	CreatedAt       time.Time                    `json:"created_at" db:"created_at"`
+	UpdatedAt       time.Time                    `json:"updated_at" db:"updated_at"`
+	OTP             string                       `json:"-" db:"otp"`
+	OTPCreatedAt    *time.Time                   `json:"-" db:"otp_created_at"`
+	OTPConfirmedAt  *time.Time                   `json:"otp_confirmed_at,omitempty" db:"otp_confirmed_at"`
+	// AnchorPlatformAccountID is the ID of the SEP24 transaction initiated by the Anchor Platform where the receiver wallet was registered.
+	AnchorPlatformTransactionID string     `json:"anchor_platform_transaction_id,omitempty" db:"anchor_platform_transaction_id"`
+	InvitedAt                   *time.Time `json:"invited_at,omitempty" db:"invited_at"`
+	LastSmsSent                 *time.Time `json:"last_sms_sent,omitempty" db:"last_sms_sent"`
 	ReceiverWalletStats
 }
 
@@ -65,6 +107,7 @@ func (rw *ReceiverWalletModel) GetWithReceiverIds(ctx context.Context, sqlExec d
 		SELECT 
 			rw.id,
 			rw.receiver_id,
+			rw.anchor_platform_transaction_id,
 			rw.stellar_address,
 			rw.stellar_memo,
 			rw.stellar_memo_type,
@@ -117,6 +160,7 @@ func (rw *ReceiverWalletModel) GetWithReceiverIds(ctx context.Context, sqlExec d
 	SELECT 
 		rwc.id,
 		rwc.receiver_id as "receiver.id",
+		COALESCE(rwc.anchor_platform_transaction_id, '') as anchor_platform_transaction_id,
 		COALESCE(rwc.stellar_address, '') as stellar_address,
 		COALESCE(rwc.stellar_memo, '') as stellar_memo,
 		COALESCE(rwc.stellar_memo_type, '') as stellar_memo_type,
@@ -288,8 +332,13 @@ func (rw *ReceiverWalletModel) GetByReceiverIDAndWalletDomain(ctx context.Contex
 			rw.id,
 			rw.receiver_id as "receiver.id",
 			rw.status,
+			COALESCE(rw.anchor_platform_transaction_id, '') as anchor_platform_transaction_id,
+			COALESCE(rw.stellar_address, '') as stellar_address,
+			COALESCE(rw.stellar_memo, '') as stellar_memo,
+			COALESCE(rw.stellar_memo_type, '') as stellar_memo_type,
 			COALESCE(rw.otp, '') as otp,
 			rw.otp_created_at,
+			rw.otp_confirmed_at,
 			w.id as "wallet.id",
 			w.name as "wallet.name",
 			w.sep_10_client_domain as "wallet.sep_10_client_domain"
@@ -311,29 +360,41 @@ func (rw *ReceiverWalletModel) GetByReceiverIDAndWalletDomain(ctx context.Contex
 	return &receiverWallet, nil
 }
 
-// UpdateReceiverWallet updates informations from the receiver wallet.
+// UpdateReceiverWallet updates the status, address, OTP confirmation time, and anchor platform transaction ID of a
+// receiver wallet.
 func (rw *ReceiverWalletModel) UpdateReceiverWallet(ctx context.Context, receiverWallet ReceiverWallet, sqlExec db.SQLExecuter) error {
 	query := `
 		UPDATE 
 			receiver_wallets rw
 		SET 
 			status = $1,
-			stellar_address = $2,
-			stellar_memo = $3,
-			stellar_memo_type = $4,
-			otp_confirmed_at = $5
-		WHERE rw.id = $6
+			anchor_platform_transaction_id = $2,
+			stellar_address = $3,
+			stellar_memo = $4,
+			stellar_memo_type = $5,
+			otp_confirmed_at = $6
+		WHERE rw.id = $7
 	`
 
-	_, err := sqlExec.ExecContext(ctx, query,
+	result, err := sqlExec.ExecContext(ctx, query,
 		receiverWallet.Status,
+		sql.NullString{String: receiverWallet.AnchorPlatformTransactionID, Valid: receiverWallet.AnchorPlatformTransactionID != ""},
 		receiverWallet.StellarAddress,
 		sql.NullString{String: receiverWallet.StellarMemo, Valid: receiverWallet.StellarMemo != ""},
 		sql.NullString{String: receiverWallet.StellarMemoType, Valid: receiverWallet.StellarMemoType != ""},
-		time.Now(),
+		receiverWallet.OTPConfirmedAt,
 		receiverWallet.ID)
 	if err != nil {
-		return fmt.Errorf("error updating receiver wallet: %w", err)
+		return fmt.Errorf("updating receiver wallet: %w", err)
+	}
+
+	numRowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("getting number of rows affected: %w", err)
+	}
+
+	if numRowsAffected == 0 {
+		return fmt.Errorf("no receiver wallet could be found in UpdateReceiverWallet: %w", ErrRecordNotFound)
 	}
 
 	return nil
@@ -398,30 +459,6 @@ func (rw *ReceiverWalletModel) UpdateStatusByDisbursementID(ctx context.Context,
 	return nil
 }
 
-func (rw *ReceiverWallet) statusHistoryFromByteArray(statusHistoryJSON pq.ByteaArray) error {
-	for _, sh := range statusHistoryJSON {
-		var shEntry ReceiversWalletStatusHistoryEntry
-		err := json.Unmarshal(sh, &shEntry)
-		if err != nil {
-			return fmt.Errorf("error unmarshaling status_history column: %w", err)
-		}
-		rw.StatusHistory = append(rw.StatusHistory, shEntry)
-	}
-	return nil
-}
-
-func (rw *ReceiverWallet) statusHistoryJson() ([]string, error) {
-	var statusHistoryJSON []string
-	for _, sh := range rw.StatusHistory {
-		shJSONBytes, err := json.Marshal(sh)
-		if err != nil {
-			return nil, fmt.Errorf("error converting status history to json for receiver wallet %s: %w", rw.ID, err)
-		}
-		statusHistoryJSON = append(statusHistoryJSON, string(shJSONBytes))
-	}
-	return statusHistoryJSON, nil
-}
-
 // GetByStellarAccountAndMemo returns a receiver wallets that match the Stellar Account.
 func (rw *ReceiverWalletModel) GetByStellarAccountAndMemo(ctx context.Context, stellarAccount, stellarMemo string) (*ReceiverWallet, error) {
 	// build query
@@ -431,6 +468,7 @@ func (rw *ReceiverWalletModel) GetByStellarAccountAndMemo(ctx context.Context, s
 			rw.id,
 			rw.receiver_id as "receiver.id",
 			rw.status,
+			COALESCE(rw.anchor_platform_transaction_id, '') as anchor_platform_transaction_id,
 			COALESCE(rw.stellar_address, '') as stellar_address,
 			COALESCE(rw.stellar_memo, '') as stellar_memo,
 			COALESCE(rw.stellar_memo_type, '') as stellar_memo_type,

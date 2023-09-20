@@ -78,6 +78,8 @@ func (a *AnchorPlatformAPIService) PatchAnchorTransactionsPostRegistration(ctx c
 	return a.updateAnchorTransactions(ctx, apTxPatches...)
 }
 
+// updateAnchorTransactions will update the transactions on the anchor platform, according with the API documentation in
+// https://developers.stellar.org/api/anchor-platform/resources/patch-transactions.
 func (a *AnchorPlatformAPIService) updateAnchorTransactions(ctx context.Context, apTxPatch ...APSep24TransactionPatch) error {
 	records := NewAPSep24TransactionRecordsFromPatches(apTxPatch...)
 

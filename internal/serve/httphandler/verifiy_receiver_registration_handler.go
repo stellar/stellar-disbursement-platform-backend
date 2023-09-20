@@ -91,7 +91,12 @@ func (v VerifyReceiverRegistrationHandler) validate(r *http.Request) (reqObj dat
 // - there is no receiver verification entry for the given receiverID and verificationType
 // - the number of attempts to confirm the verification value has already exceeded the max value
 // - the payload verification value does not match the one saved in the database
-func (v VerifyReceiverRegistrationHandler) processReceiverVerificationPII(ctx context.Context, dbTx db.DBTransaction, receiver data.Receiver, receiverRegistrationRequest data.ReceiverRegistrationRequest) error {
+func (v VerifyReceiverRegistrationHandler) processReceiverVerificationPII(
+	ctx context.Context,
+	dbTx db.DBTransaction,
+	receiver data.Receiver,
+	receiverRegistrationRequest data.ReceiverRegistrationRequest,
+) error {
 	now := time.Now()
 	truncatedPhoneNumber := utils.TruncateString(receiver.PhoneNumber, 3)
 
@@ -148,59 +153,75 @@ func (v VerifyReceiverRegistrationHandler) processReceiverVerificationPII(ctx co
 }
 
 // processReceiverWalletOTP processes the OTP provided by the user and updates the receiver wallet status to "REGISTERED" if the OTP is valid.
-func (v VerifyReceiverRegistrationHandler) processReceiverWalletOTP(ctx context.Context, dbTx db.DBTransaction, sep24Claims *anchorplatform.SEP24JWTClaims, receiver data.Receiver, otp string) (wasAlreadyRegistered bool, err error) {
+func (v VerifyReceiverRegistrationHandler) processReceiverWalletOTP(
+	ctx context.Context,
+	dbTx db.DBTransaction,
+	sep24Claims anchorplatform.SEP24JWTClaims,
+	receiver data.Receiver, otp string,
+) (receiverWallet data.ReceiverWallet, wasAlreadyRegistered bool, err error) {
 	// STEP 1: find the receiver wallet for the given [receiverID, clientDomain]
-	receiverWallet, err := v.Models.ReceiverWallet.GetByReceiverIDAndWalletDomain(ctx, receiver.ID, sep24Claims.ClientDomain(), dbTx)
+	rw, err := v.Models.ReceiverWallet.GetByReceiverIDAndWalletDomain(ctx, receiver.ID, sep24Claims.ClientDomain(), dbTx)
 	if err != nil {
 		err = fmt.Errorf("receiver wallet not found for receiverID=%s and clientDomain=%s: %w", receiver.ID, sep24Claims.ClientDomain(), err)
-		return false, &ErrorInformationNotFound{cause: err}
+		return receiverWallet, false, &ErrorInformationNotFound{cause: err}
 	}
 
 	// STEP 2: check if receiver wallet status is already "REGISTERED"
-	if receiverWallet.Status == data.RegisteredReceiversWalletStatus {
+	if rw.Status == data.RegisteredReceiversWalletStatus {
 		log.Ctx(ctx).Info("receiver already registered in the SDP")
-		return true, nil
+		return *rw, true, nil
 	}
 
 	// STEP 3: check if receiver wallet status can be transitioned to "REGISTERED"
-	err = receiverWallet.Status.TransitionTo(data.RegisteredReceiversWalletStatus)
+	err = rw.Status.TransitionTo(data.RegisteredReceiversWalletStatus)
 	if err != nil {
-		err = fmt.Errorf("transitioning status for receiverWallet[ID=%s]: %w", receiverWallet.ID, err)
-		return false, &ErrorInformationNotFound{cause: err}
+		err = fmt.Errorf("transitioning status for receiverWallet[ID=%s]: %w", rw.ID, err)
+		return receiverWallet, false, &ErrorInformationNotFound{cause: err}
 	}
 
 	// STEP 4: verify receiver wallet OTP
-	err = v.Models.ReceiverWallet.VerifyReceiverWalletOTP(ctx, v.NetworkPassphrase, *receiverWallet, otp)
+	err = v.Models.ReceiverWallet.VerifyReceiverWalletOTP(ctx, v.NetworkPassphrase, *rw, otp)
 	if err != nil {
 		err = fmt.Errorf("receiver wallet OTP is not valid: %w", err)
-		return false, &ErrorInformationNotFound{cause: err}
+		return receiverWallet, false, &ErrorInformationNotFound{cause: err}
 	}
 
 	// STEP 5: update receiver wallet status to "REGISTERED"
-	receiverWallet.StellarAddress = sep24Claims.SEP10StellarAccount()
+	now := time.Now()
+	rw.OTPConfirmedAt = &now
+	rw.Status = data.RegisteredReceiversWalletStatus
+	rw.StellarAddress = sep24Claims.SEP10StellarAccount()
+	rw.StellarMemo = sep24Claims.SEP10StellarMemo()
+	rw.StellarMemoType = ""
 	if sep24Claims.SEP10StellarMemo() != "" {
-		receiverWallet.StellarMemo = sep24Claims.SEP10StellarMemo()
-		receiverWallet.StellarMemoType = "id"
+		rw.StellarMemoType = "id"
 	}
-	receiverWallet.Status = data.RegisteredReceiversWalletStatus
-	err = v.Models.ReceiverWallet.UpdateReceiverWallet(ctx, *receiverWallet, dbTx)
+	err = v.Models.ReceiverWallet.UpdateReceiverWallet(ctx, *rw, dbTx)
 	if err != nil {
 		err = fmt.Errorf("completing receiver wallet registration: %w", err)
-		return false, err
+		return receiverWallet, false, err
 	}
 
-	return false, nil
+	return *rw, false, nil
 }
 
-// processAnchorPlatformID PATCHes the transaction on the AnchorPlatform with the status "pending_anchor" and updates the local database accordingly.
-func (v VerifyReceiverRegistrationHandler) processAnchorPlatformID(ctx context.Context, sep24Claims *anchorplatform.SEP24JWTClaims) error {
+// processAnchorPlatformID PATCHes the transaction on the AnchorPlatform with the "pending_anchor" status, and updates
+// the receiver wallet with the anchor platform transaction ID.
+func (v VerifyReceiverRegistrationHandler) processAnchorPlatformID(ctx context.Context, dbTx db.DBTransaction, sep24Claims anchorplatform.SEP24JWTClaims, receiverWallet data.ReceiverWallet) error {
+	// STEP 1: update receiver wallet with the anchor platform transaction ID.
+	receiverWallet.AnchorPlatformTransactionID = sep24Claims.TransactionID()
+	err := v.Models.ReceiverWallet.UpdateReceiverWallet(ctx, receiverWallet, dbTx)
+	if err != nil {
+		return fmt.Errorf("updating receiver wallet with anchor platform transaction ID: %w", err)
+	}
+
+	// STEP 2: PATCH transaction on the AnchorPlatform, signaling that it is pending anchor
 	apTxPatch := anchorplatform.APSep24TransactionPatchPostRegistration{
 		ID:     sep24Claims.TransactionID(),
 		SEP:    "24",
 		Status: anchorplatform.APTransactionStatusPendingAnchor,
 	}
-
-	err := v.AnchorPlatformAPIService.PatchAnchorTransactionsPostRegistration(ctx, apTxPatch)
+	err = v.AnchorPlatformAPIService.PatchAnchorTransactionsPostRegistration(ctx, apTxPatch)
 	if err != nil {
 		return fmt.Errorf("updating transaction with ID %s on anchor platform API: %w", sep24Claims.TransactionID(), err)
 	}
@@ -208,7 +229,9 @@ func (v VerifyReceiverRegistrationHandler) processAnchorPlatformID(ctx context.C
 	return nil
 }
 
-// VerifyReceiverRegistration implements the http.Handler interface.
+// VerifyReceiverRegistration is the handler for the SEP-24 `POST /wallet-registration/verification` endpoint. It is
+// where the SDP verifies the receiver's PII & OTP, update the receiver wallet with the Stellar account and memo, found
+// in the JWT token, and PATCH the transaction on the AnchorPlatform.
 func (v VerifyReceiverRegistrationHandler) VerifyReceiverRegistration(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -244,7 +267,7 @@ func (v VerifyReceiverRegistrationHandler) VerifyReceiverRegistration(w http.Res
 		}
 
 		// STEP 4: process OTP
-		wasAlreadyRegistered, err := v.processReceiverWalletOTP(ctx, dbTx, sep24Claims, *receiver, receiverRegistrationRequest.OTP)
+		receiverWallet, wasAlreadyRegistered, err := v.processReceiverWalletOTP(ctx, dbTx, *sep24Claims, *receiver, receiverRegistrationRequest.OTP)
 		if err != nil {
 			return fmt.Errorf("processing OTP for receiver with phone number %s: %w", truncatedPhoneNumber, err)
 		}
@@ -252,8 +275,8 @@ func (v VerifyReceiverRegistrationHandler) VerifyReceiverRegistration(w http.Res
 			return nil
 		}
 
-		// STEP 5: PATCH transaction on the AnchorPlatform
-		err = v.processAnchorPlatformID(ctx, sep24Claims)
+		// STEP 5: PATCH transaction on the AnchorPlatform and update the receiver wallet with the anchor platform tx ID
+		err = v.processAnchorPlatformID(ctx, dbTx, *sep24Claims, receiverWallet)
 		if err != nil {
 			return fmt.Errorf("processing anchor platform transaction ID: %w", err)
 		}
