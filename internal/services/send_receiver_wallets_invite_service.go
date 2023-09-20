@@ -51,8 +51,13 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context) error {
 		return fmt.Errorf("error getting organization: %w", err)
 	}
 
+	smsRegistrationMessageTemplate := organization.SMSRegistrationMessageTemplate
+	if !strings.Contains(smsRegistrationMessageTemplate, "{{.RegistrationLink}}") {
+		smsRegistrationMessageTemplate = fmt.Sprintf("%s {{.RegistrationLink}}", strings.TrimSpace(smsRegistrationMessageTemplate))
+	}
+
 	// Execute the template early so we avoid hitting the database to query the other info
-	msgTemplate, err := template.New("").Parse(organization.SMSRegistrationMessageTemplate)
+	msgTemplate, err := template.New("").Parse(smsRegistrationMessageTemplate)
 	if err != nil {
 		return fmt.Errorf("error parsing SMS registration message template: %w", err)
 	}
