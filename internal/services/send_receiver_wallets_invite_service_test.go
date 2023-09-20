@@ -372,7 +372,8 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 		rec2RW := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver2.ID, wallet2.ID, data.ReadyReceiversWalletStatus)
 
 		customInvitationMessage := "My custom receiver wallet registration invite. MyOrg 👋"
-		models.Organizations.Update(ctx, &data.OrganizationUpdate{SMSRegistrationMessageTemplate: &customInvitationMessage})
+		err = models.Organizations.Update(ctx, &data.OrganizationUpdate{SMSRegistrationMessageTemplate: &customInvitationMessage})
+		require.NoError(t, err)
 
 		_ = data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
 			Status:         data.ReadyPaymentStatus,
