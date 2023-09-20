@@ -48,7 +48,7 @@ Flags:
       --tss-metrics-type string      Metric monitor type. Options: "TSS_PROMETHEUS" (TSS_METRICS_TYPE) (default "TSS_PROMETHEUS")
 
 Global Flags:
-      --base-url string             The SDP UI base URL. (BASE_URL) (default "http://localhost:8000")
+      --base-url string             The SDP backend server's base URL. (BASE_URL) (default "http://localhost:8000")
       --database-url string         Postgres DB URL (DATABASE_URL) (default "postgres://localhost:5432/sdp?sslmode=disable")
       --environment string          The environment where the application is running. Example: "development", "staging", "production". (ENVIRONMENT) (default "development")
       --log-level string            The log level used in this project. Options: "TRACE", "DEBUG", "INFO", "WARN", "ERROR", "FATAL", or "PANIC". (LOG_LEVEL) (default "TRACE")
@@ -80,7 +80,7 @@ Flags:
       --horizon-url string   Horizon URL" (HORIZON_URL) (default "https://horizon-testnet.stellar.org/")
 
 Global Flags:
-      --base-url string             The SDP UI base URL. (BASE_URL) (default "http://localhost:8000")
+      --base-url string             The SDP backend server's base URL. (BASE_URL) (default "http://localhost:8000")
       --database-url string         Postgres DB URL (DATABASE_URL) (default "postgres://localhost:5432/sdp?sslmode=disable")
       --environment string          The environment where the application is running. Example: "development", "staging", "production". (ENVIRONMENT) (default "development")
       --log-level string            The log level used in this project. Options: "TRACE", "DEBUG", "INFO", "WARN", "ERROR", "FATAL", or "PANIC". (LOG_LEVEL) (default "TRACE")
