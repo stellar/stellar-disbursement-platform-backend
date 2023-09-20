@@ -508,7 +508,7 @@ func Test_WalletModelSoftDelete(t *testing.T) {
 	})
 }
 
-func Test_WalletModelSetEnabled(t *testing.T) {
+func Test_WalletModelUpdate(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 
@@ -522,8 +522,8 @@ func Test_WalletModelSetEnabled(t *testing.T) {
 
 	DeleteAllWalletFixtures(t, ctx, dbConnectionPool)
 
-	err = walletModel.SetEnabled(ctx, "unknown", true)
-	assert.EqualError(t, err, ErrRecordNotFound.Error())
+	_, err = walletModel.Update(ctx, "unknown", true)
+	assert.Equal(t, ErrRecordNotFound, err)
 
 	wallet := CreateWalletFixture(t, ctx, dbConnectionPool.SqlxDB(),
 		"NewWallet",
@@ -533,14 +533,14 @@ func Test_WalletModelSetEnabled(t *testing.T) {
 
 	assert.True(t, wallet.Enabled)
 
-	err = walletModel.SetEnabled(ctx, wallet.ID, false)
+	_, err = walletModel.Update(ctx, wallet.ID, false)
 	require.NoError(t, err)
 
 	wallet, err = walletModel.Get(ctx, wallet.ID)
 	require.NoError(t, err)
 	assert.False(t, wallet.Enabled)
 
-	err = walletModel.SetEnabled(ctx, wallet.ID, true)
+	_, err = walletModel.Update(ctx, wallet.ID, true)
 	require.NoError(t, err)
 
 	wallet, err = walletModel.Get(ctx, wallet.ID)

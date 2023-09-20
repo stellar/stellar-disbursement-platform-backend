@@ -462,7 +462,7 @@ func Test_WalletsHandlerPatchWallet(t *testing.T) {
 		assert.JSONEq(t, `{"error": "Resource not found."}`, string(respBody))
 	})
 
-	t.Run("updates wallet enabled status successfully", func(t *testing.T) {
+	t.Run("updates wallet successfully", func(t *testing.T) {
 		data.DeleteAllWalletFixtures(t, ctx, dbConnectionPool)
 		wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "My Wallet", "https://mywallet.com", "mywallet.com", "mywallet://")
 		assert.True(t, wallet.Enabled)
@@ -480,7 +480,7 @@ func Test_WalletsHandlerPatchWallet(t *testing.T) {
 		defer resp.Body.Close()
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
-		assert.JSONEq(t, `{"message": "wallet enabled status updated successfully"}`, string(respBody))
+		assert.JSONEq(t, `{"message": "wallet updated successfully"}`, string(respBody))
 
 		wallet, err = models.Wallets.Get(ctx, wallet.ID)
 		require.NoError(t, err)
@@ -499,7 +499,7 @@ func Test_WalletsHandlerPatchWallet(t *testing.T) {
 		defer resp.Body.Close()
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
-		assert.JSONEq(t, `{"message": "wallet enabled status updated successfully"}`, string(respBody))
+		assert.JSONEq(t, `{"message": "wallet updated successfully"}`, string(respBody))
 
 		wallet, err = models.Wallets.Get(ctx, wallet.ID)
 		require.NoError(t, err)

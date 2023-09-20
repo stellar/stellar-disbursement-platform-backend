@@ -258,7 +258,7 @@ func (w *WalletModel) SoftDelete(ctx context.Context, walletID string) (*Wallet,
 	return &wallet, nil
 }
 
-func (wm *WalletModel) SetEnabled(ctx context.Context, walletID string, enabled bool) error {
+func (wm *WalletModel) Update(ctx context.Context, walletID string, enabled bool) (*Wallet, error) {
 	const query = `
 		UPDATE
 			wallets
@@ -266,20 +266,16 @@ func (wm *WalletModel) SetEnabled(ctx context.Context, walletID string, enabled 
 			enabled = $1
 		WHERE
 			id = $2
+		RETURNING *
 	`
-	result, err := wm.dbConnectionPool.ExecContext(ctx, query, enabled, walletID)
+	var wallet Wallet
+	err := wm.dbConnectionPool.GetContext(ctx, &wallet, query, enabled, walletID)
 	if err != nil {
-		return fmt.Errorf("updating wallet enabled status: %w", err)
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrRecordNotFound
+		}
+		return nil, fmt.Errorf("updating wallet enabled status: %w", err)
 	}
 
-	numRowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("getting number of rows affected: %w", err)
-	}
-
-	if numRowsAffected == 0 {
-		return ErrRecordNotFound
-	}
-
-	return nil
+	return &wallet, nil
 }

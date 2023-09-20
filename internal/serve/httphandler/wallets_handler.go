@@ -115,16 +115,16 @@ func (h WalletsHandler) PatchWallets(rw http.ResponseWriter, req *http.Request) 
 
 	walletID := chi.URLParam(req, "id")
 
-	err := h.Models.Wallets.SetEnabled(ctx, walletID, *reqBody.Enabled)
+	_, err := h.Models.Wallets.Update(ctx, walletID, *reqBody.Enabled)
 	if err != nil {
 		if errors.Is(err, data.ErrRecordNotFound) {
 			httperror.NotFound("", err, nil).Render(rw)
 			return
 		}
-		err = fmt.Errorf("setting wallet enabled status: %w", err)
+		err = fmt.Errorf("updating wallet: %w", err)
 		httperror.InternalError(ctx, "", err, nil).Render(rw)
 		return
 	}
 
-	httpjson.Render(rw, map[string]string{"message": "wallet enabled status updated successfully"}, httpjson.JSON)
+	httpjson.Render(rw, map[string]string{"message": "wallet updated successfully"}, httpjson.JSON)
 }
