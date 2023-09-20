@@ -428,7 +428,7 @@ func Test_VerifyReceiverRegistrationHandler_processReceiverWalletOTP(t *testing.
 			}
 
 			// assertions
-			wasAlreadyRegistered, err := handler.processReceiverWalletOTP(ctx, dbTx, tc.sep24Claims, *receiver, otp)
+			rwUpdated, wasAlreadyRegistered, err := handler.processReceiverWalletOTP(ctx, dbTx, *tc.sep24Claims, *receiver, otp)
 			if tc.wantErrContains == nil {
 				require.NoError(t, err)
 				assert.Equal(t, tc.wantWasAlreadyRegistered, wasAlreadyRegistered)
@@ -438,8 +438,13 @@ func Test_VerifyReceiverRegistrationHandler_processReceiverWalletOTP(t *testing.
 				err = dbTx.GetContext(ctx, &rw, "SELECT id, status, stellar_address, otp_confirmed_at FROM receiver_wallets WHERE id = $1", receiverWallet.ID)
 				require.NoError(t, err)
 				assert.Equal(t, data.RegisteredReceiversWalletStatus, rw.Status)
+				assert.Equal(t, rwUpdated.Status, rw.Status)
 				assert.NotEmpty(t, rw.StellarAddress)
+				assert.Equal(t, rwUpdated.StellarAddress, rw.StellarAddress)
 				assert.NotNil(t, rw.OTPConfirmedAt)
+				assert.NotNil(t, rwUpdated.OTPConfirmedAt)
+				assert.WithinDuration(t, *rwUpdated.OTPConfirmedAt, *rw.OTPConfirmedAt, time.Millisecond)
+
 			} else {
 				for _, wantErrContain := range tc.wantErrContains {
 					assert.ErrorContains(t, err, wantErrContain)
@@ -462,8 +467,14 @@ func Test_VerifyReceiverRegistrationHandler_processAnchorPlatformID(t *testing.T
 	require.NoError(t, err)
 	handler := &VerifyReceiverRegistrationHandler{Models: models}
 
-	// create valid sep24 token
+	// creeate fixtures
+	const phoneNumber = "+380445555555"
+	defer data.DeleteAllFixtures(t, ctx, dbConnectionPool)
 	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "testWallet", "https://home.page", "home.page", "wallet123://")
+	receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{PhoneNumber: phoneNumber})
+	receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.ReadyReceiversWalletStatus)
+
+	// create valid sep24 token
 	sep24Claims := &anchorplatform.SEP24JWTClaims{
 		ClientDomainClaim: wallet.SEP10ClientDomain,
 		RegisteredClaims: jwt.RegisteredClaims{
@@ -474,15 +485,11 @@ func Test_VerifyReceiverRegistrationHandler_processAnchorPlatformID(t *testing.T
 	}
 
 	// mocks
-	apTxPatches := []anchorplatform.APSep24Transaction{{
-		ID:                 "test-transaction-id",
-		Status:             "pending_anchor",
-		SEP:                "24",
-		Kind:               "deposit",
-		DestinationAccount: sep24Claims.SEP10StellarAccount(),
-		Memo:               sep24Claims.SEP10StellarMemo(),
-		KYCVerified:        true,
-	}}
+	apTxPatch := anchorplatform.APSep24TransactionPatchPostRegistration{
+		ID:     "test-transaction-id",
+		Status: "pending_anchor",
+		SEP:    "24",
+	}
 
 	testCases := []struct {
 		name            string
@@ -501,18 +508,31 @@ func Test_VerifyReceiverRegistrationHandler_processAnchorPlatformID(t *testing.T
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			// dbTX
+			dbTx, err := dbConnectionPool.BeginTxx(ctx, nil)
+			require.NoError(t, err)
+			defer func() {
+				require.NoError(t, dbTx.Rollback())
+			}()
+
 			// mocks
 			mockAnchorPlatformService := anchorplatform.AnchorPlatformAPIServiceMock{}
 			defer mockAnchorPlatformService.AssertExpectations(t)
 			handler.AnchorPlatformAPIService = &mockAnchorPlatformService
 			mockAnchorPlatformService.
-				On("PatchAnchorTransactionsPostRegistration", mock.Anything, apTxPatches).
+				On("PatchAnchorTransactionsPostRegistration", mock.Anything, apTxPatch).
 				Return(tc.mockReturnError).Once()
 
 			// assertions
-			err := handler.processAnchorPlatformID(ctx, sep24Claims)
+			err = handler.processAnchorPlatformID(ctx, dbTx, *sep24Claims, *receiverWallet)
 			if tc.wantErrContains == "" {
 				require.NoError(t, err)
+
+				// make sure the receiverWallet was updated in the DB with the anchor platform transaction ID
+				var rw data.ReceiverWallet
+				err = dbTx.GetContext(ctx, &rw, "SELECT id, anchor_platform_transaction_id FROM receiver_wallets WHERE id = $1", receiverWallet.ID)
+				require.NoError(t, err)
+				assert.Equal(t, "test-transaction-id", rw.AnchorPlatformTransactionID)
 			} else {
 				require.ErrorContains(t, err, tc.wantErrContains)
 			}
@@ -693,20 +713,16 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 		handler.ReCAPTCHAValidator = reCAPTCHAValidator
 		reCAPTCHAValidator.On("IsTokenValid", mock.Anything, "token").Return(true, nil).Once()
 
-		apTxPatches := []anchorplatform.APSep24Transaction{{
-			ID:                 "test-transaction-id",
-			Status:             "pending_anchor",
-			SEP:                "24",
-			Kind:               "deposit",
-			DestinationAccount: validClaims.SEP10StellarAccount(),
-			Memo:               validClaims.SEP10StellarMemo(),
-			KYCVerified:        true,
-		}}
+		apTxPatch := anchorplatform.APSep24TransactionPatchPostRegistration{
+			ID:     "test-transaction-id",
+			Status: "pending_anchor",
+			SEP:    "24",
+		}
 		mockAnchorPlatformService := anchorplatform.AnchorPlatformAPIServiceMock{}
 		defer mockAnchorPlatformService.AssertExpectations(t)
 		handler.AnchorPlatformAPIService = &mockAnchorPlatformService
 		mockAnchorPlatformService.
-			On("PatchAnchorTransactionsPostRegistration", mock.Anything, apTxPatches).
+			On("PatchAnchorTransactionsPostRegistration", mock.Anything, apTxPatch).
 			Return(fmt.Errorf("error updating transaction on anchor platform")).Once()
 
 		// update database with the entries needed
@@ -774,19 +790,15 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 				handler.ReCAPTCHAValidator = reCAPTCHAValidator
 				reCAPTCHAValidator.On("IsTokenValid", mock.Anything, "token").Return(true, nil).Once()
 
-				apTxPatches := []anchorplatform.APSep24Transaction{{
-					ID:                 "test-transaction-id",
-					Status:             "pending_anchor",
-					SEP:                "24",
-					Kind:               "deposit",
-					DestinationAccount: sep24Claims.SEP10StellarAccount(),
-					Memo:               sep24Claims.SEP10StellarMemo(),
-					KYCVerified:        true,
-				}}
+				apTxPatch := anchorplatform.APSep24TransactionPatchPostRegistration{
+					ID:     "test-transaction-id",
+					Status: "pending_anchor",
+					SEP:    "24",
+				}
 				mockAnchorPlatformService := anchorplatform.AnchorPlatformAPIServiceMock{}
 				defer mockAnchorPlatformService.AssertExpectations(t)
 				handler.AnchorPlatformAPIService = &mockAnchorPlatformService
-				mockAnchorPlatformService.On("PatchAnchorTransactionsPostRegistration", mock.Anything, apTxPatches).Return(nil).Once()
+				mockAnchorPlatformService.On("PatchAnchorTransactionsPostRegistration", mock.Anything, apTxPatch).Return(nil).Once()
 
 				// update database with the entries needed
 				defer data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)

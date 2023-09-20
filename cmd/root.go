@@ -75,7 +75,7 @@ func rootCmd() *cobra.Command {
 		},
 		{
 			Name:        "base-url",
-			Usage:       "The SDP UI base URL.",
+			Usage:       "The SDP backend server's base URL.",
 			OptType:     types.String,
 			ConfigKey:   &globalOptions.baseURL,
 			FlagDefault: "http://localhost:8000",

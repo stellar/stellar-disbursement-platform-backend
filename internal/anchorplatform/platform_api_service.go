@@ -30,7 +30,7 @@ const (
 )
 
 type AnchorPlatformAPIServiceInterface interface {
-	PatchAnchorTransactionsPostRegistration(ctx context.Context, apTxPatch ...APSep24Transaction) error
+	PatchAnchorTransactionsPostRegistration(ctx context.Context, apTxPatch ...APSep24TransactionPatchPostRegistration) error
 	IsAnchorProtectedByAuth(ctx context.Context) (bool, error)
 }
 
@@ -65,20 +65,22 @@ func NewAnchorPlatformAPIService(httpClient httpclient.HttpClientInterface, anch
 	}, nil
 }
 
-func (a *AnchorPlatformAPIService) PatchAnchorTransactionsPostRegistration(ctx context.Context, apTxPostRegistrationPatch ...APSep24Transaction) error {
-	var apTxPatches []APSep24Transaction
+func (a *AnchorPlatformAPIService) PatchAnchorTransactionsPostRegistration(ctx context.Context, apTxPostRegistrationPatch ...APSep24TransactionPatchPostRegistration) error {
+	var apTxPatches []APSep24TransactionPatch
 	for _, patch := range apTxPostRegistrationPatch {
-		apTxPatch, err := utils.ConvertType[APSep24Transaction, APSep24Transaction](patch)
+		apTxPatch, err := utils.ConvertType[APSep24TransactionPatchPostRegistration, APSep24TransactionPatch](patch)
 		if err != nil {
 			return fmt.Errorf("converting apTxPostRegistrationPatch into apTxPatch: %w", err)
 		}
-		apTxPatches = append(apTxPatches, APSep24Transaction(apTxPatch))
+		apTxPatches = append(apTxPatches, APSep24TransactionPatch(apTxPatch))
 	}
 
 	return a.updateAnchorTransactions(ctx, apTxPatches...)
 }
 
-func (a *AnchorPlatformAPIService) updateAnchorTransactions(ctx context.Context, apTxPatch ...APSep24Transaction) error {
+// updateAnchorTransactions will update the transactions on the anchor platform, according with the API documentation in
+// https://developers.stellar.org/api/anchor-platform/resources/patch-transactions.
+func (a *AnchorPlatformAPIService) updateAnchorTransactions(ctx context.Context, apTxPatch ...APSep24TransactionPatch) error {
 	records := NewAPSep24TransactionRecordsFromPatches(apTxPatch...)
 
 	recordsJSON, err := json.Marshal(records)
@@ -177,7 +179,7 @@ func (a *AnchorPlatformAPIService) IsAnchorProtectedByAuth(ctx context.Context) 
 }
 
 // GetJWTToken will generate a JWT token if the service is configured with an outgoing JWT secret.
-func (a *AnchorPlatformAPIService) GetJWTToken(apTx ...APSep24Transaction) (string, error) {
+func (a *AnchorPlatformAPIService) GetJWTToken(apTx ...APSep24TransactionPatch) (string, error) {
 	if a.jwtManager == nil {
 		return "", ErrJWTManagerNotSet
 	}

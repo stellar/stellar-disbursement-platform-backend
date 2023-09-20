@@ -77,7 +77,7 @@ func Test_updateAnchorTransactions(t *testing.T) {
 	require.NoError(t, err)
 	ctx := context.Background()
 
-	apTxPatch := APSep24Transaction{
+	apTxPatch := APSep24TransactionPatch{
 		ID:     "test-transaction-id",
 		Status: "pending_anchor",
 		SEP:    "24",
@@ -206,14 +206,14 @@ func Test_PatchAnchorTransactionsPostRegistration(t *testing.T) {
 		})).Return(response, nil).Twice()
 
 		// PatchAnchorTransactionsPostRegistration and updateAnchorTransactions should result in the same request:
-		err := anchorPlatformAPIService.PatchAnchorTransactionsPostRegistration(ctx, APSep24Transaction{
+		err := anchorPlatformAPIService.PatchAnchorTransactionsPostRegistration(ctx, APSep24TransactionPatchPostRegistration{
 			ID:     "test-transaction-id",
 			Status: "pending_anchor",
 			SEP:    "24",
 		})
 		require.NoError(t, err)
 
-		err = anchorPlatformAPIService.updateAnchorTransactions(ctx, APSep24Transaction{
+		err = anchorPlatformAPIService.updateAnchorTransactions(ctx, APSep24TransactionPatch{
 			ID:     "test-transaction-id",
 			Status: "pending_anchor",
 			SEP:    "24",
@@ -403,7 +403,7 @@ func Test_IsAnchorProtectedByAuth(t *testing.T) {
 func Test_GetJWTToken(t *testing.T) {
 	t.Run("returns ErrJWTSecretNotSet when a JWT secret is not set", func(t *testing.T) {
 		apService := AnchorPlatformAPIService{}
-		transactions := []APSep24Transaction{{ID: "1"}, {ID: "2"}}
+		transactions := []APSep24TransactionPatch{{ID: "1"}, {ID: "2"}}
 		token, err := apService.GetJWTToken(transactions...)
 		require.ErrorIs(t, err, ErrJWTManagerNotSet)
 		require.Empty(t, token)
@@ -414,7 +414,7 @@ func Test_GetJWTToken(t *testing.T) {
 		require.NoError(t, err)
 
 		apService := AnchorPlatformAPIService{jwtManager: jwtManager}
-		transactions := []APSep24Transaction{{ID: "1"}, {ID: "2"}}
+		transactions := []APSep24TransactionPatch{{ID: "1"}, {ID: "2"}}
 		token, err := apService.GetJWTToken(transactions...)
 		require.NoError(t, err)
 		require.NotEmpty(t, token)

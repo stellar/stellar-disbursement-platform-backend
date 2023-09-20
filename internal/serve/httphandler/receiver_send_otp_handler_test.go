@@ -52,7 +52,7 @@ func Test_ReceiverSendOTPHandler_ServeHTTP(t *testing.T) {
 
 	ctx := context.Background()
 
-	receiver1 := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
+	receiver1 := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{PhoneNumber: "+380443973607"})
 	receiver2 := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
 	wallet1 := data.CreateWalletFixture(t, ctx, dbConnectionPool, "testWallet", "https://home.page", "home.page", "wallet123://")
 
@@ -80,7 +80,7 @@ func Test_ReceiverSendOTPHandler_ServeHTTP(t *testing.T) {
 			On("IsTokenValid", mock.Anything, "XyZ").
 			Return(true, nil).
 			Once()
-		req, err := http.NewRequest("POST", "/wallet-registration/otp", strings.NewReader(string(reqBody)))
+		req, err := http.NewRequest(http.MethodPost, "/wallet-registration/otp", strings.NewReader(string(reqBody)))
 		require.NoError(t, err)
 		rr := httptest.NewRecorder()
 		r.ServeHTTP(rr, req)
@@ -98,7 +98,7 @@ func Test_ReceiverSendOTPHandler_ServeHTTP(t *testing.T) {
 			On("IsTokenValid", mock.Anything, "XyZ").
 			Return(true, nil).
 			Once()
-		req, err := http.NewRequest("POST", "/wallet-registration/otp", strings.NewReader(string(reqBody)))
+		req, err := http.NewRequest(http.MethodPost, "/wallet-registration/otp", strings.NewReader(string(reqBody)))
 		require.NoError(t, err)
 
 		rr := httptest.NewRecorder()
@@ -118,10 +118,10 @@ func Test_ReceiverSendOTPHandler_ServeHTTP(t *testing.T) {
 		reCAPTCHAValidator.
 			On("IsTokenValid", mock.Anything, "XyZ").
 			Return(true, nil).
-			Once()
+			Twice()
 		invalidRequest := `{"recaptcha_token": "XyZ"}`
 
-		req, err := http.NewRequest("POST", "/wallet-registration/otp", strings.NewReader(invalidRequest))
+		req, err := http.NewRequest(http.MethodPost, "/wallet-registration/otp", strings.NewReader(invalidRequest))
 		require.NoError(t, err)
 
 		rr := httptest.NewRecorder()
@@ -130,11 +130,30 @@ func Test_ReceiverSendOTPHandler_ServeHTTP(t *testing.T) {
 		r.ServeHTTP(rr, req)
 
 		resp := rr.Result()
+
 		respBody, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
+		defer resp.Body.Close()
 
 		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 		assert.JSONEq(t, `{"error":"request invalid","extras":{"phone_number":"phone_number is required"}}`, string(respBody))
+
+		req, err = http.NewRequest(http.MethodPost, "/wallet-registration/otp", strings.NewReader(`{"phone_number": "+55555555555", "recaptcha_token": "XyZ"}`))
+		require.NoError(t, err)
+
+		rr = httptest.NewRecorder()
+		invalidClaims = &anchorplatform.SEP24JWTClaims{}
+		req = req.WithContext(context.WithValue(req.Context(), anchorplatform.SEP24ClaimsContextKey, invalidClaims))
+		r.ServeHTTP(rr, req)
+
+		resp = rr.Result()
+
+		respBody, err = io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+		assert.JSONEq(t, `{"error": "request invalid", "extras": {"phone_number": "invalid phone number provided"}}`, string(respBody))
 	})
 
 	t.Run("returns 200 - Ok if the token is in the request context and body it's valid", func(t *testing.T) {
@@ -142,7 +161,7 @@ func Test_ReceiverSendOTPHandler_ServeHTTP(t *testing.T) {
 			On("IsTokenValid", mock.Anything, "XyZ").
 			Return(true, nil).
 			Once()
-		req, err := http.NewRequest("POST", "/wallet-registration/otp", strings.NewReader(string(reqBody)))
+		req, err := http.NewRequest(http.MethodPost, "/wallet-registration/otp", strings.NewReader(string(reqBody)))
 		require.NoError(t, err)
 
 		validClaims := &anchorplatform.SEP24JWTClaims{
@@ -176,7 +195,7 @@ func Test_ReceiverSendOTPHandler_ServeHTTP(t *testing.T) {
 			On("IsTokenValid", mock.Anything, "XyZ").
 			Return(true, nil).
 			Once()
-		req, err := http.NewRequest("POST", "/wallet-registration/otp", strings.NewReader(string(reqBody)))
+		req, err := http.NewRequest(http.MethodPost, "/wallet-registration/otp", strings.NewReader(string(reqBody)))
 		require.NoError(t, err)
 
 		validClaims := &anchorplatform.SEP24JWTClaims{
