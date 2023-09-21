@@ -462,12 +462,10 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 
 	t.Run("updates organization's SMS Registration Message Template", func(t *testing.T) {
 		resetOrganizationInfo(t, ctx)
-
 		ctx = context.WithValue(ctx, middleware.TokenContextKey, "token")
 
 		org, err := models.Organizations.Get(ctx)
 		require.NoError(t, err)
-
 		defaultMessage := "You have a payment waiting for you from the {{.OrganizationName}}. Click {{.RegistrationLink}} to register."
 		assert.Equal(t, defaultMessage, org.SMSRegistrationMessageTemplate)
 
@@ -475,13 +473,10 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 		w := httptest.NewRecorder()
 		req, err := createOrganizationProfileMultipartRequest(t, url, "", "", `{"sms_registration_message_template": "My custom receiver wallet registration invite. MyOrg 👋"}`, new(bytes.Buffer))
 		require.NoError(t, err)
-
 		req = req.WithContext(ctx)
-
 		http.HandlerFunc(handler.PatchOrganizationProfile).ServeHTTP(w, req)
 
 		resp := w.Result()
-
 		respBody, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
 		defer resp.Body.Close()
@@ -497,13 +492,10 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 		w = httptest.NewRecorder()
 		req, err = createOrganizationProfileMultipartRequest(t, url, "", "", `{"organization_name": "MyOrg"}`, new(bytes.Buffer))
 		require.NoError(t, err)
-
 		req = req.WithContext(ctx)
-
 		http.HandlerFunc(handler.PatchOrganizationProfile).ServeHTTP(w, req)
 
 		resp = w.Result()
-
 		respBody, err = io.ReadAll(resp.Body)
 		require.NoError(t, err)
 		defer resp.Body.Close()
@@ -519,13 +511,10 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 		w = httptest.NewRecorder()
 		req, err = createOrganizationProfileMultipartRequest(t, url, "", "", `{"sms_registration_message_template": ""}`, new(bytes.Buffer))
 		require.NoError(t, err)
-
 		req = req.WithContext(ctx)
-
 		http.HandlerFunc(handler.PatchOrganizationProfile).ServeHTTP(w, req)
 
 		resp = w.Result()
-
 		respBody, err = io.ReadAll(resp.Body)
 		require.NoError(t, err)
 		defer resp.Body.Close()
@@ -553,13 +542,10 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 		w := httptest.NewRecorder()
 		req, err := createOrganizationProfileMultipartRequest(t, url, "", "", `{"otp_message_template": "Here's your OTP Code to complete your registration. MyOrg 👋"}`, new(bytes.Buffer))
 		require.NoError(t, err)
-
 		req = req.WithContext(ctx)
-
 		http.HandlerFunc(handler.PatchOrganizationProfile).ServeHTTP(w, req)
 
 		resp := w.Result()
-
 		respBody, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
 		defer resp.Body.Close()
@@ -575,13 +561,10 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 		w = httptest.NewRecorder()
 		req, err = createOrganizationProfileMultipartRequest(t, url, "", "", `{"organization_name": "MyOrg"}`, new(bytes.Buffer))
 		require.NoError(t, err)
-
 		req = req.WithContext(ctx)
-
 		http.HandlerFunc(handler.PatchOrganizationProfile).ServeHTTP(w, req)
 
 		resp = w.Result()
-
 		respBody, err = io.ReadAll(resp.Body)
 		require.NoError(t, err)
 		defer resp.Body.Close()
@@ -597,13 +580,10 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 		w = httptest.NewRecorder()
 		req, err = createOrganizationProfileMultipartRequest(t, url, "", "", `{"otp_message_template": ""}`, new(bytes.Buffer))
 		require.NoError(t, err)
-
 		req = req.WithContext(ctx)
-
 		http.HandlerFunc(handler.PatchOrganizationProfile).ServeHTTP(w, req)
 
 		resp = w.Result()
-
 		respBody, err = io.ReadAll(resp.Body)
 		require.NoError(t, err)
 		defer resp.Body.Close()
