@@ -507,3 +507,48 @@ func Test_WalletModelSoftDelete(t *testing.T) {
 		assert.Nil(t, wallet)
 	})
 }
+
+func Test_WalletModelUpdate(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+
+	walletModel := &WalletModel{dbConnectionPool: dbConnectionPool}
+
+	DeleteAllWalletFixtures(t, ctx, dbConnectionPool)
+
+	_, err = walletModel.Update(ctx, "unknown", true)
+	assert.Equal(t, ErrRecordNotFound, err)
+
+	wallet := CreateWalletFixture(t, ctx, dbConnectionPool.SqlxDB(),
+		"NewWallet",
+		"https://newwallet.com",
+		"newwallet.com",
+		"newalletapp://")
+
+	assert.True(t, wallet.Enabled)
+
+	updatedWallet, err := walletModel.Update(ctx, wallet.ID, false)
+	require.NoError(t, err)
+
+	wallet, err = walletModel.Get(ctx, wallet.ID)
+	require.NoError(t, err)
+	wallet.Assets = nil
+	assert.False(t, wallet.Enabled)
+	assert.Equal(t, wallet, updatedWallet)
+
+	updatedWallet, err = walletModel.Update(ctx, wallet.ID, true)
+	require.NoError(t, err)
+	updatedWallet.Assets = nil
+
+	wallet, err = walletModel.Get(ctx, wallet.ID)
+	require.NoError(t, err)
+	wallet.Assets = nil
+	assert.True(t, wallet.Enabled)
+	assert.Equal(t, wallet, updatedWallet)
+}

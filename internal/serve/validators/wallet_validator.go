@@ -15,6 +15,10 @@ type WalletRequest struct {
 	AssetsIDs         []string `json:"assets_ids"`
 }
 
+type PatchWalletRequest struct {
+	Enabled *bool `json:"enabled"`
+}
+
 type WalletValidator struct {
 	*Validator
 }
@@ -81,4 +85,12 @@ func (wv *WalletValidator) ValidateCreateWalletRequest(reqBody *WalletRequest) *
 	}
 
 	return modifiedReq
+}
+
+func (wv *WalletValidator) ValidatePatchWalletRequest(reqBody *PatchWalletRequest) {
+	wv.Check(reqBody != nil, "body", "request body is empty")
+	if wv.HasErrors() {
+		return
+	}
+	wv.Check(reqBody.Enabled != nil, "enabled", "enabled is required")
 }

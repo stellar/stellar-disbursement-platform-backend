@@ -132,3 +132,47 @@ func TestWalletValidator_ValidateCreateWalletRequest(t *testing.T) {
 		assert.Equal(t, "localhost:8000", reqBody.SEP10ClientDomain)
 	})
 }
+
+func TestWalletValidator_ValidatePatchWalletRequest(t *testing.T) {
+	t.Run("returns error when request body is empty", func(t *testing.T) {
+		wv := NewWalletValidator()
+		wv.ValidateCreateWalletRequest(nil)
+		assert.True(t, wv.HasErrors())
+		assert.Equal(t, map[string]interface{}{"body": "request body is empty"}, wv.Errors)
+	})
+
+	t.Run("returns error when body has empty fields", func(t *testing.T) {
+		wv := NewWalletValidator()
+		reqBody := &PatchWalletRequest{}
+
+		wv.ValidatePatchWalletRequest(reqBody)
+		assert.True(t, wv.HasErrors())
+		assert.Equal(t, map[string]interface{}{
+			"enabled": "enabled is required",
+		}, wv.Errors)
+	})
+
+	t.Run("validates successfully", func(t *testing.T) {
+		wv := NewWalletValidator()
+
+		e := new(bool)
+		assert.False(t, *e)
+		reqBody := &PatchWalletRequest{
+			Enabled: e,
+		}
+
+		wv.ValidatePatchWalletRequest(reqBody)
+		assert.False(t, wv.HasErrors())
+		assert.Empty(t, wv.Errors)
+
+		*e = true
+		assert.True(t, *e)
+		reqBody = &PatchWalletRequest{
+			Enabled: e,
+		}
+
+		wv.ValidatePatchWalletRequest(reqBody)
+		assert.False(t, wv.HasErrors())
+		assert.Empty(t, wv.Errors)
+	})
+}

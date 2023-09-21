@@ -304,6 +304,7 @@ func Test_handleHTTP_authenticatedEndpoints(t *testing.T) {
 		{http.MethodGet, "/wallets"},
 		{http.MethodPost, "/wallets"},
 		{http.MethodDelete, "/wallets/1234"},
+		{http.MethodPatch, "/wallets/1234"},
 		// Profile
 		{http.MethodGet, "/profile"},
 		{http.MethodPatch, "/profile"},
