@@ -533,17 +533,22 @@ func Test_WalletModelUpdate(t *testing.T) {
 
 	assert.True(t, wallet.Enabled)
 
-	_, err = walletModel.Update(ctx, wallet.ID, false)
+	updatedWallet, err := walletModel.Update(ctx, wallet.ID, false)
 	require.NoError(t, err)
 
 	wallet, err = walletModel.Get(ctx, wallet.ID)
 	require.NoError(t, err)
+	wallet.Assets = nil
 	assert.False(t, wallet.Enabled)
+	assert.Equal(t, wallet, updatedWallet)
 
-	_, err = walletModel.Update(ctx, wallet.ID, true)
+	updatedWallet, err = walletModel.Update(ctx, wallet.ID, true)
 	require.NoError(t, err)
+	updatedWallet.Assets = nil
 
 	wallet, err = walletModel.Get(ctx, wallet.ID)
 	require.NoError(t, err)
+	wallet.Assets = nil
 	assert.True(t, wallet.Enabled)
+	assert.Equal(t, wallet, updatedWallet)
 }
