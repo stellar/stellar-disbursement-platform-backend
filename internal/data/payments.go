@@ -167,7 +167,8 @@ func (p *PaymentModel) Get(ctx context.Context, id string, sqlExec db.SQLExecute
 			rw.updated_at as "receiver_wallet.updated_at",
 			rw.receiver_id as "receiver_wallet.receiver.id",
 			w.id as "receiver_wallet.wallet.id",
-			w.name as "receiver_wallet.wallet.name"
+			w.name as "receiver_wallet.wallet.name",
+			w.enabled as "receiver_wallet.wallet.enabled"
 		FROM
 			payments p
 		JOIN disbursements d ON p.disbursement_id = d.id
@@ -243,7 +244,8 @@ func (p *PaymentModel) GetAll(ctx context.Context, queryParams *QueryParams, sql
 			rw.updated_at as "receiver_wallet.updated_at",
 			rw.receiver_id as "receiver_wallet.receiver.id",
 			w.id as "receiver_wallet.wallet.id",
-			w.name as "receiver_wallet.wallet.name"
+			w.name as "receiver_wallet.wallet.name",
+			w.enabled as "receiver_wallet.wallet.enabled"
 		FROM
 			payments p
 		JOIN disbursements d on p.disbursement_id = d.id
