@@ -166,7 +166,8 @@ func Test_ReceiverHandlerGet(t *testing.T) {
 						"id": %q,
 						"name": "wallet1",
 						"homepage": "https://www.wallet1.com",
-						"sep_10_client_domain": "www.wallet1.com"
+						"sep_10_client_domain": "www.wallet1.com",
+						"enabled": true
 					},
 					"stellar_address": %q,
 					"stellar_memo": %q,
@@ -270,7 +271,8 @@ func Test_ReceiverHandlerGet(t *testing.T) {
 						"id": %q,
 						"name": "wallet1",
 						"homepage": "https://www.wallet1.com",
-						"sep_10_client_domain": "www.wallet1.com"
+						"sep_10_client_domain": "www.wallet1.com",
+						"enabled": true
 					},
 					"stellar_address": %q,
 					"stellar_memo": %q,
@@ -301,7 +303,8 @@ func Test_ReceiverHandlerGet(t *testing.T) {
 						"id": %q,
 						"name": "wallet2",
 						"homepage": "https://www.wallet2.com",
-						"sep_10_client_domain": "www.wallet2.com"
+						"sep_10_client_domain": "www.wallet2.com",
+						"enabled": true
 					},
 					"stellar_address": %q,
 					"stellar_memo": %q,
@@ -667,7 +670,8 @@ func Test_ReceiverHandler_GetReceivers_Success(t *testing.T) {
 									"id": %q,
 									"name": "wallet1",
 									"homepage": "https://www.wallet.com",
-									"sep_10_client_domain": "www.wallet.com"
+									"sep_10_client_domain": "www.wallet.com",
+									"enabled": true
 								},
 								"stellar_address": %q,
 								"stellar_memo": %q,
@@ -713,7 +717,8 @@ func Test_ReceiverHandler_GetReceivers_Success(t *testing.T) {
 									"id": %q,
 									"name": "wallet1",
 									"homepage": "https://www.wallet.com",
-									"sep_10_client_domain": "www.wallet.com"
+									"sep_10_client_domain": "www.wallet.com",
+									"enabled": true
 								},
 								"stellar_address": %q,
 								"stellar_memo": %q,
@@ -766,7 +771,8 @@ func Test_ReceiverHandler_GetReceivers_Success(t *testing.T) {
 									"id": %q,
 									"name": "wallet1",
 									"homepage": "https://www.wallet.com",
-									"sep_10_client_domain": "www.wallet.com"
+									"sep_10_client_domain": "www.wallet.com",
+									"enabled": true
 								},
 								"stellar_address": %q,
 								"stellar_memo": %q,
@@ -902,7 +908,8 @@ func Test_ReceiverHandler_GetReceivers_Success(t *testing.T) {
 									"id": %q,
 									"name": "wallet1",
 									"homepage": "https://www.wallet.com",
-									"sep_10_client_domain": "www.wallet.com"
+									"sep_10_client_domain": "www.wallet.com",
+									"enabled": true
 								},
 								"stellar_address": %q,
 								"stellar_memo": %q,
@@ -971,7 +978,8 @@ func Test_ReceiverHandler_GetReceivers_Success(t *testing.T) {
 									"id": %q,
 									"name": "wallet1",
 									"homepage": "https://www.wallet.com",
-									"sep_10_client_domain": "www.wallet.com"
+									"sep_10_client_domain": "www.wallet.com",
+									"enabled": true
 								},
 								"stellar_address": %q,
 								"stellar_memo": %q,
@@ -1029,7 +1037,8 @@ func Test_ReceiverHandler_GetReceivers_Success(t *testing.T) {
 									"id": %q,
 									"name": "wallet1",
 									"homepage": "https://www.wallet.com",
-									"sep_10_client_domain": "www.wallet.com"
+									"sep_10_client_domain": "www.wallet.com",
+									"enabled": true
 								},
 								"stellar_address": %q,
 								"stellar_memo": %q,
@@ -1116,7 +1125,8 @@ func Test_ReceiverHandler_GetReceivers_Success(t *testing.T) {
 									"id": %q,
 									"name": "wallet1",
 									"homepage": "https://www.wallet.com",
-									"sep_10_client_domain": "www.wallet.com"
+									"sep_10_client_domain": "www.wallet.com",
+									"enabled": true
 								},
 								"stellar_address": %q,
 								"stellar_memo": %q,
@@ -1185,7 +1195,8 @@ func Test_ReceiverHandler_GetReceivers_Success(t *testing.T) {
 									"id": %q,
 									"name": "wallet1",
 									"homepage": "https://www.wallet.com",
-									"sep_10_client_domain": "www.wallet.com"
+									"sep_10_client_domain": "www.wallet.com",
+									"enabled": true
 								},
 								"stellar_address": %q,
 								"stellar_memo": %q,
@@ -1238,7 +1249,8 @@ func Test_ReceiverHandler_GetReceivers_Success(t *testing.T) {
 									"id": %q,
 									"name": "wallet1",
 									"homepage": "https://www.wallet.com",
-									"sep_10_client_domain": "www.wallet.com"
+									"sep_10_client_domain": "www.wallet.com",
+									"enabled": true
 								},
 								"stellar_address": %q,
 								"stellar_memo": %q,
@@ -1469,7 +1481,8 @@ func Test_ReceiverHandler_BuildReceiversResponse(t *testing.T) {
 						"id": %q,
 						"name": "wallet1",
 						"homepage": "https://www.wallet.com",
-						"sep_10_client_domain": "www.wallet.com"
+						"sep_10_client_domain": "www.wallet.com",
+						"enabled": true
 					},
 					"stellar_address": %q,
 					"stellar_memo": %q,
@@ -1508,7 +1521,8 @@ func Test_ReceiverHandler_BuildReceiversResponse(t *testing.T) {
 						"id": %q,
 						"name": "wallet1",
 						"homepage": "https://www.wallet.com",
-						"sep_10_client_domain": "www.wallet.com"
+						"sep_10_client_domain": "www.wallet.com",
+						"enabled": true
 					},
 					"stellar_address": %q,
 					"stellar_memo": %q,
