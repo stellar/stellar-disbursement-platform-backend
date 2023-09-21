@@ -22,17 +22,22 @@ import (
 )
 
 type Organization struct {
-	ID                             string    `json:"id" db:"id"`
-	Name                           string    `json:"name" db:"name"`
-	StellarMainAddress             string    `json:"stellar_main_address" db:"stellar_main_address"`
-	TimezoneUTCOffset              string    `json:"timezone_utc_offset" db:"timezone_utc_offset"`
-	ArePaymentsEnabled             bool      `json:"are_payments_enabled" db:"are_payments_enabled"`
-	SMSRegistrationMessageTemplate string    `json:"sms_registration_message_template" db:"sms_registration_message_template"`
-	OTPMessageTemplate             string    `json:"otp_message_template" db:"otp_message_template"`
-	Logo                           []byte    `db:"logo"`
-	IsApprovalRequired             bool      `json:"is_approval_required" db:"is_approval_required"`
-	CreatedAt                      time.Time `json:"created_at" db:"created_at"`
-	UpdatedAt                      time.Time `json:"updated_at" db:"updated_at"`
+	ID                             string `json:"id" db:"id"`
+	Name                           string `json:"name" db:"name"`
+	StellarMainAddress             string `json:"stellar_main_address" db:"stellar_main_address"`
+	TimezoneUTCOffset              string `json:"timezone_utc_offset" db:"timezone_utc_offset"`
+	ArePaymentsEnabled             bool   `json:"are_payments_enabled" db:"are_payments_enabled"`
+	SMSRegistrationMessageTemplate string `json:"sms_registration_message_template" db:"sms_registration_message_template"`
+	// OTPMessageTemplate is the message template to send the OTP code to the receivers validates their identity when registering their wallets.
+	// The message may have the template values {{.OTP}} and {{.OrganizationName}}, it will be parsed and the values injected when executing the template.
+	// When the {{.OTP}} is not found in the message, it's added at the beginning of the message.
+	// Example:
+	//	{{.OTP}} OTPMessageTemplate
+	OTPMessageTemplate string    `json:"otp_message_template" db:"otp_message_template"`
+	Logo               []byte    `db:"logo"`
+	IsApprovalRequired bool      `json:"is_approval_required" db:"is_approval_required"`
+	CreatedAt          time.Time `json:"created_at" db:"created_at"`
+	UpdatedAt          time.Time `json:"updated_at" db:"updated_at"`
 }
 
 type OrganizationUpdate struct {

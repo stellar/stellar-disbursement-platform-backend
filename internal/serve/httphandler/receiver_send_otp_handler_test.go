@@ -27,11 +27,9 @@ import (
 
 type mockMessengerClient struct {
 	mock.Mock
-	message message.Message
 }
 
 func (m *mockMessengerClient) SendMessage(message message.Message) error {
-	m.message = message
 	return m.Called(message).Error(0)
 }
 
@@ -179,7 +177,12 @@ func Test_ReceiverSendOTPHandler_ServeHTTP(t *testing.T) {
 
 		mockMessenger.On("SendMessage", mock.AnythingOfType("message.Message")).
 			Return(nil).
-			Once()
+			Once().
+			Run(func(args mock.Arguments) {
+				msg := args.Get(0).(message.Message)
+				assert.Contains(t, msg.Message, "is your MyCustomAid phone verification code.")
+				assert.Regexp(t, regexp.MustCompile(`^\d{6}\s.+$`), msg.Message)
+			})
 
 		rr := httptest.NewRecorder()
 		r.ServeHTTP(rr, req)
@@ -191,9 +194,6 @@ func Test_ReceiverSendOTPHandler_ServeHTTP(t *testing.T) {
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.Contains(t, resp.Header.Get("Content-Type"), "/json; charset=utf-8")
 		assert.JSONEq(t, string(respBody), `{"message":"if your phone number is registered, you'll receive an OTP"}`)
-
-		assert.Contains(t, mockMessenger.message.Message, "is your MyCustomAid phone verification code.")
-		assert.Regexp(t, regexp.MustCompile(`^\d{6}\s.+$`), mockMessenger.message.Message)
 	})
 
 	t.Run("returns 200 - parses a custom OTP message template successfully", func(t *testing.T) {
@@ -221,7 +221,12 @@ func Test_ReceiverSendOTPHandler_ServeHTTP(t *testing.T) {
 
 		mockMessenger.On("SendMessage", mock.AnythingOfType("message.Message")).
 			Return(nil).
-			Once()
+			Once().
+			Run(func(args mock.Arguments) {
+				msg := args.Get(0).(message.Message)
+				assert.Contains(t, msg.Message, customOTPMessage)
+				assert.Regexp(t, regexp.MustCompile(`^\d{6}\s.+$`), msg.Message)
+			})
 
 		rr := httptest.NewRecorder()
 		r.ServeHTTP(rr, req)
@@ -233,10 +238,6 @@ func Test_ReceiverSendOTPHandler_ServeHTTP(t *testing.T) {
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.Contains(t, resp.Header.Get("Content-Type"), "/json; charset=utf-8")
 		assert.JSONEq(t, string(respBody), `{"message":"if your phone number is registered, you'll receive an OTP"}`)
-
-		// Validating message
-		assert.Contains(t, mockMessenger.message.Message, customOTPMessage)
-		assert.Regexp(t, regexp.MustCompile(`^\d{6}\s.+$`), mockMessenger.message.Message)
 	})
 
 	t.Run("returns 500 - InternalServerError when something goes wrong when sending the SMS", func(t *testing.T) {
