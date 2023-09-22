@@ -34,8 +34,19 @@ ALTER TABLE public.receivers
 
 -- Add receiver_wallet_id to payments table
 ALTER TABLE public.payments
-    ADD COLUMN receiver_wallet_id VARCHAR(64) NOT NULL,
+    ADD COLUMN receiver_wallet_id VARCHAR(64),
     ADD CONSTRAINT fk_payments_receiver_wallet_id FOREIGN KEY (receiver_wallet_id) REFERENCES public.receiver_wallets (id);
+
+UPDATE 
+    public.payments p
+    SET receiver_wallet_id = (
+        SELECT rw.id
+        FROM public.receiver_wallets rw
+        WHERE rw.receiver_id = p.receiver_id
+        LIMIT 1
+    );
+
+ALTER TABLE public.payments ALTER COLUMN receiver_wallet_id SET NOT NULL;
 
 -- +migrate Down
 DROP TRIGGER refresh_receiver_verifications_updated_at ON public.receiver_verifications;
