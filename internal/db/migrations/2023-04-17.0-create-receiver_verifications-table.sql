@@ -29,6 +29,8 @@ ALTER TABLE public.disbursements
 -- Add external_id field
 ALTER TABLE public.receivers
     ADD COLUMN external_id VARCHAR(64);
+UPDATE public.receivers SET external_id = id;
+ALTER TABLE public.receivers ALTER COLUMN external_id SET NOT NULL;
 
 -- Add receiver_wallet_id to payments table
 ALTER TABLE public.payments
