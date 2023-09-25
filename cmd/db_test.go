@@ -210,7 +210,7 @@ func Test_DatabaseCommand_db_setup_for_network(t *testing.T) {
 	wallets, err = models.Wallets.GetAll(ctx)
 	require.NoError(t, err)
 
-	assert.Len(t, wallets, 1)
+	assert.Len(t, wallets, 2)
 	// assert.Equal(t, "Beans App", wallets[0].Name)
 	// assert.Equal(t, "https://www.beansapp.com/disbursements", wallets[0].Homepage)
 	// assert.Equal(t, "api.beansapp.com", wallets[0].SEP10ClientDomain)
@@ -219,6 +219,11 @@ func Test_DatabaseCommand_db_setup_for_network(t *testing.T) {
 	assert.Equal(t, "https://vibrantapp.com/vibrant-assist", wallets[0].Homepage)
 	assert.Equal(t, "api.vibrantapp.com", wallets[0].SEP10ClientDomain)
 	assert.Equal(t, "https://vibrantapp.com/sdp", wallets[0].DeepLinkSchema)
+
+	assert.Equal(t, "Vibrant Assist RC", wallets[1].Name)
+	assert.Equal(t, "vibrantapp.com/vibrant-assist", wallets[1].Homepage)
+	assert.Equal(t, "vibrantapp.com", wallets[1].SEP10ClientDomain)
+	assert.Equal(t, "https://vibrantapp.com/sdp-rc", wallets[1].DeepLinkSchema)
 
 	expectedLogs := []string{
 		"updating/inserting assets for the 'pubnet' network",

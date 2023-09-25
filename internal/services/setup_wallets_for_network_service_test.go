@@ -46,9 +46,10 @@ func Test_SetupWalletsForProperNetwork(t *testing.T) {
 		wallets, err := models.Wallets.GetAll(ctx)
 		require.NoError(t, err)
 
-		assert.Len(t, wallets, 1)
+		assert.Len(t, wallets, 2)
 		// assert.Equal(t, "Beans App", wallets[0].Name)
 		assert.Equal(t, "Vibrant Assist", wallets[0].Name)
+		assert.Equal(t, "Vibrant Assist RC", wallets[1].Name)
 
 		expectedLogs := []string{
 			"updating/inserting wallets for the 'pubnet' network",
