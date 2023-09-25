@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -176,7 +177,56 @@ func Test_ReceiverSendOTPHandler_ServeHTTP(t *testing.T) {
 
 		mockMessenger.On("SendMessage", mock.AnythingOfType("message.Message")).
 			Return(nil).
+			Once().
+			Run(func(args mock.Arguments) {
+				msg := args.Get(0).(message.Message)
+				assert.Contains(t, msg.Message, "is your MyCustomAid phone verification code.")
+				assert.Regexp(t, regexp.MustCompile(`^\d{6}\s.+$`), msg.Message)
+			})
+
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+
+		resp := rr.Result()
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.Contains(t, resp.Header.Get("Content-Type"), "/json; charset=utf-8")
+		assert.JSONEq(t, string(respBody), `{"message":"if your phone number is registered, you'll receive an OTP"}`)
+	})
+
+	t.Run("returns 200 - parses a custom OTP message template successfully", func(t *testing.T) {
+		reCAPTCHAValidator.
+			On("IsTokenValid", mock.Anything, "XyZ").
+			Return(true, nil).
 			Once()
+		req, err := http.NewRequest(http.MethodPost, "/wallet-registration/otp", strings.NewReader(string(reqBody)))
+		require.NoError(t, err)
+
+		validClaims := &anchorplatform.SEP24JWTClaims{
+			ClientDomainClaim: wallet1.SEP10ClientDomain,
+			RegisteredClaims: jwt.RegisteredClaims{
+				ID:        "test-transaction-id",
+				Subject:   "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444",
+				ExpiresAt: jwt.NewNumericDate(time.Now().Add(5 * time.Minute)),
+			},
+		}
+		req = req.WithContext(context.WithValue(req.Context(), anchorplatform.SEP24ClaimsContextKey, validClaims))
+
+		// Set a custom message for the OTP message
+		customOTPMessage := "Here's your code to complete your registration. MyOrg 👋"
+		err = models.Organizations.Update(ctx, &data.OrganizationUpdate{OTPMessageTemplate: &customOTPMessage})
+		require.NoError(t, err)
+
+		mockMessenger.On("SendMessage", mock.AnythingOfType("message.Message")).
+			Return(nil).
+			Once().
+			Run(func(args mock.Arguments) {
+				msg := args.Get(0).(message.Message)
+				assert.Contains(t, msg.Message, customOTPMessage)
+				assert.Regexp(t, regexp.MustCompile(`^\d{6}\s.+$`), msg.Message)
+			})
 
 		rr := httptest.NewRecorder()
 		r.ServeHTTP(rr, req)

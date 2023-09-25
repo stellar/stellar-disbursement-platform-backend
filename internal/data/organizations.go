@@ -22,16 +22,22 @@ import (
 )
 
 type Organization struct {
-	ID                             string    `json:"id" db:"id"`
-	Name                           string    `json:"name" db:"name"`
-	StellarMainAddress             string    `json:"stellar_main_address" db:"stellar_main_address"`
-	TimezoneUTCOffset              string    `json:"timezone_utc_offset" db:"timezone_utc_offset"`
-	ArePaymentsEnabled             bool      `json:"are_payments_enabled" db:"are_payments_enabled"`
-	SMSRegistrationMessageTemplate string    `json:"sms_registration_message_template" db:"sms_registration_message_template"`
-	Logo                           []byte    `db:"logo"`
-	IsApprovalRequired             bool      `json:"is_approval_required" db:"is_approval_required"`
-	CreatedAt                      time.Time `json:"created_at" db:"created_at"`
-	UpdatedAt                      time.Time `json:"updated_at" db:"updated_at"`
+	ID                             string `json:"id" db:"id"`
+	Name                           string `json:"name" db:"name"`
+	StellarMainAddress             string `json:"stellar_main_address" db:"stellar_main_address"`
+	TimezoneUTCOffset              string `json:"timezone_utc_offset" db:"timezone_utc_offset"`
+	ArePaymentsEnabled             bool   `json:"are_payments_enabled" db:"are_payments_enabled"`
+	SMSRegistrationMessageTemplate string `json:"sms_registration_message_template" db:"sms_registration_message_template"`
+	// OTPMessageTemplate is the message template to send the OTP code to the receivers validates their identity when registering their wallets.
+	// The message may have the template values {{.OTP}} and {{.OrganizationName}}, it will be parsed and the values injected when executing the template.
+	// When the {{.OTP}} is not found in the message, it's added at the beginning of the message.
+	// Example:
+	//	{{.OTP}} OTPMessageTemplate
+	OTPMessageTemplate string    `json:"otp_message_template" db:"otp_message_template"`
+	Logo               []byte    `db:"logo"`
+	IsApprovalRequired bool      `json:"is_approval_required" db:"is_approval_required"`
+	CreatedAt          time.Time `json:"created_at" db:"created_at"`
+	UpdatedAt          time.Time `json:"updated_at" db:"updated_at"`
 }
 
 type OrganizationUpdate struct {
@@ -39,6 +45,10 @@ type OrganizationUpdate struct {
 	Logo               []byte
 	TimezoneUTCOffset  string
 	IsApprovalRequired *bool
+
+	// Using pointers to accept empty strings
+	SMSRegistrationMessageTemplate *string
+	OTPMessageTemplate             *string
 }
 
 type LogoType string
@@ -66,8 +76,8 @@ func (lt LogoType) ToHTTPContentType() string {
 }
 
 func (ou *OrganizationUpdate) validate() error {
-	if ou.Name == "" && len(ou.Logo) == 0 && ou.TimezoneUTCOffset == "" && ou.IsApprovalRequired == nil {
-		return fmt.Errorf("name, timezone UTC offset, approval workflow flag or logo is required")
+	if ou.areAllFieldsEmpty() {
+		return fmt.Errorf("name, timezone UTC offset, approval workflow flag, SMS invite template, OTP message template or logo is required")
 	}
 
 	if len(ou.Logo) > 0 {
@@ -86,6 +96,15 @@ func (ou *OrganizationUpdate) validate() error {
 	}
 
 	return nil
+}
+
+func (ou *OrganizationUpdate) areAllFieldsEmpty() bool {
+	return (ou.Name == "" &&
+		len(ou.Logo) == 0 &&
+		ou.TimezoneUTCOffset == "" &&
+		ou.IsApprovalRequired == nil &&
+		ou.SMSRegistrationMessageTemplate == nil &&
+		ou.OTPMessageTemplate == nil)
 }
 
 type OrganizationModel struct {
@@ -171,6 +190,26 @@ func (om *OrganizationModel) Update(ctx context.Context, ou *OrganizationUpdate)
 	if ou.IsApprovalRequired != nil {
 		fields = append(fields, "is_approval_required = ?")
 		args = append(args, *ou.IsApprovalRequired)
+	}
+
+	if ou.SMSRegistrationMessageTemplate != nil {
+		if *ou.SMSRegistrationMessageTemplate != "" {
+			fields = append(fields, "sms_registration_message_template = ?")
+			args = append(args, *ou.SMSRegistrationMessageTemplate)
+		} else {
+			// When empty value is passed by parameter we set de DEFAULT value for the column.
+			fields = append(fields, "sms_registration_message_template = DEFAULT")
+		}
+	}
+
+	if ou.OTPMessageTemplate != nil {
+		if *ou.OTPMessageTemplate != "" {
+			fields = append(fields, "otp_message_template = ?")
+			args = append(args, *ou.OTPMessageTemplate)
+		} else {
+			// When empty value is passed by parameter we set de DEFAULT value for the column.
+			fields = append(fields, "otp_message_template = DEFAULT")
+		}
 	}
 
 	query = om.dbConnectionPool.Rebind(fmt.Sprintf(query, strings.Join(fields, ", ")))

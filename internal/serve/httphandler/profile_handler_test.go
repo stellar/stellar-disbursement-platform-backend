@@ -92,7 +92,12 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 	url := "/profile/organization"
 
 	resetOrganizationInfo := func(t *testing.T, ctx context.Context) {
-		const q = "UPDATE organizations SET name = 'MyCustomAid', logo = NULL, timezone_utc_offset = '+00:00'"
+		const q = `
+			UPDATE
+				organizations
+			SET
+				name = 'MyCustomAid', logo = NULL, timezone_utc_offset = '+00:00',
+				sms_registration_message_template = DEFAULT, otp_message_template = DEFAULT`
 		_, err := dbConnectionPool.ExecContext(ctx, q)
 		require.NoError(t, err)
 	}
@@ -409,7 +414,7 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 		assert.Equal(t, "MyCustomAid", org.Name)
 	})
 
-	t.Run("updates both organization name, timezone UTC offset and logo successfully", func(t *testing.T) {
+	t.Run("updates organization name, timezone UTC offset and logo successfully", func(t *testing.T) {
 		resetOrganizationInfo(t, ctx)
 
 		ctx = context.WithValue(ctx, middleware.TokenContextKey, "token")
@@ -453,6 +458,142 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 		assert.Equal(t, "My Org Name", org.Name)
 		assert.Equal(t, "-03:00", org.TimezoneUTCOffset)
 		assert.Equal(t, imgBuf.Bytes(), org.Logo)
+	})
+
+	t.Run("updates organization's SMS Registration Message Template", func(t *testing.T) {
+		resetOrganizationInfo(t, ctx)
+		ctx = context.WithValue(ctx, middleware.TokenContextKey, "token")
+
+		org, err := models.Organizations.Get(ctx)
+		require.NoError(t, err)
+		defaultMessage := "You have a payment waiting for you from the {{.OrganizationName}}. Click {{.RegistrationLink}} to register."
+		assert.Equal(t, defaultMessage, org.SMSRegistrationMessageTemplate)
+
+		// Custom message
+		w := httptest.NewRecorder()
+		req, err := createOrganizationProfileMultipartRequest(t, url, "", "", `{"sms_registration_message_template": "My custom receiver wallet registration invite. MyOrg 👋"}`, new(bytes.Buffer))
+		require.NoError(t, err)
+		req = req.WithContext(ctx)
+		http.HandlerFunc(handler.PatchOrganizationProfile).ServeHTTP(w, req)
+
+		resp := w.Result()
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.JSONEq(t, `{"message": "organization profile updated successfully"}`, string(respBody))
+
+		org, err = models.Organizations.Get(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, "My custom receiver wallet registration invite. MyOrg 👋", org.SMSRegistrationMessageTemplate)
+
+		// Don't update the message
+		w = httptest.NewRecorder()
+		req, err = createOrganizationProfileMultipartRequest(t, url, "", "", `{"organization_name": "MyOrg"}`, new(bytes.Buffer))
+		require.NoError(t, err)
+		req = req.WithContext(ctx)
+		http.HandlerFunc(handler.PatchOrganizationProfile).ServeHTTP(w, req)
+
+		resp = w.Result()
+		respBody, err = io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.JSONEq(t, `{"message": "organization profile updated successfully"}`, string(respBody))
+
+		org, err = models.Organizations.Get(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, "My custom receiver wallet registration invite. MyOrg 👋", org.SMSRegistrationMessageTemplate)
+
+		// Back to default message
+		w = httptest.NewRecorder()
+		req, err = createOrganizationProfileMultipartRequest(t, url, "", "", `{"sms_registration_message_template": ""}`, new(bytes.Buffer))
+		require.NoError(t, err)
+		req = req.WithContext(ctx)
+		http.HandlerFunc(handler.PatchOrganizationProfile).ServeHTTP(w, req)
+
+		resp = w.Result()
+		respBody, err = io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.JSONEq(t, `{"message": "organization profile updated successfully"}`, string(respBody))
+
+		org, err = models.Organizations.Get(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, defaultMessage, org.SMSRegistrationMessageTemplate)
+	})
+
+	t.Run("updates organization's OTP Message Template", func(t *testing.T) {
+		resetOrganizationInfo(t, ctx)
+
+		ctx = context.WithValue(ctx, middleware.TokenContextKey, "token")
+
+		org, err := models.Organizations.Get(ctx)
+		require.NoError(t, err)
+
+		defaultMessage := "{{.OTP}} is your {{.OrganizationName}} phone verification code."
+		assert.Equal(t, defaultMessage, org.OTPMessageTemplate)
+
+		// Custom message
+		w := httptest.NewRecorder()
+		req, err := createOrganizationProfileMultipartRequest(t, url, "", "", `{"otp_message_template": "Here's your OTP Code to complete your registration. MyOrg 👋"}`, new(bytes.Buffer))
+		require.NoError(t, err)
+		req = req.WithContext(ctx)
+		http.HandlerFunc(handler.PatchOrganizationProfile).ServeHTTP(w, req)
+
+		resp := w.Result()
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.JSONEq(t, `{"message": "organization profile updated successfully"}`, string(respBody))
+
+		org, err = models.Organizations.Get(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, "Here's your OTP Code to complete your registration. MyOrg 👋", org.OTPMessageTemplate)
+
+		// Don't update the message
+		w = httptest.NewRecorder()
+		req, err = createOrganizationProfileMultipartRequest(t, url, "", "", `{"organization_name": "MyOrg"}`, new(bytes.Buffer))
+		require.NoError(t, err)
+		req = req.WithContext(ctx)
+		http.HandlerFunc(handler.PatchOrganizationProfile).ServeHTTP(w, req)
+
+		resp = w.Result()
+		respBody, err = io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.JSONEq(t, `{"message": "organization profile updated successfully"}`, string(respBody))
+
+		org, err = models.Organizations.Get(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, "Here's your OTP Code to complete your registration. MyOrg 👋", org.OTPMessageTemplate)
+
+		// Back to default message
+		w = httptest.NewRecorder()
+		req, err = createOrganizationProfileMultipartRequest(t, url, "", "", `{"otp_message_template": ""}`, new(bytes.Buffer))
+		require.NoError(t, err)
+		req = req.WithContext(ctx)
+		http.HandlerFunc(handler.PatchOrganizationProfile).ServeHTTP(w, req)
+
+		resp = w.Result()
+		respBody, err = io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.JSONEq(t, `{"message": "organization profile updated successfully"}`, string(respBody))
+
+		org, err = models.Organizations.Get(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, defaultMessage, org.OTPMessageTemplate)
 	})
 }
 
