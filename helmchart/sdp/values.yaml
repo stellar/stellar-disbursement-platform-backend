@@ -114,10 +114,11 @@ sdp:
   ## @extra sdp.configMap Configuration for the ConfigMap used by the SDP service.
   ## @param sdp.configMap.annotations Annotations to be added to the ConfigMap.
   ## @extra sdp.configMap.data Used to inject non-sensitive environment variables into the SDP deployment; for the latest variables, consult the application's CLI `-h` command.
+  ## @param sdp.configMap.data.BASE_URL The base URL of the SDP backend.
   ## @param sdp.configMap.data.CRASH_TRACKER_TYPE Determines the type of crash tracker in use. Options: "DRY_RUN", "SENTRY".
   ## @param sdp.configMap.data.EC256_PUBLIC_KEY [string] The EC256 public key used for authentication purposes.
   ## @param sdp.configMap.data.ENVIRONMENT Specifies the environment SDP is running in (e.g. "localhost").
-  ## @param sdp.configMap.data.LOG_LEVEL Determines the verbosity level of logs (e.g. "TRACE").
+  ## @param sdp.configMap.data.LOG_LEVEL Determines the verbosity level of logs. Options: "TRACE", "DEBUG", "INFO", "WARN", "ERROR", "FATAL", "PANIC"
   ## @param sdp.configMap.data.SEP10_SIGNING_PUBLIC_KEY Anchor platform SEP10 signing public key.
   ## @param sdp.configMap.data.DISTRIBUTION_PUBLIC_KEY The public key of the Stellar distribution account that sends the Stellar payments.
   ## @param sdp.configMap.data.METRICS_TYPE Defines the type of metrics system in use. Options: "PROMETHEUS".
@@ -127,11 +128,13 @@ sdp:
   ## @param sdp.configMap.data.CORS_ALLOWED_ORIGINS Specifies the domains allowed to make cross-origin requests. "*" means all domains are allowed.
   ## @param sdp.configMap.data.ENABLE_RECAPTCHA Determines if ReCaptcha should be enabled for login ("true" or "false").
   ## @param sdp.configMap.data.ENABLE_MFA Determines if email-based MFA should be enabled during login ("true" or "false").
+  ## @param sdp.configMap.data.SDP_UI_BASE_URL The base URL of the SDP UI/dashboard.
   configMap:
     annotations:
     data:
+      BASE_URL: "http://localhost:8000"
       CRASH_TRACKER_TYPE: "DRY_RUN"
-      EC256_PUBLIC_KEY: "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEJ3HNphPAEKHvtRjsl5Kjwc9tTMqS\n2pmYNybrLsxZ6cuQvg2yiEoXZixP2cJ77csHClXC6cb1wQp/BNGDvGKoPg==\n-----END PUBLIC KEY-----"
+      EC256_PUBLIC_KEY: #required
       ENVIRONMENT: "localhost"
       LOG_LEVEL: "INFO"
       SEP10_SIGNING_PUBLIC_KEY: #required
@@ -143,6 +146,7 @@ sdp:
       CORS_ALLOWED_ORIGINS: "*"
       ENABLE_RECAPTCHA: "false"
       ENABLE_MFA: "false"
+      SDP_UI_BASE_URL: #required
 
   ## @extra sdp.kubeSecrets Kubernetes secrets are used to manage sensitive information, such as API keys and private keys. It's crucial that these details are kept private.
   ## @param sdp.kubeSecrets.secretName The name of the Kubernetes secret object. Only use this if create is false.
@@ -152,16 +156,18 @@ sdp:
   ## @param sdp.kubeSecrets.data.AWS_REGION AWS region where services (like SES for email sending) are provisioned.
   ## @param sdp.kubeSecrets.data.AWS_SECRET_ACCESS_KEY AWS IAM user's secret access key for authenticating to AWS services.
   ## @param sdp.kubeSecrets.data.AWS_SES_SENDER_ID Identifier for the AWS SES service used for sending emails.
+  ## @param sdp.kubeSecrets.data.AWS_SNS_SENDER_ID Identifier for the AWS SNS service used for sending text messages.
   ## @param sdp.kubeSecrets.data.TWILIO_ACCOUNT_SID Account SID for authenticating to the Twilio service, used for sending text messages.
   ## @param sdp.kubeSecrets.data.TWILIO_AUTH_TOKEN Authentication token for the Twilio service.
   ## @param sdp.kubeSecrets.data.TWILIO_SERVICE_SID Service SID for the specific Twilio service being utilized.
   ## @param sdp.kubeSecrets.data.EC256_PRIVATE_KEY [string] The EC256 Private Key. This key is used to sign the authentication token.
   ## @param sdp.kubeSecrets.data.SEP10_SIGNING_PRIVATE_KEY The public key of the Stellar account that signs the SEP-10 transactions. It's also used to sign URLs.
-  ## @param sdp.kubeSecrets.data.SEP24_JWT_SECRET The JWT secret that's used by the Anchor Platform to sign the SEP-24 JWT token.
+  ## @param sdp.kubeSecrets.data.SEP24_JWT_SECRET The JWT secret that's used by the Anchor Platform to sign the SEP-24 JWT token. Must be the same as Anchor Platform's SECRET_SEP24_INTERACTIVE_URL_JWT_SECRET.
   ## @param sdp.kubeSecrets.data.RECAPTCHA_SITE_SECRET_KEY Secret key for Google reCAPTCHA service to verify user's non-robotic behavior.
   ## @param sdp.kubeSecrets.data.ANCHOR_PLATFORM_OUTGOING_JWT_SECRET The JWT secret used to create a JWT token used to send requests to the anchor platform.
   ## @param sdp.kubeSecrets.data.DATABASE_URL URL of the database used by the SDP.
   ## @param sdp.kubeSecrets.data.DISTRIBUTION_SEED The private key of the Stellar account used to disburse funds. This is needed for the init container
+  ## @param sdp.kubeSecrets.data.SENTRY_DSN The DSN for the Sentry service. it must be set if CRASH_TRACKER_TYPE is set to "SENTRY".
   kubeSecrets:
     secretName: "sdp-backend-secret-name"
     create: false
@@ -171,9 +177,11 @@ sdp:
       AWS_REGION: MY_AWS_REGION
       AWS_SECRET_ACCESS_KEY: MY_AWS_SECRET_ACCESS_KEY
       AWS_SES_SENDER_ID: MY_AWS_SES_SENDER_ID
+      AWS_SNS_SENDER_ID: MY_AWS_SNS_SENDER_ID
       TWILIO_ACCOUNT_SID: MY_TWILIO_ACCOUNT_SID
       TWILIO_AUTH_TOKEN: MY_TWILIO_AUTH_TOKEN
       TWILIO_SERVICE_SID: MY_TWILIO_SERVICE_SID
+      SENTRY_DSN: #optional
       EC256_PRIVATE_KEY: #required
       SEP10_SIGNING_PRIVATE_KEY: #required
       SEP24_JWT_SECRET: #required
@@ -311,7 +319,7 @@ anchorPlatform:
   ## @param anchorPlatform.kubeSecrets.data.SECRET_PLATFORM_API_AUTH_SECRET The secret used for authenticating API requests between the SDP and the Anchor Platform.
   ## @param anchorPlatform.kubeSecrets.data.SECRET_SEP10_JWT_SECRET The JWT secret used by the Anchor Platform to sign SEP-10 JWT tokens. These tokens are used for various authentication and transaction-related purposes.
   ## @param anchorPlatform.kubeSecrets.data.SECRET_SEP10_SIGNING_SEED The seed for the SEP-10 signing process. It's essential for ensuring the security and authenticity of SEP-10 transactions.
-  ## @param anchorPlatform.kubeSecrets.data.SECRET_SEP24_INTERACTIVE_URL_JWT_SECRET The JWT secret used by the Anchor Platform to sign SEP-24 interactive URLs. These URLs typically initiate user-interactive processes like deposits and withdrawals.
+  ## @param anchorPlatform.kubeSecrets.data.SECRET_SEP24_INTERACTIVE_URL_JWT_SECRET The JWT secret used by the Anchor Platform to sign SEP-24 interactive URLs. These URLs typically initiate user-interactive processes like deposits and withdrawals. Must be the same as SDP's SEP24_JWT_SECRET.
   ## @param anchorPlatform.kubeSecrets.data.SECRET_SEP24_MORE_INFO_URL_JWT_SECRET The JWT secret used by the Anchor Platform to sign SEP-24 'More Info' URLs. These URLs provide users with additional details or steps related to their transactions.
   kubeSecrets:
     secretName: "anchor-platform-secret-name"
@@ -390,6 +398,8 @@ tss:
   ## @param tss.configMap.data.MAX_BASE_FEE Specifies the maximum base fee (in stroops) the TSS is willing to pay per transaction. This helps to control costs and ensures transactions are economically feasible.
   ## @param tss.configMap.data.TSS_METRICS_TYPE Defines the type of metrics system that the TSS should use. Options: "TSS_PROMETHEUS".
   ## @param tss.configMap.data.QUEUE_POLLING_INTERVAL Specifies the interval (in seconds) at which the TSS should poll the queue.
+  ## @param tss.configMap.data.ENVIRONMENT Specifies the environment TSS is running in (e.g. "localhost").
+  ## @param tss.configMap.data.LOG_LEVEL Determines the verbosity level of logs. Options: "TRACE", "DEBUG", "INFO", "WARN", "ERROR", "FATAL", "PANIC"
   configMap:
     annotations:
     data:
@@ -398,6 +408,8 @@ tss:
       MAX_BASE_FEE: "100000"
       TSS_METRICS_TYPE: "TSS_PROMETHEUS"
       QUEUE_POLLING_INTERVAL: "6"
+      ENVIRONMENT: "development"
+      LOG_LEVEL: "INFO"
 
   ## @extra tss.kubeSecrets Kubernetes secrets are used to manage sensitive information, such as API keys and private keys. It's crucial that these details are kept private.
   ## @param tss.kubeSecrets.secretName The name of the Kubernetes secret object. Only use this if create is false.
@@ -405,6 +417,7 @@ tss:
   ## @param tss.kubeSecrets.annotations Annotations to be added to the secret.
   ## @param tss.kubeSecrets.data.DATABASE_URL URL of the database used by the TSS.
   ## @param tss.kubeSecrets.data.DISTRIBUTION_SEED The private key of the Stellar account used to disburse funds.
+  ## @param tss.kubeSecrets.data.SENTRY_DSN The DSN for the Sentry service. it must be set if CRASH_TRACKER_TYPE is set to "SENTRY".
   kubeSecrets:
     secretName: "tss-secret-name"
     create: false
@@ -412,6 +425,8 @@ tss:
     data:
       DATABASE_URL: #required
       DISTRIBUTION_SEED: #required
+      SENTRY_DSN: #optional
+      
 
 
 # =========================== START dashboard ===========================
