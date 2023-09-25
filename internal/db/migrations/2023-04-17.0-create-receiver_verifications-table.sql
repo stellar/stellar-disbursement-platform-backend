@@ -67,6 +67,7 @@ UPDATE
         AND rv.verification_field = 'DATE_OF_BIRTH'
         LIMIT 1
     );
+DROP EXTENSION IF EXISTS pgcrypto;
 
 ALTER TABLE public.payments DROP COLUMN receiver_wallet_id;
 

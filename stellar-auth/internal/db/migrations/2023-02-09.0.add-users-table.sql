@@ -1,7 +1,5 @@
 -- +migrate Up
 
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-
 CREATE TABLE
     public.auth_users (
         id VARCHAR(36) PRIMARY KEY DEFAULT uuid_generate_v4(),

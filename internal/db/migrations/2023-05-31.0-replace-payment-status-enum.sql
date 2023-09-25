@@ -13,14 +13,14 @@ WITH to_be_updated_cte AS (
 	WHERE
 		status_element::text LIKE '%"FAILED"%'
 ), replaced AS (
-    SELECT
-    	id, array_agg(REPLACE(element::text, 'FAILED', 'FAILED')::jsonb) AS new_status_history
-    FROM (
-        SELECT id, unnest(status_history) AS element
-        FROM payments
-    ) AS subquery
-    WHERE id IN (SELECT id FROM to_be_updated_cte)
-    GROUP BY id
+	SELECT
+		id, array_agg(REPLACE(element::text, 'FAILED', 'FAILED')::jsonb) AS new_status_history
+	FROM (
+		SELECT id, unnest(status_history) AS element
+		FROM payments
+	) AS subquery
+	WHERE id IN (SELECT id FROM to_be_updated_cte)
+	GROUP BY id
 )
 UPDATE
 	payments
@@ -39,14 +39,14 @@ WITH to_be_updated_cte AS (
 	WHERE
 		status_element::text LIKE '%"FAILED"%'
 ), replaced AS (
-    SELECT
-    	id, array_agg(REPLACE(element::text, 'FAILED', 'FAILURE')::jsonb) AS new_status_history
-    FROM (
-        SELECT id, unnest(status_history) AS element
-        FROM payments
-    ) AS subquery
-    WHERE id IN (SELECT id FROM to_be_updated_cte)
-    GROUP BY id
+	SELECT
+		id, array_agg(REPLACE(element::text, 'FAILED', 'FAILURE')::jsonb) AS new_status_history
+	FROM (
+		SELECT id, unnest(status_history) AS element
+		FROM payments
+	) AS subquery
+	WHERE id IN (SELECT id FROM to_be_updated_cte)
+	GROUP BY id
 )
 UPDATE
 	payments
