@@ -28,10 +28,10 @@ func Test_Organizations_DatabaseTriggers(t *testing.T) {
 	t.Run("SQL query will trigger an error if you try to have more than one organization", func(t *testing.T) {
 		q := `
 			INSERT INTO organizations (
-				name, stellar_main_address, timezone_utc_offset, are_payments_enabled, sms_registration_message_template
+				name, timezone_utc_offset, are_payments_enabled, sms_registration_message_template
 			)
 			VALUES (
-				'Test name', 'Test Stellar address', '+00:00', false, 'Test template {{.OrganizationName}} {{.RegistrationLink}}.'
+				'Test name', '+00:00', false, 'Test template {{.OrganizationName}} {{.RegistrationLink}}.'
 			)
 		`
 		_, err := dbConnectionPool.ExecContext(ctx, q)
@@ -54,7 +54,6 @@ func Test_Organizations_DatabaseTriggers(t *testing.T) {
 func Test_Organizations_Get(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
-
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
@@ -69,7 +68,6 @@ func Test_Organizations_Get(t *testing.T) {
 
 		assert.Len(t, gotOrganization.ID, 36)
 		assert.Equal(t, "MyCustomAid", gotOrganization.Name)
-		assert.Equal(t, "GDA34JZ26FZY64XCSY46CUNSHLX762LHJXQHWWHGL5HSFRWSGBVHUFNI", gotOrganization.StellarMainAddress)
 		assert.Equal(t, "+00:00", gotOrganization.TimezoneUTCOffset)
 		assert.False(t, gotOrganization.ArePaymentsEnabled)
 		assert.Equal(t, "You have a payment waiting for you from the {{.OrganizationName}}. Click {{.RegistrationLink}} to register.", gotOrganization.SMSRegistrationMessageTemplate)

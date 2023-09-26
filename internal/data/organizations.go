@@ -24,7 +24,6 @@ import (
 type Organization struct {
 	ID                             string `json:"id" db:"id"`
 	Name                           string `json:"name" db:"name"`
-	StellarMainAddress             string `json:"stellar_main_address" db:"stellar_main_address"`
 	TimezoneUTCOffset              string `json:"timezone_utc_offset" db:"timezone_utc_offset"`
 	ArePaymentsEnabled             bool   `json:"are_payments_enabled" db:"are_payments_enabled"`
 	SMSRegistrationMessageTemplate string `json:"sms_registration_message_template" db:"sms_registration_message_template"`
