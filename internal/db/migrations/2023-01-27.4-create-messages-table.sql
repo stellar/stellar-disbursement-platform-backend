@@ -21,7 +21,7 @@ CREATE TABLE public.messages (
 );
 
 -- +migrate StatementBegin
--- Insert messages if there are pre-existing data, so to prevent SMSs from being re-triggered.
+-- Insert messages if there is pre-existing data, so to prevent SMSs from being re-triggered.
 DO $$
 BEGIN
     IF (SELECT COUNT(*) FROM public.receivers WHERE status <> ALL(ARRAY['READY', 'PAID', 'PARTIALLY_CASHED_OUT', 'FULLY_CASHED_OUT'])) > 0 THEN 
@@ -39,8 +39,8 @@ BEGIN
             (SELECT id FROM public.assets WHERE code = 'USDC' LIMIT 1),
             (SELECT id FROM public.wallets WHERE name ILIKE '%Vibrant%' LIMIT 1),
             r.id,
-            'text ommitted during initial migration',
-            'title ommitted during initial migration',
+            'text omitted during initial migration',
+            'title omitted during initial migration',
             COALESCE(r.link_last_sent_at, NOW())
         FROM public.receivers r
         WHERE r.status <> ALL(ARRAY['READY', 'PAID', 'PARTIALLY_CASHED_OUT', 'FULLY_CASHED_OUT']);
