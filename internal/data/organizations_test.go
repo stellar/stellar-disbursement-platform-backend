@@ -28,10 +28,10 @@ func Test_Organizations_DatabaseTriggers(t *testing.T) {
 	t.Run("SQL query will trigger an error if you try to have more than one organization", func(t *testing.T) {
 		q := `
 			INSERT INTO organizations (
-				name, timezone_utc_offset, are_payments_enabled, sms_registration_message_template
+				name, timezone_utc_offset, sms_registration_message_template
 			)
 			VALUES (
-				'Test name', '+00:00', false, 'Test template {{.OrganizationName}} {{.RegistrationLink}}.'
+				'Test name', '+00:00', 'Test template {{.OrganizationName}} {{.RegistrationLink}}.'
 			)
 		`
 		_, err := dbConnectionPool.ExecContext(ctx, q)
@@ -69,40 +69,10 @@ func Test_Organizations_Get(t *testing.T) {
 		assert.Len(t, gotOrganization.ID, 36)
 		assert.Equal(t, "MyCustomAid", gotOrganization.Name)
 		assert.Equal(t, "+00:00", gotOrganization.TimezoneUTCOffset)
-		assert.False(t, gotOrganization.ArePaymentsEnabled)
 		assert.Equal(t, "You have a payment waiting for you from the {{.OrganizationName}}. Click {{.RegistrationLink}} to register.", gotOrganization.SMSRegistrationMessageTemplate)
 		assert.NotEmpty(t, gotOrganization.CreatedAt)
 		assert.NotEmpty(t, gotOrganization.UpdatedAt)
 		assert.False(t, gotOrganization.IsApprovalRequired)
-	})
-}
-
-func Test_Organizations_ArePaymentsEnabled(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
-
-	ctx := context.Background()
-
-	organizationModel := &OrganizationModel{dbConnectionPool: dbConnectionPool}
-
-	t.Run("returns false if it's not enabled", func(t *testing.T) {
-		arePaymentsEnabled, err := organizationModel.ArePaymentsEnabled(ctx)
-		require.NoError(t, err)
-		require.False(t, arePaymentsEnabled)
-	})
-
-	t.Run("returns true if it's enabled", func(t *testing.T) {
-		q := "UPDATE organizations SET are_payments_enabled = true"
-		_, err := dbConnectionPool.ExecContext(ctx, q)
-		require.NoError(t, err)
-
-		arePaymentsEnabled, err := organizationModel.ArePaymentsEnabled(ctx)
-		require.NoError(t, err)
-		require.True(t, arePaymentsEnabled)
 	})
 }
 

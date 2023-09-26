@@ -1,7 +1,14 @@
+-- This migration renames the occurrences of FAILURE into FAILED from the payment status_history column, that were
+-- missed in 2023-05-31.0-replace-payment-status-enum.sql +migrate Up. It also removes two unused columns from the
+-- organizations table.
+
+
 -- +migrate Up
 
 -- Remove unused column
-ALTER TABLE public.organizations DROP COLUMN stellar_main_address;
+ALTER TABLE public.organizations
+    DROP COLUMN stellar_main_address,
+    DROP COLUMN are_payments_enabled;
 
 -- Update the status_history column to replace `FAILURE` with `FAILED`
 WITH to_be_updated_cte AS (
@@ -55,4 +62,6 @@ FROM replaced
 WHERE payments.id = replaced.id;
 
 -- Add back the unused stellar_main_address column
-ALTER TABLE public.organizations ADD COLUMN stellar_main_address VARCHAR(56);
+ALTER TABLE public.organizations
+    ADD COLUMN stellar_main_address VARCHAR(56),
+    ADD COLUMN are_payments_enabled BOOLEAN NOT NULL DEFAULT FALSE;

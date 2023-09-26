@@ -25,7 +25,6 @@ type Organization struct {
 	ID                             string `json:"id" db:"id"`
 	Name                           string `json:"name" db:"name"`
 	TimezoneUTCOffset              string `json:"timezone_utc_offset" db:"timezone_utc_offset"`
-	ArePaymentsEnabled             bool   `json:"are_payments_enabled" db:"are_payments_enabled"`
 	SMSRegistrationMessageTemplate string `json:"sms_registration_message_template" db:"sms_registration_message_template"`
 	// OTPMessageTemplate is the message template to send the OTP code to the receivers validates their identity when registering their wallets.
 	// The message may have the template values {{.OTP}} and {{.OrganizationName}}, it will be parsed and the values injected when executing the template.
@@ -129,27 +128,6 @@ func (om *OrganizationModel) Get(ctx context.Context) (*Organization, error) {
 	}
 
 	return &organization, nil
-}
-
-func (om *OrganizationModel) ArePaymentsEnabled(ctx context.Context) (bool, error) {
-	var arePaymentsEnabled bool
-	query := `
-		SELECT
-			o.are_payments_enabled
-		FROM 
-		    organizations o
-		LIMIT 1
-	`
-
-	err := om.dbConnectionPool.GetContext(ctx, &arePaymentsEnabled, query)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return false, ErrRecordNotFound
-		}
-		return false, fmt.Errorf("error querying organization table: %w", err)
-	}
-
-	return arePaymentsEnabled, nil
 }
 
 func (om *OrganizationModel) Update(ctx context.Context, ou *OrganizationUpdate) error {
