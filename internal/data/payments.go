@@ -264,6 +264,39 @@ func (p *PaymentModel) GetAll(ctx context.Context, queryParams *QueryParams, sql
 	return payments, nil
 }
 
+func (p *PaymentModel) GetAllReadyToPatchAnchorTransactions(ctx context.Context) ([]Payment, error) {
+	const query = `
+		SELECT
+			p.id,
+			p.status,
+			rw.id AS "receiver_wallet.id",
+			rw.anchor_platform_transaction_id AS "receiver_wallet.anchor_platform_transaction_id"
+		FROM
+			payments p
+			INNER JOIN disbursements d on p.disbursement_id = d.id
+			INNER JOIN wallets w on d.wallet_id = w.id
+			INNER JOIN receiver_wallets rw on rw.receiver_id = p.receiver_id AND rw.wallet_id = w.id
+		WHERE
+			p.status = ANY($1) -- ARRAY['SUCCESS', 'FAILURE']::payment_status[]
+			AND rw.status = $2 -- 'REGISTERED'::receiver_wallet_status
+			AND rw.anchor_platform_transaction_synced_at IS NULL
+		GROUP BY
+			p.id,
+			rw.id,
+			rw.anchor_platform_transaction_id
+		ORDER BY
+			p.created_at
+	`
+
+	payments := make([]Payment, 0)
+	err := p.dbConnectionPool.SelectContext(ctx, &payments, query, pq.Array([]PaymentStatus{SuccessPaymentStatus, FailedPaymentStatus}), RegisteredReceiversWalletStatus)
+	if err != nil {
+		return nil, fmt.Errorf("getting payments: %w", err)
+	}
+
+	return payments, nil
+}
+
 // DeleteAllForDisbursement deletes all payments for a given disbursement.
 func (p *PaymentModel) DeleteAllForDisbursement(ctx context.Context, sqlExec db.SQLExecuter, disbursementID string) error {
 	query := `

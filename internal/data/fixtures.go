@@ -366,17 +366,21 @@ func CreateReceiverWalletFixture(t *testing.T, ctx context.Context, sqlExec db.S
 	stellarMemo := fmt.Sprint(randNumber.Int64() + 10000)
 	stellarMemoType := "id"
 
+	anchorPlatformTransactionID, err := utils.RandomString(10)
+	require.NoError(t, err)
+
 	const query = `
 		WITH inserted_receiver_wallet AS (
 			INSERT INTO receiver_wallets
-				(receiver_id, wallet_id, stellar_address, stellar_memo, stellar_memo_type, status)
+				(receiver_id, wallet_id, stellar_address, stellar_memo, stellar_memo_type, status, anchor_platform_transaction_id)
 			VALUES
-				($1, $2, $3, $4, $5, $6)
+				($1, $2, $3, $4, $5, $6, $7)
 			RETURNING
-				id, receiver_id, wallet_id, stellar_address, stellar_memo, stellar_memo_type, status, status_history, created_at, updated_at
+				*
 		)
 		SELECT
 			rw.id, rw.stellar_address, rw.stellar_memo, rw.stellar_memo_type, rw.status, rw.status_history, rw.created_at, rw.updated_at,
+			rw.anchor_platform_transaction_id, rw.anchor_platform_transaction_synced_at,
 			r.id, r.email, r.phone_number, r.external_id, r.created_at, r.updated_at,
 			w.id, w.name, w.homepage, w.deep_link_schema, w.created_at, w.updated_at
 		FROM
@@ -386,7 +390,7 @@ func CreateReceiverWalletFixture(t *testing.T, ctx context.Context, sqlExec db.S
 	`
 
 	var receiverWallet ReceiverWallet
-	err = sqlExec.QueryRowxContext(ctx, query, receiverID, walletID, stellarAddress, stellarMemo, stellarMemoType, status).Scan(
+	err = sqlExec.QueryRowxContext(ctx, query, receiverID, walletID, stellarAddress, stellarMemo, stellarMemoType, status, anchorPlatformTransactionID).Scan(
 		&receiverWallet.ID,
 		&receiverWallet.StellarAddress,
 		&receiverWallet.StellarMemo,
@@ -395,6 +399,8 @@ func CreateReceiverWalletFixture(t *testing.T, ctx context.Context, sqlExec db.S
 		&receiverWallet.StatusHistory,
 		&receiverWallet.CreatedAt,
 		&receiverWallet.UpdatedAt,
+		&receiverWallet.AnchorPlatformTransactionID,
+		&receiverWallet.AnchorPlatformTransactionSyncedAt,
 		&receiverWallet.Receiver.ID,
 		&receiverWallet.Receiver.Email,
 		&receiverWallet.Receiver.PhoneNumber,
