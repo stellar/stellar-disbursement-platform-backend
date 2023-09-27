@@ -41,7 +41,7 @@ BEGIN
             r.id,
             'text omitted during initial migration',
             'title omitted during initial migration',
-            COALESCE(r.link_last_sent_at, NOW())
+            NOW()
         FROM public.receivers r
         WHERE r.status <> ALL(ARRAY['READY', 'PAID', 'PARTIALLY_CASHED_OUT', 'FULLY_CASHED_OUT']);
     END IF; 
