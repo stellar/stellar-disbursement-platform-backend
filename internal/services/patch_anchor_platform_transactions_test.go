@@ -16,6 +16,30 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func Test_NewPatchAnchorPlatformTransactionService(t *testing.T) {
+	svc, err := NewPatchAnchorPlatformTransactionService(nil, nil)
+	assert.EqualError(t, err, "anchor platform API service is required")
+	assert.Nil(t, svc)
+
+	svc, err = NewPatchAnchorPlatformTransactionService(&anchorplatform.AnchorPlatformAPIServiceMock{}, nil)
+	assert.EqualError(t, err, "SDP models are required")
+	assert.Nil(t, svc)
+
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	models, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+
+	svc, err = NewPatchAnchorPlatformTransactionService(&anchorplatform.AnchorPlatformAPIServiceMock{}, models)
+	require.NoError(t, err)
+	assert.NotNil(t, svc)
+}
+
 func Test_PatchAnchorPlatformTransactionService_PatchTransactions(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
@@ -29,7 +53,8 @@ func Test_PatchAnchorPlatformTransactionService_PatchTransactions(t *testing.T) 
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
-	svc := NewPatchAnchorPlatformTransactionService(&apAPISvcMock, models)
+	svc, err := NewPatchAnchorPlatformTransactionService(&apAPISvcMock, models)
+	require.NoError(t, err)
 
 	getAPTransactionSyncedAt := func(t *testing.T, ctx context.Context, conn db.DBConnectionPool, receiverWalletID string) time.Time {
 		const q = "SELECT anchor_platform_transaction_synced_at FROM receiver_wallets WHERE id = $1"
@@ -139,7 +164,6 @@ func Test_PatchAnchorPlatformTransactionService_PatchTransactions(t *testing.T) 
 				SEP:    "24",
 				Status: anchorplatform.APTransactionStatusError,
 			}).
-			Return(nil).
 			Once()
 
 		err := svc.PatchTransactions(ctx)
