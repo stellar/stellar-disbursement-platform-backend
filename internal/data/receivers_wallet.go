@@ -221,6 +221,7 @@ func (rw *ReceiverWalletModel) GetAllPendingRegistration(ctx context.Context, da
 			SELECT m.receiver_wallet_id
 			FROM messages m
 			WHERE m.created_at >= $1
+			GROUP BY m.receiver_wallet_id
 			
 			UNION
 			
