@@ -356,9 +356,9 @@ ALTER TABLE payments_withdrawal RENAME TO withdrawal;
 DROP TABLE IF EXISTS public.withdrawal CASCADE;             -- Called 'payments_withdrawal' in SDP-v1
 DROP TABLE IF EXISTS public.payments CASCADE;               -- Called 'payments_payment' in SDP-v1
 DROP TABLE IF EXISTS public.payments_semaphore CASCADE;     -- Called 'payments_heartbeat' in SDP-v1
-DROP TABLE IF EXISTS public.disbursements CASCADE;           -- Called 'payments_disbursement' in SDP-v1
+DROP TABLE IF EXISTS public.disbursements CASCADE;          -- Called 'payments_disbursement' in SDP-v1
 DROP TABLE IF EXISTS public.on_off_switch CASCADE;          -- Called 'payments_activation' in SDP-v1
-DROP TABLE IF EXISTS public.receivers CASCADE;               -- Called 'payments_account' in SDP-v1
+DROP TABLE IF EXISTS public.receivers CASCADE;              -- Called 'payments_account' in SDP-v1
 
 DROP TABLE IF EXISTS public.django_session CASCADE;
 DROP TABLE IF EXISTS public.django_migrations CASCADE;

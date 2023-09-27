@@ -17,6 +17,19 @@ ALTER TABLE public.messages
     ADD COLUMN receiver_wallet_id VARCHAR(36) NULL REFERENCES public.receiver_wallets (id),
     ALTER COLUMN asset_id DROP NOT NULL;
 
+-- Update the receiver_wallet of the messages if we have pre-existing data.
+UPDATE 
+    public.messages
+SET
+    receiver_wallet_id = rw.id
+FROM (
+    SELECT DISTINCT ON (receiver_id) id, receiver_id
+    FROM public.receiver_wallets
+    ORDER BY receiver_id, id
+) AS rw
+WHERE
+    rw.receiver_id = messages.receiver_id;
+
 -- +migrate Down
 
 ALTER TABLE public.messages

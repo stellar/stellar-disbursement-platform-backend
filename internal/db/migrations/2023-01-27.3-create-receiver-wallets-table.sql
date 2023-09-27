@@ -16,7 +16,7 @@ CREATE TABLE public.receiver_wallets (
 );
 INSERT
     INTO receiver_wallets (receiver_id, stellar_address) 
-    (SELECT id, public_key FROM receivers WHERE public_key IS NOT NULL);
+    (SELECT id, public_key FROM receivers);
 UPDATE public.receiver_wallets SET wallet_id = (SELECT id FROM public.wallets WHERE name = 'Vibrant Assist');
 ALTER TABLE public.receiver_wallets ALTER COLUMN wallet_id SET NOT NULL;
 

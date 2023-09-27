@@ -216,24 +216,20 @@ func (rw *ReceiverWalletModel) GetByReceiverIDsAndWalletID(ctx context.Context, 
 
 func (rw *ReceiverWalletModel) GetAllPendingRegistration(ctx context.Context, daysSinceLastInvitationMessageSent, maxTries int) ([]*ReceiverWallet, error) {
 	const query = `
-		WITH receiver_wallet_ids_invitation_message_sent_between_period AS (
-			SELECT
-				m.receiver_wallet_id
-			FROM
-				messages m
-			WHERE
-				m.created_at >= $1
-			GROUP BY
-				m.receiver_wallet_id
-		), receiver_wallet_ids_reached_invitation_message_max_tries AS (
-			SELECT
-				m.receiver_wallet_id
-			FROM
-				messages m
-			GROUP BY
-				m.receiver_wallet_id
-			HAVING
-				COUNT(*) >= $2
+		WITH excluded_receiver_wallet_ids AS (
+			-- Messages sent in last 7 days
+			SELECT m.receiver_wallet_id
+			FROM messages m
+			WHERE m.created_at >= $1
+			GROUP BY m.receiver_wallet_id
+			
+			UNION
+			
+			-- Receiver wallets that have reached max message tries
+			SELECT m.receiver_wallet_id
+			FROM messages m
+			GROUP BY m.receiver_wallet_id
+			HAVING COUNT(*) >= $2
 		)
 		SELECT
 			rw.id,
@@ -249,9 +245,7 @@ func (rw *ReceiverWalletModel) GetAllPendingRegistration(ctx context.Context, da
 		WHERE
 			rw.status = 'READY'
 			AND rw.id NOT IN (
-				SELECT receiver_wallet_id FROM receiver_wallet_ids_invitation_message_sent_between_period
-				UNION
-				SELECT receiver_wallet_id FROM receiver_wallet_ids_reached_invitation_message_max_tries
+				SELECT receiver_wallet_id FROM excluded_receiver_wallet_ids
 			)
 	`
 
