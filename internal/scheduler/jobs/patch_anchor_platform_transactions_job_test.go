@@ -146,7 +146,7 @@ func Test_Test_PatchAnchorPlatformTransactionsJob_Execute(t *testing.T) {
 
 		entries := getEntries()
 		require.Len(t, entries, 2)
-		assert.Equal(t, "got 1 payments to process", entries[0].Message)
-		assert.Equal(t, "updating anchor platform transaction synced at for 1 receiver wallet(s)", entries[1].Message)
+		assert.Equal(t, "PatchAnchorPlatformTransactionService: got 1 payments to process", entries[0].Message)
+		assert.Equal(t, "PatchAnchorPlatformTransactionService: updating anchor platform transaction synced at for 1 receiver wallet(s)", entries[1].Message)
 	})
 }
