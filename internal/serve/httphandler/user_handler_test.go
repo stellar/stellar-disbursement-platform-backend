@@ -191,12 +191,65 @@ func Test_UserHandler_UserActivation(t *testing.T) {
 		assert.JSONEq(t, `{"error":"Not authorized."}`, string(respBody))
 	})
 
+	t.Run("returns BadRequest when trying to update self activation state", func(t *testing.T) {
+		token := "mytoken"
+
+		jwtManagerMock.
+			On("ValidateToken", mock.Anything, token).
+			Return(true, nil).
+			Twice().
+			On("GetUserFromToken", mock.Anything, token).
+			Return(&auth.User{ID: "user-id"}, nil).
+			Twice()
+
+		ctx := context.WithValue(context.Background(), middleware.TokenContextKey, token)
+
+		// Activating the user
+		reqBody := `
+			{
+				"user_id": "user-id",
+				"is_active": true
+			}
+		`
+		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, url, strings.NewReader(reqBody))
+		require.NoError(t, err)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		resp := w.Result()
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+		assert.JSONEq(t, `{"error": "The request was invalid in some way.", "extras": {"user_id":"cannot update your own activation"}}`, string(respBody))
+
+		// Deactivating the user
+		reqBody = `
+				{
+					"user_id": "user-id",
+					"is_active": false
+				}
+			`
+		req, err = http.NewRequestWithContext(ctx, http.MethodPatch, url, strings.NewReader(reqBody))
+		require.NoError(t, err)
+		w = httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		resp = w.Result()
+		respBody, err = io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+		assert.JSONEq(t, `{"error": "The request was invalid in some way.", "extras": {"user_id":"cannot update your own activation"}}`, string(respBody))
+	})
+
 	t.Run("returns BadRequest when user doesn't exist", func(t *testing.T) {
 		token := "mytoken"
 
 		jwtManagerMock.
 			On("ValidateToken", mock.Anything, token).
 			Return(true, nil).
+			Times(4).
+			On("GetUserFromToken", mock.Anything, token).
+			Return(&auth.User{}, nil).
 			Twice()
 
 		authenticatorMock.
@@ -274,8 +327,8 @@ func Test_UserHandler_UserActivation(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
-		assert.JSONEq(t, `{"error": "Cannot update user activation"}`, string(respBody))
-		assert.Contains(t, buf.String(), "Cannot update user activation")
+		assert.JSONEq(t, `{"error": "An internal error occurred while processing this request."}`, string(respBody))
+		assert.Contains(t, buf.String(), "getting user from token: validating token: validating token: unexpected error")
 	})
 
 	t.Run("updates the user activation correctly", func(t *testing.T) {
@@ -288,6 +341,9 @@ func Test_UserHandler_UserActivation(t *testing.T) {
 		jwtManagerMock.
 			On("ValidateToken", mock.Anything, token).
 			Return(true, nil).
+			Times(4).
+			On("GetUserFromToken", mock.Anything, token).
+			Return(&auth.User{}, nil).
 			Twice()
 
 		authenticatorMock.

@@ -119,6 +119,21 @@ func (h UserHandler) UserActivation(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	userID, err := h.AuthManager.GetUserID(ctx, token)
+	if err != nil {
+		if errors.Is(err, auth.ErrInvalidToken) {
+			httperror.Unauthorized("", err, nil).Render(rw)
+			return
+		}
+		err = fmt.Errorf("getting user from token: %w", err)
+		httperror.InternalError(ctx, "", err, nil).Render(rw)
+		return
+	}
+	if userID == reqBody.UserID {
+		httperror.BadRequest("", nil, map[string]interface{}{"user_id": "cannot update your own activation"}).Render(rw)
+		return
+	}
+
 	var activationErr error
 	if *reqBody.IsActive {
 		log.Ctx(ctx).Infof("[ActivateUserAccount] - Activating user with account ID %s", reqBody.UserID)
@@ -139,7 +154,7 @@ func (h UserHandler) UserActivation(rw http.ResponseWriter, req *http.Request) {
 			return
 		}
 
-		httperror.InternalError(ctx, "Cannot update user activation", activationErr, nil).Render(rw)
+		httperror.InternalError(ctx, "", activationErr, nil).Render(rw)
 		return
 	}
 
