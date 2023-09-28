@@ -36,6 +36,9 @@ func Test_UserHandler_UserActivation(t *testing.T) {
 		auth.WithCustomJWTManagerOption(jwtManagerMock),
 		auth.WithCustomRoleManagerOption(roleManagerMock),
 	)
+	defer authenticatorMock.AssertExpectations(t)
+	defer jwtManagerMock.AssertExpectations(t)
+	defer roleManagerMock.AssertExpectations(t)
 
 	handler := &UserHandler{AuthManager: authManager}
 
@@ -46,11 +49,8 @@ func Test_UserHandler_UserActivation(t *testing.T) {
 	t.Run("returns Unauthorized when no token is in the request context", func(t *testing.T) {
 		req, err := http.NewRequestWithContext(context.Background(), http.MethodPatch, url, nil)
 		require.NoError(t, err)
-
 		w := httptest.NewRecorder()
-
 		r.ServeHTTP(w, req)
-
 		resp := w.Result()
 		respBody, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
@@ -62,15 +62,12 @@ func Test_UserHandler_UserActivation(t *testing.T) {
 	t.Run("returns error when request body is invalid", func(t *testing.T) {
 		ctx := context.WithValue(context.Background(), middleware.TokenContextKey, "mytoken")
 
+		// is_active and user_id are required
 		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, url, strings.NewReader(`{}`))
 		require.NoError(t, err)
-
 		w := httptest.NewRecorder()
-
 		r.ServeHTTP(w, req)
-
 		resp := w.Result()
-
 		respBody, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
@@ -83,19 +80,15 @@ func Test_UserHandler_UserActivation(t *testing.T) {
 				}
 			}
 		`
-
 		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 		assert.JSONEq(t, wantsBody, string(respBody))
 
+		// is_active is required
 		req, err = http.NewRequestWithContext(ctx, http.MethodPatch, url, strings.NewReader(`{"user_id": "user-id"}`))
 		require.NoError(t, err)
-
 		w = httptest.NewRecorder()
-
 		r.ServeHTTP(w, req)
-
 		resp = w.Result()
-
 		respBody, err = io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
@@ -110,15 +103,12 @@ func Test_UserHandler_UserActivation(t *testing.T) {
 		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 		assert.JSONEq(t, wantsBody, string(respBody))
 
+		// user_id is required
 		req, err = http.NewRequestWithContext(ctx, http.MethodPatch, url, strings.NewReader(`{"is_active": true}`))
 		require.NoError(t, err)
-
 		w = httptest.NewRecorder()
-
 		r.ServeHTTP(w, req)
-
 		resp = w.Result()
-
 		respBody, err = io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
@@ -133,18 +123,14 @@ func Test_UserHandler_UserActivation(t *testing.T) {
 		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 		assert.JSONEq(t, wantsBody, string(respBody))
 
+		// invalid body format:
 		buf := new(strings.Builder)
 		log.DefaultLogger.SetOutput(buf)
-
 		req, err = http.NewRequestWithContext(ctx, http.MethodPatch, url, strings.NewReader(`"invalid"`))
 		require.NoError(t, err)
-
 		w = httptest.NewRecorder()
-
 		r.ServeHTTP(w, req)
-
 		resp = w.Result()
-
 		respBody, err = io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
@@ -177,13 +163,9 @@ func Test_UserHandler_UserActivation(t *testing.T) {
 		`
 		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, url, strings.NewReader(reqBody))
 		require.NoError(t, err)
-
 		w := httptest.NewRecorder()
-
 		r.ServeHTTP(w, req)
-
 		resp := w.Result()
-
 		respBody, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
@@ -199,13 +181,9 @@ func Test_UserHandler_UserActivation(t *testing.T) {
 		`
 		req, err = http.NewRequestWithContext(ctx, http.MethodPatch, url, strings.NewReader(reqBody))
 		require.NoError(t, err)
-
 		w = httptest.NewRecorder()
-
 		r.ServeHTTP(w, req)
-
 		resp = w.Result()
-
 		respBody, err = io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
@@ -240,13 +218,9 @@ func Test_UserHandler_UserActivation(t *testing.T) {
 		`
 		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, url, strings.NewReader(reqBody))
 		require.NoError(t, err)
-
 		w := httptest.NewRecorder()
-
 		r.ServeHTTP(w, req)
-
 		resp := w.Result()
-
 		respBody, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
@@ -262,13 +236,9 @@ func Test_UserHandler_UserActivation(t *testing.T) {
 			`
 		req, err = http.NewRequestWithContext(ctx, http.MethodPatch, url, strings.NewReader(reqBody))
 		require.NoError(t, err)
-
 		w = httptest.NewRecorder()
-
 		r.ServeHTTP(w, req)
-
 		resp = w.Result()
-
 		respBody, err = io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
@@ -297,13 +267,9 @@ func Test_UserHandler_UserActivation(t *testing.T) {
 		`
 		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, url, strings.NewReader(reqBody))
 		require.NoError(t, err)
-
 		w := httptest.NewRecorder()
-
 		r.ServeHTTP(w, req)
-
 		resp := w.Result()
-
 		respBody, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
@@ -343,13 +309,9 @@ func Test_UserHandler_UserActivation(t *testing.T) {
 		`
 		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, url, strings.NewReader(reqBody))
 		require.NoError(t, err)
-
 		w := httptest.NewRecorder()
-
 		r.ServeHTTP(w, req)
-
 		resp := w.Result()
-
 		respBody, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
@@ -365,13 +327,9 @@ func Test_UserHandler_UserActivation(t *testing.T) {
 			`
 		req, err = http.NewRequestWithContext(ctx, http.MethodPatch, url, strings.NewReader(reqBody))
 		require.NoError(t, err)
-
 		w = httptest.NewRecorder()
-
 		r.ServeHTTP(w, req)
-
 		resp = w.Result()
-
 		respBody, err = io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
