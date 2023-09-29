@@ -7,14 +7,15 @@ import (
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
 )
 
-type PatchAnchorPlatformTransactionService struct {
+type PatchAnchorPlatformTransactionServiceCompletion struct {
 	apAPISvc  anchorplatform.AnchorPlatformAPIServiceInterface
 	sdpModels *data.Models
 }
 
-func NewPatchAnchorPlatformTransactionService(apAPISvc anchorplatform.AnchorPlatformAPIServiceInterface, sdpModels *data.Models) (*PatchAnchorPlatformTransactionService, error) {
+func NewPatchAnchorPlatformTransactionServiceCompletion(apAPISvc anchorplatform.AnchorPlatformAPIServiceInterface, sdpModels *data.Models) (*PatchAnchorPlatformTransactionServiceCompletion, error) {
 	if apAPISvc == nil {
 		return nil, fmt.Errorf("anchor platform API service is required")
 	}
@@ -23,20 +24,27 @@ func NewPatchAnchorPlatformTransactionService(apAPISvc anchorplatform.AnchorPlat
 		return nil, fmt.Errorf("SDP models are required")
 	}
 
-	return &PatchAnchorPlatformTransactionService{
+	return &PatchAnchorPlatformTransactionServiceCompletion{
 		apAPISvc:  apAPISvc,
 		sdpModels: sdpModels,
 	}, nil
 }
 
-func (s *PatchAnchorPlatformTransactionService) PatchTransactions(ctx context.Context) error {
+func (s *PatchAnchorPlatformTransactionServiceCompletion) PatchTransactionsCompletion(ctx context.Context) error {
 	// Step 1: Get all Success and Failed payments from receivers for their respective wallets.
-	payments, err := s.sdpModels.Payment.GetAllReadyToPatchAnchorTransactions(ctx)
+	payments, err := db.RunInTransactionWithResult(ctx, s.sdpModels.DBConnectionPool, nil, func(dbTx db.DBTransaction) ([]data.Payment, error) {
+		payments, err := s.sdpModels.Payment.GetAllReadyToPatchCompletionAnchorTransactions(ctx, dbTx)
+		if err != nil {
+			return nil, fmt.Errorf("getting payments: %w", err)
+		}
+
+		return payments, nil
+	})
 	if err != nil {
-		return fmt.Errorf("getting payments: %w", err)
+		return fmt.Errorf("getting payments from database transaction: %w", err)
 	}
 
-	log.Ctx(ctx).Infof("PatchAnchorPlatformTransactionService: got %d payments to process", len(payments))
+	log.Ctx(ctx).Debugf("PatchAnchorPlatformTransactionService: got %d payments to process", len(payments))
 
 	// successfulPaymentsForAPTransactionID has its keys as the AP Transaction ID. Here we store the transaction IDs
 	// from the transactions patched to the AP with the "Completed" anchor status. So we avoid concurrency errors like, a receiver having
@@ -60,7 +68,7 @@ func (s *PatchAnchorPlatformTransactionService) PatchTransactions(ctx context.Co
 
 		// Step 4: Check if the AP transaction was already patched as completed. If it's true we don't need to report it anymore.
 		if _, ok := successfulPaymentsForAPTransactionID[payment.ReceiverWallet.AnchorPlatformTransactionID]; ok {
-			log.Ctx(ctx).Infof(
+			log.Ctx(ctx).Debugf(
 				"PatchAnchorPlatformTransactionService: anchor platform transaction ID %q already patched as completed. No action needed",
 				payment.ReceiverWallet.AnchorPlatformTransactionID,
 			)
@@ -86,7 +94,7 @@ func (s *PatchAnchorPlatformTransactionService) PatchTransactions(ctx context.Co
 		}
 	}
 
-	log.Ctx(ctx).Infof("PatchAnchorPlatformTransactionService: updating anchor platform transaction synced at for %d receiver wallet(s)", len(receiverWalletIDs))
+	log.Ctx(ctx).Debugf("PatchAnchorPlatformTransactionService: updating anchor platform transaction synced at for %d receiver wallet(s)", len(receiverWalletIDs))
 
 	// Step 7: we update the receiver_wallets table saying that the AP transaction associated with the user registration
 	// was successfully patched/synced.

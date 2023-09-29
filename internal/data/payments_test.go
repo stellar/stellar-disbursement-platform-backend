@@ -872,7 +872,7 @@ func Test_PaymentModelRetryFailedPayments(t *testing.T) {
 	})
 }
 
-func Test_PaymentModelGetAllReadyToPatchAnchorTransactions(t *testing.T) {
+func Test_PaymentModelGetAllReadyToPatchCompletionAnchorTransactions(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 
@@ -886,7 +886,7 @@ func Test_PaymentModelGetAllReadyToPatchAnchorTransactions(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("return empty", func(t *testing.T) {
-		payments, err := models.Payment.GetAllReadyToPatchAnchorTransactions(ctx)
+		payments, err := models.Payment.GetAllReadyToPatchCompletionAnchorTransactions(ctx, dbConnectionPool)
 		require.NoError(t, err)
 		assert.Empty(t, payments)
 	})
@@ -921,7 +921,7 @@ func Test_PaymentModelGetAllReadyToPatchAnchorTransactions(t *testing.T) {
 			Asset:                *asset,
 		})
 
-		payments, err := models.Payment.GetAllReadyToPatchAnchorTransactions(ctx)
+		payments, err := models.Payment.GetAllReadyToPatchCompletionAnchorTransactions(ctx, dbConnectionPool)
 		require.NoError(t, err)
 		assert.Empty(t, payments)
 	})
@@ -954,7 +954,7 @@ func Test_PaymentModelGetAllReadyToPatchAnchorTransactions(t *testing.T) {
 			Asset:                *asset,
 		})
 
-		payments, err := models.Payment.GetAllReadyToPatchAnchorTransactions(ctx)
+		payments, err := models.Payment.GetAllReadyToPatchCompletionAnchorTransactions(ctx, dbConnectionPool)
 		require.NoError(t, err)
 		assert.Empty(t, payments)
 	})
@@ -999,7 +999,7 @@ func Test_PaymentModelGetAllReadyToPatchAnchorTransactions(t *testing.T) {
 			Asset:                *asset,
 		})
 
-		payments, err := models.Payment.GetAllReadyToPatchAnchorTransactions(ctx)
+		payments, err := models.Payment.GetAllReadyToPatchCompletionAnchorTransactions(ctx, dbConnectionPool)
 		require.NoError(t, err)
 		require.Len(t, payments, 2)
 
@@ -1058,7 +1058,7 @@ func Test_PaymentModelGetAllReadyToPatchAnchorTransactions(t *testing.T) {
 			Asset:                *asset,
 		})
 
-		payments, err := models.Payment.GetAllReadyToPatchAnchorTransactions(ctx)
+		payments, err := models.Payment.GetAllReadyToPatchCompletionAnchorTransactions(ctx, dbConnectionPool)
 		require.NoError(t, err)
 		require.Len(t, payments, 2)
 
@@ -1129,7 +1129,7 @@ func Test_PaymentModelGetAllReadyToPatchAnchorTransactions(t *testing.T) {
 			Asset:                *asset,
 		})
 
-		payments, err := models.Payment.GetAllReadyToPatchAnchorTransactions(ctx)
+		payments, err := models.Payment.GetAllReadyToPatchCompletionAnchorTransactions(ctx, dbConnectionPool)
 		require.NoError(t, err)
 		require.Len(t, payments, 3)
 

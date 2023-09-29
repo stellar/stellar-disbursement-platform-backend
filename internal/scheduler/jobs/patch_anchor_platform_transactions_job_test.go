@@ -18,7 +18,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func Test_NewPatchAnchorPlatformTransactionJob(t *testing.T) {
+func Test_NewPatchAnchorPlatformTransactionCompletionJob(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 
@@ -28,7 +28,7 @@ func Test_NewPatchAnchorPlatformTransactionJob(t *testing.T) {
 
 	t.Run("exits with status 1 when AP API Client is missing", func(t *testing.T) {
 		if os.Getenv("TEST_FATAL") == "1" {
-			NewPatchAnchorPlatformTransactionsJob(nil, nil)
+			NewPatchAnchorPlatformTransactionsCompletionJob(nil, nil)
 			return
 		}
 
@@ -48,7 +48,7 @@ func Test_NewPatchAnchorPlatformTransactionJob(t *testing.T) {
 
 	t.Run("exits with status 1 when SDP Models are missing", func(t *testing.T) {
 		if os.Getenv("TEST_FATAL") == "1" {
-			NewPatchAnchorPlatformTransactionsJob(&anchorplatform.AnchorPlatformAPIService{}, nil)
+			NewPatchAnchorPlatformTransactionsCompletionJob(&anchorplatform.AnchorPlatformAPIService{}, nil)
 			return
 		}
 
@@ -69,19 +69,19 @@ func Test_NewPatchAnchorPlatformTransactionJob(t *testing.T) {
 	t.Run("returns a job instance successfully", func(t *testing.T) {
 		models, err := data.NewModels(dbConnectionPool)
 		require.NoError(t, err)
-		svc := NewPatchAnchorPlatformTransactionsJob(&anchorplatform.AnchorPlatformAPIService{}, models)
+		svc := NewPatchAnchorPlatformTransactionsCompletionJob(&anchorplatform.AnchorPlatformAPIService{}, models)
 		assert.NotNil(t, svc)
 	})
 }
 
-func Test_PatchAnchorPlatformTransactionsJob(t *testing.T) {
-	j := PatchAnchorPlatformTransactionsJob{}
+func Test_PatchAnchorPlatformTransactionsCompletionJob(t *testing.T) {
+	j := PatchAnchorPlatformTransactionsCompletionJob{}
 
-	assert.Equal(t, PatchAnchorPlatformTransactionsJobName, j.GetName())
-	assert.Equal(t, PatchAnchorPlatformTransactionsJobIntervalSeconds*time.Second, j.GetInterval())
+	assert.Equal(t, patchAnchorPlatformTransactionsCompletionJobName, j.GetName())
+	assert.Equal(t, patchAnchorPlatformTransactionsCompletionJobIntervalSeconds*time.Second, j.GetInterval())
 }
 
-func Test_Test_PatchAnchorPlatformTransactionsJob_Execute(t *testing.T) {
+func Test_PatchAnchorPlatformTransactionsCompletionJob_Execute(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 
@@ -95,7 +95,7 @@ func Test_Test_PatchAnchorPlatformTransactionsJob_Execute(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("executes the job successfully", func(t *testing.T) {
-		j := NewPatchAnchorPlatformTransactionsJob(&apAPISvcMock, models)
+		j := NewPatchAnchorPlatformTransactionsCompletionJob(&apAPISvcMock, models)
 
 		data.DeleteAllFixtures(t, ctx, dbConnectionPool)
 
@@ -124,7 +124,7 @@ func Test_Test_PatchAnchorPlatformTransactionsJob_Execute(t *testing.T) {
 			Asset:                *asset,
 		})
 
-		getEntries := log.DefaultLogger.StartTest(log.InfoLevel)
+		getEntries := log.DefaultLogger.StartTest(log.DebugLevel)
 
 		apAPISvcMock.
 			On("PatchAnchorTransactionsPostRegistration", ctx, anchorplatform.APSep24TransactionPatchPostRegistration{

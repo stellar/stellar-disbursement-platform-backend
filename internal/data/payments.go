@@ -264,7 +264,7 @@ func (p *PaymentModel) GetAll(ctx context.Context, queryParams *QueryParams, sql
 	return payments, nil
 }
 
-func (p *PaymentModel) GetAllReadyToPatchAnchorTransactions(ctx context.Context) ([]Payment, error) {
+func (p *PaymentModel) GetAllReadyToPatchCompletionAnchorTransactions(ctx context.Context, sqlExec db.SQLExecuter) ([]Payment, error) {
 	const query = `
 		SELECT
 			p.id,
@@ -280,16 +280,13 @@ func (p *PaymentModel) GetAllReadyToPatchAnchorTransactions(ctx context.Context)
 			p.status = ANY($1) -- ARRAY['SUCCESS', 'FAILURE']::payment_status[]
 			AND rw.status = $2 -- 'REGISTERED'::receiver_wallet_status
 			AND rw.anchor_platform_transaction_synced_at IS NULL
-		GROUP BY
-			p.id,
-			rw.id,
-			rw.anchor_platform_transaction_id
 		ORDER BY
 			p.created_at
+		FOR UPDATE SKIP LOCKED
 	`
 
 	payments := make([]Payment, 0)
-	err := p.dbConnectionPool.SelectContext(ctx, &payments, query, pq.Array([]PaymentStatus{SuccessPaymentStatus, FailedPaymentStatus}), RegisteredReceiversWalletStatus)
+	err := sqlExec.SelectContext(ctx, &payments, query, pq.Array([]PaymentStatus{SuccessPaymentStatus, FailedPaymentStatus}), RegisteredReceiversWalletStatus)
 	if err != nil {
 		return nil, fmt.Errorf("getting payments: %w", err)
 	}

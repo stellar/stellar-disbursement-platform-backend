@@ -16,12 +16,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func Test_NewPatchAnchorPlatformTransactionService(t *testing.T) {
-	svc, err := NewPatchAnchorPlatformTransactionService(nil, nil)
+func Test_NewPatchAnchorPlatformTransactionServiceCompletion(t *testing.T) {
+	svc, err := NewPatchAnchorPlatformTransactionServiceCompletion(nil, nil)
 	assert.EqualError(t, err, "anchor platform API service is required")
 	assert.Nil(t, svc)
 
-	svc, err = NewPatchAnchorPlatformTransactionService(&anchorplatform.AnchorPlatformAPIServiceMock{}, nil)
+	svc, err = NewPatchAnchorPlatformTransactionServiceCompletion(&anchorplatform.AnchorPlatformAPIServiceMock{}, nil)
 	assert.EqualError(t, err, "SDP models are required")
 	assert.Nil(t, svc)
 
@@ -35,12 +35,12 @@ func Test_NewPatchAnchorPlatformTransactionService(t *testing.T) {
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
-	svc, err = NewPatchAnchorPlatformTransactionService(&anchorplatform.AnchorPlatformAPIServiceMock{}, models)
+	svc, err = NewPatchAnchorPlatformTransactionServiceCompletion(&anchorplatform.AnchorPlatformAPIServiceMock{}, models)
 	require.NoError(t, err)
 	assert.NotNil(t, svc)
 }
 
-func Test_PatchAnchorPlatformTransactionService_PatchTransactions(t *testing.T) {
+func Test_PatchAnchorPlatformTransactionService_PatchTransactionsCompletion(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 
@@ -53,7 +53,7 @@ func Test_PatchAnchorPlatformTransactionService_PatchTransactions(t *testing.T) 
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
-	svc, err := NewPatchAnchorPlatformTransactionService(&apAPISvcMock, models)
+	svc, err := NewPatchAnchorPlatformTransactionServiceCompletion(&apAPISvcMock, models)
 	require.NoError(t, err)
 
 	getAPTransactionSyncedAt := func(t *testing.T, ctx context.Context, conn db.DBConnectionPool, receiverWalletID string) time.Time {
@@ -65,9 +65,9 @@ func Test_PatchAnchorPlatformTransactionService_PatchTransactions(t *testing.T) 
 	}
 
 	t.Run("doesn't patch transactions when there are no Success or Failed payments", func(t *testing.T) {
-		getEntries := log.DefaultLogger.StartTest(log.InfoLevel)
+		getEntries := log.DefaultLogger.StartTest(log.DebugLevel)
 
-		err := svc.PatchTransactions(ctx)
+		err := svc.PatchTransactionsCompletion(ctx)
 		require.NoError(t, err)
 
 		entries := getEntries()
@@ -104,7 +104,7 @@ func Test_PatchAnchorPlatformTransactionService_PatchTransactions(t *testing.T) 
 			Asset:                *asset,
 		})
 
-		getEntries := log.DefaultLogger.StartTest(log.InfoLevel)
+		getEntries := log.DefaultLogger.StartTest(log.DebugLevel)
 
 		apAPISvcMock.
 			On("PatchAnchorTransactionsPostRegistration", ctx, anchorplatform.APSep24TransactionPatchPostRegistration{
@@ -115,7 +115,7 @@ func Test_PatchAnchorPlatformTransactionService_PatchTransactions(t *testing.T) 
 			Return(anchorplatform.ErrInvalidToken).
 			Once()
 
-		err := svc.PatchTransactions(ctx)
+		err := svc.PatchTransactionsCompletion(ctx)
 		require.NoError(t, err)
 
 		syncedAt := getAPTransactionSyncedAt(t, ctx, dbConnectionPool, receiverWallet.ID)
@@ -156,7 +156,7 @@ func Test_PatchAnchorPlatformTransactionService_PatchTransactions(t *testing.T) 
 			Asset:                *asset,
 		})
 
-		getEntries := log.DefaultLogger.StartTest(log.InfoLevel)
+		getEntries := log.DefaultLogger.StartTest(log.DebugLevel)
 
 		apAPISvcMock.
 			On("PatchAnchorTransactionsPostRegistration", ctx, anchorplatform.APSep24TransactionPatchPostRegistration{
@@ -167,7 +167,7 @@ func Test_PatchAnchorPlatformTransactionService_PatchTransactions(t *testing.T) 
 			Return(nil).
 			Once()
 
-		err := svc.PatchTransactions(ctx)
+		err := svc.PatchTransactionsCompletion(ctx)
 		require.NoError(t, err)
 
 		syncedAt := getAPTransactionSyncedAt(t, ctx, dbConnectionPool, receiverWallet.ID)
@@ -207,7 +207,7 @@ func Test_PatchAnchorPlatformTransactionService_PatchTransactions(t *testing.T) 
 			Asset:                *asset,
 		})
 
-		getEntries := log.DefaultLogger.StartTest(log.InfoLevel)
+		getEntries := log.DefaultLogger.StartTest(log.DebugLevel)
 
 		apAPISvcMock.
 			On("PatchAnchorTransactionsPostRegistration", ctx, anchorplatform.APSep24TransactionPatchPostRegistration{
@@ -218,7 +218,7 @@ func Test_PatchAnchorPlatformTransactionService_PatchTransactions(t *testing.T) 
 			Return(nil).
 			Once()
 
-		err := svc.PatchTransactions(ctx)
+		err := svc.PatchTransactionsCompletion(ctx)
 		require.NoError(t, err)
 
 		syncedAt := getAPTransactionSyncedAt(t, ctx, dbConnectionPool, receiverWallet.ID)
@@ -276,7 +276,7 @@ func Test_PatchAnchorPlatformTransactionService_PatchTransactions(t *testing.T) 
 			Asset:                *asset,
 		})
 
-		getEntries := log.DefaultLogger.StartTest(log.InfoLevel)
+		getEntries := log.DefaultLogger.StartTest(log.DebugLevel)
 
 		apAPISvcMock.
 			On("PatchAnchorTransactionsPostRegistration", ctx, anchorplatform.APSep24TransactionPatchPostRegistration{
@@ -287,7 +287,7 @@ func Test_PatchAnchorPlatformTransactionService_PatchTransactions(t *testing.T) 
 			Return(nil).
 			Once()
 
-		err := svc.PatchTransactions(ctx)
+		err := svc.PatchTransactionsCompletion(ctx)
 		require.NoError(t, err)
 
 		syncedAt := getAPTransactionSyncedAt(t, ctx, dbConnectionPool, receiverWallet.ID)
@@ -366,7 +366,7 @@ func Test_PatchAnchorPlatformTransactionService_PatchTransactions(t *testing.T) 
 			Asset:                *asset,
 		})
 
-		getEntries := log.DefaultLogger.StartTest(log.InfoLevel)
+		getEntries := log.DefaultLogger.StartTest(log.DebugLevel)
 
 		apAPISvcMock.
 			On("PatchAnchorTransactionsPostRegistration", ctx, anchorplatform.APSep24TransactionPatchPostRegistration{
@@ -384,7 +384,7 @@ func Test_PatchAnchorPlatformTransactionService_PatchTransactions(t *testing.T) 
 			Return(nil).
 			Once()
 
-		err := svc.PatchTransactions(ctx)
+		err := svc.PatchTransactionsCompletion(ctx)
 		require.NoError(t, err)
 
 		syncedAt := getAPTransactionSyncedAt(t, ctx, dbConnectionPool, receiverWallet.ID)

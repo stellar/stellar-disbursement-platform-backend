@@ -12,34 +12,34 @@ import (
 )
 
 const (
-	PatchAnchorPlatformTransactionsJobName            = "patch_anchor_platform_transactions"
-	PatchAnchorPlatformTransactionsJobIntervalSeconds = 10
+	patchAnchorPlatformTransactionsCompletionJobName            = "patch_anchor_platform_transactions_completion"
+	patchAnchorPlatformTransactionsCompletionJobIntervalSeconds = 10
 )
 
-type PatchAnchorPlatformTransactionsJob struct {
-	service *services.PatchAnchorPlatformTransactionService
+type PatchAnchorPlatformTransactionsCompletionJob struct {
+	service *services.PatchAnchorPlatformTransactionServiceCompletion
 }
 
-func NewPatchAnchorPlatformTransactionsJob(apAPISvc anchorplatform.AnchorPlatformAPIServiceInterface, models *data.Models) *PatchAnchorPlatformTransactionsJob {
-	svc, err := services.NewPatchAnchorPlatformTransactionService(apAPISvc, models)
+func NewPatchAnchorPlatformTransactionsCompletionJob(apAPISvc anchorplatform.AnchorPlatformAPIServiceInterface, models *data.Models) *PatchAnchorPlatformTransactionsCompletionJob {
+	svc, err := services.NewPatchAnchorPlatformTransactionServiceCompletion(apAPISvc, models)
 	if err != nil {
-		log.Fatalf("error instantiating anchor platform service: %v", err)
+		log.Fatalf("instantiating anchor platform service: %v", err)
 	}
 
-	return &PatchAnchorPlatformTransactionsJob{service: svc}
+	return &PatchAnchorPlatformTransactionsCompletionJob{service: svc}
 }
 
-func (j PatchAnchorPlatformTransactionsJob) GetName() string {
-	return PatchAnchorPlatformTransactionsJobName
+func (j PatchAnchorPlatformTransactionsCompletionJob) GetName() string {
+	return patchAnchorPlatformTransactionsCompletionJobName
 }
 
-func (j PatchAnchorPlatformTransactionsJob) GetInterval() time.Duration {
-	return time.Second * PatchAnchorPlatformTransactionsJobIntervalSeconds
+func (j PatchAnchorPlatformTransactionsCompletionJob) GetInterval() time.Duration {
+	return time.Second * patchAnchorPlatformTransactionsCompletionJobIntervalSeconds
 }
 
-func (j PatchAnchorPlatformTransactionsJob) Execute(ctx context.Context) error {
-	if err := j.service.PatchTransactions(ctx); err != nil {
-		err = fmt.Errorf("patching anchor platform transactions: %w", err)
+func (j PatchAnchorPlatformTransactionsCompletionJob) Execute(ctx context.Context) error {
+	if err := j.service.PatchTransactionsCompletion(ctx); err != nil {
+		err = fmt.Errorf("patching anchor platform transactions completion: %w", err)
 		log.Ctx(ctx).Error(err)
 		return err
 	}
