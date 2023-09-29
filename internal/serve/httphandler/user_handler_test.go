@@ -336,8 +336,6 @@ func Test_UserHandler_UserActivation(t *testing.T) {
 	})
 }
 
-// 399
-
 func Test_CreateUserRequest_validate(t *testing.T) {
 	cur := CreateUserRequest{
 		FirstName: "",
