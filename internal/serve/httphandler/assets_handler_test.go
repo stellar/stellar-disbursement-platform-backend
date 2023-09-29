@@ -21,13 +21,14 @@ import (
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/support/render/problem"
 	"github.com/stellar/go/txnbuild"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/mocks"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
-	"github.com/stretchr/testify/require"
 )
 
 var preconditions = txnbuild.Preconditions{TimeBounds: txnbuild.NewTimeout(20)}
