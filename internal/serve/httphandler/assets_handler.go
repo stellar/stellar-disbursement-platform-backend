@@ -37,6 +37,7 @@ type AssetsHandler struct {
 	Models           *data.Models
 	HorizonClient    horizonclient.ClientInterface
 	SignatureService engine.SignatureService
+	GetPreconditions func() txnbuild.Preconditions
 }
 
 type AssetRequest struct {
@@ -269,6 +270,10 @@ func (c AssetsHandler) submitChangeTrustTransaction(ctx context.Context, acc *ho
 		operations = append(operations, ctOp)
 	}
 
+	preconditions := txnbuild.Preconditions{TimeBounds: txnbuild.NewTimeout(20)}
+	if c.GetPreconditions != nil {
+		preconditions = c.GetPreconditions()
+	}
 	tx, err := txnbuild.NewTransaction(
 		txnbuild.TransactionParams{
 			SourceAccount: &txnbuild.SimpleAccount{
@@ -278,7 +283,7 @@ func (c AssetsHandler) submitChangeTrustTransaction(ctx context.Context, acc *ho
 			IncrementSequenceNum: true,
 			Operations:           operations,
 			BaseFee:              txnbuild.MinBaseFee * feeMultiplierInStroops,
-			Preconditions:        txnbuild.Preconditions{TimeBounds: txnbuild.NewTimeout(20)},
+			Preconditions:        preconditions,
 		},
 	)
 	if err != nil {

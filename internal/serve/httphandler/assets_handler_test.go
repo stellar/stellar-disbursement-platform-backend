@@ -30,10 +30,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+var preconditions = txnbuild.Preconditions{TimeBounds: txnbuild.NewTimeout(20)}
+
 func Test_AssetsHandlerGetAssets(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
-
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
@@ -88,7 +89,7 @@ func Test_AssetsHandlerGetAssets(t *testing.T) {
 	})
 }
 
-func Test_AssetHandlerAddAsset(t *testing.T) {
+func Test_AssetHandler_CreateAsset(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 
@@ -107,6 +108,7 @@ func Test_AssetHandlerAddAsset(t *testing.T) {
 		Models:           model,
 		SignatureService: signatureService,
 		HorizonClient:    horizonClientMock,
+		GetPreconditions: func() txnbuild.Preconditions { return preconditions },
 	}
 
 	code := "USDT"
@@ -142,7 +144,7 @@ func Test_AssetHandlerAddAsset(t *testing.T) {
 					},
 				},
 				BaseFee:       txnbuild.MinBaseFee * feeMultiplierInStroops,
-				Preconditions: txnbuild.Preconditions{TimeBounds: txnbuild.NewTimeout(20)},
+				Preconditions: preconditions,
 			},
 		)
 		require.NoError(t, err)
@@ -328,7 +330,7 @@ func Test_AssetHandlerAddAsset(t *testing.T) {
 					},
 				},
 				BaseFee:       txnbuild.MinBaseFee * feeMultiplierInStroops,
-				Preconditions: txnbuild.Preconditions{TimeBounds: txnbuild.NewTimeout(20)},
+				Preconditions: preconditions,
 			},
 		)
 		require.NoError(t, err)
@@ -414,7 +416,7 @@ func Test_AssetHandlerAddAsset(t *testing.T) {
 					},
 				},
 				BaseFee:       txnbuild.MinBaseFee * feeMultiplierInStroops,
-				Preconditions: txnbuild.Preconditions{TimeBounds: txnbuild.NewTimeout(20)},
+				Preconditions: preconditions,
 			},
 		)
 		require.NoError(t, err)
@@ -477,7 +479,7 @@ func Test_AssetHandlerAddAsset(t *testing.T) {
 	signatureService.AssertExpectations(t)
 }
 
-func Test_AssetHandlerDeleteAsset(t *testing.T) {
+func Test_AssetHandler_DeleteAsset(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 
@@ -497,6 +499,7 @@ func Test_AssetHandlerDeleteAsset(t *testing.T) {
 		Models:           model,
 		SignatureService: signatureService,
 		HorizonClient:    horizonClientMock,
+		GetPreconditions: func() txnbuild.Preconditions { return preconditions },
 	}
 
 	r := chi.NewRouter()
@@ -533,7 +536,7 @@ func Test_AssetHandlerDeleteAsset(t *testing.T) {
 					},
 				},
 				BaseFee:       txnbuild.MinBaseFee * feeMultiplierInStroops,
-				Preconditions: txnbuild.Preconditions{TimeBounds: txnbuild.NewTimeout(20)},
+				Preconditions: preconditions,
 			},
 		)
 		require.NoError(t, err)
@@ -700,6 +703,7 @@ func Test_AssetHandler_handleUpdateAssetTrustlineForDistributionAccount(t *testi
 	handler := &AssetsHandler{
 		SignatureService: signatureService,
 		HorizonClient:    horizonClientMock,
+		GetPreconditions: func() txnbuild.Preconditions { return preconditions },
 	}
 
 	assetToAddTrustline := &txnbuild.CreditAsset{
@@ -780,7 +784,7 @@ func Test_AssetHandler_handleUpdateAssetTrustlineForDistributionAccount(t *testi
 					},
 				},
 				BaseFee:       txnbuild.MinBaseFee * feeMultiplierInStroops,
-				Preconditions: txnbuild.Preconditions{TimeBounds: txnbuild.NewTimeout(20)},
+				Preconditions: preconditions,
 			},
 		)
 		require.NoError(t, err)
@@ -871,7 +875,7 @@ func Test_AssetHandler_handleUpdateAssetTrustlineForDistributionAccount(t *testi
 					},
 				},
 				BaseFee:       txnbuild.MinBaseFee * feeMultiplierInStroops,
-				Preconditions: txnbuild.Preconditions{TimeBounds: txnbuild.NewTimeout(20)},
+				Preconditions: preconditions,
 			},
 		)
 		require.NoError(t, err)
@@ -1083,6 +1087,7 @@ func Test_AssetHandler_submitChangeTrustTransaction(t *testing.T) {
 	handler := &AssetsHandler{
 		SignatureService: signatureService,
 		HorizonClient:    horizonClientMock,
+		GetPreconditions: func() txnbuild.Preconditions { return preconditions },
 	}
 
 	code := "USDC"
@@ -1143,7 +1148,7 @@ func Test_AssetHandler_submitChangeTrustTransaction(t *testing.T) {
 					},
 				},
 				BaseFee:       txnbuild.MinBaseFee * feeMultiplierInStroops,
-				Preconditions: txnbuild.Preconditions{TimeBounds: txnbuild.NewTimeout(20)},
+				Preconditions: preconditions,
 			},
 		)
 		require.NoError(t, err)
@@ -1189,7 +1194,7 @@ func Test_AssetHandler_submitChangeTrustTransaction(t *testing.T) {
 					},
 				},
 				BaseFee:       txnbuild.MinBaseFee * feeMultiplierInStroops,
-				Preconditions: txnbuild.Preconditions{TimeBounds: txnbuild.NewTimeout(20)},
+				Preconditions: preconditions,
 			},
 		)
 		require.NoError(t, err)
@@ -1256,7 +1261,7 @@ func Test_AssetHandler_submitChangeTrustTransaction(t *testing.T) {
 					},
 				},
 				BaseFee:       txnbuild.MinBaseFee * feeMultiplierInStroops,
-				Preconditions: txnbuild.Preconditions{TimeBounds: txnbuild.NewTimeout(20)},
+				Preconditions: preconditions,
 			},
 		)
 		require.NoError(t, err)
