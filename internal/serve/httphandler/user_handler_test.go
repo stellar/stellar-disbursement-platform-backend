@@ -26,8 +26,6 @@ import (
 )
 
 func Test_UserHandler_UserActivation(t *testing.T) {
-	r := chi.NewRouter()
-
 	authenticatorMock := &auth.AuthenticatorMock{}
 	jwtManagerMock := &auth.JWTManagerMock{}
 	roleManagerMock := &auth.RoleManagerMock{}
@@ -39,19 +37,36 @@ func Test_UserHandler_UserActivation(t *testing.T) {
 	defer authenticatorMock.AssertExpectations(t)
 	defer jwtManagerMock.AssertExpectations(t)
 	defer roleManagerMock.AssertExpectations(t)
-
-	handler := &UserHandler{AuthManager: authManager}
+	handler := UserHandler{AuthManager: authManager}
 
 	const url = "/users/activation"
-
+	r := chi.NewRouter()
 	r.Patch(url, handler.UserActivation)
 
-	t.Run("returns Unauthorized when no token is in the request context", func(t *testing.T) {
-		req, err := http.NewRequestWithContext(context.Background(), http.MethodPatch, url, nil)
+	executePatchRequest := func(t *testing.T, handler UserHandler, token string, body string) *http.Response {
+		const url = "/users/activation"
+		r := chi.NewRouter()
+		r.Patch(url, handler.UserActivation)
+
+		ctx := context.Background()
+		if token != "" {
+			ctx = context.WithValue(ctx, middleware.TokenContextKey, token)
+		}
+
+		var bodyReader io.Reader
+		if body != "" {
+			bodyReader = strings.NewReader(body)
+		}
+
+		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, url, bodyReader)
 		require.NoError(t, err)
 		w := httptest.NewRecorder()
 		r.ServeHTTP(w, req)
-		resp := w.Result()
+		return w.Result()
+	}
+
+	t.Run("returns Unauthorized when no token is in the request context", func(t *testing.T) {
+		resp := executePatchRequest(t, handler, "", "")
 		respBody, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
@@ -60,88 +75,59 @@ func Test_UserHandler_UserActivation(t *testing.T) {
 	})
 
 	t.Run("returns error when request body is invalid", func(t *testing.T) {
-		ctx := context.WithValue(context.Background(), middleware.TokenContextKey, "mytoken")
-
 		// is_active and user_id are required
-		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, url, strings.NewReader(`{}`))
-		require.NoError(t, err)
-		w := httptest.NewRecorder()
-		r.ServeHTTP(w, req)
-		resp := w.Result()
+		resp := executePatchRequest(t, handler, "mytoken", "{}")
 		respBody, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
-		wantsBody := `
-			{
-				"error": "Request invalid",
-				"extras": {
-					"user_id": "user_id is required",
-					"is_active": "is_active is required"
-				}
+		wantsBody := `{
+			"error": "Request invalid",
+			"extras": {
+				"user_id": "user_id is required",
+				"is_active": "is_active is required"
 			}
-		`
+		}`
 		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 		assert.JSONEq(t, wantsBody, string(respBody))
 
 		// is_active is required
-		req, err = http.NewRequestWithContext(ctx, http.MethodPatch, url, strings.NewReader(`{"user_id": "user-id"}`))
-		require.NoError(t, err)
-		w = httptest.NewRecorder()
-		r.ServeHTTP(w, req)
-		resp = w.Result()
+		resp = executePatchRequest(t, handler, "mytoken", `{"user_id": "user-id"}`)
 		respBody, err = io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
-		wantsBody = `
-			{
-				"error": "Request invalid",
-				"extras": {
-					"is_active": "is_active is required"
-				}
+		wantsBody = `{
+			"error": "Request invalid",
+			"extras": {
+				"is_active": "is_active is required"
 			}
-		`
+		}`
 		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 		assert.JSONEq(t, wantsBody, string(respBody))
 
 		// user_id is required
-		req, err = http.NewRequestWithContext(ctx, http.MethodPatch, url, strings.NewReader(`{"is_active": true}`))
-		require.NoError(t, err)
-		w = httptest.NewRecorder()
-		r.ServeHTTP(w, req)
-		resp = w.Result()
+		resp = executePatchRequest(t, handler, "mytoken", `{"is_active": true}`)
 		respBody, err = io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
-		wantsBody = `
-			{
-				"error": "Request invalid",
-				"extras": {
-					"user_id": "user_id is required"
-				}
+		wantsBody = `{
+			"error": "Request invalid",
+			"extras": {
+				"user_id": "user_id is required"
 			}
-		`
+		}`
 		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 		assert.JSONEq(t, wantsBody, string(respBody))
 
 		// invalid body format:
-		buf := new(strings.Builder)
-		log.DefaultLogger.SetOutput(buf)
-		req, err = http.NewRequestWithContext(ctx, http.MethodPatch, url, strings.NewReader(`"invalid"`))
-		require.NoError(t, err)
-		w = httptest.NewRecorder()
-		r.ServeHTTP(w, req)
-		resp = w.Result()
+		getLogEntries := log.DefaultLogger.StartTest(log.InfoLevel)
+		resp = executePatchRequest(t, handler, "mytoken", `"invalid"`)
 		respBody, err = io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
-		wantsBody = `
-			{
-				"error": "The request was invalid in some way."
-			}
-		`
+		wantsBody = `{"error": "The request was invalid in some way."}`
 		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 		assert.JSONEq(t, wantsBody, string(respBody))
-		assert.Contains(t, buf.String(), "decoding the request body")
+		assert.Contains(t, getLogEntries()[0].Message, "decoding the request body")
 	})
 
 	t.Run("returns Unauthorized when token is invalid", func(t *testing.T) {
@@ -152,20 +138,12 @@ func Test_UserHandler_UserActivation(t *testing.T) {
 			Return(false, nil).
 			Twice()
 
-		ctx := context.WithValue(context.Background(), middleware.TokenContextKey, token)
-
 		// Activating the user
-		reqBody := `
-			{
-				"user_id": "user-id",
-				"is_active": true
-			}
-		`
-		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, url, strings.NewReader(reqBody))
-		require.NoError(t, err)
-		w := httptest.NewRecorder()
-		r.ServeHTTP(w, req)
-		resp := w.Result()
+		reqBody := `{
+			"user_id": "user-id",
+			"is_active": true
+		}`
+		resp := executePatchRequest(t, handler, token, reqBody)
 		respBody, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
@@ -173,17 +151,11 @@ func Test_UserHandler_UserActivation(t *testing.T) {
 		assert.JSONEq(t, `{"error":"Not authorized."}`, string(respBody))
 
 		// Deactivating the user
-		reqBody = `
-			{
-				"user_id": "user-id",
-				"is_active": false
-			}
-		`
-		req, err = http.NewRequestWithContext(ctx, http.MethodPatch, url, strings.NewReader(reqBody))
-		require.NoError(t, err)
-		w = httptest.NewRecorder()
-		r.ServeHTTP(w, req)
-		resp = w.Result()
+		reqBody = `{
+			"user_id": "user-id",
+			"is_active": false
+		}`
+		resp = executePatchRequest(t, handler, token, reqBody)
 		respBody, err = io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
@@ -202,20 +174,12 @@ func Test_UserHandler_UserActivation(t *testing.T) {
 			Return(&auth.User{ID: "user-id"}, nil).
 			Twice()
 
-		ctx := context.WithValue(context.Background(), middleware.TokenContextKey, token)
-
 		// Activating the user
-		reqBody := `
-			{
-				"user_id": "user-id",
-				"is_active": true
-			}
-		`
-		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, url, strings.NewReader(reqBody))
-		require.NoError(t, err)
-		w := httptest.NewRecorder()
-		r.ServeHTTP(w, req)
-		resp := w.Result()
+		reqBody := `{
+			"user_id": "user-id",
+			"is_active": true
+		}`
+		resp := executePatchRequest(t, handler, token, reqBody)
 		respBody, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
@@ -223,17 +187,11 @@ func Test_UserHandler_UserActivation(t *testing.T) {
 		assert.JSONEq(t, `{"error": "The request was invalid in some way.", "extras": {"user_id":"cannot update your own activation"}}`, string(respBody))
 
 		// Deactivating the user
-		reqBody = `
-				{
-					"user_id": "user-id",
-					"is_active": false
-				}
-			`
-		req, err = http.NewRequestWithContext(ctx, http.MethodPatch, url, strings.NewReader(reqBody))
-		require.NoError(t, err)
-		w = httptest.NewRecorder()
-		r.ServeHTTP(w, req)
-		resp = w.Result()
+		reqBody = `{
+			"user_id": "user-id",
+			"is_active": false
+		}`
+		resp = executePatchRequest(t, handler, token, reqBody)
 		respBody, err = io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
@@ -260,20 +218,12 @@ func Test_UserHandler_UserActivation(t *testing.T) {
 			Return(auth.ErrNoRowsAffected).
 			Once()
 
-		ctx := context.WithValue(context.Background(), middleware.TokenContextKey, token)
-
 		// Activating the user
-		reqBody := `
-			{
-				"user_id": "user-id",
-				"is_active": true
-			}
-		`
-		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, url, strings.NewReader(reqBody))
-		require.NoError(t, err)
-		w := httptest.NewRecorder()
-		r.ServeHTTP(w, req)
-		resp := w.Result()
+		reqBody := `{
+			"user_id": "user-id",
+			"is_active": true
+		}`
+		resp := executePatchRequest(t, handler, token, reqBody)
 		respBody, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
@@ -281,17 +231,11 @@ func Test_UserHandler_UserActivation(t *testing.T) {
 		assert.JSONEq(t, `{"error": "The request was invalid in some way.", "extras": {"user_id":"user_id is invalid"}}`, string(respBody))
 
 		// Deactivating the user
-		reqBody = `
-				{
-					"user_id": "user-id",
-					"is_active": false
-				}
-			`
-		req, err = http.NewRequestWithContext(ctx, http.MethodPatch, url, strings.NewReader(reqBody))
-		require.NoError(t, err)
-		w = httptest.NewRecorder()
-		r.ServeHTTP(w, req)
-		resp = w.Result()
+		reqBody = `{
+			"user_id": "user-id",
+			"is_active": false
+		}`
+		resp = executePatchRequest(t, handler, token, reqBody)
 		respBody, err = io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
@@ -310,19 +254,11 @@ func Test_UserHandler_UserActivation(t *testing.T) {
 		buf := new(strings.Builder)
 		log.DefaultLogger.SetOutput(buf)
 
-		ctx := context.WithValue(context.Background(), middleware.TokenContextKey, token)
-
-		reqBody := `
-			{
-				"user_id": "user-id",
-				"is_active": true
-			}
-		`
-		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, url, strings.NewReader(reqBody))
-		require.NoError(t, err)
-		w := httptest.NewRecorder()
-		r.ServeHTTP(w, req)
-		resp := w.Result()
+		reqBody := `{
+			"user_id": "user-id",
+			"is_active": true
+		}`
+		resp := executePatchRequest(t, handler, token, reqBody)
 		respBody, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
@@ -354,20 +290,12 @@ func Test_UserHandler_UserActivation(t *testing.T) {
 			Return(nil).
 			Once()
 
-		ctx := context.WithValue(context.Background(), middleware.TokenContextKey, token)
-
 		// Activating the user
-		reqBody := `
-			{
-				"user_id": "user-id",
-				"is_active": true
-			}
-		`
-		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, url, strings.NewReader(reqBody))
-		require.NoError(t, err)
-		w := httptest.NewRecorder()
-		r.ServeHTTP(w, req)
-		resp := w.Result()
+		reqBody := `{
+			"user_id": "user-id",
+			"is_active": true
+		}`
+		resp := executePatchRequest(t, handler, token, reqBody)
 		respBody, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
@@ -375,17 +303,11 @@ func Test_UserHandler_UserActivation(t *testing.T) {
 		assert.JSONEq(t, `{"message": "user activation was updated successfully"}`, string(respBody))
 
 		// Deactivating the user
-		reqBody = `
-				{
-					"user_id": "user-id",
-					"is_active": false
-				}
-			`
-		req, err = http.NewRequestWithContext(ctx, http.MethodPatch, url, strings.NewReader(reqBody))
-		require.NoError(t, err)
-		w = httptest.NewRecorder()
-		r.ServeHTTP(w, req)
-		resp = w.Result()
+		reqBody = `{
+			"user_id": "user-id",
+			"is_active": false
+		}`
+		resp = executePatchRequest(t, handler, token, reqBody)
 		respBody, err = io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
