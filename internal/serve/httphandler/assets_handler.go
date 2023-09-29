@@ -34,10 +34,10 @@ const (
 var errCouldNotRemoveTrustline = errors.New("could not remove trustline")
 
 type AssetsHandler struct {
-	Models           *data.Models
-	HorizonClient    horizonclient.ClientInterface
-	SignatureService engine.SignatureService
-	GetPreconditions func() txnbuild.Preconditions
+	Models             *data.Models
+	HorizonClient      horizonclient.ClientInterface
+	SignatureService   engine.SignatureService
+	GetPreconditionsFn func() txnbuild.Preconditions
 }
 
 type AssetRequest struct {
@@ -271,8 +271,8 @@ func (c AssetsHandler) submitChangeTrustTransaction(ctx context.Context, acc *ho
 	}
 
 	preconditions := txnbuild.Preconditions{TimeBounds: txnbuild.NewTimeout(20)}
-	if c.GetPreconditions != nil {
-		preconditions = c.GetPreconditions()
+	if c.GetPreconditionsFn != nil {
+		preconditions = c.GetPreconditionsFn()
 	}
 	tx, err := txnbuild.NewTransaction(
 		txnbuild.TransactionParams{

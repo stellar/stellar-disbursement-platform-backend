@@ -33,7 +33,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/mocks"
 )
 
-var preconditions = txnbuild.Preconditions{TimeBounds: txnbuild.NewTimeout(20)}
+var defaultPreconditions = txnbuild.Preconditions{TimeBounds: txnbuild.NewTimeout(20)}
 
 func Test_AssetsHandlerGetAssets(t *testing.T) {
 	dbt := dbtest.Open(t)
@@ -108,10 +108,10 @@ func Test_AssetHandler_CreateAsset(t *testing.T) {
 	signatureService := mocks.NewMockSignatureService(t)
 
 	handler := &AssetsHandler{
-		Models:           model,
-		SignatureService: signatureService,
-		HorizonClient:    horizonClientMock,
-		GetPreconditions: func() txnbuild.Preconditions { return preconditions },
+		Models:             model,
+		SignatureService:   signatureService,
+		HorizonClient:      horizonClientMock,
+		GetPreconditionsFn: func() txnbuild.Preconditions { return defaultPreconditions },
 	}
 
 	code := "USDT"
@@ -147,7 +147,7 @@ func Test_AssetHandler_CreateAsset(t *testing.T) {
 					},
 				},
 				BaseFee:       txnbuild.MinBaseFee * feeMultiplierInStroops,
-				Preconditions: preconditions,
+				Preconditions: defaultPreconditions,
 			},
 		)
 		require.NoError(t, err)
@@ -333,7 +333,7 @@ func Test_AssetHandler_CreateAsset(t *testing.T) {
 					},
 				},
 				BaseFee:       txnbuild.MinBaseFee * feeMultiplierInStroops,
-				Preconditions: preconditions,
+				Preconditions: defaultPreconditions,
 			},
 		)
 		require.NoError(t, err)
@@ -419,7 +419,7 @@ func Test_AssetHandler_CreateAsset(t *testing.T) {
 					},
 				},
 				BaseFee:       txnbuild.MinBaseFee * feeMultiplierInStroops,
-				Preconditions: preconditions,
+				Preconditions: defaultPreconditions,
 			},
 		)
 		require.NoError(t, err)
@@ -499,10 +499,10 @@ func Test_AssetHandler_DeleteAsset(t *testing.T) {
 	signatureService := mocks.NewMockSignatureService(t)
 
 	handler := &AssetsHandler{
-		Models:           model,
-		SignatureService: signatureService,
-		HorizonClient:    horizonClientMock,
-		GetPreconditions: func() txnbuild.Preconditions { return preconditions },
+		Models:             model,
+		SignatureService:   signatureService,
+		HorizonClient:      horizonClientMock,
+		GetPreconditionsFn: func() txnbuild.Preconditions { return defaultPreconditions },
 	}
 
 	r := chi.NewRouter()
@@ -539,7 +539,7 @@ func Test_AssetHandler_DeleteAsset(t *testing.T) {
 					},
 				},
 				BaseFee:       txnbuild.MinBaseFee * feeMultiplierInStroops,
-				Preconditions: preconditions,
+				Preconditions: defaultPreconditions,
 			},
 		)
 		require.NoError(t, err)
@@ -704,9 +704,9 @@ func Test_AssetHandler_handleUpdateAssetTrustlineForDistributionAccount(t *testi
 	signatureService := mocks.NewMockSignatureService(t)
 
 	handler := &AssetsHandler{
-		SignatureService: signatureService,
-		HorizonClient:    horizonClientMock,
-		GetPreconditions: func() txnbuild.Preconditions { return preconditions },
+		SignatureService:   signatureService,
+		HorizonClient:      horizonClientMock,
+		GetPreconditionsFn: func() txnbuild.Preconditions { return defaultPreconditions },
 	}
 
 	assetToAddTrustline := &txnbuild.CreditAsset{
@@ -787,7 +787,7 @@ func Test_AssetHandler_handleUpdateAssetTrustlineForDistributionAccount(t *testi
 					},
 				},
 				BaseFee:       txnbuild.MinBaseFee * feeMultiplierInStroops,
-				Preconditions: preconditions,
+				Preconditions: defaultPreconditions,
 			},
 		)
 		require.NoError(t, err)
@@ -878,7 +878,7 @@ func Test_AssetHandler_handleUpdateAssetTrustlineForDistributionAccount(t *testi
 					},
 				},
 				BaseFee:       txnbuild.MinBaseFee * feeMultiplierInStroops,
-				Preconditions: preconditions,
+				Preconditions: defaultPreconditions,
 			},
 		)
 		require.NoError(t, err)
@@ -1088,9 +1088,9 @@ func Test_AssetHandler_submitChangeTrustTransaction(t *testing.T) {
 	signatureService := mocks.NewMockSignatureService(t)
 
 	handler := &AssetsHandler{
-		SignatureService: signatureService,
-		HorizonClient:    horizonClientMock,
-		GetPreconditions: func() txnbuild.Preconditions { return preconditions },
+		SignatureService:   signatureService,
+		HorizonClient:      horizonClientMock,
+		GetPreconditionsFn: func() txnbuild.Preconditions { return defaultPreconditions },
 	}
 
 	code := "USDC"
@@ -1151,7 +1151,7 @@ func Test_AssetHandler_submitChangeTrustTransaction(t *testing.T) {
 					},
 				},
 				BaseFee:       txnbuild.MinBaseFee * feeMultiplierInStroops,
-				Preconditions: preconditions,
+				Preconditions: defaultPreconditions,
 			},
 		)
 		require.NoError(t, err)
@@ -1197,7 +1197,7 @@ func Test_AssetHandler_submitChangeTrustTransaction(t *testing.T) {
 					},
 				},
 				BaseFee:       txnbuild.MinBaseFee * feeMultiplierInStroops,
-				Preconditions: preconditions,
+				Preconditions: defaultPreconditions,
 			},
 		)
 		require.NoError(t, err)
@@ -1264,7 +1264,7 @@ func Test_AssetHandler_submitChangeTrustTransaction(t *testing.T) {
 					},
 				},
 				BaseFee:       txnbuild.MinBaseFee * feeMultiplierInStroops,
-				Preconditions: preconditions,
+				Preconditions: defaultPreconditions,
 			},
 		)
 		require.NoError(t, err)
@@ -1381,10 +1381,10 @@ func Test_AssetHandler_submitChangeTrustTransaction_makeSurePreconditionsAreSetA
 
 	t.Run("makes sure a non-empty precondition is used if none is explicitly set", func(t *testing.T) {
 		mocks := newAssetTestMock(t, distributionKP.Address())
-		mocks.Handler.GetPreconditions = nil
+		mocks.Handler.GetPreconditionsFn = nil
 
 		txParams := txParamsWithoutPreconditions
-		txParams.Preconditions = preconditions
+		txParams.Preconditions = defaultPreconditions
 		tx, err := txnbuild.NewTransaction(txParams)
 		require.NoError(t, err)
 
@@ -1392,13 +1392,13 @@ func Test_AssetHandler_submitChangeTrustTransaction_makeSurePreconditionsAreSetA
 		require.NoError(t, err)
 
 		mocks.SignatureService.
-			On("SignStellarTransaction", ctx, mock.MatchedBy(matchPreconditionsTimeboundsFn(preconditions)), distributionKP.Address()).
+			On("SignStellarTransaction", ctx, mock.MatchedBy(matchPreconditionsTimeboundsFn(defaultPreconditions)), distributionKP.Address()).
 			Return(signedTx, nil).
 			Once()
 		defer mocks.SignatureService.AssertExpectations(t)
 
 		mocks.HorizonClientMock.
-			On("SubmitTransactionWithOptions", mock.MatchedBy(matchPreconditionsTimeboundsFn(preconditions)), horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true}).
+			On("SubmitTransactionWithOptions", mock.MatchedBy(matchPreconditionsTimeboundsFn(defaultPreconditions)), horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true}).
 			Return(horizon.Transaction{}, nil).
 			Once()
 		defer mocks.HorizonClientMock.AssertExpectations(t)
@@ -1410,7 +1410,7 @@ func Test_AssetHandler_submitChangeTrustTransaction_makeSurePreconditionsAreSetA
 	t.Run("makes sure a the precondition that was set is used", func(t *testing.T) {
 		mocks := newAssetTestMock(t, distributionKP.Address())
 		newPreconditions := txnbuild.Preconditions{TimeBounds: txnbuild.NewTimeout(int64(rand.Intn(999999999)))}
-		mocks.Handler.GetPreconditions = func() txnbuild.Preconditions { return newPreconditions }
+		mocks.Handler.GetPreconditionsFn = func() txnbuild.Preconditions { return newPreconditions }
 
 		txParams := txParamsWithoutPreconditions
 		txParams.Preconditions = newPreconditions
