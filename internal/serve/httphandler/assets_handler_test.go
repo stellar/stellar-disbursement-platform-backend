@@ -7,10 +7,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/rand"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/stellar/go/clients/horizonclient"
@@ -1297,4 +1299,198 @@ func Test_AssetHandler_submitChangeTrustTransaction(t *testing.T) {
 
 	horizonClientMock.AssertExpectations(t)
 	signatureService.AssertExpectations(t)
+}
+
+type assetTestMock struct {
+	SignatureService  *mocks.MockSignatureService
+	HorizonClientMock *horizonclient.MockClient
+	Handler           AssetsHandler
+}
+
+func newAssetTestMock(t *testing.T, distributionAccountAddress string) *assetTestMock {
+	t.Helper()
+
+	horizonClientMock := &horizonclient.MockClient{}
+	signatureService := mocks.NewMockSignatureService(t)
+	signatureService.
+		On("DistributionAccount").
+		Return(distributionAccountAddress)
+
+	return &assetTestMock{
+		SignatureService:  signatureService,
+		HorizonClientMock: horizonClientMock,
+		Handler: AssetsHandler{
+			SignatureService: signatureService,
+			HorizonClient:    horizonClientMock,
+		},
+	}
+}
+
+func Test_AssetHandler_submitChangeTrustTransaction_makeSurePreconditionsAreSetAsExpected(t *testing.T) {
+	ctx := context.Background()
+	distributionKP := keypair.MustRandom()
+
+	const code = "USDC"
+	const issuer = "GBHC5ADV2XYITXCYC5F6X6BM2OYTYHV4ZU2JF6QWJORJQE2O7RKH2LAQ"
+	acc := &horizon.Account{
+		AccountID: distributionKP.Address(),
+		Sequence:  123,
+		Balances: []horizon.Balance{
+			{
+				Balance: "100",
+				Asset: base.Asset{
+					Type:   "",
+					Code:   code,
+					Issuer: issuer,
+				},
+			},
+		},
+	}
+
+	t.Run("makes sure a non-empty precondition is used if none is explicitly set", func(t *testing.T) {
+		mocks := newAssetTestMock(t, distributionKP.Address())
+		mocks.Handler.GetPreconditions = nil
+
+		tx, err := txnbuild.NewTransaction(
+			txnbuild.TransactionParams{
+				SourceAccount: &txnbuild.SimpleAccount{
+					AccountID: distributionKP.Address(),
+					Sequence:  124,
+				},
+				IncrementSequenceNum: false,
+				Operations: []txnbuild.Operation{
+					&txnbuild.ChangeTrust{
+						Line: txnbuild.ChangeTrustAssetWrapper{
+							Asset: txnbuild.CreditAsset{
+								Code:   code,
+								Issuer: issuer,
+							},
+						},
+						Limit:         "",
+						SourceAccount: distributionKP.Address(),
+					},
+				},
+				BaseFee:       txnbuild.MinBaseFee * feeMultiplierInStroops,
+				Preconditions: preconditions,
+			},
+		)
+		require.NoError(t, err)
+
+		signedTx, err := tx.Sign(network.TestNetworkPassphrase, distributionKP)
+		require.NoError(t, err)
+
+		matchPreconditionsFn := func(expectedPreconditions txnbuild.Preconditions) func(actualTx *txnbuild.Transaction) bool {
+			require := require.New(t)
+
+			return func(actualTx *txnbuild.Transaction) bool {
+				actualPreconditions := actualTx.ToXDR().Preconditions()
+				expectedTime := time.Unix(int64(expectedPreconditions.TimeBounds.MaxTime), 0).UTC()
+				actualTime := time.Unix(int64(actualPreconditions.TimeBounds.MaxTime), 0).UTC()
+				require.WithinDuration(expectedTime, actualTime, 2*time.Second)
+
+				return true
+			}
+
+		}
+
+		mocks.SignatureService.
+			On("SignStellarTransaction", ctx, mock.MatchedBy(matchPreconditionsFn(preconditions)), distributionKP.Address()).
+			Return(signedTx, nil).
+			Once()
+		defer mocks.SignatureService.AssertExpectations(t)
+
+		mocks.HorizonClientMock.
+			On("SubmitTransactionWithOptions", mock.MatchedBy(matchPreconditionsFn(preconditions)), horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true}).
+			Return(horizon.Transaction{}, nil).
+			Once()
+		defer mocks.HorizonClientMock.AssertExpectations(t)
+
+		err = mocks.Handler.submitChangeTrustTransaction(ctx, acc, []*txnbuild.ChangeTrust{
+			{
+				Line: txnbuild.ChangeTrustAssetWrapper{
+					Asset: txnbuild.CreditAsset{
+						Code:   code,
+						Issuer: issuer,
+					},
+				},
+				Limit:         "",
+				SourceAccount: distributionKP.Address(),
+			},
+		})
+		assert.NoError(t, err)
+	})
+
+	t.Run("makes sure a the precondition that was set is used", func(t *testing.T) {
+		mocks := newAssetTestMock(t, distributionKP.Address())
+		newPrecondition := txnbuild.Preconditions{TimeBounds: txnbuild.NewTimeout(int64(rand.Intn(999999999)))}
+		mocks.Handler.GetPreconditions = func() txnbuild.Preconditions { return newPrecondition }
+
+		tx, err := txnbuild.NewTransaction(
+			txnbuild.TransactionParams{
+				SourceAccount: &txnbuild.SimpleAccount{
+					AccountID: distributionKP.Address(),
+					Sequence:  124,
+				},
+				IncrementSequenceNum: false,
+				Operations: []txnbuild.Operation{
+					&txnbuild.ChangeTrust{
+						Line: txnbuild.ChangeTrustAssetWrapper{
+							Asset: txnbuild.CreditAsset{
+								Code:   code,
+								Issuer: issuer,
+							},
+						},
+						Limit:         "",
+						SourceAccount: distributionKP.Address(),
+					},
+				},
+				BaseFee:       txnbuild.MinBaseFee * feeMultiplierInStroops,
+				Preconditions: newPrecondition,
+			},
+		)
+		require.NoError(t, err)
+
+		signedTx, err := tx.Sign(network.TestNetworkPassphrase, distributionKP)
+		require.NoError(t, err)
+
+		matchPreconditionsFn := func(expectedPreconditions txnbuild.Preconditions) func(actualTx *txnbuild.Transaction) bool {
+			require := require.New(t)
+
+			return func(actualTx *txnbuild.Transaction) bool {
+				actualPreconditions := actualTx.ToXDR().Preconditions()
+				expectedTime := time.Unix(int64(expectedPreconditions.TimeBounds.MaxTime), 0).UTC()
+				actualTime := time.Unix(int64(actualPreconditions.TimeBounds.MaxTime), 0).UTC()
+				require.WithinDuration(expectedTime, actualTime, 2*time.Second)
+
+				return true
+			}
+
+		}
+
+		mocks.SignatureService.
+			On("SignStellarTransaction", ctx, mock.MatchedBy(matchPreconditionsFn(newPrecondition)), distributionKP.Address()).
+			Return(signedTx, nil).
+			Once()
+		defer mocks.SignatureService.AssertExpectations(t)
+
+		mocks.HorizonClientMock.
+			On("SubmitTransactionWithOptions", mock.MatchedBy(matchPreconditionsFn(newPrecondition)), horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true}).
+			Return(horizon.Transaction{}, nil).
+			Once()
+		defer mocks.HorizonClientMock.AssertExpectations(t)
+
+		err = mocks.Handler.submitChangeTrustTransaction(ctx, acc, []*txnbuild.ChangeTrust{
+			{
+				Line: txnbuild.ChangeTrustAssetWrapper{
+					Asset: txnbuild.CreditAsset{
+						Code:   code,
+						Issuer: issuer,
+					},
+				},
+				Limit:         "",
+				SourceAccount: distributionKP.Address(),
+			},
+		})
+		assert.NoError(t, err)
+	})
 }
