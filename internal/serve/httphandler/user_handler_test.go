@@ -26,32 +26,55 @@ import (
 )
 
 func Test_UserHandler_UserActivation(t *testing.T) {
-	r := chi.NewRouter()
+	type testMocks struct {
+		AuthenticatorMock *auth.AuthenticatorMock
+		JWTManagerMock    *auth.JWTManagerMock
+		Handler           UserHandler
+	}
 
-	authenticatorMock := &auth.AuthenticatorMock{}
-	jwtManagerMock := &auth.JWTManagerMock{}
-	roleManagerMock := &auth.RoleManagerMock{}
-	authManager := auth.NewAuthManager(
-		auth.WithCustomAuthenticatorOption(authenticatorMock),
-		auth.WithCustomJWTManagerOption(jwtManagerMock),
-		auth.WithCustomRoleManagerOption(roleManagerMock),
-	)
+	setupMocks := func(t *testing.T) *testMocks {
+		t.Helper()
+		authenticatorMock := &auth.AuthenticatorMock{}
+		jwtManagerMock := &auth.JWTManagerMock{}
 
-	handler := &UserHandler{AuthManager: authManager}
+		authManager := auth.NewAuthManager(
+			auth.WithCustomAuthenticatorOption(authenticatorMock),
+			auth.WithCustomJWTManagerOption(jwtManagerMock),
+		)
 
-	const url = "/users/activation"
+		return &testMocks{
+			AuthenticatorMock: authenticatorMock,
+			JWTManagerMock:    jwtManagerMock,
+			Handler:           UserHandler{AuthManager: authManager},
+		}
+	}
 
-	r.Patch(url, handler.UserActivation)
+	executePatchRequest := func(t *testing.T, handler UserHandler, token string, body string) *http.Response {
+		t.Helper()
+		const url = "/users/activation"
+		r := chi.NewRouter()
+		r.Patch(url, handler.UserActivation)
+
+		ctx := context.Background()
+		if token != "" {
+			ctx = context.WithValue(ctx, middleware.TokenContextKey, token)
+		}
+
+		var bodyReader io.Reader
+		if body != "" {
+			bodyReader = strings.NewReader(body)
+		}
+
+		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, url, bodyReader)
+		require.NoError(t, err)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		return w.Result()
+	}
 
 	t.Run("returns Unauthorized when no token is in the request context", func(t *testing.T) {
-		req, err := http.NewRequestWithContext(context.Background(), http.MethodPatch, url, nil)
-		require.NoError(t, err)
-
-		w := httptest.NewRecorder()
-
-		r.ServeHTTP(w, req)
-
-		resp := w.Result()
+		mocks := setupMocks(t)
+		resp := executePatchRequest(t, mocks.Handler, "", "")
 		respBody, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
@@ -60,130 +83,78 @@ func Test_UserHandler_UserActivation(t *testing.T) {
 	})
 
 	t.Run("returns error when request body is invalid", func(t *testing.T) {
-		ctx := context.WithValue(context.Background(), middleware.TokenContextKey, "mytoken")
-
-		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, url, strings.NewReader(`{}`))
-		require.NoError(t, err)
-
-		w := httptest.NewRecorder()
-
-		r.ServeHTTP(w, req)
-
-		resp := w.Result()
-
+		// is_active and user_id are required
+		mocks := setupMocks(t)
+		resp := executePatchRequest(t, mocks.Handler, "mytoken", "{}")
 		respBody, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
-		wantsBody := `
-			{
-				"error": "Request invalid",
-				"extras": {
-					"user_id": "user_id is required",
-					"is_active": "is_active is required"
-				}
+		wantsBody := `{
+			"error": "Request invalid",
+			"extras": {
+				"user_id": "user_id is required",
+				"is_active": "is_active is required"
 			}
-		`
-
+		}`
 		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 		assert.JSONEq(t, wantsBody, string(respBody))
 
-		req, err = http.NewRequestWithContext(ctx, http.MethodPatch, url, strings.NewReader(`{"user_id": "user-id"}`))
-		require.NoError(t, err)
-
-		w = httptest.NewRecorder()
-
-		r.ServeHTTP(w, req)
-
-		resp = w.Result()
-
+		// is_active is required
+		resp = executePatchRequest(t, mocks.Handler, "mytoken", `{"user_id": "user-id"}`)
 		respBody, err = io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
-		wantsBody = `
-			{
-				"error": "Request invalid",
-				"extras": {
-					"is_active": "is_active is required"
-				}
+		wantsBody = `{
+			"error": "Request invalid",
+			"extras": {
+				"is_active": "is_active is required"
 			}
-		`
+		}`
 		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 		assert.JSONEq(t, wantsBody, string(respBody))
 
-		req, err = http.NewRequestWithContext(ctx, http.MethodPatch, url, strings.NewReader(`{"is_active": true}`))
-		require.NoError(t, err)
-
-		w = httptest.NewRecorder()
-
-		r.ServeHTTP(w, req)
-
-		resp = w.Result()
-
+		// user_id is required
+		resp = executePatchRequest(t, mocks.Handler, "mytoken", `{"is_active": true}`)
 		respBody, err = io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
-		wantsBody = `
-			{
-				"error": "Request invalid",
-				"extras": {
-					"user_id": "user_id is required"
-				}
+		wantsBody = `{
+			"error": "Request invalid",
+			"extras": {
+				"user_id": "user_id is required"
 			}
-		`
+		}`
 		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 		assert.JSONEq(t, wantsBody, string(respBody))
 
-		buf := new(strings.Builder)
-		log.DefaultLogger.SetOutput(buf)
-
-		req, err = http.NewRequestWithContext(ctx, http.MethodPatch, url, strings.NewReader(`"invalid"`))
-		require.NoError(t, err)
-
-		w = httptest.NewRecorder()
-
-		r.ServeHTTP(w, req)
-
-		resp = w.Result()
-
+		// invalid body format:
+		getLogEntries := log.DefaultLogger.StartTest(log.InfoLevel)
+		resp = executePatchRequest(t, mocks.Handler, "mytoken", `"invalid"`)
 		respBody, err = io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
-		wantsBody = `
-			{
-				"error": "The request was invalid in some way."
-			}
-		`
+		wantsBody = `{"error": "The request was invalid in some way."}`
 		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 		assert.JSONEq(t, wantsBody, string(respBody))
-		assert.Contains(t, buf.String(), "decoding the request body")
+		assert.Contains(t, getLogEntries()[0].Message, "decoding the request body")
 	})
 
 	t.Run("returns Unauthorized when token is invalid", func(t *testing.T) {
+		mocks := setupMocks(t)
 		token := "mytoken"
 
-		jwtManagerMock.
+		mocks.JWTManagerMock.
 			On("ValidateToken", mock.Anything, token).
 			Return(false, nil).
 			Twice()
-
-		ctx := context.WithValue(context.Background(), middleware.TokenContextKey, token)
+		defer mocks.JWTManagerMock.AssertExpectations(t)
 
 		// Activating the user
-		reqBody := `
-			{
-				"user_id": "user-id",
-				"is_active": true
-			}
-		`
-		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, url, strings.NewReader(reqBody))
-		require.NoError(t, err)
-
-		w := httptest.NewRecorder()
-
-		r.ServeHTTP(w, req)
-
-		resp := w.Result()
-
+		reqBody := `{
+			"user_id": "user-id",
+			"is_active": true
+		}`
+		resp := executePatchRequest(t, mocks.Handler, token, reqBody)
 		respBody, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
@@ -191,21 +162,11 @@ func Test_UserHandler_UserActivation(t *testing.T) {
 		assert.JSONEq(t, `{"error":"Not authorized."}`, string(respBody))
 
 		// Deactivating the user
-		reqBody = `
-			{
-				"user_id": "user-id",
-				"is_active": false
-			}
-		`
-		req, err = http.NewRequestWithContext(ctx, http.MethodPatch, url, strings.NewReader(reqBody))
-		require.NoError(t, err)
-
-		w = httptest.NewRecorder()
-
-		r.ServeHTTP(w, req)
-
-		resp = w.Result()
-
+		reqBody = `{
+			"user_id": "user-id",
+			"is_active": false
+		}`
+		resp = executePatchRequest(t, mocks.Handler, token, reqBody)
 		respBody, err = io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
@@ -213,40 +174,72 @@ func Test_UserHandler_UserActivation(t *testing.T) {
 		assert.JSONEq(t, `{"error":"Not authorized."}`, string(respBody))
 	})
 
-	t.Run("returns BadRequest when user doesn't exist", func(t *testing.T) {
+	t.Run("returns BadRequest when trying to update self activation state", func(t *testing.T) {
+		mocks := setupMocks(t)
 		token := "mytoken"
 
-		jwtManagerMock.
+		mocks.JWTManagerMock.
 			On("ValidateToken", mock.Anything, token).
 			Return(true, nil).
+			Twice().
+			On("GetUserFromToken", mock.Anything, token).
+			Return(&auth.User{ID: "user-id"}, nil).
 			Twice()
+		defer mocks.JWTManagerMock.AssertExpectations(t)
 
-		authenticatorMock.
+		// Activating the user
+		reqBody := `{
+			"user_id": "user-id",
+			"is_active": true
+		}`
+		resp := executePatchRequest(t, mocks.Handler, token, reqBody)
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+		assert.JSONEq(t, `{"error": "The request was invalid in some way.", "extras": {"user_id":"cannot update your own activation"}}`, string(respBody))
+
+		// Deactivating the user
+		reqBody = `{
+			"user_id": "user-id",
+			"is_active": false
+		}`
+		resp = executePatchRequest(t, mocks.Handler, token, reqBody)
+		respBody, err = io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+		assert.JSONEq(t, `{"error": "The request was invalid in some way.", "extras": {"user_id":"cannot update your own activation"}}`, string(respBody))
+	})
+
+	t.Run("returns BadRequest when user doesn't exist", func(t *testing.T) {
+		mocks := setupMocks(t)
+		token := "mytoken"
+
+		mocks.JWTManagerMock.
+			On("ValidateToken", mock.Anything, token).
+			Return(true, nil).
+			Times(4).
+			On("GetUserFromToken", mock.Anything, token).
+			Return(&auth.User{}, nil).
+			Twice()
+		defer mocks.JWTManagerMock.AssertExpectations(t)
+
+		mocks.AuthenticatorMock.
 			On("ActivateUser", mock.Anything, "user-id").
 			Return(auth.ErrNoRowsAffected).
 			Once().
 			On("DeactivateUser", mock.Anything, "user-id").
 			Return(auth.ErrNoRowsAffected).
 			Once()
-
-		ctx := context.WithValue(context.Background(), middleware.TokenContextKey, token)
+		defer mocks.AuthenticatorMock.AssertExpectations(t)
 
 		// Activating the user
-		reqBody := `
-			{
-				"user_id": "user-id",
-				"is_active": true
-			}
-		`
-		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, url, strings.NewReader(reqBody))
-		require.NoError(t, err)
-
-		w := httptest.NewRecorder()
-
-		r.ServeHTTP(w, req)
-
-		resp := w.Result()
-
+		reqBody := `{
+			"user_id": "user-id",
+			"is_active": true
+		}`
+		resp := executePatchRequest(t, mocks.Handler, token, reqBody)
 		respBody, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
@@ -254,21 +247,11 @@ func Test_UserHandler_UserActivation(t *testing.T) {
 		assert.JSONEq(t, `{"error": "The request was invalid in some way.", "extras": {"user_id":"user_id is invalid"}}`, string(respBody))
 
 		// Deactivating the user
-		reqBody = `
-				{
-					"user_id": "user-id",
-					"is_active": false
-				}
-			`
-		req, err = http.NewRequestWithContext(ctx, http.MethodPatch, url, strings.NewReader(reqBody))
-		require.NoError(t, err)
-
-		w = httptest.NewRecorder()
-
-		r.ServeHTTP(w, req)
-
-		resp = w.Result()
-
+		reqBody = `{
+			"user_id": "user-id",
+			"is_active": false
+		}`
+		resp = executePatchRequest(t, mocks.Handler, token, reqBody)
 		respBody, err = io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
@@ -277,79 +260,59 @@ func Test_UserHandler_UserActivation(t *testing.T) {
 	})
 
 	t.Run("returns InternalServerError when a unexpected error occurs", func(t *testing.T) {
+		mocks := setupMocks(t)
 		token := "mytoken"
 
-		jwtManagerMock.
+		mocks.JWTManagerMock.
 			On("ValidateToken", mock.Anything, token).
 			Return(false, errors.New("unexpected error")).
 			Once()
+		defer mocks.JWTManagerMock.AssertExpectations(t)
 
-		buf := new(strings.Builder)
-		log.DefaultLogger.SetOutput(buf)
-
-		ctx := context.WithValue(context.Background(), middleware.TokenContextKey, token)
-
-		reqBody := `
-			{
-				"user_id": "user-id",
-				"is_active": true
-			}
-		`
-		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, url, strings.NewReader(reqBody))
-		require.NoError(t, err)
-
-		w := httptest.NewRecorder()
-
-		r.ServeHTTP(w, req)
-
-		resp := w.Result()
-
+		getTestEntries := log.DefaultLogger.StartTest(log.InfoLevel)
+		reqBody := `{
+			"user_id": "user-id",
+			"is_active": true
+		}`
+		resp := executePatchRequest(t, mocks.Handler, token, reqBody)
 		respBody, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
 		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
-		assert.JSONEq(t, `{"error": "Cannot update user activation"}`, string(respBody))
-		assert.Contains(t, buf.String(), "Cannot update user activation")
+		assert.JSONEq(t, `{"error": "An internal error occurred while processing this request."}`, string(respBody))
+		assert.Contains(t, getTestEntries()[0].Message, "getting user from token: validating token: validating token: unexpected error")
 	})
 
 	t.Run("updates the user activation correctly", func(t *testing.T) {
-		buf := new(strings.Builder)
-		log.DefaultLogger.SetOutput(buf)
-		log.SetLevel(log.InfoLevel)
-
+		mocks := setupMocks(t)
 		token := "mytoken"
 
-		jwtManagerMock.
+		mocks.JWTManagerMock.
 			On("ValidateToken", mock.Anything, token).
 			Return(true, nil).
+			Times(4).
+			On("GetUserFromToken", mock.Anything, token).
+			Return(&auth.User{}, nil).
 			Twice()
+		defer mocks.JWTManagerMock.AssertExpectations(t)
 
-		authenticatorMock.
+		mocks.AuthenticatorMock.
 			On("ActivateUser", mock.Anything, "user-id").
 			Return(nil).
 			Once().
 			On("DeactivateUser", mock.Anything, "user-id").
 			Return(nil).
 			Once()
+		defer mocks.AuthenticatorMock.AssertExpectations(t)
 
-		ctx := context.WithValue(context.Background(), middleware.TokenContextKey, token)
+		getTestEntries := log.DefaultLogger.StartTest(log.InfoLevel)
 
 		// Activating the user
-		reqBody := `
-			{
-				"user_id": "user-id",
-				"is_active": true
-			}
-		`
-		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, url, strings.NewReader(reqBody))
-		require.NoError(t, err)
-
-		w := httptest.NewRecorder()
-
-		r.ServeHTTP(w, req)
-
-		resp := w.Result()
-
+		reqBody := `{
+			"user_id": "user-id",
+			"is_active": true
+		}`
+		resp := executePatchRequest(t, mocks.Handler, token, reqBody)
 		respBody, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
@@ -357,21 +320,11 @@ func Test_UserHandler_UserActivation(t *testing.T) {
 		assert.JSONEq(t, `{"message": "user activation was updated successfully"}`, string(respBody))
 
 		// Deactivating the user
-		reqBody = `
-				{
-					"user_id": "user-id",
-					"is_active": false
-				}
-			`
-		req, err = http.NewRequestWithContext(ctx, http.MethodPatch, url, strings.NewReader(reqBody))
-		require.NoError(t, err)
-
-		w = httptest.NewRecorder()
-
-		r.ServeHTTP(w, req)
-
-		resp = w.Result()
-
+		reqBody = `{
+			"user_id": "user-id",
+			"is_active": false
+		}`
+		resp = executePatchRequest(t, mocks.Handler, token, reqBody)
 		respBody, err = io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
@@ -379,7 +332,7 @@ func Test_UserHandler_UserActivation(t *testing.T) {
 		assert.JSONEq(t, `{"message": "user activation was updated successfully"}`, string(respBody))
 
 		// validate logs
-		require.Contains(t, buf.String(), "[ActivateUserAccount] - Activating user with account ID user-id")
+		require.Contains(t, getTestEntries()[0].Message, "[ActivateUserAccount] - Activating user with account ID user-id")
 	})
 }
 
