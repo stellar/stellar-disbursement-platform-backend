@@ -79,6 +79,34 @@ func ParseStrongECPublicKey(privateKeyStr string) (*ecdsa.PublicKey, error) {
 	return publicKey, nil
 }
 
+func ValidateStrongECKeyPair(publicKeyStr, privateKeyStr string) error {
+	publicKey, err := ParseStrongECPublicKey(publicKeyStr)
+	if err != nil {
+		return fmt.Errorf("validating EC public key: %w", err)
+	}
+
+	privateKey, err := ParseStrongECPrivateKey(privateKeyStr)
+	if err != nil {
+		return fmt.Errorf("validating EC private key: %w", err)
+	}
+
+	// Sign a test message using the private key
+	msg := "test message"
+	hash := sha256.Sum256([]byte(msg))
+	r, s, err := ecdsa.Sign(rand.Reader, privateKey, hash[:])
+	if err != nil {
+		return fmt.Errorf("signing message for validation: %w", err)
+	}
+
+	// Verify the signature using the public key
+	valid := ecdsa.Verify(publicKey, hash[:], r, s)
+	if !valid {
+		return fmt.Errorf("signature verification failed for the provided pair of keys")
+	}
+
+	return nil
+}
+
 // ParseECDSAPublicKey parses the given public key string and returns the *ecdsa.PublicKey.
 func ParseECDSAPublicKey(publicKeyStr string) (*ecdsa.PublicKey, error) {
 	// Decode PEM block

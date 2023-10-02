@@ -39,6 +39,31 @@ J16L7THmguSKZq1PPS1SRravKpOhRANCAAREm0YRZXEdM6CEAVT1fIA1sXXRpcrN
 PdTvaNR8GTfx9x56Yg0kRHF0tsGzY7V+h4V3wfInpmfu0u9lYY29U35w
 -----END PRIVATE KEY-----`,
 	}
+	ec256Keypair = ecdsaKeypair{
+		publicKeyStr: `-----BEGIN PUBLIC KEY-----
+MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEfyKl2tU5lwaQ0l0VJ5vdyW6PoJDb
+YNf2uGmNq2Mw64xBqwNfI2iHQFFRUKfvJXdejeCNXZKvkP8XPSzcu0FjOw==
+-----END PUBLIC KEY-----`,
+		privateKeyStr: `-----BEGIN EC PRIVATE KEY-----
+MHcCAQEEIGgkQuWgch6O9Ryw9qsShdHAeIvvJy9X8s/tbiMlbIRqoAoGCCqGSM49
+AwEHoUQDQgAEfyKl2tU5lwaQ0l0VJ5vdyW6PoJDbYNf2uGmNq2Mw64xBqwNfI2iH
+QFFRUKfvJXdejeCNXZKvkP8XPSzcu0FjOw==
+-----END EC PRIVATE KEY-----`,
+	}
+	ec386Keypair = ecdsaKeypair{
+		publicKeyStr: `-----BEGIN PUBLIC KEY-----
+MHYwEAYHKoZIzj0CAQYFK4EEACIDYgAETM39j3wuLdKA/FjWvbep5HaRKNI25YZb
+AcXGJuvULcaEhM1heR1C8dqEKFiaqJBBwNH0TIiEAEulMhDg/xj8RGwc8OZC5laQ
+daNkmorQXHrMkFKIrLX2XaVUsoGazfUB
+-----END PUBLIC KEY-----
+`,
+		privateKeyStr: `-----BEGIN EC PRIVATE KEY-----
+MIGkAgEBBDArMin+1alz7nicQ9LGUJgTU/+2v1OQE0G24h+0/V8Sk45sPvRwaxyI
+fzZ2qk5WVDagBwYFK4EEACKhZANiAARMzf2PfC4t0oD8WNa9t6nkdpEo0jblhlsB
+xcYm69QtxoSEzWF5HULx2oQoWJqokEHA0fRMiIQAS6UyEOD/GPxEbBzw5kLmVpB1
+o2SaitBcesyQUoistfZdpVSygZrN9QE=
+-----END EC PRIVATE KEY-----`,
+	}
 )
 
 func Test_ParseStrongECPrivateKey(t *testing.T) {
@@ -156,6 +181,72 @@ func Test_ParseStrongECPublicKey(t *testing.T) {
 				require.Nil(t, gotPrivateKey)
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), tc.wantErrContains)
+			}
+		})
+	}
+}
+
+func Test_ValidateStrongECKeyPair(t *testing.T) {
+	testCases := []struct {
+		name            string
+		publicKeyStr    string
+		privateKeyStr   string
+		wantErrContains string
+	}{
+		{
+			name:            "returns an error if the public key is invalid",
+			publicKeyStr:    "not-a-pem-string",
+			privateKeyStr:   ecdsaKeypair1.privateKeyStr,
+			wantErrContains: fmt.Sprintf("validating EC public key: failed to decode PEM block containing public key: %v", ErrInvalidECPublicKey),
+		},
+		{
+			name:            "returns an error if the private key is invalid",
+			publicKeyStr:    ecdsaKeypair1.publicKeyStr,
+			privateKeyStr:   "-----BEGIN MY STRING-----\nYWJjZA==\n-----END MY STRING-----",
+			wantErrContains: fmt.Sprintf("validating EC private key: failed to parse EC private key: %v", ErrInvalidECPrivateKey),
+		},
+		{
+			name:            "returns an error if the keys are not a pair (1 & 2)",
+			publicKeyStr:    ecdsaKeypair1.publicKeyStr,
+			privateKeyStr:   ecdsaKeypair2.privateKeyStr,
+			wantErrContains: "signature verification failed for the provided pair of keys",
+		},
+		{
+			name:            "returns an error if the keys are not a pair (2 & 1)",
+			publicKeyStr:    ecdsaKeypair2.publicKeyStr,
+			privateKeyStr:   ecdsaKeypair1.privateKeyStr,
+			wantErrContains: "signature verification failed for the provided pair of keys",
+		},
+		{
+			name:          "🎉 Successfully validates a valid ECDSA key pair (1)",
+			publicKeyStr:  ecdsaKeypair1.publicKeyStr,
+			privateKeyStr: ecdsaKeypair1.privateKeyStr,
+		},
+		{
+			name:          "🎉 Successfully validates a valid ECDSA key pair (2)",
+			publicKeyStr:  ecdsaKeypair2.publicKeyStr,
+			privateKeyStr: ecdsaKeypair2.privateKeyStr,
+		},
+		{
+			name:          "🎉 Successfully validates a valid EC256 key pair",
+			publicKeyStr:  ec256Keypair.publicKeyStr,
+			privateKeyStr: ec256Keypair.privateKeyStr,
+		},
+		{
+			name:          "🎉 Successfully validates a valid EC386 key pair",
+			publicKeyStr:  ec386Keypair.publicKeyStr,
+			privateKeyStr: ec386Keypair.privateKeyStr,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := ValidateStrongECKeyPair(tc.publicKeyStr, tc.privateKeyStr)
+			if tc.wantErrContains == "" {
+				require.NoError(t, err)
+			} else {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), tc.wantErrContains)
 			}
 		})
 	}
