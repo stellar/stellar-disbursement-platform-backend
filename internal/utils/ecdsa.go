@@ -2,12 +2,49 @@ package utils
 
 import (
 	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
 )
+
+var ErrInvalidECPrivateKey = fmt.Errorf("invalid private key, make sure your private key is generated with a curve at least as strong as prime256v1 using 'openssl ecparam -name {prime256v1} -genkey -noout -out ec256_private_key.pem'")
+
+// ParseStrongECPrivateKey parses the given private key string and returns the *ecdsa.PrivateKey.
+func ParseStrongECPrivateKey(privateKeyStr string) (*ecdsa.PrivateKey, error) {
+	// Decode PEM block
+	block, _ := pem.Decode([]byte(privateKeyStr))
+	if block == nil {
+		return nil, fmt.Errorf("failed to decode PEM block containing private key: %w", ErrInvalidECPrivateKey)
+	}
+
+	// Attempts to parse using ParseECPrivateKey or ParsePKCS8PrivateKey
+	var err error
+	var privateKey *ecdsa.PrivateKey
+	privateKey, err = x509.ParseECPrivateKey(block.Bytes)
+	if err != nil {
+		// Parse the private key
+		pkcsPrivateKey, err := x509.ParsePKCS8PrivateKey(block.Bytes)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse EC private key: %w", ErrInvalidECPrivateKey)
+		}
+
+		// Check if the public key is of type *ecdsa.PublicKey
+		var ok bool
+		if privateKey, ok = pkcsPrivateKey.(*ecdsa.PrivateKey); !ok {
+			return nil, fmt.Errorf("not a valid elliptic curve private key: %w", ErrInvalidECPrivateKey)
+		}
+	}
+
+	// Check if the public key is using a curve that's at least as strong as prime256v1 (P-256)
+	if privateKey.Curve.Params().BitSize < elliptic.P256().Params().BitSize {
+		return nil, fmt.Errorf("private key curve is not at least as strong as prime256v1: %w", ErrInvalidECPrivateKey)
+	}
+
+	return privateKey, nil
+}
 
 // ParseECDSAPublicKey parses the given public key string and returns the *ecdsa.PublicKey.
 func ParseECDSAPublicKey(publicKeyStr string) (*ecdsa.PublicKey, error) {

@@ -3,6 +3,7 @@ package utils
 import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
+	"fmt"
 	"math/big"
 	"testing"
 
@@ -39,6 +40,66 @@ PdTvaNR8GTfx9x56Yg0kRHF0tsGzY7V+h4V3wfInpmfu0u9lYY29U35w
 -----END PRIVATE KEY-----`,
 	}
 )
+
+func Test_ParseStrongECPrivateKey(t *testing.T) {
+	testCases := []struct {
+		name            string
+		value           string
+		wantCurve       elliptic.Curve
+		wantErrContains string
+	}{
+		{
+			name:            "returns an error if the value is not a PEM string",
+			value:           "not-a-pem-string",
+			wantErrContains: fmt.Sprintf("failed to decode PEM block containing private key: %v", ErrInvalidECPrivateKey),
+		},
+		{
+			name:            "returns an error if the value cannot be parsed as a ecdsa.PrivateKey",
+			value:           "-----BEGIN EC PRIVATE KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAyNPqmozv8a2PnXHIkV+F\nmWMFy2YhOFzX12yzjjWkJ3rI9QSEomz4Unkwc6oYrnKEDYlnAgCiCqL2zPr5qNkX\nk5MPU87/wLgEqp7uAk0GkJZfrhJIYZ5AuG9+o69BNeQDEi7F3YdMJj9bvs2Ou1FN\n1zG/8HV969rJ/63fzWsqlNon1j4H5mJ0YbmVh/QLcYPmv7feFZGEj4OSZ4u+eJsw\nat5NPyhMgo6uB/goNS3fEY29UNvXoSIN3hnK3WSxQ79Rjn4V4so7ehxzCVPjnm/G\nFFTgY0hGBobmnxbjI08hEZmYKosjan4YqydGETjKR3UlhBx9y/eqqgL+opNJ8vJs\n2QIDAQAB\n-----END EC PRIVATE KEY-----",
+			wantErrContains: fmt.Sprintf("failed to parse EC private key: %v", ErrInvalidECPrivateKey),
+		},
+		{
+			name:            "returns an error if the curve is not a valid elliptic curve private key",
+			value:           "-----BEGIN PRIVATE KEY-----\nMIIBUwIBADANBgkqhkiG9w0BAQEFAASCAT0wggE5AgEAAkEAwbcoXhTN3mX/lToo\n9hhkDraWtm6uaeFD5Sm08e8hSBWRAQnBsf7TxZe4GIa7VdPTSIG2UFKShkecHtzT\ngBYVVQIDAQABAkBV9452kgz6kZFnDDR5YkGlNeqUc3H7kviqjmO6qkC+1+zOTxhj\nR3QLOKws7YIPGLzpM4In+cM0XpcEh2EZbn+BAiEA9D5t8X1giqzc6m6JTu5PK6Ue\nsBT0e/XenQ8XiOf29bkCIQDLCh4hhBXA4xnfCvliJ0YE41tRwiVW5/4k9Bxq8Y3q\nfQIgWma1CNoQHqPmzLqHBfj8wrnGBwRqjWsur1FDs7+vz7kCIDajTmBujvwNIRUo\netuy/eCq3hQuTqYIYBfJqSwOPMZxAiBODaEz+TXYJz+nWAHpxtouN8F9cm1hzcRS\nTIyhCXGxSw==\n-----END PRIVATE KEY-----",
+			wantErrContains: fmt.Sprintf("not a valid elliptic curve private key: %v", ErrInvalidECPrivateKey),
+		},
+		{
+			name:            "returns an error if the curve is weaker than EC256",
+			value:           "-----BEGIN EC PRIVATE KEY-----\nMGgCAQEEHKSQdMBibZ7iVb1gcINiGubmrEn/UhDp6oFfYIWgBwYFK4EEACGhPAM6\nAARb3kkiTMSr1D3DLZy1I2rb7OP4PSWx6k3w6/XwlUO6gvUP/UR6VF1929HvRKzS\nR8z1+sJpc9zt0g==\n-----END EC PRIVATE KEY-----",
+			wantErrContains: fmt.Sprintf("private key curve is not at least as strong as prime256v1: %v", ErrInvalidECPrivateKey),
+		},
+		{
+			name:      "🎉 Successfully handles a valid EC256 private key",
+			value:     "-----BEGIN EC PRIVATE KEY-----\nMHcCAQEEIGgkQuWgch6O9Ryw9qsShdHAeIvvJy9X8s/tbiMlbIRqoAoGCCqGSM49\nAwEHoUQDQgAEfyKl2tU5lwaQ0l0VJ5vdyW6PoJDbYNf2uGmNq2Mw64xBqwNfI2iH\nQFFRUKfvJXdejeCNXZKvkP8XPSzcu0FjOw==\n-----END EC PRIVATE KEY-----",
+			wantCurve: elliptic.P256(),
+		},
+		{
+			name:      "🎉 Successfully handles a valid EC384 private key",
+			value:     "-----BEGIN EC PRIVATE KEY-----\nMIGkAgEBBDArMin+1alz7nicQ9LGUJgTU/+2v1OQE0G24h+0/V8Sk45sPvRwaxyI\nfzZ2qk5WVDagBwYFK4EEACKhZANiAARMzf2PfC4t0oD8WNa9t6nkdpEo0jblhlsB\nxcYm69QtxoSEzWF5HULx2oQoWJqokEHA0fRMiIQAS6UyEOD/GPxEbBzw5kLmVpB1\no2SaitBcesyQUoistfZdpVSygZrN9QE=\n-----END EC PRIVATE KEY-----",
+			wantCurve: elliptic.P384(),
+		},
+		{
+			name:      "🎉 Successfully handles a valid EC256 private key in ECDSA format",
+			value:     "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgIqI1MzMZIw2pQDLx\nJn0+FcNT/hNjwtn2TW43710JKZqhRANCAARHzyHsCJDJUPKxFPEq8EHoJqI7+RJy\n8bKKYClQT/XaAWE1NF/ftITX0JIKWUrGy2dUU6kstYHtC7k4nRa9zPeG\n-----END PRIVATE KEY-----",
+			wantCurve: elliptic.P256(),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			gotPrivateKey, err := ParseStrongECPrivateKey(tc.value)
+			if tc.wantErrContains == "" {
+				require.NoError(t, err)
+				require.NotNil(t, gotPrivateKey)
+				assert.Equal(t, tc.wantCurve, gotPrivateKey.Curve)
+			} else {
+				require.Nil(t, gotPrivateKey)
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tc.wantErrContains)
+			}
+		})
+	}
+}
 
 func Test_ParseECDSAPublicKey(t *testing.T) {
 	// publicKeyObj is the public key object that corresponds to the keypair1.publicKeyStr
