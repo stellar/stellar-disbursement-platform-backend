@@ -16,7 +16,7 @@ type ecdsaKeypair struct {
 }
 
 var (
-	keypair1 = ecdsaKeypair{
+	ecdsaKeypair1 = ecdsaKeypair{
 		publicKeyStr: `-----BEGIN PUBLIC KEY-----
 MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAER88h7AiQyVDysRTxKvBB6CaiO/kS
 cvGyimApUE/12gFhNTRf37SE19CSCllKxstnVFOpLLWB7Qu5OJ0Wvcz3hg==
@@ -27,7 +27,7 @@ Jn0+FcNT/hNjwtn2TW43710JKZqhRANCAARHzyHsCJDJUPKxFPEq8EHoJqI7+RJy
 8bKKYClQT/XaAWE1NF/ftITX0JIKWUrGy2dUU6kstYHtC7k4nRa9zPeG
 -----END PRIVATE KEY-----`,
 	}
-	keypair2 = ecdsaKeypair{
+	ecdsaKeypair2 = ecdsaKeypair{
 		publicKeyStr: `-----BEGIN PUBLIC KEY-----
 MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAERJtGEWVxHTOghAFU9XyANbF10aXK
 zT3U72jUfBk38fceemINJERxdLbBs2O1foeFd8HyJ6Zn7tLvZWGNvVN+cA==
@@ -75,7 +75,7 @@ func Test_ParseECDSAPublicKey(t *testing.T) {
 		},
 		{
 			name:       "🎉 Successfully handles a valid ECDSA public key",
-			value:      keypair1.publicKeyStr,
+			value:      ecdsaKeypair1.publicKeyStr,
 			wantResult: publicKeyObj,
 		},
 	}
@@ -138,7 +138,7 @@ func Test_ParseECDSAPrivateKey(t *testing.T) {
 		{
 			name:       "🎉 Successfully handles a valid ECDSA private key",
 			wantResult: privateKeyObj,
-			value:      keypair1.privateKeyStr,
+			value:      ecdsaKeypair1.privateKeyStr,
 		},
 	}
 
@@ -167,36 +167,36 @@ func Test_ValidateECDSAKeys(t *testing.T) {
 		{
 			name:            "returns an error if the public key is not a PEM string",
 			publicKeyStr:    "not-a-pem-string",
-			privateKeyStr:   keypair1.privateKeyStr,
+			privateKeyStr:   ecdsaKeypair1.privateKeyStr,
 			wantErrContains: "validating ECDSA public key: failed to decode PEM block containing public key",
 		},
 		{
 			name:            "returns an error if the public key is valid but the private key is not a x509 string",
-			publicKeyStr:    keypair1.publicKeyStr,
+			publicKeyStr:    ecdsaKeypair1.publicKeyStr,
 			privateKeyStr:   "-----BEGIN MY STRING-----\nYWJjZA==\n-----END MY STRING-----",
 			wantErrContains: "validating ECDSA private key: failed to parse EC private key",
 		},
 		{
 			name:            "returns an error if the keys are not a pair (1 & 2)",
-			publicKeyStr:    keypair1.publicKeyStr,
-			privateKeyStr:   keypair2.privateKeyStr,
+			publicKeyStr:    ecdsaKeypair1.publicKeyStr,
+			privateKeyStr:   ecdsaKeypair2.privateKeyStr,
 			wantErrContains: "signature verification failed",
 		},
 		{
 			name:            "returns an error if the keys are not a pair (2 & 1)",
-			publicKeyStr:    keypair2.publicKeyStr,
-			privateKeyStr:   keypair1.privateKeyStr,
+			publicKeyStr:    ecdsaKeypair2.publicKeyStr,
+			privateKeyStr:   ecdsaKeypair1.privateKeyStr,
 			wantErrContains: "signature verification failed",
 		},
 		{
 			name:          "🎉 Successfully validates a valid ECDSA key pair (1)",
-			publicKeyStr:  keypair1.publicKeyStr,
-			privateKeyStr: keypair1.privateKeyStr,
+			publicKeyStr:  ecdsaKeypair1.publicKeyStr,
+			privateKeyStr: ecdsaKeypair1.privateKeyStr,
 		},
 		{
 			name:          "🎉 Successfully validates a valid ECDSA key pair (2)",
-			publicKeyStr:  keypair2.publicKeyStr,
-			privateKeyStr: keypair2.privateKeyStr,
+			publicKeyStr:  ecdsaKeypair2.publicKeyStr,
+			privateKeyStr: ecdsaKeypair2.privateKeyStr,
 		},
 	}
 
