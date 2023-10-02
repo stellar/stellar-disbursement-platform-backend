@@ -405,7 +405,7 @@ func createAuthManager(dbConnectionPool db.DBConnectionPool, ec256PublicKey, ec2
 		return nil, fmt.Errorf("db connection pool cannot be nil")
 	}
 
-	err := utils.ValidateECDSAKeys(ec256PublicKey, ec256PrivateKey)
+	err := utils.ValidateStrongECKeyPair(ec256PublicKey, ec256PrivateKey)
 	if err != nil {
 		return nil, fmt.Errorf("validating auth manager keys: %w", err)
 	}

@@ -90,7 +90,7 @@ func SetConfigOptionEC256PublicKey(co *config.ConfigOption) error {
 	// We must remove the literal \n in case of the config options being set this way
 	publicKey = strings.Replace(publicKey, `\n`, "\n", -1)
 
-	_, err := utils.ParseECDSAPublicKey(publicKey)
+	_, err := utils.ParseStrongECPublicKey(publicKey)
 	if err != nil {
 		return fmt.Errorf("parsing EC256PublicKey: %w", err)
 	}
@@ -111,7 +111,7 @@ func SetConfigOptionEC256PrivateKey(co *config.ConfigOption) error {
 	// We must remove the literal \n in case of the config options being set this way
 	privateKey = strings.Replace(privateKey, `\n`, "\n", -1)
 
-	_, err := utils.ParseECDSAPrivateKey(privateKey)
+	_, err := utils.ParseStrongECPrivateKey(privateKey)
 	if err != nil {
 		return fmt.Errorf("parsing EC256PrivateKey: %w", err)
 	}
