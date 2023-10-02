@@ -135,7 +135,8 @@ func Test_PaymentsHandlerGet(t *testing.T) {
 				"stellar_memo_type": %q,
 				"status": "DRAFT",
 				"created_at": %q,
-				"updated_at": %q
+				"updated_at": %q,
+				"invitation_sent_at": null
 			},
 			"created_at": %q,
             "updated_at": %q

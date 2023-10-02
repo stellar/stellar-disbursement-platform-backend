@@ -1062,3 +1062,31 @@ func Test_GetByStellarAccountAndMemo(t *testing.T) {
 		require.Empty(t, actual)
 	})
 }
+
+func Test_RetryInvitationSMS(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+	receiverWalletModel := ReceiverWalletModel{dbConnectionPool: dbConnectionPool}
+
+	t.Run("returns error when receiver wallet does not exist", func(t *testing.T) {
+		receiverWallet, err := receiverWalletModel.RetryInvitationSMS(ctx, "invalid_id", dbConnectionPool)
+		require.Error(t, err)
+		require.ErrorIs(t, err, ErrRecordNotFound)
+		require.Empty(t, receiverWallet)
+	})
+
+	t.Run("successfuly retry invitation", func(t *testing.T) {
+		receiver := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
+		wallet := CreateWalletFixture(t, ctx, dbConnectionPool, "wallet", "https://www.wallet.com", "www.wallet.com", "wallet1://")
+		rw := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, ReadyReceiversWalletStatus)
+
+		receiverWallet, err := receiverWalletModel.RetryInvitationSMS(ctx, rw.ID, dbConnectionPool)
+		require.NoError(t, err)
+		assert.Nil(t, receiverWallet.InvitationSentAt)
+	})
+}
