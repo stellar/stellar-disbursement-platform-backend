@@ -101,6 +101,66 @@ func Test_ParseStrongECPrivateKey(t *testing.T) {
 	}
 }
 
+func Test_ParseStrongECPublicKey(t *testing.T) {
+	testCases := []struct {
+		name            string
+		value           string
+		wantCurve       elliptic.Curve
+		wantErrContains string
+	}{
+		{
+			name:            "returns an error if the value is not a PEM string",
+			value:           "not-a-pem-string",
+			wantErrContains: fmt.Sprintf("failed to decode PEM block containing public key: %v", ErrInvalidECPublicKey),
+		},
+		{
+			name:            "returns an error if the value cannot be parsed as a ecdsa.PublicKey",
+			value:           "-----BEGIN PUBLIC KEY-----\nYWJjZA==\n-----END PUBLIC KEY-----",
+			wantErrContains: fmt.Sprintf("failed to parse EC public key: %v", ErrInvalidECPublicKey),
+		},
+		{
+			name:            "returns an error if the curve is not a valid elliptic curve public key",
+			value:           "-----BEGIN PUBLIC KEY-----\nMFwwDQYJKoZIhvcNAQEBBQADSwAwSAJBAMG3KF4Uzd5l/5U6KPYYZA62lrZurmnh\nQ+UptPHvIUgVkQEJwbH+08WXuBiGu1XT00iBtlBSkoZHnB7c04AWFVUCAwEAAQ==\n-----END PUBLIC KEY-----",
+			wantErrContains: fmt.Sprintf("not a valid elliptic curve public key: %v", ErrInvalidECPublicKey),
+		},
+		{
+			name:            "returns an error if the curve is weaker than EC256",
+			value:           "-----BEGIN PUBLIC KEY-----\nME4wEAYHKoZIzj0CAQYFK4EEACEDOgAEW95JIkzEq9Q9wy2ctSNq2+zj+D0lsepN\n8Ov18JVDuoL1D/1EelRdfdvR70Ss0kfM9frCaXPc7dI=\n-----END PUBLIC KEY-----",
+			wantErrContains: fmt.Sprintf("public key curve is not at least as strong as prime256v1: %v", ErrInvalidECPublicKey),
+		},
+		{
+			name:      "🎉 Successfully handles a valid EC256 public key",
+			value:     "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEfyKl2tU5lwaQ0l0VJ5vdyW6PoJDb\nYNf2uGmNq2Mw64xBqwNfI2iHQFFRUKfvJXdejeCNXZKvkP8XPSzcu0FjOw==\n-----END PUBLIC KEY-----",
+			wantCurve: elliptic.P256(),
+		},
+		{
+			name:      "🎉 Successfully handles a valid EC384 public key",
+			value:     "-----BEGIN PUBLIC KEY-----\nMHYwEAYHKoZIzj0CAQYFK4EEACIDYgAETM39j3wuLdKA/FjWvbep5HaRKNI25YZb\nAcXGJuvULcaEhM1heR1C8dqEKFiaqJBBwNH0TIiEAEulMhDg/xj8RGwc8OZC5laQ\ndaNkmorQXHrMkFKIrLX2XaVUsoGazfUB\n-----END PUBLIC KEY-----",
+			wantCurve: elliptic.P384(),
+		},
+		{
+			name:      "🎉 Successfully handles a valid EC256 private key in ECDSA format",
+			value:     "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAER88h7AiQyVDysRTxKvBB6CaiO/kS\ncvGyimApUE/12gFhNTRf37SE19CSCllKxstnVFOpLLWB7Qu5OJ0Wvcz3hg==\n-----END PUBLIC KEY-----",
+			wantCurve: elliptic.P256(),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			gotPrivateKey, err := ParseStrongECPublicKey(tc.value)
+			if tc.wantErrContains == "" {
+				require.NoError(t, err)
+				require.NotNil(t, gotPrivateKey)
+				assert.Equal(t, tc.wantCurve, gotPrivateKey.Curve)
+			} else {
+				require.Nil(t, gotPrivateKey)
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tc.wantErrContains)
+			}
+		})
+	}
+}
+
 func Test_ParseECDSAPublicKey(t *testing.T) {
 	// publicKeyObj is the public key object that corresponds to the keypair1.publicKeyStr
 	bigIntX := new(big.Int)

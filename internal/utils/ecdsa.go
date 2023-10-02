@@ -10,9 +10,13 @@ import (
 	"fmt"
 )
 
-var ErrInvalidECPrivateKey = fmt.Errorf("invalid private key, make sure your private key is generated with a curve at least as strong as prime256v1 using 'openssl ecparam -name {prime256v1} -genkey -noout -out ec256_private_key.pem'")
+var (
+	ErrInvalidECPrivateKey = fmt.Errorf("invalid private key, make sure your private key is generated with a curve at least as strong as prime256v1")
+	ErrInvalidECPublicKey  = fmt.Errorf("invalid public key, make sure your public key is generated with a curve at least as strong as prime256v1")
+)
 
-// ParseStrongECPrivateKey parses the given private key string and returns the *ecdsa.PrivateKey.
+// ParseStrongECPrivateKey parses a strong elliptic curve private key from a PEM-encoded string.
+// It returns the parsed private key or an error if the key is invalid or not strong enough.
 func ParseStrongECPrivateKey(privateKeyStr string) (*ecdsa.PrivateKey, error) {
 	// Decode PEM block
 	block, _ := pem.Decode([]byte(privateKeyStr))
@@ -44,6 +48,35 @@ func ParseStrongECPrivateKey(privateKeyStr string) (*ecdsa.PrivateKey, error) {
 	}
 
 	return privateKey, nil
+}
+
+// ParseStrongECPublicKey parses a strong elliptic curve public key from a PEM-encoded string.
+// It returns the parsed public key or an error if the key is invalid or not strong enough.
+func ParseStrongECPublicKey(privateKeyStr string) (*ecdsa.PublicKey, error) {
+	// Decode PEM block
+	block, _ := pem.Decode([]byte(privateKeyStr))
+	if block == nil {
+		return nil, fmt.Errorf("failed to decode PEM block containing public key: %w", ErrInvalidECPublicKey)
+	}
+
+	// Parse the public key
+	publicKeyInterface, err := x509.ParsePKIXPublicKey(block.Bytes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse EC public key: %w", ErrInvalidECPublicKey)
+	}
+
+	// Check if the parsed public key is of type *ecdsa.PublicKey
+	publicKey, ok := publicKeyInterface.(*ecdsa.PublicKey)
+	if !ok {
+		return nil, fmt.Errorf("not a valid elliptic curve public key: %w", ErrInvalidECPublicKey)
+	}
+
+	// Check if the public key is using a curve that's at least as strong as prime256v1 (P-256)
+	if publicKey.Curve.Params().BitSize < elliptic.P256().Params().BitSize {
+		return nil, fmt.Errorf("public key curve is not at least as strong as prime256v1: %w", ErrInvalidECPublicKey)
+	}
+
+	return publicKey, nil
 }
 
 // ParseECDSAPublicKey parses the given public key string and returns the *ecdsa.PublicKey.
