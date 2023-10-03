@@ -499,7 +499,7 @@ func (rw *ReceiverWalletModel) GetByStellarAccountAndMemo(ctx context.Context, s
 }
 
 // RetryInvitationSMS sets null the invitation_sent_at of a receiver wallet.
-func (rw *ReceiverWalletModel) RetryInvitationSMS(ctx context.Context, receiverWalletId string, sqlExec db.SQLExecuter) (*ReceiverWallet, error) {
+func (rw *ReceiverWalletModel) RetryInvitationSMS(ctx context.Context, sqlExec db.SQLExecuter, receiverWalletId string) (*ReceiverWallet, error) {
 	var receiverWallet ReceiverWallet
 	query := `
 		UPDATE 
