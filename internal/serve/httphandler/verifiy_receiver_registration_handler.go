@@ -35,10 +35,6 @@ func (e *ErrorVerificationAttemptsExceeded) Error() string {
 	return e.cause.Error()
 }
 
-func (e *ErrorVerificationAttemptsExceeded) Unwrap() error {
-	return e.cause
-}
-
 const (
 	InformationNotFoundOnServer = "the information you provided could not be found in our server"
 )
