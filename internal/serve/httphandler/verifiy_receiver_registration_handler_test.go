@@ -582,15 +582,15 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 
 		// setup router and execute request
 		r.Post("/wallet-registration/verification", handler.VerifyReceiverRegistration)
-		req, err := http.NewRequest("POST", "/wallet-registration/verification", nil)
-		require.NoError(t, err)
+		req, reqErr := http.NewRequest("POST", "/wallet-registration/verification", nil)
+		require.NoError(t, reqErr)
 		rr := httptest.NewRecorder()
 		r.ServeHTTP(rr, req)
 
 		// execute and validate response
 		resp := rr.Result()
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
+		respBody, readRespErr := io.ReadAll(resp.Body)
+		require.NoError(t, readRespErr)
 		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 		assert.JSONEq(t, `{"error": "Not authorized."}`, string(respBody))
 
@@ -611,16 +611,16 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 
 		// setup router and execute request
 		r.Post("/wallet-registration/verification", handler.VerifyReceiverRegistration)
-		req, err := http.NewRequest("POST", "/wallet-registration/verification", strings.NewReader(string(reqBody)))
-		require.NoError(t, err)
+		req, reqErr := http.NewRequest("POST", "/wallet-registration/verification", strings.NewReader(string(reqBody)))
+		require.NoError(t, reqErr)
 		req = req.WithContext(context.WithValue(req.Context(), anchorplatform.SEP24ClaimsContextKey, validClaims))
 		rr := httptest.NewRecorder()
 		r.ServeHTTP(rr, req)
 
 		// execute and validate response
 		resp := rr.Result()
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
+		respBody, readRespErr := io.ReadAll(resp.Body)
+		require.NoError(t, readRespErr)
 		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 		wantBody := fmt.Sprintf(`{"error": "%s"}`, InformationNotFoundOnServer)
 		assert.JSONEq(t, wantBody, string(respBody))
@@ -646,16 +646,16 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 
 		// setup router and execute request
 		r.Post("/wallet-registration/verification", handler.VerifyReceiverRegistration)
-		req, err := http.NewRequest("POST", "/wallet-registration/verification", strings.NewReader(string(reqBody)))
-		require.NoError(t, err)
+		req, reqErr := http.NewRequest("POST", "/wallet-registration/verification", strings.NewReader(string(reqBody)))
+		require.NoError(t, reqErr)
 		req = req.WithContext(context.WithValue(req.Context(), anchorplatform.SEP24ClaimsContextKey, validClaims))
 		rr := httptest.NewRecorder()
 		r.ServeHTTP(rr, req)
 
 		// execute and validate response
 		resp := rr.Result()
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
+		respBody, readRespErr := io.ReadAll(resp.Body)
+		require.NoError(t, readRespErr)
 		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 		wantBody := fmt.Sprintf(`{"error": "%s"}`, InformationNotFoundOnServer)
 		assert.JSONEq(t, wantBody, string(respBody))
