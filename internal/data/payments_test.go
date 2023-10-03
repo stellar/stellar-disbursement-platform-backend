@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/lib/pq"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
@@ -869,6 +870,74 @@ func Test_PaymentModelRetryFailedPayments(t *testing.T) {
 		assert.Len(t, payment2DB.StatusHistory, 2)
 		assert.Equal(t, ReadyPaymentStatus, payment2DB.StatusHistory[1].Status)
 		assert.Equal(t, "User user@test.com has requested to retry the payment - Previous Stellar Transaction ID: stellar-transaction-id-2", payment2DB.StatusHistory[1].StatusMessage)
+	})
+
+	t.Run("resets the anchor_platform_synced_at for the receiver wallets", func(t *testing.T) {
+		DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
+
+		recv := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
+		rw := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, recv.ID, wallet.ID, ReadyReceiversWalletStatus)
+
+		q := "UPDATE receiver_wallets SET anchor_platform_transaction_synced_at = NOW() WHERE id = $1"
+		_, err := dbConnectionPool.ExecContext(ctx, q, rw.ID)
+		require.NoError(t, err)
+
+		q = "SELECT anchor_platform_transaction_synced_at FROM receiver_wallets WHERE id = $1"
+		var syncedAt pq.NullTime
+		err = dbConnectionPool.GetContext(ctx, &syncedAt, q, rw.ID)
+		require.NoError(t, err)
+		assert.True(t, syncedAt.Valid)
+		assert.False(t, syncedAt.Time.IsZero())
+
+		payment1 := CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
+			Amount:               "1",
+			StellarTransactionID: "stellar-transaction-id-1",
+			StellarOperationID:   "operation-id-1",
+			Status:               FailedPaymentStatus,
+			Disbursement:         disbursement,
+			ReceiverWallet:       rw,
+			Asset:                *asset,
+		})
+
+		payment2 := CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
+			Amount:               "1",
+			StellarTransactionID: "stellar-transaction-id-2",
+			StellarOperationID:   "operation-id-2",
+			Status:               FailedPaymentStatus,
+			Disbursement:         disbursement,
+			ReceiverWallet:       rw,
+			Asset:                *asset,
+		})
+
+		err = models.Payment.RetryFailedPayments(ctx, "user@test.com", payment1.ID, payment2.ID)
+		require.NoError(t, err)
+
+		payment1DB, err := models.Payment.Get(ctx, payment1.ID, dbConnectionPool)
+		require.NoError(t, err)
+
+		payment2DB, err := models.Payment.Get(ctx, payment2.ID, dbConnectionPool)
+		require.NoError(t, err)
+
+		// Payment 1
+		assert.Equal(t, ReadyPaymentStatus, payment1DB.Status)
+		assert.Empty(t, payment1DB.StellarTransactionID)
+		assert.NotEqual(t, payment1.StatusHistory, payment1DB.StatusHistory)
+		assert.Len(t, payment1DB.StatusHistory, 2)
+		assert.Equal(t, ReadyPaymentStatus, payment1DB.StatusHistory[1].Status)
+		assert.Equal(t, "User user@test.com has requested to retry the payment - Previous Stellar Transaction ID: stellar-transaction-id-1", payment1DB.StatusHistory[1].StatusMessage)
+
+		// Payment 2
+		assert.Equal(t, ReadyPaymentStatus, payment2DB.Status)
+		assert.Empty(t, payment2DB.StellarTransactionID)
+		assert.NotEqual(t, payment2.StatusHistory, payment2DB.StatusHistory)
+		assert.Len(t, payment2DB.StatusHistory, 2)
+		assert.Equal(t, ReadyPaymentStatus, payment2DB.StatusHistory[1].Status)
+		assert.Equal(t, "User user@test.com has requested to retry the payment - Previous Stellar Transaction ID: stellar-transaction-id-2", payment2DB.StatusHistory[1].StatusMessage)
+
+		err = dbConnectionPool.GetContext(ctx, &syncedAt, q, rw.ID)
+		require.NoError(t, err)
+		assert.False(t, syncedAt.Valid)
+		assert.True(t, syncedAt.Time.IsZero())
 	})
 }
 

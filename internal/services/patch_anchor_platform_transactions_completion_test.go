@@ -16,12 +16,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func Test_NewPatchAnchorPlatformTransactionServiceCompletion(t *testing.T) {
-	svc, err := NewPatchAnchorPlatformTransactionServiceCompletion(nil, nil)
+func Test_NewPatchAnchorPlatformTransactionCompletionService(t *testing.T) {
+	svc, err := NewPatchAnchorPlatformTransactionCompletionService(nil, nil)
 	assert.EqualError(t, err, "anchor platform API service is required")
 	assert.Nil(t, svc)
 
-	svc, err = NewPatchAnchorPlatformTransactionServiceCompletion(&anchorplatform.AnchorPlatformAPIServiceMock{}, nil)
+	svc, err = NewPatchAnchorPlatformTransactionCompletionService(&anchorplatform.AnchorPlatformAPIServiceMock{}, nil)
 	assert.EqualError(t, err, "SDP models are required")
 	assert.Nil(t, svc)
 
@@ -35,12 +35,12 @@ func Test_NewPatchAnchorPlatformTransactionServiceCompletion(t *testing.T) {
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
-	svc, err = NewPatchAnchorPlatformTransactionServiceCompletion(&anchorplatform.AnchorPlatformAPIServiceMock{}, models)
+	svc, err = NewPatchAnchorPlatformTransactionCompletionService(&anchorplatform.AnchorPlatformAPIServiceMock{}, models)
 	require.NoError(t, err)
 	assert.NotNil(t, svc)
 }
 
-func Test_PatchAnchorPlatformTransactionService_PatchTransactionsCompletion(t *testing.T) {
+func Test_PatchAnchorPlatformTransactionCompletionService_PatchTransactionsCompletion(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 
@@ -53,7 +53,7 @@ func Test_PatchAnchorPlatformTransactionService_PatchTransactionsCompletion(t *t
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
-	svc, err := NewPatchAnchorPlatformTransactionServiceCompletion(&apAPISvcMock, models)
+	svc, err := NewPatchAnchorPlatformTransactionCompletionService(&apAPISvcMock, models)
 	require.NoError(t, err)
 
 	getAPTransactionSyncedAt := func(t *testing.T, ctx context.Context, conn db.DBConnectionPool, receiverWalletID string) time.Time {
@@ -94,7 +94,7 @@ func Test_PatchAnchorPlatformTransactionService_PatchTransactionsCompletion(t *t
 			VerificationField: data.VerificationFieldDateOfBirth,
 		})
 
-		_ = data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+		payment := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
 			Amount:               "1",
 			StellarTransactionID: "stellar-transaction-id-1",
 			StellarOperationID:   "operation-id-1",
@@ -107,10 +107,22 @@ func Test_PatchAnchorPlatformTransactionService_PatchTransactionsCompletion(t *t
 		getEntries := log.DefaultLogger.StartTest(log.DebugLevel)
 
 		apAPISvcMock.
-			On("PatchAnchorTransactionsPostRegistration", ctx, anchorplatform.APSep24TransactionPatchPostRegistration{
+			On("PatchAnchorTransactionsPostSuccessCompletion", ctx, anchorplatform.APSep24TransactionPatchPostSuccess{
 				ID:     receiverWallet.AnchorPlatformTransactionID,
 				SEP:    "24",
 				Status: anchorplatform.APTransactionStatusCompleted,
+				StellarTransactions: []anchorplatform.APStellarTransaction{
+					{
+						ID:       payment.StellarTransactionID,
+						Memo:     receiverWallet.StellarMemo,
+						MemoType: receiverWallet.StellarMemoType,
+					},
+				},
+				CompletedAt: &payment.UpdatedAt,
+				AmountOut: anchorplatform.APAmount{
+					Amount: payment.Amount,
+					Asset:  anchorplatform.NewStellarAssetInAIF(payment.Asset.Code, payment.Asset.Issuer),
+				},
 			}).
 			Return(anchorplatform.ErrInvalidToken).
 			Once()
@@ -124,11 +136,11 @@ func Test_PatchAnchorPlatformTransactionService_PatchTransactionsCompletion(t *t
 		entries := getEntries()
 		require.Len(t, entries, 3)
 		assert.Equal(t, "PatchAnchorPlatformTransactionService: got 1 payments to process", entries[0].Message)
-		assert.Equal(t, fmt.Sprintf(`PatchAnchorPlatformTransactionService: error patching anchor transaction ID %q: invalid token`, receiverWallet.AnchorPlatformTransactionID), entries[1].Message)
+		assert.Equal(t, fmt.Sprintf(`PatchAnchorPlatformTransactionService: error patching anchor transaction ID %q with status %q: invalid token`, receiverWallet.AnchorPlatformTransactionID, anchorplatform.APTransactionStatusCompleted), entries[1].Message)
 		assert.Equal(t, "PatchAnchorPlatformTransactionService: updating anchor platform transaction synced at for 0 receiver wallet(s)", entries[2].Message)
 	})
 
-	t.Run("doesn't mark as synced when patch anchor platform transaction successfully but payment is failed", func(t *testing.T) {
+	t.Run("mark as synced when patch anchor platform transaction successfully and payment is failed", func(t *testing.T) {
 		data.DeleteAllFixtures(t, ctx, dbConnectionPool)
 
 		country := data.CreateCountryFixture(t, ctx, dbConnectionPool, "BRA", "Brazil")
@@ -146,37 +158,46 @@ func Test_PatchAnchorPlatformTransactionService_PatchTransactionsCompletion(t *t
 			VerificationField: data.VerificationFieldDateOfBirth,
 		})
 
-		_ = data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+		payment := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
 			Amount:               "1",
 			StellarTransactionID: "stellar-transaction-id-1",
 			StellarOperationID:   "operation-id-1",
-			Status:               data.FailedPaymentStatus,
+			Status:               data.PendingPaymentStatus,
 			Disbursement:         disbursement,
 			ReceiverWallet:       receiverWallet,
 			Asset:                *asset,
 		})
 
+		errorMsg := "tx_failed op_no_source_account"
+		err := models.Payment.Update(ctx, dbConnectionPool, payment, &data.PaymentUpdate{
+			Status:               data.FailedPaymentStatus,
+			StatusMessage:        errorMsg,
+			StellarTransactionID: "stellar-transaction-id",
+		})
+		require.NoError(t, err)
+
 		getEntries := log.DefaultLogger.StartTest(log.DebugLevel)
 
 		apAPISvcMock.
-			On("PatchAnchorTransactionsPostRegistration", ctx, anchorplatform.APSep24TransactionPatchPostRegistration{
-				ID:     receiverWallet.AnchorPlatformTransactionID,
-				SEP:    "24",
-				Status: anchorplatform.APTransactionStatusError,
+			On("PatchAnchorTransactionsPostErrorCompletion", ctx, anchorplatform.APSep24TransactionPatchPostError{
+				ID:      receiverWallet.AnchorPlatformTransactionID,
+				SEP:     "24",
+				Message: errorMsg,
+				Status:  anchorplatform.APTransactionStatusError,
 			}).
 			Return(nil).
 			Once()
 
-		err := svc.PatchTransactionsCompletion(ctx)
+		err = svc.PatchTransactionsCompletion(ctx)
 		require.NoError(t, err)
 
 		syncedAt := getAPTransactionSyncedAt(t, ctx, dbConnectionPool, receiverWallet.ID)
-		assert.True(t, syncedAt.IsZero())
+		assert.False(t, syncedAt.IsZero())
 
 		entries := getEntries()
 		require.Len(t, entries, 2)
 		assert.Equal(t, "PatchAnchorPlatformTransactionService: got 1 payments to process", entries[0].Message)
-		assert.Equal(t, "PatchAnchorPlatformTransactionService: updating anchor platform transaction synced at for 0 receiver wallet(s)", entries[1].Message)
+		assert.Equal(t, "PatchAnchorPlatformTransactionService: updating anchor platform transaction synced at for 1 receiver wallet(s)", entries[1].Message)
 	})
 
 	t.Run("marks as synced when patch anchor platform transaction successfully and payment is success", func(t *testing.T) {
@@ -197,7 +218,7 @@ func Test_PatchAnchorPlatformTransactionService_PatchTransactionsCompletion(t *t
 			VerificationField: data.VerificationFieldDateOfBirth,
 		})
 
-		_ = data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+		payment := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
 			Amount:               "1",
 			StellarTransactionID: "stellar-transaction-id-1",
 			StellarOperationID:   "operation-id-1",
@@ -210,10 +231,22 @@ func Test_PatchAnchorPlatformTransactionService_PatchTransactionsCompletion(t *t
 		getEntries := log.DefaultLogger.StartTest(log.DebugLevel)
 
 		apAPISvcMock.
-			On("PatchAnchorTransactionsPostRegistration", ctx, anchorplatform.APSep24TransactionPatchPostRegistration{
+			On("PatchAnchorTransactionsPostSuccessCompletion", ctx, anchorplatform.APSep24TransactionPatchPostSuccess{
 				ID:     receiverWallet.AnchorPlatformTransactionID,
 				SEP:    "24",
 				Status: anchorplatform.APTransactionStatusCompleted,
+				StellarTransactions: []anchorplatform.APStellarTransaction{
+					{
+						ID:       payment.StellarTransactionID,
+						Memo:     receiverWallet.StellarMemo,
+						MemoType: receiverWallet.StellarMemoType,
+					},
+				},
+				CompletedAt: &payment.UpdatedAt,
+				AmountOut: anchorplatform.APAmount{
+					Amount: payment.Amount,
+					Asset:  anchorplatform.NewStellarAssetInAIF(payment.Asset.Code, payment.Asset.Issuer),
+				},
 			}).
 			Return(nil).
 			Once()
@@ -256,7 +289,7 @@ func Test_PatchAnchorPlatformTransactionService_PatchTransactionsCompletion(t *t
 			VerificationField: data.VerificationFieldDateOfBirth,
 		})
 
-		_ = data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+		payment := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
 			Amount:               "1",
 			StellarTransactionID: "stellar-transaction-id-1",
 			StellarOperationID:   "operation-id-1",
@@ -279,10 +312,22 @@ func Test_PatchAnchorPlatformTransactionService_PatchTransactionsCompletion(t *t
 		getEntries := log.DefaultLogger.StartTest(log.DebugLevel)
 
 		apAPISvcMock.
-			On("PatchAnchorTransactionsPostRegistration", ctx, anchorplatform.APSep24TransactionPatchPostRegistration{
+			On("PatchAnchorTransactionsPostSuccessCompletion", ctx, anchorplatform.APSep24TransactionPatchPostSuccess{
 				ID:     receiverWallet.AnchorPlatformTransactionID,
 				SEP:    "24",
 				Status: anchorplatform.APTransactionStatusCompleted,
+				StellarTransactions: []anchorplatform.APStellarTransaction{
+					{
+						ID:       payment.StellarTransactionID,
+						Memo:     receiverWallet.StellarMemo,
+						MemoType: receiverWallet.StellarMemoType,
+					},
+				},
+				CompletedAt: &payment.UpdatedAt,
+				AmountOut: anchorplatform.APAmount{
+					Amount: payment.Amount,
+					Asset:  anchorplatform.NewStellarAssetInAIF(payment.Asset.Code, payment.Asset.Issuer),
+				},
 			}).
 			Return(nil).
 			Once()
@@ -336,29 +381,29 @@ func Test_PatchAnchorPlatformTransactionService_PatchTransactionsCompletion(t *t
 			VerificationField: data.VerificationFieldDateOfBirth,
 		})
 
-		_ = data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+		payment1 := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
 			Amount:               "1",
 			StellarTransactionID: "stellar-transaction-id-1",
 			StellarOperationID:   "operation-id-1",
-			Status:               data.FailedPaymentStatus,
+			Status:               data.PendingPaymentStatus,
 			Disbursement:         disbursement1,
 			ReceiverWallet:       receiverWallet,
 			Asset:                *asset,
 		})
 
-		_ = data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+		payment2 := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
 			Amount:               "1",
-			StellarTransactionID: "stellar-transaction-id-1",
+			StellarTransactionID: "stellar-transaction-id-2",
 			StellarOperationID:   "operation-id-1",
-			Status:               data.FailedPaymentStatus,
+			Status:               data.PendingPaymentStatus,
 			Disbursement:         disbursement2,
 			ReceiverWallet:       receiverWallet,
 			Asset:                *asset,
 		})
 
-		_ = data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+		payment3 := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
 			Amount:               "1",
-			StellarTransactionID: "stellar-transaction-id-1",
+			StellarTransactionID: "stellar-transaction-id-3",
 			StellarOperationID:   "operation-id-1",
 			Status:               data.SuccessPaymentStatus,
 			Disbursement:         disbursement3,
@@ -366,25 +411,53 @@ func Test_PatchAnchorPlatformTransactionService_PatchTransactionsCompletion(t *t
 			Asset:                *asset,
 		})
 
+		errorMsg := "tx_failed op_no_source_account"
+		err := models.Payment.Update(ctx, dbConnectionPool, payment1, &data.PaymentUpdate{
+			Status:               data.FailedPaymentStatus,
+			StatusMessage:        errorMsg,
+			StellarTransactionID: "stellar-transaction-id-1",
+		})
+		require.NoError(t, err)
+
+		err = models.Payment.Update(ctx, dbConnectionPool, payment2, &data.PaymentUpdate{
+			Status:               data.FailedPaymentStatus,
+			StatusMessage:        errorMsg,
+			StellarTransactionID: "stellar-transaction-id-2",
+		})
+		require.NoError(t, err)
+
 		getEntries := log.DefaultLogger.StartTest(log.DebugLevel)
 
 		apAPISvcMock.
-			On("PatchAnchorTransactionsPostRegistration", ctx, anchorplatform.APSep24TransactionPatchPostRegistration{
-				ID:     receiverWallet.AnchorPlatformTransactionID,
-				SEP:    "24",
-				Status: anchorplatform.APTransactionStatusError,
+			On("PatchAnchorTransactionsPostErrorCompletion", ctx, anchorplatform.APSep24TransactionPatchPostError{
+				ID:      receiverWallet.AnchorPlatformTransactionID,
+				SEP:     "24",
+				Message: errorMsg,
+				Status:  anchorplatform.APTransactionStatusError,
 			}).
 			Return(nil).
 			Twice().
-			On("PatchAnchorTransactionsPostRegistration", ctx, anchorplatform.APSep24TransactionPatchPostRegistration{
+			On("PatchAnchorTransactionsPostSuccessCompletion", ctx, anchorplatform.APSep24TransactionPatchPostSuccess{
 				ID:     receiverWallet.AnchorPlatformTransactionID,
 				SEP:    "24",
 				Status: anchorplatform.APTransactionStatusCompleted,
+				StellarTransactions: []anchorplatform.APStellarTransaction{
+					{
+						ID:       payment3.StellarTransactionID,
+						Memo:     receiverWallet.StellarMemo,
+						MemoType: receiverWallet.StellarMemoType,
+					},
+				},
+				CompletedAt: &payment3.UpdatedAt,
+				AmountOut: anchorplatform.APAmount{
+					Amount: payment3.Amount,
+					Asset:  anchorplatform.NewStellarAssetInAIF(payment3.Asset.Code, payment3.Asset.Issuer),
+				},
 			}).
 			Return(nil).
 			Once()
 
-		err := svc.PatchTransactionsCompletion(ctx)
+		err = svc.PatchTransactionsCompletion(ctx)
 		require.NoError(t, err)
 
 		syncedAt := getAPTransactionSyncedAt(t, ctx, dbConnectionPool, receiverWallet.ID)
@@ -393,7 +466,7 @@ func Test_PatchAnchorPlatformTransactionService_PatchTransactionsCompletion(t *t
 		entries := getEntries()
 		require.Len(t, entries, 2)
 		assert.Equal(t, "PatchAnchorPlatformTransactionService: got 3 payments to process", entries[0].Message)
-		assert.Equal(t, "PatchAnchorPlatformTransactionService: updating anchor platform transaction synced at for 1 receiver wallet(s)", entries[1].Message)
+		assert.Equal(t, "PatchAnchorPlatformTransactionService: updating anchor platform transaction synced at for 3 receiver wallet(s)", entries[1].Message)
 	})
 
 	apAPISvcMock.AssertExpectations(t)

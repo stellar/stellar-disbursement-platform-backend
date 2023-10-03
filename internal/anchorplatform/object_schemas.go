@@ -111,46 +111,45 @@ type APSep24TransactionPatchPostRegistration struct {
 	TransferReceivedAt    *time.Time          `json:"transfer_received_at,omitempty"`
 }
 
-// type APSep24TransactionPatchPostSuccess struct {
-// 	ID                  string                 `json:"id"`
-// 	SEP                 string                 `json:"sep,omitempty"`
-// 	Status              APTransactionStatus    `json:"status,omitempty"` // Success
-// 	StellarTransactions []APStellarTransaction `json:"stellar_transactions,omitempty"`
-// 	Message             string                 `json:"message,omitempty"`
-// 	CompletedAt         *time.Time             `json:"completed_at,omitempty"`
-// 	AmountOut           APAmount               `json:"amount_out,omitempty"`
-// 	// TODO: update the AP version when source_account becomes patchable
-// 	SourceAccount string `json:"source_account,omitempty"`
-// }
+type APSep24TransactionPatchPostSuccess struct {
+	ID                  string                 `json:"id"`
+	SEP                 string                 `json:"sep,omitempty"`
+	Status              APTransactionStatus    `json:"status,omitempty"` // Success
+	StellarTransactions []APStellarTransaction `json:"stellar_transactions,omitempty"`
+	// Message             string                 `json:"message,omitempty"`
+	CompletedAt *time.Time `json:"completed_at,omitempty"`
+	AmountOut   APAmount   `json:"amount_out,omitempty"`
+	// TODO: update the AP version when source_account becomes patchable
+	// SourceAccount string `json:"source_account,omitempty"`
+}
 
-// type APSep24TransactionPatchPostError struct {
-// 	ID                  string                 `json:"id"`
-// 	SEP                 string                 `json:"sep,omitempty"`
-// 	StellarTransactions []APStellarTransaction `json:"stellar_transactions,omitempty"`
-// 	Message             string                 `json:"message,omitempty"` // Error message
-// 	Status              APTransactionStatus    `json:"status,omitempty"`  // Error
-// 	// TODO: update the AP version when source_account becomes patchable
-// 	SourceAccount string `json:"source_account,omitempty"`
-// }
+type APSep24TransactionPatchPostError struct {
+	ID      string              `json:"id"`
+	SEP     string              `json:"sep,omitempty"`
+	Message string              `json:"message,omitempty"` // Error message
+	Status  APTransactionStatus `json:"status,omitempty"`  // Error
+	// TODO: update the AP version when source_account becomes patchable
+	// SourceAccount string `json:"source_account,omitempty"`
+}
 
 // APTransactionStatus is the body of the Stellar transaction stored in the Anchor Platform.
 type APStellarTransaction struct {
-	ID        string             `json:"id"`
-	Memo      string             `json:"memo,omitempty"`
-	MemoType  string             `json:"memo_type,omitempty"`
-	CreatedAt time.Time          `json:"created_at"`
-	Envelope  string             `json:"envelope"`
-	Payments  []APStellarPayment `json:"payments,omitempty"`
+	ID       string `json:"id"`
+	Memo     string `json:"memo,omitempty"`
+	MemoType string `json:"memo_type,omitempty"`
+	// CreatedAt time.Time `json:"created_at"`
+	// Envelope string `json:"envelope"`
+	// Payments  []APStellarPayment `json:"payments,omitempty"`
 }
 
 // APStellarPayment is the body of the Stellar payment stored in the Anchor Platform.
-type APStellarPayment struct {
-	ID                 string   `json:"id"`
-	PaymentType        string   `json:"payment_type"`
-	SourceAccount      string   `json:"source_account"`
-	DestinationAccount string   `json:"destination_account"`
-	Amount             APAmount `json:"amount"`
-}
+// type APStellarPayment struct {
+// 	ID                 string   `json:"id"`
+// 	PaymentType        string   `json:"payment_type"`
+// 	SourceAccount      string   `json:"source_account"`
+// 	DestinationAccount string   `json:"destination_account"`
+// 	Amount             APAmount `json:"amount"`
+// }
 
 // APAmount is the body of the Stellar amount stored in the Anchor Platform.
 type APAmount struct {

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
 	"github.com/stretchr/testify/assert"
@@ -217,6 +218,182 @@ func Test_PatchAnchorTransactionsPostRegistration(t *testing.T) {
 			ID:     "test-transaction-id",
 			Status: "pending_anchor",
 			SEP:    "24",
+		})
+		require.NoError(t, err)
+
+		httpClientMock.AssertExpectations(t)
+	})
+}
+
+func Test_PatchAnchorTransactionsPostSuccessCompletion(t *testing.T) {
+	httpClientMock := httpclient.HttpClientMock{}
+	anchorPlatformAPIService, err := NewAnchorPlatformAPIService(&httpClientMock, "http://mock_anchor.com/", "jwt_secret_1234567890")
+	require.NoError(t, err)
+	ctx := context.Background()
+
+	t.Run("successfully update transaction on anchor platform", func(t *testing.T) {
+		transactionResponse := `{
+			"transaction":{
+				"id": "test-transaction-id",
+				"status": "completed",
+				"sep": "24",
+				"kind": "deposit",
+				"destination_account": "stellar_address",
+				"kyc_verified": true,
+			}
+		}`
+		response := &http.Response{
+			Body:       io.NopCloser(strings.NewReader(transactionResponse)),
+			StatusCode: http.StatusOK,
+		}
+		httpClientMock.On("Do", mock.MatchedBy(func(req *http.Request) bool {
+			assert := assert.New(t)
+
+			// STEP 1: check method type and URL
+			assert.Equal("PATCH", req.Method)
+			assert.Equal("http://mock_anchor.com/transactions", req.URL.String())
+
+			// STEP2: check request body
+			bodyBytes, err := io.ReadAll(req.Body)
+			assert.NoError(err)
+
+			// Restore the io.ReadCloser to its original state
+			req.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+			expectedJSON := `{
+				"records": [
+					{
+						"transaction": {
+							"id": "test-transaction-id",
+							"status": "completed",
+							"sep": "24",
+							"amount_out": {
+								"amount": "2",
+								"asset": "stellar:USDC:GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV"
+							},
+							"stellar_transactions": [
+								{
+									"id": "stellar-transaction-id",
+									"memo": "memo",
+									"memo_type": "id"
+								}
+							],
+							"completed_at": "2023-10-03T09:00:00Z"
+						}
+					}
+				]
+			}`
+			assert.JSONEq(expectedJSON, string(bodyBytes))
+
+			return true
+		})).Return(response, nil).Twice()
+
+		completedAt := time.Date(2023, 10, 3, 9, 0, 0, 0, time.UTC)
+		err := anchorPlatformAPIService.PatchAnchorTransactionsPostSuccessCompletion(ctx, APSep24TransactionPatchPostSuccess{
+			ID:     "test-transaction-id",
+			SEP:    "24",
+			Status: APTransactionStatusCompleted,
+			StellarTransactions: []APStellarTransaction{
+				{
+					ID:       "stellar-transaction-id",
+					Memo:     "memo",
+					MemoType: "id",
+				},
+			},
+			CompletedAt: &completedAt,
+			AmountOut: APAmount{
+				Amount: "2",
+				Asset:  NewStellarAssetInAIF("USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV"),
+			},
+		})
+		require.NoError(t, err)
+
+		err = anchorPlatformAPIService.updateAnchorTransactions(ctx, APSep24TransactionPatch{
+			ID:     "test-transaction-id",
+			SEP:    "24",
+			Status: APTransactionStatusCompleted,
+			StellarTransactions: []APStellarTransaction{
+				{
+					ID:       "stellar-transaction-id",
+					Memo:     "memo",
+					MemoType: "id",
+				},
+			},
+			CompletedAt: &completedAt,
+			AmountOut: &APAmount{
+				Amount: "2",
+				Asset:  NewStellarAssetInAIF("USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV"),
+			},
+		})
+		require.NoError(t, err)
+
+		httpClientMock.AssertExpectations(t)
+	})
+}
+
+func Test_PatchAnchorTransactionsPostErrorCompletion(t *testing.T) {
+	httpClientMock := httpclient.HttpClientMock{}
+	anchorPlatformAPIService, err := NewAnchorPlatformAPIService(&httpClientMock, "http://mock_anchor.com/", "jwt_secret_1234567890")
+	require.NoError(t, err)
+	ctx := context.Background()
+
+	t.Run("successfully update transaction on anchor platform", func(t *testing.T) {
+		transactionResponse := `{
+			"transaction":{
+				"id": "test-transaction-id",
+				"status": "error",
+				"sep": "24",
+				"kind": "deposit",
+				"destination_account": "stellar_address",
+				"kyc_verified": true,
+			}
+		}`
+		response := &http.Response{
+			Body:       io.NopCloser(strings.NewReader(transactionResponse)),
+			StatusCode: http.StatusOK,
+		}
+		httpClientMock.On("Do", mock.MatchedBy(func(req *http.Request) bool {
+			assert := assert.New(t)
+
+			// STEP 1: check method type and URL
+			assert.Equal("PATCH", req.Method)
+			assert.Equal("http://mock_anchor.com/transactions", req.URL.String())
+
+			// STEP2: check request body
+			bodyBytes, err := io.ReadAll(req.Body)
+			assert.NoError(err)
+
+			// Restore the io.ReadCloser to its original state
+			req.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+			expectedJSON := `{
+				"records": [
+					{
+						"transaction": {
+							"id": "test-transaction-id",
+							"status": "error",
+							"sep": "24",
+							"message": "transaction failed"
+						}
+					}
+				]
+			}`
+			assert.JSONEq(expectedJSON, string(bodyBytes))
+
+			return true
+		})).Return(response, nil).Twice()
+
+		err := anchorPlatformAPIService.PatchAnchorTransactionsPostErrorCompletion(ctx, APSep24TransactionPatchPostError{
+			ID:      "test-transaction-id",
+			SEP:     "24",
+			Message: "transaction failed",
+			Status:  APTransactionStatusError,
+		})
+		require.NoError(t, err)
+
+		err = anchorPlatformAPIService.updateAnchorTransactions(ctx, APSep24TransactionPatch{
+			ID:      "test-transaction-id",
+			SEP:     "24",
+			Status:  APTransactionStatusError,
+			Message: "transaction failed",
 		})
 		require.NoError(t, err)
 

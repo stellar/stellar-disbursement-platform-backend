@@ -114,7 +114,7 @@ func Test_PatchAnchorPlatformTransactionsCompletionJob_Execute(t *testing.T) {
 			VerificationField: data.VerificationFieldDateOfBirth,
 		})
 
-		_ = data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+		payment := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
 			Amount:               "1",
 			StellarTransactionID: "stellar-transaction-id-1",
 			StellarOperationID:   "operation-id-1",
@@ -127,10 +127,22 @@ func Test_PatchAnchorPlatformTransactionsCompletionJob_Execute(t *testing.T) {
 		getEntries := log.DefaultLogger.StartTest(log.DebugLevel)
 
 		apAPISvcMock.
-			On("PatchAnchorTransactionsPostRegistration", ctx, anchorplatform.APSep24TransactionPatchPostRegistration{
+			On("PatchAnchorTransactionsPostSuccessCompletion", ctx, anchorplatform.APSep24TransactionPatchPostSuccess{
 				ID:     receiverWallet.AnchorPlatformTransactionID,
 				SEP:    "24",
 				Status: anchorplatform.APTransactionStatusCompleted,
+				StellarTransactions: []anchorplatform.APStellarTransaction{
+					{
+						ID:       payment.StellarTransactionID,
+						Memo:     receiverWallet.StellarMemo,
+						MemoType: receiverWallet.StellarMemoType,
+					},
+				},
+				CompletedAt: &payment.UpdatedAt,
+				AmountOut: anchorplatform.APAmount{
+					Amount: payment.Amount,
+					Asset:  anchorplatform.NewStellarAssetInAIF(payment.Asset.Code, payment.Asset.Issuer),
+				},
 			}).
 			Return(nil).
 			Once()

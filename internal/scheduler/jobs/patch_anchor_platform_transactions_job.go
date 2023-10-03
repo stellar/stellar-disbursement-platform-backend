@@ -17,11 +17,11 @@ const (
 )
 
 type PatchAnchorPlatformTransactionsCompletionJob struct {
-	service *services.PatchAnchorPlatformTransactionServiceCompletion
+	service *services.PatchAnchorPlatformTransactionCompletionService
 }
 
 func NewPatchAnchorPlatformTransactionsCompletionJob(apAPISvc anchorplatform.AnchorPlatformAPIServiceInterface, models *data.Models) *PatchAnchorPlatformTransactionsCompletionJob {
-	svc, err := services.NewPatchAnchorPlatformTransactionServiceCompletion(apAPISvc, models)
+	svc, err := services.NewPatchAnchorPlatformTransactionCompletionService(apAPISvc, models)
 	if err != nil {
 		log.Fatalf("instantiating anchor platform service: %v", err)
 	}

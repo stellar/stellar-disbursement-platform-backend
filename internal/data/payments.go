@@ -268,14 +268,25 @@ func (p *PaymentModel) GetAllReadyToPatchCompletionAnchorTransactions(ctx contex
 	const query = `
 		SELECT
 			p.id,
+			p.amount,
+			p.stellar_transaction_id,
 			p.status,
+			p.status_history,
+			p.updated_at,
+			a.id AS "asset.id",
+			a.code AS "asset.code",
+			a.issuer AS "asset.issuer",
 			rw.id AS "receiver_wallet.id",
-			rw.anchor_platform_transaction_id AS "receiver_wallet.anchor_platform_transaction_id"
+			rw.stellar_memo AS "receiver_wallet.stellar_memo",
+			rw.stellar_memo_type AS "receiver_wallet.stellar_memo_type",
+			rw.anchor_platform_transaction_id AS "receiver_wallet.anchor_platform_transaction_id",
+			rw.anchor_platform_transaction_synced_at AS "receiver_wallet.anchor_platform_transaction_synced_at"
 		FROM
 			payments p
-			INNER JOIN disbursements d on p.disbursement_id = d.id
-			INNER JOIN wallets w on d.wallet_id = w.id
-			INNER JOIN receiver_wallets rw on rw.receiver_id = p.receiver_id AND rw.wallet_id = w.id
+			INNER JOIN disbursements d ON p.disbursement_id = d.id
+			INNER JOIN assets a ON a.id = d.asset_id
+			INNER JOIN wallets w ON d.wallet_id = w.id
+			INNER JOIN receiver_wallets rw ON rw.receiver_id = p.receiver_id AND rw.wallet_id = w.id
 		WHERE
 			p.status = ANY($1) -- ARRAY['SUCCESS', 'FAILURE']::payment_status[]
 			AND rw.status = $2 -- 'REGISTERED'::receiver_wallet_status
@@ -542,6 +553,22 @@ func (p *PaymentModel) RetryFailedPayments(ctx context.Context, email string, pa
 
 		if numRowsAffected != int64(len(paymentIDs)) {
 			return ErrMismatchNumRowsAffected
+		}
+
+		// This ensures that we are going to sync the payment transaction on the Anchor Platform again.
+		const updateReceiverWallets = `
+			UPDATE
+				receiver_wallets
+			SET
+				anchor_platform_transaction_synced_at = NULL
+			WHERE
+				id IN (
+					SELECT receiver_wallet_id FROM payments WHERE id = ANY($1)
+				)
+		`
+		_, err = dbTx.ExecContext(ctx, updateReceiverWallets, pq.Array(paymentIDs))
+		if err != nil {
+			return fmt.Errorf("updating resetting the receiver wallets' anchor platform transaction synced at: %w", err)
 		}
 
 		return nil
