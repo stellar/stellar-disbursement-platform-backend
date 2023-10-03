@@ -246,7 +246,7 @@ func Test_ReceiverVerificationModel_CheckTotalAttempts(t *testing.T) {
 	receiverVerificationModel := &ReceiverVerificationModel{}
 
 	t.Run("attempts exceeded the max value", func(t *testing.T) {
-		attempts := 6
+		attempts := 15
 		e := receiverVerificationModel.ExceededAttempts(attempts)
 		assert.True(t, e)
 	})
