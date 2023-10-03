@@ -250,7 +250,7 @@ func Test_VerifyReceiverRegistrationHandler_processReceiverVerificationPII(t *te
 				VerificationType:  data.VerificationFieldDateOfBirth,
 				VerificationValue: "1990-01-01",
 			},
-			wantErrContains: "the number of attempts to confirm the verification value exceededs the max attempts limit of 6",
+			wantErrContains: fmt.Sprintf("the number of attempts to confirm the verification value exceededs the max attempts limit of %d", data.MaxAttemptsAllowed),
 		},
 		{
 			name:     "returns an error if the varification value provided in the payload is different from the DB one",
