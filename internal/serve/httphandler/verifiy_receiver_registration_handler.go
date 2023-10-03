@@ -302,6 +302,8 @@ func (v VerifyReceiverRegistrationHandler) VerifyReceiverRegistration(w http.Res
 			httperror.BadRequest(InformationNotFoundOnServer, atomicFnErr, nil).Render(w)
 			return
 		}
+		// if error is due to verification attempts being exceeded, we want to display the message with what that limit is clearly
+		// to the user
 		var errorVerficationAttemptsExceeded *ErrorVerificationAttemptsExceeded
 		if errors.As(atomicFnErr, &errorVerficationAttemptsExceeded) {
 			log.Ctx(ctx).Error(errorVerficationAttemptsExceeded.cause)
