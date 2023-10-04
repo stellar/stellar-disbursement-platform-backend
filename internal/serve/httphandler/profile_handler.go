@@ -354,13 +354,23 @@ func (h ProfileHandler) GetOrganizationInfo(rw http.ResponseWriter, req *http.Re
 		return
 	}
 
-	httpjson.RenderStatus(rw, http.StatusOK, map[string]interface{}{
+	resp := map[string]interface{}{
 		"name":                            org.Name,
 		"logo_url":                        lu.String(),
 		"distribution_account_public_key": h.DistributionPublicKey,
 		"timezone_utc_offset":             org.TimezoneUTCOffset,
 		"is_approval_required":            org.IsApprovalRequired,
-	}, httpjson.JSON)
+	}
+
+	if org.SMSRegistrationMessageTemplate != data.DefaultSMSRegistrationMessageTemplate {
+		resp["sms_registration_message_template"] = org.SMSRegistrationMessageTemplate
+	}
+
+	if org.OTPMessageTemplate != data.DefaultOTPMessageTemplate {
+		resp["otp_message_template"] = org.OTPMessageTemplate
+	}
+
+	httpjson.RenderStatus(rw, http.StatusOK, resp, httpjson.JSON)
 }
 
 // GetOrganizationLogo renders the stored organization logo. The image is rendered inline (not attached - the attached option downloads the content)
