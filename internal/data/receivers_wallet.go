@@ -507,12 +507,15 @@ func (rw *ReceiverWalletModel) RetryInvitationSMS(ctx context.Context, sqlExec d
 		SET 
 			invitation_sent_at = NULL
 		WHERE rw.id = $1
+		AND rw.status = 'READY'
 		RETURNING 
 			rw.id,
 			rw.receiver_id as "receiver.id",
 			rw.wallet_id as "wallet.id",
 			rw.status,
-			rw.invitation_sent_at
+			rw.invitation_sent_at,
+			rw.created_at,
+			rw.updated_at
 	`
 
 	err := sqlExec.GetContext(ctx, &receiverWallet, query, receiverWalletId)

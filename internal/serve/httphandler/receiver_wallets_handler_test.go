@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
@@ -28,7 +29,6 @@ func Test_RetryInvitation(t *testing.T) {
 
 	handler := &ReceiverWalletsHandler{
 		Models:           models,
-		DBConnectionPool: dbConnectionPool,
 	}
 
 	ctx := context.Background()
@@ -38,7 +38,7 @@ func Test_RetryInvitation(t *testing.T) {
 
 	t.Run("returns error when receiver wallet does not exist", func(t *testing.T) {
 		route := "/receivers/wallets/invalid_id"
-		req, err := http.NewRequest("PATCH", route, nil)
+		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, route, nil)
 		require.NoError(t, err)
 
 		rr := httptest.NewRecorder()
@@ -46,21 +46,31 @@ func Test_RetryInvitation(t *testing.T) {
 
 		resp := rr.Result()
 		assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+		assert.JSONEq(t, `{ "error": "Resource not found." }`,rr.Body.String())
 	})
 
 	t.Run("successfuly retry invitation", func(t *testing.T) {
 		receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
-		wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "wallet", "https://www.wallet.com", "www.wallet.com", "wallet1://")
+		wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "wallet", "https://www.wallet.com", "www.wallet.com", "wallet://")
 		rw := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.ReadyReceiversWalletStatus)
 
 		route := fmt.Sprintf("/receivers/wallets/%s", rw.ID)
-		req, err := http.NewRequest("PATCH", route, nil)
+		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, route, nil)
 		require.NoError(t, err)
 
 		rr := httptest.NewRecorder()
 		r.ServeHTTP(rr, req)
 
+		wantJson := fmt.Sprintf(`{
+			"id": %q,
+			"receiver_id": %q,
+			"wallet_id": %q,
+			"created_at": %q,
+			"invitation_sent_at": null
+		}`, rw.ID, receiver.ID, wallet.ID, rw.CreatedAt.Format(time.RFC3339Nano))
+
 		resp := rr.Result()
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.JSONEq(t, wantJson, rr.Body.String())
 	})
 }

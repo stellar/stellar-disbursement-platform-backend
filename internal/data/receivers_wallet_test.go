@@ -1080,6 +1080,17 @@ func Test_RetryInvitationSMS(t *testing.T) {
 		require.Empty(t, receiverWallet)
 	})
 
+	t.Run("returns error when receiver wallet is registered", func(t *testing.T) {
+		receiver := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
+		wallet := CreateWalletFixture(t, ctx, dbConnectionPool, "wallet", "https://www.wallet.com", "www.wallet.com", "wallet1://")
+		rw := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, RegisteredReceiversWalletStatus)
+
+		receiverWallet, err := receiverWalletModel.RetryInvitationSMS(ctx, dbConnectionPool, rw.ID)
+		require.Error(t, err)
+		require.ErrorIs(t, err, ErrRecordNotFound)
+		require.Empty(t, receiverWallet)
+	})
+
 	t.Run("successfuly retry invitation", func(t *testing.T) {
 		receiver := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
 		wallet := CreateWalletFixture(t, ctx, dbConnectionPool, "wallet", "https://www.wallet.com", "www.wallet.com", "wallet1://")

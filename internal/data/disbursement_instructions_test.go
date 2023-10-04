@@ -126,6 +126,39 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 		require.Equal(t, disbursementUpdate.FileName, actualDisbursement.FileName)
 	})
 
+	t.Run("success - existing ready receiver wallet retries invitation", func(t *testing.T) {
+		// process instructions for the first time
+		err := di.ProcessAll(ctx, "user-id", instructions, disbursement, disbursementUpdate, MaxInstructionsPerDisbursement)
+		require.NoError(t, err)
+
+		// Update Receiver Waller Status to Ready
+		err = di.receiverWalletModel.UpdateStatusByDisbursementID(ctx, dbConnectionPool, disbursement.ID, DraftReceiversWalletStatus, ReadyReceiversWalletStatus)
+		require.NoError(t, err)
+
+		err = di.ProcessAll(ctx, "user-id", instructions, disbursement, disbursementUpdate, MaxInstructionsPerDisbursement)
+		require.NoError(t, err)
+
+		// Verify Receivers
+		receivers, err := di.receiverModel.GetByPhoneNumbers(ctx, dbConnectionPool, []string{instruction1.Phone, instruction2.Phone, instruction3.Phone})
+		require.NoError(t, err)
+		assertEqualReceivers(t, expectedPhoneNumbers, expectedExternalIDs, receivers)
+
+		// Verify ReceiverVerifications
+		receiverVerifications, err := di.receiverVerificationModel.GetByReceiverIDsAndVerificationField(ctx, dbConnectionPool, []string{receivers[0].ID, receivers[1].ID, receivers[2].ID}, VerificationFieldDateOfBirth)
+		require.NoError(t, err)
+		assertEqualVerifications(t, instructions, receiverVerifications, receivers)
+
+		// Verify ReceiverWallets
+		receiverWallets, err := di.receiverWalletModel.GetByReceiverIDsAndWalletID(ctx, dbConnectionPool, []string{receivers[0].ID, receivers[1].ID, receivers[2].ID}, wallet.ID)
+		require.NoError(t, err)
+		assert.Len(t, receiverWallets, len(receivers))
+		for _, receiverWallet := range receiverWallets {
+			assert.Equal(t, wallet.ID, receiverWallet.Wallet.ID)
+			assert.Equal(t, ReadyReceiversWalletStatus, receiverWallet.Status)
+			assert.Empty(t, receiverWallet.InvitationSentAt)
+		}
+	})
+
 	t.Run("failure - Too many instructions", func(t *testing.T) {
 		err := di.ProcessAll(ctx, "user-id", instructions, disbursement, disbursementUpdate, 2)
 		require.EqualError(t, err, "maximum number of instructions exceeded")
