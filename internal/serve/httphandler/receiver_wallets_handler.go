@@ -13,10 +13,10 @@ import (
 )
 
 type RetryInvitationSMSResponse struct {
-	ID               string    `json:"id"`
-	ReceiverID       string    `json:"receiver_id"`
-	WalletID         string    `json:"wallet_id"`
-	CreatedAt        time.Time `json:"created_at"`
+	ID               string     `json:"id"`
+	ReceiverID       string     `json:"receiver_id"`
+	WalletID         string     `json:"wallet_id"`
+	CreatedAt        time.Time  `json:"created_at"`
 	InvitationSentAt *time.Time `json:"invitation_sent_at"`
 }
 

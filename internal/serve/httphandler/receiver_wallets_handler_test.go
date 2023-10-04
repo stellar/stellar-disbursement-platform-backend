@@ -28,7 +28,7 @@ func Test_RetryInvitation(t *testing.T) {
 	require.NoError(t, err)
 
 	handler := &ReceiverWalletsHandler{
-		Models:           models,
+		Models: models,
 	}
 
 	ctx := context.Background()
@@ -46,7 +46,7 @@ func Test_RetryInvitation(t *testing.T) {
 
 		resp := rr.Result()
 		assert.Equal(t, http.StatusNotFound, resp.StatusCode)
-		assert.JSONEq(t, `{ "error": "Resource not found." }`,rr.Body.String())
+		assert.JSONEq(t, `{ "error": "Resource not found." }`, rr.Body.String())
 	})
 
 	t.Run("successfuly retry invitation", func(t *testing.T) {
