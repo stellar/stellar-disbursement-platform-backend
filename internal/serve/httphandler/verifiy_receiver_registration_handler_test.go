@@ -250,7 +250,7 @@ func Test_VerifyReceiverRegistrationHandler_processReceiverVerificationPII(t *te
 				VerificationType:  data.VerificationFieldDateOfBirth,
 				VerificationValue: "1990-01-01",
 			},
-			wantErrContains: "the number of attempts to confirm the verification value exceededs the max attempts limit of 6",
+			wantErrContains: fmt.Sprintf("the number of attempts to confirm the verification value exceededs the max attempts limit of %d", data.MaxAttemptsAllowed),
 		},
 		{
 			name:     "returns an error if the varification value provided in the payload is different from the DB one",
@@ -582,15 +582,15 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 
 		// setup router and execute request
 		r.Post("/wallet-registration/verification", handler.VerifyReceiverRegistration)
-		req, err := http.NewRequest("POST", "/wallet-registration/verification", nil)
-		require.NoError(t, err)
+		req, reqErr := http.NewRequest("POST", "/wallet-registration/verification", nil)
+		require.NoError(t, reqErr)
 		rr := httptest.NewRecorder()
 		r.ServeHTTP(rr, req)
 
 		// execute and validate response
 		resp := rr.Result()
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
+		respBody, readRespErr := io.ReadAll(resp.Body)
+		require.NoError(t, readRespErr)
 		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 		assert.JSONEq(t, `{"error": "Not authorized."}`, string(respBody))
 
@@ -611,16 +611,16 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 
 		// setup router and execute request
 		r.Post("/wallet-registration/verification", handler.VerifyReceiverRegistration)
-		req, err := http.NewRequest("POST", "/wallet-registration/verification", strings.NewReader(string(reqBody)))
-		require.NoError(t, err)
+		req, reqErr := http.NewRequest("POST", "/wallet-registration/verification", strings.NewReader(string(reqBody)))
+		require.NoError(t, reqErr)
 		req = req.WithContext(context.WithValue(req.Context(), anchorplatform.SEP24ClaimsContextKey, validClaims))
 		rr := httptest.NewRecorder()
 		r.ServeHTTP(rr, req)
 
 		// execute and validate response
 		resp := rr.Result()
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
+		respBody, readRespErr := io.ReadAll(resp.Body)
+		require.NoError(t, readRespErr)
 		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 		wantBody := fmt.Sprintf(`{"error": "%s"}`, InformationNotFoundOnServer)
 		assert.JSONEq(t, wantBody, string(respBody))
@@ -646,6 +646,50 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 
 		// setup router and execute request
 		r.Post("/wallet-registration/verification", handler.VerifyReceiverRegistration)
+		req, reqErr := http.NewRequest("POST", "/wallet-registration/verification", strings.NewReader(string(reqBody)))
+		require.NoError(t, reqErr)
+		req = req.WithContext(context.WithValue(req.Context(), anchorplatform.SEP24ClaimsContextKey, validClaims))
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+
+		// execute and validate response
+		resp := rr.Result()
+		respBody, readRespErr := io.ReadAll(resp.Body)
+		require.NoError(t, readRespErr)
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+		wantBody := fmt.Sprintf(`{"error": "%s"}`, InformationNotFoundOnServer)
+		assert.JSONEq(t, wantBody, string(respBody))
+
+		// validate logs
+		require.Contains(t, buf.String(), "processing receiver verification entry for receiver with phone number +38...555: DATE_OF_BIRTH not found for receiver with phone number +38...555")
+	})
+
+	t.Run("returns an error when processReceiverVerificationPII() fails - testing case where maximum number of verification attempts exceeded", func(t *testing.T) {
+		// mocks
+		reCAPTCHAValidator := &validators.ReCAPTCHAValidatorMock{}
+		defer reCAPTCHAValidator.AssertExpectations(t)
+		handler.ReCAPTCHAValidator = reCAPTCHAValidator
+		reCAPTCHAValidator.On("IsTokenValid", mock.Anything, "token").Return(true, nil).Once()
+
+		defer data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
+
+		// receiver with a receiverVerification row that's exceeded the maximum number of attempts:
+		receiverWithExceededAttempts := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{PhoneNumber: phoneNumber})
+		receiverVerificationExceededAttempts := data.CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, data.ReceiverVerificationInsert{
+			ReceiverID:        receiverWithExceededAttempts.ID,
+			VerificationField: data.VerificationFieldDateOfBirth,
+			VerificationValue: "1990-01-01",
+		})
+		receiverVerificationExceededAttempts.Attempts = data.MaxAttemptsAllowed
+		err = models.ReceiverVerification.UpdateReceiverVerification(ctx, *receiverVerificationExceededAttempts, dbConnectionPool)
+		require.NoError(t, err)
+
+		// set the logger to a buffer so we can check the error message
+		buf := new(strings.Builder)
+		log.DefaultLogger.SetOutput(buf)
+
+		// setup router and execute request
+		r.Post("/wallet-registration/verification", handler.VerifyReceiverRegistration)
 		req, err := http.NewRequest("POST", "/wallet-registration/verification", strings.NewReader(string(reqBody)))
 		require.NoError(t, err)
 		req = req.WithContext(context.WithValue(req.Context(), anchorplatform.SEP24ClaimsContextKey, validClaims))
@@ -657,11 +701,12 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 		respBody, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
 		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
-		wantBody := fmt.Sprintf(`{"error": "%s"}`, InformationNotFoundOnServer)
+		expectedError := fmt.Sprintf("the number of attempts to confirm the verification value exceededs the max attempts limit of %d", data.MaxAttemptsAllowed)
+		wantBody := fmt.Sprintf(`{"error": "%s"}`, expectedError)
 		assert.JSONEq(t, wantBody, string(respBody))
 
 		// validate logs
-		require.Contains(t, buf.String(), "processing receiver verification entry for receiver with phone number +38...555: DATE_OF_BIRTH not found for receiver with phone number +38...555")
+		require.Contains(t, buf.String(), expectedError)
 	})
 
 	t.Run("returns an error when processReceiverWalletOTP() fails - testing case where no receiverWallet is found", func(t *testing.T) {
