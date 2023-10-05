@@ -21,15 +21,6 @@ Follow these instructions to get started with the Stellar Disbursement Platform 
 
 Make sure you have Docker installed on your system. If not, you can download it from [here](https://www.docker.com/products/docker-desktop).
 
-### Hosts
-
-Add the following two hosts to your `/etc/hosts` file:
-
-```sh
-127.0.0.1       sdp-api
-127.0.0.1       anchor-platform
-```
-
 ### Stellar accounts 
 We will need to create and configure two Stellar accounts to be able to use the SDP. 
 * A Distribution account that will be used for sending funds to receivers. [Create and Fund a Distribution Account](https://developers.stellar.org/docs/stellar-disbursement-platform/getting-started#create-and-fund-a-distribution-account)
