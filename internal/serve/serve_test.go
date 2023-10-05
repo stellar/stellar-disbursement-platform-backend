@@ -293,6 +293,7 @@ func Test_handleHTTP_authenticatedEndpoints(t *testing.T) {
 		{http.MethodGet, "/receivers"},
 		{http.MethodGet, "/receivers/1234"},
 		{http.MethodPatch, "/receivers/1234"},
+		{http.MethodPatch, "/receivers/wallets/1234"},
 		// Countries
 		{http.MethodGet, "/countries"},
 		// Assets

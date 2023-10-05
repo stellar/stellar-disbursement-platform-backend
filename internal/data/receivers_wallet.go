@@ -80,6 +80,7 @@ type ReceiverWallet struct {
 	AnchorPlatformTransactionID string     `json:"anchor_platform_transaction_id,omitempty" db:"anchor_platform_transaction_id"`
 	InvitedAt                   *time.Time `json:"invited_at,omitempty" db:"invited_at"`
 	LastSmsSent                 *time.Time `json:"last_sms_sent,omitempty" db:"last_sms_sent"`
+	InvitationSentAt            *time.Time `json:"invitation_sent_at" db:"invitation_sent_at"`
 	ReceiverWalletStats
 }
 
@@ -201,7 +202,8 @@ func (rw *ReceiverWalletModel) GetByReceiverIDsAndWalletID(ctx context.Context, 
 			rw.id,
 			rw.receiver_id as "receiver.id",
 			rw.wallet_id as "wallet.id",
-			rw.status
+			rw.status,
+			rw.invitation_sent_at
 		FROM receiver_wallets rw
 		WHERE rw.receiver_id = ANY($1)
 		AND rw.wallet_id = $2
@@ -495,4 +497,35 @@ func (rw *ReceiverWalletModel) GetByStellarAccountAndMemo(ctx context.Context, s
 	}
 
 	return &receiverWallets, nil
+}
+
+// RetryInvitationSMS sets null the invitation_sent_at of a receiver wallet.
+func (rw *ReceiverWalletModel) RetryInvitationSMS(ctx context.Context, sqlExec db.SQLExecuter, receiverWalletId string) (*ReceiverWallet, error) {
+	var receiverWallet ReceiverWallet
+	query := `
+		UPDATE 
+			receiver_wallets rw
+		SET 
+			invitation_sent_at = NULL
+		WHERE rw.id = $1
+		AND rw.status = 'READY'
+		RETURNING 
+			rw.id,
+			rw.receiver_id as "receiver.id",
+			rw.wallet_id as "wallet.id",
+			rw.status,
+			rw.invitation_sent_at,
+			rw.created_at,
+			rw.updated_at
+	`
+
+	err := sqlExec.GetContext(ctx, &receiverWallet, query, receiverWalletId)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrRecordNotFound
+		}
+		return nil, fmt.Errorf("updating receiver wallet: %w", err)
+	}
+
+	return &receiverWallet, nil
 }
