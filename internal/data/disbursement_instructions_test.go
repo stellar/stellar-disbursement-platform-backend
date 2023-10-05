@@ -178,10 +178,10 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 
 		// Set invitation_sent_at = NOW()
 		for _, receiverWallet := range receiverWallets {
-			result, err := dbConnectionPool.ExecContext(ctx, "UPDATE receiver_wallets SET invitation_sent_at = NOW() WHERE id = $1", receiverWallet.ID)
-			require.NoError(t, err)
-			updatedRowsAffected, err := result.RowsAffected()
-			require.NoError(t, err)
+			result, updateErr := dbConnectionPool.ExecContext(ctx, "UPDATE receiver_wallets SET invitation_sent_at = NOW() WHERE id = $1", receiverWallet.ID)
+			require.NoError(t, updateErr)
+			updatedRowsAffected, rowsErr := result.RowsAffected()
+			require.NoError(t, rowsErr)
 			assert.Equal(t, int64(1), updatedRowsAffected)
 		}
 
