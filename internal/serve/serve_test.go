@@ -361,7 +361,7 @@ func Test_createAuthManager(t *testing.T) {
 		{
 			name:             "returns error if dbConnectionPool is valid but the keypair is not",
 			dbConnectionPool: dbConnectionPool,
-			wantErrContains:  "validating auth manager keys: validating ECDSA public key: failed to decode PEM block containing public key",
+			wantErrContains:  "validating auth manager keys: validating EC public key: failed to decode PEM block containing public key",
 		},
 		{
 			name:             "returns error if dbConnectionPool and keypair is valid but the resetTokenExpirationHours is not",
@@ -386,7 +386,7 @@ func Test_createAuthManager(t *testing.T) {
 				tc.dbConnectionPool, tc.ec256PublicKey, tc.ec256PrivateKey, tc.resetTokenExpirationHours,
 			)
 			if tc.wantErrContains != "" {
-				assert.Contains(t, tc.wantErrContains, err.Error())
+				assert.ErrorContains(t, err, tc.wantErrContains)
 				assert.Empty(t, gotAuthManager)
 			} else {
 				assert.NoError(t, err)

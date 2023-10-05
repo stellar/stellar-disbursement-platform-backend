@@ -120,7 +120,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 		},
 		{
 			Name:           "ec256-public-key",
-			Usage:          "The EC256 Public Key. This key is used to validate the token signature",
+			Usage:          "The EC256 Public Key used to validate the token signature. This EC key needs to be at least as strong as prime256v1 (P-256).",
 			OptType:        types.String,
 			CustomSetValue: cmdUtils.SetConfigOptionEC256PublicKey,
 			ConfigKey:      &serveOpts.EC256PublicKey,
@@ -128,7 +128,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 		},
 		{
 			Name:           "ec256-private-key",
-			Usage:          "The EC256 Private Key. This key is used to sign the authentication token",
+			Usage:          "The EC256 Private Key used to sign the authentication token. This EC key needs to be at least as strong as prime256v1 (P-256).",
 			OptType:        types.String,
 			CustomSetValue: cmdUtils.SetConfigOptionEC256PrivateKey,
 			ConfigKey:      &serveOpts.EC256PrivateKey,
