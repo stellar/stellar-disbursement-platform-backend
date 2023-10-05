@@ -58,7 +58,7 @@ var (
 //	|    |    |    |    |    |--- If the verification value matches, continue.
 //	|    |    |--- Check if the receiver wallet exists.
 //	|    |    |    |--- If the receiver wallet does not exist, create one.
-//	|    |    |    |--- If the receiver wallet exists, retry the invitation SMS.
+//	|    |    |    |--- If the receiver wallet exists and it's not REGISTERED, retry the invitation SMS.
 //	|    |    |--- Delete all payments tied to this disbursement.
 //	|    |    |--- Create all payments passed in the instructions.
 func (di DisbursementInstructionModel) ProcessAll(ctx context.Context, userID string, instructions []*DisbursementInstruction, disbursement *Disbursement, update *DisbursementUpdate, maxNumberOfInstructions int) error {
