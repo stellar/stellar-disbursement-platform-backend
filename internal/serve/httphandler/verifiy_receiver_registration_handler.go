@@ -27,6 +27,14 @@ func (e *ErrorInformationNotFound) Error() string {
 	return e.cause.Error()
 }
 
+type ErrorVerificationAttemptsExceeded struct {
+	cause error
+}
+
+func (e *ErrorVerificationAttemptsExceeded) Error() string {
+	return e.cause.Error()
+}
+
 const (
 	InformationNotFoundOnServer = "the information you provided could not be found in our server"
 )
@@ -118,7 +126,7 @@ func (v VerifyReceiverRegistrationHandler) processReceiverVerificationPII(
 	if v.Models.ReceiverVerification.ExceededAttempts(receiverVerification.Attempts) {
 		// TODO: the application currently can't recover from a max attempts exceeded error.
 		err = fmt.Errorf("the number of attempts to confirm the verification value exceededs the max attempts limit of %d", data.MaxAttemptsAllowed)
-		return &ErrorInformationNotFound{cause: err}
+		return &ErrorVerificationAttemptsExceeded{cause: err}
 	}
 
 	// STEP 3: check if the payload verification value matches the one saved in the database
@@ -290,6 +298,15 @@ func (v VerifyReceiverRegistrationHandler) VerifyReceiverRegistration(w http.Res
 			httperror.BadRequest(InformationNotFoundOnServer, atomicFnErr, nil).Render(w)
 			return
 		}
+		// if error is due to verification attempts being exceeded, we want to display the message with what that limit is clearly
+		// to the user
+		var errorVerficationAttemptsExceeded *ErrorVerificationAttemptsExceeded
+		if errors.As(atomicFnErr, &errorVerficationAttemptsExceeded) {
+			log.Ctx(ctx).Error(errorVerficationAttemptsExceeded.cause)
+			httperror.BadRequest(errorVerficationAttemptsExceeded.Error(), atomicFnErr, nil).Render(w)
+			return
+		}
+
 		httperror.InternalError(ctx, "", atomicFnErr, nil).Render(w)
 		return
 	}

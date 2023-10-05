@@ -32,7 +32,7 @@ type ReceiverVerificationInsert struct {
 	VerificationValue string            `db:"hashed_value"`
 }
 
-const MaxAttemptsAllowed = 6
+const MaxAttemptsAllowed = 15
 
 func (rvi *ReceiverVerificationInsert) Validate() error {
 	if strings.TrimSpace(rvi.ReceiverID) == "" {
