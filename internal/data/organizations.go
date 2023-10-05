@@ -21,6 +21,11 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
 )
 
+const (
+	DefaultSMSRegistrationMessageTemplate = "You have a payment waiting for you from the {{.OrganizationName}}. Click {{.RegistrationLink}} to register."
+	DefaultOTPMessageTemplate             = "{{.OTP}} is your {{.OrganizationName}} phone verification code."
+)
+
 type Organization struct {
 	ID                             string `json:"id" db:"id"`
 	Name                           string `json:"name" db:"name"`
