@@ -54,6 +54,19 @@ func createOrganizationProfileMultipartRequest(t *testing.T, url, fieldName, fil
 	return req, nil
 }
 
+func resetOrganizationInfo(t *testing.T, ctx context.Context, dbConnectionPool db.DBConnectionPool) {
+	t.Helper()
+
+	const q = `
+		UPDATE
+			organizations
+		SET
+			name = 'MyCustomAid', logo = NULL, timezone_utc_offset = '+00:00',
+			sms_registration_message_template = DEFAULT, otp_message_template = DEFAULT`
+	_, err := dbConnectionPool.ExecContext(ctx, q)
+	require.NoError(t, err)
+}
+
 func Test_PatchOrganizationProfileRequest_AreAllFieldsEmpty(t *testing.T) {
 	r := &PatchOrganizationProfileRequest{
 		OrganizationName:  "",
@@ -90,17 +103,6 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 
 	handler := &ProfileHandler{Models: models, MaxMemoryAllocation: DefaultMaxMemoryAllocation}
 	url := "/profile/organization"
-
-	resetOrganizationInfo := func(t *testing.T, ctx context.Context) {
-		const q = `
-			UPDATE
-				organizations
-			SET
-				name = 'MyCustomAid', logo = NULL, timezone_utc_offset = '+00:00',
-				sms_registration_message_template = DEFAULT, otp_message_template = DEFAULT`
-		_, err := dbConnectionPool.ExecContext(ctx, q)
-		require.NoError(t, err)
-	}
 
 	ctx := context.Background()
 
@@ -229,7 +231,7 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 	})
 
 	t.Run("updates the organization's name successfully", func(t *testing.T) {
-		resetOrganizationInfo(t, ctx)
+		resetOrganizationInfo(t, ctx, dbConnectionPool)
 
 		ctx = context.WithValue(ctx, middleware.TokenContextKey, "token")
 
@@ -263,7 +265,7 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 	})
 
 	t.Run("updates the organization's timezone UTC offset successfully", func(t *testing.T) {
-		resetOrganizationInfo(t, ctx)
+		resetOrganizationInfo(t, ctx, dbConnectionPool)
 
 		ctx = context.WithValue(ctx, middleware.TokenContextKey, "token")
 
@@ -299,7 +301,7 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 	})
 
 	t.Run("updates the organization's IsApprovalRequired successfully", func(t *testing.T) {
-		resetOrganizationInfo(t, ctx)
+		resetOrganizationInfo(t, ctx, dbConnectionPool)
 
 		ctx = context.WithValue(ctx, middleware.TokenContextKey, "token")
 
@@ -329,7 +331,7 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 	})
 
 	t.Run("updates the organization's logo successfully", func(t *testing.T) {
-		resetOrganizationInfo(t, ctx)
+		resetOrganizationInfo(t, ctx, dbConnectionPool)
 
 		ctx = context.WithValue(ctx, middleware.TokenContextKey, "token")
 
@@ -373,7 +375,7 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 		assert.Equal(t, "MyCustomAid", org.Name)
 
 		// JPEG logo
-		resetOrganizationInfo(t, ctx)
+		resetOrganizationInfo(t, ctx, dbConnectionPool)
 
 		org, err = models.Organizations.Get(ctx)
 		require.NoError(t, err)
@@ -415,7 +417,7 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 	})
 
 	t.Run("updates organization name, timezone UTC offset and logo successfully", func(t *testing.T) {
-		resetOrganizationInfo(t, ctx)
+		resetOrganizationInfo(t, ctx, dbConnectionPool)
 
 		ctx = context.WithValue(ctx, middleware.TokenContextKey, "token")
 
@@ -461,7 +463,7 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 	})
 
 	t.Run("updates organization's SMS Registration Message Template", func(t *testing.T) {
-		resetOrganizationInfo(t, ctx)
+		resetOrganizationInfo(t, ctx, dbConnectionPool)
 		ctx = context.WithValue(ctx, middleware.TokenContextKey, "token")
 
 		org, err := models.Organizations.Get(ctx)
@@ -528,7 +530,7 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 	})
 
 	t.Run("updates organization's OTP Message Template", func(t *testing.T) {
-		resetOrganizationInfo(t, ctx)
+		resetOrganizationInfo(t, ctx, dbConnectionPool)
 
 		ctx = context.WithValue(ctx, middleware.TokenContextKey, "token")
 
@@ -1231,9 +1233,9 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 		http.HandlerFunc(handler.GetOrganizationInfo).ServeHTTP(w, req)
 
 		resp := w.Result()
-
 		respBody, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
+		defer resp.Body.Close()
 
 		wantsBody := fmt.Sprintf(`
 			{
@@ -1242,6 +1244,71 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 				"distribution_account_public_key": %q,
 				"timezone_utc_offset": "+00:00",
 				"is_approval_required":false
+			}
+		`, distributionAccountPK)
+
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.JSONEq(t, wantsBody, string(respBody))
+	})
+
+	t.Run("returns the sms_registration_message_template and otp_message_template when they aren't the default values", func(t *testing.T) {
+		ctx = context.WithValue(ctx, middleware.TokenContextKey, "mytoken")
+
+		msg := "My custom receiver wallet registration invite. MyOrg 👋"
+		err := models.Organizations.Update(ctx, &data.OrganizationUpdate{
+			SMSRegistrationMessageTemplate: &msg,
+		})
+		require.NoError(t, err)
+
+		w := httptest.NewRecorder()
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+		require.NoError(t, err)
+		http.HandlerFunc(handler.GetOrganizationInfo).ServeHTTP(w, req)
+
+		resp := w.Result()
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		wantsBody := fmt.Sprintf(`
+			{
+				"logo_url": "http://localhost:8000/organization/logo?token=mytoken",
+				"name": "MyCustomAid",
+				"distribution_account_public_key": %q,
+				"timezone_utc_offset": "+00:00",
+				"is_approval_required":false,
+				"sms_registration_message_template": "My custom receiver wallet registration invite. MyOrg 👋"
+			}
+		`, distributionAccountPK)
+
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.JSONEq(t, wantsBody, string(respBody))
+
+		msg = "Here's your OTP Code to complete your registration. MyOrg 👋"
+		err = models.Organizations.Update(ctx, &data.OrganizationUpdate{
+			OTPMessageTemplate: &msg,
+		})
+		require.NoError(t, err)
+
+		w = httptest.NewRecorder()
+		req, err = http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+		require.NoError(t, err)
+		http.HandlerFunc(handler.GetOrganizationInfo).ServeHTTP(w, req)
+
+		resp = w.Result()
+		respBody, err = io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		wantsBody = fmt.Sprintf(`
+			{
+				"logo_url": "http://localhost:8000/organization/logo?token=mytoken",
+				"name": "MyCustomAid",
+				"distribution_account_public_key": %q,
+				"timezone_utc_offset": "+00:00",
+				"is_approval_required":false,
+				"sms_registration_message_template": "My custom receiver wallet registration invite. MyOrg 👋",
+				"otp_message_template": "Here's your OTP Code to complete your registration. MyOrg 👋"
 			}
 		`, distributionAccountPK)
 
