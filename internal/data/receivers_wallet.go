@@ -202,7 +202,8 @@ func (rw *ReceiverWalletModel) GetByReceiverIDsAndWalletID(ctx context.Context, 
 			rw.id,
 			rw.receiver_id as "receiver.id",
 			rw.wallet_id as "wallet.id",
-			rw.status
+			rw.status,
+			rw.invitation_sent_at
 		FROM receiver_wallets rw
 		WHERE rw.receiver_id = ANY($1)
 		AND rw.wallet_id = $2

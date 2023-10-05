@@ -14,3 +14,4 @@ WHERE
 -- +migrate Down
 ALTER TABLE
     public.receiver_wallets DROP COLUMN invitation_sent_at;
+    
