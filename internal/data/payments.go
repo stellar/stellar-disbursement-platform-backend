@@ -568,7 +568,7 @@ func (p *PaymentModel) RetryFailedPayments(ctx context.Context, email string, pa
 		`
 		_, err = dbTx.ExecContext(ctx, updateReceiverWallets, pq.Array(paymentIDs))
 		if err != nil {
-			return fmt.Errorf("updating resetting the receiver wallets' anchor platform transaction synced at: %w", err)
+			return fmt.Errorf("resetting the receiver wallets' anchor platform transaction synced at: %w", err)
 		}
 
 		return nil
