@@ -17,9 +17,9 @@ var (
 
 // ParseStrongECPublicKey parses a strong elliptic curve public key from a PEM-encoded string.
 // It returns the parsed public key or an error if the key is invalid or not strong enough.
-func ParseStrongECPublicKey(privateKeyStr string) (*ecdsa.PublicKey, error) {
+func ParseStrongECPublicKey(publicKeyStr string) (*ecdsa.PublicKey, error) {
 	// Decode PEM block
-	block, _ := pem.Decode([]byte(privateKeyStr))
+	block, _ := pem.Decode([]byte(publicKeyStr))
 	if block == nil {
 		return nil, fmt.Errorf("failed to decode PEM block containing public key: %w", ErrInvalidECPublicKey)
 	}
