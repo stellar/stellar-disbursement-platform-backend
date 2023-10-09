@@ -179,3 +179,11 @@ func WithSendReceiverWalletsSMSInvitationJobOption(o jobs.SendReceiverWalletsSMS
 		s.addJob(j)
 	}
 }
+
+func WithPatchAnchorPlatformTransactionsCompletionJobOption(apAPISvc anchorplatform.AnchorPlatformAPIServiceInterface, models *data.Models) SchedulerJobRegisterOption {
+	return func(s *Scheduler) {
+		j := jobs.NewPatchAnchorPlatformTransactionsCompletionJob(apAPISvc, models)
+		log.Infof("registering %s job to scheduler", j.GetName())
+		s.addJob(j)
+	}
+}

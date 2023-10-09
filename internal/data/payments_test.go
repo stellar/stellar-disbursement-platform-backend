@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/lib/pq"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
@@ -869,5 +870,348 @@ func Test_PaymentModelRetryFailedPayments(t *testing.T) {
 		assert.Len(t, payment2DB.StatusHistory, 2)
 		assert.Equal(t, ReadyPaymentStatus, payment2DB.StatusHistory[1].Status)
 		assert.Equal(t, "User user@test.com has requested to retry the payment - Previous Stellar Transaction ID: stellar-transaction-id-2", payment2DB.StatusHistory[1].StatusMessage)
+	})
+
+	t.Run("resets the anchor_platform_synced_at for the receiver wallets", func(t *testing.T) {
+		DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
+
+		recv := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
+		rw := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, recv.ID, wallet.ID, ReadyReceiversWalletStatus)
+
+		q := "UPDATE receiver_wallets SET anchor_platform_transaction_synced_at = NOW() WHERE id = $1"
+		_, err := dbConnectionPool.ExecContext(ctx, q, rw.ID)
+		require.NoError(t, err)
+
+		q = "SELECT anchor_platform_transaction_synced_at FROM receiver_wallets WHERE id = $1"
+		var syncedAt pq.NullTime
+		err = dbConnectionPool.GetContext(ctx, &syncedAt, q, rw.ID)
+		require.NoError(t, err)
+		assert.True(t, syncedAt.Valid)
+		assert.False(t, syncedAt.Time.IsZero())
+
+		payment1 := CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
+			Amount:               "1",
+			StellarTransactionID: "stellar-transaction-id-1",
+			StellarOperationID:   "operation-id-1",
+			Status:               FailedPaymentStatus,
+			Disbursement:         disbursement,
+			ReceiverWallet:       rw,
+			Asset:                *asset,
+		})
+
+		payment2 := CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
+			Amount:               "1",
+			StellarTransactionID: "stellar-transaction-id-2",
+			StellarOperationID:   "operation-id-2",
+			Status:               FailedPaymentStatus,
+			Disbursement:         disbursement,
+			ReceiverWallet:       rw,
+			Asset:                *asset,
+		})
+
+		err = models.Payment.RetryFailedPayments(ctx, "user@test.com", payment1.ID, payment2.ID)
+		require.NoError(t, err)
+
+		payment1DB, err := models.Payment.Get(ctx, payment1.ID, dbConnectionPool)
+		require.NoError(t, err)
+
+		payment2DB, err := models.Payment.Get(ctx, payment2.ID, dbConnectionPool)
+		require.NoError(t, err)
+
+		// Payment 1
+		assert.Equal(t, ReadyPaymentStatus, payment1DB.Status)
+		assert.Empty(t, payment1DB.StellarTransactionID)
+		assert.NotEqual(t, payment1.StatusHistory, payment1DB.StatusHistory)
+		assert.Len(t, payment1DB.StatusHistory, 2)
+		assert.Equal(t, ReadyPaymentStatus, payment1DB.StatusHistory[1].Status)
+		assert.Equal(t, "User user@test.com has requested to retry the payment - Previous Stellar Transaction ID: stellar-transaction-id-1", payment1DB.StatusHistory[1].StatusMessage)
+
+		// Payment 2
+		assert.Equal(t, ReadyPaymentStatus, payment2DB.Status)
+		assert.Empty(t, payment2DB.StellarTransactionID)
+		assert.NotEqual(t, payment2.StatusHistory, payment2DB.StatusHistory)
+		assert.Len(t, payment2DB.StatusHistory, 2)
+		assert.Equal(t, ReadyPaymentStatus, payment2DB.StatusHistory[1].Status)
+		assert.Equal(t, "User user@test.com has requested to retry the payment - Previous Stellar Transaction ID: stellar-transaction-id-2", payment2DB.StatusHistory[1].StatusMessage)
+
+		err = dbConnectionPool.GetContext(ctx, &syncedAt, q, rw.ID)
+		require.NoError(t, err)
+		assert.False(t, syncedAt.Valid)
+		assert.True(t, syncedAt.Time.IsZero())
+	})
+}
+
+func Test_PaymentModelGetAllReadyToPatchCompletionAnchorTransactions(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+
+	models, err := NewModels(dbConnectionPool)
+	require.NoError(t, err)
+
+	t.Run("return empty", func(t *testing.T) {
+		payments, err := models.Payment.GetAllReadyToPatchCompletionAnchorTransactions(ctx, dbConnectionPool)
+		require.NoError(t, err)
+		assert.Empty(t, payments)
+	})
+
+	t.Run("doesn't get payments when receiver wallet is not registered", func(t *testing.T) {
+		DeleteAllFixtures(t, ctx, dbConnectionPool)
+
+		country := CreateCountryFixture(t, ctx, dbConnectionPool, "BRA", "Brazil")
+		wallet := CreateWalletFixture(t, ctx, dbConnectionPool, "Wallet", "https://www.wallet.com", "www.wallet.com", "wallet://")
+		asset := CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
+
+		receiver := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
+		receiverWallet := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, ReadyReceiversWalletStatus)
+
+		disbursement := CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &Disbursement{
+			Country:           country,
+			Wallet:            wallet,
+			Asset:             asset,
+			Status:            StartedDisbursementStatus,
+			VerificationField: VerificationFieldDateOfBirth,
+		})
+
+		// It's not possible to have a payment in a end state when the receiver wallet is not registered yet
+		// but this is for validation purposes.
+		_ = CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
+			Amount:               "1",
+			StellarTransactionID: "stellar-transaction-id-1",
+			StellarOperationID:   "operation-id-1",
+			Status:               SuccessPaymentStatus,
+			Disbursement:         disbursement,
+			ReceiverWallet:       receiverWallet,
+			Asset:                *asset,
+		})
+
+		payments, err := models.Payment.GetAllReadyToPatchCompletionAnchorTransactions(ctx, dbConnectionPool)
+		require.NoError(t, err)
+		assert.Empty(t, payments)
+	})
+
+	t.Run("doesn't get payments not in the Success or Failed statuses", func(t *testing.T) {
+		DeleteAllFixtures(t, ctx, dbConnectionPool)
+
+		country := CreateCountryFixture(t, ctx, dbConnectionPool, "BRA", "Brazil")
+		wallet := CreateWalletFixture(t, ctx, dbConnectionPool, "Wallet", "https://www.wallet.com", "www.wallet.com", "wallet://")
+		asset := CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
+
+		receiver := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
+		receiverWallet := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, RegisteredReceiversWalletStatus)
+
+		disbursement := CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &Disbursement{
+			Country:           country,
+			Wallet:            wallet,
+			Asset:             asset,
+			Status:            StartedDisbursementStatus,
+			VerificationField: VerificationFieldDateOfBirth,
+		})
+
+		_ = CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
+			Amount:               "1",
+			StellarTransactionID: "stellar-transaction-id-1",
+			StellarOperationID:   "operation-id-1",
+			Status:               PendingPaymentStatus,
+			Disbursement:         disbursement,
+			ReceiverWallet:       receiverWallet,
+			Asset:                *asset,
+		})
+
+		payments, err := models.Payment.GetAllReadyToPatchCompletionAnchorTransactions(ctx, dbConnectionPool)
+		require.NoError(t, err)
+		assert.Empty(t, payments)
+	})
+
+	t.Run("gets only payments in the Success or Failed statuses", func(t *testing.T) {
+		DeleteAllFixtures(t, ctx, dbConnectionPool)
+
+		country := CreateCountryFixture(t, ctx, dbConnectionPool, "BRA", "Brazil")
+		wallet := CreateWalletFixture(t, ctx, dbConnectionPool, "Wallet", "https://www.wallet.com", "www.wallet.com", "wallet://")
+		asset := CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
+
+		receiver1 := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
+		receiverWallet1 := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver1.ID, wallet.ID, RegisteredReceiversWalletStatus)
+		receiver2 := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
+		receiverWallet2 := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver2.ID, wallet.ID, RegisteredReceiversWalletStatus)
+
+		disbursement := CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &Disbursement{
+			Country:           country,
+			Wallet:            wallet,
+			Asset:             asset,
+			Status:            StartedDisbursementStatus,
+			VerificationField: VerificationFieldDateOfBirth,
+		})
+
+		paymentReceiver1 := CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
+			Amount:               "1",
+			StellarTransactionID: "stellar-transaction-id-1",
+			StellarOperationID:   "operation-id-1",
+			Status:               SuccessPaymentStatus,
+			Disbursement:         disbursement,
+			ReceiverWallet:       receiverWallet1,
+			Asset:                *asset,
+		})
+
+		paymentReceiver2 := CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
+			Amount:               "1",
+			StellarTransactionID: "stellar-transaction-id-2",
+			StellarOperationID:   "operation-id-2",
+			Status:               FailedPaymentStatus,
+			Disbursement:         disbursement,
+			ReceiverWallet:       receiverWallet2,
+			Asset:                *asset,
+		})
+
+		payments, err := models.Payment.GetAllReadyToPatchCompletionAnchorTransactions(ctx, dbConnectionPool)
+		require.NoError(t, err)
+		require.Len(t, payments, 2)
+
+		assert.Equal(t, paymentReceiver1.ID, payments[0].ID)
+		assert.Equal(t, paymentReceiver1.Status, payments[0].Status)
+		assert.Equal(t, receiverWallet1.AnchorPlatformTransactionID, payments[0].ReceiverWallet.AnchorPlatformTransactionID)
+
+		assert.Equal(t, paymentReceiver2.ID, payments[1].ID)
+		assert.Equal(t, paymentReceiver2.Status, payments[1].Status)
+		assert.Equal(t, receiverWallet2.AnchorPlatformTransactionID, payments[1].ReceiverWallet.AnchorPlatformTransactionID)
+	})
+
+	t.Run("gets more than one payment when a receiver has payments in the Success or Failed statuses for the same wallet provider", func(t *testing.T) {
+		DeleteAllFixtures(t, ctx, dbConnectionPool)
+
+		country := CreateCountryFixture(t, ctx, dbConnectionPool, "BRA", "Brazil")
+		wallet := CreateWalletFixture(t, ctx, dbConnectionPool, "Wallet", "https://www.wallet.com", "www.wallet.com", "wallet://")
+		asset := CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
+
+		receiver := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
+		receiverWallet := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, RegisteredReceiversWalletStatus)
+
+		disbursement1 := CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &Disbursement{
+			Country:           country,
+			Wallet:            wallet,
+			Asset:             asset,
+			Status:            StartedDisbursementStatus,
+			VerificationField: VerificationFieldDateOfBirth,
+		})
+
+		disbursement2 := CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &Disbursement{
+			Country:           country,
+			Wallet:            wallet,
+			Asset:             asset,
+			Status:            StartedDisbursementStatus,
+			VerificationField: VerificationFieldDateOfBirth,
+		})
+
+		payment1 := CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
+			Amount:               "1",
+			StellarTransactionID: "stellar-transaction-id-1",
+			StellarOperationID:   "operation-id-1",
+			Status:               SuccessPaymentStatus,
+			Disbursement:         disbursement1,
+			ReceiverWallet:       receiverWallet,
+			Asset:                *asset,
+		})
+
+		payment2 := CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
+			Amount:               "1",
+			StellarTransactionID: "stellar-transaction-id-2",
+			StellarOperationID:   "operation-id-2",
+			Status:               FailedPaymentStatus,
+			Disbursement:         disbursement2,
+			ReceiverWallet:       receiverWallet,
+			Asset:                *asset,
+		})
+
+		payments, err := models.Payment.GetAllReadyToPatchCompletionAnchorTransactions(ctx, dbConnectionPool)
+		require.NoError(t, err)
+		require.Len(t, payments, 2)
+
+		assert.Equal(t, payment1.ID, payments[0].ID)
+		assert.Equal(t, payment1.Status, payments[0].Status)
+		assert.Equal(t, receiverWallet.AnchorPlatformTransactionID, payments[0].ReceiverWallet.AnchorPlatformTransactionID)
+
+		assert.Equal(t, payment2.ID, payments[1].ID)
+		assert.Equal(t, payment2.Status, payments[1].Status)
+		assert.Equal(t, receiverWallet.AnchorPlatformTransactionID, payments[1].ReceiverWallet.AnchorPlatformTransactionID)
+	})
+
+	t.Run("gets more than one payment when a receiver has payments for more than one wallet provider", func(t *testing.T) {
+		DeleteAllFixtures(t, ctx, dbConnectionPool)
+
+		country := CreateCountryFixture(t, ctx, dbConnectionPool, "BRA", "Brazil")
+		wallet1 := CreateWalletFixture(t, ctx, dbConnectionPool, "Wallet1", "https://www.wallet1.com", "www.wallet1.com", "wallet1://")
+		wallet2 := CreateWalletFixture(t, ctx, dbConnectionPool, "Wallet2", "https://www.wallet2.com", "www.wallet2.com", "wallet2://")
+		asset := CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
+
+		receiver := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
+		receiverWallet1 := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet1.ID, RegisteredReceiversWalletStatus)
+		receiverWallet2 := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet2.ID, RegisteredReceiversWalletStatus)
+
+		disbursement1 := CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &Disbursement{
+			Country:           country,
+			Wallet:            wallet1,
+			Asset:             asset,
+			Status:            StartedDisbursementStatus,
+			VerificationField: VerificationFieldDateOfBirth,
+		})
+
+		disbursement2 := CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &Disbursement{
+			Country:           country,
+			Wallet:            wallet2,
+			Asset:             asset,
+			Status:            StartedDisbursementStatus,
+			VerificationField: VerificationFieldDateOfBirth,
+		})
+
+		payment1 := CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
+			Amount:               "1",
+			StellarTransactionID: "stellar-transaction-id-1",
+			StellarOperationID:   "operation-id-1",
+			Status:               SuccessPaymentStatus,
+			Disbursement:         disbursement1,
+			ReceiverWallet:       receiverWallet1,
+			Asset:                *asset,
+		})
+
+		payment2 := CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
+			Amount:               "1",
+			StellarTransactionID: "stellar-transaction-id-2",
+			StellarOperationID:   "operation-id-2",
+			Status:               FailedPaymentStatus,
+			Disbursement:         disbursement1,
+			ReceiverWallet:       receiverWallet1,
+			Asset:                *asset,
+		})
+
+		payment3 := CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
+			Amount:               "1",
+			StellarTransactionID: "stellar-transaction-id-3",
+			StellarOperationID:   "operation-id-3",
+			Status:               FailedPaymentStatus,
+			Disbursement:         disbursement2,
+			ReceiverWallet:       receiverWallet2,
+			Asset:                *asset,
+		})
+
+		payments, err := models.Payment.GetAllReadyToPatchCompletionAnchorTransactions(ctx, dbConnectionPool)
+		require.NoError(t, err)
+		require.Len(t, payments, 3)
+
+		assert.Equal(t, payment1.ID, payments[0].ID)
+		assert.Equal(t, payment1.Status, payments[0].Status)
+		assert.Equal(t, receiverWallet1.AnchorPlatformTransactionID, payments[0].ReceiverWallet.AnchorPlatformTransactionID)
+
+		assert.Equal(t, payment2.ID, payments[1].ID)
+		assert.Equal(t, payment2.Status, payments[1].Status)
+		assert.Equal(t, receiverWallet1.AnchorPlatformTransactionID, payments[1].ReceiverWallet.AnchorPlatformTransactionID)
+
+		assert.Equal(t, payment3.ID, payments[2].ID)
+		assert.Equal(t, payment3.Status, payments[2].Status)
+		assert.Equal(t, receiverWallet2.AnchorPlatformTransactionID, payments[2].ReceiverWallet.AnchorPlatformTransactionID)
 	})
 }

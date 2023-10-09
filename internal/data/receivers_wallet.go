@@ -77,10 +77,11 @@ type ReceiverWallet struct {
 	OTPCreatedAt    *time.Time                   `json:"-" db:"otp_created_at"`
 	OTPConfirmedAt  *time.Time                   `json:"otp_confirmed_at,omitempty" db:"otp_confirmed_at"`
 	// AnchorPlatformAccountID is the ID of the SEP24 transaction initiated by the Anchor Platform where the receiver wallet was registered.
-	AnchorPlatformTransactionID string     `json:"anchor_platform_transaction_id,omitempty" db:"anchor_platform_transaction_id"`
-	InvitedAt                   *time.Time `json:"invited_at,omitempty" db:"invited_at"`
-	LastSmsSent                 *time.Time `json:"last_sms_sent,omitempty" db:"last_sms_sent"`
-	InvitationSentAt            *time.Time `json:"invitation_sent_at" db:"invitation_sent_at"`
+	AnchorPlatformTransactionID       string     `json:"anchor_platform_transaction_id,omitempty" db:"anchor_platform_transaction_id"`
+	AnchorPlatformTransactionSyncedAt *time.Time `json:"anchor_platform_transaction_synced_at,omitempty" db:"anchor_platform_transaction_synced_at"`
+	InvitedAt                         *time.Time `json:"invited_at,omitempty" db:"invited_at"`
+	LastSmsSent                       *time.Time `json:"last_sms_sent,omitempty" db:"last_sms_sent"`
+	InvitationSentAt                  *time.Time `json:"invitation_sent_at" db:"invitation_sent_at"`
 	ReceiverWalletStats
 }
 
@@ -497,6 +498,32 @@ func (rw *ReceiverWalletModel) GetByStellarAccountAndMemo(ctx context.Context, s
 	}
 
 	return &receiverWallets, nil
+}
+
+func (rw *ReceiverWalletModel) UpdateAnchorPlatformTransactionSyncedAt(ctx context.Context, receiverWalletID ...string) ([]ReceiverWallet, error) {
+	const query = `
+		UPDATE
+			receiver_wallets
+		SET
+			anchor_platform_transaction_synced_at = NOW()
+		WHERE
+			id = ANY($1)
+			AND anchor_platform_transaction_synced_at IS NULL
+			AND status = $2 -- 'REGISTERED'::receiver_wallet_status
+		RETURNING
+			id, COALESCE(stellar_address, '') AS stellar_address, COALESCE(stellar_memo, '') AS stellar_memo,
+			COALESCE(stellar_memo_type, '') AS stellar_memo_type, status, status_history,
+			COALESCE(otp, '') AS otp, otp_confirmed_at, COALESCE(anchor_platform_transaction_id, '') AS anchor_platform_transaction_id,
+			anchor_platform_transaction_synced_at
+	`
+
+	var receiverWallets []ReceiverWallet
+	err := rw.dbConnectionPool.SelectContext(ctx, &receiverWallets, query, pq.Array(receiverWalletID), RegisteredReceiversWalletStatus)
+	if err != nil {
+		return nil, fmt.Errorf("updating anchor platform transaction synced at: %w", err)
+	}
+
+	return receiverWallets, nil
 }
 
 // RetryInvitationSMS sets null the invitation_sent_at of a receiver wallet.

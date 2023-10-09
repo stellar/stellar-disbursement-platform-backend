@@ -31,6 +31,8 @@ const (
 
 type AnchorPlatformAPIServiceInterface interface {
 	PatchAnchorTransactionsPostRegistration(ctx context.Context, apTxPatch ...APSep24TransactionPatchPostRegistration) error
+	PatchAnchorTransactionsPostSuccessCompletion(ctx context.Context, apTxPatch ...APSep24TransactionPatchPostSuccess) error
+	PatchAnchorTransactionsPostErrorCompletion(ctx context.Context, apTxPatch ...APSep24TransactionPatchPostError) error
 	IsAnchorProtectedByAuth(ctx context.Context) (bool, error)
 }
 
@@ -75,6 +77,30 @@ func (a *AnchorPlatformAPIService) PatchAnchorTransactionsPostRegistration(ctx c
 		apTxPatches = append(apTxPatches, APSep24TransactionPatch(apTxPatch))
 	}
 
+	return a.updateAnchorTransactions(ctx, apTxPatches...)
+}
+
+func (a *AnchorPlatformAPIService) PatchAnchorTransactionsPostSuccessCompletion(ctx context.Context, apTxPostSuccessCompletion ...APSep24TransactionPatchPostSuccess) error {
+	var apTxPatches []APSep24TransactionPatch
+	for _, tx := range apTxPostSuccessCompletion {
+		apTxPatch, err := utils.ConvertType[APSep24TransactionPatchPostSuccess, APSep24TransactionPatch](tx)
+		if err != nil {
+			return fmt.Errorf("converting apTxPostSuccessCompletion into apTxPatch: %w", err)
+		}
+		apTxPatches = append(apTxPatches, APSep24TransactionPatch(apTxPatch))
+	}
+	return a.updateAnchorTransactions(ctx, apTxPatches...)
+}
+
+func (a *AnchorPlatformAPIService) PatchAnchorTransactionsPostErrorCompletion(ctx context.Context, apTxPostErrorCompletion ...APSep24TransactionPatchPostError) error {
+	var apTxPatches []APSep24TransactionPatch
+	for _, tx := range apTxPostErrorCompletion {
+		apTxPatch, err := utils.ConvertType[APSep24TransactionPatchPostError, APSep24TransactionPatch](tx)
+		if err != nil {
+			return fmt.Errorf("converting apTxPostErrorCompletion into apTxPatch: %w", err)
+		}
+		apTxPatches = append(apTxPatches, APSep24TransactionPatch(apTxPatch))
+	}
 	return a.updateAnchorTransactions(ctx, apTxPatches...)
 }
 

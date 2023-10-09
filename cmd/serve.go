@@ -74,6 +74,7 @@ func (s *ServerService) GetSchedulerJobRegistrars(ctx context.Context, serveOpts
 			CrashTrackerClient:       serveOpts.CrashTrackerClient.Clone(),
 		}),
 		scheduler.WithAPAuthEnforcementJob(apAPIService, serveOpts.MonitorService, serveOpts.CrashTrackerClient.Clone()),
+		scheduler.WithPatchAnchorPlatformTransactionsCompletionJobOption(apAPIService, models),
 	}, nil
 }
 
