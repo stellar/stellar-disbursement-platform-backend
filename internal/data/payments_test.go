@@ -1214,4 +1214,45 @@ func Test_PaymentModelGetAllReadyToPatchCompletionAnchorTransactions(t *testing.
 		assert.Equal(t, payment3.Status, payments[2].Status)
 		assert.Equal(t, receiverWallet2.AnchorPlatformTransactionID, payments[2].ReceiverWallet.AnchorPlatformTransactionID)
 	})
+
+	t.Run("doesn't return error when receiver wallet has the stellar_memo and stellar_memo_type null", func(t *testing.T) {
+		DeleteAllFixtures(t, ctx, dbConnectionPool)
+
+		country := CreateCountryFixture(t, ctx, dbConnectionPool, "BRA", "Brazil")
+		wallet := CreateWalletFixture(t, ctx, dbConnectionPool, "Wallet1", "https://www.wallet1.com", "www.wallet1.com", "wallet1://")
+		asset := CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
+
+		receiver := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
+		receiverWallet := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, RegisteredReceiversWalletStatus)
+
+		disbursement := CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &Disbursement{
+			Country:           country,
+			Wallet:            wallet,
+			Asset:             asset,
+			Status:            StartedDisbursementStatus,
+			VerificationField: VerificationFieldDateOfBirth,
+		})
+
+		payment := CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
+			Amount:               "1",
+			StellarTransactionID: "stellar-transaction-id-1",
+			StellarOperationID:   "operation-id-1",
+			Status:               SuccessPaymentStatus,
+			Disbursement:         disbursement,
+			ReceiverWallet:       receiverWallet,
+			Asset:                *asset,
+		})
+
+		const q = "UPDATE receiver_wallets SET stellar_memo = NULL, stellar_memo_type = NULL WHERE id = $1"
+		_, err := dbConnectionPool.ExecContext(ctx, q, receiverWallet.ID)
+		require.NoError(t, err)
+
+		payments, err := models.Payment.GetAllReadyToPatchCompletionAnchorTransactions(ctx, dbConnectionPool)
+		require.NoError(t, err)
+		require.Len(t, payments, 1)
+
+		assert.Equal(t, payment.ID, payments[0].ID)
+		assert.Equal(t, payment.Status, payments[0].Status)
+		assert.Equal(t, receiverWallet.AnchorPlatformTransactionID, payments[0].ReceiverWallet.AnchorPlatformTransactionID)
+	})
 }
