@@ -805,172 +805,58 @@ func Test_ReceiverWallet_GetAllPendingRegistration(t *testing.T) {
 	receiver := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
 	wallet1 := CreateWalletFixture(t, ctx, dbConnectionPool, "Wallet1", "https://wallet1.com", "www.wallet.com", "wallet1://")
 	wallet2 := CreateWalletFixture(t, ctx, dbConnectionPool, "Wallet2", "https://wallet2.com", "www.wallet2.com", "wallet2://")
+	wallet3 := CreateWalletFixture(t, ctx, dbConnectionPool, "Wallet3", "https://wallet3.com", "www.wallet3.com", "wallet3://")
+	wallet4 := CreateWalletFixture(t, ctx, dbConnectionPool, "Wallet4", "https://wallet4.com", "www.wallet4.com", "wallet4://")
 
 	rwm := ReceiverWalletModel{dbConnectionPool: dbConnectionPool}
 
-	t.Run("gets all receiver wallets pending registration when no message were sent", func(t *testing.T) {
+	t.Run("gets all receiver wallets pending registration", func(t *testing.T) {
 		DeleteAllMessagesFixtures(t, ctx, dbConnectionPool)
 		DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
 
 		_ = CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet1.ID, DraftReceiversWalletStatus)
-		rw2 := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet2.ID, ReadyReceiversWalletStatus)
+		_ = CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet2.ID, RegisteredReceiversWalletStatus)
+		rw3 := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet3.ID, ReadyReceiversWalletStatus)
+		rw4 := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet4.ID, ReadyReceiversWalletStatus)
 
-		rws, err := rwm.GetAllPendingRegistration(ctx, 7, 3)
+		var invitationSentAt time.Time
+		const q = `UPDATE receiver_wallets SET invitation_sent_at = NOW() WHERE id = $1 RETURNING invitation_sent_at`
+		err := dbConnectionPool.GetContext(ctx, &invitationSentAt, q, rw4.ID)
+		require.NoError(t, err)
+
+		rws, err := rwm.GetAllPendingRegistration(ctx)
 		require.NoError(t, err)
 
 		expectedRWs := []*ReceiverWallet{
 			{
-				ID: rw2.ID,
+				ID: rw3.ID,
 				Receiver: Receiver{
 					ID:          receiver.ID,
 					PhoneNumber: receiver.PhoneNumber,
 					Email:       receiver.Email,
 				},
 				Wallet: Wallet{
-					ID:   wallet2.ID,
-					Name: wallet2.Name,
+					ID:   wallet3.ID,
+					Name: wallet3.Name,
 				},
 			},
-		}
-
-		assert.Len(t, rws, 1)
-		assert.Equal(t, rws, expectedRWs)
-	})
-
-	t.Run("gets all receiver wallets pending registration when days since last invitation is satisfied", func(t *testing.T) {
-		DeleteAllMessagesFixtures(t, ctx, dbConnectionPool)
-		DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
-
-		rw1 := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet1.ID, DraftReceiversWalletStatus)
-		rw2 := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet2.ID, ReadyReceiversWalletStatus)
-
-		CreateMessageFixture(t, ctx, dbConnectionPool, &Message{
-			Type:             message.MessengerTypeTwilioSMS,
-			AssetID:          nil,
-			ReceiverID:       receiver.ID,
-			WalletID:         wallet1.ID,
-			ReceiverWalletID: &rw1.ID,
-			Status:           PendingMessageStatus,
-			CreatedAt:        time.Now().AddDate(0, 0, -3).UTC(),
-			UpdatedAt:        time.Now().UTC(),
-		})
-
-		CreateMessageFixture(t, ctx, dbConnectionPool, &Message{
-			Type:             message.MessengerTypeTwilioSMS,
-			AssetID:          nil,
-			ReceiverID:       receiver.ID,
-			WalletID:         wallet2.ID,
-			ReceiverWalletID: &rw2.ID,
-			Status:           SuccessMessageStatus,
-			CreatedAt:        time.Now().AddDate(0, 0, -8).UTC(),
-			UpdatedAt:        time.Now().AddDate(0, 0, -8).UTC(),
-		})
-
-		expectedRWs := []*ReceiverWallet{
 			{
-				ID: rw2.ID,
+				ID: rw4.ID,
 				Receiver: Receiver{
 					ID:          receiver.ID,
 					PhoneNumber: receiver.PhoneNumber,
 					Email:       receiver.Email,
 				},
 				Wallet: Wallet{
-					ID:   wallet2.ID,
-					Name: wallet2.Name,
+					ID:   wallet4.ID,
+					Name: wallet4.Name,
 				},
+				InvitationSentAt: &invitationSentAt,
 			},
 		}
 
-		rws, err := rwm.GetAllPendingRegistration(ctx, 6, 3)
-		require.NoError(t, err)
-
-		assert.Len(t, rws, 1)
-		assert.Equal(t, expectedRWs, rws)
-	})
-
-	t.Run("get all receiver wallets pending registration when max tries isn't reached", func(t *testing.T) {
-		DeleteAllMessagesFixtures(t, ctx, dbConnectionPool)
-		DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
-
-		rw1 := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet1.ID, ReadyReceiversWalletStatus)
-		rw2 := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet2.ID, ReadyReceiversWalletStatus)
-
-		// Invitations sent for rw1 - reached max tries
-		CreateMessageFixture(t, ctx, dbConnectionPool, &Message{
-			Type:             message.MessengerTypeTwilioSMS,
-			AssetID:          nil,
-			ReceiverID:       receiver.ID,
-			WalletID:         wallet1.ID,
-			ReceiverWalletID: &rw1.ID,
-			Status:           FailureMessageStatus,
-			CreatedAt:        time.Now().AddDate(0, 0, -3).UTC(),
-			UpdatedAt:        time.Now().AddDate(0, 0, -3).UTC(),
-		})
-
-		CreateMessageFixture(t, ctx, dbConnectionPool, &Message{
-			Type:             message.MessengerTypeTwilioSMS,
-			AssetID:          nil,
-			ReceiverID:       receiver.ID,
-			WalletID:         wallet1.ID,
-			ReceiverWalletID: &rw1.ID,
-			Status:           PendingMessageStatus,
-			CreatedAt:        time.Now().AddDate(0, 0, -6).UTC(),
-			UpdatedAt:        time.Now().AddDate(0, 0, -6).UTC(),
-		})
-
-		CreateMessageFixture(t, ctx, dbConnectionPool, &Message{
-			Type:             message.MessengerTypeTwilioSMS,
-			AssetID:          nil,
-			ReceiverID:       receiver.ID,
-			WalletID:         wallet1.ID,
-			ReceiverWalletID: &rw1.ID,
-			Status:           SuccessMessageStatus,
-			CreatedAt:        time.Now().AddDate(0, 0, -9).UTC(),
-			UpdatedAt:        time.Now().AddDate(0, 0, -9).UTC(),
-		})
-
-		// Invitations sent for rw2
-		CreateMessageFixture(t, ctx, dbConnectionPool, &Message{
-			Type:             message.MessengerTypeTwilioSMS,
-			AssetID:          nil,
-			ReceiverID:       receiver.ID,
-			WalletID:         wallet2.ID,
-			ReceiverWalletID: &rw2.ID,
-			Status:           SuccessMessageStatus,
-			CreatedAt:        time.Now().AddDate(0, 0, -5).UTC(),
-			UpdatedAt:        time.Now().AddDate(0, 0, -5).UTC(),
-		})
-
-		CreateMessageFixture(t, ctx, dbConnectionPool, &Message{
-			Type:             message.MessengerTypeTwilioSMS,
-			AssetID:          nil,
-			ReceiverID:       receiver.ID,
-			WalletID:         wallet2.ID,
-			ReceiverWalletID: &rw2.ID,
-			Status:           SuccessMessageStatus,
-			CreatedAt:        time.Now().AddDate(0, 0, -8).UTC(),
-			UpdatedAt:        time.Now().AddDate(0, 0, -8).UTC(),
-		})
-
-		expectedRWs := []*ReceiverWallet{
-			{
-				ID: rw2.ID,
-				Receiver: Receiver{
-					ID:          receiver.ID,
-					PhoneNumber: receiver.PhoneNumber,
-					Email:       receiver.Email,
-				},
-				Wallet: Wallet{
-					ID:   wallet2.ID,
-					Name: wallet2.Name,
-				},
-			},
-		}
-
-		rws, err := rwm.GetAllPendingRegistration(ctx, 3, 3)
-		require.NoError(t, err)
-
-		assert.Equal(t, expectedRWs, rws)
+		assert.Len(t, rws, 2)
+		assert.ElementsMatch(t, rws, expectedRWs)
 	})
 }
 
@@ -1083,7 +969,7 @@ func Test_ReceiverWalletModelUpdateAnchorPlatformTransactionSyncedAt(t *testing.
 
 	receiverWalletModel := ReceiverWalletModel{dbConnectionPool: dbConnectionPool}
 
-	t.Run("doesn't update", func(t *testing.T) {
+	t.Run("doesn't update when there's no receiver wallet IDs", func(t *testing.T) {
 		receiverWallets, err := receiverWalletModel.UpdateAnchorPlatformTransactionSyncedAt(ctx)
 		require.NoError(t, err)
 		assert.Empty(t, receiverWallets)
@@ -1175,5 +1061,90 @@ func Test_RetryInvitationSMS(t *testing.T) {
 		receiverWallet, err := receiverWalletModel.RetryInvitationSMS(ctx, dbConnectionPool, rw.ID)
 		require.NoError(t, err)
 		assert.Nil(t, receiverWallet.InvitationSentAt)
+	})
+}
+
+func Test_ReceiverWalletModelUpdateInvitationSentAt(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+
+	receiverWalletModel := ReceiverWalletModel{dbConnectionPool: dbConnectionPool}
+
+	t.Run("doesn't update when there's no receiver wallet IDs", func(t *testing.T) {
+		receiverWallets, err := receiverWalletModel.UpdateInvitationSentAt(ctx, dbConnectionPool)
+		require.NoError(t, err)
+		assert.Empty(t, receiverWallets)
+	})
+
+	t.Run("doesn't update receiver wallets not in the READY status", func(t *testing.T) {
+		DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
+		DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
+		DeleteAllWalletFixtures(t, ctx, dbConnectionPool)
+
+		wallet := CreateWalletFixture(t, ctx, dbConnectionPool, "wallet", "https://www.wallet.com", "www.wallet.com", "wallet1://")
+		receiver := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
+		receiverWallet := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, RegisteredReceiversWalletStatus)
+
+		receiverWallets, err := receiverWalletModel.UpdateInvitationSentAt(ctx, dbConnectionPool, receiverWallet.ID)
+		require.NoError(t, err)
+		assert.Empty(t, receiverWallets)
+
+		var invitationSentAt time.Time
+		const q = "UPDATE receiver_wallets SET invitation_sent_at = NOW() - interval '2 days' WHERE id = $1 RETURNING invitation_sent_at"
+		err = dbConnectionPool.GetContext(ctx, &invitationSentAt, q, receiverWallet.ID)
+		require.NoError(t, err)
+
+		receiverWallets, err = receiverWalletModel.UpdateInvitationSentAt(ctx, dbConnectionPool, receiverWallet.ID)
+		require.NoError(t, err)
+		assert.Empty(t, receiverWallets)
+
+		receiverWalletsDB, err := receiverWalletModel.GetByReceiverIDsAndWalletID(ctx, dbConnectionPool, []string{receiver.ID}, wallet.ID)
+		require.NoError(t, err)
+		require.Len(t, receiverWalletsDB, 1)
+		assert.Equal(t, receiverWallet.ID, receiverWalletsDB[0].ID)
+		assert.Equal(t, invitationSentAt, *receiverWalletsDB[0].InvitationSentAt)
+	})
+
+	t.Run("updates invitation sent at successfully", func(t *testing.T) {
+		DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
+		DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
+		DeleteAllWalletFixtures(t, ctx, dbConnectionPool)
+
+		wallet := CreateWalletFixture(t, ctx, dbConnectionPool, "wallet", "https://www.wallet.com", "www.wallet.com", "wallet1://")
+		receiver := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
+		receiverWallet := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, ReadyReceiversWalletStatus)
+
+		receiverWallets, err := receiverWalletModel.UpdateInvitationSentAt(ctx, dbConnectionPool, receiverWallet.ID)
+		require.NoError(t, err)
+		require.Len(t, receiverWallets, 1)
+		assert.Equal(t, receiverWallet.ID, receiverWallets[0].ID)
+	})
+
+	t.Run("updates invitation sent at when is already set", func(t *testing.T) {
+		DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
+		DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
+		DeleteAllWalletFixtures(t, ctx, dbConnectionPool)
+
+		wallet := CreateWalletFixture(t, ctx, dbConnectionPool, "wallet", "https://www.wallet.com", "www.wallet.com", "wallet1://")
+		receiver := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
+		receiverWallet := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, ReadyReceiversWalletStatus)
+
+		var invitationSentAt time.Time
+		const q = "UPDATE receiver_wallets SET invitation_sent_at = NOW() - interval '2 days' WHERE id = $1 RETURNING invitation_sent_at"
+		err := dbConnectionPool.GetContext(ctx, &invitationSentAt, q, receiverWallet.ID)
+		require.NoError(t, err)
+
+		receiverWallets, err := receiverWalletModel.UpdateInvitationSentAt(ctx, dbConnectionPool, receiverWallet.ID)
+		require.NoError(t, err)
+		require.Len(t, receiverWallets, 1)
+		assert.Equal(t, receiverWallet.ID, receiverWallets[0].ID)
+		require.NotNil(t, receiverWallets[0].InvitationSentAt)
+		assert.True(t, invitationSentAt.Before(*receiverWallets[0].InvitationSentAt))
 	})
 }

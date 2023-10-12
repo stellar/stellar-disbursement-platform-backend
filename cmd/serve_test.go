@@ -147,8 +147,7 @@ func Test_serve(t *testing.T) {
 	}
 
 	schedulerOptions := scheduler.SchedulerOptions{
-		MinDaysBetweenRetries: 7,
-		MaxRetries:            3,
+		MaxInvitationSMSResendAttempts: 3,
 	}
 
 	// mock server

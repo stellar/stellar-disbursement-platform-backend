@@ -225,10 +225,31 @@ func (a *AssetModel) GetAssetsPerReceiverWallet(ctx context.Context, receiverWal
 				p.id, p.asset_id, d.wallet_id
 			ORDER BY
 				p.updated_at DESC
+		), messages_resent_since_invitation AS (
+			-- Gets the number of attempts we resent the invitation message to the receiver by wallet with its asset.
+			SELECT
+				m.receiver_wallet_id,
+				m.wallet_id,
+				m.asset_id,
+				COUNT(*) AS total_invitation_sms_resent_attempts
+			FROM
+				messages m
+				INNER JOIN receiver_wallets rw ON rw.id = m.receiver_wallet_id AND rw.wallet_id = m.wallet_id
+			WHERE
+				rw.id = ANY($2)
+				AND rw.invitation_sent_at IS NOT NULL
+				AND m.created_at > rw.invitation_sent_at
+				AND m.status = 'SUCCESS'::message_status
+			GROUP BY
+				m.receiver_wallet_id,
+				m.wallet_id,
+				m.asset_id
 		)
 		SELECT DISTINCT
 			lpw.wallet_id,
 			rw.id AS "receiver_wallet.id",
+			rw.invitation_sent_at AS "receiver_wallet.invitation_sent_at",
+			COALESCE(mrsi.total_invitation_sms_resent_attempts, 0) AS "receiver_wallet.total_invitation_sms_resent_attempts",
 			r.id AS "receiver_wallet.receiver.id",
 			r.phone_number AS "receiver_wallet.receiver.phone_number",
 			r.email AS "receiver_wallet.receiver.email",
@@ -243,6 +264,7 @@ func (a *AssetModel) GetAssetsPerReceiverWallet(ctx context.Context, receiverWal
 			INNER JOIN payments p ON p.id = lpw.payment_id
 			INNER JOIN receiver_wallets rw ON rw.id = p.receiver_wallet_id
 			INNER JOIN receivers r ON r.id = rw.receiver_id
+			LEFT JOIN messages_resent_since_invitation mrsi ON rw.id = mrsi.receiver_wallet_id AND rw.wallet_id = mrsi.wallet_id AND a.id = mrsi.asset_id
 		WHERE
 			rw.id = ANY($2)
 	`

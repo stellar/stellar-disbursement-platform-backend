@@ -91,6 +91,9 @@ type ReceiverWalletStats struct {
 	FailedPayments    string          `json:"failed_payments,omitempty" db:"failed_payments"`
 	RemainingPayments string          `json:"remaining_payments,omitempty" db:"remaining_payments"`
 	ReceivedAmounts   ReceivedAmounts `json:"received_amounts,omitempty" db:"received_amounts"`
+	// TotalInvitationSMSResentAttempts holds how many times were resent the Invitation SMS to the receiver
+	// since the last invitation has been sent.
+	TotalInvitationSMSResentAttempts int64 `json:"-" db:"total_invitation_sms_resent_attempts"`
 }
 
 type ReceiverWalletModel struct {
@@ -217,25 +220,11 @@ func (rw *ReceiverWalletModel) GetByReceiverIDsAndWalletID(ctx context.Context, 
 	return receiverWallets, nil
 }
 
-func (rw *ReceiverWalletModel) GetAllPendingRegistration(ctx context.Context, daysSinceLastInvitationMessageSent, maxTries int) ([]*ReceiverWallet, error) {
+func (rw *ReceiverWalletModel) GetAllPendingRegistration(ctx context.Context) ([]*ReceiverWallet, error) {
 	const query = `
-		WITH excluded_receiver_wallet_ids AS (
-			-- Messages sent in last 7 days
-			SELECT m.receiver_wallet_id
-			FROM messages m
-			WHERE m.created_at >= $1
-			GROUP BY m.receiver_wallet_id
-			
-			UNION
-			
-			-- Receiver wallets that have reached max message tries
-			SELECT m.receiver_wallet_id
-			FROM messages m
-			GROUP BY m.receiver_wallet_id
-			HAVING COUNT(*) >= $2
-		)
 		SELECT
 			rw.id,
+			rw.invitation_sent_at,
 			r.id AS "receiver.id",
 			r.phone_number AS "receiver.phone_number",
 			r.email AS "receiver.email",
@@ -247,19 +236,10 @@ func (rw *ReceiverWalletModel) GetAllPendingRegistration(ctx context.Context, da
 			INNER JOIN wallets w ON w.id = rw.wallet_id
 		WHERE
 			rw.status = 'READY'
-			AND rw.id NOT IN (
-				SELECT receiver_wallet_id FROM excluded_receiver_wallet_ids
-			)
 	`
 
-	var (
-		receiverWallets []*ReceiverWallet
-		err             error
-	)
-
-	interval := time.Now().AddDate(0, 0, -daysSinceLastInvitationMessageSent).UTC()
-	err = rw.dbConnectionPool.SelectContext(ctx, &receiverWallets, query, interval, maxTries)
-
+	receiverWallets := make([]*ReceiverWallet, 0)
+	err := rw.dbConnectionPool.SelectContext(ctx, &receiverWallets, query)
 	if err != nil {
 		return nil, fmt.Errorf("error querying pending registration receiver wallets: %w", err)
 	}
@@ -555,4 +535,29 @@ func (rw *ReceiverWalletModel) RetryInvitationSMS(ctx context.Context, sqlExec d
 	}
 
 	return &receiverWallet, nil
+}
+
+func (rw *ReceiverWalletModel) UpdateInvitationSentAt(ctx context.Context, sqlExec db.SQLExecuter, receiverWalletID ...string) ([]ReceiverWallet, error) {
+	const query = `
+		UPDATE
+			receiver_wallets
+		SET
+			invitation_sent_at = NOW()
+		WHERE
+			id = ANY($1)
+			AND status = $2 -- 'READY'::receiver_wallet_status
+		RETURNING
+			id, COALESCE(stellar_address, '') AS stellar_address, COALESCE(stellar_memo, '') AS stellar_memo,
+			COALESCE(stellar_memo_type, '') AS stellar_memo_type, status, status_history,
+			COALESCE(otp, '') AS otp, otp_confirmed_at, COALESCE(anchor_platform_transaction_id, '') AS anchor_platform_transaction_id,
+			anchor_platform_transaction_synced_at, invitation_sent_at
+	`
+
+	var receiverWallets []ReceiverWallet
+	err := sqlExec.SelectContext(ctx, &receiverWallets, query, pq.Array(receiverWalletID), ReadyReceiversWalletStatus)
+	if err != nil {
+		return nil, fmt.Errorf("updating invitation sent at: %w", err)
+	}
+
+	return receiverWallets, nil
 }

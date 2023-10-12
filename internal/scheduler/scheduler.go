@@ -27,8 +27,7 @@ type Scheduler struct {
 }
 
 type SchedulerOptions struct {
-	MinDaysBetweenRetries int
-	MaxRetries            int
+	MaxInvitationSMSResendAttempts int64
 }
 
 type SchedulerJobRegisterOption func(*Scheduler)
