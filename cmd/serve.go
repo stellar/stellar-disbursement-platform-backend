@@ -68,7 +68,7 @@ func (s *ServerService) GetSchedulerJobRegistrars(ctx context.Context, serveOpts
 			AnchorPlatformBaseSepURL:       serveOpts.AnchorPlatformBaseSepURL,
 			Models:                         models,
 			MessengerClient:                serveOpts.SMSMessengerClient,
-			MaxInvitationSMSResendAttempts: schedulerOptions.MaxInvitationSMSResendAttempts,
+			MaxInvitationSMSResendAttempts: int64(schedulerOptions.MaxInvitationSMSResendAttempts),
 			Sep10SigningPrivateKey:         serveOpts.Sep10SigningPrivateKey,
 			CrashTrackerClient:             serveOpts.CrashTrackerClient.Clone(),
 		}),
@@ -199,7 +199,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 		{
 			Name:        "max-invitation-sms-resend-attempts",
 			Usage:       "The maximum number of attempts to resend the SMS invitation to the Receiver Wallets.",
-			OptType:     types.Int64,
+			OptType:     types.Int,
 			ConfigKey:   &schedulerOptions.MaxInvitationSMSResendAttempts,
 			FlagDefault: 3,
 			Required:    true,

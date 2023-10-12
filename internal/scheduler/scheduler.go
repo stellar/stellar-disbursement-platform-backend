@@ -27,7 +27,7 @@ type Scheduler struct {
 }
 
 type SchedulerOptions struct {
-	MaxInvitationSMSResendAttempts int64
+	MaxInvitationSMSResendAttempts int
 }
 
 type SchedulerJobRegisterOption func(*Scheduler)
