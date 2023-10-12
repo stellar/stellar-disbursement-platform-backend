@@ -62,7 +62,8 @@ func resetOrganizationInfo(t *testing.T, ctx context.Context, dbConnectionPool d
 			organizations
 		SET
 			name = 'MyCustomAid', logo = NULL, timezone_utc_offset = '+00:00',
-			sms_registration_message_template = DEFAULT, otp_message_template = DEFAULT`
+			sms_registration_message_template = DEFAULT, otp_message_template = DEFAULT,
+			sms_resend_interval = NULL`
 	_, err := dbConnectionPool.ExecContext(ctx, q)
 	require.NoError(t, err)
 }
@@ -255,7 +256,7 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
-		assert.JSONEq(t, `{"message": "organization profile updated successfully"}`, string(respBody))
+		assert.JSONEq(t, `{"message": "updated successfully"}`, string(respBody))
 
 		org, err = models.Organizations.Get(ctx)
 		require.NoError(t, err)
@@ -290,7 +291,7 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
-		assert.JSONEq(t, `{"message": "organization profile updated successfully"}`, string(respBody))
+		assert.JSONEq(t, `{"message": "updated successfully"}`, string(respBody))
 
 		org, err = models.Organizations.Get(ctx)
 		require.NoError(t, err)
@@ -323,7 +324,7 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
-		assert.JSONEq(t, `{"message": "organization profile updated successfully"}`, string(respBody))
+		assert.JSONEq(t, `{"message": "updated successfully"}`, string(respBody))
 
 		org, err = models.Organizations.Get(ctx)
 		require.NoError(t, err)
@@ -361,7 +362,7 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
-		assert.JSONEq(t, `{"message": "organization profile updated successfully"}`, string(respBody))
+		assert.JSONEq(t, `{"message": "updated successfully"}`, string(respBody))
 
 		org, err = models.Organizations.Get(ctx)
 		require.NoError(t, err)
@@ -402,7 +403,7 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
-		assert.JSONEq(t, `{"message": "organization profile updated successfully"}`, string(respBody))
+		assert.JSONEq(t, `{"message": "updated successfully"}`, string(respBody))
 
 		org, err = models.Organizations.Get(ctx)
 		require.NoError(t, err)
@@ -447,7 +448,7 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
-		assert.JSONEq(t, `{"message": "organization profile updated successfully"}`, string(respBody))
+		assert.JSONEq(t, `{"message": "updated successfully"}`, string(respBody))
 
 		org, err = models.Organizations.Get(ctx)
 		require.NoError(t, err)
@@ -484,7 +485,7 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 		defer resp.Body.Close()
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
-		assert.JSONEq(t, `{"message": "organization profile updated successfully"}`, string(respBody))
+		assert.JSONEq(t, `{"message": "updated successfully"}`, string(respBody))
 
 		org, err = models.Organizations.Get(ctx)
 		require.NoError(t, err)
@@ -503,7 +504,7 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 		defer resp.Body.Close()
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
-		assert.JSONEq(t, `{"message": "organization profile updated successfully"}`, string(respBody))
+		assert.JSONEq(t, `{"message": "updated successfully"}`, string(respBody))
 
 		org, err = models.Organizations.Get(ctx)
 		require.NoError(t, err)
@@ -522,7 +523,7 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 		defer resp.Body.Close()
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
-		assert.JSONEq(t, `{"message": "organization profile updated successfully"}`, string(respBody))
+		assert.JSONEq(t, `{"message": "updated successfully"}`, string(respBody))
 
 		org, err = models.Organizations.Get(ctx)
 		require.NoError(t, err)
@@ -553,7 +554,7 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 		defer resp.Body.Close()
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
-		assert.JSONEq(t, `{"message": "organization profile updated successfully"}`, string(respBody))
+		assert.JSONEq(t, `{"message": "updated successfully"}`, string(respBody))
 
 		org, err = models.Organizations.Get(ctx)
 		require.NoError(t, err)
@@ -572,7 +573,7 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 		defer resp.Body.Close()
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
-		assert.JSONEq(t, `{"message": "organization profile updated successfully"}`, string(respBody))
+		assert.JSONEq(t, `{"message": "updated successfully"}`, string(respBody))
 
 		org, err = models.Organizations.Get(ctx)
 		require.NoError(t, err)
@@ -591,11 +592,77 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 		defer resp.Body.Close()
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
-		assert.JSONEq(t, `{"message": "organization profile updated successfully"}`, string(respBody))
+		assert.JSONEq(t, `{"message": "updated successfully"}`, string(respBody))
 
 		org, err = models.Organizations.Get(ctx)
 		require.NoError(t, err)
 		assert.Equal(t, defaultMessage, org.OTPMessageTemplate)
+	})
+
+	t.Run("updates organization's SMS Resend Interval", func(t *testing.T) {
+		resetOrganizationInfo(t, ctx, dbConnectionPool)
+		ctx = context.WithValue(ctx, middleware.TokenContextKey, "token")
+
+		org, err := models.Organizations.Get(ctx)
+		require.NoError(t, err)
+		assert.Nil(t, org.SMSResendInterval)
+
+		// Custom interval
+		w := httptest.NewRecorder()
+		req, err := createOrganizationProfileMultipartRequest(t, url, "", "", `{"sms_resend_interval": 2}`, new(bytes.Buffer))
+		require.NoError(t, err)
+		req = req.WithContext(ctx)
+		http.HandlerFunc(handler.PatchOrganizationProfile).ServeHTTP(w, req)
+
+		resp := w.Result()
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.JSONEq(t, `{"message": "updated successfully"}`, string(respBody))
+
+		org, err = models.Organizations.Get(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, int64(2), *org.SMSResendInterval)
+
+		// Don't update the interval
+		w = httptest.NewRecorder()
+		req, err = createOrganizationProfileMultipartRequest(t, url, "", "", `{"organization_name": "MyOrg"}`, new(bytes.Buffer))
+		require.NoError(t, err)
+		req = req.WithContext(ctx)
+		http.HandlerFunc(handler.PatchOrganizationProfile).ServeHTTP(w, req)
+
+		resp = w.Result()
+		respBody, err = io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.JSONEq(t, `{"message": "updated successfully"}`, string(respBody))
+
+		org, err = models.Organizations.Get(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, int64(2), *org.SMSResendInterval)
+
+		// Back to default interval
+		w = httptest.NewRecorder()
+		req, err = createOrganizationProfileMultipartRequest(t, url, "", "", `{"sms_resend_interval": 0}`, new(bytes.Buffer))
+		require.NoError(t, err)
+		req = req.WithContext(ctx)
+		http.HandlerFunc(handler.PatchOrganizationProfile).ServeHTTP(w, req)
+
+		resp = w.Result()
+		respBody, err = io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.JSONEq(t, `{"message": "updated successfully"}`, string(respBody))
+
+		org, err = models.Organizations.Get(ctx)
+		require.NoError(t, err)
+		assert.Nil(t, org.SMSResendInterval)
 	})
 }
 
