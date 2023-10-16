@@ -38,10 +38,9 @@ func Test_NewSendReceiverWalletsSMSInvitationJob(t *testing.T) {
 	t.Run("exits with status 1 when Messenger Client is missing config", func(t *testing.T) {
 		if os.Getenv("TEST_FATAL") == "1" {
 			o := SendReceiverWalletsSMSInvitationJobOptions{
-				Models:                   models,
-				AnchorPlatformBaseSepURL: anchorPlatformBaseSepURL,
-				MinDaysBetweenRetries:    3,
-				MaxRetries:               3,
+				Models:                         models,
+				AnchorPlatformBaseSepURL:       anchorPlatformBaseSepURL,
+				MaxInvitationSMSResendAttempts: 3,
 			}
 
 			NewSendReceiverWalletsSMSInvitationJob(o)
@@ -65,11 +64,10 @@ func Test_NewSendReceiverWalletsSMSInvitationJob(t *testing.T) {
 	t.Run("exits with status 1 when Base URL is empty", func(t *testing.T) {
 		if os.Getenv("TEST_FATAL") == "1" {
 			o := SendReceiverWalletsSMSInvitationJobOptions{
-				Models:                   models,
-				MessengerClient:          messageDryRunClient,
-				AnchorPlatformBaseSepURL: "",
-				MinDaysBetweenRetries:    3,
-				MaxRetries:               3,
+				Models:                         models,
+				MessengerClient:                messageDryRunClient,
+				AnchorPlatformBaseSepURL:       "",
+				MaxInvitationSMSResendAttempts: 3,
 			}
 
 			NewSendReceiverWalletsSMSInvitationJob(o)
@@ -92,11 +90,10 @@ func Test_NewSendReceiverWalletsSMSInvitationJob(t *testing.T) {
 
 	t.Run("returns a job instance successfully", func(t *testing.T) {
 		o := SendReceiverWalletsSMSInvitationJobOptions{
-			Models:                   models,
-			MessengerClient:          messageDryRunClient,
-			AnchorPlatformBaseSepURL: anchorPlatformBaseSepURL,
-			MinDaysBetweenRetries:    3,
-			MaxRetries:               3,
+			Models:                         models,
+			MessengerClient:                messageDryRunClient,
+			AnchorPlatformBaseSepURL:       anchorPlatformBaseSepURL,
+			MaxInvitationSMSResendAttempts: 3,
 		}
 
 		j := NewSendReceiverWalletsSMSInvitationJob(o)
@@ -125,9 +122,7 @@ func Test_SendReceiverWalletsSMSInvitationJob_Execute(t *testing.T) {
 
 	anchorPlatformBaseSepURL := "http://localhost:8000"
 	stellarSecretKey := "SBUSPEKAZKLZSWHRSJ2HWDZUK6I3IVDUWA7JJZSGBLZ2WZIUJI7FPNB5"
-
-	minDaysBetweenRetries := 3
-	maxRetries := 3
+	var maxInvitationSMSResendAttempts int64 = 3
 
 	ctx := context.Background()
 
@@ -140,8 +135,7 @@ func Test_SendReceiverWalletsSMSInvitationJob_Execute(t *testing.T) {
 			messengerClientMock,
 			anchorPlatformBaseSepURL,
 			stellarSecretKey,
-			minDaysBetweenRetries,
-			maxRetries,
+			maxInvitationSMSResendAttempts,
 			crashTrackerClientMock,
 		)
 		require.NoError(t, err)
