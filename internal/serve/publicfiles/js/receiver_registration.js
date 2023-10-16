@@ -225,6 +225,10 @@ async function submitOtp(event) {
             location.reload();
             clearTimeout(t);
           }, 2000);
+        } else if (response.status === 400) {
+          const data = await response.json();
+          const errorMessage = data.error || "Something went wrong, please try again later.";
+          throw new Error(errorMessage);
         } else {
           throw new Error("Something went wrong, please try again later.");
         }

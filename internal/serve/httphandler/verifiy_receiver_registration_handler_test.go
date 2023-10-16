@@ -250,7 +250,7 @@ func Test_VerifyReceiverRegistrationHandler_processReceiverVerificationPII(t *te
 				VerificationType:  data.VerificationFieldDateOfBirth,
 				VerificationValue: "1990-01-01",
 			},
-			wantErrContains: fmt.Sprintf("the number of attempts to confirm the verification value exceededs the max attempts limit of %d", data.MaxAttemptsAllowed),
+			wantErrContains: "the number of attempts to confirm the verification value exceededs the max attempts",
 		},
 		{
 			name:     "returns an error if the varification value provided in the payload is different from the DB one",
@@ -701,7 +701,7 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 		respBody, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
 		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
-		expectedError := fmt.Sprintf("the number of attempts to confirm the verification value exceededs the max attempts limit of %d", data.MaxAttemptsAllowed)
+		expectedError := "the number of attempts to confirm the verification value exceededs the max attempts"
 		wantBody := fmt.Sprintf(`{"error": "%s"}`, expectedError)
 		assert.JSONEq(t, wantBody, string(respBody))
 
