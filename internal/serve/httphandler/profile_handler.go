@@ -48,6 +48,7 @@ type PatchOrganizationProfileRequest struct {
 	OrganizationName               string  `json:"organization_name"`
 	TimezoneUTCOffset              string  `json:"timezone_utc_offset"`
 	IsApprovalRequired             *bool   `json:"is_approval_required"`
+	SMSResendInterval              *int64  `json:"sms_resend_interval"`
 	SMSRegistrationMessageTemplate *string `json:"sms_registration_message_template"`
 	OTPMessageTemplate             *string `json:"otp_message_template"`
 }
@@ -57,7 +58,8 @@ func (r *PatchOrganizationProfileRequest) AreAllFieldsEmpty() bool {
 		r.TimezoneUTCOffset == "" &&
 		r.IsApprovalRequired == nil &&
 		r.SMSRegistrationMessageTemplate == nil &&
-		r.OTPMessageTemplate == nil)
+		r.OTPMessageTemplate == nil &&
+		r.SMSResendInterval == nil)
 }
 
 type PatchUserProfileRequest struct {
@@ -156,13 +158,14 @@ func (h ProfileHandler) PatchOrganizationProfile(rw http.ResponseWriter, req *ht
 		IsApprovalRequired:             reqBody.IsApprovalRequired,
 		SMSRegistrationMessageTemplate: reqBody.SMSRegistrationMessageTemplate,
 		OTPMessageTemplate:             reqBody.OTPMessageTemplate,
+		SMSResendInterval:              reqBody.SMSResendInterval,
 	})
 	if err != nil {
 		httperror.InternalError(ctx, "Cannot update organization", err, nil).Render(rw)
 		return
 	}
 
-	httpjson.RenderStatus(rw, http.StatusOK, map[string]string{"message": "organization profile updated successfully"}, httpjson.JSON)
+	httpjson.RenderStatus(rw, http.StatusOK, map[string]string{"message": "updated successfully"}, httpjson.JSON)
 }
 
 func (h ProfileHandler) PatchUserProfile(rw http.ResponseWriter, req *http.Request) {

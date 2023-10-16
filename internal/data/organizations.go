@@ -27,9 +27,12 @@ const (
 )
 
 type Organization struct {
-	ID                             string `json:"id" db:"id"`
-	Name                           string `json:"name" db:"name"`
-	TimezoneUTCOffset              string `json:"timezone_utc_offset" db:"timezone_utc_offset"`
+	ID                string `json:"id" db:"id"`
+	Name              string `json:"name" db:"name"`
+	TimezoneUTCOffset string `json:"timezone_utc_offset" db:"timezone_utc_offset"`
+	// SMSResendInterval is the time period that SDP will wait to resend the invitation SMS to the receivers that aren't registered.
+	// If it's nil means resending the invitation SMS is deactivated.
+	SMSResendInterval              *int64 `json:"sms_resend_interval" db:"sms_resend_interval"`
 	SMSRegistrationMessageTemplate string `json:"sms_registration_message_template" db:"sms_registration_message_template"`
 	// OTPMessageTemplate is the message template to send the OTP code to the receivers validates their identity when registering their wallets.
 	// The message may have the template values {{.OTP}} and {{.OrganizationName}}, it will be parsed and the values injected when executing the template.
@@ -48,6 +51,7 @@ type OrganizationUpdate struct {
 	Logo               []byte
 	TimezoneUTCOffset  string
 	IsApprovalRequired *bool
+	SMSResendInterval  *int64
 
 	// Using pointers to accept empty strings
 	SMSRegistrationMessageTemplate *string
@@ -80,7 +84,7 @@ func (lt LogoType) ToHTTPContentType() string {
 
 func (ou *OrganizationUpdate) validate() error {
 	if ou.areAllFieldsEmpty() {
-		return fmt.Errorf("name, timezone UTC offset, approval workflow flag, SMS invite template, OTP message template or logo is required")
+		return fmt.Errorf("name, timezone UTC offset, approval workflow flag, SMS Resend Interval, SMS invite template, OTP message template or logo is required")
 	}
 
 	if len(ou.Logo) > 0 {
@@ -107,7 +111,8 @@ func (ou *OrganizationUpdate) areAllFieldsEmpty() bool {
 		ou.TimezoneUTCOffset == "" &&
 		ou.IsApprovalRequired == nil &&
 		ou.SMSRegistrationMessageTemplate == nil &&
-		ou.OTPMessageTemplate == nil)
+		ou.OTPMessageTemplate == nil &&
+		ou.SMSResendInterval == nil)
 }
 
 type OrganizationModel struct {
@@ -179,7 +184,7 @@ func (om *OrganizationModel) Update(ctx context.Context, ou *OrganizationUpdate)
 			fields = append(fields, "sms_registration_message_template = ?")
 			args = append(args, *ou.SMSRegistrationMessageTemplate)
 		} else {
-			// When empty value is passed by parameter we set de DEFAULT value for the column.
+			// When empty value is passed by parameter we set the DEFAULT value for the column.
 			fields = append(fields, "sms_registration_message_template = DEFAULT")
 		}
 	}
@@ -189,8 +194,18 @@ func (om *OrganizationModel) Update(ctx context.Context, ou *OrganizationUpdate)
 			fields = append(fields, "otp_message_template = ?")
 			args = append(args, *ou.OTPMessageTemplate)
 		} else {
-			// When empty value is passed by parameter we set de DEFAULT value for the column.
+			// When empty value is passed by parameter we set the DEFAULT value for the column.
 			fields = append(fields, "otp_message_template = DEFAULT")
+		}
+	}
+
+	if ou.SMSResendInterval != nil {
+		if *ou.SMSResendInterval > 0 {
+			fields = append(fields, "sms_resend_interval = ?")
+			args = append(args, *ou.SMSResendInterval)
+		} else {
+			// When 0 (zero) is passed by parameter we set it as NULL.
+			fields = append(fields, "sms_resend_interval = NULL")
 		}
 	}
 
