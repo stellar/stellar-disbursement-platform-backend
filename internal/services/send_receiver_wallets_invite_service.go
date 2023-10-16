@@ -187,6 +187,9 @@ func (s SendReceiverWalletInviteService) shouldSendInvitationSMS(ctx context.Con
 
 	// If organization's SMS Resend Interval is nil and we've sent the invitation message to the receiver, we won't resend it.
 	if organization.SMSResendInterval == nil && rwa.ReceiverWallet.InvitationSentAt != nil {
+		log.Ctx(ctx).Debugf(
+			"the invitation message was not resent to the receiver %s because the organization's SMS Resend Interval is nil",
+			rwa.ReceiverWallet.Receiver.ID)
 		return false
 	}
 
@@ -195,7 +198,7 @@ func (s SendReceiverWalletInviteService) shouldSendInvitationSMS(ctx context.Con
 		// Check if the receiver wallet reached the maximum number of SMS resend attempts.
 		if rwa.ReceiverWallet.ReceiverWalletStats.TotalInvitationSMSResentAttempts >= s.maxInvitationSMSResendAttempts {
 			log.Ctx(ctx).Debugf(
-				"the invitation message was not sent to the recipient because the maximum number of SMS resend attempts has been reached: Receiver ID %s - Wallet ID %s - Total Invitation SMS resent %d - Maximum attempts %d",
+				"the invitation message was not resent to the receiver because the maximum number of SMS resend attempts has been reached: Receiver ID %s - Wallet ID %s - Total Invitation SMS resent %d - Maximum attempts %d",
 				rwa.ReceiverWallet.Receiver.ID,
 				rwa.WalletID,
 				rwa.ReceiverWallet.ReceiverWalletStats.TotalInvitationSMSResentAttempts,
@@ -209,7 +212,7 @@ func (s SendReceiverWalletInviteService) shouldSendInvitationSMS(ctx context.Con
 			AddDate(0, 0, -int(*organization.SMSResendInterval*(rwa.ReceiverWallet.ReceiverWalletStats.TotalInvitationSMSResentAttempts+1)))
 		if !rwa.ReceiverWallet.InvitationSentAt.Before(resendPeriod) {
 			log.Ctx(ctx).Debugf(
-				"the invitation message was not sent to the recipient because the receiver is not in the resend period: Receiver ID %s - Wallet ID %s - Last Invitation Sent At %s - SMS Resend Interval %d day(s)",
+				"the invitation message was not resent to the receiver because the receiver is not in the resend period: Receiver ID %s - Wallet ID %s - Last Invitation Sent At %s - SMS Resend Interval %d day(s)",
 				rwa.ReceiverWallet.Receiver.ID,
 				rwa.WalletID,
 				rwa.ReceiverWallet.InvitationSentAt.Format(time.RFC1123),

@@ -778,7 +778,7 @@ func Test_SendReceiverWalletInviteService_shouldSendInvitationSMS(t *testing.T) 
 		require.Len(t, entries, 1)
 		assert.Equal(
 			t,
-			"the invitation message was not sent to the recipient because the maximum number of SMS resend attempts has been reached: Receiver ID receiver-ID - Wallet ID wallet-ID - Total Invitation SMS resent 3 - Maximum attempts 3",
+			"the invitation message was not resent to the receiver because the maximum number of SMS resend attempts has been reached: Receiver ID receiver-ID - Wallet ID wallet-ID - Total Invitation SMS resent 3 - Maximum attempts 3",
 			entries[0].Message,
 		)
 	})
@@ -810,7 +810,7 @@ func Test_SendReceiverWalletInviteService_shouldSendInvitationSMS(t *testing.T) 
 		assert.Equal(
 			t,
 			fmt.Sprintf(
-				"the invitation message was not sent to the recipient because the receiver is not in the resend period: Receiver ID receiver-ID - Wallet ID wallet-ID - Last Invitation Sent At %s - SMS Resend Interval 2 day(s)",
+				"the invitation message was not resent to the receiver because the receiver is not in the resend period: Receiver ID receiver-ID - Wallet ID wallet-ID - Last Invitation Sent At %s - SMS Resend Interval 2 day(s)",
 				invitationSentAt.Format(time.RFC1123),
 			),
 			entries[0].Message,
