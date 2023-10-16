@@ -36,7 +36,7 @@ func (e *ErrorVerificationAttemptsExceeded) Error() string {
 }
 
 const (
-	InformationNotFoundOnServer = "the information you provided could not be found in our server"
+	InformationNotFoundOnServer = "the information you provided could not be found"
 )
 
 type VerifyReceiverRegistrationHandler struct {
@@ -125,7 +125,7 @@ func (v VerifyReceiverRegistrationHandler) processReceiverVerificationPII(
 	// STEP 2: check if the number of attempts to confirm the verification value has already exceeded the max value
 	if v.Models.ReceiverVerification.ExceededAttempts(receiverVerification.Attempts) {
 		// TODO: the application currently can't recover from a max attempts exceeded error.
-		err = fmt.Errorf("the number of attempts to confirm the verification value exceededs the max attempts limit of %d", data.MaxAttemptsAllowed)
+		err = fmt.Errorf("the number of attempts to confirm the verification value exceededs the max attempts")
 		return &ErrorVerificationAttemptsExceeded{cause: err}
 	}
 
