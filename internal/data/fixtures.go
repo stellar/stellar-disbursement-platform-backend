@@ -212,6 +212,20 @@ func ClearAndCreateWalletFixtures(t *testing.T, ctx context.Context, sqlExec db.
 	return expected
 }
 
+func EnableOrDisableWalletFixtures(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, enabled bool, walletIDs ...string) {
+	const query = `
+		UPDATE
+			wallets
+		SET
+			enabled = $1
+		WHERE
+			id = ANY($2)
+	`
+
+	_, err := sqlExec.ExecContext(ctx, query, enabled, pq.Array(walletIDs))
+	require.NoError(t, err)
+}
+
 func GetCountryFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, code string) *Country {
 	const query = `
 		SELECT

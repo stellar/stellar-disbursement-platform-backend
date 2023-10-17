@@ -72,8 +72,12 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 	}
 
 	// setup fixtures
-	wallet := data.CreateDefaultWalletFixture(t, ctx, dbConnectionPool)
-	wallet.Assets = nil
+	wallets := data.ClearAndCreateWalletFixtures(t, ctx, dbConnectionPool)
+	enabledWallet := wallets[0]
+	disabledWallet := wallets[1]
+	data.EnableOrDisableWalletFixtures(t, ctx, dbConnectionPool, false, disabledWallet.ID)
+
+	enabledWallet.Assets = nil
 	asset := data.GetAssetFixture(t, ctx, dbConnectionPool, data.FixtureAssetUSDC)
 	country := data.GetCountryFixture(t, ctx, dbConnectionPool, data.FixtureCountryUKR)
 
@@ -160,12 +164,27 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 		assertPOSTResponse(t, ctx, handler, method, url, string(requestBody), want, http.StatusBadRequest)
 	})
 
+	t.Run("returns error when wallet is not enabled", func(t *testing.T) {
+		data.EnableOrDisableWalletFixtures(t, ctx, dbConnectionPool, false, disabledWallet.ID)
+		requestBody, err := json.Marshal(PostDisbursementRequest{
+			Name:        "disbursement 1",
+			CountryCode: country.Code,
+			AssetID:     asset.ID,
+			WalletID:    disabledWallet.ID,
+		})
+		require.NoError(t, err)
+
+		want := `{"error":"wallet is not enabled"}`
+
+		assertPOSTResponse(t, ctx, handler, method, url, string(requestBody), want, http.StatusBadRequest)
+	})
+
 	t.Run("returns error when asset_id is not valid", func(t *testing.T) {
 		requestBody, err := json.Marshal(PostDisbursementRequest{
 			Name:        "disbursement 1",
 			CountryCode: country.Code,
 			AssetID:     "aab4a4a9-2493-4f37-9741-01d5bd31d68b",
-			WalletID:    wallet.ID,
+			WalletID:    enabledWallet.ID,
 		})
 		require.NoError(t, err)
 
@@ -179,7 +198,7 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 			Name:        "disbursement 1",
 			CountryCode: "AAA",
 			AssetID:     asset.ID,
-			WalletID:    wallet.ID,
+			WalletID:    enabledWallet.ID,
 		})
 		require.NoError(t, err)
 
@@ -191,7 +210,7 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 	labels := monitor.DisbursementLabels{
 		Asset:   asset.Code,
 		Country: country.Code,
-		Wallet:  wallet.Name,
+		Wallet:  enabledWallet.Name,
 	}
 
 	t.Run("returns error when disbursement name is not unique", func(t *testing.T) {
@@ -201,7 +220,7 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 			Name:        "disbursement 1",
 			CountryCode: country.Code,
 			AssetID:     asset.ID,
-			WalletID:    wallet.ID,
+			WalletID:    enabledWallet.ID,
 		})
 		require.NoError(t, err)
 
@@ -222,7 +241,7 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 			Name:        expectedName,
 			CountryCode: country.Code,
 			AssetID:     asset.ID,
-			WalletID:    wallet.ID,
+			WalletID:    enabledWallet.ID,
 		})
 		require.NoError(t, err)
 
@@ -241,7 +260,7 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 		assert.Equal(t, expectedName, actualDisbursement.Name)
 		assert.Equal(t, data.DraftDisbursementStatus, actualDisbursement.Status)
 		assert.Equal(t, asset, actualDisbursement.Asset)
-		assert.Equal(t, wallet, actualDisbursement.Wallet)
+		assert.Equal(t, &enabledWallet, actualDisbursement.Wallet)
 		assert.Equal(t, country, actualDisbursement.Country)
 		assert.Equal(t, 1, len(actualDisbursement.StatusHistory))
 		assert.Equal(t, data.DraftDisbursementStatus, actualDisbursement.StatusHistory[0].Status)
