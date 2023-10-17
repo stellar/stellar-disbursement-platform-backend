@@ -363,6 +363,7 @@ func (h ProfileHandler) GetOrganizationInfo(rw http.ResponseWriter, req *http.Re
 		"distribution_account_public_key": h.DistributionPublicKey,
 		"timezone_utc_offset":             org.TimezoneUTCOffset,
 		"is_approval_required":            org.IsApprovalRequired,
+		"sms_resend_interval":             0,
 	}
 
 	if org.SMSRegistrationMessageTemplate != data.DefaultSMSRegistrationMessageTemplate {
@@ -371,6 +372,10 @@ func (h ProfileHandler) GetOrganizationInfo(rw http.ResponseWriter, req *http.Re
 
 	if org.OTPMessageTemplate != data.DefaultOTPMessageTemplate {
 		resp["otp_message_template"] = org.OTPMessageTemplate
+	}
+
+	if org.SMSResendInterval != nil {
+		resp["sms_resend_interval"] = *org.SMSResendInterval
 	}
 
 	httpjson.RenderStatus(rw, http.StatusOK, resp, httpjson.JSON)
