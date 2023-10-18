@@ -61,7 +61,7 @@ func SetupCLI(version, gitCommit string) *cobra.Command {
 
 	cmd := rootCmd()
 
-	cmd.AddCommand(MigrateCmd("multitenant-db-url"))
+	cmd.AddCommand(MigrateCmd(""))
 
 	return cmd
 }
