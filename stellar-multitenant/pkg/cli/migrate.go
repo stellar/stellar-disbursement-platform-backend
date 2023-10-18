@@ -15,7 +15,7 @@ import (
 func MigrateCmd(databaseFlagName string) *cobra.Command {
 	migrateCmd := &cobra.Command{
 		Use:   "migrate",
-		Short: "Apply Stellar Auth database migrations",
+		Short: "Apply Stellar Multitenant database migrations",
 		Run: func(cmd *cobra.Command, args []string) {
 			if err := cmd.Help(); err != nil {
 				log.Fatalf("Error calling help command: %s", err.Error())

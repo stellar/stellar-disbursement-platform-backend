@@ -12,14 +12,14 @@ import (
 	"github.com/spf13/viper"
 	stellardbtest "github.com/stellar/go/support/db/dbtest"
 	"github.com/stellar/go/support/log"
-	dbpkg "github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/internal/db"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/internal/db/dbtest"
+	dbpkg "github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/internal/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/internal/db/dbtest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func getMigrationsApplied(t *testing.T, ctx context.Context, db *sql.DB) []string {
-	rows, err := db.QueryContext(ctx, fmt.Sprintf("SELECT id FROM %s", dbpkg.StellarAuthMigrationsTableName))
+	rows, err := db.QueryContext(ctx, fmt.Sprintf("SELECT id FROM %s", dbpkg.StellarMultitenantMigrationsTableName))
 	require.NoError(t, err)
 
 	defer rows.Close()
@@ -51,47 +51,47 @@ func Test_MigrateCmd(t *testing.T) {
 		{
 			name:   "test help command",
 			args:   []string{"migrate", "--help"},
-			expect: "Apply Stellar Auth database migrations\n\nUsage:\n  stellarauth migrate [flags]\n  stellarauth migrate [command]\n\nAvailable Commands:\n  down        Migrates database down [count] migrations\n  up          Migrates database up [count]\n\nFlags:\n  -h, --help   help for migrate\n\nGlobal Flags:\n      --database-url string   Postgres DB URL (DATABASE_URL) (default \"postgres://postgres:postgres@localhost:5432/stellar-auth?sslmode=disable\")\n      --log-level string      The log level used in this project. Options: \"TRACE\", \"DEBUG\", \"INFO\", \"WARN\", \"ERROR\", \"FATAL\", or \"PANIC\". (LOG_LEVEL) (default \"TRACE\")\n\nUse \"stellarauth migrate [command] --help\" for more information about a command.\n",
+			expect: "Apply Stellar Multitenant database migrations\n\nUsage:\n  mtn migrate [flags]\n  mtn migrate [command]\n\nAvailable Commands:\n  down        Migrates database down [count] migrations\n  up          Migrates database up [count]\n\nFlags:\n  -h, --help   help for migrate\n\nGlobal Flags:\n      --multitenant-db-url string   Postgres DB URL (MULTITENANT_DB_URL) (default \"postgres://postgres:postgres@localhost:5432/sdp_main?sslmode=disable\")\n\nUse \"mtn migrate [command] --help\" for more information about a command.\n",
 		},
 		{
 			name:   "test short help command",
 			args:   []string{"migrate", "-h"},
-			expect: "Apply Stellar Auth database migrations\n\nUsage:\n  stellarauth migrate [flags]\n  stellarauth migrate [command]\n\nAvailable Commands:\n  down        Migrates database down [count] migrations\n  up          Migrates database up [count]\n\nFlags:\n  -h, --help   help for migrate\n\nGlobal Flags:\n      --database-url string   Postgres DB URL (DATABASE_URL) (default \"postgres://postgres:postgres@localhost:5432/stellar-auth?sslmode=disable\")\n      --log-level string      The log level used in this project. Options: \"TRACE\", \"DEBUG\", \"INFO\", \"WARN\", \"ERROR\", \"FATAL\", or \"PANIC\". (LOG_LEVEL) (default \"TRACE\")\n\nUse \"stellarauth migrate [command] --help\" for more information about a command.\n",
+			expect: "Apply Stellar Multitenant database migrations\n\nUsage:\n  mtn migrate [flags]\n  mtn migrate [command]\n\nAvailable Commands:\n  down        Migrates database down [count] migrations\n  up          Migrates database up [count]\n\nFlags:\n  -h, --help   help for migrate\n\nGlobal Flags:\n      --multitenant-db-url string   Postgres DB URL (MULTITENANT_DB_URL) (default \"postgres://postgres:postgres@localhost:5432/sdp_main?sslmode=disable\")\n\nUse \"mtn migrate [command] --help\" for more information about a command.\n",
 		},
 		{
 			name:   "test migrate up successfully",
-			args:   []string{"--log-level", "TRACE", "--database-url", "", "migrate", "up", "1"},
+			args:   []string{"--multitenant-db-url", "", "migrate", "up", "1"},
 			expect: "Successfully applied 1 migrations.",
 			postRunFunc: func(db *sql.DB) {
 				ids := getMigrationsApplied(t, context.Background(), db)
-				assert.Equal(t, []string{"2023-02-09.0.add-users-table.sql"}, ids)
+				assert.Equal(t, []string{"2023-10-16.0.add-tenants-table.sql"}, ids)
 			},
 		},
 		{
-			name:    "test migrate up successfully when using the DATABASE_URL env var",
-			args:    []string{"--log-level", "TRACE", "migrate", "up", "1"},
-			envVars: map[string]string{"DATABASE_URL": ""},
+			name:    "test migrate up successfully when using the MULTITENANT_DB_URL env var",
+			args:    []string{"migrate", "up", "1"},
+			envVars: map[string]string{"MULTITENANT_DB_URL": ""},
 			expect:  "Successfully applied 1 migrations.",
 			postRunFunc: func(db *sql.DB) {
 				ids := getMigrationsApplied(t, context.Background(), db)
-				assert.Equal(t, []string{"2023-02-09.0.add-users-table.sql"}, ids)
+				assert.Equal(t, []string{"2023-10-16.0.add-tenants-table.sql"}, ids)
 			},
 		},
 		{
 			name:        "test apply migrations when no number of migration is specified",
-			args:        []string{"--log-level", "TRACE", "--database-url", "", "migrate", "up"},
+			args:        []string{"--multitenant-db-url", "", "migrate", "up"},
 			expect:      "Successfully applied",
 			expectError: "",
 		},
 		{
 			name:        "test migrate down usage",
 			args:        []string{"migrate", "down"},
-			expect:      "Usage:\n  stellarauth migrate down [count] [flags]\n\nFlags:\n  -h, --help   help for down\n\nGlobal Flags:\n      --database-url string   Postgres DB URL (DATABASE_URL) (default \"postgres://postgres:postgres@localhost:5432/stellar-auth?sslmode=disable\")\n      --log-level string      The log level used in this project. Options: \"TRACE\", \"DEBUG\", \"INFO\", \"WARN\", \"ERROR\", \"FATAL\", or \"PANIC\". (LOG_LEVEL) (default \"TRACE\")\n\n",
+			expect:      "Usage:\n  mtn migrate down [count] [flags]\n\nFlags:\n  -h, --help   help for down\n\nGlobal Flags:\n      --multitenant-db-url string   Postgres DB URL (MULTITENANT_DB_URL) (default \"postgres://postgres:postgres@localhost:5432/sdp_main?sslmode=disable\")\n\n",
 			expectError: "accepts 1 arg(s), received 0",
 		},
 		{
 			name:   "test migrate down successfully",
-			args:   []string{"--log-level", "TRACE", "--database-url", "", "migrate", "down", "1"},
+			args:   []string{"--multitenant-db-url", "", "migrate", "down", "1"},
 			expect: "Successfully applied 1 migrations.",
 			preRunFunc: func(t *testing.T, db *stellardbtest.DB) {
 				_, err := dbpkg.Migrate(db.DSN, migrate.Up, 1)
@@ -101,7 +101,7 @@ func Test_MigrateCmd(t *testing.T) {
 				defer conn.Close()
 
 				ids := getMigrationsApplied(t, context.Background(), conn.DB)
-				assert.Equal(t, []string{"2023-02-09.0.add-users-table.sql"}, ids)
+				assert.Equal(t, []string{"2023-10-16.0.add-tenants-table.sql"}, ids)
 			},
 			postRunFunc: func(db *sql.DB) {
 				ids := getMigrationsApplied(t, context.Background(), db)
@@ -109,9 +109,9 @@ func Test_MigrateCmd(t *testing.T) {
 			},
 		},
 		{
-			name:    "test migrate up successfully when using the DATABASE_URL env var",
-			args:    []string{"--log-level", "TRACE", "migrate", "down", "1"},
-			envVars: map[string]string{"DATABASE_URL": ""},
+			name:    "test migrate up successfully when using the MULTITENANT_DB_URL env var",
+			args:    []string{"migrate", "down", "1"},
+			envVars: map[string]string{"MULTITENANT_DB_URL": ""},
 			expect:  "Successfully applied 1 migrations.",
 			preRunFunc: func(t *testing.T, db *stellardbtest.DB) {
 				_, err := dbpkg.Migrate(db.DSN, migrate.Up, 1)
@@ -121,7 +121,7 @@ func Test_MigrateCmd(t *testing.T) {
 				defer conn.Close()
 
 				ids := getMigrationsApplied(t, context.Background(), conn.DB)
-				assert.Equal(t, []string{"2023-02-09.0.add-users-table.sql"}, ids)
+				assert.Equal(t, []string{"2023-10-16.0.add-tenants-table.sql"}, ids)
 			},
 			postRunFunc: func(db *sql.DB) {
 				ids := getMigrationsApplied(t, context.Background(), db)
@@ -133,8 +133,8 @@ func Test_MigrateCmd(t *testing.T) {
 	for _, tc := range testCases {
 		db := dbtest.OpenWithoutMigrations(t)
 
-		if len(tc.args) >= 3 && tc.args[2] == "--database-url" {
-			tc.args[3] = db.DSN
+		if len(tc.args) >= 3 && tc.args[0] == "--multitenant-db-url" {
+			tc.args[1] = db.DSN
 		}
 
 		t.Run(tc.name, func(t *testing.T) {
@@ -143,13 +143,14 @@ func Test_MigrateCmd(t *testing.T) {
 			}
 
 			for key, value := range tc.envVars {
-				if key == "DATABASE_URL" {
+				if key == "MULTITENANT_DB_URL" {
 					value = db.DSN
 				}
 				t.Setenv(key, value)
 			}
 
 			buf := new(strings.Builder)
+			log.DefaultLogger.SetLevel(log.DebugLevel)
 			log.DefaultLogger.SetOutput(buf)
 
 			rootCmd := rootCmd()
