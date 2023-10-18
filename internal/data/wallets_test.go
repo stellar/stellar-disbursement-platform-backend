@@ -137,6 +137,53 @@ func Test_WalletModelGetAll(t *testing.T) {
 	})
 }
 
+func Test_WalletModelFindWallets(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, outerErr)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+	walletModel := &WalletModel{dbConnectionPool: dbConnectionPool}
+
+	t.Run("returns only enabled wallets", func(t *testing.T) {
+		wallets := ClearAndCreateWalletFixtures(t, ctx, dbConnectionPool.SqlxDB())
+
+		EnableOrDisableWalletFixtures(t, ctx, dbConnectionPool.SqlxDB(), false, wallets[0].ID)
+		EnableOrDisableWalletFixtures(t, ctx, dbConnectionPool.SqlxDB(), true, wallets[1].ID)
+
+		findEnabled := true
+		actual, err := walletModel.FindWallets(ctx, &findEnabled)
+		require.NoError(t, err)
+
+		require.Len(t, actual, 1)
+		require.Equal(t, wallets[1].ID, actual[0].ID)
+	})
+
+	t.Run("returns only disabled wallets", func(t *testing.T) {
+		wallets := ClearAndCreateWalletFixtures(t, ctx, dbConnectionPool.SqlxDB())
+
+		EnableOrDisableWalletFixtures(t, ctx, dbConnectionPool.SqlxDB(), false, wallets[0].ID)
+		EnableOrDisableWalletFixtures(t, ctx, dbConnectionPool.SqlxDB(), true, wallets[1].ID)
+
+		findDisabled := false
+		actual, err := walletModel.FindWallets(ctx, &findDisabled)
+		require.NoError(t, err)
+
+		require.Len(t, actual, 1)
+		require.Equal(t, wallets[0].ID, actual[0].ID)
+	})
+
+	t.Run("returns empty array when no wallets", func(t *testing.T) {
+		DeleteAllWalletFixtures(t, ctx, dbConnectionPool.SqlxDB())
+		actual, err := walletModel.FindWallets(ctx, nil)
+		require.NoError(t, err)
+
+		require.Equal(t, []Wallet{}, actual)
+	})
+}
+
 func Test_WalletModelInsert(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()

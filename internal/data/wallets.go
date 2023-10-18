@@ -103,16 +103,29 @@ func (wm *WalletModel) GetByWalletName(ctx context.Context, name string) (*Walle
 	return &wallet, nil
 }
 
-// GetAll returns all wallets in the database
-func (wm *WalletModel) GetAll(ctx context.Context) ([]Wallet, error) {
+// FindWallets returns wallets filtering by enabled status.
+func (wm *WalletModel) FindWallets(ctx context.Context, enabledFilter *bool) ([]Wallet, error) {
 	wallets := []Wallet{}
-	query := fmt.Sprintf(getQuery, `GROUP BY w.id ORDER BY w.name`)
+	var whereClause string
+	var args []interface{}
 
-	err := wm.dbConnectionPool.SelectContext(ctx, &wallets, query)
+	if enabledFilter != nil {
+		whereClause = "WHERE w.enabled = $1"
+		args = append(args, *enabledFilter)
+	}
+
+	query := fmt.Sprintf(getQuery, whereClause+`GROUP BY w.id ORDER BY w.name`)
+
+	err := wm.dbConnectionPool.SelectContext(ctx, &wallets, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("error querying wallets: %w", err)
 	}
 	return wallets, nil
+}
+
+// GetAll returns all wallets in the database
+func (wm *WalletModel) GetAll(ctx context.Context) ([]Wallet, error) {
+	return wm.FindWallets(ctx, nil)
 }
 
 func (wm *WalletModel) Insert(ctx context.Context, newWallet WalletInsert) (*Wallet, error) {

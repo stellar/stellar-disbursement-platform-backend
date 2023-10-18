@@ -22,12 +22,12 @@ func Test_WalletsHandlerGetWallets(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
+	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, outerErr)
 	defer dbConnectionPool.Close()
 
-	models, err := data.NewModels(dbConnectionPool)
-	require.NoError(t, err)
+	models, outerErr := data.NewModels(dbConnectionPool)
+	require.NoError(t, outerErr)
 
 	ctx := context.Background()
 
@@ -52,6 +52,76 @@ func Test_WalletsHandlerGetWallets(t *testing.T) {
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 
 		assert.JSONEq(t, string(expectedJSON), string(respBody))
+	})
+
+	t.Run("successfully returns a list of enabled wallets", func(t *testing.T) {
+		wallets := data.ClearAndCreateWalletFixtures(t, ctx, dbConnectionPool)
+
+		// enable first wallet and disable all others
+		data.EnableOrDisableWalletFixtures(t, ctx, dbConnectionPool, true, wallets[0].ID)
+		for _, wallet := range wallets[1:] {
+			data.EnableOrDisableWalletFixtures(t, ctx, dbConnectionPool, false, wallet.ID)
+		}
+
+		expected, err := models.Wallets.Get(ctx, wallets[0].ID)
+		require.NoError(t, err)
+
+		expectedJSON, err := json.Marshal([]data.Wallet{*expected})
+		require.NoError(t, err)
+
+		rr := httptest.NewRecorder()
+		req, _ := http.NewRequest("GET", "/wallets?enabled=true", nil)
+		http.HandlerFunc(handler.GetWallets).ServeHTTP(rr, req)
+
+		resp := rr.Result()
+
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+		require.JSONEq(t, string(expectedJSON), string(respBody))
+	})
+
+	t.Run("successfully returns a list of disabled wallets", func(t *testing.T) {
+		wallets := data.ClearAndCreateWalletFixtures(t, ctx, dbConnectionPool)
+
+		// disable first wallet and enable all others
+		data.EnableOrDisableWalletFixtures(t, ctx, dbConnectionPool, false, wallets[0].ID)
+		for _, wallet := range wallets[1:] {
+			data.EnableOrDisableWalletFixtures(t, ctx, dbConnectionPool, true, wallet.ID)
+		}
+
+		expected, err := models.Wallets.Get(ctx, wallets[0].ID)
+		require.NoError(t, err)
+
+		expectedJSON, err := json.Marshal([]data.Wallet{*expected})
+		require.NoError(t, err)
+
+		rr := httptest.NewRecorder()
+		req, _ := http.NewRequest("GET", "/wallets?enabled=false", nil)
+		http.HandlerFunc(handler.GetWallets).ServeHTTP(rr, req)
+
+		resp := rr.Result()
+
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+		require.JSONEq(t, string(expectedJSON), string(respBody))
+	})
+
+	t.Run("bad request when enabled parameter isn't a bool", func(t *testing.T) {
+		rr := httptest.NewRecorder()
+		req, _ := http.NewRequest("GET", "/wallets?enabled=xxx", nil)
+		http.HandlerFunc(handler.GetWallets).ServeHTTP(rr, req)
+
+		resp := rr.Result()
+
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		require.Equal(t, http.StatusBadRequest, resp.StatusCode)
+		require.JSONEq(t, `{"error": "Invalid enabled parameter value"}`, string(respBody))
 	})
 }
 

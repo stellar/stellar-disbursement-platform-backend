@@ -201,6 +201,13 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 		require.ErrorIs(t, err, ErrDisbursementNotFound)
 	})
 
+	t.Run("disbursement wallet is disabled", func(t *testing.T) {
+		data.EnableOrDisableWalletFixtures(t, ctx, dbConnectionPool, false, wallet.ID)
+		defer data.EnableOrDisableWalletFixtures(t, ctx, dbConnectionPool, true, wallet.ID)
+		err = service.StartDisbursement(context.Background(), draftDisbursement.ID)
+		require.ErrorIs(t, err, ErrDisbursementWalletDisabled)
+	})
+
 	t.Run("disbursement not ready to start", func(t *testing.T) {
 		err = service.StartDisbursement(context.Background(), draftDisbursement.ID)
 		require.ErrorIs(t, err, ErrDisbursementNotReadyToStart)

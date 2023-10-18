@@ -71,6 +71,10 @@ func (d DisbursementHandler) PostDisbursement(w http.ResponseWriter, r *http.Req
 		httperror.BadRequest("wallet ID is invalid", err, nil).Render(w)
 		return
 	}
+	if !wallet.Enabled {
+		httperror.BadRequest("wallet is not enabled", errors.New("wallet is not enabled"), nil).Render(w)
+		return
+	}
 	asset, err := d.Models.Assets.Get(ctx, disbursementRequest.AssetID)
 	if err != nil {
 		httperror.BadRequest("asset ID is invalid", err, nil).Render(w)
@@ -353,6 +357,8 @@ func (d DisbursementHandler) PatchDisbursementStatus(w http.ResponseWriter, r *h
 			httperror.BadRequest(services.ErrDisbursementStatusCantBeChanged.Error(), err, nil).Render(w)
 		case errors.Is(err, services.ErrDisbursementStartedByCreator):
 			httperror.Forbidden("Disbursement can't be started by its creator. Approval by another user is required.", err, nil).Render(w)
+		case errors.Is(err, services.ErrDisbursementWalletDisabled):
+			httperror.BadRequest(services.ErrDisbursementWalletDisabled.Error(), err, nil).Render(w)
 		default:
 			msg := fmt.Sprintf("Cannot update disbursement ID %s with status: %s", disbursementID, toStatus)
 			httperror.InternalError(ctx, msg, err, nil).Render(w)
