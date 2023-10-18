@@ -17,21 +17,21 @@ CREATE TYPE public.sms_sender_type AS ENUM ('TWILIO_SMS', 'AWS_SMS', 'DRY_RUN');
 
 CREATE TABLE public.tenants
 (
-    id                       VARCHAR(36) PRIMARY KEY DEFAULT uuid_generate_v4(),
-    name                     text              not null,
-    email_sender_type        email_sender_type not null,
-    sms_sender_type          sms_sender_type   not null,
-    sep10_signing_public_key text              not null,
-    distribution_public_key  text              not null,
-    enable_mfa               boolean           not null,
-    enable_recaptcha         boolean           not null,
-    cors_allowed_origins     text              not null,
-    base_url                 text              not null,
+    id VARCHAR(36) PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name text NULL,
+    email_sender_type email_sender_type NULL,
+    sms_sender_type sms_sender_type   NULL,
+    sep10_signing_public_key text NULL,
+    distribution_public_key text NULL,
+    enable_mfa boolean NULL,
+    enable_recaptcha boolean NULL,
+    cors_allowed_origins text NULL,
+    base_url text NULL,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-        unique(name)
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 );
 
+CREATE UNIQUE INDEX idx_unique_name ON public.tenants (LOWER(name));
 CREATE TRIGGER refresh_tenants_updated_at BEFORE UPDATE ON public.tenants FOR EACH ROW EXECUTE PROCEDURE update_at_refresh();
 
 -- +migrate Down
