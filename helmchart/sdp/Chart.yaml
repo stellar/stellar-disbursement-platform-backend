@@ -1,8 +1,8 @@
 apiVersion: v2
 name: stellar-disbursement-platform
 description: A Helm chart for the Stellar Disbursement Platform Backend (A.K.A. `sdp`)
-version: 0.9.2
-appVersion: "1.0.0-rc2"
+version: 0.9.3
+appVersion: "1.0.0"
 type: application
 maintainers:
   - name: Stellar Development Foundation
