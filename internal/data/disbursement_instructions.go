@@ -58,6 +58,7 @@ var (
 //	|    |    |    |    |    |--- If the verification value matches, continue.
 //	|    |    |--- Check if the receiver wallet exists.
 //	|    |    |    |--- If the receiver wallet does not exist, create one.
+//	|    |    |    |--- If the receiver wallet exists and it's not REGISTERED, retry the invitation SMS.
 //	|    |    |--- Delete all payments tied to this disbursement.
 //	|    |    |--- Create all payments passed in the instructions.
 func (di DisbursementInstructionModel) ProcessAll(ctx context.Context, userID string, instructions []*DisbursementInstruction, disbursement *Disbursement, update *DisbursementUpdate, maxNumberOfInstructions int) error {
@@ -108,7 +109,7 @@ func (di DisbursementInstructionModel) ProcessAll(ctx context.Context, userID st
 		for _, receiver := range receiverMap {
 			receiverIDs = append(receiverIDs, receiver.ID)
 		}
-		verifications, err := di.receiverVerificationModel.GetByReceiverIdsAndVerificationField(ctx, dbTx, receiverIDs, disbursement.VerificationField)
+		verifications, err := di.receiverVerificationModel.GetByReceiverIDsAndVerificationField(ctx, dbTx, receiverIDs, disbursement.VerificationField)
 		if err != nil {
 			return fmt.Errorf("error fetching receiver verifications: %w", err)
 		}
@@ -162,7 +163,7 @@ func (di DisbursementInstructionModel) ProcessAll(ctx context.Context, userID st
 		}
 
 		for _, receiverId := range receiverIDs {
-			_, exists := receiverWalletsMap[receiverId]
+			receiverWalletId, exists := receiverWalletsMap[receiverId]
 			if !exists {
 				receiverWalletInsert := ReceiverWalletInsert{
 					ReceiverID: receiverId,
@@ -173,6 +174,13 @@ func (di DisbursementInstructionModel) ProcessAll(ctx context.Context, userID st
 					return fmt.Errorf("error inserting receiver wallet for receiver id %s: %w", receiverId, insertErr)
 				}
 				receiverWalletsMap[receiverId] = walletID
+			} else {
+				_, retryErr := di.receiverWalletModel.RetryInvitationSMS(ctx, dbTx, receiverWalletId)
+				if retryErr != nil {
+					if !errors.Is(retryErr, ErrRecordNotFound) {
+						return fmt.Errorf("error retrying invitation: %w", retryErr)
+					}
+				}
 			}
 		}
 

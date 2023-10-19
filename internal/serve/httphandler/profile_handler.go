@@ -45,13 +45,21 @@ type ProfileHandler struct {
 }
 
 type PatchOrganizationProfileRequest struct {
-	OrganizationName   string `json:"organization_name"`
-	TimezoneUTCOffset  string `json:"timezone_utc_offset"`
-	IsApprovalRequired *bool  `json:"is_approval_required"`
+	OrganizationName               string  `json:"organization_name"`
+	TimezoneUTCOffset              string  `json:"timezone_utc_offset"`
+	IsApprovalRequired             *bool   `json:"is_approval_required"`
+	SMSResendInterval              *int64  `json:"sms_resend_interval"`
+	SMSRegistrationMessageTemplate *string `json:"sms_registration_message_template"`
+	OTPMessageTemplate             *string `json:"otp_message_template"`
 }
 
 func (r *PatchOrganizationProfileRequest) AreAllFieldsEmpty() bool {
-	return r.OrganizationName == "" && r.TimezoneUTCOffset == "" && r.IsApprovalRequired == nil
+	return (r.OrganizationName == "" &&
+		r.TimezoneUTCOffset == "" &&
+		r.IsApprovalRequired == nil &&
+		r.SMSRegistrationMessageTemplate == nil &&
+		r.OTPMessageTemplate == nil &&
+		r.SMSResendInterval == nil)
 }
 
 type PatchUserProfileRequest struct {
@@ -144,17 +152,20 @@ func (h ProfileHandler) PatchOrganizationProfile(rw http.ResponseWriter, req *ht
 	}
 
 	err = h.Models.Organizations.Update(ctx, &data.OrganizationUpdate{
-		Name:               reqBody.OrganizationName,
-		Logo:               fileContentBytes,
-		TimezoneUTCOffset:  reqBody.TimezoneUTCOffset,
-		IsApprovalRequired: reqBody.IsApprovalRequired,
+		Name:                           reqBody.OrganizationName,
+		Logo:                           fileContentBytes,
+		TimezoneUTCOffset:              reqBody.TimezoneUTCOffset,
+		IsApprovalRequired:             reqBody.IsApprovalRequired,
+		SMSRegistrationMessageTemplate: reqBody.SMSRegistrationMessageTemplate,
+		OTPMessageTemplate:             reqBody.OTPMessageTemplate,
+		SMSResendInterval:              reqBody.SMSResendInterval,
 	})
 	if err != nil {
 		httperror.InternalError(ctx, "Cannot update organization", err, nil).Render(rw)
 		return
 	}
 
-	httpjson.RenderStatus(rw, http.StatusOK, map[string]string{"message": "organization profile updated successfully"}, httpjson.JSON)
+	httpjson.RenderStatus(rw, http.StatusOK, map[string]string{"message": "updated successfully"}, httpjson.JSON)
 }
 
 func (h ProfileHandler) PatchUserProfile(rw http.ResponseWriter, req *http.Request) {
@@ -258,6 +269,13 @@ func (h ProfileHandler) PatchUserPassword(rw http.ResponseWriter, req *http.Requ
 		return
 	}
 
+	userID, err := h.AuthManager.GetUserID(ctx, token)
+	if err != nil {
+		httperror.InternalError(ctx, "Cannot get user ID", err, nil).Render(rw)
+		return
+	}
+	log.Ctx(ctx).Infof("[UpdateUserPassword] - Updated password for user with account ID %s", userID)
+
 	httpjson.RenderStatus(rw, http.StatusOK, map[string]string{"message": "user password updated successfully"}, httpjson.JSON)
 }
 
@@ -339,13 +357,28 @@ func (h ProfileHandler) GetOrganizationInfo(rw http.ResponseWriter, req *http.Re
 		return
 	}
 
-	httpjson.RenderStatus(rw, http.StatusOK, map[string]interface{}{
+	resp := map[string]interface{}{
 		"name":                            org.Name,
 		"logo_url":                        lu.String(),
 		"distribution_account_public_key": h.DistributionPublicKey,
 		"timezone_utc_offset":             org.TimezoneUTCOffset,
 		"is_approval_required":            org.IsApprovalRequired,
-	}, httpjson.JSON)
+		"sms_resend_interval":             0,
+	}
+
+	if org.SMSRegistrationMessageTemplate != data.DefaultSMSRegistrationMessageTemplate {
+		resp["sms_registration_message_template"] = org.SMSRegistrationMessageTemplate
+	}
+
+	if org.OTPMessageTemplate != data.DefaultOTPMessageTemplate {
+		resp["otp_message_template"] = org.OTPMessageTemplate
+	}
+
+	if org.SMSResendInterval != nil {
+		resp["sms_resend_interval"] = *org.SMSResendInterval
+	}
+
+	httpjson.RenderStatus(rw, http.StatusOK, resp, httpjson.JSON)
 }
 
 // GetOrganizationLogo renders the stored organization logo. The image is rendered inline (not attached - the attached option downloads the content)

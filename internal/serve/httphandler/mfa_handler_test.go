@@ -7,7 +7,10 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+
+	"github.com/stellar/go/support/log"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
@@ -235,6 +238,10 @@ func Test_MFAHandler_ServeHTTP(t *testing.T) {
 	})
 
 	t.Run("Test MFA validation successful", func(t *testing.T) {
+		buf := new(strings.Builder)
+		log.DefaultLogger.SetOutput(buf)
+		log.SetLevel(log.InfoLevel)
+
 		reCAPTCHAValidatorMock.
 			On("IsTokenValid", mock.Anything, "token").
 			Return(true, nil).
@@ -268,6 +275,10 @@ func Test_MFAHandler_ServeHTTP(t *testing.T) {
 		jwtManagerMock.
 			On("GenerateToken", mock.Anything, user, mock.AnythingOfType("time.Time")).
 			Return("token123", nil).
+			On("ValidateToken", mock.Anything, "token123").
+			Return(true, nil).
+			On("GetUserFromToken", mock.Anything, "token123").
+			Return(user, nil).
 			Once()
 
 		body := MFARequest{MFACode: "123456", ReCAPTCHAToken: "token", RememberMe: true}
@@ -280,6 +291,9 @@ func Test_MFAHandler_ServeHTTP(t *testing.T) {
 
 		require.Equal(t, http.StatusOK, rw.Code)
 		require.JSONEq(t, `{"token": "token123"}`, rw.Body.String())
+
+		// validate logs
+		require.Contains(t, buf.String(), "[UserLogin] - Logged in user with account ID user-id")
 	})
 
 	authenticatorMock.AssertExpectations(t)

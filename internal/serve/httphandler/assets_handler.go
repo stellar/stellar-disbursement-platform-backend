@@ -34,9 +34,10 @@ const (
 var errCouldNotRemoveTrustline = errors.New("could not remove trustline")
 
 type AssetsHandler struct {
-	Models           *data.Models
-	HorizonClient    horizonclient.ClientInterface
-	SignatureService engine.SignatureService
+	Models             *data.Models
+	HorizonClient      horizonclient.ClientInterface
+	SignatureService   engine.SignatureService
+	GetPreconditionsFn func() txnbuild.Preconditions
 }
 
 type AssetRequest struct {
@@ -46,9 +47,17 @@ type AssetRequest struct {
 
 // GetAssets returns a list of assets.
 func (c AssetsHandler) GetAssets(w http.ResponseWriter, r *http.Request) {
-	assets, err := c.Models.Assets.GetAll(r.Context())
+	ctx := r.Context()
+	walletID := strings.TrimSpace(r.URL.Query().Get("wallet"))
+
+	var assets []data.Asset
+	var err error
+	if walletID != "" {
+		assets, err = c.Models.Assets.GetByWalletID(ctx, walletID)
+	} else {
+		assets, err = c.Models.Assets.GetAll(ctx)
+	}
 	if err != nil {
-		ctx := r.Context()
 		httperror.InternalError(ctx, "Cannot retrieve assets", err, nil).Render(w)
 		return
 	}
@@ -261,6 +270,10 @@ func (c AssetsHandler) submitChangeTrustTransaction(ctx context.Context, acc *ho
 		operations = append(operations, ctOp)
 	}
 
+	preconditions := txnbuild.Preconditions{TimeBounds: txnbuild.NewTimeout(20)}
+	if c.GetPreconditionsFn != nil {
+		preconditions = c.GetPreconditionsFn()
+	}
 	tx, err := txnbuild.NewTransaction(
 		txnbuild.TransactionParams{
 			SourceAccount: &txnbuild.SimpleAccount{
@@ -270,7 +283,7 @@ func (c AssetsHandler) submitChangeTrustTransaction(ctx context.Context, acc *ho
 			IncrementSequenceNum: true,
 			Operations:           operations,
 			BaseFee:              txnbuild.MinBaseFee * feeMultiplierInStroops,
-			Preconditions:        txnbuild.Preconditions{TimeBounds: txnbuild.NewTimeout(20)},
+			Preconditions:        preconditions,
 		},
 	)
 	if err != nil {

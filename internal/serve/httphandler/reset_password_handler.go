@@ -5,6 +5,8 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/support/render/httpjson"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
@@ -70,5 +72,7 @@ func (h ResetPasswordHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	log.Infof("[ResetUserPassword] - Reset password for user with token %s",
+		utils.TruncateString(resetPasswordRequest.ResetToken, len(resetPasswordRequest.ResetToken)/4))
 	httpjson.RenderStatus(w, http.StatusOK, nil, httpjson.JSON)
 }

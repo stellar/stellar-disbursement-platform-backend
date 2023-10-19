@@ -7,23 +7,25 @@ import (
 	"net/url"
 	"path"
 	"strings"
+	"time"
 
 	"github.com/stellar/go/strkey"
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+	"golang.org/x/exp/slices"
 )
 
 type SendReceiverWalletInviteService struct {
-	messengerClient          message.MessengerClient
-	models                   *data.Models
-	anchorPlatformBaseSepURL string
-	minDaysBetweenRetries    int
-	maxRetries               int
-	sep10SigningPrivateKey   string
-	crashTrackerClient       crashtracker.CrashTrackerClient
+	messengerClient                message.MessengerClient
+	models                         *data.Models
+	anchorPlatformBaseSepURL       string
+	maxInvitationSMSResendAttempts int64
+	sep10SigningPrivateKey         string
+	crashTrackerClient             crashtracker.CrashTrackerClient
 }
 
 func (s SendReceiverWalletInviteService) validate() error {
@@ -50,8 +52,18 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context) error {
 		return fmt.Errorf("error getting organization: %w", err)
 	}
 
+	// Debug purposes
+	if organization.SMSResendInterval == nil {
+		log.Ctx(ctx).Debug("automatic resend invitation SMS is deactivated. Set a valid value to the organization's sms_resend_interval to activate it.")
+	}
+
+	smsRegistrationMessageTemplate := organization.SMSRegistrationMessageTemplate
+	if !strings.Contains(smsRegistrationMessageTemplate, "{{.RegistrationLink}}") {
+		smsRegistrationMessageTemplate = fmt.Sprintf("%s {{.RegistrationLink}}", strings.TrimSpace(smsRegistrationMessageTemplate))
+	}
+
 	// Execute the template early so we avoid hitting the database to query the other info
-	msgTemplate, err := template.New("").Parse(organization.SMSRegistrationMessageTemplate)
+	msgTemplate, err := template.New("").Parse(smsRegistrationMessageTemplate)
 	if err != nil {
 		return fmt.Errorf("error parsing SMS registration message template: %w", err)
 	}
@@ -66,7 +78,7 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context) error {
 		walletsMap[wallet.ID] = wallet
 	}
 
-	receiverWallets, err := s.models.ReceiverWallet.GetAllPendingRegistration(ctx, s.minDaysBetweenRetries, s.maxRetries)
+	receiverWallets, err := s.models.ReceiverWallet.GetAllPendingRegistration(ctx)
 	if err != nil {
 		return fmt.Errorf("error getting receiver wallets pending registration: %w", err)
 	}
@@ -77,8 +89,13 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context) error {
 	}
 
 	msgsToInsert := []*data.MessageInsert{}
+	receiverWalletIDs := []string{}
 	// TODO: improve this code adding go routines
 	for _, rwa := range receiverWalletsAsset {
+		if !s.shouldSendInvitationSMS(ctx, organization, &rwa) {
+			continue
+		}
+
 		wallet := walletsMap[rwa.WalletID]
 
 		wdl := WalletDeepLink{
@@ -115,11 +132,12 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context) error {
 			Message:       content.String(),
 		}
 
+		assetID := rwa.Asset.ID
 		receiverWalletID := rwa.ReceiverWallet.ID
 		messageType := s.messengerClient.MessengerType()
 		msgToInsert := &data.MessageInsert{
 			Type:             messageType,
-			AssetID:          nil,
+			AssetID:          &assetID,
 			ReceiverID:       rwa.ReceiverWallet.Receiver.ID,
 			WalletID:         wallet.ID,
 			ReceiverWalletID: &receiverWalletID,
@@ -139,24 +157,82 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context) error {
 		}
 
 		msgsToInsert = append(msgsToInsert, msgToInsert)
+
+		// We don't want to update the `invitation_sent_at` for receiver wallets that we've sent the invitation SMS
+		// because there's no way to calculate how many times we've resent the invitation SMS since
+		// the first invitation if we update it.
+		if rwa.ReceiverWallet.InvitationSentAt == nil && msgToInsert.Status == data.SuccessMessageStatus {
+			receiverWalletIDs = append(receiverWalletIDs, rwa.ReceiverWallet.ID)
+		}
 	}
 
-	if err := s.models.Message.BulkInsert(ctx, msgsToInsert); err != nil {
-		return fmt.Errorf("error inserting messages in the database: %w", err)
-	}
+	return db.RunInTransaction(ctx, s.models.DBConnectionPool, nil, func(dbTx db.DBTransaction) error {
+		if _, err := s.models.ReceiverWallet.UpdateInvitationSentAt(ctx, dbTx, receiverWalletIDs...); err != nil {
+			return fmt.Errorf("updating receiver wallets' invitation sent at: %w", err)
+		}
 
-	return nil
+		if err := s.models.Message.BulkInsert(ctx, dbTx, msgsToInsert); err != nil {
+			return fmt.Errorf("error inserting messages in the database: %w", err)
+		}
+
+		return nil
+	})
 }
 
-func NewSendReceiverWalletInviteService(models *data.Models, messengerClient message.MessengerClient, anchorPlatformBaseSepURL, sep10SigningPrivateKey string, minDaysBetweenRetries, maxRetries int, crashTrackerClient crashtracker.CrashTrackerClient) (*SendReceiverWalletInviteService, error) {
+func (s SendReceiverWalletInviteService) shouldSendInvitationSMS(ctx context.Context, organization *data.Organization, rwa *data.ReceiverWalletAsset) bool {
+	// We've never sent a Invitation SMS
+	if rwa.ReceiverWallet.InvitationSentAt == nil {
+		return true
+	}
+
+	// If organization's SMS Resend Interval is nil and we've sent the invitation message to the receiver, we won't resend it.
+	if organization.SMSResendInterval == nil && rwa.ReceiverWallet.InvitationSentAt != nil {
+		log.Ctx(ctx).Debugf(
+			"the invitation message was not resent to the receiver %s because the organization's SMS Resend Interval is nil",
+			rwa.ReceiverWallet.Receiver.ID)
+		return false
+	}
+
+	// The organizations has a interval to automatic resend the Invitation SMS.
+	if organization.SMSResendInterval != nil {
+		// Check if the receiver wallet reached the maximum number of SMS resend attempts.
+		if rwa.ReceiverWallet.ReceiverWalletStats.TotalInvitationSMSResentAttempts >= s.maxInvitationSMSResendAttempts {
+			log.Ctx(ctx).Debugf(
+				"the invitation message was not resent to the receiver because the maximum number of SMS resend attempts has been reached: Receiver ID %s - Wallet ID %s - Total Invitation SMS resent %d - Maximum attempts %d",
+				rwa.ReceiverWallet.Receiver.ID,
+				rwa.WalletID,
+				rwa.ReceiverWallet.ReceiverWalletStats.TotalInvitationSMSResentAttempts,
+				s.maxInvitationSMSResendAttempts,
+			)
+			return false
+		}
+
+		// Check if it's in the period to resend it.
+		resendPeriod := time.Now().
+			AddDate(0, 0, -int(*organization.SMSResendInterval*(rwa.ReceiverWallet.ReceiverWalletStats.TotalInvitationSMSResentAttempts+1)))
+		if !rwa.ReceiverWallet.InvitationSentAt.Before(resendPeriod) {
+			log.Ctx(ctx).Debugf(
+				"the invitation message was not resent to the receiver because the receiver is not in the resend period: Receiver ID %s - Wallet ID %s - Last Invitation Sent At %s - SMS Resend Interval %d day(s)",
+				rwa.ReceiverWallet.Receiver.ID,
+				rwa.WalletID,
+				rwa.ReceiverWallet.InvitationSentAt.Format(time.RFC1123),
+				*organization.SMSResendInterval,
+			)
+			return false
+		}
+	}
+
+	return true
+}
+
+func NewSendReceiverWalletInviteService(models *data.Models, messengerClient message.MessengerClient, anchorPlatformBaseSepURL, sep10SigningPrivateKey string, maxInvitationSMSResendAttempts int64, crashTrackerClient crashtracker.CrashTrackerClient) (*SendReceiverWalletInviteService, error) {
 	s := &SendReceiverWalletInviteService{
-		messengerClient:          messengerClient,
-		models:                   models,
-		anchorPlatformBaseSepURL: anchorPlatformBaseSepURL,
-		minDaysBetweenRetries:    minDaysBetweenRetries,
-		maxRetries:               maxRetries,
-		sep10SigningPrivateKey:   sep10SigningPrivateKey,
-		crashTrackerClient:       crashTrackerClient,
+		messengerClient:                messengerClient,
+		models:                         models,
+		anchorPlatformBaseSepURL:       anchorPlatformBaseSepURL,
+		maxInvitationSMSResendAttempts: maxInvitationSMSResendAttempts,
+		sep10SigningPrivateKey:         sep10SigningPrivateKey,
+		crashTrackerClient:             crashTrackerClient,
 	}
 
 	if err := s.validate(); err != nil {
@@ -179,6 +255,19 @@ type WalletDeepLink struct {
 	AssetCode string
 	// AssetIssuer is the issuer of the Stellar asset that the receiver will be able to receive.
 	AssetIssuer string
+}
+
+func (wdl WalletDeepLink) isNativeAsset() bool {
+	return wdl.AssetIssuer == "" &&
+		slices.Contains([]string{"XLM", "NATIVE"}, strings.ToUpper(wdl.AssetCode))
+}
+
+func (wdl WalletDeepLink) assetName() string {
+	if wdl.isNativeAsset() {
+		return "native"
+	}
+
+	return wdl.AssetCode + "-" + wdl.AssetIssuer
 }
 
 // BaseURLWithRoute returns the base URL of the deep link with the route appended.
@@ -253,7 +342,7 @@ func (wdl WalletDeepLink) validate() error {
 	}
 
 	// not XLM:
-	if strings.ToUpper(wdl.AssetCode) != "XLM" {
+	if !wdl.isNativeAsset() {
 		if wdl.AssetIssuer == "" {
 			return fmt.Errorf("asset issuer can't be empty unless the asset code is XLM")
 		}
@@ -265,11 +354,6 @@ func (wdl WalletDeepLink) validate() error {
 		return nil
 	}
 
-	// XLM:
-	if wdl.AssetIssuer != "" {
-		return fmt.Errorf("asset issuer should be empty for XLM, but is %s", wdl.AssetIssuer)
-	}
-
 	return nil
 }
 
@@ -278,11 +362,6 @@ func (wdl WalletDeepLink) validate() error {
 func (wdl WalletDeepLink) GetUnsignedRegistrationLink() (string, error) {
 	if err := wdl.validate(); err != nil {
 		return "", fmt.Errorf("validating WalletDeepLink: %w", err)
-	}
-
-	assetName := wdl.AssetCode
-	if wdl.AssetIssuer != "" {
-		assetName += "-" + wdl.AssetIssuer
 	}
 
 	tomlFileDomain, err := wdl.TomlFileDomain()
@@ -303,7 +382,7 @@ func (wdl WalletDeepLink) GetUnsignedRegistrationLink() (string, error) {
 	q := u.Query()
 	q.Add("domain", tomlFileDomain)
 	q.Add("name", wdl.OrganizationName)
-	q.Add("asset", assetName)
+	q.Add("asset", wdl.assetName())
 
 	u.RawQuery = q.Encode()
 

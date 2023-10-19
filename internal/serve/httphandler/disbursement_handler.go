@@ -9,25 +9,20 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
-
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
-
-	"github.com/gocarina/gocsv"
-
 	"github.com/go-chi/chi/v5"
-
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpresponse"
-
+	"github.com/gocarina/gocsv"
 	"github.com/stellar/go/support/log"
-
 	"github.com/stellar/go/support/render/httpjson"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpresponse"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 )
 
 type DisbursementHandler struct {
@@ -74,6 +69,10 @@ func (d DisbursementHandler) PostDisbursement(w http.ResponseWriter, r *http.Req
 	wallet, err := d.Models.Wallets.Get(ctx, disbursementRequest.WalletID)
 	if err != nil {
 		httperror.BadRequest("wallet ID is invalid", err, nil).Render(w)
+		return
+	}
+	if !wallet.Enabled {
+		httperror.BadRequest("wallet is not enabled", errors.New("wallet is not enabled"), nil).Render(w)
 		return
 	}
 	asset, err := d.Models.Assets.Get(ctx, disbursementRequest.AssetID)
@@ -161,8 +160,8 @@ func (d DisbursementHandler) GetDisbursements(w http.ResponseWriter, r *http.Req
 	}
 
 	ctx := r.Context()
-	disbursementService := services.NewDisbursementService(d.Models, d.DBConnectionPool, d.AuthManager)
-	resultWithTotal, err := disbursementService.GetDisbursementsWithCount(ctx, queryParams)
+	disbursementManagementService := services.NewDisbursementManagementService(d.Models, d.DBConnectionPool, d.AuthManager)
+	resultWithTotal, err := disbursementManagementService.GetDisbursementsWithCount(ctx, queryParams)
 	if err != nil {
 		httperror.InternalError(ctx, "Cannot retrieve disbursements", err, nil).Render(w)
 		return
@@ -283,8 +282,8 @@ func (d DisbursementHandler) GetDisbursementReceivers(w http.ResponseWriter, r *
 		return
 	}
 
-	disbursementService := services.NewDisbursementService(d.Models, d.DBConnectionPool, d.AuthManager)
-	resultWithTotal, err := disbursementService.GetDisbursementReceiversWithCount(ctx, disbursementID, queryParams)
+	disbursementManagementService := services.NewDisbursementManagementService(d.Models, d.DBConnectionPool, d.AuthManager)
+	resultWithTotal, err := disbursementManagementService.GetDisbursementReceiversWithCount(ctx, disbursementID, queryParams)
 	if err != nil {
 		if errors.Is(err, services.ErrDisbursementNotFound) {
 			httperror.NotFound("disbursement not found", err, nil).Render(w)
@@ -330,17 +329,17 @@ func (d DisbursementHandler) PatchDisbursementStatus(w http.ResponseWriter, r *h
 		return
 	}
 
-	disbursementService := services.NewDisbursementService(d.Models, d.DBConnectionPool, d.AuthManager)
+	disbursementManagementService := services.NewDisbursementManagementService(d.Models, d.DBConnectionPool, d.AuthManager)
 	response := UpdateDisbursementStatusResponseBody{}
 
 	ctx := r.Context()
 	disbursementID := chi.URLParam(r, "id")
 	switch toStatus {
 	case data.StartedDisbursementStatus:
-		err = disbursementService.StartDisbursement(ctx, disbursementID)
+		err = disbursementManagementService.StartDisbursement(ctx, disbursementID)
 		response.Message = "Disbursement started"
 	case data.PausedDisbursementStatus:
-		err = disbursementService.PauseDisbursement(ctx, disbursementID)
+		err = disbursementManagementService.PauseDisbursement(ctx, disbursementID)
 		response.Message = "Disbursement paused"
 	default:
 		err = services.ErrDisbursementStatusCantBeChanged
@@ -358,6 +357,8 @@ func (d DisbursementHandler) PatchDisbursementStatus(w http.ResponseWriter, r *h
 			httperror.BadRequest(services.ErrDisbursementStatusCantBeChanged.Error(), err, nil).Render(w)
 		case errors.Is(err, services.ErrDisbursementStartedByCreator):
 			httperror.Forbidden("Disbursement can't be started by its creator. Approval by another user is required.", err, nil).Render(w)
+		case errors.Is(err, services.ErrDisbursementWalletDisabled):
+			httperror.BadRequest(services.ErrDisbursementWalletDisabled.Error(), err, nil).Render(w)
 		default:
 			msg := fmt.Sprintf("Cannot update disbursement ID %s with status: %s", disbursementID, toStatus)
 			httperror.InternalError(ctx, msg, err, nil).Render(w)

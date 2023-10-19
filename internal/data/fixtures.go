@@ -73,6 +73,19 @@ func GetAssetFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, 
 	return asset
 }
 
+// AssociateAssetWithWalletFixture associates an asset with a wallet
+func AssociateAssetWithWalletFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, assetID, walletID string) {
+	const query = `
+		INSERT INTO wallets_assets
+			(wallet_id, asset_id)
+		VALUES
+			($1, $2)
+	`
+
+	_, err := sqlExec.ExecContext(ctx, query, walletID, assetID)
+	require.NoError(t, err)
+}
+
 // DeleteAllAssetFixtures deletes all assets in the database
 func DeleteAllAssetFixtures(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter) {
 	const query = "DELETE FROM assets"
@@ -115,14 +128,40 @@ func CreateWalletFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecut
 	return GetWalletFixture(t, ctx, sqlExec, name)
 }
 
+func CreateWalletAssets(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, walletID string, assetsIDs []string) []Asset {
+	const query = `
+		WITH assets_cte AS (
+			SELECT UNNEST($1::text[]) AS asset_id
+		)
+		INSERT INTO wallets_assets
+			(wallet_id, asset_id)
+		SELECT
+			$2, a.asset_id
+		FROM
+			assets_cte a
+	`
+
+	_, err := sqlExec.ExecContext(ctx, query, pq.Array(assetsIDs), walletID)
+	require.NoError(t, err)
+
+	return GetWalletAssetsFixture(t, ctx, sqlExec, walletID)
+}
+
 func GetWalletFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, name string) *Wallet {
 	const query = `
 		SELECT
-			*
+			w.*,
+			jsonb_agg(
+				DISTINCT to_jsonb(a)
+			) FILTER (WHERE a.id IS NOT NULL) AS assets
 		FROM
 			wallets w
-		WHERE
-			w.name = $1
+			LEFT JOIN wallets_assets wa ON w.id = wa.wallet_id
+			LEFT JOIN assets a ON a.id = wa.asset_id
+		WHERE 
+		    w.name = $1
+		GROUP BY
+			w.id
 	`
 
 	wallet := &Wallet{}
@@ -132,10 +171,34 @@ func GetWalletFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter,
 	return wallet
 }
 
+func GetWalletAssetsFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, walletID string) []Asset {
+	const query = `
+		SELECT
+			a.*
+		FROM
+			wallets_assets wa
+			INNER JOIN assets a ON a.id = wa.asset_id
+		WHERE
+			wa.wallet_id = $1
+		ORDER BY
+			code
+	`
+
+	assets := make([]Asset, 0)
+	err := sqlExec.SelectContext(ctx, &assets, query, walletID)
+	require.NoError(t, err)
+
+	return assets
+}
+
 // DeleteAllWalletFixtures deletes all wallets in the database
 func DeleteAllWalletFixtures(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter) {
-	const query = "DELETE FROM wallets"
+	query := "DELETE FROM wallets_assets"
 	_, err := sqlExec.ExecContext(ctx, query)
+	require.NoError(t, err)
+
+	query = "DELETE FROM wallets"
+	_, err = sqlExec.ExecContext(ctx, query)
 	require.NoError(t, err)
 }
 
@@ -147,6 +210,20 @@ func ClearAndCreateWalletFixtures(t *testing.T, ctx context.Context, sqlExec db.
 		*CreateWalletFixture(t, ctx, sqlExec, "Vibrant Assist", "https://vibrantapp.com", "vibrantapp.com", "vibrantapp://"),
 	}
 	return expected
+}
+
+func EnableOrDisableWalletFixtures(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, enabled bool, walletIDs ...string) {
+	const query = `
+		UPDATE
+			wallets
+		SET
+			enabled = $1
+		WHERE
+			id = ANY($2)
+	`
+
+	_, err := sqlExec.ExecContext(ctx, query, enabled, pq.Array(walletIDs))
+	require.NoError(t, err)
 }
 
 func GetCountryFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, code string) *Country {
@@ -273,7 +350,7 @@ func CreateReceiverVerificationFixture(t *testing.T, ctx context.Context, sqlExe
 		VALUES
 			($1, $2, $3)
 		RETURNING
-			receiver_id, verification_field, hashed_value, attempts, created_at, confirmed_at, updated_at, failed_at
+			*
 	`
 
 	var verification ReceiverVerification
@@ -303,17 +380,21 @@ func CreateReceiverWalletFixture(t *testing.T, ctx context.Context, sqlExec db.S
 	stellarMemo := fmt.Sprint(randNumber.Int64() + 10000)
 	stellarMemoType := "id"
 
+	anchorPlatformTransactionID, err := utils.RandomString(10)
+	require.NoError(t, err)
+
 	const query = `
 		WITH inserted_receiver_wallet AS (
 			INSERT INTO receiver_wallets
-				(receiver_id, wallet_id, stellar_address, stellar_memo, stellar_memo_type, status)
+				(receiver_id, wallet_id, stellar_address, stellar_memo, stellar_memo_type, status, anchor_platform_transaction_id)
 			VALUES
-				($1, $2, $3, $4, $5, $6)
+				($1, $2, $3, $4, $5, $6, $7)
 			RETURNING
-				id, receiver_id, wallet_id, stellar_address, stellar_memo, stellar_memo_type, status, status_history, created_at, updated_at
+				*
 		)
 		SELECT
 			rw.id, rw.stellar_address, rw.stellar_memo, rw.stellar_memo_type, rw.status, rw.status_history, rw.created_at, rw.updated_at,
+			rw.anchor_platform_transaction_id, rw.anchor_platform_transaction_synced_at,
 			r.id, r.email, r.phone_number, r.external_id, r.created_at, r.updated_at,
 			w.id, w.name, w.homepage, w.deep_link_schema, w.created_at, w.updated_at
 		FROM
@@ -322,17 +403,18 @@ func CreateReceiverWalletFixture(t *testing.T, ctx context.Context, sqlExec db.S
 			JOIN wallets AS w ON rw.wallet_id = w.id
 	`
 
-	var statusHistoryJSON pq.ByteaArray
 	var receiverWallet ReceiverWallet
-	err = sqlExec.QueryRowxContext(ctx, query, receiverID, walletID, stellarAddress, stellarMemo, stellarMemoType, status).Scan(
+	err = sqlExec.QueryRowxContext(ctx, query, receiverID, walletID, stellarAddress, stellarMemo, stellarMemoType, status, anchorPlatformTransactionID).Scan(
 		&receiverWallet.ID,
 		&receiverWallet.StellarAddress,
 		&receiverWallet.StellarMemo,
 		&receiverWallet.StellarMemoType,
 		&receiverWallet.Status,
-		&statusHistoryJSON,
+		&receiverWallet.StatusHistory,
 		&receiverWallet.CreatedAt,
 		&receiverWallet.UpdatedAt,
+		&receiverWallet.AnchorPlatformTransactionID,
+		&receiverWallet.AnchorPlatformTransactionSyncedAt,
 		&receiverWallet.Receiver.ID,
 		&receiverWallet.Receiver.Email,
 		&receiverWallet.Receiver.PhoneNumber,
@@ -348,16 +430,11 @@ func CreateReceiverWalletFixture(t *testing.T, ctx context.Context, sqlExec db.S
 	)
 	require.NoError(t, err)
 
-	err = receiverWallet.statusHistoryFromByteArray(statusHistoryJSON)
-	require.NoError(t, err)
-
 	return &receiverWallet
 }
 
 func DeleteAllReceiverWalletsFixtures(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter) {
-	const query = `
-		DELETE FROM receiver_wallets
-	`
+	const query = "DELETE FROM receiver_wallets"
 	_, err := sqlExec.ExecContext(ctx, query)
 	require.NoError(t, err)
 }
@@ -661,4 +738,16 @@ func CreateMockImage(t *testing.T, width, height int, size ImageSize) image.Imag
 	}
 
 	return img
+}
+
+func DeleteAllFixtures(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter) {
+	DeleteAllMessagesFixtures(t, ctx, sqlExec)
+	DeleteAllPaymentsFixtures(t, ctx, sqlExec)
+	DeleteAllReceiverVerificationFixtures(t, ctx, sqlExec)
+	DeleteAllReceiverWalletsFixtures(t, ctx, sqlExec)
+	DeleteAllReceiversFixtures(t, ctx, sqlExec)
+	DeleteAllDisbursementFixtures(t, ctx, sqlExec)
+	DeleteAllWalletFixtures(t, ctx, sqlExec)
+	DeleteAllAssetFixtures(t, ctx, sqlExec)
+	DeleteAllCountryFixtures(t, ctx, sqlExec)
 }

@@ -127,14 +127,16 @@ func Test_PaymentsHandlerGet(t *testing.T) {
 				},
 				"wallet": {
 					"id": %q,
-					"name": "wallet1"
+					"name": "wallet1",
+					"enabled": true
 				},
 				"stellar_address": %q,
 				"stellar_memo": %q,
 				"stellar_memo_type": %q,
 				"status": "DRAFT",
 				"created_at": %q,
-				"updated_at": %q
+				"updated_at": %q,
+				"invitation_sent_at": null
 			},
 			"created_at": %q,
             "updated_at": %q
@@ -912,5 +914,99 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 		assert.Len(t, payment2DB.StatusHistory, 2)
 		assert.Equal(t, data.ReadyPaymentStatus, payment2DB.StatusHistory[1].Status)
 		assert.Equal(t, "User email@test.com has requested to retry the payment - Previous Stellar Transaction ID: stellar-transaction-id-2", payment2DB.StatusHistory[1].StatusMessage)
+	})
+}
+
+func Test_PaymentsHandler_getPaymentsWithCount(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+	models, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+	handler := &PaymentsHandler{
+		Models:           models,
+		DBConnectionPool: dbConnectionPool,
+	}
+
+	t.Run("0 payments created", func(t *testing.T) {
+		response, err := handler.getPaymentsWithCount(ctx, &data.QueryParams{})
+		require.NoError(t, err)
+
+		assert.Equal(t, response.Total, 0)
+		assert.Equal(t, response.Result, []data.Payment(nil))
+	})
+
+	t.Run("error invalid payment status", func(t *testing.T) {
+		_, err := handler.getPaymentsWithCount(ctx, &data.QueryParams{
+			Filters: map[data.FilterKey]interface{}{
+				data.FilterKeyStatus: "INVALID",
+			},
+		})
+		require.EqualError(t, err, `running atomic function in RunInTransactionWithResult: error counting payments: error counting payments: pq: invalid input value for enum payment_status: "INVALID"`)
+	})
+
+	asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
+	country := data.CreateCountryFixture(t, ctx, dbConnectionPool, "FRA", "France")
+	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "wallet1", "https://www.wallet.com", "www.wallet.com", "wallet1://")
+
+	receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
+	receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.DraftReceiversWalletStatus)
+
+	disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
+		Name:    "disbursement 1",
+		Status:  data.DraftDisbursementStatus,
+		Asset:   asset,
+		Wallet:  wallet,
+		Country: country,
+	})
+
+	payment := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+		Amount: "50",
+		Status: data.DraftPaymentStatus,
+		StatusHistory: []data.PaymentStatusHistoryEntry{
+			{
+				Status:        data.DraftPaymentStatus,
+				StatusMessage: "",
+				Timestamp:     time.Now(),
+			},
+		},
+		Disbursement:   disbursement,
+		Asset:          *asset,
+		ReceiverWallet: receiverWallet,
+	})
+
+	t.Run("return payment", func(t *testing.T) {
+		response, err := handler.getPaymentsWithCount(ctx, &data.QueryParams{})
+		require.NoError(t, err)
+
+		assert.Equal(t, response.Total, 1)
+		assert.Equal(t, response.Result, []data.Payment{*payment})
+	})
+
+	t.Run("return multiple payments", func(t *testing.T) {
+		payment2 := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+			Amount: "50",
+			Status: data.DraftPaymentStatus,
+			StatusHistory: []data.PaymentStatusHistoryEntry{
+				{
+					Status:        data.DraftPaymentStatus,
+					StatusMessage: "",
+					Timestamp:     time.Now(),
+				},
+			},
+			Disbursement:   disbursement,
+			Asset:          *asset,
+			ReceiverWallet: receiverWallet,
+		})
+
+		response, err := handler.getPaymentsWithCount(ctx, &data.QueryParams{})
+		require.NoError(t, err)
+
+		assert.Equal(t, response.Total, 2)
+		assert.Equal(t, response.Result, []data.Payment{*payment2, *payment})
 	})
 }

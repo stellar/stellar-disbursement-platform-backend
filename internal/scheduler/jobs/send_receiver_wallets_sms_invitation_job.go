@@ -17,15 +17,17 @@ const (
 	SendReceiverWalletsSMSInvitationJobIntervalSeconds = 5
 )
 
+// SendReceiverWalletsSMSInvitationJob is a job that periodically sends SMS invitations to receiver wallets.
 type SendReceiverWalletsSMSInvitationJobOptions struct {
-	AnchorPlatformBaseSepURL string
-	Models                   *data.Models
-	MessengerClient          message.MessengerClient
-	MinDaysBetweenRetries    int
-	MaxRetries               int
-	Sep10SigningPrivateKey   string
-	CrashTrackerClient       crashtracker.CrashTrackerClient
+	AnchorPlatformBaseSepURL       string
+	Models                         *data.Models
+	MessengerClient                message.MessengerClient
+	MaxInvitationSMSResendAttempts int64
+	Sep10SigningPrivateKey         string
+	CrashTrackerClient             crashtracker.CrashTrackerClient
 }
+
+var _ Job = (*SendReceiverWalletsSMSInvitationJob)(nil)
 
 type SendReceiverWalletsSMSInvitationJob struct {
 	service *services.SendReceiverWalletInviteService
@@ -54,8 +56,7 @@ func NewSendReceiverWalletsSMSInvitationJob(options SendReceiverWalletsSMSInvita
 		options.MessengerClient,
 		options.AnchorPlatformBaseSepURL,
 		options.Sep10SigningPrivateKey,
-		options.MinDaysBetweenRetries,
-		options.MaxRetries,
+		options.MaxInvitationSMSResendAttempts,
 		options.CrashTrackerClient,
 	)
 	if err != nil {
@@ -64,5 +65,3 @@ func NewSendReceiverWalletsSMSInvitationJob(options SendReceiverWalletsSMSInvita
 
 	return &SendReceiverWalletsSMSInvitationJob{service: s}
 }
-
-var _ Job = new(SendReceiverWalletsSMSInvitationJob)

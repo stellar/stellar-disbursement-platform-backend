@@ -113,31 +113,44 @@ func (h UserHandler) UserActivation(rw http.ResponseWriter, req *http.Request) {
 		httperror.BadRequest("", err, nil).Render(rw)
 		return
 	}
-
 	if err := reqBody.validate(); err != nil {
 		err.Render(rw)
 		return
 	}
 
+	// Check if the users are trying to update their own activation
+	userID, err := h.AuthManager.GetUserID(ctx, token)
+	if err != nil {
+		if errors.Is(err, auth.ErrInvalidToken) {
+			httperror.Unauthorized("", err, nil).Render(rw)
+			return
+		}
+		err = fmt.Errorf("getting user from token: %w", err)
+		httperror.InternalError(ctx, "", err, nil).Render(rw)
+		return
+	}
+	if userID == reqBody.UserID {
+		httperror.BadRequest("", nil, map[string]interface{}{"user_id": "cannot update your own activation"}).Render(rw)
+		return
+	}
+
 	var activationErr error
 	if *reqBody.IsActive {
+		log.Ctx(ctx).Infof("[ActivateUserAccount] - Activating user with account ID %s", reqBody.UserID)
 		activationErr = h.AuthManager.ActivateUser(ctx, token, reqBody.UserID)
 	} else {
+		log.Ctx(ctx).Infof("[DeactivateUserAccount] - Deactivating user with account ID %s", reqBody.UserID)
 		activationErr = h.AuthManager.DeactivateUser(ctx, token, reqBody.UserID)
 	}
 
 	if activationErr != nil {
 		if errors.Is(activationErr, auth.ErrInvalidToken) {
 			httperror.Unauthorized("", activationErr, nil).Render(rw)
-			return
-		}
-
-		if errors.Is(activationErr, auth.ErrNoRowsAffected) {
+		} else if errors.Is(activationErr, auth.ErrNoRowsAffected) {
 			httperror.BadRequest("", activationErr, map[string]interface{}{"user_id": "user_id is invalid"}).Render(rw)
-			return
+		} else {
+			httperror.InternalError(ctx, "", activationErr, nil).Render(rw)
 		}
-
-		httperror.InternalError(ctx, "Cannot update user activation", activationErr, nil).Render(rw)
 		return
 	}
 
@@ -215,6 +228,7 @@ func (h UserHandler) CreateUser(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	log.Ctx(ctx).Infof("[CreateUserAccount] - Created user with account ID %s", u.ID)
 	httpjson.RenderStatus(rw, http.StatusCreated, u, httpjson.JSON)
 }
 

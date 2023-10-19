@@ -28,10 +28,10 @@ func Test_Organizations_DatabaseTriggers(t *testing.T) {
 	t.Run("SQL query will trigger an error if you try to have more than one organization", func(t *testing.T) {
 		q := `
 			INSERT INTO organizations (
-				name, stellar_main_address, timezone_utc_offset, are_payments_enabled, sms_registration_message_template
+				name, timezone_utc_offset, sms_registration_message_template
 			)
 			VALUES (
-				'Test name', 'Test Stellar address', '+00:00', false, 'Test template {{.OrganizationName}} {{.RegistrationLink}}.'
+				'Test name', '+00:00', 'Test template {{.OrganizationName}} {{.RegistrationLink}}.'
 			)
 		`
 		_, err := dbConnectionPool.ExecContext(ctx, q)
@@ -44,11 +44,6 @@ func Test_Organizations_DatabaseTriggers(t *testing.T) {
 		require.EqualError(t, err, "pq: public.organizations can must contain exactly one row")
 	})
 
-	t.Run("updating sms_registration_message_template without the tags {{.OrganizationName}} and {{.RegistrationLink}} will trigger an error", func(t *testing.T) {
-		q := "UPDATE organizations SET sms_registration_message_template = 'Test template'"
-		_, err := dbConnectionPool.ExecContext(ctx, q)
-		require.EqualError(t, err, `pq: new row for relation "organizations" violates check constraint "organization_sms_registration_message_template_contains_tags_ch"`)
-	})
 	t.Run("updating sms_registration_message_template with the tags {{.OrganizationName}} and {{.RegistrationLink}} will succeed 🎉", func(t *testing.T) {
 		q := "UPDATE organizations SET sms_registration_message_template = 'TAG1: {{.OrganizationName}} and TAG2: {{.RegistrationLink}}.'"
 		_, err := dbConnectionPool.ExecContext(ctx, q)
@@ -59,7 +54,6 @@ func Test_Organizations_DatabaseTriggers(t *testing.T) {
 func Test_Organizations_Get(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
-
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
@@ -74,9 +68,7 @@ func Test_Organizations_Get(t *testing.T) {
 
 		assert.Len(t, gotOrganization.ID, 36)
 		assert.Equal(t, "MyCustomAid", gotOrganization.Name)
-		assert.Equal(t, "GDA34JZ26FZY64XCSY46CUNSHLX762LHJXQHWWHGL5HSFRWSGBVHUFNI", gotOrganization.StellarMainAddress)
 		assert.Equal(t, "+00:00", gotOrganization.TimezoneUTCOffset)
-		assert.False(t, gotOrganization.ArePaymentsEnabled)
 		assert.Equal(t, "You have a payment waiting for you from the {{.OrganizationName}}. Click {{.RegistrationLink}} to register.", gotOrganization.SMSRegistrationMessageTemplate)
 		assert.NotEmpty(t, gotOrganization.CreatedAt)
 		assert.NotEmpty(t, gotOrganization.UpdatedAt)
@@ -84,39 +76,10 @@ func Test_Organizations_Get(t *testing.T) {
 	})
 }
 
-func Test_Organizations_ArePaymentsEnabled(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
-
-	ctx := context.Background()
-
-	organizationModel := &OrganizationModel{dbConnectionPool: dbConnectionPool}
-
-	t.Run("returns false if it's not enabled", func(t *testing.T) {
-		arePaymentsEnabled, err := organizationModel.ArePaymentsEnabled(ctx)
-		require.NoError(t, err)
-		require.False(t, arePaymentsEnabled)
-	})
-
-	t.Run("returns true if it's enabled", func(t *testing.T) {
-		q := "UPDATE organizations SET are_payments_enabled = true"
-		_, err := dbConnectionPool.ExecContext(ctx, q)
-		require.NoError(t, err)
-
-		arePaymentsEnabled, err := organizationModel.ArePaymentsEnabled(ctx)
-		require.NoError(t, err)
-		require.True(t, arePaymentsEnabled)
-	})
-}
-
 func Test_OrganizationUpdate_validate(t *testing.T) {
 	ou := &OrganizationUpdate{}
 	err := ou.validate()
-	assert.EqualError(t, err, "name, timezone UTC offset, approval workflow flag or logo is required")
+	assert.EqualError(t, err, "name, timezone UTC offset, approval workflow flag, SMS Resend Interval, SMS invite template, OTP message template or logo is required")
 
 	ou.Name = "My Org Name"
 	err = ou.validate()
@@ -220,7 +183,12 @@ func Test_Organizations_Update(t *testing.T) {
 	ctx := context.Background()
 
 	resetOrganizationInfo := func(t *testing.T, ctx context.Context) {
-		const q = "UPDATE organizations SET name = 'MyCustomAid', logo = NULL, timezone_utc_offset = '+00:00'"
+		const q = `
+			UPDATE
+				organizations
+			SET
+				name = 'MyCustomAid', logo = NULL, timezone_utc_offset = '+00:00',
+				sms_registration_message_template = DEFAULT, otp_message_template = DEFAULT`
 		_, err := dbConnectionPool.ExecContext(ctx, q)
 		require.NoError(t, err)
 	}
@@ -230,7 +198,7 @@ func Test_Organizations_Update(t *testing.T) {
 	t.Run("returns error with invalid OrganizationUpdate", func(t *testing.T) {
 		ou := &OrganizationUpdate{}
 		err := organizationModel.Update(ctx, ou)
-		assert.EqualError(t, err, "invalid organization update: name, timezone UTC offset, approval workflow flag or logo is required")
+		assert.EqualError(t, err, "invalid organization update: name, timezone UTC offset, approval workflow flag, SMS Resend Interval, SMS invite template, OTP message template or logo is required")
 	})
 
 	t.Run("updates only organization's name successfully", func(t *testing.T) {
@@ -349,5 +317,104 @@ func Test_Organizations_Update(t *testing.T) {
 		assert.Equal(t, "My Org Name", o.Name)
 		assert.Equal(t, "+02:00", o.TimezoneUTCOffset)
 		assert.Equal(t, ou.Logo, o.Logo)
+	})
+
+	t.Run("updates the organization's SMSRegistrationMessageTemplate", func(t *testing.T) {
+		resetOrganizationInfo(t, ctx)
+
+		defaultMessage := "You have a payment waiting for you from the {{.OrganizationName}}. Click {{.RegistrationLink}} to register."
+		o, err := organizationModel.Get(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, defaultMessage, o.SMSRegistrationMessageTemplate)
+
+		// Setting custom message
+		m := "My custom receiver wallet registration invite. MyOrg 👋"
+		ou := &OrganizationUpdate{SMSRegistrationMessageTemplate: &m}
+
+		err = organizationModel.Update(ctx, ou)
+		require.NoError(t, err)
+
+		o, err = organizationModel.Get(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, m, o.SMSRegistrationMessageTemplate)
+
+		// Don't update the message
+		err = organizationModel.Update(ctx, &OrganizationUpdate{Name: "My Org Name", SMSRegistrationMessageTemplate: nil})
+		require.NoError(t, err)
+
+		o, err = organizationModel.Get(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, m, o.SMSRegistrationMessageTemplate)
+
+		// Back to the default value
+		ou.SMSRegistrationMessageTemplate = new(string)
+		err = organizationModel.Update(ctx, ou)
+		require.NoError(t, err)
+
+		o, err = organizationModel.Get(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, defaultMessage, o.SMSRegistrationMessageTemplate)
+	})
+
+	t.Run("updates the organization's OTPMessageTemplate", func(t *testing.T) {
+		resetOrganizationInfo(t, ctx)
+
+		defaultMessage := "{{.OTP}} is your {{.OrganizationName}} phone verification code."
+		o, err := organizationModel.Get(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, defaultMessage, o.OTPMessageTemplate)
+
+		// Setting custom message
+		m := "Here's your OTP Code to complete your registration. MyOrg 👋"
+		ou := &OrganizationUpdate{OTPMessageTemplate: &m}
+
+		err = organizationModel.Update(ctx, ou)
+		require.NoError(t, err)
+
+		o, err = organizationModel.Get(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, m, o.OTPMessageTemplate)
+
+		// Don't update the message
+		err = organizationModel.Update(ctx, &OrganizationUpdate{Name: "My Org Name", OTPMessageTemplate: nil})
+		require.NoError(t, err)
+
+		o, err = organizationModel.Get(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, m, o.OTPMessageTemplate)
+
+		// Back to the default value
+		ou.OTPMessageTemplate = new(string)
+		err = organizationModel.Update(ctx, ou)
+		require.NoError(t, err)
+
+		o, err = organizationModel.Get(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, defaultMessage, o.OTPMessageTemplate)
+	})
+
+	t.Run("updates the organization's SMSResendInterval", func(t *testing.T) {
+		resetOrganizationInfo(t, ctx)
+
+		o, err := organizationModel.Get(ctx)
+		require.NoError(t, err)
+		assert.Nil(t, o.SMSResendInterval)
+
+		var smsResendInterval int64 = 2
+		err = organizationModel.Update(ctx, &OrganizationUpdate{SMSResendInterval: &smsResendInterval})
+		require.NoError(t, err)
+
+		o, err = organizationModel.Get(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, smsResendInterval, *o.SMSResendInterval)
+
+		// Set it as null
+		smsResendInterval = 0
+		err = organizationModel.Update(ctx, &OrganizationUpdate{SMSResendInterval: &smsResendInterval})
+		require.NoError(t, err)
+
+		o, err = organizationModel.Get(ctx)
+		require.NoError(t, err)
+		assert.Nil(t, o.SMSResendInterval)
 	})
 }

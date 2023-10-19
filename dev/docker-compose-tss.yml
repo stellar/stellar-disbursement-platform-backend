@@ -14,7 +14,6 @@ services:
       HORIZON_URL: "https://horizon-testnet.stellar.org"
       NUM_CHANNEL_ACCOUNTS: "3"
       MAX_BASE_FEE: "100"
-      MOCK: "false"
       TSS_METRICS_PORT: "9002"
       TSS_METRICS_TYPE: "TSS_PROMETHEUS"
       DISTRIBUTION_SEED: ${DISTRIBUTION_SEED}

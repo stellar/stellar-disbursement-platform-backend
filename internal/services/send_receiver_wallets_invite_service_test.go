@@ -5,7 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"testing"
+	"time"
 
+	"github.com/stellar/go/support/log"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
@@ -57,7 +59,8 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 	messengerClientMock := &message.MessengerClientMock{}
 	messengerClientMock.
 		On("MessengerType").
-		Return(message.MessengerTypeTwilioSMS)
+		Return(message.MessengerTypeTwilioSMS).
+		Maybe()
 
 	mockCrashTrackerClient := &crashtracker.MockCrashTrackerClient{}
 
@@ -92,15 +95,15 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 	})
 
 	t.Run("returns error when service has wrong setup", func(t *testing.T) {
-		_, err := NewSendReceiverWalletInviteService(models, nil, anchorPlatformBaseSepURL, stellarSecretKey, 3, 2, mockCrashTrackerClient)
+		_, err := NewSendReceiverWalletInviteService(models, nil, anchorPlatformBaseSepURL, stellarSecretKey, 3, mockCrashTrackerClient)
 		assert.EqualError(t, err, "invalid service setup: messenger client can't be nil")
 
-		_, err = NewSendReceiverWalletInviteService(models, messengerClientMock, "", stellarSecretKey, 3, 2, mockCrashTrackerClient)
+		_, err = NewSendReceiverWalletInviteService(models, messengerClientMock, "", stellarSecretKey, 3, mockCrashTrackerClient)
 		assert.EqualError(t, err, "invalid service setup: anchorPlatformBaseSepURL can't be empty")
 	})
 
 	t.Run("inserts the failed sent message", func(t *testing.T) {
-		s, err := NewSendReceiverWalletInviteService(models, messengerClientMock, anchorPlatformBaseSepURL, stellarSecretKey, 3, 2, mockCrashTrackerClient)
+		s, err := NewSendReceiverWalletInviteService(models, messengerClientMock, anchorPlatformBaseSepURL, stellarSecretKey, 3, mockCrashTrackerClient)
 		require.NoError(t, err)
 
 		data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
@@ -174,6 +177,18 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 		err = s.SendInvite(ctx)
 		require.NoError(t, err)
 
+		receivers, err := models.ReceiverWallet.GetByReceiverIDsAndWalletID(ctx, dbConnectionPool, []string{receiver1.ID}, wallet1.ID)
+		require.NoError(t, err)
+		require.Len(t, receivers, 1)
+		assert.Equal(t, rec1RW.ID, receivers[0].ID)
+		assert.Nil(t, receivers[0].InvitationSentAt)
+
+		receivers, err = models.ReceiverWallet.GetByReceiverIDsAndWalletID(ctx, dbConnectionPool, []string{receiver2.ID}, wallet2.ID)
+		require.NoError(t, err)
+		require.Len(t, receivers, 1)
+		assert.Equal(t, rec2RW.ID, receivers[0].ID)
+		assert.NotNil(t, receivers[0].InvitationSentAt)
+
 		q := `
 			SELECT
 				type, status, receiver_id, wallet_id, receiver_wallet_id,
@@ -219,7 +234,7 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 	})
 
 	t.Run("send invite successfully", func(t *testing.T) {
-		s, err := NewSendReceiverWalletInviteService(models, messengerClientMock, anchorPlatformBaseSepURL, stellarSecretKey, 3, 2, mockCrashTrackerClient)
+		s, err := NewSendReceiverWalletInviteService(models, messengerClientMock, anchorPlatformBaseSepURL, stellarSecretKey, 3, mockCrashTrackerClient)
 		require.NoError(t, err)
 
 		data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
@@ -235,14 +250,6 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 			Status:         data.ReadyPaymentStatus,
 			Disbursement:   disbursement1,
 			Asset:          *asset1,
-			ReceiverWallet: rec1RW,
-			Amount:         "1",
-		})
-
-		_ = data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
-			Status:         data.ReadyPaymentStatus,
-			Disbursement:   disbursement2,
-			Asset:          *asset2,
 			ReceiverWallet: rec1RW,
 			Amount:         "1",
 		})
@@ -285,12 +292,6 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 			Return(nil).
 			Once().
 			On("SendMessage", message.Message{
-				ToPhoneNumber: receiver1.PhoneNumber,
-				Message:       contentWallet2,
-			}).
-			Return(nil).
-			Once().
-			On("SendMessage", message.Message{
 				ToPhoneNumber: receiver2.PhoneNumber,
 				Message:       contentWallet2,
 			}).
@@ -299,6 +300,18 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 
 		err = s.SendInvite(ctx)
 		require.NoError(t, err)
+
+		receivers, err := models.ReceiverWallet.GetByReceiverIDsAndWalletID(ctx, dbConnectionPool, []string{receiver1.ID}, wallet1.ID)
+		require.NoError(t, err)
+		require.Len(t, receivers, 1)
+		assert.Equal(t, rec1RW.ID, receivers[0].ID)
+		assert.NotNil(t, receivers[0].InvitationSentAt)
+
+		receivers, err = models.ReceiverWallet.GetByReceiverIDsAndWalletID(ctx, dbConnectionPool, []string{receiver2.ID}, wallet2.ID)
+		require.NoError(t, err)
+		require.Len(t, receivers, 1)
+		assert.Equal(t, rec2RW.ID, receivers[0].ID)
+		assert.NotNil(t, receivers[0].InvitationSentAt)
 
 		q := `
 			SELECT
@@ -326,16 +339,126 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 		assert.Nil(t, msg.AssetID)
 
 		msg = data.Message{}
-		err = dbConnectionPool.GetContext(ctx, &msg, q, receiver1.ID, wallet2.ID, rec1RW.ID)
+		err = dbConnectionPool.GetContext(ctx, &msg, q, receiver2.ID, wallet2.ID, rec2RW.ID)
+		require.NoError(t, err)
+
+		assert.Equal(t, message.MessengerTypeTwilioSMS, msg.Type)
+		assert.Equal(t, receiver2.ID, msg.ReceiverID)
+		assert.Equal(t, wallet2.ID, msg.WalletID)
+		assert.Equal(t, rec2RW.ID, *msg.ReceiverWalletID)
+		assert.Equal(t, data.SuccessMessageStatus, msg.Status)
+		assert.Empty(t, msg.TitleEncrypted)
+		assert.Equal(t, contentWallet2, msg.TextEncrypted)
+		assert.Len(t, msg.StatusHistory, 2)
+		assert.Equal(t, data.PendingMessageStatus, msg.StatusHistory[0].Status)
+		assert.Equal(t, data.SuccessMessageStatus, msg.StatusHistory[1].Status)
+		assert.Nil(t, msg.AssetID)
+	})
+
+	t.Run("send invite successfully with custom invite message", func(t *testing.T) {
+		s, err := NewSendReceiverWalletInviteService(models, messengerClientMock, anchorPlatformBaseSepURL, stellarSecretKey, 3, mockCrashTrackerClient)
+		require.NoError(t, err)
+
+		data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
+		data.DeleteAllMessagesFixtures(t, ctx, dbConnectionPool)
+		data.DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
+
+		rec1RW := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver1.ID, wallet1.ID, data.ReadyReceiversWalletStatus)
+		data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver1.ID, wallet2.ID, data.RegisteredReceiversWalletStatus)
+
+		rec2RW := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver2.ID, wallet2.ID, data.ReadyReceiversWalletStatus)
+
+		customInvitationMessage := "My custom receiver wallet registration invite. MyOrg 👋"
+		err = models.Organizations.Update(ctx, &data.OrganizationUpdate{SMSRegistrationMessageTemplate: &customInvitationMessage})
+		require.NoError(t, err)
+
+		_ = data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+			Status:         data.ReadyPaymentStatus,
+			Disbursement:   disbursement1,
+			Asset:          *asset1,
+			ReceiverWallet: rec1RW,
+			Amount:         "1",
+		})
+
+		_ = data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+			Status:         data.ReadyPaymentStatus,
+			Disbursement:   disbursement2,
+			Asset:          *asset2,
+			ReceiverWallet: rec2RW,
+			Amount:         "1",
+		})
+
+		walletDeepLink1 := WalletDeepLink{
+			DeepLink:                 wallet1.DeepLinkSchema,
+			AnchorPlatformBaseSepURL: anchorPlatformBaseSepURL,
+			OrganizationName:         "MyCustomAid",
+			AssetCode:                asset1.Code,
+			AssetIssuer:              asset1.Issuer,
+		}
+		deepLink1, err := walletDeepLink1.GetSignedRegistrationLink(stellarSecretKey)
+		require.NoError(t, err)
+		contentWallet1 := fmt.Sprintf("%s %s", customInvitationMessage, deepLink1)
+
+		walletDeepLink2 := WalletDeepLink{
+			DeepLink:                 wallet2.DeepLinkSchema,
+			AnchorPlatformBaseSepURL: anchorPlatformBaseSepURL,
+			OrganizationName:         "MyCustomAid",
+			AssetCode:                asset2.Code,
+			AssetIssuer:              asset2.Issuer,
+		}
+		deepLink2, err := walletDeepLink2.GetSignedRegistrationLink(stellarSecretKey)
+		require.NoError(t, err)
+		contentWallet2 := fmt.Sprintf("%s %s", customInvitationMessage, deepLink2)
+
+		messengerClientMock.
+			On("SendMessage", message.Message{
+				ToPhoneNumber: receiver1.PhoneNumber,
+				Message:       contentWallet1,
+			}).
+			Return(nil).
+			Once().
+			On("SendMessage", message.Message{
+				ToPhoneNumber: receiver2.PhoneNumber,
+				Message:       contentWallet2,
+			}).
+			Return(nil).
+			Once()
+
+		err = s.SendInvite(ctx)
+		require.NoError(t, err)
+
+		receivers, err := models.ReceiverWallet.GetByReceiverIDsAndWalletID(ctx, dbConnectionPool, []string{receiver1.ID}, wallet1.ID)
+		require.NoError(t, err)
+		require.Len(t, receivers, 1)
+		assert.Equal(t, rec1RW.ID, receivers[0].ID)
+		assert.NotNil(t, receivers[0].InvitationSentAt)
+
+		receivers, err = models.ReceiverWallet.GetByReceiverIDsAndWalletID(ctx, dbConnectionPool, []string{receiver2.ID}, wallet2.ID)
+		require.NoError(t, err)
+		require.Len(t, receivers, 1)
+		assert.Equal(t, rec2RW.ID, receivers[0].ID)
+		assert.NotNil(t, receivers[0].InvitationSentAt)
+
+		q := `
+			SELECT
+				type, status, receiver_id, wallet_id, receiver_wallet_id,
+				title_encrypted, text_encrypted, status_history
+			FROM
+				messages
+			WHERE
+				receiver_id = $1 AND wallet_id = $2 AND receiver_wallet_id = $3
+		`
+		var msg data.Message
+		err = dbConnectionPool.GetContext(ctx, &msg, q, receiver1.ID, wallet1.ID, rec1RW.ID)
 		require.NoError(t, err)
 
 		assert.Equal(t, message.MessengerTypeTwilioSMS, msg.Type)
 		assert.Equal(t, receiver1.ID, msg.ReceiverID)
-		assert.Equal(t, wallet2.ID, msg.WalletID)
+		assert.Equal(t, wallet1.ID, msg.WalletID)
 		assert.Equal(t, rec1RW.ID, *msg.ReceiverWalletID)
 		assert.Equal(t, data.SuccessMessageStatus, msg.Status)
 		assert.Empty(t, msg.TitleEncrypted)
-		assert.Equal(t, contentWallet2, msg.TextEncrypted)
+		assert.Equal(t, contentWallet1, msg.TextEncrypted)
 		assert.Len(t, msg.StatusHistory, 2)
 		assert.Equal(t, data.PendingMessageStatus, msg.StatusHistory[0].Status)
 		assert.Equal(t, data.SuccessMessageStatus, msg.StatusHistory[1].Status)
@@ -357,9 +480,518 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 		assert.Equal(t, data.SuccessMessageStatus, msg.StatusHistory[1].Status)
 		assert.Nil(t, msg.AssetID)
 	})
+
+	t.Run("doesn't resend the invitation SMS when organization's SMS Resend Interval is nil and the invitation was already sent", func(t *testing.T) {
+		s, err := NewSendReceiverWalletInviteService(models, messengerClientMock, anchorPlatformBaseSepURL, stellarSecretKey, 3, mockCrashTrackerClient)
+		require.NoError(t, err)
+
+		data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
+		data.DeleteAllMessagesFixtures(t, ctx, dbConnectionPool)
+		data.DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
+
+		rec1RW := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver1.ID, wallet1.ID, data.ReadyReceiversWalletStatus)
+		data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver1.ID, wallet2.ID, data.RegisteredReceiversWalletStatus)
+
+		_ = data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+			Status:         data.ReadyPaymentStatus,
+			Disbursement:   disbursement1,
+			Asset:          *asset1,
+			ReceiverWallet: rec1RW,
+			Amount:         "1",
+		})
+
+		// Marking as sent
+		var invitationSentAt time.Time
+		const q = "UPDATE receiver_wallets SET invitation_sent_at = NOW() WHERE id = $1 RETURNING invitation_sent_at"
+		err = dbConnectionPool.GetContext(ctx, &invitationSentAt, q, rec1RW.ID)
+		require.NoError(t, err)
+
+		err = models.Organizations.Update(ctx, &data.OrganizationUpdate{SMSResendInterval: new(int64)})
+		require.NoError(t, err)
+
+		err = s.SendInvite(ctx)
+		require.NoError(t, err)
+
+		receivers, err := models.ReceiverWallet.GetByReceiverIDsAndWalletID(ctx, dbConnectionPool, []string{receiver1.ID}, wallet1.ID)
+		require.NoError(t, err)
+		require.Len(t, receivers, 1)
+		assert.Equal(t, rec1RW.ID, receivers[0].ID)
+		require.NotNil(t, receivers[0].InvitationSentAt)
+		assert.Equal(t, invitationSentAt, *receivers[0].InvitationSentAt)
+	})
+
+	t.Run("doesn't resend the invitation SMS when receiver reached the maximum number of resend attempts", func(t *testing.T) {
+		s, err := NewSendReceiverWalletInviteService(models, messengerClientMock, anchorPlatformBaseSepURL, stellarSecretKey, 3, mockCrashTrackerClient)
+		require.NoError(t, err)
+
+		data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
+		data.DeleteAllMessagesFixtures(t, ctx, dbConnectionPool)
+		data.DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
+
+		rec1RW := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver1.ID, wallet1.ID, data.ReadyReceiversWalletStatus)
+		data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver1.ID, wallet2.ID, data.RegisteredReceiversWalletStatus)
+
+		_ = data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+			Status:         data.ReadyPaymentStatus,
+			Disbursement:   disbursement1,
+			Asset:          *asset1,
+			ReceiverWallet: rec1RW,
+			Amount:         "1",
+		})
+
+		// Marking as sent
+		var invitationSentAt time.Time
+		const q = "UPDATE receiver_wallets SET invitation_sent_at = NOW() - interval '8 days' WHERE id = $1 RETURNING invitation_sent_at"
+		err = dbConnectionPool.GetContext(ctx, &invitationSentAt, q, rec1RW.ID)
+		require.NoError(t, err)
+
+		// Set the SMS Resend Interval
+		var smsResendInterval int64 = 2
+		err = models.Organizations.Update(ctx, &data.OrganizationUpdate{SMSResendInterval: &smsResendInterval})
+		require.NoError(t, err)
+
+		_ = data.CreateMessageFixture(t, ctx, dbConnectionPool, &data.Message{
+			Type:             message.MessengerTypeDryRun,
+			AssetID:          &asset1.ID,
+			ReceiverID:       receiver1.ID,
+			WalletID:         wallet1.ID,
+			ReceiverWalletID: &rec1RW.ID,
+			Status:           data.SuccessMessageStatus,
+			CreatedAt:        invitationSentAt.AddDate(0, 0, int(smsResendInterval)),
+			UpdatedAt:        invitationSentAt.AddDate(0, 0, int(smsResendInterval)),
+		})
+
+		_ = data.CreateMessageFixture(t, ctx, dbConnectionPool, &data.Message{
+			Type:             message.MessengerTypeDryRun,
+			AssetID:          &asset1.ID,
+			ReceiverID:       receiver1.ID,
+			WalletID:         wallet1.ID,
+			ReceiverWalletID: &rec1RW.ID,
+			Status:           data.SuccessMessageStatus,
+			CreatedAt:        time.Now().AddDate(0, 0, int(smsResendInterval*2)),
+			UpdatedAt:        time.Now().AddDate(0, 0, int(smsResendInterval*2)),
+		})
+
+		_ = data.CreateMessageFixture(t, ctx, dbConnectionPool, &data.Message{
+			Type:             message.MessengerTypeDryRun,
+			AssetID:          &asset1.ID,
+			ReceiverID:       receiver1.ID,
+			WalletID:         wallet1.ID,
+			ReceiverWalletID: &rec1RW.ID,
+			Status:           data.SuccessMessageStatus,
+			CreatedAt:        time.Now().AddDate(0, 0, int(smsResendInterval*3)),
+			UpdatedAt:        time.Now().AddDate(0, 0, int(smsResendInterval*3)),
+		})
+
+		err = s.SendInvite(ctx)
+		require.NoError(t, err)
+
+		receivers, err := models.ReceiverWallet.GetByReceiverIDsAndWalletID(ctx, dbConnectionPool, []string{receiver1.ID}, wallet1.ID)
+		require.NoError(t, err)
+		require.Len(t, receivers, 1)
+		assert.Equal(t, rec1RW.ID, receivers[0].ID)
+		require.NotNil(t, receivers[0].InvitationSentAt)
+		assert.Equal(t, invitationSentAt, *receivers[0].InvitationSentAt)
+	})
+
+	t.Run("doesn't resend invitation SMS when receiver is not in the resend period", func(t *testing.T) {
+		s, err := NewSendReceiverWalletInviteService(models, messengerClientMock, anchorPlatformBaseSepURL, stellarSecretKey, 3, mockCrashTrackerClient)
+		require.NoError(t, err)
+
+		data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
+		data.DeleteAllMessagesFixtures(t, ctx, dbConnectionPool)
+		data.DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
+
+		rec1RW := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver1.ID, wallet1.ID, data.ReadyReceiversWalletStatus)
+		data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver1.ID, wallet2.ID, data.RegisteredReceiversWalletStatus)
+
+		_ = data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+			Status:         data.ReadyPaymentStatus,
+			Disbursement:   disbursement1,
+			Asset:          *asset1,
+			ReceiverWallet: rec1RW,
+			Amount:         "1",
+		})
+
+		// Marking as sent
+		var invitationSentAt time.Time
+		const q = "UPDATE receiver_wallets SET invitation_sent_at = NOW() - interval '1 day' WHERE id = $1 RETURNING invitation_sent_at"
+		err = dbConnectionPool.GetContext(ctx, &invitationSentAt, q, rec1RW.ID)
+		require.NoError(t, err)
+
+		// Set the SMS Resend Interval
+		var smsResendInterval int64 = 2
+		err = models.Organizations.Update(ctx, &data.OrganizationUpdate{SMSResendInterval: &smsResendInterval})
+		require.NoError(t, err)
+
+		err = s.SendInvite(ctx)
+		require.NoError(t, err)
+
+		receivers, err := models.ReceiverWallet.GetByReceiverIDsAndWalletID(ctx, dbConnectionPool, []string{receiver1.ID}, wallet1.ID)
+		require.NoError(t, err)
+		require.Len(t, receivers, 1)
+		assert.Equal(t, rec1RW.ID, receivers[0].ID)
+		require.NotNil(t, receivers[0].InvitationSentAt)
+		assert.Equal(t, invitationSentAt, *receivers[0].InvitationSentAt)
+	})
+
+	t.Run("successfully resend the invitation SMS", func(t *testing.T) {
+		s, err := NewSendReceiverWalletInviteService(models, messengerClientMock, anchorPlatformBaseSepURL, stellarSecretKey, 3, mockCrashTrackerClient)
+		require.NoError(t, err)
+
+		data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
+		data.DeleteAllMessagesFixtures(t, ctx, dbConnectionPool)
+		data.DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
+
+		rec1RW := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver1.ID, wallet1.ID, data.ReadyReceiversWalletStatus)
+		data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver1.ID, wallet2.ID, data.RegisteredReceiversWalletStatus)
+
+		_ = data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+			Status:         data.ReadyPaymentStatus,
+			Disbursement:   disbursement1,
+			Asset:          *asset1,
+			ReceiverWallet: rec1RW,
+			Amount:         "1",
+		})
+
+		// Marking as sent
+		var invitationSentAt time.Time
+		q := "UPDATE receiver_wallets SET invitation_sent_at = NOW() - interval '2 days' - interval '3 hours' WHERE id = $1 RETURNING invitation_sent_at"
+		err = dbConnectionPool.GetContext(ctx, &invitationSentAt, q, rec1RW.ID)
+		require.NoError(t, err)
+
+		// Set the SMS Resend Interval
+		var smsResendInterval int64 = 2
+		err = models.Organizations.Update(ctx, &data.OrganizationUpdate{SMSResendInterval: &smsResendInterval, SMSRegistrationMessageTemplate: new(string)})
+		require.NoError(t, err)
+
+		walletDeepLink1 := WalletDeepLink{
+			DeepLink:                 wallet1.DeepLinkSchema,
+			AnchorPlatformBaseSepURL: anchorPlatformBaseSepURL,
+			OrganizationName:         "MyCustomAid",
+			AssetCode:                asset1.Code,
+			AssetIssuer:              asset1.Issuer,
+		}
+		deepLink1, err := walletDeepLink1.GetSignedRegistrationLink(stellarSecretKey)
+		require.NoError(t, err)
+		contentWallet1 := fmt.Sprintf("You have a payment waiting for you from the MyCustomAid. Click %s to register.", deepLink1)
+
+		messengerClientMock.
+			On("SendMessage", message.Message{
+				ToPhoneNumber: receiver1.PhoneNumber,
+				Message:       contentWallet1,
+			}).
+			Return(nil).
+			Once()
+
+		err = s.SendInvite(ctx)
+		require.NoError(t, err)
+
+		receivers, err := models.ReceiverWallet.GetByReceiverIDsAndWalletID(ctx, dbConnectionPool, []string{receiver1.ID}, wallet1.ID)
+		require.NoError(t, err)
+		require.Len(t, receivers, 1)
+		assert.Equal(t, rec1RW.ID, receivers[0].ID)
+		require.NotNil(t, receivers[0].InvitationSentAt)
+		assert.Equal(t, invitationSentAt, *receivers[0].InvitationSentAt)
+
+		q = `
+			SELECT
+				type, status, receiver_id, wallet_id, receiver_wallet_id,
+				title_encrypted, text_encrypted, status_history
+			FROM
+				messages
+			WHERE
+				receiver_id = $1 AND wallet_id = $2 AND
+				receiver_wallet_id = $3 AND created_at > $4
+		`
+		var msg data.Message
+		err = dbConnectionPool.GetContext(ctx, &msg, q, receiver1.ID, wallet1.ID, rec1RW.ID, invitationSentAt)
+		require.NoError(t, err)
+
+		assert.Equal(t, message.MessengerTypeTwilioSMS, msg.Type)
+		assert.Equal(t, receiver1.ID, msg.ReceiverID)
+		assert.Equal(t, wallet1.ID, msg.WalletID)
+		assert.Equal(t, rec1RW.ID, *msg.ReceiverWalletID)
+		assert.Equal(t, data.SuccessMessageStatus, msg.Status)
+		assert.Empty(t, msg.TitleEncrypted)
+		assert.Equal(t, contentWallet1, msg.TextEncrypted)
+		assert.Len(t, msg.StatusHistory, 2)
+		assert.Equal(t, data.PendingMessageStatus, msg.StatusHistory[0].Status)
+		assert.Equal(t, data.SuccessMessageStatus, msg.StatusHistory[1].Status)
+		assert.Nil(t, msg.AssetID)
+	})
+
+	messengerClientMock.AssertExpectations(t)
 }
 
-func Test_WalletDeepLink_BaseURL(t *testing.T) {
+func Test_SendReceiverWalletInviteService_shouldSendInvitationSMS(t *testing.T) {
+	var maxInvitationSMSResendAttempts int64 = 3
+	s := SendReceiverWalletInviteService{maxInvitationSMSResendAttempts: maxInvitationSMSResendAttempts}
+	ctx := context.Background()
+
+	t.Run("returns true when user never received the invitation SMS", func(t *testing.T) {
+		org := data.Organization{SMSResendInterval: nil}
+		rwa := data.ReceiverWalletAsset{
+			ReceiverWallet: data.ReceiverWallet{
+				InvitationSentAt: nil,
+			},
+		}
+		got := s.shouldSendInvitationSMS(ctx, &org, &rwa)
+		assert.True(t, got)
+	})
+
+	t.Run("returns false when user received the invitation SMS and organization's SMS Resend Interval is not set", func(t *testing.T) {
+		invitationSentAt := time.Now()
+		org := data.Organization{SMSResendInterval: nil}
+		rwa := data.ReceiverWalletAsset{
+			ReceiverWallet: data.ReceiverWallet{
+				InvitationSentAt: &invitationSentAt,
+			},
+		}
+		got := s.shouldSendInvitationSMS(ctx, &org, &rwa)
+		assert.False(t, got)
+	})
+
+	t.Run("returns false when receiver reached the maximum number of SMS resend attempts", func(t *testing.T) {
+		var smsResendInterval int64 = 2
+		invitationSentAt := time.Now()
+		org := data.Organization{SMSResendInterval: &smsResendInterval}
+		rwa := data.ReceiverWalletAsset{
+			ReceiverWallet: data.ReceiverWallet{
+				InvitationSentAt: &invitationSentAt,
+				Receiver: data.Receiver{
+					ID: "receiver-ID",
+				},
+				ReceiverWalletStats: data.ReceiverWalletStats{
+					TotalInvitationSMSResentAttempts: maxInvitationSMSResendAttempts,
+				},
+			},
+			WalletID: "wallet-ID",
+		}
+
+		getEntries := log.DefaultLogger.StartTest(log.DebugLevel)
+
+		got := s.shouldSendInvitationSMS(ctx, &org, &rwa)
+		assert.False(t, got)
+
+		entries := getEntries()
+		require.Len(t, entries, 1)
+		assert.Equal(
+			t,
+			"the invitation message was not resent to the receiver because the maximum number of SMS resend attempts has been reached: Receiver ID receiver-ID - Wallet ID wallet-ID - Total Invitation SMS resent 3 - Maximum attempts 3",
+			entries[0].Message,
+		)
+	})
+
+	t.Run("returns false when the receiver is not in the period to resend the SMS", func(t *testing.T) {
+		var smsResendInterval int64 = 2
+		invitationSentAt := time.Now().AddDate(0, 0, -int(smsResendInterval-1))
+		org := data.Organization{SMSResendInterval: &smsResendInterval}
+		rwa := data.ReceiverWalletAsset{
+			ReceiverWallet: data.ReceiverWallet{
+				InvitationSentAt: &invitationSentAt,
+				Receiver: data.Receiver{
+					ID: "receiver-ID",
+				},
+				ReceiverWalletStats: data.ReceiverWalletStats{
+					TotalInvitationSMSResentAttempts: 1,
+				},
+			},
+			WalletID: "wallet-ID",
+		}
+
+		getEntries := log.DefaultLogger.StartTest(log.DebugLevel)
+
+		got := s.shouldSendInvitationSMS(ctx, &org, &rwa)
+		assert.False(t, got)
+
+		entries := getEntries()
+		require.Len(t, entries, 1)
+		assert.Equal(
+			t,
+			fmt.Sprintf(
+				"the invitation message was not resent to the receiver because the receiver is not in the resend period: Receiver ID receiver-ID - Wallet ID wallet-ID - Last Invitation Sent At %s - SMS Resend Interval 2 day(s)",
+				invitationSentAt.Format(time.RFC1123),
+			),
+			entries[0].Message,
+		)
+	})
+
+	t.Run("returns true when receiver meets the requirements to resend SMS", func(t *testing.T) {
+		var smsResendInterval int64 = 2
+
+		// 2 days after receiving the first invitation
+		invitationSentAt := time.Now().Add((-25 * 2) * time.Hour)
+		org := data.Organization{SMSResendInterval: &smsResendInterval}
+		rwa := data.ReceiverWalletAsset{
+			ReceiverWallet: data.ReceiverWallet{
+				InvitationSentAt: &invitationSentAt,
+				ReceiverWalletStats: data.ReceiverWalletStats{
+					TotalInvitationSMSResentAttempts: 0,
+				},
+			},
+		}
+		got := s.shouldSendInvitationSMS(ctx, &org, &rwa)
+		assert.True(t, got)
+
+		// 4 days after receiving the first invitation
+		invitationSentAt = invitationSentAt.AddDate(0, 0, -int(smsResendInterval))
+		rwa = data.ReceiverWalletAsset{
+			ReceiverWallet: data.ReceiverWallet{
+				InvitationSentAt: &invitationSentAt,
+				ReceiverWalletStats: data.ReceiverWalletStats{
+					TotalInvitationSMSResentAttempts: 1,
+				},
+			},
+		}
+		got = s.shouldSendInvitationSMS(ctx, &org, &rwa)
+		assert.True(t, got)
+
+		// 6 days after receiving the first invitation
+		invitationSentAt = invitationSentAt.AddDate(0, 0, -int(smsResendInterval))
+		rwa = data.ReceiverWalletAsset{
+			ReceiverWallet: data.ReceiverWallet{
+				InvitationSentAt: &invitationSentAt,
+				ReceiverWalletStats: data.ReceiverWalletStats{
+					TotalInvitationSMSResentAttempts: 2,
+				},
+			},
+		}
+		got = s.shouldSendInvitationSMS(ctx, &org, &rwa)
+		assert.True(t, got)
+
+		// 8 days after receiving the first invitation - we don't resend because it reached the maximum number of attempts
+		invitationSentAt = invitationSentAt.AddDate(0, 0, -int(smsResendInterval))
+		rwa = data.ReceiverWalletAsset{
+			ReceiverWallet: data.ReceiverWallet{
+				InvitationSentAt: &invitationSentAt,
+				ReceiverWalletStats: data.ReceiverWalletStats{
+					TotalInvitationSMSResentAttempts: 3,
+				},
+			},
+		}
+		got = s.shouldSendInvitationSMS(ctx, &org, &rwa)
+		assert.False(t, got)
+	})
+}
+
+func Test_WalletDeepLink_isNativeAsset(t *testing.T) {
+	testCases := []struct {
+		name        string
+		assetCode   string
+		assetIssuer string
+		wantResult  bool
+	}{
+		{
+			name:        "🟢 XLM without issuer should be native asset",
+			assetCode:   "XLM",
+			assetIssuer: "",
+			wantResult:  true,
+		},
+		{
+			name:        "🟢 xLm without issuer should be native asset (case insensitive)",
+			assetCode:   "XLM",
+			assetIssuer: "",
+			wantResult:  true,
+		},
+		{
+			name:        "🔴 XLM with issuer should NOT be native asset",
+			assetCode:   "XLM",
+			assetIssuer: "GCKGCKZ2PFSCRQXREJMTHAHDMOZQLS2R4V5LZ6VLU53HONH5FI6ACBSX",
+			wantResult:  false,
+		},
+		{
+			name:        "🟢 native without issuer should be native asset",
+			assetCode:   "native",
+			assetIssuer: "",
+			wantResult:  true,
+		},
+		{
+			name:        "🟢 NaTiVe without issuer should be native asset (case insensitive)",
+			assetCode:   "NaTiVe",
+			assetIssuer: "",
+			wantResult:  true,
+		},
+		{
+			name:        "🔴 native with issuer should NOT be native asset",
+			assetCode:   "native",
+			assetIssuer: "GCKGCKZ2PFSCRQXREJMTHAHDMOZQLS2R4V5LZ6VLU53HONH5FI6ACBSX",
+			wantResult:  false,
+		},
+		{
+			name:        "🔴 USDC with issuer should NOT be native asset",
+			assetCode:   "USDC",
+			assetIssuer: "GCKGCKZ2PFSCRQXREJMTHAHDMOZQLS2R4V5LZ6VLU53HONH5FI6ACBSX",
+			wantResult:  false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			wdl := WalletDeepLink{
+				AssetCode:   tc.assetCode,
+				AssetIssuer: tc.assetIssuer,
+			}
+
+			gotResult := wdl.isNativeAsset()
+			assert.Equal(t, tc.wantResult, gotResult)
+		})
+	}
+}
+
+func Test_WalletDeepLink_assetName(t *testing.T) {
+	testCases := []struct {
+		name        string
+		assetCode   string
+		assetIssuer string
+		wantResult  string
+	}{
+		{
+			name:        "'XLM' native asset",
+			assetCode:   "XLM",
+			assetIssuer: "",
+			wantResult:  "native",
+		},
+		{
+			name:        "'XLM' with an issuer",
+			assetCode:   "XLM",
+			assetIssuer: "GCKGCKZ2PFSCRQXREJMTHAHDMOZQLS2R4V5LZ6VLU53HONH5FI6ACBSX",
+			wantResult:  "XLM-GCKGCKZ2PFSCRQXREJMTHAHDMOZQLS2R4V5LZ6VLU53HONH5FI6ACBSX",
+		},
+		{
+			name:        "'native' native asset",
+			assetCode:   "native",
+			assetIssuer: "",
+			wantResult:  "native",
+		},
+		{
+			name:        "'native' with an issuer",
+			assetCode:   "native",
+			assetIssuer: "GCKGCKZ2PFSCRQXREJMTHAHDMOZQLS2R4V5LZ6VLU53HONH5FI6ACBSX",
+			wantResult:  "native-GCKGCKZ2PFSCRQXREJMTHAHDMOZQLS2R4V5LZ6VLU53HONH5FI6ACBSX",
+		},
+		{
+			name:        "USDC",
+			assetCode:   "USDC",
+			assetIssuer: "GCKGCKZ2PFSCRQXREJMTHAHDMOZQLS2R4V5LZ6VLU53HONH5FI6ACBSX",
+			wantResult:  "USDC-GCKGCKZ2PFSCRQXREJMTHAHDMOZQLS2R4V5LZ6VLU53HONH5FI6ACBSX",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			wdl := WalletDeepLink{
+				AssetCode:   tc.assetCode,
+				AssetIssuer: tc.assetIssuer,
+			}
+
+			gotResult := wdl.assetName()
+			assert.Equal(t, tc.wantResult, gotResult)
+		})
+	}
+}
+
+func Test_WalletDeepLink_BaseURLWithRoute(t *testing.T) {
 	testCases := []struct {
 		name       string
 		deepLink   string
@@ -553,13 +1185,8 @@ func Test_WalletDeepLink_validate(t *testing.T) {
 	err = wdl.validate()
 	require.NoError(t, err)
 
-	// asset issuer needs to be empty if it's native (XLM)
-	wdl.AssetCode = "XLM"
-	wdl.AssetIssuer = "GCKGCKZ2PFSCRQXREJMTHAHDMOZQLS2R4V5LZ6VLU53HONH5FI6ACBSX"
-	err = wdl.validate()
-	require.EqualError(t, err, "asset issuer should be empty for XLM, but is GCKGCKZ2PFSCRQXREJMTHAHDMOZQLS2R4V5LZ6VLU53HONH5FI6ACBSX")
-
 	// Successful for native (XLM) assets 🎉
+	wdl.AssetCode = "XLM"
 	wdl.AssetIssuer = ""
 	err = wdl.validate()
 	require.NoError(t, err)
@@ -596,7 +1223,7 @@ func Test_WalletDeepLink_GetUnsignedRegistrationLink(t *testing.T) {
 				OrganizationName:         "Foo Bar Org",
 				AssetCode:                "XLM",
 			},
-			wantResult: "wallet://sdp?asset=XLM&domain=foo.bar&name=Foo+Bar+Org",
+			wantResult: "wallet://sdp?asset=native&domain=foo.bar&name=Foo+Bar+Org",
 		},
 		{
 			name: "🎉 successful for deeplink with query params",
@@ -679,7 +1306,7 @@ func Test_WalletDeepLink_GetSignedRegistrationLink(t *testing.T) {
 			AssetCode:                "XLM",
 		}
 
-		expected := "wallet://sdp?asset=XLM&domain=foo.bar&name=Foo+Bar+Org&signature=d3ffb7c9f78d2131b5be4e3a1302cfe87685706e36f6f1115e4b28bb940cc75532d56ab1d5c5f3481f210021811510290735858ea35b88e26cd5a115f7ea450b"
+		expected := "wallet://sdp?asset=native&domain=foo.bar&name=Foo+Bar+Org&signature=972a3012e18f107e0bf951f5acc757df953c3bbbe668a2d2652bf2445a759132f6af303df063f69d1a862b7ab419813554b201837795648f6175c9d9d72cf60f"
 		actual, err := wdl.GetSignedRegistrationLink(stellarSecretKey)
 		require.NoError(t, err)
 		require.Equal(t, expected, actual)
@@ -697,7 +1324,7 @@ func Test_WalletDeepLink_GetSignedRegistrationLink(t *testing.T) {
 			AssetCode:                "XLM",
 		}
 
-		expected := "wallet://sdp?asset=XLM&domain=foo.bar&name=Foo+Bar+Org&signature=d3ffb7c9f78d2131b5be4e3a1302cfe87685706e36f6f1115e4b28bb940cc75532d56ab1d5c5f3481f210021811510290735858ea35b88e26cd5a115f7ea450b"
+		expected := "wallet://sdp?asset=native&domain=foo.bar&name=Foo+Bar+Org&signature=972a3012e18f107e0bf951f5acc757df953c3bbbe668a2d2652bf2445a759132f6af303df063f69d1a862b7ab419813554b201837795648f6175c9d9d72cf60f"
 		actual, err := wdl.GetSignedRegistrationLink(stellarSecretKey)
 		require.NoError(t, err)
 		require.Equal(t, expected, actual)

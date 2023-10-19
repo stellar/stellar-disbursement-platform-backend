@@ -75,7 +75,7 @@ func rootCmd() *cobra.Command {
 		},
 		{
 			Name:        "base-url",
-			Usage:       "The SDP UI base URL.",
+			Usage:       "The SDP backend server's base URL.",
 			OptType:     types.String,
 			ConfigKey:   &globalOptions.baseURL,
 			FlagDefault: "http://localhost:8000",
@@ -132,7 +132,7 @@ func SetupCLI(version, gitCommit string) *cobra.Command {
 	rootCmd.AddCommand((&ServeCommand{}).Command(&ServerService{}, &monitor.MonitorService{}))
 	rootCmd.AddCommand((&DatabaseCommand{}).Command())
 	rootCmd.AddCommand((&MessageCommand{}).Command(&MessengerService{}))
-	rootCmd.AddCommand((&TxSubmitterCommand{}).Command(&TxSubmitterService{}, &monitor.MonitorService{}))
+	rootCmd.AddCommand((&TxSubmitterCommand{}).Command(&TxSubmitterService{}))
 	rootCmd.AddCommand((&ChannelAccountsCommand{}).Command())
 	rootCmd.AddCommand((&IntegrationTestsCommand{}).Command())
 	rootCmd.AddCommand((&AuthCommand{}).Command())

@@ -7,6 +7,7 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/db/dbtest"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -86,6 +87,45 @@ func Test_AssetModelGetAll(t *testing.T) {
 	t.Run("returns empty array when no assets", func(t *testing.T) {
 		DeleteAllAssetFixtures(t, ctx, dbConnectionPool.SqlxDB())
 		actual, err := assetModel.GetAll(ctx)
+		require.NoError(t, err)
+
+		assert.Equal(t, []Asset{}, actual)
+	})
+}
+
+func Test_AssetModelGetByWalletID(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+
+	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, outerErr)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+
+	assetModel := &AssetModel{dbConnectionPool: dbConnectionPool}
+
+	t.Run("returns all assets associated with a walletID successfully", func(t *testing.T) {
+		assets := ClearAndCreateAssetFixtures(t, ctx, dbConnectionPool)
+		require.Equal(t, 2, len(assets))
+
+		wallet := CreateWalletFixture(t, ctx, dbConnectionPool, "walletA", "https://www.a.com", "www.a.com", "a://")
+		require.NotNil(t, wallet)
+
+		AssociateAssetWithWalletFixture(t, ctx, dbConnectionPool, assets[0].ID, wallet.ID)
+
+		actual, err := assetModel.GetByWalletID(ctx, wallet.ID)
+		require.NoError(t, err)
+		require.Len(t, actual, 1)
+		require.Equal(t, assets[0].ID, actual[0].ID)
+		require.Equal(t, assets[0].Code, actual[0].Code)
+		require.Equal(t, assets[0].Issuer, actual[0].Issuer)
+	})
+
+	t.Run("returns empty array when no assets associated with walletID", func(t *testing.T) {
+		wallet := CreateWalletFixture(t, ctx, dbConnectionPool, "walletB", "https://www.b.com", "www.b.com", "b://")
+
+		actual, err := assetModel.GetByWalletID(ctx, wallet.ID)
 		require.NoError(t, err)
 
 		assert.Equal(t, []Asset{}, actual)
@@ -344,6 +384,50 @@ func Test_GetAssetsPerReceiverWallet(t *testing.T) {
 		Amount:         "1",
 	})
 
+	var invitationSentAt time.Time
+	const q = "UPDATE receiver_wallets SET invitation_sent_at = NOW() WHERE id = $1 RETURNING invitation_sent_at"
+	err = dbConnectionPool.GetContext(ctx, &invitationSentAt, q, receiverWalletXA.ID)
+	require.NoError(t, err)
+
+	now := time.Now()
+	_ = CreateMessageFixture(t, ctx, dbConnectionPool, &Message{
+		Type:             message.MessengerTypeDryRun,
+		AssetID:          &asset1.ID,
+		ReceiverID:       receiverX.ID,
+		WalletID:         walletA.ID,
+		ReceiverWalletID: &receiverWalletXA.ID,
+		TextEncrypted:    "Message",
+		Status:           SuccessMessageStatus,
+		StatusHistory: []MessageStatusHistoryEntry{
+			{
+				StatusMessage: nil,
+				Status:        SuccessMessageStatus,
+				Timestamp:     now.AddDate(0, 0, 1),
+			},
+		},
+		CreatedAt: now.AddDate(0, 0, 1),
+		UpdatedAt: now.AddDate(0, 0, 1),
+	})
+
+	_ = CreateMessageFixture(t, ctx, dbConnectionPool, &Message{
+		Type:             message.MessengerTypeDryRun,
+		AssetID:          &asset1.ID,
+		ReceiverID:       receiverX.ID,
+		WalletID:         walletA.ID,
+		ReceiverWalletID: &receiverWalletXA.ID,
+		TextEncrypted:    "Message",
+		Status:           SuccessMessageStatus,
+		StatusHistory: []MessageStatusHistoryEntry{
+			{
+				StatusMessage: nil,
+				Status:        SuccessMessageStatus,
+				Timestamp:     now.AddDate(0, 0, 2),
+			},
+		},
+		CreatedAt: now.AddDate(0, 0, 2),
+		UpdatedAt: now.AddDate(0, 0, 2),
+	})
+
 	// paymentXA2 - walletA, asset2 for receiverX on their receiverWalletA
 	_ = CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
 		ReceiverWallet: receiverWalletXA,
@@ -434,6 +518,10 @@ func Test_GetAssetsPerReceiverWallet(t *testing.T) {
 					Email:       receiverX.Email,
 					PhoneNumber: receiverX.PhoneNumber,
 				},
+				ReceiverWalletStats: ReceiverWalletStats{
+					TotalInvitationSMSResentAttempts: 2,
+				},
+				InvitationSentAt: &invitationSentAt,
 			},
 			WalletID: walletA.ID,
 			Asset:    *asset1,
@@ -446,6 +534,7 @@ func Test_GetAssetsPerReceiverWallet(t *testing.T) {
 					Email:       receiverX.Email,
 					PhoneNumber: receiverX.PhoneNumber,
 				},
+				InvitationSentAt: &invitationSentAt,
 			},
 			WalletID: walletA.ID,
 			Asset:    *asset2,

@@ -19,6 +19,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve"
 	txSub "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission"
+	tssMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/monitor"
 	tssUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
 )
 
@@ -63,7 +64,7 @@ func (s *TxSubmitterService) StartMetricsServe(ctx context.Context, opts serve.M
 	}
 }
 
-func (c *TxSubmitterCommand) Command(submitterService TxSubmitterServiceInterface, monitorService monitor.MonitorServiceInterface) *cobra.Command {
+func (c *TxSubmitterCommand) Command(submitterService TxSubmitterServiceInterface) *cobra.Command {
 	submitterOpts := txSub.SubmitterOptions{}
 	metricsServeOpts := serve.MetricsServeOptions{}
 	crashTrackerOptions := crashtracker.CrashTrackerOptions{}
@@ -156,15 +157,20 @@ func (c *TxSubmitterCommand) Command(submitterService TxSubmitterServiceInterfac
 				Environment: globalOptions.environment,
 			}
 
-			// Inject metrics dependencies
-			err = monitorService.Start(metricOptions)
+			monitorClient, err := monitor.GetClient(metricOptions)
 			if err != nil {
-				log.Ctx(ctx).Fatalf("Error creating monitor service: %s", err.Error())
+				log.Ctx(ctx).Fatalf("Error creating monitor client: %s", err.Error())
 			}
-			metricsServeOpts.MonitorService = monitorService
+
+			tssMonitorSvc := tssMonitor.TSSMonitorService{
+				Client:        monitorClient,
+				GitCommitHash: globalOptions.gitCommit,
+				Version:       globalOptions.version,
+			}
+			metricsServeOpts.MonitorService = &tssMonitorSvc
 
 			// Inject server dependencies
-			submitterOpts.MonitorService = monitorService
+			submitterOpts.MonitorService = tssMonitorSvc
 			submitterOpts.DatabaseDSN = globalOptions.databaseURL
 			submitterOpts.NetworkPassphrase = globalOptions.networkPassphrase
 			submitterOpts.PrivateKeyEncrypter = tssUtils.DefaultPrivateKeyEncrypter{}

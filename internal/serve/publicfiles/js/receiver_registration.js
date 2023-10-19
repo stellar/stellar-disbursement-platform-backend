@@ -1,5 +1,7 @@
 const WalletRegistration = {
   jwtToken: "",
+  intlTelInput: null,
+  phoneNumberErrorEl: null,
 };
 
 function getJwtToken() {
@@ -74,44 +76,62 @@ function enableButtons(buttons) {
   }, 1000);
 }
 
-document.addEventListener("DOMContentLoaded", function() {
+document.addEventListener("DOMContentLoaded", function () {
   const form = document.getElementById("submitPhoneNumberForm");
 
-  form.addEventListener("submit", function(event) {
+  form.addEventListener("submit", function (event) {
     submitPhoneNumber(event);
   });
 });
 
 async function submitPhoneNumber(event) {
   event.preventDefault();
+  const phoneNumberEl = document.querySelector("#phone_number");
   const phoneNumberSectionEl = document.querySelector(
-    "[data-section='phoneNumber']",
+    "[data-section='phoneNumber']"
   );
   const passcodeSectionEl = document.querySelector("[data-section='passcode']");
-  const errorNotificationEl = document.querySelector(
-    "[data-section-error='phoneNumber']",
+  const errorNotificationEl = WalletRegistration.phoneNumberErrorEl;
+  const reCAPTCHATokenEl = phoneNumberSectionEl.querySelector(
+    "#g-recaptcha-response"
   );
-  const phoneNumberEl = document.getElementById("phone_number");
-  const reCAPTCHATokenEl = phoneNumberSectionEl.querySelector("#g-recaptcha-response")
   const buttonEls = phoneNumberSectionEl.querySelectorAll("[data-button]");
 
   if (!reCAPTCHATokenEl || !reCAPTCHATokenEl.value) {
-    toggleErrorNotification(errorNotificationEl, "Error", "reCAPTCHA is required", true);
+    toggleErrorNotification(
+      errorNotificationEl,
+      "Error",
+      "reCAPTCHA is required",
+      true
+    );
     return;
   }
 
   toggleErrorNotification(errorNotificationEl, "", "", false);
 
   if (
-    phoneNumberEl &&
+    WalletRegistration.intlTelInput &&
     reCAPTCHATokenEl &&
     phoneNumberSectionEl &&
     passcodeSectionEl &&
     errorNotificationEl
   ) {
     disableButtons(buttonEls);
-    const phoneNumber = phoneNumberEl.value;
+    const phoneNumber = WalletRegistration.intlTelInput.getNumber();
     const reCAPTCHAToken = reCAPTCHATokenEl.value;
+
+    if (
+      phoneNumberEl.value.trim() &&
+      !WalletRegistration.intlTelInput.isPossibleNumber()
+    ) {
+      toggleErrorNotification(
+        errorNotificationEl,
+        "Error",
+        "Entered phone number is not valid",
+        true
+      );
+      return;
+    }
 
     function showNextPage() {
       phoneNumberSectionEl.style.display = "none";
@@ -129,10 +149,10 @@ async function submitPhoneNumber(event) {
   }
 }
 
-document.addEventListener("DOMContentLoaded", function() {
+document.addEventListener("DOMContentLoaded", function () {
   const form = document.getElementById("submitOtpForm");
 
-  form.addEventListener("submit", function(event) {
+  form.addEventListener("submit", function (event) {
     submitOtp(event);
   });
 });
@@ -142,25 +162,31 @@ async function submitOtp(event) {
 
   const passcodeSectionEl = document.querySelector("[data-section='passcode']");
   const errorNotificationEl = document.querySelector(
-    "[data-section-error='passcode']",
+    "[data-section-error='passcode']"
   );
   const successNotificationEl = document.querySelector(
-    "[data-section-success='passcode']",
+    "[data-section-success='passcode']"
   );
-  const phoneNumberEl = document.getElementById("phone_number");
   const otpEl = document.getElementById("otp");
   const verificationEl = document.getElementById("verification");
 
   const buttonEls = passcodeSectionEl.querySelectorAll("[data-button]");
 
-  const reCAPTCHATokenEl = passcodeSectionEl.querySelector("#g-recaptcha-response-1");
+  const reCAPTCHATokenEl = passcodeSectionEl.querySelector(
+    "#g-recaptcha-response-1"
+  );
   if (!reCAPTCHATokenEl || !reCAPTCHATokenEl.value) {
-    toggleErrorNotification(errorNotificationEl, "Error", "reCAPTCHA is required", true);
+    toggleErrorNotification(
+      errorNotificationEl,
+      "Error",
+      "reCAPTCHA is required",
+      true
+    );
     return;
   }
 
   if (
-    phoneNumberEl &&
+    WalletRegistration.intlTelInput &&
     otpEl &&
     verificationEl &&
     passcodeSectionEl &&
@@ -169,7 +195,7 @@ async function submitOtp(event) {
     toggleErrorNotification(errorNotificationEl, "", "", false);
     toggleSuccessNotification(successNotificationEl, "", "", false);
 
-    const phoneNumber = phoneNumberEl.value;
+    const phoneNumber = WalletRegistration.intlTelInput.getNumber();
     const otp = otpEl.value;
     const verification = verificationEl.value;
 
@@ -199,6 +225,10 @@ async function submitOtp(event) {
             location.reload();
             clearTimeout(t);
           }, 2000);
+        } else if (response.status === 400) {
+          const data = await response.json();
+          const errorMessage = data.error || "Something went wrong, please try again later.";
+          throw new Error(errorMessage);
         } else {
           throw new Error("Something went wrong, please try again later.");
         }
@@ -211,10 +241,10 @@ async function submitOtp(event) {
   }
 }
 
-document.addEventListener("DOMContentLoaded", function() {
-  const button = document.getElementById('resendSmsButton');
+document.addEventListener("DOMContentLoaded", function () {
+  const button = document.getElementById("resendSmsButton");
 
-  button.addEventListener('click', function(event) {
+  button.addEventListener("click", function (event) {
     resendSms(event);
   });
 });
@@ -222,26 +252,37 @@ document.addEventListener("DOMContentLoaded", function() {
 async function resendSms() {
   const passcodeSectionEl = document.querySelector("[data-section='passcode']");
   const errorNotificationEl = document.querySelector(
-    "[data-section-error='passcode']",
+    "[data-section-error='passcode']"
   );
   const successNotificationEl = document.querySelector(
-    "[data-section-success='passcode']",
+    "[data-section-success='passcode']"
   );
   const buttonEls = passcodeSectionEl.querySelectorAll("[data-button]");
-  const phoneNumberEl = document.getElementById("phone_number");
-  const reCAPTCHATokenEl = passcodeSectionEl.querySelector("#g-recaptcha-response-1");
+  const reCAPTCHATokenEl = passcodeSectionEl.querySelector(
+    "#g-recaptcha-response-1"
+  );
 
   if (!reCAPTCHATokenEl || !reCAPTCHATokenEl.value) {
-    toggleErrorNotification(errorNotificationEl, "Error", "reCAPTCHA is required", true);
+    toggleErrorNotification(
+      errorNotificationEl,
+      "Error",
+      "reCAPTCHA is required",
+      true
+    );
     return;
   }
 
-  if ((passcodeSectionEl, errorNotificationEl, phoneNumberEl, reCAPTCHATokenEl)) {
+  if (
+    (passcodeSectionEl,
+    errorNotificationEl,
+    WalletRegistration.intlTelInput,
+    reCAPTCHATokenEl)
+  ) {
     disableButtons(buttonEls);
     toggleErrorNotification(errorNotificationEl, "", "", false);
     toggleSuccessNotification(successNotificationEl, "", "", false);
 
-    const phoneNumber = phoneNumberEl.value;
+    const phoneNumber = WalletRegistration.intlTelInput.getNumber();
     const reCAPTCHAToken = reCAPTCHATokenEl.value;
 
     function showErrorMessage(error) {
@@ -254,7 +295,7 @@ async function resendSms() {
         successNotificationEl,
         "New SMS sent",
         "You will receive a new one-time passcode",
-        true,
+        true
       );
       enableButtons(buttonEls);
     }
@@ -264,7 +305,62 @@ async function resendSms() {
   }
 }
 
+function resetNumberInputError(buttonEls) {
+  if (
+    WalletRegistration.phoneNumberErrorEl &&
+    WalletRegistration.phoneNumberErrorEl.style.display !== "none"
+  ) {
+    toggleErrorNotification(
+      WalletRegistration.phoneNumberErrorEl,
+      "",
+      "",
+      false
+    );
+    enableButtons(buttonEls);
+  }
+}
+
+// Phone number input
+// https://github.com/jackocnr/intl-tel-input
+function phoneNumberInit() {
+  const phoneNumberInput = document.querySelector("#phone_number");
+  const phoneNumberSectionEl = document.querySelector(
+    "[data-section='phoneNumber']"
+  );
+  const buttonEls = phoneNumberSectionEl.querySelectorAll("[data-button]");
+
+  const intlTelInput = window.intlTelInput(phoneNumberInput, {
+    utilsScript: "/static/js/intl-tel-input-v18.2.1-utils.min.js",
+    separateDialCode: true,
+    preferredCountries: [],
+    // Excluding Cuba, Iran, North Korea, and Syria
+    excludeCountries: ["cu", "ir", "kp", "sy"],
+    // Setting default country based on user's IP address
+    initialCountry: "auto",
+    geoIpLookup: (callback) => {
+      fetch("https://ipapi.co/json")
+        .then((res) => res.json())
+        .then((data) => callback(data.country_code))
+        .catch(() => callback(""));
+    },
+  });
+
+  // Clear phone number error message
+  phoneNumberInput.addEventListener("change", () =>
+    resetNumberInputError(buttonEls)
+  );
+  phoneNumberInput.addEventListener("keyup", () =>
+    resetNumberInputError(buttonEls)
+  );
+
+  return intlTelInput;
+}
+
 // Init
 window.onload = async () => {
   WalletRegistration.jwtToken = getJwtToken();
+  WalletRegistration.intlTelInput = phoneNumberInit();
+  WalletRegistration.phoneNumberErrorEl = document.querySelector(
+    "[data-section-error='phoneNumber']"
+  );
 };

@@ -13,6 +13,7 @@ import (
 	"github.com/stellar/go/network"
 	supporthttp "github.com/stellar/go/support/http"
 	"github.com/stellar/go/support/log"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
@@ -264,6 +265,10 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			updateReceiverHandler := httphandler.UpdateReceiverHandler{Models: o.Models, DBConnectionPool: o.dbConnectionPool}
 			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole)).
 				Patch("/{id}", updateReceiverHandler.UpdateReceiver)
+
+			receiverWalletHandler := httphandler.ReceiverWalletsHandler{Models: o.Models}
+			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole)).
+				Patch("/wallets/{receiver_wallet_id}", receiverWalletHandler.RetryInvitation)
 		})
 
 		r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...)).Route("/countries", func(r chi.Router) {
@@ -289,7 +294,14 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 		})
 
 		r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...)).Route("/wallets", func(r chi.Router) {
-			r.Get("/", httphandler.WalletsHandler{Models: o.Models}.GetWallets)
+			walletsHandler := httphandler.WalletsHandler{Models: o.Models}
+			r.Get("/", walletsHandler.GetWallets)
+			r.With(middleware.AnyRoleMiddleware(authManager, data.DeveloperUserRole)).
+				Post("/", walletsHandler.PostWallets)
+			r.With(middleware.AnyRoleMiddleware(authManager, data.DeveloperUserRole)).
+				Delete("/{id}", walletsHandler.DeleteWallet)
+			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole)).
+				Patch("/{id}", walletsHandler.PatchWallets)
 		})
 
 		profileHandler := httphandler.ProfileHandler{
@@ -393,7 +405,7 @@ func createAuthManager(dbConnectionPool db.DBConnectionPool, ec256PublicKey, ec2
 		return nil, fmt.Errorf("db connection pool cannot be nil")
 	}
 
-	err := utils.ValidateECDSAKeys(ec256PublicKey, ec256PrivateKey)
+	err := utils.ValidateStrongECKeyPair(ec256PublicKey, ec256PrivateKey)
 	if err != nil {
 		return nil, fmt.Errorf("validating auth manager keys: %w", err)
 	}

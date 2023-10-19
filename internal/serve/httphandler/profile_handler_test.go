@@ -54,6 +54,20 @@ func createOrganizationProfileMultipartRequest(t *testing.T, url, fieldName, fil
 	return req, nil
 }
 
+func resetOrganizationInfo(t *testing.T, ctx context.Context, dbConnectionPool db.DBConnectionPool) {
+	t.Helper()
+
+	const q = `
+		UPDATE
+			organizations
+		SET
+			name = 'MyCustomAid', logo = NULL, timezone_utc_offset = '+00:00',
+			sms_registration_message_template = DEFAULT, otp_message_template = DEFAULT,
+			sms_resend_interval = NULL`
+	_, err := dbConnectionPool.ExecContext(ctx, q)
+	require.NoError(t, err)
+}
+
 func Test_PatchOrganizationProfileRequest_AreAllFieldsEmpty(t *testing.T) {
 	r := &PatchOrganizationProfileRequest{
 		OrganizationName:  "",
@@ -90,12 +104,6 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 
 	handler := &ProfileHandler{Models: models, MaxMemoryAllocation: DefaultMaxMemoryAllocation}
 	url := "/profile/organization"
-
-	resetOrganizationInfo := func(t *testing.T, ctx context.Context) {
-		const q = "UPDATE organizations SET name = 'MyCustomAid', logo = NULL, timezone_utc_offset = '+00:00'"
-		_, err := dbConnectionPool.ExecContext(ctx, q)
-		require.NoError(t, err)
-	}
 
 	ctx := context.Background()
 
@@ -224,7 +232,7 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 	})
 
 	t.Run("updates the organization's name successfully", func(t *testing.T) {
-		resetOrganizationInfo(t, ctx)
+		resetOrganizationInfo(t, ctx, dbConnectionPool)
 
 		ctx = context.WithValue(ctx, middleware.TokenContextKey, "token")
 
@@ -248,7 +256,7 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
-		assert.JSONEq(t, `{"message": "organization profile updated successfully"}`, string(respBody))
+		assert.JSONEq(t, `{"message": "updated successfully"}`, string(respBody))
 
 		org, err = models.Organizations.Get(ctx)
 		require.NoError(t, err)
@@ -258,7 +266,7 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 	})
 
 	t.Run("updates the organization's timezone UTC offset successfully", func(t *testing.T) {
-		resetOrganizationInfo(t, ctx)
+		resetOrganizationInfo(t, ctx, dbConnectionPool)
 
 		ctx = context.WithValue(ctx, middleware.TokenContextKey, "token")
 
@@ -283,7 +291,7 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
-		assert.JSONEq(t, `{"message": "organization profile updated successfully"}`, string(respBody))
+		assert.JSONEq(t, `{"message": "updated successfully"}`, string(respBody))
 
 		org, err = models.Organizations.Get(ctx)
 		require.NoError(t, err)
@@ -294,7 +302,7 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 	})
 
 	t.Run("updates the organization's IsApprovalRequired successfully", func(t *testing.T) {
-		resetOrganizationInfo(t, ctx)
+		resetOrganizationInfo(t, ctx, dbConnectionPool)
 
 		ctx = context.WithValue(ctx, middleware.TokenContextKey, "token")
 
@@ -316,7 +324,7 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
-		assert.JSONEq(t, `{"message": "organization profile updated successfully"}`, string(respBody))
+		assert.JSONEq(t, `{"message": "updated successfully"}`, string(respBody))
 
 		org, err = models.Organizations.Get(ctx)
 		require.NoError(t, err)
@@ -324,7 +332,7 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 	})
 
 	t.Run("updates the organization's logo successfully", func(t *testing.T) {
-		resetOrganizationInfo(t, ctx)
+		resetOrganizationInfo(t, ctx, dbConnectionPool)
 
 		ctx = context.WithValue(ctx, middleware.TokenContextKey, "token")
 
@@ -354,7 +362,7 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
-		assert.JSONEq(t, `{"message": "organization profile updated successfully"}`, string(respBody))
+		assert.JSONEq(t, `{"message": "updated successfully"}`, string(respBody))
 
 		org, err = models.Organizations.Get(ctx)
 		require.NoError(t, err)
@@ -368,7 +376,7 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 		assert.Equal(t, "MyCustomAid", org.Name)
 
 		// JPEG logo
-		resetOrganizationInfo(t, ctx)
+		resetOrganizationInfo(t, ctx, dbConnectionPool)
 
 		org, err = models.Organizations.Get(ctx)
 		require.NoError(t, err)
@@ -395,7 +403,7 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
-		assert.JSONEq(t, `{"message": "organization profile updated successfully"}`, string(respBody))
+		assert.JSONEq(t, `{"message": "updated successfully"}`, string(respBody))
 
 		org, err = models.Organizations.Get(ctx)
 		require.NoError(t, err)
@@ -409,8 +417,8 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 		assert.Equal(t, "MyCustomAid", org.Name)
 	})
 
-	t.Run("updates both organization name, timezone UTC offset and logo successfully", func(t *testing.T) {
-		resetOrganizationInfo(t, ctx)
+	t.Run("updates organization name, timezone UTC offset and logo successfully", func(t *testing.T) {
+		resetOrganizationInfo(t, ctx, dbConnectionPool)
 
 		ctx = context.WithValue(ctx, middleware.TokenContextKey, "token")
 
@@ -440,7 +448,7 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
-		assert.JSONEq(t, `{"message": "organization profile updated successfully"}`, string(respBody))
+		assert.JSONEq(t, `{"message": "updated successfully"}`, string(respBody))
 
 		org, err = models.Organizations.Get(ctx)
 		require.NoError(t, err)
@@ -453,6 +461,208 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 		assert.Equal(t, "My Org Name", org.Name)
 		assert.Equal(t, "-03:00", org.TimezoneUTCOffset)
 		assert.Equal(t, imgBuf.Bytes(), org.Logo)
+	})
+
+	t.Run("updates organization's SMS Registration Message Template", func(t *testing.T) {
+		resetOrganizationInfo(t, ctx, dbConnectionPool)
+		ctx = context.WithValue(ctx, middleware.TokenContextKey, "token")
+
+		org, err := models.Organizations.Get(ctx)
+		require.NoError(t, err)
+		defaultMessage := "You have a payment waiting for you from the {{.OrganizationName}}. Click {{.RegistrationLink}} to register."
+		assert.Equal(t, defaultMessage, org.SMSRegistrationMessageTemplate)
+
+		// Custom message
+		w := httptest.NewRecorder()
+		req, err := createOrganizationProfileMultipartRequest(t, url, "", "", `{"sms_registration_message_template": "My custom receiver wallet registration invite. MyOrg 👋"}`, new(bytes.Buffer))
+		require.NoError(t, err)
+		req = req.WithContext(ctx)
+		http.HandlerFunc(handler.PatchOrganizationProfile).ServeHTTP(w, req)
+
+		resp := w.Result()
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.JSONEq(t, `{"message": "updated successfully"}`, string(respBody))
+
+		org, err = models.Organizations.Get(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, "My custom receiver wallet registration invite. MyOrg 👋", org.SMSRegistrationMessageTemplate)
+
+		// Don't update the message
+		w = httptest.NewRecorder()
+		req, err = createOrganizationProfileMultipartRequest(t, url, "", "", `{"organization_name": "MyOrg"}`, new(bytes.Buffer))
+		require.NoError(t, err)
+		req = req.WithContext(ctx)
+		http.HandlerFunc(handler.PatchOrganizationProfile).ServeHTTP(w, req)
+
+		resp = w.Result()
+		respBody, err = io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.JSONEq(t, `{"message": "updated successfully"}`, string(respBody))
+
+		org, err = models.Organizations.Get(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, "My custom receiver wallet registration invite. MyOrg 👋", org.SMSRegistrationMessageTemplate)
+
+		// Back to default message
+		w = httptest.NewRecorder()
+		req, err = createOrganizationProfileMultipartRequest(t, url, "", "", `{"sms_registration_message_template": ""}`, new(bytes.Buffer))
+		require.NoError(t, err)
+		req = req.WithContext(ctx)
+		http.HandlerFunc(handler.PatchOrganizationProfile).ServeHTTP(w, req)
+
+		resp = w.Result()
+		respBody, err = io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.JSONEq(t, `{"message": "updated successfully"}`, string(respBody))
+
+		org, err = models.Organizations.Get(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, defaultMessage, org.SMSRegistrationMessageTemplate)
+	})
+
+	t.Run("updates organization's OTP Message Template", func(t *testing.T) {
+		resetOrganizationInfo(t, ctx, dbConnectionPool)
+
+		ctx = context.WithValue(ctx, middleware.TokenContextKey, "token")
+
+		org, err := models.Organizations.Get(ctx)
+		require.NoError(t, err)
+
+		defaultMessage := "{{.OTP}} is your {{.OrganizationName}} phone verification code."
+		assert.Equal(t, defaultMessage, org.OTPMessageTemplate)
+
+		// Custom message
+		w := httptest.NewRecorder()
+		req, err := createOrganizationProfileMultipartRequest(t, url, "", "", `{"otp_message_template": "Here's your OTP Code to complete your registration. MyOrg 👋"}`, new(bytes.Buffer))
+		require.NoError(t, err)
+		req = req.WithContext(ctx)
+		http.HandlerFunc(handler.PatchOrganizationProfile).ServeHTTP(w, req)
+
+		resp := w.Result()
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.JSONEq(t, `{"message": "updated successfully"}`, string(respBody))
+
+		org, err = models.Organizations.Get(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, "Here's your OTP Code to complete your registration. MyOrg 👋", org.OTPMessageTemplate)
+
+		// Don't update the message
+		w = httptest.NewRecorder()
+		req, err = createOrganizationProfileMultipartRequest(t, url, "", "", `{"organization_name": "MyOrg"}`, new(bytes.Buffer))
+		require.NoError(t, err)
+		req = req.WithContext(ctx)
+		http.HandlerFunc(handler.PatchOrganizationProfile).ServeHTTP(w, req)
+
+		resp = w.Result()
+		respBody, err = io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.JSONEq(t, `{"message": "updated successfully"}`, string(respBody))
+
+		org, err = models.Organizations.Get(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, "Here's your OTP Code to complete your registration. MyOrg 👋", org.OTPMessageTemplate)
+
+		// Back to default message
+		w = httptest.NewRecorder()
+		req, err = createOrganizationProfileMultipartRequest(t, url, "", "", `{"otp_message_template": ""}`, new(bytes.Buffer))
+		require.NoError(t, err)
+		req = req.WithContext(ctx)
+		http.HandlerFunc(handler.PatchOrganizationProfile).ServeHTTP(w, req)
+
+		resp = w.Result()
+		respBody, err = io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.JSONEq(t, `{"message": "updated successfully"}`, string(respBody))
+
+		org, err = models.Organizations.Get(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, defaultMessage, org.OTPMessageTemplate)
+	})
+
+	t.Run("updates organization's SMS Resend Interval", func(t *testing.T) {
+		resetOrganizationInfo(t, ctx, dbConnectionPool)
+		ctx = context.WithValue(ctx, middleware.TokenContextKey, "token")
+
+		org, err := models.Organizations.Get(ctx)
+		require.NoError(t, err)
+		assert.Nil(t, org.SMSResendInterval)
+
+		// Custom interval
+		w := httptest.NewRecorder()
+		req, err := createOrganizationProfileMultipartRequest(t, url, "", "", `{"sms_resend_interval": 2}`, new(bytes.Buffer))
+		require.NoError(t, err)
+		req = req.WithContext(ctx)
+		http.HandlerFunc(handler.PatchOrganizationProfile).ServeHTTP(w, req)
+
+		resp := w.Result()
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.JSONEq(t, `{"message": "updated successfully"}`, string(respBody))
+
+		org, err = models.Organizations.Get(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, int64(2), *org.SMSResendInterval)
+
+		// Don't update the interval
+		w = httptest.NewRecorder()
+		req, err = createOrganizationProfileMultipartRequest(t, url, "", "", `{"organization_name": "MyOrg"}`, new(bytes.Buffer))
+		require.NoError(t, err)
+		req = req.WithContext(ctx)
+		http.HandlerFunc(handler.PatchOrganizationProfile).ServeHTTP(w, req)
+
+		resp = w.Result()
+		respBody, err = io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.JSONEq(t, `{"message": "updated successfully"}`, string(respBody))
+
+		org, err = models.Organizations.Get(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, int64(2), *org.SMSResendInterval)
+
+		// Back to default interval
+		w = httptest.NewRecorder()
+		req, err = createOrganizationProfileMultipartRequest(t, url, "", "", `{"sms_resend_interval": 0}`, new(bytes.Buffer))
+		require.NoError(t, err)
+		req = req.WithContext(ctx)
+		http.HandlerFunc(handler.PatchOrganizationProfile).ServeHTTP(w, req)
+
+		resp = w.Result()
+		respBody, err = io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.JSONEq(t, `{"message": "updated successfully"}`, string(respBody))
+
+		org, err = models.Organizations.Get(ctx)
+		require.NoError(t, err)
+		assert.Nil(t, org.SMSResendInterval)
 	})
 }
 
@@ -809,6 +1019,10 @@ func Test_ProfileHandler_PatchUserPassword(t *testing.T) {
 	})
 
 	t.Run("updates the user password successfully", func(t *testing.T) {
+		buf := new(strings.Builder)
+		log.DefaultLogger.SetOutput(buf)
+		log.SetLevel(log.InfoLevel)
+
 		ctx = context.WithValue(ctx, middleware.TokenContextKey, "token")
 		reqBody := `{"current_password": "currentpassword", "new_password": "!1Az?2By.3Cx"}`
 
@@ -819,10 +1033,10 @@ func Test_ProfileHandler_PatchUserPassword(t *testing.T) {
 		jwtManagerMock.
 			On("ValidateToken", req.Context(), "token").
 			Return(true, nil).
-			Once().
+			Twice().
 			On("GetUserFromToken", req.Context(), "token").
 			Return(user, nil).
-			Once()
+			Twice()
 
 		authenticatorMock.
 			On("UpdatePassword", req.Context(), user, "currentpassword", "!1Az?2By.3Cx").
@@ -837,6 +1051,9 @@ func Test_ProfileHandler_PatchUserPassword(t *testing.T) {
 		respBody, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
 		assert.JSONEq(t, `{"message": "user password updated successfully"}`, string(respBody))
+
+		// validate logs
+		require.Contains(t, buf.String(), "[UpdateUserPassword] - Updated password for user with account ID user-id")
 	})
 
 	authenticatorMock.AssertExpectations(t)
@@ -1083,9 +1300,9 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 		http.HandlerFunc(handler.GetOrganizationInfo).ServeHTTP(w, req)
 
 		resp := w.Result()
-
 		respBody, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
+		defer resp.Body.Close()
 
 		wantsBody := fmt.Sprintf(`
 			{
@@ -1093,7 +1310,111 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 				"name": "MyCustomAid",
 				"distribution_account_public_key": %q,
 				"timezone_utc_offset": "+00:00",
-				"is_approval_required":false
+				"is_approval_required": false,
+				"sms_resend_interval": 0
+			}
+		`, distributionAccountPK)
+
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.JSONEq(t, wantsBody, string(respBody))
+	})
+
+	t.Run("returns the sms_registration_message_template and otp_message_template when they aren't the default values", func(t *testing.T) {
+		ctx = context.WithValue(ctx, middleware.TokenContextKey, "mytoken")
+
+		msg := "My custom receiver wallet registration invite. MyOrg 👋"
+		err := models.Organizations.Update(ctx, &data.OrganizationUpdate{
+			SMSRegistrationMessageTemplate: &msg,
+		})
+		require.NoError(t, err)
+
+		w := httptest.NewRecorder()
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+		require.NoError(t, err)
+		http.HandlerFunc(handler.GetOrganizationInfo).ServeHTTP(w, req)
+
+		resp := w.Result()
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		wantsBody := fmt.Sprintf(`
+			{
+				"logo_url": "http://localhost:8000/organization/logo?token=mytoken",
+				"name": "MyCustomAid",
+				"distribution_account_public_key": %q,
+				"timezone_utc_offset": "+00:00",
+				"is_approval_required":false,
+				"sms_registration_message_template": "My custom receiver wallet registration invite. MyOrg 👋",
+				"sms_resend_interval": 0
+			}
+		`, distributionAccountPK)
+
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.JSONEq(t, wantsBody, string(respBody))
+
+		msg = "Here's your OTP Code to complete your registration. MyOrg 👋"
+		err = models.Organizations.Update(ctx, &data.OrganizationUpdate{
+			OTPMessageTemplate: &msg,
+		})
+		require.NoError(t, err)
+
+		w = httptest.NewRecorder()
+		req, err = http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+		require.NoError(t, err)
+		http.HandlerFunc(handler.GetOrganizationInfo).ServeHTTP(w, req)
+
+		resp = w.Result()
+		respBody, err = io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		wantsBody = fmt.Sprintf(`
+			{
+				"logo_url": "http://localhost:8000/organization/logo?token=mytoken",
+				"name": "MyCustomAid",
+				"distribution_account_public_key": %q,
+				"timezone_utc_offset": "+00:00",
+				"is_approval_required":false,
+				"sms_registration_message_template": "My custom receiver wallet registration invite. MyOrg 👋",
+				"otp_message_template": "Here's your OTP Code to complete your registration. MyOrg 👋",
+				"sms_resend_interval": 0
+			}
+		`, distributionAccountPK)
+
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.JSONEq(t, wantsBody, string(respBody))
+	})
+
+	t.Run("returns the custom sms_resend_interval", func(t *testing.T) {
+		resetOrganizationInfo(t, ctx, dbConnectionPool)
+
+		ctx = context.WithValue(ctx, middleware.TokenContextKey, "mytoken")
+
+		var smsResendInterval int64 = 2
+		err := models.Organizations.Update(ctx, &data.OrganizationUpdate{
+			SMSResendInterval: &smsResendInterval,
+		})
+		require.NoError(t, err)
+
+		w := httptest.NewRecorder()
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+		require.NoError(t, err)
+		http.HandlerFunc(handler.GetOrganizationInfo).ServeHTTP(w, req)
+
+		resp := w.Result()
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		wantsBody := fmt.Sprintf(`
+			{
+				"logo_url": "http://localhost:8000/organization/logo?token=mytoken",
+				"name": "MyCustomAid",
+				"distribution_account_public_key": %q,
+				"timezone_utc_offset": "+00:00",
+				"is_approval_required":false,
+				"sms_resend_interval": 2
 			}
 		`, distributionAccountPK)
 

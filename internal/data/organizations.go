@@ -21,17 +21,29 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
 )
 
+const (
+	DefaultSMSRegistrationMessageTemplate = "You have a payment waiting for you from the {{.OrganizationName}}. Click {{.RegistrationLink}} to register."
+	DefaultOTPMessageTemplate             = "{{.OTP}} is your {{.OrganizationName}} phone verification code."
+)
+
 type Organization struct {
-	ID                             string    `json:"id" db:"id"`
-	Name                           string    `json:"name" db:"name"`
-	StellarMainAddress             string    `json:"stellar_main_address" db:"stellar_main_address"`
-	TimezoneUTCOffset              string    `json:"timezone_utc_offset" db:"timezone_utc_offset"`
-	ArePaymentsEnabled             bool      `json:"are_payments_enabled" db:"are_payments_enabled"`
-	SMSRegistrationMessageTemplate string    `json:"sms_registration_message_template" db:"sms_registration_message_template"`
-	Logo                           []byte    `db:"logo"`
-	IsApprovalRequired             bool      `json:"is_approval_required" db:"is_approval_required"`
-	CreatedAt                      time.Time `json:"created_at" db:"created_at"`
-	UpdatedAt                      time.Time `json:"updated_at" db:"updated_at"`
+	ID                string `json:"id" db:"id"`
+	Name              string `json:"name" db:"name"`
+	TimezoneUTCOffset string `json:"timezone_utc_offset" db:"timezone_utc_offset"`
+	// SMSResendInterval is the time period that SDP will wait to resend the invitation SMS to the receivers that aren't registered.
+	// If it's nil means resending the invitation SMS is deactivated.
+	SMSResendInterval              *int64 `json:"sms_resend_interval" db:"sms_resend_interval"`
+	SMSRegistrationMessageTemplate string `json:"sms_registration_message_template" db:"sms_registration_message_template"`
+	// OTPMessageTemplate is the message template to send the OTP code to the receivers validates their identity when registering their wallets.
+	// The message may have the template values {{.OTP}} and {{.OrganizationName}}, it will be parsed and the values injected when executing the template.
+	// When the {{.OTP}} is not found in the message, it's added at the beginning of the message.
+	// Example:
+	//	{{.OTP}} OTPMessageTemplate
+	OTPMessageTemplate string    `json:"otp_message_template" db:"otp_message_template"`
+	Logo               []byte    `db:"logo"`
+	IsApprovalRequired bool      `json:"is_approval_required" db:"is_approval_required"`
+	CreatedAt          time.Time `json:"created_at" db:"created_at"`
+	UpdatedAt          time.Time `json:"updated_at" db:"updated_at"`
 }
 
 type OrganizationUpdate struct {
@@ -39,6 +51,11 @@ type OrganizationUpdate struct {
 	Logo               []byte
 	TimezoneUTCOffset  string
 	IsApprovalRequired *bool
+	SMSResendInterval  *int64
+
+	// Using pointers to accept empty strings
+	SMSRegistrationMessageTemplate *string
+	OTPMessageTemplate             *string
 }
 
 type LogoType string
@@ -66,8 +83,8 @@ func (lt LogoType) ToHTTPContentType() string {
 }
 
 func (ou *OrganizationUpdate) validate() error {
-	if ou.Name == "" && len(ou.Logo) == 0 && ou.TimezoneUTCOffset == "" && ou.IsApprovalRequired == nil {
-		return fmt.Errorf("name, timezone UTC offset, approval workflow flag or logo is required")
+	if ou.areAllFieldsEmpty() {
+		return fmt.Errorf("name, timezone UTC offset, approval workflow flag, SMS Resend Interval, SMS invite template, OTP message template or logo is required")
 	}
 
 	if len(ou.Logo) > 0 {
@@ -86,6 +103,16 @@ func (ou *OrganizationUpdate) validate() error {
 	}
 
 	return nil
+}
+
+func (ou *OrganizationUpdate) areAllFieldsEmpty() bool {
+	return (ou.Name == "" &&
+		len(ou.Logo) == 0 &&
+		ou.TimezoneUTCOffset == "" &&
+		ou.IsApprovalRequired == nil &&
+		ou.SMSRegistrationMessageTemplate == nil &&
+		ou.OTPMessageTemplate == nil &&
+		ou.SMSResendInterval == nil)
 }
 
 type OrganizationModel struct {
@@ -111,27 +138,6 @@ func (om *OrganizationModel) Get(ctx context.Context) (*Organization, error) {
 	}
 
 	return &organization, nil
-}
-
-func (om *OrganizationModel) ArePaymentsEnabled(ctx context.Context) (bool, error) {
-	var arePaymentsEnabled bool
-	query := `
-		SELECT
-			o.are_payments_enabled
-		FROM 
-		    organizations o
-		LIMIT 1
-	`
-
-	err := om.dbConnectionPool.GetContext(ctx, &arePaymentsEnabled, query)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return false, ErrRecordNotFound
-		}
-		return false, fmt.Errorf("error querying organization table: %w", err)
-	}
-
-	return arePaymentsEnabled, nil
 }
 
 func (om *OrganizationModel) Update(ctx context.Context, ou *OrganizationUpdate) error {
@@ -171,6 +177,36 @@ func (om *OrganizationModel) Update(ctx context.Context, ou *OrganizationUpdate)
 	if ou.IsApprovalRequired != nil {
 		fields = append(fields, "is_approval_required = ?")
 		args = append(args, *ou.IsApprovalRequired)
+	}
+
+	if ou.SMSRegistrationMessageTemplate != nil {
+		if *ou.SMSRegistrationMessageTemplate != "" {
+			fields = append(fields, "sms_registration_message_template = ?")
+			args = append(args, *ou.SMSRegistrationMessageTemplate)
+		} else {
+			// When empty value is passed by parameter we set the DEFAULT value for the column.
+			fields = append(fields, "sms_registration_message_template = DEFAULT")
+		}
+	}
+
+	if ou.OTPMessageTemplate != nil {
+		if *ou.OTPMessageTemplate != "" {
+			fields = append(fields, "otp_message_template = ?")
+			args = append(args, *ou.OTPMessageTemplate)
+		} else {
+			// When empty value is passed by parameter we set the DEFAULT value for the column.
+			fields = append(fields, "otp_message_template = DEFAULT")
+		}
+	}
+
+	if ou.SMSResendInterval != nil {
+		if *ou.SMSResendInterval > 0 {
+			fields = append(fields, "sms_resend_interval = ?")
+			args = append(args, *ou.SMSResendInterval)
+		} else {
+			// When 0 (zero) is passed by parameter we set it as NULL.
+			fields = append(fields, "sms_resend_interval = NULL")
+		}
 	}
 
 	query = om.dbConnectionPool.Rebind(fmt.Sprintf(query, strings.Join(fields, ", ")))

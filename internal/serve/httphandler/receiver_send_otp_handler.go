@@ -2,14 +2,16 @@ package httphandler
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"html/template"
 	"net/http"
+	"strings"
 
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/support/render/httpjson"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
-	htmlTpl "github.com/stellar/stellar-disbursement-platform-backend/internal/htmltemplate"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
@@ -60,13 +62,14 @@ func (h ReceiverSendOTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// validate request
-	v := validators.NewValidator()
-
-	v.Check(receiverSendOTPRequest.PhoneNumber != "", "phone_number", "phone_number is required")
-
-	if v.HasErrors() {
-		httperror.BadRequest("request invalid", err, v.Errors).Render(w)
+	if phoneValidateErr := utils.ValidatePhoneNumber(receiverSendOTPRequest.PhoneNumber); phoneValidateErr != nil {
+		extras := map[string]interface{}{"phone_number": "phone_number is required"}
+		if !errors.Is(phoneValidateErr, utils.ErrEmptyPhoneNumber) {
+			phoneValidateErr = fmt.Errorf("validating phone number %s: %w", utils.TruncateString(receiverSendOTPRequest.PhoneNumber, len(receiverSendOTPRequest.PhoneNumber)/4), phoneValidateErr)
+			log.Ctx(ctx).Error(phoneValidateErr)
+			extras["phone_number"] = "invalid phone number provided"
+		}
+		httperror.BadRequest("request invalid", phoneValidateErr, extras).Render(w)
 		return
 	}
 
@@ -109,21 +112,32 @@ func (h ReceiverSendOTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request
 	if numberOfUpdatedRows < 1 {
 		log.Ctx(ctx).Warnf("updated no rows in receiver send OTP handler for phone number: %s", utils.TruncateString(receiverSendOTPRequest.PhoneNumber, len(receiverSendOTPRequest.PhoneNumber)/4))
 	} else {
-		// Build the data object that will be injected in message template
 		sendOTPData := ReceiverSendOTPData{
 			OTP:              newOTP,
 			OrganizationName: organization.Name,
 		}
 
-		sendOTPMessage, err := htmlTpl.ExecuteHTMLTemplate("receiver_otp_message.tmpl", sendOTPData)
+		otpMessageTemplate := organization.OTPMessageTemplate
+		if !strings.Contains(organization.OTPMessageTemplate, "{{.OTP}}") {
+			// Adding the OTP code to the template
+			otpMessageTemplate = fmt.Sprintf(`{{.OTP}} %s`, strings.TrimSpace(otpMessageTemplate))
+		}
+
+		sendOTPMessageTpl, err := template.New("").Parse(otpMessageTemplate)
 		if err != nil {
+			httperror.InternalError(ctx, "Cannot parse OTP template", err, nil).Render(w)
+			return
+		}
+
+		builder := new(strings.Builder)
+		if err = sendOTPMessageTpl.Execute(builder, sendOTPData); err != nil {
 			httperror.InternalError(ctx, "Cannot execute OTP template", err, nil).Render(w)
 			return
 		}
 
 		smsMessage := message.Message{
 			ToPhoneNumber: receiverSendOTPRequest.PhoneNumber,
-			Message:       sendOTPMessage,
+			Message:       builder.String(),
 		}
 
 		log.Ctx(ctx).Infof("sending OTP message to phone number: %s", utils.TruncateString(receiverSendOTPRequest.PhoneNumber, 3))

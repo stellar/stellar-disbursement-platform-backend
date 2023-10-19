@@ -79,6 +79,8 @@ func (psh PaymentStatusHistory) Value() (driver.Value, error) {
 	return pq.Array(statusHistoryJSON).Value()
 }
 
+var _ driver.Valuer = (*PaymentStatusHistory)(nil)
+
 // Scan implements the sql.Scanner interface.
 func (psh *PaymentStatusHistory) Scan(src interface{}) error {
 	var statusHistoryJSON []string
@@ -97,6 +99,8 @@ func (psh *PaymentStatusHistory) Scan(src interface{}) error {
 
 	return nil
 }
+
+var _ sql.Scanner = (*PaymentStatusHistory)(nil)
 
 func (p *PaymentInsert) Validate() error {
 	if strings.TrimSpace(p.ReceiverID) == "" {
@@ -163,7 +167,8 @@ func (p *PaymentModel) Get(ctx context.Context, id string, sqlExec db.SQLExecute
 			rw.updated_at as "receiver_wallet.updated_at",
 			rw.receiver_id as "receiver_wallet.receiver.id",
 			w.id as "receiver_wallet.wallet.id",
-			w.name as "receiver_wallet.wallet.name"
+			w.name as "receiver_wallet.wallet.name",
+			w.enabled as "receiver_wallet.wallet.enabled"
 		FROM
 			payments p
 		JOIN disbursements d ON p.disbursement_id = d.id
@@ -239,7 +244,8 @@ func (p *PaymentModel) GetAll(ctx context.Context, queryParams *QueryParams, sql
 			rw.updated_at as "receiver_wallet.updated_at",
 			rw.receiver_id as "receiver_wallet.receiver.id",
 			w.id as "receiver_wallet.wallet.id",
-			w.name as "receiver_wallet.wallet.name"
+			w.name as "receiver_wallet.wallet.name",
+			w.enabled as "receiver_wallet.wallet.enabled"
 		FROM
 			payments p
 		JOIN disbursements d on p.disbursement_id = d.id
@@ -253,6 +259,47 @@ func (p *PaymentModel) GetAll(ctx context.Context, queryParams *QueryParams, sql
 	err := sqlExec.SelectContext(ctx, &payments, query, params...)
 	if err != nil {
 		return nil, fmt.Errorf("error querying payments: %w", err)
+	}
+
+	return payments, nil
+}
+
+func (p *PaymentModel) GetAllReadyToPatchCompletionAnchorTransactions(ctx context.Context, sqlExec db.SQLExecuter) ([]Payment, error) {
+	const query = `
+		SELECT
+			p.id,
+			p.amount,
+			p.stellar_transaction_id,
+			p.status,
+			p.status_history,
+			p.updated_at,
+			a.id AS "asset.id",
+			a.code AS "asset.code",
+			a.issuer AS "asset.issuer",
+			rw.id AS "receiver_wallet.id",
+			COALESCE(rw.stellar_memo, '') AS "receiver_wallet.stellar_memo",
+			COALESCE(rw.stellar_memo_type, '') AS "receiver_wallet.stellar_memo_type",
+			rw.anchor_platform_transaction_id AS "receiver_wallet.anchor_platform_transaction_id",
+			rw.anchor_platform_transaction_synced_at AS "receiver_wallet.anchor_platform_transaction_synced_at"
+		FROM
+			payments p
+			INNER JOIN disbursements d ON p.disbursement_id = d.id
+			INNER JOIN assets a ON a.id = d.asset_id
+			INNER JOIN wallets w ON d.wallet_id = w.id
+			INNER JOIN receiver_wallets rw ON rw.receiver_id = p.receiver_id AND rw.wallet_id = w.id
+		WHERE
+			p.status = ANY($1) -- ARRAY['SUCCESS', 'FAILURE']::payment_status[]
+			AND rw.status = $2 -- 'REGISTERED'::receiver_wallet_status
+			AND rw.anchor_platform_transaction_synced_at IS NULL
+		ORDER BY
+			p.created_at
+		FOR UPDATE SKIP LOCKED
+	`
+
+	payments := make([]Payment, 0)
+	err := sqlExec.SelectContext(ctx, &payments, query, pq.Array([]PaymentStatus{SuccessPaymentStatus, FailedPaymentStatus}), RegisteredReceiversWalletStatus)
+	if err != nil {
+		return nil, fmt.Errorf("getting payments: %w", err)
 	}
 
 	return payments, nil
@@ -506,6 +553,22 @@ func (p *PaymentModel) RetryFailedPayments(ctx context.Context, email string, pa
 
 		if numRowsAffected != int64(len(paymentIDs)) {
 			return ErrMismatchNumRowsAffected
+		}
+
+		// This ensures that we are going to sync the payment transaction on the Anchor Platform again.
+		const updateReceiverWallets = `
+			UPDATE
+				receiver_wallets
+			SET
+				anchor_platform_transaction_synced_at = NULL
+			WHERE
+				id IN (
+					SELECT receiver_wallet_id FROM payments WHERE id = ANY($1)
+				)
+		`
+		_, err = dbTx.ExecContext(ctx, updateReceiverWallets, pq.Array(paymentIDs))
+		if err != nil {
+			return fmt.Errorf("resetting the receiver wallets' anchor platform transaction synced at: %w", err)
 		}
 
 		return nil

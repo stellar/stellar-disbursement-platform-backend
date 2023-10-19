@@ -293,6 +293,7 @@ func Test_handleHTTP_authenticatedEndpoints(t *testing.T) {
 		{http.MethodGet, "/receivers"},
 		{http.MethodGet, "/receivers/1234"},
 		{http.MethodPatch, "/receivers/1234"},
+		{http.MethodPatch, "/receivers/wallets/1234"},
 		// Countries
 		{http.MethodGet, "/countries"},
 		// Assets
@@ -300,6 +301,11 @@ func Test_handleHTTP_authenticatedEndpoints(t *testing.T) {
 		{http.MethodPost, "/assets"},
 		{http.MethodPatch, "/assets/1234"},
 		{http.MethodDelete, "/assets/1234"},
+		// Wallets
+		{http.MethodGet, "/wallets"},
+		{http.MethodPost, "/wallets"},
+		{http.MethodDelete, "/wallets/1234"},
+		{http.MethodPatch, "/wallets/1234"},
 		// Profile
 		{http.MethodGet, "/profile"},
 		{http.MethodPatch, "/profile"},
@@ -355,7 +361,7 @@ func Test_createAuthManager(t *testing.T) {
 		{
 			name:             "returns error if dbConnectionPool is valid but the keypair is not",
 			dbConnectionPool: dbConnectionPool,
-			wantErrContains:  "validating auth manager keys: validating ECDSA public key: failed to decode PEM block containing public key",
+			wantErrContains:  "validating auth manager keys: validating EC public key: failed to decode PEM block containing public key",
 		},
 		{
 			name:             "returns error if dbConnectionPool and keypair is valid but the resetTokenExpirationHours is not",
@@ -380,7 +386,7 @@ func Test_createAuthManager(t *testing.T) {
 				tc.dbConnectionPool, tc.ec256PublicKey, tc.ec256PrivateKey, tc.resetTokenExpirationHours,
 			)
 			if tc.wantErrContains != "" {
-				assert.Contains(t, tc.wantErrContains, err.Error())
+				assert.ErrorContains(t, err, tc.wantErrContains)
 				assert.Empty(t, gotAuthManager)
 			} else {
 				assert.NoError(t, err)

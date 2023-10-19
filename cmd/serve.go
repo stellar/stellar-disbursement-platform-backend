@@ -62,18 +62,18 @@ func (s *ServerService) GetSchedulerJobRegistrars(ctx context.Context, serveOpts
 	}
 
 	return []scheduler.SchedulerJobRegisterOption{
-		scheduler.WithPaymentsProcessorJobOption(models),
-		scheduler.WithTSSMonitorJobOption(models),
+		scheduler.WithPaymentToSubmitterJobOption(models),
+		scheduler.WithPaymentFromSubmitterJobOption(models),
 		scheduler.WithSendReceiverWalletsSMSInvitationJobOption(jobs.SendReceiverWalletsSMSInvitationJobOptions{
-			AnchorPlatformBaseSepURL: serveOpts.AnchorPlatformBaseSepURL,
-			Models:                   models,
-			MessengerClient:          serveOpts.SMSMessengerClient,
-			MinDaysBetweenRetries:    schedulerOptions.MinDaysBetweenRetries,
-			MaxRetries:               schedulerOptions.MaxRetries,
-			Sep10SigningPrivateKey:   serveOpts.Sep10SigningPrivateKey,
-			CrashTrackerClient:       serveOpts.CrashTrackerClient.Clone(),
+			AnchorPlatformBaseSepURL:       serveOpts.AnchorPlatformBaseSepURL,
+			Models:                         models,
+			MessengerClient:                serveOpts.SMSMessengerClient,
+			MaxInvitationSMSResendAttempts: int64(schedulerOptions.MaxInvitationSMSResendAttempts),
+			Sep10SigningPrivateKey:         serveOpts.Sep10SigningPrivateKey,
+			CrashTrackerClient:             serveOpts.CrashTrackerClient.Clone(),
 		}),
 		scheduler.WithAPAuthEnforcementJob(apAPIService, serveOpts.MonitorService, serveOpts.CrashTrackerClient.Clone()),
+		scheduler.WithPatchAnchorPlatformTransactionsCompletionJobOption(apAPIService, models),
 	}, nil
 }
 
@@ -120,7 +120,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 		},
 		{
 			Name:           "ec256-public-key",
-			Usage:          "The EC256 Public Key. This key is used to validate the token signature",
+			Usage:          "The EC256 Public Key used to validate the token signature. This EC key needs to be at least as strong as prime256v1 (P-256).",
 			OptType:        types.String,
 			CustomSetValue: cmdUtils.SetConfigOptionEC256PublicKey,
 			ConfigKey:      &serveOpts.EC256PublicKey,
@@ -128,7 +128,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 		},
 		{
 			Name:           "ec256-private-key",
-			Usage:          "The EC256 Private Key. This key is used to sign the authentication token",
+			Usage:          "The EC256 Private Key used to sign the authentication token. This EC key needs to be at least as strong as prime256v1 (P-256).",
 			OptType:        types.String,
 			CustomSetValue: cmdUtils.SetConfigOptionEC256PrivateKey,
 			ConfigKey:      &serveOpts.EC256PrivateKey,
@@ -197,18 +197,10 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			Required:    true,
 		},
 		{
-			Name:        "min-days-between-retries",
-			Usage:       "The minimum amount of days that the invitation SMS was sent to the Receiver Wallets before we send the invitation again.",
+			Name:        "max-invitation-sms-resend-attempts",
+			Usage:       "The maximum number of attempts to resend the SMS invitation to the Receiver Wallets.",
 			OptType:     types.Int,
-			ConfigKey:   &schedulerOptions.MinDaysBetweenRetries,
-			FlagDefault: 7,
-			Required:    true,
-		},
-		{
-			Name:        "max-retries",
-			Usage:       "The maximum amount of tries to send the SMS invitation to the Receiver Wallets.",
-			OptType:     types.Int,
-			ConfigKey:   &schedulerOptions.MaxRetries,
+			ConfigKey:   &schedulerOptions.MaxInvitationSMSResendAttempts,
 			FlagDefault: 3,
 			Required:    true,
 		},
@@ -244,7 +236,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 		},
 		{
 			Name:           "sdp-ui-base-url",
-			Usage:          "The SDP UI Base URL.",
+			Usage:          "The SDP UI/dashboard Base URL.",
 			OptType:        types.String,
 			ConfigKey:      &serveOpts.UIBaseURL,
 			FlagDefault:    "http://localhost:3000",

@@ -77,20 +77,41 @@ func (a *AssetModel) GetByCodeAndIssuer(ctx context.Context, code, issuer string
 	return &asset, nil
 }
 
+// GetByWalletID returns all assets associated with a wallet.
+func (a *AssetModel) GetByWalletID(ctx context.Context, walletID string) ([]Asset, error) {
+	assets := []Asset{}
+	query := `
+		SELECT 
+		    a.*
+		FROM 
+		    assets a
+		JOIN 
+		    wallets_assets wa ON a.id = wa.asset_id
+		WHERE 
+		    deleted_at IS NULL 
+		    AND wa.wallet_id = $1
+		ORDER BY 
+		    a.code ASC
+	`
+
+	err := a.dbConnectionPool.SelectContext(ctx, &assets, query, walletID)
+	if err != nil {
+		return nil, fmt.Errorf("querying assets: %w", err)
+	}
+	return assets, nil
+}
+
 // GetAll returns all assets in the database.
 func (a *AssetModel) GetAll(ctx context.Context) ([]Asset, error) {
 	// TODO: We will want to filter out "deleted" assets at some point
 	assets := []Asset{}
 	query := `
 		SELECT 
-			a.id, 
-			a.code, 
-			a.issuer,
-			a.created_at,
-			a.updated_at,
-			a.deleted_at
+			a.*
 		FROM 
 			assets a
+		WHERE 
+		    deleted_at IS NULL
 		ORDER BY 
 			a.code ASC
 	`
@@ -204,10 +225,31 @@ func (a *AssetModel) GetAssetsPerReceiverWallet(ctx context.Context, receiverWal
 				p.id, p.asset_id, d.wallet_id
 			ORDER BY
 				p.updated_at DESC
+		), messages_resent_since_invitation AS (
+			-- Gets the number of attempts we resent the invitation message to the receiver by wallet with its asset.
+			SELECT
+				m.receiver_wallet_id,
+				m.wallet_id,
+				m.asset_id,
+				COUNT(*) AS total_invitation_sms_resent_attempts
+			FROM
+				messages m
+				INNER JOIN receiver_wallets rw ON rw.id = m.receiver_wallet_id AND rw.wallet_id = m.wallet_id
+			WHERE
+				rw.id = ANY($2)
+				AND rw.invitation_sent_at IS NOT NULL
+				AND m.created_at > rw.invitation_sent_at
+				AND m.status = 'SUCCESS'::message_status
+			GROUP BY
+				m.receiver_wallet_id,
+				m.wallet_id,
+				m.asset_id
 		)
 		SELECT DISTINCT
 			lpw.wallet_id,
 			rw.id AS "receiver_wallet.id",
+			rw.invitation_sent_at AS "receiver_wallet.invitation_sent_at",
+			COALESCE(mrsi.total_invitation_sms_resent_attempts, 0) AS "receiver_wallet.total_invitation_sms_resent_attempts",
 			r.id AS "receiver_wallet.receiver.id",
 			r.phone_number AS "receiver_wallet.receiver.phone_number",
 			r.email AS "receiver_wallet.receiver.email",
@@ -222,6 +264,7 @@ func (a *AssetModel) GetAssetsPerReceiverWallet(ctx context.Context, receiverWal
 			INNER JOIN payments p ON p.id = lpw.payment_id
 			INNER JOIN receiver_wallets rw ON rw.id = p.receiver_wallet_id
 			INNER JOIN receivers r ON r.id = rw.receiver_id
+			LEFT JOIN messages_resent_since_invitation mrsi ON rw.id = mrsi.receiver_wallet_id AND rw.wallet_id = mrsi.wallet_id AND a.id = mrsi.asset_id
 		WHERE
 			rw.id = ANY($2)
 	`

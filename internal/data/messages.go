@@ -114,7 +114,7 @@ func (m *MessageModel) Insert(ctx context.Context, newMsg *MessageInsert) (*Mess
 	return &msg, nil
 }
 
-func (m *MessageModel) BulkInsert(ctx context.Context, newMsgs []*MessageInsert) error {
+func (m *MessageModel) BulkInsert(ctx context.Context, sqlExec db.SQLExecuter, newMsgs []*MessageInsert) error {
 	var (
 		types, receiverIDs, walletIDs             pq.StringArray
 		encryptedTexts, encryptedTitles, statuses pq.StringArray
@@ -150,42 +150,40 @@ func (m *MessageModel) BulkInsert(ctx context.Context, newMsgs []*MessageInsert)
 		statuses = append(statuses, string(newMsg.Status))
 	}
 
-	return db.RunInTransaction(ctx, m.dbConnectionPool, nil, func(dbTx db.DBTransaction) error {
-		const insertQuery = `
-			INSERT INTO messages
-				(
-					type, asset_id, receiver_id, wallet_id, receiver_wallet_id,
-					text_encrypted, title_encrypted, status
-				)
-			SELECT
-				UNNEST($1::message_type[]) AS type, UNNEST($2::text[]) AS asset_id, UNNEST($3::text[]) AS receiver_id, UNNEST($4::text[]) AS wallet_id,
-				UNNEST($5::text[]) AS receiver_wallet_id, UNNEST($6::text[]) AS text_encrypted, UNNEST($7::text[]) AS title_encrypted,
-				UNNEST($8::message_status[]) AS status
-			RETURNING
-				id
-		`
+	const insertQuery = `
+		INSERT INTO messages
+			(
+				type, asset_id, receiver_id, wallet_id, receiver_wallet_id,
+				text_encrypted, title_encrypted, status
+			)
+		SELECT
+			UNNEST($1::message_type[]) AS type, UNNEST($2::text[]) AS asset_id, UNNEST($3::text[]) AS receiver_id, UNNEST($4::text[]) AS wallet_id,
+			UNNEST($5::text[]) AS receiver_wallet_id, UNNEST($6::text[]) AS text_encrypted, UNNEST($7::text[]) AS title_encrypted,
+			UNNEST($8::message_status[]) AS status
+		RETURNING
+			id
+	`
 
-		var newMsgIDs []string
-		err := dbTx.SelectContext(ctx, &newMsgIDs, insertQuery, types, pq.Array(assetIDs), receiverIDs, walletIDs, pq.Array(receiverWalletIDs), encryptedTexts, encryptedTitles, statuses)
-		if err != nil {
-			return fmt.Errorf("error inserting messages in BulkInsert: %w", err)
-		}
+	var newMsgIDs []string
+	err := sqlExec.SelectContext(ctx, &newMsgIDs, insertQuery, types, pq.Array(assetIDs), receiverIDs, walletIDs, pq.Array(receiverWalletIDs), encryptedTexts, encryptedTitles, statuses)
+	if err != nil {
+		return fmt.Errorf("error inserting messages in BulkInsert: %w", err)
+	}
 
-		const updateQuery = `
-			UPDATE
-				messages
-			SET
-				status_history = array_append(status_history, create_message_status_history(updated_at, status, NULL)),
-				updated_at = NOW()
-			WHERE
-				id = ANY($1::text[])
-				AND status != 'PENDING'
-		`
-		_, err = dbTx.ExecContext(ctx, updateQuery, pq.Array(newMsgIDs))
-		if err != nil {
-			return fmt.Errorf("error update messages status history: %w", err)
-		}
+	const updateQuery = `
+		UPDATE
+			messages
+		SET
+			status_history = array_append(status_history, create_message_status_history(updated_at, status, NULL)),
+			updated_at = NOW()
+		WHERE
+			id = ANY($1::text[])
+			AND status != 'PENDING'
+	`
+	_, err = sqlExec.ExecContext(ctx, updateQuery, pq.Array(newMsgIDs))
+	if err != nil {
+		return fmt.Errorf("error update messages status history: %w", err)
+	}
 
-		return nil
-	})
+	return nil
 }

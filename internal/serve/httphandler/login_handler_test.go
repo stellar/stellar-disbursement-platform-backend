@@ -267,7 +267,7 @@ func Test_LoginHandler(t *testing.T) {
 				"error": "Cannot validate reCAPTCHA token"
 			}
 		`
-		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 		assert.JSONEq(t, wantsBody, string(respBody))
 	})
 
@@ -309,6 +309,10 @@ func Test_LoginHandler(t *testing.T) {
 	})
 
 	t.Run("returns the token correctly", func(t *testing.T) {
+		buf := new(strings.Builder)
+		log.DefaultLogger.SetOutput(buf)
+		log.SetLevel(log.InfoLevel)
+
 		user := &auth.User{
 			ID:    "user-ID",
 			Email: "email",
@@ -318,20 +322,33 @@ func Test_LoginHandler(t *testing.T) {
 			On("ValidateCredentials", mock.Anything, "testuser", "pass1234").
 			Return(user, nil).
 			Once()
-
 		roleManagerMock.
 			On("GetUserRoles", mock.Anything, user).
 			Return([]string{"role1"}, nil).
 			Once()
-
 		jwtManagerMock.
 			On("GenerateToken", mock.Anything, user, mock.AnythingOfType("time.Time")).
 			Return("token123", nil).
 			Once()
-
 		reCAPTCHAValidator.
 			On("IsTokenValid", mock.Anything, "XyZ").
 			Return(true, nil).
+			Once()
+		jwtManagerMock.
+			On("ValidateToken", mock.Anything, "token123").
+			Return(true, nil).
+			Once()
+		jwtManagerMock.
+			On("GetUserFromToken", mock.Anything, "token123").
+			Return(user, nil).
+			Once()
+		authenticatorMock.
+			On("GetUser", mock.Anything, "user-ID").
+			Return(user, nil).
+			Once()
+		roleManagerMock.
+			On("GetUserRoles", mock.Anything, user).
+			Return([]string{"role1"}, nil).
 			Once()
 
 		r.Post(url, handler.ServeHTTP)
@@ -358,6 +375,9 @@ func Test_LoginHandler(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.JSONEq(t, `{"token": "token123"}`, string(respBody))
+
+		// validate logs
+		require.Contains(t, buf.String(), "[UserLogin] - Logged in user with account ID user-ID")
 	})
 
 	authenticatorMock.AssertExpectations(t)
