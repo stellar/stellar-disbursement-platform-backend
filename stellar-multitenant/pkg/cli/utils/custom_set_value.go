@@ -67,7 +67,6 @@ func SetConfigOptionStellarPublicKey(co *config.ConfigOption) error {
 func SetCORSAllowedOrigins(co *config.ConfigOption) error {
 	corsAllowedOriginsOptions := viper.GetString(co.Name)
 	if corsAllowedOriginsOptions == "" {
-
 		return nil
 	}
 
