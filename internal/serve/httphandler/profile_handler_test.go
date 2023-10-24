@@ -664,6 +664,72 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 		require.NoError(t, err)
 		assert.Nil(t, org.SMSResendInterval)
 	})
+
+	t.Run("updates organization's Payment Cancellation Period", func(t *testing.T) {
+		resetOrganizationInfo(t, ctx, dbConnectionPool)
+		ctx = context.WithValue(ctx, middleware.TokenContextKey, "token")
+
+		org, err := models.Organizations.Get(ctx)
+		require.NoError(t, err)
+		assert.Nil(t, org.PaymentCancellationPeriod)
+
+		// Custom period
+		w := httptest.NewRecorder()
+		req, err := createOrganizationProfileMultipartRequest(t, url, "", "", `{"payment_cancellation_period": 2}`, new(bytes.Buffer))
+		require.NoError(t, err)
+		req = req.WithContext(ctx)
+		http.HandlerFunc(handler.PatchOrganizationProfile).ServeHTTP(w, req)
+
+		resp := w.Result()
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.JSONEq(t, `{"message": "updated successfully"}`, string(respBody))
+
+		org, err = models.Organizations.Get(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, int64(2), *org.PaymentCancellationPeriod)
+
+		// Don't update the period
+		w = httptest.NewRecorder()
+		req, err = createOrganizationProfileMultipartRequest(t, url, "", "", `{"organization_name": "MyOrg"}`, new(bytes.Buffer))
+		require.NoError(t, err)
+		req = req.WithContext(ctx)
+		http.HandlerFunc(handler.PatchOrganizationProfile).ServeHTTP(w, req)
+
+		resp = w.Result()
+		respBody, err = io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.JSONEq(t, `{"message": "updated successfully"}`, string(respBody))
+
+		org, err = models.Organizations.Get(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, int64(2), *org.PaymentCancellationPeriod)
+
+		// Back to default period
+		w = httptest.NewRecorder()
+		req, err = createOrganizationProfileMultipartRequest(t, url, "", "", `{"payment_cancellation_period": 0}`, new(bytes.Buffer))
+		require.NoError(t, err)
+		req = req.WithContext(ctx)
+		http.HandlerFunc(handler.PatchOrganizationProfile).ServeHTTP(w, req)
+
+		resp = w.Result()
+		respBody, err = io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.JSONEq(t, `{"message": "updated successfully"}`, string(respBody))
+
+		org, err = models.Organizations.Get(ctx)
+		require.NoError(t, err)
+		assert.Nil(t, org.PaymentCancellationPeriod)
+	})
 }
 
 func Test_ProfileHandler_PatchUserProfile(t *testing.T) {

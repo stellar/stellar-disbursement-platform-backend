@@ -33,6 +33,7 @@ type Organization struct {
 	// SMSResendInterval is the time period that SDP will wait to resend the invitation SMS to the receivers that aren't registered.
 	// If it's nil means resending the invitation SMS is deactivated.
 	SMSResendInterval              *int64 `json:"sms_resend_interval" db:"sms_resend_interval"`
+	PaymentCancellationPeriod      *int64 `json:"payment_cancellation_period" db:"payment_cancellation_period"`
 	SMSRegistrationMessageTemplate string `json:"sms_registration_message_template" db:"sms_registration_message_template"`
 	// OTPMessageTemplate is the message template to send the OTP code to the receivers validates their identity when registering their wallets.
 	// The message may have the template values {{.OTP}} and {{.OrganizationName}}, it will be parsed and the values injected when executing the template.
@@ -47,11 +48,12 @@ type Organization struct {
 }
 
 type OrganizationUpdate struct {
-	Name               string
-	Logo               []byte
-	TimezoneUTCOffset  string
-	IsApprovalRequired *bool
-	SMSResendInterval  *int64
+	Name                      string
+	Logo                      []byte
+	TimezoneUTCOffset         string
+	IsApprovalRequired        *bool
+	SMSResendInterval         *int64
+	PaymentCancellationPeriod *int64
 
 	// Using pointers to accept empty strings
 	SMSRegistrationMessageTemplate *string
@@ -112,7 +114,8 @@ func (ou *OrganizationUpdate) areAllFieldsEmpty() bool {
 		ou.IsApprovalRequired == nil &&
 		ou.SMSRegistrationMessageTemplate == nil &&
 		ou.OTPMessageTemplate == nil &&
-		ou.SMSResendInterval == nil)
+		ou.SMSResendInterval == nil &&
+		ou.PaymentCancellationPeriod == nil)
 }
 
 type OrganizationModel struct {
@@ -206,6 +209,15 @@ func (om *OrganizationModel) Update(ctx context.Context, ou *OrganizationUpdate)
 		} else {
 			// When 0 (zero) is passed by parameter we set it as NULL.
 			fields = append(fields, "sms_resend_interval = NULL")
+		}
+	}
+
+	if ou.PaymentCancellationPeriod != nil {
+		if *ou.PaymentCancellationPeriod > 0 {
+			fields = append(fields, "payment_cancellation_period = ?")
+			args = append(args, *ou.PaymentCancellationPeriod)
+		} else {
+			fields = append(fields, "payment_cancellation_period = NULL")
 		}
 	}
 

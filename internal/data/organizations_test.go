@@ -417,4 +417,29 @@ func Test_Organizations_Update(t *testing.T) {
 		require.NoError(t, err)
 		assert.Nil(t, o.SMSResendInterval)
 	})
+
+	t.Run("updates the organization's PaymentCancellationPeriod", func(t *testing.T) {
+		resetOrganizationInfo(t, ctx)
+
+		o, err := organizationModel.Get(ctx)
+		require.NoError(t, err)
+		assert.Nil(t, o.PaymentCancellationPeriod)
+
+		var PaymentCancellationPeriod int64 = 2
+		err = organizationModel.Update(ctx, &OrganizationUpdate{PaymentCancellationPeriod: &PaymentCancellationPeriod})
+		require.NoError(t, err)
+
+		o, err = organizationModel.Get(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, PaymentCancellationPeriod, *o.PaymentCancellationPeriod)
+
+		// Set it as null
+		PaymentCancellationPeriod = 0
+		err = organizationModel.Update(ctx, &OrganizationUpdate{PaymentCancellationPeriod: &PaymentCancellationPeriod})
+		require.NoError(t, err)
+
+		o, err = organizationModel.Get(ctx)
+		require.NoError(t, err)
+		assert.Nil(t, o.PaymentCancellationPeriod)
+	})
 }
