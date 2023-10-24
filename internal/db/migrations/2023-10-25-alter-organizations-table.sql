@@ -6,4 +6,4 @@ ADD
 
 -- +migrate Down
 ALTER TABLE
-  public.public.organizations DROP COLUMN payment_cancellation_period;
+  public.organizations DROP COLUMN payment_cancellation_period;
