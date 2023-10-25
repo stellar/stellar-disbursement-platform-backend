@@ -155,7 +155,7 @@ Flags:
 		err = mockCmd.ExecuteContext(ctx)
 		require.NoError(t, err)
 
-		expectUsageMessage = `Add a new tenant. The tenant name should no contain spaces or symbols.
+		expectUsageMessage = `Add a new tenant. The tenant name should only contain lower case characters and dash (-)
 
 Usage:
    add-tenants [flags]

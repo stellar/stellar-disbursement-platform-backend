@@ -18,7 +18,7 @@ func AddTenantsCmd() *cobra.Command {
 		Use:     "add-tenants",
 		Short:   "Add a new tenant.",
 		Example: "add-tenants [name]",
-		Long:    "Add a new tenant. The tenant name should no contain spaces or symbols.",
+		Long:    "Add a new tenant. The tenant name should only contain lower case characters and dash (-)",
 		Args: cobra.MatchAll(
 			cobra.ExactArgs(1),
 			validateTenantNameArg,
