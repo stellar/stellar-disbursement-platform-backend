@@ -63,6 +63,7 @@ func SetupCLI(version, gitCommit string) *cobra.Command {
 
 	cmd.AddCommand(MigrateCmd(""))
 	cmd.AddCommand(AddTenantsCmd())
+	cmd.AddCommand(ConfigTenantCmd())
 
 	return cmd
 }
