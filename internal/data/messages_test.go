@@ -77,7 +77,7 @@ func Test_MessageModel_BulkInsert(t *testing.T) {
 		wallet := CreateWalletFixture(t, ctx, dbConnectionPool, "wallet", "https://www.wallet.com", "www.wallet.com", "wallet1://")
 		receiverWallet := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, DraftReceiversWalletStatus)
 
-		err := mm.BulkInsert(ctx, []*MessageInsert{
+		err := mm.BulkInsert(ctx, dbConnectionPool, []*MessageInsert{
 			{
 				Type:             message.MessengerTypeTwilioSMS,
 				AssetID:          nil,

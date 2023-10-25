@@ -24,6 +24,7 @@ var (
 	ErrDisbursementNotFound        = errors.New("disbursement not found")
 	ErrDisbursementNotReadyToStart = errors.New("disbursement is not ready to be started")
 	ErrDisbursementNotReadyToPause = errors.New("disbursement is not ready to be paused")
+	ErrDisbursementWalletDisabled  = errors.New("disbursement wallet is disabled")
 
 	ErrDisbursementStatusCantBeChanged = errors.New("disbursement status can't be changed to the requested status")
 	ErrDisbursementStartedByCreator    = errors.New("disbursement can't be started by its creator")
@@ -103,13 +104,17 @@ func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, d
 			}
 		}
 
-		// 1. Verify Transition is Possible
+		// 1. Verify Wallet is Enabled
+		if !disbursement.Wallet.Enabled {
+			return ErrDisbursementWalletDisabled
+		}
+		// 2. Verify Transition is Possible
 		err = disbursement.Status.TransitionTo(data.StartedDisbursementStatus)
 		if err != nil {
 			return ErrDisbursementNotReadyToStart
 		}
 
-		// 2. Check if approval Workflow is enabled for this organization
+		// 3. Check if approval Workflow is enabled for this organization
 		organization, err := s.models.Organizations.Get(ctx)
 		if err != nil {
 			return fmt.Errorf("error getting organization: %w", err)
@@ -131,19 +136,19 @@ func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, d
 			}
 		}
 
-		// 3. Update all correct payment status to `ready`
+		// 4. Update all correct payment status to `ready`
 		err = s.models.Payment.UpdateStatusByDisbursementID(ctx, dbTx, disbursementID, data.ReadyPaymentStatus)
 		if err != nil {
 			return fmt.Errorf("error updating payment status to ready for disbursement with id %s: %w", disbursementID, err)
 		}
 
-		// 4. Update all receiver_wallets from `draft` to `ready`
+		// 5. Update all receiver_wallets from `draft` to `ready`
 		err = s.models.ReceiverWallet.UpdateStatusByDisbursementID(ctx, dbTx, disbursementID, data.DraftReceiversWalletStatus, data.ReadyReceiversWalletStatus)
 		if err != nil {
 			return fmt.Errorf("error updating receiver wallet status to ready for disbursement with id %s: %w", disbursementID, err)
 		}
 
-		// 5. Update disbursement status to `started`
+		// 6. Update disbursement status to `started`
 		err = s.models.Disbursements.UpdateStatus(ctx, dbTx, user.ID, disbursementID, data.StartedDisbursementStatus)
 		if err != nil {
 			return fmt.Errorf("error updating disbursement status to started for disbursement with id %s: %w", disbursementID, err)

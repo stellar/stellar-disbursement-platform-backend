@@ -79,7 +79,7 @@ func Test_Organizations_Get(t *testing.T) {
 func Test_OrganizationUpdate_validate(t *testing.T) {
 	ou := &OrganizationUpdate{}
 	err := ou.validate()
-	assert.EqualError(t, err, "name, timezone UTC offset, approval workflow flag, SMS invite template, OTP message template or logo is required")
+	assert.EqualError(t, err, "name, timezone UTC offset, approval workflow flag, SMS Resend Interval, SMS invite template, OTP message template or logo is required")
 
 	ou.Name = "My Org Name"
 	err = ou.validate()
@@ -198,7 +198,7 @@ func Test_Organizations_Update(t *testing.T) {
 	t.Run("returns error with invalid OrganizationUpdate", func(t *testing.T) {
 		ou := &OrganizationUpdate{}
 		err := organizationModel.Update(ctx, ou)
-		assert.EqualError(t, err, "invalid organization update: name, timezone UTC offset, approval workflow flag, SMS invite template, OTP message template or logo is required")
+		assert.EqualError(t, err, "invalid organization update: name, timezone UTC offset, approval workflow flag, SMS Resend Interval, SMS invite template, OTP message template or logo is required")
 	})
 
 	t.Run("updates only organization's name successfully", func(t *testing.T) {
@@ -391,5 +391,30 @@ func Test_Organizations_Update(t *testing.T) {
 		o, err = organizationModel.Get(ctx)
 		require.NoError(t, err)
 		assert.Equal(t, defaultMessage, o.OTPMessageTemplate)
+	})
+
+	t.Run("updates the organization's SMSResendInterval", func(t *testing.T) {
+		resetOrganizationInfo(t, ctx)
+
+		o, err := organizationModel.Get(ctx)
+		require.NoError(t, err)
+		assert.Nil(t, o.SMSResendInterval)
+
+		var smsResendInterval int64 = 2
+		err = organizationModel.Update(ctx, &OrganizationUpdate{SMSResendInterval: &smsResendInterval})
+		require.NoError(t, err)
+
+		o, err = organizationModel.Get(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, smsResendInterval, *o.SMSResendInterval)
+
+		// Set it as null
+		smsResendInterval = 0
+		err = organizationModel.Update(ctx, &OrganizationUpdate{SMSResendInterval: &smsResendInterval})
+		require.NoError(t, err)
+
+		o, err = organizationModel.Get(ctx)
+		require.NoError(t, err)
+		assert.Nil(t, o.SMSResendInterval)
 	})
 }
