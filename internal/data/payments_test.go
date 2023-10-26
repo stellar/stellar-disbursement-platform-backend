@@ -1304,7 +1304,7 @@ func Test_PaymentModelCancelPayment(t *testing.T) {
 			Disbursement:         disbursement,
 			ReceiverWallet:       receiverWallet,
 			Asset:                *asset,
-			StatusHistory:        []PaymentStatusHistoryEntry{
+			StatusHistory: []PaymentStatusHistoryEntry{
 				{
 					Status:        DraftPaymentStatus,
 					StatusMessage: "",
@@ -1321,7 +1321,7 @@ func Test_PaymentModelCancelPayment(t *testing.T) {
 			Disbursement:         disbursement,
 			ReceiverWallet:       receiverWallet,
 			Asset:                *asset,
-			StatusHistory:        []PaymentStatusHistoryEntry{
+			StatusHistory: []PaymentStatusHistoryEntry{
 				{
 					Status:        ReadyPaymentStatus,
 					StatusMessage: "",
@@ -1377,7 +1377,7 @@ func Test_PaymentModelCancelPayment(t *testing.T) {
 			Disbursement:         disbursement,
 			ReceiverWallet:       receiverWallet,
 			Asset:                *asset,
-			StatusHistory:        []PaymentStatusHistoryEntry{
+			StatusHistory: []PaymentStatusHistoryEntry{
 				{
 					Status:        ReadyPaymentStatus,
 					StatusMessage: "",

@@ -69,7 +69,7 @@ func Test_ReadyPaymentsCancellationJob_Execute(t *testing.T) {
 			Disbursement:         disbursement,
 			ReceiverWallet:       receiverWallet,
 			Asset:                *asset,
-			StatusHistory:        []data.PaymentStatusHistoryEntry{
+			StatusHistory: []data.PaymentStatusHistoryEntry{
 				{
 					Status:        data.ReadyPaymentStatus,
 					StatusMessage: "",
@@ -104,7 +104,7 @@ func Test_ReadyPaymentsCancellationJob_Execute(t *testing.T) {
 			Disbursement:         disbursement,
 			ReceiverWallet:       receiverWallet,
 			Asset:                *asset,
-			StatusHistory:        []data.PaymentStatusHistoryEntry{
+			StatusHistory: []data.PaymentStatusHistoryEntry{
 				{
 					Status:        data.DraftPaymentStatus,
 					StatusMessage: "",
@@ -121,7 +121,7 @@ func Test_ReadyPaymentsCancellationJob_Execute(t *testing.T) {
 			Disbursement:         disbursement,
 			ReceiverWallet:       receiverWallet,
 			Asset:                *asset,
-			StatusHistory:        []data.PaymentStatusHistoryEntry{
+			StatusHistory: []data.PaymentStatusHistoryEntry{
 				{
 					Status:        data.ReadyPaymentStatus,
 					StatusMessage: "",
@@ -169,7 +169,7 @@ func Test_ReadyPaymentsCancellationJob_Execute(t *testing.T) {
 			Disbursement:         disbursement,
 			ReceiverWallet:       receiverWallet,
 			Asset:                *asset,
-			StatusHistory:        []data.PaymentStatusHistoryEntry{
+			StatusHistory: []data.PaymentStatusHistoryEntry{
 				{
 					Status:        data.ReadyPaymentStatus,
 					StatusMessage: "",
