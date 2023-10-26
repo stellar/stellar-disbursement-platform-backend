@@ -49,12 +49,12 @@ type Organization struct {
 }
 
 type OrganizationUpdate struct {
-	Name                      string
-	Logo                      []byte
-	TimezoneUTCOffset         string
-	IsApprovalRequired        *bool
-	SMSResendInterval         *int64
-	PaymentCancellationPeriod *int64
+	Name                          string
+	Logo                          []byte
+	TimezoneUTCOffset             string
+	IsApprovalRequired            *bool
+	SMSResendInterval             *int64
+	PaymentCancellationPeriodDays *int64
 
 	// Using pointers to accept empty strings
 	SMSRegistrationMessageTemplate *string
@@ -116,7 +116,7 @@ func (ou *OrganizationUpdate) areAllFieldsEmpty() bool {
 		ou.SMSRegistrationMessageTemplate == nil &&
 		ou.OTPMessageTemplate == nil &&
 		ou.SMSResendInterval == nil &&
-		ou.PaymentCancellationPeriod == nil)
+		ou.PaymentCancellationPeriodDays == nil)
 }
 
 type OrganizationModel struct {
@@ -213,10 +213,10 @@ func (om *OrganizationModel) Update(ctx context.Context, ou *OrganizationUpdate)
 		}
 	}
 
-	if ou.PaymentCancellationPeriod != nil {
-		if *ou.PaymentCancellationPeriod > 0 {
+	if ou.PaymentCancellationPeriodDays != nil {
+		if *ou.PaymentCancellationPeriodDays > 0 {
 			fields = append(fields, "payment_cancellation_period_days = ?")
-			args = append(args, *ou.PaymentCancellationPeriod)
+			args = append(args, *ou.PaymentCancellationPeriodDays)
 		} else {
 			fields = append(fields, "payment_cancellation_period_days = NULL")
 		}

@@ -652,9 +652,11 @@ func (p *PaymentModel) CancelPaymentsWithinPeriodDays(ctx context.Context, sqlEx
 		WHERE 
 			status = 'READY'::payment_status
 			AND (
-				SELECT (value->>'timestamp')
+				SELECT (value->>'timestamp')::timestamp
 				FROM unnest(status_history) AS value
 				WHERE value->>'status' = 'READY' 
+				ORDER BY (value->>'timestamp')::timestamp DESC 
+				LIMIT 1
 			) <= $1
 	`
 

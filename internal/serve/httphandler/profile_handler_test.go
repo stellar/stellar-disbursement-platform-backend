@@ -1377,7 +1377,8 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 				"distribution_account_public_key": %q,
 				"timezone_utc_offset": "+00:00",
 				"is_approval_required": false,
-				"sms_resend_interval": 0
+				"sms_resend_interval": 0,
+				"payment_cancellation_period_days": 0
 			}
 		`, distributionAccountPK)
 
@@ -1412,7 +1413,8 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 				"timezone_utc_offset": "+00:00",
 				"is_approval_required":false,
 				"sms_registration_message_template": "My custom receiver wallet registration invite. MyOrg 👋",
-				"sms_resend_interval": 0
+				"sms_resend_interval": 0,
+				"payment_cancellation_period_days": 0
 			}
 		`, distributionAccountPK)
 
@@ -1444,7 +1446,8 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 				"is_approval_required":false,
 				"sms_registration_message_template": "My custom receiver wallet registration invite. MyOrg 👋",
 				"otp_message_template": "Here's your OTP Code to complete your registration. MyOrg 👋",
-				"sms_resend_interval": 0
+				"sms_resend_interval": 0,
+				"payment_cancellation_period_days": 0
 			}
 		`, distributionAccountPK)
 
@@ -1480,7 +1483,45 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 				"distribution_account_public_key": %q,
 				"timezone_utc_offset": "+00:00",
 				"is_approval_required":false,
-				"sms_resend_interval": 2
+				"sms_resend_interval": 2,
+				"payment_cancellation_period_days": 0
+			}
+		`, distributionAccountPK)
+
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.JSONEq(t, wantsBody, string(respBody))
+	})
+
+	t.Run("returns the custom payment_cancellation_period_days", func(t *testing.T) {
+		resetOrganizationInfo(t, ctx, dbConnectionPool)
+
+		ctx = context.WithValue(ctx, middleware.TokenContextKey, "mytoken")
+
+		var paymentCancellationPeriodDays int64 = 5
+		err := models.Organizations.Update(ctx, &data.OrganizationUpdate{
+			PaymentCancellationPeriodDays: &paymentCancellationPeriodDays,
+		})
+		require.NoError(t, err)
+
+		w := httptest.NewRecorder()
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+		require.NoError(t, err)
+		http.HandlerFunc(handler.GetOrganizationInfo).ServeHTTP(w, req)
+
+		resp := w.Result()
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		wantsBody := fmt.Sprintf(`
+			{
+				"logo_url": "http://localhost:8000/organization/logo?token=mytoken",
+				"name": "MyCustomAid",
+				"distribution_account_public_key": %q,
+				"timezone_utc_offset": "+00:00",
+				"is_approval_required":false,
+				"sms_resend_interval": 0,
+				"payment_cancellation_period_days": 5
 			}
 		`, distributionAccountPK)
 

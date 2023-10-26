@@ -2,6 +2,7 @@ package jobs
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -9,10 +10,19 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/db/dbtest"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
+
+type mockReadyPaymentsCancellationService struct {
+	mock.Mock
+}
+
+func (s mockReadyPaymentsCancellationService) CancelReadyPayments(ctx context.Context) error {
+	args := s.Called(ctx)
+	return args.Error(0)
+}
 
 func Test_ReadyPaymentsCancellationJob(t *testing.T) {
 	j := ReadyPaymentsCancellationJob{}
@@ -30,165 +40,29 @@ func Test_ReadyPaymentsCancellationJob_Execute(t *testing.T) {
 	defer dbConnectionPool.Close()
 
 	ctx := context.Background()
-	models, err := data.NewModels(dbConnectionPool)
-	require.NoError(t, err)
 
-	data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
-	data.DeleteAllDisbursementFixtures(t, ctx, dbConnectionPool)
-	data.DeleteAllCountryFixtures(t, ctx, dbConnectionPool)
-	data.DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
-	data.DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
-	data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
-	data.DeleteAllWalletFixtures(t, ctx, dbConnectionPool)
+	mockService := mockReadyPaymentsCancellationService{}
+	j := &ReadyPaymentsCancellationJob{
+		service: &mockService,
+	}
 
-	country := data.CreateCountryFixture(t, ctx, dbConnectionPool, "BRA", "Brazil")
-	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "Wallet", "https://www.wallet.com", "www.wallet.com", "wallet://")
-	asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
+	t.Run("returns error when cancellation service fails", func(t *testing.T) {
+		getEntries := log.DefaultLogger.StartTest(log.ErrorLevel)
+		mockService.On("CancelReadyPayments", ctx).Return(errors.New("Unexpected error")).Once()
 
-	receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
-	receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
-
-	disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-		Country:           country,
-		Wallet:            wallet,
-		Asset:             asset,
-		Status:            data.ReadyDisbursementStatus,
-		VerificationField: data.VerificationFieldDateOfBirth,
-	})
-
-	s := services.NewReadyPaymentsCancellationService(models)
-
-	t.Run("automatic payment cancellation is deactivated", func(t *testing.T) {
-		getEntries := log.DefaultLogger.StartTest(log.DebugLevel)
-
-		_ = data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
-			Amount:               "1",
-			StellarTransactionID: "stellar-transaction-id-1",
-			StellarOperationID:   "operation-id-1",
-			Status:               data.ReadyPaymentStatus,
-			Disbursement:         disbursement,
-			ReceiverWallet:       receiverWallet,
-			Asset:                *asset,
-			StatusHistory: []data.PaymentStatusHistoryEntry{
-				{
-					Status:        data.ReadyPaymentStatus,
-					StatusMessage: "",
-					Timestamp:     time.Now().AddDate(0, 0, -7),
-				},
-			},
-		})
-
-		cancelErr := s.CancelReadyPayments(ctx)
-		require.NoError(t, cancelErr)
+		err := j.Execute(ctx)
+		assert.EqualError(t, err, "error cancelling ready payments: Unexpected error")
 
 		entries := getEntries()
 		require.Len(t, entries, 1)
-		assert.Equal(
-			t,
-			"automatic ready payment cancellation is deactivated. Set a valid value to the organization's payment_cancellation_period_days to activate it.",
-			entries[0].Message,
-		)
+		assert.Equal(t, entries[0].Message, "error cancelling ready payments: Unexpected error")
 	})
 
-	// Set the Payment Cancellation Period
-	var paymentCancellationPeriod int64 = 5
-	err = models.Organizations.Update(ctx, &data.OrganizationUpdate{PaymentCancellationPeriod: &paymentCancellationPeriod})
-	require.NoError(t, err)
+	t.Run("executes successfully", func(t *testing.T) {
+		mockService.On("CancelReadyPayments", ctx).Return(nil).Once()
 
-	t.Run("no ready payment for more than 5 days won't cancel any", func(t *testing.T) {
-		payment1 := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
-			Amount:               "1",
-			StellarTransactionID: "stellar-transaction-id-1",
-			StellarOperationID:   "operation-id-1",
-			Status:               data.DraftPaymentStatus,
-			Disbursement:         disbursement,
-			ReceiverWallet:       receiverWallet,
-			Asset:                *asset,
-			StatusHistory: []data.PaymentStatusHistoryEntry{
-				{
-					Status:        data.DraftPaymentStatus,
-					StatusMessage: "",
-					Timestamp:     time.Now().AddDate(0, 0, -6),
-				},
-			},
-		})
-
-		payment2 := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
-			Amount:               "1",
-			StellarTransactionID: "stellar-transaction-id-1",
-			StellarOperationID:   "operation-id-1",
-			Status:               data.ReadyPaymentStatus,
-			Disbursement:         disbursement,
-			ReceiverWallet:       receiverWallet,
-			Asset:                *asset,
-			StatusHistory: []data.PaymentStatusHistoryEntry{
-				{
-					Status:        data.ReadyPaymentStatus,
-					StatusMessage: "",
-					Timestamp:     time.Now(),
-				},
-			},
-		})
-
-		err := s.CancelReadyPayments(ctx)
-		require.NoError(t, err)
-
-		payment1DB, err := models.Payment.Get(ctx, payment1.ID, dbConnectionPool)
-		require.NoError(t, err)
-
-		payment2DB, err := models.Payment.Get(ctx, payment2.ID, dbConnectionPool)
-		require.NoError(t, err)
-
-		assert.Equal(t, data.DraftPaymentStatus, payment1DB.Status)
-		assert.Equal(t, data.ReadyPaymentStatus, payment2DB.Status)
-	})
-
-	t.Run("cancels ready payments for more than 5 days", func(t *testing.T) {
-		// payment1 := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
-		// 	Amount:               "1",
-		// 	StellarTransactionID: "stellar-transaction-id-1",
-		// 	StellarOperationID:   "operation-id-1",
-		// 	Status:               data.ReadyPaymentStatus,
-		// 	Disbursement:         disbursement,
-		// 	ReceiverWallet:       receiverWallet,
-		// 	Asset:                *asset,
-		// 	StatusHistory:        []data.PaymentStatusHistoryEntry{
-		// 		{
-		// 			Status:        data.ReadyPaymentStatus,
-		// 			StatusMessage: "",
-		// 			Timestamp:     time.Now().AddDate(0, 0, -5),
-		// 		},
-		// 	},
-		// })
-
-		payment2 := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
-			Amount:               "1",
-			StellarTransactionID: "stellar-transaction-id-1",
-			StellarOperationID:   "operation-id-1",
-			Status:               data.ReadyPaymentStatus,
-			Disbursement:         disbursement,
-			ReceiverWallet:       receiverWallet,
-			Asset:                *asset,
-			StatusHistory: []data.PaymentStatusHistoryEntry{
-				{
-					Status:        data.ReadyPaymentStatus,
-					StatusMessage: "",
-					Timestamp:     time.Now().AddDate(0, 0, -7),
-				},
-			},
-		})
-
-		cancelErr := s.CancelReadyPayments(ctx)
-		require.NoError(t, cancelErr)
-
-		// payment1DB, err := models.Payment.Get(ctx, payment1.ID, dbConnectionPool)
-		// require.NoError(t, err)
-
-		payment2DB, err := models.Payment.Get(ctx, payment2.ID, dbConnectionPool)
-		require.NoError(t, err)
-
-		// assert.Equal(t, data.CanceledPaymentStatus, payment1DB.Status)
-		assert.Equal(t, data.CanceledPaymentStatus, payment2DB.Status)
+		err := j.Execute(ctx)
+		assert.NoError(t, err)
 	})
 }
 
