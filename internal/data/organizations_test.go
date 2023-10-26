@@ -423,7 +423,7 @@ func Test_Organizations_Update(t *testing.T) {
 
 		o, err := organizationModel.Get(ctx)
 		require.NoError(t, err)
-		assert.Nil(t, o.PaymentCancellationPeriod)
+		assert.Nil(t, o.PaymentCancellationPeriodDays)
 
 		var PaymentCancellationPeriod int64 = 2
 		err = organizationModel.Update(ctx, &OrganizationUpdate{PaymentCancellationPeriod: &PaymentCancellationPeriod})
@@ -431,7 +431,7 @@ func Test_Organizations_Update(t *testing.T) {
 
 		o, err = organizationModel.Get(ctx)
 		require.NoError(t, err)
-		assert.Equal(t, PaymentCancellationPeriod, *o.PaymentCancellationPeriod)
+		assert.Equal(t, PaymentCancellationPeriod, *o.PaymentCancellationPeriodDays)
 
 		// Set it as null
 		PaymentCancellationPeriod = 0
@@ -440,6 +440,6 @@ func Test_Organizations_Update(t *testing.T) {
 
 		o, err = organizationModel.Get(ctx)
 		require.NoError(t, err)
-		assert.Nil(t, o.PaymentCancellationPeriod)
+		assert.Nil(t, o.PaymentCancellationPeriodDays)
 	})
 }

@@ -32,8 +32,9 @@ type Organization struct {
 	TimezoneUTCOffset string `json:"timezone_utc_offset" db:"timezone_utc_offset"`
 	// SMSResendInterval is the time period that SDP will wait to resend the invitation SMS to the receivers that aren't registered.
 	// If it's nil means resending the invitation SMS is deactivated.
-	SMSResendInterval              *int64 `json:"sms_resend_interval" db:"sms_resend_interval"`
-	PaymentCancellationPeriod      *int64 `json:"payment_cancellation_period" db:"payment_cancellation_period"`
+	SMSResendInterval *int64 `json:"sms_resend_interval" db:"sms_resend_interval"`
+	// PaymentCancellationPeriodDays is the number of days for a ready payment to be automatically cancelled.
+	PaymentCancellationPeriodDays  *int64 `json:"payment_cancellation_period_days" db:"payment_cancellation_period_days"`
 	SMSRegistrationMessageTemplate string `json:"sms_registration_message_template" db:"sms_registration_message_template"`
 	// OTPMessageTemplate is the message template to send the OTP code to the receivers validates their identity when registering their wallets.
 	// The message may have the template values {{.OTP}} and {{.OrganizationName}}, it will be parsed and the values injected when executing the template.
@@ -214,10 +215,10 @@ func (om *OrganizationModel) Update(ctx context.Context, ou *OrganizationUpdate)
 
 	if ou.PaymentCancellationPeriod != nil {
 		if *ou.PaymentCancellationPeriod > 0 {
-			fields = append(fields, "payment_cancellation_period = ?")
+			fields = append(fields, "payment_cancellation_period_days = ?")
 			args = append(args, *ou.PaymentCancellationPeriod)
 		} else {
-			fields = append(fields, "payment_cancellation_period = NULL")
+			fields = append(fields, "payment_cancellation_period_days = NULL")
 		}
 	}
 

@@ -6,7 +6,6 @@ import (
 
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
 )
 
 type ReadyPaymentsCancellationServiceInterface interface {
@@ -32,15 +31,13 @@ func (s ReadyPaymentsCancellationService) CancelReadyPayments(ctx context.Contex
 		return fmt.Errorf("error getting organization: %w", err)
 	}
 
-	if organization.PaymentCancellationPeriod == nil {
-		log.Debug("automatic ready payment cancellation is deactivated. Set a valid value to the organization's payment_cancellation_period to activate it.")
+	if organization.PaymentCancellationPeriodDays == nil {
+		log.Debug("automatic ready payment cancellation is deactivated. Set a valid value to the organization's payment_cancellation_period_days to activate it.")
 		return nil
 	}
 
-	return db.RunInTransaction(ctx, s.sdpModels.DBConnectionPool, nil, func(dbTx db.DBTransaction) error {
-		if err := s.sdpModels.Payment.CancelPayments(ctx, dbTx, *organization.PaymentCancellationPeriod); err != nil {
-			return fmt.Errorf("canceling ready payments after %d days: %w", int(*organization.PaymentCancellationPeriod), err)
-		}
-		return nil
-	})
+	if err := s.sdpModels.Payment.CancelPaymentsWithinPeriodDays(ctx, s.sdpModels.DBConnectionPool, *organization.PaymentCancellationPeriodDays); err != nil {
+		return fmt.Errorf("canceling ready payments after %d days: %w", int(*organization.PaymentCancellationPeriodDays), err)
+	}
+	return nil
 }

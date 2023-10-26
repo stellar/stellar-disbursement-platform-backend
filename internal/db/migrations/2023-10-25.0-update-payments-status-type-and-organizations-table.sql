@@ -1,10 +1,12 @@
--- Update the payments_status type.
--- Add a new value 'CANCELED'.
-
 -- +migrate Up
 ALTER TYPE payment_status
 ADD
     VALUE 'CANCELED';
+
+ALTER TABLE
+    public.organizations
+ADD
+    COLUMN payment_cancellation_period_days INTEGER;
 
 -- +migrate Down
 UPDATE
@@ -43,3 +45,6 @@ ALTER TABLE payments ADD COLUMN status payment_status DEFAULT payment_status('DR
 UPDATE payments SET status = status_old::text::payment_status;
 ALTER TABLE payments DROP COLUMN status_old;
 DROP TYPE old_payment_status CASCADE;
+
+ALTER TABLE
+    public.organizations DROP COLUMN payment_cancellation_period_days;

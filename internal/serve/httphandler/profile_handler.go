@@ -49,7 +49,7 @@ type PatchOrganizationProfileRequest struct {
 	TimezoneUTCOffset              string  `json:"timezone_utc_offset"`
 	IsApprovalRequired             *bool   `json:"is_approval_required"`
 	SMSResendInterval              *int64  `json:"sms_resend_interval"`
-	PaymentCancellationPeriod      *int64  `json:"payment_cancellation_period"`
+	PaymentCancellationPeriod      *int64  `json:"payment_cancellation_period_days"`
 	SMSRegistrationMessageTemplate *string `json:"sms_registration_message_template"`
 	OTPMessageTemplate             *string `json:"otp_message_template"`
 }

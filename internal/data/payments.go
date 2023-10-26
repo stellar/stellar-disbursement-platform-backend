@@ -641,18 +641,26 @@ func newPaymentQuery(baseQuery string, queryParams *QueryParams, paginated bool,
 	return sqlExec.Rebind(query), params
 }
 
-// CancelPayments cancels automatically payments that are in "READY" status for an informed time period in days.
-func (p *PaymentModel) CancelPayments(ctx context.Context, sqlExec db.SQLExecuter, periodInDays int64) error {
+// CancelPaymentsWithinPeriodDays cancels automatically payments that are in "READY" status after a certain time period in days.
+func (p *PaymentModel) CancelPaymentsWithinPeriodDays(ctx context.Context, sqlExec db.SQLExecuter, periodInDays int64) error {
 	query := `
-		UPDATE payments
-		SET status = 'CANCELED'::payment_status,
-				status_history = array_append(status_history, create_payment_status_history(NOW(), 'CANCELED', NULL))
-		WHERE status = 'READY'::payment_status
-		AND updated_at <= $1
+		UPDATE 
+			payments
+		SET 
+			status = 'CANCELED'::payment_status,
+			status_history = array_append(status_history, create_payment_status_history(NOW(), 'CANCELED', NULL))
+		WHERE 
+			status = 'READY'::payment_status
+			AND (
+				SELECT (value->>'timestamp')
+				FROM unnest(status_history) AS value
+				WHERE value->>'status' = 'READY' 
+			) <= $1
 	`
-	result, err := sqlExec.ExecContext(ctx, query, time.Now().AddDate(0, 0, int(-periodInDays)))
+
+	result, err := sqlExec.ExecContext(ctx, query, time.Now().AddDate(0, 0, -int(periodInDays)))
 	if err != nil {
-		return fmt.Errorf("error canceling payment: %w", err)
+		return fmt.Errorf("error canceling payments: %w", err)
 	}
 	numRowsAffected, err := result.RowsAffected()
 	if err != nil {

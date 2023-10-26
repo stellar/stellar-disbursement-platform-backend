@@ -671,11 +671,11 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 
 		org, err := models.Organizations.Get(ctx)
 		require.NoError(t, err)
-		assert.Nil(t, org.PaymentCancellationPeriod)
+		assert.Nil(t, org.PaymentCancellationPeriodDays)
 
 		// Custom period
 		w := httptest.NewRecorder()
-		req, err := createOrganizationProfileMultipartRequest(t, url, "", "", `{"payment_cancellation_period": 2}`, new(bytes.Buffer))
+		req, err := createOrganizationProfileMultipartRequest(t, url, "", "", `{"payment_cancellation_period_days": 2}`, new(bytes.Buffer))
 		require.NoError(t, err)
 		req = req.WithContext(ctx)
 		http.HandlerFunc(handler.PatchOrganizationProfile).ServeHTTP(w, req)
@@ -690,7 +690,7 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 
 		org, err = models.Organizations.Get(ctx)
 		require.NoError(t, err)
-		assert.Equal(t, int64(2), *org.PaymentCancellationPeriod)
+		assert.Equal(t, int64(2), *org.PaymentCancellationPeriodDays)
 
 		// Don't update the period
 		w = httptest.NewRecorder()
@@ -709,11 +709,11 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 
 		org, err = models.Organizations.Get(ctx)
 		require.NoError(t, err)
-		assert.Equal(t, int64(2), *org.PaymentCancellationPeriod)
+		assert.Equal(t, int64(2), *org.PaymentCancellationPeriodDays)
 
 		// Back to default period
 		w = httptest.NewRecorder()
-		req, err = createOrganizationProfileMultipartRequest(t, url, "", "", `{"payment_cancellation_period": 0}`, new(bytes.Buffer))
+		req, err = createOrganizationProfileMultipartRequest(t, url, "", "", `{"payment_cancellation_period_days": 0}`, new(bytes.Buffer))
 		require.NoError(t, err)
 		req = req.WithContext(ctx)
 		http.HandlerFunc(handler.PatchOrganizationProfile).ServeHTTP(w, req)
@@ -728,7 +728,7 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 
 		org, err = models.Organizations.Get(ctx)
 		require.NoError(t, err)
-		assert.Nil(t, org.PaymentCancellationPeriod)
+		assert.Nil(t, org.PaymentCancellationPeriodDays)
 	})
 }
 

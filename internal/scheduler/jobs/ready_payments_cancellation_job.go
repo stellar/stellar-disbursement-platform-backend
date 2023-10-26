@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	ReadyPaymentsCancellationJobName     = "ReadyPaymentCancellation"
+	ReadyPaymentsCancellationJobName     = "ready_payments_cancellation"
 	ReadyPaymentsCancellationJobInterval = 5
 )
 
