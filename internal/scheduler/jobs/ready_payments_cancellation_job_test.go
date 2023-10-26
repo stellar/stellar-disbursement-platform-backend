@@ -15,11 +15,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-type mockReadyPaymentsCancellationService struct {
+type mockReadyPaymentsCancellation struct {
 	mock.Mock
 }
 
-func (s mockReadyPaymentsCancellationService) CancelReadyPayments(ctx context.Context) error {
+func (s *mockReadyPaymentsCancellation) CancelReadyPayments(ctx context.Context) error {
 	args := s.Called(ctx)
 	return args.Error(0)
 }
@@ -41,7 +41,7 @@ func Test_ReadyPaymentsCancellationJob_Execute(t *testing.T) {
 
 	ctx := context.Background()
 
-	mockService := mockReadyPaymentsCancellationService{}
+	mockService := mockReadyPaymentsCancellation{}
 	j := &ReadyPaymentsCancellationJob{
 		service: &mockService,
 	}
