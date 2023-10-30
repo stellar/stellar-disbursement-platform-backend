@@ -49,7 +49,7 @@ type PatchOrganizationProfileRequest struct {
 	TimezoneUTCOffset              string  `json:"timezone_utc_offset"`
 	IsApprovalRequired             *bool   `json:"is_approval_required"`
 	SMSResendInterval              *int64  `json:"sms_resend_interval"`
-	PaymentCancellationPeriod      *int64  `json:"payment_cancellation_period_days"`
+	PaymentCancellationPeriodDays      *int64  `json:"payment_cancellation_period_days"`
 	SMSRegistrationMessageTemplate *string `json:"sms_registration_message_template"`
 	OTPMessageTemplate             *string `json:"otp_message_template"`
 }
@@ -61,7 +61,7 @@ func (r *PatchOrganizationProfileRequest) AreAllFieldsEmpty() bool {
 		r.SMSRegistrationMessageTemplate == nil &&
 		r.OTPMessageTemplate == nil &&
 		r.SMSResendInterval == nil &&
-		r.PaymentCancellationPeriod == nil)
+		r.PaymentCancellationPeriodDays == nil)
 }
 
 type PatchUserProfileRequest struct {
@@ -161,7 +161,7 @@ func (h ProfileHandler) PatchOrganizationProfile(rw http.ResponseWriter, req *ht
 		SMSRegistrationMessageTemplate: reqBody.SMSRegistrationMessageTemplate,
 		OTPMessageTemplate:             reqBody.OTPMessageTemplate,
 		SMSResendInterval:              reqBody.SMSResendInterval,
-		PaymentCancellationPeriodDays:  reqBody.PaymentCancellationPeriod,
+		PaymentCancellationPeriodDays:  reqBody.PaymentCancellationPeriodDays,
 	})
 	if err != nil {
 		httperror.InternalError(ctx, "Cannot update organization", err, nil).Render(rw)
