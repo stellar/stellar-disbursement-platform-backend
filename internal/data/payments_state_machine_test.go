@@ -42,6 +42,11 @@ func Test_PaymentStatus_SourceStatuses(t *testing.T) {
 			targetStatus:           FailedPaymentStatus,
 			expectedSourceStatuses: []PaymentStatus{PendingPaymentStatus},
 		},
+		{
+			name:                   "Canceled",
+			targetStatus:           CanceledPaymentStatus,
+			expectedSourceStatuses: []PaymentStatus{ReadyPaymentStatus},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -51,6 +56,6 @@ func Test_PaymentStatus_SourceStatuses(t *testing.T) {
 }
 
 func Test_PaymentStatus_PaymentStatuses(t *testing.T) {
-	expectedStatuses := []PaymentStatus{DraftPaymentStatus, ReadyPaymentStatus, PendingPaymentStatus, PausedPaymentStatus, SuccessPaymentStatus, FailedPaymentStatus}
+	expectedStatuses := []PaymentStatus{DraftPaymentStatus, ReadyPaymentStatus, PendingPaymentStatus, PausedPaymentStatus, SuccessPaymentStatus, FailedPaymentStatus, CanceledPaymentStatus}
 	require.Equal(t, expectedStatuses, PaymentStatuses())
 }
