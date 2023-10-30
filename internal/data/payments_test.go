@@ -1351,7 +1351,7 @@ func Test_PaymentModelCancelPayment(t *testing.T) {
 		assert.Equal(t, ReadyPaymentStatus, payment2DB.Status)
 	})
 
-	t.Run("multiple ready cases", func(t *testing.T) {
+	t.Run("successfully cancel payments when it has multiple ready status history entries", func(t *testing.T) {
 		payment1 := CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
 			Amount:               "1",
 			StellarTransactionID: "stellar-transaction-id-1",
