@@ -7,19 +7,31 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/lib/pq"
 	"github.com/spf13/cobra"
 	"github.com/stellar/go/support/log"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/internal/db"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/internal/db/dbtest"
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func DeleteAllTenantsFixture(t *testing.T, ctx context.Context, dbConnectionPool db.DBConnectionPool) {
-	const q = "DELETE FROM tenants"
+	q := "DELETE FROM tenants"
 	_, err := dbConnectionPool.ExecContext(ctx, q)
 	require.NoError(t, err)
+
+	var schemasToDrop []string
+	q = "SELECT schema_name FROM information_schema.schemata WHERE schema_name ILIKE 'sdp_%'"
+	err = dbConnectionPool.SelectContext(ctx, &schemasToDrop, q)
+	require.NoError(t, err)
+
+	for _, schema := range schemasToDrop {
+		q = fmt.Sprintf("DROP SCHEMA %s CASCADE", pq.QuoteIdentifier(schema))
+		_, err = dbConnectionPool.ExecContext(ctx, q)
+		require.NoError(t, err)
+	}
 }
 
 func Test_validateTenantNameArg(t *testing.T) {
@@ -81,7 +93,7 @@ func Test_executeAddTenant(t *testing.T) {
 
 		getEntries := log.DefaultLogger.StartTest(log.InfoLevel)
 
-		err := executeAddTenant(ctx, dbt.DSN, "myorg")
+		err := executeAddTenant(ctx, dbt.DSN, "myorg", "first", "last", "email@email.com", "testnet")
 		assert.Nil(t, err)
 
 		const q = "SELECT id FROM tenants WHERE name = $1"
@@ -90,9 +102,9 @@ func Test_executeAddTenant(t *testing.T) {
 		require.NoError(t, err)
 
 		entries := getEntries()
-		require.Len(t, entries, 2)
-		assert.Equal(t, "tenant myorg added successfully", entries[0].Message)
-		assert.Contains(t, fmt.Sprintf("tenant ID: %s", tenantID), entries[1].Message)
+		require.Len(t, entries, 15)
+		assert.Equal(t, "tenant myorg added successfully", entries[13].Message)
+		assert.Contains(t, fmt.Sprintf("tenant ID: %s", tenantID), entries[14].Message)
 	})
 
 	t.Run("duplicated tenant name", func(t *testing.T) {
@@ -100,10 +112,10 @@ func Test_executeAddTenant(t *testing.T) {
 
 		getEntries := log.DefaultLogger.StartTest(log.DebugLevel)
 
-		err := executeAddTenant(ctx, dbt.DSN, "myorg")
+		err := executeAddTenant(ctx, dbt.DSN, "myorg", "first", "last", "email@email.com", "testnet")
 		assert.Nil(t, err)
 
-		err = executeAddTenant(ctx, dbt.DSN, "MyOrg")
+		err = executeAddTenant(ctx, dbt.DSN, "myorg", "first", "last", "email@email.com", "testnet")
 		assert.ErrorIs(t, err, tenant.ErrDuplicatedTenantName)
 
 		const q = "SELECT id FROM tenants WHERE name = $1"
@@ -112,9 +124,9 @@ func Test_executeAddTenant(t *testing.T) {
 		require.NoError(t, err)
 
 		entries := getEntries()
-		require.Len(t, entries, 2)
-		assert.Equal(t, "tenant myorg added successfully", entries[0].Message)
-		assert.Contains(t, fmt.Sprintf("tenant ID: %s", tenantID), entries[1].Message)
+		require.Len(t, entries, 16)
+		assert.Equal(t, "tenant myorg added successfully", entries[13].Message)
+		assert.Contains(t, fmt.Sprintf("tenant ID: %s", tenantID), entries[14].Message)
 	})
 }
 

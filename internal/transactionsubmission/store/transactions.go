@@ -13,7 +13,7 @@ import (
 	"github.com/lib/pq"
 	"github.com/stellar/go/strkey"
 	"github.com/stellar/go/xdr"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
 )
 
 var ErrRecordNotFound = errors.New("record not found")

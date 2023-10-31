@@ -3,7 +3,7 @@ package store
 import (
 	"context"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
 )
 
 //go:generate mockery --name=ChannelAccountStore --case=underscore --structname=MockChannelAccountStore

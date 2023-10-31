@@ -6,8 +6,8 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
@@ -59,6 +59,7 @@ func (s *DisbursementManagementService) GetDisbursementsWithCount(ctx context.Co
 
 			return utils.NewResultWithTotal(totalDisbursements, disbursements), nil
 		})
+
 }
 
 func (s *DisbursementManagementService) GetDisbursementReceiversWithCount(ctx context.Context, disbursementID string, queryParams *data.QueryParams) (*utils.ResultWithTotal, error) {

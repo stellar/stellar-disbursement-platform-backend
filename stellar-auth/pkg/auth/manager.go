@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/internal/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/utils"
 )
 

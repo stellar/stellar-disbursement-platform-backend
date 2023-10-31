@@ -83,7 +83,7 @@ services:
 
   anchor-platform:
     container_name: anchor-platform
-    image: stellar/anchor-platform:2.1.3
+    image: stellar/anchor-platform:2.3.0
     command: --sep-server --platform-server --platform linux/amd64
     ports:
       - "8080:8080" # sep-server
@@ -96,7 +96,7 @@ services:
       SEP_SERVER_PORT: 8080
       CALLBACK_API_BASE_URL: http://sdp-api:8000
       CALLBACK_API_AUTH_TYPE: none  # TODO: update to jwt later
-      PLATFORM_SERVER_AUTH_TYPE: JWT
+      PLATFORM_SERVER_AUTH_TYPE: none
       APP_LOGGING_LEVEL: INFO
       DATA_TYPE: postgres
       DATA_SERVER: db-anchor-platform:5433

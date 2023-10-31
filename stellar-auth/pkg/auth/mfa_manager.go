@@ -11,7 +11,7 @@ import (
 
 	"github.com/stellar/go/support/log"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/internal/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
 )
 
 type MFAManager interface {

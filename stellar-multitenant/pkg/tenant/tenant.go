@@ -55,6 +55,7 @@ type Tenant struct {
 	CORSAllowedOrigins    pq.StringArray  `db:"cors_allowed_origins"`
 	BaseURL               *string         `db:"base_url"`
 	SDPUIBaseURL          *string         `db:"sdp_ui_base_url"`
+	Status                TenantStatus    `db:"status"`
 	CreatedAt             time.Time       `db:"created_at"`
 	UpdatedAt             time.Time       `db:"updated_at"`
 }
@@ -70,6 +71,21 @@ type TenantUpdate struct {
 	CORSAllowedOrigins    []string         `db:"cors_allowed_origins"`
 	BaseURL               *string          `db:"base_url"`
 	SDPUIBaseURL          *string          `db:"sdp_ui_base_url"`
+	Status                *TenantStatus    `db:"status"`
+}
+
+type TenantStatus string
+
+const (
+	CreatedTenantStatus     TenantStatus = "TENANT_CREATED"
+	ProvisionedTenantStatus TenantStatus = "TENANT_PROVISIONED"
+	ActivatedTenantStatus   TenantStatus = "TENANT_ACTIVATED"
+	DeactivatedTenantStatus TenantStatus = "TENANT_DEACTIVATED"
+)
+
+func (s TenantStatus) IsValid() bool {
+	validStatuses := []TenantStatus{CreatedTenantStatus, ProvisionedTenantStatus, ActivatedTenantStatus, DeactivatedTenantStatus}
+	return slices.Contains(validStatuses, s)
 }
 
 func (tu *TenantUpdate) Validate() error {
@@ -115,6 +131,10 @@ func (tu *TenantUpdate) Validate() error {
 		}
 	}
 
+	if tu.Status != nil && !tu.Status.IsValid() {
+		return fmt.Errorf("invalid tenant status: %q", *tu.Status)
+	}
+
 	return nil
 }
 
@@ -127,7 +147,8 @@ func (tu *TenantUpdate) areAllFieldsEmpty() bool {
 		tu.EnableReCAPTCHA == nil &&
 		tu.CORSAllowedOrigins == nil &&
 		tu.BaseURL == nil &&
-		tu.SDPUIBaseURL == nil)
+		tu.SDPUIBaseURL == nil &&
+		tu.Status == nil)
 }
 
 func isValidURL(u string) bool {
