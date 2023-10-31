@@ -32,6 +32,7 @@ func TestCalculateStatistics_emptyDatabase(t *testing.T) {
 		gotJsonCounter, errJson := json.Marshal(paymentsCounter)
 		require.NoError(t, errJson)
 		wantJsonCounter := `{
+			"canceled":0,
 			"draft": 0,
 			"ready": 0,
 			"pending": 0,
@@ -180,6 +181,7 @@ func TestCalculateStatistics(t *testing.T) {
 		require.NoError(t, errJson)
 
 		wantJsonCounter := `{
+			"canceled":0,
 			"draft": 2,
 			"ready": 0,
 			"pending": 0,
@@ -198,6 +200,7 @@ func TestCalculateStatistics(t *testing.T) {
 				{
 					"asset_code": "USDC",
 					"payment_amounts": {
+							"canceled": "",
 							"draft": "20.0000000",
 							"ready": "",
 							"pending": "",
@@ -249,6 +252,7 @@ func TestCalculateStatistics(t *testing.T) {
 		require.NoError(t, err)
 
 		wantJsonCounter := `{
+			"canceled": 0,
 			"draft": 2,
 			"ready": 0,
 			"pending": 0,
@@ -267,6 +271,7 @@ func TestCalculateStatistics(t *testing.T) {
 				{
 					"asset_code": "EURT",
 					"payment_amounts": {
+						  "canceled": "",
 							"draft": "",
 							"ready": "",
 							"pending": "",
@@ -280,6 +285,7 @@ func TestCalculateStatistics(t *testing.T) {
 				{
 					"asset_code": "USDC",
 					"payment_amounts": {
+							"canceled":"",
 							"draft": "20.0000000",
 							"ready": "",
 							"pending": "",
@@ -306,6 +312,7 @@ func TestCalculateStatistics(t *testing.T) {
 		require.NoError(t, err)
 
 		wantJsonCounter := `{
+			"canceled":0,
 			"draft": 0,
 			"ready": 0,
 			"pending": 0,
@@ -324,6 +331,7 @@ func TestCalculateStatistics(t *testing.T) {
 				{
 					"asset_code": "EURT",
 					"payment_amounts": {
+							"canceled":"",
 							"draft": "",
 							"ready": "",
 							"pending": "",

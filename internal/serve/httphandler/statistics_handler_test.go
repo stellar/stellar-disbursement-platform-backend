@@ -42,6 +42,7 @@ func TestStatisticsHandler(t *testing.T) {
 
 		wantJson := `{
 			"payment_counters": {
+				"canceled": 0,
 				"draft": 0,
 				"ready": 0,
 				"pending": 0,
@@ -110,6 +111,7 @@ func TestStatisticsHandler(t *testing.T) {
 
 		wantJson := `{
 			"payment_counters": {
+				"canceled": 0,
 				"draft": 0,
 				"ready": 0,
 				"pending": 0,
@@ -160,6 +162,7 @@ func TestStatisticsHandler(t *testing.T) {
 		assert.Equal(t, http.StatusOK, rr.Code)
 		wantJson := `{
 			"payment_counters": {
+				"canceled": 0,
 				"draft": 1,
 				"ready": 0,
 				"pending": 0,
@@ -172,6 +175,7 @@ func TestStatisticsHandler(t *testing.T) {
 				{
 					"asset_code": "USDC",
 					"payment_amounts": {
+							"canceled": "",
 						  "draft": "10.0000000",
 						  "ready": "",
 						  "pending": "",
@@ -208,6 +212,7 @@ func TestStatisticsHandler(t *testing.T) {
 
 		wantJson := `{
 			"payment_counters": {
+				"canceled": 0,
 				"draft": 1,
 				"ready": 0,
 				"pending": 0,
@@ -220,6 +225,7 @@ func TestStatisticsHandler(t *testing.T) {
 				{
 					"asset_code": "USDC",
 					"payment_amounts": {
+							"canceled": "",
 						  "draft": "10.0000000",
 						  "ready": "",
 						  "pending": "",
