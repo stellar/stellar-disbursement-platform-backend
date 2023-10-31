@@ -417,6 +417,7 @@ func Test_checkIfDisbursementExists(t *testing.T) {
 		})
 		exists, err := checkIfDisbursementExists(context.Background(), dbConnectionPool, disbursement.ID)
 		require.NoError(t, err)
+		
 		assert.True(t, exists)
 	})
 }
