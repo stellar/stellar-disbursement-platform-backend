@@ -10,6 +10,7 @@ import (
 	"github.com/stellar/go/keypair"
 	"github.com/stellar/go/support/config"
 	"github.com/stellar/go/support/log"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
@@ -128,5 +129,20 @@ func SetConfigOptionOptionalBoolean(co *config.ConfigOption) error {
 		return fmt.Errorf("the expected type for this config key is a boolean, but got a %T instead", co.ConfigKey)
 	}
 	*key = &value
+	return nil
+}
+
+func SetConfigOptionNetworkType(co *config.ConfigOption) error {
+	networkType := viper.GetString(co.Name)
+	value, err := utils.GetNetworkTypeFromString(networkType)
+	if err != nil {
+		return fmt.Errorf("getting network type from string: %w", err)
+	}
+
+	key, ok := co.ConfigKey.(*string)
+	if !ok {
+		return fmt.Errorf("the expected type for this config key is a string, but got a %T instead", co.ConfigKey)
+	}
+	*key = string(value)
 	return nil
 }
