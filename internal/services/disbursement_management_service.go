@@ -59,7 +59,6 @@ func (s *DisbursementManagementService) GetDisbursementsWithCount(ctx context.Co
 
 			return utils.NewResultWithTotal(totalDisbursements, disbursements), nil
 		})
-
 }
 
 func (s *DisbursementManagementService) GetDisbursementReceiversWithCount(ctx context.Context, disbursementID string, queryParams *data.QueryParams) (*utils.ResultWithTotal, error) {
