@@ -7,7 +7,8 @@ import (
 	migrate "github.com/rubenv/sql-migrate"
 	"github.com/spf13/cobra"
 	"github.com/stellar/go/support/log"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	migrations "github.com/stellar/stellar-disbursement-platform-backend/db/migrations/sdp-migrations"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/cli"
@@ -127,7 +128,7 @@ func (c *DatabaseCommand) Command() *cobra.Command {
 }
 
 func (c *DatabaseCommand) migrate(dir migrate.MigrationDirection, count int) error {
-	numMigrationsRun, err := db.Migrate(globalOptions.databaseURL, dir, count)
+	numMigrationsRun, err := db.Migrate(globalOptions.databaseURL, dir, count, migrations.FS, db.StellarAuthMigrationsTableName)
 	if err != nil {
 		return fmt.Errorf("migrating database: %w", err)
 	}

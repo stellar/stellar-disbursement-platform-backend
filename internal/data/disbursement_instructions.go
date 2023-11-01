@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
 )
 
 type DisbursementInstruction struct {

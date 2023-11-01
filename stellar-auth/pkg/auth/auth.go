@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/internal/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
 )
 
 var ErrInvalidToken = errors.New("invalid token")

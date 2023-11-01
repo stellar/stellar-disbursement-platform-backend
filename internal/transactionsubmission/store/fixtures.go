@@ -12,7 +12,7 @@ import (
 	"github.com/stellar/go/keypair"
 	"github.com/stretchr/testify/require"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
 )
 
 // CreateTransactionFixtures creates count number submitter transactions
