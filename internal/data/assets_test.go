@@ -31,7 +31,7 @@ func Test_AssetModelGet(t *testing.T) {
 	})
 
 	t.Run("returns asset successfully", func(t *testing.T) {
-		expected := CreateAssetFixture(t, ctx, dbConnectionPool.SqlxDB(), "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
+		expected := CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
 		actual, err := assetModel.Get(ctx, expected.ID)
 		require.NoError(t, err)
 		assert.Equal(t, expected, actual)
@@ -57,7 +57,7 @@ func Test_AssetModelGetByCodeAndIssuer(t *testing.T) {
 	})
 
 	t.Run("returns asset successfully", func(t *testing.T) {
-		expected := CreateAssetFixture(t, ctx, dbConnectionPool.SqlxDB(), "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
+		expected := CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
 		actual, err := assetModel.GetByCodeAndIssuer(ctx, expected.Code, expected.Issuer)
 		require.NoError(t, err)
 		assert.Equal(t, expected, actual)
@@ -77,7 +77,7 @@ func Test_AssetModelGetAll(t *testing.T) {
 	assetModel := &AssetModel{dbConnectionPool: dbConnectionPool}
 
 	t.Run("returns all assets successfully", func(t *testing.T) {
-		expected := ClearAndCreateAssetFixtures(t, ctx, dbConnectionPool.SqlxDB())
+		expected := ClearAndCreateAssetFixtures(t, ctx, dbConnectionPool)
 		actual, err := assetModel.GetAll(ctx)
 		require.NoError(t, err)
 
@@ -85,7 +85,7 @@ func Test_AssetModelGetAll(t *testing.T) {
 	})
 
 	t.Run("returns empty array when no assets", func(t *testing.T) {
-		DeleteAllAssetFixtures(t, ctx, dbConnectionPool.SqlxDB())
+		DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
 		actual, err := assetModel.GetAll(ctx)
 		require.NoError(t, err)
 
@@ -145,7 +145,7 @@ func Test_AssetModelInsert(t *testing.T) {
 	assetModel := &AssetModel{dbConnectionPool: dbConnectionPool}
 
 	t.Run("inserts asset successfully", func(t *testing.T) {
-		DeleteAllAssetFixtures(t, ctx, dbConnectionPool.SqlxDB())
+		DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
 		code := "USDT"
 		issuer := "GBVHJTRLQRMIHRYTXZQOPVYCVVH7IRJN3DOFT7VC6U75CBWWBVDTWURG"
 
@@ -159,7 +159,7 @@ func Test_AssetModelInsert(t *testing.T) {
 	})
 
 	t.Run("re-create a deleted asset", func(t *testing.T) {
-		DeleteAllAssetFixtures(t, ctx, dbConnectionPool.SqlxDB())
+		DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
 		code := "USDT"
 		issuer := "GBVHJTRLQRMIHRYTXZQOPVYCVVH7IRJN3DOFT7VC6U75CBWWBVDTWURG"
 
@@ -204,7 +204,7 @@ func Test_AssetModelInsert(t *testing.T) {
 	})
 
 	t.Run("does not insert the same asset again", func(t *testing.T) {
-		DeleteAllAssetFixtures(t, ctx, dbConnectionPool.SqlxDB())
+		DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
 		code := "USDT"
 		issuer := "GBVHJTRLQRMIHRYTXZQOPVYCVVH7IRJN3DOFT7VC6U75CBWWBVDTWURG"
 
@@ -218,7 +218,7 @@ func Test_AssetModelInsert(t *testing.T) {
 	})
 
 	t.Run("creates the stellar native asset successfully", func(t *testing.T) {
-		DeleteAllAssetFixtures(t, ctx, dbConnectionPool.SqlxDB())
+		DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
 
 		asset, err := assetModel.Insert(ctx, dbConnectionPool, "XLM", "")
 		require.NoError(t, err)
@@ -229,7 +229,7 @@ func Test_AssetModelInsert(t *testing.T) {
 	})
 
 	t.Run("does not create an asset with empty issuer", func(t *testing.T) {
-		DeleteAllAssetFixtures(t, ctx, dbConnectionPool.SqlxDB())
+		DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
 
 		asset, err := assetModel.Insert(ctx, dbConnectionPool, "USDC", "")
 		assert.EqualError(t, err, `error inserting asset: pq: new row for relation "assets" violates check constraint "asset_issuer_length_check"`)
@@ -237,7 +237,7 @@ func Test_AssetModelInsert(t *testing.T) {
 	})
 
 	t.Run("does not create an asset with a invalid issuer", func(t *testing.T) {
-		DeleteAllAssetFixtures(t, ctx, dbConnectionPool.SqlxDB())
+		DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
 
 		asset, err := assetModel.Insert(ctx, dbConnectionPool, "USDC", "INVALID")
 		assert.EqualError(t, err, `error inserting asset: pq: new row for relation "assets" violates check constraint "asset_issuer_length_check"`)
@@ -275,7 +275,7 @@ func Test_AssetModelGetOrCreate(t *testing.T) {
 	})
 
 	t.Run("returns asset successfully", func(t *testing.T) {
-		expected := CreateAssetFixture(t, ctx, dbConnectionPool.SqlxDB(), "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
+		expected := CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
 		asset, err := assetModel.GetOrCreate(ctx, expected.Code, expected.Issuer)
 		require.NoError(t, err)
 		assert.Equal(t, expected.ID, asset.ID)
@@ -295,8 +295,8 @@ func Test_AssetModelSoftDelete(t *testing.T) {
 	assetModel := &AssetModel{dbConnectionPool: dbConnectionPool}
 
 	t.Run("delete successful", func(t *testing.T) {
-		DeleteAllAssetFixtures(t, ctx, dbConnectionPool.SqlxDB())
-		expected := CreateAssetFixture(t, ctx, dbConnectionPool.SqlxDB(), "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
+		DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
+		expected := CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
 
 		asset, err := assetModel.SoftDelete(ctx, dbConnectionPool, expected.ID)
 		require.NoError(t, err)
@@ -311,7 +311,7 @@ func Test_AssetModelSoftDelete(t *testing.T) {
 	})
 
 	t.Run("delete unsuccessful, cannot find asset", func(t *testing.T) {
-		DeleteAllAssetFixtures(t, ctx, dbConnectionPool.SqlxDB())
+		DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
 
 		_, err := assetModel.SoftDelete(ctx, dbConnectionPool, "non-existant")
 		require.Error(t, err)

@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"fmt"
 
-	"github.com/jmoiron/sqlx"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 )
 
@@ -49,10 +48,6 @@ func (dbc *DBConnectionPoolWithMetrics) Ping() error {
 
 func (dbc *DBConnectionPoolWithMetrics) SqlDB() *sql.DB {
 	return dbc.dbConnectionPool.SqlDB()
-}
-
-func (dbc *DBConnectionPoolWithMetrics) SqlxDB() *sqlx.DB {
-	return dbc.dbConnectionPool.SqlxDB()
 }
 
 func (dbc *DBConnectionPoolWithMetrics) DSN(ctx context.Context) (string, error) {

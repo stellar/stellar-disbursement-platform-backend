@@ -31,7 +31,6 @@ type DBConnectionPool interface {
 	Close() error
 	Ping() error
 	SqlDB() *sql.DB
-	SqlxDB() *sqlx.DB
 	DSN(ctx context.Context) (string, error)
 }
 
