@@ -32,7 +32,7 @@ type DBConnectionPool interface {
 	Ping() error
 	SqlDB() *sql.DB
 	SqlxDB() *sqlx.DB
-	DSN() string
+	DSN(ctx context.Context) (string, error)
 }
 
 // DBConnectionPoolImplementation is a wrapper around sqlx.DB that implements DBConnectionPool.
@@ -53,8 +53,8 @@ func (db *DBConnectionPoolImplementation) SqlxDB() *sqlx.DB {
 	return db.DB
 }
 
-func (db *DBConnectionPoolImplementation) DSN() string {
-	return db.dataSourceName
+func (db *DBConnectionPoolImplementation) DSN(ctx context.Context) (string, error) {
+	return db.dataSourceName, nil
 }
 
 // RunInTransactionWithResult runs the given atomic function in an atomic database transaction and returns a result and

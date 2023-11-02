@@ -50,7 +50,10 @@ func (m *Manager) ProvisionNewTenant(
 		return nil, fmt.Errorf("creating a new database schema: %w", err)
 	}
 
-	dataSourceName := m.db.DSN()
+	dataSourceName, err := m.db.DSN(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("getting database DSN: %w", err)
+	}
 	u, err := url.Parse(dataSourceName)
 	if err != nil {
 		return nil, fmt.Errorf("parsing database DSN: %w", err)

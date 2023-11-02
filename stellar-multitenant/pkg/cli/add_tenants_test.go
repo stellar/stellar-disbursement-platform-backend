@@ -242,7 +242,9 @@ Flags:
 
 		// Connecting to the new schema
 		schemaName := fmt.Sprintf("sdp_%s", tenantName)
-		u, err := url.Parse(dbConnectionPool.DSN())
+		dataSourceName, err := dbConnectionPool.DSN(ctx)
+		require.NoError(t, err)
+		u, err := url.Parse(dataSourceName)
 		require.NoError(t, err)
 		uq := u.Query()
 		uq.Set("search_path", schemaName)
@@ -309,7 +311,9 @@ Flags:
 
 		// Connecting to the new schema
 		schemaName := fmt.Sprintf("sdp_%s", tenantName)
-		u, err := url.Parse(dbConnectionPool.DSN())
+		dataSourceName, err := dbConnectionPool.DSN(ctx)
+		require.NoError(t, err)
+		u, err := url.Parse(dataSourceName)
 		require.NoError(t, err)
 		uq := u.Query()
 		uq.Set("search_path", schemaName)

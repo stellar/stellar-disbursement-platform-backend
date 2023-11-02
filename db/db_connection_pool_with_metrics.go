@@ -55,6 +55,6 @@ func (dbc *DBConnectionPoolWithMetrics) SqlxDB() *sqlx.DB {
 	return dbc.dbConnectionPool.SqlxDB()
 }
 
-func (dbc *DBConnectionPoolWithMetrics) DSN() string {
-	return dbc.dbConnectionPool.DSN()
+func (dbc *DBConnectionPoolWithMetrics) DSN(ctx context.Context) (string, error) {
+	return dbc.dbConnectionPool.DSN(ctx)
 }
