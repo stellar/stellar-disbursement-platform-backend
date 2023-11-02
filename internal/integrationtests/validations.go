@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
 )
 
 func validateExpectationsAfterProcessDisbursement(ctx context.Context, disbursementID string, models *data.Models, sqlExec db.SQLExecuter) error {

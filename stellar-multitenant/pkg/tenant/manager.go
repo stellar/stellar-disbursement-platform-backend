@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/lib/pq"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/internal/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
 )
 
 var (

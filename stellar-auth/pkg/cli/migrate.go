@@ -8,7 +8,8 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"github.com/stellar/go/support/log"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/internal/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	migrations "github.com/stellar/stellar-disbursement-platform-backend/db/migrations/auth-migrations"
 )
 
 func MigrateCmd(databaseFlagName string) *cobra.Command {
@@ -76,7 +77,7 @@ func MigrateCmd(databaseFlagName string) *cobra.Command {
 }
 
 func runMigration(databaseURL string, dir migrate.MigrationDirection, count int) error {
-	numMigrationsRun, err := db.Migrate(databaseURL, dir, count)
+	numMigrationsRun, err := db.Migrate(databaseURL, dir, count, migrations.FS, db.StellarAuthMigrationsTableName)
 	if err != nil {
 		return fmt.Errorf("running migrations: %w", err)
 	}

@@ -9,8 +9,8 @@ import (
 	"image/png"
 	"testing"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/db/dbtest"
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -35,13 +35,13 @@ func Test_Organizations_DatabaseTriggers(t *testing.T) {
 			)
 		`
 		_, err := dbConnectionPool.ExecContext(ctx, q)
-		require.EqualError(t, err, "pq: public.organizations can must contain exactly one row")
+		require.EqualError(t, err, "pq: organizations can must contain exactly one row")
 	})
 
 	t.Run("SQL query will trigger an error if you try to delete the one organization you must have", func(t *testing.T) {
 		q := "DELETE FROM organizations"
 		_, err := dbConnectionPool.ExecContext(ctx, q)
-		require.EqualError(t, err, "pq: public.organizations can must contain exactly one row")
+		require.EqualError(t, err, "pq: organizations can must contain exactly one row")
 	})
 
 	t.Run("updating sms_registration_message_template with the tags {{.OrganizationName}} and {{.RegistrationLink}} will succeed 🎉", func(t *testing.T) {

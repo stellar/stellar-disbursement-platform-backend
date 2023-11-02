@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/lib/pq"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
 )
 
 var ErrInsuficientChannelAccounts = fmt.Errorf("there are no channel accounts available to process transactions")

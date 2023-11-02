@@ -12,8 +12,9 @@ import (
 	"github.com/spf13/viper"
 	stellardbtest "github.com/stellar/go/support/db/dbtest"
 	"github.com/stellar/go/support/log"
-	dbpkg "github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/internal/db"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/internal/db/dbtest"
+	dbpkg "github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
+	migrations "github.com/stellar/stellar-disbursement-platform-backend/db/migrations/tenant-migrations"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -94,7 +95,7 @@ func Test_MigrateCmd(t *testing.T) {
 			args:   []string{"--multitenant-db-url", "", "migrate", "down", "1"},
 			expect: "Successfully applied 1 migrations.",
 			preRunFunc: func(t *testing.T, db *stellardbtest.DB) {
-				_, err := dbpkg.Migrate(db.DSN, migrate.Up, 1)
+				_, err := dbpkg.Migrate(db.DSN, migrate.Up, 1, migrations.FS, dbpkg.StellarMultitenantMigrationsTableName)
 				require.NoError(t, err)
 
 				conn := db.Open()
@@ -114,7 +115,7 @@ func Test_MigrateCmd(t *testing.T) {
 			envVars: map[string]string{"MULTITENANT_DB_URL": ""},
 			expect:  "Successfully applied 1 migrations.",
 			preRunFunc: func(t *testing.T, db *stellardbtest.DB) {
-				_, err := dbpkg.Migrate(db.DSN, migrate.Up, 1)
+				_, err := dbpkg.Migrate(db.DSN, migrate.Up, 1, migrations.FS, dbpkg.StellarMultitenantMigrationsTableName)
 				require.NoError(t, err)
 
 				conn := db.Open()

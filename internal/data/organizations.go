@@ -18,7 +18,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
 )
 
 const (
