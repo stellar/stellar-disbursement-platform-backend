@@ -12,8 +12,10 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	authmigrations "github.com/stellar/stellar-disbursement-platform-backend/db/migrations/auth-migrations"
 	sdpmigrations "github.com/stellar/stellar-disbursement-platform-backend/db/migrations/sdp-migrations"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
 
@@ -27,18 +29,27 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 
 	ctx := context.Background()
 
-	m := NewManager(WithDatabase(dbConnectionPool))
+	messengerClientMock := message.MessengerClientMock{}
+	m := NewManager(WithDatabase(dbConnectionPool), WithMessengerClient(&messengerClientMock))
+
+	messengerClientMock.
+		On("SendMessage", mock.AnythingOfType("message.Message")).
+		Return(nil)
 
 	t.Run("provision a new tenant for the testnet", func(t *testing.T) {
 		tenantName := "myorg-ukraine"
 		userFirstName := "First"
 		userLastName := "Last"
 		userEmail := "email@email.com"
-		tnt, err := m.ProvisionNewTenant(ctx, tenantName, userFirstName, userLastName, userEmail, string(utils.TestnetNetworkType))
+		organizationName := "My Org"
+		uiBaseURL := "http://localhost:3000"
+
+		tnt, err := m.ProvisionNewTenant(ctx, tenantName, userFirstName, userLastName, userEmail, organizationName, uiBaseURL, string(utils.TestnetNetworkType))
 		require.NoError(t, err)
 
 		schemaName := fmt.Sprintf("sdp_%s", tenantName)
 		assert.Equal(t, tenantName, tnt.Name)
+		assert.Equal(t, uiBaseURL, *tnt.SDPUIBaseURL)
 		assert.Equal(t, ProvisionedTenantStatus, tnt.Status)
 		assert.True(t, CheckSchemaExistsFixture(t, ctx, dbConnectionPool, schemaName))
 
@@ -85,11 +96,15 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 		userFirstName := "First"
 		userLastName := "Last"
 		userEmail := "email@email.com"
-		tnt, err := m.ProvisionNewTenant(ctx, tenantName, userFirstName, userLastName, userEmail, string(utils.PubnetNetworkType))
+		organizationName := "My Org"
+		uiBaseURL := "http://localhost:3000"
+
+		tnt, err := m.ProvisionNewTenant(ctx, tenantName, userFirstName, userLastName, userEmail, organizationName, uiBaseURL, string(utils.PubnetNetworkType))
 		require.NoError(t, err)
 
 		schemaName := fmt.Sprintf("sdp_%s", tenantName)
 		assert.Equal(t, tenantName, tnt.Name)
+		assert.Equal(t, uiBaseURL, *tnt.SDPUIBaseURL)
 		assert.Equal(t, ProvisionedTenantStatus, tnt.Status)
 		assert.True(t, CheckSchemaExistsFixture(t, ctx, dbConnectionPool, schemaName))
 
@@ -130,6 +145,8 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 		AssertRegisteredWallets(t, ctx, tenantSchemaConnectionPool, []string{"Vibrant Assist RC", "Vibrant Assist"})
 		AssertRegisteredUser(t, ctx, tenantSchemaConnectionPool, userFirstName, userLastName, userEmail)
 	})
+
+	messengerClientMock.AssertExpectations(t)
 }
 
 func Test_Manager_AddTenant(t *testing.T) {
