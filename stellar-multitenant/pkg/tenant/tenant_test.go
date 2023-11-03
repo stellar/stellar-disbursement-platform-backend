@@ -54,6 +54,12 @@ func Test_TenantUpdate_Validate(t *testing.T) {
 		tu.CORSAllowedOrigins = []string{"inv@lid$"}
 		err = tu.Validate()
 		assert.EqualError(t, err, `invalid CORS allowed origin url: "inv@lid$"`)
+
+		tu.CORSAllowedOrigins = nil
+		tenantStatus := TenantStatus("invalid")
+		tu.Status = &tenantStatus
+		err = tu.Validate()
+		assert.EqualError(t, err, `invalid tenant status: "invalid"`)
 	})
 
 	t.Run("valid values", func(t *testing.T) {
@@ -68,6 +74,7 @@ func Test_TenantUpdate_Validate(t *testing.T) {
 			CORSAllowedOrigins:    []string{"https://myorg.sdp.io", "https://myorg-dev.sdp.io"},
 			BaseURL:               &[]string{"https://myorg.backend.io"}[0],
 			SDPUIBaseURL:          &[]string{"https://myorg.frontend.io"}[0],
+			Status:                &[]TenantStatus{ProvisionedTenantStatus}[0],
 		}
 		err := tu.Validate()
 		assert.NoError(t, err)
@@ -107,4 +114,36 @@ func Test_ParseSMSSenderType(t *testing.T) {
 	sst, err = ParseSMSSenderType("TWILIO_SMS")
 	assert.NoError(t, err)
 	assert.Equal(t, TwilioSMSSenderType, sst)
+}
+
+func Test_TenantStatus_IsValid(t *testing.T) {
+	testCases := []struct {
+		status TenantStatus
+		expect bool
+	}{
+		{
+			status: CreatedTenantStatus,
+			expect: true,
+		},
+		{
+			status: ProvisionedTenantStatus,
+			expect: true,
+		},
+		{
+			status: ActivatedTenantStatus,
+			expect: true,
+		},
+		{
+			status: DeactivatedTenantStatus,
+			expect: true,
+		},
+		{
+			status: TenantStatus("invalid"),
+			expect: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		assert.Equal(t, tc.expect, tc.status.IsValid())
+	}
 }

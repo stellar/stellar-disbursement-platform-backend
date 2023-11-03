@@ -3,12 +3,21 @@ package tenant
 import (
 	"context"
 	"database/sql"
+	"embed"
 	"errors"
 	"fmt"
+	"net/url"
 	"strings"
 
 	"github.com/lib/pq"
+	migrate "github.com/rubenv/sql-migrate"
+	"github.com/stellar/go/support/log"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	authmigrations "github.com/stellar/stellar-disbursement-platform-backend/db/migrations/auth-migrations"
+	sdpmigrations "github.com/stellar/stellar-disbursement-platform-backend/db/migrations/sdp-migrations"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 )
 
 var (
@@ -19,6 +28,83 @@ var (
 
 type Manager struct {
 	db db.DBConnectionPool
+}
+
+func (m *Manager) ProvisionNewTenant(ctx context.Context, name, userFirstName, userLastName, userEmail, networkType string) (*Tenant, error) {
+	log.Infof("adding tenant %s", name)
+	t, err := m.AddTenant(ctx, name)
+	if err != nil {
+		return nil, err
+	}
+
+	log.Infof("creating tenant %s database schema", t.Name)
+	schemaName := fmt.Sprintf("sdp_%s", t.Name)
+	_, err = m.db.ExecContext(ctx, fmt.Sprintf("CREATE SCHEMA %s", pq.QuoteIdentifier(schemaName)))
+	if err != nil {
+		return nil, fmt.Errorf("creating a new database schema: %w", err)
+	}
+
+	dataSourceName := m.db.DSN()
+	u, err := url.Parse(dataSourceName)
+	if err != nil {
+		return nil, fmt.Errorf("parsing database DSN: %w", err)
+	}
+	q := u.Query()
+	q.Set("search_path", schemaName)
+	u.RawQuery = q.Encode()
+
+	// Applying migrations
+	log.Infof("applying SDP migrations on the tenant %s schema", t.Name)
+	err = m.RunMigrationsForTenant(ctx, t, u.String(), migrate.Up, 0, sdpmigrations.FS, db.StellarSDPMigrationsTableName)
+	if err != nil {
+		return nil, fmt.Errorf("applying SDP migrations: %w", err)
+	}
+
+	log.Infof("applying stellar-auth migrations on the tenant %s schema", t.Name)
+	err = m.RunMigrationsForTenant(ctx, t, u.String(), migrate.Up, 0, authmigrations.FS, db.StellarAuthMigrationsTableName)
+	if err != nil {
+		return nil, fmt.Errorf("applying stellar-auth migrations: %w", err)
+	}
+
+	// Connecting to the tenant database schema
+	tenantSchemaConnectionPool, err := db.OpenDBConnectionPool(u.String())
+	if err != nil {
+		return nil, fmt.Errorf("opening database connection on tenant schema: %w", err)
+	}
+	defer tenantSchemaConnectionPool.Close()
+
+	err = services.SetupAssetsForProperNetwork(ctx, tenantSchemaConnectionPool, utils.NetworkType(networkType), services.DefaultAssetsNetworkMap)
+	if err != nil {
+		return nil, fmt.Errorf("running setup assets for proper network: %w", err)
+	}
+
+	err = services.SetupWalletsForProperNetwork(ctx, tenantSchemaConnectionPool, utils.NetworkType(networkType), services.DefaultWalletsNetworkMap)
+	if err != nil {
+		return nil, fmt.Errorf("running setup wallets for proper network: %w", err)
+	}
+
+	// TODO: send invitation email to this new user
+	authManager := auth.NewAuthManager(
+		auth.WithDefaultAuthenticatorOption(tenantSchemaConnectionPool, auth.NewDefaultPasswordEncrypter(), 0),
+	)
+	_, err = authManager.CreateUser(ctx, &auth.User{
+		FirstName: userFirstName,
+		LastName:  userLastName,
+		Email:     userEmail,
+		IsOwner:   true,
+		Roles:     []string{"owner"},
+	}, "")
+	if err != nil {
+		return nil, fmt.Errorf("creating user: %w", err)
+	}
+
+	tenantStatus := ProvisionedTenantStatus
+	t, err = m.UpdateTenantConfig(ctx, &TenantUpdate{ID: t.ID, Status: &tenantStatus})
+	if err != nil {
+		return nil, fmt.Errorf("updating tenant %s status to %s: %w", name, ProvisionedTenantStatus, err)
+	}
+
+	return t, nil
 }
 
 func (m *Manager) AddTenant(ctx context.Context, name string) (*Tenant, error) {
@@ -102,6 +188,11 @@ func (m *Manager) UpdateTenantConfig(ctx context.Context, tu *TenantUpdate) (*Te
 		args = append(args, pq.Array(tu.CORSAllowedOrigins))
 	}
 
+	if tu.Status != nil {
+		fields = append(fields, "status = ?")
+		args = append(args, *tu.Status)
+	}
+
 	args = append(args, tu.ID)
 	q = fmt.Sprintf(q, strings.Join(fields, ",\n"))
 	q = m.db.Rebind(q)
@@ -115,6 +206,19 @@ func (m *Manager) UpdateTenantConfig(ctx context.Context, tu *TenantUpdate) (*Te
 	}
 
 	return &t, nil
+}
+
+func (m *Manager) RunMigrationsForTenant(
+	ctx context.Context, t *Tenant, dbURL string,
+	dir migrate.MigrationDirection, count int,
+	migrationFiles embed.FS, migrationTableName db.MigrationTableName,
+) error {
+	n, err := db.Migrate(dbURL, dir, count, migrationFiles, migrationTableName)
+	if err != nil {
+		return fmt.Errorf("applying SDP migrations: %w", err)
+	}
+	log.Infof("successful applied %d migrations", n)
+	return nil
 }
 
 type Option func(m *Manager)
