@@ -33,7 +33,7 @@ func TestSQLExecWithMetrics_GetContext(t *testing.T) {
 		VALUES
 			($1, $2)
 	`
-	_, err = dbConnectionPool.SqlDB().ExecContext(ctx, query, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZCC")
+	_, err = dbConnectionPool.ExecContext(ctx, query, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZCC")
 	require.NoError(t, err)
 
 	t.Run("query successful in GetContext", func(t *testing.T) {
@@ -94,10 +94,10 @@ func TestSQLExecWithMetrics_SelectContext(t *testing.T) {
 		VALUES
 			($1, $2)
 	`
-	_, err = dbConnectionPool.SqlDB().ExecContext(ctx, query, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZCC")
+	_, err = dbConnectionPool.ExecContext(ctx, query, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZCC")
 	require.NoError(t, err)
 
-	_, err = dbConnectionPool.SqlDB().ExecContext(ctx, query, "EURT", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZCC")
+	_, err = dbConnectionPool.ExecContext(ctx, query, "EURT", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZCC")
 	require.NoError(t, err)
 
 	t.Run("query successful in SelectContext", func(t *testing.T) {
@@ -157,10 +157,10 @@ func TestSQLExecWithMetrics_QueryContext(t *testing.T) {
 		VALUES
 			($1, $2)
 	`
-	_, err = dbConnectionPool.SqlDB().ExecContext(ctx, query, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZCC")
+	_, err = dbConnectionPool.ExecContext(ctx, query, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZCC")
 	require.NoError(t, err)
 
-	_, err = dbConnectionPool.SqlDB().ExecContext(ctx, query, "EURT", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZCC")
+	_, err = dbConnectionPool.ExecContext(ctx, query, "EURT", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZCC")
 	require.NoError(t, err)
 
 	t.Run("query successful in QueryContext", func(t *testing.T) {
@@ -229,10 +229,10 @@ func TestSQLExecWithMetrics_QueryxContext(t *testing.T) {
 		VALUES
 			($1, $2)
 	`
-	_, err = dbConnectionPool.SqlDB().ExecContext(ctx, query, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZCC")
+	_, err = dbConnectionPool.ExecContext(ctx, query, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZCC")
 	require.NoError(t, err)
 
-	_, err = dbConnectionPool.SqlDB().ExecContext(ctx, query, "EURT", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZCC")
+	_, err = dbConnectionPool.ExecContext(ctx, query, "EURT", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZCC")
 	require.NoError(t, err)
 
 	t.Run("query successful in QueryxContext", func(t *testing.T) {
@@ -301,7 +301,7 @@ func TestSQLExecWithMetrics_QueryRowxContext(t *testing.T) {
 		VALUES
 			($1, $2)
 	`
-	_, err = dbConnectionPool.SqlDB().ExecContext(ctx, query, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZCC")
+	_, err = dbConnectionPool.ExecContext(ctx, query, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZCC")
 	require.NoError(t, err)
 
 	t.Run("query successful in QueryRowxContext", func(t *testing.T) {
@@ -362,7 +362,7 @@ func TestSQLExecWithMetrics_ExecContext(t *testing.T) {
 		VALUES
 			($1, $2)
 	`
-	_, err = dbConnectionPool.SqlDB().ExecContext(ctx, query, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZCC")
+	_, err = dbConnectionPool.ExecContext(ctx, query, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZCC")
 	require.NoError(t, err)
 
 	t.Run("query successful in ExecContext", func(t *testing.T) {

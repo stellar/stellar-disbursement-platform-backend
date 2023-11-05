@@ -1,6 +1,7 @@
 package db
 
 import (
+	"context"
 	"embed"
 	"fmt"
 	"net/http"
@@ -29,5 +30,6 @@ func Migrate(dbURL string, dir migrate.MigrationDirection, count int, migrationF
 	}
 
 	m := migrate.HttpFileSystemMigrationSource{FileSystem: http.FS(migrationFiles)}
-	return ms.ExecMax(dbConnectionPool.SqlDB(), dbConnectionPool.DriverName(), m, dir, count)
+	ctx := context.Background()
+	return ms.ExecMax(dbConnectionPool.SqlDB(ctx), dbConnectionPool.DriverName(), m, dir, count)
 }

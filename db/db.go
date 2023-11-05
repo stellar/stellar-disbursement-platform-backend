@@ -29,8 +29,9 @@ type DBConnectionPool interface {
 	SQLExecuter
 	BeginTxx(ctx context.Context, opts *sql.TxOptions) (DBTransaction, error)
 	Close() error
-	Ping() error
-	SqlDB() *sql.DB
+	Ping(ctx context.Context) error
+	SqlDB(ctx context.Context) *sql.DB
+	SqlxDB(ctx context.Context) *sqlx.DB
 	DSN(ctx context.Context) (string, error)
 }
 
@@ -44,11 +45,15 @@ func (db *DBConnectionPoolImplementation) BeginTxx(ctx context.Context, opts *sq
 	return db.DB.BeginTxx(ctx, opts)
 }
 
-func (db *DBConnectionPoolImplementation) SqlDB() *sql.DB {
+func (db *DBConnectionPoolImplementation) Ping(ctx context.Context) error {
+	return db.DB.PingContext(ctx)
+}
+
+func (db *DBConnectionPoolImplementation) SqlDB(ctx context.Context) *sql.DB {
 	return db.DB.DB
 }
 
-func (db *DBConnectionPoolImplementation) SqlxDB() *sqlx.DB {
+func (db *DBConnectionPoolImplementation) SqlxDB(ctx context.Context) *sqlx.DB {
 	return db.DB
 }
 
