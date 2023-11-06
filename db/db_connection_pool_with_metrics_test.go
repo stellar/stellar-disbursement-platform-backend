@@ -26,7 +26,8 @@ func TestDBConnectionPoolWithMetrics_SqlxDB(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := context.Background()
-	sqlxDB := dbConnectionPoolWithMetrics.SqlxDB(ctx)
+	sqlxDB, err := dbConnectionPoolWithMetrics.SqlxDB(ctx)
+	require.NoError(t, err)
 
 	assert.IsType(t, &sqlx.DB{}, sqlxDB)
 }
@@ -44,7 +45,8 @@ func TestDBConnectionPoolWithMetrics_SqlDB(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := context.Background()
-	sqlDB := dbConnectionPoolWithMetrics.SqlDB(ctx)
+	sqlDB, err := dbConnectionPoolWithMetrics.SqlDB(ctx)
+	require.NoError(t, err)
 
 	assert.IsType(t, &sql.DB{}, sqlDB)
 }

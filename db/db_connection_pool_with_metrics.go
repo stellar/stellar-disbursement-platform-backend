@@ -48,11 +48,11 @@ func (dbc *DBConnectionPoolWithMetrics) Ping(ctx context.Context) error {
 	return dbc.dbConnectionPool.Ping(ctx)
 }
 
-func (dbc *DBConnectionPoolWithMetrics) SqlDB(ctx context.Context) *sql.DB {
+func (dbc *DBConnectionPoolWithMetrics) SqlDB(ctx context.Context) (*sql.DB, error) {
 	return dbc.dbConnectionPool.SqlDB(ctx)
 }
 
-func (dbc *DBConnectionPoolWithMetrics) SqlxDB(ctx context.Context) *sqlx.DB {
+func (dbc *DBConnectionPoolWithMetrics) SqlxDB(ctx context.Context) (*sqlx.DB, error) {
 	return dbc.dbConnectionPool.SqlxDB(ctx)
 }
 

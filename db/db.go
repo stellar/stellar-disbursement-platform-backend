@@ -30,8 +30,8 @@ type DBConnectionPool interface {
 	BeginTxx(ctx context.Context, opts *sql.TxOptions) (DBTransaction, error)
 	Close() error
 	Ping(ctx context.Context) error
-	SqlDB(ctx context.Context) *sql.DB
-	SqlxDB(ctx context.Context) *sqlx.DB
+	SqlDB(ctx context.Context) (*sql.DB, error)
+	SqlxDB(ctx context.Context) (*sqlx.DB, error)
 	DSN(ctx context.Context) (string, error)
 }
 
@@ -49,12 +49,18 @@ func (db *DBConnectionPoolImplementation) Ping(ctx context.Context) error {
 	return db.DB.PingContext(ctx)
 }
 
-func (db *DBConnectionPoolImplementation) SqlDB(ctx context.Context) *sql.DB {
-	return db.DB.DB
+func (db *DBConnectionPoolImplementation) SqlDB(ctx context.Context) (*sql.DB, error) {
+	if db.DB.DB == nil {
+		return nil, fmt.Errorf("sql.DB is not initialized")
+	}
+	return db.DB.DB, nil
 }
 
-func (db *DBConnectionPoolImplementation) SqlxDB(ctx context.Context) *sqlx.DB {
-	return db.DB
+func (db *DBConnectionPoolImplementation) SqlxDB(ctx context.Context) (*sqlx.DB, error) {
+	if db.DB == nil {
+		return nil, fmt.Errorf("sqlx.DB is not initialized")
+	}
+	return db.DB, nil
 }
 
 func (db *DBConnectionPoolImplementation) DSN(ctx context.Context) (string, error) {

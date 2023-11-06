@@ -338,7 +338,9 @@ func Test_createAuthManager(t *testing.T) {
 
 	// creates the expected auth manager
 	passwordEncrypter := auth.NewDefaultPasswordEncrypter()
-	authDBConnectionPool := auth.DBConnectionPoolFromSqlDB(dbConnectionPool.SqlDB(context.Background()), dbConnectionPool.DriverName())
+	dbcp, err := dbConnectionPool.SqlDB(context.Background())
+	require.NoError(t, err)
+	authDBConnectionPool := auth.DBConnectionPoolFromSqlDB(dbcp, dbConnectionPool.DriverName())
 	wantAuthManager := auth.NewAuthManager(
 		auth.WithDefaultAuthenticatorOption(authDBConnectionPool, passwordEncrypter, time.Hour*time.Duration(1)),
 		auth.WithDefaultJWTManagerOption(publicKeyStr, privateKeyStr),

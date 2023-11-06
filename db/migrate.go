@@ -31,5 +31,9 @@ func Migrate(dbURL string, dir migrate.MigrationDirection, count int, migrationF
 
 	m := migrate.HttpFileSystemMigrationSource{FileSystem: http.FS(migrationFiles)}
 	ctx := context.Background()
-	return ms.ExecMax(dbConnectionPool.SqlDB(ctx), dbConnectionPool.DriverName(), m, dir, count)
+	db, err := dbConnectionPool.SqlDB(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("fetching sql.DB: %w", err)
+	}
+	return ms.ExecMax(db, dbConnectionPool.DriverName(), m, dir, count)
 }
