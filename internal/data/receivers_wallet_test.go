@@ -873,7 +873,7 @@ func Test_GetByStellarAccountAndMemo(t *testing.T) {
 	receiverWalletModel := ReceiverWalletModel{dbConnectionPool: dbConnectionPool}
 	receiver := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
 	wallet := CreateWalletFixture(t, ctx, dbConnectionPool, "wallet", "https://www.wallet.com", "www.wallet.com", "wallet1://")
-	
+
 	t.Run("returns error when receiver wallet does not exist", func(t *testing.T) {
 		actual, innerErr := receiverWalletModel.GetByStellarAccountAndMemo(ctx, "GCRSI42IC7WSW6N46LWPAHQWFI6MLGPBN3BYQ2WMNJ43GNRTIEYCAD6O", "", wallet.SEP10ClientDomain)
 		require.ErrorIs(t, innerErr, ErrRecordNotFound)

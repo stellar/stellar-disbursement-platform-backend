@@ -34,22 +34,22 @@ func Test_ReceiverRegistrationHandler_ServeHTTP(t *testing.T) {
 	r.Get("/receiver-registration/start", ReceiverRegistrationHandler{ReceiverWalletModel: receiverWalletModel, ReCAPTCHASiteKey: reCAPTCHASiteKey}.ServeHTTP)
 
 	t.Run("returns 401 - Unauthorized if the token is not in the request context", func(t *testing.T) {
-		req, err := http.NewRequest("GET", "/receiver-registration/start", nil)
-		require.NoError(t, err)
+		req, reqErr := http.NewRequest("GET", "/receiver-registration/start", nil)
+		require.NoError(t, reqErr)
 		rr := httptest.NewRecorder()
 		r.ServeHTTP(rr, req)
 
 		resp := rr.Result()
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
+		respBody, respErr := io.ReadAll(resp.Body)
+		require.NoError(t, respErr)
 
 		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 		assert.JSONEq(t, `{"error":"Not authorized."}`, string(respBody))
 	})
 
 	t.Run("returns 401 - Unauthorized if the token is in the request context but it's not valid", func(t *testing.T) {
-		req, err := http.NewRequest("GET", "/receiver-registration/start", nil)
-		require.NoError(t, err)
+		req, reqErr := http.NewRequest("GET", "/receiver-registration/start", nil)
+		require.NoError(t, reqErr)
 
 		rr := httptest.NewRecorder()
 		invalidClaims := &anchorplatform.SEP24JWTClaims{}
@@ -57,16 +57,16 @@ func Test_ReceiverRegistrationHandler_ServeHTTP(t *testing.T) {
 		r.ServeHTTP(rr, req)
 
 		resp := rr.Result()
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
+		respBody, respErr := io.ReadAll(resp.Body)
+		require.NoError(t, respErr)
 
 		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 		assert.JSONEq(t, `{"error":"Not authorized."}`, string(respBody))
 	})
 
 	t.Run("returns 200 - Ok (And show the Wallet Registration page) if the token is in the request context and it's valid 🎉", func(t *testing.T) {
-		req, err := http.NewRequest("GET", "/receiver-registration/start?token=test-token", nil)
-		require.NoError(t, err)
+		req, reqErr := http.NewRequest("GET", "/receiver-registration/start?token=test-token", nil)
+		require.NoError(t, reqErr)
 
 		validClaims := &anchorplatform.SEP24JWTClaims{
 			ClientDomainClaim: "test.com",
@@ -82,8 +82,8 @@ func Test_ReceiverRegistrationHandler_ServeHTTP(t *testing.T) {
 		r.ServeHTTP(rr, req)
 
 		resp := rr.Result()
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
+		respBody, respErr := io.ReadAll(resp.Body)
+		require.NoError(t, respErr)
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.Equal(t, "text/html; charset=utf-8", resp.Header.Get("Content-Type"))
@@ -108,8 +108,8 @@ func Test_ReceiverRegistrationHandler_ServeHTTP(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("returns 200 - Ok (And show the Registration Success page) if the token is in the request context and it's valid and the user was already registered 🎉", func(t *testing.T) {
-		req, err := http.NewRequest("GET", "/receiver-registration/start?token=test-token", nil)
-		require.NoError(t, err)
+		req, reqErr := http.NewRequest("GET", "/receiver-registration/start?token=test-token", nil)
+		require.NoError(t, reqErr)
 
 		validClaims := &anchorplatform.SEP24JWTClaims{
 			ClientDomainClaim: "mywallet.com",
@@ -125,8 +125,8 @@ func Test_ReceiverRegistrationHandler_ServeHTTP(t *testing.T) {
 		r.ServeHTTP(rr, req)
 
 		resp := rr.Result()
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
+		respBody, respErr := io.ReadAll(resp.Body)
+		require.NoError(t, respErr)
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.Equal(t, "text/html; charset=utf-8", resp.Header.Get("Content-Type"))
@@ -134,8 +134,8 @@ func Test_ReceiverRegistrationHandler_ServeHTTP(t *testing.T) {
 	})
 
 	t.Run("returns 200 - Ok (And show the Wallet Registration page) if the token is in the request context and wants to register second wallet in the same address", func(t *testing.T) {
-		req, err := http.NewRequest("GET", "/receiver-registration/start?token=test-token", nil)
-		require.NoError(t, err)
+		req, reqErr := http.NewRequest("GET", "/receiver-registration/start?token=test-token", nil)
+		require.NoError(t, reqErr)
 
 		validClaims := &anchorplatform.SEP24JWTClaims{
 			ClientDomainClaim: "newwallet.com",
@@ -151,8 +151,8 @@ func Test_ReceiverRegistrationHandler_ServeHTTP(t *testing.T) {
 		r.ServeHTTP(rr, req)
 
 		resp := rr.Result()
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
+		respBody, respErr := io.ReadAll(resp.Body)
+		require.NoError(t, respErr)
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.Equal(t, "text/html; charset=utf-8", resp.Header.Get("Content-Type"))
