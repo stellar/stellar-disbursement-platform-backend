@@ -641,7 +641,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 
 		msg := message.Message{
 			ToEmail: u.Email,
-			Title:   invitationMessageTitle,
+			Title:   "Welcome to Stellar Disbursement Platform",
 			Message: content,
 		}
 		messengerClientMock.
@@ -671,7 +671,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 
 		wantsBody := `
 			{
-				"error": "Cannot send invitation email for user user-id"
+				"error": "Cannot create user"
 			}
 		`
 
@@ -727,7 +727,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 
 		wantsBody := `
 			{
-				"error": "Cannot get forgot password link"
+				"error": "Cannot create user"
 			}
 		`
 
@@ -774,7 +774,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 
 		msg := message.Message{
 			ToEmail: u.Email,
-			Title:   invitationMessageTitle,
+			Title:   "Welcome to Stellar Disbursement Platform",
 			Message: content,
 		}
 		messengerClientMock.

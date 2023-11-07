@@ -15,6 +15,8 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	authmigrations "github.com/stellar/stellar-disbursement-platform-backend/db/migrations/auth-migrations"
 	sdpmigrations "github.com/stellar/stellar-disbursement-platform-backend/db/migrations/sdp-migrations"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
@@ -27,10 +29,14 @@ var (
 )
 
 type Manager struct {
-	db db.DBConnectionPool
+	db              db.DBConnectionPool
+	messengerClient message.MessengerClient
 }
 
-func (m *Manager) ProvisionNewTenant(ctx context.Context, name, userFirstName, userLastName, userEmail, networkType string) (*Tenant, error) {
+func (m *Manager) ProvisionNewTenant(
+	ctx context.Context, name, userFirstName, userLastName, userEmail,
+	organizationName, uiBaseURL, networkType string,
+) (*Tenant, error) {
 	log.Infof("adding tenant %s", name)
 	t, err := m.AddTenant(ctx, name)
 	if err != nil {
@@ -83,23 +89,35 @@ func (m *Manager) ProvisionNewTenant(ctx context.Context, name, userFirstName, u
 		return nil, fmt.Errorf("running setup wallets for proper network: %w", err)
 	}
 
-	// TODO: send invitation email to this new user
+	// Updating organization's name
+	models, err := data.NewModels(tenantSchemaConnectionPool)
+	if err != nil {
+		return nil, fmt.Errorf("getting models: %w", err)
+	}
+
+	err = models.Organizations.Update(ctx, &data.OrganizationUpdate{Name: organizationName})
+	if err != nil {
+		return nil, fmt.Errorf("updating organization's name: %w", err)
+	}
+
+	// Creating new user and sending invitation email
 	authManager := auth.NewAuthManager(
 		auth.WithDefaultAuthenticatorOption(tenantSchemaConnectionPool, auth.NewDefaultPasswordEncrypter(), 0),
 	)
-	_, err = authManager.CreateUser(ctx, &auth.User{
+	s := services.NewCreateUserService(models, tenantSchemaConnectionPool, authManager, m.messengerClient)
+	_, err = s.CreateUser(ctx, auth.User{
 		FirstName: userFirstName,
 		LastName:  userLastName,
 		Email:     userEmail,
 		IsOwner:   true,
 		Roles:     []string{"owner"},
-	}, "")
+	}, uiBaseURL)
 	if err != nil {
 		return nil, fmt.Errorf("creating user: %w", err)
 	}
 
 	tenantStatus := ProvisionedTenantStatus
-	t, err = m.UpdateTenantConfig(ctx, &TenantUpdate{ID: t.ID, Status: &tenantStatus})
+	t, err = m.UpdateTenantConfig(ctx, &TenantUpdate{ID: t.ID, Status: &tenantStatus, SDPUIBaseURL: &uiBaseURL})
 	if err != nil {
 		return nil, fmt.Errorf("updating tenant %s status to %s: %w", name, ProvisionedTenantStatus, err)
 	}
@@ -234,5 +252,11 @@ func NewManager(opts ...Option) *Manager {
 func WithDatabase(dbConnectionPool db.DBConnectionPool) Option {
 	return func(m *Manager) {
 		m.db = dbConnectionPool
+	}
+}
+
+func WithMessengerClient(messengerClient message.MessengerClient) Option {
+	return func(m *Manager) {
+		m.messengerClient = messengerClient
 	}
 }

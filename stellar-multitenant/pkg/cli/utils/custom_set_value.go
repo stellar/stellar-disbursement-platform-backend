@@ -10,6 +10,7 @@ import (
 	"github.com/stellar/go/keypair"
 	"github.com/stellar/go/support/config"
 	"github.com/stellar/go/support/log"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
@@ -144,5 +145,17 @@ func SetConfigOptionNetworkType(co *config.ConfigOption) error {
 		return fmt.Errorf("the expected type for this config key is a string, but got a %T instead", co.ConfigKey)
 	}
 	*key = string(value)
+	return nil
+}
+
+func SetConfigOptionMessengerType(co *config.ConfigOption) error {
+	senderType := viper.GetString(co.Name)
+
+	messengerType, err := message.ParseMessengerType(senderType)
+	if err != nil {
+		return fmt.Errorf("couldn't parse messenger type: %w", err)
+	}
+
+	*(co.ConfigKey.(*message.MessengerType)) = messengerType
 	return nil
 }

@@ -13,8 +13,10 @@ import (
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
 
@@ -87,19 +89,32 @@ func Test_executeAddTenant(t *testing.T) {
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
 
+	messengerClientMock := &message.MessengerClientMock{}
+	messengerClientMock.
+		On("SendMessage", mock.AnythingOfType("message.Message")).
+		Return(nil)
+
 	ctx := context.Background()
+
+	tenantName := "myorg"
+	userFirstName := "First"
+	userLastName := "Last"
+	userEmail := "email@email.com"
+	organizationName := "My Org"
+	uiBaseURL := "http://localhost:3000"
+	networkType := "testnet"
 
 	t.Run("adds a new tenant successfully", func(t *testing.T) {
 		DeleteAllTenantsFixture(t, ctx, dbConnectionPool)
 
 		getEntries := log.DefaultLogger.StartTest(log.InfoLevel)
 
-		err := executeAddTenant(ctx, dbt.DSN, "myorg", "first", "last", "email@email.com", "testnet")
+		err := executeAddTenant(ctx, dbt.DSN, tenantName, userFirstName, userLastName, userEmail, organizationName, uiBaseURL, networkType, messengerClientMock)
 		assert.Nil(t, err)
 
 		const q = "SELECT id FROM tenants WHERE name = $1"
 		var tenantID string
-		err = dbConnectionPool.GetContext(ctx, &tenantID, q, "myorg")
+		err = dbConnectionPool.GetContext(ctx, &tenantID, q, tenantName)
 		require.NoError(t, err)
 
 		entries := getEntries()
@@ -113,15 +128,15 @@ func Test_executeAddTenant(t *testing.T) {
 
 		getEntries := log.DefaultLogger.StartTest(log.DebugLevel)
 
-		err := executeAddTenant(ctx, dbt.DSN, "myorg", "first", "last", "email@email.com", "testnet")
+		err := executeAddTenant(ctx, dbt.DSN, tenantName, userFirstName, userLastName, userEmail, organizationName, uiBaseURL, networkType, messengerClientMock)
 		assert.Nil(t, err)
 
-		err = executeAddTenant(ctx, dbt.DSN, "myorg", "first", "last", "email@email.com", "testnet")
+		err = executeAddTenant(ctx, dbt.DSN, tenantName, userFirstName, userLastName, userEmail, organizationName, uiBaseURL, networkType, messengerClientMock)
 		assert.ErrorIs(t, err, tenant.ErrDuplicatedTenantName)
 
 		const q = "SELECT id FROM tenants WHERE name = $1"
 		var tenantID string
-		err = dbConnectionPool.GetContext(ctx, &tenantID, q, "myorg")
+		err = dbConnectionPool.GetContext(ctx, &tenantID, q, tenantName)
 		require.NoError(t, err)
 
 		entries := getEntries()
@@ -129,6 +144,8 @@ func Test_executeAddTenant(t *testing.T) {
 		assert.Equal(t, "tenant myorg added successfully", entries[13].Message)
 		assert.Contains(t, fmt.Sprintf("tenant ID: %s", tenantID), entries[14].Message)
 	})
+
+	messengerClientMock.AssertExpectations(t)
 }
 
 func Test_AddTenantsCmd(t *testing.T) {
@@ -148,18 +165,23 @@ func Test_AddTenantsCmd(t *testing.T) {
 		mockCmd.SetErr(out)
 		mockCmd.SetArgs([]string{"add-tenants"})
 		err := mockCmd.ExecuteContext(ctx)
-		assert.EqualError(t, err, "accepts 4 arg(s), received 0")
+		assert.EqualError(t, err, "accepts 5 arg(s), received 0")
 
-		expectUsageMessage := `Error: accepts 4 arg(s), received 0
+		expectUsageMessage := `Error: accepts 5 arg(s), received 0
 Usage:
    add-tenants [flags]
 
 Examples:
-add-tenants [tenant name] [user first name] [user last name] [user email]
+add-tenants [tenant name] [user first name] [user last name] [user email] [organization name]
 
 Flags:
-  -h, --help                  help for add-tenants
-      --network-type string    (NETWORK_TYPE) (default "testnet")
+      --aws-access-key-id string       The AWS access key ID (AWS_ACCESS_KEY_ID)
+      --aws-region string              The AWS region (AWS_REGION)
+      --aws-secret-access-key string   The AWS secret access key (AWS_SECRET_ACCESS_KEY)
+      --email-sender-type string       The messenger type used to send invitations to new dashboard users. Options: [DRY_RUN AWS_EMAIL] (EMAIL_SENDER_TYPE)
+  -h, --help                           help for add-tenants
+      --network-type string            The Stellar Network type (NETWORK_TYPE) (default "testnet")
+      --sdp-ui-base-url string         The Tenant SDP UI/dashboard Base URL. (SDP_UI_BASE_URL) (default "http://localhost:3000")
 
 `
 		assert.Equal(t, expectUsageMessage, out.String())
@@ -175,11 +197,16 @@ Usage:
    add-tenants [flags]
 
 Examples:
-add-tenants [tenant name] [user first name] [user last name] [user email]
+add-tenants [tenant name] [user first name] [user last name] [user email] [organization name]
 
 Flags:
-  -h, --help                  help for add-tenants
-      --network-type string    (NETWORK_TYPE) (default "testnet")
+      --aws-access-key-id string       The AWS access key ID (AWS_ACCESS_KEY_ID)
+      --aws-region string              The AWS region (AWS_REGION)
+      --aws-secret-access-key string   The AWS secret access key (AWS_SECRET_ACCESS_KEY)
+      --email-sender-type string       The messenger type used to send invitations to new dashboard users. Options: [DRY_RUN AWS_EMAIL] (EMAIL_SENDER_TYPE)
+  -h, --help                           help for add-tenants
+      --network-type string            The Stellar Network type (NETWORK_TYPE) (default "testnet")
+      --sdp-ui-base-url string         The Tenant SDP UI/dashboard Base URL. (SDP_UI_BASE_URL) (default "http://localhost:3000")
 `
 		assert.Equal(t, expectUsageMessage, out.String())
 	})
@@ -189,13 +216,14 @@ Flags:
 		userFirstName := "First"
 		userLastName := "Last"
 		userEmail := "email@email.com"
+		organizationName := "UNHCR"
 
 		out := new(strings.Builder)
 		rootCmd := rootCmd()
 		rootCmd.AddCommand(AddTenantsCmd())
 		rootCmd.SetOut(out)
 		rootCmd.SetErr(out)
-		rootCmd.SetArgs([]string{"add-tenants", tenantName, userFirstName, userLastName, userEmail, "--network-type", "testnet", "--multitenant-db-url", dbt.DSN})
+		rootCmd.SetArgs([]string{"add-tenants", tenantName, userFirstName, userLastName, userEmail, organizationName, "--email-sender-type", "DRY_RUN", "--network-type", "testnet", "--multitenant-db-url", dbt.DSN})
 		getEntries := log.DefaultLogger.StartTest(log.InfoLevel)
 
 		err := rootCmd.ExecuteContext(ctx)
@@ -214,8 +242,7 @@ Flags:
 
 		// Connecting to the new schema
 		schemaName := fmt.Sprintf("sdp_%s", tenantName)
-		dataSourceName := dbConnectionPool.DSN()
-		u, err := url.Parse(dataSourceName)
+		u, err := url.Parse(dbConnectionPool.DSN())
 		require.NoError(t, err)
 		uq := u.Query()
 		uq.Set("search_path", schemaName)
@@ -256,13 +283,14 @@ Flags:
 		userFirstName := "First"
 		userLastName := "Last"
 		userEmail := "email@email.com"
+		organizationName := "UNHCR"
 
 		out := new(strings.Builder)
 		rootCmd := rootCmd()
 		rootCmd.AddCommand(AddTenantsCmd())
 		rootCmd.SetOut(out)
 		rootCmd.SetErr(out)
-		rootCmd.SetArgs([]string{"add-tenants", tenantName, userFirstName, userLastName, userEmail, "--network-type", "pubnet", "--multitenant-db-url", dbt.DSN})
+		rootCmd.SetArgs([]string{"add-tenants", tenantName, userFirstName, userLastName, userEmail, organizationName, "--email-sender-type", "DRY_RUN", "--network-type", "pubnet", "--multitenant-db-url", dbt.DSN})
 		getEntries := log.DefaultLogger.StartTest(log.InfoLevel)
 
 		err := rootCmd.ExecuteContext(ctx)
@@ -281,8 +309,7 @@ Flags:
 
 		// Connecting to the new schema
 		schemaName := fmt.Sprintf("sdp_%s", tenantName)
-		dataSourceName := dbConnectionPool.DSN()
-		u, err := url.Parse(dataSourceName)
+		u, err := url.Parse(dbConnectionPool.DSN())
 		require.NoError(t, err)
 		uq := u.Query()
 		uq.Set("search_path", schemaName)
