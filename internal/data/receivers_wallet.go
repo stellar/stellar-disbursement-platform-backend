@@ -437,7 +437,7 @@ func (rw *ReceiverWalletModel) UpdateStatusByDisbursementID(ctx context.Context,
 }
 
 // GetByStellarAccountAndMemo returns a receiver wallets that match the Stellar Account.
-func (rw *ReceiverWalletModel) GetByStellarAccountAndMemo(ctx context.Context, stellarAccount, stellarMemo string) (*ReceiverWallet, error) {
+func (rw *ReceiverWalletModel) GetByStellarAccountAndMemo(ctx context.Context, stellarAccount, stellarMemo string, clientDomain string) (*ReceiverWallet, error) {
 	// build query
 	var receiverWallets ReceiverWallet
 	query := `
@@ -457,12 +457,13 @@ func (rw *ReceiverWalletModel) GetByStellarAccountAndMemo(ctx context.Context, s
 		FROM receiver_wallets rw
 		JOIN wallets w ON rw.wallet_id = w.id
 		WHERE rw.stellar_address = $1
+		AND w.sep_10_client_domain = $2
 	`
 
 	// append memo to query if it is not empty
-	args := []interface{}{stellarAccount}
+	args := []interface{}{stellarAccount, clientDomain}
 	if stellarMemo != "" {
-		query += " AND rw.stellar_memo = $2"
+		query += " AND rw.stellar_memo = $3"
 		args = append(args, stellarMemo)
 	} else {
 		query += " AND (rw.stellar_memo IS NULL OR rw.stellar_memo = '')"
