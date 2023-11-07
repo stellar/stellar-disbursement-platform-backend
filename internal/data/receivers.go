@@ -37,6 +37,7 @@ type ReceiverStats struct {
 	TotalPayments      string          `json:"total_payments,omitempty" db:"total_payments"`
 	SuccessfulPayments string          `json:"successful_payments,omitempty" db:"successful_payments"`
 	FailedPayments     string          `json:"failed_payments,omitempty" db:"failed_payments"`
+	CanceledPayments   string          `json:"canceled_payments,omitempty" db:"canceled_payments"`
 	RemainingPayments  string          `json:"remaining_payments,omitempty" db:"remaining_payments"`
 	RegisteredWallets  string          `json:"registered_wallets,omitempty" db:"registered_wallets"`
 	ReceivedAmounts    ReceivedAmounts `json:"received_amounts,omitempty" db:"received_amounts"`
@@ -117,6 +118,7 @@ func (r *ReceiverModel) Get(ctx context.Context, sqlExec db.SQLExecuter, id stri
 			COUNT(p) as total_payments,
 			COUNT(p) FILTER(WHERE p.status = 'SUCCESS') as successful_payments,
 			COUNT(p) FILTER(WHERE p.status = 'FAILED') as failed_payments,
+			COUNT(p) FILTER(WHERE p.status = 'CANCELED') as canceled_payments,
 			COUNT(p) FILTER(WHERE p.status IN ('DRAFT', 'READY', 'PENDING', 'PAUSED')) as remaining_payments,
 			a.code as asset_code,
 			a.issuer as asset_issuer,
@@ -132,6 +134,7 @@ func (r *ReceiverModel) Get(ctx context.Context, sqlExec db.SQLExecuter, id stri
 			SUM(rs.total_payments) as total_payments,
 			SUM(rs.successful_payments) as successful_payments,
 			SUM(rs.failed_payments) as failed_payments,
+			SUM(rs.canceled_payments) as canceled_payments,
 			SUM(rs.remaining_payments) as remaining_payments,
 			jsonb_agg(jsonb_build_object('asset_code', rs.asset_code, 'asset_issuer', rs.asset_issuer, 'received_amount', rs.received_amount::text)) as received_amounts
 		FROM receiver_stats rs
@@ -147,6 +150,7 @@ func (r *ReceiverModel) Get(ctx context.Context, sqlExec db.SQLExecuter, id stri
 		COALESCE(total_payments, 0) as total_payments,
 		COALESCE(successful_payments, 0) as successful_payments,
 		COALESCE(rs.failed_payments, '0') as failed_payments,
+		COALESCE(rs.canceled_payments, '0') as canceled_payments,
 		COALESCE(rs.remaining_payments, '0') as remaining_payments,
 		rs.received_amounts,
 		COALESCE(rw.registered_wallets, 0) as registered_wallets
@@ -206,6 +210,7 @@ func (r *ReceiverModel) GetAll(ctx context.Context, sqlExec db.SQLExecuter, quer
 				COUNT(p) as total_payments,
 				COUNT(p) FILTER(WHERE p.status = 'SUCCESS') as successful_payments,
 				COUNT(p) FILTER(WHERE p.status = 'FAILED') as failed_payments,
+				COUNT(p) FILTER(WHERE p.status = 'CANCELED') as canceled_payments,
 				COUNT(p) FILTER(WHERE p.status IN ('DRAFT', 'READY', 'PENDING', 'PAUSED')) as remaining_payments,
 				a.code as asset_code,
 				a.issuer as asset_issuer,
@@ -221,6 +226,7 @@ func (r *ReceiverModel) GetAll(ctx context.Context, sqlExec db.SQLExecuter, quer
 				SUM(rs.total_payments) as total_payments,
 				SUM(rs.successful_payments) as successful_payments,
 				SUM(rs.failed_payments) as failed_payments,
+				SUM(rs.canceled_payments) as canceled_payments,
 				SUM(rs.remaining_payments) as remaining_payments,
 				jsonb_agg(jsonb_build_object('asset_code', rs.asset_code, 'asset_issuer', rs.asset_issuer, 'received_amount', rs.received_amount::text)) as received_amounts
 			FROM receiver_stats rs
@@ -236,6 +242,7 @@ func (r *ReceiverModel) GetAll(ctx context.Context, sqlExec db.SQLExecuter, quer
 			COALESCE(total_payments, 0) as total_payments,
 			COALESCE(successful_payments, 0) as successful_payments,
 			COALESCE(rs.failed_payments, '0') as failed_payments,
+			COALESCE(rs.canceled_payments, '0') as canceled_payments,
 			COALESCE(rs.remaining_payments, '0') as remaining_payments,
 			rs.received_amounts,
 			COALESCE(rrwc.registered_wallets, 0) as registered_wallets

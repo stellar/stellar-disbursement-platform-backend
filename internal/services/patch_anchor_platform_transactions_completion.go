@@ -11,6 +11,8 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 )
 
+const MaxErrorMessageLength = 255
+
 type PatchAnchorPlatformTransactionCompletionService struct {
 	apAPISvc  anchorplatform.AnchorPlatformAPIServiceInterface
 	sdpModels *data.Models
@@ -103,10 +105,15 @@ func (s *PatchAnchorPlatformTransactionCompletionService) PatchTransactionsCompl
 				}
 			}
 
+			messageLength := len(status.StatusMessage)
+			if messageLength > MaxErrorMessageLength {
+				messageLength = MaxErrorMessageLength - 1
+			}
+
 			err = s.apAPISvc.PatchAnchorTransactionsPostErrorCompletion(ctx, anchorplatform.APSep24TransactionPatchPostError{
 				ID:      payment.ReceiverWallet.AnchorPlatformTransactionID,
 				SEP:     "24",
-				Message: status.StatusMessage,
+				Message: status.StatusMessage[:messageLength],
 				Status:  anchorplatform.APTransactionStatusError,
 			})
 			if err != nil {

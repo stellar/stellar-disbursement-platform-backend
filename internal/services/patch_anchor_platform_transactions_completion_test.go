@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -419,9 +420,10 @@ func Test_PatchAnchorPlatformTransactionCompletionService_PatchTransactionsCompl
 		})
 		require.NoError(t, err)
 
+		bigErrorMsg := strings.Repeat("tx_failed op_no_source_account", 100)
 		err = models.Payment.Update(ctx, dbConnectionPool, payment2, &data.PaymentUpdate{
 			Status:               data.FailedPaymentStatus,
-			StatusMessage:        errorMsg,
+			StatusMessage:        bigErrorMsg,
 			StellarTransactionID: "stellar-transaction-id-2",
 		})
 		require.NoError(t, err)
@@ -436,7 +438,15 @@ func Test_PatchAnchorPlatformTransactionCompletionService_PatchTransactionsCompl
 				Status:  anchorplatform.APTransactionStatusError,
 			}).
 			Return(nil).
-			Twice().
+			Once().
+			On("PatchAnchorTransactionsPostErrorCompletion", ctx, anchorplatform.APSep24TransactionPatchPostError{
+				ID:      receiverWallet.AnchorPlatformTransactionID,
+				SEP:     "24",
+				Message: bigErrorMsg[:MaxErrorMessageLength-1],
+				Status:  anchorplatform.APTransactionStatusError,
+			}).
+			Return(nil).
+			Once().
 			On("PatchAnchorTransactionsPostSuccessCompletion", ctx, anchorplatform.APSep24TransactionPatchPostSuccess{
 				ID:     receiverWallet.AnchorPlatformTransactionID,
 				SEP:    "24",
