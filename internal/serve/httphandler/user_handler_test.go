@@ -12,9 +12,9 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/stellar/go/support/log"
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/htmltemplate"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
@@ -641,7 +641,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 
 		msg := message.Message{
 			ToEmail: u.Email,
-			Title:   invitationMessageTitle,
+			Title:   "Welcome to Stellar Disbursement Platform",
 			Message: content,
 		}
 		messengerClientMock.
@@ -671,7 +671,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 
 		wantsBody := `
 			{
-				"error": "Cannot send invitation email for user user-id"
+				"error": "Cannot create user"
 			}
 		`
 
@@ -727,7 +727,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 
 		wantsBody := `
 			{
-				"error": "Cannot get forgot password link"
+				"error": "Cannot create user"
 			}
 		`
 
@@ -774,7 +774,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 
 		msg := message.Message{
 			ToEmail: u.Email,
-			Title:   invitationMessageTitle,
+			Title:   "Welcome to Stellar Disbursement Platform",
 			Message: content,
 		}
 		messengerClientMock.

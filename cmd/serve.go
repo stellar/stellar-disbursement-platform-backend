@@ -6,10 +6,10 @@ import (
 	"go/types"
 
 	cmdUtils "github.com/stellar/stellar-disbursement-platform-backend/cmd/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
 	di "github.com/stellar/stellar-disbursement-platform-backend/internal/dependencyinjection"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/scheduler"

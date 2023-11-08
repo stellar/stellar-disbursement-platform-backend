@@ -11,7 +11,7 @@ import (
 	"github.com/spf13/viper"
 	"github.com/stellar/go/support/config"
 	"github.com/stellar/go/support/log"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/internal/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/utils"
 )

@@ -7,8 +7,8 @@ import (
 
 	"github.com/lib/pq"
 	"github.com/spf13/cobra"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/internal/db"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/internal/db/dbtest"
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

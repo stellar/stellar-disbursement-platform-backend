@@ -2,6 +2,7 @@ package utils
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/stellar/go/network"
 )
@@ -21,5 +22,16 @@ func GetNetworkTypeFromNetworkPassphrase(networkPassphrase string) (NetworkType,
 		return TestnetNetworkType, nil
 	default:
 		return "", fmt.Errorf("invalid network passphrase provided")
+	}
+}
+
+func GetNetworkTypeFromString(networkType string) (NetworkType, error) {
+	switch NetworkType(strings.ToLower(networkType)) {
+	case PubnetNetworkType:
+		return PubnetNetworkType, nil
+	case TestnetNetworkType:
+		return TestnetNetworkType, nil
+	default:
+		return "", fmt.Errorf("invalid network type provided")
 	}
 }
