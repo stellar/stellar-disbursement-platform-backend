@@ -54,7 +54,9 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 		assert.True(t, CheckSchemaExistsFixture(t, ctx, dbConnectionPool, schemaName))
 
 		// Connecting to the new schema
-		u, err := url.Parse(dbConnectionPool.DSN())
+		dsn, err := dbConnectionPool.DSN(ctx)
+		require.NoError(t, err)
+		u, err := url.Parse(dsn)
 		require.NoError(t, err)
 		uq := u.Query()
 		uq.Set("search_path", schemaName)
@@ -109,7 +111,9 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 		assert.True(t, CheckSchemaExistsFixture(t, ctx, dbConnectionPool, schemaName))
 
 		// Connecting to the new schema
-		u, err := url.Parse(dbConnectionPool.DSN())
+		dsn, err := dbConnectionPool.DSN(ctx)
+		require.NoError(t, err)
+		u, err := url.Parse(dsn)
 		require.NoError(t, err)
 		uq := u.Query()
 		uq.Set("search_path", schemaName)
@@ -301,7 +305,9 @@ func Test_Manager_RunMigrationsForTenant(t *testing.T) {
 	_, err = dbConnectionPool.ExecContext(ctx, fmt.Sprintf("CREATE SCHEMA %s", tnt2SchemaName))
 	require.NoError(t, err)
 
-	u, err := url.Parse(dbConnectionPool.DSN())
+	dsn, err := dbConnectionPool.DSN(ctx)
+	require.NoError(t, err)
+	u, err := url.Parse(dsn)
 	require.NoError(t, err)
 
 	// Tenant 1 DB connection
@@ -321,9 +327,11 @@ func Test_Manager_RunMigrationsForTenant(t *testing.T) {
 	defer tnt2SchemaConnectionPool.Close()
 
 	// Apply migrations for Tenant 1
-	err = m.RunMigrationsForTenant(ctx, tnt1, tnt1SchemaConnectionPool.DSN(), migrate.Up, 0, sdpmigrations.FS, db.StellarSDPMigrationsTableName)
+	tnt1DSN, err := tnt1SchemaConnectionPool.DSN(ctx)
 	require.NoError(t, err)
-	err = m.RunMigrationsForTenant(ctx, tnt1, tnt1SchemaConnectionPool.DSN(), migrate.Up, 0, authmigrations.FS, db.StellarAuthMigrationsTableName)
+	err = m.RunMigrationsForTenant(ctx, tnt1, tnt1DSN, migrate.Up, 0, sdpmigrations.FS, db.StellarSDPMigrationsTableName)
+	require.NoError(t, err)
+	err = m.RunMigrationsForTenant(ctx, tnt1, tnt1DSN, migrate.Up, 0, authmigrations.FS, db.StellarAuthMigrationsTableName)
 	require.NoError(t, err)
 
 	expectedTablesAfterMigrationsApplied := []string{
@@ -352,9 +360,11 @@ func Test_Manager_RunMigrationsForTenant(t *testing.T) {
 	TenantSchemaHasTablesFixture(t, ctx, dbConnectionPool, tnt2SchemaName, []string{})
 
 	// Apply migrations for Tenant 2
-	err = m.RunMigrationsForTenant(ctx, tnt2, tnt2SchemaConnectionPool.DSN(), migrate.Up, 0, sdpmigrations.FS, db.StellarSDPMigrationsTableName)
+	tnt2DSN, err := tnt2SchemaConnectionPool.DSN(ctx)
 	require.NoError(t, err)
-	err = m.RunMigrationsForTenant(ctx, tnt2, tnt2SchemaConnectionPool.DSN(), migrate.Up, 0, authmigrations.FS, db.StellarAuthMigrationsTableName)
+	err = m.RunMigrationsForTenant(ctx, tnt2, tnt2DSN, migrate.Up, 0, sdpmigrations.FS, db.StellarSDPMigrationsTableName)
+	require.NoError(t, err)
+	err = m.RunMigrationsForTenant(ctx, tnt2, tnt2DSN, migrate.Up, 0, authmigrations.FS, db.StellarAuthMigrationsTableName)
 	require.NoError(t, err)
 
 	TenantSchemaHasTablesFixture(t, ctx, dbConnectionPool, tnt2SchemaName, expectedTablesAfterMigrationsApplied)

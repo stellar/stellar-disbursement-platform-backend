@@ -2,12 +2,9 @@ package auth
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"time"
-
-	"github.com/stellar/stellar-disbursement-platform-backend/db"
 )
 
 var ErrInvalidToken = errors.New("invalid token")
@@ -33,13 +30,6 @@ type AuthManager interface {
 	MFADeviceRemembered(ctx context.Context, deviceID, userID string) (bool, error)
 	GetMFACode(ctx context.Context, deviceID, userID string) (string, error)
 	AuthenticateMFA(ctx context.Context, deviceID, code string, rememberMe bool) (string, error)
-}
-
-// DBConnectionPoolFromSqlDB returns a new DBConnectionPool wrapper for a PRE-EXISTING *sql.DB. The driverName of the
-// original database is required for named query support. ATTENTION: this will not start a new connection pool, just
-// create a wrap aroung the pre-existing connection pool.
-func DBConnectionPoolFromSqlDB(sqlDB *sql.DB, driverName string) db.DBConnectionPool {
-	return db.DBConnectionPoolFromSqlDB(sqlDB, driverName)
 }
 
 func (am *defaultAuthManager) Authenticate(ctx context.Context, email, pass string) (string, error) {

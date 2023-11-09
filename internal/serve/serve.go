@@ -419,12 +419,11 @@ func createAuthManager(dbConnectionPool db.DBConnectionPool, ec256PublicKey, ec2
 
 	passwordEncrypter := auth.NewDefaultPasswordEncrypter()
 
-	authDBConnectionPool := auth.DBConnectionPoolFromSqlDB(dbConnectionPool.SqlDB(), dbConnectionPool.DriverName())
 	authManager := auth.NewAuthManager(
-		auth.WithDefaultAuthenticatorOption(authDBConnectionPool, passwordEncrypter, time.Hour*time.Duration(resetTokenExpirationHours)),
+		auth.WithDefaultAuthenticatorOption(dbConnectionPool, passwordEncrypter, time.Hour*time.Duration(resetTokenExpirationHours)),
 		auth.WithDefaultJWTManagerOption(ec256PublicKey, ec256PrivateKey),
-		auth.WithDefaultRoleManagerOption(authDBConnectionPool, data.OwnerUserRole.String()),
-		auth.WithDefaultMFAManagerOption(authDBConnectionPool),
+		auth.WithDefaultRoleManagerOption(dbConnectionPool, data.OwnerUserRole.String()),
+		auth.WithDefaultMFAManagerOption(dbConnectionPool),
 	)
 
 	return authManager, nil

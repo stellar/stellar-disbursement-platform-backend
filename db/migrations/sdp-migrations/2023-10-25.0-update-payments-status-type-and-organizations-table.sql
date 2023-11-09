@@ -4,7 +4,7 @@ ADD
     VALUE 'CANCELED';
 
 ALTER TABLE
-    public.organizations
+    organizations
 ADD
     COLUMN payment_cancellation_period_days INTEGER;
 
@@ -47,4 +47,4 @@ ALTER TABLE payments DROP COLUMN status_old;
 DROP TYPE old_payment_status CASCADE;
 
 ALTER TABLE
-    public.organizations DROP COLUMN payment_cancellation_period_days;
+    organizations DROP COLUMN payment_cancellation_period_days;

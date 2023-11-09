@@ -50,30 +50,26 @@ func (m *Manager) ProvisionNewTenant(
 		return nil, fmt.Errorf("creating a new database schema: %w", err)
 	}
 
-	dataSourceName := m.db.DSN()
-	u, err := url.Parse(dataSourceName)
+	u, err := m.GetDSNForTenant(ctx, t.Name)
 	if err != nil {
-		return nil, fmt.Errorf("parsing database DSN: %w", err)
+		return nil, fmt.Errorf("getting database DSN for tenant %s: %w", t.Name, err)
 	}
-	q := u.Query()
-	q.Set("search_path", schemaName)
-	u.RawQuery = q.Encode()
 
 	// Applying migrations
 	log.Infof("applying SDP migrations on the tenant %s schema", t.Name)
-	err = m.RunMigrationsForTenant(ctx, t, u.String(), migrate.Up, 0, sdpmigrations.FS, db.StellarSDPMigrationsTableName)
+	err = m.RunMigrationsForTenant(ctx, t, u, migrate.Up, 0, sdpmigrations.FS, db.StellarSDPMigrationsTableName)
 	if err != nil {
 		return nil, fmt.Errorf("applying SDP migrations: %w", err)
 	}
 
 	log.Infof("applying stellar-auth migrations on the tenant %s schema", t.Name)
-	err = m.RunMigrationsForTenant(ctx, t, u.String(), migrate.Up, 0, authmigrations.FS, db.StellarAuthMigrationsTableName)
+	err = m.RunMigrationsForTenant(ctx, t, u, migrate.Up, 0, authmigrations.FS, db.StellarAuthMigrationsTableName)
 	if err != nil {
 		return nil, fmt.Errorf("applying stellar-auth migrations: %w", err)
 	}
 
 	// Connecting to the tenant database schema
-	tenantSchemaConnectionPool, err := db.OpenDBConnectionPool(u.String())
+	tenantSchemaConnectionPool, err := db.OpenDBConnectionPool(u)
 	if err != nil {
 		return nil, fmt.Errorf("opening database connection on tenant schema: %w", err)
 	}
@@ -123,6 +119,34 @@ func (m *Manager) ProvisionNewTenant(
 	}
 
 	return t, nil
+}
+
+func (m *Manager) GetDSNForTenant(ctx context.Context, tenantName string) (string, error) {
+	dataSourceName, err := m.db.DSN(ctx)
+	if err != nil {
+		return "", fmt.Errorf("getting database DSN: %w", err)
+	}
+	u, err := url.Parse(dataSourceName)
+	if err != nil {
+		return "", fmt.Errorf("parsing database DSN: %w", err)
+	}
+	q := u.Query()
+	schemaName := fmt.Sprintf("sdp_%s", tenantName)
+	q.Set("search_path", schemaName)
+	u.RawQuery = q.Encode()
+	return u.String(), nil
+}
+
+func (m *Manager) GetTenantByName(ctx context.Context, name string) (*Tenant, error) {
+	const q = "SELECT * FROM tenants WHERE name = $1"
+	var t Tenant
+	if err := m.db.GetContext(ctx, &t, q, name); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrTenantDoesNotExist
+		}
+		return nil, fmt.Errorf("getting tenant %s: %w", name, err)
+	}
+	return &t, nil
 }
 
 func (m *Manager) AddTenant(ctx context.Context, name string) (*Tenant, error) {
