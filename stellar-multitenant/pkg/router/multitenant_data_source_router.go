@@ -45,9 +45,19 @@ func (m *MultiTenantDataSourceRouter) GetDataSourceForTenant(ctx context.Context
 		return value.(db.DBConnectionPool), nil
 	}
 
+	return m.getOrCreateDataSourceForTenantWithLock(ctx, currentTenant)
+}
+
+func (m *MultiTenantDataSourceRouter) getOrCreateDataSourceForTenantWithLock(ctx context.Context, currentTenant tenant.Tenant) (db.DBConnectionPool, error) {
 	// Acquire the lock only if the data source was not found.
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
+	// Fetch in case the data source was created by another goroutine.
+	value, exists := m.dataSources.Load(currentTenant.ID)
+	if exists {
+		return value.(db.DBConnectionPool), nil
+	}
 
 	// Create the connection pool for this tenant
 	u, err := m.tenantManager.GetDSNForTenant(ctx, currentTenant.Name)
