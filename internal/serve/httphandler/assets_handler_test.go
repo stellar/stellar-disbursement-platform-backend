@@ -1379,6 +1379,36 @@ func Test_AssetHandler_submitChangeTrustTransaction_makeSurePreconditionsAreSetA
 		BaseFee: txnbuild.MinBaseFee * feeMultiplierInStroops,
 	}
 
+	// TODO: Fix this test that seems to be flaky locally [SDP-963]
+	t.Run("makes sure a non-empty precondition is used if none is explicitly set", func(t *testing.T) {
+		t.Skip("Skipping this subtest for now due to deadlock issues. Fix in SDP-963")
+		mocks := newAssetTestMock(t, distributionKP.Address())
+		mocks.Handler.GetPreconditionsFn = nil
+
+		txParams := txParamsWithoutPreconditions
+		txParams.Preconditions = defaultPreconditions
+		tx, err := txnbuild.NewTransaction(txParams)
+		require.NoError(t, err)
+
+		signedTx, err := tx.Sign(network.TestNetworkPassphrase, distributionKP)
+		require.NoError(t, err)
+
+		mocks.SignatureService.
+			On("SignStellarTransaction", ctx, mock.MatchedBy(matchPreconditionsTimeboundsFn(defaultPreconditions)), distributionKP.Address()).
+			Return(signedTx, nil).
+			Once()
+		defer mocks.SignatureService.AssertExpectations(t)
+
+		mocks.HorizonClientMock.
+			On("SubmitTransactionWithOptions", mock.MatchedBy(matchPreconditionsTimeboundsFn(defaultPreconditions)), horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true}).
+			Return(horizon.Transaction{}, nil).
+			Once()
+		defer mocks.HorizonClientMock.AssertExpectations(t)
+
+		err = mocks.Handler.submitChangeTrustTransaction(ctx, acc, []*txnbuild.ChangeTrust{changeTrustOp})
+		assert.NoError(t, err)
+	})
+
 	t.Run("makes sure a the precondition that was set is used", func(t *testing.T) {
 		mocks := newAssetTestMock(t, distributionKP.Address())
 		newPreconditions := txnbuild.Preconditions{TimeBounds: txnbuild.NewTimeout(int64(rand.Intn(999999999)))}

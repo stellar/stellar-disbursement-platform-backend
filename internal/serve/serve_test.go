@@ -1,7 +1,6 @@
 package serve
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -338,14 +337,11 @@ func Test_createAuthManager(t *testing.T) {
 
 	// creates the expected auth manager
 	passwordEncrypter := auth.NewDefaultPasswordEncrypter()
-	dbcp, err := dbConnectionPool.SqlDB(context.Background())
-	require.NoError(t, err)
-	authDBConnectionPool := auth.DBConnectionPoolFromSqlDB(dbcp, dbConnectionPool.DriverName())
 	wantAuthManager := auth.NewAuthManager(
-		auth.WithDefaultAuthenticatorOption(authDBConnectionPool, passwordEncrypter, time.Hour*time.Duration(1)),
+		auth.WithDefaultAuthenticatorOption(dbConnectionPool, passwordEncrypter, time.Hour*time.Duration(1)),
 		auth.WithDefaultJWTManagerOption(publicKeyStr, privateKeyStr),
-		auth.WithDefaultRoleManagerOption(authDBConnectionPool, data.OwnerUserRole.String()),
-		auth.WithDefaultMFAManagerOption(authDBConnectionPool),
+		auth.WithDefaultRoleManagerOption(dbConnectionPool, data.OwnerUserRole.String()),
+		auth.WithDefaultMFAManagerOption(dbConnectionPool),
 	)
 
 	testCases := []struct {

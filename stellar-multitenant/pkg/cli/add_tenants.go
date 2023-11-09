@@ -124,7 +124,8 @@ func validateTenantNameArg(cmd *cobra.Command, args []string) error {
 
 func executeAddTenant(
 	ctx context.Context, dbURL, tenantName, userFirstName, userLastName, userEmail,
-	organizationName, uiBaseURL, networkType string, messengerClient message.MessengerClient) error {
+	organizationName, uiBaseURL, networkType string, messengerClient message.MessengerClient,
+) error {
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbURL)
 	if err != nil {
 		return fmt.Errorf("opening database connection pool: %w", err)

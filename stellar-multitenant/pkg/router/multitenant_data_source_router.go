@@ -20,6 +20,7 @@ type tenantContextKey struct{}
 type MultiTenantDataSourceRouter struct {
 	dataSources   sync.Map
 	tenantManager *tenant.Manager
+	mu            sync.Mutex
 }
 
 func NewMultiTenantDataSourceRouter(tenantManager *tenant.Manager) *MultiTenantDataSourceRouter {
@@ -29,38 +30,38 @@ func NewMultiTenantDataSourceRouter(tenantManager *tenant.Manager) *MultiTenantD
 }
 
 func (m *MultiTenantDataSourceRouter) GetDataSource(ctx context.Context) (db.DBConnectionPool, error) {
-	tenant, ok := GetTenantFromContext(ctx)
+	currentTenant, ok := GetTenantFromContext(ctx)
 	if !ok {
 		return nil, ErrTenantNotFoundInContext
 	}
 
-	return m.GetDataSourceForTenant(ctx, *tenant)
+	return m.GetDataSourceForTenant(ctx, *currentTenant)
 }
 
 // GetDataSourceForTenant returns the database connection pool for the given tenant if it exists, otherwise create a new one.
-func (m *MultiTenantDataSourceRouter) GetDataSourceForTenant(ctx context.Context, tenant tenant.Tenant) (db.DBConnectionPool, error) {
-	value, exists := m.dataSources.Load(tenant.ID)
+func (m *MultiTenantDataSourceRouter) GetDataSourceForTenant(ctx context.Context, currentTenant tenant.Tenant) (db.DBConnectionPool, error) {
+	value, exists := m.dataSources.Load(currentTenant.ID)
 	if exists {
 		return value.(db.DBConnectionPool), nil
 	}
 
-	u, err := m.tenantManager.GetDSNForTenant(ctx, tenant.Name)
+	// Acquire the lock only if the data source was not found.
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// Create the connection pool for this tenant
+	u, err := m.tenantManager.GetDSNForTenant(ctx, currentTenant.Name)
 	if err != nil || u == "" {
-		return nil, fmt.Errorf("getting database DSN for tenant %s: %w", tenant.ID, err)
+		return nil, fmt.Errorf("getting database DSN for tenant %s: %w", currentTenant.ID, err)
 	}
 
 	dbcp, err := db.OpenDBConnectionPool(u)
 	if err != nil {
-		return nil, fmt.Errorf("opening database connection pool for tenant %s: %w", tenant.ID, err)
+		return nil, fmt.Errorf("opening database connection pool for tenant %s: %w", currentTenant.ID, err)
 	}
 
-	// Store the new pool, but if another goroutine already stored a pool for this tenant,
-	// then use the existing one and close the newly created one.
-	actualValue, loaded := m.dataSources.LoadOrStore(tenant.ID, dbcp)
-	if loaded {
-		dbcp.Close() // Close the newly created pool if we're not using it
-		return actualValue.(db.DBConnectionPool), nil
-	}
+	// Store the new connection pool in the map.
+	m.dataSources.Store(currentTenant.ID, dbcp)
 
 	return dbcp, nil
 }
@@ -96,8 +97,8 @@ func SetTenantInContext(ctx context.Context, tenant *tenant.Tenant) context.Cont
 
 // GetTenantFromContext retrieves the tenant information from the context.
 func GetTenantFromContext(ctx context.Context) (*tenant.Tenant, bool) {
-	tenant, ok := ctx.Value(tenantContextKey{}).(*tenant.Tenant)
-	return tenant, ok
+	currentTenant, ok := ctx.Value(tenantContextKey{}).(*tenant.Tenant)
+	return currentTenant, ok
 }
 
 // make sure *MultiTenantDataSourceRouter implements DataSourceRouter:

@@ -1,7 +1,6 @@
 package serve
 
 import (
-	"context"
 	"fmt"
 	"io/fs"
 	"net/http"
@@ -420,17 +419,11 @@ func createAuthManager(dbConnectionPool db.DBConnectionPool, ec256PublicKey, ec2
 
 	passwordEncrypter := auth.NewDefaultPasswordEncrypter()
 
-	ctx := context.Background()
-	dbcp, err := dbConnectionPool.SqlDB(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("getting sql db from db connection pool: %w", err)
-	}
-	authDBConnectionPool := auth.DBConnectionPoolFromSqlDB(dbcp, dbConnectionPool.DriverName())
 	authManager := auth.NewAuthManager(
-		auth.WithDefaultAuthenticatorOption(authDBConnectionPool, passwordEncrypter, time.Hour*time.Duration(resetTokenExpirationHours)),
+		auth.WithDefaultAuthenticatorOption(dbConnectionPool, passwordEncrypter, time.Hour*time.Duration(resetTokenExpirationHours)),
 		auth.WithDefaultJWTManagerOption(ec256PublicKey, ec256PrivateKey),
-		auth.WithDefaultRoleManagerOption(authDBConnectionPool, data.OwnerUserRole.String()),
-		auth.WithDefaultMFAManagerOption(authDBConnectionPool),
+		auth.WithDefaultRoleManagerOption(dbConnectionPool, data.OwnerUserRole.String()),
+		auth.WithDefaultMFAManagerOption(dbConnectionPool),
 	)
 
 	return authManager, nil

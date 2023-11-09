@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"github.com/stellar/go/support/log"
 
 	"github.com/jmoiron/sqlx"
 )
@@ -100,6 +101,7 @@ func (s SQLExecutorWithRouter) Rebind(query string) string {
 func (m SQLExecutorWithRouter) DriverName() string {
 	dbcp, err := m.dataSourceRouter.AnyDataSource()
 	if err != nil {
+		log.Errorf("Error getting driver name: %s", err.Error())
 		return ""
 	}
 	return dbcp.DriverName()

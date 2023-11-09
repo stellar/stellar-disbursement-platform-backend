@@ -50,7 +50,7 @@ func (db *DBConnectionPoolImplementation) Ping(ctx context.Context) error {
 }
 
 func (db *DBConnectionPoolImplementation) SqlDB(ctx context.Context) (*sql.DB, error) {
-	if db.DB.DB == nil {
+	if db.DB == nil || db.DB.DB == nil {
 		return nil, fmt.Errorf("sql.DB is not initialized")
 	}
 	return db.DB.DB, nil
