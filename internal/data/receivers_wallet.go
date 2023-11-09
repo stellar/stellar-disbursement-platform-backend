@@ -436,8 +436,8 @@ func (rw *ReceiverWalletModel) UpdateStatusByDisbursementID(ctx context.Context,
 	return nil
 }
 
-// GetByStellarAccountAndMemo returns a receiver wallets that match the Stellar Account.
-func (rw *ReceiverWalletModel) GetByStellarAccountAndMemo(ctx context.Context, stellarAccount, stellarMemo string, clientDomain string) (*ReceiverWallet, error) {
+// GetByStellarAccountAndMemo returns a receiver wallets that match the Stellar Account, memo and client domain.
+func (rw *ReceiverWalletModel) GetByStellarAccountAndMemo(ctx context.Context, stellarAccount, stellarMemo, clientDomain string) (*ReceiverWallet, error) {
 	// build query
 	var receiverWallets ReceiverWallet
 	query := `
