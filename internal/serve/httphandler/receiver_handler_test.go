@@ -87,6 +87,7 @@ func Test_ReceiverHandlerGet(t *testing.T) {
 			"total_payments": "0",
 			"successful_payments": "0",
 			"failed_payments": "0",
+			"canceled_payments": "0",
     		"remaining_payments": "0",
 			"registered_wallets": "0",
 			"wallets": []
@@ -147,6 +148,7 @@ func Test_ReceiverHandlerGet(t *testing.T) {
 			"total_payments": "1",
 			"successful_payments": "1",
 			"failed_payments": "0",
+			"canceled_payments": "0",
 			"remaining_payments": "0",
             "registered_wallets": "0",
 			"received_amounts":	[
@@ -181,6 +183,7 @@ func Test_ReceiverHandlerGet(t *testing.T) {
 					"total_payments": "1",
 					"payments_received": "1",
 					"failed_payments": "0",
+					"canceled_payments": "0",
 					"remaining_payments": "0",
 					"received_amounts":  [
 						{
@@ -254,6 +257,7 @@ func Test_ReceiverHandlerGet(t *testing.T) {
 			"total_payments": "2",
 			"successful_payments": "1",
 			"failed_payments": "0",
+			"canceled_payments": "0",
 			"remaining_payments": "1",
 			"registered_wallets": "1",
 			"received_amounts":  [
@@ -288,6 +292,7 @@ func Test_ReceiverHandlerGet(t *testing.T) {
 					"total_payments": "1",
 					"payments_received": "1",
 					"failed_payments": "0",
+					"canceled_payments": "0",
 					"remaining_payments": "0",
 					"received_amounts":  [
 						{
@@ -322,6 +327,7 @@ func Test_ReceiverHandlerGet(t *testing.T) {
 					"total_payments": "1",
 					"payments_received": "0",
 					"failed_payments": "0",
+					"canceled_payments": "0",
 					"remaining_payments": "1",
 					"received_amounts":  [
 						{
@@ -664,6 +670,7 @@ func Test_ReceiverHandler_GetReceivers_Success(t *testing.T) {
 						"total_payments": "0",
 						"successful_payments": "0",
 						"failed_payments": "0",
+						"canceled_payments": "0",
 						"remaining_payments": "0",
 						"registered_wallets":"0",
 						"wallets": [
@@ -691,6 +698,7 @@ func Test_ReceiverHandler_GetReceivers_Success(t *testing.T) {
 								"total_payments": "0",
 								"payments_received": "0",
 								"failed_payments": "0",
+								"canceled_payments": "0",
 								"remaining_payments": "0",
 								"anchor_platform_transaction_id": %q
 							}
@@ -706,6 +714,7 @@ func Test_ReceiverHandler_GetReceivers_Success(t *testing.T) {
 						"total_payments": "1",
 						"successful_payments": "0",
 						"failed_payments": "0",
+						"canceled_payments": "0",
 						"remaining_payments": "1",
 						"received_amounts":  [
 							{
@@ -740,6 +749,7 @@ func Test_ReceiverHandler_GetReceivers_Success(t *testing.T) {
 								"total_payments": "1",
 								"payments_received": "0",
 								"failed_payments": "0",
+								"canceled_payments": "0",
 								"remaining_payments": "1",
 								"received_amounts":  [
 									{
@@ -762,6 +772,7 @@ func Test_ReceiverHandler_GetReceivers_Success(t *testing.T) {
 						"total_payments": "1",
 						"successful_payments": "1",
 						"failed_payments": "0",
+						"canceled_payments": "0",
 						"remaining_payments": "0",
 						"received_amounts":  [
 							{
@@ -796,6 +807,7 @@ func Test_ReceiverHandler_GetReceivers_Success(t *testing.T) {
 								"total_payments": "1",
 								"payments_received": "1",
 								"failed_payments": "0",
+								"canceled_payments": "0",
 								"remaining_payments": "0",
 								"received_amounts":  [
 									{
@@ -818,6 +830,7 @@ func Test_ReceiverHandler_GetReceivers_Success(t *testing.T) {
 						"total_payments": "0",
 						"successful_payments": "0",
 						"failed_payments": "0",
+						"canceled_payments": "0",
 						"remaining_payments": "0",
 						"registered_wallets":"0",
 						"wallets": []
@@ -867,6 +880,7 @@ func Test_ReceiverHandler_GetReceivers_Success(t *testing.T) {
 						"total_payments": "0",
 						"successful_payments": "0",
 						"failed_payments": "0",
+						"canceled_payments": "0",
 						"remaining_payments": "0",
 						"registered_wallets":"0",
 						"wallets": []
@@ -901,6 +915,7 @@ func Test_ReceiverHandler_GetReceivers_Success(t *testing.T) {
 						"total_payments": "1",
 						"successful_payments": "1",
 						"failed_payments": "0",
+						"canceled_payments": "0",
 						"remaining_payments": "0",
 						"received_amounts":  [
 							{
@@ -935,6 +950,7 @@ func Test_ReceiverHandler_GetReceivers_Success(t *testing.T) {
 								"total_payments": "1",
 								"payments_received": "1",
 								"failed_payments": "0",
+								"canceled_payments": "0",
 								"remaining_payments": "0",
 								"received_amounts":  [
 									{
@@ -980,6 +996,7 @@ func Test_ReceiverHandler_GetReceivers_Success(t *testing.T) {
 						"total_payments": "0",
 						"successful_payments": "0",
 						"failed_payments": "0",
+						"canceled_payments": "0",
 						"remaining_payments": "0",
 						"registered_wallets":"0",
 						"wallets": [
@@ -1007,6 +1024,7 @@ func Test_ReceiverHandler_GetReceivers_Success(t *testing.T) {
 								"total_payments": "0",
 								"payments_received": "0",
 								"failed_payments": "0",
+								"canceled_payments": "0",
 								"remaining_payments": "0",
 								"anchor_platform_transaction_id": %q
 							}
@@ -1041,6 +1059,7 @@ func Test_ReceiverHandler_GetReceivers_Success(t *testing.T) {
 						"total_payments": "0",
 						"successful_payments": "0",
 						"failed_payments": "0",
+						"canceled_payments": "0",
 						"remaining_payments": "0",
 						"registered_wallets":"0",
 						"wallets": [
@@ -1068,6 +1087,7 @@ func Test_ReceiverHandler_GetReceivers_Success(t *testing.T) {
 								"total_payments": "0",
 								"payments_received": "0",
 								"failed_payments": "0",
+								"canceled_payments": "0",
 								"remaining_payments": "0",
 								"anchor_platform_transaction_id": %q
 							}
@@ -1102,6 +1122,7 @@ func Test_ReceiverHandler_GetReceivers_Success(t *testing.T) {
 						"total_payments": "0",
 						"successful_payments": "0",
 						"failed_payments": "0",
+						"canceled_payments": "0",
 						"remaining_payments": "0",
 						"registered_wallets":"0",
 						"wallets": []
@@ -1131,6 +1152,7 @@ func Test_ReceiverHandler_GetReceivers_Success(t *testing.T) {
 						"total_payments": "0",
 						"successful_payments": "0",
 						"failed_payments": "0",
+						"canceled_payments": "0",
 						"remaining_payments": "0",
 						"registered_wallets":"0",
 						"wallets": [
@@ -1158,6 +1180,7 @@ func Test_ReceiverHandler_GetReceivers_Success(t *testing.T) {
 								"total_payments": "0",
 								"payments_received": "0",
 								"failed_payments": "0",
+								"canceled_payments": "0",
 								"remaining_payments": "0",
 								"anchor_platform_transaction_id": %q
 							}
@@ -1196,6 +1219,7 @@ func Test_ReceiverHandler_GetReceivers_Success(t *testing.T) {
 						"successful_payments": "0",
 						"received_amounts":  "0",
 						"failed_payments": "0",
+						"canceled_payments": "0",
 						"remaining_payments": "1",
 						"received_amounts":  [
 							{
@@ -1230,6 +1254,7 @@ func Test_ReceiverHandler_GetReceivers_Success(t *testing.T) {
 								"total_payments": "1",
 								"payments_received": "0",
 								"failed_payments": "0",
+								"canceled_payments": "0",
 								"remaining_payments": "1",
 								"received_amounts":  [
 									{
@@ -1252,6 +1277,7 @@ func Test_ReceiverHandler_GetReceivers_Success(t *testing.T) {
 						"total_payments": "1",
 						"successful_payments": "1",
 						"failed_payments": "0",
+						"canceled_payments": "0",
 						"remaining_payments": "0",
 						"received_amounts":  [
 							{
@@ -1286,6 +1312,7 @@ func Test_ReceiverHandler_GetReceivers_Success(t *testing.T) {
 								"total_payments": "1",
 								"payments_received": "1",
 								"failed_payments": "0",
+								"canceled_payments": "0",
 								"remaining_payments": "0",
 								"received_amounts":  [
 									{
@@ -1332,6 +1359,7 @@ func Test_ReceiverHandler_GetReceivers_Success(t *testing.T) {
 						"total_payments": "0",
 						"successful_payments": "0",
 						"failed_payments": "0",
+						"canceled_payments": "0",
 						"remaining_payments": "0",
 						"registered_wallets":"0",
 						"wallets": []
@@ -1361,6 +1389,7 @@ func Test_ReceiverHandler_GetReceivers_Success(t *testing.T) {
 						"total_payments": "0",
 						"successful_payments": "0",
 						"failed_payments": "0",
+						"canceled_payments": "0",
 						"remaining_payments": "0",
 						"registered_wallets":"0",
 						"wallets": []
@@ -1493,6 +1522,7 @@ func Test_ReceiverHandler_BuildReceiversResponse(t *testing.T) {
 			"total_payments": "0",
 			"successful_payments": "0",
 			"failed_payments": "0",
+			"canceled_payments": "0",
 			"remaining_payments": "0",
 			"registered_wallets":"0",
 			"wallets": [
@@ -1520,6 +1550,7 @@ func Test_ReceiverHandler_BuildReceiversResponse(t *testing.T) {
 					"total_payments": "0",
 					"payments_received": "0",
 					"failed_payments": "0",
+					"canceled_payments": "0",
 					"remaining_payments": "0",
 					"anchor_platform_transaction_id": %q
 				}
@@ -1535,6 +1566,7 @@ func Test_ReceiverHandler_BuildReceiversResponse(t *testing.T) {
 			"total_payments": "0",
 			"successful_payments": "0",
 			"failed_payments": "0",
+			"canceled_payments": "0",
 			"remaining_payments": "0",
 			"registered_wallets":"0",
 			"wallets": [
@@ -1562,6 +1594,7 @@ func Test_ReceiverHandler_BuildReceiversResponse(t *testing.T) {
 					"total_payments": "0",
 					"payments_received": "0",
 					"failed_payments": "0",
+					"canceled_payments": "0",
 					"remaining_payments": "0",
 					"anchor_platform_transaction_id": %q
 				}
