@@ -1018,7 +1018,6 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 
 				// execute and validate response
 				resp = rr.Result()
-				respBody, err = io.ReadAll(resp.Body)
 				require.NoError(t, err)
 				assert.Equal(t, http.StatusOK, resp.StatusCode)
 

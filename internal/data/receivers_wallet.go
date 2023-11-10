@@ -466,16 +466,16 @@ func (rw *ReceiverWalletModel) GetByStellarAccountAndMemo(ctx context.Context, s
 	// append memo to query if it is not empty
 	args := []interface{}{stellarAccount}
 
+	if clientDomain != "" {
+		query += " AND w.sep_10_client_domain = $2"
+		args = append(args, clientDomain)
+	}
+
 	if stellarMemo != "" {
 		query += " AND rw.stellar_memo = $3"
 		args = append(args, stellarMemo)
 	} else {
 		query += " AND (rw.stellar_memo IS NULL OR rw.stellar_memo = '')"
-	}
-
-	if clientDomain != "" {
-		query += " AND w.sep_10_client_domain = ?"
-		args = append(args, clientDomain)
 	}
 
 	// execute query
