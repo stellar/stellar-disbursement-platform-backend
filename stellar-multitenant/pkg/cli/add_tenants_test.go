@@ -8,7 +8,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lib/pq"
 	"github.com/spf13/cobra"
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
@@ -19,23 +18,6 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
-
-func DeleteAllTenantsFixture(t *testing.T, ctx context.Context, dbConnectionPool db.DBConnectionPool) {
-	q := "DELETE FROM tenants"
-	_, err := dbConnectionPool.ExecContext(ctx, q)
-	require.NoError(t, err)
-
-	var schemasToDrop []string
-	q = "SELECT schema_name FROM information_schema.schemata WHERE schema_name ILIKE 'sdp_%'"
-	err = dbConnectionPool.SelectContext(ctx, &schemasToDrop, q)
-	require.NoError(t, err)
-
-	for _, schema := range schemasToDrop {
-		q = fmt.Sprintf("DROP SCHEMA %s CASCADE", pq.QuoteIdentifier(schema))
-		_, err = dbConnectionPool.ExecContext(ctx, q)
-		require.NoError(t, err)
-	}
-}
 
 func Test_validateTenantNameArg(t *testing.T) {
 	testCases := []struct {
@@ -105,7 +87,7 @@ func Test_executeAddTenant(t *testing.T) {
 	networkType := "testnet"
 
 	t.Run("adds a new tenant successfully", func(t *testing.T) {
-		DeleteAllTenantsFixture(t, ctx, dbConnectionPool)
+		tenant.DeleteAllTenantsFixture(t, ctx, dbConnectionPool)
 
 		getEntries := log.DefaultLogger.StartTest(log.InfoLevel)
 
@@ -124,7 +106,7 @@ func Test_executeAddTenant(t *testing.T) {
 	})
 
 	t.Run("duplicated tenant name", func(t *testing.T) {
-		DeleteAllTenantsFixture(t, ctx, dbConnectionPool)
+		tenant.DeleteAllTenantsFixture(t, ctx, dbConnectionPool)
 
 		getEntries := log.DefaultLogger.StartTest(log.DebugLevel)
 

@@ -48,6 +48,15 @@ func (m *Manager) GetDSNForTenant(ctx context.Context, tenantName string) (strin
 	return u.String(), nil
 }
 
+func (m *Manager) GetAllTenants(ctx context.Context) ([]Tenant, error) {
+	const q = `SELECT * FROM tenants`
+	var tenants []Tenant
+	if err := m.db.SelectContext(ctx, &tenants, q); err != nil {
+		return nil, fmt.Errorf("getting all tenants: %w", err)
+	}
+	return tenants, nil
+}
+
 func (m *Manager) GetTenantByID(ctx context.Context, id string) (*Tenant, error) {
 	const q = "SELECT * FROM tenants WHERE id = $1"
 	var t Tenant
