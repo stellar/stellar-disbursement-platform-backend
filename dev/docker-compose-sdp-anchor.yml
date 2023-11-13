@@ -20,6 +20,8 @@ services:
       dockerfile: Dockerfile
     ports:
       - "8000:8000"
+      - "8002:8002"
+      - "8003:8003"
     environment:
       BASE_URL: http://localhost:8000
       DATABASE_URL: postgres://postgres@db:5432/postgres?sslmode=disable
