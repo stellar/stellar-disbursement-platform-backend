@@ -460,25 +460,26 @@ func (rw *ReceiverWalletModel) GetByStellarAccountAndMemo(ctx context.Context, s
 			w.homepage as "wallet.homepage"
 		FROM receiver_wallets rw
 		JOIN wallets w ON rw.wallet_id = w.id
-		WHERE rw.stellar_address = $1
+		WHERE rw.stellar_address = ?
 	`
 
 	// append memo to query if it is not empty
 	args := []interface{}{stellarAccount}
 
 	if clientDomain != "" {
-		query += " AND w.sep_10_client_domain = $2"
+		query += " AND w.sep_10_client_domain = ?"
 		args = append(args, clientDomain)
 	}
 
 	if stellarMemo != "" {
-		query += " AND rw.stellar_memo = $3"
+		query += " AND rw.stellar_memo = ?"
 		args = append(args, stellarMemo)
 	} else {
 		query += " AND (rw.stellar_memo IS NULL OR rw.stellar_memo = '')"
 	}
 
 	// execute query
+	query = rw.dbConnectionPool.Rebind(query)
 	err := rw.dbConnectionPool.GetContext(ctx, &receiverWallets, query, args...)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
