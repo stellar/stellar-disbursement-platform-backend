@@ -21,6 +21,7 @@ import (
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve"
+	serveTenants "github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/serve"
 )
 
 type ServeCommand struct{}
@@ -28,6 +29,7 @@ type ServeCommand struct{}
 type ServerServiceInterface interface {
 	StartServe(opts serve.ServeOptions, httpServer serve.HTTPServerInterface)
 	StartMetricsServe(opts serve.MetricsServeOptions, httpServer serve.HTTPServerInterface)
+	StartTenantServe(opts serveTenants.ServeOptions, httpServer serveTenants.HTTPServerInterface)
 	GetSchedulerJobRegistrars(ctx context.Context, serveOpts serve.ServeOptions, schedulerOptions scheduler.SchedulerOptions, apAPIService anchorplatform.AnchorPlatformAPIServiceInterface) ([]scheduler.SchedulerJobRegisterOption, error)
 }
 
@@ -45,6 +47,13 @@ func (s *ServerService) StartServe(opts serve.ServeOptions, httpServer serve.HTT
 
 func (s *ServerService) StartMetricsServe(opts serve.MetricsServeOptions, httpServer serve.HTTPServerInterface) {
 	err := serve.MetricsServe(opts, httpServer)
+	if err != nil {
+		log.Fatalf("Error starting metrics server: %s", err.Error())
+	}
+}
+
+func (s *ServerService) StartTenantServe(opts serveTenants.ServeOptions, httpServer serveTenants.HTTPServerInterface) {
+	err := serveTenants.StartServe(opts, httpServer)
 	if err != nil {
 		log.Fatalf("Error starting metrics server: %s", err.Error())
 	}
@@ -80,6 +89,7 @@ func (s *ServerService) GetSchedulerJobRegistrars(ctx context.Context, serveOpts
 func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorService monitor.MonitorServiceInterface) *cobra.Command {
 	serveOpts := serve.ServeOptions{}
 	metricsServeOpts := serve.MetricsServeOptions{}
+	tenantServeOpts := serveTenants.ServeOptions{}
 	schedulerOptions := scheduler.SchedulerOptions{}
 	crashTrackerOptions := crashtracker.CrashTrackerOptions{}
 
@@ -107,6 +117,14 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			OptType:     types.Int,
 			ConfigKey:   &metricsServeOpts.Port,
 			FlagDefault: 8002,
+			Required:    true,
+		},
+		{
+			Name:        "tenant-serve-port",
+			Usage:       "Port where the tenant server will be listening on",
+			OptType:     types.Int,
+			ConfigKey:   &tenantServeOpts.Port,
+			FlagDefault: 8003,
 			Required:    true,
 		},
 		{
@@ -342,6 +360,13 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			// Inject metrics server dependencies
 			metricsServeOpts.MonitorService = monitorService
 			metricsServeOpts.Environment = globalOptions.environment
+
+			// Inject tenant server dependencies
+			tenantServeOpts.DatabaseDSN = globalOptions.databaseURL
+			tenantServeOpts.Environment = globalOptions.environment
+			tenantServeOpts.GitCommit = globalOptions.gitCommit
+			tenantServeOpts.Version = globalOptions.version
+			tenantServeOpts.NetworkPassphrase = globalOptions.networkPassphrase
 		},
 		Run: func(cmd *cobra.Command, _ []string) {
 			ctx := cmd.Context()
@@ -385,6 +410,9 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			// Starting Metrics Server (background job)
 			log.Ctx(ctx).Info("Starting Metrics Server...")
 			go serverService.StartMetricsServe(metricsServeOpts, &serve.HTTPServer{})
+
+			log.Ctx(ctx).Info("Starting Tenant Server...")
+			go serverService.StartTenantServe(tenantServeOpts, &serveTenants.HTTPServer{})
 
 			// Starting Application Server
 			log.Ctx(ctx).Info("Starting Application Server...")
