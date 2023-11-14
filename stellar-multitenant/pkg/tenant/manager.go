@@ -125,6 +125,112 @@ func (m *Manager) ProvisionNewTenant(
 	return t, nil
 }
 
+func (m *Manager) GetDSNForTenant(ctx context.Context, tenantName string) (string, error) {
+	dataSourceName, err := m.db.DSN(ctx)
+	if err != nil {
+		return "", fmt.Errorf("getting database DSN: %w", err)
+	}
+	u, err := url.Parse(dataSourceName)
+	if err != nil {
+		return "", fmt.Errorf("parsing database DSN: %w", err)
+	}
+	q := u.Query()
+	schemaName := fmt.Sprintf("sdp_%s", tenantName)
+	q.Set("search_path", schemaName)
+	u.RawQuery = q.Encode()
+	return u.String(), nil
+}
+
+// GetAllTenants returns all tenants in the database.
+func (m *Manager) GetAllTenants(ctx context.Context) ([]Tenant, error) {
+	var tnts []Tenant
+	query := `
+		SELECT 
+			t.id,
+			t.name,
+			t.status,
+			t.email_sender_type,
+			t.sms_sender_type,
+			t.enable_mfa,
+			t.enable_recaptcha,
+			t.created_at,
+			t.updated_at
+		FROM
+			tenants t
+		ORDER BY
+			t.name ASC
+	`
+
+	err := m.db.SelectContext(ctx, &tnts, query)
+	if err != nil {
+		return nil, fmt.Errorf("getting all tenants: %w", err)
+	}
+
+	return tnts, nil
+}
+
+// GetTenantByID returns the tenant with the given id.
+func (m *Manager) GetTenantByID(ctx context.Context, id string) (*Tenant, error) {
+	var tnt Tenant
+	query := `
+		SELECT 
+			t.id,
+			t.name,
+			t.status,
+			t.email_sender_type,
+			t.sms_sender_type,
+			t.enable_mfa,
+			t.enable_recaptcha,
+			t.created_at,
+			t.updated_at
+		FROM
+			tenants t
+		WHERE
+			t.id = $1
+	`
+
+	err := m.db.GetContext(ctx, &tnt, query, id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrTenantDoesNotExist
+		}
+		return nil, fmt.Errorf("getting tenant id %s: %w", id, err)
+	}
+
+	return &tnt, nil
+}
+
+// GetTenantByName returns the tenant with the given name.
+func (m *Manager) GetTenantByName(ctx context.Context, name string) (*Tenant, error) {
+	var tnt Tenant
+	query := `
+		SELECT 
+			t.id,
+			t.name,
+			t.status,
+			t.email_sender_type,
+			t.sms_sender_type,
+			t.enable_mfa,
+			t.enable_recaptcha,
+			t.created_at,
+			t.updated_at
+		FROM
+			tenants t
+		WHERE
+			t.name = $1
+	`
+
+	err := m.db.GetContext(ctx, &tnt, query, name)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrTenantDoesNotExist
+		}
+		return nil, fmt.Errorf("getting tenant name %s: %w", name, err)
+	}
+
+	return &tnt, nil
+}
+
 func (m *Manager) AddTenant(ctx context.Context, name string) (*Tenant, error) {
 	if name == "" {
 		return nil, ErrEmptyTenantName
