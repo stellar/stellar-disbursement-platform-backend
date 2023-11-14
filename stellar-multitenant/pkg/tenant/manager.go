@@ -141,25 +141,27 @@ func (m *Manager) GetDSNForTenant(ctx context.Context, tenantName string) (strin
 	return u.String(), nil
 }
 
+var selectQuery string = `
+	SELECT 
+		t.id,
+		t.name,
+		t.status,
+		t.email_sender_type,
+		t.sms_sender_type,
+		t.enable_mfa,
+		t.enable_recaptcha,
+		t.created_at,
+		t.updated_at
+	FROM
+		tenants t
+	%s
+`
+
 // GetAllTenants returns all tenants in the database.
 func (m *Manager) GetAllTenants(ctx context.Context) ([]Tenant, error) {
 	var tnts []Tenant
-	query := `
-		SELECT 
-			t.id,
-			t.name,
-			t.status,
-			t.email_sender_type,
-			t.sms_sender_type,
-			t.enable_mfa,
-			t.enable_recaptcha,
-			t.created_at,
-			t.updated_at
-		FROM
-			tenants t
-		ORDER BY
-			t.name ASC
-	`
+
+	query := fmt.Sprintf(selectQuery, "ORDER BY t.name ASC")
 
 	err := m.db.SelectContext(ctx, &tnts, query)
 	if err != nil {
@@ -171,23 +173,8 @@ func (m *Manager) GetAllTenants(ctx context.Context) ([]Tenant, error) {
 
 // GetTenantByID returns the tenant with the given id.
 func (m *Manager) GetTenantByID(ctx context.Context, id string) (*Tenant, error) {
-	var tnt Tenant
-	query := `
-		SELECT 
-			t.id,
-			t.name,
-			t.status,
-			t.email_sender_type,
-			t.sms_sender_type,
-			t.enable_mfa,
-			t.enable_recaptcha,
-			t.created_at,
-			t.updated_at
-		FROM
-			tenants t
-		WHERE
-			t.id = $1
-	`
+	var tnt Tenant 
+	query := fmt.Sprintf(selectQuery, "WHERE t.id = $1")
 
 	err := m.db.GetContext(ctx, &tnt, query, id)
 	if err != nil {
@@ -203,22 +190,7 @@ func (m *Manager) GetTenantByID(ctx context.Context, id string) (*Tenant, error)
 // GetTenantByName returns the tenant with the given name.
 func (m *Manager) GetTenantByName(ctx context.Context, name string) (*Tenant, error) {
 	var tnt Tenant
-	query := `
-		SELECT 
-			t.id,
-			t.name,
-			t.status,
-			t.email_sender_type,
-			t.sms_sender_type,
-			t.enable_mfa,
-			t.enable_recaptcha,
-			t.created_at,
-			t.updated_at
-		FROM
-			tenants t
-		WHERE
-			t.name = $1
-	`
+	query := fmt.Sprintf(selectQuery, "WHERE t.name = $1")
 
 	err := m.db.GetContext(ctx, &tnt, query, name)
 	if err != nil {
