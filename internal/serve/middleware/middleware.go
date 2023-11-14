@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
+
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/rs/cors"
 	"github.com/stellar/go/support/log"
@@ -20,7 +22,12 @@ import (
 
 type ContextKey string
 
-const TokenContextKey ContextKey = "auth_token"
+const (
+	TokenContextKey ContextKey = "auth_token"
+	TenantHeaderKey string     = "SDP-Tenant-Name"
+)
+
+var ErrTenantNameNotFoundInRequest = errors.New("tenant name not found in request")
 
 // RecoverHandler is a middleware that recovers from panics and logs the error.
 func RecoverHandler(next http.Handler) http.Handler {
@@ -200,4 +207,66 @@ func CSPMiddleware() func(http.Handler) http.Handler {
 			next.ServeHTTP(rw, req)
 		})
 	}
+}
+
+func TenantMiddleware(tenantManager tenant.ManagerInterface, authManager auth.AuthManager) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+			ctx := req.Context()
+
+			// 1. Attempt fetching tenant ID from token
+			token, ok := ctx.Value(TokenContextKey).(string)
+			if ok {
+				tenantID, err := authManager.GetTenantID(ctx, token)
+				if err != nil {
+					httperror.InternalError(ctx, "Failed to get tenant ID from token", err, nil).Render(rw)
+					return
+				}
+				currentTenant, err := tenantManager.GetTenantByID(ctx, tenantID)
+				if err != nil {
+					httpErr := fmt.Errorf("failed to load tenant by ID for tenant ID %s: %w", tenantID, err)
+					httperror.InternalError(ctx, "Failed to load tenant by ID", httpErr, nil).Render(rw)
+					return
+				}
+				ctx = tenant.SaveTenantInContext(ctx, currentTenant)
+				next.ServeHTTP(rw, req.WithContext(ctx))
+				return
+			}
+
+			// 2. Attempt fetching tenant name from request
+			tenantName, err := extractTenantNameFromRequest(req)
+			if err != nil || tenantName == "" {
+				httperror.InternalError(ctx, "Tenant name not found in request", err, nil).Render(rw)
+				return
+			}
+			currentTenant, err := tenantManager.GetTenantByName(ctx, tenantName)
+			if err != nil {
+				httpErr := fmt.Errorf("failed to load tenant by name for tenant name %s: %w", tenantName, err)
+				httperror.InternalError(ctx, "Failed to load tenant by name", httpErr, nil).Render(rw)
+				return
+			}
+			ctx = tenant.SaveTenantInContext(ctx, currentTenant)
+			next.ServeHTTP(rw, req.WithContext(ctx))
+		})
+	}
+}
+
+func extractTenantNameFromRequest(r *http.Request) (string, error) {
+	// 1. Try extracting from the TenantHeaderKey header first
+	tenantName := r.Header.Get(TenantHeaderKey)
+	if tenantName != "" {
+		return tenantName, nil
+	}
+
+	// 2. If header is blank, extract from the hostname prefix
+	hostname := r.Host
+	// Remove port number if present (e.g. aidorg.sdp.com:8000 -> aidorg.sdp.com)
+	hostname = strings.Split(hostname, ":")[0]
+	// Split by dots (e.g. aidorg.sdp.com -> [aidorg, sdp, com])
+	parts := strings.Split(hostname, ".")
+	// If there's more than 2 parts, it means there's a subdomain
+	if len(parts) > 2 {
+		return parts[0], nil
+	}
+	return "", ErrTenantNameNotFoundInRequest
 }

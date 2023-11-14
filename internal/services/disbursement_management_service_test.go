@@ -4,7 +4,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
@@ -347,8 +346,7 @@ func Test_DisbursementManagementService_PauseDisbursement(t *testing.T) {
 	models, outerErr := data.NewModels(dbConnectionPool)
 	require.NoError(t, outerErr)
 
-	token := "token"
-	ctx := context.WithValue(context.Background(), middleware.TokenContextKey, token)
+	ctx := context.Background()
 
 	user := &auth.User{
 		ID:    "user-id",
