@@ -17,6 +17,11 @@ func MigrateCmd(databaseFlagName string) *cobra.Command {
 	migrateCmd := &cobra.Command{
 		Use:   "migrate",
 		Short: "Apply Stellar Multitenant database migrations",
+		PersistentPreRun: func(cmd *cobra.Command, args []string) {
+			if cmd.Parent().PersistentPreRun != nil {
+				cmd.Parent().PersistentPreRun(cmd.Parent(), args)
+			}
+		},
 		Run: func(cmd *cobra.Command, args []string) {
 			if err := cmd.Help(); err != nil {
 				log.Fatalf("Error calling help command: %s", err.Error())

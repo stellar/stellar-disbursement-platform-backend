@@ -16,6 +16,7 @@ import (
 	sdpmigrations "github.com/stellar/stellar-disbursement-platform-backend/db/migrations/sdp-migrations"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+	tenantcli "github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/cli"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
@@ -125,8 +126,27 @@ func (c *DatabaseCommand) Command() *cobra.Command {
 	}
 	stellarAuthMigrateCmd.AddCommand(authMigrateCmd)
 
+	tenantMigrateCmd := &cobra.Command{
+		Use:   "tenant",
+		Short: "Stellar Multi-Tenant migration helpers",
+		PersistentPreRun: func(cmd *cobra.Command, args []string) {
+			if cmd.Parent().PersistentPreRun != nil {
+				cmd.Parent().PersistentPreRun(cmd.Parent(), args)
+			}
+		},
+		Run: func(cmd *cobra.Command, args []string) {
+			if err := cmd.Help(); err != nil {
+				log.Fatalf("Error calling help command: %s", err.Error())
+			}
+		},
+	}
+	tenantMigrateCmd.AddCommand(tenantcli.MigrateCmd(dbConfigOptionFlagName))
+
 	// Add `auth` as a sub-command to `db`. Usage: db auth migrate up
 	cmd.AddCommand(stellarAuthMigrateCmd)
+
+	// Add `tenant` as a sub-command to `db`. Usage: db tenant migrate up
+	cmd.AddCommand(tenantMigrateCmd)
 
 	if err := configOptions.Init(cmd); err != nil {
 		log.Fatalf("initializing config options: %v", err)
