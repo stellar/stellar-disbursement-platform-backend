@@ -103,6 +103,12 @@ func AssertRegisteredUser(t *testing.T, ctx context.Context, dbConnectionPool db
 	assert.True(t, user.IsOwner)
 }
 
+func DeleteAllTenantFixtures(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter) {
+	const query = "DELETE FROM tenants"
+	_, err := sqlExec.ExecContext(ctx, query)
+	require.NoError(t, err)
+}
+
 func CreateTenantFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, name string) *Tenant {
 	tenantName := name
 	if name == "" {
@@ -112,12 +118,26 @@ func CreateTenantFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecut
 	}
 
 	const query = `
-		INSERT 
-		INTO tenants (name) 
-		VALUES ($1) 
-		RETURNING 
-			id, name, status, email_sender_type, sms_sender_type,
-			enable_mfa, enable_recaptcha, created_at, updated_at
+		WITH create_tenant AS (
+			INSERT INTO tenants 
+				(name) 
+			VALUES 
+				($1) 
+			ON CONFLICT DO NOTHING
+			RETURNING *
+		)
+		SELECT 
+			ct.id,
+			ct.name,
+			ct.status,
+			ct.email_sender_type,
+			ct.sms_sender_type,
+			ct.enable_mfa,
+			ct.enable_recaptcha,
+			ct.created_at,
+			ct.updated_at
+		FROM
+		 create_tenant ct
 		`
 
 	tnt := &Tenant{
@@ -126,6 +146,6 @@ func CreateTenantFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecut
 
 	err := sqlExec.QueryRowxContext(ctx, query, tnt.Name).Scan(&tnt.ID, &tnt.Name, &tnt.Status, &tnt.EmailSenderType, &tnt.SMSSenderType, &tnt.EnableMFA, &tnt.EnableReCAPTCHA, &tnt.CreatedAt, &tnt.UpdatedAt)
 	require.NoError(t, err)
-	
+
 	return tnt
 }
