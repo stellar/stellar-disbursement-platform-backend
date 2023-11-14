@@ -96,5 +96,14 @@ func handleHTTP(opts *ServeOptions) *chi.Mux {
 		Version:   opts.Version,
 	}.ServeHTTP)
 
+	mux.Group(func(r chi.Router) {
+		r.Route("/tenants", func(r chi.Router) {
+			tenantsHandler := httphandler.TenantsHandler{Manager: opts.tenantManager}
+			r.Get("/", tenantsHandler.GetAll)
+			r.Get("/{id}", tenantsHandler.GetByID)
+			r.Get("/{name}", tenantsHandler.GetByName)
+		})
+	})
+
 	return mux
 }
