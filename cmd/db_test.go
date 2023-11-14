@@ -419,100 +419,293 @@ func Test_DatabaseCommand_db_setup_for_network(t *testing.T) {
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
 
-	models, err := data.NewModels(dbConnectionPool)
-	require.NoError(t, err)
-
 	ctx := context.Background()
+	m := tenant.NewManager(tenant.WithDatabase(dbConnectionPool))
 
-	data.DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
-	data.DeleteAllWalletFixtures(t, ctx, dbConnectionPool)
+	// Creating Tenants
+	tnt1, err := m.AddTenant(ctx, "myorg1")
+	require.NoError(t, err)
 
-	// Assets
+	tnt2, err := m.AddTenant(ctx, "myorg2")
+	require.NoError(t, err)
+
+	_, err = dbConnectionPool.ExecContext(ctx, "CREATE SCHEMA sdp_myorg1")
+	require.NoError(t, err)
+	_, err = dbConnectionPool.ExecContext(ctx, "CREATE SCHEMA sdp_myorg2")
+	require.NoError(t, err)
+
+	tenant.ApplyMigrationsForTenantFixture(t, ctx, dbConnectionPool, tnt1.Name)
+	tenant.ApplyMigrationsForTenantFixture(t, ctx, dbConnectionPool, tnt2.Name)
+
+	tnt1DSN, err := m.GetDSNForTenant(ctx, tnt1.Name)
+	require.NoError(t, err)
+
+	tnt2DSN, err := m.GetDSNForTenant(ctx, tnt2.Name)
+	require.NoError(t, err)
+
+	tenant1SchemaConnectionPool, err := db.OpenDBConnectionPool(tnt1DSN)
+	require.NoError(t, err)
+	defer tenant1SchemaConnectionPool.Close()
+
+	tenant2SchemaConnectionPool, err := db.OpenDBConnectionPool(tnt2DSN)
+	require.NoError(t, err)
+	defer tenant2SchemaConnectionPool.Close()
+
 	testnetUSDCIssuer := keypair.MustRandom().Address()
-	data.CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", testnetUSDCIssuer)
+	clearTenantTables := func(t *testing.T, ctx context.Context, tenantSchemaConnectionPool db.DBConnectionPool) {
+		models, err := data.NewModels(tenantSchemaConnectionPool)
+		require.NoError(t, err)
 
-	assets, err := models.Assets.GetAll(ctx)
-	require.NoError(t, err)
+		// Assets
+		data.DeleteAllWalletFixtures(t, ctx, tenantSchemaConnectionPool)
+		data.DeleteAllAssetFixtures(t, ctx, tenantSchemaConnectionPool)
 
-	assert.Len(t, assets, 1)
-	assert.Equal(t, "USDC", assets[0].Code)
-	assert.Equal(t, testnetUSDCIssuer, assets[0].Issuer)
+		data.CreateAssetFixture(t, ctx, tenantSchemaConnectionPool, "USDC", testnetUSDCIssuer)
 
-	// Wallets
-	data.CreateWalletFixture(t, ctx, dbConnectionPool, "Vibrant Assist", "https://vibrantapp.com", "api-dev.vibrantapp.com", "https://vibrantapp.com/sdp-dev")
+		assets, err := models.Assets.GetAll(ctx)
+		require.NoError(t, err)
 
-	wallets, err := models.Wallets.GetAll(ctx)
-	require.NoError(t, err)
+		assert.Len(t, assets, 1)
+		assert.Equal(t, "USDC", assets[0].Code)
+		assert.Equal(t, testnetUSDCIssuer, assets[0].Issuer)
 
-	assert.Len(t, wallets, 1)
-	assert.Equal(t, "Vibrant Assist", wallets[0].Name)
-	assert.Equal(t, "https://vibrantapp.com", wallets[0].Homepage)
-	assert.Equal(t, "api-dev.vibrantapp.com", wallets[0].SEP10ClientDomain)
-	assert.Equal(t, "https://vibrantapp.com/sdp-dev", wallets[0].DeepLinkSchema)
+		// Wallets
+		data.CreateWalletFixture(t, ctx, tenantSchemaConnectionPool, "Vibrant Assist", "https://vibrantapp.com", "api-dev.vibrantapp.com", "https://vibrantapp.com/sdp-dev")
+
+		wallets, err := models.Wallets.GetAll(ctx)
+		require.NoError(t, err)
+
+		assert.Len(t, wallets, 1)
+		assert.Equal(t, "Vibrant Assist", wallets[0].Name)
+		assert.Equal(t, "https://vibrantapp.com", wallets[0].Homepage)
+		assert.Equal(t, "api-dev.vibrantapp.com", wallets[0].SEP10ClientDomain)
+		assert.Equal(t, "https://vibrantapp.com/sdp-dev", wallets[0].DeepLinkSchema)
+	}
 
 	buf := new(strings.Builder)
 	log.DefaultLogger.SetLevel(log.InfoLevel)
 	log.DefaultLogger.SetOutput(buf)
 
-	// Setup
-	rootCmd := SetupCLI("x.y.z", "1234567890abcdef")
-	rootCmd.SetArgs([]string{
-		"db",
-		"setup-for-network",
-		"--database-url",
-		dbt.DSN,
-		"--network-passphrase",
-		network.PublicNetworkPassphrase,
+	t.Run("run for all tenants", func(t *testing.T) {
+		clearTenantTables(t, ctx, tenant1SchemaConnectionPool)
+		clearTenantTables(t, ctx, tenant2SchemaConnectionPool)
+
+		// Setup
+		rootCmd := SetupCLI("x.y.z", "1234567890abcdef")
+		rootCmd.SetArgs([]string{
+			"db",
+			"setup-for-network",
+			"--database-url",
+			dbt.DSN,
+			"--network-passphrase",
+			network.PublicNetworkPassphrase,
+			"--all",
+		})
+
+		err = rootCmd.Execute()
+		require.NoError(t, err)
+
+		// Tenant 1
+		models, err := data.NewModels(tenant1SchemaConnectionPool)
+		require.NoError(t, err)
+
+		// Validating assets
+		assets, err := models.Assets.GetAll(ctx)
+		require.NoError(t, err)
+
+		assert.Len(t, assets, 2)
+		assert.Equal(t, "USDC", assets[0].Code)
+		assert.NotEqual(t, testnetUSDCIssuer, assets[0].Issuer)
+		assert.Equal(t, services.DefaultAssetsNetworkMap[utils.PubnetNetworkType]["USDC"], assets[0].Issuer)
+		assert.Equal(t, "XLM", assets[1].Code)
+		assert.Empty(t, assets[1].Issuer)
+
+		// Validating wallets
+		wallets, err := models.Wallets.GetAll(ctx)
+		require.NoError(t, err)
+
+		assert.Len(t, wallets, 2)
+		// assert.Equal(t, "Beans App", wallets[0].Name)
+		// assert.Equal(t, "https://www.beansapp.com/disbursements", wallets[0].Homepage)
+		// assert.Equal(t, "api.beansapp.com", wallets[0].SEP10ClientDomain)
+		// assert.Equal(t, "https://www.beansapp.com/disbursements/registration?redirect=true", wallets[0].DeepLinkSchema)
+		assert.Equal(t, "Vibrant Assist", wallets[0].Name)
+		assert.Equal(t, "https://vibrantapp.com/vibrant-assist", wallets[0].Homepage)
+		assert.Equal(t, "api.vibrantapp.com", wallets[0].SEP10ClientDomain)
+		assert.Equal(t, "https://vibrantapp.com/sdp", wallets[0].DeepLinkSchema)
+
+		assert.Equal(t, "Vibrant Assist RC", wallets[1].Name)
+		assert.Equal(t, "vibrantapp.com/vibrant-assist", wallets[1].Homepage)
+		assert.Equal(t, "vibrantapp.com", wallets[1].SEP10ClientDomain)
+		assert.Equal(t, "https://vibrantapp.com/sdp-rc", wallets[1].DeepLinkSchema)
+
+		expectedLogs := []string{
+			fmt.Sprintf("running for tenant ID %s", tnt1.ID),
+			"updating/inserting assets for the 'pubnet' network",
+			"Code: USDC",
+			fmt.Sprintf("Issuer: %s", services.DefaultAssetsNetworkMap[utils.PubnetNetworkType]["USDC"]),
+			"Code: XLM",
+			"Issuer: ",
+			"updating/inserting wallets for the 'pubnet' network",
+			"Name: Vibrant Assist",
+			"Homepage: https://vibrantapp.com/vibrant-assist",
+			"Deep Link Schema: https://vibrantapp.com/sdp",
+			"SEP-10 Client Domain: api.vibrantapp.com",
+		}
+
+		logs := buf.String()
+		for _, expectedLog := range expectedLogs {
+			assert.Contains(t, logs, expectedLog)
+		}
+
+		// Tenant 2
+		models, err = data.NewModels(tenant2SchemaConnectionPool)
+		require.NoError(t, err)
+
+		// Validating assets
+		assets, err = models.Assets.GetAll(ctx)
+		require.NoError(t, err)
+
+		assert.Len(t, assets, 2)
+		assert.Equal(t, "USDC", assets[0].Code)
+		assert.NotEqual(t, testnetUSDCIssuer, assets[0].Issuer)
+		assert.Equal(t, services.DefaultAssetsNetworkMap[utils.PubnetNetworkType]["USDC"], assets[0].Issuer)
+		assert.Equal(t, "XLM", assets[1].Code)
+		assert.Empty(t, assets[1].Issuer)
+
+		// Validating wallets
+		wallets, err = models.Wallets.GetAll(ctx)
+		require.NoError(t, err)
+
+		assert.Len(t, wallets, 2)
+		// assert.Equal(t, "Beans App", wallets[0].Name)
+		// assert.Equal(t, "https://www.beansapp.com/disbursements", wallets[0].Homepage)
+		// assert.Equal(t, "api.beansapp.com", wallets[0].SEP10ClientDomain)
+		// assert.Equal(t, "https://www.beansapp.com/disbursements/registration?redirect=true", wallets[0].DeepLinkSchema)
+		assert.Equal(t, "Vibrant Assist", wallets[0].Name)
+		assert.Equal(t, "https://vibrantapp.com/vibrant-assist", wallets[0].Homepage)
+		assert.Equal(t, "api.vibrantapp.com", wallets[0].SEP10ClientDomain)
+		assert.Equal(t, "https://vibrantapp.com/sdp", wallets[0].DeepLinkSchema)
+
+		assert.Equal(t, "Vibrant Assist RC", wallets[1].Name)
+		assert.Equal(t, "vibrantapp.com/vibrant-assist", wallets[1].Homepage)
+		assert.Equal(t, "vibrantapp.com", wallets[1].SEP10ClientDomain)
+		assert.Equal(t, "https://vibrantapp.com/sdp-rc", wallets[1].DeepLinkSchema)
+
+		expectedLogs = []string{
+			fmt.Sprintf("running for tenant ID %s", tnt2.ID),
+			"updating/inserting assets for the 'pubnet' network",
+			"Code: USDC",
+			fmt.Sprintf("Issuer: %s", services.DefaultAssetsNetworkMap[utils.PubnetNetworkType]["USDC"]),
+			"Code: XLM",
+			"Issuer: ",
+			"updating/inserting wallets for the 'pubnet' network",
+			"Name: Vibrant Assist",
+			"Homepage: https://vibrantapp.com/vibrant-assist",
+			"Deep Link Schema: https://vibrantapp.com/sdp",
+			"SEP-10 Client Domain: api.vibrantapp.com",
+		}
+
+		for _, expectedLog := range expectedLogs {
+			assert.Contains(t, logs, expectedLog)
+		}
 	})
 
-	err = rootCmd.Execute()
-	require.NoError(t, err)
+	t.Run("run for a specific tenant --tenant-id", func(t *testing.T) {
+		clearTenantTables(t, ctx, tenant1SchemaConnectionPool)
+		clearTenantTables(t, ctx, tenant2SchemaConnectionPool)
 
-	// Validating assets
-	assets, err = models.Assets.GetAll(ctx)
-	require.NoError(t, err)
+		// Setup
+		rootCmd := SetupCLI("x.y.z", "1234567890abcdef")
+		rootCmd.SetArgs([]string{
+			"db",
+			"setup-for-network",
+			"--database-url",
+			dbt.DSN,
+			"--network-passphrase",
+			network.PublicNetworkPassphrase,
+			"--tenant-id",
+			tnt2.ID,
+		})
 
-	assert.Len(t, assets, 2)
-	assert.Equal(t, "USDC", assets[0].Code)
-	assert.NotEqual(t, testnetUSDCIssuer, assets[0].Issuer)
-	assert.Equal(t, services.DefaultAssetsNetworkMap[utils.PubnetNetworkType]["USDC"], assets[0].Issuer)
-	assert.Equal(t, "XLM", assets[1].Code)
-	assert.Empty(t, assets[1].Issuer)
+		err = rootCmd.Execute()
+		require.NoError(t, err)
 
-	// Validating wallets
-	wallets, err = models.Wallets.GetAll(ctx)
-	require.NoError(t, err)
+		// Tenant 1
+		models, err := data.NewModels(tenant1SchemaConnectionPool)
+		require.NoError(t, err)
 
-	assert.Len(t, wallets, 2)
-	// assert.Equal(t, "Beans App", wallets[0].Name)
-	// assert.Equal(t, "https://www.beansapp.com/disbursements", wallets[0].Homepage)
-	// assert.Equal(t, "api.beansapp.com", wallets[0].SEP10ClientDomain)
-	// assert.Equal(t, "https://www.beansapp.com/disbursements/registration?redirect=true", wallets[0].DeepLinkSchema)
-	assert.Equal(t, "Vibrant Assist", wallets[0].Name)
-	assert.Equal(t, "https://vibrantapp.com/vibrant-assist", wallets[0].Homepage)
-	assert.Equal(t, "api.vibrantapp.com", wallets[0].SEP10ClientDomain)
-	assert.Equal(t, "https://vibrantapp.com/sdp", wallets[0].DeepLinkSchema)
+		// Validating assets
+		assets, err := models.Assets.GetAll(ctx)
+		require.NoError(t, err)
 
-	assert.Equal(t, "Vibrant Assist RC", wallets[1].Name)
-	assert.Equal(t, "vibrantapp.com/vibrant-assist", wallets[1].Homepage)
-	assert.Equal(t, "vibrantapp.com", wallets[1].SEP10ClientDomain)
-	assert.Equal(t, "https://vibrantapp.com/sdp-rc", wallets[1].DeepLinkSchema)
+		assert.Len(t, assets, 1)
+		assert.Equal(t, "USDC", assets[0].Code)
+		assert.Equal(t, testnetUSDCIssuer, assets[0].Issuer)
 
-	expectedLogs := []string{
-		"updating/inserting assets for the 'pubnet' network",
-		"Code: USDC",
-		fmt.Sprintf("Issuer: %s", services.DefaultAssetsNetworkMap[utils.PubnetNetworkType]["USDC"]),
-		"Code: XLM",
-		"Issuer: ",
-		"updating/inserting wallets for the 'pubnet' network",
-		"Name: Vibrant Assist",
-		"Homepage: https://vibrantapp.com/vibrant-assist",
-		"Deep Link Schema: https://vibrantapp.com/sdp",
-		"SEP-10 Client Domain: api.vibrantapp.com",
-	}
+		// Validating wallets
+		wallets, err := models.Wallets.GetAll(ctx)
+		require.NoError(t, err)
 
-	logs := buf.String()
-	for _, expectedLog := range expectedLogs {
-		assert.Contains(t, logs, expectedLog)
-	}
+		assert.Len(t, wallets, 1)
+		assert.Equal(t, "Vibrant Assist", wallets[0].Name)
+		assert.Equal(t, "https://vibrantapp.com", wallets[0].Homepage)
+		assert.Equal(t, "api-dev.vibrantapp.com", wallets[0].SEP10ClientDomain)
+		assert.Equal(t, "https://vibrantapp.com/sdp-dev", wallets[0].DeepLinkSchema)
+
+		logs := buf.String()
+		assert.NotContains(t, logs, fmt.Sprintf("running on tenant ID %s", tnt1.ID))
+
+		// Tenant 2
+		models, err = data.NewModels(tenant2SchemaConnectionPool)
+		require.NoError(t, err)
+
+		// Validating assets
+		assets, err = models.Assets.GetAll(ctx)
+		require.NoError(t, err)
+
+		assert.Len(t, assets, 2)
+		assert.Equal(t, "USDC", assets[0].Code)
+		assert.NotEqual(t, testnetUSDCIssuer, assets[0].Issuer)
+		assert.Equal(t, services.DefaultAssetsNetworkMap[utils.PubnetNetworkType]["USDC"], assets[0].Issuer)
+		assert.Equal(t, "XLM", assets[1].Code)
+		assert.Empty(t, assets[1].Issuer)
+
+		// Validating wallets
+		wallets, err = models.Wallets.GetAll(ctx)
+		require.NoError(t, err)
+
+		assert.Len(t, wallets, 2)
+		// assert.Equal(t, "Beans App", wallets[0].Name)
+		// assert.Equal(t, "https://www.beansapp.com/disbursements", wallets[0].Homepage)
+		// assert.Equal(t, "api.beansapp.com", wallets[0].SEP10ClientDomain)
+		// assert.Equal(t, "https://www.beansapp.com/disbursements/registration?redirect=true", wallets[0].DeepLinkSchema)
+		assert.Equal(t, "Vibrant Assist", wallets[0].Name)
+		assert.Equal(t, "https://vibrantapp.com/vibrant-assist", wallets[0].Homepage)
+		assert.Equal(t, "api.vibrantapp.com", wallets[0].SEP10ClientDomain)
+		assert.Equal(t, "https://vibrantapp.com/sdp", wallets[0].DeepLinkSchema)
+
+		assert.Equal(t, "Vibrant Assist RC", wallets[1].Name)
+		assert.Equal(t, "vibrantapp.com/vibrant-assist", wallets[1].Homepage)
+		assert.Equal(t, "vibrantapp.com", wallets[1].SEP10ClientDomain)
+		assert.Equal(t, "https://vibrantapp.com/sdp-rc", wallets[1].DeepLinkSchema)
+
+		expectedLogs := []string{
+			fmt.Sprintf("running for tenant ID %s", tnt2.ID),
+			"updating/inserting assets for the 'pubnet' network",
+			"Code: USDC",
+			fmt.Sprintf("Issuer: %s", services.DefaultAssetsNetworkMap[utils.PubnetNetworkType]["USDC"]),
+			"Code: XLM",
+			"Issuer: ",
+			"updating/inserting wallets for the 'pubnet' network",
+			"Name: Vibrant Assist",
+			"Homepage: https://vibrantapp.com/vibrant-assist",
+			"Deep Link Schema: https://vibrantapp.com/sdp",
+			"SEP-10 Client Domain: api.vibrantapp.com",
+		}
+
+		for _, expectedLog := range expectedLogs {
+			assert.Contains(t, logs, expectedLog)
+		}
+	})
 }

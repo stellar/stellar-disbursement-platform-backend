@@ -6,7 +6,10 @@ import (
 	"testing"
 
 	"github.com/lib/pq"
+	migrate "github.com/rubenv/sql-migrate"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	authmigrations "github.com/stellar/stellar-disbursement-platform-backend/db/migrations/auth-migrations"
+	sdpmigrations "github.com/stellar/stellar-disbursement-platform-backend/db/migrations/sdp-migrations"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -118,4 +121,17 @@ func TenantSchemaHasTablesFixture(t *testing.T, ctx context.Context, dbConnectio
 	require.NoError(t, err)
 
 	assert.ElementsMatch(t, tableNames, schemaTables)
+}
+
+func ApplyMigrationsForTenantFixture(t *testing.T, ctx context.Context, dbConnectionPool db.DBConnectionPool, tenantName string) {
+	t.Helper()
+
+	m := NewManager(WithDatabase(dbConnectionPool))
+	dsn, err := m.GetDSNForTenant(ctx, tenantName)
+	require.NoError(t, err)
+
+	_, err = db.Migrate(dsn, migrate.Up, 0, sdpmigrations.FS, db.StellarSDPMigrationsTableName)
+	require.NoError(t, err)
+	_, err = db.Migrate(dsn, migrate.Up, 0, authmigrations.FS, db.StellarAuthMigrationsTableName)
+	require.NoError(t, err)
 }

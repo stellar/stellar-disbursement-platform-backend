@@ -88,23 +88,43 @@ func (c *DatabaseCommand) Command() *cobra.Command {
 		Run: func(cmd *cobra.Command, args []string) {
 			ctx := cmd.Context()
 
-			dbConnectionPool, err := db.OpenDBConnectionPool(globalOptions.databaseURL)
+			if err := c.validateFlags(&opts); err != nil {
+				log.Ctx(ctx).Fatal(err.Error())
+			}
+
+			tenantsDSNMap, err := c.getTenantsDSN(ctx, globalOptions.databaseURL)
 			if err != nil {
-				log.Ctx(ctx).Fatalf("error connection to the database: %s", err.Error())
-			}
-			defer dbConnectionPool.Close()
-
-			networkType, err := utils.GetNetworkTypeFromNetworkPassphrase(globalOptions.networkPassphrase)
-			if err != nil {
-				log.Ctx(ctx).Fatalf("error getting network type: %s", err.Error())
+				log.Ctx(ctx).Fatalf("getting tenants schemas: %s", err.Error())
 			}
 
-			if err := services.SetupAssetsForProperNetwork(ctx, dbConnectionPool, networkType, services.DefaultAssetsNetworkMap); err != nil {
-				log.Ctx(ctx).Fatalf("error upserting assets for proper network: %s", err.Error())
+			if opts.TenantID != "" {
+				if dsn, ok := tenantsDSNMap[opts.TenantID]; ok {
+					tenantsDSNMap = map[string]string{opts.TenantID: dsn}
+				} else {
+					log.Fatalf("tenant ID %s does not exist", opts.TenantID)
+				}
 			}
 
-			if err := services.SetupWalletsForProperNetwork(ctx, dbConnectionPool, networkType, services.DefaultWalletsNetworkMap); err != nil {
-				log.Ctx(ctx).Fatalf("error upserting wallets for proper network: %s", err.Error())
+			for tenantID, dsn := range tenantsDSNMap {
+				log.Infof("running for tenant ID %s", tenantID)
+				dbConnectionPool, err := db.OpenDBConnectionPool(dsn)
+				if err != nil {
+					log.Ctx(ctx).Fatalf("error connection to the database: %s", err.Error())
+				}
+				defer dbConnectionPool.Close()
+
+				networkType, err := utils.GetNetworkTypeFromNetworkPassphrase(globalOptions.networkPassphrase)
+				if err != nil {
+					log.Ctx(ctx).Fatalf("error getting network type: %s", err.Error())
+				}
+
+				if err := services.SetupAssetsForProperNetwork(ctx, dbConnectionPool, networkType, services.DefaultAssetsNetworkMap); err != nil {
+					log.Ctx(ctx).Fatalf("error upserting assets for proper network: %s", err.Error())
+				}
+
+				if err := services.SetupWalletsForProperNetwork(ctx, dbConnectionPool, networkType, services.DefaultWalletsNetworkMap); err != nil {
+					log.Ctx(ctx).Fatalf("error upserting wallets for proper network: %s", err.Error())
+				}
 			}
 		},
 	}
