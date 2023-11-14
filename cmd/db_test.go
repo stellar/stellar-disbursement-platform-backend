@@ -453,8 +453,8 @@ func Test_DatabaseCommand_db_setup_for_network(t *testing.T) {
 
 	testnetUSDCIssuer := keypair.MustRandom().Address()
 	clearTenantTables := func(t *testing.T, ctx context.Context, tenantSchemaConnectionPool db.DBConnectionPool) {
-		models, err := data.NewModels(tenantSchemaConnectionPool)
-		require.NoError(t, err)
+		models, mErr := data.NewModels(tenantSchemaConnectionPool)
+		require.NoError(t, mErr)
 
 		// Assets
 		data.DeleteAllWalletFixtures(t, ctx, tenantSchemaConnectionPool)
@@ -462,8 +462,8 @@ func Test_DatabaseCommand_db_setup_for_network(t *testing.T) {
 
 		data.CreateAssetFixture(t, ctx, tenantSchemaConnectionPool, "USDC", testnetUSDCIssuer)
 
-		assets, err := models.Assets.GetAll(ctx)
-		require.NoError(t, err)
+		assets, aErr := models.Assets.GetAll(ctx)
+		require.NoError(t, aErr)
 
 		assert.Len(t, assets, 1)
 		assert.Equal(t, "USDC", assets[0].Code)
@@ -472,8 +472,8 @@ func Test_DatabaseCommand_db_setup_for_network(t *testing.T) {
 		// Wallets
 		data.CreateWalletFixture(t, ctx, tenantSchemaConnectionPool, "Vibrant Assist", "https://vibrantapp.com", "api-dev.vibrantapp.com", "https://vibrantapp.com/sdp-dev")
 
-		wallets, err := models.Wallets.GetAll(ctx)
-		require.NoError(t, err)
+		wallets, wErr := models.Wallets.GetAll(ctx)
+		require.NoError(t, wErr)
 
 		assert.Len(t, wallets, 1)
 		assert.Equal(t, "Vibrant Assist", wallets[0].Name)
@@ -506,12 +506,12 @@ func Test_DatabaseCommand_db_setup_for_network(t *testing.T) {
 		require.NoError(t, err)
 
 		// Tenant 1
-		models, err := data.NewModels(tenant1SchemaConnectionPool)
-		require.NoError(t, err)
+		models, mErr := data.NewModels(tenant1SchemaConnectionPool)
+		require.NoError(t, mErr)
 
 		// Validating assets
-		assets, err := models.Assets.GetAll(ctx)
-		require.NoError(t, err)
+		assets, aErr := models.Assets.GetAll(ctx)
+		require.NoError(t, aErr)
 
 		assert.Len(t, assets, 2)
 		assert.Equal(t, "USDC", assets[0].Code)
@@ -521,8 +521,8 @@ func Test_DatabaseCommand_db_setup_for_network(t *testing.T) {
 		assert.Empty(t, assets[1].Issuer)
 
 		// Validating wallets
-		wallets, err := models.Wallets.GetAll(ctx)
-		require.NoError(t, err)
+		wallets, wErr := models.Wallets.GetAll(ctx)
+		require.NoError(t, wErr)
 
 		assert.Len(t, wallets, 2)
 		// assert.Equal(t, "Beans App", wallets[0].Name)
