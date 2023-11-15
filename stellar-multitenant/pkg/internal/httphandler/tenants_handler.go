@@ -27,36 +27,18 @@ func (t TenantsHandler) GetAll(w http.ResponseWriter, r *http.Request) {
 	httpjson.RenderStatus(w, http.StatusOK, tnts, httpjson.JSON)
 }
 
-func (t TenantsHandler) GetByID(w http.ResponseWriter, r *http.Request) {
+func (t TenantsHandler) GetByIDOrName(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	tenantID := chi.URLParam(r, "id")
+	arg := chi.URLParam(r, "arg")
 
-	tnt, err := t.Manager.GetTenantByID(ctx, tenantID)
+	tnt, err := t.Manager.GetTenantByIDOrName(ctx, arg)
 	if err != nil {
 		if errors.Is(tenant.ErrTenantDoesNotExist, err) {
-			errorMsg := fmt.Sprintf("a tenant with the id %s does not exist", tenantID)
+			errorMsg := fmt.Sprintf("tenant %s does not exist", arg)
 			httperror.NotFound(errorMsg, err, nil).Render(w)
 			return
 		}
-		httperror.InternalError(ctx, "Cannot get tenant by ID", err, nil).Render(w)
-		return
-	}
-
-	httpjson.RenderStatus(w, http.StatusOK, tnt, httpjson.JSON)
-}
-
-func (t TenantsHandler) GetByName(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	tenantName := chi.URLParam(r, "name")
-
-	tnt, err := t.Manager.GetTenantByName(ctx, tenantName)
-	if err != nil {
-		if errors.Is(tenant.ErrTenantDoesNotExist, err) {
-			errorMsg := fmt.Sprintf("a tenant with the name %s does not exist", tenantName)
-			httperror.NotFound(errorMsg, err, nil).Render(w)
-			return
-		}
-		httperror.InternalError(ctx, "Cannot get tenant by ID", err, nil).Render(w)
+		httperror.InternalError(ctx, "Cannot get tenant by ID or name", err, nil).Render(w)
 		return
 	}
 

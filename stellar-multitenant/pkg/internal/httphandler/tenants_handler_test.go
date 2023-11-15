@@ -32,12 +32,11 @@ func Test_Get(t *testing.T) {
 	}
 
 	r := chi.NewRouter()
-	r.Get("/tenants/{id:^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$}", handler.GetByID)
-	r.Get("/tenants/{name:^[a-z-]+$}", handler.GetByName)
+	r.Get("/tenants/{arg}", handler.GetByIDOrName)
 
 	tenant.DeleteAllTenantFixtures(t, ctx, dbConnectionPool)
-	tnt1 := tenant.CreateTenantFixture(t, ctx, dbConnectionPool, "org-one")
-	tnt2 := tenant.CreateTenantFixture(t, ctx, dbConnectionPool, "org-two")
+	tnt1 := tenant.CreateTenantFixture(t, ctx, dbConnectionPool, "myorg1")
+	tnt2 := tenant.CreateTenantFixture(t, ctx, dbConnectionPool, "myorg2")
 
 	tnt1JSON, err := json.Marshal(tnt1)
 	require.NoError(t, err)
@@ -60,7 +59,7 @@ func Test_Get(t *testing.T) {
 		assert.JSONEq(t, expectedJSON, string(respBody))
 	})
 
-	t.Run("GetByID successfully returns a tenant by ID", func(t *testing.T) {
+	t.Run("successfully returns a tenant by ID", func(t *testing.T) {
 		url := fmt.Sprintf("/tenants/%s", tnt1.ID)
 		rr := httptest.NewRecorder()
 		req, err := http.NewRequest("GET", url, nil)
@@ -75,7 +74,7 @@ func Test_Get(t *testing.T) {
 		assert.JSONEq(t, string(tnt1JSON), string(respBody))
 	})
 
-	t.Run("GetByName successfully returns a tenant by name", func(t *testing.T) {
+	t.Run("successfully returns a tenant by name", func(t *testing.T) {
 		url := fmt.Sprintf("/tenants/%s", tnt2.Name)
 		rr := httptest.NewRecorder()
 		req, _ := http.NewRequest("GET", url, nil)

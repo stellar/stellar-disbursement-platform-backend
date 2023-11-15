@@ -171,33 +171,17 @@ func (m *Manager) GetAllTenants(ctx context.Context) ([]Tenant, error) {
 	return tnts, nil
 }
 
-// GetTenantByID returns the tenant with the given id.
-func (m *Manager) GetTenantByID(ctx context.Context, id string) (*Tenant, error) {
+// GetTenantByIDOrName returns the tenant with a given id or name.
+func (m *Manager) GetTenantByIDOrName(ctx context.Context, arg string) (*Tenant, error) {
 	var tnt Tenant 
-	query := fmt.Sprintf(selectQuery, "WHERE t.id = $1")
+	query := fmt.Sprintf(selectQuery, "WHERE t.id = $1 OR t.name = $1")
 
-	err := m.db.GetContext(ctx, &tnt, query, id)
+	err := m.db.GetContext(ctx, &tnt, query, arg)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrTenantDoesNotExist
 		}
-		return nil, fmt.Errorf("getting tenant id %s: %w", id, err)
-	}
-
-	return &tnt, nil
-}
-
-// GetTenantByName returns the tenant with the given name.
-func (m *Manager) GetTenantByName(ctx context.Context, name string) (*Tenant, error) {
-	var tnt Tenant
-	query := fmt.Sprintf(selectQuery, "WHERE t.name = $1")
-
-	err := m.db.GetContext(ctx, &tnt, query, name)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, ErrTenantDoesNotExist
-		}
-		return nil, fmt.Errorf("getting tenant name %s: %w", name, err)
+		return nil, fmt.Errorf("getting tenant %s: %w", arg, err)
 	}
 
 	return &tnt, nil
