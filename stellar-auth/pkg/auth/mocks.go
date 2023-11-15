@@ -52,6 +52,11 @@ func (m *JWTManagerMock) GetUserFromToken(ctx context.Context, tokenString strin
 	return args.Get(0).(*User), args.Error(1)
 }
 
+func (m *JWTManagerMock) GetTenantIDFromToken(ctx context.Context, token string) (string, error) {
+	args := m.Called(ctx, token)
+	return args.Get(0).(string), args.Error(1)
+}
+
 var _ JWTManager = (*JWTManagerMock)(nil)
 
 // Authenticator
@@ -251,6 +256,11 @@ func (am *AuthManagerMock) GetUser(ctx context.Context, tokenString string) (*Us
 }
 
 func (am *AuthManagerMock) GetUserID(ctx context.Context, tokenString string) (string, error) {
+	args := am.Called(ctx, tokenString)
+	return args.Get(0).(string), args.Error(1)
+}
+
+func (am *AuthManagerMock) GetTenantID(ctx context.Context, tokenString string) (string, error) {
 	args := am.Called(ctx, tokenString)
 	return args.Get(0).(string), args.Error(1)
 }

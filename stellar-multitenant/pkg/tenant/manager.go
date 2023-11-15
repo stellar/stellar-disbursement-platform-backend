@@ -3,23 +3,13 @@ package tenant
 import (
 	"context"
 	"database/sql"
-	"embed"
 	"errors"
 	"fmt"
 	"net/url"
 	"strings"
 
 	"github.com/lib/pq"
-	migrate "github.com/rubenv/sql-migrate"
-	"github.com/stellar/go/support/log"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
-	authmigrations "github.com/stellar/stellar-disbursement-platform-backend/db/migrations/auth-migrations"
-	sdpmigrations "github.com/stellar/stellar-disbursement-platform-backend/db/migrations/sdp-migrations"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 )
 
 var (
@@ -28,97 +18,18 @@ var (
 	ErrEmptyTenantName      = errors.New("tenant name cannot be empty")
 )
 
-type Manager struct {
-	db              db.DBConnectionPool
-	messengerClient message.MessengerClient
+type tenantContextKey struct{}
+
+type ManagerInterface interface {
+	GetDSNForTenant(ctx context.Context, tenantName string) (string, error)
+	GetTenantByID(ctx context.Context, id string) (*Tenant, error)
+	GetTenantByName(ctx context.Context, name string) (*Tenant, error)
+	AddTenant(ctx context.Context, name string) (*Tenant, error)
+	UpdateTenantConfig(ctx context.Context, tu *TenantUpdate) (*Tenant, error)
 }
 
-func (m *Manager) ProvisionNewTenant(
-	ctx context.Context, name, userFirstName, userLastName, userEmail,
-	organizationName, uiBaseURL, networkType string,
-) (*Tenant, error) {
-	log.Infof("adding tenant %s", name)
-	t, err := m.AddTenant(ctx, name)
-	if err != nil {
-		return nil, err
-	}
-
-	log.Infof("creating tenant %s database schema", t.Name)
-	schemaName := fmt.Sprintf("sdp_%s", t.Name)
-	_, err = m.db.ExecContext(ctx, fmt.Sprintf("CREATE SCHEMA %s", pq.QuoteIdentifier(schemaName)))
-	if err != nil {
-		return nil, fmt.Errorf("creating a new database schema: %w", err)
-	}
-
-	u, err := m.GetDSNForTenant(ctx, t.Name)
-	if err != nil {
-		return nil, fmt.Errorf("getting database DSN for tenant %s: %w", t.Name, err)
-	}
-
-	// Applying migrations
-	log.Infof("applying SDP migrations on the tenant %s schema", t.Name)
-	err = m.RunMigrationsForTenant(ctx, t, u, migrate.Up, 0, sdpmigrations.FS, db.StellarSDPMigrationsTableName)
-	if err != nil {
-		return nil, fmt.Errorf("applying SDP migrations: %w", err)
-	}
-
-	log.Infof("applying stellar-auth migrations on the tenant %s schema", t.Name)
-	err = m.RunMigrationsForTenant(ctx, t, u, migrate.Up, 0, authmigrations.FS, db.StellarAuthMigrationsTableName)
-	if err != nil {
-		return nil, fmt.Errorf("applying stellar-auth migrations: %w", err)
-	}
-
-	// Connecting to the tenant database schema
-	tenantSchemaConnectionPool, err := db.OpenDBConnectionPool(u)
-	if err != nil {
-		return nil, fmt.Errorf("opening database connection on tenant schema: %w", err)
-	}
-	defer tenantSchemaConnectionPool.Close()
-
-	err = services.SetupAssetsForProperNetwork(ctx, tenantSchemaConnectionPool, utils.NetworkType(networkType), services.DefaultAssetsNetworkMap)
-	if err != nil {
-		return nil, fmt.Errorf("running setup assets for proper network: %w", err)
-	}
-
-	err = services.SetupWalletsForProperNetwork(ctx, tenantSchemaConnectionPool, utils.NetworkType(networkType), services.DefaultWalletsNetworkMap)
-	if err != nil {
-		return nil, fmt.Errorf("running setup wallets for proper network: %w", err)
-	}
-
-	// Updating organization's name
-	models, err := data.NewModels(tenantSchemaConnectionPool)
-	if err != nil {
-		return nil, fmt.Errorf("getting models: %w", err)
-	}
-
-	err = models.Organizations.Update(ctx, &data.OrganizationUpdate{Name: organizationName})
-	if err != nil {
-		return nil, fmt.Errorf("updating organization's name: %w", err)
-	}
-
-	// Creating new user and sending invitation email
-	authManager := auth.NewAuthManager(
-		auth.WithDefaultAuthenticatorOption(tenantSchemaConnectionPool, auth.NewDefaultPasswordEncrypter(), 0),
-	)
-	s := services.NewCreateUserService(models, tenantSchemaConnectionPool, authManager, m.messengerClient)
-	_, err = s.CreateUser(ctx, auth.User{
-		FirstName: userFirstName,
-		LastName:  userLastName,
-		Email:     userEmail,
-		IsOwner:   true,
-		Roles:     []string{"owner"},
-	}, uiBaseURL)
-	if err != nil {
-		return nil, fmt.Errorf("creating user: %w", err)
-	}
-
-	tenantStatus := ProvisionedTenantStatus
-	t, err = m.UpdateTenantConfig(ctx, &TenantUpdate{ID: t.ID, Status: &tenantStatus, SDPUIBaseURL: &uiBaseURL})
-	if err != nil {
-		return nil, fmt.Errorf("updating tenant %s status to %s: %w", name, ProvisionedTenantStatus, err)
-	}
-
-	return t, nil
+type Manager struct {
+	db db.DBConnectionPool
 }
 
 func (m *Manager) GetDSNForTenant(ctx context.Context, tenantName string) (string, error) {
@@ -135,6 +46,18 @@ func (m *Manager) GetDSNForTenant(ctx context.Context, tenantName string) (strin
 	q.Set("search_path", schemaName)
 	u.RawQuery = q.Encode()
 	return u.String(), nil
+}
+
+func (m *Manager) GetTenantByID(ctx context.Context, id string) (*Tenant, error) {
+	const q = "SELECT * FROM tenants WHERE id = $1"
+	var t Tenant
+	if err := m.db.GetContext(ctx, &t, q, id); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrTenantDoesNotExist
+		}
+		return nil, fmt.Errorf("getting tenant %s: %w", id, err)
+	}
+	return &t, nil
 }
 
 func (m *Manager) GetTenantByName(ctx context.Context, name string) (*Tenant, error) {
@@ -250,17 +173,15 @@ func (m *Manager) UpdateTenantConfig(ctx context.Context, tu *TenantUpdate) (*Te
 	return &t, nil
 }
 
-func (m *Manager) RunMigrationsForTenant(
-	ctx context.Context, t *Tenant, dbURL string,
-	dir migrate.MigrationDirection, count int,
-	migrationFiles embed.FS, migrationTableName db.MigrationTableName,
-) error {
-	n, err := db.Migrate(dbURL, dir, count, migrationFiles, migrationTableName)
-	if err != nil {
-		return fmt.Errorf("applying SDP migrations: %w", err)
-	}
-	log.Infof("successful applied %d migrations", n)
-	return nil
+// GetTenantFromContext retrieves the tenant information from the context.
+func GetTenantFromContext(ctx context.Context) (*Tenant, bool) {
+	currentTenant, ok := ctx.Value(tenantContextKey{}).(*Tenant)
+	return currentTenant, ok
+}
+
+// SaveTenantInContext stores the tenant information in the context.
+func SaveTenantInContext(ctx context.Context, t *Tenant) context.Context {
+	return context.WithValue(ctx, tenantContextKey{}, t)
 }
 
 type Option func(m *Manager)
@@ -279,8 +200,4 @@ func WithDatabase(dbConnectionPool db.DBConnectionPool) Option {
 	}
 }
 
-func WithMessengerClient(messengerClient message.MessengerClient) Option {
-	return func(m *Manager) {
-		m.messengerClient = messengerClient
-	}
-}
+var _ ManagerInterface = (*Manager)(nil)

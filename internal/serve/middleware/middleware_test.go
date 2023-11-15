@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
+
 	"github.com/go-chi/chi/v5"
 	"github.com/sirupsen/logrus"
 	"github.com/stellar/go/support/log"
@@ -645,5 +647,128 @@ func Test_CSPMiddleware(t *testing.T) {
 		gotCSP := resp.Header.Get("Content-Security-Policy")
 		assert.Equal(t, wantCSP, gotCSP)
 		assert.Equal(t, expectedRespBody, string(respBody))
+	})
+}
+
+func Test_TenantMiddleware(t *testing.T) {
+	r := chi.NewRouter()
+
+	mTenantManager := &tenant.TenantManagerMock{}
+	mAuthManager := &auth.AuthManagerMock{}
+
+	r.Use(TenantMiddleware(mTenantManager, mAuthManager))
+
+	r.Get("/test", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, err := w.Write([]byte(`{"status":"ok"}`))
+		require.NoError(t, err)
+	})
+
+	t.Run("failed to fetch tenant ID from token", func(t *testing.T) {
+		req, err := http.NewRequest(http.MethodGet, "/test", nil)
+		require.NoError(t, err)
+
+		ctx := context.WithValue(req.Context(), TokenContextKey, "valid_token")
+		req = req.WithContext(ctx)
+
+		expectedErr := errors.New("error fetching tenant ID from token")
+		mAuthManager.
+			On("GetTenantID", mock.Anything, "valid_token").
+			Return("", expectedErr).
+			Once()
+
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		resp := w.Result()
+		require.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+		require.Contains(t, w.Body.String(), "Failed to get tenant ID from token")
+	})
+
+	t.Run("tenant name not found in request", func(t *testing.T) {
+		req, err := http.NewRequest(http.MethodGet, "/test", nil)
+		require.NoError(t, err)
+
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		resp := w.Result()
+		require.Equal(t, http.StatusBadRequest, resp.StatusCode)
+		require.Contains(t, w.Body.String(), "Tenant name not found in request or invalid")
+	})
+
+	t.Run("failed to load tenant by name", func(t *testing.T) {
+		req, err := http.NewRequest(http.MethodGet, "/test", nil)
+		require.NoError(t, err)
+
+		req.Header.Set(TenantHeaderKey, "tenant_name")
+
+		expectedErr := errors.New("error fetching tenant ID from token")
+		mTenantManager.
+			On("GetTenantByName", mock.Anything, "tenant_name").
+			Return(nil, expectedErr).
+			Once()
+
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		resp := w.Result()
+		require.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+		require.Contains(t, w.Body.String(), "Failed to load tenant by name")
+	})
+
+	t.Run("successfully extracts tenant ID from token", func(t *testing.T) {
+		req, err := http.NewRequest(http.MethodGet, "/test", nil)
+		require.NoError(t, err)
+
+		ctx := context.WithValue(req.Context(), TokenContextKey, "valid_token")
+		req = req.WithContext(ctx)
+
+		mAuthManager.On("GetTenantID", mock.Anything, "valid_token").Return("tenant_id", nil)
+		mTenantManager.On("GetTenantByID", mock.Anything, "tenant_id").Return(&tenant.Tenant{}, nil)
+
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		resp := w.Result()
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+	})
+}
+
+func TestExtractTenantNameFromRequest(t *testing.T) {
+	t.Run("extract tenant name from header", func(t *testing.T) {
+		expectedTenant := "tenant123"
+		r, _ := http.NewRequest("GET", "http://example.com", nil)
+		r.Header.Add(TenantHeaderKey, expectedTenant)
+
+		tenantName, err := extractTenantNameFromRequest(r)
+		require.NoError(t, err)
+		require.Equal(t, expectedTenant, tenantName)
+	})
+
+	t.Run("extract tenant name from hostname", func(t *testing.T) {
+		expectedTenant := "tenantfromhost"
+		r, _ := http.NewRequest("GET", "http://tenantfromhost.example.com", nil)
+
+		tenantName, err := extractTenantNameFromRequest(r)
+		require.NoError(t, err)
+		require.Equal(t, expectedTenant, tenantName)
+	})
+
+	t.Run("error extracting tenant from hostname", func(t *testing.T) {
+		r, _ := http.NewRequest("GET", "http://example.com", nil)
+
+		name, err := extractTenantNameFromRequest(r)
+		require.ErrorIs(t, err, ErrTenantNameNotFoundInRequest)
+		require.Empty(t, name)
+	})
+
+	t.Run("extract tenant name with port", func(t *testing.T) {
+		expectedTenant := "tenantwithport"
+		r, _ := http.NewRequest("GET", "http://tenantwithport.example.com:8080", nil)
+
+		tenantName, err := extractTenantNameFromRequest(r)
+		require.NoError(t, err)
+		require.Equal(t, expectedTenant, tenantName)
 	})
 }

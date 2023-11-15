@@ -8,7 +8,6 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 )
@@ -17,7 +16,6 @@ import (
 type DisbursementManagementService struct {
 	models           *data.Models
 	dbConnectionPool db.DBConnectionPool
-	authManager      auth.AuthManager
 }
 
 var (
@@ -31,11 +29,10 @@ var (
 )
 
 // NewDisbursementManagementService is a factory function for creating a new DisbursementManagementService.
-func NewDisbursementManagementService(models *data.Models, dbConnectionPool db.DBConnectionPool, authManager auth.AuthManager) *DisbursementManagementService {
+func NewDisbursementManagementService(models *data.Models, dbConnectionPool db.DBConnectionPool) *DisbursementManagementService {
 	return &DisbursementManagementService{
 		models:           models,
 		dbConnectionPool: dbConnectionPool,
-		authManager:      authManager,
 	}
 }
 
@@ -93,7 +90,7 @@ func (s *DisbursementManagementService) GetDisbursementReceiversWithCount(ctx co
 }
 
 // StartDisbursement starts a disbursement and all its payments and receivers wallets.
-func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, disbursementID string) error {
+func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, disbursementID string, user *auth.User) error {
 	return db.RunInTransaction(ctx, s.dbConnectionPool, nil, func(dbTx db.DBTransaction) error {
 		disbursement, err := s.models.Disbursements.Get(ctx, dbTx, disbursementID)
 		if err != nil {
@@ -119,14 +116,7 @@ func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, d
 		if err != nil {
 			return fmt.Errorf("error getting organization: %w", err)
 		}
-		token, ok := ctx.Value(middleware.TokenContextKey).(string)
-		if !ok {
-			return fmt.Errorf("error getting token from context")
-		}
-		user, err := s.authManager.GetUser(ctx, token)
-		if err != nil {
-			return fmt.Errorf("getting user from token: %w", err)
-		}
+
 		if organization.IsApprovalRequired {
 			// check that the user starting the disbursement isn't the same as the one who created it
 			for _, sh := range disbursement.StatusHistory {
@@ -159,7 +149,7 @@ func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, d
 }
 
 // PauseDisbursement pauses a disbursement and all its payments.
-func (s *DisbursementManagementService) PauseDisbursement(ctx context.Context, disbursementID string) error {
+func (s *DisbursementManagementService) PauseDisbursement(ctx context.Context, disbursementID string, user *auth.User) error {
 	return db.RunInTransaction(ctx, s.dbConnectionPool, nil, func(dbTx db.DBTransaction) error {
 		disbursement, err := s.models.Disbursements.Get(ctx, dbTx, disbursementID)
 		if err != nil {
@@ -183,14 +173,6 @@ func (s *DisbursementManagementService) PauseDisbursement(ctx context.Context, d
 		}
 
 		// 3. Update disbursement status to `paused`
-		token, ok := ctx.Value(middleware.TokenContextKey).(string)
-		if !ok {
-			return fmt.Errorf("error getting token from context")
-		}
-		user, err := s.authManager.GetUser(ctx, token)
-		if err != nil {
-			return fmt.Errorf("getting user from token: %w", err)
-		}
 		err = s.models.Disbursements.UpdateStatus(ctx, dbTx, user.ID, disbursementID, data.PausedDisbursementStatus)
 		if err != nil {
 			return fmt.Errorf("error updating disbursement status to started for disbursement with id %s: %w", disbursementID, err)

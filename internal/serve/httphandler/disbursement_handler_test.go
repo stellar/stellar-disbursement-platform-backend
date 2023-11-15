@@ -1098,6 +1098,11 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 	})
 
 	t.Run("disbursement not ready to start", func(t *testing.T) {
+		authManagerMock.
+			On("GetUser", mock.Anything, token).
+			Return(user, nil).
+			Once()
+
 		err := json.NewEncoder(reqBody).Encode(PatchDisbursementStatusRequest{Status: "Started"})
 		require.NoError(t, err)
 
@@ -1218,10 +1223,15 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 	})
 
 	t.Run("disbursement can't be paused", func(t *testing.T) {
+		authManagerMock.
+			On("GetUser", mock.Anything, token).
+			Return(user, nil).
+			Once()
+
 		err := json.NewEncoder(reqBody).Encode(PatchDisbursementStatusRequest{Status: "Paused"})
 		require.NoError(t, err)
 
-		req, err := http.NewRequest(http.MethodPatch, fmt.Sprintf("/disbursements/%s/status", draftDisbursement.ID), reqBody)
+		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, fmt.Sprintf("/disbursements/%s/status", draftDisbursement.ID), reqBody)
 		require.NoError(t, err)
 
 		rr := httptest.NewRecorder()
@@ -1232,10 +1242,15 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 	})
 
 	t.Run("disbursement status can't be changed", func(t *testing.T) {
+		authManagerMock.
+			On("GetUser", mock.Anything, token).
+			Return(user, nil).
+			Once()
+
 		err := json.NewEncoder(reqBody).Encode(PatchDisbursementStatusRequest{Status: "Completed"})
 		require.NoError(t, err)
 
-		req, err := http.NewRequest(http.MethodPatch, fmt.Sprintf("/disbursements/%s/status", draftDisbursement.ID), reqBody)
+		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, fmt.Sprintf("/disbursements/%s/status", draftDisbursement.ID), reqBody)
 		require.NoError(t, err)
 
 		rr := httptest.NewRecorder()
@@ -1246,6 +1261,11 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 	})
 
 	t.Run("disbursement doesn't exist", func(t *testing.T) {
+		authManagerMock.
+			On("GetUser", mock.Anything, token).
+			Return(user, nil).
+			Once()
+
 		id := "5e1f1c7f5b6c9c0001c1b1b1"
 		err := json.NewEncoder(reqBody).Encode(PatchDisbursementStatusRequest{Status: "STARTED"})
 		require.NoError(t, err)

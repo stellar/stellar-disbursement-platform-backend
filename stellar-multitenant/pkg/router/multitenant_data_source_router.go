@@ -15,22 +15,20 @@ var (
 	ErrNoDataSourcesAvailable  = errors.New("no data sources are available")
 )
 
-type tenantContextKey struct{}
-
 type MultiTenantDataSourceRouter struct {
 	dataSources   sync.Map
-	tenantManager *tenant.Manager
+	tenantManager tenant.ManagerInterface
 	mu            sync.Mutex
 }
 
-func NewMultiTenantDataSourceRouter(tenantManager *tenant.Manager) *MultiTenantDataSourceRouter {
+func NewMultiTenantDataSourceRouter(tenantManager tenant.ManagerInterface) *MultiTenantDataSourceRouter {
 	return &MultiTenantDataSourceRouter{
 		tenantManager: tenantManager,
 	}
 }
 
 func (m *MultiTenantDataSourceRouter) GetDataSource(ctx context.Context) (db.DBConnectionPool, error) {
-	currentTenant, ok := GetTenantFromContext(ctx)
+	currentTenant, ok := tenant.GetTenantFromContext(ctx)
 	if !ok {
 		return nil, ErrTenantNotFoundInContext
 	}
@@ -39,7 +37,10 @@ func (m *MultiTenantDataSourceRouter) GetDataSource(ctx context.Context) (db.DBC
 }
 
 // GetDataSourceForTenant returns the database connection pool for the given tenant if it exists, otherwise create a new one.
-func (m *MultiTenantDataSourceRouter) GetDataSourceForTenant(ctx context.Context, currentTenant tenant.Tenant) (db.DBConnectionPool, error) {
+func (m *MultiTenantDataSourceRouter) GetDataSourceForTenant(
+	ctx context.Context,
+	currentTenant tenant.Tenant,
+) (db.DBConnectionPool, error) {
 	value, exists := m.dataSources.Load(currentTenant.ID)
 	if exists {
 		return value.(db.DBConnectionPool), nil
@@ -48,7 +49,10 @@ func (m *MultiTenantDataSourceRouter) GetDataSourceForTenant(ctx context.Context
 	return m.getOrCreateDataSourceForTenantWithLock(ctx, currentTenant)
 }
 
-func (m *MultiTenantDataSourceRouter) getOrCreateDataSourceForTenantWithLock(ctx context.Context, currentTenant tenant.Tenant) (db.DBConnectionPool, error) {
+func (m *MultiTenantDataSourceRouter) getOrCreateDataSourceForTenantWithLock(
+	ctx context.Context,
+	currentTenant tenant.Tenant,
+) (db.DBConnectionPool, error) {
 	// Acquire the lock only if the data source was not found.
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -86,6 +90,7 @@ func (m *MultiTenantDataSourceRouter) GetAllDataSources() ([]db.DBConnectionPool
 	return pools, nil
 }
 
+// AnyDataSource returns any database connection pool.
 func (m *MultiTenantDataSourceRouter) AnyDataSource() (db.DBConnectionPool, error) {
 	var anyDBCP db.DBConnectionPool
 	var found bool
@@ -98,17 +103,6 @@ func (m *MultiTenantDataSourceRouter) AnyDataSource() (db.DBConnectionPool, erro
 		return nil, ErrNoDataSourcesAvailable
 	}
 	return anyDBCP, nil
-}
-
-// SetTenantInContext stores the tenant information in the context.
-func SetTenantInContext(ctx context.Context, tenant *tenant.Tenant) context.Context {
-	return context.WithValue(ctx, tenantContextKey{}, tenant)
-}
-
-// GetTenantFromContext retrieves the tenant information from the context.
-func GetTenantFromContext(ctx context.Context) (*tenant.Tenant, bool) {
-	currentTenant, ok := ctx.Value(tenantContextKey{}).(*tenant.Tenant)
-	return currentTenant, ok
 }
 
 // make sure *MultiTenantDataSourceRouter implements DataSourceRouter:

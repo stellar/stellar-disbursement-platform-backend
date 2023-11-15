@@ -160,7 +160,7 @@ func (d DisbursementHandler) GetDisbursements(w http.ResponseWriter, r *http.Req
 	}
 
 	ctx := r.Context()
-	disbursementManagementService := services.NewDisbursementManagementService(d.Models, d.DBConnectionPool, d.AuthManager)
+	disbursementManagementService := services.NewDisbursementManagementService(d.Models, d.DBConnectionPool)
 	resultWithTotal, err := disbursementManagementService.GetDisbursementsWithCount(ctx, queryParams)
 	if err != nil {
 		httperror.InternalError(ctx, "Cannot retrieve disbursements", err, nil).Render(w)
@@ -282,7 +282,7 @@ func (d DisbursementHandler) GetDisbursementReceivers(w http.ResponseWriter, r *
 		return
 	}
 
-	disbursementManagementService := services.NewDisbursementManagementService(d.Models, d.DBConnectionPool, d.AuthManager)
+	disbursementManagementService := services.NewDisbursementManagementService(d.Models, d.DBConnectionPool)
 	resultWithTotal, err := disbursementManagementService.GetDisbursementReceiversWithCount(ctx, disbursementID, queryParams)
 	if err != nil {
 		if errors.Is(err, services.ErrDisbursementNotFound) {
@@ -329,17 +329,27 @@ func (d DisbursementHandler) PatchDisbursementStatus(w http.ResponseWriter, r *h
 		return
 	}
 
-	disbursementManagementService := services.NewDisbursementManagementService(d.Models, d.DBConnectionPool, d.AuthManager)
+	disbursementManagementService := services.NewDisbursementManagementService(d.Models, d.DBConnectionPool)
 	response := UpdateDisbursementStatusResponseBody{}
 
 	ctx := r.Context()
 	disbursementID := chi.URLParam(r, "id")
+
+	token, ok := ctx.Value(middleware.TokenContextKey).(string)
+	if !ok {
+		httperror.InternalError(ctx, "Cannot get token from context", err, nil).Render(w)
+	}
+	user, err := d.AuthManager.GetUser(ctx, token)
+	if err != nil {
+		httperror.InternalError(ctx, "Cannot get user from token", err, nil).Render(w)
+	}
+
 	switch toStatus {
 	case data.StartedDisbursementStatus:
-		err = disbursementManagementService.StartDisbursement(ctx, disbursementID)
+		err = disbursementManagementService.StartDisbursement(ctx, disbursementID, user)
 		response.Message = "Disbursement started"
 	case data.PausedDisbursementStatus:
-		err = disbursementManagementService.PauseDisbursement(ctx, disbursementID)
+		err = disbursementManagementService.PauseDisbursement(ctx, disbursementID, user)
 		response.Message = "Disbursement paused"
 	default:
 		err = services.ErrDisbursementStatusCantBeChanged
