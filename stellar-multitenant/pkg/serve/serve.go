@@ -100,8 +100,8 @@ func handleHTTP(opts *ServeOptions) *chi.Mux {
 		r.Route("/tenants", func(r chi.Router) {
 			tenantsHandler := httphandler.TenantsHandler{Manager: opts.tenantManager}
 			r.Get("/", tenantsHandler.GetAll)
-			r.Get("/{id}", tenantsHandler.GetByID)
-			r.Get("/{name}", tenantsHandler.GetByName)
+			r.Get("/{name:^[a-z-]+$}", tenantsHandler.GetByName)
+			r.Get("/{id:^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$}", tenantsHandler.GetByID)
 		})
 	})
 
