@@ -236,7 +236,7 @@ func TenantMiddleware(tenantManager tenant.ManagerInterface, authManager auth.Au
 			// 2. Attempt fetching tenant name from request
 			tenantName, err := extractTenantNameFromRequest(req)
 			if err != nil || tenantName == "" {
-				httperror.InternalError(ctx, "Tenant name not found in request", err, nil).Render(rw)
+				httperror.BadRequest("Tenant name not found in request or invalid", err, nil).Render(rw)
 				return
 			}
 			currentTenant, err := tenantManager.GetTenantByName(ctx, tenantName)

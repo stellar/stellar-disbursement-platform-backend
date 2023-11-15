@@ -693,8 +693,8 @@ func Test_TenantMiddleware(t *testing.T) {
 		r.ServeHTTP(w, req)
 
 		resp := w.Result()
-		require.Equal(t, http.StatusInternalServerError, resp.StatusCode)
-		require.Contains(t, w.Body.String(), "Tenant name not found in request")
+		require.Equal(t, http.StatusBadRequest, resp.StatusCode)
+		require.Contains(t, w.Body.String(), "Tenant name not found in request or invalid")
 	})
 
 	t.Run("failed to load tenant by name", func(t *testing.T) {
