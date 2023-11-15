@@ -173,7 +173,7 @@ func (m *Manager) GetAllTenants(ctx context.Context) ([]Tenant, error) {
 
 // GetTenantByIDOrName returns the tenant with a given id or name.
 func (m *Manager) GetTenantByIDOrName(ctx context.Context, arg string) (*Tenant, error) {
-	var tnt Tenant 
+	var tnt Tenant
 	query := fmt.Sprintf(selectQuery, "WHERE t.id = $1 OR t.name = $1")
 
 	err := m.db.GetContext(ctx, &tnt, query, arg)
