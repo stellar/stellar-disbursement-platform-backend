@@ -8,9 +8,9 @@ import (
 	"github.com/lib/pq"
 	migrate "github.com/rubenv/sql-migrate"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	authmigrations "github.com/stellar/stellar-disbursement-platform-backend/db/migrations/auth-migrations"
 	sdpmigrations "github.com/stellar/stellar-disbursement-platform-backend/db/migrations/sdp-migrations"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -91,12 +91,6 @@ func AssertRegisteredUser(t *testing.T, ctx context.Context, dbConnectionPool db
 	assert.Equal(t, userEmail, user.Email)
 	assert.Equal(t, pq.StringArray{"owner"}, user.Roles)
 	assert.True(t, user.IsOwner)
-}
-
-func DeleteAllTenantFixtures(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter) {
-	const query = "DELETE FROM tenants"
-	_, err := sqlExec.ExecContext(ctx, query)
-	require.NoError(t, err)
 }
 
 func CreateTenantFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, name string) *Tenant {

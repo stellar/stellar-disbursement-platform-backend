@@ -34,7 +34,7 @@ func Test_Get(t *testing.T) {
 	r := chi.NewRouter()
 	r.Get("/tenants/{arg}", handler.GetByIDOrName)
 
-	tenant.DeleteAllTenantFixtures(t, ctx, dbConnectionPool)
+	tenant.DeleteAllTenantsFixture(t, ctx, dbConnectionPool)
 	tnt1 := tenant.CreateTenantFixture(t, ctx, dbConnectionPool, "myorg1")
 	tnt2 := tenant.CreateTenantFixture(t, ctx, dbConnectionPool, "myorg2")
 
