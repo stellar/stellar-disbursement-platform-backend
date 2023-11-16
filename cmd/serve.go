@@ -29,7 +29,7 @@ type ServeCommand struct{}
 type ServerServiceInterface interface {
 	StartServe(opts serve.ServeOptions, httpServer serve.HTTPServerInterface)
 	StartMetricsServe(opts serve.MetricsServeOptions, httpServer serve.HTTPServerInterface)
-	StartTenantServe(opts serveTenants.ServeOptions, httpServer serveTenants.HTTPServerInterface)
+	StartAdminServe(opts serveTenants.ServeOptions, httpServer serveTenants.HTTPServerInterface)
 	GetSchedulerJobRegistrars(ctx context.Context, serveOpts serve.ServeOptions, schedulerOptions scheduler.SchedulerOptions, apAPIService anchorplatform.AnchorPlatformAPIServiceInterface) ([]scheduler.SchedulerJobRegisterOption, error)
 }
 
@@ -52,7 +52,7 @@ func (s *ServerService) StartMetricsServe(opts serve.MetricsServeOptions, httpSe
 	}
 }
 
-func (s *ServerService) StartTenantServe(opts serveTenants.ServeOptions, httpServer serveTenants.HTTPServerInterface) {
+func (s *ServerService) StartAdminServe(opts serveTenants.ServeOptions, httpServer serveTenants.HTTPServerInterface) {
 	err := serveTenants.StartServe(opts, httpServer)
 	if err != nil {
 		log.Fatalf("Error starting metrics server: %s", err.Error())
@@ -413,7 +413,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			go serverService.StartMetricsServe(metricsServeOpts, &serve.HTTPServer{})
 
 			log.Ctx(ctx).Info("Starting Tenant Server...")
-			go serverService.StartTenantServe(tenantServeOpts, &serveTenants.HTTPServer{})
+			go serverService.StartAdminServe(tenantServeOpts, &serveTenants.HTTPServer{})
 
 			// Starting Application Server
 			log.Ctx(ctx).Info("Starting Application Server...")
