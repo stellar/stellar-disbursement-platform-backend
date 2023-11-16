@@ -22,8 +22,10 @@ type tenantContextKey struct{}
 
 type ManagerInterface interface {
 	GetDSNForTenant(ctx context.Context, tenantName string) (string, error)
+	GetAllTenants(ctx context.Context) ([]Tenant, error)
 	GetTenantByID(ctx context.Context, id string) (*Tenant, error)
 	GetTenantByName(ctx context.Context, name string) (*Tenant, error)
+	GetTenantByIDOrName(ctx context.Context, arg string) (*Tenant, error)
 	AddTenant(ctx context.Context, name string) (*Tenant, error)
 	UpdateTenantConfig(ctx context.Context, tu *TenantUpdate) (*Tenant, error)
 }
@@ -48,66 +50,9 @@ func (m *Manager) GetDSNForTenant(ctx context.Context, tenantName string) (strin
 	return u.String(), nil
 }
 
-func (m *Manager) GetAllTenants(ctx context.Context) ([]Tenant, error) {
-	const q = `SELECT * FROM tenants`
-	var tenants []Tenant
-	if err := m.db.SelectContext(ctx, &tenants, q); err != nil {
-		return nil, fmt.Errorf("getting all tenants: %w", err)
-	}
-	return tenants, nil
-}
-
-func (m *Manager) GetTenantByID(ctx context.Context, id string) (*Tenant, error) {
-	const q = "SELECT * FROM tenants WHERE id = $1"
-	var t Tenant
-	if err := m.db.GetContext(ctx, &t, q, id); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, ErrTenantDoesNotExist
-		}
-		return nil, fmt.Errorf("getting tenant %s: %w", id, err)
-	}
-	return &t, nil
-}
-
-func (m *Manager) GetTenantByName(ctx context.Context, name string) (*Tenant, error) {
-	const q = "SELECT * FROM tenants WHERE name = $1"
-	var t Tenant
-	if err := m.db.GetContext(ctx, &t, q, name); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, ErrTenantDoesNotExist
-		}
-		return nil, fmt.Errorf("getting tenant %s: %w", name, err)
-	}
-	return &t, nil
-}
-
-func (m *Manager) GetDSNForTenant(ctx context.Context, tenantName string) (string, error) {
-	dataSourceName, err := m.db.DSN(ctx)
-	if err != nil {
-		return "", fmt.Errorf("getting database DSN: %w", err)
-	}
-	u, err := url.Parse(dataSourceName)
-	if err != nil {
-		return "", fmt.Errorf("parsing database DSN: %w", err)
-	}
-	q := u.Query()
-	schemaName := fmt.Sprintf("sdp_%s", tenantName)
-	q.Set("search_path", schemaName)
-	u.RawQuery = q.Encode()
-	return u.String(), nil
-}
-
 var selectQuery string = `
 	SELECT 
-		t.id,
-		t.name,
-		t.status,
-		t.email_sender_type,
-		t.sms_sender_type,
-		t.enable_mfa,
-		t.enable_recaptcha,
-		t.created_at,
-		t.updated_at
+		*
 	FROM
 		tenants t
 	%s
@@ -125,6 +70,30 @@ func (m *Manager) GetAllTenants(ctx context.Context) ([]Tenant, error) {
 	}
 
 	return tnts, nil
+}
+
+func (m *Manager) GetTenantByID(ctx context.Context, id string) (*Tenant, error) {
+	q := fmt.Sprintf(selectQuery, "WHERE t.id = $1")
+	var t Tenant
+	if err := m.db.GetContext(ctx, &t, q, id); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrTenantDoesNotExist
+		}
+		return nil, fmt.Errorf("getting tenant %s: %w", id, err)
+	}
+	return &t, nil
+}
+
+func (m *Manager) GetTenantByName(ctx context.Context, name string) (*Tenant, error) {
+	q := fmt.Sprintf(selectQuery, "WHERE t.name = $1")
+	var t Tenant
+	if err := m.db.GetContext(ctx, &t, q, name); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrTenantDoesNotExist
+		}
+		return nil, fmt.Errorf("getting tenant %s: %w", name, err)
+	}
+	return &t, nil
 }
 
 // GetTenantByIDOrName returns the tenant with a given id or name.
