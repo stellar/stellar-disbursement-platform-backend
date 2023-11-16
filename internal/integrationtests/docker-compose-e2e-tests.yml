@@ -72,8 +72,9 @@ services:
       - -c
       - |
         sleep 5
-        ./stellar-disbursement-platform db migrate up
-        ./stellar-disbursement-platform db auth migrate up
+        ./stellar-disbursement-platform db tenant migrate up
+        ./stellar-disbursement-platform db migrate up --all
+        ./stellar-disbursement-platform db auth migrate up --all
         ./stellar-disbursement-platform db setup-for-network
         ./stellar-disbursement-platform serve
     depends_on:

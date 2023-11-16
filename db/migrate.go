@@ -13,9 +13,9 @@ import (
 type MigrationTableName string
 
 const (
-	StellarMultitenantMigrationsTableName = "migrations"
-	StellarSDPMigrationsTableName         = "gorp_migrations"
-	StellarAuthMigrationsTableName        = "auth_migrations"
+	StellarMultiTenantMigrationsTableName MigrationTableName = "migrations"
+	StellarSDPMigrationsTableName         MigrationTableName = "gorp_migrations"
+	StellarAuthMigrationsTableName        MigrationTableName = "auth_migrations"
 )
 
 func Migrate(dbURL string, dir migrate.MigrationDirection, count int, migrationFiles embed.FS, tableName MigrationTableName) (int, error) {

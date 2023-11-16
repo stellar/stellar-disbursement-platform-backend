@@ -103,12 +103,12 @@ func TestMigrate_upApplyOne_Tenant_migrations(t *testing.T) {
 
 	ctx := context.Background()
 
-	n, err := Migrate(db.DSN, migrate.Up, 1, tenantmigrations.FS, StellarMultitenantMigrationsTableName)
+	n, err := Migrate(db.DSN, migrate.Up, 1, tenantmigrations.FS, StellarMultiTenantMigrationsTableName)
 	require.NoError(t, err)
 	assert.Equal(t, 1, n)
 
 	ids := []string{}
-	err = dbConnectionPool.SelectContext(ctx, &ids, fmt.Sprintf("SELECT id FROM %s", StellarMultitenantMigrationsTableName))
+	err = dbConnectionPool.SelectContext(ctx, &ids, fmt.Sprintf("SELECT id FROM %s", StellarMultiTenantMigrationsTableName))
 	require.NoError(t, err)
 	wantIDs := []string{"2023-10-16.0.add-tenants-table.sql"}
 	assert.Equal(t, wantIDs, ids)
@@ -123,16 +123,16 @@ func TestMigrate_downApplyOne_Tenant_migrations(t *testing.T) {
 
 	ctx := context.Background()
 
-	n, err := Migrate(db.DSN, migrate.Up, 2, tenantmigrations.FS, StellarMultitenantMigrationsTableName)
+	n, err := Migrate(db.DSN, migrate.Up, 2, tenantmigrations.FS, StellarMultiTenantMigrationsTableName)
 	require.NoError(t, err)
 	require.Equal(t, 1, n)
 
-	n, err = Migrate(db.DSN, migrate.Down, 1, tenantmigrations.FS, StellarMultitenantMigrationsTableName)
+	n, err = Migrate(db.DSN, migrate.Down, 1, tenantmigrations.FS, StellarMultiTenantMigrationsTableName)
 	require.NoError(t, err)
 	require.Equal(t, 1, n)
 
 	ids := []string{}
-	err = dbConnectionPool.SelectContext(ctx, &ids, fmt.Sprintf("SELECT id FROM %s", StellarMultitenantMigrationsTableName))
+	err = dbConnectionPool.SelectContext(ctx, &ids, fmt.Sprintf("SELECT id FROM %s", StellarMultiTenantMigrationsTableName))
 	require.NoError(t, err)
 	wantIDs := []string{}
 	assert.Equal(t, wantIDs, ids)
@@ -156,19 +156,19 @@ func TestMigrate_upAndDownAllTheWayTwice_Tenant_migrations(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	n, err := Migrate(db.DSN, migrate.Up, count, tenantmigrations.FS, StellarMultitenantMigrationsTableName)
+	n, err := Migrate(db.DSN, migrate.Up, count, tenantmigrations.FS, StellarMultiTenantMigrationsTableName)
 	require.NoError(t, err)
 	require.Equal(t, count, n)
 
-	n, err = Migrate(db.DSN, migrate.Down, count, tenantmigrations.FS, StellarMultitenantMigrationsTableName)
+	n, err = Migrate(db.DSN, migrate.Down, count, tenantmigrations.FS, StellarMultiTenantMigrationsTableName)
 	require.NoError(t, err)
 	require.Equal(t, count, n)
 
-	n, err = Migrate(db.DSN, migrate.Up, count, tenantmigrations.FS, StellarMultitenantMigrationsTableName)
+	n, err = Migrate(db.DSN, migrate.Up, count, tenantmigrations.FS, StellarMultiTenantMigrationsTableName)
 	require.NoError(t, err)
 	require.Equal(t, count, n)
 
-	n, err = Migrate(db.DSN, migrate.Down, count, tenantmigrations.FS, StellarMultitenantMigrationsTableName)
+	n, err = Migrate(db.DSN, migrate.Down, count, tenantmigrations.FS, StellarMultiTenantMigrationsTableName)
 	require.NoError(t, err)
 	require.Equal(t, count, n)
 }

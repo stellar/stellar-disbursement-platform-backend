@@ -59,8 +59,8 @@ spec:
         - sh
         - -c
         - |
-          ./stellar-disbursement-platform db migrate up &&
-          ./stellar-disbursement-platform db auth migrate up &&
+          ./stellar-disbursement-platform db migrate up --all &&
+          ./stellar-disbursement-platform db auth migrate up --all &&
           ./stellar-disbursement-platform db setup-for-network &&
           ./stellar-disbursement-platform channel-accounts verify --delete-invalid-accounts
           ./stellar-disbursement-platform channel-accounts ensure --num-channel-accounts-ensure {{ .Values.tss.configMap.data.NUM_CHANNEL_ACCOUNTS | default 1 }}

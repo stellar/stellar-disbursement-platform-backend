@@ -137,3 +137,54 @@ func Test_Manager_UpdateTenantConfig(t *testing.T) {
 		assert.ElementsMatch(t, []string{"https://myorg.sdp.io", "https://myorg-dev.sdp.io"}, tnt.CORSAllowedOrigins)
 	})
 }
+
+func Test_Manager_GetAllTenants(t *testing.T) {
+	dbt := dbtest.OpenWithTenantMigrationsOnly(t)
+	defer dbt.Close()
+
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+
+	m := NewManager(WithDatabase(dbConnectionPool))
+	tnt1, err := m.AddTenant(ctx, "myorg1")
+	require.NoError(t, err)
+	tnt2, err := m.AddTenant(ctx, "myorg2")
+	require.NoError(t, err)
+
+	tenants, err := m.GetAllTenants(ctx)
+	require.NoError(t, err)
+
+	assert.ElementsMatch(t, tenants, []Tenant{*tnt1, *tnt2})
+}
+
+func Test_Manager_GetTenantByName(t *testing.T) {
+	dbt := dbtest.OpenWithTenantMigrationsOnly(t)
+	defer dbt.Close()
+
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+
+	m := NewManager(WithDatabase(dbConnectionPool))
+	_, err = m.AddTenant(ctx, "myorg1")
+	require.NoError(t, err)
+	tnt2, err := m.AddTenant(ctx, "myorg2")
+	require.NoError(t, err)
+
+	t.Run("gets tenant successfully", func(t *testing.T) {
+		tntDB, err := m.GetTenantByName(ctx, "myorg2")
+		require.NoError(t, err)
+		assert.Equal(t, tnt2, tntDB)
+	})
+
+	t.Run("returns error when tenant is not found", func(t *testing.T) {
+		tntDB, err := m.GetTenantByName(ctx, "unknown")
+		assert.ErrorIs(t, err, ErrTenantDoesNotExist)
+		assert.Nil(t, tntDB)
+	})
+}
