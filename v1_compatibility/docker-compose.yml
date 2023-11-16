@@ -46,7 +46,7 @@ services:
     - -c
     - |
       sleep 5
-      ./stellar-disbursement-platform db migrate up
+      ./stellar-disbursement-platform db migrate up --all
     depends_on:
     - db
     - sdp-v1

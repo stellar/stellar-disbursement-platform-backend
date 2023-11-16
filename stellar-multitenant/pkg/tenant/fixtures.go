@@ -2,14 +2,35 @@ package tenant
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/lib/pq"
+	migrate "github.com/rubenv/sql-migrate"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+	authmigrations "github.com/stellar/stellar-disbursement-platform-backend/db/migrations/auth-migrations"
+	sdpmigrations "github.com/stellar/stellar-disbursement-platform-backend/db/migrations/sdp-migrations"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func DeleteAllTenantsFixture(t *testing.T, ctx context.Context, dbConnectionPool db.DBConnectionPool) {
+	q := "DELETE FROM tenants"
+	_, err := dbConnectionPool.ExecContext(ctx, q)
+	require.NoError(t, err)
+
+	var schemasToDrop []string
+	q = "SELECT schema_name FROM information_schema.schemata WHERE schema_name ILIKE 'sdp_%'"
+	err = dbConnectionPool.SelectContext(ctx, &schemasToDrop, q)
+	require.NoError(t, err)
+
+	for _, schema := range schemasToDrop {
+		q = fmt.Sprintf("DROP SCHEMA %s CASCADE", pq.QuoteIdentifier(schema))
+		_, err = dbConnectionPool.ExecContext(ctx, q)
+		require.NoError(t, err)
+	}
+}
 
 func ResetTenantConfigFixture(t *testing.T, ctx context.Context, dbConnectionPool db.DBConnectionPool, tenantID string) *Tenant {
 	t.Helper()
@@ -30,37 +51,6 @@ func ResetTenantConfigFixture(t *testing.T, ctx context.Context, dbConnectionPoo
 	require.NoError(t, err)
 
 	return &tnt
-}
-
-func CheckSchemaExistsFixture(t *testing.T, ctx context.Context, dbConnectionPool db.DBConnectionPool, schemaName string) bool {
-	t.Helper()
-
-	const q = `
-		SELECT EXISTS(
-			SELECT schema_name FROM information_schema.schemata WHERE schema_name = $1
-		)
-	`
-
-	var exists bool
-	err := dbConnectionPool.GetContext(ctx, &exists, q, schemaName)
-	require.NoError(t, err)
-
-	return exists
-}
-
-// TenantSchemaHasTablesFixture asserts if the new tenant database schema has the tables passed by parameter.
-func TenantSchemaHasTablesFixture(t *testing.T, ctx context.Context, dbConnectionPool db.DBConnectionPool, schemaName string, tableNames []string) {
-	t.Helper()
-
-	const q = `
-		SELECT table_name FROM information_schema.tables WHERE table_schema = $1 ORDER BY table_name
-	`
-
-	var schemaTables []string
-	err := dbConnectionPool.SelectContext(ctx, &schemaTables, q, schemaName)
-	require.NoError(t, err)
-
-	assert.ElementsMatch(t, tableNames, schemaTables)
 }
 
 func AssertRegisteredAssets(t *testing.T, ctx context.Context, dbConnectionPool db.DBConnectionPool, expectedAssets []string) {
@@ -148,4 +138,48 @@ func CreateTenantFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecut
 	require.NoError(t, err)
 
 	return tnt
+}
+
+func CheckSchemaExistsFixture(t *testing.T, ctx context.Context, dbConnectionPool db.DBConnectionPool, schemaName string) bool {
+	t.Helper()
+
+	const q = `
+		SELECT EXISTS(
+			SELECT schema_name FROM information_schema.schemata WHERE schema_name = $1
+		)
+	`
+
+	var exists bool
+	err := dbConnectionPool.GetContext(ctx, &exists, q, schemaName)
+	require.NoError(t, err)
+
+	return exists
+}
+
+// TenantSchemaHasTablesFixture asserts if the new tenant database schema has the tables passed by parameter.
+func TenantSchemaHasTablesFixture(t *testing.T, ctx context.Context, dbConnectionPool db.DBConnectionPool, schemaName string, tableNames []string) {
+	t.Helper()
+
+	const q = `
+		SELECT table_name FROM information_schema.tables WHERE table_schema = $1 ORDER BY table_name
+	`
+
+	var schemaTables []string
+	err := dbConnectionPool.SelectContext(ctx, &schemaTables, q, schemaName)
+	require.NoError(t, err)
+
+	assert.ElementsMatch(t, tableNames, schemaTables)
+}
+
+func ApplyMigrationsForTenantFixture(t *testing.T, ctx context.Context, dbConnectionPool db.DBConnectionPool, tenantName string) {
+	t.Helper()
+
+	m := NewManager(WithDatabase(dbConnectionPool))
+	dsn, err := m.GetDSNForTenant(ctx, tenantName)
+	require.NoError(t, err)
+
+	_, err = db.Migrate(dsn, migrate.Up, 0, sdpmigrations.FS, db.StellarSDPMigrationsTableName)
+	require.NoError(t, err)
+	_, err = db.Migrate(dsn, migrate.Up, 0, authmigrations.FS, db.StellarAuthMigrationsTableName)
+	require.NoError(t, err)
 }

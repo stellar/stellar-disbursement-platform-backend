@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/lib/pq"
+	"github.com/stellar/go/support/log"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
@@ -1254,5 +1255,269 @@ func Test_PaymentModelGetAllReadyToPatchCompletionAnchorTransactions(t *testing.
 		assert.Equal(t, payment.ID, payments[0].ID)
 		assert.Equal(t, payment.Status, payments[0].Status)
 		assert.Equal(t, receiverWallet.AnchorPlatformTransactionID, payments[0].ReceiverWallet.AnchorPlatformTransactionID)
+	})
+}
+
+func Test_PaymentModelCancelPayment(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+
+	models, err := NewModels(dbConnectionPool)
+	require.NoError(t, err)
+
+	DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
+	DeleteAllDisbursementFixtures(t, ctx, dbConnectionPool)
+	DeleteAllCountryFixtures(t, ctx, dbConnectionPool)
+	DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
+	DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
+	DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
+	DeleteAllWalletFixtures(t, ctx, dbConnectionPool)
+
+	country := CreateCountryFixture(t, ctx, dbConnectionPool, "BRA", "Brazil")
+	wallet := CreateWalletFixture(t, ctx, dbConnectionPool, "Wallet", "https://www.wallet.com", "www.wallet.com", "wallet://")
+	asset := CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
+
+	receiver := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
+	receiverWallet := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, ReadyReceiversWalletStatus)
+
+	disbursement := CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &Disbursement{
+		Country:           country,
+		Wallet:            wallet,
+		Asset:             asset,
+		Status:            ReadyDisbursementStatus,
+		VerificationField: VerificationFieldDateOfBirth,
+	})
+
+	t.Run("no ready payment for more than 5 days won't cancel any", func(t *testing.T) {
+		getEntries := log.DefaultLogger.StartTest(log.DebugLevel)
+		payment1 := CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
+			Amount:               "1",
+			StellarTransactionID: "stellar-transaction-id-1",
+			StellarOperationID:   "operation-id-1",
+			Status:               DraftPaymentStatus,
+			Disbursement:         disbursement,
+			ReceiverWallet:       receiverWallet,
+			Asset:                *asset,
+			StatusHistory: []PaymentStatusHistoryEntry{
+				{
+					Status:        DraftPaymentStatus,
+					StatusMessage: "",
+					Timestamp:     time.Now().AddDate(0, 0, -6),
+				},
+			},
+		})
+
+		payment2 := CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
+			Amount:               "1",
+			StellarTransactionID: "stellar-transaction-id-1",
+			StellarOperationID:   "operation-id-1",
+			Status:               ReadyPaymentStatus,
+			Disbursement:         disbursement,
+			ReceiverWallet:       receiverWallet,
+			Asset:                *asset,
+			StatusHistory: []PaymentStatusHistoryEntry{
+				{
+					Status:        ReadyPaymentStatus,
+					StatusMessage: "",
+					Timestamp:     time.Now(),
+				},
+			},
+		})
+
+		err := models.Payment.CancelPaymentsWithinPeriodDays(ctx, dbConnectionPool, 5)
+		require.NoError(t, err)
+
+		entries := getEntries()
+		require.Len(t, entries, 1)
+		assert.Equal(
+			t,
+			"No payments were canceled",
+			entries[0].Message,
+		)
+
+		payment1DB, err := models.Payment.Get(ctx, payment1.ID, dbConnectionPool)
+		require.NoError(t, err)
+
+		payment2DB, err := models.Payment.Get(ctx, payment2.ID, dbConnectionPool)
+		require.NoError(t, err)
+
+		assert.Equal(t, DraftPaymentStatus, payment1DB.Status)
+		assert.Equal(t, ReadyPaymentStatus, payment2DB.Status)
+	})
+
+	t.Run("successfully cancel payments when it has multiple ready status history entries", func(t *testing.T) {
+		payment1 := CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
+			Amount:               "1",
+			StellarTransactionID: "stellar-transaction-id-1",
+			StellarOperationID:   "operation-id-1",
+			Status:               ReadyPaymentStatus,
+			Disbursement:         disbursement,
+			ReceiverWallet:       receiverWallet,
+			Asset:                *asset,
+			StatusHistory: []PaymentStatusHistoryEntry{
+				{
+					Status:        DraftPaymentStatus,
+					StatusMessage: "",
+					Timestamp:     time.Now().AddDate(0, 0, -7),
+				},
+				{
+					Status:        ReadyPaymentStatus,
+					StatusMessage: "",
+					Timestamp:     time.Now().AddDate(0, 0, -7),
+				},
+				{
+					Status:        PendingPaymentStatus,
+					StatusMessage: "",
+					Timestamp:     time.Now().AddDate(0, 0, -5),
+				},
+				{
+					Status:        FailedPaymentStatus,
+					StatusMessage: "",
+					Timestamp:     time.Now().AddDate(0, 0, -5),
+				},
+				{
+					Status:        ReadyPaymentStatus,
+					StatusMessage: "",
+					Timestamp:     time.Now(),
+				},
+			},
+		})
+
+		payment2 := CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
+			Amount:               "1",
+			StellarTransactionID: "stellar-transaction-id-1",
+			StellarOperationID:   "operation-id-1",
+			Status:               ReadyPaymentStatus,
+			Disbursement:         disbursement,
+			ReceiverWallet:       receiverWallet,
+			Asset:                *asset,
+			StatusHistory: []PaymentStatusHistoryEntry{
+				{
+					Status:        DraftPaymentStatus,
+					StatusMessage: "",
+					Timestamp:     time.Now().AddDate(0, 0, -7),
+				},
+				{
+					Status:        ReadyPaymentStatus,
+					StatusMessage: "",
+					Timestamp:     time.Now().AddDate(0, 0, -7),
+				},
+				{
+					Status:        PendingPaymentStatus,
+					StatusMessage: "",
+					Timestamp:     time.Now().AddDate(0, 0, -5),
+				},
+				{
+					Status:        FailedPaymentStatus,
+					StatusMessage: "",
+					Timestamp:     time.Now().AddDate(0, 0, -3),
+				},
+				{
+					Status:        ReadyPaymentStatus,
+					StatusMessage: "",
+					Timestamp:     time.Now().AddDate(0, 0, -3),
+				},
+			},
+		})
+
+		payment3 := CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
+			Amount:               "1",
+			StellarTransactionID: "stellar-transaction-id-1",
+			StellarOperationID:   "operation-id-1",
+			Status:               SuccessPaymentStatus,
+			Disbursement:         disbursement,
+			ReceiverWallet:       receiverWallet,
+			Asset:                *asset,
+			StatusHistory: []PaymentStatusHistoryEntry{
+				{
+					Status:        DraftPaymentStatus,
+					StatusMessage: "",
+					Timestamp:     time.Now().AddDate(0, 0, -7),
+				},
+				{
+					Status:        ReadyPaymentStatus,
+					StatusMessage: "",
+					Timestamp:     time.Now().AddDate(0, 0, -7),
+				},
+				{
+					Status:        PendingPaymentStatus,
+					StatusMessage: "",
+					Timestamp:     time.Now().AddDate(0, 0, -7),
+				},
+				{
+					Status:        SuccessPaymentStatus,
+					StatusMessage: "",
+					Timestamp:     time.Now().AddDate(0, 0, -7),
+				},
+			},
+		})
+
+		err := models.Payment.CancelPaymentsWithinPeriodDays(ctx, dbConnectionPool, 5)
+		require.NoError(t, err)
+
+		payment1DB, err := models.Payment.Get(ctx, payment1.ID, dbConnectionPool)
+		require.NoError(t, err)
+		payment2DB, err := models.Payment.Get(ctx, payment2.ID, dbConnectionPool)
+		require.NoError(t, err)
+		payment3DB, err := models.Payment.Get(ctx, payment3.ID, dbConnectionPool)
+		require.NoError(t, err)
+
+		assert.Equal(t, ReadyPaymentStatus, payment1DB.Status)
+		assert.Equal(t, ReadyPaymentStatus, payment2DB.Status)
+		assert.Equal(t, SuccessPaymentStatus, payment3DB.Status)
+	})
+
+	t.Run("cancels ready payments for more than 5 days", func(t *testing.T) {
+		payment1 := CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
+			Amount:               "1",
+			StellarTransactionID: "stellar-transaction-id-1",
+			StellarOperationID:   "operation-id-1",
+			Status:               ReadyPaymentStatus,
+			Disbursement:         disbursement,
+			ReceiverWallet:       receiverWallet,
+			Asset:                *asset,
+			StatusHistory: []PaymentStatusHistoryEntry{
+				{
+					Status:        ReadyPaymentStatus,
+					StatusMessage: "",
+					Timestamp:     time.Now().AddDate(0, 0, -5),
+				},
+			},
+		})
+
+		payment2 := CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
+			Amount:               "1",
+			StellarTransactionID: "stellar-transaction-id-1",
+			StellarOperationID:   "operation-id-1",
+			Status:               ReadyPaymentStatus,
+			Disbursement:         disbursement,
+			ReceiverWallet:       receiverWallet,
+			Asset:                *asset,
+			StatusHistory: []PaymentStatusHistoryEntry{
+				{
+					Status:        ReadyPaymentStatus,
+					StatusMessage: "",
+					Timestamp:     time.Now().AddDate(0, 0, -7),
+				},
+			},
+		})
+
+		err := models.Payment.CancelPaymentsWithinPeriodDays(ctx, dbConnectionPool, 5)
+		require.NoError(t, err)
+
+		payment1DB, err := models.Payment.Get(ctx, payment1.ID, dbConnectionPool)
+		require.NoError(t, err)
+
+		payment2DB, err := models.Payment.Get(ctx, payment2.ID, dbConnectionPool)
+		require.NoError(t, err)
+
+		assert.Equal(t, CanceledPaymentStatus, payment1DB.Status)
+		assert.Equal(t, CanceledPaymentStatus, payment2DB.Status)
 	})
 }

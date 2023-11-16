@@ -2,12 +2,9 @@ package auth
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"time"
-
-	"github.com/stellar/stellar-disbursement-platform-backend/db"
 )
 
 var ErrInvalidToken = errors.New("invalid token")
@@ -25,6 +22,7 @@ type AuthManager interface {
 	UpdatePassword(ctx context.Context, token, currentPassword, newPassword string) error
 	GetUser(ctx context.Context, tokenString string) (*User, error)
 	GetUserID(ctx context.Context, tokenString string) (string, error)
+	GetTenantID(ctx context.Context, tokenString string) (string, error)
 	GetAllUsers(ctx context.Context, tokenString string) ([]User, error)
 	UpdateUserRoles(ctx context.Context, tokenString, userID string, roles []string) error
 	DeactivateUser(ctx context.Context, tokenString, userID string) error
@@ -33,13 +31,6 @@ type AuthManager interface {
 	MFADeviceRemembered(ctx context.Context, deviceID, userID string) (bool, error)
 	GetMFACode(ctx context.Context, deviceID, userID string) (string, error)
 	AuthenticateMFA(ctx context.Context, deviceID, code string, rememberMe bool) (string, error)
-}
-
-// DBConnectionPoolFromSqlDB returns a new DBConnectionPool wrapper for a PRE-EXISTING *sql.DB. The driverName of the
-// original database is required for named query support. ATTENTION: this will not start a new connection pool, just
-// create a wrap aroung the pre-existing connection pool.
-func DBConnectionPoolFromSqlDB(sqlDB *sql.DB, driverName string) db.DBConnectionPool {
-	return db.DBConnectionPoolFromSqlDB(sqlDB, driverName)
 }
 
 func (am *defaultAuthManager) Authenticate(ctx context.Context, email, pass string) (string, error) {
@@ -60,6 +51,7 @@ func (am *defaultAuthManager) generateToken(ctx context.Context, user *User) (st
 	user.Roles = roles
 
 	expiresAt := time.Now().Add(am.expirationTimeInMinutes)
+
 	tokenString, err := am.jwtManager.GenerateToken(ctx, user, expiresAt)
 	if err != nil {
 		return "", fmt.Errorf("generating token: %w", err)
@@ -317,6 +309,24 @@ func (am *defaultAuthManager) getUserFromToken(ctx context.Context, tokenString 
 	}
 
 	return user, nil
+}
+
+func (am *defaultAuthManager) GetTenantID(ctx context.Context, tokenString string) (string, error) {
+	isValid, err := am.ValidateToken(ctx, tokenString)
+	if err != nil {
+		return "", fmt.Errorf("validating token: %w", err)
+	}
+
+	if !isValid {
+		return "", ErrInvalidToken
+	}
+
+	tenantID, err := am.jwtManager.GetTenantIDFromToken(ctx, tokenString)
+	if err != nil {
+		return "", fmt.Errorf("getting tenant ID from token: %w", err)
+	}
+
+	return tenantID, nil
 }
 
 func (am *defaultAuthManager) GetUserID(ctx context.Context, tokenString string) (string, error) {

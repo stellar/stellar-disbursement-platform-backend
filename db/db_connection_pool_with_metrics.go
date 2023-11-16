@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/jmoiron/sqlx"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 )
 
@@ -43,18 +44,18 @@ func (dbc *DBConnectionPoolWithMetrics) Close() error {
 	return dbc.dbConnectionPool.Close()
 }
 
-func (dbc *DBConnectionPoolWithMetrics) Ping() error {
-	return dbc.dbConnectionPool.Ping()
+func (dbc *DBConnectionPoolWithMetrics) Ping(ctx context.Context) error {
+	return dbc.dbConnectionPool.Ping(ctx)
 }
 
-func (dbc *DBConnectionPoolWithMetrics) SqlDB() *sql.DB {
-	return dbc.dbConnectionPool.SqlDB()
+func (dbc *DBConnectionPoolWithMetrics) SqlDB(ctx context.Context) (*sql.DB, error) {
+	return dbc.dbConnectionPool.SqlDB(ctx)
 }
 
-func (dbc *DBConnectionPoolWithMetrics) SqlxDB() *sqlx.DB {
-	return dbc.dbConnectionPool.SqlxDB()
+func (dbc *DBConnectionPoolWithMetrics) SqlxDB(ctx context.Context) (*sqlx.DB, error) {
+	return dbc.dbConnectionPool.SqlxDB(ctx)
 }
 
-func (dbc *DBConnectionPoolWithMetrics) DSN() string {
-	return dbc.dbConnectionPool.DSN()
+func (dbc *DBConnectionPoolWithMetrics) DSN(ctx context.Context) (string, error) {
+	return dbc.dbConnectionPool.DSN(ctx)
 }

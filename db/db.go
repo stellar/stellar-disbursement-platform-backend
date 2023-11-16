@@ -29,10 +29,10 @@ type DBConnectionPool interface {
 	SQLExecuter
 	BeginTxx(ctx context.Context, opts *sql.TxOptions) (DBTransaction, error)
 	Close() error
-	Ping() error
-	SqlDB() *sql.DB
-	SqlxDB() *sqlx.DB
-	DSN() string
+	Ping(ctx context.Context) error
+	SqlDB(ctx context.Context) (*sql.DB, error)
+	SqlxDB(ctx context.Context) (*sqlx.DB, error)
+	DSN(ctx context.Context) (string, error)
 }
 
 // DBConnectionPoolImplementation is a wrapper around sqlx.DB that implements DBConnectionPool.
@@ -45,16 +45,26 @@ func (db *DBConnectionPoolImplementation) BeginTxx(ctx context.Context, opts *sq
 	return db.DB.BeginTxx(ctx, opts)
 }
 
-func (db *DBConnectionPoolImplementation) SqlDB() *sql.DB {
-	return db.DB.DB
+func (db *DBConnectionPoolImplementation) Ping(ctx context.Context) error {
+	return db.DB.PingContext(ctx)
 }
 
-func (db *DBConnectionPoolImplementation) SqlxDB() *sqlx.DB {
-	return db.DB
+func (db *DBConnectionPoolImplementation) SqlDB(ctx context.Context) (*sql.DB, error) {
+	if db.DB == nil || db.DB.DB == nil {
+		return nil, fmt.Errorf("sql.DB is not initialized")
+	}
+	return db.DB.DB, nil
 }
 
-func (db *DBConnectionPoolImplementation) DSN() string {
-	return db.dataSourceName
+func (db *DBConnectionPoolImplementation) SqlxDB(ctx context.Context) (*sqlx.DB, error) {
+	if db.DB == nil {
+		return nil, fmt.Errorf("sqlx.DB is not initialized")
+	}
+	return db.DB, nil
+}
+
+func (db *DBConnectionPoolImplementation) DSN(ctx context.Context) (string, error) {
+	return db.dataSourceName, nil
 }
 
 // RunInTransactionWithResult runs the given atomic function in an atomic database transaction and returns a result and

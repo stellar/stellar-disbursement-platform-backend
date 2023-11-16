@@ -49,6 +49,7 @@ type PatchOrganizationProfileRequest struct {
 	TimezoneUTCOffset              string  `json:"timezone_utc_offset"`
 	IsApprovalRequired             *bool   `json:"is_approval_required"`
 	SMSResendInterval              *int64  `json:"sms_resend_interval"`
+	PaymentCancellationPeriodDays  *int64  `json:"payment_cancellation_period_days"`
 	SMSRegistrationMessageTemplate *string `json:"sms_registration_message_template"`
 	OTPMessageTemplate             *string `json:"otp_message_template"`
 }
@@ -59,7 +60,8 @@ func (r *PatchOrganizationProfileRequest) AreAllFieldsEmpty() bool {
 		r.IsApprovalRequired == nil &&
 		r.SMSRegistrationMessageTemplate == nil &&
 		r.OTPMessageTemplate == nil &&
-		r.SMSResendInterval == nil)
+		r.SMSResendInterval == nil &&
+		r.PaymentCancellationPeriodDays == nil)
 }
 
 type PatchUserProfileRequest struct {
@@ -159,6 +161,7 @@ func (h ProfileHandler) PatchOrganizationProfile(rw http.ResponseWriter, req *ht
 		SMSRegistrationMessageTemplate: reqBody.SMSRegistrationMessageTemplate,
 		OTPMessageTemplate:             reqBody.OTPMessageTemplate,
 		SMSResendInterval:              reqBody.SMSResendInterval,
+		PaymentCancellationPeriodDays:  reqBody.PaymentCancellationPeriodDays,
 	})
 	if err != nil {
 		httperror.InternalError(ctx, "Cannot update organization", err, nil).Render(rw)
@@ -358,12 +361,13 @@ func (h ProfileHandler) GetOrganizationInfo(rw http.ResponseWriter, req *http.Re
 	}
 
 	resp := map[string]interface{}{
-		"name":                            org.Name,
-		"logo_url":                        lu.String(),
-		"distribution_account_public_key": h.DistributionPublicKey,
-		"timezone_utc_offset":             org.TimezoneUTCOffset,
-		"is_approval_required":            org.IsApprovalRequired,
-		"sms_resend_interval":             0,
+		"name":                             org.Name,
+		"logo_url":                         lu.String(),
+		"distribution_account_public_key":  h.DistributionPublicKey,
+		"timezone_utc_offset":              org.TimezoneUTCOffset,
+		"is_approval_required":             org.IsApprovalRequired,
+		"sms_resend_interval":              0,
+		"payment_cancellation_period_days": 0,
 	}
 
 	if org.SMSRegistrationMessageTemplate != data.DefaultSMSRegistrationMessageTemplate {
@@ -376,6 +380,10 @@ func (h ProfileHandler) GetOrganizationInfo(rw http.ResponseWriter, req *http.Re
 
 	if org.SMSResendInterval != nil {
 		resp["sms_resend_interval"] = *org.SMSResendInterval
+	}
+
+	if org.PaymentCancellationPeriodDays != nil {
+		resp["payment_cancellation_period_days"] = *org.PaymentCancellationPeriodDays
 	}
 
 	httpjson.RenderStatus(rw, http.StatusOK, resp, httpjson.JSON)

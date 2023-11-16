@@ -1,6 +1,7 @@
 package db
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stellar/go/support/db/dbtest"
@@ -18,6 +19,7 @@ func TestOpen_OpenDBConnectionPool(t *testing.T) {
 
 	assert.Equal(t, "postgres", dbConnectionPool.DriverName())
 
-	err = dbConnectionPool.Ping()
+	ctx := context.Background()
+	err = dbConnectionPool.Ping(ctx)
 	require.NoError(t, err)
 }

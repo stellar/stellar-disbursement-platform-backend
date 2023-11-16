@@ -43,7 +43,7 @@ func (r *RetryPaymentsRequest) validate() *httperror.HTTPError {
 func (p PaymentsHandler) GetPayment(w http.ResponseWriter, r *http.Request) {
 	payment_id := chi.URLParam(r, "id")
 
-	payment, err := p.Models.Payment.Get(r.Context(), payment_id, p.DBConnectionPool.SqlxDB())
+	payment, err := p.Models.Payment.Get(r.Context(), payment_id, p.DBConnectionPool)
 	if err != nil {
 		if errors.Is(data.ErrRecordNotFound, err) {
 			errorResponse := fmt.Sprintf("Cannot retrieve payment with ID: %s", payment_id)

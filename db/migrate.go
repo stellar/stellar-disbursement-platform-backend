@@ -1,6 +1,7 @@
 package db
 
 import (
+	"context"
 	"embed"
 	"fmt"
 	"net/http"
@@ -12,9 +13,9 @@ import (
 type MigrationTableName string
 
 const (
-	StellarMultitenantMigrationsTableName = "migrations"
-	StellarSDPMigrationsTableName         = "gorp_migrations"
-	StellarAuthMigrationsTableName        = "auth_migrations"
+	StellarMultiTenantMigrationsTableName MigrationTableName = "migrations"
+	StellarSDPMigrationsTableName         MigrationTableName = "gorp_migrations"
+	StellarAuthMigrationsTableName        MigrationTableName = "auth_migrations"
 )
 
 func Migrate(dbURL string, dir migrate.MigrationDirection, count int, migrationFiles embed.FS, tableName MigrationTableName) (int, error) {
@@ -29,5 +30,10 @@ func Migrate(dbURL string, dir migrate.MigrationDirection, count int, migrationF
 	}
 
 	m := migrate.HttpFileSystemMigrationSource{FileSystem: http.FS(migrationFiles)}
-	return ms.ExecMax(dbConnectionPool.SqlDB(), dbConnectionPool.DriverName(), m, dir, count)
+	ctx := context.Background()
+	db, err := dbConnectionPool.SqlDB(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("fetching sql.DB: %w", err)
+	}
+	return ms.ExecMax(db, dbConnectionPool.DriverName(), m, dir, count)
 }

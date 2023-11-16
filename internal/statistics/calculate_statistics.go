@@ -15,24 +15,26 @@ import (
 var ErrResourcesNotFound = errors.New("resources not found")
 
 type PaymentCounters struct {
-	Draft   int64 `json:"draft"`
-	Ready   int64 `json:"ready"`
-	Pending int64 `json:"pending"`
-	Paused  int64 `json:"paused"`
-	Success int64 `json:"success"`
-	Failed  int64 `json:"failed"`
-	Total   int64 `json:"total"`
+	Draft    int64 `json:"draft"`
+	Ready    int64 `json:"ready"`
+	Pending  int64 `json:"pending"`
+	Paused   int64 `json:"paused"`
+	Success  int64 `json:"success"`
+	Failed   int64 `json:"failed"`
+	Canceled int64 `json:"canceled"`
+	Total    int64 `json:"total"`
 }
 
 type PaymentAmounts struct {
-	Draft   string `json:"draft"`
-	Ready   string `json:"ready"`
-	Pending string `json:"pending"`
-	Paused  string `json:"paused"`
-	Success string `json:"success"`
-	Failed  string `json:"failed"`
-	Average string `json:"average"`
-	Total   string `json:"total"`
+	Draft    string `json:"draft"`
+	Ready    string `json:"ready"`
+	Pending  string `json:"pending"`
+	Paused   string `json:"paused"`
+	Success  string `json:"success"`
+	Failed   string `json:"failed"`
+	Canceled string `json:"canceled"`
+	Average  string `json:"average"`
+	Total    string `json:"total"`
 }
 
 type PaymentAmountsByAsset struct {
@@ -151,6 +153,10 @@ func getPaymentsStats(ctx context.Context, sqlExec db.SQLExecuter, disbursementI
 		case data.PausedPaymentStatus:
 			paymentCounters.Paused += count
 			paymentAmounts.Paused = amount
+
+		case data.CanceledPaymentStatus:
+			paymentCounters.Canceled += count
+			paymentAmounts.Canceled = amount
 		default:
 			return nil, nil, fmt.Errorf("status %v is not a valid payment status", status)
 		}

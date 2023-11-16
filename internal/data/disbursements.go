@@ -37,6 +37,7 @@ type DisbursementStats struct {
 	TotalPayments      int    `json:"total_payments" db:"total_payments"`
 	SuccessfulPayments int    `json:"total_payments_sent" db:"total_payments_sent"`
 	FailedPayments     int    `json:"total_payments_failed" db:"total_payments_failed"`
+	CanceledPayments   int    `json:"total_payments_canceled" db:"total_payments_canceled"`
 	RemainingPayments  int    `json:"total_payments_remaining" db:"total_payments_remaining"`
 	AmountDisbursed    string `json:"amount_disbursed" db:"amount_disbursed"`
 	TotalAmount        string `json:"total_amount" db:"total_amount"`
@@ -232,6 +233,7 @@ func (d *DisbursementModel) populateStatistics(ctx context.Context, disbursement
 			count(*) as total_payments,
 			sum(case when status = 'SUCCESS' then 1 else 0 end) as total_payments_sent,
 			sum(case when status = 'FAILED' then 1 else 0 end) as total_payments_failed,
+			sum(case when status = 'CANCELED' then 1 else 0 end) as total_payments_canceled,
 			sum(case when status IN ('DRAFT', 'READY', 'PENDING', 'PAUSED')  then 1 else 0 end) as total_payments_remaining,
 			ROUND(SUM(CASE WHEN status = 'SUCCESS' THEN amount ELSE 0 END), 2) as amount_disbursed,
 			ROUND(SUM(amount), 2) as total_amount,
@@ -259,6 +261,7 @@ func (d *DisbursementModel) populateStatistics(ctx context.Context, disbursement
 			&stats.TotalPayments,
 			&stats.SuccessfulPayments,
 			&stats.FailedPayments,
+			&stats.CanceledPayments,
 			&stats.RemainingPayments,
 			&stats.AmountDisbursed,
 			&stats.TotalAmount,

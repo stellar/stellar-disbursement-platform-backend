@@ -2,152 +2,14 @@ package tenant
 
 import (
 	"context"
-	"fmt"
-	"net/url"
 	"testing"
 
-	migrate "github.com/rubenv/sql-migrate"
 	"github.com/stellar/go/keypair"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
-	authmigrations "github.com/stellar/stellar-disbursement-platform-backend/db/migrations/auth-migrations"
-	sdpmigrations "github.com/stellar/stellar-disbursement-platform-backend/db/migrations/sdp-migrations"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
-
-func Test_Manager_ProvisionNewTenant(t *testing.T) {
-	dbt := dbtest.OpenWithTenantMigrationsOnly(t)
-	defer dbt.Close()
-
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
-
-	ctx := context.Background()
-
-	messengerClientMock := message.MessengerClientMock{}
-	m := NewManager(WithDatabase(dbConnectionPool), WithMessengerClient(&messengerClientMock))
-
-	messengerClientMock.
-		On("SendMessage", mock.AnythingOfType("message.Message")).
-		Return(nil)
-
-	t.Run("provision a new tenant for the testnet", func(t *testing.T) {
-		tenantName := "myorg-ukraine"
-		userFirstName := "First"
-		userLastName := "Last"
-		userEmail := "email@email.com"
-		organizationName := "My Org"
-		uiBaseURL := "http://localhost:3000"
-
-		tnt, err := m.ProvisionNewTenant(ctx, tenantName, userFirstName, userLastName, userEmail, organizationName, uiBaseURL, string(utils.TestnetNetworkType))
-		require.NoError(t, err)
-
-		schemaName := fmt.Sprintf("sdp_%s", tenantName)
-		assert.Equal(t, tenantName, tnt.Name)
-		assert.Equal(t, uiBaseURL, *tnt.SDPUIBaseURL)
-		assert.Equal(t, ProvisionedTenantStatus, tnt.Status)
-		assert.True(t, CheckSchemaExistsFixture(t, ctx, dbConnectionPool, schemaName))
-
-		// Connecting to the new schema
-		u, err := url.Parse(dbConnectionPool.DSN())
-		require.NoError(t, err)
-		uq := u.Query()
-		uq.Set("search_path", schemaName)
-		u.RawQuery = uq.Encode()
-
-		tenantSchemaConnectionPool, err := db.OpenDBConnectionPool(u.String())
-		require.NoError(t, err)
-		defer tenantSchemaConnectionPool.Close()
-
-		expectedTablesAfterMigrationsApplied := []string{
-			"assets",
-			"auth_migrations",
-			"auth_user_mfa_codes",
-			"auth_user_password_reset",
-			"auth_users",
-			"channel_accounts",
-			"countries",
-			"disbursements",
-			"gorp_migrations",
-			"messages",
-			"organizations",
-			"payments",
-			"receiver_verifications",
-			"receiver_wallets",
-			"receivers",
-			"submitter_transactions",
-			"wallets",
-			"wallets_assets",
-		}
-		TenantSchemaHasTablesFixture(t, ctx, tenantSchemaConnectionPool, schemaName, expectedTablesAfterMigrationsApplied)
-
-		AssertRegisteredAssets(t, ctx, tenantSchemaConnectionPool, []string{"USDC:GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5", "XLM:"})
-		AssertRegisteredWallets(t, ctx, tenantSchemaConnectionPool, []string{"Demo Wallet", "Vibrant Assist"})
-		AssertRegisteredUser(t, ctx, tenantSchemaConnectionPool, userFirstName, userLastName, userEmail)
-	})
-
-	t.Run("provision a new tenant for the pubnet", func(t *testing.T) {
-		tenantName := "myorg-us"
-		userFirstName := "First"
-		userLastName := "Last"
-		userEmail := "email@email.com"
-		organizationName := "My Org"
-		uiBaseURL := "http://localhost:3000"
-
-		tnt, err := m.ProvisionNewTenant(ctx, tenantName, userFirstName, userLastName, userEmail, organizationName, uiBaseURL, string(utils.PubnetNetworkType))
-		require.NoError(t, err)
-
-		schemaName := fmt.Sprintf("sdp_%s", tenantName)
-		assert.Equal(t, tenantName, tnt.Name)
-		assert.Equal(t, uiBaseURL, *tnt.SDPUIBaseURL)
-		assert.Equal(t, ProvisionedTenantStatus, tnt.Status)
-		assert.True(t, CheckSchemaExistsFixture(t, ctx, dbConnectionPool, schemaName))
-
-		// Connecting to the new schema
-		u, err := url.Parse(dbConnectionPool.DSN())
-		require.NoError(t, err)
-		uq := u.Query()
-		uq.Set("search_path", schemaName)
-		u.RawQuery = uq.Encode()
-
-		tenantSchemaConnectionPool, err := db.OpenDBConnectionPool(u.String())
-		require.NoError(t, err)
-		defer tenantSchemaConnectionPool.Close()
-
-		expectedTablesAfterMigrationsApplied := []string{
-			"assets",
-			"auth_migrations",
-			"auth_user_mfa_codes",
-			"auth_user_password_reset",
-			"auth_users",
-			"channel_accounts",
-			"countries",
-			"disbursements",
-			"gorp_migrations",
-			"messages",
-			"organizations",
-			"payments",
-			"receiver_verifications",
-			"receiver_wallets",
-			"receivers",
-			"submitter_transactions",
-			"wallets",
-			"wallets_assets",
-		}
-		TenantSchemaHasTablesFixture(t, ctx, tenantSchemaConnectionPool, schemaName, expectedTablesAfterMigrationsApplied)
-
-		AssertRegisteredAssets(t, ctx, tenantSchemaConnectionPool, []string{"USDC:GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN", "XLM:"})
-		AssertRegisteredWallets(t, ctx, tenantSchemaConnectionPool, []string{"Vibrant Assist RC", "Vibrant Assist"})
-		AssertRegisteredUser(t, ctx, tenantSchemaConnectionPool, userFirstName, userLastName, userEmail)
-	})
-
-	messengerClientMock.AssertExpectations(t)
-}
 
 func Test_Manager_AddTenant(t *testing.T) {
 	dbt := dbtest.Open(t)
@@ -276,7 +138,7 @@ func Test_Manager_UpdateTenantConfig(t *testing.T) {
 	})
 }
 
-func Test_Manager_RunMigrationsForTenant(t *testing.T) {
+func Test_Manager_GetAllTenants(t *testing.T) {
 	dbt := dbtest.OpenWithTenantMigrationsOnly(t)
 	defer dbt.Close()
 
@@ -292,72 +154,39 @@ func Test_Manager_RunMigrationsForTenant(t *testing.T) {
 	tnt2, err := m.AddTenant(ctx, "myorg2")
 	require.NoError(t, err)
 
-	tnt1SchemaName := fmt.Sprintf("sdp_%s", tnt1.Name)
-	tnt2SchemaName := fmt.Sprintf("sdp_%s", tnt2.Name)
-
-	// Creating DB Schemas
-	_, err = dbConnectionPool.ExecContext(ctx, fmt.Sprintf("CREATE SCHEMA %s", tnt1SchemaName))
-	require.NoError(t, err)
-	_, err = dbConnectionPool.ExecContext(ctx, fmt.Sprintf("CREATE SCHEMA %s", tnt2SchemaName))
+	tenants, err := m.GetAllTenants(ctx)
 	require.NoError(t, err)
 
-	u, err := url.Parse(dbConnectionPool.DSN())
+	assert.ElementsMatch(t, tenants, []Tenant{*tnt1, *tnt2})
+}
+
+func Test_Manager_GetTenantByName(t *testing.T) {
+	dbt := dbtest.OpenWithTenantMigrationsOnly(t)
+	defer dbt.Close()
+
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+
+	m := NewManager(WithDatabase(dbConnectionPool))
+	_, err = m.AddTenant(ctx, "myorg1")
+	require.NoError(t, err)
+	tnt2, err := m.AddTenant(ctx, "myorg2")
 	require.NoError(t, err)
 
-	// Tenant 1 DB connection
-	tnt1Q := u.Query()
-	tnt1Q.Set("search_path", tnt1SchemaName)
-	u.RawQuery = tnt1Q.Encode()
-	tnt1SchemaConnectionPool, err := db.OpenDBConnectionPool(u.String())
-	require.NoError(t, err)
-	defer tnt1SchemaConnectionPool.Close()
+	t.Run("gets tenant successfully", func(t *testing.T) {
+		tntDB, err := m.GetTenantByName(ctx, "myorg2")
+		require.NoError(t, err)
+		assert.Equal(t, tnt2, tntDB)
+	})
 
-	// Tenant 2 DB connection
-	tnt2Q := u.Query()
-	tnt2Q.Set("search_path", tnt2SchemaName)
-	u.RawQuery = tnt2Q.Encode()
-	tnt2SchemaConnectionPool, err := db.OpenDBConnectionPool(u.String())
-	require.NoError(t, err)
-	defer tnt2SchemaConnectionPool.Close()
-
-	// Apply migrations for Tenant 1
-	err = m.RunMigrationsForTenant(ctx, tnt1, tnt1SchemaConnectionPool.DSN(), migrate.Up, 0, sdpmigrations.FS, db.StellarSDPMigrationsTableName)
-	require.NoError(t, err)
-	err = m.RunMigrationsForTenant(ctx, tnt1, tnt1SchemaConnectionPool.DSN(), migrate.Up, 0, authmigrations.FS, db.StellarAuthMigrationsTableName)
-	require.NoError(t, err)
-
-	expectedTablesAfterMigrationsApplied := []string{
-		"assets",
-		"auth_migrations",
-		"auth_user_mfa_codes",
-		"auth_user_password_reset",
-		"auth_users",
-		"channel_accounts",
-		"countries",
-		"disbursements",
-		"gorp_migrations",
-		"messages",
-		"organizations",
-		"payments",
-		"receiver_verifications",
-		"receiver_wallets",
-		"receivers",
-		"submitter_transactions",
-		"wallets",
-		"wallets_assets",
-	}
-	TenantSchemaHasTablesFixture(t, ctx, dbConnectionPool, tnt1SchemaName, expectedTablesAfterMigrationsApplied)
-
-	// Asserting if the Tenant 2 DB Schema wasn't affected by Tenant 1 schema migrations
-	TenantSchemaHasTablesFixture(t, ctx, dbConnectionPool, tnt2SchemaName, []string{})
-
-	// Apply migrations for Tenant 2
-	err = m.RunMigrationsForTenant(ctx, tnt2, tnt2SchemaConnectionPool.DSN(), migrate.Up, 0, sdpmigrations.FS, db.StellarSDPMigrationsTableName)
-	require.NoError(t, err)
-	err = m.RunMigrationsForTenant(ctx, tnt2, tnt2SchemaConnectionPool.DSN(), migrate.Up, 0, authmigrations.FS, db.StellarAuthMigrationsTableName)
-	require.NoError(t, err)
-
-	TenantSchemaHasTablesFixture(t, ctx, dbConnectionPool, tnt2SchemaName, expectedTablesAfterMigrationsApplied)
+	t.Run("returns error when tenant is not found", func(t *testing.T) {
+		tntDB, err := m.GetTenantByName(ctx, "unknown")
+		assert.ErrorIs(t, err, ErrTenantDoesNotExist)
+		assert.Nil(t, tntDB)
+	})
 }
 
 func Test_Manager_GetAllTenants(t *testing.T) {

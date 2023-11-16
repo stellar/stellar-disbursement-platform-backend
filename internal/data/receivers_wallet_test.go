@@ -143,6 +143,7 @@ func Test_ReceiversWalletModelGetWithReceiverId(t *testing.T) {
 					TotalPayments:     "0",
 					PaymentsReceived:  "0",
 					FailedPayments:    "0",
+					CanceledPayments:  "0",
 					RemainingPayments: "0",
 					ReceivedAmounts:   nil,
 				},
@@ -207,6 +208,7 @@ func Test_ReceiversWalletModelGetWithReceiverId(t *testing.T) {
 					TotalPayments:     "2",
 					PaymentsReceived:  "1",
 					FailedPayments:    "0",
+					CanceledPayments:  "0",
 					RemainingPayments: "1",
 					ReceivedAmounts: []Amount{
 						{
@@ -312,6 +314,7 @@ func Test_ReceiversWalletModelGetWithReceiverId(t *testing.T) {
 					TotalPayments:     "2",
 					PaymentsReceived:  "1",
 					FailedPayments:    "0",
+					CanceledPayments:  "0",
 					RemainingPayments: "1",
 					ReceivedAmounts: []Amount{
 						{
@@ -345,6 +348,7 @@ func Test_ReceiversWalletModelGetWithReceiverId(t *testing.T) {
 					TotalPayments:     "1",
 					PaymentsReceived:  "0",
 					FailedPayments:    "0",
+					CanceledPayments:  "0",
 					RemainingPayments: "1",
 					ReceivedAmounts: []Amount{
 						{
@@ -425,6 +429,7 @@ func Test_ReceiversWalletModelGetWithReceiverId(t *testing.T) {
 					TotalPayments:     "0",
 					PaymentsReceived:  "0",
 					FailedPayments:    "0",
+					CanceledPayments:  "0",
 					RemainingPayments: "0",
 					ReceivedAmounts:   nil,
 				},

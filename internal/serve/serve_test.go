@@ -8,6 +8,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
+
 	"github.com/go-chi/chi/v5"
 	"github.com/stellar/go/keypair"
 	"github.com/stellar/go/network"
@@ -130,6 +134,7 @@ func Test_handleHTTP_Health(t *testing.T) {
 	})
 
 	req := httptest.NewRequest("GET", "/health", nil)
+	req.Header.Set(middleware.TenantHeaderKey, "aid-org")
 	w := httptest.NewRecorder()
 	handlerMux.ServeHTTP(w, req)
 
@@ -197,6 +202,11 @@ func getServeOptionsForTests(t *testing.T, databaseDSN string) ServeOptions {
 	crasTrackerClient, err := crashtracker.NewDryRunClient()
 	require.NoError(t, err)
 
+	mTenantManager := &tenant.TenantManagerMock{}
+	mTenantManager.
+		On("GetTenantByName", mock.Anything, "aid-org").
+		Return(&tenant.Tenant{ID: "tenant1"}, nil)
+
 	serveOptions := ServeOptions{
 		CrashTrackerClient:              crasTrackerClient,
 		DatabaseDSN:                     databaseDSN,
@@ -217,6 +227,8 @@ func getServeOptionsForTests(t *testing.T, databaseDSN string) ServeOptions {
 	}
 	err = serveOptions.SetupDependencies()
 	require.NoError(t, err)
+
+	serveOptions.tenantManager = mTenantManager
 
 	return serveOptions
 }
@@ -243,6 +255,8 @@ func Test_handleHTTP_unauthenticatedEndpoints(t *testing.T) {
 	for _, endpoint := range unauthenticatedEndpoints {
 		t.Run(fmt.Sprintf("%s %s", endpoint.method, endpoint.path), func(t *testing.T) {
 			req := httptest.NewRequest(endpoint.method, endpoint.path, nil)
+			req.Header.Set("SDP-Tenant-Name", "aid-org")
+
 			w := httptest.NewRecorder()
 			handlerMux.ServeHTTP(w, req)
 
@@ -319,6 +333,8 @@ func Test_handleHTTP_authenticatedEndpoints(t *testing.T) {
 	for _, endpoint := range authenticatedEndpoints {
 		t.Run(fmt.Sprintf("expect 401 for %s %s", endpoint.method, endpoint.path), func(t *testing.T) {
 			req := httptest.NewRequest(endpoint.method, endpoint.path, nil)
+			req.Header.Set(middleware.TenantHeaderKey, "aid-org")
+
 			w := httptest.NewRecorder()
 			handlerMux.ServeHTTP(w, req)
 
@@ -337,12 +353,11 @@ func Test_createAuthManager(t *testing.T) {
 
 	// creates the expected auth manager
 	passwordEncrypter := auth.NewDefaultPasswordEncrypter()
-	authDBConnectionPool := auth.DBConnectionPoolFromSqlDB(dbConnectionPool.SqlDB(), dbConnectionPool.DriverName())
 	wantAuthManager := auth.NewAuthManager(
-		auth.WithDefaultAuthenticatorOption(authDBConnectionPool, passwordEncrypter, time.Hour*time.Duration(1)),
+		auth.WithDefaultAuthenticatorOption(dbConnectionPool, passwordEncrypter, time.Hour*time.Duration(1)),
 		auth.WithDefaultJWTManagerOption(publicKeyStr, privateKeyStr),
-		auth.WithDefaultRoleManagerOption(authDBConnectionPool, data.OwnerUserRole.String()),
-		auth.WithDefaultMFAManagerOption(authDBConnectionPool),
+		auth.WithDefaultRoleManagerOption(dbConnectionPool, data.OwnerUserRole.String()),
+		auth.WithDefaultMFAManagerOption(dbConnectionPool),
 	)
 
 	testCases := []struct {

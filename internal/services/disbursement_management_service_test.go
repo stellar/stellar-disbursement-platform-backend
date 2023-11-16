@@ -4,7 +4,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
@@ -24,7 +23,7 @@ func Test_DisbursementManagementService_GetDisbursementsWithCount(t *testing.T) 
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
-	service := NewDisbursementManagementService(models, models.DBConnectionPool, nil)
+	service := NewDisbursementManagementService(models, models.DBConnectionPool)
 
 	ctx := context.Background()
 	t.Run("disbursements list empty", func(t *testing.T) {
@@ -63,7 +62,7 @@ func Test_DisbursementManagementService_GetDisbursementReceiversWithCount(t *tes
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
-	service := NewDisbursementManagementService(models, models.DBConnectionPool, nil)
+	service := NewDisbursementManagementService(models, models.DBConnectionPool)
 	disbursement := data.CreateDisbursementFixture(t, context.Background(), dbConnectionPool, models.Disbursements, &data.Disbursement{})
 
 	ctx := context.Background()
@@ -122,11 +121,9 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
-	token := "token"
-	ctx := context.WithValue(context.Background(), middleware.TokenContextKey, token)
+	ctx := context.Background()
 
-	authManagerMock := &auth.AuthManagerMock{}
-	service := NewDisbursementManagementService(models, models.DBConnectionPool, authManagerMock)
+	service := NewDisbursementManagementService(models, models.DBConnectionPool)
 
 	// create fixtures
 	wallet := data.CreateDefaultWalletFixture(t, ctx, dbConnectionPool)
@@ -197,19 +194,19 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 	t.Run("disbursement doesn't exist", func(t *testing.T) {
 		id := "5e1f1c7f5b6c9c0001c1b1b1"
 
-		err = service.StartDisbursement(context.Background(), id)
+		err = service.StartDisbursement(context.Background(), id, nil)
 		require.ErrorIs(t, err, ErrDisbursementNotFound)
 	})
 
 	t.Run("disbursement wallet is disabled", func(t *testing.T) {
 		data.EnableOrDisableWalletFixtures(t, ctx, dbConnectionPool, false, wallet.ID)
 		defer data.EnableOrDisableWalletFixtures(t, ctx, dbConnectionPool, true, wallet.ID)
-		err = service.StartDisbursement(context.Background(), draftDisbursement.ID)
+		err = service.StartDisbursement(context.Background(), draftDisbursement.ID, nil)
 		require.ErrorIs(t, err, ErrDisbursementWalletDisabled)
 	})
 
 	t.Run("disbursement not ready to start", func(t *testing.T) {
-		err = service.StartDisbursement(context.Background(), draftDisbursement.ID)
+		err = service.StartDisbursement(context.Background(), draftDisbursement.ID, nil)
 		require.ErrorIs(t, err, ErrDisbursementNotReadyToStart)
 	})
 
@@ -239,17 +236,12 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 			Email: "email@email.com",
 		}
 
-		authManagerMock.
-			On("GetUser", ctx, token).
-			Return(user, nil).
-			Once()
-
 		// Enable approval workflow for org.
 		isApprovalRequired := true
 		err = models.Organizations.Update(ctx, &data.OrganizationUpdate{IsApprovalRequired: &isApprovalRequired})
 		require.NoError(t, err)
 
-		err = service.StartDisbursement(ctx, disbursement.ID)
+		err = service.StartDisbursement(ctx, disbursement.ID, user)
 		require.ErrorIs(t, err, ErrDisbursementStartedByCreator)
 
 		// rollback changes
@@ -284,17 +276,12 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 			Email: "email@email.com",
 		}
 
-		authManagerMock.
-			On("GetUser", ctx, token).
-			Return(user, nil).
-			Once()
-
 		// Enable approval workflow for org.
 		isApprovalRequired := true
 		err = models.Organizations.Update(ctx, &data.OrganizationUpdate{IsApprovalRequired: &isApprovalRequired})
 		require.NoError(t, err)
 
-		err = service.StartDisbursement(ctx, disbursement.ID)
+		err = service.StartDisbursement(ctx, disbursement.ID, user)
 		require.NoError(t, err)
 
 		// check disbursement status
@@ -314,12 +301,7 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 			Email: "email@email.com",
 		}
 
-		authManagerMock.
-			On("GetUser", ctx, token).
-			Return(user, nil).
-			Once()
-
-		err = service.StartDisbursement(ctx, readyDisbursement.ID)
+		err = service.StartDisbursement(ctx, readyDisbursement.ID, user)
 		require.NoError(t, err)
 
 		// check disbursement status
@@ -351,8 +333,6 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 			require.Equal(t, data.ReadyPaymentStatus, payment.Status)
 		}
 	})
-
-	authManagerMock.AssertExpectations(t)
 }
 
 func Test_DisbursementManagementService_PauseDisbursement(t *testing.T) {
@@ -366,19 +346,14 @@ func Test_DisbursementManagementService_PauseDisbursement(t *testing.T) {
 	models, outerErr := data.NewModels(dbConnectionPool)
 	require.NoError(t, outerErr)
 
-	token := "token"
-	ctx := context.WithValue(context.Background(), middleware.TokenContextKey, token)
+	ctx := context.Background()
 
 	user := &auth.User{
 		ID:    "user-id",
 		Email: "email@email.com",
 	}
-	authManagerMock := &auth.AuthManagerMock{}
-	authManagerMock.
-		On("GetUser", ctx, token).
-		Return(user, nil)
 
-	service := NewDisbursementManagementService(models, models.DBConnectionPool, authManagerMock)
+	service := NewDisbursementManagementService(models, models.DBConnectionPool)
 
 	// create fixtures
 	wallet := data.CreateDefaultWalletFixture(t, ctx, dbConnectionPool)
@@ -445,17 +420,17 @@ func Test_DisbursementManagementService_PauseDisbursement(t *testing.T) {
 	t.Run("disbursement doesn't exist", func(t *testing.T) {
 		id := "5e1f1c7f5b6c9c0001c1b1b1"
 
-		err := service.PauseDisbursement(ctx, id)
+		err := service.PauseDisbursement(ctx, id, user)
 		require.ErrorIs(t, err, ErrDisbursementNotFound)
 	})
 
 	t.Run("disbursement not ready to pause", func(t *testing.T) {
-		err := service.PauseDisbursement(ctx, readyDisbursement.ID)
+		err := service.PauseDisbursement(ctx, readyDisbursement.ID, user)
 		require.ErrorIs(t, err, ErrDisbursementNotReadyToPause)
 	})
 
 	t.Run("disbursement paused", func(t *testing.T) {
-		err := service.PauseDisbursement(ctx, startedDisbursement.ID)
+		err := service.PauseDisbursement(ctx, startedDisbursement.ID, user)
 		require.NoError(t, err)
 
 		// check disbursement status
@@ -478,7 +453,7 @@ func Test_DisbursementManagementService_PauseDisbursement(t *testing.T) {
 		}
 
 		// change the disbursement back to started
-		err = service.StartDisbursement(ctx, startedDisbursement.ID)
+		err = service.StartDisbursement(ctx, startedDisbursement.ID, user)
 		require.NoError(t, err)
 
 		// check disbursement is started again
@@ -489,7 +464,7 @@ func Test_DisbursementManagementService_PauseDisbursement(t *testing.T) {
 
 	t.Run("start -> pause -> start -> pause", func(t *testing.T) {
 		// 1. Pause Disbursement
-		err := service.PauseDisbursement(ctx, startedDisbursement.ID)
+		err := service.PauseDisbursement(ctx, startedDisbursement.ID, user)
 		require.NoError(t, err)
 
 		// check disbursement is paused
@@ -512,7 +487,7 @@ func Test_DisbursementManagementService_PauseDisbursement(t *testing.T) {
 		}
 
 		// 2. Start disbursement again
-		err = service.StartDisbursement(ctx, startedDisbursement.ID)
+		err = service.StartDisbursement(ctx, startedDisbursement.ID, user)
 		require.NoError(t, err)
 
 		// check disbursement is started again
@@ -535,7 +510,7 @@ func Test_DisbursementManagementService_PauseDisbursement(t *testing.T) {
 		}
 
 		// 3. Pause disbursement again
-		err = service.PauseDisbursement(ctx, startedDisbursement.ID)
+		err = service.PauseDisbursement(ctx, startedDisbursement.ID, user)
 		require.NoError(t, err)
 
 		// check disbursement is paused
@@ -557,6 +532,4 @@ func Test_DisbursementManagementService_PauseDisbursement(t *testing.T) {
 			require.Equal(t, data.PausedPaymentStatus, payment.Status)
 		}
 	})
-
-	authManagerMock.AssertExpectations(t)
 }

@@ -18,7 +18,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/scheduler"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
-	serveTenants "github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/serve"
+	serveadmin "github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/serve"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -42,7 +42,7 @@ func (m *mockServer) StartMetricsServe(opts serve.MetricsServeOptions, httpServe
 	m.wg.Done()
 }
 
-func (m *mockServer) StartTenantServe(opts serveTenants.ServeOptions, httpServer serveTenants.HTTPServerInterface) {
+func (m *mockServer) StartAdminServe(opts serveadmin.ServeOptions, httpServer serveadmin.HTTPServerInterface) {
 	m.Called(opts, httpServer)
 	m.wg.Done()
 }
@@ -152,7 +152,7 @@ func Test_serve(t *testing.T) {
 		MonitorService: &mMonitorService,
 	}
 
-	serveTenantOpts := serveTenants.ServeOptions{
+	serveTenantOpts := serveadmin.ServeOptions{
 		Environment:       "test",
 		DatabaseDSN:       randomDatabaseDSN,
 		GitCommit:         "1234567890abcdef",
@@ -169,7 +169,7 @@ func Test_serve(t *testing.T) {
 	mServer := mockServer{}
 	mServer.On("StartMetricsServe", serveMetricOpts, mock.AnythingOfType("*serve.HTTPServer")).Once()
 	mServer.On("StartServe", serveOpts, mock.AnythingOfType("*serve.HTTPServer")).Once()
-	mServer.On("StartTenantServe", serveTenantOpts, mock.AnythingOfType("*serve.HTTPServer")).Once()
+	mServer.On("StartAdminServe", serveTenantOpts, mock.AnythingOfType("*serve.HTTPServer")).Once()
 	mServer.
 		On("GetSchedulerJobRegistrars", mock.AnythingOfType("*context.emptyCtx"), serveOpts, schedulerOptions, mock.Anything).
 		Return([]scheduler.SchedulerJobRegisterOption{}, nil).

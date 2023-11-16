@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/jmoiron/sqlx"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	"github.com/stretchr/testify/assert"
@@ -24,7 +25,9 @@ func TestDBConnectionPoolWithMetrics_SqlxDB(t *testing.T) {
 	dbConnectionPoolWithMetrics, err := NewDBConnectionPoolWithMetrics(dbConnectionPool, mMonitorService)
 	require.NoError(t, err)
 
-	sqlxDB := dbConnectionPoolWithMetrics.SqlxDB()
+	ctx := context.Background()
+	sqlxDB, err := dbConnectionPoolWithMetrics.SqlxDB(ctx)
+	require.NoError(t, err)
 
 	assert.IsType(t, &sqlx.DB{}, sqlxDB)
 }
@@ -41,7 +44,9 @@ func TestDBConnectionPoolWithMetrics_SqlDB(t *testing.T) {
 	dbConnectionPoolWithMetrics, err := NewDBConnectionPoolWithMetrics(dbConnectionPool, mMonitorService)
 	require.NoError(t, err)
 
-	sqlDB := dbConnectionPoolWithMetrics.SqlDB()
+	ctx := context.Background()
+	sqlDB, err := dbConnectionPoolWithMetrics.SqlDB(ctx)
+	require.NoError(t, err)
 
 	assert.IsType(t, &sql.DB{}, sqlDB)
 }

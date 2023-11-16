@@ -28,7 +28,7 @@ func Test_WalletModelGet(t *testing.T) {
 	})
 
 	t.Run("returns wallet successfully", func(t *testing.T) {
-		expected := CreateWalletFixture(t, ctx, dbConnectionPool.SqlxDB(),
+		expected := CreateWalletFixture(t, ctx, dbConnectionPool,
 			"NewWallet",
 			"https://newwallet.com",
 			"newwallet.com",
@@ -63,7 +63,7 @@ func Test_WalletModelGetByWalletName(t *testing.T) {
 	})
 
 	t.Run("returns wallet successfully", func(t *testing.T) {
-		expected := CreateWalletFixture(t, ctx, dbConnectionPool.SqlxDB(),
+		expected := CreateWalletFixture(t, ctx, dbConnectionPool,
 			"NewWallet",
 			"https://newwallet.com",
 			"newwallet.com",
@@ -95,7 +95,7 @@ func Test_WalletModelGetAll(t *testing.T) {
 	xlm := CreateAssetFixture(t, ctx, dbConnectionPool, "XLM", "")
 
 	t.Run("returns all wallets successfully", func(t *testing.T) {
-		wallets := ClearAndCreateWalletFixtures(t, ctx, dbConnectionPool.SqlxDB())
+		wallets := ClearAndCreateWalletFixtures(t, ctx, dbConnectionPool)
 
 		wallet1 := wallets[0]
 		wallet2 := wallets[1]
@@ -129,7 +129,7 @@ func Test_WalletModelGetAll(t *testing.T) {
 	})
 
 	t.Run("returns empty array when no wallets", func(t *testing.T) {
-		DeleteAllWalletFixtures(t, ctx, dbConnectionPool.SqlxDB())
+		DeleteAllWalletFixtures(t, ctx, dbConnectionPool)
 		actual, err := walletModel.GetAll(ctx)
 		require.NoError(t, err)
 
@@ -148,10 +148,10 @@ func Test_WalletModelFindWallets(t *testing.T) {
 	walletModel := &WalletModel{dbConnectionPool: dbConnectionPool}
 
 	t.Run("returns only enabled wallets", func(t *testing.T) {
-		wallets := ClearAndCreateWalletFixtures(t, ctx, dbConnectionPool.SqlxDB())
+		wallets := ClearAndCreateWalletFixtures(t, ctx, dbConnectionPool)
 
-		EnableOrDisableWalletFixtures(t, ctx, dbConnectionPool.SqlxDB(), false, wallets[0].ID)
-		EnableOrDisableWalletFixtures(t, ctx, dbConnectionPool.SqlxDB(), true, wallets[1].ID)
+		EnableOrDisableWalletFixtures(t, ctx, dbConnectionPool, false, wallets[0].ID)
+		EnableOrDisableWalletFixtures(t, ctx, dbConnectionPool, true, wallets[1].ID)
 
 		findEnabled := true
 		actual, err := walletModel.FindWallets(ctx, &findEnabled)
@@ -162,10 +162,10 @@ func Test_WalletModelFindWallets(t *testing.T) {
 	})
 
 	t.Run("returns only disabled wallets", func(t *testing.T) {
-		wallets := ClearAndCreateWalletFixtures(t, ctx, dbConnectionPool.SqlxDB())
+		wallets := ClearAndCreateWalletFixtures(t, ctx, dbConnectionPool)
 
-		EnableOrDisableWalletFixtures(t, ctx, dbConnectionPool.SqlxDB(), false, wallets[0].ID)
-		EnableOrDisableWalletFixtures(t, ctx, dbConnectionPool.SqlxDB(), true, wallets[1].ID)
+		EnableOrDisableWalletFixtures(t, ctx, dbConnectionPool, false, wallets[0].ID)
+		EnableOrDisableWalletFixtures(t, ctx, dbConnectionPool, true, wallets[1].ID)
 
 		findDisabled := false
 		actual, err := walletModel.FindWallets(ctx, &findDisabled)
@@ -176,7 +176,7 @@ func Test_WalletModelFindWallets(t *testing.T) {
 	})
 
 	t.Run("returns empty array when no wallets", func(t *testing.T) {
-		DeleteAllWalletFixtures(t, ctx, dbConnectionPool.SqlxDB())
+		DeleteAllWalletFixtures(t, ctx, dbConnectionPool)
 		actual, err := walletModel.FindWallets(ctx, nil)
 		require.NoError(t, err)
 
@@ -396,7 +396,7 @@ func Test_WalletModelGetOrCreate(t *testing.T) {
 
 	t.Run("returns error wallet name already been used", func(t *testing.T) {
 		DeleteAllWalletFixtures(t, ctx, dbConnectionPool)
-		CreateWalletFixture(t, ctx, dbConnectionPool.SqlxDB(),
+		CreateWalletFixture(t, ctx, dbConnectionPool,
 			"test_wallet",
 			"https://www.new_wallet.com",
 			"www.new_wallet.com",
@@ -429,7 +429,7 @@ func Test_WalletModelGetOrCreate(t *testing.T) {
 
 	t.Run("returns wallet successfully", func(t *testing.T) {
 		DeleteAllWalletFixtures(t, ctx, dbConnectionPool)
-		expected := CreateWalletFixture(t, ctx, dbConnectionPool.SqlxDB(),
+		expected := CreateWalletFixture(t, ctx, dbConnectionPool,
 			"test_wallet",
 			"https://www.test_wallet.com",
 			"www.test_wallet.com",
@@ -463,7 +463,7 @@ func Test_WalletModelGetAssets(t *testing.T) {
 
 	t.Run("return empty when wallet doesn't have assets", func(t *testing.T) {
 		DeleteAllWalletFixtures(t, ctx, dbConnectionPool)
-		wallet := CreateWalletFixture(t, ctx, dbConnectionPool.SqlxDB(),
+		wallet := CreateWalletFixture(t, ctx, dbConnectionPool,
 			"NewWallet",
 			"https://newwallet.com",
 			"newwallet.com",
@@ -476,7 +476,7 @@ func Test_WalletModelGetAssets(t *testing.T) {
 
 	t.Run("return wallet's assets", func(t *testing.T) {
 		DeleteAllWalletFixtures(t, ctx, dbConnectionPool)
-		wallet := CreateWalletFixture(t, ctx, dbConnectionPool.SqlxDB(),
+		wallet := CreateWalletFixture(t, ctx, dbConnectionPool,
 			"NewWallet",
 			"https://newwallet.com",
 			"newwallet.com",
@@ -572,7 +572,7 @@ func Test_WalletModelUpdate(t *testing.T) {
 	_, err = walletModel.Update(ctx, "unknown", true)
 	assert.Equal(t, ErrRecordNotFound, err)
 
-	wallet := CreateWalletFixture(t, ctx, dbConnectionPool.SqlxDB(),
+	wallet := CreateWalletFixture(t, ctx, dbConnectionPool,
 		"NewWallet",
 		"https://newwallet.com",
 		"newwallet.com",
