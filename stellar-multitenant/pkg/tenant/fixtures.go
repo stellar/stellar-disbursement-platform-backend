@@ -10,6 +10,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	authmigrations "github.com/stellar/stellar-disbursement-platform-backend/db/migrations/auth-migrations"
 	sdpmigrations "github.com/stellar/stellar-disbursement-platform-backend/db/migrations/sdp-migrations"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -90,6 +91,47 @@ func AssertRegisteredUser(t *testing.T, ctx context.Context, dbConnectionPool db
 	assert.Equal(t, userEmail, user.Email)
 	assert.Equal(t, pq.StringArray{"owner"}, user.Roles)
 	assert.True(t, user.IsOwner)
+}
+
+func CreateTenantFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, name string) *Tenant {
+	tenantName := name
+	if name == "" {
+		name, err := utils.RandomString(56)
+		require.NoError(t, err)
+		tenantName = name
+	}
+
+	const query = `
+		WITH create_tenant AS (
+			INSERT INTO tenants 
+				(name) 
+			VALUES 
+				($1) 
+			ON CONFLICT DO NOTHING
+			RETURNING *
+		)
+		SELECT 
+			ct.id,
+			ct.name,
+			ct.status,
+			ct.email_sender_type,
+			ct.sms_sender_type,
+			ct.enable_mfa,
+			ct.enable_recaptcha,
+			ct.created_at,
+			ct.updated_at
+		FROM
+		 create_tenant ct
+		`
+
+	tnt := &Tenant{
+		Name: tenantName,
+	}
+
+	err := sqlExec.QueryRowxContext(ctx, query, tnt.Name).Scan(&tnt.ID, &tnt.Name, &tnt.Status, &tnt.EmailSenderType, &tnt.SMSSenderType, &tnt.EnableMFA, &tnt.EnableReCAPTCHA, &tnt.CreatedAt, &tnt.UpdatedAt)
+	require.NoError(t, err)
+
+	return tnt
 }
 
 func CheckSchemaExistsFixture(t *testing.T, ctx context.Context, dbConnectionPool db.DBConnectionPool, schemaName string) bool {
