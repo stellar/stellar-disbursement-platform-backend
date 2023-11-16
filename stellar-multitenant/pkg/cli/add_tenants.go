@@ -6,6 +6,8 @@ import (
 	"go/types"
 	"regexp"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/internal/provisioning"
+
 	"github.com/spf13/cobra"
 	"github.com/stellar/go/support/config"
 	"github.com/stellar/go/support/log"
@@ -132,8 +134,13 @@ func executeAddTenant(
 	}
 	defer dbConnectionPool.Close()
 
-	m := tenant.NewManager(tenant.WithDatabase(dbConnectionPool), tenant.WithMessengerClient(messengerClient))
-	t, err := m.ProvisionNewTenant(ctx, tenantName, userFirstName, userLastName, userEmail, organizationName, uiBaseURL, networkType)
+	m := tenant.NewManager(tenant.WithDatabase(dbConnectionPool))
+	p := provisioning.NewManager(
+		provisioning.WithDatabase(dbConnectionPool),
+		provisioning.WithMessengerClient(messengerClient),
+		provisioning.WithTenantManager(m))
+
+	t, err := p.ProvisionNewTenant(ctx, tenantName, userFirstName, userLastName, userEmail, organizationName, uiBaseURL, networkType)
 	if err != nil {
 		return fmt.Errorf("adding tenant with name %s: %w", tenantName, err)
 	}

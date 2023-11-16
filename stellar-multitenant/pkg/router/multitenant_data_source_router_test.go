@@ -33,7 +33,7 @@ func TestMultiTenantDataSourceRouter_GetDataSource(t *testing.T) {
 	t.Run("successfully getting data source", func(t *testing.T) {
 		// Create a new context with tenant information
 		tenantInfo := &tenant.Tenant{ID: "95e788b6-c80e-4975-9d12-141001fe6e44", Name: "aid-org-1"}
-		ctx = SetTenantInContext(context.Background(), tenantInfo)
+		ctx = tenant.SaveTenantInContext(ctx, tenantInfo)
 
 		dbcp, err := router.GetDataSource(ctx)
 		require.NotNil(t, dbcp)
@@ -68,7 +68,7 @@ func TestMultiTenantDataSourceRouter_GetAllDataSources(t *testing.T) {
 	t.Run("successfully getting data sources", func(t *testing.T) {
 		// Store DB Connection Pool for aid-org-1
 		tenantInfo := &tenant.Tenant{ID: "95e788b6-c80e-4975-9d12-141001fe6e44", Name: "aid-org-1"}
-		ctx := SetTenantInContext(context.Background(), tenantInfo)
+		ctx := tenant.SaveTenantInContext(context.Background(), tenantInfo)
 		dbcp1, err := router.GetDataSource(ctx)
 		require.NoError(t, err)
 		require.NotNil(t, dbcp1)
@@ -76,7 +76,7 @@ func TestMultiTenantDataSourceRouter_GetAllDataSources(t *testing.T) {
 
 		// Store DB Connection Pool for aid-org-2
 		tenantInfo = &tenant.Tenant{ID: "95e788b6-c80e-4975-9d12-141001fe6e45", Name: "aid-org-2"}
-		ctx = SetTenantInContext(context.Background(), tenantInfo)
+		ctx = tenant.SaveTenantInContext(context.Background(), tenantInfo)
 		dbcp2, err := router.GetDataSource(ctx)
 		require.NoError(t, err)
 		require.NotNil(t, dbcp2)
@@ -113,7 +113,7 @@ func TestMultiTenantDataSourceRouter_AnyDataSource(t *testing.T) {
 	t.Run("successfully getting data source", func(t *testing.T) {
 		// Store DB Connection Pool for aid-org-1
 		tenantInfo := &tenant.Tenant{ID: "95e788b6-c80e-4975-9d12-141001fe6e44", Name: "aid-org-1"}
-		ctx := SetTenantInContext(context.Background(), tenantInfo)
+		ctx := tenant.SaveTenantInContext(context.Background(), tenantInfo)
 		dbcp1, err := router.GetDataSource(ctx)
 		require.NoError(t, err)
 		require.NotNil(t, dbcp1)

@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/router"
+
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/stellar/go/clients/horizonclient"
@@ -82,6 +84,8 @@ type ServeOptions struct {
 	ReCAPTCHASiteSecretKey          string
 	EnableMFA                       bool
 	EnableReCAPTCHA                 bool
+	tenantManager                   tenant.ManagerInterface
+	tenantRouter                    db.DataSourceRouter
 }
 
 // SetupDependencies uses the serve options to setup the dependencies for the server.
@@ -140,6 +144,10 @@ func (opts *ServeOptions) SetupDependencies() error {
 		return fmt.Errorf("error creating signature service: %w", err)
 	}
 
+	// Setup Tenant Router & Manager
+	opts.tenantManager = tenant.NewManager(tenant.WithDatabase(opts.dbConnectionPool))
+	opts.tenantRouter = router.NewMultiTenantDataSourceRouter(opts.tenantManager)
+
 	return nil
 }
 
@@ -196,6 +204,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 	authManager := o.authManager
 	mux.Group(func(r chi.Router) {
 		r.Use(middleware.AuthenticateMiddleware(authManager))
+		r.Use(middleware.TenantMiddleware(o.tenantManager, o.authManager))
 
 		r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...)).Route("/statistics", func(r chi.Router) {
 			statisticsHandler := httphandler.StatisticsHandler{DBConnectionPool: o.dbConnectionPool}
@@ -331,40 +340,45 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 		})
 	})
 
-	// Even if the logo URL is under the public endpoints, it'll be authenticated. The `auth token` should be
-	// added in the URL's query params. Example: https://...?token=mytoken
-	mux.Get("/organization/logo", httphandler.ProfileHandler{Models: o.Models, PublicFilesFS: publicfiles.PublicFiles}.GetOrganizationLogo)
+	reCAPTCHAValidator := validators.NewGoogleReCAPTCHAValidator(o.ReCAPTCHASiteSecretKey, httpclient.DefaultClient())
+
+	// Public routes that are tenant aware (they need to know the tenant ID)
+	mux.Group(func(r chi.Router) {
+		r.Use(middleware.TenantMiddleware(o.tenantManager, o.authManager))
+
+		// Even if the logo URL is under the public endpoints, it'll be authenticated. The `auth token` should be
+		// added in the URL's query params. Example: https://...?token=mytoken
+		r.Get("/organization/logo", httphandler.ProfileHandler{Models: o.Models, PublicFilesFS: publicfiles.PublicFiles}.GetOrganizationLogo)
+
+		r.Post("/login", httphandler.LoginHandler{
+			AuthManager:        authManager,
+			ReCAPTCHAValidator: reCAPTCHAValidator,
+			MessengerClient:    o.EmailMessengerClient,
+			Models:             o.Models,
+			ReCAPTCHAEnabled:   o.EnableReCAPTCHA,
+			MFAEnabled:         o.EnableMFA,
+		}.ServeHTTP)
+		r.Post("/mfa", httphandler.MFAHandler{
+			AuthManager:        authManager,
+			ReCAPTCHAValidator: reCAPTCHAValidator,
+			Models:             o.Models,
+		}.ServeHTTP)
+		r.Post("/forgot-password", httphandler.ForgotPasswordHandler{
+			AuthManager:        authManager,
+			MessengerClient:    o.EmailMessengerClient,
+			UIBaseURL:          o.UIBaseURL,
+			Models:             o.Models,
+			ReCAPTCHAValidator: reCAPTCHAValidator,
+			ReCAPTCHAEnabled:   o.EnableReCAPTCHA,
+		}.ServeHTTP)
+		r.Post("/reset-password", httphandler.ResetPasswordHandler{AuthManager: authManager}.ServeHTTP)
+	})
 
 	mux.Get("/health", httphandler.HealthHandler{
 		ReleaseID: o.GitCommit,
 		ServiceID: ServiceID,
 		Version:   o.Version,
 	}.ServeHTTP)
-
-	reCAPTCHAValidator := validators.NewGoogleReCAPTCHAValidator(o.ReCAPTCHASiteSecretKey, httpclient.DefaultClient())
-
-	mux.Post("/login", httphandler.LoginHandler{
-		AuthManager:        authManager,
-		ReCAPTCHAValidator: reCAPTCHAValidator,
-		MessengerClient:    o.EmailMessengerClient,
-		Models:             o.Models,
-		ReCAPTCHAEnabled:   o.EnableReCAPTCHA,
-		MFAEnabled:         o.EnableMFA,
-	}.ServeHTTP)
-	mux.Post("/mfa", httphandler.MFAHandler{
-		AuthManager:        authManager,
-		ReCAPTCHAValidator: reCAPTCHAValidator,
-		Models:             o.Models,
-	}.ServeHTTP)
-	mux.Post("/forgot-password", httphandler.ForgotPasswordHandler{
-		AuthManager:        authManager,
-		MessengerClient:    o.EmailMessengerClient,
-		UIBaseURL:          o.UIBaseURL,
-		Models:             o.Models,
-		ReCAPTCHAValidator: reCAPTCHAValidator,
-		ReCAPTCHAEnabled:   o.EnableReCAPTCHA,
-	}.ServeHTTP)
-	mux.Post("/reset-password", httphandler.ResetPasswordHandler{AuthManager: authManager}.ServeHTTP)
 
 	// START SEP-24 endpoints
 	mux.Get("/.well-known/stellar.toml", httphandler.StellarTomlHandler{

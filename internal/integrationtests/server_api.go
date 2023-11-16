@@ -22,6 +22,7 @@ const (
 	loginURL        = "login"
 	disbursementURL = "disbursements"
 	registrationURL = "wallet-registration"
+	tenantName      = "aid-org-1"
 )
 
 type ServerApiIntegrationTestsInterface interface {
@@ -66,6 +67,7 @@ func (sa *ServerApiIntegrationTests) Login(ctx context.Context) (*ServerApiAuthT
 	}
 
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("SDP-Tenant-Name", tenantName)
 
 	resp, err := sa.HttpClient.Do(req)
 	if err != nil {
@@ -105,6 +107,7 @@ func (sa *ServerApiIntegrationTests) CreateDisbursement(ctx context.Context, aut
 
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+authToken.Token)
+	req.Header.Set("SDP-Tenant-Name", tenantName)
 
 	resp, err := sa.HttpClient.Do(req)
 	if err != nil {
@@ -156,6 +159,7 @@ func createInstructionsRequest(ctx context.Context, reqURL, disbursementCSVFileP
 	}
 
 	req.Header.Set("Content-Type", w.FormDataContentType())
+	req.Header.Set("SDP-Tenant-Name", tenantName)
 
 	return req, nil
 }
@@ -173,6 +177,7 @@ func (sa *ServerApiIntegrationTests) ProcessDisbursement(ctx context.Context, au
 	}
 
 	req.Header.Set("Authorization", "Bearer "+authToken.Token)
+	req.Header.Set("SDP-Tenant-Name", tenantName)
 
 	resp, err := sa.HttpClient.Do(req)
 	if err != nil {
@@ -206,6 +211,7 @@ func (sa *ServerApiIntegrationTests) StartDisbursement(ctx context.Context, auth
 
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+authToken.Token)
+	req.Header.Set("SDP-Tenant-Name", tenantName)
 
 	resp, err := sa.HttpClient.Do(req)
 	if err != nil {
@@ -239,6 +245,7 @@ func (sa *ServerApiIntegrationTests) ReceiverRegistration(ctx context.Context, a
 
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+authSEP24Token.Token)
+	req.Header.Set("SDP-Tenant-Name", tenantName)
 
 	resp, err := sa.HttpClient.Do(req)
 	if err != nil {

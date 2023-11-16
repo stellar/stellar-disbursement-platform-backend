@@ -22,6 +22,7 @@ type AuthManager interface {
 	UpdatePassword(ctx context.Context, token, currentPassword, newPassword string) error
 	GetUser(ctx context.Context, tokenString string) (*User, error)
 	GetUserID(ctx context.Context, tokenString string) (string, error)
+	GetTenantID(ctx context.Context, tokenString string) (string, error)
 	GetAllUsers(ctx context.Context, tokenString string) ([]User, error)
 	UpdateUserRoles(ctx context.Context, tokenString, userID string, roles []string) error
 	DeactivateUser(ctx context.Context, tokenString, userID string) error
@@ -50,6 +51,7 @@ func (am *defaultAuthManager) generateToken(ctx context.Context, user *User) (st
 	user.Roles = roles
 
 	expiresAt := time.Now().Add(am.expirationTimeInMinutes)
+
 	tokenString, err := am.jwtManager.GenerateToken(ctx, user, expiresAt)
 	if err != nil {
 		return "", fmt.Errorf("generating token: %w", err)
@@ -307,6 +309,24 @@ func (am *defaultAuthManager) getUserFromToken(ctx context.Context, tokenString 
 	}
 
 	return user, nil
+}
+
+func (am *defaultAuthManager) GetTenantID(ctx context.Context, tokenString string) (string, error) {
+	isValid, err := am.ValidateToken(ctx, tokenString)
+	if err != nil {
+		return "", fmt.Errorf("validating token: %w", err)
+	}
+
+	if !isValid {
+		return "", ErrInvalidToken
+	}
+
+	tenantID, err := am.jwtManager.GetTenantIDFromToken(ctx, tokenString)
+	if err != nil {
+		return "", fmt.Errorf("getting tenant ID from token: %w", err)
+	}
+
+	return tenantID, nil
 }
 
 func (am *defaultAuthManager) GetUserID(ctx context.Context, tokenString string) (string, error) {
