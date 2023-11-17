@@ -385,6 +385,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 				log.Ctx(ctx).Fatalf("error creating email client: %s", err.Error())
 			}
 			serveOpts.EmailMessengerClient = emailMessengerClient
+			adminServeOpts.EmailMessengerClient = emailMessengerClient
 
 			// Setup default SMS client
 			smsMessengerClient, err := di.NewSMSClient(smsOpts)

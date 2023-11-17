@@ -6,7 +6,7 @@ import (
 	"go/types"
 	"regexp"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/internal/provisioning"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/internal/provisioning"
 
 	"github.com/spf13/cobra"
 	"github.com/stellar/go/support/config"

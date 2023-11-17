@@ -35,9 +35,9 @@ func Test_Serve(t *testing.T) {
 		DatabaseDSN:       dbt.DSN,
 		Environment:       "test",
 		GitCommit:         "1234567890abcdef",
+		NetworkPassphrase: network.TestNetworkPassphrase,
 		Port:              8003,
 		Version:           "x.y.z",
-		NetworkPassphrase: network.TestNetworkPassphrase,
 	}
 
 	// Mock supportHTTPRun

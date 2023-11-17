@@ -92,11 +92,11 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 			"wallets",
 			"wallets_assets",
 		}
-		tenant.TenantSchemaHasTablesFixture(t, ctx, tenantSchemaConnectionPool, schemaName, expectedTablesAfterMigrationsApplied)
+		tenant.TenantSchemaMatchTablesFixture(t, ctx, tenantSchemaConnectionPool, schemaName, expectedTablesAfterMigrationsApplied)
 
-		tenant.AssertRegisteredAssets(t, ctx, tenantSchemaConnectionPool, []string{"USDC:GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5", "XLM:"})
-		tenant.AssertRegisteredWallets(t, ctx, tenantSchemaConnectionPool, []string{"Demo Wallet", "Vibrant Assist"})
-		tenant.AssertRegisteredUser(t, ctx, tenantSchemaConnectionPool, userFirstName, userLastName, userEmail)
+		tenant.AssertRegisteredAssetsFixture(t, ctx, tenantSchemaConnectionPool, []string{"USDC:GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5", "XLM:"})
+		tenant.AssertRegisteredWalletsFixture(t, ctx, tenantSchemaConnectionPool, []string{"Demo Wallet", "Vibrant Assist"})
+		tenant.AssertRegisteredUserFixture(t, ctx, tenantSchemaConnectionPool, userFirstName, userLastName, userEmail)
 	})
 
 	t.Run("provision a new tenant for the pubnet", func(t *testing.T) {
@@ -149,11 +149,11 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 			"wallets",
 			"wallets_assets",
 		}
-		tenant.TenantSchemaHasTablesFixture(t, ctx, tenantSchemaConnectionPool, schemaName, expectedTablesAfterMigrationsApplied)
+		tenant.TenantSchemaMatchTablesFixture(t, ctx, tenantSchemaConnectionPool, schemaName, expectedTablesAfterMigrationsApplied)
 
-		tenant.AssertRegisteredAssets(t, ctx, tenantSchemaConnectionPool, []string{"USDC:GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN", "XLM:"})
-		tenant.AssertRegisteredWallets(t, ctx, tenantSchemaConnectionPool, []string{"Vibrant Assist RC", "Vibrant Assist"})
-		tenant.AssertRegisteredUser(t, ctx, tenantSchemaConnectionPool, userFirstName, userLastName, userEmail)
+		tenant.AssertRegisteredAssetsFixture(t, ctx, tenantSchemaConnectionPool, []string{"USDC:GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN", "XLM:"})
+		tenant.AssertRegisteredWalletsFixture(t, ctx, tenantSchemaConnectionPool, []string{"Vibrant Assist RC", "Vibrant Assist"})
+		tenant.AssertRegisteredUserFixture(t, ctx, tenantSchemaConnectionPool, userFirstName, userLastName, userEmail)
 	})
 
 	messengerClientMock.AssertExpectations(t)
@@ -235,10 +235,10 @@ func Test_Manager_RunMigrationsForTenant(t *testing.T) {
 		"wallets",
 		"wallets_assets",
 	}
-	tenant.TenantSchemaHasTablesFixture(t, ctx, dbConnectionPool, tnt1SchemaName, expectedTablesAfterMigrationsApplied)
+	tenant.TenantSchemaMatchTablesFixture(t, ctx, dbConnectionPool, tnt1SchemaName, expectedTablesAfterMigrationsApplied)
 
 	// Asserting if the Tenant 2 DB Schema wasn't affected by Tenant 1 schema migrations
-	tenant.TenantSchemaHasTablesFixture(t, ctx, dbConnectionPool, tnt2SchemaName, []string{})
+	tenant.TenantSchemaMatchTablesFixture(t, ctx, dbConnectionPool, tnt2SchemaName, []string{})
 
 	// Apply migrations for Tenant 2
 	tnt2DSN, err := tnt2SchemaConnectionPool.DSN(ctx)
@@ -248,5 +248,5 @@ func Test_Manager_RunMigrationsForTenant(t *testing.T) {
 	err = p.RunMigrationsForTenant(ctx, tnt2, tnt2DSN, migrate.Up, 0, authmigrations.FS, db.StellarAuthMigrationsTableName)
 	require.NoError(t, err)
 
-	tenant.TenantSchemaHasTablesFixture(t, ctx, dbConnectionPool, tnt2SchemaName, expectedTablesAfterMigrationsApplied)
+	tenant.TenantSchemaMatchTablesFixture(t, ctx, dbConnectionPool, tnt2SchemaName, expectedTablesAfterMigrationsApplied)
 }

@@ -9,8 +9,11 @@ import (
 	supporthttp "github.com/stellar/go/support/http"
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/internal/httphandler"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/internal/provisioning"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
@@ -25,14 +28,17 @@ func (h *HTTPServer) Run(conf supporthttp.Config) {
 }
 
 type ServeOptions struct {
-	Environment       string
-	DatabaseDSN       string
-	dbConnectionPool  db.DBConnectionPool
-	GitCommit         string
-	NetworkPassphrase string
-	Port              int
-	tenantManager     *tenant.Manager
-	Version           string
+	DatabaseDSN               string
+	dbConnectionPool          db.DBConnectionPool
+	EmailMessengerClient      message.MessengerClient
+	Environment               string
+	GitCommit                 string
+	NetworkPassphrase         string
+	networkType               utils.NetworkType
+	Port                      int
+	tenantManager             *tenant.Manager
+	tenantProvisioningManager *provisioning.Manager
+	Version                   string
 }
 
 // SetupDependencies uses the serve options to setup the dependencies for the server.
@@ -40,19 +46,29 @@ func (opts *ServeOptions) SetupDependencies() error {
 	// Setup Database:
 	dbConnectionPool, err := db.OpenDBConnectionPool(opts.DatabaseDSN)
 	if err != nil {
-		return fmt.Errorf("error connecting to the database: %w", err)
+		return fmt.Errorf("connecting to the database: %w", err)
 	}
 
 	opts.dbConnectionPool = dbConnectionPool
 
 	opts.tenantManager = tenant.NewManager(tenant.WithDatabase(dbConnectionPool))
+	opts.tenantProvisioningManager = provisioning.NewManager(
+		provisioning.WithDatabase(dbConnectionPool),
+		provisioning.WithTenantManager(opts.tenantManager),
+		provisioning.WithMessengerClient(opts.EmailMessengerClient),
+	)
+
+	opts.networkType, err = utils.GetNetworkTypeFromNetworkPassphrase(opts.NetworkPassphrase)
+	if err != nil {
+		return fmt.Errorf("parsing network type: %w", err)
+	}
 
 	return nil
 }
 
 func StartServe(opts ServeOptions, httpServer HTTPServerInterface) error {
 	if err := opts.SetupDependencies(); err != nil {
-		return fmt.Errorf("error starting dependencies: %w", err)
+		return fmt.Errorf("starting dependencies: %w", err)
 	}
 
 	// Start the server
@@ -96,12 +112,15 @@ func handleHTTP(opts *ServeOptions) *chi.Mux {
 		Version:   opts.Version,
 	}.ServeHTTP)
 
-	mux.Group(func(r chi.Router) {
-		r.Route("/tenants", func(r chi.Router) {
-			tenantsHandler := httphandler.TenantsHandler{Manager: opts.tenantManager}
-			r.Get("/", tenantsHandler.GetAll)
-			r.Get("/{arg}", tenantsHandler.GetByIDOrName)
-		})
+	mux.Route("/tenants", func(r chi.Router) {
+		tenantsHandler := httphandler.TenantsHandler{
+			Manager:             opts.tenantManager,
+			ProvisioningManager: opts.tenantProvisioningManager,
+			NetworkType:         opts.networkType,
+		}
+		r.Get("/", tenantsHandler.GetAll)
+		r.Post("/", tenantsHandler.PostTenants)
+		r.Get("/{arg}", tenantsHandler.GetByIDOrName)
 	})
 
 	return mux
