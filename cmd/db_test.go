@@ -210,20 +210,30 @@ func Test_DatabaseCommand_db_setup_for_network(t *testing.T) {
 	wallets, err = models.Wallets.GetAll(ctx)
 	require.NoError(t, err)
 
-	assert.Len(t, wallets, 2)
-	// assert.Equal(t, "Beans App", wallets[0].Name)
-	// assert.Equal(t, "https://www.beansapp.com/disbursements", wallets[0].Homepage)
-	// assert.Equal(t, "api.beansapp.com", wallets[0].SEP10ClientDomain)
-	// assert.Equal(t, "https://www.beansapp.com/disbursements/registration?redirect=true", wallets[0].DeepLinkSchema)
-	assert.Equal(t, "Vibrant Assist", wallets[0].Name)
-	assert.Equal(t, "https://vibrantapp.com/vibrant-assist", wallets[0].Homepage)
-	assert.Equal(t, "api.vibrantapp.com", wallets[0].SEP10ClientDomain)
-	assert.Equal(t, "https://vibrantapp.com/sdp", wallets[0].DeepLinkSchema)
+	// Test only on Vibrant Assist and Vibrant Assist RC. This will help adding wallets without breaking tests.
+	var vibrantAssist, vibrantAssistRC data.Wallet
 
-	assert.Equal(t, "Vibrant Assist RC", wallets[1].Name)
-	assert.Equal(t, "vibrantapp.com/vibrant-assist", wallets[1].Homepage)
-	assert.Equal(t, "vibrantapp.com", wallets[1].SEP10ClientDomain)
-	assert.Equal(t, "https://vibrantapp.com/sdp-rc", wallets[1].DeepLinkSchema)
+	for _, w := range wallets {
+		if w.Name == "Vibrant Assist" {
+			vibrantAssist = w
+		} else if w.Name == "Vibrant Assist RC" {
+			vibrantAssistRC = w
+		}
+	}
+
+	require.NotNil(t, vibrantAssist, "Vibrant Assist wallet not found")
+	require.NotNil(t, vibrantAssistRC, "Vibrant Assist RC wallet not found")
+
+	// Test the two wallets
+	assert.Equal(t, "Vibrant Assist", vibrantAssist.Name)
+	assert.Equal(t, "https://vibrantapp.com/vibrant-assist", vibrantAssist.Homepage)
+	assert.Equal(t, "api.vibrantapp.com", vibrantAssist.SEP10ClientDomain)
+	assert.Equal(t, "https://vibrantapp.com/sdp", vibrantAssist.DeepLinkSchema)
+
+	assert.Equal(t, "Vibrant Assist RC", vibrantAssistRC.Name)
+	assert.Equal(t, "vibrantapp.com/vibrant-assist", vibrantAssistRC.Homepage)
+	assert.Equal(t, "vibrantapp.com", vibrantAssistRC.SEP10ClientDomain)
+	assert.Equal(t, "https://vibrantapp.com/sdp-rc", vibrantAssistRC.DeepLinkSchema)
 
 	expectedLogs := []string{
 		"updating/inserting assets for the 'pubnet' network",
