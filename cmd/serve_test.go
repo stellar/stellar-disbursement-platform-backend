@@ -153,12 +153,12 @@ func Test_serve(t *testing.T) {
 	}
 
 	serveTenantOpts := serveadmin.ServeOptions{
-		Environment:       "test",
-		DatabaseDSN:       randomDatabaseDSN,
-		GitCommit:         "1234567890abcdef",
-		NetworkPassphrase: network.TestNetworkPassphrase,
-		Port:              8003,
-		Version:           "x.y.z",
+		Environment:          "test",
+		EmailMessengerClient: messengerClient,
+		DatabaseDSN:          randomDatabaseDSN,
+		GitCommit:            "1234567890abcdef",
+		Port:                 8003,
+		Version:              "x.y.z",
 	}
 
 	schedulerOptions := scheduler.SchedulerOptions{

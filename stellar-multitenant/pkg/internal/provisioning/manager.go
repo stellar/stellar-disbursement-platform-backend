@@ -29,6 +29,7 @@ func (m *Manager) ProvisionNewTenant(
 	ctx context.Context, name, userFirstName, userLastName, userEmail,
 	organizationName, uiBaseURL, networkType string,
 ) (*tenant.Tenant, error) {
+	// TODO: Run this in a database transaction.
 	log.Infof("adding tenant %s", name)
 	t, err := m.tenantManager.AddTenant(ctx, name)
 	if err != nil {

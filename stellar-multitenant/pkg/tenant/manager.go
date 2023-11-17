@@ -60,7 +60,7 @@ var selectQuery string = `
 
 // GetAllTenants returns all tenants in the database.
 func (m *Manager) GetAllTenants(ctx context.Context) ([]Tenant, error) {
-	var tnts []Tenant
+	tnts := []Tenant{}
 
 	query := fmt.Sprintf(selectQuery, "ORDER BY t.name ASC")
 

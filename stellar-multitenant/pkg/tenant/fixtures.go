@@ -110,25 +110,14 @@ func CreateTenantFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecut
 			ON CONFLICT DO NOTHING
 			RETURNING *
 		)
-		SELECT 
-			ct.id,
-			ct.name,
-			ct.status,
-			ct.email_sender_type,
-			ct.sms_sender_type,
-			ct.enable_mfa,
-			ct.enable_recaptcha,
-			ct.created_at,
-			ct.updated_at
-		FROM
-		 create_tenant ct
-		`
+		SELECT * FROM create_tenant ct
+	`
 
 	tnt := &Tenant{
 		Name: tenantName,
 	}
 
-	err := sqlExec.QueryRowxContext(ctx, query, tnt.Name).Scan(&tnt.ID, &tnt.Name, &tnt.Status, &tnt.EmailSenderType, &tnt.SMSSenderType, &tnt.EnableMFA, &tnt.EnableReCAPTCHA, &tnt.CreatedAt, &tnt.UpdatedAt)
+	err := sqlExec.GetContext(ctx, tnt, query, tnt.Name)
 	require.NoError(t, err)
 
 	return tnt

@@ -367,7 +367,6 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			adminServeOpts.Environment = globalOptions.environment
 			adminServeOpts.GitCommit = globalOptions.gitCommit
 			adminServeOpts.Version = globalOptions.version
-			adminServeOpts.NetworkPassphrase = globalOptions.networkPassphrase
 		},
 		Run: func(cmd *cobra.Command, _ []string) {
 			ctx := cmd.Context()
@@ -385,6 +384,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 				log.Ctx(ctx).Fatalf("error creating email client: %s", err.Error())
 			}
 			serveOpts.EmailMessengerClient = emailMessengerClient
+			adminServeOpts.EmailMessengerClient = emailMessengerClient
 
 			// Setup default SMS client
 			smsMessengerClient, err := di.NewSMSClient(smsOpts)

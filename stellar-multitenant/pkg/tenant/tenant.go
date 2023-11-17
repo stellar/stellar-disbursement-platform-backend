@@ -44,20 +44,20 @@ func ParseSMSSenderType(smsSenderTypeStr string) (SMSSenderType, error) {
 }
 
 type Tenant struct {
-	ID                    string          `db:"id"`
-	Name                  string          `db:"name"`
-	EmailSenderType       EmailSenderType `db:"email_sender_type"`
-	SMSSenderType         SMSSenderType   `db:"sms_sender_type"`
-	SEP10SigningPublicKey *string         `db:"sep10_signing_public_key"`
-	DistributionPublicKey *string         `db:"distribution_public_key"`
-	EnableMFA             bool            `db:"enable_mfa"`
-	EnableReCAPTCHA       bool            `db:"enable_recaptcha"`
-	CORSAllowedOrigins    pq.StringArray  `db:"cors_allowed_origins"`
-	BaseURL               *string         `db:"base_url"`
-	SDPUIBaseURL          *string         `db:"sdp_ui_base_url"`
-	Status                TenantStatus    `db:"status"`
-	CreatedAt             time.Time       `db:"created_at"`
-	UpdatedAt             time.Time       `db:"updated_at"`
+	ID                    string          `json:"id" db:"id"`
+	Name                  string          `json:"name" db:"name"`
+	EmailSenderType       EmailSenderType `json:"email_sender_type" db:"email_sender_type"`
+	SMSSenderType         SMSSenderType   `json:"sms_sender_type" db:"sms_sender_type"`
+	SEP10SigningPublicKey *string         `json:"sep10_signing_public_key" db:"sep10_signing_public_key"`
+	DistributionPublicKey *string         `json:"distribution_public_key" db:"distribution_public_key"`
+	EnableMFA             bool            `json:"enable_mfa" db:"enable_mfa"`
+	EnableReCAPTCHA       bool            `json:"enable_recaptcha" db:"enable_recaptcha"`
+	CORSAllowedOrigins    pq.StringArray  `json:"cors_allowed_origins" db:"cors_allowed_origins"`
+	BaseURL               *string         `json:"base_url" db:"base_url"`
+	SDPUIBaseURL          *string         `json:"sdp_ui_base_url" db:"sdp_ui_base_url"`
+	Status                TenantStatus    `json:"status" db:"status"`
+	CreatedAt             time.Time       `json:"created_at" db:"created_at"`
+	UpdatedAt             time.Time       `json:"updated_at" db:"updated_at"`
 }
 
 type TenantUpdate struct {
