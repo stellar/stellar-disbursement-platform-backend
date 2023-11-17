@@ -7,8 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/router"
-
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/stellar/go/clients/horizonclient"
@@ -33,6 +31,7 @@ import (
 	txnsubmitterutils "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/router"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
@@ -98,8 +97,6 @@ func (opts *ServeOptions) SetupDependencies() error {
 	defer opts.CrashTrackerClient.Recover()
 	// Set crash tracker LogAndReportErrors as DefaultReportErrorFunc
 	httperror.SetDefaultReportErrorFunc(opts.CrashTrackerClient.LogAndReportErrors)
-
-	_ = tenant.Tenant{}
 
 	// Setup Database:
 	dbConnectionPool, err := db.OpenDBConnectionPoolWithMetrics(opts.DatabaseDSN, opts.MonitorService)
