@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stellar/go/network"
 	supporthttp "github.com/stellar/go/support/http"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
@@ -31,11 +32,12 @@ func Test_Serve(t *testing.T) {
 	defer dbConnectionPool.Close()
 
 	opts := ServeOptions{
-		DatabaseDSN: dbt.DSN,
-		Environment: "test",
-		GitCommit:   "1234567890abcdef",
-		Port:        8003,
-		Version:     "x.y.z",
+		DatabaseDSN:       dbt.DSN,
+		Environment:       "test",
+		GitCommit:         "1234567890abcdef",
+		NetworkPassphrase: network.TestNetworkPassphrase,
+		Port:              8003,
+		Version:           "x.y.z",
 	}
 
 	// Mock supportHTTPRun

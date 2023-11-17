@@ -18,7 +18,6 @@ type TenantRequest struct {
 	OwnerFirstName        string                 `json:"owner_first_name"`
 	OwnerLastName         string                 `json:"owner_last_name"`
 	OrganizationName      string                 `json:"organization_name"`
-	NetworkType           string                 `json:"network_type"`
 	EmailSenderType       tenant.EmailSenderType `json:"email_sender_type"`
 	SMSSenderType         tenant.SMSSenderType   `json:"sms_sender_type"`
 	SEP10SigningPublicKey string                 `json:"sep10_signing_public_key"`
@@ -49,7 +48,6 @@ func (tv *TenantValidator) ValidateCreateTenantRequest(reqBody *TenantRequest) *
 	tv.Check(reqBody.OwnerFirstName != "", "owner_first_name", "owner_first_name is required")
 	tv.Check(reqBody.OwnerLastName != "", "owner_last_name", "owner_last_name is required")
 	tv.Check(reqBody.OrganizationName != "", "organization_name", "organization_name is required")
-	tv.Check(reqBody.NetworkType == "pubnet" || reqBody.NetworkType == "testnet", "network_type", "invalid network type provided. Expected one of these values: pubnet or testnet")
 
 	var err error
 	reqBody.EmailSenderType, err = tenant.ParseEmailSenderType(string(reqBody.EmailSenderType))

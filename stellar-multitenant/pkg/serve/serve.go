@@ -11,6 +11,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/internal/httphandler"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/internal/provisioning"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
@@ -32,6 +33,8 @@ type ServeOptions struct {
 	EmailMessengerClient      message.MessengerClient
 	Environment               string
 	GitCommit                 string
+	NetworkPassphrase         string
+	networkType               utils.NetworkType
 	Port                      int
 	tenantManager             *tenant.Manager
 	tenantProvisioningManager *provisioning.Manager
@@ -43,7 +46,7 @@ func (opts *ServeOptions) SetupDependencies() error {
 	// Setup Database:
 	dbConnectionPool, err := db.OpenDBConnectionPool(opts.DatabaseDSN)
 	if err != nil {
-		return fmt.Errorf("error connecting to the database: %w", err)
+		return fmt.Errorf("connecting to the database: %w", err)
 	}
 
 	opts.dbConnectionPool = dbConnectionPool
@@ -55,12 +58,17 @@ func (opts *ServeOptions) SetupDependencies() error {
 		provisioning.WithMessengerClient(opts.EmailMessengerClient),
 	)
 
+	opts.networkType, err = utils.GetNetworkTypeFromNetworkPassphrase(opts.NetworkPassphrase)
+	if err != nil {
+		return fmt.Errorf("parsing network type: %w", err)
+	}
+
 	return nil
 }
 
 func StartServe(opts ServeOptions, httpServer HTTPServerInterface) error {
 	if err := opts.SetupDependencies(); err != nil {
-		return fmt.Errorf("error starting dependencies: %w", err)
+		return fmt.Errorf("starting dependencies: %w", err)
 	}
 
 	// Start the server
@@ -108,6 +116,7 @@ func handleHTTP(opts *ServeOptions) *chi.Mux {
 		tenantsHandler := httphandler.TenantsHandler{
 			Manager:             opts.tenantManager,
 			ProvisioningManager: opts.tenantProvisioningManager,
+			NetworkType:         opts.networkType,
 		}
 		r.Get("/", tenantsHandler.GetAll)
 		r.Post("/", tenantsHandler.PostTenants)

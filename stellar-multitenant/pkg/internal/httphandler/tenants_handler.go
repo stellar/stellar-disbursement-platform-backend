@@ -10,6 +10,7 @@ import (
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/support/render/httpjson"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/internal/provisioning"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/internal/validators"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
@@ -18,6 +19,7 @@ import (
 type TenantsHandler struct {
 	Manager             *tenant.Manager
 	ProvisioningManager *provisioning.Manager
+	NetworkType         utils.NetworkType
 }
 
 func (t TenantsHandler) GetAll(w http.ResponseWriter, r *http.Request) {
@@ -70,7 +72,7 @@ func (h TenantsHandler) PostTenants(rw http.ResponseWriter, req *http.Request) {
 	tnt, err := h.ProvisioningManager.ProvisionNewTenant(
 		ctx, reqBody.Name, reqBody.OwnerFirstName,
 		reqBody.OwnerLastName, reqBody.OwnerEmail, reqBody.OrganizationName,
-		reqBody.SDPUIBaseURL, reqBody.NetworkType,
+		reqBody.SDPUIBaseURL, string(h.NetworkType),
 	)
 	if err != nil {
 		httperror.InternalError(ctx, "Could not provision a new tenant", err, nil).Render(rw)
