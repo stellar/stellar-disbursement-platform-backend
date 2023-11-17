@@ -8,8 +8,12 @@ on:
       - "release/**"
       - "releases/**"
       - "hotfix/**"
-  pull_request:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
   workflow_call: # allows this workflow to be called from another workflow
+
+permissions:
+  contents: read
 
 env:
   USER_EMAIL: "sdp_user@stellar.org"
