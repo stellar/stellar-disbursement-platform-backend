@@ -9,7 +9,7 @@ services:
     ports:
       - "9000:9000"
     environment:
-      DATABASE_URL: postgres://postgres@db:5432/postgres?sslmode=disable
+      DATABASE_URL: postgres://postgres@db:5432/sdp?sslmode=disable
       NETWORK_PASSPHRASE: "Test SDF Network ; September 2015"
       HORIZON_URL: "https://horizon-testnet.stellar.org"
       NUM_CHANNEL_ACCOUNTS: "3"
