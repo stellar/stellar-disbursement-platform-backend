@@ -53,7 +53,7 @@ func ResetTenantConfigFixture(t *testing.T, ctx context.Context, dbConnectionPoo
 	return &tnt
 }
 
-func AssertRegisteredAssets(t *testing.T, ctx context.Context, dbConnectionPool db.DBConnectionPool, expectedAssets []string) {
+func AssertRegisteredAssetsFixture(t *testing.T, ctx context.Context, dbConnectionPool db.DBConnectionPool, expectedAssets []string) {
 	var registeredAssets []string
 	queryRegisteredAssets := `
 		SELECT CONCAT(code, ':', issuer) FROM assets
@@ -63,7 +63,7 @@ func AssertRegisteredAssets(t *testing.T, ctx context.Context, dbConnectionPool 
 	assert.ElementsMatch(t, expectedAssets, registeredAssets)
 }
 
-func AssertRegisteredWallets(t *testing.T, ctx context.Context, dbConnectionPool db.DBConnectionPool, expectedWallets []string) {
+func AssertRegisteredWalletsFixture(t *testing.T, ctx context.Context, dbConnectionPool db.DBConnectionPool, expectedWallets []string) {
 	var registeredWallets []string
 	queryRegisteredWallets := `
 		SELECT name FROM wallets
@@ -73,7 +73,7 @@ func AssertRegisteredWallets(t *testing.T, ctx context.Context, dbConnectionPool
 	assert.ElementsMatch(t, expectedWallets, registeredWallets)
 }
 
-func AssertRegisteredUser(t *testing.T, ctx context.Context, dbConnectionPool db.DBConnectionPool, userFirstName, userLastName, userEmail string) {
+func AssertRegisteredUserFixture(t *testing.T, ctx context.Context, dbConnectionPool db.DBConnectionPool, userFirstName, userLastName, userEmail string) {
 	var user struct {
 		FirstName string         `db:"first_name"`
 		LastName  string         `db:"last_name"`
@@ -150,8 +150,8 @@ func CheckSchemaExistsFixture(t *testing.T, ctx context.Context, dbConnectionPoo
 	return exists
 }
 
-// TenantSchemaHasTablesFixture asserts if the new tenant database schema has the tables passed by parameter.
-func TenantSchemaHasTablesFixture(t *testing.T, ctx context.Context, dbConnectionPool db.DBConnectionPool, schemaName string, tableNames []string) {
+// TenantSchemaMatchTablesFixture asserts if the new tenant database schema has the tables passed by parameter.
+func TenantSchemaMatchTablesFixture(t *testing.T, ctx context.Context, dbConnectionPool db.DBConnectionPool, schemaName string, tableNames []string) {
 	t.Helper()
 
 	const q = `
