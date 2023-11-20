@@ -32,7 +32,6 @@ func TestTenantValidator_ValidateCreateTenantRequest(t *testing.T) {
 			"email_sender_type":        "invalid email sender type. Expected one of these values: [AWS_EMAIL DRY_RUN]",
 			"sms_sender_type":          "invalid sms sender type. Expected one of these values: [TWILIO_SMS AWS_SMS DRY_RUN]",
 			"cors_allowed_origins":     "provide at least one CORS allowed origins",
-			"network_type":             "invalid network type provided. Expected one of these values: pubnet or testnet",
 			"sdp_ui_base_url":          "invalid SDP UI base URL value",
 			"sep10_signing_public_key": "invalid public key",
 			"distribution_public_key":  "invalid public key",
@@ -51,7 +50,6 @@ func TestTenantValidator_ValidateCreateTenantRequest(t *testing.T) {
 			"email_sender_type":        "invalid email sender type. Expected one of these values: [AWS_EMAIL DRY_RUN]",
 			"sms_sender_type":          "invalid sms sender type. Expected one of these values: [TWILIO_SMS AWS_SMS DRY_RUN]",
 			"cors_allowed_origins":     "provide at least one CORS allowed origins",
-			"network_type":             "invalid network type provided. Expected one of these values: pubnet or testnet",
 			"sdp_ui_base_url":          "invalid SDP UI base URL value",
 			"sep10_signing_public_key": "invalid public key",
 			"distribution_public_key":  "invalid public key",
@@ -66,7 +64,6 @@ func TestTenantValidator_ValidateCreateTenantRequest(t *testing.T) {
 			OwnerFirstName:        "Owner",
 			OwnerLastName:         "Owner",
 			OrganizationName:      "Aid Org",
-			NetworkType:           "pubnet",
 			EmailSenderType:       tenant.AWSEmailSenderType,
 			SMSSenderType:         tenant.TwilioSMSSenderType,
 			SEP10SigningPublicKey: keypair.MustRandom().Address(),
@@ -93,7 +90,6 @@ func TestTenantValidator_ValidateCreateTenantRequest(t *testing.T) {
 			OwnerFirstName:        "",
 			OwnerLastName:         "",
 			OrganizationName:      "",
-			NetworkType:           "pubnet",
 			EmailSenderType:       tenant.AWSEmailSenderType,
 			SMSSenderType:         tenant.TwilioSMSSenderType,
 			SEP10SigningPublicKey: keypair.MustRandom().Address(),
@@ -124,41 +120,6 @@ func TestTenantValidator_ValidateCreateTenantRequest(t *testing.T) {
 		assert.Equal(t, map[string]interface{}{}, tv.Errors)
 	})
 
-	t.Run("validates the network type successfully", func(t *testing.T) {
-		tv := NewTenantValidator()
-		reqBody := &TenantRequest{
-			Name:                  "aid-org",
-			OwnerEmail:            "owner@email.org",
-			OwnerFirstName:        "Owner",
-			OwnerLastName:         "Owner",
-			OrganizationName:      "Aid Org",
-			NetworkType:           "invalid",
-			EmailSenderType:       tenant.AWSEmailSenderType,
-			SMSSenderType:         tenant.TwilioSMSSenderType,
-			SEP10SigningPublicKey: keypair.MustRandom().Address(),
-			DistributionPublicKey: keypair.MustRandom().Address(),
-			EnableMFA:             true,
-			EnableReCAPTCHA:       true,
-			CORSAllowedOrigins:    []string{"*"},
-			SDPUIBaseURL:          "http://localhost:3000",
-			BaseURL:               "http://localhost:8000",
-		}
-
-		tv.ValidateCreateTenantRequest(reqBody)
-		assert.True(t, tv.HasErrors())
-		assert.Equal(t, map[string]interface{}{"network_type": "invalid network type provided. Expected one of these values: pubnet or testnet"}, tv.Errors)
-
-		reqBody.NetworkType = "pubnet"
-		tv.Errors = map[string]interface{}{}
-		tv.ValidateCreateTenantRequest(reqBody)
-		assert.False(t, tv.HasErrors())
-
-		reqBody.NetworkType = "testnet"
-		tv.Errors = map[string]interface{}{}
-		tv.ValidateCreateTenantRequest(reqBody)
-		assert.False(t, tv.HasErrors())
-	})
-
 	t.Run("validates the email sender type successfully", func(t *testing.T) {
 		tv := NewTenantValidator()
 		reqBody := &TenantRequest{
@@ -167,7 +128,6 @@ func TestTenantValidator_ValidateCreateTenantRequest(t *testing.T) {
 			OwnerFirstName:        "Owner",
 			OwnerLastName:         "Owner",
 			OrganizationName:      "Aid Org",
-			NetworkType:           "pubnet",
 			EmailSenderType:       "invalid",
 			SMSSenderType:         tenant.TwilioSMSSenderType,
 			SEP10SigningPublicKey: keypair.MustRandom().Address(),
@@ -197,7 +157,6 @@ func TestTenantValidator_ValidateCreateTenantRequest(t *testing.T) {
 			OwnerFirstName:        "Owner",
 			OwnerLastName:         "Owner",
 			OrganizationName:      "Aid Org",
-			NetworkType:           "pubnet",
 			EmailSenderType:       tenant.AWSEmailSenderType,
 			SMSSenderType:         "invalid",
 			SEP10SigningPublicKey: keypair.MustRandom().Address(),
@@ -227,7 +186,6 @@ func TestTenantValidator_ValidateCreateTenantRequest(t *testing.T) {
 			OwnerFirstName:        "Owner",
 			OwnerLastName:         "Owner",
 			OrganizationName:      "Aid Org",
-			NetworkType:           "pubnet",
 			EmailSenderType:       tenant.AWSEmailSenderType,
 			SMSSenderType:         tenant.TwilioSMSSenderType,
 			SEP10SigningPublicKey: "invalid",
@@ -255,7 +213,6 @@ func TestTenantValidator_ValidateCreateTenantRequest(t *testing.T) {
 			OwnerFirstName:        "Owner",
 			OwnerLastName:         "Owner",
 			OrganizationName:      "Aid Org",
-			NetworkType:           "pubnet",
 			EmailSenderType:       tenant.AWSEmailSenderType,
 			SMSSenderType:         tenant.TwilioSMSSenderType,
 			SEP10SigningPublicKey: keypair.MustRandom().Address(),

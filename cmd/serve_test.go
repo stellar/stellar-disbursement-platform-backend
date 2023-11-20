@@ -157,6 +157,7 @@ func Test_serve(t *testing.T) {
 		EmailMessengerClient: messengerClient,
 		DatabaseDSN:          randomDatabaseDSN,
 		GitCommit:            "1234567890abcdef",
+		NetworkPassphrase:    network.TestNetworkPassphrase,
 		Port:                 8003,
 		Version:              "x.y.z",
 	}

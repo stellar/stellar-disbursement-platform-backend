@@ -15,6 +15,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/internal/provisioning"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 	"github.com/stretchr/testify/assert"
@@ -277,6 +278,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 	handler := TenantsHandler{
 		Manager:             m,
 		ProvisioningManager: p,
+		NetworkType:         utils.TestnetNetworkType,
 	}
 
 	t.Run("returns BadRequest with invalid request body", func(t *testing.T) {
@@ -305,7 +307,6 @@ func Test_TenantHandler_Post(t *testing.T) {
 					"email_sender_type": "invalid email sender type. Expected one of these values: [AWS_EMAIL DRY_RUN]",
 					"sms_sender_type": "invalid sms sender type. Expected one of these values: [TWILIO_SMS AWS_SMS DRY_RUN]",
 					"cors_allowed_origins": "provide at least one CORS allowed origins",
-					"network_type": "invalid network type provided. Expected one of these values: pubnet or testnet",
 					"sdp_ui_base_url": "invalid SDP UI base URL value",
 					"sep10_signing_public_key": "invalid public key",
 					"distribution_public_key": "invalid public key"
@@ -342,7 +343,6 @@ func Test_TenantHandler_Post(t *testing.T) {
 				"enable_recaptcha": true,
 				"enable_mfa": false,
 				"cors_allowed_origins": ["*"],
-				"network_type": "testnet",
 				"base_url": "https://backend.sdp.org",
 				"sdp_ui_base_url": "https://aid-org.sdp.org",
 				"sep10_signing_public_key": %q,
