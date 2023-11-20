@@ -41,7 +41,10 @@ func (iv *DisbursementInstructionsValidator) ValidateInstruction(instruction *da
 	// validate verification field
 	// date of birth with format 2006-01-02
 	if iv.verificationField == data.VerificationFieldDateOfBirth {
-		_, err := time.Parse("2006-01-02", verification)
+		dob, err := time.Parse("2006-01-02", verification)
 		iv.CheckError(err, fmt.Sprintf("line %d - birthday", lineNumber), "invalid date of birth format. Correct format: 1990-01-01")
+
+		// check if date of birth is in the past
+		iv.Check(dob.Before(time.Now()), fmt.Sprintf("line %d - birthday", lineNumber), "date of birth cannot be in the future")
 	}
 }
