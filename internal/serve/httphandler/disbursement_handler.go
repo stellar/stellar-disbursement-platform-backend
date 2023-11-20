@@ -32,19 +32,8 @@ type DisbursementHandler struct {
 	AuthManager      auth.AuthManager
 }
 
-type PostDisbursementRequest struct {
-	Name        string `json:"name"`
-	CountryCode string `json:"country_code"`
-	WalletID    string `json:"wallet_id"`
-	AssetID     string `json:"asset_id"`
-}
-
-type PatchDisbursementStatusRequest struct {
-	Status string `json:"status"`
-}
-
 func (d DisbursementHandler) PostDisbursement(w http.ResponseWriter, r *http.Request) {
-	var disbursementRequest PostDisbursementRequest
+	var disbursementRequest data.PostDisbursementRequest
 
 	err := json.NewDecoder(r.Body).Decode(&disbursementRequest)
 	if err != nil {
@@ -315,7 +304,7 @@ type UpdateDisbursementStatusResponseBody struct {
 
 // PatchDisbursementStatus updates the status of a disbursement
 func (d DisbursementHandler) PatchDisbursementStatus(w http.ResponseWriter, r *http.Request) {
-	var patchRequest PatchDisbursementStatusRequest
+	var patchRequest data.PatchDisbursementStatusRequest
 	err := json.NewDecoder(r.Body).Decode(&patchRequest)
 	if err != nil {
 		httperror.BadRequest("invalid request body", err, nil).Render(w)

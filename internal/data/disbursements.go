@@ -76,6 +76,18 @@ type DisbursementModel struct {
 	dbConnectionPool db.DBConnectionPool
 }
 
+type PostDisbursementRequest struct {
+	Name        string `json:"name"`
+	CountryCode string `json:"country_code"`
+	WalletID    string `json:"wallet_id"`
+	AssetID     string `json:"asset_id"`
+	VerificationField VerificationField `json:"verification_field"`
+}
+
+type PatchDisbursementStatusRequest struct {
+	Status string `json:"status"`
+}
+
 var (
 	DefaultDisbursementSortField = SortFieldCreatedAt
 	DefaultDisbursementSortOrder = SortOrderDESC

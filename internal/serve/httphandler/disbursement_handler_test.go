@@ -151,7 +151,7 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 	})
 
 	t.Run("returns error when wallet_id is not valid", func(t *testing.T) {
-		requestBody, err := json.Marshal(PostDisbursementRequest{
+		requestBody, err := json.Marshal(data.PostDisbursementRequest{
 			Name:        "disbursement 1",
 			CountryCode: country.Code,
 			AssetID:     asset.ID,
@@ -166,7 +166,7 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 
 	t.Run("returns error when wallet is not enabled", func(t *testing.T) {
 		data.EnableOrDisableWalletFixtures(t, ctx, dbConnectionPool, false, disabledWallet.ID)
-		requestBody, err := json.Marshal(PostDisbursementRequest{
+		requestBody, err := json.Marshal(data.PostDisbursementRequest{
 			Name:        "disbursement 1",
 			CountryCode: country.Code,
 			AssetID:     asset.ID,
@@ -180,7 +180,7 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 	})
 
 	t.Run("returns error when asset_id is not valid", func(t *testing.T) {
-		requestBody, err := json.Marshal(PostDisbursementRequest{
+		requestBody, err := json.Marshal(data.PostDisbursementRequest{
 			Name:        "disbursement 1",
 			CountryCode: country.Code,
 			AssetID:     "aab4a4a9-2493-4f37-9741-01d5bd31d68b",
@@ -194,7 +194,7 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 	})
 
 	t.Run("returns error when country_code is not valid", func(t *testing.T) {
-		requestBody, err := json.Marshal(PostDisbursementRequest{
+		requestBody, err := json.Marshal(data.PostDisbursementRequest{
 			Name:        "disbursement 1",
 			CountryCode: "AAA",
 			AssetID:     asset.ID,
@@ -216,7 +216,7 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 	t.Run("returns error when disbursement name is not unique", func(t *testing.T) {
 		mMonitorService.On("MonitorCounters", monitor.DisbursementsCounterTag, labels.ToMap()).Return(nil).Once()
 
-		requestBody, err := json.Marshal(PostDisbursementRequest{
+		requestBody, err := json.Marshal(data.PostDisbursementRequest{
 			Name:        "disbursement 1",
 			CountryCode: country.Code,
 			AssetID:     asset.ID,
@@ -237,7 +237,7 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 		mMonitorService.On("MonitorCounters", monitor.DisbursementsCounterTag, labels.ToMap()).Return(nil).Once()
 
 		expectedName := "disbursement 2"
-		requestBody, err := json.Marshal(PostDisbursementRequest{
+		requestBody, err := json.Marshal(data.PostDisbursementRequest{
 			Name:        expectedName,
 			CountryCode: country.Code,
 			AssetID:     asset.ID,
@@ -1085,7 +1085,7 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 
 	t.Run("invalid status", func(t *testing.T) {
 		id := "5e1f1c7f5b6c9c0001c1b1b1"
-		err := json.NewEncoder(reqBody).Encode(PatchDisbursementStatusRequest{Status: "INVALID"})
+		err := json.NewEncoder(reqBody).Encode(data.PatchDisbursementStatusRequest{Status: "INVALID"})
 		require.NoError(t, err)
 
 		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, fmt.Sprintf("/disbursements/%s/status", id), reqBody)
@@ -1098,7 +1098,7 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 	})
 
 	t.Run("disbursement not ready to start", func(t *testing.T) {
-		err := json.NewEncoder(reqBody).Encode(PatchDisbursementStatusRequest{Status: "Started"})
+		err := json.NewEncoder(reqBody).Encode(data.PatchDisbursementStatusRequest{Status: "Started"})
 		require.NoError(t, err)
 
 		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, fmt.Sprintf("/disbursements/%s/status", draftDisbursement.ID), reqBody)
@@ -1125,7 +1125,7 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 			Return(user, nil).
 			Once()
 
-		err := json.NewEncoder(reqBody).Encode(PatchDisbursementStatusRequest{Status: "Started"})
+		err := json.NewEncoder(reqBody).Encode(data.PatchDisbursementStatusRequest{Status: "Started"})
 		require.NoError(t, err)
 
 		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, fmt.Sprintf("/disbursements/%s/status", readyDisbursement.ID), reqBody)
@@ -1158,7 +1158,7 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 			Return(approverUser, nil).
 			Once()
 
-		err := json.NewEncoder(reqBody).Encode(PatchDisbursementStatusRequest{Status: "Started"})
+		err := json.NewEncoder(reqBody).Encode(data.PatchDisbursementStatusRequest{Status: "Started"})
 		require.NoError(t, err)
 
 		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, fmt.Sprintf("/disbursements/%s/status", readyDisbursement.ID), reqBody)
@@ -1182,7 +1182,7 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 			StatusHistory: readyStatusHistory,
 		})
 
-		err := json.NewEncoder(reqBody).Encode(PatchDisbursementStatusRequest{Status: "Started"})
+		err := json.NewEncoder(reqBody).Encode(data.PatchDisbursementStatusRequest{Status: "Started"})
 		require.NoError(t, err)
 
 		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, fmt.Sprintf("/disbursements/%s/status", readyDisbursement.ID), reqBody)
@@ -1200,7 +1200,7 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 		require.Equal(t, data.StartedDisbursementStatus, disbursement.Status)
 
 		// pause disbursement
-		err = json.NewEncoder(reqBody).Encode(PatchDisbursementStatusRequest{Status: "Paused"})
+		err = json.NewEncoder(reqBody).Encode(data.PatchDisbursementStatusRequest{Status: "Paused"})
 		require.NoError(t, err)
 
 		req, err = http.NewRequestWithContext(ctx, http.MethodPatch, fmt.Sprintf("/disbursements/%s/status", readyDisbursement.ID), reqBody)
@@ -1218,7 +1218,7 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 	})
 
 	t.Run("disbursement can't be paused", func(t *testing.T) {
-		err := json.NewEncoder(reqBody).Encode(PatchDisbursementStatusRequest{Status: "Paused"})
+		err := json.NewEncoder(reqBody).Encode(data.PatchDisbursementStatusRequest{Status: "Paused"})
 		require.NoError(t, err)
 
 		req, err := http.NewRequest(http.MethodPatch, fmt.Sprintf("/disbursements/%s/status", draftDisbursement.ID), reqBody)
@@ -1232,7 +1232,7 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 	})
 
 	t.Run("disbursement status can't be changed", func(t *testing.T) {
-		err := json.NewEncoder(reqBody).Encode(PatchDisbursementStatusRequest{Status: "Completed"})
+		err := json.NewEncoder(reqBody).Encode(data.PatchDisbursementStatusRequest{Status: "Completed"})
 		require.NoError(t, err)
 
 		req, err := http.NewRequest(http.MethodPatch, fmt.Sprintf("/disbursements/%s/status", draftDisbursement.ID), reqBody)
@@ -1247,7 +1247,7 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 
 	t.Run("disbursement doesn't exist", func(t *testing.T) {
 		id := "5e1f1c7f5b6c9c0001c1b1b1"
-		err := json.NewEncoder(reqBody).Encode(PatchDisbursementStatusRequest{Status: "STARTED"})
+		err := json.NewEncoder(reqBody).Encode(data.PatchDisbursementStatusRequest{Status: "STARTED"})
 		require.NoError(t, err)
 
 		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, fmt.Sprintf("/disbursements/%s/status", id), reqBody)
