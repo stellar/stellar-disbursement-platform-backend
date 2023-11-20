@@ -22,7 +22,60 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func Test_Get(t *testing.T) {
+func runBadRequestPatchTest(t *testing.T, r *chi.Mux, url, fieldName, errorMsg string) {
+	rr := httptest.NewRecorder()
+	req, err := http.NewRequest(http.MethodPatch, url, strings.NewReader(fmt.Sprintf(`{"%s": "invalid"}`, fieldName)))
+	require.NoError(t, err)
+	r.ServeHTTP(rr, req)
+
+	resp := rr.Result()
+	defer resp.Body.Close()
+	respBody, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+
+	expectedRespBody := fmt.Sprintf(`{
+		"error": "invalid request body",
+		"extras": {
+			"%s": "%s"
+		}
+	}`, fieldName, errorMsg)
+	assert.JSONEq(t, string(expectedRespBody), string(respBody))
+}
+
+func runSuccessfulRequestPatchTest(t *testing.T, r *chi.Mux, ctx context.Context, dbConnectionPool db.DBConnectionPool, handler TenantsHandler, reqBody, expectedRespBody string) {
+	tenant.DeleteAllTenantsFixture(t, ctx, dbConnectionPool)
+	tnt := tenant.CreateTenantFixture(t, ctx, dbConnectionPool, "aid-org")
+	url := fmt.Sprintf("/tenants/%s", tnt.ID)
+
+	rr := httptest.NewRecorder()
+	req, err := http.NewRequest(http.MethodPatch, url, strings.NewReader(reqBody))
+	require.NoError(t, err)
+	r.ServeHTTP(rr, req)
+
+	resp := rr.Result()
+	defer resp.Body.Close()
+	respBody, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+
+	tntDB, err := handler.Manager.GetTenantByName(ctx, "aid-org")
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	expectedRespBody = fmt.Sprintf(`
+		{
+			"id": %q,
+			"name": "aid-org",
+			%s
+			"created_at": %q,
+			"updated_at": %q
+		}
+	`, tnt.ID, expectedRespBody, tnt.CreatedAt.Format(time.RFC3339Nano), tntDB.UpdatedAt.Format(time.RFC3339Nano))
+
+	assert.JSONEq(t, string(expectedRespBody), string(respBody))
+}
+
+func Test_TenantHandler_Get(t *testing.T) {
 	dbt := dbtest.OpenWithTenantMigrationsOnly(t)
 	defer dbt.Close()
 
@@ -230,7 +283,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 		rr := httptest.NewRecorder()
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/tenants", strings.NewReader(`{}`))
 		require.NoError(t, err)
-		http.HandlerFunc(handler.PostTenants).ServeHTTP(rr, req)
+		http.HandlerFunc(handler.Post).ServeHTTP(rr, req)
 
 		resp := rr.Result()
 		defer resp.Body.Close()
@@ -300,7 +353,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 		rr := httptest.NewRecorder()
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/tenants", strings.NewReader(reqBody))
 		require.NoError(t, err)
-		http.HandlerFunc(handler.PostTenants).ServeHTTP(rr, req)
+		http.HandlerFunc(handler.Post).ServeHTTP(rr, req)
 
 		resp := rr.Result()
 		defer resp.Body.Close()
@@ -370,4 +423,323 @@ func Test_TenantHandler_Post(t *testing.T) {
 	})
 
 	messengerClientMock.AssertExpectations(t)
+}
+
+func Test_TenantHandler_Patch(t *testing.T) {
+	dbt := dbtest.OpenWithTenantMigrationsOnly(t)
+	defer dbt.Close()
+
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+
+	handler := TenantsHandler{
+		Manager: tenant.NewManager(tenant.WithDatabase(dbConnectionPool)),
+	}
+
+	r := chi.NewRouter()
+	r.Patch("/tenants/{id}", handler.Patch)
+
+	tenant.DeleteAllTenantsFixture(t, ctx, dbConnectionPool)
+	tnt := tenant.CreateTenantFixture(t, ctx, dbConnectionPool, "aid-org")
+	url := fmt.Sprintf("/tenants/%s", tnt.ID)
+
+	t.Run("returns BadRequest with empty body", func(t *testing.T) {
+		rr := httptest.NewRecorder()
+		req, err := http.NewRequest(http.MethodPatch, url, strings.NewReader(`{}`))
+		require.NoError(t, err)
+		r.ServeHTTP(rr, req)
+
+		resp := rr.Result()
+		defer resp.Body.Close()
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+
+		expectedBody := fmt.Sprintf(`{"error": "updating tenant %s: provide at least one field to be updated"}`, tnt.ID)
+		assert.JSONEq(t, expectedBody, string(respBody))
+	})
+
+	t.Run("returns NotFound when tenant does not exist", func(t *testing.T) {
+		rr := httptest.NewRecorder()
+		req, err := http.NewRequest(http.MethodPatch, "/tenants/unknown", strings.NewReader(`{"email_sender_type": "AWS_EMAIL"}`))
+		require.NoError(t, err)
+		r.ServeHTTP(rr, req)
+
+		resp := rr.Result()
+		defer resp.Body.Close()
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+
+		expectedRespBody := `{"error":"updating tenant: tenant unknown does not exist"}`
+		assert.JSONEq(t, string(expectedRespBody), string(respBody))
+	})
+
+	t.Run("returns BadRequest when EmailSenderType is not valid", func(t *testing.T) {
+		runBadRequestPatchTest(t, r, url, "email_sender_type", "invalid email sender type. Expected one of these values: [AWS_EMAIL DRY_RUN]")
+	})
+
+	t.Run("returns BadRequest when SMSSenderType is not valid", func(t *testing.T) {
+		runBadRequestPatchTest(t, r, url, "sms_sender_type", "invalid sms sender type. Expected one of these values: [TWILIO_SMS AWS_SMS DRY_RUN]")
+	})
+
+	t.Run("returns BadRequest when SEP10SigningPublicKey is not valid", func(t *testing.T) {
+		runBadRequestPatchTest(t, r, url, "sep10_signing_public_key", "invalid public key")
+	})
+
+	t.Run("returns BadRequest when DistributionPublicKey is not valid", func(t *testing.T) {
+		runBadRequestPatchTest(t, r, url, "distribution_public_key", "invalid public key")
+	})
+
+	t.Run("returns BadRequest when BaseURL is not valid", func(t *testing.T) {
+		runBadRequestPatchTest(t, r, url, "base_url", "invalid base URL value")
+	})
+
+	t.Run("returns BadRequest when SDPUIBaseURL is not valid", func(t *testing.T) {
+		runBadRequestPatchTest(t, r, url, "sdp_ui_base_url", "invalid SDP UI base URL value")
+	})
+
+	t.Run("returns BadRequest when Status is not valid", func(t *testing.T) {
+		runBadRequestPatchTest(t, r, url, "status", "invalid status value")
+	})
+
+	t.Run("returns BadRequest when CORSAllowedOrigins is not valid", func(t *testing.T) {
+		rr := httptest.NewRecorder()
+		req, err := http.NewRequest(http.MethodPatch, url, strings.NewReader(`{"cors_allowed_origins": ["invalid"]}`))
+		require.NoError(t, err)
+		r.ServeHTTP(rr, req)
+
+		resp := rr.Result()
+		defer resp.Body.Close()
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+
+		expectedRespBody := `{
+			"error": "invalid request body",
+			"extras": {
+				"cors_allowed_origins":"invalid URL value for cors_allowed_origins[0] = invalid"
+			}
+		}`
+		assert.JSONEq(t, string(expectedRespBody), string(respBody))
+	})
+
+	t.Run("successfully updates EmailSenderType of a tenant", func(t *testing.T) {
+		reqBody := `{"email_sender_type": "AWS_EMAIL"}`
+		expectedRespBody := `
+			"email_sender_type": "AWS_EMAIL",
+			"sms_sender_type": "DRY_RUN",
+			"sep10_signing_public_key": null,
+			"distribution_public_key": null,
+			"enable_mfa": true,
+			"enable_recaptcha": true,
+			"cors_allowed_origins": null,
+			"base_url": null,
+			"sdp_ui_base_url": null,
+			"status": "TENANT_CREATED",
+		`
+
+		runSuccessfulRequestPatchTest(t, r, ctx, dbConnectionPool, handler, reqBody, expectedRespBody)
+	})
+
+	t.Run("successfully updates SMSSenderType of a tenant", func(t *testing.T) {
+		reqBody := `{"SMS_sender_type": "TWILIO_SMS"}`
+		expectedRespBody := `
+			"email_sender_type": "DRY_RUN",
+			"sms_sender_type": "TWILIO_SMS",
+			"sep10_signing_public_key": null,
+			"distribution_public_key": null,
+			"enable_mfa": true,
+			"enable_recaptcha": true,
+			"cors_allowed_origins": null,
+			"base_url": null,
+			"sdp_ui_base_url": null,
+			"status": "TENANT_CREATED",
+		`
+
+		runSuccessfulRequestPatchTest(t, r, ctx, dbConnectionPool, handler, reqBody, expectedRespBody)
+	})
+
+	t.Run("successfully updates SEP10SigningPublicKey of a tenant", func(t *testing.T) {
+		key := keypair.MustRandom().Address()
+		reqBody := fmt.Sprintf(`{"sep10_signing_public_key": "%s"}`, key)
+		expectedRespBody := fmt.Sprintf(`
+			"email_sender_type": "DRY_RUN",
+			"sms_sender_type": "DRY_RUN",
+			"sep10_signing_public_key": "%s",
+			"distribution_public_key": null,
+			"enable_mfa": true,
+			"enable_recaptcha": true,
+			"cors_allowed_origins": null,
+			"base_url": null,
+			"sdp_ui_base_url": null,
+			"status": "TENANT_CREATED",
+		`, key)
+
+		runSuccessfulRequestPatchTest(t, r, ctx, dbConnectionPool, handler, reqBody, expectedRespBody)
+	})
+
+	t.Run("successfully updates DistributionPublicKey of a tenant", func(t *testing.T) {
+		key := keypair.MustRandom().Address()
+		reqBody := fmt.Sprintf(`{"distribution_public_key": "%s"}`, key)
+		expectedRespBody := fmt.Sprintf(`
+			"email_sender_type": "DRY_RUN",
+			"sms_sender_type": "DRY_RUN",
+			"sep10_signing_public_key": null,
+			"distribution_public_key": "%s",
+			"enable_mfa": true,
+			"enable_recaptcha": true,
+			"cors_allowed_origins": null,
+			"base_url": null,
+			"sdp_ui_base_url": null,
+			"status": "TENANT_CREATED",
+		`, key)
+
+		runSuccessfulRequestPatchTest(t, r, ctx, dbConnectionPool, handler, reqBody, expectedRespBody)
+	})
+
+	t.Run("successfully updates EnableMFA of a tenant", func(t *testing.T) {
+		reqBody := `{"enable_mfa": false}`
+		expectedRespBody := `
+			"email_sender_type": "DRY_RUN",
+			"sms_sender_type": "DRY_RUN",
+			"sep10_signing_public_key": null,
+			"distribution_public_key": null,
+			"enable_mfa": false,
+			"enable_recaptcha": true,
+			"cors_allowed_origins": null,
+			"base_url": null,
+			"sdp_ui_base_url": null,
+			"status": "TENANT_CREATED",
+		`
+
+		runSuccessfulRequestPatchTest(t, r, ctx, dbConnectionPool, handler, reqBody, expectedRespBody)
+	})
+
+	t.Run("successfully updates EnableReCAPTCHA of a tenant", func(t *testing.T) {
+		reqBody := `{"enable_recaptcha": false}`
+		expectedRespBody := `
+			"email_sender_type": "DRY_RUN",
+			"sms_sender_type": "DRY_RUN",
+			"sep10_signing_public_key": null,
+			"distribution_public_key": null,
+			"enable_mfa": true,
+			"enable_recaptcha": false,
+			"cors_allowed_origins": null,
+			"base_url": null,
+			"sdp_ui_base_url": null,
+			"status": "TENANT_CREATED",
+		`
+
+		runSuccessfulRequestPatchTest(t, r, ctx, dbConnectionPool, handler, reqBody, expectedRespBody)
+	})
+
+	t.Run("successfully updates CORSAllowedOrigins of a tenant", func(t *testing.T) {
+		reqBody := `{"cors_allowed_origins": ["http://valid.com"]}`
+		expectedRespBody := `
+			"email_sender_type": "DRY_RUN",
+			"sms_sender_type": "DRY_RUN",
+			"sep10_signing_public_key": null,
+			"distribution_public_key": null,
+			"enable_mfa": true,
+			"enable_recaptcha": true,
+			"cors_allowed_origins": ["http://valid.com"],
+			"base_url": null,
+			"sdp_ui_base_url": null,
+			"status": "TENANT_CREATED",
+		`
+
+		runSuccessfulRequestPatchTest(t, r, ctx, dbConnectionPool, handler, reqBody, expectedRespBody)
+	})
+
+	t.Run("successfully updates BaseURL of a tenant", func(t *testing.T) {
+		reqBody := `{"base_url": "http://valid.com"}`
+		expectedRespBody := `
+			"email_sender_type": "DRY_RUN",
+			"sms_sender_type": "DRY_RUN",
+			"sep10_signing_public_key": null,
+			"distribution_public_key": null,
+			"enable_mfa": true,
+			"enable_recaptcha": true,
+			"cors_allowed_origins": null,
+			"base_url": "http://valid.com",
+			"sdp_ui_base_url": null,
+			"status": "TENANT_CREATED",
+		`
+
+		runSuccessfulRequestPatchTest(t, r, ctx, dbConnectionPool, handler, reqBody, expectedRespBody)
+	})
+
+	t.Run("successfully updates SDPUIBaseURL of a tenant", func(t *testing.T) {
+		reqBody := `{"sdp_ui_base_url": "http://valid.com"}`
+		expectedRespBody := `
+			"email_sender_type": "DRY_RUN",
+			"sms_sender_type": "DRY_RUN",
+			"sep10_signing_public_key": null,
+			"distribution_public_key": null,
+			"enable_mfa": true,
+			"enable_recaptcha": true,
+			"cors_allowed_origins": null,
+			"base_url": null,
+			"sdp_ui_base_url": "http://valid.com",
+			"status": "TENANT_CREATED",
+		`
+
+		runSuccessfulRequestPatchTest(t, r, ctx, dbConnectionPool, handler, reqBody, expectedRespBody)
+	})
+
+	t.Run("successfully updates Status of a tenant", func(t *testing.T) {
+		reqBody := `{"status": "TENANT_ACTIVATED"}`
+		expectedRespBody := `
+			"email_sender_type": "DRY_RUN",
+			"sms_sender_type": "DRY_RUN",
+			"sep10_signing_public_key": null,
+			"distribution_public_key": null,
+			"enable_mfa": true,
+			"enable_recaptcha": true,
+			"cors_allowed_origins": null,
+			"base_url": null,
+			"sdp_ui_base_url": null,
+			"status": "TENANT_ACTIVATED",
+		`
+
+		runSuccessfulRequestPatchTest(t, r, ctx, dbConnectionPool, handler, reqBody, expectedRespBody)
+	})
+
+	t.Run("successfully updates all fields of a tenant", func(t *testing.T) {
+		key := keypair.MustRandom().Address()
+		reqBody := fmt.Sprintf(`{
+			"email_sender_type": "AWS_EMAIL",
+			"sms_sender_type": "AWS_SMS",
+			"sep10_signing_public_key": "%s",
+			"distribution_public_key": "%s",
+			"enable_mfa": false,
+			"enable_recaptcha": false,
+			"cors_allowed_origins": ["http://valid.com"],
+			"base_url": "http://valid.com",
+			"sdp_ui_base_url": "http://valid.com",
+			"status": "TENANT_ACTIVATED"
+		}`, key, key)
+
+		expectedRespBody := fmt.Sprintf(`
+			"email_sender_type": "AWS_EMAIL",
+			"sms_sender_type": "AWS_SMS",
+			"sep10_signing_public_key": "%s",
+			"distribution_public_key": "%s",
+			"enable_mfa": false,
+			"enable_recaptcha": false,
+			"cors_allowed_origins": ["http://valid.com"],
+			"base_url": "http://valid.com",
+			"sdp_ui_base_url": "http://valid.com",
+			"status": "TENANT_ACTIVATED",
+		`, key, key)
+
+		runSuccessfulRequestPatchTest(t, r, ctx, dbConnectionPool, handler, reqBody, expectedRespBody)
+	})
 }

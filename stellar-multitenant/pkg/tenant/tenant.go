@@ -94,7 +94,7 @@ func (tu *TenantUpdate) Validate() error {
 	}
 
 	if tu.areAllFieldsEmpty() {
-		return fmt.Errorf("provide at least one field to be updated")
+		return ErrEmptyUpdateTenant
 	}
 
 	if tu.EmailSenderType != nil {

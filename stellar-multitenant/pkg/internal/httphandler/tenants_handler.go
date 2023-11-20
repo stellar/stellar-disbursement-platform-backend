@@ -50,7 +50,7 @@ func (t TenantsHandler) GetByIDOrName(w http.ResponseWriter, r *http.Request) {
 	httpjson.RenderStatus(w, http.StatusOK, tnt, httpjson.JSON)
 }
 
-func (h TenantsHandler) PostTenants(rw http.ResponseWriter, req *http.Request) {
+func (h TenantsHandler) Post(rw http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 
 	var reqBody *validators.TenantRequest
@@ -94,4 +94,56 @@ func (h TenantsHandler) PostTenants(rw http.ResponseWriter, req *http.Request) {
 	}
 
 	httpjson.RenderStatus(rw, http.StatusCreated, tnt, httpjson.JSON)
+}
+
+func (t TenantsHandler) Patch(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	var reqBody *validators.UpdateTenantRequest
+	if err := httpdecode.DecodeJSON(r, &reqBody); err != nil {
+		err = fmt.Errorf("decoding request body: %w", err)
+		log.Ctx(ctx).Error(err)
+		httperror.BadRequest("", err, nil).Render(w)
+		return
+	}
+
+	validator := validators.NewTenantValidator()
+	reqBody = validator.ValidateUpdateTenantRequest(reqBody)
+	if validator.HasErrors() {
+		httperror.BadRequest("invalid request body", nil, validator.Errors).Render(w)
+		return
+	}
+
+	tenantID := chi.URLParam(r, "id")
+
+	tnt, err := t.Manager.UpdateTenantConfig(ctx, &tenant.TenantUpdate{
+		ID:                    tenantID,
+		EmailSenderType:       reqBody.EmailSenderType,
+		SMSSenderType:         reqBody.SMSSenderType,
+		SEP10SigningPublicKey: reqBody.SEP10SigningPublicKey,
+		DistributionPublicKey: reqBody.DistributionPublicKey,
+		EnableMFA:             reqBody.EnableMFA,
+		EnableReCAPTCHA:       reqBody.EnableReCAPTCHA,
+		CORSAllowedOrigins:    reqBody.CORSAllowedOrigins,
+		BaseURL:               reqBody.BaseURL,
+		SDPUIBaseURL:          reqBody.SDPUIBaseURL,
+		Status:                reqBody.Status,
+	})
+	if err != nil {
+		if errors.Is(tenant.ErrEmptyUpdateTenant, err) {
+			errorMsg := fmt.Sprintf("updating tenant %s: %s", tenantID, err)
+			httperror.BadRequest(errorMsg, err, nil).Render(w)
+			return
+		}
+		if errors.Is(tenant.ErrTenantDoesNotExist, err) {
+			errorMsg := fmt.Sprintf("updating tenant: tenant %s does not exist", tenantID)
+			httperror.NotFound(errorMsg, err, nil).Render(w)
+			return
+		}
+		err = fmt.Errorf("updating tenant: %w", err)
+		httperror.InternalError(ctx, "", err, nil).Render(w)
+		return
+	}
+
+	httpjson.RenderStatus(w, http.StatusOK, tnt, httpjson.JSON)
 }

@@ -110,8 +110,9 @@ func handleHTTP(opts *ServeOptions) *chi.Mux {
 			ProvisioningManager: opts.tenantProvisioningManager,
 		}
 		r.Get("/", tenantsHandler.GetAll)
-		r.Post("/", tenantsHandler.PostTenants)
+		r.Post("/", tenantsHandler.Post)
 		r.Get("/{arg}", tenantsHandler.GetByIDOrName)
+		r.Patch("/{id}", tenantsHandler.Patch)
 	})
 
 	return mux
