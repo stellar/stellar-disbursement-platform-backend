@@ -15,17 +15,17 @@ const (
 	VERIFICATION_FIELD_MAX_ID_LENGTH = 50
 )
 
-type DisbursementStatusValidator struct {
+type DisbursementValidator struct {
 	*Validator
 }
 
-func NewDisbursementStatusValidator() *DisbursementStatusValidator {
-	return &DisbursementStatusValidator{
+func NewDisbursementValidator() *DisbursementValidator {
+	return &DisbursementValidator{
 		Validator: NewValidator(),
 	}
 }
 
-func (dsv *DisbursementStatusValidator) ValidateDisbursementStatus(disbursement *data.PostDisbursementRequest) {
+func (dsv *DisbursementValidator) ValidateDisbursement(disbursement *data.PostDisbursementRequest) {
 	verificationType := strings.TrimSpace(string(disbursement.VerificationType))
 	value := strings.TrimSpace(string(disbursement.VerificationValue))
 
@@ -36,20 +36,19 @@ func (dsv *DisbursementStatusValidator) ValidateDisbursementStatus(disbursement 
 	// validate verification field
 	// date of birth with format 2006-01-02
 	if vt == data.VerificationFieldDateOfBirth {
-		dob, err := time.Parse("2006-01-02", verificationType)
+		dob, err := time.Parse("2006-01-02", value)
 		dsv.CheckError(err, "verification", "invalid date of birth format. Correct format: 1990-01-01")
 
 		dsv.Check(dob.Before(time.Now()), "verification", "date of birth cannot be in the future")
 	} else if vt == data.VerificationFieldPin {
-		if len(verificationType) < VERIFICATION_FIELD_PIN_MIN_LENGTH || len(verificationType) > VERIFICATION_FIELD_PIN_MAX_LENGTH {
+		if len(value) < VERIFICATION_FIELD_PIN_MIN_LENGTH || len(value) > VERIFICATION_FIELD_PIN_MAX_LENGTH {
 			dsv.addError("verification", "invalid pin. Cannot have less than 4 or more than 8 characters in pin")
 		}
 	} else if vt == data.VerificationFieldNationalID {
-		if len(verificationType) > VERIFICATION_FIELD_MAX_ID_LENGTH {
+		if len(value) > VERIFICATION_FIELD_MAX_ID_LENGTH {
 			dsv.addError("verification", "invalid national id. Cannot have more than 50 characters in national id")
 		}
 	} else {
-		// TODO: validate other VerificationField types.
 		log.Warnf("Verification type %v is not being validated for ValidateReceiver", vt)
 	}
 
@@ -58,7 +57,7 @@ func (dsv *DisbursementStatusValidator) ValidateDisbursementStatus(disbursement 
 }
 
 // validateAndGetVerificationType validates if the verification type field is a valid value.
-func (dsv *DisbursementStatusValidator) validateAndGetVerificationType(verificationType string) data.VerificationField {
+func (dsv *DisbursementValidator) validateAndGetVerificationType(verificationType string) data.VerificationField {
 	vt := data.VerificationField(strings.ToUpper(verificationType))
 
 	switch vt {

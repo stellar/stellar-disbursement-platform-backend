@@ -1,7 +1,6 @@
 package validators
 
 import (
-	//"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -25,6 +24,13 @@ func Test_DisbursementUpdateValidator_ValidateDisbursementStatus(t *testing.T) {
 			errStr:            "invalid date of birth format. Correct format: 1990-01-01",
 		},
 		{
+			name:              "Invalid date of birth - date in the future",
+			verificationValue: "4000-01-01",
+			verificationType:  data.VerificationFieldDateOfBirth,
+			returnErr:         true,
+			errStr:            "date of birth cannot be in the future",
+		},
+		{
 			name:              "Invalid pin - fewer than 4 digits",
 			verificationValue: "123",
 			verificationType:  data.VerificationFieldPin,
@@ -45,12 +51,12 @@ func Test_DisbursementUpdateValidator_ValidateDisbursementStatus(t *testing.T) {
 			returnErr:         true,
 			errStr:            "invalid national id. Cannot have more than 50 characters in national id",
 		},
-		/*{
+		{
 			name:              "Valid date of birth",
 			verificationValue: "1999-01-01",
 			verificationType:  data.VerificationFieldDateOfBirth,
 			returnErr:         false,
-		},*/
+		},
 		{
 			name:              "Valid pin",
 			verificationValue: "1234",
@@ -67,13 +73,13 @@ func Test_DisbursementUpdateValidator_ValidateDisbursementStatus(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			validator := NewDisbursementStatusValidator()
+			validator := NewDisbursementValidator()
 
 			disbursementReq := data.PostDisbursementRequest{
 				VerificationValue: tc.verificationValue,
 				VerificationType:  tc.verificationType,
 			}
-			validator.ValidateDisbursementStatus(&disbursementReq)
+			validator.ValidateDisbursement(&disbursementReq)
 
 			if tc.returnErr {
 				assert.Equal(t, 1, len(validator.Errors))

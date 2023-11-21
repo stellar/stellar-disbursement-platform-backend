@@ -42,22 +42,22 @@ func (d DisbursementHandler) PostDisbursement(w http.ResponseWriter, r *http.Req
 	}
 
 	// validate request
-	v := validators.NewDisbursementStatusValidator()
+	v := validators.NewDisbursementValidator()
 
 	v.Check(disbursementRequest.Name != "", "name", "name is required")
 	v.Check(disbursementRequest.CountryCode != "", "country_code", "country_code is required")
 	v.Check(disbursementRequest.WalletID != "", "wallet_id", "wallet_id is required")
 	v.Check(disbursementRequest.AssetID != "", "asset_id", "asset_id is required")
-	
+
 	if v.HasErrors() {
 		httperror.BadRequest("Request invalid", err, v.Errors).Render(w)
 		return
 	}
-	
-	v.ValidateDisbursementStatus(&disbursementRequest)
+
+	v.ValidateDisbursement(&disbursementRequest)
 
 	if v.HasErrors() {
-		httperror.BadRequest("Validation field invalid", err, v.Errors).Render(w)
+		httperror.BadRequest("Verification field invalid", err, v.Errors).Render(w)
 		return
 	}
 
