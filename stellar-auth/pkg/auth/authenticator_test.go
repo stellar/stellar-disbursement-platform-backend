@@ -22,7 +22,7 @@ type UserSorter []User
 
 func (a UserSorter) Len() int           { return len(a) }
 func (a UserSorter) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
-func (a UserSorter) Less(i, j int) bool { return a[i].Email < a[j].Email}
+func (a UserSorter) Less(i, j int) bool { return a[i].Email < a[j].Email }
 
 func assertUserIsActive(t *testing.T, ctx context.Context, dbConnectionPool db.DBConnectionPool, userID string, expectedIsActive bool) {
 	const query = "SELECT is_active FROM auth_users WHERE id = $1"
