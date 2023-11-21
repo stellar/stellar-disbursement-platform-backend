@@ -275,6 +275,13 @@ func (h UserHandler) UpdateUserRoles(rw http.ResponseWriter, req *http.Request) 
 }
 
 func (h UserHandler) GetAllUsers(rw http.ResponseWriter, req *http.Request) {
+	validator := validators.NewUserQueryValidator()
+	queryParams := validator.ParseParametersFromRequest(req)
+	if validator.HasErrors() {
+		httperror.BadRequest("request invalid", nil, validator.Errors).Render(rw)
+		return
+	}
+
 	ctx := req.Context()
 
 	token, ok := ctx.Value(middleware.TokenContextKey).(string)
@@ -284,7 +291,7 @@ func (h UserHandler) GetAllUsers(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	users, err := h.AuthManager.GetAllUsers(ctx, token)
+	users, err := h.AuthManager.GetAllUsers(ctx, token, queryParams)
 	if err != nil {
 		if errors.Is(err, auth.ErrInvalidToken) {
 			httperror.Unauthorized("", err, nil).Render(rw)

@@ -1246,7 +1246,14 @@ func Test_UserHandler_GetAllUsers(t *testing.T) {
 			Once()
 
 		authenticatorMock.
-			On("GetAllUsers", req.Context()).
+			On("GetAllUsers", req.Context(), &data.QueryParams{
+				Query:     "",
+				Page:      1,
+				PageLimit: 20,
+				SortBy:    data.SortFieldEmail,
+				SortOrder: data.SortOrderASC,
+				Filters:   map[data.FilterKey]interface{}{},
+			}).
 			Return([]auth.User{
 				{
 					ID:        "user1-ID",

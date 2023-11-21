@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/lib/pq"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/internal/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/utils"
 )
@@ -28,6 +29,12 @@ const (
 	resetTokenLength = 10
 )
 
+var (
+	DefaultUserSortField = data.SortFieldEmail
+	DefaultUserSortOrder = data.SortOrderASC
+	AllowedUserSorts     = []data.SortField{data.SortFieldEmail, data.SortFieldIsActive}
+)
+
 type Authenticator interface {
 	ValidateCredentials(ctx context.Context, email, password string) (*User, error)
 	// CreateUser creates a new user it receives a user object and the password
@@ -38,7 +45,7 @@ type Authenticator interface {
 	ForgotPassword(ctx context.Context, email string) (string, error)
 	ResetPassword(ctx context.Context, resetToken, password string) error
 	UpdatePassword(ctx context.Context, user *User, currentPassword, newPassword string) error
-	GetAllUsers(ctx context.Context) ([]User, error)
+	GetAllUsers(ctx context.Context, queryParams *data.QueryParams) ([]User, error)
 	GetUser(ctx context.Context, userID string) (*User, error)
 }
 
@@ -404,8 +411,8 @@ func (a *defaultAuthenticator) invalidateResetPasswordToken(ctx context.Context,
 	return nil
 }
 
-func (a *defaultAuthenticator) GetAllUsers(ctx context.Context) ([]User, error) {
-	const query = `
+func (a *defaultAuthenticator) GetAllUsers(ctx context.Context, queryParams *data.QueryParams) ([]User, error) {
+	query := fmt.Sprintf(`
 		SELECT
 			id,
 			first_name,
@@ -416,7 +423,8 @@ func (a *defaultAuthenticator) GetAllUsers(ctx context.Context) ([]User, error) 
 			is_active
 		FROM
 			auth_users
-	`
+		ORDER BY %s %s
+	`, queryParams.SortBy, queryParams.SortOrder)
 
 	dbUsers := []struct {
 		ID        string         `db:"id"`
@@ -429,6 +437,7 @@ func (a *defaultAuthenticator) GetAllUsers(ctx context.Context) ([]User, error) 
 	}{}
 	err := a.dbConnectionPool.SelectContext(ctx, &dbUsers, query)
 	if err != nil {
+		fmt.Println(queryParams)
 		return nil, fmt.Errorf("error querying all users in the database: %w", err)
 	}
 

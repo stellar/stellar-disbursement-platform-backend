@@ -4,9 +4,11 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"sort"
 	"testing"
 	"time"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/internal/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/internal/db/dbtest"
 	"github.com/stretchr/testify/assert"
@@ -15,6 +17,12 @@ import (
 )
 
 var errUnexpectedError = errors.New("unexpected error")
+
+type UserSorter []User
+
+func (a UserSorter) Len() int           { return len(a) }
+func (a UserSorter) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a UserSorter) Less(i, j int) bool { return a[i].Email < a[j].Email}
 
 func assertUserIsActive(t *testing.T, ctx context.Context, dbConnectionPool db.DBConnectionPool, userID string, expectedIsActive bool) {
 	const query = "SELECT is_active FROM auth_users WHERE id = $1"
@@ -612,7 +620,10 @@ func Test_DefaultAuthenticator_GetAllUsers(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("returns an empty array if no users are registered", func(t *testing.T) {
-		users, err := authenticator.GetAllUsers(ctx)
+		users, err := authenticator.GetAllUsers(ctx, &data.QueryParams{
+			SortBy:    data.SortFieldEmail,
+			SortOrder: data.SortOrderASC,
+		})
 		require.NoError(t, err)
 
 		assert.Empty(t, users)
@@ -627,7 +638,10 @@ func Test_DefaultAuthenticator_GetAllUsers(t *testing.T) {
 		randUser2 := CreateRandomAuthUserFixture(t, ctx, dbConnectionPool, passwordEncrypterMock, true, "role1", "role2")
 		randUser3 := CreateRandomAuthUserFixture(t, ctx, dbConnectionPool, passwordEncrypterMock, false, "role3")
 
-		users, err := authenticator.GetAllUsers(ctx)
+		users, err := authenticator.GetAllUsers(ctx, &data.QueryParams{
+			SortBy:    data.SortFieldEmail,
+			SortOrder: data.SortOrderASC,
+		})
 		require.NoError(t, err)
 
 		expectedUsers := []User{
@@ -635,7 +649,7 @@ func Test_DefaultAuthenticator_GetAllUsers(t *testing.T) {
 			*randUser2.ToUser(),
 			*randUser3.ToUser(),
 		}
-
+		sort.Sort(UserSorter(expectedUsers))
 		assert.Equal(t, expectedUsers, users)
 	})
 
