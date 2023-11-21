@@ -16,6 +16,7 @@ var (
 	ErrTenantDoesNotExist   = errors.New("tenant does not exist")
 	ErrDuplicatedTenantName = errors.New("duplicated tenant name")
 	ErrEmptyTenantName      = errors.New("tenant name cannot be empty")
+	ErrEmptyUpdateTenant    = errors.New("provide at least one field to be updated")
 )
 
 type tenantContextKey struct{}

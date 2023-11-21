@@ -229,7 +229,63 @@ func TestTenantValidator_ValidateCreateTenantRequest(t *testing.T) {
 		assert.Equal(t, map[string]interface{}{
 			"base_url":             "invalid base URL value",
 			"sdp_ui_base_url":      "invalid SDP UI base URL value",
-			"cors_allowed_origins": "invalid URL value for cors_allowed_origins[1]=%invalid%",
+			"cors_allowed_origins": "invalid URL value for cors_allowed_origins[1] = %invalid%",
 		}, tv.Errors)
+	})
+}
+
+func TestTenantValidator_ValidateUpdateTenantRequest(t *testing.T) {
+	t.Run("returns error when request body is empty", func(t *testing.T) {
+		tv := NewTenantValidator()
+		tv.ValidateUpdateTenantRequest(nil)
+		assert.True(t, tv.HasErrors())
+		assert.Equal(t, map[string]interface{}{"body": "request body is empty"}, tv.Errors)
+
+		reqBody := &UpdateTenantRequest{}
+		tv.ValidateUpdateTenantRequest(reqBody)
+		assert.True(t, tv.HasErrors())
+		assert.Equal(t, map[string]interface{}{"body": "request body is empty"}, tv.Errors)
+	})
+
+	t.Run("returns error when fields are invalid", func(t *testing.T) {
+		tv := NewTenantValidator()
+		invalidValue := "invalid"
+		reqBody := &UpdateTenantRequest{
+			SEP10SigningPublicKey: &invalidValue,
+			DistributionPublicKey: &invalidValue,
+			CORSAllowedOrigins:    []string{invalidValue},
+			BaseURL:               &invalidValue,
+			SDPUIBaseURL:          &invalidValue,
+		}
+		tv.ValidateUpdateTenantRequest(reqBody)
+		assert.True(t, tv.HasErrors())
+		assert.Equal(t, map[string]interface{}{
+			"base_url":                 "invalid base URL value",
+			"cors_allowed_origins":     "invalid URL value for cors_allowed_origins[0] = invalid",
+			"distribution_public_key":  "invalid public key",
+			"sdp_ui_base_url":          "invalid SDP UI base URL value",
+			"sep10_signing_public_key": "invalid public key",
+		}, tv.Errors)
+	})
+
+	t.Run("validates request body successfully", func(t *testing.T) {
+		tv := NewTenantValidator()
+		key := keypair.MustRandom().Address()
+		enable := false
+		url := "http://valid.com"
+		reqBody := &UpdateTenantRequest{
+			EmailSenderType:       &tenant.AWSEmailSenderType,
+			SMSSenderType:         &tenant.AWSSMSSenderType,
+			SEP10SigningPublicKey: &key,
+			DistributionPublicKey: &key,
+			EnableMFA:             &enable,
+			EnableReCAPTCHA:       &enable,
+			CORSAllowedOrigins:    []string{url},
+			BaseURL:               &url,
+			SDPUIBaseURL:          &url,
+		}
+		tv.ValidateUpdateTenantRequest(reqBody)
+		assert.False(t, tv.HasErrors())
+		assert.Empty(t, tv.Errors)
 	})
 }
