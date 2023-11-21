@@ -26,9 +26,9 @@ const (
 
 type ServerApiIntegrationTestsInterface interface {
 	Login(ctx context.Context) (*ServerApiAuthToken, error)
-	CreateDisbursement(ctx context.Context, authToken *ServerApiAuthToken, body *httphandler.PostDisbursementRequest) (*data.Disbursement, error)
+	CreateDisbursement(ctx context.Context, authToken *ServerApiAuthToken, body *data.PostDisbursementRequest) (*data.Disbursement, error)
 	ProcessDisbursement(ctx context.Context, authToken *ServerApiAuthToken, disbursementID string) error
-	StartDisbursement(ctx context.Context, authToken *ServerApiAuthToken, disbursementID string, body *httphandler.PatchDisbursementStatusRequest) error
+	StartDisbursement(ctx context.Context, authToken *ServerApiAuthToken, disbursementID string, body *data.PatchDisbursementStatusRequest) error
 	ReceiverRegistration(ctx context.Context, authSEP24Token *AnchorPlatformAuthSEP24Token, body *data.ReceiverRegistrationRequest) error
 }
 
@@ -87,7 +87,7 @@ func (sa *ServerApiIntegrationTests) Login(ctx context.Context) (*ServerApiAuthT
 }
 
 // CreateDisbursement creates a new disbursement using the SDP server API.
-func (sa *ServerApiIntegrationTests) CreateDisbursement(ctx context.Context, authToken *ServerApiAuthToken, body *httphandler.PostDisbursementRequest) (*data.Disbursement, error) {
+func (sa *ServerApiIntegrationTests) CreateDisbursement(ctx context.Context, authToken *ServerApiAuthToken, body *data.PostDisbursementRequest) (*data.Disbursement, error) {
 	reqURL, err := url.JoinPath(sa.ServerApiBaseURL, disbursementURL)
 	if err != nil {
 		return nil, fmt.Errorf("error creating url: %w", err)
@@ -188,7 +188,7 @@ func (sa *ServerApiIntegrationTests) ProcessDisbursement(ctx context.Context, au
 }
 
 // StartDisbursement starts the disbursement using the SDP server API.
-func (sa *ServerApiIntegrationTests) StartDisbursement(ctx context.Context, authToken *ServerApiAuthToken, disbursementID string, body *httphandler.PatchDisbursementStatusRequest) error {
+func (sa *ServerApiIntegrationTests) StartDisbursement(ctx context.Context, authToken *ServerApiAuthToken, disbursementID string, body *data.PatchDisbursementStatusRequest) error {
 	reqURL, err := url.JoinPath(sa.ServerApiBaseURL, disbursementURL, disbursementID, "status")
 	if err != nil {
 		return fmt.Errorf("error creating url: %w", err)

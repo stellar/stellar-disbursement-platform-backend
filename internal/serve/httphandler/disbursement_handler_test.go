@@ -98,6 +98,8 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 		  "wallet_id": "aab4a4a9-2493-4f37-9741-01d5bd31d68b",
 		  "asset_id": "61dbfa89-943a-413c-b862-a2177384d321",
 		  "country_code": "UKR"
+		  "verification_value": "1990-01-01",
+		  "verification_type": "date_of_birth",
 		}`
 
 		want := `
@@ -117,6 +119,8 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 		   "name": "My New Disbursement name 5",
 		   "asset_id": "61dbfa89-943a-413c-b862-a2177384d321",
 		   "country_code": "UKR"
+		   "verification_value": "1990-01-01",
+		   "verification_type": "date_of_birth",
 		}`
 
 		want := `{"error":"Request invalid", "extras": {"wallet_id": "wallet_id is required"}}`
@@ -130,6 +134,8 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 		   "name": "My New Disbursement name 5",
 		   "wallet_id": "aab4a4a9-2493-4f37-9741-01d5bd31d68b",
 		   "country_code": "UKR"
+		   "verification_value": "1990-01-01",
+		   "verification_type": "date_of_birth",
 		}`
 
 		want := `{"error":"Request invalid", "extras": {"asset_id": "asset_id is required"}}`
@@ -143,6 +149,8 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 		   "name": "My New Disbursement name 5",
 		   "wallet_id": "aab4a4a9-2493-4f37-9741-01d5bd31d68b",
 		   "asset_id": "61dbfa89-943a-413c-b862-a2177384d321"
+		   "verification_value": "1990-01-01",
+		   "verification_type": "date_of_birth",
 		}`
 
 		want := `{"error":"Request invalid", "extras": {"country_code": "country_code is required"}}`
@@ -156,6 +164,8 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 			CountryCode: country.Code,
 			AssetID:     asset.ID,
 			WalletID:    "aab4a4a9-2493-4f37-9741-01d5bd31d68b",
+			VerificationValue: "1990-01-01",
+			VerificationType: data.VerificationFieldDateOfBirth,
 		})
 		require.NoError(t, err)
 

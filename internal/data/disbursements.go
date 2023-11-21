@@ -77,11 +77,12 @@ type DisbursementModel struct {
 }
 
 type PostDisbursementRequest struct {
-	Name        string `json:"name"`
-	CountryCode string `json:"country_code"`
-	WalletID    string `json:"wallet_id"`
-	AssetID     string `json:"asset_id"`
-	VerificationField VerificationField `json:"verification_field"`
+	Name              string            `json:"name"`
+	CountryCode       string            `json:"country_code"`
+	WalletID          string            `json:"wallet_id"`
+	AssetID           string            `json:"asset_id"`
+	VerificationValue string            `json:"verification_value"`
+	VerificationType  VerificationField `json:"verification_type"`
 }
 
 type PatchDisbursementStatusRequest struct {
