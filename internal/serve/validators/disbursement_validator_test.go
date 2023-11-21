@@ -84,6 +84,8 @@ func Test_DisbursementUpdateValidator_ValidateDisbursementStatus(t *testing.T) {
 			if tc.returnErr {
 				assert.Equal(t, 1, len(validator.Errors))
 				assert.Equal(t, tc.errStr, validator.Errors["verification"])
+			} else {
+				assert.Equal(t, validator.Errors["verification"], nil)
 			}
 		})
 	}
