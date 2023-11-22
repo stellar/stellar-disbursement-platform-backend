@@ -120,11 +120,11 @@ func (it *IntegrationTestsService) StartIntegrationTests(ctx context.Context, op
 
 	log.Ctx(ctx).Info("Creating disbursement using server API")
 	disbursement, err := it.serverAPI.CreateDisbursement(ctx, authToken, &data.PostDisbursementRequest{
-		Name:        opts.DisbursementName,
-		CountryCode: "USA",
-		WalletID:    wallet.ID,
-		AssetID:     asset.ID,
-		VerificationType: data.VerificationFieldDateOfBirth,
+		Name:              opts.DisbursementName,
+		CountryCode:       "USA",
+		WalletID:          wallet.ID,
+		AssetID:           asset.ID,
+		VerificationType:  data.VerificationFieldDateOfBirth,
 		VerificationValue: "2000-01-01",
 	})
 	if err != nil {
