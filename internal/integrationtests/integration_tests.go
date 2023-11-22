@@ -124,6 +124,8 @@ func (it *IntegrationTestsService) StartIntegrationTests(ctx context.Context, op
 		CountryCode: "USA",
 		WalletID:    wallet.ID,
 		AssetID:     asset.ID,
+		VerificationType: data.VerificationFieldDateOfBirth,
+		VerificationValue: "2000-01-01",
 	})
 	if err != nil {
 		return fmt.Errorf("error creating disbursement: %w", err)
