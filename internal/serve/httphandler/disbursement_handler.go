@@ -41,23 +41,29 @@ func (d DisbursementHandler) PostDisbursement(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// validate request
-	v := validators.NewDisbursementValidator()
-
-	v.Check(disbursementRequest.Name != "", "name", "name is required")
-	v.Check(disbursementRequest.CountryCode != "", "country_code", "country_code is required")
-	v.Check(disbursementRequest.WalletID != "", "wallet_id", "wallet_id is required")
-	v.Check(disbursementRequest.AssetID != "", "asset_id", "asset_id is required")
-
-	if v.HasErrors() {
-		httperror.BadRequest("Request invalid", err, v.Errors).Render(w)
+	// Parse uploaded CSV file
+	file, _, err := r.FormFile("file")
+	if err != nil {
+		httperror.BadRequest("could not parse file", err, nil).Render(w)
 		return
 	}
+	defer file.Close()
 
-	v.ValidateDisbursement(&disbursementRequest)
+	// validate request
+	// TeeReader is used to read multiple times from the same reader (file)
+	// We read once to process the instructions, and then again to persist the file to the database
+	var buf bytes.Buffer
+	reader := io.TeeReader(file, &buf)
 
-	if v.HasErrors() {
-		httperror.BadRequest("Verification field invalid", err, v.Errors).Render(w)
+	_, iv := parseInstructionsFromCSV(reader, disbursementRequest.VerificationType)
+
+	iv.Check(disbursementRequest.Name != "", "name", "name is required")
+	iv.Check(disbursementRequest.CountryCode != "", "country_code", "country_code is required")
+	iv.Check(disbursementRequest.WalletID != "", "wallet_id", "wallet_id is required")
+	iv.Check(disbursementRequest.AssetID != "", "asset_id", "asset_id is required")
+
+	if iv.HasErrors() {
+		httperror.BadRequest("Request invalid", err, iv.Errors).Render(w)
 		return
 	}
 
