@@ -6,14 +6,14 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/assets"
+
 	"github.com/stellar/go/keypair"
 	"github.com/stellar/go/network"
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/db/dbtest"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -158,12 +158,12 @@ func Test_DatabaseCommand_db_setup_for_network(t *testing.T) {
 	testnetUSDCIssuer := keypair.MustRandom().Address()
 	data.CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", testnetUSDCIssuer)
 
-	assets, err := models.Assets.GetAll(ctx)
+	actualAssets, err := models.Assets.GetAll(ctx)
 	require.NoError(t, err)
 
-	assert.Len(t, assets, 1)
-	assert.Equal(t, "USDC", assets[0].Code)
-	assert.Equal(t, testnetUSDCIssuer, assets[0].Issuer)
+	assert.Len(t, actualAssets, 1)
+	assert.Equal(t, "USDC", actualAssets[0].Code)
+	assert.Equal(t, testnetUSDCIssuer, actualAssets[0].Issuer)
 
 	// Wallets
 	data.CreateWalletFixture(t, ctx, dbConnectionPool, "Vibrant Assist", "https://vibrantapp.com", "api-dev.vibrantapp.com", "https://vibrantapp.com/sdp-dev")
@@ -196,15 +196,14 @@ func Test_DatabaseCommand_db_setup_for_network(t *testing.T) {
 	require.NoError(t, err)
 
 	// Validating assets
-	assets, err = models.Assets.GetAll(ctx)
+	actualAssets, err = models.Assets.GetAll(ctx)
 	require.NoError(t, err)
 
-	assert.Len(t, assets, 2)
-	assert.Equal(t, "USDC", assets[0].Code)
-	assert.NotEqual(t, testnetUSDCIssuer, assets[0].Issuer)
-	assert.Equal(t, services.DefaultAssetsNetworkMap[utils.PubnetNetworkType]["USDC"], assets[0].Issuer)
-	assert.Equal(t, "XLM", assets[1].Code)
-	assert.Empty(t, assets[1].Issuer)
+	require.Len(t, actualAssets, 2)
+	require.Equal(t, assets.USDCAssetPubnet.Code, actualAssets[0].Code)
+	require.Equal(t, assets.USDCAssetPubnet.Issuer, actualAssets[0].Issuer)
+	require.Equal(t, assets.XLMAsset.Code, actualAssets[1].Code)
+	require.Empty(t, assets.XLMAsset.Issuer)
 
 	// Validating wallets
 	wallets, err = models.Wallets.GetAll(ctx)
@@ -238,7 +237,7 @@ func Test_DatabaseCommand_db_setup_for_network(t *testing.T) {
 	expectedLogs := []string{
 		"updating/inserting assets for the 'pubnet' network",
 		"Code: USDC",
-		fmt.Sprintf("Issuer: %s", services.DefaultAssetsNetworkMap[utils.PubnetNetworkType]["USDC"]),
+		fmt.Sprintf("Issuer: %s", assets.USDCAssetPubnet.Issuer),
 		"Code: XLM",
 		"Issuer: ",
 		"updating/inserting wallets for the 'pubnet' network",
