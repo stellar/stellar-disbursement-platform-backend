@@ -1,6 +1,9 @@
 package wallets
 
-import "github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+import (
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/assets"
+)
 
 var TestnetWallets = []data.Wallet{
 	{
@@ -9,14 +12,8 @@ var TestnetWallets = []data.Wallet{
 		DeepLinkSchema:    "https://demo-wallet.stellar.org",
 		SEP10ClientDomain: "demo-wallet-server.stellar.org",
 		Assets: []data.Asset{
-			{
-				Code:   "USDC",
-				Issuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
-			},
-			{
-				Code:   "XLM",
-				Issuer: "",
-			},
+			assets.USDCAssetTestnet,
+			assets.XLMAsset,
 		},
 	},
 	{
@@ -25,10 +22,7 @@ var TestnetWallets = []data.Wallet{
 		DeepLinkSchema:    "https://vibrantapp.com/sdp-dev",
 		SEP10ClientDomain: "api-dev.vibrantapp.com",
 		Assets: []data.Asset{
-			{
-				Code:   "USDC",
-				Issuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
-			},
+			assets.USDCAssetTestnet,
 		},
 	},
 }

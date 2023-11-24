@@ -234,7 +234,7 @@ func Test_validationAfterReceiverRegistration(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("receiver wallet not found", func(t *testing.T) {
-		err = validateExpectationsAfterReceiverRegistration(ctx, models, "invalid_stellar_account", "invalid_stellar_memo")
+		err = validateExpectationsAfterReceiverRegistration(ctx, models, "invalid_stellar_account", "invalid_stellar_memo", "invalid_client_domain")
 		require.EqualError(t, err, "error getting receiver wallet with stellar account: no receiver wallet could be found in GetByStellarAccountAndMemo: record not found")
 	})
 
@@ -244,7 +244,7 @@ func Test_validationAfterReceiverRegistration(t *testing.T) {
 		receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
 		receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.ReadyReceiversWalletStatus)
 
-		err = validateExpectationsAfterReceiverRegistration(ctx, models, receiverWallet.StellarAddress, receiverWallet.StellarMemo)
+		err = validateExpectationsAfterReceiverRegistration(ctx, models, receiverWallet.StellarAddress, receiverWallet.StellarMemo, wallet.SEP10ClientDomain)
 		require.EqualError(t, err, "invalid status for receiver_wallet after receiver registration")
 	})
 
@@ -255,7 +255,7 @@ func Test_validationAfterReceiverRegistration(t *testing.T) {
 		receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
 		receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
 
-		err = validateExpectationsAfterReceiverRegistration(ctx, models, receiverWallet.StellarAddress, receiverWallet.StellarMemo)
+		err = validateExpectationsAfterReceiverRegistration(ctx, models, receiverWallet.StellarAddress, receiverWallet.StellarMemo, wallet.SEP10ClientDomain)
 		require.NoError(t, err)
 	})
 }

@@ -20,10 +20,10 @@ jobs:
     runs-on: ubuntu-latest
     environment: "Receiver Registration - E2E Integration Tests"
     env:
-      DISTRIBUTION_PUBLIC_KEY: ${{ secrets.DISTRIBUTION_PUBLIC_KEY }}
-      DISTRIBUTION_SEED: ${{ secrets.DISTRIBUTION_SEED }}
-      SEP10_SIGNING_PUBLIC_KEY: ${{ secrets.SEP10_SIGNING_PUBLIC_KEY }}
-      SEP10_SIGNING_PRIVATE_KEY: ${{ secrets.SEP10_SIGNING_PRIVATE_KEY }}
+      DISTRIBUTION_PUBLIC_KEY: ${{ vars.DISTRIBUTION_PUBLIC_KEY }}
+      DISTRIBUTION_SEED: ${{ vars.DISTRIBUTION_SEED }}
+      SEP10_SIGNING_PUBLIC_KEY: ${{ vars.SEP10_SIGNING_PUBLIC_KEY }}
+      SEP10_SIGNING_PRIVATE_KEY: ${{ vars.SEP10_SIGNING_PRIVATE_KEY }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3

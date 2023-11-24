@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/assets"
+
 	"github.com/lib/pq"
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
@@ -12,17 +14,11 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
-type AssetsNetworkMapType map[utils.NetworkType]map[string]string
+type AssetsNetworkMapType map[utils.NetworkType][]data.Asset
 
 var DefaultAssetsNetworkMap = AssetsNetworkMapType{
-	utils.PubnetNetworkType: {
-		"USDC": "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN",
-		"XLM":  "",
-	},
-	utils.TestnetNetworkType: {
-		"USDC": "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
-		"XLM":  "",
-	},
+	utils.PubnetNetworkType:  []data.Asset{assets.USDCAssetPubnet, assets.XLMAsset},
+	utils.TestnetNetworkType: []data.Asset{assets.USDCAssetTestnet, assets.XLMAsset},
 }
 
 // SetupAssetsForProperNetwork updates and inserts assets for the given Network Passphrase (`network`). So it avoids the application having
@@ -40,11 +36,11 @@ func SetupAssetsForProperNetwork(ctx context.Context, dbConnectionPool db.DBConn
 	separator := strings.Repeat("-", 20)
 	buf := new(strings.Builder)
 	buf.WriteString("assets' code that will be updated or inserted:\n\n")
-	for code, issuer := range assets {
-		codes = append(codes, code)
-		issuers = append(issuers, issuer)
+	for _, asset := range assets {
+		codes = append(codes, asset.Code)
+		issuers = append(issuers, asset.Issuer)
 
-		buf.WriteString(fmt.Sprintf("Code: %s\n%s\n\n", code, separator))
+		buf.WriteString(fmt.Sprintf("Code: %s\n%s\n\n", asset.Code, separator))
 	}
 
 	log.Ctx(ctx).Info(buf.String())

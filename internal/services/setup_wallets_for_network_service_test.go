@@ -46,10 +46,22 @@ func Test_SetupWalletsForProperNetwork(t *testing.T) {
 		wallets, err := models.Wallets.GetAll(ctx)
 		require.NoError(t, err)
 
-		assert.Len(t, wallets, 2)
-		// assert.Equal(t, "Beans App", wallets[0].Name)
-		assert.Equal(t, "Vibrant Assist", wallets[0].Name)
-		assert.Equal(t, "Vibrant Assist RC", wallets[1].Name)
+		// Test only on Vibrant Assist and Vibrant Assist RC. This will help adding wallets without breaking tests.
+		var vibrantAssist, vibrantAssistRC data.Wallet
+
+		for _, w := range wallets {
+			if w.Name == "Vibrant Assist" {
+				vibrantAssist = w
+			} else if w.Name == "Vibrant Assist RC" {
+				vibrantAssistRC = w
+			}
+		}
+
+		require.NotNil(t, vibrantAssist, "Vibrant Assist wallet not found")
+		require.NotNil(t, vibrantAssistRC, "Vibrant Assist RC wallet not found")
+
+		assert.Equal(t, "Vibrant Assist", vibrantAssist.Name)
+		assert.Equal(t, "Vibrant Assist RC", vibrantAssistRC.Name)
 
 		expectedLogs := []string{
 			"updating/inserting wallets for the 'pubnet' network",
