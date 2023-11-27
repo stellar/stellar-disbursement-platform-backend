@@ -4,7 +4,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/stellar/go/keypair"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stretchr/testify/assert"
@@ -87,8 +86,6 @@ func Test_Manager_UpdateTenantConfig(t *testing.T) {
 		tntDB = ResetTenantConfigFixture(t, ctx, dbConnectionPool, tntDB.ID)
 		assert.Equal(t, tntDB.EmailSenderType, DryRunEmailSenderType)
 		assert.Equal(t, tntDB.SMSSenderType, DryRunSMSSenderType)
-		assert.Nil(t, tntDB.SEP10SigningPublicKey)
-		assert.Nil(t, tntDB.DistributionPublicKey)
 		assert.True(t, tntDB.EnableMFA)
 		assert.True(t, tntDB.EnableReCAPTCHA)
 		assert.Nil(t, tntDB.BaseURL)
@@ -96,21 +93,17 @@ func Test_Manager_UpdateTenantConfig(t *testing.T) {
 		assert.Empty(t, tntDB.CORSAllowedOrigins)
 
 		// Partial Update
-		addr := keypair.MustRandom().Address()
 		tnt, err := m.UpdateTenantConfig(ctx, &TenantUpdate{
-			ID:                    tntDB.ID,
-			EmailSenderType:       &AWSEmailSenderType,
-			SEP10SigningPublicKey: &addr,
-			EnableMFA:             &[]bool{false}[0],
-			CORSAllowedOrigins:    []string{"https://myorg.sdp.io", "https://myorg-dev.sdp.io"},
-			SDPUIBaseURL:          &[]string{"https://myorg.frontend.io"}[0],
+			ID:                 tntDB.ID,
+			EmailSenderType:    &AWSEmailSenderType,
+			EnableMFA:          &[]bool{false}[0],
+			CORSAllowedOrigins: []string{"https://myorg.sdp.io", "https://myorg-dev.sdp.io"},
+			SDPUIBaseURL:       &[]string{"https://myorg.frontend.io"}[0],
 		})
 		require.NoError(t, err)
 
 		assert.Equal(t, tnt.EmailSenderType, AWSEmailSenderType)
 		assert.Equal(t, tnt.SMSSenderType, DryRunSMSSenderType)
-		assert.Equal(t, addr, *tnt.SEP10SigningPublicKey)
-		assert.Nil(t, tnt.DistributionPublicKey)
 		assert.False(t, tnt.EnableMFA)
 		assert.True(t, tnt.EnableReCAPTCHA)
 		assert.Nil(t, tnt.BaseURL)
@@ -118,18 +111,15 @@ func Test_Manager_UpdateTenantConfig(t *testing.T) {
 		assert.ElementsMatch(t, []string{"https://myorg.sdp.io", "https://myorg-dev.sdp.io"}, tnt.CORSAllowedOrigins)
 
 		tnt, err = m.UpdateTenantConfig(ctx, &TenantUpdate{
-			ID:                    tntDB.ID,
-			SMSSenderType:         &TwilioSMSSenderType,
-			DistributionPublicKey: &addr,
-			EnableReCAPTCHA:       &[]bool{false}[0],
-			BaseURL:               &[]string{"https://myorg.backend.io"}[0],
+			ID:              tntDB.ID,
+			SMSSenderType:   &TwilioSMSSenderType,
+			EnableReCAPTCHA: &[]bool{false}[0],
+			BaseURL:         &[]string{"https://myorg.backend.io"}[0],
 		})
 		require.NoError(t, err)
 
 		assert.Equal(t, tnt.EmailSenderType, AWSEmailSenderType)
 		assert.Equal(t, tnt.SMSSenderType, TwilioSMSSenderType)
-		assert.Equal(t, addr, *tnt.SEP10SigningPublicKey)
-		assert.Equal(t, addr, *tnt.DistributionPublicKey)
 		assert.False(t, tnt.EnableMFA)
 		assert.False(t, tnt.EnableReCAPTCHA)
 		assert.Equal(t, "https://myorg.backend.io", *tnt.BaseURL)

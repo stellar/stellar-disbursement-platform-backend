@@ -159,16 +159,6 @@ func (m *Manager) UpdateTenantConfig(ctx context.Context, tu *TenantUpdate) (*Te
 		args = append(args, *tu.SMSSenderType)
 	}
 
-	if tu.SEP10SigningPublicKey != nil {
-		fields = append(fields, "sep10_signing_public_key = ?")
-		args = append(args, *tu.SEP10SigningPublicKey)
-	}
-
-	if tu.DistributionPublicKey != nil {
-		fields = append(fields, "distribution_public_key = ?")
-		args = append(args, *tu.DistributionPublicKey)
-	}
-
 	if tu.EnableMFA != nil {
 		fields = append(fields, "enable_mfa = ?")
 		args = append(args, *tu.EnableMFA)

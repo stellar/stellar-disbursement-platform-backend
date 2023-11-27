@@ -14,16 +14,14 @@ import (
 )
 
 type tenantOptions struct {
-	ID                    string
-	EmailSenderType       *tenant.EmailSenderType
-	SMSSenderType         *tenant.SMSSenderType
-	SEP10SigningPublicKey *string
-	DistributionPublicKey *string
-	EnableMFA             *bool
-	EnableReCAPTCHA       *bool
-	CORSAllowedOrigins    []string
-	BaseURL               *string
-	SDPUIBaseURL          *string
+	ID                 string
+	EmailSenderType    *tenant.EmailSenderType
+	SMSSenderType      *tenant.SMSSenderType
+	EnableMFA          *bool
+	EnableReCAPTCHA    *bool
+	CORSAllowedOrigins []string
+	BaseURL            *string
+	SDPUIBaseURL       *string
 }
 
 func ConfigTenantCmd() *cobra.Command {
@@ -50,22 +48,6 @@ func ConfigTenantCmd() *cobra.Command {
 			OptType:        types.String,
 			CustomSetValue: utils.SetConfigOptionSMSSenderType,
 			ConfigKey:      &to.SMSSenderType,
-			Required:       false,
-		},
-		{
-			Name:           "sep10-signing-public-key",
-			Usage:          "The public key of the Stellar account that signs the SEP-10 transactions. It's also used to sign URLs.",
-			OptType:        types.String,
-			CustomSetValue: utils.SetConfigOptionStellarPublicKey,
-			ConfigKey:      &to.SEP10SigningPublicKey,
-			Required:       false,
-		},
-		{
-			Name:           "distribution-public-key",
-			Usage:          "The public key of the Stellar distribution account that sends the Stellar payments.",
-			OptType:        types.String,
-			CustomSetValue: utils.SetConfigOptionStellarPublicKey,
-			ConfigKey:      &to.DistributionPublicKey,
 			Required:       false,
 		},
 		{
@@ -146,16 +128,14 @@ func executeConfigTenant(ctx context.Context, to *tenantOptions, dbURL string) e
 
 	m := tenant.NewManager(tenant.WithDatabase(dbConnectionPool))
 	_, err = m.UpdateTenantConfig(ctx, &tenant.TenantUpdate{
-		ID:                    to.ID,
-		EmailSenderType:       to.EmailSenderType,
-		SMSSenderType:         to.SMSSenderType,
-		SEP10SigningPublicKey: to.SEP10SigningPublicKey,
-		DistributionPublicKey: to.DistributionPublicKey,
-		EnableMFA:             to.EnableMFA,
-		EnableReCAPTCHA:       to.EnableReCAPTCHA,
-		CORSAllowedOrigins:    to.CORSAllowedOrigins,
-		BaseURL:               to.BaseURL,
-		SDPUIBaseURL:          to.SDPUIBaseURL,
+		ID:                 to.ID,
+		EmailSenderType:    to.EmailSenderType,
+		SMSSenderType:      to.SMSSenderType,
+		EnableMFA:          to.EnableMFA,
+		EnableReCAPTCHA:    to.EnableReCAPTCHA,
+		CORSAllowedOrigins: to.CORSAllowedOrigins,
+		BaseURL:            to.BaseURL,
+		SDPUIBaseURL:       to.SDPUIBaseURL,
 	})
 	if err != nil {
 		return fmt.Errorf("updating tenant config: %w", err)

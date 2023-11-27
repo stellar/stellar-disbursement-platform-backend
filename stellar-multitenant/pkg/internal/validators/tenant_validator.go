@@ -5,7 +5,6 @@ import (
 	"net/url"
 	"regexp"
 
-	"github.com/stellar/go/strkey"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
@@ -13,33 +12,29 @@ import (
 var validTenantName *regexp.Regexp = regexp.MustCompile(`^[a-z-]+$`)
 
 type TenantRequest struct {
-	Name                  string                 `json:"name"`
-	OwnerEmail            string                 `json:"owner_email"`
-	OwnerFirstName        string                 `json:"owner_first_name"`
-	OwnerLastName         string                 `json:"owner_last_name"`
-	OrganizationName      string                 `json:"organization_name"`
-	EmailSenderType       tenant.EmailSenderType `json:"email_sender_type"`
-	SMSSenderType         tenant.SMSSenderType   `json:"sms_sender_type"`
-	SEP10SigningPublicKey string                 `json:"sep10_signing_public_key"`
-	DistributionPublicKey string                 `json:"distribution_public_key"`
-	EnableMFA             bool                   `json:"enable_mfa"`
-	EnableReCAPTCHA       bool                   `json:"enable_recaptcha"`
-	CORSAllowedOrigins    []string               `json:"cors_allowed_origins"`
-	BaseURL               string                 `json:"base_url"`
-	SDPUIBaseURL          string                 `json:"sdp_ui_base_url"`
+	Name               string                 `json:"name"`
+	OwnerEmail         string                 `json:"owner_email"`
+	OwnerFirstName     string                 `json:"owner_first_name"`
+	OwnerLastName      string                 `json:"owner_last_name"`
+	OrganizationName   string                 `json:"organization_name"`
+	EmailSenderType    tenant.EmailSenderType `json:"email_sender_type"`
+	SMSSenderType      tenant.SMSSenderType   `json:"sms_sender_type"`
+	EnableMFA          bool                   `json:"enable_mfa"`
+	EnableReCAPTCHA    bool                   `json:"enable_recaptcha"`
+	CORSAllowedOrigins []string               `json:"cors_allowed_origins"`
+	BaseURL            string                 `json:"base_url"`
+	SDPUIBaseURL       string                 `json:"sdp_ui_base_url"`
 }
 
 type UpdateTenantRequest struct {
-	EmailSenderType       *tenant.EmailSenderType `json:"email_sender_type"`
-	SMSSenderType         *tenant.SMSSenderType   `json:"sms_sender_type"`
-	SEP10SigningPublicKey *string                 `json:"sep10_signing_public_key"`
-	DistributionPublicKey *string                 `json:"distribution_public_key"`
-	EnableMFA             *bool                   `json:"enable_mfa"`
-	EnableReCAPTCHA       *bool                   `json:"enable_recaptcha"`
-	CORSAllowedOrigins    []string                `json:"cors_allowed_origins"`
-	BaseURL               *string                 `json:"base_url"`
-	SDPUIBaseURL          *string                 `json:"sdp_ui_base_url"`
-	Status                *tenant.TenantStatus    `json:"status"`
+	EmailSenderType    *tenant.EmailSenderType `json:"email_sender_type"`
+	SMSSenderType      *tenant.SMSSenderType   `json:"sms_sender_type"`
+	EnableMFA          *bool                   `json:"enable_mfa"`
+	EnableReCAPTCHA    *bool                   `json:"enable_recaptcha"`
+	CORSAllowedOrigins []string                `json:"cors_allowed_origins"`
+	BaseURL            *string                 `json:"base_url"`
+	SDPUIBaseURL       *string                 `json:"sdp_ui_base_url"`
+	Status             *tenant.TenantStatus    `json:"status"`
 }
 
 type TenantValidator struct {
@@ -68,9 +63,6 @@ func (tv *TenantValidator) ValidateCreateTenantRequest(reqBody *TenantRequest) *
 
 	reqBody.SMSSenderType, err = tenant.ParseSMSSenderType(string(reqBody.SMSSenderType))
 	tv.CheckError(err, "sms_sender_type", fmt.Sprintf("invalid sms sender type. Expected one of these values: %s", []tenant.SMSSenderType{tenant.TwilioSMSSenderType, tenant.AWSSMSSenderType, tenant.DryRunSMSSenderType}))
-
-	tv.Check(strkey.IsValidEd25519PublicKey(reqBody.SEP10SigningPublicKey), "sep10_signing_public_key", "invalid public key")
-	tv.Check(strkey.IsValidEd25519PublicKey(reqBody.DistributionPublicKey), "distribution_public_key", "invalid public key")
 
 	if _, err = url.ParseRequestURI(reqBody.BaseURL); err != nil {
 		tv.Check(false, "base_url", "invalid base URL value")
@@ -111,14 +103,6 @@ func (tv *TenantValidator) ValidateUpdateTenantRequest(reqBody *UpdateTenantRequ
 		SMSSenderType, smsErr := tenant.ParseSMSSenderType(string(*reqBody.SMSSenderType))
 		tv.CheckError(smsErr, "sms_sender_type", fmt.Sprintf("invalid sms sender type. Expected one of these values: %s", []tenant.SMSSenderType{tenant.TwilioSMSSenderType, tenant.AWSSMSSenderType, tenant.DryRunSMSSenderType}))
 		reqBody.SMSSenderType = &SMSSenderType
-	}
-
-	if reqBody.SEP10SigningPublicKey != nil {
-		tv.Check(strkey.IsValidEd25519PublicKey(*reqBody.SEP10SigningPublicKey), "sep10_signing_public_key", "invalid public key")
-	}
-
-	if reqBody.DistributionPublicKey != nil {
-		tv.Check(strkey.IsValidEd25519PublicKey(*reqBody.DistributionPublicKey), "distribution_public_key", "invalid public key")
 	}
 
 	if reqBody.CORSAllowedOrigins != nil && len(reqBody.CORSAllowedOrigins) != 0 {

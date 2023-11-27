@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/lib/pq"
-	"github.com/stellar/go/strkey"
 	"golang.org/x/exp/slices"
 )
 
@@ -44,34 +43,30 @@ func ParseSMSSenderType(smsSenderTypeStr string) (SMSSenderType, error) {
 }
 
 type Tenant struct {
-	ID                    string          `json:"id" db:"id"`
-	Name                  string          `json:"name" db:"name"`
-	EmailSenderType       EmailSenderType `json:"email_sender_type" db:"email_sender_type"`
-	SMSSenderType         SMSSenderType   `json:"sms_sender_type" db:"sms_sender_type"`
-	SEP10SigningPublicKey *string         `json:"sep10_signing_public_key" db:"sep10_signing_public_key"`
-	DistributionPublicKey *string         `json:"distribution_public_key" db:"distribution_public_key"`
-	EnableMFA             bool            `json:"enable_mfa" db:"enable_mfa"`
-	EnableReCAPTCHA       bool            `json:"enable_recaptcha" db:"enable_recaptcha"`
-	CORSAllowedOrigins    pq.StringArray  `json:"cors_allowed_origins" db:"cors_allowed_origins"`
-	BaseURL               *string         `json:"base_url" db:"base_url"`
-	SDPUIBaseURL          *string         `json:"sdp_ui_base_url" db:"sdp_ui_base_url"`
-	Status                TenantStatus    `json:"status" db:"status"`
-	CreatedAt             time.Time       `json:"created_at" db:"created_at"`
-	UpdatedAt             time.Time       `json:"updated_at" db:"updated_at"`
+	ID                 string          `json:"id" db:"id"`
+	Name               string          `json:"name" db:"name"`
+	EmailSenderType    EmailSenderType `json:"email_sender_type" db:"email_sender_type"`
+	SMSSenderType      SMSSenderType   `json:"sms_sender_type" db:"sms_sender_type"`
+	EnableMFA          bool            `json:"enable_mfa" db:"enable_mfa"`
+	EnableReCAPTCHA    bool            `json:"enable_recaptcha" db:"enable_recaptcha"`
+	CORSAllowedOrigins pq.StringArray  `json:"cors_allowed_origins" db:"cors_allowed_origins"`
+	BaseURL            *string         `json:"base_url" db:"base_url"`
+	SDPUIBaseURL       *string         `json:"sdp_ui_base_url" db:"sdp_ui_base_url"`
+	Status             TenantStatus    `json:"status" db:"status"`
+	CreatedAt          time.Time       `json:"created_at" db:"created_at"`
+	UpdatedAt          time.Time       `json:"updated_at" db:"updated_at"`
 }
 
 type TenantUpdate struct {
-	ID                    string           `db:"id"`
-	EmailSenderType       *EmailSenderType `db:"email_sender_type"`
-	SMSSenderType         *SMSSenderType   `db:"sms_sender_type"`
-	SEP10SigningPublicKey *string          `db:"sep10_signing_public_key"`
-	DistributionPublicKey *string          `db:"distribution_public_key"`
-	EnableMFA             *bool            `db:"enable_mfa"`
-	EnableReCAPTCHA       *bool            `db:"enable_recaptcha"`
-	CORSAllowedOrigins    []string         `db:"cors_allowed_origins"`
-	BaseURL               *string          `db:"base_url"`
-	SDPUIBaseURL          *string          `db:"sdp_ui_base_url"`
-	Status                *TenantStatus    `db:"status"`
+	ID                 string           `db:"id"`
+	EmailSenderType    *EmailSenderType `db:"email_sender_type"`
+	SMSSenderType      *SMSSenderType   `db:"sms_sender_type"`
+	EnableMFA          *bool            `db:"enable_mfa"`
+	EnableReCAPTCHA    *bool            `db:"enable_recaptcha"`
+	CORSAllowedOrigins []string         `db:"cors_allowed_origins"`
+	BaseURL            *string          `db:"base_url"`
+	SDPUIBaseURL       *string          `db:"sdp_ui_base_url"`
+	Status             *TenantStatus    `db:"status"`
 }
 
 type TenantStatus string
@@ -109,14 +104,6 @@ func (tu *TenantUpdate) Validate() error {
 		}
 	}
 
-	if tu.SEP10SigningPublicKey != nil && !strkey.IsValidEd25519PublicKey(*tu.SEP10SigningPublicKey) {
-		return fmt.Errorf("invalid SEP-10 signing public key")
-	}
-
-	if tu.DistributionPublicKey != nil && !strkey.IsValidEd25519PublicKey(*tu.DistributionPublicKey) {
-		return fmt.Errorf("invalid distribution public key")
-	}
-
 	if tu.BaseURL != nil && !isValidURL(*tu.BaseURL) {
 		return fmt.Errorf("invalid base URL")
 	}
@@ -141,8 +128,6 @@ func (tu *TenantUpdate) Validate() error {
 func (tu *TenantUpdate) areAllFieldsEmpty() bool {
 	return (tu.EmailSenderType == nil &&
 		tu.SMSSenderType == nil &&
-		tu.SEP10SigningPublicKey == nil &&
-		tu.DistributionPublicKey == nil &&
 		tu.EnableMFA == nil &&
 		tu.EnableReCAPTCHA == nil &&
 		tu.CORSAllowedOrigins == nil &&
