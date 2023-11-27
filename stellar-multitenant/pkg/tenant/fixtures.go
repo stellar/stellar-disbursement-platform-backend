@@ -118,9 +118,15 @@ func CreateTenantFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecut
 	}
 
 	err := sqlExec.GetContext(ctx, tnt, query, tnt.Name)
-	require.NoError(t, err)
+	require.Nil(t, err)
 
 	return tnt
+}
+
+func LoadDefaultTenantInContext(t *testing.T, dbConnectionPool db.DBConnectionPool) context.Context {
+	ctx := context.Background()
+	tnt := CreateTenantFixture(t, ctx, dbConnectionPool, "default-tenant")
+	return SaveTenantInContext(ctx, tnt)
 }
 
 func CheckSchemaExistsFixture(t *testing.T, ctx context.Context, dbConnectionPool db.DBConnectionPool, schemaName string) bool {

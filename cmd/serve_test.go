@@ -95,6 +95,7 @@ func Test_serve(t *testing.T) {
 		GitCommit:                       "1234567890abcdef",
 		Port:                            8000,
 		Version:                         "x.y.z",
+		InstanceName:                    "SDP Testnet",
 		MonitorService:                  &mMonitorService,
 		DatabaseDSN:                     randomDatabaseDSN,
 		EC256PublicKey:                  "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAER88h7AiQyVDysRTxKvBB6CaiO/kS\ncvGyimApUE/12gFhNTRf37SE19CSCllKxstnVFOpLLWB7Qu5OJ0Wvcz3hg==\n-----END PUBLIC KEY-----",
@@ -207,6 +208,7 @@ func Test_serve(t *testing.T) {
 	t.Setenv("RECAPTCHA_SITE_KEY", serveOpts.ReCAPTCHASiteKey)
 	t.Setenv("RECAPTCHA_SITE_SECRET_KEY", serveOpts.ReCAPTCHASiteSecretKey)
 	t.Setenv("CORS_ALLOWED_ORIGINS", "*")
+	t.Setenv("INSTANCE_NAME", serveOpts.InstanceName)
 
 	// test & assert
 	rootCmd.SetArgs([]string{"--environment", "test", "serve", "--metrics-type", "PROMETHEUS"})

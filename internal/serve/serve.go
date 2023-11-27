@@ -52,6 +52,7 @@ type ServeOptions struct {
 	GitCommit                       string
 	Port                            int
 	Version                         string
+	InstanceName                    string
 	MonitorService                  monitor.MonitorServiceInterface
 	DatabaseDSN                     string
 	dbConnectionPool                db.DBConnectionPool
@@ -387,6 +388,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 		NetworkPassphrase:        o.NetworkPassphrase,
 		Models:                   o.Models,
 		Sep10SigningPublicKey:    o.Sep10SigningPublicKey,
+		InstanceName:             o.InstanceName,
 	}.ServeHTTP)
 
 	mux.Route("/wallet-registration", func(r chi.Router) {

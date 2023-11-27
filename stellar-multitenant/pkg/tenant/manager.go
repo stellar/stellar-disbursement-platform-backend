@@ -13,10 +13,11 @@ import (
 )
 
 var (
-	ErrTenantDoesNotExist   = errors.New("tenant does not exist")
-	ErrDuplicatedTenantName = errors.New("duplicated tenant name")
-	ErrEmptyTenantName      = errors.New("tenant name cannot be empty")
-	ErrEmptyUpdateTenant    = errors.New("provide at least one field to be updated")
+	ErrTenantDoesNotExist      = errors.New("tenant does not exist")
+	ErrDuplicatedTenantName    = errors.New("duplicated tenant name")
+	ErrEmptyTenantName         = errors.New("tenant name cannot be empty")
+	ErrEmptyUpdateTenant       = errors.New("provide at least one field to be updated")
+	ErrTenantNotFoundInContext = errors.New("tenant not found in context")
 )
 
 type tenantContextKey struct{}
@@ -205,9 +206,12 @@ func (m *Manager) UpdateTenantConfig(ctx context.Context, tu *TenantUpdate) (*Te
 }
 
 // GetTenantFromContext retrieves the tenant information from the context.
-func GetTenantFromContext(ctx context.Context) (*Tenant, bool) {
+func GetTenantFromContext(ctx context.Context) (*Tenant, error) {
 	currentTenant, ok := ctx.Value(tenantContextKey{}).(*Tenant)
-	return currentTenant, ok
+	if !ok {
+		return nil, ErrTenantNotFoundInContext
+	}
+	return currentTenant, nil
 }
 
 // SaveTenantInContext stores the tenant information in the context.

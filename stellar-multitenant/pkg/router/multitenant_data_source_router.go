@@ -10,10 +10,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
-var (
-	ErrTenantNotFoundInContext = errors.New("tenant not found in context")
-	ErrNoDataSourcesAvailable  = errors.New("no data sources are available")
-)
+var ErrNoDataSourcesAvailable = errors.New("no data sources are available")
 
 type MultiTenantDataSourceRouter struct {
 	dataSources   sync.Map
@@ -28,9 +25,9 @@ func NewMultiTenantDataSourceRouter(tenantManager tenant.ManagerInterface) *Mult
 }
 
 func (m *MultiTenantDataSourceRouter) GetDataSource(ctx context.Context) (db.DBConnectionPool, error) {
-	currentTenant, ok := tenant.GetTenantFromContext(ctx)
-	if !ok {
-		return nil, ErrTenantNotFoundInContext
+	currentTenant, err := tenant.GetTenantFromContext(ctx)
+	if err != nil {
+		return nil, tenant.ErrTenantNotFoundInContext
 	}
 
 	return m.GetDataSourceForTenant(ctx, *currentTenant)
