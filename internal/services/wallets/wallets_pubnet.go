@@ -1,6 +1,9 @@
 package wallets
 
-import "github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+import (
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/assets"
+)
 
 var PubnetWallets = []data.Wallet{
 	{
@@ -9,10 +12,7 @@ var PubnetWallets = []data.Wallet{
 		DeepLinkSchema:    "https://vibrantapp.com/sdp",
 		SEP10ClientDomain: "api.vibrantapp.com",
 		Assets: []data.Asset{
-			{
-				Code:   "USDC",
-				Issuer: "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN",
-			},
+			assets.USDCAssetPubnet,
 		},
 	},
 	{
@@ -21,10 +21,16 @@ var PubnetWallets = []data.Wallet{
 		DeepLinkSchema:    "https://vibrantapp.com/sdp-rc",
 		SEP10ClientDomain: "vibrantapp.com",
 		Assets: []data.Asset{
-			{
-				Code:   "USDC",
-				Issuer: "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN",
-			},
+			assets.USDCAssetPubnet,
+		},
+	},
+	{
+		Name:              "Freedom Wallet",
+		Homepage:          "https://freedom-public-uat.bpventures.us",
+		DeepLinkSchema:    "https://freedom-public-uat.bpventures.us/disbursement/create",
+		SEP10ClientDomain: "freedom-public-uat.bpventures.us",
+		Assets: []data.Asset{
+			assets.USDCAssetPubnet,
 		},
 	},
 	// {

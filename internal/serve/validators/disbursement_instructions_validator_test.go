@@ -107,6 +107,20 @@ func Test_DisbursementInstructionsValidator_ValidateAndGetInstruction(t *testing
 				"line 3 - birthday": "invalid date of birth format. Correct format: 1990-01-01",
 			},
 		},
+		{
+			name: "date of birth in the future",
+			actual: &data.DisbursementInstruction{
+				Phone:             "+380445555555",
+				ID:                "123456789",
+				Amount:            "100.5",
+				VerificationValue: "2090-01-01",
+			},
+			lineNumber: 3,
+			hasErrors:  true,
+			expectedErrors: map[string]interface{}{
+				"line 3 - birthday": "date of birth cannot be in the future",
+			},
+		},
 	}
 
 	for _, tt := range tests {

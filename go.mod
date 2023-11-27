@@ -25,7 +25,7 @@ require (
 	github.com/stellar/go v0.0.0-20230810175703-9c94bc588b15
 	github.com/stretchr/testify v1.8.4
 	github.com/twilio/twilio-go v1.11.0
-	golang.org/x/crypto v0.12.0
+	golang.org/x/crypto v0.15.0
 	golang.org/x/exp v0.0.0-20230810033253-352e893a4cad
 )
 
@@ -64,9 +64,9 @@ require (
 	github.com/stellar/go-xdr v0.0.0-20211103144802-8017fc4bdfee // indirect
 	github.com/stretchr/objx v0.5.1 // indirect
 	github.com/subosito/gotenv v1.4.2 // indirect
-	golang.org/x/net v0.14.0 // indirect
-	golang.org/x/sys v0.11.0 // indirect
-	golang.org/x/text v0.12.0 // indirect
+	golang.org/x/net v0.18.0 // indirect
+	golang.org/x/sys v0.14.0 // indirect
+	golang.org/x/text v0.14.0 // indirect
 	google.golang.org/protobuf v1.31.0 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/tylerb/graceful.v1 v1.2.15 // indirect
