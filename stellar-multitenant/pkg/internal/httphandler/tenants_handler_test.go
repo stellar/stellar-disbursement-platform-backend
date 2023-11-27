@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/stellar/go/keypair"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
@@ -134,8 +133,6 @@ func Test_TenantHandler_Get(t *testing.T) {
 					"name": %q,
 					"email_sender_type": "DRY_RUN",
 					"sms_sender_type": "DRY_RUN",
-					"sep10_signing_public_key": null,
-					"distribution_public_key": null,
 					"enable_mfa": true,
 					"enable_recaptcha": true,
 					"cors_allowed_origins": null,
@@ -150,8 +147,6 @@ func Test_TenantHandler_Get(t *testing.T) {
 					"name": %q,
 					"email_sender_type": "DRY_RUN",
 					"sms_sender_type": "DRY_RUN",
-					"sep10_signing_public_key": null,
-					"distribution_public_key": null,
 					"enable_mfa": true,
 					"enable_recaptcha": true,
 					"cors_allowed_origins": null,
@@ -187,8 +182,6 @@ func Test_TenantHandler_Get(t *testing.T) {
 				"name": %q,
 				"email_sender_type": "DRY_RUN",
 				"sms_sender_type": "DRY_RUN",
-				"sep10_signing_public_key": null,
-				"distribution_public_key": null,
 				"enable_mfa": true,
 				"enable_recaptcha": true,
 				"cors_allowed_origins": null,
@@ -223,8 +216,6 @@ func Test_TenantHandler_Get(t *testing.T) {
 				"name": %q,
 				"email_sender_type": "DRY_RUN",
 				"sms_sender_type": "DRY_RUN",
-				"sep10_signing_public_key": null,
-				"distribution_public_key": null,
 				"enable_mfa": true,
 				"enable_recaptcha": true,
 				"cors_allowed_origins": null,
@@ -307,9 +298,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 					"email_sender_type": "invalid email sender type. Expected one of these values: [AWS_EMAIL DRY_RUN]",
 					"sms_sender_type": "invalid sms sender type. Expected one of these values: [TWILIO_SMS AWS_SMS DRY_RUN]",
 					"cors_allowed_origins": "provide at least one CORS allowed origins",
-					"sdp_ui_base_url": "invalid SDP UI base URL value",
-					"sep10_signing_public_key": "invalid public key",
-					"distribution_public_key": "invalid public key"
+					"sdp_ui_base_url": "invalid SDP UI base URL value"
 				}
 			}
 		`
@@ -330,8 +319,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 			Return(nil).
 			Once()
 
-		pubKey := keypair.MustRandom().Address()
-		reqBody := fmt.Sprintf(`
+		reqBody := `
 			{
 				"name": "aid-org",
 				"owner_email": "owner@email.org",
@@ -344,11 +332,9 @@ func Test_TenantHandler_Post(t *testing.T) {
 				"enable_mfa": false,
 				"cors_allowed_origins": ["*"],
 				"base_url": "https://backend.sdp.org",
-				"sdp_ui_base_url": "https://aid-org.sdp.org",
-				"sep10_signing_public_key": %q,
-				"distribution_public_key": %q
+				"sdp_ui_base_url": "https://aid-org.sdp.org"
 			}
-		`, pubKey, pubKey)
+		`
 
 		rr := httptest.NewRecorder()
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/tenants", strings.NewReader(reqBody))
@@ -371,8 +357,6 @@ func Test_TenantHandler_Post(t *testing.T) {
 				"name": "aid-org",
 				"email_sender_type": "DRY_RUN",
 				"sms_sender_type": "DRY_RUN",
-				"sep10_signing_public_key": %q,
-				"distribution_public_key": %q,
 				"enable_mfa": false,
 				"enable_recaptcha": true,
 				"cors_allowed_origins": ["*"],
@@ -382,7 +366,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 				"created_at": %q,
 				"updated_at": %q
 			}
-		`, tnt.ID, pubKey, pubKey, tnt.CreatedAt.Format(time.RFC3339Nano), tnt.UpdatedAt.Format(time.RFC3339Nano))
+		`, tnt.ID, tnt.CreatedAt.Format(time.RFC3339Nano), tnt.UpdatedAt.Format(time.RFC3339Nano))
 		assert.JSONEq(t, string(expectedRespBody), string(respBody))
 
 		// Validating infrastructure
@@ -488,14 +472,6 @@ func Test_TenantHandler_Patch(t *testing.T) {
 		runBadRequestPatchTest(t, r, url, "sms_sender_type", "invalid sms sender type. Expected one of these values: [TWILIO_SMS AWS_SMS DRY_RUN]")
 	})
 
-	t.Run("returns BadRequest when SEP10SigningPublicKey is not valid", func(t *testing.T) {
-		runBadRequestPatchTest(t, r, url, "sep10_signing_public_key", "invalid public key")
-	})
-
-	t.Run("returns BadRequest when DistributionPublicKey is not valid", func(t *testing.T) {
-		runBadRequestPatchTest(t, r, url, "distribution_public_key", "invalid public key")
-	})
-
 	t.Run("returns BadRequest when BaseURL is not valid", func(t *testing.T) {
 		runBadRequestPatchTest(t, r, url, "base_url", "invalid base URL value")
 	})
@@ -535,8 +511,6 @@ func Test_TenantHandler_Patch(t *testing.T) {
 		expectedRespBody := `
 			"email_sender_type": "AWS_EMAIL",
 			"sms_sender_type": "DRY_RUN",
-			"sep10_signing_public_key": null,
-			"distribution_public_key": null,
 			"enable_mfa": true,
 			"enable_recaptcha": true,
 			"cors_allowed_origins": null,
@@ -553,8 +527,6 @@ func Test_TenantHandler_Patch(t *testing.T) {
 		expectedRespBody := `
 			"email_sender_type": "DRY_RUN",
 			"sms_sender_type": "TWILIO_SMS",
-			"sep10_signing_public_key": null,
-			"distribution_public_key": null,
 			"enable_mfa": true,
 			"enable_recaptcha": true,
 			"cors_allowed_origins": null,
@@ -566,51 +538,11 @@ func Test_TenantHandler_Patch(t *testing.T) {
 		runSuccessfulRequestPatchTest(t, r, ctx, dbConnectionPool, handler, reqBody, expectedRespBody)
 	})
 
-	t.Run("successfully updates SEP10SigningPublicKey of a tenant", func(t *testing.T) {
-		key := keypair.MustRandom().Address()
-		reqBody := fmt.Sprintf(`{"sep10_signing_public_key": "%s"}`, key)
-		expectedRespBody := fmt.Sprintf(`
-			"email_sender_type": "DRY_RUN",
-			"sms_sender_type": "DRY_RUN",
-			"sep10_signing_public_key": "%s",
-			"distribution_public_key": null,
-			"enable_mfa": true,
-			"enable_recaptcha": true,
-			"cors_allowed_origins": null,
-			"base_url": null,
-			"sdp_ui_base_url": null,
-			"status": "TENANT_CREATED",
-		`, key)
-
-		runSuccessfulRequestPatchTest(t, r, ctx, dbConnectionPool, handler, reqBody, expectedRespBody)
-	})
-
-	t.Run("successfully updates DistributionPublicKey of a tenant", func(t *testing.T) {
-		key := keypair.MustRandom().Address()
-		reqBody := fmt.Sprintf(`{"distribution_public_key": "%s"}`, key)
-		expectedRespBody := fmt.Sprintf(`
-			"email_sender_type": "DRY_RUN",
-			"sms_sender_type": "DRY_RUN",
-			"sep10_signing_public_key": null,
-			"distribution_public_key": "%s",
-			"enable_mfa": true,
-			"enable_recaptcha": true,
-			"cors_allowed_origins": null,
-			"base_url": null,
-			"sdp_ui_base_url": null,
-			"status": "TENANT_CREATED",
-		`, key)
-
-		runSuccessfulRequestPatchTest(t, r, ctx, dbConnectionPool, handler, reqBody, expectedRespBody)
-	})
-
 	t.Run("successfully updates EnableMFA of a tenant", func(t *testing.T) {
 		reqBody := `{"enable_mfa": false}`
 		expectedRespBody := `
 			"email_sender_type": "DRY_RUN",
 			"sms_sender_type": "DRY_RUN",
-			"sep10_signing_public_key": null,
-			"distribution_public_key": null,
 			"enable_mfa": false,
 			"enable_recaptcha": true,
 			"cors_allowed_origins": null,
@@ -627,8 +559,6 @@ func Test_TenantHandler_Patch(t *testing.T) {
 		expectedRespBody := `
 			"email_sender_type": "DRY_RUN",
 			"sms_sender_type": "DRY_RUN",
-			"sep10_signing_public_key": null,
-			"distribution_public_key": null,
 			"enable_mfa": true,
 			"enable_recaptcha": false,
 			"cors_allowed_origins": null,
@@ -645,8 +575,6 @@ func Test_TenantHandler_Patch(t *testing.T) {
 		expectedRespBody := `
 			"email_sender_type": "DRY_RUN",
 			"sms_sender_type": "DRY_RUN",
-			"sep10_signing_public_key": null,
-			"distribution_public_key": null,
 			"enable_mfa": true,
 			"enable_recaptcha": true,
 			"cors_allowed_origins": ["http://valid.com"],
@@ -663,8 +591,6 @@ func Test_TenantHandler_Patch(t *testing.T) {
 		expectedRespBody := `
 			"email_sender_type": "DRY_RUN",
 			"sms_sender_type": "DRY_RUN",
-			"sep10_signing_public_key": null,
-			"distribution_public_key": null,
 			"enable_mfa": true,
 			"enable_recaptcha": true,
 			"cors_allowed_origins": null,
@@ -681,8 +607,6 @@ func Test_TenantHandler_Patch(t *testing.T) {
 		expectedRespBody := `
 			"email_sender_type": "DRY_RUN",
 			"sms_sender_type": "DRY_RUN",
-			"sep10_signing_public_key": null,
-			"distribution_public_key": null,
 			"enable_mfa": true,
 			"enable_recaptcha": true,
 			"cors_allowed_origins": null,
@@ -699,8 +623,6 @@ func Test_TenantHandler_Patch(t *testing.T) {
 		expectedRespBody := `
 			"email_sender_type": "DRY_RUN",
 			"sms_sender_type": "DRY_RUN",
-			"sep10_signing_public_key": null,
-			"distribution_public_key": null,
 			"enable_mfa": true,
 			"enable_recaptcha": true,
 			"cors_allowed_origins": null,
@@ -713,32 +635,27 @@ func Test_TenantHandler_Patch(t *testing.T) {
 	})
 
 	t.Run("successfully updates all fields of a tenant", func(t *testing.T) {
-		key := keypair.MustRandom().Address()
-		reqBody := fmt.Sprintf(`{
+		reqBody := `{
 			"email_sender_type": "AWS_EMAIL",
 			"sms_sender_type": "AWS_SMS",
-			"sep10_signing_public_key": "%s",
-			"distribution_public_key": "%s",
 			"enable_mfa": false,
 			"enable_recaptcha": false,
 			"cors_allowed_origins": ["http://valid.com"],
 			"base_url": "http://valid.com",
 			"sdp_ui_base_url": "http://valid.com",
 			"status": "TENANT_ACTIVATED"
-		}`, key, key)
+		}`
 
-		expectedRespBody := fmt.Sprintf(`
+		expectedRespBody := `
 			"email_sender_type": "AWS_EMAIL",
 			"sms_sender_type": "AWS_SMS",
-			"sep10_signing_public_key": "%s",
-			"distribution_public_key": "%s",
 			"enable_mfa": false,
 			"enable_recaptcha": false,
 			"cors_allowed_origins": ["http://valid.com"],
 			"base_url": "http://valid.com",
 			"sdp_ui_base_url": "http://valid.com",
 			"status": "TENANT_ACTIVATED",
-		`, key, key)
+		`
 
 		runSuccessfulRequestPatchTest(t, r, ctx, dbConnectionPool, handler, reqBody, expectedRespBody)
 	})

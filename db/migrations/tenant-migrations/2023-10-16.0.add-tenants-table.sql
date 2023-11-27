@@ -23,8 +23,6 @@ CREATE TABLE public.tenants
     name text NOT NULL,
     email_sender_type email_sender_type DEFAULT 'DRY_RUN'::email_sender_type,
     sms_sender_type sms_sender_type DEFAULT 'DRY_RUN'::sms_sender_type,
-    sep10_signing_public_key text NULL,
-    distribution_public_key text NULL,
     enable_mfa boolean DEFAULT true,
     enable_recaptcha boolean DEFAULT true,
     cors_allowed_origins text[] NULL,

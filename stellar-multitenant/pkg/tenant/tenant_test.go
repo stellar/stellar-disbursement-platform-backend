@@ -3,7 +3,6 @@ package tenant
 import (
 	"testing"
 
-	"github.com/stellar/go/keypair"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -29,22 +28,12 @@ func Test_TenantUpdate_Validate(t *testing.T) {
 		assert.EqualError(t, err, `invalid SMS sender type: invalid sms sender type "invalid"`)
 
 		tu.SMSSenderType = nil
-		addr := "invalid"
-		tu.SEP10SigningPublicKey = &addr
-		err = tu.Validate()
-		assert.EqualError(t, err, "invalid SEP-10 signing public key")
-
-		tu.SEP10SigningPublicKey = nil
-		tu.DistributionPublicKey = &addr
-		err = tu.Validate()
-		assert.EqualError(t, err, "invalid distribution public key")
-
-		tu.DistributionPublicKey = nil
 		u := "inv@lid$"
 		tu.BaseURL = &u
 		err = tu.Validate()
 		assert.EqualError(t, err, "invalid base URL")
 
+		tu.SMSSenderType = nil
 		tu.BaseURL = nil
 		tu.SDPUIBaseURL = &u
 		err = tu.Validate()
@@ -64,17 +53,15 @@ func Test_TenantUpdate_Validate(t *testing.T) {
 
 	t.Run("valid values", func(t *testing.T) {
 		tu := TenantUpdate{
-			ID:                    "abc",
-			EmailSenderType:       &AWSEmailSenderType,
-			SMSSenderType:         &TwilioSMSSenderType,
-			SEP10SigningPublicKey: &[]string{keypair.MustRandom().Address()}[0],
-			DistributionPublicKey: &[]string{keypair.MustRandom().Address()}[0],
-			EnableMFA:             &[]bool{true}[0],
-			EnableReCAPTCHA:       &[]bool{true}[0],
-			CORSAllowedOrigins:    []string{"https://myorg.sdp.io", "https://myorg-dev.sdp.io"},
-			BaseURL:               &[]string{"https://myorg.backend.io"}[0],
-			SDPUIBaseURL:          &[]string{"https://myorg.frontend.io"}[0],
-			Status:                &[]TenantStatus{ProvisionedTenantStatus}[0],
+			ID:                 "abc",
+			EmailSenderType:    &AWSEmailSenderType,
+			SMSSenderType:      &TwilioSMSSenderType,
+			EnableMFA:          &[]bool{true}[0],
+			EnableReCAPTCHA:    &[]bool{true}[0],
+			CORSAllowedOrigins: []string{"https://myorg.sdp.io", "https://myorg-dev.sdp.io"},
+			BaseURL:            &[]string{"https://myorg.backend.io"}[0],
+			SDPUIBaseURL:       &[]string{"https://myorg.frontend.io"}[0],
+			Status:             &[]TenantStatus{ProvisionedTenantStatus}[0],
 		}
 		err := tu.Validate()
 		assert.NoError(t, err)

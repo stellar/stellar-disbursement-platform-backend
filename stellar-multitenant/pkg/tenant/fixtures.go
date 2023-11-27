@@ -38,8 +38,8 @@ func ResetTenantConfigFixture(t *testing.T, ctx context.Context, dbConnectionPoo
 	const q = `
 		UPDATE tenants
 		SET
-			email_sender_type = DEFAULT, sms_sender_type = DEFAULT, sep10_signing_public_key = NULL,
-			distribution_public_key = NULL, enable_mfa = DEFAULT, enable_recaptcha = DEFAULT,
+			email_sender_type = DEFAULT, sms_sender_type = DEFAULT,
+			enable_mfa = DEFAULT, enable_recaptcha = DEFAULT,
 			cors_allowed_origins = NULL, base_url = NULL, sdp_ui_base_url = NULL
 		WHERE
 			id = $1
