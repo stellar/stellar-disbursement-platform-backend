@@ -1616,3 +1616,42 @@ func Test_ReceiverHandler_BuildReceiversResponse(t *testing.T) {
 	err = dbTx.Commit()
 	require.NoError(t, err)
 }
+
+func Test_ReceiverHandler_GetReceiverVerificatioTypes(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	models, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+
+	handler := &ReceiverHandler{
+		Models:           models,
+		DBConnectionPool: dbConnectionPool,
+	}
+
+	r := chi.NewRouter()
+	r.Get("/receivers/verification-types", handler.GetReceiverVerificatioTypes)
+
+	req, err := http.NewRequest(http.MethodGet, "/receivers/verification-types", nil)
+	require.NoError(t, err)
+
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+
+	require.Equal(t, http.StatusOK, rr.Code)
+
+	respBody, err := io.ReadAll(rr.Body)
+	require.NoError(t, err)
+
+	expectedBody := `[
+  "DATE_OF_BIRTH",
+  "NATIONAL_ID_NUMBER",
+  "PIN"
+]`
+
+	assert.Equal(t, expectedBody, string(respBody))
+}
