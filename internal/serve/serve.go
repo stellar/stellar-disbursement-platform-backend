@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/router"
+
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/stellar/go/clients/horizonclient"
@@ -31,7 +33,6 @@ import (
 	txnsubmitterutils "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/router"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
@@ -85,6 +86,8 @@ type ServeOptions struct {
 	ReCAPTCHASiteSecretKey          string
 	EnableMFA                       bool
 	EnableReCAPTCHA                 bool
+	EnableScheduler                 bool
+	EnableMultiTenantDB             bool
 	tenantManager                   tenant.ManagerInterface
 	tenantRouter                    db.DataSourceRouter
 }
@@ -99,16 +102,30 @@ func (opts *ServeOptions) SetupDependencies() error {
 	// Set crash tracker LogAndReportErrors as DefaultReportErrorFunc
 	httperror.SetDefaultReportErrorFunc(opts.CrashTrackerClient.LogAndReportErrors)
 
-	// Setup Database:
+	// Setup Tenant Router & Manager
 	dbConnectionPool, err := db.OpenDBConnectionPoolWithMetrics(opts.DatabaseDSN, opts.MonitorService)
 	if err != nil {
 		return fmt.Errorf("error connecting to the database: %w", err)
 	}
-	opts.Models, err = data.NewModels(dbConnectionPool)
+
+	// Setup Multi-Tenant Database when enabled
+	if opts.EnableMultiTenantDB {
+		opts.tenantManager = tenant.NewManager(tenant.WithDatabase(dbConnectionPool))
+		opts.tenantRouter = router.NewMultiTenantDataSourceRouter(opts.tenantManager)
+
+		mtnDbConnectionPool, innerErr := db.NewConnectionPoolWithRouter(opts.tenantRouter)
+		if innerErr != nil {
+			return fmt.Errorf("error connecting to the multi-tenant database: %w", innerErr)
+		}
+		opts.dbConnectionPool = mtnDbConnectionPool
+	} else {
+		opts.dbConnectionPool = dbConnectionPool
+	}
+
+	opts.Models, err = data.NewModels(opts.dbConnectionPool)
 	if err != nil {
 		return fmt.Errorf("error creating models for Serve: %w", err)
 	}
-	opts.dbConnectionPool = dbConnectionPool
 
 	// Setup Stellar Auth JWT manager
 	opts.authManager, err = createAuthManager(
@@ -144,10 +161,6 @@ func (opts *ServeOptions) SetupDependencies() error {
 	if err != nil {
 		return fmt.Errorf("error creating signature service: %w", err)
 	}
-
-	// Setup Tenant Router & Manager
-	opts.tenantManager = tenant.NewManager(tenant.WithDatabase(opts.dbConnectionPool))
-	opts.tenantRouter = router.NewMultiTenantDataSourceRouter(opts.tenantManager)
 
 	return nil
 }

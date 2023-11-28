@@ -2,7 +2,7 @@ version: '3.8'
 services:
   sdp-frontend:
     container_name: sdp-frontend
-    image: stellar/stellar-disbursement-platform-frontend:edge
+    image: stellar/stellar-disbursement-platform-frontend:multitenant-alpha
     ports:
       - "3000:80"
     volumes:

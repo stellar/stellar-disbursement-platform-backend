@@ -224,6 +224,7 @@ func getServeOptionsForTests(t *testing.T, databaseDSN string) ServeOptions {
 		Version:                         "x.y.z",
 		NetworkPassphrase:               network.TestNetworkPassphrase,
 		DistributionSeed:                keypair.MustRandom().Seed(),
+		EnableMultiTenantDB:             false,
 	}
 	err = serveOptions.SetupDependencies()
 	require.NoError(t, err)
