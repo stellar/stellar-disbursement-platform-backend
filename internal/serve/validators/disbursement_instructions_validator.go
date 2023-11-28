@@ -62,7 +62,7 @@ func (iv *DisbursementInstructionsValidator) ValidateInstruction(instruction *da
 			iv.addError(fmt.Sprintf("line %d - national id", lineNumber), "invalid national id. Cannot have more than 50 characters in national id")
 		}
 	} else {
-		log.Warnf("Verification type %v is not being validated for ValidateReceiver", iv)
+		log.Warnf("Verification field %v is not being validated for ValidateReceiver", iv)
 	}
 }
 
@@ -74,7 +74,7 @@ func (iv *DisbursementInstructionsValidator) ValidateAndGetVerificationType(veri
 	case data.VerificationFieldDateOfBirth, data.VerificationFieldPin, data.VerificationFieldNationalID:
 		return vt
 	default:
-		iv.Check(false, "verification_type", "invalid parameter. valid values are: DATE_OF_BIRTH, PIN, NATIONAL_ID_NUMBER")
+		iv.Check(false, "verification_field", "invalid parameter. valid values are: DATE_OF_BIRTH, PIN, NATIONAL_ID_NUMBER")
 		return ""
 	}
 }

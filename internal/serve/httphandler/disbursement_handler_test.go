@@ -154,7 +154,7 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 		assertPOSTResponse(t, ctx, handler, method, url, requestBody, want, http.StatusBadRequest)
 	})
 
-	t.Run("returns error when no verification type is provided", func(t *testing.T) {
+	t.Run("returns error when no verification field is provided", func(t *testing.T) {
 		requestBody, err := json.Marshal(PostDisbursementRequest{
 			Name:        "disbursement 1",
 			CountryCode: country.Code,
@@ -163,7 +163,7 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		want := `{"error":"Verification field invalid", "extras": {"verification_type": "invalid parameter. valid values are: DATE_OF_BIRTH, PIN, NATIONAL_ID_NUMBER"}}`
+		want := `{"error":"Verification field invalid", "extras": {"verification_field": "invalid parameter. valid values are: DATE_OF_BIRTH, PIN, NATIONAL_ID_NUMBER"}}`
 
 		assertPOSTResponse(t, ctx, handler, method, url, string(requestBody), want, http.StatusBadRequest)
 	})

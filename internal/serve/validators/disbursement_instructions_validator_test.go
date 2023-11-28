@@ -9,12 +9,12 @@ import (
 
 func Test_DisbursementInstructionsValidator_ValidateAndGetInstruction(t *testing.T) {
 	tests := []struct {
-		name             string
-		actual           *data.DisbursementInstruction
-		lineNumber       int
-		verificationType data.VerificationField
-		hasErrors        bool
-		expectedErrors   map[string]interface{}
+		name              string
+		actual            *data.DisbursementInstruction
+		lineNumber        int
+		verificationField data.VerificationField
+		hasErrors         bool
+		expectedErrors    map[string]interface{}
 	}{
 		{
 			name: "valid record",
@@ -24,9 +24,9 @@ func Test_DisbursementInstructionsValidator_ValidateAndGetInstruction(t *testing
 				Amount:            "100.5",
 				VerificationValue: "1990-01-01",
 			},
-			lineNumber:       1,
-			verificationType: data.VerificationFieldDateOfBirth,
-			hasErrors:        false,
+			lineNumber:        1,
+			verificationField: data.VerificationFieldDateOfBirth,
+			hasErrors:         false,
 		},
 		{
 			name: "empty phone number",
@@ -35,19 +35,19 @@ func Test_DisbursementInstructionsValidator_ValidateAndGetInstruction(t *testing
 				Amount:            "100.5",
 				VerificationValue: "1990-01-01",
 			},
-			lineNumber:       2,
-			verificationType: data.VerificationFieldDateOfBirth,
-			hasErrors:        true,
+			lineNumber:        2,
+			verificationField: data.VerificationFieldDateOfBirth,
+			hasErrors:         true,
 			expectedErrors: map[string]interface{}{
 				"line 2 - phone": "phone cannot be empty",
 			},
 		},
 		{
-			name:             "empty phone, id, amount and birthday",
-			actual:           &data.DisbursementInstruction{},
-			lineNumber:       2,
-			verificationType: data.VerificationFieldDateOfBirth,
-			hasErrors:        true,
+			name:              "empty phone, id, amount and birthday",
+			actual:            &data.DisbursementInstruction{},
+			lineNumber:        2,
+			verificationField: data.VerificationFieldDateOfBirth,
+			hasErrors:         true,
 			expectedErrors: map[string]interface{}{
 				"line 2 - amount":   "invalid amount. Amount must be a positive number",
 				"line 2 - birthday": "invalid date of birth format. Correct format: 1990-01-01",
@@ -63,9 +63,9 @@ func Test_DisbursementInstructionsValidator_ValidateAndGetInstruction(t *testing
 				Amount:            "100.5",
 				VerificationValue: "1990-01-01",
 			},
-			lineNumber:       2,
-			verificationType: data.VerificationFieldDateOfBirth,
-			hasErrors:        true,
+			lineNumber:        2,
+			verificationField: data.VerificationFieldDateOfBirth,
+			hasErrors:         true,
 			expectedErrors: map[string]interface{}{
 				"line 2 - phone": "invalid phone format. Correct format: +380445555555",
 			},
@@ -78,9 +78,9 @@ func Test_DisbursementInstructionsValidator_ValidateAndGetInstruction(t *testing
 				Amount:            "100.5USDC",
 				VerificationValue: "1990-01-01",
 			},
-			lineNumber:       3,
-			verificationType: data.VerificationFieldDateOfBirth,
-			hasErrors:        true,
+			lineNumber:        3,
+			verificationField: data.VerificationFieldDateOfBirth,
+			hasErrors:         true,
 			expectedErrors: map[string]interface{}{
 				"line 3 - amount": "invalid amount. Amount must be a positive number",
 			},
@@ -93,9 +93,9 @@ func Test_DisbursementInstructionsValidator_ValidateAndGetInstruction(t *testing
 				Amount:            "-100.5",
 				VerificationValue: "1990-01-01",
 			},
-			lineNumber:       3,
-			verificationType: data.VerificationFieldDateOfBirth,
-			hasErrors:        true,
+			lineNumber:        3,
+			verificationField: data.VerificationFieldDateOfBirth,
+			hasErrors:         true,
 			expectedErrors: map[string]interface{}{
 				"line 3 - amount": "invalid amount. Amount must be a positive number",
 			},
@@ -108,9 +108,9 @@ func Test_DisbursementInstructionsValidator_ValidateAndGetInstruction(t *testing
 				Amount:            "100.5",
 				VerificationValue: "1990/01/01",
 			},
-			lineNumber:       3,
-			verificationType: data.VerificationFieldDateOfBirth,
-			hasErrors:        true,
+			lineNumber:        3,
+			verificationField: data.VerificationFieldDateOfBirth,
+			hasErrors:         true,
 			expectedErrors: map[string]interface{}{
 				"line 3 - birthday": "invalid date of birth format. Correct format: 1990-01-01",
 			},
@@ -123,9 +123,9 @@ func Test_DisbursementInstructionsValidator_ValidateAndGetInstruction(t *testing
 				Amount:            "100.5",
 				VerificationValue: "2090-01-01",
 			},
-			lineNumber:       3,
-			verificationType: data.VerificationFieldDateOfBirth,
-			hasErrors:        true,
+			lineNumber:        3,
+			verificationField: data.VerificationFieldDateOfBirth,
+			hasErrors:         true,
 			expectedErrors: map[string]interface{}{
 				"line 3 - birthday": "date of birth cannot be in the future",
 			},
@@ -138,9 +138,9 @@ func Test_DisbursementInstructionsValidator_ValidateAndGetInstruction(t *testing
 				Amount:            "100.5",
 				VerificationValue: "1234",
 			},
-			lineNumber:       3,
-			verificationType: data.VerificationFieldPin,
-			hasErrors:        false,
+			lineNumber:        3,
+			verificationField: data.VerificationFieldPin,
+			hasErrors:         false,
 		},
 		{
 			name: "invalid pin - less than 4 characters",
@@ -150,9 +150,9 @@ func Test_DisbursementInstructionsValidator_ValidateAndGetInstruction(t *testing
 				Amount:            "100.5",
 				VerificationValue: "123",
 			},
-			lineNumber:       3,
-			verificationType: data.VerificationFieldPin,
-			hasErrors:        true,
+			lineNumber:        3,
+			verificationField: data.VerificationFieldPin,
+			hasErrors:         true,
 			expectedErrors: map[string]interface{}{
 				"line 3 - pin": "invalid pin. Cannot have less than 4 or more than 8 characters in pin",
 			},
@@ -165,9 +165,9 @@ func Test_DisbursementInstructionsValidator_ValidateAndGetInstruction(t *testing
 				Amount:            "100.5",
 				VerificationValue: "123456789",
 			},
-			lineNumber:       3,
-			verificationType: data.VerificationFieldPin,
-			hasErrors:        true,
+			lineNumber:        3,
+			verificationField: data.VerificationFieldPin,
+			hasErrors:         true,
 			expectedErrors: map[string]interface{}{
 				"line 3 - pin": "invalid pin. Cannot have less than 4 or more than 8 characters in pin",
 			},
@@ -180,9 +180,9 @@ func Test_DisbursementInstructionsValidator_ValidateAndGetInstruction(t *testing
 				Amount:            "100.5",
 				VerificationValue: "ABCD123",
 			},
-			lineNumber:       3,
-			verificationType: data.VerificationFieldNationalID,
-			hasErrors:        false,
+			lineNumber:        3,
+			verificationField: data.VerificationFieldNationalID,
+			hasErrors:         false,
 		},
 		{
 			name: "invalid national - more than 50 characters",
@@ -192,9 +192,9 @@ func Test_DisbursementInstructionsValidator_ValidateAndGetInstruction(t *testing
 				Amount:            "100.5",
 				VerificationValue: "6UZMB56FWTKV4U0PJ21TBR6VOQVYSGIMZG2HW2S0L7EK5K83W78",
 			},
-			lineNumber:       3,
-			verificationType: data.VerificationFieldNationalID,
-			hasErrors:        true,
+			lineNumber:        3,
+			verificationField: data.VerificationFieldNationalID,
+			hasErrors:         true,
 			expectedErrors: map[string]interface{}{
 				"line 3 - national id": "invalid national id. Cannot have more than 50 characters in national id",
 			},
@@ -203,7 +203,7 @@ func Test_DisbursementInstructionsValidator_ValidateAndGetInstruction(t *testing
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			iv := NewDisbursementInstructionsValidator(tt.verificationType)
+			iv := NewDisbursementInstructionsValidator(tt.verificationField)
 			iv.ValidateInstruction(tt.actual, tt.lineNumber)
 
 			if tt.hasErrors {
