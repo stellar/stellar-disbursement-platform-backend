@@ -437,7 +437,6 @@ func (a *defaultAuthenticator) GetAllUsers(ctx context.Context, queryParams *dat
 	}{}
 	err := a.dbConnectionPool.SelectContext(ctx, &dbUsers, query)
 	if err != nil {
-		fmt.Println(queryParams)
 		return nil, fmt.Errorf("error querying all users in the database: %w", err)
 	}
 
