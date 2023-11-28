@@ -34,11 +34,11 @@ type DisbursementHandler struct {
 }
 
 type PostDisbursementRequest struct {
-	Name             string                 `json:"name"`
-	CountryCode      string                 `json:"country_code"`
-	WalletID         string                 `json:"wallet_id"`
-	AssetID          string                 `json:"asset_id"`
-	VerificationType data.VerificationField `json:"verification_type"`
+	Name              string                 `json:"name"`
+	CountryCode       string                 `json:"country_code"`
+	WalletID          string                 `json:"wallet_id"`
+	AssetID           string                 `json:"asset_id"`
+	VerificationField data.VerificationField `json:"verification_field"`
 }
 
 type PatchDisbursementStatusRequest struct {
@@ -54,7 +54,7 @@ func (d DisbursementHandler) PostDisbursement(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	iv := validators.NewDisbursementInstructionsValidator(disbursementRequest.VerificationType)
+	iv := validators.NewDisbursementInstructionsValidator(disbursementRequest.VerificationField)
 	iv.Check(disbursementRequest.Name != "", "name", "name is required")
 	iv.Check(disbursementRequest.CountryCode != "", "country_code", "country_code is required")
 	iv.Check(disbursementRequest.WalletID != "", "wallet_id", "wallet_id is required")
@@ -65,10 +65,10 @@ func (d DisbursementHandler) PostDisbursement(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	iv.ValidateAndGetVerificationType(strings.TrimSpace(string(disbursementRequest.VerificationType)))
+	iv.ValidateAndGetVerificationType(strings.TrimSpace(string(disbursementRequest.VerificationField)))
 
 	if iv.HasErrors() {
-		httperror.BadRequest("Verification type invalid", err, iv.Errors).Render(w)
+		httperror.BadRequest("Verification field invalid", err, iv.Errors).Render(w)
 		return
 	}
 
@@ -117,7 +117,7 @@ func (d DisbursementHandler) PostDisbursement(w http.ResponseWriter, r *http.Req
 		Wallet:            wallet,
 		Asset:             asset,
 		Country:           country,
-		VerificationField: disbursementRequest.VerificationType,
+		VerificationField: disbursementRequest.VerificationField,
 	}
 
 	newId, err := d.Models.Disbursements.Insert(ctx, &disbursement)
