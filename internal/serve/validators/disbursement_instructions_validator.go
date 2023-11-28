@@ -67,12 +67,12 @@ func (iv *DisbursementInstructionsValidator) ValidateInstruction(instruction *da
 }
 
 // validateAndGetVerificationType validates if the verification type field is a valid value.
-func (iv *DisbursementInstructionsValidator) ValidateAndGetVerificationType(verificationType string) data.VerificationField {
-	vt := data.VerificationField(strings.ToUpper(verificationType))
+func (iv *DisbursementInstructionsValidator) ValidateAndGetVerificationType(verificationField string) data.VerificationField {
+	vf := data.VerificationField(strings.ToUpper(verificationField))
 
-	switch vt {
+	switch vf {
 	case data.VerificationFieldDateOfBirth, data.VerificationFieldPin, data.VerificationFieldNationalID:
-		return vt
+		return vf
 	default:
 		iv.Check(false, "verification_field", "invalid parameter. valid values are: DATE_OF_BIRTH, PIN, NATIONAL_ID_NUMBER")
 		return ""

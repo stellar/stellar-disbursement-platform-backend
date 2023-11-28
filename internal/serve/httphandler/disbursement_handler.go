@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -54,21 +53,21 @@ func (d DisbursementHandler) PostDisbursement(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	iv := validators.NewDisbursementInstructionsValidator(disbursementRequest.VerificationField)
-	iv.Check(disbursementRequest.Name != "", "name", "name is required")
-	iv.Check(disbursementRequest.CountryCode != "", "country_code", "country_code is required")
-	iv.Check(disbursementRequest.WalletID != "", "wallet_id", "wallet_id is required")
-	iv.Check(disbursementRequest.AssetID != "", "asset_id", "asset_id is required")
+	v := validators.NewDisbursementRequestValidator(disbursementRequest.VerificationField)
+	v.Check(disbursementRequest.Name != "", "name", "name is required")
+	v.Check(disbursementRequest.CountryCode != "", "country_code", "country_code is required")
+	v.Check(disbursementRequest.WalletID != "", "wallet_id", "wallet_id is required")
+	v.Check(disbursementRequest.AssetID != "", "asset_id", "asset_id is required")
 
-	if iv.HasErrors() {
-		httperror.BadRequest("Request invalid", err, iv.Errors).Render(w)
+	if v.HasErrors() {
+		httperror.BadRequest("Request invalid", err, v.Errors).Render(w)
 		return
 	}
 
-	iv.ValidateAndGetVerificationType(strings.TrimSpace(string(disbursementRequest.VerificationField)))
+	verificationField := v.ValidateAndGetVerificationType()
 
-	if iv.HasErrors() {
-		httperror.BadRequest("Verification field invalid", err, iv.Errors).Render(w)
+	if v.HasErrors() {
+		httperror.BadRequest("Verification field invalid", err, v.Errors).Render(w)
 		return
 	}
 
@@ -117,7 +116,7 @@ func (d DisbursementHandler) PostDisbursement(w http.ResponseWriter, r *http.Req
 		Wallet:            wallet,
 		Asset:             asset,
 		Country:           country,
-		VerificationField: disbursementRequest.VerificationField,
+		VerificationField: verificationField,
 	}
 
 	newId, err := d.Models.Disbursements.Insert(ctx, &disbursement)
