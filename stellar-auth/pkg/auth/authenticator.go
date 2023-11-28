@@ -45,7 +45,7 @@ type Authenticator interface {
 	ForgotPassword(ctx context.Context, email string) (string, error)
 	ResetPassword(ctx context.Context, resetToken, password string) error
 	UpdatePassword(ctx context.Context, user *User, currentPassword, newPassword string) error
-	GetAllUsers(ctx context.Context, queryParams *data.QueryParams) ([]User, error)
+	GetAllUsers(ctx context.Context) ([]User, error)
 	GetUser(ctx context.Context, userID string) (*User, error)
 }
 
@@ -411,8 +411,8 @@ func (a *defaultAuthenticator) invalidateResetPasswordToken(ctx context.Context,
 	return nil
 }
 
-func (a *defaultAuthenticator) GetAllUsers(ctx context.Context, queryParams *data.QueryParams) ([]User, error) {
-	query := fmt.Sprintf(`
+func (a *defaultAuthenticator) GetAllUsers(ctx context.Context) ([]User, error) {
+	const query = `
 		SELECT
 			id,
 			first_name,
@@ -422,9 +422,8 @@ func (a *defaultAuthenticator) GetAllUsers(ctx context.Context, queryParams *dat
 			is_owner,
 			is_active
 		FROM
-			auth_users
-		ORDER BY %s %s
-	`, queryParams.SortBy, queryParams.SortOrder)
+			auth_users	
+	`
 
 	dbUsers := []struct {
 		ID        string         `db:"id"`

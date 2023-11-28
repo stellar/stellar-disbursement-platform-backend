@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/internal/db"
 )
 
@@ -26,7 +25,7 @@ type AuthManager interface {
 	UpdatePassword(ctx context.Context, token, currentPassword, newPassword string) error
 	GetUser(ctx context.Context, tokenString string) (*User, error)
 	GetUserID(ctx context.Context, tokenString string) (string, error)
-	GetAllUsers(ctx context.Context, tokenString string, queryParams *data.QueryParams) ([]User, error)
+	GetAllUsers(ctx context.Context, tokenString string) ([]User, error)
 	UpdateUserRoles(ctx context.Context, tokenString, userID string, roles []string) error
 	DeactivateUser(ctx context.Context, tokenString, userID string) error
 	ActivateUser(ctx context.Context, tokenString, userID string) error
@@ -284,7 +283,7 @@ func (am *defaultAuthManager) UpdateUserRoles(ctx context.Context, tokenString, 
 	return nil
 }
 
-func (am *defaultAuthManager) GetAllUsers(ctx context.Context, tokenString string, queryParams *data.QueryParams) ([]User, error) {
+func (am *defaultAuthManager) GetAllUsers(ctx context.Context, tokenString string) ([]User, error) {
 	isValid, err := am.ValidateToken(ctx, tokenString)
 	if err != nil {
 		return nil, fmt.Errorf("validating token: %w", err)
@@ -294,7 +293,7 @@ func (am *defaultAuthManager) GetAllUsers(ctx context.Context, tokenString strin
 		return nil, ErrInvalidToken
 	}
 
-	users, err := am.authenticator.GetAllUsers(ctx, queryParams)
+	users, err := am.authenticator.GetAllUsers(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("error getting all users: %w", err)
 	}

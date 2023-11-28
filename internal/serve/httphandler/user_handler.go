@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"sort"
 
 	"github.com/stellar/go/support/http/httpdecode"
 	"github.com/stellar/go/support/log"
@@ -31,6 +32,18 @@ type UserActivationRequest struct {
 	UserID   string `json:"user_id"`
 	IsActive *bool  `json:"is_active"`
 }
+
+type UserSorterByEmail []auth.User
+
+func (a UserSorterByEmail) Len() int           { return len(a) }
+func (a UserSorterByEmail) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a UserSorterByEmail) Less(i, j int) bool { return a[i].Email < a[j].Email }
+
+type UserSorterByIsActive []auth.User
+
+func (a UserSorterByIsActive) Len() int           { return len(a) }
+func (a UserSorterByIsActive) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a UserSorterByIsActive) Less(i, j int) bool { return a[i].IsActive }
 
 func (uar UserActivationRequest) validate() *httperror.HTTPError {
 	validator := validators.NewValidator()
@@ -291,15 +304,30 @@ func (h UserHandler) GetAllUsers(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	users, err := h.AuthManager.GetAllUsers(ctx, token, queryParams)
+	users, err := h.AuthManager.GetAllUsers(ctx, token)
 	if err != nil {
 		if errors.Is(err, auth.ErrInvalidToken) {
 			httperror.Unauthorized("", err, nil).Render(rw)
 			return
 		}
-
 		httperror.InternalError(ctx, "Cannot get all users", err, nil).Render(rw)
 		return
+	}
+
+	// Order users
+	switch queryParams.SortBy {
+	case data.SortFieldEmail:
+		if queryParams.SortOrder == data.SortOrderDESC {
+			sort.Sort(sort.Reverse(UserSorterByEmail(users)))
+		} else {
+			sort.Sort(UserSorterByEmail(users))
+		}
+	case data.SortFieldIsActive:
+		if queryParams.SortOrder == data.SortOrderDESC {
+			sort.Sort(sort.Reverse(UserSorterByIsActive(users)))
+		} else {
+			sort.Sort(UserSorterByIsActive(users))
+		}
 	}
 
 	httpjson.RenderStatus(rw, http.StatusOK, users, httpjson.JSON)

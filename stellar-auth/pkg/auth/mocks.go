@@ -4,7 +4,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stretchr/testify/mock"
 )
 
@@ -106,8 +105,8 @@ func (am *AuthenticatorMock) UpdatePassword(ctx context.Context, user *User, cur
 	return args.Error(0)
 }
 
-func (am *AuthenticatorMock) GetAllUsers(ctx context.Context, queryParams *data.QueryParams) ([]User, error) {
-	args := am.Called(ctx, queryParams)
+func (am *AuthenticatorMock) GetAllUsers(ctx context.Context) ([]User, error) {
+	args := am.Called(ctx)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -256,8 +255,8 @@ func (am *AuthManagerMock) GetUserID(ctx context.Context, tokenString string) (s
 	return args.Get(0).(string), args.Error(1)
 }
 
-func (am *AuthManagerMock) GetAllUsers(ctx context.Context, tokenString string, queryParams *data.QueryParams) ([]User, error) {
-	args := am.Called(ctx, tokenString, queryParams)
+func (am *AuthManagerMock) GetAllUsers(ctx context.Context, tokenString string) ([]User, error) {
+	args := am.Called(ctx, tokenString)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}

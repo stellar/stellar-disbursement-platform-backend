@@ -1232,12 +1232,17 @@ func Test_UserHandler_GetAllUsers(t *testing.T) {
 		assert.Contains(t, buf.String(), "Cannot get all users")
 	})
 
-	t.Run("returns all users successfully", func(t *testing.T) {
+	const orderByEmailAscURL = "/users?sort=email&direction=ASC"
+	const orderByEmailDescURL = "/users?sort=email&direction=DESC"
+	const orderByIsActiveAscURL = "/users?sort=is_active&direction=ASC"
+	const orderByIsActiveDescURL = "/users?sort=is_active&direction=DESC"
+
+	t.Run("returns all users ordered by email ASC", func(t *testing.T) {
 		token := "mytoken"
 
 		ctx := context.WithValue(context.Background(), middleware.TokenContextKey, token)
 
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, orderByEmailAscURL, nil)
 		require.NoError(t, err)
 
 		jwtManagerMock.
@@ -1246,20 +1251,13 @@ func Test_UserHandler_GetAllUsers(t *testing.T) {
 			Once()
 
 		authenticatorMock.
-			On("GetAllUsers", req.Context(), &data.QueryParams{
-				Query:     "",
-				Page:      1,
-				PageLimit: 20,
-				SortBy:    data.SortFieldEmail,
-				SortOrder: data.SortOrderASC,
-				Filters:   map[data.FilterKey]interface{}{},
-			}).
+			On("GetAllUsers", req.Context()).
 			Return([]auth.User{
 				{
 					ID:        "user1-ID",
 					FirstName: "First",
 					LastName:  "Last",
-					Email:     "user1@email.com",
+					Email:     "userA@email.com",
 					IsOwner:   false,
 					IsActive:  false,
 					Roles:     []string{data.BusinessUserRole.String()},
@@ -1268,7 +1266,16 @@ func Test_UserHandler_GetAllUsers(t *testing.T) {
 					ID:        "user2-ID",
 					FirstName: "First",
 					LastName:  "Last",
-					Email:     "user2@email.com",
+					Email:     "userC@email.com",
+					IsOwner:   true,
+					IsActive:  true,
+					Roles:     []string{data.OwnerUserRole.String()},
+				},
+				{
+					ID:        "user3-ID",
+					FirstName: "First",
+					LastName:  "Last",
+					Email:     "userB@email.com",
 					IsOwner:   true,
 					IsActive:  true,
 					Roles:     []string{data.OwnerUserRole.String()},
@@ -1291,18 +1298,272 @@ func Test_UserHandler_GetAllUsers(t *testing.T) {
 					"id": "user1-ID",
 					"first_name": "First",
 					"last_name": "Last",
-					"email": "user1@email.com",
+					"email": "userA@email.com",
 					"is_active": false,
 					"roles": [
 						"business"
 					]
 				},
 				{
+					"id":        "user3-ID",
+					"first_name": "First",
+					"last_name":  "Last",
+					"email":     "userB@email.com",
+					"is_active":  true,
+					"roles": [
+						"owner"
+					]
+				},
+				{
 					"id": "user2-ID",
 					"first_name": "First",
 					"last_name": "Last",
-					"email": "user2@email.com",
+					"email": "userC@email.com",
 					"is_active": true,
+					"roles": [
+						"owner"
+					]
+				}
+			]
+		`
+
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.JSONEq(t, wantsBody, string(respBody))
+	})
+
+	t.Run("returns all users ordered by email DESC", func(t *testing.T) {
+		token := "mytoken"
+
+		ctx := context.WithValue(context.Background(), middleware.TokenContextKey, token)
+
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, orderByEmailDescURL, nil)
+		require.NoError(t, err)
+
+		jwtManagerMock.
+			On("ValidateToken", req.Context(), token).
+			Return(true, nil).
+			Once()
+
+		authenticatorMock.
+			On("GetAllUsers", req.Context()).
+			Return([]auth.User{
+				{
+					ID:        "user1-ID",
+					FirstName: "First",
+					LastName:  "Last",
+					Email:     "userA@email.com",
+					IsOwner:   false,
+					IsActive:  false,
+					Roles:     []string{data.BusinessUserRole.String()},
+				},
+				{
+					ID:        "user2-ID",
+					FirstName: "First",
+					LastName:  "Last",
+					Email:     "userC@email.com",
+					IsOwner:   true,
+					IsActive:  true,
+					Roles:     []string{data.OwnerUserRole.String()},
+				},
+				{
+					ID:        "user3-ID",
+					FirstName: "First",
+					LastName:  "Last",
+					Email:     "userB@email.com",
+					IsOwner:   true,
+					IsActive:  true,
+					Roles:     []string{data.OwnerUserRole.String()},
+				},
+			}, nil).
+			Once()
+
+		w := httptest.NewRecorder()
+
+		http.HandlerFunc(handler.GetAllUsers).ServeHTTP(w, req)
+
+		resp := w.Result()
+
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		wantsBody := `
+			[
+				{
+					"id": "user2-ID",
+					"first_name": "First",
+					"last_name": "Last",
+					"email": "userC@email.com",
+					"is_active": true,
+					"roles": [
+						"owner"
+					]
+				},
+				{
+					"id":        "user3-ID",
+					"first_name": "First",
+					"last_name":  "Last",
+					"email":     "userB@email.com",
+					"is_active":  true,
+					"roles": [
+						"owner"
+					]
+				},
+				{
+					"id": "user1-ID",
+					"first_name": "First",
+					"last_name": "Last",
+					"email": "userA@email.com",
+					"is_active": false,
+					"roles": [
+						"business"
+					]
+				}
+			]
+		`
+
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.JSONEq(t, wantsBody, string(respBody))
+	})
+
+	t.Run("returns all users ordered by is_active ASC", func(t *testing.T) {
+		token := "mytoken"
+
+		ctx := context.WithValue(context.Background(), middleware.TokenContextKey, token)
+
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, orderByIsActiveAscURL, nil)
+		require.NoError(t, err)
+
+		jwtManagerMock.
+			On("ValidateToken", req.Context(), token).
+			Return(true, nil).
+			Once()
+
+		authenticatorMock.
+			On("GetAllUsers", req.Context()).
+			Return([]auth.User{
+				{
+					ID:        "user1-ID",
+					FirstName: "First",
+					LastName:  "Last",
+					Email:     "userA@email.com",
+					IsOwner:   false,
+					IsActive:  false,
+					Roles:     []string{data.BusinessUserRole.String()},
+				},
+				{
+					ID:        "user2-ID",
+					FirstName: "First",
+					LastName:  "Last",
+					Email:     "userB@email.com",
+					IsOwner:   true,
+					IsActive:  true,
+					Roles:     []string{data.OwnerUserRole.String()},
+				},
+			}, nil).
+			Once()
+
+		w := httptest.NewRecorder()
+
+		http.HandlerFunc(handler.GetAllUsers).ServeHTTP(w, req)
+
+		resp := w.Result()
+
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		wantsBody := `
+			[
+				{
+					"id": "user2-ID",
+					"first_name": "First",
+					"last_name": "Last",
+					"email": "userB@email.com",
+					"is_active": true,
+					"roles": [
+						"owner"
+					]
+				},
+				{
+					"id": "user1-ID",
+					"first_name": "First",
+					"last_name": "Last",
+					"email": "userA@email.com",
+					"is_active": false,
+					"roles": [
+						"business"
+					]
+				}
+			]
+		`
+
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.JSONEq(t, wantsBody, string(respBody))
+	})
+
+	t.Run("returns all users ordered by is_active DESC", func(t *testing.T) {
+		token := "mytoken"
+
+		ctx := context.WithValue(context.Background(), middleware.TokenContextKey, token)
+
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, orderByIsActiveDescURL, nil)
+		require.NoError(t, err)
+
+		jwtManagerMock.
+			On("ValidateToken", req.Context(), token).
+			Return(true, nil).
+			Once()
+
+		authenticatorMock.
+			On("GetAllUsers", req.Context()).
+			Return([]auth.User{
+				{
+					ID:        "user1-ID",
+					FirstName: "First",
+					LastName:  "Last",
+					Email:     "userA@email.com",
+					IsOwner:   false,
+					IsActive:  false,
+					Roles:     []string{data.BusinessUserRole.String()},
+				},
+				{
+					ID:        "user2-ID",
+					FirstName: "First",
+					LastName:  "Last",
+					Email:     "userB@email.com",
+					IsOwner:   true,
+					IsActive:  true,
+					Roles:     []string{data.OwnerUserRole.String()},
+				},
+			}, nil).
+			Once()
+
+		w := httptest.NewRecorder()
+
+		http.HandlerFunc(handler.GetAllUsers).ServeHTTP(w, req)
+
+		resp := w.Result()
+
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		wantsBody := `
+			[
+				{
+					"id": "user1-ID",
+					"first_name": "First",
+					"last_name": "Last",
+					"email": "userA@email.com",
+					"is_active": false,
+					"roles": [
+						"business"
+					]
+				},
+				{
+					"id":        "user2-ID",
+					"first_name": "First",
+					"last_name":  "Last",
+					"email":     "userB@email.com",
+					"is_active":  true,
 					"roles": [
 						"owner"
 					]

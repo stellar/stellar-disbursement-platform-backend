@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -1109,10 +1108,7 @@ func Test_AuthManager_GetAllUsers(t *testing.T) {
 			Return(false, errUnexpectedError).
 			Once()
 
-		users, err := authManager.GetAllUsers(ctx, token, &data.QueryParams{
-			SortBy:    data.SortFieldEmail,
-			SortOrder: data.SortOrderASC,
-		})
+		users, err := authManager.GetAllUsers(ctx, token)
 
 		assert.Nil(t, users)
 		assert.EqualError(t, err, "validating token: validating token: unexpected error")
@@ -1126,10 +1122,7 @@ func Test_AuthManager_GetAllUsers(t *testing.T) {
 			Return(false, nil).
 			Once()
 
-		users, err := authManager.GetAllUsers(ctx, token, &data.QueryParams{
-			SortBy:    data.SortFieldEmail,
-			SortOrder: data.SortOrderASC,
-		})
+		users, err := authManager.GetAllUsers(ctx, token)
 
 		assert.Nil(t, users)
 		assert.EqualError(t, err, "invalid token")
@@ -1144,17 +1137,11 @@ func Test_AuthManager_GetAllUsers(t *testing.T) {
 			Once()
 
 		authenticatorMock.
-			On("GetAllUsers", ctx, &data.QueryParams{
-				SortBy:    data.SortFieldEmail,
-				SortOrder: data.SortOrderASC,
-			}).
+			On("GetAllUsers", ctx).
 			Return(nil, errUnexpectedError).
 			Once()
 
-		users, err := authManager.GetAllUsers(ctx, token, &data.QueryParams{
-			SortBy:    data.SortFieldEmail,
-			SortOrder: data.SortOrderASC,
-		})
+		users, err := authManager.GetAllUsers(ctx, token)
 
 		assert.EqualError(t, err, "error getting all users: unexpected error")
 		assert.Nil(t, users)
@@ -1169,17 +1156,11 @@ func Test_AuthManager_GetAllUsers(t *testing.T) {
 			Twice()
 
 		authenticatorMock.
-			On("GetAllUsers", ctx, &data.QueryParams{
-				SortBy:    data.SortFieldEmail,
-				SortOrder: data.SortOrderASC,
-			}).
+			On("GetAllUsers", ctx).
 			Return([]User{}, nil).
 			Once()
 
-		users, err := authManager.GetAllUsers(ctx, token, &data.QueryParams{
-			SortBy:    data.SortFieldEmail,
-			SortOrder: data.SortOrderASC,
-		})
+		users, err := authManager.GetAllUsers(ctx, token)
 		require.NoError(t, err)
 		assert.Empty(t, users)
 
@@ -1205,17 +1186,11 @@ func Test_AuthManager_GetAllUsers(t *testing.T) {
 		}
 
 		authenticatorMock.
-			On("GetAllUsers", ctx, &data.QueryParams{
-				SortBy:    data.SortFieldEmail,
-				SortOrder: data.SortOrderASC,
-			}).
+			On("GetAllUsers", ctx).
 			Return(expectedUsers, nil).
 			Once()
 
-		users, err = authManager.GetAllUsers(ctx, token, &data.QueryParams{
-			SortBy:    data.SortFieldEmail,
-			SortOrder: data.SortOrderASC,
-		})
+		users, err = authManager.GetAllUsers(ctx, token)
 		require.NoError(t, err)
 		assert.Equal(t, expectedUsers, users)
 	})
