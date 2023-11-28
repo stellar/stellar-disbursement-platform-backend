@@ -517,7 +517,7 @@ func CreateDisbursementFixture(t *testing.T, ctx context.Context, sqlExec db.SQL
 	if d.VerificationField == "" {
 		d.VerificationField = VerificationFieldDateOfBirth
 	}
-	
+
 	// insert disbursement
 	if d.StatusHistory == nil {
 		d.StatusHistory = []DisbursementStatusHistoryEntry{{

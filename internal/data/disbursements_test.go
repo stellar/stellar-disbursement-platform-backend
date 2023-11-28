@@ -37,9 +37,9 @@ func Test_DisbursementModelInsert(t *testing.T) {
 				UserID: "user1",
 			},
 		},
-		Asset:   asset,
-		Country: country,
-		Wallet:  wallet,
+		Asset:             asset,
+		Country:           country,
+		Wallet:            wallet,
 		VerificationField: VerificationFieldDateOfBirth,
 	}
 

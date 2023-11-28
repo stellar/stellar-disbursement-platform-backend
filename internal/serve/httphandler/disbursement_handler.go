@@ -34,11 +34,11 @@ type DisbursementHandler struct {
 }
 
 type PostDisbursementRequest struct {
-	Name              string            `json:"name"`
-	CountryCode       string            `json:"country_code"`
-	WalletID          string            `json:"wallet_id"`
-	AssetID           string            `json:"asset_id"`
-	VerificationType  data.VerificationField `json:"verification_type"`
+	Name             string                 `json:"name"`
+	CountryCode      string                 `json:"country_code"`
+	WalletID         string                 `json:"wallet_id"`
+	AssetID          string                 `json:"asset_id"`
+	VerificationType data.VerificationField `json:"verification_type"`
 }
 
 type PatchDisbursementStatusRequest struct {
@@ -66,7 +66,7 @@ func (d DisbursementHandler) PostDisbursement(w http.ResponseWriter, r *http.Req
 	}
 
 	iv.ValidateAndGetVerificationType(strings.TrimSpace(string(disbursementRequest.VerificationType)))
- 
+
 	if iv.HasErrors() {
 		httperror.BadRequest("Verification type invalid", err, iv.Errors).Render(w)
 		return
@@ -114,9 +114,9 @@ func (d DisbursementHandler) PostDisbursement(w http.ResponseWriter, r *http.Req
 			Status:    data.DraftDisbursementStatus,
 			UserID:    user.ID,
 		}},
-		Wallet:  wallet,
-		Asset:   asset,
-		Country: country,
+		Wallet:            wallet,
+		Asset:             asset,
+		Country:           country,
 		VerificationField: disbursementRequest.VerificationType,
 	}
 

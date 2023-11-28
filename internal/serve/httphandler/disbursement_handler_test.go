@@ -170,11 +170,11 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 
 	t.Run("returns error when wallet_id is not valid", func(t *testing.T) {
 		requestBody, err := json.Marshal(PostDisbursementRequest{
-			Name:              "disbursement 1",
-			CountryCode:       country.Code,
-			AssetID:           asset.ID,
-			WalletID:          "aab4a4a9-2493-4f37-9741-01d5bd31d68b",
-			VerificationType:  data.VerificationFieldDateOfBirth,
+			Name:             "disbursement 1",
+			CountryCode:      country.Code,
+			AssetID:          asset.ID,
+			WalletID:         "aab4a4a9-2493-4f37-9741-01d5bd31d68b",
+			VerificationType: data.VerificationFieldDateOfBirth,
 		})
 		require.NoError(t, err)
 
@@ -186,11 +186,11 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 	t.Run("returns error when wallet is not enabled", func(t *testing.T) {
 		data.EnableOrDisableWalletFixtures(t, ctx, dbConnectionPool, false, disabledWallet.ID)
 		requestBody, err := json.Marshal(PostDisbursementRequest{
-			Name:              "disbursement 1",
-			CountryCode:       country.Code,
-			AssetID:           asset.ID,
-			WalletID:          disabledWallet.ID,
-			VerificationType:  data.VerificationFieldDateOfBirth,
+			Name:             "disbursement 1",
+			CountryCode:      country.Code,
+			AssetID:          asset.ID,
+			WalletID:         disabledWallet.ID,
+			VerificationType: data.VerificationFieldDateOfBirth,
 		})
 		require.NoError(t, err)
 
@@ -201,11 +201,11 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 
 	t.Run("returns error when asset_id is not valid", func(t *testing.T) {
 		requestBody, err := json.Marshal(PostDisbursementRequest{
-			Name:              "disbursement 1",
-			CountryCode:       country.Code,
-			AssetID:           "aab4a4a9-2493-4f37-9741-01d5bd31d68b",
-			WalletID:          enabledWallet.ID,
-			VerificationType:  data.VerificationFieldDateOfBirth,
+			Name:             "disbursement 1",
+			CountryCode:      country.Code,
+			AssetID:          "aab4a4a9-2493-4f37-9741-01d5bd31d68b",
+			WalletID:         enabledWallet.ID,
+			VerificationType: data.VerificationFieldDateOfBirth,
 		})
 		require.NoError(t, err)
 
@@ -216,11 +216,11 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 
 	t.Run("returns error when country_code is not valid", func(t *testing.T) {
 		requestBody, err := json.Marshal(PostDisbursementRequest{
-			Name:              "disbursement 1",
-			CountryCode:       "AAA",
-			AssetID:           asset.ID,
-			WalletID:          enabledWallet.ID,
-			VerificationType:  data.VerificationFieldDateOfBirth,
+			Name:             "disbursement 1",
+			CountryCode:      "AAA",
+			AssetID:          asset.ID,
+			WalletID:         enabledWallet.ID,
+			VerificationType: data.VerificationFieldDateOfBirth,
 		})
 		require.NoError(t, err)
 
@@ -239,11 +239,11 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 		mMonitorService.On("MonitorCounters", monitor.DisbursementsCounterTag, labels.ToMap()).Return(nil).Once()
 
 		requestBody, err := json.Marshal(PostDisbursementRequest{
-			Name:              "disbursement 1",
-			CountryCode:       country.Code,
-			AssetID:           asset.ID,
-			WalletID:          enabledWallet.ID,
-			VerificationType:  data.VerificationFieldDateOfBirth,
+			Name:             "disbursement 1",
+			CountryCode:      country.Code,
+			AssetID:          asset.ID,
+			WalletID:         enabledWallet.ID,
+			VerificationType: data.VerificationFieldDateOfBirth,
 		})
 		require.NoError(t, err)
 
@@ -261,11 +261,11 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 
 		expectedName := "disbursement 2"
 		requestBody, err := json.Marshal(PostDisbursementRequest{
-			Name:              expectedName,
-			CountryCode:       country.Code,
-			AssetID:           asset.ID,
-			WalletID:          enabledWallet.ID,
-			VerificationType:  data.VerificationFieldDateOfBirth,
+			Name:             expectedName,
+			CountryCode:      country.Code,
+			AssetID:          asset.ID,
+			WalletID:         enabledWallet.ID,
+			VerificationType: data.VerificationFieldDateOfBirth,
 		})
 		require.NoError(t, err)
 
