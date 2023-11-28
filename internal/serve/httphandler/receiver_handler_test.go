@@ -1633,25 +1633,20 @@ func Test_ReceiverHandler_GetReceiverVerificatioTypes(t *testing.T) {
 		DBConnectionPool: dbConnectionPool,
 	}
 
-	r := chi.NewRouter()
-	r.Get("/receivers/verification-types", handler.GetReceiverVerificatioTypes)
-
+	rr := httptest.NewRecorder()
 	req, err := http.NewRequest(http.MethodGet, "/receivers/verification-types", nil)
 	require.NoError(t, err)
+	http.HandlerFunc(handler.GetReceiverVerificationTypes).ServeHTTP(rr, req)
 
-	rr := httptest.NewRecorder()
-	r.ServeHTTP(rr, req)
-
-	require.Equal(t, http.StatusOK, rr.Code)
-
-	respBody, err := io.ReadAll(rr.Body)
+	resp := rr.Result()
+	respBody, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
-
+	defer resp.Body.Close()
 	expectedBody := `[
-  "DATE_OF_BIRTH",
-  "NATIONAL_ID_NUMBER",
-  "PIN"
-]`
-
-	assert.Equal(t, expectedBody, string(respBody))
+		"DATE_OF_BIRTH",
+		"PIN",
+		"NATIONAL_ID_NUMBER"
+	]`
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.JSONEq(t, expectedBody, string(respBody))
 }

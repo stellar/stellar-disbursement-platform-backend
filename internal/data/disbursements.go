@@ -58,6 +58,15 @@ const (
 	VerificationFieldNationalID  VerificationField = "NATIONAL_ID_NUMBER"
 )
 
+// GetAllVerificationFields returns all verification fields
+func GetAllVerificationFields() []VerificationField {
+	return []VerificationField{
+		VerificationFieldDateOfBirth,
+		VerificationFieldPin,
+		VerificationFieldNationalID,
+	}
+}
+
 type DisbursementStatusHistoryEntry struct {
 	UserID    string             `json:"user_id"`
 	Status    DisbursementStatus `json:"status"`
