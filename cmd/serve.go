@@ -293,6 +293,22 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			FlagDefault: horizonclient.DefaultTestNetClient.HorizonURL,
 			Required:    true,
 		},
+		{
+			Name:        "enable-scheduler",
+			Usage:       "Enable Scheduler for SDP Backend Jobs",
+			OptType:     types.Bool,
+			ConfigKey:   &serveOpts.EnableScheduler,
+			FlagDefault: true,
+			Required:    false,
+		},
+		{
+			Name:        "enable-multitenant-db",
+			Usage:       "Enable Multi-tenant DB for SDP Backend API",
+			OptType:     types.Bool,
+			ConfigKey:   &serveOpts.EnableMultiTenantDB,
+			FlagDefault: true,
+			Required:    false,
+		},
 	}
 
 	messengerOptions := message.MessengerOptions{}
@@ -408,13 +424,17 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			}
 			serveOpts.AnchorPlatformAPIService = apAPIService
 
-			// Starting Scheduler Service (background job)
-			log.Ctx(ctx).Info("Starting Scheduler Service...")
-			schedulerJobRegistrars, err := serverService.GetSchedulerJobRegistrars(ctx, serveOpts, schedulerOptions, apAPIService)
-			if err != nil {
-				log.Ctx(ctx).Fatalf("Error getting scheduler job registrars: %v", err)
+			// Starting Scheduler Service (background job) if enabled
+			if serveOpts.EnableScheduler {
+				log.Ctx(ctx).Info("Starting Scheduler Service...")
+				schedulerJobRegistrars, innerErr := serverService.GetSchedulerJobRegistrars(ctx, serveOpts, schedulerOptions, apAPIService)
+				if innerErr != nil {
+					log.Ctx(ctx).Fatalf("Error getting scheduler job registrars: %v", innerErr)
+				}
+				go scheduler.StartScheduler(crashTrackerClient.Clone(), schedulerJobRegistrars...)
+			} else {
+				log.Ctx(ctx).Info("Scheduler Service is disabled.")
 			}
-			go scheduler.StartScheduler(crashTrackerClient.Clone(), schedulerJobRegistrars...)
 
 			// Starting Metrics Server (background job)
 			log.Ctx(ctx).Info("Starting Metrics Server...")

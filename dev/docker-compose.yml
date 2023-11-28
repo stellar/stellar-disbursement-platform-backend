@@ -20,10 +20,10 @@ services:
     extends:
       file: docker-compose-sdp-anchor.yml
       service: anchor-platform
-  sdp-tss:
-    extends:
-      file: docker-compose-tss.yml
-      service: sdp-tss
+#  sdp-tss:
+#    extends:
+#      file: docker-compose-tss.yml
+#      service: sdp-tss
   sdp-frontend:
     extends:
       file: docker-compose-frontend.yml

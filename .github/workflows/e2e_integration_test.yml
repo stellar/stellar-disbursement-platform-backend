@@ -9,6 +9,9 @@ on:
       - "releases/**"
       - "hotfix/**"
   pull_request:
+    branches-ignore:
+      - sdp-multitenant # TODO: SDP-968 - re-enable end to end tests for multi-tenant SDP
+
   workflow_call: # allows this workflow to be called from another workflow
 
 env:
