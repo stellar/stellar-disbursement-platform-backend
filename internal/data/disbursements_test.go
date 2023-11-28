@@ -37,9 +37,10 @@ func Test_DisbursementModelInsert(t *testing.T) {
 				UserID: "user1",
 			},
 		},
-		Asset:   asset,
-		Country: country,
-		Wallet:  wallet,
+		Asset:             asset,
+		Country:           country,
+		Wallet:            wallet,
+		VerificationField: VerificationFieldDateOfBirth,
 	}
 
 	t.Run("returns error when disbursement already exists is not found", func(t *testing.T) {
@@ -67,6 +68,7 @@ func Test_DisbursementModelInsert(t *testing.T) {
 		assert.Equal(t, 1, len(actual.StatusHistory))
 		assert.Equal(t, DraftDisbursementStatus, actual.StatusHistory[0].Status)
 		assert.Equal(t, "user1", actual.StatusHistory[0].UserID)
+		assert.Equal(t, VerificationFieldDateOfBirth, actual.VerificationField)
 	})
 }
 

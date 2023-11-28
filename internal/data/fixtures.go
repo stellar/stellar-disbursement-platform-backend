@@ -514,6 +514,10 @@ func CreateDisbursementFixture(t *testing.T, ctx context.Context, sqlExec db.SQL
 	if d.Country == nil {
 		d.Country = GetCountryFixture(t, ctx, sqlExec, FixtureCountryUKR)
 	}
+	if d.VerificationField == "" {
+		d.VerificationField = VerificationFieldDateOfBirth
+	}
+
 	// insert disbursement
 	if d.StatusHistory == nil {
 		d.StatusHistory = []DisbursementStatusHistoryEntry{{
@@ -581,6 +585,10 @@ func CreateDraftDisbursementFixture(t *testing.T, ctx context.Context, sqlExec d
 
 	if insert.Status == "" {
 		insert.Status = DraftDisbursementStatus
+	}
+
+	if insert.VerificationField == "" {
+		insert.VerificationField = VerificationFieldDateOfBirth
 	}
 
 	id, err := model.Insert(ctx, &insert)
