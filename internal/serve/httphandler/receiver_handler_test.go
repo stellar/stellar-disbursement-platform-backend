@@ -1618,20 +1618,7 @@ func Test_ReceiverHandler_BuildReceiversResponse(t *testing.T) {
 }
 
 func Test_ReceiverHandler_GetReceiverVerificatioTypes(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
-
-	models, err := data.NewModels(dbConnectionPool)
-	require.NoError(t, err)
-
-	handler := &ReceiverHandler{
-		Models:           models,
-		DBConnectionPool: dbConnectionPool,
-	}
+	handler := &ReceiverHandler{}
 
 	rr := httptest.NewRecorder()
 	req, err := http.NewRequest(http.MethodGet, "/receivers/verification-types", nil)
