@@ -65,3 +65,16 @@ func (iv *DisbursementInstructionsValidator) ValidateInstruction(instruction *da
 		log.Warnf("Verification type %v is not being validated for ValidateReceiver", iv)
 	}
 }
+
+// validateAndGetVerificationType validates if the verification type field is a valid value.
+func (iv *DisbursementInstructionsValidator) ValidateAndGetVerificationType(verificationType string) data.VerificationField {
+	vt := data.VerificationField(strings.ToUpper(verificationType))
+
+	switch vt {
+	case data.VerificationFieldDateOfBirth, data.VerificationFieldPin, data.VerificationFieldNationalID:
+		return vt
+	default:
+		iv.Check(false, "verification_type", "invalid parameter. valid values are: DATE_OF_BIRTH, PIN, NATIONAL_ID_NUMBER")
+		return ""
+	}
+}

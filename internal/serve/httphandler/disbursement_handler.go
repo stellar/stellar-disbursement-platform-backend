@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -32,8 +33,20 @@ type DisbursementHandler struct {
 	AuthManager      auth.AuthManager
 }
 
+type PostDisbursementRequest struct {
+	Name              string            `json:"name"`
+	CountryCode       string            `json:"country_code"`
+	WalletID          string            `json:"wallet_id"`
+	AssetID           string            `json:"asset_id"`
+	VerificationType  data.VerificationField `json:"verification_type"`
+}
+
+type PatchDisbursementStatusRequest struct {
+	Status string `json:"status"`
+}
+
 func (d DisbursementHandler) PostDisbursement(w http.ResponseWriter, r *http.Request) {
-	var disbursementRequest data.PostDisbursementRequest
+	var disbursementRequest PostDisbursementRequest
 
 	err := json.NewDecoder(r.Body).Decode(&disbursementRequest)
 	if err != nil {
@@ -41,22 +54,7 @@ func (d DisbursementHandler) PostDisbursement(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// Parse uploaded CSV file
-	file, _, err := r.FormFile("file")
-	if err != nil {
-		httperror.BadRequest("could not parse file", err, nil).Render(w)
-		return
-	}
-	defer file.Close()
-
-	// validate request
-	// TeeReader is used to read multiple times from the same reader (file)
-	// We read once to process the instructions, and then again to persist the file to the database
-	var buf bytes.Buffer
-	reader := io.TeeReader(file, &buf)
-
-	_, iv := parseInstructionsFromCSV(reader, disbursementRequest.VerificationType)
-
+	iv := validators.NewDisbursementInstructionsValidator(disbursementRequest.VerificationType)
 	iv.Check(disbursementRequest.Name != "", "name", "name is required")
 	iv.Check(disbursementRequest.CountryCode != "", "country_code", "country_code is required")
 	iv.Check(disbursementRequest.WalletID != "", "wallet_id", "wallet_id is required")
@@ -64,6 +62,13 @@ func (d DisbursementHandler) PostDisbursement(w http.ResponseWriter, r *http.Req
 
 	if iv.HasErrors() {
 		httperror.BadRequest("Request invalid", err, iv.Errors).Render(w)
+		return
+	}
+
+	iv.ValidateAndGetVerificationType(strings.TrimSpace(string(disbursementRequest.VerificationType)))
+ 
+	if iv.HasErrors() {
+		httperror.BadRequest("Verification type invalid", err, iv.Errors).Render(w)
 		return
 	}
 
@@ -112,6 +117,7 @@ func (d DisbursementHandler) PostDisbursement(w http.ResponseWriter, r *http.Req
 		Wallet:  wallet,
 		Asset:   asset,
 		Country: country,
+		VerificationField: disbursementRequest.VerificationType,
 	}
 
 	newId, err := d.Models.Disbursements.Insert(ctx, &disbursement)
@@ -317,7 +323,7 @@ type UpdateDisbursementStatusResponseBody struct {
 
 // PatchDisbursementStatus updates the status of a disbursement
 func (d DisbursementHandler) PatchDisbursementStatus(w http.ResponseWriter, r *http.Request) {
-	var patchRequest data.PatchDisbursementStatusRequest
+	var patchRequest PatchDisbursementStatusRequest
 	err := json.NewDecoder(r.Body).Decode(&patchRequest)
 	if err != nil {
 		httperror.BadRequest("invalid request body", err, nil).Render(w)

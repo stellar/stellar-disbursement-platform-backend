@@ -10,6 +10,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httphandler"
 	tss "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 )
 
@@ -119,7 +120,7 @@ func (it *IntegrationTestsService) StartIntegrationTests(ctx context.Context, op
 	}
 
 	log.Ctx(ctx).Info("Creating disbursement using server API")
-	disbursement, err := it.serverAPI.CreateDisbursement(ctx, authToken, &data.PostDisbursementRequest{
+	disbursement, err := it.serverAPI.CreateDisbursement(ctx, authToken, &httphandler.PostDisbursementRequest{
 		Name:              opts.DisbursementName,
 		CountryCode:       "USA",
 		WalletID:          wallet.ID,
@@ -147,7 +148,7 @@ func (it *IntegrationTestsService) StartIntegrationTests(ctx context.Context, op
 	log.Ctx(ctx).Info("Disbursement data validated")
 
 	log.Ctx(ctx).Info("Starting disbursement using server API")
-	err = it.serverAPI.StartDisbursement(ctx, authToken, disbursement.ID, &data.PatchDisbursementStatusRequest{Status: "STARTED"})
+	err = it.serverAPI.StartDisbursement(ctx, authToken, disbursement.ID, &httphandler.PatchDisbursementStatusRequest{Status: "STARTED"})
 	if err != nil {
 		return fmt.Errorf("error starting disbursement: %w", err)
 	}

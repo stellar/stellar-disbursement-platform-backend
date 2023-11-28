@@ -10,6 +10,7 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httphandler"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -100,7 +101,7 @@ func Test_CreateDisbursement(t *testing.T) {
 		Token: "valid_token",
 	}
 
-	reqBody := &data.PostDisbursementRequest{
+	reqBody := &httphandler.PostDisbursementRequest{
 		Name:        "mockDisbursement",
 		CountryCode: "USA",
 		WalletID:    "123",
@@ -243,7 +244,7 @@ func Test_StartDisbursement(t *testing.T) {
 	}
 
 	mockDisbursementID := "disbursement_id"
-	reqBody := &data.PatchDisbursementStatusRequest{
+	reqBody := &httphandler.PatchDisbursementStatusRequest{
 		Status: "STARTED",
 	}
 

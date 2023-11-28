@@ -76,19 +76,6 @@ type DisbursementModel struct {
 	dbConnectionPool db.DBConnectionPool
 }
 
-type PostDisbursementRequest struct {
-	Name              string            `json:"name"`
-	CountryCode       string            `json:"country_code"`
-	WalletID          string            `json:"wallet_id"`
-	AssetID           string            `json:"asset_id"`
-	VerificationValue string            `json:"verification_value"`
-	VerificationType  VerificationField `json:"verification_type"`
-}
-
-type PatchDisbursementStatusRequest struct {
-	Status string `json:"status"`
-}
-
 var (
 	DefaultDisbursementSortField = SortFieldCreatedAt
 	DefaultDisbursementSortOrder = SortOrderDESC
@@ -99,9 +86,9 @@ var (
 func (d *DisbursementModel) Insert(ctx context.Context, disbursement *Disbursement) (string, error) {
 	const q = `
 		INSERT INTO 
-		    disbursements (name, status, status_history, wallet_id, asset_id, country_code)
+		    disbursements (name, status, status_history, wallet_id, asset_id, country_code, verification_field)
 		VALUES 
-		    ($1, $2, $3, $4, $5, $6)
+		    ($1, $2, $3, $4, $5, $6, $7)
 		RETURNING id
 		    `
 	var newId string
@@ -112,6 +99,7 @@ func (d *DisbursementModel) Insert(ctx context.Context, disbursement *Disburseme
 		disbursement.Wallet.ID,
 		disbursement.Asset.ID,
 		disbursement.Country.Code,
+		disbursement.VerificationField,
 	)
 	if err != nil {
 		// check if the error is a duplicate key error
@@ -152,6 +140,7 @@ func (d *DisbursementModel) Get(ctx context.Context, sqlExec db.SQLExecuter, id 
 			d.file_content,
 			d.created_at,
 			d.updated_at,
+			d.verification_field,
 			w.id as "wallet.id",
 			w.name as "wallet.name",
 			w.homepage as "wallet.homepage",
@@ -202,6 +191,7 @@ func (d *DisbursementModel) GetByName(ctx context.Context, sqlExec db.SQLExecute
 			d.file_content,
 			d.created_at,
 			d.updated_at,
+			d.verification_field,
 			w.id as "wallet.id",
 			w.name as "wallet.name",
 			w.homepage as "wallet.homepage",
@@ -341,6 +331,7 @@ func (d *DisbursementModel) GetAll(ctx context.Context, sqlExec db.SQLExecuter, 
 			d.verification_field,
 			d.created_at,
 			d.updated_at,
+			d.verification_field,
 			COALESCE(d.file_name, '') as file_name,
 			w.id as "wallet.id",
 			w.name as "wallet.name",
