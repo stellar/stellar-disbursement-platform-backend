@@ -87,9 +87,9 @@ func Test_SetupAssetsForProperNetwork(t *testing.T) {
 		assert.Equal(t, pubnetEUROCIssuer, assets[0].Issuer)
 
 		assetsNetworkMap := AssetsNetworkMapType{
-			utils.TestnetNetworkType: {
-				"EUROC": testnetEUROCIssuer,
-				"USDC":  testnetUSDCIssuer,
+			utils.TestnetNetworkType: []data.Asset{
+				{Code: "EUROC", Issuer: testnetEUROCIssuer},
+				{Code: "USDC", Issuer: testnetUSDCIssuer},
 			},
 		}
 
@@ -146,9 +146,9 @@ func Test_SetupAssetsForProperNetwork(t *testing.T) {
 		assert.Equal(t, testnetEUROCIssuer, assets[1].Issuer)
 
 		assetsNetworkMap := AssetsNetworkMapType{
-			utils.PubnetNetworkType: {
-				"EUROC": pubnetEUROCIssuer,
-				"USDC":  pubnetUSDCIssuer,
+			utils.PubnetNetworkType: []data.Asset{
+				{Code: "EUROC", Issuer: pubnetEUROCIssuer},
+				{Code: "USDC", Issuer: pubnetUSDCIssuer},
 			},
 		}
 
