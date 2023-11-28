@@ -2,6 +2,13 @@
 # This script is used to locally start the integration between SDP and AnchorPlatform for the SEP-24 deposit flow, needed for registering users.
 set -eu
 
+# Check if curl is installed
+if ! command -v curl &> /dev/null
+then
+    echo "Error: curl is not installed. Please install curl to continue."
+    exit 1
+fi
+
 export DIVIDER="----------------------------------------"
 
 # prepare

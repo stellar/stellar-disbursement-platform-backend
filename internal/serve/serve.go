@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/router"
+
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/stellar/go/clients/horizonclient"
@@ -31,7 +33,6 @@ import (
 	txnsubmitterutils "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/router"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
@@ -106,11 +107,12 @@ func (opts *ServeOptions) SetupDependencies() error {
 	if err != nil {
 		return fmt.Errorf("error connecting to the database: %w", err)
 	}
-	opts.tenantManager = tenant.NewManager(tenant.WithDatabase(dbConnectionPool))
-	opts.tenantRouter = router.NewMultiTenantDataSourceRouter(opts.tenantManager)
 
 	// Setup Multi-Tenant Database when enabled
 	if opts.EnableMultiTenantDB {
+		opts.tenantManager = tenant.NewManager(tenant.WithDatabase(dbConnectionPool))
+		opts.tenantRouter = router.NewMultiTenantDataSourceRouter(opts.tenantManager)
+
 		mtnDbConnectionPool, innerErr := db.NewConnectionPoolWithRouter(opts.tenantRouter)
 		if innerErr != nil {
 			return fmt.Errorf("error connecting to the multi-tenant database: %w", innerErr)

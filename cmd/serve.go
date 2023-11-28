@@ -433,7 +433,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 				}
 				go scheduler.StartScheduler(crashTrackerClient.Clone(), schedulerJobRegistrars...)
 			} else {
-				log.Ctx(ctx).Info("Scheduler Service is disabled.")
+				log.Ctx(ctx).Warn("Scheduler Service is disabled.")
 			}
 
 			// Starting Metrics Server (background job)
