@@ -138,6 +138,13 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			Required:       true,
 		},
 		{
+			Name:      "instance-name",
+			Usage:     `Name of the SDP instance. Example: "SDP Testnet".`,
+			OptType:   types.String,
+			ConfigKey: &serveOpts.InstanceName,
+			Required:  true,
+		},
+		{
 			Name:           "ec256-public-key",
 			Usage:          "The EC256 Public Key used to validate the token signature. This EC key needs to be at least as strong as prime256v1 (P-256).",
 			OptType:        types.String,

@@ -75,9 +75,9 @@ func (m *defaultJWTManager) GenerateToken(ctx context.Context, user *User, expir
 	}
 
 	// TODO: Always throw this error after migrations are merged [SDP-953]
-	currentTenant, ok := tenant.GetTenantFromContext(ctx)
-	if !ok {
-		log.Ctx(ctx).Error("tenant not found in context")
+	currentTenant, err := tenant.GetTenantFromContext(ctx)
+	if err != nil {
+		log.Ctx(ctx).Error(err)
 	} else {
 		c.TenantID = currentTenant.ID
 	}

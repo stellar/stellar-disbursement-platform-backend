@@ -27,7 +27,7 @@ func TestMultiTenantDataSourceRouter_GetDataSource(t *testing.T) {
 	t.Run("error tenant not found in context", func(t *testing.T) {
 		dbcp, err := router.GetDataSource(ctx)
 		require.Nil(t, dbcp)
-		require.EqualError(t, err, ErrTenantNotFoundInContext.Error())
+		require.EqualError(t, err, tenant.ErrTenantNotFoundInContext.Error())
 	})
 
 	t.Run("successfully getting data source", func(t *testing.T) {

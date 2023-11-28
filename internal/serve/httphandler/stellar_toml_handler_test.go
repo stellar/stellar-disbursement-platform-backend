@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
+
 	"github.com/go-chi/chi/v5"
 	"github.com/stellar/go/network"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
@@ -95,15 +97,11 @@ func Test_StellarTomlHandler_buildGeneralInformation(t *testing.T) {
 func Test_StellarTomlHandler_buildOrganizationDocumentation(t *testing.T) {
 	stellarTomlHandler := StellarTomlHandler{}
 	testCases := []struct {
-		name         string
-		organization data.Organization
-		want         string
+		name string
+		want string
 	}{
 		{
 			name: "FOO Org",
-			organization: data.Organization{
-				Name: "FOO Org",
-			},
 			want: `
 		[DOCUMENTATION]
 		ORG_NAME="FOO Org"
@@ -111,9 +109,6 @@ func Test_StellarTomlHandler_buildOrganizationDocumentation(t *testing.T) {
 		},
 		{
 			name: "BAR Org",
-			organization: data.Organization{
-				Name: "BAR Org",
-			},
 			want: `
 		[DOCUMENTATION]
 		ORG_NAME="BAR Org"
@@ -122,7 +117,7 @@ func Test_StellarTomlHandler_buildOrganizationDocumentation(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			genaralInformation := stellarTomlHandler.buildOrganizationDocumentation(tc.organization)
+			genaralInformation := stellarTomlHandler.buildOrganizationDocumentation(tc.name)
 			assert.Equal(t, tc.want, genaralInformation)
 		})
 	}
@@ -224,11 +219,10 @@ func Test_StellarTomlHandler_ServeHTTP(t *testing.T) {
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
-	ctx := context.Background()
-
+	ctx := tenant.LoadDefaultTenantInContext(t, dbConnectionPool)
 	data.ClearAndCreateAssetFixtures(t, ctx, dbConnectionPool)
 
-	t.Run("build testnet toml", func(t *testing.T) {
+	t.Run("build testnet toml for org", func(t *testing.T) {
 		tomlHandler := StellarTomlHandler{
 			DistributionPublicKey:    "GBC2HVWFIFN7WJHFORVBCDKJORG6LWTW3O2QBHOURL3KHZPM4KMWTUSA",
 			NetworkPassphrase:        network.TestNetworkPassphrase,
@@ -240,7 +234,7 @@ func Test_StellarTomlHandler_ServeHTTP(t *testing.T) {
 		r := chi.NewRouter()
 		r.Get("/.well-known/stellar.toml", tomlHandler.ServeHTTP)
 
-		req, err := http.NewRequest("GET", "/.well-known/stellar.toml", nil)
+		req, err := http.NewRequestWithContext(ctx, "GET", "/.well-known/stellar.toml", nil)
 		require.NoError(t, err)
 		rr := httptest.NewRecorder()
 		r.ServeHTTP(rr, req)
@@ -290,7 +284,7 @@ func Test_StellarTomlHandler_ServeHTTP(t *testing.T) {
 		r := chi.NewRouter()
 		r.Get("/.well-known/stellar.toml", tomlHandler.ServeHTTP)
 
-		req, err := http.NewRequest("GET", "/.well-known/stellar.toml", nil)
+		req, err := http.NewRequestWithContext(ctx, "GET", "/.well-known/stellar.toml", nil)
 		require.NoError(t, err)
 		rr := httptest.NewRecorder()
 		r.ServeHTTP(rr, req)
@@ -328,6 +322,56 @@ func Test_StellarTomlHandler_ServeHTTP(t *testing.T) {
 		assert.Equal(t, wantToml, rr.Body.String())
 	})
 
+	t.Run("build general pubnet toml for instance", func(t *testing.T) {
+		tomlHandler := StellarTomlHandler{
+			DistributionPublicKey:    "GBC2HVWFIFN7WJHFORVBCDKJORG6LWTW3O2QBHOURL3KHZPM4KMWTUSA",
+			NetworkPassphrase:        network.PublicNetworkPassphrase,
+			Sep10SigningPublicKey:    "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
+			AnchorPlatformBaseSepURL: "https://anchor-platform-domain",
+			Models:                   models,
+			InstanceName:             "SDP Pubnet",
+		}
+
+		r := chi.NewRouter()
+		r.Get("/.well-known/stellar.toml", tomlHandler.ServeHTTP)
+
+		req, err := http.NewRequest("GET", "/.well-known/stellar.toml", nil)
+		require.NoError(t, err)
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+
+		assert.Equal(t, http.StatusOK, rr.Code)
+		wantToml := fmt.Sprintf(`
+			ACCOUNTS=["GBC2HVWFIFN7WJHFORVBCDKJORG6LWTW3O2QBHOURL3KHZPM4KMWTUSA", "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"]
+			SIGNING_KEY="GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"
+			NETWORK_PASSPHRASE=%q
+			HORIZON_URL=%q
+			WEB_AUTH_ENDPOINT="https://anchor-platform-domain/auth"
+			TRANSFER_SERVER_SEP0024="https://anchor-platform-domain/sep24"
+
+			[DOCUMENTATION]
+			ORG_NAME="SDP Pubnet"
+
+			[[CURRENCIES]]
+			code = "USDC"
+			issuer = "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN"
+			is_asset_anchored = true
+			anchor_asset_type = "fiat"
+			status = "live"
+			desc = "USDC"
+
+			[[CURRENCIES]]
+			code = "native"
+			status = "live"
+			is_asset_anchored = true
+			anchor_asset_type = "crypto"
+			desc = "XLM, the native token of the Stellar Network."
+		`, network.PublicNetworkPassphrase, horizonPubnetURL)
+		wantToml = strings.TrimSpace(wantToml)
+		wantToml = strings.ReplaceAll(wantToml, "\t", "")
+		assert.Equal(t, wantToml, rr.Body.String())
+	})
+
 	t.Run("build toml without assets in database", func(t *testing.T) {
 		data.DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
 
@@ -342,7 +386,7 @@ func Test_StellarTomlHandler_ServeHTTP(t *testing.T) {
 		r := chi.NewRouter()
 		r.Get("/.well-known/stellar.toml", tomlHandler.ServeHTTP)
 
-		req, err := http.NewRequest("GET", "/.well-known/stellar.toml", nil)
+		req, err := http.NewRequestWithContext(ctx, "GET", "/.well-known/stellar.toml", nil)
 		require.NoError(t, err)
 		rr := httptest.NewRecorder()
 		r.ServeHTTP(rr, req)
