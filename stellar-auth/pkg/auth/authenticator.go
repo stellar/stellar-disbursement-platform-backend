@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/lib/pq"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/internal/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/utils"
 )
@@ -27,12 +26,6 @@ var (
 
 const (
 	resetTokenLength = 10
-)
-
-var (
-	DefaultUserSortField = data.SortFieldEmail
-	DefaultUserSortOrder = data.SortOrderASC
-	AllowedUserSorts     = []data.SortField{data.SortFieldEmail, data.SortFieldIsActive}
 )
 
 type Authenticator interface {
@@ -422,7 +415,7 @@ func (a *defaultAuthenticator) GetAllUsers(ctx context.Context) ([]User, error) 
 			is_owner,
 			is_active
 		FROM
-			auth_users	
+			auth_users
 	`
 
 	dbUsers := []struct {
