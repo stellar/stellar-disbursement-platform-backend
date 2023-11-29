@@ -65,8 +65,8 @@ services:
         ./stellar-disbursement-platform db auth migrate up
         ./stellar-disbursement-platform db setup-for-network
         ./stellar-disbursement-platform serve
-    depends_on:
-      - db
+    #depends_on:
+    #  - db
 
   db-anchor-platform:
     container_name: anchor-platform-postgres-db
@@ -89,8 +89,8 @@ services:
       - "8080:8080" # sep-server
       - "8085:8085" # platform-server
       - "8082:8082" # metrics
-    depends_on:
-      - db-anchor-platform
+    #depends_on:
+    #  - db-anchor-platform
     environment:
       HOST_URL: http://localhost:8080
       SEP_SERVER_PORT: 8080
