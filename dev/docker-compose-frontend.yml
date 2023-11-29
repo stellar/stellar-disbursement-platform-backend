@@ -7,6 +7,3 @@ services:
       - "3000:80"
     volumes:
       - ./env-config.js:/usr/share/nginx/html/settings/env-config.js
-    #depends_on:
-    #  - db
-    #  - sdp-api
