@@ -97,7 +97,8 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 		{
 		  "wallet_id": "aab4a4a9-2493-4f37-9741-01d5bd31d68b",
 		  "asset_id": "61dbfa89-943a-413c-b862-a2177384d321",
-		  "country_code": "UKR"
+		  "country_code": "UKR",
+		  "verification_field": "date_of_birth"
 		}`
 
 		want := `
@@ -116,7 +117,8 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 		{
 		   "name": "My New Disbursement name 5",
 		   "asset_id": "61dbfa89-943a-413c-b862-a2177384d321",
-		   "country_code": "UKR"
+		   "country_code": "UKR",
+		   "verification_field": "date_of_birth"
 		}`
 
 		want := `{"error":"Request invalid", "extras": {"wallet_id": "wallet_id is required"}}`
@@ -129,7 +131,8 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 		{
 		   "name": "My New Disbursement name 5",
 		   "wallet_id": "aab4a4a9-2493-4f37-9741-01d5bd31d68b",
-		   "country_code": "UKR"
+		   "country_code": "UKR",
+		   "verification_field": "date_of_birth"
 		}`
 
 		want := `{"error":"Request invalid", "extras": {"asset_id": "asset_id is required"}}`
@@ -142,7 +145,8 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 		{
 		   "name": "My New Disbursement name 5",
 		   "wallet_id": "aab4a4a9-2493-4f37-9741-01d5bd31d68b",
-		   "asset_id": "61dbfa89-943a-413c-b862-a2177384d321"
+		   "asset_id": "61dbfa89-943a-413c-b862-a2177384d321",
+		   "verification_field": "date_of_birth"
 		}`
 
 		want := `{"error":"Request invalid", "extras": {"country_code": "country_code is required"}}`
@@ -150,12 +154,27 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 		assertPOSTResponse(t, ctx, handler, method, url, requestBody, want, http.StatusBadRequest)
 	})
 
-	t.Run("returns error when wallet_id is not valid", func(t *testing.T) {
+	t.Run("returns error when no verification field is provided", func(t *testing.T) {
 		requestBody, err := json.Marshal(PostDisbursementRequest{
 			Name:        "disbursement 1",
 			CountryCode: country.Code,
 			AssetID:     asset.ID,
-			WalletID:    "aab4a4a9-2493-4f37-9741-01d5bd31d68b",
+			WalletID:    enabledWallet.ID,
+		})
+		require.NoError(t, err)
+
+		want := `{"error":"Verification field invalid", "extras": {"verification_field": "invalid parameter. valid values are: DATE_OF_BIRTH, PIN, NATIONAL_ID_NUMBER"}}`
+
+		assertPOSTResponse(t, ctx, handler, method, url, string(requestBody), want, http.StatusBadRequest)
+	})
+
+	t.Run("returns error when wallet_id is not valid", func(t *testing.T) {
+		requestBody, err := json.Marshal(PostDisbursementRequest{
+			Name:              "disbursement 1",
+			CountryCode:       country.Code,
+			AssetID:           asset.ID,
+			WalletID:          "aab4a4a9-2493-4f37-9741-01d5bd31d68b",
+			VerificationField: data.VerificationFieldDateOfBirth,
 		})
 		require.NoError(t, err)
 
@@ -167,10 +186,11 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 	t.Run("returns error when wallet is not enabled", func(t *testing.T) {
 		data.EnableOrDisableWalletFixtures(t, ctx, dbConnectionPool, false, disabledWallet.ID)
 		requestBody, err := json.Marshal(PostDisbursementRequest{
-			Name:        "disbursement 1",
-			CountryCode: country.Code,
-			AssetID:     asset.ID,
-			WalletID:    disabledWallet.ID,
+			Name:              "disbursement 1",
+			CountryCode:       country.Code,
+			AssetID:           asset.ID,
+			WalletID:          disabledWallet.ID,
+			VerificationField: data.VerificationFieldDateOfBirth,
 		})
 		require.NoError(t, err)
 
@@ -181,10 +201,11 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 
 	t.Run("returns error when asset_id is not valid", func(t *testing.T) {
 		requestBody, err := json.Marshal(PostDisbursementRequest{
-			Name:        "disbursement 1",
-			CountryCode: country.Code,
-			AssetID:     "aab4a4a9-2493-4f37-9741-01d5bd31d68b",
-			WalletID:    enabledWallet.ID,
+			Name:              "disbursement 1",
+			CountryCode:       country.Code,
+			AssetID:           "aab4a4a9-2493-4f37-9741-01d5bd31d68b",
+			WalletID:          enabledWallet.ID,
+			VerificationField: data.VerificationFieldDateOfBirth,
 		})
 		require.NoError(t, err)
 
@@ -195,10 +216,11 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 
 	t.Run("returns error when country_code is not valid", func(t *testing.T) {
 		requestBody, err := json.Marshal(PostDisbursementRequest{
-			Name:        "disbursement 1",
-			CountryCode: "AAA",
-			AssetID:     asset.ID,
-			WalletID:    enabledWallet.ID,
+			Name:              "disbursement 1",
+			CountryCode:       "AAA",
+			AssetID:           asset.ID,
+			WalletID:          enabledWallet.ID,
+			VerificationField: data.VerificationFieldDateOfBirth,
 		})
 		require.NoError(t, err)
 
@@ -217,10 +239,11 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 		mMonitorService.On("MonitorCounters", monitor.DisbursementsCounterTag, labels.ToMap()).Return(nil).Once()
 
 		requestBody, err := json.Marshal(PostDisbursementRequest{
-			Name:        "disbursement 1",
-			CountryCode: country.Code,
-			AssetID:     asset.ID,
-			WalletID:    enabledWallet.ID,
+			Name:              "disbursement 1",
+			CountryCode:       country.Code,
+			AssetID:           asset.ID,
+			WalletID:          enabledWallet.ID,
+			VerificationField: data.VerificationFieldDateOfBirth,
 		})
 		require.NoError(t, err)
 
@@ -238,10 +261,11 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 
 		expectedName := "disbursement 2"
 		requestBody, err := json.Marshal(PostDisbursementRequest{
-			Name:        expectedName,
-			CountryCode: country.Code,
-			AssetID:     asset.ID,
-			WalletID:    enabledWallet.ID,
+			Name:              expectedName,
+			CountryCode:       country.Code,
+			AssetID:           asset.ID,
+			WalletID:          enabledWallet.ID,
+			VerificationField: data.VerificationFieldDateOfBirth,
 		})
 		require.NoError(t, err)
 
@@ -1054,6 +1078,9 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 
 	r := chi.NewRouter()
 	r.Patch("/disbursements/{id}/status", handler.PatchDisbursementStatus)
+
+	disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{})
+	require.NotNil(t, disbursement)
 
 	readyStatusHistory := []data.DisbursementStatusHistoryEntry{
 		{

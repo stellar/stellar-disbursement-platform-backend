@@ -33,10 +33,11 @@ type DisbursementHandler struct {
 }
 
 type PostDisbursementRequest struct {
-	Name        string `json:"name"`
-	CountryCode string `json:"country_code"`
-	WalletID    string `json:"wallet_id"`
-	AssetID     string `json:"asset_id"`
+	Name              string                 `json:"name"`
+	CountryCode       string                 `json:"country_code"`
+	WalletID          string                 `json:"wallet_id"`
+	AssetID           string                 `json:"asset_id"`
+	VerificationField data.VerificationField `json:"verification_field"`
 }
 
 type PatchDisbursementStatusRequest struct {
@@ -52,9 +53,7 @@ func (d DisbursementHandler) PostDisbursement(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// validate request
-	v := validators.NewValidator()
-
+	v := validators.NewDisbursementRequestValidator(disbursementRequest.VerificationField)
 	v.Check(disbursementRequest.Name != "", "name", "name is required")
 	v.Check(disbursementRequest.CountryCode != "", "country_code", "country_code is required")
 	v.Check(disbursementRequest.WalletID != "", "wallet_id", "wallet_id is required")
@@ -62,6 +61,13 @@ func (d DisbursementHandler) PostDisbursement(w http.ResponseWriter, r *http.Req
 
 	if v.HasErrors() {
 		httperror.BadRequest("Request invalid", err, v.Errors).Render(w)
+		return
+	}
+
+	verificationField := v.ValidateAndGetVerificationType()
+
+	if v.HasErrors() {
+		httperror.BadRequest("Verification field invalid", err, v.Errors).Render(w)
 		return
 	}
 
@@ -107,9 +113,10 @@ func (d DisbursementHandler) PostDisbursement(w http.ResponseWriter, r *http.Req
 			Status:    data.DraftDisbursementStatus,
 			UserID:    user.ID,
 		}},
-		Wallet:  wallet,
-		Asset:   asset,
-		Country: country,
+		Wallet:            wallet,
+		Asset:             asset,
+		Country:           country,
+		VerificationField: verificationField,
 	}
 
 	newId, err := d.Models.Disbursements.Insert(ctx, &disbursement)
