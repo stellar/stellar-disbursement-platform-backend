@@ -2,9 +2,12 @@ package anchorplatform
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 
 	"github.com/stellar/go/network"
 	"github.com/stellar/go/support/http/httpdecode"
@@ -15,6 +18,8 @@ import (
 type ContextType string
 
 const SEP24ClaimsContextKey ContextType = "sep24_claims"
+
+var ErrTenantNameNotFoundInSEP24Claims = errors.New("tenant name not found in SEP24Claims")
 
 func GetSEP24Claims(ctx context.Context) *SEP24JWTClaims {
 	claims := ctx.Value(SEP24ClaimsContextKey)
@@ -29,9 +34,10 @@ type SEP24RequestQuery struct {
 	TransactionID string `query:"transaction_id"`
 }
 
-// checkSEP24ClientDomain check if the sep24 token has a client domain and if not check in which network the API is running on,
-// only testnet can have an empty client domain.
-func checkSEP24ClientDomain(ctx context.Context, sep24Claims *SEP24JWTClaims, networkPassphrase string) error {
+// checkSEP24ClientAndHomeDomains check if the sep24 token has a client domain and a home domain,
+// if there is not a client domain it checks in which network the API is running on, only testnet can have an empty client domain,
+// and home domain is always mandatory.
+func checkSEP24ClientAndHomeDomains(ctx context.Context, sep24Claims *SEP24JWTClaims, networkPassphrase string) error {
 	if sep24Claims.ClientDomain() == "" {
 		missingDomain := "missing client domain in the token claims"
 		if networkPassphrase == network.PublicNetworkPassphrase {
@@ -40,12 +46,17 @@ func checkSEP24ClientDomain(ctx context.Context, sep24Claims *SEP24JWTClaims, ne
 		}
 		log.Ctx(ctx).Warn(missingDomain)
 	}
+	if sep24Claims.HomeDomain() == "" {
+		missingDomain := "missing home domain in the token claims"
+		log.Ctx(ctx).Error(missingDomain)
+		return fmt.Errorf(missingDomain)
+	}
 	return nil
 }
 
 // SEP24QueryTokenAuthenticateMiddleware is a middleware that validates if the token passed in as a query
 // parameter with ?token={token} is valid for the authenticated endpoints.
-func SEP24QueryTokenAuthenticateMiddleware(jwtManager *JWTManager, networkPassphrase string) func(http.Handler) http.Handler {
+func SEP24QueryTokenAuthenticateMiddleware(jwtManager *JWTManager, networkPassphrase string, tenantManager tenant.ManagerInterface) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 			ctx := req.Context()
@@ -82,14 +93,28 @@ func SEP24QueryTokenAuthenticateMiddleware(jwtManager *JWTManager, networkPassph
 				return
 			}
 
-			err = checkSEP24ClientDomain(ctx, sep24Claims, networkPassphrase)
+			err = checkSEP24ClientAndHomeDomains(ctx, sep24Claims, networkPassphrase)
 			if err != nil {
 				httperror.BadRequest("", err, nil).Render(rw)
 				return
 			}
 
+			tenantName, err := extractTenantNameFromSEP24Claims(sep24Claims)
+			if err != nil || tenantName == "" {
+				httperror.BadRequest("Tenant name not found in SEP24Claims or invalid", err, nil).Render(rw)
+				return
+			}
+
+			currentTenant, err := tenantManager.GetTenantByName(ctx, tenantName)
+			if err != nil {
+				httpErr := fmt.Errorf("failed to load tenant by name for tenant name %s: %w", tenantName, err)
+				httperror.InternalError(ctx, "Failed to load tenant by name", httpErr, nil).Render(rw)
+				return
+			}
+
 			// Add the token to the request context
 			ctx = context.WithValue(ctx, SEP24ClaimsContextKey, sep24Claims)
+			ctx = tenant.SaveTenantInContext(ctx, currentTenant)
 			req = req.WithContext(ctx)
 
 			next.ServeHTTP(rw, req)
@@ -99,7 +124,7 @@ func SEP24QueryTokenAuthenticateMiddleware(jwtManager *JWTManager, networkPassph
 
 // SEP24HeaderTokenAuthenticateMiddleware is a middleware that validates if the token passed in
 // the 'Authorization' header is valid for the authenticated endpoints.
-func SEP24HeaderTokenAuthenticateMiddleware(jwtManager *JWTManager, networkPassphrase string) func(http.Handler) http.Handler {
+func SEP24HeaderTokenAuthenticateMiddleware(jwtManager *JWTManager, networkPassphrase string, tenantManager tenant.ManagerInterface) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 			ctx := req.Context()
@@ -131,17 +156,41 @@ func SEP24HeaderTokenAuthenticateMiddleware(jwtManager *JWTManager, networkPassp
 				return
 			}
 
-			err = checkSEP24ClientDomain(ctx, sep24Claims, networkPassphrase)
+			err = checkSEP24ClientAndHomeDomains(ctx, sep24Claims, networkPassphrase)
 			if err != nil {
 				httperror.BadRequest("", err, nil).Render(rw)
 				return
 			}
 
+			tenantName, err := extractTenantNameFromSEP24Claims(sep24Claims)
+			if err != nil || tenantName == "" {
+				httperror.BadRequest("Tenant name not found in SEP24Claims or invalid", err, nil).Render(rw)
+				return
+			}
+
+			currentTenant, err := tenantManager.GetTenantByName(ctx, tenantName)
+			if err != nil {
+				httpErr := fmt.Errorf("failed to load tenant by name for tenant name %s: %w", tenantName, err)
+				httperror.InternalError(ctx, "Failed to load tenant by name", httpErr, nil).Render(rw)
+				return
+			}
+
 			// Add the token to the request context
 			ctx = context.WithValue(ctx, SEP24ClaimsContextKey, sep24Claims)
+			ctx = tenant.SaveTenantInContext(ctx, currentTenant)
 			req = req.WithContext(ctx)
 
 			next.ServeHTTP(rw, req)
 		})
 	}
+}
+
+func extractTenantNameFromSEP24Claims(sep24Claims *SEP24JWTClaims) (string, error) {
+	homedomain := sep24Claims.HomeDomain()
+	hostname := strings.Split(homedomain, ":")[0]
+	parts := strings.Split(hostname, ".")
+	if len(parts) > 2 {
+		return parts[0], nil
+	}
+	return "", ErrTenantNameNotFoundInSEP24Claims
 }
