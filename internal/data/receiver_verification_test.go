@@ -2,6 +2,7 @@ package data
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -122,6 +123,59 @@ func Test_ReceiverVerificationModel_GetAllByReceiverId(t *testing.T) {
 				UpdatedAt:         verification3.UpdatedAt,
 			},
 		}, actualVerifications)
+	})
+}
+
+func Test_ReceiverVerificationModel_GetReceiverVerificationByReceiverId(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+
+	receiver := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
+
+	t.Run("returns error when the receiver has no verifications registered", func(t *testing.T) {
+		receiverVerificationModel := ReceiverVerificationModel{}
+		_, err := receiverVerificationModel.GetLatestByReceiverId(ctx, dbConnectionPool, receiver.ID)
+		require.Error(t, err, fmt.Errorf("cannot query any receiver verifications for receiver id %s", receiver.ID))
+	})
+
+	t.Run("returns the latest receiver verification for a list of receiver verifications", func(t *testing.T) {
+		earlierTime := time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC)
+		CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, ReceiverVerificationInsert{
+			ReceiverID:        receiver.ID,
+			VerificationField: VerificationFieldDateOfBirth,
+			VerificationValue: "1990-01-01",
+			UpdatedAt:         &earlierTime,
+		})
+		CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, ReceiverVerificationInsert{
+			ReceiverID:        receiver.ID,
+			VerificationField: VerificationFieldPin,
+			VerificationValue: "1234",
+			UpdatedAt:         &earlierTime,
+		})
+		verification3 := CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, ReceiverVerificationInsert{
+			ReceiverID:        receiver.ID,
+			VerificationField: VerificationFieldNationalID,
+			VerificationValue: "5678",
+		})
+
+		receiverVerificationModel := ReceiverVerificationModel{}
+		actualVerification, err := receiverVerificationModel.GetLatestByReceiverId(ctx, dbConnectionPool, receiver.ID)
+		require.NoError(t, err)
+
+		assert.Equal(t,
+			ReceiverVerification{
+				ReceiverID:        receiver.ID,
+				VerificationField: VerificationFieldNationalID,
+				HashedValue:       verification3.HashedValue,
+				CreatedAt:         verification3.CreatedAt,
+				UpdatedAt:         verification3.UpdatedAt,
+			}, *actualVerification)
 	})
 }
 

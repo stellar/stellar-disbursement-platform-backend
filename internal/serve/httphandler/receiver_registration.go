@@ -8,21 +8,25 @@ import (
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
 	htmlTpl "github.com/stellar/stellar-disbursement-platform-backend/internal/htmltemplate"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 )
 
 type ReceiverRegistrationHandler struct {
-	ReceiverWalletModel *data.ReceiverWalletModel
-	ReCAPTCHASiteKey    string
+	ReceiverWalletModel       *data.ReceiverWalletModel
+	ReceiverVerificationModel *data.ReceiverVerificationModel
+	DBConnectionPool          db.DBConnectionPool
+	ReCAPTCHASiteKey          string
 }
 
 type ReceiverRegistrationData struct {
-	StellarAccount   string
-	JWTToken         string
-	Title            string
-	Message          string
-	ReCAPTCHASiteKey string
+	StellarAccount    string
+	JWTToken          string
+	Title             string
+	Message           string
+	ReCAPTCHASiteKey  string
+	VerificationField data.VerificationField
 }
 
 // ServeHTTP will serve the SEP-24 deposit page needed to register users.
@@ -70,6 +74,14 @@ func (h ReceiverRegistrationHandler) ServeHTTP(w http.ResponseWriter, r *http.Re
 		htmlTemplateName = "receiver_registered_successfully.tmpl"
 		tmplData.Title = "Registration Complete 🎉"
 		tmplData.Message = "Your Stellar wallet has been registered successfully!"
+	} else {
+		latestReceiverVerification, err := h.ReceiverVerificationModel.GetLatestByReceiverId(ctx, h.DBConnectionPool, rw.Receiver.ID)
+		if err != nil {
+			httperror.InternalError(ctx, "Cannot find receiver verifications for receiver wallet", err, nil).Render(w)
+			return
+		}
+
+		tmplData.VerificationField = latestReceiverVerification.VerificationField
 	}
 
 	registerPage, err := htmlTpl.ExecuteHTMLTemplate(htmlTemplateName, tmplData)

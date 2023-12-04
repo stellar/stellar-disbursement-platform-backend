@@ -30,6 +30,7 @@ type ReceiverVerificationInsert struct {
 	ReceiverID        string            `db:"receiver_id"`
 	VerificationField VerificationField `db:"verification_field"`
 	VerificationValue string            `db:"hashed_value"`
+	UpdatedAt         *time.Time        `db:"updated_at"`
 }
 
 const MaxAttemptsAllowed = 15
@@ -91,6 +92,30 @@ func (m ReceiverVerificationModel) GetAllByReceiverId(ctx context.Context, sqlEx
 	return receiverVerifications, nil
 }
 
+func (m *ReceiverVerificationModel) GetLatestByReceiverId(ctx context.Context, sqlExec db.SQLExecuter, receiverId string) (*ReceiverVerification, error) {
+	receiverVerifications := []ReceiverVerification{}
+	query := `
+		SELECT 
+			*
+		FROM 
+			receiver_verifications
+		WHERE 
+			receiver_id = $1
+		ORDER BY
+			updated_at DESC
+	`
+
+	err := sqlExec.SelectContext(ctx, &receiverVerifications, query, receiverId)
+	if err != nil {
+		return nil, fmt.Errorf("error querying receiver verifications: %w", err)
+	}
+	if len(receiverVerifications) == 0 {
+		return nil, fmt.Errorf("cannot query any receiver verifications for receiver id %s", receiverId)
+	}
+
+	return &receiverVerifications[0], nil
+}
+
 // Insert inserts a new receiver verification
 func (m ReceiverVerificationModel) Insert(ctx context.Context, sqlExec db.SQLExecuter, verificationInsert ReceiverVerificationInsert) (string, error) {
 	err := verificationInsert.Validate()
@@ -106,11 +131,17 @@ func (m ReceiverVerificationModel) Insert(ctx context.Context, sqlExec db.SQLExe
 		INSERT INTO receiver_verifications (
 		    receiver_id, 
 		    verification_field, 
-		    hashed_value
-		) VALUES ($1, $2, $3)
+		    hashed_value%s
+		) VALUES ($1, $2, $3%s)
 	`
 
-	_, err = sqlExec.ExecContext(ctx, query, verificationInsert.ReceiverID, verificationInsert.VerificationField, hashedValue)
+	if verificationInsert.UpdatedAt != nil {
+		query = fmt.Sprintf(query, ",\nupdated_at\n", ", $4")
+		_, err = sqlExec.ExecContext(ctx, query, verificationInsert.ReceiverID, verificationInsert.VerificationField, hashedValue, *verificationInsert.UpdatedAt)
+	} else {
+		query = fmt.Sprintf(query, "", "")
+		_, err = sqlExec.ExecContext(ctx, query, verificationInsert.ReceiverID, verificationInsert.VerificationField, hashedValue)
+	}
 
 	if err != nil {
 		return "", fmt.Errorf("error inserting receiver verification: %w", err)
