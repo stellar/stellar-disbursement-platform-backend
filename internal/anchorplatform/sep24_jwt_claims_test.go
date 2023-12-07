@@ -12,7 +12,7 @@ func Test_SEP24JWTClaims_getters(t *testing.T) {
 	expiresAt := jwt.NewNumericDate(time.Now().Add(time.Minute * 5))
 	claims := SEP24JWTClaims{
 		ClientDomainClaim: "test.com",
-		HomeDomainClaim: "tenant.test.com:8080",
+		HomeDomainClaim:   "tenant.test.com:8080",
 		RegisteredClaims: jwt.RegisteredClaims{
 			ID:        "test-transaction-id",
 			Subject:   "GB54GWWWOSHATX5ALKHBBL2IQBZ2E7TBFO7F7VXKPIW6XANYDK4Y3RRC:123456",

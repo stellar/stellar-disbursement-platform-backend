@@ -285,7 +285,7 @@ func Test_SEP24QueryTokenAuthenticateMiddleware(t *testing.T) {
 		})
 
 		validTransactionID := "valid-transaction-id"
-		validToken, err := jwtManager.GenerateSEP24Token("GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444", "", "", "tenant.test.com:8080",validTransactionID)
+		validToken, err := jwtManager.GenerateSEP24Token("GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444", "", "", "tenant.test.com:8080", validTransactionID)
 		require.NoError(t, err)
 
 		urlStr := fmt.Sprintf("/authenticated_testnet?transaction_id=%s&token=%s", validTransactionID, validToken)
@@ -607,7 +607,7 @@ func Test_SEP24HeaderTokenAuthenticateMiddleware(t *testing.T) {
 		})
 
 		validTransactionID := "valid-transaction-id"
-		validToken, err := jwtManager.GenerateSEP24Token("GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444", "", "", "tenant.test.com:8080",validTransactionID)
+		validToken, err := jwtManager.GenerateSEP24Token("GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444", "", "", "tenant.test.com:8080", validTransactionID)
 		require.NoError(t, err)
 
 		req, err := http.NewRequest(http.MethodGet, "/authenticated_testnet", nil)

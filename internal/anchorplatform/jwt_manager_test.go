@@ -37,7 +37,7 @@ func Test_JWTManager_GenerateAndParseSEP24Token(t *testing.T) {
 	require.Empty(t, tokenStr)
 
 	// valid claims 🎉
-	tokenStr, err = jwtManager.GenerateSEP24Token("GB54GWWWOSHATX5ALKHBBL2IQBZ2E7TBFO7F7VXKPIW6XANYDK4Y3RRC", "123456", "test.com", "test-home-domain.com:3000","test-transaction-id")
+	tokenStr, err = jwtManager.GenerateSEP24Token("GB54GWWWOSHATX5ALKHBBL2IQBZ2E7TBFO7F7VXKPIW6XANYDK4Y3RRC", "123456", "test.com", "test-home-domain.com:3000", "test-transaction-id")
 	require.NoError(t, err)
 	require.NotEmpty(t, tokenStr)
 	now := time.Now()

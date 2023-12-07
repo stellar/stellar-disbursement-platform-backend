@@ -39,7 +39,7 @@ func (manager *JWTManager) GenerateSEP24Token(stellarAccount, stellarMemo, clien
 
 	claims := SEP24JWTClaims{
 		ClientDomainClaim: clientDomain,
-		HomeDomainClaim: homeDomain,
+		HomeDomainClaim:   homeDomain,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ID:        transactionID,
 			Subject:   subject,
