@@ -32,12 +32,12 @@ func Test_JWTManager_GenerateAndParseSEP24Token(t *testing.T) {
 	require.NoError(t, err)
 
 	// invalid claims
-	tokenStr, err := jwtManager.GenerateSEP24Token("", "", "test.com", "test-transaction-id")
+	tokenStr, err := jwtManager.GenerateSEP24Token("", "", "test.com", "test-home-domain.com:3000", "test-transaction-id")
 	require.EqualError(t, err, "validating SEP24 token claims: stellar account is invalid: strkey is 0 bytes long; minimum valid length is 5")
 	require.Empty(t, tokenStr)
 
 	// valid claims 🎉
-	tokenStr, err = jwtManager.GenerateSEP24Token("GB54GWWWOSHATX5ALKHBBL2IQBZ2E7TBFO7F7VXKPIW6XANYDK4Y3RRC", "123456", "test.com", "test-transaction-id")
+	tokenStr, err = jwtManager.GenerateSEP24Token("GB54GWWWOSHATX5ALKHBBL2IQBZ2E7TBFO7F7VXKPIW6XANYDK4Y3RRC", "123456", "test.com", "test-home-domain.com:3000","test-transaction-id")
 	require.NoError(t, err)
 	require.NotEmpty(t, tokenStr)
 	now := time.Now()
@@ -50,6 +50,7 @@ func Test_JWTManager_GenerateAndParseSEP24Token(t *testing.T) {
 	assert.Equal(t, "GB54GWWWOSHATX5ALKHBBL2IQBZ2E7TBFO7F7VXKPIW6XANYDK4Y3RRC", claims.SEP10StellarAccount())
 	assert.Equal(t, "123456", claims.SEP10StellarMemo())
 	assert.Equal(t, "test.com", claims.ClientDomain())
+	assert.Equal(t, "test-home-domain.com:3000", claims.HomeDomain())
 	assert.True(t, claims.ExpiresAt().After(now.Add(time.Duration(4000*time.Millisecond))))
 	assert.True(t, claims.ExpiresAt().Before(now.Add(time.Duration(5000*time.Millisecond))))
 }
