@@ -17,9 +17,6 @@ services:
       TSS_METRICS_PORT: "9002"
       TSS_METRICS_TYPE: "TSS_PROMETHEUS"
       DISTRIBUTION_SEED: ${DISTRIBUTION_SEED}
-    depends_on:
-      - db
-      - sdp-api
     entrypoint: ""
     command:
       - sh
