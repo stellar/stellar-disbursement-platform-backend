@@ -2,7 +2,6 @@ package anchorplatform
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -13,13 +12,12 @@ import (
 	"github.com/stellar/go/support/http/httpdecode"
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
 type ContextType string
 
 const SEP24ClaimsContextKey ContextType = "sep24_claims"
-
-var ErrTenantNameNotFoundInSEP24Claims = errors.New("tenant name not found in SEP24Claims")
 
 func GetSEP24Claims(ctx context.Context) *SEP24JWTClaims {
 	claims := ctx.Value(SEP24ClaimsContextKey)
@@ -99,7 +97,7 @@ func SEP24QueryTokenAuthenticateMiddleware(jwtManager *JWTManager, networkPassph
 				return
 			}
 
-			tenantName, err := extractTenantNameFromSEP24Claims(sep24Claims)
+			tenantName, err := utils.ExtractTenantNameFromHostName(sep24Claims.HomeDomain())
 			if err != nil || tenantName == "" {
 				httperror.BadRequest("Tenant name not found in SEP24Claims or invalid", err, nil).Render(rw)
 				return
@@ -162,7 +160,7 @@ func SEP24HeaderTokenAuthenticateMiddleware(jwtManager *JWTManager, networkPassp
 				return
 			}
 
-			tenantName, err := extractTenantNameFromSEP24Claims(sep24Claims)
+			tenantName, err := utils.ExtractTenantNameFromHostName(sep24Claims.HomeDomain())
 			if err != nil || tenantName == "" {
 				httperror.BadRequest("Tenant name not found in SEP24Claims or invalid", err, nil).Render(rw)
 				return
@@ -183,14 +181,4 @@ func SEP24HeaderTokenAuthenticateMiddleware(jwtManager *JWTManager, networkPassp
 			next.ServeHTTP(rw, req)
 		})
 	}
-}
-
-func extractTenantNameFromSEP24Claims(sep24Claims *SEP24JWTClaims) (string, error) {
-	homedomain := sep24Claims.HomeDomain()
-	hostname := strings.Split(homedomain, ":")[0]
-	parts := strings.Split(hostname, ".")
-	if len(parts) > 2 {
-		return parts[0], nil
-	}
-	return "", ErrTenantNameNotFoundInSEP24Claims
 }
