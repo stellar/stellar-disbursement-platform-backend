@@ -27,8 +27,6 @@ const (
 	TenantHeaderKey string     = "SDP-Tenant-Name"
 )
 
-var ErrTenantNameNotFoundInRequest = errors.New("tenant name not found in request")
-
 // RecoverHandler is a middleware that recovers from panics and logs the error.
 func RecoverHandler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
