@@ -119,39 +119,31 @@
               />
             </div>
             <div class="Form__item">
-              {{ if .VerificationField eq "DATE_OF_BIRTH" }}
+              {{ if eq .VerificationField "DATE_OF_BIRTH" }}
                 <label for="verification">Date of birth</label>
                 <input
                   type="date"
-                  id="date-of-birth"
-                  name="date-of-birth"
+                  id="verification"
+                  name="date_of_birth"
                   required
                 />
-              {{ else if .VerificationField eq "PIN" }}
+              {{ else if eq .VerificationField "PIN" }}
                 <label for="verification">Pin</label>
                 <input
-                  type="string"
-                  id="pin"
+                  type="text"
+                  id="verification"
                   name="pin"
                   required
                 />
-              {{ else if .VerificationField eq "NATIONAL_ID" }}
+              {{ else if eq .VerificationField "NATIONAL_ID" }}
                 <label for="verification">National ID</label>
                 <input
-                  type="string"
-                  id="national-id"
-                  name="national-id"
+                  type="text"
+                  id="verification"
+                  name="national_id"
                   required
                 />
               {{ end }}
-              <!--<label for="verification">Date of birth</label>
-              <input
-                type="date"
-                id="verification"
-                name="verification"
-                required
-              />
-            </div-->
 
             <div class="g-recaptcha" data-sitekey="{{.ReCAPTCHASiteKey}}"></div>
 

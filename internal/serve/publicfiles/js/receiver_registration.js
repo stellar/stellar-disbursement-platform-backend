@@ -169,6 +169,8 @@ async function submitOtp(event) {
   );
   const otpEl = document.getElementById("otp");
   const verificationEl = document.getElementById("verification");
+  const verificationType = verificationEl.className;
+  console.log(verificationType);
 
   const buttonEls = passcodeSectionEl.querySelectorAll("[data-button]");
 
@@ -213,7 +215,7 @@ async function submitOtp(event) {
             phone_number: phoneNumber,
             otp: otp,
             verification: verification,
-            verification_type: "date_of_birth",
+            verification_type: verificationType,
             recaptcha_token: reCAPTCHATokenEl.value,
           }),
         });

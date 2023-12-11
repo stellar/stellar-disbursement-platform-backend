@@ -8,7 +8,6 @@ import (
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
 	htmlTpl "github.com/stellar/stellar-disbursement-platform-backend/internal/htmltemplate"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 )
@@ -16,7 +15,7 @@ import (
 type ReceiverRegistrationHandler struct {
 	ReceiverWalletModel       *data.ReceiverWalletModel
 	ReceiverVerificationModel *data.ReceiverVerificationModel
-	DBConnectionPool          db.DBConnectionPool
+	Models *data.Models
 	ReCAPTCHASiteKey          string
 }
 
@@ -75,13 +74,13 @@ func (h ReceiverRegistrationHandler) ServeHTTP(w http.ResponseWriter, r *http.Re
 		tmplData.Title = "Registration Complete 🎉"
 		tmplData.Message = "Your Stellar wallet has been registered successfully!"
 	} else {
-		latestReceiverVerification, err := h.ReceiverVerificationModel.GetLatestByReceiverId(ctx, h.DBConnectionPool, rw.Receiver.ID)
+		/*latestReceiverVerification, err := h.Models.ReceiverVerification.GetLatestByReceiverId(ctx, "abc")
 		if err != nil {
 			httperror.InternalError(ctx, "Cannot find receiver verifications for receiver wallet", err, nil).Render(w)
 			return
-		}
+		}*/
 
-		tmplData.VerificationField = latestReceiverVerification.VerificationField
+		tmplData.VerificationField = data.VerificationFieldPin
 	}
 
 	registerPage, err := htmlTpl.ExecuteHTMLTemplate(htmlTemplateName, tmplData)

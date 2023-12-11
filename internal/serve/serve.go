@@ -380,7 +380,12 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 
 	mux.Route("/wallet-registration", func(r chi.Router) {
 		sep24QueryTokenAuthenticationMiddleware := anchorplatform.SEP24QueryTokenAuthenticateMiddleware(o.sep24JWTManager, o.NetworkPassphrase)
-		r.With(sep24QueryTokenAuthenticationMiddleware).Get("/start", httphandler.ReceiverRegistrationHandler{ReceiverWalletModel: o.Models.ReceiverWallet, ReCAPTCHASiteKey: o.ReCAPTCHASiteKey}.ServeHTTP) // This loads the SEP-24 PII registration webpage.
+		r.With(sep24QueryTokenAuthenticationMiddleware).Get("/start", httphandler.ReceiverRegistrationHandler{
+			ReceiverWalletModel: o.Models.ReceiverWallet,
+			ReceiverVerificationModel: o.Models.ReceiverVerification,
+			Models: o.Models,
+			ReCAPTCHASiteKey: o.ReCAPTCHASiteKey,
+		}.ServeHTTP) // This loads the SEP-24 PII registration webpage.
 
 		sep24HeaderTokenAuthenticationMiddleware := anchorplatform.SEP24HeaderTokenAuthenticateMiddleware(o.sep24JWTManager, o.NetworkPassphrase)
 		r.With(sep24HeaderTokenAuthenticationMiddleware).Post("/otp", httphandler.ReceiverSendOTPHandler{Models: o.Models, SMSMessengerClient: o.SMSMessengerClient, ReCAPTCHAValidator: reCAPTCHAValidator}.ServeHTTP)
