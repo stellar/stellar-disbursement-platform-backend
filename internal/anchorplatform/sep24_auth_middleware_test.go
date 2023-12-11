@@ -15,6 +15,9 @@ import (
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/stellar/go/network"
 	"github.com/stellar/go/support/log"
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 	"github.com/stretchr/testify/require"
 )
 
@@ -25,6 +28,7 @@ func Test_GetSEP24Claims(t *testing.T) {
 
 	wantClaims := &SEP24JWTClaims{
 		ClientDomainClaim: "test.com",
+		HomeDomainClaim:   "tenant.test.com:8080",
 		RegisteredClaims: jwt.RegisteredClaims{
 			ID:        "test-transaction-id",
 			Subject:   "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444:123456",
@@ -66,8 +70,17 @@ func Test_SEP24QueryTokenAuthenticateMiddleware(t *testing.T) {
 	jwtManager, err := NewJWTManager(tokenSecret, 5000)
 	require.NoError(t, err)
 
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+
+	tenantManager := tenant.NewManager(tenant.WithDatabase(dbConnectionPool))
 	r.Group(func(r chi.Router) {
-		r.Use(SEP24QueryTokenAuthenticateMiddleware(jwtManager, network.TestNetworkPassphrase))
+		r.Use(SEP24QueryTokenAuthenticateMiddleware(jwtManager, network.TestNetworkPassphrase, tenantManager))
 
 		r.Get("/authenticated", func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
@@ -138,7 +151,7 @@ func Test_SEP24QueryTokenAuthenticateMiddleware(t *testing.T) {
 	})
 
 	t.Run("returns Unauthorized if the token is valid but the transaction_id is not different from what's expected", func(t *testing.T) {
-		validToken, err := jwtManager.GenerateSEP24Token("GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444", "", "test.com", "test-transaction-id")
+		validToken, err := jwtManager.GenerateSEP24Token("GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444", "", "test.com", "tenant.test.com:8080", "test-transaction-id")
 		require.NoError(t, err)
 
 		urlStr := fmt.Sprintf("/authenticated?transaction_id=%s&token=%s", "invalid-transaction-id", validToken)
@@ -162,6 +175,7 @@ func Test_SEP24QueryTokenAuthenticateMiddleware(t *testing.T) {
 		// create a token with an odd subject (stellar_account:memo)
 		badClaims := SEP24JWTClaims{
 			ClientDomainClaim: "test.com",
+			HomeDomainClaim:   "tenant.test.com:8080",
 			RegisteredClaims: jwt.RegisteredClaims{
 				ID:        "test-transaction-id",
 				Subject:   "bad-subject",
@@ -197,7 +211,7 @@ func Test_SEP24QueryTokenAuthenticateMiddleware(t *testing.T) {
 		anotherTokenSecret := tokenSecret + "another"
 		anotherJWTManager, err := NewJWTManager(anotherTokenSecret, 5000)
 		require.NoError(t, err)
-		tokenWithDifferentSigner, err := anotherJWTManager.GenerateSEP24Token("GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444", "", "test.com", "valid-transaction-id")
+		tokenWithDifferentSigner, err := anotherJWTManager.GenerateSEP24Token("GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444", "", "test.com", "tenant.test.com:8080", "valid-transaction-id")
 		require.NoError(t, err)
 
 		urlStr := fmt.Sprintf("/authenticated?transaction_id=%s&token=%s", "valid-transaction-id", tokenWithDifferentSigner)
@@ -216,10 +230,11 @@ func Test_SEP24QueryTokenAuthenticateMiddleware(t *testing.T) {
 		require.Contains(t, buf.String(), "parsing the token claims: parsing SEP24 token: signature is invalid")
 	})
 
+	tenant.CreateTenantFixture(t, ctx, dbConnectionPool, "tenant")
 	t.Run("both the token and the transaction_id are valid 🎉", func(t *testing.T) {
 		var contextClaims *SEP24JWTClaims
 		require.Nil(t, contextClaims)
-		r.With(SEP24QueryTokenAuthenticateMiddleware(jwtManager, network.TestNetworkPassphrase)).Get("/authenticated_success", func(w http.ResponseWriter, r *http.Request) {
+		r.With(SEP24QueryTokenAuthenticateMiddleware(jwtManager, network.TestNetworkPassphrase, tenantManager)).Get("/authenticated_success", func(w http.ResponseWriter, r *http.Request) {
 			contextClaims = r.Context().Value(SEP24ClaimsContextKey).(*SEP24JWTClaims)
 			w.WriteHeader(http.StatusOK)
 			_, err := w.Write(json.RawMessage(`{"status":"ok"}`))
@@ -228,7 +243,7 @@ func Test_SEP24QueryTokenAuthenticateMiddleware(t *testing.T) {
 
 		now := time.Now()
 		validTransactionID := "valid-transaction-id"
-		validToken, err := jwtManager.GenerateSEP24Token("GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444", "", "test.com", validTransactionID)
+		validToken, err := jwtManager.GenerateSEP24Token("GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444", "", "test.com", "tenant.test.com:8080", validTransactionID)
 		require.NoError(t, err)
 
 		urlStr := fmt.Sprintf("/authenticated_success?transaction_id=%s&token=%s", validTransactionID, validToken)
@@ -246,6 +261,7 @@ func Test_SEP24QueryTokenAuthenticateMiddleware(t *testing.T) {
 		// validate the context claims
 		require.NotNil(t, contextClaims)
 		require.Equal(t, "test.com", contextClaims.ClientDomain())
+		require.Equal(t, "tenant.test.com:8080", contextClaims.HomeDomain())
 		require.Equal(t, "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444", contextClaims.SEP10StellarAccount())
 		require.Equal(t, validTransactionID, contextClaims.TransactionID())
 		require.Empty(t, contextClaims.SEP10StellarMemo())
@@ -261,7 +277,7 @@ func Test_SEP24QueryTokenAuthenticateMiddleware(t *testing.T) {
 
 		var contextClaims *SEP24JWTClaims
 		require.Nil(t, contextClaims)
-		r.With(SEP24QueryTokenAuthenticateMiddleware(jwtManager, network.TestNetworkPassphrase)).Get("/authenticated_testnet", func(w http.ResponseWriter, r *http.Request) {
+		r.With(SEP24QueryTokenAuthenticateMiddleware(jwtManager, network.TestNetworkPassphrase, tenantManager)).Get("/authenticated_testnet", func(w http.ResponseWriter, r *http.Request) {
 			contextClaims = r.Context().Value(SEP24ClaimsContextKey).(*SEP24JWTClaims)
 			w.WriteHeader(http.StatusOK)
 			_, err := w.Write(json.RawMessage(`{"status":"ok"}`))
@@ -269,7 +285,7 @@ func Test_SEP24QueryTokenAuthenticateMiddleware(t *testing.T) {
 		})
 
 		validTransactionID := "valid-transaction-id"
-		validToken, err := jwtManager.GenerateSEP24Token("GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444", "", "", validTransactionID)
+		validToken, err := jwtManager.GenerateSEP24Token("GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444", "", "", "tenant.test.com:8080", validTransactionID)
 		require.NoError(t, err)
 
 		urlStr := fmt.Sprintf("/authenticated_testnet?transaction_id=%s&token=%s", validTransactionID, validToken)
@@ -296,14 +312,14 @@ func Test_SEP24QueryTokenAuthenticateMiddleware(t *testing.T) {
 		buf := new(strings.Builder)
 		log.DefaultLogger.SetOutput(buf)
 
-		r.With(SEP24QueryTokenAuthenticateMiddleware(jwtManager, network.PublicNetworkPassphrase)).Get("/authenticated_pubnet", func(w http.ResponseWriter, r *http.Request) {
+		r.With(SEP24QueryTokenAuthenticateMiddleware(jwtManager, network.PublicNetworkPassphrase, tenantManager)).Get("/authenticated_pubnet", func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 			_, err := w.Write(json.RawMessage(`{"status":"ok"}`))
 			require.NoError(t, err)
 		})
 
 		validTransactionID := "valid-transaction-id"
-		validToken, err := jwtManager.GenerateSEP24Token("GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444", "", "", validTransactionID)
+		validToken, err := jwtManager.GenerateSEP24Token("GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444", "", "", "tenant.test.com:8080", validTransactionID)
 		require.NoError(t, err)
 
 		urlStr := fmt.Sprintf("/authenticated_pubnet?transaction_id=%s&token=%s", validTransactionID, validToken)
@@ -321,6 +337,37 @@ func Test_SEP24QueryTokenAuthenticateMiddleware(t *testing.T) {
 		// validate logs
 		require.Contains(t, buf.String(), "missing client domain in the token claims")
 	})
+
+	t.Run("token with empty home domain returns error", func(t *testing.T) {
+		// set the logger to a buffer so we can check the error message
+		buf := new(strings.Builder)
+		log.DefaultLogger.SetOutput(buf)
+
+		r.With(SEP24QueryTokenAuthenticateMiddleware(jwtManager, network.PublicNetworkPassphrase, tenantManager)).Get("/authenticated_pubnet", func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, err := w.Write(json.RawMessage(`{"status":"ok"}`))
+			require.NoError(t, err)
+		})
+
+		validTransactionID := "valid-transaction-id"
+		validToken, err := jwtManager.GenerateSEP24Token("GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444", "", "test.com", "", validTransactionID)
+		require.NoError(t, err)
+
+		urlStr := fmt.Sprintf("/authenticated_pubnet?transaction_id=%s&token=%s", validTransactionID, validToken)
+		req, err := http.NewRequest(http.MethodGet, urlStr, nil)
+		require.NoError(t, err)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		resp := w.Result()
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusBadRequest, resp.StatusCode)
+		require.JSONEq(t, `{"error":"The request was invalid in some way."}`, string(respBody))
+
+		// validate logs
+		require.Contains(t, buf.String(), "missing home domain in the token claims")
+	})
 }
 
 func Test_SEP24HeaderTokenAuthenticateMiddleware(t *testing.T) {
@@ -329,8 +376,17 @@ func Test_SEP24HeaderTokenAuthenticateMiddleware(t *testing.T) {
 	jwtManager, err := NewJWTManager(tokenSecret, 5000)
 	require.NoError(t, err)
 
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+
+	tenantManager := tenant.NewManager(tenant.WithDatabase(dbConnectionPool))
 	r.Group(func(r chi.Router) {
-		r.Use(SEP24HeaderTokenAuthenticateMiddleware(jwtManager, network.TestNetworkPassphrase))
+		r.Use(SEP24HeaderTokenAuthenticateMiddleware(jwtManager, network.TestNetworkPassphrase, tenantManager))
 
 		r.Get("/authenticated", func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
@@ -435,6 +491,7 @@ func Test_SEP24HeaderTokenAuthenticateMiddleware(t *testing.T) {
 		// create a token with an odd subject (stellar_account:memo)
 		badClaims := SEP24JWTClaims{
 			ClientDomainClaim: "test.com",
+			HomeDomainClaim:   "tenant.test.com:8080",
 			RegisteredClaims: jwt.RegisteredClaims{
 				ID:        "test-transaction-id",
 				Subject:   "bad-subject",
@@ -472,7 +529,7 @@ func Test_SEP24HeaderTokenAuthenticateMiddleware(t *testing.T) {
 		anotherTokenSecret := tokenSecret + "another"
 		anotherJWTManager, err := NewJWTManager(anotherTokenSecret, 5000)
 		require.NoError(t, err)
-		tokenWithDifferentSigner, err := anotherJWTManager.GenerateSEP24Token("GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444", "", "test.com", "valid-transaction-id")
+		tokenWithDifferentSigner, err := anotherJWTManager.GenerateSEP24Token("GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444", "", "test.com", "tenant.test.com:8080", "valid-transaction-id")
 		require.NoError(t, err)
 
 		req, err := http.NewRequest(http.MethodGet, "/authenticated", nil)
@@ -493,10 +550,11 @@ func Test_SEP24HeaderTokenAuthenticateMiddleware(t *testing.T) {
 		require.Contains(t, buf.String(), "parsing the token claims: parsing SEP24 token: signature is invalid")
 	})
 
+	tenant.CreateTenantFixture(t, ctx, dbConnectionPool, "tenant")
 	t.Run("token is valid 🎉", func(t *testing.T) {
 		var contextClaims *SEP24JWTClaims
 		require.Nil(t, contextClaims)
-		r.With(SEP24HeaderTokenAuthenticateMiddleware(jwtManager, network.TestNetworkPassphrase)).Get("/authenticated_success", func(w http.ResponseWriter, r *http.Request) {
+		r.With(SEP24HeaderTokenAuthenticateMiddleware(jwtManager, network.TestNetworkPassphrase, tenantManager)).Get("/authenticated_success", func(w http.ResponseWriter, r *http.Request) {
 			contextClaims = r.Context().Value(SEP24ClaimsContextKey).(*SEP24JWTClaims)
 			w.WriteHeader(http.StatusOK)
 			_, err := w.Write(json.RawMessage(`{"status":"ok"}`))
@@ -505,7 +563,7 @@ func Test_SEP24HeaderTokenAuthenticateMiddleware(t *testing.T) {
 
 		now := time.Now()
 		validTransactionID := "valid-transaction-id"
-		validToken, err := jwtManager.GenerateSEP24Token("GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444", "", "test.com", validTransactionID)
+		validToken, err := jwtManager.GenerateSEP24Token("GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444", "", "test.com", "tenant.test.com:8080", validTransactionID)
 		require.NoError(t, err)
 
 		req, err := http.NewRequest(http.MethodGet, "/authenticated_success", nil)
@@ -525,6 +583,7 @@ func Test_SEP24HeaderTokenAuthenticateMiddleware(t *testing.T) {
 		// validate the context claims
 		require.NotNil(t, contextClaims)
 		require.Equal(t, "test.com", contextClaims.ClientDomain())
+		require.Equal(t, "tenant.test.com:8080", contextClaims.HomeDomain())
 		require.Equal(t, "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444", contextClaims.SEP10StellarAccount())
 		require.Equal(t, validTransactionID, contextClaims.TransactionID())
 		require.Empty(t, contextClaims.SEP10StellarMemo())
@@ -540,7 +599,7 @@ func Test_SEP24HeaderTokenAuthenticateMiddleware(t *testing.T) {
 
 		var contextClaims *SEP24JWTClaims
 		require.Nil(t, contextClaims)
-		r.With(SEP24HeaderTokenAuthenticateMiddleware(jwtManager, network.TestNetworkPassphrase)).Get("/authenticated_testnet", func(w http.ResponseWriter, r *http.Request) {
+		r.With(SEP24HeaderTokenAuthenticateMiddleware(jwtManager, network.TestNetworkPassphrase, tenantManager)).Get("/authenticated_testnet", func(w http.ResponseWriter, r *http.Request) {
 			contextClaims = r.Context().Value(SEP24ClaimsContextKey).(*SEP24JWTClaims)
 			w.WriteHeader(http.StatusOK)
 			_, err := w.Write(json.RawMessage(`{"status":"ok"}`))
@@ -548,7 +607,7 @@ func Test_SEP24HeaderTokenAuthenticateMiddleware(t *testing.T) {
 		})
 
 		validTransactionID := "valid-transaction-id"
-		validToken, err := jwtManager.GenerateSEP24Token("GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444", "", "", validTransactionID)
+		validToken, err := jwtManager.GenerateSEP24Token("GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444", "", "", "tenant.test.com:8080", validTransactionID)
 		require.NoError(t, err)
 
 		req, err := http.NewRequest(http.MethodGet, "/authenticated_testnet", nil)
@@ -577,14 +636,14 @@ func Test_SEP24HeaderTokenAuthenticateMiddleware(t *testing.T) {
 		buf := new(strings.Builder)
 		log.DefaultLogger.SetOutput(buf)
 
-		r.With(SEP24HeaderTokenAuthenticateMiddleware(jwtManager, network.PublicNetworkPassphrase)).Get("/authenticated_testnet", func(w http.ResponseWriter, r *http.Request) {
+		r.With(SEP24HeaderTokenAuthenticateMiddleware(jwtManager, network.PublicNetworkPassphrase, tenantManager)).Get("/authenticated_testnet", func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 			_, err := w.Write(json.RawMessage(`{"status":"ok"}`))
 			require.NoError(t, err)
 		})
 
 		validTransactionID := "valid-transaction-id"
-		validToken, err := jwtManager.GenerateSEP24Token("GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444", "", "", validTransactionID)
+		validToken, err := jwtManager.GenerateSEP24Token("GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444", "", "", "tenant.test.com:8080", validTransactionID)
 		require.NoError(t, err)
 
 		req, err := http.NewRequest(http.MethodGet, "/authenticated_testnet", nil)
@@ -603,5 +662,38 @@ func Test_SEP24HeaderTokenAuthenticateMiddleware(t *testing.T) {
 
 		// validate logs
 		require.Contains(t, buf.String(), "missing client domain in the token claims")
+	})
+
+	t.Run("token with empty home domain returns error", func(t *testing.T) {
+		// set the logger to a buffer so we can check the error message
+		buf := new(strings.Builder)
+		log.DefaultLogger.SetOutput(buf)
+
+		r.With(SEP24HeaderTokenAuthenticateMiddleware(jwtManager, network.PublicNetworkPassphrase, tenantManager)).Get("/authenticated_testnet", func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, err := w.Write(json.RawMessage(`{"status":"ok"}`))
+			require.NoError(t, err)
+		})
+
+		validTransactionID := "valid-transaction-id"
+		validToken, err := jwtManager.GenerateSEP24Token("GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444", "", "test.com", "", validTransactionID)
+		require.NoError(t, err)
+
+		req, err := http.NewRequest(http.MethodGet, "/authenticated_testnet", nil)
+		require.NoError(t, err)
+		authHeader := "Bearer " + validToken
+		req.Header.Set("Authorization", authHeader)
+
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		resp := w.Result()
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusBadRequest, resp.StatusCode)
+		require.JSONEq(t, `{"error":"The request was invalid in some way."}`, string(respBody))
+
+		// validate logs
+		require.Contains(t, buf.String(), "missing home domain in the token claims")
 	})
 }

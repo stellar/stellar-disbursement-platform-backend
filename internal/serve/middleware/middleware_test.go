@@ -17,6 +17,7 @@ import (
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -759,7 +760,7 @@ func TestExtractTenantNameFromRequest(t *testing.T) {
 		r, _ := http.NewRequest("GET", "http://example.com", nil)
 
 		name, err := extractTenantNameFromRequest(r)
-		require.ErrorIs(t, err, ErrTenantNameNotFoundInRequest)
+		require.ErrorIs(t, err, utils.ErrTenantNameNotFound)
 		require.Empty(t, name)
 	})
 

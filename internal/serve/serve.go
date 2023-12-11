@@ -405,10 +405,10 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 	}.ServeHTTP)
 
 	mux.Route("/wallet-registration", func(r chi.Router) {
-		sep24QueryTokenAuthenticationMiddleware := anchorplatform.SEP24QueryTokenAuthenticateMiddleware(o.sep24JWTManager, o.NetworkPassphrase)
+		sep24QueryTokenAuthenticationMiddleware := anchorplatform.SEP24QueryTokenAuthenticateMiddleware(o.sep24JWTManager, o.NetworkPassphrase, o.tenantManager)
 		r.With(sep24QueryTokenAuthenticationMiddleware).Get("/start", httphandler.ReceiverRegistrationHandler{ReceiverWalletModel: o.Models.ReceiverWallet, ReCAPTCHASiteKey: o.ReCAPTCHASiteKey}.ServeHTTP) // This loads the SEP-24 PII registration webpage.
 
-		sep24HeaderTokenAuthenticationMiddleware := anchorplatform.SEP24HeaderTokenAuthenticateMiddleware(o.sep24JWTManager, o.NetworkPassphrase)
+		sep24HeaderTokenAuthenticationMiddleware := anchorplatform.SEP24HeaderTokenAuthenticateMiddleware(o.sep24JWTManager, o.NetworkPassphrase, o.tenantManager)
 		r.With(sep24HeaderTokenAuthenticationMiddleware).Post("/otp", httphandler.ReceiverSendOTPHandler{Models: o.Models, SMSMessengerClient: o.SMSMessengerClient, ReCAPTCHAValidator: reCAPTCHAValidator}.ServeHTTP)
 		r.With(sep24HeaderTokenAuthenticationMiddleware).Post("/verification", httphandler.VerifyReceiverRegistrationHandler{
 			AnchorPlatformAPIService: o.AnchorPlatformAPIService,

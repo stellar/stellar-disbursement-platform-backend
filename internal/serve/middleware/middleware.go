@@ -27,8 +27,6 @@ const (
 	TenantHeaderKey string     = "SDP-Tenant-Name"
 )
 
-var ErrTenantNameNotFoundInRequest = errors.New("tenant name not found in request")
-
 // RecoverHandler is a middleware that recovers from panics and logs the error.
 func RecoverHandler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
@@ -259,14 +257,5 @@ func extractTenantNameFromRequest(r *http.Request) (string, error) {
 	}
 
 	// 2. If header is blank, extract from the hostname prefix
-	hostname := r.Host
-	// Remove port number if present (e.g. aidorg.sdp.com:8000 -> aidorg.sdp.com)
-	hostname = strings.Split(hostname, ":")[0]
-	// Split by dots (e.g. aidorg.sdp.com -> [aidorg, sdp, com])
-	parts := strings.Split(hostname, ".")
-	// If there's more than 2 parts, it means there's a subdomain
-	if len(parts) > 2 {
-		return parts[0], nil
-	}
-	return "", ErrTenantNameNotFoundInRequest
+	return utils.ExtractTenantNameFromHostName(r.Host)
 }

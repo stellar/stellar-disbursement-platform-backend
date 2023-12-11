@@ -90,7 +90,7 @@ services:
 
   anchor-platform:
     container_name: anchor-platform
-    image: stellar/anchor-platform:2.1.3
+    image: stellar/anchor-platform:2.4.0
     command: --sep-server --platform-server --platform linux/amd64
     ports:
       - "8080:8080" # sep-server
