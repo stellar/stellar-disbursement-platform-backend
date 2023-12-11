@@ -582,3 +582,77 @@ func Test_SetConfigOptionURLString(t *testing.T) {
 		})
 	}
 }
+
+func Test_SetConfigOptionURLList(t *testing.T) {
+	opts := struct{ brokers []string }{}
+
+	co := config.ConfigOption{
+		Name:           "brokers",
+		OptType:        types.String,
+		CustomSetValue: SetConfigOptionURLList,
+		ConfigKey:      &opts.brokers,
+		Required:       false,
+	}
+
+	testCases := []customSetterTestCase[[]string]{
+		{
+			name:            "returns an error if the list is empty",
+			args:            []string{"--brokers", ""},
+			wantErrContains: "cannot be empty",
+		},
+		{
+			name:       "🎉 handles string list successfully (from CLI args)",
+			args:       []string{"--brokers", "kafka:9092,localhost:9093,kafka://broker:9092"},
+			wantResult: []string{"kafka:9092", "localhost:9093", "kafka://broker:9092"},
+		},
+		{
+			name:       "🎉 string list successfully (from ENV vars)",
+			envValue:   "kafka:9092,localhost:9093",
+			wantResult: []string{"kafka:9092", "localhost:9093"},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			opts.brokers = []string{}
+			customSetterTester[[]string](t, tc, co)
+		})
+	}
+}
+
+func Test_SetConfigOptionStringList(t *testing.T) {
+	opts := struct{ topics []string }{}
+
+	co := config.ConfigOption{
+		Name:           "topics",
+		OptType:        types.String,
+		CustomSetValue: SetConfigOptionStringList,
+		ConfigKey:      &opts.topics,
+		Required:       false,
+	}
+
+	testCases := []customSetterTestCase[[]string]{
+		{
+			name:            "returns an error if the list is empty",
+			args:            []string{"--topics", ""},
+			wantErrContains: "cannot be empty",
+		},
+		{
+			name:       "🎉 handles string list successfully (from CLI args)",
+			args:       []string{"--topics", "topic1, topic2,topic3"},
+			wantResult: []string{"topic1", "topic2", "topic3"},
+		},
+		{
+			name:       "🎉 string list successfully (from ENV vars)",
+			envValue:   "topic1, topic2",
+			wantResult: []string{"topic1", "topic2"},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			opts.topics = []string{}
+			customSetterTester[[]string](t, tc, co)
+		})
+	}
+}

@@ -203,3 +203,49 @@ func SetConfigOptionURLString(co *config.ConfigOption) error {
 
 	return nil
 }
+
+func SetConfigOptionURLList(co *config.ConfigOption) error {
+	urlsStr := viper.GetString(co.Name)
+
+	if urlsStr == "" {
+		return fmt.Errorf("url list cannot be empty")
+	}
+
+	urls := strings.Split(urlsStr, ",")
+	for _, u := range urls {
+		_, err := url.ParseRequestURI(strings.TrimSpace(u))
+		if err != nil {
+			return fmt.Errorf("error parsing url: %w", err)
+		}
+	}
+
+	key, ok := co.ConfigKey.(*[]string)
+	if !ok {
+		return fmt.Errorf("the expected type for this config key is a string slice, but got a %T instead", co.ConfigKey)
+	}
+	*key = urls
+
+	return nil
+}
+
+func SetConfigOptionStringList(co *config.ConfigOption) error {
+	listStr := viper.GetString(co.Name)
+
+	if listStr == "" {
+		return fmt.Errorf("cannot be empty")
+	}
+
+	list := strings.Split(listStr, ",")
+	for i, el := range list {
+		list[i] = strings.TrimSpace(el)
+	}
+
+	key, ok := co.ConfigKey.(*[]string)
+	if !ok {
+		return fmt.Errorf("the expected type for this config key is a string slice, but got a %T instead", co.ConfigKey)
+	}
+
+	*key = list
+
+	return nil
+}

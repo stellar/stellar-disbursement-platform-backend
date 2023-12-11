@@ -11,6 +11,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	di "github.com/stellar/stellar-disbursement-platform-backend/internal/dependencyinjection"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/scheduler"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/scheduler/jobs"
@@ -309,6 +310,29 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			FlagDefault: true,
 			Required:    false,
 		},
+		{
+			Name:           "brokers",
+			Usage:          "List of Message Brokers Connection string comma separated.",
+			OptType:        types.String,
+			ConfigKey:      &serveOpts.Brokers,
+			CustomSetValue: cmdUtils.SetConfigOptionURLList,
+			Required:       true,
+		},
+		{
+			Name:           "topics",
+			Usage:          "List of Message Brokers Consumer Topics comma separated.",
+			OptType:        types.String,
+			ConfigKey:      &serveOpts.Topics,
+			CustomSetValue: cmdUtils.SetConfigOptionStringList,
+			Required:       true,
+		},
+		{
+			Name:      "consumer-group-id",
+			Usage:     "Message Broker Consumer Group ID.",
+			OptType:   types.String,
+			ConfigKey: &serveOpts.ConsumerGroupID,
+			Required:  true,
+		},
 	}
 
 	messengerOptions := message.MessengerOptions{}
@@ -423,6 +447,14 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 				log.Ctx(ctx).Fatalf("error creating Anchor Platform API Service: %v", err)
 			}
 			serveOpts.AnchorPlatformAPIService = apAPIService
+
+			// Kafka (background)
+			kafkaEventManager, _ := events.NewKafkaEventManager(serveOpts.Brokers, serveOpts.Topics, serveOpts.ConsumerGroupID)
+			kafkaEventManager.RegisterEventHandler(ctx, &events.PingPongEventHandler{})
+			defer kafkaEventManager.Close()
+
+			go events.Consume(ctx, kafkaEventManager)
+			serveOpts.EventProducer = kafkaEventManager
 
 			// Starting Scheduler Service (background job) if enabled
 			if serveOpts.EnableScheduler {
