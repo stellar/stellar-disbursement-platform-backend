@@ -203,7 +203,7 @@ func Test_AssetModelInsert(t *testing.T) {
 		assert.NotNil(t, usdcDB.DeletedAt)
 	})
 
-	t.Run("does not insert the same asset again", func(t *testing.T) {
+	t.Run("asset insertion is idempotent", func(t *testing.T) {
 		DeleteAllAssetFixtures(t, ctx, dbConnectionPool.SqlxDB())
 		code := "USDT"
 		issuer := "GBVHJTRLQRMIHRYTXZQOPVYCVVH7IRJN3DOFT7VC6U75CBWWBVDTWURG"
@@ -212,9 +212,13 @@ func Test_AssetModelInsert(t *testing.T) {
 		require.NoError(t, err)
 		assert.NotNil(t, asset)
 
-		duplicatedAsset, err := assetModel.Insert(ctx, dbConnectionPool, code, issuer)
-		assert.EqualError(t, err, "error inserting asset: sql: no rows in result set")
-		assert.Nil(t, duplicatedAsset)
+		idempotentAsset, err := assetModel.Insert(ctx, dbConnectionPool, code, issuer)
+		require.NoError(t, err)
+		assert.NotNil(t, idempotentAsset)
+		assert.Equal(t, asset.Code, idempotentAsset.Code)
+		assert.Equal(t, asset.Issuer, idempotentAsset.Issuer)
+		assert.Equal(t, asset.DeletedAt, idempotentAsset.DeletedAt)
+		assert.Empty(t, asset.DeletedAt)
 	})
 
 	t.Run("creates the stellar native asset successfully", func(t *testing.T) {

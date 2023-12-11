@@ -132,8 +132,6 @@ func (a *AssetModel) Insert(ctx context.Context, sqlExec db.SQLExecuter, code st
 		ON CONFLICT (code, issuer) DO
 		UPDATE SET
 			deleted_at = NULL
-		WHERE
-			assets.deleted_at IS NOT NULL
 		RETURNING *
 	`
 
