@@ -88,7 +88,7 @@ func (c AssetsHandler) CreateAsset(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	asset, err := db.RunInTransactionWithResult(ctx, c.Models.DBConnectionPool, nil, func(dbTx db.DBTransaction) (*data.Asset, error) {
-		insertedAsset, insertErr := c.Models.Assets.Insert(
+		insertedAsset, insertErr := c.Models.Assets.Ensure(
 			ctx,
 			dbTx,
 			assetRequest.Code,

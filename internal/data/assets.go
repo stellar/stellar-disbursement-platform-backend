@@ -123,7 +123,8 @@ func (a *AssetModel) GetAll(ctx context.Context) ([]Asset, error) {
 	return assets, nil
 }
 
-func (a *AssetModel) Insert(ctx context.Context, sqlExec db.SQLExecuter, code string, issuer string) (*Asset, error) {
+// Ensure creates an asset if it doesn't exist, otherwise it returns the existing asset, clearing the deleted_at field.
+func (a *AssetModel) Ensure(ctx context.Context, sqlExec db.SQLExecuter, code string, issuer string) (*Asset, error) {
 	const query = `
 		INSERT INTO assets
 			(code, issuer)
