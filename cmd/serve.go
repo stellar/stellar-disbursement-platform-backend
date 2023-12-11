@@ -449,11 +449,23 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			serveOpts.AnchorPlatformAPIService = apAPIService
 
 			// Kafka (background)
-			kafkaEventManager, _ := events.NewKafkaEventManager(serveOpts.Brokers, serveOpts.Topics, serveOpts.ConsumerGroupID)
-			kafkaEventManager.RegisterEventHandler(ctx, &events.PingPongEventHandler{})
+			kafkaEventManager, err := events.NewKafkaEventManager(serveOpts.Brokers, serveOpts.Topics, serveOpts.ConsumerGroupID)
+			if err != nil {
+				log.Ctx(ctx).Fatalf("error creating Kafka Event Manager: %v", err)
+			}
 			defer kafkaEventManager.Close()
 
-			go events.Consume(ctx, kafkaEventManager)
+			err = kafkaEventManager.RegisterEventHandler(ctx, &events.PingPongEventHandler{})
+			if err != nil {
+				log.Ctx(ctx).Fatalf("error creating registering handlers: %v", err)
+			}
+
+			go func() {
+				err := events.Consume(ctx, kafkaEventManager)
+				if err != nil {
+					log.Ctx(ctx).Fatalf("error consuming events: %v", err)
+				}
+			}()
 			serveOpts.EventProducer = kafkaEventManager
 
 			// Starting Scheduler Service (background job) if enabled
