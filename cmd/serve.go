@@ -449,16 +449,11 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			serveOpts.AnchorPlatformAPIService = apAPIService
 
 			// Kafka (background)
-			kafkaEventManager, err := events.NewKafkaEventManager(serveOpts.Brokers, serveOpts.Topics, serveOpts.ConsumerGroupID)
+			kafkaEventManager, err := di.NewKafkaEventManager(ctx, serveOpts.Brokers, serveOpts.Topics, serveOpts.ConsumerGroupID, &events.PingPongEventHandler{})
 			if err != nil {
 				log.Ctx(ctx).Fatalf("error creating Kafka Event Manager: %v", err)
 			}
 			defer kafkaEventManager.Close()
-
-			err = kafkaEventManager.RegisterEventHandler(ctx, &events.PingPongEventHandler{})
-			if err != nil {
-				log.Ctx(ctx).Fatalf("error creating registering handlers: %v", err)
-			}
 
 			go func() {
 				err := events.Consume(ctx, kafkaEventManager)

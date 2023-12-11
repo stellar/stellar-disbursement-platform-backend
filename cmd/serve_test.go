@@ -146,9 +146,7 @@ func Test_serve(t *testing.T) {
 	require.NoError(t, err)
 	serveOpts.SMSMessengerClient = smsMessengerClient
 
-	kafkaEventManager, err := events.NewKafkaEventManager(serveOpts.Brokers, serveOpts.Topics, serveOpts.ConsumerGroupID)
-	require.NoError(t, err)
-	err = kafkaEventManager.RegisterEventHandler(ctx, &events.PingPongEventHandler{})
+	kafkaEventManager, err := di.NewKafkaEventManager(ctx, serveOpts.Brokers, serveOpts.Topics, serveOpts.ConsumerGroupID, &events.PingPongEventHandler{})
 	require.NoError(t, err)
 	serveOpts.EventProducer = kafkaEventManager
 

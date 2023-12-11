@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 
 	"github.com/stellar/go/support/log"
 )
@@ -67,8 +68,13 @@ func Consume(ctx context.Context, consumer Consumer) error {
 	log.Ctx(ctx).Info("starting consuming messages...")
 	for {
 		if err := consumer.ReadMessage(ctx); err != nil {
+			if errors.Is(err, io.EOF) {
+				log.Ctx(ctx).Warn("message broker returned EOF")
+				break
+			}
 			log.Errorf("error consuming: %s", err.Error())
 			return fmt.Errorf("consuming messages: %w", err)
 		}
 	}
+	return nil
 }
