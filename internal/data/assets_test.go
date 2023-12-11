@@ -149,7 +149,7 @@ func Test_AssetModel_Ensure(t *testing.T) {
 		code := "USDT"
 		issuer := "GBVHJTRLQRMIHRYTXZQOPVYCVVH7IRJN3DOFT7VC6U75CBWWBVDTWURG"
 
-		asset, err := assetModel.Ensure(ctx, dbConnectionPool, code, issuer)
+		asset, err := assetModel.Insert(ctx, dbConnectionPool, code, issuer)
 		require.NoError(t, err)
 		assert.NotNil(t, asset)
 
@@ -163,11 +163,11 @@ func Test_AssetModel_Ensure(t *testing.T) {
 		code := "USDT"
 		issuer := "GBVHJTRLQRMIHRYTXZQOPVYCVVH7IRJN3DOFT7VC6U75CBWWBVDTWURG"
 
-		usdt, err := assetModel.Ensure(ctx, dbConnectionPool, code, issuer)
+		usdt, err := assetModel.Insert(ctx, dbConnectionPool, code, issuer)
 		require.NoError(t, err)
 		assert.NotNil(t, usdt)
 
-		usdc, err := assetModel.Ensure(ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
+		usdc, err := assetModel.Insert(ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
 		require.NoError(t, err)
 		assert.NotNil(t, usdt)
 
@@ -181,7 +181,7 @@ func Test_AssetModel_Ensure(t *testing.T) {
 		require.NoError(t, err)
 		assert.NotNil(t, usdcDB.DeletedAt)
 
-		reCreatedUSDT, err := assetModel.Ensure(ctx, dbConnectionPool, code, issuer)
+		reCreatedUSDT, err := assetModel.Insert(ctx, dbConnectionPool, code, issuer)
 		require.NoError(t, err)
 		assert.NotNil(t, reCreatedUSDT)
 
@@ -208,11 +208,11 @@ func Test_AssetModel_Ensure(t *testing.T) {
 		code := "USDT"
 		issuer := "GBVHJTRLQRMIHRYTXZQOPVYCVVH7IRJN3DOFT7VC6U75CBWWBVDTWURG"
 
-		asset, err := assetModel.Ensure(ctx, dbConnectionPool, code, issuer)
+		asset, err := assetModel.Insert(ctx, dbConnectionPool, code, issuer)
 		require.NoError(t, err)
 		assert.NotNil(t, asset)
 
-		idempotentAsset, err := assetModel.Ensure(ctx, dbConnectionPool, code, issuer)
+		idempotentAsset, err := assetModel.Insert(ctx, dbConnectionPool, code, issuer)
 		require.NoError(t, err)
 		assert.NotNil(t, idempotentAsset)
 		assert.Equal(t, asset.Code, idempotentAsset.Code)
@@ -224,7 +224,7 @@ func Test_AssetModel_Ensure(t *testing.T) {
 	t.Run("creates the stellar native asset successfully", func(t *testing.T) {
 		DeleteAllAssetFixtures(t, ctx, dbConnectionPool.SqlxDB())
 
-		asset, err := assetModel.Ensure(ctx, dbConnectionPool, "XLM", "")
+		asset, err := assetModel.Insert(ctx, dbConnectionPool, "XLM", "")
 		require.NoError(t, err)
 		assert.NotNil(t, asset)
 
@@ -235,7 +235,7 @@ func Test_AssetModel_Ensure(t *testing.T) {
 	t.Run("does not create an asset with empty issuer (unless it's XLM)", func(t *testing.T) {
 		DeleteAllAssetFixtures(t, ctx, dbConnectionPool.SqlxDB())
 
-		asset, err := assetModel.Ensure(ctx, dbConnectionPool, "USDC", "")
+		asset, err := assetModel.Insert(ctx, dbConnectionPool, "USDC", "")
 		assert.EqualError(t, err, `error inserting asset: pq: new row for relation "assets" violates check constraint "asset_issuer_length_check"`)
 		assert.Nil(t, asset)
 	})
@@ -243,11 +243,11 @@ func Test_AssetModel_Ensure(t *testing.T) {
 	t.Run("does not create an asset with a invalid issuer", func(t *testing.T) {
 		DeleteAllAssetFixtures(t, ctx, dbConnectionPool.SqlxDB())
 
-		asset, err := assetModel.Ensure(ctx, dbConnectionPool, "USDC", "INVALID")
+		asset, err := assetModel.Insert(ctx, dbConnectionPool, "USDC", "INVALID")
 		assert.EqualError(t, err, `error inserting asset: pq: new row for relation "assets" violates check constraint "asset_issuer_length_check"`)
 		assert.Nil(t, asset)
 
-		asset, err = assetModel.Ensure(ctx, dbConnectionPool, "XLM", "INVALID")
+		asset, err = assetModel.Insert(ctx, dbConnectionPool, "XLM", "INVALID")
 		assert.EqualError(t, err, `error inserting asset: pq: new row for relation "assets" violates check constraint "asset_issuer_length_check"`)
 		assert.Nil(t, asset)
 	})

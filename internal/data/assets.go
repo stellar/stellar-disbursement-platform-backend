@@ -123,10 +123,9 @@ func (a *AssetModel) GetAll(ctx context.Context) ([]Asset, error) {
 	return assets, nil
 }
 
-// Ensure creates an asset if it doesn't exist, otherwise it returns the existing asset, clearing the deleted_at field.
-func (a *AssetModel) Ensure(ctx context.Context, sqlExec db.SQLExecuter, code string, issuer string) (*Asset, error) {
-	// We could leave the UNION out of it if we didn't have the WHERE clause in the upsert, but this way we can prevent
-	// the updated_at field from being updated if the asset already exists.
+// Insert is idempotent and returns a new asset if it doesn't exist or the existing one if it does, clrearing the
+// deleted_at field if it was marked as deleted.
+func (a *AssetModel) Insert(ctx context.Context, sqlExec db.SQLExecuter, code string, issuer string) (*Asset, error) {
 	const query = `
 		WITH upsert_asset AS (
 			INSERT INTO assets
@@ -141,7 +140,7 @@ func (a *AssetModel) Ensure(ctx context.Context, sqlExec db.SQLExecuter, code st
 			RETURNING *
 		)
 		SELECT * FROM upsert_asset
-		UNION ALL
+		UNION ALL  -- // The UNION statement is applied to prevent the updated_at field from beong autoupdated when the asset already exists.
 		SELECT * FROM assets WHERE code = $1 AND issuer = $2 AND NOT EXISTS (SELECT 1 FROM upsert_asset);
 	`
 
