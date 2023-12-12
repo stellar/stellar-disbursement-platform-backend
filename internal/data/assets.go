@@ -132,11 +132,8 @@ func (a *AssetModel) Insert(ctx context.Context, sqlExec db.SQLExecuter, code st
 				(code, issuer)
 			VALUES
 				($1, $2)
-			ON CONFLICT (code, issuer) DO
-			UPDATE SET
-				deleted_at = NULL
-			WHERE
-				assets.deleted_at IS NOT NULL
+			ON CONFLICT (code, issuer) DO UPDATE
+				SET deleted_at = NULL WHERE assets.deleted_at IS NOT NULL
 			RETURNING *
 		)
 		SELECT * FROM upsert_asset
