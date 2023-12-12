@@ -123,18 +123,22 @@ func (a *AssetModel) GetAll(ctx context.Context) ([]Asset, error) {
 	return assets, nil
 }
 
+// Insert is idempotent and returns a new asset if it doesn't exist or the existing one if it does, clearing the
+// deleted_at field if it was marked as deleted.
 func (a *AssetModel) Insert(ctx context.Context, sqlExec db.SQLExecuter, code string, issuer string) (*Asset, error) {
 	const query = `
-		INSERT INTO assets
-			(code, issuer)
-		VALUES
-			($1, $2)
-		ON CONFLICT (code, issuer) DO
-		UPDATE SET
-			deleted_at = NULL
-		WHERE
-			assets.deleted_at IS NOT NULL
-		RETURNING *
+		WITH upsert_asset AS (
+			INSERT INTO assets
+				(code, issuer)
+			VALUES
+				($1, $2)
+			ON CONFLICT (code, issuer) DO UPDATE
+				SET deleted_at = NULL WHERE assets.deleted_at IS NOT NULL
+			RETURNING *
+		)
+		SELECT * FROM upsert_asset
+		UNION ALL  -- // The UNION statement is applied to prevent the updated_at field from being autoupdated when the asset already exists.
+		SELECT * FROM assets WHERE code = $1 AND issuer = $2 AND NOT EXISTS (SELECT 1 FROM upsert_asset);
 	`
 
 	var asset Asset
