@@ -10,7 +10,7 @@ import (
 
 type EmailSenderType string
 
-var (
+const (
 	AWSEmailSenderType    EmailSenderType = "AWS_EMAIL"
 	DryRunEmailSenderType EmailSenderType = "DRY_RUN"
 )
@@ -26,7 +26,7 @@ func ParseEmailSenderType(emailSenderTypeStr string) (EmailSenderType, error) {
 
 type SMSSenderType string
 
-var (
+const (
 	TwilioSMSSenderType SMSSenderType = "TWILIO_SMS"
 	AWSSMSSenderType    SMSSenderType = "AWS_SMS"
 	DryRunSMSSenderType SMSSenderType = "DRY_RUN"

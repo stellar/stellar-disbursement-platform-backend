@@ -51,6 +51,7 @@ func (c *DatabaseCommand) Command() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "db",
 		Short: "Database related commands",
+
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
 			if cmd.Parent().PersistentPreRun != nil {
 				cmd.Parent().PersistentPreRun(cmd.Parent(), args)
@@ -68,71 +69,21 @@ func (c *DatabaseCommand) Command() *cobra.Command {
 		},
 	}
 
-	// migrate CMD
+	// setup-for-network CMD
+	cmd.AddCommand(c.setupForNetwork(cmd.Context(), opts))
+
+	// migrate up|down CMD
+	// It will run the migrations from the `sdp-migrations` folder and track migrated files in the `gorp_migrations` table.
 	sdpMigrateCmd := c.migrateCmd()
-	authMigrateCmd := c.migrateCmd()
+	sdpMigrateCmd.AddCommand(c.migrateUpCmd(&opts))
+	sdpMigrateCmd.AddCommand(c.migrateDownCmd(&opts))
 	cmd.AddCommand(sdpMigrateCmd)
 
-	// migrate Up CMD
-	sdpMigrateCmd.AddCommand(c.migrateUpCmd(&opts))
-	authMigrateCmd.AddCommand(c.migrateUpCmd(&opts))
-
-	// migrate Down CMD
-	sdpMigrateCmd.AddCommand(c.migrateDownCmd(&opts))
-	authMigrateCmd.AddCommand(c.migrateDownCmd(&opts))
-
-	setupForNetwork := &cobra.Command{
-		Use:   "setup-for-network",
-		Short: "Set up the assets and wallets registered in the database based on the network passphrase.",
-		Long:  "Set up the assets and wallets registered in the database based on the network passphrase. It inserts or updates the entries of these tables according with the configured Network Passphrase.",
-		Run: func(cmd *cobra.Command, args []string) {
-			ctx := cmd.Context()
-
-			if err := c.validateFlags(&opts); err != nil {
-				log.Ctx(ctx).Fatal(err.Error())
-			}
-
-			tenantsDSNMap, err := c.getTenantsDSN(ctx, globalOptions.databaseURL)
-			if err != nil {
-				log.Ctx(ctx).Fatalf("getting tenants schemas: %s", err.Error())
-			}
-
-			if opts.TenantID != "" {
-				if dsn, ok := tenantsDSNMap[opts.TenantID]; ok {
-					tenantsDSNMap = map[string]string{opts.TenantID: dsn}
-				} else {
-					log.Fatalf("tenant ID %s does not exist", opts.TenantID)
-				}
-			}
-
-			for tenantID, dsn := range tenantsDSNMap {
-				log.Infof("running for tenant ID %s", tenantID)
-				dbConnectionPool, err := db.OpenDBConnectionPool(dsn)
-				if err != nil {
-					log.Ctx(ctx).Fatalf("error connection to the database: %s", err.Error())
-				}
-				defer dbConnectionPool.Close()
-
-				networkType, err := utils.GetNetworkTypeFromNetworkPassphrase(globalOptions.networkPassphrase)
-				if err != nil {
-					log.Ctx(ctx).Fatalf("error getting network type: %s", err.Error())
-				}
-
-				if err := services.SetupAssetsForProperNetwork(ctx, dbConnectionPool, networkType, services.DefaultAssetsNetworkMap); err != nil {
-					log.Ctx(ctx).Fatalf("error upserting assets for proper network: %s", err.Error())
-				}
-
-				if err := services.SetupWalletsForProperNetwork(ctx, dbConnectionPool, networkType, services.DefaultWalletsNetworkMap); err != nil {
-					log.Ctx(ctx).Fatalf("error upserting wallets for proper network: %s", err.Error())
-				}
-			}
-		},
-	}
-	cmd.AddCommand(setupForNetwork)
-
-	stellarAuthMigrateCmd := &cobra.Command{
+	// auth migrate up|down CMD
+	// It will run the migrations from the `auth-migrations` folder and track migrated files in the `auth_migrations` table.
+	authCmd := &cobra.Command{
 		Use:   "auth",
-		Short: "Stellar Auth schema migration helpers",
+		Short: "Stellar Auth schema migration helpers. For every existing tenant, it will run the migrations from the `auth-migrations` folder and track migrated files in the `auth_migrations` table.",
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
 			if cmd.Parent().PersistentPreRun != nil {
 				cmd.Parent().PersistentPreRun(cmd.Parent(), args)
@@ -144,11 +95,17 @@ func (c *DatabaseCommand) Command() *cobra.Command {
 			}
 		},
 	}
-	stellarAuthMigrateCmd.AddCommand(authMigrateCmd)
+	authMigrateCmd := c.migrateCmd()
+	authMigrateCmd.AddCommand(c.migrateUpCmd(&opts))
+	authMigrateCmd.AddCommand(c.migrateDownCmd(&opts))
+	authCmd.AddCommand(authMigrateCmd)
+	cmd.AddCommand(authCmd)
 
-	tenantMigrateCmd := &cobra.Command{
+	// tenant migrate up|down CMD
+	// It will run the migrations from the `tenant-migrations` folder and track migrated files in the `migrations` table.
+	tenantCmd := &cobra.Command{
 		Use:   "tenant",
-		Short: "Stellar Multi-Tenant migration helpers",
+		Short: "Multi-Tenant table migration helpers. Creates the high level structure organizes the tenants.",
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
 			if cmd.Parent().PersistentPreRun != nil {
 				cmd.Parent().PersistentPreRun(cmd.Parent(), args)
@@ -160,13 +117,8 @@ func (c *DatabaseCommand) Command() *cobra.Command {
 			}
 		},
 	}
-	tenantMigrateCmd.AddCommand(tenantcli.MigrateCmd(dbConfigOptionFlagName))
-
-	// Add `auth` as a sub-command to `db`. Usage: db auth migrate up
-	cmd.AddCommand(stellarAuthMigrateCmd)
-
-	// Add `tenant` as a sub-command to `db`. Usage: db tenant migrate up
-	cmd.AddCommand(tenantMigrateCmd)
+	tenantCmd.AddCommand(tenantcli.MigrateCmd(dbConfigOptionFlagName))
+	cmd.AddCommand(tenantCmd)
 
 	if err := configOptions.Init(cmd); err != nil {
 		log.Fatalf("initializing config options: %v", err)
@@ -261,9 +213,59 @@ func (c *DatabaseCommand) migrateDownCmd(opts *databaseCommandConfigOptions) *co
 	}
 }
 
+func (c *DatabaseCommand) setupForNetwork(ctx context.Context, opts databaseCommandConfigOptions) *cobra.Command {
+	return &cobra.Command{
+		Use:   "setup-for-network",
+		Short: "Set up the assets and wallets registered in the database based on the network passphrase.",
+		Long:  "Set up the assets and wallets registered in the database based on the network passphrase. It inserts or updates the entries of these tables according with the configured Network Passphrase.",
+		Run: func(cmd *cobra.Command, args []string) {
+			ctx := cmd.Context()
+
+			if err := c.validateFlags(&opts); err != nil {
+				log.Ctx(ctx).Fatal(err.Error())
+			}
+
+			tenantsDSNMap, err := c.getTenantsDSN(ctx, globalOptions.databaseURL)
+			if err != nil {
+				log.Ctx(ctx).Fatalf("getting tenants schemas: %s", err.Error())
+			}
+
+			if opts.TenantID != "" {
+				if dsn, ok := tenantsDSNMap[opts.TenantID]; ok {
+					tenantsDSNMap = map[string]string{opts.TenantID: dsn}
+				} else {
+					log.Fatalf("tenant ID %s does not exist", opts.TenantID)
+				}
+			}
+
+			for tenantID, dsn := range tenantsDSNMap {
+				log.Infof("running for tenant ID %s", tenantID)
+				dbConnectionPool, err := db.OpenDBConnectionPool(dsn)
+				if err != nil {
+					log.Ctx(ctx).Fatalf("error connection to the database: %s", err.Error())
+				}
+				defer dbConnectionPool.Close()
+
+				networkType, err := utils.GetNetworkTypeFromNetworkPassphrase(globalOptions.networkPassphrase)
+				if err != nil {
+					log.Ctx(ctx).Fatalf("error getting network type: %s", err.Error())
+				}
+
+				if err := services.SetupAssetsForProperNetwork(ctx, dbConnectionPool, networkType, services.DefaultAssetsNetworkMap); err != nil {
+					log.Ctx(ctx).Fatalf("error upserting assets for proper network: %s", err.Error())
+				}
+
+				if err := services.SetupWalletsForProperNetwork(ctx, dbConnectionPool, networkType, services.DefaultWalletsNetworkMap); err != nil {
+					log.Ctx(ctx).Fatalf("error upserting wallets for proper network: %s", err.Error())
+				}
+			}
+		},
+	}
+}
+
 func (c *DatabaseCommand) executeMigrate(ctx context.Context, opts *databaseCommandConfigOptions, dir migrate.MigrationDirection, count int, migrationFiles embed.FS, tableName db.MigrationTableName) error {
 	if err := c.validateFlags(opts); err != nil {
-		log.Fatal(err.Error())
+		log.Ctx(ctx).Fatal(err.Error())
 	}
 
 	tenantsDSNMap, err := c.getTenantsDSN(ctx, globalOptions.databaseURL)
@@ -275,15 +277,15 @@ func (c *DatabaseCommand) executeMigrate(ctx context.Context, opts *databaseComm
 		if dsn, ok := tenantsDSNMap[opts.TenantID]; ok {
 			tenantsDSNMap = map[string]string{opts.TenantID: dsn}
 		} else {
-			log.Fatalf("tenant ID %s does not exist", opts.TenantID)
+			log.Ctx(ctx).Fatalf("tenant ID %s does not exist", opts.TenantID)
 		}
 	}
 
 	for tenantID, dsn := range tenantsDSNMap {
-		log.Infof("applying migrations on tenant ID %s", tenantID)
+		log.Ctx(ctx).Infof("applying migrations on tenant ID %s", tenantID)
 		err = c.applyMigrations(dsn, dir, count, migrationFiles, tableName)
 		if err != nil {
-			log.Fatalf("Error migrating database Up: %s", err.Error())
+			log.Ctx(ctx).Fatalf("Error migrating database Up: %s", err.Error())
 		}
 	}
 
