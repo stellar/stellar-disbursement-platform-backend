@@ -29,7 +29,6 @@ type DatabaseCommand struct{}
 
 func (c *DatabaseCommand) Command() *cobra.Command {
 	opts := databaseCommandConfigOptions{}
-
 	configOptions := config.ConfigOptions{
 		{
 			Name:        "all",
@@ -72,11 +71,26 @@ func (c *DatabaseCommand) Command() *cobra.Command {
 	// setup-for-network CMD
 	cmd.AddCommand(c.setupForNetwork(cmd.Context(), opts))
 
-	// migrate up|down CMD
+	// sdp migrate up|down CMD
 	// It will run the migrations from the `sdp-migrations` folder and track migrated files in the `gorp_migrations` table.
+	sdpCmd := &cobra.Command{
+		Use:   "sdp",
+		Short: "Stellar Disbursement Platform schema migration helpers. For every existing tenant, it will run the migrations from the `sdp-migrations` folder and track migrated files in the `gorp_migrations` table.",
+		PersistentPreRun: func(cmd *cobra.Command, args []string) {
+			if cmd.Parent().PersistentPreRun != nil {
+				cmd.Parent().PersistentPreRun(cmd.Parent(), args)
+			}
+		},
+		Run: func(cmd *cobra.Command, args []string) {
+			if err := cmd.Help(); err != nil {
+				log.Fatalf("Error calling help command: %s", err.Error())
+			}
+		},
+	}
 	sdpMigrateCmd := c.migrateCmd()
 	sdpMigrateCmd.AddCommand(c.migrateUpCmd(&opts))
 	sdpMigrateCmd.AddCommand(c.migrateDownCmd(&opts))
+	sdpCmd.AddCommand(sdpMigrateCmd)
 	cmd.AddCommand(sdpMigrateCmd)
 
 	// auth migrate up|down CMD
