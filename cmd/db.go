@@ -114,11 +114,11 @@ func (c *DatabaseCommand) Command() *cobra.Command {
 	authCmd.AddCommand(authMigrateCmd)
 	cmd.AddCommand(authCmd)
 
-	// tenant migrate up|down CMD
+	// admin migrate up|down CMD
 	// It will run the migrations from the `tenant-migrations` folder and track migrated files in the `migrations` table.
-	tenantCmd := &cobra.Command{
-		Use:   "tenant",
-		Short: "Multi-Tenant table migration helpers. Creates the high level structure organizes the tenants.",
+	adminCmd := &cobra.Command{
+		Use:   "admin",
+		Short: "Admin migrations used for the multi-tenant module that manages the tenants.",
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
 			if cmd.Parent().PersistentPreRun != nil {
 				cmd.Parent().PersistentPreRun(cmd.Parent(), args)
@@ -130,8 +130,8 @@ func (c *DatabaseCommand) Command() *cobra.Command {
 			}
 		},
 	}
-	tenantCmd.AddCommand(tenantcli.MigrateCmd(dbConfigOptionFlagName))
-	cmd.AddCommand(tenantCmd)
+	adminCmd.AddCommand(tenantcli.MigrateCmd(dbConfigOptionFlagName))
+	cmd.AddCommand(adminCmd)
 
 	if err := configOptions.Init(cmd); err != nil {
 		log.Fatalf("initializing config options: %v", err)
