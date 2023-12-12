@@ -35,7 +35,8 @@ type ReceiverSendOTPRequest struct {
 }
 
 type ReceiverSendOTPResponseBody struct {
-	Message string `json:"message"`
+	Message          string                 `json:"message"`
+	VerificationType data.VerificationField `json:"verification_type"`
 }
 
 func (h ReceiverSendOTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -109,6 +110,13 @@ func (h ReceiverSendOTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	log.Infof("phone number is %s", receiverSendOTPRequest.PhoneNumber)
+	receiverVerification, err := h.Models.ReceiverVerification.GetLatestByPhoneNumber(ctx, receiverSendOTPRequest.PhoneNumber)
+	if err != nil {
+		httperror.InternalError(ctx, "Cannot find receiver verification associated with phone number", err, nil).Render(w)
+		return
+	}
+
 	if numberOfUpdatedRows < 1 {
 		log.Ctx(ctx).Warnf("updated no rows in receiver send OTP handler for phone number: %s", utils.TruncateString(receiverSendOTPRequest.PhoneNumber, len(receiverSendOTPRequest.PhoneNumber)/4))
 	} else {
@@ -148,8 +156,14 @@ func (h ReceiverSendOTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request
 		}
 	}
 
+	fmt.Println("=======")
+	fmt.Println(receiverVerification.VerificationField)
+
+	fmt.Println("======")
+
 	response := ReceiverSendOTPResponseBody{
-		Message: "if your phone number is registered, you'll receive an OTP",
+		Message:          "if your phone number is registered, you'll receive an OTP",
+		VerificationType: receiverVerification.VerificationField,
 	}
 	httpjson.RenderStatus(w, http.StatusOK, response, httpjson.JSON)
 }

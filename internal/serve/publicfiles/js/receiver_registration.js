@@ -51,9 +51,9 @@ async function sendSms(phoneNumber, reCAPTCHAToken, onSuccess, onError) {
           recaptcha_token: reCAPTCHAToken,
         }),
       });
-      await request.json();
+      const resp = await request.json();
 
-      onSuccess();
+      onSuccess(resp.verification_type);
     } catch (error) {
       onError(error);
     }
@@ -96,6 +96,8 @@ async function submitPhoneNumber(event) {
     "#g-recaptcha-response"
   );
   const buttonEls = phoneNumberSectionEl.querySelectorAll("[data-button]");
+  const verificationTypeTitle = document.querySelector("label[for='verification']");
+  const verificationTypeInput = document.querySelector("#verification"); // id verification
 
   if (!reCAPTCHATokenEl || !reCAPTCHATokenEl.value) {
     toggleErrorNotification(
@@ -133,7 +135,23 @@ async function submitPhoneNumber(event) {
       return;
     }
 
-    function showNextPage() {
+    function showNextPage(verificationType) {
+      if(verificationType === "DATE_OF_BIRTH") {
+        verificationTypeTitle.textContent = "Date_of_birth"
+        verificationTypeInput.name = "date_of_birth"
+        verificationTypeInput.type = "date"
+      }
+      else if(verificationType === "NATIONAL_ID") {
+        verificationTypeTitle.textContent = "National_ID"
+        verificationTypeInput.name = "national_id"
+        verificationTypeInput.type = "text"
+      }
+      else if(verificationType === "PIN") {
+        verificationTypeTitle.textContent = "Pin"
+        verificationTypeInput.name = "pin"
+        verificationTypeInput.type = "text"
+      }
+
       phoneNumberSectionEl.style.display = "none";
       reCAPTCHATokenEl.style.display = "none";
       passcodeSectionEl.style.display = "flex";
@@ -169,8 +187,7 @@ async function submitOtp(event) {
   );
   const otpEl = document.getElementById("otp");
   const verificationEl = document.getElementById("verification");
-  const verificationType = verificationEl.className;
-  console.log(verificationType);
+  const verificationType = verificationEl.getAttribute("name");
 
   const buttonEls = passcodeSectionEl.querySelectorAll("[data-button]");
 

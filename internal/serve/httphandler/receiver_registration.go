@@ -15,7 +15,7 @@ import (
 type ReceiverRegistrationHandler struct {
 	ReceiverWalletModel       *data.ReceiverWalletModel
 	ReceiverVerificationModel *data.ReceiverVerificationModel
-	Models *data.Models
+	Models                    *data.Models
 	ReCAPTCHASiteKey          string
 }
 
@@ -80,7 +80,7 @@ func (h ReceiverRegistrationHandler) ServeHTTP(w http.ResponseWriter, r *http.Re
 			return
 		}*/
 
-		tmplData.VerificationField = data.VerificationFieldPin
+		//tmplData.VerificationField = data.VerificationFieldPin
 	}
 
 	registerPage, err := htmlTpl.ExecuteHTMLTemplate(htmlTemplateName, tmplData)

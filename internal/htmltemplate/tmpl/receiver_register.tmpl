@@ -87,7 +87,7 @@
         </div>
       </section>
 
-      <!-- Enter passcode and DOB page -->
+      <!-- Enter passcode and verification type page -->
       <section data-section="passcode" style="display: none">
         <div class="WalletRegistration__MainContent">
           <h2>Enter passcode</h2>
@@ -119,7 +119,7 @@
               />
             </div>
             <div class="Form__item">
-              {{ if eq .VerificationField "DATE_OF_BIRTH" }}
+              <!--{{ if eq .VerificationField "DATE_OF_BIRTH" }}
                 <label for="verification">Date of birth</label>
                 <input
                   type="date"
@@ -143,7 +143,13 @@
                   name="national_id"
                   required
                 />
-              {{ end }}
+              {{ end }}-->
+                <label for="verification"></label>
+                <input
+                  type="text"
+                  id="verification"
+                  required
+                />
 
             <div class="g-recaptcha" data-sitekey="{{.ReCAPTCHASiteKey}}"></div>
 

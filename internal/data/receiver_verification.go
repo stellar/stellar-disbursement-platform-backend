@@ -24,7 +24,7 @@ type ReceiverVerification struct {
 	FailedAt          *time.Time        `db:"failed_at"`
 }
 
-type ReceiverVerificationModel struct{
+type ReceiverVerificationModel struct {
 	dbConnectionPool db.DBConnectionPool
 }
 
@@ -94,28 +94,27 @@ func (m *ReceiverVerificationModel) GetAllByReceiverId(ctx context.Context, sqlE
 	return receiverVerifications, nil
 }
 
-func (m *ReceiverVerificationModel) GetLatestByReceiverId(ctx context.Context, receiverId string) (*ReceiverVerification, error) {
+func (m *ReceiverVerificationModel) GetLatestByPhoneNumber(ctx context.Context, phoneNumber string) (*ReceiverVerification, error) {
 	receiverVerifications := []ReceiverVerification{}
 	query := `
 		SELECT 
-			*
+			rv.*
 		FROM 
-			receiver_verifications
-		WHERE 
-			receiver_id = $1
+			receiver_verifications rv
+		JOIN receivers r 
+			ON rv.receiver_id = r.id
+		WHERE r.phone_number = $1
 		ORDER BY
-			updated_at DESC
+			rv.updated_at DESC
 	`
-	log.Ctx(ctx).Info("reached here 2")
 
-	err := m.dbConnectionPool.SelectContext(ctx, &receiverVerifications, query, receiverId)
+	err := m.dbConnectionPool.SelectContext(ctx, &receiverVerifications, query, phoneNumber)
 	if err != nil {
 		return nil, fmt.Errorf("error querying receiver verifications: %w", err)
 	}
-	log.Ctx(ctx).Info("reached here 3")
 
 	if len(receiverVerifications) == 0 {
-		return nil, fmt.Errorf("cannot query any receiver verifications for receiver id %s", receiverId)
+		return nil, fmt.Errorf("cannot query any receiver verifications for phone number %s: %w", phoneNumber, err)
 	}
 
 	return &receiverVerifications[0], nil
