@@ -31,11 +31,12 @@ func (c *DatabaseCommand) Command() *cobra.Command {
 	opts := databaseCommandConfigOptions{}
 	configOptions := config.ConfigOptions{
 		{
-			Name:      "all",
-			Usage:     "Apply the migrations to all tenants. It's ignored when '--tenant-id' is set.",
-			OptType:   types.Bool,
-			ConfigKey: &opts.All,
-			Required:  false,
+			Name:        "all",
+			Usage:       "Apply the migrations to all tenants. It's ignored when '--tenant-id' is set.",
+			OptType:     types.Bool,
+			FlagDefault: false,
+			ConfigKey:   &opts.All,
+			Required:    false,
 		},
 		{
 			Name:      "tenant-id",
