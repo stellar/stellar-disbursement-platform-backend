@@ -91,7 +91,7 @@ func (c *DatabaseCommand) Command() *cobra.Command {
 	sdpMigrateCmd.AddCommand(c.migrateUpCmd(&opts))
 	sdpMigrateCmd.AddCommand(c.migrateDownCmd(&opts))
 	sdpCmd.AddCommand(sdpMigrateCmd)
-	cmd.AddCommand(sdpMigrateCmd)
+	cmd.AddCommand(sdpCmd)
 
 	// auth migrate up|down CMD
 	// It will run the migrations from the `auth-migrations` folder and track migrated files in the `auth_migrations` table.
