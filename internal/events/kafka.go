@@ -19,11 +19,11 @@ type KafkaEventManager struct {
 func NewKafkaEventManager(brokers []string, consumerTopics []string, consumerGroupID string) (*KafkaEventManager, error) {
 	k := KafkaEventManager{}
 
-	writer := kafka.NewWriter(kafka.WriterConfig{
-		Brokers:      brokers,
+	writer := kafka.Writer{
+		Addr:         kafka.TCP(brokers...),
 		Balancer:     &kafka.RoundRobin{},
 		RequiredAcks: -1,
-	})
+	}
 
 	reader := kafka.NewReader(kafka.ReaderConfig{
 		Brokers:     brokers,
@@ -31,7 +31,7 @@ func NewKafkaEventManager(brokers []string, consumerTopics []string, consumerGro
 		GroupTopics: consumerTopics,
 	})
 
-	k.writer = writer
+	k.writer = &writer
 	k.reader = reader
 
 	return &k, nil
