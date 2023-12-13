@@ -110,7 +110,7 @@ func (wm *WalletModel) FindWallets(ctx context.Context, enabledFilter *bool) ([]
 	var args []interface{}
 
 	if enabledFilter != nil {
-		whereClause = "WHERE w.enabled = $1"
+		whereClause = "WHERE w.enabled = $1 "
 		args = append(args, *enabledFilter)
 	}
 
