@@ -24,6 +24,7 @@ data:
   BASE_URL: {{ include "sdp.schema" . }}://{{ include "sdp.domain" . }}
   PORT: {{ include "sdp.port" . | quote }}
   METRICS_PORT: {{ include "sdp.metricsPort" . | quote }}
+  ADMIN_PORT: {{ include "sdp.adminPort" . | quote }}
   ANCHOR_PLATFORM_BASE_SEP_URL: {{ include "sdp.ap.schema" . }}://{{ include "sdp.ap.domain" . }}
   ANCHOR_PLATFORM_BASE_PLATFORM_URL: {{ include "sdp.ap.platformServiceAddress" . }}
   {{- tpl (toYaml .Values.sdp.configMap.data | nindent 2) . }}
