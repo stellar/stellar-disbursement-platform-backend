@@ -3,7 +3,6 @@ package cmd
 import (
 	"bytes"
 	"context"
-	"strings"
 	"sync"
 	"testing"
 
@@ -14,7 +13,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	di "github.com/stellar/stellar-disbursement-platform-backend/internal/dependencyinjection"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/scheduler"
@@ -122,9 +120,6 @@ func Test_serve(t *testing.T) {
 		EnableReCAPTCHA:                 true,
 		EnableScheduler:                 true,
 		EnableMultiTenantDB:             false,
-		Brokers:                         []string{"kafka:9092"},
-		Topics:                          []string{"my-topic"},
-		ConsumerGroupID:                 "group-id",
 	}
 	var err error
 	serveOpts.AnchorPlatformAPIService, err = anchorplatform.NewAnchorPlatformAPIService(httpclient.DefaultClient(), serveOpts.AnchorPlatformBasePlatformURL, serveOpts.AnchorPlatformOutgoingJWTSecret)
@@ -146,7 +141,7 @@ func Test_serve(t *testing.T) {
 	require.NoError(t, err)
 	serveOpts.SMSMessengerClient = smsMessengerClient
 
-	kafkaEventManager, err := di.NewKafkaEventManager(ctx, serveOpts.Brokers, serveOpts.Topics, serveOpts.ConsumerGroupID, &events.PingPongEventHandler{})
+	kafkaEventManager, err := di.NewKafkaProducer(ctx, []string{"kafka:9092"})
 	require.NoError(t, err)
 	serveOpts.EventProducer = kafkaEventManager
 
@@ -222,9 +217,8 @@ func Test_serve(t *testing.T) {
 	t.Setenv("INSTANCE_NAME", serveOpts.InstanceName)
 	t.Setenv("ENABLE_SCHEDULER", "true")
 	t.Setenv("ENABLE_MULTITENANT_DB", "false")
-	t.Setenv("BROKERS", strings.Join(serveOpts.Brokers, ","))
-	t.Setenv("TOPICS", strings.Join(serveOpts.Topics, ","))
-	t.Setenv("CONSUMER_GROUP_ID", serveOpts.ConsumerGroupID)
+	t.Setenv("BROKERS", "kafka:9092")
+	t.Setenv("CONSUMER_GROUP_ID", "group-id")
 
 	// test & assert
 	rootCmd.SetArgs([]string{"--environment", "test", "serve", "--metrics-type", "PROMETHEUS"})

@@ -10,40 +10,26 @@ import (
 	"golang.org/x/exp/maps"
 )
 
-type KafkaEventManager struct {
-	handlers []EventHandler
-	writer   *kafka.Writer
-	reader   *kafka.Reader
+type KafkaProducer struct {
+	writer *kafka.Writer
 }
 
-func NewKafkaEventManager(brokers []string, consumerTopics []string, consumerGroupID string) (*KafkaEventManager, error) {
-	k := KafkaEventManager{}
+// Implements Producer interface
+var _ Producer = new(KafkaProducer)
 
-	writer := kafka.Writer{
+func NewKafkaProducer(brokers []string) *KafkaProducer {
+	k := KafkaProducer{}
+
+	k.writer = &kafka.Writer{
 		Addr:         kafka.TCP(brokers...),
 		Balancer:     &kafka.RoundRobin{},
 		RequiredAcks: -1,
 	}
 
-	reader := kafka.NewReader(kafka.ReaderConfig{
-		Brokers:     brokers,
-		GroupID:     consumerGroupID,
-		GroupTopics: consumerTopics,
-	})
-
-	k.writer = &writer
-	k.reader = reader
-
-	return &k, nil
+	return &k
 }
 
-// Implements Producer interface
-var _ Producer = new(KafkaEventManager)
-
-// Implements Consumer interface
-var _ Consumer = new(KafkaEventManager)
-
-func (k *KafkaEventManager) WriteMessages(ctx context.Context, messages ...Message) error {
+func (k *KafkaProducer) WriteMessages(ctx context.Context, messages ...Message) error {
 	kafkaMessages := make([]kafka.Message, 0, len(messages))
 	for _, msg := range messages {
 		msgJSON, err := json.Marshal(msg)
@@ -66,7 +52,32 @@ func (k *KafkaEventManager) WriteMessages(ctx context.Context, messages ...Messa
 	return nil
 }
 
-func (k *KafkaEventManager) RegisterEventHandler(ctx context.Context, handlers ...EventHandler) error {
+func (k *KafkaProducer) Close() error {
+	log.Info("closing kafka producer")
+	return k.writer.Close()
+}
+
+type KafkaConsumer struct {
+	handlers []EventHandler
+	reader   *kafka.Reader
+}
+
+// Implements Consumer interface
+var _ Consumer = new(KafkaConsumer)
+
+func NewKafkaConsumer(brokers []string, topic string, consumerGroupID string) *KafkaConsumer {
+	k := KafkaConsumer{}
+
+	k.reader = kafka.NewReader(kafka.ReaderConfig{
+		Brokers: brokers,
+		Topic:   topic,
+		GroupID: consumerGroupID,
+	})
+
+	return &k
+}
+
+func (k *KafkaConsumer) RegisterEventHandler(ctx context.Context, handlers ...EventHandler) error {
 	ehMap := make(map[string]EventHandler, len(handlers))
 	for _, handler := range handlers {
 		log.Ctx(ctx).Infof("registering event handler %s", handler.Name())
@@ -76,7 +87,7 @@ func (k *KafkaEventManager) RegisterEventHandler(ctx context.Context, handlers .
 	return nil
 }
 
-func (k *KafkaEventManager) ReadMessage(ctx context.Context) error {
+func (k *KafkaConsumer) ReadMessage(ctx context.Context) error {
 	log.Ctx(ctx).Info("fetching messages from kafka")
 	kafkaMessage, err := k.reader.FetchMessage(ctx)
 	if err != nil {
@@ -104,9 +115,7 @@ func (k *KafkaEventManager) ReadMessage(ctx context.Context) error {
 	return nil
 }
 
-func (k *KafkaEventManager) Close() error {
-	log.Info("closing kafka producer and consumer")
-	defer k.writer.Close()
-	defer k.reader.Close()
-	return nil
+func (k *KafkaConsumer) Close() error {
+	log.Info("closing kafka consumer")
+	return k.reader.Close()
 }

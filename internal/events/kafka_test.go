@@ -28,11 +28,11 @@ func (h *MockEventHandler) Handle(ctx context.Context, message *Message) {
 	h.Called(ctx, message)
 }
 
-func Test_KafkaEventManager_RegisterEventHandler(t *testing.T) {
+func Test_KafkaConsumer_RegisterEventHandler(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("register handler successfully", func(t *testing.T) {
-		k := KafkaEventManager{}
+		k := KafkaConsumer{}
 		assert.Empty(t, k.handlers)
 		eh := MockEventHandler{}
 		err := k.RegisterEventHandler(ctx, &eh)
@@ -41,7 +41,7 @@ func Test_KafkaEventManager_RegisterEventHandler(t *testing.T) {
 	})
 
 	t.Run("no handler duplicated", func(t *testing.T) {
-		k := KafkaEventManager{}
+		k := KafkaConsumer{}
 		assert.Empty(t, k.handlers)
 		eh := MockEventHandler{}
 		err := k.RegisterEventHandler(ctx, &eh, &eh)

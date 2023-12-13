@@ -92,9 +92,6 @@ type ServeOptions struct {
 	tenantManager                   tenant.ManagerInterface
 	tenantRouter                    db.DataSourceRouter
 	EventProducer                   events.Producer
-	Brokers                         []string
-	Topics                          []string
-	ConsumerGroupID                 string
 }
 
 // SetupDependencies uses the serve options to setup the dependencies for the server.

@@ -25,6 +25,11 @@ import (
 	serveadmin "github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/serve"
 )
 
+var (
+	brokers         []string
+	consumerGroupID string
+)
+
 type ServeCommand struct{}
 
 type ServerServiceInterface interface {
@@ -314,23 +319,15 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			Name:           "brokers",
 			Usage:          "List of Message Brokers Connection string comma separated.",
 			OptType:        types.String,
-			ConfigKey:      &serveOpts.Brokers,
+			ConfigKey:      &brokers,
 			CustomSetValue: cmdUtils.SetConfigOptionURLList,
-			Required:       true,
-		},
-		{
-			Name:           "topics",
-			Usage:          "List of Message Brokers Consumer Topics comma separated.",
-			OptType:        types.String,
-			ConfigKey:      &serveOpts.Topics,
-			CustomSetValue: cmdUtils.SetConfigOptionStringList,
 			Required:       true,
 		},
 		{
 			Name:      "consumer-group-id",
 			Usage:     "Message Broker Consumer Group ID.",
 			OptType:   types.String,
-			ConfigKey: &serveOpts.ConsumerGroupID,
+			ConfigKey: &consumerGroupID,
 			Required:  true,
 		},
 	}
@@ -449,19 +446,17 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			serveOpts.AnchorPlatformAPIService = apAPIService
 
 			// Kafka (background)
-			kafkaEventManager, err := di.NewKafkaEventManager(ctx, serveOpts.Brokers, serveOpts.Topics, serveOpts.ConsumerGroupID, &events.PingPongEventHandler{})
+			kafkaProducer, err := di.NewKafkaProducer(ctx, brokers)
 			if err != nil {
-				log.Ctx(ctx).Fatalf("error creating Kafka Event Manager: %v", err)
+				log.Ctx(ctx).Fatalf("error creating Kafka Producer: %v", err)
 			}
-			defer kafkaEventManager.Close()
+			defer kafkaProducer.Close()
+			serveOpts.EventProducer = kafkaProducer
 
-			go func() {
-				err := events.Consume(ctx, kafkaEventManager)
-				if err != nil {
-					log.Ctx(ctx).Fatalf("error consuming events: %v", err)
-				}
-			}()
-			serveOpts.EventProducer = kafkaEventManager
+			// TODO: remove this example when start implementing the actual consumers
+			pingPongConsumer := events.NewKafkaConsumer(brokers, "ping-pong", consumerGroupID)
+			defer pingPongConsumer.Close()
+			go events.Consume(ctx, pingPongConsumer, crashTrackerClient)
 
 			// Starting Scheduler Service (background job) if enabled
 			if serveOpts.EnableScheduler {

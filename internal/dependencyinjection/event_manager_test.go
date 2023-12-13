@@ -7,40 +7,20 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func Test_NewKafkaEventManager(t *testing.T) {
+func Test_NewKafkaProducer(t *testing.T) {
 	testingCases := []struct {
 		name            string
 		brokers         []string
-		topics          []string
-		consumerGroupID string
 		wantErrContains string
 	}{
 		{
 			name:            "return an error if brokers is empty",
 			brokers:         []string{},
-			topics:          []string{},
-			consumerGroupID: "",
 			wantErrContains: "brokers cannot be empty",
-		},
-		{
-			name:            "return an error if consumer topics is empty",
-			brokers:         []string{"kafka:9092"},
-			topics:          []string{},
-			consumerGroupID: "",
-			wantErrContains: "consumer topics cannot be empty",
-		},
-		{
-			name:            "return an error if consumer group ID is empty",
-			brokers:         []string{"kafka:9092"},
-			topics:          []string{"my-topic"},
-			consumerGroupID: "",
-			wantErrContains: "consumer group ID cannot be empty",
 		},
 		{
 			name:            "🎉 successfully creates a new instance if none exist before",
 			brokers:         []string{"kafka:9092"},
-			topics:          []string{"my-topic"},
-			consumerGroupID: "group-id",
 			wantErrContains: "",
 		},
 	}
@@ -50,7 +30,7 @@ func Test_NewKafkaEventManager(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			defer ClearInstancesTestHelper(t)
 
-			gotResult, err := NewKafkaEventManager(ctx, tc.brokers, tc.topics, tc.consumerGroupID)
+			gotResult, err := NewKafkaProducer(ctx, tc.brokers)
 			if tc.wantErrContains != "" {
 				require.ErrorContains(t, err, tc.wantErrContains)
 				require.Nil(t, gotResult)
@@ -62,34 +42,32 @@ func Test_NewKafkaEventManager(t *testing.T) {
 	}
 }
 
-func Test_NewKafkaEventManager_existingInstanceIsReturned(t *testing.T) {
+func Test_NewKafkaProducer_existingInstanceIsReturned(t *testing.T) {
 	ctx := context.Background()
 	brokers := []string{"kafka:9092"}
-	topics := []string{"my-topic"}
-	consumerGroupID := "group-id"
 
 	defer ClearInstancesTestHelper(t)
 
 	// STEP 1: assert that the instance is nil
-	_, ok := dependenciesStoreMap[kafkaEventManagerInstanceName]
+	_, ok := dependenciesStoreMap[kafkaProducerInstanceName]
 	require.False(t, ok)
 
 	// STEP 2: create a new instance
-	kafkaEventManager1, err := NewKafkaEventManager(ctx, brokers, topics, consumerGroupID)
+	kafkaProducer1, err := NewKafkaProducer(ctx, brokers)
 	require.NoError(t, err)
-	require.NotNil(t, kafkaEventManager1)
+	require.NotNil(t, kafkaProducer1)
 
 	// STEP 3: assert that the instance is not nil
-	storedKafkaEventManager, ok := dependenciesStoreMap[kafkaEventManagerInstanceName]
+	storedKafkaProducer, ok := dependenciesStoreMap[kafkaProducerInstanceName]
 	require.True(t, ok)
-	require.NotNil(t, storedKafkaEventManager)
-	require.Same(t, kafkaEventManager1, storedKafkaEventManager)
+	require.NotNil(t, storedKafkaProducer)
+	require.Same(t, kafkaProducer1, storedKafkaProducer)
 
 	// STEP 4: create a new instance
-	kafkaEventManager2, err := NewKafkaEventManager(ctx, brokers, topics, consumerGroupID)
+	kafkaProducer2, err := NewKafkaProducer(ctx, brokers)
 	require.NoError(t, err)
-	require.NotNil(t, kafkaEventManager2)
+	require.NotNil(t, kafkaProducer2)
 
 	// STEP 5: assert that the returned object is the same as the stored one
-	require.Same(t, kafkaEventManager1, kafkaEventManager2)
+	require.Same(t, kafkaProducer1, kafkaProducer2)
 }
