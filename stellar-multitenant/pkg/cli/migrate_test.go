@@ -14,13 +14,13 @@ import (
 	"github.com/stellar/go/support/log"
 	dbpkg "github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
-	migrations "github.com/stellar/stellar-disbursement-platform-backend/db/migrations/tenant-migrations"
+	adminMigrations "github.com/stellar/stellar-disbursement-platform-backend/db/migrations/admin-migrations"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func getMigrationsApplied(t *testing.T, ctx context.Context, db *sql.DB) []string {
-	rows, err := db.QueryContext(ctx, fmt.Sprintf("SELECT id FROM %s", dbpkg.StellarMultiTenantMigrationsTableName))
+	rows, err := db.QueryContext(ctx, fmt.Sprintf("SELECT id FROM %s", dbpkg.StellarAdminMigrationsTableName))
 	require.NoError(t, err)
 
 	defer rows.Close()
@@ -95,7 +95,7 @@ func Test_MigrateCmd(t *testing.T) {
 			args:   []string{"--multitenant-db-url", "", "migrate", "down", "1"},
 			expect: "Successfully applied 1 migrations.",
 			preRunFunc: func(t *testing.T, db *stellardbtest.DB) {
-				_, err := dbpkg.Migrate(db.DSN, migrate.Up, 1, migrations.FS, dbpkg.StellarMultiTenantMigrationsTableName)
+				_, err := dbpkg.Migrate(db.DSN, migrate.Up, 1, adminMigrations.FS, dbpkg.StellarAdminMigrationsTableName)
 				require.NoError(t, err)
 
 				conn := db.Open()
@@ -115,7 +115,7 @@ func Test_MigrateCmd(t *testing.T) {
 			envVars: map[string]string{"MULTITENANT_DB_URL": ""},
 			expect:  "Successfully applied 1 migrations.",
 			preRunFunc: func(t *testing.T, db *stellardbtest.DB) {
-				_, err := dbpkg.Migrate(db.DSN, migrate.Up, 1, migrations.FS, dbpkg.StellarMultiTenantMigrationsTableName)
+				_, err := dbpkg.Migrate(db.DSN, migrate.Up, 1, adminMigrations.FS, dbpkg.StellarAdminMigrationsTableName)
 				require.NoError(t, err)
 
 				conn := db.Open()

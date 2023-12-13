@@ -5,7 +5,7 @@ import (
 	"strconv"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
-	migrations "github.com/stellar/stellar-disbursement-platform-backend/db/migrations/tenant-migrations"
+	adminMigrations "github.com/stellar/stellar-disbursement-platform-backend/db/migrations/admin-migrations"
 
 	migrate "github.com/rubenv/sql-migrate"
 	"github.com/spf13/cobra"
@@ -83,7 +83,7 @@ func MigrateCmd(databaseFlagName string) *cobra.Command {
 }
 
 func runMigration(databaseURL string, dir migrate.MigrationDirection, count int) error {
-	numMigrationsRun, err := db.Migrate(databaseURL, dir, count, migrations.FS, db.StellarMultiTenantMigrationsTableName)
+	numMigrationsRun, err := db.Migrate(databaseURL, dir, count, adminMigrations.FS, db.StellarAdminMigrationsTableName)
 	if err != nil {
 		return fmt.Errorf("running migrations: %w", err)
 	}
