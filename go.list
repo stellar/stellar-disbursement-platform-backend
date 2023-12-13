@@ -227,8 +227,8 @@ github.com/spf13/cast v1.5.1
 github.com/spf13/cobra v1.7.0
 github.com/spf13/pflag v1.0.5
 github.com/spf13/viper v1.17.0
-github.com/stellar/go v0.0.0-20231204215033-854a8db58348
-github.com/stellar/go-xdr v0.0.0-20230919160922-6c7b68458206
+github.com/stellar/go v0.0.0-20231212225359-bc7173e667a6
+github.com/stellar/go-xdr v0.0.0-20231122183749-b53fb00bcac2
 github.com/stellar/throttled v2.2.3-0.20190823235211-89d75816f59d+incompatible
 github.com/stretchr/objx v0.5.1
 github.com/stretchr/testify v1.8.4
