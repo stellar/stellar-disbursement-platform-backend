@@ -75,7 +75,7 @@ func (c *DatabaseCommand) Command() *cobra.Command {
 	// It will run the migrations from the `sdp-migrations` folder and track migrated files in the `gorp_migrations` table.
 	sdpCmd := &cobra.Command{
 		Use:   "sdp",
-		Short: "Stellar Disbursement Platform schema migration helpers. For every existing tenant, it will run the migrations from the `sdp-migrations` folder and track migrated files in the `gorp_migrations` table.",
+		Short: "Stellar Disbursement Platform's per-tenant schema migration helpers. Will execute the migrations of the `sdp-migrations` folder on the desired tenant , according with the --all or --tenant-id configs. The migrations are tracked in the table `gorp_migrations`.",
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
 			if cmd.Parent().PersistentPreRun != nil {
 				cmd.Parent().PersistentPreRun(cmd.Parent(), args)
@@ -97,7 +97,7 @@ func (c *DatabaseCommand) Command() *cobra.Command {
 	// It will run the migrations from the `auth-migrations` folder and track migrated files in the `auth_migrations` table.
 	authCmd := &cobra.Command{
 		Use:   "auth",
-		Short: "Stellar Auth schema migration helpers. For every existing tenant, it will run the migrations from the `auth-migrations` folder and track migrated files in the `auth_migrations` table.",
+		Short: "Authentication's per-tenant schema migration helpers. Will execute the migrations of the `auth-migrations` folder on the desired tenant, according with the --all or --tenant-id configs. The migrations are tracked in the table `auth_migrations`.",
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
 			if cmd.Parent().PersistentPreRun != nil {
 				cmd.Parent().PersistentPreRun(cmd.Parent(), args)
@@ -116,10 +116,10 @@ func (c *DatabaseCommand) Command() *cobra.Command {
 	cmd.AddCommand(authCmd)
 
 	// admin migrate up|down CMD
-	// It will run the migrations from the `tenant-migrations` folder and track migrated files in the `migrations` table.
+	// It will run the migrations from the `admin-migrations` folder and track migrated files in the `admin_migrations` table.
 	adminCmd := &cobra.Command{
 		Use:   "admin",
-		Short: "Admin migrations used for the multi-tenant module that manages the tenants.",
+		Short: "Admin migrations used to configure the multi-tenant module that manages the tenants.",
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
 			if cmd.Parent().PersistentPreRun != nil {
 				cmd.Parent().PersistentPreRun(cmd.Parent(), args)
@@ -162,7 +162,7 @@ func (c *DatabaseCommand) migrateCmd() *cobra.Command {
 func (c *DatabaseCommand) migrateUpCmd(opts *databaseCommandConfigOptions) *cobra.Command {
 	return &cobra.Command{
 		Use:   "up",
-		Short: "Migrates database up [count]",
+		Short: "Migrates database up [count] migrations",
 		Args:  cobra.MaximumNArgs(1),
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
 			if cmd.Parent().PersistentPreRun != nil {
@@ -296,7 +296,7 @@ func (c *DatabaseCommand) executeMigrate(ctx context.Context, opts *databaseComm
 	}
 
 	for tenantID, dsn := range tenantsDSNMap {
-		log.Ctx(ctx).Infof("applying migrations on tenant ID %s", tenantID)
+		log.Ctx(ctx).Infof("Applying migrations on tenant ID %s", tenantID)
 		err = c.applyMigrations(dsn, dir, count, migrationFiles, tableName)
 		if err != nil {
 			log.Ctx(ctx).Fatalf("Error migrating database Up: %s", err.Error())
@@ -315,9 +315,16 @@ func (c *DatabaseCommand) applyMigrations(dbURL string, dir migrate.MigrationDir
 	if numMigrationsRun == 0 {
 		log.Info("No migrations applied.")
 	} else {
-		log.Infof("Successfully applied %d migrations.", numMigrationsRun)
+		log.Infof("Successfully applied %d migrations %s.", numMigrationsRun, migrationDirectionStr(dir))
 	}
 	return nil
+}
+
+func migrationDirectionStr(dir migrate.MigrationDirection) string {
+	if dir == migrate.Up {
+		return "up"
+	}
+	return "down"
 }
 
 func (c *DatabaseCommand) validateFlags(opts *databaseCommandConfigOptions) error {

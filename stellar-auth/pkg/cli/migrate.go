@@ -25,7 +25,7 @@ func MigrateCmd(databaseFlagName string) *cobra.Command {
 
 	migrateUp := &cobra.Command{
 		Use:   "up [count]",
-		Short: "Migrates database up [count]",
+		Short: "Migrates database up [count] migrations",
 		Args:  cobra.MaximumNArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			var count int
@@ -85,8 +85,15 @@ func runMigration(databaseURL string, dir migrate.MigrationDirection, count int)
 	if numMigrationsRun == 0 {
 		log.Info("No migrations applied.")
 	} else {
-		log.Infof("Successfully applied %d migrations.", numMigrationsRun)
+		log.Infof("Successfully applied %d migrations, %s.", numMigrationsRun, migrationDirectionStr(dir))
 	}
 
 	return nil
+}
+
+func migrationDirectionStr(dir migrate.MigrationDirection) string {
+	if dir == migrate.Up {
+		return "up"
+	}
+	return "down"
 }
