@@ -40,7 +40,7 @@ func (c *DatabaseCommand) Command() *cobra.Command {
 		},
 		{
 			Name:      "tenant-id",
-			Usage:     "The tenant ID where the migrations will be applied. If the '--tenant-id' is set, the '--all' option will be ignored.",
+			Usage:     "The tenant ID where the migrations will be applied. When set, the '--all' option will be ignored.",
 			OptType:   types.String,
 			ConfigKey: &opts.TenantID,
 			Required:  false,
