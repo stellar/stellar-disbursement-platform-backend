@@ -24,9 +24,8 @@ func (h *MockEventHandler) CanHandleMessage(ctx context.Context, message *Messag
 	return args.Bool(0)
 }
 
-func (h *MockEventHandler) Handle(ctx context.Context, message *Message) error {
-	args := h.Called(ctx, message)
-	return args.Error(0)
+func (h *MockEventHandler) Handle(ctx context.Context, message *Message) {
+	h.Called(ctx, message)
 }
 
 func Test_KafkaEventManager_RegisterEventHandler(t *testing.T) {

@@ -7,6 +7,7 @@ import (
 	"io"
 
 	"github.com/stellar/go/support/log"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 )
 
 var (
@@ -64,17 +65,15 @@ type Consumer interface {
 	Close() error
 }
 
-func Consume(ctx context.Context, consumer Consumer) error {
+func Consume(ctx context.Context, consumer Consumer, crashTracker crashtracker.CrashTrackerClient) {
 	log.Ctx(ctx).Info("starting consuming messages...")
 	for {
 		if err := consumer.ReadMessage(ctx); err != nil {
 			if errors.Is(err, io.EOF) {
-				log.Ctx(ctx).Warn("message broker returned EOF")
+				log.Ctx(ctx).Warn("message broker returned EOF") // This is an end state
 				break
 			}
-			log.Errorf("error consuming: %s", err.Error())
-			return fmt.Errorf("consuming messages: %w", err)
+			crashTracker.LogAndReportErrors(ctx, err, "consuming messages")
 		}
 	}
-	return nil
 }

@@ -8,7 +8,7 @@ import (
 type EventHandler interface {
 	Name() string
 	CanHandleMessage(ctx context.Context, message *Message) bool
-	Handle(ctx context.Context, message *Message) error
+	Handle(ctx context.Context, message *Message)
 }
 
 type PingPongRequest struct {
@@ -28,12 +28,10 @@ func (h *PingPongEventHandler) CanHandleMessage(ctx context.Context, message *Me
 	return message.Topic == "ping-pong"
 }
 
-func (h *PingPongEventHandler) Handle(ctx context.Context, message *Message) error {
+func (h *PingPongEventHandler) Handle(ctx context.Context, message *Message) {
 	if message.Type == "ping" {
 		fmt.Println("pong")
 	} else {
 		fmt.Println("ping")
 	}
-
-	return nil
 }

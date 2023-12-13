@@ -3,12 +3,13 @@ package events
 import (
 	"context"
 	"errors"
+	"io"
 	"testing"
 	"time"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
-	"github.com/stretchr/testify/require"
 )
 
 type MockConsumer struct {
@@ -35,26 +36,35 @@ func (c *MockConsumer) Close() error {
 func TestConsume(t *testing.T) {
 	ctx := context.Background()
 	consumer := &MockConsumer{}
+	crashTracker := &crashtracker.MockCrashTrackerClient{}
 
+	unexpectedErr := errors.New("unexpected error")
 	consumer.
 		On("ReadMessage", ctx).
-		Return(errors.New("unexpected error")).
+		Return(unexpectedErr).
+		Once().
+		On("ReadMessage", ctx).
+		Return(io.EOF).
 		Once().
 		On("ReadMessage", ctx).
 		Return(nil)
 
-	err := Consume(ctx, consumer)
-	assert.EqualError(t, err, "consuming messages: unexpected error")
+	crashTracker.
+		On("LogAndReportErrors", ctx, unexpectedErr, "consuming messages").
+		Return().
+		Once()
+
+	Consume(ctx, consumer, crashTracker)
 
 	tick := time.Tick(time.Second * 1)
 	go func() {
-		err := Consume(ctx, consumer)
-		require.NoError(t, err)
+		Consume(ctx, consumer, crashTracker)
 	}()
 
 	<-tick
 
 	consumer.AssertExpectations(t)
+	crashTracker.AssertExpectations(t)
 }
 
 func Test_Message_Validate(t *testing.T) {

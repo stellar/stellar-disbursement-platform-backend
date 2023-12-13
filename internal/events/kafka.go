@@ -80,7 +80,6 @@ func (k *KafkaEventManager) ReadMessage(ctx context.Context) error {
 	log.Ctx(ctx).Info("fetching messages from kafka")
 	kafkaMessage, err := k.reader.FetchMessage(ctx)
 	if err != nil {
-		log.Ctx(ctx).Errorf("fetching message from kafka: %s", err.Error())
 		return fmt.Errorf("fetching message from kafka: %w", err)
 	}
 
@@ -93,9 +92,7 @@ func (k *KafkaEventManager) ReadMessage(ctx context.Context) error {
 	log.Ctx(ctx).Infof("new message being processed: %s", msg.String())
 	for _, handler := range k.handlers {
 		if handler.CanHandleMessage(ctx, &msg) {
-			if err = handler.Handle(ctx, &msg); err != nil {
-				return fmt.Errorf("handler %s errored when handling message: %w", handler.Name(), err)
-			}
+			handler.Handle(ctx, &msg)
 		}
 	}
 
