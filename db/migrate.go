@@ -14,7 +14,7 @@ type MigrationTableName string
 
 const (
 	StellarAdminMigrationsTableName MigrationTableName = "admin_migrations"
-	StellarSDPMigrationsTableName   MigrationTableName = "sdp_migrations"
+	StellarSDPMigrationsTableName   MigrationTableName = "sdp_migrations" // TODO: send back to gorp_migrations, or update the rest of the code for sdp_migrations?
 	StellarAuthMigrationsTableName  MigrationTableName = "auth_migrations"
 )
 
