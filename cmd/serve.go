@@ -456,6 +456,12 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			// TODO: remove this example when start implementing the actual consumers
 			pingPongConsumer := events.NewKafkaConsumer(brokers, "ping-pong", consumerGroupID)
 			defer pingPongConsumer.Close()
+
+			err = pingPongConsumer.RegisterEventHandler(ctx, &events.PingPongEventHandler{})
+			if err != nil {
+				log.Ctx(ctx).Fatalf("error registering handler: %v", err)
+			}
+
 			go events.Consume(ctx, pingPongConsumer, crashTrackerClient)
 
 			// Starting Scheduler Service (background job) if enabled
