@@ -11,11 +11,12 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/stellar/go/support/config"
 	"github.com/stellar/go/support/log"
+	"github.com/stellar/stellar-disbursement-platform-backend/cmd/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	authmigrations "github.com/stellar/stellar-disbursement-platform-backend/db/migrations/auth-migrations"
 	sdpmigrations "github.com/stellar/stellar-disbursement-platform-backend/db/migrations/sdp-migrations"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+	sdpUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	tenantcli "github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/cli"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
@@ -24,14 +25,7 @@ type databaseCommandConfigOptions struct {
 	All      bool
 	TenantID string
 }
-
 type DatabaseCommand struct{}
-
-var defaultPersistentPreRun = func(cmd *cobra.Command, args []string) {
-	if cmd.Parent().PersistentPreRun != nil {
-		cmd.Parent().PersistentPreRun(cmd.Parent(), args)
-	}
-}
 
 func (c *DatabaseCommand) Command() *cobra.Command {
 	opts := databaseCommandConfigOptions{}
@@ -62,24 +56,24 @@ func (c *DatabaseCommand) Command() *cobra.Command {
 			}
 			configOptions.Require()
 			if err := configOptions.SetValues(); err != nil {
-				log.Fatalf("Error setting values of config options: %s", err.Error())
+				log.Ctx(cmd.Context()).Fatalf("Error setting values of config options: %s", err.Error())
 			}
 		},
 		Run: func(cmd *cobra.Command, _ []string) {
 			if err := cmd.Help(); err != nil {
-				log.Fatalf("Error calling help command: %s", err.Error())
+				log.Ctx(cmd.Context()).Fatalf("Error calling help command: %s", err.Error())
 			}
 		},
 	}
 
 	// ADD COMMANDs:
-	cmd.AddCommand(c.setupForNetworkCmd(cmd.Context(), &opts))           // 'setup-for-network'
-	cmd.AddCommand(c.sdpTenantMigrationsCommand(cmd.Context(), &opts))   // 'sdp migrate up|down'
-	cmd.AddCommand(c.authTenantMigrationsCommand(cmd.Context(), &opts))  // 'auth migrate up|down'
-	cmd.AddCommand(c.adminTenantMigrationsCommand(cmd.Context(), &opts)) // 'admin migrate up|down'
+	cmd.AddCommand(c.setupForNetworkCmd(cmd.Context(), &opts))         // 'setup-for-network'
+	cmd.AddCommand(c.sdpPerTenantMigrationsCmd(cmd.Context(), &opts))  // 'sdp migrate up|down'
+	cmd.AddCommand(c.authPerTenantMigrationsCmd(cmd.Context(), &opts)) // 'auth migrate up|down'
+	cmd.AddCommand(c.adminMigrationsCmd(cmd.Context(), &opts))         // 'admin migrate up|down'
 
 	if err := configOptions.Init(cmd); err != nil {
-		log.Fatalf("initializing config options: %v", err)
+		log.Ctx(cmd.Context()).Fatalf("initializing config options: %v", err)
 	}
 
 	return cmd
@@ -108,19 +102,19 @@ func (c *DatabaseCommand) setupForNetworkCmd(ctx context.Context, opts *database
 				if dsn, ok := tenantsDSNMap[opts.TenantID]; ok {
 					tenantsDSNMap = map[string]string{opts.TenantID: dsn}
 				} else {
-					log.Fatalf("tenant ID %s does not exist", opts.TenantID)
+					log.Ctx(ctx).Fatalf("tenant ID %s does not exist", opts.TenantID)
 				}
 			}
 
 			for tenantID, dsn := range tenantsDSNMap {
-				log.Infof("running for tenant ID %s", tenantID)
+				log.Ctx(ctx).Infof("running for tenant ID %s", tenantID)
 				dbConnectionPool, err := db.OpenDBConnectionPool(dsn)
 				if err != nil {
 					log.Ctx(ctx).Fatalf("error connection to the database: %s", err.Error())
 				}
 				defer dbConnectionPool.Close()
 
-				networkType, err := utils.GetNetworkTypeFromNetworkPassphrase(globalOptions.networkPassphrase)
+				networkType, err := sdpUtils.GetNetworkTypeFromNetworkPassphrase(globalOptions.networkPassphrase)
 				if err != nil {
 					log.Ctx(ctx).Fatalf("error getting network type: %s", err.Error())
 				}
@@ -137,16 +131,16 @@ func (c *DatabaseCommand) setupForNetworkCmd(ctx context.Context, opts *database
 	}
 }
 
-// sdpTenantMigrationsCommand returns a cobra.Command responsible for running the migrations of the `sdp-migrations`
+// sdpPerTenantMigrationsCmd returns a cobra.Command responsible for running the migrations of the `sdp-migrations`
 // folder on the desired tenant(s).
-func (c *DatabaseCommand) sdpTenantMigrationsCommand(ctx context.Context, opts *databaseCommandConfigOptions) *cobra.Command {
+func (c *DatabaseCommand) sdpPerTenantMigrationsCmd(ctx context.Context, opts *databaseCommandConfigOptions) *cobra.Command {
 	sdpCmd := &cobra.Command{
 		Use:              "sdp",
 		Short:            "Stellar Disbursement Platform's per-tenant schema migration helpers. Will execute the migrations of the `sdp-migrations` folder on the desired tenant, according with the --all or --tenant-id configs. The migrations are tracked in the table `sdp_migrations`.",
-		PersistentPreRun: defaultPersistentPreRun,
+		PersistentPreRun: utils.DefaultPersistentPreRun,
 		Run: func(cmd *cobra.Command, args []string) {
 			if err := cmd.Help(); err != nil {
-				log.Fatalf("Error calling help command: %s", err.Error())
+				log.Ctx(ctx).Fatalf("Error calling help command: %s", err.Error())
 			}
 		},
 	}
@@ -154,16 +148,16 @@ func (c *DatabaseCommand) sdpTenantMigrationsCommand(ctx context.Context, opts *
 	return sdpCmd
 }
 
-// authTenantMigrationsCommand returns a cobra.Command responsible for running the migrations of the `auth-migrations`
+// authPerTenantMigrationsCmd returns a cobra.Command responsible for running the migrations of the `auth-migrations`
 // folder on the desired tenant(s).
-func (c *DatabaseCommand) authTenantMigrationsCommand(ctx context.Context, opts *databaseCommandConfigOptions) *cobra.Command {
+func (c *DatabaseCommand) authPerTenantMigrationsCmd(ctx context.Context, opts *databaseCommandConfigOptions) *cobra.Command {
 	authCmd := &cobra.Command{
 		Use:              "auth",
 		Short:            "Authentication's per-tenant schema migration helpers. Will execute the migrations of the `auth-migrations` folder on the desired tenant, according with the --all or --tenant-id configs. The migrations are tracked in the table `auth_migrations`.",
-		PersistentPreRun: defaultPersistentPreRun,
+		PersistentPreRun: utils.DefaultPersistentPreRun,
 		Run: func(cmd *cobra.Command, args []string) {
 			if err := cmd.Help(); err != nil {
-				log.Fatalf("Error calling help command: %s", err.Error())
+				log.Ctx(ctx).Fatalf("Error calling help command: %s", err.Error())
 			}
 		},
 	}
@@ -171,16 +165,16 @@ func (c *DatabaseCommand) authTenantMigrationsCommand(ctx context.Context, opts 
 	return authCmd
 }
 
-// adminTenantMigrationsCommand returns a cobra.Command responsible for running the migrations of the `admin-migrations`
+// adminMigrationsCmd returns a cobra.Command responsible for running the migrations of the `admin-migrations`
 // folder, that are used to configure the multi-tenant module that manages the tenants.
-func (c *DatabaseCommand) adminTenantMigrationsCommand(ctx context.Context, opts *databaseCommandConfigOptions) *cobra.Command {
+func (c *DatabaseCommand) adminMigrationsCmd(ctx context.Context, opts *databaseCommandConfigOptions) *cobra.Command {
 	adminCmd := &cobra.Command{
 		Use:              "admin",
 		Short:            "Admin migrations used to configure the multi-tenant module that manages the tenants. Will execute the migrations of the `admin-migrations` and the migrations are tracked in the table `admin_migrations`.",
-		PersistentPreRun: defaultPersistentPreRun,
+		PersistentPreRun: utils.DefaultPersistentPreRun,
 		Run: func(cmd *cobra.Command, args []string) {
 			if err := cmd.Help(); err != nil {
-				log.Fatalf("Error calling help command: %s", err.Error())
+				log.Ctx(ctx).Fatalf("Error calling help command: %s", err.Error())
 			}
 		},
 	}
@@ -193,7 +187,7 @@ func (c *DatabaseCommand) migrateCmd(ctx context.Context, opts *databaseCommandC
 	migrateCmd := &cobra.Command{
 		Use:              "migrate",
 		Short:            "Schema migration helpers",
-		PersistentPreRun: defaultPersistentPreRun,
+		PersistentPreRun: utils.DefaultPersistentPreRun,
 		Run: func(cmd *cobra.Command, _ []string) {
 			if err := cmd.Help(); err != nil {
 				log.Ctx(ctx).Fatalf("Error calling help command: %s", err.Error())
@@ -205,7 +199,7 @@ func (c *DatabaseCommand) migrateCmd(ctx context.Context, opts *databaseCommandC
 		Use:              "up",
 		Short:            "Migrates database up [count] migrations",
 		Args:             cobra.MaximumNArgs(1),
-		PersistentPreRun: defaultPersistentPreRun,
+		PersistentPreRun: utils.DefaultPersistentPreRun,
 		Run: func(cmd *cobra.Command, args []string) {
 			var count int
 			if len(args) > 0 {
@@ -234,11 +228,11 @@ func (c *DatabaseCommand) migrateCmd(ctx context.Context, opts *databaseCommandC
 		Use:              "down [count]",
 		Short:            "Migrates database down [count] migrations",
 		Args:             cobra.ExactArgs(1),
-		PersistentPreRun: defaultPersistentPreRun,
+		PersistentPreRun: utils.DefaultPersistentPreRun,
 		Run: func(cmd *cobra.Command, args []string) {
 			count, err := strconv.Atoi(args[0])
 			if err != nil {
-				log.Fatalf("Invalid [count] argument: %s", args[0])
+				log.Ctx(ctx).Fatalf("Invalid [count] argument: %s", args[0])
 			}
 
 			migrationFiles := sdpmigrations.FS
@@ -250,7 +244,7 @@ func (c *DatabaseCommand) migrateCmd(ctx context.Context, opts *databaseCommandC
 			}
 
 			if err := c.executeMigrate(cmd.Context(), opts, migrate.Down, count, migrationFiles, migrationTableName); err != nil {
-				log.Fatalf("Error executing migrate down: %v", err)
+				log.Ctx(ctx).Fatalf("Error executing migrate down: %v", err)
 			}
 		},
 	}
