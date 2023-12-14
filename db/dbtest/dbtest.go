@@ -33,7 +33,7 @@ func Open(t *testing.T) *dbtest.DB {
 	}
 
 	// SDP migrations
-	ms = migrate.MigrationSet{}
+	ms = migrate.MigrationSet{TableName: "sdp_migrations"}
 	m = migrate.HttpFileSystemMigrationSource{FileSystem: http.FS(sdpmigrations.FS)}
 	_, err = ms.ExecMax(conn.DB, "postgres", m, migrateDirection, 0)
 	if err != nil {

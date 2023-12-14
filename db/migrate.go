@@ -13,8 +13,9 @@ import (
 type MigrationTableName string
 
 const (
-	StellarAdminMigrationsTableName MigrationTableName = "admin_migrations"
-	StellarSDPMigrationsTableName   MigrationTableName = "sdp_migrations" // TODO: send back to gorp_migrations, or update the rest of the code for sdp_migrations?
+	// NOTE: these names are hardcoded in the dbtest.go file and need to be kept in sync if updated.
+	StellarAdminMigrationsTableName MigrationTableName = "migrations"
+	StellarSDPMigrationsTableName   MigrationTableName = "sdp_migrations"
 	StellarAuthMigrationsTableName  MigrationTableName = "auth_migrations"
 )
 

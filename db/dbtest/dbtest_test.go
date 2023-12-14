@@ -10,7 +10,6 @@ import (
 func TestOpen(t *testing.T) {
 	db := Open(t)
 	defer db.Close()
-
 	session := db.Open()
 	defer session.Close()
 
@@ -22,7 +21,7 @@ func TestOpen(t *testing.T) {
 	assert.Greater(t, count, 0)
 
 	// SDP migrations
-	err = session.Get(&count, `SELECT COUNT(*) FROM gorp_migrations`)
+	err = session.Get(&count, `SELECT COUNT(*) FROM sdp_migrations`)
 	require.NoError(t, err)
 	assert.Greater(t, count, 0)
 

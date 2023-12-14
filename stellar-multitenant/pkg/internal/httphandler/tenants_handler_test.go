@@ -373,7 +373,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 			"channel_accounts",
 			"countries",
 			"disbursements",
-			"gorp_migrations",
+			"sdp_migrations",
 			"messages",
 			"organizations",
 			"payments",
