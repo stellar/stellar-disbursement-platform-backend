@@ -136,10 +136,11 @@ async function submitPhoneNumber(event) {
     }
 
     function showNextPage(verificationType) {
-      verificationTypeInput.type = "date";
+      verificationTypeInput.type = "text";
       if(verificationType === "DATE_OF_BIRTH") {
         verificationTypeTitle.textContent = "Date_of_birth";
         verificationTypeInput.name = "date_of_birth";
+        verificationTypeInput.type = "date";
       }
       else if(verificationType === "NATIONAL_ID") {
         verificationTypeTitle.textContent = "National_ID";
@@ -148,7 +149,6 @@ async function submitPhoneNumber(event) {
       else if(verificationType === "PIN") {
         verificationTypeTitle.textContent = "Pin";
         verificationTypeInput.name = "pin";
-        verificationTypeInput.type = "text";
       }
 
       phoneNumberSectionEl.style.display = "none";
