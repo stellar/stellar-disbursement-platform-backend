@@ -85,7 +85,7 @@ func runMigration(databaseURL string, dir migrate.MigrationDirection, count int)
 	if numMigrationsRun == 0 {
 		log.Info("No migrations applied.")
 	} else {
-		log.Infof("Successfully applied %d migrations, %s.", numMigrationsRun, migrationDirectionStr(dir))
+		log.Infof("Successfully applied %d migrations %s.", numMigrationsRun, migrationDirectionStr(dir))
 	}
 
 	return nil

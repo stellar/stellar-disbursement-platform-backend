@@ -62,7 +62,7 @@ func Test_MigrateCmd(t *testing.T) {
 		{
 			name:   "test migrate up successfully",
 			args:   []string{"--log-level", "TRACE", "--database-url", "", "migrate", "up", "1"},
-			expect: "Successfully applied 1 migrations.",
+			expect: "Successfully applied 1 migrations up.",
 			postRunFunc: func(db *sql.DB) {
 				ids := getMigrationsApplied(t, context.Background(), db)
 				assert.Equal(t, []string{"2023-02-09.0.add-users-table.sql"}, ids)
@@ -72,7 +72,7 @@ func Test_MigrateCmd(t *testing.T) {
 			name:    "test migrate up successfully when using the DATABASE_URL env var",
 			args:    []string{"--log-level", "TRACE", "migrate", "up", "1"},
 			envVars: map[string]string{"DATABASE_URL": ""},
-			expect:  "Successfully applied 1 migrations.",
+			expect:  "Successfully applied 1 migrations up.",
 			postRunFunc: func(db *sql.DB) {
 				ids := getMigrationsApplied(t, context.Background(), db)
 				assert.Equal(t, []string{"2023-02-09.0.add-users-table.sql"}, ids)
@@ -93,7 +93,7 @@ func Test_MigrateCmd(t *testing.T) {
 		{
 			name:   "test migrate down successfully",
 			args:   []string{"--log-level", "TRACE", "--database-url", "", "migrate", "down", "1"},
-			expect: "Successfully applied 1 migrations.",
+			expect: "Successfully applied 1 migrations down.",
 			preRunFunc: func(t *testing.T, db *stellardbtest.DB) {
 				_, err := dbpkg.Migrate(db.DSN, migrate.Up, 1, migrations.FS, dbpkg.StellarAuthMigrationsTableName)
 				require.NoError(t, err)
@@ -113,7 +113,7 @@ func Test_MigrateCmd(t *testing.T) {
 			name:    "test migrate up successfully when using the DATABASE_URL env var",
 			args:    []string{"--log-level", "TRACE", "migrate", "down", "1"},
 			envVars: map[string]string{"DATABASE_URL": ""},
-			expect:  "Successfully applied 1 migrations.",
+			expect:  "Successfully applied 1 migrations down.",
 			preRunFunc: func(t *testing.T, db *stellardbtest.DB) {
 				_, err := dbpkg.Migrate(db.DSN, migrate.Up, 1, migrations.FS, dbpkg.StellarAuthMigrationsTableName)
 				require.NoError(t, err)
@@ -214,5 +214,5 @@ func Test_MigrateCmd_databaseFlagName(t *testing.T) {
 	err = testCmd.Execute()
 	require.NoError(t, err)
 
-	assert.Contains(t, buf.String(), "Successfully applied 1 migrations.")
+	assert.Contains(t, buf.String(), "Successfully applied 1 migrations up.")
 }

@@ -69,7 +69,7 @@ func (c *DatabaseCommand) Command() *cobra.Command {
 	}
 
 	// setup-for-network CMD
-	cmd.AddCommand(c.setupForNetwork(cmd.Context(), opts))
+	cmd.AddCommand(c.setupForNetwork(cmd.Context(), &opts))
 
 	// sdp migrate up|down CMD
 	// It will run the migrations from the `sdp-migrations` folder and track migrated files in the `gorp_migrations` table.
@@ -227,7 +227,7 @@ func (c *DatabaseCommand) migrateDownCmd(opts *databaseCommandConfigOptions) *co
 	}
 }
 
-func (c *DatabaseCommand) setupForNetwork(ctx context.Context, opts databaseCommandConfigOptions) *cobra.Command {
+func (c *DatabaseCommand) setupForNetwork(ctx context.Context, opts *databaseCommandConfigOptions) *cobra.Command {
 	return &cobra.Command{
 		Use:   "setup-for-network",
 		Short: "Set up the assets and wallets registered in the database based on the network passphrase.",
@@ -235,7 +235,7 @@ func (c *DatabaseCommand) setupForNetwork(ctx context.Context, opts databaseComm
 		Run: func(cmd *cobra.Command, args []string) {
 			ctx := cmd.Context()
 
-			if err := c.validateFlags(&opts); err != nil {
+			if err := c.validateFlags(opts); err != nil {
 				log.Ctx(ctx).Fatal(err.Error())
 			}
 

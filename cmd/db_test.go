@@ -74,12 +74,12 @@ func Test_DatabaseCommand_db_help(t *testing.T) {
 		"Database related commands",
 		"stellar-disbursement-platform db [flags]",
 		"stellar-disbursement-platform db [command]",
-		"auth              Stellar Auth schema migration helpers",
+		"auth              Authentication's per-tenant schema migration helpers. Will execute the migrations of the `auth-migrations` folder on the desired tenant, according with the --all or --tenant-id configs. The migrations are tracked in the table `auth_migrations`.",
 		"migrate           Schema migration helpers",
 		"setup-for-network Set up the assets and wallets registered in the database based on the network passphrase.",
-		"--all                Apply the migrations to all tenants. (ALL)",
+		"--all                Apply the migrations to all tenants. It's ignored when '--tenant-id' is set. (ALL)",
 		"-h, --help               help for db",
-		"--tenant-id string   The tenant ID where the migrations will be applied. (TENANT_ID)",
+		"--tenant-id string   The tenant ID where the migrations will be applied. When set, the '--all' option will be ignored. (TENANT_ID)",
 		`--base-url string             The SDP backend server's base URL. (BASE_URL) (default "http://localhost:8000")`,
 		`--database-url string         Postgres DB URL (DATABASE_URL) (default "postgres://localhost:5432/sdp?sslmode=disable")`,
 		`--environment string          The environment where the application is running. Example: "development", "staging", "production". (ENVIRONMENT) (default "development")`,
@@ -128,16 +128,16 @@ func Test_DatabaseCommand_db_migrate(t *testing.T) {
 			"stellar-disbursement-platform db migrate [flags]",
 			"stellar-disbursement-platform db migrate [command]",
 			"down        Migrates database down [count] migrations",
-			"up          Migrates database up [count] migrations ",
+			"up          Migrates database up [count] migrations",
 			"-h, --help   help for migrate",
-			`--all                         Apply the migrations to all tenants. (ALL)`,
+			`--all                         Apply the migrations to all tenants. It's ignored when '--tenant-id' is set. (ALL)`,
 			`--base-url string             The SDP backend server's base URL. (BASE_URL) (default "http://localhost:8000")`,
 			`--database-url string         Postgres DB URL (DATABASE_URL) (default "postgres://localhost:5432/sdp?sslmode=disable")`,
 			`--environment string          The environment where the application is running. Example: "development", "staging", "production". (ENVIRONMENT) (default "development")`,
 			`--log-level string            The log level used in this project. Options: "TRACE", "DEBUG", "INFO", "WARN", "ERROR", "FATAL", or "PANIC". (LOG_LEVEL) (default "TRACE")`,
 			`--network-passphrase string   The Stellar network passphrase (NETWORK_PASSPHRASE) (default "Test SDF Network ; September 2015")`,
 			`--sentry-dsn string           The DSN (client key) of the Sentry project. If not provided, Sentry will not be used. (SENTRY_DSN)`,
-			`--tenant-id string            The tenant ID where the migrations will be applied. (TENANT_ID)`,
+			`--tenant-id string            The tenant ID where the migrations will be applied. When set, the '--all' option will be ignored. (TENANT_ID)`,
 		}
 
 		output := buf.String()
@@ -186,14 +186,14 @@ func Test_DatabaseCommand_db_migrate(t *testing.T) {
 		ids := getSDPMigrationsApplied(t, ctx, tenant1SchemaConnectionPool)
 		assert.Equal(t, []string{"2023-01-20.0-initial.sql"}, ids)
 		assert.Contains(t, buf.String(), fmt.Sprintf("Applying migrations on tenant ID %s", tnt1.ID))
-		assert.Contains(t, buf.String(), "Successfully applied 1 migrations.")
+		assert.Contains(t, buf.String(), "Successfully applied 1 migrations up.")
 		tenant.TenantSchemaMatchTablesFixture(t, ctx, dbConnectionPool, "sdp_myorg1", []string{"gorp_migrations"})
 
 		// Checking if the migrations were applied on the Tenant 2
 		ids = getSDPMigrationsApplied(t, ctx, tenant2SchemaConnectionPool)
 		assert.Equal(t, []string{"2023-01-20.0-initial.sql"}, ids)
 		assert.Contains(t, buf.String(), fmt.Sprintf("Applying migrations on tenant ID %s", tnt1.ID))
-		assert.Contains(t, buf.String(), "Successfully applied 1 migrations.")
+		assert.Contains(t, buf.String(), "Successfully applied 1 migrations up.")
 		tenant.TenantSchemaMatchTablesFixture(t, ctx, dbConnectionPool, "sdp_myorg2", []string{"gorp_migrations"})
 
 		buf.Reset()
@@ -204,13 +204,13 @@ func Test_DatabaseCommand_db_migrate(t *testing.T) {
 		// Checking if the migrations were applied on the Tenant 1
 		ids = getSDPMigrationsApplied(t, context.Background(), tenant1SchemaConnectionPool)
 		assert.Equal(t, []string{}, ids)
-		assert.Contains(t, buf.String(), "Successfully applied 1 migrations.")
+		assert.Contains(t, buf.String(), "Successfully applied 1 migrations down.")
 		tenant.TenantSchemaMatchTablesFixture(t, ctx, dbConnectionPool, "sdp_myorg1", []string{"gorp_migrations"})
 
 		// Checking if the migrations were applied on the Tenant 2
 		ids = getSDPMigrationsApplied(t, context.Background(), tenant2SchemaConnectionPool)
 		assert.Equal(t, []string{}, ids)
-		assert.Contains(t, buf.String(), "Successfully applied 1 migrations.")
+		assert.Contains(t, buf.String(), "Successfully applied 1 migrations down.")
 		tenant.TenantSchemaMatchTablesFixture(t, ctx, dbConnectionPool, "sdp_myorg2", []string{"gorp_migrations"})
 	})
 
@@ -254,7 +254,7 @@ func Test_DatabaseCommand_db_migrate(t *testing.T) {
 		ids := getSDPMigrationsApplied(t, ctx, tenant1SchemaConnectionPool)
 		assert.Equal(t, []string{"2023-01-20.0-initial.sql"}, ids)
 		assert.Contains(t, buf.String(), fmt.Sprintf("Applying migrations on tenant ID %s", tnt1.ID))
-		assert.Contains(t, buf.String(), "Successfully applied 1 migrations.")
+		assert.Contains(t, buf.String(), "Successfully applied 1 migrations up.")
 		tenant.TenantSchemaMatchTablesFixture(t, ctx, dbConnectionPool, "sdp_myorg1", []string{"gorp_migrations"})
 
 		// Checking if the migrations were not applied on the Tenant 2 schema
@@ -270,7 +270,7 @@ func Test_DatabaseCommand_db_migrate(t *testing.T) {
 		ids = getSDPMigrationsApplied(t, ctx, tenant1SchemaConnectionPool)
 		assert.Equal(t, []string{}, ids)
 		assert.Contains(t, buf.String(), fmt.Sprintf("Applying migrations on tenant ID %s", tnt1.ID))
-		assert.Contains(t, buf.String(), "Successfully applied 1 migrations.")
+		assert.Contains(t, buf.String(), "Successfully applied 1 migrations down.")
 		tenant.TenantSchemaMatchTablesFixture(t, ctx, dbConnectionPool, "sdp_myorg1", []string{"gorp_migrations"})
 
 		// Checking if the migrations were not applied on the Tenant 2 schema
@@ -318,14 +318,14 @@ func Test_DatabaseCommand_db_migrate(t *testing.T) {
 		ids := getAuthMigrationsApplied(t, ctx, tenant1SchemaConnectionPool)
 		assert.Equal(t, []string{"2023-02-09.0.add-users-table.sql"}, ids)
 		assert.Contains(t, buf.String(), fmt.Sprintf("Applying migrations on tenant ID %s", tnt1.ID))
-		assert.Contains(t, buf.String(), "Successfully applied 1 migrations.")
+		assert.Contains(t, buf.String(), "Successfully applied 1 migrations up.")
 		tenant.TenantSchemaMatchTablesFixture(t, ctx, dbConnectionPool, "sdp_myorg1", []string{"auth_migrations", "auth_users"})
 
 		// Checking if the migrations were applied on the Tenant 2
 		ids = getAuthMigrationsApplied(t, ctx, tenant2SchemaConnectionPool)
 		assert.Equal(t, []string{"2023-02-09.0.add-users-table.sql"}, ids)
 		assert.Contains(t, buf.String(), fmt.Sprintf("Applying migrations on tenant ID %s", tnt1.ID))
-		assert.Contains(t, buf.String(), "Successfully applied 1 migrations.")
+		assert.Contains(t, buf.String(), "Successfully applied 1 migrations up.")
 		tenant.TenantSchemaMatchTablesFixture(t, ctx, dbConnectionPool, "sdp_myorg2", []string{"auth_migrations", "auth_users"})
 
 		buf.Reset()
@@ -336,13 +336,13 @@ func Test_DatabaseCommand_db_migrate(t *testing.T) {
 		// Checking if the migrations were applied on the Tenant 1
 		ids = getAuthMigrationsApplied(t, context.Background(), tenant1SchemaConnectionPool)
 		assert.Equal(t, []string{}, ids)
-		assert.Contains(t, buf.String(), "Successfully applied 1 migrations.")
+		assert.Contains(t, buf.String(), "Successfully applied 1 migrations down.")
 		tenant.TenantSchemaMatchTablesFixture(t, ctx, dbConnectionPool, "sdp_myorg1", []string{"auth_migrations"})
 
 		// Checking if the migrations were applied on the Tenant 2
 		ids = getAuthMigrationsApplied(t, context.Background(), tenant2SchemaConnectionPool)
 		assert.Equal(t, []string{}, ids)
-		assert.Contains(t, buf.String(), "Successfully applied 1 migrations.")
+		assert.Contains(t, buf.String(), "Successfully applied 1 migrations down.")
 		tenant.TenantSchemaMatchTablesFixture(t, ctx, dbConnectionPool, "sdp_myorg2", []string{"auth_migrations"})
 	})
 
@@ -386,7 +386,7 @@ func Test_DatabaseCommand_db_migrate(t *testing.T) {
 		ids := getAuthMigrationsApplied(t, ctx, tenant1SchemaConnectionPool)
 		assert.Equal(t, []string{"2023-02-09.0.add-users-table.sql"}, ids)
 		assert.Contains(t, buf.String(), fmt.Sprintf("Applying migrations on tenant ID %s", tnt1.ID))
-		assert.Contains(t, buf.String(), "Successfully applied 1 migrations.")
+		assert.Contains(t, buf.String(), "Successfully applied 1 migrations up.")
 		tenant.TenantSchemaMatchTablesFixture(t, ctx, dbConnectionPool, "sdp_myorg1", []string{"auth_migrations", "auth_users"})
 
 		// Checking if the migrations were not applied on the Tenant 2 schema
@@ -402,7 +402,7 @@ func Test_DatabaseCommand_db_migrate(t *testing.T) {
 		ids = getAuthMigrationsApplied(t, ctx, tenant1SchemaConnectionPool)
 		assert.Equal(t, []string{}, ids)
 		assert.Contains(t, buf.String(), fmt.Sprintf("Applying migrations on tenant ID %s", tnt1.ID))
-		assert.Contains(t, buf.String(), "Successfully applied 1 migrations.")
+		assert.Contains(t, buf.String(), "Successfully applied 1 migrations down.")
 		tenant.TenantSchemaMatchTablesFixture(t, ctx, dbConnectionPool, "sdp_myorg1", []string{"auth_migrations"})
 
 		// Checking if the migrations were not applied on the Tenant 2 schema
