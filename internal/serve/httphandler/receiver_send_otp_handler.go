@@ -91,6 +91,12 @@ func (h ReceiverSendOTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	receiverVerification, err := h.Models.ReceiverVerification.GetLatestByPhoneNumber(ctx, receiverSendOTPRequest.PhoneNumber)
+	if err != nil {
+		httperror.InternalError(ctx, "Cannot find latest receiver verification for receiver", err, nil).Render(w)
+		return
+	}
+
 	// Generate a new 6 digits OTP
 	newOTP, err := utils.RandomString(6, utils.NumberBytes)
 	if err != nil {
@@ -107,13 +113,6 @@ func (h ReceiverSendOTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request
 	numberOfUpdatedRows, err := h.Models.ReceiverWallet.UpdateOTPByReceiverPhoneNumberAndWalletDomain(ctx, receiverSendOTPRequest.PhoneNumber, sep24Claims.ClientDomainClaim, newOTP)
 	if err != nil {
 		httperror.InternalError(ctx, "Cannot update OTP for receiver wallet", err, nil).Render(w)
-		return
-	}
-
-	log.Infof("phone number is %s", receiverSendOTPRequest.PhoneNumber)
-	receiverVerification, err := h.Models.ReceiverVerification.GetLatestByPhoneNumber(ctx, receiverSendOTPRequest.PhoneNumber)
-	if err != nil {
-		httperror.InternalError(ctx, "Cannot find receiver verification associated with phone number", err, nil).Render(w)
 		return
 	}
 
@@ -155,11 +154,6 @@ func (h ReceiverSendOTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request
 			return
 		}
 	}
-
-	fmt.Println("=======")
-	fmt.Println(receiverVerification.VerificationField)
-
-	fmt.Println("======")
 
 	response := ReceiverSendOTPResponseBody{
 		Message:          "if your phone number is registered, you'll receive an OTP",

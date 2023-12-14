@@ -73,14 +73,6 @@ func (h ReceiverRegistrationHandler) ServeHTTP(w http.ResponseWriter, r *http.Re
 		htmlTemplateName = "receiver_registered_successfully.tmpl"
 		tmplData.Title = "Registration Complete 🎉"
 		tmplData.Message = "Your Stellar wallet has been registered successfully!"
-	} else {
-		/*latestReceiverVerification, err := h.Models.ReceiverVerification.GetLatestByReceiverId(ctx, "abc")
-		if err != nil {
-			httperror.InternalError(ctx, "Cannot find receiver verifications for receiver wallet", err, nil).Render(w)
-			return
-		}*/
-
-		//tmplData.VerificationField = data.VerificationFieldPin
 	}
 
 	registerPage, err := htmlTpl.ExecuteHTMLTemplate(htmlTemplateName, tmplData)

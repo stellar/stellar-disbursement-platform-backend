@@ -110,7 +110,7 @@ func (m *ReceiverVerificationModel) GetLatestByPhoneNumber(ctx context.Context, 
 
 	err := m.dbConnectionPool.SelectContext(ctx, &receiverVerifications, query, phoneNumber)
 	if err != nil {
-		return nil, fmt.Errorf("error querying receiver verifications: %w", err)
+		return nil, fmt.Errorf("error querying receiver verifications for phone number %s: %w", phoneNumber, err)
 	}
 
 	if len(receiverVerifications) == 0 {
