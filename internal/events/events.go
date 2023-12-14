@@ -63,7 +63,6 @@ type Producer interface {
 }
 
 type Consumer interface {
-	RegisterEventHandler(ctx context.Context, eventHandlers ...EventHandler) error
 	ReadMessage(ctx context.Context) error
 	Close() error
 }

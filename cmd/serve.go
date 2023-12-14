@@ -446,7 +446,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			serveOpts.AnchorPlatformAPIService = apAPIService
 
 			// Kafka (background)
-			kafkaProducer, err := di.NewKafkaProducer(ctx, brokers)
+			kafkaProducer, err := events.NewKafkaProducer(brokers)
 			if err != nil {
 				log.Ctx(ctx).Fatalf("error creating Kafka Producer: %v", err)
 			}
@@ -454,13 +454,11 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			serveOpts.EventProducer = kafkaProducer
 
 			// TODO: remove this example when start implementing the actual consumers
-			pingPongConsumer := events.NewKafkaConsumer(brokers, "ping-pong", consumerGroupID)
-			defer pingPongConsumer.Close()
-
-			err = pingPongConsumer.RegisterEventHandler(ctx, &events.PingPongEventHandler{})
+			pingPongConsumer, err := events.NewKafkaConsumer(brokers, "ping-pong", consumerGroupID, &events.PingPongEventHandler{})
 			if err != nil {
-				log.Ctx(ctx).Fatalf("error registering handler: %v", err)
+				log.Ctx(ctx).Fatalf("error creating Kafka Consumer: %v", err)
 			}
+			defer pingPongConsumer.Close()
 
 			go events.Consume(ctx, pingPongConsumer, crashTrackerClient)
 

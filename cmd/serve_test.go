@@ -13,6 +13,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	di "github.com/stellar/stellar-disbursement-platform-backend/internal/dependencyinjection"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/scheduler"
@@ -141,7 +142,7 @@ func Test_serve(t *testing.T) {
 	require.NoError(t, err)
 	serveOpts.SMSMessengerClient = smsMessengerClient
 
-	kafkaEventManager, err := di.NewKafkaProducer(ctx, []string{"kafka:9092"})
+	kafkaEventManager, err := events.NewKafkaProducer([]string{"kafka:9092"})
 	require.NoError(t, err)
 	serveOpts.EventProducer = kafkaEventManager
 

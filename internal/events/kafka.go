@@ -17,8 +17,12 @@ type KafkaProducer struct {
 // Implements Producer interface
 var _ Producer = new(KafkaProducer)
 
-func NewKafkaProducer(brokers []string) *KafkaProducer {
+func NewKafkaProducer(brokers []string) (*KafkaProducer, error) {
 	k := KafkaProducer{}
+
+	if len(brokers) == 0 {
+		return nil, fmt.Errorf("brokers cannot be empty")
+	}
 
 	k.writer = &kafka.Writer{
 		Addr:         kafka.TCP(brokers...),
@@ -26,7 +30,7 @@ func NewKafkaProducer(brokers []string) *KafkaProducer {
 		RequiredAcks: -1,
 	}
 
-	return &k
+	return &k, nil
 }
 
 func (k *KafkaProducer) WriteMessages(ctx context.Context, messages ...Message) error {
@@ -65,7 +69,7 @@ type KafkaConsumer struct {
 // Implements Consumer interface
 var _ Consumer = new(KafkaConsumer)
 
-func NewKafkaConsumer(brokers []string, topic string, consumerGroupID string) *KafkaConsumer {
+func NewKafkaConsumer(brokers []string, topic string, consumerGroupID string, handlers ...EventHandler) (*KafkaConsumer, error) {
 	k := KafkaConsumer{}
 
 	k.reader = kafka.NewReader(kafka.ReaderConfig{
@@ -74,17 +78,18 @@ func NewKafkaConsumer(brokers []string, topic string, consumerGroupID string) *K
 		GroupID: consumerGroupID,
 	})
 
-	return &k
-}
+	if len(handlers) == 0 {
+		return nil, fmt.Errorf("handlers cannot be empty")
+	}
 
-func (k *KafkaConsumer) RegisterEventHandler(ctx context.Context, handlers ...EventHandler) error {
-	ehMap := make(map[string]EventHandler, len(handlers))
+	ehMap := make(map[string]EventHandler)
 	for _, handler := range handlers {
-		log.Ctx(ctx).Infof("registering event handler %s", handler.Name())
+		log.Infof("registering event handler %s for topic %s", handler.Name(), topic)
 		ehMap[handler.Name()] = handler
 	}
 	k.handlers = maps.Values(ehMap)
-	return nil
+
+	return &k, nil
 }
 
 func (k *KafkaConsumer) ReadMessage(ctx context.Context) error {
