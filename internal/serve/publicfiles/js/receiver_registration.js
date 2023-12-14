@@ -96,8 +96,8 @@ async function submitPhoneNumber(event) {
     "#g-recaptcha-response"
   );
   const buttonEls = phoneNumberSectionEl.querySelectorAll("[data-button]");
-  const verificationTypeTitle = document.querySelector("label[for='verification']");
-  const verificationTypeInput = document.querySelector("#verification");
+  const verificationFieldTitle = document.querySelector("label[for='verification']");
+  const verificationFieldInput = document.querySelector("#verification");
 
   if (!reCAPTCHATokenEl || !reCAPTCHATokenEl.value) {
     toggleErrorNotification(
@@ -135,20 +135,20 @@ async function submitPhoneNumber(event) {
       return;
     }
 
-    function showNextPage(verificationType) {
-      verificationTypeInput.type = "text";
-      if(verificationType === "DATE_OF_BIRTH") {
-        verificationTypeTitle.textContent = "Date_of_birth";
-        verificationTypeInput.name = "date_of_birth";
-        verificationTypeInput.type = "date";
+    function showNextPage(verificationField) {
+      verificationFieldInput.type = "text";
+      if(verificationField === "DATE_OF_BIRTH") {
+        verificationFieldTitle.textContent = "Date_of_birth";
+        verificationFieldInput.name = "date_of_birth";
+        verificationFieldInput.type = "date";
       }
-      else if(verificationType === "NATIONAL_ID") {
-        verificationTypeTitle.textContent = "National_ID";
-        verificationTypeInput.name = "national_id";
+      else if(verificationField === "NATIONAL_ID") {
+        verificationFieldTitle.textContent = "National_ID";
+        verificationFieldInput.name = "national_id";
       }
-      else if(verificationType === "PIN") {
-        verificationTypeTitle.textContent = "Pin";
-        verificationTypeInput.name = "pin";
+      else if(verificationField === "PIN") {
+        verificationFieldTitle.textContent = "Pin";
+        verificationFieldInput.name = "pin";
       }
 
       phoneNumberSectionEl.style.display = "none";
