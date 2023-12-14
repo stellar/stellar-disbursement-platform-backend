@@ -29,6 +29,7 @@ type DatabaseCommand struct{}
 
 func (c *DatabaseCommand) Command() *cobra.Command {
 	opts := databaseCommandConfigOptions{}
+	// TODO: tie these configs only where needed
 	configOptions := config.ConfigOptions{
 		{
 			Name:        "all",
@@ -51,19 +52,13 @@ func (c *DatabaseCommand) Command() *cobra.Command {
 		Use:   "db",
 		Short: "Database related commands",
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
-			if cmd.Parent().PersistentPreRun != nil {
-				cmd.Parent().PersistentPreRun(cmd.Parent(), args)
-			}
+			utils.PropagatePersistentPreRun(cmd, args)
 			configOptions.Require()
 			if err := configOptions.SetValues(); err != nil {
 				log.Ctx(cmd.Context()).Fatalf("Error setting values of config options: %s", err.Error())
 			}
 		},
-		Run: func(cmd *cobra.Command, _ []string) {
-			if err := cmd.Help(); err != nil {
-				log.Ctx(cmd.Context()).Fatalf("Error calling help command: %s", err.Error())
-			}
-		},
+		RunE: utils.CallHelpCommand,
 	}
 
 	// ADD COMMANDs:
@@ -137,12 +132,8 @@ func (c *DatabaseCommand) sdpPerTenantMigrationsCmd(ctx context.Context, opts *d
 	sdpCmd := &cobra.Command{
 		Use:              "sdp",
 		Short:            "Stellar Disbursement Platform's per-tenant schema migration helpers. Will execute the migrations of the `sdp-migrations` folder on the desired tenant, according with the --all or --tenant-id configs. The migrations are tracked in the table `sdp_migrations`.",
-		PersistentPreRun: utils.DefaultPersistentPreRun,
-		Run: func(cmd *cobra.Command, args []string) {
-			if err := cmd.Help(); err != nil {
-				log.Ctx(ctx).Fatalf("Error calling help command: %s", err.Error())
-			}
-		},
+		PersistentPreRun: utils.PropagatePersistentPreRun,
+		RunE:             utils.CallHelpCommand,
 	}
 	sdpCmd.AddCommand(c.migrateCmd(ctx, opts))
 	return sdpCmd
@@ -154,12 +145,8 @@ func (c *DatabaseCommand) authPerTenantMigrationsCmd(ctx context.Context, opts *
 	authCmd := &cobra.Command{
 		Use:              "auth",
 		Short:            "Authentication's per-tenant schema migration helpers. Will execute the migrations of the `auth-migrations` folder on the desired tenant, according with the --all or --tenant-id configs. The migrations are tracked in the table `auth_migrations`.",
-		PersistentPreRun: utils.DefaultPersistentPreRun,
-		Run: func(cmd *cobra.Command, args []string) {
-			if err := cmd.Help(); err != nil {
-				log.Ctx(ctx).Fatalf("Error calling help command: %s", err.Error())
-			}
-		},
+		PersistentPreRun: utils.PropagatePersistentPreRun,
+		RunE:             utils.CallHelpCommand,
 	}
 	authCmd.AddCommand(c.migrateCmd(ctx, opts))
 	return authCmd
@@ -171,12 +158,8 @@ func (c *DatabaseCommand) adminMigrationsCmd(ctx context.Context, opts *database
 	adminCmd := &cobra.Command{
 		Use:              "admin",
 		Short:            "Admin migrations used to configure the multi-tenant module that manages the tenants. Will execute the migrations of the `admin-migrations` and the migrations are tracked in the table `admin_migrations`.",
-		PersistentPreRun: utils.DefaultPersistentPreRun,
-		Run: func(cmd *cobra.Command, args []string) {
-			if err := cmd.Help(); err != nil {
-				log.Ctx(ctx).Fatalf("Error calling help command: %s", err.Error())
-			}
-		},
+		PersistentPreRun: utils.PropagatePersistentPreRun,
+		RunE:             utils.CallHelpCommand,
 	}
 	adminCmd.AddCommand(tenantcli.MigrateCmd(dbConfigOptionFlagName))
 	return adminCmd
@@ -187,19 +170,15 @@ func (c *DatabaseCommand) migrateCmd(ctx context.Context, opts *databaseCommandC
 	migrateCmd := &cobra.Command{
 		Use:              "migrate",
 		Short:            "Schema migration helpers",
-		PersistentPreRun: utils.DefaultPersistentPreRun,
-		Run: func(cmd *cobra.Command, _ []string) {
-			if err := cmd.Help(); err != nil {
-				log.Ctx(ctx).Fatalf("Error calling help command: %s", err.Error())
-			}
-		},
+		PersistentPreRun: utils.PropagatePersistentPreRun,
+		RunE:             utils.CallHelpCommand,
 	}
 
 	migrateUpCmd := cobra.Command{
 		Use:              "up",
 		Short:            "Migrates database up [count] migrations",
 		Args:             cobra.MaximumNArgs(1),
-		PersistentPreRun: utils.DefaultPersistentPreRun,
+		PersistentPreRun: utils.PropagatePersistentPreRun,
 		Run: func(cmd *cobra.Command, args []string) {
 			var count int
 			if len(args) > 0 {
@@ -228,7 +207,7 @@ func (c *DatabaseCommand) migrateCmd(ctx context.Context, opts *databaseCommandC
 		Use:              "down [count]",
 		Short:            "Migrates database down [count] migrations",
 		Args:             cobra.ExactArgs(1),
-		PersistentPreRun: utils.DefaultPersistentPreRun,
+		PersistentPreRun: utils.PropagatePersistentPreRun,
 		Run: func(cmd *cobra.Command, args []string) {
 			count, err := strconv.Atoi(args[0])
 			if err != nil {
