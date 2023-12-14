@@ -13,7 +13,7 @@ import (
 type MigrationTableName string
 
 const (
-	// NOTE: these names are hardcoded in the dbtest.go file and need to be kept in sync if updated.
+	// NOTE: these names are hardcoded in the `db.dbtest.Open` method and need to be kept in sync if updated.
 	StellarAdminMigrationsTableName MigrationTableName = "admin_migrations"
 	StellarSDPMigrationsTableName   MigrationTableName = "sdp_migrations"
 	StellarAuthMigrationsTableName  MigrationTableName = "auth_migrations"
