@@ -23,8 +23,8 @@ func Open(t *testing.T) *dbtest.DB {
 	conn := db.Open()
 	defer conn.Close()
 
-	// Tenant migrations
-	ms := migrate.MigrationSet{TableName: "migrations"}
+	// Admin migrations
+	ms := migrate.MigrationSet{TableName: "admin_migrations"}
 	migrateDirection := migrate.Up
 	m := migrate.HttpFileSystemMigrationSource{FileSystem: http.FS(adminmigrations.FS)}
 	_, err := ms.ExecMax(conn.DB, "postgres", m, migrateDirection, 0)
@@ -32,7 +32,7 @@ func Open(t *testing.T) *dbtest.DB {
 		t.Fatal(err)
 	}
 
-	// SDP migrations
+	// Per-tenant SDP migrations
 	ms = migrate.MigrationSet{TableName: "sdp_migrations"}
 	m = migrate.HttpFileSystemMigrationSource{FileSystem: http.FS(sdpmigrations.FS)}
 	_, err = ms.ExecMax(conn.DB, "postgres", m, migrateDirection, 0)
@@ -40,7 +40,7 @@ func Open(t *testing.T) *dbtest.DB {
 		t.Fatal(err)
 	}
 
-	// Auth migrations
+	// Per-tenant Auth migrations
 	ms = migrate.MigrationSet{TableName: "auth_migrations"}
 	m = migrate.HttpFileSystemMigrationSource{FileSystem: http.FS(authmigrations.FS)}
 	_, err = ms.ExecMax(conn.DB, "postgres", m, migrateDirection, 0)
