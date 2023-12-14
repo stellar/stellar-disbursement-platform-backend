@@ -32,7 +32,7 @@ func (c *DatabaseCommand) Command() *cobra.Command {
 	configOptions := config.ConfigOptions{
 		{
 			Name:        "all",
-			Usage:       "Apply the migrations to all tenants. It's ignored when '--tenant-id' is set.",
+			Usage:       "Apply the migrations to all tenants. Either --tenant-id or --all must be set, but the --all option will be ignored if --tenant-id is set.",
 			OptType:     types.Bool,
 			FlagDefault: false,
 			ConfigKey:   &opts.All,
@@ -40,7 +40,7 @@ func (c *DatabaseCommand) Command() *cobra.Command {
 		},
 		{
 			Name:      "tenant-id",
-			Usage:     "The tenant ID where the migrations will be applied. When set, the '--all' option will be ignored.",
+			Usage:     "The tenant ID where the migrations will be applied. Either --tenant-id or --all must be set, but the --all option will be ignored if --tenant-id is set.",
 			OptType:   types.String,
 			ConfigKey: &opts.TenantID,
 			Required:  false,

@@ -78,9 +78,9 @@ func Test_DatabaseCommand_db_help(t *testing.T) {
 		"auth              Authentication's per-tenant schema migration helpers. Will execute the migrations of the `auth-migrations` folder on the desired tenant, according with the --all or --tenant-id configs. The migrations are tracked in the table `auth_migrations`.",
 		"sdp               Stellar Disbursement Platform's per-tenant schema migration helpers.",
 		"setup-for-network Set up the assets and wallets registered in the database based on the network passphrase.",
-		"--all                Apply the migrations to all tenants. It's ignored when '--tenant-id' is set. (ALL)",
+		"--all                Apply the migrations to all tenants. Either --tenant-id or --all must be set, but the --all option will be ignored if --tenant-id is set.",
 		"-h, --help               help for db",
-		"--tenant-id string   The tenant ID where the migrations will be applied. When set, the '--all' option will be ignored. (TENANT_ID)",
+		"--tenant-id string   The tenant ID where the migrations will be applied. Either --tenant-id or --all must be set, but the --all option will be ignored if --tenant-id is set. (TENANT_ID)",
 		`--base-url string             The SDP backend server's base URL. (BASE_URL) (default "http://localhost:8000")`,
 		`--database-url string         Postgres DB URL (DATABASE_URL) (default "postgres://localhost:5432/sdp?sslmode=disable")`,
 		`--environment string          The environment where the application is running. Example: "development", "staging", "production". (ENVIRONMENT) (default "development")`,
@@ -131,14 +131,14 @@ func Test_DatabaseCommand_db_sdp_migrate(t *testing.T) {
 			"down        Migrates database down [count] migrations",
 			"up          Migrates database up [count] migrations",
 			"-h, --help   help for migrate",
-			`--all                         Apply the migrations to all tenants. It's ignored when '--tenant-id' is set. (ALL)`,
+			`--all                         Apply the migrations to all tenants. Either --tenant-id or --all must be set, but the --all option will be ignored if --tenant-id is set.`,
 			`--base-url string             The SDP backend server's base URL. (BASE_URL) (default "http://localhost:8000")`,
 			`--database-url string         Postgres DB URL (DATABASE_URL) (default "postgres://localhost:5432/sdp?sslmode=disable")`,
 			`--environment string          The environment where the application is running. Example: "development", "staging", "production". (ENVIRONMENT) (default "development")`,
 			`--log-level string            The log level used in this project. Options: "TRACE", "DEBUG", "INFO", "WARN", "ERROR", "FATAL", or "PANIC". (LOG_LEVEL) (default "TRACE")`,
 			`--network-passphrase string   The Stellar network passphrase (NETWORK_PASSPHRASE) (default "Test SDF Network ; September 2015")`,
 			`--sentry-dsn string           The DSN (client key) of the Sentry project. If not provided, Sentry will not be used. (SENTRY_DSN)`,
-			`--tenant-id string            The tenant ID where the migrations will be applied. When set, the '--all' option will be ignored. (TENANT_ID)`,
+			`--tenant-id string            The tenant ID where the migrations will be applied. Either --tenant-id or --all must be set, but the --all option will be ignored if --tenant-id is set. (TENANT_ID)`,
 		}
 
 		output := buf.String()
