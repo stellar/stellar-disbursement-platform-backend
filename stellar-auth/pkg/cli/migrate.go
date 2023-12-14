@@ -77,7 +77,7 @@ func MigrateCmd(databaseFlagName string) *cobra.Command {
 }
 
 func runMigration(databaseURL string, dir migrate.MigrationDirection, count int) error {
-	numMigrationsRun, err := db.Migrate(databaseURL, dir, count, migrations.FS, db.StellarAuthMigrationsTableName)
+	numMigrationsRun, err := db.Migrate(databaseURL, dir, count, migrations.FS, db.StellarPerTenantAuthMigrationsTableName)
 	if err != nil {
 		return fmt.Errorf("running migrations: %w", err)
 	}

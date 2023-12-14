@@ -24,12 +24,12 @@ func TestMigrate_upApplyOne_SDP_migrations(t *testing.T) {
 
 	ctx := context.Background()
 
-	n, err := Migrate(db.DSN, migrate.Up, 1, sdpmigrations.FS, StellarSDPMigrationsTableName)
+	n, err := Migrate(db.DSN, migrate.Up, 1, sdpmigrations.FS, StellarPerTenantSDPMigrationsTableName)
 	require.NoError(t, err)
 	assert.Equal(t, 1, n)
 
 	ids := []string{}
-	err = dbConnectionPool.SelectContext(ctx, &ids, fmt.Sprintf("SELECT id FROM %s", StellarSDPMigrationsTableName))
+	err = dbConnectionPool.SelectContext(ctx, &ids, fmt.Sprintf("SELECT id FROM %s", StellarPerTenantSDPMigrationsTableName))
 	require.NoError(t, err)
 	wantIDs := []string{"2023-01-20.0-initial.sql"}
 	assert.Equal(t, wantIDs, ids)
@@ -44,16 +44,16 @@ func TestMigrate_downApplyOne_SDP_migrations(t *testing.T) {
 
 	ctx := context.Background()
 
-	n, err := Migrate(db.DSN, migrate.Up, 2, sdpmigrations.FS, StellarSDPMigrationsTableName)
+	n, err := Migrate(db.DSN, migrate.Up, 2, sdpmigrations.FS, StellarPerTenantSDPMigrationsTableName)
 	require.NoError(t, err)
 	require.Equal(t, 2, n)
 
-	n, err = Migrate(db.DSN, migrate.Down, 1, sdpmigrations.FS, StellarSDPMigrationsTableName)
+	n, err = Migrate(db.DSN, migrate.Down, 1, sdpmigrations.FS, StellarPerTenantSDPMigrationsTableName)
 	require.NoError(t, err)
 	require.Equal(t, 1, n)
 
 	ids := []string{}
-	err = dbConnectionPool.SelectContext(ctx, &ids, fmt.Sprintf("SELECT id FROM %s", StellarSDPMigrationsTableName))
+	err = dbConnectionPool.SelectContext(ctx, &ids, fmt.Sprintf("SELECT id FROM %s", StellarPerTenantSDPMigrationsTableName))
 	require.NoError(t, err)
 	wantIDs := []string{"2023-01-20.0-initial.sql"}
 	assert.Equal(t, wantIDs, ids)
@@ -77,19 +77,19 @@ func TestMigrate_upAndDownAllTheWayTwice_SDP_migrations(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	n, err := Migrate(db.DSN, migrate.Up, count, sdpmigrations.FS, StellarSDPMigrationsTableName)
+	n, err := Migrate(db.DSN, migrate.Up, count, sdpmigrations.FS, StellarPerTenantSDPMigrationsTableName)
 	require.NoError(t, err)
 	require.Equal(t, count, n)
 
-	n, err = Migrate(db.DSN, migrate.Down, count, sdpmigrations.FS, StellarSDPMigrationsTableName)
+	n, err = Migrate(db.DSN, migrate.Down, count, sdpmigrations.FS, StellarPerTenantSDPMigrationsTableName)
 	require.NoError(t, err)
 	require.Equal(t, count, n)
 
-	n, err = Migrate(db.DSN, migrate.Up, count, sdpmigrations.FS, StellarSDPMigrationsTableName)
+	n, err = Migrate(db.DSN, migrate.Up, count, sdpmigrations.FS, StellarPerTenantSDPMigrationsTableName)
 	require.NoError(t, err)
 	require.Equal(t, count, n)
 
-	n, err = Migrate(db.DSN, migrate.Down, count, sdpmigrations.FS, StellarSDPMigrationsTableName)
+	n, err = Migrate(db.DSN, migrate.Down, count, sdpmigrations.FS, StellarPerTenantSDPMigrationsTableName)
 	require.NoError(t, err)
 	require.Equal(t, count, n)
 }
@@ -182,12 +182,12 @@ func TestMigrate_upApplyOne_Auth_migrations(t *testing.T) {
 
 	ctx := context.Background()
 
-	n, err := Migrate(db.DSN, migrate.Up, 1, authmigrations.FS, StellarAuthMigrationsTableName)
+	n, err := Migrate(db.DSN, migrate.Up, 1, authmigrations.FS, StellarPerTenantAuthMigrationsTableName)
 	require.NoError(t, err)
 	assert.Equal(t, 1, n)
 
 	ids := []string{}
-	err = dbConnectionPool.SelectContext(ctx, &ids, fmt.Sprintf("SELECT id FROM %s", StellarAuthMigrationsTableName))
+	err = dbConnectionPool.SelectContext(ctx, &ids, fmt.Sprintf("SELECT id FROM %s", StellarPerTenantAuthMigrationsTableName))
 	require.NoError(t, err)
 	wantIDs := []string{"2023-02-09.0.add-users-table.sql"}
 	assert.Equal(t, wantIDs, ids)
@@ -202,16 +202,16 @@ func TestMigrate_downApplyOne_Auth_migrations(t *testing.T) {
 
 	ctx := context.Background()
 
-	n, err := Migrate(db.DSN, migrate.Up, 2, authmigrations.FS, StellarAuthMigrationsTableName)
+	n, err := Migrate(db.DSN, migrate.Up, 2, authmigrations.FS, StellarPerTenantAuthMigrationsTableName)
 	require.NoError(t, err)
 	require.Equal(t, 2, n)
 
-	n, err = Migrate(db.DSN, migrate.Down, 1, authmigrations.FS, StellarAuthMigrationsTableName)
+	n, err = Migrate(db.DSN, migrate.Down, 1, authmigrations.FS, StellarPerTenantAuthMigrationsTableName)
 	require.NoError(t, err)
 	require.Equal(t, 1, n)
 
 	ids := []string{}
-	err = dbConnectionPool.SelectContext(ctx, &ids, fmt.Sprintf("SELECT id FROM %s", StellarAuthMigrationsTableName))
+	err = dbConnectionPool.SelectContext(ctx, &ids, fmt.Sprintf("SELECT id FROM %s", StellarPerTenantAuthMigrationsTableName))
 	require.NoError(t, err)
 	wantIDs := []string{"2023-02-09.0.add-users-table.sql"}
 	assert.Equal(t, wantIDs, ids)
@@ -235,19 +235,19 @@ func TestMigrate_upAndDownAllTheWayTwice_Auth_migrations(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	n, err := Migrate(db.DSN, migrate.Up, count, authmigrations.FS, StellarAuthMigrationsTableName)
+	n, err := Migrate(db.DSN, migrate.Up, count, authmigrations.FS, StellarPerTenantAuthMigrationsTableName)
 	require.NoError(t, err)
 	require.Equal(t, count, n)
 
-	n, err = Migrate(db.DSN, migrate.Down, count, authmigrations.FS, StellarAuthMigrationsTableName)
+	n, err = Migrate(db.DSN, migrate.Down, count, authmigrations.FS, StellarPerTenantAuthMigrationsTableName)
 	require.NoError(t, err)
 	require.Equal(t, count, n)
 
-	n, err = Migrate(db.DSN, migrate.Up, count, authmigrations.FS, StellarAuthMigrationsTableName)
+	n, err = Migrate(db.DSN, migrate.Up, count, authmigrations.FS, StellarPerTenantAuthMigrationsTableName)
 	require.NoError(t, err)
 	require.Equal(t, count, n)
 
-	n, err = Migrate(db.DSN, migrate.Down, count, authmigrations.FS, StellarAuthMigrationsTableName)
+	n, err = Migrate(db.DSN, migrate.Down, count, authmigrations.FS, StellarPerTenantAuthMigrationsTableName)
 	require.NoError(t, err)
 	require.Equal(t, count, n)
 }

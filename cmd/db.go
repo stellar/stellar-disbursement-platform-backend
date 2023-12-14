@@ -211,11 +211,11 @@ func (c *DatabaseCommand) migrateCmd(ctx context.Context, opts *databaseCommandC
 			}
 
 			migrationFiles := sdpmigrations.FS
-			migrationTableName := db.StellarSDPMigrationsTableName
+			migrationTableName := db.StellarPerTenantSDPMigrationsTableName
 
 			if cmd.Parent().Parent().Name() == "auth" {
 				migrationFiles = authmigrations.FS
-				migrationTableName = db.StellarAuthMigrationsTableName
+				migrationTableName = db.StellarPerTenantAuthMigrationsTableName
 			}
 
 			if err := c.executeMigrate(cmd.Context(), opts, migrate.Up, count, migrationFiles, migrationTableName); err != nil {
@@ -236,11 +236,11 @@ func (c *DatabaseCommand) migrateCmd(ctx context.Context, opts *databaseCommandC
 			}
 
 			migrationFiles := sdpmigrations.FS
-			migrationTableName := db.StellarSDPMigrationsTableName
+			migrationTableName := db.StellarPerTenantSDPMigrationsTableName
 
 			if cmd.Parent().Parent().Name() == "auth" {
 				migrationFiles = authmigrations.FS
-				migrationTableName = db.StellarAuthMigrationsTableName
+				migrationTableName = db.StellarPerTenantAuthMigrationsTableName
 			}
 
 			if err := c.executeMigrate(cmd.Context(), opts, migrate.Down, count, migrationFiles, migrationTableName); err != nil {
@@ -297,6 +297,7 @@ func (c *DatabaseCommand) applyMigrations(dbURL string, dir migrate.MigrationDir
 	return nil
 }
 
+// migrationDirectionStr returns a string representation of the migration direction (up or down).
 func migrationDirectionStr(dir migrate.MigrationDirection) string {
 	if dir == migrate.Up {
 		return "up"

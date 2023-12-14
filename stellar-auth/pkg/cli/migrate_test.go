@@ -20,7 +20,7 @@ import (
 )
 
 func getMigrationsApplied(t *testing.T, ctx context.Context, db *sql.DB) []string {
-	rows, err := db.QueryContext(ctx, fmt.Sprintf("SELECT id FROM %s", dbpkg.StellarAuthMigrationsTableName))
+	rows, err := db.QueryContext(ctx, fmt.Sprintf("SELECT id FROM %s", dbpkg.StellarPerTenantAuthMigrationsTableName))
 	require.NoError(t, err)
 
 	defer rows.Close()
@@ -95,7 +95,7 @@ func Test_MigrateCmd(t *testing.T) {
 			args:   []string{"--log-level", "TRACE", "--database-url", "", "migrate", "down", "1"},
 			expect: "Successfully applied 1 migrations down.",
 			preRunFunc: func(t *testing.T, db *stellardbtest.DB) {
-				_, err := dbpkg.Migrate(db.DSN, migrate.Up, 1, migrations.FS, dbpkg.StellarAuthMigrationsTableName)
+				_, err := dbpkg.Migrate(db.DSN, migrate.Up, 1, migrations.FS, dbpkg.StellarPerTenantAuthMigrationsTableName)
 				require.NoError(t, err)
 
 				conn := db.Open()
@@ -115,7 +115,7 @@ func Test_MigrateCmd(t *testing.T) {
 			envVars: map[string]string{"DATABASE_URL": ""},
 			expect:  "Successfully applied 1 migrations down.",
 			preRunFunc: func(t *testing.T, db *stellardbtest.DB) {
-				_, err := dbpkg.Migrate(db.DSN, migrate.Up, 1, migrations.FS, dbpkg.StellarAuthMigrationsTableName)
+				_, err := dbpkg.Migrate(db.DSN, migrate.Up, 1, migrations.FS, dbpkg.StellarPerTenantAuthMigrationsTableName)
 				require.NoError(t, err)
 
 				conn := db.Open()

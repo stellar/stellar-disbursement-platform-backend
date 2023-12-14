@@ -50,13 +50,13 @@ func (m *Manager) ProvisionNewTenant(
 
 	// Applying migrations
 	log.Infof("applying SDP migrations on the tenant %s schema", t.Name)
-	err = m.RunMigrationsForTenant(ctx, t, u, migrate.Up, 0, sdpmigrations.FS, db.StellarSDPMigrationsTableName)
+	err = m.RunMigrationsForTenant(ctx, t, u, migrate.Up, 0, sdpmigrations.FS, db.StellarPerTenantSDPMigrationsTableName)
 	if err != nil {
 		return nil, fmt.Errorf("applying SDP migrations: %w", err)
 	}
 
 	log.Infof("applying stellar-auth migrations on the tenant %s schema", t.Name)
-	err = m.RunMigrationsForTenant(ctx, t, u, migrate.Up, 0, authmigrations.FS, db.StellarAuthMigrationsTableName)
+	err = m.RunMigrationsForTenant(ctx, t, u, migrate.Up, 0, authmigrations.FS, db.StellarPerTenantAuthMigrationsTableName)
 	if err != nil {
 		return nil, fmt.Errorf("applying stellar-auth migrations: %w", err)
 	}
