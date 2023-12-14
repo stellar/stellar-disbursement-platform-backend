@@ -13,19 +13,16 @@ import (
 )
 
 type ReceiverRegistrationHandler struct {
-	ReceiverWalletModel       *data.ReceiverWalletModel
-	ReceiverVerificationModel *data.ReceiverVerificationModel
-	Models                    *data.Models
-	ReCAPTCHASiteKey          string
+	ReceiverWalletModel *data.ReceiverWalletModel
+	ReCAPTCHASiteKey    string
 }
 
 type ReceiverRegistrationData struct {
-	StellarAccount    string
-	JWTToken          string
-	Title             string
-	Message           string
-	ReCAPTCHASiteKey  string
-	VerificationField data.VerificationField
+	StellarAccount   string
+	JWTToken         string
+	Title            string
+	Message          string
+	ReCAPTCHASiteKey string
 }
 
 // ServeHTTP will serve the SEP-24 deposit page needed to register users.

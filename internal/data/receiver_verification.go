@@ -94,6 +94,7 @@ func (m *ReceiverVerificationModel) GetAllByReceiverId(ctx context.Context, sqlE
 	return receiverVerifications, nil
 }
 
+// GetLatestByPhoneNumber returns the latest updated receiver verification for some receiver that is associated with a phone number.
 func (m *ReceiverVerificationModel) GetLatestByPhoneNumber(ctx context.Context, phoneNumber string) (*ReceiverVerification, error) {
 	receiverVerifications := []ReceiverVerification{}
 	query := `
@@ -101,8 +102,7 @@ func (m *ReceiverVerificationModel) GetLatestByPhoneNumber(ctx context.Context, 
 			rv.*
 		FROM 
 			receiver_verifications rv
-		JOIN receivers r 
-			ON rv.receiver_id = r.id
+		JOIN receivers r ON rv.receiver_id = r.id
 		WHERE r.phone_number = $1
 		ORDER BY
 			rv.updated_at DESC

@@ -53,7 +53,7 @@ async function sendSms(phoneNumber, reCAPTCHAToken, onSuccess, onError) {
       });
       const resp = await request.json();
 
-      onSuccess(resp.verification_type);
+      onSuccess(resp.verification_field);
     } catch (error) {
       onError(error);
     }
@@ -97,7 +97,7 @@ async function submitPhoneNumber(event) {
   );
   const buttonEls = phoneNumberSectionEl.querySelectorAll("[data-button]");
   const verificationTypeTitle = document.querySelector("label[for='verification']");
-  const verificationTypeInput = document.querySelector("#verification"); // id verification
+  const verificationTypeInput = document.querySelector("#verification");
 
   if (!reCAPTCHATokenEl || !reCAPTCHATokenEl.value) {
     toggleErrorNotification(
@@ -136,20 +136,19 @@ async function submitPhoneNumber(event) {
     }
 
     function showNextPage(verificationType) {
+      verificationTypeInput.type = "date";
       if(verificationType === "DATE_OF_BIRTH") {
-        verificationTypeTitle.textContent = "Date_of_birth"
-        verificationTypeInput.name = "date_of_birth"
-        verificationTypeInput.type = "date"
+        verificationTypeTitle.textContent = "Date_of_birth";
+        verificationTypeInput.name = "date_of_birth";
       }
       else if(verificationType === "NATIONAL_ID") {
-        verificationTypeTitle.textContent = "National_ID"
-        verificationTypeInput.name = "national_id"
-        verificationTypeInput.type = "text"
+        verificationTypeTitle.textContent = "National_ID";
+        verificationTypeInput.name = "national_id";
       }
       else if(verificationType === "PIN") {
-        verificationTypeTitle.textContent = "Pin"
-        verificationTypeInput.name = "pin"
-        verificationTypeInput.type = "text"
+        verificationTypeTitle.textContent = "Pin";
+        verificationTypeInput.name = "pin";
+        verificationTypeInput.type = "text";
       }
 
       phoneNumberSectionEl.style.display = "none";
@@ -187,7 +186,7 @@ async function submitOtp(event) {
   );
   const otpEl = document.getElementById("otp");
   const verificationEl = document.getElementById("verification");
-  const verificationType = verificationEl.getAttribute("name");
+  const verificationField = verificationEl.getAttribute("name");
 
   const buttonEls = passcodeSectionEl.querySelectorAll("[data-button]");
 
@@ -232,7 +231,7 @@ async function submitOtp(event) {
             phone_number: phoneNumber,
             otp: otp,
             verification: verification,
-            verification_type: verificationType,
+            verification_type: verificationField,
             recaptcha_token: reCAPTCHATokenEl.value,
           }),
         });

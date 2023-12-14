@@ -35,8 +35,8 @@ type ReceiverSendOTPRequest struct {
 }
 
 type ReceiverSendOTPResponseBody struct {
-	Message          string                 `json:"message"`
-	VerificationType data.VerificationField `json:"verification_type"`
+	Message           string                 `json:"message"`
+	VerificationField data.VerificationField `json:"verification_field"`
 }
 
 func (h ReceiverSendOTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -156,8 +156,8 @@ func (h ReceiverSendOTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request
 	}
 
 	response := ReceiverSendOTPResponseBody{
-		Message:          "if your phone number is registered, you'll receive an OTP",
-		VerificationType: receiverVerification.VerificationField,
+		Message:           "if your phone number is registered, you'll receive an OTP",
+		VerificationField: receiverVerification.VerificationField,
 	}
 	httpjson.RenderStatus(w, http.StatusOK, response, httpjson.JSON)
 }

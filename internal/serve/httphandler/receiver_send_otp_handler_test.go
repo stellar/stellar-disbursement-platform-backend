@@ -198,7 +198,7 @@ func Test_ReceiverSendOTPHandler_ServeHTTP(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.Contains(t, resp.Header.Get("Content-Type"), "/json; charset=utf-8")
-		assert.JSONEq(t, string(respBody), `{"message":"if your phone number is registered, you'll receive an OTP", "verification_type":"DATE_OF_BIRTH"}`)
+		assert.JSONEq(t, string(respBody), `{"message":"if your phone number is registered, you'll receive an OTP", "verification_field":"DATE_OF_BIRTH"}`)
 	})
 
 	t.Run("returns 200 - parses a custom OTP message template successfully", func(t *testing.T) {
@@ -242,7 +242,7 @@ func Test_ReceiverSendOTPHandler_ServeHTTP(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.Contains(t, resp.Header.Get("Content-Type"), "/json; charset=utf-8")
-		assert.JSONEq(t, string(respBody), `{"message":"if your phone number is registered, you'll receive an OTP", "verification_type":"DATE_OF_BIRTH"}`)
+		assert.JSONEq(t, string(respBody), `{"message":"if your phone number is registered, you'll receive an OTP", "verification_field":"DATE_OF_BIRTH"}`)
 	})
 
 	t.Run("returns 500 - InternalServerError when something goes wrong when sending the SMS", func(t *testing.T) {
@@ -319,8 +319,7 @@ func Test_ReceiverSendOTPHandler_ServeHTTP(t *testing.T) {
 			PhoneNumber:    "+14152223333",
 			ReCAPTCHAToken: "XyZ",
 		}
-		reqBody, err := json.Marshal(requestSendOTP)
-		require.NoError(t, err)
+		reqBody, _ = json.Marshal(requestSendOTP)
 
 		reCAPTCHAValidator.
 			On("IsTokenValid", mock.Anything, "XyZ").
