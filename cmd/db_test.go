@@ -74,8 +74,9 @@ func Test_DatabaseCommand_db_help(t *testing.T) {
 		"Database related commands",
 		"stellar-disbursement-platform db [flags]",
 		"stellar-disbursement-platform db [command]",
+		"admin             Admin migrations used to configure the multi-tenant module that manages the tenants.",
 		"auth              Authentication's per-tenant schema migration helpers. Will execute the migrations of the `auth-migrations` folder on the desired tenant, according with the --all or --tenant-id configs. The migrations are tracked in the table `auth_migrations`.",
-		"migrate           Schema migration helpers",
+		"sdp               Stellar Disbursement Platform's per-tenant schema migration helpers.",
 		"setup-for-network Set up the assets and wallets registered in the database based on the network passphrase.",
 		"--all                Apply the migrations to all tenants. It's ignored when '--tenant-id' is set. (ALL)",
 		"-h, --help               help for db",
@@ -104,7 +105,7 @@ func Test_DatabaseCommand_db_help(t *testing.T) {
 	}
 }
 
-func Test_DatabaseCommand_db_migrate(t *testing.T) {
+func Test_DatabaseCommand_db_sdp_migrate(t *testing.T) {
 	dbt := dbtest.OpenWithTenantMigrationsOnly(t)
 	defer dbt.Close()
 
@@ -118,15 +119,15 @@ func Test_DatabaseCommand_db_migrate(t *testing.T) {
 
 	t.Run("migrate usage", func(t *testing.T) {
 		rootCmd := SetupCLI("x.y.z", "1234567890abcdef")
-		rootCmd.SetArgs([]string{"db", "migrate"})
+		rootCmd.SetArgs([]string{"db", "sdp", "migrate"})
 		rootCmd.SetOut(buf)
 		err = rootCmd.Execute()
 		require.NoError(t, err)
 
 		expectedContains := []string{
 			"Schema migration helpers",
-			"stellar-disbursement-platform db migrate [flags]",
-			"stellar-disbursement-platform db migrate [command]",
+			"stellar-disbursement-platform db sdp migrate [flags]",
+			"stellar-disbursement-platform db sdp migrate [command]",
 			"down        Migrates database down [count] migrations",
 			"up          Migrates database up [count] migrations",
 			"-h, --help   help for migrate",
@@ -164,7 +165,7 @@ func Test_DatabaseCommand_db_migrate(t *testing.T) {
 		buf.Reset()
 		log.DefaultLogger.SetOutput(buf)
 		rootCmd := SetupCLI("x.y.z", "1234567890abcdef")
-		rootCmd.SetArgs([]string{"db", "migrate", "up", "1", "--database-url", dbt.DSN, "--log-level", "TRACE", "--all"})
+		rootCmd.SetArgs([]string{"db", "sdp", "migrate", "up", "1", "--database-url", dbt.DSN, "--log-level", "TRACE", "--all"})
 		err = rootCmd.Execute()
 		require.NoError(t, err)
 
@@ -197,7 +198,7 @@ func Test_DatabaseCommand_db_migrate(t *testing.T) {
 		tenant.TenantSchemaMatchTablesFixture(t, ctx, dbConnectionPool, "sdp_myorg2", []string{"sdp_migrations"})
 
 		buf.Reset()
-		rootCmd.SetArgs([]string{"db", "migrate", "down", "1", "--database-url", dbt.DSN, "--log-level", "TRACE", "--all"})
+		rootCmd.SetArgs([]string{"db", "sdp", "migrate", "down", "1", "--database-url", dbt.DSN, "--log-level", "TRACE", "--all"})
 		err = rootCmd.Execute()
 		require.NoError(t, err)
 
@@ -232,7 +233,7 @@ func Test_DatabaseCommand_db_migrate(t *testing.T) {
 		buf.Reset()
 		log.DefaultLogger.SetOutput(buf)
 		rootCmd := SetupCLI("x.y.z", "1234567890abcdef")
-		rootCmd.SetArgs([]string{"db", "migrate", "up", "1", "--database-url", dbt.DSN, "--log-level", "TRACE", "--tenant-id", tnt1.ID})
+		rootCmd.SetArgs([]string{"db", "sdp", "migrate", "up", "1", "--database-url", dbt.DSN, "--log-level", "TRACE", "--tenant-id", tnt1.ID})
 		err = rootCmd.Execute()
 		require.NoError(t, err)
 
@@ -262,7 +263,7 @@ func Test_DatabaseCommand_db_migrate(t *testing.T) {
 		assert.NotContains(t, buf.String(), fmt.Sprintf("Applying migrations on tenant ID %s", tnt2.ID))
 
 		buf.Reset()
-		rootCmd.SetArgs([]string{"db", "migrate", "down", "1", "--database-url", dbt.DSN, "--log-level", "TRACE", "--tenant-id", tnt1.ID})
+		rootCmd.SetArgs([]string{"db", "sdp", "migrate", "down", "1", "--database-url", dbt.DSN, "--log-level", "TRACE", "--tenant-id", tnt1.ID})
 		err = rootCmd.Execute()
 		require.NoError(t, err)
 
