@@ -32,4 +32,17 @@ spec:
                 name: {{ include "sdp.fullname" . }}
                 port:
                   number: {{ include "sdp.port" . }}
+{{- if .Values.sdp.route.mtnDomain }}
+    - host: {{ include "sdp.mtnDomain" . | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "sdp.fullname" . }}
+                port:
+                  number: {{ include "sdp.port" . }}
+{{- end }}
+
 {{- end }}

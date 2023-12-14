@@ -121,7 +121,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			Required:    true,
 		},
 		{
-			Name:        "admin-serve-port",
+			Name:        "admin-port",
 			Usage:       "Port where the admin tenant server will be listening on",
 			OptType:     types.Int,
 			ConfigKey:   &adminServeOpts.Port,

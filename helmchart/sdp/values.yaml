@@ -82,6 +82,7 @@ sdp:
     domain: sdp.localhost.com
     port: "8000"
     metricsPort: "8002"
+    adminPort: "8003"
 
   ## @extra sdp.image Configuration related to the Docker image used by the SDP service.
   ## @param sdp.image.repository Docker image repository for the SDP backend service.
@@ -359,6 +360,10 @@ anchorPlatform:
 ##  This service is designed to maximize payment throughput, handle queuing, and graceful resubmission/error handling
 ## @descriptionEnd
 tss:
+
+  ## @param tss.enabled If true, the tss will be deployed.
+  enabled: true
+
   ## @extra tss.route Configuration related to the routing of the TSS.
   ## @param tss.route.schema Protocol scheme used for the service. Can be "http" or "https".
   ## @param tss.route.port Primary port on which the TSS listens.
@@ -495,6 +500,5 @@ dashboard:
     - hosts:
       - '{{ include "dashboard.domain" . }}'
       secretName: dashboard-tls-cert-name    # You need to create this secret manually. For more instructions, please refer to helmchart/docs/README.md
-
 
 
