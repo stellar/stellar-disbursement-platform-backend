@@ -138,13 +138,13 @@ async function submitPhoneNumber(event) {
     function showNextPage(verificationField) {
       verificationFieldInput.type = "text";
       if(verificationField === "DATE_OF_BIRTH") {
-        verificationFieldTitle.textContent = "Date_of_birth";
+        verificationFieldTitle.textContent = "Date of birth";
         verificationFieldInput.name = "date_of_birth";
         verificationFieldInput.type = "date";
       }
-      else if(verificationField === "NATIONAL_ID") {
-        verificationFieldTitle.textContent = "National_ID";
-        verificationFieldInput.name = "national_id";
+      else if(verificationField === "NATIONAL_ID_NUMBER") {
+        verificationFieldTitle.textContent = "National ID number";
+        verificationFieldInput.name = "national_id_number";
       }
       else if(verificationField === "PIN") {
         verificationFieldTitle.textContent = "Pin";
