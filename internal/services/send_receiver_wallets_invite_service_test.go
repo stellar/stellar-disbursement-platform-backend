@@ -760,7 +760,8 @@ func Test_SendReceiverWalletInviteService_shouldSendInvitationSMS(t *testing.T) 
 			ReceiverWallet: data.ReceiverWallet{
 				InvitationSentAt: &invitationSentAt,
 				Receiver: data.Receiver{
-					ID: "receiver-ID",
+					ID:          "receiver-ID",
+					PhoneNumber: "+123456789",
 				},
 				ReceiverWalletStats: data.ReceiverWalletStats{
 					TotalInvitationSMSResentAttempts: maxInvitationSMSResendAttempts,
@@ -778,7 +779,7 @@ func Test_SendReceiverWalletInviteService_shouldSendInvitationSMS(t *testing.T) 
 		require.Len(t, entries, 1)
 		assert.Equal(
 			t,
-			"the invitation message was not resent to the receiver because the maximum number of SMS resend attempts has been reached: Receiver ID receiver-ID - Wallet ID wallet-ID - Total Invitation SMS resent 3 - Maximum attempts 3",
+			"the invitation message was not resent to the receiver because the maximum number of SMS resend attempts has been reached: Phone Number: +12...789 - Receiver ID receiver-ID - Wallet ID wallet-ID - Total Invitation SMS resent 3 - Maximum attempts 3",
 			entries[0].Message,
 		)
 	})
@@ -791,7 +792,8 @@ func Test_SendReceiverWalletInviteService_shouldSendInvitationSMS(t *testing.T) 
 			ReceiverWallet: data.ReceiverWallet{
 				InvitationSentAt: &invitationSentAt,
 				Receiver: data.Receiver{
-					ID: "receiver-ID",
+					ID:          "receiver-ID",
+					PhoneNumber: "+123456789",
 				},
 				ReceiverWalletStats: data.ReceiverWalletStats{
 					TotalInvitationSMSResentAttempts: 1,
@@ -810,7 +812,7 @@ func Test_SendReceiverWalletInviteService_shouldSendInvitationSMS(t *testing.T) 
 		assert.Equal(
 			t,
 			fmt.Sprintf(
-				"the invitation message was not resent to the receiver because the receiver is not in the resend period: Receiver ID receiver-ID - Wallet ID wallet-ID - Last Invitation Sent At %s - SMS Resend Interval 2 day(s)",
+				"the invitation message was not automatically resent to the receiver because the receiver is not in the resend period: Phone Number: +12...789 - Receiver ID receiver-ID - Wallet ID wallet-ID - Last Invitation Sent At %s - SMS Resend Interval 2 day(s)",
 				invitationSentAt.Format(time.RFC1123),
 			),
 			entries[0].Message,

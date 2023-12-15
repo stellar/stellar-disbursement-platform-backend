@@ -114,7 +114,7 @@ func (wm *WalletModel) FindWallets(ctx context.Context, enabledFilter *bool) ([]
 		args = append(args, *enabledFilter)
 	}
 
-	query := fmt.Sprintf(getQuery, whereClause+`GROUP BY w.id ORDER BY w.name`)
+	query := fmt.Sprintf(getQuery, whereClause+" GROUP BY w.id ORDER BY w.name")
 
 	err := wm.dbConnectionPool.SelectContext(ctx, &wallets, query, args...)
 	if err != nil {

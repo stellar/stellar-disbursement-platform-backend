@@ -89,6 +89,7 @@ type ReceiverWalletStats struct {
 	TotalPayments     string          `json:"total_payments,omitempty" db:"total_payments"`
 	PaymentsReceived  string          `json:"payments_received,omitempty" db:"payments_received"`
 	FailedPayments    string          `json:"failed_payments,omitempty" db:"failed_payments"`
+	CanceledPayments  string          `json:"canceled_payments,omitempty" db:"canceled_payments"`
 	RemainingPayments string          `json:"remaining_payments,omitempty" db:"remaining_payments"`
 	ReceivedAmounts   ReceivedAmounts `json:"received_amounts,omitempty" db:"received_amounts"`
 	// TotalInvitationSMSResentAttempts holds how many times were resent the Invitation SMS to the receiver
@@ -133,6 +134,7 @@ func (rw *ReceiverWalletModel) GetWithReceiverIds(ctx context.Context, sqlExec d
 			COUNT(p) as total_payments,
 			COUNT(p) FILTER(WHERE p.status = 'SUCCESS') as payments_received,
 			COUNT(p) FILTER(WHERE p.status = 'FAILED') as failed_payments,
+			COUNT(p) FILTER(WHERE p.status = 'CANCELED') as canceled_payments,
 			COUNT(p) FILTER(WHERE p.status IN ('DRAFT', 'READY', 'PENDING', 'PAUSED')) as remaining_payments,
 			a.code as asset_code,
 			a.issuer as asset_issuer,
@@ -148,6 +150,7 @@ func (rw *ReceiverWalletModel) GetWithReceiverIds(ctx context.Context, sqlExec d
 			SUM(rws.total_payments) as total_payments,
 			SUM(rws.payments_received) as payments_received,
 			SUM(rws.failed_payments) as failed_payments,
+			SUM(rws.canceled_payments) as canceled_payments,
 			SUM(rws.remaining_payments) as remaining_payments,
 			jsonb_agg(jsonb_build_object('asset_code', rws.asset_code, 'asset_issuer', rws.asset_issuer, 'received_amount', rws.received_amount::text)) as received_amounts
 		FROM receiver_wallets_stats rws
@@ -180,6 +183,7 @@ func (rw *ReceiverWalletModel) GetWithReceiverIds(ctx context.Context, sqlExec d
 		COALESCE(rws.total_payments, '0') as total_payments,
 		COALESCE(rws.payments_received, '0') as payments_received,
 		COALESCE(rws.failed_payments, '0') as failed_payments,
+		COALESCE(rws.canceled_payments, '0') as canceled_payments,
 		COALESCE(rws.remaining_payments, '0') as remaining_payments,
 		rws.received_amounts,
 		rwm.invited_at as invited_at,
@@ -436,8 +440,8 @@ func (rw *ReceiverWalletModel) UpdateStatusByDisbursementID(ctx context.Context,
 	return nil
 }
 
-// GetByStellarAccountAndMemo returns a receiver wallets that match the Stellar Account.
-func (rw *ReceiverWalletModel) GetByStellarAccountAndMemo(ctx context.Context, stellarAccount, stellarMemo string) (*ReceiverWallet, error) {
+// GetByStellarAccountAndMemo returns a receiver wallets that match the Stellar Account, memo and client domain.
+func (rw *ReceiverWalletModel) GetByStellarAccountAndMemo(ctx context.Context, stellarAccount, stellarMemo, clientDomain string) (*ReceiverWallet, error) {
 	// build query
 	var receiverWallets ReceiverWallet
 	query := `
@@ -456,19 +460,26 @@ func (rw *ReceiverWalletModel) GetByStellarAccountAndMemo(ctx context.Context, s
 			w.homepage as "wallet.homepage"
 		FROM receiver_wallets rw
 		JOIN wallets w ON rw.wallet_id = w.id
-		WHERE rw.stellar_address = $1
+		WHERE rw.stellar_address = ?
 	`
 
 	// append memo to query if it is not empty
 	args := []interface{}{stellarAccount}
+
+	if clientDomain != "" {
+		query += " AND w.sep_10_client_domain = ?"
+		args = append(args, clientDomain)
+	}
+
 	if stellarMemo != "" {
-		query += " AND rw.stellar_memo = $2"
+		query += " AND rw.stellar_memo = ?"
 		args = append(args, stellarMemo)
 	} else {
 		query += " AND (rw.stellar_memo IS NULL OR rw.stellar_memo = '')"
 	}
 
 	// execute query
+	query = rw.dbConnectionPool.Rebind(query)
 	err := rw.dbConnectionPool.GetContext(ctx, &receiverWallets, query, args...)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {

@@ -6,14 +6,14 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/assets"
+
 	"github.com/stellar/go/keypair"
 	"github.com/stellar/go/network"
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/db/dbtest"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -158,12 +158,12 @@ func Test_DatabaseCommand_db_setup_for_network(t *testing.T) {
 	testnetUSDCIssuer := keypair.MustRandom().Address()
 	data.CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", testnetUSDCIssuer)
 
-	assets, err := models.Assets.GetAll(ctx)
+	actualAssets, err := models.Assets.GetAll(ctx)
 	require.NoError(t, err)
 
-	assert.Len(t, assets, 1)
-	assert.Equal(t, "USDC", assets[0].Code)
-	assert.Equal(t, testnetUSDCIssuer, assets[0].Issuer)
+	assert.Len(t, actualAssets, 1)
+	assert.Equal(t, "USDC", actualAssets[0].Code)
+	assert.Equal(t, testnetUSDCIssuer, actualAssets[0].Issuer)
 
 	// Wallets
 	data.CreateWalletFixture(t, ctx, dbConnectionPool, "Vibrant Assist", "https://vibrantapp.com", "api-dev.vibrantapp.com", "https://vibrantapp.com/sdp-dev")
@@ -196,39 +196,48 @@ func Test_DatabaseCommand_db_setup_for_network(t *testing.T) {
 	require.NoError(t, err)
 
 	// Validating assets
-	assets, err = models.Assets.GetAll(ctx)
+	actualAssets, err = models.Assets.GetAll(ctx)
 	require.NoError(t, err)
 
-	assert.Len(t, assets, 2)
-	assert.Equal(t, "USDC", assets[0].Code)
-	assert.NotEqual(t, testnetUSDCIssuer, assets[0].Issuer)
-	assert.Equal(t, services.DefaultAssetsNetworkMap[utils.PubnetNetworkType]["USDC"], assets[0].Issuer)
-	assert.Equal(t, "XLM", assets[1].Code)
-	assert.Empty(t, assets[1].Issuer)
+	require.Len(t, actualAssets, 2)
+	require.Equal(t, assets.USDCAssetPubnet.Code, actualAssets[0].Code)
+	require.Equal(t, assets.USDCAssetPubnet.Issuer, actualAssets[0].Issuer)
+	require.Equal(t, assets.XLMAsset.Code, actualAssets[1].Code)
+	require.Empty(t, assets.XLMAsset.Issuer)
 
 	// Validating wallets
 	wallets, err = models.Wallets.GetAll(ctx)
 	require.NoError(t, err)
 
-	assert.Len(t, wallets, 2)
-	// assert.Equal(t, "Beans App", wallets[0].Name)
-	// assert.Equal(t, "https://www.beansapp.com/disbursements", wallets[0].Homepage)
-	// assert.Equal(t, "api.beansapp.com", wallets[0].SEP10ClientDomain)
-	// assert.Equal(t, "https://www.beansapp.com/disbursements/registration?redirect=true", wallets[0].DeepLinkSchema)
-	assert.Equal(t, "Vibrant Assist", wallets[0].Name)
-	assert.Equal(t, "https://vibrantapp.com/vibrant-assist", wallets[0].Homepage)
-	assert.Equal(t, "vibrantapp.com", wallets[0].SEP10ClientDomain)
-	assert.Equal(t, "https://vibrantapp.com/sdp", wallets[0].DeepLinkSchema)
+	// Test only on Vibrant Assist and Vibrant Assist RC. This will help adding wallets without breaking tests.
+	var vibrantAssist, vibrantAssistRC data.Wallet
 
-	assert.Equal(t, "Vibrant Assist RC", wallets[1].Name)
-	assert.Equal(t, "vibrantapp.com/vibrant-assist", wallets[1].Homepage)
-	assert.Equal(t, "vibrantapp.com", wallets[1].SEP10ClientDomain)
-	assert.Equal(t, "https://vibrantapp.com/sdp-rc", wallets[1].DeepLinkSchema)
+	for _, w := range wallets {
+		if w.Name == "Vibrant Assist" {
+			vibrantAssist = w
+		} else if w.Name == "Vibrant Assist RC" {
+			vibrantAssistRC = w
+		}
+	}
+
+	require.NotNil(t, vibrantAssist, "Vibrant Assist wallet not found")
+	require.NotNil(t, vibrantAssistRC, "Vibrant Assist RC wallet not found")
+
+	// Test the two wallets
+	assert.Equal(t, "Vibrant Assist", vibrantAssist.Name)
+	assert.Equal(t, "https://vibrantapp.com/vibrant-assist", vibrantAssist.Homepage)
+	assert.Equal(t, "vibrantapp.com", vibrantAssist.SEP10ClientDomain)
+	assert.Equal(t, "https://vibrantapp.com/sdp", vibrantAssist.DeepLinkSchema)
+
+	assert.Equal(t, "Vibrant Assist RC", vibrantAssistRC.Name)
+	assert.Equal(t, "vibrantapp.com/vibrant-assist", vibrantAssistRC.Homepage)
+	assert.Equal(t, "vibrantapp.com", vibrantAssistRC.SEP10ClientDomain)
+	assert.Equal(t, "https://vibrantapp.com/sdp-rc", vibrantAssistRC.DeepLinkSchema)
 
 	expectedLogs := []string{
 		"updating/inserting assets for the 'pubnet' network",
 		"Code: USDC",
-		fmt.Sprintf("Issuer: %s", services.DefaultAssetsNetworkMap[utils.PubnetNetworkType]["USDC"]),
+		fmt.Sprintf("Issuer: %s", assets.USDCAssetPubnet.Issuer),
 		"Code: XLM",
 		"Issuer: ",
 		"updating/inserting wallets for the 'pubnet' network",

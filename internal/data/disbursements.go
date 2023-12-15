@@ -37,6 +37,7 @@ type DisbursementStats struct {
 	TotalPayments      int    `json:"total_payments" db:"total_payments"`
 	SuccessfulPayments int    `json:"total_payments_sent" db:"total_payments_sent"`
 	FailedPayments     int    `json:"total_payments_failed" db:"total_payments_failed"`
+	CanceledPayments   int    `json:"total_payments_canceled" db:"total_payments_canceled"`
 	RemainingPayments  int    `json:"total_payments_remaining" db:"total_payments_remaining"`
 	AmountDisbursed    string `json:"amount_disbursed" db:"amount_disbursed"`
 	TotalAmount        string `json:"total_amount" db:"total_amount"`
@@ -57,6 +58,15 @@ const (
 	VerificationFieldNationalID  VerificationField = "NATIONAL_ID_NUMBER"
 )
 
+// GetAllVerificationFields returns all verification fields
+func GetAllVerificationFields() []VerificationField {
+	return []VerificationField{
+		VerificationFieldDateOfBirth,
+		VerificationFieldPin,
+		VerificationFieldNationalID,
+	}
+}
+
 type DisbursementStatusHistoryEntry struct {
 	UserID    string             `json:"user_id"`
 	Status    DisbursementStatus `json:"status"`
@@ -76,9 +86,9 @@ var (
 func (d *DisbursementModel) Insert(ctx context.Context, disbursement *Disbursement) (string, error) {
 	const q = `
 		INSERT INTO 
-		    disbursements (name, status, status_history, wallet_id, asset_id, country_code)
+		    disbursements (name, status, status_history, wallet_id, asset_id, country_code, verification_field)
 		VALUES 
-		    ($1, $2, $3, $4, $5, $6)
+		    ($1, $2, $3, $4, $5, $6, $7)
 		RETURNING id
 		    `
 	var newId string
@@ -89,6 +99,7 @@ func (d *DisbursementModel) Insert(ctx context.Context, disbursement *Disburseme
 		disbursement.Wallet.ID,
 		disbursement.Asset.ID,
 		disbursement.Country.Code,
+		disbursement.VerificationField,
 	)
 	if err != nil {
 		// check if the error is a duplicate key error
@@ -129,6 +140,7 @@ func (d *DisbursementModel) Get(ctx context.Context, sqlExec db.SQLExecuter, id 
 			d.file_content,
 			d.created_at,
 			d.updated_at,
+			d.verification_field,
 			w.id as "wallet.id",
 			w.name as "wallet.name",
 			w.homepage as "wallet.homepage",
@@ -179,6 +191,7 @@ func (d *DisbursementModel) GetByName(ctx context.Context, sqlExec db.SQLExecute
 			d.file_content,
 			d.created_at,
 			d.updated_at,
+			d.verification_field,
 			w.id as "wallet.id",
 			w.name as "wallet.name",
 			w.homepage as "wallet.homepage",
@@ -232,6 +245,7 @@ func (d *DisbursementModel) populateStatistics(ctx context.Context, disbursement
 			count(*) as total_payments,
 			sum(case when status = 'SUCCESS' then 1 else 0 end) as total_payments_sent,
 			sum(case when status = 'FAILED' then 1 else 0 end) as total_payments_failed,
+			sum(case when status = 'CANCELED' then 1 else 0 end) as total_payments_canceled,
 			sum(case when status IN ('DRAFT', 'READY', 'PENDING', 'PAUSED')  then 1 else 0 end) as total_payments_remaining,
 			ROUND(SUM(CASE WHEN status = 'SUCCESS' THEN amount ELSE 0 END), 2) as amount_disbursed,
 			ROUND(SUM(amount), 2) as total_amount,
@@ -259,6 +273,7 @@ func (d *DisbursementModel) populateStatistics(ctx context.Context, disbursement
 			&stats.TotalPayments,
 			&stats.SuccessfulPayments,
 			&stats.FailedPayments,
+			&stats.CanceledPayments,
 			&stats.RemainingPayments,
 			&stats.AmountDisbursed,
 			&stats.TotalAmount,
@@ -316,6 +331,7 @@ func (d *DisbursementModel) GetAll(ctx context.Context, sqlExec db.SQLExecuter, 
 			d.verification_field,
 			d.created_at,
 			d.updated_at,
+			d.verification_field,
 			COALESCE(d.file_name, '') as file_name,
 			w.id as "wallet.id",
 			w.name as "wallet.name",

@@ -37,9 +37,10 @@ func Test_DisbursementModelInsert(t *testing.T) {
 				UserID: "user1",
 			},
 		},
-		Asset:   asset,
-		Country: country,
-		Wallet:  wallet,
+		Asset:             asset,
+		Country:           country,
+		Wallet:            wallet,
+		VerificationField: VerificationFieldDateOfBirth,
 	}
 
 	t.Run("returns error when disbursement already exists is not found", func(t *testing.T) {
@@ -67,6 +68,7 @@ func Test_DisbursementModelInsert(t *testing.T) {
 		assert.Equal(t, 1, len(actual.StatusHistory))
 		assert.Equal(t, DraftDisbursementStatus, actual.StatusHistory[0].Status)
 		assert.Equal(t, "user1", actual.StatusHistory[0].UserID)
+		assert.Equal(t, VerificationFieldDateOfBirth, actual.VerificationField)
 	})
 }
 
@@ -391,15 +393,23 @@ func Test_DisbursementModelGetAll(t *testing.T) {
 			Amount:         "020.50",
 			Status:         FailedPaymentStatus,
 		})
+		CreatePaymentFixture(t, ctx, dbConnectionPool, &paymentModel, &Payment{
+			ReceiverWallet: receiverWallet,
+			Disbursement:   expectedDisbursement,
+			Asset:          *asset,
+			Amount:         "020.50",
+			Status:         CanceledPaymentStatus,
+		})
 
 		expectedStats := &DisbursementStats{}
-		expectedStats.TotalPayments = 3
+		expectedStats.TotalPayments = 4
 		expectedStats.SuccessfulPayments = 1
 		expectedStats.FailedPayments = 1
+		expectedStats.CanceledPayments = 1
 		expectedStats.RemainingPayments = 1
-		expectedStats.TotalAmount = "270.55"
+		expectedStats.TotalAmount = "291.05"
 		expectedStats.AmountDisbursed = "100.00"
-		expectedStats.AverageAmount = "90.18"
+		expectedStats.AverageAmount = "72.76"
 
 		expectedDisbursement.DisbursementStats = expectedStats
 

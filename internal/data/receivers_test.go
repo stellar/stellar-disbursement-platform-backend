@@ -99,6 +99,7 @@ func Test_ReceiversModelGet(t *testing.T) {
 				TotalPayments:      "0",
 				SuccessfulPayments: "0",
 				FailedPayments:     "0",
+				CanceledPayments:   "0",
 				RemainingPayments:  "0",
 				RegisteredWallets:  "0",
 				ReceivedAmounts:    nil,
@@ -139,6 +140,7 @@ func Test_ReceiversModelGet(t *testing.T) {
 				TotalPayments:      "1",
 				SuccessfulPayments: "0",
 				FailedPayments:     "0",
+				CanceledPayments:   "0",
 				RemainingPayments:  "1",
 				RegisteredWallets:  "0",
 				ReceivedAmounts: []Amount{
@@ -195,6 +197,7 @@ func Test_ReceiversModelGet(t *testing.T) {
 				TotalPayments:      "2",
 				SuccessfulPayments: "1",
 				FailedPayments:     "0",
+				CanceledPayments:   "0",
 				RemainingPayments:  "1",
 				RegisteredWallets:  "0",
 				ReceivedAmounts: []Amount{
@@ -254,6 +257,7 @@ func Test_ReceiversModelGet(t *testing.T) {
 				TotalPayments:      "2",
 				SuccessfulPayments: "1",
 				FailedPayments:     "0",
+				CanceledPayments:   "0",
 				RemainingPayments:  "1",
 				RegisteredWallets:  "0",
 				ReceivedAmounts: []Amount{
@@ -312,6 +316,7 @@ func Test_ReceiversModelGet(t *testing.T) {
 				TotalPayments:      "1",
 				SuccessfulPayments: "0",
 				FailedPayments:     "0",
+				CanceledPayments:   "0",
 				RemainingPayments:  "1",
 				RegisteredWallets:  "0",
 				ReceivedAmounts: []Amount{
@@ -503,6 +508,7 @@ func Test_ReceiversModelGetAll(t *testing.T) {
 					"total_payments": "0",
 					"successful_payments": "0",
 					"failed_payments": "0",
+					"canceled_payments": "0",
 					"remaining_payments": "0",
 					"registered_wallets":"0"
 				},
@@ -516,6 +522,7 @@ func Test_ReceiversModelGetAll(t *testing.T) {
 					"total_payments": "0",
 					"successful_payments": "0",
 					"failed_payments": "0",
+					"canceled_payments": "0",
 					"remaining_payments": "0",
 					"registered_wallets":"1"
 				}
@@ -559,6 +566,7 @@ func Test_ReceiversModelGetAll(t *testing.T) {
 				"total_payments": "0",
 				"successful_payments": "0",
 				"failed_payments": "0",
+				"canceled_payments": "0",
 				"remaining_payments": "0",
 				"registered_wallets":"0"
 			}
@@ -601,6 +609,7 @@ func Test_ReceiversModelGetAll(t *testing.T) {
 				"total_payments": "0",
 				"successful_payments": "0",
 				"failed_payments": "0",
+				"canceled_payments": "0",
 				"remaining_payments": "0",
 				"registered_wallets":"1"
 			}
@@ -643,6 +652,7 @@ func Test_ReceiversModelGetAll(t *testing.T) {
 				"total_payments": "0",
 				"successful_payments": "0",
 				"failed_payments": "0",
+				"canceled_payments": "0",
 				"remaining_payments": "0",
 				"registered_wallets":"0"
 			}
@@ -680,6 +690,7 @@ func Test_ReceiversModelGetAll(t *testing.T) {
 				"total_payments": "0",
 				"successful_payments": "0",
 				"failed_payments": "0",
+				"canceled_payments": "0",
 				"remaining_payments": "0",
 				"registered_wallets":"0"	
 			}
@@ -717,6 +728,7 @@ func Test_ReceiversModelGetAll(t *testing.T) {
 				"total_payments": "0",
 				"successful_payments": "0",
 				"failed_payments": "0",
+				"canceled_payments": "0",
 				"remaining_payments": "0",
 				"registered_wallets":"1"
 			}
@@ -758,6 +770,7 @@ func Test_ReceiversModelGetAll(t *testing.T) {
 				"total_payments": "0",
 				"successful_payments": "0",
 				"failed_payments": "0",
+				"canceled_payments": "0",
 				"remaining_payments": "0",
 				"registered_wallets":"0"
 			}
@@ -795,6 +808,7 @@ func Test_ReceiversModelGetAll(t *testing.T) {
 					"total_payments": "0",
 					"successful_payments": "0",
 					"failed_payments": "0",
+					"canceled_payments": "0",
 					"remaining_payments": "0",
 					"registered_wallets":"0"
 				},
@@ -808,6 +822,7 @@ func Test_ReceiversModelGetAll(t *testing.T) {
 					"total_payments": "0",
 					"successful_payments": "0",
 					"failed_payments": "0",
+					"canceled_payments": "0",
 					"remaining_payments": "0",
 					"registered_wallets":"1"
 				}
