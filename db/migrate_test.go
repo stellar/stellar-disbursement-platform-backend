@@ -125,11 +125,11 @@ func TestMigrate_downApplyOne_Tenant_migrations(t *testing.T) {
 
 	n, err := Migrate(db.DSN, migrate.Up, 2, tenantmigrations.FS, StellarMultiTenantMigrationsTableName)
 	require.NoError(t, err)
-	require.Equal(t, 1, n)
+	require.Equal(t, 2, n)
 
-	n, err = Migrate(db.DSN, migrate.Down, 1, tenantmigrations.FS, StellarMultiTenantMigrationsTableName)
+	n, err = Migrate(db.DSN, migrate.Down, 2, tenantmigrations.FS, StellarMultiTenantMigrationsTableName)
 	require.NoError(t, err)
-	require.Equal(t, 1, n)
+	require.Equal(t, 2, n)
 
 	ids := []string{}
 	err = dbConnectionPool.SelectContext(ctx, &ids, fmt.Sprintf("SELECT id FROM %s", StellarMultiTenantMigrationsTableName))

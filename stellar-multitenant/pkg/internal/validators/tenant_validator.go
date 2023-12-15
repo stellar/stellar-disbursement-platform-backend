@@ -12,29 +12,27 @@ import (
 var validTenantName *regexp.Regexp = regexp.MustCompile(`^[a-z-]+$`)
 
 type TenantRequest struct {
-	Name               string                 `json:"name"`
-	OwnerEmail         string                 `json:"owner_email"`
-	OwnerFirstName     string                 `json:"owner_first_name"`
-	OwnerLastName      string                 `json:"owner_last_name"`
-	OrganizationName   string                 `json:"organization_name"`
-	EmailSenderType    tenant.EmailSenderType `json:"email_sender_type"`
-	SMSSenderType      tenant.SMSSenderType   `json:"sms_sender_type"`
-	EnableMFA          bool                   `json:"enable_mfa"`
-	EnableReCAPTCHA    bool                   `json:"enable_recaptcha"`
-	CORSAllowedOrigins []string               `json:"cors_allowed_origins"`
-	BaseURL            string                 `json:"base_url"`
-	SDPUIBaseURL       string                 `json:"sdp_ui_base_url"`
+	Name             string                 `json:"name"`
+	OwnerEmail       string                 `json:"owner_email"`
+	OwnerFirstName   string                 `json:"owner_first_name"`
+	OwnerLastName    string                 `json:"owner_last_name"`
+	OrganizationName string                 `json:"organization_name"`
+	EmailSenderType  tenant.EmailSenderType `json:"email_sender_type"`
+	SMSSenderType    tenant.SMSSenderType   `json:"sms_sender_type"`
+	EnableMFA        bool                   `json:"enable_mfa"`
+	EnableReCAPTCHA  bool                   `json:"enable_recaptcha"`
+	BaseURL          string                 `json:"base_url"`
+	SDPUIBaseURL     string                 `json:"sdp_ui_base_url"`
 }
 
 type UpdateTenantRequest struct {
-	EmailSenderType    *tenant.EmailSenderType `json:"email_sender_type"`
-	SMSSenderType      *tenant.SMSSenderType   `json:"sms_sender_type"`
-	EnableMFA          *bool                   `json:"enable_mfa"`
-	EnableReCAPTCHA    *bool                   `json:"enable_recaptcha"`
-	CORSAllowedOrigins []string                `json:"cors_allowed_origins"`
-	BaseURL            *string                 `json:"base_url"`
-	SDPUIBaseURL       *string                 `json:"sdp_ui_base_url"`
-	Status             *tenant.TenantStatus    `json:"status"`
+	EmailSenderType *tenant.EmailSenderType `json:"email_sender_type"`
+	SMSSenderType   *tenant.SMSSenderType   `json:"sms_sender_type"`
+	EnableMFA       *bool                   `json:"enable_mfa"`
+	EnableReCAPTCHA *bool                   `json:"enable_recaptcha"`
+	BaseURL         *string                 `json:"base_url"`
+	SDPUIBaseURL    *string                 `json:"sdp_ui_base_url"`
+	Status          *tenant.TenantStatus    `json:"status"`
 }
 
 type TenantValidator struct {
@@ -72,13 +70,6 @@ func (tv *TenantValidator) ValidateCreateTenantRequest(reqBody *TenantRequest) *
 		tv.Check(false, "sdp_ui_base_url", "invalid SDP UI base URL value")
 	}
 
-	tv.Check(len(reqBody.CORSAllowedOrigins) != 0, "cors_allowed_origins", "provide at least one CORS allowed origins")
-	for i, cors := range reqBody.CORSAllowedOrigins {
-		if _, err = url.ParseRequestURI(cors); err != nil {
-			tv.Check(false, "cors_allowed_origins", fmt.Sprintf("invalid URL value for cors_allowed_origins[%d] = %s", i, cors))
-		}
-	}
-
 	if tv.HasErrors() {
 		return nil
 	}
@@ -103,14 +94,6 @@ func (tv *TenantValidator) ValidateUpdateTenantRequest(reqBody *UpdateTenantRequ
 		SMSSenderType, smsErr := tenant.ParseSMSSenderType(string(*reqBody.SMSSenderType))
 		tv.CheckError(smsErr, "sms_sender_type", fmt.Sprintf("invalid sms sender type. Expected one of these values: %s", []tenant.SMSSenderType{tenant.TwilioSMSSenderType, tenant.AWSSMSSenderType, tenant.DryRunSMSSenderType}))
 		reqBody.SMSSenderType = &SMSSenderType
-	}
-
-	if reqBody.CORSAllowedOrigins != nil && len(reqBody.CORSAllowedOrigins) != 0 {
-		for i, cors := range reqBody.CORSAllowedOrigins {
-			if _, err = url.ParseRequestURI(cors); err != nil {
-				tv.Check(false, "cors_allowed_origins", fmt.Sprintf("invalid URL value for cors_allowed_origins[%d] = %s", i, cors))
-			}
-		}
 	}
 
 	if reqBody.BaseURL != nil {

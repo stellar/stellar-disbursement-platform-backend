@@ -180,11 +180,6 @@ func (m *Manager) UpdateTenantConfig(ctx context.Context, tu *TenantUpdate) (*Te
 		args = append(args, *tu.SDPUIBaseURL)
 	}
 
-	if tu.CORSAllowedOrigins != nil && len(tu.CORSAllowedOrigins) > 0 {
-		fields = append(fields, "cors_allowed_origins = ?")
-		args = append(args, pq.Array(tu.CORSAllowedOrigins))
-	}
-
 	if tu.Status != nil {
 		fields = append(fields, "status = ?")
 		args = append(args, *tu.Status)
