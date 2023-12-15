@@ -148,18 +148,20 @@ func Test_ReceiverVerificationModel_GetReceiverVerificationByReceiverId(t *testi
 
 	t.Run("returns the latest receiver verification for a list of receiver verifications", func(t *testing.T) {
 		earlierTime := time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC)
-		CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, ReceiverVerificationInsert{
+		verification1 := CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, ReceiverVerificationInsert{
 			ReceiverID:        receiver.ID,
 			VerificationField: VerificationFieldDateOfBirth,
 			VerificationValue: "1990-01-01",
-			UpdatedAt:         &earlierTime,
 		})
-		CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, ReceiverVerificationInsert{
+		verification1.UpdatedAt = earlierTime
+
+		verification2 := CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, ReceiverVerificationInsert{
 			ReceiverID:        receiver.ID,
 			VerificationField: VerificationFieldPin,
 			VerificationValue: "1234",
-			UpdatedAt:         &earlierTime,
 		})
+		verification2.UpdatedAt = earlierTime
+
 		verification3 := CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, ReceiverVerificationInsert{
 			ReceiverID:        receiver.ID,
 			VerificationField: VerificationFieldNationalID,

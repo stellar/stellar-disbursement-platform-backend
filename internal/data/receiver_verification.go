@@ -2,6 +2,8 @@ package data
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -32,7 +34,6 @@ type ReceiverVerificationInsert struct {
 	ReceiverID        string            `db:"receiver_id"`
 	VerificationField VerificationField `db:"verification_field"`
 	VerificationValue string            `db:"hashed_value"`
-	UpdatedAt         *time.Time        `db:"updated_at"`
 }
 
 const MaxAttemptsAllowed = 15
@@ -96,28 +97,29 @@ func (m *ReceiverVerificationModel) GetAllByReceiverId(ctx context.Context, sqlE
 
 // GetLatestByPhoneNumber returns the latest updated receiver verification for some receiver that is associated with a phone number.
 func (m *ReceiverVerificationModel) GetLatestByPhoneNumber(ctx context.Context, phoneNumber string) (*ReceiverVerification, error) {
-	receiverVerifications := []ReceiverVerification{}
+	receiverVerification := ReceiverVerification{}
 	query := `
 		SELECT 
-			rv.*
+		    rv.*
 		FROM 
-			receiver_verifications rv
+		    receiver_verifications rv
 		JOIN receivers r ON rv.receiver_id = r.id
-		WHERE r.phone_number = $1
+		WHERE 
+		    r.phone_number = $1
 		ORDER BY
-			rv.updated_at DESC
+		    rv.updated_at DESC
+		LIMIT 1
 	`
 
-	err := m.dbConnectionPool.SelectContext(ctx, &receiverVerifications, query, phoneNumber)
+	err := m.dbConnectionPool.GetContext(ctx, &receiverVerification, query, phoneNumber)
 	if err != nil {
-		return nil, fmt.Errorf("error querying receiver verifications for phone number %s: %w", phoneNumber, err)
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrRecordNotFound
+		}
+		return nil, fmt.Errorf("fetching receiver verifications for phone number %s: %w", phoneNumber, err)
 	}
 
-	if len(receiverVerifications) == 0 {
-		return nil, fmt.Errorf("cannot query any receiver verifications for phone number %s: %w", phoneNumber, err)
-	}
-
-	return &receiverVerifications[0], nil
+	return &receiverVerification, nil
 }
 
 // Insert inserts a new receiver verification
@@ -135,18 +137,11 @@ func (m *ReceiverVerificationModel) Insert(ctx context.Context, sqlExec db.SQLEx
 		INSERT INTO receiver_verifications (
 		    receiver_id, 
 		    verification_field, 
-		    hashed_value%s
-		) VALUES ($1, $2, $3%s)
+		    hashed_value
+		) VALUES ($1, $2, $3)
 	`
 
-	if verificationInsert.UpdatedAt != nil {
-		query = fmt.Sprintf(query, ",\nupdated_at\n", ", $4")
-		_, err = sqlExec.ExecContext(ctx, query, verificationInsert.ReceiverID, verificationInsert.VerificationField, hashedValue, *verificationInsert.UpdatedAt)
-	} else {
-		query = fmt.Sprintf(query, "", "")
-		_, err = sqlExec.ExecContext(ctx, query, verificationInsert.ReceiverID, verificationInsert.VerificationField, hashedValue)
-	}
-
+	_, err = sqlExec.ExecContext(ctx, query, verificationInsert.ReceiverID, verificationInsert.VerificationField, hashedValue)
 	if err != nil {
 		return "", fmt.Errorf("error inserting receiver verification: %w", err)
 	}
