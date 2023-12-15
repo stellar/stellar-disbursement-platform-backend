@@ -217,7 +217,7 @@ func Test_DatabaseCommand_db_setup_for_network(t *testing.T) {
 	// assert.Equal(t, "https://www.beansapp.com/disbursements/registration?redirect=true", wallets[0].DeepLinkSchema)
 	assert.Equal(t, "Vibrant Assist", wallets[0].Name)
 	assert.Equal(t, "https://vibrantapp.com/vibrant-assist", wallets[0].Homepage)
-	assert.Equal(t, "api.vibrantapp.com", wallets[0].SEP10ClientDomain)
+	assert.Equal(t, "vibrantapp.com", wallets[0].SEP10ClientDomain)
 	assert.Equal(t, "https://vibrantapp.com/sdp", wallets[0].DeepLinkSchema)
 
 	assert.Equal(t, "Vibrant Assist RC", wallets[1].Name)
@@ -235,7 +235,7 @@ func Test_DatabaseCommand_db_setup_for_network(t *testing.T) {
 		"Name: Vibrant Assist",
 		"Homepage: https://vibrantapp.com/vibrant-assist",
 		"Deep Link Schema: https://vibrantapp.com/sdp",
-		"SEP-10 Client Domain: api.vibrantapp.com",
+		"SEP-10 Client Domain: vibrantapp.com",
 	}
 
 	logs := buf.String()
