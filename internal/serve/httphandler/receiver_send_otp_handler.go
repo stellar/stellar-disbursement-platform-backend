@@ -63,10 +63,11 @@ func (h ReceiverSendOTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	truncatedPhoneNumber := utils.TruncateString(receiverSendOTPRequest.PhoneNumber, 3)
 	if phoneValidateErr := utils.ValidatePhoneNumber(receiverSendOTPRequest.PhoneNumber); phoneValidateErr != nil {
 		extras := map[string]interface{}{"phone_number": "phone_number is required"}
 		if !errors.Is(phoneValidateErr, utils.ErrEmptyPhoneNumber) {
-			phoneValidateErr = fmt.Errorf("validating phone number %s: %w", utils.TruncateString(receiverSendOTPRequest.PhoneNumber, len(receiverSendOTPRequest.PhoneNumber)/4), phoneValidateErr)
+			phoneValidateErr = fmt.Errorf("validating phone number %s: %w", truncatedPhoneNumber, phoneValidateErr)
 			log.Ctx(ctx).Error(phoneValidateErr)
 			extras["phone_number"] = "invalid phone number provided"
 		}
@@ -117,7 +118,7 @@ func (h ReceiverSendOTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request
 	}
 
 	if numberOfUpdatedRows < 1 {
-		log.Ctx(ctx).Warnf("updated no rows in receiver send OTP handler for phone number: %s", utils.TruncateString(receiverSendOTPRequest.PhoneNumber, len(receiverSendOTPRequest.PhoneNumber)/4))
+		log.Ctx(ctx).Warnf("updated no rows in ReceiverSendOTPHandler, please verify if the provided phone number (%s) and client_domain (%s) are both valid", truncatedPhoneNumber, sep24Claims.ClientDomainClaim)
 	} else {
 		sendOTPData := ReceiverSendOTPData{
 			OTP:              newOTP,
@@ -147,7 +148,7 @@ func (h ReceiverSendOTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request
 			Message:       builder.String(),
 		}
 
-		log.Ctx(ctx).Infof("sending OTP message to phone number: %s", utils.TruncateString(receiverSendOTPRequest.PhoneNumber, 3))
+		log.Ctx(ctx).Infof("sending OTP message to phone number: %s", truncatedPhoneNumber)
 		err = h.SMSMessengerClient.SendMessage(smsMessage)
 		if err != nil {
 			httperror.InternalError(ctx, "Cannot send OTP message", err, nil).Render(w)
