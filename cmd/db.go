@@ -65,7 +65,7 @@ func (c *DatabaseCommand) Command() *cobra.Command {
 	cmd.AddCommand(c.setupForNetworkCmd(cmd.Context(), &opts))         // 'setup-for-network'
 	cmd.AddCommand(c.sdpPerTenantMigrationsCmd(cmd.Context(), &opts))  // 'sdp migrate up|down'
 	cmd.AddCommand(c.authPerTenantMigrationsCmd(cmd.Context(), &opts)) // 'auth migrate up|down'
-	cmd.AddCommand(c.adminMigrationsCmd(cmd.Context(), &opts))         // 'admin migrate up|down'
+	cmd.AddCommand(c.adminMigrationsCmd(cmd.Context()))                // 'admin migrate up|down'
 
 	if err := configOptions.Init(cmd); err != nil {
 		log.Ctx(cmd.Context()).Fatalf("initializing config options: %v", err)
@@ -154,7 +154,7 @@ func (c *DatabaseCommand) authPerTenantMigrationsCmd(ctx context.Context, opts *
 
 // adminMigrationsCmd returns a cobra.Command responsible for running the migrations of the `admin-migrations`
 // folder, that are used to configure the multi-tenant module that manages the tenants.
-func (c *DatabaseCommand) adminMigrationsCmd(ctx context.Context, opts *databaseCommandConfigOptions) *cobra.Command {
+func (c *DatabaseCommand) adminMigrationsCmd(ctx context.Context) *cobra.Command {
 	adminCmd := &cobra.Command{
 		Use:              "admin",
 		Short:            "Admin migrations used to configure the multi-tenant module that manages the tenants. Will execute the migrations of the `admin-migrations` and the migrations are tracked in the table `admin_migrations`.",
