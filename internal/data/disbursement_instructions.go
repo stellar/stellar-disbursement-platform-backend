@@ -9,10 +9,11 @@ import (
 )
 
 type DisbursementInstruction struct {
-	Phone             string `csv:"phone"`
-	ID                string `csv:"id"`
-	Amount            string `csv:"amount"`
-	VerificationValue string `csv:"verification"`
+	Phone             string  `csv:"phone"`
+	ID                string  `csv:"id"`
+	Amount            string  `csv:"amount"`
+	VerificationValue string  `csv:"verification"`
+	ExternalPaymentId *string `csv:"paymentID"`
 }
 
 type DisbursementInstructionModel struct {
@@ -194,11 +195,12 @@ func (di DisbursementInstructionModel) ProcessAll(ctx context.Context, userID st
 		for _, instruction := range instructions {
 			receiver := receiverMap[instruction.Phone]
 			payment := PaymentInsert{
-				ReceiverID:       receiver.ID,
-				DisbursementID:   disbursement.ID,
-				Amount:           instruction.Amount,
-				AssetID:          disbursement.Asset.ID,
-				ReceiverWalletID: receiverWalletsMap[receiver.ID],
+				ReceiverID:        receiver.ID,
+				DisbursementID:    disbursement.ID,
+				Amount:            instruction.Amount,
+				AssetID:           disbursement.Asset.ID,
+				ReceiverWalletID:  receiverWalletsMap[receiver.ID],
+				ExternalPaymentID: instruction.ExternalPaymentId,
 			}
 			payments = append(payments, payment)
 		}

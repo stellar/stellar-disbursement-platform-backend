@@ -141,7 +141,7 @@ func Test_PaymentsHandlerGet(t *testing.T) {
 				"invitation_sent_at": null
 			},
 			"created_at": %q,
-            "updated_at": %q
+        	"updated_at": %q
 		}`, payment.ID, payment.StellarTransactionID, payment.StellarOperationID, payment.StatusHistory[0].Timestamp.Format(time.RFC3339Nano),
 			disbursement.ID, disbursement.CreatedAt.Format(time.RFC3339Nano), disbursement.UpdatedAt.Format(time.RFC3339Nano),
 			asset.ID, receiverWallet.ID, receiver.ID, wallet.ID, receiverWallet.StellarAddress, receiverWallet.StellarMemo,
