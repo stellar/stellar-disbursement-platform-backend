@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/stellar/go/support/config"
 	"github.com/stellar/go/support/log"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/cmd/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	authmigrations "github.com/stellar/stellar-disbursement-platform-backend/db/migrations/auth-migrations"
@@ -135,7 +136,15 @@ func (c *DatabaseCommand) sdpPerTenantMigrationsCmd(ctx context.Context, opts *d
 		PersistentPreRun: utils.PropagatePersistentPreRun,
 		RunE:             utils.CallHelpCommand,
 	}
-	sdpCmd.AddCommand(c.migrateCmd(ctx, opts))
+
+	executeMigrationsFn := func(ctx context.Context, dir migrate.MigrationDirection, count int) error {
+		if err := c.executeMigrate(ctx, opts, dir, count, sdpmigrations.FS, db.StellarPerTenantSDPMigrationsTableName); err != nil {
+			return fmt.Errorf("executing migrations for %s: %w", sdpCmd.Name(), err)
+		}
+		return nil
+	}
+	sdpCmd.AddCommand(c.migrateCmd(ctx, executeMigrationsFn))
+
 	return sdpCmd
 }
 
@@ -148,7 +157,15 @@ func (c *DatabaseCommand) authPerTenantMigrationsCmd(ctx context.Context, opts *
 		PersistentPreRun: utils.PropagatePersistentPreRun,
 		RunE:             utils.CallHelpCommand,
 	}
-	authCmd.AddCommand(c.migrateCmd(ctx, opts))
+
+	executeMigrationsFn := func(ctx context.Context, dir migrate.MigrationDirection, count int) error {
+		if err := c.executeMigrate(ctx, opts, dir, count, authmigrations.FS, db.StellarPerTenantAuthMigrationsTableName); err != nil {
+			return fmt.Errorf("executing migrations for %s: %w", authCmd.Name(), err)
+		}
+		return nil
+	}
+	authCmd.AddCommand(c.migrateCmd(ctx, executeMigrationsFn))
+
 	return authCmd
 }
 
@@ -166,7 +183,7 @@ func (c *DatabaseCommand) adminMigrationsCmd(ctx context.Context) *cobra.Command
 }
 
 // migrateCmd returns a cobra.Command responsible for running the database migrations.
-func (c *DatabaseCommand) migrateCmd(ctx context.Context, opts *databaseCommandConfigOptions) *cobra.Command {
+func (c *DatabaseCommand) migrateCmd(ctx context.Context, executeMigrationsFn func(ctx context.Context, dir migrate.MigrationDirection, count int) error) *cobra.Command {
 	migrateCmd := &cobra.Command{
 		Use:              "migrate",
 		Short:            "Schema migration helpers",
@@ -189,15 +206,7 @@ func (c *DatabaseCommand) migrateCmd(ctx context.Context, opts *databaseCommandC
 				}
 			}
 
-			migrationFiles := sdpmigrations.FS
-			migrationTableName := db.StellarPerTenantSDPMigrationsTableName
-
-			if cmd.Parent().Parent().Name() == "auth" {
-				migrationFiles = authmigrations.FS
-				migrationTableName = db.StellarPerTenantAuthMigrationsTableName
-			}
-
-			if err := c.executeMigrate(cmd.Context(), opts, migrate.Up, count, migrationFiles, migrationTableName); err != nil {
+			if err := executeMigrationsFn(cmd.Context(), migrate.Up, count); err != nil {
 				log.Ctx(ctx).Fatalf("Error executing migrate up: %v", err)
 			}
 		},
@@ -214,15 +223,7 @@ func (c *DatabaseCommand) migrateCmd(ctx context.Context, opts *databaseCommandC
 				log.Ctx(ctx).Fatalf("Invalid [count] argument: %s", args[0])
 			}
 
-			migrationFiles := sdpmigrations.FS
-			migrationTableName := db.StellarPerTenantSDPMigrationsTableName
-
-			if cmd.Parent().Parent().Name() == "auth" {
-				migrationFiles = authmigrations.FS
-				migrationTableName = db.StellarPerTenantAuthMigrationsTableName
-			}
-
-			if err := c.executeMigrate(cmd.Context(), opts, migrate.Down, count, migrationFiles, migrationTableName); err != nil {
+			if err := executeMigrationsFn(cmd.Context(), migrate.Down, count); err != nil {
 				log.Ctx(ctx).Fatalf("Error executing migrate down: %v", err)
 			}
 		},
