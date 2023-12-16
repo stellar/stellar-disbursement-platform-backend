@@ -83,6 +83,36 @@ func Test_ReceiverRegistrationValidator_ValidateReceiver(t *testing.T) {
 		assert.Equal(t, "invalid date of birth format. Correct format: 1990-01-01", validator.Errors["verification"])
 	})
 
+	t.Run("Invalid pin", func(t *testing.T) {
+		validator := NewReceiverRegistrationValidator()
+
+		receiverInfo := data.ReceiverRegistrationRequest{
+			PhoneNumber:       "+380445555555",
+			OTP:               "123456",
+			VerificationValue: "ABCDE1234",
+			VerificationType:  "PIN",
+		}
+		validator.ValidateReceiver(&receiverInfo)
+
+		assert.Equal(t, 1, len(validator.Errors))
+		assert.Equal(t, "invalid pin. Cannot have less than 4 or more than 8 characters in pin", validator.Errors["verification"])
+	})
+
+	t.Run("Invalid national ID number", func(t *testing.T) {
+		validator := NewReceiverRegistrationValidator()
+
+		receiverInfo := data.ReceiverRegistrationRequest{
+			PhoneNumber:       "+380445555555",
+			OTP:               "123456",
+			VerificationValue: "6UZMB56FWTKV4U0PJ21TBR6VOQVYSGIMZG2HW2S0L7EK5K83W78XXXXX",
+			VerificationType:  "NATIONAL_ID_NUMBER",
+		}
+		validator.ValidateReceiver(&receiverInfo)
+
+		assert.Equal(t, 1, len(validator.Errors))
+		assert.Equal(t, "invalid national id. Cannot have more than 50 characters in national id", validator.Errors["verification"])
+	})
+
 	t.Run("Valid receiver values", func(t *testing.T) {
 		validator := NewReceiverRegistrationValidator()
 
@@ -99,6 +129,22 @@ func Test_ReceiverRegistrationValidator_ValidateReceiver(t *testing.T) {
 		assert.Equal(t, "123456", receiverInfo.OTP)
 		assert.Equal(t, "1990-01-01", receiverInfo.VerificationValue)
 		assert.Equal(t, data.VerificationField("DATE_OF_BIRTH"), receiverInfo.VerificationType)
+
+		receiverInfo.VerificationValue = "1234"
+		receiverInfo.VerificationType = "pin"
+		validator.ValidateReceiver(&receiverInfo)
+
+		assert.Equal(t, 0, len(validator.Errors))
+		assert.Equal(t, "1234", receiverInfo.VerificationValue)
+		assert.Equal(t, data.VerificationField("PIN"), receiverInfo.VerificationType)
+
+		receiverInfo.VerificationValue = "NATIONALIDNUMBER123"
+		receiverInfo.VerificationType = "national_id_number"
+		validator.ValidateReceiver(&receiverInfo)
+
+		assert.Equal(t, 0, len(validator.Errors))
+		assert.Equal(t, "NATIONALIDNUMBER123", receiverInfo.VerificationValue)
+		assert.Equal(t, data.VerificationField("NATIONAL_ID_NUMBER"), receiverInfo.VerificationType)
 	})
 }
 

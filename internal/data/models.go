@@ -42,7 +42,7 @@ func NewModels(dbConnectionPool db.DBConnectionPool) (*Models, error) {
 		Payment:                  &PaymentModel{dbConnectionPool: dbConnectionPool},
 		Receiver:                 &ReceiverModel{},
 		DisbursementInstructions: NewDisbursementInstructionModel(dbConnectionPool),
-		ReceiverVerification:     &ReceiverVerificationModel{},
+		ReceiverVerification:     &ReceiverVerificationModel{dbConnectionPool: dbConnectionPool},
 		ReceiverWallet:           &ReceiverWalletModel{dbConnectionPool: dbConnectionPool},
 		DisbursementReceivers:    &DisbursementReceiverModel{dbConnectionPool: dbConnectionPool},
 		Message:                  &MessageModel{dbConnectionPool: dbConnectionPool},
