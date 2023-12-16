@@ -35,7 +35,8 @@ type ReceiverSendOTPRequest struct {
 }
 
 type ReceiverSendOTPResponseBody struct {
-	Message string `json:"message"`
+	Message           string                 `json:"message"`
+	VerificationField data.VerificationField `json:"verification_field"`
 }
 
 func (h ReceiverSendOTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -87,6 +88,12 @@ func (h ReceiverSendOTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request
 		err = fmt.Errorf("SEP-24 claims are invalid: %w", err)
 		log.Ctx(ctx).Error(err)
 		httperror.Unauthorized("", err, nil).Render(w)
+		return
+	}
+
+	receiverVerification, err := h.Models.ReceiverVerification.GetLatestByPhoneNumber(ctx, receiverSendOTPRequest.PhoneNumber)
+	if err != nil {
+		httperror.InternalError(ctx, "Cannot find latest receiver verification for receiver", err, nil).Render(w)
 		return
 	}
 
@@ -149,7 +156,8 @@ func (h ReceiverSendOTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request
 	}
 
 	response := ReceiverSendOTPResponseBody{
-		Message: "if your phone number is registered, you'll receive an OTP",
+		Message:           "if your phone number is registered, you'll receive an OTP",
+		VerificationField: receiverVerification.VerificationField,
 	}
 	httpjson.RenderStatus(w, http.StatusOK, response, httpjson.JSON)
 }
