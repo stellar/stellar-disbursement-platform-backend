@@ -10,6 +10,7 @@ import (
 	"github.com/stellar/go/support/config"
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
@@ -653,6 +654,47 @@ func Test_SetConfigOptionStringList(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			opts.topics = []string{}
 			customSetterTester[[]string](t, tc, co)
+		})
+	}
+}
+
+func Test_SetConfigOptionEventBrokerType(t *testing.T) {
+	opts := struct{ eventBrokerType events.EventBrokerType }{}
+
+	co := config.ConfigOption{
+		Name:           "event-broker-type",
+		OptType:        types.String,
+		CustomSetValue: SetConfigOptionEventBrokerType,
+		ConfigKey:      &opts.eventBrokerType,
+	}
+
+	testCases := []customSetterTestCase[events.EventBrokerType]{
+		{
+			name:            "returns an error if event broker type is empty",
+			args:            []string{"--event-broker-type", ""},
+			wantErrContains: "couldn't parse event broker type: invalid event broker type",
+		},
+		{
+			name:       "🎉 handles event broker type (through CLI args): KAFKA",
+			args:       []string{"--event-broker-type", "kafka"},
+			wantResult: events.KafkaEventBrokerType,
+		},
+		{
+			name:       "🎉 handles event broker type (through CLI args): NONE",
+			args:       []string{"--event-broker-type", "NONE"},
+			wantResult: events.NoneEventBrokerType,
+		},
+		{
+			name:            "returns an error if a invalid event broker type",
+			args:            []string{"--event-broker-type", "invalid"},
+			wantErrContains: "couldn't parse event broker type: invalid event broker type",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			opts.eventBrokerType = ""
+			customSetterTester[events.EventBrokerType](t, tc, co)
 		})
 	}
 }

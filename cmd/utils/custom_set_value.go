@@ -12,6 +12,7 @@ import (
 	"github.com/stellar/go/support/config"
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
@@ -247,5 +248,17 @@ func SetConfigOptionStringList(co *config.ConfigOption) error {
 
 	*key = list
 
+	return nil
+}
+
+func SetConfigOptionEventBrokerType(co *config.ConfigOption) error {
+	ebType := viper.GetString(co.Name)
+
+	ebTypeParsed, err := events.ParseEventBrokerType(ebType)
+	if err != nil {
+		return fmt.Errorf("couldn't parse event broker type: %w", err)
+	}
+
+	*(co.ConfigKey.(*events.EventBrokerType)) = ebTypeParsed
 	return nil
 }

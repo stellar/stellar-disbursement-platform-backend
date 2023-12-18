@@ -26,6 +26,7 @@ import (
 )
 
 var (
+	eventBrokerType events.EventBrokerType
 	brokers         []string
 	consumerGroupID string
 )
@@ -316,19 +317,28 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			Required:    false,
 		},
 		{
+			Name:           "event-broker-type",
+			Usage:          `Event Broker type. Options: "KAFKA", "NONE"`,
+			OptType:        types.String,
+			ConfigKey:      &eventBrokerType,
+			CustomSetValue: cmdUtils.SetConfigOptionEventBrokerType,
+			FlagDefault:    string(events.KafkaEventBrokerType),
+			Required:       true,
+		},
+		{
 			Name:           "brokers",
 			Usage:          "List of Message Brokers Connection string comma separated.",
 			OptType:        types.String,
 			ConfigKey:      &brokers,
 			CustomSetValue: cmdUtils.SetConfigOptionURLList,
-			Required:       true,
+			Required:       false,
 		},
 		{
 			Name:      "consumer-group-id",
 			Usage:     "Message Broker Consumer Group ID.",
 			OptType:   types.String,
 			ConfigKey: &consumerGroupID,
-			Required:  true,
+			Required:  false,
 		},
 	}
 
@@ -446,21 +456,25 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			serveOpts.AnchorPlatformAPIService = apAPIService
 
 			// Kafka (background)
-			kafkaProducer, err := events.NewKafkaProducer(brokers)
-			if err != nil {
-				log.Ctx(ctx).Fatalf("error creating Kafka Producer: %v", err)
-			}
-			defer kafkaProducer.Close()
-			serveOpts.EventProducer = kafkaProducer
+			if eventBrokerType == events.KafkaEventBrokerType {
+				kafkaProducer, err := events.NewKafkaProducer(brokers)
+				if err != nil {
+					log.Ctx(ctx).Fatalf("error creating Kafka Producer: %v", err)
+				}
+				defer kafkaProducer.Close()
+				serveOpts.EventProducer = kafkaProducer
 
-			// TODO: remove this example when start implementing the actual consumers
-			pingPongConsumer, err := events.NewKafkaConsumer(brokers, "ping-pong", consumerGroupID, &events.PingPongEventHandler{})
-			if err != nil {
-				log.Ctx(ctx).Fatalf("error creating Kafka Consumer: %v", err)
-			}
-			defer pingPongConsumer.Close()
+				// TODO: remove this example when start implementing the actual consumers
+				pingPongConsumer, err := events.NewKafkaConsumer(brokers, "ping-pong", consumerGroupID, &events.PingPongEventHandler{})
+				if err != nil {
+					log.Ctx(ctx).Fatalf("error creating Kafka Consumer: %v", err)
+				}
+				defer pingPongConsumer.Close()
 
-			go events.Consume(ctx, pingPongConsumer, crashTrackerClient)
+				go events.Consume(ctx, pingPongConsumer, crashTrackerClient)
+			} else {
+				log.Ctx(ctx).Warn("Event Broker is NONE.")
+			}
 
 			// Starting Scheduler Service (background job) if enabled
 			if serveOpts.EnableScheduler {

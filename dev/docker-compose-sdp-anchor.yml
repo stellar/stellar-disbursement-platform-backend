@@ -44,7 +44,6 @@ services:
       ENABLE_MFA: "false"
       ENABLE_RECAPTCHA: "false"
       BROKERS: "kafka:9092"
-      TOPICS: "ping-pong"
       CONSUMER_GROUP_ID: "group-id"
 
       # multi-tenant
