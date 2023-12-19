@@ -13,6 +13,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	di "github.com/stellar/stellar-disbursement-platform-backend/internal/dependencyinjection"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/scheduler"
@@ -141,6 +142,10 @@ func Test_serve(t *testing.T) {
 	require.NoError(t, err)
 	serveOpts.SMSMessengerClient = smsMessengerClient
 
+	kafkaEventManager, err := events.NewKafkaProducer([]string{"kafka:9092"})
+	require.NoError(t, err)
+	serveOpts.EventProducer = kafkaEventManager
+
 	metricOptions := monitor.MetricOptions{
 		MetricType:  monitor.MetricTypePrometheus,
 		Environment: "test",
@@ -213,6 +218,8 @@ func Test_serve(t *testing.T) {
 	t.Setenv("INSTANCE_NAME", serveOpts.InstanceName)
 	t.Setenv("ENABLE_SCHEDULER", "true")
 	t.Setenv("ENABLE_MULTITENANT_DB", "false")
+	t.Setenv("BROKERS", "kafka:9092")
+	t.Setenv("CONSUMER_GROUP_ID", "group-id")
 
 	// test & assert
 	rootCmd.SetArgs([]string{"--environment", "test", "serve", "--metrics-type", "PROMETHEUS"})

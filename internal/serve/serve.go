@@ -20,6 +20,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
@@ -90,6 +91,7 @@ type ServeOptions struct {
 	EnableMultiTenantDB             bool
 	tenantManager                   tenant.ManagerInterface
 	tenantRouter                    db.DataSourceRouter
+	EventProducer                   events.Producer
 }
 
 // SetupDependencies uses the serve options to setup the dependencies for the server.

@@ -11,6 +11,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	di "github.com/stellar/stellar-disbursement-platform-backend/internal/dependencyinjection"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/scheduler"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/scheduler/jobs"
@@ -22,6 +23,12 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve"
 	serveadmin "github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/serve"
+)
+
+var (
+	eventBrokerType events.EventBrokerType
+	brokers         []string
+	consumerGroupID string
 )
 
 type ServeCommand struct{}
@@ -309,6 +316,30 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			FlagDefault: true,
 			Required:    false,
 		},
+		{
+			Name:           "event-broker-type",
+			Usage:          `Event Broker type. Options: "KAFKA", "NONE"`,
+			OptType:        types.String,
+			ConfigKey:      &eventBrokerType,
+			CustomSetValue: cmdUtils.SetConfigOptionEventBrokerType,
+			FlagDefault:    string(events.KafkaEventBrokerType),
+			Required:       true,
+		},
+		{
+			Name:           "brokers",
+			Usage:          "List of Message Brokers Connection string comma separated.",
+			OptType:        types.String,
+			ConfigKey:      &brokers,
+			CustomSetValue: cmdUtils.SetConfigOptionURLList,
+			Required:       false,
+		},
+		{
+			Name:      "consumer-group-id",
+			Usage:     "Message Broker Consumer Group ID.",
+			OptType:   types.String,
+			ConfigKey: &consumerGroupID,
+			Required:  false,
+		},
 	}
 
 	messengerOptions := message.MessengerOptions{}
@@ -423,6 +454,27 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 				log.Ctx(ctx).Fatalf("error creating Anchor Platform API Service: %v", err)
 			}
 			serveOpts.AnchorPlatformAPIService = apAPIService
+
+			// Kafka (background)
+			if eventBrokerType == events.KafkaEventBrokerType {
+				kafkaProducer, err := events.NewKafkaProducer(brokers)
+				if err != nil {
+					log.Ctx(ctx).Fatalf("error creating Kafka Producer: %v", err)
+				}
+				defer kafkaProducer.Close()
+				serveOpts.EventProducer = kafkaProducer
+
+				// TODO: remove this example when start implementing the actual consumers
+				pingPongConsumer, err := events.NewKafkaConsumer(brokers, "ping-pong", consumerGroupID, &events.PingPongEventHandler{})
+				if err != nil {
+					log.Ctx(ctx).Fatalf("error creating Kafka Consumer: %v", err)
+				}
+				defer pingPongConsumer.Close()
+
+				go events.Consume(ctx, pingPongConsumer, crashTrackerClient)
+			} else {
+				log.Ctx(ctx).Warn("Event Broker is NONE.")
+			}
 
 			// Starting Scheduler Service (background job) if enabled
 			if serveOpts.EnableScheduler {

@@ -43,6 +43,8 @@ services:
       CORS_ALLOWED_ORIGINS: "*"
       ENABLE_MFA: "false"
       ENABLE_RECAPTCHA: "false"
+      BROKERS: "kafka:9092"
+      CONSUMER_GROUP_ID: "group-id"
 
       # multi-tenant
       INSTANCE_NAME: "SDP Testnet on Docker"
@@ -74,6 +76,7 @@ services:
         ./stellar-disbursement-platform serve
     depends_on:
       - db
+      - kafka
 
   db-anchor-platform:
     container_name: anchor-platform-postgres-db
@@ -170,8 +173,69 @@ services:
       SECRET_SEP10_SIGNING_SEED: ${SEP10_SIGNING_PRIVATE_KEY}
       SECRET_SEP24_INTERACTIVE_URL_JWT_SECRET: jwt_secret_1234567890
       SECRET_SEP24_MORE_INFO_URL_JWT_SECRET: jwt_secret_1234567890
+
+  kafka:
+    image: docker.io/bitnami/kafka:3.6
+    ports:
+      - "9094:9094"
+    volumes:
+      - "kafka-data:/bitnami"
+    environment:
+      # KRaft settings
+      - KAFKA_CFG_NODE_ID=0
+      - KAFKA_CFG_PROCESS_ROLES=controller,broker
+      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=0@kafka:9093
+      # Listeners
+      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:9094
+      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092,EXTERNAL://localhost:9094
+      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
+
+  db-conduktor:
+    image: postgres:14
+    hostname: postgresql
+    volumes:
+      - db-conduktor-data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: "conduktor-platform"
+      POSTGRES_USER: "conduktor"
+      POSTGRES_PASSWORD: "change_me"
+      POSTGRES_HOST_AUTH_METHOD: "scram-sha-256"
+
+  conduktor-platform:
+    image: conduktor/conduktor-platform:1.19.2
+    depends_on:
+      - db-conduktor
+    ports:
+      - "9090:8080"
+    volumes:
+      - conduktor-platform-data:/var/conduktor
+    environment:
+      CDK_DATABASE_URL: "postgresql://conduktor:change_me@db-conduktor:5432/conduktor-platform"
+      CDK_MONITORING_CORTEX-URL: http://conduktor-monitoring:9009/
+      CDK_MONITORING_ALERT-MANAGER-URL: http://conduktor-monitoring:9010/
+      CDK_MONITORING_CALLBACK-URL: http://conduktor-platform:9090/monitoring/api/
+      CDK_MONITORING_NOTIFICATIONS-CALLBACK-URL: http://localhost:9090
+    healthcheck:
+      test: curl -f http://localhost:9090/platform/api/modules/health/live || exit 1
+      interval: 10s
+      start_period: 10s
+      timeout: 5s
+      retries: 3
+
+  conduktor-monitoring:
+    image: conduktor/conduktor-platform-cortex:1.19.2
+    environment:
+      CDK_CONSOLE-URL: "http://conduktor-platform:9090"
+
 volumes:
   postgres-db:
     driver: local
   postgres-ap-db:
+    driver: local
+  kafka-data:
+    driver: local
+  db-conduktor-data:
+    driver: local
+  conduktor-platform-data:
     driver: local
