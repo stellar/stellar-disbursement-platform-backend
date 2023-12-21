@@ -2,6 +2,7 @@ package httphandler
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -16,6 +17,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpresponse"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 )
@@ -152,4 +154,59 @@ func (p PaymentsHandler) getPaymentsWithCount(ctx context.Context, queryParams *
 
 		return utils.NewResultWithTotal(totalPayments, payments), nil
 	})
+}
+
+type PatchPaymentStatusRequest struct {
+	Status string `json:"status"`
+}
+
+type UpdatePaymentStatusResponseBody struct {
+	Message string `json:"message"`
+}
+
+func (p PaymentsHandler) PatchPaymentStatus(w http.ResponseWriter, r *http.Request) {
+	var patchRequest PatchPaymentStatusRequest
+	err := json.NewDecoder(r.Body).Decode(&patchRequest)
+	if err != nil {
+		httperror.BadRequest("invalid request body", err, nil).Render(w)
+		return
+	}
+
+	// validate request
+	toStatus, err := data.ToPaymentStatus(patchRequest.Status)
+	if err != nil {
+		httperror.BadRequest("invalid status", err, nil).Render(w)
+		return
+	}
+
+	paymentManagementService := services.NewPaymentManagementService(p.Models, p.DBConnectionPool, p.AuthManager)
+	response := UpdatePaymentStatusResponseBody{}
+
+	ctx := r.Context()
+	paymentID := chi.URLParam(r, "id")
+
+	switch toStatus {
+	case data.CanceledPaymentStatus:
+		err = paymentManagementService.CancelPayment(ctx, paymentID)
+		response.Message = "Payment canceled"
+	default:
+		err = services.ErrPaymentStatusCantBeChanged
+	}
+
+	if err != nil {
+		switch {
+		case errors.Is(err, services.ErrPaymentNotFound):
+			httperror.NotFound(services.ErrPaymentNotFound.Error(), err, nil).Render(w)
+		case errors.Is(err, services.ErrPaymentNotReadyToCancel):
+			httperror.BadRequest(services.ErrPaymentNotReadyToCancel.Error(), err, nil).Render(w)
+		case errors.Is(err, services.ErrPaymentStatusCantBeChanged):
+			httperror.BadRequest(services.ErrPaymentStatusCantBeChanged.Error(), err, nil).Render(w)
+		default:
+			msg := fmt.Sprintf("Cannot update payment ID %s with status: %s", paymentID, toStatus)
+			httperror.InternalError(ctx, msg, err, nil).Render(w)
+		}
+		return
+	}
+
+	httpjson.RenderStatus(w, http.StatusOK, response, httpjson.JSON)
 }

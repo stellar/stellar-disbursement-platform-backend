@@ -253,6 +253,8 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			r.Get("/", paymentsHandler.GetPayments)
 			r.Get("/{id}", paymentsHandler.GetPayment)
 			r.Patch("/retry", paymentsHandler.RetryPayments)
+			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole)).
+				Patch("/{id}/status", paymentsHandler.PatchPaymentStatus)
 		})
 
 		r.Route("/receivers", func(r chi.Router) {
