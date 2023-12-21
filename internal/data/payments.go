@@ -30,7 +30,7 @@ type Payment struct {
 	ReceiverWallet     *ReceiverWallet      `json:"receiver_wallet,omitempty" db:"receiver_wallet"`
 	CreatedAt          time.Time            `json:"created_at" db:"created_at"`
 	UpdatedAt          time.Time            `json:"updated_at" db:"updated_at"`
-	ExternalPaymentID  *string              `json:"external_payment_id,omitempty" db:"external_payment_id"`
+	ExternalPaymentID  string              `json:"external_payment_id,omitempty" db:"external_payment_id"`
 }
 
 type PaymentStatusHistoryEntry struct {
@@ -352,7 +352,7 @@ func (p *PaymentModel) InsertAll(ctx context.Context, sqlExec db.SQLExecuter, in
 			$2,
 			$3,
 			$4,
-		    $5,
+			$5,
 			$6
 		)
 		`

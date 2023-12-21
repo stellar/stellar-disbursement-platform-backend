@@ -83,6 +83,7 @@ func Test_PaymentsHandlerGet(t *testing.T) {
 		Disbursement:   disbursement,
 		Asset:          *asset,
 		ReceiverWallet: receiverWallet,
+		ExternalPaymentID: "mockID",
 	})
 
 	t.Run("successfully returns payment details for given ID", func(t *testing.T) {
@@ -141,12 +142,13 @@ func Test_PaymentsHandlerGet(t *testing.T) {
 				"invitation_sent_at": null
 			},
 			"created_at": %q,
-        	"updated_at": %q
+			"updated_at": %q,
+			"external_payment_id": %q
 		}`, payment.ID, payment.StellarTransactionID, payment.StellarOperationID, payment.StatusHistory[0].Timestamp.Format(time.RFC3339Nano),
 			disbursement.ID, disbursement.CreatedAt.Format(time.RFC3339Nano), disbursement.UpdatedAt.Format(time.RFC3339Nano),
 			asset.ID, receiverWallet.ID, receiver.ID, wallet.ID, receiverWallet.StellarAddress, receiverWallet.StellarMemo,
 			receiverWallet.StellarMemoType, receiverWallet.CreatedAt.Format(time.RFC3339Nano), receiverWallet.UpdatedAt.Format(time.RFC3339Nano),
-			payment.CreatedAt.Format(time.RFC3339Nano), payment.UpdatedAt.Format(time.RFC3339Nano))
+			payment.CreatedAt.Format(time.RFC3339Nano), payment.UpdatedAt.Format(time.RFC3339Nano), payment.ExternalPaymentID)
 
 		assert.JSONEq(t, wantJson, rr.Body.String())
 	})
