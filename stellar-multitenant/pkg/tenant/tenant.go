@@ -5,7 +5,6 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/lib/pq"
 	"golang.org/x/exp/slices"
 )
 
@@ -43,30 +42,28 @@ func ParseSMSSenderType(smsSenderTypeStr string) (SMSSenderType, error) {
 }
 
 type Tenant struct {
-	ID                 string          `json:"id" db:"id"`
-	Name               string          `json:"name" db:"name"`
-	EmailSenderType    EmailSenderType `json:"email_sender_type" db:"email_sender_type"`
-	SMSSenderType      SMSSenderType   `json:"sms_sender_type" db:"sms_sender_type"`
-	EnableMFA          bool            `json:"enable_mfa" db:"enable_mfa"`
-	EnableReCAPTCHA    bool            `json:"enable_recaptcha" db:"enable_recaptcha"`
-	CORSAllowedOrigins pq.StringArray  `json:"cors_allowed_origins" db:"cors_allowed_origins"`
-	BaseURL            *string         `json:"base_url" db:"base_url"`
-	SDPUIBaseURL       *string         `json:"sdp_ui_base_url" db:"sdp_ui_base_url"`
-	Status             TenantStatus    `json:"status" db:"status"`
-	CreatedAt          time.Time       `json:"created_at" db:"created_at"`
-	UpdatedAt          time.Time       `json:"updated_at" db:"updated_at"`
+	ID              string          `json:"id" db:"id"`
+	Name            string          `json:"name" db:"name"`
+	EmailSenderType EmailSenderType `json:"email_sender_type" db:"email_sender_type"`
+	SMSSenderType   SMSSenderType   `json:"sms_sender_type" db:"sms_sender_type"`
+	EnableMFA       bool            `json:"enable_mfa" db:"enable_mfa"`
+	EnableReCAPTCHA bool            `json:"enable_recaptcha" db:"enable_recaptcha"`
+	BaseURL         *string         `json:"base_url" db:"base_url"`
+	SDPUIBaseURL    *string         `json:"sdp_ui_base_url" db:"sdp_ui_base_url"`
+	Status          TenantStatus    `json:"status" db:"status"`
+	CreatedAt       time.Time       `json:"created_at" db:"created_at"`
+	UpdatedAt       time.Time       `json:"updated_at" db:"updated_at"`
 }
 
 type TenantUpdate struct {
-	ID                 string           `db:"id"`
-	EmailSenderType    *EmailSenderType `db:"email_sender_type"`
-	SMSSenderType      *SMSSenderType   `db:"sms_sender_type"`
-	EnableMFA          *bool            `db:"enable_mfa"`
-	EnableReCAPTCHA    *bool            `db:"enable_recaptcha"`
-	CORSAllowedOrigins []string         `db:"cors_allowed_origins"`
-	BaseURL            *string          `db:"base_url"`
-	SDPUIBaseURL       *string          `db:"sdp_ui_base_url"`
-	Status             *TenantStatus    `db:"status"`
+	ID              string           `db:"id"`
+	EmailSenderType *EmailSenderType `db:"email_sender_type"`
+	SMSSenderType   *SMSSenderType   `db:"sms_sender_type"`
+	EnableMFA       *bool            `db:"enable_mfa"`
+	EnableReCAPTCHA *bool            `db:"enable_recaptcha"`
+	BaseURL         *string          `db:"base_url"`
+	SDPUIBaseURL    *string          `db:"sdp_ui_base_url"`
+	Status          *TenantStatus    `db:"status"`
 }
 
 type TenantStatus string
@@ -112,12 +109,6 @@ func (tu *TenantUpdate) Validate() error {
 		return fmt.Errorf("invalid SDP UI base URL")
 	}
 
-	for _, u := range tu.CORSAllowedOrigins {
-		if !isValidURL(u) {
-			return fmt.Errorf("invalid CORS allowed origin url: %q", u)
-		}
-	}
-
 	if tu.Status != nil && !tu.Status.IsValid() {
 		return fmt.Errorf("invalid tenant status: %q", *tu.Status)
 	}
@@ -130,7 +121,6 @@ func (tu *TenantUpdate) areAllFieldsEmpty() bool {
 		tu.SMSSenderType == nil &&
 		tu.EnableMFA == nil &&
 		tu.EnableReCAPTCHA == nil &&
-		tu.CORSAllowedOrigins == nil &&
 		tu.BaseURL == nil &&
 		tu.SDPUIBaseURL == nil &&
 		tu.Status == nil)

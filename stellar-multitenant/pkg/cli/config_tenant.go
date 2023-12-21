@@ -14,14 +14,13 @@ import (
 )
 
 type tenantOptions struct {
-	ID                 string
-	EmailSenderType    *tenant.EmailSenderType
-	SMSSenderType      *tenant.SMSSenderType
-	EnableMFA          *bool
-	EnableReCAPTCHA    *bool
-	CORSAllowedOrigins []string
-	BaseURL            *string
-	SDPUIBaseURL       *string
+	ID              string
+	EmailSenderType *tenant.EmailSenderType
+	SMSSenderType   *tenant.SMSSenderType
+	EnableMFA       *bool
+	EnableReCAPTCHA *bool
+	BaseURL         *string
+	SDPUIBaseURL    *string
 }
 
 func ConfigTenantCmd() *cobra.Command {
@@ -64,14 +63,6 @@ func ConfigTenantCmd() *cobra.Command {
 			OptType:        types.String,
 			CustomSetValue: utils.SetConfigOptionOptionalBoolean,
 			ConfigKey:      &to.EnableReCAPTCHA,
-			Required:       false,
-		},
-		{
-			Name:           "cors-allowed-origins",
-			Usage:          `Cors URLs that are allowed to access the endpoints, separated by ","`,
-			OptType:        types.String,
-			CustomSetValue: utils.SetCORSAllowedOrigins,
-			ConfigKey:      &to.CORSAllowedOrigins,
 			Required:       false,
 		},
 		{
@@ -128,14 +119,13 @@ func executeConfigTenant(ctx context.Context, to *tenantOptions, dbURL string) e
 
 	m := tenant.NewManager(tenant.WithDatabase(dbConnectionPool))
 	_, err = m.UpdateTenantConfig(ctx, &tenant.TenantUpdate{
-		ID:                 to.ID,
-		EmailSenderType:    to.EmailSenderType,
-		SMSSenderType:      to.SMSSenderType,
-		EnableMFA:          to.EnableMFA,
-		EnableReCAPTCHA:    to.EnableReCAPTCHA,
-		CORSAllowedOrigins: to.CORSAllowedOrigins,
-		BaseURL:            to.BaseURL,
-		SDPUIBaseURL:       to.SDPUIBaseURL,
+		ID:              to.ID,
+		EmailSenderType: to.EmailSenderType,
+		SMSSenderType:   to.SMSSenderType,
+		EnableMFA:       to.EnableMFA,
+		EnableReCAPTCHA: to.EnableReCAPTCHA,
+		BaseURL:         to.BaseURL,
+		SDPUIBaseURL:    to.SDPUIBaseURL,
 	})
 	if err != nil {
 		return fmt.Errorf("updating tenant config: %w", err)

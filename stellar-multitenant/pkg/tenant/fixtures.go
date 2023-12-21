@@ -40,7 +40,7 @@ func ResetTenantConfigFixture(t *testing.T, ctx context.Context, dbConnectionPoo
 		SET
 			email_sender_type = DEFAULT, sms_sender_type = DEFAULT,
 			enable_mfa = DEFAULT, enable_recaptcha = DEFAULT,
-			cors_allowed_origins = NULL, base_url = NULL, sdp_ui_base_url = NULL
+			base_url = NULL, sdp_ui_base_url = NULL
 		WHERE
 			id = $1
 		RETURNING *

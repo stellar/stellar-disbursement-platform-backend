@@ -80,13 +80,12 @@ func (h TenantsHandler) Post(rw http.ResponseWriter, req *http.Request) {
 	}
 
 	tnt, err = h.Manager.UpdateTenantConfig(ctx, &tenant.TenantUpdate{
-		ID:                 tnt.ID,
-		EmailSenderType:    &reqBody.EmailSenderType,
-		SMSSenderType:      &reqBody.SMSSenderType,
-		EnableMFA:          &reqBody.EnableMFA,
-		EnableReCAPTCHA:    &reqBody.EnableReCAPTCHA,
-		CORSAllowedOrigins: reqBody.CORSAllowedOrigins,
-		BaseURL:            &reqBody.BaseURL,
+		ID:              tnt.ID,
+		EmailSenderType: &reqBody.EmailSenderType,
+		SMSSenderType:   &reqBody.SMSSenderType,
+		EnableMFA:       &reqBody.EnableMFA,
+		EnableReCAPTCHA: &reqBody.EnableReCAPTCHA,
+		BaseURL:         &reqBody.BaseURL,
 	})
 	if err != nil {
 		httperror.InternalError(ctx, "Could not update tenant config", err, nil).Render(rw)
@@ -117,15 +116,14 @@ func (t TenantsHandler) Patch(w http.ResponseWriter, r *http.Request) {
 	tenantID := chi.URLParam(r, "id")
 
 	tnt, err := t.Manager.UpdateTenantConfig(ctx, &tenant.TenantUpdate{
-		ID:                 tenantID,
-		EmailSenderType:    reqBody.EmailSenderType,
-		SMSSenderType:      reqBody.SMSSenderType,
-		EnableMFA:          reqBody.EnableMFA,
-		EnableReCAPTCHA:    reqBody.EnableReCAPTCHA,
-		CORSAllowedOrigins: reqBody.CORSAllowedOrigins,
-		BaseURL:            reqBody.BaseURL,
-		SDPUIBaseURL:       reqBody.SDPUIBaseURL,
-		Status:             reqBody.Status,
+		ID:              tenantID,
+		EmailSenderType: reqBody.EmailSenderType,
+		SMSSenderType:   reqBody.SMSSenderType,
+		EnableMFA:       reqBody.EnableMFA,
+		EnableReCAPTCHA: reqBody.EnableReCAPTCHA,
+		BaseURL:         reqBody.BaseURL,
+		SDPUIBaseURL:    reqBody.SDPUIBaseURL,
+		Status:          reqBody.Status,
 	})
 	if err != nil {
 		if errors.Is(tenant.ErrEmptyUpdateTenant, err) {

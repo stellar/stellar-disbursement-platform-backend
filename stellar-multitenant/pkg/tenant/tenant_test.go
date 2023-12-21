@@ -40,11 +40,6 @@ func Test_TenantUpdate_Validate(t *testing.T) {
 		assert.EqualError(t, err, "invalid SDP UI base URL")
 
 		tu.SDPUIBaseURL = nil
-		tu.CORSAllowedOrigins = []string{"inv@lid$"}
-		err = tu.Validate()
-		assert.EqualError(t, err, `invalid CORS allowed origin url: "inv@lid$"`)
-
-		tu.CORSAllowedOrigins = nil
 		tenantStatus := TenantStatus("invalid")
 		tu.Status = &tenantStatus
 		err = tu.Validate()
@@ -53,15 +48,14 @@ func Test_TenantUpdate_Validate(t *testing.T) {
 
 	t.Run("valid values", func(t *testing.T) {
 		tu := TenantUpdate{
-			ID:                 "abc",
-			EmailSenderType:    &AWSEmailSenderType,
-			SMSSenderType:      &TwilioSMSSenderType,
-			EnableMFA:          &[]bool{true}[0],
-			EnableReCAPTCHA:    &[]bool{true}[0],
-			CORSAllowedOrigins: []string{"https://myorg.sdp.io", "https://myorg-dev.sdp.io"},
-			BaseURL:            &[]string{"https://myorg.backend.io"}[0],
-			SDPUIBaseURL:       &[]string{"https://myorg.frontend.io"}[0],
-			Status:             &[]TenantStatus{ProvisionedTenantStatus}[0],
+			ID:              "abc",
+			EmailSenderType: &AWSEmailSenderType,
+			SMSSenderType:   &TwilioSMSSenderType,
+			EnableMFA:       &[]bool{true}[0],
+			EnableReCAPTCHA: &[]bool{true}[0],
+			BaseURL:         &[]string{"https://myorg.backend.io"}[0],
+			SDPUIBaseURL:    &[]string{"https://myorg.frontend.io"}[0],
+			Status:          &[]TenantStatus{ProvisionedTenantStatus}[0],
 		}
 		err := tu.Validate()
 		assert.NoError(t, err)

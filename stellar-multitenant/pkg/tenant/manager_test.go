@@ -90,15 +90,13 @@ func Test_Manager_UpdateTenantConfig(t *testing.T) {
 		assert.True(t, tntDB.EnableReCAPTCHA)
 		assert.Nil(t, tntDB.BaseURL)
 		assert.Nil(t, tntDB.SDPUIBaseURL)
-		assert.Empty(t, tntDB.CORSAllowedOrigins)
 
 		// Partial Update
 		tnt, err := m.UpdateTenantConfig(ctx, &TenantUpdate{
-			ID:                 tntDB.ID,
-			EmailSenderType:    &AWSEmailSenderType,
-			EnableMFA:          &[]bool{false}[0],
-			CORSAllowedOrigins: []string{"https://myorg.sdp.io", "https://myorg-dev.sdp.io"},
-			SDPUIBaseURL:       &[]string{"https://myorg.frontend.io"}[0],
+			ID:              tntDB.ID,
+			EmailSenderType: &AWSEmailSenderType,
+			EnableMFA:       &[]bool{false}[0],
+			SDPUIBaseURL:    &[]string{"https://myorg.frontend.io"}[0],
 		})
 		require.NoError(t, err)
 
@@ -108,7 +106,6 @@ func Test_Manager_UpdateTenantConfig(t *testing.T) {
 		assert.True(t, tnt.EnableReCAPTCHA)
 		assert.Nil(t, tnt.BaseURL)
 		assert.Equal(t, "https://myorg.frontend.io", *tnt.SDPUIBaseURL)
-		assert.ElementsMatch(t, []string{"https://myorg.sdp.io", "https://myorg-dev.sdp.io"}, tnt.CORSAllowedOrigins)
 
 		tnt, err = m.UpdateTenantConfig(ctx, &TenantUpdate{
 			ID:              tntDB.ID,
@@ -124,7 +121,6 @@ func Test_Manager_UpdateTenantConfig(t *testing.T) {
 		assert.False(t, tnt.EnableReCAPTCHA)
 		assert.Equal(t, "https://myorg.backend.io", *tnt.BaseURL)
 		assert.Equal(t, "https://myorg.frontend.io", *tnt.SDPUIBaseURL)
-		assert.ElementsMatch(t, []string{"https://myorg.sdp.io", "https://myorg-dev.sdp.io"}, tnt.CORSAllowedOrigins)
 	})
 }
 
