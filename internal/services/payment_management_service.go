@@ -40,7 +40,7 @@ func (s *PaymentManagementService) CancelPayment(ctx context.Context, paymentID 
 			if errors.Is(err, data.ErrRecordNotFound) {
 				return ErrPaymentNotFound
 			} else {
-				return fmt.Errorf("error getting disbursement with id %s: %w", paymentID, err)
+				return fmt.Errorf("error getting payment with id %s: %w", paymentID, err)
 			}
 		}
 
