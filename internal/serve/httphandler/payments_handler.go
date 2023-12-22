@@ -179,7 +179,7 @@ func (p PaymentsHandler) PatchPaymentStatus(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	paymentManagementService := services.NewPaymentManagementService(p.Models, p.DBConnectionPool, p.AuthManager)
+	paymentManagementService := services.NewPaymentManagementService(p.Models, p.DBConnectionPool)
 	response := UpdatePaymentStatusResponseBody{}
 
 	ctx := r.Context()

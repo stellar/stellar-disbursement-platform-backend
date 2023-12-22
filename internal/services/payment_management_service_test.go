@@ -8,7 +8,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 	"github.com/stretchr/testify/require"
 )
 
@@ -26,16 +25,7 @@ func Test_PaymentManagementService_CancelPayment(t *testing.T) {
 	token := "token"
 	ctx := context.WithValue(context.Background(), middleware.TokenContextKey, token)
 
-	user := &auth.User{
-		ID:    "user-id",
-		Email: "email@email.com",
-	}
-	authManagerMock := &auth.AuthManagerMock{}
-	authManagerMock.
-		On("GetUser", ctx, token).
-		Return(user, nil)
-
-	service := NewPaymentManagementService(models, models.DBConnectionPool, authManagerMock)
+	service := NewPaymentManagementService(models, models.DBConnectionPool)
 
 	// create fixtures
 	wallet := data.CreateDefaultWalletFixture(t, ctx, dbConnectionPool)

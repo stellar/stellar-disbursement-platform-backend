@@ -7,14 +7,12 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 )
 
 // PaymentManagementService is a service for managing disbursements.
 type PaymentManagementService struct {
 	models           *data.Models
 	dbConnectionPool db.DBConnectionPool
-	authManager      auth.AuthManager
 }
 
 var (
@@ -24,11 +22,10 @@ var (
 )
 
 // NewPaymentManagementService is a factory function for creating a new PaymentManagementService.
-func NewPaymentManagementService(models *data.Models, dbConnectionPool db.DBConnectionPool, authManager auth.AuthManager) *PaymentManagementService {
+func NewPaymentManagementService(models *data.Models, dbConnectionPool db.DBConnectionPool) *PaymentManagementService {
 	return &PaymentManagementService{
 		models:           models,
 		dbConnectionPool: dbConnectionPool,
-		authManager:      authManager,
 	}
 }
 
