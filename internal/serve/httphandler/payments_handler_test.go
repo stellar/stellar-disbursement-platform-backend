@@ -80,9 +80,9 @@ func Test_PaymentsHandlerGet(t *testing.T) {
 				Timestamp:     time.Now(),
 			},
 		},
-		Disbursement:   disbursement,
-		Asset:          *asset,
-		ReceiverWallet: receiverWallet,
+		Disbursement:      disbursement,
+		Asset:             *asset,
+		ReceiverWallet:    receiverWallet,
 		ExternalPaymentID: "mockID",
 	})
 

@@ -30,7 +30,7 @@ type Payment struct {
 	ReceiverWallet     *ReceiverWallet      `json:"receiver_wallet,omitempty" db:"receiver_wallet"`
 	CreatedAt          time.Time            `json:"created_at" db:"created_at"`
 	UpdatedAt          time.Time            `json:"updated_at" db:"updated_at"`
-	ExternalPaymentID  string              `json:"external_payment_id,omitempty" db:"external_payment_id"`
+	ExternalPaymentID  string               `json:"external_payment_id,omitempty" db:"external_payment_id"`
 }
 
 type PaymentStatusHistoryEntry struct {
@@ -152,7 +152,7 @@ func (p *PaymentModel) Get(ctx context.Context, id string, sqlExec db.SQLExecute
 			p.status_history,
 			p.created_at,
 			p.updated_at,
-			p.external_payment_id,
+			COALESCE(p.external_payment_id, '') as external_payment_id,
 			d.id as "disbursement.id",
 			d.name as "disbursement.name",
 			d.status as "disbursement.status",
@@ -230,7 +230,7 @@ func (p *PaymentModel) GetAll(ctx context.Context, queryParams *QueryParams, sql
 			p.status_history,
 			p.created_at,
 			p.updated_at,
-			p.external_payment_id,
+			COALESCE(p.external_payment_id, '') as external_payment_id,
 			d.id as "disbursement.id",
 			d.name as "disbursement.name",
 			d.status as "disbursement.status",
