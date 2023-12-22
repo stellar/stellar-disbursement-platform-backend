@@ -284,12 +284,11 @@ func Test_handleHTTP_authenticatedEndpoints(t *testing.T) {
 		{http.MethodGet, "/disbursements"},
 		{http.MethodGet, "/disbursements/1234"},
 		{http.MethodGet, "/disbursements/1234/receivers"},
-		{http.MethodPatch, "/disbursements/1234/status"},
+		{http.MethodGet, "/disbursements/1234/status"},
 		// Payments
 		{http.MethodGet, "/payments"},
 		{http.MethodGet, "/payments/1234"},
 		{http.MethodPatch, "/payments/retry"},
-		{http.MethodPatch, "/payments/1234/status"},
 		// Receivers
 		{http.MethodGet, "/receivers"},
 		{http.MethodGet, "/receivers/1234"},

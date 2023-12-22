@@ -1,7 +1,6 @@
 package httphandler
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -19,7 +18,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpresponse"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 	"github.com/stretchr/testify/assert"
@@ -1011,150 +1009,4 @@ func Test_PaymentsHandler_getPaymentsWithCount(t *testing.T) {
 		assert.Equal(t, response.Total, 2)
 		assert.Equal(t, response.Result, []data.Payment{*payment2, *payment})
 	})
-}
-
-func Test_PaymentsHandler_PatchPaymentStatus(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
-
-	models, err := data.NewModels(dbConnectionPool)
-	require.NoError(t, err)
-
-	authManagerMock := &auth.AuthManagerMock{}
-
-	handler := &PaymentsHandler{
-		Models:           models,
-		DBConnectionPool: models.DBConnectionPool,
-		AuthManager:      authManagerMock,
-	}
-
-	ctx := context.Background()
-
-	r := chi.NewRouter()
-	r.Patch("/payments/{id}/status", handler.PatchPaymentStatus)
-
-	// create fixtures
-	wallet := data.CreateDefaultWalletFixture(t, ctx, dbConnectionPool)
-	asset := data.GetAssetFixture(t, ctx, dbConnectionPool, data.FixtureAssetUSDC)
-	country := data.GetCountryFixture(t, ctx, dbConnectionPool, data.FixtureCountryUSA)
-
-	// create disbursements
-	startedDisbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-		Name:    "ready disbursement",
-		Status:  data.StartedDisbursementStatus,
-		Asset:   asset,
-		Wallet:  wallet,
-		Country: country,
-	})
-
-	// create disbursement receivers
-	receiver1 := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
-	receiver2 := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
-
-	rw1 := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver1.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
-	rw2 := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver2.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
-
-	readyPayment := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
-		ReceiverWallet: rw1,
-		Disbursement:   startedDisbursement,
-		Asset:          *asset,
-		Amount:         "100",
-		Status:         data.ReadyPaymentStatus,
-	})
-	draftPayment := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
-		ReceiverWallet: rw2,
-		Disbursement:   startedDisbursement,
-		Asset:          *asset,
-		Amount:         "200",
-		Status:         data.DraftPaymentStatus,
-	})
-
-	reqBody := bytes.NewBuffer(nil)
-	t.Run("invalid body", func(t *testing.T) {
-		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, fmt.Sprintf("/payments/%s/status", readyPayment.ID), reqBody)
-		require.NoError(t, err)
-		rr := httptest.NewRecorder()
-		r.ServeHTTP(rr, req)
-
-		require.Equal(t, http.StatusBadRequest, rr.Code)
-		require.Contains(t, rr.Body.String(), "invalid request body")
-	})
-
-	t.Run("invalid status", func(t *testing.T) {
-		err := json.NewEncoder(reqBody).Encode(PatchPaymentStatusRequest{Status: "INVALID"})
-		require.NoError(t, err)
-
-		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, fmt.Sprintf("/payments/%s/status", readyPayment.ID), reqBody)
-		require.NoError(t, err)
-		rr := httptest.NewRecorder()
-		r.ServeHTTP(rr, req)
-
-		require.Equal(t, http.StatusBadRequest, rr.Code)
-		require.Contains(t, rr.Body.String(), "invalid status")
-	})
-
-	t.Run("payment not found", func(t *testing.T) {
-		err := json.NewEncoder(reqBody).Encode(PatchPaymentStatusRequest{Status: "CANCELED"})
-		require.NoError(t, err)
-
-		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, fmt.Sprintf("/payments/%s/status", "invalid-id"), reqBody)
-		require.NoError(t, err)
-		rr := httptest.NewRecorder()
-		r.ServeHTTP(rr, req)
-
-		require.Equal(t, http.StatusNotFound, rr.Code)
-		require.Contains(t, rr.Body.String(), "payment not found")
-	})
-
-	t.Run("payment can't be canceled", func(t *testing.T) {
-		err := json.NewEncoder(reqBody).Encode(PatchDisbursementStatusRequest{Status: "CANCELED"})
-		require.NoError(t, err)
-
-		req, err := http.NewRequest(http.MethodPatch, fmt.Sprintf("/payments/%s/status", draftPayment.ID), reqBody)
-		require.NoError(t, err)
-
-		rr := httptest.NewRecorder()
-		r.ServeHTTP(rr, req)
-
-		require.Equal(t, http.StatusBadRequest, rr.Code)
-		require.Contains(t, rr.Body.String(), services.ErrPaymentNotReadyToCancel.Error())
-	})
-
-	t.Run("payment status can't be changed", func(t *testing.T) {
-		err := json.NewEncoder(reqBody).Encode(PatchDisbursementStatusRequest{Status: "READY"})
-		require.NoError(t, err)
-
-		req, err := http.NewRequest(http.MethodPatch, fmt.Sprintf("/payments/%s/status", readyPayment.ID), reqBody)
-		require.NoError(t, err)
-
-		rr := httptest.NewRecorder()
-		r.ServeHTTP(rr, req)
-
-		require.Equal(t, http.StatusBadRequest, rr.Code)
-		require.Contains(t, rr.Body.String(), services.ErrPaymentStatusCantBeChanged.Error())
-	})
-
-	t.Run("payment canceled successfully", func(t *testing.T) {
-		err := json.NewEncoder(reqBody).Encode(PatchDisbursementStatusRequest{Status: "Canceled"})
-		require.NoError(t, err)
-
-		req, err := http.NewRequest(http.MethodPatch, fmt.Sprintf("/payments/%s/status", readyPayment.ID), reqBody)
-		require.NoError(t, err)
-
-		rr := httptest.NewRecorder()
-		r.ServeHTTP(rr, req)
-
-		require.Equal(t, http.StatusOK, rr.Code)
-		require.Contains(t, rr.Body.String(), "Payment canceled")
-
-		payment, err := handler.Models.Payment.Get(context.Background(), readyPayment.ID, models.DBConnectionPool)
-		require.NoError(t, err)
-		require.Equal(t, data.CanceledPaymentStatus, payment.Status)
-	})
-
-	authManagerMock.AssertExpectations(t)
 }

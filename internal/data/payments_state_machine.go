@@ -66,16 +66,6 @@ func (status PaymentStatus) SourceStatuses() []PaymentStatus {
 	return fromStates
 }
 
-// ToPaymentStatus converts a string to a PaymentStatus
-func ToPaymentStatus(s string) (PaymentStatus, error) {
-	err := PaymentStatus(s).Validate()
-	if err != nil {
-		return "", err
-	}
-
-	return PaymentStatus(strings.ToUpper(s)), nil
-}
-
 func (status PaymentStatus) State() State {
 	return State(status)
 }
