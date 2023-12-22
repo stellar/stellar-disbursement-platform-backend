@@ -36,9 +36,8 @@ func (s *PaymentManagementService) CancelPayment(ctx context.Context, paymentID 
 		if err != nil {
 			if errors.Is(err, data.ErrRecordNotFound) {
 				return ErrPaymentNotFound
-			} else {
-				return fmt.Errorf("error getting payment with id %s: %w", paymentID, err)
 			}
+			return fmt.Errorf("error getting payment with id %s: %w", paymentID, err)
 		}
 
 		// 1. Verify Transition is Possible
