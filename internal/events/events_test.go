@@ -9,29 +9,7 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 )
-
-type MockConsumer struct {
-	mock.Mock
-}
-
-var _ Consumer = new(MockConsumer)
-
-func (c *MockConsumer) ReadMessage(ctx context.Context) error {
-	args := c.Called(ctx)
-	return args.Error(0)
-}
-
-func (c *MockConsumer) RegisterEventHandler(ctx context.Context, eventHandlers ...EventHandler) error {
-	args := c.Called(ctx, eventHandlers)
-	return args.Error(0)
-}
-
-func (c *MockConsumer) Close() error {
-	args := c.Called()
-	return args.Error(0)
-}
 
 func TestConsume(t *testing.T) {
 	ctx := context.Background()

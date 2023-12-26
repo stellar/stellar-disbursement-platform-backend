@@ -797,7 +797,7 @@ func Test_VerifyReceiverWalletOTP(t *testing.T) {
 	}
 }
 
-func Test_ReceiverWallet_GetAllPendingRegistration(t *testing.T) {
+func Test_ReceiverWallet_GetAllPendingRegistrationByReceiverWalletIDs(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 
@@ -819,8 +819,8 @@ func Test_ReceiverWallet_GetAllPendingRegistration(t *testing.T) {
 		DeleteAllMessagesFixtures(t, ctx, dbConnectionPool)
 		DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
 
-		_ = CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet1.ID, DraftReceiversWalletStatus)
-		_ = CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet2.ID, RegisteredReceiversWalletStatus)
+		rw1 := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet1.ID, DraftReceiversWalletStatus)
+		rw2 := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet2.ID, RegisteredReceiversWalletStatus)
 		rw3 := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet3.ID, ReadyReceiversWalletStatus)
 		rw4 := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet4.ID, ReadyReceiversWalletStatus)
 
@@ -829,7 +829,7 @@ func Test_ReceiverWallet_GetAllPendingRegistration(t *testing.T) {
 		err := dbConnectionPool.GetContext(ctx, &invitationSentAt, q, rw4.ID)
 		require.NoError(t, err)
 
-		rws, err := rwm.GetAllPendingRegistration(ctx)
+		rws, err := rwm.GetAllPendingRegistrationByReceiverWalletIDs(ctx, []string{rw1.ID, rw2.ID, rw3.ID, rw4.ID})
 		require.NoError(t, err)
 
 		expectedRWs := []*ReceiverWallet{

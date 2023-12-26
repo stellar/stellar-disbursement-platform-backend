@@ -12,9 +12,9 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	di "github.com/stellar/stellar-disbursement-platform-backend/internal/dependencyinjection"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/eventhandlers"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/scheduler"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/scheduler/jobs"
 
 	"github.com/spf13/cobra"
 	"github.com/stellar/go/clients/horizonclient"
@@ -38,6 +38,7 @@ type ServerServiceInterface interface {
 	StartMetricsServe(opts serve.MetricsServeOptions, httpServer serve.HTTPServerInterface)
 	StartAdminServe(opts serveadmin.ServeOptions, httpServer serveadmin.HTTPServerInterface)
 	GetSchedulerJobRegistrars(ctx context.Context, serveOpts serve.ServeOptions, schedulerOptions scheduler.SchedulerOptions, apAPIService anchorplatform.AnchorPlatformAPIServiceInterface) ([]scheduler.SchedulerJobRegisterOption, error)
+	SetupConsumers(ctx context.Context, serveOpts serve.ServeOptions, eventHandlerOptions events.EventHandlerOptions)
 }
 
 type ServerService struct{}
@@ -80,18 +81,36 @@ func (s *ServerService) GetSchedulerJobRegistrars(ctx context.Context, serveOpts
 	return []scheduler.SchedulerJobRegisterOption{
 		scheduler.WithPaymentToSubmitterJobOption(models),
 		scheduler.WithPaymentFromSubmitterJobOption(models),
-		scheduler.WithSendReceiverWalletsSMSInvitationJobOption(jobs.SendReceiverWalletsSMSInvitationJobOptions{
-			AnchorPlatformBaseSepURL:       serveOpts.AnchorPlatformBaseSepURL,
-			Models:                         models,
-			MessengerClient:                serveOpts.SMSMessengerClient,
-			MaxInvitationSMSResendAttempts: int64(schedulerOptions.MaxInvitationSMSResendAttempts),
-			Sep10SigningPrivateKey:         serveOpts.Sep10SigningPrivateKey,
-			CrashTrackerClient:             serveOpts.CrashTrackerClient.Clone(),
-		}),
 		scheduler.WithAPAuthEnforcementJob(apAPIService, serveOpts.MonitorService, serveOpts.CrashTrackerClient.Clone()),
 		scheduler.WithPatchAnchorPlatformTransactionsCompletionJobOption(apAPIService, models),
 		scheduler.WithReadyPaymentsCancellationJobOption(models),
 	}, nil
+}
+
+func (s *ServerService) SetupConsumers(ctx context.Context, serveOpts serve.ServeOptions, eventHandlerOptions events.EventHandlerOptions) {
+	dbConnectionPool, err := db.OpenDBConnectionPool(globalOptions.databaseURL)
+	if err != nil {
+		log.Ctx(ctx).Fatalf("error getting DB connection in Setup Consumers: %s", err.Error())
+	}
+
+	smsInvitationConsumer, err := events.NewKafkaConsumer(
+		brokers,
+		events.ReceiverWalletSMSInvitationTopic,
+		consumerGroupID,
+		eventhandlers.NewSendReceiverWalletsSMSInvitationEventHandler(eventhandlers.SendReceiverWalletsSMSInvitationEventHandlerOptions{
+			DBConnectionPool:               dbConnectionPool,
+			AnchorPlatformBaseSepURL:       serveOpts.AnchorPlatformBasePlatformURL,
+			MessengerClient:                serveOpts.SMSMessengerClient,
+			MaxInvitationSMSResendAttempts: int64(eventHandlerOptions.MaxInvitationSMSResendAttempts),
+			Sep10SigningPrivateKey:         serveOpts.Sep10SigningPrivateKey,
+			CrashTrackerClient:             serveOpts.CrashTrackerClient.Clone(),
+		}),
+	)
+	if err != nil {
+		log.Ctx(ctx).Fatalf("error creating SMS Invitation Kafka Consumer: %v", err)
+	}
+
+	go events.Consume(ctx, smsInvitationConsumer, serveOpts.CrashTrackerClient.Clone())
 }
 
 func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorService monitor.MonitorServiceInterface) *cobra.Command {
@@ -100,6 +119,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 	adminServeOpts := serveadmin.ServeOptions{}
 	schedulerOptions := scheduler.SchedulerOptions{}
 	crashTrackerOptions := crashtracker.CrashTrackerOptions{}
+	eventHandlerOptions := events.EventHandlerOptions{}
 
 	configOpts := config.ConfigOptions{
 		{
@@ -233,7 +253,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			Name:        "max-invitation-sms-resend-attempts",
 			Usage:       "The maximum number of attempts to resend the SMS invitation to the Receiver Wallets.",
 			OptType:     types.Int,
-			ConfigKey:   &schedulerOptions.MaxInvitationSMSResendAttempts,
+			ConfigKey:   &eventHandlerOptions.MaxInvitationSMSResendAttempts,
 			FlagDefault: 3,
 			Required:    true,
 		},
@@ -464,14 +484,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 				defer kafkaProducer.Close()
 				serveOpts.EventProducer = kafkaProducer
 
-				// TODO: remove this example when start implementing the actual consumers
-				pingPongConsumer, err := events.NewKafkaConsumer(brokers, "ping-pong", consumerGroupID, &events.PingPongEventHandler{})
-				if err != nil {
-					log.Ctx(ctx).Fatalf("error creating Kafka Consumer: %v", err)
-				}
-				defer pingPongConsumer.Close()
-
-				go events.Consume(ctx, pingPongConsumer, crashTrackerClient)
+				serverService.SetupConsumers(ctx, serveOpts, eventHandlerOptions)
 			} else {
 				log.Ctx(ctx).Warn("Event Broker is NONE.")
 			}

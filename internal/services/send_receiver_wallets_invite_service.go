@@ -19,14 +19,21 @@ import (
 	"golang.org/x/exp/slices"
 )
 
+type SendReceiverWalletInviteServiceInterface interface {
+	SendInvite(ctx context.Context, receiverWalletsReq ...ReceiverWalletReq) error
+	SetModels(models *data.Models)
+}
+
 type SendReceiverWalletInviteService struct {
 	messengerClient                message.MessengerClient
-	models                         *data.Models
+	Models                         *data.Models
 	anchorPlatformBaseSepURL       string
 	maxInvitationSMSResendAttempts int64
 	sep10SigningPrivateKey         string
 	crashTrackerClient             crashtracker.CrashTrackerClient
 }
+
+var _ SendReceiverWalletInviteServiceInterface = new(SendReceiverWalletInviteService)
 
 func (s SendReceiverWalletInviteService) validate() error {
 	if s.messengerClient == nil {
@@ -40,14 +47,22 @@ func (s SendReceiverWalletInviteService) validate() error {
 	return nil
 }
 
+type ReceiverWalletReq struct {
+	ID string `json:"id"`
+}
+
 // SendInvite sends the invitation’s deep link to the wallet’s application.
 // The approach to sending the invitation is to send the deep link for each asset the wallet will pay based on the payment.
 // For instance, the Wallet Foo is in two Ready Payments, one with USDC and the other with EUROC.
 // So the receiver who has a Stellar Address pending registration (status:READY) in this wallet will receive both invites for USDC and EUROC.
 // This would not impact the user receiving both token amounts. It's only for the registration process.
-func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context) error {
+func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context, receiverWalletsReq ...ReceiverWalletReq) error {
+	if s.Models == nil {
+		return fmt.Errorf("SendReceiverWalletInviteService.Models cannot be nil")
+	}
+
 	// Get the organization entry to get the Org name and SMSRegistrationMessageTemplate
-	organization, err := s.models.Organizations.Get(ctx)
+	organization, err := s.Models.Organizations.Get(ctx)
 	if err != nil {
 		return fmt.Errorf("error getting organization: %w", err)
 	}
@@ -68,7 +83,7 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context) error {
 		return fmt.Errorf("error parsing SMS registration message template: %w", err)
 	}
 
-	wallets, err := s.models.Wallets.GetAll(ctx)
+	wallets, err := s.Models.Wallets.GetAll(ctx)
 	if err != nil {
 		return fmt.Errorf("error getting all wallets: %w", err)
 	}
@@ -78,12 +93,17 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context) error {
 		walletsMap[wallet.ID] = wallet
 	}
 
-	receiverWallets, err := s.models.ReceiverWallet.GetAllPendingRegistration(ctx)
+	receiverWalletIDsPendingRegistration := make([]string, 0, len(receiverWalletsReq))
+	for _, receiverWallet := range receiverWalletsReq {
+		receiverWalletIDsPendingRegistration = append(receiverWalletIDsPendingRegistration, receiverWallet.ID)
+	}
+
+	receiverWallets, err := s.Models.ReceiverWallet.GetAllPendingRegistrationByReceiverWalletIDs(ctx, receiverWalletIDsPendingRegistration)
 	if err != nil {
 		return fmt.Errorf("error getting receiver wallets pending registration: %w", err)
 	}
 
-	receiverWalletsAsset, err := s.models.Assets.GetAssetsPerReceiverWallet(ctx, receiverWallets...)
+	receiverWalletsAsset, err := s.Models.Assets.GetAssetsPerReceiverWallet(ctx, receiverWallets...)
 	if err != nil {
 		return fmt.Errorf("error getting all assets: %w", err)
 	}
@@ -166,12 +186,12 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context) error {
 		}
 	}
 
-	return db.RunInTransaction(ctx, s.models.DBConnectionPool, nil, func(dbTx db.DBTransaction) error {
-		if _, err := s.models.ReceiverWallet.UpdateInvitationSentAt(ctx, dbTx, receiverWalletIDs...); err != nil {
+	return db.RunInTransaction(ctx, s.Models.DBConnectionPool, nil, func(dbTx db.DBTransaction) error {
+		if _, err := s.Models.ReceiverWallet.UpdateInvitationSentAt(ctx, dbTx, receiverWalletIDs...); err != nil {
 			return fmt.Errorf("updating receiver wallets' invitation sent at: %w", err)
 		}
 
-		if err := s.models.Message.BulkInsert(ctx, dbTx, msgsToInsert); err != nil {
+		if err := s.Models.Message.BulkInsert(ctx, dbTx, msgsToInsert); err != nil {
 			return fmt.Errorf("error inserting messages in the database: %w", err)
 		}
 
@@ -225,10 +245,14 @@ func (s SendReceiverWalletInviteService) shouldSendInvitationSMS(ctx context.Con
 	return true
 }
 
+func (s *SendReceiverWalletInviteService) SetModels(models *data.Models) {
+	s.Models = models
+}
+
 func NewSendReceiverWalletInviteService(models *data.Models, messengerClient message.MessengerClient, anchorPlatformBaseSepURL, sep10SigningPrivateKey string, maxInvitationSMSResendAttempts int64, crashTrackerClient crashtracker.CrashTrackerClient) (*SendReceiverWalletInviteService, error) {
 	s := &SendReceiverWalletInviteService{
 		messengerClient:                messengerClient,
-		models:                         models,
+		Models:                         models,
 		anchorPlatformBaseSepURL:       anchorPlatformBaseSepURL,
 		maxInvitationSMSResendAttempts: maxInvitationSMSResendAttempts,
 		sep10SigningPrivateKey:         sep10SigningPrivateKey,

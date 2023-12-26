@@ -2,11 +2,15 @@ package data
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
 
@@ -19,6 +23,10 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 	defer dbConnectionPool.Close()
 
 	ctx := context.Background()
+	eventProducerMock := events.MockProducer{}
+	tnt := tenant.Tenant{ID: "tenant-id"}
+
+	ctx = tenant.SaveTenantInContext(ctx, &tnt)
 
 	asset := CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
 	country := CreateCountryFixture(t, ctx, dbConnectionPool, "FRA", "France")
@@ -65,7 +73,29 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 	}
 
 	t.Run("success", func(t *testing.T) {
-		err := di.ProcessAll(ctx, "user-id", instructions, disbursement, disbursementUpdate, MaxInstructionsPerDisbursement)
+		var eventData []events.EventReceiverWalletSMSInvitationData
+		eventProducerMock.
+			On("WriteMessages", ctx, mock.AnythingOfType("[]events.Message")).
+			Run(func(args mock.Arguments) {
+				msgs := args.Get(1).([]events.Message)
+				require.Len(t, msgs, 1)
+
+				msg := msgs[0]
+
+				assert.Equal(t, events.ReceiverWalletSMSInvitationTopic, msg.Topic)
+				assert.Equal(t, disbursement.ID, msg.Key)
+				assert.Equal(t, "batch-receiver-wallet-sms-invitation", msg.Type)
+				assert.Equal(t, tnt.ID, msg.TenantID)
+
+				var ok bool
+				eventData, ok = msg.Data.([]events.EventReceiverWalletSMSInvitationData)
+				require.True(t, ok)
+				assert.Len(t, eventData, 3)
+			}).
+			Return(nil).
+			Once()
+
+		err := di.ProcessAll(ctx, "user-id", instructions, disbursement, disbursementUpdate, MaxInstructionsPerDisbursement, &eventProducerMock)
 		require.NoError(t, err)
 
 		// Verify Receivers
@@ -82,9 +112,12 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 		receiverWallets, err := di.receiverWalletModel.GetByReceiverIDsAndWalletID(ctx, dbConnectionPool, []string{receivers[0].ID, receivers[1].ID, receivers[2].ID}, wallet.ID)
 		require.NoError(t, err)
 		assert.Len(t, receiverWallets, len(receivers))
+
+		expectedEventData := make([]events.EventReceiverWalletSMSInvitationData, 0, len(receivers))
 		for _, receiverWallet := range receiverWallets {
 			assert.Equal(t, wallet.ID, receiverWallet.Wallet.ID)
 			assert.Equal(t, DraftReceiversWalletStatus, receiverWallet.Status)
+			expectedEventData = append(expectedEventData, events.EventReceiverWalletSMSInvitationData{ReceiverWalletID: receiverWallet.ID})
 		}
 
 		// Verify Payments
@@ -97,15 +130,59 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 		require.Equal(t, ReadyDisbursementStatus, actualDisbursement.Status)
 		require.Equal(t, disbursementUpdate.FileContent, actualDisbursement.FileContent)
 		require.Equal(t, disbursementUpdate.FileName, actualDisbursement.FileName)
+
+		// Verify the published events
+		assert.Equal(t, expectedEventData, eventData)
 	})
 
 	t.Run("success - Not confirmed Verification Value updated", func(t *testing.T) {
+		DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
+		DeleteAllReceiverVerificationFixtures(t, ctx, dbConnectionPool)
+		DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
+		DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
+
+		eventProducerMock.
+			On("WriteMessages", ctx, mock.AnythingOfType("[]events.Message")).
+			Run(func(args mock.Arguments) {
+				msgs := args.Get(1).([]events.Message)
+				require.Len(t, msgs, 1)
+
+				msg := msgs[0]
+
+				assert.Equal(t, events.ReceiverWalletSMSInvitationTopic, msg.Topic)
+				assert.Equal(t, disbursement.ID, msg.Key)
+				assert.Equal(t, "batch-receiver-wallet-sms-invitation", msg.Type)
+				assert.Equal(t, tnt.ID, msg.TenantID)
+
+				eventData := msg.Data.([]events.EventReceiverWalletSMSInvitationData)
+				assert.Len(t, eventData, 3)
+			}).
+			Return(nil).
+			Once().
+			On("WriteMessages", ctx, mock.AnythingOfType("[]events.Message")).
+			Run(func(args mock.Arguments) {
+				msgs := args.Get(1).([]events.Message)
+				require.Len(t, msgs, 1)
+
+				msg := msgs[0]
+
+				assert.Equal(t, events.ReceiverWalletSMSInvitationTopic, msg.Topic)
+				assert.Equal(t, disbursement.ID, msg.Key)
+				assert.Equal(t, "batch-receiver-wallet-sms-invitation", msg.Type)
+				assert.Equal(t, tnt.ID, msg.TenantID)
+
+				eventData := msg.Data.([]events.EventReceiverWalletSMSInvitationData)
+				assert.Len(t, eventData, 0)
+			}).
+			Return(nil).
+			Once()
+
 		// process instructions for the first time
-		err := di.ProcessAll(ctx, "user-id", instructions, disbursement, disbursementUpdate, MaxInstructionsPerDisbursement)
+		err := di.ProcessAll(ctx, "user-id", instructions, disbursement, disbursementUpdate, MaxInstructionsPerDisbursement, &eventProducerMock)
 		require.NoError(t, err)
 
 		instruction1.VerificationValue = "1990-01-04"
-		err = di.ProcessAll(ctx, "user-id", instructions, disbursement, disbursementUpdate, MaxInstructionsPerDisbursement)
+		err = di.ProcessAll(ctx, "user-id", instructions, disbursement, disbursementUpdate, MaxInstructionsPerDisbursement, &eventProducerMock)
 		require.NoError(t, err)
 
 		// Verify Receivers
@@ -166,7 +243,50 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 			FileContent: CreateInstructionsFixture(t, newInstructions),
 		}
 
-		err := di.ProcessAll(ctx, "user-id", newInstructions, readyDisbursement, readyDisbursementUpdate, MaxInstructionsPerDisbursement)
+		var (
+			eventDataFirstRun, eventDataLastRun, expectedEventDataFirstRun, expectedEventDataLastRun []events.EventReceiverWalletSMSInvitationData
+		)
+		eventProducerMock.
+			On("WriteMessages", ctx, mock.AnythingOfType("[]events.Message")).
+			Run(func(args mock.Arguments) {
+				msgs := args.Get(1).([]events.Message)
+				require.Len(t, msgs, 1)
+
+				msg := msgs[0]
+
+				assert.Equal(t, events.ReceiverWalletSMSInvitationTopic, msg.Topic)
+				assert.Equal(t, readyDisbursement.ID, msg.Key)
+				assert.Equal(t, "batch-receiver-wallet-sms-invitation", msg.Type)
+				assert.Equal(t, tnt.ID, msg.TenantID)
+
+				var ok bool
+				eventDataFirstRun, ok = msg.Data.([]events.EventReceiverWalletSMSInvitationData)
+				require.True(t, ok)
+				assert.Len(t, eventDataFirstRun, 3)
+			}).
+			Return(nil).
+			Once().
+			On("WriteMessages", ctx, mock.AnythingOfType("[]events.Message")).
+			Run(func(args mock.Arguments) {
+				msgs := args.Get(1).([]events.Message)
+				require.Len(t, msgs, 1)
+
+				msg := msgs[0]
+
+				assert.Equal(t, events.ReceiverWalletSMSInvitationTopic, msg.Topic)
+				assert.Equal(t, readyDisbursement.ID, msg.Key)
+				assert.Equal(t, "batch-receiver-wallet-sms-invitation", msg.Type)
+				assert.Equal(t, tnt.ID, msg.TenantID)
+
+				var ok bool
+				eventDataLastRun, ok = msg.Data.([]events.EventReceiverWalletSMSInvitationData)
+				require.True(t, ok)
+				assert.Len(t, eventDataLastRun, 2)
+			}).
+			Return(nil).
+			Once()
+
+		err := di.ProcessAll(ctx, "user-id", newInstructions, readyDisbursement, readyDisbursementUpdate, MaxInstructionsPerDisbursement, &eventProducerMock)
 		require.NoError(t, err)
 
 		receivers, err := di.receiverModel.GetByPhoneNumbers(ctx, dbConnectionPool, []string{newInstruction1.Phone, newInstruction2.Phone, newInstruction3.Phone})
@@ -183,6 +303,7 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 			updatedRowsAffected, rowsErr := result.RowsAffected()
 			require.NoError(t, rowsErr)
 			assert.Equal(t, int64(1), updatedRowsAffected)
+			expectedEventDataFirstRun = append(expectedEventDataFirstRun, events.EventReceiverWalletSMSInvitationData{ReceiverWalletID: receiverWallet.ID})
 		}
 
 		// Update Receiver Waller Status to Ready
@@ -203,7 +324,7 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 			assert.NotNil(t, receiverWallet.InvitationSentAt)
 		}
 
-		err = di.ProcessAll(ctx, "user-id", newInstructions, readyDisbursement, readyDisbursementUpdate, MaxInstructionsPerDisbursement)
+		err = di.ProcessAll(ctx, "user-id", newInstructions, readyDisbursement, readyDisbursementUpdate, MaxInstructionsPerDisbursement, &eventProducerMock)
 		require.NoError(t, err)
 
 		// Verify ReceiverWallets
@@ -213,6 +334,7 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 		for _, receiverWallet := range receiverWallets {
 			assert.Equal(t, ReadyReceiversWalletStatus, receiverWallet.Status)
 			assert.Nil(t, receiverWallet.InvitationSentAt)
+			expectedEventDataLastRun = append(expectedEventDataLastRun, events.EventReceiverWalletSMSInvitationData{ReceiverWalletID: receiverWallet.ID})
 		}
 
 		receiverWallets, err = di.receiverWalletModel.GetByReceiverIDsAndWalletID(ctx, dbConnectionPool, []string{receivers[2].ID}, wallet.ID)
@@ -220,16 +342,44 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 		assert.Len(t, receiverWallets, 1)
 		assert.Equal(t, RegisteredReceiversWalletStatus, receiverWallets[0].Status)
 		assert.NotNil(t, receiverWallets[0].InvitationSentAt)
+
+		// Verify event messages published
+		assert.Equal(t, expectedEventDataFirstRun, eventDataFirstRun)
+		assert.Equal(t, expectedEventDataLastRun, eventDataLastRun)
 	})
 
 	t.Run("failure - Too many instructions", func(t *testing.T) {
-		err := di.ProcessAll(ctx, "user-id", instructions, disbursement, disbursementUpdate, 2)
+		err := di.ProcessAll(ctx, "user-id", instructions, disbursement, disbursementUpdate, 2, &eventProducerMock)
 		require.EqualError(t, err, "maximum number of instructions exceeded")
 	})
 
 	t.Run("failure - Confirmed Verification Value not matching", func(t *testing.T) {
+		DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
+		DeleteAllReceiverVerificationFixtures(t, ctx, dbConnectionPool)
+		DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
+		DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
+
+		eventProducerMock.
+			On("WriteMessages", ctx, mock.AnythingOfType("[]events.Message")).
+			Run(func(args mock.Arguments) {
+				msgs := args.Get(1).([]events.Message)
+				require.Len(t, msgs, 1)
+
+				msg := msgs[0]
+
+				assert.Equal(t, events.ReceiverWalletSMSInvitationTopic, msg.Topic)
+				assert.Equal(t, disbursement.ID, msg.Key)
+				assert.Equal(t, "batch-receiver-wallet-sms-invitation", msg.Type)
+				assert.Equal(t, tnt.ID, msg.TenantID)
+
+				eventData := msg.Data.([]events.EventReceiverWalletSMSInvitationData)
+				assert.Len(t, eventData, 3)
+			}).
+			Return(nil).
+			Once()
+
 		// process instructions for the first time
-		err := di.ProcessAll(ctx, "user-id", instructions, disbursement, disbursementUpdate, MaxInstructionsPerDisbursement)
+		err := di.ProcessAll(ctx, "user-id", instructions, disbursement, disbursementUpdate, MaxInstructionsPerDisbursement, &eventProducerMock)
 		require.NoError(t, err)
 
 		receivers, err := di.receiverModel.GetByPhoneNumbers(ctx, dbConnectionPool, []string{instruction1.Phone, instruction2.Phone, instruction3.Phone})
@@ -244,10 +394,64 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 
 		// process instructions with mismatched verification values
 		instruction1.VerificationValue = "1990-01-07"
-		err = di.ProcessAll(ctx, "user-id", instructions, disbursement, disbursementUpdate, MaxInstructionsPerDisbursement)
+		err = di.ProcessAll(ctx, "user-id", instructions, disbursement, disbursementUpdate, MaxInstructionsPerDisbursement, &eventProducerMock)
 		require.Error(t, err)
 		assert.EqualError(t, err, "running atomic function in RunInTransactionWithResult: receiver verification mismatch: receiver verification for +380-12-345-671 doesn't match")
 	})
+
+	t.Run("failure - error writing message", func(t *testing.T) {
+		DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
+		DeleteAllReceiverVerificationFixtures(t, ctx, dbConnectionPool)
+		DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
+		DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
+
+		eventProducerMock.
+			On("WriteMessages", ctx, mock.AnythingOfType("[]events.Message")).
+			Run(func(args mock.Arguments) {
+				msgs := args.Get(1).([]events.Message)
+				require.Len(t, msgs, 1)
+
+				msg := msgs[0]
+
+				assert.Equal(t, events.ReceiverWalletSMSInvitationTopic, msg.Topic)
+				assert.Equal(t, disbursement.ID, msg.Key)
+				assert.Equal(t, "batch-receiver-wallet-sms-invitation", msg.Type)
+				assert.Equal(t, tnt.ID, msg.TenantID)
+
+				eventData, ok := msg.Data.([]events.EventReceiverWalletSMSInvitationData)
+				require.True(t, ok)
+				assert.Len(t, eventData, 3)
+			}).
+			Return(errors.New("unexpected error")).
+			Once()
+
+		err := di.ProcessAll(ctx, "user-id", instructions, disbursement, disbursementUpdate, MaxInstructionsPerDisbursement, &eventProducerMock)
+		assert.EqualError(t, err, "running atomic function in RunInTransactionWithResult: publishing event on event producer: unexpected error")
+
+		// Assert no receivers were registered
+		receivers, err := di.receiverModel.GetByPhoneNumbers(ctx, dbConnectionPool, []string{instruction1.Phone, instruction2.Phone, instruction3.Phone})
+		require.NoError(t, err)
+		assert.Empty(t, receivers)
+	})
+
+	t.Run("failure - getting tenant from context", func(t *testing.T) {
+		DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
+		DeleteAllReceiverVerificationFixtures(t, ctx, dbConnectionPool)
+		DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
+		DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
+
+		ctxWithoutTenant := context.Background()
+
+		err := di.ProcessAll(ctxWithoutTenant, "user-id", instructions, disbursement, disbursementUpdate, MaxInstructionsPerDisbursement, &eventProducerMock)
+		assert.EqualError(t, err, "running atomic function in RunInTransactionWithResult: getting tenant from context: tenant not found in context")
+
+		// Assert no receivers were registered
+		receivers, err := di.receiverModel.GetByPhoneNumbers(ctxWithoutTenant, dbConnectionPool, []string{instruction1.Phone, instruction2.Phone, instruction3.Phone})
+		require.NoError(t, err)
+		assert.Empty(t, receivers)
+	})
+
+	eventProducerMock.AssertExpectations(t)
 }
 
 func assertEqualReceivers(t *testing.T, expectedPhones, expectedExternalIDs []string, actualReceivers []*Receiver) {
@@ -295,7 +499,7 @@ func GetPaymentsByDisbursementID(t *testing.T, ctx context.Context, dbConnection
 	query := `
 		SELECT
 			ROUND(p.amount, 2)
-		FROM	
+		FROM
 			payments p
 			WHERE p.disbursement_id = $1
 		`

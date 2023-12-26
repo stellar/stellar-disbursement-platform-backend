@@ -16,8 +16,10 @@ import (
 
 	"github.com/stretchr/testify/mock"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 
@@ -623,9 +625,12 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 	require.NoError(t, err)
 
 	mMonitorService := &monitor.MockMonitorService{}
+	eventProducerMock := events.MockProducer{}
+	tnt := tenant.Tenant{ID: "tenant-id"}
 
 	token := "token"
 	ctx := context.WithValue(context.Background(), middleware.TokenContextKey, token)
+	ctx = tenant.SaveTenantInContext(ctx, &tnt)
 
 	user := &auth.User{
 		ID:    "user-id",
@@ -646,6 +651,7 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 		MonitorService:   mMonitorService,
 		DBConnectionPool: models.DBConnectionPool,
 		AuthManager:      authManagerMock,
+		EventProducer:    &eventProducerMock,
 	}
 
 	// create fixtures
@@ -774,6 +780,28 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 			req, err := createInstructionsMultipartRequest(t, ctx, tc.fieldName, tc.disbursementID, fileContent)
 			require.NoError(t, err)
 
+			if tc.expectedStatus == http.StatusOK {
+				eventProducerMock.
+					On("WriteMessages", mock.Anything, mock.AnythingOfType("[]events.Message")).
+					Run(func(args mock.Arguments) {
+						msgs := args.Get(1).([]events.Message)
+						require.Len(t, msgs, 1)
+
+						msg := msgs[0]
+
+						assert.Equal(t, events.ReceiverWalletSMSInvitationTopic, msg.Topic)
+						assert.Equal(t, tc.disbursementID, msg.Key)
+						assert.Equal(t, "batch-receiver-wallet-sms-invitation", msg.Type)
+						assert.Equal(t, tnt.ID, msg.TenantID)
+
+						eventData, ok := msg.Data.([]events.EventReceiverWalletSMSInvitationData)
+						require.True(t, ok)
+						assert.Len(t, eventData, len(tc.csvRecords)-1)
+					}).
+					Return(nil).
+					Once()
+			}
+
 			// Record the response
 			rr := httptest.NewRecorder()
 			router := chi.NewRouter()
@@ -786,6 +814,7 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 		})
 
 		authManagerMock.AssertExpectations(t)
+		eventProducerMock.AssertExpectations(t)
 	}
 }
 
