@@ -243,9 +243,7 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 			FileContent: CreateInstructionsFixture(t, newInstructions),
 		}
 
-		var (
-			eventDataFirstRun, eventDataLastRun, expectedEventDataFirstRun, expectedEventDataLastRun []events.EventReceiverWalletSMSInvitationData
-		)
+		var eventDataFirstRun, eventDataLastRun, expectedEventDataFirstRun, expectedEventDataLastRun []events.EventReceiverWalletSMSInvitationData
 		eventProducerMock.
 			On("WriteMessages", ctx, mock.AnythingOfType("[]events.Message")).
 			Run(func(args mock.Arguments) {
