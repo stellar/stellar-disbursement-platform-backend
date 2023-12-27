@@ -7,9 +7,12 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/support/render/httpjson"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 type RetryInvitationSMSResponse struct {
@@ -21,11 +24,19 @@ type RetryInvitationSMSResponse struct {
 }
 
 type ReceiverWalletsHandler struct {
-	Models *data.Models
+	Models        *data.Models
+	EventProducer events.Producer
 }
 
 func (h ReceiverWalletsHandler) RetryInvitation(rw http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
+
+	tnt, err := tenant.GetTenantFromContext(ctx)
+	if err != nil {
+		log.Ctx(ctx).Errorf("could not get tenant from context: %v", err)
+		httperror.Forbidden("", err, nil).Render(rw)
+		return
+	}
 
 	receiverWalletID := chi.URLParam(req, "receiver_wallet_id")
 	receiverWallet, err := h.Models.ReceiverWallet.RetryInvitationSMS(ctx, h.Models.DBConnectionPool, receiverWalletID)
@@ -35,6 +46,23 @@ func (h ReceiverWalletsHandler) RetryInvitation(rw http.ResponseWriter, req *htt
 			return
 		}
 		err = fmt.Errorf("retrying invitation: %w", err)
+		httperror.InternalError(ctx, "", err, nil).Render(rw)
+		return
+	}
+
+	err = h.EventProducer.WriteMessages(ctx, events.Message{
+		Topic:    events.ReceiverWalletSMSInvitationTopic,
+		Key:      receiverWalletID,
+		TenantID: tnt.ID,
+		Type:     "retry-receiver-wallet-sms-invitation",
+		Data: []events.EventReceiverWalletSMSInvitationData{
+			{
+				ReceiverWalletID: receiverWalletID,
+			},
+		},
+	})
+	if err != nil {
+		err = fmt.Errorf("writing message on message broker: %w", err)
 		httperror.InternalError(ctx, "", err, nil).Render(rw)
 		return
 	}
