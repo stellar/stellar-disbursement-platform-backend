@@ -56,8 +56,8 @@ func Test_PatchAnchorPlatformTransactionCompletionService_PatchTransactionsCompl
 	getAPTransactionSyncedAt := func(t *testing.T, ctx context.Context, conn db.DBConnectionPool, receiverWalletID string) time.Time {
 		const q = "SELECT anchor_platform_transaction_synced_at FROM receiver_wallets WHERE id = $1"
 		var syncedAt pq.NullTime
-		err := conn.GetContext(ctx, &syncedAt, q, receiverWalletID)
-		require.NoError(t, err)
+		queryErr := conn.GetContext(ctx, &syncedAt, q, receiverWalletID)
+		require.NoError(t, queryErr)
 		return syncedAt.Time
 	}
 
@@ -91,8 +91,8 @@ func Test_PatchAnchorPlatformTransactionCompletionService_PatchTransactionsCompl
 
 		getEntries := log.DefaultLogger.StartTest(log.DebugLevel)
 
-		err := svc.PatchTransactionCompletion(ctx, PatchAnchorPlatformTransactionCompletionReq{PaymentID: payment.ID})
-		assert.ErrorIs(t, err, sql.ErrNoRows)
+		sErr := svc.PatchTransactionCompletion(ctx, PatchAnchorPlatformTransactionCompletionReq{PaymentID: payment.ID})
+		assert.ErrorIs(t, sErr, sql.ErrNoRows)
 
 		entries := getEntries()
 		require.Len(t, entries, 1)
@@ -150,8 +150,8 @@ func Test_PatchAnchorPlatformTransactionCompletionService_PatchTransactionsCompl
 			Return(anchorplatform.ErrInvalidToken).
 			Once()
 
-		err := svc.PatchTransactionCompletion(ctx, PatchAnchorPlatformTransactionCompletionReq{PaymentID: payment.ID})
-		assert.EqualError(t, err, fmt.Sprintf(`PatchAnchorPlatformTransactionService: error patching anchor transaction ID %q with status %q: invalid token`, receiverWallet.AnchorPlatformTransactionID, anchorplatform.APTransactionStatusCompleted))
+		sErr := svc.PatchTransactionCompletion(ctx, PatchAnchorPlatformTransactionCompletionReq{PaymentID: payment.ID})
+		assert.EqualError(t, sErr, fmt.Sprintf(`PatchAnchorPlatformTransactionService: error patching anchor transaction ID %q with status %q: invalid token`, receiverWallet.AnchorPlatformTransactionID, anchorplatform.APTransactionStatusCompleted))
 
 		syncedAt := getAPTransactionSyncedAt(t, ctx, dbConnectionPool, receiverWallet.ID)
 		assert.True(t, syncedAt.IsZero())
@@ -190,12 +190,12 @@ func Test_PatchAnchorPlatformTransactionCompletionService_PatchTransactionsCompl
 		})
 
 		errorMsg := "tx_failed op_no_source_account"
-		err := models.Payment.Update(ctx, dbConnectionPool, payment, &data.PaymentUpdate{
+		updateErr := models.Payment.Update(ctx, dbConnectionPool, payment, &data.PaymentUpdate{
 			Status:               data.FailedPaymentStatus,
 			StatusMessage:        errorMsg,
 			StellarTransactionID: "stellar-transaction-id",
 		})
-		require.NoError(t, err)
+		require.NoError(t, updateErr)
 
 		apAPISvcMock.
 			On("PatchAnchorTransactionsPostErrorCompletion", ctx, anchorplatform.APSep24TransactionPatchPostError{
@@ -263,8 +263,8 @@ func Test_PatchAnchorPlatformTransactionCompletionService_PatchTransactionsCompl
 			Return(nil).
 			Once()
 
-		err := svc.PatchTransactionCompletion(ctx, PatchAnchorPlatformTransactionCompletionReq{PaymentID: payment.ID})
-		require.NoError(t, err)
+		sErr := svc.PatchTransactionCompletion(ctx, PatchAnchorPlatformTransactionCompletionReq{PaymentID: payment.ID})
+		require.NoError(t, sErr)
 
 		syncedAt := getAPTransactionSyncedAt(t, ctx, dbConnectionPool, receiverWallet.ID)
 		assert.False(t, syncedAt.IsZero())
