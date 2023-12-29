@@ -5,7 +5,8 @@ import (
 )
 
 const (
-	ReceiverWalletSMSInvitationTopic = "receiver-wallet-sms-invitation"
+	ReceiverWalletSMSInvitationTopic              = "receiver-wallet-sms-invitation"
+	PatchAnchorPlatformTransactionCompletionTopic = "patch-anchor-platform-transaction-completion"
 )
 
 type EventHandler interface {
@@ -16,8 +17,4 @@ type EventHandler interface {
 
 type EventHandlerOptions struct {
 	MaxInvitationSMSResendAttempts int
-}
-
-type EventReceiverWalletSMSInvitationData struct {
-	ReceiverWalletID string `json:"id"`
 }

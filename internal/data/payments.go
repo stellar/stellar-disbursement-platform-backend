@@ -264,7 +264,7 @@ func (p *PaymentModel) GetAll(ctx context.Context, queryParams *QueryParams, sql
 	return payments, nil
 }
 
-func (p *PaymentModel) GetAllReadyToPatchCompletionAnchorTransactions(ctx context.Context, sqlExec db.SQLExecuter) ([]Payment, error) {
+func (p *PaymentModel) GetReadyToPatchCompletionAnchorTransactionByID(ctx context.Context, sqlExec db.SQLExecuter, paymentID string) (*Payment, error) {
 	const query = `
 		SELECT
 			p.id,
@@ -291,18 +291,20 @@ func (p *PaymentModel) GetAllReadyToPatchCompletionAnchorTransactions(ctx contex
 			p.status = ANY($1) -- ARRAY['SUCCESS', 'FAILURE']::payment_status[]
 			AND rw.status = $2 -- 'REGISTERED'::receiver_wallet_status
 			AND rw.anchor_platform_transaction_synced_at IS NULL
-		ORDER BY
-			p.created_at
+			AND p.id = $3
 		FOR UPDATE SKIP LOCKED
 	`
 
-	payments := make([]Payment, 0)
-	err := sqlExec.SelectContext(ctx, &payments, query, pq.Array([]PaymentStatus{SuccessPaymentStatus, FailedPaymentStatus}), RegisteredReceiversWalletStatus)
+	var payment Payment
+	err := sqlExec.GetContext(ctx, &payment, query, pq.Array([]PaymentStatus{SuccessPaymentStatus, FailedPaymentStatus}), RegisteredReceiversWalletStatus, paymentID)
 	if err != nil {
-		return nil, fmt.Errorf("getting payments: %w", err)
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, err
+		}
+		return nil, fmt.Errorf("getting payment ID %s: %w", paymentID, err)
 	}
 
-	return payments, nil
+	return &payment, nil
 }
 
 // DeleteAllForDisbursement deletes all payments for a given disbursement.
