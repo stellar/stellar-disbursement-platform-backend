@@ -6,8 +6,9 @@ import (
 
 // Topic Names
 const (
-	ReceiverWalletNewInvitationTopic = "events.receiver-wallets.new-invitation"
-	PaymentFromSubmitterTopic        = "events.transaction-submitter.payment-from-submitter"
+	ReceiverWalletNewInvitationTopic              = "events.receiver-wallets.new-invitation"
+	PaymentFromSubmitterTopic                     = "events.transaction-submitter.payment-from-submitter"
+	PatchAnchorPlatformTransactionCompletionTopic = "events.anchor-platform.transaction-completion"
 )
 
 // Type Names

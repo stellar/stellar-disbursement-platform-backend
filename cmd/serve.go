@@ -78,7 +78,6 @@ func (s *ServerService) GetSchedulerJobRegistrars(ctx context.Context, serveOpts
 	return []scheduler.SchedulerJobRegisterOption{
 		scheduler.WithPaymentToSubmitterJobOption(models),
 		scheduler.WithAPAuthEnforcementJob(apAPIService, serveOpts.MonitorService, serveOpts.CrashTrackerClient.Clone()),
-		scheduler.WithPatchAnchorPlatformTransactionsCompletionJobOption(apAPIService, models),
 		scheduler.WithReadyPaymentsCancellationJobOption(models),
 	}, nil
 }
@@ -139,8 +138,23 @@ func (s *ServerService) SetupConsumers(ctx context.Context, eventBrokerOptions c
 		return nil, fmt.Errorf("creating Payment From Submitter Kafka Consumer: %w", err)
 	}
 
+	patchAPTransactionCompletionConsumer, err := events.NewKafkaConsumer(
+		eventBrokerOptions.BrokerURLs,
+		events.PatchAnchorPlatformTransactionCompletionTopic,
+		eventBrokerOptions.ConsumerGroupID,
+		eventhandlers.NewPatchAnchorPlatformTransactionCompletionEventHandler(eventhandlers.PatchAnchorPlatformTransactionCompletionEventHandlerOptions{
+			DBConnectionPool:   dbConnectionPool,
+			APapiSvc:           serveOpts.AnchorPlatformAPIService,
+			CrashTrackerClient: serveOpts.CrashTrackerClient.Clone(),
+		}),
+	)
+	if err != nil {
+		log.Ctx(ctx).Fatalf("error creating Patch AP Transaction Completion Kafka Consumer: %v", err)
+	}
+
 	go events.Consume(ctx, smsInvitationConsumer, serveOpts.CrashTrackerClient.Clone())
 	go events.Consume(ctx, paymentFromSubmitterConsumer, serveOpts.CrashTrackerClient.Clone())
+	go events.Consume(ctx, patchAPTransactionCompletionConsumer, serveOpts.CrashTrackerClient.Clone())
 
 	return TearDownFunc(func() {
 		defer dbConnectionPool.Close()
