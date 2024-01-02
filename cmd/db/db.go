@@ -4,7 +4,6 @@ import (
 	"context"
 	"embed"
 	"fmt"
-	"go/types"
 	"strconv"
 
 	migrate "github.com/rubenv/sql-migrate"
@@ -24,76 +23,53 @@ import (
 
 const DBConfigOptionFlagName = "database-url"
 
-type databaseCommandConfigOptions struct {
-	All           bool
-	TenantID      string
-	globalOptions *utils.GlobalOptionsType
-}
-
 type DatabaseCommand struct{}
 
 func (c *DatabaseCommand) Command(globalOptions *utils.GlobalOptionsType) *cobra.Command {
-	opts := databaseCommandConfigOptions{globalOptions: globalOptions}
-	// TODO: tie these configs only where needed
-	configOptions := config.ConfigOptions{
-		{
-			Name:        "all",
-			Usage:       "Apply the migrations to all tenants. Either --tenant-id or --all must be set, but the --all option will be ignored if --tenant-id is set.",
-			OptType:     types.Bool,
-			FlagDefault: false,
-			ConfigKey:   &opts.All,
-			Required:    false,
-		},
-		{
-			Name:      "tenant-id",
-			Usage:     "The tenant ID where the migrations will be applied. Either --tenant-id or --all must be set, but the --all option will be ignored if --tenant-id is set.",
-			OptType:   types.String,
-			ConfigKey: &opts.TenantID,
-			Required:  false,
-		},
-	}
-
 	cmd := &cobra.Command{
-		Use:   "db",
-		Short: "Database related commands",
-		PersistentPreRun: func(cmd *cobra.Command, args []string) {
-			utils.PropagatePersistentPreRun(cmd, args)
-			configOptions.Require()
-			if err := configOptions.SetValues(); err != nil {
-				log.Ctx(cmd.Context()).Fatalf("Error setting values of config options: %s", err.Error())
-			}
-		},
-		RunE: utils.CallHelpCommand,
+		Use:              "db",
+		Short:            "Database related commands",
+		PersistentPreRun: utils.PropagatePersistentPreRun,
+		RunE:             utils.CallHelpCommand,
 	}
 
 	// ADD COMMANDs:
-	cmd.AddCommand(c.setupForNetworkCmd(cmd.Context(), &opts))         // 'setup-for-network'
-	cmd.AddCommand(c.sdpPerTenantMigrationsCmd(cmd.Context(), &opts))  // 'sdp migrate up|down'
-	cmd.AddCommand(c.authPerTenantMigrationsCmd(cmd.Context(), &opts)) // 'auth migrate up|down'
-	cmd.AddCommand(c.adminMigrationsCmd(cmd.Context()))                // 'admin migrate up|down'
+	// The following three use --all and --tenant-id flags.
+	cmd.AddCommand(c.setupForNetworkCmd(cmd.Context(), globalOptions))         // 'setup-for-network'
+	cmd.AddCommand(c.sdpPerTenantMigrationsCmd(cmd.Context(), globalOptions))  // 'sdp migrate up|down'
+	cmd.AddCommand(c.authPerTenantMigrationsCmd(cmd.Context(), globalOptions)) // 'auth migrate up|down'
 
-	if err := configOptions.Init(cmd); err != nil {
-		log.Ctx(cmd.Context()).Fatalf("initializing config options: %v", err)
-	}
+	// The following command does NOT use --all and --tenant-id flags.
+	cmd.AddCommand(c.adminMigrationsCmd(cmd.Context())) // 'admin migrate up|down'
 
 	return cmd
 }
 
 // setupForNetworkCmd returns a cobra.Command responsible for setting up the assets and wallets registered in the
 // database based on the network passphrase.
-func (c *DatabaseCommand) setupForNetworkCmd(ctx context.Context, opts *databaseCommandConfigOptions) *cobra.Command {
-	return &cobra.Command{
+func (c *DatabaseCommand) setupForNetworkCmd(ctx context.Context, globalOptions *utils.GlobalOptionsType) *cobra.Command {
+	opts := utils.TenantRoutingOptions{}
+	var configOptions config.ConfigOptions = utils.TenantRoutingConfigOptions(&opts)
+
+	cmd := &cobra.Command{
 		Use:   "setup-for-network",
 		Short: "Set up the assets and wallets registered in the database based on the network passphrase.",
 		Long:  "Set up the assets and wallets registered in the database based on the network passphrase. It inserts or updates the entries of these tables according with the configured Network Passphrase.",
+		PersistentPreRun: func(cmd *cobra.Command, args []string) {
+			utils.PropagatePersistentPreRun(cmd, args)
+			configOptions.Require()
+			if err := configOptions.SetValues(); err != nil {
+				log.Ctx(cmd.Context()).Fatalf("Error setting values of config options: %v", err)
+			}
+		},
 		Run: func(cmd *cobra.Command, args []string) {
 			ctx := cmd.Context()
 
-			if err := c.validateFlags(opts); err != nil {
+			if err := opts.ValidateFlags(); err != nil {
 				log.Ctx(ctx).Fatal(err.Error())
 			}
 
-			tenantsDSNMap, err := c.getTenantsDSN(ctx, opts.globalOptions.DatabaseURL)
+			tenantsDSNMap, err := c.getTenantsDSN(ctx, globalOptions.DatabaseURL)
 			if err != nil {
 				log.Ctx(ctx).Fatalf("getting tenants schemas: %s", err.Error())
 			}
@@ -114,7 +90,7 @@ func (c *DatabaseCommand) setupForNetworkCmd(ctx context.Context, opts *database
 				}
 				defer dbConnectionPool.Close()
 
-				networkType, err := sdpUtils.GetNetworkTypeFromNetworkPassphrase(opts.globalOptions.NetworkPassphrase)
+				networkType, err := sdpUtils.GetNetworkTypeFromNetworkPassphrase(globalOptions.NetworkPassphrase)
 				if err != nil {
 					log.Ctx(ctx).Fatalf("error getting network type: %s", err.Error())
 				}
@@ -129,46 +105,78 @@ func (c *DatabaseCommand) setupForNetworkCmd(ctx context.Context, opts *database
 			}
 		},
 	}
+
+	if err := configOptions.Init(cmd); err != nil {
+		log.Ctx(cmd.Context()).Fatalf("initializing config options: %v", err)
+	}
+
+	return cmd
 }
 
 // sdpPerTenantMigrationsCmd returns a cobra.Command responsible for running the migrations of the `sdp-migrations`
 // folder on the desired tenant(s).
-func (c *DatabaseCommand) sdpPerTenantMigrationsCmd(ctx context.Context, opts *databaseCommandConfigOptions) *cobra.Command {
+func (c *DatabaseCommand) sdpPerTenantMigrationsCmd(ctx context.Context, globalOptions *utils.GlobalOptionsType) *cobra.Command {
+	opts := utils.TenantRoutingOptions{}
+	var configOptions config.ConfigOptions = utils.TenantRoutingConfigOptions(&opts)
+
 	sdpCmd := &cobra.Command{
-		Use:              "sdp",
-		Short:            "Stellar Disbursement Platform's per-tenant schema migration helpers. Will execute the migrations of the `sdp-migrations` folder on the desired tenant, according with the --all or --tenant-id configs. The migrations are tracked in the table `sdp_migrations`.",
-		PersistentPreRun: utils.PropagatePersistentPreRun,
-		RunE:             utils.CallHelpCommand,
+		Use:   "sdp",
+		Short: "Stellar Disbursement Platform's per-tenant schema migration helpers. Will execute the migrations of the `sdp-migrations` folder on the desired tenant, according with the --all or --tenant-id configs. The migrations are tracked in the table `sdp_migrations`.",
+		PersistentPreRun: func(cmd *cobra.Command, args []string) {
+			utils.PropagatePersistentPreRun(cmd, args)
+			configOptions.Require()
+			if err := configOptions.SetValues(); err != nil {
+				log.Ctx(cmd.Context()).Fatalf("Error setting values of config options: %v", err)
+			}
+		},
+		RunE: utils.CallHelpCommand,
 	}
 
 	executeMigrationsFn := func(ctx context.Context, dir migrate.MigrationDirection, count int) error {
-		if err := c.executeMigrate(ctx, opts, dir, count, sdpmigrations.FS, db.StellarPerTenantSDPMigrationsTableName); err != nil {
+		if err := c.executeMigrate(ctx, globalOptions.DatabaseURL, opts, dir, count, sdpmigrations.FS, db.StellarPerTenantSDPMigrationsTableName); err != nil {
 			return fmt.Errorf("executing migrations for %s: %w", sdpCmd.Name(), err)
 		}
 		return nil
 	}
 	sdpCmd.AddCommand(c.migrateCmd(ctx, executeMigrationsFn))
 
+	if err := configOptions.Init(sdpCmd); err != nil {
+		log.Ctx(sdpCmd.Context()).Fatalf("initializing config options: %v", err)
+	}
+
 	return sdpCmd
 }
 
 // authPerTenantMigrationsCmd returns a cobra.Command responsible for running the migrations of the `auth-migrations`
 // folder on the desired tenant(s).
-func (c *DatabaseCommand) authPerTenantMigrationsCmd(ctx context.Context, opts *databaseCommandConfigOptions) *cobra.Command {
+func (c *DatabaseCommand) authPerTenantMigrationsCmd(ctx context.Context, globalOptions *utils.GlobalOptionsType) *cobra.Command {
+	opts := utils.TenantRoutingOptions{}
+	var configOptions config.ConfigOptions = utils.TenantRoutingConfigOptions(&opts)
+
 	authCmd := &cobra.Command{
-		Use:              "auth",
-		Short:            "Authentication's per-tenant schema migration helpers. Will execute the migrations of the `auth-migrations` folder on the desired tenant, according with the --all or --tenant-id configs. The migrations are tracked in the table `auth_migrations`.",
-		PersistentPreRun: utils.PropagatePersistentPreRun,
-		RunE:             utils.CallHelpCommand,
+		Use:   "auth",
+		Short: "Authentication's per-tenant schema migration helpers. Will execute the migrations of the `auth-migrations` folder on the desired tenant, according with the --all or --tenant-id configs. The migrations are tracked in the table `auth_migrations`.",
+		PersistentPreRun: func(cmd *cobra.Command, args []string) {
+			utils.PropagatePersistentPreRun(cmd, args)
+			configOptions.Require()
+			if err := configOptions.SetValues(); err != nil {
+				log.Ctx(cmd.Context()).Fatalf("Error setting values of config options: %v", err)
+			}
+		},
+		RunE: utils.CallHelpCommand,
 	}
 
 	executeMigrationsFn := func(ctx context.Context, dir migrate.MigrationDirection, count int) error {
-		if err := c.executeMigrate(ctx, opts, dir, count, authmigrations.FS, db.StellarPerTenantAuthMigrationsTableName); err != nil {
+		if err := c.executeMigrate(ctx, globalOptions.DatabaseURL, opts, dir, count, authmigrations.FS, db.StellarPerTenantAuthMigrationsTableName); err != nil {
 			return fmt.Errorf("executing migrations for %s: %w", authCmd.Name(), err)
 		}
 		return nil
 	}
 	authCmd.AddCommand(c.migrateCmd(ctx, executeMigrationsFn))
+
+	if err := configOptions.Init(authCmd); err != nil {
+		log.Ctx(authCmd.Context()).Fatalf("initializing config options: %v", err)
+	}
 
 	return authCmd
 }
@@ -238,12 +246,12 @@ func (c *DatabaseCommand) migrateCmd(ctx context.Context, executeMigrationsFn fu
 	return migrateCmd
 }
 
-func (c *DatabaseCommand) executeMigrate(ctx context.Context, opts *databaseCommandConfigOptions, dir migrate.MigrationDirection, count int, migrationFiles embed.FS, tableName db.MigrationTableName) error {
-	if err := c.validateFlags(opts); err != nil {
+func (c *DatabaseCommand) executeMigrate(ctx context.Context, databaseURL string, opts utils.TenantRoutingOptions, dir migrate.MigrationDirection, count int, migrationFiles embed.FS, tableName db.MigrationTableName) error {
+	if err := opts.ValidateFlags(); err != nil {
 		log.Ctx(ctx).Fatal(err.Error())
 	}
 
-	tenantsDSNMap, err := c.getTenantsDSN(ctx, opts.globalOptions.DatabaseURL)
+	tenantsDSNMap, err := c.getTenantsDSN(ctx, databaseURL)
 	if err != nil {
 		return fmt.Errorf("getting tenants schemas: %w", err)
 	}
@@ -287,16 +295,6 @@ func migrationDirectionStr(dir migrate.MigrationDirection) string {
 		return "up"
 	}
 	return "down"
-}
-
-func (c *DatabaseCommand) validateFlags(opts *databaseCommandConfigOptions) error {
-	if !opts.All && opts.TenantID == "" {
-		return fmt.Errorf(
-			"invalid config. Please specify --all to run the migrations for all tenants " +
-				"or specify --tenant-id to run the migrations to a specific tenant",
-		)
-	}
-	return nil
 }
 
 func (c *DatabaseCommand) getTenantsDSN(ctx context.Context, dbURL string) (map[string]string, error) {
