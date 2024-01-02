@@ -5,6 +5,7 @@ import (
 	"go/types"
 
 	"github.com/stellar/go/support/config"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 )
 
