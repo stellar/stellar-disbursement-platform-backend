@@ -98,7 +98,7 @@ func (a *AuthCommand) Command() *cobra.Command {
 					log.Ctx(ctx).Fatalf("error getting forgot password link: %s", err.Error())
 				}
 
-				dbConnectionPool, err := db.OpenDBConnectionPool(globalOptions.databaseURL)
+				dbConnectionPool, err := db.OpenDBConnectionPool(globalOptions.DatabaseURL)
 				if err != nil {
 					log.Ctx(ctx).Fatalf("error getting database connection: %s", err.Error())
 				}

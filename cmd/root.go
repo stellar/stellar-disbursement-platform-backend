@@ -3,40 +3,18 @@ package cmd
 import (
 	"go/types"
 
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/stellar/go/network"
 	"github.com/stellar/go/support/config"
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/stellar-disbursement-platform-backend/cmd/db"
 	cmdUtils "github.com/stellar/stellar-disbursement-platform-backend/cmd/utils"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 )
 
-type globalOptionsType struct {
-	logLevel          logrus.Level
-	sentryDSN         string
-	environment       string
-	version           string
-	gitCommit         string
-	databaseURL       string
-	baseURL           string
-	networkPassphrase string
-}
-
-// populateConfigOptions populates the CrastTrackerOptions from the global options.
-func (g globalOptionsType) populateCrashTrackerOptions(crashTrackerOptions *crashtracker.CrashTrackerOptions) {
-	if crashTrackerOptions.CrashTrackerType == crashtracker.CrashTrackerTypeSentry {
-		crashTrackerOptions.SentryDSN = g.sentryDSN
-	}
-	crashTrackerOptions.Environment = g.environment
-	crashTrackerOptions.GitCommit = g.gitCommit
-}
-
 // globalOptions is a variable that holds the global CLI options that can be
 // applied to any command or subcommand.
-var globalOptions globalOptionsType
+var globalOptions cmdUtils.GlobalOptionsType
 
 func rootCmd() *cobra.Command {
 	configOpts := config.ConfigOptions{
@@ -45,7 +23,7 @@ func rootCmd() *cobra.Command {
 			Usage:          `The log level used in this project. Options: "TRACE", "DEBUG", "INFO", "WARN", "ERROR", "FATAL", or "PANIC".`,
 			OptType:        types.String,
 			FlagDefault:    "TRACE",
-			ConfigKey:      &globalOptions.logLevel,
+			ConfigKey:      &globalOptions.LogLevel,
 			CustomSetValue: cmdUtils.SetConfigOptionLogLevel,
 			Required:       true,
 		},
@@ -53,7 +31,7 @@ func rootCmd() *cobra.Command {
 			Name:      "sentry-dsn",
 			Usage:     "The DSN (client key) of the Sentry project. If not provided, Sentry will not be used.",
 			OptType:   types.String,
-			ConfigKey: &globalOptions.sentryDSN,
+			ConfigKey: &globalOptions.SentryDSN,
 			Required:  false,
 		},
 		{
@@ -61,7 +39,7 @@ func rootCmd() *cobra.Command {
 			Usage:       `The environment where the application is running. Example: "development", "staging", "production".`,
 			OptType:     types.String,
 			FlagDefault: "development",
-			ConfigKey:   &globalOptions.environment,
+			ConfigKey:   &globalOptions.Environment,
 			Required:    true,
 		},
 		{
@@ -69,14 +47,14 @@ func rootCmd() *cobra.Command {
 			Usage:       `Postgres DB URL`,
 			OptType:     types.String,
 			FlagDefault: "postgres://localhost:5432/sdp?sslmode=disable",
-			ConfigKey:   &globalOptions.databaseURL,
+			ConfigKey:   &globalOptions.DatabaseURL,
 			Required:    true,
 		},
 		{
 			Name:        "base-url",
 			Usage:       "The SDP backend server's base URL.",
 			OptType:     types.String,
-			ConfigKey:   &globalOptions.baseURL,
+			ConfigKey:   &globalOptions.BaseURL,
 			FlagDefault: "http://localhost:8000",
 			Required:    true,
 		},
@@ -84,7 +62,7 @@ func rootCmd() *cobra.Command {
 			Name:        "network-passphrase",
 			Usage:       "The Stellar network passphrase",
 			OptType:     types.String,
-			ConfigKey:   &globalOptions.networkPassphrase,
+			ConfigKey:   &globalOptions.NetworkPassphrase,
 			FlagDefault: network.TestNetworkPassphrase,
 			Required:    true,
 		},
@@ -94,15 +72,15 @@ func rootCmd() *cobra.Command {
 		Use:     "stellar-disbursement-platform",
 		Short:   "Stellar Disbursement Platform",
 		Long:    "The Stellar Disbursement Platform (SDP) enables organizations to disburse bulk payments to recipients using Stellar.",
-		Version: globalOptions.version,
+		Version: globalOptions.Version,
 		PersistentPreRun: func(cmd *cobra.Command, _ []string) {
 			configOpts.Require()
 			err := configOpts.SetValues()
 			if err != nil {
 				log.Fatalf("Error setting values of config options: %s", err.Error())
 			}
-			log.Info("Version: ", globalOptions.version)
-			log.Info("GitCommit: ", globalOptions.gitCommit)
+			log.Info("Version: ", globalOptions.Version)
+			log.Info("GitCommit: ", globalOptions.GitCommit)
 		},
 		Run: func(cmd *cobra.Command, args []string) {
 			err := cmd.Help()
@@ -123,13 +101,13 @@ func rootCmd() *cobra.Command {
 // SetupCLI sets up the CLI and returns the root command with the subcommands
 // attached.
 func SetupCLI(version, gitCommit string) *cobra.Command {
-	globalOptions.version = version
-	globalOptions.gitCommit = gitCommit
+	globalOptions.Version = version
+	globalOptions.GitCommit = gitCommit
 	rootCmd := rootCmd()
 
 	// Add subcommands
 	rootCmd.AddCommand((&ServeCommand{}).Command(&ServerService{}, &monitor.MonitorService{}))
-	rootCmd.AddCommand((&db.DatabaseCommand{}).Command(&globalOptions.databaseURL, &globalOptions.networkPassphrase))
+	rootCmd.AddCommand((&db.DatabaseCommand{}).Command(&globalOptions))
 	rootCmd.AddCommand((&MessageCommand{}).Command(&MessengerService{}))
 	rootCmd.AddCommand((&TxSubmitterCommand{}).Command(&TxSubmitterService{}))
 	rootCmd.AddCommand((&ChannelAccountsCommand{}).Command())

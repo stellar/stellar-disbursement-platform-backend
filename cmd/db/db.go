@@ -25,16 +25,15 @@ import (
 const DBConfigOptionFlagName = "database-url"
 
 type databaseCommandConfigOptions struct {
-	All               bool
-	TenantID          string
-	databaseURL       *string
-	networkPassphrase *string
+	All           bool
+	TenantID      string
+	globalOptions *utils.GlobalOptionsType
 }
 
 type DatabaseCommand struct{}
 
-func (c *DatabaseCommand) Command(databaseURL, networkPassphrase *string) *cobra.Command {
-	opts := databaseCommandConfigOptions{databaseURL: databaseURL, networkPassphrase: networkPassphrase}
+func (c *DatabaseCommand) Command(globalOptions *utils.GlobalOptionsType) *cobra.Command {
+	opts := databaseCommandConfigOptions{globalOptions: globalOptions}
 	// TODO: tie these configs only where needed
 	configOptions := config.ConfigOptions{
 		{
@@ -94,7 +93,7 @@ func (c *DatabaseCommand) setupForNetworkCmd(ctx context.Context, opts *database
 				log.Ctx(ctx).Fatal(err.Error())
 			}
 
-			tenantsDSNMap, err := c.getTenantsDSN(ctx, opts.databaseURL)
+			tenantsDSNMap, err := c.getTenantsDSN(ctx, opts.globalOptions.DatabaseURL)
 			if err != nil {
 				log.Ctx(ctx).Fatalf("getting tenants schemas: %s", err.Error())
 			}
@@ -115,10 +114,7 @@ func (c *DatabaseCommand) setupForNetworkCmd(ctx context.Context, opts *database
 				}
 				defer dbConnectionPool.Close()
 
-				if opts.networkPassphrase == nil {
-					log.Ctx(ctx).Fatalf("network-passphrase flag is required")
-				}
-				networkType, err := sdpUtils.GetNetworkTypeFromNetworkPassphrase(*opts.networkPassphrase)
+				networkType, err := sdpUtils.GetNetworkTypeFromNetworkPassphrase(opts.globalOptions.NetworkPassphrase)
 				if err != nil {
 					log.Ctx(ctx).Fatalf("error getting network type: %s", err.Error())
 				}
@@ -247,7 +243,7 @@ func (c *DatabaseCommand) executeMigrate(ctx context.Context, opts *databaseComm
 		log.Ctx(ctx).Fatal(err.Error())
 	}
 
-	tenantsDSNMap, err := c.getTenantsDSN(ctx, opts.databaseURL)
+	tenantsDSNMap, err := c.getTenantsDSN(ctx, opts.globalOptions.DatabaseURL)
 	if err != nil {
 		return fmt.Errorf("getting tenants schemas: %w", err)
 	}
@@ -303,12 +299,8 @@ func (c *DatabaseCommand) validateFlags(opts *databaseCommandConfigOptions) erro
 	return nil
 }
 
-func (c *DatabaseCommand) getTenantsDSN(ctx context.Context, dbURL *string) (map[string]string, error) {
-	if dbURL == nil {
-		return nil, fmt.Errorf("database URL dannot be nil in getTenantsDSN")
-	}
-
-	dbConnectionPool, err := db.OpenDBConnectionPool(*dbURL)
+func (c *DatabaseCommand) getTenantsDSN(ctx context.Context, dbURL string) (map[string]string, error) {
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbURL)
 	if err != nil {
 		return nil, fmt.Errorf("opening database connection pool: %w", err)
 	}

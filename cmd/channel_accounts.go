@@ -62,15 +62,15 @@ func (c *ChannelAccountsCommand) Command() *cobra.Command {
 			}
 
 			// Inject server dependencies
-			svcOpts.DatabaseDSN = globalOptions.databaseURL
-			svcOpts.NetworkPassphrase = globalOptions.networkPassphrase
+			svcOpts.DatabaseDSN = globalOptions.DatabaseURL
+			svcOpts.NetworkPassphrase = globalOptions.NetworkPassphrase
 			c.Service, err = txSubSvc.NewChannelAccountService(ctx, *svcOpts)
 			if err != nil {
 				log.Ctx(ctx).Fatalf("Error creating channel account service: %s", err.Error())
 			}
 
 			// Inject crash tracker options dependencies
-			globalOptions.populateCrashTrackerOptions(&crashTrackerOptions)
+			globalOptions.PopulateCrashTrackerOptions(&crashTrackerOptions)
 
 			// Setup default Crash Tracker client
 			crashTrackerClient, err := di.NewCrashTracker(ctx, crashTrackerOptions)
