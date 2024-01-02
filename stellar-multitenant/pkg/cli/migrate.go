@@ -5,7 +5,7 @@ import (
 	"strconv"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
-	migrations "github.com/stellar/stellar-disbursement-platform-backend/db/migrations/tenant-migrations"
+	adminMigrations "github.com/stellar/stellar-disbursement-platform-backend/db/migrations/admin-migrations"
 
 	migrate "github.com/rubenv/sql-migrate"
 	"github.com/spf13/cobra"
@@ -16,7 +16,7 @@ import (
 func MigrateCmd(databaseFlagName string) *cobra.Command {
 	migrateCmd := &cobra.Command{
 		Use:   "migrate",
-		Short: "Apply Stellar Multitenant database migrations",
+		Short: "Apply admin migrations to configure the multi-tenant module that manages the tenants.",
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
 			if cmd.Parent().PersistentPreRun != nil {
 				cmd.Parent().PersistentPreRun(cmd.Parent(), args)
@@ -31,7 +31,7 @@ func MigrateCmd(databaseFlagName string) *cobra.Command {
 
 	migrateUp := &cobra.Command{
 		Use:   "up [count]",
-		Short: "Migrates database up [count]",
+		Short: "Migrates database up [count] migrations",
 		Args:  cobra.MaximumNArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			var count int
@@ -83,7 +83,7 @@ func MigrateCmd(databaseFlagName string) *cobra.Command {
 }
 
 func runMigration(databaseURL string, dir migrate.MigrationDirection, count int) error {
-	numMigrationsRun, err := db.Migrate(databaseURL, dir, count, migrations.FS, db.StellarMultiTenantMigrationsTableName)
+	numMigrationsRun, err := db.Migrate(databaseURL, dir, count, adminMigrations.FS, db.StellarAdminMigrationsTableName)
 	if err != nil {
 		return fmt.Errorf("running migrations: %w", err)
 	}
@@ -91,8 +91,15 @@ func runMigration(databaseURL string, dir migrate.MigrationDirection, count int)
 	if numMigrationsRun == 0 {
 		log.Info("No migrations applied.")
 	} else {
-		log.Infof("Successfully applied %d migrations.", numMigrationsRun)
+		log.Infof("Successfully applied %d migrations %s.", numMigrationsRun, migrationDirectionStr(dir))
 	}
 
 	return nil
+}
+
+func migrationDirectionStr(dir migrate.MigrationDirection) string {
+	if dir == migrate.Up {
+		return "up"
+	}
+	return "down"
 }

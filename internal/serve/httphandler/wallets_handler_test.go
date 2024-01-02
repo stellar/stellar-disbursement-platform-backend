@@ -106,7 +106,7 @@ func Test_WalletsHandlerGetWallets(t *testing.T) {
 		respBody, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
-		require.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		require.JSONEq(t, string(expectedJSON), string(respBody))
 	})
 

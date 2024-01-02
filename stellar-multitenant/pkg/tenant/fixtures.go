@@ -167,8 +167,8 @@ func ApplyMigrationsForTenantFixture(t *testing.T, ctx context.Context, dbConnec
 	dsn, err := m.GetDSNForTenant(ctx, tenantName)
 	require.NoError(t, err)
 
-	_, err = db.Migrate(dsn, migrate.Up, 0, sdpmigrations.FS, db.StellarSDPMigrationsTableName)
+	_, err = db.Migrate(dsn, migrate.Up, 0, sdpmigrations.FS, db.StellarPerTenantSDPMigrationsTableName)
 	require.NoError(t, err)
-	_, err = db.Migrate(dsn, migrate.Up, 0, authmigrations.FS, db.StellarAuthMigrationsTableName)
+	_, err = db.Migrate(dsn, migrate.Up, 0, authmigrations.FS, db.StellarPerTenantAuthMigrationsTableName)
 	require.NoError(t, err)
 }
