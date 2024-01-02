@@ -597,11 +597,6 @@ func Test_SetConfigOptionURLList(t *testing.T) {
 
 	testCases := []customSetterTestCase[[]string]{
 		{
-			name:            "returns an error if the list is empty",
-			args:            []string{"--brokers", ""},
-			wantErrContains: "cannot be empty",
-		},
-		{
 			name:       "🎉 handles string list successfully (from CLI args)",
 			args:       []string{"--brokers", "kafka:9092,localhost:9093,kafka://broker:9092"},
 			wantResult: []string{"kafka:9092", "localhost:9093", "kafka://broker:9092"},
@@ -611,6 +606,16 @@ func Test_SetConfigOptionURLList(t *testing.T) {
 			envValue:   "kafka:9092,localhost:9093",
 			wantResult: []string{"kafka:9092", "localhost:9093"},
 		},
+		{
+			name:       "🎉 handles when event broker type is empty but it's not required",
+			args:       []string{"--brokers", ""},
+			wantResult: []string{},
+		},
+		{
+			name:       "🎉 handles when event broker type are spaces but it's not required",
+			args:       []string{"--brokers", "    "},
+			wantResult: []string{},
+		},
 	}
 
 	for _, tc := range testCases {
@@ -619,6 +624,17 @@ func Test_SetConfigOptionURLList(t *testing.T) {
 			customSetterTester[[]string](t, tc, co)
 		})
 	}
+
+	tc := customSetterTestCase[[]string]{
+		name:            "returns an error if the list is empty and it's required",
+		args:            []string{"--brokers", "   "}, // Workaround to test empty values
+		wantErrContains: "cannot be empty",
+	}
+	t.Run(tc.name, func(t *testing.T) {
+		opts.brokers = []string{}
+		co.Required = true
+		customSetterTester[[]string](t, tc, co)
+	})
 }
 
 func Test_SetConfigOptionStringList(t *testing.T) {
