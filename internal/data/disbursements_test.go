@@ -437,9 +437,9 @@ func Test_DisbursementModel_Update(t *testing.T) {
 	})
 
 	disbursementFileContent := CreateInstructionsFixture(t, []*DisbursementInstruction{
-		{"1234567890", "1", "123.12", "1995-02-20"},
-		{"0987654321", "2", "321", "1974-07-19"},
-		{"0987654321", "3", "321", "1974-07-19"},
+		{"1234567890", "1", "123.12", "1995-02-20", nil},
+		{"0987654321", "2", "321", "1974-07-19", nil},
+		{"0987654321", "3", "321", "1974-07-19", nil},
 	})
 
 	t.Run("update instructions", func(t *testing.T) {
