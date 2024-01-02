@@ -8,6 +8,7 @@ import (
 	"github.com/stellar/go/network"
 	"github.com/stellar/go/support/config"
 	"github.com/stellar/go/support/log"
+	"github.com/stellar/stellar-disbursement-platform-backend/cmd/db"
 	cmdUtils "github.com/stellar/stellar-disbursement-platform-backend/cmd/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
@@ -37,8 +38,6 @@ func (g globalOptionsType) populateCrashTrackerOptions(crashTrackerOptions *cras
 // applied to any command or subcommand.
 var globalOptions globalOptionsType
 
-const dbConfigOptionFlagName = "database-url"
-
 func rootCmd() *cobra.Command {
 	configOpts := config.ConfigOptions{
 		{
@@ -66,7 +65,7 @@ func rootCmd() *cobra.Command {
 			Required:    true,
 		},
 		{
-			Name:        dbConfigOptionFlagName,
+			Name:        db.DBConfigOptionFlagName,
 			Usage:       `Postgres DB URL`,
 			OptType:     types.String,
 			FlagDefault: "postgres://localhost:5432/sdp?sslmode=disable",
@@ -130,7 +129,7 @@ func SetupCLI(version, gitCommit string) *cobra.Command {
 
 	// Add subcommands
 	rootCmd.AddCommand((&ServeCommand{}).Command(&ServerService{}, &monitor.MonitorService{}))
-	rootCmd.AddCommand((&DatabaseCommand{}).Command())
+	rootCmd.AddCommand((&db.DatabaseCommand{}).Command(&globalOptions.databaseURL, &globalOptions.networkPassphrase))
 	rootCmd.AddCommand((&MessageCommand{}).Command(&MessengerService{}))
 	rootCmd.AddCommand((&TxSubmitterCommand{}).Command(&TxSubmitterService{}))
 	rootCmd.AddCommand((&ChannelAccountsCommand{}).Command())
