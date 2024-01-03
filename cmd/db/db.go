@@ -11,11 +11,11 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/cmd/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	adminmigrations "github.com/stellar/stellar-disbursement-platform-backend/db/migrations/admin-migrations"
 	authmigrations "github.com/stellar/stellar-disbursement-platform-backend/db/migrations/auth-migrations"
 	sdpmigrations "github.com/stellar/stellar-disbursement-platform-backend/db/migrations/sdp-migrations"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	sdpUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
-	tenantcli "github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/cli"
 )
 
 const DBConfigOptionFlagName = "database-url"
@@ -37,7 +37,7 @@ func (c *DatabaseCommand) Command(globalOptions *utils.GlobalOptionsType) *cobra
 	cmd.AddCommand(c.authPerTenantMigrationsCmd(cmd.Context(), globalOptions)) // 'auth migrate up|down'
 
 	// The following command does NOT use --all and --tenant-id flags.
-	cmd.AddCommand(c.adminMigrationsCmd(cmd.Context())) // 'admin migrate up|down'
+	cmd.AddCommand(c.adminMigrationsCmd(cmd.Context(), globalOptions)) // 'admin migrate up|down'
 
 	return cmd
 }
@@ -135,7 +135,7 @@ func (c *DatabaseCommand) sdpPerTenantMigrationsCmd(ctx context.Context, globalO
 		}
 		return nil
 	}
-	sdpCmd.AddCommand(c.migrateCmd(ctx, executeMigrationsFn))
+	sdpCmd.AddCommand(MigrateCmd(ctx, executeMigrationsFn))
 
 	if err := configOptions.Init(sdpCmd); err != nil {
 		log.Ctx(sdpCmd.Context()).Fatalf("initializing config options: %v", err)
@@ -169,7 +169,7 @@ func (c *DatabaseCommand) authPerTenantMigrationsCmd(ctx context.Context, global
 		}
 		return nil
 	}
-	authCmd.AddCommand(c.migrateCmd(ctx, executeMigrationsFn))
+	authCmd.AddCommand(MigrateCmd(ctx, executeMigrationsFn))
 
 	if err := configOptions.Init(authCmd); err != nil {
 		log.Ctx(authCmd.Context()).Fatalf("initializing config options: %v", err)
@@ -180,13 +180,21 @@ func (c *DatabaseCommand) authPerTenantMigrationsCmd(ctx context.Context, global
 
 // adminMigrationsCmd returns a cobra.Command responsible for running the migrations of the `admin-migrations`
 // folder, that are used to configure the multi-tenant module that manages the tenants.
-func (c *DatabaseCommand) adminMigrationsCmd(ctx context.Context) *cobra.Command {
+func (c *DatabaseCommand) adminMigrationsCmd(ctx context.Context, globalOptions *utils.GlobalOptionsType) *cobra.Command {
 	adminCmd := &cobra.Command{
 		Use:              "admin",
 		Short:            "Admin migrations used to configure the multi-tenant module that manages the tenants. Will execute the migrations of the `admin-migrations` and the migrations are tracked in the table `admin_migrations`.",
 		PersistentPreRun: utils.PropagatePersistentPreRun,
 		RunE:             utils.CallHelpCommand,
 	}
-	adminCmd.AddCommand(tenantcli.MigrateCmd(DBConfigOptionFlagName))
+
+	executeMigrationsFn := func(ctx context.Context, dir migrate.MigrationDirection, count int) error {
+		if err := ExecuteMigrations(ctx, globalOptions.DatabaseURL, dir, count, adminmigrations.FS, db.StellarAdminMigrationsTableName); err != nil {
+			return fmt.Errorf("executing migrations for %s: %w", adminCmd.Name(), err)
+		}
+		return nil
+	}
+	adminCmd.AddCommand(MigrateCmd(ctx, executeMigrationsFn))
+
 	return adminCmd
 }

@@ -35,28 +35,12 @@ func executeMigrationsPerTenant(ctx context.Context, databaseURL string, opts ut
 
 	for tenantID, dsn := range tenantIDToDNSMap {
 		log.Ctx(ctx).Infof("Applying migrations on tenant ID %s", tenantID)
-		err = executeMigrations(ctx, dsn, dir, count, migrationFiles, tableName)
+		err = ExecuteMigrations(ctx, dsn, dir, count, migrationFiles, tableName)
 		if err != nil {
 			log.Ctx(ctx).Fatalf("Error migrating database Up: %s", err.Error())
 		}
 	}
 
-	return nil
-}
-
-// executeMigrations executes the migrations on the database, according with the direction, count and folder containing
-// the migration files.
-func executeMigrations(ctx context.Context, dbURL string, dir migrate.MigrationDirection, count int, migrationFiles embed.FS, tableName db.MigrationTableName) error {
-	numMigrationsRun, err := db.Migrate(dbURL, dir, count, migrationFiles, tableName)
-	if err != nil {
-		return fmt.Errorf("migrating database: %w", err)
-	}
-
-	if numMigrationsRun == 0 {
-		log.Ctx(ctx).Info("No migrations applied.")
-	} else {
-		log.Ctx(ctx).Infof("Successfully applied %d migrations %s.", numMigrationsRun, migrationDirectionStr(dir))
-	}
 	return nil
 }
 
@@ -84,12 +68,4 @@ func getTenantIDToDSNMapping(ctx context.Context, dbURL string) (map[string]stri
 	}
 
 	return tenantsDSNMap, nil
-}
-
-// migrationDirectionStr returns a string representation of the migration direction (up or down).
-func migrationDirectionStr(dir migrate.MigrationDirection) string {
-	if dir == migrate.Up {
-		return "up"
-	}
-	return "down"
 }

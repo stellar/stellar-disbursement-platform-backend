@@ -2,16 +2,19 @@ package db
 
 import (
 	"context"
+	"embed"
+	"fmt"
 	"strconv"
 
 	migrate "github.com/rubenv/sql-migrate"
 	"github.com/spf13/cobra"
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/stellar-disbursement-platform-backend/cmd/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
 )
 
-// migrateCmd returns a cobra.Command responsible for running the database migrations.
-func (c *DatabaseCommand) migrateCmd(ctx context.Context, executeMigrationsFn func(ctx context.Context, dir migrate.MigrationDirection, count int) error) *cobra.Command {
+// MigrateCmd returns a cobra.Command responsible for running the database migrations.
+func MigrateCmd(ctx context.Context, executeMigrationsFn func(ctx context.Context, dir migrate.MigrationDirection, count int) error) *cobra.Command {
 	migrateCmd := &cobra.Command{
 		Use:              "migrate",
 		Short:            "Schema migration helpers",
@@ -60,4 +63,28 @@ func (c *DatabaseCommand) migrateCmd(ctx context.Context, executeMigrationsFn fu
 	migrateCmd.AddCommand(&migrateUpCmd)
 	migrateCmd.AddCommand(migrateDownCmd)
 	return migrateCmd
+}
+
+// ExecuteMigrations executes the migrations on the database, according with the direction, count and folder containing
+// the migration files.
+func ExecuteMigrations(ctx context.Context, dbURL string, dir migrate.MigrationDirection, count int, migrationFiles embed.FS, tableName db.MigrationTableName) error {
+	numMigrationsRun, err := db.Migrate(dbURL, dir, count, migrationFiles, tableName)
+	if err != nil {
+		return fmt.Errorf("migrating database: %w", err)
+	}
+
+	if numMigrationsRun == 0 {
+		log.Ctx(ctx).Info("No migrations applied.")
+	} else {
+		log.Ctx(ctx).Infof("Successfully applied %d migrations %s.", numMigrationsRun, migrationDirectionStr(dir))
+	}
+	return nil
+}
+
+// migrationDirectionStr returns a string representation of the migration direction (up or down).
+func migrationDirectionStr(dir migrate.MigrationDirection) string {
+	if dir == migrate.Up {
+		return "up"
+	}
+	return "down"
 }
