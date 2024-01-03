@@ -1,4 +1,4 @@
-package migrations
+package adminmigrations
 
 import "embed"
 

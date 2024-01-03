@@ -30,7 +30,7 @@ func (c *DatabaseCommand) Command(globalOptions *utils.GlobalOptionsType) *cobra
 		RunE:             utils.CallHelpCommand,
 	}
 
-	// ADD COMMANDs:
+	// ADD SUBCOMMANDs:
 	// The following commands use --all and --tenant-id flags.
 	cmd.AddCommand(c.setupForNetworkCmd(cmd.Context(), globalOptions))         // 'setup-for-network'
 	cmd.AddCommand(c.sdpPerTenantMigrationsCmd(cmd.Context(), globalOptions))  // 'sdp migrate up|down'
