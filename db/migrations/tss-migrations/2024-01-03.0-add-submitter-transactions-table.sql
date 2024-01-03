@@ -23,7 +23,7 @@ $$ LANGUAGE plpgsql;
 -- +migrate StatementEnd
 
 CREATE TABLE submitter_transactions (
-    id VARCHAR(36) PRIMARY KEY DEFAULT uuid_generate_v4()
+    id VARCHAR(36) PRIMARY KEY DEFAULT public.uuid_generate_v4(),
     external_id VARCHAR(64) NOT NULL,
 
     status transaction_status NOT NULL DEFAULT 'PENDING'::transaction_status,
@@ -59,6 +59,6 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_external_id ON submitter_transactio
 
 DROP TABLE submitter_transactions;
 
-DROP TYPE transaction_status;
-
 DROP FUNCTION create_submitter_transactions_status_history;
+
+DROP TYPE transaction_status;
