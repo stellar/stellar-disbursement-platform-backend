@@ -36,7 +36,7 @@ CREATE TABLE submitter_transactions (
     destination VARCHAR(56) NOT NULL,
 
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     locked_at TIMESTAMPTZ,
     started_at TIMESTAMPTZ,
     sent_at TIMESTAMPTZ,
@@ -54,8 +54,13 @@ CREATE TABLE submitter_transactions (
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_external_id ON submitter_transactions (external_id) WHERE status != 'ERROR';
 
+-- TRIGGER: updated_at
+CREATE TRIGGER refresh_submitter_transactions_updated_at BEFORE UPDATE ON submitter_transactions FOR EACH ROW EXECUTE PROCEDURE public.update_at_refresh();
+
 
 -- +migrate Down
+
+DROP TRIGGER refresh_submitter_transactions_updated_at ON submitter_transactions;
 
 DROP TABLE submitter_transactions;
 
