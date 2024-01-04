@@ -28,9 +28,38 @@ services:
     extends:
       file: docker-compose-frontend.yml
       service: sdp-frontend
+  kafka:
+    extends:
+      file: docker-compose-sdp-anchor.yml
+      service: kafka
+    volumes:
+      - kafka-data:/bitnami
+  conduktor-platform:
+    extends:
+      file: docker-compose-sdp-anchor.yml
+      service: conduktor-platform
+    volumes:
+      - conduktor-platform-data:/var/conduktor
+  db-conduktor:
+    extends:
+      file: docker-compose-sdp-anchor.yml
+      service: db-conduktor
+    volumes:
+      - db-conduktor-data:/var/lib/postgresql/data
+  conduktor-monitoring:
+    extends:
+      file: docker-compose-sdp-anchor.yml
+      service: conduktor-monitoring
+
 volumes:
   postgres-db:
     driver: local
   postgres-ap-db:
+    driver: local
+  kafka-data:
+    driver: local
+  db-conduktor-data:
+    driver: local
+  conduktor-platform-data:
     driver: local
 
