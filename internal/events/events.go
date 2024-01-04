@@ -87,6 +87,7 @@ func Consume(ctx context.Context, consumer Consumer, crashTracker crashtracker.C
 		default:
 			if err := consumer.ReadMessage(ctx); err != nil {
 				if errors.Is(err, io.EOF) {
+					// TODO: better handle this error.
 					log.Ctx(ctx).Warn("message broker returned EOF") // This is an end state
 					return
 				}
