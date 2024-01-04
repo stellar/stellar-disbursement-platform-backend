@@ -151,6 +151,7 @@ sdp:
       ENABLE_MFA: "false"
       SDP_UI_BASE_URL: #required
       INSTANCE_NAME: "SDP Testnet Preview"
+      EVENT_BROKER_TYPE: NONE
 
   ## @extra sdp.kubeSecrets Kubernetes secrets are used to manage sensitive information, such as API keys and private keys. It's crucial that these details are kept private.
   ## @param sdp.kubeSecrets.secretName The name of the Kubernetes secret object. Only use this if create is false.
