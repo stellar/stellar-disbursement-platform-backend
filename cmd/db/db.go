@@ -3,7 +3,6 @@ package db
 import (
 	"context"
 	"fmt"
-	"net/url"
 
 	migrate "github.com/rubenv/sql-migrate"
 	"github.com/spf13/cobra"
@@ -15,7 +14,6 @@ import (
 	adminmigrations "github.com/stellar/stellar-disbursement-platform-backend/db/migrations/admin-migrations"
 	authmigrations "github.com/stellar/stellar-disbursement-platform-backend/db/migrations/auth-migrations"
 	sdpmigrations "github.com/stellar/stellar-disbursement-platform-backend/db/migrations/sdp-migrations"
-	tssmigrations "github.com/stellar/stellar-disbursement-platform-backend/db/migrations/tss-migrations"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	sdpUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
@@ -206,65 +204,43 @@ func (c *DatabaseCommand) adminMigrationsCmd(ctx context.Context, globalOptions 
 // are used to configure the Transaction Submission Service (TSS) module that submits transactions to the Stellar
 // network.
 func (c *DatabaseCommand) tssMigrationsCmd(ctx context.Context, globalOptions *utils.GlobalOptionsType) *cobra.Command {
-	adminCmd := &cobra.Command{
+	tssCmd := &cobra.Command{
 		Use:              "tss",
 		Short:            "TSS migrations used to configure the Transaction Submission Service (TSS) module that submits transactions to the Stellar network. Will execute the migrations of the `tss-migrations` and the migrations are tracked in the table `tss_migrations`.",
 		PersistentPreRun: utils.PropagatePersistentPreRun,
 		RunE:             utils.CallHelpCommand,
 	}
 
-	// TODO: decouple this in separate function(s) and add tests for it.
 	executeMigrationsFn := func(ctx context.Context, dir migrate.MigrationDirection, count int) error {
-		dbConnectionPool, err := db.OpenDBConnectionPool(globalOptions.DatabaseURL)
+		tssMigrationsManager, err := NewTSSDatabaseMigrationManager(globalOptions.DatabaseURL)
 		if err != nil {
-			return fmt.Errorf("opening database connection pool: %w", err)
+			return fmt.Errorf("creating TSS database migration manager: %w", err)
 		}
 
-		_, err = dbConnectionPool.ExecContext(ctx, "CREATE SCHEMA IF NOT EXISTS tss")
+		err = tssMigrationsManager.createTSSSchemaIfNeeded(ctx)
 		if err != nil {
-			return fmt.Errorf("creating the 'tss' database schema: %w", err)
+			return fmt.Errorf("creating the 'tss' database schema if needed: %w", err)
 		}
 
-		// The TSS migrations are executed in the `tss` schema.
-		dbURL, err := url.Parse(globalOptions.DatabaseURL)
+		dbURL, err := tssMigrationsManager.getTSSDatabaseDSN()
 		if err != nil {
-			return fmt.Errorf("parsing database DSN: %w", err)
-		}
-		q := dbURL.Query()
-		q.Set("search_path", "tss")
-		dbURL.RawQuery = q.Encode()
-
-		if err = ExecuteMigrations(ctx, dbURL.String(), dir, count, tssmigrations.FS, db.StellarTSSMigrationsTableName); err != nil {
-			return fmt.Errorf("executing migrations for %s: %w", adminCmd.Name(), err)
+			return fmt.Errorf("getting the TSS database DSN: %w", err)
 		}
 
-		// Delete the `tss` schema if needed.
-		var numberOfRemainingTablesInTSSSchema int
-		const query = `
-			SELECT COUNT(*)
-			FROM information_schema.tables
-			WHERE table_schema = 'tss'
-			AND table_name NOT LIKE '%migrations%'
-		`
-		err = dbConnectionPool.GetContext(ctx, &numberOfRemainingTablesInTSSSchema, query)
-		if err != nil {
-			return fmt.Errorf("counting number of tables remaining in the 'tss' database schema: %w", err)
+		if err = runTSSMigrations(ctx, dbURL, dir, count); err != nil {
+			return fmt.Errorf("running TSS migrations: %w", err)
 		}
 
-		if numberOfRemainingTablesInTSSSchema == 0 {
-			log.Ctx(ctx).Info("dropping the 'tss' database schema ⏳...")
-			_, err = dbConnectionPool.ExecContext(ctx, "DROP SCHEMA IF EXISTS tss CASCADE")
+		if dir == migrate.Down {
+			err = tssMigrationsManager.deleteTSSSchemaIfNeeded(ctx)
 			if err != nil {
-				return fmt.Errorf("dropping the 'tss' database schema: %w", err)
+				return fmt.Errorf("deleting the 'tss' database schema if needed: %w", err)
 			}
-			log.Ctx(ctx).Info("dropped the 'tss' database schema ✅")
-		} else {
-			log.Ctx(ctx).Debugf("the 'tss' database schema was not dropped because there are %d tables remaining", numberOfRemainingTablesInTSSSchema)
 		}
 
 		return nil
 	}
-	adminCmd.AddCommand(MigrateCmd(ctx, executeMigrationsFn))
+	tssCmd.AddCommand(MigrateCmd(ctx, executeMigrationsFn))
 
-	return adminCmd
+	return tssCmd
 }
