@@ -10,7 +10,7 @@ CREATE TABLE channel_accounts (
 );
 
 -- TRIGGER: updated_at
-CREATE TRIGGER refresh_channel_accounts_updated_at BEFORE UPDATE ON channel_accounts FOR EACH ROW EXECUTE PROCEDURE public.update_at_refresh();
+CREATE TRIGGER refresh_channel_accounts_updated_at BEFORE UPDATE ON channel_accounts FOR EACH ROW EXECUTE PROCEDURE update_at_refresh();
 
 
 -- +migrate Down
