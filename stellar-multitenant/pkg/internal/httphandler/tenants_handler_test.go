@@ -76,7 +76,7 @@ func runSuccessfulRequestPatchTest(t *testing.T, r *chi.Mux, ctx context.Context
 }
 
 func Test_TenantHandler_Get(t *testing.T) {
-	dbt := dbtest.OpenWithTenantMigrationsOnly(t)
+	dbt := dbtest.OpenWithAdminMigrationsOnly(t)
 	defer dbt.Close()
 
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
@@ -247,7 +247,7 @@ func Test_TenantHandler_Get(t *testing.T) {
 }
 
 func Test_TenantHandler_Post(t *testing.T) {
-	dbt := dbtest.OpenWithTenantMigrationsOnly(t)
+	dbt := dbtest.OpenWithAdminMigrationsOnly(t)
 	defer dbt.Close()
 
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
@@ -403,7 +403,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 }
 
 func Test_TenantHandler_Patch(t *testing.T) {
-	dbt := dbtest.OpenWithTenantMigrationsOnly(t)
+	dbt := dbtest.OpenWithAdminMigrationsOnly(t)
 	defer dbt.Close()
 
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)

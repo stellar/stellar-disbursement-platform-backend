@@ -104,7 +104,7 @@ func Test_DatabaseCommand_db_help(t *testing.T) {
 }
 
 func Test_DatabaseCommand_db_sdp_migrate(t *testing.T) {
-	dbt := dbtest.OpenWithTenantMigrationsOnly(t)
+	dbt := dbtest.OpenWithAdminMigrationsOnly(t)
 	defer dbt.Close()
 
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)

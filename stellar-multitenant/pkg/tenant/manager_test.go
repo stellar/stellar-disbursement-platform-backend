@@ -125,7 +125,7 @@ func Test_Manager_UpdateTenantConfig(t *testing.T) {
 }
 
 func Test_Manager_GetAllTenants(t *testing.T) {
-	dbt := dbtest.OpenWithTenantMigrationsOnly(t)
+	dbt := dbtest.OpenWithAdminMigrationsOnly(t)
 	defer dbt.Close()
 
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
@@ -147,7 +147,7 @@ func Test_Manager_GetAllTenants(t *testing.T) {
 }
 
 func Test_Manager_GetTenantByID(t *testing.T) {
-	dbt := dbtest.OpenWithTenantMigrationsOnly(t)
+	dbt := dbtest.OpenWithAdminMigrationsOnly(t)
 	defer dbt.Close()
 
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
@@ -176,7 +176,7 @@ func Test_Manager_GetTenantByID(t *testing.T) {
 }
 
 func Test_Manager_GetTenantByName(t *testing.T) {
-	dbt := dbtest.OpenWithTenantMigrationsOnly(t)
+	dbt := dbtest.OpenWithAdminMigrationsOnly(t)
 	defer dbt.Close()
 
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
@@ -205,7 +205,7 @@ func Test_Manager_GetTenantByName(t *testing.T) {
 }
 
 func Test_Manager_GetTenantByIDOrName(t *testing.T) {
-	dbt := dbtest.OpenWithTenantMigrationsOnly(t)
+	dbt := dbtest.OpenWithAdminMigrationsOnly(t)
 	defer dbt.Close()
 
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)

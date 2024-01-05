@@ -11,7 +11,7 @@ import (
 )
 
 func TestMultiTenantDataSourceRouter_GetDataSource(t *testing.T) {
-	dbt := dbtest.OpenWithTenantMigrationsOnly(t)
+	dbt := dbtest.OpenWithAdminMigrationsOnly(t)
 	defer dbt.Close()
 
 	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)
@@ -47,7 +47,7 @@ func TestMultiTenantDataSourceRouter_GetDataSource(t *testing.T) {
 }
 
 func TestMultiTenantDataSourceRouter_GetAllDataSources(t *testing.T) {
-	dbt := dbtest.OpenWithTenantMigrationsOnly(t)
+	dbt := dbtest.OpenWithAdminMigrationsOnly(t)
 	defer dbt.Close()
 
 	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)
@@ -93,7 +93,7 @@ func TestMultiTenantDataSourceRouter_GetAllDataSources(t *testing.T) {
 }
 
 func TestMultiTenantDataSourceRouter_AnyDataSource(t *testing.T) {
-	dbt := dbtest.OpenWithTenantMigrationsOnly(t)
+	dbt := dbtest.OpenWithAdminMigrationsOnly(t)
 	defer dbt.Close()
 
 	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)

@@ -50,7 +50,7 @@ func Open(t *testing.T) *dbtest.DB {
 	return db
 }
 
-func OpenWithTenantMigrationsOnly(t *testing.T) *dbtest.DB {
+func OpenWithAdminMigrationsOnly(t *testing.T) *dbtest.DB {
 	db := OpenWithoutMigrations(t)
 
 	conn := db.Open()

@@ -20,7 +20,7 @@ import (
 )
 
 func Test_Manager_ProvisionNewTenant(t *testing.T) {
-	dbt := dbtest.OpenWithTenantMigrationsOnly(t)
+	dbt := dbtest.OpenWithAdminMigrationsOnly(t)
 	defer dbt.Close()
 
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
@@ -160,7 +160,7 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 }
 
 func Test_Manager_RunMigrationsForTenant(t *testing.T) {
-	dbt := dbtest.OpenWithTenantMigrationsOnly(t)
+	dbt := dbtest.OpenWithAdminMigrationsOnly(t)
 	defer dbt.Close()
 
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
