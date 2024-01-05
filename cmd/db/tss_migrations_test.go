@@ -111,22 +111,6 @@ func Test_TSSDatabaseMigrationManager_deleteTSSSchemaIfNeeded(t *testing.T) {
 	assert.False(t, exists)
 }
 
-func Test_TSSDatabaseMigrationManager_getTSSDatabaseDSN(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-	manager, err := NewTSSDatabaseMigrationManager(dbt.DSN)
-	require.NoError(t, err)
-	defer manager.RootDBConnectionPool.Close()
-
-	// Checks that the search_path is not set.
-	require.NotContains(t, manager.RootDatabaseDSN, "search_path=tss")
-
-	// Sets the search_path to tss.
-	updatedDSN, err := manager.getTSSDatabaseDSN()
-	require.NoError(t, err)
-	require.Contains(t, updatedDSN, "search_path=tss")
-}
-
 func Test_runTSSMigrations(t *testing.T) {
 	dbt := dbtest.OpenWithoutMigrations(t)
 	defer dbt.Close()

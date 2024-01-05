@@ -3,12 +3,13 @@ package db
 import (
 	"context"
 	"fmt"
-	"net/url"
 
 	migrate "github.com/rubenv/sql-migrate"
 	"github.com/stellar/go/support/log"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	tssmigrations "github.com/stellar/stellar-disbursement-platform-backend/db/migrations/tss-migrations"
+	"github.com/stellar/stellar-disbursement-platform-backend/db/router"
 )
 
 type TSSDatabaseMigrationManager struct {
@@ -17,7 +18,7 @@ type TSSDatabaseMigrationManager struct {
 }
 
 func (m *TSSDatabaseMigrationManager) SchemaName() string {
-	return "tss"
+	return router.TSSSchemaName
 }
 
 func NewTSSDatabaseMigrationManager(rootDatabaseDSN string) (*TSSDatabaseMigrationManager, error) {
@@ -40,19 +41,6 @@ func (m *TSSDatabaseMigrationManager) createTSSSchemaIfNeeded(ctx context.Contex
 	}
 
 	return nil
-}
-
-func (m *TSSDatabaseMigrationManager) getTSSDatabaseDSN() (string, error) {
-	dbURL, err := url.Parse(m.RootDatabaseDSN)
-	if err != nil {
-		return "", fmt.Errorf("parsing database DSN: %w", err)
-	}
-
-	q := dbURL.Query()
-	q.Set("search_path", m.SchemaName())
-	dbURL.RawQuery = q.Encode()
-
-	return dbURL.String(), nil
 }
 
 func (m *TSSDatabaseMigrationManager) deleteTSSSchemaIfNeeded(ctx context.Context) error {
