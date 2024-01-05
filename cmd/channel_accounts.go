@@ -11,6 +11,7 @@ import (
 	"github.com/stellar/go/txnbuild"
 
 	cmdUtils "github.com/stellar/stellar-disbursement-platform-backend/cmd/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/db/router"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	di "github.com/stellar/stellar-disbursement-platform-backend/internal/dependencyinjection"
 	txSubSvc "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/services"
@@ -62,7 +63,11 @@ func (c *ChannelAccountsCommand) Command() *cobra.Command {
 			}
 
 			// Inject server dependencies
-			svcOpts.DatabaseDSN = globalOptions.DatabaseURL
+			tssDatabaseDSN, err := router.GetDNSForTSS(globalOptions.DatabaseURL)
+			if err != nil {
+				log.Ctx(ctx).Fatalf("Error getting TSS database DSN: %v", err)
+			}
+			svcOpts.DatabaseDSN = tssDatabaseDSN
 			svcOpts.NetworkPassphrase = globalOptions.NetworkPassphrase
 			c.Service, err = txSubSvc.NewChannelAccountService(ctx, *svcOpts)
 			if err != nil {

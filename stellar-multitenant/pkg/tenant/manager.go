@@ -5,11 +5,12 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"net/url"
 	"strings"
 
 	"github.com/lib/pq"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/db/router"
 )
 
 var (
@@ -41,15 +42,8 @@ func (m *Manager) GetDSNForTenant(ctx context.Context, tenantName string) (strin
 	if err != nil {
 		return "", fmt.Errorf("getting database DSN: %w", err)
 	}
-	u, err := url.Parse(dataSourceName)
-	if err != nil {
-		return "", fmt.Errorf("parsing database DSN: %w", err)
-	}
-	q := u.Query()
-	schemaName := fmt.Sprintf("sdp_%s", tenantName)
-	q.Set("search_path", schemaName)
-	u.RawQuery = q.Encode()
-	return u.String(), nil
+
+	return router.GetDSNForTenant(dataSourceName, tenantName)
 }
 
 var selectQuery string = `
