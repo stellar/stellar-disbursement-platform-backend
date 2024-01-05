@@ -18,6 +18,10 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
+// OTPMessageDisclaimer contains disclaimer text that needs to be added as part of the OTP message to remind the
+// receiver how sensitive the data is.
+const OTPMessageDisclaimer = " If you did not request this code, please ignore. Do not share your code with anyone."
+
 type ReceiverSendOTPHandler struct {
 	Models             *data.Models
 	SMSMessengerClient message.MessengerClient
@@ -125,7 +129,7 @@ func (h ReceiverSendOTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request
 			OrganizationName: organization.Name,
 		}
 
-		otpMessageTemplate := organization.OTPMessageTemplate
+		otpMessageTemplate := organization.OTPMessageTemplate + OTPMessageDisclaimer
 		if !strings.Contains(organization.OTPMessageTemplate, "{{.OTP}}") {
 			// Adding the OTP code to the template
 			otpMessageTemplate = fmt.Sprintf(`{{.OTP}} %s`, strings.TrimSpace(otpMessageTemplate))
