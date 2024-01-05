@@ -48,7 +48,7 @@ func Test_Transaction_IsLocked(t *testing.T) {
 }
 
 func Test_TransactionModel_Insert(t *testing.T) {
-	dbt := dbtest.Open(t)
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
@@ -89,7 +89,7 @@ func Test_TransactionModel_Insert(t *testing.T) {
 }
 
 func Test_TransactionModel_BulkInsert(t *testing.T) {
-	dbt := dbtest.Open(t)
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
@@ -167,7 +167,7 @@ func Test_TransactionModel_BulkInsert(t *testing.T) {
 }
 
 func Test_TransactionModel_UpdateStatusToSuccess(t *testing.T) {
-	dbt := dbtest.Open(t)
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
@@ -259,7 +259,7 @@ func Test_TransactionModel_UpdateStatusToSuccess(t *testing.T) {
 }
 
 func Test_TransactionModel_UpdateStatusToError(t *testing.T) {
-	dbt := dbtest.Open(t)
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
@@ -354,7 +354,7 @@ func Test_TransactionModel_UpdateStatusToError(t *testing.T) {
 }
 
 func Test_TransactionModel_UpdateStellarTransactionHashAndXDRSent(t *testing.T) {
-	dbt := dbtest.Open(t)
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
@@ -471,7 +471,7 @@ func Test_TransactionModel_UpdateStellarTransactionHashAndXDRSent(t *testing.T) 
 }
 
 func Test_TransactionModel_UpdateStellarTransactionXDRReceived(t *testing.T) {
-	dbt := dbtest.Open(t)
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
@@ -546,7 +546,7 @@ func Test_TransactionModel_UpdateStellarTransactionXDRReceived(t *testing.T) {
 }
 
 func Test_Transaction_validate(t *testing.T) {
-	dbt := dbtest.Open(t)
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
@@ -650,7 +650,7 @@ func Test_Transaction_validate(t *testing.T) {
 }
 
 func Test_TransactionModel_GetTransactionBatchForUpdate(t *testing.T) {
-	dbt := dbtest.Open(t)
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
@@ -761,7 +761,7 @@ func Test_TransactionModel_GetTransactionBatchForUpdate(t *testing.T) {
 }
 
 func Test_TransactionModel_UpdateSyncedTransactions(t *testing.T) {
-	dbt := dbtest.Open(t)
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
@@ -893,7 +893,7 @@ func Test_TransactionModel_queryFilterForLockedState(t *testing.T) {
 }
 
 func Test_TransactionModel_Lock(t *testing.T) {
-	dbt := dbtest.Open(t)
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
@@ -985,7 +985,7 @@ func Test_TransactionModel_Lock(t *testing.T) {
 }
 
 func Test_TransactionModel_Unlock(t *testing.T) {
-	dbt := dbtest.Open(t)
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
@@ -1060,7 +1060,7 @@ func Test_TransactionModel_Unlock(t *testing.T) {
 }
 
 func Test_TransactionModel_PrepareTransactionForReprocessing(t *testing.T) {
-	dbt := dbtest.Open(t)
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)

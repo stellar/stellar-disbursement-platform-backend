@@ -98,7 +98,7 @@ func createTxJobFixture(t *testing.T, ctx context.Context, dbConnectionPool db.D
 }
 
 func Test_NewTransactionWorker(t *testing.T) {
-	dbt := dbtest.Open(t)
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
@@ -258,7 +258,7 @@ func Test_NewTransactionWorker(t *testing.T) {
 }
 
 func Test_TransactionWorker_handleSuccessfulTransaction(t *testing.T) {
-	dbt := dbtest.Open(t)
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
@@ -459,7 +459,7 @@ func Test_TransactionWorker_handleSuccessfulTransaction(t *testing.T) {
 }
 
 func Test_TransactionWorker_reconcileSubmittedTransaction(t *testing.T) {
-	dbt := dbtest.Open(t)
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
@@ -576,7 +576,7 @@ func Test_TransactionWorker_reconcileSubmittedTransaction(t *testing.T) {
 }
 
 func Test_TransactionWorker_validateJob(t *testing.T) {
-	dbt := dbtest.Open(t)
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
@@ -697,7 +697,7 @@ func Test_TransactionWorker_validateJob(t *testing.T) {
 }
 
 func Test_TransactionWorker_buildAndSignTransaction(t *testing.T) {
-	dbt := dbtest.Open(t)
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
@@ -853,7 +853,7 @@ func Test_TransactionWorker_buildAndSignTransaction(t *testing.T) {
 }
 
 func Test_TransactionWorker_submit(t *testing.T) {
-	dbt := dbtest.Open(t)
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)

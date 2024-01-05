@@ -30,7 +30,7 @@ import (
 )
 
 func Test_SubmitterOptions_validate(t *testing.T) {
-	dbt := dbtest.Open(t)
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 
 	testCases := []struct {
@@ -194,7 +194,7 @@ func Test_SubmitterOptions_validate(t *testing.T) {
 }
 
 func Test_NewManager(t *testing.T) {
-	dbt := dbtest.Open(t)
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
@@ -371,7 +371,7 @@ func Test_NewManager(t *testing.T) {
 }
 
 func Test_Manager_ProcessTransactions(t *testing.T) {
-	dbt := dbtest.Open(t)
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)

@@ -48,7 +48,7 @@ func Test_ChannelAccount_IsLocked(t *testing.T) {
 }
 
 func Test_ChannelAccountModel_BatchInsert_GetAll(t *testing.T) {
-	dbt := dbtest.Open(t)
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
@@ -184,7 +184,7 @@ func Test_ChannelAccountModel_BatchInsert_GetAll(t *testing.T) {
 }
 
 func Test_ChannelAccountModel_Insert_Get(t *testing.T) {
-	dbt := dbtest.Open(t)
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
@@ -316,7 +316,7 @@ func Test_ChannelAccountModel_Insert_Get(t *testing.T) {
 }
 
 func Test_ChannelAccountModel_Insert_Count(t *testing.T) {
-	dbt := dbtest.Open(t)
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
@@ -352,7 +352,7 @@ func Test_ChannelAccountModel_Insert_Count(t *testing.T) {
 }
 
 func Test_ChannelAccountModel_Insert_Delete(t *testing.T) {
-	dbt := dbtest.Open(t)
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
@@ -438,7 +438,7 @@ func Test_ChannelAccountModel_queryFilterForLockedState(t *testing.T) {
 }
 
 func Test_ChannelAccountModel_Lock(t *testing.T) {
-	dbt := dbtest.Open(t)
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
@@ -504,7 +504,7 @@ func Test_ChannelAccountModel_Lock(t *testing.T) {
 }
 
 func Test_ChannelAccountModel_Unlock(t *testing.T) {
-	dbt := dbtest.Open(t)
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
@@ -557,7 +557,7 @@ func Test_ChannelAccountModel_Unlock(t *testing.T) {
 }
 
 func Test_ChannelAccountModel_Lock_Unlock(t *testing.T) {
-	dbt := dbtest.Open(t)
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
@@ -602,7 +602,7 @@ func Test_ChannelAccountModel_Lock_Unlock(t *testing.T) {
 }
 
 func Test_ChannelAccountModel_DeleteIfLockedUntil(t *testing.T) {
-	dbt := dbtest.Open(t)
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
@@ -663,7 +663,7 @@ func Test_ChannelAccountModel_DeleteIfLockedUntil(t *testing.T) {
 }
 
 func Test_ChannelAccountModel_GetAndLockAll(t *testing.T) {
-	dbt := dbtest.Open(t)
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
@@ -702,7 +702,7 @@ func Test_ChannelAccountModel_GetAndLockAll(t *testing.T) {
 }
 
 func Test_ChannelAccountModel_GetAndLock(t *testing.T) {
-	dbt := dbtest.Open(t)
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
