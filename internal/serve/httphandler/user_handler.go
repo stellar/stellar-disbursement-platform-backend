@@ -149,10 +149,10 @@ func (h UserHandler) UserActivation(rw http.ResponseWriter, req *http.Request) {
 
 	var activationErr error
 	if *reqBody.IsActive {
-		log.Ctx(ctx).Infof("[ActivateUserAccount] - Activating user with account ID %s", reqBody.UserID)
+		log.Ctx(ctx).Infof("[ActivateUserAccount] - User ID %s activating user with account ID %s", userID, reqBody.UserID)
 		activationErr = h.AuthManager.ActivateUser(ctx, token, reqBody.UserID)
 	} else {
-		log.Ctx(ctx).Infof("[DeactivateUserAccount] - Deactivating user with account ID %s", reqBody.UserID)
+		log.Ctx(ctx).Infof("[DeactivateUserAccount] - User ID %s deactivating user with account ID %s", userID, reqBody.UserID)
 		activationErr = h.AuthManager.DeactivateUser(ctx, token, reqBody.UserID)
 	}
 
@@ -173,6 +173,13 @@ func (h UserHandler) UserActivation(rw http.ResponseWriter, req *http.Request) {
 func (h UserHandler) CreateUser(rw http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 
+	token, ok := ctx.Value(middleware.TokenContextKey).(string)
+	if !ok {
+		log.Ctx(ctx).Warn("token not found when updating user activation")
+		httperror.Unauthorized("", nil, nil).Render(rw)
+		return
+	}
+
 	var reqBody CreateUserRequest
 	if err := httpdecode.DecodeJSON(req, &reqBody); err != nil {
 		err = fmt.Errorf("decoding the request body: %w", err)
@@ -183,6 +190,14 @@ func (h UserHandler) CreateUser(rw http.ResponseWriter, req *http.Request) {
 
 	if err := reqBody.validate(); err != nil {
 		err.Render(rw)
+		return
+	}
+
+	authenticatedUserID, err := h.AuthManager.GetUserID(ctx, token)
+	if err != nil {
+		err = fmt.Errorf("getting request authenticated user ID: %w", err)
+		log.Ctx(ctx).Error(err)
+		httperror.Unauthorized("", err, nil).Render(rw)
 		return
 	}
 
@@ -241,7 +256,7 @@ func (h UserHandler) CreateUser(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	log.Ctx(ctx).Infof("[CreateUserAccount] - Created user with account ID %s", u.ID)
+	log.Ctx(ctx).Infof("[CreateUserAccount] - User ID %s created user with account ID %s", authenticatedUserID, u.ID)
 	httpjson.RenderStatus(rw, http.StatusCreated, u, httpjson.JSON)
 }
 
@@ -268,6 +283,14 @@ func (h UserHandler) UpdateUserRoles(rw http.ResponseWriter, req *http.Request) 
 		return
 	}
 
+	authenticatedUserID, err := h.AuthManager.GetUserID(ctx, token)
+	if err != nil {
+		err = fmt.Errorf("getting request authenticated user ID: %w", err)
+		log.Ctx(ctx).Error(err)
+		httperror.Unauthorized("", err, nil).Render(rw)
+		return
+	}
+
 	updateUserRolesErr := h.AuthManager.UpdateUserRoles(ctx, token, reqBody.UserID, data.FromUserRoleArrayToStringArray(reqBody.Roles))
 	if updateUserRolesErr != nil {
 		if errors.Is(updateUserRolesErr, auth.ErrInvalidToken) {
@@ -284,6 +307,7 @@ func (h UserHandler) UpdateUserRoles(rw http.ResponseWriter, req *http.Request) 
 		return
 	}
 
+	log.Ctx(ctx).Infof("[UpdateUserRoles] - User ID %s updated user with account ID %s roles to %v", authenticatedUserID, reqBody.UserID, reqBody.Roles)
 	httpjson.RenderStatus(rw, http.StatusOK, map[string]string{"message": "user roles were updated successfully"}, httpjson.JSON)
 }
 

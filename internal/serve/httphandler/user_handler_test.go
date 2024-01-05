@@ -292,7 +292,7 @@ func Test_UserHandler_UserActivation(t *testing.T) {
 			Return(true, nil).
 			Times(4).
 			On("GetUserFromToken", mock.Anything, token).
-			Return(&auth.User{}, nil).
+			Return(&auth.User{ID: "authenticated-user-id"}, nil).
 			Twice()
 		defer mocks.JWTManagerMock.AssertExpectations(t)
 
@@ -332,7 +332,7 @@ func Test_UserHandler_UserActivation(t *testing.T) {
 		assert.JSONEq(t, `{"message": "user activation was updated successfully"}`, string(respBody))
 
 		// validate logs
-		require.Contains(t, getTestEntries()[0].Message, "[ActivateUserAccount] - Activating user with account ID user-id")
+		require.Contains(t, getTestEntries()[0].Message, "[ActivateUserAccount] - User ID authenticated-user-id activating user with account ID user-id")
 	})
 }
 
@@ -394,13 +394,12 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 
 	r := chi.NewRouter()
 
-	authenticatorMock := &auth.AuthenticatorMock{}
-	authManager := auth.NewAuthManager(auth.WithCustomAuthenticatorOption(authenticatorMock))
+	authManagerMock := &auth.AuthManagerMock{}
 
 	messengerClientMock := &message.MessengerClientMock{}
 	uiBaseURL := "https://sdp.com"
 	handler := &UserHandler{
-		AuthManager:     authManager,
+		AuthManager:     authManagerMock,
 		MessengerClient: messengerClientMock,
 		UIBaseURL:       uiBaseURL,
 		Models:          models,
@@ -410,8 +409,25 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 
 	r.Post(url, handler.CreateUser)
 
-	t.Run("returns error when request body is invalid", func(t *testing.T) {
+	t.Run("returns Unauthorized when token is invalid", func(t *testing.T) {
 		req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(`{}`))
+		require.NoError(t, err)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		resp := w.Result()
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+		assert.JSONEq(t, `{"error":"Not authorized."}`, string(respBody))
+	})
+
+	t.Run("returns error when request body is invalid", func(t *testing.T) {
+		token := "mytoken"
+		ctx := context.WithValue(context.Background(), middleware.TokenContextKey, token)
+
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(`{}`))
 		require.NoError(t, err)
 
 		w := httptest.NewRecorder()
@@ -446,7 +462,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 				"roles": ["role1", "role2"]
 			}
 		`
-		req, err = http.NewRequest(http.MethodPost, url, strings.NewReader(body))
+		req, err = http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(body))
 		require.NoError(t, err)
 
 		w = httptest.NewRecorder()
@@ -478,7 +494,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 				"roles": ["role1"]
 			}
 		`
-		req, err = http.NewRequest(http.MethodPost, url, strings.NewReader(body))
+		req, err = http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(body))
 		require.NoError(t, err)
 
 		w = httptest.NewRecorder()
@@ -505,7 +521,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 		buf := new(strings.Builder)
 		log.DefaultLogger.SetOutput(buf)
 
-		req, err = http.NewRequest(http.MethodPost, url, strings.NewReader(`"invalid"`))
+		req, err = http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(`"invalid"`))
 		require.NoError(t, err)
 
 		w = httptest.NewRecorder()
@@ -528,16 +544,12 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 	})
 
 	t.Run("returns error when Auth Manager fails", func(t *testing.T) {
-		u := &auth.User{
-			FirstName: "First",
-			LastName:  "Last",
-			Email:     "email@email.com",
-			Roles:     []string{data.DeveloperUserRole.String()},
-		}
+		token := "mytoken"
+		ctx := context.WithValue(context.Background(), middleware.TokenContextKey, token)
 
-		authenticatorMock.
-			On("CreateUser", mock.Anything, u, "").
-			Return(nil, errors.New("unexpected error")).
+		authManagerMock.
+			On("GetUserID", mock.Anything, token).
+			Return("", errors.New("unexpected error")).
 			Once()
 
 		body := `
@@ -548,7 +560,8 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 				"roles": ["developer"]
 			}
 		`
-		req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(body))
+
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(body))
 		require.NoError(t, err)
 
 		w := httptest.NewRecorder()
@@ -562,6 +575,42 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 
 		wantsBody := `
 			{
+				"error": "Not authorized."
+			}
+		`
+
+		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+		assert.JSONEq(t, wantsBody, string(respBody))
+
+		u := &auth.User{
+			FirstName: "First",
+			LastName:  "Last",
+			Email:     "email@email.com",
+			Roles:     []string{data.DeveloperUserRole.String()},
+		}
+
+		authManagerMock.
+			On("GetUserID", mock.Anything, token).
+			Return("authenticated-user-id", nil).
+			Once().
+			On("CreateUser", mock.Anything, u, "").
+			Return(nil, errors.New("unexpected error")).
+			Once()
+
+		req, err = http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(body))
+		require.NoError(t, err)
+
+		w = httptest.NewRecorder()
+
+		r.ServeHTTP(w, req)
+
+		resp = w.Result()
+
+		respBody, err = io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		wantsBody = `
+			{
 				"error": "Cannot create user"
 			}
 		`
@@ -571,6 +620,9 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 	})
 
 	t.Run("returns Bad Request when user is duplicated", func(t *testing.T) {
+		token := "mytoken"
+		ctx := context.WithValue(context.Background(), middleware.TokenContextKey, token)
+
 		u := &auth.User{
 			FirstName: "First",
 			LastName:  "Last",
@@ -578,7 +630,10 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 			Roles:     []string{data.DeveloperUserRole.String()},
 		}
 
-		authenticatorMock.
+		authManagerMock.
+			On("GetUserID", mock.Anything, token).
+			Return("authenticated-user-id", nil).
+			Once().
 			On("CreateUser", mock.Anything, u, "").
 			Return(nil, auth.ErrUserEmailAlreadyExists).
 			Once()
@@ -591,7 +646,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 				"roles": ["developer"]
 			}
 		`
-		req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(body))
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(body))
 		require.NoError(t, err)
 
 		w := httptest.NewRecorder()
@@ -608,6 +663,9 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 	})
 
 	t.Run("returns error when sending email fails", func(t *testing.T) {
+		token := "mytoken"
+		ctx := context.WithValue(context.Background(), middleware.TokenContextKey, token)
+
 		u := &auth.User{
 			FirstName: "First",
 			LastName:  "Last",
@@ -623,7 +681,10 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 			Roles:     u.Roles,
 		}
 
-		authenticatorMock.
+		authManagerMock.
+			On("GetUserID", mock.Anything, token).
+			Return("authenticated-user-id", nil).
+			Once().
 			On("CreateUser", mock.Anything, u, "").
 			Return(expectedUser, nil).
 			Once()
@@ -657,7 +718,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 				"roles": ["developer"]
 			}
 		`
-		req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(body))
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(body))
 		require.NoError(t, err)
 
 		w := httptest.NewRecorder()
@@ -680,6 +741,9 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 	})
 
 	t.Run("returns error when joining the forgot password link", func(t *testing.T) {
+		token := "mytoken"
+		ctx := context.WithValue(context.Background(), middleware.TokenContextKey, token)
+
 		u := &auth.User{
 			FirstName: "First",
 			LastName:  "Last",
@@ -695,7 +759,10 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 			Roles:     u.Roles,
 		}
 
-		authenticatorMock.
+		authManagerMock.
+			On("GetUserID", mock.Anything, token).
+			Return("authenticated-user-id", nil).
+			Once().
 			On("CreateUser", mock.Anything, u, "").
 			Return(expectedUser, nil).
 			Once()
@@ -708,13 +775,13 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 				"roles": ["developer"]
 			}
 		`
-		req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(body))
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(body))
 		require.NoError(t, err)
 
 		w := httptest.NewRecorder()
 
 		http.HandlerFunc(UserHandler{
-			AuthManager:     authManager,
+			AuthManager:     authManagerMock,
 			MessengerClient: messengerClientMock,
 			UIBaseURL:       "%invalid%",
 			Models:          models,
@@ -736,6 +803,9 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 	})
 
 	t.Run("creates user successfully", func(t *testing.T) {
+		token := "mytoken"
+		ctx := context.WithValue(context.Background(), middleware.TokenContextKey, token)
+
 		buf := new(strings.Builder)
 		log.DefaultLogger.SetOutput(buf)
 		log.SetLevel(log.InfoLevel)
@@ -756,7 +826,10 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 			IsActive:  true,
 		}
 
-		authenticatorMock.
+		authManagerMock.
+			On("GetUserID", mock.Anything, token).
+			Return("authenticated-user-id", nil).
+			Once().
 			On("CreateUser", mock.Anything, u, "").
 			Return(expectedUser, nil).
 			Once()
@@ -790,7 +863,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 				"roles": ["developer"]
 			}
 		`
-		req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(body))
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(body))
 		require.NoError(t, err)
 
 		w := httptest.NewRecorder()
@@ -817,10 +890,10 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 		assert.JSONEq(t, wantsBody, string(respBody))
 
 		// validate logs
-		require.Contains(t, buf.String(), "[CreateUserAccount] - Created user with account ID user-id")
+		require.Contains(t, buf.String(), "[CreateUserAccount] - User ID authenticated-user-id created user with account ID user-id")
 	})
 
-	authenticatorMock.AssertExpectations(t)
+	authManagerMock.AssertExpectations(t)
 	messengerClientMock.AssertExpectations(t)
 }
 
@@ -1043,6 +1116,9 @@ func Test_UserHandler_UpdateUserRoles(t *testing.T) {
 		jwtManagerMock.
 			On("ValidateToken", mock.Anything, token).
 			Return(true, nil).
+			Twice().
+			On("GetUserFromToken", mock.Anything, token).
+			Return(&auth.User{ID: "authenticated-user-id"}, nil).
 			Once()
 
 		roleManagerMock.
@@ -1078,6 +1154,12 @@ func Test_UserHandler_UpdateUserRoles(t *testing.T) {
 		token := "mytoken"
 
 		jwtManagerMock.
+			On("ValidateToken", mock.Anything, token).
+			Return(true, nil).
+			Once().
+			On("GetUserFromToken", mock.Anything, token).
+			Return(&auth.User{ID: "authenticated-user-id"}, nil).
+			Once().
 			On("ValidateToken", mock.Anything, token).
 			Return(false, errors.New("unexpected error")).
 			Once()
@@ -1116,6 +1198,9 @@ func Test_UserHandler_UpdateUserRoles(t *testing.T) {
 		jwtManagerMock.
 			On("ValidateToken", mock.Anything, token).
 			Return(true, nil).
+			Twice().
+			On("GetUserFromToken", mock.Anything, token).
+			Return(&auth.User{ID: "authenticated-user-id"}, nil).
 			Once()
 
 		roleManagerMock.
