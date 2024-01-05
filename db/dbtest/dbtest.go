@@ -7,9 +7,11 @@ import (
 	migrate "github.com/rubenv/sql-migrate"
 	"github.com/stellar/go/support/db/dbtest"
 	"github.com/stellar/go/support/db/schema"
+
 	adminmigrations "github.com/stellar/stellar-disbursement-platform-backend/db/migrations/admin-migrations"
 	authmigrations "github.com/stellar/stellar-disbursement-platform-backend/db/migrations/auth-migrations"
 	sdpmigrations "github.com/stellar/stellar-disbursement-platform-backend/db/migrations/sdp-migrations"
+	tssmigrations "github.com/stellar/stellar-disbursement-platform-backend/db/migrations/tss-migrations"
 )
 
 func OpenWithoutMigrations(t *testing.T) *dbtest.DB {
@@ -43,6 +45,14 @@ func Open(t *testing.T) *dbtest.DB {
 	// Per-tenant Auth migrations
 	ms = migrate.MigrationSet{TableName: "auth_migrations"}
 	m = migrate.HttpFileSystemMigrationSource{FileSystem: http.FS(authmigrations.FS)}
+	_, err = ms.ExecMax(conn.DB, "postgres", m, migrateDirection, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// TSS migrations
+	ms = migrate.MigrationSet{TableName: "tss_migrations"}
+	m = migrate.HttpFileSystemMigrationSource{FileSystem: http.FS(tssmigrations.FS)}
 	_, err = ms.ExecMax(conn.DB, "postgres", m, migrateDirection, 0)
 	if err != nil {
 		t.Fatal(err)
@@ -88,6 +98,21 @@ func OpenWithAuthMigrationsOnly(t *testing.T) *dbtest.DB {
 
 	migrateDirection := schema.MigrateUp
 	m := migrate.HttpFileSystemMigrationSource{FileSystem: http.FS(authmigrations.FS)}
+	_, err := schema.Migrate(conn.DB, m, migrateDirection, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return db
+}
+
+func OpenWithTSSMigrationsOnly(t *testing.T) *dbtest.DB {
+	db := OpenWithoutMigrations(t)
+
+	conn := db.Open()
+	defer conn.Close()
+
+	migrateDirection := schema.MigrateUp
+	m := migrate.HttpFileSystemMigrationSource{FileSystem: http.FS(tssmigrations.FS)}
 	_, err := schema.Migrate(conn.DB, m, migrateDirection, 0)
 	if err != nil {
 		t.Fatal(err)

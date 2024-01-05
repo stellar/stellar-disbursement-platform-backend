@@ -78,7 +78,6 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 			"auth_user_mfa_codes",
 			"auth_user_password_reset",
 			"auth_users",
-			"channel_accounts",
 			"countries",
 			"disbursements",
 			"sdp_migrations",
@@ -88,7 +87,6 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 			"receiver_verifications",
 			"receiver_wallets",
 			"receivers",
-			"submitter_transactions",
 			"wallets",
 			"wallets_assets",
 		}
@@ -135,7 +133,6 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 			"auth_user_mfa_codes",
 			"auth_user_password_reset",
 			"auth_users",
-			"channel_accounts",
 			"countries",
 			"disbursements",
 			"sdp_migrations",
@@ -145,7 +142,6 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 			"receiver_verifications",
 			"receiver_wallets",
 			"receivers",
-			"submitter_transactions",
 			"wallets",
 			"wallets_assets",
 		}
@@ -221,7 +217,6 @@ func Test_Manager_RunMigrationsForTenant(t *testing.T) {
 		"auth_user_mfa_codes",
 		"auth_user_password_reset",
 		"auth_users",
-		"channel_accounts",
 		"countries",
 		"disbursements",
 		"sdp_migrations",
@@ -231,7 +226,6 @@ func Test_Manager_RunMigrationsForTenant(t *testing.T) {
 		"receiver_verifications",
 		"receiver_wallets",
 		"receivers",
-		"submitter_transactions",
 		"wallets",
 		"wallets_assets",
 	}

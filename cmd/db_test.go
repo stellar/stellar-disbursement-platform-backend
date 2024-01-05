@@ -145,7 +145,7 @@ func Test_DatabaseCommand_db_sdp_migrate(t *testing.T) {
 		}
 	})
 
-	t.Run("migrate up and down --all", func(t *testing.T) {
+	t.Run("db sdp migrate up and down --all", func(t *testing.T) {
 		tenant.DeleteAllTenantsFixture(t, ctx, dbConnectionPool)
 
 		// Creating Tenants
@@ -213,7 +213,7 @@ func Test_DatabaseCommand_db_sdp_migrate(t *testing.T) {
 		tenant.TenantSchemaMatchTablesFixture(t, ctx, dbConnectionPool, "sdp_myorg2", []string{"sdp_migrations"})
 	})
 
-	t.Run("migrate up and down --tenant-id", func(t *testing.T) {
+	t.Run("db sdp migrate up and down --tenant-id", func(t *testing.T) {
 		tenant.DeleteAllTenantsFixture(t, ctx, dbConnectionPool)
 
 		// Creating Tenants
@@ -277,7 +277,7 @@ func Test_DatabaseCommand_db_sdp_migrate(t *testing.T) {
 		assert.NotContains(t, buf.String(), fmt.Sprintf("Applying migrations on tenant ID %s", tnt2.ID))
 	})
 
-	t.Run("migrate up and down auth migrations --all", func(t *testing.T) {
+	t.Run("db sdp migrate up and down auth migrations --all", func(t *testing.T) {
 		tenant.DeleteAllTenantsFixture(t, ctx, dbConnectionPool)
 
 		// Creating Tenants
@@ -345,7 +345,7 @@ func Test_DatabaseCommand_db_sdp_migrate(t *testing.T) {
 		tenant.TenantSchemaMatchTablesFixture(t, ctx, dbConnectionPool, "sdp_myorg2", []string{"auth_migrations"})
 	})
 
-	t.Run("migrate up and down auth migrations --tenant-id", func(t *testing.T) {
+	t.Run("db sdp migrate up and down auth migrations --tenant-id", func(t *testing.T) {
 		tenant.DeleteAllTenantsFixture(t, ctx, dbConnectionPool)
 
 		// Creating Tenants
