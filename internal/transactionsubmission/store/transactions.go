@@ -31,6 +31,9 @@ type Transaction struct {
 	Amount        float64                  `db:"amount"`
 	Destination   string                   `db:"destination"`
 
+	TenantID            string         `db:"tenant_id"`
+	DistributionAccount sql.NullString `db:"distribution_account"`
+
 	CreatedAt *time.Time `db:"created_at"`
 	UpdatedAt *time.Time `db:"updated_at"`
 	// StartedAt is when the transaction was read from the queue into memory.
