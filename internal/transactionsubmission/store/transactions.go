@@ -85,6 +85,9 @@ func (tx *Transaction) validate() error {
 	if !strkey.IsValidEd25519PublicKey(tx.Destination) {
 		return fmt.Errorf("destination %q is not a valid ed25519 public key", tx.Destination)
 	}
+	if tx.TenantID == "" {
+		return fmt.Errorf("tenant ID is required")
+	}
 	return nil
 }
 
@@ -113,7 +116,7 @@ func (t *TransactionModel) BulkInsert(ctx context.Context, sqlExec db.SQLExecute
 	}
 
 	var queryBuilder strings.Builder
-	queryBuilder.WriteString("INSERT INTO submitter_transactions (external_id, asset_code, asset_issuer, amount, destination) VALUES ")
+	queryBuilder.WriteString("INSERT INTO submitter_transactions (external_id, asset_code, asset_issuer, amount, destination, tenant_id) VALUES ")
 	valueStrings := make([]string, 0, len(transactions))
 	valueArgs := make([]interface{}, 0, len(transactions)*6)
 
@@ -121,13 +124,14 @@ func (t *TransactionModel) BulkInsert(ctx context.Context, sqlExec db.SQLExecute
 		if err := transaction.validate(); err != nil {
 			return nil, fmt.Errorf("validating transaction for insertion: %w", err)
 		}
-		valueStrings = append(valueStrings, "(?, ?, ?, ?, ?)")
+		valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?)")
 		valueArgs = append(valueArgs,
 			transaction.ExternalID,
 			transaction.AssetCode,
 			transaction.AssetIssuer,
 			transaction.Amount,
 			transaction.Destination,
+			transaction.TenantID,
 		)
 	}
 
