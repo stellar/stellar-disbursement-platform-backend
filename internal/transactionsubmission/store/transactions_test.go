@@ -202,31 +202,27 @@ func Test_TransactionModel_UpdateStatusToSuccess(t *testing.T) {
 		},
 	}
 
-	unphazedTx := CreateTransactionFixture(
-		t,
-		ctx,
-		dbConnectionPool,
-		uuid.NewString(),
-		"USDC",
-		"GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
-		"GBHNIYGWZUAVZX7KTLVSMILBXJMUACVO6XBEKIN6RW7AABDFH6S7GK2Y",
-		TransactionStatusPending,
-		1.23,
-	)
+	unphazedTx := CreateTransactionFixtureNew(t, ctx, dbConnectionPool, TransactionFixture{
+		ExternalID:         uuid.NewString(),
+		AssetCode:          "USDC",
+		AssetIssuer:        "GCBIRB7Q5T53H4L6P5QSI3O6LPD5MBWGM5GHE7A5NY4XT5OT4VCOEZFX",
+		DestinationAddress: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+		Status:             TransactionStatusPending,
+		Amount:             1.23,
+		TenantID:           uuid.NewString(),
+	})
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			tx := CreateTransactionFixture(
-				t,
-				ctx,
-				dbConnectionPool,
-				uuid.NewString(),
-				"USDC",
-				"GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
-				"GBHNIYGWZUAVZX7KTLVSMILBXJMUACVO6XBEKIN6RW7AABDFH6S7GK2Y",
-				tc.transactionStatus,
-				1.23,
-			)
+			tx := CreateTransactionFixtureNew(t, ctx, dbConnectionPool, TransactionFixture{
+				ExternalID:         uuid.NewString(),
+				AssetCode:          "USDC",
+				AssetIssuer:        "GCBIRB7Q5T53H4L6P5QSI3O6LPD5MBWGM5GHE7A5NY4XT5OT4VCOEZFX",
+				DestinationAddress: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+				Status:             tc.transactionStatus,
+				Amount:             1.23,
+				TenantID:           uuid.NewString(),
+			})
 			if (tc.transactionStatus != TransactionStatusSuccess) && (tc.transactionStatus != TransactionStatusError) {
 				assert.Empty(t, tx.CompletedAt)
 			} else {
@@ -294,31 +290,27 @@ func Test_TransactionModel_UpdateStatusToError(t *testing.T) {
 		},
 	}
 
-	unphazedTx := CreateTransactionFixture(
-		t,
-		ctx,
-		dbConnectionPool,
-		uuid.NewString(),
-		"USDC",
-		"GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
-		"GBHNIYGWZUAVZX7KTLVSMILBXJMUACVO6XBEKIN6RW7AABDFH6S7GK2Y",
-		TransactionStatusPending,
-		1.23,
-	)
+	unphazedTx := CreateTransactionFixtureNew(t, ctx, dbConnectionPool, TransactionFixture{
+		ExternalID:         uuid.NewString(),
+		AssetCode:          "USDC",
+		AssetIssuer:        "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+		DestinationAddress: "GBHNIYGWZUAVZX7KTLVSMILBXJMUACVO6XBEKIN6RW7AABDFH6S7GK2Y",
+		Status:             TransactionStatusPending,
+		Amount:             1.23,
+		TenantID:           uuid.NewString(),
+	})
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			tx := CreateTransactionFixture(
-				t,
-				ctx,
-				dbConnectionPool,
-				uuid.NewString(),
-				"USDC",
-				"GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
-				"GBHNIYGWZUAVZX7KTLVSMILBXJMUACVO6XBEKIN6RW7AABDFH6S7GK2Y",
-				tc.transactionStatus,
-				1.23,
-			)
+			tx := CreateTransactionFixtureNew(t, ctx, dbConnectionPool, TransactionFixture{
+				ExternalID:         uuid.NewString(),
+				AssetCode:          "USDC",
+				AssetIssuer:        "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+				DestinationAddress: "GBHNIYGWZUAVZX7KTLVSMILBXJMUACVO6XBEKIN6RW7AABDFH6S7GK2Y",
+				Status:             tc.transactionStatus,
+				Amount:             1.23,
+				TenantID:           uuid.NewString(),
+			})
 			assert.Empty(t, tx.StatusMessage)
 			if (tc.transactionStatus != TransactionStatusSuccess) && (tc.transactionStatus != TransactionStatusError) {
 				assert.Empty(t, tx.CompletedAt)
@@ -717,18 +709,14 @@ func Test_TransactionModel_GetTransactionBatchForUpdate(t *testing.T) {
 
 			var transactions []*Transaction
 			if tc.transactionStatus != "" {
-				// create transactions and get their IDs
-				transactions = CreateTransactionFixtures(
-					t,
-					ctx,
-					dbTx,
-					txCount,
-					"USDC",
-					"GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
-					"GBHNIYGWZUAVZX7KTLVSMILBXJMUACVO6XBEKIN6RW7AABDFH6S7GK2Y",
-					tc.transactionStatus,
-					1.2,
-				)
+				transactions = CreateTransactionFixturesNew(t, ctx, dbTx, txCount, TransactionFixture{
+					AssetCode:          "USDC",
+					AssetIssuer:        "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+					DestinationAddress: "GBHNIYGWZUAVZX7KTLVSMILBXJMUACVO6XBEKIN6RW7AABDFH6S7GK2Y",
+					Status:             tc.transactionStatus,
+					Amount:             1.2,
+					TenantID:           uuid.NewString(),
+				})
 			}
 			var txIDs []string
 			for _, tx := range transactions {
@@ -824,17 +812,14 @@ func Test_TransactionModel_UpdateSyncedTransactions(t *testing.T) {
 			} else if tc.shouldSendInvalidIDs {
 				txIDs = []string{"invalid-id"}
 			} else {
-				transactions := CreateTransactionFixtures(
-					t,
-					ctx,
-					dbTx,
-					txCount,
-					"USDC",
-					"GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
-					"GBHNIYGWZUAVZX7KTLVSMILBXJMUACVO6XBEKIN6RW7AABDFH6S7GK2Y",
-					tc.transactionStatus,
-					1.2,
-				)
+				transactions := CreateTransactionFixturesNew(t, ctx, dbTx, txCount, TransactionFixture{
+					AssetCode:          "USDC",
+					AssetIssuer:        "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+					DestinationAddress: "GBHNIYGWZUAVZX7KTLVSMILBXJMUACVO6XBEKIN6RW7AABDFH6S7GK2Y",
+					Status:             tc.transactionStatus,
+					Amount:             1.2,
+					TenantID:           uuid.NewString(),
+				})
 				for _, tx := range transactions {
 					txIDs = append(txIDs, tx.ID)
 				}
@@ -954,7 +939,15 @@ func Test_TransactionModel_Lock(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			tx := CreateTransactionFixture(t, ctx, dbConnectionPool, uuid.NewString(), "USDC", "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5", "GCBIRB7Q5T53H4L6P5QSI3O6LPD5MBWGM5GHE7A5NY4XT5OT4VCOEZFX", tc.initialStatus, 1)
+			tx := CreateTransactionFixtureNew(t, ctx, dbConnectionPool, TransactionFixture{
+				ExternalID:         uuid.NewString(),
+				AssetCode:          "USDC",
+				AssetIssuer:        "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+				DestinationAddress: "GCBIRB7Q5T53H4L6P5QSI3O6LPD5MBWGM5GHE7A5NY4XT5OT4VCOEZFX",
+				Status:             tc.initialStatus,
+				Amount:             1,
+				TenantID:           uuid.NewString(),
+			})
 			q := `UPDATE submitter_transactions SET locked_at = $1, locked_until_ledger_number = $2, synced_at = $3, status = $4 WHERE id = $5`
 			_, err := dbConnectionPool.ExecContext(ctx, q, tc.initialLockedAt, tc.initialLockedUntilLedger, tc.initialSyncedAt, tc.initialStatus, tx.ID)
 			require.NoError(t, err)
@@ -1036,7 +1029,15 @@ func Test_TransactionModel_Unlock(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			tx := CreateTransactionFixture(t, ctx, dbConnectionPool, uuid.NewString(), "USDC", "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5", "GCBIRB7Q5T53H4L6P5QSI3O6LPD5MBWGM5GHE7A5NY4XT5OT4VCOEZFX", tc.initialStatus, 1)
+			tx := CreateTransactionFixtureNew(t, ctx, dbConnectionPool, TransactionFixture{
+				ExternalID:         uuid.NewString(),
+				AssetCode:          "USDC",
+				AssetIssuer:        "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+				DestinationAddress: "GCBIRB7Q5T53H4L6P5QSI3O6LPD5MBWGM5GHE7A5NY4XT5OT4VCOEZFX",
+				Status:             tc.initialStatus,
+				Amount:             1,
+				TenantID:           uuid.NewString(),
+			})
 			q := `UPDATE submitter_transactions SET locked_at = $1, locked_until_ledger_number = $2, synced_at = $3, status = $4 WHERE id = $5`
 			_, err := dbConnectionPool.ExecContext(ctx, q, tc.initialLockedAt, tc.initialLockedUntilLedger, tc.initialSyncedAt, tc.initialStatus, tx.ID)
 			require.NoError(t, err)
@@ -1107,7 +1108,15 @@ func Test_TransactionModel_PrepareTransactionForReprocessing(t *testing.T) {
 			const lockedUntilLedger = 2
 
 			// create and prepare the transaction:
-			tx := CreateTransactionFixture(t, ctx, dbConnectionPool, uuid.NewString(), "USDC", "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5", "GCBIRB7Q5T53H4L6P5QSI3O6LPD5MBWGM5GHE7A5NY4XT5OT4VCOEZFX", tc.status, 1)
+			tx := CreateTransactionFixtureNew(t, ctx, dbConnectionPool, TransactionFixture{
+				ExternalID:         uuid.NewString(),
+				AssetCode:          "USDC",
+				AssetIssuer:        "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+				DestinationAddress: "GCBIRB7Q5T53H4L6P5QSI3O6LPD5MBWGM5GHE7A5NY4XT5OT4VCOEZFX",
+				Status:             tc.status,
+				Amount:             1,
+				TenantID:           uuid.NewString(),
+			})
 			q := `UPDATE submitter_transactions SET status = $1, synced_at = $2, locked_at = NOW(), locked_until_ledger_number=$3 WHERE id = $4`
 			_, err = dbConnectionPool.ExecContext(ctx, q, tc.status, tc.synchedAt, lockedUntilLedger, tx.ID)
 			require.NoError(t, err)
