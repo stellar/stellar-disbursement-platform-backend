@@ -10,6 +10,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 	"github.com/stretchr/testify/assert"
@@ -23,7 +24,7 @@ type SendReceiverWalletInviteServiceMock struct {
 
 var _ services.SendReceiverWalletInviteServiceInterface = new(SendReceiverWalletInviteServiceMock)
 
-func (s *SendReceiverWalletInviteServiceMock) SendInvite(ctx context.Context, receiverWalletsReq ...services.ReceiverWalletReq) error {
+func (s *SendReceiverWalletInviteServiceMock) SendInvite(ctx context.Context, receiverWalletsReq ...schemas.EventReceiverWalletSMSInvitationData) error {
 	args := s.Called(ctx, receiverWalletsReq)
 	return args.Error(0)
 }
@@ -68,9 +69,9 @@ func Test_SendReceiverWalletsSMSInvitationEventHandler_Handle(t *testing.T) {
 
 		handler.Handle(ctx, &events.Message{
 			TenantID: "tenant-id",
-			Data: []services.ReceiverWalletReq{
-				{ID: "rw-id-1"},
-				{ID: "rw-id-2"},
+			Data: []schemas.EventReceiverWalletSMSInvitationData{
+				{ReceiverWalletID: "rw-id-1"},
+				{ReceiverWalletID: "rw-id-2"},
 			},
 		})
 	})
@@ -81,9 +82,9 @@ func Test_SendReceiverWalletsSMSInvitationEventHandler_Handle(t *testing.T) {
 		tnt, err := tenantManager.AddTenant(ctx, "myorg1")
 		require.NoError(t, err)
 
-		reqs := []services.ReceiverWalletReq{
-			{ID: "rw-id-1"},
-			{ID: "rw-id-2"},
+		reqs := []schemas.EventReceiverWalletSMSInvitationData{
+			{ReceiverWalletID: "rw-id-1"},
+			{ReceiverWalletID: "rw-id-2"},
 		}
 
 		service.
@@ -110,9 +111,9 @@ func Test_SendReceiverWalletsSMSInvitationEventHandler_Handle(t *testing.T) {
 		tnt, err := tenantManager.AddTenant(ctx, "myorg1")
 		require.NoError(t, err)
 
-		reqs := []services.ReceiverWalletReq{
-			{ID: "rw-id-1"},
-			{ID: "rw-id-2"},
+		reqs := []schemas.EventReceiverWalletSMSInvitationData{
+			{ReceiverWalletID: "rw-id-1"},
+			{ReceiverWalletID: "rw-id-2"},
 		}
 
 		service.

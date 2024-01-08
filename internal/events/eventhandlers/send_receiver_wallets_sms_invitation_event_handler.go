@@ -10,6 +10,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
@@ -67,8 +68,8 @@ func (h *SendReceiverWalletsSMSInvitationEventHandler) Handle(ctx context.Contex
 		return
 	}
 
-	var receiverWalletsReq []services.ReceiverWalletReq
-	err = json.Unmarshal(dataJSON, &receiverWalletsReq)
+	var receiverWalletInvitationData []schemas.EventReceiverWalletSMSInvitationData
+	err = json.Unmarshal(dataJSON, &receiverWalletInvitationData)
 	if err != nil {
 		h.crashTrackerClient.LogAndReportErrors(ctx, err, fmt.Sprintf("[SendReceiverWalletsSMSInvitationEventHandler] could not unmarshal data: %v", message.Data))
 		return
@@ -100,7 +101,7 @@ func (h *SendReceiverWalletsSMSInvitationEventHandler) Handle(ctx context.Contex
 	}
 
 	h.service.SetModels(models)
-	if err := h.service.SendInvite(ctx, receiverWalletsReq...); err != nil {
+	if err := h.service.SendInvite(ctx, receiverWalletInvitationData...); err != nil {
 		h.crashTrackerClient.LogAndReportErrors(ctx, err, "[SendReceiverWalletsSMSInvitationEventHandler] sending receiver wallets invitation")
 		return
 	}

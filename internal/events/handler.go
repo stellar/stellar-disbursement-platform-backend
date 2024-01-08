@@ -17,7 +17,3 @@ type EventHandler interface {
 type EventHandlerOptions struct {
 	MaxInvitationSMSResendAttempts int
 }
-
-type EventReceiverWalletSMSInvitationData struct {
-	ReceiverWalletID string `json:"id"`
-}

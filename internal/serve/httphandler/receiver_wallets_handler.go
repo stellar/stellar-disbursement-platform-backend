@@ -11,6 +11,7 @@ import (
 	"github.com/stellar/go/support/render/httpjson"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
@@ -55,7 +56,7 @@ func (h ReceiverWalletsHandler) RetryInvitation(rw http.ResponseWriter, req *htt
 		Key:      receiverWalletID,
 		TenantID: tnt.ID,
 		Type:     "retry-receiver-wallet-sms-invitation",
-		Data: []events.EventReceiverWalletSMSInvitationData{
+		Data: []schemas.EventReceiverWalletSMSInvitationData{
 			{
 				ReceiverWalletID: receiverWalletID,
 			},

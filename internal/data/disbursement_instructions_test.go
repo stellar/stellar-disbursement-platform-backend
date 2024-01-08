@@ -8,6 +8,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -73,7 +74,7 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 	}
 
 	t.Run("success", func(t *testing.T) {
-		var eventData []events.EventReceiverWalletSMSInvitationData
+		var eventData []schemas.EventReceiverWalletSMSInvitationData
 		eventProducerMock.
 			On("WriteMessages", ctx, mock.AnythingOfType("[]events.Message")).
 			Run(func(args mock.Arguments) {
@@ -88,7 +89,7 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 				assert.Equal(t, tnt.ID, msg.TenantID)
 
 				var ok bool
-				eventData, ok = msg.Data.([]events.EventReceiverWalletSMSInvitationData)
+				eventData, ok = msg.Data.([]schemas.EventReceiverWalletSMSInvitationData)
 				require.True(t, ok)
 				assert.Len(t, eventData, 3)
 			}).
@@ -113,11 +114,11 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 		require.NoError(t, err)
 		assert.Len(t, receiverWallets, len(receivers))
 
-		expectedEventData := make([]events.EventReceiverWalletSMSInvitationData, 0, len(receivers))
+		expectedEventData := make([]schemas.EventReceiverWalletSMSInvitationData, 0, len(receivers))
 		for _, receiverWallet := range receiverWallets {
 			assert.Equal(t, wallet.ID, receiverWallet.Wallet.ID)
 			assert.Equal(t, DraftReceiversWalletStatus, receiverWallet.Status)
-			expectedEventData = append(expectedEventData, events.EventReceiverWalletSMSInvitationData{ReceiverWalletID: receiverWallet.ID})
+			expectedEventData = append(expectedEventData, schemas.EventReceiverWalletSMSInvitationData{ReceiverWalletID: receiverWallet.ID})
 		}
 
 		// Verify Payments
@@ -154,7 +155,7 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 				assert.Equal(t, "batch-receiver-wallet-sms-invitation", msg.Type)
 				assert.Equal(t, tnt.ID, msg.TenantID)
 
-				eventData := msg.Data.([]events.EventReceiverWalletSMSInvitationData)
+				eventData := msg.Data.([]schemas.EventReceiverWalletSMSInvitationData)
 				assert.Len(t, eventData, 3)
 			}).
 			Return(nil).
@@ -171,7 +172,7 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 				assert.Equal(t, "batch-receiver-wallet-sms-invitation", msg.Type)
 				assert.Equal(t, tnt.ID, msg.TenantID)
 
-				eventData := msg.Data.([]events.EventReceiverWalletSMSInvitationData)
+				eventData := msg.Data.([]schemas.EventReceiverWalletSMSInvitationData)
 				assert.Len(t, eventData, 0)
 			}).
 			Return(nil).
@@ -243,7 +244,7 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 			FileContent: CreateInstructionsFixture(t, newInstructions),
 		}
 
-		var eventDataFirstRun, eventDataLastRun, expectedEventDataFirstRun, expectedEventDataLastRun []events.EventReceiverWalletSMSInvitationData
+		var eventDataFirstRun, eventDataLastRun, expectedEventDataFirstRun, expectedEventDataLastRun []schemas.EventReceiverWalletSMSInvitationData
 		eventProducerMock.
 			On("WriteMessages", ctx, mock.AnythingOfType("[]events.Message")).
 			Run(func(args mock.Arguments) {
@@ -258,7 +259,7 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 				assert.Equal(t, tnt.ID, msg.TenantID)
 
 				var ok bool
-				eventDataFirstRun, ok = msg.Data.([]events.EventReceiverWalletSMSInvitationData)
+				eventDataFirstRun, ok = msg.Data.([]schemas.EventReceiverWalletSMSInvitationData)
 				require.True(t, ok)
 				assert.Len(t, eventDataFirstRun, 3)
 			}).
@@ -277,7 +278,7 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 				assert.Equal(t, tnt.ID, msg.TenantID)
 
 				var ok bool
-				eventDataLastRun, ok = msg.Data.([]events.EventReceiverWalletSMSInvitationData)
+				eventDataLastRun, ok = msg.Data.([]schemas.EventReceiverWalletSMSInvitationData)
 				require.True(t, ok)
 				assert.Len(t, eventDataLastRun, 2)
 			}).
@@ -301,7 +302,7 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 			updatedRowsAffected, rowsErr := result.RowsAffected()
 			require.NoError(t, rowsErr)
 			assert.Equal(t, int64(1), updatedRowsAffected)
-			expectedEventDataFirstRun = append(expectedEventDataFirstRun, events.EventReceiverWalletSMSInvitationData{ReceiverWalletID: receiverWallet.ID})
+			expectedEventDataFirstRun = append(expectedEventDataFirstRun, schemas.EventReceiverWalletSMSInvitationData{ReceiverWalletID: receiverWallet.ID})
 		}
 
 		// Update Receiver Waller Status to Ready
@@ -332,7 +333,7 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 		for _, receiverWallet := range receiverWallets {
 			assert.Equal(t, ReadyReceiversWalletStatus, receiverWallet.Status)
 			assert.Nil(t, receiverWallet.InvitationSentAt)
-			expectedEventDataLastRun = append(expectedEventDataLastRun, events.EventReceiverWalletSMSInvitationData{ReceiverWalletID: receiverWallet.ID})
+			expectedEventDataLastRun = append(expectedEventDataLastRun, schemas.EventReceiverWalletSMSInvitationData{ReceiverWalletID: receiverWallet.ID})
 		}
 
 		receiverWallets, err = di.receiverWalletModel.GetByReceiverIDsAndWalletID(ctx, dbConnectionPool, []string{receivers[2].ID}, wallet.ID)
@@ -370,7 +371,7 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 				assert.Equal(t, "batch-receiver-wallet-sms-invitation", msg.Type)
 				assert.Equal(t, tnt.ID, msg.TenantID)
 
-				eventData := msg.Data.([]events.EventReceiverWalletSMSInvitationData)
+				eventData := msg.Data.([]schemas.EventReceiverWalletSMSInvitationData)
 				assert.Len(t, eventData, 3)
 			}).
 			Return(nil).
@@ -416,7 +417,7 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 				assert.Equal(t, "batch-receiver-wallet-sms-invitation", msg.Type)
 				assert.Equal(t, tnt.ID, msg.TenantID)
 
-				eventData, ok := msg.Data.([]events.EventReceiverWalletSMSInvitationData)
+				eventData, ok := msg.Data.([]schemas.EventReceiverWalletSMSInvitationData)
 				require.True(t, ok)
 				assert.Len(t, eventData, 3)
 			}).

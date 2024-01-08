@@ -14,6 +14,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -83,7 +84,7 @@ func Test_RetryInvitation(t *testing.T) {
 					Key:      rw.ID,
 					TenantID: tnt.ID,
 					Type:     "retry-receiver-wallet-sms-invitation",
-					Data: []events.EventReceiverWalletSMSInvitationData{
+					Data: []schemas.EventReceiverWalletSMSInvitationData{
 						{
 							ReceiverWalletID: rw.ID,
 						},
@@ -125,7 +126,7 @@ func Test_RetryInvitation(t *testing.T) {
 					Key:      rw.ID,
 					TenantID: tnt.ID,
 					Type:     "retry-receiver-wallet-sms-invitation",
-					Data: []events.EventReceiverWalletSMSInvitationData{
+					Data: []schemas.EventReceiverWalletSMSInvitationData{
 						{
 							ReceiverWalletID: rw.ID,
 						},

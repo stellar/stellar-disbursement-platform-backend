@@ -7,6 +7,7 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
@@ -164,7 +165,7 @@ func (di DisbursementInstructionModel) ProcessAll(ctx context.Context, userID st
 			receiverWalletsMap[receiverWallet.Receiver.ID] = receiverWallet.ID
 		}
 
-		eventData := make([]events.EventReceiverWalletSMSInvitationData, 0, len(receiverIDs))
+		eventData := make([]schemas.EventReceiverWalletSMSInvitationData, 0, len(receiverIDs))
 		for _, receiverId := range receiverIDs {
 			receiverWalletId, exists := receiverWalletsMap[receiverId]
 			if !exists {
@@ -177,7 +178,7 @@ func (di DisbursementInstructionModel) ProcessAll(ctx context.Context, userID st
 					return fmt.Errorf("error inserting receiver wallet for receiver id %s: %w", receiverId, insertErr)
 				}
 				receiverWalletsMap[receiverId] = id
-				eventData = append(eventData, events.EventReceiverWalletSMSInvitationData{ReceiverWalletID: id})
+				eventData = append(eventData, schemas.EventReceiverWalletSMSInvitationData{ReceiverWalletID: id})
 			} else {
 				rw, retryErr := di.receiverWalletModel.RetryInvitationSMS(ctx, dbTx, receiverWalletId)
 				if retryErr != nil {
@@ -186,7 +187,7 @@ func (di DisbursementInstructionModel) ProcessAll(ctx context.Context, userID st
 					}
 				}
 				if rw != nil && rw.Status == ReadyReceiversWalletStatus {
-					eventData = append(eventData, events.EventReceiverWalletSMSInvitationData{ReceiverWalletID: rw.ID})
+					eventData = append(eventData, schemas.EventReceiverWalletSMSInvitationData{ReceiverWalletID: rw.ID})
 				}
 			}
 		}

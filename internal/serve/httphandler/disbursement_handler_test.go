@@ -17,6 +17,7 @@ import (
 	"github.com/stretchr/testify/mock"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
@@ -794,7 +795,7 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 						assert.Equal(t, "batch-receiver-wallet-sms-invitation", msg.Type)
 						assert.Equal(t, tnt.ID, msg.TenantID)
 
-						eventData, ok := msg.Data.([]events.EventReceiverWalletSMSInvitationData)
+						eventData, ok := msg.Data.([]schemas.EventReceiverWalletSMSInvitationData)
 						require.True(t, ok)
 						assert.Len(t, eventData, len(tc.csvRecords)-1)
 					}).

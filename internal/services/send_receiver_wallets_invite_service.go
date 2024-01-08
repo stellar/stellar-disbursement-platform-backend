@@ -14,13 +14,14 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"golang.org/x/exp/slices"
 )
 
 type SendReceiverWalletInviteServiceInterface interface {
-	SendInvite(ctx context.Context, receiverWalletsReq ...ReceiverWalletReq) error
+	SendInvite(ctx context.Context, receiverWalletInvitationData ...schemas.EventReceiverWalletSMSInvitationData) error
 	SetModels(models *data.Models)
 }
 
@@ -47,16 +48,12 @@ func (s SendReceiverWalletInviteService) validate() error {
 	return nil
 }
 
-type ReceiverWalletReq struct {
-	ID string `json:"id"`
-}
-
 // SendInvite sends the invitation’s deep link to the wallet’s application.
 // The approach to sending the invitation is to send the deep link for each asset the wallet will pay based on the payment.
 // For instance, the Wallet Foo is in two Ready Payments, one with USDC and the other with EUROC.
 // So the receiver who has a Stellar Address pending registration (status:READY) in this wallet will receive both invites for USDC and EUROC.
 // This would not impact the user receiving both token amounts. It's only for the registration process.
-func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context, receiverWalletsReq ...ReceiverWalletReq) error {
+func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context, receiverWalletInvitationData ...schemas.EventReceiverWalletSMSInvitationData) error {
 	if s.Models == nil {
 		return fmt.Errorf("SendReceiverWalletInviteService.Models cannot be nil")
 	}
@@ -93,9 +90,9 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context, receive
 		walletsMap[wallet.ID] = wallet
 	}
 
-	receiverWalletIDsPendingRegistration := make([]string, 0, len(receiverWalletsReq))
-	for _, receiverWallet := range receiverWalletsReq {
-		receiverWalletIDsPendingRegistration = append(receiverWalletIDsPendingRegistration, receiverWallet.ID)
+	receiverWalletIDsPendingRegistration := make([]string, 0, len(receiverWalletInvitationData))
+	for _, receiverWallet := range receiverWalletInvitationData {
+		receiverWalletIDsPendingRegistration = append(receiverWalletIDsPendingRegistration, receiverWallet.ReceiverWalletID)
 	}
 
 	receiverWallets, err := s.Models.ReceiverWallet.GetAllPendingRegistrationByReceiverWalletIDs(ctx, receiverWalletIDsPendingRegistration)
