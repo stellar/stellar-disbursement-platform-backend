@@ -129,7 +129,6 @@ func (pv *PasswordValidator) ValidatePassword(input string) error {
 
 func (pv *PasswordValidator) determineIfCommonPassword(input string) bool {
 	input = strings.ToLower(input)
-	fmt.Println(input)
 	for _, commonPassword := range pv.commonPasswordsList {
 		if input == commonPassword {
 			return true
