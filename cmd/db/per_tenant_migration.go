@@ -29,7 +29,7 @@ func executeMigrationsPerTenant(ctx context.Context, databaseURL string, opts ut
 		if dsn, ok := tenantIDToDNSMap[opts.TenantID]; ok {
 			tenantIDToDNSMap = map[string]string{opts.TenantID: dsn}
 		} else {
-			log.Ctx(ctx).Fatalf("tenant ID %s does not exist", opts.TenantID)
+			return fmt.Errorf("tenant ID %s does not exist", opts.TenantID)
 		}
 	}
 
@@ -37,7 +37,7 @@ func executeMigrationsPerTenant(ctx context.Context, databaseURL string, opts ut
 		log.Ctx(ctx).Infof("Applying migrations on tenant ID %s", tenantID)
 		err = ExecuteMigrations(ctx, dsn, dir, count, migrationFiles, tableName)
 		if err != nil {
-			log.Ctx(ctx).Fatalf("Error migrating database Up: %s", err.Error())
+			return fmt.Errorf("migrating database %s: %w", migrationDirectionStr(dir), err)
 		}
 	}
 
