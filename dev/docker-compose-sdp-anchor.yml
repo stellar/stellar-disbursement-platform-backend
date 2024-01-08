@@ -41,8 +41,6 @@ services:
       DISTRIBUTION_SEED: ${DISTRIBUTION_SEED}
       RECAPTCHA_SITE_KEY: 6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI
       CORS_ALLOWED_ORIGINS: "*"
-      ENABLE_MFA: "false"
-      ENABLE_RECAPTCHA: "false"
       BROKERS: "kafka:9092"
       CONSUMER_GROUP_ID: "group-id"
 

@@ -277,22 +277,6 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			Required:       true,
 		},
 		{
-			Name:        "enable-mfa",
-			Usage:       "Enable MFA using email.",
-			OptType:     types.Bool,
-			ConfigKey:   &serveOpts.EnableMFA,
-			FlagDefault: true,
-			Required:    false,
-		},
-		{
-			Name:        "enable-recaptcha",
-			Usage:       "Enable ReCAPTCHA for login and forgot password.",
-			OptType:     types.Bool,
-			ConfigKey:   &serveOpts.EnableReCAPTCHA,
-			FlagDefault: true,
-			Required:    false,
-		},
-		{
 			Name:        "horizon-url",
 			Usage:       "Stellar Horizon URL.",
 			OptType:     types.String,

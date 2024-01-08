@@ -145,8 +145,6 @@ sdp:
       SMS_SENDER_TYPE: DRY_RUN
       RECAPTCHA_SITE_KEY: #required
       CORS_ALLOWED_ORIGINS: "*"
-      ENABLE_RECAPTCHA: "false"
-      ENABLE_MFA: "false"
       SDP_UI_BASE_URL: #required
 
   ## @extra sdp.kubeSecrets Kubernetes secrets are used to manage sensitive information, such as API keys and private keys. It's crucial that these details are kept private.

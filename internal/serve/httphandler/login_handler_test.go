@@ -1,6 +1,7 @@
 package httphandler
 
 import (
+	"context"
 	"errors"
 	"io"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/htmltemplate"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 
@@ -67,15 +69,19 @@ func Test_LoginHandler(t *testing.T) {
 	handler := &LoginHandler{
 		AuthManager:        authManager,
 		ReCAPTCHAValidator: reCAPTCHAValidator,
-		ReCAPTCHAEnabled:   true,
 	}
+
+	tnt := tenant.Tenant{
+		EnableReCAPTCHA: true,
+	}
+	ctx := tenant.SaveTenantInContext(context.Background(), &tnt)
 
 	const url = "/login"
 
 	t.Run("returns error when body is invalid", func(t *testing.T) {
 		r.Post(url, handler.ServeHTTP)
 
-		req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(`{}`))
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(`{}`))
 		require.NoError(t, err)
 
 		w := httptest.NewRecorder()
@@ -99,7 +105,7 @@ func Test_LoginHandler(t *testing.T) {
 		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 		assert.JSONEq(t, wantsBody, string(respBody))
 
-		req, err = http.NewRequest(http.MethodPost, url, strings.NewReader(`{"email": "testuser"}`))
+		req, err = http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(`{"email": "testuser"}`))
 		require.NoError(t, err)
 
 		w = httptest.NewRecorder()
@@ -125,7 +131,7 @@ func Test_LoginHandler(t *testing.T) {
 		buf := new(strings.Builder)
 		log.DefaultLogger.SetOutput(buf)
 
-		req, err = http.NewRequest(http.MethodPost, url, strings.NewReader(`"invalid"`))
+		req, err = http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(`"invalid"`))
 		require.NoError(t, err)
 
 		w = httptest.NewRecorder()
@@ -167,7 +173,7 @@ func Test_LoginHandler(t *testing.T) {
 		buf := new(strings.Builder)
 		log.DefaultLogger.SetOutput(buf)
 
-		req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(reqBody))
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(reqBody))
 		require.NoError(t, err)
 
 		w := httptest.NewRecorder()
@@ -210,7 +216,7 @@ func Test_LoginHandler(t *testing.T) {
 			}
 		`
 
-		req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(reqBody))
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(reqBody))
 		require.NoError(t, err)
 
 		w := httptest.NewRecorder()
@@ -234,6 +240,33 @@ func Test_LoginHandler(t *testing.T) {
 		assert.JSONEq(t, wantsBody, string(respBody))
 	})
 
+	t.Run("retturns error when tenant is not found in context", func(t *testing.T) {
+		ctxWithoutTenant := context.Background()
+		reqBody := `
+			{
+				"email": "testuser",
+				"password": "pass1234",
+				"recaptcha_token": "XyZ"
+			}
+		`
+		rr := httptest.NewRecorder()
+		req, err := http.NewRequestWithContext(ctxWithoutTenant, http.MethodPost, url, strings.NewReader(reqBody))
+		require.NoError(t, err)
+
+		http.HandlerFunc(handler.ServeHTTP).ServeHTTP(rr, req)
+		resp := rr.Result()
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		wantsBody := `
+			{
+				"error": "Not authorized."
+			}
+		`
+
+		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+		assert.JSONEq(t, wantsBody, string(respBody))
+	})
 	t.Run("returns error when unable to validate recaptcha", func(t *testing.T) {
 		reCAPTCHAValidator.
 			On("IsTokenValid", mock.Anything, "XyZ").
@@ -250,7 +283,7 @@ func Test_LoginHandler(t *testing.T) {
 			}
 		`
 
-		req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(reqBody))
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(reqBody))
 		require.NoError(t, err)
 
 		w := httptest.NewRecorder()
@@ -287,7 +320,7 @@ func Test_LoginHandler(t *testing.T) {
 			}
 		`
 
-		req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(reqBody))
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(reqBody))
 		require.NoError(t, err)
 
 		w := httptest.NewRecorder()
@@ -361,7 +394,7 @@ func Test_LoginHandler(t *testing.T) {
 			}
 		`
 
-		req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(reqBody))
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(reqBody))
 		require.NoError(t, err)
 
 		w := httptest.NewRecorder()
@@ -409,11 +442,9 @@ func Test_LoginHandlerr_ServeHTTP_MFA(t *testing.T) {
 	)
 	messengerClientMock := &message.MessengerClientMock{}
 	loginHandler := &LoginHandler{
-		AuthManager:      authManager,
-		ReCAPTCHAEnabled: false,
-		MFAEnabled:       true,
-		Models:           models,
-		MessengerClient:  messengerClientMock,
+		AuthManager:     authManager,
+		Models:          models,
+		MessengerClient: messengerClientMock,
 	}
 
 	user := &auth.User{
@@ -438,6 +469,12 @@ func Test_LoginHandlerr_ServeHTTP_MFA(t *testing.T) {
 
 	deviceID := "safari-xyz"
 
+	tnt := tenant.Tenant{
+		EnableReCAPTCHA: false,
+		EnableMFA:       true,
+	}
+	ctx := tenant.SaveTenantInContext(context.Background(), &tnt)
+
 	t.Run("error getting user from token", func(t *testing.T) {
 		authenticatorMock.
 			On("GetUser", mock.Anything, "userID").
@@ -446,6 +483,7 @@ func Test_LoginHandlerr_ServeHTTP_MFA(t *testing.T) {
 
 		body := LoginRequest{Email: "testuser@mail.com", Password: "pass1234"}
 		req := httptest.NewRequest(http.MethodPost, "/login", requestToJSON(t, &body))
+		req = req.WithContext(ctx)
 		rw := httptest.NewRecorder()
 
 		loginHandler.ServeHTTP(rw, req)
@@ -462,6 +500,7 @@ func Test_LoginHandlerr_ServeHTTP_MFA(t *testing.T) {
 
 		body := LoginRequest{Email: "testuser@mail.com", Password: "pass1234"}
 		req := httptest.NewRequest(http.MethodPost, "/login", requestToJSON(t, &body))
+		req = req.WithContext(ctx)
 		rw := httptest.NewRecorder()
 
 		loginHandler.ServeHTTP(rw, req)
@@ -482,6 +521,7 @@ func Test_LoginHandlerr_ServeHTTP_MFA(t *testing.T) {
 
 		body := LoginRequest{Email: "testuser@mail.com", Password: "pass1234"}
 		req := httptest.NewRequest(http.MethodPost, "/login", requestToJSON(t, &body))
+		req = req.WithContext(ctx)
 		req.Header.Set(DeviceIDHeader, deviceID)
 		rw := httptest.NewRecorder()
 
@@ -503,6 +543,7 @@ func Test_LoginHandlerr_ServeHTTP_MFA(t *testing.T) {
 
 		body := LoginRequest{Email: "testuser@mail.com", Password: "pass1234"}
 		req := httptest.NewRequest(http.MethodPost, "/login", requestToJSON(t, &body))
+		req = req.WithContext(ctx)
 		req.Header.Set(DeviceIDHeader, deviceID)
 		rw := httptest.NewRecorder()
 
@@ -528,6 +569,7 @@ func Test_LoginHandlerr_ServeHTTP_MFA(t *testing.T) {
 
 		body := LoginRequest{Email: "testuser@mail.com", Password: "pass1234"}
 		req := httptest.NewRequest(http.MethodPost, "/login", requestToJSON(t, &body))
+		req = req.WithContext(ctx)
 		req.Header.Set(DeviceIDHeader, deviceID)
 		rw := httptest.NewRecorder()
 
@@ -553,6 +595,7 @@ func Test_LoginHandlerr_ServeHTTP_MFA(t *testing.T) {
 
 		body := LoginRequest{Email: "testuser@mail.com", Password: "pass1234"}
 		req := httptest.NewRequest(http.MethodPost, "/login", requestToJSON(t, &body))
+		req = req.WithContext(ctx)
 		req.Header.Set(DeviceIDHeader, deviceID)
 		rw := httptest.NewRecorder()
 
@@ -582,6 +625,7 @@ func Test_LoginHandlerr_ServeHTTP_MFA(t *testing.T) {
 
 		body := LoginRequest{Email: "testuser@mail.com", Password: "pass1234"}
 		req := httptest.NewRequest(http.MethodPost, "/login", requestToJSON(t, &body))
+		req = req.WithContext(ctx)
 		req.Header.Set(DeviceIDHeader, deviceID)
 		rw := httptest.NewRecorder()
 
@@ -623,6 +667,7 @@ func Test_LoginHandlerr_ServeHTTP_MFA(t *testing.T) {
 
 		body := LoginRequest{Email: "testuser@mail.com", Password: "pass1234"}
 		req := httptest.NewRequest(http.MethodPost, "/login", requestToJSON(t, &body))
+		req = req.WithContext(ctx)
 		req.Header.Set(DeviceIDHeader, deviceID)
 		rw := httptest.NewRecorder()
 

@@ -8,6 +8,7 @@ import (
 	"net/url"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/support/render/httpjson"
@@ -29,7 +30,6 @@ type ForgotPasswordHandler struct {
 	UIBaseURL          string
 	Models             *data.Models
 	ReCAPTCHAValidator validators.ReCAPTCHAValidator
-	ReCAPTCHAEnabled   bool
 }
 
 type ForgotPasswordRequest struct {
@@ -53,7 +53,14 @@ func (h ForgotPasswordHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 
 	ctx := r.Context()
 
-	if h.ReCAPTCHAEnabled {
+	tnt, err := tenant.GetTenantFromContext(ctx)
+	if err != nil {
+		log.Ctx(ctx).Errorf("error getting tenant from context: %s", err)
+		httperror.Unauthorized("", err, nil).Render(w)
+		return
+	}
+
+	if tnt.EnableReCAPTCHA {
 		// validating reCAPTCHA Token
 		isValid, recaptchaErr := h.ReCAPTCHAValidator.IsTokenValid(ctx, forgotPasswordRequest.ReCAPTCHAToken)
 		if recaptchaErr != nil {

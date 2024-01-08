@@ -85,8 +85,6 @@ type ServeOptions struct {
 	DistributionSeed                string
 	ReCAPTCHASiteKey                string
 	ReCAPTCHASiteSecretKey          string
-	EnableMFA                       bool
-	EnableReCAPTCHA                 bool
 	EnableScheduler                 bool
 	EnableMultiTenantDB             bool
 	tenantManager                   tenant.ManagerInterface
@@ -371,8 +369,6 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			ReCAPTCHAValidator: reCAPTCHAValidator,
 			MessengerClient:    o.EmailMessengerClient,
 			Models:             o.Models,
-			ReCAPTCHAEnabled:   o.EnableReCAPTCHA,
-			MFAEnabled:         o.EnableMFA,
 		}.ServeHTTP)
 		r.Post("/mfa", httphandler.MFAHandler{
 			AuthManager:        authManager,
@@ -385,7 +381,6 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			UIBaseURL:          o.UIBaseURL,
 			Models:             o.Models,
 			ReCAPTCHAValidator: reCAPTCHAValidator,
-			ReCAPTCHAEnabled:   o.EnableReCAPTCHA,
 		}.ServeHTTP)
 		r.Post("/reset-password", httphandler.ResetPasswordHandler{AuthManager: authManager}.ServeHTTP)
 	})
