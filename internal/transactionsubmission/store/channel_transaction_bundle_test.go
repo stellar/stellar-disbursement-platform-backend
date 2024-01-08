@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	sdpUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
@@ -162,14 +163,28 @@ func Test_ChannelTransactionBundleModel_LoadAndLockTuples(t *testing.T) {
 			unlockedChAccounts := CreateChannelAccountFixtures(t, ctx, dbConnectionPool, tc.numberOfChannelAccountsUnlocked)
 
 			// Transactions(LOCKED)
-			lockedTransactions := CreateTransactionFixtures(t, ctx, dbConnectionPool, tc.numberOfTransactionsLocked, "USDC", "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5", "", TransactionStatusPending, 1)
+			lockedTransactions := CreateTransactionFixturesNew(t, ctx, dbConnectionPool, tc.numberOfTransactionsLocked, TransactionFixture{
+				AssetCode:          "USDC",
+				AssetIssuer:        "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+				DestinationAddress: "",
+				Status:             TransactionStatusPending,
+				Amount:             1,
+				TenantID:           uuid.NewString(),
+			})
 			for _, tx := range lockedTransactions {
 				_, err = txModel.Lock(ctx, dbConnectionPool, tx.ID, int32(currentLedgerNumber*2), int32(tc.lockToLedgerNumber))
 				require.NoError(t, err)
 			}
 
 			// Transactions(UNLOCKED)
-			unlockedTransactions := CreateTransactionFixtures(t, ctx, dbConnectionPool, tc.numberOfTransactionsUnlocked, "USDC", "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5", "", TransactionStatusPending, 1)
+			unlockedTransactions := CreateTransactionFixturesNew(t, ctx, dbConnectionPool, tc.numberOfTransactionsUnlocked, TransactionFixture{
+				AssetCode:          "USDC",
+				AssetIssuer:        "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+				DestinationAddress: "",
+				Status:             TransactionStatusPending,
+				Amount:             1,
+				TenantID:           uuid.NewString(),
+			})
 
 			chTxBundles, err := chAccTupleModel.LoadAndLockTuples(ctx, currentLedgerNumber, tc.lockToLedgerNumber, tc.limit)
 			if tc.expectedError != nil {

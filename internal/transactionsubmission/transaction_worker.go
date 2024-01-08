@@ -30,7 +30,7 @@ import (
 type TxJob store.ChannelTransactionBundle
 
 func (job TxJob) String() string {
-	return fmt.Sprintf("TxJob{ChannelAccount: %q, Transaction: %q, LockedUntilLedgerNumber: \"%d\"}", job.ChannelAccount.PublicKey, job.Transaction.ID, job.LockedUntilLedgerNumber)
+	return fmt.Sprintf("TxJob{ChannelAccount: %q, Transaction: %q, Tenant: %q, LockedUntilLedgerNumber: \"%d\"}", job.ChannelAccount.PublicKey, job.Transaction.ID, job.Transaction.TenantID, job.LockedUntilLedgerNumber)
 }
 
 type TransactionWorker struct {

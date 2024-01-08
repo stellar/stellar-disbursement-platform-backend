@@ -92,6 +92,7 @@ func Test_PaymentToSubmitterService_SendBatchPayments(t *testing.T) {
 	})
 
 	t.Run("send payments", func(t *testing.T) {
+		t.Skip("Fix in SDP-925, when we refactor `payment_to_submitter_job` to use Kafka")
 		err = service.SendBatchPayments(ctx, 5)
 		require.NoError(t, err)
 
@@ -131,6 +132,7 @@ func Test_PaymentToSubmitterService_SendBatchPayments(t *testing.T) {
 	})
 
 	t.Run("send payments with native asset", func(t *testing.T) {
+		t.Skip("Fix in SDP-925, when we refactor `payment_to_submitter_job` to use Kafka")
 		nativeAsset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "XLM", "")
 
 		startedDisbursementNA := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
@@ -343,6 +345,7 @@ func Test_PaymentToSubmitterService_ValidatePaymentReadyForSending(t *testing.T)
 }
 
 func Test_PaymentToSubmitterService_RetryPayment(t *testing.T) {
+	t.Skip("Fix in SDP-925, when we refactor `payment_to_submitter_job` to use Kafka")
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 

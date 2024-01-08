@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/lib/pq"
 	"github.com/stellar/go/keypair"
 	"github.com/stretchr/testify/require"
@@ -16,42 +15,51 @@ import (
 )
 
 // CreateTransactionFixtures creates count number submitter transactions
-func CreateTransactionFixtures(t *testing.T,
+func CreateTransactionFixturesNew(t *testing.T,
 	ctx context.Context,
 	sqlExec db.SQLExecuter,
 	count int,
-	code, issuer, destination string,
-	status TransactionStatus,
-	amount float64,
+	txFixture TransactionFixture,
 ) []*Transaction {
 	var txs []*Transaction
 	for i := 0; i < count; i++ {
-		tx := CreateTransactionFixture(t, ctx, sqlExec, uuid.NewString(), code, issuer, destination, status, amount)
+		txFixtureCopy := txFixture
+		txFixtureCopy.ExternalID = keypair.MustRandom().Address()
+		tx := CreateTransactionFixtureNew(t, ctx, sqlExec, txFixtureCopy)
 		txs = append(txs, tx)
 	}
 
 	return txs
 }
 
+type TransactionFixture struct {
+	ExternalID          string
+	AssetCode           string
+	AssetIssuer         string
+	DestinationAddress  string
+	Status              TransactionStatus
+	Amount              float64
+	TenantID            string
+	DistributionAccount string
+}
+
 // CreateTransactionFixture creates a submitter transaction in the database
-func CreateTransactionFixture(
+func CreateTransactionFixtureNew(
 	t *testing.T,
 	ctx context.Context,
 	sqlExec db.SQLExecuter,
-	externalID, assetCode, assetIssuer, destinationAddress string,
-	status TransactionStatus,
-	amount float64,
+	txFixture TransactionFixture,
 ) *Transaction {
-	if assetIssuer == "" {
-		assetIssuer = keypair.MustRandom().Address()
+	if txFixture.AssetIssuer == "" {
+		txFixture.AssetIssuer = keypair.MustRandom().Address()
 	}
 
-	if destinationAddress == "" {
-		destinationAddress = keypair.MustRandom().Address()
+	if txFixture.DestinationAddress == "" {
+		txFixture.DestinationAddress = keypair.MustRandom().Address()
 	}
 
 	completedAt := pq.NullTime{}
-	if status == TransactionStatusSuccess || status == TransactionStatusError {
+	if txFixture.Status == TransactionStatusSuccess || txFixture.Status == TransactionStatusError {
 		timeElapsed, _ := rand.Int(rand.Reader, big.NewInt(time.Now().Unix()))
 		randomCompletedAt := time.Unix(timeElapsed.Int64(), 0)
 		completedAt = pq.NullTime{Time: randomCompletedAt, Valid: true}
@@ -59,15 +67,24 @@ func CreateTransactionFixture(
 
 	const query = `
 		INSERT INTO submitter_transactions
-			(external_id, status, asset_code, asset_issuer, amount, destination, completed_at, started_at)
+			(external_id, status, asset_code, asset_issuer, amount, destination, tenant_id, completed_at, started_at)
 		VALUES
-			($1, $2, $3, $4, $5, $6, $7, NOW())
+			($1, $2, $3, $4, $5, $6, $7, $8, NOW())
 		RETURNING
 			*
 	`
 
 	tx := Transaction{}
-	err := sqlExec.GetContext(ctx, &tx, query, externalID, string(status), assetCode, assetIssuer, amount, destinationAddress, completedAt)
+	err := sqlExec.GetContext(ctx, &tx, query,
+		txFixture.ExternalID,
+		string(txFixture.Status),
+		txFixture.AssetCode,
+		txFixture.AssetIssuer,
+		txFixture.Amount,
+		txFixture.DestinationAddress,
+		txFixture.TenantID,
+		completedAt,
+	)
 	require.NoError(t, err)
 
 	return &tx

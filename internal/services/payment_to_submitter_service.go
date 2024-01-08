@@ -88,6 +88,7 @@ func (s PaymentToSubmitterService) sendBatchPayments(ctx context.Context, dbTx d
 	}
 
 	// 3. Persist data in Transactions table
+	// TODO: insert with the tenant info.
 	insertedTransactions, err := s.tssModel.BulkInsert(ctx, dbTx, transactions)
 	if err != nil {
 		return fmt.Errorf("inserting transactions: %w", err)
