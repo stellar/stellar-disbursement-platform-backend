@@ -49,19 +49,18 @@ type PasswordValidator struct {
 func NewPasswordValidator() (PasswordValidator, error) {
 	reader := bytes.NewReader(passwordsBinary)
 
-	fz, err := gzip.NewReader(reader)
+	gzipReader, err := gzip.NewReader(reader)
 	if err != nil {
-		return PasswordValidator{}, err
+		return PasswordValidator{}, fmt.Errorf("error creating gzip reader: %w", err)
 	}
-	defer fz.Close()
+	defer gzipReader.Close()
 
-	s, err := io.ReadAll(fz)
+	contents, err := io.ReadAll(gzipReader)
 	if err != nil {
-		return PasswordValidator{}, err
+		return PasswordValidator{}, fmt.Errorf("error reading contents: %w", err)
 	}
 
-	passwordsList := strings.Split(string(s), "\n")
-	fmt.Println(passwordsList)
+	passwordsList := strings.Split(string(contents), "\n")
 	return PasswordValidator{
 		commonPasswordsList: passwordsList,
 	}, nil

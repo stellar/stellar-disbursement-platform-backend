@@ -144,7 +144,7 @@ func (opts *ServeOptions) SetupDependencies() error {
 
 	opts.PasswordValidator, err = authUtils.NewPasswordValidator()
 	if err != nil {
-		return err
+		return fmt.Errorf("error initializing password validator: %w", err)
 	}
 
 	return nil
