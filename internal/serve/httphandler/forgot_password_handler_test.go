@@ -379,18 +379,29 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 	t.Run("Should return http status 401 when error getting tenant from context", func(t *testing.T) {
 		ctxWithoutTenant := context.Background()
 		requestBody := `
-        { 
-            "email": "valid@email.com" ,
-            "recaptcha_token": "validToken"
-        }`
+			{ 
+				"email": "valid@email.com",
+				"recaptcha_token": "validToken"
+			}
+		`
 
 		rr := httptest.NewRecorder()
 		req, err := http.NewRequestWithContext(ctxWithoutTenant, http.MethodPost, url, strings.NewReader(requestBody))
 		require.NoError(t, err)
 
 		http.HandlerFunc(handler.ServeHTTP).ServeHTTP(rr, req)
+
+		wantsBody := `
+			{
+				"error": "Not authorized."
+			}
+		`
 		resp := rr.Result()
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		
 		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+		assert.JSONEq(t, wantsBody, string(respBody))
 	})
 
 	authenticatorMock.AssertExpectations(t)

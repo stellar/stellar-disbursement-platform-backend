@@ -255,7 +255,17 @@ func Test_LoginHandler(t *testing.T) {
 
 		http.HandlerFunc(handler.ServeHTTP).ServeHTTP(rr, req)
 		resp := rr.Result()
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		wantsBody := `
+			{
+				"error": "Not authorized."
+			}
+		`
+
 		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+		assert.JSONEq(t, wantsBody, string(respBody))
 	})
 	t.Run("returns error when unable to validate recaptcha", func(t *testing.T) {
 		reCAPTCHAValidator.
