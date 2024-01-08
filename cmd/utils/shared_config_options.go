@@ -1,9 +1,11 @@
 package utils
 
 import (
+	"fmt"
 	"go/types"
 
 	"github.com/stellar/go/support/config"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 )
 
@@ -73,6 +75,42 @@ func AWSConfigOptions(opts *message.MessengerOptions) []*config.ConfigOption {
 			Usage:     "The email address that AWS will use to send emails. Uses AWS SES.",
 			OptType:   types.String,
 			ConfigKey: &opts.AWSSESSenderID,
+			Required:  false,
+		},
+	}
+}
+
+type TenantRoutingOptions struct {
+	All      bool
+	TenantID string
+}
+
+func (o *TenantRoutingOptions) ValidateFlags() error {
+	if !o.All && o.TenantID == "" {
+		return fmt.Errorf(
+			"invalid config. Please specify --all to run the migrations for all tenants " +
+				"or specify --tenant-id to run the migrations to a specific tenant",
+		)
+	}
+	return nil
+}
+
+// TenantRoutingConfigOptions returns the config options for routing commands that apply to all tenants or a specific tenant.
+func TenantRoutingConfigOptions(opts *TenantRoutingOptions) []*config.ConfigOption {
+	return []*config.ConfigOption{
+		{
+			Name:        "all",
+			Usage:       "Apply the command to all tenants. Either --tenant-id or --all must be set, but the --all option will be ignored if --tenant-id is set.",
+			OptType:     types.Bool,
+			FlagDefault: false,
+			ConfigKey:   &opts.All,
+			Required:    false,
+		},
+		{
+			Name:      "tenant-id",
+			Usage:     "The tenant ID where the command will be applied. Either --tenant-id or --all must be set, but the --all option will be ignored if --tenant-id is set.",
+			OptType:   types.String,
+			ConfigKey: &opts.TenantID,
 			Required:  false,
 		},
 	}

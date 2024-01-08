@@ -9,6 +9,8 @@ import (
 	"github.com/spf13/viper"
 	"github.com/stellar/go/support/config"
 	"github.com/stellar/go/support/log"
+
+	cmdDB "github.com/stellar/stellar-disbursement-platform-backend/cmd/db"
 	cmdUtils "github.com/stellar/stellar-disbursement-platform-backend/cmd/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
@@ -51,7 +53,7 @@ func (a *AuthCommand) Command() *cobra.Command {
 
 	// Auth Module sub-commands
 	availableRoles := data.FromUserRoleArrayToStringArray(data.GetAllRoles())
-	addUserSubcommand := cli.AddUserCmd(dbConfigOptionFlagName, cli.NewDefaultPasswordPrompt(), availableRoles)
+	addUserSubcommand := cli.AddUserCmd(cmdDB.DBConfigOptionFlagName, cli.NewDefaultPasswordPrompt(), availableRoles)
 
 	authCmd := &cobra.Command{
 		Use:     "auth",
@@ -97,7 +99,7 @@ func (a *AuthCommand) Command() *cobra.Command {
 					log.Ctx(ctx).Fatalf("error getting forgot password link: %s", err.Error())
 				}
 
-				dbConnectionPool, err := db.OpenDBConnectionPool(globalOptions.databaseURL)
+				dbConnectionPool, err := db.OpenDBConnectionPool(globalOptions.DatabaseURL)
 				if err != nil {
 					log.Ctx(ctx).Fatalf("error getting database connection: %s", err.Error())
 				}

@@ -1,4 +1,4 @@
-package authmigrations
+package tssmigrations
 
 import "embed"
 

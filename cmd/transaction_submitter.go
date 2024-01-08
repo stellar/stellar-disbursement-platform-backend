@@ -154,7 +154,7 @@ func (c *TxSubmitterCommand) Command(submitterService TxSubmitterServiceInterfac
 			// Initializing monitor service
 			metricOptions := monitor.MetricOptions{
 				MetricType:  metricsServeOpts.MetricType,
-				Environment: globalOptions.environment,
+				Environment: globalOptions.Environment,
 			}
 
 			monitorClient, err := monitor.GetClient(metricOptions)
@@ -164,19 +164,19 @@ func (c *TxSubmitterCommand) Command(submitterService TxSubmitterServiceInterfac
 
 			tssMonitorSvc := tssMonitor.TSSMonitorService{
 				Client:        monitorClient,
-				GitCommitHash: globalOptions.gitCommit,
-				Version:       globalOptions.version,
+				GitCommitHash: globalOptions.GitCommit,
+				Version:       globalOptions.Version,
 			}
 			metricsServeOpts.MonitorService = &tssMonitorSvc
 
 			// Inject server dependencies
 			submitterOpts.MonitorService = tssMonitorSvc
-			submitterOpts.DatabaseDSN = globalOptions.databaseURL
-			submitterOpts.NetworkPassphrase = globalOptions.networkPassphrase
+			submitterOpts.DatabaseDSN = globalOptions.DatabaseURL
+			submitterOpts.NetworkPassphrase = globalOptions.NetworkPassphrase
 			submitterOpts.PrivateKeyEncrypter = tssUtils.DefaultPrivateKeyEncrypter{}
 
 			// Inject crash tracker options dependencies
-			globalOptions.populateCrashTrackerOptions(&crashTrackerOptions)
+			globalOptions.PopulateCrashTrackerOptions(&crashTrackerOptions)
 			// Setup default Crash Tracker client
 			crashTrackerClient, err := di.NewCrashTracker(ctx, crashTrackerOptions)
 			if err != nil {

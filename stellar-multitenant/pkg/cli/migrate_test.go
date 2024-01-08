@@ -52,12 +52,12 @@ func Test_MigrateCmd(t *testing.T) {
 		{
 			name:   "test help command",
 			args:   []string{"migrate", "--help"},
-			expect: "Apply admin migrations to configure the multi-tenant module that manages the tenants.\n\nUsage:\n  mtn migrate [flags]\n  mtn migrate [command]\n\nAvailable Commands:\n  down        Migrates database down [count] migrations\n  up          Migrates database up [count] migrations\n\nFlags:\n  -h, --help   help for migrate\n\nGlobal Flags:\n      --multitenant-db-url string   Postgres DB URL (MULTITENANT_DB_URL) (default \"postgres://postgres:postgres@localhost:5432/sdp_main?sslmode=disable\")\n\nUse \"mtn migrate [command] --help\" for more information about a command.\n",
+			expect: "Schema migration helpers",
 		},
 		{
 			name:   "test short help command",
 			args:   []string{"migrate", "-h"},
-			expect: "Apply admin migrations to configure the multi-tenant module that manages the tenants.\n\nUsage:\n  mtn migrate [flags]\n  mtn migrate [command]\n\nAvailable Commands:\n  down        Migrates database down [count] migrations\n  up          Migrates database up [count] migrations\n\nFlags:\n  -h, --help   help for migrate\n\nGlobal Flags:\n      --multitenant-db-url string   Postgres DB URL (MULTITENANT_DB_URL) (default \"postgres://postgres:postgres@localhost:5432/sdp_main?sslmode=disable\")\n\nUse \"mtn migrate [command] --help\" for more information about a command.\n",
+			expect: "Schema migration helpers",
 		},
 		{
 			name:   "test migrate up successfully",

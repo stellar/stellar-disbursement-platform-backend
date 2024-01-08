@@ -63,7 +63,7 @@ func (c *IntegrationTestsCommand) Command() *cobra.Command {
 			}
 
 			// inject database url to integration tests opts
-			integrationTestsOpts.DatabaseDSN = globalOptions.databaseURL
+			integrationTestsOpts.DatabaseDSN = globalOptions.DatabaseURL
 
 			c.Service, err = integrationtests.NewIntegrationTestsService(*integrationTestsOpts)
 			if err != nil {
