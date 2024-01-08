@@ -399,7 +399,7 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 		resp := rr.Result()
 		respBody, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
-		
+
 		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 		assert.JSONEq(t, wantsBody, string(respBody))
 	})
