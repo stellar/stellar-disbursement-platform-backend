@@ -20,6 +20,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	publicfiles "github.com/stellar/stellar-disbursement-platform-backend/internal/serve/publicfiles"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
+	authUtils "github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -56,6 +57,7 @@ func Test_Serve(t *testing.T) {
 	require.NoError(t, err)
 
 	mockCrashTrackerClient := &crashtracker.MockCrashTrackerClient{}
+	//pwValidator := authUtils.PasswordValidator{}
 
 	opts := ServeOptions{
 		CrashTrackerClient:              mockCrashTrackerClient,
@@ -73,6 +75,7 @@ func Test_Serve(t *testing.T) {
 		Version:                         "x.y.z",
 		NetworkPassphrase:               network.TestNetworkPassphrase,
 		DistributionSeed:                keypair.MustRandom().Seed(),
+		//PasswordValidator:               pwValidator,
 	}
 
 	// Mock supportHTTPRun
@@ -197,6 +200,8 @@ func getServeOptionsForTests(t *testing.T, databaseDSN string) ServeOptions {
 	crasTrackerClient, err := crashtracker.NewDryRunClient()
 	require.NoError(t, err)
 
+	pwValidator := authUtils.PasswordValidator{}
+
 	serveOptions := ServeOptions{
 		CrashTrackerClient:              crasTrackerClient,
 		DatabaseDSN:                     databaseDSN,
@@ -214,6 +219,7 @@ func getServeOptionsForTests(t *testing.T, databaseDSN string) ServeOptions {
 		Version:                         "x.y.z",
 		NetworkPassphrase:               network.TestNetworkPassphrase,
 		DistributionSeed:                keypair.MustRandom().Seed(),
+		PasswordValidator:               pwValidator,
 	}
 	err = serveOptions.SetupDependencies()
 	require.NoError(t, err)
