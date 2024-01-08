@@ -12,7 +12,7 @@ import (
 )
 
 func Test_Fixtures_CreateTransactionFixture(t *testing.T) {
-	dbt := dbtest.Open(t)
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 
 	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)
@@ -62,7 +62,7 @@ func Test_Fixtures_CreateTransactionFixture(t *testing.T) {
 }
 
 func Test_Fixtures_CreateAndDeleteAllTransactionFixtures(t *testing.T) {
-	dbt := dbtest.Open(t)
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 
 	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)
@@ -106,7 +106,7 @@ func Test_Fixtures_CreateAndDeleteAllTransactionFixtures(t *testing.T) {
 }
 
 func Test_Fixtures_CreateChannelAccountsOnChainFixtures(t *testing.T) {
-	dbt := dbtest.Open(t)
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 
 	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)

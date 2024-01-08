@@ -12,7 +12,7 @@ import (
 )
 
 func Test_NewChannelTransactionBundleModel(t *testing.T) {
-	dbt := dbtest.Open(t)
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
@@ -52,7 +52,7 @@ func Test_NewChannelTransactionBundleModel(t *testing.T) {
 }
 
 func Test_ChannelTransactionBundleModel_LoadAndLockTuples(t *testing.T) {
-	dbt := dbtest.Open(t)
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)

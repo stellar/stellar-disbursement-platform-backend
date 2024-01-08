@@ -14,6 +14,7 @@ import (
 	"github.com/stellar/go/txnbuild"
 
 	cmdUtils "github.com/stellar/stellar-disbursement-platform-backend/cmd/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/db/router"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	di "github.com/stellar/stellar-disbursement-platform-backend/internal/dependencyinjection"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
@@ -170,8 +171,12 @@ func (c *TxSubmitterCommand) Command(submitterService TxSubmitterServiceInterfac
 			metricsServeOpts.MonitorService = &tssMonitorSvc
 
 			// Inject server dependencies
+			tssDatabaseDSN, err := router.GetDNSForTSS(globalOptions.DatabaseURL)
+			if err != nil {
+				log.Ctx(ctx).Fatalf("Error getting TSS database DSN: %v", err)
+			}
+			submitterOpts.DatabaseDSN = tssDatabaseDSN
 			submitterOpts.MonitorService = tssMonitorSvc
-			submitterOpts.DatabaseDSN = globalOptions.DatabaseURL
 			submitterOpts.NetworkPassphrase = globalOptions.NetworkPassphrase
 			submitterOpts.PrivateKeyEncrypter = tssUtils.DefaultPrivateKeyEncrypter{}
 

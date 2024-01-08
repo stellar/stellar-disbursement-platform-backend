@@ -242,7 +242,6 @@ Flags:
 			"auth_user_mfa_codes",
 			"auth_user_password_reset",
 			"auth_users",
-			"channel_accounts",
 			"countries",
 			"disbursements",
 			"sdp_migrations",
@@ -252,7 +251,6 @@ Flags:
 			"receiver_verifications",
 			"receiver_wallets",
 			"receivers",
-			"submitter_transactions",
 			"wallets",
 			"wallets_assets",
 		}
@@ -311,7 +309,6 @@ Flags:
 			"auth_user_mfa_codes",
 			"auth_user_password_reset",
 			"auth_users",
-			"channel_accounts",
 			"countries",
 			"disbursements",
 			"sdp_migrations",
@@ -321,7 +318,6 @@ Flags:
 			"receiver_verifications",
 			"receiver_wallets",
 			"receivers",
-			"submitter_transactions",
 			"wallets",
 			"wallets_assets",
 		}

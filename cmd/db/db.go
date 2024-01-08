@@ -14,6 +14,7 @@ import (
 	adminmigrations "github.com/stellar/stellar-disbursement-platform-backend/db/migrations/admin-migrations"
 	authmigrations "github.com/stellar/stellar-disbursement-platform-backend/db/migrations/auth-migrations"
 	sdpmigrations "github.com/stellar/stellar-disbursement-platform-backend/db/migrations/sdp-migrations"
+	"github.com/stellar/stellar-disbursement-platform-backend/db/router"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	sdpUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
@@ -222,7 +223,7 @@ func (c *DatabaseCommand) tssMigrationsCmd(ctx context.Context, globalOptions *u
 			return fmt.Errorf("creating the 'tss' database schema if needed: %w", err)
 		}
 
-		dbURL, err := tssMigrationsManager.getTSSDatabaseDSN()
+		dbURL, err := router.GetDNSForTSS(tssMigrationsManager.RootDatabaseDSN)
 		if err != nil {
 			return fmt.Errorf("getting the TSS database DSN: %w", err)
 		}

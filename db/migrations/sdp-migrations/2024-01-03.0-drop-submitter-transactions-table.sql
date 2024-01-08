@@ -1,20 +1,21 @@
-
-
 -- +migrate Up
 
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp" SCHEMA public;
+DROP TRIGGER refresh_submitter_transactions_updated_at ON submitter_transactions;
+
+DROP TABLE submitter_transactions;
+
+DROP FUNCTION create_submitter_transactions_status_history;
+
+DROP TYPE transaction_status;
+
+
+-- +migrate Down
+
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 CREATE TYPE transaction_status AS ENUM ('PENDING', 'PROCESSING', 'SUCCESS', 'ERROR');
 
 -- +migrate StatementBegin
-CREATE OR REPLACE FUNCTION update_at_refresh()
-    RETURNS TRIGGER AS $$
-BEGIN
-    NEW.updated_at = NOW();
-    RETURN NEW;
-END;
-$$ language 'plpgsql';
-
 CREATE OR REPLACE FUNCTION create_submitter_transactions_status_history(time_stamp TIMESTAMP WITH TIME ZONE, tss_status transaction_status, status_message VARCHAR, stellar_transaction_hash TEXT, xdr_sent TEXT, xdr_received TEXT)
 RETURNS jsonb AS $$
 	BEGIN
@@ -64,16 +65,3 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_external_id ON submitter_transactio
 
 -- TRIGGER: updated_at
 CREATE TRIGGER refresh_submitter_transactions_updated_at BEFORE UPDATE ON submitter_transactions FOR EACH ROW EXECUTE PROCEDURE update_at_refresh();
-
-
--- +migrate Down
-
-DROP TRIGGER refresh_submitter_transactions_updated_at ON submitter_transactions;
-
-DROP TABLE submitter_transactions;
-
-DROP FUNCTION create_submitter_transactions_status_history;
-
-DROP TYPE transaction_status;
-
-DROP FUNCTION update_at_refresh;

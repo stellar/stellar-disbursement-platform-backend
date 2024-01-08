@@ -17,7 +17,7 @@ import (
 )
 
 func Test_NewDefaultSignatureService(t *testing.T) {
-	dbt := dbtest.Open(t)
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
@@ -92,7 +92,7 @@ func Test_NewDefaultSignatureService(t *testing.T) {
 }
 
 func Test_DefaultSignatureService_DistributionAccount(t *testing.T) {
-	dbt := dbtest.Open(t)
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
@@ -126,7 +126,7 @@ func Test_DefaultSignatureService_NetworkPassphrase(t *testing.T) {
 }
 
 func Test_DefaultSignatureService_getKPsForAccounts(t *testing.T) {
-	dbt := dbtest.Open(t)
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
@@ -239,7 +239,7 @@ func Test_DefaultSignatureService_getKPsForAccounts(t *testing.T) {
 }
 
 func Test_DefaultSignatureService_SignStellarTransaction(t *testing.T) {
-	dbt := dbtest.Open(t)
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
@@ -330,7 +330,7 @@ func Test_DefaultSignatureService_SignStellarTransaction(t *testing.T) {
 }
 
 func Test_DefaultSignatureService_SignFeeBumpStellarTransaction(t *testing.T) {
-	dbt := dbtest.Open(t)
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
@@ -432,7 +432,7 @@ func Test_DefaultSignatureService_SignFeeBumpStellarTransaction(t *testing.T) {
 }
 
 func Test_DefaultSignatureService_BatchInsert(t *testing.T) {
-	dbt := dbtest.Open(t)
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
@@ -529,7 +529,7 @@ func Test_DefaultSignatureService_BatchInsert(t *testing.T) {
 }
 
 func Test_DefaultSignatureService_Delete(t *testing.T) {
-	dbt := dbtest.Open(t)
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)

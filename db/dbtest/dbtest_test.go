@@ -29,4 +29,9 @@ func TestOpen(t *testing.T) {
 	err = session.Get(&count, `SELECT COUNT(*) FROM auth_migrations`)
 	require.NoError(t, err)
 	assert.Greater(t, count, 0)
+
+	// Per-tenant Auth Migrations
+	err = session.Get(&count, `SELECT COUNT(*) FROM tss_migrations`)
+	require.NoError(t, err)
+	assert.Greater(t, count, 0)
 }

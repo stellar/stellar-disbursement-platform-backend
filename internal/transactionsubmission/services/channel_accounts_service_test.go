@@ -26,7 +26,7 @@ import (
 )
 
 func Test_ChannelAccounts_CreateAccount_Success(t *testing.T) {
-	dbt := dbtest.Open(t)
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
@@ -84,7 +84,7 @@ func Test_ChannelAccounts_CreateAccount_Success(t *testing.T) {
 }
 
 func Test_ChannelAccounts_CreateAccount_CannotFindRootAccount_Failure(t *testing.T) {
-	dbt := dbtest.Open(t)
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
@@ -127,7 +127,7 @@ func Test_ChannelAccounts_CreateAccount_CannotFindRootAccount_Failure(t *testing
 }
 
 func Test_ChannelAccounts_CreateAccount_Insert_Failure(t *testing.T) {
-	dbt := dbtest.Open(t)
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
@@ -178,7 +178,7 @@ func Test_ChannelAccounts_CreateAccount_Insert_Failure(t *testing.T) {
 }
 
 func Test_ChannelAccounts_VerifyAccounts_Success(t *testing.T) {
-	dbt := dbtest.Open(t)
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
@@ -222,7 +222,7 @@ func Test_ChannelAccounts_VerifyAccounts_Success(t *testing.T) {
 }
 
 func Test_ChannelAccounts_VerifyAccounts_LoadChannelAccountsError_Failure(t *testing.T) {
-	dbt := dbtest.Open(t)
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
@@ -256,7 +256,7 @@ func Test_ChannelAccounts_VerifyAccounts_LoadChannelAccountsError_Failure(t *tes
 }
 
 func Test_ChannelAccounts_VerifyAccounts_NotFound(t *testing.T) {
-	dbt := dbtest.Open(t)
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
@@ -318,7 +318,7 @@ func Test_ChannelAccounts_VerifyAccounts_NotFound(t *testing.T) {
 }
 
 func Test_ChannelAccounts_DeleteAccount_Success(t *testing.T) {
-	dbt := dbtest.Open(t)
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
@@ -378,7 +378,7 @@ func Test_ChannelAccounts_DeleteAccount_Success(t *testing.T) {
 }
 
 func Test_ChannelAccounts_DeleteAccount_All_Success(t *testing.T) {
-	dbt := dbtest.Open(t)
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
@@ -447,7 +447,7 @@ func Test_ChannelAccounts_DeleteAccount_All_Success(t *testing.T) {
 }
 
 func Test_ChannelAccounts_DeleteAccount_FindByPublicKey_Failure(t *testing.T) {
-	dbt := dbtest.Open(t)
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
@@ -487,7 +487,7 @@ func Test_ChannelAccounts_DeleteAccount_FindByPublicKey_Failure(t *testing.T) {
 }
 
 func Test_ChannelAccounts_DeleteAccount_DeleteFromDatabaseError(t *testing.T) {
-	dbt := dbtest.Open(t)
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
@@ -550,7 +550,7 @@ func Test_ChannelAccounts_DeleteAccount_DeleteFromDatabaseError(t *testing.T) {
 }
 
 func Test_ChannelAccounts_DeleteAccount_SubmitTransaction_Failure(t *testing.T) {
-	dbt := dbtest.Open(t)
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
@@ -614,7 +614,7 @@ func Test_ChannelAccounts_DeleteAccount_SubmitTransaction_Failure(t *testing.T) 
 }
 
 func Test_ChannelAccounts_EnsureChannelAccounts_Exact_Success(t *testing.T) {
-	dbt := dbtest.Open(t)
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
@@ -649,7 +649,7 @@ func Test_ChannelAccounts_EnsureChannelAccounts_Exact_Success(t *testing.T) {
 }
 
 func Test_ChannelAccounts_EnsureChannelAccounts_Add_Success(t *testing.T) {
-	dbt := dbtest.Open(t)
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
@@ -706,7 +706,7 @@ func Test_ChannelAccounts_EnsureChannelAccounts_Add_Success(t *testing.T) {
 }
 
 func Test_ChannelAccounts_EnsureChannelAccounts_Delete_Success(t *testing.T) {
-	dbt := dbtest.Open(t)
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
