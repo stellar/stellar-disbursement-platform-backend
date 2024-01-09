@@ -248,6 +248,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 				MonitorService:   o.MonitorService,
 				DBConnectionPool: o.dbConnectionPool,
 				AuthManager:      authManager,
+				EventProducer:    o.EventProducer,
 			}
 			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole)).
 				Post("/", handler.PostDisbursement)
@@ -289,7 +290,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole)).
 				Patch("/{id}", updateReceiverHandler.UpdateReceiver)
 
-			receiverWalletHandler := httphandler.ReceiverWalletsHandler{Models: o.Models}
+			receiverWalletHandler := httphandler.ReceiverWalletsHandler{Models: o.Models, EventProducer: o.EventProducer}
 			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole)).
 				Patch("/wallets/{receiver_wallet_id}", receiverWalletHandler.RetryInvitation)
 		})

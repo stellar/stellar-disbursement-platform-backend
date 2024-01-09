@@ -26,9 +26,7 @@ type Scheduler struct {
 	crashTrackerClient crashtracker.CrashTrackerClient
 }
 
-type SchedulerOptions struct {
-	MaxInvitationSMSResendAttempts int
-}
+type SchedulerOptions struct{}
 
 type SchedulerJobRegisterOption func(*Scheduler)
 
@@ -166,14 +164,6 @@ func WithAPAuthEnforcementJob(apService anchorplatform.AnchorPlatformAPIServiceI
 func WithPaymentFromSubmitterJobOption(models *data.Models) SchedulerJobRegisterOption {
 	return func(s *Scheduler) {
 		j := jobs.NewPaymentFromSubmitterJob(models)
-		log.Infof("registering %s job to scheduler", j.GetName())
-		s.addJob(j)
-	}
-}
-
-func WithSendReceiverWalletsSMSInvitationJobOption(o jobs.SendReceiverWalletsSMSInvitationJobOptions) SchedulerJobRegisterOption {
-	return func(s *Scheduler) {
-		j := jobs.NewSendReceiverWalletsSMSInvitationJob(o)
 		log.Infof("registering %s job to scheduler", j.GetName())
 		s.addJob(j)
 	}

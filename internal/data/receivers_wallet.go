@@ -224,7 +224,7 @@ func (rw *ReceiverWalletModel) GetByReceiverIDsAndWalletID(ctx context.Context, 
 	return receiverWallets, nil
 }
 
-func (rw *ReceiverWalletModel) GetAllPendingRegistration(ctx context.Context) ([]*ReceiverWallet, error) {
+func (rw *ReceiverWalletModel) GetAllPendingRegistrationByReceiverWalletIDs(ctx context.Context, receiverWalletIDs []string) ([]*ReceiverWallet, error) {
 	const query = `
 		SELECT
 			rw.id,
@@ -239,11 +239,12 @@ func (rw *ReceiverWalletModel) GetAllPendingRegistration(ctx context.Context) ([
 			INNER JOIN receivers r ON r.id = rw.receiver_id
 			INNER JOIN wallets w ON w.id = rw.wallet_id
 		WHERE
-			rw.status = 'READY'
+			rw.id = ANY($1)
+			AND rw.status = 'READY'
 	`
 
 	receiverWallets := make([]*ReceiverWallet, 0)
-	err := rw.dbConnectionPool.SelectContext(ctx, &receiverWallets, query)
+	err := rw.dbConnectionPool.SelectContext(ctx, &receiverWallets, query, pq.Array(receiverWalletIDs))
 	if err != nil {
 		return nil, fmt.Errorf("error querying pending registration receiver wallets: %w", err)
 	}

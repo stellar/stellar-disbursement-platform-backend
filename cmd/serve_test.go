@@ -56,6 +56,10 @@ func (m *mockServer) GetSchedulerJobRegistrars(ctx context.Context, serveOpts se
 	return args.Get(0).([]scheduler.SchedulerJobRegisterOption), args.Error(1)
 }
 
+func (m *mockServer) SetupConsumers(ctx context.Context, serveOpts serve.ServeOptions, eventHandlerOptions events.EventHandlerOptions) {
+	m.Called(ctx, serveOpts, eventHandlerOptions)
+}
+
 func Test_serve_wasCalled(t *testing.T) {
 	// setup
 	rootCmd := SetupCLI("x.y.z", "1234567890abcdef")
@@ -168,7 +172,7 @@ func Test_serve(t *testing.T) {
 		Version:              "x.y.z",
 	}
 
-	schedulerOptions := scheduler.SchedulerOptions{
+	eventHandlerOptions := events.EventHandlerOptions{
 		MaxInvitationSMSResendAttempts: 3,
 	}
 
@@ -178,9 +182,10 @@ func Test_serve(t *testing.T) {
 	mServer.On("StartServe", serveOpts, mock.AnythingOfType("*serve.HTTPServer")).Once()
 	mServer.On("StartAdminServe", serveTenantOpts, mock.AnythingOfType("*serve.HTTPServer")).Once()
 	mServer.
-		On("GetSchedulerJobRegistrars", mock.AnythingOfType("*context.emptyCtx"), serveOpts, schedulerOptions, mock.Anything).
+		On("GetSchedulerJobRegistrars", mock.AnythingOfType("*context.emptyCtx"), serveOpts, scheduler.SchedulerOptions{}, mock.Anything).
 		Return([]scheduler.SchedulerJobRegisterOption{}, nil).
 		Once()
+	mServer.On("SetupConsumers", ctx, serveOpts, eventHandlerOptions).Once()
 	mServer.wg.Add(2)
 
 	// SetupCLI and replace the serve command with one containing a mocked server
@@ -216,6 +221,7 @@ func Test_serve(t *testing.T) {
 	t.Setenv("INSTANCE_NAME", serveOpts.InstanceName)
 	t.Setenv("ENABLE_SCHEDULER", "true")
 	t.Setenv("ENABLE_MULTITENANT_DB", "false")
+	t.Setenv("EVENT_BROKER", "kafka")
 	t.Setenv("BROKERS", "kafka:9092")
 	t.Setenv("CONSUMER_GROUP_ID", "group-id")
 

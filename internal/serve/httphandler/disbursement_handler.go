@@ -16,6 +16,7 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpresponse"
@@ -30,6 +31,7 @@ type DisbursementHandler struct {
 	MonitorService   monitor.MonitorServiceInterface
 	DBConnectionPool db.DBConnectionPool
 	AuthManager      auth.AuthManager
+	EventProducer    events.Producer
 }
 
 type PostDisbursementRequest struct {
@@ -233,7 +235,7 @@ func (d DisbursementHandler) PostDisbursementInstructions(w http.ResponseWriter,
 		return
 	}
 
-	if err = d.Models.DisbursementInstructions.ProcessAll(ctx, user.ID, instructions, disbursement, disbursementUpdate, data.MaxInstructionsPerDisbursement); err != nil {
+	if err = d.Models.DisbursementInstructions.ProcessAll(ctx, user.ID, instructions, disbursement, disbursementUpdate, data.MaxInstructionsPerDisbursement, d.EventProducer); err != nil {
 		switch {
 		case errors.Is(err, data.ErrMaxInstructionsExceeded):
 			httperror.BadRequest(fmt.Sprintf("number of instructions exceeds maximum of : %d", data.MaxInstructionsPerDisbursement), err, nil).Render(w)
