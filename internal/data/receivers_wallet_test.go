@@ -829,6 +829,8 @@ func Test_ReceiverWallet_GetAllPendingRegistrationByReceiverWalletIDs(t *testing
 		err := dbConnectionPool.GetContext(ctx, &invitationSentAt, q, rw4.ID)
 		require.NoError(t, err)
 
+		// If you pass only rw1 and rw3 IDs as parameters this function will only return these receiver wallets. That's why
+		// we need to pass all IDs.
 		rws, err := rwm.GetAllPendingRegistrationByReceiverWalletIDs(ctx, []string{rw1.ID, rw2.ID, rw3.ID, rw4.ID})
 		require.NoError(t, err)
 
