@@ -18,12 +18,6 @@ const (
 	PaymentCompletedErrorType            = "payment-completed-error"
 )
 
-// Type Names
-const (
-	RetryReceiverWalletSMSInvitationType = "retry-receiver-wallet-sms-invitation"
-	BatchReceiverWalletSMSInvitationType = "batch-receiver-wallet-sms-invitation"
-)
-
 type EventHandler interface {
 	Name() string
 	CanHandleMessage(ctx context.Context, message *Message) bool
