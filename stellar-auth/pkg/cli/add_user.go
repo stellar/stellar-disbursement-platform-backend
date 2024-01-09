@@ -108,7 +108,6 @@ func AddUserCmd(databaseURLFlagName string, passwordPrompt PasswordPromptInterfa
 				pwValidator, err := utils.NewPasswordValidator()
 				if err != nil {
 					log.Fatalf("cannot initialize password validator: %s", err)
-
 				}
 				err = pwValidator.ValidatePassword(result)
 				if err != nil {

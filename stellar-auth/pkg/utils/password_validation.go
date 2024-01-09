@@ -11,9 +11,8 @@ import (
 )
 
 const (
-	passwordMinLength           = 12
-	passwordMaxLength           = 36
-	compressedPasswordsFileName = "./common_passwords.txt.gz"
+	passwordMinLength = 12
+	passwordMaxLength = 36
 )
 
 //go:embed common_passwords.txt.gz
