@@ -23,3 +23,11 @@ func ParseEventBrokerType(ebType string) (EventBrokerType, error) {
 		return "", fmt.Errorf("invalid event broker type")
 	}
 }
+
+type EventReceiverWalletSMSInvitationData struct {
+	ReceiverWalletID string `json:"id"`
+}
+
+type EventPatchAnchorPlatformTransactionCompletionData struct {
+	PaymentID string `json:"payment_id"`
+}

@@ -82,7 +82,6 @@ func (s *ServerService) GetSchedulerJobRegistrars(ctx context.Context, serveOpts
 		scheduler.WithPaymentToSubmitterJobOption(models),
 		scheduler.WithPaymentFromSubmitterJobOption(models),
 		scheduler.WithAPAuthEnforcementJob(apAPIService, serveOpts.MonitorService, serveOpts.CrashTrackerClient.Clone()),
-		scheduler.WithPatchAnchorPlatformTransactionsCompletionJobOption(apAPIService, models),
 		scheduler.WithReadyPaymentsCancellationJobOption(models),
 	}, nil
 }
@@ -110,7 +109,22 @@ func (s *ServerService) SetupConsumers(ctx context.Context, serveOpts serve.Serv
 		log.Ctx(ctx).Fatalf("error creating SMS Invitation Kafka Consumer: %v", err)
 	}
 
+	patchAPTransactionCompletionConsumer, err := events.NewKafkaConsumer(
+		brokers,
+		events.PatchAnchorPlatformTransactionCompletionTopic,
+		consumerGroupID,
+		eventhandlers.NewPatchAnchorPlatformTransactionCompletionEventHandler(eventhandlers.PatchAnchorPlatformTransactionCompletionEventHandlerOptions{
+			DBConnectionPool:   dbConnectionPool,
+			APapiSvc:           serveOpts.AnchorPlatformAPIService,
+			CrashTrackerClient: serveOpts.CrashTrackerClient.Clone(),
+		}),
+	)
+	if err != nil {
+		log.Ctx(ctx).Fatalf("error creating Patch AP Transaction Completion Kafka Consumer: %v", err)
+	}
+
 	go events.Consume(ctx, smsInvitationConsumer, serveOpts.CrashTrackerClient.Clone())
+	go events.Consume(ctx, patchAPTransactionCompletionConsumer, serveOpts.CrashTrackerClient.Clone())
 }
 
 func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorService monitor.MonitorServiceInterface) *cobra.Command {
