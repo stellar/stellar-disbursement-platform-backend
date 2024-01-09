@@ -4,8 +4,15 @@ import (
 	"context"
 )
 
+// Topic Names
 const (
 	ReceiverWalletSMSInvitationTopic = "receiver-wallet-sms-invitation"
+)
+
+// Type Names
+const (
+	RetryReceiverWalletSMSInvitationType = "retry-receiver-wallet-sms-invitation"
+	BatchReceiverWalletSMSInvitationType = "batch-receiver-wallet-sms-invitation"
 )
 
 type EventHandler interface {

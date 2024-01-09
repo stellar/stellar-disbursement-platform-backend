@@ -55,7 +55,7 @@ func (h ReceiverWalletsHandler) RetryInvitation(rw http.ResponseWriter, req *htt
 		Topic:    events.ReceiverWalletSMSInvitationTopic,
 		Key:      receiverWalletID,
 		TenantID: tnt.ID,
-		Type:     "retry-receiver-wallet-sms-invitation",
+		Type:     events.RetryReceiverWalletSMSInvitationType,
 		Data: []schemas.EventReceiverWalletSMSInvitationData{
 			{
 				ReceiverWalletID: receiverWalletID,

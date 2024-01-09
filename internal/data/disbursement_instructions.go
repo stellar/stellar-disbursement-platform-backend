@@ -234,7 +234,7 @@ func (di DisbursementInstructionModel) ProcessAll(ctx context.Context, userID st
 			Topic:    events.ReceiverWalletSMSInvitationTopic,
 			Key:      disbursement.ID,
 			TenantID: tnt.ID,
-			Type:     "batch-receiver-wallet-sms-invitation",
+			Type:     events.BatchReceiverWalletSMSInvitationType,
 			Data:     eventData,
 		})
 		if err != nil {

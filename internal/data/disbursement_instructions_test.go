@@ -85,7 +85,7 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 
 				assert.Equal(t, events.ReceiverWalletSMSInvitationTopic, msg.Topic)
 				assert.Equal(t, disbursement.ID, msg.Key)
-				assert.Equal(t, "batch-receiver-wallet-sms-invitation", msg.Type)
+				assert.Equal(t, events.BatchReceiverWalletSMSInvitationType, msg.Type)
 				assert.Equal(t, tnt.ID, msg.TenantID)
 
 				var ok bool
@@ -152,7 +152,7 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 
 				assert.Equal(t, events.ReceiverWalletSMSInvitationTopic, msg.Topic)
 				assert.Equal(t, disbursement.ID, msg.Key)
-				assert.Equal(t, "batch-receiver-wallet-sms-invitation", msg.Type)
+				assert.Equal(t, events.BatchReceiverWalletSMSInvitationType, msg.Type)
 				assert.Equal(t, tnt.ID, msg.TenantID)
 
 				eventData := msg.Data.([]schemas.EventReceiverWalletSMSInvitationData)
@@ -169,7 +169,7 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 
 				assert.Equal(t, events.ReceiverWalletSMSInvitationTopic, msg.Topic)
 				assert.Equal(t, disbursement.ID, msg.Key)
-				assert.Equal(t, "batch-receiver-wallet-sms-invitation", msg.Type)
+				assert.Equal(t, events.BatchReceiverWalletSMSInvitationType, msg.Type)
 				assert.Equal(t, tnt.ID, msg.TenantID)
 
 				eventData := msg.Data.([]schemas.EventReceiverWalletSMSInvitationData)
@@ -255,7 +255,7 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 
 				assert.Equal(t, events.ReceiverWalletSMSInvitationTopic, msg.Topic)
 				assert.Equal(t, readyDisbursement.ID, msg.Key)
-				assert.Equal(t, "batch-receiver-wallet-sms-invitation", msg.Type)
+				assert.Equal(t, events.BatchReceiverWalletSMSInvitationType, msg.Type)
 				assert.Equal(t, tnt.ID, msg.TenantID)
 
 				var ok bool
@@ -274,7 +274,7 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 
 				assert.Equal(t, events.ReceiverWalletSMSInvitationTopic, msg.Topic)
 				assert.Equal(t, readyDisbursement.ID, msg.Key)
-				assert.Equal(t, "batch-receiver-wallet-sms-invitation", msg.Type)
+				assert.Equal(t, events.BatchReceiverWalletSMSInvitationType, msg.Type)
 				assert.Equal(t, tnt.ID, msg.TenantID)
 
 				var ok bool
@@ -368,7 +368,7 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 
 				assert.Equal(t, events.ReceiverWalletSMSInvitationTopic, msg.Topic)
 				assert.Equal(t, disbursement.ID, msg.Key)
-				assert.Equal(t, "batch-receiver-wallet-sms-invitation", msg.Type)
+				assert.Equal(t, events.BatchReceiverWalletSMSInvitationType, msg.Type)
 				assert.Equal(t, tnt.ID, msg.TenantID)
 
 				eventData := msg.Data.([]schemas.EventReceiverWalletSMSInvitationData)
@@ -414,7 +414,7 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 
 				assert.Equal(t, events.ReceiverWalletSMSInvitationTopic, msg.Topic)
 				assert.Equal(t, disbursement.ID, msg.Key)
-				assert.Equal(t, "batch-receiver-wallet-sms-invitation", msg.Type)
+				assert.Equal(t, events.BatchReceiverWalletSMSInvitationType, msg.Type)
 				assert.Equal(t, tnt.ID, msg.TenantID)
 
 				eventData, ok := msg.Data.([]schemas.EventReceiverWalletSMSInvitationData)

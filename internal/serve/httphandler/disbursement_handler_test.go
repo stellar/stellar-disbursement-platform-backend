@@ -792,7 +792,7 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 
 						assert.Equal(t, events.ReceiverWalletSMSInvitationTopic, msg.Topic)
 						assert.Equal(t, tc.disbursementID, msg.Key)
-						assert.Equal(t, "batch-receiver-wallet-sms-invitation", msg.Type)
+						assert.Equal(t, events.BatchReceiverWalletSMSInvitationType, msg.Type)
 						assert.Equal(t, tnt.ID, msg.TenantID)
 
 						eventData, ok := msg.Data.([]schemas.EventReceiverWalletSMSInvitationData)
