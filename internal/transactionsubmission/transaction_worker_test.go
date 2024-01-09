@@ -81,7 +81,15 @@ func createTxJobFixture(t *testing.T, ctx context.Context, dbConnectionPool db.D
 	chAccModel := store.NewChannelAccountModel(dbConnectionPool)
 
 	// Create txJob:
-	tx := store.CreateTransactionFixture(t, ctx, dbConnectionPool, uuid.NewString(), "USDC", "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5", "GCBIRB7Q5T53H4L6P5QSI3O6LPD5MBWGM5GHE7A5NY4XT5OT4VCOEZFX", store.TransactionStatusProcessing, 1)
+	tx := store.CreateTransactionFixtureNew(t, ctx, dbConnectionPool, store.TransactionFixture{
+		ExternalID:         uuid.NewString(),
+		AssetCode:          "USDC",
+		AssetIssuer:        "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+		DestinationAddress: "GCBIRB7Q5T53H4L6P5QSI3O6LPD5MBWGM5GHE7A5NY4XT5OT4VCOEZFX",
+		Status:             store.TransactionStatusProcessing,
+		Amount:             1,
+		TenantID:           uuid.NewString(),
+	})
 	chAcc := store.CreateChannelAccountFixtures(t, ctx, dbConnectionPool, 1)[0]
 
 	if shouldLock {
