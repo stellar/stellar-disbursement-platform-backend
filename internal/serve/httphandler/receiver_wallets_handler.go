@@ -51,7 +51,7 @@ func (h ReceiverWalletsHandler) RetryInvitation(rw http.ResponseWriter, req *htt
 		return
 	}
 
-	err = h.EventProducer.WriteMessages(ctx, events.Message{
+	msg := events.Message{
 		Topic:    events.ReceiverWalletSMSInvitationTopic,
 		Key:      receiverWalletID,
 		TenantID: tnt.ID,
@@ -61,9 +61,10 @@ func (h ReceiverWalletsHandler) RetryInvitation(rw http.ResponseWriter, req *htt
 				ReceiverWalletID: receiverWalletID,
 			},
 		},
-	})
+	}
+	err = h.EventProducer.WriteMessages(ctx, msg)
 	if err != nil {
-		err = fmt.Errorf("writing message on message broker: %w", err)
+		err = fmt.Errorf("publishing message %s on event producer: %w", msg.String(), err)
 		httperror.InternalError(ctx, "", err, nil).Render(rw)
 		return
 	}

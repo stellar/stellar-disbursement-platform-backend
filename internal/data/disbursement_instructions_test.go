@@ -425,7 +425,7 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 			Once()
 
 		err := di.ProcessAll(ctx, "user-id", instructions, disbursement, disbursementUpdate, MaxInstructionsPerDisbursement, &eventProducerMock)
-		assert.EqualError(t, err, "running atomic function in RunInTransactionWithResult: publishing event on event producer: unexpected error")
+		assert.Error(t, err)
 
 		// Assert no receivers were registered
 		receivers, err := di.receiverModel.GetByPhoneNumbers(ctx, dbConnectionPool, []string{instruction1.Phone, instruction2.Phone, instruction3.Phone})

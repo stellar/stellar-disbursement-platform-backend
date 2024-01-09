@@ -230,15 +230,16 @@ func (di DisbursementInstructionModel) ProcessAll(ctx context.Context, userID st
 			return fmt.Errorf("getting tenant from context: %w", err)
 		}
 
-		err = eventProducer.WriteMessages(ctx, events.Message{
+		msg := events.Message{
 			Topic:    events.ReceiverWalletSMSInvitationTopic,
 			Key:      disbursement.ID,
 			TenantID: tnt.ID,
 			Type:     events.BatchReceiverWalletSMSInvitationType,
 			Data:     eventData,
-		})
+		}
+		err = eventProducer.WriteMessages(ctx, msg)
 		if err != nil {
-			return fmt.Errorf("publishing event on event producer: %w", err)
+			return fmt.Errorf("publishing message %s on event producer: %w", msg.String(), err)
 		}
 
 		return nil

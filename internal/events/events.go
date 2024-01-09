@@ -31,7 +31,7 @@ type Message struct {
 }
 
 func (m Message) String() string {
-	return fmt.Sprintf("Topic: %s - Key: %s - Type: %s - Tenant ID: %s", m.Topic, m.Key, m.Type, m.TenantID)
+	return fmt.Sprintf("Message{Topic: %s, Key: %s, Type: %s, TenantID: %s, Data: %v}", m.Topic, m.Key, m.Type, m.TenantID, m.Data)
 }
 
 func (m Message) Validate() error {
