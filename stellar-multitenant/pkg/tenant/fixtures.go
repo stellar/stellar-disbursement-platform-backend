@@ -40,7 +40,7 @@ func ResetTenantConfigFixture(t *testing.T, ctx context.Context, dbConnectionPoo
 		SET
 			email_sender_type = DEFAULT, sms_sender_type = DEFAULT,
 			enable_mfa = DEFAULT, enable_recaptcha = DEFAULT,
-			cors_allowed_origins = NULL, base_url = NULL, sdp_ui_base_url = NULL
+			base_url = NULL, sdp_ui_base_url = NULL
 		WHERE
 			id = $1
 		RETURNING *
@@ -167,8 +167,8 @@ func ApplyMigrationsForTenantFixture(t *testing.T, ctx context.Context, dbConnec
 	dsn, err := m.GetDSNForTenant(ctx, tenantName)
 	require.NoError(t, err)
 
-	_, err = db.Migrate(dsn, migrate.Up, 0, sdpmigrations.FS, db.StellarSDPMigrationsTableName)
+	_, err = db.Migrate(dsn, migrate.Up, 0, sdpmigrations.FS, db.StellarPerTenantSDPMigrationsTableName)
 	require.NoError(t, err)
-	_, err = db.Migrate(dsn, migrate.Up, 0, authmigrations.FS, db.StellarAuthMigrationsTableName)
+	_, err = db.Migrate(dsn, migrate.Up, 0, authmigrations.FS, db.StellarPerTenantAuthMigrationsTableName)
 	require.NoError(t, err)
 }

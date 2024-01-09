@@ -71,12 +71,11 @@ const getQuery = `
 		    wallets w
 			LEFT JOIN wallets_assets wa ON w.id = wa.wallet_id
 			LEFT JOIN assets a ON a.id = wa.asset_id
-		%s
 	`
 
 func (wm *WalletModel) Get(ctx context.Context, id string) (*Wallet, error) {
 	var wallet Wallet
-	query := fmt.Sprintf(getQuery, `WHERE w.id = $1 GROUP BY w.id`)
+	query := fmt.Sprintf("%s %s", getQuery, `WHERE w.id = $1 GROUP BY w.id`)
 
 	err := wm.dbConnectionPool.GetContext(ctx, &wallet, query, id)
 	if err != nil {
@@ -91,7 +90,7 @@ func (wm *WalletModel) Get(ctx context.Context, id string) (*Wallet, error) {
 // GetByWalletName returns wallet filtering by wallet name.
 func (wm *WalletModel) GetByWalletName(ctx context.Context, name string) (*Wallet, error) {
 	var wallet Wallet
-	query := fmt.Sprintf(getQuery, `WHERE w.name = $1 GROUP BY w.id`)
+	query := fmt.Sprintf("%s %s", getQuery, `WHERE w.name = $1 GROUP BY w.id`)
 
 	err := wm.dbConnectionPool.GetContext(ctx, &wallet, query, name)
 	if err != nil {
@@ -110,11 +109,11 @@ func (wm *WalletModel) FindWallets(ctx context.Context, enabledFilter *bool) ([]
 	var args []interface{}
 
 	if enabledFilter != nil {
-		whereClause = "WHERE w.enabled = $1"
+		whereClause = "WHERE w.enabled = $1 "
 		args = append(args, *enabledFilter)
 	}
 
-	query := fmt.Sprintf(getQuery, whereClause+`GROUP BY w.id ORDER BY w.name`)
+	query := fmt.Sprintf("%s %s %s", getQuery, whereClause, `GROUP BY w.id ORDER BY w.name`)
 
 	err := wm.dbConnectionPool.SelectContext(ctx, &wallets, query, args...)
 	if err != nil {

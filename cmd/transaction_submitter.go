@@ -14,6 +14,7 @@ import (
 	"github.com/stellar/go/txnbuild"
 
 	cmdUtils "github.com/stellar/stellar-disbursement-platform-backend/cmd/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/db/router"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	di "github.com/stellar/stellar-disbursement-platform-backend/internal/dependencyinjection"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
@@ -154,7 +155,7 @@ func (c *TxSubmitterCommand) Command(submitterService TxSubmitterServiceInterfac
 			// Initializing monitor service
 			metricOptions := monitor.MetricOptions{
 				MetricType:  metricsServeOpts.MetricType,
-				Environment: globalOptions.environment,
+				Environment: globalOptions.Environment,
 			}
 
 			monitorClient, err := monitor.GetClient(metricOptions)
@@ -164,19 +165,23 @@ func (c *TxSubmitterCommand) Command(submitterService TxSubmitterServiceInterfac
 
 			tssMonitorSvc := tssMonitor.TSSMonitorService{
 				Client:        monitorClient,
-				GitCommitHash: globalOptions.gitCommit,
-				Version:       globalOptions.version,
+				GitCommitHash: globalOptions.GitCommit,
+				Version:       globalOptions.Version,
 			}
 			metricsServeOpts.MonitorService = &tssMonitorSvc
 
 			// Inject server dependencies
+			tssDatabaseDSN, err := router.GetDNSForTSS(globalOptions.DatabaseURL)
+			if err != nil {
+				log.Ctx(ctx).Fatalf("Error getting TSS database DSN: %v", err)
+			}
+			submitterOpts.DatabaseDSN = tssDatabaseDSN
 			submitterOpts.MonitorService = tssMonitorSvc
-			submitterOpts.DatabaseDSN = globalOptions.databaseURL
-			submitterOpts.NetworkPassphrase = globalOptions.networkPassphrase
+			submitterOpts.NetworkPassphrase = globalOptions.NetworkPassphrase
 			submitterOpts.PrivateKeyEncrypter = tssUtils.DefaultPrivateKeyEncrypter{}
 
 			// Inject crash tracker options dependencies
-			globalOptions.populateCrashTrackerOptions(&crashTrackerOptions)
+			globalOptions.PopulateCrashTrackerOptions(&crashTrackerOptions)
 			// Setup default Crash Tracker client
 			crashTrackerClient, err := di.NewCrashTracker(ctx, crashTrackerOptions)
 			if err != nil {

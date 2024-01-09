@@ -7,12 +7,17 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/keypair"
 	"github.com/stellar/go/network"
 	"github.com/stellar/go/protocols/horizon"
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/txnbuild"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
@@ -24,13 +29,10 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 	storeMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
-	"github.com/stretchr/testify/require"
 )
 
 func Test_SubmitterOptions_validate(t *testing.T) {
-	dbt := dbtest.Open(t)
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 
 	testCases := []struct {
@@ -194,7 +196,7 @@ func Test_SubmitterOptions_validate(t *testing.T) {
 }
 
 func Test_NewManager(t *testing.T) {
-	dbt := dbtest.Open(t)
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
@@ -371,7 +373,7 @@ func Test_NewManager(t *testing.T) {
 }
 
 func Test_Manager_ProcessTransactions(t *testing.T) {
-	dbt := dbtest.Open(t)
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
@@ -410,7 +412,15 @@ func Test_Manager_ProcessTransactions(t *testing.T) {
 			}
 
 			// Create transactions to be used by the tx submitter
-			transactions := store.CreateTransactionFixtures(t, ctx, dbConnectionPool, 10, "USDC", "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5", keypair.MustRandom().Address(), store.TransactionStatusPending, 1)
+			transactions := store.CreateTransactionFixturesNew(t, ctx, dbConnectionPool, 10, store.TransactionFixture{
+				AssetCode:          "USDC",
+				AssetIssuer:        "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+				DestinationAddress: keypair.MustRandom().Address(),
+				Status:             store.TransactionStatusPending,
+				Amount:             1,
+				TenantID:           uuid.NewString(),
+			})
+
 			assert.Len(t, transactions, 10)
 
 			// Signature service

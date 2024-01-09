@@ -15,6 +15,10 @@ import (
 	"github.com/stellar/go/protocols/horizon"
 	"github.com/stellar/go/support/render/problem"
 	"github.com/stellar/go/txnbuild"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
@@ -27,9 +31,6 @@ import (
 	storeMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
 	sdpUtlis "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
-	"github.com/stretchr/testify/require"
 )
 
 // getTransactionWorkerInstance is used to create a valid instance of the class TransactionWorker, which is needed in
@@ -80,7 +81,15 @@ func createTxJobFixture(t *testing.T, ctx context.Context, dbConnectionPool db.D
 	chAccModel := store.NewChannelAccountModel(dbConnectionPool)
 
 	// Create txJob:
-	tx := store.CreateTransactionFixture(t, ctx, dbConnectionPool, uuid.NewString(), "USDC", "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5", "GCBIRB7Q5T53H4L6P5QSI3O6LPD5MBWGM5GHE7A5NY4XT5OT4VCOEZFX", store.TransactionStatusProcessing, 1)
+	tx := store.CreateTransactionFixtureNew(t, ctx, dbConnectionPool, store.TransactionFixture{
+		ExternalID:         uuid.NewString(),
+		AssetCode:          "USDC",
+		AssetIssuer:        "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+		DestinationAddress: "GCBIRB7Q5T53H4L6P5QSI3O6LPD5MBWGM5GHE7A5NY4XT5OT4VCOEZFX",
+		Status:             store.TransactionStatusProcessing,
+		Amount:             1,
+		TenantID:           uuid.NewString(),
+	})
 	chAcc := store.CreateChannelAccountFixtures(t, ctx, dbConnectionPool, 1)[0]
 
 	if shouldLock {
@@ -97,7 +106,7 @@ func createTxJobFixture(t *testing.T, ctx context.Context, dbConnectionPool db.D
 }
 
 func Test_NewTransactionWorker(t *testing.T) {
-	dbt := dbtest.Open(t)
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
@@ -257,7 +266,7 @@ func Test_NewTransactionWorker(t *testing.T) {
 }
 
 func Test_TransactionWorker_handleSuccessfulTransaction(t *testing.T) {
-	dbt := dbtest.Open(t)
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
@@ -458,7 +467,7 @@ func Test_TransactionWorker_handleSuccessfulTransaction(t *testing.T) {
 }
 
 func Test_TransactionWorker_reconcileSubmittedTransaction(t *testing.T) {
-	dbt := dbtest.Open(t)
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
@@ -575,7 +584,7 @@ func Test_TransactionWorker_reconcileSubmittedTransaction(t *testing.T) {
 }
 
 func Test_TransactionWorker_validateJob(t *testing.T) {
-	dbt := dbtest.Open(t)
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
@@ -696,7 +705,7 @@ func Test_TransactionWorker_validateJob(t *testing.T) {
 }
 
 func Test_TransactionWorker_buildAndSignTransaction(t *testing.T) {
-	dbt := dbtest.Open(t)
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
@@ -852,7 +861,7 @@ func Test_TransactionWorker_buildAndSignTransaction(t *testing.T) {
 }
 
 func Test_TransactionWorker_submit(t *testing.T) {
-	dbt := dbtest.Open(t)
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)

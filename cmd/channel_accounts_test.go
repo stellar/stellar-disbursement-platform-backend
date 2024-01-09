@@ -10,31 +10,50 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/stellar/go/keypair"
+	"github.com/stellar/go/network"
 	"github.com/stellar/go/txnbuild"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/cmd/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/cmd/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	txSubSvc "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/services"
 )
 
 func Test_ChannelAccountsCommand_Command(t *testing.T) {
-	dbt := dbtest.Open(t)
-
-	caCommand := &ChannelAccountsCommand{}
-
+	dbt := dbtest.OpenWithoutMigrations(t)
 	root := rootCmd()
-	cmd := caCommand.Command()
-	root.AddCommand(cmd)
 
+	// Run tss migrations:
+	globalOptions := utils.GlobalOptionsType{
+		DatabaseURL:       dbt.DSN,
+		NetworkPassphrase: network.TestNetworkPassphrase,
+	}
+	dbCommand := (&db.DatabaseCommand{}).Command(&globalOptions)
+	root.AddCommand(dbCommand)
+	root.SetArgs([]string{
+		"db",
+		"tss",
+		"migrate",
+		"up",
+		"--database-url",
+		dbt.DSN,
+	})
+	err := dbCommand.Execute()
+	require.NoError(t, err)
+
+	// Run channel accounts verify:
+	caCommand := (&ChannelAccountsCommand{}).Command()
+	root.AddCommand(caCommand)
 	root.SetArgs([]string{
 		"channel-accounts",
 		"verify",
 		"--database-url",
 		dbt.DSN,
 	})
-	err := cmd.Execute()
+	err = caCommand.Execute()
 	require.NoError(t, err)
 }
 

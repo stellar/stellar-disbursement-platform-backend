@@ -13,9 +13,11 @@ import (
 type MigrationTableName string
 
 const (
-	StellarMultiTenantMigrationsTableName MigrationTableName = "migrations"
-	StellarSDPMigrationsTableName         MigrationTableName = "gorp_migrations"
-	StellarAuthMigrationsTableName        MigrationTableName = "auth_migrations"
+	// NOTE: these names are hardcoded in the `db.dbtest.Open` method and need to be kept in sync if updated.
+	StellarAdminMigrationsTableName         MigrationTableName = "admin_migrations"
+	StellarTSSMigrationsTableName           MigrationTableName = "tss_migrations"
+	StellarPerTenantSDPMigrationsTableName  MigrationTableName = "sdp_migrations"
+	StellarPerTenantAuthMigrationsTableName MigrationTableName = "auth_migrations"
 )
 
 func Migrate(dbURL string, dir migrate.MigrationDirection, count int, migrationFiles embed.FS, tableName MigrationTableName) (int, error) {

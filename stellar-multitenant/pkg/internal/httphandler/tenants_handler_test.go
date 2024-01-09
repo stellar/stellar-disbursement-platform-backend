@@ -76,7 +76,7 @@ func runSuccessfulRequestPatchTest(t *testing.T, r *chi.Mux, ctx context.Context
 }
 
 func Test_TenantHandler_Get(t *testing.T) {
-	dbt := dbtest.OpenWithTenantMigrationsOnly(t)
+	dbt := dbtest.OpenWithAdminMigrationsOnly(t)
 	defer dbt.Close()
 
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
@@ -135,7 +135,6 @@ func Test_TenantHandler_Get(t *testing.T) {
 					"sms_sender_type": "DRY_RUN",
 					"enable_mfa": true,
 					"enable_recaptcha": true,
-					"cors_allowed_origins": null,
 					"base_url": null,
 					"sdp_ui_base_url": null,
 					"status": "TENANT_CREATED",
@@ -149,7 +148,6 @@ func Test_TenantHandler_Get(t *testing.T) {
 					"sms_sender_type": "DRY_RUN",
 					"enable_mfa": true,
 					"enable_recaptcha": true,
-					"cors_allowed_origins": null,
 					"base_url": null,
 					"sdp_ui_base_url": null,
 					"status": "TENANT_CREATED",
@@ -184,7 +182,6 @@ func Test_TenantHandler_Get(t *testing.T) {
 				"sms_sender_type": "DRY_RUN",
 				"enable_mfa": true,
 				"enable_recaptcha": true,
-				"cors_allowed_origins": null,
 				"base_url": null,
 				"sdp_ui_base_url": null,
 				"status": "TENANT_CREATED",
@@ -218,7 +215,6 @@ func Test_TenantHandler_Get(t *testing.T) {
 				"sms_sender_type": "DRY_RUN",
 				"enable_mfa": true,
 				"enable_recaptcha": true,
-				"cors_allowed_origins": null,
 				"base_url": null,
 				"sdp_ui_base_url": null,
 				"status": "TENANT_CREATED",
@@ -251,7 +247,7 @@ func Test_TenantHandler_Get(t *testing.T) {
 }
 
 func Test_TenantHandler_Post(t *testing.T) {
-	dbt := dbtest.OpenWithTenantMigrationsOnly(t)
+	dbt := dbtest.OpenWithAdminMigrationsOnly(t)
 	defer dbt.Close()
 
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
@@ -297,7 +293,6 @@ func Test_TenantHandler_Post(t *testing.T) {
 					"base_url": "invalid base URL value",
 					"email_sender_type": "invalid email sender type. Expected one of these values: [AWS_EMAIL DRY_RUN]",
 					"sms_sender_type": "invalid sms sender type. Expected one of these values: [TWILIO_SMS AWS_SMS DRY_RUN]",
-					"cors_allowed_origins": "provide at least one CORS allowed origins",
 					"sdp_ui_base_url": "invalid SDP UI base URL value"
 				}
 			}
@@ -330,7 +325,6 @@ func Test_TenantHandler_Post(t *testing.T) {
 				"sms_sender_type": "DRY_RUN",
 				"enable_recaptcha": true,
 				"enable_mfa": false,
-				"cors_allowed_origins": ["*"],
 				"base_url": "https://backend.sdp.org",
 				"sdp_ui_base_url": "https://aid-org.sdp.org"
 			}
@@ -359,7 +353,6 @@ func Test_TenantHandler_Post(t *testing.T) {
 				"sms_sender_type": "DRY_RUN",
 				"enable_mfa": false,
 				"enable_recaptcha": true,
-				"cors_allowed_origins": ["*"],
 				"base_url": "https://backend.sdp.org",
 				"sdp_ui_base_url": "https://aid-org.sdp.org",
 				"status": "TENANT_PROVISIONED",
@@ -377,17 +370,15 @@ func Test_TenantHandler_Post(t *testing.T) {
 			"auth_user_mfa_codes",
 			"auth_user_password_reset",
 			"auth_users",
-			"channel_accounts",
 			"countries",
 			"disbursements",
-			"gorp_migrations",
+			"sdp_migrations",
 			"messages",
 			"organizations",
 			"payments",
 			"receiver_verifications",
 			"receiver_wallets",
 			"receivers",
-			"submitter_transactions",
 			"wallets",
 			"wallets_assets",
 		}
@@ -410,7 +401,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 }
 
 func Test_TenantHandler_Patch(t *testing.T) {
-	dbt := dbtest.OpenWithTenantMigrationsOnly(t)
+	dbt := dbtest.OpenWithAdminMigrationsOnly(t)
 	defer dbt.Close()
 
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
@@ -484,28 +475,6 @@ func Test_TenantHandler_Patch(t *testing.T) {
 		runBadRequestPatchTest(t, r, url, "status", "invalid status value")
 	})
 
-	t.Run("returns BadRequest when CORSAllowedOrigins is not valid", func(t *testing.T) {
-		rr := httptest.NewRecorder()
-		req, err := http.NewRequest(http.MethodPatch, url, strings.NewReader(`{"cors_allowed_origins": ["invalid"]}`))
-		require.NoError(t, err)
-		r.ServeHTTP(rr, req)
-
-		resp := rr.Result()
-		defer resp.Body.Close()
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-
-		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
-
-		expectedRespBody := `{
-			"error": "invalid request body",
-			"extras": {
-				"cors_allowed_origins":"invalid URL value for cors_allowed_origins[0] = invalid"
-			}
-		}`
-		assert.JSONEq(t, string(expectedRespBody), string(respBody))
-	})
-
 	t.Run("successfully updates EmailSenderType of a tenant", func(t *testing.T) {
 		reqBody := `{"email_sender_type": "AWS_EMAIL"}`
 		expectedRespBody := `
@@ -513,7 +482,6 @@ func Test_TenantHandler_Patch(t *testing.T) {
 			"sms_sender_type": "DRY_RUN",
 			"enable_mfa": true,
 			"enable_recaptcha": true,
-			"cors_allowed_origins": null,
 			"base_url": null,
 			"sdp_ui_base_url": null,
 			"status": "TENANT_CREATED",
@@ -529,7 +497,6 @@ func Test_TenantHandler_Patch(t *testing.T) {
 			"sms_sender_type": "TWILIO_SMS",
 			"enable_mfa": true,
 			"enable_recaptcha": true,
-			"cors_allowed_origins": null,
 			"base_url": null,
 			"sdp_ui_base_url": null,
 			"status": "TENANT_CREATED",
@@ -545,7 +512,6 @@ func Test_TenantHandler_Patch(t *testing.T) {
 			"sms_sender_type": "DRY_RUN",
 			"enable_mfa": false,
 			"enable_recaptcha": true,
-			"cors_allowed_origins": null,
 			"base_url": null,
 			"sdp_ui_base_url": null,
 			"status": "TENANT_CREATED",
@@ -561,23 +527,6 @@ func Test_TenantHandler_Patch(t *testing.T) {
 			"sms_sender_type": "DRY_RUN",
 			"enable_mfa": true,
 			"enable_recaptcha": false,
-			"cors_allowed_origins": null,
-			"base_url": null,
-			"sdp_ui_base_url": null,
-			"status": "TENANT_CREATED",
-		`
-
-		runSuccessfulRequestPatchTest(t, r, ctx, dbConnectionPool, handler, reqBody, expectedRespBody)
-	})
-
-	t.Run("successfully updates CORSAllowedOrigins of a tenant", func(t *testing.T) {
-		reqBody := `{"cors_allowed_origins": ["http://valid.com"]}`
-		expectedRespBody := `
-			"email_sender_type": "DRY_RUN",
-			"sms_sender_type": "DRY_RUN",
-			"enable_mfa": true,
-			"enable_recaptcha": true,
-			"cors_allowed_origins": ["http://valid.com"],
 			"base_url": null,
 			"sdp_ui_base_url": null,
 			"status": "TENANT_CREATED",
@@ -593,7 +542,6 @@ func Test_TenantHandler_Patch(t *testing.T) {
 			"sms_sender_type": "DRY_RUN",
 			"enable_mfa": true,
 			"enable_recaptcha": true,
-			"cors_allowed_origins": null,
 			"base_url": "http://valid.com",
 			"sdp_ui_base_url": null,
 			"status": "TENANT_CREATED",
@@ -609,7 +557,6 @@ func Test_TenantHandler_Patch(t *testing.T) {
 			"sms_sender_type": "DRY_RUN",
 			"enable_mfa": true,
 			"enable_recaptcha": true,
-			"cors_allowed_origins": null,
 			"base_url": null,
 			"sdp_ui_base_url": "http://valid.com",
 			"status": "TENANT_CREATED",
@@ -625,7 +572,6 @@ func Test_TenantHandler_Patch(t *testing.T) {
 			"sms_sender_type": "DRY_RUN",
 			"enable_mfa": true,
 			"enable_recaptcha": true,
-			"cors_allowed_origins": null,
 			"base_url": null,
 			"sdp_ui_base_url": null,
 			"status": "TENANT_ACTIVATED",
@@ -640,7 +586,6 @@ func Test_TenantHandler_Patch(t *testing.T) {
 			"sms_sender_type": "AWS_SMS",
 			"enable_mfa": false,
 			"enable_recaptcha": false,
-			"cors_allowed_origins": ["http://valid.com"],
 			"base_url": "http://valid.com",
 			"sdp_ui_base_url": "http://valid.com",
 			"status": "TENANT_ACTIVATED"
@@ -651,7 +596,6 @@ func Test_TenantHandler_Patch(t *testing.T) {
 			"sms_sender_type": "AWS_SMS",
 			"enable_mfa": false,
 			"enable_recaptcha": false,
-			"cors_allowed_origins": ["http://valid.com"],
 			"base_url": "http://valid.com",
 			"sdp_ui_base_url": "http://valid.com",
 			"status": "TENANT_ACTIVATED",

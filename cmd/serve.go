@@ -69,7 +69,7 @@ func (s *ServerService) StartAdminServe(opts serveadmin.ServeOptions, httpServer
 
 func (s *ServerService) GetSchedulerJobRegistrars(ctx context.Context, serveOpts serve.ServeOptions, schedulerOptions scheduler.SchedulerOptions, apAPIService anchorplatform.AnchorPlatformAPIServiceInterface) ([]scheduler.SchedulerJobRegisterOption, error) {
 	// TODO: inject these in the server options, to do the Dependency Injection properly.
-	dbConnectionPool, err := db.OpenDBConnectionPool(globalOptions.databaseURL)
+	dbConnectionPool, err := db.OpenDBConnectionPool(globalOptions.DatabaseURL)
 	if err != nil {
 		log.Ctx(ctx).Fatalf("error getting DB connection in Job Scheduler: %s", err.Error())
 	}
@@ -297,22 +297,6 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			Required:       true,
 		},
 		{
-			Name:        "enable-mfa",
-			Usage:       "Enable MFA using email.",
-			OptType:     types.Bool,
-			ConfigKey:   &serveOpts.EnableMFA,
-			FlagDefault: true,
-			Required:    false,
-		},
-		{
-			Name:        "enable-recaptcha",
-			Usage:       "Enable ReCAPTCHA for login and forgot password.",
-			OptType:     types.Bool,
-			ConfigKey:   &serveOpts.EnableReCAPTCHA,
-			FlagDefault: true,
-			Required:    false,
-		},
-		{
 			Name:        "horizon-url",
 			Usage:       "Stellar Horizon URL.",
 			OptType:     types.String,
@@ -412,7 +396,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			// Initializing monitor service
 			metricOptions := monitor.MetricOptions{
 				MetricType:  metricsServeOpts.MetricType,
-				Environment: globalOptions.environment,
+				Environment: globalOptions.Environment,
 			}
 
 			err = monitorService.Start(metricOptions)
@@ -421,27 +405,27 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			}
 
 			// Inject crash tracker options dependencies
-			globalOptions.populateCrashTrackerOptions(&crashTrackerOptions)
+			globalOptions.PopulateCrashTrackerOptions(&crashTrackerOptions)
 
 			// Inject server dependencies
-			serveOpts.Environment = globalOptions.environment
-			serveOpts.GitCommit = globalOptions.gitCommit
-			serveOpts.DatabaseDSN = globalOptions.databaseURL
-			serveOpts.Version = globalOptions.version
+			serveOpts.Environment = globalOptions.Environment
+			serveOpts.GitCommit = globalOptions.GitCommit
+			serveOpts.DatabaseDSN = globalOptions.DatabaseURL
+			serveOpts.Version = globalOptions.Version
 			serveOpts.MonitorService = monitorService
-			serveOpts.BaseURL = globalOptions.baseURL
-			serveOpts.NetworkPassphrase = globalOptions.networkPassphrase
+			serveOpts.BaseURL = globalOptions.BaseURL
+			serveOpts.NetworkPassphrase = globalOptions.NetworkPassphrase
 
 			// Inject metrics server dependencies
 			metricsServeOpts.MonitorService = monitorService
-			metricsServeOpts.Environment = globalOptions.environment
+			metricsServeOpts.Environment = globalOptions.Environment
 
 			// Inject tenant server dependencies
-			adminServeOpts.DatabaseDSN = globalOptions.databaseURL
-			adminServeOpts.Environment = globalOptions.environment
-			adminServeOpts.GitCommit = globalOptions.gitCommit
-			adminServeOpts.Version = globalOptions.version
-			adminServeOpts.NetworkPassphrase = globalOptions.networkPassphrase
+			adminServeOpts.DatabaseDSN = globalOptions.DatabaseURL
+			adminServeOpts.Environment = globalOptions.Environment
+			adminServeOpts.GitCommit = globalOptions.GitCommit
+			adminServeOpts.Version = globalOptions.Version
+			adminServeOpts.NetworkPassphrase = globalOptions.NetworkPassphrase
 		},
 		Run: func(cmd *cobra.Command, _ []string) {
 			ctx := cmd.Context()

@@ -55,7 +55,7 @@ func (s *MessageCommand) Command(messengerService MessengerServiceInterface) *co
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
 			cmd.Parent().PersistentPreRun(cmd.Parent(), args)
 			// Inject dependencies:
-			opts.Environment = globalOptions.environment
+			opts.Environment = globalOptions.Environment
 
 			// Validate & ingest input parameters
 			messageCmdConfigOpts.Require()

@@ -14,13 +14,13 @@ import (
 	"github.com/stellar/go/support/log"
 	dbpkg "github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
-	migrations "github.com/stellar/stellar-disbursement-platform-backend/db/migrations/tenant-migrations"
+	adminMigrations "github.com/stellar/stellar-disbursement-platform-backend/db/migrations/admin-migrations"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func getMigrationsApplied(t *testing.T, ctx context.Context, db *sql.DB) []string {
-	rows, err := db.QueryContext(ctx, fmt.Sprintf("SELECT id FROM %s", dbpkg.StellarMultiTenantMigrationsTableName))
+	rows, err := db.QueryContext(ctx, fmt.Sprintf("SELECT id FROM %s", dbpkg.StellarAdminMigrationsTableName))
 	require.NoError(t, err)
 
 	defer rows.Close()
@@ -52,17 +52,17 @@ func Test_MigrateCmd(t *testing.T) {
 		{
 			name:   "test help command",
 			args:   []string{"migrate", "--help"},
-			expect: "Apply Stellar Multitenant database migrations\n\nUsage:\n  mtn migrate [flags]\n  mtn migrate [command]\n\nAvailable Commands:\n  down        Migrates database down [count] migrations\n  up          Migrates database up [count]\n\nFlags:\n  -h, --help   help for migrate\n\nGlobal Flags:\n      --multitenant-db-url string   Postgres DB URL (MULTITENANT_DB_URL) (default \"postgres://postgres:postgres@localhost:5432/sdp_main?sslmode=disable\")\n\nUse \"mtn migrate [command] --help\" for more information about a command.\n",
+			expect: "Schema migration helpers",
 		},
 		{
 			name:   "test short help command",
 			args:   []string{"migrate", "-h"},
-			expect: "Apply Stellar Multitenant database migrations\n\nUsage:\n  mtn migrate [flags]\n  mtn migrate [command]\n\nAvailable Commands:\n  down        Migrates database down [count] migrations\n  up          Migrates database up [count]\n\nFlags:\n  -h, --help   help for migrate\n\nGlobal Flags:\n      --multitenant-db-url string   Postgres DB URL (MULTITENANT_DB_URL) (default \"postgres://postgres:postgres@localhost:5432/sdp_main?sslmode=disable\")\n\nUse \"mtn migrate [command] --help\" for more information about a command.\n",
+			expect: "Schema migration helpers",
 		},
 		{
 			name:   "test migrate up successfully",
 			args:   []string{"--multitenant-db-url", "", "migrate", "up", "1"},
-			expect: "Successfully applied 1 migrations.",
+			expect: "Successfully applied 1 migrations up.",
 			postRunFunc: func(db *sql.DB) {
 				ids := getMigrationsApplied(t, context.Background(), db)
 				assert.Equal(t, []string{"2023-10-16.0.add-tenants-table.sql"}, ids)
@@ -72,7 +72,7 @@ func Test_MigrateCmd(t *testing.T) {
 			name:    "test migrate up successfully when using the MULTITENANT_DB_URL env var",
 			args:    []string{"migrate", "up", "1"},
 			envVars: map[string]string{"MULTITENANT_DB_URL": ""},
-			expect:  "Successfully applied 1 migrations.",
+			expect:  "Successfully applied 1 migrations up.",
 			postRunFunc: func(db *sql.DB) {
 				ids := getMigrationsApplied(t, context.Background(), db)
 				assert.Equal(t, []string{"2023-10-16.0.add-tenants-table.sql"}, ids)
@@ -93,9 +93,9 @@ func Test_MigrateCmd(t *testing.T) {
 		{
 			name:   "test migrate down successfully",
 			args:   []string{"--multitenant-db-url", "", "migrate", "down", "1"},
-			expect: "Successfully applied 1 migrations.",
+			expect: "Successfully applied 1 migrations down.",
 			preRunFunc: func(t *testing.T, db *stellardbtest.DB) {
-				_, err := dbpkg.Migrate(db.DSN, migrate.Up, 1, migrations.FS, dbpkg.StellarMultiTenantMigrationsTableName)
+				_, err := dbpkg.Migrate(db.DSN, migrate.Up, 1, adminMigrations.FS, dbpkg.StellarAdminMigrationsTableName)
 				require.NoError(t, err)
 
 				conn := db.Open()
@@ -113,9 +113,9 @@ func Test_MigrateCmd(t *testing.T) {
 			name:    "test migrate up successfully when using the MULTITENANT_DB_URL env var",
 			args:    []string{"migrate", "down", "1"},
 			envVars: map[string]string{"MULTITENANT_DB_URL": ""},
-			expect:  "Successfully applied 1 migrations.",
+			expect:  "Successfully applied 1 migrations down.",
 			preRunFunc: func(t *testing.T, db *stellardbtest.DB) {
-				_, err := dbpkg.Migrate(db.DSN, migrate.Up, 1, migrations.FS, dbpkg.StellarMultiTenantMigrationsTableName)
+				_, err := dbpkg.Migrate(db.DSN, migrate.Up, 1, adminMigrations.FS, dbpkg.StellarAdminMigrationsTableName)
 				require.NoError(t, err)
 
 				conn := db.Open()
@@ -215,5 +215,5 @@ func Test_MigrateCmd_databaseFlagName(t *testing.T) {
 	err = testCmd.Execute()
 	require.NoError(t, err)
 
-	assert.Contains(t, buf.String(), "Successfully applied 1 migrations.")
+	assert.Contains(t, buf.String(), "Successfully applied 1 migrations up.")
 }

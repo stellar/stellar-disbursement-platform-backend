@@ -20,7 +20,7 @@ import (
 )
 
 func getMigrationsApplied(t *testing.T, ctx context.Context, db *sql.DB) []string {
-	rows, err := db.QueryContext(ctx, fmt.Sprintf("SELECT id FROM %s", dbpkg.StellarAuthMigrationsTableName))
+	rows, err := db.QueryContext(ctx, fmt.Sprintf("SELECT id FROM %s", dbpkg.StellarPerTenantAuthMigrationsTableName))
 	require.NoError(t, err)
 
 	defer rows.Close()
@@ -52,17 +52,17 @@ func Test_MigrateCmd(t *testing.T) {
 		{
 			name:   "test help command",
 			args:   []string{"migrate", "--help"},
-			expect: "Apply Stellar Auth database migrations\n\nUsage:\n  stellarauth migrate [flags]\n  stellarauth migrate [command]\n\nAvailable Commands:\n  down        Migrates database down [count] migrations\n  up          Migrates database up [count]\n\nFlags:\n  -h, --help   help for migrate\n\nGlobal Flags:\n      --database-url string   Postgres DB URL (DATABASE_URL) (default \"postgres://postgres:postgres@localhost:5432/stellar-auth?sslmode=disable\")\n      --log-level string      The log level used in this project. Options: \"TRACE\", \"DEBUG\", \"INFO\", \"WARN\", \"ERROR\", \"FATAL\", or \"PANIC\". (LOG_LEVEL) (default \"TRACE\")\n\nUse \"stellarauth migrate [command] --help\" for more information about a command.\n",
+			expect: "Apply Stellar Auth database migrations\n\nUsage:\n  stellarauth migrate [flags]\n  stellarauth migrate [command]\n\nAvailable Commands:\n  down        Migrates database down [count] migrations\n  up          Migrates database up [count] migrations\n\nFlags:\n  -h, --help   help for migrate\n\nGlobal Flags:\n      --database-url string   Postgres DB URL (DATABASE_URL) (default \"postgres://postgres:postgres@localhost:5432/stellar-auth?sslmode=disable\")\n      --log-level string      The log level used in this project. Options: \"TRACE\", \"DEBUG\", \"INFO\", \"WARN\", \"ERROR\", \"FATAL\", or \"PANIC\". (LOG_LEVEL) (default \"TRACE\")\n\nUse \"stellarauth migrate [command] --help\" for more information about a command.\n",
 		},
 		{
 			name:   "test short help command",
 			args:   []string{"migrate", "-h"},
-			expect: "Apply Stellar Auth database migrations\n\nUsage:\n  stellarauth migrate [flags]\n  stellarauth migrate [command]\n\nAvailable Commands:\n  down        Migrates database down [count] migrations\n  up          Migrates database up [count]\n\nFlags:\n  -h, --help   help for migrate\n\nGlobal Flags:\n      --database-url string   Postgres DB URL (DATABASE_URL) (default \"postgres://postgres:postgres@localhost:5432/stellar-auth?sslmode=disable\")\n      --log-level string      The log level used in this project. Options: \"TRACE\", \"DEBUG\", \"INFO\", \"WARN\", \"ERROR\", \"FATAL\", or \"PANIC\". (LOG_LEVEL) (default \"TRACE\")\n\nUse \"stellarauth migrate [command] --help\" for more information about a command.\n",
+			expect: "Apply Stellar Auth database migrations\n\nUsage:\n  stellarauth migrate [flags]\n  stellarauth migrate [command]\n\nAvailable Commands:\n  down        Migrates database down [count] migrations\n  up          Migrates database up [count] migrations\n\nFlags:\n  -h, --help   help for migrate\n\nGlobal Flags:\n      --database-url string   Postgres DB URL (DATABASE_URL) (default \"postgres://postgres:postgres@localhost:5432/stellar-auth?sslmode=disable\")\n      --log-level string      The log level used in this project. Options: \"TRACE\", \"DEBUG\", \"INFO\", \"WARN\", \"ERROR\", \"FATAL\", or \"PANIC\". (LOG_LEVEL) (default \"TRACE\")\n\nUse \"stellarauth migrate [command] --help\" for more information about a command.\n",
 		},
 		{
 			name:   "test migrate up successfully",
 			args:   []string{"--log-level", "TRACE", "--database-url", "", "migrate", "up", "1"},
-			expect: "Successfully applied 1 migrations.",
+			expect: "Successfully applied 1 migrations up.",
 			postRunFunc: func(db *sql.DB) {
 				ids := getMigrationsApplied(t, context.Background(), db)
 				assert.Equal(t, []string{"2023-02-09.0.add-users-table.sql"}, ids)
@@ -72,7 +72,7 @@ func Test_MigrateCmd(t *testing.T) {
 			name:    "test migrate up successfully when using the DATABASE_URL env var",
 			args:    []string{"--log-level", "TRACE", "migrate", "up", "1"},
 			envVars: map[string]string{"DATABASE_URL": ""},
-			expect:  "Successfully applied 1 migrations.",
+			expect:  "Successfully applied 1 migrations up.",
 			postRunFunc: func(db *sql.DB) {
 				ids := getMigrationsApplied(t, context.Background(), db)
 				assert.Equal(t, []string{"2023-02-09.0.add-users-table.sql"}, ids)
@@ -93,9 +93,9 @@ func Test_MigrateCmd(t *testing.T) {
 		{
 			name:   "test migrate down successfully",
 			args:   []string{"--log-level", "TRACE", "--database-url", "", "migrate", "down", "1"},
-			expect: "Successfully applied 1 migrations.",
+			expect: "Successfully applied 1 migrations down.",
 			preRunFunc: func(t *testing.T, db *stellardbtest.DB) {
-				_, err := dbpkg.Migrate(db.DSN, migrate.Up, 1, migrations.FS, dbpkg.StellarAuthMigrationsTableName)
+				_, err := dbpkg.Migrate(db.DSN, migrate.Up, 1, migrations.FS, dbpkg.StellarPerTenantAuthMigrationsTableName)
 				require.NoError(t, err)
 
 				conn := db.Open()
@@ -113,9 +113,9 @@ func Test_MigrateCmd(t *testing.T) {
 			name:    "test migrate up successfully when using the DATABASE_URL env var",
 			args:    []string{"--log-level", "TRACE", "migrate", "down", "1"},
 			envVars: map[string]string{"DATABASE_URL": ""},
-			expect:  "Successfully applied 1 migrations.",
+			expect:  "Successfully applied 1 migrations down.",
 			preRunFunc: func(t *testing.T, db *stellardbtest.DB) {
-				_, err := dbpkg.Migrate(db.DSN, migrate.Up, 1, migrations.FS, dbpkg.StellarAuthMigrationsTableName)
+				_, err := dbpkg.Migrate(db.DSN, migrate.Up, 1, migrations.FS, dbpkg.StellarPerTenantAuthMigrationsTableName)
 				require.NoError(t, err)
 
 				conn := db.Open()
@@ -214,5 +214,5 @@ func Test_MigrateCmd_databaseFlagName(t *testing.T) {
 	err = testCmd.Execute()
 	require.NoError(t, err)
 
-	assert.Contains(t, buf.String(), "Successfully applied 1 migrations.")
+	assert.Contains(t, buf.String(), "Successfully applied 1 migrations up.")
 }

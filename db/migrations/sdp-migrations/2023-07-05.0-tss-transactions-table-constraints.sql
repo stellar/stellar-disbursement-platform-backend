@@ -29,6 +29,4 @@ ALTER TABLE submitter_transactions
     DROP COLUMN xdr_received,
     ALTER COLUMN external_id DROP NOT NULL,
     ALTER COLUMN status DROP DEFAULT,
-    ALTER COLUMN amount TYPE numeric(10,2),
-    DROP CONSTRAINT unique_stellar_transaction_hash,
-    DROP CONSTRAINT check_retry_count;
+    ALTER COLUMN amount TYPE NUMERIC(10,2);

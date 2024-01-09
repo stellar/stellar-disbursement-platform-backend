@@ -20,7 +20,7 @@ import (
 )
 
 func Test_Manager_ProvisionNewTenant(t *testing.T) {
-	dbt := dbtest.OpenWithTenantMigrationsOnly(t)
+	dbt := dbtest.OpenWithAdminMigrationsOnly(t)
 	defer dbt.Close()
 
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
@@ -78,17 +78,15 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 			"auth_user_mfa_codes",
 			"auth_user_password_reset",
 			"auth_users",
-			"channel_accounts",
 			"countries",
 			"disbursements",
-			"gorp_migrations",
+			"sdp_migrations",
 			"messages",
 			"organizations",
 			"payments",
 			"receiver_verifications",
 			"receiver_wallets",
 			"receivers",
-			"submitter_transactions",
 			"wallets",
 			"wallets_assets",
 		}
@@ -135,17 +133,15 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 			"auth_user_mfa_codes",
 			"auth_user_password_reset",
 			"auth_users",
-			"channel_accounts",
 			"countries",
 			"disbursements",
-			"gorp_migrations",
+			"sdp_migrations",
 			"messages",
 			"organizations",
 			"payments",
 			"receiver_verifications",
 			"receiver_wallets",
 			"receivers",
-			"submitter_transactions",
 			"wallets",
 			"wallets_assets",
 		}
@@ -160,7 +156,7 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 }
 
 func Test_Manager_RunMigrationsForTenant(t *testing.T) {
-	dbt := dbtest.OpenWithTenantMigrationsOnly(t)
+	dbt := dbtest.OpenWithAdminMigrationsOnly(t)
 	defer dbt.Close()
 
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
@@ -210,9 +206,9 @@ func Test_Manager_RunMigrationsForTenant(t *testing.T) {
 	require.NoError(t, err)
 
 	p := NewManager(WithDatabase(dbConnectionPool))
-	err = p.RunMigrationsForTenant(ctx, tnt1, tnt1DSN, migrate.Up, 0, sdpmigrations.FS, db.StellarSDPMigrationsTableName)
+	err = p.RunMigrationsForTenant(ctx, tnt1, tnt1DSN, migrate.Up, 0, sdpmigrations.FS, db.StellarPerTenantSDPMigrationsTableName)
 	require.NoError(t, err)
-	err = p.RunMigrationsForTenant(ctx, tnt1, tnt1DSN, migrate.Up, 0, authmigrations.FS, db.StellarAuthMigrationsTableName)
+	err = p.RunMigrationsForTenant(ctx, tnt1, tnt1DSN, migrate.Up, 0, authmigrations.FS, db.StellarPerTenantAuthMigrationsTableName)
 	require.NoError(t, err)
 
 	expectedTablesAfterMigrationsApplied := []string{
@@ -221,17 +217,15 @@ func Test_Manager_RunMigrationsForTenant(t *testing.T) {
 		"auth_user_mfa_codes",
 		"auth_user_password_reset",
 		"auth_users",
-		"channel_accounts",
 		"countries",
 		"disbursements",
-		"gorp_migrations",
+		"sdp_migrations",
 		"messages",
 		"organizations",
 		"payments",
 		"receiver_verifications",
 		"receiver_wallets",
 		"receivers",
-		"submitter_transactions",
 		"wallets",
 		"wallets_assets",
 	}
@@ -243,9 +237,9 @@ func Test_Manager_RunMigrationsForTenant(t *testing.T) {
 	// Apply migrations for Tenant 2
 	tnt2DSN, err := tnt2SchemaConnectionPool.DSN(ctx)
 	require.NoError(t, err)
-	err = p.RunMigrationsForTenant(ctx, tnt2, tnt2DSN, migrate.Up, 0, sdpmigrations.FS, db.StellarSDPMigrationsTableName)
+	err = p.RunMigrationsForTenant(ctx, tnt2, tnt2DSN, migrate.Up, 0, sdpmigrations.FS, db.StellarPerTenantSDPMigrationsTableName)
 	require.NoError(t, err)
-	err = p.RunMigrationsForTenant(ctx, tnt2, tnt2DSN, migrate.Up, 0, authmigrations.FS, db.StellarAuthMigrationsTableName)
+	err = p.RunMigrationsForTenant(ctx, tnt2, tnt2DSN, migrate.Up, 0, authmigrations.FS, db.StellarPerTenantAuthMigrationsTableName)
 	require.NoError(t, err)
 
 	tenant.TenantSchemaMatchTablesFixture(t, ctx, dbConnectionPool, tnt2SchemaName, expectedTablesAfterMigrationsApplied)

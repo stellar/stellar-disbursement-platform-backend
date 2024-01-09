@@ -121,8 +121,6 @@ func Test_serve(t *testing.T) {
 		DistributionSeed:                "SBHQEYSACD5DOK5I656NKLAMOHC6VT64ATOWWM2VJ3URGDGMVGNPG4ON",
 		ReCAPTCHASiteKey:                "reCAPTCHASiteKey",
 		ReCAPTCHASiteSecretKey:          "reCAPTCHASiteSecretKey",
-		EnableMFA:                       true,
-		EnableReCAPTCHA:                 true,
 		EnableScheduler:                 true,
 		EnableMultiTenantDB:             false,
 	}
