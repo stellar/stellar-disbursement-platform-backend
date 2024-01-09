@@ -88,7 +88,7 @@ func (s *ServerService) GetSchedulerJobRegistrars(ctx context.Context, serveOpts
 }
 
 func (s *ServerService) SetupConsumers(ctx context.Context, serveOpts serve.ServeOptions, eventHandlerOptions events.EventHandlerOptions) {
-	dbConnectionPool, err := db.OpenDBConnectionPool(globalOptions.databaseURL)
+	dbConnectionPool, err := db.OpenDBConnectionPool(globalOptions.DatabaseURL)
 	if err != nil {
 		log.Ctx(ctx).Fatalf("error getting DB connection in Setup Consumers: %s", err.Error())
 	}
