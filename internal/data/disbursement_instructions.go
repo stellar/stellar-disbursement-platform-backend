@@ -160,25 +160,25 @@ func (di DisbursementInstructionModel) ProcessAll(ctx context.Context, userID st
 		if err != nil {
 			return fmt.Errorf("error fetching receiver wallets: %w", err)
 		}
-		receiverWalletsMap := make(map[string]string)
+		receiverIDToReceiverWalletIDMap := make(map[string]string)
 		for _, receiverWallet := range receiverWallets {
-			receiverWalletsMap[receiverWallet.Receiver.ID] = receiverWallet.ID
+			receiverIDToReceiverWalletIDMap[receiverWallet.Receiver.ID] = receiverWallet.ID
 		}
 
 		eventData := make([]schemas.EventReceiverWalletSMSInvitationData, 0, len(receiverIDs))
 		for _, receiverId := range receiverIDs {
-			receiverWalletId, exists := receiverWalletsMap[receiverId]
+			receiverWalletId, exists := receiverIDToReceiverWalletIDMap[receiverId]
 			if !exists {
 				receiverWalletInsert := ReceiverWalletInsert{
 					ReceiverID: receiverId,
 					WalletID:   disbursement.Wallet.ID,
 				}
-				id, insertErr := di.receiverWalletModel.Insert(ctx, dbTx, receiverWalletInsert)
+				rwID, insertErr := di.receiverWalletModel.Insert(ctx, dbTx, receiverWalletInsert)
 				if insertErr != nil {
 					return fmt.Errorf("error inserting receiver wallet for receiver id %s: %w", receiverId, insertErr)
 				}
-				receiverWalletsMap[receiverId] = id
-				eventData = append(eventData, schemas.EventReceiverWalletSMSInvitationData{ReceiverWalletID: id})
+				receiverIDToReceiverWalletIDMap[receiverId] = rwID
+				eventData = append(eventData, schemas.EventReceiverWalletSMSInvitationData{ReceiverWalletID: rwID})
 			} else {
 				rw, retryErr := di.receiverWalletModel.RetryInvitationSMS(ctx, dbTx, receiverWalletId)
 				if retryErr != nil {
@@ -206,7 +206,7 @@ func (di DisbursementInstructionModel) ProcessAll(ctx context.Context, userID st
 				DisbursementID:   disbursement.ID,
 				Amount:           instruction.Amount,
 				AssetID:          disbursement.Asset.ID,
-				ReceiverWalletID: receiverWalletsMap[receiver.ID],
+				ReceiverWalletID: receiverIDToReceiverWalletIDMap[receiver.ID],
 			}
 			payments = append(payments, payment)
 		}
