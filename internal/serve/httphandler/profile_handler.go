@@ -42,6 +42,7 @@ type ProfileHandler struct {
 	BaseURL               string
 	PublicFilesFS         fs.FS
 	DistributionPublicKey string
+	PasswordValidator     authUtils.PasswordValidator
 }
 
 type PatchOrganizationProfileRequest struct {
@@ -248,7 +249,7 @@ func (h ProfileHandler) PatchUserPassword(rw http.ResponseWriter, req *http.Requ
 
 	// validate if the password format attends the requirements
 	badRequestExtras := map[string]interface{}{}
-	err := authUtils.ValidatePassword(reqBody.NewPassword)
+	err := h.PasswordValidator.ValidatePassword(reqBody.NewPassword)
 	if err != nil {
 		var validatePasswordError *authUtils.ValidatePasswordError
 		if errors.As(err, &validatePasswordError) {

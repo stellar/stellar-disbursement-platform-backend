@@ -17,7 +17,8 @@ import (
 // ResetPasswordHandler resets the user password by receiving a valid reset token
 // and the new password.
 type ResetPasswordHandler struct {
-	AuthManager auth.AuthManager
+	AuthManager       auth.AuthManager
+	PasswordValidator authUtils.PasswordValidator
 }
 
 type ResetPasswordRequest struct {
@@ -38,7 +39,7 @@ func (h ResetPasswordHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 
 	// validate password
 	badRequestExtras := map[string]interface{}{}
-	err = authUtils.ValidatePassword(resetPasswordRequest.Password)
+	err = h.PasswordValidator.ValidatePassword(resetPasswordRequest.Password)
 	if err != nil {
 		var validatePasswordError *authUtils.ValidatePasswordError
 		if errors.As(err, &validatePasswordError) {
