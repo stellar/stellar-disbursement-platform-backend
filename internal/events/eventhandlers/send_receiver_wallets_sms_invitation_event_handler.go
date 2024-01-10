@@ -27,10 +27,10 @@ type SendReceiverWalletsSMSInvitationEventHandlerOptions struct {
 }
 
 type SendReceiverWalletsSMSInvitationEventHandler struct {
-	tenantManager          tenant.ManagerInterface
-	tenantDBConnectionPool db.DBConnectionPool
-	crashTrackerClient     crashtracker.CrashTrackerClient
-	service                services.SendReceiverWalletInviteServiceInterface
+	tenantManager       tenant.ManagerInterface
+	mtnDBConnectionPool db.DBConnectionPool
+	crashTrackerClient  crashtracker.CrashTrackerClient
+	service             services.SendReceiverWalletInviteServiceInterface
 }
 
 var _ events.EventHandler = new(SendReceiverWalletsSMSInvitationEventHandler)
@@ -50,16 +50,16 @@ func NewSendReceiverWalletsSMSInvitationEventHandler(options SendReceiverWallets
 
 	tm := tenant.NewManager(tenant.WithDatabase(options.DBConnectionPool))
 	tr := router.NewMultiTenantDataSourceRouter(tm)
-	tenantDBConnectionPool, err := db.NewConnectionPoolWithRouter(tr)
+	mtnDBConnectionPool, err := db.NewConnectionPoolWithRouter(tr)
 	if err != nil {
 		log.Fatalf("error getting tenant DB Connection Pool: %s", err.Error())
 	}
 
 	return &SendReceiverWalletsSMSInvitationEventHandler{
-		tenantManager:          tm,
-		tenantDBConnectionPool: tenantDBConnectionPool,
-		service:                s,
-		crashTrackerClient:     options.CrashTrackerClient,
+		tenantManager:       tm,
+		mtnDBConnectionPool: mtnDBConnectionPool,
+		service:             s,
+		crashTrackerClient:  options.CrashTrackerClient,
 	}
 }
 
@@ -93,7 +93,7 @@ func (h *SendReceiverWalletsSMSInvitationEventHandler) Handle(ctx context.Contex
 
 	ctx = tenant.SaveTenantInContext(ctx, t)
 
-	models, err := data.NewModels(h.tenantDBConnectionPool)
+	models, err := data.NewModels(h.mtnDBConnectionPool)
 	if err != nil {
 		h.crashTrackerClient.LogAndReportErrors(ctx, err, "[SendReceiverWalletsSMSInvitationEventHandler] error getting models")
 		return

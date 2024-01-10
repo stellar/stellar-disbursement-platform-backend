@@ -59,6 +59,8 @@ func (m Message) Validate() error {
 	return nil
 }
 
+// NewMessage returns a new message with values passed by parameters. It also parses the `TenantID` from the context and inject it into the message.
+// Returns error if the tenant is not found in the context.
 func NewMessage(ctx context.Context, topic, key, messageType string, data any) (*Message, error) {
 	tnt, err := tenant.GetTenantFromContext(ctx)
 	if err != nil {
@@ -103,7 +105,7 @@ func Consume(ctx context.Context, consumer Consumer, crashTracker crashtracker.C
 		default:
 			if err := consumer.ReadMessage(ctx); err != nil {
 				if errors.Is(err, io.EOF) {
-					// TODO: better handle this error.
+					// TODO: better handle this error in SDP-1040.
 					log.Ctx(ctx).Warn("message broker returned EOF") // This is an end state
 					return
 				}
