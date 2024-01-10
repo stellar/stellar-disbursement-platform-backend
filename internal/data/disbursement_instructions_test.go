@@ -83,7 +83,7 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 
 				msg := msgs[0]
 
-				assert.Equal(t, events.ReceiverWalletSMSInvitationTopic, msg.Topic)
+				assert.Equal(t, events.ReceiverWalletNewInvitationTopic, msg.Topic)
 				assert.Equal(t, disbursement.ID, msg.Key)
 				assert.Equal(t, events.BatchReceiverWalletSMSInvitationType, msg.Type)
 				assert.Equal(t, tnt.ID, msg.TenantID)
@@ -150,7 +150,7 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 
 				msg := msgs[0]
 
-				assert.Equal(t, events.ReceiverWalletSMSInvitationTopic, msg.Topic)
+				assert.Equal(t, events.ReceiverWalletNewInvitationTopic, msg.Topic)
 				assert.Equal(t, disbursement.ID, msg.Key)
 				assert.Equal(t, events.BatchReceiverWalletSMSInvitationType, msg.Type)
 				assert.Equal(t, tnt.ID, msg.TenantID)
@@ -167,7 +167,7 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 
 				msg := msgs[0]
 
-				assert.Equal(t, events.ReceiverWalletSMSInvitationTopic, msg.Topic)
+				assert.Equal(t, events.ReceiverWalletNewInvitationTopic, msg.Topic)
 				assert.Equal(t, disbursement.ID, msg.Key)
 				assert.Equal(t, events.BatchReceiverWalletSMSInvitationType, msg.Type)
 				assert.Equal(t, tnt.ID, msg.TenantID)
@@ -253,7 +253,7 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 
 				msg := msgs[0]
 
-				assert.Equal(t, events.ReceiverWalletSMSInvitationTopic, msg.Topic)
+				assert.Equal(t, events.ReceiverWalletNewInvitationTopic, msg.Topic)
 				assert.Equal(t, readyDisbursement.ID, msg.Key)
 				assert.Equal(t, events.BatchReceiverWalletSMSInvitationType, msg.Type)
 				assert.Equal(t, tnt.ID, msg.TenantID)
@@ -272,7 +272,7 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 
 				msg := msgs[0]
 
-				assert.Equal(t, events.ReceiverWalletSMSInvitationTopic, msg.Topic)
+				assert.Equal(t, events.ReceiverWalletNewInvitationTopic, msg.Topic)
 				assert.Equal(t, readyDisbursement.ID, msg.Key)
 				assert.Equal(t, events.BatchReceiverWalletSMSInvitationType, msg.Type)
 				assert.Equal(t, tnt.ID, msg.TenantID)
@@ -366,7 +366,7 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 
 				msg := msgs[0]
 
-				assert.Equal(t, events.ReceiverWalletSMSInvitationTopic, msg.Topic)
+				assert.Equal(t, events.ReceiverWalletNewInvitationTopic, msg.Topic)
 				assert.Equal(t, disbursement.ID, msg.Key)
 				assert.Equal(t, events.BatchReceiverWalletSMSInvitationType, msg.Type)
 				assert.Equal(t, tnt.ID, msg.TenantID)
@@ -412,7 +412,7 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 
 				msg := msgs[0]
 
-				assert.Equal(t, events.ReceiverWalletSMSInvitationTopic, msg.Topic)
+				assert.Equal(t, events.ReceiverWalletNewInvitationTopic, msg.Topic)
 				assert.Equal(t, disbursement.ID, msg.Key)
 				assert.Equal(t, events.BatchReceiverWalletSMSInvitationType, msg.Type)
 				assert.Equal(t, tnt.ID, msg.TenantID)

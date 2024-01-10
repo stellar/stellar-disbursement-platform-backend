@@ -95,7 +95,7 @@ func (s *ServerService) SetupConsumers(ctx context.Context, serveOpts serve.Serv
 
 	smsInvitationConsumer, err := events.NewKafkaConsumer(
 		brokers,
-		events.ReceiverWalletSMSInvitationTopic,
+		events.ReceiverWalletNewInvitationTopic,
 		consumerGroupID,
 		eventhandlers.NewSendReceiverWalletsSMSInvitationEventHandler(eventhandlers.SendReceiverWalletsSMSInvitationEventHandlerOptions{
 			DBConnectionPool:               dbConnectionPool,

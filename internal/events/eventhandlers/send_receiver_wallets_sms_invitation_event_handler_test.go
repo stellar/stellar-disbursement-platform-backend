@@ -148,5 +148,5 @@ func Test_SendReceiverWalletsSMSInvitationEventHandler_CanHandleMessage(t *testi
 	handler := SendReceiverWalletsSMSInvitationEventHandler{}
 
 	assert.False(t, handler.CanHandleMessage(ctx, &events.Message{Topic: "some-topic"}))
-	assert.True(t, handler.CanHandleMessage(ctx, &events.Message{Topic: events.ReceiverWalletSMSInvitationTopic}))
+	assert.True(t, handler.CanHandleMessage(ctx, &events.Message{Topic: events.ReceiverWalletNewInvitationTopic}))
 }

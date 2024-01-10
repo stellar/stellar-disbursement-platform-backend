@@ -68,7 +68,7 @@ func (h *SendReceiverWalletsSMSInvitationEventHandler) Name() string {
 }
 
 func (h *SendReceiverWalletsSMSInvitationEventHandler) CanHandleMessage(ctx context.Context, message *events.Message) bool {
-	return message.Topic == events.ReceiverWalletSMSInvitationTopic
+	return message.Topic == events.ReceiverWalletNewInvitationTopic
 }
 
 func (h *SendReceiverWalletsSMSInvitationEventHandler) Handle(ctx context.Context, message *events.Message) {

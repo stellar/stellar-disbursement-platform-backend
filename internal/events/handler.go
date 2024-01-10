@@ -6,7 +6,7 @@ import (
 
 // Topic Names
 const (
-	ReceiverWalletSMSInvitationTopic = "receiver-wallet-sms-invitation"
+	ReceiverWalletNewInvitationTopic = "events.receiver-wallets.new-invitation"
 )
 
 // Type Names

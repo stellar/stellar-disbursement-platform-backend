@@ -42,7 +42,7 @@ func (h ReceiverWalletsHandler) RetryInvitation(rw http.ResponseWriter, req *htt
 		return
 	}
 
-	msg, err := events.NewMessage(ctx, events.ReceiverWalletSMSInvitationTopic, receiverWalletID, events.RetryReceiverWalletSMSInvitationType, []schemas.EventReceiverWalletSMSInvitationData{
+	msg, err := events.NewMessage(ctx, events.ReceiverWalletNewInvitationTopic, receiverWalletID, events.RetryReceiverWalletSMSInvitationType, []schemas.EventReceiverWalletSMSInvitationData{
 		{
 			ReceiverWalletID: receiverWalletID,
 		},

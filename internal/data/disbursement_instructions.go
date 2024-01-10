@@ -224,7 +224,7 @@ func (di DisbursementInstructionModel) ProcessAll(ctx context.Context, userID st
 		}
 
 		// Step 8: Produce event to send invitation message to the receivers
-		msg, err := events.NewMessage(ctx, events.ReceiverWalletSMSInvitationTopic, disbursement.ID, events.BatchReceiverWalletSMSInvitationType, eventData)
+		msg, err := events.NewMessage(ctx, events.ReceiverWalletNewInvitationTopic, disbursement.ID, events.BatchReceiverWalletSMSInvitationType, eventData)
 		if err != nil {
 			return fmt.Errorf("creating event producer message: %w", err)
 		}

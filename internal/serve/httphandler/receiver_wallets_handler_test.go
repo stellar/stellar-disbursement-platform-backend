@@ -84,7 +84,7 @@ func Test_RetryInvitation(t *testing.T) {
 		eventProducerMock.
 			On("WriteMessages", mock.Anything, []events.Message{
 				{
-					Topic:    events.ReceiverWalletSMSInvitationTopic,
+					Topic:    events.ReceiverWalletNewInvitationTopic,
 					Key:      rw.ID,
 					TenantID: tnt.ID,
 					Type:     events.RetryReceiverWalletSMSInvitationType,
@@ -126,7 +126,7 @@ func Test_RetryInvitation(t *testing.T) {
 		eventProducerMock.
 			On("WriteMessages", mock.Anything, []events.Message{
 				{
-					Topic:    events.ReceiverWalletSMSInvitationTopic,
+					Topic:    events.ReceiverWalletNewInvitationTopic,
 					Key:      rw.ID,
 					TenantID: tnt.ID,
 					Type:     events.RetryReceiverWalletSMSInvitationType,
