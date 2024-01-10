@@ -44,17 +44,17 @@ func Test_SendReceiverWalletsSMSInvitationEventHandler_Handle(t *testing.T) {
 
 	tenantManager := tenant.NewManager(tenant.WithDatabase(dbConnectionPool))
 	tenantRouter := router.NewMultiTenantDataSourceRouter(tenantManager)
-	tenantDBConnectionPool, err := db.NewConnectionPoolWithRouter(tenantRouter)
+	mtnDBConnectionPool, err := db.NewConnectionPoolWithRouter(tenantRouter)
 	require.NoError(t, err)
 
 	crashTrackerClient := crashtracker.MockCrashTrackerClient{}
 	service := SendReceiverWalletInviteServiceMock{}
 
 	handler := SendReceiverWalletsSMSInvitationEventHandler{
-		tenantManager:          tenantManager,
-		tenantDBConnectionPool: tenantDBConnectionPool,
-		crashTrackerClient:     &crashTrackerClient,
-		service:                &service,
+		tenantManager:       tenantManager,
+		mtnDBConnectionPool: mtnDBConnectionPool,
+		crashTrackerClient:  &crashTrackerClient,
+		service:             &service,
 	}
 
 	ctx := context.Background()
