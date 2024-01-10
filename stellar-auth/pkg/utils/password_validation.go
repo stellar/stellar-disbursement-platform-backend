@@ -19,7 +19,7 @@ var (
 	//go:embed common_passwords.txt.gz
 	passwordsBinary []byte
 	// singlePasswordValidator is a singleton instance of PasswordValidator that we will use to ensure
-	// that we do not load multiple copies of the passwords set into memory if one already exists
+	// that we do not load multiple copies of the passwords set into memory if one already exists.
 	singlePasswordValidator *PasswordValidator
 )
 
