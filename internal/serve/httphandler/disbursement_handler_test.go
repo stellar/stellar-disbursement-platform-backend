@@ -81,6 +81,8 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 	asset := data.GetAssetFixture(t, ctx, dbConnectionPool, data.FixtureAssetUSDC)
 	country := data.GetCountryFixture(t, ctx, dbConnectionPool, data.FixtureCountryUKR)
 
+	smsTemplate := "You have a new payment waiting for you from org x. Click on the link to register."
+
 	t.Run("returns error when body is invalid", func(t *testing.T) {
 		requestBody := `
        {
@@ -266,6 +268,7 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 			AssetID:           asset.ID,
 			WalletID:          enabledWallet.ID,
 			VerificationField: data.VerificationFieldDateOfBirth,
+			SMSRegistrationMessageTemplate: smsTemplate,
 		})
 		require.NoError(t, err)
 
@@ -289,6 +292,7 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 		assert.Equal(t, 1, len(actualDisbursement.StatusHistory))
 		assert.Equal(t, data.DraftDisbursementStatus, actualDisbursement.StatusHistory[0].Status)
 		assert.Equal(t, user.ID, actualDisbursement.StatusHistory[0].UserID)
+		assert.Equal(t, smsTemplate, actualDisbursement.SMSRegistrationMessageTemplate)
 		mMonitorService.AssertExpectations(t)
 	})
 

@@ -28,6 +28,8 @@ func Test_DisbursementModelInsert(t *testing.T) {
 	wallet := CreateWalletFixture(t, ctx, dbConnectionPool, "wallet1", "https://www.wallet.com", "www.wallet.com", "wallet1://")
 	wallet.Assets = nil
 
+	smsTemplate := "You have a new payment waiting for you from org x. Click on the link to register."
+
 	disbursement := Disbursement{
 		Name:   "disbursement1",
 		Status: DraftDisbursementStatus,
@@ -41,6 +43,7 @@ func Test_DisbursementModelInsert(t *testing.T) {
 		Country:           country,
 		Wallet:            wallet,
 		VerificationField: VerificationFieldDateOfBirth,
+		SMSRegistrationMessageTemplate: smsTemplate,
 	}
 
 	t.Run("returns error when disbursement already exists is not found", func(t *testing.T) {
@@ -65,6 +68,7 @@ func Test_DisbursementModelInsert(t *testing.T) {
 		assert.Equal(t, asset, actual.Asset)
 		assert.Equal(t, country, actual.Country)
 		assert.Equal(t, wallet, actual.Wallet)
+		assert.Equal(t, smsTemplate, actual.SMSRegistrationMessageTemplate)
 		assert.Equal(t, 1, len(actual.StatusHistory))
 		assert.Equal(t, DraftDisbursementStatus, actual.StatusHistory[0].Status)
 		assert.Equal(t, "user1", actual.StatusHistory[0].UserID)
