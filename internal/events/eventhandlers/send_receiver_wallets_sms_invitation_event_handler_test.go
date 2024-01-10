@@ -12,6 +12,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/router"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -42,13 +43,18 @@ func Test_SendReceiverWalletsSMSInvitationEventHandler_Handle(t *testing.T) {
 	defer dbConnectionPool.Close()
 
 	tenantManager := tenant.NewManager(tenant.WithDatabase(dbConnectionPool))
+	tenantRouter := router.NewMultiTenantDataSourceRouter(tenantManager)
+	tenantDBConnectionPool, err := db.NewConnectionPoolWithRouter(tenantRouter)
+	require.NoError(t, err)
+
 	crashTrackerClient := crashtracker.MockCrashTrackerClient{}
 	service := SendReceiverWalletInviteServiceMock{}
 
 	handler := SendReceiverWalletsSMSInvitationEventHandler{
-		tenantManager:      tenantManager,
-		crashTrackerClient: &crashTrackerClient,
-		service:            &service,
+		tenantManager:          tenantManager,
+		tenantDBConnectionPool: tenantDBConnectionPool,
+		crashTrackerClient:     &crashTrackerClient,
+		service:                &service,
 	}
 
 	ctx := context.Background()
@@ -87,15 +93,17 @@ func Test_SendReceiverWalletsSMSInvitationEventHandler_Handle(t *testing.T) {
 			{ReceiverWalletID: "rw-id-2"},
 		}
 
+		ctxWithTenant := tenant.SaveTenantInContext(ctx, tnt)
+
 		service.
 			On("SetModels", mock.AnythingOfType("*data.Models")).
 			Return().
-			On("SendInvite", ctx, reqs).
+			On("SendInvite", ctxWithTenant, reqs).
 			Return(errors.New("unexpected error")).
 			Once()
 
 		crashTrackerClient.
-			On("LogAndReportErrors", ctx, errors.New("unexpected error"), "[SendReceiverWalletsSMSInvitationEventHandler] sending receiver wallets invitation").
+			On("LogAndReportErrors", ctxWithTenant, errors.New("unexpected error"), "[SendReceiverWalletsSMSInvitationEventHandler] sending receiver wallets invitation").
 			Return().
 			Once()
 
@@ -116,10 +124,12 @@ func Test_SendReceiverWalletsSMSInvitationEventHandler_Handle(t *testing.T) {
 			{ReceiverWalletID: "rw-id-2"},
 		}
 
+		ctxWithTenant := tenant.SaveTenantInContext(ctx, tnt)
+
 		service.
 			On("SetModels", mock.AnythingOfType("*data.Models")).
 			Return().
-			On("SendInvite", ctx, reqs).
+			On("SendInvite", ctxWithTenant, reqs).
 			Return(nil).
 			Once()
 

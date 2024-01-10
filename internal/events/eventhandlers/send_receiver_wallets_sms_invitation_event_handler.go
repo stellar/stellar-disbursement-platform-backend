@@ -13,6 +13,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/router"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
@@ -26,9 +27,10 @@ type SendReceiverWalletsSMSInvitationEventHandlerOptions struct {
 }
 
 type SendReceiverWalletsSMSInvitationEventHandler struct {
-	tenantManager      tenant.ManagerInterface
-	crashTrackerClient crashtracker.CrashTrackerClient
-	service            services.SendReceiverWalletInviteServiceInterface
+	tenantManager          tenant.ManagerInterface
+	tenantDBConnectionPool db.DBConnectionPool
+	crashTrackerClient     crashtracker.CrashTrackerClient
+	service                services.SendReceiverWalletInviteServiceInterface
 }
 
 var _ events.EventHandler = new(SendReceiverWalletsSMSInvitationEventHandler)
@@ -46,10 +48,18 @@ func NewSendReceiverWalletsSMSInvitationEventHandler(options SendReceiverWallets
 		log.Fatalf("error instantiating service: %s", err.Error())
 	}
 
+	tm := tenant.NewManager(tenant.WithDatabase(options.DBConnectionPool))
+	tr := router.NewMultiTenantDataSourceRouter(tm)
+	tenantDBConnectionPool, err := db.NewConnectionPoolWithRouter(tr)
+	if err != nil {
+		log.Fatalf("error getting tenant DB Connection Pool: %s", err.Error())
+	}
+
 	return &SendReceiverWalletsSMSInvitationEventHandler{
-		tenantManager:      tenant.NewManager(tenant.WithDatabase(options.DBConnectionPool)),
-		service:            s,
-		crashTrackerClient: options.CrashTrackerClient,
+		tenantManager:          tm,
+		tenantDBConnectionPool: tenantDBConnectionPool,
+		service:                s,
+		crashTrackerClient:     options.CrashTrackerClient,
 	}
 }
 
@@ -81,20 +91,9 @@ func (h *SendReceiverWalletsSMSInvitationEventHandler) Handle(ctx context.Contex
 		return
 	}
 
-	dsn, err := h.tenantManager.GetDSNForTenant(ctx, t.Name)
-	if err != nil {
-		h.crashTrackerClient.LogAndReportErrors(ctx, err, fmt.Sprintf("[SendReceiverWalletsSMSInvitationEventHandler] error getting DSN for tenant %s", t.Name))
-		return
-	}
+	ctx = tenant.SaveTenantInContext(ctx, t)
 
-	dbConnectionPool, err := db.OpenDBConnectionPool(dsn)
-	if err != nil {
-		h.crashTrackerClient.LogAndReportErrors(ctx, err, fmt.Sprintf("[SendReceiverWalletsSMSInvitationEventHandler] error opening DB Connection pool for tenant %s", t.Name))
-		return
-	}
-	defer dbConnectionPool.Close()
-
-	models, err := data.NewModels(dbConnectionPool)
+	models, err := data.NewModels(h.tenantDBConnectionPool)
 	if err != nil {
 		h.crashTrackerClient.LogAndReportErrors(ctx, err, "[SendReceiverWalletsSMSInvitationEventHandler] error getting models")
 		return
