@@ -142,7 +142,7 @@ func (opts *ServeOptions) SetupDependencies() error {
 		return fmt.Errorf("error creating signature service: %w", err)
 	}
 
-	opts.PasswordValidator, err = authUtils.NewPasswordValidator()
+	opts.PasswordValidator, err = authUtils.GetPasswordValidatorInstance()
 	if err != nil {
 		return fmt.Errorf("error initializing password validator: %w", err)
 	}

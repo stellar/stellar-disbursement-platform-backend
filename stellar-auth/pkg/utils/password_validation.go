@@ -50,7 +50,9 @@ type PasswordValidator struct {
 	commonPasswordsList map[string]bool
 }
 
-func NewPasswordValidator() (*PasswordValidator, error) {
+// GetPasswordValidatorInstance (1) retrieves the reference for a global PasswordValidator instance if it already
+// exists or (2) creates a new one, assigns it to the aforementioned global reference, and returns it.
+func GetPasswordValidatorInstance() (*PasswordValidator, error) {
 	if singlePasswordValidator != nil {
 		return singlePasswordValidator, nil
 	}

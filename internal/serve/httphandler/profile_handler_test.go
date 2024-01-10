@@ -933,7 +933,7 @@ func Test_ProfileHandler_PatchUserPassword(t *testing.T) {
 		auth.WithCustomAuthenticatorOption(authenticatorMock),
 		auth.WithCustomJWTManagerOption(jwtManagerMock),
 	)
-	pwValidator, _ := utils.NewPasswordValidator()
+	pwValidator, _ := utils.GetPasswordValidatorInstance()
 
 	handler := &ProfileHandler{
 		AuthManager:       authManager,

@@ -23,8 +23,7 @@ func Test_ResetPasswordHandlerPost(t *testing.T) {
 	authManager := auth.NewAuthManager(
 		auth.WithCustomAuthenticatorOption(authenticatorMock),
 	)
-	pwValidator, _ := utils.NewPasswordValidator()
-
+	pwValidator, _ := utils.GetPasswordValidatorInstance()
 	handler := &ResetPasswordHandler{
 		AuthManager:       authManager,
 		PasswordValidator: pwValidator,

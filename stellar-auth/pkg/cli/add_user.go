@@ -105,7 +105,7 @@ func AddUserCmd(databaseURLFlagName string, passwordPrompt PasswordPromptInterfa
 					log.Fatalf("add-user error prompting password: %s", err)
 				}
 
-				pwValidator, err := utils.NewPasswordValidator()
+				pwValidator, err := utils.GetPasswordValidatorInstance()
 				if err != nil {
 					log.Fatalf("cannot initialize password validator: %s", err)
 				}
