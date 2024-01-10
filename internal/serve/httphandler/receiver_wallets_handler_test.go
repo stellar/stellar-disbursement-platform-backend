@@ -44,19 +44,6 @@ func Test_RetryInvitation(t *testing.T) {
 	r := chi.NewRouter()
 	r.Patch("/receivers/wallets/{receiver_wallet_id}", handler.RetryInvitation)
 
-	t.Run("returns error when tenant is not in the context", func(t *testing.T) {
-		route := "/receivers/wallets/invalid_id"
-		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, route, nil)
-		require.NoError(t, err)
-
-		rr := httptest.NewRecorder()
-		r.ServeHTTP(rr, req)
-
-		resp := rr.Result()
-		assert.Equal(t, http.StatusForbidden, resp.StatusCode)
-		assert.JSONEq(t, `{ "error": "You don't have permission to perform this action." }`, rr.Body.String())
-	})
-
 	ctx = tenant.SaveTenantInContext(ctx, &tnt)
 
 	t.Run("returns error when receiver wallet does not exist", func(t *testing.T) {
@@ -70,6 +57,23 @@ func Test_RetryInvitation(t *testing.T) {
 		resp := rr.Result()
 		assert.Equal(t, http.StatusNotFound, resp.StatusCode)
 		assert.JSONEq(t, `{ "error": "Resource not found." }`, rr.Body.String())
+	})
+
+	t.Run("returns error when tenant is not in the context", func(t *testing.T) {
+		receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
+		wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "wallet", "https://www.wallet.com", "www.wallet.com", "wallet://")
+		rw := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.ReadyReceiversWalletStatus)
+
+		route := fmt.Sprintf("/receivers/wallets/%s", rw.ID)
+		req, err := http.NewRequestWithContext(context.Background(), http.MethodPatch, route, nil)
+		require.NoError(t, err)
+
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+
+		resp := rr.Result()
+		assert.Equal(t, http.StatusForbidden, resp.StatusCode)
+		assert.JSONEq(t, `{ "error": "You don't have permission to perform this action." }`, rr.Body.String())
 	})
 
 	t.Run("successfuly retry invitation", func(t *testing.T) {

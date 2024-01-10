@@ -442,7 +442,7 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 		ctxWithoutTenant := context.Background()
 
 		err := di.ProcessAll(ctxWithoutTenant, "user-id", instructions, disbursement, disbursementUpdate, MaxInstructionsPerDisbursement, &eventProducerMock)
-		assert.EqualError(t, err, "running atomic function in RunInTransactionWithResult: getting tenant from context: tenant not found in context")
+		assert.EqualError(t, err, "running atomic function in RunInTransactionWithResult: creating event producer message: getting tenant from context: tenant not found in context")
 
 		// Assert no receivers were registered
 		receivers, err := di.receiverModel.GetByPhoneNumbers(ctxWithoutTenant, dbConnectionPool, []string{instruction1.Phone, instruction2.Phone, instruction3.Phone})

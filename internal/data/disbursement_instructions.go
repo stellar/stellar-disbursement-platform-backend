@@ -8,7 +8,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 type DisbursementInstruction struct {
@@ -225,19 +224,12 @@ func (di DisbursementInstructionModel) ProcessAll(ctx context.Context, userID st
 		}
 
 		// Step 8: Produce event to send invitation message to the receivers
-		tnt, err := tenant.GetTenantFromContext(ctx)
+		msg, err := events.NewMessage(ctx, events.ReceiverWalletSMSInvitationTopic, disbursement.ID, events.BatchReceiverWalletSMSInvitationType, eventData)
 		if err != nil {
-			return fmt.Errorf("getting tenant from context: %w", err)
+			return fmt.Errorf("creating event producer message: %w", err)
 		}
 
-		msg := events.Message{
-			Topic:    events.ReceiverWalletSMSInvitationTopic,
-			Key:      disbursement.ID,
-			TenantID: tnt.ID,
-			Type:     events.BatchReceiverWalletSMSInvitationType,
-			Data:     eventData,
-		}
-		err = eventProducer.WriteMessages(ctx, msg)
+		err = eventProducer.WriteMessages(ctx, *msg)
 		if err != nil {
 			return fmt.Errorf("publishing message %s on event producer: %w", msg.String(), err)
 		}

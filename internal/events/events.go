@@ -11,6 +11,7 @@ import (
 
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 	"github.com/stretchr/testify/mock"
 )
 
@@ -56,6 +57,21 @@ func (m Message) Validate() error {
 	}
 
 	return nil
+}
+
+func NewMessage(ctx context.Context, topic, key, messageType string, data any) (*Message, error) {
+	tnt, err := tenant.GetTenantFromContext(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("getting tenant from context: %w", err)
+	}
+
+	return &Message{
+		Topic:    topic,
+		Key:      key,
+		TenantID: tnt.ID,
+		Type:     messageType,
+		Data:     data,
+	}, nil
 }
 
 type Producer interface {

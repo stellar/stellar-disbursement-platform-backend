@@ -7,13 +7,11 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/support/render/httpjson"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 type RetryInvitationSMSResponse struct {
@@ -32,13 +30,6 @@ type ReceiverWalletsHandler struct {
 func (h ReceiverWalletsHandler) RetryInvitation(rw http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 
-	tnt, err := tenant.GetTenantFromContext(ctx)
-	if err != nil {
-		log.Ctx(ctx).Errorf("could not get tenant from context: %v", err)
-		httperror.Forbidden("", err, nil).Render(rw)
-		return
-	}
-
 	receiverWalletID := chi.URLParam(req, "receiver_wallet_id")
 	receiverWallet, err := h.Models.ReceiverWallet.RetryInvitationSMS(ctx, h.Models.DBConnectionPool, receiverWalletID)
 	if err != nil {
@@ -51,18 +42,18 @@ func (h ReceiverWalletsHandler) RetryInvitation(rw http.ResponseWriter, req *htt
 		return
 	}
 
-	msg := events.Message{
-		Topic:    events.ReceiverWalletSMSInvitationTopic,
-		Key:      receiverWalletID,
-		TenantID: tnt.ID,
-		Type:     events.RetryReceiverWalletSMSInvitationType,
-		Data: []schemas.EventReceiverWalletSMSInvitationData{
-			{
-				ReceiverWalletID: receiverWalletID,
-			},
+	msg, err := events.NewMessage(ctx, events.ReceiverWalletSMSInvitationTopic, receiverWalletID, events.RetryReceiverWalletSMSInvitationType, []schemas.EventReceiverWalletSMSInvitationData{
+		{
+			ReceiverWalletID: receiverWalletID,
 		},
+	})
+	if err != nil {
+		err = fmt.Errorf("creating event producer message: %w", err)
+		httperror.Forbidden("", err, nil).Render(rw)
+		return
 	}
-	err = h.EventProducer.WriteMessages(ctx, msg)
+
+	err = h.EventProducer.WriteMessages(ctx, *msg)
 	if err != nil {
 		err = fmt.Errorf("publishing message %s on event producer: %w", msg.String(), err)
 		httperror.InternalError(ctx, "", err, nil).Render(rw)
