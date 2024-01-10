@@ -15,8 +15,13 @@ const (
 	passwordMaxLength = 36
 )
 
-//go:embed common_passwords.txt.gz
-var passwordsBinary []byte
+var (
+	//go:embed common_passwords.txt.gz
+	passwordsBinary []byte
+	// singlePasswordValidator is a singleton instance of PasswordValidator that we will use to ensure
+	// that we do not load multiple copies of the passwords set into memory if one already exists
+	singlePasswordValidator *PasswordValidator
+)
 
 // ValidatePasswordError is an error type that contains the failed validations specified under a map.
 type ValidatePasswordError struct {
@@ -46,6 +51,10 @@ type PasswordValidator struct {
 }
 
 func NewPasswordValidator() (*PasswordValidator, error) {
+	if singlePasswordValidator != nil {
+		return singlePasswordValidator, nil
+	}
+
 	pwValidator := PasswordValidator{}
 	reader := bytes.NewReader(passwordsBinary)
 
