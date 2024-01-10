@@ -77,6 +77,7 @@ func NewPasswordValidator() (*PasswordValidator, error) {
 	}
 	pwValidator.commonPasswordsList = commonPasswordsList
 
+	singlePasswordValidator = &pwValidator
 	return &pwValidator, nil
 }
 
