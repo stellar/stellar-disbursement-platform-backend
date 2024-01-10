@@ -18,7 +18,7 @@ import (
 // and the new password.
 type ResetPasswordHandler struct {
 	AuthManager       auth.AuthManager
-	PasswordValidator authUtils.PasswordValidator
+	PasswordValidator *authUtils.PasswordValidator
 }
 
 type ResetPasswordRequest struct {

@@ -19,14 +19,16 @@ import (
 
 	"github.com/stellar/go/keypair"
 	"github.com/stellar/go/support/log"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/publicfiles"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/utils"
 )
 
 func createOrganizationProfileMultipartRequest(t *testing.T, url, fieldName, filename, body string, fileContent io.Reader) (*http.Request, error) {
@@ -931,7 +933,12 @@ func Test_ProfileHandler_PatchUserPassword(t *testing.T) {
 		auth.WithCustomAuthenticatorOption(authenticatorMock),
 		auth.WithCustomJWTManagerOption(jwtManagerMock),
 	)
-	handler := &ProfileHandler{AuthManager: authManager}
+	pwValidator, _ := utils.NewPasswordValidator()
+
+	handler := &ProfileHandler{
+		AuthManager:       authManager,
+		PasswordValidator: pwValidator,
+	}
 
 	url := "/profile/reset-password"
 	ctx := context.Background()

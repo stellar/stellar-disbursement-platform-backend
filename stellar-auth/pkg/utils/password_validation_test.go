@@ -10,7 +10,7 @@ import (
 
 func Test_ValidatePassword(t *testing.T) {
 	pwValidator := PasswordValidator{
-		commonPasswordsList: []string{"password!1234"},
+		commonPasswordsList: map[string]bool{"password!1234": true},
 	}
 
 	const (

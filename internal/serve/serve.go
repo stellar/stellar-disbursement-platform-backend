@@ -83,7 +83,7 @@ type ServeOptions struct {
 	ReCAPTCHASiteSecretKey          string
 	EnableMFA                       bool
 	EnableReCAPTCHA                 bool
-	PasswordValidator               authUtils.PasswordValidator
+	PasswordValidator               *authUtils.PasswordValidator
 }
 
 // SetupDependencies uses the serve options to setup the dependencies for the server.

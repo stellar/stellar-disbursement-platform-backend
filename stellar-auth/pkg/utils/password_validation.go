@@ -42,27 +42,33 @@ func (e *ValidatePasswordError) FailedValidations() map[string]string {
 }
 
 type PasswordValidator struct {
-	commonPasswordsList []string
+	commonPasswordsList map[string]bool
 }
 
-func NewPasswordValidator() (PasswordValidator, error) {
+func NewPasswordValidator() (*PasswordValidator, error) {
+	pwValidator := PasswordValidator{}
 	reader := bytes.NewReader(passwordsBinary)
 
 	gzipReader, err := gzip.NewReader(reader)
 	if err != nil {
-		return PasswordValidator{}, fmt.Errorf("error creating gzip reader: %w", err)
+		return &pwValidator, fmt.Errorf("error creating gzip reader: %w", err)
 	}
 	defer gzipReader.Close()
 
 	contents, err := io.ReadAll(gzipReader)
 	if err != nil {
-		return PasswordValidator{}, fmt.Errorf("error reading contents: %w", err)
+		return &pwValidator, fmt.Errorf("error reading contents: %w", err)
 	}
 
 	passwordsList := strings.Split(string(contents), "\n")
-	return PasswordValidator{
-		commonPasswordsList: passwordsList,
-	}, nil
+	commonPasswordsList := make(map[string]bool)
+	for _, password := range passwordsList {
+		cleanedPassword := strings.TrimSpace(strings.ToLower(password))
+		commonPasswordsList[cleanedPassword] = true
+	}
+	pwValidator.commonPasswordsList = commonPasswordsList
+
+	return &pwValidator, nil
 }
 
 // ValidatePassword returns an error if the password does not meet the requirements.
@@ -127,12 +133,6 @@ func (pv *PasswordValidator) ValidatePassword(input string) error {
 }
 
 func (pv *PasswordValidator) determineIfCommonPassword(input string) bool {
-	input = strings.ToLower(input)
-	for _, commonPassword := range pv.commonPasswordsList {
-		if input == commonPassword {
-			return true
-		}
-	}
-
-	return false
+	_, found := pv.commonPasswordsList[strings.ToLower(input)]
+	return found
 }

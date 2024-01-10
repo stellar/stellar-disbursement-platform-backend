@@ -42,7 +42,7 @@ type ProfileHandler struct {
 	BaseURL               string
 	PublicFilesFS         fs.FS
 	DistributionPublicKey string
-	PasswordValidator     authUtils.PasswordValidator
+	PasswordValidator     *authUtils.PasswordValidator
 }
 
 type PatchOrganizationProfileRequest struct {
