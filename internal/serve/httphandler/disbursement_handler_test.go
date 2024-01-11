@@ -263,11 +263,11 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 
 		expectedName := "disbursement 2"
 		requestBody, err := json.Marshal(PostDisbursementRequest{
-			Name:              expectedName,
-			CountryCode:       country.Code,
-			AssetID:           asset.ID,
-			WalletID:          enabledWallet.ID,
-			VerificationField: data.VerificationFieldDateOfBirth,
+			Name:                           expectedName,
+			CountryCode:                    country.Code,
+			AssetID:                        asset.ID,
+			WalletID:                       enabledWallet.ID,
+			VerificationField:              data.VerificationFieldDateOfBirth,
 			SMSRegistrationMessageTemplate: smsTemplate,
 		})
 		require.NoError(t, err)
