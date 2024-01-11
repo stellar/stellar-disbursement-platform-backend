@@ -817,6 +817,8 @@ func Test_ProfileHandler_PatchUserProfile(t *testing.T) {
 
 	url := "/profile/user"
 	ctx := context.Background()
+	pwValidator, err := utils.GetPasswordValidatorInstance()
+	require.NoError(t, err)
 
 	t.Run("returns Unauthorized error when no token is found", func(t *testing.T) {
 		handler := &ProfileHandler{}
@@ -882,7 +884,17 @@ func Test_ProfileHandler_PatchUserProfile(t *testing.T) {
 		respBody, err = io.ReadAll(resp.Body)
 		require.NoError(t, err)
 		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
-		assert.JSONEq(t, `{"error": "The request was invalid in some way.", "extras": {"password": "password should have at least 8 characters"}}`, string(respBody))
+		assert.JSONEq(t, `{
+			"error": "The request was invalid in some way.",
+			"extras": {
+					"password": {
+						"digit": "password must contain at least one numberical digit",
+						"length":"password length must be between 12 and 36 characters",
+						"special character":"password must contain at least one special character",
+						"uppercase":"password must contain at least one uppercase letter"
+					}
+				}
+		}`, string(respBody))
 
 		// None of values provided
 		w = httptest.NewRecorder()
@@ -908,17 +920,17 @@ func Test_ProfileHandler_PatchUserProfile(t *testing.T) {
 			On("GetUser", mock.Anything, token).
 			Return(user, nil).
 			Once().
-			On("UpdateUser", mock.Anything, token, "First", "Last", "email@email.com", "mypassword").
+			On("UpdateUser", mock.Anything, token, "First", "Last", "email@email.com", "!1Az?2By.3Cx").
 			Return(errors.New("unexpected error")).
 			Once()
 		defer authManagerMock.AssertExpectations(t)
-		handler := &ProfileHandler{AuthManager: authManagerMock}
+		handler := &ProfileHandler{AuthManager: authManagerMock, PasswordValidator: pwValidator}
 
 		reqBody := `{
 			"first_name": "First",
 			"last_name": "Last",
 			"email": "email@email.com",
-			"password": "mypassword"
+			"password": "!1Az?2By.3Cx"
 		}`
 
 		w := httptest.NewRecorder()
@@ -944,17 +956,17 @@ func Test_ProfileHandler_PatchUserProfile(t *testing.T) {
 			On("GetUser", mock.Anything, token).
 			Return(user, nil).
 			Once().
-			On("UpdateUser", mock.Anything, token, "First", "Last", "email@email.com", "mypassword").
+			On("UpdateUser", mock.Anything, token, "First", "Last", "email@email.com", "!1Az?2By.3Cx").
 			Return(nil).
 			Once()
 		defer authManagerMock.AssertExpectations(t)
-		handler := &ProfileHandler{AuthManager: authManagerMock}
+		handler := &ProfileHandler{AuthManager: authManagerMock, PasswordValidator: pwValidator}
 
 		reqBody := `{
 			"first_name": "First",
 			"last_name": "Last",
 			"email": "email@email.com",
-			"password": "mypassword"
+			"password": "!1Az?2By.3Cx"
 		}`
 
 		w := httptest.NewRecorder()
@@ -977,7 +989,8 @@ func Test_ProfileHandler_PatchUserPassword(t *testing.T) {
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
 
-	pwValidator, _ := utils.GetPasswordValidatorInstance()
+	pwValidator, err := utils.GetPasswordValidatorInstance()
+	require.NoError(t, err)
 
 	url := "/profile/reset-password"
 	ctx := context.Background()

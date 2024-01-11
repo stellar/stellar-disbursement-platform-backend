@@ -204,12 +204,26 @@ func (h ProfileHandler) PatchUserProfile(rw http.ResponseWriter, req *http.Reque
 		return
 	}
 
-	if reqBody.Password != "" && len(reqBody.Password) < 8 {
+	if reqBody.Password != "" {
+		// validate if the password format attends the requirements
+		err := h.PasswordValidator.ValidatePassword(reqBody.Password)
+		if err != nil {
+			var validatePasswordError *authUtils.ValidatePasswordError
+			if errors.As(err, &validatePasswordError) {
+				passwordExtras := map[string]interface{}{}
+				for k, v := range validatePasswordError.FailedValidations() {
+					passwordExtras[k] = v
+				}
+				badRequestExtras := map[string]interface{}{"password": passwordExtras}
+				log.Ctx(ctx).Errorf("validating password in PatchUserPassword: %v", err)
+				httperror.BadRequest("", nil, badRequestExtras).Render(rw)
+			} else {
+				httperror.InternalError(ctx, "Cannot update user password", err, nil).Render(rw)
+			}
+			return
+		}
+
 		log.Ctx(ctx).Warnf("[PatchUserProfile] - Will update password for userID %s", user.ID)
-		httperror.BadRequest("", nil, map[string]interface{}{
-			"password": "password should have at least 8 characters",
-		}).Render(rw)
-		return
 	}
 
 	if reqBody.Email != "" {
