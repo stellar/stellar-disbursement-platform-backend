@@ -302,7 +302,7 @@ func (h ProfileHandler) PatchUserPassword(rw http.ResponseWriter, req *http.Requ
 		return
 	}
 
-	log.Ctx(ctx).Warnf("[UpdateUserPassword] - Will update password for user account ID %s", user.ID)
+	log.Ctx(ctx).Warnf("[PatchUserPassword] - Will update password for user account ID %s", user.ID)
 	err = h.AuthManager.UpdatePassword(ctx, token, reqBody.CurrentPassword, reqBody.NewPassword)
 	if err != nil {
 		httperror.InternalError(ctx, "Cannot update user password", err, nil).Render(rw)

@@ -876,84 +876,65 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 }
 
 func Test_ProfileHandler_PatchUserProfile(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
-
-	url := "/profile/user"
-	ctx := context.Background()
-	pwValidator, err := utils.GetPasswordValidatorInstance()
-	require.NoError(t, err)
-
-	t.Run("returns Unauthorized error when no token is found", func(t *testing.T) {
-		handler := &ProfileHandler{}
-
-		w := httptest.NewRecorder()
-		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, url, nil)
-		require.NoError(t, err)
-		http.HandlerFunc(handler.PatchUserProfile).ServeHTTP(w, req)
-
-		resp := w.Result()
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
-		assert.JSONEq(t, `{"error": "Not authorized."}`, string(respBody))
-	})
-
-	t.Run("returns BadRequest error when the request is invalid", func(t *testing.T) {
-		token := "token"
-		ctx = context.WithValue(ctx, middleware.TokenContextKey, token)
-
-		// Setup handler
-		user := &auth.User{ID: "user-id"}
-		authManagerMock := &auth.AuthManagerMock{}
-		authManagerMock.
-			On("GetUser", mock.Anything, token).
-			Return(user, nil).
-			Times(4)
-		defer authManagerMock.AssertExpectations(t)
-		handler := &ProfileHandler{AuthManager: authManagerMock}
-
-		// Invalid JSON
-		w := httptest.NewRecorder()
-		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, url, strings.NewReader(`invalid`))
-		require.NoError(t, err)
-
-		http.HandlerFunc(handler.PatchUserProfile).ServeHTTP(w, req)
-		resp := w.Result()
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
-		assert.JSONEq(t, `{"error": "The request was invalid in some way."}`, string(respBody))
-
-		// Invalid email
-		w = httptest.NewRecorder()
-		req, err = http.NewRequestWithContext(ctx, http.MethodPatch, url, strings.NewReader(`{"email": "invalid"}`))
-		require.NoError(t, err)
-		req = req.WithContext(ctx)
-
-		http.HandlerFunc(handler.PatchUserProfile).ServeHTTP(w, req)
-		resp = w.Result()
-		respBody, err = io.ReadAll(resp.Body)
-		require.NoError(t, err)
-		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
-		assert.JSONEq(t, `{"error": "The request was invalid in some way.", "extras": {"email": "invalid email provided"}}`, string(respBody))
-
-		// Password too short
-		w = httptest.NewRecorder()
-		req, err = http.NewRequestWithContext(ctx, http.MethodPatch, url, strings.NewReader(`{"password": "short"}`))
-		require.NoError(t, err)
-		http.HandlerFunc(handler.PatchUserProfile).ServeHTTP(w, req)
-
-		resp = w.Result()
-		respBody, err = io.ReadAll(resp.Body)
-		require.NoError(t, err)
-		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
-		assert.JSONEq(t, `{
-			"error": "The request was invalid in some way.",
-			"extras": {
+	user := &auth.User{ID: "user-id"}
+	testCases := []struct {
+		name              string
+		token             string
+		reqBody           string
+		mockAuthManagerFn func(authManagerMock *auth.AuthManagerMock)
+		wantStatusCode    int
+		wantRespBody      string
+	}{
+		{
+			name:           "returns Unauthorized when no token is found",
+			wantStatusCode: http.StatusUnauthorized,
+			wantRespBody:   `{"error": "Not authorized."}`,
+		},
+		{
+			name:    "returns BadRequest when the request has an invalid JSON body",
+			token:   "token",
+			reqBody: `invalid`,
+			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
+				authManagerMock.
+					On("GetUser", mock.Anything, "token").
+					Return(user, nil).
+					Once()
+			},
+			wantStatusCode: http.StatusBadRequest,
+			wantRespBody:   `{"error": "The request was invalid in some way."}`,
+		},
+		{
+			name:    "returns BadRequest when the request has an invalid email",
+			token:   "token",
+			reqBody: `{"email": "invalid"}`,
+			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
+				authManagerMock.
+					On("GetUser", mock.Anything, "token").
+					Return(user, nil).
+					Once()
+			},
+			wantStatusCode: http.StatusBadRequest,
+			wantRespBody: `{
+				"error": "The request was invalid in some way.", 
+				"extras": {
+					"email": "invalid email provided"
+				}
+			}`,
+		},
+		{
+			name:    "returns BadRequest when the request has an invalid password",
+			token:   "token",
+			reqBody: `{"password": "invalid"}`,
+			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
+				authManagerMock.
+					On("GetUser", mock.Anything, "token").
+					Return(user, nil).
+					Once()
+			},
+			wantStatusCode: http.StatusBadRequest,
+			wantRespBody: `{
+				"error": "The request was invalid in some way.",
+				"extras": {
 					"password": {
 						"digit": "password must contain at least one numberical digit",
 						"length":"password length must be between 12 and 36 characters",
@@ -961,101 +942,127 @@ func Test_ProfileHandler_PatchUserProfile(t *testing.T) {
 						"uppercase":"password must contain at least one uppercase letter"
 					}
 				}
-		}`, string(respBody))
+			}`,
+		},
+		{
+			name:    "returns BadRequest if none of the fields are provided",
+			token:   "token",
+			reqBody: `{}`,
+			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
+				authManagerMock.
+					On("GetUser", mock.Anything, "token").
+					Return(user, nil).
+					Once()
+			},
+			wantStatusCode: http.StatusBadRequest,
+			wantRespBody: `{
+				"error": "The request was invalid in some way.",
+				"extras": {
+					"details":"provide at least first_name, last_name, email or password."
+				}
+			}`,
+		},
+		{
+			name:  "returns InternalServerError when AuthManager fails",
+			token: "token",
+			reqBody: `{
+				"first_name": "First",
+				"last_name": "Last",
+				"email": "email@email.com",
+				"password": "!1Az?2By.3Cx"
+			}`,
+			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
+				authManagerMock.
+					On("GetUser", mock.Anything, "token").
+					Return(user, nil).
+					Once().
+					On("UpdateUser", mock.Anything, "token", "First", "Last", "email@email.com", "!1Az?2By.3Cx").
+					Return(errors.New("unexpected error")).
+					Once()
+			},
+			wantStatusCode: http.StatusInternalServerError,
+			wantRespBody:   `{"error":"Cannot update user profiles"}`,
+		},
+		{
+			name:  "🎉 successfully updates user profile",
+			token: "token",
+			reqBody: `{
+				"first_name": "First",
+				"last_name": "Last",
+				"email": "email@email.com",
+				"password": "!1Az?2By.3Cx"
+			}`,
+			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
+				authManagerMock.
+					On("GetUser", mock.Anything, "token").
+					Return(user, nil).
+					Once().
+					On("UpdateUser", mock.Anything, "token", "First", "Last", "email@email.com", "!1Az?2By.3Cx").
+					Return(nil).
+					Once()
+			},
+			wantStatusCode: http.StatusOK,
+			wantRespBody:   `{"message": "user profile updated successfully"}`,
+		},
+	}
 
-		// None of values provided
-		w = httptest.NewRecorder()
-		req, err = http.NewRequestWithContext(ctx, http.MethodPatch, url, strings.NewReader(`{}`))
-		require.NoError(t, err)
-		http.HandlerFunc(handler.PatchUserProfile).ServeHTTP(w, req)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			buf := new(strings.Builder)
+			log.DefaultLogger.SetOutput(buf)
+			log.SetLevel(log.InfoLevel)
 
-		resp = w.Result()
-		respBody, err = io.ReadAll(resp.Body)
-		require.NoError(t, err)
-		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
-		assert.JSONEq(t, `{"error": "The request was invalid in some way.", "extras": {"details":"provide at least first_name, last_name, email or password."}}`, string(respBody))
-	})
+			// Setup DB
+			dbt := dbtest.Open(t)
+			defer dbt.Close()
+			dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+			require.NoError(t, err)
+			defer dbConnectionPool.Close()
 
-	t.Run("returns InternalServerError when AuthManager fails", func(t *testing.T) {
-		token := "token"
-		ctx = context.WithValue(ctx, middleware.TokenContextKey, token)
+			// Inject authenticated token into context:
+			ctx := context.Background()
+			if tc.token != "" {
+				ctx = context.WithValue(ctx, middleware.TokenContextKey, tc.token)
+			}
 
-		// Setup handler
-		user := &auth.User{ID: "user-id"}
-		authManagerMock := &auth.AuthManagerMock{}
-		authManagerMock.
-			On("GetUser", mock.Anything, token).
-			Return(user, nil).
-			Once().
-			On("UpdateUser", mock.Anything, token, "First", "Last", "email@email.com", "!1Az?2By.3Cx").
-			Return(errors.New("unexpected error")).
-			Once()
-		defer authManagerMock.AssertExpectations(t)
-		handler := &ProfileHandler{AuthManager: authManagerMock, PasswordValidator: pwValidator}
+			// Setup password validator
+			pwValidator, err := utils.GetPasswordValidatorInstance()
+			require.NoError(t, err)
 
-		reqBody := `{
-			"first_name": "First",
-			"last_name": "Last",
-			"email": "email@email.com",
-			"password": "!1Az?2By.3Cx"
-		}`
+			// Setup handler with mocked dependencies
+			handler := &ProfileHandler{PasswordValidator: pwValidator}
+			if tc.mockAuthManagerFn != nil {
+				authManagerMock := &auth.AuthManagerMock{}
+				tc.mockAuthManagerFn(authManagerMock)
+				handler.AuthManager = authManagerMock
+				defer authManagerMock.AssertExpectations(t)
+			}
 
-		w := httptest.NewRecorder()
-		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, url, strings.NewReader(reqBody))
-		require.NoError(t, err)
-		http.HandlerFunc(handler.PatchUserProfile).ServeHTTP(w, req)
+			// Execute the request
+			var body io.Reader
+			if tc.reqBody != "" {
+				body = strings.NewReader(tc.reqBody)
+			}
+			w := httptest.NewRecorder()
+			req, err := http.NewRequestWithContext(ctx, http.MethodPatch, "/profile/user", body)
+			require.NoError(t, err)
+			http.HandlerFunc(handler.PatchUserProfile).ServeHTTP(w, req)
 
-		resp := w.Result()
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
-		assert.JSONEq(t, `{"error":"Cannot update user profiles"}`, string(respBody))
-	})
+			// Assert response
+			resp := w.Result()
+			assert.Equal(t, tc.wantStatusCode, resp.StatusCode)
+			respBody, err := io.ReadAll(resp.Body)
+			require.NoError(t, err)
+			defer resp.Body.Close()
+			assert.JSONEq(t, tc.wantRespBody, string(respBody))
 
-	t.Run("updates the user profile successfully", func(t *testing.T) {
-		buf := new(strings.Builder)
-		log.DefaultLogger.SetOutput(buf)
-		log.SetLevel(log.InfoLevel)
-
-		token := "token"
-		ctx = context.WithValue(ctx, middleware.TokenContextKey, token)
-
-		// Setup handler
-		user := &auth.User{ID: "user-id"}
-		authManagerMock := &auth.AuthManagerMock{}
-		authManagerMock.
-			On("GetUser", mock.Anything, token).
-			Return(user, nil).
-			Once().
-			On("UpdateUser", mock.Anything, token, "First", "Last", "email@email.com", "!1Az?2By.3Cx").
-			Return(nil).
-			Once()
-		defer authManagerMock.AssertExpectations(t)
-		handler := &ProfileHandler{AuthManager: authManagerMock, PasswordValidator: pwValidator}
-
-		reqBody := `{
-			"first_name": "First",
-			"last_name": "Last",
-			"email": "email@email.com",
-			"password": "!1Az?2By.3Cx"
-		}`
-
-		w := httptest.NewRecorder()
-		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, url, strings.NewReader(reqBody))
-		require.NoError(t, err)
-		http.HandlerFunc(handler.PatchUserProfile).ServeHTTP(w, req)
-
-		resp := w.Result()
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
-		assert.JSONEq(t, `{"message": "user profile updated successfully"}`, string(respBody))
-
-		// validate logs
-		t.Log(buf.String())
-		require.Contains(t, buf.String(), "[PatchUserProfile] - Will update email for userID user-id to ema...com")
-		require.Contains(t, buf.String(), "[PatchUserProfile] - Will update password for userID user-id")
-	})
+			// Validate logs
+			if tc.wantStatusCode == http.StatusOK {
+				assert.Contains(t, buf.String(), "[PatchUserProfile] - Will update email for userID user-id to ema...com")
+				assert.Contains(t, buf.String(), "[PatchUserProfile] - Will update password for userID user-id")
+			}
+		})
+	}
 }
 
 func Test_ProfileHandler_PatchUserPassword(t *testing.T) {
@@ -1179,6 +1186,10 @@ func Test_ProfileHandler_PatchUserPassword(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			buf := new(strings.Builder)
+			log.DefaultLogger.SetOutput(buf)
+			log.SetLevel(log.InfoLevel)
+
 			// Setup DB
 			dbt := dbtest.Open(t)
 			defer dbt.Close()
@@ -1222,6 +1233,11 @@ func Test_ProfileHandler_PatchUserPassword(t *testing.T) {
 			require.NoError(t, err)
 			defer resp.Body.Close()
 			assert.JSONEq(t, tc.wantRespBody, string(respBody))
+
+			// Validate logs
+			if tc.wantStatusCode == http.StatusOK {
+				require.Contains(t, buf.String(), "[PatchUserPassword] - Will update password for user account ID user-id")
+			}
 		})
 	}
 }
