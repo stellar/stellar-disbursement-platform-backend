@@ -242,6 +242,10 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 	})
 
 	t.Run("updates the organization's name successfully", func(t *testing.T) {
+		buf := new(strings.Builder)
+		log.DefaultLogger.SetOutput(buf)
+		log.SetLevel(log.InfoLevel)
+
 		resetOrganizationInfo(t, ctx, dbConnectionPool)
 		token := "token"
 		ctx = context.WithValue(ctx, middleware.TokenContextKey, token)
@@ -280,9 +284,16 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "My Org Name", org.Name)
 		assert.Nil(t, org.Logo)
+
+		// validate logs
+		require.Contains(t, buf.String(), "[PatchOrganizationProfile] - userID user-id will update the organization fields [Name]")
 	})
 
 	t.Run("updates the organization's timezone UTC offset successfully", func(t *testing.T) {
+		buf := new(strings.Builder)
+		log.DefaultLogger.SetOutput(buf)
+		log.SetLevel(log.InfoLevel)
+
 		resetOrganizationInfo(t, ctx, dbConnectionPool)
 		token := "token"
 		ctx = context.WithValue(ctx, middleware.TokenContextKey, token)
@@ -323,9 +334,16 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 		assert.Equal(t, "-03:00", org.TimezoneUTCOffset)
 		assert.Equal(t, "MyCustomAid", org.Name)
 		assert.Nil(t, org.Logo)
+
+		// validate logs
+		require.Contains(t, buf.String(), "[PatchOrganizationProfile] - userID user-id will update the organization fields [TimezoneUTCOffset]")
 	})
 
 	t.Run("updates the organization's IsApprovalRequired successfully", func(t *testing.T) {
+		buf := new(strings.Builder)
+		log.DefaultLogger.SetOutput(buf)
+		log.SetLevel(log.InfoLevel)
+
 		resetOrganizationInfo(t, ctx, dbConnectionPool)
 		token := "token"
 		ctx = context.WithValue(ctx, middleware.TokenContextKey, token)
@@ -362,9 +380,16 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 		org, err = models.Organizations.Get(ctx)
 		require.NoError(t, err)
 		require.True(t, org.IsApprovalRequired)
+
+		// validate logs
+		require.Contains(t, buf.String(), "[PatchOrganizationProfile] - userID user-id will update the organization fields [IsApprovalRequired]")
 	})
 
 	t.Run("updates the organization's logo successfully", func(t *testing.T) {
+		buf := new(strings.Builder)
+		log.DefaultLogger.SetOutput(buf)
+		log.SetLevel(log.InfoLevel)
+
 		resetOrganizationInfo(t, ctx, dbConnectionPool)
 		token := "token"
 		ctx = context.WithValue(ctx, middleware.TokenContextKey, token)
@@ -445,9 +470,16 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, imgBuf.Bytes(), org.Logo)
 		assert.Equal(t, "MyCustomAid", org.Name)
+
+		// validate logs
+		require.Contains(t, buf.String(), "[PatchOrganizationProfile] - userID user-id will update the organization fields [Logo]")
 	})
 
 	t.Run("updates organization name, timezone UTC offset and logo successfully", func(t *testing.T) {
+		buf := new(strings.Builder)
+		log.DefaultLogger.SetOutput(buf)
+		log.SetLevel(log.InfoLevel)
+
 		resetOrganizationInfo(t, ctx, dbConnectionPool)
 		token := "token"
 		ctx = context.WithValue(ctx, middleware.TokenContextKey, token)
@@ -497,9 +529,16 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 		assert.Equal(t, "My Org Name", org.Name)
 		assert.Equal(t, "-03:00", org.TimezoneUTCOffset)
 		assert.Equal(t, imgBuf.Bytes(), org.Logo)
+
+		// validate logs
+		require.Contains(t, buf.String(), "[PatchOrganizationProfile] - userID user-id will update the organization fields [Logo Name TimezoneUTCOffset]")
 	})
 
 	t.Run("updates organization's SMS Registration Message Template", func(t *testing.T) {
+		buf := new(strings.Builder)
+		log.DefaultLogger.SetOutput(buf)
+		log.SetLevel(log.InfoLevel)
+
 		resetOrganizationInfo(t, ctx, dbConnectionPool)
 		token := "token"
 		ctx = context.WithValue(ctx, middleware.TokenContextKey, token)
@@ -573,9 +612,17 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 		org, err = models.Organizations.Get(ctx)
 		require.NoError(t, err)
 		assert.Equal(t, defaultMessage, org.SMSRegistrationMessageTemplate)
+
+		// validate logs
+		require.Contains(t, buf.String(), "[PatchOrganizationProfile] - userID user-id will update the organization fields [SMSRegistrationMessageTemplate]")
+		require.Contains(t, buf.String(), "[PatchOrganizationProfile] - userID user-id will update the organization fields [Name]")
 	})
 
 	t.Run("updates organization's OTP Message Template", func(t *testing.T) {
+		buf := new(strings.Builder)
+		log.DefaultLogger.SetOutput(buf)
+		log.SetLevel(log.InfoLevel)
+
 		resetOrganizationInfo(t, ctx, dbConnectionPool)
 		token := "token"
 		ctx = context.WithValue(ctx, middleware.TokenContextKey, token)
@@ -650,9 +697,17 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 		org, err = models.Organizations.Get(ctx)
 		require.NoError(t, err)
 		assert.Equal(t, defaultMessage, org.OTPMessageTemplate)
+
+		// validate logs
+		require.Contains(t, buf.String(), "[PatchOrganizationProfile] - userID user-id will update the organization fields [OTPMessageTemplate]")
+		require.Contains(t, buf.String(), "[PatchOrganizationProfile] - userID user-id will update the organization fields [Name]")
 	})
 
 	t.Run("updates organization's SMS Resend Interval", func(t *testing.T) {
+		buf := new(strings.Builder)
+		log.DefaultLogger.SetOutput(buf)
+		log.SetLevel(log.InfoLevel)
+
 		resetOrganizationInfo(t, ctx, dbConnectionPool)
 		token := "token"
 		ctx = context.WithValue(ctx, middleware.TokenContextKey, token)
@@ -727,9 +782,17 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 		org, err = models.Organizations.Get(ctx)
 		require.NoError(t, err)
 		assert.Nil(t, org.SMSResendInterval)
+
+		// validate logs
+		require.Contains(t, buf.String(), "[PatchOrganizationProfile] - userID user-id will update the organization fields [SMSResendInterval]")
+		require.Contains(t, buf.String(), "[PatchOrganizationProfile] - userID user-id will update the organization fields [Name]")
 	})
 
 	t.Run("updates organization's Payment Cancellation Period", func(t *testing.T) {
+		buf := new(strings.Builder)
+		log.DefaultLogger.SetOutput(buf)
+		log.SetLevel(log.InfoLevel)
+
 		resetOrganizationInfo(t, ctx, dbConnectionPool)
 		token := "token"
 		ctx = context.WithValue(ctx, middleware.TokenContextKey, token)
@@ -805,6 +868,10 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 		org, err = models.Organizations.Get(ctx)
 		require.NoError(t, err)
 		assert.Nil(t, org.PaymentCancellationPeriodDays)
+
+		// validate logs
+		require.Contains(t, buf.String(), "[PatchOrganizationProfile] - userID user-id will update the organization fields [PaymentCancellationPeriodDays]")
+		require.Contains(t, buf.String(), "[PatchOrganizationProfile] - userID user-id will update the organization fields [Name]")
 	})
 }
 
@@ -946,6 +1013,10 @@ func Test_ProfileHandler_PatchUserProfile(t *testing.T) {
 	})
 
 	t.Run("updates the user profile successfully", func(t *testing.T) {
+		buf := new(strings.Builder)
+		log.DefaultLogger.SetOutput(buf)
+		log.SetLevel(log.InfoLevel)
+
 		token := "token"
 		ctx = context.WithValue(ctx, middleware.TokenContextKey, token)
 
@@ -979,6 +1050,11 @@ func Test_ProfileHandler_PatchUserProfile(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.JSONEq(t, `{"message": "user profile updated successfully"}`, string(respBody))
+
+		// validate logs
+		t.Log(buf.String())
+		require.Contains(t, buf.String(), "[PatchUserProfile] - Will update email for userID user-id to ema...com")
+		require.Contains(t, buf.String(), "[PatchUserProfile] - Will update password for userID user-id")
 	})
 }
 

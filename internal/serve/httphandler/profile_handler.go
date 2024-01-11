@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"image"
+	"sort"
 
 	// Don't remove the `image/jpeg` and `image/png` packages import unless
 	// the `image` package is no longer necessary.
@@ -172,10 +173,13 @@ func (h ProfileHandler) PatchOrganizationProfile(rw http.ResponseWriter, req *ht
 	}
 	var nonEmptyKeys []string
 	for k, v := range requestDict {
-		if !utils.IsEmpty(v) {
+		if utils.IsEmpty(v) || v == "" || v == nil {
+			continue
+		} else {
 			nonEmptyKeys = append(nonEmptyKeys, k)
 		}
 	}
+	sort.Strings(nonEmptyKeys)
 
 	log.Ctx(ctx).Warnf("[PatchOrganizationProfile] - userID %s will update the organization fields %v", user.ID, nonEmptyKeys)
 	err = h.Models.Organizations.Update(ctx, &organizationUpdate)
@@ -227,13 +231,13 @@ func (h ProfileHandler) PatchUserProfile(rw http.ResponseWriter, req *http.Reque
 	}
 
 	if reqBody.Email != "" {
-		log.Ctx(ctx).Warnf("[PatchUserProfile] - Will update email for userID %s to %s", user.ID, utils.TruncateString(reqBody.Email, 3))
 		if err := utils.ValidateEmail(reqBody.Email); err != nil {
 			httperror.BadRequest("", nil, map[string]interface{}{
 				"email": "invalid email provided",
 			}).Render(rw)
 			return
 		}
+		log.Ctx(ctx).Warnf("[PatchUserProfile] - Will update email for userID %s to %s", user.ID, utils.TruncateString(reqBody.Email, 3))
 	}
 
 	if utils.IsEmpty(reqBody) {
