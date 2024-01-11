@@ -241,7 +241,7 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 		assert.Equal(t, "error parsing multipart form: http: request body too large", entries[0].Message)
 	})
 
-	t.Run("updates the organization's name successfully", func(t *testing.T) {
+	t.Run("🎉 successfully updates the organization's name", func(t *testing.T) {
 		buf := new(strings.Builder)
 		log.DefaultLogger.SetOutput(buf)
 		log.SetLevel(log.InfoLevel)
@@ -289,7 +289,7 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 		require.Contains(t, buf.String(), "[PatchOrganizationProfile] - userID user-id will update the organization fields [Name]")
 	})
 
-	t.Run("updates the organization's timezone UTC offset successfully", func(t *testing.T) {
+	t.Run("🎉 successfully updates the organization's timezone UTC offset", func(t *testing.T) {
 		buf := new(strings.Builder)
 		log.DefaultLogger.SetOutput(buf)
 		log.SetLevel(log.InfoLevel)
@@ -339,7 +339,7 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 		require.Contains(t, buf.String(), "[PatchOrganizationProfile] - userID user-id will update the organization fields [TimezoneUTCOffset]")
 	})
 
-	t.Run("updates the organization's IsApprovalRequired successfully", func(t *testing.T) {
+	t.Run("🎉 successfully updates the organization's IsApprovalRequired", func(t *testing.T) {
 		buf := new(strings.Builder)
 		log.DefaultLogger.SetOutput(buf)
 		log.SetLevel(log.InfoLevel)
@@ -385,7 +385,7 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 		require.Contains(t, buf.String(), "[PatchOrganizationProfile] - userID user-id will update the organization fields [IsApprovalRequired]")
 	})
 
-	t.Run("updates the organization's logo successfully", func(t *testing.T) {
+	t.Run("🎉 successfully updates the organization's logo", func(t *testing.T) {
 		buf := new(strings.Builder)
 		log.DefaultLogger.SetOutput(buf)
 		log.SetLevel(log.InfoLevel)
@@ -475,7 +475,7 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 		require.Contains(t, buf.String(), "[PatchOrganizationProfile] - userID user-id will update the organization fields [Logo]")
 	})
 
-	t.Run("updates organization name, timezone UTC offset and logo successfully", func(t *testing.T) {
+	t.Run("🎉 successfully updates organization name, timezone UTC offset and logo", func(t *testing.T) {
 		buf := new(strings.Builder)
 		log.DefaultLogger.SetOutput(buf)
 		log.SetLevel(log.InfoLevel)
@@ -534,7 +534,7 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 		require.Contains(t, buf.String(), "[PatchOrganizationProfile] - userID user-id will update the organization fields [Logo Name TimezoneUTCOffset]")
 	})
 
-	t.Run("updates organization's SMS Registration Message Template", func(t *testing.T) {
+	t.Run("🎉 successfully updates organization's SMS Registration Message Template", func(t *testing.T) {
 		buf := new(strings.Builder)
 		log.DefaultLogger.SetOutput(buf)
 		log.SetLevel(log.InfoLevel)
@@ -618,7 +618,7 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 		require.Contains(t, buf.String(), "[PatchOrganizationProfile] - userID user-id will update the organization fields [Name]")
 	})
 
-	t.Run("updates organization's OTP Message Template", func(t *testing.T) {
+	t.Run("🎉 successfully updates organization's OTP Message Template", func(t *testing.T) {
 		buf := new(strings.Builder)
 		log.DefaultLogger.SetOutput(buf)
 		log.SetLevel(log.InfoLevel)
@@ -703,7 +703,7 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 		require.Contains(t, buf.String(), "[PatchOrganizationProfile] - userID user-id will update the organization fields [Name]")
 	})
 
-	t.Run("updates organization's SMS Resend Interval", func(t *testing.T) {
+	t.Run("🎉 successfully updates organization's SMS Resend Interval", func(t *testing.T) {
 		buf := new(strings.Builder)
 		log.DefaultLogger.SetOutput(buf)
 		log.SetLevel(log.InfoLevel)
@@ -788,7 +788,7 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 		require.Contains(t, buf.String(), "[PatchOrganizationProfile] - userID user-id will update the organization fields [Name]")
 	})
 
-	t.Run("updates organization's Payment Cancellation Period", func(t *testing.T) {
+	t.Run("🎉 successfully updates organization's Payment Cancellation Period", func(t *testing.T) {
 		buf := new(strings.Builder)
 		log.DefaultLogger.SetOutput(buf)
 		log.SetLevel(log.InfoLevel)
