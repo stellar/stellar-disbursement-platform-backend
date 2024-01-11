@@ -425,3 +425,29 @@ func (h ProfileHandler) GetOrganizationLogo(rw http.ResponseWriter, req *http.Re
 		httperror.InternalError(ctx, "Cannot write organization logo to response", err, nil).Render(rw)
 	}
 }
+
+func getTokenAndUser(ctx context.Context, authManager auth.AuthManager) (token string, user *auth.User, httpErr *httperror.HTTPError) {
+	token, ok := ctx.Value(middleware.TokenContextKey).(string)
+	if !ok {
+		return "", nil, httperror.Unauthorized("", nil, nil)
+	}
+
+	user, err := authManager.GetUser(ctx, token)
+	if err != nil {
+		if errors.Is(err, auth.ErrInvalidToken) {
+			err = fmt.Errorf("getting user profile: %w", err)
+			log.Ctx(ctx).Error(err)
+			return "", nil, httperror.Unauthorized("", err, nil)
+		}
+
+		if errors.Is(err, auth.ErrUserNotFound) {
+			err = fmt.Errorf("user from token %s not found: %w", token, err)
+			log.Ctx(ctx).Error(err)
+			return "", nil, httperror.BadRequest("", err, nil)
+		}
+
+		return "", nil, httperror.InternalError(ctx, "Cannot get user", err, nil)
+	}
+
+	return token, user, nil
+}
