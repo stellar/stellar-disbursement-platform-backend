@@ -171,17 +171,19 @@ func (h ProfileHandler) PatchOrganizationProfile(rw http.ResponseWriter, req *ht
 		httperror.InternalError(ctx, "Cannot convert organization update to map", err, nil).Render(rw)
 		return
 	}
-	var nonEmptyKeys []string
+	var nonEmptyChanges []string
 	for k, v := range requestDict {
-		if utils.IsEmpty(v) || v == "" || v == nil {
-			continue
-		} else {
-			nonEmptyKeys = append(nonEmptyKeys, k)
+		if !utils.IsEmpty(v) {
+			value := v
+			if k == "Logo" {
+				value = "..."
+			}
+			nonEmptyChanges = append(nonEmptyChanges, fmt.Sprintf("%s='%v'", k, value))
 		}
 	}
-	sort.Strings(nonEmptyKeys)
+	sort.Strings(nonEmptyChanges)
 
-	log.Ctx(ctx).Warnf("[PatchOrganizationProfile] - userID %s will update the organization fields %v", user.ID, nonEmptyKeys)
+	log.Ctx(ctx).Warnf("[PatchOrganizationProfile] - userID %s will update the organization fields [%s]", user.ID, strings.Join(nonEmptyChanges, ", "))
 	err = h.Models.Organizations.Update(ctx, &organizationUpdate)
 	if err != nil {
 		httperror.InternalError(ctx, "Cannot update organization", err, nil).Render(rw)

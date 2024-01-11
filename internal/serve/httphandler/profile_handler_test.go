@@ -286,7 +286,7 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 		assert.Nil(t, org.Logo)
 
 		// validate logs
-		require.Contains(t, buf.String(), "[PatchOrganizationProfile] - userID user-id will update the organization fields [Name]")
+		require.Contains(t, buf.String(), "[PatchOrganizationProfile] - userID user-id will update the organization fields [Name='My Org Name']")
 	})
 
 	t.Run("🎉 successfully updates the organization's timezone UTC offset", func(t *testing.T) {
@@ -336,7 +336,7 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 		assert.Nil(t, org.Logo)
 
 		// validate logs
-		require.Contains(t, buf.String(), "[PatchOrganizationProfile] - userID user-id will update the organization fields [TimezoneUTCOffset]")
+		require.Contains(t, buf.String(), "[PatchOrganizationProfile] - userID user-id will update the organization fields [TimezoneUTCOffset='-03:00']")
 	})
 
 	t.Run("🎉 successfully updates the organization's IsApprovalRequired", func(t *testing.T) {
@@ -382,7 +382,7 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 		require.True(t, org.IsApprovalRequired)
 
 		// validate logs
-		require.Contains(t, buf.String(), "[PatchOrganizationProfile] - userID user-id will update the organization fields [IsApprovalRequired]")
+		require.Contains(t, buf.String(), "[PatchOrganizationProfile] - userID user-id will update the organization fields [IsApprovalRequired='true']")
 	})
 
 	t.Run("🎉 successfully updates the organization's logo", func(t *testing.T) {
@@ -472,7 +472,7 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 		assert.Equal(t, "MyCustomAid", org.Name)
 
 		// validate logs
-		require.Contains(t, buf.String(), "[PatchOrganizationProfile] - userID user-id will update the organization fields [Logo]")
+		require.Contains(t, buf.String(), "[PatchOrganizationProfile] - userID user-id will update the organization fields [Logo='...']")
 	})
 
 	t.Run("🎉 successfully updates organization name, timezone UTC offset and logo", func(t *testing.T) {
@@ -531,7 +531,7 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 		assert.Equal(t, imgBuf.Bytes(), org.Logo)
 
 		// validate logs
-		require.Contains(t, buf.String(), "[PatchOrganizationProfile] - userID user-id will update the organization fields [Logo Name TimezoneUTCOffset]")
+		require.Contains(t, buf.String(), "[PatchOrganizationProfile] - userID user-id will update the organization fields [Logo='...', Name='My Org Name', TimezoneUTCOffset='-03:00']")
 	})
 
 	t.Run("🎉 successfully updates organization's SMS Registration Message Template", func(t *testing.T) {
@@ -614,8 +614,9 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 		assert.Equal(t, defaultMessage, org.SMSRegistrationMessageTemplate)
 
 		// validate logs
-		require.Contains(t, buf.String(), "[PatchOrganizationProfile] - userID user-id will update the organization fields [SMSRegistrationMessageTemplate]")
-		require.Contains(t, buf.String(), "[PatchOrganizationProfile] - userID user-id will update the organization fields [Name]")
+		require.Contains(t, buf.String(), "[PatchOrganizationProfile] - userID user-id will update the organization fields [SMSRegistrationMessageTemplate='My custom receiver wallet registration invite. MyOrg 👋']")
+		require.Contains(t, buf.String(), "[PatchOrganizationProfile] - userID user-id will update the organization fields [Name='MyOrg']")
+		require.Contains(t, buf.String(), "[PatchOrganizationProfile] - userID user-id will update the organization fields [SMSRegistrationMessageTemplate='']")
 	})
 
 	t.Run("🎉 successfully updates organization's OTP Message Template", func(t *testing.T) {
@@ -699,8 +700,9 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 		assert.Equal(t, defaultMessage, org.OTPMessageTemplate)
 
 		// validate logs
-		require.Contains(t, buf.String(), "[PatchOrganizationProfile] - userID user-id will update the organization fields [OTPMessageTemplate]")
-		require.Contains(t, buf.String(), "[PatchOrganizationProfile] - userID user-id will update the organization fields [Name]")
+		require.Contains(t, buf.String(), "[PatchOrganizationProfile] - userID user-id will update the organization fields [OTPMessageTemplate='']")
+		require.Contains(t, buf.String(), "[PatchOrganizationProfile] - userID user-id will update the organization fields [OTPMessageTemplate='Here's your OTP Code to complete your registration. MyOrg 👋']")
+		require.Contains(t, buf.String(), "[PatchOrganizationProfile] - userID user-id will update the organization fields [Name='MyOrg']")
 	})
 
 	t.Run("🎉 successfully updates organization's SMS Resend Interval", func(t *testing.T) {
@@ -784,8 +786,9 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 		assert.Nil(t, org.SMSResendInterval)
 
 		// validate logs
-		require.Contains(t, buf.String(), "[PatchOrganizationProfile] - userID user-id will update the organization fields [SMSResendInterval]")
-		require.Contains(t, buf.String(), "[PatchOrganizationProfile] - userID user-id will update the organization fields [Name]")
+		require.Contains(t, buf.String(), `[PatchOrganizationProfile] - userID user-id will update the organization fields [SMSResendInterval='2']`)
+		require.Contains(t, buf.String(), `[PatchOrganizationProfile] - userID user-id will update the organization fields [Name='MyOrg']`)
+		require.Contains(t, buf.String(), `[PatchOrganizationProfile] - userID user-id will update the organization fields [SMSResendInterval='0']`)
 	})
 
 	t.Run("🎉 successfully updates organization's Payment Cancellation Period", func(t *testing.T) {
@@ -870,8 +873,9 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 		assert.Nil(t, org.PaymentCancellationPeriodDays)
 
 		// validate logs
-		require.Contains(t, buf.String(), "[PatchOrganizationProfile] - userID user-id will update the organization fields [PaymentCancellationPeriodDays]")
-		require.Contains(t, buf.String(), "[PatchOrganizationProfile] - userID user-id will update the organization fields [Name]")
+		require.Contains(t, buf.String(), "[PatchOrganizationProfile] - userID user-id will update the organization fields [PaymentCancellationPeriodDays='2']")
+		require.Contains(t, buf.String(), "[PatchOrganizationProfile] - userID user-id will update the organization fields [Name='MyOrg']")
+		require.Contains(t, buf.String(), "[PatchOrganizationProfile] - userID user-id will update the organization fields [PaymentCancellationPeriodDays='0']")
 	})
 }
 
