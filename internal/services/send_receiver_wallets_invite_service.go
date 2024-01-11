@@ -57,15 +57,15 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context) error {
 		log.Ctx(ctx).Debug("automatic resend invitation SMS is deactivated. Set a valid value to the organization's sms_resend_interval to activate it.")
 	}
 
-	smsRegistrationMessageTemplate := organization.SMSRegistrationMessageTemplate
-	if !strings.Contains(smsRegistrationMessageTemplate, "{{.RegistrationLink}}") {
-		smsRegistrationMessageTemplate = fmt.Sprintf("%s {{.RegistrationLink}}", strings.TrimSpace(smsRegistrationMessageTemplate))
+	orgSMSRegistrationMessageTemplate := organization.SMSRegistrationMessageTemplate
+	if !strings.Contains(orgSMSRegistrationMessageTemplate, "{{.RegistrationLink}}") {
+		orgSMSRegistrationMessageTemplate = fmt.Sprintf("%s {{.RegistrationLink}}", strings.TrimSpace(orgSMSRegistrationMessageTemplate))
 	}
 
 	// Execute the template early so we avoid hitting the database to query the other info
-	msgTemplate, err := template.New("").Parse(smsRegistrationMessageTemplate)
+	msgTemplate, err := template.New("").Parse(orgSMSRegistrationMessageTemplate)
 	if err != nil {
-		return fmt.Errorf("error parsing SMS registration message template: %w", err)
+		return fmt.Errorf("error parsing organization SMS registration message template: %w", err)
 	}
 
 	wallets, err := s.models.Wallets.GetAll(ctx)
@@ -113,6 +113,18 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context) error {
 				rwa.ReceiverWallet.ID, wallet.ID, rwa.Asset.ID, err.Error(),
 			)
 			continue
+		}
+
+		disbursementSMSRegistrationMessageTemplate := rwa.DisbursementSMSTemplate
+		if disbursementSMSRegistrationMessageTemplate != nil {
+			if !strings.Contains(*disbursementSMSRegistrationMessageTemplate, "{{.RegistrationLink}}") {
+				*disbursementSMSRegistrationMessageTemplate = fmt.Sprintf("%s {{.RegistrationLink}}", strings.TrimSpace(*disbursementSMSRegistrationMessageTemplate))
+			}
+
+			msgTemplate, err = template.New("").Parse(*disbursementSMSRegistrationMessageTemplate)
+			if err != nil {
+				return fmt.Errorf("error parsing disbursement SMS registration message template: %w", err)
+			}
 		}
 
 		content := new(strings.Builder)
