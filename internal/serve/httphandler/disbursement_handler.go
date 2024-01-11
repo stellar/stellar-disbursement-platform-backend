@@ -114,10 +114,10 @@ func (d DisbursementHandler) PostDisbursement(w http.ResponseWriter, r *http.Req
 			Status:    data.DraftDisbursementStatus,
 			UserID:    user.ID,
 		}},
-		Wallet:            wallet,
-		Asset:             asset,
-		Country:           country,
-		VerificationField: verificationField,
+		Wallet:                         wallet,
+		Asset:                          asset,
+		Country:                        country,
+		VerificationField:              verificationField,
 		SMSRegistrationMessageTemplate: disbursementRequest.SMSRegistrationMessageTemplate,
 	}
 
