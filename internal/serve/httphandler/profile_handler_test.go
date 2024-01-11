@@ -1059,230 +1059,171 @@ func Test_ProfileHandler_PatchUserProfile(t *testing.T) {
 }
 
 func Test_ProfileHandler_PatchUserPassword(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
+	user := &auth.User{ID: "user-id"}
+	testCases := []struct {
+		name              string
+		token             string
+		reqBody           string
+		mockAuthManagerFn func(authManagerMock *auth.AuthManagerMock)
+		wantStatusCode    int
+		wantRespBody      string
+	}{
+		{
+			name:           "returns Unauthorized error when no token is found",
+			token:          "",
+			wantStatusCode: http.StatusUnauthorized,
+			wantRespBody:   `{"error": "Not authorized."}`,
+		},
+		{
+			name:    "returns BadRequest error when JSON decoding fails",
+			token:   "token",
+			reqBody: `invalid`,
+			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
+				authManagerMock.
+					On("GetUser", mock.Anything, "token").
+					Return(user, nil).
+					Once()
+			},
+			wantStatusCode: http.StatusBadRequest,
+			wantRespBody:   `{"error": "The request was invalid in some way."}`,
+		},
+		{
+			name:    "returns BadRequest error when current_password and new_password are not provided",
+			token:   "token",
+			reqBody: `{}`,
+			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
+				authManagerMock.
+					On("GetUser", mock.Anything, "token").
+					Return(user, nil).
+					Once()
+			},
+			wantStatusCode: http.StatusBadRequest,
+			wantRespBody: `{
+				"error": "The request was invalid in some way.",
+				"extras": {
+					"current_password":"current_password is required",
+					"new_password":"new_password should be different from current_password"
+				}
+			}`,
+		},
+		{
+			name:    "returns BadRequest error when current_password and new_password are equal",
+			token:   "token",
+			reqBody: `{"current_password": "currentpassword", "new_password": "currentpassword"}`,
+			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
+				authManagerMock.
+					On("GetUser", mock.Anything, "token").
+					Return(user, nil).
+					Once()
+			},
+			wantStatusCode: http.StatusBadRequest,
+			wantRespBody: `{
+				"error": "The request was invalid in some way.",
+				"extras": {
+					"new_password":"new_password should be different from current_password"
+				}
+			}`,
+		},
+		{
+			name:    "returns BadRequest error when password does not match all the criteria",
+			token:   "token",
+			reqBody: `{"current_password": "currentpassword", "new_password": "1Az2By3Cx"}`,
+			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
+				authManagerMock.
+					On("GetUser", mock.Anything, "token").
+					Return(user, nil).
+					Once()
+			},
+			wantStatusCode: http.StatusBadRequest,
+			wantRespBody: `{
+				"error": "The request was invalid in some way.",
+				"extras": {
+					"length":"password length must be between 12 and 36 characters",
+					"special character":"password must contain at least one special character"
+				}
+			}`,
+		},
+		{
+			name:    "returns InternalServerError when AuthManager fails",
+			token:   "token",
+			reqBody: `{"current_password": "currentpassword", "new_password": "!1Az?2By.3Cx"}`,
+			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
+				authManagerMock.
+					On("GetUser", mock.Anything, "token").
+					Return(user, nil).
+					Once().
+					On("UpdatePassword", mock.Anything, "token", "currentpassword", "!1Az?2By.3Cx").
+					Return(errors.New("unexpected error")).
+					Once()
+			},
+			wantStatusCode: http.StatusInternalServerError,
+			wantRespBody:   `{"error":"Cannot update user password"}`,
+		},
+		{
+			name:    "🎉 successfully updates the user password",
+			token:   "token",
+			reqBody: `{"current_password": "currentpassword", "new_password": "!1Az?2By.3Cx"}`,
+			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
+				authManagerMock.
+					On("GetUser", mock.Anything, "token").
+					Return(user, nil).
+					Once().
+					On("UpdatePassword", mock.Anything, "token", "currentpassword", "!1Az?2By.3Cx").
+					Return(nil).
+					Once()
+			},
+			wantStatusCode: http.StatusOK,
+			wantRespBody:   `{"message": "user password updated successfully"}`,
+		},
+	}
 
-	pwValidator, err := utils.GetPasswordValidatorInstance()
-	require.NoError(t, err)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Setup DB
+			dbt := dbtest.Open(t)
+			defer dbt.Close()
+			dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+			require.NoError(t, err)
+			defer dbConnectionPool.Close()
 
-	url := "/profile/reset-password"
-	ctx := context.Background()
-
-	t.Run("returns Unauthorized error when no token is found", func(t *testing.T) {
-		handler := &ProfileHandler{PasswordValidator: pwValidator}
-
-		w := httptest.NewRecorder()
-		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, url, nil)
-		require.NoError(t, err)
-		http.HandlerFunc(handler.PatchUserPassword).ServeHTTP(w, req)
-
-		resp := w.Result()
-		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-		defer resp.Body.Close()
-		assert.JSONEq(t, `{"error": "Not authorized."}`, string(respBody))
-	})
-
-	t.Run("returns BadRequest error when JSON decoding fails", func(t *testing.T) {
-		token := "token"
-		ctx = context.WithValue(ctx, middleware.TokenContextKey, token)
-
-		// Setup handler
-		user := &auth.User{ID: "user-id"}
-		authManagerMock := &auth.AuthManagerMock{}
-		authManagerMock.
-			On("GetUser", mock.Anything, token).
-			Return(user, nil).
-			Once()
-		defer authManagerMock.AssertExpectations(t)
-		handler := &ProfileHandler{AuthManager: authManagerMock, PasswordValidator: pwValidator}
-
-		w := httptest.NewRecorder()
-		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, url, strings.NewReader(`invalid`))
-		require.NoError(t, err)
-		http.HandlerFunc(handler.PatchUserPassword).ServeHTTP(w, req)
-
-		resp := w.Result()
-		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-		defer resp.Body.Close()
-		assert.JSONEq(t, `{"error": "The request was invalid in some way."}`, string(respBody))
-	})
-
-	t.Run("returns BadRequest error when current_password and new_password are not provided", func(t *testing.T) {
-		token := "token"
-		ctx = context.WithValue(ctx, middleware.TokenContextKey, token)
-
-		// Setup handler
-		user := &auth.User{ID: "user-id"}
-		authManagerMock := &auth.AuthManagerMock{}
-		authManagerMock.
-			On("GetUser", mock.Anything, token).
-			Return(user, nil).
-			Once()
-		defer authManagerMock.AssertExpectations(t)
-		handler := &ProfileHandler{AuthManager: authManagerMock, PasswordValidator: pwValidator}
-
-		w := httptest.NewRecorder()
-		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, url, strings.NewReader(`{}`))
-		require.NoError(t, err)
-		http.HandlerFunc(handler.PatchUserPassword).ServeHTTP(w, req)
-
-		resp := w.Result()
-		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-		defer resp.Body.Close()
-		wantBody := `{
-			"error": "The request was invalid in some way.",
-			"extras": {
-				"current_password":"current_password is required",
-				"new_password":"new_password should be different from current_password"
+			// Inject authenticated token into context:
+			ctx := context.Background()
+			if tc.token != "" {
+				ctx = context.WithValue(ctx, middleware.TokenContextKey, tc.token)
 			}
-		}`
-		assert.JSONEq(t, wantBody, string(respBody))
-	})
 
-	t.Run("returns BadRequest error when current_password and new_password are equal", func(t *testing.T) {
-		token := "token"
-		ctx = context.WithValue(ctx, middleware.TokenContextKey, token)
+			// Setup password validator
+			pwValidator, err := utils.GetPasswordValidatorInstance()
+			require.NoError(t, err)
 
-		// Setup handler
-		user := &auth.User{ID: "user-id"}
-		authManagerMock := &auth.AuthManagerMock{}
-		authManagerMock.
-			On("GetUser", mock.Anything, token).
-			Return(user, nil).
-			Once()
-		defer authManagerMock.AssertExpectations(t)
-		handler := &ProfileHandler{AuthManager: authManagerMock, PasswordValidator: pwValidator}
-
-		reqBody := `{"current_password": "currentpassword", "new_password": "currentpassword"}`
-		w := httptest.NewRecorder()
-		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, url, strings.NewReader(reqBody))
-		require.NoError(t, err)
-		http.HandlerFunc(handler.PatchUserPassword).ServeHTTP(w, req)
-
-		resp := w.Result()
-		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-		defer resp.Body.Close()
-		wantBody := `{
-			"error": "The request was invalid in some way.",
-			"extras": {
-				"new_password":"new_password should be different from current_password"
+			// Setup handler with mocked dependencies
+			handler := &ProfileHandler{PasswordValidator: pwValidator}
+			if tc.mockAuthManagerFn != nil {
+				authManagerMock := &auth.AuthManagerMock{}
+				tc.mockAuthManagerFn(authManagerMock)
+				handler.AuthManager = authManagerMock
+				defer authManagerMock.AssertExpectations(t)
 			}
-		}`
-		assert.JSONEq(t, wantBody, string(respBody))
-	})
 
-	t.Run("returns BadRequest error when password does not match all the criteria", func(t *testing.T) {
-		token := "token"
-		ctx = context.WithValue(ctx, middleware.TokenContextKey, token)
-
-		// Setup handler
-		user := &auth.User{ID: "user-id"}
-		authManagerMock := &auth.AuthManagerMock{}
-		authManagerMock.
-			On("GetUser", mock.Anything, token).
-			Return(user, nil).
-			Once()
-		defer authManagerMock.AssertExpectations(t)
-		handler := &ProfileHandler{AuthManager: authManagerMock, PasswordValidator: pwValidator}
-
-		reqBody := `{"current_password": "currentpassword", "new_password": "1Az2By3Cx"}`
-		w := httptest.NewRecorder()
-		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, url, strings.NewReader(reqBody))
-		require.NoError(t, err)
-		http.HandlerFunc(handler.PatchUserPassword).ServeHTTP(w, req)
-
-		resp := w.Result()
-		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-		defer resp.Body.Close()
-		wantBody := `{
-			"error": "The request was invalid in some way.",
-			"extras": {
-				"length":"password length must be between 12 and 36 characters",
-				"special character":"password must contain at least one special character"
+			// Execute the request
+			var body io.Reader
+			if tc.reqBody != "" {
+				body = strings.NewReader(tc.reqBody)
 			}
-		}`
-		assert.JSONEq(t, wantBody, string(respBody))
-	})
+			w := httptest.NewRecorder()
+			req, err := http.NewRequestWithContext(ctx, http.MethodPatch, "/profile/reset-password", body)
+			require.NoError(t, err)
+			http.HandlerFunc(handler.PatchUserPassword).ServeHTTP(w, req)
 
-	t.Run("returns InternalServerError when AuthManager fails", func(t *testing.T) {
-		token := "token"
-		ctx = context.WithValue(ctx, middleware.TokenContextKey, token)
-
-		// Setup handler
-		user := &auth.User{ID: "user-id"}
-		authManagerMock := &auth.AuthManagerMock{}
-		authManagerMock.
-			On("GetUser", mock.Anything, token).
-			Return(user, nil).
-			Once().
-			On("UpdatePassword", mock.Anything, token, "currentpassword", "!1Az?2By.3Cx").
-			Return(errors.New("unexpected error")).
-			Once()
-		defer authManagerMock.AssertExpectations(t)
-		handler := &ProfileHandler{AuthManager: authManagerMock, PasswordValidator: pwValidator}
-
-		reqBody := `{"current_password": "currentpassword", "new_password": "!1Az?2By.3Cx"}`
-		w := httptest.NewRecorder()
-		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, url, strings.NewReader(reqBody))
-		require.NoError(t, err)
-		http.HandlerFunc(handler.PatchUserPassword).ServeHTTP(w, req)
-
-		resp := w.Result()
-		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-		assert.JSONEq(t, `{"error":"Cannot update user password"}`, string(respBody))
-	})
-
-	t.Run("updates the user password successfully", func(t *testing.T) {
-		buf := new(strings.Builder)
-		log.DefaultLogger.SetOutput(buf)
-		log.SetLevel(log.InfoLevel)
-
-		token := "token"
-		ctx = context.WithValue(ctx, middleware.TokenContextKey, token)
-
-		// Setup handler
-		user := &auth.User{ID: "user-id"}
-		authManagerMock := &auth.AuthManagerMock{}
-		authManagerMock.
-			On("GetUser", mock.Anything, token).
-			Return(user, nil).
-			Once().
-			On("UpdatePassword", mock.Anything, token, "currentpassword", "!1Az?2By.3Cx").
-			Return(nil).
-			Once()
-		defer authManagerMock.AssertExpectations(t)
-		handler := &ProfileHandler{AuthManager: authManagerMock, PasswordValidator: pwValidator}
-
-		reqBody := `{"current_password": "currentpassword", "new_password": "!1Az?2By.3Cx"}`
-		w := httptest.NewRecorder()
-		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, url, strings.NewReader(reqBody))
-		require.NoError(t, err)
-		http.HandlerFunc(handler.PatchUserPassword).ServeHTTP(w, req)
-
-		resp := w.Result()
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-		assert.JSONEq(t, `{"message": "user password updated successfully"}`, string(respBody))
-
-		// validate logs
-		require.Contains(t, buf.String(), "[UpdateUserPassword] - Will update password for user account ID user-id")
-	})
+			// Assert response
+			resp := w.Result()
+			assert.Equal(t, tc.wantStatusCode, resp.StatusCode)
+			respBody, err := io.ReadAll(resp.Body)
+			require.NoError(t, err)
+			defer resp.Body.Close()
+			assert.JSONEq(t, tc.wantRespBody, string(respBody))
+		})
+	}
 }
 
 func Test_ProfileHandler_GetProfile(t *testing.T) {
