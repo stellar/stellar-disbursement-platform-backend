@@ -30,7 +30,7 @@ func Test_DefaultPasswordEncrypter_Encrypt(t *testing.T) {
 	})
 
 	t.Run("encrypts the password correctly", func(t *testing.T) {
-		password := "mysecret"
+		password := "mysecret1234"
 
 		encryptedPassword, err := passwordEncrypter.Encrypt(ctx, password)
 		require.NoError(t, err)
@@ -56,7 +56,7 @@ func Test_DefaultPasswordEncrypter_ComparePassword(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("returns false when the password is wrong", func(t *testing.T) {
-		password := "mysecret"
+		password := "mysecret1234"
 
 		encryptedPassword, err := passwordEncrypter.Encrypt(ctx, password)
 		require.NoError(t, err)
@@ -68,7 +68,7 @@ func Test_DefaultPasswordEncrypter_ComparePassword(t *testing.T) {
 	})
 
 	t.Run("returns true when the password is correct", func(t *testing.T) {
-		password := "mysecret"
+		password := "mysecret1234"
 
 		encryptedPassword, err := passwordEncrypter.Encrypt(ctx, password)
 		require.NoError(t, err)

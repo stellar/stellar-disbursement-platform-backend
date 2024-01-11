@@ -195,7 +195,7 @@ func Test_execAddUserFunc(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("User must be valid", func(t *testing.T) {
-		email, password, firstName, lastName := "test@email.com", "mypassword", "First", "Last"
+		email, password, firstName, lastName := "test@email.com", "mypassword12", "First", "Last"
 
 		// Invalid invalid
 		err := execAddUser(ctx, dbt.DSN, "", firstName, lastName, password, false, []string{})
@@ -222,7 +222,7 @@ func Test_execAddUserFunc(t *testing.T) {
 	})
 
 	t.Run("Inserted user must have his password encrypted", func(t *testing.T) {
-		email, password, firstName, lastName := "test2@email.com", "mypassword", "First", "Last"
+		email, password, firstName, lastName := "test2@email.com", "mypassword12", "First", "Last"
 
 		err := execAddUser(ctx, dbt.DSN, email, firstName, lastName, password, false, []string{})
 		require.NoError(t, err)
@@ -240,7 +240,7 @@ func Test_execAddUserFunc(t *testing.T) {
 	})
 
 	t.Run("Email should be unique", func(t *testing.T) {
-		email, password, firstName, lastName := "unique@email.com", "mypassword", "First", "Last"
+		email, password, firstName, lastName := "unique@email.com", "mypassword12", "First", "Last"
 
 		err := execAddUser(ctx, dbt.DSN, email, firstName, lastName, password, false, []string{})
 		require.NoError(t, err)
@@ -250,7 +250,7 @@ func Test_execAddUserFunc(t *testing.T) {
 	})
 
 	t.Run("set the user roles", func(t *testing.T) {
-		email, password, firstName, lastName := "testroles@email.com", "mypassword", "First", "Last"
+		email, password, firstName, lastName := "testroles@email.com", "mypassword12", "First", "Last"
 
 		err := execAddUser(ctx, dbt.DSN, email, firstName, lastName, password, false, []string{"role1", "role2"})
 		require.NoError(t, err)

@@ -9,8 +9,8 @@ import (
 )
 
 const (
-	minPasswordLength = 8
-	maxPasswordLength = 16
+	minPasswordLength = 12
+	maxPasswordLength = 36
 )
 
 var ErrPasswordTooShort = errors.New("password should have at least 8 characters")
