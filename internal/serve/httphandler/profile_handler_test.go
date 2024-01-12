@@ -95,10 +95,171 @@ func Test_PatchOrganizationProfileRequest_AreAllFieldsEmpty(t *testing.T) {
 	assert.False(t, res)
 }
 
+func Test_ProfileHandler_PatchOrganizationProfile_Failures(t *testing.T) {
+	// PNG file
+	pngImg := data.CreateMockImage(t, 300, 300, data.ImageSizeSmall)
+	pngImgBuf := new(bytes.Buffer)
+	err := png.Encode(pngImgBuf, pngImg)
+	require.NoError(t, err)
+
+	// CSV file
+	csvBuf := new(bytes.Buffer)
+	csvWriter := csv.NewWriter(csvBuf)
+	err = csvWriter.WriteAll([][]string{
+		{"name", "age"},
+		{"foo", "99"},
+		{"bar", "99"},
+	})
+	require.NoError(t, err)
+
+	// JPEG too big
+	imgTooBig := data.CreateMockImage(t, 3840, 2160, data.ImageSizeMedium)
+	imgTooBigBuf := new(bytes.Buffer)
+	err = jpeg.Encode(imgTooBigBuf, imgTooBig, &jpeg.Options{Quality: jpeg.DefaultQuality})
+	require.NoError(t, err)
+
+	url := "/profile/organization"
+	user := &auth.User{ID: "user-id"}
+	testCases := []struct {
+		name              string
+		token             string
+		getRequestFn      func(t *testing.T, ctx context.Context) *http.Request
+		mockAuthManagerFn func(authManagerMock *auth.AuthManagerMock)
+		wantStatusCode    int
+		wantRespBody      string
+	}{
+		{
+			name: "returns Unauthorized when no token is found",
+			getRequestFn: func(t *testing.T, ctx context.Context) *http.Request {
+				return httptest.NewRequest(http.MethodPatch, url, nil).WithContext(ctx)
+			},
+			wantStatusCode: http.StatusUnauthorized,
+			wantRespBody:   `{"error": "Not authorized."}`,
+		},
+		{
+			name:  "returns BadRequest when the request is not valid (invalid JSON)",
+			token: "token",
+			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
+				authManagerMock.
+					On("GetUser", mock.Anything, "token").
+					Return(user, nil).
+					Once()
+			},
+			getRequestFn: func(t *testing.T, ctx context.Context) *http.Request {
+				return createOrganizationProfileMultipartRequest(t, ctx, url, "logo", "logo.png", `invalid`, pngImgBuf)
+			},
+			wantStatusCode: http.StatusBadRequest,
+			wantRespBody:   `{"error": "The request was invalid in some way."}`,
+		},
+		{
+			name:  "returns BadRequest when the request is not valid (invalid file format)",
+			token: "token",
+			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
+				authManagerMock.
+					On("GetUser", mock.Anything, "token").
+					Return(user, nil).
+					Once()
+			},
+			getRequestFn: func(t *testing.T, ctx context.Context) *http.Request {
+				return createOrganizationProfileMultipartRequest(t, ctx, url, "logo", "logo.csv", `{}`, csvBuf)
+			},
+			wantStatusCode: http.StatusBadRequest,
+			wantRespBody: `{
+				"error": "The request was invalid in some way.",
+				"extras": {
+					"logo": "invalid file type provided. Expected png or jpeg."
+				}
+			}`,
+		},
+		{
+			name:  "returns BadRequest when the request is not valid (both file and data are empty)",
+			token: "token",
+			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
+				authManagerMock.
+					On("GetUser", mock.Anything, "token").
+					Return(user, nil).
+					Once()
+			},
+			getRequestFn: func(t *testing.T, ctx context.Context) *http.Request {
+				return createOrganizationProfileMultipartRequest(t, ctx, url, "invalidParameterName", "logo.csv", `{}`, pngImgBuf)
+			},
+			wantStatusCode: http.StatusBadRequest,
+			wantRespBody: `{
+				"error": "request is invalid",
+				"extras": {
+					"details": "data or logo is required"
+				}
+			}`,
+		},
+		{
+			name:  "returns BadRequest error when the request size is too large",
+			token: "token",
+			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
+				authManagerMock.
+					On("GetUser", mock.Anything, "token").
+					Return(user, nil).
+					Once()
+			},
+			getRequestFn: func(t *testing.T, ctx context.Context) *http.Request {
+				return createOrganizationProfileMultipartRequest(t, ctx, url, "logo", "logo.png", `{}`, imgTooBigBuf)
+			},
+			wantStatusCode: http.StatusBadRequest,
+			wantRespBody: `{
+				"error": "could not parse multipart form data",
+				"extras": {
+					"details": "request too large. Max size 2MB."
+				}
+			}`,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Setup DB
+			dbt := dbtest.Open(t)
+			defer dbt.Close()
+			dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+			require.NoError(t, err)
+			defer dbConnectionPool.Close()
+
+			// Inject authenticated token into context:
+			ctx := context.Background()
+			if tc.token != "" {
+				ctx = context.WithValue(ctx, middleware.TokenContextKey, tc.token)
+			}
+
+			// Setup password validator
+			pwValidator, err := utils.GetPasswordValidatorInstance()
+			require.NoError(t, err)
+
+			// Setup handler with mocked dependencies
+			handler := &ProfileHandler{MaxMemoryAllocation: 1024 * 1024, PasswordValidator: pwValidator}
+			if tc.mockAuthManagerFn != nil {
+				authManagerMock := &auth.AuthManagerMock{}
+				tc.mockAuthManagerFn(authManagerMock)
+				handler.AuthManager = authManagerMock
+				defer authManagerMock.AssertExpectations(t)
+			}
+
+			// Execute the request
+			req := tc.getRequestFn(t, ctx)
+			w := httptest.NewRecorder()
+			http.HandlerFunc(handler.PatchOrganizationProfile).ServeHTTP(w, req)
+
+			// Assert response
+			resp := w.Result()
+			assert.Equal(t, tc.wantStatusCode, resp.StatusCode)
+			respBody, err := io.ReadAll(resp.Body)
+			require.NoError(t, err)
+			defer resp.Body.Close()
+			assert.JSONEq(t, tc.wantRespBody, string(respBody))
+		})
+	}
+}
+
 func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
-
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
@@ -108,131 +269,7 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 
 	handler := &ProfileHandler{Models: models, MaxMemoryAllocation: DefaultMaxMemoryAllocation}
 	url := "/profile/organization"
-
 	ctx := context.Background()
-
-	t.Run("returns Unauthorized error when no token is found", func(t *testing.T) {
-		w := httptest.NewRecorder()
-		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, url, nil)
-		require.NoError(t, err)
-		http.HandlerFunc(handler.PatchOrganizationProfile).ServeHTTP(w, req)
-
-		resp := w.Result()
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
-		assert.JSONEq(t, `{"error": "Not authorized."}`, string(respBody))
-	})
-
-	t.Run("returns BadRequest error when the request is invalid", func(t *testing.T) {
-		token := "token"
-		ctx = context.WithValue(ctx, middleware.TokenContextKey, token)
-
-		// Setup handler
-		user := &auth.User{ID: "user-id"}
-		authManagerMock := &auth.AuthManagerMock{}
-		authManagerMock.
-			On("GetUser", mock.Anything, token).
-			Return(user, nil).
-			Times(3)
-		handler.AuthManager = authManagerMock
-		defer func() { handler.AuthManager = nil }()
-		defer authManagerMock.AssertExpectations(t)
-
-		// Case 1: invalid JSON data
-		img := data.CreateMockImage(t, 300, 300, data.ImageSizeSmall)
-		imgBuf := new(bytes.Buffer)
-		err := png.Encode(imgBuf, img)
-		require.NoError(t, err)
-
-		// Execute the request
-		w := httptest.NewRecorder()
-		req := createOrganizationProfileMultipartRequest(t, ctx, url, "logo", "logo.png", `invalid`, imgBuf)
-		http.HandlerFunc(handler.PatchOrganizationProfile).ServeHTTP(w, req)
-
-		// Assert response
-		resp := w.Result()
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
-		assert.JSONEq(t, `{"error": "The request was invalid in some way."}`, string(respBody))
-
-		// Case 2: invalid file format
-		csvBuf := new(bytes.Buffer)
-		csvWriter := csv.NewWriter(csvBuf)
-		err = csvWriter.WriteAll([][]string{
-			{"name", "age"},
-			{"foo", "99"},
-			{"bar", "99"},
-		})
-		require.NoError(t, err)
-
-		// Execute the request
-		w = httptest.NewRecorder()
-		req = createOrganizationProfileMultipartRequest(t, ctx, url, "logo", "logo.csv", `{}`, csvBuf)
-		http.HandlerFunc(handler.PatchOrganizationProfile).ServeHTTP(w, req)
-
-		// Assert response
-		resp = w.Result()
-		respBody, err = io.ReadAll(resp.Body)
-		require.NoError(t, err)
-		wantsBody := `
-			{
-				"error": "The request was invalid in some way.",
-				"extras": {
-					"logo": "invalid file type provided. Expected png or jpeg."
-				}
-			}
-		`
-		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
-		assert.JSONEq(t, wantsBody, string(respBody))
-
-		// Case 3: Neither logo and organization_name isn't present.
-		// Execute the request:
-		w = httptest.NewRecorder()
-		req = createOrganizationProfileMultipartRequest(t, ctx, url, "wrong", "logo.png", `{}`, new(bytes.Buffer))
-		http.HandlerFunc(handler.PatchOrganizationProfile).ServeHTTP(w, req)
-
-		// Assert response:
-		resp = w.Result()
-		respBody, err = io.ReadAll(resp.Body)
-		require.NoError(t, err)
-		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
-		assert.JSONEq(t, `{"error": "request is invalid", "extras": {"details": "data or logo is required"}}`, string(respBody))
-	})
-
-	t.Run("returns BadRequest error when the request size is too large", func(t *testing.T) {
-		token := "token"
-		ctx = context.WithValue(ctx, middleware.TokenContextKey, token)
-		authManagerMock := &auth.AuthManagerMock{}
-		authManagerMock.
-			On("GetUser", mock.Anything, token).
-			Return(&auth.User{ID: "user-id"}, nil).
-			Once()
-		getEntries := log.DefaultLogger.StartTest(log.ErrorLevel)
-		defer authManagerMock.AssertExpectations(t)
-
-		profileHandler := &ProfileHandler{AuthManager: authManagerMock, Models: models, MaxMemoryAllocation: 1024 * 1024}
-		profileHandler.AuthManager = authManagerMock
-
-		img := data.CreateMockImage(t, 3840, 2160, data.ImageSizeMedium)
-		imgBuf := new(bytes.Buffer)
-		err := jpeg.Encode(imgBuf, img, &jpeg.Options{Quality: jpeg.DefaultQuality})
-		require.NoError(t, err)
-
-		w := httptest.NewRecorder()
-		req := createOrganizationProfileMultipartRequest(t, ctx, url, "logo", "logo.jpeg", `{}`, imgBuf)
-
-		http.HandlerFunc(profileHandler.PatchOrganizationProfile).ServeHTTP(w, req)
-		resp := w.Result()
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
-		assert.JSONEq(t, `{"error": "could not parse multipart form data", "extras": {"details": "request too large. Max size 2MB."}}`, string(respBody))
-
-		entries := getEntries()
-		assert.Equal(t, "error parsing multipart form: http: request body too large", entries[0].Message)
-	})
 
 	t.Run("🎉 successfully updates the organization's name", func(t *testing.T) {
 		buf := new(strings.Builder)
