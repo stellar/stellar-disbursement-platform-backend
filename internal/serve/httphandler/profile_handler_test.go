@@ -32,7 +32,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/utils"
 )
 
-func createOrganizationProfileMultipartRequest(t *testing.T, url, fieldName, filename, body string, fileContent io.Reader) (*http.Request, error) {
+func createOrganizationProfileMultipartRequest(t *testing.T, ctx context.Context, url, fieldName, filename, body string, fileContent io.Reader) *http.Request {
 	buf := new(bytes.Buffer)
 	writer := multipart.NewWriter(buf)
 	defer writer.Close()
@@ -41,20 +41,21 @@ func createOrganizationProfileMultipartRequest(t *testing.T, url, fieldName, fil
 		fieldName = "logo"
 	}
 
+	// Insert file into the Multipart form
 	part, err := writer.CreateFormFile(fieldName, filename)
 	require.NoError(t, err)
-
 	_, err = io.Copy(part, fileContent)
 	require.NoError(t, err)
 
-	// adding the data
+	// Insert JSON body into the Multipart form
 	err = writer.WriteField("data", body)
 	require.NoError(t, err)
 
+	// Create the request
 	req, err := http.NewRequest(http.MethodPatch, url, buf)
 	require.NoError(t, err)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
-	return req, nil
+	return req.WithContext(ctx)
 }
 
 func resetOrganizationInfo(t *testing.T, ctx context.Context, dbConnectionPool db.DBConnectionPool) {
@@ -146,9 +147,7 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 
 		// Execute the request
 		w := httptest.NewRecorder()
-		req, err := createOrganizationProfileMultipartRequest(t, url, "logo", "logo.png", `invalid`, imgBuf)
-		require.NoError(t, err)
-		req = req.WithContext(ctx)
+		req := createOrganizationProfileMultipartRequest(t, ctx, url, "logo", "logo.png", `invalid`, imgBuf)
 		http.HandlerFunc(handler.PatchOrganizationProfile).ServeHTTP(w, req)
 
 		// Assert response
@@ -170,9 +169,7 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 
 		// Execute the request
 		w = httptest.NewRecorder()
-		req, err = createOrganizationProfileMultipartRequest(t, url, "logo", "logo.csv", `{}`, csvBuf)
-		require.NoError(t, err)
-		req = req.WithContext(ctx)
+		req = createOrganizationProfileMultipartRequest(t, ctx, url, "logo", "logo.csv", `{}`, csvBuf)
 		http.HandlerFunc(handler.PatchOrganizationProfile).ServeHTTP(w, req)
 
 		// Assert response
@@ -193,9 +190,7 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 		// Case 3: Neither logo and organization_name isn't present.
 		// Execute the request:
 		w = httptest.NewRecorder()
-		req, err = createOrganizationProfileMultipartRequest(t, url, "wrong", "logo.png", `{}`, new(bytes.Buffer))
-		require.NoError(t, err)
-		req = req.WithContext(ctx)
+		req = createOrganizationProfileMultipartRequest(t, ctx, url, "wrong", "logo.png", `{}`, new(bytes.Buffer))
 		http.HandlerFunc(handler.PatchOrganizationProfile).ServeHTTP(w, req)
 
 		// Assert response:
@@ -226,9 +221,7 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 		require.NoError(t, err)
 
 		w := httptest.NewRecorder()
-		req, err := createOrganizationProfileMultipartRequest(t, url, "logo", "logo.jpeg", `{}`, imgBuf)
-		require.NoError(t, err)
-		req = req.WithContext(ctx)
+		req := createOrganizationProfileMultipartRequest(t, ctx, url, "logo", "logo.jpeg", `{}`, imgBuf)
 
 		http.HandlerFunc(profileHandler.PatchOrganizationProfile).ServeHTTP(w, req)
 		resp := w.Result()
@@ -268,9 +261,7 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 		assert.Nil(t, org.Logo)
 
 		w := httptest.NewRecorder()
-		req, err := createOrganizationProfileMultipartRequest(t, url, "", "", `{"organization_name": "My Org Name"}`, new(bytes.Buffer))
-		require.NoError(t, err)
-		req = req.WithContext(ctx)
+		req := createOrganizationProfileMultipartRequest(t, ctx, url, "", "", `{"organization_name": "My Org Name"}`, new(bytes.Buffer))
 		http.HandlerFunc(handler.PatchOrganizationProfile).ServeHTTP(w, req)
 
 		resp := w.Result()
@@ -317,9 +308,7 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 		assert.Nil(t, org.Logo)
 
 		w := httptest.NewRecorder()
-		req, err := createOrganizationProfileMultipartRequest(t, url, "", "", `{"timezone_utc_offset": "-03:00"}`, new(bytes.Buffer))
-		require.NoError(t, err)
-		req = req.WithContext(ctx)
+		req := createOrganizationProfileMultipartRequest(t, ctx, url, "", "", `{"timezone_utc_offset": "-03:00"}`, new(bytes.Buffer))
 		http.HandlerFunc(handler.PatchOrganizationProfile).ServeHTTP(w, req)
 
 		resp := w.Result()
@@ -365,9 +354,7 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 		assert.False(t, org.IsApprovalRequired)
 
 		w := httptest.NewRecorder()
-		req, err := createOrganizationProfileMultipartRequest(t, url, "", "", `{"is_approval_required": true}`, new(bytes.Buffer))
-		require.NoError(t, err)
-		req = req.WithContext(ctx)
+		req := createOrganizationProfileMultipartRequest(t, ctx, url, "", "", `{"is_approval_required": true}`, new(bytes.Buffer))
 		http.HandlerFunc(handler.PatchOrganizationProfile).ServeHTTP(w, req)
 
 		resp := w.Result()
@@ -417,9 +404,7 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 		require.NoError(t, err)
 
 		w := httptest.NewRecorder()
-		req, err := createOrganizationProfileMultipartRequest(t, url, "logo", "logo.png", `{}`, imgBuf)
-		require.NoError(t, err)
-		req = req.WithContext(ctx)
+		req := createOrganizationProfileMultipartRequest(t, ctx, url, "logo", "logo.png", `{}`, imgBuf)
 		http.HandlerFunc(handler.PatchOrganizationProfile).ServeHTTP(w, req)
 
 		resp := w.Result()
@@ -451,9 +436,7 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 		require.NoError(t, err)
 
 		w = httptest.NewRecorder()
-		req, err = createOrganizationProfileMultipartRequest(t, url, "logo", "logo.jpeg", `{}`, imgBuf)
-		require.NoError(t, err)
-		req = req.WithContext(ctx)
+		req = createOrganizationProfileMultipartRequest(t, ctx, url, "logo", "logo.jpeg", `{}`, imgBuf)
 		http.HandlerFunc(handler.PatchOrganizationProfile).ServeHTTP(w, req)
 
 		resp = w.Result()
@@ -508,9 +491,7 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 		require.NoError(t, err)
 
 		w := httptest.NewRecorder()
-		req, err := createOrganizationProfileMultipartRequest(t, url, "logo", "logo.png", `{"organization_name": "My Org Name", "timezone_utc_offset": "-03:00"}`, imgBuf)
-		require.NoError(t, err)
-		req = req.WithContext(ctx)
+		req := createOrganizationProfileMultipartRequest(t, ctx, url, "logo", "logo.png", `{"organization_name": "My Org Name", "timezone_utc_offset": "-03:00"}`, imgBuf)
 		http.HandlerFunc(handler.PatchOrganizationProfile).ServeHTTP(w, req)
 
 		resp := w.Result()
@@ -561,9 +542,7 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 
 		// Custom message
 		w := httptest.NewRecorder()
-		req, err := createOrganizationProfileMultipartRequest(t, url, "", "", `{"sms_registration_message_template": "My custom receiver wallet registration invite. MyOrg 👋"}`, new(bytes.Buffer))
-		require.NoError(t, err)
-		req = req.WithContext(ctx)
+		req := createOrganizationProfileMultipartRequest(t, ctx, url, "", "", `{"sms_registration_message_template": "My custom receiver wallet registration invite. MyOrg 👋"}`, new(bytes.Buffer))
 		http.HandlerFunc(handler.PatchOrganizationProfile).ServeHTTP(w, req)
 
 		resp := w.Result()
@@ -579,9 +558,7 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 
 		// Don't update the message
 		w = httptest.NewRecorder()
-		req, err = createOrganizationProfileMultipartRequest(t, url, "", "", `{"organization_name": "MyOrg"}`, new(bytes.Buffer))
-		require.NoError(t, err)
-		req = req.WithContext(ctx)
+		req = createOrganizationProfileMultipartRequest(t, ctx, url, "", "", `{"organization_name": "MyOrg"}`, new(bytes.Buffer))
 		http.HandlerFunc(handler.PatchOrganizationProfile).ServeHTTP(w, req)
 
 		resp = w.Result()
@@ -597,9 +574,7 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 
 		// Back to default message
 		w = httptest.NewRecorder()
-		req, err = createOrganizationProfileMultipartRequest(t, url, "", "", `{"sms_registration_message_template": ""}`, new(bytes.Buffer))
-		require.NoError(t, err)
-		req = req.WithContext(ctx)
+		req = createOrganizationProfileMultipartRequest(t, ctx, url, "", "", `{"sms_registration_message_template": ""}`, new(bytes.Buffer))
 		http.HandlerFunc(handler.PatchOrganizationProfile).ServeHTTP(w, req)
 
 		resp = w.Result()
@@ -647,9 +622,7 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 
 		// Custom message
 		w := httptest.NewRecorder()
-		req, err := createOrganizationProfileMultipartRequest(t, url, "", "", `{"otp_message_template": "Here's your OTP Code to complete your registration. MyOrg 👋"}`, new(bytes.Buffer))
-		require.NoError(t, err)
-		req = req.WithContext(ctx)
+		req := createOrganizationProfileMultipartRequest(t, ctx, url, "", "", `{"otp_message_template": "Here's your OTP Code to complete your registration. MyOrg 👋"}`, new(bytes.Buffer))
 		http.HandlerFunc(handler.PatchOrganizationProfile).ServeHTTP(w, req)
 
 		resp := w.Result()
@@ -665,9 +638,7 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 
 		// Don't update the message
 		w = httptest.NewRecorder()
-		req, err = createOrganizationProfileMultipartRequest(t, url, "", "", `{"organization_name": "MyOrg"}`, new(bytes.Buffer))
-		require.NoError(t, err)
-		req = req.WithContext(ctx)
+		req = createOrganizationProfileMultipartRequest(t, ctx, url, "", "", `{"organization_name": "MyOrg"}`, new(bytes.Buffer))
 		http.HandlerFunc(handler.PatchOrganizationProfile).ServeHTTP(w, req)
 
 		resp = w.Result()
@@ -683,9 +654,7 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 
 		// Back to default message
 		w = httptest.NewRecorder()
-		req, err = createOrganizationProfileMultipartRequest(t, url, "", "", `{"otp_message_template": ""}`, new(bytes.Buffer))
-		require.NoError(t, err)
-		req = req.WithContext(ctx)
+		req = createOrganizationProfileMultipartRequest(t, ctx, url, "", "", `{"otp_message_template": ""}`, new(bytes.Buffer))
 		http.HandlerFunc(handler.PatchOrganizationProfile).ServeHTTP(w, req)
 
 		resp = w.Result()
@@ -731,9 +700,7 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 
 		// Custom interval
 		w := httptest.NewRecorder()
-		req, err := createOrganizationProfileMultipartRequest(t, url, "", "", `{"sms_resend_interval": 2}`, new(bytes.Buffer))
-		require.NoError(t, err)
-		req = req.WithContext(ctx)
+		req := createOrganizationProfileMultipartRequest(t, ctx, url, "", "", `{"sms_resend_interval": 2}`, new(bytes.Buffer))
 		http.HandlerFunc(handler.PatchOrganizationProfile).ServeHTTP(w, req)
 
 		resp := w.Result()
@@ -749,9 +716,7 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 
 		// Don't update the interval
 		w = httptest.NewRecorder()
-		req, err = createOrganizationProfileMultipartRequest(t, url, "", "", `{"organization_name": "MyOrg"}`, new(bytes.Buffer))
-		require.NoError(t, err)
-		req = req.WithContext(ctx)
+		req = createOrganizationProfileMultipartRequest(t, ctx, url, "", "", `{"organization_name": "MyOrg"}`, new(bytes.Buffer))
 		http.HandlerFunc(handler.PatchOrganizationProfile).ServeHTTP(w, req)
 
 		resp = w.Result()
@@ -768,9 +733,7 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 
 		// Back to default interval
 		w = httptest.NewRecorder()
-		req, err = createOrganizationProfileMultipartRequest(t, url, "", "", `{"sms_resend_interval": 0}`, new(bytes.Buffer))
-		require.NoError(t, err)
-		req = req.WithContext(ctx)
+		req = createOrganizationProfileMultipartRequest(t, ctx, url, "", "", `{"sms_resend_interval": 0}`, new(bytes.Buffer))
 		http.HandlerFunc(handler.PatchOrganizationProfile).ServeHTTP(w, req)
 
 		resp = w.Result()
@@ -817,9 +780,7 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 
 		// Custom period
 		w := httptest.NewRecorder()
-		req, err := createOrganizationProfileMultipartRequest(t, url, "", "", `{"payment_cancellation_period_days": 2}`, new(bytes.Buffer))
-		require.NoError(t, err)
-		req = req.WithContext(ctx)
+		req := createOrganizationProfileMultipartRequest(t, ctx, url, "", "", `{"payment_cancellation_period_days": 2}`, new(bytes.Buffer))
 		http.HandlerFunc(handler.PatchOrganizationProfile).ServeHTTP(w, req)
 
 		resp := w.Result()
@@ -836,9 +797,7 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 
 		// Don't update the period
 		w = httptest.NewRecorder()
-		req, err = createOrganizationProfileMultipartRequest(t, url, "", "", `{"organization_name": "MyOrg"}`, new(bytes.Buffer))
-		require.NoError(t, err)
-		req = req.WithContext(ctx)
+		req = createOrganizationProfileMultipartRequest(t, ctx, url, "", "", `{"organization_name": "MyOrg"}`, new(bytes.Buffer))
 		http.HandlerFunc(handler.PatchOrganizationProfile).ServeHTTP(w, req)
 
 		resp = w.Result()
@@ -855,9 +814,7 @@ func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
 
 		// Back to default period
 		w = httptest.NewRecorder()
-		req, err = createOrganizationProfileMultipartRequest(t, url, "", "", `{"payment_cancellation_period_days": 0}`, new(bytes.Buffer))
-		require.NoError(t, err)
-		req = req.WithContext(ctx)
+		req = createOrganizationProfileMultipartRequest(t, ctx, url, "", "", `{"payment_cancellation_period_days": 0}`, new(bytes.Buffer))
 		http.HandlerFunc(handler.PatchOrganizationProfile).ServeHTTP(w, req)
 
 		resp = w.Result()
