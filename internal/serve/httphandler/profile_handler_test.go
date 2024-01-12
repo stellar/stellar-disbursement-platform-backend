@@ -888,6 +888,7 @@ func Test_ProfileHandler_PatchUserProfile(t *testing.T) {
 		mockAuthManagerFn func(authManagerMock *auth.AuthManagerMock)
 		wantStatusCode    int
 		wantRespBody      string
+		wantLogEntries    []string
 	}{
 		{
 			name:           "returns Unauthorized when no token is found",
@@ -1007,6 +1008,10 @@ func Test_ProfileHandler_PatchUserProfile(t *testing.T) {
 			},
 			wantStatusCode: http.StatusOK,
 			wantRespBody:   `{"message": "user profile updated successfully"}`,
+			wantLogEntries: []string{
+				"[PatchUserProfile] - Will update email for userID user-id to ema...com",
+				"[PatchUserProfile] - Will update password for userID user-id",
+			},
 		},
 	}
 
@@ -1061,9 +1066,10 @@ func Test_ProfileHandler_PatchUserProfile(t *testing.T) {
 			assert.JSONEq(t, tc.wantRespBody, string(respBody))
 
 			// Validate logs
-			if tc.wantStatusCode == http.StatusOK {
-				assert.Contains(t, buf.String(), "[PatchUserProfile] - Will update email for userID user-id to ema...com")
-				assert.Contains(t, buf.String(), "[PatchUserProfile] - Will update password for userID user-id")
+			if len(tc.wantLogEntries) > 0 {
+				for _, entry := range tc.wantLogEntries {
+					assert.Contains(t, buf.String(), entry)
+				}
 			}
 		})
 	}
@@ -1078,6 +1084,7 @@ func Test_ProfileHandler_PatchUserPassword(t *testing.T) {
 		mockAuthManagerFn func(authManagerMock *auth.AuthManagerMock)
 		wantStatusCode    int
 		wantRespBody      string
+		wantLogEntries    []string
 	}{
 		{
 			name:           "returns Unauthorized error when no token is found",
@@ -1185,6 +1192,9 @@ func Test_ProfileHandler_PatchUserPassword(t *testing.T) {
 			},
 			wantStatusCode: http.StatusOK,
 			wantRespBody:   `{"message": "user password updated successfully"}`,
+			wantLogEntries: []string{
+				"[PatchUserPassword] - Will update password for user account ID user-id",
+			},
 		},
 	}
 
@@ -1239,8 +1249,10 @@ func Test_ProfileHandler_PatchUserPassword(t *testing.T) {
 			assert.JSONEq(t, tc.wantRespBody, string(respBody))
 
 			// Validate logs
-			if tc.wantStatusCode == http.StatusOK {
-				require.Contains(t, buf.String(), "[PatchUserPassword] - Will update password for user account ID user-id")
+			if len(tc.wantLogEntries) > 0 {
+				for _, entry := range tc.wantLogEntries {
+					assert.Contains(t, buf.String(), entry)
+				}
 			}
 		})
 	}
