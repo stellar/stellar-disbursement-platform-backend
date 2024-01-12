@@ -13,8 +13,10 @@ const (
 	maxPasswordLength = 36
 )
 
-var ErrPasswordTooShort = fmt.Errorf("password should have at least %d characters", minPasswordLength)
-var ErrPasswordTooLong = fmt.Errorf("password should have at most %d characters", maxPasswordLength)
+var (
+	ErrPasswordTooShort = fmt.Errorf("password should have at least %d characters", minPasswordLength)
+	ErrPasswordTooLong  = fmt.Errorf("password should have at most %d characters", maxPasswordLength)
+)
 
 // PasswordEncrypter is a interface that defines the methods to encrypt passwords and compare a password with its stored hash.
 // This interface is used by `DefaultAuthenticator` as the type of `passwordEncrypter` attribute.
