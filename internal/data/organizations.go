@@ -49,16 +49,16 @@ type Organization struct {
 }
 
 type OrganizationUpdate struct {
-	Name                          string
-	Logo                          []byte
-	TimezoneUTCOffset             string
-	IsApprovalRequired            *bool
-	SMSResendInterval             *int64
-	PaymentCancellationPeriodDays *int64
+	Name                          string `json:",omitempty"`
+	Logo                          []byte `json:",omitempty"`
+	TimezoneUTCOffset             string `json:",omitempty"`
+	IsApprovalRequired            *bool  `json:",omitempty"`
+	SMSResendInterval             *int64 `json:",omitempty"`
+	PaymentCancellationPeriodDays *int64 `json:",omitempty"`
 
 	// Using pointers to accept empty strings
-	SMSRegistrationMessageTemplate *string
-	OTPMessageTemplate             *string
+	SMSRegistrationMessageTemplate *string `json:",omitempty"`
+	OTPMessageTemplate             *string `json:",omitempty"`
 }
 
 type LogoType string
