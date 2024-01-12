@@ -31,6 +31,7 @@ import (
 	txnsubmitterutils "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
+	authUtils "github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/utils"
 )
 
 const ServiceID = "serve"
@@ -82,6 +83,7 @@ type ServeOptions struct {
 	ReCAPTCHASiteSecretKey          string
 	EnableMFA                       bool
 	EnableReCAPTCHA                 bool
+	PasswordValidator               *authUtils.PasswordValidator
 }
 
 // SetupDependencies uses the serve options to setup the dependencies for the server.
@@ -138,6 +140,11 @@ func (opts *ServeOptions) SetupDependencies() error {
 	)
 	if err != nil {
 		return fmt.Errorf("error creating signature service: %w", err)
+	}
+
+	opts.PasswordValidator, err = authUtils.GetPasswordValidatorInstance()
+	if err != nil {
+		return fmt.Errorf("error initializing password validator: %w", err)
 	}
 
 	return nil
@@ -261,7 +268,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			receiversHandler := httphandler.ReceiverHandler{Models: o.Models, DBConnectionPool: o.dbConnectionPool}
 			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole, data.BusinessUserRole)).
 				Get("/", receiversHandler.GetReceivers)
-			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole)).
+			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole, data.BusinessUserRole)).
 				Get("/{id}", receiversHandler.GetReceiver)
 
 			r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...)).
@@ -315,6 +322,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			MaxMemoryAllocation:   httphandler.DefaultMaxMemoryAllocation,
 			BaseURL:               o.BaseURL,
 			DistributionPublicKey: o.DistributionPublicKey,
+			PasswordValidator:     o.PasswordValidator,
 		}
 		r.Route("/profile", func(r chi.Router) {
 			r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...)).
@@ -369,7 +377,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 		ReCAPTCHAValidator: reCAPTCHAValidator,
 		ReCAPTCHAEnabled:   o.EnableReCAPTCHA,
 	}.ServeHTTP)
-	mux.Post("/reset-password", httphandler.ResetPasswordHandler{AuthManager: authManager}.ServeHTTP)
+	mux.Post("/reset-password", httphandler.ResetPasswordHandler{AuthManager: authManager, PasswordValidator: o.PasswordValidator}.ServeHTTP)
 
 	// START SEP-24 endpoints
 	mux.Get("/.well-known/stellar.toml", httphandler.StellarTomlHandler{

@@ -8,10 +8,11 @@ import (
 	"testing"
 
 	"github.com/stellar/go/support/log"
-
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/utils"
 )
 
 func Test_ResetPasswordHandlerPost(t *testing.T) {
@@ -22,9 +23,10 @@ func Test_ResetPasswordHandlerPost(t *testing.T) {
 	authManager := auth.NewAuthManager(
 		auth.WithCustomAuthenticatorOption(authenticatorMock),
 	)
-
+	pwValidator, _ := utils.GetPasswordValidatorInstance()
 	handler := &ResetPasswordHandler{
-		AuthManager: authManager,
+		AuthManager:       authManager,
+		PasswordValidator: pwValidator,
 	}
 
 	t.Run("Should return http status 200 on a valid request", func(t *testing.T) {
