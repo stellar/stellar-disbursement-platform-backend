@@ -105,12 +105,12 @@ func (a *defaultAuthenticator) CreateUser(ctx context.Context, user *User, passw
 	// In case no password is passed we generate a random OTP (One Time Password)
 	if password == "" {
 		// Random length pasword
-		randomNumber, err := rand.Int(rand.Reader, big.NewInt(maxPasswordLength-minPasswordLength+1))
+		randomNumber, err := rand.Int(rand.Reader, big.NewInt(MaxPasswordLength-MinPasswordLength+1))
 		if err != nil {
 			return nil, fmt.Errorf("error generating random number in create user: %w", err)
 		}
 
-		passwordLength := int(randomNumber.Int64() + minPasswordLength)
+		passwordLength := int(randomNumber.Int64() + MinPasswordLength)
 		password, err = utils.StringWithCharset(passwordLength, utils.PasswordCharset)
 		if err != nil {
 			return nil, fmt.Errorf("error generating random password string in create user: %w", err)

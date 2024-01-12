@@ -40,7 +40,7 @@ func AddUserCmd(databaseURLFlagName string, passwordPrompt PasswordPromptInterfa
 		},
 		{
 			Name:        "password",
-			Usage:       "Sets the user password, it should be at least 8 characters long, if omitted, the command will generate a random one.",
+			Usage:       fmt.Sprintf("Sets the user password, it should be at least %d characters long, if omitted, the command will generate a random one.", auth.MinPasswordLength),
 			OptType:     types.Bool,
 			ConfigKey:   &passwordFlag,
 			FlagDefault: false,
@@ -64,7 +64,7 @@ func AddUserCmd(databaseURLFlagName string, passwordPrompt PasswordPromptInterfa
 	addUser := &cobra.Command{
 		Use:   "add-user <email> <first name> <last name> [--owner] [--roles] [--password]",
 		Short: "Add user to the system",
-		Long:  "Add a user to the system. Email should be unique and password must be at least 8 characters long.",
+		Long:  fmt.Sprintf("Add a user to the system. Email should be unique and password must be at least %d characters long.", auth.MinPasswordLength),
 		Args:  cobra.ExactArgs(3),
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
 			ctx := cmd.Context()
