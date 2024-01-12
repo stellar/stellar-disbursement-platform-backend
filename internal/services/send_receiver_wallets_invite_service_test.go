@@ -723,18 +723,18 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 
 	t.Run("send disbursement invite successfully", func(t *testing.T) {
 		disbursement3 := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-			Country: country,
-			Wallet:  wallet1,
-			Status:  data.ReadyDisbursementStatus,
-			Asset:   asset1,
+			Country:                        country,
+			Wallet:                         wallet1,
+			Status:                         data.ReadyDisbursementStatus,
+			Asset:                          asset1,
 			SMSRegistrationMessageTemplate: "SMS Registration Message template test disbursement 3:",
 		})
 
 		disbursement4 := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-			Country: country,
-			Wallet:  wallet2,
-			Status:  data.ReadyDisbursementStatus,
-			Asset:   asset2,
+			Country:                        country,
+			Wallet:                         wallet2,
+			Status:                         data.ReadyDisbursementStatus,
+			Asset:                          asset2,
 			SMSRegistrationMessageTemplate: "SMS Registration Message template test disbursement 4:",
 		})
 
@@ -861,10 +861,10 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 
 	t.Run("successfully resend the disbursement invitation SMS", func(t *testing.T) {
 		disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-			Country: country,
-			Wallet:  wallet1,
-			Status:  data.ReadyDisbursementStatus,
-			Asset:   asset1,
+			Country:                        country,
+			Wallet:                         wallet1,
+			Status:                         data.ReadyDisbursementStatus,
+			Asset:                          asset1,
 			SMSRegistrationMessageTemplate: "SMS Registration Message template test disbursement:",
 		})
 
