@@ -527,29 +527,6 @@ func Test_ProfileHandler_PatchUserProfile(t *testing.T) {
 			}`,
 		},
 		{
-			name:    "returns BadRequest when the request has an invalid password",
-			token:   "token",
-			reqBody: `{"password": "invalid"}`,
-			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
-				authManagerMock.
-					On("GetUser", mock.Anything, "token").
-					Return(user, nil).
-					Once()
-			},
-			wantStatusCode: http.StatusBadRequest,
-			wantRespBody: `{
-				"error": "The request was invalid in some way.",
-				"extras": {
-					"password": {
-						"digit": "password must contain at least one numberical digit",
-						"length":"password length must be between 12 and 36 characters",
-						"special character":"password must contain at least one special character",
-						"uppercase":"password must contain at least one uppercase letter"
-					}
-				}
-			}`,
-		},
-		{
 			name:    "returns BadRequest if none of the fields are provided",
 			token:   "token",
 			reqBody: `{}`,
@@ -563,7 +540,7 @@ func Test_ProfileHandler_PatchUserProfile(t *testing.T) {
 			wantRespBody: `{
 				"error": "The request was invalid in some way.",
 				"extras": {
-					"details":"provide at least first_name, last_name, email or password."
+					"details":"provide at least first_name, last_name or email."
 				}
 			}`,
 		},
@@ -573,15 +550,14 @@ func Test_ProfileHandler_PatchUserProfile(t *testing.T) {
 			reqBody: `{
 				"first_name": "First",
 				"last_name": "Last",
-				"email": "email@email.com",
-				"password": "!1Az?2By.3Cx"
+				"email": "email@email.com"
 			}`,
 			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
 				authManagerMock.
 					On("GetUser", mock.Anything, "token").
 					Return(user, nil).
 					Once().
-					On("UpdateUser", mock.Anything, "token", "First", "Last", "email@email.com", "!1Az?2By.3Cx").
+					On("UpdateUser", mock.Anything, "token", "First", "Last", "email@email.com", "").
 					Return(errors.New("unexpected error")).
 					Once()
 			},
@@ -594,15 +570,14 @@ func Test_ProfileHandler_PatchUserProfile(t *testing.T) {
 			reqBody: `{
 				"first_name": "First",
 				"last_name": "Last",
-				"email": "email@email.com",
-				"password": "!1Az?2By.3Cx"
+				"email": "email@email.com"
 			}`,
 			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
 				authManagerMock.
 					On("GetUser", mock.Anything, "token").
 					Return(user, nil).
 					Once().
-					On("UpdateUser", mock.Anything, "token", "First", "Last", "email@email.com", "!1Az?2By.3Cx").
+					On("UpdateUser", mock.Anything, "token", "First", "Last", "email@email.com", "").
 					Return(nil).
 					Once()
 			},
@@ -610,7 +585,6 @@ func Test_ProfileHandler_PatchUserProfile(t *testing.T) {
 			wantRespBody:   `{"message": "user profile updated successfully"}`,
 			wantLogEntries: []string{
 				"[PatchUserProfile] - Will update email for userID user-id to ema...com",
-				"[PatchUserProfile] - Will update password for userID user-id",
 			},
 		},
 	}

@@ -71,7 +71,6 @@ type PatchUserProfileRequest struct {
 	FirstName string `json:"first_name"`
 	LastName  string `json:"last_name"`
 	Email     string `json:"email"`
-	Password  string `json:"password"`
 }
 
 type GetProfileResponse struct {
@@ -210,28 +209,6 @@ func (h ProfileHandler) PatchUserProfile(rw http.ResponseWriter, req *http.Reque
 		return
 	}
 
-	if reqBody.Password != "" {
-		// validate if the password format attends the requirements
-		err := h.PasswordValidator.ValidatePassword(reqBody.Password)
-		if err != nil {
-			var validatePasswordError *authUtils.ValidatePasswordError
-			if errors.As(err, &validatePasswordError) {
-				passwordExtras := map[string]interface{}{}
-				for k, v := range validatePasswordError.FailedValidations() {
-					passwordExtras[k] = v
-				}
-				badRequestExtras := map[string]interface{}{"password": passwordExtras}
-				log.Ctx(ctx).Errorf("validating password in PatchUserPassword: %v", err)
-				httperror.BadRequest("", nil, badRequestExtras).Render(rw)
-			} else {
-				httperror.InternalError(ctx, "Cannot update user password", err, nil).Render(rw)
-			}
-			return
-		}
-
-		log.Ctx(ctx).Warnf("[PatchUserProfile] - Will update password for userID %s", user.ID)
-	}
-
 	if reqBody.Email != "" {
 		if err := utils.ValidateEmail(reqBody.Email); err != nil {
 			httperror.BadRequest("", nil, map[string]interface{}{
@@ -244,12 +221,12 @@ func (h ProfileHandler) PatchUserProfile(rw http.ResponseWriter, req *http.Reque
 
 	if utils.IsEmpty(reqBody) {
 		httperror.BadRequest("", nil, map[string]interface{}{
-			"details": "provide at least first_name, last_name, email or password.",
+			"details": "provide at least first_name, last_name or email.",
 		}).Render(rw)
 		return
 	}
 
-	err := h.AuthManager.UpdateUser(ctx, token, reqBody.FirstName, reqBody.LastName, reqBody.Email, reqBody.Password)
+	err := h.AuthManager.UpdateUser(ctx, token, reqBody.FirstName, reqBody.LastName, reqBody.Email, "")
 	if err != nil {
 		httperror.InternalError(ctx, "Cannot update user profiles", err, nil).Render(rw)
 		return
