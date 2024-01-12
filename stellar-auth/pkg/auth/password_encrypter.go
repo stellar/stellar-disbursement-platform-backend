@@ -9,13 +9,13 @@ import (
 )
 
 const (
-	minPasswordLength = 12
-	maxPasswordLength = 36
+	MinPasswordLength = 12
+	MaxPasswordLength = 36
 )
 
 var (
-	ErrPasswordTooShort = fmt.Errorf("password should have at least %d characters", minPasswordLength)
-	ErrPasswordTooLong  = fmt.Errorf("password should have at most %d characters", maxPasswordLength)
+	ErrPasswordTooShort = fmt.Errorf("password should have at least %d characters", MinPasswordLength)
+	ErrPasswordTooLong  = fmt.Errorf("password should have at most %d characters", MaxPasswordLength)
 )
 
 // PasswordEncrypter is a interface that defines the methods to encrypt passwords and compare a password with its stored hash.
@@ -33,11 +33,11 @@ type PasswordEncrypter interface {
 type DefaultPasswordEncrypter struct{}
 
 func (e *DefaultPasswordEncrypter) Encrypt(ctx context.Context, password string) (string, error) {
-	if len(password) < minPasswordLength {
+	if len(password) < MinPasswordLength {
 		return "", ErrPasswordTooShort
 	}
 
-	if len(password) > maxPasswordLength {
+	if len(password) > MaxPasswordLength {
 		return "", ErrPasswordTooLong
 	}
 
