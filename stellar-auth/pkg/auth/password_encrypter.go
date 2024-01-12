@@ -13,7 +13,8 @@ const (
 	maxPasswordLength = 36
 )
 
-var ErrPasswordTooShort = errors.New("password should have at least 8 characters")
+var ErrPasswordTooShort = fmt.Errorf("password should have at least %d characters", minPasswordLength)
+var ErrPasswordTooLong = fmt.Errorf("password should have at most %d characters", maxPasswordLength)
 
 // PasswordEncrypter is a interface that defines the methods to encrypt passwords and compare a password with its stored hash.
 // This interface is used by `DefaultAuthenticator` as the type of `passwordEncrypter` attribute.
@@ -30,9 +31,12 @@ type PasswordEncrypter interface {
 type DefaultPasswordEncrypter struct{}
 
 func (e *DefaultPasswordEncrypter) Encrypt(ctx context.Context, password string) (string, error) {
-	// Assumes that a password can't have less than 8 characters.
 	if len(password) < minPasswordLength {
 		return "", ErrPasswordTooShort
+	}
+
+	if len(password) > maxPasswordLength {
+		return "", ErrPasswordTooLong
 	}
 
 	encryptedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)

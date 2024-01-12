@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -201,7 +202,7 @@ func Test_DefaultAuthenticator_CreateUser(t *testing.T) {
 		u, err := authenticator.CreateUser(ctx, user, password)
 
 		assert.Nil(t, u)
-		assert.EqualError(t, err, "error encrypting password: password should have at least 8 characters")
+		assert.EqualError(t, err, fmt.Sprintf("error encrypting password: password should have at least %d characters", minPasswordLength))
 
 		passwordEncrypterMock.
 			On("Encrypt", ctx, password).
@@ -696,7 +697,7 @@ func Test_DefaultAuthenticator_UpdateUser(t *testing.T) {
 			Once()
 
 		err := authenticator.UpdateUser(ctx, "user-id", "", "", "", "short")
-		assert.EqualError(t, err, "password should have at least 8 characters")
+		assert.EqualError(t, err, fmt.Sprintf("password should have at least %d characters", minPasswordLength))
 	})
 
 	t.Run("returns error when PasswordEncrypter fails", func(t *testing.T) {
