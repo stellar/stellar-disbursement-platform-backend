@@ -666,10 +666,8 @@ func Test_ProfileHandler_PatchUserProfile(t *testing.T) {
 			assert.JSONEq(t, tc.wantRespBody, string(respBody))
 
 			// Validate logs
-			if len(tc.wantLogEntries) > 0 {
-				for _, entry := range tc.wantLogEntries {
-					assert.Contains(t, buf.String(), entry)
-				}
+			for _, logEntry := range tc.wantLogEntries {
+				assert.Contains(t, buf.String(), logEntry)
 			}
 		})
 	}
@@ -849,10 +847,8 @@ func Test_ProfileHandler_PatchUserPassword(t *testing.T) {
 			assert.JSONEq(t, tc.wantRespBody, string(respBody))
 
 			// Validate logs
-			if len(tc.wantLogEntries) > 0 {
-				for _, entry := range tc.wantLogEntries {
-					assert.Contains(t, buf.String(), entry)
-				}
+			for _, logEntry := range tc.wantLogEntries {
+				assert.Contains(t, buf.String(), logEntry)
 			}
 		})
 	}
