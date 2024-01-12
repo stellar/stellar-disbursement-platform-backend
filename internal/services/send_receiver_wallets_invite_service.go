@@ -116,7 +116,7 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context) error {
 		}
 
 		disbursementSMSRegistrationMessageTemplate := rwa.DisbursementSMSTemplate
-		if disbursementSMSRegistrationMessageTemplate != nil {
+		if disbursementSMSRegistrationMessageTemplate != nil && *disbursementSMSRegistrationMessageTemplate != "" {
 			if !strings.Contains(*disbursementSMSRegistrationMessageTemplate, "{{.RegistrationLink}}") {
 				*disbursementSMSRegistrationMessageTemplate = fmt.Sprintf("%s {{.RegistrationLink}}", strings.TrimSpace(*disbursementSMSRegistrationMessageTemplate))
 			}

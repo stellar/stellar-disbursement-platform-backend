@@ -721,6 +721,238 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 		assert.Nil(t, msg.AssetID)
 	})
 
+	t.Run("send disbursement invite successfully", func(t *testing.T) {
+		disbursement3 := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
+			Country: country,
+			Wallet:  wallet1,
+			Status:  data.ReadyDisbursementStatus,
+			Asset:   asset1,
+			SMSRegistrationMessageTemplate: "SMS Registration Message template test disbursement 3:",
+		})
+
+		disbursement4 := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
+			Country: country,
+			Wallet:  wallet2,
+			Status:  data.ReadyDisbursementStatus,
+			Asset:   asset2,
+			SMSRegistrationMessageTemplate: "SMS Registration Message template test disbursement 4:",
+		})
+
+		s, err := NewSendReceiverWalletInviteService(models, messengerClientMock, anchorPlatformBaseSepURL, stellarSecretKey, 3, mockCrashTrackerClient)
+		require.NoError(t, err)
+
+		data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
+		data.DeleteAllMessagesFixtures(t, ctx, dbConnectionPool)
+		data.DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
+
+		rec1RW := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver1.ID, wallet1.ID, data.ReadyReceiversWalletStatus)
+		data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver1.ID, wallet2.ID, data.RegisteredReceiversWalletStatus)
+
+		rec2RW := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver2.ID, wallet2.ID, data.ReadyReceiversWalletStatus)
+
+		_ = data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+			Status:         data.ReadyPaymentStatus,
+			Disbursement:   disbursement3,
+			Asset:          *asset1,
+			ReceiverWallet: rec1RW,
+			Amount:         "1",
+		})
+
+		_ = data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+			Status:         data.ReadyPaymentStatus,
+			Disbursement:   disbursement4,
+			Asset:          *asset2,
+			ReceiverWallet: rec2RW,
+			Amount:         "1",
+		})
+
+		walletDeepLink1 := WalletDeepLink{
+			DeepLink:                 wallet1.DeepLinkSchema,
+			AnchorPlatformBaseSepURL: anchorPlatformBaseSepURL,
+			OrganizationName:         "MyCustomAid",
+			AssetCode:                asset1.Code,
+			AssetIssuer:              asset1.Issuer,
+		}
+		deepLink1, err := walletDeepLink1.GetSignedRegistrationLink(stellarSecretKey)
+		require.NoError(t, err)
+		contentDisbursement3 := fmt.Sprintf("%s %s", disbursement3.SMSRegistrationMessageTemplate, deepLink1)
+
+		walletDeepLink2 := WalletDeepLink{
+			DeepLink:                 wallet2.DeepLinkSchema,
+			AnchorPlatformBaseSepURL: anchorPlatformBaseSepURL,
+			OrganizationName:         "MyCustomAid",
+			AssetCode:                asset2.Code,
+			AssetIssuer:              asset2.Issuer,
+		}
+		deepLink2, err := walletDeepLink2.GetSignedRegistrationLink(stellarSecretKey)
+		require.NoError(t, err)
+		contentDisbursement4 := fmt.Sprintf("%s %s", disbursement4.SMSRegistrationMessageTemplate, deepLink2)
+
+		messengerClientMock.
+			On("SendMessage", message.Message{
+				ToPhoneNumber: receiver1.PhoneNumber,
+				Message:       contentDisbursement3,
+			}).
+			Return(nil).
+			Once().
+			On("SendMessage", message.Message{
+				ToPhoneNumber: receiver2.PhoneNumber,
+				Message:       contentDisbursement4,
+			}).
+			Return(nil).
+			Once()
+
+		err = s.SendInvite(ctx)
+		require.NoError(t, err)
+
+		receivers, err := models.ReceiverWallet.GetByReceiverIDsAndWalletID(ctx, dbConnectionPool, []string{receiver1.ID}, wallet1.ID)
+		require.NoError(t, err)
+		require.Len(t, receivers, 1)
+		assert.Equal(t, rec1RW.ID, receivers[0].ID)
+		assert.NotNil(t, receivers[0].InvitationSentAt)
+
+		receivers, err = models.ReceiverWallet.GetByReceiverIDsAndWalletID(ctx, dbConnectionPool, []string{receiver2.ID}, wallet2.ID)
+		require.NoError(t, err)
+		require.Len(t, receivers, 1)
+		assert.Equal(t, rec2RW.ID, receivers[0].ID)
+		assert.NotNil(t, receivers[0].InvitationSentAt)
+
+		q := `
+			SELECT
+				type, status, receiver_id, wallet_id, receiver_wallet_id,
+				title_encrypted, text_encrypted, status_history
+			FROM
+				messages
+			WHERE
+				receiver_id = $1 AND wallet_id = $2 AND receiver_wallet_id = $3
+		`
+		var msg data.Message
+		err = dbConnectionPool.GetContext(ctx, &msg, q, receiver1.ID, wallet1.ID, rec1RW.ID)
+		require.NoError(t, err)
+
+		assert.Equal(t, message.MessengerTypeTwilioSMS, msg.Type)
+		assert.Equal(t, receiver1.ID, msg.ReceiverID)
+		assert.Equal(t, wallet1.ID, msg.WalletID)
+		assert.Equal(t, rec1RW.ID, *msg.ReceiverWalletID)
+		assert.Equal(t, data.SuccessMessageStatus, msg.Status)
+		assert.Empty(t, msg.TitleEncrypted)
+		assert.Equal(t, contentDisbursement3, msg.TextEncrypted)
+		assert.Len(t, msg.StatusHistory, 2)
+		assert.Equal(t, data.PendingMessageStatus, msg.StatusHistory[0].Status)
+		assert.Equal(t, data.SuccessMessageStatus, msg.StatusHistory[1].Status)
+		assert.Nil(t, msg.AssetID)
+
+		msg = data.Message{}
+		err = dbConnectionPool.GetContext(ctx, &msg, q, receiver2.ID, wallet2.ID, rec2RW.ID)
+		require.NoError(t, err)
+
+		assert.Equal(t, message.MessengerTypeTwilioSMS, msg.Type)
+		assert.Equal(t, receiver2.ID, msg.ReceiverID)
+		assert.Equal(t, wallet2.ID, msg.WalletID)
+		assert.Equal(t, rec2RW.ID, *msg.ReceiverWalletID)
+		assert.Equal(t, data.SuccessMessageStatus, msg.Status)
+		assert.Empty(t, msg.TitleEncrypted)
+		assert.Equal(t, contentDisbursement4, msg.TextEncrypted)
+		assert.Len(t, msg.StatusHistory, 2)
+		assert.Equal(t, data.PendingMessageStatus, msg.StatusHistory[0].Status)
+		assert.Equal(t, data.SuccessMessageStatus, msg.StatusHistory[1].Status)
+		assert.Nil(t, msg.AssetID)
+	})
+
+	t.Run("successfully resend the disbursement invitation SMS", func(t *testing.T) {
+		disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
+			Country: country,
+			Wallet:  wallet1,
+			Status:  data.ReadyDisbursementStatus,
+			Asset:   asset1,
+			SMSRegistrationMessageTemplate: "SMS Registration Message template test disbursement:",
+		})
+
+		s, err := NewSendReceiverWalletInviteService(models, messengerClientMock, anchorPlatformBaseSepURL, stellarSecretKey, 3, mockCrashTrackerClient)
+		require.NoError(t, err)
+
+		data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
+		data.DeleteAllMessagesFixtures(t, ctx, dbConnectionPool)
+		data.DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
+
+		rec1RW := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver1.ID, wallet1.ID, data.ReadyReceiversWalletStatus)
+		data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver1.ID, wallet2.ID, data.RegisteredReceiversWalletStatus)
+
+		_ = data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+			Status:         data.ReadyPaymentStatus,
+			Disbursement:   disbursement,
+			Asset:          *asset1,
+			ReceiverWallet: rec1RW,
+			Amount:         "1",
+		})
+
+		// Marking as sent
+		var invitationSentAt time.Time
+		q := "UPDATE receiver_wallets SET invitation_sent_at = NOW() - interval '2 days' - interval '3 hours' WHERE id = $1 RETURNING invitation_sent_at"
+		err = dbConnectionPool.GetContext(ctx, &invitationSentAt, q, rec1RW.ID)
+		require.NoError(t, err)
+
+		// Set the SMS Resend Interval
+		var smsResendInterval int64 = 2
+		err = models.Organizations.Update(ctx, &data.OrganizationUpdate{SMSResendInterval: &smsResendInterval, SMSRegistrationMessageTemplate: new(string)})
+		require.NoError(t, err)
+
+		walletDeepLink1 := WalletDeepLink{
+			DeepLink:                 wallet1.DeepLinkSchema,
+			AnchorPlatformBaseSepURL: anchorPlatformBaseSepURL,
+			OrganizationName:         "MyCustomAid",
+			AssetCode:                asset1.Code,
+			AssetIssuer:              asset1.Issuer,
+		}
+		deepLink1, err := walletDeepLink1.GetSignedRegistrationLink(stellarSecretKey)
+		require.NoError(t, err)
+		contentDisbursement := fmt.Sprintf("%s %s", disbursement.SMSRegistrationMessageTemplate, deepLink1)
+
+		messengerClientMock.
+			On("SendMessage", message.Message{
+				ToPhoneNumber: receiver1.PhoneNumber,
+				Message:       contentDisbursement,
+			}).
+			Return(nil).
+			Once()
+
+		err = s.SendInvite(ctx)
+		require.NoError(t, err)
+
+		receivers, err := models.ReceiverWallet.GetByReceiverIDsAndWalletID(ctx, dbConnectionPool, []string{receiver1.ID}, wallet1.ID)
+		require.NoError(t, err)
+		require.Len(t, receivers, 1)
+		assert.Equal(t, rec1RW.ID, receivers[0].ID)
+		require.NotNil(t, receivers[0].InvitationSentAt)
+		assert.Equal(t, invitationSentAt, *receivers[0].InvitationSentAt)
+
+		q = `
+			SELECT
+				type, status, receiver_id, wallet_id, receiver_wallet_id,
+				title_encrypted, text_encrypted, status_history
+			FROM
+				messages
+			WHERE
+				receiver_id = $1 AND wallet_id = $2 AND
+				receiver_wallet_id = $3 AND created_at > $4
+		`
+		var msg data.Message
+		err = dbConnectionPool.GetContext(ctx, &msg, q, receiver1.ID, wallet1.ID, rec1RW.ID, invitationSentAt)
+		require.NoError(t, err)
+
+		assert.Equal(t, message.MessengerTypeTwilioSMS, msg.Type)
+		assert.Equal(t, receiver1.ID, msg.ReceiverID)
+		assert.Equal(t, wallet1.ID, msg.WalletID)
+		assert.Equal(t, rec1RW.ID, *msg.ReceiverWalletID)
+		assert.Equal(t, data.SuccessMessageStatus, msg.Status)
+		assert.Empty(t, msg.TitleEncrypted)
+		assert.Equal(t, contentDisbursement, msg.TextEncrypted)
+		assert.Len(t, msg.StatusHistory, 2)
+		assert.Equal(t, data.PendingMessageStatus, msg.StatusHistory[0].Status)
+		assert.Equal(t, data.SuccessMessageStatus, msg.StatusHistory[1].Status)
+		assert.Nil(t, msg.AssetID)
+	})
+
 	messengerClientMock.AssertExpectations(t)
 }
 
