@@ -92,7 +92,7 @@ services:
 
   anchor-platform:
     container_name: anchor-platform
-    image: stellar/anchor-platform:2.4.0
+    image: stellar/anchor-platform:2.5.2
     command: --sep-server --platform-server --platform linux/amd64
     ports:
       - "8080:8080" # sep-server
@@ -115,7 +115,9 @@ services:
       METRICS_ENABLED: "false"  # Metrics would be available at port 8082
       METRICS_EXTRAS_ENABLED: "false"
       SEP10_ENABLED: "true"
-      SEP10_HOME_DOMAIN: localhost:8080
+      SEP10_HOME_DOMAINS: "localhost:8000" # Comma separated list of home domains
+      SEP10_HOME_DOMAIN: ""
+      SEP10_WEB_AUTH_DOMAIN: "localhost:8080"
       # SEP10_CLIENT_ATTRIBUTION_REQUIRED: true  # RECOMMENDED
       # SEP10_CLIENT_ATTRIBUTION_ALLOW_LIST: "demo-wallet-server.stellar.org,https://example.com"  # RECOMMENDED
       SEP24_ENABLED: "true"
@@ -177,6 +179,7 @@ services:
     image: docker.io/bitnami/kafka:3.6
     ports:
       - "9094:9094"
+      - "9092:9092"
     volumes:
       - "kafka-data:/bitnami"
     environment:
