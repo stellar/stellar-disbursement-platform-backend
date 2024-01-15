@@ -6,6 +6,8 @@ import (
 	"fmt"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 )
 
 type DisbursementInstruction struct {
@@ -61,7 +63,7 @@ var (
 //	|    |    |    |--- If the receiver wallet exists and it's not REGISTERED, retry the invitation SMS.
 //	|    |    |--- Delete all payments tied to this disbursement.
 //	|    |    |--- Create all payments passed in the instructions.
-func (di DisbursementInstructionModel) ProcessAll(ctx context.Context, userID string, instructions []*DisbursementInstruction, disbursement *Disbursement, update *DisbursementUpdate, maxNumberOfInstructions int) error {
+func (di DisbursementInstructionModel) ProcessAll(ctx context.Context, userID string, instructions []*DisbursementInstruction, disbursement *Disbursement, update *DisbursementUpdate, maxNumberOfInstructions int, eventProducer events.Producer) error {
 	if len(instructions) > maxNumberOfInstructions {
 		return ErrMaxInstructionsExceeded
 	}
@@ -157,29 +159,34 @@ func (di DisbursementInstructionModel) ProcessAll(ctx context.Context, userID st
 		if err != nil {
 			return fmt.Errorf("error fetching receiver wallets: %w", err)
 		}
-		receiverWalletsMap := make(map[string]string)
+		receiverIDToReceiverWalletIDMap := make(map[string]string)
 		for _, receiverWallet := range receiverWallets {
-			receiverWalletsMap[receiverWallet.Receiver.ID] = receiverWallet.ID
+			receiverIDToReceiverWalletIDMap[receiverWallet.Receiver.ID] = receiverWallet.ID
 		}
 
+		eventData := make([]schemas.EventReceiverWalletSMSInvitationData, 0, len(receiverIDs))
 		for _, receiverId := range receiverIDs {
-			receiverWalletId, exists := receiverWalletsMap[receiverId]
+			receiverWalletId, exists := receiverIDToReceiverWalletIDMap[receiverId]
 			if !exists {
 				receiverWalletInsert := ReceiverWalletInsert{
 					ReceiverID: receiverId,
 					WalletID:   disbursement.Wallet.ID,
 				}
-				walletID, insertErr := di.receiverWalletModel.Insert(ctx, dbTx, receiverWalletInsert)
+				rwID, insertErr := di.receiverWalletModel.Insert(ctx, dbTx, receiverWalletInsert)
 				if insertErr != nil {
 					return fmt.Errorf("error inserting receiver wallet for receiver id %s: %w", receiverId, insertErr)
 				}
-				receiverWalletsMap[receiverId] = walletID
+				receiverIDToReceiverWalletIDMap[receiverId] = rwID
+				eventData = append(eventData, schemas.EventReceiverWalletSMSInvitationData{ReceiverWalletID: rwID})
 			} else {
-				_, retryErr := di.receiverWalletModel.RetryInvitationSMS(ctx, dbTx, receiverWalletId)
+				rw, retryErr := di.receiverWalletModel.RetryInvitationSMS(ctx, dbTx, receiverWalletId)
 				if retryErr != nil {
 					if !errors.Is(retryErr, ErrRecordNotFound) {
 						return fmt.Errorf("error retrying invitation: %w", retryErr)
 					}
+				}
+				if rw != nil && rw.Status == ReadyReceiversWalletStatus {
+					eventData = append(eventData, schemas.EventReceiverWalletSMSInvitationData{ReceiverWalletID: rw.ID})
 				}
 			}
 		}
@@ -198,7 +205,7 @@ func (di DisbursementInstructionModel) ProcessAll(ctx context.Context, userID st
 				DisbursementID:   disbursement.ID,
 				Amount:           instruction.Amount,
 				AssetID:          disbursement.Asset.ID,
-				ReceiverWalletID: receiverWalletsMap[receiver.ID],
+				ReceiverWalletID: receiverIDToReceiverWalletIDMap[receiver.ID],
 			}
 			payments = append(payments, payment)
 		}
@@ -214,6 +221,17 @@ func (di DisbursementInstructionModel) ProcessAll(ctx context.Context, userID st
 		// Step 7: Update Disbursement Status
 		if err = di.disbursementModel.UpdateStatus(ctx, dbTx, userID, disbursement.ID, ReadyDisbursementStatus); err != nil {
 			return fmt.Errorf("error updating status: %w", err)
+		}
+
+		// Step 8: Produce event to send invitation message to the receivers
+		msg, err := events.NewMessage(ctx, events.ReceiverWalletNewInvitationTopic, disbursement.ID, events.BatchReceiverWalletSMSInvitationType, eventData)
+		if err != nil {
+			return fmt.Errorf("creating event producer message: %w", err)
+		}
+
+		err = eventProducer.WriteMessages(ctx, *msg)
+		if err != nil {
+			return fmt.Errorf("publishing message %s on event producer: %w", msg.String(), err)
 		}
 
 		return nil

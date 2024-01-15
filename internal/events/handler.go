@@ -2,7 +2,17 @@ package events
 
 import (
 	"context"
-	"fmt"
+)
+
+// Topic Names
+const (
+	ReceiverWalletNewInvitationTopic = "events.receiver-wallets.new-invitation"
+)
+
+// Type Names
+const (
+	RetryReceiverWalletSMSInvitationType = "retry-receiver-wallet-sms-invitation"
+	BatchReceiverWalletSMSInvitationType = "batch-receiver-wallet-sms-invitation"
 )
 
 type EventHandler interface {
@@ -11,27 +21,6 @@ type EventHandler interface {
 	Handle(ctx context.Context, message *Message)
 }
 
-type PingPongRequest struct {
-	Message string `json:"message"`
-}
-
-// PingPongEventHandler is a example of event handler
-type PingPongEventHandler struct{}
-
-var _ EventHandler = new(PingPongEventHandler)
-
-func (h *PingPongEventHandler) Name() string {
-	return "PingPong.EventHandler"
-}
-
-func (h *PingPongEventHandler) CanHandleMessage(ctx context.Context, message *Message) bool {
-	return message.Topic == "ping-pong"
-}
-
-func (h *PingPongEventHandler) Handle(ctx context.Context, message *Message) {
-	if message.Type == "ping" {
-		fmt.Println("pong")
-	} else {
-		fmt.Println("ping")
-	}
+type EventHandlerOptions struct {
+	MaxInvitationSMSResendAttempts int
 }

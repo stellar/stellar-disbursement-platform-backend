@@ -12,6 +12,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stretchr/testify/assert"
@@ -174,7 +175,16 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 		)
 		mockCrashTrackerClient.On("LogAndReportErrors", ctx, mockErr, mockMsg).Once()
 
-		err = s.SendInvite(ctx)
+		reqs := []schemas.EventReceiverWalletSMSInvitationData{
+			{
+				ReceiverWalletID: rec1RW.ID,
+			},
+			{
+				ReceiverWalletID: rec2RW.ID,
+			},
+		}
+
+		err = s.SendInvite(ctx, reqs...)
 		require.NoError(t, err)
 
 		receivers, err := models.ReceiverWallet.GetByReceiverIDsAndWalletID(ctx, dbConnectionPool, []string{receiver1.ID}, wallet1.ID)
@@ -298,7 +308,16 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 			Return(nil).
 			Once()
 
-		err = s.SendInvite(ctx)
+		reqs := []schemas.EventReceiverWalletSMSInvitationData{
+			{
+				ReceiverWalletID: rec1RW.ID,
+			},
+			{
+				ReceiverWalletID: rec2RW.ID,
+			},
+		}
+
+		err = s.SendInvite(ctx, reqs...)
 		require.NoError(t, err)
 
 		receivers, err := models.ReceiverWallet.GetByReceiverIDsAndWalletID(ctx, dbConnectionPool, []string{receiver1.ID}, wallet1.ID)
@@ -424,7 +443,16 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 			Return(nil).
 			Once()
 
-		err = s.SendInvite(ctx)
+		reqs := []schemas.EventReceiverWalletSMSInvitationData{
+			{
+				ReceiverWalletID: rec1RW.ID,
+			},
+			{
+				ReceiverWalletID: rec2RW.ID,
+			},
+		}
+
+		err = s.SendInvite(ctx, reqs...)
 		require.NoError(t, err)
 
 		receivers, err := models.ReceiverWallet.GetByReceiverIDsAndWalletID(ctx, dbConnectionPool, []string{receiver1.ID}, wallet1.ID)
@@ -509,7 +537,13 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 		err = models.Organizations.Update(ctx, &data.OrganizationUpdate{SMSResendInterval: new(int64)})
 		require.NoError(t, err)
 
-		err = s.SendInvite(ctx)
+		reqs := []schemas.EventReceiverWalletSMSInvitationData{
+			{
+				ReceiverWalletID: rec1RW.ID,
+			},
+		}
+
+		err = s.SendInvite(ctx, reqs...)
 		require.NoError(t, err)
 
 		receivers, err := models.ReceiverWallet.GetByReceiverIDsAndWalletID(ctx, dbConnectionPool, []string{receiver1.ID}, wallet1.ID)
@@ -583,7 +617,13 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 			UpdatedAt:        time.Now().AddDate(0, 0, int(smsResendInterval*3)),
 		})
 
-		err = s.SendInvite(ctx)
+		reqs := []schemas.EventReceiverWalletSMSInvitationData{
+			{
+				ReceiverWalletID: rec1RW.ID,
+			},
+		}
+
+		err = s.SendInvite(ctx, reqs...)
 		require.NoError(t, err)
 
 		receivers, err := models.ReceiverWallet.GetByReceiverIDsAndWalletID(ctx, dbConnectionPool, []string{receiver1.ID}, wallet1.ID)
@@ -624,7 +664,13 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 		err = models.Organizations.Update(ctx, &data.OrganizationUpdate{SMSResendInterval: &smsResendInterval})
 		require.NoError(t, err)
 
-		err = s.SendInvite(ctx)
+		reqs := []schemas.EventReceiverWalletSMSInvitationData{
+			{
+				ReceiverWalletID: rec1RW.ID,
+			},
+		}
+
+		err = s.SendInvite(ctx, reqs...)
 		require.NoError(t, err)
 
 		receivers, err := models.ReceiverWallet.GetByReceiverIDsAndWalletID(ctx, dbConnectionPool, []string{receiver1.ID}, wallet1.ID)
@@ -684,7 +730,13 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 			Return(nil).
 			Once()
 
-		err = s.SendInvite(ctx)
+		reqs := []schemas.EventReceiverWalletSMSInvitationData{
+			{
+				ReceiverWalletID: rec1RW.ID,
+			},
+		}
+
+		err = s.SendInvite(ctx, reqs...)
 		require.NoError(t, err)
 
 		receivers, err := models.ReceiverWallet.GetByReceiverIDsAndWalletID(ctx, dbConnectionPool, []string{receiver1.ID}, wallet1.ID)
