@@ -13,6 +13,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -20,6 +21,7 @@ import (
 	"github.com/stellar/go/keypair"
 	"github.com/stellar/go/support/log"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
@@ -31,7 +33,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/utils"
 )
 
-func createOrganizationProfileMultipartRequest(t *testing.T, url, fieldName, filename, body string, fileContent io.Reader) (*http.Request, error) {
+func createOrganizationProfileMultipartRequest(t *testing.T, ctx context.Context, url, fieldName, filename, body string, fileContent io.Reader) *http.Request {
 	buf := new(bytes.Buffer)
 	writer := multipart.NewWriter(buf)
 	defer writer.Close()
@@ -40,20 +42,25 @@ func createOrganizationProfileMultipartRequest(t *testing.T, url, fieldName, fil
 		fieldName = "logo"
 	}
 
+	if fileContent == nil {
+		fileContent = new(bytes.Buffer)
+	}
+
+	// Insert file into the Multipart form
 	part, err := writer.CreateFormFile(fieldName, filename)
 	require.NoError(t, err)
-
 	_, err = io.Copy(part, fileContent)
 	require.NoError(t, err)
 
-	// adding the data
+	// Insert JSON body into the Multipart form
 	err = writer.WriteField("data", body)
 	require.NoError(t, err)
 
+	// Create the request
 	req, err := http.NewRequest(http.MethodPatch, url, buf)
 	require.NoError(t, err)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
-	return req, nil
+	return req.WithContext(ctx)
 }
 
 func resetOrganizationInfo(t *testing.T, ctx context.Context, dbConnectionPool db.DBConnectionPool) {
@@ -93,1044 +100,732 @@ func Test_PatchOrganizationProfileRequest_AreAllFieldsEmpty(t *testing.T) {
 	assert.False(t, res)
 }
 
-func Test_ProfileHandler_PatchOrganizationProfile(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
-
-	models, err := data.NewModels(dbConnectionPool)
+func Test_ProfileHandler_PatchOrganizationProfile_Failures(t *testing.T) {
+	// PNG file
+	pngImg := data.CreateMockImage(t, 300, 300, data.ImageSizeSmall)
+	pngImgBuf := new(bytes.Buffer)
+	err := png.Encode(pngImgBuf, pngImg)
 	require.NoError(t, err)
 
-	handler := &ProfileHandler{Models: models, MaxMemoryAllocation: DefaultMaxMemoryAllocation}
-	url := "/profile/organization"
-
-	ctx := context.Background()
-
-	t.Run("returns Unauthorized error when no token is found", func(t *testing.T) {
-		w := httptest.NewRecorder()
-		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, url, nil)
-		require.NoError(t, err)
-
-		http.HandlerFunc(handler.PatchOrganizationProfile).ServeHTTP(w, req)
-
-		resp := w.Result()
-
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-
-		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
-		assert.JSONEq(t, `{"error": "Not authorized."}`, string(respBody))
+	// CSV file
+	csvBuf := new(bytes.Buffer)
+	csvWriter := csv.NewWriter(csvBuf)
+	err = csvWriter.WriteAll([][]string{
+		{"name", "age"},
+		{"foo", "99"},
+		{"bar", "99"},
 	})
+	require.NoError(t, err)
 
-	t.Run("returns BadRequest error when the request is invalid", func(t *testing.T) {
-		ctx = context.WithValue(ctx, middleware.TokenContextKey, "token")
+	// JPEG too big
+	imgTooBig := data.CreateMockImage(t, 3840, 2160, data.ImageSizeMedium)
+	imgTooBigBuf := new(bytes.Buffer)
+	err = jpeg.Encode(imgTooBigBuf, imgTooBig, &jpeg.Options{Quality: jpeg.DefaultQuality})
+	require.NoError(t, err)
 
-		// Invalid JSON data
-		img := data.CreateMockImage(t, 300, 300, data.ImageSizeSmall)
-		imgBuf := new(bytes.Buffer)
-		err := png.Encode(imgBuf, img)
-		require.NoError(t, err)
-
-		w := httptest.NewRecorder()
-		req, err := createOrganizationProfileMultipartRequest(t, url, "logo", "logo.png", `invalid`, imgBuf)
-		require.NoError(t, err)
-
-		req = req.WithContext(ctx)
-
-		http.HandlerFunc(handler.PatchOrganizationProfile).ServeHTTP(w, req)
-
-		resp := w.Result()
-
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-
-		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
-		assert.JSONEq(t, `{"error": "The request was invalid in some way."}`, string(respBody))
-
-		// Invalid file format
-		csvBuf := new(bytes.Buffer)
-		csvWriter := csv.NewWriter(csvBuf)
-		err = csvWriter.WriteAll([][]string{
-			{"name", "age"},
-			{"foo", "99"},
-			{"bar", "99"},
-		})
-		require.NoError(t, err)
-
-		w = httptest.NewRecorder()
-		req, err = createOrganizationProfileMultipartRequest(t, url, "logo", "logo.csv", `{}`, csvBuf)
-		require.NoError(t, err)
-
-		req = req.WithContext(ctx)
-
-		http.HandlerFunc(handler.PatchOrganizationProfile).ServeHTTP(w, req)
-
-		resp = w.Result()
-
-		respBody, err = io.ReadAll(resp.Body)
-		require.NoError(t, err)
-
-		wantsBody := `
-			{
+	url := "/profile/organization"
+	user := &auth.User{ID: "user-id"}
+	testCases := []struct {
+		name              string
+		token             string
+		getRequestFn      func(t *testing.T, ctx context.Context) *http.Request
+		mockAuthManagerFn func(authManagerMock *auth.AuthManagerMock)
+		wantStatusCode    int
+		wantRespBody      string
+	}{
+		{
+			name: "returns Unauthorized when no token is found",
+			getRequestFn: func(t *testing.T, ctx context.Context) *http.Request {
+				return httptest.NewRequest(http.MethodPatch, url, nil).WithContext(ctx)
+			},
+			wantStatusCode: http.StatusUnauthorized,
+			wantRespBody:   `{"error": "Not authorized."}`,
+		},
+		{
+			name:  "returns BadRequest when the request is not valid (invalid JSON)",
+			token: "token",
+			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
+				authManagerMock.
+					On("GetUser", mock.Anything, "token").
+					Return(user, nil).
+					Once()
+			},
+			getRequestFn: func(t *testing.T, ctx context.Context) *http.Request {
+				return createOrganizationProfileMultipartRequest(t, ctx, url, "logo", "logo.png", `invalid`, pngImgBuf)
+			},
+			wantStatusCode: http.StatusBadRequest,
+			wantRespBody:   `{"error": "The request was invalid in some way."}`,
+		},
+		{
+			name:  "returns BadRequest when the request is not valid (invalid file format)",
+			token: "token",
+			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
+				authManagerMock.
+					On("GetUser", mock.Anything, "token").
+					Return(user, nil).
+					Once()
+			},
+			getRequestFn: func(t *testing.T, ctx context.Context) *http.Request {
+				return createOrganizationProfileMultipartRequest(t, ctx, url, "logo", "logo.csv", `{}`, csvBuf)
+			},
+			wantStatusCode: http.StatusBadRequest,
+			wantRespBody: `{
 				"error": "The request was invalid in some way.",
 				"extras": {
 					"logo": "invalid file type provided. Expected png or jpeg."
 				}
+			}`,
+		},
+		{
+			name:  "returns BadRequest when the request is not valid (both file and data are empty)",
+			token: "token",
+			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
+				authManagerMock.
+					On("GetUser", mock.Anything, "token").
+					Return(user, nil).
+					Once()
+			},
+			getRequestFn: func(t *testing.T, ctx context.Context) *http.Request {
+				return createOrganizationProfileMultipartRequest(t, ctx, url, "invalidParameterName", "logo.csv", `{}`, pngImgBuf)
+			},
+			wantStatusCode: http.StatusBadRequest,
+			wantRespBody: `{
+				"error": "request is invalid",
+				"extras": {
+					"details": "data or logo is required"
+				}
+			}`,
+		},
+		{
+			name:  "returns BadRequest error when the request size is too large",
+			token: "token",
+			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
+				authManagerMock.
+					On("GetUser", mock.Anything, "token").
+					Return(user, nil).
+					Once()
+			},
+			getRequestFn: func(t *testing.T, ctx context.Context) *http.Request {
+				return createOrganizationProfileMultipartRequest(t, ctx, url, "logo", "logo.png", `{}`, imgTooBigBuf)
+			},
+			wantStatusCode: http.StatusBadRequest,
+			wantRespBody: `{
+				"error": "could not parse multipart form data",
+				"extras": {
+					"details": "request too large. Max size 2MB."
+				}
+			}`,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Setup DB
+			dbt := dbtest.Open(t)
+			defer dbt.Close()
+			dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+			require.NoError(t, err)
+			defer dbConnectionPool.Close()
+
+			// Inject authenticated token into context:
+			ctx := context.Background()
+			if tc.token != "" {
+				ctx = context.WithValue(ctx, middleware.TokenContextKey, tc.token)
 			}
-		`
-		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
-		assert.JSONEq(t, wantsBody, string(respBody))
 
-		// Neither logo and organization_name isn't present.
-		w = httptest.NewRecorder()
-		req, err = createOrganizationProfileMultipartRequest(t, url, "wrong", "logo.png", `{}`, new(bytes.Buffer))
-		require.NoError(t, err)
-
-		req = req.WithContext(ctx)
-
-		http.HandlerFunc(handler.PatchOrganizationProfile).ServeHTTP(w, req)
-
-		resp = w.Result()
-
-		respBody, err = io.ReadAll(resp.Body)
-		require.NoError(t, err)
-
-		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
-		assert.JSONEq(t, `{"error": "request is invalid", "extras": {"details": "data or logo is required"}}`, string(respBody))
-	})
-
-	t.Run("returns BadRequest error when the request size is too large", func(t *testing.T) {
-		ctx = context.WithValue(ctx, middleware.TokenContextKey, "token")
-
-		img := data.CreateMockImage(t, 3840, 2160, data.ImageSizeMedium)
-		imgBuf := new(bytes.Buffer)
-		err := jpeg.Encode(imgBuf, img, &jpeg.Options{Quality: jpeg.DefaultQuality})
-		require.NoError(t, err)
-
-		w := httptest.NewRecorder()
-		req, err := createOrganizationProfileMultipartRequest(t, url, "logo", "logo.jpeg", `{}`, imgBuf)
-		require.NoError(t, err)
-
-		req = req.WithContext(ctx)
-
-		getEntries := log.DefaultLogger.StartTest(log.ErrorLevel)
-
-		profileHandler := &ProfileHandler{Models: models, MaxMemoryAllocation: 1024 * 1024}
-		http.HandlerFunc(profileHandler.PatchOrganizationProfile).ServeHTTP(w, req)
-
-		resp := w.Result()
-
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-
-		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
-		assert.JSONEq(t, `{"error": "could not parse multipart form data", "extras": {"details": "request too large. Max size 2MB."}}`, string(respBody))
-
-		entries := getEntries()
-		assert.Equal(t, "error parsing multipart form: http: request body too large", entries[0].Message)
-	})
-
-	t.Run("updates the organization's name successfully", func(t *testing.T) {
-		resetOrganizationInfo(t, ctx, dbConnectionPool)
-
-		ctx = context.WithValue(ctx, middleware.TokenContextKey, "token")
-
-		org, err := models.Organizations.Get(ctx)
-		require.NoError(t, err)
-
-		assert.Equal(t, "MyCustomAid", org.Name)
-		assert.Nil(t, org.Logo)
-
-		w := httptest.NewRecorder()
-		req, err := createOrganizationProfileMultipartRequest(t, url, "", "", `{"organization_name": "My Org Name"}`, new(bytes.Buffer))
-		require.NoError(t, err)
-
-		req = req.WithContext(ctx)
-
-		http.HandlerFunc(handler.PatchOrganizationProfile).ServeHTTP(w, req)
-
-		resp := w.Result()
-
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
-		assert.JSONEq(t, `{"message": "updated successfully"}`, string(respBody))
-
-		org, err = models.Organizations.Get(ctx)
-		require.NoError(t, err)
-
-		assert.Equal(t, "My Org Name", org.Name)
-		assert.Nil(t, org.Logo)
-	})
-
-	t.Run("updates the organization's timezone UTC offset successfully", func(t *testing.T) {
-		resetOrganizationInfo(t, ctx, dbConnectionPool)
-
-		ctx = context.WithValue(ctx, middleware.TokenContextKey, "token")
-
-		org, err := models.Organizations.Get(ctx)
-		require.NoError(t, err)
-
-		assert.Equal(t, "+00:00", org.TimezoneUTCOffset)
-		assert.Equal(t, "MyCustomAid", org.Name)
-		assert.Nil(t, org.Logo)
-
-		w := httptest.NewRecorder()
-		req, err := createOrganizationProfileMultipartRequest(t, url, "", "", `{"timezone_utc_offset": "-03:00"}`, new(bytes.Buffer))
-		require.NoError(t, err)
-
-		req = req.WithContext(ctx)
-
-		http.HandlerFunc(handler.PatchOrganizationProfile).ServeHTTP(w, req)
-
-		resp := w.Result()
-
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
-		assert.JSONEq(t, `{"message": "updated successfully"}`, string(respBody))
-
-		org, err = models.Organizations.Get(ctx)
-		require.NoError(t, err)
-
-		assert.Equal(t, "-03:00", org.TimezoneUTCOffset)
-		assert.Equal(t, "MyCustomAid", org.Name)
-		assert.Nil(t, org.Logo)
-	})
-
-	t.Run("updates the organization's IsApprovalRequired successfully", func(t *testing.T) {
-		resetOrganizationInfo(t, ctx, dbConnectionPool)
-
-		ctx = context.WithValue(ctx, middleware.TokenContextKey, "token")
-
-		org, err := models.Organizations.Get(ctx)
-		require.NoError(t, err)
-		assert.False(t, org.IsApprovalRequired)
-
-		w := httptest.NewRecorder()
-		req, err := createOrganizationProfileMultipartRequest(t, url, "", "", `{"is_approval_required": true}`, new(bytes.Buffer))
-		require.NoError(t, err)
-
-		req = req.WithContext(ctx)
-
-		http.HandlerFunc(handler.PatchOrganizationProfile).ServeHTTP(w, req)
-
-		resp := w.Result()
-
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
-		assert.JSONEq(t, `{"message": "updated successfully"}`, string(respBody))
-
-		org, err = models.Organizations.Get(ctx)
-		require.NoError(t, err)
-		require.True(t, org.IsApprovalRequired)
-	})
-
-	t.Run("updates the organization's logo successfully", func(t *testing.T) {
-		resetOrganizationInfo(t, ctx, dbConnectionPool)
-
-		ctx = context.WithValue(ctx, middleware.TokenContextKey, "token")
-
-		// PNG logo
-		org, err := models.Organizations.Get(ctx)
-		require.NoError(t, err)
-
-		assert.Nil(t, org.Logo)
-		assert.Equal(t, "MyCustomAid", org.Name)
-
-		img := data.CreateMockImage(t, 300, 300, data.ImageSizeSmall)
-		imgBuf := new(bytes.Buffer)
-		err = png.Encode(imgBuf, img)
-		require.NoError(t, err)
-
-		w := httptest.NewRecorder()
-		req, err := createOrganizationProfileMultipartRequest(t, url, "logo", "logo.png", `{}`, imgBuf)
-		require.NoError(t, err)
-
-		req = req.WithContext(ctx)
-
-		http.HandlerFunc(handler.PatchOrganizationProfile).ServeHTTP(w, req)
-
-		resp := w.Result()
-
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
-		assert.JSONEq(t, `{"message": "updated successfully"}`, string(respBody))
-
-		org, err = models.Organizations.Get(ctx)
-		require.NoError(t, err)
-
-		// renew buffer
-		imgBuf = new(bytes.Buffer)
-		err = png.Encode(imgBuf, img)
-		require.NoError(t, err)
-
-		assert.Equal(t, imgBuf.Bytes(), org.Logo)
-		assert.Equal(t, "MyCustomAid", org.Name)
-
-		// JPEG logo
-		resetOrganizationInfo(t, ctx, dbConnectionPool)
-
-		org, err = models.Organizations.Get(ctx)
-		require.NoError(t, err)
-
-		assert.Nil(t, org.Logo)
-		assert.Equal(t, "MyCustomAid", org.Name)
-
-		img = data.CreateMockImage(t, 300, 300, data.ImageSizeSmall)
-		imgBuf = new(bytes.Buffer)
-		err = jpeg.Encode(imgBuf, img, &jpeg.Options{Quality: jpeg.DefaultQuality})
-		require.NoError(t, err)
-
-		w = httptest.NewRecorder()
-		req, err = createOrganizationProfileMultipartRequest(t, url, "logo", "logo.jpeg", `{}`, imgBuf)
-		require.NoError(t, err)
-
-		req = req.WithContext(ctx)
-
-		http.HandlerFunc(handler.PatchOrganizationProfile).ServeHTTP(w, req)
-
-		resp = w.Result()
-
-		respBody, err = io.ReadAll(resp.Body)
-		require.NoError(t, err)
-
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
-		assert.JSONEq(t, `{"message": "updated successfully"}`, string(respBody))
-
-		org, err = models.Organizations.Get(ctx)
-		require.NoError(t, err)
-
-		// renew buffer
-		imgBuf = new(bytes.Buffer)
-		err = jpeg.Encode(imgBuf, img, &jpeg.Options{Quality: jpeg.DefaultQuality})
-		require.NoError(t, err)
-
-		assert.Equal(t, imgBuf.Bytes(), org.Logo)
-		assert.Equal(t, "MyCustomAid", org.Name)
-	})
-
-	t.Run("updates organization name, timezone UTC offset and logo successfully", func(t *testing.T) {
-		resetOrganizationInfo(t, ctx, dbConnectionPool)
-
-		ctx = context.WithValue(ctx, middleware.TokenContextKey, "token")
-
-		org, err := models.Organizations.Get(ctx)
-		require.NoError(t, err)
-
-		assert.Equal(t, "MyCustomAid", org.Name)
-		assert.Equal(t, "+00:00", org.TimezoneUTCOffset)
-		assert.Nil(t, org.Logo)
-
-		img := data.CreateMockImage(t, 300, 300, data.ImageSizeSmall)
-		imgBuf := new(bytes.Buffer)
-		err = png.Encode(imgBuf, img)
-		require.NoError(t, err)
-
-		w := httptest.NewRecorder()
-		req, err := createOrganizationProfileMultipartRequest(t, url, "logo", "logo.png", `{"organization_name": "My Org Name", "timezone_utc_offset": "-03:00"}`, imgBuf)
-		require.NoError(t, err)
-
-		req = req.WithContext(ctx)
-
-		http.HandlerFunc(handler.PatchOrganizationProfile).ServeHTTP(w, req)
-
-		resp := w.Result()
-
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
-		assert.JSONEq(t, `{"message": "updated successfully"}`, string(respBody))
-
-		org, err = models.Organizations.Get(ctx)
-		require.NoError(t, err)
-
-		// renew buffer
-		imgBuf = new(bytes.Buffer)
-		err = png.Encode(imgBuf, img)
-		require.NoError(t, err)
-
-		assert.Equal(t, "My Org Name", org.Name)
-		assert.Equal(t, "-03:00", org.TimezoneUTCOffset)
-		assert.Equal(t, imgBuf.Bytes(), org.Logo)
-	})
-
-	t.Run("updates organization's SMS Registration Message Template", func(t *testing.T) {
-		resetOrganizationInfo(t, ctx, dbConnectionPool)
-		ctx = context.WithValue(ctx, middleware.TokenContextKey, "token")
-
-		org, err := models.Organizations.Get(ctx)
-		require.NoError(t, err)
-		defaultMessage := "You have a payment waiting for you from the {{.OrganizationName}}. Click {{.RegistrationLink}} to register."
-		assert.Equal(t, defaultMessage, org.SMSRegistrationMessageTemplate)
-
-		// Custom message
-		w := httptest.NewRecorder()
-		req, err := createOrganizationProfileMultipartRequest(t, url, "", "", `{"sms_registration_message_template": "My custom receiver wallet registration invite. MyOrg 👋"}`, new(bytes.Buffer))
-		require.NoError(t, err)
-		req = req.WithContext(ctx)
-		http.HandlerFunc(handler.PatchOrganizationProfile).ServeHTTP(w, req)
-
-		resp := w.Result()
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-		defer resp.Body.Close()
-
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
-		assert.JSONEq(t, `{"message": "updated successfully"}`, string(respBody))
-
-		org, err = models.Organizations.Get(ctx)
-		require.NoError(t, err)
-		assert.Equal(t, "My custom receiver wallet registration invite. MyOrg 👋", org.SMSRegistrationMessageTemplate)
-
-		// Don't update the message
-		w = httptest.NewRecorder()
-		req, err = createOrganizationProfileMultipartRequest(t, url, "", "", `{"organization_name": "MyOrg"}`, new(bytes.Buffer))
-		require.NoError(t, err)
-		req = req.WithContext(ctx)
-		http.HandlerFunc(handler.PatchOrganizationProfile).ServeHTTP(w, req)
-
-		resp = w.Result()
-		respBody, err = io.ReadAll(resp.Body)
-		require.NoError(t, err)
-		defer resp.Body.Close()
-
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
-		assert.JSONEq(t, `{"message": "updated successfully"}`, string(respBody))
-
-		org, err = models.Organizations.Get(ctx)
-		require.NoError(t, err)
-		assert.Equal(t, "My custom receiver wallet registration invite. MyOrg 👋", org.SMSRegistrationMessageTemplate)
-
-		// Back to default message
-		w = httptest.NewRecorder()
-		req, err = createOrganizationProfileMultipartRequest(t, url, "", "", `{"sms_registration_message_template": ""}`, new(bytes.Buffer))
-		require.NoError(t, err)
-		req = req.WithContext(ctx)
-		http.HandlerFunc(handler.PatchOrganizationProfile).ServeHTTP(w, req)
-
-		resp = w.Result()
-		respBody, err = io.ReadAll(resp.Body)
-		require.NoError(t, err)
-		defer resp.Body.Close()
-
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
-		assert.JSONEq(t, `{"message": "updated successfully"}`, string(respBody))
-
-		org, err = models.Organizations.Get(ctx)
-		require.NoError(t, err)
-		assert.Equal(t, defaultMessage, org.SMSRegistrationMessageTemplate)
-	})
-
-	t.Run("updates organization's OTP Message Template", func(t *testing.T) {
-		resetOrganizationInfo(t, ctx, dbConnectionPool)
-
-		ctx = context.WithValue(ctx, middleware.TokenContextKey, "token")
-
-		org, err := models.Organizations.Get(ctx)
-		require.NoError(t, err)
-
-		defaultMessage := "{{.OTP}} is your {{.OrganizationName}} phone verification code."
-		assert.Equal(t, defaultMessage, org.OTPMessageTemplate)
-
-		// Custom message
-		w := httptest.NewRecorder()
-		req, err := createOrganizationProfileMultipartRequest(t, url, "", "", `{"otp_message_template": "Here's your OTP Code to complete your registration. MyOrg 👋"}`, new(bytes.Buffer))
-		require.NoError(t, err)
-		req = req.WithContext(ctx)
-		http.HandlerFunc(handler.PatchOrganizationProfile).ServeHTTP(w, req)
-
-		resp := w.Result()
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-		defer resp.Body.Close()
-
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
-		assert.JSONEq(t, `{"message": "updated successfully"}`, string(respBody))
-
-		org, err = models.Organizations.Get(ctx)
-		require.NoError(t, err)
-		assert.Equal(t, "Here's your OTP Code to complete your registration. MyOrg 👋", org.OTPMessageTemplate)
-
-		// Don't update the message
-		w = httptest.NewRecorder()
-		req, err = createOrganizationProfileMultipartRequest(t, url, "", "", `{"organization_name": "MyOrg"}`, new(bytes.Buffer))
-		require.NoError(t, err)
-		req = req.WithContext(ctx)
-		http.HandlerFunc(handler.PatchOrganizationProfile).ServeHTTP(w, req)
-
-		resp = w.Result()
-		respBody, err = io.ReadAll(resp.Body)
-		require.NoError(t, err)
-		defer resp.Body.Close()
-
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
-		assert.JSONEq(t, `{"message": "updated successfully"}`, string(respBody))
-
-		org, err = models.Organizations.Get(ctx)
-		require.NoError(t, err)
-		assert.Equal(t, "Here's your OTP Code to complete your registration. MyOrg 👋", org.OTPMessageTemplate)
-
-		// Back to default message
-		w = httptest.NewRecorder()
-		req, err = createOrganizationProfileMultipartRequest(t, url, "", "", `{"otp_message_template": ""}`, new(bytes.Buffer))
-		require.NoError(t, err)
-		req = req.WithContext(ctx)
-		http.HandlerFunc(handler.PatchOrganizationProfile).ServeHTTP(w, req)
-
-		resp = w.Result()
-		respBody, err = io.ReadAll(resp.Body)
-		require.NoError(t, err)
-		defer resp.Body.Close()
-
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
-		assert.JSONEq(t, `{"message": "updated successfully"}`, string(respBody))
-
-		org, err = models.Organizations.Get(ctx)
-		require.NoError(t, err)
-		assert.Equal(t, defaultMessage, org.OTPMessageTemplate)
-	})
-
-	t.Run("updates organization's SMS Resend Interval", func(t *testing.T) {
-		resetOrganizationInfo(t, ctx, dbConnectionPool)
-		ctx = context.WithValue(ctx, middleware.TokenContextKey, "token")
-
-		org, err := models.Organizations.Get(ctx)
-		require.NoError(t, err)
-		assert.Nil(t, org.SMSResendInterval)
-
-		// Custom interval
-		w := httptest.NewRecorder()
-		req, err := createOrganizationProfileMultipartRequest(t, url, "", "", `{"sms_resend_interval": 2}`, new(bytes.Buffer))
-		require.NoError(t, err)
-		req = req.WithContext(ctx)
-		http.HandlerFunc(handler.PatchOrganizationProfile).ServeHTTP(w, req)
-
-		resp := w.Result()
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-		defer resp.Body.Close()
-
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
-		assert.JSONEq(t, `{"message": "updated successfully"}`, string(respBody))
-
-		org, err = models.Organizations.Get(ctx)
-		require.NoError(t, err)
-		assert.Equal(t, int64(2), *org.SMSResendInterval)
-
-		// Don't update the interval
-		w = httptest.NewRecorder()
-		req, err = createOrganizationProfileMultipartRequest(t, url, "", "", `{"organization_name": "MyOrg"}`, new(bytes.Buffer))
-		require.NoError(t, err)
-		req = req.WithContext(ctx)
-		http.HandlerFunc(handler.PatchOrganizationProfile).ServeHTTP(w, req)
-
-		resp = w.Result()
-		respBody, err = io.ReadAll(resp.Body)
-		require.NoError(t, err)
-		defer resp.Body.Close()
-
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
-		assert.JSONEq(t, `{"message": "updated successfully"}`, string(respBody))
-
-		org, err = models.Organizations.Get(ctx)
-		require.NoError(t, err)
-		assert.Equal(t, int64(2), *org.SMSResendInterval)
-
-		// Back to default interval
-		w = httptest.NewRecorder()
-		req, err = createOrganizationProfileMultipartRequest(t, url, "", "", `{"sms_resend_interval": 0}`, new(bytes.Buffer))
-		require.NoError(t, err)
-		req = req.WithContext(ctx)
-		http.HandlerFunc(handler.PatchOrganizationProfile).ServeHTTP(w, req)
-
-		resp = w.Result()
-		respBody, err = io.ReadAll(resp.Body)
-		require.NoError(t, err)
-		defer resp.Body.Close()
-
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
-		assert.JSONEq(t, `{"message": "updated successfully"}`, string(respBody))
-
-		org, err = models.Organizations.Get(ctx)
-		require.NoError(t, err)
-		assert.Nil(t, org.SMSResendInterval)
-	})
-
-	t.Run("updates organization's Payment Cancellation Period", func(t *testing.T) {
-		resetOrganizationInfo(t, ctx, dbConnectionPool)
-		ctx = context.WithValue(ctx, middleware.TokenContextKey, "token")
-
-		org, err := models.Organizations.Get(ctx)
-		require.NoError(t, err)
-		assert.Nil(t, org.PaymentCancellationPeriodDays)
-
-		// Custom period
-		w := httptest.NewRecorder()
-		req, err := createOrganizationProfileMultipartRequest(t, url, "", "", `{"payment_cancellation_period_days": 2}`, new(bytes.Buffer))
-		require.NoError(t, err)
-		req = req.WithContext(ctx)
-		http.HandlerFunc(handler.PatchOrganizationProfile).ServeHTTP(w, req)
-
-		resp := w.Result()
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-		defer resp.Body.Close()
-
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
-		assert.JSONEq(t, `{"message": "updated successfully"}`, string(respBody))
-
-		org, err = models.Organizations.Get(ctx)
-		require.NoError(t, err)
-		assert.Equal(t, int64(2), *org.PaymentCancellationPeriodDays)
-
-		// Don't update the period
-		w = httptest.NewRecorder()
-		req, err = createOrganizationProfileMultipartRequest(t, url, "", "", `{"organization_name": "MyOrg"}`, new(bytes.Buffer))
-		require.NoError(t, err)
-		req = req.WithContext(ctx)
-		http.HandlerFunc(handler.PatchOrganizationProfile).ServeHTTP(w, req)
-
-		resp = w.Result()
-		respBody, err = io.ReadAll(resp.Body)
-		require.NoError(t, err)
-		defer resp.Body.Close()
-
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
-		assert.JSONEq(t, `{"message": "updated successfully"}`, string(respBody))
-
-		org, err = models.Organizations.Get(ctx)
-		require.NoError(t, err)
-		assert.Equal(t, int64(2), *org.PaymentCancellationPeriodDays)
-
-		// Back to default period
-		w = httptest.NewRecorder()
-		req, err = createOrganizationProfileMultipartRequest(t, url, "", "", `{"payment_cancellation_period_days": 0}`, new(bytes.Buffer))
-		require.NoError(t, err)
-		req = req.WithContext(ctx)
-		http.HandlerFunc(handler.PatchOrganizationProfile).ServeHTTP(w, req)
-
-		resp = w.Result()
-		respBody, err = io.ReadAll(resp.Body)
-		require.NoError(t, err)
-		defer resp.Body.Close()
-
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
-		assert.JSONEq(t, `{"message": "updated successfully"}`, string(respBody))
-
-		org, err = models.Organizations.Get(ctx)
-		require.NoError(t, err)
-		assert.Nil(t, org.PaymentCancellationPeriodDays)
-	})
+			// Setup password validator
+			pwValidator, err := utils.GetPasswordValidatorInstance()
+			require.NoError(t, err)
+
+			// Setup handler with mocked dependencies
+			handler := &ProfileHandler{MaxMemoryAllocation: 1024 * 1024, PasswordValidator: pwValidator}
+			if tc.mockAuthManagerFn != nil {
+				authManagerMock := &auth.AuthManagerMock{}
+				tc.mockAuthManagerFn(authManagerMock)
+				handler.AuthManager = authManagerMock
+				defer authManagerMock.AssertExpectations(t)
+			}
+
+			// Execute the request
+			req := tc.getRequestFn(t, ctx)
+			w := httptest.NewRecorder()
+			http.HandlerFunc(handler.PatchOrganizationProfile).ServeHTTP(w, req)
+
+			// Assert response
+			resp := w.Result()
+			assert.Equal(t, tc.wantStatusCode, resp.StatusCode)
+			respBody, err := io.ReadAll(resp.Body)
+			require.NoError(t, err)
+			defer resp.Body.Close()
+			assert.JSONEq(t, tc.wantRespBody, string(respBody))
+		})
+	}
+}
+
+func Test_ProfileHandler_PatchOrganizationProfile_Successful(t *testing.T) {
+	// PNG file
+	newPNGImgBuf := func() *bytes.Buffer {
+		pngImg := data.CreateMockImage(t, 300, 300, data.ImageSizeSmall)
+		pngImgBuf := new(bytes.Buffer)
+		err := png.Encode(pngImgBuf, pngImg)
+		require.NoError(t, err)
+		return pngImgBuf
+	}
+
+	var nilInt64 *int64
+
+	// JPEG file
+	jpegImg := data.CreateMockImage(t, 300, 300, data.ImageSizeSmall)
+	jpegImgBuf := new(bytes.Buffer)
+	err := jpeg.Encode(jpegImgBuf, jpegImg, &jpeg.Options{Quality: jpeg.DefaultQuality})
+	require.NoError(t, err)
+
+	url := "/profile/organization"
+	user := &auth.User{ID: "user-id"}
+	testCases := []struct {
+		name                     string
+		token                    string
+		updateOrgInitialValuesFn func(t *testing.T, ctx context.Context, models *data.Models)
+		getRequestFn             func(t *testing.T, ctx context.Context) *http.Request
+		mockAuthManagerFn        func(authManagerMock *auth.AuthManagerMock)
+		resultingFieldsToCompare map[string]interface{}
+		wantLogEntries           []string
+	}{
+		{
+			name:  "🎉 successfully updates the organization's logo (PNG)",
+			token: "token",
+			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
+				authManagerMock.
+					On("GetUser", mock.Anything, "token").
+					Return(user, nil).
+					Once()
+			},
+			getRequestFn: func(t *testing.T, ctx context.Context) *http.Request {
+				return createOrganizationProfileMultipartRequest(t, ctx, url, "logo", "logo.png", `{}`, newPNGImgBuf())
+			},
+			resultingFieldsToCompare: map[string]interface{}{
+				"Logo": newPNGImgBuf().Bytes(),
+			},
+			wantLogEntries: []string{"[PatchOrganizationProfile] - userID user-id will update the organization fields [Logo='...']"},
+		},
+		{
+			name:  "🎉 successfully updates the organization's logo (JPEG)",
+			token: "token",
+			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
+				authManagerMock.
+					On("GetUser", mock.Anything, "token").
+					Return(user, nil).
+					Once()
+			},
+			getRequestFn: func(t *testing.T, ctx context.Context) *http.Request {
+				return createOrganizationProfileMultipartRequest(t, ctx, url, "logo", "logo.jpeg", `{}`, jpegImgBuf)
+			},
+			resultingFieldsToCompare: map[string]interface{}{
+				"Logo": jpegImgBuf.Bytes(),
+			},
+			wantLogEntries: []string{"[PatchOrganizationProfile] - userID user-id will update the organization fields [Logo='...']"},
+		},
+		{
+			name:  "🎉 successfully updates ALL the organization fields",
+			token: "token",
+			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
+				authManagerMock.
+					On("GetUser", mock.Anything, "token").
+					Return(user, nil).
+					Once()
+			},
+			getRequestFn: func(t *testing.T, ctx context.Context) *http.Request {
+				reqBody := `{
+					"is_approval_required": true,
+					"organization_name": "My Org Name",
+					"otp_message_template": "Here's your OTP Code to complete your registration. MyOrg 👋",
+					"payment_cancellation_period_days": 2,
+					"sms_registration_message_template": "My custom receiver wallet registration invite. MyOrg 👋",
+					"sms_resend_interval": 2,
+					"timezone_utc_offset": "-03:00"
+				}`
+				return createOrganizationProfileMultipartRequest(t, ctx, url, "logo", "logo.png", reqBody, newPNGImgBuf())
+			},
+			resultingFieldsToCompare: map[string]interface{}{
+				"IsApprovalRequired":             true,
+				"Name":                           "My Org Name",
+				"Logo":                           newPNGImgBuf().Bytes(),
+				"OTPMessageTemplate":             "Here's your OTP Code to complete your registration. MyOrg 👋",
+				"PaymentCancellationPeriodDays":  int64(2),
+				"SMSRegistrationMessageTemplate": "My custom receiver wallet registration invite. MyOrg 👋",
+				"SMSResendInterval":              int64(2),
+				"TimezoneUTCOffset":              "-03:00",
+			},
+			wantLogEntries: []string{"[PatchOrganizationProfile] - userID user-id will update the organization fields [IsApprovalRequired='true', Logo='...', Name='My Org Name', OTPMessageTemplate='Here's your OTP Code to complete your registration. MyOrg 👋', PaymentCancellationPeriodDays='2', SMSRegistrationMessageTemplate='My custom receiver wallet registration invite. MyOrg 👋', SMSResendInterval='2', TimezoneUTCOffset='-03:00']"},
+		},
+		{
+			name:  "🎉 successfully updates organization back to its default values",
+			token: "token",
+			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
+				authManagerMock.
+					On("GetUser", mock.Anything, "token").
+					Return(user, nil).
+					Once()
+			},
+			updateOrgInitialValuesFn: func(t *testing.T, ctx context.Context, models *data.Models) {
+				otpMessageTemplate := "custom OTPMessageTemplate"
+				smsRegistrationMessageTemplate := "custom SMSRegistrationMessageTemplate"
+				smsResendInterval := int64(123)
+				paymentCancellationPeriodDays := int64(456)
+				err := models.Organizations.Update(ctx, &data.OrganizationUpdate{
+					SMSRegistrationMessageTemplate: &smsRegistrationMessageTemplate,
+					OTPMessageTemplate:             &otpMessageTemplate,
+					SMSResendInterval:              &smsResendInterval,
+					PaymentCancellationPeriodDays:  &paymentCancellationPeriodDays,
+				})
+				require.NoError(t, err)
+			},
+			getRequestFn: func(t *testing.T, ctx context.Context) *http.Request {
+				reqBody := `{
+					"sms_registration_message_template": "",
+					"otp_message_template": "",
+					"sms_resend_interval": 0,
+					"payment_cancellation_period_days": 0
+				}`
+				return createOrganizationProfileMultipartRequest(t, ctx, url, "", "", reqBody, new(bytes.Buffer))
+			},
+			resultingFieldsToCompare: map[string]interface{}{
+				"SMSRegistrationMessageTemplate": "You have a payment waiting for you from the {{.OrganizationName}}. Click {{.RegistrationLink}} to register.",
+				"OTPMessageTemplate":             "{{.OTP}} is your {{.OrganizationName}} phone verification code.",
+				"SMSResendInterval":              nilInt64,
+				"PaymentCancellationPeriodDays":  nilInt64,
+			},
+			wantLogEntries: []string{"[PatchOrganizationProfile] - userID user-id will update the organization fields [OTPMessageTemplate='', PaymentCancellationPeriodDays='0', SMSRegistrationMessageTemplate='', SMSResendInterval='0']"},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			buf := new(strings.Builder)
+			log.DefaultLogger.SetOutput(buf)
+			log.SetLevel(log.InfoLevel)
+
+			// Setup DB
+			dbt := dbtest.Open(t)
+			defer dbt.Close()
+			dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+			require.NoError(t, err)
+			defer dbConnectionPool.Close()
+			models, err := data.NewModels(dbConnectionPool)
+			require.NoError(t, err)
+
+			// Inject authenticated token into context:
+			ctx := context.Background()
+			if tc.token != "" {
+				ctx = context.WithValue(ctx, middleware.TokenContextKey, tc.token)
+			}
+
+			// Assert DB before
+			if tc.updateOrgInitialValuesFn != nil {
+				tc.updateOrgInitialValuesFn(t, ctx, models)
+			}
+			org, err := models.Organizations.Get(ctx)
+			require.NoError(t, err)
+			for k, expectedValue := range tc.resultingFieldsToCompare {
+				fieldValue := reflect.ValueOf(org).Elem().FieldByName(k)
+				if fieldValue.Kind() == reflect.Ptr && !fieldValue.IsNil() {
+					fieldValue = fieldValue.Elem()
+				}
+				assert.NotEqual(t, expectedValue, fieldValue.Interface())
+			}
+
+			// Setup password validator
+			pwValidator, err := utils.GetPasswordValidatorInstance()
+			require.NoError(t, err)
+
+			// Setup handler with mocked dependencies
+			handler := &ProfileHandler{Models: models, MaxMemoryAllocation: 1024 * 1024, PasswordValidator: pwValidator}
+			if tc.mockAuthManagerFn != nil {
+				authManagerMock := &auth.AuthManagerMock{}
+				tc.mockAuthManagerFn(authManagerMock)
+				handler.AuthManager = authManagerMock
+				defer authManagerMock.AssertExpectations(t)
+			}
+
+			// Execute the request
+			req := tc.getRequestFn(t, ctx)
+			w := httptest.NewRecorder()
+			http.HandlerFunc(handler.PatchOrganizationProfile).ServeHTTP(w, req)
+
+			// Assert response
+			resp := w.Result()
+			assert.Equal(t, http.StatusOK, resp.StatusCode)
+			respBody, err := io.ReadAll(resp.Body)
+			require.NoError(t, err)
+			defer resp.Body.Close()
+			assert.JSONEq(t, `{"message": "updated successfully"}`, string(respBody))
+
+			// Assert DB after
+			org, err = models.Organizations.Get(ctx)
+			require.NoError(t, err)
+			for k, expectedValue := range tc.resultingFieldsToCompare {
+				fieldValue := reflect.ValueOf(org).Elem().FieldByName(k)
+				if fieldValue.Kind() == reflect.Ptr && !fieldValue.IsNil() {
+					fieldValue = fieldValue.Elem()
+				}
+				assert.Equal(t, expectedValue, fieldValue.Interface())
+			}
+
+			// Assert logs
+			for _, logEntry := range tc.wantLogEntries {
+				require.Contains(t, buf.String(), logEntry)
+			}
+		})
+	}
 }
 
 func Test_ProfileHandler_PatchUserProfile(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
-
-	authenticatorMock := &auth.AuthenticatorMock{}
-	jwtManagerMock := &auth.JWTManagerMock{}
-	authManager := auth.NewAuthManager(
-		auth.WithCustomAuthenticatorOption(authenticatorMock),
-		auth.WithCustomJWTManagerOption(jwtManagerMock),
-	)
-
-	handler := &ProfileHandler{AuthManager: authManager}
-	url := "/profile/user"
-
-	ctx := context.Background()
-
-	t.Run("returns Unauthorized error when no token is found", func(t *testing.T) {
-		w := httptest.NewRecorder()
-		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, url, nil)
-		require.NoError(t, err)
-
-		http.HandlerFunc(handler.PatchUserProfile).ServeHTTP(w, req)
-
-		resp := w.Result()
-
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-
-		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
-		assert.JSONEq(t, `{"error": "Not authorized."}`, string(respBody))
-	})
-
-	t.Run("returns BadRequest error when the request is invalid", func(t *testing.T) {
-		ctx = context.WithValue(ctx, middleware.TokenContextKey, "token")
-
-		// Invalid JSON
-		w := httptest.NewRecorder()
-		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, url, strings.NewReader(`invalid`))
-		require.NoError(t, err)
-
-		http.HandlerFunc(handler.PatchUserProfile).ServeHTTP(w, req)
-
-		resp := w.Result()
-
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-
-		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
-		assert.JSONEq(t, `{"error": "The request was invalid in some way."}`, string(respBody))
-
-		// Invalid email
-		w = httptest.NewRecorder()
-		req, err = http.NewRequestWithContext(ctx, http.MethodPatch, url, strings.NewReader(`{"email": "invalid"}`))
-		require.NoError(t, err)
-
-		req = req.WithContext(ctx)
-
-		http.HandlerFunc(handler.PatchUserProfile).ServeHTTP(w, req)
-
-		resp = w.Result()
-
-		respBody, err = io.ReadAll(resp.Body)
-		require.NoError(t, err)
-
-		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
-		assert.JSONEq(t, `{"error": "The request was invalid in some way.", "extras": {"email": "invalid email provided"}}`, string(respBody))
-
-		// Password too short
-		w = httptest.NewRecorder()
-		req, err = http.NewRequestWithContext(ctx, http.MethodPatch, url, strings.NewReader(`{"password": "short"}`))
-		require.NoError(t, err)
-
-		http.HandlerFunc(handler.PatchUserProfile).ServeHTTP(w, req)
-
-		resp = w.Result()
-
-		respBody, err = io.ReadAll(resp.Body)
-		require.NoError(t, err)
-
-		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
-		assert.JSONEq(t, `{"error": "The request was invalid in some way.", "extras": {"password": "password should have at least 8 characters"}}`, string(respBody))
-
-		// None of values provided
-		w = httptest.NewRecorder()
-		req, err = http.NewRequestWithContext(ctx, http.MethodPatch, url, strings.NewReader(`{}`))
-		require.NoError(t, err)
-
-		http.HandlerFunc(handler.PatchUserProfile).ServeHTTP(w, req)
-
-		resp = w.Result()
-
-		respBody, err = io.ReadAll(resp.Body)
-		require.NoError(t, err)
-
-		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
-		assert.JSONEq(t, `{"error": "The request was invalid in some way.", "extras": {"details":"provide at least first_name, last_name, email or password."}}`, string(respBody))
-	})
-
-	t.Run("returns InternalServerError when AuthManager fails", func(t *testing.T) {
-		ctx = context.WithValue(ctx, middleware.TokenContextKey, "token")
-
-		reqBody := `
-			{
+	user := &auth.User{ID: "user-id"}
+	testCases := []struct {
+		name              string
+		token             string
+		reqBody           string
+		mockAuthManagerFn func(authManagerMock *auth.AuthManagerMock)
+		wantStatusCode    int
+		wantRespBody      string
+		wantLogEntries    []string
+	}{
+		{
+			name:           "returns Unauthorized when no token is found",
+			wantStatusCode: http.StatusUnauthorized,
+			wantRespBody:   `{"error": "Not authorized."}`,
+		},
+		{
+			name:    "returns BadRequest when the request has an invalid JSON body",
+			token:   "token",
+			reqBody: `invalid`,
+			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
+				authManagerMock.
+					On("GetUser", mock.Anything, "token").
+					Return(user, nil).
+					Once()
+			},
+			wantStatusCode: http.StatusBadRequest,
+			wantRespBody:   `{"error": "The request was invalid in some way."}`,
+		},
+		{
+			name:    "returns BadRequest when the request has an invalid email",
+			token:   "token",
+			reqBody: `{"email": "invalid"}`,
+			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
+				authManagerMock.
+					On("GetUser", mock.Anything, "token").
+					Return(user, nil).
+					Once()
+			},
+			wantStatusCode: http.StatusBadRequest,
+			wantRespBody: `{
+				"error": "The request was invalid in some way.", 
+				"extras": {
+					"email": "invalid email provided"
+				}
+			}`,
+		},
+		{
+			name:    "returns BadRequest if none of the fields are provided",
+			token:   "token",
+			reqBody: `{}`,
+			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
+				authManagerMock.
+					On("GetUser", mock.Anything, "token").
+					Return(user, nil).
+					Once()
+			},
+			wantStatusCode: http.StatusBadRequest,
+			wantRespBody: `{
+				"error": "The request was invalid in some way.",
+				"extras": {
+					"details":"provide at least first_name, last_name or email."
+				}
+			}`,
+		},
+		{
+			name:  "returns InternalServerError when AuthManager fails",
+			token: "token",
+			reqBody: `{
 				"first_name": "First",
 				"last_name": "Last",
-				"email": "email@email.com",
-				"password": "mypassword"
-			}
-		`
-
-		w := httptest.NewRecorder()
-		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, url, strings.NewReader(reqBody))
-		require.NoError(t, err)
-
-		jwtManagerMock.
-			On("ValidateToken", req.Context(), "token").
-			Return(true, nil).
-			Once().
-			On("GetUserFromToken", req.Context(), "token").
-			Return(&auth.User{ID: "user-id"}, nil).
-			Once()
-
-		authenticatorMock.
-			On("UpdateUser", req.Context(), "user-id", "First", "Last", "email@email.com", "mypassword").
-			Return(errors.New("unexpected error")).
-			Once()
-
-		http.HandlerFunc(handler.PatchUserProfile).ServeHTTP(w, req)
-
-		resp := w.Result()
-
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-
-		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
-		assert.JSONEq(t, `{"error":"Cannot update user profiles"}`, string(respBody))
-	})
-
-	t.Run("updates the user profile successfully", func(t *testing.T) {
-		ctx = context.WithValue(ctx, middleware.TokenContextKey, "token")
-
-		reqBody := `
-			{
+				"email": "email@email.com"
+			}`,
+			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
+				authManagerMock.
+					On("GetUser", mock.Anything, "token").
+					Return(user, nil).
+					Once().
+					On("UpdateUser", mock.Anything, "token", "First", "Last", "email@email.com", "").
+					Return(errors.New("unexpected error")).
+					Once()
+			},
+			wantStatusCode: http.StatusInternalServerError,
+			wantRespBody:   `{"error":"Cannot update user profiles"}`,
+		},
+		{
+			name:  "🎉 successfully updates user profile",
+			token: "token",
+			reqBody: `{
 				"first_name": "First",
 				"last_name": "Last",
-				"email": "email@email.com",
-				"password": "mypassword"
+				"email": "email@email.com"
+			}`,
+			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
+				authManagerMock.
+					On("GetUser", mock.Anything, "token").
+					Return(user, nil).
+					Once().
+					On("UpdateUser", mock.Anything, "token", "First", "Last", "email@email.com", "").
+					Return(nil).
+					Once()
+			},
+			wantStatusCode: http.StatusOK,
+			wantRespBody:   `{"message": "user profile updated successfully"}`,
+			wantLogEntries: []string{
+				"[PatchUserProfile] - Will update email for userID user-id to ema...com",
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			buf := new(strings.Builder)
+			log.DefaultLogger.SetOutput(buf)
+			log.SetLevel(log.InfoLevel)
+
+			// Setup DB
+			dbt := dbtest.Open(t)
+			defer dbt.Close()
+			dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+			require.NoError(t, err)
+			defer dbConnectionPool.Close()
+
+			// Inject authenticated token into context:
+			ctx := context.Background()
+			if tc.token != "" {
+				ctx = context.WithValue(ctx, middleware.TokenContextKey, tc.token)
 			}
-		`
 
-		w := httptest.NewRecorder()
-		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, url, strings.NewReader(reqBody))
-		require.NoError(t, err)
+			// Setup password validator
+			pwValidator, err := utils.GetPasswordValidatorInstance()
+			require.NoError(t, err)
 
-		jwtManagerMock.
-			On("ValidateToken", req.Context(), "token").
-			Return(true, nil).
-			Once().
-			On("GetUserFromToken", req.Context(), "token").
-			Return(&auth.User{ID: "user-id"}, nil).
-			Once()
+			// Setup handler with mocked dependencies
+			handler := &ProfileHandler{PasswordValidator: pwValidator}
+			if tc.mockAuthManagerFn != nil {
+				authManagerMock := &auth.AuthManagerMock{}
+				tc.mockAuthManagerFn(authManagerMock)
+				handler.AuthManager = authManagerMock
+				defer authManagerMock.AssertExpectations(t)
+			}
 
-		authenticatorMock.
-			On("UpdateUser", req.Context(), "user-id", "First", "Last", "email@email.com", "mypassword").
-			Return(nil).
-			Once()
+			// Execute the request
+			var body io.Reader
+			if tc.reqBody != "" {
+				body = strings.NewReader(tc.reqBody)
+			}
+			w := httptest.NewRecorder()
+			req, err := http.NewRequestWithContext(ctx, http.MethodPatch, "/profile/user", body)
+			require.NoError(t, err)
+			http.HandlerFunc(handler.PatchUserProfile).ServeHTTP(w, req)
 
-		http.HandlerFunc(handler.PatchUserProfile).ServeHTTP(w, req)
+			// Assert response
+			resp := w.Result()
+			assert.Equal(t, tc.wantStatusCode, resp.StatusCode)
+			respBody, err := io.ReadAll(resp.Body)
+			require.NoError(t, err)
+			defer resp.Body.Close()
+			assert.JSONEq(t, tc.wantRespBody, string(respBody))
 
-		resp := w.Result()
-
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
-		assert.JSONEq(t, `{"message": "user profile updated successfully"}`, string(respBody))
-	})
-
-	authenticatorMock.AssertExpectations(t)
-	jwtManagerMock.AssertExpectations(t)
+			// Validate logs
+			for _, logEntry := range tc.wantLogEntries {
+				assert.Contains(t, buf.String(), logEntry)
+			}
+		})
+	}
 }
 
 func Test_ProfileHandler_PatchUserPassword(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
-
-	authenticatorMock := &auth.AuthenticatorMock{}
-	jwtManagerMock := &auth.JWTManagerMock{}
-	authManager := auth.NewAuthManager(
-		auth.WithCustomAuthenticatorOption(authenticatorMock),
-		auth.WithCustomJWTManagerOption(jwtManagerMock),
-	)
-	pwValidator, _ := utils.GetPasswordValidatorInstance()
-
-	handler := &ProfileHandler{
-		AuthManager:       authManager,
-		PasswordValidator: pwValidator,
+	user := &auth.User{ID: "user-id"}
+	testCases := []struct {
+		name              string
+		token             string
+		reqBody           string
+		mockAuthManagerFn func(authManagerMock *auth.AuthManagerMock)
+		wantStatusCode    int
+		wantRespBody      string
+		wantLogEntries    []string
+	}{
+		{
+			name:           "returns Unauthorized error when no token is found",
+			token:          "",
+			wantStatusCode: http.StatusUnauthorized,
+			wantRespBody:   `{"error": "Not authorized."}`,
+		},
+		{
+			name:    "returns BadRequest error when JSON decoding fails",
+			token:   "token",
+			reqBody: `invalid`,
+			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
+				authManagerMock.
+					On("GetUser", mock.Anything, "token").
+					Return(user, nil).
+					Once()
+			},
+			wantStatusCode: http.StatusBadRequest,
+			wantRespBody:   `{"error": "The request was invalid in some way."}`,
+		},
+		{
+			name:    "returns BadRequest error when current_password and new_password are not provided",
+			token:   "token",
+			reqBody: `{}`,
+			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
+				authManagerMock.
+					On("GetUser", mock.Anything, "token").
+					Return(user, nil).
+					Once()
+			},
+			wantStatusCode: http.StatusBadRequest,
+			wantRespBody: `{
+				"error": "The request was invalid in some way.",
+				"extras": {
+					"current_password":"current_password is required",
+					"new_password":"new_password should be different from current_password"
+				}
+			}`,
+		},
+		{
+			name:    "returns BadRequest error when current_password and new_password are equal",
+			token:   "token",
+			reqBody: `{"current_password": "currentpassword", "new_password": "currentpassword"}`,
+			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
+				authManagerMock.
+					On("GetUser", mock.Anything, "token").
+					Return(user, nil).
+					Once()
+			},
+			wantStatusCode: http.StatusBadRequest,
+			wantRespBody: `{
+				"error": "The request was invalid in some way.",
+				"extras": {
+					"new_password":"new_password should be different from current_password"
+				}
+			}`,
+		},
+		{
+			name:    "returns BadRequest error when password does not match all the criteria",
+			token:   "token",
+			reqBody: `{"current_password": "currentpassword", "new_password": "1Az2By3Cx"}`,
+			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
+				authManagerMock.
+					On("GetUser", mock.Anything, "token").
+					Return(user, nil).
+					Once()
+			},
+			wantStatusCode: http.StatusBadRequest,
+			wantRespBody: `{
+				"error": "The request was invalid in some way.",
+				"extras": {
+					"length":"password length must be between 12 and 36 characters",
+					"special character":"password must contain at least one special character"
+				}
+			}`,
+		},
+		{
+			name:    "returns InternalServerError when AuthManager fails",
+			token:   "token",
+			reqBody: `{"current_password": "currentpassword", "new_password": "!1Az?2By.3Cx"}`,
+			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
+				authManagerMock.
+					On("GetUser", mock.Anything, "token").
+					Return(user, nil).
+					Once().
+					On("UpdatePassword", mock.Anything, "token", "currentpassword", "!1Az?2By.3Cx").
+					Return(errors.New("unexpected error")).
+					Once()
+			},
+			wantStatusCode: http.StatusInternalServerError,
+			wantRespBody:   `{"error":"Cannot update user password"}`,
+		},
+		{
+			name:    "🎉 successfully updates the user password",
+			token:   "token",
+			reqBody: `{"current_password": "currentpassword", "new_password": "!1Az?2By.3Cx"}`,
+			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
+				authManagerMock.
+					On("GetUser", mock.Anything, "token").
+					Return(user, nil).
+					Once().
+					On("UpdatePassword", mock.Anything, "token", "currentpassword", "!1Az?2By.3Cx").
+					Return(nil).
+					Once()
+			},
+			wantStatusCode: http.StatusOK,
+			wantRespBody:   `{"message": "user password updated successfully"}`,
+			wantLogEntries: []string{
+				"[PatchUserPassword] - Will update password for user account ID user-id",
+			},
+		},
 	}
 
-	url := "/profile/reset-password"
-	ctx := context.Background()
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			buf := new(strings.Builder)
+			log.DefaultLogger.SetOutput(buf)
+			log.SetLevel(log.InfoLevel)
 
-	user := &auth.User{
-		ID:        "user-id",
-		FirstName: "First",
-		LastName:  "Last",
-		Email:     "email@email.com",
+			// Setup DB
+			dbt := dbtest.Open(t)
+			defer dbt.Close()
+			dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+			require.NoError(t, err)
+			defer dbConnectionPool.Close()
+
+			// Inject authenticated token into context:
+			ctx := context.Background()
+			if tc.token != "" {
+				ctx = context.WithValue(ctx, middleware.TokenContextKey, tc.token)
+			}
+
+			// Setup password validator
+			pwValidator, err := utils.GetPasswordValidatorInstance()
+			require.NoError(t, err)
+
+			// Setup handler with mocked dependencies
+			handler := &ProfileHandler{PasswordValidator: pwValidator}
+			if tc.mockAuthManagerFn != nil {
+				authManagerMock := &auth.AuthManagerMock{}
+				tc.mockAuthManagerFn(authManagerMock)
+				handler.AuthManager = authManagerMock
+				defer authManagerMock.AssertExpectations(t)
+			}
+
+			// Execute the request
+			var body io.Reader
+			if tc.reqBody != "" {
+				body = strings.NewReader(tc.reqBody)
+			}
+			w := httptest.NewRecorder()
+			req, err := http.NewRequestWithContext(ctx, http.MethodPatch, "/profile/reset-password", body)
+			require.NoError(t, err)
+			http.HandlerFunc(handler.PatchUserPassword).ServeHTTP(w, req)
+
+			// Assert response
+			resp := w.Result()
+			assert.Equal(t, tc.wantStatusCode, resp.StatusCode)
+			respBody, err := io.ReadAll(resp.Body)
+			require.NoError(t, err)
+			defer resp.Body.Close()
+			assert.JSONEq(t, tc.wantRespBody, string(respBody))
+
+			// Validate logs
+			for _, logEntry := range tc.wantLogEntries {
+				assert.Contains(t, buf.String(), logEntry)
+			}
+		})
 	}
-
-	t.Run("returns Unauthorized error when no token is found", func(t *testing.T) {
-		w := httptest.NewRecorder()
-		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, url, nil)
-		require.NoError(t, err)
-
-		http.HandlerFunc(handler.PatchUserPassword).ServeHTTP(w, req)
-
-		resp := w.Result()
-		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
-
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-		defer resp.Body.Close()
-		assert.JSONEq(t, `{"error": "Not authorized."}`, string(respBody))
-	})
-
-	t.Run("returns BadRequest error when JSON decoding fails", func(t *testing.T) {
-		ctx = context.WithValue(ctx, middleware.TokenContextKey, "token")
-
-		w := httptest.NewRecorder()
-		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, url, strings.NewReader(`invalid`))
-		require.NoError(t, err)
-
-		http.HandlerFunc(handler.PatchUserPassword).ServeHTTP(w, req)
-
-		resp := w.Result()
-		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
-
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-		defer resp.Body.Close()
-		assert.JSONEq(t, `{"error": "The request was invalid in some way."}`, string(respBody))
-	})
-
-	t.Run("returns BadRequest error when current_password and new_password are not provided", func(t *testing.T) {
-		ctx = context.WithValue(ctx, middleware.TokenContextKey, "token")
-
-		w := httptest.NewRecorder()
-		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, url, strings.NewReader(`{}`))
-		require.NoError(t, err)
-
-		http.HandlerFunc(handler.PatchUserPassword).ServeHTTP(w, req)
-
-		resp := w.Result()
-		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
-
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-		defer resp.Body.Close()
-		wantBody := `{
-			"error": "The request was invalid in some way.",
-			"extras": {
-				"current_password":"current_password is required",
-				"new_password":"new_password should be different from current_password"
-			}
-		}`
-		assert.JSONEq(t, wantBody, string(respBody))
-	})
-
-	t.Run("returns BadRequest error when current_password and new_password are equal", func(t *testing.T) {
-		ctx = context.WithValue(ctx, middleware.TokenContextKey, "token")
-		reqBody := `{"current_password": "currentpassword", "new_password": "currentpassword"}`
-
-		w := httptest.NewRecorder()
-		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, url, strings.NewReader(reqBody))
-		require.NoError(t, err)
-
-		http.HandlerFunc(handler.PatchUserPassword).ServeHTTP(w, req)
-
-		resp := w.Result()
-		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
-
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-		defer resp.Body.Close()
-		wantBody := `{
-			"error": "The request was invalid in some way.",
-			"extras": {
-				"new_password":"new_password should be different from current_password"
-			}
-		}`
-		assert.JSONEq(t, wantBody, string(respBody))
-	})
-
-	t.Run("returns BadRequest error when password does not match all the criteria", func(t *testing.T) {
-		ctx = context.WithValue(ctx, middleware.TokenContextKey, "token")
-		reqBody := `{"current_password": "currentpassword", "new_password": "1Az2By3Cx"}`
-
-		w := httptest.NewRecorder()
-		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, url, strings.NewReader(reqBody))
-		require.NoError(t, err)
-
-		http.HandlerFunc(handler.PatchUserPassword).ServeHTTP(w, req)
-
-		resp := w.Result()
-		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
-
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-		defer resp.Body.Close()
-		wantBody := `{
-			"error": "The request was invalid in some way.",
-			"extras": {
-				"length":"password length must be between 12 and 36 characters",
-				"special character":"password must contain at least one special character"
-			}
-		}`
-		assert.JSONEq(t, wantBody, string(respBody))
-	})
-
-	t.Run("returns InternalServerError when AuthManager fails", func(t *testing.T) {
-		ctx = context.WithValue(ctx, middleware.TokenContextKey, "token")
-		reqBody := `{"current_password": "currentpassword", "new_password": "!1Az?2By.3Cx"}`
-
-		w := httptest.NewRecorder()
-		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, url, strings.NewReader(reqBody))
-		require.NoError(t, err)
-
-		jwtManagerMock.
-			On("ValidateToken", req.Context(), "token").
-			Return(true, nil).
-			Once().
-			On("GetUserFromToken", req.Context(), "token").
-			Return(user, nil).
-			Once()
-
-		authenticatorMock.
-			On("UpdatePassword", req.Context(), user, "currentpassword", "!1Az?2By.3Cx").
-			Return(errors.New("unexpected error")).
-			Once()
-
-		http.HandlerFunc(handler.PatchUserPassword).ServeHTTP(w, req)
-
-		resp := w.Result()
-		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
-
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-		assert.JSONEq(t, `{"error":"Cannot update user password"}`, string(respBody))
-	})
-
-	t.Run("updates the user password successfully", func(t *testing.T) {
-		buf := new(strings.Builder)
-		log.DefaultLogger.SetOutput(buf)
-		log.SetLevel(log.InfoLevel)
-
-		ctx = context.WithValue(ctx, middleware.TokenContextKey, "token")
-		reqBody := `{"current_password": "currentpassword", "new_password": "!1Az?2By.3Cx"}`
-
-		w := httptest.NewRecorder()
-		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, url, strings.NewReader(reqBody))
-		require.NoError(t, err)
-
-		jwtManagerMock.
-			On("ValidateToken", req.Context(), "token").
-			Return(true, nil).
-			Twice().
-			On("GetUserFromToken", req.Context(), "token").
-			Return(user, nil).
-			Twice()
-
-		authenticatorMock.
-			On("UpdatePassword", req.Context(), user, "currentpassword", "!1Az?2By.3Cx").
-			Return(nil).
-			Once()
-
-		http.HandlerFunc(handler.PatchUserPassword).ServeHTTP(w, req)
-
-		resp := w.Result()
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
-
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-		assert.JSONEq(t, `{"message": "user password updated successfully"}`, string(respBody))
-
-		// validate logs
-		require.Contains(t, buf.String(), "[UpdateUserPassword] - Updated password for user with account ID user-id")
-	})
-
-	authenticatorMock.AssertExpectations(t)
-	jwtManagerMock.AssertExpectations(t)
 }
 
 func Test_ProfileHandler_GetProfile(t *testing.T) {
