@@ -194,6 +194,9 @@ func (c *TxSubmitterCommand) Command(submitterService TxSubmitterServiceInterfac
 				log.Ctx(ctx).Fatalf("error creating crash tracker client: %s", err.Error())
 			}
 			submitterOpts.CrashTrackerClient = crashTrackerClient
+		},
+		Run: func(cmd *cobra.Command, _ []string) {
+			ctx := cmd.Context()
 
 			kafkaProducer, err := events.NewKafkaProducer(eventBrokerOptions.Brokers)
 			if err != nil {
@@ -201,9 +204,7 @@ func (c *TxSubmitterCommand) Command(submitterService TxSubmitterServiceInterfac
 			}
 			defer kafkaProducer.Close()
 			submitterOpts.EventProducer = kafkaProducer
-		},
-		Run: func(cmd *cobra.Command, _ []string) {
-			ctx := cmd.Context()
+
 			// Starting Metrics Server (background job)
 			go submitterService.StartMetricsServe(ctx, metricsServeOpts, &serve.HTTPServer{}, submitterOpts.CrashTrackerClient)
 

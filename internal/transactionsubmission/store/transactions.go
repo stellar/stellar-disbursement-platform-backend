@@ -343,7 +343,7 @@ func (t *TransactionModel) GetTransactionBatchForUpdate(ctx context.Context, dbT
 	return transactions, nil
 }
 
-func (t *TransactionModel) GetTransactionForUpdateByID(ctx context.Context, dbTx db.DBTransaction, txID string) (*Transaction, error) {
+func (t *TransactionModel) GetTransactionForUpdateByID(ctx context.Context, dbTx db.SQLExecuter, txID string) (*Transaction, error) {
 	query := `
 		SELECT 
 		    *
@@ -370,7 +370,7 @@ func (t *TransactionModel) GetTransactionForUpdateByID(ctx context.Context, dbTx
 
 // UpdateSyncedTransactions updates the synced_at field for the given transaction IDs. Returns an error if the number of
 // updated rows is not equal to the number of provided transaction IDs.
-func (t *TransactionModel) UpdateSyncedTransactions(ctx context.Context, dbTx db.DBTransaction, txIDs []string) error {
+func (t *TransactionModel) UpdateSyncedTransactions(ctx context.Context, dbTx db.SQLExecuter, txIDs []string) error {
 	if len(txIDs) == 0 {
 		return fmt.Errorf("no transaction IDs provided")
 	}

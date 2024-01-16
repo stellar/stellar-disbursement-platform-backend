@@ -56,7 +56,7 @@ func (s PaymentFromSubmitterService) syncTransaction(ctx context.Context, dbTx d
 
 	// 1. Get transaction passed by parameter which is in a final state (status=SUCCESS or status=ERROR)
 	//     this operation will lock the row.
-	transaction, err := s.tssModel.GetTransactionForUpdateByID(ctx, dbTx, tx.TransactionID)
+	transaction, err := s.tssModel.GetTransactionForUpdateByID(ctx, s.tssModel.DBConnectionPool, tx.TransactionID)
 	if err != nil {
 		return fmt.Errorf("getting transaction ID %s for update: %w", tx.TransactionID, err)
 	}
@@ -76,7 +76,7 @@ func (s PaymentFromSubmitterService) syncTransaction(ctx context.Context, dbTx d
 	}
 
 	// 4. Set synced_at for the synced transaction
-	err = s.tssModel.UpdateSyncedTransactions(ctx, dbTx, []string{transaction.ID})
+	err = s.tssModel.UpdateSyncedTransactions(ctx, s.tssModel.DBConnectionPool, []string{transaction.ID})
 	if err != nil {
 		return fmt.Errorf("updating transaction ID %s as synced: %w", transaction.ID, err)
 	}
