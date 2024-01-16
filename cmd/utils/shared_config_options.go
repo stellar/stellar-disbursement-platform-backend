@@ -6,6 +6,7 @@ import (
 
 	"github.com/stellar/go/support/config"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 )
 
@@ -111,6 +112,41 @@ func TenantRoutingConfigOptions(opts *TenantRoutingOptions) []*config.ConfigOpti
 			Usage:     "The tenant ID where the command will be applied. Either --tenant-id or --all must be set, but the --all option will be ignored if --tenant-id is set.",
 			OptType:   types.String,
 			ConfigKey: &opts.TenantID,
+			Required:  false,
+		},
+	}
+}
+
+type EventBrokerOptions struct {
+	EventBrokerType events.EventBrokerType
+	Brokers         []string
+	ConsumerGroupID string
+}
+
+func EventBrokerConfigOptions(opts *EventBrokerOptions) []*config.ConfigOption {
+	return []*config.ConfigOption{
+		{
+			Name:           "event-broker-type",
+			Usage:          `Event Broker type. Options: "KAFKA", "NONE"`,
+			OptType:        types.String,
+			ConfigKey:      &opts.EventBrokerType,
+			CustomSetValue: SetConfigOptionEventBrokerType,
+			FlagDefault:    string(events.KafkaEventBrokerType),
+			Required:       true,
+		},
+		{
+			Name:           "brokers",
+			Usage:          "List of Message Brokers Connection string comma separated.",
+			OptType:        types.String,
+			ConfigKey:      &opts.Brokers,
+			CustomSetValue: SetConfigOptionURLList,
+			Required:       false,
+		},
+		{
+			Name:      "consumer-group-id",
+			Usage:     "Message Broker Consumer Group ID.",
+			OptType:   types.String,
+			ConfigKey: &opts.ConsumerGroupID,
 			Required:  false,
 		},
 	}

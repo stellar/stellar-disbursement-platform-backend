@@ -17,6 +17,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db/router"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	di "github.com/stellar/stellar-disbursement-platform-backend/internal/dependencyinjection"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve"
 	txSub "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission"
@@ -138,6 +139,11 @@ func (c *TxSubmitterCommand) Command(submitterService TxSubmitterServiceInterfac
 			Required:       true,
 		},
 	}
+
+	// event broker options:
+	eventBrokerOptions := cmdUtils.EventBrokerOptions{}
+	configOpts = append(configOpts, cmdUtils.EventBrokerConfigOptions(&eventBrokerOptions)...)
+
 	cmd := &cobra.Command{
 		Use:   "tss",
 		Short: "Run the Transaction Submission Service",
@@ -188,6 +194,13 @@ func (c *TxSubmitterCommand) Command(submitterService TxSubmitterServiceInterfac
 				log.Ctx(ctx).Fatalf("error creating crash tracker client: %s", err.Error())
 			}
 			submitterOpts.CrashTrackerClient = crashTrackerClient
+
+			kafkaProducer, err := events.NewKafkaProducer(eventBrokerOptions.Brokers)
+			if err != nil {
+				log.Ctx(ctx).Fatalf("error creating Kafka Producer: %v", err)
+			}
+			defer kafkaProducer.Close()
+			submitterOpts.EventProducer = kafkaProducer
 		},
 		Run: func(cmd *cobra.Command, _ []string) {
 			ctx := cmd.Context()

@@ -2,6 +2,7 @@ package transactionsubmission
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -22,6 +23,8 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
@@ -68,6 +71,7 @@ func getTransactionWorkerInstance(t *testing.T, dbConnectionPool db.DBConnection
 		sigService:         wantSigService,
 		maxBaseFee:         wantMaxBaseFee,
 		crashTrackerClient: &crashtracker.MockCrashTrackerClient{},
+		eventProducer:      &events.MockProducer{},
 	}
 }
 
@@ -150,6 +154,7 @@ func Test_NewTransactionWorker(t *testing.T) {
 		crashTrackerClient:  &crashtracker.MockCrashTrackerClient{},
 		txProcessingLimiter: wantTxProcessingLimiter,
 		monitorSvc:          tssMonitorSvc,
+		eventProducer:       &events.MockProducer{},
 	}
 
 	testCases := []struct {
@@ -163,6 +168,7 @@ func Test_NewTransactionWorker(t *testing.T) {
 		crashTrackerClient  crashtracker.CrashTrackerClient
 		txProcessingLimiter *engine.TransactionProcessingLimiter
 		monitorSvc          tssMonitor.TSSMonitorService
+		eventProducer       events.Producer
 		wantError           error
 	}{
 		{
@@ -226,6 +232,19 @@ func Test_NewTransactionWorker(t *testing.T) {
 			wantError:          fmt.Errorf("txProcessingLimiter cannot be nil"),
 		},
 		{
+			name:                "validate eventProducer",
+			dbConnectionPool:    dbConnectionPool,
+			txModel:             txModel,
+			chAccModel:          chAccModel,
+			engine:              wantSubmitterEngine,
+			sigService:          wantSigService,
+			maxBaseFee:          wantMaxBaseFee,
+			crashTrackerClient:  &crashtracker.MockCrashTrackerClient{},
+			txProcessingLimiter: wantTxProcessingLimiter,
+			monitorSvc:          tssMonitorSvc,
+			wantError:           fmt.Errorf("eventProducer cannot be nil"),
+		},
+		{
 			name:                "🎉 successfully returns a new transaction worker",
 			dbConnectionPool:    dbConnectionPool,
 			txModel:             txModel,
@@ -236,6 +255,7 @@ func Test_NewTransactionWorker(t *testing.T) {
 			crashTrackerClient:  &crashtracker.MockCrashTrackerClient{},
 			txProcessingLimiter: wantTxProcessingLimiter,
 			monitorSvc:          tssMonitorSvc,
+			eventProducer:       &events.MockProducer{},
 		},
 	}
 
@@ -251,6 +271,7 @@ func Test_NewTransactionWorker(t *testing.T) {
 				tc.crashTrackerClient,
 				tc.txProcessingLimiter,
 				tc.monitorSvc,
+				tc.eventProducer,
 			)
 
 			if tc.wantError != nil {
@@ -318,6 +339,64 @@ func Test_TransactionWorker_handleSuccessfulTransaction(t *testing.T) {
 		mockTxStore.AssertExpectations(t)
 	})
 
+	t.Run("returns an error if eventProducer.WriteMessages fails", func(t *testing.T) {
+		defer store.DeleteAllFromChannelAccounts(t, ctx, dbConnectionPool)
+		defer store.DeleteAllTransactionFixtures(t, ctx, dbConnectionPool)
+
+		transactionWorker := getTransactionWorkerInstance(t, dbConnectionPool)
+		txJob := createTxJobFixture(t, ctx, dbConnectionPool, true, currentLedger, lockedToLedger)
+		require.NotEmpty(t, txJob)
+
+		// mock UpdateStatusToSuccess ✅
+		txJob.Transaction.Status = store.TransactionStatusSuccess
+		mockTxStore := &storeMocks.MockTransactionStore{}
+		mockTxStore.
+			On("UpdateStatusToSuccess", ctx, mock.AnythingOfType("store.Transaction")).
+			Return(&txJob.Transaction, nil).
+			Once()
+		mockTxStore.
+			On("UpdateStellarTransactionXDRReceived", ctx, mock.AnythingOfType("string"), mock.AnythingOfType("string")).
+			Return(&txJob.Transaction, nil).
+			Once()
+		transactionWorker.txModel = mockTxStore
+
+		// mock eventProducer WriteMessages (FAIL)
+		errReturned := fmt.Errorf("something went wrong")
+		mockEventProducer := &events.MockProducer{}
+		mockEventProducer.
+			On("WriteMessages", ctx, []events.Message{
+				{
+					Topic:    events.PaymentFromSubmitterTopic,
+					Key:      txJob.Transaction.ExternalID,
+					TenantID: txJob.Transaction.TenantID,
+					Type:     events.SyncSuccessPaymentFromSubmitterType,
+					Data: schemas.EventPaymentFromSubmitterData{
+						TransactionID: txJob.Transaction.ID,
+					},
+				},
+			}).
+			Return(errReturned).
+			Once()
+		transactionWorker.eventProducer = mockEventProducer
+
+		// Run test:
+		expectedError := fmt.Sprintf(
+			"producing event transaction ID %s - Status %s: writing message Message{Topic: %s, Key: %s, Type: %s, TenantID: %s, Data: {%s}} on event producer: something went wrong",
+			txJob.Transaction.ID,
+			store.TransactionStatusSuccess,
+			events.PaymentFromSubmitterTopic,
+			txJob.Transaction.ExternalID,
+			events.SyncSuccessPaymentFromSubmitterType,
+			txJob.Transaction.TenantID,
+			txJob.Transaction.ID,
+		)
+		err := transactionWorker.handleSuccessfulTransaction(ctx, &txJob, horizon.Transaction{Successful: true})
+		assert.EqualError(t, err, expectedError)
+
+		mockTxStore.AssertExpectations(t)
+		mockEventProducer.AssertExpectations(t)
+	})
+
 	t.Run("returns an error if ChannelAccountModel.Unlock fails", func(t *testing.T) {
 		defer store.DeleteAllFromChannelAccounts(t, ctx, dbConnectionPool)
 		defer store.DeleteAllTransactionFixtures(t, ctx, dbConnectionPool)
@@ -330,13 +409,31 @@ func Test_TransactionWorker_handleSuccessfulTransaction(t *testing.T) {
 		mockTxStore := &storeMocks.MockTransactionStore{}
 		mockTxStore.
 			On("UpdateStatusToSuccess", ctx, mock.AnythingOfType("store.Transaction")).
-			Return(&store.Transaction{}, nil).
+			Return(&txJob.Transaction, nil).
 			Once()
 		mockTxStore.
 			On("UpdateStellarTransactionXDRReceived", ctx, mock.AnythingOfType("string"), mock.AnythingOfType("string")).
 			Return(&txJob.Transaction, nil).
 			Once()
 		transactionWorker.txModel = mockTxStore
+
+		// mock eventProducer WriteMessages ✅
+		mockEventProducer := &events.MockProducer{}
+		mockEventProducer.
+			On("WriteMessages", ctx, []events.Message{
+				{
+					Topic:    events.PaymentFromSubmitterTopic,
+					Key:      txJob.Transaction.ExternalID,
+					TenantID: txJob.Transaction.TenantID,
+					Type:     events.SyncSuccessPaymentFromSubmitterType,
+					Data: schemas.EventPaymentFromSubmitterData{
+						TransactionID: txJob.Transaction.ID,
+					},
+				},
+			}).
+			Return(nil).
+			Once()
+		transactionWorker.eventProducer = mockEventProducer
 
 		// mock channelAccount Unlock (FAIL)
 		errReturned := fmt.Errorf("something went wrong")
@@ -354,6 +451,7 @@ func Test_TransactionWorker_handleSuccessfulTransaction(t *testing.T) {
 		require.Equal(t, wantErr, err)
 
 		mockTxStore.AssertExpectations(t)
+		mockEventProducer.AssertExpectations(t)
 	})
 
 	t.Run("returns an error TransactionModel.Unlock fails", func(t *testing.T) {
@@ -372,8 +470,26 @@ func Test_TransactionWorker_handleSuccessfulTransaction(t *testing.T) {
 			Once()
 		mockTxStore.
 			On("UpdateStatusToSuccess", ctx, mock.AnythingOfType("store.Transaction")).
-			Return(&store.Transaction{}, nil).
+			Return(&txJob.Transaction, nil).
 			Once()
+
+		// mock eventProducer WriteMessages ✅
+		mockEventProducer := &events.MockProducer{}
+		mockEventProducer.
+			On("WriteMessages", ctx, []events.Message{
+				{
+					Topic:    events.PaymentFromSubmitterTopic,
+					Key:      txJob.Transaction.ExternalID,
+					TenantID: txJob.Transaction.TenantID,
+					Type:     events.SyncSuccessPaymentFromSubmitterType,
+					Data: schemas.EventPaymentFromSubmitterData{
+						TransactionID: txJob.Transaction.ID,
+					},
+				},
+			}).
+			Return(nil).
+			Once()
+		transactionWorker.eventProducer = mockEventProducer
 
 		// mock channelAccount Unlock ✅
 		mockChAccStore := &storeMocks.MockChannelAccountStore{}
@@ -398,6 +514,7 @@ func Test_TransactionWorker_handleSuccessfulTransaction(t *testing.T) {
 		require.Equal(t, wantErr, err)
 
 		mockTxStore.AssertExpectations(t)
+		mockEventProducer.AssertExpectations(t)
 	})
 
 	t.Run("🎉 successfully handles a transaction success", func(t *testing.T) {
@@ -419,6 +536,24 @@ func Test_TransactionWorker_handleSuccessfulTransaction(t *testing.T) {
 		txJob := createTxJobFixture(t, ctx, dbConnectionPool, true, currentLedger, lockedToLedger)
 		require.NotEmpty(t, txJob)
 
+		// mock eventProducer WriteMessages ✅
+		mockEventProducer := &events.MockProducer{}
+		mockEventProducer.
+			On("WriteMessages", ctx, []events.Message{
+				{
+					Topic:    events.PaymentFromSubmitterTopic,
+					Key:      txJob.Transaction.ExternalID,
+					TenantID: txJob.Transaction.TenantID,
+					Type:     events.SyncSuccessPaymentFromSubmitterType,
+					Data: schemas.EventPaymentFromSubmitterData{
+						TransactionID: txJob.Transaction.ID,
+					},
+				},
+			}).
+			Return(nil).
+			Once()
+		transactionWorker.eventProducer = mockEventProducer
+
 		// Run test:
 		const resultXDR = "AAAAAAAAAGQAAAAAAAAAAQAAAAAAAAAOAAAAAAAAAABw2JZZYIt4n/WXKcnDow3mbTBMPrOnldetgvGUlpTSEQAAAAA="
 		err := transactionWorker.handleSuccessfulTransaction(ctx, &txJob, horizon.Transaction{Successful: true, ResultXdr: resultXDR})
@@ -435,6 +570,8 @@ func Test_TransactionWorker_handleSuccessfulTransaction(t *testing.T) {
 		chAcc, err := chAccModel.Get(ctx, dbConnectionPool, txJob.ChannelAccount.PublicKey, 0)
 		require.NoError(t, err)
 		assert.False(t, chAcc.IsLocked(int32(currentLedger)))
+
+		mockEventProducer.AssertExpectations(t)
 	})
 
 	t.Run("if a transaction with successful=false is passed, we save the xdr and leave it to be checked on reconciliation", func(t *testing.T) {
@@ -542,6 +679,25 @@ func Test_TransactionWorker_reconcileSubmittedTransaction(t *testing.T) {
 
 			transactionWorker.monitorSvc = tssMonitorService
 
+			mockEventProducer := &events.MockProducer{}
+			if tc.horizonTxResponse.Successful {
+				mockEventProducer.
+					On("WriteMessages", ctx, []events.Message{
+						{
+							Topic:    events.PaymentFromSubmitterTopic,
+							Key:      txJob.Transaction.ExternalID,
+							TenantID: txJob.Transaction.TenantID,
+							Type:     events.SyncSuccessPaymentFromSubmitterType,
+							Data: schemas.EventPaymentFromSubmitterData{
+								TransactionID: txJob.Transaction.ID,
+							},
+						},
+					}).
+					Return(nil).
+					Once()
+			}
+			transactionWorker.eventProducer = mockEventProducer
+
 			// Run test:
 			err = transactionWorker.reconcileSubmittedTransaction(ctx, &txJob)
 			if tc.wantErrContains != "" {
@@ -579,6 +735,7 @@ func Test_TransactionWorker_reconcileSubmittedTransaction(t *testing.T) {
 
 			mockLedgerNumberTracker.AssertExpectations(t)
 			hMock.AssertExpectations(t)
+			mockEventProducer.AssertExpectations(t)
 		})
 	}
 }
@@ -916,8 +1073,38 @@ func Test_TransactionWorker_submit(t *testing.T) {
 
 			mockHorizonClient := &horizonclient.MockClient{}
 			mockCrashTrackerClient := &crashtracker.MockCrashTrackerClient{}
+			mockEventProducer := &events.MockProducer{}
 			if tc.txMarkAsError {
 				mockCrashTrackerClient.On("LogAndReportErrors", ctx, utils.NewHorizonErrorWrapper(tc.horizonError), "transaction error - cannot be retried").Once()
+				mockEventProducer.
+					On("WriteMessages", ctx, []events.Message{
+						{
+							Topic:    events.PaymentFromSubmitterTopic,
+							Key:      txJob.Transaction.ExternalID,
+							TenantID: txJob.Transaction.TenantID,
+							Type:     events.SyncErrorPaymentFromSubmitterType,
+							Data: schemas.EventPaymentFromSubmitterData{
+								TransactionID: txJob.Transaction.ID,
+							},
+						},
+					}).
+					Return(nil).
+					Once()
+			} else {
+				mockEventProducer.
+					On("WriteMessages", ctx, []events.Message{
+						{
+							Topic:    events.PaymentFromSubmitterTopic,
+							Key:      txJob.Transaction.ExternalID,
+							TenantID: txJob.Transaction.TenantID,
+							Type:     events.SyncSuccessPaymentFromSubmitterType,
+							Data: schemas.EventPaymentFromSubmitterData{
+								TransactionID: txJob.Transaction.ID,
+							},
+						},
+					}).
+					Return(nil).
+					Once()
 			}
 
 			txProcessingLimiter := engine.NewTransactionProcessingLimiter(15)
@@ -934,6 +1121,7 @@ func Test_TransactionWorker_submit(t *testing.T) {
 				},
 				crashTrackerClient:  mockCrashTrackerClient,
 				txProcessingLimiter: txProcessingLimiter,
+				eventProducer:       mockEventProducer,
 			}
 
 			mMonitorService := monitor.MockMonitorService{}
@@ -969,4 +1157,73 @@ func Test_TransactionWorker_submit(t *testing.T) {
 			mockCrashTrackerClient.AssertExpectations(t)
 		})
 	}
+}
+
+func Test_TransactionWorker_produceSyncPaymentEvent(t *testing.T) {
+	ctx := context.Background()
+
+	mockEventProducer := &events.MockProducer{}
+	transactionWorker := TransactionWorker{
+		eventProducer: mockEventProducer,
+	}
+
+	t.Run("returns error when an unexpected payment status is passed", func(t *testing.T) {
+		err := transactionWorker.produceSyncPaymentEvent(ctx, events.SyncErrorPaymentFromSubmitterType, &store.Transaction{}, store.TransactionStatusPending)
+		assert.EqualError(t, err, "invalid status to produce sync payment event")
+		mockEventProducer.AssertExpectations(t)
+	})
+
+	t.Run("returns error when eventProducer fails writing a new message", func(t *testing.T) {
+		tx := store.Transaction{
+			ID:         "tx-id",
+			ExternalID: "payment-id",
+			TenantID:   "tenant-id",
+		}
+
+		mockEventProducer.
+			On("WriteMessages", ctx, []events.Message{
+				{
+					Topic:    events.PaymentFromSubmitterTopic,
+					Key:      tx.ExternalID,
+					Type:     events.SyncSuccessPaymentFromSubmitterType,
+					TenantID: tx.TenantID,
+					Data: schemas.EventPaymentFromSubmitterData{
+						TransactionID: tx.ID,
+					},
+				},
+			}).
+			Return(errors.New("unexpected error")).
+			Once()
+
+		err := transactionWorker.produceSyncPaymentEvent(ctx, events.SyncSuccessPaymentFromSubmitterType, &tx, store.TransactionStatusSuccess)
+		assert.EqualError(t, err, "writing message Message{Topic: events.transaction-submitter.payment-from-submitter, Key: payment-id, Type: sync-success-payment-from-submitter, TenantID: tenant-id, Data: {tx-id}} on event producer: unexpected error")
+		mockEventProducer.AssertExpectations(t)
+	})
+
+	t.Run("successfully produce sync payment event", func(t *testing.T) {
+		tx := store.Transaction{
+			ID:         "tx-id",
+			ExternalID: "payment-id",
+			TenantID:   "tenant-id",
+		}
+
+		mockEventProducer.
+			On("WriteMessages", ctx, []events.Message{
+				{
+					Topic:    events.PaymentFromSubmitterTopic,
+					Key:      tx.ExternalID,
+					Type:     events.SyncErrorPaymentFromSubmitterType,
+					TenantID: tx.TenantID,
+					Data: schemas.EventPaymentFromSubmitterData{
+						TransactionID: tx.ID,
+					},
+				},
+			}).
+			Return(nil).
+			Once()
+
+		err := transactionWorker.produceSyncPaymentEvent(ctx, events.SyncErrorPaymentFromSubmitterType, &tx, store.TransactionStatusError)
+		assert.NoError(t, err)
+		mockEventProducer.AssertExpectations(t)
+	})
 }

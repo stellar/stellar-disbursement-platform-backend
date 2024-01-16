@@ -21,6 +21,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	monitorMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
@@ -159,6 +160,7 @@ func Test_SubmitterOptions_validate(t *testing.T) {
 				NumChannelAccounts:   1,
 				QueuePollingInterval: 10,
 				MaxBaseFee:           txnbuild.MinBaseFee,
+				EventProducer:        &events.MockProducer{},
 			},
 		},
 		{
@@ -178,7 +180,29 @@ func Test_SubmitterOptions_validate(t *testing.T) {
 				QueuePollingInterval: 10,
 				MaxBaseFee:           txnbuild.MinBaseFee,
 				CrashTrackerClient:   &crashtracker.MockCrashTrackerClient{},
+				EventProducer:        &events.MockProducer{},
 			},
+		},
+		{
+			name: "validate EventProducer",
+			submitterOptions: SubmitterOptions{
+				DatabaseDSN: dbt.DSN,
+				MonitorService: tssMonitor.TSSMonitorService{
+					Client:        &monitorMocks.MockMonitorClient{},
+					GitCommitHash: "0xABC",
+					Version:       "0.01",
+				},
+				HorizonURL:           "https://horizon-testnet.stellar.org",
+				NetworkPassphrase:    network.TestNetworkPassphrase,
+				PrivateKeyEncrypter:  &utils.PrivateKeyEncrypterMock{},
+				DistributionSeed:     "SBDBQFZIIZ53A7JC2X23LSQLI5RTKV5YWDRT33YXW5LRMPKRSJYXS2EW",
+				NumChannelAccounts:   1,
+				QueuePollingInterval: 10,
+				MaxBaseFee:           txnbuild.MinBaseFee,
+				CrashTrackerClient:   &crashtracker.MockCrashTrackerClient{},
+				EventProducer:        nil,
+			},
+			wantErrContains: "event producer cannot be nil",
 		},
 	}
 
@@ -217,6 +241,7 @@ func Test_NewManager(t *testing.T) {
 		NumChannelAccounts:   5,
 		QueuePollingInterval: 10,
 		MaxBaseFee:           txnbuild.MinBaseFee,
+		EventProducer:        &events.MockProducer{},
 	}
 
 	testCases := []struct {
@@ -333,6 +358,8 @@ func Test_NewManager(t *testing.T) {
 					wantCrashTrackerClient = tc.wantCrashTrackerClientFn()
 				}
 
+				wantEventProducer := &events.MockProducer{}
+
 				txProcessingLimiter := engine.NewTransactionProcessingLimiter(submitterOptions.NumChannelAccounts)
 				txProcessingLimiter.CounterLastUpdated = gotManager.txProcessingLimiter.CounterLastUpdated
 				wantManager := &Manager{
@@ -354,6 +381,8 @@ func Test_NewManager(t *testing.T) {
 					monitorService:     submitterOptions.MonitorService,
 
 					txProcessingLimiter: txProcessingLimiter,
+
+					eventProducer: wantEventProducer,
 				}
 				assert.Equal(t, wantManager, gotManager)
 
@@ -366,7 +395,6 @@ func Test_NewManager(t *testing.T) {
 					}
 					assert.True(t, didFindExpectedLogEntry)
 				}
-
 			}
 		})
 	}
@@ -475,6 +503,10 @@ func Test_Manager_ProcessTransactions(t *testing.T) {
 			mMonitorClient.On("MonitorCounters", mock.Anything, mock.Anything).Return(nil).Times(3)
 			defer mMonitorClient.AssertExpectations(t)
 
+			mockEventProducer := &events.MockProducer{}
+			mockEventProducer.On("WriteMessages", mock.Anything, mock.AnythingOfType("[]events.Message")).Return(nil).Once()
+			defer mockEventProducer.AssertExpectations(t)
+
 			manager := &Manager{
 				dbConnectionPool:    dbConnectionPool,
 				chTxBundleModel:     chTxBundleModel,
@@ -491,6 +523,7 @@ func Test_Manager_ProcessTransactions(t *testing.T) {
 					GitCommitHash: "gitCommitHash0x",
 					Version:       "version123",
 				},
+				eventProducer: mockEventProducer,
 			}
 
 			go manager.ProcessTransactions(ctx)
