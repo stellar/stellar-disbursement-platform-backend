@@ -8,8 +8,15 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 	txSubStore "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 )
+
+type PaymentFromSubmitterServiceInterface interface {
+	SyncTransaction(ctx context.Context, tx *schemas.EventPaymentFromSubmitterData) error
+	SetModels(models *data.Models)
+}
 
 // PaymentFromSubmitterService is a service that monitors TSS transactions that were complete and sync their completion
 // state with the SDP payments.
@@ -18,21 +25,23 @@ type PaymentFromSubmitterService struct {
 	tssModel  *txSubStore.TransactionModel
 }
 
+var _ PaymentFromSubmitterServiceInterface = new(PaymentFromSubmitterService)
+
 // NewPaymentFromSubmitterService is a PaymentFromSubmitterService constructor.
-func NewPaymentFromSubmitterService(models *data.Models) *PaymentFromSubmitterService {
+func NewPaymentFromSubmitterService(models *data.Models, tssDBConnectionPool db.DBConnectionPool) *PaymentFromSubmitterService {
 	return &PaymentFromSubmitterService{
 		sdpModels: models,
-		tssModel:  txSubStore.NewTransactionModel(models.DBConnectionPool),
+		tssModel:  txSubStore.NewTransactionModel(tssDBConnectionPool),
 	}
 }
 
-// MonitorTransactions monitors TSS transactions that were complete and sync their completion state with the SDP payments.
-func (s PaymentFromSubmitterService) MonitorTransactions(ctx context.Context, batchSize int) error {
+// SyncTransaction syncs the completed TSS transaction with the SDP's payment.
+func (s PaymentFromSubmitterService) SyncTransaction(ctx context.Context, tx *schemas.EventPaymentFromSubmitterData) error {
 	err := db.RunInTransaction(ctx, s.sdpModels.DBConnectionPool, nil, func(dbTx db.DBTransaction) error {
-		return s.monitorTransactions(ctx, dbTx, batchSize)
+		return s.syncTransaction(ctx, dbTx, tx)
 	})
 	if err != nil {
-		return fmt.Errorf("synching payments from submitter: %w", err)
+		return fmt.Errorf("synching payment from submitter: %w", err)
 	}
 
 	return nil
@@ -40,116 +49,79 @@ func (s PaymentFromSubmitterService) MonitorTransactions(ctx context.Context, ba
 
 // MonitorTransactions monitors TSS transactions that were complete and sync their completion state with the SDP payments. It
 // should be called within a DB transaction.
-func (s PaymentFromSubmitterService) monitorTransactions(ctx context.Context, dbTx db.DBTransaction, batchSize int) error {
-	// 1. Get transactions that are in a final state (status=SUCCESS or status=ERROR)
-	//     this operation will lock the rows.
-	transactions, err := s.tssModel.GetTransactionBatchForUpdate(ctx, dbTx, batchSize)
+func (s PaymentFromSubmitterService) syncTransaction(ctx context.Context, dbTx db.DBTransaction, tx *schemas.EventPaymentFromSubmitterData) error {
+	if s.sdpModels == nil {
+		return fmt.Errorf("PaymentFromSubmitterService.sdpModels cannot be nil")
+	}
+
+	// 1. Get transaction passed by parameter which is in a final state (status=SUCCESS or status=ERROR)
+	//     this operation will lock the row.
+	transaction, err := s.tssModel.GetTransactionForUpdateByID(ctx, dbTx, tx.TransactionID)
 	if err != nil {
-		return fmt.Errorf("getting transactions for update: %w", err)
-	}
-	if len(transactions) == 0 {
-		log.Ctx(ctx).Debug("No transactions to sync from submitter to SDP")
-		return nil
+		return fmt.Errorf("getting transaction ID %s for update: %w", tx.TransactionID, err)
 	}
 
-	// 2. Split transactions into successful and failed
-	failedTransactions := []*txSubStore.Transaction{}
-	successfulTransactions := []*txSubStore.Transaction{}
-	for _, transaction := range transactions {
-		if !transaction.StellarTransactionHash.Valid {
-			return fmt.Errorf("expected transaction %s to have a stellar transaction hash", transaction.ID)
-		}
-		if transaction.Status == txSubStore.TransactionStatusSuccess {
-			successfulTransactions = append(successfulTransactions, transaction)
-		} else if transaction.Status == txSubStore.TransactionStatusError {
-			failedTransactions = append(failedTransactions, transaction)
-		} else {
-			return fmt.Errorf("transaction id %s is in an unexpected status: %s", transaction.ID, transaction.Status)
-		}
+	if !transaction.StellarTransactionHash.Valid {
+		return fmt.Errorf("expected transaction %s to have a stellar transaction hash", transaction.ID)
 	}
 
-	// 3. Update payments based on the status of the transactions
-	if len(successfulTransactions) > 0 {
-		log.Ctx(ctx).Infof("Syncing payments for %d successful transactions", len(successfulTransactions))
-		errPayments := s.syncPaymentsWithTransactions(ctx, dbTx, successfulTransactions, data.SuccessPaymentStatus)
-		if errPayments != nil {
-			return fmt.Errorf("syncing payments for successful transactions: %w", errPayments)
-		}
-	}
-	if len(failedTransactions) > 0 {
-		log.Ctx(ctx).Infof("Syncing payments for %d failed transactions", len(failedTransactions))
-		errPayments := s.syncPaymentsWithTransactions(ctx, dbTx, failedTransactions, data.FailedPaymentStatus)
-		if errPayments != nil {
-			return fmt.Errorf("syncing payments for failed transactions: %w", errPayments)
-		}
+	if transaction.Status != txSubStore.TransactionStatusSuccess && transaction.Status != txSubStore.TransactionStatusError {
+		return fmt.Errorf("transaction id %s is in an unexpected status: %s", transaction.ID, transaction.Status)
 	}
 
-	// 4. Set synced_at for all synced transactions
-	transactionIDs := make([]string, len(transactions))
-	for i, transaction := range transactions {
-		transactionIDs[i] = transaction.ID
-	}
-	err = s.tssModel.UpdateSyncedTransactions(ctx, dbTx, transactionIDs)
+	// 3. Update payments based on the transaction status
+	err = s.syncPaymentsWithTransactions(ctx, dbTx, transaction)
 	if err != nil {
-		return fmt.Errorf("updating transactions as synced: %w", err)
+		return fmt.Errorf("synching payments for transaction ID %s: %w", transaction.ID, err)
 	}
-	log.Ctx(ctx).Infof("Updated %d transactions as synced", len(transactions))
+
+	// 4. Set synced_at for the synced transaction
+	err = s.tssModel.UpdateSyncedTransactions(ctx, dbTx, []string{transaction.ID})
+	if err != nil {
+		return fmt.Errorf("updating transaction ID %s as synced: %w", transaction.ID, err)
+	}
+	log.Ctx(ctx).Infof("Updated transaction ID %s as synced", transaction.ID)
 
 	return nil
 }
 
 // syncPaymentsWithTransactions updates the status of the payments based on the status of the transactions.
-func (s PaymentFromSubmitterService) syncPaymentsWithTransactions(ctx context.Context, dbTx db.DBTransaction, transactions []*txSubStore.Transaction, toStatus data.PaymentStatus) error {
-	paymentIDs := make([]string, len(transactions))
-	for i, transaction := range transactions {
-		paymentIDs[i] = transaction.ExternalID
-	}
-	payments, errPayments := s.sdpModels.Payment.GetByIDs(ctx, dbTx, paymentIDs)
-	if errPayments != nil {
-		return fmt.Errorf("getting payments by IDs: %w", errPayments)
+func (s PaymentFromSubmitterService) syncPaymentsWithTransactions(ctx context.Context, dbTx db.DBTransaction, transaction *txSubStore.Transaction) error {
+	payments, err := s.sdpModels.Payment.GetByIDs(ctx, dbTx, []string{transaction.ExternalID})
+	if err != nil {
+		return fmt.Errorf("getting payments by IDs: %w", err)
 	}
 
-	// Create a map of disbursement id from payment
-	disbursementMap := make(map[string]struct{}, len(payments))
-	paymentMap := make(map[string]*data.Payment, len(payments))
+	if len(payments) == 0 {
+		return fmt.Errorf("no payment found for transaction ID %s", transaction.ID)
+	}
+	payment := payments[0]
 
-	for _, payment := range payments {
-		if payment.Status != data.PendingPaymentStatus {
-			return fmt.Errorf("getting payments by IDs, expected payment %s to be in pending status but got %s", payment.ID, payment.Status)
-		}
-		paymentMap[payment.ID] = payment
-		disbursementMap[payment.Disbursement.ID] = struct{}{}
+	toStatus := data.SuccessPaymentStatus
+	if transaction.Status == store.TransactionStatusError {
+		toStatus = data.FailedPaymentStatus
 	}
 
-	// Update payment status for each transaction to SUCCESS or FAILURE
-	for _, transaction := range transactions {
-		payment := paymentMap[transaction.ExternalID]
-		if payment == nil {
-			// The payment associated with this transaction was deleted.
-			log.Ctx(ctx).Errorf("orphaned transaction, unable to sync transaction %s because the associated payment %s was deleted",
-				transaction.ID,
-				transaction.ExternalID)
-			continue
-		}
-		paymentUpdate := &data.PaymentUpdate{
-			Status:               toStatus,
-			StatusMessage:        transaction.StatusMessage.String,
-			StellarTransactionID: transaction.StellarTransactionHash.String,
-		}
-		errUpdate := s.sdpModels.Payment.Update(ctx, dbTx, payment, paymentUpdate)
-		if errUpdate != nil {
-			return fmt.Errorf("updating payment ID %s for transaction id %s: %w", payment.ID, transaction.ID, errUpdate)
-		}
+	// Update payment status for the transaction to SUCCESS or FAILURE
+	paymentUpdate := &data.PaymentUpdate{
+		Status:               toStatus,
+		StatusMessage:        transaction.StatusMessage.String,
+		StellarTransactionID: transaction.StellarTransactionHash.String,
+	}
+	err = s.sdpModels.Payment.Update(ctx, dbTx, payment, paymentUpdate)
+	if err != nil {
+		return fmt.Errorf("updating payment ID %s for transaction ID %s: %w", payment.ID, transaction.ID, err)
 	}
 
-	disbursementIDs := make([]string, 0, len(disbursementMap))
-	for disbursement := range disbursementMap {
-		disbursementIDs = append(disbursementIDs, disbursement)
-	}
-	err := s.sdpModels.Disbursements.CompleteDisbursements(ctx, dbTx, disbursementIDs)
+	// Update the disbursement to complete if it has all payments in the end state.
+	err = s.sdpModels.Disbursements.CompleteDisbursements(ctx, dbTx, []string{payment.Disbursement.ID})
 	if err != nil {
 		return fmt.Errorf("completing disbursement: %w", err)
 	}
 
 	return nil
+}
+
+func (s *PaymentFromSubmitterService) SetModels(models *data.Models) {
+	s.sdpModels = models
 }

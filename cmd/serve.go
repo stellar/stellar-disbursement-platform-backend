@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"go/types"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/cmd/utils"
 	cmdUtils "github.com/stellar/stellar-disbursement-platform-backend/cmd/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/db/router"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
@@ -25,11 +27,7 @@ import (
 	serveadmin "github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/serve"
 )
 
-var (
-	eventBrokerType events.EventBrokerType
-	brokers         []string
-	consumerGroupID string
-)
+type TearDownFunc func()
 
 type ServeCommand struct{}
 
@@ -38,7 +36,7 @@ type ServerServiceInterface interface {
 	StartMetricsServe(opts serve.MetricsServeOptions, httpServer serve.HTTPServerInterface)
 	StartAdminServe(opts serveadmin.ServeOptions, httpServer serveadmin.HTTPServerInterface)
 	GetSchedulerJobRegistrars(ctx context.Context, serveOpts serve.ServeOptions, schedulerOptions scheduler.SchedulerOptions, apAPIService anchorplatform.AnchorPlatformAPIServiceInterface) ([]scheduler.SchedulerJobRegisterOption, error)
-	SetupConsumers(ctx context.Context, serveOpts serve.ServeOptions, eventHandlerOptions events.EventHandlerOptions)
+	SetupConsumers(ctx context.Context, eventBrokerOptions utils.EventBrokerOptions, eventHandlerOptions events.EventHandlerOptions, serveOpts serve.ServeOptions) TearDownFunc
 }
 
 type ServerService struct{}
@@ -80,23 +78,31 @@ func (s *ServerService) GetSchedulerJobRegistrars(ctx context.Context, serveOpts
 
 	return []scheduler.SchedulerJobRegisterOption{
 		scheduler.WithPaymentToSubmitterJobOption(models),
-		scheduler.WithPaymentFromSubmitterJobOption(models),
 		scheduler.WithAPAuthEnforcementJob(apAPIService, serveOpts.MonitorService, serveOpts.CrashTrackerClient.Clone()),
 		scheduler.WithPatchAnchorPlatformTransactionsCompletionJobOption(apAPIService, models),
 		scheduler.WithReadyPaymentsCancellationJobOption(models),
 	}, nil
 }
 
-func (s *ServerService) SetupConsumers(ctx context.Context, serveOpts serve.ServeOptions, eventHandlerOptions events.EventHandlerOptions) {
+func (s *ServerService) SetupConsumers(ctx context.Context, eventBrokerOptions utils.EventBrokerOptions, eventHandlerOptions events.EventHandlerOptions, serveOpts serve.ServeOptions) TearDownFunc {
 	dbConnectionPool, err := db.OpenDBConnectionPool(globalOptions.DatabaseURL)
 	if err != nil {
 		log.Ctx(ctx).Fatalf("error getting DB connection in Setup Consumers: %s", err.Error())
 	}
 
+	tssDNS, err := router.GetDNSForTSS(globalOptions.DatabaseURL)
+	if err != nil {
+		log.Ctx(ctx).Fatalf("error getting TSS database DNS in Setup Consumers: %s", err.Error())
+	}
+	tssDBConnectionPool, err := db.OpenDBConnectionPool(tssDNS)
+	if err != nil {
+		log.Ctx(ctx).Fatalf("error getting TSS DB connection in Setup Consumers: %s", err.Error())
+	}
+
 	smsInvitationConsumer, err := events.NewKafkaConsumer(
-		brokers,
+		eventBrokerOptions.Brokers,
 		events.ReceiverWalletNewInvitationTopic,
-		consumerGroupID,
+		eventBrokerOptions.ConsumerGroupID,
 		eventhandlers.NewSendReceiverWalletsSMSInvitationEventHandler(eventhandlers.SendReceiverWalletsSMSInvitationEventHandlerOptions{
 			DBConnectionPool:               dbConnectionPool,
 			AnchorPlatformBaseSepURL:       serveOpts.AnchorPlatformBasePlatformURL,
@@ -110,7 +116,27 @@ func (s *ServerService) SetupConsumers(ctx context.Context, serveOpts serve.Serv
 		log.Ctx(ctx).Fatalf("error creating SMS Invitation Kafka Consumer: %v", err)
 	}
 
+	paymentFromSubmitterConsumer, err := events.NewKafkaConsumer(
+		eventBrokerOptions.Brokers,
+		events.PaymentFromSubmitterTopic,
+		eventBrokerOptions.ConsumerGroupID,
+		eventhandlers.NewPaymentFromSubmitterEventHandler(eventhandlers.PaymentFromSubmitterEventHandlerOptions{
+			DBConnectionPool:    dbConnectionPool,
+			TSSDBConnectionPool: tssDBConnectionPool,
+			CrashTrackerClient:  serveOpts.CrashTrackerClient.Clone(),
+		}),
+	)
+	if err != nil {
+		log.Ctx(ctx).Fatalf("error creating Payment From Submitter Kafka Consumer: %v", err)
+	}
+
 	go events.Consume(ctx, smsInvitationConsumer, serveOpts.CrashTrackerClient.Clone())
+	go events.Consume(ctx, paymentFromSubmitterConsumer, serveOpts.CrashTrackerClient.Clone())
+
+	return TearDownFunc(func() {
+		defer dbConnectionPool.Close()
+		defer tssDBConnectionPool.Close()
+	})
 }
 
 func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorService monitor.MonitorServiceInterface) *cobra.Command {
@@ -320,30 +346,6 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			FlagDefault: true,
 			Required:    false,
 		},
-		{
-			Name:           "event-broker-type",
-			Usage:          `Event Broker type. Options: "KAFKA", "NONE"`,
-			OptType:        types.String,
-			ConfigKey:      &eventBrokerType,
-			CustomSetValue: cmdUtils.SetConfigOptionEventBrokerType,
-			FlagDefault:    string(events.KafkaEventBrokerType),
-			Required:       true,
-		},
-		{
-			Name:           "brokers",
-			Usage:          "List of Message Brokers Connection string comma separated.",
-			OptType:        types.String,
-			ConfigKey:      &brokers,
-			CustomSetValue: cmdUtils.SetConfigOptionURLList,
-			Required:       false,
-		},
-		{
-			Name:      "consumer-group-id",
-			Usage:     "Message Broker Consumer Group ID.",
-			OptType:   types.String,
-			ConfigKey: &consumerGroupID,
-			Required:  false,
-		},
 	}
 
 	messengerOptions := message.MessengerOptions{}
@@ -379,6 +381,10 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			FlagDefault:    string(message.MessengerTypeDryRun),
 			Required:       true,
 		})
+
+	// event config options:
+	eventBrokerOptions := utils.EventBrokerOptions{}
+	configOpts = append(configOpts, utils.EventBrokerConfigOptions(&eventBrokerOptions)...)
 
 	cmd := &cobra.Command{
 		Use:   "serve",
@@ -460,15 +466,16 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			serveOpts.AnchorPlatformAPIService = apAPIService
 
 			// Kafka (background)
-			if eventBrokerType == events.KafkaEventBrokerType {
-				kafkaProducer, err := events.NewKafkaProducer(brokers)
+			if eventBrokerOptions.EventBrokerType == events.KafkaEventBrokerType {
+				kafkaProducer, err := events.NewKafkaProducer(eventBrokerOptions.Brokers)
 				if err != nil {
 					log.Ctx(ctx).Fatalf("error creating Kafka Producer: %v", err)
 				}
 				defer kafkaProducer.Close()
 				serveOpts.EventProducer = kafkaProducer
 
-				serverService.SetupConsumers(ctx, serveOpts, eventHandlerOptions)
+				tearDownFunc := serverService.SetupConsumers(ctx, eventBrokerOptions, eventHandlerOptions, serveOpts)
+				defer tearDownFunc()
 			} else {
 				log.Ctx(ctx).Warn("Event Broker is NONE.")
 			}

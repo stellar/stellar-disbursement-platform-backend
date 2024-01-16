@@ -2,7 +2,6 @@ package eventhandlers
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
 	"github.com/stellar/go/support/log"
@@ -13,6 +12,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/router"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
@@ -72,16 +72,9 @@ func (h *SendReceiverWalletsSMSInvitationEventHandler) CanHandleMessage(ctx cont
 }
 
 func (h *SendReceiverWalletsSMSInvitationEventHandler) Handle(ctx context.Context, message *events.Message) {
-	dataJSON, err := json.Marshal(message.Data)
+	receiverWalletInvitationData, err := utils.ConvertType[any, []schemas.EventReceiverWalletSMSInvitationData](message.Data)
 	if err != nil {
-		h.crashTrackerClient.LogAndReportErrors(ctx, err, fmt.Sprintf("[SendReceiverWalletsSMSInvitationEventHandler] could not marshal data: %v", message.Data))
-		return
-	}
-
-	var receiverWalletInvitationData []schemas.EventReceiverWalletSMSInvitationData
-	err = json.Unmarshal(dataJSON, &receiverWalletInvitationData)
-	if err != nil {
-		h.crashTrackerClient.LogAndReportErrors(ctx, err, fmt.Sprintf("[SendReceiverWalletsSMSInvitationEventHandler] could not unmarshal data: %v", message.Data))
+		h.crashTrackerClient.LogAndReportErrors(ctx, err, fmt.Sprintf("[SendReceiverWalletsSMSInvitationEventHandler] could convert data to %T: %v", []schemas.EventReceiverWalletSMSInvitationData{}, message.Data))
 		return
 	}
 
