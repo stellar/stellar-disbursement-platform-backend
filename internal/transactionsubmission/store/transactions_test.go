@@ -768,6 +768,87 @@ func Test_TransactionModel_GetTransactionBatchForUpdate(t *testing.T) {
 	DeleteAllTransactionFixtures(t, ctx, dbConnectionPool)
 }
 
+func Test_TransactionModel_GetTransactionForUpdateByID(t *testing.T) {
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+	txModel := NewTransactionModel(dbConnectionPool)
+
+	testCase := []struct {
+		name              string
+		transactionStatus TransactionStatus
+		shouldBeFound     bool
+		wantErr           error
+	}{
+		{
+			name:              "transaction not found (NOT IN DB)",
+			transactionStatus: "",
+			shouldBeFound:     false,
+			wantErr:           ErrRecordNotFound,
+		},
+		{
+			name:              "transaction not found (PENDING)",
+			transactionStatus: TransactionStatusPending,
+			shouldBeFound:     false,
+			wantErr:           ErrRecordNotFound,
+		},
+		{
+			name:              "transaction not found (PROCESSING)",
+			transactionStatus: TransactionStatusProcessing,
+			shouldBeFound:     false,
+			wantErr:           ErrRecordNotFound,
+		},
+		{
+			name:              "🎉 transactions successfully found (SUCCESS)",
+			transactionStatus: TransactionStatusSuccess,
+			shouldBeFound:     true,
+		},
+		{
+			name:              "🎉 transactions successfully found (ERROR)",
+			transactionStatus: TransactionStatusError,
+			shouldBeFound:     true,
+		},
+	}
+
+	for _, tc := range testCase {
+		t.Run(tc.name, func(t *testing.T) {
+			dbTx, err := dbConnectionPool.BeginTxx(ctx, nil)
+			require.NoError(t, err)
+			defer func() {
+				err = dbTx.Rollback()
+				require.NoError(t, err)
+			}()
+
+			var tx Transaction
+			if tc.transactionStatus != "" {
+				tx = *CreateTransactionFixtureNew(t, ctx, dbTx, TransactionFixture{
+					AssetCode:          "USDC",
+					AssetIssuer:        "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+					DestinationAddress: "GBHNIYGWZUAVZX7KTLVSMILBXJMUACVO6XBEKIN6RW7AABDFH6S7GK2Y",
+					Status:             tc.transactionStatus,
+					Amount:             1.2,
+					TenantID:           uuid.NewString(),
+				})
+			}
+
+			foundTransaction, err := txModel.GetTransactionForUpdateByID(ctx, dbTx, tx.ID)
+			if tc.wantErr == nil {
+				require.NoError(t, err)
+				assert.Equal(t, tx, *foundTransaction)
+			} else {
+				require.Error(t, err)
+				assert.EqualError(t, err, tc.wantErr.Error())
+			}
+		})
+	}
+
+	DeleteAllTransactionFixtures(t, ctx, dbConnectionPool)
+}
+
 func Test_TransactionModel_UpdateSyncedTransactions(t *testing.T) {
 	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
