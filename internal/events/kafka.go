@@ -36,6 +36,10 @@ func NewKafkaProducer(brokers []string) (*KafkaProducer, error) {
 func (k *KafkaProducer) WriteMessages(ctx context.Context, messages ...Message) error {
 	kafkaMessages := make([]kafka.Message, 0, len(messages))
 	for _, msg := range messages {
+		if err := msg.Validate(); err != nil {
+			return fmt.Errorf("invalid message: %w", err)
+		}
+
 		msgJSON, err := json.Marshal(msg)
 		if err != nil {
 			return fmt.Errorf("marshalling message: %w", err)
