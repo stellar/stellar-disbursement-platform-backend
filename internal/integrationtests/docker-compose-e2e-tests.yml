@@ -38,7 +38,7 @@ services:
       DISTRIBUTION_PUBLIC_KEY: ${DISTRIBUTION_PUBLIC_KEY}
       RECAPTCHA_SITE_KEY: 6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI
       CORS_ALLOWED_ORIGINS: "*"
-      ENABLE_MFA: "false"
+      DISABLE_MFA: "true"
       ENABLE_RECAPTCHA: "false"
 
       # integration tests vars

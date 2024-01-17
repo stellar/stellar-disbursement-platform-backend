@@ -81,7 +81,7 @@ type ServeOptions struct {
 	DistributionSeed                string
 	ReCAPTCHASiteKey                string
 	ReCAPTCHASiteSecretKey          string
-	EnableMFA                       bool
+	DisableMFA                      bool
 	EnableReCAPTCHA                 bool
 	PasswordValidator               *authUtils.PasswordValidator
 }
@@ -362,7 +362,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 		MessengerClient:    o.EmailMessengerClient,
 		Models:             o.Models,
 		ReCAPTCHAEnabled:   o.EnableReCAPTCHA,
-		MFAEnabled:         o.EnableMFA,
+		MFAEnabled:         !o.DisableMFA,
 	}.ServeHTTP)
 	mux.Post("/mfa", httphandler.MFAHandler{
 		AuthManager:        authManager,

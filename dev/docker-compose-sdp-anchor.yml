@@ -39,7 +39,7 @@ services:
       DISTRIBUTION_SEED: ${DISTRIBUTION_SEED}
       RECAPTCHA_SITE_KEY: 6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI
       CORS_ALLOWED_ORIGINS: http://localhost:3000
-      ENABLE_MFA: "false"
+      DISABLE_MFA: "true"
       ENABLE_RECAPTCHA: "false"
 
       # secrets:

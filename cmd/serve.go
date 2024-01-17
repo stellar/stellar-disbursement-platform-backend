@@ -245,11 +245,11 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			Required:       true,
 		},
 		{
-			Name:        "enable-mfa",
-			Usage:       "Enable MFA using email.",
+			Name:        "disable-mfa",
+			Usage:       "Disables the email Multi-Factor Authentication (MFA).",
 			OptType:     types.Bool,
-			ConfigKey:   &serveOpts.EnableMFA,
-			FlagDefault: true,
+			ConfigKey:   &serveOpts.DisableMFA,
+			FlagDefault: false,
 			Required:    false,
 		},
 		{
