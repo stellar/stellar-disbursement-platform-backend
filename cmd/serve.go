@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"go/types"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/cmd/utils"
 	cmdUtils "github.com/stellar/stellar-disbursement-platform-backend/cmd/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/router"
@@ -36,7 +35,7 @@ type ServerServiceInterface interface {
 	StartMetricsServe(opts serve.MetricsServeOptions, httpServer serve.HTTPServerInterface)
 	StartAdminServe(opts serveadmin.ServeOptions, httpServer serveadmin.HTTPServerInterface)
 	GetSchedulerJobRegistrars(ctx context.Context, serveOpts serve.ServeOptions, schedulerOptions scheduler.SchedulerOptions, apAPIService anchorplatform.AnchorPlatformAPIServiceInterface) ([]scheduler.SchedulerJobRegisterOption, error)
-	SetupConsumers(ctx context.Context, eventBrokerOptions utils.EventBrokerOptions, eventHandlerOptions events.EventHandlerOptions, serveOpts serve.ServeOptions) TearDownFunc
+	SetupConsumers(ctx context.Context, eventBrokerOptions cmdUtils.EventBrokerOptions, eventHandlerOptions events.EventHandlerOptions, serveOpts serve.ServeOptions) (_ TearDownFunc, err error)
 }
 
 type ServerService struct{}
@@ -84,23 +83,33 @@ func (s *ServerService) GetSchedulerJobRegistrars(ctx context.Context, serveOpts
 	}, nil
 }
 
-func (s *ServerService) SetupConsumers(ctx context.Context, eventBrokerOptions utils.EventBrokerOptions, eventHandlerOptions events.EventHandlerOptions, serveOpts serve.ServeOptions) TearDownFunc {
+func (s *ServerService) SetupConsumers(ctx context.Context, eventBrokerOptions cmdUtils.EventBrokerOptions, eventHandlerOptions events.EventHandlerOptions, serveOpts serve.ServeOptions) (_ TearDownFunc, err error) {
 	dbConnectionPool, err := db.OpenDBConnectionPool(globalOptions.DatabaseURL)
 	if err != nil {
 		log.Ctx(ctx).Fatalf("error getting DB connection in Setup Consumers: %s", err.Error())
 	}
+	defer func() {
+		if err != nil && dbConnectionPool != nil {
+			dbConnectionPool.Close()
+		}
+	}()
 
 	tssDNS, err := router.GetDNSForTSS(globalOptions.DatabaseURL)
 	if err != nil {
-		log.Ctx(ctx).Fatalf("error getting TSS database DNS in Setup Consumers: %s", err.Error())
+		return nil, fmt.Errorf("getting TSS database DNS: %s", err.Error())
 	}
 	tssDBConnectionPool, err := db.OpenDBConnectionPool(tssDNS)
 	if err != nil {
-		log.Ctx(ctx).Fatalf("error getting TSS DB connection in Setup Consumers: %s", err.Error())
+		return nil, fmt.Errorf("getting TSS DB connection: %s", err.Error())
 	}
+	defer func() {
+		if err != nil && tssDBConnectionPool != nil {
+			tssDBConnectionPool.Close()
+		}
+	}()
 
 	smsInvitationConsumer, err := events.NewKafkaConsumer(
-		eventBrokerOptions.Brokers,
+		eventBrokerOptions.BrokerURLs,
 		events.ReceiverWalletNewInvitationTopic,
 		eventBrokerOptions.ConsumerGroupID,
 		eventhandlers.NewSendReceiverWalletsSMSInvitationEventHandler(eventhandlers.SendReceiverWalletsSMSInvitationEventHandlerOptions{
@@ -113,11 +122,11 @@ func (s *ServerService) SetupConsumers(ctx context.Context, eventBrokerOptions u
 		}),
 	)
 	if err != nil {
-		log.Ctx(ctx).Fatalf("error creating SMS Invitation Kafka Consumer: %v", err)
+		return nil, fmt.Errorf("creating SMS Invitation Kafka Consumer: %v", err)
 	}
 
 	paymentFromSubmitterConsumer, err := events.NewKafkaConsumer(
-		eventBrokerOptions.Brokers,
+		eventBrokerOptions.BrokerURLs,
 		events.PaymentFromSubmitterTopic,
 		eventBrokerOptions.ConsumerGroupID,
 		eventhandlers.NewPaymentFromSubmitterEventHandler(eventhandlers.PaymentFromSubmitterEventHandlerOptions{
@@ -127,7 +136,7 @@ func (s *ServerService) SetupConsumers(ctx context.Context, eventBrokerOptions u
 		}),
 	)
 	if err != nil {
-		log.Ctx(ctx).Fatalf("error creating Payment From Submitter Kafka Consumer: %v", err)
+		return nil, fmt.Errorf("creating Payment From Submitter Kafka Consumer: %v", err)
 	}
 
 	go events.Consume(ctx, smsInvitationConsumer, serveOpts.CrashTrackerClient.Clone())
@@ -136,7 +145,7 @@ func (s *ServerService) SetupConsumers(ctx context.Context, eventBrokerOptions u
 	return TearDownFunc(func() {
 		defer dbConnectionPool.Close()
 		defer tssDBConnectionPool.Close()
-	})
+	}), nil
 }
 
 func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorService monitor.MonitorServiceInterface) *cobra.Command {
@@ -383,8 +392,8 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 		})
 
 	// event config options:
-	eventBrokerOptions := utils.EventBrokerOptions{}
-	configOpts = append(configOpts, utils.EventBrokerConfigOptions(&eventBrokerOptions)...)
+	eventBrokerOptions := cmdUtils.EventBrokerOptions{}
+	configOpts = append(configOpts, cmdUtils.EventBrokerConfigOptions(&eventBrokerOptions)...)
 
 	cmd := &cobra.Command{
 		Use:   "serve",
@@ -467,17 +476,20 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 
 			// Kafka (background)
 			if eventBrokerOptions.EventBrokerType == events.KafkaEventBrokerType {
-				kafkaProducer, err := events.NewKafkaProducer(eventBrokerOptions.Brokers)
+				kafkaProducer, err := events.NewKafkaProducer(eventBrokerOptions.BrokerURLs)
 				if err != nil {
 					log.Ctx(ctx).Fatalf("error creating Kafka Producer: %v", err)
 				}
 				defer kafkaProducer.Close()
 				serveOpts.EventProducer = kafkaProducer
 
-				tearDownFunc := serverService.SetupConsumers(ctx, eventBrokerOptions, eventHandlerOptions, serveOpts)
+				tearDownFunc, err := serverService.SetupConsumers(ctx, eventBrokerOptions, eventHandlerOptions, serveOpts)
+				if err != nil {
+					log.Fatalf("error setting up consumers: %v", err)
+				}
 				defer tearDownFunc()
 			} else {
-				log.Ctx(ctx).Warn("Event Broker is NONE.")
+				log.Ctx(ctx).Warn("Event Broker Type is NONE.")
 			}
 
 			// Starting Scheduler Service (background job) if enabled

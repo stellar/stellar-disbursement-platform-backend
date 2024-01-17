@@ -14,6 +14,7 @@ import (
 	"github.com/stellar/go/keypair"
 	"github.com/stellar/go/network"
 	"github.com/stellar/go/protocols/horizon"
+	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/support/render/problem"
 	"github.com/stellar/go/txnbuild"
 	"github.com/stretchr/testify/assert"
@@ -232,19 +233,6 @@ func Test_NewTransactionWorker(t *testing.T) {
 			wantError:          fmt.Errorf("txProcessingLimiter cannot be nil"),
 		},
 		{
-			name:                "validate eventProducer",
-			dbConnectionPool:    dbConnectionPool,
-			txModel:             txModel,
-			chAccModel:          chAccModel,
-			engine:              wantSubmitterEngine,
-			sigService:          wantSigService,
-			maxBaseFee:          wantMaxBaseFee,
-			crashTrackerClient:  &crashtracker.MockCrashTrackerClient{},
-			txProcessingLimiter: wantTxProcessingLimiter,
-			monitorSvc:          tssMonitorSvc,
-			wantError:           fmt.Errorf("eventProducer cannot be nil"),
-		},
-		{
 			name:                "🎉 successfully returns a new transaction worker",
 			dbConnectionPool:    dbConnectionPool,
 			txModel:             txModel,
@@ -381,14 +369,14 @@ func Test_TransactionWorker_handleSuccessfulTransaction(t *testing.T) {
 
 		// Run test:
 		expectedError := fmt.Sprintf(
-			"producing event transaction ID %s - Status %s: writing message Message{Topic: %s, Key: %s, Type: %s, TenantID: %s, Data: {%s}} on event producer: something went wrong",
-			txJob.Transaction.ID,
+			"producing event Status %s: writing message Message{Topic: %s, Key: %s, Type: %s, TenantID: %s, Data: {%s}} on event producer: something went wrong - Job %v",
 			store.TransactionStatusSuccess,
 			events.PaymentFromSubmitterTopic,
 			txJob.Transaction.ExternalID,
 			events.SyncSuccessPaymentFromSubmitterType,
 			txJob.Transaction.TenantID,
 			txJob.Transaction.ID,
+			txJob,
 		)
 		err := transactionWorker.handleSuccessfulTransaction(ctx, &txJob, horizon.Transaction{Successful: true})
 		assert.EqualError(t, err, expectedError)
@@ -1155,6 +1143,7 @@ func Test_TransactionWorker_submit(t *testing.T) {
 
 			mockHorizonClient.AssertExpectations(t)
 			mockCrashTrackerClient.AssertExpectations(t)
+			mockEventProducer.AssertExpectations(t)
 		})
 	}
 }
@@ -1170,7 +1159,6 @@ func Test_TransactionWorker_produceSyncPaymentEvent(t *testing.T) {
 	t.Run("returns error when an unexpected payment status is passed", func(t *testing.T) {
 		err := transactionWorker.produceSyncPaymentEvent(ctx, events.SyncErrorPaymentFromSubmitterType, &store.Transaction{}, store.TransactionStatusPending)
 		assert.EqualError(t, err, "invalid status to produce sync payment event")
-		mockEventProducer.AssertExpectations(t)
 	})
 
 	t.Run("returns error when eventProducer fails writing a new message", func(t *testing.T) {
@@ -1197,7 +1185,6 @@ func Test_TransactionWorker_produceSyncPaymentEvent(t *testing.T) {
 
 		err := transactionWorker.produceSyncPaymentEvent(ctx, events.SyncSuccessPaymentFromSubmitterType, &tx, store.TransactionStatusSuccess)
 		assert.EqualError(t, err, "writing message Message{Topic: events.transaction-submitter.payment-from-submitter, Key: payment-id, Type: sync-success-payment-from-submitter, TenantID: tenant-id, Data: {tx-id}} on event producer: unexpected error")
-		mockEventProducer.AssertExpectations(t)
 	})
 
 	t.Run("successfully produce sync payment event", func(t *testing.T) {
@@ -1224,6 +1211,25 @@ func Test_TransactionWorker_produceSyncPaymentEvent(t *testing.T) {
 
 		err := transactionWorker.produceSyncPaymentEvent(ctx, events.SyncErrorPaymentFromSubmitterType, &tx, store.TransactionStatusError)
 		assert.NoError(t, err)
-		mockEventProducer.AssertExpectations(t)
 	})
+
+	t.Run("logs when couldn't produce message when eventProducer is nil", func(t *testing.T) {
+		tx := store.Transaction{
+			ID:         "tx-id",
+			ExternalID: "payment-id",
+			TenantID:   "tenant-id",
+		}
+
+		getEntries := log.DefaultLogger.StartTest(log.DebugLevel)
+
+		txWorker := TransactionWorker{}
+		err := txWorker.produceSyncPaymentEvent(ctx, events.SyncSuccessPaymentFromSubmitterType, &tx, store.TransactionStatusSuccess)
+		assert.NoError(t, err)
+
+		entries := getEntries()
+		require.Len(t, entries, 1)
+		assert.Equal(t, "message Message{Topic: events.transaction-submitter.payment-from-submitter, Key: payment-id, Type: sync-success-payment-from-submitter, TenantID: tenant-id, Data: {tx-id}} not published because eventProducer is nil", entries[0].Message)
+	})
+
+	mockEventProducer.AssertExpectations(t)
 }

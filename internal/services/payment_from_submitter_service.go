@@ -28,10 +28,9 @@ type PaymentFromSubmitterService struct {
 var _ PaymentFromSubmitterServiceInterface = new(PaymentFromSubmitterService)
 
 // NewPaymentFromSubmitterService is a PaymentFromSubmitterService constructor.
-func NewPaymentFromSubmitterService(models *data.Models, tssDBConnectionPool db.DBConnectionPool) *PaymentFromSubmitterService {
+func NewPaymentFromSubmitterService(tssDBConnectionPool db.DBConnectionPool) *PaymentFromSubmitterService {
 	return &PaymentFromSubmitterService{
-		sdpModels: models,
-		tssModel:  txSubStore.NewTransactionModel(tssDBConnectionPool),
+		tssModel: txSubStore.NewTransactionModel(tssDBConnectionPool),
 	}
 }
 
@@ -56,7 +55,7 @@ func (s PaymentFromSubmitterService) syncTransaction(ctx context.Context, dbTx d
 
 	// 1. Get transaction passed by parameter which is in a final state (status=SUCCESS or status=ERROR)
 	//     this operation will lock the row.
-	transaction, err := s.tssModel.GetTransactionForUpdateByID(ctx, s.tssModel.DBConnectionPool, tx.TransactionID)
+	transaction, err := s.tssModel.GetTransactionPendingUpdateByID(ctx, s.tssModel.DBConnectionPool, tx.TransactionID)
 	if err != nil {
 		return fmt.Errorf("getting transaction ID %s for update: %w", tx.TransactionID, err)
 	}
@@ -70,7 +69,7 @@ func (s PaymentFromSubmitterService) syncTransaction(ctx context.Context, dbTx d
 	}
 
 	// 3. Update payments based on the transaction status
-	err = s.syncPaymentsWithTransactions(ctx, dbTx, transaction)
+	err = s.syncPaymentsWithTransaction(ctx, dbTx, transaction)
 	if err != nil {
 		return fmt.Errorf("synching payments for transaction ID %s: %w", transaction.ID, err)
 	}
@@ -85,21 +84,25 @@ func (s PaymentFromSubmitterService) syncTransaction(ctx context.Context, dbTx d
 	return nil
 }
 
-// syncPaymentsWithTransactions updates the status of the payments based on the status of the transactions.
-func (s PaymentFromSubmitterService) syncPaymentsWithTransactions(ctx context.Context, dbTx db.DBTransaction, transaction *txSubStore.Transaction) error {
+// syncPaymentsWithTransaction updates the status of the payments based on the status of the transactions.
+func (s PaymentFromSubmitterService) syncPaymentsWithTransaction(ctx context.Context, dbTx db.DBTransaction, transaction *txSubStore.Transaction) error {
 	payments, err := s.sdpModels.Payment.GetByIDs(ctx, dbTx, []string{transaction.ExternalID})
 	if err != nil {
 		return fmt.Errorf("getting payments by IDs: %w", err)
 	}
 
-	if len(payments) == 0 {
+	if len(payments) != 1 {
 		return fmt.Errorf("no payment found for transaction ID %s", transaction.ID)
 	}
 	payment := payments[0]
 
-	toStatus := data.SuccessPaymentStatus
-	if transaction.Status == store.TransactionStatusError {
+	var toStatus data.PaymentStatus
+	if transaction.Status == store.TransactionStatusSuccess {
+		toStatus = data.SuccessPaymentStatus
+	} else if transaction.Status == store.TransactionStatusError {
 		toStatus = data.FailedPaymentStatus
+	} else {
+		return fmt.Errorf("invalid transaction status %s. Expected only %s or %s", transaction.Status, store.TransactionStatusSuccess, store.TransactionStatusError)
 	}
 
 	// Update payment status for the transaction to SUCCESS or FAILURE

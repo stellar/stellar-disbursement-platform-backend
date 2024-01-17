@@ -120,8 +120,8 @@ func (_m *MockTransactionStore) GetTransactionBatchForUpdate(ctx context.Context
 	return r0, r1
 }
 
-// GetTransactionForUpdateByID provides a mock function with given fields: ctx, sqlExec, txID
-func (_m *MockTransactionStore) GetTransactionForUpdateByID(ctx context.Context, sqlExec db.SQLExecuter, txID string) (*store.Transaction, error) {
+// GetTransactionPendingUpdateByID provides a mock function with given fields: ctx, sqlExec, txID
+func (_m *MockTransactionStore) GetTransactionPendingUpdateByID(ctx context.Context, sqlExec db.SQLExecuter, txID string) (*store.Transaction, error) {
 	ret := _m.Called(ctx, sqlExec, txID)
 
 	var r0 *store.Transaction

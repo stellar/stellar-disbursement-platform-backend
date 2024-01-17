@@ -98,6 +98,7 @@ func Test_SendReceiverWalletsSMSInvitationEventHandler_Handle(t *testing.T) {
 		service.
 			On("SetModels", mock.AnythingOfType("*data.Models")).
 			Return().
+			Once().
 			On("SendInvite", ctxWithTenant, reqs).
 			Return(errors.New("unexpected error")).
 			Once()
@@ -129,6 +130,7 @@ func Test_SendReceiverWalletsSMSInvitationEventHandler_Handle(t *testing.T) {
 		service.
 			On("SetModels", mock.AnythingOfType("*data.Models")).
 			Return().
+			Once().
 			On("SendInvite", ctxWithTenant, reqs).
 			Return(nil).
 			Once()

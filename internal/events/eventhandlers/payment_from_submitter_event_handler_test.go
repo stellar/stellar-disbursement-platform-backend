@@ -95,6 +95,7 @@ func Test_PaymentFromSubmitterEventHandler_Handle(t *testing.T) {
 		service.
 			On("SetModels", mock.AnythingOfType("*data.Models")).
 			Return().
+			Once().
 			On("SyncTransaction", ctxWithTenant, &tx).
 			Return(errors.New("unexpected error")).
 			Once()
@@ -125,6 +126,7 @@ func Test_PaymentFromSubmitterEventHandler_Handle(t *testing.T) {
 		service.
 			On("SetModels", mock.AnythingOfType("*data.Models")).
 			Return().
+			Once().
 			On("SyncTransaction", ctxWithTenant, &tx).
 			Return(nil).
 			Once()
@@ -134,4 +136,7 @@ func Test_PaymentFromSubmitterEventHandler_Handle(t *testing.T) {
 			Data:     tx,
 		})
 	})
+
+	crashTrackerClient.AssertExpectations(t)
+	service.AssertExpectations(t)
 }

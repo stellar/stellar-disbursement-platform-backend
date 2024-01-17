@@ -119,7 +119,7 @@ func TenantRoutingConfigOptions(opts *TenantRoutingOptions) []*config.ConfigOpti
 
 type EventBrokerOptions struct {
 	EventBrokerType events.EventBrokerType
-	Brokers         []string
+	BrokerURLs      []string
 	ConsumerGroupID string
 }
 
@@ -135,10 +135,10 @@ func EventBrokerConfigOptions(opts *EventBrokerOptions) []*config.ConfigOption {
 			Required:       true,
 		},
 		{
-			Name:           "brokers",
-			Usage:          "List of Message Brokers Connection string comma separated.",
+			Name:           "broker-urls",
+			Usage:          "List of Message Broker URLs comma separated.",
 			OptType:        types.String,
-			ConfigKey:      &opts.Brokers,
+			ConfigKey:      &opts.BrokerURLs,
 			CustomSetValue: SetConfigOptionURLList,
 			Required:       false,
 		},

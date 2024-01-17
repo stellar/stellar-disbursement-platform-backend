@@ -96,10 +96,6 @@ func NewTransactionWorker(
 		return TransactionWorker{}, fmt.Errorf("monitorSvc cannot be nil")
 	}
 
-	if eventProducer == nil {
-		return TransactionWorker{}, fmt.Errorf("eventProducer cannot be nil")
-	}
-
 	return TransactionWorker{
 		dbConnectionPool:    dbConnectionPool,
 		txModel:             txModel,
@@ -186,7 +182,7 @@ func (tw *TransactionWorker) handleFailedTransaction(ctx context.Context, txJob 
 				// Publishing a new event on the event producer
 				err = tw.produceSyncPaymentEvent(ctx, events.SyncErrorPaymentFromSubmitterType, &txJob.Transaction, store.TransactionStatusError)
 				if err != nil {
-					return fmt.Errorf("producing event transaction ID %s - Status %s: %w", txJob.Transaction.ID, txJob.Transaction.Status, err)
+					return fmt.Errorf("producing event Status %s: %w - Job %v", txJob.Transaction.Status, err, txJob)
 				}
 
 				txJob.Transaction = *updatedTx
@@ -282,7 +278,7 @@ func (tw *TransactionWorker) handleSuccessfulTransaction(ctx context.Context, tx
 	// Publishing a new event on the event producer
 	err = tw.produceSyncPaymentEvent(ctx, events.SyncSuccessPaymentFromSubmitterType, &txJob.Transaction, store.TransactionStatusSuccess)
 	if err != nil {
-		return fmt.Errorf("producing event transaction ID %s - Status %s: %w", txJob.Transaction.ID, txJob.Transaction.Status, err)
+		return fmt.Errorf("producing event Status %s: %w - Job %v", txJob.Transaction.Status, err, txJob)
 	}
 
 	err = tw.unlockJob(ctx, txJob)
@@ -373,9 +369,13 @@ func (tw *TransactionWorker) produceSyncPaymentEvent(ctx context.Context, eventT
 		},
 	}
 
-	err := tw.eventProducer.WriteMessages(ctx, msg)
-	if err != nil {
-		return fmt.Errorf("writing message %s on event producer: %w", msg, err)
+	if tw.eventProducer != nil {
+		err := tw.eventProducer.WriteMessages(ctx, msg)
+		if err != nil {
+			return fmt.Errorf("writing message %s on event producer: %w", msg, err)
+		}
+	} else {
+		log.Ctx(ctx).Debugf("message %s not published because eventProducer is nil", msg.String())
 	}
 
 	return nil

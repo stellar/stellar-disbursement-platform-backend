@@ -343,16 +343,16 @@ func (t *TransactionModel) GetTransactionBatchForUpdate(ctx context.Context, dbT
 	return transactions, nil
 }
 
-func (t *TransactionModel) GetTransactionForUpdateByID(ctx context.Context, dbTx db.SQLExecuter, txID string) (*Transaction, error) {
+func (t *TransactionModel) GetTransactionPendingUpdateByID(ctx context.Context, dbTx db.SQLExecuter, txID string) (*Transaction, error) {
 	query := `
 		SELECT 
-		    *
+			*
 		FROM 
-		    submitter_transactions
+			submitter_transactions
 		WHERE
 			id = $1
-		    AND status IN ('SUCCESS', 'ERROR')
-		    AND synced_at IS NULL
+			AND status IN ('SUCCESS', 'ERROR')
+			AND synced_at IS NULL
 		FOR UPDATE SKIP LOCKED
 	`
 

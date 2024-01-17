@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/stellar/go/support/log"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
@@ -229,9 +230,13 @@ func (di DisbursementInstructionModel) ProcessAll(ctx context.Context, userID st
 			return fmt.Errorf("creating event producer message: %w", err)
 		}
 
-		err = eventProducer.WriteMessages(ctx, *msg)
-		if err != nil {
-			return fmt.Errorf("publishing message %s on event producer: %w", msg.String(), err)
+		if eventProducer != nil {
+			err = eventProducer.WriteMessages(ctx, *msg)
+			if err != nil {
+				return fmt.Errorf("publishing message %s on event producer: %w", msg.String(), err)
+			}
+		} else {
+			log.Ctx(ctx).Debugf("message %s not published because eventProducer is nil", msg.String())
 		}
 
 		return nil

@@ -52,7 +52,8 @@ func Test_PaymentFromSubmitterService_SyncTransaction(t *testing.T) {
 	testCtx := setupTestContext(t, dbConnectionPool)
 	ctx := testCtx.ctx
 
-	monitorService := NewPaymentFromSubmitterService(testCtx.sdpModel, dbConnectionPool)
+	monitorService := NewPaymentFromSubmitterService(dbConnectionPool)
+	monitorService.sdpModels = testCtx.sdpModel
 
 	// create fixtures
 	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool,
@@ -379,7 +380,8 @@ func Test_PaymentFromSubmitterService_RetryingPayment(t *testing.T) {
 	testCtx := setupTestContext(t, dbConnectionPool)
 	ctx := testCtx.ctx
 
-	monitorService := NewPaymentFromSubmitterService(testCtx.sdpModel, dbConnectionPool)
+	monitorService := NewPaymentFromSubmitterService(dbConnectionPool)
+	monitorService.sdpModels = testCtx.sdpModel
 
 	// clean test db
 	data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
@@ -505,7 +507,8 @@ func Test_PaymentFromSubmitterService_CompleteDisbursements(t *testing.T) {
 	testCtx := setupTestContext(t, dbConnectionPool)
 	ctx := testCtx.ctx
 
-	monitorService := NewPaymentFromSubmitterService(testCtx.sdpModel, dbConnectionPool)
+	monitorService := NewPaymentFromSubmitterService(dbConnectionPool)
+	monitorService.sdpModels = testCtx.sdpModel
 
 	// clean test db
 	data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)

@@ -8,7 +8,6 @@ import (
 
 	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/network"
-	"github.com/stellar/go/support/log"
 	cmdUtils "github.com/stellar/stellar-disbursement-platform-backend/cmd/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
@@ -57,9 +56,9 @@ func (m *mockServer) GetSchedulerJobRegistrars(ctx context.Context, serveOpts se
 	return args.Get(0).([]scheduler.SchedulerJobRegisterOption), args.Error(1)
 }
 
-func (m *mockServer) SetupConsumers(ctx context.Context, eventBrokerOptions cmdUtils.EventBrokerOptions, eventHandlerOptions events.EventHandlerOptions, serveOpts serve.ServeOptions) TearDownFunc {
+func (m *mockServer) SetupConsumers(ctx context.Context, eventBrokerOptions cmdUtils.EventBrokerOptions, eventHandlerOptions events.EventHandlerOptions, serveOpts serve.ServeOptions) (TearDownFunc, error) {
 	args := m.Called(ctx, eventBrokerOptions, eventHandlerOptions, serveOpts)
-	return args.Get(0).(TearDownFunc)
+	return args.Get(0).(TearDownFunc), args.Error(1)
 }
 
 func Test_serve_wasCalled(t *testing.T) {
@@ -176,7 +175,7 @@ func Test_serve(t *testing.T) {
 
 	eventBrokerOptions := cmdUtils.EventBrokerOptions{
 		EventBrokerType: events.KafkaEventBrokerType,
-		Brokers:         []string{"kafka:9092"},
+		BrokerURLs:      []string{"kafka:9092"},
 		ConsumerGroupID: "group-id",
 	}
 
@@ -193,7 +192,7 @@ func Test_serve(t *testing.T) {
 		On("GetSchedulerJobRegistrars", mock.AnythingOfType("*context.emptyCtx"), serveOpts, scheduler.SchedulerOptions{}, mock.Anything).
 		Return([]scheduler.SchedulerJobRegisterOption{}, nil).
 		Once()
-	mServer.On("SetupConsumers", ctx, eventBrokerOptions, eventHandlerOptions, serveOpts).Return(TearDownFunc(func() { log.Info("tear down func called") })).Once()
+	mServer.On("SetupConsumers", ctx, eventBrokerOptions, eventHandlerOptions, serveOpts).Return(TearDownFunc(func() { t.Log("tear down func called") }), nil).Once()
 	mServer.wg.Add(2)
 
 	// SetupCLI and replace the serve command with one containing a mocked server
@@ -230,7 +229,7 @@ func Test_serve(t *testing.T) {
 	t.Setenv("ENABLE_SCHEDULER", "true")
 	t.Setenv("ENABLE_MULTITENANT_DB", "false")
 	t.Setenv("EVENT_BROKER", "kafka")
-	t.Setenv("BROKERS", "kafka:9092")
+	t.Setenv("BROKER_URLS", "kafka:9092")
 	t.Setenv("CONSUMER_GROUP_ID", "group-id")
 
 	// test & assert

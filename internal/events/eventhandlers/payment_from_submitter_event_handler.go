@@ -32,7 +32,7 @@ type PaymentFromSubmitterEventHandler struct {
 var _ events.EventHandler = new(PaymentFromSubmitterEventHandler)
 
 func NewPaymentFromSubmitterEventHandler(options PaymentFromSubmitterEventHandlerOptions) *PaymentFromSubmitterEventHandler {
-	s := services.NewPaymentFromSubmitterService(nil, options.TSSDBConnectionPool)
+	s := services.NewPaymentFromSubmitterService(options.TSSDBConnectionPool)
 
 	tm := tenant.NewManager(tenant.WithDatabase(options.DBConnectionPool))
 	tr := router.NewMultiTenantDataSourceRouter(tm)

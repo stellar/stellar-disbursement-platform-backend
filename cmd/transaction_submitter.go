@@ -198,12 +198,16 @@ func (c *TxSubmitterCommand) Command(submitterService TxSubmitterServiceInterfac
 		Run: func(cmd *cobra.Command, _ []string) {
 			ctx := cmd.Context()
 
-			kafkaProducer, err := events.NewKafkaProducer(eventBrokerOptions.Brokers)
-			if err != nil {
-				log.Ctx(ctx).Fatalf("error creating Kafka Producer: %v", err)
+			if eventBrokerOptions.EventBrokerType == events.KafkaEventBrokerType {
+				kafkaProducer, err := events.NewKafkaProducer(eventBrokerOptions.BrokerURLs)
+				if err != nil {
+					log.Ctx(ctx).Fatalf("error creating Kafka Producer: %v", err)
+				}
+				defer kafkaProducer.Close()
+				submitterOpts.EventProducer = kafkaProducer
+			} else {
+				log.Ctx(ctx).Warn("Event Broker Type is NONE.")
 			}
-			defer kafkaProducer.Close()
-			submitterOpts.EventProducer = kafkaProducer
 
 			// Starting Metrics Server (background job)
 			go submitterService.StartMetricsServe(ctx, metricsServeOpts, &serve.HTTPServer{}, submitterOpts.CrashTrackerClient)

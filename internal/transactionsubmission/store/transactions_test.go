@@ -768,7 +768,7 @@ func Test_TransactionModel_GetTransactionBatchForUpdate(t *testing.T) {
 	DeleteAllTransactionFixtures(t, ctx, dbConnectionPool)
 }
 
-func Test_TransactionModel_GetTransactionForUpdateByID(t *testing.T) {
+func Test_TransactionModel_GetTransactionPendingUpdateByID(t *testing.T) {
 	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
@@ -833,9 +833,10 @@ func Test_TransactionModel_GetTransactionForUpdateByID(t *testing.T) {
 					Amount:             1.2,
 					TenantID:           uuid.NewString(),
 				})
+				defer DeleteAllTransactionFixtures(t, ctx, dbConnectionPool)
 			}
 
-			foundTransaction, err := txModel.GetTransactionForUpdateByID(ctx, dbTx, tx.ID)
+			foundTransaction, err := txModel.GetTransactionPendingUpdateByID(ctx, dbTx, tx.ID)
 			if tc.wantErr == nil {
 				require.NoError(t, err)
 				assert.Equal(t, tx, *foundTransaction)
@@ -845,8 +846,6 @@ func Test_TransactionModel_GetTransactionForUpdateByID(t *testing.T) {
 			}
 		})
 	}
-
-	DeleteAllTransactionFixtures(t, ctx, dbConnectionPool)
 }
 
 func Test_TransactionModel_UpdateSyncedTransactions(t *testing.T) {
