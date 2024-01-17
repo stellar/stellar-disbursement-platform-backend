@@ -253,11 +253,11 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			Required:    false,
 		},
 		{
-			Name:        "enable-recaptcha",
-			Usage:       "Enable ReCAPTCHA for login and forgot password.",
+			Name:        "disable-recaptcha",
+			Usage:       "Disables ReCAPTCHA for login and forgot password.",
 			OptType:     types.Bool,
-			ConfigKey:   &serveOpts.EnableReCAPTCHA,
-			FlagDefault: true,
+			ConfigKey:   &serveOpts.DisableReCAPTCHA,
+			FlagDefault: false,
 			Required:    false,
 		},
 		{

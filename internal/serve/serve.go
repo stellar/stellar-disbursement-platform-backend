@@ -82,7 +82,7 @@ type ServeOptions struct {
 	ReCAPTCHASiteKey                string
 	ReCAPTCHASiteSecretKey          string
 	DisableMFA                      bool
-	EnableReCAPTCHA                 bool
+	DisableReCAPTCHA                bool
 	PasswordValidator               *authUtils.PasswordValidator
 }
 
@@ -361,7 +361,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 		ReCAPTCHAValidator: reCAPTCHAValidator,
 		MessengerClient:    o.EmailMessengerClient,
 		Models:             o.Models,
-		ReCAPTCHAEnabled:   o.EnableReCAPTCHA,
+		ReCAPTCHAEnabled:   !o.DisableReCAPTCHA,
 		MFAEnabled:         !o.DisableMFA,
 	}.ServeHTTP)
 	mux.Post("/mfa", httphandler.MFAHandler{
@@ -375,7 +375,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 		UIBaseURL:          o.UIBaseURL,
 		Models:             o.Models,
 		ReCAPTCHAValidator: reCAPTCHAValidator,
-		ReCAPTCHAEnabled:   o.EnableReCAPTCHA,
+		ReCAPTCHAEnabled:   !o.DisableReCAPTCHA,
 	}.ServeHTTP)
 	mux.Post("/reset-password", httphandler.ResetPasswordHandler{AuthManager: authManager, PasswordValidator: o.PasswordValidator}.ServeHTTP)
 

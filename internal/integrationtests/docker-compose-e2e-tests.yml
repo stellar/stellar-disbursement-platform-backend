@@ -39,7 +39,7 @@ services:
       RECAPTCHA_SITE_KEY: 6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI
       CORS_ALLOWED_ORIGINS: "*"
       DISABLE_MFA: "true"
-      ENABLE_RECAPTCHA: "false"
+      DISABLE_RECAPTCHA: "true"
 
       # integration tests vars
       USER_EMAIL: ${USER_EMAIL}
