@@ -219,7 +219,7 @@ func (a *AssetModel) GetAssetsPerReceiverWallet(ctx context.Context, receiverWal
 			SELECT
 				p.id AS payment_id,
 				d.wallet_id,
-				d.sms_registration_message_template,
+				COALESCE(d.sms_registration_message_template, '') as sms_registration_message_template,
 				p.asset_id
 			FROM
 				payments p
