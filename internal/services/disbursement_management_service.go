@@ -20,6 +20,18 @@ type DisbursementManagementService struct {
 	authManager      auth.AuthManager
 }
 
+type UserReference struct {
+	Id        string `json:"id"`
+	FirstName string `json:"first_name"`
+	LastName  string `json:"last_name"`
+}
+
+type DisbursementResponseBody struct {
+	Disbursement data.Disbursement `json:"disbursement"`
+	CreatedBy    UserReference     `json:"created_by"`
+	StartedBy    UserReference     `json:"started_by"`
+}
+
 var (
 	ErrDisbursementNotFound        = errors.New("disbursement not found")
 	ErrDisbursementNotReadyToStart = errors.New("disbursement is not ready to be started")
@@ -39,6 +51,31 @@ func NewDisbursementManagementService(models *data.Models, dbConnectionPool db.D
 	}
 }
 
+func (s *DisbursementManagementService) AddUserMetadata(ctx context.Context, statusHistory data.DisbursementStatusHistory, resp *DisbursementResponseBody) error {
+	for _, v := range resp.Disbursement.StatusHistory {
+		if v.Status == data.DraftDisbursementStatus || v.Status == data.StartedDisbursementStatus {
+			user, err := s.authManager.GetUserByID(ctx, v.UserID)
+			if err != nil {
+				return fmt.Errorf("error getting user ID %s", v.UserID)
+			}
+
+			userRef := UserReference{
+				FirstName: user.FirstName,
+				LastName:  user.LastName,
+				Id:        v.UserID,
+			}
+			if v.Status == data.DraftDisbursementStatus {
+				resp.CreatedBy = userRef
+			} else if v.Status == data.StartedDisbursementStatus {
+				resp.StartedBy = userRef
+				break
+			}
+		}
+	}
+
+	return nil
+}
+
 func (s *DisbursementManagementService) GetDisbursementsWithCount(ctx context.Context, queryParams *data.QueryParams) (*utils.ResultWithTotal, error) {
 	return db.RunInTransactionWithResult(ctx,
 		s.dbConnectionPool,
@@ -55,6 +92,17 @@ func (s *DisbursementManagementService) GetDisbursementsWithCount(ctx context.Co
 				if err != nil {
 					return nil, fmt.Errorf("error retrieving disbursements: %w", err)
 				}
+
+				resp := make([]*DisbursementResponseBody, totalDisbursements)
+				for i, disbursement := range disbursements {
+					err = s.AddUserMetadata(ctx, disbursement.StatusHistory, resp[i])
+					if err != nil {
+						return nil, fmt.Errorf("error adding user metadata: %w", err)
+					}
+					resp[i].Disbursement = *disbursement
+				}
+
+				return utils.NewResultWithTotal(totalDisbursements, resp), nil
 			}
 
 			return utils.NewResultWithTotal(totalDisbursements, disbursements), nil

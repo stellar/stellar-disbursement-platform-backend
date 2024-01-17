@@ -24,6 +24,7 @@ type AuthManager interface {
 	ResetPassword(ctx context.Context, tokenString, password string) error
 	UpdatePassword(ctx context.Context, token, currentPassword, newPassword string) error
 	GetUser(ctx context.Context, tokenString string) (*User, error)
+	GetUserByID(ctx context.Context, userID string) (*User, error)
 	GetUserID(ctx context.Context, tokenString string) (string, error)
 	GetAllUsers(ctx context.Context, tokenString string) ([]User, error)
 	UpdateUserRoles(ctx context.Context, tokenString, userID string, roles []string) error
@@ -314,6 +315,15 @@ func (am *defaultAuthManager) getUserFromToken(ctx context.Context, tokenString 
 	user, err := am.jwtManager.GetUserFromToken(ctx, tokenString)
 	if err != nil {
 		return nil, fmt.Errorf("getting user from token: %w", err)
+	}
+
+	return user, nil
+}
+
+func (am *defaultAuthManager) GetUserByID(ctx context.Context, userID string) (*User, error) {
+	user, err := am.authenticator.GetUser(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("getting user with ID %s: %w", userID, err)
 	}
 
 	return user, nil

@@ -250,8 +250,13 @@ func (am *AuthManagerMock) GetUser(ctx context.Context, tokenString string) (*Us
 	return args.Get(0).(*User), args.Error(1)
 }
 
-func (am *AuthManagerMock) GetUserID(ctx context.Context, tokenString string) (string, error) {
+func (am *AuthManagerMock) GetUserByID(ctx context.Context, tokenString string) (*User, error) {
 	args := am.Called(ctx, tokenString)
+	return args.Get(0).(*User), args.Error(1)
+}
+
+func (am *AuthManagerMock) GetUserID(ctx context.Context, userID string) (string, error) {
+	args := am.Called(ctx, userID)
 	return args.Get(0).(string), args.Error(1)
 }
 

@@ -836,18 +836,46 @@ func Test_DisbursementHandler_GetDisbursement(t *testing.T) {
 	r := chi.NewRouter()
 	r.Get("/disbursements/{id}", handler.GetDisbursement)
 
+	ctx := context.Background()
+	createdByUser := auth.CreateRandomAuthUserFixture(t, ctx, dbConnectionPool, &auth.PasswordEncrypterMock{}, false)
+	startedByUser := auth.CreateRandomAuthUserFixture(t, ctx, dbConnectionPool, &auth.PasswordEncrypterMock{}, false)
+
 	// create disbursements
 	disbursement := data.CreateDisbursementFixture(t, context.Background(), dbConnectionPool, handler.Models.Disbursements, &data.Disbursement{
-		Name:      "disbursement 1",
-		Status:    data.DraftDisbursementStatus,
+		Name:   "disbursement 1",
+		Status: data.DraftDisbursementStatus,
+		StatusHistory: data.DisbursementStatusHistory{
+			data.DisbursementStatusHistoryEntry{
+				Status: data.DraftDisbursementStatus,
+				UserID: createdByUser.ID,
+			},
+			data.DisbursementStatusHistoryEntry{
+				Status: data.StartedDisbursementStatus,
+				UserID: startedByUser.ID,
+			},
+		},
 		CreatedAt: time.Date(2022, 3, 21, 23, 40, 20, 1431, time.UTC),
 	})
+
+	response := services.DisbursementResponseBody{
+		Disbursement: *disbursement,
+		CreatedBy: services.UserReference{
+			Id:        createdByUser.ID,
+			FirstName: createdByUser.FirstName,
+			LastName:  createdByUser.LastName,
+		},
+		StartedBy: services.UserReference{
+			Id:        startedByUser.ID,
+			FirstName: startedByUser.FirstName,
+			LastName:  startedByUser.LastName,
+		},
+	}
 
 	tests := []struct {
 		name                 string
 		id                   string
 		expectedStatusCode   int
-		expectedDisbursement data.Disbursement
+		expectedDisbursement services.DisbursementResponseBody
 		expectedErrorMessage string
 	}{
 		{
@@ -860,7 +888,7 @@ func Test_DisbursementHandler_GetDisbursement(t *testing.T) {
 			name:                 "success",
 			id:                   disbursement.ID,
 			expectedStatusCode:   http.StatusOK,
-			expectedDisbursement: *disbursement,
+			expectedDisbursement: response,
 		},
 	}
 	for _, tc := range tests {

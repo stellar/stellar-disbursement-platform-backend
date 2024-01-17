@@ -177,14 +177,16 @@ func (d DisbursementHandler) GetDisbursements(w http.ResponseWriter, r *http.Req
 	}
 	if resultWithTotal.Total == 0 {
 		httpjson.RenderStatus(w, http.StatusOK, httpresponse.NewEmptyPaginatedResponse(), httpjson.JSON)
-	} else {
-		response, errGet := httpresponse.NewPaginatedResponse(r, resultWithTotal.Result, queryParams.Page, queryParams.PageLimit, resultWithTotal.Total)
-		if errGet != nil {
-			httperror.InternalError(ctx, "Cannot write paginated response for disbursements", errGet, nil).Render(w)
-			return
-		}
-		httpjson.RenderStatus(w, http.StatusOK, response, httpjson.JSON)
+		return
 	}
+
+	response, errGet := httpresponse.NewPaginatedResponse(r, resultWithTotal.Result, queryParams.Page, queryParams.PageLimit, resultWithTotal.Total)
+	if errGet != nil {
+		httperror.InternalError(ctx, "Cannot write paginated response for disbursements", errGet, nil).Render(w)
+		return
+	}
+
+	httpjson.RenderStatus(w, http.StatusOK, response, httpjson.JSON)
 }
 
 func (d DisbursementHandler) PostDisbursementInstructions(w http.ResponseWriter, r *http.Request) {
@@ -276,7 +278,17 @@ func (d DisbursementHandler) GetDisbursement(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	httpjson.Render(w, disbursement, httpjson.JSON)
+	response := &services.DisbursementResponseBody{
+		Disbursement: *disbursement,
+	}
+
+	disbursementManagementService := services.NewDisbursementManagementService(d.Models, d.DBConnectionPool, d.AuthManager)
+	err = disbursementManagementService.AddUserMetadata(ctx, disbursement.StatusHistory, response)
+	if err != nil {
+		httperror.NotFound("disbursement user metadata not found", err, nil).Render(w)
+	}
+
+	httpjson.Render(w, *response, httpjson.JSON)
 }
 
 func (d DisbursementHandler) GetDisbursementReceivers(w http.ResponseWriter, r *http.Request) {

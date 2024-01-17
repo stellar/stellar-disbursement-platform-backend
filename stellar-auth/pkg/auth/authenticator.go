@@ -354,7 +354,7 @@ func (a *defaultAuthenticator) ResetPassword(ctx context.Context, resetToken, pa
 
 func (a *defaultAuthenticator) UpdatePassword(ctx context.Context, user *User, currentPassword, newPassword string) error {
 	if currentPassword == "" || newPassword == "" {
-		return fmt.Errorf("provide currentPassword and newPassword values.")
+		return fmt.Errorf("provide currentPassword and newPassword values")
 	}
 
 	_, err := a.ValidateCredentials(ctx, user.Email, currentPassword)
