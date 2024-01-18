@@ -182,7 +182,7 @@ func (tw *TransactionWorker) handleFailedTransaction(ctx context.Context, txJob 
 				// Publishing a new event on the event producer
 				err = tw.produceSyncPaymentEvent(ctx, events.SyncErrorPaymentFromSubmitterType, &txJob.Transaction, store.TransactionStatusError)
 				if err != nil {
-					return fmt.Errorf("producing event Status %s: %w - Job %v", txJob.Transaction.Status, err, txJob)
+					return fmt.Errorf("producing event Status %s - Job %v: %w", txJob.Transaction.Status, txJob, err)
 				}
 
 				txJob.Transaction = *updatedTx
@@ -278,7 +278,7 @@ func (tw *TransactionWorker) handleSuccessfulTransaction(ctx context.Context, tx
 	// Publishing a new event on the event producer
 	err = tw.produceSyncPaymentEvent(ctx, events.SyncSuccessPaymentFromSubmitterType, &txJob.Transaction, store.TransactionStatusSuccess)
 	if err != nil {
-		return fmt.Errorf("producing event Status %s: %w - Job %v", txJob.Transaction.Status, err, txJob)
+		return fmt.Errorf("producing event Status %s - Job %v: %w", txJob.Transaction.Status, txJob, err)
 	}
 
 	err = tw.unlockJob(ctx, txJob)

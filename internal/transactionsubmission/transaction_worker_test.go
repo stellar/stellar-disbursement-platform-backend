@@ -369,14 +369,14 @@ func Test_TransactionWorker_handleSuccessfulTransaction(t *testing.T) {
 
 		// Run test:
 		expectedError := fmt.Sprintf(
-			"producing event Status %s: writing message Message{Topic: %s, Key: %s, Type: %s, TenantID: %s, Data: {%s}} on event producer: something went wrong - Job %v",
+			"producing event Status %s - Job %v: writing message Message{Topic: %s, Key: %s, Type: %s, TenantID: %s, Data: {%s}} on event producer: something went wrong",
 			store.TransactionStatusSuccess,
+			txJob,
 			events.PaymentFromSubmitterTopic,
 			txJob.Transaction.ExternalID,
 			events.SyncSuccessPaymentFromSubmitterType,
 			txJob.Transaction.TenantID,
 			txJob.Transaction.ID,
-			txJob,
 		)
 		err := transactionWorker.handleSuccessfulTransaction(ctx, &txJob, horizon.Transaction{Successful: true})
 		assert.EqualError(t, err, expectedError)

@@ -96,11 +96,11 @@ func (s *ServerService) SetupConsumers(ctx context.Context, eventBrokerOptions c
 
 	tssDNS, err := router.GetDNSForTSS(globalOptions.DatabaseURL)
 	if err != nil {
-		return nil, fmt.Errorf("getting TSS database DNS: %s", err.Error())
+		return nil, fmt.Errorf("getting TSS database DNS: %w", err)
 	}
 	tssDBConnectionPool, err := db.OpenDBConnectionPool(tssDNS)
 	if err != nil {
-		return nil, fmt.Errorf("getting TSS DB connection: %s", err.Error())
+		return nil, fmt.Errorf("getting TSS DB connection: %w", err)
 	}
 	defer func() {
 		if err != nil && tssDBConnectionPool != nil {
@@ -122,7 +122,7 @@ func (s *ServerService) SetupConsumers(ctx context.Context, eventBrokerOptions c
 		}),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("creating SMS Invitation Kafka Consumer: %v", err)
+		return nil, fmt.Errorf("creating SMS Invitation Kafka Consumer: %w", err)
 	}
 
 	paymentFromSubmitterConsumer, err := events.NewKafkaConsumer(
@@ -136,7 +136,7 @@ func (s *ServerService) SetupConsumers(ctx context.Context, eventBrokerOptions c
 		}),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("creating Payment From Submitter Kafka Consumer: %v", err)
+		return nil, fmt.Errorf("creating Payment From Submitter Kafka Consumer: %w", err)
 	}
 
 	go events.Consume(ctx, smsInvitationConsumer, serveOpts.CrashTrackerClient.Clone())

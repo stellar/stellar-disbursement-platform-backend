@@ -246,7 +246,7 @@ func Test_PaymentFromSubmitterService_SyncTransaction(t *testing.T) {
 		assert.NotEmpty(t, tx.CompletedAt)
 
 		err = monitorService.SyncTransaction(ctx, &schemas.EventPaymentFromSubmitterData{TransactionID: tx.ID})
-		assert.ErrorContains(t, err, fmt.Sprintf("no payment found for transaction ID %s", tx.ID))
+		assert.ErrorContains(t, err, fmt.Sprintf("expected exactly 1 payment for the transaction ID %s but found 0", tx.ID))
 	})
 }
 

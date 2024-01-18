@@ -69,7 +69,7 @@ func (s PaymentFromSubmitterService) syncTransaction(ctx context.Context, dbTx d
 	}
 
 	// 3. Update payments based on the transaction status
-	err = s.syncPaymentsWithTransaction(ctx, dbTx, transaction)
+	err = s.syncPaymentWithTransaction(ctx, dbTx, transaction)
 	if err != nil {
 		return fmt.Errorf("synching payments for transaction ID %s: %w", transaction.ID, err)
 	}
@@ -84,15 +84,15 @@ func (s PaymentFromSubmitterService) syncTransaction(ctx context.Context, dbTx d
 	return nil
 }
 
-// syncPaymentsWithTransaction updates the status of the payments based on the status of the transactions.
-func (s PaymentFromSubmitterService) syncPaymentsWithTransaction(ctx context.Context, dbTx db.DBTransaction, transaction *txSubStore.Transaction) error {
+// syncPaymentWithTransaction updates the status of the payments based on the status of the transactions.
+func (s PaymentFromSubmitterService) syncPaymentWithTransaction(ctx context.Context, dbTx db.DBTransaction, transaction *txSubStore.Transaction) error {
 	payments, err := s.sdpModels.Payment.GetByIDs(ctx, dbTx, []string{transaction.ExternalID})
 	if err != nil {
 		return fmt.Errorf("getting payments by IDs: %w", err)
 	}
 
 	if len(payments) != 1 {
-		return fmt.Errorf("no payment found for transaction ID %s", transaction.ID)
+		return fmt.Errorf("expected exactly 1 payment for the transaction ID %s but found %d", transaction.ID, len(payments))
 	}
 	payment := payments[0]
 
