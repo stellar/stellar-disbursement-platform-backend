@@ -81,8 +81,8 @@ type ServeOptions struct {
 	DistributionSeed                string
 	ReCAPTCHASiteKey                string
 	ReCAPTCHASiteSecretKey          string
-	EnableMFA                       bool
-	EnableReCAPTCHA                 bool
+	DisableMFA                      bool
+	DisableReCAPTCHA                bool
 	PasswordValidator               *authUtils.PasswordValidator
 }
 
@@ -150,10 +150,33 @@ func (opts *ServeOptions) SetupDependencies() error {
 	return nil
 }
 
+// ValidateSecurity validates the MFA and ReCAPTCHA security options.
+func (opts *ServeOptions) ValidateSecurity() error {
+	if opts.NetworkPassphrase == network.PublicNetworkPassphrase {
+		if opts.DisableMFA {
+			return fmt.Errorf("MFA cannot be disabled in pubnet")
+		} else if opts.DisableReCAPTCHA {
+			return fmt.Errorf("reCAPTCHA cannot be disabled in pubnet")
+		}
+	}
+
+	if opts.DisableMFA {
+		log.Warnf("MFA is disabled in network '%s'", opts.NetworkPassphrase)
+	}
+	if opts.DisableReCAPTCHA {
+		log.Warnf("reCAPTCHA is disabled in network '%s'", opts.NetworkPassphrase)
+	}
+
+	return nil
+}
+
 func Serve(opts ServeOptions, httpServer HTTPServerInterface) error {
-	err := opts.SetupDependencies()
-	if err != nil {
-		return fmt.Errorf("error starting dependencies: %w", err)
+	if err := opts.ValidateSecurity(); err != nil {
+		return fmt.Errorf("validating security options: %w", err)
+	}
+
+	if err := opts.SetupDependencies(); err != nil {
+		return fmt.Errorf("starting dependencies: %w", err)
 	}
 
 	// Start the server
@@ -361,8 +384,8 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 		ReCAPTCHAValidator: reCAPTCHAValidator,
 		MessengerClient:    o.EmailMessengerClient,
 		Models:             o.Models,
-		ReCAPTCHAEnabled:   o.EnableReCAPTCHA,
-		MFAEnabled:         o.EnableMFA,
+		ReCAPTCHADisabled:  o.DisableReCAPTCHA,
+		MFADisabled:        o.DisableMFA,
 	}.ServeHTTP)
 	mux.Post("/mfa", httphandler.MFAHandler{
 		AuthManager:        authManager,
@@ -375,7 +398,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 		UIBaseURL:          o.UIBaseURL,
 		Models:             o.Models,
 		ReCAPTCHAValidator: reCAPTCHAValidator,
-		ReCAPTCHAEnabled:   o.EnableReCAPTCHA,
+		ReCAPTCHADisabled:  o.DisableReCAPTCHA,
 	}.ServeHTTP)
 	mux.Post("/reset-password", httphandler.ResetPasswordHandler{AuthManager: authManager, PasswordValidator: o.PasswordValidator}.ServeHTTP)
 

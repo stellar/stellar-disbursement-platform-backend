@@ -67,7 +67,8 @@ func Test_LoginHandler(t *testing.T) {
 	handler := &LoginHandler{
 		AuthManager:        authManager,
 		ReCAPTCHAValidator: reCAPTCHAValidator,
-		ReCAPTCHAEnabled:   true,
+		ReCAPTCHADisabled:  false,
+		MFADisabled:        true,
 	}
 
 	const url = "/login"
@@ -409,11 +410,11 @@ func Test_LoginHandlerr_ServeHTTP_MFA(t *testing.T) {
 	)
 	messengerClientMock := &message.MessengerClientMock{}
 	loginHandler := &LoginHandler{
-		AuthManager:      authManager,
-		ReCAPTCHAEnabled: false,
-		MFAEnabled:       true,
-		Models:           models,
-		MessengerClient:  messengerClientMock,
+		AuthManager:       authManager,
+		ReCAPTCHADisabled: true,
+		MFADisabled:       false,
+		Models:            models,
+		MessengerClient:   messengerClientMock,
 	}
 
 	user := &auth.User{

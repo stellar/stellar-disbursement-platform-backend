@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"sync"
 	"testing"
 
@@ -109,8 +110,8 @@ func Test_serve(t *testing.T) {
 		DistributionSeed:                "SBHQEYSACD5DOK5I656NKLAMOHC6VT64ATOWWM2VJ3URGDGMVGNPG4ON",
 		ReCAPTCHASiteKey:                "reCAPTCHASiteKey",
 		ReCAPTCHASiteSecretKey:          "reCAPTCHASiteSecretKey",
-		EnableMFA:                       true,
-		EnableReCAPTCHA:                 true,
+		DisableMFA:                      false,
+		DisableReCAPTCHA:                false,
 	}
 	var err error
 	serveOpts.AnchorPlatformAPIService, err = anchorplatform.NewAnchorPlatformAPIService(httpclient.DefaultClient(), serveOpts.AnchorPlatformBasePlatformURL, serveOpts.AnchorPlatformOutgoingJWTSecret)
@@ -186,6 +187,8 @@ func Test_serve(t *testing.T) {
 	t.Setenv("ANCHOR_PLATFORM_OUTGOING_JWT_SECRET", serveOpts.AnchorPlatformOutgoingJWTSecret)
 	t.Setenv("DISTRIBUTION_PUBLIC_KEY", serveOpts.DistributionPublicKey)
 	t.Setenv("DISTRIBUTION_SEED", serveOpts.DistributionSeed)
+	t.Setenv("DISABLE_MFA", fmt.Sprintf("%t", serveOpts.DisableMFA))
+	t.Setenv("DISABLE_RECAPTCHA", fmt.Sprintf("%t", serveOpts.DisableMFA))
 	t.Setenv("BASE_URL", serveOpts.BaseURL)
 	t.Setenv("RECAPTCHA_SITE_KEY", serveOpts.ReCAPTCHASiteKey)
 	t.Setenv("RECAPTCHA_SITE_SECRET_KEY", serveOpts.ReCAPTCHASiteSecretKey)

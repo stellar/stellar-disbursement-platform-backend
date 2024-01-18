@@ -49,7 +49,7 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 		Models:             models,
 		UIBaseURL:          uiBaseURL,
 		ReCAPTCHAValidator: reCAPTCHAValidatorMock,
-		ReCAPTCHAEnabled:   true,
+		ReCAPTCHADisabled:  false,
 	}
 
 	t.Run("Should return http status 200 on a valid request", func(t *testing.T) {
@@ -124,7 +124,7 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 			Models:             models,
 			UIBaseURL:          "%invalid%",
 			ReCAPTCHAValidator: reCAPTCHAValidatorMock,
-			ReCAPTCHAEnabled:   true,
+			ReCAPTCHADisabled:  false,
 		}.ServeHTTP).ServeHTTP(rr, req)
 
 		resp := rr.Result()

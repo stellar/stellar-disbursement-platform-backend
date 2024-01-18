@@ -39,8 +39,8 @@ services:
       DISTRIBUTION_SEED: ${DISTRIBUTION_SEED}
       RECAPTCHA_SITE_KEY: 6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI
       CORS_ALLOWED_ORIGINS: http://localhost:3000
-      ENABLE_MFA: "false"
-      ENABLE_RECAPTCHA: "false"
+      DISABLE_MFA: "true"
+      DISABLE_RECAPTCHA: "true"
 
       # secrets:
       AWS_ACCESS_KEY_ID: MY_AWS_ACCESS_KEY_ID
