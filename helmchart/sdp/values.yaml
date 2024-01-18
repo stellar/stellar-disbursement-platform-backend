@@ -426,7 +426,7 @@ tss:
       DATABASE_URL: #required
       DISTRIBUTION_SEED: #required
       SENTRY_DSN: #optional
-      
+
 
 
 # =========================== START dashboard ===========================
@@ -492,9 +492,9 @@ dashboard:
     className: "nginx"
     annotations: {}
     tls:
-    - hosts:
-      - '{{ include "dashboard.domain" . }}'
-      secretName: dashboard-tls-cert-name    # You need to create this secret manually. For more instructions, please refer to helmchart/docs/README.md
+      - hosts:
+          - '{{ include "dashboard.domain" . }}'
+        secretName: dashboard-tls-cert-name    # You need to create this secret manually. For more instructions, please refer to helmchart/docs/README.md
 
 
 
