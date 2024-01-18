@@ -29,7 +29,7 @@ type ForgotPasswordHandler struct {
 	UIBaseURL          string
 	Models             *data.Models
 	ReCAPTCHAValidator validators.ReCAPTCHAValidator
-	ReCAPTCHAEnabled   bool
+	ReCAPTCHADisabled  bool
 }
 
 type ForgotPasswordRequest struct {
@@ -53,7 +53,7 @@ func (h ForgotPasswordHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 
 	ctx := r.Context()
 
-	if h.ReCAPTCHAEnabled {
+	if !h.ReCAPTCHADisabled {
 		// validating reCAPTCHA Token
 		isValid, recaptchaErr := h.ReCAPTCHAValidator.IsTokenValid(ctx, forgotPasswordRequest.ReCAPTCHAToken)
 		if recaptchaErr != nil {

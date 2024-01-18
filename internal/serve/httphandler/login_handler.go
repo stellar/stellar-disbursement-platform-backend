@@ -49,8 +49,8 @@ type LoginHandler struct {
 	ReCAPTCHAValidator validators.ReCAPTCHAValidator
 	MessengerClient    message.MessengerClient
 	Models             *data.Models
-	ReCAPTCHAEnabled   bool
-	MFAEnabled         bool
+	ReCAPTCHADisabled  bool
+	MFADisabled        bool
 }
 
 func (h LoginHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
@@ -69,7 +69,7 @@ func (h LoginHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	if h.ReCAPTCHAEnabled {
+	if !h.ReCAPTCHADisabled {
 		// validating reCAPTCHA Token
 		isValid, err := h.ReCAPTCHAValidator.IsTokenValid(ctx, reqBody.ReCAPTCHAToken)
 		if err != nil {
@@ -102,7 +102,7 @@ func (h LoginHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	if !h.MFAEnabled {
+	if h.MFADisabled {
 		log.Ctx(ctx).Infof("[UserLogin] - Logged in user with account ID %s", user.ID)
 		httpjson.RenderStatus(rw, http.StatusOK, LoginResponse{Token: token}, httpjson.JSON)
 		return

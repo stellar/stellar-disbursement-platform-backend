@@ -384,8 +384,8 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 		ReCAPTCHAValidator: reCAPTCHAValidator,
 		MessengerClient:    o.EmailMessengerClient,
 		Models:             o.Models,
-		ReCAPTCHAEnabled:   !o.DisableReCAPTCHA,
-		MFAEnabled:         !o.DisableMFA,
+		ReCAPTCHADisabled:  o.DisableReCAPTCHA,
+		MFADisabled:        o.DisableMFA,
 	}.ServeHTTP)
 	mux.Post("/mfa", httphandler.MFAHandler{
 		AuthManager:        authManager,
@@ -398,7 +398,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 		UIBaseURL:          o.UIBaseURL,
 		Models:             o.Models,
 		ReCAPTCHAValidator: reCAPTCHAValidator,
-		ReCAPTCHAEnabled:   !o.DisableReCAPTCHA,
+		ReCAPTCHADisabled:  o.DisableReCAPTCHA,
 	}.ServeHTTP)
 	mux.Post("/reset-password", httphandler.ResetPasswordHandler{AuthManager: authManager, PasswordValidator: o.PasswordValidator}.ServeHTTP)
 
