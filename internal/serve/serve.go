@@ -150,10 +150,33 @@ func (opts *ServeOptions) SetupDependencies() error {
 	return nil
 }
 
+// ValidateSecurity validates the MFA and ReCAPTCHA security options.
+func (opts *ServeOptions) ValidateSecurity() error {
+	if opts.NetworkPassphrase == network.PublicNetworkPassphrase {
+		if opts.DisableMFA {
+			return fmt.Errorf("MFA cannot be disabled in pubnet")
+		} else if opts.DisableReCAPTCHA {
+			return fmt.Errorf("reCAPTCHA cannot be disabled in pubnet")
+		}
+	}
+
+	if opts.DisableMFA {
+		log.Warnf("MFA is disabled in network '%s'", opts.NetworkPassphrase)
+	}
+	if opts.DisableReCAPTCHA {
+		log.Warnf("reCAPTCHA is disabled in network '%s'", opts.NetworkPassphrase)
+	}
+
+	return nil
+}
+
 func Serve(opts ServeOptions, httpServer HTTPServerInterface) error {
-	err := opts.SetupDependencies()
-	if err != nil {
-		return fmt.Errorf("error starting dependencies: %w", err)
+	if err := opts.ValidateSecurity(); err != nil {
+		return fmt.Errorf("validating security options: %w", err)
+	}
+
+	if err := opts.SetupDependencies(); err != nil {
+		return fmt.Errorf("starting dependencies: %w", err)
 	}
 
 	// Start the server
