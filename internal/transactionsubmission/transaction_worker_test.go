@@ -1490,5 +1490,4 @@ func Test_TransactionWorker_producePatchAnchorPlatformTransactionEvent(t *testin
 	})
 
 	mockEventProducer.AssertExpectations(t)
-
 }
