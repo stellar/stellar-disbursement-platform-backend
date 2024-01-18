@@ -28,7 +28,7 @@ func Test_DisbursementManagementService_GetDisbursementsWithCount(t *testing.T) 
 
 	ctx := context.Background()
 	t.Run("disbursements list empty", func(t *testing.T) {
-		resultWithTotal, err := service.GetDisbursementsWithCount(ctx, &data.QueryParams{})
+		resultWithTotal, err := service.GetDisbursementsWithCount(ctx, &data.QueryParams{}, false)
 		require.NoError(t, err)
 		require.Equal(t, 0, resultWithTotal.Total)
 		result, ok := resultWithTotal.Result.([]*data.Disbursement)
@@ -41,7 +41,7 @@ func Test_DisbursementManagementService_GetDisbursementsWithCount(t *testing.T) 
 		d1 := data.CreateDisbursementFixture(t, context.Background(), dbConnectionPool, models.Disbursements, &data.Disbursement{Name: "d1"})
 		d2 := data.CreateDisbursementFixture(t, context.Background(), dbConnectionPool, models.Disbursements, &data.Disbursement{Name: "d2"})
 
-		resultWithTotal, err := service.GetDisbursementsWithCount(ctx, &data.QueryParams{SortOrder: "asc", SortBy: "name"})
+		resultWithTotal, err := service.GetDisbursementsWithCount(ctx, &data.QueryParams{SortOrder: "asc", SortBy: "name"}, false)
 		require.NoError(t, err)
 		require.Equal(t, 2, resultWithTotal.Total)
 		result, ok := resultWithTotal.Result.([]*data.Disbursement)

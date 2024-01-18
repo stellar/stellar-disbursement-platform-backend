@@ -26,7 +26,7 @@ type UserReference struct {
 	LastName  string `json:"last_name"`
 }
 
-type DisbursementResponseBody struct {
+type DisbursementWithUserMetadata struct {
 	Disbursement data.Disbursement `json:"disbursement"`
 	CreatedBy    UserReference     `json:"created_by"`
 	StartedBy    UserReference     `json:"started_by"`
@@ -51,23 +51,27 @@ func NewDisbursementManagementService(models *data.Models, dbConnectionPool db.D
 	}
 }
 
-func (s *DisbursementManagementService) AddUserMetadata(ctx context.Context, statusHistory data.DisbursementStatusHistory, resp *DisbursementResponseBody) error {
-	for _, v := range resp.Disbursement.StatusHistory {
-		if v.Status == data.DraftDisbursementStatus || v.Status == data.StartedDisbursementStatus {
-			user, err := s.authManager.GetUserByID(ctx, v.UserID)
+// AddUserMetadata populates a reference to DisbursementWithUserMetadata instance with basic user information about the disbursement.
+func (s *DisbursementManagementService) AddUserMetadata(ctx context.Context, statusHistory data.DisbursementStatusHistory, d *DisbursementWithUserMetadata) error {
+	for _, entry := range d.Disbursement.StatusHistory {
+		if entry.Status == data.DraftDisbursementStatus || entry.Status == data.StartedDisbursementStatus {
+			user, err := s.authManager.GetUserByID(ctx, entry.UserID)
 			if err != nil {
-				return fmt.Errorf("error getting user ID %s", v.UserID)
+				return fmt.Errorf("error getting user ID %s", entry.UserID)
 			}
 
 			userRef := UserReference{
 				FirstName: user.FirstName,
 				LastName:  user.LastName,
-				Id:        v.UserID,
+				Id:        entry.UserID,
 			}
-			if v.Status == data.DraftDisbursementStatus {
-				resp.CreatedBy = userRef
-			} else if v.Status == data.StartedDisbursementStatus {
-				resp.StartedBy = userRef
+			if entry.Status == data.DraftDisbursementStatus {
+				d.CreatedBy = userRef
+			} else if entry.Status == data.StartedDisbursementStatus {
+				d.StartedBy = userRef
+				// Disbursements could have multiple "started" entries in its status history log from being paused and resumed, etc.
+				// The earliest entry will refer to the user who initiated the disbursement, and we will not care about any subsequent
+				// entries.
 				break
 			}
 		}
@@ -76,7 +80,7 @@ func (s *DisbursementManagementService) AddUserMetadata(ctx context.Context, sta
 	return nil
 }
 
-func (s *DisbursementManagementService) GetDisbursementsWithCount(ctx context.Context, queryParams *data.QueryParams) (*utils.ResultWithTotal, error) {
+func (s *DisbursementManagementService) GetDisbursementsWithCount(ctx context.Context, queryParams *data.QueryParams, addUserMetadata bool) (*utils.ResultWithTotal, error) {
 	return db.RunInTransactionWithResult(ctx,
 		s.dbConnectionPool,
 		&sql.TxOptions{Isolation: sql.LevelReadCommitted, ReadOnly: true},
@@ -93,16 +97,18 @@ func (s *DisbursementManagementService) GetDisbursementsWithCount(ctx context.Co
 					return nil, fmt.Errorf("error retrieving disbursements: %w", err)
 				}
 
-				resp := make([]*DisbursementResponseBody, totalDisbursements)
-				for i, disbursement := range disbursements {
-					err = s.AddUserMetadata(ctx, disbursement.StatusHistory, resp[i])
-					if err != nil {
-						return nil, fmt.Errorf("error adding user metadata: %w", err)
+				if addUserMetadata {
+					resp := make([]*DisbursementWithUserMetadata, totalDisbursements)
+					for i, disbursement := range disbursements {
+						err = s.AddUserMetadata(ctx, disbursement.StatusHistory, resp[i])
+						if err != nil {
+							return nil, fmt.Errorf("error adding user metadata: %w", err)
+						}
+						resp[i].Disbursement = *disbursement
 					}
-					resp[i].Disbursement = *disbursement
-				}
 
-				return utils.NewResultWithTotal(totalDisbursements, resp), nil
+					return utils.NewResultWithTotal(totalDisbursements, resp), nil
+				}
 			}
 
 			return utils.NewResultWithTotal(totalDisbursements, disbursements), nil

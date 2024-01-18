@@ -907,7 +907,7 @@ func Test_DefaultAuthenticator_UpdatePassword(t *testing.T) {
 			Once()
 		randUser := CreateRandomAuthUserFixture(t, ctx, dbConnectionPool, passwordEncrypterMock, false)
 		err := authenticator.UpdatePassword(ctx, randUser.ToUser(), "", "")
-		assert.EqualError(t, err, "provide currentPassword and newPassword values.")
+		assert.EqualError(t, err, "provide currentPassword and newPassword values")
 	})
 
 	t.Run("returns error when credentials are invalid", func(t *testing.T) {
