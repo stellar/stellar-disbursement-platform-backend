@@ -198,9 +198,10 @@ func (a *AssetModel) SoftDelete(ctx context.Context, sqlExec db.SQLExecuter, id 
 }
 
 type ReceiverWalletAsset struct {
-	WalletID       string         `db:"wallet_id"`
-	ReceiverWallet ReceiverWallet `db:"receiver_wallet"`
-	Asset          Asset          `db:"asset"`
+	WalletID                string         `db:"wallet_id"`
+	ReceiverWallet          ReceiverWallet `db:"receiver_wallet"`
+	Asset                   Asset          `db:"asset"`
+	DisbursementSMSTemplate *string        `json:"-" db:"sms_registration_message_template"`
 }
 
 // GetAssetsPerReceiverWallet returns the assets associated with a READY payment for each receiver
@@ -218,6 +219,7 @@ func (a *AssetModel) GetAssetsPerReceiverWallet(ctx context.Context, receiverWal
 			SELECT
 				p.id AS payment_id,
 				d.wallet_id,
+				COALESCE(d.sms_registration_message_template, '') as sms_registration_message_template,
 				p.asset_id
 			FROM
 				payments p
@@ -226,7 +228,7 @@ func (a *AssetModel) GetAssetsPerReceiverWallet(ctx context.Context, receiverWal
 			WHERE
 				p.status = $1
 			GROUP BY
-				p.id, p.asset_id, d.wallet_id
+				p.id, p.asset_id, d.wallet_id, d.sms_registration_message_template
 			ORDER BY
 				p.updated_at DESC
 		), messages_resent_since_invitation AS (
@@ -251,6 +253,7 @@ func (a *AssetModel) GetAssetsPerReceiverWallet(ctx context.Context, receiverWal
 		)
 		SELECT DISTINCT
 			lpw.wallet_id,
+			lpw.sms_registration_message_template,
 			rw.id AS "receiver_wallet.id",
 			rw.invitation_sent_at AS "receiver_wallet.invitation_sent_at",
 			COALESCE(mrsi.total_invitation_sms_resent_attempts, 0) AS "receiver_wallet.total_invitation_sms_resent_attempts",

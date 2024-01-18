@@ -115,7 +115,8 @@ func Test_PaymentsHandlerGet(t *testing.T) {
 				"name": "disbursement 1",
 				"status": "DRAFT",
 				"created_at": %q,
-				"updated_at": %q
+				"updated_at": %q,
+				"sms_registration_message_template":""
 			},
 			"asset": {
 				"id": %q,
