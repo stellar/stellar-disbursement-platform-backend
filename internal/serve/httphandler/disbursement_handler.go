@@ -33,11 +33,12 @@ type DisbursementHandler struct {
 }
 
 type PostDisbursementRequest struct {
-	Name              string                 `json:"name"`
-	CountryCode       string                 `json:"country_code"`
-	WalletID          string                 `json:"wallet_id"`
-	AssetID           string                 `json:"asset_id"`
-	VerificationField data.VerificationField `json:"verification_field"`
+	Name                           string                 `json:"name"`
+	CountryCode                    string                 `json:"country_code"`
+	WalletID                       string                 `json:"wallet_id"`
+	AssetID                        string                 `json:"asset_id"`
+	VerificationField              data.VerificationField `json:"verification_field"`
+	SMSRegistrationMessageTemplate string                 `json:"sms_registration_message_template"`
 }
 
 type PatchDisbursementStatusRequest struct {
@@ -113,10 +114,11 @@ func (d DisbursementHandler) PostDisbursement(w http.ResponseWriter, r *http.Req
 			Status:    data.DraftDisbursementStatus,
 			UserID:    user.ID,
 		}},
-		Wallet:            wallet,
-		Asset:             asset,
-		Country:           country,
-		VerificationField: verificationField,
+		Wallet:                         wallet,
+		Asset:                          asset,
+		Country:                        country,
+		VerificationField:              verificationField,
+		SMSRegistrationMessageTemplate: disbursementRequest.SMSRegistrationMessageTemplate,
 	}
 
 	newId, err := d.Models.Disbursements.Insert(ctx, &disbursement)
