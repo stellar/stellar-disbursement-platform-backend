@@ -504,7 +504,7 @@ func Test_Manager_ProcessTransactions(t *testing.T) {
 			defer mMonitorClient.AssertExpectations(t)
 
 			mockEventProducer := &events.MockProducer{}
-			mockEventProducer.On("WriteMessages", mock.Anything, mock.AnythingOfType("[]events.Message")).Return(nil).Once()
+			mockEventProducer.On("WriteMessages", mock.Anything, mock.AnythingOfType("[]events.Message")).Return(nil).Twice()
 			defer mockEventProducer.AssertExpectations(t)
 
 			manager := &Manager{

@@ -2,12 +2,14 @@ package transactionsubmission
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/stellar/go/clients/horizonclient"
@@ -24,6 +26,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
@@ -369,7 +372,7 @@ func Test_TransactionWorker_handleSuccessfulTransaction(t *testing.T) {
 
 		// Run test:
 		expectedError := fmt.Sprintf(
-			"producing event Status %s - Job %v: writing message Message{Topic: %s, Key: %s, Type: %s, TenantID: %s, Data: {%s}} on event producer: something went wrong",
+			"producing sync payment event Status %s - Job %v: writing message Message{Topic: %s, Key: %s, Type: %s, TenantID: %s, Data: {%s}} on event producer: something went wrong",
 			store.TransactionStatusSuccess,
 			txJob,
 			events.PaymentFromSubmitterTopic,
@@ -418,6 +421,29 @@ func Test_TransactionWorker_handleSuccessfulTransaction(t *testing.T) {
 						TransactionID: txJob.Transaction.ID,
 					},
 				},
+			}).
+			Return(nil).
+			Once().
+			On("WriteMessages", ctx, mock.AnythingOfType("[]events.Message")).
+			Run(func(args mock.Arguments) {
+				messages, ok := args.Get(1).([]events.Message)
+				require.True(t, ok)
+				require.Len(t, messages, 1)
+
+				msg := messages[0]
+
+				assert.Equal(t, events.PatchAnchorPlatformTransactionCompletionTopic, msg.Topic)
+				assert.Equal(t, txJob.Transaction.ExternalID, msg.Key)
+				assert.Equal(t, txJob.Transaction.TenantID, msg.TenantID)
+				assert.Equal(t, events.PatchSuccessAnchorPlatformTransactionCompletionType, msg.Type)
+
+				msgData, ok := msg.Data.(schemas.EventPatchAnchorPlatformTransactionCompletionData)
+				require.True(t, ok)
+				assert.Equal(t, txJob.Transaction.ExternalID, msgData.PaymentID)
+				assert.Equal(t, string(data.SuccessPaymentStatus), msgData.PaymentStatus)
+				assert.Empty(t, msgData.PaymentStatusMessage)
+				assert.WithinDuration(t, time.Now(), msgData.PaymentCompletedAt, time.Millisecond*100)
+				assert.Empty(t, msgData.StellarTransactionID)
 			}).
 			Return(nil).
 			Once()
@@ -474,6 +500,29 @@ func Test_TransactionWorker_handleSuccessfulTransaction(t *testing.T) {
 						TransactionID: txJob.Transaction.ID,
 					},
 				},
+			}).
+			Return(nil).
+			Once().
+			On("WriteMessages", ctx, mock.AnythingOfType("[]events.Message")).
+			Run(func(args mock.Arguments) {
+				messages, ok := args.Get(1).([]events.Message)
+				require.True(t, ok)
+				require.Len(t, messages, 1)
+
+				msg := messages[0]
+
+				assert.Equal(t, events.PatchAnchorPlatformTransactionCompletionTopic, msg.Topic)
+				assert.Equal(t, txJob.Transaction.ExternalID, msg.Key)
+				assert.Equal(t, txJob.Transaction.TenantID, msg.TenantID)
+				assert.Equal(t, events.PatchSuccessAnchorPlatformTransactionCompletionType, msg.Type)
+
+				msgData, ok := msg.Data.(schemas.EventPatchAnchorPlatformTransactionCompletionData)
+				require.True(t, ok)
+				assert.Equal(t, txJob.Transaction.ExternalID, msgData.PaymentID)
+				assert.Equal(t, string(data.SuccessPaymentStatus), msgData.PaymentStatus)
+				assert.Empty(t, msgData.PaymentStatusMessage)
+				assert.WithinDuration(t, time.Now(), msgData.PaymentCompletedAt, time.Millisecond*100)
+				assert.Empty(t, msgData.StellarTransactionID)
 			}).
 			Return(nil).
 			Once()
@@ -537,6 +586,29 @@ func Test_TransactionWorker_handleSuccessfulTransaction(t *testing.T) {
 						TransactionID: txJob.Transaction.ID,
 					},
 				},
+			}).
+			Return(nil).
+			Once().
+			On("WriteMessages", ctx, mock.AnythingOfType("[]events.Message")).
+			Run(func(args mock.Arguments) {
+				messages, ok := args.Get(1).([]events.Message)
+				require.True(t, ok)
+				require.Len(t, messages, 1)
+
+				msg := messages[0]
+
+				assert.Equal(t, events.PatchAnchorPlatformTransactionCompletionTopic, msg.Topic)
+				assert.Equal(t, txJob.Transaction.ExternalID, msg.Key)
+				assert.Equal(t, txJob.Transaction.TenantID, msg.TenantID)
+				assert.Equal(t, events.PatchSuccessAnchorPlatformTransactionCompletionType, msg.Type)
+
+				msgData, ok := msg.Data.(schemas.EventPatchAnchorPlatformTransactionCompletionData)
+				require.True(t, ok)
+				assert.Equal(t, txJob.Transaction.ExternalID, msgData.PaymentID)
+				assert.Equal(t, string(data.SuccessPaymentStatus), msgData.PaymentStatus)
+				assert.Empty(t, msgData.PaymentStatusMessage)
+				assert.WithinDuration(t, time.Now(), msgData.PaymentCompletedAt, time.Millisecond*100)
+				assert.Empty(t, msgData.StellarTransactionID)
 			}).
 			Return(nil).
 			Once()
@@ -680,6 +752,29 @@ func Test_TransactionWorker_reconcileSubmittedTransaction(t *testing.T) {
 								TransactionID: txJob.Transaction.ID,
 							},
 						},
+					}).
+					Return(nil).
+					Once().
+					On("WriteMessages", ctx, mock.AnythingOfType("[]events.Message")).
+					Run(func(args mock.Arguments) {
+						messages, ok := args.Get(1).([]events.Message)
+						require.True(t, ok)
+						require.Len(t, messages, 1)
+
+						msg := messages[0]
+
+						assert.Equal(t, events.PatchAnchorPlatformTransactionCompletionTopic, msg.Topic)
+						assert.Equal(t, txJob.Transaction.ExternalID, msg.Key)
+						assert.Equal(t, txJob.Transaction.TenantID, msg.TenantID)
+						assert.Equal(t, events.PatchSuccessAnchorPlatformTransactionCompletionType, msg.Type)
+
+						msgData, ok := msg.Data.(schemas.EventPatchAnchorPlatformTransactionCompletionData)
+						require.True(t, ok)
+						assert.Equal(t, txJob.Transaction.ExternalID, msgData.PaymentID)
+						assert.Equal(t, string(data.SuccessPaymentStatus), msgData.PaymentStatus)
+						assert.Empty(t, msgData.PaymentStatusMessage)
+						assert.WithinDuration(t, time.Now(), msgData.PaymentCompletedAt, time.Millisecond*100)
+						assert.Equal(t, txHash, msgData.StellarTransactionID)
 					}).
 					Return(nil).
 					Once()
@@ -1077,6 +1172,29 @@ func Test_TransactionWorker_submit(t *testing.T) {
 						},
 					}).
 					Return(nil).
+					Once().
+					On("WriteMessages", ctx, mock.AnythingOfType("[]events.Message")).
+					Run(func(args mock.Arguments) {
+						messages, ok := args.Get(1).([]events.Message)
+						require.True(t, ok)
+						require.Len(t, messages, 1)
+
+						msg := messages[0]
+
+						assert.Equal(t, events.PatchAnchorPlatformTransactionCompletionTopic, msg.Topic)
+						assert.Equal(t, txJob.Transaction.ExternalID, msg.Key)
+						assert.Equal(t, txJob.Transaction.TenantID, msg.TenantID)
+						assert.Equal(t, events.PatchFailedAnchorPlatformTransactionCompletionType, msg.Type)
+
+						msgData, ok := msg.Data.(schemas.EventPatchAnchorPlatformTransactionCompletionData)
+						require.True(t, ok)
+						assert.Equal(t, txJob.Transaction.ExternalID, msgData.PaymentID)
+						assert.Equal(t, string(data.FailedPaymentStatus), msgData.PaymentStatus)
+						assert.Equal(t, "horizon response error: StatusCode=400, Extras=transaction: tx_failed - operation codes: [ op_underfunded ]", msgData.PaymentStatusMessage)
+						assert.WithinDuration(t, time.Now(), msgData.PaymentCompletedAt, time.Millisecond*100)
+						assert.Empty(t, msgData.StellarTransactionID)
+					}).
+					Return(nil).
 					Once()
 			} else {
 				mockEventProducer.
@@ -1090,6 +1208,28 @@ func Test_TransactionWorker_submit(t *testing.T) {
 								TransactionID: txJob.Transaction.ID,
 							},
 						},
+					}).
+					Return(nil).
+					Once().
+					On("WriteMessages", ctx, mock.AnythingOfType("[]events.Message")).
+					Run(func(args mock.Arguments) {
+						messages, ok := args.Get(1).([]events.Message)
+						require.True(t, ok)
+						require.Len(t, messages, 1)
+
+						msg := messages[0]
+
+						assert.Equal(t, events.PatchAnchorPlatformTransactionCompletionTopic, msg.Topic)
+						assert.Equal(t, txJob.Transaction.ExternalID, msg.Key)
+						assert.Equal(t, txJob.Transaction.TenantID, msg.TenantID)
+						assert.Equal(t, events.PatchSuccessAnchorPlatformTransactionCompletionType, msg.Type)
+
+						msgData, ok := msg.Data.(schemas.EventPatchAnchorPlatformTransactionCompletionData)
+						require.True(t, ok)
+						assert.Equal(t, txJob.Transaction.ExternalID, msgData.PaymentID)
+						assert.Equal(t, string(data.SuccessPaymentStatus), msgData.PaymentStatus)
+						assert.Empty(t, msgData.PaymentStatusMessage)
+						assert.WithinDuration(t, time.Now(), msgData.PaymentCompletedAt, time.Millisecond*100)
 					}).
 					Return(nil).
 					Once()
@@ -1242,4 +1382,113 @@ func Test_TransactionWorker_produceSyncPaymentEvent(t *testing.T) {
 	})
 
 	mockEventProducer.AssertExpectations(t)
+}
+
+func Test_TransactionWorker_producePatchAnchorPlatformTransactionEvent(t *testing.T) {
+	ctx := context.Background()
+
+	mockEventProducer := &events.MockProducer{}
+	transactionWorker := TransactionWorker{
+		eventProducer: mockEventProducer,
+	}
+
+	t.Run("returns error when an unexpected payment status is passed", func(t *testing.T) {
+		err := transactionWorker.producePatchAnchorPlatformTransactionCompletionEvent(ctx, events.PatchSuccessAnchorPlatformTransactionCompletionType, &store.Transaction{}, data.PendingPaymentStatus)
+		assert.EqualError(t, err, "invalid payment status to produce patch anchor platform transaction event")
+	})
+
+	t.Run("returns error when eventProducer fails writing a new message", func(t *testing.T) {
+		tx := store.Transaction{
+			ID:                     "tx-id",
+			ExternalID:             "payment-id",
+			TenantID:               "tenant-id",
+			StellarTransactionHash: sql.NullString{String: "tx-hash", Valid: true},
+			StatusMessage:          sql.NullString{},
+		}
+
+		mockEventProducer.
+			On("WriteMessages", ctx, mock.AnythingOfType("[]events.Message")).
+			Run(func(args mock.Arguments) {
+				messages, ok := args.Get(1).([]events.Message)
+				require.True(t, ok)
+				require.Len(t, messages, 1)
+
+				msg := messages[0]
+
+				assert.Equal(t, events.PatchAnchorPlatformTransactionCompletionTopic, msg.Topic)
+				assert.Equal(t, tx.ExternalID, msg.Key)
+				assert.Equal(t, tx.TenantID, msg.TenantID)
+				assert.Equal(t, events.PatchSuccessAnchorPlatformTransactionCompletionType, msg.Type)
+
+				msgData, ok := msg.Data.(schemas.EventPatchAnchorPlatformTransactionCompletionData)
+				require.True(t, ok)
+				assert.Equal(t, tx.ExternalID, msgData.PaymentID)
+				assert.Equal(t, string(data.SuccessPaymentStatus), msgData.PaymentStatus)
+				assert.Empty(t, msgData.PaymentStatusMessage)
+				assert.WithinDuration(t, time.Now(), msgData.PaymentCompletedAt, time.Millisecond*100)
+			}).
+			Return(errors.New("unexpected error")).
+			Once()
+
+		err := transactionWorker.producePatchAnchorPlatformTransactionCompletionEvent(ctx, events.PatchSuccessAnchorPlatformTransactionCompletionType, &tx, data.SuccessPaymentStatus)
+		assert.ErrorContains(t, err, "writing message Message{Topic: events.transaction-submitter.transaction-completion, Key: payment-id, Type: patch-success-anchor-platform-transaction-completion, TenantID: tenant-id")
+	})
+
+	t.Run("successfully produce sync payment event", func(t *testing.T) {
+		tx := store.Transaction{
+			ID:                     "tx-id",
+			ExternalID:             "payment-id",
+			TenantID:               "tenant-id",
+			StellarTransactionHash: sql.NullString{},
+			StatusMessage:          sql.NullString{String: "error status message", Valid: true},
+		}
+
+		mockEventProducer.
+			On("WriteMessages", ctx, mock.AnythingOfType("[]events.Message")).
+			Run(func(args mock.Arguments) {
+				messages, ok := args.Get(1).([]events.Message)
+				require.True(t, ok)
+				require.Len(t, messages, 1)
+
+				msg := messages[0]
+
+				assert.Equal(t, events.PatchAnchorPlatformTransactionCompletionTopic, msg.Topic)
+				assert.Equal(t, tx.ExternalID, msg.Key)
+				assert.Equal(t, tx.TenantID, msg.TenantID)
+				assert.Equal(t, events.PatchFailedAnchorPlatformTransactionCompletionType, msg.Type)
+
+				msgData, ok := msg.Data.(schemas.EventPatchAnchorPlatformTransactionCompletionData)
+				require.True(t, ok)
+				assert.Equal(t, tx.ExternalID, msgData.PaymentID)
+				assert.Equal(t, string(data.FailedPaymentStatus), msgData.PaymentStatus)
+				assert.Equal(t, "error status message", msgData.PaymentStatusMessage)
+				assert.WithinDuration(t, time.Now(), msgData.PaymentCompletedAt, time.Millisecond*100)
+			}).
+			Return(nil).
+			Once()
+
+		err := transactionWorker.producePatchAnchorPlatformTransactionCompletionEvent(ctx, events.PatchFailedAnchorPlatformTransactionCompletionType, &tx, data.FailedPaymentStatus)
+		assert.NoError(t, err)
+	})
+
+	t.Run("logs when couldn't produce message when eventProducer is nil", func(t *testing.T) {
+		tx := store.Transaction{
+			ID:         "tx-id",
+			ExternalID: "payment-id",
+			TenantID:   "tenant-id",
+		}
+
+		getEntries := log.DefaultLogger.StartTest(log.DebugLevel)
+
+		txWorker := TransactionWorker{}
+		err := txWorker.produceSyncPaymentEvent(ctx, events.SyncSuccessPaymentFromSubmitterType, &tx, store.TransactionStatusSuccess)
+		assert.NoError(t, err)
+
+		entries := getEntries()
+		require.Len(t, entries, 1)
+		assert.Equal(t, "message Message{Topic: events.transaction-submitter.payment-from-submitter, Key: payment-id, Type: sync-success-payment-from-submitter, TenantID: tenant-id, Data: {tx-id}} not published because eventProducer is nil", entries[0].Message)
+	})
+
+	mockEventProducer.AssertExpectations(t)
+
 }

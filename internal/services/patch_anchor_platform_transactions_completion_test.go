@@ -2,7 +2,6 @@ package services
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"testing"
 	"time"
@@ -13,6 +12,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -89,14 +89,13 @@ func Test_PatchAnchorPlatformTransactionCompletionService_PatchTransactionsCompl
 			Asset:                *asset,
 		})
 
-		getEntries := log.DefaultLogger.StartTest(log.DebugLevel)
-
-		sErr := svc.PatchTransactionCompletion(ctx, PatchAnchorPlatformTransactionCompletionReq{PaymentID: payment.ID})
-		assert.ErrorIs(t, sErr, sql.ErrNoRows)
-
-		entries := getEntries()
-		require.Len(t, entries, 1)
-		assert.Equal(t, fmt.Sprintf("rolling back transaction due to error: running atomic function in RunInTransactionWithResult: getting payment ID %s: sql: no rows in result set", payment.ID), entries[0].Message)
+		sErr := svc.PatchTransactionCompletion(ctx, schemas.EventPatchAnchorPlatformTransactionCompletionData{
+			PaymentID:            payment.ID,
+			PaymentStatus:        string(data.PendingMessageStatus),
+			PaymentStatusMessage: "",
+			StellarTransactionID: "tx-hash",
+		})
+		assert.EqualError(t, sErr, fmt.Sprintf("PatchAnchorPlatformTransactionService: invalid payment status to patch to anchor platform. Payment ID: %s - Status: PENDING", payment.ID))
 	})
 
 	t.Run("doesn't mark as synced when fails patching anchor platform transaction when payment is success", func(t *testing.T) {
@@ -129,6 +128,14 @@ func Test_PatchAnchorPlatformTransactionCompletionService_PatchTransactionsCompl
 
 		getEntries := log.DefaultLogger.StartTest(log.DebugLevel)
 
+		tx := schemas.EventPatchAnchorPlatformTransactionCompletionData{
+			PaymentID:            payment.ID,
+			PaymentStatus:        string(data.SuccessPaymentStatus),
+			PaymentStatusMessage: "",
+			PaymentCompletedAt:   time.Now(),
+			StellarTransactionID: "tx-hash",
+		}
+
 		apAPISvcMock.
 			On("PatchAnchorTransactionsPostSuccessCompletion", ctx, anchorplatform.APSep24TransactionPatchPostSuccess{
 				ID:     receiverWallet.AnchorPlatformTransactionID,
@@ -136,12 +143,12 @@ func Test_PatchAnchorPlatformTransactionCompletionService_PatchTransactionsCompl
 				Status: anchorplatform.APTransactionStatusCompleted,
 				StellarTransactions: []anchorplatform.APStellarTransaction{
 					{
-						ID:       payment.StellarTransactionID,
+						ID:       tx.StellarTransactionID,
 						Memo:     receiverWallet.StellarMemo,
 						MemoType: receiverWallet.StellarMemoType,
 					},
 				},
-				CompletedAt: &payment.UpdatedAt,
+				CompletedAt: &tx.PaymentCompletedAt,
 				AmountOut: anchorplatform.APAmount{
 					Amount: payment.Amount,
 					Asset:  anchorplatform.NewStellarAssetInAIF(payment.Asset.Code, payment.Asset.Issuer),
@@ -150,7 +157,7 @@ func Test_PatchAnchorPlatformTransactionCompletionService_PatchTransactionsCompl
 			Return(anchorplatform.ErrInvalidToken).
 			Once()
 
-		sErr := svc.PatchTransactionCompletion(ctx, PatchAnchorPlatformTransactionCompletionReq{PaymentID: payment.ID})
+		sErr := svc.PatchTransactionCompletion(ctx, tx)
 		assert.EqualError(t, sErr, fmt.Sprintf(`PatchAnchorPlatformTransactionService: error patching anchor transaction ID %q with status %q: invalid token`, receiverWallet.AnchorPlatformTransactionID, anchorplatform.APTransactionStatusCompleted))
 
 		syncedAt := getAPTransactionSyncedAt(t, ctx, dbConnectionPool, receiverWallet.ID)
@@ -190,12 +197,13 @@ func Test_PatchAnchorPlatformTransactionCompletionService_PatchTransactionsCompl
 		})
 
 		errorMsg := "tx_failed op_no_source_account"
-		updateErr := models.Payment.Update(ctx, dbConnectionPool, payment, &data.PaymentUpdate{
-			Status:               data.FailedPaymentStatus,
-			StatusMessage:        errorMsg,
-			StellarTransactionID: "stellar-transaction-id",
-		})
-		require.NoError(t, updateErr)
+		tx := schemas.EventPatchAnchorPlatformTransactionCompletionData{
+			PaymentID:            payment.ID,
+			PaymentStatus:        string(data.FailedPaymentStatus),
+			PaymentStatusMessage: errorMsg,
+			PaymentCompletedAt:   time.Now(),
+			StellarTransactionID: "",
+		}
 
 		apAPISvcMock.
 			On("PatchAnchorTransactionsPostErrorCompletion", ctx, anchorplatform.APSep24TransactionPatchPostError{
@@ -207,7 +215,7 @@ func Test_PatchAnchorPlatformTransactionCompletionService_PatchTransactionsCompl
 			Return(nil).
 			Once()
 
-		err = svc.PatchTransactionCompletion(ctx, PatchAnchorPlatformTransactionCompletionReq{PaymentID: payment.ID})
+		err = svc.PatchTransactionCompletion(ctx, tx)
 		require.NoError(t, err)
 
 		syncedAt := getAPTransactionSyncedAt(t, ctx, dbConnectionPool, receiverWallet.ID)
@@ -242,6 +250,14 @@ func Test_PatchAnchorPlatformTransactionCompletionService_PatchTransactionsCompl
 			Asset:                *asset,
 		})
 
+		tx := schemas.EventPatchAnchorPlatformTransactionCompletionData{
+			PaymentID:            payment.ID,
+			PaymentStatus:        string(data.SuccessPaymentStatus),
+			PaymentStatusMessage: "",
+			PaymentCompletedAt:   time.Now(),
+			StellarTransactionID: "tx-hash",
+		}
+
 		apAPISvcMock.
 			On("PatchAnchorTransactionsPostSuccessCompletion", ctx, anchorplatform.APSep24TransactionPatchPostSuccess{
 				ID:     receiverWallet.AnchorPlatformTransactionID,
@@ -249,12 +265,12 @@ func Test_PatchAnchorPlatformTransactionCompletionService_PatchTransactionsCompl
 				Status: anchorplatform.APTransactionStatusCompleted,
 				StellarTransactions: []anchorplatform.APStellarTransaction{
 					{
-						ID:       payment.StellarTransactionID,
+						ID:       tx.StellarTransactionID,
 						Memo:     receiverWallet.StellarMemo,
 						MemoType: receiverWallet.StellarMemoType,
 					},
 				},
-				CompletedAt: &payment.UpdatedAt,
+				CompletedAt: &tx.PaymentCompletedAt,
 				AmountOut: anchorplatform.APAmount{
 					Amount: payment.Amount,
 					Asset:  anchorplatform.NewStellarAssetInAIF(payment.Asset.Code, payment.Asset.Issuer),
@@ -263,7 +279,7 @@ func Test_PatchAnchorPlatformTransactionCompletionService_PatchTransactionsCompl
 			Return(nil).
 			Once()
 
-		sErr := svc.PatchTransactionCompletion(ctx, PatchAnchorPlatformTransactionCompletionReq{PaymentID: payment.ID})
+		sErr := svc.PatchTransactionCompletion(ctx, tx)
 		require.NoError(t, sErr)
 
 		syncedAt := getAPTransactionSyncedAt(t, ctx, dbConnectionPool, receiverWallet.ID)
@@ -302,17 +318,17 @@ func Test_PatchAnchorPlatformTransactionCompletionService_PatchTransactionsCompl
 		_, err = dbConnectionPool.ExecContext(ctx, q, receiverWallet.ID)
 		require.NoError(t, err)
 
-		getEntries := log.DefaultLogger.StartTest(log.DebugLevel)
+		getEntries := log.DefaultLogger.StartTest(log.InfoLevel)
 
-		err := svc.PatchTransactionCompletion(ctx, PatchAnchorPlatformTransactionCompletionReq{PaymentID: payment.ID})
-		assert.ErrorIs(t, err, sql.ErrNoRows)
+		err := svc.PatchTransactionCompletion(ctx, schemas.EventPatchAnchorPlatformTransactionCompletionData{PaymentID: payment.ID, PaymentStatus: string(data.SuccessMessageStatus)})
+		require.NoError(t, err)
 
 		syncedAt := getAPTransactionSyncedAt(t, ctx, dbConnectionPool, receiverWallet.ID)
 		assert.False(t, syncedAt.IsZero())
 
 		entries := getEntries()
 		require.Len(t, entries, 1)
-		assert.Equal(t, fmt.Sprintf("rolling back transaction due to error: running atomic function in RunInTransactionWithResult: getting payment ID %s: sql: no rows in result set", payment.ID), entries[0].Message)
+		assert.Equal(t, fmt.Sprintf("AP Transaction ID %s already patched", receiverWallet.AnchorPlatformTransactionID), entries[0].Message)
 	})
 
 	apAPISvcMock.AssertExpectations(t)

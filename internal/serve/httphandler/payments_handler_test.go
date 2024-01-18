@@ -136,7 +136,8 @@ func Test_PaymentsHandlerGet(t *testing.T) {
 				"status": "DRAFT",
 				"created_at": %q,
 				"updated_at": %q,
-				"invitation_sent_at": null
+				"invitation_sent_at": null,
+				"anchor_platform_transaction_id": %q
 			},
 			"created_at": %q,
             "updated_at": %q
@@ -144,7 +145,7 @@ func Test_PaymentsHandlerGet(t *testing.T) {
 			disbursement.ID, disbursement.CreatedAt.Format(time.RFC3339Nano), disbursement.UpdatedAt.Format(time.RFC3339Nano),
 			asset.ID, receiverWallet.ID, receiver.ID, wallet.ID, receiverWallet.StellarAddress, receiverWallet.StellarMemo,
 			receiverWallet.StellarMemoType, receiverWallet.CreatedAt.Format(time.RFC3339Nano), receiverWallet.UpdatedAt.Format(time.RFC3339Nano),
-			payment.CreatedAt.Format(time.RFC3339Nano), payment.UpdatedAt.Format(time.RFC3339Nano))
+			receiverWallet.AnchorPlatformTransactionID, payment.CreatedAt.Format(time.RFC3339Nano), payment.UpdatedAt.Format(time.RFC3339Nano))
 
 		assert.JSONEq(t, wantJson, rr.Body.String())
 	})

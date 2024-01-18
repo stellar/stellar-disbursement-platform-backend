@@ -10,6 +10,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 	"github.com/stretchr/testify/mock"
@@ -22,8 +23,8 @@ type PatchAnchorPlatformTransactionCompletionServiceMock struct {
 
 var _ services.PatchAnchorPlatformTransactionCompletionServiceInterface = new(PatchAnchorPlatformTransactionCompletionServiceMock)
 
-func (s *PatchAnchorPlatformTransactionCompletionServiceMock) PatchTransactionCompletion(ctx context.Context, req services.PatchAnchorPlatformTransactionCompletionReq) error {
-	args := s.Called(ctx, req)
+func (s *PatchAnchorPlatformTransactionCompletionServiceMock) PatchTransactionCompletion(ctx context.Context, tx schemas.EventPatchAnchorPlatformTransactionCompletionData) error {
+	args := s.Called(ctx, tx)
 	return args.Error(0)
 }
 
@@ -52,7 +53,7 @@ func Test_PatchAnchorPlatformTransactionCompletionEventHandler(t *testing.T) {
 	ctx := context.Background()
 	t.Run("logs and report error when message Data is invalid", func(t *testing.T) {
 		crashTrackerClient.
-			On("LogAndReportErrors", ctx, mock.AnythingOfType("*json.UnmarshalTypeError"), "[PatchAnchorPlatformTransactionCompletionEventHandler] could not unmarshal data: invalid").
+			On("LogAndReportErrors", ctx, mock.Anything, "[PatchAnchorPlatformTransactionCompletionEventHandler] could convert data to schemas.EventPatchAnchorPlatformTransactionCompletionData: invalid").
 			Return().
 			Once()
 
@@ -67,7 +68,12 @@ func Test_PatchAnchorPlatformTransactionCompletionEventHandler(t *testing.T) {
 
 		handler.Handle(ctx, &events.Message{
 			TenantID: "tenant-id",
-			Data:     services.PatchAnchorPlatformTransactionCompletionReq{PaymentID: "payment-ID"},
+			Data: schemas.EventPatchAnchorPlatformTransactionCompletionData{
+				PaymentID:            "payment-ID",
+				PaymentStatus:        "SUCCESS",
+				PaymentStatusMessage: "",
+				StellarTransactionID: "tx-hash",
+			},
 		})
 	})
 
@@ -77,11 +83,16 @@ func Test_PatchAnchorPlatformTransactionCompletionEventHandler(t *testing.T) {
 		tnt, err := tenantManager.AddTenant(ctx, "myorg1")
 		require.NoError(t, err)
 
-		req := services.PatchAnchorPlatformTransactionCompletionReq{PaymentID: "payment-ID"}
+		tx := schemas.EventPatchAnchorPlatformTransactionCompletionData{
+			PaymentID:            "payment-ID",
+			PaymentStatus:        "SUCCESS",
+			PaymentStatusMessage: "",
+			StellarTransactionID: "tx-hash",
+		}
 
 		service.
 			On("SetModels", mock.AnythingOfType("*data.Models")).
-			On("PatchTransactionCompletion", ctx, req).
+			On("PatchTransactionCompletion", ctx, tx).
 			Return(errors.New("unexpected error")).
 			Once()
 
@@ -92,7 +103,7 @@ func Test_PatchAnchorPlatformTransactionCompletionEventHandler(t *testing.T) {
 
 		handler.Handle(ctx, &events.Message{
 			TenantID: tnt.ID,
-			Data:     req,
+			Data:     tx,
 		})
 	})
 
@@ -102,17 +113,22 @@ func Test_PatchAnchorPlatformTransactionCompletionEventHandler(t *testing.T) {
 		tnt, err := tenantManager.AddTenant(ctx, "myorg1")
 		require.NoError(t, err)
 
-		req := services.PatchAnchorPlatformTransactionCompletionReq{PaymentID: "payment-ID"}
+		tx := schemas.EventPatchAnchorPlatformTransactionCompletionData{
+			PaymentID:            "payment-ID",
+			PaymentStatus:        "SUCCESS",
+			PaymentStatusMessage: "",
+			StellarTransactionID: "tx-hash",
+		}
 
 		service.
 			On("SetModels", mock.AnythingOfType("*data.Models")).
-			On("PatchTransactionCompletion", ctx, req).
+			On("PatchTransactionCompletion", ctx, tx).
 			Return(nil).
 			Once()
 
 		handler.Handle(ctx, &events.Message{
 			TenantID: tnt.ID,
-			Data:     req,
+			Data:     tx,
 		})
 	})
 
