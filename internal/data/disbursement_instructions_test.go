@@ -440,7 +440,7 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 		DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
 		DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
 
-		getEntries := log.DefaultLogger.StartTest(log.DebugLevel)
+		getEntries := log.DefaultLogger.StartTest(log.ErrorLevel)
 
 		err := di.ProcessAll(ctx, "user-id", instructions, disbursement, disbursementUpdate, MaxInstructionsPerDisbursement, nil)
 		require.NoError(t, err)
@@ -451,8 +451,8 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 		assert.Len(t, receivers, 3)
 
 		entries := getEntries()
-		require.Len(t, entries, 3)
-		assert.Contains(t, entries[2].Message, "not published because eventProducer is nil")
+		require.Len(t, entries, 1)
+		assert.Contains(t, entries[0].Message, "Message{")
 	})
 
 	t.Run("failure - getting tenant from context", func(t *testing.T) {

@@ -1220,15 +1220,25 @@ func Test_TransactionWorker_produceSyncPaymentEvent(t *testing.T) {
 			TenantID:   "tenant-id",
 		}
 
-		getEntries := log.DefaultLogger.StartTest(log.DebugLevel)
+		getEntries := log.DefaultLogger.StartTest(log.ErrorLevel)
 
 		txWorker := TransactionWorker{}
 		err := txWorker.produceSyncPaymentEvent(ctx, events.SyncSuccessPaymentFromSubmitterType, &tx, store.TransactionStatusSuccess)
 		assert.NoError(t, err)
 
+		msg := events.Message{
+			Topic:    events.PaymentFromSubmitterTopic,
+			Key:      tx.ExternalID,
+			TenantID: tx.TenantID,
+			Type:     events.SyncSuccessPaymentFromSubmitterType,
+			Data: schemas.EventPaymentFromSubmitterData{
+				TransactionID: tx.ID,
+			},
+		}
+
 		entries := getEntries()
 		require.Len(t, entries, 1)
-		assert.Equal(t, "message Message{Topic: events.transaction-submitter.payment-from-submitter, Key: payment-id, Type: sync-success-payment-from-submitter, TenantID: tenant-id, Data: {tx-id}} not published because eventProducer is nil", entries[0].Message)
+		assert.Equal(t, msg.String(), entries[0].Message)
 	})
 
 	mockEventProducer.AssertExpectations(t)

@@ -375,7 +375,7 @@ func (tw *TransactionWorker) produceSyncPaymentEvent(ctx context.Context, eventT
 			return fmt.Errorf("writing message %s on event producer: %w", msg, err)
 		}
 	} else {
-		log.Ctx(ctx).Debugf("message %s not published because eventProducer is nil", msg.String())
+		log.Ctx(ctx).Error(msg.String())
 	}
 
 	return nil

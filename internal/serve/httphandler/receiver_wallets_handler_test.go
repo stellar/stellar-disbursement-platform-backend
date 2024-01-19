@@ -166,7 +166,7 @@ func Test_RetryInvitation(t *testing.T) {
 		router := chi.NewRouter()
 		router.Patch("/receivers/wallets/{receiver_wallet_id}", handler.RetryInvitation)
 
-		getEntries := log.DefaultLogger.StartTest(log.DebugLevel)
+		getEntries := log.DefaultLogger.StartTest(log.ErrorLevel)
 
 		// Assert no receivers were registered
 		route := fmt.Sprintf("/receivers/wallets/%s", rw.ID)
@@ -188,8 +188,18 @@ func Test_RetryInvitation(t *testing.T) {
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.JSONEq(t, wantJson, rr.Body.String())
 
+		msg := events.Message{
+			Topic:    events.ReceiverWalletNewInvitationTopic,
+			Key:      rw.ID,
+			TenantID: tnt.ID,
+			Type:     events.RetryReceiverWalletSMSInvitationType,
+			Data: []schemas.EventReceiverWalletSMSInvitationData{
+				{ReceiverWalletID: rw.ID},
+			},
+		}
+
 		entries := getEntries()
 		require.Len(t, entries, 1)
-		assert.Contains(t, entries[0].Message, "not published because eventProducer is nil")
+		assert.Equal(t, msg.String(), entries[0].Message)
 	})
 }
