@@ -62,7 +62,7 @@ func (h ReceiverWalletsHandler) RetryInvitation(rw http.ResponseWriter, req *htt
 			return
 		}
 	} else {
-		log.Ctx(ctx).Error(msg.String())
+		log.Ctx(ctx).Errorf("event producer is nil, could not publish message %s", msg.String())
 	}
 
 	response := RetryInvitationSMSResponse{

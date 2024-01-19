@@ -236,7 +236,7 @@ func (di DisbursementInstructionModel) ProcessAll(ctx context.Context, userID st
 				return fmt.Errorf("publishing message %s on event producer: %w", msg.String(), err)
 			}
 		} else {
-			log.Ctx(ctx).Error(msg.String())
+			log.Ctx(ctx).Errorf("event producer is nil, could not publish message %s", msg.String())
 		}
 
 		return nil

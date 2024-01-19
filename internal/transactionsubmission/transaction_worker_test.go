@@ -1238,7 +1238,7 @@ func Test_TransactionWorker_produceSyncPaymentEvent(t *testing.T) {
 
 		entries := getEntries()
 		require.Len(t, entries, 1)
-		assert.Equal(t, msg.String(), entries[0].Message)
+		assert.Equal(t, fmt.Sprintf("event producer is nil, could not publish message %s", msg.String()), entries[0].Message)
 	})
 
 	mockEventProducer.AssertExpectations(t)
