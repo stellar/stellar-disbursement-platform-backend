@@ -268,49 +268,6 @@ func (p *PaymentModel) GetAll(ctx context.Context, queryParams *QueryParams, sql
 	return payments, nil
 }
 
-func (p *PaymentModel) GetReadyToPatchCompletionAnchorTransactionByID(ctx context.Context, sqlExec db.SQLExecuter, paymentID string) (*Payment, error) {
-	const query = `
-		SELECT
-			p.id,
-			p.amount,
-			p.stellar_transaction_id,
-			p.status,
-			p.status_history,
-			p.updated_at,
-			a.id AS "asset.id",
-			a.code AS "asset.code",
-			a.issuer AS "asset.issuer",
-			rw.id AS "receiver_wallet.id",
-			COALESCE(rw.stellar_memo, '') AS "receiver_wallet.stellar_memo",
-			COALESCE(rw.stellar_memo_type, '') AS "receiver_wallet.stellar_memo_type",
-			rw.anchor_platform_transaction_id AS "receiver_wallet.anchor_platform_transaction_id",
-			rw.anchor_platform_transaction_synced_at AS "receiver_wallet.anchor_platform_transaction_synced_at"
-		FROM
-			payments p
-			INNER JOIN disbursements d ON p.disbursement_id = d.id
-			INNER JOIN assets a ON a.id = d.asset_id
-			INNER JOIN wallets w ON d.wallet_id = w.id
-			INNER JOIN receiver_wallets rw ON rw.receiver_id = p.receiver_id AND rw.wallet_id = w.id
-		WHERE
-			p.status = ANY($1) -- ARRAY['SUCCESS', 'FAILURE']::payment_status[]
-			AND rw.status = $2 -- 'REGISTERED'::receiver_wallet_status
-			AND rw.anchor_platform_transaction_synced_at IS NULL
-			AND p.id = $3
-		FOR UPDATE SKIP LOCKED
-	`
-
-	var payment Payment
-	err := sqlExec.GetContext(ctx, &payment, query, pq.Array([]PaymentStatus{SuccessPaymentStatus, FailedPaymentStatus}), RegisteredReceiversWalletStatus, paymentID)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, err
-		}
-		return nil, fmt.Errorf("getting payment ID %s: %w", paymentID, err)
-	}
-
-	return &payment, nil
-}
-
 // DeleteAllForDisbursement deletes all payments for a given disbursement.
 func (p *PaymentModel) DeleteAllForDisbursement(ctx context.Context, sqlExec db.SQLExecuter, disbursementID string) error {
 	query := `
