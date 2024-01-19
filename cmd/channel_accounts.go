@@ -26,8 +26,9 @@ func (c *ChannelAccountsCommand) Command() *cobra.Command {
 	crashTrackerOptions := crashtracker.CrashTrackerOptions{}
 
 	configOpts := config.ConfigOptions{
-		cmdUtils.HorizonURLConfigOption(&svcOpts.HorizonUrl),
 		cmdUtils.CrashTrackerTypeConfigOption(&crashTrackerOptions.CrashTrackerType),
+		cmdUtils.HorizonURLConfigOption(&svcOpts.HorizonUrl),
+		cmdUtils.ChannelAccountEncryptionKeyConfigOption(&svcOpts.EncryptionKey),
 	}
 	channelAccountsCmd := &cobra.Command{
 		Use:   "channel-accounts",

@@ -45,6 +45,8 @@ type ChannelAccountServiceOptions struct {
 	NetworkPassphrase      string
 	NumChannelAccounts     int
 	RootSeed               string
+	// EncryptionKey is a Stellar private key to be used to encrypt channel account private keys.
+	EncryptionKey string
 }
 
 func NewChannelAccountService(ctx context.Context, opts ChannelAccountServiceOptions) (*ChannelAccountsService, error) {

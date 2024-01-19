@@ -31,7 +31,9 @@ type DefaultSignatureService struct {
 	dbConnectionPool    db.DBConnectionPool
 	chAccModel          store.ChannelAccountStore
 	encrypter           utils.PrivateKeyEncrypter
-	encrypterPass       string
+
+	// TODO: encrypterPass and EncryptionKey should have the same name
+	encrypterPass string
 }
 
 // NewDefaultSignatureService returns a new DefaultSignatureService instance.
