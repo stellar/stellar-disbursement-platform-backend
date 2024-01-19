@@ -14,9 +14,8 @@ type EmailClientOptions struct {
 	MessengerOptions *message.MessengerOptions
 }
 
-// buildEmailClientInstanceName sets up a instance name for the email messenger type
-// to either be created and stored, also retrived later, so we can have a instance
-// for each type at the same time.
+// buildEmailClientInstanceName creates a new email client instance, or retrives a instance that was already created
+// before.
 func buildEmailClientInstanceName(emailClientType message.MessengerType) string {
 	return fmt.Sprintf("%s-%s", EmailClientInstanceName, string(emailClientType))
 }

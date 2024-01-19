@@ -14,9 +14,7 @@ type SMSClientOptions struct {
 	MessengerOptions *message.MessengerOptions
 }
 
-// buildSMSClientInstanceName sets up a instance name for the SMS messenger type
-// to either be created and stored, also retrived later, so we can have a instance
-// for each type at the same time.
+// buildSMSClientInstanceName creates a new SMS client instance, or retrives a instance that was already created before.
 func buildSMSClientInstanceName(smsClientType message.MessengerType) string {
 	return fmt.Sprintf("%s-%s", SMSClientInstanceName, string(smsClientType))
 }
