@@ -452,12 +452,12 @@ func Test_DisbursementHandler_GetDisbursements_Success(t *testing.T) {
 		Return(&startedByUser, nil)
 
 	createdByUserRef := services.UserReference{
-		Id:        createdByUser.ID,
+		ID:        createdByUser.ID,
 		FirstName: createdByUser.FirstName,
 		LastName:  createdByUser.LastName,
 	}
 	startedByUserRef := services.UserReference{
-		Id:        startedByUser.ID,
+		ID:        startedByUser.ID,
 		FirstName: startedByUser.FirstName,
 		LastName:  startedByUser.LastName,
 	}
@@ -1005,12 +1005,12 @@ func Test_DisbursementHandler_GetDisbursement(t *testing.T) {
 	response := services.DisbursementWithUserMetadata{
 		Disbursement: *disbursement,
 		CreatedBy: services.UserReference{
-			Id:        createdByUser.ID,
+			ID:        createdByUser.ID,
 			FirstName: createdByUser.FirstName,
 			LastName:  createdByUser.LastName,
 		},
 		StartedBy: services.UserReference{
-			Id:        startedByUser.ID,
+			ID:        startedByUser.ID,
 			FirstName: startedByUser.FirstName,
 			LastName:  startedByUser.LastName,
 		},

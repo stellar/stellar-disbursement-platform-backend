@@ -21,7 +21,7 @@ type DisbursementManagementService struct {
 }
 
 type UserReference struct {
-	Id        string `json:"id"`
+	ID        string `json:"id"`
 	FirstName string `json:"first_name"`
 	LastName  string `json:"last_name"`
 }
@@ -63,7 +63,7 @@ func (s *DisbursementManagementService) AddUserMetadata(ctx context.Context, d *
 			userRef := UserReference{
 				FirstName: user.FirstName,
 				LastName:  user.LastName,
-				Id:        entry.UserID,
+				ID:        entry.UserID,
 			}
 			if entry.Status == data.DraftDisbursementStatus {
 				d.CreatedBy = userRef
