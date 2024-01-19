@@ -44,7 +44,7 @@ func (c *ChannelAccountsCommand) Command() *cobra.Command {
 			configOpts.Require()
 			err := configOpts.SetValues()
 			if err != nil {
-				log.Ctx(ctx).Fatalf("Error setting values of config options: %s", err.Error())
+				log.Ctx(ctx).Fatalf("Error setting values of config options: %v", err)
 			}
 
 			// Inject server dependencies
@@ -56,7 +56,7 @@ func (c *ChannelAccountsCommand) Command() *cobra.Command {
 			svcOpts.NetworkPassphrase = globalOptions.NetworkPassphrase
 			c.Service, err = txSubSvc.NewChannelAccountService(ctx, *svcOpts)
 			if err != nil {
-				log.Ctx(ctx).Fatalf("Error creating channel account service: %s", err.Error())
+				log.Ctx(ctx).Fatalf("Error creating channel account service: %v", err)
 			}
 
 			// Inject crash tracker options dependencies
@@ -65,14 +65,14 @@ func (c *ChannelAccountsCommand) Command() *cobra.Command {
 			// Setup default Crash Tracker client
 			crashTrackerClient, err := di.NewCrashTracker(ctx, crashTrackerOptions)
 			if err != nil {
-				log.Ctx(ctx).Fatalf("Error creating crash tracker client: %s", err.Error())
+				log.Ctx(ctx).Fatalf("Error creating crash tracker client: %v", err)
 			}
 			c.CrashTrackerClient = crashTrackerClient
 		},
 	}
 	err := configOpts.Init(channelAccountsCmd)
 	if err != nil {
-		log.Fatalf("Error initializing channelAccountsCmd config option: %s", err.Error())
+		log.Fatalf("Error initializing channelAccountsCmd config option: %v", err)
 	}
 
 	createCmd := c.CreateCommand(svcOpts)
@@ -85,21 +85,21 @@ func (c *ChannelAccountsCommand) Command() *cobra.Command {
 	return channelAccountsCmd
 }
 
-func (c *ChannelAccountsCommand) CreateCommand(toolOpts *txSubSvc.ChannelAccountServiceOptions) *cobra.Command {
+func (c *ChannelAccountsCommand) CreateCommand(chAccOpts *txSubSvc.ChannelAccountServiceOptions) *cobra.Command {
 	configOpts := config.ConfigOptions{
 		{
 			Name:           "distribution-seed",
 			Usage:          "The private key of the Stellar account that will be used to sponsor the channel accounts",
 			OptType:        types.String,
 			CustomSetValue: cmdUtils.SetConfigOptionStellarPrivateKey,
-			ConfigKey:      &toolOpts.RootSeed,
+			ConfigKey:      &chAccOpts.RootSeed,
 			Required:       true,
 		},
 		{
 			Name:        "num-channel-accounts-create",
 			Usage:       "The desired number of channel accounts to be created",
 			OptType:     types.Int,
-			ConfigKey:   &toolOpts.NumChannelAccounts,
+			ConfigKey:   &chAccOpts.NumChannelAccounts,
 			FlagDefault: 1,
 			Required:    true,
 		},
@@ -107,7 +107,7 @@ func (c *ChannelAccountsCommand) CreateCommand(toolOpts *txSubSvc.ChannelAccount
 			Name:        "max-base-fee",
 			Usage:       "The max base fee for submitting a stellar transaction",
 			OptType:     types.Int,
-			ConfigKey:   &toolOpts.MaxBaseFee,
+			ConfigKey:   &chAccOpts.MaxBaseFee,
 			FlagDefault: 100 * txnbuild.MinBaseFee,
 			Required:    true,
 		},
@@ -123,34 +123,34 @@ func (c *ChannelAccountsCommand) CreateCommand(toolOpts *txSubSvc.ChannelAccount
 			configOpts.Require()
 			err := configOpts.SetValues()
 			if err != nil {
-				log.Ctx(ctx).Fatalf("Error setting values of config options: %s", err.Error())
+				log.Ctx(ctx).Fatalf("Error setting values of config options: %v", err)
 			}
 		},
 		Run: func(cmd *cobra.Command, _ []string) {
 			ctx := cmd.Context()
 
 			// entrypoint into the main logic for creating channel accounts
-			if err := c.Service.CreateChannelAccountsOnChain(ctx, *toolOpts); err != nil {
+			if err := c.Service.CreateChannelAccountsOnChain(ctx, *chAccOpts); err != nil {
 				c.CrashTrackerClient.LogAndReportErrors(ctx, err, "Cmd channel-accounts create crash")
-				log.Ctx(ctx).Fatalf("Error creating channel accounts: %s", err.Error())
+				log.Ctx(ctx).Fatalf("Error creating channel accounts: %v", err)
 			}
 		},
 	}
 	err := configOpts.Init(createCmd)
 	if err != nil {
-		log.Fatalf("Error initializing createCmd: %s", err.Error())
+		log.Fatalf("Error initializing createCmd: %v", err)
 	}
 
 	return createCmd
 }
 
-func (c *ChannelAccountsCommand) VerifyCommand(toolOpts *txSubSvc.ChannelAccountServiceOptions) *cobra.Command {
+func (c *ChannelAccountsCommand) VerifyCommand(chAccOpts *txSubSvc.ChannelAccountServiceOptions) *cobra.Command {
 	configOpts := config.ConfigOptions{
 		{
 			Name:        "delete-invalid-accounts",
 			Usage:       "Delete channel accounts from storage that are verified to be invalid on the network",
 			OptType:     types.Bool,
-			ConfigKey:   &toolOpts.DeleteInvalidAcccounts,
+			ConfigKey:   &chAccOpts.DeleteInvalidAcccounts,
 			FlagDefault: false,
 			Required:    false,
 		},
@@ -166,40 +166,40 @@ func (c *ChannelAccountsCommand) VerifyCommand(toolOpts *txSubSvc.ChannelAccount
 			configOpts.Require()
 			err := configOpts.SetValues()
 			if err != nil {
-				log.Ctx(ctx).Fatalf("Error setting values of config options: %s", err.Error())
+				log.Ctx(ctx).Fatalf("Error setting values of config options: %v", err)
 			}
 		},
 		Run: func(cmd *cobra.Command, _ []string) {
 			ctx := cmd.Context()
-			if err := c.Service.VerifyChannelAccounts(ctx, *toolOpts); err != nil {
+			if err := c.Service.VerifyChannelAccounts(ctx, *chAccOpts); err != nil {
 				c.CrashTrackerClient.LogAndReportErrors(ctx, err, "Cmd channel-accounts verify crash")
-				log.Ctx(ctx).Fatalf("Error verifying channel accounts: %s", err.Error())
+				log.Ctx(ctx).Fatalf("Error verifying channel accounts: %v", err)
 			}
 		},
 	}
 	err := configOpts.Init(verifyCmd)
 	if err != nil {
-		log.Fatalf("Error initializing verifyCmd: %s", err.Error())
+		log.Fatalf("Error initializing verifyCmd: %v", err)
 	}
 
 	return verifyCmd
 }
 
-func (c *ChannelAccountsCommand) EnsureCommand(toolOpts *txSubSvc.ChannelAccountServiceOptions) *cobra.Command {
+func (c *ChannelAccountsCommand) EnsureCommand(chAccOpts *txSubSvc.ChannelAccountServiceOptions) *cobra.Command {
 	configOpts := config.ConfigOptions{
 		{
 			Name:           "distribution-seed",
 			Usage:          "The private key of the Stellar account used to sponsor existing channel accounts",
 			OptType:        types.String,
 			CustomSetValue: cmdUtils.SetConfigOptionStellarPrivateKey,
-			ConfigKey:      &toolOpts.RootSeed,
+			ConfigKey:      &chAccOpts.RootSeed,
 			Required:       true,
 		},
 		{
 			Name:        "num-channel-accounts-ensure",
 			Usage:       "The desired number of channel accounts to manage",
 			OptType:     types.Int,
-			ConfigKey:   &toolOpts.NumChannelAccounts,
+			ConfigKey:   &chAccOpts.NumChannelAccounts,
 			FlagDefault: 1,
 			Required:    true,
 		},
@@ -207,7 +207,7 @@ func (c *ChannelAccountsCommand) EnsureCommand(toolOpts *txSubSvc.ChannelAccount
 			Name:        "max-base-fee",
 			Usage:       "The max base fee for submitting a stellar transaction",
 			OptType:     types.Int,
-			ConfigKey:   &toolOpts.MaxBaseFee,
+			ConfigKey:   &chAccOpts.MaxBaseFee,
 			FlagDefault: 100 * txnbuild.MinBaseFee,
 			Required:    true,
 		},
@@ -226,48 +226,48 @@ func (c *ChannelAccountsCommand) EnsureCommand(toolOpts *txSubSvc.ChannelAccount
 			configOpts.Require()
 			err := configOpts.SetValues()
 			if err != nil {
-				log.Ctx(ctx).Fatalf("Error setting values of config options: %s", err.Error())
+				log.Ctx(ctx).Fatalf("Error setting values of config options: %v", err)
 			}
 		},
 		Run: func(cmd *cobra.Command, _ []string) {
 			ctx := cmd.Context()
-			if err := c.Service.EnsureChannelAccountsCount(ctx, *toolOpts); err != nil {
+			if err := c.Service.EnsureChannelAccountsCount(ctx, *chAccOpts); err != nil {
 				c.CrashTrackerClient.LogAndReportErrors(ctx, err, "Cmd channel-accounts ensure crash")
-				log.Ctx(ctx).Fatalf("Error ensuring count for channel accounts: %s", err.Error())
+				log.Ctx(ctx).Fatalf("Error ensuring count for channel accounts: %v", err)
 			}
 		},
 	}
 
 	err := configOpts.Init(ensureCmd)
 	if err != nil {
-		log.Fatalf("Error initializing ensureCmd: %s", err.Error())
+		log.Fatalf("Error initializing ensureCmd: %v", err)
 	}
 
 	return ensureCmd
 }
 
-func (c *ChannelAccountsCommand) DeleteCommand(toolOpts *txSubSvc.ChannelAccountServiceOptions) *cobra.Command {
+func (c *ChannelAccountsCommand) DeleteCommand(chAccOpts *txSubSvc.ChannelAccountServiceOptions) *cobra.Command {
 	configOpts := config.ConfigOptions{
 		{
 			Name:           "distribution-seed",
 			Usage:          "The private key of the Stellar account used to sponsor the channel account specified",
 			OptType:        types.String,
 			CustomSetValue: cmdUtils.SetConfigOptionStellarPrivateKey,
-			ConfigKey:      &toolOpts.RootSeed,
+			ConfigKey:      &chAccOpts.RootSeed,
 			Required:       true,
 		},
 		{
 			Name:      "channel-account-id",
 			Usage:     "The ID of the channel account to delete",
 			OptType:   types.String,
-			ConfigKey: &toolOpts.ChannelAccountID,
+			ConfigKey: &chAccOpts.ChannelAccountID,
 			Required:  false,
 		},
 		{
 			Name:        "delete-all-accounts",
 			Usage:       "Delete all managed channel accoounts in the database and on the network",
 			OptType:     types.Bool,
-			ConfigKey:   &toolOpts.DeleteAllAccounts,
+			ConfigKey:   &chAccOpts.DeleteAllAccounts,
 			FlagDefault: false,
 			Required:    false,
 		},
@@ -275,7 +275,7 @@ func (c *ChannelAccountsCommand) DeleteCommand(toolOpts *txSubSvc.ChannelAccount
 			Name:        "max-base-fee",
 			Usage:       "The max base fee for submitting a stellar transaction",
 			OptType:     types.Int,
-			ConfigKey:   &toolOpts.MaxBaseFee,
+			ConfigKey:   &chAccOpts.MaxBaseFee,
 			FlagDefault: 100 * txnbuild.MinBaseFee,
 			Required:    true,
 		},
@@ -292,21 +292,21 @@ func (c *ChannelAccountsCommand) DeleteCommand(toolOpts *txSubSvc.ChannelAccount
 			configOpts.Require()
 			err := configOpts.SetValues()
 			if err != nil {
-				log.Ctx(ctx).Fatalf("Error setting values of config options: %s", err.Error())
+				log.Ctx(ctx).Fatalf("Error setting values of config options: %v", err)
 			}
 		},
 		Run: func(cmd *cobra.Command, _ []string) {
 			ctx := cmd.Context()
-			if err := c.Service.DeleteChannelAccount(ctx, *toolOpts); err != nil {
+			if err := c.Service.DeleteChannelAccount(ctx, *chAccOpts); err != nil {
 				c.CrashTrackerClient.LogAndReportErrors(ctx, err, "Cmd channel-accounts delete crash")
-				log.Ctx(ctx).Fatalf("Error deleting channel account: %s", err.Error())
+				log.Ctx(ctx).Fatalf("Error deleting channel account: %v", err)
 			}
 		},
 	}
 
 	err := configOpts.Init(deleteCmd)
 	if err != nil {
-		log.Fatalf("Error initializing deleteCmd: %s", err.Error())
+		log.Fatalf("Error initializing deleteCmd: %v", err)
 	}
 
 	deleteCmd.MarkFlagsMutuallyExclusive("channel-account-id", "delete-all-accounts")
@@ -323,7 +323,7 @@ func (c *ChannelAccountsCommand) ViewCommand() *cobra.Command {
 			err := c.Service.ViewChannelAccounts(ctx)
 			if err != nil {
 				c.CrashTrackerClient.LogAndReportErrors(ctx, err, "Cmd channel-accounts view crash")
-				log.Ctx(ctx).Fatalf("Error viewing channel accounts: %s", err.Error())
+				log.Ctx(ctx).Fatalf("Error viewing channel accounts: %v", err)
 			}
 		},
 	}
