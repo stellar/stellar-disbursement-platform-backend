@@ -189,15 +189,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			FlagDefault: 8003,
 			Required:    true,
 		},
-		{
-			Name:           "crash-tracker-type",
-			Usage:          `Crash tracker type. Options: "SENTRY", "DRY_RUN"`,
-			OptType:        types.String,
-			CustomSetValue: cmdUtils.SetConfigOptionCrashTrackerType,
-			ConfigKey:      &crashTrackerOptions.CrashTrackerType,
-			FlagDefault:    "DRY_RUN",
-			Required:       true,
-		},
+		cmdUtils.CrashTrackerTypeConfigOption(&crashTrackerOptions.CrashTrackerType),
 		{
 			Name:      "instance-name",
 			Usage:     `Name of the SDP instance. Example: "SDP Testnet".`,

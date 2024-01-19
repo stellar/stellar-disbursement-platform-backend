@@ -27,15 +27,7 @@ func (c *ChannelAccountsCommand) Command() *cobra.Command {
 
 	configOpts := config.ConfigOptions{
 		cmdUtils.HorizonURLConfigOption(&svcOpts.HorizonUrl),
-		{
-			Name:           "crash-tracker-type",
-			Usage:          `Crash tracker type. Options: "SENTRY", "DRY_RUN"`,
-			OptType:        types.String,
-			CustomSetValue: cmdUtils.SetConfigOptionCrashTrackerType,
-			ConfigKey:      &crashTrackerOptions.CrashTrackerType,
-			FlagDefault:    "DRY_RUN",
-			Required:       true,
-		},
+		cmdUtils.CrashTrackerTypeConfigOption(&crashTrackerOptions.CrashTrackerType),
 	}
 	channelAccountsCmd := &cobra.Command{
 		Use:   "channel-accounts",

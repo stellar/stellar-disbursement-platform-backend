@@ -121,15 +121,7 @@ func (c *TxSubmitterCommand) Command(submitterService TxSubmitterServiceInterfac
 			FlagDefault: 100 * txnbuild.MinBaseFee,
 			Required:    true,
 		},
-		{
-			Name:           "crash-tracker-type",
-			Usage:          `Crash tracker type. Options: "SENTRY", "DRY_RUN"`,
-			OptType:        types.String,
-			CustomSetValue: cmdUtils.SetConfigOptionCrashTrackerType,
-			ConfigKey:      &crashTrackerOptions.CrashTrackerType,
-			FlagDefault:    "DRY_RUN",
-			Required:       true,
-		},
+		cmdUtils.CrashTrackerTypeConfigOption(&crashTrackerOptions.CrashTrackerType),
 	}
 
 	// event broker options:

@@ -163,3 +163,15 @@ func HorizonURLConfigOption(targetPointer interface{}) *config.ConfigOption {
 		Required:    true,
 	}
 }
+
+func CrashTrackerTypeConfigOption(targetPointer interface{}) *config.ConfigOption {
+	return &config.ConfigOption{
+		Name:           "crash-tracker-type",
+		Usage:          `Crash tracker type. Options: "SENTRY", "DRY_RUN"`,
+		OptType:        types.String,
+		CustomSetValue: SetConfigOptionCrashTrackerType,
+		ConfigKey:      targetPointer,
+		FlagDefault:    "DRY_RUN",
+		Required:       true,
+	}
+}
