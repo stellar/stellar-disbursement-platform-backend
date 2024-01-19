@@ -279,14 +279,17 @@ func (d DisbursementHandler) GetDisbursement(w http.ResponseWriter, r *http.Requ
 	}
 
 	disbursementManagementService := services.NewDisbursementManagementService(d.Models, d.DBConnectionPool, d.AuthManager)
-	response, err := disbursementManagementService.AddUserMetadata(ctx, disbursement.StatusHistory, &services.DisbursementWithUserMetadata{
-		Disbursement: *disbursement,
-	})
+	response, err := disbursementManagementService.AddUserMetadata(
+		ctx,
+		&services.DisbursementWithUserMetadata{
+			Disbursement: *disbursement,
+		},
+	)
 	if err != nil {
 		httperror.NotFound("disbursement user metadata not found", err, nil).Render(w)
 	}
 
-	httpjson.Render(w, *response, httpjson.JSON)
+	httpjson.Render(w, response, httpjson.JSON)
 }
 
 func (d DisbursementHandler) GetDisbursementReceivers(w http.ResponseWriter, r *http.Request) {

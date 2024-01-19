@@ -51,9 +51,9 @@ func NewDisbursementManagementService(models *data.Models, dbConnectionPool db.D
 	}
 }
 
-// AddUserMetadata returns a DisbursementWithUserMetadata instance with basic user information based on some status history.
-func (s *DisbursementManagementService) AddUserMetadata(ctx context.Context, statusHistory data.DisbursementStatusHistory, d *DisbursementWithUserMetadata) (*DisbursementWithUserMetadata, error) {
-	for _, entry := range statusHistory {
+// AddUserMetadata returns a DisbursementWithUserMetadata instance with basic user information based on the disbursement's status history.
+func (s *DisbursementManagementService) AddUserMetadata(ctx context.Context, d *DisbursementWithUserMetadata) (*DisbursementWithUserMetadata, error) {
+	for _, entry := range d.Disbursement.StatusHistory {
 		if entry.Status == data.DraftDisbursementStatus || entry.Status == data.StartedDisbursementStatus {
 			user, err := s.authManager.GetUserByID(ctx, entry.UserID)
 			if err != nil {
@@ -102,7 +102,6 @@ func (s *DisbursementManagementService) GetDisbursementsWithCount(ctx context.Co
 					for i, disbursement := range disbursements {
 						resp[i], err = s.AddUserMetadata(
 							ctx,
-							disbursement.StatusHistory,
 							&DisbursementWithUserMetadata{
 								Disbursement: *disbursement,
 							},
