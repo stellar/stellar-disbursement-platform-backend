@@ -49,6 +49,14 @@ type ChannelAccountServiceOptions struct {
 	EncryptionKey string
 }
 
+func (opts *ChannelAccountServiceOptions) encryptionPass() string {
+	if opts.EncryptionKey == "" {
+		return opts.RootSeed
+	}
+
+	return opts.EncryptionKey
+}
+
 func NewChannelAccountService(ctx context.Context, opts ChannelAccountServiceOptions) (*ChannelAccountsService, error) {
 	dbConnectionPool, err := db.OpenDBConnectionPool(opts.DatabaseDSN)
 	if err != nil {
@@ -56,6 +64,7 @@ func NewChannelAccountService(ctx context.Context, opts ChannelAccountServiceOpt
 	}
 
 	caModel := &store.ChannelAccountModel{DBConnectionPool: dbConnectionPool}
+
 	horizonClient := &horizonclient.Client{
 		HorizonURL: opts.HorizonUrl,
 		HTTP:       httpclient.DefaultClient(),
@@ -99,7 +108,7 @@ func createAccountsInBatch(
 	chAccModel store.ChannelAccountStore,
 	ledgerNumberTracker engine.LedgerNumberTracker,
 ) error {
-	sigService, err := engine.NewDefaultSignatureService(opts.NetworkPassphrase, dbConnectionPool, opts.RootSeed, chAccModel, &utils.DefaultPrivateKeyEncrypter{}, opts.RootSeed)
+	sigService, err := engine.NewDefaultSignatureService(opts.NetworkPassphrase, dbConnectionPool, opts.RootSeed, chAccModel, &utils.DefaultPrivateKeyEncrypter{}, opts.encryptionPass())
 	if err != nil {
 		return fmt.Errorf("creating signature service: %w", err)
 	}
@@ -324,7 +333,7 @@ func (s *ChannelAccountsService) deleteChannelAccount(
 	chAccAddress string,
 	lockedUntilLedger int,
 ) error {
-	sigService, err := engine.NewDefaultSignatureService(opts.NetworkPassphrase, s.dbConnectionPool, opts.RootSeed, s.caStore, &utils.DefaultPrivateKeyEncrypter{}, opts.RootSeed)
+	sigService, err := engine.NewDefaultSignatureService(opts.NetworkPassphrase, s.dbConnectionPool, opts.RootSeed, s.caStore, &utils.DefaultPrivateKeyEncrypter{}, opts.encryptionPass())
 	if err != nil {
 		return fmt.Errorf("creating signature service: %w", err)
 	}

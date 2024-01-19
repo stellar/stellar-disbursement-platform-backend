@@ -179,7 +179,7 @@ func CrashTrackerTypeConfigOption(targetPointer interface{}) *config.ConfigOptio
 func ChannelAccountEncryptionKeyConfigOption(targetPointer interface{}) *config.ConfigOption {
 	return &config.ConfigOption{
 		Name:           "channel-account-encryption-key",
-		Usage:          "A Stellar-compliant ed25519 private key used to encrypt/decrypt the channel accounts' private keys. When not set, it will default to the value of the `distribution-seed` option.",
+		Usage:          "A Stellar-compliant ed25519 private key used to encrypt/decrypt the channel accounts' private keys. When not set, it will default to the value of the 'distribution-seed' option.",
 		OptType:        types.String,
 		CustomSetValue: SetConfigOptionStellarPrivateKey,
 		ConfigKey:      targetPointer,

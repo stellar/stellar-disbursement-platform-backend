@@ -25,6 +25,24 @@ import (
 	storeMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store/mocks"
 )
 
+func Test_ChannelAccountServiceOptions_encriptionPass(t *testing.T) {
+	t.Run("returns EncryptionKey if it is not empty", func(t *testing.T) {
+		opts := ChannelAccountServiceOptions{
+			EncryptionKey: "EncryptionKey",
+			RootSeed:      "DistributionAccountPrivateKey",
+		}
+		require.Equal(t, "EncryptionKey", opts.encryptionPass())
+	})
+
+	t.Run("returns RootSeed if EncryptionKey is empty", func(t *testing.T) {
+		opts := ChannelAccountServiceOptions{
+			EncryptionKey: "",
+			RootSeed:      "DistributionAccountPrivateKey",
+		}
+		require.Equal(t, "DistributionAccountPrivateKey", opts.encryptionPass())
+	})
+}
+
 func Test_ChannelAccounts_CreateAccount_Success(t *testing.T) {
 	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
