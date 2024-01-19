@@ -41,5 +41,6 @@ type TransactionStore interface {
 	// Queue management:
 	PrepareTransactionForReprocessing(ctx context.Context, sqlExec db.SQLExecuter, transactionID string) (*Transaction, error)
 	GetTransactionBatchForUpdate(ctx context.Context, dbTx db.DBTransaction, batchSize int) (transactions []*Transaction, err error)
-	UpdateSyncedTransactions(ctx context.Context, dbTx db.DBTransaction, txIDs []string) error
+	GetTransactionPendingUpdateByID(ctx context.Context, sqlExec db.SQLExecuter, txID string) (transaction *Transaction, err error)
+	UpdateSyncedTransactions(ctx context.Context, sqlExec db.SQLExecuter, txIDs []string) error
 }

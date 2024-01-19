@@ -16,6 +16,8 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	sdpMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	tssMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/monitor"
@@ -43,6 +45,7 @@ type TransactionWorker struct {
 	crashTrackerClient  crashtracker.CrashTrackerClient
 	txProcessingLimiter *engine.TransactionProcessingLimiter
 	monitorSvc          tssMonitor.TSSMonitorService
+	eventProducer       events.Producer
 }
 
 func NewTransactionWorker(
@@ -55,6 +58,7 @@ func NewTransactionWorker(
 	crashTrackerClient crashtracker.CrashTrackerClient,
 	txProcessingLimiter *engine.TransactionProcessingLimiter,
 	monitorSvc tssMonitor.TSSMonitorService,
+	eventProducer events.Producer,
 ) (TransactionWorker, error) {
 	if dbConnectionPool == nil {
 		return TransactionWorker{}, fmt.Errorf("dbConnectionPool cannot be nil")
@@ -102,6 +106,7 @@ func NewTransactionWorker(
 		crashTrackerClient:  crashTrackerClient,
 		txProcessingLimiter: txProcessingLimiter,
 		monitorSvc:          monitorSvc,
+		eventProducer:       eventProducer,
 	}, nil
 }
 
@@ -172,6 +177,12 @@ func (tw *TransactionWorker) handleFailedTransaction(ctx context.Context, txJob 
 				updatedTx, err = tw.txModel.UpdateStatusToError(ctx, txJob.Transaction, hErrWrapper.Error())
 				if err != nil {
 					return fmt.Errorf("updating transaction status to error: %w", err)
+				}
+
+				// Publishing a new event on the event producer
+				err = tw.produceSyncPaymentEvent(ctx, events.SyncErrorPaymentFromSubmitterType, &txJob.Transaction, store.TransactionStatusError)
+				if err != nil {
+					return fmt.Errorf("producing event Status %s - Job %v: %w", txJob.Transaction.Status, txJob, err)
 				}
 
 				txJob.Transaction = *updatedTx
@@ -264,6 +275,12 @@ func (tw *TransactionWorker) handleSuccessfulTransaction(ctx context.Context, tx
 	}
 	txJob.Transaction = *updatedTx
 
+	// Publishing a new event on the event producer
+	err = tw.produceSyncPaymentEvent(ctx, events.SyncSuccessPaymentFromSubmitterType, &txJob.Transaction, store.TransactionStatusSuccess)
+	if err != nil {
+		return fmt.Errorf("producing event Status %s - Job %v: %w", txJob.Transaction.Status, txJob, err)
+	}
+
 	err = tw.unlockJob(ctx, txJob)
 	if err != nil {
 		return fmt.Errorf("unlocking job: %w", err)
@@ -333,6 +350,33 @@ func (tw *TransactionWorker) reconcileSubmittedTransaction(ctx context.Context, 
 		SrcChannelAcc:    txJob.ChannelAccount.PublicKey,
 		PaymentEventType: sdpMonitor.PaymentReconciliationMarkedForReprocessingLabel,
 	})
+
+	return nil
+}
+
+func (tw *TransactionWorker) produceSyncPaymentEvent(ctx context.Context, eventType string, tx *store.Transaction, status store.TransactionStatus) error {
+	if status != store.TransactionStatusSuccess && status != store.TransactionStatusError {
+		return fmt.Errorf("invalid status to produce sync payment event")
+	}
+
+	msg := events.Message{
+		Topic:    events.PaymentFromSubmitterTopic,
+		Key:      tx.ExternalID,
+		TenantID: tx.TenantID,
+		Type:     eventType,
+		Data: schemas.EventPaymentFromSubmitterData{
+			TransactionID: tx.ID,
+		},
+	}
+
+	if tw.eventProducer != nil {
+		err := tw.eventProducer.WriteMessages(ctx, msg)
+		if err != nil {
+			return fmt.Errorf("writing message %s on event producer: %w", msg, err)
+		}
+	} else {
+		log.Ctx(ctx).Errorf("event producer is nil, could not publish message %s", msg.String())
+	}
 
 	return nil
 }

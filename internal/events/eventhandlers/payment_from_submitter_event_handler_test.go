@@ -14,27 +14,26 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/router"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
 
-type SendReceiverWalletInviteServiceMock struct {
+type PaymentFromSubmitterServiceMock struct {
 	mock.Mock
 }
 
-var _ services.SendReceiverWalletInviteServiceInterface = new(SendReceiverWalletInviteServiceMock)
+var _ services.PaymentFromSubmitterServiceInterface = new(PaymentFromSubmitterServiceMock)
 
-func (s *SendReceiverWalletInviteServiceMock) SendInvite(ctx context.Context, receiverWalletsReq ...schemas.EventReceiverWalletSMSInvitationData) error {
-	args := s.Called(ctx, receiverWalletsReq)
+func (s *PaymentFromSubmitterServiceMock) SyncTransaction(ctx context.Context, tx *schemas.EventPaymentFromSubmitterData) error {
+	args := s.Called(ctx, tx)
 	return args.Error(0)
 }
 
-func (s *SendReceiverWalletInviteServiceMock) SetModels(models *data.Models) {
+func (s *PaymentFromSubmitterServiceMock) SetModels(models *data.Models) {
 	s.Called(models)
 }
 
-func Test_SendReceiverWalletsSMSInvitationEventHandler_Handle(t *testing.T) {
+func Test_PaymentFromSubmitterEventHandler_Handle(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 
@@ -48,9 +47,9 @@ func Test_SendReceiverWalletsSMSInvitationEventHandler_Handle(t *testing.T) {
 	require.NoError(t, err)
 
 	crashTrackerClient := crashtracker.MockCrashTrackerClient{}
-	service := SendReceiverWalletInviteServiceMock{}
+	service := PaymentFromSubmitterServiceMock{}
 
-	handler := SendReceiverWalletsSMSInvitationEventHandler{
+	handler := PaymentFromSubmitterEventHandler{
 		tenantManager:       tenantManager,
 		mtnDBConnectionPool: mtnDBConnectionPool,
 		crashTrackerClient:  &crashTrackerClient,
@@ -60,7 +59,7 @@ func Test_SendReceiverWalletsSMSInvitationEventHandler_Handle(t *testing.T) {
 	ctx := context.Background()
 	t.Run("logs and report error when message Data is invalid", func(t *testing.T) {
 		crashTrackerClient.
-			On("LogAndReportErrors", ctx, mock.Anything, "[SendReceiverWalletsSMSInvitationEventHandler] could convert data to []schemas.EventReceiverWalletSMSInvitationData: invalid").
+			On("LogAndReportErrors", ctx, mock.Anything, "[PaymentFromSubmitterEventHandler] could convert data to schemas.EventPaymentFromSubmitterData: invalid").
 			Return().
 			Once()
 
@@ -69,15 +68,14 @@ func Test_SendReceiverWalletsSMSInvitationEventHandler_Handle(t *testing.T) {
 
 	t.Run("logs and report error when fails getting tenant by ID", func(t *testing.T) {
 		crashTrackerClient.
-			On("LogAndReportErrors", ctx, tenant.ErrTenantDoesNotExist, "[SendReceiverWalletsSMSInvitationEventHandler] error getting tenant by id").
+			On("LogAndReportErrors", ctx, tenant.ErrTenantDoesNotExist, "[PaymentFromSubmitterEventHandler] error getting tenant by id").
 			Return().
 			Once()
 
 		handler.Handle(ctx, &events.Message{
 			TenantID: "tenant-id",
-			Data: []schemas.EventReceiverWalletSMSInvitationData{
-				{ReceiverWalletID: "rw-id-1"},
-				{ReceiverWalletID: "rw-id-2"},
+			Data: schemas.EventPaymentFromSubmitterData{
+				TransactionID: "tx-id",
 			},
 		})
 	})
@@ -88,9 +86,8 @@ func Test_SendReceiverWalletsSMSInvitationEventHandler_Handle(t *testing.T) {
 		tnt, err := tenantManager.AddTenant(ctx, "myorg1")
 		require.NoError(t, err)
 
-		reqs := []schemas.EventReceiverWalletSMSInvitationData{
-			{ReceiverWalletID: "rw-id-1"},
-			{ReceiverWalletID: "rw-id-2"},
+		tx := schemas.EventPaymentFromSubmitterData{
+			TransactionID: "tx-id",
 		}
 
 		ctxWithTenant := tenant.SaveTenantInContext(ctx, tnt)
@@ -99,30 +96,29 @@ func Test_SendReceiverWalletsSMSInvitationEventHandler_Handle(t *testing.T) {
 			On("SetModels", mock.AnythingOfType("*data.Models")).
 			Return().
 			Once().
-			On("SendInvite", ctxWithTenant, reqs).
+			On("SyncTransaction", ctxWithTenant, &tx).
 			Return(errors.New("unexpected error")).
 			Once()
 
 		crashTrackerClient.
-			On("LogAndReportErrors", ctxWithTenant, errors.New("unexpected error"), "[SendReceiverWalletsSMSInvitationEventHandler] sending receiver wallets invitation").
+			On("LogAndReportErrors", ctxWithTenant, errors.New("unexpected error"), `[PaymentFromSubmitterEventHandler] synching transaction completion for transaction ID "tx-id"`).
 			Return().
 			Once()
 
 		handler.Handle(ctx, &events.Message{
 			TenantID: tnt.ID,
-			Data:     reqs,
+			Data:     tx,
 		})
 	})
 
-	t.Run("successfully send invitation to the receivers", func(t *testing.T) {
+	t.Run("successfully syncs the TSS transaction with the SDP's payment", func(t *testing.T) {
 		tenant.DeleteAllTenantsFixture(t, ctx, dbConnectionPool)
 
 		tnt, err := tenantManager.AddTenant(ctx, "myorg1")
 		require.NoError(t, err)
 
-		reqs := []schemas.EventReceiverWalletSMSInvitationData{
-			{ReceiverWalletID: "rw-id-1"},
-			{ReceiverWalletID: "rw-id-2"},
+		tx := schemas.EventPaymentFromSubmitterData{
+			TransactionID: "tx-id",
 		}
 
 		ctxWithTenant := tenant.SaveTenantInContext(ctx, tnt)
@@ -131,24 +127,16 @@ func Test_SendReceiverWalletsSMSInvitationEventHandler_Handle(t *testing.T) {
 			On("SetModels", mock.AnythingOfType("*data.Models")).
 			Return().
 			Once().
-			On("SendInvite", ctxWithTenant, reqs).
+			On("SyncTransaction", ctxWithTenant, &tx).
 			Return(nil).
 			Once()
 
 		handler.Handle(ctx, &events.Message{
 			TenantID: tnt.ID,
-			Data:     reqs,
+			Data:     tx,
 		})
 	})
 
 	crashTrackerClient.AssertExpectations(t)
 	service.AssertExpectations(t)
-}
-
-func Test_SendReceiverWalletsSMSInvitationEventHandler_CanHandleMessage(t *testing.T) {
-	ctx := context.Background()
-	handler := SendReceiverWalletsSMSInvitationEventHandler{}
-
-	assert.False(t, handler.CanHandleMessage(ctx, &events.Message{Topic: "some-topic"}))
-	assert.True(t, handler.CanHandleMessage(ctx, &events.Message{Topic: events.ReceiverWalletNewInvitationTopic}))
 }

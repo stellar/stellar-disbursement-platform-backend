@@ -4,17 +4,18 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"strings"
+	"strconv"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/lib/pq"
-	"github.com/stellar/go/support/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	txSubStore "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 )
 
@@ -22,6 +23,7 @@ type testContext struct {
 	tssModel *txSubStore.TransactionModel
 	sdpModel *data.Models
 	ctx      context.Context
+	tenantID string
 }
 
 func setupTestContext(t *testing.T, dbConnectionPool db.DBConnectionPool) *testContext {
@@ -35,11 +37,11 @@ func setupTestContext(t *testing.T, dbConnectionPool db.DBConnectionPool) *testC
 		tssModel: tssModel,
 		sdpModel: models,
 		ctx:      context.Background(),
+		tenantID: uuid.NewString(),
 	}
 }
 
-func Test_PaymentFromSubmitterService_MonitorTransactions(t *testing.T) {
-	t.Skip("Fix in SDP-924, when we refactor `payment_from_submitter_job` to use Kafka")
+func Test_PaymentFromSubmitterService_SyncTransaction(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 
@@ -50,8 +52,8 @@ func Test_PaymentFromSubmitterService_MonitorTransactions(t *testing.T) {
 	testCtx := setupTestContext(t, dbConnectionPool)
 	ctx := testCtx.ctx
 
-	paymentService := NewPaymentToSubmitterService(testCtx.sdpModel)
-	monitorService := NewPaymentFromSubmitterService(testCtx.sdpModel)
+	monitorService := NewPaymentFromSubmitterService(dbConnectionPool)
+	monitorService.sdpModels = testCtx.sdpModel
 
 	// create fixtures
 	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool,
@@ -122,12 +124,10 @@ func Test_PaymentFromSubmitterService_MonitorTransactions(t *testing.T) {
 		Status:         data.ReadyPaymentStatus,
 	})
 
-	outerErr = paymentService.SendBatchPayments(ctx, 5)
-	require.NoError(t, outerErr)
+	payments := []*data.Payment{payment1, payment2, payment3, payment4, payment5}
 
-	transactions, outerErr := testCtx.tssModel.GetAllByPaymentIDs(ctx, []string{payment1.ID, payment2.ID, payment3.ID, payment4.ID, payment5.ID})
-	require.NoError(t, outerErr)
-	require.Len(t, transactions, 5)
+	// Creating TSS transactions
+	transactions := createTSSTxs(t, testCtx, payments...)
 
 	// Update Hash and status of transactions to simulate success
 	prepareTxsForSync(t, testCtx, transactions)
@@ -148,9 +148,12 @@ func Test_PaymentFromSubmitterService_MonitorTransactions(t *testing.T) {
 		}
 	}
 
-	t.Run("monitor successful tss transactions", func(t *testing.T) {
-		err := monitorService.MonitorTransactions(ctx, 5)
-		require.NoError(t, err)
+	t.Run("sync tss transactions successfully", func(t *testing.T) {
+		// We call sync transaction for each tss transaction created
+		for _, transaction := range transactions {
+			err := monitorService.SyncTransaction(ctx, &schemas.EventPaymentFromSubmitterData{TransactionID: transaction.ID})
+			require.NoError(t, err)
+		}
 
 		// check that successful payments are updated
 		for _, p := range []*data.Payment{payment1, payment2, payment3} {
@@ -187,9 +190,9 @@ func Test_PaymentFromSubmitterService_MonitorTransactions(t *testing.T) {
 		require.Equal(t, payment.StatusHistory[2].StatusMessage, "another-test-error")
 
 		// validate transactions synced_at is updated.
-		txs, txErr = testCtx.tssModel.GetAllByPaymentIDs(ctx, []string{payment1.ID, payment2.ID, payment3.ID, payment4.ID})
+		txs, txErr = testCtx.tssModel.GetAllByPaymentIDs(ctx, []string{payment1.ID, payment2.ID, payment3.ID, payment4.ID, payment5.ID})
 		require.NoError(t, txErr)
-		require.Len(t, txs, 4)
+		require.Len(t, txs, 5)
 
 		for _, tx := range txs {
 			require.NotNil(t, tx.SyncedAt)
@@ -202,7 +205,7 @@ func Test_PaymentFromSubmitterService_MonitorTransactions(t *testing.T) {
 		_, err := dbConnectionPool.ExecContext(ctx, q, transactions[0].ID)
 		require.NoError(t, err)
 
-		err = monitorService.MonitorTransactions(ctx, 5)
+		err = monitorService.SyncTransaction(ctx, &schemas.EventPaymentFromSubmitterData{TransactionID: transactions[0].ID})
 		require.Error(t, err)
 		require.ErrorContainsf(t, err, "stellar transaction id is required", "error: %s", err.Error())
 	})
@@ -211,16 +214,13 @@ func Test_PaymentFromSubmitterService_MonitorTransactions(t *testing.T) {
 		prepareTxsForSync(t, testCtx, transactions)
 		updatePaymentStatus(t, testCtx, payment1.ID, data.SuccessPaymentStatus)
 
-		err := monitorService.MonitorTransactions(ctx, 5)
+		err := monitorService.SyncTransaction(ctx, &schemas.EventPaymentFromSubmitterData{TransactionID: transactions[0].ID})
 		require.Error(t, err)
-		contains := fmt.Sprintf("expected payment %s to be in pending status but got SUCCESS", payment1.ID)
+		contains := fmt.Sprintf("updating payment ID %s for transaction ID %s: cannot transition from SUCCESS to SUCCESS for payment %s: cannot transition from SUCCESS to SUCCESS", payment1.ID, transactions[0].ID, payment1.ID)
 		require.ErrorContainsf(t, err, contains, "error: %s", err.Error())
 	})
 
 	t.Run("error for orphaned transactions", func(t *testing.T) {
-		buf := new(strings.Builder)
-		log.DefaultLogger.SetOutput(buf)
-
 		prepareTxsForSync(t, testCtx, transactions)
 		// insert a transaction that is not associated with a payment
 		paymentID := "dummy_payment_id"
@@ -231,6 +231,7 @@ func Test_PaymentFromSubmitterService_MonitorTransactions(t *testing.T) {
 			AssetIssuer: asset.Issuer,
 			Amount:      100,
 			Destination: rw1.StellarAddress,
+			TenantID:    uuid.NewString(),
 		})
 		require.NoError(t, err)
 
@@ -244,11 +245,44 @@ func Test_PaymentFromSubmitterService_MonitorTransactions(t *testing.T) {
 		assert.Equal(t, txSubStore.TransactionStatusSuccess, tx.Status)
 		assert.NotEmpty(t, tx.CompletedAt)
 
-		err = monitorService.MonitorTransactions(ctx, 10)
-		require.NoError(t, err)
-		expectedError := fmt.Sprintf("orphaned transaction, unable to sync transaction %s because the associated payment %s was deleted", tx.ID, paymentID)
-		assert.Contains(t, buf.String(), expectedError)
+		err = monitorService.SyncTransaction(ctx, &schemas.EventPaymentFromSubmitterData{TransactionID: tx.ID})
+		assert.ErrorContains(t, err, fmt.Sprintf("expected exactly 1 payment for the transaction ID %s but found 0", tx.ID))
 	})
+}
+
+func createTSSTxs(t *testing.T, testCtx *testContext, payments ...*data.Payment) []*txSubStore.Transaction {
+	t.Helper()
+
+	paymentsQuantity := len(payments)
+	transactionsToCreate := make([]txSubStore.Transaction, 0, paymentsQuantity)
+	for _, payment := range payments {
+		amount, err := strconv.ParseFloat(payment.Amount, 64)
+		require.NoError(t, err)
+
+		transactionsToCreate = append(transactionsToCreate, txSubStore.Transaction{
+			ExternalID:  payment.ID,
+			AssetCode:   payment.Asset.Code,
+			AssetIssuer: payment.Asset.Issuer,
+			Amount:      amount,
+			Destination: payment.ReceiverWallet.StellarAddress,
+			TenantID:    testCtx.tenantID,
+		})
+	}
+
+	transactionsCreated, err := testCtx.tssModel.BulkInsert(testCtx.ctx, testCtx.tssModel.DBConnectionPool, transactionsToCreate)
+	require.NoError(t, err)
+	require.Len(t, transactionsCreated, paymentsQuantity)
+
+	n, err := testCtx.sdpModel.Payment.UpdateStatuses(testCtx.ctx, testCtx.sdpModel.DBConnectionPool, payments, data.PendingPaymentStatus)
+	require.NoError(t, err)
+	require.Equal(t, int64(paymentsQuantity), n)
+
+	transactions := make([]*txSubStore.Transaction, 0, paymentsQuantity)
+	for i := range transactionsCreated {
+		transactions = append(transactions, &transactionsCreated[i])
+	}
+
+	return transactions
 }
 
 func prepareTxsForSync(t *testing.T, testCtx *testContext, transactions []*txSubStore.Transaction) {
@@ -264,7 +298,6 @@ func prepareTxsForSync(t *testing.T, testCtx *testContext, transactions []*txSub
 		require.NoError(t, err)
 
 		tx, err = testCtx.tssModel.Get(testCtx.ctx, tx.ID)
-
 		require.NoError(t, err)
 
 		// Update transactions states PROCESSING->SUCCESS:
@@ -337,7 +370,6 @@ func updateTSSTransactionsToError(t *testing.T, testCtx *testContext, txDataSlic
 }
 
 func Test_PaymentFromSubmitterService_RetryingPayment(t *testing.T) {
-	t.Skip("Fix in SDP-924, when we refactor `payment_from_submitter_job` to use Kafka")
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 
@@ -348,8 +380,8 @@ func Test_PaymentFromSubmitterService_RetryingPayment(t *testing.T) {
 	testCtx := setupTestContext(t, dbConnectionPool)
 	ctx := testCtx.ctx
 
-	paymentService := NewPaymentToSubmitterService(testCtx.sdpModel)
-	monitorService := NewPaymentFromSubmitterService(testCtx.sdpModel)
+	monitorService := NewPaymentFromSubmitterService(dbConnectionPool)
+	monitorService.sdpModels = testCtx.sdpModel
 
 	// clean test db
 	data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
@@ -386,16 +418,12 @@ func Test_PaymentFromSubmitterService_RetryingPayment(t *testing.T) {
 		Asset:                *asset,
 	})
 
-	err := paymentService.SendBatchPayments(ctx, 1)
-	require.NoError(t, err)
+	transactions := createTSSTxs(t, testCtx, payment)
+	require.Len(t, transactions, 1)
 
 	paymentDB, err := testCtx.sdpModel.Payment.Get(ctx, payment.ID, dbConnectionPool)
 	require.NoError(t, err)
 	assert.Equal(t, data.PendingPaymentStatus, paymentDB.Status)
-
-	transactions, err := testCtx.tssModel.GetAllByPaymentIDs(ctx, []string{payment.ID})
-	require.NoError(t, err)
-	require.Len(t, transactions, 1)
 
 	transaction := transactions[0]
 	assert.Equal(t, payment.ID, transaction.ExternalID)
@@ -412,7 +440,9 @@ func Test_PaymentFromSubmitterService_RetryingPayment(t *testing.T) {
 	assert.Equal(t, txSubStore.TransactionStatusError, transaction.Status)
 
 	// WHEN the monitor service is called
-	err = monitorService.MonitorTransactions(ctx, 1)
+	err = monitorService.SyncTransaction(ctx, &schemas.EventPaymentFromSubmitterData{
+		TransactionID: transaction.ID,
+	})
 	require.NoError(t, err)
 
 	// THEN the payment is synced to the error state
@@ -432,8 +462,8 @@ func Test_PaymentFromSubmitterService_RetryingPayment(t *testing.T) {
 	assert.Equal(t, data.ReadyPaymentStatus, paymentDB.Status)
 
 	// AND a new transaction is created for the payment
-	err = paymentService.SendBatchPayments(ctx, 1)
-	require.NoError(t, err)
+	transactions = createTSSTxs(t, testCtx, payment)
+	require.Len(t, transactions, 1)
 
 	paymentDB, err = testCtx.sdpModel.Payment.Get(ctx, payment.ID, dbConnectionPool)
 	require.NoError(t, err)
@@ -453,7 +483,9 @@ func Test_PaymentFromSubmitterService_RetryingPayment(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, txSubStore.TransactionStatusSuccess, transaction2.Status)
 
-	err = monitorService.MonitorTransactions(ctx, 2)
+	err = monitorService.SyncTransaction(ctx, &schemas.EventPaymentFromSubmitterData{
+		TransactionID: transaction2.ID,
+	})
 	require.NoError(t, err)
 
 	paymentDB, err = testCtx.sdpModel.Payment.Get(ctx, paymentDB.ID, dbConnectionPool)
@@ -465,7 +497,6 @@ func Test_PaymentFromSubmitterService_RetryingPayment(t *testing.T) {
 }
 
 func Test_PaymentFromSubmitterService_CompleteDisbursements(t *testing.T) {
-	t.Skip("Fix in SDP-924, when we refactor `payment_from_submitter_job` to use Kafka")
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 
@@ -476,8 +507,8 @@ func Test_PaymentFromSubmitterService_CompleteDisbursements(t *testing.T) {
 	testCtx := setupTestContext(t, dbConnectionPool)
 	ctx := testCtx.ctx
 
-	paymentService := NewPaymentToSubmitterService(testCtx.sdpModel)
-	monitorService := NewPaymentFromSubmitterService(testCtx.sdpModel)
+	monitorService := NewPaymentFromSubmitterService(dbConnectionPool)
+	monitorService.sdpModels = testCtx.sdpModel
 
 	// clean test db
 	data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
@@ -514,16 +545,12 @@ func Test_PaymentFromSubmitterService_CompleteDisbursements(t *testing.T) {
 		Asset:                *asset,
 	})
 
-	err := paymentService.SendBatchPayments(ctx, 1)
-	require.NoError(t, err)
+	transactions := createTSSTxs(t, testCtx, payment)
+	require.Len(t, transactions, 1)
 
 	paymentDB, err := testCtx.sdpModel.Payment.Get(ctx, payment.ID, dbConnectionPool)
 	require.NoError(t, err)
 	assert.Equal(t, data.PendingPaymentStatus, paymentDB.Status)
-
-	transactions, err := testCtx.tssModel.GetAllByPaymentIDs(ctx, []string{payment.ID})
-	require.NoError(t, err)
-	require.Len(t, transactions, 1)
 
 	transaction := transactions[0]
 	assert.Equal(t, payment.ID, transaction.ExternalID)
@@ -540,7 +567,7 @@ func Test_PaymentFromSubmitterService_CompleteDisbursements(t *testing.T) {
 	assert.Equal(t, txSubStore.TransactionStatusError, transaction.Status)
 
 	// WHEN the monitor service is called
-	err = monitorService.MonitorTransactions(ctx, 1)
+	err = monitorService.SyncTransaction(testCtx.ctx, &schemas.EventPaymentFromSubmitterData{TransactionID: transaction.ID})
 	require.NoError(t, err)
 
 	// THEN the disbursement will not be completed
@@ -557,8 +584,7 @@ func Test_PaymentFromSubmitterService_CompleteDisbursements(t *testing.T) {
 	assert.Equal(t, data.ReadyPaymentStatus, paymentDB.Status)
 
 	// AND a new transaction is created for the payment
-	err = paymentService.SendBatchPayments(ctx, 1)
-	require.NoError(t, err)
+	createTSSTxs(t, testCtx, paymentDB)
 
 	paymentDB, err = testCtx.sdpModel.Payment.Get(ctx, payment.ID, dbConnectionPool)
 	require.NoError(t, err)
@@ -579,7 +605,7 @@ func Test_PaymentFromSubmitterService_CompleteDisbursements(t *testing.T) {
 	assert.Equal(t, txSubStore.TransactionStatusSuccess, transaction2.Status)
 
 	// WHEN the monitor service is called again
-	err = monitorService.MonitorTransactions(ctx, 2)
+	err = monitorService.SyncTransaction(testCtx.ctx, &schemas.EventPaymentFromSubmitterData{TransactionID: transaction2.ID})
 	require.NoError(t, err)
 
 	// THEN disbursement gets completed

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/stellar/go/support/log"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
@@ -431,6 +432,27 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 		receivers, err := di.receiverModel.GetByPhoneNumbers(ctx, dbConnectionPool, []string{instruction1.Phone, instruction2.Phone, instruction3.Phone})
 		require.NoError(t, err)
 		assert.Empty(t, receivers)
+	})
+
+	t.Run("logs when couldn't write message because EventProducer is nil", func(t *testing.T) {
+		DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
+		DeleteAllReceiverVerificationFixtures(t, ctx, dbConnectionPool)
+		DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
+		DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
+
+		getEntries := log.DefaultLogger.StartTest(log.ErrorLevel)
+
+		err := di.ProcessAll(ctx, "user-id", instructions, disbursement, disbursementUpdate, MaxInstructionsPerDisbursement, nil)
+		require.NoError(t, err)
+
+		// Assert no receivers were registered
+		receivers, err := di.receiverModel.GetByPhoneNumbers(ctx, dbConnectionPool, []string{instruction1.Phone, instruction2.Phone, instruction3.Phone})
+		require.NoError(t, err)
+		assert.Len(t, receivers, 3)
+
+		entries := getEntries()
+		require.Len(t, entries, 1)
+		assert.Contains(t, entries[0].Message, "Message{")
 	})
 
 	t.Run("failure - getting tenant from context", func(t *testing.T) {

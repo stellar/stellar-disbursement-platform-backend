@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/stellar/go/support/log"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
@@ -150,5 +151,55 @@ func Test_RetryInvitation(t *testing.T) {
 		resp := rr.Result()
 		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
 		assert.JSONEq(t, `{"error":"An internal error occurred while processing this request."}`, rr.Body.String())
+	})
+
+	t.Run("logs when couldn't write message because EventProducer is nil", func(t *testing.T) {
+		receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
+		wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "wallet", "https://www.wallet.com", "www.wallet.com", "wallet://")
+		rw := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.ReadyReceiversWalletStatus)
+
+		handler := &ReceiverWalletsHandler{
+			Models:        models,
+			EventProducer: nil,
+		}
+
+		router := chi.NewRouter()
+		router.Patch("/receivers/wallets/{receiver_wallet_id}", handler.RetryInvitation)
+
+		getEntries := log.DefaultLogger.StartTest(log.ErrorLevel)
+
+		// Assert no receivers were registered
+		route := fmt.Sprintf("/receivers/wallets/%s", rw.ID)
+		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, route, nil)
+		require.NoError(t, err)
+
+		rr := httptest.NewRecorder()
+		router.ServeHTTP(rr, req)
+
+		wantJson := fmt.Sprintf(`{
+			"id": %q,
+			"receiver_id": %q,
+			"wallet_id": %q,
+			"created_at": %q,
+			"invitation_sent_at": null
+		}`, rw.ID, receiver.ID, wallet.ID, rw.CreatedAt.Format(time.RFC3339Nano))
+
+		resp := rr.Result()
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.JSONEq(t, wantJson, rr.Body.String())
+
+		msg := events.Message{
+			Topic:    events.ReceiverWalletNewInvitationTopic,
+			Key:      rw.ID,
+			TenantID: tnt.ID,
+			Type:     events.RetryReceiverWalletSMSInvitationType,
+			Data: []schemas.EventReceiverWalletSMSInvitationData{
+				{ReceiverWalletID: rw.ID},
+			},
+		}
+
+		entries := getEntries()
+		require.Len(t, entries, 1)
+		assert.Equal(t, fmt.Sprintf("event producer is nil, could not publish message %s", msg.String()), entries[0].Message)
 	})
 }
