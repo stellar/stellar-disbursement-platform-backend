@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"go/types"
 
+	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/support/config"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
@@ -149,5 +150,16 @@ func EventBrokerConfigOptions(opts *EventBrokerOptions) []*config.ConfigOption {
 			ConfigKey: &opts.ConsumerGroupID,
 			Required:  false,
 		},
+	}
+}
+
+func HorizonURLConfigOption(targetPointer interface{}) *config.ConfigOption {
+	return &config.ConfigOption{
+		Name:        "horizon-url",
+		Usage:       "The URL of the Stellar Horizon server where this application will communicate with.",
+		OptType:     types.String,
+		ConfigKey:   targetPointer,
+		FlagDefault: horizonclient.DefaultTestNetClient.HorizonURL,
+		Required:    true,
 	}
 }

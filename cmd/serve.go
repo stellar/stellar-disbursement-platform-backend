@@ -18,7 +18,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/scheduler"
 
 	"github.com/spf13/cobra"
-	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/support/config"
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
@@ -331,14 +330,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			CustomSetValue: cmdUtils.SetConfigOptionURLString,
 			Required:       true,
 		},
-		{
-			Name:        "horizon-url",
-			Usage:       "Stellar Horizon URL.",
-			OptType:     types.String,
-			ConfigKey:   &serveOpts.HorizonURL,
-			FlagDefault: horizonclient.DefaultTestNetClient.HorizonURL,
-			Required:    true,
-		},
+		cmdUtils.HorizonURLConfigOption(&serveOpts.HorizonURL),
 		{
 			Name:        "enable-scheduler",
 			Usage:       "Enable Scheduler for SDP Backend Jobs",

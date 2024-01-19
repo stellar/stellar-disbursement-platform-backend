@@ -5,7 +5,6 @@ import (
 	"go/types"
 
 	"github.com/spf13/cobra"
-	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/support/config"
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/txnbuild"
@@ -27,14 +26,7 @@ func (c *ChannelAccountsCommand) Command() *cobra.Command {
 	crashTrackerOptions := crashtracker.CrashTrackerOptions{}
 
 	configOpts := config.ConfigOptions{
-		{
-			Name:        "horizon-url",
-			Usage:       `Horizon URL"`,
-			OptType:     types.String,
-			ConfigKey:   &svcOpts.HorizonUrl,
-			FlagDefault: horizonclient.DefaultTestNetClient.HorizonURL,
-			Required:    true,
-		},
+		cmdUtils.HorizonURLConfigOption(&svcOpts.HorizonUrl),
 		{
 			Name:           "crash-tracker-type",
 			Usage:          `Crash tracker type. Options: "SENTRY", "DRY_RUN"`,
@@ -173,7 +165,7 @@ func (c *ChannelAccountsCommand) VerifyCommand(toolOpts *txSubSvc.ChannelAccount
 
 	verifyCmd := &cobra.Command{
 		Use:   "verify",
-		Short: "Verify the existence of all channel accounts in the database on the Stellar newtwork",
+		Short: "Verify that all the channel accounts in the database exist on the Stellar newtwork",
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
 			ctx := cmd.Context()
 			cmd.Parent().PersistentPreRun(cmd.Parent(), args)

@@ -8,7 +8,6 @@ import (
 	"syscall"
 
 	"github.com/spf13/cobra"
-	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/support/config"
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/txnbuild"
@@ -97,14 +96,7 @@ func (c *TxSubmitterCommand) Command(submitterService TxSubmitterServiceInterfac
 			ConfigKey:      &submitterOpts.DistributionSeed,
 			Required:       true,
 		},
-		{
-			Name:        "horizon-url",
-			Usage:       "Horizon URL",
-			OptType:     types.String,
-			ConfigKey:   &submitterOpts.HorizonURL,
-			FlagDefault: horizonclient.DefaultTestNetClient.HorizonURL,
-			Required:    true,
-		},
+		cmdUtils.HorizonURLConfigOption(&submitterOpts.HorizonURL),
 		{
 			Name:        "num-channel-accounts",
 			Usage:       "Number of channel accounts to utilize for transaction submission",
