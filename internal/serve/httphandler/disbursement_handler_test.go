@@ -416,9 +416,11 @@ func Test_DisbursementHandler_GetDisbursements_Success(t *testing.T) {
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
+	authManagerMock := &auth.AuthManagerMock{}
 	handler := &DisbursementHandler{
 		Models:           models,
 		DBConnectionPool: dbConnectionPool,
+		AuthManager:      authManagerMock,
 	}
 
 	ts := httptest.NewServer(http.HandlerFunc(handler.GetDisbursements))
@@ -431,14 +433,23 @@ func Test_DisbursementHandler_GetDisbursements_Success(t *testing.T) {
 	asset := data.GetAssetFixture(t, ctx, dbConnectionPool, data.FixtureAssetUSDC)
 	country := data.GetCountryFixture(t, ctx, dbConnectionPool, data.FixtureCountryUKR)
 
-	mockPasswordEncrypter := &auth.PasswordEncrypterMock{}
-	encryptedPassword := "ABC123"
-	mockPasswordEncrypter.
-		On("Encrypt", ctx, mock.AnythingOfType("string")).
-		Return(encryptedPassword, nil).Once()
+	createdByUser := auth.User{
+		ID:        "User1",
+		FirstName: "User",
+		LastName:  "One",
+	}
+	startedByUser := auth.User{
+		ID:        "User2",
+		FirstName: "User",
+		LastName:  "Two",
+	}
 
-	createdByUser := auth.CreateRandomAuthUserFixture(t, ctx, dbConnectionPool, mockPasswordEncrypter, false)
-	startedByUser := auth.CreateRandomAuthUserFixture(t, ctx, dbConnectionPool, mockPasswordEncrypter, false)
+	authManagerMock.
+		On("GetUserByID", mock.Anything, createdByUser.ID).
+		Return(&createdByUser, nil)
+	authManagerMock.
+		On("GetUserByID", mock.Anything, startedByUser.ID).
+		Return(&startedByUser, nil)
 
 	createdByUserRef := services.UserReference{
 		Id:        createdByUser.ID,
@@ -480,12 +491,13 @@ func Test_DisbursementHandler_GetDisbursements_Success(t *testing.T) {
 		CreatedAt:     time.Date(2022, 3, 21, 23, 40, 20, 1431, time.UTC),
 	})
 	disbursement2 := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-		Name:      "disbursement 2",
-		Status:    data.ReadyDisbursementStatus,
-		Asset:     asset,
-		Wallet:    wallet,
-		Country:   country,
-		CreatedAt: time.Date(2023, 2, 20, 23, 40, 20, 1431, time.UTC),
+		Name:          "disbursement 2",
+		Status:        data.ReadyDisbursementStatus,
+		StatusHistory: draftStatusHistory,
+		Asset:         asset,
+		Wallet:        wallet,
+		Country:       country,
+		CreatedAt:     time.Date(2023, 2, 20, 23, 40, 20, 1431, time.UTC),
 	})
 	disbursement3 := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
 		Name:          "disbursement 3",
@@ -535,6 +547,7 @@ func Test_DisbursementHandler_GetDisbursements_Success(t *testing.T) {
 				},
 				{
 					Disbursement: *disbursement2,
+					CreatedBy:    createdByUserRef,
 				},
 				{
 					Disbursement: *disbursement1,
@@ -582,6 +595,7 @@ func Test_DisbursementHandler_GetDisbursements_Success(t *testing.T) {
 			expectedDisbursements: []services.DisbursementWithUserMetadata{
 				{
 					Disbursement: *disbursement2,
+					CreatedBy:    createdByUserRef,
 				},
 			},
 		},
@@ -643,6 +657,10 @@ func Test_DisbursementHandler_GetDisbursements_Success(t *testing.T) {
 			},
 			expectedDisbursements: []services.DisbursementWithUserMetadata{
 				{
+					Disbursement: *disbursement4,
+					CreatedBy:    createdByUserRef,
+				},
+				{
 					Disbursement: *disbursement1,
 					CreatedBy:    createdByUserRef,
 				},
@@ -692,6 +710,7 @@ func Test_DisbursementHandler_GetDisbursements_Success(t *testing.T) {
 				},
 				{
 					Disbursement: *disbursement2,
+					CreatedBy:    createdByUserRef,
 				},
 			},
 		},
@@ -716,6 +735,7 @@ func Test_DisbursementHandler_GetDisbursements_Success(t *testing.T) {
 				},
 				{
 					Disbursement: *disbursement2,
+					CreatedBy:    createdByUserRef,
 				},
 			},
 		},
@@ -738,7 +758,7 @@ func Test_DisbursementHandler_GetDisbursements_Success(t *testing.T) {
 			assert.Equal(t, tc.expectedPagination, actualResponse.Pagination)
 
 			// Parse the response data
-			var actualDisbursements []data.Disbursement
+			var actualDisbursements []services.DisbursementWithUserMetadata
 			err = json.Unmarshal(actualResponse.Data, &actualDisbursements)
 			require.NoError(t, err)
 
@@ -937,28 +957,38 @@ func Test_DisbursementHandler_GetDisbursement(t *testing.T) {
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
+	authManagerMock := &auth.AuthManagerMock{}
+	createdByUser := auth.User{
+		ID:        "User1",
+		FirstName: "User",
+		LastName:  "One",
+	}
+	startedByUser := auth.User{
+		ID:        "User2",
+		FirstName: "User",
+		LastName:  "Two",
+	}
+
+	authManagerMock.
+		On("GetUserByID", mock.Anything, createdByUser.ID).
+		Return(&createdByUser, nil)
+	authManagerMock.
+		On("GetUserByID", mock.Anything, startedByUser.ID).
+		Return(&startedByUser, nil)
+
 	handler := &DisbursementHandler{
 		Models:           models,
 		DBConnectionPool: models.DBConnectionPool,
+		AuthManager:      authManagerMock,
 	}
 
 	r := chi.NewRouter()
 	r.Get("/disbursements/{id}", handler.GetDisbursement)
 
-	ctx := context.Background()
-	mockPasswordEncrypter := &auth.PasswordEncrypterMock{}
-	encryptedPassword := "ABC123"
-	mockPasswordEncrypter.
-		On("Encrypt", ctx, mock.AnythingOfType("string")).
-		Return(encryptedPassword, nil).Once()
-
-	createdByUser := auth.CreateRandomAuthUserFixture(t, ctx, dbConnectionPool, mockPasswordEncrypter, false)
-	startedByUser := auth.CreateRandomAuthUserFixture(t, ctx, dbConnectionPool, mockPasswordEncrypter, false)
-
 	// create disbursements
 	disbursement := data.CreateDisbursementFixture(t, context.Background(), dbConnectionPool, handler.Models.Disbursements, &data.Disbursement{
 		Name:   "disbursement 1",
-		Status: data.DraftDisbursementStatus,
+		Status: data.StartedDisbursementStatus,
 		StatusHistory: data.DisbursementStatusHistory{
 			data.DisbursementStatusHistoryEntry{
 				Status: data.DraftDisbursementStatus,
@@ -1014,7 +1044,7 @@ func Test_DisbursementHandler_GetDisbursement(t *testing.T) {
 			r.ServeHTTP(rr, req)
 
 			if rr.Code == http.StatusOK {
-				var actualDisbursement data.Disbursement
+				var actualDisbursement services.DisbursementWithUserMetadata
 				require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &actualDisbursement))
 				require.Equal(t, tc.expectedDisbursement, actualDisbursement)
 			} else {

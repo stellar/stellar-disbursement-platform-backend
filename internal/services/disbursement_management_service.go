@@ -51,13 +51,13 @@ func NewDisbursementManagementService(models *data.Models, dbConnectionPool db.D
 	}
 }
 
-// AddUserMetadata populates a reference to DisbursementWithUserMetadata instance with basic user information about the disbursement.
-func (s *DisbursementManagementService) AddUserMetadata(ctx context.Context, statusHistory data.DisbursementStatusHistory, d *DisbursementWithUserMetadata) error {
-	for _, entry := range d.Disbursement.StatusHistory {
+// AddUserMetadata returns a DisbursementWithUserMetadata instance with basic user information based on some status history.
+func (s *DisbursementManagementService) AddUserMetadata(ctx context.Context, statusHistory data.DisbursementStatusHistory, d *DisbursementWithUserMetadata) (*DisbursementWithUserMetadata, error) {
+	for _, entry := range statusHistory {
 		if entry.Status == data.DraftDisbursementStatus || entry.Status == data.StartedDisbursementStatus {
 			user, err := s.authManager.GetUserByID(ctx, entry.UserID)
 			if err != nil {
-				return fmt.Errorf("error getting user ID %s", entry.UserID)
+				return d, fmt.Errorf("error getting user ID %s", entry.UserID)
 			}
 
 			userRef := UserReference{
@@ -77,7 +77,7 @@ func (s *DisbursementManagementService) AddUserMetadata(ctx context.Context, sta
 		}
 	}
 
-	return nil
+	return d, nil
 }
 
 func (s *DisbursementManagementService) GetDisbursementsWithCount(ctx context.Context, queryParams *data.QueryParams, addUserMetadata bool) (*utils.ResultWithTotal, error) {
@@ -98,13 +98,18 @@ func (s *DisbursementManagementService) GetDisbursementsWithCount(ctx context.Co
 				}
 
 				if addUserMetadata {
-					resp := make([]*DisbursementWithUserMetadata, totalDisbursements)
+					resp := make([]*DisbursementWithUserMetadata, len(disbursements))
 					for i, disbursement := range disbursements {
-						err = s.AddUserMetadata(ctx, disbursement.StatusHistory, resp[i])
+						resp[i], err = s.AddUserMetadata(
+							ctx,
+							disbursement.StatusHistory,
+							&DisbursementWithUserMetadata{
+								Disbursement: *disbursement,
+							},
+						)
 						if err != nil {
 							return nil, fmt.Errorf("error adding user metadata: %w", err)
 						}
-						resp[i].Disbursement = *disbursement
 					}
 
 					return utils.NewResultWithTotal(totalDisbursements, resp), nil
