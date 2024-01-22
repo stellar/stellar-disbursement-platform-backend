@@ -22,7 +22,6 @@ import (
 
 type SendReceiverWalletInviteServiceInterface interface {
 	SendInvite(ctx context.Context, receiverWalletInvitationData ...schemas.EventReceiverWalletSMSInvitationData) error
-	SetModels(models *data.Models)
 }
 
 type SendReceiverWalletInviteService struct {
@@ -240,10 +239,6 @@ func (s SendReceiverWalletInviteService) shouldSendInvitationSMS(ctx context.Con
 	}
 
 	return true
-}
-
-func (s *SendReceiverWalletInviteService) SetModels(models *data.Models) {
-	s.Models = models
 }
 
 func NewSendReceiverWalletInviteService(models *data.Models, messengerClient message.MessengerClient, anchorPlatformBaseSepURL, sep10SigningPrivateKey string, maxInvitationSMSResendAttempts int64, crashTrackerClient crashtracker.CrashTrackerClient) (*SendReceiverWalletInviteService, error) {

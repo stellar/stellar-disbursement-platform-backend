@@ -14,8 +14,7 @@ import (
 const MaxErrorMessageLength = 255
 
 type PatchAnchorPlatformTransactionCompletionServiceInterface interface {
-	PatchTransactionCompletion(ctx context.Context, tx schemas.EventPatchAnchorPlatformTransactionCompletionData) error
-	SetModels(models *data.Models)
+	PatchTransactionCompletion(ctx context.Context, tx schemas.EventPaymentCompletedData) error
 }
 
 type PatchAnchorPlatformTransactionCompletionService struct {
@@ -36,7 +35,7 @@ func NewPatchAnchorPlatformTransactionCompletionService(apAPISvc anchorplatform.
 	}, nil
 }
 
-func (s *PatchAnchorPlatformTransactionCompletionService) PatchTransactionCompletion(ctx context.Context, tx schemas.EventPatchAnchorPlatformTransactionCompletionData) error {
+func (s *PatchAnchorPlatformTransactionCompletionService) PatchTransactionCompletion(ctx context.Context, tx schemas.EventPaymentCompletedData) error {
 	if s.sdpModels == nil {
 		return fmt.Errorf("SDP models are required")
 	}

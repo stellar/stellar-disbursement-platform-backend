@@ -13,6 +13,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/router"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
@@ -31,7 +32,19 @@ type PatchAnchorPlatformTransactionCompletionEventHandler struct {
 var _ events.EventHandler = new(PatchAnchorPlatformTransactionCompletionEventHandler)
 
 func NewPatchAnchorPlatformTransactionCompletionEventHandler(options PatchAnchorPlatformTransactionCompletionEventHandlerOptions) *PatchAnchorPlatformTransactionCompletionEventHandler {
-	s, err := services.NewPatchAnchorPlatformTransactionCompletionService(options.APapiSvc, nil)
+	tm := tenant.NewManager(tenant.WithDatabase(options.DBConnectionPool))
+	tr := router.NewMultiTenantDataSourceRouter(tm)
+	mtnDBConnectionPool, err := db.NewConnectionPoolWithRouter(tr)
+	if err != nil {
+		log.Fatalf("error getting tenant DB Connection Pool: %s", err.Error())
+	}
+
+	models, err := data.NewModels(mtnDBConnectionPool)
+	if err != nil {
+		log.Fatalf("error getting models: %s", err.Error())
+	}
+
+	s, err := services.NewPatchAnchorPlatformTransactionCompletionService(options.APapiSvc, models)
 	if err != nil {
 		log.Fatalf("error instantiating service: %s", err.Error())
 	}
@@ -48,42 +61,24 @@ func (h *PatchAnchorPlatformTransactionCompletionEventHandler) Name() string {
 }
 
 func (h *PatchAnchorPlatformTransactionCompletionEventHandler) CanHandleMessage(ctx context.Context, message *events.Message) bool {
-	return message.Topic == events.PatchAnchorPlatformTransactionCompletionTopic
+	return message.Topic == events.PaymentCompletedTopic
 }
 
 func (h *PatchAnchorPlatformTransactionCompletionEventHandler) Handle(ctx context.Context, message *events.Message) {
-	payment, err := utils.ConvertType[any, schemas.EventPatchAnchorPlatformTransactionCompletionData](message.Data)
+	payment, err := utils.ConvertType[any, schemas.EventPaymentCompletedData](message.Data)
 	if err != nil {
-		h.crashTrackerClient.LogAndReportErrors(ctx, err, fmt.Sprintf("[PatchAnchorPlatformTransactionCompletionEventHandler] could convert data to %T: %v", schemas.EventPatchAnchorPlatformTransactionCompletionData{}, message.Data))
+		h.crashTrackerClient.LogAndReportErrors(ctx, err, fmt.Sprintf("[PatchAnchorPlatformTransactionCompletionEventHandler] could not convert data to %T: %v", schemas.EventPaymentCompletedData{}, message.Data))
 		return
 	}
 
-	t, err := h.tenantManager.GetTenantByID(ctx, message.TenantID)
+	tnt, err := h.tenantManager.GetTenantByID(ctx, message.TenantID)
 	if err != nil {
 		h.crashTrackerClient.LogAndReportErrors(ctx, err, "[PatchAnchorPlatformTransactionCompletionEventHandler] error getting tenant by id")
 		return
 	}
 
-	dsn, err := h.tenantManager.GetDSNForTenant(ctx, t.Name)
-	if err != nil {
-		h.crashTrackerClient.LogAndReportErrors(ctx, err, fmt.Sprintf("[PatchAnchorPlatformTransactionCompletionEventHandler] error getting DSN for tenant %s", t.Name))
-		return
-	}
+	ctx = tenant.SaveTenantInContext(ctx, tnt)
 
-	dbConnectionPool, err := db.OpenDBConnectionPool(dsn)
-	if err != nil {
-		h.crashTrackerClient.LogAndReportErrors(ctx, err, fmt.Sprintf("[PatchAnchorPlatformTransactionCompletionEventHandler] error opening DB Connection pool for tenant %s", t.Name))
-		return
-	}
-	defer dbConnectionPool.Close()
-
-	models, err := data.NewModels(dbConnectionPool)
-	if err != nil {
-		h.crashTrackerClient.LogAndReportErrors(ctx, err, "[PatchAnchorPlatformTransactionCompletionEventHandler] error getting models")
-		return
-	}
-
-	h.service.SetModels(models)
 	if err := h.service.PatchTransactionCompletion(ctx, payment); err != nil {
 		h.crashTrackerClient.LogAndReportErrors(ctx, err, "[PatchAnchorPlatformTransactionCompletionEventHandler] patching anchor platform transaction")
 		return

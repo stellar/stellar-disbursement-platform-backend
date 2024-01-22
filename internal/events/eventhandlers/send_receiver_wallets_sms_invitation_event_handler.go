@@ -36,8 +36,20 @@ type SendReceiverWalletsSMSInvitationEventHandler struct {
 var _ events.EventHandler = new(SendReceiverWalletsSMSInvitationEventHandler)
 
 func NewSendReceiverWalletsSMSInvitationEventHandler(options SendReceiverWalletsSMSInvitationEventHandlerOptions) *SendReceiverWalletsSMSInvitationEventHandler {
+	tm := tenant.NewManager(tenant.WithDatabase(options.DBConnectionPool))
+	tr := router.NewMultiTenantDataSourceRouter(tm)
+	mtnDBConnectionPool, err := db.NewConnectionPoolWithRouter(tr)
+	if err != nil {
+		log.Fatalf("error getting tenant DB Connection Pool: %s", err.Error())
+	}
+
+	models, err := data.NewModels(mtnDBConnectionPool)
+	if err != nil {
+		log.Fatalf("error getting models: %s", err.Error())
+	}
+
 	s, err := services.NewSendReceiverWalletInviteService(
-		nil,
+		models,
 		options.MessengerClient,
 		options.AnchorPlatformBaseSepURL,
 		options.Sep10SigningPrivateKey,
@@ -46,13 +58,6 @@ func NewSendReceiverWalletsSMSInvitationEventHandler(options SendReceiverWallets
 	)
 	if err != nil {
 		log.Fatalf("error instantiating service: %s", err.Error())
-	}
-
-	tm := tenant.NewManager(tenant.WithDatabase(options.DBConnectionPool))
-	tr := router.NewMultiTenantDataSourceRouter(tm)
-	mtnDBConnectionPool, err := db.NewConnectionPoolWithRouter(tr)
-	if err != nil {
-		log.Fatalf("error getting tenant DB Connection Pool: %s", err.Error())
 	}
 
 	return &SendReceiverWalletsSMSInvitationEventHandler{
@@ -74,7 +79,7 @@ func (h *SendReceiverWalletsSMSInvitationEventHandler) CanHandleMessage(ctx cont
 func (h *SendReceiverWalletsSMSInvitationEventHandler) Handle(ctx context.Context, message *events.Message) {
 	receiverWalletInvitationData, err := utils.ConvertType[any, []schemas.EventReceiverWalletSMSInvitationData](message.Data)
 	if err != nil {
-		h.crashTrackerClient.LogAndReportErrors(ctx, err, fmt.Sprintf("[SendReceiverWalletsSMSInvitationEventHandler] could convert data to %T: %v", []schemas.EventReceiverWalletSMSInvitationData{}, message.Data))
+		h.crashTrackerClient.LogAndReportErrors(ctx, err, fmt.Sprintf("[SendReceiverWalletsSMSInvitationEventHandler] could not convert data to %T: %v", []schemas.EventReceiverWalletSMSInvitationData{}, message.Data))
 		return
 	}
 
@@ -86,13 +91,6 @@ func (h *SendReceiverWalletsSMSInvitationEventHandler) Handle(ctx context.Contex
 
 	ctx = tenant.SaveTenantInContext(ctx, t)
 
-	models, err := data.NewModels(h.mtnDBConnectionPool)
-	if err != nil {
-		h.crashTrackerClient.LogAndReportErrors(ctx, err, "[SendReceiverWalletsSMSInvitationEventHandler] error getting models")
-		return
-	}
-
-	h.service.SetModels(models)
 	if err := h.service.SendInvite(ctx, receiverWalletInvitationData...); err != nil {
 		h.crashTrackerClient.LogAndReportErrors(ctx, err, "[SendReceiverWalletsSMSInvitationEventHandler] sending receiver wallets invitation")
 		return

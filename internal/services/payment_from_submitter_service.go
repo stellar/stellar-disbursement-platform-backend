@@ -14,8 +14,7 @@ import (
 )
 
 type PaymentFromSubmitterServiceInterface interface {
-	SyncTransaction(ctx context.Context, tx *schemas.EventPaymentFromSubmitterData) error
-	SetModels(models *data.Models)
+	SyncTransaction(ctx context.Context, tx *schemas.EventPaymentCompletedData) error
 }
 
 // PaymentFromSubmitterService is a service that monitors TSS transactions that were complete and sync their completion
@@ -28,14 +27,15 @@ type PaymentFromSubmitterService struct {
 var _ PaymentFromSubmitterServiceInterface = new(PaymentFromSubmitterService)
 
 // NewPaymentFromSubmitterService is a PaymentFromSubmitterService constructor.
-func NewPaymentFromSubmitterService(tssDBConnectionPool db.DBConnectionPool) *PaymentFromSubmitterService {
+func NewPaymentFromSubmitterService(models *data.Models, tssDBConnectionPool db.DBConnectionPool) *PaymentFromSubmitterService {
 	return &PaymentFromSubmitterService{
-		tssModel: txSubStore.NewTransactionModel(tssDBConnectionPool),
+		sdpModels: models,
+		tssModel:  txSubStore.NewTransactionModel(tssDBConnectionPool),
 	}
 }
 
 // SyncTransaction syncs the completed TSS transaction with the SDP's payment.
-func (s PaymentFromSubmitterService) SyncTransaction(ctx context.Context, tx *schemas.EventPaymentFromSubmitterData) error {
+func (s PaymentFromSubmitterService) SyncTransaction(ctx context.Context, tx *schemas.EventPaymentCompletedData) error {
 	err := db.RunInTransaction(ctx, s.sdpModels.DBConnectionPool, nil, func(dbTx db.DBTransaction) error {
 		return s.syncTransaction(ctx, dbTx, tx)
 	})
@@ -48,7 +48,7 @@ func (s PaymentFromSubmitterService) SyncTransaction(ctx context.Context, tx *sc
 
 // MonitorTransactions monitors TSS transactions that were complete and sync their completion state with the SDP payments. It
 // should be called within a DB transaction.
-func (s PaymentFromSubmitterService) syncTransaction(ctx context.Context, dbTx db.DBTransaction, tx *schemas.EventPaymentFromSubmitterData) error {
+func (s PaymentFromSubmitterService) syncTransaction(ctx context.Context, dbTx db.DBTransaction, tx *schemas.EventPaymentCompletedData) error {
 	if s.sdpModels == nil {
 		return fmt.Errorf("PaymentFromSubmitterService.sdpModels cannot be nil")
 	}
@@ -123,8 +123,4 @@ func (s PaymentFromSubmitterService) syncPaymentWithTransaction(ctx context.Cont
 	}
 
 	return nil
-}
-
-func (s *PaymentFromSubmitterService) SetModels(models *data.Models) {
-	s.sdpModels = models
 }

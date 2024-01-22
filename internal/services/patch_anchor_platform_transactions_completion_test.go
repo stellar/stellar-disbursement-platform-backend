@@ -89,7 +89,7 @@ func Test_PatchAnchorPlatformTransactionCompletionService_PatchTransactionsCompl
 			Asset:                *asset,
 		})
 
-		sErr := svc.PatchTransactionCompletion(ctx, schemas.EventPatchAnchorPlatformTransactionCompletionData{
+		sErr := svc.PatchTransactionCompletion(ctx, schemas.EventPaymentCompletedData{
 			PaymentID:            payment.ID,
 			PaymentStatus:        string(data.PendingMessageStatus),
 			PaymentStatusMessage: "",
@@ -128,7 +128,7 @@ func Test_PatchAnchorPlatformTransactionCompletionService_PatchTransactionsCompl
 
 		getEntries := log.DefaultLogger.StartTest(log.DebugLevel)
 
-		tx := schemas.EventPatchAnchorPlatformTransactionCompletionData{
+		tx := schemas.EventPaymentCompletedData{
 			PaymentID:            payment.ID,
 			PaymentStatus:        string(data.SuccessPaymentStatus),
 			PaymentStatusMessage: "",
@@ -197,7 +197,7 @@ func Test_PatchAnchorPlatformTransactionCompletionService_PatchTransactionsCompl
 		})
 
 		errorMsg := "tx_failed op_no_source_account"
-		tx := schemas.EventPatchAnchorPlatformTransactionCompletionData{
+		tx := schemas.EventPaymentCompletedData{
 			PaymentID:            payment.ID,
 			PaymentStatus:        string(data.FailedPaymentStatus),
 			PaymentStatusMessage: errorMsg,
@@ -250,7 +250,7 @@ func Test_PatchAnchorPlatformTransactionCompletionService_PatchTransactionsCompl
 			Asset:                *asset,
 		})
 
-		tx := schemas.EventPatchAnchorPlatformTransactionCompletionData{
+		tx := schemas.EventPaymentCompletedData{
 			PaymentID:            payment.ID,
 			PaymentStatus:        string(data.SuccessPaymentStatus),
 			PaymentStatusMessage: "",
@@ -320,7 +320,7 @@ func Test_PatchAnchorPlatformTransactionCompletionService_PatchTransactionsCompl
 
 		getEntries := log.DefaultLogger.StartTest(log.InfoLevel)
 
-		err := svc.PatchTransactionCompletion(ctx, schemas.EventPatchAnchorPlatformTransactionCompletionData{PaymentID: payment.ID, PaymentStatus: string(data.SuccessMessageStatus)})
+		err := svc.PatchTransactionCompletion(ctx, schemas.EventPaymentCompletedData{PaymentID: payment.ID, PaymentStatus: string(data.SuccessMessageStatus)})
 		require.NoError(t, err)
 
 		syncedAt := getAPTransactionSyncedAt(t, ctx, dbConnectionPool, receiverWallet.ID)
