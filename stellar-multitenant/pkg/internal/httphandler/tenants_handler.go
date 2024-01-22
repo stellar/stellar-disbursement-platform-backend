@@ -75,6 +75,10 @@ func (h TenantsHandler) Post(rw http.ResponseWriter, req *http.Request) {
 		reqBody.SDPUIBaseURL, string(h.NetworkType),
 	)
 	if err != nil {
+		if errors.Is(err, tenant.ErrDuplicatedTenantName) {
+			httperror.BadRequest("Tenant name already exists", err, nil).Render(rw)
+			return
+		}
 		httperror.InternalError(ctx, "Could not provision a new tenant", err, nil).Render(rw)
 		return
 	}

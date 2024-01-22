@@ -72,7 +72,7 @@ func runSuccessfulRequestPatchTest(t *testing.T, r *chi.Mux, ctx context.Context
 		}
 	`, tnt.ID, expectedRespBody, tnt.CreatedAt.Format(time.RFC3339Nano), tntDB.UpdatedAt.Format(time.RFC3339Nano))
 
-	assert.JSONEq(t, string(expectedRespBody), string(respBody))
+	assert.JSONEq(t, expectedRespBody, string(respBody))
 }
 
 func Test_TenantHandler_Get(t *testing.T) {
@@ -250,8 +250,8 @@ func Test_TenantHandler_Post(t *testing.T) {
 	dbt := dbtest.OpenWithAdminMigrationsOnly(t)
 	defer dbt.Close()
 
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
+	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, outerErr)
 	defer dbConnectionPool.Close()
 
 	ctx := context.Background()
@@ -395,6 +395,64 @@ func Test_TenantHandler_Post(t *testing.T) {
 		tenant.AssertRegisteredAssetsFixture(t, ctx, tenantSchemaConnectionPool, []string{"USDC:GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5", "XLM:"})
 		tenant.AssertRegisteredWalletsFixture(t, ctx, tenantSchemaConnectionPool, []string{"Demo Wallet", "Vibrant Assist"})
 		tenant.AssertRegisteredUserFixture(t, ctx, tenantSchemaConnectionPool, "Owner", "Owner", "owner@email.org")
+	})
+
+	t.Run("returns badRequest for duplicate tenant name", func(t *testing.T) {
+		messengerClientMock.
+			On("SendMessage", mock.AnythingOfType("message.Message")).
+			Run(func(args mock.Arguments) {
+				msg, ok := args.Get(0).(message.Message)
+				require.True(t, ok)
+
+				assert.Equal(t, "Welcome to Stellar Disbursement Platform", msg.Title)
+				assert.Equal(t, "owner@email.org", msg.ToEmail)
+				assert.Empty(t, msg.ToPhoneNumber)
+			}).
+			Return(nil).
+			Once()
+
+		reqBody := `
+			{
+				"name": "my-aid-org",
+				"owner_email": "owner@email.org",
+				"owner_first_name": "Owner",
+				"owner_last_name": "Owner",
+				"organization_name": "My Aid Org",
+				"email_sender_type": "DRY_RUN",
+				"sms_sender_type": "DRY_RUN",
+				"enable_recaptcha": true,
+				"enable_mfa": false,
+				"base_url": "https://backend.sdp.org",
+				"sdp_ui_base_url": "https://aid-org.sdp.org"
+			}
+		`
+
+		createTenantReq := func() *http.Request {
+			req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/tenants", strings.NewReader(reqBody))
+			require.NoError(t, err)
+			return req
+		}
+
+		// create tenant
+		rr := httptest.NewRecorder()
+		http.HandlerFunc(handler.Post).ServeHTTP(rr, createTenantReq())
+
+		resp := rr.Result()
+		defer resp.Body.Close()
+
+		assert.Equal(t, http.StatusCreated, resp.StatusCode)
+
+		// attempt creating another tenant with the same name
+		rr = httptest.NewRecorder()
+		http.HandlerFunc(handler.Post).ServeHTTP(rr, createTenantReq())
+
+		resp = rr.Result()
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		require.NotNil(t, respBody)
+
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+		assert.JSONEq(t, `{"error": "Tenant name already exists"}`, string(respBody))
 	})
 
 	messengerClientMock.AssertExpectations(t)
