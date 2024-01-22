@@ -12,6 +12,10 @@ spec:
       targetPort: http
       protocol: TCP
       name: http
+    - port: {{ include "sdp.adminPort" . }}
+      targetPort: admin
+      protocol: TCP
+      name: admin
     
   selector:
     {{- include "sdp.selectorLabels" . | nindent 4 }}
