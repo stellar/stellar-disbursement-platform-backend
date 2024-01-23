@@ -80,7 +80,7 @@ func (s *DisbursementManagementService) AddUserMetadata(ctx context.Context, d *
 	return d, nil
 }
 
-func (s *DisbursementManagementService) GetDisbursementsWithCount(ctx context.Context, queryParams *data.QueryParams, addUserMetadata bool) (*utils.ResultWithTotal, error) {
+func (s *DisbursementManagementService) GetDisbursementsWithCount(ctx context.Context, queryParams *data.QueryParams) (*utils.ResultWithTotal, error) {
 	return db.RunInTransactionWithResult(ctx,
 		s.dbConnectionPool,
 		&sql.TxOptions{Isolation: sql.LevelReadCommitted, ReadOnly: true},
@@ -97,22 +97,20 @@ func (s *DisbursementManagementService) GetDisbursementsWithCount(ctx context.Co
 					return nil, fmt.Errorf("error retrieving disbursements: %w", err)
 				}
 
-				if addUserMetadata {
-					resp := make([]*DisbursementWithUserMetadata, len(disbursements))
-					for i, disbursement := range disbursements {
-						resp[i], err = s.AddUserMetadata(
-							ctx,
-							&DisbursementWithUserMetadata{
-								Disbursement: *disbursement,
-							},
-						)
-						if err != nil {
-							return nil, fmt.Errorf("error adding user metadata: %w", err)
-						}
+				resp := make([]*DisbursementWithUserMetadata, len(disbursements))
+				for i, disbursement := range disbursements {
+					resp[i], err = s.AddUserMetadata(
+						ctx,
+						&DisbursementWithUserMetadata{
+							Disbursement: *disbursement,
+						},
+					)
+					if err != nil {
+						return nil, fmt.Errorf("error adding user metadata: %w", err)
 					}
-
-					return utils.NewResultWithTotal(totalDisbursements, resp), nil
 				}
+
+				return utils.NewResultWithTotal(totalDisbursements, resp), nil
 			}
 
 			return utils.NewResultWithTotal(totalDisbursements, disbursements), nil

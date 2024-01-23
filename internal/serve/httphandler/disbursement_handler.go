@@ -170,7 +170,7 @@ func (d DisbursementHandler) GetDisbursements(w http.ResponseWriter, r *http.Req
 
 	ctx := r.Context()
 	disbursementManagementService := services.NewDisbursementManagementService(d.Models, d.DBConnectionPool, d.AuthManager)
-	resultWithTotal, err := disbursementManagementService.GetDisbursementsWithCount(ctx, queryParams, true)
+	resultWithTotal, err := disbursementManagementService.GetDisbursementsWithCount(ctx, queryParams)
 	if err != nil {
 		httperror.InternalError(ctx, "Cannot retrieve disbursements", err, nil).Render(w)
 		return
