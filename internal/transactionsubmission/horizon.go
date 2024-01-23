@@ -80,7 +80,7 @@ func CreateChannelAccountsOnChain(ctx context.Context, horizonClient horizonclie
 		if err != nil {
 			return nil, fmt.Errorf("failed to generate keypair: %w", err)
 		}
-		log.Ctx(ctx).Infof("Creating sponsored Stellar account with address: %s", channelAccountKP.Address())
+		log.Ctx(ctx).Infof("⏳ Creating sponsored Stellar account with address: %s", channelAccountKP.Address())
 
 		sponsoredCreateAccountOps = append(
 			sponsoredCreateAccountOps,

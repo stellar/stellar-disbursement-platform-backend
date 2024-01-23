@@ -88,14 +88,7 @@ func (c *TxSubmitterCommand) Command(submitterService TxSubmitterServiceInterfac
 			FlagDefault:    "TSS_PROMETHEUS",
 			Required:       true,
 		},
-		{
-			Name:           "distribution-seed",
-			Usage:          "The private key of the Stellar account used to disburse funds",
-			OptType:        types.String,
-			CustomSetValue: cmdUtils.SetConfigOptionStellarPrivateKey,
-			ConfigKey:      &submitterOpts.DistributionSeed,
-			Required:       true,
-		},
+		cmdUtils.DistributionSeed(&submitterOpts.DistributionSeed),
 		cmdUtils.HorizonURLConfigOption(&submitterOpts.HorizonURL),
 		{
 			Name:        "num-channel-accounts",

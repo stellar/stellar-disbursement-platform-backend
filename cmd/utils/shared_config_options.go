@@ -6,6 +6,7 @@ import (
 
 	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/support/config"
+	"github.com/stellar/go/txnbuild"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
@@ -176,13 +177,46 @@ func CrashTrackerTypeConfigOption(targetPointer interface{}) *config.ConfigOptio
 	}
 }
 
-func ChannelAccountEncryptionKeyConfigOption(targetPointer interface{}) *config.ConfigOption {
+func ChannelAccountEncryptionPassphraseConfigOption(targetPointer interface{}) *config.ConfigOption {
 	return &config.ConfigOption{
-		Name:           "channel-account-encryption-key",
+		Name:           "channel-account-encryption-passphrase",
 		Usage:          "A Stellar-compliant ed25519 private key used to encrypt/decrypt the channel accounts' private keys. When not set, it will default to the value of the 'distribution-seed' option.",
 		OptType:        types.String,
 		CustomSetValue: SetConfigOptionStellarPrivateKey,
 		ConfigKey:      targetPointer,
 		Required:       false,
+	}
+}
+
+func DistributionSeed(targetPointer interface{}) *config.ConfigOption {
+	return &config.ConfigOption{
+		Name:           "distribution-seed",
+		Usage:          "The private key of the Stellar distribution account that sends the disbursements.", // TODO: this will eventually be used for sponsoring tenant accounts.
+		OptType:        types.String,
+		CustomSetValue: SetConfigOptionStellarPrivateKey,
+		ConfigKey:      targetPointer,
+		Required:       true,
+	}
+}
+
+func DistributionPublicKey(targetPointer interface{}) *config.ConfigOption {
+	return &config.ConfigOption{
+		Name:           "distribution-public-key",
+		Usage:          "The public key of the Stellar distribution account that sends the disbursements.",
+		OptType:        types.String,
+		CustomSetValue: SetConfigOptionStellarPublicKey,
+		ConfigKey:      targetPointer,
+		Required:       true,
+	}
+}
+
+func MaxBaseFee(targetPointer interface{}) *config.ConfigOption {
+	return &config.ConfigOption{
+		Name:        "max-base-fee",
+		Usage:       "The max base fee for submitting a stellar transaction",
+		OptType:     types.Int,
+		ConfigKey:   targetPointer,
+		FlagDefault: 100 * txnbuild.MinBaseFee,
+		Required:    true,
 	}
 }

@@ -24,6 +24,33 @@ type SignatureService interface {
 	Delete(ctx context.Context, publicKey string, currLedgerNumber int) error
 }
 
+type DefaultSignatureServiceOptions struct {
+	NetworkPassphrase      string
+	DBConnectionPool       db.DBConnectionPool
+	DistributionPrivateKey string
+	EncryptionPassphrase   string
+}
+
+func (opts *DefaultSignatureServiceOptions) Validate() error {
+	if opts.NetworkPassphrase == "" {
+		return fmt.Errorf("network passphrase cannot be empty")
+	}
+
+	if opts.DBConnectionPool == nil {
+		return fmt.Errorf("database connection pool cannot be nil")
+	}
+
+	if opts.DistributionPrivateKey == "" {
+		return fmt.Errorf("distribution private key cannot be empty")
+	}
+
+	if opts.EncryptionPassphrase == "" {
+		return fmt.Errorf("encrypter passphrase cannot be empty")
+	}
+
+	return nil
+}
+
 type DefaultSignatureService struct {
 	networkPassphrase   string
 	distributionAccount string
@@ -34,6 +61,29 @@ type DefaultSignatureService struct {
 
 	// TODO: encrypterPass and EncryptionKey should have the same name
 	encrypterPass string
+}
+
+func NewDefaultSignatureServiceNew(opts DefaultSignatureServiceOptions) (*DefaultSignatureService, error) {
+	if err := opts.Validate(); err != nil {
+		return nil, fmt.Errorf("validating options: %w", err)
+	}
+
+	distributionKP, err := keypair.ParseFull(opts.DistributionPrivateKey)
+	if err != nil {
+		return nil, fmt.Errorf("parsing distribution seed: %w", err)
+	}
+
+	encrypter := utils.DefaultPrivateKeyEncrypter{}
+
+	return &DefaultSignatureService{
+		networkPassphrase:   opts.NetworkPassphrase,
+		distributionAccount: distributionKP.Address(),
+		distributionKP:      distributionKP,
+		dbConnectionPool:    opts.DBConnectionPool,
+		chAccModel:          store.NewChannelAccountModel(opts.DBConnectionPool),
+		encrypter:           encrypter,
+		encrypterPass:       opts.EncryptionPassphrase,
+	}, nil
 }
 
 // NewDefaultSignatureService returns a new DefaultSignatureService instance.
