@@ -10,7 +10,6 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/stellar/go/support/config"
 	"github.com/stellar/go/support/log"
-	"github.com/stellar/go/txnbuild"
 
 	cmdUtils "github.com/stellar/stellar-disbursement-platform-backend/cmd/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/router"
@@ -106,14 +105,7 @@ func (c *TxSubmitterCommand) Command(submitterService TxSubmitterServiceInterfac
 			FlagDefault: 6,
 			Required:    true,
 		},
-		{
-			Name:        "max-base-fee",
-			Usage:       "The max base fee for submitting a Stellar transaction",
-			OptType:     types.Int,
-			ConfigKey:   &submitterOpts.MaxBaseFee,
-			FlagDefault: 100 * txnbuild.MinBaseFee,
-			Required:    true,
-		},
+		cmdUtils.MaxBaseFee(&submitterOpts.MaxBaseFee),
 		cmdUtils.CrashTrackerTypeConfigOption(&crashTrackerOptions.CrashTrackerType),
 	}
 

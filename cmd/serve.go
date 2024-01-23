@@ -283,14 +283,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			FlagDefault: 3,
 			Required:    true,
 		},
-		{
-			Name:           "distribution-public-key",
-			Usage:          "The public key of the Stellar distribution account that sends the Stellar payments.",
-			OptType:        types.String,
-			CustomSetValue: cmdUtils.SetConfigOptionStellarPublicKey,
-			ConfigKey:      &serveOpts.DistributionPublicKey,
-			Required:       true,
-		},
+		cmdUtils.DistributionPublicKey(&serveOpts.DistributionPublicKey),
 		cmdUtils.DistributionSeed(&serveOpts.DistributionSeed),
 		{
 			Name:      "recaptcha-site-key",
