@@ -478,7 +478,7 @@ func (a *defaultAuthenticator) GetUser(ctx context.Context, userID string) (*Use
 	}, nil
 }
 
-// GetUsers retrieves a list of users from its respective user ids.
+// GetUsers retrieves the respective users from a list of user IDs.
 func (a *defaultAuthenticator) GetUsers(ctx context.Context, userIDs []string) ([]*User, error) {
 	const query = `
 		SELECT

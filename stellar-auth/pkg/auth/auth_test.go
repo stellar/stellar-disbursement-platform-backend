@@ -1384,7 +1384,7 @@ func Test_AuthManager_GetUsersByID(t *testing.T) {
 	})
 
 	t.Run("get users by ID successfully", func(t *testing.T) {
-		expectedUsers := []User{
+		expectedUsers := []*User{
 			{
 				ID:        "user1-ID",
 				FirstName: "First",
@@ -1407,6 +1407,8 @@ func Test_AuthManager_GetUsersByID(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, expectedUsers, users)
 	})
+
+	authenticatorMock.AssertExpectations(t)
 }
 
 func Test_AuthManager_GetUserID(t *testing.T) {

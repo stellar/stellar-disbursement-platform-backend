@@ -443,13 +443,20 @@ func Test_DisbursementHandler_GetDisbursements_Success(t *testing.T) {
 		FirstName: "User",
 		LastName:  "Two",
 	}
+	allUsers := []*auth.User{
+		&startedByUser,
+		&createdByUser,
+	}
 
 	authManagerMock.
-		On("GetUserByID", mock.Anything, createdByUser.ID).
-		Return(&createdByUser, nil)
+		On("GetUsersByID", mock.Anything, []string{createdByUser.ID, startedByUser.ID}).
+		Return(allUsers, nil)
 	authManagerMock.
-		On("GetUserByID", mock.Anything, startedByUser.ID).
-		Return(&startedByUser, nil)
+		On("GetUsersByID", mock.Anything, []string{startedByUser.ID, createdByUser.ID}).
+		Return(allUsers, nil)
+	authManagerMock.
+		On("GetUsersByID", mock.Anything, []string{createdByUser.ID}).
+		Return([]*auth.User{&createdByUser}, nil)
 
 	createdByUserRef := services.UserReference{
 		ID:        createdByUser.ID,
@@ -969,12 +976,17 @@ func Test_DisbursementHandler_GetDisbursement(t *testing.T) {
 		LastName:  "Two",
 	}
 
+	allUsers := []*auth.User{
+		&createdByUser,
+		&startedByUser,
+	}
+
 	authManagerMock.
-		On("GetUserByID", mock.Anything, createdByUser.ID).
-		Return(&createdByUser, nil)
+		On("GetUsersByID", mock.Anything, []string{createdByUser.ID, startedByUser.ID}).
+		Return(allUsers, nil)
 	authManagerMock.
-		On("GetUserByID", mock.Anything, startedByUser.ID).
-		Return(&startedByUser, nil)
+		On("GetUsersByID", mock.Anything, []string{startedByUser.ID, createdByUser.ID}).
+		Return(allUsers, nil)
 
 	handler := &DisbursementHandler{
 		Models:           models,

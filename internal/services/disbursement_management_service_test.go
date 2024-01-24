@@ -25,23 +25,39 @@ func Test_DisbursementManagementService_GetDisbursementsWithCount(t *testing.T) 
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
-	user := &auth.User{
-		ID:        "john-doe",
-		Email:     "john-doe@email.com",
-		FirstName: "John",
-		LastName:  "Doe",
+	users := []*auth.User{
+		{
+			ID:        "john-doe",
+			Email:     "john-doe@email.com",
+			FirstName: "John",
+			LastName:  "Doe",
+		},
+		{
+			ID:        "jane-doe",
+			Email:     "jane-doe@email.com",
+			FirstName: "Jane",
+			LastName:  "Doe",
+		},
 	}
+	userIDs := []string{users[0].ID, users[1].ID}
 
-	userRef := UserReference{
-		ID:        "john-doe",
-		FirstName: "John",
-		LastName:  "Doe",
+	userRef := []UserReference{
+		{
+			ID:        users[0].ID,
+			FirstName: users[0].FirstName,
+			LastName:  users[0].LastName,
+		},
+		{
+			ID:        users[1].ID,
+			FirstName: users[1].FirstName,
+			LastName:  users[1].LastName,
+		},
 	}
 
 	authManagerMock := &auth.AuthManagerMock{}
 	authManagerMock.
-		On("GetUserByID", mock.Anything, user.ID).
-		Return(user, nil)
+		On("GetUsersByID", mock.Anything, userIDs).
+		Return(users, nil)
 
 	service := NewDisbursementManagementService(models, models.DBConnectionPool, authManagerMock)
 
@@ -63,11 +79,11 @@ func Test_DisbursementManagementService_GetDisbursementsWithCount(t *testing.T) 
 				StatusHistory: []data.DisbursementStatusHistoryEntry{
 					{
 						Status: data.DraftDisbursementStatus,
-						UserID: user.ID,
+						UserID: users[0].ID,
 					},
 					{
 						Status: data.StartedDisbursementStatus,
-						UserID: user.ID,
+						UserID: users[1].ID,
 					},
 				},
 			},
@@ -78,7 +94,7 @@ func Test_DisbursementManagementService_GetDisbursementsWithCount(t *testing.T) 
 				StatusHistory: []data.DisbursementStatusHistoryEntry{
 					{
 						Status: data.DraftDisbursementStatus,
-						UserID: user.ID,
+						UserID: users[1].ID,
 					},
 				},
 			},
@@ -92,9 +108,9 @@ func Test_DisbursementManagementService_GetDisbursementsWithCount(t *testing.T) 
 		require.Equal(t, 2, len(result))
 		require.Equal(t, d1.ID, result[0].Disbursement.ID)
 		require.Equal(t, d2.ID, result[1].Disbursement.ID)
-		require.Equal(t, userRef, result[0].CreatedBy)
-		require.Equal(t, userRef, result[0].StartedBy)
-		require.Equal(t, userRef, result[1].CreatedBy)
+		require.Equal(t, userRef[0], result[0].CreatedBy)
+		require.Equal(t, userRef[1], result[0].StartedBy)
+		require.Equal(t, userRef[1], result[1].CreatedBy)
 		require.Equal(t, UserReference{}, result[1].StartedBy)
 	})
 }
