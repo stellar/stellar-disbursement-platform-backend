@@ -284,12 +284,8 @@ func (d DisbursementHandler) GetDisbursement(w http.ResponseWriter, r *http.Requ
 		httperror.NotFound("disbursement user metadata not found", err, nil).Render(w)
 	}
 	if len(response) != 1 {
-		err = errors.New("number of records created is not 1")
 		httperror.InternalError(
-			ctx,
-			fmt.Sprintf("Size of response is unexpected: %d", len(response)),
-			err,
-			nil,
+			ctx, fmt.Sprintf("Size of response is unexpected: %d", len(response)), nil, nil,
 		).Render(w)
 	}
 
