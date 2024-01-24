@@ -18,13 +18,46 @@ import (
 	txSubSvc "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/services"
 )
 
+//go:generate mockery --name=ChAccCmdServiceInterface --case=underscore --structname=MockChAccCmdServiceInterface
+type ChAccCmdServiceInterface interface {
+	ListChannelAccounts(ctx context.Context, opts txSubSvc.ListChannelAccountsOptions) error
+	CreateChannelAccounts(ctx context.Context, chAccService txSubSvc.ChannelAccountsService, count int) error
+	EnsureChannelAccountsCount(ctx context.Context, chAccService txSubSvc.ChannelAccountsService, count int) error
+	DeleteChannelAccount(ctx context.Context, chAccService txSubSvc.ChannelAccountsService, opts txSubSvc.DeleteChannelAccountsOptions) error
+	VerifyChannelAccounts(ctx context.Context, chAccService txSubSvc.ChannelAccountsService, deleteInvalidAccounts bool) error
+}
+
+type ChAccCmdService struct{}
+
+func (s *ChAccCmdService) ListChannelAccounts(ctx context.Context, opts txSubSvc.ListChannelAccountsOptions) error {
+	return txSubSvc.ListChannelAccounts(ctx, opts)
+}
+
+func (s *ChAccCmdService) CreateChannelAccounts(ctx context.Context, chAccService txSubSvc.ChannelAccountsService, count int) error {
+	return chAccService.CreateChannelAccounts(ctx, count)
+}
+
+func (s *ChAccCmdService) EnsureChannelAccountsCount(ctx context.Context, chAccService txSubSvc.ChannelAccountsService, count int) error {
+	return chAccService.CreateChannelAccounts(ctx, count)
+}
+
+func (s *ChAccCmdService) DeleteChannelAccount(ctx context.Context, chAccService txSubSvc.ChannelAccountsService, opts txSubSvc.DeleteChannelAccountsOptions) error {
+	return chAccService.DeleteChannelAccount(ctx, opts)
+}
+
+func (s *ChAccCmdService) VerifyChannelAccounts(ctx context.Context, chAccService txSubSvc.ChannelAccountsService, deleteInvalidAccounts bool) error {
+	return chAccService.VerifyChannelAccounts(ctx, deleteInvalidAccounts)
+}
+
+var _ ChAccCmdServiceInterface = (*ChAccCmdService)(nil)
+
 type ChannelAccountsCommand struct {
 	// Shared:
 	CrashTrackerClient  crashtracker.CrashTrackerClient
 	TSSDBConnectionPool db.DBConnectionPool
 }
 
-func (c *ChannelAccountsCommand) Command() *cobra.Command {
+func (c *ChannelAccountsCommand) Command(cmdService ChAccCmdServiceInterface) *cobra.Command {
 	crashTrackerOptions := crashtracker.CrashTrackerOptions{}
 
 	configOpts := config.ConfigOptions{
@@ -65,16 +98,16 @@ func (c *ChannelAccountsCommand) Command() *cobra.Command {
 		log.Fatalf("Error initializing %s command: %v", channelAccountsCmd.Name(), err)
 	}
 
-	channelAccountsCmd.AddCommand(c.ListCommand())
-	channelAccountsCmd.AddCommand(c.CreateCommand())
-	channelAccountsCmd.AddCommand(c.DeleteCommand())
-	channelAccountsCmd.AddCommand(c.EnsureCommand())
-	channelAccountsCmd.AddCommand(c.VerifyCommand())
+	channelAccountsCmd.AddCommand(c.ListCommand(cmdService))
+	channelAccountsCmd.AddCommand(c.CreateCommand(cmdService))
+	channelAccountsCmd.AddCommand(c.DeleteCommand(cmdService))
+	channelAccountsCmd.AddCommand(c.EnsureCommand(cmdService))
+	channelAccountsCmd.AddCommand(c.VerifyCommand(cmdService))
 
 	return channelAccountsCmd
 }
 
-func (c *ChannelAccountsCommand) ListCommand() *cobra.Command {
+func (c *ChannelAccountsCommand) ListCommand(cmdService ChAccCmdServiceInterface) *cobra.Command {
 	opts := txSubSvc.ListChannelAccountsOptions{}
 	listCmd := &cobra.Command{
 		Use:   "list",
@@ -87,7 +120,7 @@ func (c *ChannelAccountsCommand) ListCommand() *cobra.Command {
 		},
 		Run: func(cmd *cobra.Command, _ []string) {
 			ctx := cmd.Context()
-			if err := txSubSvc.ListChannelAccounts(ctx, opts); err != nil {
+			if err := cmdService.ListChannelAccounts(ctx, opts); err != nil {
 				c.CrashTrackerClient.LogAndReportErrors(ctx, err, "Cmd channel-accounts view crash")
 				log.Ctx(ctx).Fatalf("Error viewing channel accounts: %v", err)
 			}
@@ -146,7 +179,7 @@ func (c *ChannelAccountsCommand) chAccServicePersistentPreRun(
 	return nil
 }
 
-func (c *ChannelAccountsCommand) CreateCommand() *cobra.Command {
+func (c *ChannelAccountsCommand) CreateCommand(cmdService ChAccCmdServiceInterface) *cobra.Command {
 	chAccService := txSubSvc.ChannelAccountsService{}
 	sigServiceOptions := engine.DefaultSignatureServiceOptions{}
 	configOpts := chAccServiceConfigOptions(&sigServiceOptions, &chAccService)
@@ -168,7 +201,7 @@ func (c *ChannelAccountsCommand) CreateCommand() *cobra.Command {
 				log.Ctx(ctx).Fatalf("Invalid [count] argument: %s", args[0])
 			}
 
-			if err = chAccService.CreateChannelAccounts(ctx, count); err != nil {
+			if err = cmdService.CreateChannelAccounts(ctx, chAccService, count); err != nil {
 				c.CrashTrackerClient.LogAndReportErrors(ctx, err, "Cmd channel-accounts create crash")
 				log.Ctx(ctx).Fatalf("Error creating channel accounts: %v", err)
 			}
@@ -181,7 +214,7 @@ func (c *ChannelAccountsCommand) CreateCommand() *cobra.Command {
 	return createCmd
 }
 
-func (c *ChannelAccountsCommand) EnsureCommand() *cobra.Command {
+func (c *ChannelAccountsCommand) EnsureCommand(cmdService ChAccCmdServiceInterface) *cobra.Command {
 	chAccService := txSubSvc.ChannelAccountsService{}
 	sigServiceOptions := engine.DefaultSignatureServiceOptions{}
 	configOpts := chAccServiceConfigOptions(&sigServiceOptions, &chAccService)
@@ -205,7 +238,7 @@ func (c *ChannelAccountsCommand) EnsureCommand() *cobra.Command {
 				log.Ctx(ctx).Fatalf("Invalid [count] argument: %s", args[0])
 			}
 
-			if err = chAccService.EnsureChannelAccountsCount(ctx, count); err != nil {
+			if err = cmdService.EnsureChannelAccountsCount(ctx, chAccService, count); err != nil {
 				c.CrashTrackerClient.LogAndReportErrors(ctx, err, "Cmd channel-accounts ensure crash")
 				log.Ctx(ctx).Fatalf("Error ensuring count for channel accounts: %v", err)
 			}
@@ -218,7 +251,7 @@ func (c *ChannelAccountsCommand) EnsureCommand() *cobra.Command {
 	return ensureCmd
 }
 
-func (c *ChannelAccountsCommand) DeleteCommand() *cobra.Command {
+func (c *ChannelAccountsCommand) DeleteCommand(cmdService ChAccCmdServiceInterface) *cobra.Command {
 	chAccService := txSubSvc.ChannelAccountsService{}
 	sigServiceOptions := engine.DefaultSignatureServiceOptions{}
 	configOpts := chAccServiceConfigOptions(&sigServiceOptions, &chAccService)
@@ -252,7 +285,7 @@ func (c *ChannelAccountsCommand) DeleteCommand() *cobra.Command {
 		},
 		Run: func(cmd *cobra.Command, _ []string) {
 			ctx := cmd.Context()
-			if err := chAccService.DeleteChannelAccount(ctx, deleteChAccOpts); err != nil {
+			if err := cmdService.DeleteChannelAccount(ctx, chAccService, deleteChAccOpts); err != nil {
 				c.CrashTrackerClient.LogAndReportErrors(ctx, err, "Cmd channel-accounts delete crash")
 				log.Ctx(ctx).Fatalf("Error deleting channel account: %v", err)
 			}
@@ -267,7 +300,7 @@ func (c *ChannelAccountsCommand) DeleteCommand() *cobra.Command {
 	return deleteCmd
 }
 
-func (c *ChannelAccountsCommand) VerifyCommand() *cobra.Command {
+func (c *ChannelAccountsCommand) VerifyCommand(cmdService ChAccCmdServiceInterface) *cobra.Command {
 	chAccService := txSubSvc.ChannelAccountsService{}
 	sigServiceOptions := engine.DefaultSignatureServiceOptions{}
 	configOpts := chAccServiceConfigOptions(&sigServiceOptions, &chAccService)
@@ -292,7 +325,7 @@ func (c *ChannelAccountsCommand) VerifyCommand() *cobra.Command {
 		},
 		Run: func(cmd *cobra.Command, _ []string) {
 			ctx := cmd.Context()
-			if err := chAccService.VerifyChannelAccounts(ctx, deleteInvalidAccounts); err != nil {
+			if err := cmdService.VerifyChannelAccounts(ctx, chAccService, deleteInvalidAccounts); err != nil {
 				c.CrashTrackerClient.LogAndReportErrors(ctx, err, "Cmd channel-accounts create crash")
 				log.Ctx(ctx).Fatalf("Error creating channel accounts: %v", err)
 			}

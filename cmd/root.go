@@ -110,7 +110,7 @@ func SetupCLI(version, gitCommit string) *cobra.Command {
 	rootCmd.AddCommand((&db.DatabaseCommand{}).Command(&globalOptions))
 	rootCmd.AddCommand((&MessageCommand{}).Command(&MessengerService{}))
 	rootCmd.AddCommand((&TxSubmitterCommand{}).Command(&TxSubmitterService{}))
-	rootCmd.AddCommand((&ChannelAccountsCommand{}).Command())
+	rootCmd.AddCommand((&ChannelAccountsCommand{}).Command(&ChAccCmdService{}))
 	rootCmd.AddCommand((&IntegrationTestsCommand{}).Command())
 	rootCmd.AddCommand((&AuthCommand{}).Command())
 
