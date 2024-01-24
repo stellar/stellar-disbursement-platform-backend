@@ -179,9 +179,6 @@ func (d DisbursementHandler) GetDisbursements(w http.ResponseWriter, r *http.Req
 		httpjson.RenderStatus(w, http.StatusOK, httpresponse.NewEmptyPaginatedResponse(), httpjson.JSON)
 		return
 	}
-	fmt.Println("----")
-	fmt.Println(resultWithTotal)
-	fmt.Println("----")
 
 	response, errGet := httpresponse.NewPaginatedResponse(r, resultWithTotal.Result, queryParams.Page, queryParams.PageLimit, resultWithTotal.Total)
 	if errGet != nil {

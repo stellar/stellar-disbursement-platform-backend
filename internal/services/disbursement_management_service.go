@@ -59,6 +59,13 @@ func (s *DisbursementManagementService) AppendUserMetadata(ctx context.Context, 
 		for _, entry := range d.StatusHistory {
 			if entry.Status == data.DraftDisbursementStatus || entry.Status == data.StartedDisbursementStatus {
 				users[entry.UserID] = nil
+
+				if entry.Status == data.StartedDisbursementStatus {
+					// Disbursements could have multiple "started" entries in its status history log from being paused and resumed, etc.
+					// The earliest entry will refer to the user who initiated the disbursement, and we will not care about any subsequent
+					// entries.
+					break
+				}
 			}
 		}
 	}
@@ -91,9 +98,6 @@ func (s *DisbursementManagementService) AppendUserMetadata(ctx context.Context, 
 			}
 			if entry.Status == data.StartedDisbursementStatus {
 				response[i].StartedBy = userRef
-				// Disbursements could have multiple "started" entries in its status history log from being paused and resumed, etc.
-				// The earliest entry will refer to the user who initiated the disbursement, and we will not care about any subsequent
-				// entries.
 				break
 			}
 		}
