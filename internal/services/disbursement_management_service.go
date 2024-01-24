@@ -29,7 +29,7 @@ type UserReference struct {
 }
 
 type DisbursementWithUserMetadata struct {
-	Disbursement data.Disbursement `json:"disbursement"`
+	data.Disbursement
 	CreatedBy    UserReference     `json:"created_by"`
 	StartedBy    UserReference     `json:"started_by"`
 }
