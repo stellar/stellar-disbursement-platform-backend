@@ -15,18 +15,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
 )
 
-type ViewChannelAccountsOptions struct {
-	DBConnectionPool db.DBConnectionPool
-}
-
-// type ChannelAccountsServiceInterface interface {
-// 	CreateChannelAccounts(ctx context.Context, amount int) error
-// 	VerifyChannelAccounts(ctx context.Context, deleteInvalidAccounts bool) error
-// 	DeleteChannelAccount(context.Context, DeleteChannelAccountsOptions) error
-// 	EnsureChannelAccountsCount(ctx context.Context, numAccountsToEnsure int) error
-// 	ViewChannelAccounts(context.Context) error
-// }
-
 const advisoryLock = int(2172398390434160)
 
 func acquireAdvisoryLockForCommand(ctx context.Context, dbConnectionPool db.DBConnectionPool) error {
@@ -42,12 +30,12 @@ func acquireAdvisoryLockForCommand(ctx context.Context, dbConnectionPool db.DBCo
 }
 
 // ViewChannelAccounts prints all the database channel accounts.
-func ViewChannelAccounts(ctx context.Context, opts ViewChannelAccountsOptions) error {
-	if opts.DBConnectionPool == nil {
+func ViewChannelAccounts(ctx context.Context, dbConnectionPool db.DBConnectionPool) error {
+	if dbConnectionPool == nil {
 		return fmt.Errorf("db connection pool cannot be nil")
 	}
-	chAccModel := store.NewChannelAccountModel(opts.DBConnectionPool)
-	accounts, err := chAccModel.GetAll(ctx, opts.DBConnectionPool, 0, 0)
+	chAccModel := store.NewChannelAccountModel(dbConnectionPool)
+	accounts, err := chAccModel.GetAll(ctx, dbConnectionPool, 0, 0)
 	if err != nil {
 		return fmt.Errorf("loading channel accounts from database in ViewChannelAccounts: %w", err)
 	}

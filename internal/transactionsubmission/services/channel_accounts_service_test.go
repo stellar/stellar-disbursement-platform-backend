@@ -870,7 +870,7 @@ func Test_ChannelAccounts_ViewChannelAccounts_Success(t *testing.T) {
 
 	getEntries := log.DefaultLogger.StartTest(log.InfoLevel)
 
-	err = ViewChannelAccounts(ctx, ViewChannelAccountsOptions{DBConnectionPool: dbConnectionPool})
+	err = ViewChannelAccounts(ctx, dbConnectionPool)
 	require.NoError(t, err)
 
 	entries := getEntries()
@@ -882,7 +882,7 @@ func Test_ChannelAccounts_ViewChannelAccounts_Success(t *testing.T) {
 func Test_ChannelAccounts_ViewChannelAccounts_LoadChannelAccountsError_Failure(t *testing.T) {
 	ctx := context.Background()
 
-	err := ViewChannelAccounts(ctx, ViewChannelAccountsOptions{})
+	err := ViewChannelAccounts(ctx, nil)
 	require.Error(t, err)
 	require.EqualError(t, err, "db connection pool cannot be nil")
 }

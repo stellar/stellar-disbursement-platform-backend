@@ -20,7 +20,7 @@ import (
 
 //go:generate mockery --name=ChAccCmdServiceInterface --case=underscore --structname=MockChAccCmdServiceInterface
 type ChAccCmdServiceInterface interface {
-	ViewChannelAccounts(ctx context.Context, opts txSubSvc.ViewChannelAccountsOptions) error
+	ViewChannelAccounts(ctx context.Context, dbConnectionPool db.DBConnectionPool) error
 	CreateChannelAccounts(ctx context.Context, chAccService txSubSvc.ChannelAccountsService, count int) error
 	EnsureChannelAccountsCount(ctx context.Context, chAccService txSubSvc.ChannelAccountsService, count int) error
 	DeleteChannelAccount(ctx context.Context, chAccService txSubSvc.ChannelAccountsService, opts txSubSvc.DeleteChannelAccountsOptions) error
@@ -29,8 +29,8 @@ type ChAccCmdServiceInterface interface {
 
 type ChAccCmdService struct{}
 
-func (s *ChAccCmdService) ViewChannelAccounts(ctx context.Context, opts txSubSvc.ViewChannelAccountsOptions) error {
-	return txSubSvc.ViewChannelAccounts(ctx, opts)
+func (s *ChAccCmdService) ViewChannelAccounts(ctx context.Context, dbConnectionPool db.DBConnectionPool) error {
+	return txSubSvc.ViewChannelAccounts(ctx, dbConnectionPool)
 }
 
 func (s *ChAccCmdService) CreateChannelAccounts(ctx context.Context, chAccService txSubSvc.ChannelAccountsService, count int) error {
@@ -267,19 +267,15 @@ func (c *ChannelAccountsCommand) DeleteCommand(cmdService ChAccCmdServiceInterfa
 }
 
 func (c *ChannelAccountsCommand) ViewCommand(cmdService ChAccCmdServiceInterface) *cobra.Command {
-	opts := txSubSvc.ViewChannelAccountsOptions{}
 	listCmd := &cobra.Command{
 		Use:   "view",
 		Short: "List public keys of all channel accounts currently stored in the database",
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
 			cmdUtils.PropagatePersistentPreRun(cmd, args)
-
-			// Inject command dependencies
-			opts.DBConnectionPool = c.TSSDBConnectionPool
 		},
 		Run: func(cmd *cobra.Command, _ []string) {
 			ctx := cmd.Context()
-			if err := cmdService.ViewChannelAccounts(ctx, opts); err != nil {
+			if err := cmdService.ViewChannelAccounts(ctx, c.TSSDBConnectionPool); err != nil {
 				c.CrashTrackerClient.LogAndReportErrors(ctx, err, "Cmd channel-accounts view crash")
 				log.Ctx(ctx).Fatalf("Error viewing channel accounts: %v", err)
 			}

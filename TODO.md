@@ -4,8 +4,8 @@ As part of this PR, don't forget to:
 
 - [x] NewDefaultSignatureServiceNew
 - [x] Tests for (opts *DefaultSignatureServiceOptions) Validate() error
-- [ ] Update channel-account view method signature. No options is needed
-- [ ] Update create and update to use the flag again, so we don't break the code
+- [x] Update channel-account view method signature. No options object is needed
+- [x] create/ensure commands now don't use flags anymore. Handle it in the helm chart
 - [ ] Add tests for dependency injectors
   - [ ] tss_db_connection_pool
   - [ ] signature_service
