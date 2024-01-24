@@ -30,8 +30,8 @@ type UserReference struct {
 
 type DisbursementWithUserMetadata struct {
 	data.Disbursement
-	CreatedBy    UserReference     `json:"created_by"`
-	StartedBy    UserReference     `json:"started_by"`
+	CreatedBy UserReference `json:"created_by"`
+	StartedBy UserReference `json:"started_by"`
 }
 
 var (

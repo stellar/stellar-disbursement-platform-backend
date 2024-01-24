@@ -39,7 +39,6 @@ func Test_DisbursementManagementService_GetDisbursementsWithCount(t *testing.T) 
 			LastName:  "Doe",
 		},
 	}
-	userIDs := []string{users[0].ID, users[1].ID}
 
 	userRef := []UserReference{
 		{
@@ -56,7 +55,10 @@ func Test_DisbursementManagementService_GetDisbursementsWithCount(t *testing.T) 
 
 	authManagerMock := &auth.AuthManagerMock{}
 	authManagerMock.
-		On("GetUsersByID", mock.Anything, userIDs).
+		On("GetUsersByID", mock.Anything, []string{users[0].ID, users[1].ID}).
+		Return(users, nil)
+	authManagerMock.
+		On("GetUsersByID", mock.Anything, []string{users[1].ID, users[0].ID}).
 		Return(users, nil)
 
 	service := NewDisbursementManagementService(models, models.DBConnectionPool, authManagerMock)
