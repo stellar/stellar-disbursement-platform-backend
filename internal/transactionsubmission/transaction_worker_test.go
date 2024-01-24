@@ -52,14 +52,13 @@ func getTransactionWorkerInstance(t *testing.T, dbConnectionPool db.DBConnection
 	require.NoError(t, err)
 
 	distributionKP := keypair.MustRandom()
-	wantSigService, err := engine.NewDefaultSignatureService(
-		network.TestNetworkPassphrase,
-		dbConnectionPool,
-		distributionKP.Seed(),
-		chAccModel,
-		&utils.PrivateKeyEncrypterMock{},
-		distributionKP.Seed(),
-	)
+	wantSigService, err := engine.NewDefaultSignatureServiceNew(engine.DefaultSignatureServiceOptions{
+		NetworkPassphrase:      network.TestNetworkPassphrase,
+		DBConnectionPool:       dbConnectionPool,
+		DistributionPrivateKey: distributionKP.Seed(),
+		EncryptionPassphrase:   distributionKP.Seed(),
+		Encrypter:              &utils.PrivateKeyEncrypterMock{},
+	})
 	require.NoError(t, err)
 
 	wantMaxBaseFee := 100
@@ -127,14 +126,13 @@ func Test_NewTransactionWorker(t *testing.T) {
 	require.NoError(t, err)
 
 	distributionKP := keypair.MustRandom()
-	wantSigService, err := engine.NewDefaultSignatureService(
-		network.TestNetworkPassphrase,
-		dbConnectionPool,
-		distributionKP.Seed(),
-		chAccModel,
-		&utils.PrivateKeyEncrypterMock{},
-		distributionKP.Seed(),
-	)
+	wantSigService, err := engine.NewDefaultSignatureServiceNew(engine.DefaultSignatureServiceOptions{
+		NetworkPassphrase:      network.TestNetworkPassphrase,
+		DBConnectionPool:       dbConnectionPool,
+		DistributionPrivateKey: distributionKP.Seed(),
+		EncryptionPassphrase:   distributionKP.Seed(),
+		Encrypter:              &utils.PrivateKeyEncrypterMock{},
+	})
 	require.NoError(t, err)
 
 	wantMaxBaseFee := 100
@@ -862,14 +860,13 @@ func Test_TransactionWorker_buildAndSignTransaction(t *testing.T) {
 	const accountSequence = 123
 
 	distributionKP := keypair.MustRandom()
-	sigService, err := engine.NewDefaultSignatureService(
-		network.TestNetworkPassphrase,
-		dbConnectionPool,
-		distributionKP.Seed(),
-		store.NewChannelAccountModel(dbConnectionPool),
-		&utils.PrivateKeyEncrypterMock{},
-		distributionKP.Seed(),
-	)
+	sigService, err := engine.NewDefaultSignatureServiceNew(engine.DefaultSignatureServiceOptions{
+		NetworkPassphrase:      network.TestNetworkPassphrase,
+		DBConnectionPool:       dbConnectionPool,
+		DistributionPrivateKey: distributionKP.Seed(),
+		EncryptionPassphrase:   distributionKP.Seed(),
+		Encrypter:              &utils.PrivateKeyEncrypterMock{},
+	})
 	require.NoError(t, err)
 
 	testCases := []struct {

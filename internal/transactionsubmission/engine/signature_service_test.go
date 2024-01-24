@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"math"
+	"reflect"
 	"testing"
 
 	"github.com/stellar/go/keypair"
@@ -16,6 +17,89 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func Test_DefaultSignatureServiceOptions_Validate(t *testing.T) {
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	testCases := []struct {
+		name            string
+		opts            DefaultSignatureServiceOptions
+		wantErrContains string
+	}{
+		{
+			name:            "return an error if network passphrase is empty",
+			wantErrContains: "network passphrase cannot be empty",
+		},
+		{
+			name: "return an error if dbConnectionPool is nil",
+			opts: DefaultSignatureServiceOptions{
+				NetworkPassphrase: network.TestNetworkPassphrase,
+			},
+			wantErrContains: "database connection pool cannot be nil",
+		},
+		{
+			name: "return an error if distribution private key is empty",
+			opts: DefaultSignatureServiceOptions{
+				NetworkPassphrase: network.TestNetworkPassphrase,
+				DBConnectionPool:  dbConnectionPool,
+			},
+			wantErrContains: "distribution private key is not a valid Ed25519 secret",
+		},
+		{
+			name: "return an error if distribution private key is invalid",
+			opts: DefaultSignatureServiceOptions{
+				NetworkPassphrase:      network.TestNetworkPassphrase,
+				DBConnectionPool:       dbConnectionPool,
+				DistributionPrivateKey: "invalid",
+			},
+			wantErrContains: "distribution private key is not a valid Ed25519 secret",
+		},
+		{
+			name: "return an error if encryption passphrase is empty",
+			opts: DefaultSignatureServiceOptions{
+				NetworkPassphrase:      network.TestNetworkPassphrase,
+				DBConnectionPool:       dbConnectionPool,
+				DistributionPrivateKey: "SCPGNK3MRMXKNWGZ4ET3JZ6RUJIN7FMHT4ASVXDG7YPBL4WKBQNEL63F",
+			},
+			wantErrContains: "encryption passphrase is not a valid Ed25519 secret",
+		},
+		{
+			name: "return an error if encryption passphrase is invalid",
+			opts: DefaultSignatureServiceOptions{
+				NetworkPassphrase:      network.TestNetworkPassphrase,
+				DBConnectionPool:       dbConnectionPool,
+				DistributionPrivateKey: "SCPGNK3MRMXKNWGZ4ET3JZ6RUJIN7FMHT4ASVXDG7YPBL4WKBQNEL63F",
+				EncryptionPassphrase:   "invalid",
+			},
+			wantErrContains: "encryption passphrase is not a valid Ed25519 secret",
+		},
+		{
+			name: "🎉 Successfully validates options",
+			opts: DefaultSignatureServiceOptions{
+				NetworkPassphrase:      network.TestNetworkPassphrase,
+				DBConnectionPool:       dbConnectionPool,
+				DistributionPrivateKey: "SCPGNK3MRMXKNWGZ4ET3JZ6RUJIN7FMHT4ASVXDG7YPBL4WKBQNEL63F",
+				EncryptionPassphrase:   "SCPGNK3MRMXKNWGZ4ET3JZ6RUJIN7FMHT4ASVXDG7YPBL4WKBQNEL63F",
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.opts.Validate()
+			if tc.wantErrContains != "" {
+				require.Error(t, err)
+				assert.ErrorContains(t, err, tc.wantErrContains)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
 func Test_NewDefaultSignatureService(t *testing.T) {
 	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
@@ -23,62 +107,42 @@ func Test_NewDefaultSignatureService(t *testing.T) {
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
 
-	chAccountStore := &store.ChannelAccountModel{DBConnectionPool: dbConnectionPool}
-
 	testCases := []struct {
-		name              string
-		chAccountStore    store.ChannelAccountStore
-		networkPassphrase string
-		distributionSeed  string
-		encrypter         utils.PrivateKeyEncrypter
-		encrypterPass     string
-		wantErrContains   string
+		name                  string
+		opts                  DefaultSignatureServiceOptions
+		wantEncrypterTypeName string
+		wantErrContains       string
 	}{
 		{
-			name:            "return an error if dbConnectionPool is nil",
-			wantErrContains: "channel account store cannot be nil",
+			name:            "return an error if validation fails with an empty networkPassphrase",
+			wantErrContains: "validating options: network passphrase cannot be empty",
 		},
 		{
-			name:              "return an error if networkPassphrase is invalid",
-			chAccountStore:    chAccountStore,
-			networkPassphrase: "foo bar",
-			wantErrContains:   `invalid network passphrase: "foo bar"`,
+			name: "🎉 Successfully instantiates a new default signature service with default encrypter",
+			opts: DefaultSignatureServiceOptions{
+				NetworkPassphrase:      network.TestNetworkPassphrase,
+				DBConnectionPool:       dbConnectionPool,
+				DistributionPrivateKey: "SCPGNK3MRMXKNWGZ4ET3JZ6RUJIN7FMHT4ASVXDG7YPBL4WKBQNEL63F",
+				EncryptionPassphrase:   "SCPGNK3MRMXKNWGZ4ET3JZ6RUJIN7FMHT4ASVXDG7YPBL4WKBQNEL63F",
+			},
+			wantEncrypterTypeName: reflect.TypeOf(&utils.DefaultPrivateKeyEncrypter{}).String(),
 		},
 		{
-			name:              "return an error if distributionSeed is invalid",
-			chAccountStore:    chAccountStore,
-			networkPassphrase: network.TestNetworkPassphrase,
-			distributionSeed:  "foo bar",
-			wantErrContains:   "parsing distribution seed: base32 decode failed: illegal base32 data at input byte 7",
-		},
-		{
-			name:              "return an error if encrypter is nil",
-			chAccountStore:    chAccountStore,
-			networkPassphrase: network.TestNetworkPassphrase,
-			distributionSeed:  "SCPGNK3MRMXKNWGZ4ET3JZ6RUJIN7FMHT4ASVXDG7YPBL4WKBQNEL63F",
-			wantErrContains:   "private key encrypter cannot be nil",
-		},
-		{
-			name:              "return an error if encrypterPass is empty",
-			chAccountStore:    chAccountStore,
-			networkPassphrase: network.TestNetworkPassphrase,
-			distributionSeed:  "SCPGNK3MRMXKNWGZ4ET3JZ6RUJIN7FMHT4ASVXDG7YPBL4WKBQNEL63F",
-			encrypter:         &utils.PrivateKeyEncrypterMock{},
-			wantErrContains:   "private key encrypter passphrase cannot be empty",
-		},
-		{
-			name:              "🎉 Successfully instantiates a new default signature service",
-			chAccountStore:    chAccountStore,
-			networkPassphrase: network.TestNetworkPassphrase,
-			encrypter:         &utils.PrivateKeyEncrypterMock{},
-			encrypterPass:     "SCPGNK3MRMXKNWGZ4ET3JZ6RUJIN7FMHT4ASVXDG7YPBL4WKBQNEL63F",
-			distributionSeed:  "SCPGNK3MRMXKNWGZ4ET3JZ6RUJIN7FMHT4ASVXDG7YPBL4WKBQNEL63F",
+			name: "🎉 Successfully instantiates a new default signature service with a custom encrypter",
+			opts: DefaultSignatureServiceOptions{
+				NetworkPassphrase:      network.TestNetworkPassphrase,
+				DBConnectionPool:       dbConnectionPool,
+				DistributionPrivateKey: "SCPGNK3MRMXKNWGZ4ET3JZ6RUJIN7FMHT4ASVXDG7YPBL4WKBQNEL63F",
+				EncryptionPassphrase:   "SCPGNK3MRMXKNWGZ4ET3JZ6RUJIN7FMHT4ASVXDG7YPBL4WKBQNEL63F",
+				Encrypter:              &utils.PrivateKeyEncrypterMock{},
+			},
+			wantEncrypterTypeName: reflect.TypeOf(&utils.PrivateKeyEncrypterMock{}).String(),
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			sigService, err := NewDefaultSignatureService(tc.networkPassphrase, dbConnectionPool, tc.distributionSeed, tc.chAccountStore, tc.encrypter, tc.encrypterPass)
+			sigService, err := NewDefaultSignatureServiceNew(tc.opts)
 			if tc.wantErrContains != "" {
 				require.Error(t, err)
 				assert.ErrorContains(t, err, tc.wantErrContains)
@@ -86,6 +150,7 @@ func Test_NewDefaultSignatureService(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 				assert.NotNil(t, sigService)
+				assert.Equal(t, tc.wantEncrypterTypeName, reflect.TypeOf(sigService.encrypter).String())
 			}
 		})
 	}
@@ -98,19 +163,29 @@ func Test_DefaultSignatureService_DistributionAccount(t *testing.T) {
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
 
-	chAccountStore := &store.ChannelAccountModel{DBConnectionPool: dbConnectionPool}
-
 	// test with the first KP:
 	distributionKP, err := keypair.Random()
 	require.NoError(t, err)
-	defaultSigService, err := NewDefaultSignatureService(network.TestNetworkPassphrase, dbConnectionPool, distributionKP.Seed(), chAccountStore, &utils.PrivateKeyEncrypterMock{}, distributionKP.Seed())
+	defaultSigService, err := NewDefaultSignatureServiceNew(DefaultSignatureServiceOptions{
+		NetworkPassphrase:      network.TestNetworkPassphrase,
+		DBConnectionPool:       dbConnectionPool,
+		DistributionPrivateKey: distributionKP.Seed(),
+		EncryptionPassphrase:   distributionKP.Seed(),
+		Encrypter:              &utils.PrivateKeyEncrypterMock{},
+	})
 	require.NoError(t, err)
 	require.Equal(t, distributionKP.Address(), defaultSigService.DistributionAccount())
 
 	// test with the second KP, to make sure it's changing accordingly:
 	distributionKP, err = keypair.Random()
 	require.NoError(t, err)
-	defaultSigService, err = NewDefaultSignatureService(network.TestNetworkPassphrase, dbConnectionPool, distributionKP.Seed(), chAccountStore, &utils.PrivateKeyEncrypterMock{}, distributionKP.Seed())
+	defaultSigService, err = NewDefaultSignatureServiceNew(DefaultSignatureServiceOptions{
+		NetworkPassphrase:      network.TestNetworkPassphrase,
+		DBConnectionPool:       dbConnectionPool,
+		DistributionPrivateKey: distributionKP.Seed(),
+		EncryptionPassphrase:   distributionKP.Seed(),
+		Encrypter:              &utils.PrivateKeyEncrypterMock{},
+	})
 	require.NoError(t, err)
 	require.Equal(t, distributionKP.Address(), defaultSigService.DistributionAccount())
 }
@@ -171,7 +246,13 @@ func Test_DefaultSignatureService_getKPsForAccounts(t *testing.T) {
 	require.NoError(t, err)
 
 	// create default signature service
-	defaultSigService, err := NewDefaultSignatureService(network.TestNetworkPassphrase, dbConnectionPool, distributionKP.Seed(), chAccountStore, encrypter, encrypterPass)
+	defaultSigService, err := NewDefaultSignatureServiceNew(DefaultSignatureServiceOptions{
+		NetworkPassphrase:      network.TestNetworkPassphrase,
+		DBConnectionPool:       dbConnectionPool,
+		DistributionPrivateKey: distributionKP.Seed(),
+		EncryptionPassphrase:   encrypterPass,
+		Encrypter:              encrypter,
+	})
 	require.NoError(t, err)
 
 	testCases := []struct {
@@ -245,7 +326,6 @@ func Test_DefaultSignatureService_SignStellarTransaction(t *testing.T) {
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
 
-	chAccountStore := &store.ChannelAccountModel{DBConnectionPool: dbConnectionPool}
 	ctx := context.Background()
 
 	// create channel accounts in the DB
@@ -257,7 +337,13 @@ func Test_DefaultSignatureService_SignStellarTransaction(t *testing.T) {
 	distributionKP, err := keypair.Random()
 	require.NoError(t, err)
 
-	defaultSigService, err := NewDefaultSignatureService(network.TestNetworkPassphrase, dbConnectionPool, distributionKP.Seed(), chAccountStore, &utils.DefaultPrivateKeyEncrypter{}, distributionKP.Seed())
+	defaultSigService, err := NewDefaultSignatureServiceNew(DefaultSignatureServiceOptions{
+		NetworkPassphrase:      network.TestNetworkPassphrase,
+		DBConnectionPool:       dbConnectionPool,
+		DistributionPrivateKey: distributionKP.Seed(),
+		EncryptionPassphrase:   distributionKP.Seed(),
+		Encrypter:              &utils.DefaultPrivateKeyEncrypter{},
+	})
 	require.NoError(t, err)
 
 	// create stellar transaction
@@ -336,7 +422,6 @@ func Test_DefaultSignatureService_SignFeeBumpStellarTransaction(t *testing.T) {
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
 
-	chAccountStore := &store.ChannelAccountModel{DBConnectionPool: dbConnectionPool}
 	ctx := context.Background()
 
 	// create channel accounts in the DB
@@ -348,7 +433,13 @@ func Test_DefaultSignatureService_SignFeeBumpStellarTransaction(t *testing.T) {
 	distributionKP, err := keypair.Random()
 	require.NoError(t, err)
 
-	defaultSigService, err := NewDefaultSignatureService(network.TestNetworkPassphrase, dbConnectionPool, distributionKP.Seed(), chAccountStore, &utils.DefaultPrivateKeyEncrypter{}, distributionKP.Seed())
+	defaultSigService, err := NewDefaultSignatureServiceNew(DefaultSignatureServiceOptions{
+		NetworkPassphrase:      network.TestNetworkPassphrase,
+		DBConnectionPool:       dbConnectionPool,
+		DistributionPrivateKey: distributionKP.Seed(),
+		EncryptionPassphrase:   distributionKP.Seed(),
+		Encrypter:              &utils.DefaultPrivateKeyEncrypter{},
+	})
 	require.NoError(t, err)
 
 	// create stellar transaction
@@ -476,7 +567,13 @@ func Test_DefaultSignatureService_BatchInsert(t *testing.T) {
 
 	defaultEncrypter := &utils.DefaultPrivateKeyEncrypter{}
 	encrypterPass := distributionKP.Seed()
-	defaultSigService, err := NewDefaultSignatureService(network.TestNetworkPassphrase, dbConnectionPool, distributionKP.Seed(), chAccountStore, defaultEncrypter, encrypterPass)
+	defaultSigService, err := NewDefaultSignatureServiceNew(DefaultSignatureServiceOptions{
+		NetworkPassphrase:      network.TestNetworkPassphrase,
+		DBConnectionPool:       dbConnectionPool,
+		DistributionPrivateKey: distributionKP.Seed(),
+		EncryptionPassphrase:   encrypterPass,
+		Encrypter:              defaultEncrypter,
+	})
 	require.NoError(t, err)
 
 	for _, tc := range testCase {
@@ -540,7 +637,13 @@ func Test_DefaultSignatureService_Delete(t *testing.T) {
 
 	distributionKP, err := keypair.Random()
 	require.NoError(t, err)
-	defaultSigService, err := NewDefaultSignatureService(network.TestNetworkPassphrase, dbConnectionPool, distributionKP.Seed(), chAccountStore, &utils.PrivateKeyEncrypterMock{}, distributionKP.Seed())
+	defaultSigService, err := NewDefaultSignatureServiceNew(DefaultSignatureServiceOptions{
+		NetworkPassphrase:      network.TestNetworkPassphrase,
+		DBConnectionPool:       dbConnectionPool,
+		DistributionPrivateKey: distributionKP.Seed(),
+		EncryptionPassphrase:   distributionKP.Seed(),
+		Encrypter:              &utils.PrivateKeyEncrypterMock{},
+	})
 	require.NoError(t, err)
 
 	// at start: count=0

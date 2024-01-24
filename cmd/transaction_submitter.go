@@ -153,7 +153,7 @@ func (c *TxSubmitterCommand) Command(submitterService TxSubmitterServiceInterfac
 			submitterOpts.DatabaseDSN = tssDatabaseDSN
 			submitterOpts.MonitorService = tssMonitorSvc
 			submitterOpts.NetworkPassphrase = globalOptions.NetworkPassphrase
-			submitterOpts.PrivateKeyEncrypter = tssUtils.DefaultPrivateKeyEncrypter{}
+			submitterOpts.PrivateKeyEncrypter = &tssUtils.DefaultPrivateKeyEncrypter{}
 
 			// Inject crash tracker options dependencies
 			globalOptions.PopulateCrashTrackerOptions(&crashTrackerOptions)

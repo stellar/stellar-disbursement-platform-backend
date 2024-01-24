@@ -344,13 +344,13 @@ func Test_NewManager(t *testing.T) {
 				})
 				require.NoError(t, err)
 
-				wantSigService, err := engine.NewDefaultSignatureService(
-					submitterOptions.NetworkPassphrase,
-					wantConnectionPool,
-					submitterOptions.DistributionSeed, wantChAccModel,
-					submitterOptions.PrivateKeyEncrypter,
-					submitterOptions.DistributionSeed,
-				)
+				wantSigService, err := engine.NewDefaultSignatureServiceNew(engine.DefaultSignatureServiceOptions{
+					NetworkPassphrase:      submitterOptions.NetworkPassphrase,
+					DBConnectionPool:       wantConnectionPool,
+					DistributionPrivateKey: submitterOptions.DistributionSeed,
+					EncryptionPassphrase:   submitterOptions.DistributionSeed,
+					Encrypter:              submitterOptions.PrivateKeyEncrypter,
+				})
 				require.NoError(t, err)
 
 				wantCrashTrackerClient := submitterOptions.CrashTrackerClient
@@ -453,14 +453,13 @@ func Test_Manager_ProcessTransactions(t *testing.T) {
 
 			// Signature service
 			distributionKP := keypair.MustRandom()
-			sigService, err := engine.NewDefaultSignatureService(
-				network.TestNetworkPassphrase,
-				dbConnectionPool,
-				distributionKP.Seed(),
-				store.NewChannelAccountModel(dbConnectionPool),
-				&utils.PrivateKeyEncrypterMock{},
-				distributionKP.Seed(),
-			)
+			sigService, err := engine.NewDefaultSignatureServiceNew(engine.DefaultSignatureServiceOptions{
+				NetworkPassphrase:      network.TestNetworkPassphrase,
+				DBConnectionPool:       dbConnectionPool,
+				DistributionPrivateKey: distributionKP.Seed(),
+				EncryptionPassphrase:   distributionKP.Seed(),
+				Encrypter:              &utils.PrivateKeyEncrypterMock{},
+			})
 			require.NoError(t, err)
 
 			// mock ledger number tracker

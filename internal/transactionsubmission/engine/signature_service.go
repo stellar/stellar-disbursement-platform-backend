@@ -29,6 +29,7 @@ type DefaultSignatureServiceOptions struct {
 	DBConnectionPool       db.DBConnectionPool
 	DistributionPrivateKey string
 	EncryptionPassphrase   string
+	Encrypter              utils.PrivateKeyEncrypter
 }
 
 func (opts *DefaultSignatureServiceOptions) Validate() error {
@@ -40,12 +41,12 @@ func (opts *DefaultSignatureServiceOptions) Validate() error {
 		return fmt.Errorf("database connection pool cannot be nil")
 	}
 
-	if opts.DistributionPrivateKey == "" {
-		return fmt.Errorf("distribution private key cannot be empty")
+	if !strkey.IsValidEd25519SecretSeed(opts.DistributionPrivateKey) {
+		return fmt.Errorf("distribution private key is not a valid Ed25519 secret")
 	}
 
-	if opts.EncryptionPassphrase == "" {
-		return fmt.Errorf("encrypter passphrase cannot be empty")
+	if !strkey.IsValidEd25519SecretSeed(opts.EncryptionPassphrase) {
+		return fmt.Errorf("encryption passphrase is not a valid Ed25519 secret")
 	}
 
 	return nil
@@ -71,7 +72,10 @@ func NewDefaultSignatureServiceNew(opts DefaultSignatureServiceOptions) (*Defaul
 		return nil, fmt.Errorf("parsing distribution seed: %w", err)
 	}
 
-	encrypter := utils.DefaultPrivateKeyEncrypter{}
+	encrypter := opts.Encrypter
+	if encrypter == nil {
+		encrypter = &utils.DefaultPrivateKeyEncrypter{}
+	}
 
 	return &DefaultSignatureService{
 		networkPassphrase:    opts.NetworkPassphrase,
