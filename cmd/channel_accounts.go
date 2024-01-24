@@ -20,7 +20,7 @@ import (
 
 //go:generate mockery --name=ChAccCmdServiceInterface --case=underscore --structname=MockChAccCmdServiceInterface
 type ChAccCmdServiceInterface interface {
-	ListChannelAccounts(ctx context.Context, opts txSubSvc.ListChannelAccountsOptions) error
+	ViewChannelAccounts(ctx context.Context, opts txSubSvc.ViewChannelAccountsOptions) error
 	CreateChannelAccounts(ctx context.Context, chAccService txSubSvc.ChannelAccountsService, count int) error
 	EnsureChannelAccountsCount(ctx context.Context, chAccService txSubSvc.ChannelAccountsService, count int) error
 	DeleteChannelAccount(ctx context.Context, chAccService txSubSvc.ChannelAccountsService, opts txSubSvc.DeleteChannelAccountsOptions) error
@@ -29,8 +29,8 @@ type ChAccCmdServiceInterface interface {
 
 type ChAccCmdService struct{}
 
-func (s *ChAccCmdService) ListChannelAccounts(ctx context.Context, opts txSubSvc.ListChannelAccountsOptions) error {
-	return txSubSvc.ListChannelAccounts(ctx, opts)
+func (s *ChAccCmdService) ViewChannelAccounts(ctx context.Context, opts txSubSvc.ViewChannelAccountsOptions) error {
+	return txSubSvc.ViewChannelAccounts(ctx, opts)
 }
 
 func (s *ChAccCmdService) CreateChannelAccounts(ctx context.Context, chAccService txSubSvc.ChannelAccountsService, count int) error {
@@ -98,85 +98,13 @@ func (c *ChannelAccountsCommand) Command(cmdService ChAccCmdServiceInterface) *c
 		log.Fatalf("Error initializing %s command: %v", channelAccountsCmd.Name(), err)
 	}
 
-	channelAccountsCmd.AddCommand(c.ListCommand(cmdService))
+	channelAccountsCmd.AddCommand(c.ViewCommand(cmdService))
 	channelAccountsCmd.AddCommand(c.CreateCommand(cmdService))
 	channelAccountsCmd.AddCommand(c.DeleteCommand(cmdService))
 	channelAccountsCmd.AddCommand(c.EnsureCommand(cmdService))
 	channelAccountsCmd.AddCommand(c.VerifyCommand(cmdService))
 
 	return channelAccountsCmd
-}
-
-func (c *ChannelAccountsCommand) ListCommand(cmdService ChAccCmdServiceInterface) *cobra.Command {
-	opts := txSubSvc.ListChannelAccountsOptions{}
-	listCmd := &cobra.Command{
-		Use:   "list",
-		Short: "List public keys of all channel accounts currently stored in the database",
-		PersistentPreRun: func(cmd *cobra.Command, args []string) {
-			cmdUtils.PropagatePersistentPreRun(cmd, args)
-
-			// Inject command dependencies
-			opts.DBConnectionPool = c.TSSDBConnectionPool
-		},
-		Run: func(cmd *cobra.Command, _ []string) {
-			ctx := cmd.Context()
-			if err := cmdService.ListChannelAccounts(ctx, opts); err != nil {
-				c.CrashTrackerClient.LogAndReportErrors(ctx, err, "Cmd channel-accounts view crash")
-				log.Ctx(ctx).Fatalf("Error viewing channel accounts: %v", err)
-			}
-		},
-	}
-
-	return listCmd
-}
-
-// chAccServiceConfigOptions returns the config options for the channel accounts service to be used when the signature
-// service is needed.
-func chAccServiceConfigOptions(
-	sigServiceOptions *engine.DefaultSignatureServiceOptions,
-	chAccService *txSubSvc.ChannelAccountsService,
-) config.ConfigOptions {
-	return config.ConfigOptions{
-		// signature service options:
-		cmdUtils.DistributionSeed(&sigServiceOptions.DistributionPrivateKey),
-		cmdUtils.ChannelAccountEncryptionPassphraseConfigOption(&sigServiceOptions.EncryptionPassphrase),
-		// other shared options:
-		cmdUtils.HorizonURLConfigOption(&chAccService.HorizonURL),
-		cmdUtils.MaxBaseFee(&chAccService.MaxBaseFee),
-	}
-}
-
-// chAccServicePersistentPreRun runs the persistent pre run for the channel accounts service to be used when the
-// signature service is needed.
-func (c *ChannelAccountsCommand) chAccServicePersistentPreRun(
-	cmd *cobra.Command,
-	args []string,
-	configOpts config.ConfigOptions,
-	sigServiceOptions *engine.DefaultSignatureServiceOptions,
-	chAccService *txSubSvc.ChannelAccountsService,
-) error {
-	ctx := cmd.Context()
-	cmd.Parent().PersistentPreRun(cmd.Parent(), args)
-
-	// Validate & ingest input parameters
-	configOpts.Require()
-	if err := configOpts.SetValues(); err != nil {
-		return fmt.Errorf("setting values of config options in %s: %w", cmd.Name(), err)
-	}
-
-	// Prepare the signature service
-	sigServiceOptions.NetworkPassphrase = globalOptions.NetworkPassphrase
-	sigServiceOptions.DBConnectionPool = c.TSSDBConnectionPool
-	sigService, err := di.NewSignatureService(ctx, *sigServiceOptions)
-	if err != nil {
-		return fmt.Errorf("retrieving signing service through the dependency injector in %s: %w", cmd.Name(), err)
-	}
-
-	// Inject channel account service dependencies
-	chAccService.SigningService = sigService
-	chAccService.TSSDBConnectionPool = c.TSSDBConnectionPool
-
-	return nil
 }
 
 func (c *ChannelAccountsCommand) CreateCommand(cmdService ChAccCmdServiceInterface) *cobra.Command {
@@ -212,6 +140,44 @@ func (c *ChannelAccountsCommand) CreateCommand(cmdService ChAccCmdServiceInterfa
 	}
 
 	return createCmd
+}
+
+func (c *ChannelAccountsCommand) VerifyCommand(cmdService ChAccCmdServiceInterface) *cobra.Command {
+	chAccService := txSubSvc.ChannelAccountsService{}
+	sigServiceOptions := engine.DefaultSignatureServiceOptions{}
+	configOpts := chAccServiceConfigOptions(&sigServiceOptions, &chAccService)
+
+	var deleteInvalidAccounts bool
+	configOpts = append(configOpts, &config.ConfigOption{
+		Name:        "delete-invalid-accounts",
+		Usage:       "Delete channel accounts from storage that are verified to be invalid on the network",
+		OptType:     types.Bool,
+		ConfigKey:   &deleteInvalidAccounts,
+		FlagDefault: false,
+		Required:    false,
+	})
+
+	verifyCmd := &cobra.Command{
+		Use:   "verify",
+		Short: "Verify that all the channel accounts in the database exist on the Stellar newtwork",
+		PersistentPreRun: func(cmd *cobra.Command, args []string) {
+			if err := c.chAccServicePersistentPreRun(cmd, args, configOpts, &sigServiceOptions, &chAccService); err != nil {
+				log.Ctx(cmd.Context()).Fatalf("Error running persistent pre run: %v", err)
+			}
+		},
+		Run: func(cmd *cobra.Command, _ []string) {
+			ctx := cmd.Context()
+			if err := cmdService.VerifyChannelAccounts(ctx, chAccService, deleteInvalidAccounts); err != nil {
+				c.CrashTrackerClient.LogAndReportErrors(ctx, err, "Cmd channel-accounts create crash")
+				log.Ctx(ctx).Fatalf("Error creating channel accounts: %v", err)
+			}
+		},
+	}
+	if err := configOpts.Init(verifyCmd); err != nil {
+		log.Fatalf("Error initializing %s command: %v", verifyCmd.Name(), err)
+	}
+
+	return verifyCmd
 }
 
 func (c *ChannelAccountsCommand) EnsureCommand(cmdService ChAccCmdServiceInterface) *cobra.Command {
@@ -300,40 +266,74 @@ func (c *ChannelAccountsCommand) DeleteCommand(cmdService ChAccCmdServiceInterfa
 	return deleteCmd
 }
 
-func (c *ChannelAccountsCommand) VerifyCommand(cmdService ChAccCmdServiceInterface) *cobra.Command {
-	chAccService := txSubSvc.ChannelAccountsService{}
-	sigServiceOptions := engine.DefaultSignatureServiceOptions{}
-	configOpts := chAccServiceConfigOptions(&sigServiceOptions, &chAccService)
-
-	var deleteInvalidAccounts bool
-	configOpts = append(configOpts, &config.ConfigOption{
-		Name:        "delete-invalid-accounts",
-		Usage:       "Delete channel accounts from storage that are verified to be invalid on the network",
-		OptType:     types.Bool,
-		ConfigKey:   &deleteInvalidAccounts,
-		FlagDefault: false,
-		Required:    false,
-	})
-
-	verifyCmd := &cobra.Command{
-		Use:   "verify",
-		Short: "Verify that all the channel accounts in the database exist on the Stellar newtwork",
+func (c *ChannelAccountsCommand) ViewCommand(cmdService ChAccCmdServiceInterface) *cobra.Command {
+	opts := txSubSvc.ViewChannelAccountsOptions{}
+	listCmd := &cobra.Command{
+		Use:   "view",
+		Short: "List public keys of all channel accounts currently stored in the database",
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
-			if err := c.chAccServicePersistentPreRun(cmd, args, configOpts, &sigServiceOptions, &chAccService); err != nil {
-				log.Ctx(cmd.Context()).Fatalf("Error running persistent pre run: %v", err)
-			}
+			cmdUtils.PropagatePersistentPreRun(cmd, args)
+
+			// Inject command dependencies
+			opts.DBConnectionPool = c.TSSDBConnectionPool
 		},
 		Run: func(cmd *cobra.Command, _ []string) {
 			ctx := cmd.Context()
-			if err := cmdService.VerifyChannelAccounts(ctx, chAccService, deleteInvalidAccounts); err != nil {
-				c.CrashTrackerClient.LogAndReportErrors(ctx, err, "Cmd channel-accounts create crash")
-				log.Ctx(ctx).Fatalf("Error creating channel accounts: %v", err)
+			if err := cmdService.ViewChannelAccounts(ctx, opts); err != nil {
+				c.CrashTrackerClient.LogAndReportErrors(ctx, err, "Cmd channel-accounts view crash")
+				log.Ctx(ctx).Fatalf("Error viewing channel accounts: %v", err)
 			}
 		},
 	}
-	if err := configOpts.Init(verifyCmd); err != nil {
-		log.Fatalf("Error initializing %s command: %v", verifyCmd.Name(), err)
+
+	return listCmd
+}
+
+// chAccServiceConfigOptions returns the config options for the channel accounts service to be used when the signature
+// service is needed.
+func chAccServiceConfigOptions(
+	sigServiceOptions *engine.DefaultSignatureServiceOptions,
+	chAccService *txSubSvc.ChannelAccountsService,
+) config.ConfigOptions {
+	return config.ConfigOptions{
+		// signature service options:
+		cmdUtils.DistributionSeed(&sigServiceOptions.DistributionPrivateKey),
+		cmdUtils.ChannelAccountEncryptionPassphraseConfigOption(&sigServiceOptions.EncryptionPassphrase),
+		// other shared options:
+		cmdUtils.HorizonURLConfigOption(&chAccService.HorizonURL),
+		cmdUtils.MaxBaseFee(&chAccService.MaxBaseFee),
+	}
+}
+
+// chAccServicePersistentPreRun runs the persistent pre run for the channel accounts service to be used when the
+// signature service is needed.
+func (c *ChannelAccountsCommand) chAccServicePersistentPreRun(
+	cmd *cobra.Command,
+	args []string,
+	configOpts config.ConfigOptions,
+	sigServiceOptions *engine.DefaultSignatureServiceOptions,
+	chAccService *txSubSvc.ChannelAccountsService,
+) error {
+	ctx := cmd.Context()
+	cmd.Parent().PersistentPreRun(cmd.Parent(), args)
+
+	// Validate & ingest input parameters
+	configOpts.Require()
+	if err := configOpts.SetValues(); err != nil {
+		return fmt.Errorf("setting values of config options in %s: %w", cmd.Name(), err)
 	}
 
-	return verifyCmd
+	// Prepare the signature service
+	sigServiceOptions.NetworkPassphrase = globalOptions.NetworkPassphrase
+	sigServiceOptions.DBConnectionPool = c.TSSDBConnectionPool
+	sigService, err := di.NewSignatureService(ctx, *sigServiceOptions)
+	if err != nil {
+		return fmt.Errorf("retrieving signing service through the dependency injector in %s: %w", cmd.Name(), err)
+	}
+
+	// Inject channel account service dependencies
+	chAccService.SigningService = sigService
+	chAccService.TSSDBConnectionPool = c.TSSDBConnectionPool
+
+	return nil
 }

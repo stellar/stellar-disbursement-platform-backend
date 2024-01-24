@@ -345,13 +345,13 @@ func Test_ChannelAccountsCommand_DeleteCommand(t *testing.T) {
 	caServiceMock.AssertExpectations(t)
 }
 
-func Test_ChannelAccountsCommand_ListCommand(t *testing.T) {
+func Test_ChannelAccountsCommand_ViewCommand(t *testing.T) {
 	parentCmdMock := &cobra.Command{PersistentPreRun: func(cmd *cobra.Command, args []string) {}}
-	parentCmdMock.SetArgs([]string{"list"})
+	parentCmdMock.SetArgs([]string{"view"})
 
 	caServiceMock := mocks.NewMockChAccCmdServiceInterface(t)
 	caCommand := &ChannelAccountsCommand{}
-	cmd := caCommand.ListCommand(caServiceMock)
+	cmd := caCommand.ViewCommand(caServiceMock)
 	parentCmdMock.AddCommand(cmd)
 
 	t.Run("exit with status 1 when ChannelAccountsService fails", func(t *testing.T) {
@@ -366,7 +366,7 @@ func Test_ChannelAccountsCommand_ListCommand(t *testing.T) {
 			defer crashTrackerMock.AssertExpectations(t)
 
 			caServiceMock.
-				On("ListChannelAccounts", context.Background()).
+				On("ViewChannelAccounts", context.Background()).
 				Return(customErr).
 				Once()
 			defer caServiceMock.AssertExpectations(t)
@@ -394,7 +394,7 @@ func Test_ChannelAccountsCommand_ListCommand(t *testing.T) {
 	t.Run("executes the list command successfully", func(t *testing.T) {
 		caCommand.CrashTrackerClient = nil
 		caServiceMock.
-			On("ListChannelAccounts", context.Background(), mock.Anything).
+			On("ViewChannelAccounts", context.Background(), mock.Anything).
 			Return(nil).
 			Once()
 

@@ -52,15 +52,13 @@ func (opts *DefaultSignatureServiceOptions) Validate() error {
 }
 
 type DefaultSignatureService struct {
-	networkPassphrase   string
-	distributionAccount string
-	distributionKP      *keypair.Full
-	dbConnectionPool    db.DBConnectionPool
-	chAccModel          store.ChannelAccountStore
-	encrypter           utils.PrivateKeyEncrypter
-
-	// TODO: encrypterPass and EncryptionKey should have the same name
-	encrypterPass string
+	networkPassphrase    string
+	distributionAccount  string
+	distributionKP       *keypair.Full
+	dbConnectionPool     db.DBConnectionPool
+	chAccModel           store.ChannelAccountStore
+	encrypter            utils.PrivateKeyEncrypter
+	encryptionPassphrase string
 }
 
 func NewDefaultSignatureServiceNew(opts DefaultSignatureServiceOptions) (*DefaultSignatureService, error) {
@@ -76,13 +74,13 @@ func NewDefaultSignatureServiceNew(opts DefaultSignatureServiceOptions) (*Defaul
 	encrypter := utils.DefaultPrivateKeyEncrypter{}
 
 	return &DefaultSignatureService{
-		networkPassphrase:   opts.NetworkPassphrase,
-		distributionAccount: distributionKP.Address(),
-		distributionKP:      distributionKP,
-		dbConnectionPool:    opts.DBConnectionPool,
-		chAccModel:          store.NewChannelAccountModel(opts.DBConnectionPool),
-		encrypter:           encrypter,
-		encrypterPass:       opts.EncryptionPassphrase,
+		networkPassphrase:    opts.NetworkPassphrase,
+		distributionAccount:  distributionKP.Address(),
+		distributionKP:       distributionKP,
+		dbConnectionPool:     opts.DBConnectionPool,
+		chAccModel:           store.NewChannelAccountModel(opts.DBConnectionPool),
+		encrypter:            encrypter,
+		encryptionPassphrase: opts.EncryptionPassphrase,
 	}, nil
 }
 
@@ -113,13 +111,13 @@ func NewDefaultSignatureService(networkPassphrase string, dbConnectionPool db.DB
 	}
 
 	return &DefaultSignatureService{
-		networkPassphrase:   networkPassphrase,
-		distributionAccount: distributionKP.Address(),
-		distributionKP:      distributionKP,
-		dbConnectionPool:    dbConnectionPool,
-		chAccModel:          chAccStore,
-		encrypter:           encrypter,
-		encrypterPass:       encrypterPass,
+		networkPassphrase:    networkPassphrase,
+		distributionAccount:  distributionKP.Address(),
+		distributionKP:       distributionKP,
+		dbConnectionPool:     dbConnectionPool,
+		chAccModel:           chAccStore,
+		encrypter:            encrypter,
+		encryptionPassphrase: encrypterPass,
 	}, nil
 }
 
@@ -161,7 +159,7 @@ func (ds *DefaultSignatureService) getKPsForAccounts(ctx context.Context, stella
 
 		chAccPrivateKey := chAcc.PrivateKey
 		if !strkey.IsValidEd25519SecretSeed(chAccPrivateKey) {
-			chAccPrivateKey, err = ds.encrypter.Decrypt(chAccPrivateKey, ds.encrypterPass)
+			chAccPrivateKey, err = ds.encrypter.Decrypt(chAccPrivateKey, ds.encryptionPassphrase)
 			if err != nil {
 				return nil, fmt.Errorf("cannot decrypt private key: %w", err)
 			}
@@ -223,7 +221,7 @@ func (ds *DefaultSignatureService) BatchInsert(ctx context.Context, kps []*keypa
 		publicKey := kp.Address()
 		privateKey := kp.Seed()
 		if shouldEncryptSeed {
-			privateKey, err = ds.encrypter.Encrypt(privateKey, ds.encrypterPass)
+			privateKey, err = ds.encrypter.Encrypt(privateKey, ds.encryptionPassphrase)
 			if err != nil {
 				return fmt.Errorf("encrypting channel account private key: %w", err)
 			}

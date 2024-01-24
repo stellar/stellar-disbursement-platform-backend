@@ -447,6 +447,10 @@ func Test_SetConfigOptionStellarPrivateKey(t *testing.T) {
 
 	testCases := []customSetterTestCase[string]{
 		{
+			name:            "returns an error if the private key is empty",
+			wantErrContains: `error validating private key: ""`,
+		},
+		{
 			name:            "returns an error if the private key is invalid",
 			args:            []string{"--sep10-signing-private-key", "invalid_private_key"},
 			wantErrContains: `error validating private key: "in...ey"`,

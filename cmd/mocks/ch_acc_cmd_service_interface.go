@@ -56,20 +56,6 @@ func (_m *MockChAccCmdServiceInterface) EnsureChannelAccountsCount(ctx context.C
 	return r0
 }
 
-// ListChannelAccounts provides a mock function with given fields: ctx, opts
-func (_m *MockChAccCmdServiceInterface) ListChannelAccounts(ctx context.Context, opts services.ListChannelAccountsOptions) error {
-	ret := _m.Called(ctx, opts)
-
-	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, services.ListChannelAccountsOptions) error); ok {
-		r0 = rf(ctx, opts)
-	} else {
-		r0 = ret.Error(0)
-	}
-
-	return r0
-}
-
 // VerifyChannelAccounts provides a mock function with given fields: ctx, chAccService, deleteInvalidAccounts
 func (_m *MockChAccCmdServiceInterface) VerifyChannelAccounts(ctx context.Context, chAccService services.ChannelAccountsService, deleteInvalidAccounts bool) error {
 	ret := _m.Called(ctx, chAccService, deleteInvalidAccounts)
@@ -77,6 +63,20 @@ func (_m *MockChAccCmdServiceInterface) VerifyChannelAccounts(ctx context.Contex
 	var r0 error
 	if rf, ok := ret.Get(0).(func(context.Context, services.ChannelAccountsService, bool) error); ok {
 		r0 = rf(ctx, chAccService, deleteInvalidAccounts)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// ViewChannelAccounts provides a mock function with given fields: ctx, opts
+func (_m *MockChAccCmdServiceInterface) ViewChannelAccounts(ctx context.Context, opts services.ViewChannelAccountsOptions) error {
+	ret := _m.Called(ctx, opts)
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, services.ViewChannelAccountsOptions) error); ok {
+		r0 = rf(ctx, opts)
 	} else {
 		r0 = ret.Error(0)
 	}

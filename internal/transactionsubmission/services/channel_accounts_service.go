@@ -15,7 +15,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
 )
 
-type ListChannelAccountsOptions struct {
+type ViewChannelAccountsOptions struct {
 	DBConnectionPool db.DBConnectionPool
 }
 
@@ -24,7 +24,7 @@ type ListChannelAccountsOptions struct {
 // 	VerifyChannelAccounts(ctx context.Context, deleteInvalidAccounts bool) error
 // 	DeleteChannelAccount(context.Context, DeleteChannelAccountsOptions) error
 // 	EnsureChannelAccountsCount(ctx context.Context, numAccountsToEnsure int) error
-// 	ListChannelAccounts(context.Context) error
+// 	ViewChannelAccounts(context.Context) error
 // }
 
 const advisoryLock = int(2172398390434160)
@@ -41,8 +41,8 @@ func acquireAdvisoryLockForCommand(ctx context.Context, dbConnectionPool db.DBCo
 	return nil
 }
 
-// ListChannelAccounts prints all the database channel accounts.
-func ListChannelAccounts(ctx context.Context, opts ListChannelAccountsOptions) error {
+// ViewChannelAccounts prints all the database channel accounts.
+func ViewChannelAccounts(ctx context.Context, opts ViewChannelAccountsOptions) error {
 	if opts.DBConnectionPool == nil {
 		return fmt.Errorf("db connection pool cannot be nil")
 	}

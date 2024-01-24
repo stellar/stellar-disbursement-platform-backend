@@ -857,7 +857,7 @@ func Test_ChannelAccounts_EnsureChannelAccounts_Delete_Success(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func Test_ChannelAccounts_ListChannelAccounts_Success(t *testing.T) {
+func Test_ChannelAccounts_ViewChannelAccounts_Success(t *testing.T) {
 	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
@@ -870,7 +870,7 @@ func Test_ChannelAccounts_ListChannelAccounts_Success(t *testing.T) {
 
 	getEntries := log.DefaultLogger.StartTest(log.InfoLevel)
 
-	err = ListChannelAccounts(ctx, ListChannelAccountsOptions{DBConnectionPool: dbConnectionPool})
+	err = ViewChannelAccounts(ctx, ViewChannelAccountsOptions{DBConnectionPool: dbConnectionPool})
 	require.NoError(t, err)
 
 	entries := getEntries()
@@ -879,10 +879,10 @@ func Test_ChannelAccounts_ListChannelAccounts_Success(t *testing.T) {
 	}
 }
 
-func Test_ChannelAccounts_ListChannelAccounts_LoadChannelAccountsError_Failure(t *testing.T) {
+func Test_ChannelAccounts_ViewChannelAccounts_LoadChannelAccountsError_Failure(t *testing.T) {
 	ctx := context.Background()
 
-	err := ListChannelAccounts(ctx, ListChannelAccountsOptions{})
+	err := ViewChannelAccounts(ctx, ViewChannelAccountsOptions{})
 	require.Error(t, err)
 	require.EqualError(t, err, "db connection pool cannot be nil")
 }
