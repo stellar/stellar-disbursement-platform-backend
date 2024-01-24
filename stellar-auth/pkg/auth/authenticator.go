@@ -40,6 +40,7 @@ type Authenticator interface {
 	UpdatePassword(ctx context.Context, user *User, currentPassword, newPassword string) error
 	GetAllUsers(ctx context.Context) ([]User, error)
 	GetUser(ctx context.Context, userID string) (*User, error)
+	GetUsers(ctx context.Context, userIDs []string) ([]*User, error)
 }
 
 type defaultAuthenticator struct {
@@ -475,6 +476,40 @@ func (a *defaultAuthenticator) GetUser(ctx context.Context, userID string) (*Use
 		LastName:  u.LastName,
 		Email:     u.Email,
 	}, nil
+}
+
+// GetUsers retrieves a list of users from its respective user ids.
+func (a *defaultAuthenticator) GetUsers(ctx context.Context, userIDs []string) ([]*User, error) {
+	const query = `
+		SELECT
+			id
+			first_name,
+			last_name,
+		FROM
+			auth_users
+		WHERE
+			id IN ($1::text[]) AND is_active = true
+	`
+
+	var dbUsers []authUser
+	err := a.dbConnectionPool.GetContext(ctx, &dbUsers, query, pq.Array(userIDs))
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrUserNotFound
+		}
+		return nil, fmt.Errorf("error querying user IDs: %w", err)
+	}
+
+	users := make([]*User, len(dbUsers))
+	for i, u := range dbUsers {
+		users[i] = &User{
+			ID:        u.ID,
+			FirstName: u.FirstName,
+			LastName:  u.LastName,
+		}
+	}
+
+	return users, nil
 }
 
 type defaultAuthenticatorOption func(a *defaultAuthenticator)

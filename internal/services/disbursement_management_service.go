@@ -51,33 +51,54 @@ func NewDisbursementManagementService(models *data.Models, dbConnectionPool db.D
 	}
 }
 
-// AddUserMetadata returns a DisbursementWithUserMetadata instance with basic user information based on the disbursement's status history.
-func (s *DisbursementManagementService) AddUserMetadata(ctx context.Context, d *DisbursementWithUserMetadata) (*DisbursementWithUserMetadata, error) {
-	for _, entry := range d.Disbursement.StatusHistory {
-		if entry.Status == data.DraftDisbursementStatus || entry.Status == data.StartedDisbursementStatus {
-			user, err := s.authManager.GetUserByID(ctx, entry.UserID)
-			if err != nil {
-				return d, fmt.Errorf("error getting user ID %s", entry.UserID)
+func (s *DisbursementManagementService) AppendUserMetadata(ctx context.Context, disbursements []*data.Disbursement) ([]*DisbursementWithUserMetadata, error) {
+	resp := make([]*DisbursementWithUserMetadata, len(disbursements))
+	users := map[string]*auth.User{}
+	for i, d := range disbursements {
+		resp[i].Disbursement = *d
+		for _, entry := range d.StatusHistory {
+			if entry.Status == data.DraftDisbursementStatus || entry.Status == data.StartedDisbursementStatus {
+				users[entry.UserID] = nil
 			}
 
-			userRef := UserReference{
-				FirstName: user.FirstName,
-				LastName:  user.LastName,
-				ID:        entry.UserID,
-			}
+			userRef := UserReference{ID: entry.UserID}
 			if entry.Status == data.DraftDisbursementStatus {
-				d.CreatedBy = userRef
+				resp[i].CreatedBy = userRef
 			} else if entry.Status == data.StartedDisbursementStatus {
-				d.StartedBy = userRef
-				// Disbursements could have multiple "started" entries in its status history log from being paused and resumed, etc.
-				// The earliest entry will refer to the user who initiated the disbursement, and we will not care about any subsequent
-				// entries.
+				resp[i].StartedBy = userRef
 				break
 			}
 		}
 	}
 
-	return d, nil
+	userIDs := make([]string, len(users))
+	i := 0
+	for uid := range users {
+		userIDs[i] = uid
+		i++
+	}
+
+	usersList, err := s.authManager.GetUsersByID(ctx, userIDs)
+	if err != nil {
+		return nil, fmt.Errorf("error getting user for IDs: %w", err)
+	}
+
+	for _, u := range usersList {
+		users[u.ID] = u
+	}
+
+	for _, dis := range resp {
+		if dis.CreatedBy.ID != "" {
+			dis.CreatedBy.FirstName = users[dis.CreatedBy.ID].FirstName
+			dis.CreatedBy.LastName = users[dis.CreatedBy.ID].LastName
+		}
+		if dis.StartedBy.ID != "" {
+			dis.StartedBy.FirstName = users[dis.StartedBy.ID].FirstName
+			dis.StartedBy.LastName = users[dis.StartedBy.ID].LastName
+		}
+	}
+
+	return resp, nil
 }
 
 func (s *DisbursementManagementService) GetDisbursementsWithCount(ctx context.Context, queryParams *data.QueryParams) (*utils.ResultWithTotal, error) {
@@ -97,17 +118,9 @@ func (s *DisbursementManagementService) GetDisbursementsWithCount(ctx context.Co
 					return nil, fmt.Errorf("error retrieving disbursements: %w", err)
 				}
 
-				resp := make([]*DisbursementWithUserMetadata, len(disbursements))
-				for i, disbursement := range disbursements {
-					resp[i], err = s.AddUserMetadata(
-						ctx,
-						&DisbursementWithUserMetadata{
-							Disbursement: *disbursement,
-						},
-					)
-					if err != nil {
-						return nil, fmt.Errorf("error adding user metadata: %w", err)
-					}
+				resp, err := s.AppendUserMetadata(ctx, disbursements)
+				if err != nil {
+					return nil, err
 				}
 
 				return utils.NewResultWithTotal(totalDisbursements, resp), nil

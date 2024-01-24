@@ -279,17 +279,21 @@ func (d DisbursementHandler) GetDisbursement(w http.ResponseWriter, r *http.Requ
 	}
 
 	disbursementManagementService := services.NewDisbursementManagementService(d.Models, d.DBConnectionPool, d.AuthManager)
-	response, err := disbursementManagementService.AddUserMetadata(
-		ctx,
-		&services.DisbursementWithUserMetadata{
-			Disbursement: *disbursement,
-		},
-	)
+	response, err := disbursementManagementService.AppendUserMetadata(ctx, []*data.Disbursement{disbursement})
 	if err != nil {
 		httperror.NotFound("disbursement user metadata not found", err, nil).Render(w)
 	}
+	if len(response) != 1 {
+		err = errors.New("number of records created is not 1")
+		httperror.InternalError(
+			ctx,
+			fmt.Sprintf("Size of response is unexpected: %d", len(response)),
+			err,
+			nil,
+		).Render(w)
+	}
 
-	httpjson.Render(w, response, httpjson.JSON)
+	httpjson.Render(w, response[0], httpjson.JSON)
 }
 
 func (d DisbursementHandler) GetDisbursementReceivers(w http.ResponseWriter, r *http.Request) {

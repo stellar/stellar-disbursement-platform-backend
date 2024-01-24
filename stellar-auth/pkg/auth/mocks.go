@@ -121,6 +121,14 @@ func (am *AuthenticatorMock) GetUser(ctx context.Context, userID string) (*User,
 	return args.Get(0).(*User), args.Error(1)
 }
 
+func (am *AuthenticatorMock) GetUsers(ctx context.Context, userIDs []string) ([]*User, error) {
+	args := am.Called(ctx, userIDs)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*User), args.Error(1)
+}
+
 var _ Authenticator = (*AuthenticatorMock)(nil)
 
 type RoleManagerMock struct {
@@ -250,9 +258,9 @@ func (am *AuthManagerMock) GetUser(ctx context.Context, tokenString string) (*Us
 	return args.Get(0).(*User), args.Error(1)
 }
 
-func (am *AuthManagerMock) GetUserByID(ctx context.Context, tokenString string) (*User, error) {
+func (am *AuthManagerMock) GetUsersByID(ctx context.Context, tokenString []string) ([]*User, error) {
 	args := am.Called(ctx, tokenString)
-	return args.Get(0).(*User), args.Error(1)
+	return args.Get(0).([]*User), args.Error(1)
 }
 
 func (am *AuthManagerMock) GetUserID(ctx context.Context, userID string) (string, error) {

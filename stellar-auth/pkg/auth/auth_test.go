@@ -1360,6 +1360,55 @@ func Test_AuthManager_GetUser(t *testing.T) {
 	roleManagerMock.AssertExpectations(t)
 }
 
+func Test_AuthManager_GetUsersByID(t *testing.T) {
+	jwtManagerMock := &JWTManagerMock{}
+	authenticatorMock := &AuthenticatorMock{}
+	roleManagerMock := &RoleManagerMock{}
+	authManager := NewAuthManager(
+		WithCustomJWTManagerOption(jwtManagerMock),
+		WithCustomAuthenticatorOption(authenticatorMock),
+		WithCustomRoleManagerOption(roleManagerMock),
+	)
+
+	ctx := context.Background()
+
+	t.Run("returns error when aunthenticator fails", func(t *testing.T) {
+		userIDs := []string{"invalid-id"}
+		authenticatorMock.
+			On("GetUsers", ctx, userIDs).
+			Return(nil, errUnexpectedError).
+			Once()
+
+		_, err := authManager.GetUsersByID(ctx, userIDs)
+		require.Error(t, err)
+	})
+
+	t.Run("get users by ID successfully", func(t *testing.T) {
+		expectedUsers := []User{
+			{
+				ID:        "user1-ID",
+				FirstName: "First",
+				LastName:  "Last",
+			},
+			{
+				ID:        "user2-ID",
+				FirstName: "First",
+				LastName:  "Last",
+			},
+		}
+
+		userIDs := []string{expectedUsers[0].ID, expectedUsers[1].ID}
+		authenticatorMock.
+			On("GetUsers", ctx, userIDs).
+			Return(expectedUsers, nil).
+			Once()
+
+		users, err := authManager.GetUsersByID(ctx, userIDs)
+		require.NoError(t, err)
+		assert.Equal(t, expectedUsers, users)
+	})
+}
+
 func Test_AuthManager_GetUserID(t *testing.T) {
 	jwtManagerMock := &JWTManagerMock{}
 	authenticatorMock := &AuthenticatorMock{}
