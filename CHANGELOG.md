@@ -6,7 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## Unreleased
 
-## [1.0.2](https://github.com/stellar/stellar-disbursement-platform-backend/compare/1.0.1...release/1.0.2)
+- Add metadata for users that created and started a disbursement in disbursement details `GET /disbursements`, `GET /disbursements/{id}` [#151](https://github.com/stellar/stellar-disbursement-platform-backend/pull/151)
+
+## [1.0.2](https://github.com/stellar/stellar-disbursement-platform-backend/compare/1.0.1...1.0.2)
 
 ### Changed
 
@@ -33,6 +35,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Add missing space when building query [#121](https://github.com/stellar/stellar-disbursement-platform-backend/pull/121)
 
 ### Security
+
 - Stellar Protocol 20 Horizon SDK upgrade [#107](https://github.com/stellar/stellar-disbursement-platform-backend/pull/107)
 - Coinspect Issues:
   - Coinspect SDP-012 Enhance User Awareness for SMS One-Time Password (OTP) Usage [#138](https://github.com/stellar/stellar-disbursement-platform-backend/pull/138)
