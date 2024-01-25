@@ -35,17 +35,17 @@ func Test_dependencyinjection_NewDBConnectionPool(t *testing.T) {
 		opts := DBConnectionPoolOptions{}
 		gotDependency, err := NewDBConnectionPool(ctx, opts)
 		assert.Nil(t, gotDependency)
-		assert.ErrorContains(t, err, "opening TSS DB connection pool: error pinging app DB connection pool")
+		assert.ErrorContains(t, err, "opening DB connection pool: error pinging app DB connection pool")
 	})
 
 	t.Run("should return an error if there's an invalid instance pre-stored", func(t *testing.T) {
 		ClearInstancesTestHelper(t)
 
-		setInstance(tssDBConnectionPoolInstanceName, false)
+		setInstance(dbConnectionPoolInstanceName, false)
 
 		opts := DBConnectionPoolOptions{DatabaseURL: dbt.DSN}
 		gotDependency, err := NewDBConnectionPool(ctx, opts)
 		assert.Nil(t, gotDependency)
-		assert.EqualError(t, err, "trying to cast TSS DBConnectionPool client for depencency injection")
+		assert.EqualError(t, err, "trying to cast DBConnectionPool client for depencency injection")
 	})
 }
