@@ -15,15 +15,15 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
 )
 
-const advisoryLock = int(2172398390434160)
+const advisoryLockID = int(2172398390434160)
 
 func acquireAdvisoryLockForCommand(ctx context.Context, dbConnectionPool db.DBConnectionPool) error {
-	locked, err := utils.AcquireAdvisoryLock(ctx, dbConnectionPool, advisoryLock)
+	locked, err := utils.AcquireAdvisoryLock(ctx, dbConnectionPool, advisoryLockID)
 	if err != nil {
 		return fmt.Errorf("problem retrieving db advisory lock: %w", err)
 	}
 	if !locked {
-		return fmt.Errorf("cannot retrieve unavailable db advisory lock")
+		return fmt.Errorf("advisory lock is unavailable")
 	}
 
 	return nil

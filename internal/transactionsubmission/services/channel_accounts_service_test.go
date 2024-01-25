@@ -12,18 +12,188 @@ import (
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/support/render/problem"
 	"github.com/stellar/go/txnbuild"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	engineMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 	storeMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store/mocks"
 )
+
+func Test_ChannelAccountsService_validate(t *testing.T) {
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	mSigService := engineMocks.NewMockSignatureService(t)
+
+	testCases := []struct {
+		name                      string
+		serviceOptions            ChannelAccountsService
+		isAdvisoryLockUnavailable bool
+		wantError                 string
+	}{
+		{
+			name:      "TSSDBConnectionPool cannot be nil",
+			wantError: "tss db connection pool cannot be nil",
+		},
+		{
+			name: "TSSDBConnectionPool cannot be nil",
+			serviceOptions: ChannelAccountsService{
+				TSSDBConnectionPool: dbConnectionPool,
+			},
+			wantError: "signing service cannot be nil",
+		},
+		{
+			name: "HorizonURL cannot be empty",
+			serviceOptions: ChannelAccountsService{
+				TSSDBConnectionPool: dbConnectionPool,
+				SigningService:      mSigService,
+			},
+			wantError: "horizon url cannot be empty",
+		},
+		{
+			name: "maxBaseFee must be greater than or equal to 100",
+			serviceOptions: ChannelAccountsService{
+				TSSDBConnectionPool: dbConnectionPool,
+				SigningService:      mSigService,
+				HorizonURL:          "https://horizon-testnet.stellar.org",
+			},
+			wantError: "maxBaseFee must be greater than or equal to 100",
+		},
+		{
+			name: "advisory lock with ID was unavailable",
+			serviceOptions: ChannelAccountsService{
+				TSSDBConnectionPool: dbConnectionPool,
+				SigningService:      mSigService,
+				HorizonURL:          "https://horizon-testnet.stellar.org",
+				MaxBaseFee:          100,
+			},
+			isAdvisoryLockUnavailable: true,
+			wantError:                 "failed getting db advisory lock: advisory lock is unavailable",
+		},
+		{
+			name: "🎉 Successfully validate service",
+			serviceOptions: ChannelAccountsService{
+				TSSDBConnectionPool: dbConnectionPool,
+				SigningService:      mSigService,
+				HorizonURL:          "https://horizon-testnet.stellar.org",
+				MaxBaseFee:          100,
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.isAdvisoryLockUnavailable {
+				anotherDBConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+				require.NoError(t, err)
+				defer anotherDBConnectionPool.Close()
+
+				ctx := context.Background()
+				err = acquireAdvisoryLockForCommand(ctx, anotherDBConnectionPool)
+				require.NoError(t, err)
+			}
+
+			err := tc.serviceOptions.validate()
+			if tc.wantError == "" {
+				require.NoError(t, err)
+			} else {
+				require.EqualError(t, err, tc.wantError)
+			}
+		})
+	}
+}
+
+func Test_ChannelAccountsService_GetChannelAccountStore(t *testing.T) {
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	t.Run("GetChannelAccountStore() instantiates a new ChannelAccountStore if the current chAccService value is empty", func(t *testing.T) {
+		chAccService := ChannelAccountsService{TSSDBConnectionPool: dbConnectionPool}
+		wantChAccStore := store.NewChannelAccountModel(dbConnectionPool)
+		chAccStore := chAccService.GetChannelAccountStore()
+		require.Equal(t, wantChAccStore, chAccStore)
+		require.Equal(t, wantChAccStore, chAccService.chAccStore)
+		require.NotEqual(t, &wantChAccStore, &chAccService.chAccStore)
+		require.Equal(t, &chAccStore, &chAccService.chAccStore)
+	})
+
+	t.Run("GetChannelAccountStore() returns the existing chAccService if the current value is NOT empty", func(t *testing.T) {
+		chAccService := ChannelAccountsService{TSSDBConnectionPool: dbConnectionPool}
+		chAccService.chAccStore = &storeMocks.MockChannelAccountStore{}
+		chAccStore := chAccService.GetChannelAccountStore()
+		require.Equal(t, &chAccStore, &chAccService.chAccStore)
+	})
+}
+
+func Test_ChannelAccountsService_GetHorizonClient(t *testing.T) {
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	t.Run("GetHorizonClient() instantiates a new Horizon Client if the current horizonClient value is empty", func(t *testing.T) {
+		chAccService := ChannelAccountsService{HorizonURL: "https://horizon-testnet.stellar.org"}
+		wantHorizonCLient := &horizonclient.Client{
+			HorizonURL: "https://horizon-testnet.stellar.org",
+			HTTP:       httpclient.DefaultClient(),
+		}
+		horizonClient := chAccService.GetHorizonClient()
+		require.Equal(t, wantHorizonCLient, horizonClient)
+		require.Equal(t, wantHorizonCLient, chAccService.horizonClient)
+		require.NotEqual(t, &wantHorizonCLient, &chAccService.horizonClient)
+		require.Equal(t, &horizonClient, &chAccService.horizonClient)
+	})
+
+	t.Run("GetHorizonClient() returns the existing horizonClient if the current value is NOT empty", func(t *testing.T) {
+		chAccService := ChannelAccountsService{HorizonURL: "https://horizon-testnet.stellar.org"}
+		chAccService.horizonClient = &horizonclient.MockClient{}
+		horizonClient := chAccService.GetHorizonClient()
+		require.Equal(t, &horizonClient, &chAccService.horizonClient)
+	})
+}
+
+func Test_ChannelAccountsService_GetLedgerNumberTracker(t *testing.T) {
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	t.Run("GetLedgerNumberTracker() instantiates a new LedgerNumberTracker if the current one is empty", func(t *testing.T) {
+		chAccService := ChannelAccountsService{HorizonURL: "https://horizon-testnet.stellar.org"}
+		wantLedgerNumberTracker, err := engine.NewLedgerNumberTracker(chAccService.GetHorizonClient())
+		require.NoError(t, err)
+
+		ledgerNumberTracker, err := chAccService.GetLedgerNumberTracker()
+		require.NoError(t, err)
+
+		require.Equal(t, wantLedgerNumberTracker, ledgerNumberTracker)
+		require.Equal(t, wantLedgerNumberTracker, chAccService.ledgerNumberTracker)
+		require.NotEqual(t, &wantLedgerNumberTracker, &chAccService.ledgerNumberTracker)
+		require.Equal(t, &ledgerNumberTracker, &chAccService.ledgerNumberTracker)
+	})
+
+	t.Run("GetLedgerNumberTracker() returns the existing LedgerNumberTracker if the current value is NOT empty", func(t *testing.T) {
+		chAccService := ChannelAccountsService{HorizonURL: "https://horizon-testnet.stellar.org"}
+		chAccService.ledgerNumberTracker = &engineMocks.MockLedgerNumberTracker{}
+		ledgerNumberTracker, err := chAccService.GetLedgerNumberTracker()
+		require.NoError(t, err)
+		require.Equal(t, &ledgerNumberTracker, &chAccService.ledgerNumberTracker)
+	})
+}
 
 func Test_ChannelAccounts_CreateAccount_Success(t *testing.T) {
 	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
