@@ -80,7 +80,7 @@ func (c *ChannelAccountsCommand) Command(cmdService ChAccCmdServiceInterface) *c
 				log.Ctx(ctx).Fatalf("Error setting values of config options: %v", err)
 			}
 
-			c.TSSDBConnectionPool, err = di.NewTSSDBConnectionPool(di.TSSDBConnectionPoolOptions{DatabaseURL: globalOptions.DatabaseURL})
+			c.TSSDBConnectionPool, err = di.NewTSSDBConnectionPool(ctx, di.TSSDBConnectionPoolOptions{DatabaseURL: globalOptions.DatabaseURL})
 			if err != nil {
 				log.Ctx(ctx).Fatalf("Error creating TSS DB connection pool: %v", err)
 			}
