@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/stellar/go/keypair"
-	"github.com/stellar/go/network"
 	"github.com/stellar/go/strkey"
 	"github.com/stellar/go/txnbuild"
 
@@ -62,7 +61,8 @@ type DefaultSignatureService struct {
 	encryptionPassphrase string
 }
 
-func NewDefaultSignatureServiceNew(opts DefaultSignatureServiceOptions) (*DefaultSignatureService, error) {
+// NewDefaultSignatureService returns a new DefaultSignatureService instance.
+func NewDefaultSignatureService(opts DefaultSignatureServiceOptions) (*DefaultSignatureService, error) {
 	if err := opts.Validate(); err != nil {
 		return nil, fmt.Errorf("validating options: %w", err)
 	}
@@ -85,43 +85,6 @@ func NewDefaultSignatureServiceNew(opts DefaultSignatureServiceOptions) (*Defaul
 		chAccModel:           store.NewChannelAccountModel(opts.DBConnectionPool),
 		encrypter:            encrypter,
 		encryptionPassphrase: opts.EncryptionPassphrase,
-	}, nil
-}
-
-// NewDefaultSignatureService returns a new DefaultSignatureService instance.
-func NewDefaultSignatureService(networkPassphrase string, dbConnectionPool db.DBConnectionPool, distributionSeed string, chAccStore store.ChannelAccountStore, encrypter utils.PrivateKeyEncrypter, encrypterPass string) (*DefaultSignatureService, error) {
-	if dbConnectionPool == nil {
-		return nil, fmt.Errorf("db connection pool cannot be nil")
-	}
-	if chAccStore == nil {
-		return nil, fmt.Errorf("channel account store cannot be nil")
-	}
-
-	if (networkPassphrase != network.TestNetworkPassphrase) && (networkPassphrase != network.PublicNetworkPassphrase) {
-		return nil, fmt.Errorf("invalid network passphrase: %q", networkPassphrase)
-	}
-
-	distributionKP, err := keypair.ParseFull(distributionSeed)
-	if err != nil {
-		return nil, fmt.Errorf("parsing distribution seed: %w", err)
-	}
-
-	if encrypter == nil {
-		return nil, fmt.Errorf("private key encrypter cannot be nil")
-	}
-
-	if encrypterPass == "" {
-		return nil, fmt.Errorf("private key encrypter passphrase cannot be empty")
-	}
-
-	return &DefaultSignatureService{
-		networkPassphrase:    networkPassphrase,
-		distributionAccount:  distributionKP.Address(),
-		distributionKP:       distributionKP,
-		dbConnectionPool:     dbConnectionPool,
-		chAccModel:           chAccStore,
-		encrypter:            encrypter,
-		encryptionPassphrase: encrypterPass,
 	}, nil
 }
 

@@ -344,7 +344,7 @@ func Test_NewManager(t *testing.T) {
 				})
 				require.NoError(t, err)
 
-				wantSigService, err := engine.NewDefaultSignatureServiceNew(engine.DefaultSignatureServiceOptions{
+				wantSigService, err := engine.NewDefaultSignatureService(engine.DefaultSignatureServiceOptions{
 					NetworkPassphrase:      submitterOptions.NetworkPassphrase,
 					DBConnectionPool:       wantConnectionPool,
 					DistributionPrivateKey: submitterOptions.DistributionSeed,
@@ -453,7 +453,7 @@ func Test_Manager_ProcessTransactions(t *testing.T) {
 
 			// Signature service
 			distributionKP := keypair.MustRandom()
-			sigService, err := engine.NewDefaultSignatureServiceNew(engine.DefaultSignatureServiceOptions{
+			sigService, err := engine.NewDefaultSignatureService(engine.DefaultSignatureServiceOptions{
 				NetworkPassphrase:      network.TestNetworkPassphrase,
 				DBConnectionPool:       dbConnectionPool,
 				DistributionPrivateKey: distributionKP.Seed(),

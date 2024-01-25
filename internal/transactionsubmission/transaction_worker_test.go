@@ -52,7 +52,7 @@ func getTransactionWorkerInstance(t *testing.T, dbConnectionPool db.DBConnection
 	require.NoError(t, err)
 
 	distributionKP := keypair.MustRandom()
-	wantSigService, err := engine.NewDefaultSignatureServiceNew(engine.DefaultSignatureServiceOptions{
+	wantSigService, err := engine.NewDefaultSignatureService(engine.DefaultSignatureServiceOptions{
 		NetworkPassphrase:      network.TestNetworkPassphrase,
 		DBConnectionPool:       dbConnectionPool,
 		DistributionPrivateKey: distributionKP.Seed(),
@@ -126,7 +126,7 @@ func Test_NewTransactionWorker(t *testing.T) {
 	require.NoError(t, err)
 
 	distributionKP := keypair.MustRandom()
-	wantSigService, err := engine.NewDefaultSignatureServiceNew(engine.DefaultSignatureServiceOptions{
+	wantSigService, err := engine.NewDefaultSignatureService(engine.DefaultSignatureServiceOptions{
 		NetworkPassphrase:      network.TestNetworkPassphrase,
 		DBConnectionPool:       dbConnectionPool,
 		DistributionPrivateKey: distributionKP.Seed(),
@@ -860,7 +860,7 @@ func Test_TransactionWorker_buildAndSignTransaction(t *testing.T) {
 	const accountSequence = 123
 
 	distributionKP := keypair.MustRandom()
-	sigService, err := engine.NewDefaultSignatureServiceNew(engine.DefaultSignatureServiceOptions{
+	sigService, err := engine.NewDefaultSignatureService(engine.DefaultSignatureServiceOptions{
 		NetworkPassphrase:      network.TestNetworkPassphrase,
 		DBConnectionPool:       dbConnectionPool,
 		DistributionPrivateKey: distributionKP.Seed(),

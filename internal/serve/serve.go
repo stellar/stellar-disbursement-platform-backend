@@ -164,7 +164,7 @@ func (opts *ServeOptions) SetupDependencies() error {
 
 	// Setup Signature Service
 	// TODO: Setup signature service from dependency injector
-	opts.signatureService, err = engine.NewDefaultSignatureServiceNew(engine.DefaultSignatureServiceOptions{
+	opts.signatureService, err = engine.NewDefaultSignatureService(engine.DefaultSignatureServiceOptions{
 		NetworkPassphrase:      opts.NetworkPassphrase,
 		DBConnectionPool:       tssDBConnectionPool,
 		DistributionPrivateKey: opts.DistributionSeed,

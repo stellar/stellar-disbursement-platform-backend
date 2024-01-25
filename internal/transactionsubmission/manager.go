@@ -151,7 +151,7 @@ func NewManager(ctx context.Context, opts SubmitterOptions) (m *Manager, err err
 	}
 
 	// initialize default signature service
-	sigService, err := engine.NewDefaultSignatureServiceNew(engine.DefaultSignatureServiceOptions{
+	sigService, err := engine.NewDefaultSignatureService(engine.DefaultSignatureServiceOptions{
 		NetworkPassphrase:      opts.NetworkPassphrase,
 		DBConnectionPool:       dbConnectionPool,
 		DistributionPrivateKey: opts.DistributionSeed,

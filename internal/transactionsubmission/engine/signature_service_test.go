@@ -142,7 +142,7 @@ func Test_NewDefaultSignatureService(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			sigService, err := NewDefaultSignatureServiceNew(tc.opts)
+			sigService, err := NewDefaultSignatureService(tc.opts)
 			if tc.wantErrContains != "" {
 				require.Error(t, err)
 				assert.ErrorContains(t, err, tc.wantErrContains)
@@ -166,7 +166,7 @@ func Test_DefaultSignatureService_DistributionAccount(t *testing.T) {
 	// test with the first KP:
 	distributionKP, err := keypair.Random()
 	require.NoError(t, err)
-	defaultSigService, err := NewDefaultSignatureServiceNew(DefaultSignatureServiceOptions{
+	defaultSigService, err := NewDefaultSignatureService(DefaultSignatureServiceOptions{
 		NetworkPassphrase:      network.TestNetworkPassphrase,
 		DBConnectionPool:       dbConnectionPool,
 		DistributionPrivateKey: distributionKP.Seed(),
@@ -179,7 +179,7 @@ func Test_DefaultSignatureService_DistributionAccount(t *testing.T) {
 	// test with the second KP, to make sure it's changing accordingly:
 	distributionKP, err = keypair.Random()
 	require.NoError(t, err)
-	defaultSigService, err = NewDefaultSignatureServiceNew(DefaultSignatureServiceOptions{
+	defaultSigService, err = NewDefaultSignatureService(DefaultSignatureServiceOptions{
 		NetworkPassphrase:      network.TestNetworkPassphrase,
 		DBConnectionPool:       dbConnectionPool,
 		DistributionPrivateKey: distributionKP.Seed(),
@@ -246,7 +246,7 @@ func Test_DefaultSignatureService_getKPsForAccounts(t *testing.T) {
 	require.NoError(t, err)
 
 	// create default signature service
-	defaultSigService, err := NewDefaultSignatureServiceNew(DefaultSignatureServiceOptions{
+	defaultSigService, err := NewDefaultSignatureService(DefaultSignatureServiceOptions{
 		NetworkPassphrase:      network.TestNetworkPassphrase,
 		DBConnectionPool:       dbConnectionPool,
 		DistributionPrivateKey: distributionKP.Seed(),
@@ -337,7 +337,7 @@ func Test_DefaultSignatureService_SignStellarTransaction(t *testing.T) {
 	distributionKP, err := keypair.Random()
 	require.NoError(t, err)
 
-	defaultSigService, err := NewDefaultSignatureServiceNew(DefaultSignatureServiceOptions{
+	defaultSigService, err := NewDefaultSignatureService(DefaultSignatureServiceOptions{
 		NetworkPassphrase:      network.TestNetworkPassphrase,
 		DBConnectionPool:       dbConnectionPool,
 		DistributionPrivateKey: distributionKP.Seed(),
@@ -433,7 +433,7 @@ func Test_DefaultSignatureService_SignFeeBumpStellarTransaction(t *testing.T) {
 	distributionKP, err := keypair.Random()
 	require.NoError(t, err)
 
-	defaultSigService, err := NewDefaultSignatureServiceNew(DefaultSignatureServiceOptions{
+	defaultSigService, err := NewDefaultSignatureService(DefaultSignatureServiceOptions{
 		NetworkPassphrase:      network.TestNetworkPassphrase,
 		DBConnectionPool:       dbConnectionPool,
 		DistributionPrivateKey: distributionKP.Seed(),
@@ -567,7 +567,7 @@ func Test_DefaultSignatureService_BatchInsert(t *testing.T) {
 
 	defaultEncrypter := &utils.DefaultPrivateKeyEncrypter{}
 	encrypterPass := distributionKP.Seed()
-	defaultSigService, err := NewDefaultSignatureServiceNew(DefaultSignatureServiceOptions{
+	defaultSigService, err := NewDefaultSignatureService(DefaultSignatureServiceOptions{
 		NetworkPassphrase:      network.TestNetworkPassphrase,
 		DBConnectionPool:       dbConnectionPool,
 		DistributionPrivateKey: distributionKP.Seed(),
@@ -637,7 +637,7 @@ func Test_DefaultSignatureService_Delete(t *testing.T) {
 
 	distributionKP, err := keypair.Random()
 	require.NoError(t, err)
-	defaultSigService, err := NewDefaultSignatureServiceNew(DefaultSignatureServiceOptions{
+	defaultSigService, err := NewDefaultSignatureService(DefaultSignatureServiceOptions{
 		NetworkPassphrase:      network.TestNetworkPassphrase,
 		DBConnectionPool:       dbConnectionPool,
 		DistributionPrivateKey: distributionKP.Seed(),

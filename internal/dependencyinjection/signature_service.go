@@ -23,7 +23,7 @@ func NewSignatureService(ctx context.Context, opts engine.DefaultSignatureServic
 	}
 
 	// Setup a new signature service instance
-	newSignatureService, err := engine.NewDefaultSignatureServiceNew(opts)
+	newSignatureService, err := engine.NewDefaultSignatureService(opts)
 	if err != nil {
 		return nil, fmt.Errorf("creating a new signature service instance: %w", err)
 	}
