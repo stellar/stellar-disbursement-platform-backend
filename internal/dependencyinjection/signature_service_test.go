@@ -8,7 +8,6 @@ import (
 	"github.com/stellar/go/network"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -27,7 +26,7 @@ func Test_dependencyinjection_NewSignatureService(t *testing.T) {
 	t.Run("should create and return the same instance on the second call", func(t *testing.T) {
 		ClearInstancesTestHelper(t)
 
-		opts := engine.DefaultSignatureServiceOptions{
+		opts := SignatureServiceOptions{
 			NetworkPassphrase:      network.TestNetworkPassphrase,
 			DBConnectionPool:       dbConnectionPool,
 			DistributionPrivateKey: distributionPrivateKey,
@@ -46,7 +45,7 @@ func Test_dependencyinjection_NewSignatureService(t *testing.T) {
 	t.Run("should return an error on a invalid option", func(t *testing.T) {
 		ClearInstancesTestHelper(t)
 
-		opts := engine.DefaultSignatureServiceOptions{}
+		opts := SignatureServiceOptions{}
 		gotDependency, err := NewSignatureService(ctx, opts)
 		assert.Nil(t, gotDependency)
 		assert.EqualError(t, err, "creating a new signature service instance: validating options: network passphrase cannot be empty")
@@ -57,7 +56,7 @@ func Test_dependencyinjection_NewSignatureService(t *testing.T) {
 
 		setInstance(signatureServiceInstanceName, false)
 
-		opts := engine.DefaultSignatureServiceOptions{
+		opts := SignatureServiceOptions{
 			NetworkPassphrase:      network.TestNetworkPassphrase,
 			DBConnectionPool:       dbConnectionPool,
 			DistributionPrivateKey: distributionPrivateKey,
