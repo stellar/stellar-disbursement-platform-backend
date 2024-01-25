@@ -94,16 +94,16 @@ func (s *ChannelAccountsService) GetChannelAccountStore() store.ChannelAccountSt
 	return s.chAccStore
 }
 
-func (s *ChannelAccountsService) GetLedgerNumberTracker() engine.LedgerNumberTracker {
+func (s *ChannelAccountsService) GetLedgerNumberTracker() (engine.LedgerNumberTracker, error) {
 	if s.ledgerNumberTracker == nil {
 		var err error
 		s.ledgerNumberTracker, err = engine.NewLedgerNumberTracker(s.GetHorizonClient())
 		if err != nil {
-			log.Fatal(err)
+			return nil, fmt.Errorf("initializing ledger number tracker: %w", err)
 		}
 
 	}
-	return s.ledgerNumberTracker
+	return s.ledgerNumberTracker, nil
 }
 
 func (s *ChannelAccountsService) GetHorizonClient() horizonclient.ClientInterface {
@@ -130,7 +130,12 @@ func (s *ChannelAccountsService) CreateChannelAccounts(ctx context.Context, amou
 		}
 		log.Ctx(ctx).Debugf("batch size: %d", batchSize)
 
-		currLedgerNumber, err := s.GetLedgerNumberTracker().GetLedgerNumber()
+		ledgerNumberTracker, err := s.GetLedgerNumberTracker()
+		if err != nil {
+			return fmt.Errorf("getting ledger number tracker: %w", err)
+		}
+
+		currLedgerNumber, err := ledgerNumberTracker.GetLedgerNumber()
 		if err != nil {
 			return fmt.Errorf("cannot get current ledger number: %w", err)
 		}
@@ -172,7 +177,12 @@ func (s *ChannelAccountsService) DeleteChannelAccount(ctx context.Context, opts 
 	}
 
 	if opts.ChannelAccountID != "" { // delete specified accounts
-		currLedgerNum, err := s.GetLedgerNumberTracker().GetLedgerNumber()
+		ledgerNumberTracker, err := s.GetLedgerNumberTracker()
+		if err != nil {
+			return fmt.Errorf("getting ledger number tracker: %w", err)
+		}
+
+		currLedgerNum, err := ledgerNumberTracker.GetLedgerNumber()
 		if err != nil {
 			return fmt.Errorf("retrieving current ledger number in DeleteChannelAccount: %w", err)
 		}
@@ -211,8 +221,13 @@ func (s *ChannelAccountsService) deleteChannelAccounts(ctx context.Context, numA
 		return fmt.Errorf("initializing channel account service: %w", err)
 	}
 
+	ledgerNumberTracker, err := s.GetLedgerNumberTracker()
+	if err != nil {
+		return fmt.Errorf("getting ledger number tracker: %w", err)
+	}
+
 	for i := 0; i < numAccountsToDelete; i++ {
-		currLedgerNum, err := s.GetLedgerNumberTracker().GetLedgerNumber()
+		currLedgerNum, err := ledgerNumberTracker.GetLedgerNumber()
 		if err != nil {
 			return fmt.Errorf("retrieving current ledger number in DeleteChannelAccount: %w", err)
 		}
@@ -240,14 +255,14 @@ func (s *ChannelAccountsService) deleteChannelAccounts(ctx context.Context, numA
 
 func (s *ChannelAccountsService) deleteChannelAccount(ctx context.Context, lockedUntilLedger int, publicKey string) error {
 	if _, err := s.GetHorizonClient().AccountDetail(horizonclient.AccountRequest{AccountID: publicKey}); err != nil {
-		if horizonclient.IsNotFoundError(err) {
-			log.Ctx(ctx).Warnf("Account %s does not exist on the network", publicKey)
-			err = s.SigningService.Delete(ctx, publicKey, lockedUntilLedger)
-			if err != nil {
-				return fmt.Errorf("deleting %s from signature service: %w", publicKey, err)
-			}
-		} else {
+		if !horizonclient.IsNotFoundError(err) {
 			return fmt.Errorf("failed to reach account %s on the network: %w", publicKey, err)
+		}
+
+		log.Ctx(ctx).Warnf("Account %s does not exist on the network", publicKey)
+		err = s.SigningService.Delete(ctx, publicKey, lockedUntilLedger)
+		if err != nil {
+			return fmt.Errorf("deleting %s from signature service: %w", publicKey, err)
 		}
 	} else {
 		log.Ctx(ctx).Infof("⏳ Deleting Stellar account with address: %s", publicKey)
@@ -279,11 +294,7 @@ func (s *ChannelAccountsService) EnsureChannelAccountsCount(ctx context.Context,
 	log.Ctx(ctx).Infof("⚙️ Desired Accounts Count: %d", numAccountsToEnsure)
 
 	if numAccountsToEnsure > txSub.MaxNumberOfChannelAccounts {
-		return fmt.Errorf(
-			"count entered %d is greater than the channel accounts count limit %d in EnsureChannelAccountsCount",
-			numAccountsToEnsure,
-			txSub.MaxNumberOfChannelAccounts,
-		)
+		return fmt.Errorf("count entered %d is greater than the channel accounts count limit %d in EnsureChannelAccountsCount", numAccountsToEnsure, txSub.MaxNumberOfChannelAccounts)
 	}
 
 	accountsCount, err := s.GetChannelAccountStore().Count(ctx)
@@ -333,35 +344,29 @@ func (s *ChannelAccountsService) VerifyChannelAccounts(ctx context.Context, dele
 	invalidAccountsCount := 0
 	for _, account := range accounts {
 		_, err := s.GetHorizonClient().AccountDetail(horizonclient.AccountRequest{AccountID: account.PublicKey})
-		if err != nil {
-			if horizonclient.IsNotFoundError(err) {
-				warnMessage := fmt.Sprintf("Account %s does not exist on the network", account.PublicKey)
-				if !deleteInvalidAccounts {
-					warnMessage += ". Use the '--delete-invalid-accounts' flag to erase it from the database"
-				}
-				log.Ctx(ctx).Warn(warnMessage)
-				if deleteInvalidAccounts {
-					deleteErr := s.GetChannelAccountStore().Delete(ctx, s.TSSDBConnectionPool, account.PublicKey)
-					if deleteErr != nil {
-						return fmt.Errorf(
-							"deleting %s from database in VerifyChannelAccounts: %w",
-							account.PublicKey,
-							deleteErr,
-						)
-					}
-					log.Ctx(ctx).Infof("✅ Successfully deleted channel account %q", account.PublicKey)
-				}
-
-				invalidAccountsCount++
-			} else {
-				// return any error other than 404's
-				return fmt.Errorf(
-					"retrieving account details through horizon for account %s in VerifyChannelAccounts: %w",
-					account.PublicKey,
-					horizonclient.GetError(err),
-				)
-			}
+		if err == nil {
+			continue
 		}
+
+		if !horizonclient.IsNotFoundError(err) {
+			// return any error other than 404's
+			return fmt.Errorf("retrieving account details through horizon for account %s in VerifyChannelAccounts: %w", account.PublicKey, horizonclient.GetError(err))
+		}
+
+		warnMessage := fmt.Sprintf("Account %s does not exist on the network", account.PublicKey)
+		if !deleteInvalidAccounts {
+			warnMessage += ". Use the '--delete-invalid-accounts' flag to erase it from the database"
+		}
+		log.Ctx(ctx).Warn(warnMessage)
+
+		if deleteInvalidAccounts {
+			if err = s.GetChannelAccountStore().Delete(ctx, s.TSSDBConnectionPool, account.PublicKey); err != nil {
+				return fmt.Errorf("deleting %s from database in VerifyChannelAccounts: %w", account.PublicKey, err)
+			}
+			log.Ctx(ctx).Infof("✅ Successfully deleted channel account %q", account.PublicKey)
+		}
+
+		invalidAccountsCount++
 	}
 
 	if invalidAccountsCount == 0 {
