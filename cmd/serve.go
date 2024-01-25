@@ -7,7 +7,6 @@ import (
 
 	cmdUtils "github.com/stellar/stellar-disbursement-platform-backend/cmd/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
-	"github.com/stellar/stellar-disbursement-platform-backend/db/router"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
@@ -92,13 +91,9 @@ func (s *ServerService) SetupConsumers(ctx context.Context, eventBrokerOptions c
 		}
 	}()
 
-	tssDNS, err := router.GetDNSForTSS(globalOptions.DatabaseURL)
+	tssDBConnectionPool, err := di.NewTSSDBConnectionPool(ctx, di.TSSDBConnectionPoolOptions{DatabaseURL: globalOptions.DatabaseURL})
 	if err != nil {
-		return nil, fmt.Errorf("getting TSS database DNS: %w", err)
-	}
-	tssDBConnectionPool, err := db.OpenDBConnectionPool(tssDNS)
-	if err != nil {
-		return nil, fmt.Errorf("getting TSS DB connection: %w", err)
+		return nil, fmt.Errorf("getting TSS DB connection pool: %w", err)
 	}
 	defer func() {
 		if err != nil && tssDBConnectionPool != nil {
@@ -331,9 +326,8 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 		},
 	}
 
-	messengerOptions := message.MessengerOptions{}
-
 	// messenger config options:
+	messengerOptions := message.MessengerOptions{}
 	configOpts = append(configOpts, cmdUtils.TwilioConfigOptions(&messengerOptions)...)
 	configOpts = append(configOpts, cmdUtils.AWSConfigOptions(&messengerOptions)...)
 
@@ -419,14 +413,14 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 		Run: func(cmd *cobra.Command, _ []string) {
 			ctx := cmd.Context()
 
-			// Setup default Crash Tracker client
+			// Setup the Crash Tracker client
 			crashTrackerClient, err := di.NewCrashTracker(ctx, crashTrackerOptions)
 			if err != nil {
 				log.Ctx(ctx).Fatalf("error creating crash tracker client: %s", err.Error())
 			}
 			serveOpts.CrashTrackerClient = crashTrackerClient
 
-			// Setup default Email client
+			// Setup the Email client
 			emailMessengerClient, err := di.NewEmailClient(emailOpts)
 			if err != nil {
 				log.Ctx(ctx).Fatalf("error creating email client: %s", err.Error())
@@ -434,14 +428,13 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			serveOpts.EmailMessengerClient = emailMessengerClient
 			adminServeOpts.EmailMessengerClient = emailMessengerClient
 
-			// Setup default SMS client
-			smsMessengerClient, err := di.NewSMSClient(smsOpts)
+			// Setup the SMS client
+			serveOpts.SMSMessengerClient, err = di.NewSMSClient(smsOpts)
 			if err != nil {
 				log.Ctx(ctx).Fatalf("error creating SMS client: %s", err.Error())
 			}
-			serveOpts.SMSMessengerClient = smsMessengerClient
 
-			// Setup default AP Auth enforcer
+			// Setup the AP Auth enforcer
 			apAPIService, err := di.NewAnchorPlatformAPIService(serveOpts.AnchorPlatformBasePlatformURL, serveOpts.AnchorPlatformOutgoingJWTSecret)
 			if err != nil {
 				log.Ctx(ctx).Fatalf("error creating Anchor Platform API Service: %v", err)

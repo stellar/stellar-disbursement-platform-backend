@@ -32,7 +32,7 @@ func NewSignatureService(ctx context.Context, opts SignatureServiceOptions) (eng
 	}
 
 	// Setup a new signature service instance
-	log.Ctx(ctx).Infof("⚙️ Setting Signature Service to: %v", "DefaultSignatureService")
+	log.Ctx(ctx).Infof("⚙️ Setting up Signature Service to: %v", "DefaultSignatureService")
 	newSignatureService, err := engine.NewDefaultSignatureService(engine.DefaultSignatureServiceOptions{
 		NetworkPassphrase:      opts.NetworkPassphrase,
 		DBConnectionPool:       opts.DBConnectionPool,
