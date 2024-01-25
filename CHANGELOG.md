@@ -6,7 +6,38 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## Unreleased
 
+## [1.0.2](https://github.com/stellar/stellar-disbursement-platform-backend/compare/1.0.1...release/1.0.2)
+
+### Changed
+
+- Automatic cancellation of payments in `READY` status after a certain time period [#121] (https://github.com/stellar/stellar-disbursement-platform-backend/pull/121)
+- Change `POST /disbursements` to accept different verification types [#103](https://github.com/stellar/stellar-disbursement-platform-backend/pull/103)
+- Change `SEP-24` Flow to display different verifications based on disbursement verification type [#116](https://github.com/stellar/stellar-disbursement-platform-backend/pull/116)
 - Add sorting to `GET /users` endpoint [#104](https://github.com/stellar/stellar-disbursement-platform-backend/pull/104)
+- Add read permission for receiver details for business roles [#144](https://github.com/stellar/stellar-disbursement-platform-backend/pull/144)
+- Add unique payment ID to disbursement instructions file as an optional field in `GET /payments/{id}` [#131](https://github.com/stellar/stellar-disbursement-platform-backend/pull/131)
+- Add SMS preview & editing before sending a new disbursement [#146](https://github.com/stellar/stellar-disbursement-platform-backend/pull/146)
+
+
+### Added
+
+- API endpoint for cancelling payments in `READY` status: `PATCH /payments/{id}/status` [#130](https://github.com/stellar/stellar-disbursement-platform-backend/pull/130)
+
+### Fixed
+
+- Verification DOB validation missing when date is in the future [#101](https://github.com/stellar/stellar-disbursement-platform-backend/pull/101)
+- Support disbursements from two or more wallet providers to the same address [#87](https://github.com/stellar/stellar-disbursement-platform-backend/pull/87)
+- [TSS] Stale channel account not cleared after switching distribution keys [#91](https://github.com/stellar/stellar-disbursement-platform-backend/pull/91)
+- Make setup-wallets-for-network tests more flexible [#95](https://github.com/stellar/stellar-disbursement-platform-backend/pull/95)
+- Make `POST /assets` idempotent [#122](https://github.com/stellar/stellar-disbursement-platform-backend/pull/122)
+- Add missing space when building query [#121](https://github.com/stellar/stellar-disbursement-platform-backend/pull/121)
+
+### Security
+- Stellar Protocol 20 Horizon SDK upgrade [#107](https://github.com/stellar/stellar-disbursement-platform-backend/pull/107)
+- Coinspect Issues:
+  - Coinspect SDP-012 Enhance User Awareness for SMS One-Time Password (OTP) Usage [#138](https://github.com/stellar/stellar-disbursement-platform-backend/pull/138)
+  - Add "Secure Operation Manual" section and updated the code to enforce MFA and reCAPTCHA [#150] (https://github.com/stellar/stellar-disbursement-platform-backend/pull/150)
+  - Coinspect SDP-006 Weak password policy [#143] (https://github.com/stellar/stellar-disbursement-platform-backend/pull/143)
 
 ## [1.0.1](https://github.com/stellar/stellar-disbursement-platform-backend/compare/1.0.0...1.0.1)
 
