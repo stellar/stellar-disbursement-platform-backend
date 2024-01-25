@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/stellar/go/clients/horizonclient"
 	"golang.org/x/exp/maps"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
@@ -20,6 +21,7 @@ type DisbursementManagementService struct {
 	models           *data.Models
 	dbConnectionPool db.DBConnectionPool
 	authManager      auth.AuthManager
+	horizonClient    horizonclient.ClientInterface
 }
 
 type UserReference struct {
@@ -45,11 +47,12 @@ var (
 )
 
 // NewDisbursementManagementService is a factory function for creating a new DisbursementManagementService.
-func NewDisbursementManagementService(models *data.Models, dbConnectionPool db.DBConnectionPool, authManager auth.AuthManager) *DisbursementManagementService {
+func NewDisbursementManagementService(models *data.Models, dbConnectionPool db.DBConnectionPool, authManager auth.AuthManager, horizonClient horizonclient.ClientInterface) *DisbursementManagementService {
 	return &DisbursementManagementService{
 		models:           models,
 		dbConnectionPool: dbConnectionPool,
 		authManager:      authManager,
+		horizonClient:    horizonClient,
 	}
 }
 
@@ -210,19 +213,36 @@ func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, d
 			}
 		}
 
-		// 4. Update all correct payment status to `ready`
+		// 4. Check if there is enough balance from the distribution wallet for this disbursement along with any pending disbursements
+		racc, err := s.horizonClient.AccountDetail(horizonclient.AccountRequest{
+			AccountID: "",
+		})
+		if err != nil {
+			return fmt.Errorf("error getting details for root account from horizon client: %w", err)
+		}
+		asset := disbursement.Asset
+		var distributionBalance string
+		for _, b := range racc.Balances {
+			if b.Asset.Code == disbursement.Asset.Code {
+				distributionBalance = b.Balance
+			}
+		}
+
+		dAmount := disbursement.TotalAmount
+
+		// 5. Update all correct payment status to `ready`
 		err = s.models.Payment.UpdateStatusByDisbursementID(ctx, dbTx, disbursementID, data.ReadyPaymentStatus)
 		if err != nil {
 			return fmt.Errorf("error updating payment status to ready for disbursement with id %s: %w", disbursementID, err)
 		}
 
-		// 5. Update all receiver_wallets from `draft` to `ready`
+		// 6. Update all receiver_wallets from `draft` to `ready`
 		err = s.models.ReceiverWallet.UpdateStatusByDisbursementID(ctx, dbTx, disbursementID, data.DraftReceiversWalletStatus, data.ReadyReceiversWalletStatus)
 		if err != nil {
 			return fmt.Errorf("error updating receiver wallet status to ready for disbursement with id %s: %w", disbursementID, err)
 		}
 
-		// 6. Update disbursement status to `started`
+		// 7. Update disbursement status to `started`
 		err = s.models.Disbursements.UpdateStatus(ctx, dbTx, user.ID, disbursementID, data.StartedDisbursementStatus)
 		if err != nil {
 			return fmt.Errorf("error updating disbursement status to started for disbursement with id %s: %w", disbursementID, err)
