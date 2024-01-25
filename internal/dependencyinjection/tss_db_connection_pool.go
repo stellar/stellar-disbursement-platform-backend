@@ -21,7 +21,7 @@ func NewTSSDBConnectionPool(ctx context.Context, opts TSSDBConnectionPoolOptions
 	instanceName := tssDBConnectionPoolInstanceName
 
 	if instance, ok := dependenciesStoreMap[instanceName]; ok {
-		if dbConnectionPoolInstance, ok := instance.(db.DBConnectionPool); ok {
+		if dbConnectionPoolInstance, ok2 := instance.(db.DBConnectionPool); ok2 {
 			return dbConnectionPoolInstance, nil
 		}
 		return nil, fmt.Errorf("trying to cast TSS DBConnectionPool client for depencency injection")
