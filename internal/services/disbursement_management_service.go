@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 
+	"golang.org/x/exp/maps"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
@@ -18,6 +20,18 @@ type DisbursementManagementService struct {
 	models           *data.Models
 	dbConnectionPool db.DBConnectionPool
 	authManager      auth.AuthManager
+}
+
+type UserReference struct {
+	ID        string `json:"id"`
+	FirstName string `json:"first_name"`
+	LastName  string `json:"last_name"`
+}
+
+type DisbursementWithUserMetadata struct {
+	data.Disbursement
+	CreatedBy UserReference `json:"created_by"`
+	StartedBy UserReference `json:"started_by"`
 }
 
 var (
@@ -39,6 +53,59 @@ func NewDisbursementManagementService(models *data.Models, dbConnectionPool db.D
 	}
 }
 
+func (s *DisbursementManagementService) AppendUserMetadata(ctx context.Context, disbursements []*data.Disbursement) ([]*DisbursementWithUserMetadata, error) {
+	users := map[string]*auth.User{}
+	for _, d := range disbursements {
+		for _, entry := range d.StatusHistory {
+			if entry.Status == data.DraftDisbursementStatus || entry.Status == data.StartedDisbursementStatus {
+				users[entry.UserID] = nil
+
+				if entry.Status == data.StartedDisbursementStatus {
+					// Disbursements could have multiple "started" entries in its status history log from being paused and resumed, etc.
+					// The earliest entry will refer to the user who initiated the disbursement, and we will not care about any subsequent
+					// entries.
+					break
+				}
+			}
+		}
+	}
+
+	usersList, err := s.authManager.GetUsersByID(ctx, maps.Keys(users))
+	if err != nil {
+		return nil, fmt.Errorf("error getting user for IDs: %w", err)
+	}
+
+	for _, u := range usersList {
+		users[u.ID] = u
+	}
+
+	response := make([]*DisbursementWithUserMetadata, len(disbursements))
+	for i, d := range disbursements {
+		response[i] = &DisbursementWithUserMetadata{
+			Disbursement: *d,
+		}
+
+		for _, entry := range d.StatusHistory {
+			userInfo := users[entry.UserID]
+			userRef := UserReference{
+				ID:        entry.UserID,
+				FirstName: userInfo.FirstName,
+				LastName:  userInfo.LastName,
+			}
+
+			if entry.Status == data.DraftDisbursementStatus {
+				response[i].CreatedBy = userRef
+			}
+			if entry.Status == data.StartedDisbursementStatus {
+				response[i].StartedBy = userRef
+				break
+			}
+		}
+	}
+
+	return response, nil
+}
+
 func (s *DisbursementManagementService) GetDisbursementsWithCount(ctx context.Context, queryParams *data.QueryParams) (*utils.ResultWithTotal, error) {
 	return db.RunInTransactionWithResult(ctx,
 		s.dbConnectionPool,
@@ -55,6 +122,13 @@ func (s *DisbursementManagementService) GetDisbursementsWithCount(ctx context.Co
 				if err != nil {
 					return nil, fmt.Errorf("error retrieving disbursements: %w", err)
 				}
+
+				resp, err := s.AppendUserMetadata(ctx, disbursements)
+				if err != nil {
+					return nil, fmt.Errorf("error appending user metadata to disbursement response: %w", err)
+				}
+
+				return utils.NewResultWithTotal(totalDisbursements, resp), nil
 			}
 
 			return utils.NewResultWithTotal(totalDisbursements, disbursements), nil

@@ -10,6 +10,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/db/dbtest"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
 
@@ -24,7 +25,43 @@ func Test_DisbursementManagementService_GetDisbursementsWithCount(t *testing.T) 
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
-	service := NewDisbursementManagementService(models, models.DBConnectionPool, nil)
+	users := []*auth.User{
+		{
+			ID:        "john-doe",
+			Email:     "john-doe@email.com",
+			FirstName: "John",
+			LastName:  "Doe",
+		},
+		{
+			ID:        "jane-doe",
+			Email:     "jane-doe@email.com",
+			FirstName: "Jane",
+			LastName:  "Doe",
+		},
+	}
+
+	userRef := []UserReference{
+		{
+			ID:        users[0].ID,
+			FirstName: users[0].FirstName,
+			LastName:  users[0].LastName,
+		},
+		{
+			ID:        users[1].ID,
+			FirstName: users[1].FirstName,
+			LastName:  users[1].LastName,
+		},
+	}
+
+	authManagerMock := &auth.AuthManagerMock{}
+	authManagerMock.
+		On("GetUsersByID", mock.Anything, []string{users[0].ID, users[1].ID}).
+		Return(users, nil)
+	authManagerMock.
+		On("GetUsersByID", mock.Anything, []string{users[1].ID, users[0].ID}).
+		Return(users, nil)
+
+	service := NewDisbursementManagementService(models, models.DBConnectionPool, authManagerMock)
 
 	ctx := context.Background()
 	t.Run("disbursements list empty", func(t *testing.T) {
@@ -38,17 +75,45 @@ func Test_DisbursementManagementService_GetDisbursementsWithCount(t *testing.T) 
 
 	t.Run("get disbursements successfully", func(t *testing.T) {
 		// create disbursements
-		d1 := data.CreateDisbursementFixture(t, context.Background(), dbConnectionPool, models.Disbursements, &data.Disbursement{Name: "d1"})
-		d2 := data.CreateDisbursementFixture(t, context.Background(), dbConnectionPool, models.Disbursements, &data.Disbursement{Name: "d2"})
+		d1 := data.CreateDisbursementFixture(t, context.Background(), dbConnectionPool, models.Disbursements,
+			&data.Disbursement{
+				Name: "d1",
+				StatusHistory: []data.DisbursementStatusHistoryEntry{
+					{
+						Status: data.DraftDisbursementStatus,
+						UserID: users[0].ID,
+					},
+					{
+						Status: data.StartedDisbursementStatus,
+						UserID: users[1].ID,
+					},
+				},
+			},
+		)
+		d2 := data.CreateDisbursementFixture(t, context.Background(), dbConnectionPool, models.Disbursements,
+			&data.Disbursement{
+				Name: "d2",
+				StatusHistory: []data.DisbursementStatusHistoryEntry{
+					{
+						Status: data.DraftDisbursementStatus,
+						UserID: users[1].ID,
+					},
+				},
+			},
+		)
 
 		resultWithTotal, err := service.GetDisbursementsWithCount(ctx, &data.QueryParams{SortOrder: "asc", SortBy: "name"})
 		require.NoError(t, err)
 		require.Equal(t, 2, resultWithTotal.Total)
-		result, ok := resultWithTotal.Result.([]*data.Disbursement)
+		result, ok := resultWithTotal.Result.([]*DisbursementWithUserMetadata)
 		require.True(t, ok)
 		require.Equal(t, 2, len(result))
-		require.Equal(t, d1.ID, result[0].ID)
-		require.Equal(t, d2.ID, result[1].ID)
+		require.Equal(t, d1.ID, result[0].Disbursement.ID)
+		require.Equal(t, d2.ID, result[1].Disbursement.ID)
+		require.Equal(t, userRef[0], result[0].CreatedBy)
+		require.Equal(t, userRef[1], result[0].StartedBy)
+		require.Equal(t, userRef[1], result[1].CreatedBy)
+		require.Equal(t, UserReference{}, result[1].StartedBy)
 	})
 }
 

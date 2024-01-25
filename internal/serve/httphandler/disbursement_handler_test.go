@@ -416,9 +416,11 @@ func Test_DisbursementHandler_GetDisbursements_Success(t *testing.T) {
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
+	authManagerMock := &auth.AuthManagerMock{}
 	handler := &DisbursementHandler{
 		Models:           models,
 		DBConnectionPool: dbConnectionPool,
+		AuthManager:      authManagerMock,
 	}
 
 	ts := httptest.NewServer(http.HandlerFunc(handler.GetDisbursements))
@@ -431,38 +433,96 @@ func Test_DisbursementHandler_GetDisbursements_Success(t *testing.T) {
 	asset := data.GetAssetFixture(t, ctx, dbConnectionPool, data.FixtureAssetUSDC)
 	country := data.GetCountryFixture(t, ctx, dbConnectionPool, data.FixtureCountryUKR)
 
+	createdByUser := auth.User{
+		ID:        "User1",
+		FirstName: "User",
+		LastName:  "One",
+	}
+	startedByUser := auth.User{
+		ID:        "User2",
+		FirstName: "User",
+		LastName:  "Two",
+	}
+	allUsers := []*auth.User{
+		&startedByUser,
+		&createdByUser,
+	}
+
+	authManagerMock.
+		On("GetUsersByID", mock.Anything, []string{createdByUser.ID, startedByUser.ID}).
+		Return(allUsers, nil)
+	authManagerMock.
+		On("GetUsersByID", mock.Anything, []string{startedByUser.ID, createdByUser.ID}).
+		Return(allUsers, nil)
+	authManagerMock.
+		On("GetUsersByID", mock.Anything, []string{createdByUser.ID}).
+		Return([]*auth.User{&createdByUser}, nil)
+
+	createdByUserRef := services.UserReference{
+		ID:        createdByUser.ID,
+		FirstName: createdByUser.FirstName,
+		LastName:  createdByUser.LastName,
+	}
+	startedByUserRef := services.UserReference{
+		ID:        startedByUser.ID,
+		FirstName: startedByUser.FirstName,
+		LastName:  startedByUser.LastName,
+	}
+
+	draftStatusHistory := data.DisbursementStatusHistory{
+		data.DisbursementStatusHistoryEntry{
+			Status: data.DraftDisbursementStatus,
+			UserID: createdByUser.ID,
+		},
+	}
+
+	startedStatusHistory := data.DisbursementStatusHistory{
+		data.DisbursementStatusHistoryEntry{
+			Status: data.DraftDisbursementStatus,
+			UserID: createdByUser.ID,
+		},
+		data.DisbursementStatusHistoryEntry{
+			Status: data.StartedDisbursementStatus,
+			UserID: startedByUser.ID,
+		},
+	}
+
 	// create disbursements
 	disbursement1 := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-		Name:      "disbursement 1",
-		Status:    data.DraftDisbursementStatus,
-		Asset:     asset,
-		Wallet:    wallet,
-		Country:   country,
-		CreatedAt: time.Date(2022, 3, 21, 23, 40, 20, 1431, time.UTC),
+		Name:          "disbursement 1",
+		Status:        data.DraftDisbursementStatus,
+		StatusHistory: draftStatusHistory,
+		Asset:         asset,
+		Wallet:        wallet,
+		Country:       country,
+		CreatedAt:     time.Date(2022, 3, 21, 23, 40, 20, 1431, time.UTC),
 	})
 	disbursement2 := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-		Name:      "disbursement 2",
-		Status:    data.ReadyDisbursementStatus,
-		Asset:     asset,
-		Wallet:    wallet,
-		Country:   country,
-		CreatedAt: time.Date(2023, 2, 20, 23, 40, 20, 1431, time.UTC),
+		Name:          "disbursement 2",
+		Status:        data.ReadyDisbursementStatus,
+		StatusHistory: draftStatusHistory,
+		Asset:         asset,
+		Wallet:        wallet,
+		Country:       country,
+		CreatedAt:     time.Date(2023, 2, 20, 23, 40, 20, 1431, time.UTC),
 	})
 	disbursement3 := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-		Name:      "disbursement 3",
-		Status:    data.StartedDisbursementStatus,
-		Asset:     asset,
-		Wallet:    wallet,
-		Country:   country,
-		CreatedAt: time.Date(2023, 3, 19, 23, 40, 20, 1431, time.UTC),
+		Name:          "disbursement 3",
+		Status:        data.StartedDisbursementStatus,
+		StatusHistory: startedStatusHistory,
+		Asset:         asset,
+		Wallet:        wallet,
+		Country:       country,
+		CreatedAt:     time.Date(2023, 3, 19, 23, 40, 20, 1431, time.UTC),
 	})
 	disbursement4 := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-		Name:      "disbursement 4",
-		Status:    data.DraftDisbursementStatus,
-		Asset:     asset,
-		Wallet:    wallet,
-		Country:   country,
-		CreatedAt: time.Date(2023, 4, 19, 23, 40, 20, 1431, time.UTC),
+		Name:          "disbursement 4",
+		Status:        data.DraftDisbursementStatus,
+		StatusHistory: draftStatusHistory,
+		Asset:         asset,
+		Wallet:        wallet,
+		Country:       country,
+		CreatedAt:     time.Date(2023, 4, 19, 23, 40, 20, 1431, time.UTC),
 	})
 
 	tests := []struct {
@@ -470,7 +530,7 @@ func Test_DisbursementHandler_GetDisbursements_Success(t *testing.T) {
 		queryParams           map[string]string
 		expectedStatusCode    int
 		expectedPagination    httpresponse.PaginationInfo
-		expectedDisbursements []data.Disbursement
+		expectedDisbursements []services.DisbursementWithUserMetadata
 	}{
 		{
 			name:               "fetch all disbursements without filters",
@@ -482,7 +542,25 @@ func Test_DisbursementHandler_GetDisbursements_Success(t *testing.T) {
 				Pages: 1,
 				Total: 4,
 			},
-			expectedDisbursements: []data.Disbursement{*disbursement4, *disbursement3, *disbursement2, *disbursement1},
+			expectedDisbursements: []services.DisbursementWithUserMetadata{
+				{
+					Disbursement: *disbursement4,
+					CreatedBy:    createdByUserRef,
+				},
+				{
+					Disbursement: *disbursement3,
+					CreatedBy:    createdByUserRef,
+					StartedBy:    startedByUserRef,
+				},
+				{
+					Disbursement: *disbursement2,
+					CreatedBy:    createdByUserRef,
+				},
+				{
+					Disbursement: *disbursement1,
+					CreatedBy:    createdByUserRef,
+				},
+			},
 		},
 		{
 			name: "fetch first page of disbursements with limit 1 and sort by name",
@@ -499,7 +577,12 @@ func Test_DisbursementHandler_GetDisbursements_Success(t *testing.T) {
 				Pages: 4,
 				Total: 4,
 			},
-			expectedDisbursements: []data.Disbursement{*disbursement1},
+			expectedDisbursements: []services.DisbursementWithUserMetadata{
+				{
+					Disbursement: *disbursement1,
+					CreatedBy:    createdByUserRef,
+				},
+			},
 		},
 		{
 			name: "fetch second page of disbursements with limit 1 and sort by name",
@@ -516,7 +599,12 @@ func Test_DisbursementHandler_GetDisbursements_Success(t *testing.T) {
 				Pages: 4,
 				Total: 4,
 			},
-			expectedDisbursements: []data.Disbursement{*disbursement2},
+			expectedDisbursements: []services.DisbursementWithUserMetadata{
+				{
+					Disbursement: *disbursement2,
+					CreatedBy:    createdByUserRef,
+				},
+			},
 		},
 		{
 			name: "fetch last page of disbursements with limit 1 and sort by name",
@@ -533,7 +621,12 @@ func Test_DisbursementHandler_GetDisbursements_Success(t *testing.T) {
 				Pages: 4,
 				Total: 4,
 			},
-			expectedDisbursements: []data.Disbursement{*disbursement4},
+			expectedDisbursements: []services.DisbursementWithUserMetadata{
+				{
+					Disbursement: *disbursement4,
+					CreatedBy:    createdByUserRef,
+				},
+			},
 		},
 		{
 			name: "fetch last page of disbursements with limit 1 and sort by name",
@@ -550,7 +643,12 @@ func Test_DisbursementHandler_GetDisbursements_Success(t *testing.T) {
 				Pages: 4,
 				Total: 4,
 			},
-			expectedDisbursements: []data.Disbursement{*disbursement4},
+			expectedDisbursements: []services.DisbursementWithUserMetadata{
+				{
+					Disbursement: *disbursement4,
+					CreatedBy:    createdByUserRef,
+				},
+			},
 		},
 		{
 			name: "fetch disbursements with status draft",
@@ -564,7 +662,16 @@ func Test_DisbursementHandler_GetDisbursements_Success(t *testing.T) {
 				Pages: 1,
 				Total: 2,
 			},
-			expectedDisbursements: []data.Disbursement{*disbursement4, *disbursement1},
+			expectedDisbursements: []services.DisbursementWithUserMetadata{
+				{
+					Disbursement: *disbursement4,
+					CreatedBy:    createdByUserRef,
+				},
+				{
+					Disbursement: *disbursement1,
+					CreatedBy:    createdByUserRef,
+				},
+			},
 		},
 		{
 			name: "fetch disbursements with status draft and q=1",
@@ -579,7 +686,12 @@ func Test_DisbursementHandler_GetDisbursements_Success(t *testing.T) {
 				Pages: 1,
 				Total: 1,
 			},
-			expectedDisbursements: []data.Disbursement{*disbursement1},
+			expectedDisbursements: []services.DisbursementWithUserMetadata{
+				{
+					Disbursement: *disbursement1,
+					CreatedBy:    createdByUserRef,
+				},
+			},
 		},
 		{
 			name: "fetch disbursements after 2023-01-01",
@@ -593,7 +705,21 @@ func Test_DisbursementHandler_GetDisbursements_Success(t *testing.T) {
 				Pages: 1,
 				Total: 3,
 			},
-			expectedDisbursements: []data.Disbursement{*disbursement4, *disbursement3, *disbursement2},
+			expectedDisbursements: []services.DisbursementWithUserMetadata{
+				{
+					Disbursement: *disbursement4,
+					CreatedBy:    createdByUserRef,
+				},
+				{
+					Disbursement: *disbursement3,
+					CreatedBy:    createdByUserRef,
+					StartedBy:    startedByUserRef,
+				},
+				{
+					Disbursement: *disbursement2,
+					CreatedBy:    createdByUserRef,
+				},
+			},
 		},
 		{
 			name: "fetch disbursements after 2023-01-01 and before 2023-03-20",
@@ -608,7 +734,17 @@ func Test_DisbursementHandler_GetDisbursements_Success(t *testing.T) {
 				Pages: 1,
 				Total: 2,
 			},
-			expectedDisbursements: []data.Disbursement{*disbursement3, *disbursement2},
+			expectedDisbursements: []services.DisbursementWithUserMetadata{
+				{
+					Disbursement: *disbursement3,
+					CreatedBy:    createdByUserRef,
+					StartedBy:    startedByUserRef,
+				},
+				{
+					Disbursement: *disbursement2,
+					CreatedBy:    createdByUserRef,
+				},
+			},
 		},
 	}
 
@@ -629,7 +765,7 @@ func Test_DisbursementHandler_GetDisbursements_Success(t *testing.T) {
 			assert.Equal(t, tc.expectedPagination, actualResponse.Pagination)
 
 			// Parse the response data
-			var actualDisbursements []data.Disbursement
+			var actualDisbursements []services.DisbursementWithUserMetadata
 			err = json.Unmarshal(actualResponse.Data, &actualDisbursements)
 			require.NoError(t, err)
 
@@ -828,9 +964,34 @@ func Test_DisbursementHandler_GetDisbursement(t *testing.T) {
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
+	authManagerMock := &auth.AuthManagerMock{}
+	createdByUser := auth.User{
+		ID:        "User1",
+		FirstName: "User",
+		LastName:  "One",
+	}
+	startedByUser := auth.User{
+		ID:        "User2",
+		FirstName: "User",
+		LastName:  "Two",
+	}
+
+	allUsers := []*auth.User{
+		&createdByUser,
+		&startedByUser,
+	}
+
+	authManagerMock.
+		On("GetUsersByID", mock.Anything, []string{createdByUser.ID, startedByUser.ID}).
+		Return(allUsers, nil)
+	authManagerMock.
+		On("GetUsersByID", mock.Anything, []string{startedByUser.ID, createdByUser.ID}).
+		Return(allUsers, nil)
+
 	handler := &DisbursementHandler{
 		Models:           models,
 		DBConnectionPool: models.DBConnectionPool,
+		AuthManager:      authManagerMock,
 	}
 
 	r := chi.NewRouter()
@@ -838,16 +999,40 @@ func Test_DisbursementHandler_GetDisbursement(t *testing.T) {
 
 	// create disbursements
 	disbursement := data.CreateDisbursementFixture(t, context.Background(), dbConnectionPool, handler.Models.Disbursements, &data.Disbursement{
-		Name:      "disbursement 1",
-		Status:    data.DraftDisbursementStatus,
+		Name:   "disbursement 1",
+		Status: data.StartedDisbursementStatus,
+		StatusHistory: data.DisbursementStatusHistory{
+			data.DisbursementStatusHistoryEntry{
+				Status: data.DraftDisbursementStatus,
+				UserID: createdByUser.ID,
+			},
+			data.DisbursementStatusHistoryEntry{
+				Status: data.StartedDisbursementStatus,
+				UserID: startedByUser.ID,
+			},
+		},
 		CreatedAt: time.Date(2022, 3, 21, 23, 40, 20, 1431, time.UTC),
 	})
+
+	response := services.DisbursementWithUserMetadata{
+		Disbursement: *disbursement,
+		CreatedBy: services.UserReference{
+			ID:        createdByUser.ID,
+			FirstName: createdByUser.FirstName,
+			LastName:  createdByUser.LastName,
+		},
+		StartedBy: services.UserReference{
+			ID:        startedByUser.ID,
+			FirstName: startedByUser.FirstName,
+			LastName:  startedByUser.LastName,
+		},
+	}
 
 	tests := []struct {
 		name                 string
 		id                   string
 		expectedStatusCode   int
-		expectedDisbursement data.Disbursement
+		expectedDisbursement services.DisbursementWithUserMetadata
 		expectedErrorMessage string
 	}{
 		{
@@ -860,7 +1045,7 @@ func Test_DisbursementHandler_GetDisbursement(t *testing.T) {
 			name:                 "success",
 			id:                   disbursement.ID,
 			expectedStatusCode:   http.StatusOK,
-			expectedDisbursement: *disbursement,
+			expectedDisbursement: response,
 		},
 	}
 	for _, tc := range tests {
@@ -871,7 +1056,7 @@ func Test_DisbursementHandler_GetDisbursement(t *testing.T) {
 			r.ServeHTTP(rr, req)
 
 			if rr.Code == http.StatusOK {
-				var actualDisbursement data.Disbursement
+				var actualDisbursement services.DisbursementWithUserMetadata
 				require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &actualDisbursement))
 				require.Equal(t, tc.expectedDisbursement, actualDisbursement)
 			} else {

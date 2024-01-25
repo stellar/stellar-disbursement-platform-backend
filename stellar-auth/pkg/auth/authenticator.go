@@ -40,6 +40,7 @@ type Authenticator interface {
 	UpdatePassword(ctx context.Context, user *User, currentPassword, newPassword string) error
 	GetAllUsers(ctx context.Context) ([]User, error)
 	GetUser(ctx context.Context, userID string) (*User, error)
+	GetUsers(ctx context.Context, userIDs []string) ([]*User, error)
 }
 
 type defaultAuthenticator struct {
@@ -354,7 +355,7 @@ func (a *defaultAuthenticator) ResetPassword(ctx context.Context, resetToken, pa
 
 func (a *defaultAuthenticator) UpdatePassword(ctx context.Context, user *User, currentPassword, newPassword string) error {
 	if currentPassword == "" || newPassword == "" {
-		return fmt.Errorf("provide currentPassword and newPassword values.")
+		return fmt.Errorf("provide currentPassword and newPassword values")
 	}
 
 	_, err := a.ValidateCredentials(ctx, user.Email, currentPassword)
@@ -475,6 +476,45 @@ func (a *defaultAuthenticator) GetUser(ctx context.Context, userID string) (*Use
 		LastName:  u.LastName,
 		Email:     u.Email,
 	}, nil
+}
+
+// GetUsers retrieves the respective users from a list of user IDs.
+func (a *defaultAuthenticator) GetUsers(ctx context.Context, userIDs []string) ([]*User, error) {
+	const query = `
+		SELECT
+			id,
+			first_name,
+			last_name
+		FROM
+			auth_users
+		WHERE
+			id = ANY($1::text[]) AND is_active = true
+	`
+
+	var dbUsers []authUser
+	err := a.dbConnectionPool.SelectContext(ctx, &dbUsers, query, pq.Array(userIDs))
+	if err != nil {
+		return nil, fmt.Errorf("error querying user IDs: %w", err)
+	}
+	if len(dbUsers) != len(userIDs) {
+		return nil,
+			fmt.Errorf(
+				"error querying user IDs: searching for %d users, found %d users",
+				len(userIDs),
+				len(dbUsers),
+			)
+	}
+
+	users := make([]*User, len(dbUsers))
+	for i, u := range dbUsers {
+		users[i] = &User{
+			ID:        u.ID,
+			FirstName: u.FirstName,
+			LastName:  u.LastName,
+		}
+	}
+
+	return users, nil
 }
 
 type defaultAuthenticatorOption func(a *defaultAuthenticator)

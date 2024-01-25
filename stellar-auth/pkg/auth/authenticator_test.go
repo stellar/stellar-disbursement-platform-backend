@@ -643,6 +643,62 @@ func Test_DefaultAuthenticator_GetAllUsers(t *testing.T) {
 	passwordEncrypterMock.AssertExpectations(t)
 }
 
+func Test_DefaultAuthenticator_GetUsers(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	passwordEncrypterMock := &PasswordEncrypterMock{}
+	authenticator := newDefaultAuthenticator(withAuthenticatorDatabaseConnectionPool(dbConnectionPool))
+
+	ctx := context.Background()
+
+	t.Run("returns an error if users for user IDs cannot be found", func(t *testing.T) {
+		userIDs := []string{"invalid-id"}
+		_, err := authenticator.GetUsers(ctx, userIDs)
+		require.EqualError(t, err, "error querying user IDs: searching for 1 users, found 0 users")
+	})
+
+	t.Run("gets users for provided IDs successfully", func(t *testing.T) {
+		passwordEncrypterMock.
+			On("Encrypt", ctx, mock.AnythingOfType("string")).
+			Return("encryptedPassword", nil)
+
+		randUser1 := CreateRandomAuthUserFixture(t, ctx, dbConnectionPool, passwordEncrypterMock, false, "role1", "role2")
+		randUser2 := CreateRandomAuthUserFixture(t, ctx, dbConnectionPool, passwordEncrypterMock, true, "role1", "role2")
+		randUser3 := CreateRandomAuthUserFixture(t, ctx, dbConnectionPool, passwordEncrypterMock, false, "role3")
+
+		users, err := authenticator.GetUsers(
+			ctx, []string{randUser1.ID, randUser2.ID, randUser3.ID},
+		)
+		require.NoError(t, err)
+
+		expectedUsers := []*User{
+			{
+				ID:        randUser1.ID,
+				FirstName: randUser1.FirstName,
+				LastName:  randUser1.LastName,
+			},
+			{
+				ID:        randUser2.ID,
+				FirstName: randUser2.FirstName,
+				LastName:  randUser2.LastName,
+			},
+			{
+				ID:        randUser3.ID,
+				FirstName: randUser3.FirstName,
+				LastName:  randUser3.LastName,
+			},
+		}
+
+		assert.Equal(t, expectedUsers, users)
+	})
+
+	passwordEncrypterMock.AssertExpectations(t)
+}
+
 func Test_DefaultAuthenticator_UpdateUser(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
@@ -907,7 +963,7 @@ func Test_DefaultAuthenticator_UpdatePassword(t *testing.T) {
 			Once()
 		randUser := CreateRandomAuthUserFixture(t, ctx, dbConnectionPool, passwordEncrypterMock, false)
 		err := authenticator.UpdatePassword(ctx, randUser.ToUser(), "", "")
-		assert.EqualError(t, err, "provide currentPassword and newPassword values.")
+		assert.EqualError(t, err, "provide currentPassword and newPassword values")
 	})
 
 	t.Run("returns error when credentials are invalid", func(t *testing.T) {
