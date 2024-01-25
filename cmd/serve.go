@@ -363,6 +363,10 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 	eventBrokerOptions := cmdUtils.EventBrokerOptions{}
 	configOpts = append(configOpts, cmdUtils.EventBrokerConfigOptions(&eventBrokerOptions)...)
 
+	// signature service config options:
+	sigServiceOptions := di.SignatureServiceOptions{}
+	configOpts = append(configOpts, cmdUtils.ChannelAccountEncryptionPassphraseConfigOption(&sigServiceOptions.EncryptionPassphrase))
+
 	cmd := &cobra.Command{
 		Use:   "serve",
 		Short: "Serve the Stellar Disbursement Platform API",
@@ -440,6 +444,21 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 				log.Ctx(ctx).Fatalf("error creating Anchor Platform API Service: %v", err)
 			}
 			serveOpts.AnchorPlatformAPIService = apAPIService
+
+			// Setup the TSSDBConnectionPool
+			tssDBConnectionPool, err := di.NewTSSDBConnectionPool(ctx, di.TSSDBConnectionPoolOptions{DatabaseURL: globalOptions.DatabaseURL})
+			if err != nil {
+				log.Ctx(ctx).Fatalf("error getting TSS DB connection pool: %v", err)
+			}
+
+			// Setup the signature service
+			sigServiceOptions.DBConnectionPool = tssDBConnectionPool
+			sigServiceOptions.NetworkPassphrase = globalOptions.NetworkPassphrase
+			sigServiceOptions.DistributionPrivateKey = serveOpts.DistributionSeed
+			serveOpts.SignatureService, err = di.NewSignatureService(ctx, sigServiceOptions)
+			if err != nil {
+				log.Ctx(ctx).Fatalf("error creating signature service: %v", err)
+			}
 
 			// Kafka (background)
 			if eventBrokerOptions.EventBrokerType == events.KafkaEventBrokerType {
