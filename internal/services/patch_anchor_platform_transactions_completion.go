@@ -3,28 +3,30 @@ package services
 import (
 	"context"
 	"fmt"
-	"sort"
 
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 )
 
 const MaxErrorMessageLength = 255
+
+type PatchAnchorPlatformTransactionCompletionServiceInterface interface {
+	PatchTransactionCompletion(ctx context.Context, tx schemas.EventPaymentCompletedData) error
+}
 
 type PatchAnchorPlatformTransactionCompletionService struct {
 	apAPISvc  anchorplatform.AnchorPlatformAPIServiceInterface
 	sdpModels *data.Models
 }
 
+var _ PatchAnchorPlatformTransactionCompletionServiceInterface = new(PatchAnchorPlatformTransactionCompletionService)
+
 func NewPatchAnchorPlatformTransactionCompletionService(apAPISvc anchorplatform.AnchorPlatformAPIServiceInterface, sdpModels *data.Models) (*PatchAnchorPlatformTransactionCompletionService, error) {
 	if apAPISvc == nil {
 		return nil, fmt.Errorf("anchor platform API service is required")
-	}
-
-	if sdpModels == nil {
-		return nil, fmt.Errorf("SDP models are required")
 	}
 
 	return &PatchAnchorPlatformTransactionCompletionService{
@@ -33,110 +35,87 @@ func NewPatchAnchorPlatformTransactionCompletionService(apAPISvc anchorplatform.
 	}, nil
 }
 
-func (s *PatchAnchorPlatformTransactionCompletionService) PatchTransactionsCompletion(ctx context.Context) error {
-	// Step 1: Get all Success and Failed payments from receivers for their respective wallets.
-	payments, err := db.RunInTransactionWithResult(ctx, s.sdpModels.DBConnectionPool, nil, func(dbTx db.DBTransaction) ([]data.Payment, error) {
-		payments, err := s.sdpModels.Payment.GetAllReadyToPatchCompletionAnchorTransactions(ctx, dbTx)
-		if err != nil {
-			return nil, fmt.Errorf("getting payments: %w", err)
-		}
+func (s *PatchAnchorPlatformTransactionCompletionService) PatchTransactionCompletion(ctx context.Context, tx schemas.EventPaymentCompletedData) error {
+	if s.sdpModels == nil {
+		return fmt.Errorf("SDP models are required")
+	}
 
-		return payments, nil
+	// Step 1: Get the requested payment.
+	payment, err := db.RunInTransactionWithResult(ctx, s.sdpModels.DBConnectionPool, nil, func(dbTx db.DBTransaction) (*data.Payment, error) {
+		payment, err := s.sdpModels.Payment.Get(ctx, tx.PaymentID, dbTx)
+		if err != nil {
+			return nil, fmt.Errorf("getting payment ID %s: %w", tx.PaymentID, err)
+		}
+		return payment, nil
 	})
 	if err != nil {
-		return fmt.Errorf("getting payments from database transaction: %w", err)
+		return fmt.Errorf("getting payment from database transaction: %w", err)
 	}
 
-	log.Ctx(ctx).Debugf("PatchAnchorPlatformTransactionService: got %d payments to process", len(payments))
-
-	// successfulPaymentsForAPTransactionID has its keys as the AP Transaction ID. Here we store the transaction IDs
-	// from the transactions patched to the AP with the "Completed" anchor status. So we avoid concurrency errors like, a receiver having
-	// two payments for the same wallet, we report the transaction as "Complete" to the AP and then overwrite this
-	// status with the "Error" status.
-	successfulPaymentsForAPTransactionID := make(map[string]struct{}, len(payments))
-
-	// Step 2: Iterate over the payments.
-	receiverWalletIDs := make([]string, 0)
-	for _, payment := range payments {
-		// Step 3: Check if the AP transaction was already patched as completed. If it's true we don't need to report it anymore.
-		if _, ok := successfulPaymentsForAPTransactionID[payment.ReceiverWallet.AnchorPlatformTransactionID]; ok {
-			log.Ctx(ctx).Debugf(
-				"PatchAnchorPlatformTransactionService: anchor platform transaction ID %q already patched as completed. No action needed",
-				payment.ReceiverWallet.AnchorPlatformTransactionID,
-			)
-			continue
-		}
-
-		// Step 4: patch the transaction on the AP with the respective status.
-		if payment.Status == data.SuccessPaymentStatus {
-			err = s.apAPISvc.PatchAnchorTransactionsPostSuccessCompletion(ctx, anchorplatform.APSep24TransactionPatchPostSuccess{
-				ID:     payment.ReceiverWallet.AnchorPlatformTransactionID,
-				SEP:    "24",
-				Status: anchorplatform.APTransactionStatusCompleted,
-				StellarTransactions: []anchorplatform.APStellarTransaction{
-					{
-						ID:       payment.StellarTransactionID,
-						Memo:     payment.ReceiverWallet.StellarMemo,
-						MemoType: payment.ReceiverWallet.StellarMemoType,
-					},
-				},
-				CompletedAt: &payment.UpdatedAt,
-				AmountOut: anchorplatform.APAmount{
-					Amount: payment.Amount,
-					Asset:  anchorplatform.NewStellarAssetInAIF(payment.Asset.Code, payment.Asset.Issuer),
-				},
-			})
-			if err != nil {
-				log.Ctx(ctx).Errorf("PatchAnchorPlatformTransactionService: error patching anchor transaction ID %q with status %q: %v", payment.ReceiverWallet.AnchorPlatformTransactionID, anchorplatform.APTransactionStatusCompleted, err)
-				continue
-			}
-			// marking the AP Transaction as synced as completed.
-			successfulPaymentsForAPTransactionID[payment.ReceiverWallet.AnchorPlatformTransactionID] = struct{}{}
-		} else if payment.Status == data.FailedPaymentStatus {
-			sort.Slice(payment.StatusHistory, func(i, j int) bool {
-				return payment.StatusHistory[i].Timestamp.After(payment.StatusHistory[j].Timestamp)
-			})
-
-			var status data.PaymentStatusHistoryEntry
-			for _, st := range payment.StatusHistory {
-				if st.Status == data.FailedPaymentStatus {
-					status = st
-					break
-				}
-			}
-
-			messageLength := len(status.StatusMessage)
-			if messageLength > MaxErrorMessageLength {
-				messageLength = MaxErrorMessageLength - 1
-			}
-
-			err = s.apAPISvc.PatchAnchorTransactionsPostErrorCompletion(ctx, anchorplatform.APSep24TransactionPatchPostError{
-				ID:      payment.ReceiverWallet.AnchorPlatformTransactionID,
-				SEP:     "24",
-				Message: status.StatusMessage[:messageLength],
-				Status:  anchorplatform.APTransactionStatusError,
-			})
-			if err != nil {
-				log.Ctx(ctx).Errorf("PatchAnchorPlatformTransactionService: error patching anchor transaction ID %q with status %q: %v", payment.ReceiverWallet.AnchorPlatformTransactionID, anchorplatform.APTransactionStatusError, err)
-				continue
-			}
-		} else {
-			log.Ctx(ctx).Errorf("PatchAnchorPlatformTransactionService: invalid payment status to patch to anchor platform. Payment ID: %s - Status: %s", payment.ID, payment.Status)
-			continue
-		}
-
-		// Step 5: If the transaction was successfully patched we select it to be marked as synced.
-		receiverWalletIDs = append(receiverWalletIDs, payment.ReceiverWallet.ID)
+	if payment.ReceiverWallet.AnchorPlatformTransactionSyncedAt != nil && !payment.ReceiverWallet.AnchorPlatformTransactionSyncedAt.IsZero() {
+		log.Ctx(ctx).Infof("AP Transaction ID %s already patched", payment.ReceiverWallet.AnchorPlatformTransactionID)
+		return nil
 	}
 
-	log.Ctx(ctx).Debugf("PatchAnchorPlatformTransactionService: updating anchor platform transaction synced at for %d receiver wallet(s)", len(receiverWalletIDs))
+	paymentStatus := data.PaymentStatus(tx.PaymentStatus)
 
-	// Step 6: we update the receiver_wallets table saying that the AP transaction associated with the user registration
+	// Step 2: patch the transaction on the AP with the respective status.
+	if paymentStatus == data.SuccessPaymentStatus {
+		err = s.apAPISvc.PatchAnchorTransactionsPostSuccessCompletion(ctx, anchorplatform.APSep24TransactionPatchPostSuccess{
+			ID:     payment.ReceiverWallet.AnchorPlatformTransactionID,
+			SEP:    "24",
+			Status: anchorplatform.APTransactionStatusCompleted,
+			StellarTransactions: []anchorplatform.APStellarTransaction{
+				{
+					ID:       tx.StellarTransactionID,
+					Memo:     payment.ReceiverWallet.StellarMemo,
+					MemoType: payment.ReceiverWallet.StellarMemoType,
+				},
+			},
+			CompletedAt: &tx.PaymentCompletedAt,
+			AmountOut: anchorplatform.APAmount{
+				Amount: payment.Amount,
+				Asset:  anchorplatform.NewStellarAssetInAIF(payment.Asset.Code, payment.Asset.Issuer),
+			},
+		})
+		if err != nil {
+			err = fmt.Errorf("PatchAnchorPlatformTransactionService: error patching anchor transaction ID %q with status %q: %w", payment.ReceiverWallet.AnchorPlatformTransactionID, anchorplatform.APTransactionStatusCompleted, err)
+			log.Ctx(ctx).Error(err)
+			return err
+		}
+	} else if paymentStatus == data.FailedPaymentStatus {
+		messageLength := len(tx.PaymentStatusMessage)
+		if messageLength > MaxErrorMessageLength {
+			messageLength = MaxErrorMessageLength - 1
+		}
+
+		err = s.apAPISvc.PatchAnchorTransactionsPostErrorCompletion(ctx, anchorplatform.APSep24TransactionPatchPostError{
+			ID:      payment.ReceiverWallet.AnchorPlatformTransactionID,
+			SEP:     "24",
+			Message: tx.PaymentStatusMessage[:messageLength],
+			Status:  anchorplatform.APTransactionStatusError,
+		})
+		if err != nil {
+			err = fmt.Errorf("PatchAnchorPlatformTransactionService: error patching anchor transaction ID %q with status %q: %w", payment.ReceiverWallet.AnchorPlatformTransactionID, anchorplatform.APTransactionStatusError, err)
+			log.Ctx(ctx).Error(err)
+			return err
+		}
+	} else {
+		err = fmt.Errorf("PatchAnchorPlatformTransactionService: invalid payment status to patch to anchor platform. Payment ID: %s - Status: %s", payment.ID, paymentStatus)
+		log.Ctx(ctx).Error(err)
+		return err
+	}
+
+	// Step 3: we update the receiver_wallets table saying that the AP transaction associated with the user registration
 	// was successfully patched/synced.
-	_, err = s.sdpModels.ReceiverWallet.UpdateAnchorPlatformTransactionSyncedAt(ctx, receiverWalletIDs...)
+	_, err = s.sdpModels.ReceiverWallet.UpdateAnchorPlatformTransactionSyncedAt(ctx, payment.ReceiverWallet.ID)
 	if err != nil {
 		return fmt.Errorf("updating receiver wallet anchor platform transaction synced at: %w", err)
 	}
 
 	return nil
+}
+
+func (s *PatchAnchorPlatformTransactionCompletionService) SetModels(models *data.Models) {
+	s.sdpModels = models
 }

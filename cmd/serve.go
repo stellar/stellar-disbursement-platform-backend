@@ -78,7 +78,6 @@ func (s *ServerService) GetSchedulerJobRegistrars(ctx context.Context, serveOpts
 	return []scheduler.SchedulerJobRegisterOption{
 		scheduler.WithPaymentToSubmitterJobOption(models),
 		scheduler.WithAPAuthEnforcementJob(apAPIService, serveOpts.MonitorService, serveOpts.CrashTrackerClient.Clone()),
-		scheduler.WithPatchAnchorPlatformTransactionsCompletionJobOption(apAPIService, models),
 		scheduler.WithReadyPaymentsCancellationJobOption(models),
 	}, nil
 }
@@ -125,22 +124,27 @@ func (s *ServerService) SetupConsumers(ctx context.Context, eventBrokerOptions c
 		return nil, fmt.Errorf("creating SMS Invitation Kafka Consumer: %w", err)
 	}
 
-	paymentFromSubmitterConsumer, err := events.NewKafkaConsumer(
+	paymentCompletedConsumer, err := events.NewKafkaConsumer(
 		eventBrokerOptions.BrokerURLs,
-		events.PaymentFromSubmitterTopic,
+		events.PaymentCompletedTopic,
 		eventBrokerOptions.ConsumerGroupID,
 		eventhandlers.NewPaymentFromSubmitterEventHandler(eventhandlers.PaymentFromSubmitterEventHandlerOptions{
 			DBConnectionPool:    dbConnectionPool,
 			TSSDBConnectionPool: tssDBConnectionPool,
 			CrashTrackerClient:  serveOpts.CrashTrackerClient.Clone(),
 		}),
+		eventhandlers.NewPatchAnchorPlatformTransactionCompletionEventHandler(eventhandlers.PatchAnchorPlatformTransactionCompletionEventHandlerOptions{
+			DBConnectionPool:   dbConnectionPool,
+			APapiSvc:           serveOpts.AnchorPlatformAPIService,
+			CrashTrackerClient: serveOpts.CrashTrackerClient.Clone(),
+		}),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("creating Payment From Submitter Kafka Consumer: %w", err)
+		return nil, fmt.Errorf("creating Payment Completed Kafka Consumer: %w", err)
 	}
 
 	go events.Consume(ctx, smsInvitationConsumer, serveOpts.CrashTrackerClient.Clone())
-	go events.Consume(ctx, paymentFromSubmitterConsumer, serveOpts.CrashTrackerClient.Clone())
+	go events.Consume(ctx, paymentCompletedConsumer, serveOpts.CrashTrackerClient.Clone())
 
 	return TearDownFunc(func() {
 		defer dbConnectionPool.Close()

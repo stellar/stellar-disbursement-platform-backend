@@ -6,16 +6,16 @@ import (
 
 // Topic Names
 const (
-	ReceiverWalletNewInvitationTopic = "events.receiver-wallets.new-invitation"
-	PaymentFromSubmitterTopic        = "events.transaction-submitter.payment-from-submitter"
+	ReceiverWalletNewInvitationTopic = "events.receiver-wallets.new_invitation"
+	PaymentCompletedTopic            = "events.payment.payment_completed"
 )
 
 // Type Names
 const (
 	RetryReceiverWalletSMSInvitationType = "retry-receiver-wallet-sms-invitation"
 	BatchReceiverWalletSMSInvitationType = "batch-receiver-wallet-sms-invitation"
-	SyncSuccessPaymentFromSubmitterType  = "sync-success-payment-from-submitter"
-	SyncErrorPaymentFromSubmitterType    = "sync-error-payment-from-submitter"
+	PaymentCompletedSuccessType          = "payment-completed-success"
+	PaymentCompletedErrorType            = "payment-completed-error"
 )
 
 type EventHandler interface {

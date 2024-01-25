@@ -2,12 +2,14 @@ package transactionsubmission
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/stellar/go/clients/horizonclient"
@@ -24,6 +26,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
@@ -352,16 +355,27 @@ func Test_TransactionWorker_handleSuccessfulTransaction(t *testing.T) {
 		errReturned := fmt.Errorf("something went wrong")
 		mockEventProducer := &events.MockProducer{}
 		mockEventProducer.
-			On("WriteMessages", ctx, []events.Message{
-				{
-					Topic:    events.PaymentFromSubmitterTopic,
-					Key:      txJob.Transaction.ExternalID,
-					TenantID: txJob.Transaction.TenantID,
-					Type:     events.SyncSuccessPaymentFromSubmitterType,
-					Data: schemas.EventPaymentFromSubmitterData{
-						TransactionID: txJob.Transaction.ID,
-					},
-				},
+			On("WriteMessages", ctx, mock.AnythingOfType("[]events.Message")).
+			Run(func(args mock.Arguments) {
+				messages, ok := args.Get(1).([]events.Message)
+				require.True(t, ok)
+				require.Len(t, messages, 1)
+
+				msg := messages[0]
+
+				assert.Equal(t, events.PaymentCompletedTopic, msg.Topic)
+				assert.Equal(t, txJob.Transaction.ExternalID, msg.Key)
+				assert.Equal(t, txJob.Transaction.TenantID, msg.TenantID)
+				assert.Equal(t, events.PaymentCompletedSuccessType, msg.Type)
+
+				msgData, ok := msg.Data.(schemas.EventPaymentCompletedData)
+				require.True(t, ok)
+				assert.Equal(t, txJob.Transaction.ID, msgData.TransactionID)
+				assert.Equal(t, txJob.Transaction.ExternalID, msgData.PaymentID)
+				assert.Equal(t, string(data.SuccessPaymentStatus), msgData.PaymentStatus)
+				assert.Empty(t, msgData.PaymentStatusMessage)
+				assert.WithinDuration(t, time.Now(), msgData.PaymentCompletedAt, time.Millisecond*100)
+				assert.Empty(t, msgData.StellarTransactionID)
 			}).
 			Return(errReturned).
 			Once()
@@ -369,17 +383,16 @@ func Test_TransactionWorker_handleSuccessfulTransaction(t *testing.T) {
 
 		// Run test:
 		expectedError := fmt.Sprintf(
-			"producing event Status %s - Job %v: writing message Message{Topic: %s, Key: %s, Type: %s, TenantID: %s, Data: {%s}} on event producer: something went wrong",
+			"producing payment completed event Status %s - Job %v: writing message Message{Topic: %s, Key: %s, Type: %s, TenantID: %s",
 			store.TransactionStatusSuccess,
 			txJob,
-			events.PaymentFromSubmitterTopic,
+			events.PaymentCompletedTopic,
 			txJob.Transaction.ExternalID,
-			events.SyncSuccessPaymentFromSubmitterType,
+			events.PaymentCompletedSuccessType,
 			txJob.Transaction.TenantID,
-			txJob.Transaction.ID,
 		)
 		err := transactionWorker.handleSuccessfulTransaction(ctx, &txJob, horizon.Transaction{Successful: true})
-		assert.EqualError(t, err, expectedError)
+		assert.ErrorContains(t, err, expectedError)
 
 		mockTxStore.AssertExpectations(t)
 		mockEventProducer.AssertExpectations(t)
@@ -408,16 +421,27 @@ func Test_TransactionWorker_handleSuccessfulTransaction(t *testing.T) {
 		// mock eventProducer WriteMessages ✅
 		mockEventProducer := &events.MockProducer{}
 		mockEventProducer.
-			On("WriteMessages", ctx, []events.Message{
-				{
-					Topic:    events.PaymentFromSubmitterTopic,
-					Key:      txJob.Transaction.ExternalID,
-					TenantID: txJob.Transaction.TenantID,
-					Type:     events.SyncSuccessPaymentFromSubmitterType,
-					Data: schemas.EventPaymentFromSubmitterData{
-						TransactionID: txJob.Transaction.ID,
-					},
-				},
+			On("WriteMessages", ctx, mock.AnythingOfType("[]events.Message")).
+			Run(func(args mock.Arguments) {
+				messages, ok := args.Get(1).([]events.Message)
+				require.True(t, ok)
+				require.Len(t, messages, 1)
+
+				msg := messages[0]
+
+				assert.Equal(t, events.PaymentCompletedTopic, msg.Topic)
+				assert.Equal(t, txJob.Transaction.ExternalID, msg.Key)
+				assert.Equal(t, txJob.Transaction.TenantID, msg.TenantID)
+				assert.Equal(t, events.PaymentCompletedSuccessType, msg.Type)
+
+				msgData, ok := msg.Data.(schemas.EventPaymentCompletedData)
+				require.True(t, ok)
+				assert.Equal(t, txJob.Transaction.ID, msgData.TransactionID)
+				assert.Equal(t, txJob.Transaction.ExternalID, msgData.PaymentID)
+				assert.Equal(t, string(data.SuccessPaymentStatus), msgData.PaymentStatus)
+				assert.Empty(t, msgData.PaymentStatusMessage)
+				assert.WithinDuration(t, time.Now(), msgData.PaymentCompletedAt, time.Millisecond*100)
+				assert.Empty(t, msgData.StellarTransactionID)
 			}).
 			Return(nil).
 			Once()
@@ -464,16 +488,27 @@ func Test_TransactionWorker_handleSuccessfulTransaction(t *testing.T) {
 		// mock eventProducer WriteMessages ✅
 		mockEventProducer := &events.MockProducer{}
 		mockEventProducer.
-			On("WriteMessages", ctx, []events.Message{
-				{
-					Topic:    events.PaymentFromSubmitterTopic,
-					Key:      txJob.Transaction.ExternalID,
-					TenantID: txJob.Transaction.TenantID,
-					Type:     events.SyncSuccessPaymentFromSubmitterType,
-					Data: schemas.EventPaymentFromSubmitterData{
-						TransactionID: txJob.Transaction.ID,
-					},
-				},
+			On("WriteMessages", ctx, mock.AnythingOfType("[]events.Message")).
+			Run(func(args mock.Arguments) {
+				messages, ok := args.Get(1).([]events.Message)
+				require.True(t, ok)
+				require.Len(t, messages, 1)
+
+				msg := messages[0]
+
+				assert.Equal(t, events.PaymentCompletedTopic, msg.Topic)
+				assert.Equal(t, txJob.Transaction.ExternalID, msg.Key)
+				assert.Equal(t, txJob.Transaction.TenantID, msg.TenantID)
+				assert.Equal(t, events.PaymentCompletedSuccessType, msg.Type)
+
+				msgData, ok := msg.Data.(schemas.EventPaymentCompletedData)
+				require.True(t, ok)
+				assert.Equal(t, txJob.Transaction.ID, msgData.TransactionID)
+				assert.Equal(t, txJob.Transaction.ExternalID, msgData.PaymentID)
+				assert.Equal(t, string(data.SuccessPaymentStatus), msgData.PaymentStatus)
+				assert.Empty(t, msgData.PaymentStatusMessage)
+				assert.WithinDuration(t, time.Now(), msgData.PaymentCompletedAt, time.Millisecond*100)
+				assert.Empty(t, msgData.StellarTransactionID)
 			}).
 			Return(nil).
 			Once()
@@ -527,16 +562,27 @@ func Test_TransactionWorker_handleSuccessfulTransaction(t *testing.T) {
 		// mock eventProducer WriteMessages ✅
 		mockEventProducer := &events.MockProducer{}
 		mockEventProducer.
-			On("WriteMessages", ctx, []events.Message{
-				{
-					Topic:    events.PaymentFromSubmitterTopic,
-					Key:      txJob.Transaction.ExternalID,
-					TenantID: txJob.Transaction.TenantID,
-					Type:     events.SyncSuccessPaymentFromSubmitterType,
-					Data: schemas.EventPaymentFromSubmitterData{
-						TransactionID: txJob.Transaction.ID,
-					},
-				},
+			On("WriteMessages", ctx, mock.AnythingOfType("[]events.Message")).
+			Run(func(args mock.Arguments) {
+				messages, ok := args.Get(1).([]events.Message)
+				require.True(t, ok)
+				require.Len(t, messages, 1)
+
+				msg := messages[0]
+
+				assert.Equal(t, events.PaymentCompletedTopic, msg.Topic)
+				assert.Equal(t, txJob.Transaction.ExternalID, msg.Key)
+				assert.Equal(t, txJob.Transaction.TenantID, msg.TenantID)
+				assert.Equal(t, events.PaymentCompletedSuccessType, msg.Type)
+
+				msgData, ok := msg.Data.(schemas.EventPaymentCompletedData)
+				require.True(t, ok)
+				assert.Equal(t, txJob.Transaction.ID, msgData.TransactionID)
+				assert.Equal(t, txJob.Transaction.ExternalID, msgData.PaymentID)
+				assert.Equal(t, string(data.SuccessPaymentStatus), msgData.PaymentStatus)
+				assert.Empty(t, msgData.PaymentStatusMessage)
+				assert.WithinDuration(t, time.Now(), msgData.PaymentCompletedAt, time.Millisecond*100)
+				assert.Empty(t, msgData.StellarTransactionID)
 			}).
 			Return(nil).
 			Once()
@@ -670,16 +716,27 @@ func Test_TransactionWorker_reconcileSubmittedTransaction(t *testing.T) {
 			mockEventProducer := &events.MockProducer{}
 			if tc.horizonTxResponse.Successful {
 				mockEventProducer.
-					On("WriteMessages", ctx, []events.Message{
-						{
-							Topic:    events.PaymentFromSubmitterTopic,
-							Key:      txJob.Transaction.ExternalID,
-							TenantID: txJob.Transaction.TenantID,
-							Type:     events.SyncSuccessPaymentFromSubmitterType,
-							Data: schemas.EventPaymentFromSubmitterData{
-								TransactionID: txJob.Transaction.ID,
-							},
-						},
+					On("WriteMessages", ctx, mock.AnythingOfType("[]events.Message")).
+					Run(func(args mock.Arguments) {
+						messages, ok := args.Get(1).([]events.Message)
+						require.True(t, ok)
+						require.Len(t, messages, 1)
+
+						msg := messages[0]
+
+						assert.Equal(t, events.PaymentCompletedTopic, msg.Topic)
+						assert.Equal(t, txJob.Transaction.ExternalID, msg.Key)
+						assert.Equal(t, txJob.Transaction.TenantID, msg.TenantID)
+						assert.Equal(t, events.PaymentCompletedSuccessType, msg.Type)
+
+						msgData, ok := msg.Data.(schemas.EventPaymentCompletedData)
+						require.True(t, ok)
+						assert.Equal(t, txJob.Transaction.ID, msgData.TransactionID)
+						assert.Equal(t, txJob.Transaction.ExternalID, msgData.PaymentID)
+						assert.Equal(t, string(data.SuccessPaymentStatus), msgData.PaymentStatus)
+						assert.Empty(t, msgData.PaymentStatusMessage)
+						assert.WithinDuration(t, time.Now(), msgData.PaymentCompletedAt, time.Millisecond*100)
+						assert.Equal(t, txHash, msgData.StellarTransactionID)
 					}).
 					Return(nil).
 					Once()
@@ -1065,31 +1122,52 @@ func Test_TransactionWorker_submit(t *testing.T) {
 			if tc.txMarkAsError {
 				mockCrashTrackerClient.On("LogAndReportErrors", ctx, utils.NewHorizonErrorWrapper(tc.horizonError), "transaction error - cannot be retried").Once()
 				mockEventProducer.
-					On("WriteMessages", ctx, []events.Message{
-						{
-							Topic:    events.PaymentFromSubmitterTopic,
-							Key:      txJob.Transaction.ExternalID,
-							TenantID: txJob.Transaction.TenantID,
-							Type:     events.SyncErrorPaymentFromSubmitterType,
-							Data: schemas.EventPaymentFromSubmitterData{
-								TransactionID: txJob.Transaction.ID,
-							},
-						},
+					On("WriteMessages", ctx, mock.AnythingOfType("[]events.Message")).
+					Run(func(args mock.Arguments) {
+						messages, ok := args.Get(1).([]events.Message)
+						require.True(t, ok)
+						require.Len(t, messages, 1)
+
+						msg := messages[0]
+
+						assert.Equal(t, events.PaymentCompletedTopic, msg.Topic)
+						assert.Equal(t, txJob.Transaction.ExternalID, msg.Key)
+						assert.Equal(t, txJob.Transaction.TenantID, msg.TenantID)
+						assert.Equal(t, events.PaymentCompletedErrorType, msg.Type)
+
+						msgData, ok := msg.Data.(schemas.EventPaymentCompletedData)
+						require.True(t, ok)
+						assert.Equal(t, txJob.Transaction.ID, msgData.TransactionID)
+						assert.Equal(t, txJob.Transaction.ExternalID, msgData.PaymentID)
+						assert.Equal(t, string(data.FailedPaymentStatus), msgData.PaymentStatus)
+						assert.Equal(t, "horizon response error: StatusCode=400, Extras=transaction: tx_failed - operation codes: [ op_underfunded ]", msgData.PaymentStatusMessage)
+						assert.WithinDuration(t, time.Now(), msgData.PaymentCompletedAt, time.Millisecond*100)
+						assert.Empty(t, msgData.StellarTransactionID)
 					}).
 					Return(nil).
 					Once()
 			} else {
 				mockEventProducer.
-					On("WriteMessages", ctx, []events.Message{
-						{
-							Topic:    events.PaymentFromSubmitterTopic,
-							Key:      txJob.Transaction.ExternalID,
-							TenantID: txJob.Transaction.TenantID,
-							Type:     events.SyncSuccessPaymentFromSubmitterType,
-							Data: schemas.EventPaymentFromSubmitterData{
-								TransactionID: txJob.Transaction.ID,
-							},
-						},
+					On("WriteMessages", ctx, mock.AnythingOfType("[]events.Message")).
+					Run(func(args mock.Arguments) {
+						messages, ok := args.Get(1).([]events.Message)
+						require.True(t, ok)
+						require.Len(t, messages, 1)
+
+						msg := messages[0]
+
+						assert.Equal(t, events.PaymentCompletedTopic, msg.Topic)
+						assert.Equal(t, txJob.Transaction.ExternalID, msg.Key)
+						assert.Equal(t, txJob.Transaction.TenantID, msg.TenantID)
+						assert.Equal(t, events.PaymentCompletedSuccessType, msg.Type)
+
+						msgData, ok := msg.Data.(schemas.EventPaymentCompletedData)
+						require.True(t, ok)
+						assert.Equal(t, txJob.Transaction.ID, msgData.TransactionID)
+						assert.Equal(t, txJob.Transaction.ExternalID, msgData.PaymentID)
+						assert.Equal(t, string(data.SuccessPaymentStatus), msgData.PaymentStatus)
+						assert.Empty(t, msgData.PaymentStatusMessage)
+						assert.WithinDuration(t, time.Now(), msgData.PaymentCompletedAt, time.Millisecond*100)
 					}).
 					Return(nil).
 					Once()
@@ -1148,7 +1226,7 @@ func Test_TransactionWorker_submit(t *testing.T) {
 	}
 }
 
-func Test_TransactionWorker_produceSyncPaymentEvent(t *testing.T) {
+func Test_TransactionWorker_producePaymentCompletedEvent(t *testing.T) {
 	ctx := context.Background()
 
 	mockEventProducer := &events.MockProducer{}
@@ -1157,59 +1235,81 @@ func Test_TransactionWorker_produceSyncPaymentEvent(t *testing.T) {
 	}
 
 	t.Run("returns error when an unexpected payment status is passed", func(t *testing.T) {
-		err := transactionWorker.produceSyncPaymentEvent(ctx, events.SyncErrorPaymentFromSubmitterType, &store.Transaction{}, store.TransactionStatusPending)
-		assert.EqualError(t, err, "invalid status to produce sync payment event")
+		err := transactionWorker.producePaymentCompletedEvent(ctx, events.PaymentCompletedSuccessType, &store.Transaction{}, data.PendingPaymentStatus)
+		assert.EqualError(t, err, "invalid payment status to produce payment completed event")
 	})
 
 	t.Run("returns error when eventProducer fails writing a new message", func(t *testing.T) {
 		tx := store.Transaction{
-			ID:         "tx-id",
-			ExternalID: "payment-id",
-			TenantID:   "tenant-id",
+			ID:                     "tx-id",
+			ExternalID:             "payment-id",
+			TenantID:               "tenant-id",
+			StellarTransactionHash: sql.NullString{String: "tx-hash", Valid: true},
+			StatusMessage:          sql.NullString{},
 		}
 
 		mockEventProducer.
-			On("WriteMessages", ctx, []events.Message{
-				{
-					Topic:    events.PaymentFromSubmitterTopic,
-					Key:      tx.ExternalID,
-					Type:     events.SyncSuccessPaymentFromSubmitterType,
-					TenantID: tx.TenantID,
-					Data: schemas.EventPaymentFromSubmitterData{
-						TransactionID: tx.ID,
-					},
-				},
+			On("WriteMessages", ctx, mock.AnythingOfType("[]events.Message")).
+			Run(func(args mock.Arguments) {
+				messages, ok := args.Get(1).([]events.Message)
+				require.True(t, ok)
+				require.Len(t, messages, 1)
+
+				msg := messages[0]
+
+				assert.Equal(t, events.PaymentCompletedTopic, msg.Topic)
+				assert.Equal(t, tx.ExternalID, msg.Key)
+				assert.Equal(t, tx.TenantID, msg.TenantID)
+				assert.Equal(t, events.PaymentCompletedSuccessType, msg.Type)
+
+				msgData, ok := msg.Data.(schemas.EventPaymentCompletedData)
+				require.True(t, ok)
+				assert.Equal(t, tx.ExternalID, msgData.PaymentID)
+				assert.Equal(t, string(data.SuccessPaymentStatus), msgData.PaymentStatus)
+				assert.Empty(t, msgData.PaymentStatusMessage)
+				assert.WithinDuration(t, time.Now(), msgData.PaymentCompletedAt, time.Millisecond*100)
 			}).
 			Return(errors.New("unexpected error")).
 			Once()
 
-		err := transactionWorker.produceSyncPaymentEvent(ctx, events.SyncSuccessPaymentFromSubmitterType, &tx, store.TransactionStatusSuccess)
-		assert.EqualError(t, err, "writing message Message{Topic: events.transaction-submitter.payment-from-submitter, Key: payment-id, Type: sync-success-payment-from-submitter, TenantID: tenant-id, Data: {tx-id}} on event producer: unexpected error")
+		err := transactionWorker.producePaymentCompletedEvent(ctx, events.PaymentCompletedSuccessType, &tx, data.SuccessPaymentStatus)
+		assert.ErrorContains(t, err, "writing message Message{Topic: events.payment.payment_completed, Key: payment-id, Type: payment-completed-success, TenantID: tenant-id")
 	})
 
 	t.Run("successfully produce sync payment event", func(t *testing.T) {
 		tx := store.Transaction{
-			ID:         "tx-id",
-			ExternalID: "payment-id",
-			TenantID:   "tenant-id",
+			ID:                     "tx-id",
+			ExternalID:             "payment-id",
+			TenantID:               "tenant-id",
+			StellarTransactionHash: sql.NullString{},
+			StatusMessage:          sql.NullString{String: "error status message", Valid: true},
 		}
 
 		mockEventProducer.
-			On("WriteMessages", ctx, []events.Message{
-				{
-					Topic:    events.PaymentFromSubmitterTopic,
-					Key:      tx.ExternalID,
-					Type:     events.SyncErrorPaymentFromSubmitterType,
-					TenantID: tx.TenantID,
-					Data: schemas.EventPaymentFromSubmitterData{
-						TransactionID: tx.ID,
-					},
-				},
+			On("WriteMessages", ctx, mock.AnythingOfType("[]events.Message")).
+			Run(func(args mock.Arguments) {
+				messages, ok := args.Get(1).([]events.Message)
+				require.True(t, ok)
+				require.Len(t, messages, 1)
+
+				msg := messages[0]
+
+				assert.Equal(t, events.PaymentCompletedTopic, msg.Topic)
+				assert.Equal(t, tx.ExternalID, msg.Key)
+				assert.Equal(t, tx.TenantID, msg.TenantID)
+				assert.Equal(t, events.PaymentCompletedErrorType, msg.Type)
+
+				msgData, ok := msg.Data.(schemas.EventPaymentCompletedData)
+				require.True(t, ok)
+				assert.Equal(t, tx.ExternalID, msgData.PaymentID)
+				assert.Equal(t, string(data.FailedPaymentStatus), msgData.PaymentStatus)
+				assert.Equal(t, "error status message", msgData.PaymentStatusMessage)
+				assert.WithinDuration(t, time.Now(), msgData.PaymentCompletedAt, time.Millisecond*100)
 			}).
 			Return(nil).
 			Once()
 
-		err := transactionWorker.produceSyncPaymentEvent(ctx, events.SyncErrorPaymentFromSubmitterType, &tx, store.TransactionStatusError)
+		err := transactionWorker.producePaymentCompletedEvent(ctx, events.PaymentCompletedErrorType, &tx, data.FailedPaymentStatus)
 		assert.NoError(t, err)
 	})
 
@@ -1220,25 +1320,15 @@ func Test_TransactionWorker_produceSyncPaymentEvent(t *testing.T) {
 			TenantID:   "tenant-id",
 		}
 
-		getEntries := log.DefaultLogger.StartTest(log.ErrorLevel)
+		getEntries := log.DefaultLogger.StartTest(log.DebugLevel)
 
 		txWorker := TransactionWorker{}
-		err := txWorker.produceSyncPaymentEvent(ctx, events.SyncSuccessPaymentFromSubmitterType, &tx, store.TransactionStatusSuccess)
+		err := txWorker.producePaymentCompletedEvent(ctx, events.PaymentCompletedSuccessType, &tx, data.SuccessPaymentStatus)
 		assert.NoError(t, err)
-
-		msg := events.Message{
-			Topic:    events.PaymentFromSubmitterTopic,
-			Key:      tx.ExternalID,
-			TenantID: tx.TenantID,
-			Type:     events.SyncSuccessPaymentFromSubmitterType,
-			Data: schemas.EventPaymentFromSubmitterData{
-				TransactionID: tx.ID,
-			},
-		}
 
 		entries := getEntries()
 		require.Len(t, entries, 1)
-		assert.Equal(t, fmt.Sprintf("event producer is nil, could not publish message %s", msg.String()), entries[0].Message)
+		assert.Contains(t, entries[0].Message, "message Message{Topic: events.payment.payment_completed, Key: payment-id, Type: payment-completed-success, TenantID: tenant-id")
 	})
 
 	mockEventProducer.AssertExpectations(t)

@@ -52,8 +52,7 @@ func Test_PaymentFromSubmitterService_SyncTransaction(t *testing.T) {
 	testCtx := setupTestContext(t, dbConnectionPool)
 	ctx := testCtx.ctx
 
-	monitorService := NewPaymentFromSubmitterService(dbConnectionPool)
-	monitorService.sdpModels = testCtx.sdpModel
+	monitorService := NewPaymentFromSubmitterService(testCtx.sdpModel, dbConnectionPool)
 
 	// create fixtures
 	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool,
@@ -151,7 +150,7 @@ func Test_PaymentFromSubmitterService_SyncTransaction(t *testing.T) {
 	t.Run("sync tss transactions successfully", func(t *testing.T) {
 		// We call sync transaction for each tss transaction created
 		for _, transaction := range transactions {
-			err := monitorService.SyncTransaction(ctx, &schemas.EventPaymentFromSubmitterData{TransactionID: transaction.ID})
+			err := monitorService.SyncTransaction(ctx, &schemas.EventPaymentCompletedData{TransactionID: transaction.ID})
 			require.NoError(t, err)
 		}
 
@@ -205,7 +204,7 @@ func Test_PaymentFromSubmitterService_SyncTransaction(t *testing.T) {
 		_, err := dbConnectionPool.ExecContext(ctx, q, transactions[0].ID)
 		require.NoError(t, err)
 
-		err = monitorService.SyncTransaction(ctx, &schemas.EventPaymentFromSubmitterData{TransactionID: transactions[0].ID})
+		err = monitorService.SyncTransaction(ctx, &schemas.EventPaymentCompletedData{TransactionID: transactions[0].ID})
 		require.Error(t, err)
 		require.ErrorContainsf(t, err, "stellar transaction id is required", "error: %s", err.Error())
 	})
@@ -214,7 +213,7 @@ func Test_PaymentFromSubmitterService_SyncTransaction(t *testing.T) {
 		prepareTxsForSync(t, testCtx, transactions)
 		updatePaymentStatus(t, testCtx, payment1.ID, data.SuccessPaymentStatus)
 
-		err := monitorService.SyncTransaction(ctx, &schemas.EventPaymentFromSubmitterData{TransactionID: transactions[0].ID})
+		err := monitorService.SyncTransaction(ctx, &schemas.EventPaymentCompletedData{TransactionID: transactions[0].ID})
 		require.Error(t, err)
 		contains := fmt.Sprintf("updating payment ID %s for transaction ID %s: cannot transition from SUCCESS to SUCCESS for payment %s: cannot transition from SUCCESS to SUCCESS", payment1.ID, transactions[0].ID, payment1.ID)
 		require.ErrorContainsf(t, err, contains, "error: %s", err.Error())
@@ -245,7 +244,7 @@ func Test_PaymentFromSubmitterService_SyncTransaction(t *testing.T) {
 		assert.Equal(t, txSubStore.TransactionStatusSuccess, tx.Status)
 		assert.NotEmpty(t, tx.CompletedAt)
 
-		err = monitorService.SyncTransaction(ctx, &schemas.EventPaymentFromSubmitterData{TransactionID: tx.ID})
+		err = monitorService.SyncTransaction(ctx, &schemas.EventPaymentCompletedData{TransactionID: tx.ID})
 		assert.ErrorContains(t, err, fmt.Sprintf("expected exactly 1 payment for the transaction ID %s but found 0", tx.ID))
 	})
 }
@@ -380,8 +379,7 @@ func Test_PaymentFromSubmitterService_RetryingPayment(t *testing.T) {
 	testCtx := setupTestContext(t, dbConnectionPool)
 	ctx := testCtx.ctx
 
-	monitorService := NewPaymentFromSubmitterService(dbConnectionPool)
-	monitorService.sdpModels = testCtx.sdpModel
+	monitorService := NewPaymentFromSubmitterService(testCtx.sdpModel, dbConnectionPool)
 
 	// clean test db
 	data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
@@ -440,7 +438,7 @@ func Test_PaymentFromSubmitterService_RetryingPayment(t *testing.T) {
 	assert.Equal(t, txSubStore.TransactionStatusError, transaction.Status)
 
 	// WHEN the monitor service is called
-	err = monitorService.SyncTransaction(ctx, &schemas.EventPaymentFromSubmitterData{
+	err = monitorService.SyncTransaction(ctx, &schemas.EventPaymentCompletedData{
 		TransactionID: transaction.ID,
 	})
 	require.NoError(t, err)
@@ -483,7 +481,7 @@ func Test_PaymentFromSubmitterService_RetryingPayment(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, txSubStore.TransactionStatusSuccess, transaction2.Status)
 
-	err = monitorService.SyncTransaction(ctx, &schemas.EventPaymentFromSubmitterData{
+	err = monitorService.SyncTransaction(ctx, &schemas.EventPaymentCompletedData{
 		TransactionID: transaction2.ID,
 	})
 	require.NoError(t, err)
@@ -507,8 +505,7 @@ func Test_PaymentFromSubmitterService_CompleteDisbursements(t *testing.T) {
 	testCtx := setupTestContext(t, dbConnectionPool)
 	ctx := testCtx.ctx
 
-	monitorService := NewPaymentFromSubmitterService(dbConnectionPool)
-	monitorService.sdpModels = testCtx.sdpModel
+	monitorService := NewPaymentFromSubmitterService(testCtx.sdpModel, dbConnectionPool)
 
 	// clean test db
 	data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
@@ -567,7 +564,7 @@ func Test_PaymentFromSubmitterService_CompleteDisbursements(t *testing.T) {
 	assert.Equal(t, txSubStore.TransactionStatusError, transaction.Status)
 
 	// WHEN the monitor service is called
-	err = monitorService.SyncTransaction(testCtx.ctx, &schemas.EventPaymentFromSubmitterData{TransactionID: transaction.ID})
+	err = monitorService.SyncTransaction(testCtx.ctx, &schemas.EventPaymentCompletedData{TransactionID: transaction.ID})
 	require.NoError(t, err)
 
 	// THEN the disbursement will not be completed
@@ -605,7 +602,7 @@ func Test_PaymentFromSubmitterService_CompleteDisbursements(t *testing.T) {
 	assert.Equal(t, txSubStore.TransactionStatusSuccess, transaction2.Status)
 
 	// WHEN the monitor service is called again
-	err = monitorService.SyncTransaction(testCtx.ctx, &schemas.EventPaymentFromSubmitterData{TransactionID: transaction2.ID})
+	err = monitorService.SyncTransaction(testCtx.ctx, &schemas.EventPaymentCompletedData{TransactionID: transaction2.ID})
 	require.NoError(t, err)
 
 	// THEN disbursement gets completed

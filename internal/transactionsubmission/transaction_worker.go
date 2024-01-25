@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/protocols/horizon"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	sdpMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
@@ -178,14 +180,14 @@ func (tw *TransactionWorker) handleFailedTransaction(ctx context.Context, txJob 
 				if err != nil {
 					return fmt.Errorf("updating transaction status to error: %w", err)
 				}
+				txJob.Transaction = *updatedTx
 
 				// Publishing a new event on the event producer
-				err = tw.produceSyncPaymentEvent(ctx, events.SyncErrorPaymentFromSubmitterType, &txJob.Transaction, store.TransactionStatusError)
+				err = tw.producePaymentCompletedEvent(ctx, events.PaymentCompletedErrorType, &txJob.Transaction, data.FailedPaymentStatus)
 				if err != nil {
-					return fmt.Errorf("producing event Status %s - Job %v: %w", txJob.Transaction.Status, txJob, err)
+					return fmt.Errorf("producing payment completed event Status %s - Job %v: %w", txJob.Transaction.Status, txJob, err)
 				}
 
-				txJob.Transaction = *updatedTx
 				// report any terminal errors, excluding those caused by the external account not being valid
 				if !hErrWrapper.IsDestinationAccountNotReady() {
 					tw.crashTrackerClient.LogAndReportErrors(ctx, hErrWrapper, "transaction error - cannot be retried")
@@ -276,9 +278,9 @@ func (tw *TransactionWorker) handleSuccessfulTransaction(ctx context.Context, tx
 	txJob.Transaction = *updatedTx
 
 	// Publishing a new event on the event producer
-	err = tw.produceSyncPaymentEvent(ctx, events.SyncSuccessPaymentFromSubmitterType, &txJob.Transaction, store.TransactionStatusSuccess)
+	err = tw.producePaymentCompletedEvent(ctx, events.PaymentCompletedSuccessType, &txJob.Transaction, data.SuccessPaymentStatus)
 	if err != nil {
-		return fmt.Errorf("producing event Status %s - Job %v: %w", txJob.Transaction.Status, txJob, err)
+		return fmt.Errorf("producing payment completed event Status %s - Job %v: %w", txJob.Transaction.Status, txJob, err)
 	}
 
 	err = tw.unlockJob(ctx, txJob)
@@ -354,18 +356,23 @@ func (tw *TransactionWorker) reconcileSubmittedTransaction(ctx context.Context, 
 	return nil
 }
 
-func (tw *TransactionWorker) produceSyncPaymentEvent(ctx context.Context, eventType string, tx *store.Transaction, status store.TransactionStatus) error {
-	if status != store.TransactionStatusSuccess && status != store.TransactionStatusError {
-		return fmt.Errorf("invalid status to produce sync payment event")
+func (tw *TransactionWorker) producePaymentCompletedEvent(ctx context.Context, eventType string, tx *store.Transaction, paymentStatus data.PaymentStatus) error {
+	if paymentStatus != data.SuccessPaymentStatus && paymentStatus != data.FailedPaymentStatus {
+		return fmt.Errorf("invalid payment status to produce payment completed event")
 	}
 
 	msg := events.Message{
-		Topic:    events.PaymentFromSubmitterTopic,
+		Topic:    events.PaymentCompletedTopic,
 		Key:      tx.ExternalID,
 		TenantID: tx.TenantID,
 		Type:     eventType,
-		Data: schemas.EventPaymentFromSubmitterData{
-			TransactionID: tx.ID,
+		Data: schemas.EventPaymentCompletedData{
+			TransactionID:        tx.ID,
+			PaymentID:            tx.ExternalID,
+			PaymentStatus:        string(paymentStatus),
+			PaymentStatusMessage: tx.StatusMessage.String,
+			PaymentCompletedAt:   time.Now(),
+			StellarTransactionID: tx.StellarTransactionHash.String,
 		},
 	}
 
@@ -375,7 +382,7 @@ func (tw *TransactionWorker) produceSyncPaymentEvent(ctx context.Context, eventT
 			return fmt.Errorf("writing message %s on event producer: %w", msg, err)
 		}
 	} else {
-		log.Ctx(ctx).Errorf("event producer is nil, could not publish message %s", msg.String())
+		log.Ctx(ctx).Debugf("message %s not published because eventProducer is nil", msg.String())
 	}
 
 	return nil

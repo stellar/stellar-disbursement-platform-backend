@@ -23,17 +23,14 @@ type PaymentFromSubmitterEventHandlerOptions struct {
 }
 
 type PaymentFromSubmitterEventHandler struct {
-	tenantManager       tenant.ManagerInterface
-	mtnDBConnectionPool db.DBConnectionPool
-	crashTrackerClient  crashtracker.CrashTrackerClient
-	service             services.PaymentFromSubmitterServiceInterface
+	tenantManager      tenant.ManagerInterface
+	crashTrackerClient crashtracker.CrashTrackerClient
+	service            services.PaymentFromSubmitterServiceInterface
 }
 
 var _ events.EventHandler = new(PaymentFromSubmitterEventHandler)
 
 func NewPaymentFromSubmitterEventHandler(options PaymentFromSubmitterEventHandlerOptions) *PaymentFromSubmitterEventHandler {
-	s := services.NewPaymentFromSubmitterService(options.TSSDBConnectionPool)
-
 	tm := tenant.NewManager(tenant.WithDatabase(options.DBConnectionPool))
 	tr := router.NewMultiTenantDataSourceRouter(tm)
 	mtnDBConnectionPool, err := db.NewConnectionPoolWithRouter(tr)
@@ -41,11 +38,17 @@ func NewPaymentFromSubmitterEventHandler(options PaymentFromSubmitterEventHandle
 		log.Fatalf("error getting tenant DB Connection Pool: %s", err.Error())
 	}
 
+	models, err := data.NewModels(mtnDBConnectionPool)
+	if err != nil {
+		log.Fatalf("error getting models: %s", err.Error())
+	}
+
+	s := services.NewPaymentFromSubmitterService(models, options.TSSDBConnectionPool)
+
 	return &PaymentFromSubmitterEventHandler{
-		tenantManager:       tm,
-		mtnDBConnectionPool: mtnDBConnectionPool,
-		service:             s,
-		crashTrackerClient:  options.CrashTrackerClient,
+		tenantManager:      tm,
+		service:            s,
+		crashTrackerClient: options.CrashTrackerClient,
 	}
 }
 
@@ -54,13 +57,13 @@ func (h *PaymentFromSubmitterEventHandler) Name() string {
 }
 
 func (h *PaymentFromSubmitterEventHandler) CanHandleMessage(ctx context.Context, message *events.Message) bool {
-	return message.Topic == events.PaymentFromSubmitterTopic
+	return message.Topic == events.PaymentCompletedTopic
 }
 
 func (h *PaymentFromSubmitterEventHandler) Handle(ctx context.Context, message *events.Message) {
-	tx, err := utils.ConvertType[any, schemas.EventPaymentFromSubmitterData](message.Data)
+	tx, err := utils.ConvertType[any, schemas.EventPaymentCompletedData](message.Data)
 	if err != nil {
-		h.crashTrackerClient.LogAndReportErrors(ctx, err, fmt.Sprintf("[PaymentFromSubmitterEventHandler] could convert data to %T: %v", schemas.EventPaymentFromSubmitterData{}, message.Data))
+		h.crashTrackerClient.LogAndReportErrors(ctx, err, fmt.Sprintf("[PaymentFromSubmitterEventHandler] could not convert data to %T: %v", schemas.EventPaymentCompletedData{}, message.Data))
 		return
 	}
 
@@ -72,13 +75,6 @@ func (h *PaymentFromSubmitterEventHandler) Handle(ctx context.Context, message *
 
 	ctx = tenant.SaveTenantInContext(ctx, t)
 
-	models, err := data.NewModels(h.mtnDBConnectionPool)
-	if err != nil {
-		h.crashTrackerClient.LogAndReportErrors(ctx, err, "[PaymentFromSubmitterEventHandler] error getting models")
-		return
-	}
-
-	h.service.SetModels(models)
 	if err := h.service.SyncTransaction(ctx, &tx); err != nil {
 		h.crashTrackerClient.LogAndReportErrors(ctx, err, fmt.Sprintf("[PaymentFromSubmitterEventHandler] synching transaction completion for transaction ID %q", tx.TransactionID))
 		return

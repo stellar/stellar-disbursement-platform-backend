@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
@@ -16,18 +17,18 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-type PaymentFromSubmitterServiceMock struct {
+type PatchAnchorPlatformTransactionCompletionServiceMock struct {
 	mock.Mock
 }
 
-var _ services.PaymentFromSubmitterServiceInterface = new(PaymentFromSubmitterServiceMock)
+var _ services.PatchAnchorPlatformTransactionCompletionServiceInterface = new(PatchAnchorPlatformTransactionCompletionServiceMock)
 
-func (s *PaymentFromSubmitterServiceMock) SyncTransaction(ctx context.Context, tx *schemas.EventPaymentCompletedData) error {
+func (s *PatchAnchorPlatformTransactionCompletionServiceMock) PatchTransactionCompletion(ctx context.Context, tx schemas.EventPaymentCompletedData) error {
 	args := s.Called(ctx, tx)
 	return args.Error(0)
 }
 
-func Test_PaymentFromSubmitterEventHandler_Handle(t *testing.T) {
+func Test_PatchAnchorPlatformTransactionCompletionEventHandler(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 
@@ -36,11 +37,10 @@ func Test_PaymentFromSubmitterEventHandler_Handle(t *testing.T) {
 	defer dbConnectionPool.Close()
 
 	tenantManager := tenant.NewManager(tenant.WithDatabase(dbConnectionPool))
-
 	crashTrackerClient := crashtracker.MockCrashTrackerClient{}
-	service := PaymentFromSubmitterServiceMock{}
+	service := PatchAnchorPlatformTransactionCompletionServiceMock{}
 
-	handler := PaymentFromSubmitterEventHandler{
+	handler := PatchAnchorPlatformTransactionCompletionEventHandler{
 		tenantManager:      tenantManager,
 		crashTrackerClient: &crashTrackerClient,
 		service:            &service,
@@ -49,7 +49,7 @@ func Test_PaymentFromSubmitterEventHandler_Handle(t *testing.T) {
 	ctx := context.Background()
 	t.Run("logs and report error when message Data is invalid", func(t *testing.T) {
 		crashTrackerClient.
-			On("LogAndReportErrors", ctx, mock.Anything, "[PaymentFromSubmitterEventHandler] could not convert data to schemas.EventPaymentCompletedData: invalid").
+			On("LogAndReportErrors", ctx, mock.Anything, "[PatchAnchorPlatformTransactionCompletionEventHandler] could not convert data to schemas.EventPaymentCompletedData: invalid").
 			Return().
 			Once()
 
@@ -58,14 +58,17 @@ func Test_PaymentFromSubmitterEventHandler_Handle(t *testing.T) {
 
 	t.Run("logs and report error when fails getting tenant by ID", func(t *testing.T) {
 		crashTrackerClient.
-			On("LogAndReportErrors", ctx, tenant.ErrTenantDoesNotExist, "[PaymentFromSubmitterEventHandler] error getting tenant by id").
+			On("LogAndReportErrors", mock.Anything, tenant.ErrTenantDoesNotExist, "[PatchAnchorPlatformTransactionCompletionEventHandler] error getting tenant by id").
 			Return().
 			Once()
 
 		handler.Handle(ctx, &events.Message{
 			TenantID: "tenant-id",
 			Data: schemas.EventPaymentCompletedData{
-				TransactionID: "tx-id",
+				PaymentID:            "payment-ID",
+				PaymentStatus:        "SUCCESS",
+				PaymentStatusMessage: "",
+				StellarTransactionID: "tx-hash",
 			},
 		})
 	})
@@ -77,18 +80,20 @@ func Test_PaymentFromSubmitterEventHandler_Handle(t *testing.T) {
 		require.NoError(t, err)
 
 		tx := schemas.EventPaymentCompletedData{
-			TransactionID: "tx-id",
+			PaymentID:            "payment-ID",
+			PaymentStatus:        "SUCCESS",
+			PaymentStatusMessage: "",
+			PaymentCompletedAt:   time.Now().UTC(),
+			StellarTransactionID: "tx-hash",
 		}
 
-		ctxWithTenant := tenant.SaveTenantInContext(ctx, tnt)
-
 		service.
-			On("SyncTransaction", ctxWithTenant, &tx).
+			On("PatchTransactionCompletion", mock.Anything, tx).
 			Return(errors.New("unexpected error")).
 			Once()
 
 		crashTrackerClient.
-			On("LogAndReportErrors", ctxWithTenant, errors.New("unexpected error"), `[PaymentFromSubmitterEventHandler] synching transaction completion for transaction ID "tx-id"`).
+			On("LogAndReportErrors", mock.Anything, errors.New("unexpected error"), "[PatchAnchorPlatformTransactionCompletionEventHandler] patching anchor platform transaction").
 			Return().
 			Once()
 
@@ -98,20 +103,22 @@ func Test_PaymentFromSubmitterEventHandler_Handle(t *testing.T) {
 		})
 	})
 
-	t.Run("successfully syncs the TSS transaction with the SDP's payment", func(t *testing.T) {
+	t.Run("successfully patch anchor platform transaction completion", func(t *testing.T) {
 		tenant.DeleteAllTenantsFixture(t, ctx, dbConnectionPool)
 
 		tnt, err := tenantManager.AddTenant(ctx, "myorg1")
 		require.NoError(t, err)
 
 		tx := schemas.EventPaymentCompletedData{
-			TransactionID: "tx-id",
+			PaymentID:            "payment-ID",
+			PaymentStatus:        "SUCCESS",
+			PaymentStatusMessage: "",
+			PaymentCompletedAt:   time.Now().UTC(),
+			StellarTransactionID: "tx-hash",
 		}
 
-		ctxWithTenant := tenant.SaveTenantInContext(ctx, tnt)
-
 		service.
-			On("SyncTransaction", ctxWithTenant, &tx).
+			On("PatchTransactionCompletion", mock.Anything, tx).
 			Return(nil).
 			Once()
 

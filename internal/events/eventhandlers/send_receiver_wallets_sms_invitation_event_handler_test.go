@@ -60,7 +60,7 @@ func Test_SendReceiverWalletsSMSInvitationEventHandler_Handle(t *testing.T) {
 	ctx := context.Background()
 	t.Run("logs and report error when message Data is invalid", func(t *testing.T) {
 		crashTrackerClient.
-			On("LogAndReportErrors", ctx, mock.Anything, "[SendReceiverWalletsSMSInvitationEventHandler] could convert data to []schemas.EventReceiverWalletSMSInvitationData: invalid").
+			On("LogAndReportErrors", ctx, mock.Anything, "[SendReceiverWalletsSMSInvitationEventHandler] could not convert data to []schemas.EventReceiverWalletSMSInvitationData: invalid").
 			Return().
 			Once()
 
@@ -96,9 +96,6 @@ func Test_SendReceiverWalletsSMSInvitationEventHandler_Handle(t *testing.T) {
 		ctxWithTenant := tenant.SaveTenantInContext(ctx, tnt)
 
 		service.
-			On("SetModels", mock.AnythingOfType("*data.Models")).
-			Return().
-			Once().
 			On("SendInvite", ctxWithTenant, reqs).
 			Return(errors.New("unexpected error")).
 			Once()
@@ -128,9 +125,6 @@ func Test_SendReceiverWalletsSMSInvitationEventHandler_Handle(t *testing.T) {
 		ctxWithTenant := tenant.SaveTenantInContext(ctx, tnt)
 
 		service.
-			On("SetModels", mock.AnythingOfType("*data.Models")).
-			Return().
-			Once().
 			On("SendInvite", ctxWithTenant, reqs).
 			Return(nil).
 			Once()
