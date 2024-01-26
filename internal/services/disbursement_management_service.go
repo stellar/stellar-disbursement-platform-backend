@@ -228,7 +228,7 @@ func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, d
 
 		var distributionBalance float64
 		for _, b := range rootAccount.Balances {
-			if b.Asset.Code == disbursement.Asset.Code {
+			if b.Asset.Code == disbursement.Asset.Code && b.Asset.Issuer == disbursement.Asset.Issuer {
 				distributionBalance, err = strconv.ParseFloat(b.Balance, 64)
 				if err != nil {
 					return fmt.Errorf("error converting Horizon distribution account balance %s into float: %w", b.Balance, err)
@@ -255,25 +255,32 @@ func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, d
 					data.PausedPaymentStatus,
 					data.FailedPaymentStatus,
 				},
+				data.FilterKeyNotDisbursementID: disbursement.ID,
 			},
 		}, dbTx)
 		if err != nil {
 			return fmt.Errorf("error retreiving incomplete payments: %w", err)
 		}
 
-		for _, p := range incompletePayments {
-			paymentAmount, err := strconv.ParseFloat(p.Amount, 64)
-			if err != nil {
+		for _, ip := range incompletePayments {
+			paymentAmount, parsePaymentAmountErr := strconv.ParseFloat(ip.Amount, 64)
+			if parsePaymentAmountErr != nil {
 				return fmt.Errorf(
 					"error converting amount %s for paymment id %s into float: %w",
-					p.Amount,
-					p.ID,
+					ip.Amount,
+					ip.ID,
 					err,
 				)
 			}
 
 			totalPendingAmount += paymentAmount
 		}
+		fmt.Println("----")
+
+		fmt.Println(distributionBalance)
+		fmt.Println(disbursementAmount)
+		fmt.Println(totalPendingAmount)
+		fmt.Println("----")
 
 		if (distributionBalance - (disbursementAmount + totalPendingAmount)) < 0 {
 			return errors.New("not enough balance in distribution account to complete disbursement")

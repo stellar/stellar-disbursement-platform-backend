@@ -300,6 +300,50 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 		require.ErrorIs(t, err, ErrDisbursementNotReadyToStart)
 	})
 
+	t.Run("disbursement cannot be started because insufficient balance on distribution account", func(t *testing.T) {
+		disbursement := data.CreateDisbursementFixture(t, context.Background(), dbConnectionPool, models.Disbursements, &data.Disbursement{
+			Name:    "disbursement #3",
+			Status:  data.ReadyDisbursementStatus,
+			Asset:   asset,
+			Wallet:  wallet,
+			Country: country,
+		})
+		data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+			ReceiverWallet: rwReady,
+			Disbursement:   disbursement,
+			Asset:          *asset,
+			Amount:         "10001",
+			Status:         data.DraftPaymentStatus,
+		})
+
+		hMock.On(
+			"AccountDetail", horizonclient.AccountRequest{AccountID: distributionPubKey},
+		).Return(horizon.Account{
+			Balances: []horizon.Balance{
+				{
+					Balance: "100",
+					Asset: base.Asset{
+						Code:   asset.Code,
+						Issuer: asset.Issuer,
+					},
+				},
+			},
+		}, nil)
+
+		user := &auth.User{
+			ID:    "user-id",
+			Email: "email@email.com",
+		}
+
+		authManagerMock.
+			On("GetUser", ctx, token).
+			Return(user, nil).
+			Once()
+
+		err = service.StartDisbursement(ctx, readyDisbursement.ID, distributionPubKey)
+		require.Error(t, err)
+	})
+
 	t.Run("disbursement can't be started by its creator", func(t *testing.T) {
 		userID := "9ae68f09-cad9-4311-9758-4ff59d2e9e6d"
 		statusHistory := []data.DisbursementStatusHistoryEntry{

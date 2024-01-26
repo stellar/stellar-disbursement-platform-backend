@@ -29,8 +29,9 @@ const (
 type FilterKey string
 
 const (
-	FilterKeyStatus          FilterKey = "status"
-	FilterKeyReceiverID      FilterKey = "receiver_id"
-	FilterKeyCreatedAtAfter  FilterKey = "created_at_after"
-	FilterKeyCreatedAtBefore FilterKey = "created_at_before"
+	FilterKeyStatus            FilterKey = "status"
+	FilterKeyReceiverID        FilterKey = "receiver_id"
+	FilterKeyNotDisbursementID FilterKey = "not_disbursement_id"
+	FilterKeyCreatedAtAfter    FilterKey = "created_at_after"
+	FilterKeyCreatedAtBefore   FilterKey = "created_at_before"
 )
