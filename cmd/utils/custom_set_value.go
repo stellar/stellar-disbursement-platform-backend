@@ -15,6 +15,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
@@ -51,6 +52,18 @@ func SetConfigOptionCrashTrackerType(co *config.ConfigOption) error {
 	}
 
 	*(co.ConfigKey.(*crashtracker.CrashTrackerType)) = ctTypeParsed
+	return nil
+}
+
+func SetConfigOptionSignatureServiceType(co *config.ConfigOption) error {
+	ssType := viper.GetString(co.Name)
+
+	ssTypeParsed, err := engine.ParseSignatureServiceType(ssType)
+	if err != nil {
+		return fmt.Errorf("couldn't parse signature service type in %s: %w", co.Name, err)
+	}
+
+	*(co.ConfigKey.(*engine.SignatureServiceType)) = ssTypeParsed
 	return nil
 }
 

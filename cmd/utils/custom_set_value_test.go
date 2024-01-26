@@ -13,6 +13,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -272,6 +273,47 @@ func Test_SetConfigOptionCrashTrackerType(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			opts.crashTrackerType = ""
 			customSetterTester[crashtracker.CrashTrackerType](t, tc, co)
+		})
+	}
+}
+
+func Test_SetConfigOptionSignatureServiceType(t *testing.T) {
+	opts := struct{ sigServiceType engine.SignatureServiceType }{}
+
+	co := config.ConfigOption{
+		Name:           "signature-service-type",
+		OptType:        types.String,
+		CustomSetValue: SetConfigOptionSignatureServiceType,
+		ConfigKey:      &opts.sigServiceType,
+	}
+
+	testCases := []customSetterTestCase[engine.SignatureServiceType]{
+		{
+			name:            "returns an error if the value is empty",
+			args:            []string{},
+			wantErrContains: `couldn't parse signature service type in signature-service-type: invalid signature service type ""`,
+		},
+		{
+			name:            "returns an error if the value is not supported",
+			args:            []string{"--signature-service-type", "test"},
+			wantErrContains: `couldn't parse signature service type in signature-service-type: invalid signature service type "TEST"`,
+		},
+		{
+			name:       "🎉 handles signature service type (through CLI args): DEFAULT",
+			args:       []string{"--signature-service-type", string(engine.SignatureServiceTypeDefault)},
+			wantResult: engine.SignatureServiceTypeDefault,
+		},
+		{
+			name:       "🎉 handles signature service type (through ENV vars): DEFAULT",
+			envValue:   string(engine.SignatureServiceTypeDefault),
+			wantResult: engine.SignatureServiceTypeDefault,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			opts.sigServiceType = ""
+			customSetterTester[engine.SignatureServiceType](t, tc, co)
 		})
 	}
 }
