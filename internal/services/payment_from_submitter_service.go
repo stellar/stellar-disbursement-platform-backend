@@ -75,7 +75,9 @@ func (s PaymentFromSubmitterService) syncTransaction(ctx context.Context, dbTx d
 	}
 
 	// 4. Set synced_at for the synced transaction
-	err = s.tssModel.UpdateSyncedTransactions(ctx, s.tssModel.DBConnectionPool, []string{transaction.ID})
+	err = db.RunInTransaction(ctx, s.tssModel.DBConnectionPool, nil, func(tssDBTx db.DBTransaction) error {
+		return s.tssModel.UpdateSyncedTransactions(ctx, tssDBTx, []string{transaction.ID})
+	})
 	if err != nil {
 		return fmt.Errorf("updating transaction ID %s as synced: %w", transaction.ID, err)
 	}

@@ -3,7 +3,8 @@ package mocks
 import (
 	"context"
 
-	services "github.com/stellar/stellar-disbursement-platform-backend/internal/services"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stretchr/testify/mock"
 )
 
@@ -12,8 +13,8 @@ type MockPaymentToSubmitterService struct {
 	mock.Mock
 }
 
-func (m *MockPaymentToSubmitterService) SendBatchPayments(ctx context.Context, batchSize int) error {
-	args := m.Called(ctx, batchSize)
+func (m *MockPaymentToSubmitterService) SendPaymentsReadyToPay(ctx context.Context, paymentsReadyToPay *schemas.EventPaymentsReadyToPayData) error {
+	args := m.Called(ctx, paymentsReadyToPay)
 	return args.Error(0)
 }
 

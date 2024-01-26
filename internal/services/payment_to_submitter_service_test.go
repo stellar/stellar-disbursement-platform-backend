@@ -11,6 +11,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	txSubStore "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 )
 
@@ -26,7 +27,7 @@ func Test_PaymentToSubmitterService_SendBatchPayments(t *testing.T) {
 	require.NoError(t, err)
 	tssModel := txSubStore.NewTransactionModel(models.DBConnectionPool)
 
-	service := NewPaymentToSubmitterService(models)
+	service := NewPaymentToSubmitterService(models, dbConnectionPool)
 	ctx := context.Background()
 
 	// create fixtures
@@ -92,8 +93,13 @@ func Test_PaymentToSubmitterService_SendBatchPayments(t *testing.T) {
 	})
 
 	t.Run("send payments", func(t *testing.T) {
-		t.Skip("Fix in SDP-925, when we refactor `payment_to_submitter_job` to use Kafka")
-		err = service.SendBatchPayments(ctx, 5)
+		tenantID := "tenant-id"
+		paymentsReadyToPay := schemas.EventPaymentsReadyToPayData{TenantID: tenantID}
+		for _, p := range []*data.Payment{payment1, payment2, payment3, payment4} {
+			paymentsReadyToPay.Payments = append(paymentsReadyToPay.Payments, schemas.PaymentReadyToPay{ID: p.ID})
+		}
+
+		err = service.SendPaymentsReadyToPay(ctx, &paymentsReadyToPay)
 		require.NoError(t, err)
 
 		// payments that can be sent
@@ -122,17 +128,17 @@ func Test_PaymentToSubmitterService_SendBatchPayments(t *testing.T) {
 		}
 
 		for _, tx := range transactions {
-			require.Equal(t, txSubStore.TransactionStatusPending, tx.Status)
-			require.Equal(t, expectedPayments[tx.ExternalID].Asset.Code, tx.AssetCode)
-			require.Equal(t, expectedPayments[tx.ExternalID].Asset.Issuer, tx.AssetIssuer)
-			require.Equal(t, expectedPayments[tx.ExternalID].Amount, strconv.FormatFloat(tx.Amount, 'f', 7, 32))
-			require.Equal(t, expectedPayments[tx.ExternalID].ReceiverWallet.StellarAddress, tx.Destination)
-			require.Equal(t, expectedPayments[tx.ExternalID].ID, tx.ExternalID)
+			assert.Equal(t, txSubStore.TransactionStatusPending, tx.Status)
+			assert.Equal(t, expectedPayments[tx.ExternalID].Asset.Code, tx.AssetCode)
+			assert.Equal(t, expectedPayments[tx.ExternalID].Asset.Issuer, tx.AssetIssuer)
+			assert.Equal(t, expectedPayments[tx.ExternalID].Amount, strconv.FormatFloat(tx.Amount, 'f', 7, 32))
+			assert.Equal(t, expectedPayments[tx.ExternalID].ReceiverWallet.StellarAddress, tx.Destination)
+			assert.Equal(t, expectedPayments[tx.ExternalID].ID, tx.ExternalID)
+			assert.Equal(t, tenantID, tx.TenantID)
 		}
 	})
 
 	t.Run("send payments with native asset", func(t *testing.T) {
-		t.Skip("Fix in SDP-925, when we refactor `payment_to_submitter_job` to use Kafka")
 		nativeAsset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "XLM", "")
 
 		startedDisbursementNA := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
@@ -159,7 +165,13 @@ func Test_PaymentToSubmitterService_SendBatchPayments(t *testing.T) {
 			Status:         data.ReadyPaymentStatus,
 		})
 
-		err = service.SendBatchPayments(ctx, 5)
+		tenantID := "tenant-id"
+		paymentsReadyToPay := schemas.EventPaymentsReadyToPayData{TenantID: tenantID}
+		for _, p := range []*data.Payment{paymentNA1, paymentNA2} {
+			paymentsReadyToPay.Payments = append(paymentsReadyToPay.Payments, schemas.PaymentReadyToPay{ID: p.ID})
+		}
+
+		err = service.SendPaymentsReadyToPay(ctx, &paymentsReadyToPay)
 		require.NoError(t, err)
 
 		for _, p := range []*data.Payment{paymentNA1, paymentNA2} {
@@ -184,6 +196,7 @@ func Test_PaymentToSubmitterService_SendBatchPayments(t *testing.T) {
 			assert.Equal(t, expectedPayments[tx.ExternalID].Amount, strconv.FormatFloat(tx.Amount, 'f', 7, 32))
 			assert.Equal(t, expectedPayments[tx.ExternalID].ReceiverWallet.StellarAddress, tx.Destination)
 			assert.Equal(t, expectedPayments[tx.ExternalID].ID, tx.ExternalID)
+			assert.Equal(t, tenantID, tx.TenantID)
 		}
 	})
 }
@@ -345,7 +358,6 @@ func Test_PaymentToSubmitterService_ValidatePaymentReadyForSending(t *testing.T)
 }
 
 func Test_PaymentToSubmitterService_RetryPayment(t *testing.T) {
-	t.Skip("Fix in SDP-925, when we refactor `payment_to_submitter_job` to use Kafka")
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 
@@ -359,7 +371,7 @@ func Test_PaymentToSubmitterService_RetryPayment(t *testing.T) {
 	require.NoError(t, err)
 	tssModel := txSubStore.NewTransactionModel(models.DBConnectionPool)
 
-	service := NewPaymentToSubmitterService(models)
+	service := NewPaymentToSubmitterService(models, dbConnectionPool)
 
 	// clean test db
 	data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
@@ -394,7 +406,17 @@ func Test_PaymentToSubmitterService_RetryPayment(t *testing.T) {
 		Asset:          *asset,
 	})
 
-	err = service.SendBatchPayments(ctx, 1)
+	tenantID := "tenant-id"
+	paymentsReadyToPay := schemas.EventPaymentsReadyToPayData{
+		TenantID: tenantID,
+		Payments: []schemas.PaymentReadyToPay{
+			{
+				ID: payment.ID,
+			},
+		},
+	}
+
+	err = service.SendPaymentsReadyToPay(ctx, &paymentsReadyToPay)
 	require.NoError(t, err)
 
 	paymentDB, err := models.Payment.Get(ctx, payment.ID, dbConnectionPool)
@@ -408,6 +430,7 @@ func Test_PaymentToSubmitterService_RetryPayment(t *testing.T) {
 	transaction := transactions[0]
 	assert.Equal(t, payment.ID, transaction.ExternalID)
 	assert.Equal(t, txSubStore.TransactionStatusPending, transaction.Status)
+	assert.Equal(t, tenantID, transaction.TenantID)
 
 	// Marking the transaction as failed
 	transaction.Status = txSubStore.TransactionStatusProcessing
@@ -438,7 +461,7 @@ func Test_PaymentToSubmitterService_RetryPayment(t *testing.T) {
 	assert.Equal(t, data.ReadyPaymentStatus, paymentDB.Status)
 
 	// insert a new transaction for the same payment
-	err = service.SendBatchPayments(ctx, 1)
+	err = service.SendPaymentsReadyToPay(ctx, &paymentsReadyToPay)
 	require.NoError(t, err)
 
 	paymentDB, err = models.Payment.Get(ctx, payment.ID, dbConnectionPool)
@@ -452,5 +475,7 @@ func Test_PaymentToSubmitterService_RetryPayment(t *testing.T) {
 	transaction1 := transactions[0]
 	transaction2 := transactions[1]
 	assert.Equal(t, txSubStore.TransactionStatusError, transaction1.Status)
+	assert.Equal(t, tenantID, transaction1.TenantID)
 	assert.Equal(t, txSubStore.TransactionStatusPending, transaction2.Status)
+	assert.Equal(t, tenantID, transaction2.TenantID)
 }
