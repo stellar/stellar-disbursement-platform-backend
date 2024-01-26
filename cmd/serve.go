@@ -18,7 +18,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/scheduler"
 
 	"github.com/spf13/cobra"
-	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/support/config"
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
@@ -194,15 +193,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			FlagDefault: 8003,
 			Required:    true,
 		},
-		{
-			Name:           "crash-tracker-type",
-			Usage:          `Crash tracker type. Options: "SENTRY", "DRY_RUN"`,
-			OptType:        types.String,
-			CustomSetValue: cmdUtils.SetConfigOptionCrashTrackerType,
-			ConfigKey:      &crashTrackerOptions.CrashTrackerType,
-			FlagDefault:    "DRY_RUN",
-			Required:       true,
-		},
+		cmdUtils.CrashTrackerTypeConfigOption(&crashTrackerOptions.CrashTrackerType),
 		{
 			Name:      "instance-name",
 			Usage:     `Name of the SDP instance. Example: "SDP Testnet".`,
@@ -296,22 +287,8 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			FlagDefault: 3,
 			Required:    true,
 		},
-		{
-			Name:           "distribution-public-key",
-			Usage:          "The public key of the Stellar distribution account that sends the Stellar payments.",
-			OptType:        types.String,
-			CustomSetValue: cmdUtils.SetConfigOptionStellarPublicKey,
-			ConfigKey:      &serveOpts.DistributionPublicKey,
-			Required:       true,
-		},
-		{
-			Name:           "distribution-seed",
-			Usage:          "The private key of the Stellar account used to disburse funds",
-			OptType:        types.String,
-			CustomSetValue: cmdUtils.SetConfigOptionStellarPrivateKey,
-			ConfigKey:      &serveOpts.DistributionSeed,
-			Required:       true,
-		},
+		cmdUtils.DistributionPublicKey(&serveOpts.DistributionPublicKey),
+		cmdUtils.DistributionSeed(&serveOpts.DistributionSeed),
 		{
 			Name:      "recaptcha-site-key",
 			Usage:     "The Google 'reCAPTCHA v2 - I'm not a robot' site key.",
@@ -335,14 +312,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			CustomSetValue: cmdUtils.SetConfigOptionURLString,
 			Required:       true,
 		},
-		{
-			Name:        "horizon-url",
-			Usage:       "Stellar Horizon URL.",
-			OptType:     types.String,
-			ConfigKey:   &serveOpts.HorizonURL,
-			FlagDefault: horizonclient.DefaultTestNetClient.HorizonURL,
-			Required:    true,
-		},
+		cmdUtils.HorizonURLConfigOption(&serveOpts.HorizonURL),
 		{
 			Name:        "enable-scheduler",
 			Usage:       "Enable Scheduler for SDP Backend Jobs",

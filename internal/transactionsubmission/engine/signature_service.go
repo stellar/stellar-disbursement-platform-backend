@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/stellar/go/keypair"
-	"github.com/stellar/go/network"
 	"github.com/stellar/go/strkey"
 	"github.com/stellar/go/txnbuild"
 
@@ -24,50 +23,68 @@ type SignatureService interface {
 	Delete(ctx context.Context, publicKey string, currLedgerNumber int) error
 }
 
+type DefaultSignatureServiceOptions struct {
+	NetworkPassphrase      string
+	DBConnectionPool       db.DBConnectionPool
+	DistributionPrivateKey string
+	EncryptionPassphrase   string
+	Encrypter              utils.PrivateKeyEncrypter
+}
+
+func (opts *DefaultSignatureServiceOptions) Validate() error {
+	if opts.NetworkPassphrase == "" {
+		return fmt.Errorf("network passphrase cannot be empty")
+	}
+
+	if opts.DBConnectionPool == nil {
+		return fmt.Errorf("database connection pool cannot be nil")
+	}
+
+	if !strkey.IsValidEd25519SecretSeed(opts.DistributionPrivateKey) {
+		return fmt.Errorf("distribution private key is not a valid Ed25519 secret")
+	}
+
+	if !strkey.IsValidEd25519SecretSeed(opts.EncryptionPassphrase) {
+		return fmt.Errorf("encryption passphrase is not a valid Ed25519 secret")
+	}
+
+	return nil
+}
+
 type DefaultSignatureService struct {
-	networkPassphrase   string
-	distributionAccount string
-	distributionKP      *keypair.Full
-	dbConnectionPool    db.DBConnectionPool
-	chAccModel          store.ChannelAccountStore
-	encrypter           utils.PrivateKeyEncrypter
-	encrypterPass       string
+	networkPassphrase    string
+	distributionAccount  string
+	distributionKP       *keypair.Full
+	dbConnectionPool     db.DBConnectionPool
+	chAccModel           store.ChannelAccountStore
+	encrypter            utils.PrivateKeyEncrypter
+	encryptionPassphrase string
 }
 
 // NewDefaultSignatureService returns a new DefaultSignatureService instance.
-func NewDefaultSignatureService(networkPassphrase string, dbConnectionPool db.DBConnectionPool, distributionSeed string, chAccStore store.ChannelAccountStore, encrypter utils.PrivateKeyEncrypter, encrypterPass string) (*DefaultSignatureService, error) {
-	if dbConnectionPool == nil {
-		return nil, fmt.Errorf("db connection pool cannot be nil")
-	}
-	if chAccStore == nil {
-		return nil, fmt.Errorf("channel account store cannot be nil")
+func NewDefaultSignatureService(opts DefaultSignatureServiceOptions) (*DefaultSignatureService, error) {
+	if err := opts.Validate(); err != nil {
+		return nil, fmt.Errorf("validating options: %w", err)
 	}
 
-	if (networkPassphrase != network.TestNetworkPassphrase) && (networkPassphrase != network.PublicNetworkPassphrase) {
-		return nil, fmt.Errorf("invalid network passphrase: %q", networkPassphrase)
-	}
-
-	distributionKP, err := keypair.ParseFull(distributionSeed)
+	distributionKP, err := keypair.ParseFull(opts.DistributionPrivateKey)
 	if err != nil {
 		return nil, fmt.Errorf("parsing distribution seed: %w", err)
 	}
 
+	encrypter := opts.Encrypter
 	if encrypter == nil {
-		return nil, fmt.Errorf("private key encrypter cannot be nil")
-	}
-
-	if encrypterPass == "" {
-		return nil, fmt.Errorf("private key encrypter passphrase cannot be empty")
+		encrypter = &utils.DefaultPrivateKeyEncrypter{}
 	}
 
 	return &DefaultSignatureService{
-		networkPassphrase:   networkPassphrase,
-		distributionAccount: distributionKP.Address(),
-		distributionKP:      distributionKP,
-		dbConnectionPool:    dbConnectionPool,
-		chAccModel:          chAccStore,
-		encrypter:           encrypter,
-		encrypterPass:       encrypterPass,
+		networkPassphrase:    opts.NetworkPassphrase,
+		distributionAccount:  distributionKP.Address(),
+		distributionKP:       distributionKP,
+		dbConnectionPool:     opts.DBConnectionPool,
+		chAccModel:           store.NewChannelAccountModel(opts.DBConnectionPool),
+		encrypter:            encrypter,
+		encryptionPassphrase: opts.EncryptionPassphrase,
 	}, nil
 }
 
@@ -109,7 +126,7 @@ func (ds *DefaultSignatureService) getKPsForAccounts(ctx context.Context, stella
 
 		chAccPrivateKey := chAcc.PrivateKey
 		if !strkey.IsValidEd25519SecretSeed(chAccPrivateKey) {
-			chAccPrivateKey, err = ds.encrypter.Decrypt(chAccPrivateKey, ds.encrypterPass)
+			chAccPrivateKey, err = ds.encrypter.Decrypt(chAccPrivateKey, ds.encryptionPassphrase)
 			if err != nil {
 				return nil, fmt.Errorf("cannot decrypt private key: %w", err)
 			}
@@ -171,7 +188,7 @@ func (ds *DefaultSignatureService) BatchInsert(ctx context.Context, kps []*keypa
 		publicKey := kp.Address()
 		privateKey := kp.Seed()
 		if shouldEncryptSeed {
-			privateKey, err = ds.encrypter.Encrypt(privateKey, ds.encrypterPass)
+			privateKey, err = ds.encrypter.Encrypt(privateKey, ds.encryptionPassphrase)
 			if err != nil {
 				return fmt.Errorf("encrypting channel account private key: %w", err)
 			}

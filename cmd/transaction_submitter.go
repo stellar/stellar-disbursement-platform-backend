@@ -8,10 +8,8 @@ import (
 	"syscall"
 
 	"github.com/spf13/cobra"
-	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/support/config"
 	"github.com/stellar/go/support/log"
-	"github.com/stellar/go/txnbuild"
 
 	cmdUtils "github.com/stellar/stellar-disbursement-platform-backend/cmd/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/router"
@@ -89,22 +87,8 @@ func (c *TxSubmitterCommand) Command(submitterService TxSubmitterServiceInterfac
 			FlagDefault:    "TSS_PROMETHEUS",
 			Required:       true,
 		},
-		{
-			Name:           "distribution-seed",
-			Usage:          "The private key of the Stellar account used to disburse funds",
-			OptType:        types.String,
-			CustomSetValue: cmdUtils.SetConfigOptionStellarPrivateKey,
-			ConfigKey:      &submitterOpts.DistributionSeed,
-			Required:       true,
-		},
-		{
-			Name:        "horizon-url",
-			Usage:       "Horizon URL",
-			OptType:     types.String,
-			ConfigKey:   &submitterOpts.HorizonURL,
-			FlagDefault: horizonclient.DefaultTestNetClient.HorizonURL,
-			Required:    true,
-		},
+		cmdUtils.DistributionSeed(&submitterOpts.DistributionSeed),
+		cmdUtils.HorizonURLConfigOption(&submitterOpts.HorizonURL),
 		{
 			Name:        "num-channel-accounts",
 			Usage:       "Number of channel accounts to utilize for transaction submission",
@@ -121,23 +105,8 @@ func (c *TxSubmitterCommand) Command(submitterService TxSubmitterServiceInterfac
 			FlagDefault: 6,
 			Required:    true,
 		},
-		{
-			Name:        "max-base-fee",
-			Usage:       "The max base fee for submitting a Stellar transaction",
-			OptType:     types.Int,
-			ConfigKey:   &submitterOpts.MaxBaseFee,
-			FlagDefault: 100 * txnbuild.MinBaseFee,
-			Required:    true,
-		},
-		{
-			Name:           "crash-tracker-type",
-			Usage:          `Crash tracker type. Options: "SENTRY", "DRY_RUN"`,
-			OptType:        types.String,
-			CustomSetValue: cmdUtils.SetConfigOptionCrashTrackerType,
-			ConfigKey:      &crashTrackerOptions.CrashTrackerType,
-			FlagDefault:    "DRY_RUN",
-			Required:       true,
-		},
+		cmdUtils.MaxBaseFee(&submitterOpts.MaxBaseFee),
+		cmdUtils.CrashTrackerTypeConfigOption(&crashTrackerOptions.CrashTrackerType),
 	}
 
 	// event broker options:
@@ -184,7 +153,7 @@ func (c *TxSubmitterCommand) Command(submitterService TxSubmitterServiceInterfac
 			submitterOpts.DatabaseDSN = tssDatabaseDSN
 			submitterOpts.MonitorService = tssMonitorSvc
 			submitterOpts.NetworkPassphrase = globalOptions.NetworkPassphrase
-			submitterOpts.PrivateKeyEncrypter = tssUtils.DefaultPrivateKeyEncrypter{}
+			submitterOpts.PrivateKeyEncrypter = &tssUtils.DefaultPrivateKeyEncrypter{}
 
 			// Inject crash tracker options dependencies
 			globalOptions.PopulateCrashTrackerOptions(&crashTrackerOptions)

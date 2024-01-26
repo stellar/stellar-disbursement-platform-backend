@@ -7,8 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/router"
-
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/stellar/go/clients/horizonclient"
@@ -17,6 +15,7 @@ import (
 	"github.com/stellar/go/support/log"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	dbRouter "github.com/stellar/stellar-disbursement-platform-backend/db/router"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
@@ -30,10 +29,9 @@ import (
 	publicfiles "github.com/stellar/stellar-disbursement-platform-backend/internal/serve/publicfiles"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
-	txnsubmitterutils "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/router"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
@@ -109,7 +107,12 @@ func (opts *ServeOptions) SetupDependencies() error {
 	}
 
 	// Setup Multi-Tenant Database when enabled
+	tssDBConnectionPool := dbConnectionPool
 	if opts.EnableMultiTenantDB {
+		deprecatedConnectionPool := dbConnectionPool
+		defer deprecatedConnectionPool.Close()
+
+		// Setup Per-tenant database
 		opts.tenantManager = tenant.NewManager(tenant.WithDatabase(dbConnectionPool))
 		opts.tenantRouter = router.NewMultiTenantDataSourceRouter(opts.tenantManager)
 
@@ -118,6 +121,17 @@ func (opts *ServeOptions) SetupDependencies() error {
 			return fmt.Errorf("error connecting to the multi-tenant database: %w", innerErr)
 		}
 		opts.dbConnectionPool = mtnDbConnectionPool
+
+		// Setup TSS Database
+		var tssDNS string
+		tssDNS, err = dbRouter.GetDNSForTSS(opts.DatabaseDSN)
+		if err != nil {
+			return fmt.Errorf("getting TSS database DNS: %w", err)
+		}
+		tssDBConnectionPool, err = db.OpenDBConnectionPool(tssDNS)
+		if err != nil {
+			return fmt.Errorf("getting TSS DB connection: %w", err)
+		}
 	} else {
 		opts.dbConnectionPool = dbConnectionPool
 	}
@@ -149,15 +163,13 @@ func (opts *ServeOptions) SetupDependencies() error {
 	}
 
 	// Setup Signature Service
-	// TODO: improve the way we setup signature service
-	opts.signatureService, err = engine.NewDefaultSignatureService(
-		opts.NetworkPassphrase,
-		dbConnectionPool,
-		opts.DistributionSeed,
-		store.NewChannelAccountModel(opts.dbConnectionPool),
-		txnsubmitterutils.DefaultPrivateKeyEncrypter{},
-		opts.DistributionSeed,
-	)
+	// TODO: Setup signature service from dependency injector
+	opts.signatureService, err = engine.NewDefaultSignatureService(engine.DefaultSignatureServiceOptions{
+		NetworkPassphrase:      opts.NetworkPassphrase,
+		DBConnectionPool:       tssDBConnectionPool,
+		DistributionPrivateKey: opts.DistributionSeed,
+		EncryptionPassphrase:   opts.DistributionSeed,
+	})
 	if err != nil {
 		return fmt.Errorf("error creating signature service: %w", err)
 	}

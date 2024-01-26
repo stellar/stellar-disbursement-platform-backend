@@ -150,8 +150,15 @@ func NewManager(ctx context.Context, opts SubmitterOptions) (m *Manager, err err
 		HTTP:       httpclient.DefaultClient(),
 	}
 
-	// initialize default signature service
-	sigService, err := engine.NewDefaultSignatureService(opts.NetworkPassphrase, dbConnectionPool, opts.DistributionSeed, chAccModel, opts.PrivateKeyEncrypter, opts.DistributionSeed)
+	// Setup Signature Service
+	// TODO: Setup signature service from dependency injector
+	sigService, err := engine.NewDefaultSignatureService(engine.DefaultSignatureServiceOptions{
+		NetworkPassphrase:      opts.NetworkPassphrase,
+		DBConnectionPool:       dbConnectionPool,
+		DistributionPrivateKey: opts.DistributionSeed,
+		EncryptionPassphrase:   opts.DistributionSeed,
+		Encrypter:              opts.PrivateKeyEncrypter,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("initializing default signature service: %w", err)
 	}
