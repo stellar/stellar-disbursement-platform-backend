@@ -337,7 +337,8 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 		require.NoError(t, err)
 
 		// check disbursement status
-		disbursement, err := models.Disbursements.Get(context.Background(), models.DBConnectionPool, readyDisbursement.ID)
+		var disbursement *data.Disbursement
+		disbursement, err = models.Disbursements.Get(context.Background(), models.DBConnectionPool, readyDisbursement.ID)
 		require.NoError(t, err)
 		require.Equal(t, data.StartedDisbursementStatus, disbursement.Status)
 
@@ -345,7 +346,8 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 		require.Equal(t, disbursement.StatusHistory[1].UserID, user.ID)
 
 		// check receivers wallets status
-		receiverWallets, err := models.ReceiverWallet.GetByReceiverIDsAndWalletID(ctx, models.DBConnectionPool, receiverIds, wallet.ID)
+		var receiverWallets []*data.ReceiverWallet
+		receiverWallets, err = models.ReceiverWallet.GetByReceiverIDsAndWalletID(ctx, models.DBConnectionPool, receiverIds, wallet.ID)
 		require.NoError(t, err)
 		require.Equal(t, 4, len(receiverWallets))
 		rwExpectedStatuses := map[string]data.ReceiversWalletStatus{
@@ -360,8 +362,8 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 
 		// check payments status
 		for _, p := range payments {
-			payment, err := models.Payment.Get(ctx, p.ID, dbConnectionPool)
-			require.NoError(t, err)
+			payment, getPaymentErr := models.Payment.Get(ctx, p.ID, dbConnectionPool)
+			require.NoError(t, getPaymentErr)
 			require.Equal(t, data.ReadyPaymentStatus, payment.Status)
 		}
 	})
