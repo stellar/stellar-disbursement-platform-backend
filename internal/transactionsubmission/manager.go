@@ -10,8 +10,6 @@ import (
 	"time"
 
 	"github.com/stellar/go/clients/horizonclient"
-	"github.com/stellar/go/network"
-	"github.com/stellar/go/strkey"
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/txnbuild"
 
@@ -22,45 +20,35 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	tssMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
 	sdpUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
 const serviceName = "Transaction Submission Service"
 
 type SubmitterOptions struct {
-	DatabaseDSN          string
 	HorizonURL           string
-	NetworkPassphrase    string
-	DistributionSeed     string
 	NumChannelAccounts   int
 	QueuePollingInterval int
 	MaxBaseFee           int
 	MonitorService       tssMonitor.TSSMonitorService
-	PrivateKeyEncrypter  utils.PrivateKeyEncrypter
 	CrashTrackerClient   crashtracker.CrashTrackerClient
 	EventProducer        events.Producer
+
+	SignatureService engine.SignatureService
+	DBConnectionPool db.DBConnectionPool
 }
 
 func (so *SubmitterOptions) validate() error {
-	if so.DatabaseDSN == "" {
-		return fmt.Errorf("database DSN cannot be empty")
+	if so.DBConnectionPool == nil {
+		return fmt.Errorf("database connection pool cannot be nil")
+	}
+
+	if so.SignatureService == nil {
+		return fmt.Errorf("signature service cannot be nil")
 	}
 
 	if so.HorizonURL == "" {
 		return fmt.Errorf("horizon url cannot be empty")
-	}
-
-	if (so.NetworkPassphrase != network.TestNetworkPassphrase) && (so.NetworkPassphrase != network.PublicNetworkPassphrase) {
-		return fmt.Errorf("network passphrase %q is invalid", so.NetworkPassphrase)
-	}
-
-	if so.PrivateKeyEncrypter == nil {
-		return fmt.Errorf("private key encrypter cannot be nil")
-	}
-
-	if !strkey.IsValidEd25519SecretSeed(so.DistributionSeed) {
-		return fmt.Errorf("distribution seed is invalid")
 	}
 
 	if so.NumChannelAccounts < MinNumberOfChannelAccounts || so.NumChannelAccounts > MaxNumberOfChannelAccounts {
@@ -79,6 +67,7 @@ func (so *SubmitterOptions) validate() error {
 		return fmt.Errorf("monitor service cannot be nil")
 	}
 
+	// TODO: confirm with Caio if this is correct:
 	if so.EventProducer == nil {
 		return fmt.Errorf("event producer cannot be nil")
 	}
@@ -125,21 +114,9 @@ func NewManager(ctx context.Context, opts SubmitterOptions) (m *Manager, err err
 		return nil, fmt.Errorf("validating options: %w", err)
 	}
 
-	// initialize database connection pool and the data models
-	dbConnectionPool, err := db.OpenDBConnectionPool(opts.DatabaseDSN)
-	if err != nil {
-		return nil, fmt.Errorf("opening db connection pool: %w", err)
-	}
-	defer func() {
-		// We only close the connection pool if the constructor finishes with an error.
-		// If we close the connection pool on successful cases, the manager will not be able to use it.
-		if err != nil {
-			dbConnectionPool.Close()
-		}
-	}()
-	txModel := store.NewTransactionModel(dbConnectionPool)
-	chAccModel := &store.ChannelAccountModel{DBConnectionPool: dbConnectionPool}
-	chTxBundleModel, err := store.NewChannelTransactionBundleModel(dbConnectionPool)
+	txModel := store.NewTransactionModel(opts.DBConnectionPool)
+	chAccModel := &store.ChannelAccountModel{DBConnectionPool: opts.DBConnectionPool}
+	chTxBundleModel, err := store.NewChannelTransactionBundleModel(opts.DBConnectionPool)
 	if err != nil {
 		return nil, fmt.Errorf("initializing channel transaction bundle model: %w", err)
 	}
@@ -148,19 +125,6 @@ func NewManager(ctx context.Context, opts SubmitterOptions) (m *Manager, err err
 	horizonClient := &horizonclient.Client{
 		HorizonURL: opts.HorizonURL,
 		HTTP:       httpclient.DefaultClient(),
-	}
-
-	// Setup Signature Service
-	// TODO: Setup signature service from dependency injector
-	sigService, err := engine.NewDefaultSignatureService(engine.DefaultSignatureServiceOptions{
-		NetworkPassphrase:      opts.NetworkPassphrase,
-		DBConnectionPool:       dbConnectionPool,
-		DistributionPrivateKey: opts.DistributionSeed,
-		EncryptionPassphrase:   opts.DistributionSeed,
-		Encrypter:              opts.PrivateKeyEncrypter,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("initializing default signature service: %w", err)
 	}
 
 	// initialize SubmitterEngine
@@ -191,7 +155,7 @@ func NewManager(ctx context.Context, opts SubmitterOptions) (m *Manager, err err
 	txProcessingLimiter := engine.NewTransactionProcessingLimiter(opts.NumChannelAccounts)
 
 	return &Manager{
-		dbConnectionPool: dbConnectionPool,
+		dbConnectionPool: opts.DBConnectionPool,
 		chAccModel:       chAccModel,
 		txModel:          txModel,
 		chTxBundleModel:  chTxBundleModel,
@@ -200,7 +164,7 @@ func NewManager(ctx context.Context, opts SubmitterOptions) (m *Manager, err err
 		txProcessingLimiter: txProcessingLimiter,
 
 		engine:     submitterEngine,
-		sigService: sigService,
+		sigService: opts.SignatureService,
 		maxBaseFee: opts.MaxBaseFee,
 
 		crashTrackerClient: crashTrackerClient,

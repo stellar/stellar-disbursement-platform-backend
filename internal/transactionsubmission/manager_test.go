@@ -33,8 +33,18 @@ import (
 )
 
 func Test_SubmitterOptions_validate(t *testing.T) {
-	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
+	dbt := dbtest.Open(t)
 	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	mSigService := mocks.NewMockSignatureService(t)
+	tssMonitorService := tssMonitor.TSSMonitorService{
+		Client:        monitorMocks.NewMockMonitorClient(t),
+		GitCommitHash: "gitCommitHash0x",
+		Version:       "version123",
+	}
 
 	testCases := []struct {
 		name             string
@@ -42,88 +52,61 @@ func Test_SubmitterOptions_validate(t *testing.T) {
 		submitterOptions SubmitterOptions
 	}{
 		{
-			name:             "validate DatabaseDSN",
+			name:             "validate DBConnectionPool",
 			submitterOptions: SubmitterOptions{},
-			wantErrContains:  "database DSN cannot be empty",
+			wantErrContains:  "database connection pool cannot be nil",
 		},
 		{
-			name: "validate horizonURL",
+			name: "validate SignatureService",
 			submitterOptions: SubmitterOptions{
-				DatabaseDSN: dbt.DSN,
+				DBConnectionPool: dbConnectionPool,
+			},
+			wantErrContains: "signature service cannot be nil",
+		},
+		{
+			name: "validate HorizonURL",
+			submitterOptions: SubmitterOptions{
+				DBConnectionPool: dbConnectionPool,
+				SignatureService: mSigService,
 			},
 			wantErrContains: "horizon url cannot be empty",
 		},
 		{
-			name: "validate networkPassphrase",
-			submitterOptions: SubmitterOptions{
-				DatabaseDSN: dbt.DSN,
-				HorizonURL:  "https://horizon-testnet.stellar.org",
-			},
-			wantErrContains: "network passphrase \"\" is invalid",
-		},
-		{
-			name: "validate PrivateKeyEncrypter",
-			submitterOptions: SubmitterOptions{
-				DatabaseDSN:       dbt.DSN,
-				HorizonURL:        "https://horizon-testnet.stellar.org",
-				NetworkPassphrase: network.TestNetworkPassphrase,
-			},
-			wantErrContains: "private key encrypter cannot be nil",
-		},
-		{
-			name: "validate DistributionSeed",
-			submitterOptions: SubmitterOptions{
-				DatabaseDSN:         dbt.DSN,
-				HorizonURL:          "https://horizon-testnet.stellar.org",
-				NetworkPassphrase:   network.TestNetworkPassphrase,
-				PrivateKeyEncrypter: &utils.PrivateKeyEncrypterMock{},
-			},
-			wantErrContains: "distribution seed is invalid",
-		},
-		{
 			name: "validate NumChannelAccounts (min)",
 			submitterOptions: SubmitterOptions{
-				DatabaseDSN:         dbt.DSN,
-				HorizonURL:          "https://horizon-testnet.stellar.org",
-				NetworkPassphrase:   network.TestNetworkPassphrase,
-				PrivateKeyEncrypter: &utils.PrivateKeyEncrypterMock{},
-				DistributionSeed:    "SBDBQFZIIZ53A7JC2X23LSQLI5RTKV5YWDRT33YXW5LRMPKRSJYXS2EW",
-				NumChannelAccounts:  0,
+				DBConnectionPool:   dbConnectionPool,
+				SignatureService:   mSigService,
+				HorizonURL:         "https://horizon-testnet.stellar.org",
+				NumChannelAccounts: 0,
 			},
 			wantErrContains: "num channel accounts must stay in the range from 1 to 1000",
 		},
 		{
-			name: "validate NumChannelAccounts (min)",
+			name: "validate NumChannelAccounts (max)",
 			submitterOptions: SubmitterOptions{
-				DatabaseDSN:         dbt.DSN,
-				HorizonURL:          "https://horizon-testnet.stellar.org",
-				NetworkPassphrase:   network.TestNetworkPassphrase,
-				PrivateKeyEncrypter: &utils.PrivateKeyEncrypterMock{},
-				DistributionSeed:    "SBDBQFZIIZ53A7JC2X23LSQLI5RTKV5YWDRT33YXW5LRMPKRSJYXS2EW",
-				NumChannelAccounts:  1001,
+				DBConnectionPool:   dbConnectionPool,
+				SignatureService:   mSigService,
+				HorizonURL:         "https://horizon-testnet.stellar.org",
+				NumChannelAccounts: 1001,
 			},
 			wantErrContains: "num channel accounts must stay in the range from 1 to 1000",
 		},
 		{
 			name: "validate QueuePollingInterval",
 			submitterOptions: SubmitterOptions{
-				DatabaseDSN:         dbt.DSN,
-				HorizonURL:          "https://horizon-testnet.stellar.org",
-				NetworkPassphrase:   network.TestNetworkPassphrase,
-				PrivateKeyEncrypter: &utils.PrivateKeyEncrypterMock{},
-				DistributionSeed:    "SBDBQFZIIZ53A7JC2X23LSQLI5RTKV5YWDRT33YXW5LRMPKRSJYXS2EW",
-				NumChannelAccounts:  1,
+				DBConnectionPool:   dbConnectionPool,
+				SignatureService:   mSigService,
+				HorizonURL:         "https://horizon-testnet.stellar.org",
+				NumChannelAccounts: 1,
 			},
 			wantErrContains: "queue polling interval must be greater than 6 seconds",
 		},
 		{
 			name: "validate MaxBaseFee",
 			submitterOptions: SubmitterOptions{
-				DatabaseDSN:          dbt.DSN,
+				DBConnectionPool:     dbConnectionPool,
+				SignatureService:     mSigService,
 				HorizonURL:           "https://horizon-testnet.stellar.org",
-				NetworkPassphrase:    network.TestNetworkPassphrase,
-				PrivateKeyEncrypter:  &utils.PrivateKeyEncrypterMock{},
-				DistributionSeed:     "SBDBQFZIIZ53A7JC2X23LSQLI5RTKV5YWDRT33YXW5LRMPKRSJYXS2EW",
 				NumChannelAccounts:   1,
 				QueuePollingInterval: 10,
 			},
@@ -132,12 +115,9 @@ func Test_SubmitterOptions_validate(t *testing.T) {
 		{
 			name: "validate monitorService",
 			submitterOptions: SubmitterOptions{
-				DatabaseDSN:          dbt.DSN,
-				MonitorService:       tssMonitor.TSSMonitorService{},
+				DBConnectionPool:     dbConnectionPool,
+				SignatureService:     mSigService,
 				HorizonURL:           "https://horizon-testnet.stellar.org",
-				NetworkPassphrase:    network.TestNetworkPassphrase,
-				PrivateKeyEncrypter:  &utils.PrivateKeyEncrypterMock{},
-				DistributionSeed:     "SBDBQFZIIZ53A7JC2X23LSQLI5RTKV5YWDRT33YXW5LRMPKRSJYXS2EW",
 				NumChannelAccounts:   1,
 				QueuePollingInterval: 10,
 				MaxBaseFee:           txnbuild.MinBaseFee,
@@ -145,64 +125,44 @@ func Test_SubmitterOptions_validate(t *testing.T) {
 			wantErrContains: "monitor service cannot be nil",
 		},
 		{
-			name: "🎉 successfully finishes validation with nil crash tracker client",
+			name: "validate EventProducer",
 			submitterOptions: SubmitterOptions{
-				DatabaseDSN: dbt.DSN,
-				MonitorService: tssMonitor.TSSMonitorService{
-					Client:        &monitorMocks.MockMonitorClient{},
-					GitCommitHash: "0xABC",
-					Version:       "0.01",
-				},
+				DBConnectionPool:     dbConnectionPool,
+				SignatureService:     mSigService,
 				HorizonURL:           "https://horizon-testnet.stellar.org",
-				NetworkPassphrase:    network.TestNetworkPassphrase,
-				PrivateKeyEncrypter:  &utils.PrivateKeyEncrypterMock{},
-				DistributionSeed:     "SBDBQFZIIZ53A7JC2X23LSQLI5RTKV5YWDRT33YXW5LRMPKRSJYXS2EW",
 				NumChannelAccounts:   1,
 				QueuePollingInterval: 10,
 				MaxBaseFee:           txnbuild.MinBaseFee,
+				MonitorService:       tssMonitorService,
+			},
+			wantErrContains: "event producer cannot be nil",
+		},
+		{
+			name: "🎉 successfully finishes validation with nil crash tracker client",
+			submitterOptions: SubmitterOptions{
+				DBConnectionPool:     dbConnectionPool,
+				SignatureService:     mSigService,
+				HorizonURL:           "https://horizon-testnet.stellar.org",
+				NumChannelAccounts:   1,
+				QueuePollingInterval: 10,
+				MaxBaseFee:           txnbuild.MinBaseFee,
+				MonitorService:       tssMonitorService,
 				EventProducer:        &events.MockProducer{},
 			},
 		},
 		{
 			name: "🎉 successfully finishes validation with existing crash tracker client",
 			submitterOptions: SubmitterOptions{
-				DatabaseDSN: dbt.DSN,
-				MonitorService: tssMonitor.TSSMonitorService{
-					Client:        &monitorMocks.MockMonitorClient{},
-					GitCommitHash: "0xABC",
-					Version:       "0.01",
-				},
+				DBConnectionPool:     dbConnectionPool,
+				SignatureService:     mSigService,
 				HorizonURL:           "https://horizon-testnet.stellar.org",
-				NetworkPassphrase:    network.TestNetworkPassphrase,
-				PrivateKeyEncrypter:  &utils.PrivateKeyEncrypterMock{},
-				DistributionSeed:     "SBDBQFZIIZ53A7JC2X23LSQLI5RTKV5YWDRT33YXW5LRMPKRSJYXS2EW",
 				NumChannelAccounts:   1,
 				QueuePollingInterval: 10,
 				MaxBaseFee:           txnbuild.MinBaseFee,
-				CrashTrackerClient:   &crashtracker.MockCrashTrackerClient{},
+				MonitorService:       tssMonitorService,
 				EventProducer:        &events.MockProducer{},
-			},
-		},
-		{
-			name: "validate EventProducer",
-			submitterOptions: SubmitterOptions{
-				DatabaseDSN: dbt.DSN,
-				MonitorService: tssMonitor.TSSMonitorService{
-					Client:        &monitorMocks.MockMonitorClient{},
-					GitCommitHash: "0xABC",
-					Version:       "0.01",
-				},
-				HorizonURL:           "https://horizon-testnet.stellar.org",
-				NetworkPassphrase:    network.TestNetworkPassphrase,
-				PrivateKeyEncrypter:  &utils.PrivateKeyEncrypterMock{},
-				DistributionSeed:     "SBDBQFZIIZ53A7JC2X23LSQLI5RTKV5YWDRT33YXW5LRMPKRSJYXS2EW",
-				NumChannelAccounts:   1,
-				QueuePollingInterval: 10,
-				MaxBaseFee:           txnbuild.MinBaseFee,
 				CrashTrackerClient:   &crashtracker.MockCrashTrackerClient{},
-				EventProducer:        nil,
 			},
-			wantErrContains: "event producer cannot be nil",
 		},
 	}
 
@@ -226,18 +186,18 @@ func Test_NewManager(t *testing.T) {
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
 
+	mSigService := mocks.NewMockSignatureService(t)
+
 	ctx := context.Background()
 	validSubmitterOptions := SubmitterOptions{
-		DatabaseDSN: dbt.DSN,
+		DBConnectionPool: dbConnectionPool,
 		MonitorService: tssMonitor.TSSMonitorService{
 			Client:        &monitorMocks.MockMonitorClient{},
 			GitCommitHash: "0xABC",
 			Version:       "0.01",
 		},
 		HorizonURL:           "https://horizon-testnet.stellar.org",
-		NetworkPassphrase:    network.TestNetworkPassphrase,
-		PrivateKeyEncrypter:  &utils.PrivateKeyEncrypterMock{},
-		DistributionSeed:     "SBDBQFZIIZ53A7JC2X23LSQLI5RTKV5YWDRT33YXW5LRMPKRSJYXS2EW",
+		SignatureService:     mSigService,
 		NumChannelAccounts:   5,
 		QueuePollingInterval: 10,
 		MaxBaseFee:           txnbuild.MinBaseFee,
@@ -259,10 +219,10 @@ func Test_NewManager(t *testing.T) {
 			name: "returns an error if the database connection cannot be opened",
 			getSubmitterOptionsFn: func() SubmitterOptions {
 				opts := validSubmitterOptions
-				opts.DatabaseDSN = "invalid-dsn"
+				opts.DBConnectionPool = nil
 				return opts
 			},
-			wantErrContains: "opening db connection pool: error pinging app DB connection pool: ",
+			wantErrContains: "validating options: database connection pool cannot be nil",
 		},
 		{
 			name:                  "returns an error if there are zero channel accounts in the database",
@@ -329,7 +289,6 @@ func Test_NewManager(t *testing.T) {
 				require.NoError(t, err)
 				require.NotNil(t, gotManager)
 				assert.NotEmpty(t, gotManager.dbConnectionPool)
-				defer gotManager.dbConnectionPool.Close()
 
 				// Assert the resulting manager state:
 				wantConnectionPool := gotManager.dbConnectionPool
@@ -344,14 +303,7 @@ func Test_NewManager(t *testing.T) {
 				})
 				require.NoError(t, err)
 
-				wantSigService, err := engine.NewDefaultSignatureService(engine.DefaultSignatureServiceOptions{
-					NetworkPassphrase:      submitterOptions.NetworkPassphrase,
-					DBConnectionPool:       wantConnectionPool,
-					DistributionPrivateKey: submitterOptions.DistributionSeed,
-					EncryptionPassphrase:   submitterOptions.DistributionSeed,
-					Encrypter:              submitterOptions.PrivateKeyEncrypter,
-				})
-				require.NoError(t, err)
+				wantSigService := mSigService
 
 				wantCrashTrackerClient := submitterOptions.CrashTrackerClient
 				if tc.wantCrashTrackerClientFn != nil {

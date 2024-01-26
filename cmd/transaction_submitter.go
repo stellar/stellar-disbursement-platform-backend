@@ -12,7 +12,6 @@ import (
 	"github.com/stellar/go/support/log"
 
 	cmdUtils "github.com/stellar/stellar-disbursement-platform-backend/cmd/utils"
-	"github.com/stellar/stellar-disbursement-platform-backend/db/router"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	di "github.com/stellar/stellar-disbursement-platform-backend/internal/dependencyinjection"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
@@ -20,7 +19,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve"
 	txSub "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission"
 	tssMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/monitor"
-	tssUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
 )
 
 type TxSubmitterCommand struct{}
@@ -49,6 +47,7 @@ func (t *TxSubmitterService) StartSubmitter(ctx context.Context, opts txSub.Subm
 
 	tssManager, err := txSub.NewManager(ctx, opts)
 	if err != nil {
+		defer opts.DBConnectionPool.Close()
 		opts.CrashTrackerClient.LogAndReportErrors(ctx, err, "Cannot start submitter service")
 		log.Fatalf("Error starting transaction submission service: %s", err.Error())
 	}
@@ -68,7 +67,6 @@ func (c *TxSubmitterCommand) Command(submitterService TxSubmitterServiceInterfac
 	submitterOpts := txSub.SubmitterOptions{}
 
 	configOpts := config.ConfigOptions{
-		cmdUtils.DistributionSeed(&submitterOpts.DistributionSeed),
 		cmdUtils.HorizonURLConfigOption(&submitterOpts.HorizonURL),
 		{
 			Name:        "num-channel-accounts",
@@ -114,6 +112,13 @@ func (c *TxSubmitterCommand) Command(submitterService TxSubmitterServiceInterfac
 	crashTrackerOptions := crashtracker.CrashTrackerOptions{}
 	configOpts = append(configOpts, cmdUtils.CrashTrackerTypeConfigOption(&crashTrackerOptions.CrashTrackerType))
 
+	// signature service config options:
+	sigServiceOptions := di.SignatureServiceOptions{}
+	configOpts = append(configOpts,
+		cmdUtils.ChannelAccountEncryptionPassphraseConfigOption(&sigServiceOptions.EncryptionPassphrase),
+		cmdUtils.DistributionSeed(&sigServiceOptions.DistributionPrivateKey),
+	)
+
 	// event broker options:
 	eventBrokerOptions := cmdUtils.EventBrokerOptions{}
 	configOpts = append(configOpts, cmdUtils.EventBrokerConfigOptions(&eventBrokerOptions)...)
@@ -150,15 +155,24 @@ func (c *TxSubmitterCommand) Command(submitterService TxSubmitterServiceInterfac
 			}
 			metricsServeOpts.MonitorService = &tssMonitorSvc
 
-			// Inject server dependencies
-			tssDatabaseDSN, err := router.GetDNSForTSS(globalOptions.DatabaseURL)
+			// Setup the TSSDBConnectionPool
+			tssDBConnectionPool, err := di.NewTSSDBConnectionPool(ctx, di.TSSDBConnectionPoolOptions{DatabaseURL: globalOptions.DatabaseURL})
 			if err != nil {
-				log.Ctx(ctx).Fatalf("Error getting TSS database DSN: %v", err)
+				log.Ctx(ctx).Fatalf("error getting TSS DB connection pool: %v", err)
 			}
-			submitterOpts.DatabaseDSN = tssDatabaseDSN
+
+			// Setup the signature service
+			sigServiceOptions.DBConnectionPool = tssDBConnectionPool
+			sigServiceOptions.NetworkPassphrase = globalOptions.NetworkPassphrase
+			signatureService, err := di.NewSignatureService(ctx, sigServiceOptions)
+			if err != nil {
+				log.Ctx(ctx).Fatalf("error creating signature service: %v", err)
+			}
+
+			// Inject server dependencies
+			submitterOpts.DBConnectionPool = tssDBConnectionPool
+			submitterOpts.SignatureService = signatureService
 			submitterOpts.MonitorService = tssMonitorSvc
-			submitterOpts.NetworkPassphrase = globalOptions.NetworkPassphrase
-			submitterOpts.PrivateKeyEncrypter = &tssUtils.DefaultPrivateKeyEncrypter{}
 
 			// Inject crash tracker options dependencies
 			globalOptions.PopulateCrashTrackerOptions(&crashTrackerOptions)
