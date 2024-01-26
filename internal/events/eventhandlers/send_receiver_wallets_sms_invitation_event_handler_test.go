@@ -8,31 +8,15 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
+	servicesmocks "github.com/stellar/stellar-disbursement-platform-backend/internal/services/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/router"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
-
-type SendReceiverWalletInviteServiceMock struct {
-	mock.Mock
-}
-
-var _ services.SendReceiverWalletInviteServiceInterface = new(SendReceiverWalletInviteServiceMock)
-
-func (s *SendReceiverWalletInviteServiceMock) SendInvite(ctx context.Context, receiverWalletsReq ...schemas.EventReceiverWalletSMSInvitationData) error {
-	args := s.Called(ctx, receiverWalletsReq)
-	return args.Error(0)
-}
-
-func (s *SendReceiverWalletInviteServiceMock) SetModels(models *data.Models) {
-	s.Called(models)
-}
 
 func Test_SendReceiverWalletsSMSInvitationEventHandler_Handle(t *testing.T) {
 	dbt := dbtest.Open(t)
@@ -48,7 +32,7 @@ func Test_SendReceiverWalletsSMSInvitationEventHandler_Handle(t *testing.T) {
 	require.NoError(t, err)
 
 	crashTrackerClient := crashtracker.MockCrashTrackerClient{}
-	service := SendReceiverWalletInviteServiceMock{}
+	service := servicesmocks.MockSendReceiverWalletInviteService{}
 
 	handler := SendReceiverWalletsSMSInvitationEventHandler{
 		tenantManager:       tenantManager,
