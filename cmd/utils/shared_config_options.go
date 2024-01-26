@@ -8,8 +8,10 @@ import (
 	"github.com/stellar/go/support/config"
 	"github.com/stellar/go/txnbuild"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 )
 
 // TwilioConfigOptions returns the config options for Twilio. Relevant for loading configs needed for the messenger type(s): `TWILIO_*`.
@@ -154,6 +156,28 @@ func EventBrokerConfigOptions(opts *EventBrokerOptions) []*config.ConfigOption {
 	}
 }
 
+func BaseSignatureServiceConfigOptions(opts *engine.SignatureServiceOptions) []*config.ConfigOption {
+	return []*config.ConfigOption{
+		{
+			Name:           "channel-account-encryption-passphrase",
+			Usage:          "A Stellar-compliant ed25519 private key used to encrypt/decrypt the channel accounts' private keys. When not set, it will default to the value of the 'distribution-seed' option.",
+			OptType:        types.String,
+			CustomSetValue: SetConfigOptionStellarPrivateKey,
+			ConfigKey:      &opts.EncryptionPassphrase,
+			Required:       false,
+		},
+		{
+			Name:           "signature-service-type",
+			Usage:          "The type of the signature service. Options: ['DEFAULT']",
+			OptType:        types.String,
+			CustomSetValue: SetConfigOptionSignatureServiceType,
+			ConfigKey:      &opts.Type,
+			FlagDefault:    string(engine.SignatureServiceTypeDefault),
+			Required:       true,
+		},
+	}
+}
+
 func HorizonURLConfigOption(targetPointer interface{}) *config.ConfigOption {
 	return &config.ConfigOption{
 		Name:        "horizon-url",
@@ -172,19 +196,8 @@ func CrashTrackerTypeConfigOption(targetPointer interface{}) *config.ConfigOptio
 		OptType:        types.String,
 		CustomSetValue: SetConfigOptionCrashTrackerType,
 		ConfigKey:      targetPointer,
-		FlagDefault:    "DRY_RUN",
+		FlagDefault:    string(crashtracker.CrashTrackerTypeDryRun),
 		Required:       true,
-	}
-}
-
-func ChannelAccountEncryptionPassphraseConfigOption(targetPointer interface{}) *config.ConfigOption {
-	return &config.ConfigOption{
-		Name:           "channel-account-encryption-passphrase",
-		Usage:          "A Stellar-compliant ed25519 private key used to encrypt/decrypt the channel accounts' private keys. When not set, it will default to the value of the 'distribution-seed' option.",
-		OptType:        types.String,
-		CustomSetValue: SetConfigOptionStellarPrivateKey,
-		ConfigKey:      targetPointer,
-		Required:       false,
 	}
 }
 

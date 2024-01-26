@@ -377,7 +377,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 
 	// signature service config options:
 	sigServiceOptions := engine.SignatureServiceOptions{}
-	configOpts = append(configOpts, cmdUtils.ChannelAccountEncryptionPassphraseConfigOption(&sigServiceOptions.EncryptionPassphrase))
+	configOpts = append(configOpts, cmdUtils.BaseSignatureServiceConfigOptions(&sigServiceOptions)...)
 
 	cmd := &cobra.Command{
 		Use:   "serve",

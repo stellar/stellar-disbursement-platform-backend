@@ -116,8 +116,10 @@ func (c *TxSubmitterCommand) Command(submitterService TxSubmitterServiceInterfac
 	// signature service config options:
 	sigServiceOptions := engine.SignatureServiceOptions{}
 	configOpts = append(configOpts,
-		cmdUtils.ChannelAccountEncryptionPassphraseConfigOption(&sigServiceOptions.EncryptionPassphrase),
-		cmdUtils.DistributionSeed(&sigServiceOptions.DistributionPrivateKey),
+		append(
+			cmdUtils.BaseSignatureServiceConfigOptions(&sigServiceOptions),
+			cmdUtils.DistributionSeed(&sigServiceOptions.DistributionPrivateKey),
+		)...,
 	)
 
 	// event broker options:

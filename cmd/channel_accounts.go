@@ -291,14 +291,14 @@ func chAccServiceConfigOptions(
 	sigServiceOptions *engine.SignatureServiceOptions,
 	chAccService *txSubSvc.ChannelAccountsService,
 ) config.ConfigOptions {
-	return config.ConfigOptions{
+	return append(
 		// signature service options:
+		cmdUtils.BaseSignatureServiceConfigOptions(sigServiceOptions),
 		cmdUtils.DistributionSeed(&sigServiceOptions.DistributionPrivateKey),
-		cmdUtils.ChannelAccountEncryptionPassphraseConfigOption(&sigServiceOptions.EncryptionPassphrase),
 		// other shared options:
 		cmdUtils.HorizonURLConfigOption(&chAccService.HorizonURL),
 		cmdUtils.MaxBaseFee(&chAccService.MaxBaseFee),
-	}
+	)
 }
 
 // chAccServicePersistentPreRun runs the persistent pre run for the channel accounts service to be used when the

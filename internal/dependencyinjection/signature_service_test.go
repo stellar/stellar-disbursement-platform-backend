@@ -32,6 +32,7 @@ func Test_dependencyinjection_NewSignatureService(t *testing.T) {
 			DBConnectionPool:       dbConnectionPool,
 			DistributionPrivateKey: distributionPrivateKey,
 			EncryptionPassphrase:   encryptionPassphrase,
+			Type:                   engine.SignatureServiceTypeDefault,
 		}
 
 		gotDependency, err := NewSignatureService(ctx, opts)
@@ -43,10 +44,19 @@ func Test_dependencyinjection_NewSignatureService(t *testing.T) {
 		assert.Equal(t, &gotDependency, &gotDependencyDuplicate)
 	})
 
-	t.Run("should return an error on a invalid option", func(t *testing.T) {
+	t.Run("should return an error on an invalid sig service type", func(t *testing.T) {
 		ClearInstancesTestHelper(t)
 
 		opts := engine.SignatureServiceOptions{}
+		gotDependency, err := NewSignatureService(ctx, opts)
+		assert.Nil(t, gotDependency)
+		assert.EqualError(t, err, "creating a new signature service instance: invalid signature service type: ")
+	})
+
+	t.Run("should return an error on a invalid option", func(t *testing.T) {
+		ClearInstancesTestHelper(t)
+
+		opts := engine.SignatureServiceOptions{Type: engine.SignatureServiceTypeDefault}
 		gotDependency, err := NewSignatureService(ctx, opts)
 		assert.Nil(t, gotDependency)
 		assert.EqualError(t, err, "creating a new signature service instance: validating options: network passphrase cannot be empty")
@@ -62,6 +72,7 @@ func Test_dependencyinjection_NewSignatureService(t *testing.T) {
 			DBConnectionPool:       dbConnectionPool,
 			DistributionPrivateKey: distributionPrivateKey,
 			EncryptionPassphrase:   encryptionPassphrase,
+			Type:                   engine.SignatureServiceTypeDefault,
 		}
 		gotDependency, err := NewSignatureService(ctx, opts)
 		assert.Nil(t, gotDependency)
