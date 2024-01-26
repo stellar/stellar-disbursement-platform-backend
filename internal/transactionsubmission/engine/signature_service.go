@@ -13,6 +13,35 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
 )
 
+type SignatureServiceType string
+
+const (
+	SignatureServiceTypeDefault SignatureServiceType = "DEFAULT"
+)
+
+type SignatureServiceOptions struct {
+	NetworkPassphrase      string
+	DBConnectionPool       db.DBConnectionPool
+	DistributionPrivateKey string
+	EncryptionPassphrase   string
+	Type                   SignatureServiceType
+}
+
+func NewSignatureService(opts SignatureServiceOptions) (SignatureService, error) {
+	switch opts.Type {
+	case SignatureServiceTypeDefault:
+		return NewDefaultSignatureService(DefaultSignatureServiceOptions{
+			NetworkPassphrase:      opts.NetworkPassphrase,
+			DBConnectionPool:       opts.DBConnectionPool,
+			DistributionPrivateKey: opts.DistributionPrivateKey,
+			EncryptionPassphrase:   opts.EncryptionPassphrase,
+		})
+
+	default:
+		return nil, fmt.Errorf("invalid signature service type: %v", opts.Type)
+	}
+}
+
 //go:generate mockery --name=SignatureService --case=underscore --structname=MockSignatureService
 type SignatureService interface {
 	DistributionAccount() string

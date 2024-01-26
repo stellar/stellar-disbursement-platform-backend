@@ -25,6 +25,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/scheduler"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	serveadmin "github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/serve"
 )
 
@@ -94,7 +95,7 @@ func Test_serve(t *testing.T) {
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
 	defer func() {
-		err := dbConnectionPool.Close()
+		err = dbConnectionPool.Close()
 		require.NoError(t, err)
 	}()
 
@@ -164,7 +165,7 @@ func Test_serve(t *testing.T) {
 	defer mMonitorService.AssertExpectations(t)
 
 	encryptionPassphrase := keypair.MustRandom().Seed()
-	serveOpts.SignatureService, err = di.NewSignatureService(ctx, di.SignatureServiceOptions{
+	serveOpts.SignatureService, err = di.NewSignatureService(ctx, engine.SignatureServiceOptions{
 		NetworkPassphrase:      serveOpts.NetworkPassphrase,
 		DBConnectionPool:       dbConnectionPool,
 		DistributionPrivateKey: serveOpts.DistributionSeed,

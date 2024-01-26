@@ -18,6 +18,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve"
 	txSub "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	tssMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/monitor"
 )
 
@@ -113,7 +114,7 @@ func (c *TxSubmitterCommand) Command(submitterService TxSubmitterServiceInterfac
 	configOpts = append(configOpts, cmdUtils.CrashTrackerTypeConfigOption(&crashTrackerOptions.CrashTrackerType))
 
 	// signature service config options:
-	sigServiceOptions := di.SignatureServiceOptions{}
+	sigServiceOptions := engine.SignatureServiceOptions{}
 	configOpts = append(configOpts,
 		cmdUtils.ChannelAccountEncryptionPassphraseConfigOption(&sigServiceOptions.EncryptionPassphrase),
 		cmdUtils.DistributionSeed(&sigServiceOptions.DistributionPrivateKey),

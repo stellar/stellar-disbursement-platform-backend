@@ -15,6 +15,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/eventhandlers"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/scheduler"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 
 	"github.com/spf13/cobra"
 	"github.com/stellar/go/support/config"
@@ -375,7 +376,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 	configOpts = append(configOpts, cmdUtils.EventBrokerConfigOptions(&eventBrokerOptions)...)
 
 	// signature service config options:
-	sigServiceOptions := di.SignatureServiceOptions{}
+	sigServiceOptions := engine.SignatureServiceOptions{}
 	configOpts = append(configOpts, cmdUtils.ChannelAccountEncryptionPassphraseConfigOption(&sigServiceOptions.EncryptionPassphrase))
 
 	cmd := &cobra.Command{

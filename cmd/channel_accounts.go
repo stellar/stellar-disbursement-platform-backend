@@ -14,6 +14,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	di "github.com/stellar/stellar-disbursement-platform-backend/internal/dependencyinjection"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	txSubSvc "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/services"
 )
 
@@ -108,7 +109,7 @@ func (c *ChannelAccountsCommand) Command(cmdService ChAccCmdServiceInterface) *c
 
 func (c *ChannelAccountsCommand) CreateCommand(cmdService ChAccCmdServiceInterface) *cobra.Command {
 	chAccService := txSubSvc.ChannelAccountsService{}
-	sigServiceOptions := di.SignatureServiceOptions{}
+	sigServiceOptions := engine.SignatureServiceOptions{}
 	configOpts := chAccServiceConfigOptions(&sigServiceOptions, &chAccService)
 
 	createCmd := &cobra.Command{
@@ -143,7 +144,7 @@ func (c *ChannelAccountsCommand) CreateCommand(cmdService ChAccCmdServiceInterfa
 
 func (c *ChannelAccountsCommand) VerifyCommand(cmdService ChAccCmdServiceInterface) *cobra.Command {
 	chAccService := txSubSvc.ChannelAccountsService{}
-	sigServiceOptions := di.SignatureServiceOptions{}
+	sigServiceOptions := engine.SignatureServiceOptions{}
 	configOpts := chAccServiceConfigOptions(&sigServiceOptions, &chAccService)
 
 	var deleteInvalidAccounts bool
@@ -181,7 +182,7 @@ func (c *ChannelAccountsCommand) VerifyCommand(cmdService ChAccCmdServiceInterfa
 
 func (c *ChannelAccountsCommand) EnsureCommand(cmdService ChAccCmdServiceInterface) *cobra.Command {
 	chAccService := txSubSvc.ChannelAccountsService{}
-	sigServiceOptions := di.SignatureServiceOptions{}
+	sigServiceOptions := engine.SignatureServiceOptions{}
 	configOpts := chAccServiceConfigOptions(&sigServiceOptions, &chAccService)
 
 	ensureCmd := &cobra.Command{
@@ -218,7 +219,7 @@ func (c *ChannelAccountsCommand) EnsureCommand(cmdService ChAccCmdServiceInterfa
 
 func (c *ChannelAccountsCommand) DeleteCommand(cmdService ChAccCmdServiceInterface) *cobra.Command {
 	chAccService := txSubSvc.ChannelAccountsService{}
-	sigServiceOptions := di.SignatureServiceOptions{}
+	sigServiceOptions := engine.SignatureServiceOptions{}
 	configOpts := chAccServiceConfigOptions(&sigServiceOptions, &chAccService)
 
 	deleteChAccOpts := txSubSvc.DeleteChannelAccountsOptions{}
@@ -287,7 +288,7 @@ func (c *ChannelAccountsCommand) ViewCommand(cmdService ChAccCmdServiceInterface
 // chAccServiceConfigOptions returns the config options for the channel accounts service to be used when the signature
 // service is needed.
 func chAccServiceConfigOptions(
-	sigServiceOptions *di.SignatureServiceOptions,
+	sigServiceOptions *engine.SignatureServiceOptions,
 	chAccService *txSubSvc.ChannelAccountsService,
 ) config.ConfigOptions {
 	return config.ConfigOptions{
@@ -306,7 +307,7 @@ func (c *ChannelAccountsCommand) chAccServicePersistentPreRun(
 	cmd *cobra.Command,
 	args []string,
 	configOpts config.ConfigOptions,
-	sigServiceOptions *di.SignatureServiceOptions,
+	sigServiceOptions *engine.SignatureServiceOptions,
 	chAccService *txSubSvc.ChannelAccountsService,
 ) error {
 	ctx := cmd.Context()
