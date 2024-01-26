@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strconv"
 
 	"github.com/stellar/go/clients/horizonclient"
 	"golang.org/x/exp/maps"
@@ -47,7 +48,12 @@ var (
 )
 
 // NewDisbursementManagementService is a factory function for creating a new DisbursementManagementService.
-func NewDisbursementManagementService(models *data.Models, dbConnectionPool db.DBConnectionPool, authManager auth.AuthManager, horizonClient horizonclient.ClientInterface) *DisbursementManagementService {
+func NewDisbursementManagementService(
+	models *data.Models,
+	dbConnectionPool db.DBConnectionPool,
+	authManager auth.AuthManager,
+	horizonClient horizonclient.ClientInterface,
+) *DisbursementManagementService {
 	return &DisbursementManagementService{
 		models:           models,
 		dbConnectionPool: dbConnectionPool,
@@ -170,9 +176,9 @@ func (s *DisbursementManagementService) GetDisbursementReceiversWithCount(ctx co
 }
 
 // StartDisbursement starts a disbursement and all its payments and receivers wallets.
-func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, disbursementID string) error {
+func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, disbursementID string, distributionPubKey string) error {
 	return db.RunInTransaction(ctx, s.dbConnectionPool, nil, func(dbTx db.DBTransaction) error {
-		disbursement, err := s.models.Disbursements.Get(ctx, dbTx, disbursementID)
+		disbursement, err := s.models.Disbursements.GetWithStatistics(ctx, disbursementID)
 		if err != nil {
 			if errors.Is(err, data.ErrRecordNotFound) {
 				return ErrDisbursementNotFound
@@ -214,21 +220,64 @@ func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, d
 		}
 
 		// 4. Check if there is enough balance from the distribution wallet for this disbursement along with any pending disbursements
-		racc, err := s.horizonClient.AccountDetail(horizonclient.AccountRequest{
-			AccountID: "",
-		})
+		rootAccount, err := s.horizonClient.AccountDetail(
+			horizonclient.AccountRequest{AccountID: distributionPubKey})
 		if err != nil {
 			return fmt.Errorf("error getting details for root account from horizon client: %w", err)
 		}
-		asset := disbursement.Asset
-		var distributionBalance string
-		for _, b := range racc.Balances {
+
+		var distributionBalance float64
+		for _, b := range rootAccount.Balances {
 			if b.Asset.Code == disbursement.Asset.Code {
-				distributionBalance = b.Balance
+				distributionBalance, err = strconv.ParseFloat(b.Balance, 64)
+				if err != nil {
+					return fmt.Errorf("error converting Horizon distribution account balance %s into float: %w", b.Balance, err)
+				}
 			}
 		}
 
-		dAmount := disbursement.TotalAmount
+		disbursementAmount, err := strconv.ParseFloat(disbursement.TotalAmount, 64)
+		if err != nil {
+			return fmt.Errorf(
+				"error converting total amount %s for disbursement id %s into float: %w",
+				disbursement.TotalAmount,
+				disbursementID,
+				err,
+			)
+		}
+
+		var totalPendingAmount float64 = 0.0
+		incompletePayments, err := s.models.Payment.GetAll(ctx, &data.QueryParams{
+			Filters: map[data.FilterKey]interface{}{
+				data.FilterKeyStatus: []data.PaymentStatus{
+					data.DraftPaymentStatus,
+					data.ReadyPaymentStatus,
+					data.PausedPaymentStatus,
+					data.FailedPaymentStatus,
+				},
+			},
+		}, dbTx)
+		if err != nil {
+			return fmt.Errorf("error retreiving incomplete payments: %w", err)
+		}
+
+		for _, p := range incompletePayments {
+			paymentAmount, err := strconv.ParseFloat(p.Amount, 64)
+			if err != nil {
+				return fmt.Errorf(
+					"error converting amount %s for paymment id %s into float: %w",
+					p.Amount,
+					p.ID,
+					err,
+				)
+			}
+
+			totalPendingAmount += paymentAmount
+		}
+
+		if (distributionBalance - (disbursementAmount + totalPendingAmount)) < 0 {
+			return errors.New("not enough balance in distribution account to complete disbursement")
+		}
 
 		// 5. Update all correct payment status to `ready`
 		err = s.models.Payment.UpdateStatusByDisbursementID(ctx, dbTx, disbursementID, data.ReadyPaymentStatus)
