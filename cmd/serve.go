@@ -148,11 +148,7 @@ func (s *ServerService) SetupConsumers(ctx context.Context, eventBrokerOptions c
 
 func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorService monitor.MonitorServiceInterface) *cobra.Command {
 	serveOpts := serve.ServeOptions{}
-	metricsServeOpts := serve.MetricsServeOptions{}
-	adminServeOpts := serveadmin.ServeOptions{}
 	schedulerOptions := scheduler.SchedulerOptions{}
-	crashTrackerOptions := crashtracker.CrashTrackerOptions{}
-	eventHandlerOptions := events.EventHandlerOptions{}
 
 	configOpts := config.ConfigOptions{
 		{
@@ -163,32 +159,6 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			FlagDefault: 8000,
 			Required:    true,
 		},
-		{
-			Name:           "metrics-type",
-			Usage:          `Metric monitor type. Options: "PROMETHEUS"`,
-			OptType:        types.String,
-			CustomSetValue: cmdUtils.SetConfigOptionMetricType,
-			ConfigKey:      &metricsServeOpts.MetricType,
-			FlagDefault:    "PROMETHEUS",
-			Required:       true,
-		},
-		{
-			Name:        "metrics-port",
-			Usage:       "Port where the metrics server will be listening on",
-			OptType:     types.Int,
-			ConfigKey:   &metricsServeOpts.Port,
-			FlagDefault: 8002,
-			Required:    true,
-		},
-		{
-			Name:        "admin-port",
-			Usage:       "Port where the admin tenant server will be listening on",
-			OptType:     types.Int,
-			ConfigKey:   &adminServeOpts.Port,
-			FlagDefault: 8003,
-			Required:    true,
-		},
-		cmdUtils.CrashTrackerTypeConfigOption(&crashTrackerOptions.CrashTrackerType),
 		{
 			Name:      "instance-name",
 			Usage:     `Name of the SDP instance. Example: "SDP Testnet".`,
@@ -274,14 +244,6 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			FlagDefault: 24,
 			Required:    true,
 		},
-		{
-			Name:        "max-invitation-sms-resend-attempts",
-			Usage:       "The maximum number of attempts to resend the SMS invitation to the Receiver Wallets.",
-			OptType:     types.Int,
-			ConfigKey:   &eventHandlerOptions.MaxInvitationSMSResendAttempts,
-			FlagDefault: 3,
-			Required:    true,
-		},
 		cmdUtils.DistributionPublicKey(&serveOpts.DistributionPublicKey),
 		cmdUtils.DistributionSeed(&serveOpts.DistributionSeed),
 		{
@@ -325,6 +287,55 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			Required:    false,
 		},
 	}
+
+	// crash tracker options
+	crashTrackerOptions := crashtracker.CrashTrackerOptions{}
+	configOpts = append(configOpts, cmdUtils.CrashTrackerTypeConfigOption(&crashTrackerOptions.CrashTrackerType))
+
+	// admin endpoint(s) options
+	adminServeOpts := serveadmin.ServeOptions{}
+	configOpts = append(configOpts,
+		&config.ConfigOption{
+			Name:        "admin-port",
+			Usage:       "Port where the admin tenant server will be listening on",
+			OptType:     types.Int,
+			ConfigKey:   &adminServeOpts.Port,
+			FlagDefault: 8003,
+			Required:    true,
+		})
+
+	// metrics server options
+	metricsServeOpts := serve.MetricsServeOptions{}
+	configOpts = append(configOpts,
+		&config.ConfigOption{
+			Name:           "metrics-type",
+			Usage:          `Metric monitor type. Options: "PROMETHEUS"`,
+			OptType:        types.String,
+			CustomSetValue: cmdUtils.SetConfigOptionMetricType,
+			ConfigKey:      &metricsServeOpts.MetricType,
+			FlagDefault:    "PROMETHEUS",
+			Required:       true,
+		},
+		&config.ConfigOption{
+			Name:        "metrics-port",
+			Usage:       "Port where the metrics server will be listening on",
+			OptType:     types.Int,
+			ConfigKey:   &metricsServeOpts.Port,
+			FlagDefault: 8002,
+			Required:    true,
+		})
+
+	// event handler options
+	eventHandlerOptions := events.EventHandlerOptions{}
+	configOpts = append(configOpts,
+		&config.ConfigOption{
+			Name:        "max-invitation-sms-resend-attempts",
+			Usage:       "The maximum number of attempts to resend the SMS invitation to the Receiver Wallets.",
+			OptType:     types.Int,
+			ConfigKey:   &eventHandlerOptions.MaxInvitationSMSResendAttempts,
+			FlagDefault: 3,
+			Required:    true,
+		})
 
 	// messenger config options:
 	messengerOptions := message.MessengerOptions{}
