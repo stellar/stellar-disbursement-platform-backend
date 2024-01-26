@@ -190,7 +190,7 @@ func (c *TxSubmitterCommand) Command(submitterService TxSubmitterServiceInterfac
 			ctx := cmd.Context()
 
 			if eventBrokerOptions.EventBrokerType == events.KafkaEventBrokerType {
-				kafkaProducer, err := events.NewKafkaProducer(eventBrokerOptions.BrokerURLs)
+				kafkaProducer, err := events.NewKafkaProducer(cmdUtils.KafkaConfig(eventBrokerOptions))
 				if err != nil {
 					log.Ctx(ctx).Fatalf("error creating Kafka Producer: %v", err)
 				}

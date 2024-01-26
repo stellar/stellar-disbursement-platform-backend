@@ -103,7 +103,7 @@ func (s *ServerService) SetupConsumers(ctx context.Context, eventBrokerOptions c
 	}()
 
 	smsInvitationConsumer, err := events.NewKafkaConsumer(
-		eventBrokerOptions.BrokerURLs,
+		cmdUtils.KafkaConfig(eventBrokerOptions),
 		events.ReceiverWalletNewInvitationTopic,
 		eventBrokerOptions.ConsumerGroupID,
 		eventhandlers.NewSendReceiverWalletsSMSInvitationEventHandler(eventhandlers.SendReceiverWalletsSMSInvitationEventHandlerOptions{
@@ -120,7 +120,7 @@ func (s *ServerService) SetupConsumers(ctx context.Context, eventBrokerOptions c
 	}
 
 	paymentCompletedConsumer, err := events.NewKafkaConsumer(
-		eventBrokerOptions.BrokerURLs,
+		cmdUtils.KafkaConfig(eventBrokerOptions),
 		events.PaymentCompletedTopic,
 		eventBrokerOptions.ConsumerGroupID,
 		eventhandlers.NewPaymentFromSubmitterEventHandler(eventhandlers.PaymentFromSubmitterEventHandlerOptions{
@@ -480,7 +480,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 
 			// Kafka (background)
 			if eventBrokerOptions.EventBrokerType == events.KafkaEventBrokerType {
-				kafkaProducer, err := events.NewKafkaProducer(eventBrokerOptions.BrokerURLs)
+				kafkaProducer, err := events.NewKafkaProducer(cmdUtils.KafkaConfig(eventBrokerOptions))
 				if err != nil {
 					log.Ctx(ctx).Fatalf("error creating Kafka Producer: %v", err)
 				}

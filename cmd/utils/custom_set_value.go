@@ -281,3 +281,15 @@ func SetConfigOptionEventBrokerType(co *config.ConfigOption) error {
 	*(co.ConfigKey.(*events.EventBrokerType)) = ebTypeParsed
 	return nil
 }
+
+func SetConfigOptionKafkaSecurityProtocol(co *config.ConfigOption) error {
+	protocol := viper.GetString(co.Name)
+
+	protocolParsed, err := events.ParseKafkaSecurityProtocol(protocol)
+	if err != nil {
+		return fmt.Errorf("couldn't parse kafka security protocol: %w", err)
+	}
+
+	*(co.ConfigKey.(*events.KafkaSecurityProtocol)) = protocolParsed
+	return nil
+}

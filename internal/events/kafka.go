@@ -4,11 +4,63 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
+
+	"github.com/segmentio/kafka-go/sasl/plain"
 
 	"github.com/segmentio/kafka-go"
 	"github.com/stellar/go/support/log"
 	"golang.org/x/exp/maps"
 )
+
+type KafkaSecurityProtocol string
+
+const (
+	KafkaProtocolPlaintext     KafkaSecurityProtocol = "PLAINTEXT"
+	KafkaProtocolSASLPlaintext KafkaSecurityProtocol = "SASL_PLAINTEXT"
+	KafkaProtocolSASLSSL       KafkaSecurityProtocol = "SASL_SSL"
+	KafkaProtocolSSL           KafkaSecurityProtocol = "SSL"
+)
+
+func ParseKafkaSecurityProtocol(protocol string) (KafkaSecurityProtocol, error) {
+	protocol = strings.ToUpper(protocol)
+	switch KafkaSecurityProtocol(protocol) {
+	case KafkaProtocolPlaintext, KafkaProtocolSASLPlaintext, KafkaProtocolSASLSSL, KafkaProtocolSSL:
+		return KafkaSecurityProtocol(protocol), nil
+	default:
+		return "", fmt.Errorf("invalid kafka security protocol: %s", protocol)
+	}
+}
+
+type KafkaConfig struct {
+	Brokers          []string
+	SecurityProtocol KafkaSecurityProtocol
+	SaslUsername     string
+	SaslPassword     string
+}
+
+func (kc *KafkaConfig) Validate() error {
+	if len(kc.Brokers) == 0 {
+		return fmt.Errorf("brokers cannot be empty")
+	}
+
+	if kc.SecurityProtocol == "" {
+		return fmt.Errorf("security protocol cannot be empty")
+	}
+
+	if kc.SecurityProtocol == KafkaProtocolSASLPlaintext || kc.SecurityProtocol == KafkaProtocolSASLSSL {
+		if kc.SaslUsername == "" || kc.SaslPassword == "" {
+			return fmt.Errorf("SASL credentials must be provided for SASL_PLAINTEXT and SASL_SSL protocols")
+		}
+	}
+
+	if kc.SecurityProtocol == KafkaProtocolSASLSSL || kc.SecurityProtocol == KafkaProtocolSSL {
+		// TODO: SDP-1071 Add additional validation for SASL_SSL and SSL
+		return fmt.Errorf("security protocols SASL_SSL and SSL are not yet supported")
+	}
+
+	return nil
+}
 
 type KafkaProducer struct {
 	writer *kafka.Writer
@@ -17,17 +69,29 @@ type KafkaProducer struct {
 // Implements Producer interface
 var _ Producer = new(KafkaProducer)
 
-func NewKafkaProducer(brokers []string) (*KafkaProducer, error) {
+func NewKafkaProducer(config KafkaConfig) (*KafkaProducer, error) {
 	k := KafkaProducer{}
 
-	if len(brokers) == 0 {
-		return nil, fmt.Errorf("brokers cannot be empty")
+	err := config.Validate()
+	if err != nil {
+		return nil, fmt.Errorf("invalid kafka config: %w", err)
+	}
+
+	var transport *kafka.Transport
+	if config.SecurityProtocol == KafkaProtocolSASLPlaintext || config.SecurityProtocol == KafkaProtocolSASLSSL {
+		transport = &kafka.Transport{
+			SASL: plain.Mechanism{
+				Username: config.SaslUsername,
+				Password: config.SaslPassword,
+			},
+		}
 	}
 
 	k.writer = &kafka.Writer{
-		Addr:         kafka.TCP(brokers...),
+		Addr:         kafka.TCP(config.Brokers...),
 		Balancer:     &kafka.RoundRobin{},
 		RequiredAcks: -1,
+		Transport:    transport,
 	}
 
 	return &k, nil
@@ -73,13 +137,29 @@ type KafkaConsumer struct {
 // Implements Consumer interface
 var _ Consumer = new(KafkaConsumer)
 
-func NewKafkaConsumer(brokers []string, topic string, consumerGroupID string, handlers ...EventHandler) (*KafkaConsumer, error) {
+func NewKafkaConsumer(config KafkaConfig, topic string, consumerGroupID string, handlers ...EventHandler) (*KafkaConsumer, error) {
 	k := KafkaConsumer{}
 
+	err := config.Validate()
+	if err != nil {
+		return nil, fmt.Errorf("invalid kafka config: %w", err)
+	}
+
+	var dialer *kafka.Dialer
+	if config.SecurityProtocol == KafkaProtocolSASLPlaintext || config.SecurityProtocol == KafkaProtocolSASLSSL {
+		dialer = &kafka.Dialer{
+			SASLMechanism: plain.Mechanism{
+				Username: config.SaslUsername,
+				Password: config.SaslPassword,
+			},
+		}
+	}
+
 	k.reader = kafka.NewReader(kafka.ReaderConfig{
-		Brokers: brokers,
+		Brokers: config.Brokers,
 		Topic:   topic,
 		GroupID: consumerGroupID,
+		Dialer:  dialer,
 	})
 
 	if len(handlers) == 0 {
