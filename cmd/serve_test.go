@@ -25,7 +25,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/scheduler"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
+	engineMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/mocks"
 	serveadmin "github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/serve"
 )
 
@@ -90,14 +90,10 @@ func Test_serve_wasCalled(t *testing.T) {
 
 func Test_serve(t *testing.T) {
 	dbt := dbtest.Open(t)
-	randomDatabaseDSN := dbt.DSN
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
-	defer func() {
-		err = dbConnectionPool.Close()
-		require.NoError(t, err)
-	}()
+	dbConnectionPool.Close()
 
 	cmdUtils.ClearTestEnvironment(t)
 	// Populate the dependency injection object for the TSS DB connection pool, so we can close it later
@@ -115,7 +111,7 @@ func Test_serve(t *testing.T) {
 		Version:                         "x.y.z",
 		InstanceName:                    "SDP Testnet",
 		MonitorService:                  &mMonitorService,
-		DatabaseDSN:                     randomDatabaseDSN,
+		DatabaseDSN:                     dbt.DSN,
 		EC256PublicKey:                  "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAER88h7AiQyVDysRTxKvBB6CaiO/kS\ncvGyimApUE/12gFhNTRf37SE19CSCllKxstnVFOpLLWB7Qu5OJ0Wvcz3hg==\n-----END PUBLIC KEY-----",
 		EC256PrivateKey:                 "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgIqI1MzMZIw2pQDLx\nJn0+FcNT/hNjwtn2TW43710JKZqhRANCAARHzyHsCJDJUPKxFPEq8EHoJqI7+RJy\n8bKKYClQT/XaAWE1NF/ftITX0JIKWUrGy2dUU6kstYHtC7k4nRa9zPeG\n-----END PRIVATE KEY-----",
 		CorsAllowedOrigins:              []string{"*"},
@@ -165,13 +161,8 @@ func Test_serve(t *testing.T) {
 	defer mMonitorService.AssertExpectations(t)
 
 	encryptionPassphrase := keypair.MustRandom().Seed()
-	serveOpts.SignatureService, err = di.NewSignatureService(ctx, engine.SignatureServiceOptions{
-		NetworkPassphrase:      serveOpts.NetworkPassphrase,
-		DBConnectionPool:       dbConnectionPool,
-		DistributionPrivateKey: serveOpts.DistributionSeed,
-		EncryptionPassphrase:   encryptionPassphrase,
-	})
-	require.NoError(t, err)
+	serveOpts.SignatureService = engineMocks.NewMockSignatureService(t)
+	di.SetInstance("signature_service_instance", serveOpts.SignatureService)
 
 	serveMetricOpts := serve.MetricsServeOptions{
 		Port:        8002,
@@ -184,7 +175,7 @@ func Test_serve(t *testing.T) {
 	serveTenantOpts := serveadmin.ServeOptions{
 		Environment:          "test",
 		EmailMessengerClient: messengerClient,
-		DatabaseDSN:          randomDatabaseDSN,
+		DatabaseDSN:          dbt.DSN,
 		GitCommit:            "1234567890abcdef",
 		NetworkPassphrase:    network.TestNetworkPassphrase,
 		Port:                 8003,
@@ -253,7 +244,6 @@ func Test_serve(t *testing.T) {
 	t.Setenv("CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE", encryptionPassphrase)
 	t.Setenv("ENVIRONMENT", "test")
 	t.Setenv("METRICS_TYPE", "PROMETHEUS")
-	t.Setenv("CHANNEL_ACCOUNT_ID", "1")
 
 	// test & assert
 	rootCmd.SetArgs([]string{"serve"})
