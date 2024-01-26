@@ -66,27 +66,8 @@ func (s *TxSubmitterService) StartMetricsServe(ctx context.Context, opts serve.M
 
 func (c *TxSubmitterCommand) Command(submitterService TxSubmitterServiceInterface) *cobra.Command {
 	submitterOpts := txSub.SubmitterOptions{}
-	metricsServeOpts := serve.MetricsServeOptions{}
-	crashTrackerOptions := crashtracker.CrashTrackerOptions{}
 
 	configOpts := config.ConfigOptions{
-		{
-			Name:        "tss-metrics-port",
-			Usage:       `Port where the metrics server will be listening on. Default: 9002"`,
-			OptType:     types.Int,
-			ConfigKey:   &metricsServeOpts.Port,
-			FlagDefault: 9002,
-			Required:    true,
-		},
-		{
-			Name:           "tss-metrics-type",
-			Usage:          `Metric monitor type. Options: "TSS_PROMETHEUS"`,
-			OptType:        types.String,
-			CustomSetValue: cmdUtils.SetConfigOptionMetricType,
-			ConfigKey:      &metricsServeOpts.MetricType,
-			FlagDefault:    "TSS_PROMETHEUS",
-			Required:       true,
-		},
 		cmdUtils.DistributionSeed(&submitterOpts.DistributionSeed),
 		cmdUtils.HorizonURLConfigOption(&submitterOpts.HorizonURL),
 		{
@@ -106,8 +87,32 @@ func (c *TxSubmitterCommand) Command(submitterService TxSubmitterServiceInterfac
 			Required:    true,
 		},
 		cmdUtils.MaxBaseFee(&submitterOpts.MaxBaseFee),
-		cmdUtils.CrashTrackerTypeConfigOption(&crashTrackerOptions.CrashTrackerType),
 	}
+
+	// metrics server options
+	metricsServeOpts := serve.MetricsServeOptions{}
+	configOpts = append(configOpts,
+		&config.ConfigOption{
+			Name:           "tss-metrics-type",
+			Usage:          `Metric monitor type. Options: "TSS_PROMETHEUS"`,
+			OptType:        types.String,
+			CustomSetValue: cmdUtils.SetConfigOptionMetricType,
+			ConfigKey:      &metricsServeOpts.MetricType,
+			FlagDefault:    "TSS_PROMETHEUS",
+			Required:       true,
+		},
+		&config.ConfigOption{
+			Name:        "tss-metrics-port",
+			Usage:       `Port where the metrics server will be listening on. Default: 9002"`,
+			OptType:     types.Int,
+			ConfigKey:   &metricsServeOpts.Port,
+			FlagDefault: 9002,
+			Required:    true,
+		})
+
+	// crash tracker options
+	crashTrackerOptions := crashtracker.CrashTrackerOptions{}
+	configOpts = append(configOpts, cmdUtils.CrashTrackerTypeConfigOption(&crashTrackerOptions.CrashTrackerType))
 
 	// event broker options:
 	eventBrokerOptions := cmdUtils.EventBrokerOptions{}
