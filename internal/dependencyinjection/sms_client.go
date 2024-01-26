@@ -46,6 +46,6 @@ func NewSMSClient(opts SMSClientOptions) (message.MessengerClient, error) {
 		return nil, fmt.Errorf("creating SMS client: %w", err)
 	}
 
-	setInstance(instanceName, messengerClient)
+	SetInstance(instanceName, messengerClient)
 	return messengerClient, nil
 }

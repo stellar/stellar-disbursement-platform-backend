@@ -35,7 +35,7 @@ func NewCrashTracker(ctx context.Context, opts crashtracker.CrashTrackerOptions)
 		return nil, fmt.Errorf("error creating a new crash tracker instance: %w", err)
 	}
 
-	setInstance(instanceName, newCrashTracker)
+	SetInstance(instanceName, newCrashTracker)
 
 	return newCrashTracker, nil
 }

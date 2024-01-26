@@ -41,7 +41,7 @@ func Test_dependencyinjection_NewDBConnectionPool(t *testing.T) {
 	t.Run("should return an error if there's an invalid instance pre-stored", func(t *testing.T) {
 		ClearInstancesTestHelper(t)
 
-		setInstance(dbConnectionPoolInstanceName, false)
+		SetInstance(dbConnectionPoolInstanceName, false)
 
 		opts := DBConnectionPoolOptions{DatabaseURL: dbt.DSN}
 		gotDependency, err := NewDBConnectionPool(ctx, opts)

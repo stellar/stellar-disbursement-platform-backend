@@ -47,6 +47,6 @@ func NewEmailClient(opts EmailClientOptions) (message.MessengerClient, error) {
 		return nil, fmt.Errorf("creating Email client: %w", err)
 	}
 
-	setInstance(instanceName, messengerClient)
+	SetInstance(instanceName, messengerClient)
 	return messengerClient, nil
 }

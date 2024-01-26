@@ -50,7 +50,7 @@ func Test_dependencyinjection_NewCrashTracker(t *testing.T) {
 			CrashTrackerType: crashtracker.CrashTrackerTypeSentry,
 		}
 
-		setInstance(buildCrashTrackerInstanceName(testSentryOptions.CrashTrackerType), false)
+		SetInstance(buildCrashTrackerInstanceName(testSentryOptions.CrashTrackerType), false)
 
 		gotClient, err := NewCrashTracker(ctx, testSentryOptions)
 		assert.Nil(t, gotClient)

@@ -54,7 +54,7 @@ func Test_dependencyinjection_NewSignatureService(t *testing.T) {
 	t.Run("should return an error if there's an invalid instance pre-stored", func(t *testing.T) {
 		ClearInstancesTestHelper(t)
 
-		setInstance(signatureServiceInstanceName, false)
+		SetInstance(signatureServiceInstanceName, false)
 
 		opts := SignatureServiceOptions{
 			NetworkPassphrase:      network.TestNetworkPassphrase,

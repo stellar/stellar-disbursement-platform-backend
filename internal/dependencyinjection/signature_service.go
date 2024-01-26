@@ -43,7 +43,7 @@ func NewSignatureService(ctx context.Context, opts SignatureServiceOptions) (eng
 		return nil, fmt.Errorf("creating a new signature service instance: %w", err)
 	}
 
-	setInstance(instanceName, newSignatureService)
+	SetInstance(instanceName, newSignatureService)
 
 	return newSignatureService, nil
 }

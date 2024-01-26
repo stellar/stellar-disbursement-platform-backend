@@ -32,7 +32,7 @@ func NewAnchorPlatformAPIService(anchorPlatformBasePlatformURL, anchorPlatformOu
 	if err != nil {
 		return nil, fmt.Errorf("creating Anchor Platform API service: %w", err)
 	}
-	setInstance(anchorPlatformAPIServiceInstanceName, anchorPlatformAPIService)
+	SetInstance(anchorPlatformAPIServiceInstanceName, anchorPlatformAPIService)
 
 	return anchorPlatformAPIService, nil
 }
