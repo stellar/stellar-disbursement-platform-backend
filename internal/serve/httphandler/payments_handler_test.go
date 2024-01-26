@@ -13,13 +13,17 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/stellar/go/support/log"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpresponse"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -602,14 +606,19 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 	require.NoError(t, err)
 
 	authManagerMock := &auth.AuthManagerMock{}
+	eventProducerMock := events.MockProducer{}
 
 	handler := PaymentsHandler{
 		Models:           models,
 		DBConnectionPool: dbConnectionPool,
 		AuthManager:      authManagerMock,
+		EventProducer:    &eventProducerMock,
 	}
 
+	tnt := tenant.Tenant{ID: "tenant-id"}
+
 	ctx := context.Background()
+	ctx = tenant.SaveTenantInContext(ctx, &tnt)
 
 	data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
 	data.DeleteAllDisbursementFixtures(t, ctx, dbConnectionPool)
@@ -624,13 +633,13 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 	asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
 
 	receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
-	receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.ReadyReceiversWalletStatus)
+	receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
 
 	disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
 		Country:           country,
 		Wallet:            wallet,
 		Asset:             asset,
-		Status:            data.ReadyDisbursementStatus,
+		Status:            data.StartedDisbursementStatus,
 		VerificationField: data.VerificationFieldDateOfBirth,
 	})
 
@@ -882,6 +891,29 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 			}, nil).
 			Once()
 
+		eventProducerMock.
+			On("WriteMessages", ctx, []events.Message{
+				{
+					Topic:    events.PaymentReadyToPayTopic,
+					Key:      "",
+					TenantID: tnt.ID,
+					Type:     events.PaymentReadyToPayRetryFailedPayment,
+					Data: schemas.EventPaymentsReadyToPayData{
+						TenantID: tnt.ID,
+						Payments: []schemas.PaymentReadyToPay{
+							{
+								ID: payment1.ID,
+							},
+							{
+								ID: payment2.ID,
+							},
+						},
+					},
+				},
+			}).
+			Return(nil).
+			Once()
+
 		rw := httptest.NewRecorder()
 		http.HandlerFunc(handler.RetryPayments).ServeHTTP(rw, req)
 
@@ -916,6 +948,211 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 		assert.Equal(t, data.ReadyPaymentStatus, payment2DB.StatusHistory[1].Status)
 		assert.Equal(t, "User email@test.com has requested to retry the payment - Previous Stellar Transaction ID: stellar-transaction-id-2", payment2DB.StatusHistory[1].StatusMessage)
 	})
+
+	t.Run("returns error when tenant is not in the context", func(t *testing.T) {
+		data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
+
+		payment1 := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+			Amount:               "1",
+			StellarTransactionID: "stellar-transaction-id-1",
+			StellarOperationID:   "operation-id-1",
+			Status:               data.FailedPaymentStatus,
+			Disbursement:         disbursement,
+			ReceiverWallet:       receiverWallet,
+			Asset:                *asset,
+		})
+
+		payment2 := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+			Amount:               "1",
+			StellarTransactionID: "stellar-transaction-id-2",
+			StellarOperationID:   "operation-id-2",
+			Status:               data.FailedPaymentStatus,
+			Disbursement:         disbursement,
+			ReceiverWallet:       receiverWallet,
+			Asset:                *asset,
+		})
+
+		ctxWithoutTenant := context.WithValue(context.Background(), middleware.TokenContextKey, "mytoken")
+
+		payload := strings.NewReader(fmt.Sprintf(`
+			{
+				"payment_ids": [
+					%q,
+					%q
+				]
+			}
+		`, payment1.ID, payment2.ID))
+		req, err := http.NewRequestWithContext(ctxWithoutTenant, http.MethodPatch, "/retry", payload)
+		require.NoError(t, err)
+
+		authManagerMock.
+			On("GetUser", ctxWithoutTenant, "mytoken").
+			Return(&auth.User{
+				Email: "email@test.com",
+			}, nil).
+			Once()
+
+		rw := httptest.NewRecorder()
+		http.HandlerFunc(handler.RetryPayments).ServeHTTP(rw, req)
+
+		resp := rw.Result()
+		defer resp.Body.Close()
+
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+		assert.JSONEq(t, `{"error": "An internal error occurred while processing this request."}`, string(respBody))
+	})
+
+	t.Run("returns error when EventProducer fails writing a message", func(t *testing.T) {
+		data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
+
+		payment1 := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+			Amount:               "1",
+			StellarTransactionID: "stellar-transaction-id-1",
+			StellarOperationID:   "operation-id-1",
+			Status:               data.FailedPaymentStatus,
+			Disbursement:         disbursement,
+			ReceiverWallet:       receiverWallet,
+			Asset:                *asset,
+		})
+
+		ctx = context.WithValue(ctx, middleware.TokenContextKey, "mytoken")
+
+		payload := strings.NewReader(fmt.Sprintf(`
+			{
+				"payment_ids": [
+					%q
+				]
+			}
+		`, payment1.ID))
+		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, "/retry", payload)
+		require.NoError(t, err)
+
+		authManagerMock.
+			On("GetUser", ctx, "mytoken").
+			Return(&auth.User{
+				Email: "email@test.com",
+			}, nil).
+			Once()
+
+		eventProducerMock.
+			On("WriteMessages", ctx, []events.Message{
+				{
+					Topic:    events.PaymentReadyToPayTopic,
+					Key:      "",
+					TenantID: tnt.ID,
+					Type:     events.PaymentReadyToPayRetryFailedPayment,
+					Data: schemas.EventPaymentsReadyToPayData{
+						TenantID: tnt.ID,
+						Payments: []schemas.PaymentReadyToPay{
+							{
+								ID: payment1.ID,
+							},
+						},
+					},
+				},
+			}).
+			Return(errors.New("unexpected error")).
+			Once()
+
+		rw := httptest.NewRecorder()
+		http.HandlerFunc(handler.RetryPayments).ServeHTTP(rw, req)
+
+		resp := rw.Result()
+		defer resp.Body.Close()
+
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+		assert.JSONEq(t, `{"error":"An internal error occurred while processing this request."}`, string(respBody))
+	})
+
+	t.Run("logs when couldn't write message because EventProducer is nil", func(t *testing.T) {
+		data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
+
+		payment1 := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+			Amount:               "1",
+			StellarTransactionID: "stellar-transaction-id-1",
+			StellarOperationID:   "operation-id-1",
+			Status:               data.FailedPaymentStatus,
+			Disbursement:         disbursement,
+			ReceiverWallet:       receiverWallet,
+			Asset:                *asset,
+		})
+
+		payment2 := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+			Amount:               "1",
+			StellarTransactionID: "stellar-transaction-id-2",
+			StellarOperationID:   "operation-id-2",
+			Status:               data.FailedPaymentStatus,
+			Disbursement:         disbursement,
+			ReceiverWallet:       receiverWallet,
+			Asset:                *asset,
+		})
+
+		ctx = context.WithValue(ctx, middleware.TokenContextKey, "mytoken")
+
+		payload := strings.NewReader(fmt.Sprintf(`
+			{
+				"payment_ids": [
+					%q,
+					%q
+				]
+			}
+		`, payment1.ID, payment2.ID))
+		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, "/retry", payload)
+		require.NoError(t, err)
+
+		authManagerMock.
+			On("GetUser", ctx, "mytoken").
+			Return(&auth.User{
+				Email: "email@test.com",
+			}, nil).
+			Once()
+
+		getEntries := log.DefaultLogger.StartTest(log.ErrorLevel)
+
+		handler.EventProducer = nil
+		rw := httptest.NewRecorder()
+		http.HandlerFunc(handler.RetryPayments).ServeHTTP(rw, req)
+
+		resp := rw.Result()
+		defer resp.Body.Close()
+
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.JSONEq(t, `{"message":"Payments retried successfully"}`, string(respBody))
+
+		msg := events.Message{
+			Topic:    events.PaymentReadyToPayTopic,
+			Key:      "",
+			TenantID: tnt.ID,
+			Type:     events.PaymentReadyToPayRetryFailedPayment,
+			Data: schemas.EventPaymentsReadyToPayData{
+				TenantID: tnt.ID,
+				Payments: []schemas.PaymentReadyToPay{
+					{
+						ID: payment1.ID,
+					},
+					{
+						ID: payment2.ID,
+					},
+				},
+			},
+		}
+
+		entries := getEntries()
+		require.Len(t, entries, 1)
+		assert.Contains(t, fmt.Sprintf("event producer is nil, could not publish message %s", msg.String()), entries[0].Message)
+	})
+
+	authManagerMock.AssertExpectations(t)
+	eventProducerMock.AssertExpectations(t)
 }
 
 func Test_PaymentsHandler_getPaymentsWithCount(t *testing.T) {

@@ -28,6 +28,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
 	publicfiles "github.com/stellar/stellar-disbursement-platform-backend/internal/serve/publicfiles"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
@@ -256,11 +257,12 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 
 		r.Route("/disbursements", func(r chi.Router) {
 			handler := httphandler.DisbursementHandler{
-				Models:           o.Models,
-				MonitorService:   o.MonitorService,
-				DBConnectionPool: o.dbConnectionPool,
-				AuthManager:      authManager,
-				EventProducer:    o.EventProducer,
+				Models:                        o.Models,
+				MonitorService:                o.MonitorService,
+				DBConnectionPool:              o.dbConnectionPool,
+				AuthManager:                   authManager,
+				EventProducer:                 o.EventProducer,
+				DisbursementManagementService: services.NewDisbursementManagementService(o.Models, o.dbConnectionPool, o.EventProducer),
 			}
 			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole)).
 				Post("/", handler.PostDisbursement)
@@ -285,7 +287,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 		})
 
 		r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole, data.BusinessUserRole)).Route("/payments", func(r chi.Router) {
-			paymentsHandler := httphandler.PaymentsHandler{Models: o.Models, DBConnectionPool: o.dbConnectionPool, AuthManager: o.authManager}
+			paymentsHandler := httphandler.PaymentsHandler{Models: o.Models, DBConnectionPool: o.dbConnectionPool, AuthManager: o.authManager, EventProducer: o.EventProducer}
 			r.Get("/", paymentsHandler.GetPayments)
 			r.Get("/{id}", paymentsHandler.GetPayment)
 			r.Patch("/retry", paymentsHandler.RetryPayments)
@@ -425,6 +427,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			Models:                   o.Models,
 			ReCAPTCHAValidator:       reCAPTCHAValidator,
 			NetworkPassphrase:        o.NetworkPassphrase,
+			EventProducer:            o.EventProducer,
 		}.VerifyReceiverRegistration)
 
 		// This will be used for test purposes and will only be available when IsPubnet is false:

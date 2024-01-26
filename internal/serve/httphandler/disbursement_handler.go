@@ -27,11 +27,12 @@ import (
 )
 
 type DisbursementHandler struct {
-	Models           *data.Models
-	MonitorService   monitor.MonitorServiceInterface
-	DBConnectionPool db.DBConnectionPool
-	AuthManager      auth.AuthManager
-	EventProducer    events.Producer
+	Models                        *data.Models
+	MonitorService                monitor.MonitorServiceInterface
+	DBConnectionPool              db.DBConnectionPool
+	AuthManager                   auth.AuthManager
+	DisbursementManagementService *services.DisbursementManagementService
+	EventProducer                 events.Producer
 }
 
 type PostDisbursementRequest struct {
@@ -162,8 +163,7 @@ func (d DisbursementHandler) GetDisbursements(w http.ResponseWriter, r *http.Req
 	}
 
 	ctx := r.Context()
-	disbursementManagementService := services.NewDisbursementManagementService(d.Models, d.DBConnectionPool)
-	resultWithTotal, err := disbursementManagementService.GetDisbursementsWithCount(ctx, queryParams)
+	resultWithTotal, err := d.DisbursementManagementService.GetDisbursementsWithCount(ctx, queryParams)
 	if err != nil {
 		httperror.InternalError(ctx, "Cannot retrieve disbursements", err, nil).Render(w)
 		return
@@ -284,8 +284,7 @@ func (d DisbursementHandler) GetDisbursementReceivers(w http.ResponseWriter, r *
 		return
 	}
 
-	disbursementManagementService := services.NewDisbursementManagementService(d.Models, d.DBConnectionPool)
-	resultWithTotal, err := disbursementManagementService.GetDisbursementReceiversWithCount(ctx, disbursementID, queryParams)
+	resultWithTotal, err := d.DisbursementManagementService.GetDisbursementReceiversWithCount(ctx, disbursementID, queryParams)
 	if err != nil {
 		if errors.Is(err, services.ErrDisbursementNotFound) {
 			httperror.NotFound("disbursement not found", err, nil).Render(w)
@@ -331,7 +330,6 @@ func (d DisbursementHandler) PatchDisbursementStatus(w http.ResponseWriter, r *h
 		return
 	}
 
-	disbursementManagementService := services.NewDisbursementManagementService(d.Models, d.DBConnectionPool)
 	response := UpdateDisbursementStatusResponseBody{}
 
 	ctx := r.Context()
@@ -348,10 +346,10 @@ func (d DisbursementHandler) PatchDisbursementStatus(w http.ResponseWriter, r *h
 
 	switch toStatus {
 	case data.StartedDisbursementStatus:
-		err = disbursementManagementService.StartDisbursement(ctx, disbursementID, user)
+		err = d.DisbursementManagementService.StartDisbursement(ctx, disbursementID, user)
 		response.Message = "Disbursement started"
 	case data.PausedDisbursementStatus:
-		err = disbursementManagementService.PauseDisbursement(ctx, disbursementID, user)
+		err = d.DisbursementManagementService.PauseDisbursement(ctx, disbursementID, user)
 		response.Message = "Disbursement paused"
 	default:
 		err = services.ErrDisbursementStatusCantBeChanged
