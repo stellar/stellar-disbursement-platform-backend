@@ -67,7 +67,6 @@ func (so *SubmitterOptions) validate() error {
 		return fmt.Errorf("monitor service cannot be nil")
 	}
 
-	// TODO: confirm with Caio if this is correct:
 	if so.EventProducer == nil {
 		return fmt.Errorf("event producer cannot be nil")
 	}

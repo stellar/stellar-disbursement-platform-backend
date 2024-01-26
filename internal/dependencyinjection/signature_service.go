@@ -32,8 +32,8 @@ func NewSignatureService(ctx context.Context, opts engine.SignatureServiceOption
 	}
 
 	// Setup a new signature service instance
-	log.Ctx(ctx).Infof("⚙️ Setting up Signature Service to: %v", "DefaultSignatureService")
 	opts.Type = engine.SignatureServiceTypeDefault // For now we only support the Default type, the same used before multi-tenancy.
+	log.Ctx(ctx).Infof("⚙️ Setting up Signature Service to: %v", opts.Type)
 	newSignatureService, err := engine.NewSignatureService(opts)
 	if err != nil {
 		return nil, fmt.Errorf("creating a new signature service instance: %w", err)
