@@ -7,8 +7,14 @@ import (
 	"testing"
 
 	"github.com/stellar/go/clients/horizonclient"
+	"github.com/stellar/go/keypair"
 	"github.com/stellar/go/network"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
+
 	cmdUtils "github.com/stellar/stellar-disbursement-platform-backend/cmd/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
@@ -20,9 +26,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
 	serveadmin "github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/serve"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
-	"github.com/stretchr/testify/require"
 )
 
 type mockServer struct {
@@ -87,7 +90,13 @@ func Test_serve_wasCalled(t *testing.T) {
 func Test_serve(t *testing.T) {
 	dbt := dbtest.Open(t)
 	randomDatabaseDSN := dbt.DSN
-	dbt.Close()
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	// Populate the dependency injection object for the TSS DB connection pool, so we can close it later
+	di.SetInstance("tss_db_connection_pool_instance", dbConnectionPool)
 
 	cmdUtils.ClearTestEnvironment(t)
 
@@ -125,35 +134,41 @@ func Test_serve(t *testing.T) {
 		EnableScheduler:                 true,
 		EnableMultiTenantDB:             false,
 	}
-	var err error
 	serveOpts.AnchorPlatformAPIService, err = anchorplatform.NewAnchorPlatformAPIService(httpclient.DefaultClient(), serveOpts.AnchorPlatformBasePlatformURL, serveOpts.AnchorPlatformOutgoingJWTSecret)
 	require.NoError(t, err)
 
-	crashTrackerClient, err := di.NewCrashTracker(ctx, crashtracker.CrashTrackerOptions{
+	serveOpts.CrashTrackerClient, err = di.NewCrashTracker(ctx, crashtracker.CrashTrackerOptions{
 		Environment:      serveOpts.Environment,
 		GitCommit:        serveOpts.GitCommit,
 		CrashTrackerType: "DRY_RUN",
 	})
 	require.NoError(t, err)
-	serveOpts.CrashTrackerClient = crashTrackerClient
 
 	messengerClient, err := di.NewEmailClient(di.EmailClientOptions{EmailType: message.MessengerTypeDryRun})
 	require.NoError(t, err)
 	serveOpts.EmailMessengerClient = messengerClient
 
-	smsMessengerClient, err := di.NewSMSClient(di.SMSClientOptions{SMSType: message.MessengerTypeDryRun})
+	serveOpts.SMSMessengerClient, err = di.NewSMSClient(di.SMSClientOptions{SMSType: message.MessengerTypeDryRun})
 	require.NoError(t, err)
-	serveOpts.SMSMessengerClient = smsMessengerClient
 
-	kafkaEventManager, err := events.NewKafkaProducer([]string{"kafka:9092"})
+	serveOpts.EventProducer, err = events.NewKafkaProducer([]string{"kafka:9092"})
 	require.NoError(t, err)
-	serveOpts.EventProducer = kafkaEventManager
 
 	metricOptions := monitor.MetricOptions{
 		MetricType:  monitor.MetricTypePrometheus,
 		Environment: "test",
 	}
 	mMonitorService.On("Start", metricOptions).Return(nil).Once()
+	defer mMonitorService.AssertExpectations(t)
+
+	encryptionPassphrase := keypair.MustRandom().Seed()
+	serveOpts.SignatureService, err = di.NewSignatureService(ctx, di.SignatureServiceOptions{
+		NetworkPassphrase:      serveOpts.NetworkPassphrase,
+		DBConnectionPool:       dbConnectionPool,
+		DistributionPrivateKey: serveOpts.DistributionSeed,
+		EncryptionPassphrase:   encryptionPassphrase,
+	})
+	require.NoError(t, err)
 
 	serveMetricOpts := serve.MetricsServeOptions{
 		Port:        8002,
@@ -194,6 +209,7 @@ func Test_serve(t *testing.T) {
 		Once()
 	mServer.On("SetupConsumers", ctx, eventBrokerOptions, eventHandlerOptions, serveOpts).Return(TearDownFunc(func() { t.Log("tear down func called") }), nil).Once()
 	mServer.wg.Add(2)
+	defer mServer.AssertExpectations(t)
 
 	// SetupCLI and replace the serve command with one containing a mocked server
 	rootCmd := SetupCLI("x.y.z", "1234567890abcdef")
@@ -231,11 +247,12 @@ func Test_serve(t *testing.T) {
 	t.Setenv("EVENT_BROKER", "kafka")
 	t.Setenv("BROKER_URLS", "kafka:9092")
 	t.Setenv("CONSUMER_GROUP_ID", "group-id")
+	t.Setenv("CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE", encryptionPassphrase)
+	t.Setenv("ENVIRONMENT", "test")
+	t.Setenv("METRICS_TYPE", "PROMETHEUS")
 
 	// test & assert
-	rootCmd.SetArgs([]string{"--environment", "test", "serve", "--metrics-type", "PROMETHEUS"})
+	rootCmd.SetArgs([]string{"serve"})
 	err = rootCmd.Execute()
 	require.NoError(t, err)
-	mServer.AssertExpectations(t)
-	mMonitorService.AssertExpectations(t)
 }
