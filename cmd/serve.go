@@ -75,7 +75,6 @@ func (s *ServerService) GetSchedulerJobRegistrars(ctx context.Context, serveOpts
 	}
 
 	return []scheduler.SchedulerJobRegisterOption{
-		scheduler.WithPaymentToSubmitterJobOption(models),
 		scheduler.WithAPAuthEnforcementJob(apAPIService, serveOpts.MonitorService, serveOpts.CrashTrackerClient.Clone()),
 		scheduler.WithReadyPaymentsCancellationJobOption(models),
 	}, nil
@@ -142,8 +141,23 @@ func (s *ServerService) SetupConsumers(ctx context.Context, eventBrokerOptions c
 		return nil, fmt.Errorf("creating Payment Completed Kafka Consumer: %w", err)
 	}
 
+	paymentReadyToPayConsumer, err := events.NewKafkaConsumer(
+		eventBrokerOptions.BrokerURLs,
+		events.PaymentReadyToPayTopic,
+		eventBrokerOptions.ConsumerGroupID,
+		eventhandlers.NewPaymentToSubmitterEventHandler(eventhandlers.PaymentToSubmitterEventHandlerOptions{
+			DBConnectionPool:    dbConnectionPool,
+			TSSDBConnectionPool: tssDBConnectionPool,
+			CrashTrackerClient:  serveOpts.CrashTrackerClient.Clone(),
+		}),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("creating Payment Completed Kafka Consumer: %w", err)
+	}
+
 	go events.Consume(ctx, smsInvitationConsumer, serveOpts.CrashTrackerClient.Clone())
 	go events.Consume(ctx, paymentCompletedConsumer, serveOpts.CrashTrackerClient.Clone())
+	go events.Consume(ctx, paymentReadyToPayConsumer, serveOpts.CrashTrackerClient.Clone())
 
 	return TearDownFunc(func() {
 		defer dbConnectionPool.Close()

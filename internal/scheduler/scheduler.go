@@ -142,14 +142,6 @@ func worker(ctx context.Context, workerID int, crashTrackerClient crashtracker.C
 	}
 }
 
-func WithPaymentToSubmitterJobOption(models *data.Models) SchedulerJobRegisterOption {
-	return func(s *Scheduler) {
-		j := jobs.NewPaymentToSubmitterJob(models)
-		log.Infof("registering %s job to scheduler", j.GetName())
-		s.addJob(j)
-	}
-}
-
 func WithAPAuthEnforcementJob(apService anchorplatform.AnchorPlatformAPIServiceInterface, monitorService monitor.MonitorServiceInterface, crashTrackerClient crashtracker.CrashTrackerClient) SchedulerJobRegisterOption {
 	return func(s *Scheduler) {
 		j, err := jobs.NewAnchorPlatformAuthMonitoringJob(apService, monitorService, crashTrackerClient)
