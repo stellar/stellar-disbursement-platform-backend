@@ -88,15 +88,17 @@ func Test_serve_wasCalled(t *testing.T) {
 }
 
 func Test_serve(t *testing.T) {
-	cmdUtils.ClearTestEnvironment(t)
-
 	dbt := dbtest.Open(t)
 	randomDatabaseDSN := dbt.DSN
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
-	defer dbConnectionPool.Close()
+	defer func() {
+		err := dbConnectionPool.Close()
+		require.NoError(t, err)
+	}()
 
+	cmdUtils.ClearTestEnvironment(t)
 	// Populate the dependency injection object for the TSS DB connection pool, so we can close it later
 	di.SetInstance("tss_db_connection_pool_instance", dbConnectionPool)
 
