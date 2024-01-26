@@ -253,6 +253,7 @@ func Test_serve(t *testing.T) {
 	t.Setenv("CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE", encryptionPassphrase)
 	t.Setenv("ENVIRONMENT", "test")
 	t.Setenv("METRICS_TYPE", "PROMETHEUS")
+	t.Setenv("CHANNEL_ACCOUNT_ID", "1")
 
 	// test & assert
 	rootCmd.SetArgs([]string{"serve"})
