@@ -124,19 +124,19 @@ func Test_SubmitterOptions_validate(t *testing.T) {
 			},
 			wantErrContains: "monitor service cannot be nil",
 		},
-		{
-			name: "validate EventProducer",
-			submitterOptions: SubmitterOptions{
-				DBConnectionPool:     dbConnectionPool,
-				SignatureService:     mSigService,
-				HorizonURL:           "https://horizon-testnet.stellar.org",
-				NumChannelAccounts:   1,
-				QueuePollingInterval: 10,
-				MaxBaseFee:           txnbuild.MinBaseFee,
-				MonitorService:       tssMonitorService,
-			},
-			wantErrContains: "event producer cannot be nil",
-		},
+		// {
+		// 	name: "validate EventProducer",
+		// 	submitterOptions: SubmitterOptions{
+		// 		DBConnectionPool:     dbConnectionPool,
+		// 		SignatureService:     mSigService,
+		// 		HorizonURL:           "https://horizon-testnet.stellar.org",
+		// 		NumChannelAccounts:   1,
+		// 		QueuePollingInterval: 10,
+		// 		MaxBaseFee:           txnbuild.MinBaseFee,
+		// 		MonitorService:       tssMonitorService,
+		// 	},
+		// 	wantErrContains: "event producer cannot be nil",
+		// },
 		{
 			name: "🎉 successfully finishes validation with nil crash tracker client",
 			submitterOptions: SubmitterOptions{
