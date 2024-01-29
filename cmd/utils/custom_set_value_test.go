@@ -13,6 +13,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -29,6 +30,7 @@ type customSetterTestCase[T any] struct {
 
 // customSetterTester tests a custom_set_value function, according with the customSetterTestCase provided.
 func customSetterTester[T any](t *testing.T, tc customSetterTestCase[T], co config.ConfigOption) {
+	t.Helper()
 	ClearTestEnvironment(t)
 	if tc.envValue != "" {
 		envName := strings.ToUpper(co.Name)
@@ -85,12 +87,12 @@ func Test_SetConfigOptionMessengerType(t *testing.T) {
 		{
 			name:            "returns an error if the messenger type is empty",
 			args:            []string{},
-			wantErrContains: `couldn't parse messenger type: invalid message sender type ""`,
+			wantErrContains: `couldn't parse messenger type in message-sender-type: invalid message sender type ""`,
 		},
 		{
 			name:            "returns an error if the messenger type is invalid",
 			args:            []string{"--message-sender-type", "test"},
-			wantErrContains: `couldn't parse messenger type: invalid message sender type "TEST"`,
+			wantErrContains: `couldn't parse messenger type in message-sender-type: invalid message sender type "TEST"`,
 		},
 		{
 			name:       "🎉 handles messenger type TWILIO_SMS (through CLI args)",
@@ -146,12 +148,12 @@ func Test_SetConfigOptionLogLevel(t *testing.T) {
 		{
 			name:            "returns an error if the log level is empty",
 			args:            []string{},
-			wantErrContains: `couldn't parse log level: not a valid logrus Level: ""`,
+			wantErrContains: `couldn't parse log level in log-level: not a valid logrus Level: ""`,
 		},
 		{
 			name:            "returns an error if the log level is invalid",
 			args:            []string{"--log-level", "test"},
-			wantErrContains: `couldn't parse log level: not a valid logrus Level: "test"`,
+			wantErrContains: `couldn't parse log level in log-level: not a valid logrus Level: "test"`,
 		},
 		{
 			name:       "🎉 handles messenger type TRACE (through CLI args)",
@@ -197,12 +199,12 @@ func Test_SetConfigOptionMetricType(t *testing.T) {
 		{
 			name:            "returns an error if the value is empty",
 			args:            []string{},
-			wantErrContains: `couldn't parse metric type: invalid metric type ""`,
+			wantErrContains: `couldn't parse metric type in metrics-type: invalid metric type ""`,
 		},
 		{
 			name:            "returns an error if the value is not supported",
 			args:            []string{"--metrics-type", "test"},
-			wantErrContains: `couldn't parse metric type: invalid metric type "TEST"`,
+			wantErrContains: `couldn't parse metric type in metrics-type: invalid metric type "TEST"`,
 		},
 		{
 			name:       "🎉 handles crash tracker type (through CLI args): PROMETHEUS",
@@ -238,12 +240,12 @@ func Test_SetConfigOptionCrashTrackerType(t *testing.T) {
 		{
 			name:            "returns an error if the value is empty",
 			args:            []string{},
-			wantErrContains: `couldn't parse crash tracker type: invalid crash tracker type ""`,
+			wantErrContains: `couldn't parse crash tracker type in crash-tracker-type: invalid crash tracker type ""`,
 		},
 		{
 			name:            "returns an error if the value is not supported",
 			args:            []string{"--crash-tracker-type", "test"},
-			wantErrContains: `couldn't parse crash tracker type: invalid crash tracker type "TEST"`,
+			wantErrContains: `couldn't parse crash tracker type in crash-tracker-type: invalid crash tracker type "TEST"`,
 		},
 		{
 			name:       "🎉 handles crash tracker type (through CLI args): SENTRY",
@@ -275,6 +277,47 @@ func Test_SetConfigOptionCrashTrackerType(t *testing.T) {
 	}
 }
 
+func Test_SetConfigOptionSignatureServiceType(t *testing.T) {
+	opts := struct{ sigServiceType engine.SignatureServiceType }{}
+
+	co := config.ConfigOption{
+		Name:           "signature-service-type",
+		OptType:        types.String,
+		CustomSetValue: SetConfigOptionSignatureServiceType,
+		ConfigKey:      &opts.sigServiceType,
+	}
+
+	testCases := []customSetterTestCase[engine.SignatureServiceType]{
+		{
+			name:            "returns an error if the value is empty",
+			args:            []string{},
+			wantErrContains: `couldn't parse signature service type in signature-service-type: invalid signature service type ""`,
+		},
+		{
+			name:            "returns an error if the value is not supported",
+			args:            []string{"--signature-service-type", "test"},
+			wantErrContains: `couldn't parse signature service type in signature-service-type: invalid signature service type "TEST"`,
+		},
+		{
+			name:       "🎉 handles signature service type (through CLI args): DEFAULT",
+			args:       []string{"--signature-service-type", string(engine.SignatureServiceTypeDefault)},
+			wantResult: engine.SignatureServiceTypeDefault,
+		},
+		{
+			name:       "🎉 handles signature service type (through ENV vars): DEFAULT",
+			envValue:   string(engine.SignatureServiceTypeDefault),
+			wantResult: engine.SignatureServiceTypeDefault,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			opts.sigServiceType = ""
+			customSetterTester[engine.SignatureServiceType](t, tc, co)
+		})
+	}
+}
+
 func Test_SetConfigOptionEC256PublicKey(t *testing.T) {
 	opts := struct{ ec256PublicKey string }{}
 
@@ -294,17 +337,17 @@ cvGyimApUE/12gFhNTRf37SE19CSCllKxstnVFOpLLWB7Qu5OJ0Wvcz3hg==
 		{
 			name:            "returns an error if the value is not a PEM string",
 			args:            []string{"--ec256-public-key", "not-a-pem-string"},
-			wantErrContains: "parsing EC256PublicKey: failed to decode PEM block containing public key",
+			wantErrContains: "parsing EC256PublicKey in ec256-public-key: failed to decode PEM block containing public key",
 		},
 		{
 			name:            "returns an error if the value is not a x509 string",
 			args:            []string{"--ec256-public-key", "-----BEGIN MY STRING-----\nYWJjZA==\n-----END MY STRING-----"},
-			wantErrContains: "parsing EC256PublicKey: failed to parse EC public key",
+			wantErrContains: "parsing EC256PublicKey in ec256-public-key: failed to parse EC public key",
 		},
 		{
 			name:            "returns an error if the value is not a ECDSA public key",
 			args:            []string{"--ec256-public-key", "-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAyNPqmozv8a2PnXHIkV+F\nmWMFy2YhOFzX12yzjjWkJ3rI9QSEomz4Unkwc6oYrnKEDYlnAgCiCqL2zPr5qNkX\nk5MPU87/wLgEqp7uAk0GkJZfrhJIYZ5AuG9+o69BNeQDEi7F3YdMJj9bvs2Ou1FN\n1zG/8HV969rJ/63fzWsqlNon1j4H5mJ0YbmVh/QLcYPmv7feFZGEj4OSZ4u+eJsw\nat5NPyhMgo6uB/goNS3fEY29UNvXoSIN3hnK3WSxQ79Rjn4V4so7ehxzCVPjnm/G\nFFTgY0hGBobmnxbjI08hEZmYKosjan4YqydGETjKR3UlhBx9y/eqqgL+opNJ8vJs\n2QIDAQAB\n-----END PUBLIC KEY-----"},
-			wantErrContains: "parsing EC256PublicKey: not a valid elliptic curve public key",
+			wantErrContains: "parsing EC256PublicKey in ec256-public-key: not a valid elliptic curve public key",
 		},
 		{
 			name:       "🎉 handles EC256 public key through the CLI flag",
@@ -351,17 +394,17 @@ Jn0+FcNT/hNjwtn2TW43710JKZqhRANCAARHzyHsCJDJUPKxFPEq8EHoJqI7+RJy
 		{
 			name:            "returns an error if the value is not a PEM string",
 			args:            []string{"--ec256-private-key", "not-a-pem-string"},
-			wantErrContains: "parsing EC256PrivateKey: failed to decode PEM block containing private key",
+			wantErrContains: "parsing EC256PrivateKey in ec256-private-key: failed to decode PEM block containing private key",
 		},
 		{
 			name:            "returns an error if the value is not a x509 string",
 			args:            []string{"--ec256-private-key", "-----BEGIN MY STRING-----\nYWJjZA==\n-----END MY STRING-----"},
-			wantErrContains: "parsing EC256PrivateKey: failed to parse EC private key",
+			wantErrContains: "parsing EC256PrivateKey in ec256-private-key: failed to parse EC private key",
 		},
 		{
 			name:            "returns an error if the value is not a ECDSA private key",
 			args:            []string{"--ec256-private-key", "-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAyNPqmozv8a2PnXHIkV+F\nmWMFy2YhOFzX12yzjjWkJ3rI9QSEomz4Unkwc6oYrnKEDYlnAgCiCqL2zPr5qNkX\nk5MPU87/wLgEqp7uAk0GkJZfrhJIYZ5AuG9+o69BNeQDEi7F3YdMJj9bvs2Ou1FN\n1zG/8HV969rJ/63fzWsqlNon1j4H5mJ0YbmVh/QLcYPmv7feFZGEj4OSZ4u+eJsw\nat5NPyhMgo6uB/goNS3fEY29UNvXoSIN3hnK3WSxQ79Rjn4V4so7ehxzCVPjnm/G\nFFTgY0hGBobmnxbjI08hEZmYKosjan4YqydGETjKR3UlhBx9y/eqqgL+opNJ8vJs\n2QIDAQAB\n-----END PUBLIC KEY-----"},
-			wantErrContains: "parsing EC256PrivateKey: failed to parse EC private key",
+			wantErrContains: "parsing EC256PrivateKey in ec256-private-key: failed to parse EC private key",
 		},
 		{
 			name:       "🎉 handles EC256 private key through the CLI flag",
@@ -402,17 +445,17 @@ func Test_SetConfigOptionStellarPublicKey(t *testing.T) {
 	testCases := []customSetterTestCase[string]{
 		{
 			name:            "returns an error if the public key is empty",
-			wantErrContains: "error validating public key: strkey is 0 bytes long; minimum valid length is 5",
+			wantErrContains: "error validating public key in sep10-signing-public-key: strkey is 0 bytes long; minimum valid length is 5",
 		},
 		{
 			name:            "returns an error if the public key is invalid",
 			args:            []string{"--sep10-signing-public-key", "invalid_public_key"},
-			wantErrContains: "error validating public key: base32 decode failed: illegal base32 data at input byte 18",
+			wantErrContains: "error validating public key in sep10-signing-public-key: base32 decode failed: illegal base32 data at input byte 18",
 		},
 		{
 			name:            "returns an error if the public key is invalid (private key instead)",
 			args:            []string{"--sep10-signing-public-key", "SDISQRUPIHAO5WIIGY4QRDCINZSA44TX3OIIUK3C63NUKN5DABKEQ276"},
-			wantErrContains: "error validating public key: invalid version byte",
+			wantErrContains: "error validating public key in sep10-signing-public-key: invalid version byte",
 		},
 		{
 			name:       "🎉 handles Stellar public key through the CLI flag",
@@ -448,17 +491,17 @@ func Test_SetConfigOptionStellarPrivateKey(t *testing.T) {
 	testCases := []customSetterTestCase[string]{
 		{
 			name:            "returns an error if the private key is empty",
-			wantErrContains: `error validating private key: ""`,
+			wantErrContains: `error validating private key in sep10-signing-private-key: ""`,
 		},
 		{
 			name:            "returns an error if the private key is invalid",
 			args:            []string{"--sep10-signing-private-key", "invalid_private_key"},
-			wantErrContains: `error validating private key: "in...ey"`,
+			wantErrContains: `error validating private key in sep10-signing-private-key: "in...ey"`,
 		},
 		{
 			name:            "returns an error if the private key is invalid (public key instead)",
 			args:            []string{"--sep10-signing-private-key", "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"},
-			wantErrContains: `error validating private key: "GA...7S"`,
+			wantErrContains: `error validating private key in sep10-signing-private-key: "GA...7S"`,
 		},
 		{
 			name:       "🎉 handles Stellar private key through the CLI flag",
@@ -495,12 +538,12 @@ func Test_SetCorsAllowedOriginsFunc(t *testing.T) {
 		{
 			name:            "returns an error if the cors flag is empty",
 			args:            []string{"--cors-allowed-origins", ""},
-			wantErrContains: "cors allowed addresses cannot be empty",
+			wantErrContains: "cors allowed addresses cannot be empty in cors-allowed-origins",
 		},
 		{
 			name:            "returns an error if the cors flag results in an empty array",
 			args:            []string{"--cors-allowed-origins", ","},
-			wantErrContains: `error parsing cors addresses: parse ""`,
+			wantErrContains: `error parsing cors addresses in cors-allowed-origins: parse ""`,
 		},
 		{
 			name:       "🎉 handles one url successfully (from CLI args)",
@@ -558,7 +601,7 @@ func Test_SetConfigOptionURLString(t *testing.T) {
 		{
 			name:            "returns an error if the ui base url flag is empty",
 			args:            []string{"--sdp-ui-base-url", ""},
-			wantErrContains: "ui base url cannot be empty",
+			wantErrContains: "URL cannot be empty in sdp-ui-base-url",
 		},
 		{
 			name:       "🎉 handles ui base url successfully (from CLI args)",
@@ -688,7 +731,7 @@ func Test_SetConfigOptionEventBrokerType(t *testing.T) {
 		{
 			name:            "returns an error if event broker type is empty",
 			args:            []string{"--event-broker-type", ""},
-			wantErrContains: "couldn't parse event broker type: invalid event broker type",
+			wantErrContains: "couldn't parse event broker type in event-broker-type: invalid event broker type",
 		},
 		{
 			name:       "🎉 handles event broker type (through CLI args): KAFKA",
@@ -703,7 +746,7 @@ func Test_SetConfigOptionEventBrokerType(t *testing.T) {
 		{
 			name:            "returns an error if a invalid event broker type",
 			args:            []string{"--event-broker-type", "invalid"},
-			wantErrContains: "couldn't parse event broker type: invalid event broker type",
+			wantErrContains: "couldn't parse event broker type in event-broker-type: invalid event broker type",
 		},
 	}
 

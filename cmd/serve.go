@@ -377,7 +377,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 
 	// signature service config options:
 	sigServiceOptions := engine.SignatureServiceOptions{}
-	configOpts = append(configOpts, cmdUtils.ChannelAccountEncryptionPassphraseConfigOption(&sigServiceOptions.EncryptionPassphrase))
+	configOpts = append(configOpts, cmdUtils.BaseSignatureServiceConfigOptions(&sigServiceOptions)...)
 
 	cmd := &cobra.Command{
 		Use:   "serve",
@@ -463,9 +463,9 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 				log.Ctx(ctx).Fatalf("error getting TSS DB connection pool: %v", err)
 			}
 			defer func() {
-				err = tssDBConnectionPool.Close()
+				err = db.CloseConnectionPoolIfNeeded(ctx, tssDBConnectionPool)
 				if err != nil {
-					log.Ctx(ctx).Errorf("error closing TSS DB connection pool: %v", err)
+					log.Ctx(ctx).Errorf("closing TSS DB connection pool: %v", err)
 				}
 			}()
 

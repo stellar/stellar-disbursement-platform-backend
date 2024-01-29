@@ -15,6 +15,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
@@ -23,7 +24,7 @@ func SetConfigOptionMessengerType(co *config.ConfigOption) error {
 
 	messengerType, err := message.ParseMessengerType(senderType)
 	if err != nil {
-		return fmt.Errorf("couldn't parse messenger type: %w", err)
+		return fmt.Errorf("couldn't parse messenger type in %s: %w", co.Name, err)
 	}
 
 	*(co.ConfigKey.(*message.MessengerType)) = messengerType
@@ -35,7 +36,7 @@ func SetConfigOptionMetricType(co *config.ConfigOption) error {
 
 	metricTypeParsed, err := monitor.ParseMetricType(metricType)
 	if err != nil {
-		return fmt.Errorf("couldn't parse metric type: %w", err)
+		return fmt.Errorf("couldn't parse metric type in %s: %w", co.Name, err)
 	}
 
 	*(co.ConfigKey.(*monitor.MetricType)) = metricTypeParsed
@@ -47,10 +48,22 @@ func SetConfigOptionCrashTrackerType(co *config.ConfigOption) error {
 
 	ctTypeParsed, err := crashtracker.ParseCrashTrackerType(ctType)
 	if err != nil {
-		return fmt.Errorf("couldn't parse crash tracker type: %w", err)
+		return fmt.Errorf("couldn't parse crash tracker type in %s: %w", co.Name, err)
 	}
 
 	*(co.ConfigKey.(*crashtracker.CrashTrackerType)) = ctTypeParsed
+	return nil
+}
+
+func SetConfigOptionSignatureServiceType(co *config.ConfigOption) error {
+	ssType := viper.GetString(co.Name)
+
+	ssTypeParsed, err := engine.ParseSignatureServiceType(ssType)
+	if err != nil {
+		return fmt.Errorf("couldn't parse signature service type in %s: %w", co.Name, err)
+	}
+
+	*(co.ConfigKey.(*engine.SignatureServiceType)) = ssTypeParsed
 	return nil
 }
 
@@ -59,13 +72,13 @@ func SetConfigOptionLogLevel(co *config.ConfigOption) error {
 	logLevelStr := viper.GetString(co.Name)
 	logLevel, err := logrus.ParseLevel(logLevelStr)
 	if err != nil {
-		return fmt.Errorf("couldn't parse log level: %w", err)
+		return fmt.Errorf("couldn't parse log level in %s: %w", co.Name, err)
 	}
 
 	// update the configKey
 	key, ok := co.ConfigKey.(*logrus.Level)
 	if !ok {
-		return fmt.Errorf("configKey has an invalid type %T", co.ConfigKey)
+		return fmt.Errorf("%s configKey has an invalid type %T", co.Name, co.ConfigKey)
 	}
 	*key = logLevel
 
@@ -83,7 +96,7 @@ func SetConfigOptionLogLevel(co *config.ConfigOption) error {
 func SetConfigOptionEC256PublicKey(co *config.ConfigOption) error {
 	key, ok := co.ConfigKey.(*string)
 	if !ok {
-		return fmt.Errorf("not a valid EC256PublicKey: the expected type for this config key is a string, but got a %T instead", co.ConfigKey)
+		return fmt.Errorf("not a valid EC256PublicKey in %s: the expected type for this config key is a string, but got a %T instead", co.Name, co.ConfigKey)
 	}
 
 	publicKey := viper.GetString(co.Name)
@@ -93,7 +106,7 @@ func SetConfigOptionEC256PublicKey(co *config.ConfigOption) error {
 
 	_, err := utils.ParseStrongECPublicKey(publicKey)
 	if err != nil {
-		return fmt.Errorf("parsing EC256PublicKey: %w", err)
+		return fmt.Errorf("parsing EC256PublicKey in %s: %w", co.Name, err)
 	}
 
 	*key = publicKey
@@ -104,7 +117,7 @@ func SetConfigOptionEC256PublicKey(co *config.ConfigOption) error {
 func SetConfigOptionEC256PrivateKey(co *config.ConfigOption) error {
 	key, ok := co.ConfigKey.(*string)
 	if !ok {
-		return fmt.Errorf("not a valid EC256PrivateKey: the expected type for this config key is a string, but got a %T instead", co.ConfigKey)
+		return fmt.Errorf("not a valid EC256PrivateKey in %s: the expected type for this config key is a string, but got a %T instead", co.Name, co.ConfigKey)
 	}
 
 	privateKey := viper.GetString(co.Name)
@@ -114,7 +127,7 @@ func SetConfigOptionEC256PrivateKey(co *config.ConfigOption) error {
 
 	_, err := utils.ParseStrongECPrivateKey(privateKey)
 	if err != nil {
-		return fmt.Errorf("parsing EC256PrivateKey: %w", err)
+		return fmt.Errorf("parsing EC256PrivateKey in %s: %w", co.Name, err)
 	}
 
 	*key = privateKey
@@ -125,7 +138,7 @@ func SetCorsAllowedOrigins(co *config.ConfigOption) error {
 	corsAllowedOriginsOptions := viper.GetString(co.Name)
 
 	if corsAllowedOriginsOptions == "" {
-		return fmt.Errorf("cors allowed addresses cannot be empty")
+		return fmt.Errorf("cors allowed addresses cannot be empty in %s", co.Name)
 	}
 
 	corsAllowedOrigins := strings.Split(corsAllowedOriginsOptions, ",")
@@ -134,7 +147,7 @@ func SetCorsAllowedOrigins(co *config.ConfigOption) error {
 	for _, address := range corsAllowedOrigins {
 		_, err := url.ParseRequestURI(address)
 		if err != nil {
-			return fmt.Errorf("error parsing cors addresses: %w", err)
+			return fmt.Errorf("error parsing cors addresses in %s: %w", co.Name, err)
 		}
 		if address == "*" {
 			log.Warn(`The value "*" for the CORS Allowed Origins is too permissive and not recommended.`)
@@ -143,7 +156,7 @@ func SetCorsAllowedOrigins(co *config.ConfigOption) error {
 
 	key, ok := co.ConfigKey.(*[]string)
 	if !ok {
-		return fmt.Errorf("the expected type for this config key is a string slice, but got a %T instead", co.ConfigKey)
+		return fmt.Errorf("the expected type for the config key in %s is a string slice, but a %T was provided instead", co.Name, co.ConfigKey)
 	}
 	*key = corsAllowedOrigins
 
@@ -155,12 +168,12 @@ func SetConfigOptionStellarPublicKey(co *config.ConfigOption) error {
 
 	kp, err := keypair.ParseAddress(publicKey)
 	if err != nil {
-		return fmt.Errorf("error validating public key: %w", err)
+		return fmt.Errorf("error validating public key in %s: %w", co.Name, err)
 	}
 
 	key, ok := co.ConfigKey.(*string)
 	if !ok {
-		return fmt.Errorf("the expected type for this config key is a string, but got a %T instead", co.ConfigKey)
+		return fmt.Errorf("the expected type for the config key in %s is a string, but a %T was provided instead", co.Name, co.ConfigKey)
 	}
 	*key = kp.Address()
 
@@ -172,12 +185,12 @@ func SetConfigOptionStellarPrivateKey(co *config.ConfigOption) error {
 
 	isValid := strkey.IsValidEd25519SecretSeed(privateKey)
 	if !isValid {
-		return fmt.Errorf("error validating private key: %q", utils.TruncateString(privateKey, 2))
+		return fmt.Errorf("error validating private key in %s: %q", co.Name, utils.TruncateString(privateKey, 2))
 	}
 
 	key, ok := co.ConfigKey.(*string)
 	if !ok {
-		return fmt.Errorf("the expected type for this config key is a string, but got a %T instead", co.ConfigKey)
+		return fmt.Errorf("the expected type for the config key in %s is a string, but a %T was provided instead", co.Name, co.ConfigKey)
 	}
 	*key = privateKey
 
@@ -188,17 +201,17 @@ func SetConfigOptionURLString(co *config.ConfigOption) error {
 	u := viper.GetString(co.Name)
 
 	if u == "" {
-		return fmt.Errorf("ui base url cannot be empty")
+		return fmt.Errorf("URL cannot be empty in %s", co.Name)
 	}
 
 	_, err := url.ParseRequestURI(u)
 	if err != nil {
-		return fmt.Errorf("error parsing ui base url: %w", err)
+		return fmt.Errorf("parsing URL in %s: %w", co.Name, err)
 	}
 
 	key, ok := co.ConfigKey.(*string)
 	if !ok {
-		return fmt.Errorf("the expected type for this config key is a string, but got a %T instead", co.ConfigKey)
+		return fmt.Errorf("the expected type for the config key in %s is a string, but a %T was provided instead", co.Name, co.ConfigKey)
 	}
 	*key = u
 
@@ -211,12 +224,12 @@ func SetConfigOptionURLList(co *config.ConfigOption) error {
 
 	key, ok := co.ConfigKey.(*[]string)
 	if !ok {
-		return fmt.Errorf("the expected type for this config key is a string slice, but got a %T instead", co.ConfigKey)
+		return fmt.Errorf("the expected type for the config key in %s is a string slice, but a %T was provided instead", co.Name, co.ConfigKey)
 	}
 
 	if urlsStr == "" {
 		if co.Required {
-			return fmt.Errorf("url list cannot be empty")
+			return fmt.Errorf("URL list cannot be empty in %s", co.Name)
 		}
 		*key = make([]string, 0)
 		return nil
@@ -226,7 +239,7 @@ func SetConfigOptionURLList(co *config.ConfigOption) error {
 	for _, u := range urls {
 		_, err := url.ParseRequestURI(strings.TrimSpace(u))
 		if err != nil {
-			return fmt.Errorf("error parsing url: %w", err)
+			return fmt.Errorf("error parsing URL in %s: %w", co.Name, err)
 		}
 	}
 
@@ -239,7 +252,7 @@ func SetConfigOptionStringList(co *config.ConfigOption) error {
 	listStr := viper.GetString(co.Name)
 
 	if listStr == "" {
-		return fmt.Errorf("cannot be empty")
+		return fmt.Errorf("string list cannot be empty in %s", co.Name)
 	}
 
 	list := strings.Split(listStr, ",")
@@ -249,7 +262,7 @@ func SetConfigOptionStringList(co *config.ConfigOption) error {
 
 	key, ok := co.ConfigKey.(*[]string)
 	if !ok {
-		return fmt.Errorf("the expected type for this config key is a string slice, but got a %T instead", co.ConfigKey)
+		return fmt.Errorf("the expected type for the config key in %s is a string slice, but a %T was provided instead", co.Name, co.ConfigKey)
 	}
 
 	*key = list
@@ -262,7 +275,7 @@ func SetConfigOptionEventBrokerType(co *config.ConfigOption) error {
 
 	ebTypeParsed, err := events.ParseEventBrokerType(ebType)
 	if err != nil {
-		return fmt.Errorf("couldn't parse event broker type: %w", err)
+		return fmt.Errorf("couldn't parse event broker type in %s: %w", co.Name, err)
 	}
 
 	*(co.ConfigKey.(*events.EventBrokerType)) = ebTypeParsed

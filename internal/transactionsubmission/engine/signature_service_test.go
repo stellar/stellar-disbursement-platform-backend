@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"fmt"
 	"math"
 	"reflect"
 	"testing"
@@ -16,6 +17,27 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func Test_ParseSignatureServiceType(t *testing.T) {
+	testCases := []struct {
+		sigServiceTypeStr      string
+		expectedSigServiceType SignatureServiceType
+		wantErr                error
+	}{
+		{wantErr: fmt.Errorf(`invalid signature service type ""`)},
+		{sigServiceTypeStr: "INVALID", wantErr: fmt.Errorf(`invalid signature service type "INVALID"`)},
+		{sigServiceTypeStr: "DEFAULT", expectedSigServiceType: SignatureServiceTypeDefault},
+		{sigServiceTypeStr: "dEfAuLt", expectedSigServiceType: SignatureServiceTypeDefault},
+	}
+
+	for _, tc := range testCases {
+		t.Run("signatureServiceTypeType: "+tc.sigServiceTypeStr, func(t *testing.T) {
+			sigServiceType, err := ParseSignatureServiceType(tc.sigServiceTypeStr)
+			assert.Equal(t, tc.expectedSigServiceType, sigServiceType)
+			assert.Equal(t, tc.wantErr, err)
+		})
+	}
+}
 
 func Test_DefaultSignatureServiceOptions_Validate(t *testing.T) {
 	dbt := dbtest.OpenWithTSSMigrationsOnly(t)

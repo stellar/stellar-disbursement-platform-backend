@@ -184,3 +184,18 @@ func CloseRows(ctx context.Context, rows *sqlx.Rows) {
 		log.Ctx(ctx).Errorf("Failed to close rows: %v", err)
 	}
 }
+
+// CloseConnectionPoolIfNeeded closes the given DB connection pool if it's open and not nil.
+func CloseConnectionPoolIfNeeded(ctx context.Context, dbConnectionPool DBConnectionPool) error {
+	if dbConnectionPool == nil {
+		log.Ctx(ctx).Info("NO-OP: attempting to close a DB connection pool but the object is nil")
+		return nil
+	}
+
+	if err := dbConnectionPool.Ping(ctx); err != nil {
+		log.Ctx(ctx).Info("NO-OP: attempting to close a DB connection pool that was already closed")
+		return nil
+	}
+
+	return dbConnectionPool.Close()
+}

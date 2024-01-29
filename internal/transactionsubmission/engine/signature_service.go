@@ -3,10 +3,12 @@ package engine
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/stellar/go/keypair"
 	"github.com/stellar/go/strkey"
 	"github.com/stellar/go/txnbuild"
+	"golang.org/x/exp/slices"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
@@ -18,6 +20,29 @@ type SignatureServiceType string
 const (
 	SignatureServiceTypeDefault SignatureServiceType = "DEFAULT"
 )
+
+func (t SignatureServiceType) All() []SignatureServiceType {
+	return []SignatureServiceType{SignatureServiceTypeDefault}
+}
+
+func (t SignatureServiceType) StringAll() []string {
+	strAll := []string{}
+	for _, t := range t.All() {
+		strAll = append(strAll, string(t))
+	}
+	return strAll
+}
+
+func ParseSignatureServiceType(sigServiceType string) (SignatureServiceType, error) {
+	sigServiceTypeStrUpper := strings.ToUpper(sigServiceType)
+	ctType := SignatureServiceType(sigServiceTypeStrUpper)
+
+	if slices.Contains(ctType.All(), ctType) {
+		return ctType, nil
+	}
+
+	return "", fmt.Errorf("invalid signature service type %q", sigServiceTypeStrUpper)
+}
 
 type SignatureServiceOptions struct {
 	NetworkPassphrase      string

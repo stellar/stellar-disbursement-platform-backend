@@ -1,6 +1,7 @@
 package serve
 
 import (
+	"context"
 	"fmt"
 	"io/fs"
 	"net/http"
@@ -173,10 +174,10 @@ func Serve(opts ServeOptions, httpServer HTTPServerInterface) error {
 			log.Infof("Listening on %s", listenAddr)
 		},
 		OnStopping: func() {
-			log.Info("Closing the database connection...")
-			err := opts.dbConnectionPool.Close()
+			log.Info("Closing the SDP Server database connection pool")
+			err := db.CloseConnectionPoolIfNeeded(context.Background(), opts.dbConnectionPool)
 			if err != nil {
-				log.Errorf("error closing database connection: %s", err.Error())
+				log.Errorf("error closing database connection: %v", err)
 			}
 
 			log.Info("Stopping SDP (Stellar Disbursement Platform) Server")

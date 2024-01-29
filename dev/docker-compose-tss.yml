@@ -30,6 +30,6 @@ services:
       - |
         sleep 10
         ./stellar-disbursement-platform channel-accounts delete --delete-all-accounts
-        ./stellar-disbursement-platform channel-accounts ensure --num-channel-accounts-ensure 1
+        ./stellar-disbursement-platform channel-accounts ensure 1
         ./stellar-disbursement-platform tss
 
