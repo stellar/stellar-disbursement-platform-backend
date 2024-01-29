@@ -421,16 +421,16 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 		require.NoError(t, err)
 
 		// check disbursement status
-		disbursement, err := models.Disbursements.Get(context.Background(), models.DBConnectionPool, readyDisbursement.ID)
-		require.NoError(t, err)
+		disbursement, getDisbursementErr := models.Disbursements.Get(context.Background(), models.DBConnectionPool, readyDisbursement.ID)
+		require.NoError(t, getDisbursementErr)
 		require.Equal(t, data.StartedDisbursementStatus, disbursement.Status)
 
 		// check disbursement history
 		require.Equal(t, disbursement.StatusHistory[1].UserID, user.ID)
 
 		// check receivers wallets status
-		receiverWallets, err := models.ReceiverWallet.GetByReceiverIDsAndWalletID(ctx, models.DBConnectionPool, receiverIds, wallet.ID)
-		require.NoError(t, err)
+		receiverWallets, getReceiversErr := models.ReceiverWallet.GetByReceiverIDsAndWalletID(ctx, models.DBConnectionPool, receiverIds, wallet.ID)
+		require.NoError(t, getReceiversErr)
 		require.Equal(t, 4, len(receiverWallets))
 		rwExpectedStatuses := map[string]data.ReceiversWalletStatus{
 			rwDraft1.ID:     data.ReadyReceiversWalletStatus,
@@ -444,8 +444,8 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 
 		// check payments status
 		for _, p := range payments {
-			payment, err := models.Payment.Get(ctx, p.ID, dbConnectionPool)
-			require.NoError(t, err)
+			payment, getPaymentErr := models.Payment.Get(ctx, p.ID, dbConnectionPool)
+			require.NoError(t, getPaymentErr)
 			require.Equal(t, data.ReadyPaymentStatus, payment.Status)
 		}
 	})
