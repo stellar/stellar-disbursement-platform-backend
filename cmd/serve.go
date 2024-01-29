@@ -463,7 +463,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 				log.Ctx(ctx).Fatalf("error getting TSS DB connection pool: %v", err)
 			}
 			defer func() {
-				err := tssDBConnectionPool.Close()
+				err = tssDBConnectionPool.Close()
 				if err != nil {
 					log.Ctx(ctx).Errorf("error closing TSS DB connection pool: %v", err)
 				}
