@@ -498,6 +498,9 @@ func Test_Manager_ProcessTransactions(t *testing.T) {
 			case signalTypeOSSigquit:
 				err = syscall.Kill(syscall.Getpid(), syscall.SIGQUIT)
 				require.NoError(t, err)
+
+			default:
+				// NO-OP
 			}
 
 			cancel()
