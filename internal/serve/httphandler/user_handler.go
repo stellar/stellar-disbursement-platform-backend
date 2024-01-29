@@ -339,19 +339,19 @@ func (h UserHandler) GetAllUsers(rw http.ResponseWriter, req *http.Request) {
 	}
 
 	// Order users
+	sortingFn := sort.Sort
+	if queryParams.SortOrder == data.SortOrderDESC {
+		sortingFn = func(data sort.Interface) {
+			sort.Sort(sort.Reverse(data))
+		}
+	}
 	switch queryParams.SortBy {
 	case data.SortFieldEmail:
-		if queryParams.SortOrder == data.SortOrderDESC {
-			sort.Sort(sort.Reverse(UserSorterByEmail(users)))
-		} else {
-			sort.Sort(UserSorterByEmail(users))
-		}
+		sortingFn(UserSorterByEmail(users))
 	case data.SortFieldIsActive:
-		if queryParams.SortOrder == data.SortOrderDESC {
-			sort.Sort(sort.Reverse(UserSorterByIsActive(users)))
-		} else {
-			sort.Sort(UserSorterByIsActive(users))
-		}
+		sortingFn(UserSorterByIsActive(users))
+	default:
+		log.Ctx(ctx).Warnf("unexpected sort field in GetAllUsers: %s", queryParams.SortBy)
 	}
 
 	httpjson.RenderStatus(rw, http.StatusOK, users, httpjson.JSON)
