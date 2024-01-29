@@ -29,6 +29,7 @@ sdp:
   ## @param sdp.kubeSecrets.data.ANCHOR_PLATFORM_OUTGOING_JWT_SECRET The JWT secret used to create a JWT token used to send requests to the anchor platform.
   ## @param sdp.kubeSecrets.data.DATABASE_URL URL of the database used by the SDP.
   ## @param sdp.kubeSecrets.data.DISTRIBUTION_SEED The private key of the Stellar account used to disburse funds. This is needed for the init container
+  ## @param sdp.kubeSecrets.data.CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE The private key used to encrypt the channel account secrets in the database.
   kubeSecrets:
     create: true
     data:
@@ -39,6 +40,7 @@ sdp:
       ANCHOR_PLATFORM_OUTGOING_JWT_SECRET: #required for mySdpToAnchorPlatformSecret
       DATABASE_URL: #required
       DISTRIBUTION_SEED: #required
+      CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE: #required
 
   ## @extra sdp.ingress Configuration for the ingress controller for the SDP service.
   ingress: #required
@@ -80,11 +82,13 @@ tss:
 
   ## @param tss.kubeSecrets.data.DATABASE_URL URL of the database used by the TSS.
   ## @param tss.kubeSecrets.data.DISTRIBUTION_SEED The private key of the Stellar account used to disburse funds.
+  ## @param tss.kubeSecrets.data.CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE The private key used to encrypt the channel account secrets in the database.
   kubeSecrets:
     create: true
     data:
       DATABASE_URL: #required
       DISTRIBUTION_SEED: #required
+      CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE: #required
 
 dashboard:
 

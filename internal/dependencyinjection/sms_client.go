@@ -40,12 +40,12 @@ func NewSMSClient(opts SMSClientOptions) (message.MessengerClient, error) {
 		return nil, fmt.Errorf("trying to cast pre-existing SMS client for depencency injection")
 	}
 
-	log.Infof("⚙️ Setting SMS client to: %v", opts.MessengerOptions.MessengerType)
+	log.Infof("⚙️ Setting up SMS client to: %v", opts.MessengerOptions.MessengerType)
 	messengerClient, err := message.GetClient(*opts.MessengerOptions)
 	if err != nil {
 		return nil, fmt.Errorf("creating SMS client: %w", err)
 	}
 
-	setInstance(instanceName, messengerClient)
+	SetInstance(instanceName, messengerClient)
 	return messengerClient, nil
 }

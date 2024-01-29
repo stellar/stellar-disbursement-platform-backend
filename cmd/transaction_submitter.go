@@ -12,15 +12,14 @@ import (
 	"github.com/stellar/go/support/log"
 
 	cmdUtils "github.com/stellar/stellar-disbursement-platform-backend/cmd/utils"
-	"github.com/stellar/stellar-disbursement-platform-backend/db/router"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	di "github.com/stellar/stellar-disbursement-platform-backend/internal/dependencyinjection"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve"
 	txSub "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	tssMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/monitor"
-	tssUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
 )
 
 type TxSubmitterCommand struct{}
@@ -49,6 +48,7 @@ func (t *TxSubmitterService) StartSubmitter(ctx context.Context, opts txSub.Subm
 
 	tssManager, err := txSub.NewManager(ctx, opts)
 	if err != nil {
+		defer opts.DBConnectionPool.Close()
 		opts.CrashTrackerClient.LogAndReportErrors(ctx, err, "Cannot start submitter service")
 		log.Fatalf("Error starting transaction submission service: %s", err.Error())
 	}
@@ -66,28 +66,8 @@ func (s *TxSubmitterService) StartMetricsServe(ctx context.Context, opts serve.M
 
 func (c *TxSubmitterCommand) Command(submitterService TxSubmitterServiceInterface) *cobra.Command {
 	submitterOpts := txSub.SubmitterOptions{}
-	metricsServeOpts := serve.MetricsServeOptions{}
-	crashTrackerOptions := crashtracker.CrashTrackerOptions{}
 
 	configOpts := config.ConfigOptions{
-		{
-			Name:        "tss-metrics-port",
-			Usage:       `Port where the metrics server will be listening on. Default: 9002"`,
-			OptType:     types.Int,
-			ConfigKey:   &metricsServeOpts.Port,
-			FlagDefault: 9002,
-			Required:    true,
-		},
-		{
-			Name:           "tss-metrics-type",
-			Usage:          `Metric monitor type. Options: "TSS_PROMETHEUS"`,
-			OptType:        types.String,
-			CustomSetValue: cmdUtils.SetConfigOptionMetricType,
-			ConfigKey:      &metricsServeOpts.MetricType,
-			FlagDefault:    "TSS_PROMETHEUS",
-			Required:       true,
-		},
-		cmdUtils.DistributionSeed(&submitterOpts.DistributionSeed),
 		cmdUtils.HorizonURLConfigOption(&submitterOpts.HorizonURL),
 		{
 			Name:        "num-channel-accounts",
@@ -106,8 +86,39 @@ func (c *TxSubmitterCommand) Command(submitterService TxSubmitterServiceInterfac
 			Required:    true,
 		},
 		cmdUtils.MaxBaseFee(&submitterOpts.MaxBaseFee),
-		cmdUtils.CrashTrackerTypeConfigOption(&crashTrackerOptions.CrashTrackerType),
 	}
+
+	// metrics server options
+	metricsServeOpts := serve.MetricsServeOptions{}
+	configOpts = append(configOpts,
+		&config.ConfigOption{
+			Name:           "tss-metrics-type",
+			Usage:          `Metric monitor type. Options: "TSS_PROMETHEUS"`,
+			OptType:        types.String,
+			CustomSetValue: cmdUtils.SetConfigOptionMetricType,
+			ConfigKey:      &metricsServeOpts.MetricType,
+			FlagDefault:    "TSS_PROMETHEUS",
+			Required:       true,
+		},
+		&config.ConfigOption{
+			Name:        "tss-metrics-port",
+			Usage:       `Port where the metrics server will be listening on. Default: 9002"`,
+			OptType:     types.Int,
+			ConfigKey:   &metricsServeOpts.Port,
+			FlagDefault: 9002,
+			Required:    true,
+		})
+
+	// crash tracker options
+	crashTrackerOptions := crashtracker.CrashTrackerOptions{}
+	configOpts = append(configOpts, cmdUtils.CrashTrackerTypeConfigOption(&crashTrackerOptions.CrashTrackerType))
+
+	// signature service config options:
+	sigServiceOptions := engine.SignatureServiceOptions{}
+	configOpts = append(configOpts,
+		cmdUtils.ChannelAccountEncryptionPassphraseConfigOption(&sigServiceOptions.EncryptionPassphrase),
+		cmdUtils.DistributionSeed(&sigServiceOptions.DistributionPrivateKey),
+	)
 
 	// event broker options:
 	eventBrokerOptions := cmdUtils.EventBrokerOptions{}
@@ -145,15 +156,24 @@ func (c *TxSubmitterCommand) Command(submitterService TxSubmitterServiceInterfac
 			}
 			metricsServeOpts.MonitorService = &tssMonitorSvc
 
-			// Inject server dependencies
-			tssDatabaseDSN, err := router.GetDNSForTSS(globalOptions.DatabaseURL)
+			// Setup the TSSDBConnectionPool
+			tssDBConnectionPool, err := di.NewTSSDBConnectionPool(ctx, di.TSSDBConnectionPoolOptions{DatabaseURL: globalOptions.DatabaseURL})
 			if err != nil {
-				log.Ctx(ctx).Fatalf("Error getting TSS database DSN: %v", err)
+				log.Ctx(ctx).Fatalf("error getting TSS DB connection pool: %v", err)
 			}
-			submitterOpts.DatabaseDSN = tssDatabaseDSN
+
+			// Setup the signature service
+			sigServiceOptions.DBConnectionPool = tssDBConnectionPool
+			sigServiceOptions.NetworkPassphrase = globalOptions.NetworkPassphrase
+			signatureService, err := di.NewSignatureService(ctx, sigServiceOptions)
+			if err != nil {
+				log.Ctx(ctx).Fatalf("error creating signature service: %v", err)
+			}
+
+			// Inject server dependencies
+			submitterOpts.DBConnectionPool = tssDBConnectionPool
+			submitterOpts.SignatureService = signatureService
 			submitterOpts.MonitorService = tssMonitorSvc
-			submitterOpts.NetworkPassphrase = globalOptions.NetworkPassphrase
-			submitterOpts.PrivateKeyEncrypter = &tssUtils.DefaultPrivateKeyEncrypter{}
 
 			// Inject crash tracker options dependencies
 			globalOptions.PopulateCrashTrackerOptions(&crashTrackerOptions)

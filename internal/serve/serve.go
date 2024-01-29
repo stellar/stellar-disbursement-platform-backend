@@ -15,7 +15,6 @@ import (
 	"github.com/stellar/go/support/log"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
-	dbRouter "github.com/stellar/stellar-disbursement-platform-backend/db/router"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
@@ -71,7 +70,7 @@ type ServeOptions struct {
 	NetworkPassphrase               string
 	HorizonURL                      string
 	horizonClient                   horizonclient.ClientInterface
-	signatureService                engine.SignatureService
+	SignatureService                engine.SignatureService
 	Sep10SigningPublicKey           string
 	Sep10SigningPrivateKey          string
 	AnchorPlatformBaseSepURL        string
@@ -107,7 +106,6 @@ func (opts *ServeOptions) SetupDependencies() error {
 	}
 
 	// Setup Multi-Tenant Database when enabled
-	tssDBConnectionPool := dbConnectionPool
 	if opts.EnableMultiTenantDB {
 		deprecatedConnectionPool := dbConnectionPool
 		defer deprecatedConnectionPool.Close()
@@ -121,17 +119,6 @@ func (opts *ServeOptions) SetupDependencies() error {
 			return fmt.Errorf("error connecting to the multi-tenant database: %w", innerErr)
 		}
 		opts.dbConnectionPool = mtnDbConnectionPool
-
-		// Setup TSS Database
-		var tssDNS string
-		tssDNS, err = dbRouter.GetDNSForTSS(opts.DatabaseDSN)
-		if err != nil {
-			return fmt.Errorf("getting TSS database DNS: %w", err)
-		}
-		tssDBConnectionPool, err = db.OpenDBConnectionPool(tssDNS)
-		if err != nil {
-			return fmt.Errorf("getting TSS DB connection: %w", err)
-		}
 	} else {
 		opts.dbConnectionPool = dbConnectionPool
 	}
@@ -160,18 +147,6 @@ func (opts *ServeOptions) SetupDependencies() error {
 	opts.horizonClient = &horizonclient.Client{
 		HorizonURL: opts.HorizonURL,
 		HTTP:       httpclient.DefaultClient(),
-	}
-
-	// Setup Signature Service
-	// TODO: Setup signature service from dependency injector
-	opts.signatureService, err = engine.NewDefaultSignatureService(engine.DefaultSignatureServiceOptions{
-		NetworkPassphrase:      opts.NetworkPassphrase,
-		DBConnectionPool:       tssDBConnectionPool,
-		DistributionPrivateKey: opts.DistributionSeed,
-		EncryptionPassphrase:   opts.DistributionSeed,
-	})
-	if err != nil {
-		return fmt.Errorf("error creating signature service: %w", err)
 	}
 
 	return nil
@@ -314,7 +289,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 		r.Route("/assets", func(r chi.Router) {
 			assetsHandler := httphandler.AssetsHandler{
 				Models:           o.Models,
-				SignatureService: o.signatureService,
+				SignatureService: o.SignatureService,
 				HorizonClient:    o.horizonClient,
 			}
 

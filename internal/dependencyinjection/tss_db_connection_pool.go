@@ -37,6 +37,6 @@ func NewTSSDBConnectionPool(ctx context.Context, opts TSSDBConnectionPoolOptions
 		return nil, fmt.Errorf("opening TSS DB connection pool: %w", err)
 	}
 
-	setInstance(instanceName, tssDBConnectionPool)
+	SetInstance(instanceName, tssDBConnectionPool)
 	return tssDBConnectionPool, nil
 }

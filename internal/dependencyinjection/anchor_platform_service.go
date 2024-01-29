@@ -27,12 +27,12 @@ func NewAnchorPlatformAPIService(anchorPlatformBasePlatformURL, anchorPlatformOu
 	}
 
 	// Setup Anchor Platform API Service
-	log.Infof("⚙️ Setting default anchor platform API Service")
+	log.Infof("⚙️ Setting up Anchor Platform API Service")
 	anchorPlatformAPIService, err := anchorplatform.NewAnchorPlatformAPIService(httpclient.DefaultClient(), anchorPlatformBasePlatformURL, anchorPlatformOutgoingJWTSecret)
 	if err != nil {
 		return nil, fmt.Errorf("creating Anchor Platform API service: %w", err)
 	}
-	setInstance(anchorPlatformAPIServiceInstanceName, anchorPlatformAPIService)
+	SetInstance(anchorPlatformAPIServiceInstanceName, anchorPlatformAPIService)
 
 	return anchorPlatformAPIService, nil
 }

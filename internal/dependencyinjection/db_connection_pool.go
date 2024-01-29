@@ -32,6 +32,6 @@ func NewDBConnectionPool(ctx context.Context, opts DBConnectionPoolOptions) (db.
 		return nil, fmt.Errorf("opening DB connection pool: %w", err)
 	}
 
-	setInstance(instanceName, dbConnectionPool)
+	SetInstance(instanceName, dbConnectionPool)
 	return dbConnectionPool, nil
 }

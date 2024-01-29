@@ -7,7 +7,6 @@ import (
 
 	cmdUtils "github.com/stellar/stellar-disbursement-platform-backend/cmd/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
-	"github.com/stellar/stellar-disbursement-platform-backend/db/router"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
@@ -16,6 +15,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/eventhandlers"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/scheduler"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 
 	"github.com/spf13/cobra"
 	"github.com/stellar/go/support/config"
@@ -92,13 +92,9 @@ func (s *ServerService) SetupConsumers(ctx context.Context, eventBrokerOptions c
 		}
 	}()
 
-	tssDNS, err := router.GetDNSForTSS(globalOptions.DatabaseURL)
+	tssDBConnectionPool, err := di.NewTSSDBConnectionPool(ctx, di.TSSDBConnectionPoolOptions{DatabaseURL: globalOptions.DatabaseURL})
 	if err != nil {
-		return nil, fmt.Errorf("getting TSS database DNS: %w", err)
-	}
-	tssDBConnectionPool, err := db.OpenDBConnectionPool(tssDNS)
-	if err != nil {
-		return nil, fmt.Errorf("getting TSS DB connection: %w", err)
+		return nil, fmt.Errorf("getting TSS DB connection pool: %w", err)
 	}
 	defer func() {
 		if err != nil && tssDBConnectionPool != nil {
@@ -153,11 +149,7 @@ func (s *ServerService) SetupConsumers(ctx context.Context, eventBrokerOptions c
 
 func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorService monitor.MonitorServiceInterface) *cobra.Command {
 	serveOpts := serve.ServeOptions{}
-	metricsServeOpts := serve.MetricsServeOptions{}
-	adminServeOpts := serveadmin.ServeOptions{}
 	schedulerOptions := scheduler.SchedulerOptions{}
-	crashTrackerOptions := crashtracker.CrashTrackerOptions{}
-	eventHandlerOptions := events.EventHandlerOptions{}
 
 	configOpts := config.ConfigOptions{
 		{
@@ -168,32 +160,6 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			FlagDefault: 8000,
 			Required:    true,
 		},
-		{
-			Name:           "metrics-type",
-			Usage:          `Metric monitor type. Options: "PROMETHEUS"`,
-			OptType:        types.String,
-			CustomSetValue: cmdUtils.SetConfigOptionMetricType,
-			ConfigKey:      &metricsServeOpts.MetricType,
-			FlagDefault:    "PROMETHEUS",
-			Required:       true,
-		},
-		{
-			Name:        "metrics-port",
-			Usage:       "Port where the metrics server will be listening on",
-			OptType:     types.Int,
-			ConfigKey:   &metricsServeOpts.Port,
-			FlagDefault: 8002,
-			Required:    true,
-		},
-		{
-			Name:        "admin-port",
-			Usage:       "Port where the admin tenant server will be listening on",
-			OptType:     types.Int,
-			ConfigKey:   &adminServeOpts.Port,
-			FlagDefault: 8003,
-			Required:    true,
-		},
-		cmdUtils.CrashTrackerTypeConfigOption(&crashTrackerOptions.CrashTrackerType),
 		{
 			Name:      "instance-name",
 			Usage:     `Name of the SDP instance. Example: "SDP Testnet".`,
@@ -279,14 +245,6 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			FlagDefault: 24,
 			Required:    true,
 		},
-		{
-			Name:        "max-invitation-sms-resend-attempts",
-			Usage:       "The maximum number of attempts to resend the SMS invitation to the Receiver Wallets.",
-			OptType:     types.Int,
-			ConfigKey:   &eventHandlerOptions.MaxInvitationSMSResendAttempts,
-			FlagDefault: 3,
-			Required:    true,
-		},
 		cmdUtils.DistributionPublicKey(&serveOpts.DistributionPublicKey),
 		cmdUtils.DistributionSeed(&serveOpts.DistributionSeed),
 		{
@@ -331,9 +289,57 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 		},
 	}
 
-	messengerOptions := message.MessengerOptions{}
+	// crash tracker options
+	crashTrackerOptions := crashtracker.CrashTrackerOptions{}
+	configOpts = append(configOpts, cmdUtils.CrashTrackerTypeConfigOption(&crashTrackerOptions.CrashTrackerType))
+
+	// admin endpoint(s) options
+	adminServeOpts := serveadmin.ServeOptions{}
+	configOpts = append(configOpts,
+		&config.ConfigOption{
+			Name:        "admin-port",
+			Usage:       "Port where the admin tenant server will be listening on",
+			OptType:     types.Int,
+			ConfigKey:   &adminServeOpts.Port,
+			FlagDefault: 8003,
+			Required:    true,
+		})
+
+	// metrics server options
+	metricsServeOpts := serve.MetricsServeOptions{}
+	configOpts = append(configOpts,
+		&config.ConfigOption{
+			Name:           "metrics-type",
+			Usage:          `Metric monitor type. Options: "PROMETHEUS"`,
+			OptType:        types.String,
+			CustomSetValue: cmdUtils.SetConfigOptionMetricType,
+			ConfigKey:      &metricsServeOpts.MetricType,
+			FlagDefault:    "PROMETHEUS",
+			Required:       true,
+		},
+		&config.ConfigOption{
+			Name:        "metrics-port",
+			Usage:       "Port where the metrics server will be listening on",
+			OptType:     types.Int,
+			ConfigKey:   &metricsServeOpts.Port,
+			FlagDefault: 8002,
+			Required:    true,
+		})
+
+	// event handler options
+	eventHandlerOptions := events.EventHandlerOptions{}
+	configOpts = append(configOpts,
+		&config.ConfigOption{
+			Name:        "max-invitation-sms-resend-attempts",
+			Usage:       "The maximum number of attempts to resend the SMS invitation to the Receiver Wallets.",
+			OptType:     types.Int,
+			ConfigKey:   &eventHandlerOptions.MaxInvitationSMSResendAttempts,
+			FlagDefault: 3,
+			Required:    true,
+		})
 
 	// messenger config options:
+	messengerOptions := message.MessengerOptions{}
 	configOpts = append(configOpts, cmdUtils.TwilioConfigOptions(&messengerOptions)...)
 	configOpts = append(configOpts, cmdUtils.AWSConfigOptions(&messengerOptions)...)
 
@@ -368,6 +374,10 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 	// event config options:
 	eventBrokerOptions := cmdUtils.EventBrokerOptions{}
 	configOpts = append(configOpts, cmdUtils.EventBrokerConfigOptions(&eventBrokerOptions)...)
+
+	// signature service config options:
+	sigServiceOptions := engine.SignatureServiceOptions{}
+	configOpts = append(configOpts, cmdUtils.ChannelAccountEncryptionPassphraseConfigOption(&sigServiceOptions.EncryptionPassphrase))
 
 	cmd := &cobra.Command{
 		Use:   "serve",
@@ -419,14 +429,14 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 		Run: func(cmd *cobra.Command, _ []string) {
 			ctx := cmd.Context()
 
-			// Setup default Crash Tracker client
+			// Setup the Crash Tracker client
 			crashTrackerClient, err := di.NewCrashTracker(ctx, crashTrackerOptions)
 			if err != nil {
 				log.Ctx(ctx).Fatalf("error creating crash tracker client: %s", err.Error())
 			}
 			serveOpts.CrashTrackerClient = crashTrackerClient
 
-			// Setup default Email client
+			// Setup the Email client
 			emailMessengerClient, err := di.NewEmailClient(emailOpts)
 			if err != nil {
 				log.Ctx(ctx).Fatalf("error creating email client: %s", err.Error())
@@ -434,19 +444,39 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			serveOpts.EmailMessengerClient = emailMessengerClient
 			adminServeOpts.EmailMessengerClient = emailMessengerClient
 
-			// Setup default SMS client
-			smsMessengerClient, err := di.NewSMSClient(smsOpts)
+			// Setup the SMS client
+			serveOpts.SMSMessengerClient, err = di.NewSMSClient(smsOpts)
 			if err != nil {
 				log.Ctx(ctx).Fatalf("error creating SMS client: %s", err.Error())
 			}
-			serveOpts.SMSMessengerClient = smsMessengerClient
 
-			// Setup default AP Auth enforcer
+			// Setup the AP Auth enforcer
 			apAPIService, err := di.NewAnchorPlatformAPIService(serveOpts.AnchorPlatformBasePlatformURL, serveOpts.AnchorPlatformOutgoingJWTSecret)
 			if err != nil {
 				log.Ctx(ctx).Fatalf("error creating Anchor Platform API Service: %v", err)
 			}
 			serveOpts.AnchorPlatformAPIService = apAPIService
+
+			// Setup the TSSDBConnectionPool
+			tssDBConnectionPool, err := di.NewTSSDBConnectionPool(ctx, di.TSSDBConnectionPoolOptions{DatabaseURL: globalOptions.DatabaseURL})
+			if err != nil {
+				log.Ctx(ctx).Fatalf("error getting TSS DB connection pool: %v", err)
+			}
+			defer func() {
+				err = tssDBConnectionPool.Close()
+				if err != nil {
+					log.Ctx(ctx).Errorf("error closing TSS DB connection pool: %v", err)
+				}
+			}()
+
+			// Setup the signature service
+			sigServiceOptions.DBConnectionPool = tssDBConnectionPool
+			sigServiceOptions.NetworkPassphrase = globalOptions.NetworkPassphrase
+			sigServiceOptions.DistributionPrivateKey = serveOpts.DistributionSeed
+			serveOpts.SignatureService, err = di.NewSignatureService(ctx, sigServiceOptions)
+			if err != nil {
+				log.Ctx(ctx).Fatalf("error creating signature service: %v", err)
+			}
 
 			// Kafka (background)
 			if eventBrokerOptions.EventBrokerType == events.KafkaEventBrokerType {

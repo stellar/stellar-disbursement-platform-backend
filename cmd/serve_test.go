@@ -7,8 +7,14 @@ import (
 	"testing"
 
 	"github.com/stellar/go/clients/horizonclient"
+	"github.com/stellar/go/keypair"
 	"github.com/stellar/go/network"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
+
 	cmdUtils "github.com/stellar/stellar-disbursement-platform-backend/cmd/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
@@ -19,10 +25,8 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/scheduler"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
+	engineMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/mocks"
 	serveadmin "github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/serve"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
-	"github.com/stretchr/testify/require"
 )
 
 type mockServer struct {
@@ -86,10 +90,14 @@ func Test_serve_wasCalled(t *testing.T) {
 
 func Test_serve(t *testing.T) {
 	dbt := dbtest.Open(t)
-	randomDatabaseDSN := dbt.DSN
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	dbConnectionPool.Close()
 	dbt.Close()
 
 	cmdUtils.ClearTestEnvironment(t)
+	// Populate the dependency injection object for the TSS DB connection pool, so we can close it later
+	di.SetInstance("tss_db_connection_pool_instance", dbConnectionPool)
 
 	ctx := context.Background()
 
@@ -103,7 +111,7 @@ func Test_serve(t *testing.T) {
 		Version:                         "x.y.z",
 		InstanceName:                    "SDP Testnet",
 		MonitorService:                  &mMonitorService,
-		DatabaseDSN:                     randomDatabaseDSN,
+		DatabaseDSN:                     dbt.DSN,
 		EC256PublicKey:                  "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAER88h7AiQyVDysRTxKvBB6CaiO/kS\ncvGyimApUE/12gFhNTRf37SE19CSCllKxstnVFOpLLWB7Qu5OJ0Wvcz3hg==\n-----END PUBLIC KEY-----",
 		EC256PrivateKey:                 "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgIqI1MzMZIw2pQDLx\nJn0+FcNT/hNjwtn2TW43710JKZqhRANCAARHzyHsCJDJUPKxFPEq8EHoJqI7+RJy\n8bKKYClQT/XaAWE1NF/ftITX0JIKWUrGy2dUU6kstYHtC7k4nRa9zPeG\n-----END PRIVATE KEY-----",
 		CorsAllowedOrigins:              []string{"*"},
@@ -125,35 +133,36 @@ func Test_serve(t *testing.T) {
 		EnableScheduler:                 true,
 		EnableMultiTenantDB:             false,
 	}
-	var err error
 	serveOpts.AnchorPlatformAPIService, err = anchorplatform.NewAnchorPlatformAPIService(httpclient.DefaultClient(), serveOpts.AnchorPlatformBasePlatformURL, serveOpts.AnchorPlatformOutgoingJWTSecret)
 	require.NoError(t, err)
 
-	crashTrackerClient, err := di.NewCrashTracker(ctx, crashtracker.CrashTrackerOptions{
+	serveOpts.CrashTrackerClient, err = di.NewCrashTracker(ctx, crashtracker.CrashTrackerOptions{
 		Environment:      serveOpts.Environment,
 		GitCommit:        serveOpts.GitCommit,
 		CrashTrackerType: "DRY_RUN",
 	})
 	require.NoError(t, err)
-	serveOpts.CrashTrackerClient = crashTrackerClient
 
 	messengerClient, err := di.NewEmailClient(di.EmailClientOptions{EmailType: message.MessengerTypeDryRun})
 	require.NoError(t, err)
 	serveOpts.EmailMessengerClient = messengerClient
 
-	smsMessengerClient, err := di.NewSMSClient(di.SMSClientOptions{SMSType: message.MessengerTypeDryRun})
+	serveOpts.SMSMessengerClient, err = di.NewSMSClient(di.SMSClientOptions{SMSType: message.MessengerTypeDryRun})
 	require.NoError(t, err)
-	serveOpts.SMSMessengerClient = smsMessengerClient
 
-	kafkaEventManager, err := events.NewKafkaProducer([]string{"kafka:9092"})
+	serveOpts.EventProducer, err = events.NewKafkaProducer([]string{"kafka:9092"})
 	require.NoError(t, err)
-	serveOpts.EventProducer = kafkaEventManager
 
 	metricOptions := monitor.MetricOptions{
 		MetricType:  monitor.MetricTypePrometheus,
 		Environment: "test",
 	}
 	mMonitorService.On("Start", metricOptions).Return(nil).Once()
+	defer mMonitorService.AssertExpectations(t)
+
+	encryptionPassphrase := keypair.MustRandom().Seed()
+	serveOpts.SignatureService = engineMocks.NewMockSignatureService(t)
+	di.SetInstance("signature_service_instance", serveOpts.SignatureService)
 
 	serveMetricOpts := serve.MetricsServeOptions{
 		Port:        8002,
@@ -166,7 +175,7 @@ func Test_serve(t *testing.T) {
 	serveTenantOpts := serveadmin.ServeOptions{
 		Environment:          "test",
 		EmailMessengerClient: messengerClient,
-		DatabaseDSN:          randomDatabaseDSN,
+		DatabaseDSN:          dbt.DSN,
 		GitCommit:            "1234567890abcdef",
 		NetworkPassphrase:    network.TestNetworkPassphrase,
 		Port:                 8003,
@@ -194,6 +203,7 @@ func Test_serve(t *testing.T) {
 		Once()
 	mServer.On("SetupConsumers", ctx, eventBrokerOptions, eventHandlerOptions, serveOpts).Return(TearDownFunc(func() { t.Log("tear down func called") }), nil).Once()
 	mServer.wg.Add(2)
+	defer mServer.AssertExpectations(t)
 
 	// SetupCLI and replace the serve command with one containing a mocked server
 	rootCmd := SetupCLI("x.y.z", "1234567890abcdef")
@@ -231,11 +241,12 @@ func Test_serve(t *testing.T) {
 	t.Setenv("EVENT_BROKER", "kafka")
 	t.Setenv("BROKER_URLS", "kafka:9092")
 	t.Setenv("CONSUMER_GROUP_ID", "group-id")
+	t.Setenv("CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE", encryptionPassphrase)
+	t.Setenv("ENVIRONMENT", "test")
+	t.Setenv("METRICS_TYPE", "PROMETHEUS")
 
 	// test & assert
-	rootCmd.SetArgs([]string{"--environment", "test", "serve", "--metrics-type", "PROMETHEUS"})
+	rootCmd.SetArgs([]string{"serve"})
 	err = rootCmd.Execute()
 	require.NoError(t, err)
-	mServer.AssertExpectations(t)
-	mMonitorService.AssertExpectations(t)
 }

@@ -27,7 +27,7 @@ func Test_dependencyinjection_NewSignatureService(t *testing.T) {
 	t.Run("should create and return the same instance on the second call", func(t *testing.T) {
 		ClearInstancesTestHelper(t)
 
-		opts := engine.DefaultSignatureServiceOptions{
+		opts := engine.SignatureServiceOptions{
 			NetworkPassphrase:      network.TestNetworkPassphrase,
 			DBConnectionPool:       dbConnectionPool,
 			DistributionPrivateKey: distributionPrivateKey,
@@ -46,7 +46,7 @@ func Test_dependencyinjection_NewSignatureService(t *testing.T) {
 	t.Run("should return an error on a invalid option", func(t *testing.T) {
 		ClearInstancesTestHelper(t)
 
-		opts := engine.DefaultSignatureServiceOptions{}
+		opts := engine.SignatureServiceOptions{}
 		gotDependency, err := NewSignatureService(ctx, opts)
 		assert.Nil(t, gotDependency)
 		assert.EqualError(t, err, "creating a new signature service instance: validating options: network passphrase cannot be empty")
@@ -55,9 +55,9 @@ func Test_dependencyinjection_NewSignatureService(t *testing.T) {
 	t.Run("should return an error if there's an invalid instance pre-stored", func(t *testing.T) {
 		ClearInstancesTestHelper(t)
 
-		setInstance(signatureServiceInstanceName, false)
+		SetInstance(signatureServiceInstanceName, false)
 
-		opts := engine.DefaultSignatureServiceOptions{
+		opts := engine.SignatureServiceOptions{
 			NetworkPassphrase:      network.TestNetworkPassphrase,
 			DBConnectionPool:       dbConnectionPool,
 			DistributionPrivateKey: distributionPrivateKey,
