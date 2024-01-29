@@ -14,7 +14,6 @@ import (
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/support/render/httpjson"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
@@ -29,7 +28,6 @@ import (
 type DisbursementHandler struct {
 	Models                        *data.Models
 	MonitorService                monitor.MonitorServiceInterface
-	DBConnectionPool              db.DBConnectionPool
 	AuthManager                   auth.AuthManager
 	DisbursementManagementService *services.DisbursementManagementService
 	EventProducer                 events.Producer
@@ -125,7 +123,7 @@ func (d DisbursementHandler) PostDisbursement(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	newDisbursement, err := d.Models.Disbursements.Get(ctx, d.DBConnectionPool, newId)
+	newDisbursement, err := d.Models.Disbursements.Get(ctx, d.Models.DBConnectionPool, newId)
 	if err != nil {
 		msg := fmt.Sprintf("Cannot retrieve disbursement for ID: %s", newId)
 		httperror.InternalError(ctx, msg, err, nil).Render(w)
@@ -185,7 +183,7 @@ func (d DisbursementHandler) PostDisbursementInstructions(w http.ResponseWriter,
 
 	// check if disbursement exists
 	ctx := r.Context()
-	disbursement, err := d.Models.Disbursements.Get(ctx, d.DBConnectionPool, disbursementID)
+	disbursement, err := d.Models.Disbursements.Get(ctx, d.Models.DBConnectionPool, disbursementID)
 	if err != nil {
 		httperror.BadRequest("disbursement ID is invalid", err, nil).Render(w)
 		return
@@ -383,7 +381,7 @@ func (d DisbursementHandler) GetDisbursementInstructions(w http.ResponseWriter, 
 	ctx := r.Context()
 	disbursementID := chi.URLParam(r, "id")
 
-	disbursement, err := d.Models.Disbursements.Get(ctx, d.DBConnectionPool, disbursementID)
+	disbursement, err := d.Models.Disbursements.Get(ctx, d.Models.DBConnectionPool, disbursementID)
 	if err != nil {
 		httperror.NotFound("disbursement not found", err, nil).Render(w)
 		return

@@ -63,20 +63,20 @@ func (h *PaymentFromSubmitterEventHandler) CanHandleMessage(ctx context.Context,
 func (h *PaymentFromSubmitterEventHandler) Handle(ctx context.Context, message *events.Message) {
 	tx, err := utils.ConvertType[any, schemas.EventPaymentCompletedData](message.Data)
 	if err != nil {
-		h.crashTrackerClient.LogAndReportErrors(ctx, err, fmt.Sprintf("[PaymentFromSubmitterEventHandler] could not convert data to %T: %v", schemas.EventPaymentCompletedData{}, message.Data))
+		h.crashTrackerClient.LogAndReportErrors(ctx, err, fmt.Sprintf("[%s] could not convert data to %T: %v", h.Name(), schemas.EventPaymentCompletedData{}, message.Data))
 		return
 	}
 
 	t, err := h.tenantManager.GetTenantByID(ctx, message.TenantID)
 	if err != nil {
-		h.crashTrackerClient.LogAndReportErrors(ctx, err, "[PaymentFromSubmitterEventHandler] error getting tenant by id")
+		h.crashTrackerClient.LogAndReportErrors(ctx, err, fmt.Sprintf("[%s] error getting tenant by id", h.Name()))
 		return
 	}
 
 	ctx = tenant.SaveTenantInContext(ctx, t)
 
 	if err := h.service.SyncTransaction(ctx, &tx); err != nil {
-		h.crashTrackerClient.LogAndReportErrors(ctx, err, fmt.Sprintf("[PaymentFromSubmitterEventHandler] synching transaction completion for transaction ID %q", tx.TransactionID))
+		h.crashTrackerClient.LogAndReportErrors(ctx, err, fmt.Sprintf("[%s] synching transaction completion for transaction ID %q", h.Name(), tx.TransactionID))
 		return
 	}
 }

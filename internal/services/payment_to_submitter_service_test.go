@@ -99,7 +99,7 @@ func Test_PaymentToSubmitterService_SendBatchPayments(t *testing.T) {
 			paymentsReadyToPay.Payments = append(paymentsReadyToPay.Payments, schemas.PaymentReadyToPay{ID: p.ID})
 		}
 
-		err = service.SendPaymentsReadyToPay(ctx, &paymentsReadyToPay)
+		err = service.SendPaymentsReadyToPay(ctx, paymentsReadyToPay)
 		require.NoError(t, err)
 
 		// payments that can be sent
@@ -171,7 +171,7 @@ func Test_PaymentToSubmitterService_SendBatchPayments(t *testing.T) {
 			paymentsReadyToPay.Payments = append(paymentsReadyToPay.Payments, schemas.PaymentReadyToPay{ID: p.ID})
 		}
 
-		err = service.SendPaymentsReadyToPay(ctx, &paymentsReadyToPay)
+		err = service.SendPaymentsReadyToPay(ctx, paymentsReadyToPay)
 		require.NoError(t, err)
 
 		for _, p := range []*data.Payment{paymentNA1, paymentNA2} {
@@ -416,7 +416,7 @@ func Test_PaymentToSubmitterService_RetryPayment(t *testing.T) {
 		},
 	}
 
-	err = service.SendPaymentsReadyToPay(ctx, &paymentsReadyToPay)
+	err = service.SendPaymentsReadyToPay(ctx, paymentsReadyToPay)
 	require.NoError(t, err)
 
 	paymentDB, err := models.Payment.Get(ctx, payment.ID, dbConnectionPool)
@@ -461,7 +461,7 @@ func Test_PaymentToSubmitterService_RetryPayment(t *testing.T) {
 	assert.Equal(t, data.ReadyPaymentStatus, paymentDB.Status)
 
 	// insert a new transaction for the same payment
-	err = service.SendPaymentsReadyToPay(ctx, &paymentsReadyToPay)
+	err = service.SendPaymentsReadyToPay(ctx, paymentsReadyToPay)
 	require.NoError(t, err)
 
 	paymentDB, err = models.Payment.Get(ctx, payment.ID, dbConnectionPool)

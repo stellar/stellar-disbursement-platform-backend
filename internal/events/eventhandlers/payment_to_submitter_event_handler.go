@@ -57,26 +57,26 @@ func (h *PaymentToSubmitterEventHandler) Name() string {
 }
 
 func (h *PaymentToSubmitterEventHandler) CanHandleMessage(ctx context.Context, message *events.Message) bool {
-	return message.Topic == events.PaymentCompletedTopic
+	return message.Topic == events.PaymentReadyToPayTopic
 }
 
 func (h *PaymentToSubmitterEventHandler) Handle(ctx context.Context, message *events.Message) {
 	paymentsReadyToPay, err := utils.ConvertType[any, schemas.EventPaymentsReadyToPayData](message.Data)
 	if err != nil {
-		h.crashTrackerClient.LogAndReportErrors(ctx, err, fmt.Sprintf("[PaymentToSubmitterEventHandler] could not convert data to %T: %v", schemas.EventPaymentsReadyToPayData{}, message.Data))
+		h.crashTrackerClient.LogAndReportErrors(ctx, err, fmt.Sprintf("[%s] could not convert data to %T: %v", h.Name(), schemas.EventPaymentsReadyToPayData{}, message.Data))
 		return
 	}
 
 	t, err := h.tenantManager.GetTenantByID(ctx, message.TenantID)
 	if err != nil {
-		h.crashTrackerClient.LogAndReportErrors(ctx, err, "[PaymentToSubmitterEventHandler] error getting tenant by id")
+		h.crashTrackerClient.LogAndReportErrors(ctx, err, fmt.Sprintf("[%s] error getting tenant by id", h.Name()))
 		return
 	}
 
 	ctx = tenant.SaveTenantInContext(ctx, t)
 
-	if err := h.service.SendPaymentsReadyToPay(ctx, &paymentsReadyToPay); err != nil {
-		h.crashTrackerClient.LogAndReportErrors(ctx, err, fmt.Sprintf("[PaymentToSubmitterEventHandler] send payments ready to pay: %s", paymentsReadyToPay.Payments))
+	if err := h.service.SendPaymentsReadyToPay(ctx, paymentsReadyToPay); err != nil {
+		h.crashTrackerClient.LogAndReportErrors(ctx, err, fmt.Sprintf("[%s] send payments ready to pay: %s", h.Name(), paymentsReadyToPay.Payments))
 		return
 	}
 }

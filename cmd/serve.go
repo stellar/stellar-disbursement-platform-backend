@@ -152,7 +152,7 @@ func (s *ServerService) SetupConsumers(ctx context.Context, eventBrokerOptions c
 		}),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("creating Payment Completed Kafka Consumer: %w", err)
+		return nil, fmt.Errorf("creating Payment Ready to Pay Kafka Consumer: %w", err)
 	}
 
 	go events.Consume(ctx, smsInvitationConsumer, serveOpts.CrashTrackerClient.Clone())

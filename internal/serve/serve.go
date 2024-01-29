@@ -259,7 +259,6 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			handler := httphandler.DisbursementHandler{
 				Models:                        o.Models,
 				MonitorService:                o.MonitorService,
-				DBConnectionPool:              o.dbConnectionPool,
 				AuthManager:                   authManager,
 				EventProducer:                 o.EventProducer,
 				DisbursementManagementService: services.NewDisbursementManagementService(o.Models, o.dbConnectionPool, o.EventProducer),

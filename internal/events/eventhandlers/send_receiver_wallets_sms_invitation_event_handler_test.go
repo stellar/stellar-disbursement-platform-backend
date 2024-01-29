@@ -10,7 +10,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
-	servicesmocks "github.com/stellar/stellar-disbursement-platform-backend/internal/services/mocks"
+	servicesMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/services/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/router"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 	"github.com/stretchr/testify/assert"
@@ -32,7 +32,7 @@ func Test_SendReceiverWalletsSMSInvitationEventHandler_Handle(t *testing.T) {
 	require.NoError(t, err)
 
 	crashTrackerClient := crashtracker.MockCrashTrackerClient{}
-	service := servicesmocks.MockSendReceiverWalletInviteService{}
+	service := servicesMocks.MockSendReceiverWalletInviteService{}
 
 	handler := SendReceiverWalletsSMSInvitationEventHandler{
 		tenantManager:       tenantManager,

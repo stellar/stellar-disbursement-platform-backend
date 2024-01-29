@@ -10,7 +10,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
-	servicesmocks "github.com/stellar/stellar-disbursement-platform-backend/internal/services/mocks"
+	servicesMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/services/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -27,7 +27,7 @@ func Test_PaymentToSubmitterEventHandler_Handle(t *testing.T) {
 	tenantManager := tenant.NewManager(tenant.WithDatabase(dbConnectionPool))
 
 	crashTrackerClient := crashtracker.MockCrashTrackerClient{}
-	service := servicesmocks.MockPaymentToSubmitterService{}
+	service := servicesMocks.MockPaymentToSubmitterService{}
 
 	handler := PaymentToSubmitterEventHandler{
 		tenantManager:      tenantManager,
@@ -77,7 +77,7 @@ func Test_PaymentToSubmitterEventHandler_Handle(t *testing.T) {
 		ctxWithTenant := tenant.SaveTenantInContext(ctx, tnt)
 
 		service.
-			On("SendPaymentsReadyToPay", ctxWithTenant, &paymentsReadyToPay).
+			On("SendPaymentsReadyToPay", ctxWithTenant, paymentsReadyToPay).
 			Return(errors.New("unexpected error")).
 			Once()
 
@@ -110,7 +110,7 @@ func Test_PaymentToSubmitterEventHandler_Handle(t *testing.T) {
 		ctxWithTenant := tenant.SaveTenantInContext(ctx, tnt)
 
 		service.
-			On("SendPaymentsReadyToPay", ctxWithTenant, &paymentsReadyToPay).
+			On("SendPaymentsReadyToPay", ctxWithTenant, paymentsReadyToPay).
 			Return(nil).
 			Once()
 

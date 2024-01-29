@@ -382,11 +382,14 @@ const getReadyPaymentsBaseQuery = `
 	%s
 `
 
+var getReadyPaymentsBaseArgs = []any{ReadyPaymentStatus, RegisteredReceiversWalletStatus, StartedDisbursementStatus}
+
 func (p *PaymentModel) GetReadyByDisbursementID(ctx context.Context, sqlExec db.SQLExecuter, disbursementID string) ([]*Payment, error) {
 	query := fmt.Sprintf(getReadyPaymentsBaseQuery, "AND p.disbursement_id = $4")
 
 	var payments []*Payment
-	err := sqlExec.SelectContext(ctx, &payments, query, ReadyPaymentStatus, RegisteredReceiversWalletStatus, StartedDisbursementStatus, disbursementID)
+	args := append(getReadyPaymentsBaseArgs, disbursementID)
+	err := sqlExec.SelectContext(ctx, &payments, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("getting ready payments for disbursement ID %s: %w", disbursementID, err)
 	}
@@ -398,7 +401,8 @@ func (p *PaymentModel) GetReadyByID(ctx context.Context, sqlExec db.SQLExecuter,
 	query := fmt.Sprintf(getReadyPaymentsBaseQuery, "AND p.id = ANY($4)")
 
 	var payments []*Payment
-	err := sqlExec.SelectContext(ctx, &payments, query, ReadyPaymentStatus, RegisteredReceiversWalletStatus, StartedDisbursementStatus, pq.Array(paymentIDs))
+	args := append(getReadyPaymentsBaseArgs, pq.Array(paymentIDs))
+	err := sqlExec.SelectContext(ctx, &payments, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("getting ready payments by IDs: %w", err)
 	}
@@ -410,9 +414,10 @@ func (p *PaymentModel) GetReadyByReceiverWalletID(ctx context.Context, sqlExec d
 	query := fmt.Sprintf(getReadyPaymentsBaseQuery, "AND rw.id = $4")
 
 	var payments []*Payment
-	err := sqlExec.SelectContext(ctx, &payments, query, ReadyPaymentStatus, RegisteredReceiversWalletStatus, StartedDisbursementStatus, receiverWalletID)
+	args := append(getReadyPaymentsBaseArgs, receiverWalletID)
+	err := sqlExec.SelectContext(ctx, &payments, query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("getting ready payments by IDs: %w", err)
+		return nil, fmt.Errorf("getting ready payments by receiver wallet ID %s: %w", receiverWalletID, err)
 	}
 
 	return payments, nil

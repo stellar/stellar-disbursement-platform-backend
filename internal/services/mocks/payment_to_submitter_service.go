@@ -13,7 +13,7 @@ type MockPaymentToSubmitterService struct {
 	mock.Mock
 }
 
-func (m *MockPaymentToSubmitterService) SendPaymentsReadyToPay(ctx context.Context, paymentsReadyToPay *schemas.EventPaymentsReadyToPayData) error {
+func (m *MockPaymentToSubmitterService) SendPaymentsReadyToPay(ctx context.Context, paymentsReadyToPay schemas.EventPaymentsReadyToPayData) error {
 	args := m.Called(ctx, paymentsReadyToPay)
 	return args.Error(0)
 }
