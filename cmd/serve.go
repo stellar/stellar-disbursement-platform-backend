@@ -462,7 +462,12 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			if err != nil {
 				log.Ctx(ctx).Fatalf("error getting TSS DB connection pool: %v", err)
 			}
-			defer db.CloseConnectionPoolIfNeeded(ctx, tssDBConnectionPool)
+			defer func() {
+				err = db.CloseConnectionPoolIfNeeded(ctx, tssDBConnectionPool)
+				if err != nil {
+					log.Ctx(ctx).Errorf("closing TSS DB connection pool: %v", err)
+				}
+			}()
 
 			// Setup the signature service
 			sigServiceOptions.DBConnectionPool = tssDBConnectionPool
