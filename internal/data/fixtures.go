@@ -730,14 +730,12 @@ func CreateMockImage(t *testing.T, width, height int, size ImageSize) image.Imag
 
 	var c color.Color
 	for x := 0; x < width; x++ {
-		if size == ImageSizeMedium {
-			c = mediumImageColor()
-		}
-
 		for y := 0; y < height; y++ {
 			switch size {
 			case ImageSizeSmall:
 				c = smallImageColor()
+			case ImageSizeMedium:
+				c = mediumImageColor()
 			case ImageSizeLarge:
 				c = largeImageColor()
 			}
