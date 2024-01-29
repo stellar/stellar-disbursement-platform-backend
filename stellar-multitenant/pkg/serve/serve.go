@@ -1,6 +1,7 @@
 package serve
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -86,10 +87,10 @@ func StartServe(opts ServeOptions, httpServer HTTPServerInterface) error {
 			log.Infof("Listening on %s", listenAddr)
 		},
 		OnStopping: func() {
-			log.Info("Closing the database connection...")
-			err := opts.dbConnectionPool.Close()
+			log.Info("Closing the Tenant Server database connection pool")
+			err := db.CloseConnectionPoolIfNeeded(context.Background(), opts.dbConnectionPool)
 			if err != nil {
-				log.Errorf("error closing database connection: %s", err.Error())
+				log.Errorf("error closing database connection: %v", err)
 			}
 
 			log.Info("Stopping Tenant Server")
