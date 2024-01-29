@@ -636,16 +636,6 @@ func newPaymentQuery(baseQuery string, queryParams *QueryParams, paginated bool,
 			qb.AddCondition("p.status = ?", queryParams.Filters[FilterKeyStatus])
 		}
 	}
-	if queryParams.Filters[FilterKeyNotDisbursementID] != nil {
-		if statusSlice, ok := queryParams.Filters[FilterKeyNotDisbursementID].([]string); ok {
-			if len(statusSlice) > 0 {
-				qb.AddCondition("disbursement.id != ANY(?)", pq.Array(statusSlice))
-			}
-		} else {
-			qb.AddCondition("disbursement.id != ?", queryParams.Filters[FilterKeyStatus])
-		}
-	}
-
 	if queryParams.Filters[FilterKeyReceiverID] != nil {
 		qb.AddCondition("p.receiver_id = ?", queryParams.Filters[FilterKeyReceiverID])
 	}

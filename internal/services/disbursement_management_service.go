@@ -8,6 +8,7 @@ import (
 	"strconv"
 
 	"github.com/stellar/go/clients/horizonclient"
+	"github.com/stellar/go/support/log"
 	"golang.org/x/exp/maps"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
@@ -255,7 +256,6 @@ func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, d
 					data.PausedPaymentStatus,
 					data.FailedPaymentStatus,
 				},
-				data.FilterKeyNotDisbursementID: disbursement.ID,
 			},
 		}, dbTx)
 		if err != nil {
@@ -263,6 +263,10 @@ func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, d
 		}
 
 		for _, ip := range incompletePayments {
+			if ip.Disbursement.ID == disbursementID {
+				continue
+			}
+
 			paymentAmount, parsePaymentAmountErr := strconv.ParseFloat(ip.Amount, 64)
 			if parsePaymentAmountErr != nil {
 				return fmt.Errorf(
@@ -272,18 +276,18 @@ func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, d
 					err,
 				)
 			}
-
 			totalPendingAmount += paymentAmount
 		}
-		fmt.Println("----")
-
-		fmt.Println(distributionBalance)
-		fmt.Println(disbursementAmount)
-		fmt.Println(totalPendingAmount)
-		fmt.Println("----")
 
 		if (distributionBalance - (disbursementAmount + totalPendingAmount)) < 0 {
-			return errors.New("not enough balance in distribution account to complete disbursement")
+			log.Ctx(ctx).Errorf(
+				"Insufficient distribution account balance %f to fulfill amount %f for disbursement id %s and total pending amount %f",
+				distributionBalance,
+				disbursementAmount,
+				disbursementID,
+				totalPendingAmount,
+			)
+			return fmt.Errorf("error starting disbursement with id %s: insufficient balance on distribution account", disbursementID)
 		}
 
 		// 5. Update all correct payment status to `ready`

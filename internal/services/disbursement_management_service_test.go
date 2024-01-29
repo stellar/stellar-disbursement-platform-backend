@@ -2,11 +2,15 @@ package services
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/protocols/horizon"
 	"github.com/stellar/go/protocols/horizon/base"
+	"github.com/stellar/go/support/log"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
@@ -300,50 +304,6 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 		require.ErrorIs(t, err, ErrDisbursementNotReadyToStart)
 	})
 
-	t.Run("disbursement cannot be started because insufficient balance on distribution account", func(t *testing.T) {
-		disbursement := data.CreateDisbursementFixture(t, context.Background(), dbConnectionPool, models.Disbursements, &data.Disbursement{
-			Name:    "disbursement #3",
-			Status:  data.ReadyDisbursementStatus,
-			Asset:   asset,
-			Wallet:  wallet,
-			Country: country,
-		})
-		data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
-			ReceiverWallet: rwReady,
-			Disbursement:   disbursement,
-			Asset:          *asset,
-			Amount:         "10001",
-			Status:         data.DraftPaymentStatus,
-		})
-
-		hMock.On(
-			"AccountDetail", horizonclient.AccountRequest{AccountID: distributionPubKey},
-		).Return(horizon.Account{
-			Balances: []horizon.Balance{
-				{
-					Balance: "100",
-					Asset: base.Asset{
-						Code:   asset.Code,
-						Issuer: asset.Issuer,
-					},
-				},
-			},
-		}, nil)
-
-		user := &auth.User{
-			ID:    "user-id",
-			Email: "email@email.com",
-		}
-
-		authManagerMock.
-			On("GetUser", ctx, token).
-			Return(user, nil).
-			Once()
-
-		err = service.StartDisbursement(ctx, readyDisbursement.ID, distributionPubKey)
-		require.Error(t, err)
-	})
-
 	t.Run("disbursement can't be started by its creator", func(t *testing.T) {
 		userID := "9ae68f09-cad9-4311-9758-4ff59d2e9e6d"
 		statusHistory := []data.DisbursementStatusHistoryEntry{
@@ -488,6 +448,52 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, data.ReadyPaymentStatus, payment.Status)
 		}
+	})
+
+	t.Run("disbursement cannot be started because insufficient balance on distribution account", func(t *testing.T) {
+		user := &auth.User{
+			ID:    "user-id",
+			Email: "email@email.com",
+		}
+
+		authManagerMock.
+			On("GetUser", ctx, token).
+			Return(user, nil).
+			Once()
+
+		disbursement := data.CreateDisbursementFixture(t, context.Background(), dbConnectionPool, models.Disbursements, &data.Disbursement{
+			Name:    "disbursement #3",
+			Status:  data.ReadyDisbursementStatus,
+			Asset:   asset,
+			Wallet:  wallet,
+			Country: country,
+		})
+		data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+			ReceiverWallet: rwReady,
+			Disbursement:   disbursement,
+			Asset:          *asset,
+			Amount:         "10001",
+			Status:         data.ReadyPaymentStatus,
+		})
+
+		buf := new(strings.Builder)
+		log.DefaultLogger.SetOutput(buf)
+
+		err = service.StartDisbursement(ctx, disbursement.ID, distributionPubKey)
+		require.EqualError(t, err, fmt.Sprintf(
+			"running atomic function in RunInTransactionWithResult: error starting disbursement with id %s: insufficient balance on distribution account",
+			disbursement.ID,
+		))
+
+		assert.Contains(
+			t,
+			buf.String(),
+			fmt.Sprintf("Insufficient distribution account balance %f to fulfill amount %f for disbursement id %s and total pending amount %f",
+				10000.0,
+				10001.0,
+				disbursement.ID,
+				1100.0),
+		)
 	})
 
 	authManagerMock.AssertExpectations(t)
