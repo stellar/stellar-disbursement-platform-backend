@@ -36,7 +36,7 @@ jobs:
         run: go install github.com/nishanths/exhaustive/cmd/exhaustive@latest
 
       - name: Run exhaustive
-        run: exhaustive ./...
+        run: exhaustive -default-signifies-exhaustive ./...
 
   check-helm-readme:
     runs-on: ubuntu-latest
