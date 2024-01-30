@@ -125,6 +125,11 @@ type EventBrokerOptions struct {
 	EventBrokerType events.EventBrokerType
 	BrokerURLs      []string
 	ConsumerGroupID string
+
+	// KAFKA specific options
+	KafkaSecurityProtocol events.KafkaSecurityProtocol
+	KafkaSASLUsername     string
+	KafkaSASLPassword     string
 }
 
 func EventBrokerConfigOptions(opts *EventBrokerOptions) []*config.ConfigOption {
@@ -151,6 +156,29 @@ func EventBrokerConfigOptions(opts *EventBrokerOptions) []*config.ConfigOption {
 			Usage:     "Message Broker Consumer Group ID.",
 			OptType:   types.String,
 			ConfigKey: &opts.ConsumerGroupID,
+			Required:  false,
+		},
+
+		{
+			Name:           "kafka-security-protocol",
+			Usage:          "Kafka Security Protocol. Options: PLAINTEXT, SASL_PLAINTEXT, SASL_SSL, SSL",
+			OptType:        types.String,
+			CustomSetValue: SetConfigOptionKafkaSecurityProtocol,
+			ConfigKey:      &opts.KafkaSecurityProtocol,
+			Required:       true,
+		},
+		{
+			Name:      "kafka-sasl-username",
+			Usage:     "Kafka SASL Username",
+			OptType:   types.String,
+			ConfigKey: &opts.KafkaSASLUsername,
+			Required:  false,
+		},
+		{
+			Name:      "kafka-sasl-password",
+			Usage:     "Kafka SASL Password",
+			OptType:   types.String,
+			ConfigKey: &opts.KafkaSASLPassword,
 			Required:  false,
 		},
 	}
@@ -231,5 +259,14 @@ func MaxBaseFee(targetPointer interface{}) *config.ConfigOption {
 		ConfigKey:   targetPointer,
 		FlagDefault: 100 * txnbuild.MinBaseFee,
 		Required:    true,
+	}
+}
+
+func KafkaConfig(opts EventBrokerOptions) events.KafkaConfig {
+	return events.KafkaConfig{
+		Brokers:          opts.BrokerURLs,
+		SecurityProtocol: opts.KafkaSecurityProtocol,
+		SASLUsername:     opts.KafkaSASLUsername,
+		SASLPassword:     opts.KafkaSASLPassword,
 	}
 }

@@ -63,6 +63,20 @@ global:
   ##   - postgres://postgres:postgres@{{ include "sdp.fullname" . }}-psql:5433/postgres-ap?sslmode=disable
   ephemeralDatabase: true
 
+  ## @extra global.eventBroker Configuration related to the event broker used by the application.
+  ## @param global.eventBroker.type The type of event broker to be used. Options: "NONE", "KAFKA". Default: "KAFKA".
+  ## @param global.eventBroker.urls A comma-separated list of broker URLs for the event broker.
+  ## @param global.eventBroker.consumerGroupId The consumer group ID for the event broker.
+  eventBroker:
+    type: "KAFKA"
+    urls: "kafka:9092"
+    consumerGroupId: "group-id"
+
+    ## @extra global.eventBroker.kafka Configuration related to the Kafka event broker.
+    ## @param global.eventBroker.kafka.securityProtocol The security protocol to be used for the Kafka broker. Options: "PLAINTEXT", "SASL_SSL", "SASL_PLAINTEXT", "SSL".
+    kafka:
+      securityProtocol: "PLAINTEXT"
+
 # =========================== START sdp ===========================
 ## @section Stellar Disbursement Platform (SDP) parameters
 ## @descriptionStart
@@ -132,7 +146,6 @@ sdp:
   ## @param sdp.configMap.data.DISABLE_MFA Determines if email-based MFA should be disabled during login ("true" or "false").
   ## @param sdp.configMap.data.SDP_UI_BASE_URL The base URL of the SDP UI/dashboard.
   ## @param sdp.configMap.data.INSTANCE_NAME The name of the SDP instance. Example: "SDP Testnet".
-  ## @param sdp.configMap.data.EVENT_BROKER_TYPE The type of event broker to be used. Options: "NONE", "KAFKA".
   ## @param sdp.configMap.data.ENABLE_SCHEDULER Wether or not the scheduled jobs be enabled in this instance ("true" or "false").
   configMap:
     annotations:
@@ -156,7 +169,6 @@ sdp:
       # ATTENTION: the following variables will need to be updated as we rollout the multitenant feature. They were set
       # like the following to allow the deployment to work:
       INSTANCE_NAME: "SDP Testnet Preview"
-      EVENT_BROKER_TYPE: NONE
       ENABLE_SCHEDULER: "false"
 
   ## @extra sdp.kubeSecrets Kubernetes secrets are used to manage sensitive information, such as API keys and private keys. It's crucial that these details are kept private.
@@ -180,6 +192,8 @@ sdp:
   ## @param sdp.kubeSecrets.data.DISTRIBUTION_SEED The private key of the Stellar account used to disburse funds. This is needed for the init container.
   ## @param sdp.kubeSecrets.data.CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE The private key used to encrypt the channel account secrets in the database.
   ## @param sdp.kubeSecrets.data.SENTRY_DSN The DSN for the Sentry service. it must be set if CRASH_TRACKER_TYPE is set to "SENTRY".
+  ## @param sdp.kubeSecrets.data.KAFKA_SASL_USERNAME The username for SASL authentication to the Kafka broker. Required if KAFKA_SECURITY_PROTOCOL is set to "SASL_SSL" or "SASL_PLAINTEXT".
+  ## @param sdp.kubeSecrets.data.KAFKA_SASL_PASSWORD The password for SASL authentication to the Kafka broker. Required if KAFKA_SECURITY_PROTOCOL is set to "SASL_SSL" or "SASL_PLAINTEXT".
   kubeSecrets:
     secretName: "sdp-backend-secret-name"
     create: false
@@ -202,6 +216,8 @@ sdp:
       DATABASE_URL: #required
       DISTRIBUTION_SEED: #required
       CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE: #required
+      KAFKA_SASL_USERNAME: #optional, depends on value of KAFKA_SECURITY_PROTOCOL
+      KAFKA_SASL_PASSWORD: #optional, depends on value of KAFKA_SECURITY_PROTOCOL
 
 
   ## @extra sdp.ingress Configuration for the ingress controller for the SDP service.
@@ -436,6 +452,8 @@ tss:
   ## @param tss.kubeSecrets.data.DISTRIBUTION_SEED The private key of the Stellar account used to disburse funds.
   ## @param tss.kubeSecrets.data.CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE The private key used to encrypt the channel account secrets in the database.
   ## @param tss.kubeSecrets.data.SENTRY_DSN The DSN for the Sentry service. it must be set if CRASH_TRACKER_TYPE is set to "SENTRY".
+  ## @param tss.kubeSecrets.data.KAFKA_SASL_USERNAME The username for SASL authentication to the Kafka broker. Required if KAFKA_SECURITY_PROTOCOL is set to "SASL_SSL" or "SASL_PLAINTEXT".
+  ## @param tss.kubeSecrets.data.KAFKA_SASL_PASSWORD The password for SASL authentication to the Kafka broker. Required if KAFKA_SECURITY_PROTOCOL is set to "SASL_SSL" or "SASL_PLAINTEXT".
   kubeSecrets:
     secretName: "tss-secret-name"
     create: false
@@ -445,6 +463,9 @@ tss:
       DISTRIBUTION_SEED: #required
       CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE: #required
       SENTRY_DSN: #optional
+      KAFKA_SASL_USERNAME: #optional, depends on value of KAFKA_SECURITY_PROTOCOL
+      KAFKA_SASL_PASSWORD: #optional, depends on value of KAFKA_SECURITY_PROTOCOL
+
       
 
 

@@ -61,23 +61,29 @@ helm delete sdp
 
 These parameters are shared by all charts.
 
-| Name                                                   | Description                                                                                                                         | Value       |
-| ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- | ----------- |
-| `global.isPubnet`                                      | Determines if the network is public. Set this to true for public networks.                                                          | `false`     |
-| `global.replicaCount`                                  | Number of replicas for the application.                                                                                             | `1`         |
-| `global.resources`                                     | Resource limits and requests for the application pods.                                                                              | `{}`        |
-| `global.service.type`                                  | Kubernetes Service type for the application.                                                                                        | `ClusterIP` |
-| `global.autoscaling`                                   | Configuration related to the horizontal pod autoscaling of the application.                                                         |             |
-| `global.autoscaling.enabled`                           | Determines if autoscaling is enabled for the application.                                                                           | `false`     |
-| `global.autoscaling.minReplicas`                       | Minimum number of replicas when autoscaling is enabled.                                                                             | `1`         |
-| `global.autoscaling.maxReplicas`                       | Maximum number of replicas when autoscaling is enabled.                                                                             | `4`         |
-| `global.autoscaling.targetCPUUtilizationPercentage`    | Target CPU utilization percentage for autoscaling.                                                                                  | `80`        |
-| `global.autoscaling.targetMemoryUtilizationPercentage` | Target memory utilization percentage for autoscaling.                                                                               | `80`        |
-| `global.serviceAccount`                                | Configuration related to the Kubernetes Service Account used by the application.                                                    |             |
-| `global.serviceAccount.create`                         | Determines if a new service account should be created.                                                                              | `false`     |
-| `global.serviceAccount.annotations`                    | Annotations to be added to the service account.                                                                                     | `nil`       |
-| `global.serviceAccount.name`                           | Name of the service account to be used. If not set and create is set to true, a name will be generated using the fullname template. | `""`        |
-| `global.ephemeralDatabase`                             | Enables or disables the creation of an ephemeral database for testing purposes.                                                     | `true`      |
+| Name                                                   | Description                                                                                                                         | Value        |
+| ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| `global.isPubnet`                                      | Determines if the network is public. Set this to true for public networks.                                                          | `false`      |
+| `global.replicaCount`                                  | Number of replicas for the application.                                                                                             | `1`          |
+| `global.resources`                                     | Resource limits and requests for the application pods.                                                                              | `{}`         |
+| `global.service.type`                                  | Kubernetes Service type for the application.                                                                                        | `ClusterIP`  |
+| `global.autoscaling`                                   | Configuration related to the horizontal pod autoscaling of the application.                                                         |              |
+| `global.autoscaling.enabled`                           | Determines if autoscaling is enabled for the application.                                                                           | `false`      |
+| `global.autoscaling.minReplicas`                       | Minimum number of replicas when autoscaling is enabled.                                                                             | `1`          |
+| `global.autoscaling.maxReplicas`                       | Maximum number of replicas when autoscaling is enabled.                                                                             | `4`          |
+| `global.autoscaling.targetCPUUtilizationPercentage`    | Target CPU utilization percentage for autoscaling.                                                                                  | `80`         |
+| `global.autoscaling.targetMemoryUtilizationPercentage` | Target memory utilization percentage for autoscaling.                                                                               | `80`         |
+| `global.serviceAccount`                                | Configuration related to the Kubernetes Service Account used by the application.                                                    |              |
+| `global.serviceAccount.create`                         | Determines if a new service account should be created.                                                                              | `false`      |
+| `global.serviceAccount.annotations`                    | Annotations to be added to the service account.                                                                                     | `nil`        |
+| `global.serviceAccount.name`                           | Name of the service account to be used. If not set and create is set to true, a name will be generated using the fullname template. | `""`         |
+| `global.ephemeralDatabase`                             | Enables or disables the creation of an ephemeral database for testing purposes.                                                     | `true`       |
+| `global.eventBroker`                                   | Configuration related to the event broker used by the application.                                                                  |              |
+| `global.eventBroker.type`                              | The type of event broker to be used. Options: "NONE", "KAFKA". Default: "KAFKA".                                                    | `KAFKA`      |
+| `global.eventBroker.urls`                              | A comma-separated list of broker URLs for the event broker.                                                                         | `kafka:9092` |
+| `global.eventBroker.consumerGroupId`                   | The consumer group ID for the event broker.                                                                                         | `group-id`   |
+| `global.eventBroker.kafka`                             | Configuration related to the Kafka event broker.                                                                                    |              |
+| `global.eventBroker.kafka.securityProtocol`            | The security protocol to be used for the Kafka broker. Options: "PLAINTEXT", "SASL_SSL", "SASL_PLAINTEXT", "SSL".                   | `PLAINTEXT`  |
 
 ### Stellar Disbursement Platform (SDP) parameters
 
@@ -126,7 +132,6 @@ Configuration parameters for the SDP Core Service which is the core backend serv
 | `sdp.configMap.data.DISABLE_MFA`                             | Determines if email-based MFA should be disabled during login ("true" or "false").                                                                             | `false`                                         |
 | `sdp.configMap.data.SDP_UI_BASE_URL`                         | The base URL of the SDP UI/dashboard.                                                                                                                          | `nil`                                           |
 | `sdp.configMap.data.INSTANCE_NAME`                           | The name of the SDP instance. Example: "SDP Testnet".                                                                                                          | `SDP Testnet Preview`                           |
-| `sdp.configMap.data.EVENT_BROKER_TYPE`                       | The type of event broker to be used. Options: "NONE", "KAFKA".                                                                                                 | `NONE`                                          |
 | `sdp.configMap.data.ENABLE_SCHEDULER`                        | Wether or not the scheduled jobs be enabled in this instance ("true" or "false").                                                                              | `false`                                         |
 | `sdp.kubeSecrets`                                            | Kubernetes secrets are used to manage sensitive information, such as API keys and private keys. It's crucial that these details are kept private.              |                                                 |
 | `sdp.kubeSecrets.secretName`                                 | The name of the Kubernetes secret object. Only use this if create is false.                                                                                    | `sdp-backend-secret-name`                       |
@@ -149,6 +154,8 @@ Configuration parameters for the SDP Core Service which is the core backend serv
 | `sdp.kubeSecrets.data.DISTRIBUTION_SEED`                     | The private key of the Stellar account used to disburse funds. This is needed for the init container.                                                          | `nil`                                           |
 | `sdp.kubeSecrets.data.CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE` | The private key used to encrypt the channel account secrets in the database.                                                                                   | `nil`                                           |
 | `sdp.kubeSecrets.data.SENTRY_DSN`                            | The DSN for the Sentry service. it must be set if CRASH_TRACKER_TYPE is set to "SENTRY".                                                                       | `nil`                                           |
+| `sdp.kubeSecrets.data.KAFKA_SASL_USERNAME`                   | The username for SASL authentication to the Kafka broker. Required if KAFKA_SECURITY_PROTOCOL is set to "SASL_SSL" or "SASL_PLAINTEXT".                        | `nil`                                           |
+| `sdp.kubeSecrets.data.KAFKA_SASL_PASSWORD`                   | The password for SASL authentication to the Kafka broker. Required if KAFKA_SECURITY_PROTOCOL is set to "SASL_SSL" or "SASL_PLAINTEXT".                        | `nil`                                           |
 | `sdp.ingress`                                                | Configuration for the ingress controller for the SDP service.                                                                                                  |                                                 |
 | `sdp.ingress.enabled`                                        | If true, an ingress controller will be created for the SDP service.                                                                                            | `true`                                          |
 | `sdp.ingress.className`                                      | Name of the IngressClass to be used for the ingress controller.                                                                                                | `nginx`                                         |
@@ -247,6 +254,8 @@ This service is designed to maximize payment throughput, handle queuing, and gra
 | `tss.kubeSecrets.data.DISTRIBUTION_SEED`                     | The private key of the Stellar account used to disburse funds.                                                                                                         | `nil`             |
 | `tss.kubeSecrets.data.CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE` | The private key used to encrypt the channel account secrets in the database.                                                                                           | `nil`             |
 | `tss.kubeSecrets.data.SENTRY_DSN`                            | The DSN for the Sentry service. it must be set if CRASH_TRACKER_TYPE is set to "SENTRY".                                                                               | `nil`             |
+| `tss.kubeSecrets.data.KAFKA_SASL_USERNAME`                   | The username for SASL authentication to the Kafka broker. Required if KAFKA_SECURITY_PROTOCOL is set to "SASL_SSL" or "SASL_PLAINTEXT".                                | `nil`             |
+| `tss.kubeSecrets.data.KAFKA_SASL_PASSWORD`                   | The password for SASL authentication to the Kafka broker. Required if KAFKA_SECURITY_PROTOCOL is set to "SASL_SSL" or "SASL_PLAINTEXT".                                | `nil`             |
 
 ### Dashboard
 

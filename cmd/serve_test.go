@@ -150,7 +150,11 @@ func Test_serve(t *testing.T) {
 	serveOpts.SMSMessengerClient, err = di.NewSMSClient(di.SMSClientOptions{SMSType: message.MessengerTypeDryRun})
 	require.NoError(t, err)
 
-	serveOpts.EventProducer, err = events.NewKafkaProducer([]string{"kafka:9092"})
+	kafkaConfig := events.KafkaConfig{
+		Brokers:          []string{"kafka:9092"},
+		SecurityProtocol: events.KafkaProtocolPlaintext,
+	}
+	serveOpts.EventProducer, err = events.NewKafkaProducer(kafkaConfig)
 	require.NoError(t, err)
 
 	metricOptions := monitor.MetricOptions{
@@ -186,6 +190,8 @@ func Test_serve(t *testing.T) {
 		EventBrokerType: events.KafkaEventBrokerType,
 		BrokerURLs:      []string{"kafka:9092"},
 		ConsumerGroupID: "group-id",
+
+		KafkaSecurityProtocol: events.KafkaProtocolPlaintext,
 	}
 
 	eventHandlerOptions := events.EventHandlerOptions{
@@ -244,6 +250,7 @@ func Test_serve(t *testing.T) {
 	t.Setenv("CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE", encryptionPassphrase)
 	t.Setenv("ENVIRONMENT", "test")
 	t.Setenv("METRICS_TYPE", "PROMETHEUS")
+	t.Setenv("KAFKA_SECURITY_PROTOCOL", string(events.KafkaProtocolPlaintext))
 
 	// test & assert
 	rootCmd.SetArgs([]string{"serve"})
