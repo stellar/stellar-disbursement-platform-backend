@@ -32,6 +32,12 @@ jobs:
       - name: Run ./gomod.sh
         run: ./gomod.sh
 
+      - name: Install github.com/nishanths/exhaustive
+        run: go install github.com/nishanths/exhaustive/cmd/exhaustive@latest
+
+      - name: Run exhaustive
+        run: exhaustive -default-signifies-exhaustive ./...
+
   check-helm-readme:
     runs-on: ubuntu-latest
     steps:
