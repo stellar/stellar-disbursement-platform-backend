@@ -20,7 +20,7 @@ type TSSDBConnectionPoolOptions struct {
 func NewTSSDBConnectionPool(ctx context.Context, opts TSSDBConnectionPoolOptions) (db.DBConnectionPool, error) {
 	instanceName := tssDBConnectionPoolInstanceName
 
-	if instance, ok := dependenciesStoreMap[instanceName]; ok {
+	if instance, ok := GetInstance(instanceName); ok {
 		if dbConnectionPoolInstance, ok2 := instance.(db.DBConnectionPool); ok2 {
 			return dbConnectionPoolInstance, nil
 		}

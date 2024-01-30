@@ -16,7 +16,7 @@ func NewSignatureService(ctx context.Context, opts engine.SignatureServiceOption
 	instanceName := signatureServiceInstanceName
 
 	// Already initialized
-	if instance, ok := dependenciesStoreMap[instanceName]; ok {
+	if instance, ok := GetInstance(instanceName); ok {
 		if signatureServiceInstance, ok2 := instance.(engine.SignatureService); ok2 {
 			return signatureServiceInstance, nil
 		}
