@@ -65,10 +65,11 @@ func (s *TxSubmitterService) StartMetricsServe(ctx context.Context, opts serve.M
 }
 
 func (c *TxSubmitterCommand) Command(submitterService TxSubmitterServiceInterface) *cobra.Command {
+	var horizonURL string
 	submitterOpts := txSub.SubmitterOptions{}
 
 	configOpts := config.ConfigOptions{
-		cmdUtils.HorizonURLConfigOption(&submitterOpts.HorizonURL),
+		cmdUtils.HorizonURLConfigOption(&horizonURL),
 		{
 			Name:        "num-channel-accounts",
 			Usage:       "Number of channel accounts to utilize for transaction submission",
@@ -164,6 +165,12 @@ func (c *TxSubmitterCommand) Command(submitterService TxSubmitterServiceInterfac
 				log.Ctx(ctx).Fatalf("error getting TSS DB connection pool: %v", err)
 			}
 
+			// Grab horizon client instance
+			horizonClient, err := di.NewHorizonClient(ctx, horizonURL)
+			if err != nil {
+				log.Ctx(ctx).Fatalf("error retrieving horizon client through the dependency injector in %s: %v", cmd.Name(), err)
+			}
+
 			// Setup the signature service
 			sigServiceOptions.DBConnectionPool = tssDBConnectionPool
 			sigServiceOptions.NetworkPassphrase = globalOptions.NetworkPassphrase
@@ -176,6 +183,7 @@ func (c *TxSubmitterCommand) Command(submitterService TxSubmitterServiceInterfac
 			submitterOpts.DBConnectionPool = tssDBConnectionPool
 			submitterOpts.SignatureService = signatureService
 			submitterOpts.MonitorService = tssMonitorSvc
+			submitterOpts.HorizonClient = horizonClient
 
 			// Inject crash tracker options dependencies
 			globalOptions.PopulateCrashTrackerOptions(&crashTrackerOptions)

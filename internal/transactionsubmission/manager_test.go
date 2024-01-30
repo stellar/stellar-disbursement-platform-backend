@@ -23,7 +23,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	monitorMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor/mocks"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/mocks"
 	tssMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/monitor"
@@ -45,6 +44,7 @@ func Test_SubmitterOptions_validate(t *testing.T) {
 		GitCommitHash: "gitCommitHash0x",
 		Version:       "version123",
 	}
+	mHorizonClient := &horizonclient.MockClient{}
 
 	testCases := []struct {
 		name             string
@@ -64,19 +64,19 @@ func Test_SubmitterOptions_validate(t *testing.T) {
 			wantErrContains: "signature service cannot be nil",
 		},
 		{
-			name: "validate HorizonURL",
+			name: "validate Horizon Client",
 			submitterOptions: SubmitterOptions{
 				DBConnectionPool: dbConnectionPool,
 				SignatureService: mSigService,
 			},
-			wantErrContains: "horizon url cannot be empty",
+			wantErrContains: "horizon client cannot be nil",
 		},
 		{
 			name: "validate NumChannelAccounts (min)",
 			submitterOptions: SubmitterOptions{
 				DBConnectionPool:   dbConnectionPool,
 				SignatureService:   mSigService,
-				HorizonURL:         "https://horizon-testnet.stellar.org",
+				HorizonClient:      mHorizonClient,
 				NumChannelAccounts: 0,
 			},
 			wantErrContains: "num channel accounts must stay in the range from 1 to 1000",
@@ -86,7 +86,7 @@ func Test_SubmitterOptions_validate(t *testing.T) {
 			submitterOptions: SubmitterOptions{
 				DBConnectionPool:   dbConnectionPool,
 				SignatureService:   mSigService,
-				HorizonURL:         "https://horizon-testnet.stellar.org",
+				HorizonClient:      mHorizonClient,
 				NumChannelAccounts: 1001,
 			},
 			wantErrContains: "num channel accounts must stay in the range from 1 to 1000",
@@ -96,7 +96,7 @@ func Test_SubmitterOptions_validate(t *testing.T) {
 			submitterOptions: SubmitterOptions{
 				DBConnectionPool:   dbConnectionPool,
 				SignatureService:   mSigService,
-				HorizonURL:         "https://horizon-testnet.stellar.org",
+				HorizonClient:      mHorizonClient,
 				NumChannelAccounts: 1,
 			},
 			wantErrContains: "queue polling interval must be greater than 6 seconds",
@@ -106,7 +106,7 @@ func Test_SubmitterOptions_validate(t *testing.T) {
 			submitterOptions: SubmitterOptions{
 				DBConnectionPool:     dbConnectionPool,
 				SignatureService:     mSigService,
-				HorizonURL:           "https://horizon-testnet.stellar.org",
+				HorizonClient:        mHorizonClient,
 				NumChannelAccounts:   1,
 				QueuePollingInterval: 10,
 			},
@@ -117,7 +117,7 @@ func Test_SubmitterOptions_validate(t *testing.T) {
 			submitterOptions: SubmitterOptions{
 				DBConnectionPool:     dbConnectionPool,
 				SignatureService:     mSigService,
-				HorizonURL:           "https://horizon-testnet.stellar.org",
+				HorizonClient:        mHorizonClient,
 				NumChannelAccounts:   1,
 				QueuePollingInterval: 10,
 				MaxBaseFee:           txnbuild.MinBaseFee,
@@ -129,7 +129,7 @@ func Test_SubmitterOptions_validate(t *testing.T) {
 			submitterOptions: SubmitterOptions{
 				DBConnectionPool:     dbConnectionPool,
 				SignatureService:     mSigService,
-				HorizonURL:           "https://horizon-testnet.stellar.org",
+				HorizonClient:        mHorizonClient,
 				NumChannelAccounts:   1,
 				QueuePollingInterval: 10,
 				MaxBaseFee:           txnbuild.MinBaseFee,
@@ -142,7 +142,7 @@ func Test_SubmitterOptions_validate(t *testing.T) {
 			submitterOptions: SubmitterOptions{
 				DBConnectionPool:     dbConnectionPool,
 				SignatureService:     mSigService,
-				HorizonURL:           "https://horizon-testnet.stellar.org",
+				HorizonClient:        mHorizonClient,
 				NumChannelAccounts:   1,
 				QueuePollingInterval: 10,
 				MaxBaseFee:           txnbuild.MinBaseFee,
@@ -174,6 +174,7 @@ func Test_NewManager(t *testing.T) {
 	defer dbConnectionPool.Close()
 
 	mSigService := mocks.NewMockSignatureService(t)
+	mHorizonClient := &horizonclient.MockClient{}
 
 	ctx := context.Background()
 	validSubmitterOptions := SubmitterOptions{
@@ -183,7 +184,7 @@ func Test_NewManager(t *testing.T) {
 			GitCommitHash: "0xABC",
 			Version:       "0.01",
 		},
-		HorizonURL:           "https://horizon-testnet.stellar.org",
+		HorizonClient:        mHorizonClient,
 		SignatureService:     mSigService,
 		NumChannelAccounts:   5,
 		QueuePollingInterval: 10,
@@ -284,10 +285,7 @@ func Test_NewManager(t *testing.T) {
 				wantChTxBundleModel, err := store.NewChannelTransactionBundleModel(wantConnectionPool)
 				require.NoError(t, err)
 
-				wantSubmitterEngine, err := engine.NewSubmitterEngine(&horizonclient.Client{
-					HorizonURL: submitterOptions.HorizonURL,
-					HTTP:       httpclient.DefaultClient(),
-				})
+				wantSubmitterEngine, err := engine.NewSubmitterEngine(mHorizonClient)
 				require.NoError(t, err)
 
 				wantSigService := mSigService

@@ -16,7 +16,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	tssMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
@@ -26,7 +25,7 @@ import (
 const serviceName = "Transaction Submission Service"
 
 type SubmitterOptions struct {
-	HorizonURL           string
+	HorizonClient        horizonclient.ClientInterface
 	NumChannelAccounts   int
 	QueuePollingInterval int
 	MaxBaseFee           int
@@ -47,8 +46,8 @@ func (so *SubmitterOptions) validate() error {
 		return fmt.Errorf("signature service cannot be nil")
 	}
 
-	if so.HorizonURL == "" {
-		return fmt.Errorf("horizon url cannot be empty")
+	if so.HorizonClient == nil {
+		return fmt.Errorf("horizon client cannot be nil")
 	}
 
 	if so.NumChannelAccounts < MinNumberOfChannelAccounts || so.NumChannelAccounts > MaxNumberOfChannelAccounts {
@@ -116,14 +115,8 @@ func NewManager(ctx context.Context, opts SubmitterOptions) (m *Manager, err err
 		return nil, fmt.Errorf("initializing channel transaction bundle model: %w", err)
 	}
 
-	// initialize horizon client
-	horizonClient := &horizonclient.Client{
-		HorizonURL: opts.HorizonURL,
-		HTTP:       httpclient.DefaultClient(),
-	}
-
 	// initialize SubmitterEngine
-	submitterEngine, err := engine.NewSubmitterEngine(horizonClient)
+	submitterEngine, err := engine.NewSubmitterEngine(opts.HorizonClient)
 	if err != nil {
 		return nil, fmt.Errorf("initializing submitter engine: %w", err)
 	}
