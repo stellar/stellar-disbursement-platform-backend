@@ -251,10 +251,9 @@ func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, d
 		incompletePayments, err := s.models.Payment.GetAll(ctx, &data.QueryParams{
 			Filters: map[data.FilterKey]interface{}{
 				data.FilterKeyStatus: []data.PaymentStatus{
-					data.DraftPaymentStatus,
 					data.ReadyPaymentStatus,
+					data.PendingPaymentStatus,
 					data.PausedPaymentStatus,
-					data.FailedPaymentStatus,
 				},
 			},
 		}, dbTx)

@@ -485,6 +485,7 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 			disbursement.ID,
 		))
 
+		// PendingTotal includes payments associated with 'readyDisbursement' that were moved from the draft to ready status
 		assert.Contains(
 			t,
 			buf.String(),
