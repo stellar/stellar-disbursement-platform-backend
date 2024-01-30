@@ -251,11 +251,12 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 
 		r.Route("/disbursements", func(r chi.Router) {
 			handler := httphandler.DisbursementHandler{
-				Models:           o.Models,
-				MonitorService:   o.MonitorService,
-				DBConnectionPool: o.dbConnectionPool,
-				AuthManager:      authManager,
-				HorizonClient:    o.horizonClient,
+				Models:             o.Models,
+				MonitorService:     o.MonitorService,
+				DBConnectionPool:   o.dbConnectionPool,
+				AuthManager:        authManager,
+				HorizonClient:      o.horizonClient,
+				DistributionPubKey: o.DistributionPublicKey,
 			}
 			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole)).
 				Post("/", handler.PostDisbursement)
