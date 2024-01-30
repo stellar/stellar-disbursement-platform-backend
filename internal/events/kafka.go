@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"strings"
 
+	"golang.org/x/exp/slices"
+
 	"github.com/segmentio/kafka-go/sasl/plain"
 
 	"github.com/segmentio/kafka-go"
@@ -20,6 +22,11 @@ const (
 	KafkaProtocolSASLPlaintext KafkaSecurityProtocol = "SASL_PLAINTEXT"
 	KafkaProtocolSASLSSL       KafkaSecurityProtocol = "SASL_SSL"
 	KafkaProtocolSSL           KafkaSecurityProtocol = "SSL"
+)
+
+var (
+	SASLProtocols = []KafkaSecurityProtocol{KafkaProtocolSASLPlaintext, KafkaProtocolSASLSSL}
+	SSLProtocols  = []KafkaSecurityProtocol{KafkaProtocolSASLSSL, KafkaProtocolSSL}
 )
 
 func ParseKafkaSecurityProtocol(protocol string) (KafkaSecurityProtocol, error) {
@@ -48,13 +55,13 @@ func (kc *KafkaConfig) Validate() error {
 		return fmt.Errorf("security protocol cannot be empty")
 	}
 
-	if kc.SecurityProtocol == KafkaProtocolSASLPlaintext || kc.SecurityProtocol == KafkaProtocolSASLSSL {
+	if slices.Contains(SASLProtocols, kc.SecurityProtocol) {
 		if kc.SASLUsername == "" || kc.SASLPassword == "" {
 			return fmt.Errorf("SASL credentials must be provided for SASL_PLAINTEXT and SASL_SSL protocols")
 		}
 	}
 
-	if kc.SecurityProtocol == KafkaProtocolSASLSSL || kc.SecurityProtocol == KafkaProtocolSSL {
+	if slices.Contains(SSLProtocols, kc.SecurityProtocol) {
 		// TODO: SDP-1071 Add additional validation for SASL_SSL and SSL
 		return fmt.Errorf("security protocols SASL_SSL and SSL are not yet supported")
 	}
