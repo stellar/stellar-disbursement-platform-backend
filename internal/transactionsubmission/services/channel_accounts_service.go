@@ -8,7 +8,6 @@ import (
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/txnbuild"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
 	txSub "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
@@ -52,13 +51,12 @@ type ChannelAccountsService struct {
 	// Injected dependencies
 	TSSDBConnectionPool db.DBConnectionPool
 	SigningService      engine.SignatureService
-	HorizonURL          string
+	HorizonClient       horizonclient.ClientInterface
 	MaxBaseFee          int
 
 	// Initialized in Init()
 	ledgerNumberTracker engine.LedgerNumberTracker
 	chAccStore          store.ChannelAccountStore
-	horizonClient       horizonclient.ClientInterface
 }
 
 // validate initializes the ChannelAccountsManagementService, preparing it to access the DB and the Stellar network.
@@ -71,8 +69,8 @@ func (s *ChannelAccountsService) validate() error {
 		return fmt.Errorf("signing service cannot be nil")
 	}
 
-	if s.HorizonURL == "" {
-		return fmt.Errorf("horizon url cannot be empty")
+	if s.HorizonClient == nil {
+		return fmt.Errorf("horizon client cannot be nil")
 	}
 
 	if s.MaxBaseFee < txnbuild.MinBaseFee {
@@ -94,26 +92,17 @@ func (s *ChannelAccountsService) GetChannelAccountStore() store.ChannelAccountSt
 	return s.chAccStore
 }
 
+// TODO: inject LedgerNumberTracker in this object
 func (s *ChannelAccountsService) GetLedgerNumberTracker() (engine.LedgerNumberTracker, error) {
 	if s.ledgerNumberTracker == nil {
 		var err error
-		s.ledgerNumberTracker, err = engine.NewLedgerNumberTracker(s.GetHorizonClient())
+		s.ledgerNumberTracker, err = engine.NewLedgerNumberTracker(s.HorizonClient)
 		if err != nil {
 			return nil, fmt.Errorf("initializing ledger number tracker: %w", err)
 		}
 
 	}
 	return s.ledgerNumberTracker, nil
-}
-
-func (s *ChannelAccountsService) GetHorizonClient() horizonclient.ClientInterface {
-	if s.horizonClient == nil {
-		s.horizonClient = &horizonclient.Client{
-			HorizonURL: s.HorizonURL,
-			HTTP:       httpclient.DefaultClient(),
-		}
-	}
-	return s.horizonClient
 }
 
 // CreateChannelAccounts creates the specified number of channel accounts on the network and stores them in the database.
@@ -141,7 +130,7 @@ func (s *ChannelAccountsService) CreateChannelAccounts(ctx context.Context, amou
 		}
 		accounts, err := txSub.CreateChannelAccountsOnChain(
 			ctx,
-			s.GetHorizonClient(),
+			s.HorizonClient,
 			batchSize,
 			s.MaxBaseFee,
 			s.SigningService,
@@ -254,7 +243,7 @@ func (s *ChannelAccountsService) deleteChannelAccounts(ctx context.Context, numA
 }
 
 func (s *ChannelAccountsService) deleteChannelAccount(ctx context.Context, lockedUntilLedger int, publicKey string) error {
-	if _, err := s.GetHorizonClient().AccountDetail(horizonclient.AccountRequest{AccountID: publicKey}); err != nil {
+	if _, err := s.HorizonClient.AccountDetail(horizonclient.AccountRequest{AccountID: publicKey}); err != nil {
 		if !horizonclient.IsNotFoundError(err) {
 			return fmt.Errorf("failed to reach account %s on the network: %w", publicKey, err)
 		}
@@ -268,7 +257,7 @@ func (s *ChannelAccountsService) deleteChannelAccount(ctx context.Context, locke
 		log.Ctx(ctx).Infof("⏳ Deleting Stellar account with address: %s", publicKey)
 		err = txSub.DeleteChannelAccountOnChain(
 			ctx,
-			s.GetHorizonClient(),
+			s.HorizonClient,
 			publicKey,
 			int64(s.MaxBaseFee),
 			s.SigningService,
@@ -343,7 +332,7 @@ func (s *ChannelAccountsService) VerifyChannelAccounts(ctx context.Context, dele
 
 	invalidAccountsCount := 0
 	for _, account := range accounts {
-		_, err := s.GetHorizonClient().AccountDetail(horizonclient.AccountRequest{AccountID: account.PublicKey})
+		_, err := s.HorizonClient.AccountDetail(horizonclient.AccountRequest{AccountID: account.PublicKey})
 		if err == nil {
 			continue
 		}

@@ -18,7 +18,6 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	engineMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
@@ -33,6 +32,7 @@ func Test_ChannelAccountsService_validate(t *testing.T) {
 	defer dbConnectionPool.Close()
 
 	mSigService := engineMocks.NewMockSignatureService(t)
+	mHorizonClient := &horizonclient.MockClient{}
 
 	testCases := []struct {
 		name                      string
@@ -52,19 +52,19 @@ func Test_ChannelAccountsService_validate(t *testing.T) {
 			wantError: "signing service cannot be nil",
 		},
 		{
-			name: "HorizonURL cannot be empty",
+			name: "HorizonClient cannot be nil",
 			serviceOptions: ChannelAccountsService{
 				TSSDBConnectionPool: dbConnectionPool,
 				SigningService:      mSigService,
 			},
-			wantError: "horizon url cannot be empty",
+			wantError: "horizon client cannot be nil",
 		},
 		{
 			name: "maxBaseFee must be greater than or equal to 100",
 			serviceOptions: ChannelAccountsService{
 				TSSDBConnectionPool: dbConnectionPool,
 				SigningService:      mSigService,
-				HorizonURL:          "https://horizon-testnet.stellar.org",
+				HorizonClient:       mHorizonClient,
 			},
 			wantError: "maxBaseFee must be greater than or equal to 100",
 		},
@@ -73,7 +73,7 @@ func Test_ChannelAccountsService_validate(t *testing.T) {
 			serviceOptions: ChannelAccountsService{
 				TSSDBConnectionPool: dbConnectionPool,
 				SigningService:      mSigService,
-				HorizonURL:          "https://horizon-testnet.stellar.org",
+				HorizonClient:       mHorizonClient,
 				MaxBaseFee:          100,
 			},
 			isAdvisoryLockUnavailable: true,
@@ -84,7 +84,7 @@ func Test_ChannelAccountsService_validate(t *testing.T) {
 			serviceOptions: ChannelAccountsService{
 				TSSDBConnectionPool: dbConnectionPool,
 				SigningService:      mSigService,
-				HorizonURL:          "https://horizon-testnet.stellar.org",
+				HorizonClient:       mHorizonClient,
 				MaxBaseFee:          100,
 			},
 		},
@@ -137,34 +137,6 @@ func Test_ChannelAccountsService_GetChannelAccountStore(t *testing.T) {
 	})
 }
 
-func Test_ChannelAccountsService_GetHorizonClient(t *testing.T) {
-	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
-	defer dbt.Close()
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
-
-	t.Run("GetHorizonClient() instantiates a new Horizon Client if the current horizonClient value is empty", func(t *testing.T) {
-		chAccService := ChannelAccountsService{HorizonURL: "https://horizon-testnet.stellar.org"}
-		wantHorizonCLient := &horizonclient.Client{
-			HorizonURL: "https://horizon-testnet.stellar.org",
-			HTTP:       httpclient.DefaultClient(),
-		}
-		horizonClient := chAccService.GetHorizonClient()
-		require.Equal(t, wantHorizonCLient, horizonClient)
-		require.Equal(t, wantHorizonCLient, chAccService.horizonClient)
-		require.NotEqual(t, &wantHorizonCLient, &chAccService.horizonClient)
-		require.Equal(t, &horizonClient, &chAccService.horizonClient)
-	})
-
-	t.Run("GetHorizonClient() returns the existing horizonClient if the current value is NOT empty", func(t *testing.T) {
-		chAccService := ChannelAccountsService{HorizonURL: "https://horizon-testnet.stellar.org"}
-		chAccService.horizonClient = &horizonclient.MockClient{}
-		horizonClient := chAccService.GetHorizonClient()
-		require.Equal(t, &horizonClient, &chAccService.horizonClient)
-	})
-}
-
 func Test_ChannelAccountsService_GetLedgerNumberTracker(t *testing.T) {
 	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
@@ -173,8 +145,9 @@ func Test_ChannelAccountsService_GetLedgerNumberTracker(t *testing.T) {
 	defer dbConnectionPool.Close()
 
 	t.Run("GetLedgerNumberTracker() instantiates a new LedgerNumberTracker if the current one is empty", func(t *testing.T) {
-		chAccService := ChannelAccountsService{HorizonURL: "https://horizon-testnet.stellar.org"}
-		wantLedgerNumberTracker, err := engine.NewLedgerNumberTracker(chAccService.GetHorizonClient())
+		mHorizonClient := &horizonclient.MockClient{}
+		chAccService := ChannelAccountsService{HorizonClient: mHorizonClient}
+		wantLedgerNumberTracker, err := engine.NewLedgerNumberTracker(chAccService.HorizonClient)
 		require.NoError(t, err)
 
 		ledgerNumberTracker, err := chAccService.GetLedgerNumberTracker()
@@ -187,7 +160,8 @@ func Test_ChannelAccountsService_GetLedgerNumberTracker(t *testing.T) {
 	})
 
 	t.Run("GetLedgerNumberTracker() returns the existing LedgerNumberTracker if the current value is NOT empty", func(t *testing.T) {
-		chAccService := ChannelAccountsService{HorizonURL: "https://horizon-testnet.stellar.org"}
+		mHorizonClient := &horizonclient.MockClient{}
+		chAccService := ChannelAccountsService{HorizonClient: mHorizonClient}
 		chAccService.ledgerNumberTracker = &engineMocks.MockLedgerNumberTracker{}
 		ledgerNumberTracker, err := chAccService.GetLedgerNumberTracker()
 		require.NoError(t, err)
@@ -215,12 +189,11 @@ func Test_ChannelAccounts_CreateAccount_Success(t *testing.T) {
 
 	cas := ChannelAccountsService{
 		chAccStore:          mChannelAccountStore,
-		horizonClient:       mHorizonClient,
+		HorizonClient:       mHorizonClient,
 		TSSDBConnectionPool: dbConnectionPool,
 		ledgerNumberTracker: mLedgerNumberTracker,
 		MaxBaseFee:          100,
 		SigningService:      mSigService,
-		HorizonURL:          "https://horizon-testnet.stellar.org",
 	}
 
 	rootAccount := keypair.MustParseFull("SBMW2WDSVTGT2N2PCBF3PV7WBOIKVTGGIEBUUYMDX3CKTDD5HY3UIHV4")
@@ -275,12 +248,11 @@ func Test_ChannelAccounts_CreateAccount_CannotFindRootAccount_Failure(t *testing
 
 	cas := ChannelAccountsService{
 		chAccStore:          mChannelAccountStore,
-		horizonClient:       mHorizonClient,
+		HorizonClient:       mHorizonClient,
 		TSSDBConnectionPool: dbConnectionPool,
 		ledgerNumberTracker: mLedgerNumberTracker,
 		MaxBaseFee:          100,
 		SigningService:      mSigService,
-		HorizonURL:          "https://horizon-testnet.stellar.org",
 	}
 
 	rootAccount := keypair.MustParseFull("SDL4E4RF6BHX77DBKE63QC4H4LQG7S7D2PB4TSF64LTHDIHP7UUJHH2V")
@@ -322,12 +294,11 @@ func Test_ChannelAccounts_CreateAccount_Insert_Failure(t *testing.T) {
 
 	cas := ChannelAccountsService{
 		chAccStore:          mChannelAccountStore,
-		horizonClient:       mHorizonClient,
+		HorizonClient:       mHorizonClient,
 		TSSDBConnectionPool: dbConnectionPool,
 		ledgerNumberTracker: mLedgerNumberTracker,
 		MaxBaseFee:          100,
 		SigningService:      mSigService,
-		HorizonURL:          "https://horizon-testnet.stellar.org",
 	}
 
 	rootAccount := keypair.MustParseFull("SBMW2WDSVTGT2N2PCBF3PV7WBOIKVTGGIEBUUYMDX3CKTDD5HY3UIHV4")
@@ -368,12 +339,11 @@ func Test_ChannelAccounts_VerifyAccounts_Success(t *testing.T) {
 
 	cas := ChannelAccountsService{
 		chAccStore:          mChannelAccountStore,
-		horizonClient:       mHorizonClient,
+		HorizonClient:       mHorizonClient,
 		TSSDBConnectionPool: dbConnectionPool,
 		ledgerNumberTracker: mLedgerNumberTracker,
 		MaxBaseFee:          100,
 		SigningService:      mSigService,
-		HorizonURL:          "https://horizon-testnet.stellar.org",
 	}
 
 	channelAccounts := []*store.ChannelAccount{
@@ -416,12 +386,11 @@ func Test_ChannelAccounts_VerifyAccounts_LoadChannelAccountsError_Failure(t *tes
 
 	cas := ChannelAccountsService{
 		chAccStore:          mChannelAccountStore,
-		horizonClient:       mHorizonClient,
+		HorizonClient:       mHorizonClient,
 		TSSDBConnectionPool: dbConnectionPool,
 		ledgerNumberTracker: mLedgerNumberTracker,
 		MaxBaseFee:          100,
 		SigningService:      mSigService,
-		HorizonURL:          "https://horizon-testnet.stellar.org",
 	}
 
 	ctx := context.Background()
@@ -457,12 +426,11 @@ func Test_ChannelAccounts_VerifyAccounts_NotFound(t *testing.T) {
 
 	cas := ChannelAccountsService{
 		chAccStore:          mChannelAccountStore,
-		horizonClient:       mHorizonClient,
+		HorizonClient:       mHorizonClient,
 		TSSDBConnectionPool: dbConnectionPool,
 		ledgerNumberTracker: mLedgerNumberTracker,
 		MaxBaseFee:          100,
 		SigningService:      mSigService,
-		HorizonURL:          "https://horizon-testnet.stellar.org",
 	}
 
 	channelAccounts := []*store.ChannelAccount{
@@ -520,12 +488,11 @@ func Test_ChannelAccounts_DeleteAccount_Success(t *testing.T) {
 
 	cas := ChannelAccountsService{
 		chAccStore:          mChannelAccountStore,
-		horizonClient:       mHorizonClient,
+		HorizonClient:       mHorizonClient,
 		TSSDBConnectionPool: dbConnectionPool,
 		ledgerNumberTracker: mLedgerNumberTracker,
 		MaxBaseFee:          100,
 		SigningService:      mSigService,
-		HorizonURL:          "https://horizon-testnet.stellar.org",
 	}
 
 	channelAccount := &store.ChannelAccount{
@@ -591,12 +558,11 @@ func Test_ChannelAccounts_DeleteAccount_All_Success(t *testing.T) {
 
 	cas := ChannelAccountsService{
 		chAccStore:          mChannelAccountStore,
-		horizonClient:       mHorizonClient,
+		HorizonClient:       mHorizonClient,
 		TSSDBConnectionPool: dbConnectionPool,
 		ledgerNumberTracker: mLedgerNumberTracker,
 		MaxBaseFee:          100,
 		SigningService:      mSigService,
-		HorizonURL:          "https://horizon-testnet.stellar.org",
 	}
 
 	channelAccounts := []*store.ChannelAccount{
@@ -672,12 +638,11 @@ func Test_ChannelAccounts_DeleteAccount_FindByPublicKey_Failure(t *testing.T) {
 
 	cas := ChannelAccountsService{
 		chAccStore:          mChannelAccountStore,
-		horizonClient:       mHorizonClient,
+		HorizonClient:       mHorizonClient,
 		TSSDBConnectionPool: dbConnectionPool,
 		ledgerNumberTracker: mLedgerNumberTracker,
 		MaxBaseFee:          100,
 		SigningService:      mSigService,
-		HorizonURL:          "https://horizon-testnet.stellar.org",
 	}
 
 	channelAccountID := "GDKMLSJSPHFWB26JV7ESWLJAKJ6KDTLQWYFT2T4ZVXFFHWBINUEJKASM"
@@ -719,12 +684,11 @@ func Test_ChannelAccounts_DeleteAccount_DeleteFromSigServiceError(t *testing.T) 
 
 	cas := ChannelAccountsService{
 		chAccStore:          mChannelAccountStore,
-		horizonClient:       mHorizonClient,
+		HorizonClient:       mHorizonClient,
 		TSSDBConnectionPool: dbConnectionPool,
 		ledgerNumberTracker: mLedgerNumberTracker,
 		MaxBaseFee:          100,
 		SigningService:      mSigService,
-		HorizonURL:          "https://horizon-testnet.stellar.org",
 	}
 
 	channelAccount := &store.ChannelAccount{
@@ -780,12 +744,11 @@ func Test_ChannelAccounts_DeleteAccount_SubmitTransaction_Failure(t *testing.T) 
 
 	cas := ChannelAccountsService{
 		chAccStore:          mChannelAccountStore,
-		horizonClient:       mHorizonClient,
+		HorizonClient:       mHorizonClient,
 		TSSDBConnectionPool: dbConnectionPool,
 		ledgerNumberTracker: mLedgerNumberTracker,
 		MaxBaseFee:          100,
 		SigningService:      mSigService,
-		HorizonURL:          "https://horizon-testnet.stellar.org",
 	}
 
 	channelAccount := &store.ChannelAccount{
@@ -849,12 +812,11 @@ func Test_ChannelAccounts_EnsureChannelAccounts_Exact_Success(t *testing.T) {
 
 	cas := ChannelAccountsService{
 		chAccStore:          mChannelAccountStore,
-		horizonClient:       mHorizonClient,
+		HorizonClient:       mHorizonClient,
 		TSSDBConnectionPool: dbConnectionPool,
 		ledgerNumberTracker: mLedgerNumberTracker,
 		MaxBaseFee:          100,
 		SigningService:      mSigService,
-		HorizonURL:          "https://horizon-testnet.stellar.org",
 	}
 
 	ensureCount := 2
@@ -894,12 +856,11 @@ func Test_ChannelAccounts_EnsureChannelAccounts_Add_Success(t *testing.T) {
 
 	cas := ChannelAccountsService{
 		chAccStore:          mChannelAccountStore,
-		horizonClient:       mHorizonClient,
+		HorizonClient:       mHorizonClient,
 		TSSDBConnectionPool: dbConnectionPool,
 		ledgerNumberTracker: mLedgerNumberTracker,
 		MaxBaseFee:          100,
 		SigningService:      mSigService,
-		HorizonURL:          "https://horizon-testnet.stellar.org",
 	}
 
 	desiredCount := 5
@@ -960,12 +921,11 @@ func Test_ChannelAccounts_EnsureChannelAccounts_Delete_Success(t *testing.T) {
 
 	cas := ChannelAccountsService{
 		chAccStore:          mChannelAccountStore,
-		horizonClient:       mHorizonClient,
+		HorizonClient:       mHorizonClient,
 		TSSDBConnectionPool: dbConnectionPool,
 		ledgerNumberTracker: mLedgerNumberTracker,
 		MaxBaseFee:          100,
 		SigningService:      mSigService,
-		HorizonURL:          "https://horizon-testnet.stellar.org",
 	}
 
 	rootAccount := keypair.MustParseFull("SBMW2WDSVTGT2N2PCBF3PV7WBOIKVTGGIEBUUYMDX3CKTDD5HY3UIHV4")

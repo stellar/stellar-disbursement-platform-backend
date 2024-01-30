@@ -108,16 +108,17 @@ func (c *ChannelAccountsCommand) Command(cmdService ChAccCmdServiceInterface) *c
 }
 
 func (c *ChannelAccountsCommand) CreateCommand(cmdService ChAccCmdServiceInterface) *cobra.Command {
+	var horizonURL string
 	chAccService := txSubSvc.ChannelAccountsService{}
 	sigServiceOptions := engine.SignatureServiceOptions{}
-	configOpts := chAccServiceConfigOptions(&sigServiceOptions, &chAccService)
+	configOpts := chAccServiceConfigOptions(&horizonURL, &chAccService, &sigServiceOptions)
 
 	createCmd := &cobra.Command{
 		Use:   "create [count]",
 		Short: "Create channel accounts",
 		Args:  cobra.ExactArgs(1),
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
-			if err := c.chAccServicePersistentPreRun(cmd, args, configOpts, &sigServiceOptions, &chAccService); err != nil {
+			if err := c.chAccServicePersistentPreRun(cmd, args, configOpts, &horizonURL, &chAccService, &sigServiceOptions); err != nil {
 				log.Ctx(cmd.Context()).Fatalf("Error running persistent pre run: %v", err)
 			}
 		},
@@ -143,9 +144,10 @@ func (c *ChannelAccountsCommand) CreateCommand(cmdService ChAccCmdServiceInterfa
 }
 
 func (c *ChannelAccountsCommand) VerifyCommand(cmdService ChAccCmdServiceInterface) *cobra.Command {
+	var horizonURL string
 	chAccService := txSubSvc.ChannelAccountsService{}
 	sigServiceOptions := engine.SignatureServiceOptions{}
-	configOpts := chAccServiceConfigOptions(&sigServiceOptions, &chAccService)
+	configOpts := chAccServiceConfigOptions(&horizonURL, &chAccService, &sigServiceOptions)
 
 	var deleteInvalidAccounts bool
 	configOpts = append(configOpts, &config.ConfigOption{
@@ -161,7 +163,7 @@ func (c *ChannelAccountsCommand) VerifyCommand(cmdService ChAccCmdServiceInterfa
 		Use:   "verify",
 		Short: "Verify that all the channel accounts in the database exist on the Stellar newtwork",
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
-			if err := c.chAccServicePersistentPreRun(cmd, args, configOpts, &sigServiceOptions, &chAccService); err != nil {
+			if err := c.chAccServicePersistentPreRun(cmd, args, configOpts, &horizonURL, &chAccService, &sigServiceOptions); err != nil {
 				log.Ctx(cmd.Context()).Fatalf("Error running persistent pre run: %v", err)
 			}
 		},
@@ -181,9 +183,10 @@ func (c *ChannelAccountsCommand) VerifyCommand(cmdService ChAccCmdServiceInterfa
 }
 
 func (c *ChannelAccountsCommand) EnsureCommand(cmdService ChAccCmdServiceInterface) *cobra.Command {
+	var horizonURL string
 	chAccService := txSubSvc.ChannelAccountsService{}
 	sigServiceOptions := engine.SignatureServiceOptions{}
-	configOpts := chAccServiceConfigOptions(&sigServiceOptions, &chAccService)
+	configOpts := chAccServiceConfigOptions(&horizonURL, &chAccService, &sigServiceOptions)
 
 	ensureCmd := &cobra.Command{
 		Use: "ensure",
@@ -192,7 +195,7 @@ func (c *ChannelAccountsCommand) EnsureCommand(cmdService ChAccCmdServiceInterfa
 			"channel accounts in storage and onchain",
 		Args: cobra.ExactArgs(1),
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
-			if err := c.chAccServicePersistentPreRun(cmd, args, configOpts, &sigServiceOptions, &chAccService); err != nil {
+			if err := c.chAccServicePersistentPreRun(cmd, args, configOpts, &horizonURL, &chAccService, &sigServiceOptions); err != nil {
 				log.Ctx(cmd.Context()).Fatalf("Error running persistent pre run: %v", err)
 			}
 		},
@@ -218,9 +221,10 @@ func (c *ChannelAccountsCommand) EnsureCommand(cmdService ChAccCmdServiceInterfa
 }
 
 func (c *ChannelAccountsCommand) DeleteCommand(cmdService ChAccCmdServiceInterface) *cobra.Command {
+	var horizonURL string
 	chAccService := txSubSvc.ChannelAccountsService{}
 	sigServiceOptions := engine.SignatureServiceOptions{}
-	configOpts := chAccServiceConfigOptions(&sigServiceOptions, &chAccService)
+	configOpts := chAccServiceConfigOptions(&horizonURL, &chAccService, &sigServiceOptions)
 
 	deleteChAccOpts := txSubSvc.DeleteChannelAccountsOptions{}
 	configOpts = append(configOpts, []*config.ConfigOption{
@@ -245,7 +249,7 @@ func (c *ChannelAccountsCommand) DeleteCommand(cmdService ChAccCmdServiceInterfa
 		Use:   "delete",
 		Short: "Delete a specified channel account from storage and on the network",
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
-			if err := c.chAccServicePersistentPreRun(cmd, args, configOpts, &sigServiceOptions, &chAccService); err != nil {
+			if err := c.chAccServicePersistentPreRun(cmd, args, configOpts, &horizonURL, &chAccService, &sigServiceOptions); err != nil {
 				log.Ctx(cmd.Context()).Fatalf("Error running persistent pre run: %v", err)
 			}
 		},
@@ -288,15 +292,16 @@ func (c *ChannelAccountsCommand) ViewCommand(cmdService ChAccCmdServiceInterface
 // chAccServiceConfigOptions returns the config options for the channel accounts service to be used when the signature
 // service is needed.
 func chAccServiceConfigOptions(
-	sigServiceOptions *engine.SignatureServiceOptions,
+	horizonURL *string,
 	chAccService *txSubSvc.ChannelAccountsService,
+	sigServiceOptions *engine.SignatureServiceOptions,
 ) config.ConfigOptions {
 	return append(
 		// signature service options:
 		cmdUtils.BaseSignatureServiceConfigOptions(sigServiceOptions),
 		cmdUtils.DistributionSeed(&sigServiceOptions.DistributionPrivateKey),
 		// other shared options:
-		cmdUtils.HorizonURLConfigOption(&chAccService.HorizonURL),
+		cmdUtils.HorizonURLConfigOption(horizonURL),
 		cmdUtils.MaxBaseFee(&chAccService.MaxBaseFee),
 	)
 }
@@ -307,8 +312,9 @@ func (c *ChannelAccountsCommand) chAccServicePersistentPreRun(
 	cmd *cobra.Command,
 	args []string,
 	configOpts config.ConfigOptions,
-	sigServiceOptions *engine.SignatureServiceOptions,
+	horizonURL *string,
 	chAccService *txSubSvc.ChannelAccountsService,
+	sigServiceOptions *engine.SignatureServiceOptions,
 ) error {
 	ctx := cmd.Context()
 	cmd.Parent().PersistentPreRun(cmd.Parent(), args)
@@ -317,6 +323,12 @@ func (c *ChannelAccountsCommand) chAccServicePersistentPreRun(
 	configOpts.Require()
 	if err := configOpts.SetValues(); err != nil {
 		return fmt.Errorf("setting values of config options in %s: %w", cmd.Name(), err)
+	}
+
+	// Prepare horizonClient
+	horizonClient, err := di.NewHorizonClient(ctx, *horizonURL)
+	if err != nil {
+		return fmt.Errorf("retrieving horizon client through the dependency injector in %s: %w", cmd.Name(), err)
 	}
 
 	// Prepare the signature service
@@ -330,6 +342,7 @@ func (c *ChannelAccountsCommand) chAccServicePersistentPreRun(
 	// Inject channel account service dependencies
 	chAccService.SigningService = sigService
 	chAccService.TSSDBConnectionPool = c.TSSDBConnectionPool
+	chAccService.HorizonClient = horizonClient
 
 	return nil
 }
