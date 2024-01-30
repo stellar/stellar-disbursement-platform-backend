@@ -38,7 +38,7 @@ func (s *ChAccCmdService) CreateChannelAccounts(ctx context.Context, chAccServic
 }
 
 func (s *ChAccCmdService) EnsureChannelAccountsCount(ctx context.Context, chAccService txSubSvc.ChannelAccountsService, count int) error {
-	return chAccService.CreateChannelAccounts(ctx, count)
+	return chAccService.EnsureChannelAccountsCount(ctx, count)
 }
 
 func (s *ChAccCmdService) DeleteChannelAccount(ctx context.Context, chAccService txSubSvc.ChannelAccountsService, opts txSubSvc.DeleteChannelAccountsOptions) error {
