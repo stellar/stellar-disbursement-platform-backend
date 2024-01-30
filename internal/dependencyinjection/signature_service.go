@@ -5,18 +5,10 @@ import (
 	"fmt"
 
 	"github.com/stellar/go/support/log"
-	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 )
 
 const signatureServiceInstanceName = "signature_service_instance"
-
-type SignatureServiceOptions struct {
-	NetworkPassphrase      string
-	DBConnectionPool       db.DBConnectionPool
-	DistributionPrivateKey string
-	EncryptionPassphrase   string
-}
 
 // NewSignatureService creates a new signature service instance, or retrives an instance that was already
 // created before.
