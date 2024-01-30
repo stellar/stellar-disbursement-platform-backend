@@ -33,6 +33,7 @@ func Test_ChannelAccountsService_validate(t *testing.T) {
 
 	mSigService := engineMocks.NewMockSignatureService(t)
 	mHorizonClient := &horizonclient.MockClient{}
+	mLedgerNumberTracker := &engineMocks.MockLedgerNumberTracker{}
 
 	testCases := []struct {
 		name                      string
@@ -60,11 +61,21 @@ func Test_ChannelAccountsService_validate(t *testing.T) {
 			wantError: "horizon client cannot be nil",
 		},
 		{
+			name: "LedgerNumberTracker cannot be nil",
+			serviceOptions: ChannelAccountsService{
+				TSSDBConnectionPool: dbConnectionPool,
+				SigningService:      mSigService,
+				HorizonClient:       mHorizonClient,
+			},
+			wantError: "ledger number tracker cannot be nil",
+		},
+		{
 			name: "maxBaseFee must be greater than or equal to 100",
 			serviceOptions: ChannelAccountsService{
 				TSSDBConnectionPool: dbConnectionPool,
 				SigningService:      mSigService,
 				HorizonClient:       mHorizonClient,
+				LedgerNumberTracker: mLedgerNumberTracker,
 			},
 			wantError: "maxBaseFee must be greater than or equal to 100",
 		},
@@ -74,6 +85,7 @@ func Test_ChannelAccountsService_validate(t *testing.T) {
 				TSSDBConnectionPool: dbConnectionPool,
 				SigningService:      mSigService,
 				HorizonClient:       mHorizonClient,
+				LedgerNumberTracker: mLedgerNumberTracker,
 				MaxBaseFee:          100,
 			},
 			isAdvisoryLockUnavailable: true,
@@ -85,6 +97,7 @@ func Test_ChannelAccountsService_validate(t *testing.T) {
 				TSSDBConnectionPool: dbConnectionPool,
 				SigningService:      mSigService,
 				HorizonClient:       mHorizonClient,
+				LedgerNumberTracker: mLedgerNumberTracker,
 				MaxBaseFee:          100,
 			},
 		},
@@ -137,38 +150,6 @@ func Test_ChannelAccountsService_GetChannelAccountStore(t *testing.T) {
 	})
 }
 
-func Test_ChannelAccountsService_GetLedgerNumberTracker(t *testing.T) {
-	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
-	defer dbt.Close()
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
-
-	t.Run("GetLedgerNumberTracker() instantiates a new LedgerNumberTracker if the current one is empty", func(t *testing.T) {
-		mHorizonClient := &horizonclient.MockClient{}
-		chAccService := ChannelAccountsService{HorizonClient: mHorizonClient}
-		wantLedgerNumberTracker, err := engine.NewLedgerNumberTracker(chAccService.HorizonClient)
-		require.NoError(t, err)
-
-		ledgerNumberTracker, err := chAccService.GetLedgerNumberTracker()
-		require.NoError(t, err)
-
-		require.Equal(t, wantLedgerNumberTracker, ledgerNumberTracker)
-		require.Equal(t, wantLedgerNumberTracker, chAccService.ledgerNumberTracker)
-		require.NotEqual(t, &wantLedgerNumberTracker, &chAccService.ledgerNumberTracker)
-		require.Equal(t, &ledgerNumberTracker, &chAccService.ledgerNumberTracker)
-	})
-
-	t.Run("GetLedgerNumberTracker() returns the existing LedgerNumberTracker if the current value is NOT empty", func(t *testing.T) {
-		mHorizonClient := &horizonclient.MockClient{}
-		chAccService := ChannelAccountsService{HorizonClient: mHorizonClient}
-		chAccService.ledgerNumberTracker = &engineMocks.MockLedgerNumberTracker{}
-		ledgerNumberTracker, err := chAccService.GetLedgerNumberTracker()
-		require.NoError(t, err)
-		require.Equal(t, &ledgerNumberTracker, &chAccService.ledgerNumberTracker)
-	})
-}
-
 func Test_ChannelAccounts_CreateAccount_Success(t *testing.T) {
 	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
@@ -191,7 +172,7 @@ func Test_ChannelAccounts_CreateAccount_Success(t *testing.T) {
 		chAccStore:          mChannelAccountStore,
 		HorizonClient:       mHorizonClient,
 		TSSDBConnectionPool: dbConnectionPool,
-		ledgerNumberTracker: mLedgerNumberTracker,
+		LedgerNumberTracker: mLedgerNumberTracker,
 		MaxBaseFee:          100,
 		SigningService:      mSigService,
 	}
@@ -250,7 +231,7 @@ func Test_ChannelAccounts_CreateAccount_CannotFindRootAccount_Failure(t *testing
 		chAccStore:          mChannelAccountStore,
 		HorizonClient:       mHorizonClient,
 		TSSDBConnectionPool: dbConnectionPool,
-		ledgerNumberTracker: mLedgerNumberTracker,
+		LedgerNumberTracker: mLedgerNumberTracker,
 		MaxBaseFee:          100,
 		SigningService:      mSigService,
 	}
@@ -296,7 +277,7 @@ func Test_ChannelAccounts_CreateAccount_Insert_Failure(t *testing.T) {
 		chAccStore:          mChannelAccountStore,
 		HorizonClient:       mHorizonClient,
 		TSSDBConnectionPool: dbConnectionPool,
-		ledgerNumberTracker: mLedgerNumberTracker,
+		LedgerNumberTracker: mLedgerNumberTracker,
 		MaxBaseFee:          100,
 		SigningService:      mSigService,
 	}
@@ -341,7 +322,7 @@ func Test_ChannelAccounts_VerifyAccounts_Success(t *testing.T) {
 		chAccStore:          mChannelAccountStore,
 		HorizonClient:       mHorizonClient,
 		TSSDBConnectionPool: dbConnectionPool,
-		ledgerNumberTracker: mLedgerNumberTracker,
+		LedgerNumberTracker: mLedgerNumberTracker,
 		MaxBaseFee:          100,
 		SigningService:      mSigService,
 	}
@@ -388,7 +369,7 @@ func Test_ChannelAccounts_VerifyAccounts_LoadChannelAccountsError_Failure(t *tes
 		chAccStore:          mChannelAccountStore,
 		HorizonClient:       mHorizonClient,
 		TSSDBConnectionPool: dbConnectionPool,
-		ledgerNumberTracker: mLedgerNumberTracker,
+		LedgerNumberTracker: mLedgerNumberTracker,
 		MaxBaseFee:          100,
 		SigningService:      mSigService,
 	}
@@ -428,7 +409,7 @@ func Test_ChannelAccounts_VerifyAccounts_NotFound(t *testing.T) {
 		chAccStore:          mChannelAccountStore,
 		HorizonClient:       mHorizonClient,
 		TSSDBConnectionPool: dbConnectionPool,
-		ledgerNumberTracker: mLedgerNumberTracker,
+		LedgerNumberTracker: mLedgerNumberTracker,
 		MaxBaseFee:          100,
 		SigningService:      mSigService,
 	}
@@ -490,7 +471,7 @@ func Test_ChannelAccounts_DeleteAccount_Success(t *testing.T) {
 		chAccStore:          mChannelAccountStore,
 		HorizonClient:       mHorizonClient,
 		TSSDBConnectionPool: dbConnectionPool,
-		ledgerNumberTracker: mLedgerNumberTracker,
+		LedgerNumberTracker: mLedgerNumberTracker,
 		MaxBaseFee:          100,
 		SigningService:      mSigService,
 	}
@@ -560,7 +541,7 @@ func Test_ChannelAccounts_DeleteAccount_All_Success(t *testing.T) {
 		chAccStore:          mChannelAccountStore,
 		HorizonClient:       mHorizonClient,
 		TSSDBConnectionPool: dbConnectionPool,
-		ledgerNumberTracker: mLedgerNumberTracker,
+		LedgerNumberTracker: mLedgerNumberTracker,
 		MaxBaseFee:          100,
 		SigningService:      mSigService,
 	}
@@ -640,7 +621,7 @@ func Test_ChannelAccounts_DeleteAccount_FindByPublicKey_Failure(t *testing.T) {
 		chAccStore:          mChannelAccountStore,
 		HorizonClient:       mHorizonClient,
 		TSSDBConnectionPool: dbConnectionPool,
-		ledgerNumberTracker: mLedgerNumberTracker,
+		LedgerNumberTracker: mLedgerNumberTracker,
 		MaxBaseFee:          100,
 		SigningService:      mSigService,
 	}
@@ -686,7 +667,7 @@ func Test_ChannelAccounts_DeleteAccount_DeleteFromSigServiceError(t *testing.T) 
 		chAccStore:          mChannelAccountStore,
 		HorizonClient:       mHorizonClient,
 		TSSDBConnectionPool: dbConnectionPool,
-		ledgerNumberTracker: mLedgerNumberTracker,
+		LedgerNumberTracker: mLedgerNumberTracker,
 		MaxBaseFee:          100,
 		SigningService:      mSigService,
 	}
@@ -746,7 +727,7 @@ func Test_ChannelAccounts_DeleteAccount_SubmitTransaction_Failure(t *testing.T) 
 		chAccStore:          mChannelAccountStore,
 		HorizonClient:       mHorizonClient,
 		TSSDBConnectionPool: dbConnectionPool,
-		ledgerNumberTracker: mLedgerNumberTracker,
+		LedgerNumberTracker: mLedgerNumberTracker,
 		MaxBaseFee:          100,
 		SigningService:      mSigService,
 	}
@@ -814,7 +795,7 @@ func Test_ChannelAccounts_EnsureChannelAccounts_Exact_Success(t *testing.T) {
 		chAccStore:          mChannelAccountStore,
 		HorizonClient:       mHorizonClient,
 		TSSDBConnectionPool: dbConnectionPool,
-		ledgerNumberTracker: mLedgerNumberTracker,
+		LedgerNumberTracker: mLedgerNumberTracker,
 		MaxBaseFee:          100,
 		SigningService:      mSigService,
 	}
@@ -858,7 +839,7 @@ func Test_ChannelAccounts_EnsureChannelAccounts_Add_Success(t *testing.T) {
 		chAccStore:          mChannelAccountStore,
 		HorizonClient:       mHorizonClient,
 		TSSDBConnectionPool: dbConnectionPool,
-		ledgerNumberTracker: mLedgerNumberTracker,
+		LedgerNumberTracker: mLedgerNumberTracker,
 		MaxBaseFee:          100,
 		SigningService:      mSigService,
 	}
@@ -923,7 +904,7 @@ func Test_ChannelAccounts_EnsureChannelAccounts_Delete_Success(t *testing.T) {
 		chAccStore:          mChannelAccountStore,
 		HorizonClient:       mHorizonClient,
 		TSSDBConnectionPool: dbConnectionPool,
-		ledgerNumberTracker: mLedgerNumberTracker,
+		LedgerNumberTracker: mLedgerNumberTracker,
 		MaxBaseFee:          100,
 		SigningService:      mSigService,
 	}

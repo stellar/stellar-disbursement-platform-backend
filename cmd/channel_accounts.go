@@ -331,6 +331,12 @@ func (c *ChannelAccountsCommand) chAccServicePersistentPreRun(
 		return fmt.Errorf("retrieving horizon client through the dependency injector in %s: %w", cmd.Name(), err)
 	}
 
+	// Prepare Ledger Number Tracker
+	ledgerNumberTracker, err := di.NewLedgerNumberTracker(ctx, horizonClient)
+	if err != nil {
+		return fmt.Errorf("retrieving ledger number tracker through the dependency injector in %s: %w", cmd.Name(), err)
+	}
+
 	// Prepare the signature service
 	sigServiceOptions.NetworkPassphrase = globalOptions.NetworkPassphrase
 	sigServiceOptions.DBConnectionPool = c.TSSDBConnectionPool
@@ -343,6 +349,7 @@ func (c *ChannelAccountsCommand) chAccServicePersistentPreRun(
 	chAccService.SigningService = sigService
 	chAccService.TSSDBConnectionPool = c.TSSDBConnectionPool
 	chAccService.HorizonClient = horizonClient
+	chAccService.LedgerNumberTracker = ledgerNumberTracker
 
 	return nil
 }

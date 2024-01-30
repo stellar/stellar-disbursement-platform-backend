@@ -6,7 +6,6 @@ import (
 
 	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/support/log"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 )
 
@@ -14,7 +13,7 @@ const ledgerNumberTrackerInstanceName = "ledger_number_tracker_instance"
 
 // NewLedgerNumberTracker creates a new ledger number tracker instance, or retrives an instance that was already
 // created before.
-func NewLedgerNumberTracker(ctx context.Context, horizonURL string) (engine.LedgerNumberTracker, error) {
+func NewLedgerNumberTracker(ctx context.Context, horizonClient horizonclient.ClientInterface) (engine.LedgerNumberTracker, error) {
 	instanceName := ledgerNumberTrackerInstanceName
 
 	// Already initialized
@@ -27,10 +26,6 @@ func NewLedgerNumberTracker(ctx context.Context, horizonURL string) (engine.Ledg
 
 	// Setup a new instance
 	log.Ctx(ctx).Infof("⚙️ Setting up Ledger Number Tracker")
-	horizonClient := &horizonclient.Client{
-		HorizonURL: horizonURL,
-		HTTP:       httpclient.DefaultClient(),
-	}
 	newInstance, err := engine.NewLedgerNumberTracker(horizonClient)
 	if err != nil {
 		return nil, fmt.Errorf("creating a new ledger number tracker instance: %w", err)

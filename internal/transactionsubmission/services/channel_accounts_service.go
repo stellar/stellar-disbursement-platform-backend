@@ -55,7 +55,7 @@ type ChannelAccountsService struct {
 	MaxBaseFee          int
 
 	// Initialized in Init()
-	ledgerNumberTracker engine.LedgerNumberTracker
+	LedgerNumberTracker engine.LedgerNumberTracker
 	chAccStore          store.ChannelAccountStore
 }
 
@@ -71,6 +71,10 @@ func (s *ChannelAccountsService) validate() error {
 
 	if s.HorizonClient == nil {
 		return fmt.Errorf("horizon client cannot be nil")
+	}
+
+	if s.LedgerNumberTracker == nil {
+		return fmt.Errorf("ledger number tracker cannot be nil")
 	}
 
 	if s.MaxBaseFee < txnbuild.MinBaseFee {
@@ -92,19 +96,6 @@ func (s *ChannelAccountsService) GetChannelAccountStore() store.ChannelAccountSt
 	return s.chAccStore
 }
 
-// TODO: inject LedgerNumberTracker in this object
-func (s *ChannelAccountsService) GetLedgerNumberTracker() (engine.LedgerNumberTracker, error) {
-	if s.ledgerNumberTracker == nil {
-		var err error
-		s.ledgerNumberTracker, err = engine.NewLedgerNumberTracker(s.HorizonClient)
-		if err != nil {
-			return nil, fmt.Errorf("initializing ledger number tracker: %w", err)
-		}
-
-	}
-	return s.ledgerNumberTracker, nil
-}
-
 // CreateChannelAccounts creates the specified number of channel accounts on the network and stores them in the database.
 func (s *ChannelAccountsService) CreateChannelAccounts(ctx context.Context, amount int) error {
 	if err := s.validate(); err != nil {
@@ -119,12 +110,7 @@ func (s *ChannelAccountsService) CreateChannelAccounts(ctx context.Context, amou
 		}
 		log.Ctx(ctx).Debugf("batch size: %d", batchSize)
 
-		ledgerNumberTracker, err := s.GetLedgerNumberTracker()
-		if err != nil {
-			return fmt.Errorf("getting ledger number tracker: %w", err)
-		}
-
-		currLedgerNumber, err := ledgerNumberTracker.GetLedgerNumber()
+		currLedgerNumber, err := s.LedgerNumberTracker.GetLedgerNumber()
 		if err != nil {
 			return fmt.Errorf("cannot get current ledger number: %w", err)
 		}
@@ -166,12 +152,7 @@ func (s *ChannelAccountsService) DeleteChannelAccount(ctx context.Context, opts 
 	}
 
 	if opts.ChannelAccountID != "" { // delete specified accounts
-		ledgerNumberTracker, err := s.GetLedgerNumberTracker()
-		if err != nil {
-			return fmt.Errorf("getting ledger number tracker: %w", err)
-		}
-
-		currLedgerNum, err := ledgerNumberTracker.GetLedgerNumber()
+		currLedgerNum, err := s.LedgerNumberTracker.GetLedgerNumber()
 		if err != nil {
 			return fmt.Errorf("retrieving current ledger number in DeleteChannelAccount: %w", err)
 		}
@@ -210,13 +191,8 @@ func (s *ChannelAccountsService) deleteChannelAccounts(ctx context.Context, numA
 		return fmt.Errorf("initializing channel account service: %w", err)
 	}
 
-	ledgerNumberTracker, err := s.GetLedgerNumberTracker()
-	if err != nil {
-		return fmt.Errorf("getting ledger number tracker: %w", err)
-	}
-
 	for i := 0; i < numAccountsToDelete; i++ {
-		currLedgerNum, err := ledgerNumberTracker.GetLedgerNumber()
+		currLedgerNum, err := s.LedgerNumberTracker.GetLedgerNumber()
 		if err != nil {
 			return fmt.Errorf("retrieving current ledger number in DeleteChannelAccount: %w", err)
 		}
