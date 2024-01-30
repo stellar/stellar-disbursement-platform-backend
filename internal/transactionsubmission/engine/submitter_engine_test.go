@@ -4,48 +4,70 @@ import (
 	"testing"
 
 	"github.com/stellar/go/clients/horizonclient"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/mocks"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func Test_NewSubmitterEngine(t *testing.T) {
-	mockHorizonClient := &horizonclient.MockClient{}
+func Test_SubmitterEngine_Validate(t *testing.T) {
+	hMock := &horizonclient.MockClient{}
+	mLedgerNumberTracker := mocks.NewMockLedgerNumberTracker(t)
+	mSigService := mocks.NewMockSignatureService(t)
 
 	testCases := []struct {
 		name            string
-		hClient         horizonclient.ClientInterface
+		engine          SubmitterEngine
 		wantErrContains string
-		wantResult      *SubmitterEngine
 	}{
 		{
 			name:            "returns an error if the horizon client is nil",
-			hClient:         nil,
-			wantErrContains: "creating ledger keeper: horizon client cannot be nil",
+			wantErrContains: "horizon client cannot be nil",
 		},
 		{
-			name:    "🎉 successfully provides new SubmitterEngine",
-			hClient: mockHorizonClient,
-			wantResult: &SubmitterEngine{
-				HorizonClient:       mockHorizonClient,
-				LedgerNumberTracker: &DefaultLedgerNumberTracker{hClient: mockHorizonClient, maxLedgerAge: MaxLedgerAge},
+			name: "returns an error if the ledger number tracker is nil",
+			engine: SubmitterEngine{
+				HorizonClient: hMock,
+			},
+			wantErrContains: "ledger number tracker cannot be nil",
+		},
+		{
+			name: "returns an error if the signature service is nil",
+			engine: SubmitterEngine{
+				HorizonClient:       hMock,
+				LedgerNumberTracker: mLedgerNumberTracker,
+			},
+			wantErrContains: "signature service cannot be nil",
+		},
+		{
+			name: "returns an error if the max base fee is less than the minimum",
+			engine: SubmitterEngine{
+				HorizonClient:       hMock,
+				LedgerNumberTracker: mLedgerNumberTracker,
+				SignatureService:    mSigService,
+				MaxBaseFee:          99,
+			},
+			wantErrContains: "maxBaseFee must be greater than or equal to 100",
+		},
+		{
+			name: "🎉 successfully validates the SubmitterEngine",
+			engine: SubmitterEngine{
+				HorizonClient:       hMock,
+				LedgerNumberTracker: mLedgerNumberTracker,
+				SignatureService:    mSigService,
+				MaxBaseFee:          100,
 			},
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			submitterEngine, err := NewSubmitterEngine(tc.hClient)
+			err := tc.engine.Validate()
 			if tc.wantErrContains != "" {
 				require.Error(t, err)
 				assert.ErrorContains(t, err, tc.wantErrContains)
-				assert.Nil(t, submitterEngine)
 			} else {
 				require.NoError(t, err)
-				assert.NotNil(t, submitterEngine)
-				assert.Equal(t, tc.wantResult, submitterEngine)
 			}
 		})
 	}
-
-	mockHorizonClient.AssertExpectations(t)
 }

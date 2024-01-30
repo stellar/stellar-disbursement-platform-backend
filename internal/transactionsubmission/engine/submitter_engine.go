@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/stellar/go/clients/horizonclient"
+	"github.com/stellar/go/txnbuild"
 )
 
 // SubmitterEngine aggregates the dependencies that are shared between all Submitter instances, such as the Ledger
@@ -11,16 +12,26 @@ import (
 type SubmitterEngine struct {
 	HorizonClient horizonclient.ClientInterface
 	LedgerNumberTracker
+	SignatureService
+	MaxBaseFee int
 }
 
-func NewSubmitterEngine(hClient horizonclient.ClientInterface) (*SubmitterEngine, error) {
-	ledgerNumberTracker, err := NewLedgerNumberTracker(hClient)
-	if err != nil {
-		return nil, fmt.Errorf("creating ledger keeper: %w", err)
+func (se *SubmitterEngine) Validate() error {
+	if se.HorizonClient == nil {
+		return fmt.Errorf("horizon client cannot be nil")
 	}
 
-	return &SubmitterEngine{
-		HorizonClient:       hClient,
-		LedgerNumberTracker: ledgerNumberTracker,
-	}, nil
+	if se.LedgerNumberTracker == nil {
+		return fmt.Errorf("ledger number tracker cannot be nil")
+	}
+
+	if se.SignatureService == nil {
+		return fmt.Errorf("signature service cannot be nil")
+	}
+
+	if se.MaxBaseFee < txnbuild.MinBaseFee {
+		return fmt.Errorf("maxBaseFee must be greater than or equal to %d", txnbuild.MinBaseFee)
+	}
+
+	return nil
 }

@@ -9,9 +9,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/support/log"
-	"github.com/stellar/go/txnbuild"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
@@ -25,15 +23,13 @@ import (
 const serviceName = "Transaction Submission Service"
 
 type SubmitterOptions struct {
-	HorizonClient        horizonclient.ClientInterface
 	NumChannelAccounts   int
 	QueuePollingInterval int
-	MaxBaseFee           int
 	MonitorService       tssMonitor.TSSMonitorService
 	CrashTrackerClient   crashtracker.CrashTrackerClient
 	EventProducer        events.Producer
 
-	SignatureService engine.SignatureService
+	SubmitterEngine  engine.SubmitterEngine
 	DBConnectionPool db.DBConnectionPool
 }
 
@@ -42,12 +38,8 @@ func (so *SubmitterOptions) validate() error {
 		return fmt.Errorf("database connection pool cannot be nil")
 	}
 
-	if so.SignatureService == nil {
-		return fmt.Errorf("signature service cannot be nil")
-	}
-
-	if so.HorizonClient == nil {
-		return fmt.Errorf("horizon client cannot be nil")
+	if err := so.SubmitterEngine.Validate(); err != nil {
+		return fmt.Errorf("validating submitter engine: %w", err)
 	}
 
 	if so.NumChannelAccounts < MinNumberOfChannelAccounts || so.NumChannelAccounts > MaxNumberOfChannelAccounts {
@@ -56,10 +48,6 @@ func (so *SubmitterOptions) validate() error {
 
 	if so.QueuePollingInterval < 6 {
 		return fmt.Errorf("queue polling interval must be greater than 6 seconds")
-	}
-
-	if so.MaxBaseFee < txnbuild.MinBaseFee {
-		return fmt.Errorf("max base fee must be greater than or equal to %d", txnbuild.MinBaseFee)
 	}
 
 	if sdpUtils.IsEmpty(so.MonitorService) {
@@ -79,9 +67,7 @@ type Manager struct {
 	queueService        defaultQueueService
 	txProcessingLimiter *engine.TransactionProcessingLimiter
 	// transaction submission:
-	engine     *engine.SubmitterEngine
-	sigService engine.SignatureService
-	maxBaseFee int
+	engine *engine.SubmitterEngine
 	// crash & metrics monitoring:
 	monitorService     tssMonitor.TSSMonitorService
 	crashTrackerClient crashtracker.CrashTrackerClient
@@ -115,12 +101,6 @@ func NewManager(ctx context.Context, opts SubmitterOptions) (m *Manager, err err
 		return nil, fmt.Errorf("initializing channel transaction bundle model: %w", err)
 	}
 
-	// initialize SubmitterEngine
-	submitterEngine, err := engine.NewSubmitterEngine(opts.HorizonClient)
-	if err != nil {
-		return nil, fmt.Errorf("initializing submitter engine: %w", err)
-	}
-
 	// validate if we have any channel accounts in the DB.
 	chAccCount, err := chAccModel.Count(ctx)
 	if err != nil {
@@ -151,9 +131,7 @@ func NewManager(ctx context.Context, opts SubmitterOptions) (m *Manager, err err
 		queueService:        queueService,
 		txProcessingLimiter: txProcessingLimiter,
 
-		engine:     submitterEngine,
-		sigService: opts.SignatureService,
-		maxBaseFee: opts.MaxBaseFee,
+		engine: &opts.SubmitterEngine,
 
 		crashTrackerClient: crashTrackerClient,
 		monitorService:     opts.MonitorService,
@@ -212,8 +190,6 @@ func (m *Manager) ProcessTransactions(ctx context.Context) {
 					m.txModel,
 					m.chAccModel,
 					m.engine,
-					m.sigService,
-					m.maxBaseFee,
 					m.crashTrackerClient,
 					m.txProcessingLimiter,
 					m.monitorService,
