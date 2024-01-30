@@ -162,6 +162,7 @@ func (s *ServerService) SetupConsumers(ctx context.Context, eventBrokerOptions c
 }
 
 func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorService monitor.MonitorServiceInterface) *cobra.Command {
+	var horizonURL string
 	serveOpts := serve.ServeOptions{}
 	schedulerOptions := scheduler.SchedulerOptions{}
 
@@ -284,7 +285,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			CustomSetValue: cmdUtils.SetConfigOptionURLString,
 			Required:       true,
 		},
-		cmdUtils.HorizonURLConfigOption(&serveOpts.HorizonURL),
+		cmdUtils.HorizonURLConfigOption(&horizonURL),
 		{
 			Name:        "enable-scheduler",
 			Usage:       "Enable Scheduler for SDP Backend Jobs",
@@ -470,6 +471,13 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 				log.Ctx(ctx).Fatalf("error creating Anchor Platform API Service: %v", err)
 			}
 			serveOpts.AnchorPlatformAPIService = apAPIService
+
+			// Grab horizon client instance
+			horizonClient, err := di.NewHorizonClient(ctx, horizonURL)
+			if err != nil {
+				log.Ctx(ctx).Fatalf("error retrieving horizon client through the dependency injector in %s: %v", cmd.Name(), err)
+			}
+			serveOpts.HorizonClient = horizonClient
 
 			// Setup the TSSDBConnectionPool
 			tssDBConnectionPool, err := di.NewTSSDBConnectionPool(ctx, di.TSSDBConnectionPoolOptions{DatabaseURL: globalOptions.DatabaseURL})

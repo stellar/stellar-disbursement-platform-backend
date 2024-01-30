@@ -103,6 +103,8 @@ func Test_serve(t *testing.T) {
 
 	// mock metric service
 	mMonitorService := monitor.MockMonitorService{}
+	mHorizonClient := &horizonclient.MockClient{}
+	di.SetInstance("horizon_client_instance", mHorizonClient)
 
 	serveOpts := serve.ServeOptions{
 		Environment:                     "test",
@@ -120,7 +122,7 @@ func Test_serve(t *testing.T) {
 		UIBaseURL:                       "http://localhost:3000",
 		ResetTokenExpirationHours:       24,
 		NetworkPassphrase:               network.TestNetworkPassphrase,
-		HorizonURL:                      horizonclient.DefaultTestNetClient.HorizonURL,
+		HorizonClient:                   mHorizonClient,
 		Sep10SigningPublicKey:           "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
 		Sep10SigningPrivateKey:          "SBUSPEKAZKLZSWHRSJ2HWDZUK6I3IVDUWA7JJZSGBLZ2WZIUJI7FPNB5",
 		AnchorPlatformBaseSepURL:        "localhost:8080",

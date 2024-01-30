@@ -70,8 +70,7 @@ type ServeOptions struct {
 	UIBaseURL                       string
 	ResetTokenExpirationHours       int
 	NetworkPassphrase               string
-	HorizonURL                      string
-	horizonClient                   horizonclient.ClientInterface
+	HorizonClient                   horizonclient.ClientInterface
 	SignatureService                engine.SignatureService
 	Sep10SigningPublicKey           string
 	Sep10SigningPrivateKey          string
@@ -141,12 +140,6 @@ func (opts *ServeOptions) SetupDependencies() error {
 		return fmt.Errorf("error creating SEP-24 JWT manager: %w", err)
 	}
 	opts.sep24JWTManager = sep24JWTManager
-
-	// Setup Horizon Client
-	opts.horizonClient = &horizonclient.Client{
-		HorizonURL: opts.HorizonURL,
-		HTTP:       httpclient.DefaultClient(),
-	}
 
 	return nil
 }
@@ -289,7 +282,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			assetsHandler := httphandler.AssetsHandler{
 				Models:           o.Models,
 				SignatureService: o.SignatureService,
-				HorizonClient:    o.horizonClient,
+				HorizonClient:    o.HorizonClient,
 			}
 
 			r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...)).
