@@ -35,8 +35,8 @@ func ParseKafkaSecurityProtocol(protocol string) (KafkaSecurityProtocol, error) 
 type KafkaConfig struct {
 	Brokers          []string
 	SecurityProtocol KafkaSecurityProtocol
-	SaslUsername     string
-	SaslPassword     string
+	SASLUsername     string
+	SASLPassword     string
 }
 
 func (kc *KafkaConfig) Validate() error {
@@ -49,7 +49,7 @@ func (kc *KafkaConfig) Validate() error {
 	}
 
 	if kc.SecurityProtocol == KafkaProtocolSASLPlaintext || kc.SecurityProtocol == KafkaProtocolSASLSSL {
-		if kc.SaslUsername == "" || kc.SaslPassword == "" {
+		if kc.SASLUsername == "" || kc.SASLPassword == "" {
 			return fmt.Errorf("SASL credentials must be provided for SASL_PLAINTEXT and SASL_SSL protocols")
 		}
 	}
@@ -81,8 +81,8 @@ func NewKafkaProducer(config KafkaConfig) (*KafkaProducer, error) {
 	if config.SecurityProtocol == KafkaProtocolSASLPlaintext || config.SecurityProtocol == KafkaProtocolSASLSSL {
 		transport = &kafka.Transport{
 			SASL: plain.Mechanism{
-				Username: config.SaslUsername,
-				Password: config.SaslPassword,
+				Username: config.SASLUsername,
+				Password: config.SASLPassword,
 			},
 		}
 	}
@@ -149,8 +149,8 @@ func NewKafkaConsumer(config KafkaConfig, topic string, consumerGroupID string, 
 	if config.SecurityProtocol == KafkaProtocolSASLPlaintext || config.SecurityProtocol == KafkaProtocolSASLSSL {
 		dialer = &kafka.Dialer{
 			SASLMechanism: plain.Mechanism{
-				Username: config.SaslUsername,
-				Password: config.SaslPassword,
+				Username: config.SASLUsername,
+				Password: config.SASLPassword,
 			},
 		}
 	}

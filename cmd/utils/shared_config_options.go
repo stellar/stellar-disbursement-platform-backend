@@ -266,7 +266,7 @@ func KafkaConfig(opts EventBrokerOptions) events.KafkaConfig {
 	return events.KafkaConfig{
 		Brokers:          opts.BrokerURLs,
 		SecurityProtocol: opts.KafkaSecurityProtocol,
-		SaslUsername:     opts.KafkaSASLUsername,
-		SaslPassword:     opts.KafkaSASLPassword,
+		SASLUsername:     opts.KafkaSASLUsername,
+		SASLPassword:     opts.KafkaSASLPassword,
 	}
 }

@@ -81,8 +81,8 @@ func Test_KafkaConfig_Validate(t *testing.T) {
 			config: KafkaConfig{
 				Brokers:          []string{"localhost:9092"},
 				SecurityProtocol: KafkaProtocolSASLPlaintext,
-				SaslUsername:     "user",
-				SaslPassword:     "pass",
+				SASLUsername:     "user",
+				SASLPassword:     "pass",
 			},
 			wantErr: false,
 		},
@@ -116,8 +116,8 @@ func Test_KafkaConfig_Validate(t *testing.T) {
 			config: KafkaConfig{
 				Brokers:          []string{"localhost:9092"},
 				SecurityProtocol: KafkaProtocolSASLSSL,
-				SaslUsername:     "user",
-				SaslPassword:     "pass",
+				SASLUsername:     "user",
+				SASLPassword:     "pass",
 			},
 			wantErr: true,
 			errMsg:  "security protocols SASL_SSL and SSL are not yet supported",
