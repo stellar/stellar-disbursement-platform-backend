@@ -31,7 +31,7 @@ func Test_dependencyinjection_NewLedgerNumberTracker(t *testing.T) {
 	t.Run("should return an error if there's an invalid instance pre-stored", func(t *testing.T) {
 		ClearInstancesTestHelper(t)
 
-		SetInstance(ledgerNumberTrackerInstanceName, false)
+		SetInstance(LedgerNumberTrackerInstanceName, false)
 
 		gotDependency, err := NewLedgerNumberTracker(ctx, &horizonclient.MockClient{})
 		assert.Nil(t, gotDependency)

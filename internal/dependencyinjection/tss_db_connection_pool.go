@@ -9,7 +9,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db/router"
 )
 
-const tssDBConnectionPoolInstanceName = "tss_db_connection_pool_instance"
+const TSSDBConnectionPoolInstanceName = "tss_db_connection_pool_instance"
 
 type TSSDBConnectionPoolOptions struct {
 	DatabaseURL string
@@ -18,7 +18,7 @@ type TSSDBConnectionPoolOptions struct {
 // NewTSSDBConnectionPool creates a new TSS db connection pool instance, or retrives a instance that
 // was already created before.
 func NewTSSDBConnectionPool(ctx context.Context, opts TSSDBConnectionPoolOptions) (db.DBConnectionPool, error) {
-	instanceName := tssDBConnectionPoolInstanceName
+	instanceName := TSSDBConnectionPoolInstanceName
 
 	if instance, ok := GetInstance(instanceName); ok {
 		if dbConnectionPoolInstance, ok2 := instance.(db.DBConnectionPool); ok2 {

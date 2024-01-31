@@ -9,12 +9,12 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 )
 
-const ledgerNumberTrackerInstanceName = "ledger_number_tracker_instance"
+const LedgerNumberTrackerInstanceName = "ledger_number_tracker_instance"
 
 // NewLedgerNumberTracker creates a new ledger number tracker instance, or retrives an instance that was already
 // created before.
 func NewLedgerNumberTracker(ctx context.Context, horizonClient horizonclient.ClientInterface) (engine.LedgerNumberTracker, error) {
-	instanceName := ledgerNumberTrackerInstanceName
+	instanceName := LedgerNumberTrackerInstanceName
 
 	// Already initialized
 	if instance, ok := GetInstance(instanceName); ok {

@@ -8,12 +8,12 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 )
 
-const signatureServiceInstanceName = "signature_service_instance"
+const SignatureServiceInstanceName = "signature_service_instance"
 
 // NewSignatureService creates a new signature service instance, or retrives an instance that was already
 // created before.
 func NewSignatureService(ctx context.Context, opts engine.SignatureServiceOptions) (engine.SignatureService, error) {
-	instanceName := signatureServiceInstanceName
+	instanceName := SignatureServiceInstanceName
 
 	// Already initialized
 	if instance, ok := GetInstance(instanceName); ok {

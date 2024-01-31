@@ -20,7 +20,7 @@ func Test_dependencyinjection_NewTxSubmitterEngine(t *testing.T) {
 		ClearInstancesTestHelper(t)
 
 		mSigService := engineMocks.NewMockSignatureService(t)
-		SetInstance(signatureServiceInstanceName, mSigService)
+		SetInstance(SignatureServiceInstanceName, mSigService)
 
 		opts := TxSubmitterEngineOptions{MaxBaseFee: 100}
 		gotDependency, err := NewTxSubmitterEngine(ctx, opts)
@@ -35,7 +35,7 @@ func Test_dependencyinjection_NewTxSubmitterEngine(t *testing.T) {
 	t.Run("should return an error if there's an invalid instance pre-stored", func(t *testing.T) {
 		ClearInstancesTestHelper(t)
 
-		SetInstance(txSubmitterEngineInstanceName, false)
+		SetInstance(TxSubmitterEngineInstanceName, false)
 
 		opts := TxSubmitterEngineOptions{}
 		gotDependency, err := NewTxSubmitterEngine(ctx, opts)

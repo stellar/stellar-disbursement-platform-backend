@@ -9,12 +9,12 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
 )
 
-const horizonClientInstanceName = "horizon_client_instance"
+const HorizonClientInstanceName = "horizon_client_instance"
 
 // NewHorizonClient creates a new horizon client instance, or retrives an instance that was already
 // created before.
 func NewHorizonClient(ctx context.Context, horizonURL string) (horizonclient.ClientInterface, error) {
-	instanceName := horizonClientInstanceName
+	instanceName := HorizonClientInstanceName
 
 	// Already initialized
 	if instance, ok := GetInstance(instanceName); ok {

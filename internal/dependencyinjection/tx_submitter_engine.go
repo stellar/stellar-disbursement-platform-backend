@@ -8,7 +8,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 )
 
-const txSubmitterEngineInstanceName = "tx_submitter_engine_instance"
+const TxSubmitterEngineInstanceName = "tx_submitter_engine_instance"
 
 type TxSubmitterEngineOptions struct {
 	HorizonURL              string
@@ -19,7 +19,7 @@ type TxSubmitterEngineOptions struct {
 // NewTxSubmitterEngine creates a new ledger number tracker instance, or retrives an instance that was already
 // created before.
 func NewTxSubmitterEngine(ctx context.Context, opts TxSubmitterEngineOptions) (engine.SubmitterEngine, error) {
-	instanceName := txSubmitterEngineInstanceName
+	instanceName := TxSubmitterEngineInstanceName
 
 	// Already initialized
 	if instance, ok := GetInstance(instanceName); ok {

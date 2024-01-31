@@ -30,7 +30,7 @@ func Test_dependencyinjection_NewHorizonClient(t *testing.T) {
 	t.Run("should return an error if there's an invalid instance pre-stored", func(t *testing.T) {
 		ClearInstancesTestHelper(t)
 
-		SetInstance(horizonClientInstanceName, false)
+		SetInstance(HorizonClientInstanceName, false)
 
 		horizonURL := "https://horizon-testnet.stellar.org"
 		gotDependency, err := NewHorizonClient(ctx, horizonURL)

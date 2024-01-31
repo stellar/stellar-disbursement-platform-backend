@@ -101,16 +101,16 @@ func Test_serve(t *testing.T) {
 	distributionSeed := "SBHQEYSACD5DOK5I656NKLAMOHC6VT64ATOWWM2VJ3URGDGMVGNPG4ON"
 
 	// Populate dependency injection:
-	di.SetInstance("tss_db_connection_pool_instance", dbConnectionPool)
+	di.SetInstance(di.TSSDBConnectionPoolInstanceName, dbConnectionPool)
 
 	mHorizonClient := &horizonclient.MockClient{}
-	di.SetInstance("horizon_client_instance", mHorizonClient)
+	di.SetInstance(di.HorizonClientInstanceName, mHorizonClient)
 
 	mLedgerNumberTracker := engineMocks.NewMockLedgerNumberTracker(t)
-	di.SetInstance("ledger_number_tracker_instance", mLedgerNumberTracker)
+	di.SetInstance(di.LedgerNumberTrackerInstanceName, mLedgerNumberTracker)
 
 	mSignatureService := engineMocks.NewMockSignatureService(t)
-	di.SetInstance("signature_service_instance", mSignatureService)
+	di.SetInstance(di.SignatureServiceInstanceName, mSignatureService)
 
 	submitterEngine := engine.SubmitterEngine{
 		HorizonClient:       mHorizonClient,
@@ -118,7 +118,7 @@ func Test_serve(t *testing.T) {
 		LedgerNumberTracker: mLedgerNumberTracker,
 		MaxBaseFee:          100 * txnbuild.MinBaseFee,
 	}
-	di.SetInstance("tx_submitter_engine_instance", submitterEngine)
+	di.SetInstance(di.TxSubmitterEngineInstanceName, submitterEngine)
 
 	ctx := context.Background()
 
