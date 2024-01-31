@@ -109,9 +109,6 @@ func (opts *ServeOptions) SetupDependencies() error {
 
 	// Setup Multi-Tenant Database when enabled
 	if opts.EnableMultiTenantDB {
-		deprecatedConnectionPool := dbConnectionPool
-		defer deprecatedConnectionPool.Close()
-
 		// Setup Per-tenant database
 		opts.tenantManager = tenant.NewManager(tenant.WithDatabase(dbConnectionPool))
 		opts.tenantRouter = router.NewMultiTenantDataSourceRouter(opts.tenantManager)
