@@ -385,7 +385,7 @@ func (d DisbursementHandler) PatchDisbursementStatus(w http.ResponseWriter, r *h
 		case errors.Is(err, services.ErrDisbursementWalletDisabled):
 			httperror.BadRequest(services.ErrDisbursementWalletDisabled.Error(), err, nil).Render(w)
 		case errors.Is(err, services.ErrDisbursementWalletInsufficientBalance):
-			httperror.Conflict(services.ErrDisbursementNotFound.Error(), err, nil).Render(w)
+			httperror.Conflict(services.ErrDisbursementWalletInsufficientBalance.Error(), err, nil).Render(w)
 		default:
 			msg := fmt.Sprintf("Cannot update disbursement ID %s with status: %s", disbursementID, toStatus)
 			httperror.InternalError(ctx, msg, err, nil).Render(w)
