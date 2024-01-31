@@ -138,7 +138,7 @@ func (s *ServerService) SetupConsumers(ctx context.Context, eventBrokerOptions c
 	}
 
 	paymentReadyToPayConsumer, err := events.NewKafkaConsumer(
-		eventBrokerOptions.BrokerURLs,
+		cmdUtils.KafkaConfig(eventBrokerOptions),
 		events.PaymentReadyToPayTopic,
 		eventBrokerOptions.ConsumerGroupID,
 		eventhandlers.NewPaymentToSubmitterEventHandler(eventhandlers.PaymentToSubmitterEventHandlerOptions{
