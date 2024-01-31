@@ -25,14 +25,6 @@ func (t SignatureServiceType) All() []SignatureServiceType {
 	return []SignatureServiceType{SignatureServiceTypeDefault}
 }
 
-func (t SignatureServiceType) StringAll() []string {
-	strAll := []string{}
-	for _, t := range t.All() {
-		strAll = append(strAll, string(t))
-	}
-	return strAll
-}
-
 func ParseSignatureServiceType(sigServiceType string) (SignatureServiceType, error) {
 	sigServiceTypeStrUpper := strings.ToUpper(sigServiceType)
 	ctType := SignatureServiceType(sigServiceTypeStrUpper)

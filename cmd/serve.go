@@ -388,13 +388,9 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 
 	// signature service config options:
 	txSubmitterOpts := di.TxSubmitterEngineOptions{}
-	configOpts = append(configOpts,
-		append(
-			cmdUtils.BaseSignatureServiceConfigOptions(&txSubmitterOpts.SignatureServiceOptions),
-			cmdUtils.DistributionSeed(&txSubmitterOpts.SignatureServiceOptions.DistributionPrivateKey),
-			cmdUtils.MaxBaseFee(&txSubmitterOpts.MaxBaseFee),
-			cmdUtils.HorizonURLConfigOption(&txSubmitterOpts.HorizonURL),
-		)...,
+	configOpts = append(
+		configOpts,
+		cmdUtils.TransactionSubmitterEngineConfigOptions(&txSubmitterOpts)...,
 	)
 
 	cmd := &cobra.Command{

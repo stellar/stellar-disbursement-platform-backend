@@ -9,6 +9,7 @@ import (
 	"github.com/stellar/go/txnbuild"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
+	di "github.com/stellar/stellar-disbursement-platform-backend/internal/dependencyinjection"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
@@ -184,6 +185,28 @@ func EventBrokerConfigOptions(opts *EventBrokerOptions) []*config.ConfigOption {
 	}
 }
 
+func TransactionSubmitterEngineConfigOptions(opts *di.TxSubmitterEngineOptions) config.ConfigOptions {
+	return append(
+		BaseSignatureServiceConfigOptions(&opts.SignatureServiceOptions),
+		&config.ConfigOption{
+			Name:        "max-base-fee",
+			Usage:       "The max base fee for submitting a Stellar transaction",
+			OptType:     types.Int,
+			ConfigKey:   &opts.MaxBaseFee,
+			FlagDefault: 100 * txnbuild.MinBaseFee,
+			Required:    true,
+		},
+		&config.ConfigOption{
+			Name:        "horizon-url",
+			Usage:       "The URL of the Stellar Horizon server where this application will communicate with.",
+			OptType:     types.String,
+			ConfigKey:   &opts.HorizonURL,
+			FlagDefault: horizonclient.DefaultTestNetClient.HorizonURL,
+			Required:    true,
+		},
+	)
+}
+
 func BaseSignatureServiceConfigOptions(opts *engine.SignatureServiceOptions) []*config.ConfigOption {
 	return []*config.ConfigOption{
 		{
@@ -195,25 +218,22 @@ func BaseSignatureServiceConfigOptions(opts *engine.SignatureServiceOptions) []*
 			Required:       false,
 		},
 		{
+			Name:           "distribution-seed",
+			Usage:          "The private key of the Stellar distribution account that sends the disbursements.", // TODO: this will eventually be used for sponsoring tenant accounts.
+			OptType:        types.String,
+			CustomSetValue: SetConfigOptionStellarPrivateKey,
+			ConfigKey:      &opts.DistributionPrivateKey,
+			Required:       true,
+		},
+		{
 			Name:           "signature-service-type",
-			Usage:          "The type of the signature service. Options: ['DEFAULT']",
+			Usage:          fmt.Sprintf("The type of the signature service. Options: %+v", engine.SignatureServiceType("").All()),
 			OptType:        types.String,
 			CustomSetValue: SetConfigOptionSignatureServiceType,
 			ConfigKey:      &opts.Type,
 			FlagDefault:    string(engine.SignatureServiceTypeDefault),
 			Required:       true,
 		},
-	}
-}
-
-func HorizonURLConfigOption(targetPointer interface{}) *config.ConfigOption {
-	return &config.ConfigOption{
-		Name:        "horizon-url",
-		Usage:       "The URL of the Stellar Horizon server where this application will communicate with.",
-		OptType:     types.String,
-		ConfigKey:   targetPointer,
-		FlagDefault: horizonclient.DefaultTestNetClient.HorizonURL,
-		Required:    true,
 	}
 }
 
@@ -229,17 +249,6 @@ func CrashTrackerTypeConfigOption(targetPointer interface{}) *config.ConfigOptio
 	}
 }
 
-func DistributionSeed(targetPointer interface{}) *config.ConfigOption {
-	return &config.ConfigOption{
-		Name:           "distribution-seed",
-		Usage:          "The private key of the Stellar distribution account that sends the disbursements.", // TODO: this will eventually be used for sponsoring tenant accounts.
-		OptType:        types.String,
-		CustomSetValue: SetConfigOptionStellarPrivateKey,
-		ConfigKey:      targetPointer,
-		Required:       true,
-	}
-}
-
 func DistributionPublicKey(targetPointer interface{}) *config.ConfigOption {
 	return &config.ConfigOption{
 		Name:           "distribution-public-key",
@@ -248,17 +257,6 @@ func DistributionPublicKey(targetPointer interface{}) *config.ConfigOption {
 		CustomSetValue: SetConfigOptionStellarPublicKey,
 		ConfigKey:      targetPointer,
 		Required:       true,
-	}
-}
-
-func MaxBaseFee(targetPointer interface{}) *config.ConfigOption {
-	return &config.ConfigOption{
-		Name:        "max-base-fee",
-		Usage:       "The max base fee for submitting a stellar transaction",
-		OptType:     types.Int,
-		ConfigKey:   targetPointer,
-		FlagDefault: 100 * txnbuild.MinBaseFee,
-		Required:    true,
 	}
 }
 

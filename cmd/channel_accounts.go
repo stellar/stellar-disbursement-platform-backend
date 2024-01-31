@@ -109,7 +109,7 @@ func (c *ChannelAccountsCommand) Command(cmdService ChAccCmdServiceInterface) *c
 func (c *ChannelAccountsCommand) CreateCommand(cmdService ChAccCmdServiceInterface) *cobra.Command {
 	chAccService := txSubSvc.ChannelAccountsService{}
 	txSubmitterOpts := di.TxSubmitterEngineOptions{}
-	configOpts := chAccServiceConfigOptions(&txSubmitterOpts)
+	configOpts := cmdUtils.TransactionSubmitterEngineConfigOptions(&txSubmitterOpts)
 
 	createCmd := &cobra.Command{
 		Use:   "create [count]",
@@ -144,7 +144,7 @@ func (c *ChannelAccountsCommand) CreateCommand(cmdService ChAccCmdServiceInterfa
 func (c *ChannelAccountsCommand) VerifyCommand(cmdService ChAccCmdServiceInterface) *cobra.Command {
 	chAccService := txSubSvc.ChannelAccountsService{}
 	txSubmitterOpts := di.TxSubmitterEngineOptions{}
-	configOpts := chAccServiceConfigOptions(&txSubmitterOpts)
+	configOpts := cmdUtils.TransactionSubmitterEngineConfigOptions(&txSubmitterOpts)
 
 	var deleteInvalidAccounts bool
 	configOpts = append(configOpts, &config.ConfigOption{
@@ -182,7 +182,7 @@ func (c *ChannelAccountsCommand) VerifyCommand(cmdService ChAccCmdServiceInterfa
 func (c *ChannelAccountsCommand) EnsureCommand(cmdService ChAccCmdServiceInterface) *cobra.Command {
 	chAccService := txSubSvc.ChannelAccountsService{}
 	txSubmitterOpts := di.TxSubmitterEngineOptions{}
-	configOpts := chAccServiceConfigOptions(&txSubmitterOpts)
+	configOpts := cmdUtils.TransactionSubmitterEngineConfigOptions(&txSubmitterOpts)
 
 	ensureCmd := &cobra.Command{
 		Use: "ensure",
@@ -219,7 +219,7 @@ func (c *ChannelAccountsCommand) EnsureCommand(cmdService ChAccCmdServiceInterfa
 func (c *ChannelAccountsCommand) DeleteCommand(cmdService ChAccCmdServiceInterface) *cobra.Command {
 	chAccService := txSubSvc.ChannelAccountsService{}
 	txSubmitterOpts := di.TxSubmitterEngineOptions{}
-	configOpts := chAccServiceConfigOptions(&txSubmitterOpts)
+	configOpts := cmdUtils.TransactionSubmitterEngineConfigOptions(&txSubmitterOpts)
 
 	deleteChAccOpts := txSubSvc.DeleteChannelAccountsOptions{}
 	configOpts = append(configOpts, []*config.ConfigOption{
@@ -282,17 +282,6 @@ func (c *ChannelAccountsCommand) ViewCommand(cmdService ChAccCmdServiceInterface
 	}
 
 	return listCmd
-}
-
-// chAccServiceConfigOptions returns the config options for the channel accounts service to be used when the signature
-// service is needed.
-func chAccServiceConfigOptions(txSubmitterOpts *di.TxSubmitterEngineOptions) config.ConfigOptions {
-	return append(
-		cmdUtils.BaseSignatureServiceConfigOptions(&txSubmitterOpts.SignatureServiceOptions),
-		cmdUtils.DistributionSeed(&txSubmitterOpts.SignatureServiceOptions.DistributionPrivateKey),
-		cmdUtils.MaxBaseFee(&txSubmitterOpts.MaxBaseFee),
-		cmdUtils.HorizonURLConfigOption(&txSubmitterOpts.HorizonURL),
-	)
 }
 
 // chAccServicePersistentPreRun runs the persistent pre run for the channel accounts service to be used when the
