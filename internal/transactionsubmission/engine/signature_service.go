@@ -69,6 +69,7 @@ type SignatureService interface {
 	SignFeeBumpStellarTransaction(ctx context.Context, feeBumpStellarTx *txnbuild.FeeBumpTransaction, stellarAccounts ...string) (signedFeeBumpStellarTx *txnbuild.FeeBumpTransaction, err error)
 	BatchInsert(ctx context.Context, amount int) (publicKeys []string, err error)
 	Delete(ctx context.Context, publicKey string) error
+	Type() string
 }
 
 type DefaultSignatureServiceOptions struct {
@@ -143,7 +144,11 @@ func NewDefaultSignatureService(opts DefaultSignatureServiceOptions) (*DefaultSi
 	}, nil
 }
 
-var _ SignatureService = &DefaultSignatureService{}
+var _ SignatureService = (*DefaultSignatureService)(nil)
+
+func (ds *DefaultSignatureService) Type() string {
+	return string(SignatureServiceTypeDefault)
+}
 
 func (ds *DefaultSignatureService) NetworkPassphrase() string {
 	return ds.networkPassphrase
