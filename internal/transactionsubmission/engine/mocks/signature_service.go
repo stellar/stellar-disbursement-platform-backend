@@ -5,8 +5,6 @@ package mocks
 import (
 	context "context"
 
-	keypair "github.com/stellar/go/keypair"
-
 	mock "github.com/stretchr/testify/mock"
 
 	txnbuild "github.com/stellar/go/txnbuild"
@@ -17,27 +15,39 @@ type MockSignatureService struct {
 	mock.Mock
 }
 
-// BatchInsert provides a mock function with given fields: ctx, kps, shouldEncryptSeed, currLedgerNumber
-func (_m *MockSignatureService) BatchInsert(ctx context.Context, kps []*keypair.Full, shouldEncryptSeed bool, currLedgerNumber int) error {
-	ret := _m.Called(ctx, kps, shouldEncryptSeed, currLedgerNumber)
+// BatchInsert provides a mock function with given fields: ctx, amount
+func (_m *MockSignatureService) BatchInsert(ctx context.Context, amount int) ([]string, error) {
+	ret := _m.Called(ctx, amount)
 
-	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, []*keypair.Full, bool, int) error); ok {
-		r0 = rf(ctx, kps, shouldEncryptSeed, currLedgerNumber)
+	var r0 []string
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, int) ([]string, error)); ok {
+		return rf(ctx, amount)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, int) []string); ok {
+		r0 = rf(ctx, amount)
 	} else {
-		r0 = ret.Error(0)
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]string)
+		}
 	}
 
-	return r0
+	if rf, ok := ret.Get(1).(func(context.Context, int) error); ok {
+		r1 = rf(ctx, amount)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
 }
 
-// Delete provides a mock function with given fields: ctx, publicKey, currLedgerNumber
-func (_m *MockSignatureService) Delete(ctx context.Context, publicKey string, currLedgerNumber int) error {
-	ret := _m.Called(ctx, publicKey, currLedgerNumber)
+// Delete provides a mock function with given fields: ctx, publicKey
+func (_m *MockSignatureService) Delete(ctx context.Context, publicKey string) error {
+	ret := _m.Called(ctx, publicKey)
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, string, int) error); ok {
-		r0 = rf(ctx, publicKey, currLedgerNumber)
+	if rf, ok := ret.Get(0).(func(context.Context, string) error); ok {
+		r0 = rf(ctx, publicKey)
 	} else {
 		r0 = ret.Error(0)
 	}

@@ -202,6 +202,14 @@ func Test_ChannelAccounts_CreateAccount_Success(t *testing.T) {
 
 	rootAccount := keypair.MustParseFull("SBMW2WDSVTGT2N2PCBF3PV7WBOIKVTGGIEBUUYMDX3CKTDD5HY3UIHV4")
 	currLedgerNumber := 100
+	ledgerBounds := &txnbuild.LedgerBounds{
+		MaxLedger: uint32(currLedgerNumber + engine.IncrementForMaxLedgerBounds),
+	}
+
+	publicKeys := []string{
+		keypair.MustRandom().Address(),
+		keypair.MustRandom().Address(),
+	}
 
 	mHorizonClient.
 		On("AccountDetail", horizonclient.AccountRequest{AccountID: rootAccount.Address()}).
@@ -210,8 +218,8 @@ func Test_ChannelAccounts_CreateAccount_Success(t *testing.T) {
 		Return(horizon.Transaction{}, nil).
 		Once()
 	mLedgerNumberTracker.
-		On("GetLedgerNumber").
-		Return(currLedgerNumber, nil).
+		On("GetLedgerBounds").
+		Return(ledgerBounds, nil).
 		Once()
 	mChannelAccountStore.
 		On("Unlock", ctx, mock.Anything, mock.AnythingOfType("string")).
@@ -221,8 +229,8 @@ func Test_ChannelAccounts_CreateAccount_Success(t *testing.T) {
 		On("DistributionAccount").
 		Return(rootAccount.Address()).
 		Twice().
-		On("BatchInsert", ctx, mock.AnythingOfType("[]*keypair.Full"), true, currLedgerNumber).
-		Return(nil).
+		On("BatchInsert", ctx, 2).
+		Return(publicKeys, nil).
 		Once().
 		On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), mock.AnythingOfType("string"), mock.AnythingOfType("string"), mock.AnythingOfType("string")).
 		Return(&txnbuild.Transaction{}, nil).
@@ -267,10 +275,6 @@ func Test_ChannelAccounts_CreateAccount_CannotFindRootAccount_Failure(t *testing
 	mHorizonClient.
 		On("AccountDetail", horizonclient.AccountRequest{AccountID: rootAccount.Address()}).
 		Return(horizon.Account{}, errors.New("some random error"))
-	mLedgerNumberTracker.
-		On("GetLedgerNumber").
-		Return(currLedgerNumber, nil).
-		Once()
 	mSigService.
 		On("DistributionAccount").
 		Return(rootAccount.Address()).
@@ -310,11 +314,17 @@ func Test_ChannelAccounts_CreateAccount_Insert_Failure(t *testing.T) {
 	}
 
 	rootAccount := keypair.MustParseFull("SBMW2WDSVTGT2N2PCBF3PV7WBOIKVTGGIEBUUYMDX3CKTDD5HY3UIHV4")
+
+	// current ledger number
 	currLedgerNumber := 100
+	ledgerBounds := &txnbuild.LedgerBounds{
+		MaxLedger: uint32(currLedgerNumber + engine.IncrementForMaxLedgerBounds),
+	}
+
+	defer mLedgerNumberTracker.AssertExpectations(t)
 
 	mLedgerNumberTracker.
-		On("GetLedgerNumber").Return(currLedgerNumber, nil).
-		Once()
+		On("GetLedgerBounds").Return(ledgerBounds, nil).Once()
 	mHorizonClient.
 		On("AccountDetail", horizonclient.AccountRequest{AccountID: rootAccount.Address()}).
 		Return(horizon.Account{AccountID: rootAccount.Address()}, nil)
@@ -322,8 +332,8 @@ func Test_ChannelAccounts_CreateAccount_Insert_Failure(t *testing.T) {
 		On("DistributionAccount").
 		Return(rootAccount.Address()).
 		Once().
-		On("BatchInsert", ctx, mock.AnythingOfType("[]*keypair.Full"), true, 100).
-		Return(errors.New("failure inserting account"))
+		On("BatchInsert", ctx, 2).
+		Return(nil, errors.New("failure inserting account"))
 
 	err = cas.CreateChannelAccounts(ctx, 2)
 	require.EqualError(t, err, "creating channel accounts onchain: failed to insert channel accounts into signature service: failure inserting account")
@@ -517,11 +527,15 @@ func Test_ChannelAccounts_DeleteAccount_Success(t *testing.T) {
 	}
 
 	rootAccount := keypair.MustParseFull("SBMW2WDSVTGT2N2PCBF3PV7WBOIKVTGGIEBUUYMDX3CKTDD5HY3UIHV4")
+
 	currLedgerNum := 100
+	ledgerBounds := &txnbuild.LedgerBounds{
+		MaxLedger: uint32(currLedgerNum + engine.IncrementForMaxLedgerBounds),
+	}
 
 	mLedgerNumberTracker.
-		On("GetLedgerNumber").
-		Return(currLedgerNum, nil)
+		On("GetLedgerNumber").Return(currLedgerNum, nil).Once().
+		On("GetLedgerBounds").Return(ledgerBounds, nil).Once()
 	mChannelAccountStore.
 		On("GetAndLock", ctx, channelAccount.PublicKey, currLedgerNum, currLedgerNum+engine.IncrementForMaxLedgerBounds).
 		Return(channelAccount, nil).
@@ -543,7 +557,7 @@ func Test_ChannelAccounts_DeleteAccount_Success(t *testing.T) {
 		On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), mock.AnythingOfType("string"), mock.AnythingOfType("string"), mock.AnythingOfType("string")).
 		Return(&txnbuild.Transaction{}, nil).
 		Once().
-		On("Delete", ctx, channelAccount.PublicKey, currLedgerNum+engine.IncrementForMaxLedgerBounds).
+		On("Delete", ctx, channelAccount.PublicKey).
 		Return(nil).
 		Once()
 
@@ -595,16 +609,19 @@ func Test_ChannelAccounts_DeleteAccount_All_Success(t *testing.T) {
 	}
 
 	rootAccount := keypair.MustParseFull("SBMW2WDSVTGT2N2PCBF3PV7WBOIKVTGGIEBUUYMDX3CKTDD5HY3UIHV4")
+
 	currLedgerNum := 1000
+	ledgerBounds := &txnbuild.LedgerBounds{
+		MaxLedger: uint32(currLedgerNum + engine.IncrementForMaxLedgerBounds),
+	}
 
 	mChannelAccountStore.
 		On("Count", ctx).
 		Return(len(channelAccounts), nil).
 		Once()
 	mLedgerNumberTracker.
-		On("GetLedgerNumber").
-		Return(currLedgerNum, nil).
-		Times(len(channelAccounts))
+		On("GetLedgerNumber").Return(currLedgerNum, nil).Times(len(channelAccounts)).
+		On("GetLedgerBounds").Return(ledgerBounds, nil).Times(len(channelAccounts))
 	for _, acc := range channelAccounts {
 		mChannelAccountStore.
 			On("GetAndLockAll", ctx, currLedgerNum, currLedgerNum+engine.IncrementForMaxLedgerBounds, 1).
@@ -627,7 +644,7 @@ func Test_ChannelAccounts_DeleteAccount_All_Success(t *testing.T) {
 			On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), mock.AnythingOfType("string"), mock.AnythingOfType("string"), mock.AnythingOfType("string")).
 			Return(&txnbuild.Transaction{}, nil).
 			Once().
-			On("Delete", ctx, acc.PublicKey, currLedgerNum+engine.IncrementForMaxLedgerBounds).
+			On("Delete", ctx, acc.PublicKey).
 			Return(nil).
 			Once()
 	}
@@ -737,7 +754,7 @@ func Test_ChannelAccounts_DeleteAccount_DeleteFromSigServiceError(t *testing.T) 
 		}).
 		Once()
 	mSigService.
-		On("Delete", ctx, channelAccount.PublicKey, currLedgerNum+engine.IncrementForMaxLedgerBounds).
+		On("Delete", ctx, channelAccount.PublicKey).
 		Return(errors.New("sig service error")).
 		Once()
 
@@ -781,12 +798,15 @@ func Test_ChannelAccounts_DeleteAccount_SubmitTransaction_Failure(t *testing.T) 
 	}
 
 	rootAccount := keypair.MustParseFull("SBMW2WDSVTGT2N2PCBF3PV7WBOIKVTGGIEBUUYMDX3CKTDD5HY3UIHV4")
+
 	currLedgerNum := 1000
+	ledgerBounds := &txnbuild.LedgerBounds{
+		MaxLedger: uint32(currLedgerNum + engine.IncrementForMaxLedgerBounds),
+	}
 
 	mLedgerNumberTracker.
-		On("GetLedgerNumber").
-		Return(currLedgerNum, nil).
-		Once()
+		On("GetLedgerNumber").Return(currLedgerNum, nil).Once().
+		On("GetLedgerBounds").Return(ledgerBounds, nil).Once()
 	mChannelAccountStore.
 		On("GetAndLock", ctx, channelAccount.PublicKey, currLedgerNum, currLedgerNum+engine.IncrementForMaxLedgerBounds).
 		Return(channelAccount, nil).
@@ -894,7 +914,17 @@ func Test_ChannelAccounts_EnsureChannelAccounts_Add_Success(t *testing.T) {
 	desiredCount := 5
 	rootAccount := keypair.MustParseFull("SBMW2WDSVTGT2N2PCBF3PV7WBOIKVTGGIEBUUYMDX3CKTDD5HY3UIHV4")
 	currChannelAccountsCount := 2
+
 	currLedgerNum := 100
+	ledgerBounds := &txnbuild.LedgerBounds{
+		MaxLedger: uint32(currLedgerNum + engine.IncrementForMaxLedgerBounds),
+	}
+
+	publicKeys := []string{
+		keypair.MustRandom().Address(),
+		keypair.MustRandom().Address(),
+		keypair.MustRandom().Address(),
+	}
 
 	mChannelAccountStore.
 		On("Count", ctx).
@@ -904,9 +934,7 @@ func Test_ChannelAccounts_EnsureChannelAccounts_Add_Success(t *testing.T) {
 		Return(nil, nil).
 		Times(desiredCount - currChannelAccountsCount)
 	mLedgerNumberTracker.
-		On("GetLedgerNumber").
-		Return(currLedgerNum, nil).
-		Once()
+		On("GetLedgerBounds").Return(ledgerBounds, nil).Once()
 	mHorizonClient.
 		On("AccountDetail", horizonclient.AccountRequest{AccountID: rootAccount.Address()}).
 		Return(horizon.Account{AccountID: rootAccount.Address()}, nil).
@@ -918,8 +946,8 @@ func Test_ChannelAccounts_EnsureChannelAccounts_Add_Success(t *testing.T) {
 		On("DistributionAccount").
 		Return(rootAccount.Address()).
 		Twice().
-		On("BatchInsert", ctx, mock.AnythingOfType("[]*keypair.Full"), true, currLedgerNum).
-		Return(nil).
+		On("BatchInsert", ctx, desiredCount-currChannelAccountsCount).
+		Return(publicKeys, nil).
 		Once().
 		On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), mock.AnythingOfType("string"), mock.AnythingOfType("string"), mock.AnythingOfType("string"), mock.AnythingOfType("string")).
 		Return(&txnbuild.Transaction{}, nil).
@@ -972,8 +1000,11 @@ func Test_ChannelAccounts_EnsureChannelAccounts_Delete_Success(t *testing.T) {
 		},
 	}
 
-	currLedgerNum := 1000
 	wantEnsureCount := 2
+	currLedgerNum := 1000
+	ledgerBounds := &txnbuild.LedgerBounds{
+		MaxLedger: uint32(currLedgerNum + engine.IncrementForMaxLedgerBounds),
+	}
 
 	mChannelAccountStore.
 		On("Count", ctx).
@@ -982,6 +1013,9 @@ func Test_ChannelAccounts_EnsureChannelAccounts_Delete_Success(t *testing.T) {
 	mLedgerNumberTracker.
 		On("GetLedgerNumber").
 		Return(currLedgerNum, nil).
+		Times(currChannelAccountsCount-wantEnsureCount).
+		On("GetLedgerBounds").
+		Return(ledgerBounds, nil).
 		Times(currChannelAccountsCount - wantEnsureCount)
 	mHorizonClient.
 		On("AccountDetail", horizonclient.AccountRequest{AccountID: rootAccount.Address()}).
@@ -1004,7 +1038,7 @@ func Test_ChannelAccounts_EnsureChannelAccounts_Delete_Success(t *testing.T) {
 			On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), mock.AnythingOfType("string"), mock.AnythingOfType("string")).
 			Return(&txnbuild.Transaction{}, nil).
 			Once().
-			On("Delete", ctx, acc.PublicKey, currLedgerNum+engine.IncrementForMaxLedgerBounds).
+			On("Delete", ctx, acc.PublicKey).
 			Return(nil).
 			Once()
 	}

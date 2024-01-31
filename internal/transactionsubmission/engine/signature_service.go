@@ -67,8 +67,8 @@ type SignatureService interface {
 	NetworkPassphrase() string
 	SignStellarTransaction(ctx context.Context, stellarTx *txnbuild.Transaction, stellarAccounts ...string) (signedStellarTx *txnbuild.Transaction, err error)
 	SignFeeBumpStellarTransaction(ctx context.Context, feeBumpStellarTx *txnbuild.FeeBumpTransaction, stellarAccounts ...string) (signedFeeBumpStellarTx *txnbuild.FeeBumpTransaction, err error)
-	BatchInsert(ctx context.Context, kps []*keypair.Full, shouldEncryptSeed bool, currLedgerNumber int) (err error)
-	Delete(ctx context.Context, publicKey string, currLedgerNumber int) error
+	BatchInsert(ctx context.Context, amount int) (publicKeys []string, err error)
+	Delete(ctx context.Context, publicKey string) error
 }
 
 type DefaultSignatureServiceOptions struct {
@@ -233,38 +233,54 @@ func (ds *DefaultSignatureService) SignFeeBumpStellarTransaction(ctx context.Con
 	return signedFeeBumpStellarTx, nil
 }
 
-func (ds *DefaultSignatureService) BatchInsert(ctx context.Context, kps []*keypair.Full, shouldEncryptSeed bool, currLedgerNumber int) (err error) {
-	if len(kps) == 0 {
-		return fmt.Errorf("no keypairs provided")
+func (ds *DefaultSignatureService) BatchInsert(ctx context.Context, amount int) (publicKeys []string, err error) {
+	if amount < 1 {
+		return nil, fmt.Errorf("the amnount of accounts to insert need to be greater than zero")
 	}
 
+	currentLedgerNumber, err := ds.ledgerNumberTracker.GetLedgerNumber()
+	if err != nil {
+		return nil, fmt.Errorf("getting current ledger number: %w", err)
+	}
+	lockedToLedgerNumber := currentLedgerNumber + IncrementForMaxLedgerBounds
+
 	batchInsertPayload := []*store.ChannelAccount{}
-	for _, kp := range kps {
+	for range make([]interface{}, amount) {
+		kp, innerErr := keypair.Random()
+		if innerErr != nil {
+			return nil, fmt.Errorf("generating random keypair: %w", innerErr)
+		}
+
 		publicKey := kp.Address()
 		privateKey := kp.Seed()
-		if shouldEncryptSeed {
-			privateKey, err = ds.encrypter.Encrypt(privateKey, ds.encryptionPassphrase)
-			if err != nil {
-				return fmt.Errorf("encrypting channel account private key: %w", err)
-			}
+		encryptedPrivateKey, innerErr := ds.encrypter.Encrypt(privateKey, ds.encryptionPassphrase)
+		if innerErr != nil {
+			return nil, fmt.Errorf("encrypting channel account private key: %w", innerErr)
 		}
 
 		batchInsertPayload = append(batchInsertPayload, &store.ChannelAccount{
 			PublicKey:  publicKey,
-			PrivateKey: privateKey,
+			PrivateKey: encryptedPrivateKey,
 		})
+		publicKeys = append(publicKeys, publicKey)
 	}
 
-	err = ds.chAccModel.BatchInsertAndLock(ctx, batchInsertPayload, currLedgerNumber, currLedgerNumber+IncrementForMaxLedgerBounds)
+	err = ds.chAccModel.BatchInsertAndLock(ctx, batchInsertPayload, currentLedgerNumber, lockedToLedgerNumber)
 	if err != nil {
-		return fmt.Errorf("batch inserting channel accounts: %w", err)
+		return nil, fmt.Errorf("batch inserting channel accounts: %w", err)
 	}
 
-	return nil
+	return publicKeys, nil
 }
 
-func (ds *DefaultSignatureService) Delete(ctx context.Context, publicKey string, lockedToLedgerNumber int) error {
-	err := ds.chAccModel.DeleteIfLockedUntil(ctx, publicKey, lockedToLedgerNumber)
+func (ds *DefaultSignatureService) Delete(ctx context.Context, publicKey string) error {
+	currentLedgerNumber, err := ds.ledgerNumberTracker.GetLedgerNumber()
+	if err != nil {
+		return fmt.Errorf("getting current ledger number: %w", err)
+	}
+	lockedToLedgerNumber := currentLedgerNumber + IncrementForMaxLedgerBounds
+
+	err = ds.chAccModel.DeleteIfLockedUntil(ctx, publicKey, lockedToLedgerNumber)
 	if err != nil {
 		return fmt.Errorf("deleting channel account %q from database: %w", publicKey, err)
 	}

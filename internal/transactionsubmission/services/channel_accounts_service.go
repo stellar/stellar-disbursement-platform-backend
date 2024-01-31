@@ -95,18 +95,7 @@ func (s *ChannelAccountsService) CreateChannelAccounts(ctx context.Context, amou
 		}
 		log.Ctx(ctx).Debugf("batch size: %d", batchSize)
 
-		currLedgerNumber, err := s.LedgerNumberTracker.GetLedgerNumber()
-		if err != nil {
-			return fmt.Errorf("cannot get current ledger number: %w", err)
-		}
-		accounts, err := txSub.CreateChannelAccountsOnChain(
-			ctx,
-			s.HorizonClient,
-			batchSize,
-			s.MaxBaseFee,
-			s.SignatureService,
-			currLedgerNumber,
-		)
+		accounts, err := txSub.CreateChannelAccountsOnChain(ctx, s.SubmitterEngine, batchSize)
 		if err != nil {
 			return fmt.Errorf("creating channel accounts onchain: %w", err)
 		}
@@ -149,7 +138,7 @@ func (s *ChannelAccountsService) DeleteChannelAccount(ctx context.Context, opts 
 				"retrieving account %s from database in DeleteChannelAccount: %w", opts.ChannelAccountID, err)
 		}
 
-		err = s.deleteChannelAccount(ctx, lockedUntilLedgerNumber, channelAccount.PublicKey)
+		err = s.deleteChannelAccount(ctx, channelAccount.PublicKey)
 		if err != nil {
 			return fmt.Errorf("deleting account %s in DeleteChannelAccount: %w", channelAccount.PublicKey, err)
 		}
@@ -194,7 +183,7 @@ func (s *ChannelAccountsService) deleteChannelAccounts(ctx context.Context, numA
 		}
 
 		accountToDelete := accounts[0]
-		err = s.deleteChannelAccount(ctx, lockedUntilLedgerNumber, accountToDelete.PublicKey)
+		err = s.deleteChannelAccount(ctx, accountToDelete.PublicKey)
 		if err != nil {
 			return fmt.Errorf("cannot delete account %s: %w", accountToDelete.PublicKey, err)
 		}
@@ -203,27 +192,20 @@ func (s *ChannelAccountsService) deleteChannelAccounts(ctx context.Context, numA
 	return nil
 }
 
-func (s *ChannelAccountsService) deleteChannelAccount(ctx context.Context, lockedUntilLedger int, publicKey string) error {
+func (s *ChannelAccountsService) deleteChannelAccount(ctx context.Context, publicKey string) error {
 	if _, err := s.HorizonClient.AccountDetail(horizonclient.AccountRequest{AccountID: publicKey}); err != nil {
 		if !horizonclient.IsNotFoundError(err) {
 			return fmt.Errorf("failed to reach account %s on the network: %w", publicKey, err)
 		}
 
 		log.Ctx(ctx).Warnf("Account %s does not exist on the network", publicKey)
-		err = s.SignatureService.Delete(ctx, publicKey, lockedUntilLedger)
+		err = s.SignatureService.Delete(ctx, publicKey)
 		if err != nil {
 			return fmt.Errorf("deleting %s from signature service: %w", publicKey, err)
 		}
 	} else {
 		log.Ctx(ctx).Infof("⏳ Deleting Stellar account with address: %s", publicKey)
-		err = txSub.DeleteChannelAccountOnChain(
-			ctx,
-			s.HorizonClient,
-			publicKey,
-			int64(s.MaxBaseFee),
-			s.SignatureService,
-			lockedUntilLedger,
-		)
+		err = txSub.DeleteChannelAccountOnChain(ctx, s.SubmitterEngine, publicKey)
 		if err != nil {
 			return fmt.Errorf("deleting account %s onchain: %w", publicKey, err)
 		}

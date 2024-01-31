@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	"github.com/stellar/go/clients/horizonclient"
-	"github.com/stellar/go/keypair"
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/txnbuild"
 	"golang.org/x/exp/slices"
@@ -35,16 +34,16 @@ const DefaultRevokeSponsorshipReserveAmount = "1.5"
 // CreateChannelAccountsOnChain will create up to 19 accounts per Transaction due to the 20 signatures per tx limit This
 // is also a good opportunity to periodically write the generated accounts to persistent storage if generating large
 // amounts of channel accounts.
-func CreateChannelAccountsOnChain(ctx context.Context, horizonClient horizonclient.ClientInterface, numOfChanAccToCreate int, maxBaseFee int, sigService engine.SignatureService, currLedgerNumber int) (newAccountAddresses []string, err error) {
+func CreateChannelAccountsOnChain(ctx context.Context, submiterEngine engine.SubmitterEngine, numOfChanAccToCreate int) (newAccountAddresses []string, err error) {
 	defer func() {
 		// If we failed to create the accounts, we should delete the accounts that were added to the signature service.
-		if err != nil && sigService != nil {
+		if err != nil {
 			cloneOfNewAccountAddresses := slices.Clone(newAccountAddresses)
 			for _, accountAddress := range cloneOfNewAccountAddresses {
-				if accountAddress == sigService.DistributionAccount() {
+				if accountAddress == submiterEngine.SignatureService.DistributionAccount() {
 					continue
 				}
-				deleteErr := sigService.Delete(ctx, accountAddress, currLedgerNumber+engine.IncrementForMaxLedgerBounds)
+				deleteErr := submiterEngine.SignatureService.Delete(ctx, accountAddress)
 				if deleteErr != nil {
 					log.Ctx(ctx).Errorf("failed to delete channel account %s: %v", accountAddress, deleteErr)
 				}
@@ -61,8 +60,8 @@ func CreateChannelAccountsOnChain(ctx context.Context, horizonClient horizonclie
 		return nil, ErrInvalidNumOfChannelAccountsToCreate
 	}
 
-	rootAccount, err := horizonClient.AccountDetail(horizonclient.AccountRequest{
-		AccountID: sigService.DistributionAccount(),
+	rootAccount, err := submiterEngine.HorizonClient.AccountDetail(horizonclient.AccountRequest{
+		AccountID: submiterEngine.SignatureService.DistributionAccount(),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve root account: %w", err)
@@ -70,42 +69,39 @@ func CreateChannelAccountsOnChain(ctx context.Context, horizonClient horizonclie
 
 	var sponsoredCreateAccountOps []txnbuild.Operation
 
-	kpsToCreate := []*keypair.Full{}
+	ledgerBounds, err := submiterEngine.LedgerNumberTracker.GetLedgerBounds()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get ledger bounds: %w", err)
+	}
+
+	publicKeys, err := submiterEngine.SignatureService.BatchInsert(ctx, numOfChanAccToCreate)
+	if err != nil {
+		return nil, fmt.Errorf("failed to insert channel accounts into signature service: %w", err)
+	}
 
 	// Prepare Stellar operations to create the sponsored channel accounts
-	for i := 0; i < numOfChanAccToCreate; i++ {
+	for _, publicKey := range publicKeys {
 		// generate random keypair for this channel account
-		var channelAccountKP *keypair.Full
-		channelAccountKP, err = keypair.Random()
-		if err != nil {
-			return nil, fmt.Errorf("failed to generate keypair: %w", err)
-		}
-		log.Ctx(ctx).Infof("⏳ Creating sponsored Stellar account with address: %s", channelAccountKP.Address())
+		log.Ctx(ctx).Infof("⏳ Creating sponsored Stellar account with address: %s", publicKey)
 
 		sponsoredCreateAccountOps = append(
 			sponsoredCreateAccountOps,
 
 			// add sponsor operations for this account
 			&txnbuild.BeginSponsoringFutureReserves{
-				SponsoredID: channelAccountKP.Address(),
+				SponsoredID: publicKey,
 			},
 			&txnbuild.CreateAccount{
-				Destination: channelAccountKP.Address(),
+				Destination: publicKey,
 				Amount:      "0",
 			},
 			&txnbuild.EndSponsoringFutureReserves{
-				SourceAccount: channelAccountKP.Address(),
+				SourceAccount: publicKey,
 			},
 		)
 
 		// append this channel account to the list of signers
-		kpsToCreate = append(kpsToCreate, channelAccountKP)
-		newAccountAddresses = append(newAccountAddresses, channelAccountKP.Address())
-	}
-
-	err = sigService.BatchInsert(ctx, kpsToCreate, true, currLedgerNumber)
-	if err != nil {
-		return nil, fmt.Errorf("failed to insert channel accounts into signature service: %w", err)
+		newAccountAddresses = append(newAccountAddresses, publicKey)
 	}
 
 	// create a new transaction with the account creation/sponsorship operations
@@ -113,9 +109,10 @@ func CreateChannelAccountsOnChain(ctx context.Context, horizonClient horizonclie
 		SourceAccount:        &rootAccount,
 		IncrementSequenceNum: true,
 		Operations:           sponsoredCreateAccountOps,
-		BaseFee:              int64(maxBaseFee),
+		BaseFee:              int64(submiterEngine.MaxBaseFee),
 		Preconditions: txnbuild.Preconditions{
-			TimeBounds: txnbuild.NewTimeout(15),
+			TimeBounds:   txnbuild.NewTimeout(15),
+			LedgerBounds: ledgerBounds,
 		},
 	})
 	if err != nil {
@@ -123,13 +120,13 @@ func CreateChannelAccountsOnChain(ctx context.Context, horizonClient horizonclie
 	}
 
 	// sign the transaction
-	signers := append([]string{sigService.DistributionAccount()}, newAccountAddresses...)
-	tx, err = sigService.SignStellarTransaction(ctx, tx, signers...)
+	signers := append([]string{submiterEngine.SignatureService.DistributionAccount()}, newAccountAddresses...)
+	tx, err = submiterEngine.SignatureService.SignStellarTransaction(ctx, tx, signers...)
 	if err != nil {
 		return newAccountAddresses, fmt.Errorf("signing transaction: %w", err)
 	}
 
-	_, err = horizonClient.SubmitTransactionWithOptions(tx, horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true})
+	_, err = submiterEngine.HorizonClient.SubmitTransactionWithOptions(tx, horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true})
 	if err != nil {
 		hError := utils.NewHorizonErrorWrapper(err)
 		return newAccountAddresses, fmt.Errorf("creating sponsored channel accounts: %w", hError)
@@ -140,20 +137,19 @@ func CreateChannelAccountsOnChain(ctx context.Context, horizonClient horizonclie
 }
 
 // DeleteChannelAccountOnChain creates, signs, and broadcasts a transaction to delete a channel account onchain.
-func DeleteChannelAccountOnChain(
-	ctx context.Context,
-	horizonClient horizonclient.ClientInterface,
-	chAccAddress string,
-	maxBaseFee int64,
-	sigService engine.SignatureService,
-	lockedUntilLedgerNumber int,
-) error {
-	distributionAccount := sigService.DistributionAccount()
-	rootAccount, err := horizonClient.AccountDetail(horizonclient.AccountRequest{
+// TODO: apply engine here
+func DeleteChannelAccountOnChain(ctx context.Context, submiterEngine engine.SubmitterEngine, chAccAddress string) error {
+	distributionAccount := submiterEngine.SignatureService.DistributionAccount()
+	rootAccount, err := submiterEngine.HorizonClient.AccountDetail(horizonclient.AccountRequest{
 		AccountID: distributionAccount,
 	})
 	if err != nil {
 		return fmt.Errorf("retrieving root account from distribution seed: %w", err)
+	}
+
+	ledgerBounds, err := submiterEngine.LedgerNumberTracker.GetLedgerBounds()
+	if err != nil {
+		return fmt.Errorf("failed to get ledger bounds: %w", err)
 	}
 
 	// TODO: Currently, this transaction deletes a single sponsored account onchain, we may want to
@@ -178,9 +174,10 @@ func DeleteChannelAccountOnChain(
 				SourceAccount: chAccAddress,
 			},
 		},
-		BaseFee: maxBaseFee,
+		BaseFee: int64(submiterEngine.MaxBaseFee),
 		Preconditions: txnbuild.Preconditions{
-			TimeBounds: txnbuild.NewTimeout(15),
+			LedgerBounds: ledgerBounds,
+			TimeBounds:   txnbuild.NewTimeout(15),
 		},
 	})
 	if err != nil {
@@ -193,18 +190,18 @@ func DeleteChannelAccountOnChain(
 
 	// the root account authorizes the sponsorship revocation, while the channel account authorizes
 	// merging into the distribution account
-	tx, err = sigService.SignStellarTransaction(ctx, tx, sigService.DistributionAccount(), chAccAddress)
+	tx, err = submiterEngine.SignatureService.SignStellarTransaction(ctx, tx, submiterEngine.DistributionAccount(), chAccAddress)
 	if err != nil {
 		return fmt.Errorf("signing remove account transaction for account %s: %w", chAccAddress, err)
 	}
 
-	_, err = horizonClient.SubmitTransactionWithOptions(tx, horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true})
+	_, err = submiterEngine.HorizonClient.SubmitTransactionWithOptions(tx, horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true})
 	if err != nil {
 		hError := utils.NewHorizonErrorWrapper(err)
 		return fmt.Errorf("submitting remove account transaction to the network for account %s: %w", chAccAddress, hError)
 	}
 
-	err = sigService.Delete(ctx, chAccAddress, lockedUntilLedgerNumber)
+	err = submiterEngine.SignatureService.Delete(ctx, chAccAddress)
 	if err != nil {
 		return fmt.Errorf("deleting channel account %s from the store: %w", chAccAddress, err)
 	}
