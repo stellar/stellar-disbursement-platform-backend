@@ -1205,3 +1205,221 @@ func Test_PaymentModelCancelPayment(t *testing.T) {
 		assert.Equal(t, CanceledPaymentStatus, payment2DB.Status)
 	})
 }
+
+func Test_PaymentModel_GetReadyByDisbursementID(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+
+	models, err := NewModels(dbConnectionPool)
+	require.NoError(t, err)
+
+	country := CreateCountryFixture(t, ctx, dbConnectionPool, "BRA", "Brazil")
+	wallet := CreateWalletFixture(t, ctx, dbConnectionPool, "Wallet", "https://www.wallet.com", "www.wallet.com", "wallet://")
+	asset := CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
+
+	receiver1 := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
+	rw1 := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver1.ID, wallet.ID, RegisteredReceiversWalletStatus)
+
+	receiver2 := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
+	rw2 := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver2.ID, wallet.ID, ReadyReceiversWalletStatus)
+
+	disbursement := CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &Disbursement{
+		Country:           country,
+		Wallet:            wallet,
+		Asset:             asset,
+		Status:            StartedDisbursementStatus,
+		VerificationField: VerificationFieldDateOfBirth,
+	})
+
+	t.Run("returns empty array when there's no payment ready", func(t *testing.T) {
+		payments, err := models.Payment.GetReadyByDisbursementID(ctx, dbConnectionPool, disbursement.ID)
+		require.NoError(t, err)
+		assert.Empty(t, payments)
+	})
+
+	t.Run("return only payments ready to be paid from a REGISTERED wallet", func(t *testing.T) {
+		payment1 := CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
+			Amount:         "2",
+			Disbursement:   disbursement,
+			Asset:          *asset,
+			ReceiverWallet: rw1, // REGISTERED status, will be returned in the query
+			Status:         ReadyPaymentStatus,
+		})
+
+		_ = CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
+			Amount:         "2",
+			Disbursement:   disbursement,
+			Asset:          *asset,
+			ReceiverWallet: rw2, // READY status, will NOT be returned in the query
+			Status:         ReadyPaymentStatus,
+		})
+
+		payments, err := models.Payment.GetReadyByDisbursementID(ctx, dbConnectionPool, disbursement.ID)
+		require.NoError(t, err)
+		require.Len(t, payments, 1)
+
+		assert.Equal(t, payment1.ID, payments[0].ID)
+		assert.Equal(t, payment1.Amount, payments[0].Amount)
+		assert.Equal(t, payment1.Status, payments[0].Status)
+		assert.Equal(t, payment1.Disbursement.ID, payments[0].Disbursement.ID)
+		assert.Equal(t, payment1.ReceiverWallet.ID, payments[0].ReceiverWallet.ID)
+	})
+}
+
+func Test_PaymentModel_GetReadyByPaymentsID(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+
+	models, err := NewModels(dbConnectionPool)
+	require.NoError(t, err)
+
+	country := CreateCountryFixture(t, ctx, dbConnectionPool, "BRA", "Brazil")
+	wallet := CreateWalletFixture(t, ctx, dbConnectionPool, "Wallet", "https://www.wallet.com", "www.wallet.com", "wallet://")
+	asset := CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
+
+	receiver1 := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
+	rw1 := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver1.ID, wallet.ID, RegisteredReceiversWalletStatus)
+
+	receiver2 := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
+	rw2 := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver2.ID, wallet.ID, ReadyReceiversWalletStatus)
+
+	disbursement := CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &Disbursement{
+		Country:           country,
+		Wallet:            wallet,
+		Asset:             asset,
+		Status:            StartedDisbursementStatus,
+		VerificationField: VerificationFieldDateOfBirth,
+	})
+
+	t.Run("returns empty array when there's no payment ready", func(t *testing.T) {
+		payment := CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
+			Amount:         "2",
+			Disbursement:   disbursement,
+			Asset:          *asset,
+			ReceiverWallet: rw1,
+			Status:         DraftPaymentStatus,
+		})
+
+		payments, err := models.Payment.GetReadyByID(ctx, dbConnectionPool, payment.ID)
+		require.NoError(t, err)
+		assert.Empty(t, payments)
+	})
+
+	t.Run("return only payments ready to be paid from a REGISTERED wallet", func(t *testing.T) {
+		payment1 := CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
+			Amount:         "2",
+			Disbursement:   disbursement,
+			Asset:          *asset,
+			ReceiverWallet: rw1, // REGISTERED status, will be returned in the query
+			Status:         ReadyPaymentStatus,
+		})
+
+		payment2 := CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
+			Amount:         "2",
+			Disbursement:   disbursement,
+			Asset:          *asset,
+			ReceiverWallet: rw2, // READY status, will NOT be returned in the query
+			Status:         ReadyPaymentStatus,
+		})
+
+		payments, err := models.Payment.GetReadyByID(ctx, dbConnectionPool, payment1.ID, payment2.ID)
+		require.NoError(t, err)
+		require.Len(t, payments, 1)
+
+		assert.Equal(t, payment1.ID, payments[0].ID)
+		assert.Equal(t, payment1.Amount, payments[0].Amount)
+		assert.Equal(t, payment1.Status, payments[0].Status)
+		assert.Equal(t, payment1.Disbursement.ID, payments[0].Disbursement.ID)
+		assert.Equal(t, payment1.ReceiverWallet.ID, payments[0].ReceiverWallet.ID)
+	})
+}
+
+func Test_PaymentModel_GetReadyByReceiverWalletID(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+
+	models, err := NewModels(dbConnectionPool)
+	require.NoError(t, err)
+
+	country := CreateCountryFixture(t, ctx, dbConnectionPool, "BRA", "Brazil")
+	wallet := CreateWalletFixture(t, ctx, dbConnectionPool, "Wallet", "https://www.wallet.com", "www.wallet.com", "wallet://")
+	asset := CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
+
+	receiver1 := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
+	rw1 := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver1.ID, wallet.ID, RegisteredReceiversWalletStatus)
+
+	receiver2 := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
+	rw2 := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver2.ID, wallet.ID, ReadyReceiversWalletStatus)
+
+	disbursement := CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &Disbursement{
+		Country:           country,
+		Wallet:            wallet,
+		Asset:             asset,
+		Status:            StartedDisbursementStatus,
+		VerificationField: VerificationFieldDateOfBirth,
+	})
+
+	t.Run("returns empty array when there's no payment ready", func(t *testing.T) {
+		_ = CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
+			Amount:         "2",
+			Disbursement:   disbursement,
+			Asset:          *asset,
+			ReceiverWallet: rw1,
+			Status:         DraftPaymentStatus,
+		})
+
+		payments, err := models.Payment.GetReadyByReceiverWalletID(ctx, dbConnectionPool, rw1.ID)
+		require.NoError(t, err)
+		assert.Empty(t, payments)
+	})
+
+	t.Run("return only payments ready to be paid from a REGISTERED wallet", func(t *testing.T) {
+		payment1 := CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
+			Amount:         "2",
+			Disbursement:   disbursement,
+			Asset:          *asset,
+			ReceiverWallet: rw1, // REGISTERED status, will be returned in the query
+			Status:         ReadyPaymentStatus,
+		})
+
+		_ = CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
+			Amount:         "2",
+			Disbursement:   disbursement,
+			Asset:          *asset,
+			ReceiverWallet: rw2, // READY status, will NOT be returned in the query
+			Status:         ReadyPaymentStatus,
+		})
+
+		payments, err := models.Payment.GetReadyByReceiverWalletID(ctx, dbConnectionPool, rw1.ID)
+		require.NoError(t, err)
+		require.Len(t, payments, 1)
+
+		assert.Equal(t, payment1.ID, payments[0].ID)
+		assert.Equal(t, payment1.Amount, payments[0].Amount)
+		assert.Equal(t, payment1.Status, payments[0].Status)
+		assert.Equal(t, payment1.Disbursement.ID, payments[0].Disbursement.ID)
+		assert.Equal(t, payment1.ReceiverWallet.ID, payments[0].ReceiverWallet.ID)
+
+		payments, err = models.Payment.GetReadyByReceiverWalletID(ctx, dbConnectionPool, rw2.ID)
+		require.NoError(t, err)
+		assert.Empty(t, payments)
+	})
+}

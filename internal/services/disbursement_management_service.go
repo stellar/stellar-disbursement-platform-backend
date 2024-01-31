@@ -6,8 +6,11 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/stellar/go/support/log"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 )
@@ -16,6 +19,7 @@ import (
 type DisbursementManagementService struct {
 	models           *data.Models
 	dbConnectionPool db.DBConnectionPool
+	eventProducer    events.Producer
 }
 
 var (
@@ -29,10 +33,11 @@ var (
 )
 
 // NewDisbursementManagementService is a factory function for creating a new DisbursementManagementService.
-func NewDisbursementManagementService(models *data.Models, dbConnectionPool db.DBConnectionPool) *DisbursementManagementService {
+func NewDisbursementManagementService(models *data.Models, dbConnectionPool db.DBConnectionPool, eventProducer events.Producer) *DisbursementManagementService {
 	return &DisbursementManagementService{
 		models:           models,
 		dbConnectionPool: dbConnectionPool,
+		eventProducer:    eventProducer,
 	}
 }
 
@@ -142,6 +147,37 @@ func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, d
 		err = s.models.Disbursements.UpdateStatus(ctx, dbTx, user.ID, disbursementID, data.StartedDisbursementStatus)
 		if err != nil {
 			return fmt.Errorf("error updating disbursement status to started for disbursement with id %s: %w", disbursementID, err)
+		}
+
+		// 7. Produce event to send payments to TSS
+		payments, err := s.models.Payment.GetReadyByDisbursementID(ctx, dbTx, disbursementID)
+		if err != nil {
+			return fmt.Errorf("getting ready payments for disbursement with id %s: %w", disbursementID, err)
+		}
+
+		if len(payments) == 0 {
+			log.Ctx(ctx).Infof("no payments ready to pay for disbursement ID %s", disbursementID)
+			return nil
+		}
+
+		msg, err := events.NewMessage(ctx, events.PaymentReadyToPayTopic, disbursementID, events.PaymentReadyToPayDisbursementStarted, nil)
+		if err != nil {
+			return fmt.Errorf("creating new message: %w", err)
+		}
+
+		paymentsReadyToPay := schemas.EventPaymentsReadyToPayData{TenantID: msg.TenantID}
+		for _, payment := range payments {
+			paymentsReadyToPay.Payments = append(paymentsReadyToPay.Payments, schemas.PaymentReadyToPay{ID: payment.ID})
+		}
+		msg.Data = paymentsReadyToPay
+
+		if s.eventProducer != nil {
+			err := s.eventProducer.WriteMessages(ctx, *msg)
+			if err != nil {
+				return fmt.Errorf("writing message %s on event producer: %w", msg, err)
+			}
+		} else {
+			log.Ctx(ctx).Errorf("event producer is nil, could not publish message %s", msg.String())
 		}
 
 		return nil

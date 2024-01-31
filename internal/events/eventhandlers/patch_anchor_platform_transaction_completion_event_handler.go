@@ -67,20 +67,20 @@ func (h *PatchAnchorPlatformTransactionCompletionEventHandler) CanHandleMessage(
 func (h *PatchAnchorPlatformTransactionCompletionEventHandler) Handle(ctx context.Context, message *events.Message) {
 	payment, err := utils.ConvertType[any, schemas.EventPaymentCompletedData](message.Data)
 	if err != nil {
-		h.crashTrackerClient.LogAndReportErrors(ctx, err, fmt.Sprintf("[PatchAnchorPlatformTransactionCompletionEventHandler] could not convert data to %T: %v", schemas.EventPaymentCompletedData{}, message.Data))
+		h.crashTrackerClient.LogAndReportErrors(ctx, err, fmt.Sprintf("[%s] could not convert data to %T: %v", h.Name(), schemas.EventPaymentCompletedData{}, message.Data))
 		return
 	}
 
 	tnt, err := h.tenantManager.GetTenantByID(ctx, message.TenantID)
 	if err != nil {
-		h.crashTrackerClient.LogAndReportErrors(ctx, err, "[PatchAnchorPlatformTransactionCompletionEventHandler] error getting tenant by id")
+		h.crashTrackerClient.LogAndReportErrors(ctx, err, fmt.Sprintf("[%s] error getting tenant by id", h.Name()))
 		return
 	}
 
 	ctx = tenant.SaveTenantInContext(ctx, tnt)
 
 	if err := h.service.PatchTransactionCompletion(ctx, payment); err != nil {
-		h.crashTrackerClient.LogAndReportErrors(ctx, err, "[PatchAnchorPlatformTransactionCompletionEventHandler] patching anchor platform transaction")
+		h.crashTrackerClient.LogAndReportErrors(ctx, err, fmt.Sprintf("[%s] patching anchor platform transaction", h.Name()))
 		return
 	}
 }

@@ -11,22 +11,11 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
+	servicesMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/services/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
-
-type PatchAnchorPlatformTransactionCompletionServiceMock struct {
-	mock.Mock
-}
-
-var _ services.PatchAnchorPlatformTransactionCompletionServiceInterface = new(PatchAnchorPlatformTransactionCompletionServiceMock)
-
-func (s *PatchAnchorPlatformTransactionCompletionServiceMock) PatchTransactionCompletion(ctx context.Context, tx schemas.EventPaymentCompletedData) error {
-	args := s.Called(ctx, tx)
-	return args.Error(0)
-}
 
 func Test_PatchAnchorPlatformTransactionCompletionEventHandler(t *testing.T) {
 	dbt := dbtest.Open(t)
@@ -38,7 +27,7 @@ func Test_PatchAnchorPlatformTransactionCompletionEventHandler(t *testing.T) {
 
 	tenantManager := tenant.NewManager(tenant.WithDatabase(dbConnectionPool))
 	crashTrackerClient := crashtracker.MockCrashTrackerClient{}
-	service := PatchAnchorPlatformTransactionCompletionServiceMock{}
+	service := servicesMocks.MockPatchAnchorPlatformTransactionCompletionService{}
 
 	handler := PatchAnchorPlatformTransactionCompletionEventHandler{
 		tenantManager:      tenantManager,

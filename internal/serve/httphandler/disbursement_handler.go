@@ -14,7 +14,6 @@ import (
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/support/render/httpjson"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
@@ -27,11 +26,11 @@ import (
 )
 
 type DisbursementHandler struct {
-	Models           *data.Models
-	MonitorService   monitor.MonitorServiceInterface
-	DBConnectionPool db.DBConnectionPool
-	AuthManager      auth.AuthManager
-	EventProducer    events.Producer
+	Models                        *data.Models
+	MonitorService                monitor.MonitorServiceInterface
+	AuthManager                   auth.AuthManager
+	DisbursementManagementService *services.DisbursementManagementService
+	EventProducer                 events.Producer
 }
 
 type PostDisbursementRequest struct {
@@ -124,7 +123,7 @@ func (d DisbursementHandler) PostDisbursement(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	newDisbursement, err := d.Models.Disbursements.Get(ctx, d.DBConnectionPool, newId)
+	newDisbursement, err := d.Models.Disbursements.Get(ctx, d.Models.DBConnectionPool, newId)
 	if err != nil {
 		msg := fmt.Sprintf("Cannot retrieve disbursement for ID: %s", newId)
 		httperror.InternalError(ctx, msg, err, nil).Render(w)
@@ -162,8 +161,7 @@ func (d DisbursementHandler) GetDisbursements(w http.ResponseWriter, r *http.Req
 	}
 
 	ctx := r.Context()
-	disbursementManagementService := services.NewDisbursementManagementService(d.Models, d.DBConnectionPool)
-	resultWithTotal, err := disbursementManagementService.GetDisbursementsWithCount(ctx, queryParams)
+	resultWithTotal, err := d.DisbursementManagementService.GetDisbursementsWithCount(ctx, queryParams)
 	if err != nil {
 		httperror.InternalError(ctx, "Cannot retrieve disbursements", err, nil).Render(w)
 		return
@@ -185,7 +183,7 @@ func (d DisbursementHandler) PostDisbursementInstructions(w http.ResponseWriter,
 
 	// check if disbursement exists
 	ctx := r.Context()
-	disbursement, err := d.Models.Disbursements.Get(ctx, d.DBConnectionPool, disbursementID)
+	disbursement, err := d.Models.Disbursements.Get(ctx, d.Models.DBConnectionPool, disbursementID)
 	if err != nil {
 		httperror.BadRequest("disbursement ID is invalid", err, nil).Render(w)
 		return
@@ -284,8 +282,7 @@ func (d DisbursementHandler) GetDisbursementReceivers(w http.ResponseWriter, r *
 		return
 	}
 
-	disbursementManagementService := services.NewDisbursementManagementService(d.Models, d.DBConnectionPool)
-	resultWithTotal, err := disbursementManagementService.GetDisbursementReceiversWithCount(ctx, disbursementID, queryParams)
+	resultWithTotal, err := d.DisbursementManagementService.GetDisbursementReceiversWithCount(ctx, disbursementID, queryParams)
 	if err != nil {
 		if errors.Is(err, services.ErrDisbursementNotFound) {
 			httperror.NotFound("disbursement not found", err, nil).Render(w)
@@ -331,7 +328,6 @@ func (d DisbursementHandler) PatchDisbursementStatus(w http.ResponseWriter, r *h
 		return
 	}
 
-	disbursementManagementService := services.NewDisbursementManagementService(d.Models, d.DBConnectionPool)
 	response := UpdateDisbursementStatusResponseBody{}
 
 	ctx := r.Context()
@@ -348,10 +344,10 @@ func (d DisbursementHandler) PatchDisbursementStatus(w http.ResponseWriter, r *h
 
 	switch toStatus {
 	case data.StartedDisbursementStatus:
-		err = disbursementManagementService.StartDisbursement(ctx, disbursementID, user)
+		err = d.DisbursementManagementService.StartDisbursement(ctx, disbursementID, user)
 		response.Message = "Disbursement started"
 	case data.PausedDisbursementStatus:
-		err = disbursementManagementService.PauseDisbursement(ctx, disbursementID, user)
+		err = d.DisbursementManagementService.PauseDisbursement(ctx, disbursementID, user)
 		response.Message = "Disbursement paused"
 	default:
 		err = services.ErrDisbursementStatusCantBeChanged
@@ -385,7 +381,7 @@ func (d DisbursementHandler) GetDisbursementInstructions(w http.ResponseWriter, 
 	ctx := r.Context()
 	disbursementID := chi.URLParam(r, "id")
 
-	disbursement, err := d.Models.Disbursements.Get(ctx, d.DBConnectionPool, disbursementID)
+	disbursement, err := d.Models.Disbursements.Get(ctx, d.Models.DBConnectionPool, disbursementID)
 	if err != nil {
 		httperror.NotFound("disbursement not found", err, nil).Render(w)
 		return

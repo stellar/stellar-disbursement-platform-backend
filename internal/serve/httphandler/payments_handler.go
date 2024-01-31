@@ -8,10 +8,13 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/stellar/go/support/http/httpdecode"
+	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/support/render/httpjson"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpresponse"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
@@ -24,6 +27,7 @@ type PaymentsHandler struct {
 	Models           *data.Models
 	DBConnectionPool db.DBConnectionPool
 	AuthManager      auth.AuthManager
+	EventProducer    events.Producer
 }
 
 type RetryPaymentsRequest struct {
@@ -130,6 +134,38 @@ func (p PaymentsHandler) RetryPayments(rw http.ResponseWriter, req *http.Request
 
 		httperror.InternalError(ctx, "", err, nil).Render(rw)
 		return
+	}
+
+	// Producing event to send ready payments to TSS
+	payments, err := p.Models.Payment.GetReadyByID(ctx, p.DBConnectionPool, reqBody.PaymentIDs...)
+	if err != nil {
+		httperror.InternalError(ctx, "", err, nil).Render(rw)
+		return
+	}
+
+	if len(payments) > 0 {
+		msg, err := events.NewMessage(ctx, events.PaymentReadyToPayTopic, "", events.PaymentReadyToPayRetryFailedPayment, nil)
+		if err != nil {
+			httperror.InternalError(ctx, "", err, nil).Render(rw)
+			return
+		}
+
+		paymentsReadyToPay := schemas.EventPaymentsReadyToPayData{TenantID: msg.TenantID}
+		for _, payment := range payments {
+			paymentsReadyToPay.Payments = append(paymentsReadyToPay.Payments, schemas.PaymentReadyToPay{ID: payment.ID})
+		}
+		msg.Data = paymentsReadyToPay
+
+		if p.EventProducer != nil {
+			err = p.EventProducer.WriteMessages(ctx, *msg)
+			if err != nil {
+				err = fmt.Errorf("writing message %s on event producer: %w", msg, err)
+				httperror.InternalError(ctx, "", err, nil).Render(rw)
+				return
+			}
+		} else {
+			log.Ctx(ctx).Errorf("event producer is nil, could not publish message %s", msg.String())
+		}
 	}
 
 	httpjson.RenderStatus(rw, http.StatusOK, map[string]string{"message": "Payments retried successfully"}, httpjson.JSON)

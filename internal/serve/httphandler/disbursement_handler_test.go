@@ -68,10 +68,9 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 	mMonitorService := &monitor.MockMonitorService{}
 
 	handler := &DisbursementHandler{
-		Models:           models,
-		MonitorService:   mMonitorService,
-		DBConnectionPool: models.DBConnectionPool,
-		AuthManager:      authManagerMock,
+		Models:         models,
+		MonitorService: mMonitorService,
+		AuthManager:    authManagerMock,
 	}
 
 	// setup fixtures
@@ -286,8 +285,8 @@ func Test_DisbursementHandler_GetDisbursements_Errors(t *testing.T) {
 	require.NoError(t, err)
 
 	handler := &DisbursementHandler{
-		Models:           models,
-		DBConnectionPool: dbConnectionPool,
+		Models:                        models,
+		DisbursementManagementService: services.NewDisbursementManagementService(models, dbConnectionPool, nil),
 	}
 
 	ts := httptest.NewServer(http.HandlerFunc(handler.GetDisbursements))
@@ -392,8 +391,8 @@ func Test_DisbursementHandler_GetDisbursements_Success(t *testing.T) {
 	require.NoError(t, err)
 
 	handler := &DisbursementHandler{
-		Models:           models,
-		DBConnectionPool: dbConnectionPool,
+		Models:                        models,
+		DisbursementManagementService: services.NewDisbursementManagementService(models, dbConnectionPool, nil),
 	}
 
 	ts := httptest.NewServer(http.HandlerFunc(handler.GetDisbursements))
@@ -648,11 +647,10 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 		})
 
 	handler := &DisbursementHandler{
-		Models:           models,
-		MonitorService:   mMonitorService,
-		DBConnectionPool: models.DBConnectionPool,
-		AuthManager:      authManagerMock,
-		EventProducer:    &eventProducerMock,
+		Models:         models,
+		MonitorService: mMonitorService,
+		AuthManager:    authManagerMock,
+		EventProducer:  &eventProducerMock,
 	}
 
 	// create fixtures
@@ -831,8 +829,7 @@ func Test_DisbursementHandler_GetDisbursement(t *testing.T) {
 	require.NoError(t, err)
 
 	handler := &DisbursementHandler{
-		Models:           models,
-		DBConnectionPool: models.DBConnectionPool,
+		Models: models,
 	}
 
 	r := chi.NewRouter()
@@ -898,8 +895,8 @@ func Test_DisbursementHandler_GetDisbursementReceivers(t *testing.T) {
 	require.NoError(t, err)
 
 	handler := &DisbursementHandler{
-		Models:           models,
-		DBConnectionPool: models.DBConnectionPool,
+		Models:                        models,
+		DisbursementManagementService: services.NewDisbursementManagementService(models, dbConnectionPool, nil),
 	}
 
 	r := chi.NewRouter()
@@ -1075,11 +1072,12 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 	}
 	require.NotNil(t, user)
 	authManagerMock := &auth.AuthManagerMock{}
+	mockEventProducer := events.MockProducer{}
 
 	handler := &DisbursementHandler{
-		Models:           models,
-		DBConnectionPool: models.DBConnectionPool,
-		AuthManager:      authManagerMock,
+		Models:                        models,
+		AuthManager:                   authManagerMock,
+		DisbursementManagementService: services.NewDisbursementManagementService(models, dbConnectionPool, &mockEventProducer),
 	}
 
 	r := chi.NewRouter()
@@ -1311,6 +1309,7 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 	})
 
 	authManagerMock.AssertExpectations(t)
+	mockEventProducer.AssertExpectations(t)
 }
 
 func Test_DisbursementHandler_GetDisbursementInstructions(t *testing.T) {
@@ -1327,8 +1326,7 @@ func Test_DisbursementHandler_GetDisbursementInstructions(t *testing.T) {
 	require.NoError(t, outerErr)
 
 	handler := &DisbursementHandler{
-		Models:           models,
-		DBConnectionPool: models.DBConnectionPool,
+		Models: models,
 	}
 
 	r := chi.NewRouter()

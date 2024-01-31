@@ -14,3 +14,12 @@ type EventPaymentCompletedData struct {
 	PaymentCompletedAt   time.Time `json:"completed_at"`
 	StellarTransactionID string    `json:"stellar_transaction_id"`
 }
+
+type PaymentReadyToPay struct {
+	ID string `json:"id"`
+}
+
+type EventPaymentsReadyToPayData struct {
+	TenantID string              `json:"tenant_id"`
+	Payments []PaymentReadyToPay `json:"payments"`
+}

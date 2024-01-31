@@ -10,12 +10,13 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	txSubStore "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
 type PaymentToSubmitterServiceInterface interface {
-	SendBatchPayments(ctx context.Context, batchSize int) error
+	SendPaymentsReadyToPay(ctx context.Context, paymentsReadyToPay schemas.EventPaymentsReadyToPayData) error
 }
 
 // Making sure that ServerService implements ServerServiceInterface:
@@ -27,17 +28,17 @@ type PaymentToSubmitterService struct {
 	tssModel  *txSubStore.TransactionModel
 }
 
-func NewPaymentToSubmitterService(models *data.Models) *PaymentToSubmitterService {
+func NewPaymentToSubmitterService(models *data.Models, tssDBConnectionPool db.DBConnectionPool) *PaymentToSubmitterService {
 	return &PaymentToSubmitterService{
 		sdpModels: models,
-		tssModel:  txSubStore.NewTransactionModel(models.DBConnectionPool),
+		tssModel:  txSubStore.NewTransactionModel(tssDBConnectionPool),
 	}
 }
 
-// SendBatchPayments sends SDP's ready-to-pay payments (in batches) to the transaction submission service.
-func (s PaymentToSubmitterService) SendBatchPayments(ctx context.Context, batchSize int) error {
+// SendPaymentsReadyToPay sends SDP's ready-to-pay payments (in batches) to the transaction submission service.
+func (s PaymentToSubmitterService) SendPaymentsReadyToPay(ctx context.Context, paymentsReadyToPay schemas.EventPaymentsReadyToPayData) error {
 	err := db.RunInTransaction(ctx, s.sdpModels.DBConnectionPool, nil, func(dbTx db.DBTransaction) error {
-		return s.sendBatchPayments(ctx, dbTx, batchSize)
+		return s.sendPaymentsReadyToPay(ctx, dbTx, paymentsReadyToPay)
 	})
 	if err != nil {
 		return fmt.Errorf("sending payments: %w", err)
@@ -46,15 +47,21 @@ func (s PaymentToSubmitterService) SendBatchPayments(ctx context.Context, batchS
 	return nil
 }
 
-// sendBatchPayments sends SDP's ready-to-pay payments (in batches) to the transaction submission service, inside a DB
+// sendPaymentsReadyToPay sends SDP's ready-to-pay payments to the transaction submission service, inside a DB
 // transaction.
-func (s PaymentToSubmitterService) sendBatchPayments(ctx context.Context, dbTx db.DBTransaction, batchSize int) error {
+func (s PaymentToSubmitterService) sendPaymentsReadyToPay(ctx context.Context, dbTx db.DBTransaction, paymentsReadyToPay schemas.EventPaymentsReadyToPayData) error {
 	// 1. Get payments that are ready to be sent. This will lock the rows.
 	// Payments Ready to be sent means:
 	//    a. Payment is in `READY` status
 	//    b. Receiver Wallet is in `REGISTERED` status
 	//    c. Disbursement is in `STARTED` status
-	payments, err := s.sdpModels.Payment.GetBatchForUpdate(ctx, dbTx, batchSize)
+	paymentIDs := make([]string, 0, len(paymentsReadyToPay.Payments))
+	for _, paymentReadyToPay := range paymentsReadyToPay.Payments {
+		paymentIDs = append(paymentIDs, paymentReadyToPay.ID)
+	}
+
+	// Double checking the payments passed by parameter
+	payments, err := s.sdpModels.Payment.GetReadyByID(ctx, dbTx, paymentIDs...)
 	if err != nil {
 		return fmt.Errorf("getting payments ready to be sent: %w", err)
 	}
@@ -82,14 +89,16 @@ func (s PaymentToSubmitterService) sendBatchPayments(ctx context.Context, dbTx d
 			AssetIssuer: payment.Asset.Issuer,
 			Amount:      amount,
 			Destination: payment.ReceiverWallet.StellarAddress,
+			TenantID:    paymentsReadyToPay.TenantID,
 		}
 		transactions = append(transactions, transaction)
 		pendingPayments = append(pendingPayments, payment)
 	}
 
 	// 3. Persist data in Transactions table
-	// TODO: insert with the tenant info.
-	insertedTransactions, err := s.tssModel.BulkInsert(ctx, dbTx, transactions)
+	insertedTransactions, err := db.RunInTransactionWithResult(ctx, s.tssModel.DBConnectionPool, nil, func(tssDBTx db.DBTransaction) ([]txSubStore.Transaction, error) {
+		return s.tssModel.BulkInsert(ctx, tssDBTx, transactions)
+	})
 	if err != nil {
 		return fmt.Errorf("inserting transactions: %w", err)
 	}

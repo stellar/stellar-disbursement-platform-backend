@@ -16,7 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func Test_PaymentFromSubmitterEventHandler_Handle(t *testing.T) {
+func Test_PaymentToSubmitterEventHandler_Handle(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 
@@ -27,9 +27,9 @@ func Test_PaymentFromSubmitterEventHandler_Handle(t *testing.T) {
 	tenantManager := tenant.NewManager(tenant.WithDatabase(dbConnectionPool))
 
 	crashTrackerClient := crashtracker.MockCrashTrackerClient{}
-	service := servicesMocks.MockPaymentFromSubmitterService{}
+	service := servicesMocks.MockPaymentToSubmitterService{}
 
-	handler := PaymentFromSubmitterEventHandler{
+	handler := PaymentToSubmitterEventHandler{
 		tenantManager:      tenantManager,
 		crashTrackerClient: &crashTrackerClient,
 		service:            &service,
@@ -38,7 +38,7 @@ func Test_PaymentFromSubmitterEventHandler_Handle(t *testing.T) {
 	ctx := context.Background()
 	t.Run("logs and report error when message Data is invalid", func(t *testing.T) {
 		crashTrackerClient.
-			On("LogAndReportErrors", ctx, mock.Anything, "[PaymentFromSubmitterEventHandler] could not convert data to schemas.EventPaymentCompletedData: invalid").
+			On("LogAndReportErrors", ctx, mock.Anything, "[PaymentToSubmitterEventHandler] could not convert data to schemas.EventPaymentsReadyToPayData: invalid").
 			Return().
 			Once()
 
@@ -47,7 +47,7 @@ func Test_PaymentFromSubmitterEventHandler_Handle(t *testing.T) {
 
 	t.Run("logs and report error when fails getting tenant by ID", func(t *testing.T) {
 		crashTrackerClient.
-			On("LogAndReportErrors", ctx, tenant.ErrTenantDoesNotExist, "[PaymentFromSubmitterEventHandler] error getting tenant by id").
+			On("LogAndReportErrors", ctx, tenant.ErrTenantDoesNotExist, "[PaymentToSubmitterEventHandler] error getting tenant by id").
 			Return().
 			Once()
 
@@ -65,48 +65,58 @@ func Test_PaymentFromSubmitterEventHandler_Handle(t *testing.T) {
 		tnt, err := tenantManager.AddTenant(ctx, "myorg1")
 		require.NoError(t, err)
 
-		tx := schemas.EventPaymentCompletedData{
-			TransactionID: "tx-id",
+		paymentsReadyToPay := schemas.EventPaymentsReadyToPayData{
+			TenantID: tnt.ID,
+			Payments: []schemas.PaymentReadyToPay{
+				{
+					ID: "payment-id",
+				},
+			},
 		}
 
 		ctxWithTenant := tenant.SaveTenantInContext(ctx, tnt)
 
 		service.
-			On("SyncTransaction", ctxWithTenant, &tx).
+			On("SendPaymentsReadyToPay", ctxWithTenant, paymentsReadyToPay).
 			Return(errors.New("unexpected error")).
 			Once()
 
 		crashTrackerClient.
-			On("LogAndReportErrors", ctxWithTenant, errors.New("unexpected error"), `[PaymentFromSubmitterEventHandler] synching transaction completion for transaction ID "tx-id"`).
+			On("LogAndReportErrors", ctxWithTenant, errors.New("unexpected error"), `[PaymentToSubmitterEventHandler] send payments ready to pay: [{payment-id}]`).
 			Return().
 			Once()
 
 		handler.Handle(ctx, &events.Message{
 			TenantID: tnt.ID,
-			Data:     tx,
+			Data:     paymentsReadyToPay,
 		})
 	})
 
-	t.Run("successfully syncs the TSS transaction with the SDP's payment", func(t *testing.T) {
+	t.Run("successfully sends payments ready to pay to TSS", func(t *testing.T) {
 		tenant.DeleteAllTenantsFixture(t, ctx, dbConnectionPool)
 
 		tnt, err := tenantManager.AddTenant(ctx, "myorg1")
 		require.NoError(t, err)
 
-		tx := schemas.EventPaymentCompletedData{
-			TransactionID: "tx-id",
+		paymentsReadyToPay := schemas.EventPaymentsReadyToPayData{
+			TenantID: tnt.ID,
+			Payments: []schemas.PaymentReadyToPay{
+				{
+					ID: "payment-id",
+				},
+			},
 		}
 
 		ctxWithTenant := tenant.SaveTenantInContext(ctx, tnt)
 
 		service.
-			On("SyncTransaction", ctxWithTenant, &tx).
+			On("SendPaymentsReadyToPay", ctxWithTenant, paymentsReadyToPay).
 			Return(nil).
 			Once()
 
 		handler.Handle(ctx, &events.Message{
 			TenantID: tnt.ID,
-			Data:     tx,
+			Data:     paymentsReadyToPay,
 		})
 	})
 

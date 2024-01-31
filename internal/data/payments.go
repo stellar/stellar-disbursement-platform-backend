@@ -350,49 +350,76 @@ func (p *PaymentModel) UpdateStatusByDisbursementID(ctx context.Context, sqlExec
 	return nil
 }
 
-func (p *PaymentModel) GetBatchForUpdate(ctx context.Context, dbTx db.DBTransaction, batchSize int) ([]*Payment, error) {
-	if batchSize <= 0 {
-		return nil, fmt.Errorf("batch size must be greater than 0")
-	}
-
-	query := `
-		SELECT
-			p.id,
-			p.amount,
-			COALESCE(p.stellar_transaction_id, '') as "stellar_transaction_id",
-			COALESCE(p.stellar_operation_id, '') as "stellar_operation_id",
-			p.status,
-			p.created_at,
-			p.updated_at,
-			d.id as "disbursement.id",
-			d.status as "disbursement.status",
-			a.id as "asset.id",
-			a.code as "asset.code",
-			a.issuer as "asset.issuer",
-			rw.id as "receiver_wallet.id",
-			rw.receiver_id as "receiver_wallet.receiver.id",
-			COALESCE(rw.stellar_address, '') as "receiver_wallet.stellar_address",
-			COALESCE(rw.stellar_memo, '') as "receiver_wallet.stellar_memo",
-			COALESCE(rw.stellar_memo_type, '') as "receiver_wallet.stellar_memo_type",
-			rw.status as "receiver_wallet.status"
-		FROM
-			payments p
-				JOIN assets a on p.asset_id = a.id
-				JOIN receiver_wallets rw on p.receiver_wallet_id = rw.id
-				JOIN disbursements d on p.disbursement_id = d.id
-		WHERE p.status = $1 -- 'READY'::payment_status
+const getReadyPaymentsBaseQuery = `
+	SELECT
+		p.id,
+		p.amount,
+		COALESCE(p.stellar_transaction_id, '') as "stellar_transaction_id",
+		COALESCE(p.stellar_operation_id, '') as "stellar_operation_id",
+		p.status,
+		p.created_at,
+		p.updated_at,
+		d.id as "disbursement.id",
+		d.status as "disbursement.status",
+		a.id as "asset.id",
+		a.code as "asset.code",
+		a.issuer as "asset.issuer",
+		rw.id as "receiver_wallet.id",
+		rw.receiver_id as "receiver_wallet.receiver.id",
+		COALESCE(rw.stellar_address, '') as "receiver_wallet.stellar_address",
+		COALESCE(rw.stellar_memo, '') as "receiver_wallet.stellar_memo",
+		COALESCE(rw.stellar_memo_type, '') as "receiver_wallet.stellar_memo_type",
+		rw.status as "receiver_wallet.status"
+	FROM
+		payments p
+		JOIN assets a on p.asset_id = a.id
+		JOIN receiver_wallets rw on p.receiver_wallet_id = rw.id
+		JOIN disbursements d on p.disbursement_id = d.id
+	WHERE
+		p.status = $1 -- 'READY'::payment_status
 		AND rw.status = $2 -- 'REGISTERED'::receiver_wallet_status
 		AND d.status = $3 -- 'STARTED'::disbursement_status
-		ORDER BY p.disbursement_id ASC, p.updated_at ASC
-		LIMIT $4
-		FOR UPDATE SKIP LOCKED
-		`
+	%s
+`
+
+var getReadyPaymentsBaseArgs = []any{ReadyPaymentStatus, RegisteredReceiversWalletStatus, StartedDisbursementStatus}
+
+func (p *PaymentModel) GetReadyByDisbursementID(ctx context.Context, sqlExec db.SQLExecuter, disbursementID string) ([]*Payment, error) {
+	query := fmt.Sprintf(getReadyPaymentsBaseQuery, "AND p.disbursement_id = $4")
 
 	var payments []*Payment
-	err := dbTx.SelectContext(ctx, &payments, query, ReadyPaymentStatus, RegisteredReceiversWalletStatus, StartedDisbursementStatus, batchSize)
+	args := append(getReadyPaymentsBaseArgs, disbursementID)
+	err := sqlExec.SelectContext(ctx, &payments, query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("error getting ready payments: %w", err)
+		return nil, fmt.Errorf("getting ready payments for disbursement ID %s: %w", disbursementID, err)
 	}
+
+	return payments, nil
+}
+
+func (p *PaymentModel) GetReadyByID(ctx context.Context, sqlExec db.SQLExecuter, paymentIDs ...string) ([]*Payment, error) {
+	query := fmt.Sprintf(getReadyPaymentsBaseQuery, "AND p.id = ANY($4)")
+
+	var payments []*Payment
+	args := append(getReadyPaymentsBaseArgs, pq.Array(paymentIDs))
+	err := sqlExec.SelectContext(ctx, &payments, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("getting ready payments by IDs: %w", err)
+	}
+
+	return payments, nil
+}
+
+func (p *PaymentModel) GetReadyByReceiverWalletID(ctx context.Context, sqlExec db.SQLExecuter, receiverWalletID string) ([]*Payment, error) {
+	query := fmt.Sprintf(getReadyPaymentsBaseQuery, "AND rw.id = $4")
+
+	var payments []*Payment
+	args := append(getReadyPaymentsBaseArgs, receiverWalletID)
+	err := sqlExec.SelectContext(ctx, &payments, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("getting ready payments by receiver wallet ID %s: %w", receiverWalletID, err)
+	}
+
 	return payments, nil
 }
 

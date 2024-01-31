@@ -79,20 +79,20 @@ func (h *SendReceiverWalletsSMSInvitationEventHandler) CanHandleMessage(ctx cont
 func (h *SendReceiverWalletsSMSInvitationEventHandler) Handle(ctx context.Context, message *events.Message) {
 	receiverWalletInvitationData, err := utils.ConvertType[any, []schemas.EventReceiverWalletSMSInvitationData](message.Data)
 	if err != nil {
-		h.crashTrackerClient.LogAndReportErrors(ctx, err, fmt.Sprintf("[SendReceiverWalletsSMSInvitationEventHandler] could not convert data to %T: %v", []schemas.EventReceiverWalletSMSInvitationData{}, message.Data))
+		h.crashTrackerClient.LogAndReportErrors(ctx, err, fmt.Sprintf("[%s] could not convert data to %T: %v", h.Name(), []schemas.EventReceiverWalletSMSInvitationData{}, message.Data))
 		return
 	}
 
 	t, err := h.tenantManager.GetTenantByID(ctx, message.TenantID)
 	if err != nil {
-		h.crashTrackerClient.LogAndReportErrors(ctx, err, "[SendReceiverWalletsSMSInvitationEventHandler] error getting tenant by id")
+		h.crashTrackerClient.LogAndReportErrors(ctx, err, fmt.Sprintf("[%s] error getting tenant by id", h.Name()))
 		return
 	}
 
 	ctx = tenant.SaveTenantInContext(ctx, t)
 
 	if err := h.service.SendInvite(ctx, receiverWalletInvitationData...); err != nil {
-		h.crashTrackerClient.LogAndReportErrors(ctx, err, "[SendReceiverWalletsSMSInvitationEventHandler] sending receiver wallets invitation")
+		h.crashTrackerClient.LogAndReportErrors(ctx, err, fmt.Sprintf("[%s] sending receiver wallets invitation", h.Name()))
 		return
 	}
 }
