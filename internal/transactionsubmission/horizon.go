@@ -137,7 +137,6 @@ func CreateChannelAccountsOnChain(ctx context.Context, submiterEngine engine.Sub
 }
 
 // DeleteChannelAccountOnChain creates, signs, and broadcasts a transaction to delete a channel account onchain.
-// TODO: apply engine here
 func DeleteChannelAccountOnChain(ctx context.Context, submiterEngine engine.SubmitterEngine, chAccAddress string) error {
 	distributionAccount := submiterEngine.SignatureService.DistributionAccount()
 	rootAccount, err := submiterEngine.HorizonClient.AccountDetail(horizonclient.AccountRequest{

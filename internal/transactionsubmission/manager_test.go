@@ -24,7 +24,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	monitorMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/mocks"
 	engineMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/mocks"
 	tssMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
@@ -421,7 +420,7 @@ func Test_Manager_ProcessTransactions(t *testing.T) {
 
 			// mock ledger number tracker
 			const currentLedgerNumber = 123
-			mockLedgerNumberTracker := &mocks.MockLedgerNumberTracker{}
+			mockLedgerNumberTracker := engineMocks.NewMockLedgerNumberTracker(t)
 			mockLedgerNumberTracker.On("GetLedgerNumber").Return(currentLedgerNumber, nil)
 			defer mockLedgerNumberTracker.AssertExpectations(t)
 
