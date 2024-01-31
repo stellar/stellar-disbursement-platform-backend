@@ -415,6 +415,7 @@ func Test_Manager_ProcessTransactions(t *testing.T) {
 				DistributionPrivateKey: distributionKP.Seed(),
 				EncryptionPassphrase:   distributionKP.Seed(),
 				Encrypter:              &utils.PrivateKeyEncrypterMock{},
+				LedgerNumberTracker:    engineMocks.NewMockLedgerNumberTracker(t),
 			})
 			require.NoError(t, err)
 

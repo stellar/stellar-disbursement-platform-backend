@@ -38,6 +38,7 @@ func NewTxSubmitterEngine(ctx context.Context, opts TxSubmitterEngineOptions) (e
 	if err != nil {
 		return engine.SubmitterEngine{}, fmt.Errorf("grabbing ledger number tracker instance: %w", err)
 	}
+	opts.SignatureServiceOptions.LedgerNumberTracker = ledgerNumberTracker
 
 	signatureService, err := NewSignatureService(ctx, opts.SignatureServiceOptions)
 	if err != nil {

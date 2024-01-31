@@ -41,6 +41,7 @@ type SignatureServiceOptions struct {
 	DBConnectionPool       db.DBConnectionPool
 	DistributionPrivateKey string
 	EncryptionPassphrase   string
+	LedgerNumberTracker    LedgerNumberTracker
 	Type                   SignatureServiceType
 }
 
@@ -52,6 +53,7 @@ func NewSignatureService(opts SignatureServiceOptions) (SignatureService, error)
 			DBConnectionPool:       opts.DBConnectionPool,
 			DistributionPrivateKey: opts.DistributionPrivateKey,
 			EncryptionPassphrase:   opts.EncryptionPassphrase,
+			LedgerNumberTracker:    opts.LedgerNumberTracker,
 		})
 
 	default:
@@ -75,6 +77,7 @@ type DefaultSignatureServiceOptions struct {
 	DistributionPrivateKey string
 	EncryptionPassphrase   string
 	Encrypter              utils.PrivateKeyEncrypter
+	LedgerNumberTracker    LedgerNumberTracker
 }
 
 func (opts *DefaultSignatureServiceOptions) Validate() error {
@@ -94,6 +97,10 @@ func (opts *DefaultSignatureServiceOptions) Validate() error {
 		return fmt.Errorf("encryption passphrase is not a valid Ed25519 secret")
 	}
 
+	if opts.LedgerNumberTracker == nil {
+		return fmt.Errorf("ledger number tracker cannot be nil")
+	}
+
 	return nil
 }
 
@@ -105,6 +112,7 @@ type DefaultSignatureService struct {
 	chAccModel           store.ChannelAccountStore
 	encrypter            utils.PrivateKeyEncrypter
 	encryptionPassphrase string
+	ledgerNumberTracker  LedgerNumberTracker
 }
 
 // NewDefaultSignatureService returns a new DefaultSignatureService instance.
@@ -131,6 +139,7 @@ func NewDefaultSignatureService(opts DefaultSignatureServiceOptions) (*DefaultSi
 		chAccModel:           store.NewChannelAccountModel(opts.DBConnectionPool),
 		encrypter:            encrypter,
 		encryptionPassphrase: opts.EncryptionPassphrase,
+		ledgerNumberTracker:  opts.LedgerNumberTracker,
 	}, nil
 }
 

@@ -47,6 +47,7 @@ func Test_CreateChannelAccountsOnChain(t *testing.T) {
 		DistributionPrivateKey: distributionKP.Seed(),
 		EncryptionPassphrase:   encrypterPass,
 		Encrypter:              privateKeyEncrypterMock,
+		LedgerNumberTracker:    engineMocks.NewMockLedgerNumberTracker(t),
 	})
 	require.NoError(t, err)
 

@@ -9,6 +9,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
+	engineMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/mocks"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -33,6 +34,7 @@ func Test_dependencyinjection_NewSignatureService(t *testing.T) {
 			DistributionPrivateKey: distributionPrivateKey,
 			EncryptionPassphrase:   encryptionPassphrase,
 			Type:                   engine.SignatureServiceTypeDefault,
+			LedgerNumberTracker:    engineMocks.NewMockLedgerNumberTracker(t),
 		}
 
 		gotDependency, err := NewSignatureService(ctx, opts)

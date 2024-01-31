@@ -62,6 +62,7 @@ func getTransactionWorkerInstance(t *testing.T, dbConnectionPool db.DBConnection
 		DistributionPrivateKey: distributionKP.Seed(),
 		EncryptionPassphrase:   distributionKP.Seed(),
 		Encrypter:              &utils.PrivateKeyEncrypterMock{},
+		LedgerNumberTracker:    engineMocks.NewMockLedgerNumberTracker(t),
 	})
 	require.NoError(t, err)
 
@@ -133,6 +134,7 @@ func Test_NewTransactionWorker(t *testing.T) {
 		DistributionPrivateKey: distributionKP.Seed(),
 		EncryptionPassphrase:   distributionKP.Seed(),
 		Encrypter:              &utils.PrivateKeyEncrypterMock{},
+		LedgerNumberTracker:    engineMocks.NewMockLedgerNumberTracker(t),
 	})
 	require.NoError(t, err)
 
@@ -956,6 +958,7 @@ func Test_TransactionWorker_buildAndSignTransaction(t *testing.T) {
 		DistributionPrivateKey: distributionKP.Seed(),
 		EncryptionPassphrase:   distributionKP.Seed(),
 		Encrypter:              &utils.PrivateKeyEncrypterMock{},
+		LedgerNumberTracker:    engineMocks.NewMockLedgerNumberTracker(t),
 	})
 	require.NoError(t, err)
 
