@@ -5,7 +5,10 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strconv"
 
+	"github.com/stellar/go/clients/horizonclient"
+	"github.com/stellar/go/support/log"
 	"golang.org/x/exp/maps"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
@@ -20,6 +23,7 @@ type DisbursementManagementService struct {
 	models           *data.Models
 	dbConnectionPool db.DBConnectionPool
 	authManager      auth.AuthManager
+	horizonClient    horizonclient.ClientInterface
 }
 
 type UserReference struct {
@@ -35,21 +39,28 @@ type DisbursementWithUserMetadata struct {
 }
 
 var (
-	ErrDisbursementNotFound        = errors.New("disbursement not found")
-	ErrDisbursementNotReadyToStart = errors.New("disbursement is not ready to be started")
-	ErrDisbursementNotReadyToPause = errors.New("disbursement is not ready to be paused")
-	ErrDisbursementWalletDisabled  = errors.New("disbursement wallet is disabled")
+	ErrDisbursementNotFound                  = errors.New("disbursement not found")
+	ErrDisbursementNotReadyToStart           = errors.New("disbursement is not ready to be started")
+	ErrDisbursementNotReadyToPause           = errors.New("disbursement is not ready to be paused")
+	ErrDisbursementWalletDisabled            = errors.New("disbursement wallet is disabled")
+	ErrDisbursementWalletInsufficientBalance = errors.New("disbursement wallet has insufficient balance to fulfill disbursement and current pending payments")
 
 	ErrDisbursementStatusCantBeChanged = errors.New("disbursement status can't be changed to the requested status")
 	ErrDisbursementStartedByCreator    = errors.New("disbursement can't be started by its creator")
 )
 
 // NewDisbursementManagementService is a factory function for creating a new DisbursementManagementService.
-func NewDisbursementManagementService(models *data.Models, dbConnectionPool db.DBConnectionPool, authManager auth.AuthManager) *DisbursementManagementService {
+func NewDisbursementManagementService(
+	models *data.Models,
+	dbConnectionPool db.DBConnectionPool,
+	authManager auth.AuthManager,
+	horizonClient horizonclient.ClientInterface,
+) *DisbursementManagementService {
 	return &DisbursementManagementService{
 		models:           models,
 		dbConnectionPool: dbConnectionPool,
 		authManager:      authManager,
+		horizonClient:    horizonClient,
 	}
 }
 
@@ -167,9 +178,9 @@ func (s *DisbursementManagementService) GetDisbursementReceiversWithCount(ctx co
 }
 
 // StartDisbursement starts a disbursement and all its payments and receivers wallets.
-func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, disbursementID string) error {
+func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, disbursementID string, distributionPubKey string) error {
 	return db.RunInTransaction(ctx, s.dbConnectionPool, nil, func(dbTx db.DBTransaction) error {
-		disbursement, err := s.models.Disbursements.Get(ctx, dbTx, disbursementID)
+		disbursement, err := s.models.Disbursements.GetWithStatistics(ctx, disbursementID)
 		if err != nil {
 			if errors.Is(err, data.ErrRecordNotFound) {
 				return ErrDisbursementNotFound
@@ -210,19 +221,84 @@ func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, d
 			}
 		}
 
-		// 4. Update all correct payment status to `ready`
+		// 4. Check if there is enough balance from the distribution wallet for this disbursement along with any pending disbursements
+		rootAccount, err := s.horizonClient.AccountDetail(
+			horizonclient.AccountRequest{AccountID: distributionPubKey})
+		if err != nil {
+			return fmt.Errorf("cannot get details for root account from horizon client: %w", err)
+		}
+
+		var distributionBalance float64
+		for _, b := range rootAccount.Balances {
+			if b.Asset.Code == disbursement.Asset.Code && b.Asset.Issuer == disbursement.Asset.Issuer {
+				distributionBalance, err = strconv.ParseFloat(b.Balance, 64)
+				if err != nil {
+					return fmt.Errorf("cannot convert Horizon distribution account balance %s into float: %w", b.Balance, err)
+				}
+			}
+		}
+
+		disbursementAmount, err := strconv.ParseFloat(disbursement.TotalAmount, 64)
+		if err != nil {
+			return fmt.Errorf(
+				"cannot convert total amount %s for disbursement id %s into float: %w",
+				disbursement.TotalAmount,
+				disbursementID,
+				err,
+			)
+		}
+
+		var totalPendingAmount float64 = 0.0
+		incompletePayments, err := s.models.Payment.GetAll(ctx, &data.QueryParams{
+			Filters: map[data.FilterKey]interface{}{
+				data.FilterKeyStatus: data.PaymentInProgressStatuses(),
+			},
+		}, dbTx)
+		if err != nil {
+			return fmt.Errorf("cannot retrieve incomplete payments: %w", err)
+		}
+
+		for _, ip := range incompletePayments {
+			if ip.Disbursement.ID == disbursementID {
+				continue
+			}
+
+			paymentAmount, parsePaymentAmountErr := strconv.ParseFloat(ip.Amount, 64)
+			if parsePaymentAmountErr != nil {
+				return fmt.Errorf(
+					"cannot convert amount %s for paymment id %s into float: %w",
+					ip.Amount,
+					ip.ID,
+					err,
+				)
+			}
+			totalPendingAmount += paymentAmount
+		}
+
+		if (distributionBalance - (disbursementAmount + totalPendingAmount)) < 0 {
+			log.Ctx(ctx).Errorf(
+				"Insufficient distribution account balance %f to fulfill amount %f for disbursement id %s and total pending amount %f",
+				distributionBalance,
+				disbursementAmount,
+				disbursementID,
+				totalPendingAmount,
+			)
+			return ErrDisbursementWalletInsufficientBalance
+		}
+
+		// 5. Update all correct payment status to `ready`
 		err = s.models.Payment.UpdateStatusByDisbursementID(ctx, dbTx, disbursementID, data.ReadyPaymentStatus)
 		if err != nil {
 			return fmt.Errorf("error updating payment status to ready for disbursement with id %s: %w", disbursementID, err)
 		}
 
-		// 5. Update all receiver_wallets from `draft` to `ready`
+		// 6. Update all receiver_wallets from `draft` to `ready`
 		err = s.models.ReceiverWallet.UpdateStatusByDisbursementID(ctx, dbTx, disbursementID, data.DraftReceiversWalletStatus, data.ReadyReceiversWalletStatus)
 		if err != nil {
 			return fmt.Errorf("error updating receiver wallet status to ready for disbursement with id %s: %w", disbursementID, err)
 		}
 
-		// 6. Update disbursement status to `started`
+		// 7. Update disbursement status to `started`
 		err = s.models.Disbursements.UpdateStatus(ctx, dbTx, user.ID, disbursementID, data.StartedDisbursementStatus)
 		if err != nil {
 			return fmt.Errorf("error updating disbursement status to started for disbursement with id %s: %w", disbursementID, err)

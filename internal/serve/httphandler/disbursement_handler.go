@@ -11,6 +11,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/gocarina/gocsv"
+	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/support/render/httpjson"
 
@@ -26,10 +27,12 @@ import (
 )
 
 type DisbursementHandler struct {
-	Models           *data.Models
-	MonitorService   monitor.MonitorServiceInterface
-	DBConnectionPool db.DBConnectionPool
-	AuthManager      auth.AuthManager
+	Models             *data.Models
+	MonitorService     monitor.MonitorServiceInterface
+	DBConnectionPool   db.DBConnectionPool
+	AuthManager        auth.AuthManager
+	HorizonClient      horizonclient.ClientInterface
+	DistributionPubKey string
 }
 
 type PostDisbursementRequest struct {
@@ -169,7 +172,7 @@ func (d DisbursementHandler) GetDisbursements(w http.ResponseWriter, r *http.Req
 	}
 
 	ctx := r.Context()
-	disbursementManagementService := services.NewDisbursementManagementService(d.Models, d.DBConnectionPool, d.AuthManager)
+	disbursementManagementService := services.NewDisbursementManagementService(d.Models, d.DBConnectionPool, d.AuthManager, d.HorizonClient)
 	resultWithTotal, err := disbursementManagementService.GetDisbursementsWithCount(ctx, queryParams)
 	if err != nil {
 		httperror.InternalError(ctx, "Cannot retrieve disbursements", err, nil).Render(w)
@@ -278,7 +281,7 @@ func (d DisbursementHandler) GetDisbursement(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	disbursementManagementService := services.NewDisbursementManagementService(d.Models, d.DBConnectionPool, d.AuthManager)
+	disbursementManagementService := services.NewDisbursementManagementService(d.Models, d.DBConnectionPool, d.AuthManager, d.HorizonClient)
 	response, err := disbursementManagementService.AppendUserMetadata(ctx, []*data.Disbursement{disbursement})
 	if err != nil {
 		httperror.NotFound("disbursement user metadata not found", err, nil).Render(w)
@@ -304,7 +307,7 @@ func (d DisbursementHandler) GetDisbursementReceivers(w http.ResponseWriter, r *
 		return
 	}
 
-	disbursementManagementService := services.NewDisbursementManagementService(d.Models, d.DBConnectionPool, d.AuthManager)
+	disbursementManagementService := services.NewDisbursementManagementService(d.Models, d.DBConnectionPool, d.AuthManager, d.HorizonClient)
 	resultWithTotal, err := disbursementManagementService.GetDisbursementReceiversWithCount(ctx, disbursementID, queryParams)
 	if err != nil {
 		if errors.Is(err, services.ErrDisbursementNotFound) {
@@ -351,14 +354,14 @@ func (d DisbursementHandler) PatchDisbursementStatus(w http.ResponseWriter, r *h
 		return
 	}
 
-	disbursementManagementService := services.NewDisbursementManagementService(d.Models, d.DBConnectionPool, d.AuthManager)
+	disbursementManagementService := services.NewDisbursementManagementService(d.Models, d.DBConnectionPool, d.AuthManager, d.HorizonClient)
 	response := UpdateDisbursementStatusResponseBody{}
 
 	ctx := r.Context()
 	disbursementID := chi.URLParam(r, "id")
 	switch toStatus {
 	case data.StartedDisbursementStatus:
-		err = disbursementManagementService.StartDisbursement(ctx, disbursementID)
+		err = disbursementManagementService.StartDisbursement(ctx, disbursementID, d.DistributionPubKey)
 		response.Message = "Disbursement started"
 	case data.PausedDisbursementStatus:
 		err = disbursementManagementService.PauseDisbursement(ctx, disbursementID)
@@ -381,6 +384,8 @@ func (d DisbursementHandler) PatchDisbursementStatus(w http.ResponseWriter, r *h
 			httperror.Forbidden("Disbursement can't be started by its creator. Approval by another user is required.", err, nil).Render(w)
 		case errors.Is(err, services.ErrDisbursementWalletDisabled):
 			httperror.BadRequest(services.ErrDisbursementWalletDisabled.Error(), err, nil).Render(w)
+		case errors.Is(err, services.ErrDisbursementWalletInsufficientBalance):
+			httperror.Conflict(services.ErrDisbursementWalletInsufficientBalance.Error(), err, nil).Render(w)
 		default:
 			msg := fmt.Sprintf("Cannot update disbursement ID %s with status: %s", disbursementID, toStatus)
 			httperror.InternalError(ctx, msg, err, nil).Render(w)

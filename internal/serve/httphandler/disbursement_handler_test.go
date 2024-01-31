@@ -14,27 +14,23 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/mock"
-
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
-
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
-
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
-
 	"github.com/go-chi/chi/v5"
+	"github.com/stellar/go/clients/horizonclient"
+	"github.com/stellar/go/protocols/horizon"
+	"github.com/stellar/go/protocols/horizon/base"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpresponse"
-
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
-
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
-	"github.com/stretchr/testify/assert"
-
-	"github.com/stretchr/testify/require"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpresponse"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 )
 
 func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
@@ -1257,12 +1253,18 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 		Email: "email@email.com",
 	}
 	require.NotNil(t, user)
+
 	authManagerMock := &auth.AuthManagerMock{}
+	hMock := &horizonclient.MockClient{}
+	distributionPubKey := "ABC"
+	asset := data.GetAssetFixture(t, ctx, dbConnectionPool, data.FixtureAssetUSDC)
 
 	handler := &DisbursementHandler{
-		Models:           models,
-		DBConnectionPool: models.DBConnectionPool,
-		AuthManager:      authManagerMock,
+		Models:             models,
+		DBConnectionPool:   models.DBConnectionPool,
+		AuthManager:        authManagerMock,
+		HorizonClient:      hMock,
+		DistributionPubKey: distributionPubKey,
 	}
 
 	r := chi.NewRouter()
@@ -1355,6 +1357,20 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 	})
 
 	t.Run("disbursement can be started by approver who is not a creator", func(t *testing.T) {
+		hMock.On(
+			"AccountDetail", horizonclient.AccountRequest{AccountID: distributionPubKey},
+		).Return(horizon.Account{
+			Balances: []horizon.Balance{
+				{
+					Balance: "10000",
+					Asset: base.Asset{
+						Code:   asset.Code,
+						Issuer: asset.Issuer,
+					},
+				},
+			},
+		}, nil).Once()
+
 		data.EnableDisbursementApproval(t, ctx, handler.Models.Organizations)
 		defer data.DisableDisbursementApproval(t, ctx, handler.Models.Organizations)
 
@@ -1362,6 +1378,16 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 			Name:          "ready disbursement #2",
 			Status:        data.ReadyDisbursementStatus,
 			StatusHistory: readyStatusHistory,
+		})
+		wallet := data.CreateDefaultWalletFixture(t, ctx, dbConnectionPool)
+		receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
+		receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.DraftReceiversWalletStatus)
+		data.CreatePaymentFixture(t, ctx, dbConnectionPool, handler.Models.Payment, &data.Payment{
+			ReceiverWallet: receiverWallet,
+			Disbursement:   readyDisbursement,
+			Asset:          *asset,
+			Amount:         "300",
+			Status:         data.DraftPaymentStatus,
 		})
 
 		approverUser := &auth.User{
@@ -1388,6 +1414,20 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 	})
 
 	t.Run("disbursement started - then paused", func(t *testing.T) {
+		hMock.On(
+			"AccountDetail", horizonclient.AccountRequest{AccountID: distributionPubKey},
+		).Return(horizon.Account{
+			Balances: []horizon.Balance{
+				{
+					Balance: "10000",
+					Asset: base.Asset{
+						Code:   asset.Code,
+						Issuer: asset.Issuer,
+					},
+				},
+			},
+		}, nil).Once()
+
 		authManagerMock.
 			On("GetUser", mock.Anything, token).
 			Return(user, nil).
@@ -1396,6 +1436,16 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 			Name:          "ready disbursement #3",
 			Status:        data.ReadyDisbursementStatus,
 			StatusHistory: readyStatusHistory,
+		})
+		wallet := data.CreateDefaultWalletFixture(t, ctx, dbConnectionPool)
+		receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
+		receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.DraftReceiversWalletStatus)
+		data.CreatePaymentFixture(t, ctx, dbConnectionPool, handler.Models.Payment, &data.Payment{
+			ReceiverWallet: receiverWallet,
+			Disbursement:   readyDisbursement,
+			Asset:          *asset,
+			Amount:         "300",
+			Status:         data.DraftPaymentStatus,
 		})
 
 		err := json.NewEncoder(reqBody).Encode(PatchDisbursementStatusRequest{Status: "Started"})
@@ -1477,6 +1527,7 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 	})
 
 	authManagerMock.AssertExpectations(t)
+	hMock.AssertExpectations(t)
 }
 
 func Test_DisbursementHandler_GetDisbursementInstructions(t *testing.T) {

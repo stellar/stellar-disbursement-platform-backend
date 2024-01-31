@@ -628,7 +628,13 @@ func (p *PaymentModel) GetByIDs(ctx context.Context, sqlExec db.SQLExecuter, pay
 func newPaymentQuery(baseQuery string, queryParams *QueryParams, paginated bool, sqlExec db.SQLExecuter) (string, []interface{}) {
 	qb := NewQueryBuilder(baseQuery)
 	if queryParams.Filters[FilterKeyStatus] != nil {
-		qb.AddCondition("p.status = ?", queryParams.Filters[FilterKeyStatus])
+		if statusSlice, ok := queryParams.Filters[FilterKeyStatus].([]PaymentStatus); ok {
+			if len(statusSlice) > 0 {
+				qb.AddCondition("p.status = ANY(?)", pq.Array(statusSlice))
+			}
+		} else {
+			qb.AddCondition("p.status = ?", queryParams.Filters[FilterKeyStatus])
+		}
 	}
 	if queryParams.Filters[FilterKeyReceiverID] != nil {
 		qb.AddCondition("p.receiver_id = ?", queryParams.Filters[FilterKeyReceiverID])
