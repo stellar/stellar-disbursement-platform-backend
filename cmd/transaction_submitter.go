@@ -172,8 +172,8 @@ func (c *TxSubmitterCommand) Command(submitterService TxSubmitterServiceInterfac
 			}
 
 			// Inject server dependencies
-			tssOpts.DBConnectionPool = tssDBConnectionPool
 			tssOpts.SubmitterEngine = submitterEngine
+			tssOpts.DBConnectionPool = tssDBConnectionPool
 			tssOpts.MonitorService = tssMonitorSvc
 
 			// Inject crash tracker options dependencies

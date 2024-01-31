@@ -19,8 +19,9 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
-	engineMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
+
+	engineMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/mocks"
 	storeMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store/mocks"
 )
 
@@ -31,9 +32,9 @@ func Test_ChannelAccountsService_validate(t *testing.T) {
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
 
-	mSigService := engineMocks.NewMockSignatureService(t)
 	mHorizonClient := &horizonclient.MockClient{}
 	mLedgerNumberTracker := &engineMocks.MockLedgerNumberTracker{}
+	mSigService := engineMocks.NewMockSignatureService(t)
 
 	testCases := []struct {
 		name                      string
@@ -46,47 +47,65 @@ func Test_ChannelAccountsService_validate(t *testing.T) {
 			wantError: "tss db connection pool cannot be nil",
 		},
 		{
-			name: "TSSDBConnectionPool cannot be nil",
+			name: "SubmitterEngine cannot be empty",
 			serviceOptions: ChannelAccountsService{
 				TSSDBConnectionPool: dbConnectionPool,
 			},
-			wantError: "signing service cannot be nil",
+			wantError: "submitter engine cannot be empty",
 		},
 		{
-			name: "HorizonClient cannot be nil",
+			name: "Validating SubmitterEngine: horizon client cannot be nil",
 			serviceOptions: ChannelAccountsService{
 				TSSDBConnectionPool: dbConnectionPool,
-				SigningService:      mSigService,
+				SubmitterEngine: engine.SubmitterEngine{
+					MaxBaseFee: 100,
+				},
 			},
-			wantError: "horizon client cannot be nil",
+			wantError: "validating submitter engine: horizon client cannot be nil",
 		},
 		{
-			name: "LedgerNumberTracker cannot be nil",
+			name: "Validating SubmitterEngine: ledger number tracker cannot be nil",
 			serviceOptions: ChannelAccountsService{
 				TSSDBConnectionPool: dbConnectionPool,
-				SigningService:      mSigService,
-				HorizonClient:       mHorizonClient,
+				SubmitterEngine: engine.SubmitterEngine{
+					HorizonClient: mHorizonClient,
+				},
 			},
-			wantError: "ledger number tracker cannot be nil",
+			wantError: "validating submitter engine: ledger number tracker cannot be nil",
 		},
 		{
-			name: "maxBaseFee must be greater than or equal to 100",
+			name: "Validating SubmitterEngine: signature service cannot be nil",
 			serviceOptions: ChannelAccountsService{
 				TSSDBConnectionPool: dbConnectionPool,
-				SigningService:      mSigService,
-				HorizonClient:       mHorizonClient,
-				LedgerNumberTracker: mLedgerNumberTracker,
+				SubmitterEngine: engine.SubmitterEngine{
+					HorizonClient:       mHorizonClient,
+					LedgerNumberTracker: mLedgerNumberTracker,
+				},
 			},
-			wantError: "maxBaseFee must be greater than or equal to 100",
+			wantError: "validating submitter engine: signature service cannot be nil",
+		},
+		{
+			name: "Validating SubmitterEngine: max base fee must be greater than or equal to 100",
+			serviceOptions: ChannelAccountsService{
+				TSSDBConnectionPool: dbConnectionPool,
+				SubmitterEngine: engine.SubmitterEngine{
+					HorizonClient:       mHorizonClient,
+					LedgerNumberTracker: mLedgerNumberTracker,
+					SignatureService:    mSigService,
+				},
+			},
+			wantError: "validating submitter engine: maxBaseFee must be greater than or equal to 100",
 		},
 		{
 			name: "advisory lock with ID was unavailable",
 			serviceOptions: ChannelAccountsService{
 				TSSDBConnectionPool: dbConnectionPool,
-				SigningService:      mSigService,
-				HorizonClient:       mHorizonClient,
-				LedgerNumberTracker: mLedgerNumberTracker,
-				MaxBaseFee:          100,
+				SubmitterEngine: engine.SubmitterEngine{
+					HorizonClient:       mHorizonClient,
+					LedgerNumberTracker: mLedgerNumberTracker,
+					SignatureService:    mSigService,
+					MaxBaseFee:          100,
+				},
 			},
 			isAdvisoryLockUnavailable: true,
 			wantError:                 "failed getting db advisory lock: advisory lock is unavailable",
@@ -95,10 +114,12 @@ func Test_ChannelAccountsService_validate(t *testing.T) {
 			name: "🎉 Successfully validate service",
 			serviceOptions: ChannelAccountsService{
 				TSSDBConnectionPool: dbConnectionPool,
-				SigningService:      mSigService,
-				HorizonClient:       mHorizonClient,
-				LedgerNumberTracker: mLedgerNumberTracker,
-				MaxBaseFee:          100,
+				SubmitterEngine: engine.SubmitterEngine{
+					HorizonClient:       mHorizonClient,
+					LedgerNumberTracker: mLedgerNumberTracker,
+					SignatureService:    mSigService,
+					MaxBaseFee:          100,
+				},
 			},
 		},
 	}
@@ -170,11 +191,13 @@ func Test_ChannelAccounts_CreateAccount_Success(t *testing.T) {
 
 	cas := ChannelAccountsService{
 		chAccStore:          mChannelAccountStore,
-		HorizonClient:       mHorizonClient,
 		TSSDBConnectionPool: dbConnectionPool,
-		LedgerNumberTracker: mLedgerNumberTracker,
-		MaxBaseFee:          100,
-		SigningService:      mSigService,
+		SubmitterEngine: engine.SubmitterEngine{
+			HorizonClient:       mHorizonClient,
+			LedgerNumberTracker: mLedgerNumberTracker,
+			MaxBaseFee:          100,
+			SignatureService:    mSigService,
+		},
 	}
 
 	rootAccount := keypair.MustParseFull("SBMW2WDSVTGT2N2PCBF3PV7WBOIKVTGGIEBUUYMDX3CKTDD5HY3UIHV4")
@@ -229,11 +252,13 @@ func Test_ChannelAccounts_CreateAccount_CannotFindRootAccount_Failure(t *testing
 
 	cas := ChannelAccountsService{
 		chAccStore:          mChannelAccountStore,
-		HorizonClient:       mHorizonClient,
 		TSSDBConnectionPool: dbConnectionPool,
-		LedgerNumberTracker: mLedgerNumberTracker,
-		MaxBaseFee:          100,
-		SigningService:      mSigService,
+		SubmitterEngine: engine.SubmitterEngine{
+			HorizonClient:       mHorizonClient,
+			LedgerNumberTracker: mLedgerNumberTracker,
+			MaxBaseFee:          100,
+			SignatureService:    mSigService,
+		},
 	}
 
 	rootAccount := keypair.MustParseFull("SDL4E4RF6BHX77DBKE63QC4H4LQG7S7D2PB4TSF64LTHDIHP7UUJHH2V")
@@ -275,11 +300,13 @@ func Test_ChannelAccounts_CreateAccount_Insert_Failure(t *testing.T) {
 
 	cas := ChannelAccountsService{
 		chAccStore:          mChannelAccountStore,
-		HorizonClient:       mHorizonClient,
 		TSSDBConnectionPool: dbConnectionPool,
-		LedgerNumberTracker: mLedgerNumberTracker,
-		MaxBaseFee:          100,
-		SigningService:      mSigService,
+		SubmitterEngine: engine.SubmitterEngine{
+			HorizonClient:       mHorizonClient,
+			LedgerNumberTracker: mLedgerNumberTracker,
+			MaxBaseFee:          100,
+			SignatureService:    mSigService,
+		},
 	}
 
 	rootAccount := keypair.MustParseFull("SBMW2WDSVTGT2N2PCBF3PV7WBOIKVTGGIEBUUYMDX3CKTDD5HY3UIHV4")
@@ -320,11 +347,13 @@ func Test_ChannelAccounts_VerifyAccounts_Success(t *testing.T) {
 
 	cas := ChannelAccountsService{
 		chAccStore:          mChannelAccountStore,
-		HorizonClient:       mHorizonClient,
 		TSSDBConnectionPool: dbConnectionPool,
-		LedgerNumberTracker: mLedgerNumberTracker,
-		MaxBaseFee:          100,
-		SigningService:      mSigService,
+		SubmitterEngine: engine.SubmitterEngine{
+			HorizonClient:       mHorizonClient,
+			LedgerNumberTracker: mLedgerNumberTracker,
+			MaxBaseFee:          100,
+			SignatureService:    mSigService,
+		},
 	}
 
 	channelAccounts := []*store.ChannelAccount{
@@ -367,11 +396,13 @@ func Test_ChannelAccounts_VerifyAccounts_LoadChannelAccountsError_Failure(t *tes
 
 	cas := ChannelAccountsService{
 		chAccStore:          mChannelAccountStore,
-		HorizonClient:       mHorizonClient,
 		TSSDBConnectionPool: dbConnectionPool,
-		LedgerNumberTracker: mLedgerNumberTracker,
-		MaxBaseFee:          100,
-		SigningService:      mSigService,
+		SubmitterEngine: engine.SubmitterEngine{
+			HorizonClient:       mHorizonClient,
+			LedgerNumberTracker: mLedgerNumberTracker,
+			MaxBaseFee:          100,
+			SignatureService:    mSigService,
+		},
 	}
 
 	ctx := context.Background()
@@ -407,11 +438,13 @@ func Test_ChannelAccounts_VerifyAccounts_NotFound(t *testing.T) {
 
 	cas := ChannelAccountsService{
 		chAccStore:          mChannelAccountStore,
-		HorizonClient:       mHorizonClient,
 		TSSDBConnectionPool: dbConnectionPool,
-		LedgerNumberTracker: mLedgerNumberTracker,
-		MaxBaseFee:          100,
-		SigningService:      mSigService,
+		SubmitterEngine: engine.SubmitterEngine{
+			HorizonClient:       mHorizonClient,
+			LedgerNumberTracker: mLedgerNumberTracker,
+			MaxBaseFee:          100,
+			SignatureService:    mSigService,
+		},
 	}
 
 	channelAccounts := []*store.ChannelAccount{
@@ -469,11 +502,13 @@ func Test_ChannelAccounts_DeleteAccount_Success(t *testing.T) {
 
 	cas := ChannelAccountsService{
 		chAccStore:          mChannelAccountStore,
-		HorizonClient:       mHorizonClient,
 		TSSDBConnectionPool: dbConnectionPool,
-		LedgerNumberTracker: mLedgerNumberTracker,
-		MaxBaseFee:          100,
-		SigningService:      mSigService,
+		SubmitterEngine: engine.SubmitterEngine{
+			HorizonClient:       mHorizonClient,
+			LedgerNumberTracker: mLedgerNumberTracker,
+			MaxBaseFee:          100,
+			SignatureService:    mSigService,
+		},
 	}
 
 	channelAccount := &store.ChannelAccount{
@@ -539,11 +574,13 @@ func Test_ChannelAccounts_DeleteAccount_All_Success(t *testing.T) {
 
 	cas := ChannelAccountsService{
 		chAccStore:          mChannelAccountStore,
-		HorizonClient:       mHorizonClient,
 		TSSDBConnectionPool: dbConnectionPool,
-		LedgerNumberTracker: mLedgerNumberTracker,
-		MaxBaseFee:          100,
-		SigningService:      mSigService,
+		SubmitterEngine: engine.SubmitterEngine{
+			HorizonClient:       mHorizonClient,
+			LedgerNumberTracker: mLedgerNumberTracker,
+			MaxBaseFee:          100,
+			SignatureService:    mSigService,
+		},
 	}
 
 	channelAccounts := []*store.ChannelAccount{
@@ -619,11 +656,13 @@ func Test_ChannelAccounts_DeleteAccount_FindByPublicKey_Failure(t *testing.T) {
 
 	cas := ChannelAccountsService{
 		chAccStore:          mChannelAccountStore,
-		HorizonClient:       mHorizonClient,
 		TSSDBConnectionPool: dbConnectionPool,
-		LedgerNumberTracker: mLedgerNumberTracker,
-		MaxBaseFee:          100,
-		SigningService:      mSigService,
+		SubmitterEngine: engine.SubmitterEngine{
+			HorizonClient:       mHorizonClient,
+			LedgerNumberTracker: mLedgerNumberTracker,
+			MaxBaseFee:          100,
+			SignatureService:    mSigService,
+		},
 	}
 
 	channelAccountID := "GDKMLSJSPHFWB26JV7ESWLJAKJ6KDTLQWYFT2T4ZVXFFHWBINUEJKASM"
@@ -665,11 +704,13 @@ func Test_ChannelAccounts_DeleteAccount_DeleteFromSigServiceError(t *testing.T) 
 
 	cas := ChannelAccountsService{
 		chAccStore:          mChannelAccountStore,
-		HorizonClient:       mHorizonClient,
 		TSSDBConnectionPool: dbConnectionPool,
-		LedgerNumberTracker: mLedgerNumberTracker,
-		MaxBaseFee:          100,
-		SigningService:      mSigService,
+		SubmitterEngine: engine.SubmitterEngine{
+			HorizonClient:       mHorizonClient,
+			LedgerNumberTracker: mLedgerNumberTracker,
+			MaxBaseFee:          100,
+			SignatureService:    mSigService,
+		},
 	}
 
 	channelAccount := &store.ChannelAccount{
@@ -725,11 +766,13 @@ func Test_ChannelAccounts_DeleteAccount_SubmitTransaction_Failure(t *testing.T) 
 
 	cas := ChannelAccountsService{
 		chAccStore:          mChannelAccountStore,
-		HorizonClient:       mHorizonClient,
 		TSSDBConnectionPool: dbConnectionPool,
-		LedgerNumberTracker: mLedgerNumberTracker,
-		MaxBaseFee:          100,
-		SigningService:      mSigService,
+		SubmitterEngine: engine.SubmitterEngine{
+			HorizonClient:       mHorizonClient,
+			LedgerNumberTracker: mLedgerNumberTracker,
+			MaxBaseFee:          100,
+			SignatureService:    mSigService,
+		},
 	}
 
 	channelAccount := &store.ChannelAccount{
@@ -793,11 +836,13 @@ func Test_ChannelAccounts_EnsureChannelAccounts_Exact_Success(t *testing.T) {
 
 	cas := ChannelAccountsService{
 		chAccStore:          mChannelAccountStore,
-		HorizonClient:       mHorizonClient,
 		TSSDBConnectionPool: dbConnectionPool,
-		LedgerNumberTracker: mLedgerNumberTracker,
-		MaxBaseFee:          100,
-		SigningService:      mSigService,
+		SubmitterEngine: engine.SubmitterEngine{
+			HorizonClient:       mHorizonClient,
+			LedgerNumberTracker: mLedgerNumberTracker,
+			MaxBaseFee:          100,
+			SignatureService:    mSigService,
+		},
 	}
 
 	ensureCount := 2
@@ -837,11 +882,13 @@ func Test_ChannelAccounts_EnsureChannelAccounts_Add_Success(t *testing.T) {
 
 	cas := ChannelAccountsService{
 		chAccStore:          mChannelAccountStore,
-		HorizonClient:       mHorizonClient,
 		TSSDBConnectionPool: dbConnectionPool,
-		LedgerNumberTracker: mLedgerNumberTracker,
-		MaxBaseFee:          100,
-		SigningService:      mSigService,
+		SubmitterEngine: engine.SubmitterEngine{
+			HorizonClient:       mHorizonClient,
+			LedgerNumberTracker: mLedgerNumberTracker,
+			MaxBaseFee:          100,
+			SignatureService:    mSigService,
+		},
 	}
 
 	desiredCount := 5
@@ -902,11 +949,13 @@ func Test_ChannelAccounts_EnsureChannelAccounts_Delete_Success(t *testing.T) {
 
 	cas := ChannelAccountsService{
 		chAccStore:          mChannelAccountStore,
-		HorizonClient:       mHorizonClient,
 		TSSDBConnectionPool: dbConnectionPool,
-		LedgerNumberTracker: mLedgerNumberTracker,
-		MaxBaseFee:          100,
-		SigningService:      mSigService,
+		SubmitterEngine: engine.SubmitterEngine{
+			HorizonClient:       mHorizonClient,
+			LedgerNumberTracker: mLedgerNumberTracker,
+			MaxBaseFee:          100,
+			SignatureService:    mSigService,
+		},
 	}
 
 	rootAccount := keypair.MustParseFull("SBMW2WDSVTGT2N2PCBF3PV7WBOIKVTGGIEBUUYMDX3CKTDD5HY3UIHV4")

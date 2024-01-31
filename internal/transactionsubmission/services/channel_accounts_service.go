@@ -6,7 +6,6 @@ import (
 
 	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/support/log"
-	"github.com/stellar/go/txnbuild"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	txSub "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
@@ -48,14 +47,9 @@ func ViewChannelAccounts(ctx context.Context, dbConnectionPool db.DBConnectionPo
 }
 
 type ChannelAccountsService struct {
-	// Injected dependencies
-	TSSDBConnectionPool db.DBConnectionPool
-	SigningService      engine.SignatureService
-	HorizonClient       horizonclient.ClientInterface
-	MaxBaseFee          int
+	engine.SubmitterEngine
 
-	// Initialized in Init()
-	LedgerNumberTracker engine.LedgerNumberTracker
+	TSSDBConnectionPool db.DBConnectionPool
 	chAccStore          store.ChannelAccountStore
 }
 
@@ -65,20 +59,11 @@ func (s *ChannelAccountsService) validate() error {
 		return fmt.Errorf("tss db connection pool cannot be nil")
 	}
 
-	if s.SigningService == nil {
-		return fmt.Errorf("signing service cannot be nil")
+	if s.SubmitterEngine == (engine.SubmitterEngine{}) {
+		return fmt.Errorf("submitter engine cannot be empty")
 	}
-
-	if s.HorizonClient == nil {
-		return fmt.Errorf("horizon client cannot be nil")
-	}
-
-	if s.LedgerNumberTracker == nil {
-		return fmt.Errorf("ledger number tracker cannot be nil")
-	}
-
-	if s.MaxBaseFee < txnbuild.MinBaseFee {
-		return fmt.Errorf("maxBaseFee must be greater than or equal to %d", txnbuild.MinBaseFee)
+	if err := s.SubmitterEngine.Validate(); err != nil {
+		return fmt.Errorf("validating submitter engine: %w", err)
 	}
 
 	err := acquireAdvisoryLockForCommand(context.Background(), s.TSSDBConnectionPool)
@@ -119,7 +104,7 @@ func (s *ChannelAccountsService) CreateChannelAccounts(ctx context.Context, amou
 			s.HorizonClient,
 			batchSize,
 			s.MaxBaseFee,
-			s.SigningService,
+			s.SignatureService,
 			currLedgerNumber,
 		)
 		if err != nil {
@@ -225,7 +210,7 @@ func (s *ChannelAccountsService) deleteChannelAccount(ctx context.Context, locke
 		}
 
 		log.Ctx(ctx).Warnf("Account %s does not exist on the network", publicKey)
-		err = s.SigningService.Delete(ctx, publicKey, lockedUntilLedger)
+		err = s.SignatureService.Delete(ctx, publicKey, lockedUntilLedger)
 		if err != nil {
 			return fmt.Errorf("deleting %s from signature service: %w", publicKey, err)
 		}
@@ -236,7 +221,7 @@ func (s *ChannelAccountsService) deleteChannelAccount(ctx context.Context, locke
 			s.HorizonClient,
 			publicKey,
 			int64(s.MaxBaseFee),
-			s.SigningService,
+			s.SignatureService,
 			lockedUntilLedger,
 		)
 		if err != nil {
