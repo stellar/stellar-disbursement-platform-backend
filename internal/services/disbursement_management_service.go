@@ -224,7 +224,7 @@ func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, d
 		rootAccount, err := s.horizonClient.AccountDetail(
 			horizonclient.AccountRequest{AccountID: distributionPubKey})
 		if err != nil {
-			return fmt.Errorf("error getting details for root account from horizon client: %w", err)
+			return fmt.Errorf("cannot get details for root account from horizon client: %w", err)
 		}
 
 		var distributionBalance float64
@@ -232,7 +232,7 @@ func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, d
 			if b.Asset.Code == disbursement.Asset.Code && b.Asset.Issuer == disbursement.Asset.Issuer {
 				distributionBalance, err = strconv.ParseFloat(b.Balance, 64)
 				if err != nil {
-					return fmt.Errorf("error converting Horizon distribution account balance %s into float: %w", b.Balance, err)
+					return fmt.Errorf("cannot convert Horizon distribution account balance %s into float: %w", b.Balance, err)
 				}
 			}
 		}
@@ -240,7 +240,7 @@ func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, d
 		disbursementAmount, err := strconv.ParseFloat(disbursement.TotalAmount, 64)
 		if err != nil {
 			return fmt.Errorf(
-				"error converting total amount %s for disbursement id %s into float: %w",
+				"cannot convert total amount %s for disbursement id %s into float: %w",
 				disbursement.TotalAmount,
 				disbursementID,
 				err,
@@ -250,15 +250,11 @@ func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, d
 		var totalPendingAmount float64 = 0.0
 		incompletePayments, err := s.models.Payment.GetAll(ctx, &data.QueryParams{
 			Filters: map[data.FilterKey]interface{}{
-				data.FilterKeyStatus: []data.PaymentStatus{
-					data.ReadyPaymentStatus,
-					data.PendingPaymentStatus,
-					data.PausedPaymentStatus,
-				},
+				data.FilterKeyStatus: data.PaymentInProgressStatuses(),
 			},
 		}, dbTx)
 		if err != nil {
-			return fmt.Errorf("error retreiving incomplete payments: %w", err)
+			return fmt.Errorf("cannot retrieve incomplete payments: %w", err)
 		}
 
 		for _, ip := range incompletePayments {
@@ -269,7 +265,7 @@ func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, d
 			paymentAmount, parsePaymentAmountErr := strconv.ParseFloat(ip.Amount, 64)
 			if parsePaymentAmountErr != nil {
 				return fmt.Errorf(
-					"error converting amount %s for paymment id %s into float: %w",
+					"cannot convert amount %s for paymment id %s into float: %w",
 					ip.Amount,
 					ip.ID,
 					err,
@@ -286,7 +282,7 @@ func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, d
 				disbursementID,
 				totalPendingAmount,
 			)
-			return fmt.Errorf("error starting disbursement with id %s: insufficient balance on distribution account", disbursementID)
+			return fmt.Errorf("cannot start disbursement with id %s: insufficient balance on distribution account", disbursementID)
 		}
 
 		// 5. Update all correct payment status to `ready`

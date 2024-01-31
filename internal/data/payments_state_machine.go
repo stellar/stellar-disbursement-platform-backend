@@ -54,6 +54,12 @@ func PaymentStatuses() []PaymentStatus {
 	return []PaymentStatus{DraftPaymentStatus, ReadyPaymentStatus, PendingPaymentStatus, PausedPaymentStatus, SuccessPaymentStatus, FailedPaymentStatus, CanceledPaymentStatus}
 }
 
+// PaymentInProgressStatuses returns a list of payment statuses that are in progress and could block potential new payments
+// from being initiated if the distribution balance is low.
+func PaymentInProgressStatuses() []PaymentStatus {
+	return []PaymentStatus{ReadyPaymentStatus, PendingPaymentStatus, PausedPaymentStatus}
+}
+
 // SourceStatuses returns a list of states that the payment status can transition from given the target state
 func (status PaymentStatus) SourceStatuses() []PaymentStatus {
 	stateMachine := PaymentStateMachineWithInitialState(DraftPaymentStatus)

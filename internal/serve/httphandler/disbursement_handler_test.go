@@ -1259,20 +1259,6 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 	distributionPubKey := "ABC"
 	asset := data.GetAssetFixture(t, ctx, dbConnectionPool, data.FixtureAssetUSDC)
 
-	hMock.On(
-		"AccountDetail", horizonclient.AccountRequest{AccountID: distributionPubKey},
-	).Return(horizon.Account{
-		Balances: []horizon.Balance{
-			{
-				Balance: "10000",
-				Asset: base.Asset{
-					Code:   asset.Code,
-					Issuer: asset.Issuer,
-				},
-			},
-		},
-	}, nil)
-
 	handler := &DisbursementHandler{
 		Models:             models,
 		DBConnectionPool:   models.DBConnectionPool,
@@ -1371,6 +1357,20 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 	})
 
 	t.Run("disbursement can be started by approver who is not a creator", func(t *testing.T) {
+		hMock.On(
+			"AccountDetail", horizonclient.AccountRequest{AccountID: distributionPubKey},
+		).Return(horizon.Account{
+			Balances: []horizon.Balance{
+				{
+					Balance: "10000",
+					Asset: base.Asset{
+						Code:   asset.Code,
+						Issuer: asset.Issuer,
+					},
+				},
+			},
+		}, nil).Once()
+
 		data.EnableDisbursementApproval(t, ctx, handler.Models.Organizations)
 		defer data.DisableDisbursementApproval(t, ctx, handler.Models.Organizations)
 
@@ -1414,6 +1414,20 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 	})
 
 	t.Run("disbursement started - then paused", func(t *testing.T) {
+		hMock.On(
+			"AccountDetail", horizonclient.AccountRequest{AccountID: distributionPubKey},
+		).Return(horizon.Account{
+			Balances: []horizon.Balance{
+				{
+					Balance: "10000",
+					Asset: base.Asset{
+						Code:   asset.Code,
+						Issuer: asset.Issuer,
+					},
+				},
+			},
+		}, nil).Once()
+
 		authManagerMock.
 			On("GetUser", mock.Anything, token).
 			Return(user, nil).
@@ -1513,6 +1527,7 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 	})
 
 	authManagerMock.AssertExpectations(t)
+	hMock.AssertExpectations(t)
 }
 
 func Test_DisbursementHandler_GetDisbursementInstructions(t *testing.T) {

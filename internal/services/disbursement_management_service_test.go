@@ -68,8 +68,7 @@ func Test_DisbursementManagementService_GetDisbursementsWithCount(t *testing.T) 
 		On("GetUsersByID", mock.Anything, []string{users[1].ID, users[0].ID}).
 		Return(users, nil)
 
-	hMock := &horizonclient.MockClient{}
-	service := NewDisbursementManagementService(models, models.DBConnectionPool, authManagerMock, hMock)
+	service := NewDisbursementManagementService(models, models.DBConnectionPool, authManagerMock, nil)
 
 	ctx := context.Background()
 	t.Run("disbursements list empty", func(t *testing.T) {
@@ -136,9 +135,7 @@ func Test_DisbursementManagementService_GetDisbursementReceiversWithCount(t *tes
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
-	hMock := &horizonclient.MockClient{}
-
-	service := NewDisbursementManagementService(models, models.DBConnectionPool, nil, hMock)
+	service := NewDisbursementManagementService(models, models.DBConnectionPool, nil, nil)
 	disbursement := data.CreateDisbursementFixture(t, context.Background(), dbConnectionPool, models.Disbursements, &data.Disbursement{})
 
 	ctx := context.Background()
@@ -205,19 +202,6 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 	hMock := &horizonclient.MockClient{}
 	distributionPubKey := "ABC"
 
-	hMock.On(
-		"AccountDetail", horizonclient.AccountRequest{AccountID: distributionPubKey},
-	).Return(horizon.Account{
-		Balances: []horizon.Balance{
-			{
-				Balance: "10000",
-				Asset: base.Asset{
-					Code:   asset.Code,
-					Issuer: asset.Issuer,
-				},
-			},
-		},
-	}, nil)
 	service := NewDisbursementManagementService(models, models.DBConnectionPool, authManagerMock, hMock)
 
 	// create fixtures
@@ -361,6 +345,21 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 				UserID: userID,
 			},
 		}
+
+		hMock.On(
+			"AccountDetail", horizonclient.AccountRequest{AccountID: distributionPubKey},
+		).Return(horizon.Account{
+			Balances: []horizon.Balance{
+				{
+					Balance: "10000",
+					Asset: base.Asset{
+						Code:   asset.Code,
+						Issuer: asset.Issuer,
+					},
+				},
+			},
+		}, nil).Once()
+
 		disbursement := data.CreateDisbursementFixture(t, context.Background(), dbConnectionPool, models.Disbursements, &data.Disbursement{
 			Name:          "disbursement #2",
 			Status:        data.ReadyDisbursementStatus,
@@ -417,6 +416,20 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 			Return(user, nil).
 			Once()
 
+		hMock.On(
+			"AccountDetail", horizonclient.AccountRequest{AccountID: distributionPubKey},
+		).Return(horizon.Account{
+			Balances: []horizon.Balance{
+				{
+					Balance: "10000",
+					Asset: base.Asset{
+						Code:   asset.Code,
+						Issuer: asset.Issuer,
+					},
+				},
+			},
+		}, nil).Once()
+
 		err = service.StartDisbursement(ctx, readyDisbursement.ID, distributionPubKey)
 		require.NoError(t, err)
 
@@ -461,6 +474,20 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 			Return(user, nil).
 			Once()
 
+		hMock.On(
+			"AccountDetail", horizonclient.AccountRequest{AccountID: distributionPubKey},
+		).Return(horizon.Account{
+			Balances: []horizon.Balance{
+				{
+					Balance: "10000",
+					Asset: base.Asset{
+						Code:   asset.Code,
+						Issuer: asset.Issuer,
+					},
+				},
+			},
+		}, nil).Once()
+
 		disbursement := data.CreateDisbursementFixture(t, context.Background(), dbConnectionPool, models.Disbursements, &data.Disbursement{
 			Name:    "disbursement #3",
 			Status:  data.ReadyDisbursementStatus,
@@ -481,7 +508,7 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 
 		err = service.StartDisbursement(ctx, disbursement.ID, distributionPubKey)
 		require.EqualError(t, err, fmt.Sprintf(
-			"running atomic function in RunInTransactionWithResult: error starting disbursement with id %s: insufficient balance on distribution account",
+			"running atomic function in RunInTransactionWithResult: cannot start disbursement with id %s: insufficient balance on distribution account",
 			disbursement.ID,
 		))
 
@@ -498,6 +525,7 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 	})
 
 	authManagerMock.AssertExpectations(t)
+	hMock.AssertExpectations(t)
 }
 
 func Test_DisbursementManagementService_PauseDisbursement(t *testing.T) {
@@ -527,19 +555,6 @@ func Test_DisbursementManagementService_PauseDisbursement(t *testing.T) {
 
 	hMock := &horizonclient.MockClient{}
 	distributionPubKey := "ABC"
-	hMock.On(
-		"AccountDetail", horizonclient.AccountRequest{AccountID: distributionPubKey},
-	).Return(horizon.Account{
-		Balances: []horizon.Balance{
-			{
-				Balance: "10000",
-				Asset: base.Asset{
-					Code:   asset.Code,
-					Issuer: asset.Issuer,
-				},
-			},
-		},
-	}, nil)
 
 	service := NewDisbursementManagementService(models, models.DBConnectionPool, authManagerMock, hMock)
 
@@ -617,6 +632,20 @@ func Test_DisbursementManagementService_PauseDisbursement(t *testing.T) {
 	})
 
 	t.Run("disbursement paused", func(t *testing.T) {
+		hMock.On(
+			"AccountDetail", horizonclient.AccountRequest{AccountID: distributionPubKey},
+		).Return(horizon.Account{
+			Balances: []horizon.Balance{
+				{
+					Balance: "10000",
+					Asset: base.Asset{
+						Code:   asset.Code,
+						Issuer: asset.Issuer,
+					},
+				},
+			},
+		}, nil).Once()
+
 		err := service.PauseDisbursement(ctx, startedDisbursement.ID)
 		require.NoError(t, err)
 
@@ -650,6 +679,20 @@ func Test_DisbursementManagementService_PauseDisbursement(t *testing.T) {
 	})
 
 	t.Run("start -> pause -> start -> pause", func(t *testing.T) {
+		hMock.On(
+			"AccountDetail", horizonclient.AccountRequest{AccountID: distributionPubKey},
+		).Return(horizon.Account{
+			Balances: []horizon.Balance{
+				{
+					Balance: "10000",
+					Asset: base.Asset{
+						Code:   asset.Code,
+						Issuer: asset.Issuer,
+					},
+				},
+			},
+		}, nil).Once()
+
 		// 1. Pause Disbursement
 		err := service.PauseDisbursement(ctx, startedDisbursement.ID)
 		require.NoError(t, err)
@@ -721,4 +764,5 @@ func Test_DisbursementManagementService_PauseDisbursement(t *testing.T) {
 	})
 
 	authManagerMock.AssertExpectations(t)
+	hMock.AssertExpectations(t)
 }
