@@ -12,18 +12,22 @@ None
 
 ### Changed
 
-- Automatic cancellation of payments in `READY` status after a certain time period [#121] (https://github.com/stellar/stellar-disbursement-platform-backend/pull/121)
 - Change `POST /disbursements` to accept different verification types [#103](https://github.com/stellar/stellar-disbursement-platform-backend/pull/103)
 - Change `SEP-24` Flow to display different verifications based on disbursement verification type [#116](https://github.com/stellar/stellar-disbursement-platform-backend/pull/116)
 - Add sorting to `GET /users` endpoint [#104](https://github.com/stellar/stellar-disbursement-platform-backend/pull/104)
-- Add read permission for receiver details for business roles [#144](https://github.com/stellar/stellar-disbursement-platform-backend/pull/144)
-- Add unique payment ID to disbursement instructions file as an optional field in `GET /payments/{id}` [#131](https://github.com/stellar/stellar-disbursement-platform-backend/pull/131)
-- Add SMS preview & editing before sending a new disbursement [#146](https://github.com/stellar/stellar-disbursement-platform-backend/pull/146)
+- Change read permission for receiver details to include business roles [#144](https://github.com/stellar/stellar-disbursement-platform-backend/pull/144)
+- Add support for unique payment ID to disbursement instructions file as an optional field in `GET /payments/{id}` [#131](https://github.com/stellar/stellar-disbursement-platform-backend/pull/131)
+- Add support for SMS preview & editing before sending a new disbursement [#146](https://github.com/stellar/stellar-disbursement-platform-backend/pull/146)
 - Add metadata for users that created and started a disbursement in disbursement details `GET /disbursements`, `GET /disbursements/{id}` [#151](https://github.com/stellar/stellar-disbursement-platform-backend/pull/151)
+- Update CI check to run the exhaustive validator [#163](https://github.com/stellar/stellar-disbursement-platform-backend/pull/163)
+- Preload reCAPTCHA script in attempt to mitigate component loading issues upon login [#152](https://github.com/stellar/stellar-disbursement-platform-backend/pull/152)
+- Validate distribution account balance before starting disbursement [#161](https://github.com/stellar/stellar-disbursement-platform-backend/pull/161)
 
 ### Added
 
+- Support automatic cancellation of payments in `READY` status after a certain time period [#121](https://github.com/stellar/stellar-disbursement-platform-backend/pull/121)
 - API endpoint for cancelling payments in `READY` status: `PATCH /payments/{id}/status` [#130](https://github.com/stellar/stellar-disbursement-platform-backend/pull/130)
+- Use CI to m sure the helm README is up to date [#164](https://github.com/stellar/stellar-disbursement-platform-backend/pull/164)
 
 ### Fixed
 
@@ -38,9 +42,10 @@ None
 
 - Stellar Protocol 20 Horizon SDK upgrade [#107](https://github.com/stellar/stellar-disbursement-platform-backend/pull/107)
 - Coinspect Issues:
-  - Coinspect SDP-012 Enhance User Awareness for SMS One-Time Password (OTP) Usage [#138](https://github.com/stellar/stellar-disbursement-platform-backend/pull/138)
   - Add "Secure Operation Manual" section and updated the code to enforce MFA and reCAPTCHA [#150](https://github.com/stellar/stellar-disbursement-platform-backend/pull/150)
   - Coinspect SDP-006 Weak password policy [#143](https://github.com/stellar/stellar-disbursement-platform-backend/pull/143)
+  - Coinspect SDP-007: Log user activity when updating user info [#139](https://github.com/stellar/stellar-disbursement-platform-backend/pull/139)
+  - Coinspect SDP-012 Enhance User Awareness for SMS One-Time Password (OTP) Usage [#138](https://github.com/stellar/stellar-disbursement-platform-backend/pull/138)
 
 ## [1.0.1](https://github.com/stellar/stellar-disbursement-platform-backend/compare/1.0.0...1.0.1)
 
