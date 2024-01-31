@@ -39,10 +39,11 @@ type DisbursementWithUserMetadata struct {
 }
 
 var (
-	ErrDisbursementNotFound        = errors.New("disbursement not found")
-	ErrDisbursementNotReadyToStart = errors.New("disbursement is not ready to be started")
-	ErrDisbursementNotReadyToPause = errors.New("disbursement is not ready to be paused")
-	ErrDisbursementWalletDisabled  = errors.New("disbursement wallet is disabled")
+	ErrDisbursementNotFound                  = errors.New("disbursement not found")
+	ErrDisbursementNotReadyToStart           = errors.New("disbursement is not ready to be started")
+	ErrDisbursementNotReadyToPause           = errors.New("disbursement is not ready to be paused")
+	ErrDisbursementWalletDisabled            = errors.New("disbursement wallet is disabled")
+	ErrDisbursementWalletInsufficientBalance = errors.New("disbursement wallet has insufficient balance to fulfill disbursement and current pending payments")
 
 	ErrDisbursementStatusCantBeChanged = errors.New("disbursement status can't be changed to the requested status")
 	ErrDisbursementStartedByCreator    = errors.New("disbursement can't be started by its creator")
@@ -282,7 +283,7 @@ func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, d
 				disbursementID,
 				totalPendingAmount,
 			)
-			return fmt.Errorf("cannot start disbursement with id %s: insufficient balance on distribution account", disbursementID)
+			return ErrDisbursementWalletInsufficientBalance
 		}
 
 		// 5. Update all correct payment status to `ready`

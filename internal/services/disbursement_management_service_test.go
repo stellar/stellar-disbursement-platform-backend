@@ -507,10 +507,14 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 		log.DefaultLogger.SetOutput(buf)
 
 		err = service.StartDisbursement(ctx, disbursement.ID, distributionPubKey)
-		require.EqualError(t, err, fmt.Sprintf(
-			"running atomic function in RunInTransactionWithResult: cannot start disbursement with id %s: insufficient balance on distribution account",
-			disbursement.ID,
-		))
+		require.EqualError(
+			t,
+			err,
+			fmt.Sprintf(
+				"running atomic function in RunInTransactionWithResult: %s",
+				ErrDisbursementWalletInsufficientBalance.Error(),
+			),
+		)
 
 		// PendingTotal includes payments associated with 'readyDisbursement' that were moved from the draft to ready status
 		assert.Contains(
