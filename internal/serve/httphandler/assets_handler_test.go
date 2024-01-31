@@ -30,6 +30,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/mocks"
 )
 
@@ -106,11 +107,16 @@ func Test_AssetHandler_CreateAsset(t *testing.T) {
 	distributionKP := keypair.MustRandom()
 	horizonClientMock := &horizonclient.MockClient{}
 	signatureService := mocks.NewMockSignatureService(t)
+	mLedgerNumberTracker := mocks.NewMockLedgerNumberTracker(t)
 
 	handler := &AssetsHandler{
-		Models:             model,
-		SignatureService:   signatureService,
-		HorizonClient:      horizonClientMock,
+		Models: model,
+		SubmitterEngine: engine.SubmitterEngine{
+			SignatureService:    signatureService,
+			HorizonClient:       horizonClientMock,
+			LedgerNumberTracker: mLedgerNumberTracker,
+			MaxBaseFee:          200,
+		},
 		GetPreconditionsFn: func() txnbuild.Preconditions { return defaultPreconditions },
 	}
 
@@ -146,7 +152,7 @@ func Test_AssetHandler_CreateAsset(t *testing.T) {
 						SourceAccount: distributionKP.Address(),
 					},
 				},
-				BaseFee:       txnbuild.MinBaseFee * feeMultiplierInStroops,
+				BaseFee:       200,
 				Preconditions: defaultPreconditions,
 			},
 		)
@@ -332,7 +338,7 @@ func Test_AssetHandler_CreateAsset(t *testing.T) {
 						SourceAccount: distributionKP.Address(),
 					},
 				},
-				BaseFee:       txnbuild.MinBaseFee * feeMultiplierInStroops,
+				BaseFee:       200,
 				Preconditions: defaultPreconditions,
 			},
 		)
@@ -418,7 +424,7 @@ func Test_AssetHandler_CreateAsset(t *testing.T) {
 						SourceAccount: distributionKP.Address(),
 					},
 				},
-				BaseFee:       txnbuild.MinBaseFee * feeMultiplierInStroops,
+				BaseFee:       200,
 				Preconditions: defaultPreconditions,
 			},
 		)
@@ -497,11 +503,16 @@ func Test_AssetHandler_DeleteAsset(t *testing.T) {
 	distributionKP := keypair.MustRandom()
 	horizonClientMock := &horizonclient.MockClient{}
 	signatureService := mocks.NewMockSignatureService(t)
+	mLedgerNumberTracker := mocks.NewMockLedgerNumberTracker(t)
 
 	handler := &AssetsHandler{
-		Models:             model,
-		SignatureService:   signatureService,
-		HorizonClient:      horizonClientMock,
+		Models: model,
+		SubmitterEngine: engine.SubmitterEngine{
+			SignatureService:    signatureService,
+			HorizonClient:       horizonClientMock,
+			LedgerNumberTracker: mLedgerNumberTracker,
+			MaxBaseFee:          150,
+		},
 		GetPreconditionsFn: func() txnbuild.Preconditions { return defaultPreconditions },
 	}
 
@@ -538,7 +549,7 @@ func Test_AssetHandler_DeleteAsset(t *testing.T) {
 						SourceAccount: distributionKP.Address(),
 					},
 				},
-				BaseFee:       txnbuild.MinBaseFee * feeMultiplierInStroops,
+				BaseFee:       150,
 				Preconditions: defaultPreconditions,
 			},
 		)
@@ -702,10 +713,15 @@ func Test_AssetHandler_handleUpdateAssetTrustlineForDistributionAccount(t *testi
 	distributionKP := keypair.MustRandom()
 	horizonClientMock := &horizonclient.MockClient{}
 	signatureService := mocks.NewMockSignatureService(t)
+	mLedgerNumberTracker := mocks.NewMockLedgerNumberTracker(t)
 
 	handler := &AssetsHandler{
-		SignatureService:   signatureService,
-		HorizonClient:      horizonClientMock,
+		SubmitterEngine: engine.SubmitterEngine{
+			SignatureService:    signatureService,
+			HorizonClient:       horizonClientMock,
+			LedgerNumberTracker: mLedgerNumberTracker,
+			MaxBaseFee:          300,
+		},
 		GetPreconditionsFn: func() txnbuild.Preconditions { return defaultPreconditions },
 	}
 
@@ -786,7 +802,7 @@ func Test_AssetHandler_handleUpdateAssetTrustlineForDistributionAccount(t *testi
 						SourceAccount: distributionKP.Address(),
 					},
 				},
-				BaseFee:       txnbuild.MinBaseFee * feeMultiplierInStroops,
+				BaseFee:       300,
 				Preconditions: defaultPreconditions,
 			},
 		)
@@ -877,7 +893,7 @@ func Test_AssetHandler_handleUpdateAssetTrustlineForDistributionAccount(t *testi
 						SourceAccount: distributionKP.Address(),
 					},
 				},
-				BaseFee:       txnbuild.MinBaseFee * feeMultiplierInStroops,
+				BaseFee:       300,
 				Preconditions: defaultPreconditions,
 			},
 		)
@@ -1086,10 +1102,15 @@ func Test_AssetHandler_submitChangeTrustTransaction(t *testing.T) {
 	distributionKP := keypair.MustRandom()
 	horizonClientMock := &horizonclient.MockClient{}
 	signatureService := mocks.NewMockSignatureService(t)
+	mLedgerNumberTracker := mocks.NewMockLedgerNumberTracker(t)
 
 	handler := &AssetsHandler{
-		SignatureService:   signatureService,
-		HorizonClient:      horizonClientMock,
+		SubmitterEngine: engine.SubmitterEngine{
+			SignatureService:    signatureService,
+			HorizonClient:       horizonClientMock,
+			LedgerNumberTracker: mLedgerNumberTracker,
+			MaxBaseFee:          txnbuild.MinBaseFee,
+		},
 		GetPreconditionsFn: func() txnbuild.Preconditions { return defaultPreconditions },
 	}
 
@@ -1150,7 +1171,7 @@ func Test_AssetHandler_submitChangeTrustTransaction(t *testing.T) {
 						SourceAccount: distributionKP.Address(),
 					},
 				},
-				BaseFee:       txnbuild.MinBaseFee * feeMultiplierInStroops,
+				BaseFee:       txnbuild.MinBaseFee,
 				Preconditions: defaultPreconditions,
 			},
 		)
@@ -1196,7 +1217,7 @@ func Test_AssetHandler_submitChangeTrustTransaction(t *testing.T) {
 						SourceAccount: distributionKP.Address(),
 					},
 				},
-				BaseFee:       txnbuild.MinBaseFee * feeMultiplierInStroops,
+				BaseFee:       txnbuild.MinBaseFee,
 				Preconditions: defaultPreconditions,
 			},
 		)
@@ -1263,7 +1284,7 @@ func Test_AssetHandler_submitChangeTrustTransaction(t *testing.T) {
 						SourceAccount: distributionKP.Address(),
 					},
 				},
-				BaseFee:       txnbuild.MinBaseFee * feeMultiplierInStroops,
+				BaseFee:       txnbuild.MinBaseFee,
 				Preconditions: defaultPreconditions,
 			},
 		)
@@ -1316,12 +1337,18 @@ func newAssetTestMock(t *testing.T, distributionAccountAddress string) *assetTes
 		On("DistributionAccount").
 		Return(distributionAccountAddress)
 
+	mLedgerNumberTracker := mocks.NewMockLedgerNumberTracker(t)
+
 	return &assetTestMock{
 		SignatureService:  signatureService,
 		HorizonClientMock: horizonClientMock,
 		Handler: AssetsHandler{
-			SignatureService: signatureService,
-			HorizonClient:    horizonClientMock,
+			SubmitterEngine: engine.SubmitterEngine{
+				SignatureService:    signatureService,
+				HorizonClient:       horizonClientMock,
+				LedgerNumberTracker: mLedgerNumberTracker,
+				MaxBaseFee:          txnbuild.MinBaseFee,
+			},
 		},
 	}
 }
@@ -1376,7 +1403,7 @@ func Test_AssetHandler_submitChangeTrustTransaction_makeSurePreconditionsAreSetA
 				SourceAccount: distributionKP.Address(),
 			},
 		},
-		BaseFee: txnbuild.MinBaseFee * feeMultiplierInStroops,
+		BaseFee: txnbuild.MinBaseFee,
 	}
 
 	// TODO: Fix this test that seems to be flaky locally [SDP-963]

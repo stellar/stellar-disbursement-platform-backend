@@ -26,7 +26,7 @@ func NewTxSubmitterEngine(ctx context.Context, opts TxSubmitterEngineOptions) (e
 		if castedInstance, ok2 := instance.(engine.SubmitterEngine); ok2 {
 			return castedInstance, nil
 		}
-		return engine.SubmitterEngine{}, fmt.Errorf("trying to cast an existing ledger number tracker instance")
+		return engine.SubmitterEngine{}, fmt.Errorf("trying to cast an existing submitter engine instance")
 	}
 
 	horizonClient, err := NewHorizonClient(ctx, opts.HorizonURL)

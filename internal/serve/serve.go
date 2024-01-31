@@ -10,7 +10,6 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
-	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/network"
 	supporthttp "github.com/stellar/go/support/http"
 	"github.com/stellar/go/support/log"
@@ -70,8 +69,7 @@ type ServeOptions struct {
 	UIBaseURL                       string
 	ResetTokenExpirationHours       int
 	NetworkPassphrase               string
-	HorizonClient                   horizonclient.ClientInterface
-	SignatureService                engine.SignatureService
+	SubmitterEngine                 engine.SubmitterEngine
 	Sep10SigningPublicKey           string
 	Sep10SigningPrivateKey          string
 	AnchorPlatformBaseSepURL        string
@@ -80,7 +78,6 @@ type ServeOptions struct {
 	AnchorPlatformAPIService        anchorplatform.AnchorPlatformAPIServiceInterface
 	CrashTrackerClient              crashtracker.CrashTrackerClient
 	DistributionPublicKey           string
-	DistributionSeed                string
 	ReCAPTCHASiteKey                string
 	ReCAPTCHASiteSecretKey          string
 	EnableScheduler                 bool
@@ -280,9 +277,8 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 
 		r.Route("/assets", func(r chi.Router) {
 			assetsHandler := httphandler.AssetsHandler{
-				Models:           o.Models,
-				SignatureService: o.SignatureService,
-				HorizonClient:    o.HorizonClient,
+				Models:          o.Models,
+				SubmitterEngine: o.SubmitterEngine,
 			}
 
 			r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...)).

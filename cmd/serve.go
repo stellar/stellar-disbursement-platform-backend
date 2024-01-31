@@ -15,7 +15,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/eventhandlers"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/scheduler"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 
 	"github.com/spf13/cobra"
 	"github.com/stellar/go/support/config"
@@ -162,7 +161,6 @@ func (s *ServerService) SetupConsumers(ctx context.Context, eventBrokerOptions c
 }
 
 func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorService monitor.MonitorServiceInterface) *cobra.Command {
-	var horizonURL string
 	serveOpts := serve.ServeOptions{}
 	schedulerOptions := scheduler.SchedulerOptions{}
 
@@ -261,7 +259,6 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			Required:    true,
 		},
 		cmdUtils.DistributionPublicKey(&serveOpts.DistributionPublicKey),
-		cmdUtils.DistributionSeed(&serveOpts.DistributionSeed),
 		{
 			Name:      "recaptcha-site-key",
 			Usage:     "The Google 'reCAPTCHA v2 - I'm not a robot' site key.",
@@ -285,7 +282,6 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			CustomSetValue: cmdUtils.SetConfigOptionURLString,
 			Required:       true,
 		},
-		cmdUtils.HorizonURLConfigOption(&horizonURL),
 		{
 			Name:        "enable-scheduler",
 			Usage:       "Enable Scheduler for SDP Backend Jobs",
@@ -391,8 +387,15 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 	configOpts = append(configOpts, cmdUtils.EventBrokerConfigOptions(&eventBrokerOptions)...)
 
 	// signature service config options:
-	sigServiceOptions := engine.SignatureServiceOptions{}
-	configOpts = append(configOpts, cmdUtils.BaseSignatureServiceConfigOptions(&sigServiceOptions)...)
+	txSubmitterOpts := di.TxSubmitterEngineOptions{}
+	configOpts = append(configOpts,
+		append(
+			cmdUtils.BaseSignatureServiceConfigOptions(&txSubmitterOpts.SignatureServiceOptions),
+			cmdUtils.DistributionSeed(&txSubmitterOpts.SignatureServiceOptions.DistributionPrivateKey),
+			cmdUtils.MaxBaseFee(&txSubmitterOpts.MaxBaseFee),
+			cmdUtils.HorizonURLConfigOption(&txSubmitterOpts.HorizonURL),
+		)...,
+	)
 
 	cmd := &cobra.Command{
 		Use:   "serve",
@@ -472,13 +475,6 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			}
 			serveOpts.AnchorPlatformAPIService = apAPIService
 
-			// Grab horizon client instance
-			horizonClient, err := di.NewHorizonClient(ctx, horizonURL)
-			if err != nil {
-				log.Ctx(ctx).Fatalf("error retrieving horizon client through the dependency injector in %s: %v", cmd.Name(), err)
-			}
-			serveOpts.HorizonClient = horizonClient
-
 			// Setup the TSSDBConnectionPool
 			tssDBConnectionPool, err := di.NewTSSDBConnectionPool(ctx, di.TSSDBConnectionPoolOptions{DatabaseURL: globalOptions.DatabaseURL})
 			if err != nil {
@@ -491,14 +487,14 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 				}
 			}()
 
-			// Setup the signature service
-			sigServiceOptions.DBConnectionPool = tssDBConnectionPool
-			sigServiceOptions.NetworkPassphrase = globalOptions.NetworkPassphrase
-			sigServiceOptions.DistributionPrivateKey = serveOpts.DistributionSeed
-			serveOpts.SignatureService, err = di.NewSignatureService(ctx, sigServiceOptions)
+			// Setup the Submitter Engine
+			txSubmitterOpts.SignatureServiceOptions.DBConnectionPool = tssDBConnectionPool
+			txSubmitterOpts.SignatureServiceOptions.NetworkPassphrase = globalOptions.NetworkPassphrase
+			submitterEngine, err := di.NewTxSubmitterEngine(ctx, txSubmitterOpts)
 			if err != nil {
-				log.Ctx(ctx).Fatalf("error creating signature service: %v", err)
+				log.Ctx(ctx).Fatalf("error creating submitter engine: %v", err)
 			}
+			serveOpts.SubmitterEngine = submitterEngine
 
 			// Kafka (background)
 			if eventBrokerOptions.EventBrokerType == events.KafkaEventBrokerType {

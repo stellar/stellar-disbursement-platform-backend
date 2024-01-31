@@ -9,6 +9,7 @@ import (
 	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/keypair"
 	"github.com/stellar/go/network"
+	"github.com/stellar/go/txnbuild"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -25,6 +26,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/scheduler"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	engineMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/mocks"
 	serveadmin "github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/serve"
 )
@@ -96,15 +98,32 @@ func Test_serve(t *testing.T) {
 	dbt.Close()
 
 	cmdUtils.ClearTestEnvironment(t)
-	// Populate the dependency injection object for the TSS DB connection pool, so we can close it later
+	distributionSeed := "SBHQEYSACD5DOK5I656NKLAMOHC6VT64ATOWWM2VJ3URGDGMVGNPG4ON"
+
+	// Populate dependency injection:
 	di.SetInstance("tss_db_connection_pool_instance", dbConnectionPool)
+
+	mHorizonClient := &horizonclient.MockClient{}
+	di.SetInstance("horizon_client_instance", mHorizonClient)
+
+	mLedgerNumberTracker := engineMocks.NewMockLedgerNumberTracker(t)
+	di.SetInstance("ledger_number_tracker_instance", mLedgerNumberTracker)
+
+	mSignatureService := engineMocks.NewMockSignatureService(t)
+	di.SetInstance("signature_service_instance", mSignatureService)
+
+	submitterEngine := engine.SubmitterEngine{
+		HorizonClient:       mHorizonClient,
+		SignatureService:    mSignatureService,
+		LedgerNumberTracker: mLedgerNumberTracker,
+		MaxBaseFee:          100 * txnbuild.MinBaseFee,
+	}
+	di.SetInstance("tx_submitter_engine_instance", submitterEngine)
 
 	ctx := context.Background()
 
 	// mock metric service
 	mMonitorService := monitor.MockMonitorService{}
-	mHorizonClient := &horizonclient.MockClient{}
-	di.SetInstance("horizon_client_instance", mHorizonClient)
 
 	serveOpts := serve.ServeOptions{
 		Environment:                     "test",
@@ -122,18 +141,17 @@ func Test_serve(t *testing.T) {
 		UIBaseURL:                       "http://localhost:3000",
 		ResetTokenExpirationHours:       24,
 		NetworkPassphrase:               network.TestNetworkPassphrase,
-		HorizonClient:                   mHorizonClient,
 		Sep10SigningPublicKey:           "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
 		Sep10SigningPrivateKey:          "SBUSPEKAZKLZSWHRSJ2HWDZUK6I3IVDUWA7JJZSGBLZ2WZIUJI7FPNB5",
 		AnchorPlatformBaseSepURL:        "localhost:8080",
 		AnchorPlatformBasePlatformURL:   "localhost:8085",
 		AnchorPlatformOutgoingJWTSecret: "jwt_secret_1234567890",
 		DistributionPublicKey:           "GBC2HVWFIFN7WJHFORVBCDKJORG6LWTW3O2QBHOURL3KHZPM4KMWTUSA",
-		DistributionSeed:                "SBHQEYSACD5DOK5I656NKLAMOHC6VT64ATOWWM2VJ3URGDGMVGNPG4ON",
 		ReCAPTCHASiteKey:                "reCAPTCHASiteKey",
 		ReCAPTCHASiteSecretKey:          "reCAPTCHASiteSecretKey",
 		EnableScheduler:                 true,
 		EnableMultiTenantDB:             false,
+		SubmitterEngine:                 submitterEngine,
 	}
 	serveOpts.AnchorPlatformAPIService, err = anchorplatform.NewAnchorPlatformAPIService(httpclient.DefaultClient(), serveOpts.AnchorPlatformBasePlatformURL, serveOpts.AnchorPlatformOutgoingJWTSecret)
 	require.NoError(t, err)
@@ -167,8 +185,6 @@ func Test_serve(t *testing.T) {
 	defer mMonitorService.AssertExpectations(t)
 
 	encryptionPassphrase := keypair.MustRandom().Seed()
-	serveOpts.SignatureService = engineMocks.NewMockSignatureService(t)
-	di.SetInstance("signature_service_instance", serveOpts.SignatureService)
 
 	serveMetricOpts := serve.MetricsServeOptions{
 		Port:        8002,
@@ -238,7 +254,7 @@ func Test_serve(t *testing.T) {
 	t.Setenv("ANCHOR_PLATFORM_BASE_PLATFORM_URL", serveOpts.AnchorPlatformBasePlatformURL)
 	t.Setenv("ANCHOR_PLATFORM_OUTGOING_JWT_SECRET", serveOpts.AnchorPlatformOutgoingJWTSecret)
 	t.Setenv("DISTRIBUTION_PUBLIC_KEY", serveOpts.DistributionPublicKey)
-	t.Setenv("DISTRIBUTION_SEED", serveOpts.DistributionSeed)
+	t.Setenv("DISTRIBUTION_SEED", distributionSeed)
 	t.Setenv("BASE_URL", serveOpts.BaseURL)
 	t.Setenv("RECAPTCHA_SITE_KEY", serveOpts.ReCAPTCHASiteKey)
 	t.Setenv("RECAPTCHA_SITE_SECRET_KEY", serveOpts.ReCAPTCHASiteSecretKey)
