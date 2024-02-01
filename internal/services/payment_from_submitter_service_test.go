@@ -452,7 +452,7 @@ func Test_PaymentFromSubmitterService_RetryingPayment(t *testing.T) {
 	assert.Equal(t, "Failing Test", paymentDB.StatusHistory[2].StatusMessage)
 
 	// AND the payment is retried
-	err = testCtx.sdpModel.Payment.RetryFailedPayments(ctx, "email@test.com", paymentDB.ID)
+	err = testCtx.sdpModel.Payment.RetryFailedPayments(ctx, dbConnectionPool, "email@test.com", paymentDB.ID)
 	require.NoError(t, err)
 
 	paymentDB, err = testCtx.sdpModel.Payment.Get(ctx, paymentDB.ID, dbConnectionPool)
@@ -573,7 +573,7 @@ func Test_PaymentFromSubmitterService_CompleteDisbursements(t *testing.T) {
 	assert.Equal(t, data.StartedDisbursementStatus, disbursement.Status)
 
 	// AND the payment is retried
-	err = testCtx.sdpModel.Payment.RetryFailedPayments(ctx, "email@test.com", paymentDB.ID)
+	err = testCtx.sdpModel.Payment.RetryFailedPayments(ctx, dbConnectionPool, "email@test.com", paymentDB.ID)
 	require.NoError(t, err)
 
 	paymentDB, err = testCtx.sdpModel.Payment.Get(ctx, paymentDB.ID, dbConnectionPool)
