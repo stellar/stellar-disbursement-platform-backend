@@ -14,6 +14,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 type RetryInvitationSMSResponse struct {
@@ -65,6 +66,12 @@ func (h ReceiverWalletsHandler) RetryInvitation(rw http.ResponseWriter, req *htt
 			httperror.NotFound("", err, nil).Render(rw)
 			return
 		}
+
+		if errors.Is(err, tenant.ErrTenantNotFoundInContext) {
+			httperror.Forbidden("", err, nil).Render(rw)
+			return
+		}
+
 		err = fmt.Errorf("retrying invitation: %w", err)
 		httperror.InternalError(ctx, "", err, nil).Render(rw)
 		return
