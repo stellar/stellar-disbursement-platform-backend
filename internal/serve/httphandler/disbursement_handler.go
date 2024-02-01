@@ -11,6 +11,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/gocarina/gocsv"
+	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/support/render/httpjson"
 
@@ -26,17 +27,21 @@ import (
 )
 
 type DisbursementHandler struct {
-	Models           *data.Models
-	MonitorService   monitor.MonitorServiceInterface
-	DBConnectionPool db.DBConnectionPool
-	AuthManager      auth.AuthManager
+	Models             *data.Models
+	MonitorService     monitor.MonitorServiceInterface
+	DBConnectionPool   db.DBConnectionPool
+	AuthManager        auth.AuthManager
+	HorizonClient      horizonclient.ClientInterface
+	DistributionPubKey string
 }
 
 type PostDisbursementRequest struct {
-	Name        string `json:"name"`
-	CountryCode string `json:"country_code"`
-	WalletID    string `json:"wallet_id"`
-	AssetID     string `json:"asset_id"`
+	Name                           string                 `json:"name"`
+	CountryCode                    string                 `json:"country_code"`
+	WalletID                       string                 `json:"wallet_id"`
+	AssetID                        string                 `json:"asset_id"`
+	VerificationField              data.VerificationField `json:"verification_field"`
+	SMSRegistrationMessageTemplate string                 `json:"sms_registration_message_template"`
 }
 
 type PatchDisbursementStatusRequest struct {
@@ -52,9 +57,7 @@ func (d DisbursementHandler) PostDisbursement(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// validate request
-	v := validators.NewValidator()
-
+	v := validators.NewDisbursementRequestValidator(disbursementRequest.VerificationField)
 	v.Check(disbursementRequest.Name != "", "name", "name is required")
 	v.Check(disbursementRequest.CountryCode != "", "country_code", "country_code is required")
 	v.Check(disbursementRequest.WalletID != "", "wallet_id", "wallet_id is required")
@@ -62,6 +65,13 @@ func (d DisbursementHandler) PostDisbursement(w http.ResponseWriter, r *http.Req
 
 	if v.HasErrors() {
 		httperror.BadRequest("Request invalid", err, v.Errors).Render(w)
+		return
+	}
+
+	verificationField := v.ValidateAndGetVerificationType()
+
+	if v.HasErrors() {
+		httperror.BadRequest("Verification field invalid", err, v.Errors).Render(w)
 		return
 	}
 
@@ -107,9 +117,11 @@ func (d DisbursementHandler) PostDisbursement(w http.ResponseWriter, r *http.Req
 			Status:    data.DraftDisbursementStatus,
 			UserID:    user.ID,
 		}},
-		Wallet:  wallet,
-		Asset:   asset,
-		Country: country,
+		Wallet:                         wallet,
+		Asset:                          asset,
+		Country:                        country,
+		VerificationField:              verificationField,
+		SMSRegistrationMessageTemplate: disbursementRequest.SMSRegistrationMessageTemplate,
 	}
 
 	newId, err := d.Models.Disbursements.Insert(ctx, &disbursement)
@@ -160,7 +172,7 @@ func (d DisbursementHandler) GetDisbursements(w http.ResponseWriter, r *http.Req
 	}
 
 	ctx := r.Context()
-	disbursementManagementService := services.NewDisbursementManagementService(d.Models, d.DBConnectionPool, d.AuthManager)
+	disbursementManagementService := services.NewDisbursementManagementService(d.Models, d.DBConnectionPool, d.AuthManager, d.HorizonClient)
 	resultWithTotal, err := disbursementManagementService.GetDisbursementsWithCount(ctx, queryParams)
 	if err != nil {
 		httperror.InternalError(ctx, "Cannot retrieve disbursements", err, nil).Render(w)
@@ -168,14 +180,16 @@ func (d DisbursementHandler) GetDisbursements(w http.ResponseWriter, r *http.Req
 	}
 	if resultWithTotal.Total == 0 {
 		httpjson.RenderStatus(w, http.StatusOK, httpresponse.NewEmptyPaginatedResponse(), httpjson.JSON)
-	} else {
-		response, errGet := httpresponse.NewPaginatedResponse(r, resultWithTotal.Result, queryParams.Page, queryParams.PageLimit, resultWithTotal.Total)
-		if errGet != nil {
-			httperror.InternalError(ctx, "Cannot write paginated response for disbursements", errGet, nil).Render(w)
-			return
-		}
-		httpjson.RenderStatus(w, http.StatusOK, response, httpjson.JSON)
+		return
 	}
+
+	response, errGet := httpresponse.NewPaginatedResponse(r, resultWithTotal.Result, queryParams.Page, queryParams.PageLimit, resultWithTotal.Total)
+	if errGet != nil {
+		httperror.InternalError(ctx, "Cannot write paginated response for disbursements", errGet, nil).Render(w)
+		return
+	}
+
+	httpjson.RenderStatus(w, http.StatusOK, response, httpjson.JSON)
 }
 
 func (d DisbursementHandler) PostDisbursementInstructions(w http.ResponseWriter, r *http.Request) {
@@ -267,7 +281,18 @@ func (d DisbursementHandler) GetDisbursement(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	httpjson.Render(w, disbursement, httpjson.JSON)
+	disbursementManagementService := services.NewDisbursementManagementService(d.Models, d.DBConnectionPool, d.AuthManager, d.HorizonClient)
+	response, err := disbursementManagementService.AppendUserMetadata(ctx, []*data.Disbursement{disbursement})
+	if err != nil {
+		httperror.NotFound("disbursement user metadata not found", err, nil).Render(w)
+	}
+	if len(response) != 1 {
+		httperror.InternalError(
+			ctx, fmt.Sprintf("Size of response is unexpected: %d", len(response)), nil, nil,
+		).Render(w)
+	}
+
+	httpjson.Render(w, response[0], httpjson.JSON)
 }
 
 func (d DisbursementHandler) GetDisbursementReceivers(w http.ResponseWriter, r *http.Request) {
@@ -282,7 +307,7 @@ func (d DisbursementHandler) GetDisbursementReceivers(w http.ResponseWriter, r *
 		return
 	}
 
-	disbursementManagementService := services.NewDisbursementManagementService(d.Models, d.DBConnectionPool, d.AuthManager)
+	disbursementManagementService := services.NewDisbursementManagementService(d.Models, d.DBConnectionPool, d.AuthManager, d.HorizonClient)
 	resultWithTotal, err := disbursementManagementService.GetDisbursementReceiversWithCount(ctx, disbursementID, queryParams)
 	if err != nil {
 		if errors.Is(err, services.ErrDisbursementNotFound) {
@@ -329,14 +354,14 @@ func (d DisbursementHandler) PatchDisbursementStatus(w http.ResponseWriter, r *h
 		return
 	}
 
-	disbursementManagementService := services.NewDisbursementManagementService(d.Models, d.DBConnectionPool, d.AuthManager)
+	disbursementManagementService := services.NewDisbursementManagementService(d.Models, d.DBConnectionPool, d.AuthManager, d.HorizonClient)
 	response := UpdateDisbursementStatusResponseBody{}
 
 	ctx := r.Context()
 	disbursementID := chi.URLParam(r, "id")
 	switch toStatus {
 	case data.StartedDisbursementStatus:
-		err = disbursementManagementService.StartDisbursement(ctx, disbursementID)
+		err = disbursementManagementService.StartDisbursement(ctx, disbursementID, d.DistributionPubKey)
 		response.Message = "Disbursement started"
 	case data.PausedDisbursementStatus:
 		err = disbursementManagementService.PauseDisbursement(ctx, disbursementID)
@@ -359,6 +384,8 @@ func (d DisbursementHandler) PatchDisbursementStatus(w http.ResponseWriter, r *h
 			httperror.Forbidden("Disbursement can't be started by its creator. Approval by another user is required.", err, nil).Render(w)
 		case errors.Is(err, services.ErrDisbursementWalletDisabled):
 			httperror.BadRequest(services.ErrDisbursementWalletDisabled.Error(), err, nil).Render(w)
+		case errors.Is(err, services.ErrDisbursementWalletInsufficientBalance):
+			httperror.Conflict(services.ErrDisbursementWalletInsufficientBalance.Error(), err, nil).Render(w)
 		default:
 			msg := fmt.Sprintf("Cannot update disbursement ID %s with status: %s", disbursementID, toStatus)
 			httperror.InternalError(ctx, msg, err, nil).Render(w)

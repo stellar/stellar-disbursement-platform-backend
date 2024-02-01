@@ -2,10 +2,12 @@ package httphandler
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"image"
+	"sort"
 
 	// Don't remove the `image/jpeg` and `image/png` packages import unless
 	// the `image` package is no longer necessary.
@@ -42,6 +44,7 @@ type ProfileHandler struct {
 	BaseURL               string
 	PublicFilesFS         fs.FS
 	DistributionPublicKey string
+	PasswordValidator     *authUtils.PasswordValidator
 }
 
 type PatchOrganizationProfileRequest struct {
@@ -49,6 +52,7 @@ type PatchOrganizationProfileRequest struct {
 	TimezoneUTCOffset              string  `json:"timezone_utc_offset"`
 	IsApprovalRequired             *bool   `json:"is_approval_required"`
 	SMSResendInterval              *int64  `json:"sms_resend_interval"`
+	PaymentCancellationPeriodDays  *int64  `json:"payment_cancellation_period_days"`
 	SMSRegistrationMessageTemplate *string `json:"sms_registration_message_template"`
 	OTPMessageTemplate             *string `json:"otp_message_template"`
 }
@@ -59,14 +63,14 @@ func (r *PatchOrganizationProfileRequest) AreAllFieldsEmpty() bool {
 		r.IsApprovalRequired == nil &&
 		r.SMSRegistrationMessageTemplate == nil &&
 		r.OTPMessageTemplate == nil &&
-		r.SMSResendInterval == nil)
+		r.SMSResendInterval == nil &&
+		r.PaymentCancellationPeriodDays == nil)
 }
 
 type PatchUserProfileRequest struct {
 	FirstName string `json:"first_name"`
 	LastName  string `json:"last_name"`
 	Email     string `json:"email"`
-	Password  string `json:"password"`
 }
 
 type GetProfileResponse struct {
@@ -86,9 +90,9 @@ type PatchUserPasswordRequest struct {
 func (h ProfileHandler) PatchOrganizationProfile(rw http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 
-	_, ok := ctx.Value(middleware.TokenContextKey).(string)
-	if !ok {
-		httperror.Unauthorized("", nil, nil).Render(rw)
+	_, user, httpErr := getTokenAndUser(ctx, h.AuthManager)
+	if httpErr != nil {
+		httpErr.Render(rw)
 		return
 	}
 
@@ -151,7 +155,7 @@ func (h ProfileHandler) PatchOrganizationProfile(rw http.ResponseWriter, req *ht
 		return
 	}
 
-	err = h.Models.Organizations.Update(ctx, &data.OrganizationUpdate{
+	organizationUpdate := data.OrganizationUpdate{
 		Name:                           reqBody.OrganizationName,
 		Logo:                           fileContentBytes,
 		TimezoneUTCOffset:              reqBody.TimezoneUTCOffset,
@@ -159,7 +163,27 @@ func (h ProfileHandler) PatchOrganizationProfile(rw http.ResponseWriter, req *ht
 		SMSRegistrationMessageTemplate: reqBody.SMSRegistrationMessageTemplate,
 		OTPMessageTemplate:             reqBody.OTPMessageTemplate,
 		SMSResendInterval:              reqBody.SMSResendInterval,
-	})
+		PaymentCancellationPeriodDays:  reqBody.PaymentCancellationPeriodDays,
+	}
+	requestDict, err := utils.ConvertType[data.OrganizationUpdate, map[string]interface{}](organizationUpdate)
+	if err != nil {
+		httperror.InternalError(ctx, "Cannot convert organization update to map", err, nil).Render(rw)
+		return
+	}
+	var nonEmptyChanges []string
+	for k, v := range requestDict {
+		if !utils.IsEmpty(v) {
+			value := v
+			if k == "Logo" {
+				value = "..."
+			}
+			nonEmptyChanges = append(nonEmptyChanges, fmt.Sprintf("%s='%v'", k, value))
+		}
+	}
+	sort.Strings(nonEmptyChanges)
+
+	log.Ctx(ctx).Warnf("[PatchOrganizationProfile] - userID %s will update the organization fields [%s]", user.ID, strings.Join(nonEmptyChanges, ", "))
+	err = h.Models.Organizations.Update(ctx, &organizationUpdate)
 	if err != nil {
 		httperror.InternalError(ctx, "Cannot update organization", err, nil).Render(rw)
 		return
@@ -171,9 +195,9 @@ func (h ProfileHandler) PatchOrganizationProfile(rw http.ResponseWriter, req *ht
 func (h ProfileHandler) PatchUserProfile(rw http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 
-	token, ok := ctx.Value(middleware.TokenContextKey).(string)
-	if !ok {
-		httperror.Unauthorized("", nil, nil).Render(rw)
+	token, user, httpErr := getTokenAndUser(ctx, h.AuthManager)
+	if httpErr != nil {
+		httpErr.Render(rw)
 		return
 	}
 
@@ -185,13 +209,6 @@ func (h ProfileHandler) PatchUserProfile(rw http.ResponseWriter, req *http.Reque
 		return
 	}
 
-	if reqBody.Password != "" && len(reqBody.Password) < 8 {
-		httperror.BadRequest("", nil, map[string]interface{}{
-			"password": "password should have at least 8 characters",
-		}).Render(rw)
-		return
-	}
-
 	if reqBody.Email != "" {
 		if err := utils.ValidateEmail(reqBody.Email); err != nil {
 			httperror.BadRequest("", nil, map[string]interface{}{
@@ -199,16 +216,17 @@ func (h ProfileHandler) PatchUserProfile(rw http.ResponseWriter, req *http.Reque
 			}).Render(rw)
 			return
 		}
+		log.Ctx(ctx).Warnf("[PatchUserProfile] - Will update email for userID %s to %s", user.ID, utils.TruncateString(reqBody.Email, 3))
 	}
 
-	if reqBody.FirstName == "" && reqBody.LastName == "" && reqBody.Email == "" && reqBody.Password == "" {
+	if utils.IsEmpty(reqBody) {
 		httperror.BadRequest("", nil, map[string]interface{}{
-			"details": "provide at least first_name, last_name, email or password.",
+			"details": "provide at least first_name, last_name or email.",
 		}).Render(rw)
 		return
 	}
 
-	err := h.AuthManager.UpdateUser(ctx, token, reqBody.FirstName, reqBody.LastName, reqBody.Email, reqBody.Password)
+	err := h.AuthManager.UpdateUser(ctx, token, reqBody.FirstName, reqBody.LastName, reqBody.Email, "")
 	if err != nil {
 		httperror.InternalError(ctx, "Cannot update user profiles", err, nil).Render(rw)
 		return
@@ -220,9 +238,9 @@ func (h ProfileHandler) PatchUserProfile(rw http.ResponseWriter, req *http.Reque
 func (h ProfileHandler) PatchUserPassword(rw http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 
-	token, ok := ctx.Value(middleware.TokenContextKey).(string)
-	if !ok {
-		httperror.Unauthorized("", nil, nil).Render(rw)
+	token, user, httpErr := getTokenAndUser(ctx, h.AuthManager)
+	if httpErr != nil {
+		httpErr.Render(rw)
 		return
 	}
 
@@ -245,7 +263,7 @@ func (h ProfileHandler) PatchUserPassword(rw http.ResponseWriter, req *http.Requ
 
 	// validate if the password format attends the requirements
 	badRequestExtras := map[string]interface{}{}
-	err := authUtils.ValidatePassword(reqBody.NewPassword)
+	err := h.PasswordValidator.ValidatePassword(reqBody.NewPassword)
 	if err != nil {
 		var validatePasswordError *authUtils.ValidatePasswordError
 		if errors.As(err, &validatePasswordError) {
@@ -263,18 +281,12 @@ func (h ProfileHandler) PatchUserPassword(rw http.ResponseWriter, req *http.Requ
 		return
 	}
 
+	log.Ctx(ctx).Warnf("[PatchUserPassword] - Will update password for user account ID %s", user.ID)
 	err = h.AuthManager.UpdatePassword(ctx, token, reqBody.CurrentPassword, reqBody.NewPassword)
 	if err != nil {
 		httperror.InternalError(ctx, "Cannot update user password", err, nil).Render(rw)
 		return
 	}
-
-	userID, err := h.AuthManager.GetUserID(ctx, token)
-	if err != nil {
-		httperror.InternalError(ctx, "Cannot get user ID", err, nil).Render(rw)
-		return
-	}
-	log.Ctx(ctx).Infof("[UpdateUserPassword] - Updated password for user with account ID %s", userID)
 
 	httpjson.RenderStatus(rw, http.StatusOK, map[string]string{"message": "user password updated successfully"}, httpjson.JSON)
 }
@@ -282,29 +294,9 @@ func (h ProfileHandler) PatchUserPassword(rw http.ResponseWriter, req *http.Requ
 func (h ProfileHandler) GetProfile(rw http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 
-	token, ok := ctx.Value(middleware.TokenContextKey).(string)
-	if !ok {
-		httperror.Unauthorized("", nil, nil).Render(rw)
-		return
-	}
-
-	user, err := h.AuthManager.GetUser(ctx, token)
-	if err != nil {
-		if errors.Is(err, auth.ErrInvalidToken) {
-			err = fmt.Errorf("getting user profile: %w", err)
-			log.Ctx(ctx).Error(err)
-			httperror.Unauthorized("", err, nil).Render(rw)
-			return
-		}
-
-		if errors.Is(err, auth.ErrUserNotFound) {
-			err = fmt.Errorf("user from token %s not found: %w", token, err)
-			log.Ctx(ctx).Error(err)
-			httperror.BadRequest("", err, nil).Render(rw)
-			return
-		}
-
-		httperror.InternalError(ctx, "Cannot get user", err, nil).Render(rw)
+	_, user, httpErr := getTokenAndUser(ctx, h.AuthManager)
+	if httpErr != nil {
+		httpErr.Render(rw)
 		return
 	}
 
@@ -358,12 +350,13 @@ func (h ProfileHandler) GetOrganizationInfo(rw http.ResponseWriter, req *http.Re
 	}
 
 	resp := map[string]interface{}{
-		"name":                            org.Name,
-		"logo_url":                        lu.String(),
-		"distribution_account_public_key": h.DistributionPublicKey,
-		"timezone_utc_offset":             org.TimezoneUTCOffset,
-		"is_approval_required":            org.IsApprovalRequired,
-		"sms_resend_interval":             0,
+		"name":                             org.Name,
+		"logo_url":                         lu.String(),
+		"distribution_account_public_key":  h.DistributionPublicKey,
+		"timezone_utc_offset":              org.TimezoneUTCOffset,
+		"is_approval_required":             org.IsApprovalRequired,
+		"sms_resend_interval":              0,
+		"payment_cancellation_period_days": 0,
 	}
 
 	if org.SMSRegistrationMessageTemplate != data.DefaultSMSRegistrationMessageTemplate {
@@ -376,6 +369,10 @@ func (h ProfileHandler) GetOrganizationInfo(rw http.ResponseWriter, req *http.Re
 
 	if org.SMSResendInterval != nil {
 		resp["sms_resend_interval"] = *org.SMSResendInterval
+	}
+
+	if org.PaymentCancellationPeriodDays != nil {
+		resp["payment_cancellation_period_days"] = *org.PaymentCancellationPeriodDays
 	}
 
 	httpjson.RenderStatus(rw, http.StatusOK, resp, httpjson.JSON)
@@ -415,4 +412,30 @@ func (h ProfileHandler) GetOrganizationLogo(rw http.ResponseWriter, req *http.Re
 	if err != nil {
 		httperror.InternalError(ctx, "Cannot write organization logo to response", err, nil).Render(rw)
 	}
+}
+
+func getTokenAndUser(ctx context.Context, authManager auth.AuthManager) (token string, user *auth.User, httpErr *httperror.HTTPError) {
+	token, ok := ctx.Value(middleware.TokenContextKey).(string)
+	if !ok {
+		return "", nil, httperror.Unauthorized("", nil, nil)
+	}
+
+	user, err := authManager.GetUser(ctx, token)
+	if err != nil {
+		if errors.Is(err, auth.ErrInvalidToken) {
+			err = fmt.Errorf("getting user profile: %w", err)
+			log.Ctx(ctx).Error(err)
+			return "", nil, httperror.Unauthorized("", err, nil)
+		}
+
+		if errors.Is(err, auth.ErrUserNotFound) {
+			err = fmt.Errorf("user from token %s not found: %w", token, err)
+			log.Ctx(ctx).Error(err)
+			return "", nil, httperror.BadRequest("", err, nil)
+		}
+
+		return "", nil, httperror.InternalError(ctx, "Cannot get user", err, nil)
+	}
+
+	return token, user, nil
 }

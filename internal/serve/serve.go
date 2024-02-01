@@ -31,6 +31,7 @@ import (
 	txnsubmitterutils "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
+	authUtils "github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/utils"
 )
 
 const ServiceID = "serve"
@@ -80,8 +81,9 @@ type ServeOptions struct {
 	DistributionSeed                string
 	ReCAPTCHASiteKey                string
 	ReCAPTCHASiteSecretKey          string
-	EnableMFA                       bool
-	EnableReCAPTCHA                 bool
+	DisableMFA                      bool
+	DisableReCAPTCHA                bool
+	PasswordValidator               *authUtils.PasswordValidator
 }
 
 // SetupDependencies uses the serve options to setup the dependencies for the server.
@@ -140,13 +142,41 @@ func (opts *ServeOptions) SetupDependencies() error {
 		return fmt.Errorf("error creating signature service: %w", err)
 	}
 
+	opts.PasswordValidator, err = authUtils.GetPasswordValidatorInstance()
+	if err != nil {
+		return fmt.Errorf("error initializing password validator: %w", err)
+	}
+
+	return nil
+}
+
+// ValidateSecurity validates the MFA and ReCAPTCHA security options.
+func (opts *ServeOptions) ValidateSecurity() error {
+	if opts.NetworkPassphrase == network.PublicNetworkPassphrase {
+		if opts.DisableMFA {
+			return fmt.Errorf("MFA cannot be disabled in pubnet")
+		} else if opts.DisableReCAPTCHA {
+			return fmt.Errorf("reCAPTCHA cannot be disabled in pubnet")
+		}
+	}
+
+	if opts.DisableMFA {
+		log.Warnf("MFA is disabled in network '%s'", opts.NetworkPassphrase)
+	}
+	if opts.DisableReCAPTCHA {
+		log.Warnf("reCAPTCHA is disabled in network '%s'", opts.NetworkPassphrase)
+	}
+
 	return nil
 }
 
 func Serve(opts ServeOptions, httpServer HTTPServerInterface) error {
-	err := opts.SetupDependencies()
-	if err != nil {
-		return fmt.Errorf("error starting dependencies: %w", err)
+	if err := opts.ValidateSecurity(); err != nil {
+		return fmt.Errorf("validating security options: %w", err)
+	}
+
+	if err := opts.SetupDependencies(); err != nil {
+		return fmt.Errorf("starting dependencies: %w", err)
 	}
 
 	// Start the server
@@ -221,10 +251,12 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 
 		r.Route("/disbursements", func(r chi.Router) {
 			handler := httphandler.DisbursementHandler{
-				Models:           o.Models,
-				MonitorService:   o.MonitorService,
-				DBConnectionPool: o.dbConnectionPool,
-				AuthManager:      authManager,
+				Models:             o.Models,
+				MonitorService:     o.MonitorService,
+				DBConnectionPool:   o.dbConnectionPool,
+				AuthManager:        authManager,
+				HorizonClient:      o.horizonClient,
+				DistributionPubKey: o.DistributionPublicKey,
 			}
 			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole)).
 				Post("/", handler.PostDisbursement)
@@ -253,14 +285,19 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			r.Get("/", paymentsHandler.GetPayments)
 			r.Get("/{id}", paymentsHandler.GetPayment)
 			r.Patch("/retry", paymentsHandler.RetryPayments)
+			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole)).
+				Patch("/{id}/status", paymentsHandler.PatchPaymentStatus)
 		})
 
 		r.Route("/receivers", func(r chi.Router) {
 			receiversHandler := httphandler.ReceiverHandler{Models: o.Models, DBConnectionPool: o.dbConnectionPool}
 			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole, data.BusinessUserRole)).
 				Get("/", receiversHandler.GetReceivers)
-			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole)).
+			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole, data.BusinessUserRole)).
 				Get("/{id}", receiversHandler.GetReceiver)
+
+			r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...)).
+				Get("/verification-types", receiversHandler.GetReceiverVerificationTypes)
 
 			updateReceiverHandler := httphandler.UpdateReceiverHandler{Models: o.Models, DBConnectionPool: o.dbConnectionPool}
 			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole)).
@@ -310,6 +347,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			MaxMemoryAllocation:   httphandler.DefaultMaxMemoryAllocation,
 			BaseURL:               o.BaseURL,
 			DistributionPublicKey: o.DistributionPublicKey,
+			PasswordValidator:     o.PasswordValidator,
 		}
 		r.Route("/profile", func(r chi.Router) {
 			r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...)).
@@ -348,8 +386,8 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 		ReCAPTCHAValidator: reCAPTCHAValidator,
 		MessengerClient:    o.EmailMessengerClient,
 		Models:             o.Models,
-		ReCAPTCHAEnabled:   o.EnableReCAPTCHA,
-		MFAEnabled:         o.EnableMFA,
+		ReCAPTCHADisabled:  o.DisableReCAPTCHA,
+		MFADisabled:        o.DisableMFA,
 	}.ServeHTTP)
 	mux.Post("/mfa", httphandler.MFAHandler{
 		AuthManager:        authManager,
@@ -362,9 +400,9 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 		UIBaseURL:          o.UIBaseURL,
 		Models:             o.Models,
 		ReCAPTCHAValidator: reCAPTCHAValidator,
-		ReCAPTCHAEnabled:   o.EnableReCAPTCHA,
+		ReCAPTCHADisabled:  o.DisableReCAPTCHA,
 	}.ServeHTTP)
-	mux.Post("/reset-password", httphandler.ResetPasswordHandler{AuthManager: authManager}.ServeHTTP)
+	mux.Post("/reset-password", httphandler.ResetPasswordHandler{AuthManager: authManager, PasswordValidator: o.PasswordValidator}.ServeHTTP)
 
 	// START SEP-24 endpoints
 	mux.Get("/.well-known/stellar.toml", httphandler.StellarTomlHandler{
@@ -377,7 +415,10 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 
 	mux.Route("/wallet-registration", func(r chi.Router) {
 		sep24QueryTokenAuthenticationMiddleware := anchorplatform.SEP24QueryTokenAuthenticateMiddleware(o.sep24JWTManager, o.NetworkPassphrase)
-		r.With(sep24QueryTokenAuthenticationMiddleware).Get("/start", httphandler.ReceiverRegistrationHandler{ReceiverWalletModel: o.Models.ReceiverWallet, ReCAPTCHASiteKey: o.ReCAPTCHASiteKey}.ServeHTTP) // This loads the SEP-24 PII registration webpage.
+		r.With(sep24QueryTokenAuthenticationMiddleware).Get("/start", httphandler.ReceiverRegistrationHandler{
+			ReceiverWalletModel: o.Models.ReceiverWallet,
+			ReCAPTCHASiteKey:    o.ReCAPTCHASiteKey,
+		}.ServeHTTP) // This loads the SEP-24 PII registration webpage.
 
 		sep24HeaderTokenAuthenticationMiddleware := anchorplatform.SEP24HeaderTokenAuthenticateMiddleware(o.sep24JWTManager, o.NetworkPassphrase)
 		r.With(sep24HeaderTokenAuthenticationMiddleware).Post("/otp", httphandler.ReceiverSendOTPHandler{Models: o.Models, SMSMessengerClient: o.SMSMessengerClient, ReCAPTCHAValidator: reCAPTCHAValidator}.ServeHTTP)

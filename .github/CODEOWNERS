@@ -1,0 +1,3 @@
+# we set `sdp-backend` as code owners
+# require approval from 1 member of `sdp-backend` team
+@stellar/sdp-backend

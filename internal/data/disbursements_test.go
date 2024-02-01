@@ -28,6 +28,8 @@ func Test_DisbursementModelInsert(t *testing.T) {
 	wallet := CreateWalletFixture(t, ctx, dbConnectionPool, "wallet1", "https://www.wallet.com", "www.wallet.com", "wallet1://")
 	wallet.Assets = nil
 
+	smsTemplate := "You have a new payment waiting for you from org x. Click on the link to register."
+
 	disbursement := Disbursement{
 		Name:   "disbursement1",
 		Status: DraftDisbursementStatus,
@@ -37,9 +39,11 @@ func Test_DisbursementModelInsert(t *testing.T) {
 				UserID: "user1",
 			},
 		},
-		Asset:   asset,
-		Country: country,
-		Wallet:  wallet,
+		Asset:                          asset,
+		Country:                        country,
+		Wallet:                         wallet,
+		VerificationField:              VerificationFieldDateOfBirth,
+		SMSRegistrationMessageTemplate: smsTemplate,
 	}
 
 	t.Run("returns error when disbursement already exists is not found", func(t *testing.T) {
@@ -64,9 +68,11 @@ func Test_DisbursementModelInsert(t *testing.T) {
 		assert.Equal(t, asset, actual.Asset)
 		assert.Equal(t, country, actual.Country)
 		assert.Equal(t, wallet, actual.Wallet)
+		assert.Equal(t, smsTemplate, actual.SMSRegistrationMessageTemplate)
 		assert.Equal(t, 1, len(actual.StatusHistory))
 		assert.Equal(t, DraftDisbursementStatus, actual.StatusHistory[0].Status)
 		assert.Equal(t, "user1", actual.StatusHistory[0].UserID)
+		assert.Equal(t, VerificationFieldDateOfBirth, actual.VerificationField)
 	})
 }
 
@@ -391,15 +397,23 @@ func Test_DisbursementModelGetAll(t *testing.T) {
 			Amount:         "020.50",
 			Status:         FailedPaymentStatus,
 		})
+		CreatePaymentFixture(t, ctx, dbConnectionPool, &paymentModel, &Payment{
+			ReceiverWallet: receiverWallet,
+			Disbursement:   expectedDisbursement,
+			Asset:          *asset,
+			Amount:         "020.50",
+			Status:         CanceledPaymentStatus,
+		})
 
 		expectedStats := &DisbursementStats{}
-		expectedStats.TotalPayments = 3
+		expectedStats.TotalPayments = 4
 		expectedStats.SuccessfulPayments = 1
 		expectedStats.FailedPayments = 1
+		expectedStats.CanceledPayments = 1
 		expectedStats.RemainingPayments = 1
-		expectedStats.TotalAmount = "270.55"
+		expectedStats.TotalAmount = "291.05"
 		expectedStats.AmountDisbursed = "100.00"
-		expectedStats.AverageAmount = "90.18"
+		expectedStats.AverageAmount = "72.76"
 
 		expectedDisbursement.DisbursementStats = expectedStats
 
@@ -427,9 +441,9 @@ func Test_DisbursementModel_Update(t *testing.T) {
 	})
 
 	disbursementFileContent := CreateInstructionsFixture(t, []*DisbursementInstruction{
-		{"1234567890", "1", "123.12", "1995-02-20"},
-		{"0987654321", "2", "321", "1974-07-19"},
-		{"0987654321", "3", "321", "1974-07-19"},
+		{"1234567890", "1", "123.12", "1995-02-20", nil},
+		{"0987654321", "2", "321", "1974-07-19", nil},
+		{"0987654321", "3", "321", "1974-07-19", nil},
 	})
 
 	t.Run("update instructions", func(t *testing.T) {

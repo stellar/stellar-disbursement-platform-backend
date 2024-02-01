@@ -459,9 +459,9 @@ func CreatePaymentFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecu
 	const query = `
 		INSERT INTO payments
 			(receiver_id, disbursement_id, receiver_wallet_id, asset_id, amount, status, status_history,
-			stellar_transaction_id, stellar_operation_id, created_at, updated_at)
+			stellar_transaction_id, stellar_operation_id, created_at, updated_at, external_payment_id)
 		VALUES
-			($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+			($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 		RETURNING
 			id
 	`
@@ -478,6 +478,7 @@ func CreatePaymentFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecu
 		p.StellarOperationID,
 		p.CreatedAt,
 		p.UpdatedAt,
+		p.ExternalPaymentID,
 	)
 	require.NoError(t, err)
 
@@ -514,6 +515,10 @@ func CreateDisbursementFixture(t *testing.T, ctx context.Context, sqlExec db.SQL
 	if d.Country == nil {
 		d.Country = GetCountryFixture(t, ctx, sqlExec, FixtureCountryUKR)
 	}
+	if d.VerificationField == "" {
+		d.VerificationField = VerificationFieldDateOfBirth
+	}
+
 	// insert disbursement
 	if d.StatusHistory == nil {
 		d.StatusHistory = []DisbursementStatusHistoryEntry{{
@@ -581,6 +586,10 @@ func CreateDraftDisbursementFixture(t *testing.T, ctx context.Context, sqlExec d
 
 	if insert.Status == "" {
 		insert.Status = DraftDisbursementStatus
+	}
+
+	if insert.VerificationField == "" {
+		insert.VerificationField = VerificationFieldDateOfBirth
 	}
 
 	id, err := model.Insert(ctx, &insert)
@@ -729,6 +738,8 @@ func CreateMockImage(t *testing.T, width, height int, size ImageSize) image.Imag
 			switch size {
 			case ImageSizeSmall:
 				c = smallImageColor()
+			case ImageSizeMedium:
+				// NO-OP
 			case ImageSizeLarge:
 				c = largeImageColor()
 			}

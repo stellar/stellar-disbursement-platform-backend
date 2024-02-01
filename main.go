@@ -11,7 +11,7 @@ import (
 
 // Version is the official version of this application. Whenever it's changed
 // here, it also needs to be updated at the `helmchart/Chart.yaml#appVersion“.
-const Version = "1.0.1"
+const Version = "1.1.0"
 
 // GitCommit is populated at build time by
 // go build -ldflags "-X main.GitCommit=$GIT_COMMIT"

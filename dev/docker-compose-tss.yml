@@ -17,16 +17,13 @@ services:
       TSS_METRICS_PORT: "9002"
       TSS_METRICS_TYPE: "TSS_PROMETHEUS"
       DISTRIBUTION_SEED: ${DISTRIBUTION_SEED}
-    depends_on:
-      - db
-      - sdp-api
     entrypoint: ""
     command:
       - sh
       - -c
       - |
         sleep 10
-        ./stellar-disbursement-platform channel-accounts verify --delete-invalid-accounts
+        ./stellar-disbursement-platform channel-accounts delete --delete-all-accounts
         ./stellar-disbursement-platform channel-accounts ensure --num-channel-accounts-ensure 1
         ./stellar-disbursement-platform tss
 

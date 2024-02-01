@@ -74,6 +74,7 @@ func (s *ServerService) GetSchedulerJobRegistrars(ctx context.Context, serveOpts
 		}),
 		scheduler.WithAPAuthEnforcementJob(apAPIService, serveOpts.MonitorService, serveOpts.CrashTrackerClient.Clone()),
 		scheduler.WithPatchAnchorPlatformTransactionsCompletionJobOption(apAPIService, models),
+		scheduler.WithReadyPaymentsCancellationJobOption(models),
 	}, nil
 }
 
@@ -244,19 +245,19 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			Required:       true,
 		},
 		{
-			Name:        "enable-mfa",
-			Usage:       "Enable MFA using email.",
+			Name:        "disable-mfa",
+			Usage:       "Disables the email Multi-Factor Authentication (MFA).",
 			OptType:     types.Bool,
-			ConfigKey:   &serveOpts.EnableMFA,
-			FlagDefault: true,
+			ConfigKey:   &serveOpts.DisableMFA,
+			FlagDefault: false,
 			Required:    false,
 		},
 		{
-			Name:        "enable-recaptcha",
-			Usage:       "Enable ReCAPTCHA for login and forgot password.",
+			Name:        "disable-recaptcha",
+			Usage:       "Disables ReCAPTCHA for login and forgot password.",
 			OptType:     types.Bool,
-			ConfigKey:   &serveOpts.EnableReCAPTCHA,
-			FlagDefault: true,
+			ConfigKey:   &serveOpts.DisableReCAPTCHA,
+			FlagDefault: false,
 			Required:    false,
 		},
 		{

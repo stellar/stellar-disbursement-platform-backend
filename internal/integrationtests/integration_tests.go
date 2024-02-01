@@ -121,10 +121,11 @@ func (it *IntegrationTestsService) StartIntegrationTests(ctx context.Context, op
 
 	log.Ctx(ctx).Info("Creating disbursement using server API")
 	disbursement, err := it.serverAPI.CreateDisbursement(ctx, authToken, &httphandler.PostDisbursementRequest{
-		Name:        opts.DisbursementName,
-		CountryCode: "USA",
-		WalletID:    wallet.ID,
-		AssetID:     asset.ID,
+		Name:              opts.DisbursementName,
+		CountryCode:       "USA",
+		WalletID:          wallet.ID,
+		AssetID:           asset.ID,
+		VerificationField: data.VerificationFieldDateOfBirth,
 	})
 	if err != nil {
 		return fmt.Errorf("error creating disbursement: %w", err)
@@ -207,7 +208,7 @@ func (it *IntegrationTestsService) StartIntegrationTests(ctx context.Context, op
 	log.Ctx(ctx).Info("Receiver OTP obtained")
 
 	log.Ctx(ctx).Info("Validating receiver data after completing registration")
-	err = validateExpectationsAfterReceiverRegistration(ctx, it.models, opts.ReceiverAccountPublicKey, opts.ReceiverAccountStellarMemo)
+	err = validateExpectationsAfterReceiverRegistration(ctx, it.models, opts.ReceiverAccountPublicKey, opts.ReceiverAccountStellarMemo, opts.WalletSEP10Domain)
 	if err != nil {
 		return fmt.Errorf("error validating receiver after registration: %w", err)
 	}

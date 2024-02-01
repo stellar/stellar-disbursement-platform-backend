@@ -2,15 +2,23 @@ package services
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"testing"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
+	"github.com/stellar/go/clients/horizonclient"
+	"github.com/stellar/go/protocols/horizon"
+	"github.com/stellar/go/protocols/horizon/base"
+	"github.com/stellar/go/support/log"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/db/dbtest"
-	"github.com/stretchr/testify/require"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 )
 
 func Test_DisbursementManagementService_GetDisbursementsWithCount(t *testing.T) {
@@ -24,7 +32,43 @@ func Test_DisbursementManagementService_GetDisbursementsWithCount(t *testing.T) 
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
-	service := NewDisbursementManagementService(models, models.DBConnectionPool, nil)
+	users := []*auth.User{
+		{
+			ID:        "john-doe",
+			Email:     "john-doe@email.com",
+			FirstName: "John",
+			LastName:  "Doe",
+		},
+		{
+			ID:        "jane-doe",
+			Email:     "jane-doe@email.com",
+			FirstName: "Jane",
+			LastName:  "Doe",
+		},
+	}
+
+	userRef := []UserReference{
+		{
+			ID:        users[0].ID,
+			FirstName: users[0].FirstName,
+			LastName:  users[0].LastName,
+		},
+		{
+			ID:        users[1].ID,
+			FirstName: users[1].FirstName,
+			LastName:  users[1].LastName,
+		},
+	}
+
+	authManagerMock := &auth.AuthManagerMock{}
+	authManagerMock.
+		On("GetUsersByID", mock.Anything, []string{users[0].ID, users[1].ID}).
+		Return(users, nil)
+	authManagerMock.
+		On("GetUsersByID", mock.Anything, []string{users[1].ID, users[0].ID}).
+		Return(users, nil)
+
+	service := NewDisbursementManagementService(models, models.DBConnectionPool, authManagerMock, nil)
 
 	ctx := context.Background()
 	t.Run("disbursements list empty", func(t *testing.T) {
@@ -38,17 +82,45 @@ func Test_DisbursementManagementService_GetDisbursementsWithCount(t *testing.T) 
 
 	t.Run("get disbursements successfully", func(t *testing.T) {
 		// create disbursements
-		d1 := data.CreateDisbursementFixture(t, context.Background(), dbConnectionPool, models.Disbursements, &data.Disbursement{Name: "d1"})
-		d2 := data.CreateDisbursementFixture(t, context.Background(), dbConnectionPool, models.Disbursements, &data.Disbursement{Name: "d2"})
+		d1 := data.CreateDisbursementFixture(t, context.Background(), dbConnectionPool, models.Disbursements,
+			&data.Disbursement{
+				Name: "d1",
+				StatusHistory: []data.DisbursementStatusHistoryEntry{
+					{
+						Status: data.DraftDisbursementStatus,
+						UserID: users[0].ID,
+					},
+					{
+						Status: data.StartedDisbursementStatus,
+						UserID: users[1].ID,
+					},
+				},
+			},
+		)
+		d2 := data.CreateDisbursementFixture(t, context.Background(), dbConnectionPool, models.Disbursements,
+			&data.Disbursement{
+				Name: "d2",
+				StatusHistory: []data.DisbursementStatusHistoryEntry{
+					{
+						Status: data.DraftDisbursementStatus,
+						UserID: users[1].ID,
+					},
+				},
+			},
+		)
 
 		resultWithTotal, err := service.GetDisbursementsWithCount(ctx, &data.QueryParams{SortOrder: "asc", SortBy: "name"})
 		require.NoError(t, err)
 		require.Equal(t, 2, resultWithTotal.Total)
-		result, ok := resultWithTotal.Result.([]*data.Disbursement)
+		result, ok := resultWithTotal.Result.([]*DisbursementWithUserMetadata)
 		require.True(t, ok)
 		require.Equal(t, 2, len(result))
-		require.Equal(t, d1.ID, result[0].ID)
-		require.Equal(t, d2.ID, result[1].ID)
+		require.Equal(t, d1.ID, result[0].Disbursement.ID)
+		require.Equal(t, d2.ID, result[1].Disbursement.ID)
+		require.Equal(t, userRef[0], result[0].CreatedBy)
+		require.Equal(t, userRef[1], result[0].StartedBy)
+		require.Equal(t, userRef[1], result[1].CreatedBy)
+		require.Equal(t, UserReference{}, result[1].StartedBy)
 	})
 }
 
@@ -63,7 +135,7 @@ func Test_DisbursementManagementService_GetDisbursementReceiversWithCount(t *tes
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
-	service := NewDisbursementManagementService(models, models.DBConnectionPool, nil)
+	service := NewDisbursementManagementService(models, models.DBConnectionPool, nil, nil)
 	disbursement := data.CreateDisbursementFixture(t, context.Background(), dbConnectionPool, models.Disbursements, &data.Disbursement{})
 
 	ctx := context.Background()
@@ -125,12 +197,15 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 	token := "token"
 	ctx := context.WithValue(context.Background(), middleware.TokenContextKey, token)
 
+	asset := data.GetAssetFixture(t, ctx, dbConnectionPool, data.FixtureAssetUSDC)
 	authManagerMock := &auth.AuthManagerMock{}
-	service := NewDisbursementManagementService(models, models.DBConnectionPool, authManagerMock)
+	hMock := &horizonclient.MockClient{}
+	distributionPubKey := "ABC"
+
+	service := NewDisbursementManagementService(models, models.DBConnectionPool, authManagerMock, hMock)
 
 	// create fixtures
 	wallet := data.CreateDefaultWalletFixture(t, ctx, dbConnectionPool)
-	asset := data.GetAssetFixture(t, ctx, dbConnectionPool, data.FixtureAssetUSDC)
 	country := data.GetCountryFixture(t, ctx, dbConnectionPool, data.FixtureCountryUKR)
 
 	// create disbursements
@@ -197,19 +272,19 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 	t.Run("disbursement doesn't exist", func(t *testing.T) {
 		id := "5e1f1c7f5b6c9c0001c1b1b1"
 
-		err = service.StartDisbursement(context.Background(), id)
+		err = service.StartDisbursement(context.Background(), id, distributionPubKey)
 		require.ErrorIs(t, err, ErrDisbursementNotFound)
 	})
 
 	t.Run("disbursement wallet is disabled", func(t *testing.T) {
 		data.EnableOrDisableWalletFixtures(t, ctx, dbConnectionPool, false, wallet.ID)
 		defer data.EnableOrDisableWalletFixtures(t, ctx, dbConnectionPool, true, wallet.ID)
-		err = service.StartDisbursement(context.Background(), draftDisbursement.ID)
+		err = service.StartDisbursement(context.Background(), draftDisbursement.ID, distributionPubKey)
 		require.ErrorIs(t, err, ErrDisbursementWalletDisabled)
 	})
 
 	t.Run("disbursement not ready to start", func(t *testing.T) {
-		err = service.StartDisbursement(context.Background(), draftDisbursement.ID)
+		err = service.StartDisbursement(context.Background(), draftDisbursement.ID, distributionPubKey)
 		require.ErrorIs(t, err, ErrDisbursementNotReadyToStart)
 	})
 
@@ -249,7 +324,7 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 		err = models.Organizations.Update(ctx, &data.OrganizationUpdate{IsApprovalRequired: &isApprovalRequired})
 		require.NoError(t, err)
 
-		err = service.StartDisbursement(ctx, disbursement.ID)
+		err = service.StartDisbursement(ctx, disbursement.ID, distributionPubKey)
 		require.ErrorIs(t, err, ErrDisbursementStartedByCreator)
 
 		// rollback changes
@@ -270,6 +345,21 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 				UserID: userID,
 			},
 		}
+
+		hMock.On(
+			"AccountDetail", horizonclient.AccountRequest{AccountID: distributionPubKey},
+		).Return(horizon.Account{
+			Balances: []horizon.Balance{
+				{
+					Balance: "10000",
+					Asset: base.Asset{
+						Code:   asset.Code,
+						Issuer: asset.Issuer,
+					},
+				},
+			},
+		}, nil).Once()
+
 		disbursement := data.CreateDisbursementFixture(t, context.Background(), dbConnectionPool, models.Disbursements, &data.Disbursement{
 			Name:          "disbursement #2",
 			Status:        data.ReadyDisbursementStatus,
@@ -277,6 +367,13 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 			Wallet:        wallet,
 			Country:       country,
 			StatusHistory: statusHistory,
+		})
+		data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+			ReceiverWallet: rwReady,
+			Disbursement:   disbursement,
+			Asset:          *asset,
+			Amount:         "100",
+			Status:         data.DraftPaymentStatus,
 		})
 
 		user := &auth.User{
@@ -294,7 +391,7 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 		err = models.Organizations.Update(ctx, &data.OrganizationUpdate{IsApprovalRequired: &isApprovalRequired})
 		require.NoError(t, err)
 
-		err = service.StartDisbursement(ctx, disbursement.ID)
+		err = service.StartDisbursement(ctx, disbursement.ID, distributionPubKey)
 		require.NoError(t, err)
 
 		// check disbursement status
@@ -319,20 +416,34 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 			Return(user, nil).
 			Once()
 
-		err = service.StartDisbursement(ctx, readyDisbursement.ID)
+		hMock.On(
+			"AccountDetail", horizonclient.AccountRequest{AccountID: distributionPubKey},
+		).Return(horizon.Account{
+			Balances: []horizon.Balance{
+				{
+					Balance: "10000",
+					Asset: base.Asset{
+						Code:   asset.Code,
+						Issuer: asset.Issuer,
+					},
+				},
+			},
+		}, nil).Once()
+
+		err = service.StartDisbursement(ctx, readyDisbursement.ID, distributionPubKey)
 		require.NoError(t, err)
 
 		// check disbursement status
-		disbursement, err := models.Disbursements.Get(context.Background(), models.DBConnectionPool, readyDisbursement.ID)
-		require.NoError(t, err)
+		disbursement, getDisbursementErr := models.Disbursements.Get(context.Background(), models.DBConnectionPool, readyDisbursement.ID)
+		require.NoError(t, getDisbursementErr)
 		require.Equal(t, data.StartedDisbursementStatus, disbursement.Status)
 
 		// check disbursement history
 		require.Equal(t, disbursement.StatusHistory[1].UserID, user.ID)
 
 		// check receivers wallets status
-		receiverWallets, err := models.ReceiverWallet.GetByReceiverIDsAndWalletID(ctx, models.DBConnectionPool, receiverIds, wallet.ID)
-		require.NoError(t, err)
+		receiverWallets, getReceiversErr := models.ReceiverWallet.GetByReceiverIDsAndWalletID(ctx, models.DBConnectionPool, receiverIds, wallet.ID)
+		require.NoError(t, getReceiversErr)
 		require.Equal(t, 4, len(receiverWallets))
 		rwExpectedStatuses := map[string]data.ReceiversWalletStatus{
 			rwDraft1.ID:     data.ReadyReceiversWalletStatus,
@@ -346,13 +457,79 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 
 		// check payments status
 		for _, p := range payments {
-			payment, err := models.Payment.Get(ctx, p.ID, dbConnectionPool)
-			require.NoError(t, err)
+			payment, getPaymentErr := models.Payment.Get(ctx, p.ID, dbConnectionPool)
+			require.NoError(t, getPaymentErr)
 			require.Equal(t, data.ReadyPaymentStatus, payment.Status)
 		}
 	})
 
+	t.Run("disbursement cannot be started because insufficient balance on distribution account", func(t *testing.T) {
+		user := &auth.User{
+			ID:    "user-id",
+			Email: "email@email.com",
+		}
+
+		authManagerMock.
+			On("GetUser", ctx, token).
+			Return(user, nil).
+			Once()
+
+		hMock.On(
+			"AccountDetail", horizonclient.AccountRequest{AccountID: distributionPubKey},
+		).Return(horizon.Account{
+			Balances: []horizon.Balance{
+				{
+					Balance: "10000",
+					Asset: base.Asset{
+						Code:   asset.Code,
+						Issuer: asset.Issuer,
+					},
+				},
+			},
+		}, nil).Once()
+
+		disbursement := data.CreateDisbursementFixture(t, context.Background(), dbConnectionPool, models.Disbursements, &data.Disbursement{
+			Name:    "disbursement #3",
+			Status:  data.ReadyDisbursementStatus,
+			Asset:   asset,
+			Wallet:  wallet,
+			Country: country,
+		})
+		data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+			ReceiverWallet: rwReady,
+			Disbursement:   disbursement,
+			Asset:          *asset,
+			Amount:         "10001",
+			Status:         data.ReadyPaymentStatus,
+		})
+
+		buf := new(strings.Builder)
+		log.DefaultLogger.SetOutput(buf)
+
+		err = service.StartDisbursement(ctx, disbursement.ID, distributionPubKey)
+		require.EqualError(
+			t,
+			err,
+			fmt.Sprintf(
+				"running atomic function in RunInTransactionWithResult: %s",
+				ErrDisbursementWalletInsufficientBalance.Error(),
+			),
+		)
+
+		// PendingTotal includes payments associated with 'readyDisbursement' that were moved from the draft to ready status
+		assert.Contains(
+			t,
+			buf.String(),
+			fmt.Sprintf("Insufficient distribution account balance %f to fulfill amount %f for disbursement id %s and total pending amount %f",
+				10000.0,
+				10001.0,
+				disbursement.ID,
+				1100.0),
+		)
+	})
+
 	authManagerMock.AssertExpectations(t)
+	hMock.AssertExpectations(t)
 }
 
 func Test_DisbursementManagementService_PauseDisbursement(t *testing.T) {
@@ -378,11 +555,15 @@ func Test_DisbursementManagementService_PauseDisbursement(t *testing.T) {
 		On("GetUser", ctx, token).
 		Return(user, nil)
 
-	service := NewDisbursementManagementService(models, models.DBConnectionPool, authManagerMock)
+	asset := data.GetAssetFixture(t, ctx, dbConnectionPool, data.FixtureAssetUSDC)
+
+	hMock := &horizonclient.MockClient{}
+	distributionPubKey := "ABC"
+
+	service := NewDisbursementManagementService(models, models.DBConnectionPool, authManagerMock, hMock)
 
 	// create fixtures
 	wallet := data.CreateDefaultWalletFixture(t, ctx, dbConnectionPool)
-	asset := data.GetAssetFixture(t, ctx, dbConnectionPool, data.FixtureAssetUSDC)
 	country := data.GetCountryFixture(t, ctx, dbConnectionPool, data.FixtureCountryUSA)
 
 	// create disbursements
@@ -455,6 +636,20 @@ func Test_DisbursementManagementService_PauseDisbursement(t *testing.T) {
 	})
 
 	t.Run("disbursement paused", func(t *testing.T) {
+		hMock.On(
+			"AccountDetail", horizonclient.AccountRequest{AccountID: distributionPubKey},
+		).Return(horizon.Account{
+			Balances: []horizon.Balance{
+				{
+					Balance: "10000",
+					Asset: base.Asset{
+						Code:   asset.Code,
+						Issuer: asset.Issuer,
+					},
+				},
+			},
+		}, nil).Once()
+
 		err := service.PauseDisbursement(ctx, startedDisbursement.ID)
 		require.NoError(t, err)
 
@@ -478,7 +673,7 @@ func Test_DisbursementManagementService_PauseDisbursement(t *testing.T) {
 		}
 
 		// change the disbursement back to started
-		err = service.StartDisbursement(ctx, startedDisbursement.ID)
+		err = service.StartDisbursement(ctx, startedDisbursement.ID, distributionPubKey)
 		require.NoError(t, err)
 
 		// check disbursement is started again
@@ -488,6 +683,20 @@ func Test_DisbursementManagementService_PauseDisbursement(t *testing.T) {
 	})
 
 	t.Run("start -> pause -> start -> pause", func(t *testing.T) {
+		hMock.On(
+			"AccountDetail", horizonclient.AccountRequest{AccountID: distributionPubKey},
+		).Return(horizon.Account{
+			Balances: []horizon.Balance{
+				{
+					Balance: "10000",
+					Asset: base.Asset{
+						Code:   asset.Code,
+						Issuer: asset.Issuer,
+					},
+				},
+			},
+		}, nil).Once()
+
 		// 1. Pause Disbursement
 		err := service.PauseDisbursement(ctx, startedDisbursement.ID)
 		require.NoError(t, err)
@@ -512,7 +721,7 @@ func Test_DisbursementManagementService_PauseDisbursement(t *testing.T) {
 		}
 
 		// 2. Start disbursement again
-		err = service.StartDisbursement(ctx, startedDisbursement.ID)
+		err = service.StartDisbursement(ctx, startedDisbursement.ID, distributionPubKey)
 		require.NoError(t, err)
 
 		// check disbursement is started again
@@ -559,4 +768,5 @@ func Test_DisbursementManagementService_PauseDisbursement(t *testing.T) {
 	})
 
 	authManagerMock.AssertExpectations(t)
+	hMock.AssertExpectations(t)
 }

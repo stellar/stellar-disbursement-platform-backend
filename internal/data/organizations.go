@@ -32,7 +32,9 @@ type Organization struct {
 	TimezoneUTCOffset string `json:"timezone_utc_offset" db:"timezone_utc_offset"`
 	// SMSResendInterval is the time period that SDP will wait to resend the invitation SMS to the receivers that aren't registered.
 	// If it's nil means resending the invitation SMS is deactivated.
-	SMSResendInterval              *int64 `json:"sms_resend_interval" db:"sms_resend_interval"`
+	SMSResendInterval *int64 `json:"sms_resend_interval" db:"sms_resend_interval"`
+	// PaymentCancellationPeriodDays is the number of days for a ready payment to be automatically cancelled.
+	PaymentCancellationPeriodDays  *int64 `json:"payment_cancellation_period_days" db:"payment_cancellation_period_days"`
 	SMSRegistrationMessageTemplate string `json:"sms_registration_message_template" db:"sms_registration_message_template"`
 	// OTPMessageTemplate is the message template to send the OTP code to the receivers validates their identity when registering their wallets.
 	// The message may have the template values {{.OTP}} and {{.OrganizationName}}, it will be parsed and the values injected when executing the template.
@@ -47,15 +49,16 @@ type Organization struct {
 }
 
 type OrganizationUpdate struct {
-	Name               string
-	Logo               []byte
-	TimezoneUTCOffset  string
-	IsApprovalRequired *bool
-	SMSResendInterval  *int64
+	Name                          string `json:",omitempty"`
+	Logo                          []byte `json:",omitempty"`
+	TimezoneUTCOffset             string `json:",omitempty"`
+	IsApprovalRequired            *bool  `json:",omitempty"`
+	SMSResendInterval             *int64 `json:",omitempty"`
+	PaymentCancellationPeriodDays *int64 `json:",omitempty"`
 
 	// Using pointers to accept empty strings
-	SMSRegistrationMessageTemplate *string
-	OTPMessageTemplate             *string
+	SMSRegistrationMessageTemplate *string `json:",omitempty"`
+	OTPMessageTemplate             *string `json:",omitempty"`
 }
 
 type LogoType string
@@ -112,7 +115,8 @@ func (ou *OrganizationUpdate) areAllFieldsEmpty() bool {
 		ou.IsApprovalRequired == nil &&
 		ou.SMSRegistrationMessageTemplate == nil &&
 		ou.OTPMessageTemplate == nil &&
-		ou.SMSResendInterval == nil)
+		ou.SMSResendInterval == nil &&
+		ou.PaymentCancellationPeriodDays == nil)
 }
 
 type OrganizationModel struct {
@@ -206,6 +210,15 @@ func (om *OrganizationModel) Update(ctx context.Context, ou *OrganizationUpdate)
 		} else {
 			// When 0 (zero) is passed by parameter we set it as NULL.
 			fields = append(fields, "sms_resend_interval = NULL")
+		}
+	}
+
+	if ou.PaymentCancellationPeriodDays != nil {
+		if *ou.PaymentCancellationPeriodDays > 0 {
+			fields = append(fields, "payment_cancellation_period_days = ?")
+			args = append(args, *ou.PaymentCancellationPeriodDays)
+		} else {
+			fields = append(fields, "payment_cancellation_period_days = NULL")
 		}
 	}
 

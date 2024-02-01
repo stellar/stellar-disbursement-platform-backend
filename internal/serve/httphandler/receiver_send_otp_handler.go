@@ -18,6 +18,10 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
+// OTPMessageDisclaimer contains disclaimer text that needs to be added as part of the OTP message to remind the
+// receiver how sensitive the data is.
+const OTPMessageDisclaimer = " If you did not request this code, please ignore. Do not share your code with anyone."
+
 type ReceiverSendOTPHandler struct {
 	Models             *data.Models
 	SMSMessengerClient message.MessengerClient
@@ -35,7 +39,8 @@ type ReceiverSendOTPRequest struct {
 }
 
 type ReceiverSendOTPResponseBody struct {
-	Message string `json:"message"`
+	Message           string                 `json:"message"`
+	VerificationField data.VerificationField `json:"verification_field"`
 }
 
 func (h ReceiverSendOTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -91,6 +96,12 @@ func (h ReceiverSendOTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	receiverVerification, err := h.Models.ReceiverVerification.GetLatestByPhoneNumber(ctx, receiverSendOTPRequest.PhoneNumber)
+	if err != nil {
+		httperror.InternalError(ctx, "Cannot find latest receiver verification for receiver", err, nil).Render(w)
+		return
+	}
+
 	// Generate a new 6 digits OTP
 	newOTP, err := utils.RandomString(6, utils.NumberBytes)
 	if err != nil {
@@ -118,7 +129,7 @@ func (h ReceiverSendOTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request
 			OrganizationName: organization.Name,
 		}
 
-		otpMessageTemplate := organization.OTPMessageTemplate
+		otpMessageTemplate := organization.OTPMessageTemplate + OTPMessageDisclaimer
 		if !strings.Contains(organization.OTPMessageTemplate, "{{.OTP}}") {
 			// Adding the OTP code to the template
 			otpMessageTemplate = fmt.Sprintf(`{{.OTP}} %s`, strings.TrimSpace(otpMessageTemplate))
@@ -150,7 +161,8 @@ func (h ReceiverSendOTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request
 	}
 
 	response := ReceiverSendOTPResponseBody{
-		Message: "if your phone number is registered, you'll receive an OTP",
+		Message:           "if your phone number is registered, you'll receive an OTP",
+		VerificationField: receiverVerification.VerificationField,
 	}
 	httpjson.RenderStatus(w, http.StatusOK, response, httpjson.JSON)
 }

@@ -52,7 +52,7 @@ func (h ReceiverRegistrationHandler) ServeHTTP(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	rw, err := h.ReceiverWalletModel.GetByStellarAccountAndMemo(ctx, sep24Claims.SEP10StellarAccount(), sep24Claims.SEP10StellarMemo())
+	rw, err := h.ReceiverWalletModel.GetByStellarAccountAndMemo(ctx, sep24Claims.SEP10StellarAccount(), sep24Claims.SEP10StellarMemo(), sep24Claims.ClientDomain())
 	if err != nil && !errors.Is(err, data.ErrRecordNotFound) {
 		httperror.InternalError(ctx, "Cannot register receiver wallet", err, nil).Render(w)
 		return
