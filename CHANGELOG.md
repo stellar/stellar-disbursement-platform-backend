@@ -27,7 +27,7 @@ None
 
 - Support automatic cancellation of payments in `READY` status after a certain time period [#121](https://github.com/stellar/stellar-disbursement-platform-backend/pull/121)
 - API endpoint for cancelling payments in `READY` status: `PATCH /payments/{id}/status` [#130](https://github.com/stellar/stellar-disbursement-platform-backend/pull/130)
-- Use CI to m sure the helm README is up to date [#164](https://github.com/stellar/stellar-disbursement-platform-backend/pull/164)
+- Use CI to make sure the helm README is up to date [#164](https://github.com/stellar/stellar-disbursement-platform-backend/pull/164)
 
 ### Fixed
 
