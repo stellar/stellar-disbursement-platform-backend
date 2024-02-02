@@ -6,8 +6,8 @@ import (
 	"time"
 )
 
-// MAX_RETRY_VALUE defines the max retry value. We need this to avoid memory overflow.
-const MAX_RETRY_VALUE = 32
+// MaxRetryValue defines the max retry value. We need this to avoid memory overflow.
+const MaxRetryValue = 32
 
 var (
 	ErrInvalidBackoffRetryValue = errors.New("invalid backoff retry value")
@@ -24,7 +24,7 @@ func CalculateExponentialBackoffDuration(retry int) (time.Duration, error) {
 		return 0, ErrInvalidBackoffRetryValue
 	}
 
-	if retry > MAX_RETRY_VALUE {
+	if retry > MaxRetryValue {
 		return 0, ErrMaxRetryValueOverflow
 	}
 

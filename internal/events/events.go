@@ -11,12 +11,9 @@ import (
 
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 	"github.com/stretchr/testify/mock"
 )
-
-const MAX_BACKOFF_DURATION = 8
 
 var (
 	ErrTopicRequired    = errors.New("message topic is required")
@@ -96,10 +93,9 @@ func Consume(ctx context.Context, consumer Consumer, crashTracker crashtracker.C
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, syscall.SIGTERM, syscall.SIGINT, syscall.SIGQUIT)
 
-	var backoff time.Duration
-	var backoffCounter int
 	backoffChan := make(chan struct{}, 1)
 	defer close(backoffChan)
+	backoffManager := NewBackoffManager(backoffChan)
 
 	for {
 		select {
@@ -112,25 +108,17 @@ func Consume(ctx context.Context, consumer Consumer, crashTracker crashtracker.C
 			return
 
 		case <-backoffChan:
+			backoff := backoffManager.GetBackoffDuration()
 			log.Ctx(ctx).Warnf("Waiting %s before retrying reading new messages", backoff)
 			time.Sleep(backoff)
 
 		default:
 			if err := consumer.ReadMessage(ctx); err != nil {
 				crashTracker.LogAndReportErrors(ctx, err, fmt.Sprintf("consuming messages for topic %s", consumer.Topic()))
-
-				backoffCounter++
-				if backoffCounter > MAX_BACKOFF_DURATION {
-					backoffCounter = MAX_BACKOFF_DURATION
-				}
-
-				// No need to handle this error since it only returns error when retry > 32, < 0
-				backoff, _ = utils.ExponentialBackoffInSeconds(backoffCounter)
-				backoffChan <- struct{}{}
+				backoffManager.TriggerBackoff()
 				continue
 			}
-			backoff = 0
-			backoffCounter = 0
+			backoffManager.ResetBackoff()
 		}
 	}
 }
