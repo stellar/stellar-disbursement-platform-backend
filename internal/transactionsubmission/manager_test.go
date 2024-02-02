@@ -8,16 +8,16 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
-	"github.com/stretchr/testify/require"
-
 	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/keypair"
 	"github.com/stellar/go/network"
 	"github.com/stellar/go/protocols/horizon"
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/txnbuild"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
@@ -25,6 +25,7 @@ import (
 	monitorMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	engineMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/mocks"
+	preconditionsMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions/mocks"
 	tssMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 	storeMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store/mocks"
@@ -39,7 +40,7 @@ func Test_SubmitterOptions_validate(t *testing.T) {
 	defer dbConnectionPool.Close()
 
 	mHorizonClient := &horizonclient.MockClient{}
-	mLedgerNumberTracker := engineMocks.NewMockLedgerNumberTracker(t)
+	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
 	mSigService := engineMocks.NewMockSignatureService(t)
 	mSubmitterEngine := engine.SubmitterEngine{
 		HorizonClient:       mHorizonClient,
@@ -187,7 +188,7 @@ func Test_NewManager(t *testing.T) {
 	defer dbConnectionPool.Close()
 
 	mHorizonClient := &horizonclient.MockClient{}
-	mLedgerNumberTracker := engineMocks.NewMockLedgerNumberTracker(t)
+	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
 	mSigService := engineMocks.NewMockSignatureService(t)
 	mSubmitterEngine := engine.SubmitterEngine{
 		HorizonClient:       mHorizonClient,
@@ -414,13 +415,13 @@ func Test_Manager_ProcessTransactions(t *testing.T) {
 				DistributionPrivateKey: distributionKP.Seed(),
 				EncryptionPassphrase:   distributionKP.Seed(),
 				Encrypter:              &utils.PrivateKeyEncrypterMock{},
-				LedgerNumberTracker:    engineMocks.NewMockLedgerNumberTracker(t),
+				LedgerNumberTracker:    preconditionsMocks.NewMockLedgerNumberTracker(t),
 			})
 			require.NoError(t, err)
 
 			// mock ledger number tracker
 			const currentLedgerNumber = 123
-			mockLedgerNumberTracker := engineMocks.NewMockLedgerNumberTracker(t)
+			mockLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
 			mockLedgerNumberTracker.On("GetLedgerNumber").Return(currentLedgerNumber, nil)
 			defer mockLedgerNumberTracker.AssertExpectations(t)
 

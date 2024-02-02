@@ -11,6 +11,7 @@ import (
 	"golang.org/x/exp/slices"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
 )
@@ -41,7 +42,7 @@ type SignatureServiceOptions struct {
 	DBConnectionPool       db.DBConnectionPool
 	DistributionPrivateKey string
 	EncryptionPassphrase   string
-	LedgerNumberTracker    LedgerNumberTracker
+	LedgerNumberTracker    preconditions.LedgerNumberTracker
 	Type                   SignatureServiceType
 }
 
@@ -78,7 +79,7 @@ type DefaultSignatureServiceOptions struct {
 	DistributionPrivateKey string
 	EncryptionPassphrase   string
 	Encrypter              utils.PrivateKeyEncrypter
-	LedgerNumberTracker    LedgerNumberTracker
+	LedgerNumberTracker    preconditions.LedgerNumberTracker
 }
 
 func (opts *DefaultSignatureServiceOptions) Validate() error {
@@ -113,7 +114,7 @@ type DefaultSignatureService struct {
 	chAccModel           store.ChannelAccountStore
 	encrypter            utils.PrivateKeyEncrypter
 	encryptionPassphrase string
-	ledgerNumberTracker  LedgerNumberTracker
+	ledgerNumberTracker  preconditions.LedgerNumberTracker
 }
 
 // NewDefaultSignatureService returns a new DefaultSignatureService instance.
@@ -245,7 +246,7 @@ func (ds *DefaultSignatureService) BatchInsert(ctx context.Context, amount int) 
 	if err != nil {
 		return nil, fmt.Errorf("getting current ledger number: %w", err)
 	}
-	lockedToLedgerNumber := currentLedgerNumber + IncrementForMaxLedgerBounds
+	lockedToLedgerNumber := currentLedgerNumber + preconditions.IncrementForMaxLedgerBounds
 
 	batchInsertPayload := []*store.ChannelAccount{}
 	for i := 0; i < amount; i++ {
@@ -281,7 +282,7 @@ func (ds *DefaultSignatureService) Delete(ctx context.Context, publicKey string)
 	if err != nil {
 		return fmt.Errorf("getting current ledger number: %w", err)
 	}
-	lockedToLedgerNumber := currentLedgerNumber + IncrementForMaxLedgerBounds
+	lockedToLedgerNumber := currentLedgerNumber + preconditions.IncrementForMaxLedgerBounds
 
 	err = ds.chAccModel.DeleteIfLockedUntil(ctx, publicKey, lockedToLedgerNumber)
 	if err != nil {

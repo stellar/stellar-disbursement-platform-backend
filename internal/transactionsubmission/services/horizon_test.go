@@ -23,6 +23,8 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	engineMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/mocks"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions"
+	preconditionsMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
 )
@@ -40,9 +42,9 @@ func Test_CreateChannelAccountsOnChain(t *testing.T) {
 	chAccModel := store.NewChannelAccountModel(dbConnectionPool)
 
 	currLedgerNumber := 100
-	mLedgerNumberTracker := engineMocks.NewMockLedgerNumberTracker(t)
+	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
 	ledgerBounds := &txnbuild.LedgerBounds{
-		MaxLedger: uint32(currLedgerNumber + engine.IncrementForMaxLedgerBounds),
+		MaxLedger: uint32(currLedgerNumber + preconditions.IncrementForMaxLedgerBounds),
 	}
 
 	distributionKP := keypair.MustRandom()
@@ -268,9 +270,9 @@ func Test_DeleteChannelAccountOnChain(t *testing.T) {
 	require.NoError(t, err)
 
 	currLedger := 100
-	mLedgerNumberTracker := engineMocks.NewMockLedgerNumberTracker(t)
+	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
 	ledgerBounds := &txnbuild.LedgerBounds{
-		MaxLedger: uint32(currLedger + engine.IncrementForMaxLedgerBounds),
+		MaxLedger: uint32(currLedger + preconditions.IncrementForMaxLedgerBounds),
 	}
 
 	chAccAddress := keypair.MustRandom().Address()

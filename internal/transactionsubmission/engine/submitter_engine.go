@@ -5,13 +5,14 @@ import (
 
 	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/txnbuild"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions"
 )
 
 // SubmitterEngine aggregates the dependencies that are shared between all Submitter instances, such as the Ledger
 // number tracker.
 type SubmitterEngine struct {
 	HorizonClient horizonclient.ClientInterface
-	LedgerNumberTracker
+	preconditions.LedgerNumberTracker
 	SignatureService
 	MaxBaseFee int
 	HostSigner SignatureService

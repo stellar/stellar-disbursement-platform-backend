@@ -29,6 +29,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	engineMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/mocks"
+	preconditionsMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions/mocks"
 	serveadmin "github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/serve"
 )
 
@@ -107,7 +108,7 @@ func Test_serve(t *testing.T) {
 	mHorizonClient := &horizonclient.MockClient{}
 	di.SetInstance(di.HorizonClientInstanceName, mHorizonClient)
 
-	mLedgerNumberTracker := engineMocks.NewMockLedgerNumberTracker(t)
+	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
 	di.SetInstance(di.LedgerNumberTrackerInstanceName, mLedgerNumberTracker)
 
 	mSignatureService := engineMocks.NewMockSignatureService(t)

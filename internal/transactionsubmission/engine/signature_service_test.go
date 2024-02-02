@@ -15,7 +15,7 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/mocks"
+	preconditionsMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
 )
@@ -117,7 +117,7 @@ func Test_DefaultSignatureServiceOptions_Validate(t *testing.T) {
 				DBConnectionPool:       dbConnectionPool,
 				DistributionPrivateKey: "SCPGNK3MRMXKNWGZ4ET3JZ6RUJIN7FMHT4ASVXDG7YPBL4WKBQNEL63F",
 				EncryptionPassphrase:   "SCPGNK3MRMXKNWGZ4ET3JZ6RUJIN7FMHT4ASVXDG7YPBL4WKBQNEL63F",
-				LedgerNumberTracker:    mocks.NewMockLedgerNumberTracker(t),
+				LedgerNumberTracker:    preconditionsMocks.NewMockLedgerNumberTracker(t),
 			},
 		},
 	}
@@ -142,7 +142,7 @@ func Test_NewDefaultSignatureService(t *testing.T) {
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
 
-	mLedgerNumberTracker := mocks.NewMockLedgerNumberTracker(t)
+	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
 
 	testCases := []struct {
 		name                  string
@@ -205,7 +205,7 @@ func Test_DefaultSignatureService_DistributionAccount(t *testing.T) {
 	// test with the first KP:
 	distributionKP, err := keypair.Random()
 	require.NoError(t, err)
-	mLedgerNumberTracker := mocks.NewMockLedgerNumberTracker(t)
+	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
 	defaultSigService, err := NewDefaultSignatureService(DefaultSignatureServiceOptions{
 		NetworkPassphrase:      network.TestNetworkPassphrase,
 		DBConnectionPool:       dbConnectionPool,
@@ -294,7 +294,7 @@ func Test_DefaultSignatureService_getKPsForAccounts(t *testing.T) {
 		DistributionPrivateKey: distributionKP.Seed(),
 		EncryptionPassphrase:   encrypterPass,
 		Encrypter:              encrypter,
-		LedgerNumberTracker:    mocks.NewMockLedgerNumberTracker(t),
+		LedgerNumberTracker:    preconditionsMocks.NewMockLedgerNumberTracker(t),
 	})
 	require.NoError(t, err)
 
@@ -386,7 +386,7 @@ func Test_DefaultSignatureService_SignStellarTransaction(t *testing.T) {
 		DistributionPrivateKey: distributionKP.Seed(),
 		EncryptionPassphrase:   distributionKP.Seed(),
 		Encrypter:              &utils.DefaultPrivateKeyEncrypter{},
-		LedgerNumberTracker:    mocks.NewMockLedgerNumberTracker(t),
+		LedgerNumberTracker:    preconditionsMocks.NewMockLedgerNumberTracker(t),
 	})
 	require.NoError(t, err)
 
@@ -483,7 +483,7 @@ func Test_DefaultSignatureService_SignFeeBumpStellarTransaction(t *testing.T) {
 		DistributionPrivateKey: distributionKP.Seed(),
 		EncryptionPassphrase:   distributionKP.Seed(),
 		Encrypter:              &utils.DefaultPrivateKeyEncrypter{},
-		LedgerNumberTracker:    mocks.NewMockLedgerNumberTracker(t),
+		LedgerNumberTracker:    preconditionsMocks.NewMockLedgerNumberTracker(t),
 	})
 	require.NoError(t, err)
 
@@ -595,7 +595,7 @@ func Test_DefaultSignatureService_BatchInsert(t *testing.T) {
 		},
 	}
 
-	mLedgerNumberTracker := mocks.NewMockLedgerNumberTracker(t)
+	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
 	mLedgerNumberTracker.On("GetLedgerNumber").Return(100, nil).Once()
 	defer mLedgerNumberTracker.AssertExpectations(t)
 
@@ -664,7 +664,7 @@ func Test_DefaultSignatureService_Delete(t *testing.T) {
 	// current ledger number
 	currLedgerNumber := 0
 	lockUntilLedgerNumber := 10
-	mLedgerNumberTracker := mocks.NewMockLedgerNumberTracker(t)
+	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
 	mLedgerNumberTracker.
 		On("GetLedgerNumber").
 		Return(currLedgerNumber, nil).

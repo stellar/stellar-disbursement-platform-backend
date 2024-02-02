@@ -20,6 +20,8 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	engineMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/mocks"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions"
+	preconditionsMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 	storeMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store/mocks"
 )
@@ -32,7 +34,7 @@ func Test_ChannelAccountsService_validate(t *testing.T) {
 	defer dbConnectionPool.Close()
 
 	mHorizonClient := &horizonclient.MockClient{}
-	mLedgerNumberTracker := &engineMocks.MockLedgerNumberTracker{}
+	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
 	mSigService := engineMocks.NewMockSignatureService(t)
 
 	testCases := []struct {
@@ -197,7 +199,7 @@ func Test_ChannelAccounts_CreateAccount_Success(t *testing.T) {
 	mHorizonClient := &horizonclient.MockClient{}
 	defer mHorizonClient.AssertExpectations(t)
 	mChannelAccountStore := storeMocks.NewMockChannelAccountStore(t)
-	mLedgerNumberTracker := engineMocks.NewMockLedgerNumberTracker(t)
+	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
 	mSigService := engineMocks.NewMockSignatureService(t)
 	mHostSigner := engineMocks.NewMockSignatureService(t)
 
@@ -216,7 +218,7 @@ func Test_ChannelAccounts_CreateAccount_Success(t *testing.T) {
 	rootAccount := keypair.MustParseFull("SBMW2WDSVTGT2N2PCBF3PV7WBOIKVTGGIEBUUYMDX3CKTDD5HY3UIHV4")
 	currLedgerNumber := 100
 	ledgerBounds := &txnbuild.LedgerBounds{
-		MaxLedger: uint32(currLedgerNumber + engine.IncrementForMaxLedgerBounds),
+		MaxLedger: uint32(currLedgerNumber + preconditions.IncrementForMaxLedgerBounds),
 	}
 
 	publicKeys := []string{
@@ -269,7 +271,7 @@ func Test_ChannelAccounts_CreateAccount_CannotFindRootAccount_Failure(t *testing
 	mHorizonClient := &horizonclient.MockClient{}
 	defer mHorizonClient.AssertExpectations(t)
 	mChannelAccountStore := storeMocks.NewMockChannelAccountStore(t)
-	mLedgerNumberTracker := engineMocks.NewMockLedgerNumberTracker(t)
+	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
 	mSigService := engineMocks.NewMockSignatureService(t)
 	mHostSigner := engineMocks.NewMockSignatureService(t)
 
@@ -312,7 +314,7 @@ func Test_ChannelAccounts_CreateAccount_Insert_Failure(t *testing.T) {
 	mHorizonClient := &horizonclient.MockClient{}
 	defer mHorizonClient.AssertExpectations(t)
 	mChannelAccountStore := storeMocks.NewMockChannelAccountStore(t)
-	mLedgerNumberTracker := engineMocks.NewMockLedgerNumberTracker(t)
+	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
 	mSigService := engineMocks.NewMockSignatureService(t)
 	mHostSigner := engineMocks.NewMockSignatureService(t)
 
@@ -333,7 +335,7 @@ func Test_ChannelAccounts_CreateAccount_Insert_Failure(t *testing.T) {
 	// current ledger number
 	currLedgerNumber := 100
 	ledgerBounds := &txnbuild.LedgerBounds{
-		MaxLedger: uint32(currLedgerNumber + engine.IncrementForMaxLedgerBounds),
+		MaxLedger: uint32(currLedgerNumber + preconditions.IncrementForMaxLedgerBounds),
 	}
 
 	defer mLedgerNumberTracker.AssertExpectations(t)
@@ -365,7 +367,7 @@ func Test_ChannelAccounts_VerifyAccounts_Success(t *testing.T) {
 	mHorizonClient := &horizonclient.MockClient{}
 	defer mHorizonClient.AssertExpectations(t)
 	mChannelAccountStore := storeMocks.NewMockChannelAccountStore(t)
-	mLedgerNumberTracker := engineMocks.NewMockLedgerNumberTracker(t)
+	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
 	mSigService := engineMocks.NewMockSignatureService(t)
 	mHostSigner := engineMocks.NewMockSignatureService(t)
 
@@ -413,7 +415,7 @@ func Test_ChannelAccounts_VerifyAccounts_LoadChannelAccountsError_Failure(t *tes
 	mHorizonClient := &horizonclient.MockClient{}
 	defer mHorizonClient.AssertExpectations(t)
 	mChannelAccountStore := storeMocks.NewMockChannelAccountStore(t)
-	mLedgerNumberTracker := engineMocks.NewMockLedgerNumberTracker(t)
+	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
 	mSigService := engineMocks.NewMockSignatureService(t)
 	mHostSigner := engineMocks.NewMockSignatureService(t)
 
@@ -454,7 +456,7 @@ func Test_ChannelAccounts_VerifyAccounts_NotFound(t *testing.T) {
 	mHorizonClient := &horizonclient.MockClient{}
 	defer mHorizonClient.AssertExpectations(t)
 	mChannelAccountStore := storeMocks.NewMockChannelAccountStore(t)
-	mLedgerNumberTracker := engineMocks.NewMockLedgerNumberTracker(t)
+	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
 	mSigService := engineMocks.NewMockSignatureService(t)
 	mHostSigner := engineMocks.NewMockSignatureService(t)
 
@@ -517,7 +519,7 @@ func Test_ChannelAccounts_DeleteAccount_Success(t *testing.T) {
 	mHorizonClient := &horizonclient.MockClient{}
 	defer mHorizonClient.AssertExpectations(t)
 	mChannelAccountStore := storeMocks.NewMockChannelAccountStore(t)
-	mLedgerNumberTracker := engineMocks.NewMockLedgerNumberTracker(t)
+	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
 	mSigService := engineMocks.NewMockSignatureService(t)
 	mHostSigner := engineMocks.NewMockSignatureService(t)
 
@@ -542,14 +544,14 @@ func Test_ChannelAccounts_DeleteAccount_Success(t *testing.T) {
 
 	currLedgerNum := 100
 	ledgerBounds := &txnbuild.LedgerBounds{
-		MaxLedger: uint32(currLedgerNum + engine.IncrementForMaxLedgerBounds),
+		MaxLedger: uint32(currLedgerNum + preconditions.IncrementForMaxLedgerBounds),
 	}
 
 	mLedgerNumberTracker.
 		On("GetLedgerNumber").Return(currLedgerNum, nil).Once().
 		On("GetLedgerBounds").Return(ledgerBounds, nil).Once()
 	mChannelAccountStore.
-		On("GetAndLock", ctx, channelAccount.PublicKey, currLedgerNum, currLedgerNum+engine.IncrementForMaxLedgerBounds).
+		On("GetAndLock", ctx, channelAccount.PublicKey, currLedgerNum, currLedgerNum+preconditions.IncrementForMaxLedgerBounds).
 		Return(channelAccount, nil).
 		Once()
 	mHorizonClient.
@@ -596,7 +598,7 @@ func Test_ChannelAccounts_DeleteAccount_All_Success(t *testing.T) {
 	mHorizonClient := &horizonclient.MockClient{}
 	defer mHorizonClient.AssertExpectations(t)
 	mChannelAccountStore := storeMocks.NewMockChannelAccountStore(t)
-	mLedgerNumberTracker := engineMocks.NewMockLedgerNumberTracker(t)
+	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
 	mSigService := engineMocks.NewMockSignatureService(t)
 	mHostSigner := engineMocks.NewMockSignatureService(t)
 
@@ -627,7 +629,7 @@ func Test_ChannelAccounts_DeleteAccount_All_Success(t *testing.T) {
 
 	currLedgerNum := 1000
 	ledgerBounds := &txnbuild.LedgerBounds{
-		MaxLedger: uint32(currLedgerNum + engine.IncrementForMaxLedgerBounds),
+		MaxLedger: uint32(currLedgerNum + preconditions.IncrementForMaxLedgerBounds),
 	}
 
 	mChannelAccountStore.
@@ -639,7 +641,7 @@ func Test_ChannelAccounts_DeleteAccount_All_Success(t *testing.T) {
 		On("GetLedgerBounds").Return(ledgerBounds, nil).Times(len(channelAccounts))
 	for _, acc := range channelAccounts {
 		mChannelAccountStore.
-			On("GetAndLockAll", ctx, currLedgerNum, currLedgerNum+engine.IncrementForMaxLedgerBounds, 1).
+			On("GetAndLockAll", ctx, currLedgerNum, currLedgerNum+preconditions.IncrementForMaxLedgerBounds, 1).
 			Return([]*store.ChannelAccount{acc}, nil).
 			Once()
 		mHorizonClient.
@@ -684,7 +686,7 @@ func Test_ChannelAccounts_DeleteAccount_FindByPublicKey_Failure(t *testing.T) {
 	mHorizonClient := &horizonclient.MockClient{}
 	defer mHorizonClient.AssertExpectations(t)
 	mChannelAccountStore := storeMocks.NewMockChannelAccountStore(t)
-	mLedgerNumberTracker := engineMocks.NewMockLedgerNumberTracker(t)
+	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
 	mSigService := engineMocks.NewMockSignatureService(t)
 	mHostSigner := engineMocks.NewMockSignatureService(t)
 
@@ -708,7 +710,7 @@ func Test_ChannelAccounts_DeleteAccount_FindByPublicKey_Failure(t *testing.T) {
 		Return(currLedgerNum, nil).
 		Once()
 	mChannelAccountStore.
-		On("GetAndLock", ctx, channelAccountID, currLedgerNum, currLedgerNum+engine.IncrementForMaxLedgerBounds).
+		On("GetAndLock", ctx, channelAccountID, currLedgerNum, currLedgerNum+preconditions.IncrementForMaxLedgerBounds).
 		Return(nil, errors.New("db error")).
 		Once()
 
@@ -731,7 +733,7 @@ func Test_ChannelAccounts_DeleteAccount_DeleteFromSigServiceError(t *testing.T) 
 	mHorizonClient := &horizonclient.MockClient{}
 	defer mHorizonClient.AssertExpectations(t)
 	mChannelAccountStore := storeMocks.NewMockChannelAccountStore(t)
-	mLedgerNumberTracker := engineMocks.NewMockLedgerNumberTracker(t)
+	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
 	mSigService := engineMocks.NewMockSignatureService(t)
 	mHostSigner := engineMocks.NewMockSignatureService(t)
 
@@ -759,7 +761,7 @@ func Test_ChannelAccounts_DeleteAccount_DeleteFromSigServiceError(t *testing.T) 
 		Return(currLedgerNum, nil).
 		Once()
 	mChannelAccountStore.
-		On("GetAndLock", ctx, channelAccount.PublicKey, currLedgerNum, currLedgerNum+engine.IncrementForMaxLedgerBounds).
+		On("GetAndLock", ctx, channelAccount.PublicKey, currLedgerNum, currLedgerNum+preconditions.IncrementForMaxLedgerBounds).
 		Return(channelAccount, nil).
 		Once()
 	mHorizonClient.
@@ -792,7 +794,7 @@ func Test_ChannelAccounts_DeleteAccount_SubmitTransaction_Failure(t *testing.T) 
 	mHorizonClient := &horizonclient.MockClient{}
 	defer mHorizonClient.AssertExpectations(t)
 	mChannelAccountStore := storeMocks.NewMockChannelAccountStore(t)
-	mLedgerNumberTracker := engineMocks.NewMockLedgerNumberTracker(t)
+	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
 	mSigService := engineMocks.NewMockSignatureService(t)
 	mHostSigner := engineMocks.NewMockSignatureService(t)
 
@@ -817,14 +819,14 @@ func Test_ChannelAccounts_DeleteAccount_SubmitTransaction_Failure(t *testing.T) 
 
 	currLedgerNum := 1000
 	ledgerBounds := &txnbuild.LedgerBounds{
-		MaxLedger: uint32(currLedgerNum + engine.IncrementForMaxLedgerBounds),
+		MaxLedger: uint32(currLedgerNum + preconditions.IncrementForMaxLedgerBounds),
 	}
 
 	mLedgerNumberTracker.
 		On("GetLedgerNumber").Return(currLedgerNum, nil).Once().
 		On("GetLedgerBounds").Return(ledgerBounds, nil).Once()
 	mChannelAccountStore.
-		On("GetAndLock", ctx, channelAccount.PublicKey, currLedgerNum, currLedgerNum+engine.IncrementForMaxLedgerBounds).
+		On("GetAndLock", ctx, channelAccount.PublicKey, currLedgerNum, currLedgerNum+preconditions.IncrementForMaxLedgerBounds).
 		Return(channelAccount, nil).
 		Once()
 	mHorizonClient.
@@ -868,7 +870,7 @@ func Test_ChannelAccounts_EnsureChannelAccounts_Exact_Success(t *testing.T) {
 	mHorizonClient := &horizonclient.MockClient{}
 	defer mHorizonClient.AssertExpectations(t)
 	mChannelAccountStore := storeMocks.NewMockChannelAccountStore(t)
-	mLedgerNumberTracker := engineMocks.NewMockLedgerNumberTracker(t)
+	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
 	mSigService := engineMocks.NewMockSignatureService(t)
 	mHostSigner := engineMocks.NewMockSignatureService(t)
 
@@ -913,7 +915,7 @@ func Test_ChannelAccounts_EnsureChannelAccounts_Add_Success(t *testing.T) {
 	mHorizonClient := &horizonclient.MockClient{}
 	defer mHorizonClient.AssertExpectations(t)
 	mChannelAccountStore := storeMocks.NewMockChannelAccountStore(t)
-	mLedgerNumberTracker := engineMocks.NewMockLedgerNumberTracker(t)
+	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
 	mSigService := engineMocks.NewMockSignatureService(t)
 	mHostSigner := engineMocks.NewMockSignatureService(t)
 
@@ -935,7 +937,7 @@ func Test_ChannelAccounts_EnsureChannelAccounts_Add_Success(t *testing.T) {
 
 	currLedgerNum := 100
 	ledgerBounds := &txnbuild.LedgerBounds{
-		MaxLedger: uint32(currLedgerNum + engine.IncrementForMaxLedgerBounds),
+		MaxLedger: uint32(currLedgerNum + preconditions.IncrementForMaxLedgerBounds),
 	}
 
 	publicKeys := []string{
@@ -991,7 +993,7 @@ func Test_ChannelAccounts_EnsureChannelAccounts_Delete_Success(t *testing.T) {
 	mHorizonClient := &horizonclient.MockClient{}
 	defer mHorizonClient.AssertExpectations(t)
 	mChannelAccountStore := storeMocks.NewMockChannelAccountStore(t)
-	mLedgerNumberTracker := engineMocks.NewMockLedgerNumberTracker(t)
+	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
 	mSigService := engineMocks.NewMockSignatureService(t)
 	mHostSigner := engineMocks.NewMockSignatureService(t)
 
@@ -1024,7 +1026,7 @@ func Test_ChannelAccounts_EnsureChannelAccounts_Delete_Success(t *testing.T) {
 	wantEnsureCount := 2
 	currLedgerNum := 1000
 	ledgerBounds := &txnbuild.LedgerBounds{
-		MaxLedger: uint32(currLedgerNum + engine.IncrementForMaxLedgerBounds),
+		MaxLedger: uint32(currLedgerNum + preconditions.IncrementForMaxLedgerBounds),
 	}
 
 	mChannelAccountStore.
@@ -1045,7 +1047,7 @@ func Test_ChannelAccounts_EnsureChannelAccounts_Delete_Success(t *testing.T) {
 
 	for _, acc := range channelAccounts {
 		mChannelAccountStore.
-			On("GetAndLockAll", ctx, currLedgerNum, currLedgerNum+engine.IncrementForMaxLedgerBounds, 1).
+			On("GetAndLockAll", ctx, currLedgerNum, currLedgerNum+preconditions.IncrementForMaxLedgerBounds, 1).
 			Return([]*store.ChannelAccount{acc}, nil).
 			Once()
 		mHorizonClient.

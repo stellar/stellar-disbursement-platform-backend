@@ -8,11 +8,12 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/mocks"
+	preconditionsMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions/mocks"
 )
 
 func Test_SubmitterEngine_Validate(t *testing.T) {
 	hMock := &horizonclient.MockClient{}
-	mLedgerNumberTracker := mocks.NewMockLedgerNumberTracker(t)
+	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
 	mSigService := mocks.NewMockSignatureService(t)
 
 	testCases := []struct {

@@ -32,6 +32,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/mocks"
+	preconditionsMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions/mocks"
 )
 
 var defaultPreconditions = txnbuild.Preconditions{TimeBounds: txnbuild.NewTimeout(20)}
@@ -107,7 +108,7 @@ func Test_AssetHandler_CreateAsset(t *testing.T) {
 	distributionKP := keypair.MustRandom()
 	horizonClientMock := &horizonclient.MockClient{}
 	signatureService := mocks.NewMockSignatureService(t)
-	mLedgerNumberTracker := mocks.NewMockLedgerNumberTracker(t)
+	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
 
 	handler := &AssetsHandler{
 		Models: model,
@@ -494,7 +495,7 @@ func Test_AssetHandler_DeleteAsset(t *testing.T) {
 	distributionKP := keypair.MustRandom()
 	horizonClientMock := &horizonclient.MockClient{}
 	signatureService := mocks.NewMockSignatureService(t)
-	mLedgerNumberTracker := mocks.NewMockLedgerNumberTracker(t)
+	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
 
 	handler := &AssetsHandler{
 		Models: model,
@@ -704,7 +705,7 @@ func Test_AssetHandler_handleUpdateAssetTrustlineForDistributionAccount(t *testi
 	distributionKP := keypair.MustRandom()
 	horizonClientMock := &horizonclient.MockClient{}
 	signatureService := mocks.NewMockSignatureService(t)
-	mLedgerNumberTracker := mocks.NewMockLedgerNumberTracker(t)
+	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
 
 	handler := &AssetsHandler{
 		SubmitterEngine: engine.SubmitterEngine{
@@ -1093,7 +1094,7 @@ func Test_AssetHandler_submitChangeTrustTransaction(t *testing.T) {
 	distributionKP := keypair.MustRandom()
 	horizonClientMock := &horizonclient.MockClient{}
 	signatureService := mocks.NewMockSignatureService(t)
-	mLedgerNumberTracker := mocks.NewMockLedgerNumberTracker(t)
+	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
 
 	handler := &AssetsHandler{
 		SubmitterEngine: engine.SubmitterEngine{
@@ -1328,7 +1329,7 @@ func newAssetTestMock(t *testing.T, distributionAccountAddress string) *assetTes
 		On("DistributionAccount").
 		Return(distributionAccountAddress)
 
-	mLedgerNumberTracker := mocks.NewMockLedgerNumberTracker(t)
+	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
 
 	return &assetTestMock{
 		SignatureService:  signatureService,
