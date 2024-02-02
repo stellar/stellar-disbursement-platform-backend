@@ -72,13 +72,7 @@ func NewChannelAccountDBSignatureClient(opts ChannelAccountDBSignatureClientOpti
 	}, nil
 }
 
-func (c *ChannelAccountDBSignatureClient) Type() string {
-	return string(SignatureClientTypeChannelAccountDB)
-}
-
-func (c *ChannelAccountDBSignatureClient) NetworkPassphrase() string {
-	return c.networkPassphrase
-}
+var _ SignatureClient = &ChannelAccountDBSignatureClient{}
 
 func (c *ChannelAccountDBSignatureClient) getKPsForAccounts(ctx context.Context, stellarAccounts ...string) ([]*keypair.Full, error) {
 	if len(stellarAccounts) == 0 {
@@ -209,4 +203,10 @@ func (c *ChannelAccountDBSignatureClient) Delete(ctx context.Context, publicKey 
 	return nil
 }
 
-var _ SignatureClient = &ChannelAccountDBSignatureClient{}
+func (c *ChannelAccountDBSignatureClient) Type() string {
+	return string(SignatureClientTypeChannelAccountDB)
+}
+
+func (c *ChannelAccountDBSignatureClient) NetworkPassphrase() string {
+	return c.networkPassphrase
+}

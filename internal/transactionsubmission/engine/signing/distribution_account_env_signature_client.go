@@ -6,6 +6,7 @@ import (
 
 	"github.com/stellar/go/keypair"
 	"github.com/stellar/go/strkey"
+	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/txnbuild"
 )
 
@@ -58,13 +59,7 @@ func NewDistributionAccountEnvSignatureClient(opts DistributionAccountEnvOptions
 	}, nil
 }
 
-func (c *DistributionAccountEnvSignatureClient) Type() string {
-	return string(SignatureClientTypeDistributionAccountEnv)
-}
-
-func (c *DistributionAccountEnvSignatureClient) NetworkPassphrase() string {
-	return c.networkPassphrase
-}
+var _ SignatureClient = &DistributionAccountEnvSignatureClient{}
 
 func (c *DistributionAccountEnvSignatureClient) SignStellarTransaction(ctx context.Context, stellarTx *txnbuild.Transaction, stellarAccounts ...string) (signedStellarTx *txnbuild.Transaction, err error) {
 	if stellarTx == nil {
@@ -100,4 +95,17 @@ func (c *DistributionAccountEnvSignatureClient) Delete(ctx context.Context, publ
 	return fmt.Errorf("signature client of type %s does not support Delete", c.Type())
 }
 
-var _ SignatureClient = &DistributionAccountEnvSignatureClient{}
+func (c *DistributionAccountEnvSignatureClient) Type() string {
+	return string(SignatureClientTypeDistributionAccountEnv)
+}
+
+func (c *DistributionAccountEnvSignatureClient) NetworkPassphrase() string {
+	return c.networkPassphrase
+}
+
+var _ DistributionAccountResolver = &DistributionAccountEnvSignatureClient{}
+
+func (c *DistributionAccountEnvSignatureClient) DistributionAccount(keyword string) string {
+	log.Warnf("Distribution is nor resolved by keyword in DistributionAccountEnvSignatureClient, keyword: %s", keyword)
+	return c.distributionAccount
+}
