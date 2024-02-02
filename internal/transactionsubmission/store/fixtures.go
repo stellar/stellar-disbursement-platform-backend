@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
 )
 
 // CreateTransactionFixtures creates count number submitter transactions
@@ -110,6 +111,59 @@ func CreateChannelAccountFixtures(t *testing.T, ctx context.Context, dbConnectio
 	require.NoError(t, err)
 
 	return channelAccounts
+}
+
+// CreateChannelAccountFixtures creates 'count' number of channel accounts, and store them in the DB with the private
+// keys encrypted, returning the channel accounts.
+func CreateChannelAccountFixturesEncrypted(
+	t *testing.T,
+	ctx context.Context,
+	dbConnectionPool db.DBConnectionPool,
+	encrypter utils.PrivateKeyEncrypter,
+	encryptionPassphrase string,
+	count int,
+) []*ChannelAccount {
+	caModel := ChannelAccountModel{DBConnectionPool: dbConnectionPool}
+	for i := 0; i < count; i++ {
+		kp := keypair.MustRandom()
+		publicKey := kp.Address()
+		privateKey := kp.Seed()
+		encryptedPrivateKey, err := encrypter.Encrypt(privateKey, encryptionPassphrase)
+		require.NoError(t, err)
+
+		err = caModel.Insert(ctx, dbConnectionPool, publicKey, encryptedPrivateKey)
+		require.NoError(t, err)
+	}
+
+	channelAccounts, err := caModel.GetAll(ctx, dbConnectionPool, 0, count)
+	require.NoError(t, err)
+
+	return channelAccounts
+}
+
+// CreateChannelAccountFixtures creates 'count' number of channel accounts, and store them in the DB with the private
+// keys encrypted, returning the Keypairs.
+func CreateChannelAccountFixturesEncryptedKPs(
+	t *testing.T,
+	ctx context.Context,
+	dbConnectionPool db.DBConnectionPool,
+	encrypter utils.PrivateKeyEncrypter,
+	encryptionPassphrase string,
+	count int,
+) []*keypair.Full {
+	channelAccounts := CreateChannelAccountFixturesEncrypted(t, ctx, dbConnectionPool, encrypter, encryptionPassphrase, count)
+	var kps []*keypair.Full
+	for _, ca := range channelAccounts {
+		encryptedPrivateKey := ca.PrivateKey
+		privateKey, err := encrypter.Decrypt(encryptedPrivateKey, encryptionPassphrase)
+		require.NoError(t, err)
+
+		kp, err := keypair.ParseFull(privateKey)
+		require.NoError(t, err)
+		kps = append(kps, kp)
+	}
+
+	return kps
 }
 
 func DeleteAllFromChannelAccounts(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter) {
