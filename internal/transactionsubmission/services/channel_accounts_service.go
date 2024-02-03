@@ -7,7 +7,6 @@ import (
 	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
-	txSub "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
@@ -89,13 +88,13 @@ func (s *ChannelAccountsService) CreateChannelAccounts(ctx context.Context, amou
 
 	for amount > 0 {
 		batchSize := amount
-		if amount > txSub.MaximumCreateAccountOperationsPerStellarTx {
+		if amount > MaximumCreateAccountOperationsPerStellarTx {
 			// only create a MaxBatchSize (19) of accounts per transaction, this is due to the signature limit of a transaction
-			batchSize = txSub.MaximumCreateAccountOperationsPerStellarTx
+			batchSize = MaximumCreateAccountOperationsPerStellarTx
 		}
 		log.Ctx(ctx).Debugf("batch size: %d", batchSize)
 
-		accounts, err := txSub.CreateChannelAccountsOnChain(ctx, s.SubmitterEngine, batchSize)
+		accounts, err := CreateChannelAccountsOnChain(ctx, s.SubmitterEngine, batchSize)
 		if err != nil {
 			return fmt.Errorf("creating channel accounts onchain: %w", err)
 		}
@@ -205,7 +204,7 @@ func (s *ChannelAccountsService) deleteChannelAccount(ctx context.Context, publi
 		}
 	} else {
 		log.Ctx(ctx).Infof("⏳ Deleting Stellar account with address: %s", publicKey)
-		err = txSub.DeleteChannelAccountOnChain(ctx, s.SubmitterEngine, publicKey)
+		err = DeleteChannelAccountOnChain(ctx, s.SubmitterEngine, publicKey)
 		if err != nil {
 			return fmt.Errorf("deleting account %s onchain: %w", publicKey, err)
 		}
@@ -225,8 +224,8 @@ func (s *ChannelAccountsService) EnsureChannelAccountsCount(ctx context.Context,
 
 	log.Ctx(ctx).Infof("⚙️ Desired Accounts Count: %d", numAccountsToEnsure)
 
-	if numAccountsToEnsure > txSub.MaxNumberOfChannelAccounts {
-		return fmt.Errorf("count entered %d is greater than the channel accounts count limit %d in EnsureChannelAccountsCount", numAccountsToEnsure, txSub.MaxNumberOfChannelAccounts)
+	if numAccountsToEnsure > MaxNumberOfChannelAccounts {
+		return fmt.Errorf("count entered %d is greater than the channel accounts count limit %d in EnsureChannelAccountsCount", numAccountsToEnsure, MaxNumberOfChannelAccounts)
 	}
 
 	accountsCount, err := s.GetChannelAccountStore().Count(ctx)
