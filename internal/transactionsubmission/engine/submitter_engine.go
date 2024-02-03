@@ -14,6 +14,7 @@ type SubmitterEngine struct {
 	LedgerNumberTracker
 	SignatureService
 	MaxBaseFee int
+	HostSigner SignatureService
 }
 
 func (se *SubmitterEngine) Validate() error {

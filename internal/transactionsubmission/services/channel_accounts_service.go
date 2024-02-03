@@ -65,6 +65,10 @@ func (s *ChannelAccountsService) validate() error {
 		return fmt.Errorf("validating submitter engine: %w", err)
 	}
 
+	if s.SubmitterEngine.HostSigner == nil {
+		return fmt.Errorf("signature engine's host signer cannot be nil")
+	}
+
 	err := acquireAdvisoryLockForCommand(context.Background(), s.TSSDBConnectionPool)
 	if err != nil {
 		return fmt.Errorf("failed getting db advisory lock: %w", err)

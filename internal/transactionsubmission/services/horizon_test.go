@@ -15,15 +15,16 @@ import (
 	"github.com/stellar/go/strkey"
 	"github.com/stellar/go/support/render/problem"
 	"github.com/stellar/go/txnbuild"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	engineMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
-	"github.com/stretchr/testify/require"
 )
 
 func Test_CreateChannelAccountsOnChain(t *testing.T) {
@@ -36,7 +37,7 @@ func Test_CreateChannelAccountsOnChain(t *testing.T) {
 	horizonClientMock := &horizonclient.MockClient{}
 	privateKeyEncrypterMock := &utils.PrivateKeyEncrypterMock{}
 	ctx := context.Background()
-	chAccModel := &store.ChannelAccountModel{DBConnectionPool: dbConnectionPool}
+	chAccModel := store.NewChannelAccountModel(dbConnectionPool)
 
 	currLedgerNumber := 100
 	mLedgerNumberTracker := engineMocks.NewMockLedgerNumberTracker(t)
@@ -47,6 +48,15 @@ func Test_CreateChannelAccountsOnChain(t *testing.T) {
 	distributionKP := keypair.MustRandom()
 	encrypterPass := distributionKP.Seed()
 	sigService, err := engine.NewDefaultSignatureService(engine.DefaultSignatureServiceOptions{
+		NetworkPassphrase:      network.TestNetworkPassphrase,
+		DBConnectionPool:       dbConnectionPool,
+		DistributionPrivateKey: distributionKP.Seed(),
+		EncryptionPassphrase:   encrypterPass,
+		Encrypter:              privateKeyEncrypterMock,
+		LedgerNumberTracker:    mLedgerNumberTracker,
+	})
+	require.NoError(t, err)
+	hostSigner, err := engine.NewDefaultSignatureService(engine.DefaultSignatureServiceOptions{
 		NetworkPassphrase:      network.TestNetworkPassphrase,
 		DBConnectionPool:       dbConnectionPool,
 		DistributionPrivateKey: distributionKP.Seed(),
@@ -82,7 +92,7 @@ func Test_CreateChannelAccountsOnChain(t *testing.T) {
 			numOfChanAccToCreate: 2,
 			prepareMocksFn: func() {
 				horizonClientMock.
-					On("AccountDetail", horizonclient.AccountRequest{AccountID: sigService.DistributionAccount()}).
+					On("AccountDetail", horizonclient.AccountRequest{AccountID: hostSigner.HostDistributionAccount()}).
 					Return(horizon.Account{}, horizonclient.Error{
 						Problem: problem.NotFound,
 					}).
@@ -95,9 +105,9 @@ func Test_CreateChannelAccountsOnChain(t *testing.T) {
 			numOfChanAccToCreate: 2,
 			prepareMocksFn: func() {
 				horizonClientMock.
-					On("AccountDetail", horizonclient.AccountRequest{AccountID: sigService.DistributionAccount()}).
+					On("AccountDetail", horizonclient.AccountRequest{AccountID: hostSigner.HostDistributionAccount()}).
 					Return(horizon.Account{
-						AccountID: sigService.DistributionAccount(),
+						AccountID: hostSigner.HostDistributionAccount(),
 						Sequence:  1,
 					}, nil).
 					Once()
@@ -113,9 +123,9 @@ func Test_CreateChannelAccountsOnChain(t *testing.T) {
 			numOfChanAccToCreate: 2,
 			prepareMocksFn: func() {
 				horizonClientMock.
-					On("AccountDetail", horizonclient.AccountRequest{AccountID: sigService.DistributionAccount()}).
+					On("AccountDetail", horizonclient.AccountRequest{AccountID: hostSigner.HostDistributionAccount()}).
 					Return(horizon.Account{
-						AccountID: sigService.DistributionAccount(),
+						AccountID: hostSigner.HostDistributionAccount(),
 						Sequence:  1,
 					}, nil).
 					Once()
@@ -134,9 +144,9 @@ func Test_CreateChannelAccountsOnChain(t *testing.T) {
 			numOfChanAccToCreate: 2,
 			prepareMocksFn: func() {
 				horizonClientMock.
-					On("AccountDetail", horizonclient.AccountRequest{AccountID: sigService.DistributionAccount()}).
+					On("AccountDetail", horizonclient.AccountRequest{AccountID: hostSigner.HostDistributionAccount()}).
 					Return(horizon.Account{
-						AccountID: sigService.DistributionAccount(),
+						AccountID: hostSigner.HostDistributionAccount(),
 						Sequence:  1,
 					}, nil).
 					Once().
@@ -203,6 +213,7 @@ func Test_CreateChannelAccountsOnChain(t *testing.T) {
 				SignatureService:    sigService,
 				MaxBaseFee:          txnbuild.MinBaseFee,
 				LedgerNumberTracker: mLedgerNumberTracker,
+				HostSigner:          hostSigner,
 			}
 
 			channelAccountAddresses, err := CreateChannelAccountsOnChain(ctx, submitterEngine, tc.numOfChanAccToCreate)
@@ -237,7 +248,6 @@ func Test_CreateChannelAccountsOnChain(t *testing.T) {
 
 	horizonClientMock.AssertExpectations(t)
 	privateKeyEncrypterMock.AssertExpectations(t)
-	mLedgerNumberTracker.AssertExpectations(t)
 }
 
 func Test_DeleteChannelAccountOnChain(t *testing.T) {
@@ -253,7 +263,8 @@ func Test_DeleteChannelAccountOnChain(t *testing.T) {
 
 	distributionKP := keypair.MustRandom()
 	distributionAddress := distributionKP.Address()
-	mockSigService := &engineMocks.MockSignatureService{}
+	mockSigService := engineMocks.NewMockSignatureService(t)
+	mHostSigner := engineMocks.NewMockSignatureService(t)
 	require.NoError(t, err)
 
 	currLedger := 100
@@ -273,7 +284,10 @@ func Test_DeleteChannelAccountOnChain(t *testing.T) {
 		{
 			name: "returns error when HorizonClient fails getting AccountDetails",
 			prepareMocksFn: func() {
-				mockSigService.On("HostDistributionAccount").Return(distributionAddress).Once()
+				mHostSigner.
+					On("HostDistributionAccount").
+					Return(distributionAddress).
+					Once()
 				horizonClientMock.
 					On("AccountDetail", horizonclient.AccountRequest{AccountID: distributionAddress}).
 					Return(horizon.Account{}, horizonclient.Error{Problem: problem.NotFound}).
@@ -284,7 +298,10 @@ func Test_DeleteChannelAccountOnChain(t *testing.T) {
 		{
 			name: "returns error when GetLedgerBounds fails",
 			prepareMocksFn: func() {
-				mockSigService.On("HostDistributionAccount").Return(distributionAddress).Once()
+				mHostSigner.
+					On("HostDistributionAccount").
+					Return(distributionAddress).
+					Once()
 				horizonClientMock.
 					On("AccountDetail", horizonclient.AccountRequest{AccountID: distributionAddress}).
 					Return(horizon.Account{AccountID: distributionAddress, Sequence: 1}, nil).
@@ -300,7 +317,10 @@ func Test_DeleteChannelAccountOnChain(t *testing.T) {
 			name:                 "returns error when channel account doesnt exist",
 			chAccAddressToDelete: chAccAddress,
 			prepareMocksFn: func() {
-				mockSigService.On("HostDistributionAccount").Return(distributionAddress).Twice()
+				mHostSigner.
+					On("HostDistributionAccount").
+					Return(distributionAddress).
+					Twice()
 				mockSigService.
 					On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), distributionAddress, chAccAddress).
 					Return(nil, fmt.Errorf("signing remove account transaction for account")).Once()
@@ -322,7 +342,10 @@ func Test_DeleteChannelAccountOnChain(t *testing.T) {
 			name:                 "returns error when fails submitting transaction to horizon",
 			chAccAddressToDelete: chAccAddress,
 			prepareMocksFn: func() {
-				mockSigService.On("HostDistributionAccount").Return(distributionAddress).Twice()
+				mHostSigner.
+					On("HostDistributionAccount").
+					Return(distributionAddress).
+					Twice()
 				mockSigService.
 					On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), distributionAddress, chAccAddress).
 					Return(&txnbuild.Transaction{}, nil).Once()
@@ -356,7 +379,10 @@ func Test_DeleteChannelAccountOnChain(t *testing.T) {
 			name:                 "🎉 Successfully deletes channel account on chain and database",
 			chAccAddressToDelete: chAccAddress,
 			prepareMocksFn: func() {
-				mockSigService.On("HostDistributionAccount").Return(distributionAddress).Twice()
+				mHostSigner.
+					On("HostDistributionAccount").
+					Return(distributionAddress).
+					Twice()
 				mockSigService.
 					On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), distributionAddress, chAccAddress).
 					Return(&txnbuild.Transaction{}, nil).Once()
@@ -390,6 +416,7 @@ func Test_DeleteChannelAccountOnChain(t *testing.T) {
 				SignatureService:    mockSigService,
 				MaxBaseFee:          txnbuild.MinBaseFee,
 				LedgerNumberTracker: mLedgerNumberTracker,
+				HostSigner:          mHostSigner,
 			}
 
 			err = DeleteChannelAccountOnChain(ctx, submitterEngine, tc.chAccAddressToDelete)
@@ -404,8 +431,6 @@ func Test_DeleteChannelAccountOnChain(t *testing.T) {
 		})
 	}
 
-	mockSigService.AssertExpectations(t)
 	horizonClientMock.AssertExpectations(t)
 	privateKeyEncrypterMock.AssertExpectations(t)
-	mLedgerNumberTracker.AssertExpectations(t)
 }
