@@ -226,7 +226,7 @@ func Test_ChannelAccounts_CreateAccount_Success(t *testing.T) {
 		Return(nil, nil).
 		Twice()
 	mSigService.
-		On("DistributionAccount").
+		On("HostDistributionAccount").
 		Return(rootAccount.Address()).
 		Twice().
 		On("BatchInsert", ctx, 2).
@@ -276,7 +276,7 @@ func Test_ChannelAccounts_CreateAccount_CannotFindRootAccount_Failure(t *testing
 		On("AccountDetail", horizonclient.AccountRequest{AccountID: rootAccount.Address()}).
 		Return(horizon.Account{}, errors.New("some random error"))
 	mSigService.
-		On("DistributionAccount").
+		On("HostDistributionAccount").
 		Return(rootAccount.Address()).
 		Once()
 
@@ -329,7 +329,7 @@ func Test_ChannelAccounts_CreateAccount_Insert_Failure(t *testing.T) {
 		On("AccountDetail", horizonclient.AccountRequest{AccountID: rootAccount.Address()}).
 		Return(horizon.Account{AccountID: rootAccount.Address()}, nil)
 	mSigService.
-		On("DistributionAccount").
+		On("HostDistributionAccount").
 		Return(rootAccount.Address()).
 		Once().
 		On("BatchInsert", ctx, 2).
@@ -551,7 +551,7 @@ func Test_ChannelAccounts_DeleteAccount_Success(t *testing.T) {
 		Return(horizon.Transaction{}, nil).
 		Once()
 	mSigService.
-		On("DistributionAccount").
+		On("HostDistributionAccount").
 		Return(rootAccount.Address()).
 		Twice().
 		On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), mock.AnythingOfType("string"), mock.AnythingOfType("string"), mock.AnythingOfType("string")).
@@ -638,7 +638,7 @@ func Test_ChannelAccounts_DeleteAccount_All_Success(t *testing.T) {
 			Return(horizon.Transaction{}, nil).
 			Once()
 		mSigService.
-			On("DistributionAccount").
+			On("HostDistributionAccount").
 			Return(rootAccount.Address()).
 			Twice().
 			On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), mock.AnythingOfType("string"), mock.AnythingOfType("string"), mock.AnythingOfType("string")).
@@ -822,7 +822,7 @@ func Test_ChannelAccounts_DeleteAccount_SubmitTransaction_Failure(t *testing.T) 
 		Return(horizon.Transaction{}, errors.New("foo bar")).
 		Once()
 	mSigService.
-		On("DistributionAccount").
+		On("HostDistributionAccount").
 		Return(rootAccount.Address()).
 		Twice().
 		On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), mock.AnythingOfType("string"), mock.AnythingOfType("string")).
@@ -943,7 +943,7 @@ func Test_ChannelAccounts_EnsureChannelAccounts_Add_Success(t *testing.T) {
 		Return(horizon.Transaction{}, nil).
 		Once()
 	mSigService.
-		On("DistributionAccount").
+		On("HostDistributionAccount").
 		Return(rootAccount.Address()).
 		Twice().
 		On("BatchInsert", ctx, desiredCount-currChannelAccountsCount).
@@ -1032,7 +1032,7 @@ func Test_ChannelAccounts_EnsureChannelAccounts_Delete_Success(t *testing.T) {
 			Return(horizon.Account{}, nil).
 			Once()
 		mSigService.
-			On("DistributionAccount").
+			On("HostDistributionAccount").
 			Return(rootAccount.Address()).
 			Twice().
 			On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), mock.AnythingOfType("string"), mock.AnythingOfType("string")).

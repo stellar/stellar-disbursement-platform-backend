@@ -273,7 +273,7 @@ func Test_DeleteChannelAccountOnChain(t *testing.T) {
 		{
 			name: "returns error when HorizonClient fails getting AccountDetails",
 			prepareMocksFn: func() {
-				mockSigService.On("DistributionAccount").Return(distributionAddress).Once()
+				mockSigService.On("HostDistributionAccount").Return(distributionAddress).Once()
 				horizonClientMock.
 					On("AccountDetail", horizonclient.AccountRequest{AccountID: distributionAddress}).
 					Return(horizon.Account{}, horizonclient.Error{Problem: problem.NotFound}).
@@ -284,7 +284,7 @@ func Test_DeleteChannelAccountOnChain(t *testing.T) {
 		{
 			name: "returns error when GetLedgerBounds fails",
 			prepareMocksFn: func() {
-				mockSigService.On("DistributionAccount").Return(distributionAddress).Once()
+				mockSigService.On("HostDistributionAccount").Return(distributionAddress).Once()
 				horizonClientMock.
 					On("AccountDetail", horizonclient.AccountRequest{AccountID: distributionAddress}).
 					Return(horizon.Account{AccountID: distributionAddress, Sequence: 1}, nil).
@@ -300,7 +300,7 @@ func Test_DeleteChannelAccountOnChain(t *testing.T) {
 			name:                 "returns error when channel account doesnt exist",
 			chAccAddressToDelete: chAccAddress,
 			prepareMocksFn: func() {
-				mockSigService.On("DistributionAccount").Return(distributionAddress).Twice()
+				mockSigService.On("HostDistributionAccount").Return(distributionAddress).Twice()
 				mockSigService.
 					On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), distributionAddress, chAccAddress).
 					Return(nil, fmt.Errorf("signing remove account transaction for account")).Once()
@@ -322,7 +322,7 @@ func Test_DeleteChannelAccountOnChain(t *testing.T) {
 			name:                 "returns error when fails submitting transaction to horizon",
 			chAccAddressToDelete: chAccAddress,
 			prepareMocksFn: func() {
-				mockSigService.On("DistributionAccount").Return(distributionAddress).Twice()
+				mockSigService.On("HostDistributionAccount").Return(distributionAddress).Twice()
 				mockSigService.
 					On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), distributionAddress, chAccAddress).
 					Return(&txnbuild.Transaction{}, nil).Once()
@@ -356,7 +356,7 @@ func Test_DeleteChannelAccountOnChain(t *testing.T) {
 			name:                 "🎉 Successfully deletes channel account on chain and database",
 			chAccAddressToDelete: chAccAddress,
 			prepareMocksFn: func() {
-				mockSigService.On("DistributionAccount").Return(distributionAddress).Twice()
+				mockSigService.On("HostDistributionAccount").Return(distributionAddress).Twice()
 				mockSigService.
 					On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), distributionAddress, chAccAddress).
 					Return(&txnbuild.Transaction{}, nil).Once()
