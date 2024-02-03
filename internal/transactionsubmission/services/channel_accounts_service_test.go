@@ -562,9 +562,12 @@ func Test_ChannelAccounts_DeleteAccount_Success(t *testing.T) {
 	mHostSigner.
 		On("HostDistributionAccount").
 		Return(rootAccount.Address()).
-		Twice()
+		Twice().
+		On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), mock.AnythingOfType("string")).
+		Return(&txnbuild.Transaction{}, nil).
+		Once()
 	mSigService.
-		On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), mock.AnythingOfType("string"), mock.AnythingOfType("string"), mock.AnythingOfType("string")).
+		On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), mock.AnythingOfType("string"), mock.AnythingOfType("string")).
 		Return(&txnbuild.Transaction{}, nil).
 		Once().
 		On("Delete", ctx, channelAccount.PublicKey).
@@ -649,9 +652,12 @@ func Test_ChannelAccounts_DeleteAccount_All_Success(t *testing.T) {
 		mHostSigner.
 			On("HostDistributionAccount").
 			Return(rootAccount.Address()).
-			Twice()
+			Twice().
+			On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), mock.AnythingOfType("string")).
+			Return(&txnbuild.Transaction{}, nil).
+			Once()
 		mSigService.
-			On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), mock.AnythingOfType("string"), mock.AnythingOfType("string"), mock.AnythingOfType("string")).
+			On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), mock.AnythingOfType("string"), mock.AnythingOfType("string")).
 			Return(&txnbuild.Transaction{}, nil).
 			Once().
 			On("Delete", ctx, acc.PublicKey).
@@ -831,9 +837,12 @@ func Test_ChannelAccounts_DeleteAccount_SubmitTransaction_Failure(t *testing.T) 
 	mHostSigner.
 		On("HostDistributionAccount").
 		Return(rootAccount.Address()).
-		Twice()
+		Twice().
+		On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), mock.AnythingOfType("string")).
+		Return(&txnbuild.Transaction{}, nil).
+		Once()
 	mSigService.
-		On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), mock.AnythingOfType("string"), mock.AnythingOfType("string")).
+		On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), mock.AnythingOfType("string")).
 		Return(&txnbuild.Transaction{}, nil).
 		Once()
 
@@ -1040,9 +1049,12 @@ func Test_ChannelAccounts_EnsureChannelAccounts_Delete_Success(t *testing.T) {
 		mHostSigner.
 			On("HostDistributionAccount").
 			Return(rootAccount.Address()).
-			Twice()
+			Twice().
+			On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), mock.AnythingOfType("string")).
+			Return(&txnbuild.Transaction{}, nil).
+			Once()
 		mSigService.
-			On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), mock.AnythingOfType("string"), mock.AnythingOfType("string")).
+			On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), mock.AnythingOfType("string")).
 			Return(&txnbuild.Transaction{}, nil).
 			Once().
 			On("Delete", ctx, acc.PublicKey).

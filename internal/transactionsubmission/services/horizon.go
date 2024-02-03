@@ -188,10 +188,16 @@ func DeleteChannelAccountOnChain(ctx context.Context, submiterEngine engine.Subm
 	}
 
 	// the root account authorizes the sponsorship revocation, while the channel account authorizes
-	// merging into the distribution account
-	tx, err = submiterEngine.SignatureService.SignStellarTransaction(ctx, tx, submiterEngine.HostSigner.HostDistributionAccount(), chAccAddress)
+	// merging into the distribution account.
+	// Channel account signing:
+	tx, err = submiterEngine.SignatureService.SignStellarTransaction(ctx, tx, chAccAddress)
 	if err != nil {
-		return fmt.Errorf("signing remove account transaction for account %s: %w", chAccAddress, err)
+		return fmt.Errorf("signing remove account transaction for channel account %s: %w", chAccAddress, err)
+	}
+	// Host distribution account signing:
+	tx, err = submiterEngine.HostSigner.SignStellarTransaction(ctx, tx, submiterEngine.HostSigner.HostDistributionAccount())
+	if err != nil {
+		return fmt.Errorf("signing remove account transaction for host account %s: %w", submiterEngine.HostSigner.HostDistributionAccount(), err)
 	}
 
 	_, err = submiterEngine.HorizonClient.SubmitTransactionWithOptions(tx, horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true})

@@ -320,9 +320,9 @@ func Test_DeleteChannelAccountOnChain(t *testing.T) {
 				mHostSigner.
 					On("HostDistributionAccount").
 					Return(distributionAddress).
-					Twice()
+					Once()
 				mockSigService.
-					On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), distributionAddress, chAccAddress).
+					On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), chAccAddress).
 					Return(nil, fmt.Errorf("signing remove account transaction for account")).Once()
 				horizonClientMock.
 					On("AccountDetail", horizonclient.AccountRequest{AccountID: distributionAddress}).
@@ -345,10 +345,14 @@ func Test_DeleteChannelAccountOnChain(t *testing.T) {
 				mHostSigner.
 					On("HostDistributionAccount").
 					Return(distributionAddress).
-					Twice()
+					Twice().
+					On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), distributionAddress).
+					Return(&txnbuild.Transaction{}, nil).
+					Once()
 				mockSigService.
-					On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), distributionAddress, chAccAddress).
-					Return(&txnbuild.Transaction{}, nil).Once()
+					On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), chAccAddress).
+					Return(&txnbuild.Transaction{}, nil).
+					Once()
 				horizonClientMock.
 					On("AccountDetail", horizonclient.AccountRequest{AccountID: distributionAddress}).
 					Return(horizon.Account{
@@ -382,10 +386,14 @@ func Test_DeleteChannelAccountOnChain(t *testing.T) {
 				mHostSigner.
 					On("HostDistributionAccount").
 					Return(distributionAddress).
-					Twice()
+					Twice().
+					On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), distributionAddress).
+					Return(&txnbuild.Transaction{}, nil).
+					Once()
 				mockSigService.
-					On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), distributionAddress, chAccAddress).
-					Return(&txnbuild.Transaction{}, nil).Once()
+					On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), chAccAddress).
+					Return(&txnbuild.Transaction{}, nil).
+					Once()
 				mockSigService.On("Delete", ctx, chAccAddress).Return(nil).Once()
 				horizonClientMock.
 					On("AccountDetail", horizonclient.AccountRequest{AccountID: distributionAddress}).
