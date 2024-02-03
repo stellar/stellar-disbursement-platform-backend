@@ -19,9 +19,8 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
-
 	engineMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/mocks"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 	storeMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store/mocks"
 )
 
@@ -180,14 +179,11 @@ func Test_ChannelAccounts_CreateAccount_Success(t *testing.T) {
 
 	ctx := context.Background()
 
-	mChannelAccountStore := &storeMocks.MockChannelAccountStore{}
-	defer mChannelAccountStore.AssertExpectations(t)
 	mHorizonClient := &horizonclient.MockClient{}
 	defer mHorizonClient.AssertExpectations(t)
-	mLedgerNumberTracker := &engineMocks.MockLedgerNumberTracker{}
-	defer mLedgerNumberTracker.AssertExpectations(t)
+	mChannelAccountStore := storeMocks.NewMockChannelAccountStore(t)
+	mLedgerNumberTracker := engineMocks.NewMockLedgerNumberTracker(t)
 	mSigService := engineMocks.NewMockSignatureService(t)
-	defer mSigService.AssertExpectations(t)
 
 	cas := ChannelAccountsService{
 		chAccStore:          mChannelAccountStore,
@@ -249,14 +245,11 @@ func Test_ChannelAccounts_CreateAccount_CannotFindRootAccount_Failure(t *testing
 
 	ctx := context.Background()
 
-	mChannelAccountStore := &storeMocks.MockChannelAccountStore{}
-	defer mChannelAccountStore.AssertExpectations(t)
 	mHorizonClient := &horizonclient.MockClient{}
 	defer mHorizonClient.AssertExpectations(t)
-	mLedgerNumberTracker := &engineMocks.MockLedgerNumberTracker{}
-	defer mLedgerNumberTracker.AssertExpectations(t)
+	mChannelAccountStore := storeMocks.NewMockChannelAccountStore(t)
+	mLedgerNumberTracker := engineMocks.NewMockLedgerNumberTracker(t)
 	mSigService := engineMocks.NewMockSignatureService(t)
-	defer mSigService.AssertExpectations(t)
 
 	cas := ChannelAccountsService{
 		chAccStore:          mChannelAccountStore,
@@ -293,14 +286,11 @@ func Test_ChannelAccounts_CreateAccount_Insert_Failure(t *testing.T) {
 
 	ctx := context.Background()
 
-	mChannelAccountStore := &storeMocks.MockChannelAccountStore{}
-	defer mChannelAccountStore.AssertExpectations(t)
 	mHorizonClient := &horizonclient.MockClient{}
 	defer mHorizonClient.AssertExpectations(t)
-	mLedgerNumberTracker := &engineMocks.MockLedgerNumberTracker{}
-	defer mLedgerNumberTracker.AssertExpectations(t)
+	mChannelAccountStore := storeMocks.NewMockChannelAccountStore(t)
+	mLedgerNumberTracker := engineMocks.NewMockLedgerNumberTracker(t)
 	mSigService := engineMocks.NewMockSignatureService(t)
-	defer mSigService.AssertExpectations(t)
 
 	cas := ChannelAccountsService{
 		chAccStore:          mChannelAccountStore,
@@ -346,14 +336,11 @@ func Test_ChannelAccounts_VerifyAccounts_Success(t *testing.T) {
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
 
-	mChannelAccountStore := &storeMocks.MockChannelAccountStore{}
-	defer mChannelAccountStore.AssertExpectations(t)
 	mHorizonClient := &horizonclient.MockClient{}
 	defer mHorizonClient.AssertExpectations(t)
-	mLedgerNumberTracker := &engineMocks.MockLedgerNumberTracker{}
-	defer mLedgerNumberTracker.AssertExpectations(t)
+	mChannelAccountStore := storeMocks.NewMockChannelAccountStore(t)
+	mLedgerNumberTracker := engineMocks.NewMockLedgerNumberTracker(t)
 	mSigService := engineMocks.NewMockSignatureService(t)
-	defer mSigService.AssertExpectations(t)
 
 	cas := ChannelAccountsService{
 		chAccStore:          mChannelAccountStore,
@@ -395,14 +382,11 @@ func Test_ChannelAccounts_VerifyAccounts_LoadChannelAccountsError_Failure(t *tes
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
 
-	mChannelAccountStore := &storeMocks.MockChannelAccountStore{}
-	defer mChannelAccountStore.AssertExpectations(t)
 	mHorizonClient := &horizonclient.MockClient{}
 	defer mHorizonClient.AssertExpectations(t)
-	mLedgerNumberTracker := &engineMocks.MockLedgerNumberTracker{}
-	defer mLedgerNumberTracker.AssertExpectations(t)
+	mChannelAccountStore := storeMocks.NewMockChannelAccountStore(t)
+	mLedgerNumberTracker := engineMocks.NewMockLedgerNumberTracker(t)
 	mSigService := engineMocks.NewMockSignatureService(t)
-	defer mSigService.AssertExpectations(t)
 
 	cas := ChannelAccountsService{
 		chAccStore:          mChannelAccountStore,
@@ -437,14 +421,11 @@ func Test_ChannelAccounts_VerifyAccounts_NotFound(t *testing.T) {
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
 
-	mChannelAccountStore := &storeMocks.MockChannelAccountStore{}
-	defer mChannelAccountStore.AssertExpectations(t)
 	mHorizonClient := &horizonclient.MockClient{}
 	defer mHorizonClient.AssertExpectations(t)
-	mLedgerNumberTracker := &engineMocks.MockLedgerNumberTracker{}
-	defer mLedgerNumberTracker.AssertExpectations(t)
+	mChannelAccountStore := storeMocks.NewMockChannelAccountStore(t)
+	mLedgerNumberTracker := engineMocks.NewMockLedgerNumberTracker(t)
 	mSigService := engineMocks.NewMockSignatureService(t)
-	defer mSigService.AssertExpectations(t)
 
 	cas := ChannelAccountsService{
 		chAccStore:          mChannelAccountStore,
@@ -501,14 +482,11 @@ func Test_ChannelAccounts_DeleteAccount_Success(t *testing.T) {
 
 	ctx := context.Background()
 
-	mChannelAccountStore := &storeMocks.MockChannelAccountStore{}
-	defer mChannelAccountStore.AssertExpectations(t)
 	mHorizonClient := &horizonclient.MockClient{}
 	defer mHorizonClient.AssertExpectations(t)
-	mLedgerNumberTracker := &engineMocks.MockLedgerNumberTracker{}
-	defer mLedgerNumberTracker.AssertExpectations(t)
+	mChannelAccountStore := storeMocks.NewMockChannelAccountStore(t)
+	mLedgerNumberTracker := engineMocks.NewMockLedgerNumberTracker(t)
 	mSigService := engineMocks.NewMockSignatureService(t)
-	defer mSigService.AssertExpectations(t)
 
 	cas := ChannelAccountsService{
 		chAccStore:          mChannelAccountStore,
@@ -577,14 +555,11 @@ func Test_ChannelAccounts_DeleteAccount_All_Success(t *testing.T) {
 
 	ctx := context.Background()
 
-	mChannelAccountStore := &storeMocks.MockChannelAccountStore{}
-	defer mChannelAccountStore.AssertExpectations(t)
 	mHorizonClient := &horizonclient.MockClient{}
 	defer mHorizonClient.AssertExpectations(t)
-	mLedgerNumberTracker := &engineMocks.MockLedgerNumberTracker{}
-	defer mLedgerNumberTracker.AssertExpectations(t)
+	mChannelAccountStore := storeMocks.NewMockChannelAccountStore(t)
+	mLedgerNumberTracker := engineMocks.NewMockLedgerNumberTracker(t)
 	mSigService := engineMocks.NewMockSignatureService(t)
-	defer mSigService.AssertExpectations(t)
 
 	cas := ChannelAccountsService{
 		chAccStore:          mChannelAccountStore,
@@ -662,14 +637,11 @@ func Test_ChannelAccounts_DeleteAccount_FindByPublicKey_Failure(t *testing.T) {
 
 	ctx := context.Background()
 
-	mChannelAccountStore := &storeMocks.MockChannelAccountStore{}
-	defer mChannelAccountStore.AssertExpectations(t)
 	mHorizonClient := &horizonclient.MockClient{}
 	defer mHorizonClient.AssertExpectations(t)
-	mLedgerNumberTracker := &engineMocks.MockLedgerNumberTracker{}
-	defer mLedgerNumberTracker.AssertExpectations(t)
+	mChannelAccountStore := storeMocks.NewMockChannelAccountStore(t)
+	mLedgerNumberTracker := engineMocks.NewMockLedgerNumberTracker(t)
 	mSigService := engineMocks.NewMockSignatureService(t)
-	defer mSigService.AssertExpectations(t)
 
 	cas := ChannelAccountsService{
 		chAccStore:          mChannelAccountStore,
@@ -710,14 +682,11 @@ func Test_ChannelAccounts_DeleteAccount_DeleteFromSigServiceError(t *testing.T) 
 
 	ctx := context.Background()
 
-	mChannelAccountStore := &storeMocks.MockChannelAccountStore{}
-	defer mChannelAccountStore.AssertExpectations(t)
 	mHorizonClient := &horizonclient.MockClient{}
 	defer mHorizonClient.AssertExpectations(t)
-	mLedgerNumberTracker := &engineMocks.MockLedgerNumberTracker{}
-	defer mLedgerNumberTracker.AssertExpectations(t)
+	mChannelAccountStore := storeMocks.NewMockChannelAccountStore(t)
+	mLedgerNumberTracker := engineMocks.NewMockLedgerNumberTracker(t)
 	mSigService := engineMocks.NewMockSignatureService(t)
-	defer mSigService.AssertExpectations(t)
 
 	cas := ChannelAccountsService{
 		chAccStore:          mChannelAccountStore,
@@ -772,14 +741,11 @@ func Test_ChannelAccounts_DeleteAccount_SubmitTransaction_Failure(t *testing.T) 
 
 	ctx := context.Background()
 
-	mChannelAccountStore := &storeMocks.MockChannelAccountStore{}
-	defer mChannelAccountStore.AssertExpectations(t)
 	mHorizonClient := &horizonclient.MockClient{}
 	defer mHorizonClient.AssertExpectations(t)
-	mLedgerNumberTracker := &engineMocks.MockLedgerNumberTracker{}
-	defer mLedgerNumberTracker.AssertExpectations(t)
+	mChannelAccountStore := storeMocks.NewMockChannelAccountStore(t)
+	mLedgerNumberTracker := engineMocks.NewMockLedgerNumberTracker(t)
 	mSigService := engineMocks.NewMockSignatureService(t)
-	defer mSigService.AssertExpectations(t)
 
 	cas := ChannelAccountsService{
 		chAccStore:          mChannelAccountStore,
@@ -845,14 +811,11 @@ func Test_ChannelAccounts_EnsureChannelAccounts_Exact_Success(t *testing.T) {
 
 	ctx := context.Background()
 
-	mChannelAccountStore := &storeMocks.MockChannelAccountStore{}
-	defer mChannelAccountStore.AssertExpectations(t)
 	mHorizonClient := &horizonclient.MockClient{}
 	defer mHorizonClient.AssertExpectations(t)
-	mLedgerNumberTracker := &engineMocks.MockLedgerNumberTracker{}
-	defer mLedgerNumberTracker.AssertExpectations(t)
+	mChannelAccountStore := storeMocks.NewMockChannelAccountStore(t)
+	mLedgerNumberTracker := engineMocks.NewMockLedgerNumberTracker(t)
 	mSigService := engineMocks.NewMockSignatureService(t)
-	defer mSigService.AssertExpectations(t)
 
 	cas := ChannelAccountsService{
 		chAccStore:          mChannelAccountStore,
@@ -891,14 +854,11 @@ func Test_ChannelAccounts_EnsureChannelAccounts_Add_Success(t *testing.T) {
 
 	ctx := context.Background()
 
-	mChannelAccountStore := &storeMocks.MockChannelAccountStore{}
-	defer mChannelAccountStore.AssertExpectations(t)
 	mHorizonClient := &horizonclient.MockClient{}
 	defer mHorizonClient.AssertExpectations(t)
-	mLedgerNumberTracker := &engineMocks.MockLedgerNumberTracker{}
-	defer mLedgerNumberTracker.AssertExpectations(t)
+	mChannelAccountStore := storeMocks.NewMockChannelAccountStore(t)
+	mLedgerNumberTracker := engineMocks.NewMockLedgerNumberTracker(t)
 	mSigService := engineMocks.NewMockSignatureService(t)
-	defer mSigService.AssertExpectations(t)
 
 	cas := ChannelAccountsService{
 		chAccStore:          mChannelAccountStore,
@@ -966,14 +926,11 @@ func Test_ChannelAccounts_EnsureChannelAccounts_Delete_Success(t *testing.T) {
 
 	ctx := context.Background()
 
-	mChannelAccountStore := &storeMocks.MockChannelAccountStore{}
-	defer mChannelAccountStore.AssertExpectations(t)
 	mHorizonClient := &horizonclient.MockClient{}
 	defer mHorizonClient.AssertExpectations(t)
-	mLedgerNumberTracker := &engineMocks.MockLedgerNumberTracker{}
-	defer mLedgerNumberTracker.AssertExpectations(t)
+	mChannelAccountStore := storeMocks.NewMockChannelAccountStore(t)
+	mLedgerNumberTracker := engineMocks.NewMockLedgerNumberTracker(t)
 	mSigService := engineMocks.NewMockSignatureService(t)
-	defer mSigService.AssertExpectations(t)
 
 	cas := ChannelAccountsService{
 		chAccStore:          mChannelAccountStore,
