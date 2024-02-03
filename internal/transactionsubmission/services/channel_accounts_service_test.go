@@ -241,12 +241,15 @@ func Test_ChannelAccounts_CreateAccount_Success(t *testing.T) {
 	mHostSigner.
 		On("HostDistributionAccount").
 		Return(rootAccount.Address()).
-		Twice()
+		Twice().
+		On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), mock.AnythingOfType("string")).
+		Return(&txnbuild.Transaction{}, nil).
+		Once()
 	mSigService.
 		On("BatchInsert", ctx, 2).
 		Return(publicKeys, nil).
 		Once().
-		On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), mock.AnythingOfType("string"), mock.AnythingOfType("string"), mock.AnythingOfType("string")).
+		On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), mock.AnythingOfType("string"), mock.AnythingOfType("string")).
 		Return(&txnbuild.Transaction{}, nil).
 		Once()
 
@@ -960,12 +963,15 @@ func Test_ChannelAccounts_EnsureChannelAccounts_Add_Success(t *testing.T) {
 	mHostSigner.
 		On("HostDistributionAccount").
 		Return(rootAccount.Address()).
-		Twice()
+		Twice().
+		On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), mock.AnythingOfType("string")).
+		Return(&txnbuild.Transaction{}, nil).
+		Once()
 	mSigService.
 		On("BatchInsert", ctx, desiredCount-currChannelAccountsCount).
 		Return(publicKeys, nil).
 		Once().
-		On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), mock.AnythingOfType("string"), mock.AnythingOfType("string"), mock.AnythingOfType("string"), mock.AnythingOfType("string")).
+		On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), mock.AnythingOfType("string"), mock.AnythingOfType("string"), mock.AnythingOfType("string")).
 		Return(&txnbuild.Transaction{}, nil).
 		Once()
 

@@ -120,10 +120,15 @@ func CreateChannelAccountsOnChain(ctx context.Context, submiterEngine engine.Sub
 	}
 
 	// sign the transaction
-	signers := append([]string{submiterEngine.HostSigner.HostDistributionAccount()}, newAccountAddresses...)
-	tx, err = submiterEngine.SignatureService.SignStellarTransaction(ctx, tx, signers...)
+	// Channel account signing:
+	tx, err = submiterEngine.SignatureService.SignStellarTransaction(ctx, tx, newAccountAddresses...)
 	if err != nil {
-		return newAccountAddresses, fmt.Errorf("signing transaction: %w", err)
+		return newAccountAddresses, fmt.Errorf("signing account creation transaction for channel accounts %v: %w", newAccountAddresses, err)
+	}
+	// Host distribution account signing:
+	tx, err = submiterEngine.HostSigner.SignStellarTransaction(ctx, tx, submiterEngine.HostSigner.HostDistributionAccount())
+	if err != nil {
+		return newAccountAddresses, fmt.Errorf("signing account creation transaction for host distribution account %s: %w", submiterEngine.HostSigner.HostDistributionAccount(), err)
 	}
 
 	_, err = submiterEngine.HorizonClient.SubmitTransactionWithOptions(tx, horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true})
@@ -197,7 +202,7 @@ func DeleteChannelAccountOnChain(ctx context.Context, submiterEngine engine.Subm
 	// Host distribution account signing:
 	tx, err = submiterEngine.HostSigner.SignStellarTransaction(ctx, tx, submiterEngine.HostSigner.HostDistributionAccount())
 	if err != nil {
-		return fmt.Errorf("signing remove account transaction for host account %s: %w", submiterEngine.HostSigner.HostDistributionAccount(), err)
+		return fmt.Errorf("signing remove account transaction for host distribution account %s: %w", submiterEngine.HostSigner.HostDistributionAccount(), err)
 	}
 
 	_, err = submiterEngine.HorizonClient.SubmitTransactionWithOptions(tx, horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true})
