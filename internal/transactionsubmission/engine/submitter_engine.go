@@ -36,5 +36,3 @@ func (se *SubmitterEngine) Validate() error {
 
 	return nil
 }
-
-var _ DistributionAccountResolver = (*SubmitterEngine)(nil)
