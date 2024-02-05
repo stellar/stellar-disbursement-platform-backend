@@ -59,11 +59,18 @@ func NewDistributionAccountEnvSignatureClient(opts DistributionAccountEnvOptions
 	}, nil
 }
 
-var _ SignatureClient = &DistributionAccountEnvSignatureClient{}
+var _ SignatureClient = (*DistributionAccountEnvSignatureClient)(nil)
 
 func (c *DistributionAccountEnvSignatureClient) SignStellarTransaction(ctx context.Context, stellarTx *txnbuild.Transaction, stellarAccounts ...string) (signedStellarTx *txnbuild.Transaction, err error) {
 	if stellarTx == nil {
 		return nil, fmt.Errorf("stellarTx cannot be nil in %s", c.Type())
+	}
+
+	// Ensure that the distribution account is the only account signing the transaction
+	for _, stellarAccount := range stellarAccounts {
+		if stellarAccount != c.distributionAccount {
+			return nil, fmt.Errorf("stellar account %s is not allowed to sign in %s", stellarAccount, c.Type())
+		}
 	}
 
 	signedStellarTx, err = stellarTx.Sign(c.NetworkPassphrase(), c.distributionKP)
@@ -77,6 +84,13 @@ func (c *DistributionAccountEnvSignatureClient) SignStellarTransaction(ctx conte
 func (c *DistributionAccountEnvSignatureClient) SignFeeBumpStellarTransaction(ctx context.Context, feeBumpStellarTx *txnbuild.FeeBumpTransaction, stellarAccounts ...string) (signedFeeBumpStellarTx *txnbuild.FeeBumpTransaction, err error) {
 	if feeBumpStellarTx == nil {
 		return nil, fmt.Errorf("stellarTx cannot be nil in %s", c.Type())
+	}
+
+	// Ensure that the distribution account is the only account signing the transaction
+	for _, stellarAccount := range stellarAccounts {
+		if stellarAccount != c.distributionAccount {
+			return nil, fmt.Errorf("stellar account %s is not allowed to sign in %s", stellarAccount, c.Type())
+		}
 	}
 
 	signedFeeBumpStellarTx, err = feeBumpStellarTx.Sign(c.NetworkPassphrase(), c.distributionKP)
@@ -103,7 +117,7 @@ func (c *DistributionAccountEnvSignatureClient) NetworkPassphrase() string {
 	return c.networkPassphrase
 }
 
-var _ DistributionAccountResolver = &DistributionAccountEnvSignatureClient{}
+var _ DistributionAccountResolver = (*DistributionAccountEnvSignatureClient)(nil)
 
 func (c *DistributionAccountEnvSignatureClient) DistributionAccount() string {
 	var keyword string
