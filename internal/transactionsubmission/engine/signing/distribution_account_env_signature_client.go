@@ -105,7 +105,12 @@ func (c *DistributionAccountEnvSignatureClient) NetworkPassphrase() string {
 
 var _ DistributionAccountResolver = &DistributionAccountEnvSignatureClient{}
 
-func (c *DistributionAccountEnvSignatureClient) DistributionAccount(keyword string) string {
-	log.Warnf("Distribution is nor resolved by keyword in DistributionAccountEnvSignatureClient, keyword: %s", keyword)
+func (c *DistributionAccountEnvSignatureClient) DistributionAccount() string {
+	var keyword string
+	log.Warnf("Distribution accounts are not resolved by keyword in DistributionAccountEnvSignatureClient, keyword: '%s' is being ignored", keyword)
+	return c.distributionAccount
+}
+
+func (c *DistributionAccountEnvSignatureClient) HostDistributionAccount() string {
 	return c.distributionAccount
 }

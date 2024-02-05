@@ -4,5 +4,6 @@ package signing
 //
 //go:generate mockery --name=DistributionAccountResolver --case=underscore --structname=DistributionAccountResolver
 type DistributionAccountResolver interface {
-	DistributionAccount(keyword string) string
+	DistributionAccount() string
+	HostDistributionAccount() string
 }

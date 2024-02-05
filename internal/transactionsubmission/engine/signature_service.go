@@ -12,6 +12,7 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
 )
@@ -64,7 +65,7 @@ func NewSignatureService(opts SignatureServiceOptions) (SignatureService, error)
 
 //go:generate mockery --name=SignatureService --case=underscore --structname=MockSignatureService
 type SignatureService interface {
-	DistributionAccountResolver
+	signing.DistributionAccountResolver
 	NetworkPassphrase() string
 	SignStellarTransaction(ctx context.Context, stellarTx *txnbuild.Transaction, stellarAccounts ...string) (signedStellarTx *txnbuild.Transaction, err error)
 	SignFeeBumpStellarTransaction(ctx context.Context, feeBumpStellarTx *txnbuild.FeeBumpTransaction, stellarAccounts ...string) (signedFeeBumpStellarTx *txnbuild.FeeBumpTransaction, err error)
@@ -292,7 +293,7 @@ func (ds *DefaultSignatureService) Delete(ctx context.Context, publicKey string)
 	return nil
 }
 
-var _ DistributionAccountResolver = (*DefaultSignatureService)(nil)
+var _ signing.DistributionAccountResolver = (*DefaultSignatureService)(nil)
 
 func (ds *DefaultSignatureService) DistributionAccount() string {
 	return ds.distributionAccount
