@@ -235,7 +235,6 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 	})
 
 	t.Run("failure - Confirmed Verification Value not matching", func(t *testing.T) {
-		//created new instructions to verify that the correct line number is returned in the error message
 		instruction4 := DisbursementInstruction{
 			Phone:             "+380-12-345-674",
 			Amount:            "100.04",

@@ -93,7 +93,7 @@ func (di DisbursementInstructionModel) ProcessAll(ctx context.Context, userID st
 		instructionMap := make(map[string]InstructionLine)
 		for line, instruction := range instructions {
 			instructionMap[instruction.Phone] = InstructionLine{
-				line:                    line+1,
+				line:                    line + 1,
 				disbursementInstruction: instruction,
 			}
 		}
