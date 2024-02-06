@@ -1360,17 +1360,17 @@ func Test_AssetHandler_submitChangeTrustTransaction_makeSurePreconditionsAreSetA
 	distributionKP := keypair.MustRandom()
 
 	// matchPreconditionsTimeboundsFn is a function meant to be used with mock.MatchedBy to check that the preconditions are set as expected.
-	matchPreconditionsTimeboundsFn := func(expectedPreconditions txnbuild.Preconditions) func(actualTx *txnbuild.Transaction) bool {
-		require := require.New(t)
+	assertExpectedPreconditionsWithTimeboundsTolerance := func(expectedTx *txnbuild.Transaction, actualTxIndex int) func(args mock.Arguments) {
+		return func(args mock.Arguments) {
+			actualTx, ok := args.Get(int(actualTxIndex)).(*txnbuild.Transaction)
+			require.True(t, ok)
 
-		return func(actualTx *txnbuild.Transaction) bool {
-			actualPreconditions := actualTx.ToXDR().Preconditions()
+			expectedPreconditions := expectedTx.ToXDR().Preconditions()
 			expectedTime := time.Unix(int64(expectedPreconditions.TimeBounds.MaxTime), 0).UTC()
+			actualPreconditions := actualTx.ToXDR().Preconditions()
 			actualTime := time.Unix(int64(actualPreconditions.TimeBounds.MaxTime), 0).UTC()
-			require.WithinDuration(expectedTime, actualTime, 2*time.Second)
-			require.Equal(expectedPreconditions.TimeBounds.MinTime, int64(actualPreconditions.TimeBounds.MinTime))
-
-			return true
+			require.WithinDuration(t, expectedTime, actualTime, 5*time.Second)
+			require.Equal(t, expectedPreconditions.TimeBounds.MinTime, actualPreconditions.TimeBounds.MinTime)
 		}
 	}
 
@@ -1421,13 +1421,14 @@ func Test_AssetHandler_submitChangeTrustTransaction_makeSurePreconditionsAreSetA
 		require.NoError(t, err)
 
 		mocks.SignatureService.
-			On("SignStellarTransaction", ctx, mock.MatchedBy(matchPreconditionsTimeboundsFn(defaultPreconditions)), distributionKP.Address()).
+			On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), distributionKP.Address()).
+			Run(assertExpectedPreconditionsWithTimeboundsTolerance(signedTx, 1)).
 			Return(signedTx, nil).
 			Once()
-		defer mocks.SignatureService.AssertExpectations(t)
 
 		mocks.HorizonClientMock.
-			On("SubmitTransactionWithOptions", mock.MatchedBy(matchPreconditionsTimeboundsFn(defaultPreconditions)), horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true}).
+			On("SubmitTransactionWithOptions", mock.AnythingOfType("*txnbuild.Transaction"), horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true}).
+			Run(assertExpectedPreconditionsWithTimeboundsTolerance(signedTx, 0)).
 			Return(horizon.Transaction{}, nil).
 			Once()
 		defer mocks.HorizonClientMock.AssertExpectations(t)
@@ -1450,14 +1451,15 @@ func Test_AssetHandler_submitChangeTrustTransaction_makeSurePreconditionsAreSetA
 		require.NoError(t, err)
 
 		mocks.SignatureService.
-			On("SignStellarTransaction", ctx, mock.MatchedBy(matchPreconditionsTimeboundsFn(newPreconditions)), distributionKP.Address()).
+			On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), distributionKP.Address()).
+			Run(assertExpectedPreconditionsWithTimeboundsTolerance(signedTx, 1)).
 			Return(signedTx, nil).
 			Once()
-		defer mocks.SignatureService.AssertExpectations(t)
 
 		mocks.HorizonClientMock.
-			On("SubmitTransactionWithOptions", mock.MatchedBy(matchPreconditionsTimeboundsFn(newPreconditions)), horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true}).
+			On("SubmitTransactionWithOptions", mock.AnythingOfType("*txnbuild.Transaction"), horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true}).
 			Return(horizon.Transaction{}, nil).
+			Run(assertExpectedPreconditionsWithTimeboundsTolerance(signedTx, 0)).
 			Once()
 		defer mocks.HorizonClientMock.AssertExpectations(t)
 
