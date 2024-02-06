@@ -94,7 +94,7 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context, receive
 		receiverWalletIDsPendingRegistration = append(receiverWalletIDsPendingRegistration, receiverWallet.ReceiverWalletID)
 	}
 
-	receiverWallets, err := s.Models.ReceiverWallet.GetAllPendingRegistrationByReceiverWalletIDs(ctx, receiverWalletIDsPendingRegistration)
+	receiverWallets, err := s.Models.ReceiverWallet.GetAllPendingRegistrationByReceiverWalletIDs(ctx, s.Models.DBConnectionPool, receiverWalletIDsPendingRegistration)
 	if err != nil {
 		return fmt.Errorf("error getting receiver wallets pending registration: %w", err)
 	}

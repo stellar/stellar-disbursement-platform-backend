@@ -149,39 +149,77 @@ func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, d
 			return fmt.Errorf("error updating disbursement status to started for disbursement with id %s: %w", disbursementID, err)
 		}
 
-		// 7. Produce event to send payments to TSS
+		// Step 7: Produce events to send invitation message to the receivers and to send payments to TSS
+		msgs := make([]events.Message, 0)
+
+		receiverWallets, err := s.models.ReceiverWallet.GetAllPendingRegistrationByDisbursementID(ctx, dbTx, disbursementID)
+		if err != nil {
+			return fmt.Errorf("getting pending registration receiver wallets: %w", err)
+		}
+
+		if len(receiverWallets) != 0 {
+			eventData := make([]schemas.EventReceiverWalletSMSInvitationData, 0, len(receiverWallets))
+			for _, receiverWallet := range receiverWallets {
+				eventData = append(eventData, schemas.EventReceiverWalletSMSInvitationData{ReceiverWalletID: receiverWallet.ID})
+			}
+
+			sendInviteMsg, msgErr := events.NewMessage(ctx, events.ReceiverWalletNewInvitationTopic, disbursement.ID, events.BatchReceiverWalletSMSInvitationType, eventData)
+			if msgErr != nil {
+				return fmt.Errorf("creating new message: %w", msgErr)
+			}
+
+			msgs = append(msgs, *sendInviteMsg)
+		} else {
+			log.Ctx(ctx).Infof("no receiver wallets to send invitation for disbursement ID %s", disbursementID)
+		}
+
 		payments, err := s.models.Payment.GetReadyByDisbursementID(ctx, dbTx, disbursementID)
 		if err != nil {
 			return fmt.Errorf("getting ready payments for disbursement with id %s: %w", disbursementID, err)
 		}
 
-		if len(payments) == 0 {
+		if len(payments) != 0 {
+			paymentsReadyToPayMsg, msgErr := events.NewMessage(ctx, events.PaymentReadyToPayTopic, disbursementID, events.PaymentReadyToPayDisbursementStarted, nil)
+			if msgErr != nil {
+				return fmt.Errorf("creating new message: %w", msgErr)
+			}
+
+			paymentsReadyToPay := schemas.EventPaymentsReadyToPayData{TenantID: paymentsReadyToPayMsg.TenantID}
+			for _, payment := range payments {
+				paymentsReadyToPay.Payments = append(paymentsReadyToPay.Payments, schemas.PaymentReadyToPay{ID: payment.ID})
+			}
+			paymentsReadyToPayMsg.Data = paymentsReadyToPay
+
+			msgs = append(msgs, *paymentsReadyToPayMsg)
+		} else {
 			log.Ctx(ctx).Infof("no payments ready to pay for disbursement ID %s", disbursementID)
+		}
+
+		// If there's no message to publish we only log it.
+		if len(msgs) == 0 {
+			log.Ctx(ctx).Infof("no messages to be published for disbursement ID %s", disbursementID)
 			return nil
 		}
 
-		msg, err := events.NewMessage(ctx, events.PaymentReadyToPayTopic, disbursementID, events.PaymentReadyToPayDisbursementStarted, nil)
-		if err != nil {
-			return fmt.Errorf("creating new message: %w", err)
-		}
-
-		paymentsReadyToPay := schemas.EventPaymentsReadyToPayData{TenantID: msg.TenantID}
-		for _, payment := range payments {
-			paymentsReadyToPay.Payments = append(paymentsReadyToPay.Payments, schemas.PaymentReadyToPay{ID: payment.ID})
-		}
-		msg.Data = paymentsReadyToPay
-
-		if s.eventProducer != nil {
-			err := s.eventProducer.WriteMessages(ctx, *msg)
-			if err != nil {
-				return fmt.Errorf("writing message %s on event producer: %w", msg, err)
-			}
-		} else {
-			log.Ctx(ctx).Errorf("event producer is nil, could not publish message %s", msg.String())
+		if err = s.produceEvents(ctx, msgs...); err != nil {
+			return err
 		}
 
 		return nil
 	})
+}
+
+func (s *DisbursementManagementService) produceEvents(ctx context.Context, msgs ...events.Message) error {
+	if s.eventProducer == nil {
+		log.Ctx(ctx).Errorf("event producer is nil, could not publish messages %s", msgs)
+		return nil
+	}
+
+	if err := s.eventProducer.WriteMessages(ctx, msgs...); err != nil {
+		return fmt.Errorf("publishing messages %s on event producer: %w", msgs, err)
+	}
+
+	return nil
 }
 
 // PauseDisbursement pauses a disbursement and all its payments.

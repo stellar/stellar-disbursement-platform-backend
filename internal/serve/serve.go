@@ -233,7 +233,6 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 				Models:                        o.Models,
 				MonitorService:                o.MonitorService,
 				AuthManager:                   authManager,
-				EventProducer:                 o.EventProducer,
 				DisbursementManagementService: services.NewDisbursementManagementService(o.Models, o.dbConnectionPool, o.EventProducer),
 			}
 			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole)).
