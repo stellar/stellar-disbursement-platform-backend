@@ -84,7 +84,7 @@ func NewKafkaProducer(config KafkaConfig) (*KafkaProducer, error) {
 		return nil, fmt.Errorf("invalid kafka config: %w", err)
 	}
 
-	var transport *kafka.Transport
+	transport := kafka.DefaultTransport
 	if config.SecurityProtocol == KafkaProtocolSASLPlaintext || config.SecurityProtocol == KafkaProtocolSASLSSL {
 		transport = &kafka.Transport{
 			SASL: plain.Mechanism{
@@ -152,7 +152,7 @@ func NewKafkaConsumer(config KafkaConfig, topic string, consumerGroupID string, 
 		return nil, fmt.Errorf("invalid kafka config: %w", err)
 	}
 
-	var dialer *kafka.Dialer
+	dialer := kafka.DefaultDialer
 	if config.SecurityProtocol == KafkaProtocolSASLPlaintext || config.SecurityProtocol == KafkaProtocolSASLSSL {
 		dialer = &kafka.Dialer{
 			SASLMechanism: plain.Mechanism{
