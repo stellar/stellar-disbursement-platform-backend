@@ -34,7 +34,7 @@ func NewEmailClient(opts EmailClientOptions) (message.MessengerClient, error) {
 
 	// If there is already an instance of the service, we return the same instance
 	instanceName := buildEmailClientInstanceName(opts.MessengerOptions.MessengerType)
-	if instance, ok := dependenciesStoreMap[instanceName]; ok {
+	if instance, ok := GetInstance(instanceName); ok {
 		if emailClientInstance, ok := instance.(message.MessengerClient); ok {
 			return emailClientInstance, nil
 		}

@@ -12,6 +12,7 @@ import (
 	"github.com/stellar/go/txnbuild"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
 	"github.com/stretchr/testify/assert"
@@ -99,12 +100,23 @@ func Test_DefaultSignatureServiceOptions_Validate(t *testing.T) {
 			wantErrContains: "encryption passphrase is not a valid Ed25519 secret",
 		},
 		{
+			name: "return an error if the ledger number tracker is nil",
+			opts: DefaultSignatureServiceOptions{
+				NetworkPassphrase:      network.TestNetworkPassphrase,
+				DBConnectionPool:       dbConnectionPool,
+				DistributionPrivateKey: "SCPGNK3MRMXKNWGZ4ET3JZ6RUJIN7FMHT4ASVXDG7YPBL4WKBQNEL63F",
+				EncryptionPassphrase:   "SCPGNK3MRMXKNWGZ4ET3JZ6RUJIN7FMHT4ASVXDG7YPBL4WKBQNEL63F",
+			},
+			wantErrContains: "ledger number tracker cannot be nil",
+		},
+		{
 			name: "🎉 Successfully validates options",
 			opts: DefaultSignatureServiceOptions{
 				NetworkPassphrase:      network.TestNetworkPassphrase,
 				DBConnectionPool:       dbConnectionPool,
 				DistributionPrivateKey: "SCPGNK3MRMXKNWGZ4ET3JZ6RUJIN7FMHT4ASVXDG7YPBL4WKBQNEL63F",
 				EncryptionPassphrase:   "SCPGNK3MRMXKNWGZ4ET3JZ6RUJIN7FMHT4ASVXDG7YPBL4WKBQNEL63F",
+				LedgerNumberTracker:    mocks.NewMockLedgerNumberTracker(t),
 			},
 		},
 	}
@@ -129,6 +141,8 @@ func Test_NewDefaultSignatureService(t *testing.T) {
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
 
+	mLedgerNumberTracker := mocks.NewMockLedgerNumberTracker(t)
+
 	testCases := []struct {
 		name                  string
 		opts                  DefaultSignatureServiceOptions
@@ -146,6 +160,7 @@ func Test_NewDefaultSignatureService(t *testing.T) {
 				DBConnectionPool:       dbConnectionPool,
 				DistributionPrivateKey: "SCPGNK3MRMXKNWGZ4ET3JZ6RUJIN7FMHT4ASVXDG7YPBL4WKBQNEL63F",
 				EncryptionPassphrase:   "SCPGNK3MRMXKNWGZ4ET3JZ6RUJIN7FMHT4ASVXDG7YPBL4WKBQNEL63F",
+				LedgerNumberTracker:    mLedgerNumberTracker,
 			},
 			wantEncrypterTypeName: reflect.TypeOf(&utils.DefaultPrivateKeyEncrypter{}).String(),
 		},
@@ -156,6 +171,7 @@ func Test_NewDefaultSignatureService(t *testing.T) {
 				DBConnectionPool:       dbConnectionPool,
 				DistributionPrivateKey: "SCPGNK3MRMXKNWGZ4ET3JZ6RUJIN7FMHT4ASVXDG7YPBL4WKBQNEL63F",
 				EncryptionPassphrase:   "SCPGNK3MRMXKNWGZ4ET3JZ6RUJIN7FMHT4ASVXDG7YPBL4WKBQNEL63F",
+				LedgerNumberTracker:    mLedgerNumberTracker,
 				Encrypter:              &utils.PrivateKeyEncrypterMock{},
 			},
 			wantEncrypterTypeName: reflect.TypeOf(&utils.PrivateKeyEncrypterMock{}).String(),
@@ -188,12 +204,14 @@ func Test_DefaultSignatureService_DistributionAccount(t *testing.T) {
 	// test with the first KP:
 	distributionKP, err := keypair.Random()
 	require.NoError(t, err)
+	mLedgerNumberTracker := mocks.NewMockLedgerNumberTracker(t)
 	defaultSigService, err := NewDefaultSignatureService(DefaultSignatureServiceOptions{
 		NetworkPassphrase:      network.TestNetworkPassphrase,
 		DBConnectionPool:       dbConnectionPool,
 		DistributionPrivateKey: distributionKP.Seed(),
 		EncryptionPassphrase:   distributionKP.Seed(),
 		Encrypter:              &utils.PrivateKeyEncrypterMock{},
+		LedgerNumberTracker:    mLedgerNumberTracker,
 	})
 	require.NoError(t, err)
 	require.Equal(t, distributionKP.Address(), defaultSigService.DistributionAccount())
@@ -207,6 +225,7 @@ func Test_DefaultSignatureService_DistributionAccount(t *testing.T) {
 		DistributionPrivateKey: distributionKP.Seed(),
 		EncryptionPassphrase:   distributionKP.Seed(),
 		Encrypter:              &utils.PrivateKeyEncrypterMock{},
+		LedgerNumberTracker:    mLedgerNumberTracker,
 	})
 	require.NoError(t, err)
 	require.Equal(t, distributionKP.Address(), defaultSigService.DistributionAccount())
@@ -274,6 +293,7 @@ func Test_DefaultSignatureService_getKPsForAccounts(t *testing.T) {
 		DistributionPrivateKey: distributionKP.Seed(),
 		EncryptionPassphrase:   encrypterPass,
 		Encrypter:              encrypter,
+		LedgerNumberTracker:    mocks.NewMockLedgerNumberTracker(t),
 	})
 	require.NoError(t, err)
 
@@ -365,6 +385,7 @@ func Test_DefaultSignatureService_SignStellarTransaction(t *testing.T) {
 		DistributionPrivateKey: distributionKP.Seed(),
 		EncryptionPassphrase:   distributionKP.Seed(),
 		Encrypter:              &utils.DefaultPrivateKeyEncrypter{},
+		LedgerNumberTracker:    mocks.NewMockLedgerNumberTracker(t),
 	})
 	require.NoError(t, err)
 
@@ -461,6 +482,7 @@ func Test_DefaultSignatureService_SignFeeBumpStellarTransaction(t *testing.T) {
 		DistributionPrivateKey: distributionKP.Seed(),
 		EncryptionPassphrase:   distributionKP.Seed(),
 		Encrypter:              &utils.DefaultPrivateKeyEncrypter{},
+		LedgerNumberTracker:    mocks.NewMockLedgerNumberTracker(t),
 	})
 	require.NoError(t, err)
 
@@ -557,35 +579,24 @@ func Test_DefaultSignatureService_BatchInsert(t *testing.T) {
 	distributionKP, err := keypair.Random()
 	require.NoError(t, err)
 
-	signerKP1 := keypair.MustRandom()
-	signerKP2 := keypair.MustRandom()
-
 	testCase := []struct {
-		name              string
-		shouldEncryptSeed bool
-		kps               []*keypair.Full
-		wantErrContains   string
+		name            string
+		amount          int
+		wantErrContains string
 	}{
 		{
-			name:            "if KPs is empty, return an error",
-			wantErrContains: "no keypairs provided",
+			name:            "if amount<=0, return an error",
+			wantErrContains: "the amnount of accounts to insert need to be greater than zero",
 		},
 		{
-			name:              "🎉 successfully bulk insert without encryption",
-			shouldEncryptSeed: false,
-			kps:               []*keypair.Full{signerKP1, signerKP2},
-		},
-		{
-			name:              "🎉 successfully bulk insert with encryption",
-			shouldEncryptSeed: true,
-			kps:               []*keypair.Full{signerKP1, signerKP2},
+			name:   "🎉 successfully bulk insert",
+			amount: 2,
 		},
 	}
 
-	type comparableChAccount struct {
-		PublicKey  string
-		PrivateKey string
-	}
+	mLedgerNumberTracker := mocks.NewMockLedgerNumberTracker(t)
+	mLedgerNumberTracker.On("GetLedgerNumber").Return(100, nil).Once()
+	defer mLedgerNumberTracker.AssertExpectations(t)
 
 	defaultEncrypter := &utils.DefaultPrivateKeyEncrypter{}
 	encrypterPass := distributionKP.Seed()
@@ -595,6 +606,7 @@ func Test_DefaultSignatureService_BatchInsert(t *testing.T) {
 		DistributionPrivateKey: distributionKP.Seed(),
 		EncryptionPassphrase:   encrypterPass,
 		Encrypter:              defaultEncrypter,
+		LedgerNumberTracker:    mLedgerNumberTracker,
 	})
 	require.NoError(t, err)
 
@@ -604,42 +616,33 @@ func Test_DefaultSignatureService_BatchInsert(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, 0, count, "this test should have started with 0 channel accounts")
 
-			err = defaultSigService.BatchInsert(ctx, tc.kps, tc.shouldEncryptSeed, 0)
+			publicKeys, err := defaultSigService.BatchInsert(ctx, tc.amount)
 			if tc.wantErrContains != "" {
 				require.Error(t, err)
 				assert.ErrorContains(t, err, tc.wantErrContains)
+				assert.Nil(t, publicKeys)
 			} else {
 				require.NoError(t, err)
 
 				allChAccounts, err := chAccountStore.GetAll(ctx, dbConnectionPool, math.MaxInt32, 0)
 				require.NoError(t, err)
-				assert.Equal(t, len(tc.kps), len(allChAccounts))
+				assert.Equal(t, tc.amount, len(publicKeys))
+				assert.Equal(t, tc.amount, len(allChAccounts))
 
 				// compare the accounts
-				var allChAccountsComparable []comparableChAccount
+				var alChAccPublicKeys []string
 				for _, chAccount := range allChAccounts {
-					publicKey := chAccount.PublicKey
-					privateKey := chAccount.PrivateKey
+					alChAccPublicKeys = append(alChAccPublicKeys, chAccount.PublicKey)
 
-					if tc.shouldEncryptSeed {
-						privateKey, err = defaultEncrypter.Decrypt(privateKey, encrypterPass)
-						require.NoError(t, err)
-					}
-
-					allChAccountsComparable = append(allChAccountsComparable, comparableChAccount{
-						PublicKey:  publicKey,
-						PrivateKey: privateKey,
-					})
+					// Check if the private key is the actual seed for the public key
+					encryptedPrivateKey := chAccount.PrivateKey
+					privateKey, err := defaultEncrypter.Decrypt(encryptedPrivateKey, encrypterPass)
+					require.NoError(t, err)
+					kp := keypair.MustParseFull(privateKey)
+					assert.Equal(t, chAccount.PublicKey, kp.Address())
 				}
 
-				var tcChAccountsComparable []comparableChAccount
-				for _, kp := range tc.kps {
-					tcChAccountsComparable = append(tcChAccountsComparable, comparableChAccount{
-						PublicKey:  kp.Address(),
-						PrivateKey: kp.Seed(),
-					})
-				}
-				assert.ElementsMatch(t, tcChAccountsComparable, allChAccountsComparable)
+				assert.ElementsMatch(t, alChAccPublicKeys, publicKeys)
 			}
 
 			store.DeleteAllFromChannelAccounts(t, ctx, dbConnectionPool)
@@ -657,16 +660,16 @@ func Test_DefaultSignatureService_Delete(t *testing.T) {
 	ctx := context.Background()
 	chAccountStore := &store.ChannelAccountModel{DBConnectionPool: dbConnectionPool}
 
-	distributionKP, err := keypair.Random()
-	require.NoError(t, err)
-	defaultSigService, err := NewDefaultSignatureService(DefaultSignatureServiceOptions{
-		NetworkPassphrase:      network.TestNetworkPassphrase,
-		DBConnectionPool:       dbConnectionPool,
-		DistributionPrivateKey: distributionKP.Seed(),
-		EncryptionPassphrase:   distributionKP.Seed(),
-		Encrypter:              &utils.PrivateKeyEncrypterMock{},
-	})
-	require.NoError(t, err)
+	// current ledger number
+	currLedgerNumber := 0
+	lockUntilLedgerNumber := 10
+	mLedgerNumberTracker := mocks.NewMockLedgerNumberTracker(t)
+	mLedgerNumberTracker.
+		On("GetLedgerNumber").
+		Return(currLedgerNumber, nil).
+		Times(3)
+
+	defer mLedgerNumberTracker.AssertExpectations(t)
 
 	// at start: count=0
 	count, err := chAccountStore.Count(ctx)
@@ -679,29 +682,39 @@ func Test_DefaultSignatureService_Delete(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 2, count)
 
-	currLedgerNumber := 0
-	lockUntilLedgerNumber := 10
 	for _, chAcc := range channelAccounts {
 		_, err = chAccountStore.Lock(ctx, chAccountStore.DBConnectionPool, chAcc.PublicKey, int32(currLedgerNumber), int32(lockUntilLedgerNumber))
 		require.NoError(t, err)
 	}
 
+	distributionKP, err := keypair.Random()
+	require.NoError(t, err)
+	defaultSigService, err := NewDefaultSignatureService(DefaultSignatureServiceOptions{
+		NetworkPassphrase:      network.TestNetworkPassphrase,
+		DBConnectionPool:       dbConnectionPool,
+		DistributionPrivateKey: distributionKP.Seed(),
+		EncryptionPassphrase:   distributionKP.Seed(),
+		Encrypter:              &utils.PrivateKeyEncrypterMock{},
+		LedgerNumberTracker:    mLedgerNumberTracker,
+	})
+	require.NoError(t, err)
+
 	// delete one account: count=2->1
-	err = defaultSigService.Delete(ctx, channelAccounts[0].PublicKey, lockUntilLedgerNumber)
+	err = defaultSigService.Delete(ctx, channelAccounts[0].PublicKey)
 	require.NoError(t, err)
 	count, err = chAccountStore.Count(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, 1, count)
 
 	// delete another account: count=1->0
-	err = defaultSigService.Delete(ctx, channelAccounts[1].PublicKey, lockUntilLedgerNumber)
+	err = defaultSigService.Delete(ctx, channelAccounts[1].PublicKey)
 	require.NoError(t, err)
 	count, err = chAccountStore.Count(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, 0, count)
 
 	// delete non-existing account: error expected
-	err = defaultSigService.Delete(ctx, "non-existent-account", 0)
+	err = defaultSigService.Delete(ctx, "non-existent-account")
 	require.Error(t, err)
 	assert.ErrorIs(t, err, store.ErrRecordNotFound)
 }

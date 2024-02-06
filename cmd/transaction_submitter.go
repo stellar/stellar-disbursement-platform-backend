@@ -18,7 +18,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve"
 	txSub "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	tssMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/monitor"
 )
 
@@ -65,15 +64,14 @@ func (s *TxSubmitterService) StartMetricsServe(ctx context.Context, opts serve.M
 }
 
 func (c *TxSubmitterCommand) Command(submitterService TxSubmitterServiceInterface) *cobra.Command {
-	submitterOpts := txSub.SubmitterOptions{}
+	tssOpts := txSub.SubmitterOptions{}
 
 	configOpts := config.ConfigOptions{
-		cmdUtils.HorizonURLConfigOption(&submitterOpts.HorizonURL),
 		{
 			Name:        "num-channel-accounts",
 			Usage:       "Number of channel accounts to utilize for transaction submission",
 			OptType:     types.Int,
-			ConfigKey:   &submitterOpts.NumChannelAccounts,
+			ConfigKey:   &tssOpts.NumChannelAccounts,
 			FlagDefault: 2,
 			Required:    false,
 		},
@@ -81,11 +79,10 @@ func (c *TxSubmitterCommand) Command(submitterService TxSubmitterServiceInterfac
 			Name:        "queue-polling-interval",
 			Usage:       "Polling interval (seconds) to query the database for pending transactions to process",
 			OptType:     types.Int,
-			ConfigKey:   &submitterOpts.QueuePollingInterval,
+			ConfigKey:   &tssOpts.QueuePollingInterval,
 			FlagDefault: 6,
 			Required:    true,
 		},
-		cmdUtils.MaxBaseFee(&submitterOpts.MaxBaseFee),
 	}
 
 	// metrics server options
@@ -113,13 +110,11 @@ func (c *TxSubmitterCommand) Command(submitterService TxSubmitterServiceInterfac
 	crashTrackerOptions := crashtracker.CrashTrackerOptions{}
 	configOpts = append(configOpts, cmdUtils.CrashTrackerTypeConfigOption(&crashTrackerOptions.CrashTrackerType))
 
-	// signature service config options:
-	sigServiceOptions := engine.SignatureServiceOptions{}
-	configOpts = append(configOpts,
-		append(
-			cmdUtils.BaseSignatureServiceConfigOptions(&sigServiceOptions),
-			cmdUtils.DistributionSeed(&sigServiceOptions.DistributionPrivateKey),
-		)...,
+	// txSubmitterOpts
+	txSubmitterOpts := di.TxSubmitterEngineOptions{}
+	configOpts = append(
+		configOpts,
+		cmdUtils.TransactionSubmitterEngineConfigOptions(&txSubmitterOpts)...,
 	)
 
 	// event broker options:
@@ -164,18 +159,18 @@ func (c *TxSubmitterCommand) Command(submitterService TxSubmitterServiceInterfac
 				log.Ctx(ctx).Fatalf("error getting TSS DB connection pool: %v", err)
 			}
 
-			// Setup the signature service
-			sigServiceOptions.DBConnectionPool = tssDBConnectionPool
-			sigServiceOptions.NetworkPassphrase = globalOptions.NetworkPassphrase
-			signatureService, err := di.NewSignatureService(ctx, sigServiceOptions)
+			// Setup the Submitter Engine
+			txSubmitterOpts.SignatureServiceOptions.DBConnectionPool = tssDBConnectionPool
+			txSubmitterOpts.SignatureServiceOptions.NetworkPassphrase = globalOptions.NetworkPassphrase
+			submitterEngine, err := di.NewTxSubmitterEngine(ctx, txSubmitterOpts)
 			if err != nil {
-				log.Ctx(ctx).Fatalf("error creating signature service: %v", err)
+				log.Ctx(ctx).Fatalf("error creating submitter engine: %v", err)
 			}
 
 			// Inject server dependencies
-			submitterOpts.DBConnectionPool = tssDBConnectionPool
-			submitterOpts.SignatureService = signatureService
-			submitterOpts.MonitorService = tssMonitorSvc
+			tssOpts.SubmitterEngine = submitterEngine
+			tssOpts.DBConnectionPool = tssDBConnectionPool
+			tssOpts.MonitorService = tssMonitorSvc
 
 			// Inject crash tracker options dependencies
 			globalOptions.PopulateCrashTrackerOptions(&crashTrackerOptions)
@@ -184,7 +179,7 @@ func (c *TxSubmitterCommand) Command(submitterService TxSubmitterServiceInterfac
 			if err != nil {
 				log.Ctx(ctx).Fatalf("error creating crash tracker client: %s", err.Error())
 			}
-			submitterOpts.CrashTrackerClient = crashTrackerClient
+			tssOpts.CrashTrackerClient = crashTrackerClient
 		},
 		Run: func(cmd *cobra.Command, _ []string) {
 			ctx := cmd.Context()
@@ -195,16 +190,16 @@ func (c *TxSubmitterCommand) Command(submitterService TxSubmitterServiceInterfac
 					log.Ctx(ctx).Fatalf("error creating Kafka Producer: %v", err)
 				}
 				defer kafkaProducer.Close()
-				submitterOpts.EventProducer = kafkaProducer
+				tssOpts.EventProducer = kafkaProducer
 			} else {
 				log.Ctx(ctx).Warn("Event Broker Type is NONE.")
 			}
 
 			// Starting Metrics Server (background job)
-			go submitterService.StartMetricsServe(ctx, metricsServeOpts, &serve.HTTPServer{}, submitterOpts.CrashTrackerClient)
+			go submitterService.StartMetricsServe(ctx, metricsServeOpts, &serve.HTTPServer{}, tssOpts.CrashTrackerClient)
 
 			// Start transaction submission service
-			submitterService.StartSubmitter(ctx, submitterOpts)
+			submitterService.StartSubmitter(ctx, tssOpts)
 		},
 	}
 	err := configOpts.Init(cmd)

@@ -4,5 +4,10 @@ import "testing"
 
 func ClearInstancesTestHelper(t *testing.T) {
 	t.Helper()
-	dependenciesStoreMap = make(map[string]interface{})
+
+	// Range over the map and delete each entry.
+	dependenciesStore.Range(func(key, value interface{}) bool {
+		dependenciesStore.Delete(key)
+		return true // Continue iteration
+	})
 }
