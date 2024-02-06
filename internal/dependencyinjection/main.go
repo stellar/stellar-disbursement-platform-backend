@@ -2,26 +2,16 @@ package dependencyinjection
 
 import "sync"
 
-var (
-	// dependenciesStoreMap var is the global map for all the service instances.
-	dependenciesStoreMap = make(map[string]interface{})
-	// dependenciesStoreMutex is the mutex for the global map, used to make sure the map is thread safe.
-	dependenciesStoreMutex sync.Mutex
-)
+// dependenciesStore is the global store for all the service instances.
+// sync.Map is safe for concurrent use by multiple goroutines without additional locking or coordination.
+var dependenciesStore sync.Map
 
-// SetInstance adds a new service instance to instances map.
+// SetInstance adds a new service instance to the store.
 func SetInstance(instanceName string, instance interface{}) {
-	dependenciesStoreMutex.Lock()
-	defer dependenciesStoreMutex.Unlock()
-
-	dependenciesStoreMap[instanceName] = instance
+	dependenciesStore.Store(instanceName, instance)
 }
 
-// GetInstance retrieves a service instance by name from the instances map.
+// GetInstance retrieves a service instance by name from the store.
 func GetInstance(instanceName string) (interface{}, bool) {
-	dependenciesStoreMutex.Lock()
-	defer dependenciesStoreMutex.Unlock()
-
-	instance, ok := dependenciesStoreMap[instanceName]
-	return instance, ok
+	return dependenciesStore.Load(instanceName)
 }

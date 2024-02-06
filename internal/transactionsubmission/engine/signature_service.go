@@ -245,7 +245,7 @@ func (ds *DefaultSignatureService) BatchInsert(ctx context.Context, amount int) 
 	lockedToLedgerNumber := currentLedgerNumber + IncrementForMaxLedgerBounds
 
 	batchInsertPayload := []*store.ChannelAccount{}
-	for range make([]interface{}, amount) {
+	for i := 0; i < amount; i++ {
 		kp, innerErr := keypair.Random()
 		if innerErr != nil {
 			return nil, fmt.Errorf("generating random keypair: %w", innerErr)
