@@ -8,6 +8,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 None
 
+## [1.1.2](https://github.com/stellar/stellar-disbursement-platform-backend/compare/1.1.1...1.1.2)
+
+### Fixed
+
+- Re-add missing recaptcha script [#179](https://github.com/stellar/stellar-disbursement-platform-backend/pull/179)
+
+## [1.1.1](https://github.com/stellar/stellar-disbursement-platform-backend/compare/1.1.0...1.1.1)
+
+### Fixed
+
+- TSS amount precision [#176](https://github.com/stellar/stellar-disbursement-platform-backend/pull/176)
+
 ## [1.1.0](https://github.com/stellar/stellar-disbursement-platform-backend/compare/1.0.1...1.1.0)
 
 ### Changed
