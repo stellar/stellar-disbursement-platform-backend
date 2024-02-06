@@ -16,6 +16,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	tssMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/monitor"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 	sdpUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
@@ -42,8 +43,8 @@ func (so *SubmitterOptions) validate() error {
 		return fmt.Errorf("validating submitter engine: %w", err)
 	}
 
-	if so.NumChannelAccounts < MinNumberOfChannelAccounts || so.NumChannelAccounts > MaxNumberOfChannelAccounts {
-		return fmt.Errorf("num channel accounts must stay in the range from %d to %d", MinNumberOfChannelAccounts, MaxNumberOfChannelAccounts)
+	if so.NumChannelAccounts < services.MinNumberOfChannelAccounts || so.NumChannelAccounts > services.MaxNumberOfChannelAccounts {
+		return fmt.Errorf("num channel accounts must stay in the range from %d to %d", services.MinNumberOfChannelAccounts, services.MaxNumberOfChannelAccounts)
 	}
 
 	if so.QueuePollingInterval < 6 {

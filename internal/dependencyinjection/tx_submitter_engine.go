@@ -51,6 +51,7 @@ func NewTxSubmitterEngine(ctx context.Context, opts TxSubmitterEngineOptions) (e
 		HorizonClient:       horizonClient,
 		LedgerNumberTracker: ledgerNumberTracker,
 		SignatureService:    signatureService,
+		HostSigner:          signatureService,
 		MaxBaseFee:          opts.MaxBaseFee,
 	}
 	if err = newInstance.Validate(); err != nil {

@@ -63,7 +63,7 @@ func NewSignatureService(opts SignatureServiceOptions) (SignatureService, error)
 
 //go:generate mockery --name=SignatureService --case=underscore --structname=MockSignatureService
 type SignatureService interface {
-	DistributionAccount() string
+	DistributionAccountResolver
 	NetworkPassphrase() string
 	SignStellarTransaction(ctx context.Context, stellarTx *txnbuild.Transaction, stellarAccounts ...string) (signedStellarTx *txnbuild.Transaction, err error)
 	SignFeeBumpStellarTransaction(ctx context.Context, feeBumpStellarTx *txnbuild.FeeBumpTransaction, stellarAccounts ...string) (signedFeeBumpStellarTx *txnbuild.FeeBumpTransaction, err error)
@@ -143,9 +143,7 @@ func NewDefaultSignatureService(opts DefaultSignatureServiceOptions) (*DefaultSi
 	}, nil
 }
 
-func (ds *DefaultSignatureService) DistributionAccount() string {
-	return ds.distributionAccount
-}
+var _ SignatureService = &DefaultSignatureService{}
 
 func (ds *DefaultSignatureService) NetworkPassphrase() string {
 	return ds.networkPassphrase
@@ -288,4 +286,12 @@ func (ds *DefaultSignatureService) Delete(ctx context.Context, publicKey string)
 	return nil
 }
 
-var _ SignatureService = &DefaultSignatureService{}
+var _ DistributionAccountResolver = (*DefaultSignatureService)(nil)
+
+func (ds *DefaultSignatureService) DistributionAccount() string {
+	return ds.distributionAccount
+}
+
+func (ds *DefaultSignatureService) HostDistributionAccount() string {
+	return ds.distributionAccount
+}
