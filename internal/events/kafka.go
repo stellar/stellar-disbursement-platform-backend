@@ -124,7 +124,7 @@ func (k *KafkaProducer) WriteMessages(ctx context.Context, messages ...Message) 
 	}
 
 	if err := k.writer.WriteMessages(ctx, kafkaMessages...); err != nil {
-		log.Ctx(ctx).Errorf("writing message on kafka: %s", err.Error())
+		log.Ctx(ctx).Errorf("writing message on kafka for topic %s: %s", k.writer.Topic, err.Error())
 		return fmt.Errorf("writing message on kafka: %w", err)
 	}
 
@@ -184,7 +184,7 @@ func NewKafkaConsumer(config KafkaConfig, topic string, consumerGroupID string, 
 }
 
 func (k *KafkaConsumer) ReadMessage(ctx context.Context) error {
-	log.Ctx(ctx).Info("fetching messages from kafka")
+	log.Ctx(ctx).Infof("fetching messages from kafka for topic %s", k.reader.Config().Topic)
 	kafkaMessage, err := k.reader.FetchMessage(ctx)
 	if err != nil {
 		return fmt.Errorf("fetching message from kafka: %w", err)
@@ -209,6 +209,10 @@ func (k *KafkaConsumer) ReadMessage(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func (k *KafkaConsumer) Topic() string {
+	return k.reader.Config().Topic
 }
 
 func (k *KafkaConsumer) Close() error {

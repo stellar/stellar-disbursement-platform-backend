@@ -4,10 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
@@ -83,6 +83,7 @@ type Producer interface {
 
 type Consumer interface {
 	ReadMessage(ctx context.Context) error
+	Topic() string
 	Close() error
 }
 
@@ -92,25 +93,32 @@ func Consume(ctx context.Context, consumer Consumer, crashTracker crashtracker.C
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, syscall.SIGTERM, syscall.SIGINT, syscall.SIGQUIT)
 
+	backoffChan := make(chan struct{}, 1)
+	defer close(backoffChan)
+	backoffManager := NewBackoffManager(backoffChan)
+
 	for {
 		select {
 		case <-ctx.Done():
-			log.Ctx(ctx).Infof("Stopping consuming messages due to context cancellation...")
+			log.Ctx(ctx).Infof("Stopping consuming messages for topic %s due to context cancellation...", consumer.Topic())
 			return
 
 		case sig := <-signalChan:
-			log.Ctx(ctx).Infof("Stopping consuming messages due to OS signal '%+v'", sig)
+			log.Ctx(ctx).Infof("Stopping consuming messages for topic %s due to OS signal '%+v'", consumer.Topic(), sig)
 			return
+
+		case <-backoffChan:
+			backoff := backoffManager.GetBackoffDuration()
+			log.Ctx(ctx).Warnf("Waiting %s before retrying reading new messages", backoff)
+			time.Sleep(backoff)
 
 		default:
 			if err := consumer.ReadMessage(ctx); err != nil {
-				if errors.Is(err, io.EOF) {
-					// TODO: better handle this error in SDP-1040.
-					log.Ctx(ctx).Warn("message broker returned EOF") // This is an end state
-					return
-				}
-				crashTracker.LogAndReportErrors(ctx, err, "consuming messages")
+				crashTracker.LogAndReportErrors(ctx, err, fmt.Sprintf("consuming messages for topic %s", consumer.Topic()))
+				backoffManager.TriggerBackoff()
+				continue
 			}
+			backoffManager.ResetBackoff()
 		}
 	}
 }
@@ -129,6 +137,10 @@ func (c *MockConsumer) ReadMessage(ctx context.Context) error {
 func (c *MockConsumer) RegisterEventHandler(ctx context.Context, eventHandlers ...EventHandler) error {
 	args := c.Called(ctx, eventHandlers)
 	return args.Error(0)
+}
+
+func (c *MockConsumer) Topic() string {
+	return c.Called().String(0)
 }
 
 func (c *MockConsumer) Close() error {
