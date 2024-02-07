@@ -61,8 +61,10 @@ func Test_NewAnchorPlatformAPIService_existingInstanceIsReturned(t *testing.T) {
 
 	defer ClearInstancesTestHelper(t)
 
+	instanceName := anchorPlatformAPIServiceInstanceName
+
 	// STEP 1: assert that the instance is nil
-	_, ok := dependenciesStoreMap[anchorPlatformAPIServiceInstanceName]
+	_, ok := GetInstance(instanceName)
 	require.False(t, ok)
 
 	// STEP 2: create a new instance
@@ -71,7 +73,7 @@ func Test_NewAnchorPlatformAPIService_existingInstanceIsReturned(t *testing.T) {
 	require.NotNil(t, apService1)
 
 	// STEP 3: assert that the instance is not nil
-	storedAPService, ok := dependenciesStoreMap[anchorPlatformAPIServiceInstanceName]
+	storedAPService, ok := GetInstance(instanceName)
 	require.True(t, ok)
 	require.NotNil(t, storedAPService)
 	require.True(t, apService1 == storedAPService)

@@ -25,14 +25,6 @@ func (t SignatureServiceType) All() []SignatureServiceType {
 	return []SignatureServiceType{SignatureServiceTypeDefault}
 }
 
-func (t SignatureServiceType) StringAll() []string {
-	strAll := []string{}
-	for _, t := range t.All() {
-		strAll = append(strAll, string(t))
-	}
-	return strAll
-}
-
 func ParseSignatureServiceType(sigServiceType string) (SignatureServiceType, error) {
 	sigServiceTypeStrUpper := strings.ToUpper(sigServiceType)
 	ctType := SignatureServiceType(sigServiceTypeStrUpper)
@@ -49,6 +41,7 @@ type SignatureServiceOptions struct {
 	DBConnectionPool       db.DBConnectionPool
 	DistributionPrivateKey string
 	EncryptionPassphrase   string
+	LedgerNumberTracker    LedgerNumberTracker
 	Type                   SignatureServiceType
 }
 
@@ -60,6 +53,7 @@ func NewSignatureService(opts SignatureServiceOptions) (SignatureService, error)
 			DBConnectionPool:       opts.DBConnectionPool,
 			DistributionPrivateKey: opts.DistributionPrivateKey,
 			EncryptionPassphrase:   opts.EncryptionPassphrase,
+			LedgerNumberTracker:    opts.LedgerNumberTracker,
 		})
 
 	default:
@@ -69,12 +63,12 @@ func NewSignatureService(opts SignatureServiceOptions) (SignatureService, error)
 
 //go:generate mockery --name=SignatureService --case=underscore --structname=MockSignatureService
 type SignatureService interface {
-	DistributionAccount() string
+	DistributionAccountResolver
 	NetworkPassphrase() string
 	SignStellarTransaction(ctx context.Context, stellarTx *txnbuild.Transaction, stellarAccounts ...string) (signedStellarTx *txnbuild.Transaction, err error)
 	SignFeeBumpStellarTransaction(ctx context.Context, feeBumpStellarTx *txnbuild.FeeBumpTransaction, stellarAccounts ...string) (signedFeeBumpStellarTx *txnbuild.FeeBumpTransaction, err error)
-	BatchInsert(ctx context.Context, kps []*keypair.Full, shouldEncryptSeed bool, currLedgerNumber int) (err error)
-	Delete(ctx context.Context, publicKey string, currLedgerNumber int) error
+	BatchInsert(ctx context.Context, amount int) (publicKeys []string, err error)
+	Delete(ctx context.Context, publicKey string) error
 }
 
 type DefaultSignatureServiceOptions struct {
@@ -83,6 +77,7 @@ type DefaultSignatureServiceOptions struct {
 	DistributionPrivateKey string
 	EncryptionPassphrase   string
 	Encrypter              utils.PrivateKeyEncrypter
+	LedgerNumberTracker    LedgerNumberTracker
 }
 
 func (opts *DefaultSignatureServiceOptions) Validate() error {
@@ -102,6 +97,10 @@ func (opts *DefaultSignatureServiceOptions) Validate() error {
 		return fmt.Errorf("encryption passphrase is not a valid Ed25519 secret")
 	}
 
+	if opts.LedgerNumberTracker == nil {
+		return fmt.Errorf("ledger number tracker cannot be nil")
+	}
+
 	return nil
 }
 
@@ -113,6 +112,7 @@ type DefaultSignatureService struct {
 	chAccModel           store.ChannelAccountStore
 	encrypter            utils.PrivateKeyEncrypter
 	encryptionPassphrase string
+	ledgerNumberTracker  LedgerNumberTracker
 }
 
 // NewDefaultSignatureService returns a new DefaultSignatureService instance.
@@ -139,12 +139,11 @@ func NewDefaultSignatureService(opts DefaultSignatureServiceOptions) (*DefaultSi
 		chAccModel:           store.NewChannelAccountModel(opts.DBConnectionPool),
 		encrypter:            encrypter,
 		encryptionPassphrase: opts.EncryptionPassphrase,
+		ledgerNumberTracker:  opts.LedgerNumberTracker,
 	}, nil
 }
 
-func (ds *DefaultSignatureService) DistributionAccount() string {
-	return ds.distributionAccount
-}
+var _ SignatureService = &DefaultSignatureService{}
 
 func (ds *DefaultSignatureService) NetworkPassphrase() string {
 	return ds.networkPassphrase
@@ -232,38 +231,54 @@ func (ds *DefaultSignatureService) SignFeeBumpStellarTransaction(ctx context.Con
 	return signedFeeBumpStellarTx, nil
 }
 
-func (ds *DefaultSignatureService) BatchInsert(ctx context.Context, kps []*keypair.Full, shouldEncryptSeed bool, currLedgerNumber int) (err error) {
-	if len(kps) == 0 {
-		return fmt.Errorf("no keypairs provided")
+func (ds *DefaultSignatureService) BatchInsert(ctx context.Context, amount int) (publicKeys []string, err error) {
+	if amount < 1 {
+		return nil, fmt.Errorf("the amnount of accounts to insert need to be greater than zero")
 	}
 
+	currentLedgerNumber, err := ds.ledgerNumberTracker.GetLedgerNumber()
+	if err != nil {
+		return nil, fmt.Errorf("getting current ledger number: %w", err)
+	}
+	lockedToLedgerNumber := currentLedgerNumber + IncrementForMaxLedgerBounds
+
 	batchInsertPayload := []*store.ChannelAccount{}
-	for _, kp := range kps {
+	for i := 0; i < amount; i++ {
+		kp, innerErr := keypair.Random()
+		if innerErr != nil {
+			return nil, fmt.Errorf("generating random keypair: %w", innerErr)
+		}
+
 		publicKey := kp.Address()
 		privateKey := kp.Seed()
-		if shouldEncryptSeed {
-			privateKey, err = ds.encrypter.Encrypt(privateKey, ds.encryptionPassphrase)
-			if err != nil {
-				return fmt.Errorf("encrypting channel account private key: %w", err)
-			}
+		encryptedPrivateKey, innerErr := ds.encrypter.Encrypt(privateKey, ds.encryptionPassphrase)
+		if innerErr != nil {
+			return nil, fmt.Errorf("encrypting channel account private key: %w", innerErr)
 		}
 
 		batchInsertPayload = append(batchInsertPayload, &store.ChannelAccount{
 			PublicKey:  publicKey,
-			PrivateKey: privateKey,
+			PrivateKey: encryptedPrivateKey,
 		})
+		publicKeys = append(publicKeys, publicKey)
 	}
 
-	err = ds.chAccModel.BatchInsertAndLock(ctx, batchInsertPayload, currLedgerNumber, currLedgerNumber+IncrementForMaxLedgerBounds)
+	err = ds.chAccModel.BatchInsertAndLock(ctx, batchInsertPayload, currentLedgerNumber, lockedToLedgerNumber)
 	if err != nil {
-		return fmt.Errorf("batch inserting channel accounts: %w", err)
+		return nil, fmt.Errorf("batch inserting channel accounts: %w", err)
 	}
 
-	return nil
+	return publicKeys, nil
 }
 
-func (ds *DefaultSignatureService) Delete(ctx context.Context, publicKey string, lockedToLedgerNumber int) error {
-	err := ds.chAccModel.DeleteIfLockedUntil(ctx, publicKey, lockedToLedgerNumber)
+func (ds *DefaultSignatureService) Delete(ctx context.Context, publicKey string) error {
+	currentLedgerNumber, err := ds.ledgerNumberTracker.GetLedgerNumber()
+	if err != nil {
+		return fmt.Errorf("getting current ledger number: %w", err)
+	}
+	lockedToLedgerNumber := currentLedgerNumber + IncrementForMaxLedgerBounds
+
+	err = ds.chAccModel.DeleteIfLockedUntil(ctx, publicKey, lockedToLedgerNumber)
 	if err != nil {
 		return fmt.Errorf("deleting channel account %q from database: %w", publicKey, err)
 	}
@@ -271,4 +286,12 @@ func (ds *DefaultSignatureService) Delete(ctx context.Context, publicKey string,
 	return nil
 }
 
-var _ SignatureService = &DefaultSignatureService{}
+var _ DistributionAccountResolver = (*DefaultSignatureService)(nil)
+
+func (ds *DefaultSignatureService) DistributionAccount() string {
+	return ds.distributionAccount
+}
+
+func (ds *DefaultSignatureService) HostDistributionAccount() string {
+	return ds.distributionAccount
+}

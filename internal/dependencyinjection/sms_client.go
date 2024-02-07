@@ -33,7 +33,7 @@ func NewSMSClient(opts SMSClientOptions) (message.MessengerClient, error) {
 
 	// If there is already an instance of the service, we return the same instance
 	instanceName := buildSMSClientInstanceName(opts.MessengerOptions.MessengerType)
-	if instance, ok := dependenciesStoreMap[instanceName]; ok {
+	if instance, ok := GetInstance(instanceName); ok {
 		if smsClientInstance, ok := instance.(message.MessengerClient); ok {
 			return smsClientInstance, nil
 		}

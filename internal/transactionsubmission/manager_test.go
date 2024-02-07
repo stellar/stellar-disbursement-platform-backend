@@ -8,24 +8,23 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
+
 	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/keypair"
 	"github.com/stellar/go/network"
 	"github.com/stellar/go/protocols/horizon"
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/txnbuild"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
-	"github.com/stretchr/testify/require"
-
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	monitorMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor/mocks"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/mocks"
+	engineMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/mocks"
 	tssMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 	storeMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store/mocks"
@@ -39,7 +38,15 @@ func Test_SubmitterOptions_validate(t *testing.T) {
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
 
-	mSigService := mocks.NewMockSignatureService(t)
+	mHorizonClient := &horizonclient.MockClient{}
+	mLedgerNumberTracker := engineMocks.NewMockLedgerNumberTracker(t)
+	mSigService := engineMocks.NewMockSignatureService(t)
+	mSubmitterEngine := engine.SubmitterEngine{
+		HorizonClient:       mHorizonClient,
+		LedgerNumberTracker: mLedgerNumberTracker,
+		SignatureService:    mSigService,
+		MaxBaseFee:          txnbuild.MinBaseFee,
+	}
 	tssMonitorService := tssMonitor.TSSMonitorService{
 		Client:        monitorMocks.NewMockMonitorClient(t),
 		GitCommitHash: "gitCommitHash0x",
@@ -57,26 +64,51 @@ func Test_SubmitterOptions_validate(t *testing.T) {
 			wantErrContains:  "database connection pool cannot be nil",
 		},
 		{
-			name: "validate SignatureService",
+			name: "validate submitter engine's Horizon Client",
 			submitterOptions: SubmitterOptions{
 				DBConnectionPool: dbConnectionPool,
+				SubmitterEngine:  engine.SubmitterEngine{},
 			},
-			wantErrContains: "signature service cannot be nil",
+			wantErrContains: "validating submitter engine: horizon client cannot be nil",
 		},
 		{
-			name: "validate HorizonURL",
+			name: "validate submitter engine's Ledger Number Tracker",
 			submitterOptions: SubmitterOptions{
 				DBConnectionPool: dbConnectionPool,
-				SignatureService: mSigService,
+				SubmitterEngine: engine.SubmitterEngine{
+					HorizonClient: mHorizonClient,
+				},
 			},
-			wantErrContains: "horizon url cannot be empty",
+			wantErrContains: "validating submitter engine: ledger number tracker cannot be nil",
+		},
+		{
+			name: "validate submitter engine's Signature Service",
+			submitterOptions: SubmitterOptions{
+				DBConnectionPool: dbConnectionPool,
+				SubmitterEngine: engine.SubmitterEngine{
+					HorizonClient:       mHorizonClient,
+					LedgerNumberTracker: mLedgerNumberTracker,
+				},
+			},
+			wantErrContains: "validating submitter engine: signature service cannot be nil",
+		},
+		{
+			name: "validate submitter engine's Max Base Fee",
+			submitterOptions: SubmitterOptions{
+				DBConnectionPool: dbConnectionPool,
+				SubmitterEngine: engine.SubmitterEngine{
+					HorizonClient:       mHorizonClient,
+					LedgerNumberTracker: mLedgerNumberTracker,
+					SignatureService:    mSigService,
+				},
+			},
+			wantErrContains: "validating submitter engine: maxBaseFee must be greater than or equal to",
 		},
 		{
 			name: "validate NumChannelAccounts (min)",
 			submitterOptions: SubmitterOptions{
 				DBConnectionPool:   dbConnectionPool,
-				SignatureService:   mSigService,
-				HorizonURL:         "https://horizon-testnet.stellar.org",
+				SubmitterEngine:    mSubmitterEngine,
 				NumChannelAccounts: 0,
 			},
 			wantErrContains: "num channel accounts must stay in the range from 1 to 1000",
@@ -85,8 +117,7 @@ func Test_SubmitterOptions_validate(t *testing.T) {
 			name: "validate NumChannelAccounts (max)",
 			submitterOptions: SubmitterOptions{
 				DBConnectionPool:   dbConnectionPool,
-				SignatureService:   mSigService,
-				HorizonURL:         "https://horizon-testnet.stellar.org",
+				SubmitterEngine:    mSubmitterEngine,
 				NumChannelAccounts: 1001,
 			},
 			wantErrContains: "num channel accounts must stay in the range from 1 to 1000",
@@ -95,32 +126,18 @@ func Test_SubmitterOptions_validate(t *testing.T) {
 			name: "validate QueuePollingInterval",
 			submitterOptions: SubmitterOptions{
 				DBConnectionPool:   dbConnectionPool,
-				SignatureService:   mSigService,
-				HorizonURL:         "https://horizon-testnet.stellar.org",
+				SubmitterEngine:    mSubmitterEngine,
 				NumChannelAccounts: 1,
 			},
 			wantErrContains: "queue polling interval must be greater than 6 seconds",
 		},
 		{
-			name: "validate MaxBaseFee",
-			submitterOptions: SubmitterOptions{
-				DBConnectionPool:     dbConnectionPool,
-				SignatureService:     mSigService,
-				HorizonURL:           "https://horizon-testnet.stellar.org",
-				NumChannelAccounts:   1,
-				QueuePollingInterval: 10,
-			},
-			wantErrContains: "max base fee must be greater than or equal to 100",
-		},
-		{
 			name: "validate monitorService",
 			submitterOptions: SubmitterOptions{
 				DBConnectionPool:     dbConnectionPool,
-				SignatureService:     mSigService,
-				HorizonURL:           "https://horizon-testnet.stellar.org",
+				SubmitterEngine:      mSubmitterEngine,
 				NumChannelAccounts:   1,
 				QueuePollingInterval: 10,
-				MaxBaseFee:           txnbuild.MinBaseFee,
 			},
 			wantErrContains: "monitor service cannot be nil",
 		},
@@ -128,11 +145,9 @@ func Test_SubmitterOptions_validate(t *testing.T) {
 			name: "🎉 successfully finishes validation with nil crash tracker client",
 			submitterOptions: SubmitterOptions{
 				DBConnectionPool:     dbConnectionPool,
-				SignatureService:     mSigService,
-				HorizonURL:           "https://horizon-testnet.stellar.org",
+				SubmitterEngine:      mSubmitterEngine,
 				NumChannelAccounts:   1,
 				QueuePollingInterval: 10,
-				MaxBaseFee:           txnbuild.MinBaseFee,
 				MonitorService:       tssMonitorService,
 				EventProducer:        &events.MockProducer{},
 			},
@@ -141,11 +156,9 @@ func Test_SubmitterOptions_validate(t *testing.T) {
 			name: "🎉 successfully finishes validation with existing crash tracker client",
 			submitterOptions: SubmitterOptions{
 				DBConnectionPool:     dbConnectionPool,
-				SignatureService:     mSigService,
-				HorizonURL:           "https://horizon-testnet.stellar.org",
+				SubmitterEngine:      mSubmitterEngine,
 				NumChannelAccounts:   1,
 				QueuePollingInterval: 10,
-				MaxBaseFee:           txnbuild.MinBaseFee,
 				MonitorService:       tssMonitorService,
 				EventProducer:        &events.MockProducer{},
 				CrashTrackerClient:   &crashtracker.MockCrashTrackerClient{},
@@ -173,7 +186,15 @@ func Test_NewManager(t *testing.T) {
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
 
-	mSigService := mocks.NewMockSignatureService(t)
+	mHorizonClient := &horizonclient.MockClient{}
+	mLedgerNumberTracker := engineMocks.NewMockLedgerNumberTracker(t)
+	mSigService := engineMocks.NewMockSignatureService(t)
+	mSubmitterEngine := engine.SubmitterEngine{
+		HorizonClient:       mHorizonClient,
+		LedgerNumberTracker: mLedgerNumberTracker,
+		SignatureService:    mSigService,
+		MaxBaseFee:          txnbuild.MinBaseFee,
+	}
 
 	ctx := context.Background()
 	validSubmitterOptions := SubmitterOptions{
@@ -183,11 +204,9 @@ func Test_NewManager(t *testing.T) {
 			GitCommitHash: "0xABC",
 			Version:       "0.01",
 		},
-		HorizonURL:           "https://horizon-testnet.stellar.org",
-		SignatureService:     mSigService,
+		SubmitterEngine:      mSubmitterEngine,
 		NumChannelAccounts:   5,
 		QueuePollingInterval: 10,
-		MaxBaseFee:           txnbuild.MinBaseFee,
 		EventProducer:        &events.MockProducer{},
 	}
 
@@ -284,13 +303,12 @@ func Test_NewManager(t *testing.T) {
 				wantChTxBundleModel, err := store.NewChannelTransactionBundleModel(wantConnectionPool)
 				require.NoError(t, err)
 
-				wantSubmitterEngine, err := engine.NewSubmitterEngine(&horizonclient.Client{
-					HorizonURL: submitterOptions.HorizonURL,
-					HTTP:       httpclient.DefaultClient(),
-				})
-				require.NoError(t, err)
-
-				wantSigService := mSigService
+				wantSubmitterEngine := &engine.SubmitterEngine{
+					HorizonClient:       mHorizonClient,
+					LedgerNumberTracker: mLedgerNumberTracker,
+					SignatureService:    mSigService,
+					MaxBaseFee:          txnbuild.MinBaseFee,
+				}
 
 				wantCrashTrackerClient := submitterOptions.CrashTrackerClient
 				if tc.wantCrashTrackerClientFn != nil {
@@ -312,9 +330,7 @@ func Test_NewManager(t *testing.T) {
 						numChannelAccounts: submitterOptions.NumChannelAccounts,
 					},
 
-					engine:     wantSubmitterEngine,
-					sigService: wantSigService,
-					maxBaseFee: submitterOptions.MaxBaseFee,
+					engine: wantSubmitterEngine,
 
 					crashTrackerClient: wantCrashTrackerClient,
 					monitorService:     submitterOptions.MonitorService,
@@ -398,12 +414,13 @@ func Test_Manager_ProcessTransactions(t *testing.T) {
 				DistributionPrivateKey: distributionKP.Seed(),
 				EncryptionPassphrase:   distributionKP.Seed(),
 				Encrypter:              &utils.PrivateKeyEncrypterMock{},
+				LedgerNumberTracker:    engineMocks.NewMockLedgerNumberTracker(t),
 			})
 			require.NoError(t, err)
 
 			// mock ledger number tracker
 			const currentLedgerNumber = 123
-			mockLedgerNumberTracker := &mocks.MockLedgerNumberTracker{}
+			mockLedgerNumberTracker := engineMocks.NewMockLedgerNumberTracker(t)
 			mockLedgerNumberTracker.On("GetLedgerNumber").Return(currentLedgerNumber, nil)
 			defer mockLedgerNumberTracker.AssertExpectations(t)
 
@@ -424,6 +441,8 @@ func Test_Manager_ProcessTransactions(t *testing.T) {
 			submitterEngine := &engine.SubmitterEngine{
 				LedgerNumberTracker: mockLedgerNumberTracker,
 				HorizonClient:       mockHorizonClient,
+				SignatureService:    sigService,
+				MaxBaseFee:          txnbuild.MinBaseFee,
 			}
 
 			dryRunCrashTracker, err := crashtracker.NewDryRunClient()
@@ -453,8 +472,6 @@ func Test_Manager_ProcessTransactions(t *testing.T) {
 				engine:              submitterEngine,
 				crashTrackerClient:  dryRunCrashTracker,
 				queueService:        queueService,
-				sigService:          sigService,
-				maxBaseFee:          txnbuild.MinBaseFee,
 				txProcessingLimiter: engine.NewTransactionProcessingLimiter(queueService.numChannelAccounts),
 				monitorService: tssMonitor.TSSMonitorService{
 					Client:        &mMonitorClient,

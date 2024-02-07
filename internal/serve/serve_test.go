@@ -13,7 +13,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/stellar/go/keypair"
 	"github.com/stellar/go/network"
 	supporthttp "github.com/stellar/go/support/http"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
@@ -76,7 +75,6 @@ func Test_Serve(t *testing.T) {
 		AnchorPlatformOutgoingJWTSecret: "jwt_secret_1234567890",
 		Version:                         "x.y.z",
 		NetworkPassphrase:               network.TestNetworkPassphrase,
-		DistributionSeed:                keypair.MustRandom().Seed(),
 	}
 
 	// Mock supportHTTPRun
@@ -223,7 +221,6 @@ func getServeOptionsForTests(t *testing.T, databaseDSN string) ServeOptions {
 		SMSMessengerClient:              &messengerClientMock,
 		Version:                         "x.y.z",
 		NetworkPassphrase:               network.TestNetworkPassphrase,
-		DistributionSeed:                keypair.MustRandom().Seed(),
 		EnableMultiTenantDB:             false,
 	}
 	err = serveOptions.SetupDependencies()

@@ -2,8 +2,10 @@ package utils
 
 import (
 	"context"
-	"math/rand"
+	"crypto/rand"
+	"math/big"
 	"testing"
+	"time"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
@@ -17,7 +19,9 @@ func TestAdvisoryLockAndRelease(t *testing.T) {
 	defer dbt.Close()
 
 	// Creates a database pool
-	lockKey := rand.Intn(100000)
+	randBigInt, err := rand.Int(rand.Reader, big.NewInt(90000))
+	require.NoError(t, err)
+	lockKey := int(randBigInt.Int64())
 
 	dbConnectionPool1, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
@@ -38,7 +42,11 @@ func TestAdvisoryLockAndRelease(t *testing.T) {
 	require.False(t, lockAcquired2)
 
 	// Close the original connection which releases the lock
+	sqlQuery := "SELECT pg_advisory_unlock($1)"
+	_, err = dbConnectionPool1.ExecContext(ctx, sqlQuery, lockKey)
+	require.NoError(t, err)
 	dbConnectionPool1.Close()
+	time.Sleep(200 * time.Millisecond)
 
 	// try to acquire the lock again
 	lockAcquired3, err := AcquireAdvisoryLock(ctx, dbConnectionPool2, lockKey)
