@@ -99,7 +99,7 @@ func (h ReceiverSendOTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request
 	verificationField := data.VerificationFieldDateOfBirth
 	receiverVerification, err := h.Models.ReceiverVerification.GetLatestByPhoneNumber(ctx, receiverSendOTPRequest.PhoneNumber)
 	if err != nil {
-		err = fmt.Errorf("cannot find latest receiver verification for receiver: %w", err)
+		err = fmt.Errorf("cannot find latest receiver verification for phone number %s: %w", truncatedPhoneNumber, err)
 		log.Ctx(ctx).Error(err)
 	} else {
 		verificationField = receiverVerification.VerificationField
