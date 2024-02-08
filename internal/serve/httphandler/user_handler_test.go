@@ -20,6 +20,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -398,20 +399,24 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 	authManager := auth.NewAuthManager(auth.WithCustomAuthenticatorOption(authenticatorMock))
 
 	messengerClientMock := &message.MessengerClientMock{}
-	uiBaseURL := "https://sdp.com"
 	handler := &UserHandler{
 		AuthManager:     authManager,
 		MessengerClient: messengerClientMock,
-		UIBaseURL:       uiBaseURL,
 		Models:          models,
 	}
+
+	uiBaseURL := "https://sdp.org"
+	tnt := tenant.Tenant{
+		SDPUIBaseURL: &uiBaseURL,
+	}
+	ctx := tenant.SaveTenantInContext(context.Background(), &tnt)
 
 	const url = "/users"
 
 	r.Post(url, handler.CreateUser)
 
 	t.Run("returns error when request body is invalid", func(t *testing.T) {
-		req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(`{}`))
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(`{}`))
 		require.NoError(t, err)
 
 		w := httptest.NewRecorder()
@@ -446,7 +451,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 				"roles": ["role1", "role2"]
 			}
 		`
-		req, err = http.NewRequest(http.MethodPost, url, strings.NewReader(body))
+		req, err = http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(body))
 		require.NoError(t, err)
 
 		w = httptest.NewRecorder()
@@ -478,7 +483,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 				"roles": ["role1"]
 			}
 		`
-		req, err = http.NewRequest(http.MethodPost, url, strings.NewReader(body))
+		req, err = http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(body))
 		require.NoError(t, err)
 
 		w = httptest.NewRecorder()
@@ -505,7 +510,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 		buf := new(strings.Builder)
 		log.DefaultLogger.SetOutput(buf)
 
-		req, err = http.NewRequest(http.MethodPost, url, strings.NewReader(`"invalid"`))
+		req, err = http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(`"invalid"`))
 		require.NoError(t, err)
 
 		w = httptest.NewRecorder()
@@ -548,7 +553,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 				"roles": ["developer"]
 			}
 		`
-		req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(body))
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(body))
 		require.NoError(t, err)
 
 		w := httptest.NewRecorder()
@@ -591,7 +596,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 				"roles": ["developer"]
 			}
 		`
-		req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(body))
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(body))
 		require.NoError(t, err)
 
 		w := httptest.NewRecorder()
@@ -657,7 +662,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 				"roles": ["developer"]
 			}
 		`
-		req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(body))
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(body))
 		require.NoError(t, err)
 
 		w := httptest.NewRecorder()
@@ -680,6 +685,12 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 	})
 
 	t.Run("returns error when joining the forgot password link", func(t *testing.T) {
+		tntInvalidUIBaseURL := tenant.Tenant{
+			EnableReCAPTCHA: false,
+			SDPUIBaseURL:    &[]string{"%invalid%"}[0],
+		}
+		ctxTenantWithInvalidUIBaseURL := tenant.SaveTenantInContext(context.Background(), &tntInvalidUIBaseURL)
+
 		u := &auth.User{
 			FirstName: "First",
 			LastName:  "Last",
@@ -708,7 +719,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 				"roles": ["developer"]
 			}
 		`
-		req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(body))
+		req, err := http.NewRequestWithContext(ctxTenantWithInvalidUIBaseURL, http.MethodPost, url, strings.NewReader(body))
 		require.NoError(t, err)
 
 		w := httptest.NewRecorder()
@@ -716,7 +727,6 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 		http.HandlerFunc(UserHandler{
 			AuthManager:     authManager,
 			MessengerClient: messengerClientMock,
-			UIBaseURL:       "%invalid%",
 			Models:          models,
 		}.CreateUser).ServeHTTP(w, req)
 
@@ -790,7 +800,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 				"roles": ["developer"]
 			}
 		`
-		req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(body))
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(body))
 		require.NoError(t, err)
 
 		w := httptest.NewRecorder()
@@ -818,6 +828,33 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 
 		// validate logs
 		require.Contains(t, buf.String(), "[CreateUserAccount] - Created user with account ID user-id")
+	})
+
+	t.Run("returns Unauthorized when tenant is not in the context", func(t *testing.T) {
+		ctxWithoutTenant := context.Background()
+
+		body := `
+			{
+				"first_name": "First",
+				"last_name": "Last",
+				"email": "email@email.com",
+				"roles": ["developer"]
+			}
+		`
+		req, err := http.NewRequestWithContext(ctxWithoutTenant, http.MethodPost, url, strings.NewReader(body))
+		require.NoError(t, err)
+
+		w := httptest.NewRecorder()
+
+		r.ServeHTTP(w, req)
+
+		resp := w.Result()
+
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+		assert.JSONEq(t, `{"error": "Not authorized."}`, string(respBody))
 	})
 
 	authenticatorMock.AssertExpectations(t)

@@ -43,18 +43,18 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 		auth.WithCustomAuthenticatorOption(authenticatorMock),
 	)
 
-	uiBaseURL := "https://sdp.com"
 	messengerClientMock := &message.MessengerClientMock{}
 	handler := &ForgotPasswordHandler{
 		AuthManager:        authManager,
 		MessengerClient:    messengerClientMock,
 		Models:             models,
-		UIBaseURL:          uiBaseURL,
 		ReCAPTCHAValidator: reCAPTCHAValidatorMock,
 	}
 
+	uiBaseURL := "https://sdp.com"
 	tnt := tenant.Tenant{
 		EnableReCAPTCHA: true,
+		SDPUIBaseURL:    &uiBaseURL,
 	}
 	ctx := tenant.SaveTenantInContext(context.Background(), &tnt)
 
@@ -105,6 +105,12 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 	})
 
 	t.Run("Should return http status 500 when the reset password link is invalid", func(t *testing.T) {
+		tntInvalidUIBaseURL := tenant.Tenant{
+			EnableReCAPTCHA: false,
+			SDPUIBaseURL:    &[]string{"%invalid%"}[0],
+		}
+		ctxTenantWithInvalidUIBaseURL := tenant.SaveTenantInContext(context.Background(), &tntInvalidUIBaseURL)
+
 		requestBody := `
 		{ 
 			"email": "valid@email.com" ,
@@ -112,23 +118,18 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 		}`
 
 		rr := httptest.NewRecorder()
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(requestBody))
+		req, err := http.NewRequestWithContext(ctxTenantWithInvalidUIBaseURL, http.MethodPost, url, strings.NewReader(requestBody))
 		require.NoError(t, err)
 
 		authenticatorMock.
 			On("ForgotPassword", req.Context(), "valid@email.com").
 			Return("resetToken", nil).
 			Once()
-		reCAPTCHAValidatorMock.
-			On("IsTokenValid", mock.Anything, "validToken").
-			Return(true, nil).
-			Once()
 
 		http.HandlerFunc(ForgotPasswordHandler{
 			AuthManager:        authManager,
 			MessengerClient:    messengerClientMock,
 			Models:             models,
-			UIBaseURL:          "%invalid%",
 			ReCAPTCHAValidator: reCAPTCHAValidatorMock,
 		}.ServeHTTP).ServeHTTP(rr, req)
 
@@ -326,7 +327,7 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 		require.NoError(t, err)
 
 		reCAPTCHAValidatorMock.
-			On("IsTokenValid", mock.Anything, "validToken").
+			On("IsTokenValid", req.Context(), "validToken").
 			Return(false, errors.New("error requesting verify reCAPTCHA token")).
 			Once()
 

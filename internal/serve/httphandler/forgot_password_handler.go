@@ -27,7 +27,6 @@ const forgotPasswordMessageTitle = "Reset Account Password"
 type ForgotPasswordHandler struct {
 	AuthManager        auth.AuthManager
 	MessengerClient    message.MessengerClient
-	UIBaseURL          string
 	Models             *data.Models
 	ReCAPTCHAValidator validators.ReCAPTCHAValidator
 }
@@ -107,7 +106,7 @@ func (h ForgotPasswordHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 			return
 		}
 
-		resetPasswordLink, err := url.JoinPath(h.UIBaseURL, "reset-password")
+		resetPasswordLink, err := url.JoinPath(*tnt.SDPUIBaseURL, "reset-password")
 		if err != nil {
 			err = fmt.Errorf("error getting reset password link: %w", err)
 			log.Ctx(ctx).Error(err)

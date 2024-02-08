@@ -15,12 +15,12 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 type UserHandler struct {
 	AuthManager     auth.AuthManager
 	MessengerClient message.MessengerClient
-	UIBaseURL       string
 	Models          *data.Models
 }
 
@@ -157,6 +157,13 @@ func (h UserHandler) UserActivation(rw http.ResponseWriter, req *http.Request) {
 func (h UserHandler) CreateUser(rw http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 
+	tnt, err := tenant.GetTenantFromContext(ctx)
+	if err != nil {
+		err = fmt.Errorf("getting tenant from context: %w", err)
+		httperror.Unauthorized("", err, nil).Render(rw)
+		return
+	}
+
 	var reqBody CreateUserRequest
 	if err := httpdecode.DecodeJSON(req, &reqBody); err != nil {
 		err = fmt.Errorf("decoding the request body: %w", err)
@@ -178,7 +185,7 @@ func (h UserHandler) CreateUser(rw http.ResponseWriter, req *http.Request) {
 	}
 
 	s := services.NewCreateUserService(h.Models, h.Models.DBConnectionPool, h.AuthManager, h.MessengerClient)
-	u, err := s.CreateUser(ctx, newUser, h.UIBaseURL)
+	u, err := s.CreateUser(ctx, newUser, *tnt.SDPUIBaseURL)
 	if err != nil {
 		if errors.Is(err, auth.ErrUserEmailAlreadyExists) {
 			httperror.BadRequest(auth.ErrUserEmailAlreadyExists.Error(), err, nil).Render(rw)
