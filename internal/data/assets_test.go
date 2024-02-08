@@ -12,6 +12,48 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func Test_Asset_IsNative(t *testing.T) {
+	cases := []struct {
+		asset    Asset
+		isNative bool
+	}{
+		{Asset{Code: "XLM"}, true},
+		{Asset{Code: "NATIVE"}, true},
+		{Asset{Code: "ABC"}, false},
+		{Asset{Issuer: "Issuer1", Code: "XLM"}, false},
+		{Asset{Issuer: "Issuer1", Code: "NATIVE"}, false},
+		{Asset{Issuer: "Issuer2", Code: "XYZ"}, false},
+	}
+
+	for _, c := range cases {
+		got := c.asset.IsNative()
+		if got != c.isNative {
+			t.Errorf("Asset{%q, %q}.IsNative() == %t, want %t", c.asset.Issuer, c.asset.Code, got, c.isNative)
+		}
+	}
+}
+
+func Test_Asset_Equals(t *testing.T) {
+	cases := []struct {
+		asset1 Asset
+		asset2 Asset
+		equals bool
+	}{
+		{Asset{Code: "XLM"}, Asset{Code: "XLM"}, true},
+		{Asset{Code: "XLM"}, Asset{Code: "ABC"}, false},
+		{Asset{Issuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5", Code: "USDC"}, Asset{Issuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5", Code: "usdc"}, true},
+		{Asset{Issuer: "Issuer1", Code: "ABC"}, Asset{Issuer: "Issuer2", Code: "ABC"}, false},
+		{Asset{Issuer: "Issuer1", Code: "ABC"}, Asset{Issuer: "Issuer1", Code: "XYZ"}, false},
+	}
+
+	for _, c := range cases {
+		got := c.asset1.Equals(c.asset2)
+		if got != c.equals {
+			t.Errorf("Asset{%q, %q}.Equals(Asset{%q, %q}) == %t, want %t", c.asset1.Issuer, c.asset1.Code, c.asset2.Issuer, c.asset2.Code, got, c.equals)
+		}
+	}
+}
+
 func Test_AssetModelGet(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
