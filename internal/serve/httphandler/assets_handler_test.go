@@ -469,6 +469,46 @@ func Test_AssetHandler_CreateAsset(t *testing.T) {
 		assert.JSONEq(t, `{"error": "Cannot create new asset"}`, string(respBody))
 	})
 
+	t.Run("ensures that issuers public key value has spaces trimmed", func(t *testing.T) {
+		data.DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
+
+		getEntries := log.DefaultLogger.StartTest(log.WarnLevel)
+
+		horizonClientMock.
+			On("AccountDetail", horizonclient.AccountRequest{
+				AccountID: distributionKP.Address(),
+			}).
+			Return(horizon.Account{
+				AccountID: distributionKP.Address(),
+				Sequence:  123,
+				Balances: []horizon.Balance{
+					{
+						Balance: "100",
+						Asset: base.Asset{
+							Code:   code,
+							Issuer: issuer,
+						},
+					},
+				},
+			}, nil).
+			Once()
+
+		rr := httptest.NewRecorder()
+
+		requestBody, _ := json.Marshal(AssetRequest{code, fmt.Sprintf(" %s ", issuer)})
+
+		req, _ := http.NewRequest(http.MethodPost, "/assets", strings.NewReader(string(requestBody)))
+		http.HandlerFunc(handler.CreateAsset).ServeHTTP(rr, req)
+
+		resp := rr.Result()
+
+		assert.Equal(t, http.StatusCreated, resp.StatusCode)
+
+		entries := getEntries()
+		assert.Len(t, entries, 2)
+		assert.Equal(t, "not adding trustline for the asset USDT:GBHC5ADV2XYITXCYC5F6X6BM2OYTYHV4ZU2JF6QWJORJQE2O7RKH2LAQ because it already exists", entries[0].Message)
+	})
+
 	horizonClientMock.AssertExpectations(t)
 	signatureService.AssertExpectations(t)
 }
