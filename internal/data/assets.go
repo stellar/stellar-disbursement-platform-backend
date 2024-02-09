@@ -5,11 +5,12 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"golang.org/x/exp/slices"
 	"strings"
 	"time"
 
 	"github.com/lib/pq"
+	"golang.org/x/exp/slices"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
 )
 
