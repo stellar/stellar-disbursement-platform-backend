@@ -507,6 +507,7 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 		log.DefaultLogger.SetOutput(buf)
 
 		expectedErr := InsufficientBalanceError{
+			DisbursementAsset:  *asset,
 			DisbursementID:     disbursement.ID,
 			AvailableBalance:   11111.0,
 			DisbursementAmount: 22222.0,
@@ -516,8 +517,7 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 		require.EqualError(t, err, fmt.Sprintf("running atomic function in RunInTransactionWithResult: %v", expectedErr))
 
 		// PendingTotal includes payments associated with 'readyDisbursement' that were moved from the draft to ready status
-		expectedErrStr := fmt.Sprintf("disbursement %s failed with insufficient distribution account balance 11111.00 to fulfill new amount (22222.00) along with the pending amount (1100.00). Total pending amount: 12211.00", disbursement.ID)
-		t.Log(expectedErr.Error())
+		expectedErrStr := fmt.Sprintf("the disbursement %s failed due to an account balance (11111.00) that was insufficient to fulfill new amount (22222.00) along with the pending amount (1100.00). To complete this action, your distribution account needs to be recharged with at least 12211.00 USDC", disbursement.ID)
 		assert.Contains(t, buf.String(), expectedErrStr)
 	})
 
