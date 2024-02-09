@@ -479,7 +479,7 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 		).Return(horizon.Account{
 			Balances: []horizon.Balance{
 				{
-					Balance: "10000",
+					Balance: "11111",
 					Asset: base.Asset{
 						Code:   asset.Code,
 						Issuer: asset.Issuer,
@@ -499,33 +499,26 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 			ReceiverWallet: rwReady,
 			Disbursement:   disbursement,
 			Asset:          *asset,
-			Amount:         "10001",
+			Amount:         "22222",
 			Status:         data.ReadyPaymentStatus,
 		})
 
 		buf := new(strings.Builder)
 		log.DefaultLogger.SetOutput(buf)
 
+		expectedErr := InsufficientBalanceError{
+			DisbursementID:     disbursement.ID,
+			AvailableBalance:   11111.0,
+			DisbursementAmount: 22222.0,
+			TotalPendingAmount: 1100.0,
+		}
 		err = service.StartDisbursement(ctx, disbursement.ID, distributionPubKey)
-		require.EqualError(
-			t,
-			err,
-			fmt.Sprintf(
-				"running atomic function in RunInTransactionWithResult: %s",
-				ErrDisbursementWalletInsufficientBalance.Error(),
-			),
-		)
+		require.EqualError(t, err, fmt.Sprintf("running atomic function in RunInTransactionWithResult: %v", expectedErr))
 
 		// PendingTotal includes payments associated with 'readyDisbursement' that were moved from the draft to ready status
-		assert.Contains(
-			t,
-			buf.String(),
-			fmt.Sprintf("Insufficient distribution account balance %f to fulfill amount %f for disbursement id %s and total pending amount %f",
-				10000.0,
-				10001.0,
-				disbursement.ID,
-				1100.0),
-		)
+		expectedErrStr := fmt.Sprintf("disbursement %s failed with insufficient distribution account balance 11111.000000 to fulfill new amount (22222.000000) along with the pending amount (1100.000000). Total pending amount: 12211.000000", disbursement.ID)
+		t.Log(expectedErr.Error())
+		assert.Contains(t, buf.String(), expectedErrStr)
 	})
 
 	authManagerMock.AssertExpectations(t)

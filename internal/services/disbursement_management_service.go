@@ -39,15 +39,32 @@ type DisbursementWithUserMetadata struct {
 }
 
 var (
-	ErrDisbursementNotFound                  = errors.New("disbursement not found")
-	ErrDisbursementNotReadyToStart           = errors.New("disbursement is not ready to be started")
-	ErrDisbursementNotReadyToPause           = errors.New("disbursement is not ready to be paused")
-	ErrDisbursementWalletDisabled            = errors.New("disbursement wallet is disabled")
-	ErrDisbursementWalletInsufficientBalance = errors.New("disbursement wallet has insufficient balance to fulfill disbursement and current pending payments")
+	ErrDisbursementNotFound        = errors.New("disbursement not found")
+	ErrDisbursementNotReadyToStart = errors.New("disbursement is not ready to be started")
+	ErrDisbursementNotReadyToPause = errors.New("disbursement is not ready to be paused")
+	ErrDisbursementWalletDisabled  = errors.New("disbursement wallet is disabled")
 
 	ErrDisbursementStatusCantBeChanged = errors.New("disbursement status can't be changed to the requested status")
 	ErrDisbursementStartedByCreator    = errors.New("disbursement can't be started by its creator")
 )
+
+type InsufficientBalanceError struct {
+	DisbursementID     string
+	AvailableBalance   float64
+	DisbursementAmount float64
+	TotalPendingAmount float64
+}
+
+func (e InsufficientBalanceError) Error() string {
+	return fmt.Sprintf(
+		"disbursement %s failed with insufficient distribution account balance %f to fulfill new amount (%f) along with the pending amount (%f). Total pending amount: %f",
+		e.DisbursementID,
+		e.AvailableBalance,
+		e.DisbursementAmount,
+		e.TotalPendingAmount,
+		(e.DisbursementAmount+e.TotalPendingAmount)-e.AvailableBalance,
+	)
+}
 
 // NewDisbursementManagementService is a factory function for creating a new DisbursementManagementService.
 func NewDisbursementManagementService(
@@ -228,10 +245,10 @@ func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, d
 			return fmt.Errorf("cannot get details for root account from horizon client: %w", err)
 		}
 
-		var distributionBalance float64
+		var availableBalance float64
 		for _, b := range rootAccount.Balances {
 			if disbursement.Asset.EqualsHorizonAsset(b.Asset) {
-				distributionBalance, err = strconv.ParseFloat(b.Balance, 64)
+				availableBalance, err = strconv.ParseFloat(b.Balance, 64)
 				if err != nil {
 					return fmt.Errorf("cannot convert Horizon distribution account balance %s into float: %w", b.Balance, err)
 				}
@@ -275,15 +292,15 @@ func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, d
 			totalPendingAmount += paymentAmount
 		}
 
-		if (distributionBalance - (disbursementAmount + totalPendingAmount)) < 0 {
-			log.Ctx(ctx).Errorf(
-				"Insufficient distribution account balance %f to fulfill amount %f for disbursement id %s and total pending amount %f",
-				distributionBalance,
-				disbursementAmount,
-				disbursementID,
-				totalPendingAmount,
-			)
-			return ErrDisbursementWalletInsufficientBalance
+		if (availableBalance - (disbursementAmount + totalPendingAmount)) < 0 {
+			err = InsufficientBalanceError{
+				DisbursementID:     disbursementID,
+				AvailableBalance:   availableBalance,
+				DisbursementAmount: disbursementAmount,
+				TotalPendingAmount: totalPendingAmount,
+			}
+			log.Ctx(ctx).Error(err)
+			return err
 		}
 
 		// 5. Update all correct payment status to `ready`
