@@ -40,7 +40,7 @@ function toggleSuccessNotification(parentEl, title, message, isVisible) {
 async function sendSms(phoneNumber, reCAPTCHAToken, onSuccess, onError) {
   if (phoneNumber && reCAPTCHAToken) {
     try {
-      const request = await fetch("/wallet-registration/otp", {
+      const response = await fetch("/wallet-registration/otp", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -51,9 +51,13 @@ async function sendSms(phoneNumber, reCAPTCHAToken, onSuccess, onError) {
           recaptcha_token: reCAPTCHAToken,
         }),
       });
-      const resp = await request.json();
 
-      onSuccess(resp.verification_field);
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Something went wrong, please try again later.");
+      }
+      
+      onSuccess(data.verification_field);;
     } catch (error) {
       onError(error);
     }
