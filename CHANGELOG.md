@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 None
 
+## [1.1.3](https://github.com/stellar/stellar-disbursement-platform-backend/compare/1.1.2...1.1.3)
+
+### Fixed
+
+- SEP24 registration flow not working properly when the phone number was not found in the DB [#187](https://github.com/stellar/stellar-disbursement-platform-backend/pull/187)
+- Fix distribution account balance validation that fails when the intended asset is XLM [#186](https://github.com/stellar/stellar-disbursement-platform-backend/pull/186)
+
 ## [1.1.2](https://github.com/stellar/stellar-disbursement-platform-backend/compare/1.1.1...1.1.2)
 
 ### Fixed
