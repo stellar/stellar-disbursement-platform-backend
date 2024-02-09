@@ -14,6 +14,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
+	tssUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 )
@@ -225,6 +226,7 @@ func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, d
 		rootAccount, err := s.horizonClient.AccountDetail(
 			horizonclient.AccountRequest{AccountID: distributionPubKey})
 		if err != nil {
+			err = tssUtils.NewHorizonErrorWrapper(err)
 			return fmt.Errorf("cannot get details for root account from horizon client: %w", err)
 		}
 
