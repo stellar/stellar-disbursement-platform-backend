@@ -165,7 +165,7 @@ func (h UserHandler) CreateUser(rw http.ResponseWriter, req *http.Request) {
 	}
 
 	var reqBody CreateUserRequest
-	if err := httpdecode.DecodeJSON(req, &reqBody); err != nil {
+	if err = httpdecode.DecodeJSON(req, &reqBody); err != nil {
 		err = fmt.Errorf("decoding the request body: %w", err)
 		log.Ctx(ctx).Error(err)
 		httperror.BadRequest("", err, nil).Render(rw)
