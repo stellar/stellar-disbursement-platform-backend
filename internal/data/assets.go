@@ -11,6 +11,7 @@ import (
 	"github.com/lib/pq"
 	"golang.org/x/exp/slices"
 
+	"github.com/stellar/go/protocols/horizon/base"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
 )
 
@@ -35,6 +36,14 @@ func (a Asset) Equals(other Asset) bool {
 		return true
 	}
 	return strings.EqualFold(a.Code, other.Code) && strings.EqualFold(a.Issuer, other.Issuer)
+}
+
+func (a Asset) EqualsHorizonAsset(horizonAsset base.Asset) bool {
+	if a.IsNative() && horizonAsset.Type == "native" {
+		return true
+	}
+
+	return strings.EqualFold(a.Code, horizonAsset.Code) && strings.EqualFold(a.Issuer, horizonAsset.Issuer)
 }
 
 type AssetModel struct {

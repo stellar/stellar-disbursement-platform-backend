@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stellar/go/protocols/horizon/base"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
@@ -41,6 +42,7 @@ func Test_Asset_Equals(t *testing.T) {
 		expectedResult bool
 	}{
 		{Asset{Code: "XLM"}, Asset{Code: "XLM"}, true},
+		{Asset{Code: "NATIVE"}, Asset{Code: "XLM"}, true},
 		{Asset{Code: "XLM"}, Asset{Code: "xlm"}, true},
 		{Asset{Code: "XLM"}, Asset{Code: "ABC"}, false},
 		{Asset{Issuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5", Code: "USDC"}, Asset{Issuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5", Code: "usdc"}, true},
@@ -55,6 +57,71 @@ func Test_Asset_Equals(t *testing.T) {
 			if got != c.expectedResult {
 				t.Errorf("Asset{%q, %q}.Equals(Asset{%q, %q}) == %t, want %t", c.asset1.Issuer, c.asset1.Code, c.asset2.Issuer, c.asset2.Code, got, c.expectedResult)
 			}
+		})
+	}
+}
+
+func Test_Asset_EqualsHorizonAsset(t *testing.T) {
+	testCases := []struct {
+		name           string
+		localAsset     Asset
+		horizonAsset   base.Asset
+		expectedResult bool
+	}{
+		{
+			name:           "🟢 native assets",
+			localAsset:     Asset{Code: "XLM"},
+			horizonAsset:   base.Asset{Type: "native"},
+			expectedResult: true,
+		},
+		{
+			name:           "🟢 native asset 2",
+			localAsset:     Asset{Code: "NATIVE"},
+			horizonAsset:   base.Asset{Type: "native"},
+			expectedResult: true,
+		},
+		{
+			name:           "🟢 issued assets are equal",
+			localAsset:     Asset{Code: "USDC", Issuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"},
+			horizonAsset:   base.Asset{Type: "credit_alphanum4", Code: "USDC", Issuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"},
+			expectedResult: true,
+		},
+		{
+			name:           "🟢 issued assets are equal2",
+			localAsset:     Asset{Code: "usdc", Issuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"},
+			horizonAsset:   base.Asset{Type: "credit_alphanum4", Code: "USdc", Issuer: "gbbD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"},
+			expectedResult: true,
+		},
+		{
+			name:           "🔴 native asset != issued asset",
+			localAsset:     Asset{Code: "XLM"},
+			horizonAsset:   base.Asset{Type: "credit_alphanum4", Code: "NATIVE", Issuer: "issuer"},
+			expectedResult: false,
+		},
+		{
+			name:           "🔴 issued asset != native asset",
+			localAsset:     Asset{Code: "USDC", Issuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"},
+			horizonAsset:   base.Asset{Type: "native"},
+			expectedResult: false,
+		},
+		{
+			name:           "🔴 issued asset != issued asset",
+			localAsset:     Asset{Code: "USDC", Issuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"},
+			horizonAsset:   base.Asset{Type: "credit_alphanum4", Code: "EUROC", Issuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"},
+			expectedResult: false,
+		},
+		{
+			name:           "🔴 issued asset != issued asset 2",
+			localAsset:     Asset{Code: "USDC", Issuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"},
+			horizonAsset:   base.Asset{Type: "credit_alphanum4", Code: "USDC", Issuer: "another-issuer"},
+			expectedResult: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := tc.localAsset.EqualsHorizonAsset(tc.horizonAsset)
+			assert.Equal(t, tc.expectedResult, got)
 		})
 	}
 }

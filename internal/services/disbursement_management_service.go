@@ -14,7 +14,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/assets"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 )
@@ -231,13 +230,7 @@ func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, d
 
 		var distributionBalance float64
 		for _, b := range rootAccount.Balances {
-			var rootAsset data.Asset
-			if b.Asset.Type == "native" {
-				rootAsset = assets.XLMAsset
-			} else {
-				rootAsset = data.Asset{Code: b.Asset.Code, Issuer: b.Asset.Issuer}
-			}
-			if disbursement.Asset.Equals(rootAsset) {
+			if disbursement.Asset.EqualsHorizonAsset(b.Asset) {
 				distributionBalance, err = strconv.ParseFloat(b.Balance, 64)
 				if err != nil {
 					return fmt.Errorf("cannot convert Horizon distribution account balance %s into float: %w", b.Balance, err)
