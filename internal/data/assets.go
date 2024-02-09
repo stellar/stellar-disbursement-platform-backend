@@ -34,8 +34,7 @@ func (a Asset) Equals(other Asset) bool {
 	if a.IsNative() && other.IsNative() {
 		return true
 	}
-	return strings.ToUpper(a.Code) == strings.ToUpper(other.Code) &&
-		strings.ToUpper(a.Issuer) == strings.ToUpper(other.Issuer)
+	return strings.EqualFold(a.Code, other.Code) && strings.EqualFold(a.Issuer, other.Issuer)
 }
 
 type AssetModel struct {

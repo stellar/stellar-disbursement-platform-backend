@@ -2,6 +2,7 @@ package data
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -35,22 +36,26 @@ func Test_Asset_IsNative(t *testing.T) {
 
 func Test_Asset_Equals(t *testing.T) {
 	cases := []struct {
-		asset1 Asset
-		asset2 Asset
-		equals bool
+		asset1         Asset
+		asset2         Asset
+		expectedResult bool
 	}{
 		{Asset{Code: "XLM"}, Asset{Code: "XLM"}, true},
+		{Asset{Code: "XLM"}, Asset{Code: "xlm"}, true},
 		{Asset{Code: "XLM"}, Asset{Code: "ABC"}, false},
 		{Asset{Issuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5", Code: "USDC"}, Asset{Issuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5", Code: "usdc"}, true},
+		{Asset{Issuer: "gbbD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5", Code: "USDC"}, Asset{Issuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5", Code: "usdc"}, true},
 		{Asset{Issuer: "Issuer1", Code: "ABC"}, Asset{Issuer: "Issuer2", Code: "ABC"}, false},
 		{Asset{Issuer: "Issuer1", Code: "ABC"}, Asset{Issuer: "Issuer1", Code: "XYZ"}, false},
 	}
 
-	for _, c := range cases {
-		got := c.asset1.Equals(c.asset2)
-		if got != c.equals {
-			t.Errorf("Asset{%q, %q}.Equals(Asset{%q, %q}) == %t, want %t", c.asset1.Issuer, c.asset1.Code, c.asset2.Issuer, c.asset2.Code, got, c.equals)
-		}
+	for i, c := range cases {
+		t.Run(fmt.Sprintf("Case %d", i), func(t *testing.T) {
+			got := c.asset1.Equals(c.asset2)
+			if got != c.expectedResult {
+				t.Errorf("Asset{%q, %q}.Equals(Asset{%q, %q}) == %t, want %t", c.asset1.Issuer, c.asset1.Code, c.asset2.Issuer, c.asset2.Code, got, c.expectedResult)
+			}
+		})
 	}
 }
 
