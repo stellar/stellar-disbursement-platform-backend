@@ -386,8 +386,6 @@ func Test_AssetHandler_CreateAsset(t *testing.T) {
 	})
 
 	t.Run("failed creating asset, error adding asset trustline", func(t *testing.T) {
-		ctx := context.Background()
-
 		data.DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
 
 		tx, err := txnbuild.NewTransaction(
