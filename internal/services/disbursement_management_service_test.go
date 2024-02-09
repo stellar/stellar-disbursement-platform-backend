@@ -516,7 +516,7 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 		require.EqualError(t, err, fmt.Sprintf("running atomic function in RunInTransactionWithResult: %v", expectedErr))
 
 		// PendingTotal includes payments associated with 'readyDisbursement' that were moved from the draft to ready status
-		expectedErrStr := fmt.Sprintf("disbursement %s failed with insufficient distribution account balance 11111.000000 to fulfill new amount (22222.000000) along with the pending amount (1100.000000). Total pending amount: 12211.000000", disbursement.ID)
+		expectedErrStr := fmt.Sprintf("disbursement %s failed with insufficient distribution account balance 11111.00 to fulfill new amount (22222.00) along with the pending amount (1100.00). Total pending amount: 12211.00", disbursement.ID)
 		t.Log(expectedErr.Error())
 		assert.Contains(t, buf.String(), expectedErrStr)
 	})

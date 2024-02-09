@@ -57,7 +57,7 @@ type InsufficientBalanceError struct {
 
 func (e InsufficientBalanceError) Error() string {
 	return fmt.Sprintf(
-		"disbursement %s failed with insufficient distribution account balance %f to fulfill new amount (%f) along with the pending amount (%f). Total pending amount: %f",
+		"disbursement %s failed with insufficient distribution account balance %.2f to fulfill new amount (%.2f) along with the pending amount (%.2f). Total pending amount: %.2f",
 		e.DisbursementID,
 		e.AvailableBalance,
 		e.DisbursementAmount,
