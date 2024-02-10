@@ -10,24 +10,38 @@ services:
     extends:
       file: docker-compose-sdp-anchor.yml
       service: sdp-api
+    depends_on:
+      - db
+      - kafka
   db-anchor-platform:
     extends:
       file: docker-compose-sdp-anchor.yml
       service: db-anchor-platform
+    depends_on:
+      - sdp-api
     volumes:
       - postgres-ap-db:/data/postgres
   anchor-platform:
     extends:
       file: docker-compose-sdp-anchor.yml
       service: anchor-platform
+    depends_on:
+      - db-anchor-platform
 #  sdp-tss:
 #    extends:
 #      file: docker-compose-tss.yml
 #      service: sdp-tss
+#    depends_on:
+#      - db
+#      - sdp-api
+#      - kafka
   sdp-frontend:
     extends:
       file: docker-compose-frontend.yml
       service: sdp-frontend
+    depends_on:
+      - db
+      - sdp-api
   kafka:
     extends:
       file: docker-compose-sdp-anchor.yml

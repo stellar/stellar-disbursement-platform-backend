@@ -57,10 +57,10 @@ func (qv *PaymentQueryValidator) ValidateAndGetPaymentFilters(filters map[data.F
 func (qv *PaymentQueryValidator) validateAndGetPaymentStatus(status string) data.PaymentStatus {
 	s := data.PaymentStatus(strings.ToUpper(status))
 	switch s {
-	case data.DraftPaymentStatus, data.ReadyPaymentStatus, data.PendingPaymentStatus, data.PausedPaymentStatus, data.SuccessPaymentStatus, data.FailedPaymentStatus:
+	case data.DraftPaymentStatus, data.ReadyPaymentStatus, data.PendingPaymentStatus, data.PausedPaymentStatus, data.SuccessPaymentStatus, data.FailedPaymentStatus, data.CanceledPaymentStatus:
 		return s
 	default:
-		qv.Check(false, string(data.FilterKeyStatus), "invalid parameter. valid values are: draft, ready, pending, paused, success, failed")
+		qv.Check(false, string(data.FilterKeyStatus), "invalid parameter. valid values are: DRAFT, READY, PENDING, PAUSED, SUCCESS, FAILED, CANCELLED")
 		return ""
 	}
 }

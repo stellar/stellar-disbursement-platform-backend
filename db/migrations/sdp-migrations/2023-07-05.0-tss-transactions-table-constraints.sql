@@ -6,7 +6,7 @@ ALTER TABLE submitter_transactions
     ADD COLUMN xdr_received TEXT UNIQUE,
     ALTER COLUMN external_id SET NOT NULL,
     ALTER COLUMN status SET DEFAULT 'PENDING',
-    ALTER COLUMN amount TYPE numeric(10,7),
+    ALTER COLUMN amount TYPE NUMERIC(19,7),
     ADD CONSTRAINT unique_stellar_transaction_hash UNIQUE (stellar_transaction_hash),
     ADD CONSTRAINT check_retry_count CHECK (retry_count >= 0);
 

@@ -132,7 +132,7 @@ func Test_AssetModelGetByWalletID(t *testing.T) {
 	})
 }
 
-func Test_AssetModelInsert(t *testing.T) {
+func Test_AssetModel_Ensure(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 
@@ -203,7 +203,7 @@ func Test_AssetModelInsert(t *testing.T) {
 		assert.NotNil(t, usdcDB.DeletedAt)
 	})
 
-	t.Run("does not insert the same asset again", func(t *testing.T) {
+	t.Run("asset insertion is idempotent", func(t *testing.T) {
 		DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
 		code := "USDT"
 		issuer := "GBVHJTRLQRMIHRYTXZQOPVYCVVH7IRJN3DOFT7VC6U75CBWWBVDTWURG"
@@ -212,9 +212,13 @@ func Test_AssetModelInsert(t *testing.T) {
 		require.NoError(t, err)
 		assert.NotNil(t, asset)
 
-		duplicatedAsset, err := assetModel.Insert(ctx, dbConnectionPool, code, issuer)
-		assert.EqualError(t, err, "error inserting asset: sql: no rows in result set")
-		assert.Nil(t, duplicatedAsset)
+		idempotentAsset, err := assetModel.Insert(ctx, dbConnectionPool, code, issuer)
+		require.NoError(t, err)
+		assert.NotNil(t, idempotentAsset)
+		assert.Equal(t, asset.Code, idempotentAsset.Code)
+		assert.Equal(t, asset.Issuer, idempotentAsset.Issuer)
+		assert.Equal(t, asset.DeletedAt, idempotentAsset.DeletedAt)
+		assert.Empty(t, asset.DeletedAt)
 	})
 
 	t.Run("creates the stellar native asset successfully", func(t *testing.T) {
@@ -228,7 +232,7 @@ func Test_AssetModelInsert(t *testing.T) {
 		assert.Empty(t, asset.Issuer)
 	})
 
-	t.Run("does not create an asset with empty issuer", func(t *testing.T) {
+	t.Run("does not create an asset with empty issuer (unless it's XLM)", func(t *testing.T) {
 		DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
 
 		asset, err := assetModel.Insert(ctx, dbConnectionPool, "USDC", "")
@@ -341,28 +345,32 @@ func Test_GetAssetsPerReceiverWallet(t *testing.T) {
 	walletB := CreateWalletFixture(t, ctx, dbConnectionPool, "walletB", "https://www.b.com", "www.b.com", "b://")
 
 	disbursementA1 := CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &Disbursement{
-		Country: country,
-		Wallet:  walletA,
-		Status:  ReadyDisbursementStatus,
-		Asset:   asset1,
+		Country:                        country,
+		Wallet:                         walletA,
+		Status:                         ReadyDisbursementStatus,
+		Asset:                          asset1,
+		SMSRegistrationMessageTemplate: "Disbursement SMS Registration Message Template A1",
 	})
 	disbursementA2 := CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &Disbursement{
-		Country: country,
-		Wallet:  walletA,
-		Status:  ReadyDisbursementStatus,
-		Asset:   asset2,
+		Country:                        country,
+		Wallet:                         walletA,
+		Status:                         ReadyDisbursementStatus,
+		Asset:                          asset2,
+		SMSRegistrationMessageTemplate: "Disbursement SMS Registration Message Template A2",
 	})
 	disbursementB1 := CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &Disbursement{
-		Country: country,
-		Wallet:  walletB,
-		Status:  ReadyDisbursementStatus,
-		Asset:   asset1,
+		Country:                        country,
+		Wallet:                         walletB,
+		Status:                         ReadyDisbursementStatus,
+		Asset:                          asset1,
+		SMSRegistrationMessageTemplate: "Disbursement SMS Registration Message Template B1",
 	})
 	disbursementB2 := CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &Disbursement{
-		Country: country,
-		Wallet:  walletB,
-		Status:  ReadyDisbursementStatus,
-		Asset:   asset2,
+		Country:                        country,
+		Wallet:                         walletB,
+		Status:                         ReadyDisbursementStatus,
+		Asset:                          asset2,
+		SMSRegistrationMessageTemplate: "Disbursement SMS Registration Message Template B2",
 	})
 
 	// 2. Create receivers, and receiver wallets:
@@ -523,8 +531,9 @@ func Test_GetAssetsPerReceiverWallet(t *testing.T) {
 				},
 				InvitationSentAt: &invitationSentAt,
 			},
-			WalletID: walletA.ID,
-			Asset:    *asset1,
+			WalletID:                walletA.ID,
+			Asset:                   *asset1,
+			DisbursementSMSTemplate: &disbursementA1.SMSRegistrationMessageTemplate,
 		},
 		{
 			ReceiverWallet: ReceiverWallet{
@@ -536,8 +545,9 @@ func Test_GetAssetsPerReceiverWallet(t *testing.T) {
 				},
 				InvitationSentAt: &invitationSentAt,
 			},
-			WalletID: walletA.ID,
-			Asset:    *asset2,
+			WalletID:                walletA.ID,
+			Asset:                   *asset2,
+			DisbursementSMSTemplate: &disbursementA2.SMSRegistrationMessageTemplate,
 		},
 		{
 			ReceiverWallet: ReceiverWallet{
@@ -548,8 +558,9 @@ func Test_GetAssetsPerReceiverWallet(t *testing.T) {
 					PhoneNumber: receiverX.PhoneNumber,
 				},
 			},
-			WalletID: walletB.ID,
-			Asset:    *asset1,
+			WalletID:                walletB.ID,
+			Asset:                   *asset1,
+			DisbursementSMSTemplate: &disbursementB1.SMSRegistrationMessageTemplate,
 		},
 		{
 			ReceiverWallet: ReceiverWallet{
@@ -560,8 +571,9 @@ func Test_GetAssetsPerReceiverWallet(t *testing.T) {
 					PhoneNumber: receiverX.PhoneNumber,
 				},
 			},
-			WalletID: walletB.ID,
-			Asset:    *asset2,
+			WalletID:                walletB.ID,
+			Asset:                   *asset2,
+			DisbursementSMSTemplate: &disbursementB2.SMSRegistrationMessageTemplate,
 		},
 		{
 			ReceiverWallet: ReceiverWallet{
@@ -572,8 +584,9 @@ func Test_GetAssetsPerReceiverWallet(t *testing.T) {
 					PhoneNumber: receiverY.PhoneNumber,
 				},
 			},
-			WalletID: walletA.ID,
-			Asset:    *asset1,
+			WalletID:                walletA.ID,
+			Asset:                   *asset1,
+			DisbursementSMSTemplate: &disbursementA1.SMSRegistrationMessageTemplate,
 		},
 		{
 			ReceiverWallet: ReceiverWallet{
@@ -584,8 +597,9 @@ func Test_GetAssetsPerReceiverWallet(t *testing.T) {
 					PhoneNumber: receiverY.PhoneNumber,
 				},
 			},
-			WalletID: walletA.ID,
-			Asset:    *asset2,
+			WalletID:                walletA.ID,
+			Asset:                   *asset2,
+			DisbursementSMSTemplate: &disbursementA2.SMSRegistrationMessageTemplate,
 		},
 		{
 			ReceiverWallet: ReceiverWallet{
@@ -596,8 +610,9 @@ func Test_GetAssetsPerReceiverWallet(t *testing.T) {
 					PhoneNumber: receiverY.PhoneNumber,
 				},
 			},
-			WalletID: walletB.ID,
-			Asset:    *asset1,
+			WalletID:                walletB.ID,
+			Asset:                   *asset1,
+			DisbursementSMSTemplate: &disbursementB1.SMSRegistrationMessageTemplate,
 		},
 		{
 			ReceiverWallet: ReceiverWallet{
@@ -608,8 +623,9 @@ func Test_GetAssetsPerReceiverWallet(t *testing.T) {
 					PhoneNumber: receiverY.PhoneNumber,
 				},
 			},
-			WalletID: walletB.ID,
-			Asset:    *asset2,
+			WalletID:                walletB.ID,
+			Asset:                   *asset2,
+			DisbursementSMSTemplate: &disbursementB2.SMSRegistrationMessageTemplate,
 		},
 	}
 

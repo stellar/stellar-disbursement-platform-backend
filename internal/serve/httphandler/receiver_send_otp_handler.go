@@ -18,6 +18,10 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
+// OTPMessageDisclaimer contains disclaimer text that needs to be added as part of the OTP message to remind the
+// receiver how sensitive the data is.
+const OTPMessageDisclaimer = " If you did not request this code, please ignore. Do not share your code with anyone."
+
 type ReceiverSendOTPHandler struct {
 	Models             *data.Models
 	SMSMessengerClient message.MessengerClient
@@ -35,7 +39,8 @@ type ReceiverSendOTPRequest struct {
 }
 
 type ReceiverSendOTPResponseBody struct {
-	Message string `json:"message"`
+	Message           string                 `json:"message"`
+	VerificationField data.VerificationField `json:"verification_field"`
 }
 
 func (h ReceiverSendOTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -62,10 +67,11 @@ func (h ReceiverSendOTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	truncatedPhoneNumber := utils.TruncateString(receiverSendOTPRequest.PhoneNumber, 3)
 	if phoneValidateErr := utils.ValidatePhoneNumber(receiverSendOTPRequest.PhoneNumber); phoneValidateErr != nil {
 		extras := map[string]interface{}{"phone_number": "phone_number is required"}
 		if !errors.Is(phoneValidateErr, utils.ErrEmptyPhoneNumber) {
-			phoneValidateErr = fmt.Errorf("validating phone number %s: %w", utils.TruncateString(receiverSendOTPRequest.PhoneNumber, len(receiverSendOTPRequest.PhoneNumber)/4), phoneValidateErr)
+			phoneValidateErr = fmt.Errorf("validating phone number %s: %w", truncatedPhoneNumber, phoneValidateErr)
 			log.Ctx(ctx).Error(phoneValidateErr)
 			extras["phone_number"] = "invalid phone number provided"
 		}
@@ -90,6 +96,12 @@ func (h ReceiverSendOTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	receiverVerification, err := h.Models.ReceiverVerification.GetLatestByPhoneNumber(ctx, receiverSendOTPRequest.PhoneNumber)
+	if err != nil {
+		httperror.InternalError(ctx, "Cannot find latest receiver verification for receiver", err, nil).Render(w)
+		return
+	}
+
 	// Generate a new 6 digits OTP
 	newOTP, err := utils.RandomString(6, utils.NumberBytes)
 	if err != nil {
@@ -110,14 +122,14 @@ func (h ReceiverSendOTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request
 	}
 
 	if numberOfUpdatedRows < 1 {
-		log.Ctx(ctx).Warnf("updated no rows in receiver send OTP handler for phone number: %s", utils.TruncateString(receiverSendOTPRequest.PhoneNumber, len(receiverSendOTPRequest.PhoneNumber)/4))
+		log.Ctx(ctx).Warnf("updated no rows in ReceiverSendOTPHandler, please verify if the provided phone number (%s) and client_domain (%s) are both valid", truncatedPhoneNumber, sep24Claims.ClientDomainClaim)
 	} else {
 		sendOTPData := ReceiverSendOTPData{
 			OTP:              newOTP,
 			OrganizationName: organization.Name,
 		}
 
-		otpMessageTemplate := organization.OTPMessageTemplate
+		otpMessageTemplate := organization.OTPMessageTemplate + OTPMessageDisclaimer
 		if !strings.Contains(organization.OTPMessageTemplate, "{{.OTP}}") {
 			// Adding the OTP code to the template
 			otpMessageTemplate = fmt.Sprintf(`{{.OTP}} %s`, strings.TrimSpace(otpMessageTemplate))
@@ -140,7 +152,7 @@ func (h ReceiverSendOTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request
 			Message:       builder.String(),
 		}
 
-		log.Ctx(ctx).Infof("sending OTP message to phone number: %s", utils.TruncateString(receiverSendOTPRequest.PhoneNumber, 3))
+		log.Ctx(ctx).Infof("sending OTP message to phone number: %s", truncatedPhoneNumber)
 		err = h.SMSMessengerClient.SendMessage(smsMessage)
 		if err != nil {
 			httperror.InternalError(ctx, "Cannot send OTP message", err, nil).Render(w)
@@ -149,7 +161,8 @@ func (h ReceiverSendOTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request
 	}
 
 	response := ReceiverSendOTPResponseBody{
-		Message: "if your phone number is registered, you'll receive an OTP",
+		Message:           "if your phone number is registered, you'll receive an OTP",
+		VerificationField: receiverVerification.VerificationField,
 	}
 	httpjson.RenderStatus(w, http.StatusOK, response, httpjson.JSON)
 }

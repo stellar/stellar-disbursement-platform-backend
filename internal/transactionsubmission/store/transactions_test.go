@@ -126,7 +126,8 @@ func Test_TransactionModel_BulkInsert(t *testing.T) {
 			ExternalID:  "external-id-1",
 			AssetCode:   "USDC",
 			AssetIssuer: keypair.MustRandom().Address(),
-			Amount:      1,
+			// Lowest number in the Stellar network (ref: https://developers.stellar.org/docs/fundamentals-and-concepts/stellar-data-structures/assets#amount-precision):
+			Amount:      0.0000001,
 			Destination: keypair.MustRandom().Address(),
 			TenantID:    uuid.NewString(),
 		}
@@ -134,7 +135,8 @@ func Test_TransactionModel_BulkInsert(t *testing.T) {
 			ExternalID:  "external-id-2",
 			AssetCode:   "USDC",
 			AssetIssuer: keypair.MustRandom().Address(),
-			Amount:      2,
+			// Largest number in the Stellar network (ref: https://developers.stellar.org/docs/fundamentals-and-concepts/stellar-data-structures/assets#amount-precision):
+			Amount:      922337203685.4775807,
 			Destination: keypair.MustRandom().Address(),
 			TenantID:    uuid.NewString(),
 		}

@@ -316,7 +316,7 @@ func Test_AssetHandler_CreateAsset(t *testing.T) {
 		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 	})
 
-	t.Run("failed creating asset, duplicated asset", func(t *testing.T) {
+	t.Run("asset creation is idempotent", func(t *testing.T) {
 		data.DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
 
 		tx, err := txnbuild.NewTransaction(
@@ -350,7 +350,7 @@ func Test_AssetHandler_CreateAsset(t *testing.T) {
 		signatureService.
 			On("SignStellarTransaction", mock.Anything, tx, distributionKP.Address()).
 			Return(signedTx, nil).
-			Once()
+			Twice()
 
 		horizonClientMock.
 			On("AccountDetail", horizonclient.AccountRequest{
@@ -361,43 +361,34 @@ func Test_AssetHandler_CreateAsset(t *testing.T) {
 				Sequence:  123,
 				Balances:  []horizon.Balance{},
 			}, nil).
-			Once().
+			Twice().
 			On("SubmitTransactionWithOptions", signedTx, horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true}).
 			Return(horizon.Transaction{}, nil).
-			Once()
+			Twice()
 
 		// Creating the asset
 		requestBody, err := json.Marshal(AssetRequest{Code: code, Issuer: issuer})
 		require.NoError(t, err)
-
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/assets", bytes.NewReader(requestBody))
 		require.NoError(t, err)
-
 		rr := httptest.NewRecorder()
 		http.HandlerFunc(handler.CreateAsset).ServeHTTP(rr, req)
 
 		resp := rr.Result()
-
+		defer resp.Body.Close()
 		assert.Equal(t, http.StatusCreated, resp.StatusCode)
 
 		// Duplicating the asset
 		requestBody, err = json.Marshal(AssetRequest{Code: code, Issuer: issuer})
 		require.NoError(t, err)
-
 		req, err = http.NewRequestWithContext(ctx, http.MethodPost, "/assets", bytes.NewReader(requestBody))
 		require.NoError(t, err)
-
 		rr = httptest.NewRecorder()
 		http.HandlerFunc(handler.CreateAsset).ServeHTTP(rr, req)
 
 		resp = rr.Result()
 		defer resp.Body.Close()
-
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-
-		assert.Equal(t, http.StatusConflict, resp.StatusCode)
-		assert.JSONEq(t, `{"error": "asset already exists"}`, string(respBody))
+		assert.Equal(t, http.StatusCreated, resp.StatusCode)
 	})
 
 	t.Run("failed creating asset, error adding asset trustline", func(t *testing.T) {

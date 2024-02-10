@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"sync"
 	"testing"
 
@@ -149,6 +150,8 @@ func Test_serve(t *testing.T) {
 		DistributionPublicKey:           "GBC2HVWFIFN7WJHFORVBCDKJORG6LWTW3O2QBHOURL3KHZPM4KMWTUSA",
 		ReCAPTCHASiteKey:                "reCAPTCHASiteKey",
 		ReCAPTCHASiteSecretKey:          "reCAPTCHASiteSecretKey",
+		DisableMFA:                      false,
+		DisableReCAPTCHA:                false,
 		EnableScheduler:                 true,
 		EnableMultiTenantDB:             false,
 		SubmitterEngine:                 submitterEngine,
@@ -254,6 +257,8 @@ func Test_serve(t *testing.T) {
 	t.Setenv("ANCHOR_PLATFORM_BASE_PLATFORM_URL", serveOpts.AnchorPlatformBasePlatformURL)
 	t.Setenv("ANCHOR_PLATFORM_OUTGOING_JWT_SECRET", serveOpts.AnchorPlatformOutgoingJWTSecret)
 	t.Setenv("DISTRIBUTION_PUBLIC_KEY", serveOpts.DistributionPublicKey)
+	t.Setenv("DISABLE_MFA", fmt.Sprintf("%t", serveOpts.DisableMFA))
+	t.Setenv("DISABLE_RECAPTCHA", fmt.Sprintf("%t", serveOpts.DisableMFA))
 	t.Setenv("DISTRIBUTION_SEED", distributionSeed)
 	t.Setenv("BASE_URL", serveOpts.BaseURL)
 	t.Setenv("RECAPTCHA_SITE_KEY", serveOpts.ReCAPTCHASiteKey)
