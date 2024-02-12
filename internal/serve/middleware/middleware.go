@@ -9,16 +9,18 @@ import (
 	"strings"
 	"time"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
-
+	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/rs/cors"
+	"github.com/stellar/go/support/http/mutil"
 	"github.com/stellar/go/support/log"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 type ContextKey string
@@ -175,6 +177,70 @@ type cspItem struct {
 
 func (c cspItem) String() string {
 	return fmt.Sprintf("%s %s;", c.ContentType, strings.Join(c.Policy, " "))
+}
+
+// LoggingMiddleware is a middleware that logs requests to the logger.
+func LoggingMiddleware() func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+			mw := mutil.WrapWriter(rw)
+
+			reqCtx := req.Context()
+			tenant, err := tenant.GetTenantFromContext(reqCtx)
+			if err != nil {
+				httperror.InternalError(reqCtx, "", err, nil).Render(rw)
+				return
+			}
+
+			logCtx := log.PushContext(reqCtx, func(l *log.Entry) *log.Entry {
+				return l.WithFields(log.F{
+					"req":         middleware.GetReqID(reqCtx),
+					"tenant_id":   tenant.ID,
+					"tenant_name": tenant.Name,
+				})
+			})
+
+			logRequestStart(logCtx, req)
+			started := time.Now()
+			req = req.WithContext(logCtx)
+
+			next.ServeHTTP(mw, req)
+			ended := time.Since(started)
+			logRequestEnd(logCtx, req, mw, ended)
+		})
+	}
+}
+
+func logRequestStart(ctx context.Context, req *http.Request) {
+	l := log.Ctx(ctx).WithFields(
+		log.F{
+			"subsys":    "htttp",
+			"path":      req.URL.String(),
+			"method":    req.Method,
+			"ip":        req.RemoteAddr,
+			"host":      req.Host,
+			"useragent": req.Header.Get("User-Agent"),
+		},
+	)
+
+	l.Info("starting request")
+}
+
+func logRequestEnd(ctx context.Context, req *http.Request, mw mutil.WriterProxy, duration time.Duration) {
+	l := log.Ctx(ctx).WithFields(log.F{
+		"subsys":   "http",
+		"path":     req.URL.String(),
+		"method":   req.Method,
+		"status":   mw.Status(),
+		"bytes":    mw.BytesWritten(),
+		"duration": duration,
+	})
+	if routeContext := chi.RouteContext(req.Context()); routeContext != nil {
+		l = l.WithField("route", routeContext.RoutePattern())
+	}
+	fmt.Println(req.Context())
+
+	l.Info("finished request")
 }
 
 // CSPMiddleware is the middleware that sets the content security policy, restricting content to only be accessed

@@ -622,6 +622,60 @@ func Test_CorsMiddleware(t *testing.T) {
 	})
 }
 
+func Test_LoggingMiddleware(t *testing.T) {
+	t.Run("Should log request", func(t *testing.T) {
+		r := chi.NewRouter()
+		expectedRespBody := "ok"
+
+		mTenantManager := &tenant.TenantManagerMock{}
+		mAuthManager := &auth.AuthManagerMock{}
+
+		tenantName := "tenant123"
+		tenantID := "tenant_id"
+		token := "valid_token"
+		mAuthManager.On("GetTenantID", mock.Anything, token).Return(tenantID, nil)
+		mTenantManager.On("GetTenantByID", mock.Anything, tenantID).Return(&tenant.Tenant{
+			ID:   "tenant_id",
+			Name: tenantName,
+		}, nil)
+
+		r.Use(TenantMiddleware(mTenantManager, mAuthManager))
+		r.Use(LoggingMiddleware())
+		r.Get("/", func(w http.ResponseWriter, r *http.Request) {
+			_, err := w.Write([]byte(expectedRespBody))
+			require.NoError(t, err)
+		})
+
+		buf := new(strings.Builder)
+		log.DefaultLogger.SetLevel(log.InfoLevel)
+		log.DefaultLogger.SetOutput(buf)
+
+		req, err := http.NewRequest(http.MethodGet, "/", nil)
+
+		require.NoError(t, err)
+
+		ctx := context.WithValue(req.Context(), TokenContextKey, token)
+		req = req.WithContext(ctx)
+
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+
+		resp := rr.Result()
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.Equal(t, expectedRespBody, string(respBody))
+
+		logs := buf.String()
+
+		assert.Contains(t, logs, "starting request")
+		assert.Contains(t, logs, "finished request")
+		assert.Contains(t, logs, tenantName)
+		assert.Contains(t, logs, tenantID)
+	})
+}
+
 func Test_CSPMiddleware(t *testing.T) {
 	t.Run("Should populate the Content-Security-Policy header correctly", func(t *testing.T) {
 		r := chi.NewRouter()
