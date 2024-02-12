@@ -22,7 +22,7 @@ func NewCrashTracker(ctx context.Context, opts crashtracker.CrashTrackerOptions)
 	instanceName := buildCrashTrackerInstanceName(opts.CrashTrackerType)
 
 	// Already initialized
-	if instance, ok := dependenciesStoreMap[instanceName]; ok {
+	if instance, ok := GetInstance(instanceName); ok {
 		if crashTrackerInstance, ok := instance.(crashtracker.CrashTrackerClient); ok {
 			return crashTrackerInstance, nil
 		}

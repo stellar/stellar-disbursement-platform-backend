@@ -26,17 +26,13 @@ import (
 	tssUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
 )
 
-const (
-	feeMultiplierInStroops = 10_000
-	stellarNativeAssetCode = "XLM"
-)
+const stellarNativeAssetCode = "XLM"
 
 var errCouldNotRemoveTrustline = errors.New("could not remove trustline")
 
 type AssetsHandler struct {
-	Models             *data.Models
-	HorizonClient      horizonclient.ClientInterface
-	SignatureService   engine.SignatureService
+	Models *data.Models
+	engine.SubmitterEngine
 	GetPreconditionsFn func() txnbuild.Preconditions
 }
 
@@ -282,7 +278,7 @@ func (c AssetsHandler) submitChangeTrustTransaction(ctx context.Context, acc *ho
 			},
 			IncrementSequenceNum: true,
 			Operations:           operations,
-			BaseFee:              txnbuild.MinBaseFee * feeMultiplierInStroops,
+			BaseFee:              int64(c.MaxBaseFee),
 			Preconditions:        preconditions,
 		},
 	)

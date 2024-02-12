@@ -6,10 +6,7 @@ import (
 
 	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/support/log"
-	"github.com/stellar/go/txnbuild"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
-	txSub "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
@@ -49,16 +46,10 @@ func ViewChannelAccounts(ctx context.Context, dbConnectionPool db.DBConnectionPo
 }
 
 type ChannelAccountsService struct {
-	// Injected dependencies
-	TSSDBConnectionPool db.DBConnectionPool
-	SigningService      engine.SignatureService
-	HorizonURL          string
-	MaxBaseFee          int
+	engine.SubmitterEngine
 
-	// Initialized in Init()
-	ledgerNumberTracker engine.LedgerNumberTracker
+	TSSDBConnectionPool db.DBConnectionPool
 	chAccStore          store.ChannelAccountStore
-	horizonClient       horizonclient.ClientInterface
 }
 
 // validate initializes the ChannelAccountsManagementService, preparing it to access the DB and the Stellar network.
@@ -67,16 +58,15 @@ func (s *ChannelAccountsService) validate() error {
 		return fmt.Errorf("tss db connection pool cannot be nil")
 	}
 
-	if s.SigningService == nil {
-		return fmt.Errorf("signing service cannot be nil")
+	if s.SubmitterEngine == (engine.SubmitterEngine{}) {
+		return fmt.Errorf("submitter engine cannot be empty")
+	}
+	if err := s.SubmitterEngine.Validate(); err != nil {
+		return fmt.Errorf("validating submitter engine: %w", err)
 	}
 
-	if s.HorizonURL == "" {
-		return fmt.Errorf("horizon url cannot be empty")
-	}
-
-	if s.MaxBaseFee < txnbuild.MinBaseFee {
-		return fmt.Errorf("maxBaseFee must be greater than or equal to %d", txnbuild.MinBaseFee)
+	if s.SubmitterEngine.HostSigner == nil {
+		return fmt.Errorf("signature engine's host signer cannot be nil")
 	}
 
 	err := acquireAdvisoryLockForCommand(context.Background(), s.TSSDBConnectionPool)
@@ -94,28 +84,6 @@ func (s *ChannelAccountsService) GetChannelAccountStore() store.ChannelAccountSt
 	return s.chAccStore
 }
 
-func (s *ChannelAccountsService) GetLedgerNumberTracker() (engine.LedgerNumberTracker, error) {
-	if s.ledgerNumberTracker == nil {
-		var err error
-		s.ledgerNumberTracker, err = engine.NewLedgerNumberTracker(s.GetHorizonClient())
-		if err != nil {
-			return nil, fmt.Errorf("initializing ledger number tracker: %w", err)
-		}
-
-	}
-	return s.ledgerNumberTracker, nil
-}
-
-func (s *ChannelAccountsService) GetHorizonClient() horizonclient.ClientInterface {
-	if s.horizonClient == nil {
-		s.horizonClient = &horizonclient.Client{
-			HorizonURL: s.HorizonURL,
-			HTTP:       httpclient.DefaultClient(),
-		}
-	}
-	return s.horizonClient
-}
-
 // CreateChannelAccounts creates the specified number of channel accounts on the network and stores them in the database.
 func (s *ChannelAccountsService) CreateChannelAccounts(ctx context.Context, amount int) error {
 	if err := s.validate(); err != nil {
@@ -124,29 +92,13 @@ func (s *ChannelAccountsService) CreateChannelAccounts(ctx context.Context, amou
 
 	for amount > 0 {
 		batchSize := amount
-		if amount > txSub.MaximumCreateAccountOperationsPerStellarTx {
+		if amount > MaximumCreateAccountOperationsPerStellarTx {
 			// only create a MaxBatchSize (19) of accounts per transaction, this is due to the signature limit of a transaction
-			batchSize = txSub.MaximumCreateAccountOperationsPerStellarTx
+			batchSize = MaximumCreateAccountOperationsPerStellarTx
 		}
 		log.Ctx(ctx).Debugf("batch size: %d", batchSize)
 
-		ledgerNumberTracker, err := s.GetLedgerNumberTracker()
-		if err != nil {
-			return fmt.Errorf("getting ledger number tracker: %w", err)
-		}
-
-		currLedgerNumber, err := ledgerNumberTracker.GetLedgerNumber()
-		if err != nil {
-			return fmt.Errorf("cannot get current ledger number: %w", err)
-		}
-		accounts, err := txSub.CreateChannelAccountsOnChain(
-			ctx,
-			s.GetHorizonClient(),
-			batchSize,
-			s.MaxBaseFee,
-			s.SigningService,
-			currLedgerNumber,
-		)
+		accounts, err := CreateChannelAccountsOnChain(ctx, s.SubmitterEngine, batchSize)
 		if err != nil {
 			return fmt.Errorf("creating channel accounts onchain: %w", err)
 		}
@@ -177,12 +129,7 @@ func (s *ChannelAccountsService) DeleteChannelAccount(ctx context.Context, opts 
 	}
 
 	if opts.ChannelAccountID != "" { // delete specified accounts
-		ledgerNumberTracker, err := s.GetLedgerNumberTracker()
-		if err != nil {
-			return fmt.Errorf("getting ledger number tracker: %w", err)
-		}
-
-		currLedgerNum, err := ledgerNumberTracker.GetLedgerNumber()
+		currLedgerNum, err := s.LedgerNumberTracker.GetLedgerNumber()
 		if err != nil {
 			return fmt.Errorf("retrieving current ledger number in DeleteChannelAccount: %w", err)
 		}
@@ -194,7 +141,7 @@ func (s *ChannelAccountsService) DeleteChannelAccount(ctx context.Context, opts 
 				"retrieving account %s from database in DeleteChannelAccount: %w", opts.ChannelAccountID, err)
 		}
 
-		err = s.deleteChannelAccount(ctx, lockedUntilLedgerNumber, channelAccount.PublicKey)
+		err = s.deleteChannelAccount(ctx, channelAccount.PublicKey)
 		if err != nil {
 			return fmt.Errorf("deleting account %s in DeleteChannelAccount: %w", channelAccount.PublicKey, err)
 		}
@@ -221,13 +168,8 @@ func (s *ChannelAccountsService) deleteChannelAccounts(ctx context.Context, numA
 		return fmt.Errorf("initializing channel account service: %w", err)
 	}
 
-	ledgerNumberTracker, err := s.GetLedgerNumberTracker()
-	if err != nil {
-		return fmt.Errorf("getting ledger number tracker: %w", err)
-	}
-
 	for i := 0; i < numAccountsToDelete; i++ {
-		currLedgerNum, err := ledgerNumberTracker.GetLedgerNumber()
+		currLedgerNum, err := s.LedgerNumberTracker.GetLedgerNumber()
 		if err != nil {
 			return fmt.Errorf("retrieving current ledger number in DeleteChannelAccount: %w", err)
 		}
@@ -244,7 +186,7 @@ func (s *ChannelAccountsService) deleteChannelAccounts(ctx context.Context, numA
 		}
 
 		accountToDelete := accounts[0]
-		err = s.deleteChannelAccount(ctx, lockedUntilLedgerNumber, accountToDelete.PublicKey)
+		err = s.deleteChannelAccount(ctx, accountToDelete.PublicKey)
 		if err != nil {
 			return fmt.Errorf("cannot delete account %s: %w", accountToDelete.PublicKey, err)
 		}
@@ -253,27 +195,20 @@ func (s *ChannelAccountsService) deleteChannelAccounts(ctx context.Context, numA
 	return nil
 }
 
-func (s *ChannelAccountsService) deleteChannelAccount(ctx context.Context, lockedUntilLedger int, publicKey string) error {
-	if _, err := s.GetHorizonClient().AccountDetail(horizonclient.AccountRequest{AccountID: publicKey}); err != nil {
+func (s *ChannelAccountsService) deleteChannelAccount(ctx context.Context, publicKey string) error {
+	if _, err := s.HorizonClient.AccountDetail(horizonclient.AccountRequest{AccountID: publicKey}); err != nil {
 		if !horizonclient.IsNotFoundError(err) {
 			return fmt.Errorf("failed to reach account %s on the network: %w", publicKey, err)
 		}
 
 		log.Ctx(ctx).Warnf("Account %s does not exist on the network", publicKey)
-		err = s.SigningService.Delete(ctx, publicKey, lockedUntilLedger)
+		err = s.SignatureService.Delete(ctx, publicKey)
 		if err != nil {
 			return fmt.Errorf("deleting %s from signature service: %w", publicKey, err)
 		}
 	} else {
 		log.Ctx(ctx).Infof("⏳ Deleting Stellar account with address: %s", publicKey)
-		err = txSub.DeleteChannelAccountOnChain(
-			ctx,
-			s.GetHorizonClient(),
-			publicKey,
-			int64(s.MaxBaseFee),
-			s.SigningService,
-			lockedUntilLedger,
-		)
+		err = DeleteChannelAccountOnChain(ctx, s.SubmitterEngine, publicKey)
 		if err != nil {
 			return fmt.Errorf("deleting account %s onchain: %w", publicKey, err)
 		}
@@ -293,8 +228,8 @@ func (s *ChannelAccountsService) EnsureChannelAccountsCount(ctx context.Context,
 
 	log.Ctx(ctx).Infof("⚙️ Desired Accounts Count: %d", numAccountsToEnsure)
 
-	if numAccountsToEnsure > txSub.MaxNumberOfChannelAccounts {
-		return fmt.Errorf("count entered %d is greater than the channel accounts count limit %d in EnsureChannelAccountsCount", numAccountsToEnsure, txSub.MaxNumberOfChannelAccounts)
+	if numAccountsToEnsure > MaxNumberOfChannelAccounts {
+		return fmt.Errorf("count entered %d is greater than the channel accounts count limit %d in EnsureChannelAccountsCount", numAccountsToEnsure, MaxNumberOfChannelAccounts)
 	}
 
 	accountsCount, err := s.GetChannelAccountStore().Count(ctx)
@@ -343,7 +278,7 @@ func (s *ChannelAccountsService) VerifyChannelAccounts(ctx context.Context, dele
 
 	invalidAccountsCount := 0
 	for _, account := range accounts {
-		_, err := s.GetHorizonClient().AccountDetail(horizonclient.AccountRequest{AccountID: account.PublicKey})
+		_, err := s.HorizonClient.AccountDetail(horizonclient.AccountRequest{AccountID: account.PublicKey})
 		if err == nil {
 			continue
 		}

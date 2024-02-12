@@ -495,74 +495,72 @@ func (p *PaymentModel) Update(ctx context.Context, sqlExec db.SQLExecuter, payme
 	return nil
 }
 
-func (p *PaymentModel) RetryFailedPayments(ctx context.Context, email string, paymentIDs ...string) error {
-	return db.RunInTransaction(ctx, p.dbConnectionPool, nil, func(dbTx db.DBTransaction) error {
-		if len(paymentIDs) == 0 {
-			return fmt.Errorf("payment ids is required: %w", ErrMissingInput)
-		}
+func (p *PaymentModel) RetryFailedPayments(ctx context.Context, sqlExec db.SQLExecuter, email string, paymentIDs ...string) error {
+	if len(paymentIDs) == 0 {
+		return fmt.Errorf("payment ids is required: %w", ErrMissingInput)
+	}
 
-		if email == "" {
-			return fmt.Errorf("user email is required: %w", ErrMissingInput)
-		}
+	if email == "" {
+		return fmt.Errorf("user email is required: %w", ErrMissingInput)
+	}
 
-		const query = `
-			WITH previous_payments_stellar_transaction_ids AS (
-				SELECT
-					id,
-					stellar_transaction_id,
-					$2 AS status_message
-				FROM
-					payments
-				WHERE
-					id = ANY($1)
-					AND status = 'FAILED'::payment_status
-			)
-			UPDATE
-				payments
-			SET
-				status = 'READY'::payment_status,
-				stellar_transaction_id = '',
-				status_history = array_append(status_history, create_payment_status_history(NOW(), 'READY', CONCAT(pp.status_message, pp.stellar_transaction_id)))
+	const query = `
+		WITH previous_payments_stellar_transaction_ids AS (
+			SELECT
+				id,
+				stellar_transaction_id,
+				$2 AS status_message
 			FROM
-				previous_payments_stellar_transaction_ids pp
+				payments
 			WHERE
-				payments.id = pp.id
+				id = ANY($1)
+				AND status = 'FAILED'::payment_status
+		)
+		UPDATE
+			payments
+		SET
+			status = 'READY'::payment_status,
+			stellar_transaction_id = '',
+			status_history = array_append(status_history, create_payment_status_history(NOW(), 'READY', CONCAT(pp.status_message, pp.stellar_transaction_id)))
+		FROM
+			previous_payments_stellar_transaction_ids pp
+		WHERE
+			payments.id = pp.id
 		`
 
-		statusMessage := fmt.Sprintf("User %s has requested to retry the payment - Previous Stellar Transaction ID: ", email)
+	statusMessage := fmt.Sprintf("User %s has requested to retry the payment - Previous Stellar Transaction ID: ", email)
 
-		res, err := dbTx.ExecContext(ctx, query, pq.Array(paymentIDs), statusMessage)
-		if err != nil {
-			return fmt.Errorf("error retrying failed payments: %w", err)
-		}
+	res, err := sqlExec.ExecContext(ctx, query, pq.Array(paymentIDs), statusMessage)
+	if err != nil {
+		return fmt.Errorf("error retrying failed payments: %w", err)
+	}
 
-		numRowsAffected, err := res.RowsAffected()
-		if err != nil {
-			return fmt.Errorf("error getting number of rows affected: %w", err)
-		}
+	numRowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("error getting number of rows affected: %w", err)
+	}
 
-		if numRowsAffected != int64(len(paymentIDs)) {
-			return ErrMismatchNumRowsAffected
-		}
+	if numRowsAffected != int64(len(paymentIDs)) {
+		return ErrMismatchNumRowsAffected
+	}
 
-		// This ensures that we are going to sync the payment transaction on the Anchor Platform again.
-		const updateReceiverWallets = `
-			UPDATE
-				receiver_wallets
-			SET
-				anchor_platform_transaction_synced_at = NULL
-			WHERE
-				id IN (
-					SELECT receiver_wallet_id FROM payments WHERE id = ANY($1)
-				)
+	// This ensures that we are going to sync the payment transaction on the Anchor Platform again.
+	const updateReceiverWallets = `
+		UPDATE
+			receiver_wallets
+		SET
+			anchor_platform_transaction_synced_at = NULL
+		WHERE
+			id IN (
+				SELECT receiver_wallet_id FROM payments WHERE id = ANY($1)
+			)
 		`
-		_, err = dbTx.ExecContext(ctx, updateReceiverWallets, pq.Array(paymentIDs))
-		if err != nil {
-			return fmt.Errorf("resetting the receiver wallets' anchor platform transaction synced at: %w", err)
-		}
+	_, err = sqlExec.ExecContext(ctx, updateReceiverWallets, pq.Array(paymentIDs))
+	if err != nil {
+		return fmt.Errorf("resetting the receiver wallets' anchor platform transaction synced at: %w", err)
+	}
 
-		return nil
-	})
+	return nil
 }
 
 // GetByIDs returns a list of payments for the given IDs.

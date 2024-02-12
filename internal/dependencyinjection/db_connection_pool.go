@@ -19,7 +19,7 @@ type DBConnectionPoolOptions struct {
 func NewDBConnectionPool(ctx context.Context, opts DBConnectionPoolOptions) (db.DBConnectionPool, error) {
 	// If there is already an instance of the service, we return the same instance
 	instanceName := dbConnectionPoolInstanceName
-	if instance, ok := dependenciesStoreMap[instanceName]; ok {
+	if instance, ok := GetInstance(instanceName); ok {
 		if dbConnectionPoolInstance, ok := instance.(db.DBConnectionPool); ok {
 			return dbConnectionPoolInstance, nil
 		}

@@ -454,7 +454,7 @@ func Test_PaymentToSubmitterService_RetryPayment(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, data.FailedPaymentStatus, paymentDB.Status)
 
-	err = models.Payment.RetryFailedPayments(ctx, "email@test.com", paymentDB.ID)
+	err = models.Payment.RetryFailedPayments(ctx, dbConnectionPool, "email@test.com", paymentDB.ID)
 	require.NoError(t, err)
 	paymentDB, err = models.Payment.Get(ctx, paymentDB.ID, dbConnectionPool)
 	require.NoError(t, err)
