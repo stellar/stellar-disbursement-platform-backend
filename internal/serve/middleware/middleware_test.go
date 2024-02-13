@@ -623,21 +623,21 @@ func Test_CorsMiddleware(t *testing.T) {
 }
 
 func Test_LoggingMiddleware(t *testing.T) {
+	mTenantManager := &tenant.TenantManagerMock{}
+	mAuthManager := &auth.AuthManagerMock{}
+
 	t.Run("Should log request", func(t *testing.T) {
 		r := chi.NewRouter()
 		expectedRespBody := "ok"
 
-		mTenantManager := &tenant.TenantManagerMock{}
-		mAuthManager := &auth.AuthManagerMock{}
-
 		tenantName := "tenant123"
 		tenantID := "tenant_id"
 		token := "valid_token"
-		mAuthManager.On("GetTenantID", mock.Anything, token).Return(tenantID, nil)
+		mAuthManager.On("GetTenantID", mock.Anything, token).Return(tenantID, nil).Once()
 		mTenantManager.On("GetTenantByID", mock.Anything, tenantID).Return(&tenant.Tenant{
 			ID:   "tenant_id",
 			Name: tenantName,
-		}, nil)
+		}, nil).Once()
 
 		r.Use(TenantMiddleware(mTenantManager, mAuthManager))
 		r.Use(LoggingMiddleware())
@@ -674,6 +674,9 @@ func Test_LoggingMiddleware(t *testing.T) {
 		assert.Contains(t, logs, tenantName)
 		assert.Contains(t, logs, tenantID)
 	})
+
+	mTenantManager.AssertExpectations(t)
+	mAuthManager.AssertExpectations(t)
 }
 
 func Test_CSPMiddleware(t *testing.T) {

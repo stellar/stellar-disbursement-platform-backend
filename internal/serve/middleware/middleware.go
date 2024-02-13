@@ -235,10 +235,9 @@ func logRequestEnd(ctx context.Context, req *http.Request, mw mutil.WriterProxy,
 		"bytes":    mw.BytesWritten(),
 		"duration": duration,
 	})
-	if routeContext := chi.RouteContext(req.Context()); routeContext != nil {
+	if routeContext := chi.RouteContext(ctx); routeContext != nil {
 		l = l.WithField("route", routeContext.RoutePattern())
 	}
-	fmt.Println(req.Context())
 
 	l.Info("finished request")
 }
