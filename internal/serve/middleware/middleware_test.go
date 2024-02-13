@@ -626,7 +626,7 @@ func Test_LoggingMiddleware(t *testing.T) {
 	mTenantManager := &tenant.TenantManagerMock{}
 	mAuthManager := &auth.AuthManagerMock{}
 
-	t.Run("Should log request", func(t *testing.T) {
+	t.Run("emits request started and finished logs", func(t *testing.T) {
 		r := chi.NewRouter()
 		expectedRespBody := "ok"
 
@@ -651,7 +651,6 @@ func Test_LoggingMiddleware(t *testing.T) {
 		log.DefaultLogger.SetOutput(buf)
 
 		req, err := http.NewRequest(http.MethodGet, "/", nil)
-
 		require.NoError(t, err)
 
 		ctx := context.WithValue(req.Context(), TokenContextKey, token)
@@ -673,6 +672,28 @@ func Test_LoggingMiddleware(t *testing.T) {
 		assert.Contains(t, logs, "finished request")
 		assert.Contains(t, logs, tenantName)
 		assert.Contains(t, logs, tenantID)
+	})
+
+	t.Run("responds with internal error if tenant cannot be derived from context", func(t *testing.T) {
+		r := chi.NewRouter()
+
+		r.Use(LoggingMiddleware())
+		r.Get("/", func(w http.ResponseWriter, r *http.Request) {
+			_, err := w.Write([]byte(""))
+			require.NoError(t, err)
+		})
+
+		req, err := http.NewRequest(http.MethodGet, "/", nil)
+		require.NoError(t, err)
+
+		ctx := context.Background()
+		req = req.WithContext(ctx)
+
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+
+		resp := rr.Result()
+		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
 	})
 
 	mTenantManager.AssertExpectations(t)

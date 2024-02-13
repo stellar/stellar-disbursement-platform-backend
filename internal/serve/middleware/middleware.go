@@ -188,7 +188,7 @@ func LoggingMiddleware() func(http.Handler) http.Handler {
 			reqCtx := req.Context()
 			tenant, err := tenant.GetTenantFromContext(reqCtx)
 			if err != nil {
-				httperror.InternalError(reqCtx, "", err, nil).Render(rw)
+				httperror.InternalError(reqCtx, "Cannot find tenant from context", err, nil).Render(rw)
 				return
 			}
 
@@ -235,7 +235,7 @@ func logRequestEnd(ctx context.Context, req *http.Request, mw mutil.WriterProxy,
 		"bytes":    mw.BytesWritten(),
 		"duration": duration,
 	})
-	if routeContext := chi.RouteContext(ctx); routeContext != nil {
+	if routeContext := chi.RouteContext(req.Context()); routeContext != nil {
 		l = l.WithField("route", routeContext.RoutePattern())
 	}
 
