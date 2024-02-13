@@ -27,14 +27,14 @@ services:
       service: anchor-platform
     depends_on:
       - db-anchor-platform
-#  sdp-tss:
-#    extends:
-#      file: docker-compose-tss.yml
-#      service: sdp-tss
-#    depends_on:
-#      - db
-#      - sdp-api
-#      - kafka
+  sdp-tss:
+    extends:
+      file: docker-compose-tss.yml
+      service: sdp-tss
+    depends_on:
+      - db
+      - sdp-api
+      - kafka
   sdp-frontend:
     extends:
       file: docker-compose-frontend.yml

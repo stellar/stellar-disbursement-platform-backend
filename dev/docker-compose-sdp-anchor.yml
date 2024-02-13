@@ -13,7 +13,7 @@ services:
       - postgres-db:/data/postgres
 
   sdp-api:
-    container_name: sdp-api
+    container_name: sdp-api-mtn
     image: stellar/sdp-v2:latest
     build:
       context: ../
@@ -81,7 +81,7 @@ services:
         ./stellar-disbursement-platform serve
 
   db-anchor-platform:
-    container_name: anchor-platform-postgres-db
+    container_name: anchor-platform-postgres-db-mtn
     image: postgres:14-alpine
     environment:
       POSTGRES_USER: postgres
@@ -116,7 +116,7 @@ services:
       METRICS_ENABLED: "false"  # Metrics would be available at port 8082
       METRICS_EXTRAS_ENABLED: "false"
       SEP10_ENABLED: "true"
-      SEP10_HOME_DOMAINS: "localhost:8000, *.stellar.local" # Comma separated list of home domains
+      SEP10_HOME_DOMAINS: "localhost:8000, redcorp.stellar.local:8000, bluecorp.stellar.local:8000" # Comma separated list of home domains
       SEP10_HOME_DOMAIN: ""
       SEP10_WEB_AUTH_DOMAIN: "localhost:8080"
       # SEP10_CLIENT_ATTRIBUTION_REQUIRED: true  # RECOMMENDED
