@@ -314,7 +314,7 @@ func Test_ReceiverSendOTPHandler_ServeHTTP(t *testing.T) {
 		assert.JSONEq(t, wantsBody, string(respBody))
 	})
 
-	t.Run("returns 500 - InternalServerError if phone number is not associated with receiver verification", func(t *testing.T) {
+	t.Run("returns 200 (DoB) - InternalServerError if phone number is not associated with receiver verification", func(t *testing.T) {
 		requestSendOTP := ReceiverSendOTPRequest{
 			PhoneNumber:    "+14152223333",
 			ReCAPTCHAToken: "XyZ",
@@ -345,12 +345,11 @@ func Test_ReceiverSendOTPHandler_ServeHTTP(t *testing.T) {
 		respBody, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
-		wantsBody := `
-			{
-				"error": "Cannot find latest receiver verification for receiver"
-			}
-		`
-		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+		wantsBody := `{
+			"message":"if your phone number is registered, you'll receive an OTP",
+			"verification_field":"DATE_OF_BIRTH"
+		}`
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.JSONEq(t, wantsBody, string(respBody))
 	})
 
