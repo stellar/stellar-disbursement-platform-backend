@@ -6,7 +6,6 @@ import (
 
 	"github.com/stellar/go/keypair"
 	"github.com/stellar/go/strkey"
-	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/txnbuild"
 )
 
@@ -120,8 +119,8 @@ func (c *DistributionAccountEnvSignatureClient) NetworkPassphrase() string {
 var _ DistributionAccountResolver = (*DistributionAccountEnvSignatureClient)(nil)
 
 func (c *DistributionAccountEnvSignatureClient) DistributionAccount() string {
-	var keyword string
-	log.Warnf("Distribution accounts are not resolved by keyword in DistributionAccountEnvSignatureClient, keyword: '%s' is being ignored", keyword)
+	// var keyword string
+	// log.Warnf("Distribution accounts are not resolved by keyword in DistributionAccountEnvSignatureClient, keyword: '%s' is being ignored", keyword)
 	return c.distributionAccount
 }
 

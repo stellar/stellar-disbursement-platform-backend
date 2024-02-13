@@ -203,7 +203,7 @@ func (s *ChannelAccountsService) deleteChannelAccount(ctx context.Context, publi
 		}
 
 		log.Ctx(ctx).Warnf("Account %s does not exist on the network", publicKey)
-		err = s.SignatureService.Delete(ctx, publicKey)
+		err = s.SignatureService.ChAccSigner.Delete(ctx, publicKey)
 		if err != nil {
 			return fmt.Errorf("deleting %s from signature service: %w", publicKey, err)
 		}

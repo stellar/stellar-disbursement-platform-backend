@@ -6,12 +6,13 @@ import (
 
 	"github.com/stellar/go/keypair"
 	"github.com/stellar/go/network"
-	"github.com/stellar/stellar-disbursement-platform-backend/db"
-	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
-	preconditionsMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions/mocks"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
+	preconditionsMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions/mocks"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 )
 
 func Test_dependencyinjection_NewSignatureService(t *testing.T) {
@@ -28,12 +29,12 @@ func Test_dependencyinjection_NewSignatureService(t *testing.T) {
 	t.Run("should create and return the same instance on the second call", func(t *testing.T) {
 		ClearInstancesTestHelper(t)
 
-		opts := engine.SignatureServiceOptions{
+		opts := SignatureServiceOptions{
 			NetworkPassphrase:      network.TestNetworkPassphrase,
 			DBConnectionPool:       dbConnectionPool,
 			DistributionPrivateKey: distributionPrivateKey,
 			EncryptionPassphrase:   encryptionPassphrase,
-			Type:                   engine.SignatureServiceTypeDefault,
+			DistributionSignerType: signing.SignatureClientTypeDistributionAccountEnv,
 			LedgerNumberTracker:    preconditionsMocks.NewMockLedgerNumberTracker(t),
 		}
 
@@ -49,35 +50,38 @@ func Test_dependencyinjection_NewSignatureService(t *testing.T) {
 	t.Run("should return an error on an invalid sig service type", func(t *testing.T) {
 		ClearInstancesTestHelper(t)
 
-		opts := engine.SignatureServiceOptions{}
+		opts := SignatureServiceOptions{}
 		gotDependency, err := NewSignatureService(ctx, opts)
-		assert.Nil(t, gotDependency)
-		assert.EqualError(t, err, "creating a new signature service instance: invalid signature service type: ")
+		assert.Empty(t, gotDependency)
+		assert.EqualError(t, err, "creating a new signature service instance: invalid distribution signer type \"\"")
 	})
 
 	t.Run("should return an error on a invalid option", func(t *testing.T) {
 		ClearInstancesTestHelper(t)
 
-		opts := engine.SignatureServiceOptions{Type: engine.SignatureServiceTypeDefault}
+		opts := SignatureServiceOptions{DistributionSignerType: signing.SignatureClientTypeDistributionAccountEnv}
 		gotDependency, err := NewSignatureService(ctx, opts)
-		assert.Nil(t, gotDependency)
-		assert.EqualError(t, err, "creating a new signature service instance: validating options: network passphrase cannot be empty")
+		assert.Empty(t, gotDependency)
+		assert.ErrorContains(t, err, "creating a new signature service instance:")
+		assert.ErrorContains(t, err, ": network passphrase cannot be empty")
 	})
 
 	t.Run("should return an error if there's an invalid instance pre-stored", func(t *testing.T) {
 		ClearInstancesTestHelper(t)
 
-		SetInstance(SignatureServiceInstanceName, false)
+		distributionSignerType := signing.SignatureClientTypeDistributionAccountEnv
+		instanceName := buildSignatureServiceInstanceName(distributionSignerType)
+		SetInstance(instanceName, false)
 
-		opts := engine.SignatureServiceOptions{
+		opts := SignatureServiceOptions{
+			DistributionSignerType: distributionSignerType,
 			NetworkPassphrase:      network.TestNetworkPassphrase,
 			DBConnectionPool:       dbConnectionPool,
 			DistributionPrivateKey: distributionPrivateKey,
 			EncryptionPassphrase:   encryptionPassphrase,
-			Type:                   engine.SignatureServiceTypeDefault,
 		}
 		gotDependency, err := NewSignatureService(ctx, opts)
-		assert.Nil(t, gotDependency)
+		assert.Empty(t, gotDependency)
 		assert.EqualError(t, err, "trying to cast an existing signature service instance")
 	})
 }

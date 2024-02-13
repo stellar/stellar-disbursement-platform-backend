@@ -24,8 +24,8 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	monitorMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
-	engineMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/mocks"
 	preconditionsMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions/mocks"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	tssMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 	storeMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store/mocks"
@@ -41,11 +41,11 @@ func Test_SubmitterOptions_validate(t *testing.T) {
 
 	mHorizonClient := &horizonclient.MockClient{}
 	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
-	mSigService := engineMocks.NewMockSignatureService(t)
+	signatureService, _, _, _, distAccResolver := signing.NewMockSignatureService(t)
 	mSubmitterEngine := engine.SubmitterEngine{
 		HorizonClient:       mHorizonClient,
 		LedgerNumberTracker: mLedgerNumberTracker,
-		SignatureService:    mSigService,
+		SignatureService:    signatureService,
 		MaxBaseFee:          txnbuild.MinBaseFee,
 	}
 	tssMonitorService := tssMonitor.TSSMonitorService{
@@ -91,7 +91,21 @@ func Test_SubmitterOptions_validate(t *testing.T) {
 					LedgerNumberTracker: mLedgerNumberTracker,
 				},
 			},
-			wantErrContains: "validating submitter engine: signature service cannot be nil",
+			wantErrContains: "validating submitter engine: signature service cannot be empty",
+		},
+		{
+			name: "validate submitter engine's Signature Service",
+			submitterOptions: SubmitterOptions{
+				DBConnectionPool: dbConnectionPool,
+				SubmitterEngine: engine.SubmitterEngine{
+					HorizonClient:       mHorizonClient,
+					LedgerNumberTracker: mLedgerNumberTracker,
+					SignatureService: signing.SignatureService{
+						DistributionAccountResolver: distAccResolver,
+					},
+				},
+			},
+			wantErrContains: "validating submitter engine: validating signature service: channel account signer cannot be nil",
 		},
 		{
 			name: "validate submitter engine's Max Base Fee",
@@ -100,7 +114,7 @@ func Test_SubmitterOptions_validate(t *testing.T) {
 				SubmitterEngine: engine.SubmitterEngine{
 					HorizonClient:       mHorizonClient,
 					LedgerNumberTracker: mLedgerNumberTracker,
-					SignatureService:    mSigService,
+					SignatureService:    signatureService,
 				},
 			},
 			wantErrContains: "validating submitter engine: maxBaseFee must be greater than or equal to",
@@ -189,11 +203,11 @@ func Test_NewManager(t *testing.T) {
 
 	mHorizonClient := &horizonclient.MockClient{}
 	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
-	mSigService := engineMocks.NewMockSignatureService(t)
+	sigService, _, _, _, _ := signing.NewMockSignatureService(t)
 	mSubmitterEngine := engine.SubmitterEngine{
 		HorizonClient:       mHorizonClient,
 		LedgerNumberTracker: mLedgerNumberTracker,
-		SignatureService:    mSigService,
+		SignatureService:    sigService,
 		MaxBaseFee:          txnbuild.MinBaseFee,
 	}
 
@@ -307,7 +321,7 @@ func Test_NewManager(t *testing.T) {
 				wantSubmitterEngine := &engine.SubmitterEngine{
 					HorizonClient:       mHorizonClient,
 					LedgerNumberTracker: mLedgerNumberTracker,
-					SignatureService:    mSigService,
+					SignatureService:    sigService,
 					MaxBaseFee:          txnbuild.MinBaseFee,
 				}
 
@@ -363,6 +377,39 @@ func Test_Manager_ProcessTransactions(t *testing.T) {
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
 
+	// Signature service
+	encrypter := &utils.DefaultPrivateKeyEncrypter{}
+	encryptionPassphrase := keypair.MustRandom().Seed()
+	distributionKP := keypair.MustRandom()
+
+	sigClientOptions := signing.SignatureClientOptions{
+		NetworkPassphrase:      network.TestNetworkPassphrase,
+		DistributionPrivateKey: distributionKP.Seed(),
+		DBConnectionPool:       dbConnectionPool,
+		EncryptionPassphrase:   encryptionPassphrase,
+		LedgerNumberTracker:    preconditionsMocks.NewMockLedgerNumberTracker(t),
+		Encrypter:              encrypter,
+	}
+
+	sigClientOptions.Type = signing.SignatureClientTypeChannelAccountDB
+	chAccSigClient, err := signing.NewSignatureClient(sigClientOptions)
+	require.NoError(t, err)
+
+	sigClientOptions.Type = signing.SignatureClientTypeDistributionAccountEnv
+	distAccSigClient, err := signing.NewSignatureClient(sigClientOptions)
+	require.NoError(t, err)
+
+	distAccResolver, ok := distAccSigClient.(signing.DistributionAccountResolver)
+	require.True(t, ok)
+
+	sigService := signing.SignatureService{
+		ChAccSigner:                 chAccSigClient,
+		DistAccountSigner:           distAccSigClient,
+		HostSigner:                  distAccSigClient,
+		DistributionAccountResolver: distAccResolver,
+	}
+
+	// Signal types
 	type signalType string
 	const (
 		signalTypeCancel    signalType = "CANCEL"
@@ -388,7 +435,7 @@ func Test_Manager_ProcessTransactions(t *testing.T) {
 			defer store.DeleteAllTransactionFixtures(t, context.Background(), dbConnectionPool)
 
 			// Create channel accounts to be used by the tx submitter
-			channelAccounts := store.CreateChannelAccountFixtures(t, ctx, dbConnectionPool, 2)
+			channelAccounts := store.CreateChannelAccountFixturesEncrypted(t, ctx, dbConnectionPool, encrypter, encryptionPassphrase, 2)
 			assert.Len(t, channelAccounts, 2)
 			channelAccountsMap := map[string]*store.ChannelAccount{}
 			for _, ca := range channelAccounts {
@@ -407,23 +454,10 @@ func Test_Manager_ProcessTransactions(t *testing.T) {
 
 			assert.Len(t, transactions, 10)
 
-			// Signature service
-			distributionKP := keypair.MustRandom()
-			sigService, err := engine.NewDefaultSignatureService(engine.DefaultSignatureServiceOptions{
-				NetworkPassphrase:      network.TestNetworkPassphrase,
-				DBConnectionPool:       dbConnectionPool,
-				DistributionPrivateKey: distributionKP.Seed(),
-				EncryptionPassphrase:   distributionKP.Seed(),
-				Encrypter:              &utils.PrivateKeyEncrypterMock{},
-				LedgerNumberTracker:    preconditionsMocks.NewMockLedgerNumberTracker(t),
-			})
-			require.NoError(t, err)
-
 			// mock ledger number tracker
 			const currentLedgerNumber = 123
 			mockLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
 			mockLedgerNumberTracker.On("GetLedgerNumber").Return(currentLedgerNumber, nil)
-			defer mockLedgerNumberTracker.AssertExpectations(t)
 
 			// mock horizon client
 			const sequenceNumber = 456
@@ -457,9 +491,8 @@ func Test_Manager_ProcessTransactions(t *testing.T) {
 			chTxBundleModel, err := store.NewChannelTransactionBundleModel(dbConnectionPool)
 			require.NoError(t, err)
 
-			mMonitorClient := monitorMocks.MockMonitorClient{}
+			mMonitorClient := monitorMocks.NewMockMonitorClient(t)
 			mMonitorClient.On("MonitorCounters", mock.Anything, mock.Anything).Return(nil).Times(3)
-			defer mMonitorClient.AssertExpectations(t)
 
 			mockEventProducer := &events.MockProducer{}
 			mockEventProducer.On("WriteMessages", mock.Anything, mock.AnythingOfType("[]events.Message")).Return(nil).Once()
@@ -475,7 +508,7 @@ func Test_Manager_ProcessTransactions(t *testing.T) {
 				queueService:        queueService,
 				txProcessingLimiter: engine.NewTransactionProcessingLimiter(queueService.numChannelAccounts),
 				monitorService: tssMonitor.TSSMonitorService{
-					Client:        &mMonitorClient,
+					Client:        mMonitorClient,
 					GitCommitHash: "gitCommitHash0x",
 					Version:       "version123",
 				},

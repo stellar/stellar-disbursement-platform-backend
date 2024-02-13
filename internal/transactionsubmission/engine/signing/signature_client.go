@@ -28,10 +28,11 @@ type SignatureClientType string
 const (
 	SignatureClientTypeChannelAccountDB       SignatureClientType = "CHANNEL_ACCOUNT_DB"
 	SignatureClientTypeDistributionAccountEnv SignatureClientType = "DISTRIBUTION_ACCOUNT_ENV"
+	SignatureClientTypeHostAccountEnv         SignatureClientType = "Host_ACCOUNT_ENV"
 )
 
 func (t SignatureClientType) All() []SignatureClientType {
-	return []SignatureClientType{SignatureClientTypeChannelAccountDB, SignatureClientTypeDistributionAccountEnv}
+	return []SignatureClientType{SignatureClientTypeChannelAccountDB, SignatureClientTypeDistributionAccountEnv, SignatureClientTypeHostAccountEnv}
 }
 
 func ParseSignatureClientType(sigClientType string) (SignatureClientType, error) {
@@ -43,6 +44,21 @@ func ParseSignatureClientType(sigClientType string) (SignatureClientType, error)
 	}
 
 	return "", fmt.Errorf("invalid signature client type %q", sigClientTypeStrUpper)
+}
+
+func (t SignatureClientType) AllDistribution() []SignatureClientType {
+	return []SignatureClientType{SignatureClientTypeDistributionAccountEnv}
+}
+
+func ParseSignatureClientDistributionType(sigClientType string) (SignatureClientType, error) {
+	sigClientTypeStrUpper := strings.ToUpper(sigClientType)
+	scType := SignatureClientType(sigClientTypeStrUpper)
+
+	if slices.Contains(scType.AllDistribution(), scType) {
+		return scType, nil
+	}
+
+	return "", fmt.Errorf("invalid signature client distribution type %q", sigClientTypeStrUpper)
 }
 
 type SignatureClientOptions struct {
@@ -64,7 +80,7 @@ type SignatureClientOptions struct {
 
 func NewSignatureClient(opts SignatureClientOptions) (SignatureClient, error) {
 	switch opts.Type {
-	case SignatureClientTypeDistributionAccountEnv:
+	case SignatureClientTypeDistributionAccountEnv, SignatureClientTypeHostAccountEnv:
 		return NewDistributionAccountEnvSignatureClient(DistributionAccountEnvOptions{
 			NetworkPassphrase:      opts.NetworkPassphrase,
 			DistributionPrivateKey: opts.DistributionPrivateKey,
@@ -76,6 +92,7 @@ func NewSignatureClient(opts SignatureClientOptions) (SignatureClient, error) {
 			DBConnectionPool:     opts.DBConnectionPool,
 			EncryptionPassphrase: opts.EncryptionPassphrase,
 			LedgerNumberTracker:  opts.LedgerNumberTracker,
+			Encrypter:            opts.Encrypter,
 		})
 
 	default:

@@ -12,7 +12,7 @@ const TxSubmitterEngineInstanceName = "tx_submitter_engine_instance"
 
 type TxSubmitterEngineOptions struct {
 	HorizonURL              string
-	SignatureServiceOptions engine.SignatureServiceOptions
+	SignatureServiceOptions SignatureServiceOptions
 	MaxBaseFee              int
 }
 
@@ -51,7 +51,6 @@ func NewTxSubmitterEngine(ctx context.Context, opts TxSubmitterEngineOptions) (e
 		HorizonClient:       horizonClient,
 		LedgerNumberTracker: ledgerNumberTracker,
 		SignatureService:    signatureService,
-		HostSigner:          signatureService,
 		MaxBaseFee:          opts.MaxBaseFee,
 	}
 	if err = newInstance.Validate(); err != nil {

@@ -507,9 +507,15 @@ func (tw *TransactionWorker) buildAndSignTransaction(ctx context.Context, txJob 
 		return nil, fmt.Errorf("building transaction for job %v: %w", txJob, err)
 	}
 
-	paymentTx, err = tw.engine.SignatureService.SignStellarTransaction(ctx, paymentTx, tw.engine.SignatureService.DistributionAccount(), txJob.ChannelAccount.PublicKey)
+	// Sign tx for the channel account:
+	paymentTx, err = tw.engine.ChAccSigner.SignStellarTransaction(ctx, paymentTx, txJob.ChannelAccount.PublicKey)
 	if err != nil {
-		return nil, fmt.Errorf("signing transaction: for job %v: %w", txJob, err)
+		return nil, fmt.Errorf("signing transaction for channel account: for job %v: %w", txJob, err)
+	}
+	// Sign tx for the distribution account:
+	paymentTx, err = tw.engine.DistAccountSigner.SignStellarTransaction(ctx, paymentTx, tw.engine.SignatureService.DistributionAccount())
+	if err != nil {
+		return nil, fmt.Errorf("signing transaction for distribution account: for job %v: %w", txJob, err)
 	}
 
 	// build the outer fee-bump transaction
@@ -524,8 +530,8 @@ func (tw *TransactionWorker) buildAndSignTransaction(ctx context.Context, txJob 
 		return nil, fmt.Errorf("building fee-bump transaction for job %v: %w", txJob, err)
 	}
 
-	// generate a random number to use as the fee-bump transaction's sequence number
-	feeBumpTx, err = tw.engine.SignatureService.SignFeeBumpStellarTransaction(ctx, feeBumpTx, tw.engine.SignatureService.DistributionAccount())
+	// Sign fee-bump tx for the distribution account:
+	feeBumpTx, err = tw.engine.DistAccountSigner.SignFeeBumpStellarTransaction(ctx, feeBumpTx, tw.engine.SignatureService.DistributionAccount())
 	if err != nil {
 		return nil, fmt.Errorf("signing fee-bump transaction for job %v: %w", txJob, err)
 	}
