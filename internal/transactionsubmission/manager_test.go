@@ -381,33 +381,16 @@ func Test_Manager_ProcessTransactions(t *testing.T) {
 	encrypter := &utils.DefaultPrivateKeyEncrypter{}
 	encryptionPassphrase := keypair.MustRandom().Seed()
 	distributionKP := keypair.MustRandom()
-
-	sigClientOptions := signing.SignatureClientOptions{
+	sigService, err := signing.NewSignatureService(signing.SignatureServiceOptions{
+		DistributionSignerType: signing.SignatureClientTypeDistributionAccountEnv,
 		NetworkPassphrase:      network.TestNetworkPassphrase,
 		DistributionPrivateKey: distributionKP.Seed(),
 		DBConnectionPool:       dbConnectionPool,
 		EncryptionPassphrase:   encryptionPassphrase,
 		LedgerNumberTracker:    preconditionsMocks.NewMockLedgerNumberTracker(t),
 		Encrypter:              encrypter,
-	}
-
-	sigClientOptions.Type = signing.SignatureClientTypeChannelAccountDB
-	chAccSigClient, err := signing.NewSignatureClient(sigClientOptions)
+	})
 	require.NoError(t, err)
-
-	sigClientOptions.Type = signing.SignatureClientTypeDistributionAccountEnv
-	distAccSigClient, err := signing.NewSignatureClient(sigClientOptions)
-	require.NoError(t, err)
-
-	distAccResolver, ok := distAccSigClient.(signing.DistributionAccountResolver)
-	require.True(t, ok)
-
-	sigService := signing.SignatureService{
-		ChAccSigner:                 chAccSigClient,
-		DistAccountSigner:           distAccSigClient,
-		HostSigner:                  distAccSigClient,
-		DistributionAccountResolver: distAccResolver,
-	}
 
 	// Signal types
 	type signalType string

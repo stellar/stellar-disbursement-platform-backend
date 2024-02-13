@@ -207,7 +207,7 @@ func TransactionSubmitterEngineConfigOptions(opts *di.TxSubmitterEngineOptions) 
 	)
 }
 
-func BaseSignatureServiceConfigOptions(opts *di.SignatureServiceOptions) []*config.ConfigOption {
+func BaseSignatureServiceConfigOptions(opts *signing.SignatureServiceOptions) []*config.ConfigOption {
 	return []*config.ConfigOption{
 		{
 			Name:           "channel-account-encryption-passphrase",

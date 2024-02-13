@@ -15,7 +15,7 @@ type DistributionAccountEnvOptions struct {
 }
 
 func (opts *DistributionAccountEnvOptions) String() string {
-	return fmt.Sprintf("DistributionAccountEnvOptions{NetworkPassphrase: %s}", opts.NetworkPassphrase)
+	return fmt.Sprintf("%T{NetworkPassphrase: %s}", opts, opts.NetworkPassphrase)
 }
 
 func (opts *DistributionAccountEnvOptions) Validate() error {

@@ -28,7 +28,7 @@ type SignatureClientType string
 const (
 	SignatureClientTypeChannelAccountDB       SignatureClientType = "CHANNEL_ACCOUNT_DB"
 	SignatureClientTypeDistributionAccountEnv SignatureClientType = "DISTRIBUTION_ACCOUNT_ENV"
-	SignatureClientTypeHostAccountEnv         SignatureClientType = "Host_ACCOUNT_ENV"
+	SignatureClientTypeHostAccountEnv         SignatureClientType = "HOST_ACCOUNT_ENV"
 )
 
 func (t SignatureClientType) All() []SignatureClientType {

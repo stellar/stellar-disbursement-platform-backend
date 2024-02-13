@@ -291,12 +291,12 @@ func Test_SetConfigOptionDistributionSignerType(t *testing.T) {
 		{
 			name:            "returns an error if the value is empty",
 			args:            []string{},
-			wantErrContains: `couldn't parse signature client type in distribution-signer-type: invalid signature client distribution type ""`,
+			wantErrContains: `couldn't parse signature client distribution type in distribution-signer-type: invalid signature client distribution type ""`,
 		},
 		{
 			name:            "returns an error if the value is not supported",
 			args:            []string{"--distribution-signer-type", "test"},
-			wantErrContains: `couldn't parse signature client type in distribution-signer-type: invalid signature client distribution type "TEST"`,
+			wantErrContains: `couldn't parse signature client distribution type in distribution-signer-type: invalid signature client distribution type "TEST"`,
 		},
 		{
 			name:       "🎉 handles signature service type (through CLI args): DISTRIBUTION_ACCOUNT_ENV",

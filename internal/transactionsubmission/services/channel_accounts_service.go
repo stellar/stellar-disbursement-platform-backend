@@ -66,7 +66,7 @@ func (s *ChannelAccountsService) validate() error {
 		return fmt.Errorf("validating submitter engine: %w", err)
 	}
 
-	if s.SubmitterEngine.HostSigner == nil {
+	if s.SubmitterEngine.HostAccountSigner == nil {
 		return fmt.Errorf("signature engine's host signer cannot be nil")
 	}
 
@@ -203,7 +203,7 @@ func (s *ChannelAccountsService) deleteChannelAccount(ctx context.Context, publi
 		}
 
 		log.Ctx(ctx).Warnf("Account %s does not exist on the network", publicKey)
-		err = s.SignatureService.ChAccSigner.Delete(ctx, publicKey)
+		err = s.SignatureService.ChAccountSigner.Delete(ctx, publicKey)
 		if err != nil {
 			return fmt.Errorf("deleting %s from signature service: %w", publicKey, err)
 		}

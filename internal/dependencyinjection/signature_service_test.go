@@ -29,12 +29,12 @@ func Test_dependencyinjection_NewSignatureService(t *testing.T) {
 	t.Run("should create and return the same instance on the second call", func(t *testing.T) {
 		ClearInstancesTestHelper(t)
 
-		opts := SignatureServiceOptions{
+		opts := signing.SignatureServiceOptions{
+			DistributionSignerType: signing.SignatureClientTypeDistributionAccountEnv,
 			NetworkPassphrase:      network.TestNetworkPassphrase,
 			DBConnectionPool:       dbConnectionPool,
 			DistributionPrivateKey: distributionPrivateKey,
 			EncryptionPassphrase:   encryptionPassphrase,
-			DistributionSignerType: signing.SignatureClientTypeDistributionAccountEnv,
 			LedgerNumberTracker:    preconditionsMocks.NewMockLedgerNumberTracker(t),
 		}
 
@@ -50,7 +50,7 @@ func Test_dependencyinjection_NewSignatureService(t *testing.T) {
 	t.Run("should return an error on an invalid sig service type", func(t *testing.T) {
 		ClearInstancesTestHelper(t)
 
-		opts := SignatureServiceOptions{}
+		opts := signing.SignatureServiceOptions{}
 		gotDependency, err := NewSignatureService(ctx, opts)
 		assert.Empty(t, gotDependency)
 		assert.EqualError(t, err, "creating a new signature service instance: invalid distribution signer type \"\"")
@@ -59,7 +59,7 @@ func Test_dependencyinjection_NewSignatureService(t *testing.T) {
 	t.Run("should return an error on a invalid option", func(t *testing.T) {
 		ClearInstancesTestHelper(t)
 
-		opts := SignatureServiceOptions{DistributionSignerType: signing.SignatureClientTypeDistributionAccountEnv}
+		opts := signing.SignatureServiceOptions{DistributionSignerType: signing.SignatureClientTypeDistributionAccountEnv}
 		gotDependency, err := NewSignatureService(ctx, opts)
 		assert.Empty(t, gotDependency)
 		assert.ErrorContains(t, err, "creating a new signature service instance:")
@@ -73,7 +73,7 @@ func Test_dependencyinjection_NewSignatureService(t *testing.T) {
 		instanceName := buildSignatureServiceInstanceName(distributionSignerType)
 		SetInstance(instanceName, false)
 
-		opts := SignatureServiceOptions{
+		opts := signing.SignatureServiceOptions{
 			DistributionSignerType: distributionSignerType,
 			NetworkPassphrase:      network.TestNetworkPassphrase,
 			DBConnectionPool:       dbConnectionPool,

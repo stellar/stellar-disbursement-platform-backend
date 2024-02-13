@@ -58,7 +58,8 @@ func getTransactionWorkerInstance(t *testing.T, dbConnectionPool db.DBConnection
 	require.NoError(t, err)
 
 	distributionKP := keypair.MustRandom()
-	sigService, err := signing.NewSignatureService(signing.SignatureClientTypeDistributionAccountEnv, signing.SignatureServiceOptions{
+	sigService, err := signing.NewSignatureService(signing.SignatureServiceOptions{
+		DistributionSignerType: signing.SignatureClientTypeDistributionAccountEnv,
 		NetworkPassphrase:      network.TestNetworkPassphrase,
 		DBConnectionPool:       dbConnectionPool,
 		DistributionPrivateKey: distributionKP.Seed(),
@@ -134,7 +135,8 @@ func Test_NewTransactionWorker(t *testing.T) {
 	chAccModel := &store.ChannelAccountModel{DBConnectionPool: dbConnectionPool}
 
 	distributionKP := keypair.MustRandom()
-	wantSigService, err := signing.NewSignatureService(signing.SignatureClientTypeDistributionAccountEnv, signing.SignatureServiceOptions{
+	wantSigService, err := signing.NewSignatureService(signing.SignatureServiceOptions{
+		DistributionSignerType: signing.SignatureClientTypeDistributionAccountEnv,
 		NetworkPassphrase:      network.TestNetworkPassphrase,
 		DBConnectionPool:       dbConnectionPool,
 		DistributionPrivateKey: distributionKP.Seed(),
@@ -957,7 +959,8 @@ func Test_TransactionWorker_buildAndSignTransaction(t *testing.T) {
 	const accountSequence = 123
 
 	distributionKP := keypair.MustRandom()
-	sigService, err := signing.NewSignatureService(signing.SignatureClientTypeDistributionAccountEnv, signing.SignatureServiceOptions{
+	sigService, err := signing.NewSignatureService(signing.SignatureServiceOptions{
+		DistributionSignerType: signing.SignatureClientTypeDistributionAccountEnv,
 		NetworkPassphrase:      network.TestNetworkPassphrase,
 		DBConnectionPool:       dbConnectionPool,
 		DistributionPrivateKey: distributionKP.Seed(),
@@ -1082,7 +1085,7 @@ func Test_TransactionWorker_buildAndSignTransaction(t *testing.T) {
 					},
 				)
 				require.NoError(t, err)
-				wantInnerTx, err = sigService.ChAccSigner.SignStellarTransaction(ctx, wantInnerTx, txJob.ChannelAccount.PublicKey)
+				wantInnerTx, err = sigService.ChAccountSigner.SignStellarTransaction(ctx, wantInnerTx, txJob.ChannelAccount.PublicKey)
 				require.NoError(t, err)
 				wantInnerTx, err = sigService.DistAccountSigner.SignStellarTransaction(ctx, wantInnerTx, distributionKP.Address())
 				require.NoError(t, err)

@@ -508,7 +508,7 @@ func (tw *TransactionWorker) buildAndSignTransaction(ctx context.Context, txJob 
 	}
 
 	// Sign tx for the channel account:
-	paymentTx, err = tw.engine.ChAccSigner.SignStellarTransaction(ctx, paymentTx, txJob.ChannelAccount.PublicKey)
+	paymentTx, err = tw.engine.ChAccountSigner.SignStellarTransaction(ctx, paymentTx, txJob.ChannelAccount.PublicKey)
 	if err != nil {
 		return nil, fmt.Errorf("signing transaction for channel account: for job %v: %w", txJob, err)
 	}

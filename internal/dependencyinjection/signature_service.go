@@ -5,39 +5,20 @@ import (
 	"fmt"
 
 	"github.com/stellar/go/support/log"
-	"github.com/stellar/stellar-disbursement-platform-backend/db"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
 )
-
-type SignatureServiceOptions struct {
-	// Used for routing:
-	DistributionSignerType signing.SignatureClientType
-
-	// Shared:
-	NetworkPassphrase string
-
-	// DistributionAccountEnv:
-	DistributionPrivateKey string
-
-	// ChannelAccountDB:
-	DBConnectionPool     db.DBConnectionPool
-	EncryptionPassphrase string
-	LedgerNumberTracker  preconditions.LedgerNumberTracker
-}
 
 const SignatureServiceInstanceName = "signature_service_instance"
 
-// buildSignatureServiceInstanceName creates a new Signature Service instance, or retrives a instance that was already
-// created before.
+// buildSignatureServiceInstanceName returns the name of the signature service instance, based on the signature type
+// provided.
 func buildSignatureServiceInstanceName(sigType signing.SignatureClientType) string {
 	return fmt.Sprintf("%s-%s", SignatureServiceInstanceName, string(sigType))
 }
 
 // NewSignatureService creates a new signature service instance, or retrives an instance that was already
 // created before.
-func NewSignatureService(ctx context.Context, opts SignatureServiceOptions) (signing.SignatureService, error) {
+func NewSignatureService(ctx context.Context, opts signing.SignatureServiceOptions) (signing.SignatureService, error) {
 	instanceName := buildSignatureServiceInstanceName(opts.DistributionSignerType)
 
 	// Already initialized
@@ -49,14 +30,7 @@ func NewSignatureService(ctx context.Context, opts SignatureServiceOptions) (sig
 	}
 
 	log.Ctx(ctx).Infof("⚙️ Setting up Signature Service to: %v", opts.DistributionSignerType)
-	newInstance, err := signing.NewSignatureService(opts.DistributionSignerType, signing.SignatureServiceOptions{
-		NetworkPassphrase:      opts.NetworkPassphrase,
-		DistributionPrivateKey: opts.DistributionPrivateKey,
-		DBConnectionPool:       opts.DBConnectionPool,
-		EncryptionPassphrase:   opts.EncryptionPassphrase,
-		LedgerNumberTracker:    opts.LedgerNumberTracker,
-		Encrypter:              &utils.DefaultPrivateKeyEncrypter{},
-	})
+	newInstance, err := signing.NewSignatureService(opts)
 	if err != nil {
 		return signing.SignatureService{}, fmt.Errorf("creating a new signature service instance: %w", err)
 	}
