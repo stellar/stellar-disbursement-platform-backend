@@ -72,7 +72,7 @@ func Test_SetupWalletsForProperNetwork(t *testing.T) {
 			"Name: Vibrant Assist",
 			"Homepage: https://vibrantapp.com/vibrant-assist",
 			"Deep Link Schema: https://vibrantapp.com/sdp",
-			"SEP-10 Client Domain: api.vibrantapp.com",
+			"SEP-10 Client Domain: vibrantapp.com",
 		}
 
 		logs := buf.String()
@@ -101,7 +101,7 @@ func Test_SetupWalletsForProperNetwork(t *testing.T) {
 					Name:              "Vibrant Assist",
 					Homepage:          "https://vibrantapp.com/vibrant-assist",
 					DeepLinkSchema:    "https://aidpubnet.netlify.app",
-					SEP10ClientDomain: "api.vibrantapp.com",
+					SEP10ClientDomain: "vibrantapp.com",
 				},
 				{
 					Name:              "BOSS Money",
@@ -130,7 +130,7 @@ func Test_SetupWalletsForProperNetwork(t *testing.T) {
 
 		assert.Equal(t, "Vibrant Assist", wallets[1].Name)
 		assert.Equal(t, "https://vibrantapp.com/vibrant-assist", wallets[1].Homepage)
-		assert.Equal(t, "api.vibrantapp.com", wallets[1].SEP10ClientDomain)
+		assert.Equal(t, "vibrantapp.com", wallets[1].SEP10ClientDomain)
 		assert.Equal(t, "https://aidpubnet.netlify.app", wallets[1].DeepLinkSchema)
 
 		expectedLogs := []string{
@@ -142,7 +142,7 @@ func Test_SetupWalletsForProperNetwork(t *testing.T) {
 			"Name: Vibrant Assist",
 			"Homepage: https://vibrantapp.com/vibrant-assist",
 			"Deep Link Schema: https://aidpubnet.netlify.app",
-			"SEP-10 Client Domain: api.vibrantapp.com",
+			"SEP-10 Client Domain: vibrantapp.com",
 		}
 
 		logs := buf.String()
@@ -164,7 +164,7 @@ func Test_SetupWalletsForProperNetwork(t *testing.T) {
 					Name:              "Vibrant Assist",
 					Homepage:          "https://vibrantapp.com/vibrant-assist",
 					DeepLinkSchema:    "https://aidpubnet.netlify.app",
-					SEP10ClientDomain: "api.vibrantapp.com",
+					SEP10ClientDomain: "vibrantapp.com",
 					Assets: []data.Asset{
 						{
 							Code:   "USDC",
@@ -253,7 +253,7 @@ func Test_SetupWalletsForProperNetwork(t *testing.T) {
 			"Name: Vibrant Assist",
 			"Homepage: https://vibrantapp.com/vibrant-assist",
 			"Deep Link Schema: https://aidpubnet.netlify.app",
-			"SEP-10 Client Domain: api.vibrantapp.com",
+			"SEP-10 Client Domain: vibrantapp.com",
 			"Assets:",
 			"* USDC - GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
 		}

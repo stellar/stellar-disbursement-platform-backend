@@ -14,9 +14,9 @@
 
 #### PR Structure
 
-* [ ] This PR has reasonably narrow scope (if not, break it down into smaller PRs).
+* [ ] This PR has a reasonably narrow scope (if not, break it down into smaller PRs).
+* [ ] This PR title and description are clear enough for anyone to review it.
 * [ ] This PR does not mix refactoring changes with feature changes (split into two PRs otherwise).
-* [ ] This PR's title starts with the name of the package, area, or subject affected by the change.
 
 #### Thoroughness
 

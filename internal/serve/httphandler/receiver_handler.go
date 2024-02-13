@@ -133,3 +133,8 @@ func (rh ReceiverHandler) GetReceivers(w http.ResponseWriter, r *http.Request) {
 
 	httpjson.RenderStatus(w, http.StatusOK, httpResponse, httpjson.JSON)
 }
+
+// GetReceiverVerification returns a list of verification types
+func (rh ReceiverHandler) GetReceiverVerificationTypes(w http.ResponseWriter, r *http.Request) {
+	httpjson.Render(w, data.GetAllVerificationFields(), httpjson.JSON)
+}

@@ -9,7 +9,12 @@ import (
 )
 
 func Test_ValidatePassword(t *testing.T) {
+	pwValidator := PasswordValidator{
+		commonPasswordsList: map[string]bool{"password!1234": true},
+	}
+
 	const (
+		commonPasswordErrMsg     = "password is determined to be too common"
 		defaultErrMsg            = "password validation failed for the following reason(s)"
 		invalidLengthErrMsg      = "length: password length must be between 12 and 36 characters"
 		invalidCharsErrMsg       = "invalid character: password cannot contain any invalid characters ("
@@ -20,6 +25,7 @@ func Test_ValidatePassword(t *testing.T) {
 	)
 
 	allErrMessages := []string{
+		commonPasswordErrMsg,
 		defaultErrMsg,
 		invalidLengthErrMsg,
 		invalidCharsErrMsg,
@@ -120,6 +126,11 @@ func Test_ValidatePassword(t *testing.T) {
 			errContains: []string{defaultErrMsg, missingSpecialCharErrMsg},
 		},
 		{
+			name:        "only one criteria is missing: [common password]",
+			input:       "pAssWord!1234",
+			errContains: []string{defaultErrMsg, commonPasswordErrMsg},
+		},
+		{
 			name:        "🎉 All criteria was met!",
 			input:       "!1Az?2By.3Cx",
 			errContains: nil,
@@ -133,7 +144,7 @@ func Test_ValidatePassword(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := ValidatePassword(tc.input)
+			err := pwValidator.ValidatePassword(tc.input)
 			if tc.errContains == nil {
 				require.NoError(t, err)
 			} else {

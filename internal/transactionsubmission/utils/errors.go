@@ -67,7 +67,7 @@ func NewHorizonErrorWrapper(err error) *HorizonErrorWrapper {
 
 	resultCodes, resCodeErr := hError.ResultCodes()
 	if resCodeErr != nil {
-		log.Errorf("parsing result_codes: %v", resCodeErr)
+		log.Warnf("parsing result_codes: %v", resCodeErr)
 	}
 
 	return &HorizonErrorWrapper{

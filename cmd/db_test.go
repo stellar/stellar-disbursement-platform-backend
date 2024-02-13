@@ -535,7 +535,7 @@ func Test_DatabaseCommand_db_setup_for_network(t *testing.T) {
 		}
 		assert.Equal(t, "Vibrant Assist", vibrantAssist.Name)
 		assert.Equal(t, "https://vibrantapp.com/vibrant-assist", vibrantAssist.Homepage)
-		assert.Equal(t, "api.vibrantapp.com", vibrantAssist.SEP10ClientDomain)
+		assert.Equal(t, "vibrantapp.com", vibrantAssist.SEP10ClientDomain)
 		assert.Equal(t, "https://vibrantapp.com/sdp", vibrantAssist.DeepLinkSchema)
 
 		assert.Equal(t, "Vibrant Assist RC", vibrantAssistRC.Name)
@@ -554,7 +554,7 @@ func Test_DatabaseCommand_db_setup_for_network(t *testing.T) {
 			"Name: Vibrant Assist",
 			"Homepage: https://vibrantapp.com/vibrant-assist",
 			"Deep Link Schema: https://vibrantapp.com/sdp",
-			"SEP-10 Client Domain: api.vibrantapp.com",
+			"SEP-10 Client Domain: vibrantapp.com",
 		}
 
 		logs := buf.String()
@@ -595,7 +595,7 @@ func Test_DatabaseCommand_db_setup_for_network(t *testing.T) {
 		// Test the two wallets
 		assert.Equal(t, "Vibrant Assist", vibrantAssist.Name)
 		assert.Equal(t, "https://vibrantapp.com/vibrant-assist", vibrantAssist.Homepage)
-		assert.Equal(t, "api.vibrantapp.com", vibrantAssist.SEP10ClientDomain)
+		assert.Equal(t, "vibrantapp.com", vibrantAssist.SEP10ClientDomain)
 		assert.Equal(t, "https://vibrantapp.com/sdp", vibrantAssist.DeepLinkSchema)
 
 		assert.Equal(t, "Vibrant Assist RC", vibrantAssistRC.Name)
@@ -614,7 +614,7 @@ func Test_DatabaseCommand_db_setup_for_network(t *testing.T) {
 			"Name: Vibrant Assist",
 			"Homepage: https://vibrantapp.com/vibrant-assist",
 			"Deep Link Schema: https://vibrantapp.com/sdp",
-			"SEP-10 Client Domain: api.vibrantapp.com",
+			"SEP-10 Client Domain: vibrantapp.com",
 		}
 
 		for _, expectedLog := range expectedLogs {
@@ -697,7 +697,7 @@ func Test_DatabaseCommand_db_setup_for_network(t *testing.T) {
 		}
 		assert.Equal(t, "Vibrant Assist", vibrantAssist.Name)
 		assert.Equal(t, "https://vibrantapp.com/vibrant-assist", vibrantAssist.Homepage)
-		assert.Equal(t, "api.vibrantapp.com", vibrantAssist.SEP10ClientDomain)
+		assert.Equal(t, "vibrantapp.com", vibrantAssist.SEP10ClientDomain)
 		assert.Equal(t, "https://vibrantapp.com/sdp", vibrantAssist.DeepLinkSchema)
 
 		assert.Equal(t, "Vibrant Assist RC", vibrantAssistRC.Name)
@@ -716,7 +716,7 @@ func Test_DatabaseCommand_db_setup_for_network(t *testing.T) {
 			"Name: Vibrant Assist",
 			"Homepage: https://vibrantapp.com/vibrant-assist",
 			"Deep Link Schema: https://vibrantapp.com/sdp",
-			"SEP-10 Client Domain: api.vibrantapp.com",
+			"SEP-10 Client Domain: vibrantapp.com",
 		}
 
 		for _, expectedLog := range expectedLogs {

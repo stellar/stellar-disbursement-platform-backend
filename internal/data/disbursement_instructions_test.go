@@ -2,6 +2,7 @@ package data
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"testing"
 
@@ -57,16 +58,19 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 		VerificationValue: "1990-01-02",
 	}
 
+	externalPaymentID := "abc123"
 	instruction3 := DisbursementInstruction{
 		Phone:             "+380-12-345-673",
 		Amount:            "100.03",
 		ID:                "123456783",
 		VerificationValue: "1990-01-03",
+		ExternalPaymentId: &externalPaymentID,
 	}
 	instructions := []*DisbursementInstruction{&instruction1, &instruction2, &instruction3}
 	expectedPhoneNumbers := []string{instruction1.Phone, instruction2.Phone, instruction3.Phone}
 	expectedExternalIDs := []string{instruction1.ID, instruction2.ID, instruction3.ID}
 	expectedPayments := []string{instruction1.Amount, instruction2.Amount, instruction3.Amount}
+	expectedExternalPaymentIDs := []string{*instruction3.ExternalPaymentId}
 
 	disbursementUpdate := &DisbursementUpdate{
 		ID:          disbursement.ID,
@@ -125,6 +129,9 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 		// Verify Payments
 		actualPayments := GetPaymentsByDisbursementID(t, ctx, dbConnectionPool, disbursement.ID)
 		assert.Equal(t, expectedPayments, actualPayments)
+
+		actualExternalPaymentIDs := GetExternalPaymentIDsByDisbursementID(t, ctx, dbConnectionPool, disbursement.ID)
+		assert.Equal(t, expectedExternalPaymentIDs, actualExternalPaymentIDs)
 
 		// Verify Disbursement
 		actualDisbursement, err := di.disbursementModel.Get(ctx, dbConnectionPool, disbursement.ID)
@@ -528,4 +535,26 @@ func GetPaymentsByDisbursementID(t *testing.T, ctx context.Context, dbConnection
 	err := dbConnectionPool.SelectContext(ctx, &payments, query, disbursementID)
 	require.NoError(t, err)
 	return payments
+}
+
+func GetExternalPaymentIDsByDisbursementID(t *testing.T, ctx context.Context, dbConnectionPool db.DBConnectionPool, disbursementID string) []string {
+	query := `
+	SELECT
+		p.external_payment_id
+	FROM	
+		payments p
+		WHERE p.disbursement_id = $1
+	`
+	var externalPaymentIDRefs []sql.NullString
+	err := dbConnectionPool.SelectContext(ctx, &externalPaymentIDRefs, query, disbursementID)
+	require.NoError(t, err)
+
+	var externalPaymentIDs []string
+	for _, v := range externalPaymentIDRefs {
+		if v.String != "" {
+			externalPaymentIDs = append(externalPaymentIDs, v.String)
+		}
+	}
+
+	return externalPaymentIDs
 }

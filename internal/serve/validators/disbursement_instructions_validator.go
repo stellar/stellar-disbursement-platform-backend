@@ -5,9 +5,16 @@ import (
 	"strings"
 	"time"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
-
+	"github.com/stellar/go/support/log"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+)
+
+const (
+	VERIFICATION_FIELD_PIN_MIN_LENGTH = 4
+	VERIFICATION_FIELD_PIN_MAX_LENGTH = 8
+
+	VERIFICATION_FIELD_MAX_ID_LENGTH = 50
 )
 
 type DisbursementInstructionsValidator struct {
@@ -46,5 +53,15 @@ func (iv *DisbursementInstructionsValidator) ValidateInstruction(instruction *da
 
 		// check if date of birth is in the past
 		iv.Check(dob.Before(time.Now()), fmt.Sprintf("line %d - birthday", lineNumber), "date of birth cannot be in the future")
+	} else if iv.verificationField == data.VerificationFieldPin {
+		if len(verification) < VERIFICATION_FIELD_PIN_MIN_LENGTH || len(verification) > VERIFICATION_FIELD_PIN_MAX_LENGTH {
+			iv.addError(fmt.Sprintf("line %d - pin", lineNumber), "invalid pin. Cannot have less than 4 or more than 8 characters in pin")
+		}
+	} else if iv.verificationField == data.VerificationFieldNationalID {
+		if len(verification) > VERIFICATION_FIELD_MAX_ID_LENGTH {
+			iv.addError(fmt.Sprintf("line %d - national id", lineNumber), "invalid national id. Cannot have more than 50 characters in national id")
+		}
+	} else {
+		log.Warnf("Verification field %v is not being validated for ValidateReceiver", iv)
 	}
 }

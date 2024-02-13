@@ -89,7 +89,7 @@ func Test_ReceiverRegistrationHandler_ServeHTTP(t *testing.T) {
 		assert.Equal(t, "text/html; charset=utf-8", resp.Header.Get("Content-Type"))
 		assert.Contains(t, string(respBody), "<title>Wallet Registration</title>")
 		assert.Contains(t, string(respBody), `<div class="g-recaptcha" data-sitekey="reCAPTCHASiteKey">`)
-		assert.Contains(t, string(respBody), `<script src="https://www.google.com/recaptcha/api.js" async defer></script>`)
+		assert.Contains(t, string(respBody), `<link rel="preload" href="https://www.google.com/recaptcha/api.js" as="script" />`)
 	})
 
 	ctx := context.Background()
@@ -158,6 +158,6 @@ func Test_ReceiverRegistrationHandler_ServeHTTP(t *testing.T) {
 		assert.Equal(t, "text/html; charset=utf-8", resp.Header.Get("Content-Type"))
 		assert.Contains(t, string(respBody), "<title>Wallet Registration</title>")
 		assert.Contains(t, string(respBody), `<div class="g-recaptcha" data-sitekey="reCAPTCHASiteKey">`)
-		assert.Contains(t, string(respBody), `<script src="https://www.google.com/recaptcha/api.js" async defer></script>`)
+		assert.Contains(t, string(respBody), `<link rel="preload" href="https://www.google.com/recaptcha/api.js" as="script" />`)
 	})
 }
