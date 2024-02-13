@@ -5,9 +5,13 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/lib/pq"
+	"golang.org/x/exp/slices"
+
+	"github.com/stellar/go/protocols/horizon/base"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 )
 
@@ -18,6 +22,28 @@ type Asset struct {
 	CreatedAt *time.Time `json:"created_at,omitempty" db:"created_at"`
 	UpdatedAt *time.Time `json:"updated_at,omitempty" db:"updated_at"`
 	DeletedAt *time.Time `json:"deleted_at" db:"deleted_at"`
+}
+
+// IsNative returns true if the asset is the native asset (XLM).
+func (a Asset) IsNative() bool {
+	return strings.TrimSpace(a.Issuer) == "" &&
+		slices.Contains([]string{"XLM", "NATIVE"}, strings.ToUpper(a.Code))
+}
+
+// Equals returns true if the asset is the same as the other asset. Case-insensitive.
+func (a Asset) Equals(other Asset) bool {
+	if a.IsNative() && other.IsNative() {
+		return true
+	}
+	return strings.EqualFold(a.Code, other.Code) && strings.EqualFold(a.Issuer, other.Issuer)
+}
+
+func (a Asset) EqualsHorizonAsset(horizonAsset base.Asset) bool {
+	if a.IsNative() && horizonAsset.Type == "native" {
+		return true
+	}
+
+	return strings.EqualFold(a.Code, horizonAsset.Code) && strings.EqualFold(a.Issuer, horizonAsset.Issuer)
 }
 
 type AssetModel struct {

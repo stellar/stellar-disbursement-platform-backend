@@ -375,6 +375,7 @@ func (d DisbursementHandler) PatchDisbursementStatus(w http.ResponseWriter, r *h
 		err = services.ErrDisbursementStatusCantBeChanged
 	}
 
+	var insufficientBalanceErr services.InsufficientBalanceError
 	if err != nil {
 		switch {
 		case errors.Is(err, services.ErrDisbursementNotFound):
@@ -389,8 +390,9 @@ func (d DisbursementHandler) PatchDisbursementStatus(w http.ResponseWriter, r *h
 			httperror.Forbidden("Disbursement can't be started by its creator. Approval by another user is required.", err, nil).Render(w)
 		case errors.Is(err, services.ErrDisbursementWalletDisabled):
 			httperror.BadRequest(services.ErrDisbursementWalletDisabled.Error(), err, nil).Render(w)
-		case errors.Is(err, services.ErrDisbursementWalletInsufficientBalance):
-			httperror.Conflict(services.ErrDisbursementWalletInsufficientBalance.Error(), err, nil).Render(w)
+		case errors.As(err, &insufficientBalanceErr):
+			log.Ctx(ctx).Error(insufficientBalanceErr)
+			httperror.Conflict(insufficientBalanceErr.Error(), err, nil).Render(w)
 		default:
 			msg := fmt.Sprintf("Cannot update disbursement ID %s with status: %s", disbursementID, toStatus)
 			httperror.InternalError(ctx, msg, err, nil).Render(w)

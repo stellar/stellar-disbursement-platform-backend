@@ -96,10 +96,13 @@ func (h ReceiverSendOTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	verificationField := data.VerificationFieldDateOfBirth
 	receiverVerification, err := h.Models.ReceiverVerification.GetLatestByPhoneNumber(ctx, receiverSendOTPRequest.PhoneNumber)
 	if err != nil {
-		httperror.InternalError(ctx, "Cannot find latest receiver verification for receiver", err, nil).Render(w)
-		return
+		err = fmt.Errorf("cannot find latest receiver verification for phone number %s: %w", truncatedPhoneNumber, err)
+		log.Ctx(ctx).Error(err)
+	} else {
+		verificationField = receiverVerification.VerificationField
 	}
 
 	// Generate a new 6 digits OTP
@@ -162,7 +165,7 @@ func (h ReceiverSendOTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request
 
 	response := ReceiverSendOTPResponseBody{
 		Message:           "if your phone number is registered, you'll receive an OTP",
-		VerificationField: receiverVerification.VerificationField,
+		VerificationField: verificationField,
 	}
 	httpjson.RenderStatus(w, http.StatusOK, response, httpjson.JSON)
 }
