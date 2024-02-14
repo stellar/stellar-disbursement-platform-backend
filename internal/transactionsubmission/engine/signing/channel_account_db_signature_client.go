@@ -150,7 +150,7 @@ func (c *ChannelAccountDBSignatureClient) SignFeeBumpStellarTransaction(ctx cont
 
 func (c *ChannelAccountDBSignatureClient) BatchInsert(ctx context.Context, number int) (publicKeys []string, err error) {
 	if number < 1 {
-		return nil, fmt.Errorf("the amount of accounts to insert need to be greater than zero")
+		return nil, fmt.Errorf("the number of accounts to insert need to be greater than zero")
 	}
 
 	currentLedgerNumber, err := c.ledgerNumberTracker.GetLedgerNumber()

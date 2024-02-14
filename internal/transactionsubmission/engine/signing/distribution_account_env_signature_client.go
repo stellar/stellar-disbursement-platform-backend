@@ -134,7 +134,7 @@ func (c *DistributionAccountEnvSignatureClient) Delete(ctx context.Context, publ
 }
 
 func (c *DistributionAccountEnvSignatureClient) Type() string {
-	return string(SignatureClientTypeDistributionAccountEnv)
+	return string(DistributionAccountEnvSignatureClientType)
 }
 
 func (c *DistributionAccountEnvSignatureClient) NetworkPassphrase() string {

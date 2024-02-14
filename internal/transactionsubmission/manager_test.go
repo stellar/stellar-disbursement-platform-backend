@@ -382,7 +382,7 @@ func Test_Manager_ProcessTransactions(t *testing.T) {
 	encryptionPassphrase := keypair.MustRandom().Seed()
 	distributionKP := keypair.MustRandom()
 	sigService, err := signing.NewSignatureService(signing.SignatureServiceOptions{
-		DistributionSignerType: signing.SignatureClientTypeDistributionAccountEnv,
+		DistributionSignerType: signing.DistributionAccountEnvSignatureClientType,
 		NetworkPassphrase:      network.TestNetworkPassphrase,
 		DistributionPrivateKey: distributionKP.Seed(),
 		DBConnectionPool:       dbConnectionPool,

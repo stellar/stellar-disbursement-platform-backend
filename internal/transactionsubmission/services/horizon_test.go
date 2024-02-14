@@ -50,7 +50,7 @@ func Test_CreateChannelAccountsOnChain(t *testing.T) {
 	distributionKP := keypair.MustRandom()
 	encrypterPass := distributionKP.Seed()
 	sigService, err := signing.NewSignatureService(signing.SignatureServiceOptions{
-		DistributionSignerType: signing.SignatureClientTypeDistributionAccountEnv,
+		DistributionSignerType: signing.DistributionAccountEnvSignatureClientType,
 		NetworkPassphrase:      network.TestNetworkPassphrase,
 		DBConnectionPool:       dbConnectionPool,
 		DistributionPrivateKey: distributionKP.Seed(),

@@ -24,9 +24,9 @@ func Test_ParseSignatureClientType(t *testing.T) {
 	}{
 		{wantErr: fmt.Errorf(`invalid signature client type ""`)},
 		{sigServiceTypeStr: "INVALID", wantErr: fmt.Errorf(`invalid signature client type "INVALID"`)},
-		{sigServiceTypeStr: "CHANNEL_ACCOUNT_DB", expectedSigClientType: SignatureClientTypeChannelAccountDB},
-		{sigServiceTypeStr: "DISTRIBUTION_ACCOUNT_ENV", expectedSigClientType: SignatureClientTypeDistributionAccountEnv},
-		{sigServiceTypeStr: "HOST_ACCOUNT_ENV", expectedSigClientType: SignatureClientTypeHostAccountEnv},
+		{sigServiceTypeStr: "CHANNEL_ACCOUNT_DB", expectedSigClientType: ChannelAccountDBSignatureClientType},
+		{sigServiceTypeStr: "DISTRIBUTION_ACCOUNT_ENV", expectedSigClientType: DistributionAccountEnvSignatureClientType},
+		{sigServiceTypeStr: "HOST_ACCOUNT_ENV", expectedSigClientType: HostAccountEnvSignatureClientType},
 	}
 
 	for _, tc := range testCases {
@@ -48,7 +48,7 @@ func Test_ParseSignatureClientDistributionType(t *testing.T) {
 		{sigServiceTypeStr: "INVALID", wantErr: fmt.Errorf(`invalid signature client distribution type "INVALID"`)},
 		{sigServiceTypeStr: "CHANNEL_ACCOUNT_DB", wantErr: fmt.Errorf(`invalid signature client distribution type "CHANNEL_ACCOUNT_DB"`)},
 		{sigServiceTypeStr: "HOST_ACCOUNT_ENV", wantErr: fmt.Errorf(`invalid signature client distribution type "HOST_ACCOUNT_ENV"`)},
-		{sigServiceTypeStr: "DISTRIBUTION_ACCOUNT_ENV", expectedSigClientType: SignatureClientTypeDistributionAccountEnv},
+		{sigServiceTypeStr: "DISTRIBUTION_ACCOUNT_ENV", expectedSigClientType: DistributionAccountEnvSignatureClientType},
 	}
 
 	for _, tc := range testCases {
@@ -85,7 +85,7 @@ func Test_NewSignatureClient(t *testing.T) {
 		{
 			name: "🎉 successfully instantiate a Channel Account DB instance",
 			opts: SignatureClientOptions{
-				Type:                 SignatureClientTypeChannelAccountDB,
+				Type:                 ChannelAccountDBSignatureClientType,
 				NetworkPassphrase:    network.TestNetworkPassphrase,
 				DBConnectionPool:     dbConnectionPool,
 				EncryptionPassphrase: encryptionPassphrase,
@@ -103,7 +103,7 @@ func Test_NewSignatureClient(t *testing.T) {
 		{
 			name: "🎉 successfully instantiate a Distribution Account ENV instance",
 			opts: SignatureClientOptions{
-				Type:                   SignatureClientTypeDistributionAccountEnv,
+				Type:                   DistributionAccountEnvSignatureClientType,
 				NetworkPassphrase:      network.TestNetworkPassphrase,
 				DistributionPrivateKey: distributionKP.Seed(),
 			},

@@ -76,7 +76,7 @@ func NewSignatureService(opts SignatureServiceOptions) (SignatureService, error)
 		LedgerNumberTracker:    opts.LedgerNumberTracker,
 	}
 
-	sigClientOpts.Type = SignatureClientTypeChannelAccountDB
+	sigClientOpts.Type = ChannelAccountDBSignatureClientType
 	chAccountSigner, err := NewSignatureClient(sigClientOpts)
 	if err != nil {
 		return SignatureService{}, fmt.Errorf("creating a new channel account signature client: %w", err)
@@ -88,7 +88,7 @@ func NewSignatureService(opts SignatureServiceOptions) (SignatureService, error)
 		return SignatureService{}, fmt.Errorf("creating a new distribution account signature client: %w", err)
 	}
 
-	sigClientOpts.Type = SignatureClientTypeHostAccountEnv
+	sigClientOpts.Type = HostAccountEnvSignatureClientType
 	hostAccSigner, err := NewSignatureClient(sigClientOpts)
 	if err != nil {
 		return SignatureService{}, fmt.Errorf("creating a new host account signature client: %w", err)

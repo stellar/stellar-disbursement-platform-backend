@@ -20,13 +20,13 @@ func Test_dependencyinjection_NewTxSubmitterEngine(t *testing.T) {
 		ClearInstancesTestHelper(t)
 
 		sigService, _, _, _, _ := signing.NewMockSignatureService(t)
-		istanceName := buildSignatureServiceInstanceName(signing.SignatureClientTypeDistributionAccountEnv)
+		istanceName := buildSignatureServiceInstanceName(signing.DistributionAccountEnvSignatureClientType)
 		SetInstance(istanceName, sigService)
 
 		opts := TxSubmitterEngineOptions{
 			MaxBaseFee: 100,
 			SignatureServiceOptions: signing.SignatureServiceOptions{
-				DistributionSignerType: signing.SignatureClientTypeDistributionAccountEnv,
+				DistributionSignerType: signing.DistributionAccountEnvSignatureClientType,
 			},
 		}
 		gotDependency, err := NewTxSubmitterEngine(ctx, opts)

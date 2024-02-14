@@ -300,13 +300,13 @@ func Test_SetConfigOptionDistributionSignerType(t *testing.T) {
 		},
 		{
 			name:       "🎉 handles signature service type (through CLI args): DISTRIBUTION_ACCOUNT_ENV",
-			args:       []string{"--distribution-signer-type", string(signing.SignatureClientTypeDistributionAccountEnv)},
-			wantResult: signing.SignatureClientTypeDistributionAccountEnv,
+			args:       []string{"--distribution-signer-type", string(signing.DistributionAccountEnvSignatureClientType)},
+			wantResult: signing.DistributionAccountEnvSignatureClientType,
 		},
 		{
 			name:       "🎉 handles signature service type (through ENV vars): DISTRIBUTION_ACCOUNT_ENV",
-			envValue:   string(signing.SignatureClientTypeDistributionAccountEnv),
-			wantResult: signing.SignatureClientTypeDistributionAccountEnv,
+			envValue:   string(signing.DistributionAccountEnvSignatureClientType),
+			wantResult: signing.DistributionAccountEnvSignatureClientType,
 		},
 	}
 

@@ -231,7 +231,7 @@ func BaseSignatureServiceConfigOptions(opts *signing.SignatureServiceOptions) []
 			OptType:        types.String,
 			CustomSetValue: SetConfigOptionDistributionSignerType,
 			ConfigKey:      &opts.DistributionSignerType,
-			FlagDefault:    string(signing.SignatureClientTypeDistributionAccountEnv),
+			FlagDefault:    string(signing.DistributionAccountEnvSignatureClientType),
 			Required:       true,
 		},
 	}

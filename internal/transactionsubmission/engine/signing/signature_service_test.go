@@ -126,14 +126,14 @@ func Test_NewSignatureService(t *testing.T) {
 		{
 			name: "returns an error if the options are invalid for the channel account signer",
 			opts: SignatureServiceOptions{
-				DistributionSignerType: SignatureClientTypeDistributionAccountEnv,
+				DistributionSignerType: DistributionAccountEnvSignatureClientType,
 			},
 			wantErrContains: "creating a new channel account signature client:",
 		},
 		{
 			name: "returns an error if the options are invalid for the distribution account signer",
 			opts: SignatureServiceOptions{
-				DistributionSignerType: SignatureClientTypeDistributionAccountEnv,
+				DistributionSignerType: DistributionAccountEnvSignatureClientType,
 				NetworkPassphrase:      network.TestNetworkPassphrase,
 				DBConnectionPool:       dbConnectionPool,
 				EncryptionPassphrase:   encryptionPassphrase,
@@ -144,7 +144,7 @@ func Test_NewSignatureService(t *testing.T) {
 		{
 			name: "🎉 successfully instantiate new signature service",
 			opts: SignatureServiceOptions{
-				DistributionSignerType: SignatureClientTypeDistributionAccountEnv,
+				DistributionSignerType: DistributionAccountEnvSignatureClientType,
 				NetworkPassphrase:      network.TestNetworkPassphrase,
 				DBConnectionPool:       dbConnectionPool,
 				EncryptionPassphrase:   encryptionPassphrase,

@@ -28,13 +28,13 @@ type SignatureClient interface {
 type SignatureClientType string
 
 const (
-	SignatureClientTypeChannelAccountDB       SignatureClientType = "CHANNEL_ACCOUNT_DB"
-	SignatureClientTypeDistributionAccountEnv SignatureClientType = "DISTRIBUTION_ACCOUNT_ENV"
-	SignatureClientTypeHostAccountEnv         SignatureClientType = "HOST_ACCOUNT_ENV"
+	ChannelAccountDBSignatureClientType       SignatureClientType = "CHANNEL_ACCOUNT_DB"
+	DistributionAccountEnvSignatureClientType SignatureClientType = "DISTRIBUTION_ACCOUNT_ENV"
+	HostAccountEnvSignatureClientType         SignatureClientType = "HOST_ACCOUNT_ENV"
 )
 
 func (t SignatureClientType) All() []SignatureClientType {
-	return []SignatureClientType{SignatureClientTypeChannelAccountDB, SignatureClientTypeDistributionAccountEnv, SignatureClientTypeHostAccountEnv}
+	return []SignatureClientType{ChannelAccountDBSignatureClientType, DistributionAccountEnvSignatureClientType, HostAccountEnvSignatureClientType}
 }
 
 func ParseSignatureClientType(sigClientType string) (SignatureClientType, error) {
@@ -49,7 +49,7 @@ func ParseSignatureClientType(sigClientType string) (SignatureClientType, error)
 }
 
 func (t SignatureClientType) AllDistribution() []SignatureClientType {
-	return []SignatureClientType{SignatureClientTypeDistributionAccountEnv}
+	return []SignatureClientType{DistributionAccountEnvSignatureClientType}
 }
 
 func ParseSignatureClientDistributionType(sigClientType string) (SignatureClientType, error) {
@@ -82,13 +82,13 @@ type SignatureClientOptions struct {
 
 func NewSignatureClient(opts SignatureClientOptions) (SignatureClient, error) {
 	switch opts.Type {
-	case SignatureClientTypeDistributionAccountEnv, SignatureClientTypeHostAccountEnv:
+	case DistributionAccountEnvSignatureClientType, HostAccountEnvSignatureClientType:
 		return NewDistributionAccountEnvSignatureClient(DistributionAccountEnvOptions{
 			NetworkPassphrase:      opts.NetworkPassphrase,
 			DistributionPrivateKey: opts.DistributionPrivateKey,
 		})
 
-	case SignatureClientTypeChannelAccountDB:
+	case ChannelAccountDBSignatureClientType:
 		return NewChannelAccountDBSignatureClient(ChannelAccountDBSignatureClientOptions{
 			NetworkPassphrase:    opts.NetworkPassphrase,
 			DBConnectionPool:     opts.DBConnectionPool,

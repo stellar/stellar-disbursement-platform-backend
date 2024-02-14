@@ -30,7 +30,7 @@ func Test_dependencyinjection_NewSignatureService(t *testing.T) {
 		ClearInstancesTestHelper(t)
 
 		opts := signing.SignatureServiceOptions{
-			DistributionSignerType: signing.SignatureClientTypeDistributionAccountEnv,
+			DistributionSignerType: signing.DistributionAccountEnvSignatureClientType,
 			NetworkPassphrase:      network.TestNetworkPassphrase,
 			DBConnectionPool:       dbConnectionPool,
 			DistributionPrivateKey: distributionPrivateKey,
@@ -59,7 +59,7 @@ func Test_dependencyinjection_NewSignatureService(t *testing.T) {
 	t.Run("should return an error on a invalid option", func(t *testing.T) {
 		ClearInstancesTestHelper(t)
 
-		opts := signing.SignatureServiceOptions{DistributionSignerType: signing.SignatureClientTypeDistributionAccountEnv}
+		opts := signing.SignatureServiceOptions{DistributionSignerType: signing.DistributionAccountEnvSignatureClientType}
 		gotDependency, err := NewSignatureService(ctx, opts)
 		assert.Empty(t, gotDependency)
 		assert.ErrorContains(t, err, "creating a new signature service instance:")
@@ -69,7 +69,7 @@ func Test_dependencyinjection_NewSignatureService(t *testing.T) {
 	t.Run("should return an error if there's an invalid instance pre-stored", func(t *testing.T) {
 		ClearInstancesTestHelper(t)
 
-		distributionSignerType := signing.SignatureClientTypeDistributionAccountEnv
+		distributionSignerType := signing.DistributionAccountEnvSignatureClientType
 		instanceName := buildSignatureServiceInstanceName(distributionSignerType)
 		SetInstance(instanceName, false)
 
