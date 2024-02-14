@@ -67,7 +67,6 @@ func NewSignatureService(opts SignatureServiceOptions) (SignatureService, error)
 	}
 
 	sigClientOpts := SignatureClientOptions{
-		Type:                   distSignerType,
 		NetworkPassphrase:      opts.NetworkPassphrase,
 		DistributionPrivateKey: opts.DistributionPrivateKey,
 		DBConnectionPool:       opts.DBConnectionPool,
@@ -76,20 +75,17 @@ func NewSignatureService(opts SignatureServiceOptions) (SignatureService, error)
 		LedgerNumberTracker:    opts.LedgerNumberTracker,
 	}
 
-	sigClientOpts.Type = ChannelAccountDBSignatureClientType
-	chAccountSigner, err := NewSignatureClient(sigClientOpts)
+	chAccountSigner, err := NewSignatureClient(ChannelAccountDBSignatureClientType, sigClientOpts)
 	if err != nil {
 		return SignatureService{}, fmt.Errorf("creating a new channel account signature client: %w", err)
 	}
 
-	sigClientOpts.Type = distSignerType
-	distAccSigner, err := NewSignatureClient(sigClientOpts)
+	distAccSigner, err := NewSignatureClient(distSignerType, sigClientOpts)
 	if err != nil {
 		return SignatureService{}, fmt.Errorf("creating a new distribution account signature client: %w", err)
 	}
 
-	sigClientOpts.Type = HostAccountEnvSignatureClientType
-	hostAccSigner, err := NewSignatureClient(sigClientOpts)
+	hostAccSigner, err := NewSignatureClient(HostAccountEnvSignatureClientType, sigClientOpts)
 	if err != nil {
 		return SignatureService{}, fmt.Errorf("creating a new host account signature client: %w", err)
 	}

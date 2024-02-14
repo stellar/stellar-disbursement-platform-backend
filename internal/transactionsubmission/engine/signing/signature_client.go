@@ -64,9 +64,6 @@ func ParseSignatureClientDistributionType(sigClientType string) (SignatureClient
 }
 
 type SignatureClientOptions struct {
-	// Used for routing:
-	Type SignatureClientType
-
 	// Shared:
 	NetworkPassphrase string
 
@@ -80,8 +77,8 @@ type SignatureClientOptions struct {
 	Encrypter            utils.PrivateKeyEncrypter // (optional)
 }
 
-func NewSignatureClient(opts SignatureClientOptions) (SignatureClient, error) {
-	switch opts.Type {
+func NewSignatureClient(sigType SignatureClientType, opts SignatureClientOptions) (SignatureClient, error) {
+	switch sigType {
 	case DistributionAccountEnvSignatureClientType, HostAccountEnvSignatureClientType:
 		return NewDistributionAccountEnvSignatureClient(DistributionAccountEnvOptions{
 			NetworkPassphrase:      opts.NetworkPassphrase,
@@ -98,6 +95,6 @@ func NewSignatureClient(opts SignatureClientOptions) (SignatureClient, error) {
 		})
 
 	default:
-		return nil, fmt.Errorf("invalid signature client type: %v", opts.Type)
+		return nil, fmt.Errorf("invalid signature client type: %v", sigType)
 	}
 }

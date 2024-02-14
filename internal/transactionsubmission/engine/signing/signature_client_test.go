@@ -73,19 +73,21 @@ func Test_NewSignatureClient(t *testing.T) {
 
 	testCases := []struct {
 		name         string
+		sigType      SignatureClientType
 		opts         SignatureClientOptions
 		wantResult   SignatureClient
 		wantErrorMsg string
 	}{
 		{
 			name:         "invalid signature client type",
-			opts:         SignatureClientOptions{Type: SignatureClientType("INVALID")},
+			sigType:      SignatureClientType("INVALID"),
+			opts:         SignatureClientOptions{},
 			wantErrorMsg: "invalid signature client type: INVALID",
 		},
 		{
-			name: "🎉 successfully instantiate a Channel Account DB instance",
+			name:    "🎉 successfully instantiate a Channel Account DB instance",
+			sigType: ChannelAccountDBSignatureClientType,
 			opts: SignatureClientOptions{
-				Type:                 ChannelAccountDBSignatureClientType,
 				NetworkPassphrase:    network.TestNetworkPassphrase,
 				DBConnectionPool:     dbConnectionPool,
 				EncryptionPassphrase: encryptionPassphrase,
@@ -101,9 +103,9 @@ func Test_NewSignatureClient(t *testing.T) {
 			},
 		},
 		{
-			name: "🎉 successfully instantiate a Distribution Account ENV instance",
+			name:    "🎉 successfully instantiate a Distribution Account ENV instance",
+			sigType: DistributionAccountEnvSignatureClientType,
 			opts: SignatureClientOptions{
-				Type:                   DistributionAccountEnvSignatureClientType,
 				NetworkPassphrase:      network.TestNetworkPassphrase,
 				DistributionPrivateKey: distributionKP.Seed(),
 			},
@@ -117,7 +119,7 @@ func Test_NewSignatureClient(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			sigService, err := NewSignatureClient(tc.opts)
+			sigService, err := NewSignatureClient(tc.sigType, tc.opts)
 			if tc.wantErrorMsg != "" {
 				assert.EqualError(t, err, tc.wantErrorMsg)
 			} else {
