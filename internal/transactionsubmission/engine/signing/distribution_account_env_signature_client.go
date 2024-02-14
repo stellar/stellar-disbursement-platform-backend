@@ -85,11 +85,9 @@ func (c *DistributionAccountEnvSignatureClient) SignFeeBumpStellarTransaction(ct
 		return nil, fmt.Errorf("stellarTx cannot be nil in %s", c.Type())
 	}
 
-	// Ensure that the distribution account is the only account signing the transaction
-	for _, stellarAccount := range stellarAccounts {
-		if stellarAccount != c.distributionAccount {
-			return nil, fmt.Errorf("stellar account %s is not allowed to sign in %s", stellarAccount, c.Type())
-		}
+	err = c.validateStellarAccounts(stellarAccounts...)
+	if err != nil {
+		return nil, fmt.Errorf("validating stellar accounts: %w", err)
 	}
 
 	signedFeeBumpStellarTx, err = feeBumpStellarTx.Sign(c.NetworkPassphrase(), c.distributionKP)
@@ -101,11 +99,20 @@ func (c *DistributionAccountEnvSignatureClient) SignFeeBumpStellarTransaction(ct
 }
 
 func (c *DistributionAccountEnvSignatureClient) BatchInsert(ctx context.Context, amount int) (publicKeys []string, err error) {
-	return nil, fmt.Errorf("signature client of type %s does not support BatchInsert", c.Type())
+	publicKeys = make([]string, amount)
+	for i := 0; i < amount; i++ {
+		publicKeys[i] = c.distributionAccount
+	}
+	err = fmt.Errorf("BatchInsert called for signature client type %s: %w", c.Type(), ErrUnsupportedCommand)
+	return publicKeys, err
 }
 
 func (c *DistributionAccountEnvSignatureClient) Delete(ctx context.Context, publicKey string) error {
-	return fmt.Errorf("signature client of type %s does not support Delete", c.Type())
+	err := c.validateStellarAccounts(publicKey)
+	if err != nil {
+		return fmt.Errorf("validating stellar account to delete: %w", err)
+	}
+	return fmt.Errorf("Delete called for signature client type %s: %w", c.Type(), ErrUnsupportedCommand)
 }
 
 func (c *DistributionAccountEnvSignatureClient) Type() string {

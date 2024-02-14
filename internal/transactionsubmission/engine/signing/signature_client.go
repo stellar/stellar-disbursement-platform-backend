@@ -13,6 +13,8 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
 )
 
+var ErrUnsupportedCommand = fmt.Errorf("unsupported command for signature client")
+
 //go:generate mockery --name=SignatureClient --case=underscore --structname=MockSignatureClient
 type SignatureClient interface {
 	NetworkPassphrase() string
