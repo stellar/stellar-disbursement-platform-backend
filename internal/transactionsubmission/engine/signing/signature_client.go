@@ -20,7 +20,7 @@ type SignatureClient interface {
 	NetworkPassphrase() string
 	SignStellarTransaction(ctx context.Context, stellarTx *txnbuild.Transaction, stellarAccounts ...string) (signedStellarTx *txnbuild.Transaction, err error)
 	SignFeeBumpStellarTransaction(ctx context.Context, feeBumpStellarTx *txnbuild.FeeBumpTransaction, stellarAccounts ...string) (signedFeeBumpStellarTx *txnbuild.FeeBumpTransaction, err error)
-	BatchInsert(ctx context.Context, amount int) (publicKeys []string, err error)
+	BatchInsert(ctx context.Context, number int) (publicKeys []string, err error)
 	Delete(ctx context.Context, publicKey string) error
 	Type() string
 }

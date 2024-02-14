@@ -113,6 +113,52 @@ func Test_NewDistributionAccountEnvSignatureClient(t *testing.T) {
 	}
 }
 
+func Test_DistributionAccountEnvSignatureClient_validateStellarAccounts(t *testing.T) {
+	distributionKP := keypair.MustRandom()
+	unsupportedAccountKP := keypair.MustRandom()
+	distEnvClient, err := NewDistributionAccountEnvSignatureClient(DistributionAccountEnvOptions{
+		NetworkPassphrase:      network.TestNetworkPassphrase,
+		DistributionPrivateKey: distributionKP.Seed(),
+	})
+	require.NoError(t, err)
+
+	testCases := []struct {
+		name              string
+		stellarAccounts   []string
+		wantErrorContains string
+	}{
+		{
+			name:              "returns an error if the stellar accounts are empty",
+			stellarAccounts:   []string{},
+			wantErrorContains: "stellar accounts cannot be empty in " + distEnvClient.Type(),
+		},
+		{
+			name:              "returns an error if an account other than the distribution one is provided",
+			stellarAccounts:   []string{unsupportedAccountKP.Address(), distributionKP.Address()},
+			wantErrorContains: fmt.Sprintf("stellar account %s is not allowed to sign in %s", unsupportedAccountKP.Address(), distEnvClient.Type()),
+		},
+		{
+			name:            "🎉 successfully signs with distribution account",
+			stellarAccounts: []string{distributionKP.Address()},
+		},
+		{
+			name:            "🎉 successfully signs with distribution account, even if repeated",
+			stellarAccounts: []string{distributionKP.Address(), distributionKP.Address()},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := distEnvClient.validateStellarAccounts(tc.stellarAccounts...)
+			if tc.wantErrorContains == "" {
+				require.NoError(t, err)
+			} else {
+				require.ErrorContains(t, err, tc.wantErrorContains)
+			}
+		})
+	}
+}
+
 func Test_DistributionAccountEnvSignatureClient_SignStellarTransaction(t *testing.T) {
 	ctx := context.Background()
 
@@ -289,6 +335,13 @@ func Test_DistributionAccountEnvSignatureClient_BatchInsert(t *testing.T) {
 		DistributionPrivateKey: distributionKP.Seed(),
 	})
 	require.NoError(t, err)
+
+	t.Run("number needs to be greated than zero", func(t *testing.T) {
+		insertedAccounts, err := distEnvClient.BatchInsert(ctx, 0)
+		require.NotErrorIs(t, err, ErrUnsupportedCommand)
+		require.ErrorContains(t, err, "number must be greater than 0")
+		require.Nil(t, insertedAccounts)
+	})
 
 	t.Run("one account returns the list with the error ErrUnsupportedCommand", func(t *testing.T) {
 		insertedAccounts, err := distEnvClient.BatchInsert(ctx, 1)

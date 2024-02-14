@@ -148,9 +148,9 @@ func (c *ChannelAccountDBSignatureClient) SignFeeBumpStellarTransaction(ctx cont
 	return signedFeeBumpStellarTx, nil
 }
 
-func (c *ChannelAccountDBSignatureClient) BatchInsert(ctx context.Context, amount int) (publicKeys []string, err error) {
-	if amount < 1 {
-		return nil, fmt.Errorf("the amnount of accounts to insert need to be greater than zero")
+func (c *ChannelAccountDBSignatureClient) BatchInsert(ctx context.Context, number int) (publicKeys []string, err error) {
+	if number < 1 {
+		return nil, fmt.Errorf("the amount of accounts to insert need to be greater than zero")
 	}
 
 	currentLedgerNumber, err := c.ledgerNumberTracker.GetLedgerNumber()
@@ -160,7 +160,7 @@ func (c *ChannelAccountDBSignatureClient) BatchInsert(ctx context.Context, amoun
 	lockedToLedgerNumber := currentLedgerNumber + preconditions.IncrementForMaxLedgerBounds
 
 	batchInsertPayload := []*store.ChannelAccount{}
-	for range make([]interface{}, amount) {
+	for range make([]interface{}, number) {
 		kp, innerErr := keypair.Random()
 		if innerErr != nil {
 			return nil, fmt.Errorf("generating random keypair: %w", innerErr)
@@ -204,7 +204,7 @@ func (c *ChannelAccountDBSignatureClient) Delete(ctx context.Context, publicKey 
 }
 
 func (c *ChannelAccountDBSignatureClient) Type() string {
-	return string(SignatureClientTypeChannelAccountDB)
+	return string(ChannelAccountDBSignatureClientType)
 }
 
 func (c *ChannelAccountDBSignatureClient) NetworkPassphrase() string {

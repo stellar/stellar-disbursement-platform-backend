@@ -474,7 +474,7 @@ func Test_ChannelAccountDBSignatureClient_BatchInsert(t *testing.T) {
 	}{
 		{
 			name:            "if amount<=0, return an error",
-			wantErrContains: "the amnount of accounts to insert need to be greater than zero",
+			wantErrContains: "the amount of accounts to insert need to be greater than zero",
 		},
 		{
 			name:   "🎉 successfully bulk insert",

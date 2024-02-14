@@ -15,17 +15,17 @@ type MockSignatureClient struct {
 	mock.Mock
 }
 
-// BatchInsert provides a mock function with given fields: ctx, amount
-func (_m *MockSignatureClient) BatchInsert(ctx context.Context, amount int) ([]string, error) {
-	ret := _m.Called(ctx, amount)
+// BatchInsert provides a mock function with given fields: ctx, number
+func (_m *MockSignatureClient) BatchInsert(ctx context.Context, number int) ([]string, error) {
+	ret := _m.Called(ctx, number)
 
 	var r0 []string
 	var r1 error
 	if rf, ok := ret.Get(0).(func(context.Context, int) ([]string, error)); ok {
-		return rf(ctx, amount)
+		return rf(ctx, number)
 	}
 	if rf, ok := ret.Get(0).(func(context.Context, int) []string); ok {
-		r0 = rf(ctx, amount)
+		r0 = rf(ctx, number)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).([]string)
@@ -33,7 +33,7 @@ func (_m *MockSignatureClient) BatchInsert(ctx context.Context, amount int) ([]s
 	}
 
 	if rf, ok := ret.Get(1).(func(context.Context, int) error); ok {
-		r1 = rf(ctx, amount)
+		r1 = rf(ctx, number)
 	} else {
 		r1 = ret.Error(1)
 	}

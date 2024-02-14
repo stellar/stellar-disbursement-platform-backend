@@ -60,16 +60,30 @@ func NewDistributionAccountEnvSignatureClient(opts DistributionAccountEnvOptions
 
 var _ SignatureClient = (*DistributionAccountEnvSignatureClient)(nil)
 
-func (c *DistributionAccountEnvSignatureClient) SignStellarTransaction(ctx context.Context, stellarTx *txnbuild.Transaction, stellarAccounts ...string) (signedStellarTx *txnbuild.Transaction, err error) {
-	if stellarTx == nil {
-		return nil, fmt.Errorf("stellarTx cannot be nil in %s", c.Type())
+// validateStellarAccounts ensures that the distribution account is the only account signing the transaction
+func (c *DistributionAccountEnvSignatureClient) validateStellarAccounts(stellarAccounts ...string) error {
+	if len(stellarAccounts) == 0 {
+		return fmt.Errorf("stellar accounts cannot be empty in %s", c.Type())
 	}
 
 	// Ensure that the distribution account is the only account signing the transaction
 	for _, stellarAccount := range stellarAccounts {
 		if stellarAccount != c.distributionAccount {
-			return nil, fmt.Errorf("stellar account %s is not allowed to sign in %s", stellarAccount, c.Type())
+			return fmt.Errorf("stellar account %s is not allowed to sign in %s", stellarAccount, c.Type())
 		}
+	}
+
+	return nil
+}
+
+func (c *DistributionAccountEnvSignatureClient) SignStellarTransaction(ctx context.Context, stellarTx *txnbuild.Transaction, stellarAccounts ...string) (signedStellarTx *txnbuild.Transaction, err error) {
+	if stellarTx == nil {
+		return nil, fmt.Errorf("stellarTx cannot be nil in %s", c.Type())
+	}
+
+	err = c.validateStellarAccounts(stellarAccounts...)
+	if err != nil {
+		return nil, fmt.Errorf("validating stellar accounts: %w", err)
 	}
 
 	signedStellarTx, err = stellarTx.Sign(c.NetworkPassphrase(), c.distributionKP)
@@ -98,9 +112,13 @@ func (c *DistributionAccountEnvSignatureClient) SignFeeBumpStellarTransaction(ct
 	return signedFeeBumpStellarTx, nil
 }
 
-func (c *DistributionAccountEnvSignatureClient) BatchInsert(ctx context.Context, amount int) (publicKeys []string, err error) {
-	publicKeys = make([]string, amount)
-	for i := 0; i < amount; i++ {
+func (c *DistributionAccountEnvSignatureClient) BatchInsert(ctx context.Context, number int) (publicKeys []string, err error) {
+	if number <= 0 {
+		return nil, fmt.Errorf("number must be greater than 0")
+	}
+
+	publicKeys = make([]string, number)
+	for i := 0; i < number; i++ {
 		publicKeys[i] = c.distributionAccount
 	}
 	err = fmt.Errorf("BatchInsert called for signature client type %s: %w", c.Type(), ErrUnsupportedCommand)
@@ -126,8 +144,6 @@ func (c *DistributionAccountEnvSignatureClient) NetworkPassphrase() string {
 var _ DistributionAccountResolver = (*DistributionAccountEnvSignatureClient)(nil)
 
 func (c *DistributionAccountEnvSignatureClient) DistributionAccount() string {
-	// var keyword string
-	// log.Warnf("Distribution accounts are not resolved by keyword in DistributionAccountEnvSignatureClient, keyword: '%s' is being ignored", keyword)
 	return c.distributionAccount
 }
 
