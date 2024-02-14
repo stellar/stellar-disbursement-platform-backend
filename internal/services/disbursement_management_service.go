@@ -14,6 +14,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
+	tssUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 )
@@ -39,15 +40,34 @@ type DisbursementWithUserMetadata struct {
 }
 
 var (
-	ErrDisbursementNotFound                  = errors.New("disbursement not found")
-	ErrDisbursementNotReadyToStart           = errors.New("disbursement is not ready to be started")
-	ErrDisbursementNotReadyToPause           = errors.New("disbursement is not ready to be paused")
-	ErrDisbursementWalletDisabled            = errors.New("disbursement wallet is disabled")
-	ErrDisbursementWalletInsufficientBalance = errors.New("disbursement wallet has insufficient balance to fulfill disbursement and current pending payments")
+	ErrDisbursementNotFound        = errors.New("disbursement not found")
+	ErrDisbursementNotReadyToStart = errors.New("disbursement is not ready to be started")
+	ErrDisbursementNotReadyToPause = errors.New("disbursement is not ready to be paused")
+	ErrDisbursementWalletDisabled  = errors.New("disbursement wallet is disabled")
 
 	ErrDisbursementStatusCantBeChanged = errors.New("disbursement status can't be changed to the requested status")
 	ErrDisbursementStartedByCreator    = errors.New("disbursement can't be started by its creator")
 )
+
+type InsufficientBalanceError struct {
+	DisbursementID     string
+	DisbursementAsset  data.Asset
+	AvailableBalance   float64
+	DisbursementAmount float64
+	TotalPendingAmount float64
+}
+
+func (e InsufficientBalanceError) Error() string {
+	return fmt.Sprintf(
+		"the disbursement %s failed due to an account balance (%.2f) that was insufficient to fulfill new amount (%.2f) along with the pending amount (%.2f). To complete this action, your distribution account needs to be recharged with at least %.2f %s",
+		e.DisbursementID,
+		e.AvailableBalance,
+		e.DisbursementAmount,
+		e.TotalPendingAmount,
+		(e.DisbursementAmount+e.TotalPendingAmount)-e.AvailableBalance,
+		e.DisbursementAsset.Code,
+	)
+}
 
 // NewDisbursementManagementService is a factory function for creating a new DisbursementManagementService.
 func NewDisbursementManagementService(
@@ -225,13 +245,14 @@ func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, d
 		rootAccount, err := s.horizonClient.AccountDetail(
 			horizonclient.AccountRequest{AccountID: distributionPubKey})
 		if err != nil {
+			err = tssUtils.NewHorizonErrorWrapper(err)
 			return fmt.Errorf("cannot get details for root account from horizon client: %w", err)
 		}
 
-		var distributionBalance float64
+		var availableBalance float64
 		for _, b := range rootAccount.Balances {
-			if b.Asset.Code == disbursement.Asset.Code && b.Asset.Issuer == disbursement.Asset.Issuer {
-				distributionBalance, err = strconv.ParseFloat(b.Balance, 64)
+			if disbursement.Asset.EqualsHorizonAsset(b.Asset) {
+				availableBalance, err = strconv.ParseFloat(b.Balance, 64)
 				if err != nil {
 					return fmt.Errorf("cannot convert Horizon distribution account balance %s into float: %w", b.Balance, err)
 				}
@@ -275,15 +296,16 @@ func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, d
 			totalPendingAmount += paymentAmount
 		}
 
-		if (distributionBalance - (disbursementAmount + totalPendingAmount)) < 0 {
-			log.Ctx(ctx).Errorf(
-				"Insufficient distribution account balance %f to fulfill amount %f for disbursement id %s and total pending amount %f",
-				distributionBalance,
-				disbursementAmount,
-				disbursementID,
-				totalPendingAmount,
-			)
-			return ErrDisbursementWalletInsufficientBalance
+		if (availableBalance - (disbursementAmount + totalPendingAmount)) < 0 {
+			err = InsufficientBalanceError{
+				DisbursementAsset:  *disbursement.Asset,
+				DisbursementID:     disbursementID,
+				AvailableBalance:   availableBalance,
+				DisbursementAmount: disbursementAmount,
+				TotalPendingAmount: totalPendingAmount,
+			}
+			log.Ctx(ctx).Error(err)
+			return err
 		}
 
 		// 5. Update all correct payment status to `ready`
