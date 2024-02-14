@@ -1,7 +1,7 @@
 version: '3.8'
 services:
   sdp-tss:
-    container_name: sdp-tss
+    container_name: sdp-tss-mtn
     image: stellar/sdp-v2:latest
     build:
       context: ../
