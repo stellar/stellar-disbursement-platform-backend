@@ -160,6 +160,26 @@ func Test_NewSignatureService(t *testing.T) {
 				DistributionAccountResolver: wantDistAccountEnvSigner,
 			},
 		},
+		{
+			name: "🎉 successfully instantiate new signature with the provided DistributionAccountResolver",
+			opts: SignatureServiceOptions{
+				DistributionSignerType: DistributionAccountEnvSignatureClientType,
+				NetworkPassphrase:      network.TestNetworkPassphrase,
+				DBConnectionPool:       dbConnectionPool,
+				EncryptionPassphrase:   encryptionPassphrase,
+				LedgerNumberTracker:    mLedgerNumberTracker,
+
+				DistributionPrivateKey:      distributionKP.Seed(),
+				DistributionAccountResolver: mocks.NewMockDistributionAccountResolver(t),
+			},
+
+			wantSigService: SignatureService{
+				ChAccountSigner:             wantChAccountSigner,
+				DistAccountSigner:           wantDistAccountEnvSigner,
+				HostAccountSigner:           wantDistAccountEnvSigner,
+				DistributionAccountResolver: mocks.NewMockDistributionAccountResolver(t),
+			},
+		},
 	}
 
 	for _, tc := range testCases {

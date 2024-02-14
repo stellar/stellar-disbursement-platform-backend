@@ -57,6 +57,9 @@ type SignatureServiceOptions struct {
 	EncryptionPassphrase string
 	LedgerNumberTracker  preconditions.LedgerNumberTracker
 	Encrypter            utils.PrivateKeyEncrypter
+
+	// DistributionAccountResolver
+	DistributionAccountResolver
 }
 
 // NewSignatureService creates a new signature service instance, given the distribution signer type and the options.
@@ -90,9 +93,13 @@ func NewSignatureService(opts SignatureServiceOptions) (SignatureService, error)
 		return SignatureService{}, fmt.Errorf("creating a new host account signature client: %w", err)
 	}
 
-	distAccResolver, ok := distAccSigner.(DistributionAccountResolver)
-	if !ok {
-		return SignatureService{}, fmt.Errorf("trying to cast a distribution account signer to a distribution account resolver")
+	distAccResolver := opts.DistributionAccountResolver
+	if distAccResolver == nil {
+		var ok bool
+		distAccResolver, ok = distAccSigner.(DistributionAccountResolver)
+		if !ok {
+			return SignatureService{}, fmt.Errorf("trying to cast a distribution account signer to a distribution account resolver")
+		}
 	}
 
 	return SignatureService{
