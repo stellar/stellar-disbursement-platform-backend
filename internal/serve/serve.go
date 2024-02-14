@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
+	"github.com/go-chi/httprate"
 	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/network"
 	supporthttp "github.com/stellar/go/support/http"
@@ -207,6 +208,11 @@ func Serve(opts ServeOptions, httpServer HTTPServerInterface) error {
 	return nil
 }
 
+const (
+	rateLimitPer20Seconds = 30
+	rateLimitWindow       = 20 * time.Second
+)
+
 func handleHTTP(o ServeOptions) *chi.Mux {
 	mux := chi.NewMux()
 
@@ -214,6 +220,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 	mux.Use(middleware.CorsMiddleware(o.CorsAllowedOrigins))
 	mux.Use(chimiddleware.RequestID)
 	mux.Use(chimiddleware.RealIP)
+	mux.Use(httprate.LimitAll(rateLimitPer20Seconds, rateLimitWindow))
 	mux.Use(supporthttp.LoggingMiddleware)
 	mux.Use(middleware.RecoverHandler)
 	mux.Use(middleware.MetricsRequestHandler(o.MonitorService))
