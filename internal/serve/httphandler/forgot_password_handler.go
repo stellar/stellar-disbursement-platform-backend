@@ -49,6 +49,7 @@ func (h ForgotPasswordHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 	if err != nil {
 		err = fmt.Errorf("getting tenant from context: %w", err)
 		httperror.Unauthorized("", err, nil).Render(w)
+		return
 	}
 
 	var forgotPasswordRequest ForgotPasswordRequest

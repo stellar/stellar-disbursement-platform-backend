@@ -380,6 +380,29 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 		assert.JSONEq(t, wantsBody, string(respBody))
 	})
 
+	t.Run("returns Unauthorized when tenant is not in the context", func(t *testing.T) {
+		ctxWithoutTenant := context.Background()
+
+		requestBody := `
+		{ 
+			"email": "valid@email.com" ,
+			"recaptcha_token": "invalidToken"
+		}`
+
+		rr := httptest.NewRecorder()
+		req, err := http.NewRequestWithContext(ctxWithoutTenant, http.MethodPost, url, strings.NewReader(requestBody))
+		require.NoError(t, err)
+
+		http.HandlerFunc(handler.ServeHTTP).ServeHTTP(rr, req)
+
+		resp := rr.Result()
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+		assert.JSONEq(t, `{"error": "Not authorized."}`, string(respBody))
+	})
+
 	authenticatorMock.AssertExpectations(t)
 	messengerClientMock.AssertExpectations(t)
 	reCAPTCHAValidatorMock.AssertExpectations(t)
