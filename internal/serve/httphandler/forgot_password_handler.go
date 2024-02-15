@@ -27,9 +27,9 @@ const forgotPasswordMessageTitle = "Reset Account Password"
 type ForgotPasswordHandler struct {
 	AuthManager        auth.AuthManager
 	MessengerClient    message.MessengerClient
-	UIBaseURL          string
 	Models             *data.Models
 	ReCAPTCHAValidator validators.ReCAPTCHAValidator
+	ReCAPTCHADisabled  bool
 }
 
 type ForgotPasswordRequest struct {
@@ -43,24 +43,23 @@ type ForgotPasswordResponseBody struct {
 
 // ServeHTTP implements the http.Handler interface.
 func (h ForgotPasswordHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	var forgotPasswordRequest ForgotPasswordRequest
+	ctx := r.Context()
 
-	err := json.NewDecoder(r.Body).Decode(&forgotPasswordRequest)
+	tnt, err := tenant.GetTenantFromContext(ctx)
+	if err != nil {
+		err = fmt.Errorf("getting tenant from context: %w", err)
+		httperror.Unauthorized("", err, nil).Render(w)
+		return
+	}
+
+	var forgotPasswordRequest ForgotPasswordRequest
+	err = json.NewDecoder(r.Body).Decode(&forgotPasswordRequest)
 	if err != nil {
 		httperror.BadRequest("invalid request body", err, nil).Render(w)
 		return
 	}
 
-	ctx := r.Context()
-
-	tnt, err := tenant.GetTenantFromContext(ctx)
-	if err != nil {
-		log.Ctx(ctx).Errorf("error getting tenant from context: %s", err)
-		httperror.Unauthorized("", err, nil).Render(w)
-		return
-	}
-
-	if tnt.EnableReCAPTCHA {
+	if !h.ReCAPTCHADisabled {
 		// validating reCAPTCHA Token
 		isValid, recaptchaErr := h.ReCAPTCHAValidator.IsTokenValid(ctx, forgotPasswordRequest.ReCAPTCHAToken)
 		if recaptchaErr != nil {
@@ -107,7 +106,7 @@ func (h ForgotPasswordHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 			return
 		}
 
-		resetPasswordLink, err := url.JoinPath(h.UIBaseURL, "reset-password")
+		resetPasswordLink, err := url.JoinPath(*tnt.SDPUIBaseURL, "reset-password")
 		if err != nil {
 			err = fmt.Errorf("error getting reset password link: %w", err)
 			log.Ctx(ctx).Error(err)

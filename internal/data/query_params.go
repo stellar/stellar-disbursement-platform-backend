@@ -20,6 +20,8 @@ type SortField string
 
 const (
 	SortFieldName      SortField = "name"
+	SortFieldEmail     SortField = "email"
+	SortFieldIsActive  SortField = "is_active"
 	SortFieldCreatedAt SortField = "created_at"
 	SortFieldUpdatedAt SortField = "updated_at"
 )

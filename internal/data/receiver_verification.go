@@ -2,6 +2,8 @@ package data
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -24,7 +26,9 @@ type ReceiverVerification struct {
 	FailedAt          *time.Time        `db:"failed_at"`
 }
 
-type ReceiverVerificationModel struct{}
+type ReceiverVerificationModel struct {
+	dbConnectionPool db.DBConnectionPool
+}
 
 type ReceiverVerificationInsert struct {
 	ReceiverID        string            `db:"receiver_id"`
@@ -48,7 +52,7 @@ func (rvi *ReceiverVerificationInsert) Validate() error {
 }
 
 // GetByReceiverIDsAndVerificationField returns receiver verifications by receiver IDs and verification type.
-func (m ReceiverVerificationModel) GetByReceiverIDsAndVerificationField(ctx context.Context, sqlExec db.SQLExecuter, receiverIds []string, verificationField VerificationField) ([]*ReceiverVerification, error) {
+func (m *ReceiverVerificationModel) GetByReceiverIDsAndVerificationField(ctx context.Context, sqlExec db.SQLExecuter, receiverIds []string, verificationField VerificationField) ([]*ReceiverVerification, error) {
 	receiverVerifications := []*ReceiverVerification{}
 	query := `
 		SELECT 
@@ -74,7 +78,7 @@ func (m ReceiverVerificationModel) GetByReceiverIDsAndVerificationField(ctx cont
 }
 
 // GetAllByReceiverId returns all receiver verifications by receiver id.
-func (m ReceiverVerificationModel) GetAllByReceiverId(ctx context.Context, sqlExec db.SQLExecuter, receiverId string) ([]ReceiverVerification, error) {
+func (m *ReceiverVerificationModel) GetAllByReceiverId(ctx context.Context, sqlExec db.SQLExecuter, receiverId string) ([]ReceiverVerification, error) {
 	receiverVerifications := []ReceiverVerification{}
 	query := `
 		SELECT 
@@ -91,8 +95,35 @@ func (m ReceiverVerificationModel) GetAllByReceiverId(ctx context.Context, sqlEx
 	return receiverVerifications, nil
 }
 
+// GetLatestByPhoneNumber returns the latest updated receiver verification for some receiver that is associated with a phone number.
+func (m *ReceiverVerificationModel) GetLatestByPhoneNumber(ctx context.Context, phoneNumber string) (*ReceiverVerification, error) {
+	receiverVerification := ReceiverVerification{}
+	query := `
+		SELECT 
+		    rv.*
+		FROM 
+		    receiver_verifications rv
+		JOIN receivers r ON rv.receiver_id = r.id
+		WHERE 
+		    r.phone_number = $1
+		ORDER BY
+		    rv.updated_at DESC
+		LIMIT 1
+	`
+
+	err := m.dbConnectionPool.GetContext(ctx, &receiverVerification, query, phoneNumber)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrRecordNotFound
+		}
+		return nil, fmt.Errorf("fetching receiver verifications for phone number %s: %w", phoneNumber, err)
+	}
+
+	return &receiverVerification, nil
+}
+
 // Insert inserts a new receiver verification
-func (m ReceiverVerificationModel) Insert(ctx context.Context, sqlExec db.SQLExecuter, verificationInsert ReceiverVerificationInsert) (string, error) {
+func (m *ReceiverVerificationModel) Insert(ctx context.Context, sqlExec db.SQLExecuter, verificationInsert ReceiverVerificationInsert) (string, error) {
 	err := verificationInsert.Validate()
 	if err != nil {
 		return "", fmt.Errorf("error validating receiver verification insert: %w", err)
@@ -111,7 +142,6 @@ func (m ReceiverVerificationModel) Insert(ctx context.Context, sqlExec db.SQLExe
 	`
 
 	_, err = sqlExec.ExecContext(ctx, query, verificationInsert.ReceiverID, verificationInsert.VerificationField, hashedValue)
-
 	if err != nil {
 		return "", fmt.Errorf("error inserting receiver verification: %w", err)
 	}
@@ -120,7 +150,7 @@ func (m ReceiverVerificationModel) Insert(ctx context.Context, sqlExec db.SQLExe
 }
 
 // UpdateVerificationValue updates the hashed value of a receiver verification.
-func (m ReceiverVerificationModel) UpdateVerificationValue(ctx context.Context,
+func (m *ReceiverVerificationModel) UpdateVerificationValue(ctx context.Context,
 	sqlExec db.SQLExecuter,
 	receiverID string,
 	verificationField VerificationField,
@@ -139,7 +169,6 @@ func (m ReceiverVerificationModel) UpdateVerificationValue(ctx context.Context,
 	`
 
 	_, err = sqlExec.ExecContext(ctx, query, hashedValue, receiverID, verificationField)
-
 	if err != nil {
 		return fmt.Errorf("error updating receiver verification: %w", err)
 	}
@@ -148,7 +177,7 @@ func (m ReceiverVerificationModel) UpdateVerificationValue(ctx context.Context,
 }
 
 // UpdateVerificationValue updates the hashed value of a receiver verification.
-func (m ReceiverVerificationModel) UpdateReceiverVerification(ctx context.Context, receiverVerification ReceiverVerification, sqlExec db.SQLExecuter) error {
+func (m *ReceiverVerificationModel) UpdateReceiverVerification(ctx context.Context, receiverVerification ReceiverVerification, sqlExec db.SQLExecuter) error {
 	query := `
 		UPDATE 
 			receiver_verifications

@@ -2,6 +2,7 @@ package httphandler
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -19,6 +20,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpresponse"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 )
@@ -125,7 +127,43 @@ func (p PaymentsHandler) RetryPayments(rw http.ResponseWriter, req *http.Request
 		return
 	}
 
-	err = p.Models.Payment.RetryFailedPayments(ctx, user.Email, reqBody.PaymentIDs...)
+	err = db.RunInTransaction(ctx, p.Models.DBConnectionPool, nil, func(dbTx db.DBTransaction) error {
+		err = p.Models.Payment.RetryFailedPayments(ctx, dbTx, user.Email, reqBody.PaymentIDs...)
+		if err != nil {
+			return fmt.Errorf("retrying failed payments: %w", err)
+		}
+
+		// Producing event to send ready payments to TSS
+		var payments []*data.Payment
+		payments, err = p.Models.Payment.GetReadyByID(ctx, dbTx, reqBody.PaymentIDs...)
+		if err != nil {
+			return fmt.Errorf("getting ready payments by IDs: %w", err)
+		}
+
+		if len(payments) > 0 {
+			msg, msgErr := events.NewMessage(ctx, events.PaymentReadyToPayTopic, "", events.PaymentReadyToPayRetryFailedPayment, nil)
+			if msgErr != nil {
+				return fmt.Errorf("create new message: %w", msgErr)
+			}
+
+			paymentsReadyToPay := schemas.EventPaymentsReadyToPayData{TenantID: msg.TenantID}
+			for _, payment := range payments {
+				paymentsReadyToPay.Payments = append(paymentsReadyToPay.Payments, schemas.PaymentReadyToPay{ID: payment.ID})
+			}
+			msg.Data = paymentsReadyToPay
+
+			if p.EventProducer != nil {
+				err = p.EventProducer.WriteMessages(ctx, *msg)
+				if err != nil {
+					return fmt.Errorf("writing message %s on event producer: %w", msg, err)
+				}
+			} else {
+				log.Ctx(ctx).Errorf("event producer is nil, could not publish message %s", msg.String())
+			}
+		}
+
+		return nil
+	})
 	if err != nil {
 		if errors.Is(err, data.ErrMismatchNumRowsAffected) {
 			httperror.BadRequest("Invalid payment ID(s) provided. All payment IDs must exist and be in the 'FAILED' state.", err, nil).Render(rw)
@@ -134,38 +172,6 @@ func (p PaymentsHandler) RetryPayments(rw http.ResponseWriter, req *http.Request
 
 		httperror.InternalError(ctx, "", err, nil).Render(rw)
 		return
-	}
-
-	// Producing event to send ready payments to TSS
-	payments, err := p.Models.Payment.GetReadyByID(ctx, p.DBConnectionPool, reqBody.PaymentIDs...)
-	if err != nil {
-		httperror.InternalError(ctx, "", err, nil).Render(rw)
-		return
-	}
-
-	if len(payments) > 0 {
-		msg, err := events.NewMessage(ctx, events.PaymentReadyToPayTopic, "", events.PaymentReadyToPayRetryFailedPayment, nil)
-		if err != nil {
-			httperror.InternalError(ctx, "", err, nil).Render(rw)
-			return
-		}
-
-		paymentsReadyToPay := schemas.EventPaymentsReadyToPayData{TenantID: msg.TenantID}
-		for _, payment := range payments {
-			paymentsReadyToPay.Payments = append(paymentsReadyToPay.Payments, schemas.PaymentReadyToPay{ID: payment.ID})
-		}
-		msg.Data = paymentsReadyToPay
-
-		if p.EventProducer != nil {
-			err = p.EventProducer.WriteMessages(ctx, *msg)
-			if err != nil {
-				err = fmt.Errorf("writing message %s on event producer: %w", msg, err)
-				httperror.InternalError(ctx, "", err, nil).Render(rw)
-				return
-			}
-		} else {
-			log.Ctx(ctx).Errorf("event producer is nil, could not publish message %s", msg.String())
-		}
 	}
 
 	httpjson.RenderStatus(rw, http.StatusOK, map[string]string{"message": "Payments retried successfully"}, httpjson.JSON)
@@ -188,4 +194,59 @@ func (p PaymentsHandler) getPaymentsWithCount(ctx context.Context, queryParams *
 
 		return utils.NewResultWithTotal(totalPayments, payments), nil
 	})
+}
+
+type PatchPaymentStatusRequest struct {
+	Status string `json:"status"`
+}
+
+type UpdatePaymentStatusResponseBody struct {
+	Message string `json:"message"`
+}
+
+func (p PaymentsHandler) PatchPaymentStatus(w http.ResponseWriter, r *http.Request) {
+	var patchRequest PatchPaymentStatusRequest
+	err := json.NewDecoder(r.Body).Decode(&patchRequest)
+	if err != nil {
+		httperror.BadRequest("invalid request body", err, nil).Render(w)
+		return
+	}
+
+	// validate request
+	toStatus, err := data.ToPaymentStatus(patchRequest.Status)
+	if err != nil {
+		httperror.BadRequest("invalid status", err, nil).Render(w)
+		return
+	}
+
+	paymentManagementService := services.NewPaymentManagementService(p.Models, p.DBConnectionPool)
+	response := UpdatePaymentStatusResponseBody{}
+
+	ctx := r.Context()
+	paymentID := chi.URLParam(r, "id")
+
+	switch toStatus {
+	case data.CanceledPaymentStatus:
+		err = paymentManagementService.CancelPayment(ctx, paymentID)
+		response.Message = "Payment canceled"
+	default:
+		err = services.ErrPaymentStatusCantBeChanged
+	}
+
+	if err != nil {
+		switch {
+		case errors.Is(err, services.ErrPaymentNotFound):
+			httperror.NotFound(services.ErrPaymentNotFound.Error(), err, nil).Render(w)
+		case errors.Is(err, services.ErrPaymentNotReadyToCancel):
+			httperror.BadRequest(services.ErrPaymentNotReadyToCancel.Error(), err, nil).Render(w)
+		case errors.Is(err, services.ErrPaymentStatusCantBeChanged):
+			httperror.BadRequest(services.ErrPaymentStatusCantBeChanged.Error(), err, nil).Render(w)
+		default:
+			msg := fmt.Sprintf("Cannot update payment ID %s with status: %s", paymentID, toStatus)
+			httperror.InternalError(ctx, msg, err, nil).Render(w)
+		}
+		return
+	}
+
+	httpjson.RenderStatus(w, http.StatusOK, response, httpjson.JSON)
 }

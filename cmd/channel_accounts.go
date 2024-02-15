@@ -14,7 +14,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	di "github.com/stellar/stellar-disbursement-platform-backend/internal/dependencyinjection"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	txSubSvc "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/services"
 )
 
@@ -38,7 +37,7 @@ func (s *ChAccCmdService) CreateChannelAccounts(ctx context.Context, chAccServic
 }
 
 func (s *ChAccCmdService) EnsureChannelAccountsCount(ctx context.Context, chAccService txSubSvc.ChannelAccountsService, count int) error {
-	return chAccService.CreateChannelAccounts(ctx, count)
+	return chAccService.EnsureChannelAccountsCount(ctx, count)
 }
 
 func (s *ChAccCmdService) DeleteChannelAccount(ctx context.Context, chAccService txSubSvc.ChannelAccountsService, opts txSubSvc.DeleteChannelAccountsOptions) error {
@@ -109,15 +108,15 @@ func (c *ChannelAccountsCommand) Command(cmdService ChAccCmdServiceInterface) *c
 
 func (c *ChannelAccountsCommand) CreateCommand(cmdService ChAccCmdServiceInterface) *cobra.Command {
 	chAccService := txSubSvc.ChannelAccountsService{}
-	sigServiceOptions := engine.SignatureServiceOptions{}
-	configOpts := chAccServiceConfigOptions(&sigServiceOptions, &chAccService)
+	txSubmitterOpts := di.TxSubmitterEngineOptions{}
+	configOpts := cmdUtils.TransactionSubmitterEngineConfigOptions(&txSubmitterOpts)
 
 	createCmd := &cobra.Command{
 		Use:   "create [count]",
 		Short: "Create channel accounts",
 		Args:  cobra.ExactArgs(1),
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
-			if err := c.chAccServicePersistentPreRun(cmd, args, configOpts, &sigServiceOptions, &chAccService); err != nil {
+			if err := c.chAccServicePersistentPreRun(cmd, args, configOpts, &chAccService, &txSubmitterOpts); err != nil {
 				log.Ctx(cmd.Context()).Fatalf("Error running persistent pre run: %v", err)
 			}
 		},
@@ -144,8 +143,8 @@ func (c *ChannelAccountsCommand) CreateCommand(cmdService ChAccCmdServiceInterfa
 
 func (c *ChannelAccountsCommand) VerifyCommand(cmdService ChAccCmdServiceInterface) *cobra.Command {
 	chAccService := txSubSvc.ChannelAccountsService{}
-	sigServiceOptions := engine.SignatureServiceOptions{}
-	configOpts := chAccServiceConfigOptions(&sigServiceOptions, &chAccService)
+	txSubmitterOpts := di.TxSubmitterEngineOptions{}
+	configOpts := cmdUtils.TransactionSubmitterEngineConfigOptions(&txSubmitterOpts)
 
 	var deleteInvalidAccounts bool
 	configOpts = append(configOpts, &config.ConfigOption{
@@ -161,7 +160,7 @@ func (c *ChannelAccountsCommand) VerifyCommand(cmdService ChAccCmdServiceInterfa
 		Use:   "verify",
 		Short: "Verify that all the channel accounts in the database exist on the Stellar newtwork",
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
-			if err := c.chAccServicePersistentPreRun(cmd, args, configOpts, &sigServiceOptions, &chAccService); err != nil {
+			if err := c.chAccServicePersistentPreRun(cmd, args, configOpts, &chAccService, &txSubmitterOpts); err != nil {
 				log.Ctx(cmd.Context()).Fatalf("Error running persistent pre run: %v", err)
 			}
 		},
@@ -182,8 +181,8 @@ func (c *ChannelAccountsCommand) VerifyCommand(cmdService ChAccCmdServiceInterfa
 
 func (c *ChannelAccountsCommand) EnsureCommand(cmdService ChAccCmdServiceInterface) *cobra.Command {
 	chAccService := txSubSvc.ChannelAccountsService{}
-	sigServiceOptions := engine.SignatureServiceOptions{}
-	configOpts := chAccServiceConfigOptions(&sigServiceOptions, &chAccService)
+	txSubmitterOpts := di.TxSubmitterEngineOptions{}
+	configOpts := cmdUtils.TransactionSubmitterEngineConfigOptions(&txSubmitterOpts)
 
 	ensureCmd := &cobra.Command{
 		Use: "ensure",
@@ -192,7 +191,7 @@ func (c *ChannelAccountsCommand) EnsureCommand(cmdService ChAccCmdServiceInterfa
 			"channel accounts in storage and onchain",
 		Args: cobra.ExactArgs(1),
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
-			if err := c.chAccServicePersistentPreRun(cmd, args, configOpts, &sigServiceOptions, &chAccService); err != nil {
+			if err := c.chAccServicePersistentPreRun(cmd, args, configOpts, &chAccService, &txSubmitterOpts); err != nil {
 				log.Ctx(cmd.Context()).Fatalf("Error running persistent pre run: %v", err)
 			}
 		},
@@ -219,8 +218,8 @@ func (c *ChannelAccountsCommand) EnsureCommand(cmdService ChAccCmdServiceInterfa
 
 func (c *ChannelAccountsCommand) DeleteCommand(cmdService ChAccCmdServiceInterface) *cobra.Command {
 	chAccService := txSubSvc.ChannelAccountsService{}
-	sigServiceOptions := engine.SignatureServiceOptions{}
-	configOpts := chAccServiceConfigOptions(&sigServiceOptions, &chAccService)
+	txSubmitterOpts := di.TxSubmitterEngineOptions{}
+	configOpts := cmdUtils.TransactionSubmitterEngineConfigOptions(&txSubmitterOpts)
 
 	deleteChAccOpts := txSubSvc.DeleteChannelAccountsOptions{}
 	configOpts = append(configOpts, []*config.ConfigOption{
@@ -245,7 +244,7 @@ func (c *ChannelAccountsCommand) DeleteCommand(cmdService ChAccCmdServiceInterfa
 		Use:   "delete",
 		Short: "Delete a specified channel account from storage and on the network",
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
-			if err := c.chAccServicePersistentPreRun(cmd, args, configOpts, &sigServiceOptions, &chAccService); err != nil {
+			if err := c.chAccServicePersistentPreRun(cmd, args, configOpts, &chAccService, &txSubmitterOpts); err != nil {
 				log.Ctx(cmd.Context()).Fatalf("Error running persistent pre run: %v", err)
 			}
 		},
@@ -285,30 +284,14 @@ func (c *ChannelAccountsCommand) ViewCommand(cmdService ChAccCmdServiceInterface
 	return listCmd
 }
 
-// chAccServiceConfigOptions returns the config options for the channel accounts service to be used when the signature
-// service is needed.
-func chAccServiceConfigOptions(
-	sigServiceOptions *engine.SignatureServiceOptions,
-	chAccService *txSubSvc.ChannelAccountsService,
-) config.ConfigOptions {
-	return append(
-		// signature service options:
-		cmdUtils.BaseSignatureServiceConfigOptions(sigServiceOptions),
-		cmdUtils.DistributionSeed(&sigServiceOptions.DistributionPrivateKey),
-		// other shared options:
-		cmdUtils.HorizonURLConfigOption(&chAccService.HorizonURL),
-		cmdUtils.MaxBaseFee(&chAccService.MaxBaseFee),
-	)
-}
-
 // chAccServicePersistentPreRun runs the persistent pre run for the channel accounts service to be used when the
 // signature service is needed.
 func (c *ChannelAccountsCommand) chAccServicePersistentPreRun(
 	cmd *cobra.Command,
 	args []string,
 	configOpts config.ConfigOptions,
-	sigServiceOptions *engine.SignatureServiceOptions,
 	chAccService *txSubSvc.ChannelAccountsService,
+	txSubmitterOpts *di.TxSubmitterEngineOptions,
 ) error {
 	ctx := cmd.Context()
 	cmd.Parent().PersistentPreRun(cmd.Parent(), args)
@@ -320,15 +303,15 @@ func (c *ChannelAccountsCommand) chAccServicePersistentPreRun(
 	}
 
 	// Prepare the signature service
-	sigServiceOptions.NetworkPassphrase = globalOptions.NetworkPassphrase
-	sigServiceOptions.DBConnectionPool = c.TSSDBConnectionPool
-	sigService, err := di.NewSignatureService(ctx, *sigServiceOptions)
+	txSubmitterOpts.SignatureServiceOptions.DBConnectionPool = c.TSSDBConnectionPool
+	txSubmitterOpts.SignatureServiceOptions.NetworkPassphrase = globalOptions.NetworkPassphrase
+	submitterEngine, err := di.NewTxSubmitterEngine(ctx, *txSubmitterOpts)
 	if err != nil {
-		return fmt.Errorf("retrieving signing service through the dependency injector in %s: %w", cmd.Name(), err)
+		log.Ctx(ctx).Fatalf("error creating submitter engine: %v", err)
 	}
 
 	// Inject channel account service dependencies
-	chAccService.SigningService = sigService
+	chAccService.SubmitterEngine = submitterEngine
 	chAccService.TSSDBConnectionPool = c.TSSDBConnectionPool
 
 	return nil

@@ -22,6 +22,8 @@ jobs:
         uses: actions/setup-go@v3
         with:
           go-version: 1.19
+          cache: true
+          cache-dependency-path: go.sum
 
       - name: golangci-lint
         uses: golangci/golangci-lint-action@08e2f20817b15149a52b5b3ebe7de50aff2ba8c5 # version v3.4.0
@@ -31,6 +33,40 @@ jobs:
 
       - name: Run ./gomod.sh
         run: ./gomod.sh
+
+      - name: Install github.com/nishanths/exhaustive
+        run: go install github.com/nishanths/exhaustive/cmd/exhaustive@latest
+
+      - name: Run exhaustive
+        run: exhaustive -default-signifies-exhaustive ./...
+
+  check-helm-readme:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Install NodeJs
+        uses: actions/setup-node@v2
+        with:
+          node-version: 14
+
+      - name: Install Helm Readme Generator (@bitnami/readme-generator-for-helm)
+        run: npm install -g @bitnami/readme-generator-for-helm
+
+      - name: Generate README.md for comparison
+        run: readme-generator -v helmchart/sdp/values.yaml -r helmchart/sdp/README.md
+
+      - name: Check if helmchart/sdp/README.md is in sync with helmchart/sdp/values.yaml
+        run: |
+          if git diff --exit-code --stat helmchart/sdp/README.md; then
+            echo "✅ helmchart/sdp/README.md is in sync with helmchart/sdp/values.yaml"
+          else
+            echo "🚨 helmchart/sdp/README.md needs to be re-generated!"
+            echo "Run 'readme-generator -v helmchart/sdp/values.yaml -r helmchart/sdp/README.md' locally and commit the changes."
+            echo "Refer to https://github.com/bitnami/readme-generator-for-helm for more information."
+            exit 1
+          fi
 
   build:
     runs-on: ubuntu-latest
@@ -42,6 +78,8 @@ jobs:
         uses: actions/setup-go@v3
         with:
           go-version: 1.19
+          cache: true
+          cache-dependency-path: go.sum
 
       - name: Build Project
         run: go build ./...
@@ -79,13 +117,15 @@ jobs:
         uses: actions/setup-go@v3
         with:
           go-version: 1.19
+          cache: true
+          cache-dependency-path: go.sum
 
       - name: Run tests
         run: go test -race -coverpkg=./... -coverprofile=c.out ./...
 
       - name: Validate Test Coverage Threshold
         env:
-          TESTCOVERAGE_THRESHOLD: 82 # percentage
+          TESTCOVERAGE_THRESHOLD: 83 # percentage
         run: |
           echo "Quality Gate:   Checking if test coverage is above threshold..."
           echo "Threshold:      $TESTCOVERAGE_THRESHOLD%"
@@ -104,7 +144,7 @@ jobs:
 
   complete:
     if: always()
-    needs: [check, build, test]
+    needs: [check, check-helm-readme, build, test]
     runs-on: ubuntu-latest
     steps:
       - if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')

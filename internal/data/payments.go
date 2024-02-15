@@ -30,6 +30,7 @@ type Payment struct {
 	ReceiverWallet     *ReceiverWallet      `json:"receiver_wallet,omitempty" db:"receiver_wallet"`
 	CreatedAt          time.Time            `json:"created_at" db:"created_at"`
 	UpdatedAt          time.Time            `json:"updated_at" db:"updated_at"`
+	ExternalPaymentID  string               `json:"external_payment_id,omitempty" db:"external_payment_id"`
 }
 
 type PaymentStatusHistoryEntry struct {
@@ -50,11 +51,12 @@ var (
 )
 
 type PaymentInsert struct {
-	ReceiverID       string `db:"receiver_id"`
-	DisbursementID   string `db:"disbursement_id"`
-	Amount           string `db:"amount"`
-	AssetID          string `db:"asset_id"`
-	ReceiverWalletID string `db:"receiver_wallet_id"`
+	ReceiverID        string  `db:"receiver_id"`
+	DisbursementID    string  `db:"disbursement_id"`
+	Amount            string  `db:"amount"`
+	AssetID           string  `db:"asset_id"`
+	ReceiverWalletID  string  `db:"receiver_wallet_id"`
+	ExternalPaymentID *string `db:"external_payment_id"`
 }
 
 type PaymentUpdate struct {
@@ -150,6 +152,7 @@ func (p *PaymentModel) Get(ctx context.Context, id string, sqlExec db.SQLExecute
 			p.status_history,
 			p.created_at,
 			p.updated_at,
+			COALESCE(p.external_payment_id, '') as external_payment_id,
 			d.id as "disbursement.id",
 			d.name as "disbursement.name",
 			d.status as "disbursement.status",
@@ -229,6 +232,7 @@ func (p *PaymentModel) GetAll(ctx context.Context, queryParams *QueryParams, sql
 			p.status_history,
 			p.created_at,
 			p.updated_at,
+			COALESCE(p.external_payment_id, '') as external_payment_id,
 			d.id as "disbursement.id",
 			d.name as "disbursement.name",
 			d.status as "disbursement.status",
@@ -304,18 +308,20 @@ func (p *PaymentModel) InsertAll(ctx context.Context, sqlExec db.SQLExecuter, in
 			asset_id,
 			receiver_id,
 			disbursement_id,
-		    receiver_wallet_id
+		    receiver_wallet_id,
+			external_payment_id
 		) VALUES (
 			$1,
 			$2,
 			$3,
 			$4,
-		    $5
+			$5,
+			$6
 		)
 		`
 
 	for _, payment := range inserts {
-		_, err := sqlExec.ExecContext(ctx, query, payment.Amount, payment.AssetID, payment.ReceiverID, payment.DisbursementID, payment.ReceiverWalletID)
+		_, err := sqlExec.ExecContext(ctx, query, payment.Amount, payment.AssetID, payment.ReceiverID, payment.DisbursementID, payment.ReceiverWalletID, payment.ExternalPaymentID)
 		if err != nil {
 			return fmt.Errorf("error inserting payment: %w", err)
 		}
@@ -495,74 +501,72 @@ func (p *PaymentModel) Update(ctx context.Context, sqlExec db.SQLExecuter, payme
 	return nil
 }
 
-func (p *PaymentModel) RetryFailedPayments(ctx context.Context, email string, paymentIDs ...string) error {
-	return db.RunInTransaction(ctx, p.dbConnectionPool, nil, func(dbTx db.DBTransaction) error {
-		if len(paymentIDs) == 0 {
-			return fmt.Errorf("payment ids is required: %w", ErrMissingInput)
-		}
+func (p *PaymentModel) RetryFailedPayments(ctx context.Context, sqlExec db.SQLExecuter, email string, paymentIDs ...string) error {
+	if len(paymentIDs) == 0 {
+		return fmt.Errorf("payment ids is required: %w", ErrMissingInput)
+	}
 
-		if email == "" {
-			return fmt.Errorf("user email is required: %w", ErrMissingInput)
-		}
+	if email == "" {
+		return fmt.Errorf("user email is required: %w", ErrMissingInput)
+	}
 
-		const query = `
-			WITH previous_payments_stellar_transaction_ids AS (
-				SELECT
-					id,
-					stellar_transaction_id,
-					$2 AS status_message
-				FROM
-					payments
-				WHERE
-					id = ANY($1)
-					AND status = 'FAILED'::payment_status
-			)
-			UPDATE
-				payments
-			SET
-				status = 'READY'::payment_status,
-				stellar_transaction_id = '',
-				status_history = array_append(status_history, create_payment_status_history(NOW(), 'READY', CONCAT(pp.status_message, pp.stellar_transaction_id)))
+	const query = `
+		WITH previous_payments_stellar_transaction_ids AS (
+			SELECT
+				id,
+				stellar_transaction_id,
+				$2 AS status_message
 			FROM
-				previous_payments_stellar_transaction_ids pp
+				payments
 			WHERE
-				payments.id = pp.id
+				id = ANY($1)
+				AND status = 'FAILED'::payment_status
+		)
+		UPDATE
+			payments
+		SET
+			status = 'READY'::payment_status,
+			stellar_transaction_id = '',
+			status_history = array_append(status_history, create_payment_status_history(NOW(), 'READY', CONCAT(pp.status_message, pp.stellar_transaction_id)))
+		FROM
+			previous_payments_stellar_transaction_ids pp
+		WHERE
+			payments.id = pp.id
 		`
 
-		statusMessage := fmt.Sprintf("User %s has requested to retry the payment - Previous Stellar Transaction ID: ", email)
+	statusMessage := fmt.Sprintf("User %s has requested to retry the payment - Previous Stellar Transaction ID: ", email)
 
-		res, err := dbTx.ExecContext(ctx, query, pq.Array(paymentIDs), statusMessage)
-		if err != nil {
-			return fmt.Errorf("error retrying failed payments: %w", err)
-		}
+	res, err := sqlExec.ExecContext(ctx, query, pq.Array(paymentIDs), statusMessage)
+	if err != nil {
+		return fmt.Errorf("error retrying failed payments: %w", err)
+	}
 
-		numRowsAffected, err := res.RowsAffected()
-		if err != nil {
-			return fmt.Errorf("error getting number of rows affected: %w", err)
-		}
+	numRowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("error getting number of rows affected: %w", err)
+	}
 
-		if numRowsAffected != int64(len(paymentIDs)) {
-			return ErrMismatchNumRowsAffected
-		}
+	if numRowsAffected != int64(len(paymentIDs)) {
+		return ErrMismatchNumRowsAffected
+	}
 
-		// This ensures that we are going to sync the payment transaction on the Anchor Platform again.
-		const updateReceiverWallets = `
-			UPDATE
-				receiver_wallets
-			SET
-				anchor_platform_transaction_synced_at = NULL
-			WHERE
-				id IN (
-					SELECT receiver_wallet_id FROM payments WHERE id = ANY($1)
-				)
+	// This ensures that we are going to sync the payment transaction on the Anchor Platform again.
+	const updateReceiverWallets = `
+		UPDATE
+			receiver_wallets
+		SET
+			anchor_platform_transaction_synced_at = NULL
+		WHERE
+			id IN (
+				SELECT receiver_wallet_id FROM payments WHERE id = ANY($1)
+			)
 		`
-		_, err = dbTx.ExecContext(ctx, updateReceiverWallets, pq.Array(paymentIDs))
-		if err != nil {
-			return fmt.Errorf("resetting the receiver wallets' anchor platform transaction synced at: %w", err)
-		}
+	_, err = sqlExec.ExecContext(ctx, updateReceiverWallets, pq.Array(paymentIDs))
+	if err != nil {
+		return fmt.Errorf("resetting the receiver wallets' anchor platform transaction synced at: %w", err)
+	}
 
-		return nil
-	})
+	return nil
 }
 
 // GetByIDs returns a list of payments for the given IDs.
@@ -612,7 +616,13 @@ func (p *PaymentModel) GetByIDs(ctx context.Context, sqlExec db.SQLExecuter, pay
 func newPaymentQuery(baseQuery string, queryParams *QueryParams, paginated bool, sqlExec db.SQLExecuter) (string, []interface{}) {
 	qb := NewQueryBuilder(baseQuery)
 	if queryParams.Filters[FilterKeyStatus] != nil {
-		qb.AddCondition("p.status = ?", queryParams.Filters[FilterKeyStatus])
+		if statusSlice, ok := queryParams.Filters[FilterKeyStatus].([]PaymentStatus); ok {
+			if len(statusSlice) > 0 {
+				qb.AddCondition("p.status = ANY(?)", pq.Array(statusSlice))
+			}
+		} else {
+			qb.AddCondition("p.status = ?", queryParams.Filters[FilterKeyStatus])
+		}
 	}
 	if queryParams.Filters[FilterKeyReceiverID] != nil {
 		qb.AddCondition("p.receiver_id = ?", queryParams.Filters[FilterKeyReceiverID])

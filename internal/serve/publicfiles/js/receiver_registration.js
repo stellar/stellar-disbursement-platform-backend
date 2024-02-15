@@ -40,7 +40,7 @@ function toggleSuccessNotification(parentEl, title, message, isVisible) {
 async function sendSms(phoneNumber, reCAPTCHAToken, onSuccess, onError) {
   if (phoneNumber && reCAPTCHAToken) {
     try {
-      const request = await fetch("/wallet-registration/otp", {
+      const response = await fetch("/wallet-registration/otp", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -51,9 +51,13 @@ async function sendSms(phoneNumber, reCAPTCHAToken, onSuccess, onError) {
           recaptcha_token: reCAPTCHAToken,
         }),
       });
-      await request.json();
 
-      onSuccess();
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Something went wrong, please try again later.");
+      }
+      
+      onSuccess(data.verification_field);;
     } catch (error) {
       onError(error);
     }
@@ -96,6 +100,8 @@ async function submitPhoneNumber(event) {
     "#g-recaptcha-response"
   );
   const buttonEls = phoneNumberSectionEl.querySelectorAll("[data-button]");
+  const verificationFieldTitle = document.querySelector("label[for='verification']");
+  const verificationFieldInput = document.querySelector("#verification");
 
   if (!reCAPTCHATokenEl || !reCAPTCHATokenEl.value) {
     toggleErrorNotification(
@@ -133,7 +139,22 @@ async function submitPhoneNumber(event) {
       return;
     }
 
-    function showNextPage() {
+    function showNextPage(verificationField) {
+      verificationFieldInput.type = "text";
+      if(verificationField === "DATE_OF_BIRTH") {
+        verificationFieldTitle.textContent = "Date of birth";
+        verificationFieldInput.name = "date_of_birth";
+        verificationFieldInput.type = "date";
+      }
+      else if(verificationField === "NATIONAL_ID_NUMBER") {
+        verificationFieldTitle.textContent = "National ID number";
+        verificationFieldInput.name = "national_id_number";
+      }
+      else if(verificationField === "PIN") {
+        verificationFieldTitle.textContent = "Pin";
+        verificationFieldInput.name = "pin";
+      }
+
       phoneNumberSectionEl.style.display = "none";
       reCAPTCHATokenEl.style.display = "none";
       passcodeSectionEl.style.display = "flex";
@@ -169,6 +190,7 @@ async function submitOtp(event) {
   );
   const otpEl = document.getElementById("otp");
   const verificationEl = document.getElementById("verification");
+  const verificationField = verificationEl.getAttribute("name");
 
   const buttonEls = passcodeSectionEl.querySelectorAll("[data-button]");
 
@@ -213,7 +235,7 @@ async function submitOtp(event) {
             phone_number: phoneNumber,
             otp: otp,
             verification: verification,
-            verification_type: "date_of_birth",
+            verification_type: verificationField,
             recaptcha_token: reCAPTCHATokenEl.value,
           }),
         });

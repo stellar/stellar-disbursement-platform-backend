@@ -1,12 +1,9 @@
 version: '3.8'
 services:
   sdp-frontend:
-    container_name: sdp-frontend
+    container_name: sdp-frontend-mtn
     image: stellar/stellar-disbursement-platform-frontend:multitenant-alpha
     ports:
       - "3000:80"
     volumes:
       - ./env-config.js:/usr/share/nginx/html/settings/env-config.js
-    depends_on:
-      - db
-      - sdp-api

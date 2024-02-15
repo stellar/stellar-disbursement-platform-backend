@@ -8,7 +8,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/htmltemplate"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 
@@ -50,17 +49,12 @@ type LoginHandler struct {
 	ReCAPTCHAValidator validators.ReCAPTCHAValidator
 	MessengerClient    message.MessengerClient
 	Models             *data.Models
+	ReCAPTCHADisabled  bool
+	MFADisabled        bool
 }
 
 func (h LoginHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
-
-	tnt, tntErr := tenant.GetTenantFromContext(ctx)
-	if tntErr != nil {
-		log.Ctx(ctx).Errorf("error getting tenant from context: %s", tntErr)
-		httperror.Unauthorized("", tntErr, nil).Render(rw)
-		return
-	}
 
 	var reqBody LoginRequest
 	if err := httpdecode.DecodeJSON(req, &reqBody); err != nil {
@@ -75,7 +69,7 @@ func (h LoginHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	if tnt.EnableReCAPTCHA {
+	if !h.ReCAPTCHADisabled {
 		// validating reCAPTCHA Token
 		isValid, err := h.ReCAPTCHAValidator.IsTokenValid(ctx, reqBody.ReCAPTCHAToken)
 		if err != nil {
@@ -108,7 +102,7 @@ func (h LoginHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	if !tnt.EnableMFA {
+	if h.MFADisabled {
 		log.Ctx(ctx).Infof("[UserLogin] - Logged in user with account ID %s", user.ID)
 		httpjson.RenderStatus(rw, http.StatusOK, LoginResponse{Token: token}, httpjson.JSON)
 		return

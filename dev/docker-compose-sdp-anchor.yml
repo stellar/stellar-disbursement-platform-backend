@@ -13,7 +13,7 @@ services:
       - postgres-db:/data/postgres
 
   sdp-api:
-    container_name: sdp-api
+    container_name: sdp-api-mtn
     image: stellar/sdp-v2:latest
     build:
       context: ../
@@ -41,6 +41,8 @@ services:
       DISTRIBUTION_SEED: ${DISTRIBUTION_SEED}
       CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE: ${CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE}
       RECAPTCHA_SITE_KEY: 6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI
+      DISABLE_MFA: "true"
+      DISABLE_RECAPTCHA: "true"
       CORS_ALLOWED_ORIGINS: "*"
 
 
@@ -77,12 +79,9 @@ services:
         ./stellar-disbursement-platform db sdp migrate up --all
         ./stellar-disbursement-platform db setup-for-network --all
         ./stellar-disbursement-platform serve
-    depends_on:
-      - db
-      - kafka
 
   db-anchor-platform:
-    container_name: anchor-platform-postgres-db
+    container_name: anchor-platform-postgres-db-mtn
     image: postgres:14-alpine
     environment:
       POSTGRES_USER: postgres
@@ -102,8 +101,6 @@ services:
       - "8080:8080" # sep-server
       - "8085:8085" # platform-server
       - "8082:8082" # metrics
-    depends_on:
-      - db-anchor-platform
     environment:
       HOST_URL: http://localhost:8080
       SEP_SERVER_PORT: 8080
@@ -119,7 +116,7 @@ services:
       METRICS_ENABLED: "false"  # Metrics would be available at port 8082
       METRICS_EXTRAS_ENABLED: "false"
       SEP10_ENABLED: "true"
-      SEP10_HOME_DOMAINS: "localhost:8000" # Comma separated list of home domains
+      SEP10_HOME_DOMAINS: "localhost:8000, redcorp.stellar.local:8000, bluecorp.stellar.local:8000" # Comma separated list of home domains
       SEP10_HOME_DOMAIN: ""
       SEP10_WEB_AUTH_DOMAIN: "localhost:8080"
       # SEP10_CLIENT_ATTRIBUTION_REQUIRED: true  # RECOMMENDED

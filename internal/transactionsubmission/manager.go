@@ -9,16 +9,15 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/support/log"
-	"github.com/stellar/go/txnbuild"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions"
 	tssMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/monitor"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 	sdpUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
@@ -26,15 +25,13 @@ import (
 const serviceName = "Transaction Submission Service"
 
 type SubmitterOptions struct {
-	HorizonURL           string
 	NumChannelAccounts   int
 	QueuePollingInterval int
-	MaxBaseFee           int
 	MonitorService       tssMonitor.TSSMonitorService
 	CrashTrackerClient   crashtracker.CrashTrackerClient
 	EventProducer        events.Producer
 
-	SignatureService engine.SignatureService
+	SubmitterEngine  engine.SubmitterEngine
 	DBConnectionPool db.DBConnectionPool
 }
 
@@ -43,24 +40,16 @@ func (so *SubmitterOptions) validate() error {
 		return fmt.Errorf("database connection pool cannot be nil")
 	}
 
-	if so.SignatureService == nil {
-		return fmt.Errorf("signature service cannot be nil")
+	if err := so.SubmitterEngine.Validate(); err != nil {
+		return fmt.Errorf("validating submitter engine: %w", err)
 	}
 
-	if so.HorizonURL == "" {
-		return fmt.Errorf("horizon url cannot be empty")
-	}
-
-	if so.NumChannelAccounts < MinNumberOfChannelAccounts || so.NumChannelAccounts > MaxNumberOfChannelAccounts {
-		return fmt.Errorf("num channel accounts must stay in the range from %d to %d", MinNumberOfChannelAccounts, MaxNumberOfChannelAccounts)
+	if so.NumChannelAccounts < services.MinNumberOfChannelAccounts || so.NumChannelAccounts > services.MaxNumberOfChannelAccounts {
+		return fmt.Errorf("num channel accounts must stay in the range from %d to %d", services.MinNumberOfChannelAccounts, services.MaxNumberOfChannelAccounts)
 	}
 
 	if so.QueuePollingInterval < 6 {
 		return fmt.Errorf("queue polling interval must be greater than 6 seconds")
-	}
-
-	if so.MaxBaseFee < txnbuild.MinBaseFee {
-		return fmt.Errorf("max base fee must be greater than or equal to %d", txnbuild.MinBaseFee)
 	}
 
 	if sdpUtils.IsEmpty(so.MonitorService) {
@@ -80,9 +69,7 @@ type Manager struct {
 	queueService        defaultQueueService
 	txProcessingLimiter *engine.TransactionProcessingLimiter
 	// transaction submission:
-	engine     *engine.SubmitterEngine
-	sigService engine.SignatureService
-	maxBaseFee int
+	engine *engine.SubmitterEngine
 	// crash & metrics monitoring:
 	monitorService     tssMonitor.TSSMonitorService
 	crashTrackerClient crashtracker.CrashTrackerClient
@@ -116,18 +103,6 @@ func NewManager(ctx context.Context, opts SubmitterOptions) (m *Manager, err err
 		return nil, fmt.Errorf("initializing channel transaction bundle model: %w", err)
 	}
 
-	// initialize horizon client
-	horizonClient := &horizonclient.Client{
-		HorizonURL: opts.HorizonURL,
-		HTTP:       httpclient.DefaultClient(),
-	}
-
-	// initialize SubmitterEngine
-	submitterEngine, err := engine.NewSubmitterEngine(horizonClient)
-	if err != nil {
-		return nil, fmt.Errorf("initializing submitter engine: %w", err)
-	}
-
 	// validate if we have any channel accounts in the DB.
 	chAccCount, err := chAccModel.Count(ctx)
 	if err != nil {
@@ -158,9 +133,7 @@ func NewManager(ctx context.Context, opts SubmitterOptions) (m *Manager, err err
 		queueService:        queueService,
 		txProcessingLimiter: txProcessingLimiter,
 
-		engine:     submitterEngine,
-		sigService: opts.SignatureService,
-		maxBaseFee: opts.MaxBaseFee,
+		engine: &opts.SubmitterEngine,
 
 		crashTrackerClient: crashTrackerClient,
 		monitorService:     opts.MonitorService,
@@ -219,8 +192,6 @@ func (m *Manager) ProcessTransactions(ctx context.Context) {
 					m.txModel,
 					m.chAccModel,
 					m.engine,
-					m.sigService,
-					m.maxBaseFee,
 					m.crashTrackerClient,
 					m.txProcessingLimiter,
 					m.monitorService,
@@ -246,7 +217,7 @@ func (m *Manager) loadReadyForProcessingBundles(ctx context.Context) ([]*store.C
 	if err != nil {
 		return nil, fmt.Errorf("getting current ledger number: %w", err)
 	}
-	lockToLedgerNumber := currentLedgerNumber + engine.IncrementForMaxLedgerBounds
+	lockToLedgerNumber := currentLedgerNumber + preconditions.IncrementForMaxLedgerBounds
 
 	chTxBundles, err := m.chTxBundleModel.LoadAndLockTuples(ctx, currentLedgerNumber, lockToLedgerNumber, m.txProcessingLimiter.LimitValue())
 	if err != nil {

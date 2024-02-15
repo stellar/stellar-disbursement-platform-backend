@@ -9,9 +9,10 @@ import (
 	"github.com/stellar/go/txnbuild"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
+	di "github.com/stellar/stellar-disbursement-platform-backend/internal/dependencyinjection"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 )
 
 // TwilioConfigOptions returns the config options for Twilio. Relevant for loading configs needed for the messenger type(s): `TWILIO_*`.
@@ -184,7 +185,29 @@ func EventBrokerConfigOptions(opts *EventBrokerOptions) []*config.ConfigOption {
 	}
 }
 
-func BaseSignatureServiceConfigOptions(opts *engine.SignatureServiceOptions) []*config.ConfigOption {
+func TransactionSubmitterEngineConfigOptions(opts *di.TxSubmitterEngineOptions) config.ConfigOptions {
+	return append(
+		BaseSignatureServiceConfigOptions(&opts.SignatureServiceOptions),
+		&config.ConfigOption{
+			Name:        "max-base-fee",
+			Usage:       "The max base fee for submitting a Stellar transaction",
+			OptType:     types.Int,
+			ConfigKey:   &opts.MaxBaseFee,
+			FlagDefault: 100 * txnbuild.MinBaseFee,
+			Required:    true,
+		},
+		&config.ConfigOption{
+			Name:        "horizon-url",
+			Usage:       "The URL of the Stellar Horizon server where this application will communicate with.",
+			OptType:     types.String,
+			ConfigKey:   &opts.HorizonURL,
+			FlagDefault: horizonclient.DefaultTestNetClient.HorizonURL,
+			Required:    true,
+		},
+	)
+}
+
+func BaseSignatureServiceConfigOptions(opts *signing.SignatureServiceOptions) []*config.ConfigOption {
 	return []*config.ConfigOption{
 		{
 			Name:           "channel-account-encryption-passphrase",
@@ -195,25 +218,22 @@ func BaseSignatureServiceConfigOptions(opts *engine.SignatureServiceOptions) []*
 			Required:       false,
 		},
 		{
-			Name:           "signature-service-type",
-			Usage:          "The type of the signature service. Options: ['DEFAULT']",
+			Name:           "distribution-seed",
+			Usage:          "The private key of the Stellar distribution account that sends the disbursements.", // TODO: this will eventually be used for sponsoring tenant accounts.
 			OptType:        types.String,
-			CustomSetValue: SetConfigOptionSignatureServiceType,
-			ConfigKey:      &opts.Type,
-			FlagDefault:    string(engine.SignatureServiceTypeDefault),
+			CustomSetValue: SetConfigOptionStellarPrivateKey,
+			ConfigKey:      &opts.DistributionPrivateKey,
 			Required:       true,
 		},
-	}
-}
-
-func HorizonURLConfigOption(targetPointer interface{}) *config.ConfigOption {
-	return &config.ConfigOption{
-		Name:        "horizon-url",
-		Usage:       "The URL of the Stellar Horizon server where this application will communicate with.",
-		OptType:     types.String,
-		ConfigKey:   targetPointer,
-		FlagDefault: horizonclient.DefaultTestNetClient.HorizonURL,
-		Required:    true,
+		{
+			Name:           "distribution-signer-type",
+			Usage:          fmt.Sprintf("The type of the signature client used for distribution accounts. Options: %+v", signing.DistributionSignatureClientTypes()),
+			OptType:        types.String,
+			CustomSetValue: SetConfigOptionDistributionSignerType,
+			ConfigKey:      &opts.DistributionSignerType,
+			FlagDefault:    string(signing.DistributionAccountEnvSignatureClientType),
+			Required:       true,
+		},
 	}
 }
 
@@ -229,17 +249,6 @@ func CrashTrackerTypeConfigOption(targetPointer interface{}) *config.ConfigOptio
 	}
 }
 
-func DistributionSeed(targetPointer interface{}) *config.ConfigOption {
-	return &config.ConfigOption{
-		Name:           "distribution-seed",
-		Usage:          "The private key of the Stellar distribution account that sends the disbursements.", // TODO: this will eventually be used for sponsoring tenant accounts.
-		OptType:        types.String,
-		CustomSetValue: SetConfigOptionStellarPrivateKey,
-		ConfigKey:      targetPointer,
-		Required:       true,
-	}
-}
-
 func DistributionPublicKey(targetPointer interface{}) *config.ConfigOption {
 	return &config.ConfigOption{
 		Name:           "distribution-public-key",
@@ -248,17 +257,6 @@ func DistributionPublicKey(targetPointer interface{}) *config.ConfigOption {
 		CustomSetValue: SetConfigOptionStellarPublicKey,
 		ConfigKey:      targetPointer,
 		Required:       true,
-	}
-}
-
-func MaxBaseFee(targetPointer interface{}) *config.ConfigOption {
-	return &config.ConfigOption{
-		Name:        "max-base-fee",
-		Usage:       "The max base fee for submitting a stellar transaction",
-		OptType:     types.Int,
-		ConfigKey:   targetPointer,
-		FlagDefault: 100 * txnbuild.MinBaseFee,
-		Required:    true,
 	}
 }
 

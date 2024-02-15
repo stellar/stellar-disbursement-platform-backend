@@ -343,7 +343,7 @@ func Test_PaymentModelGetAll(t *testing.T) {
 		assert.Equal(t, []Payment{*expectedPayment1, *expectedPayment2}, actualPayments)
 	})
 
-	t.Run("returns payments successfully with filter", func(t *testing.T) {
+	t.Run("returns payments successfully with one status filter", func(t *testing.T) {
 		filters := map[FilterKey]interface{}{
 			FilterKeyStatus: PendingPaymentStatus,
 		}
@@ -351,6 +351,19 @@ func Test_PaymentModelGetAll(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, 1, len(actualPayments))
 		assert.Equal(t, []Payment{*expectedPayment2}, actualPayments)
+	})
+
+	t.Run("returns payments successfully with list of status filters", func(t *testing.T) {
+		filters := map[FilterKey]interface{}{
+			FilterKeyStatus: []PaymentStatus{
+				DraftPaymentStatus,
+				PendingPaymentStatus,
+			},
+		}
+		actualPayments, err := paymentModel.GetAll(ctx, &QueryParams{Filters: filters}, dbConnectionPool)
+		require.NoError(t, err)
+		assert.Equal(t, 2, len(actualPayments))
+		assert.Equal(t, []Payment{*expectedPayment1, *expectedPayment2}, actualPayments)
 	})
 
 	t.Run("should not return duplicated entries when receiver are in more than one disbursements with different wallets", func(t *testing.T) {
@@ -711,12 +724,12 @@ func Test_PaymentModelRetryFailedPayments(t *testing.T) {
 	})
 
 	t.Run("does not update payments when no payments IDs is given", func(t *testing.T) {
-		err := models.Payment.RetryFailedPayments(ctx, "user@test.com")
+		err := models.Payment.RetryFailedPayments(ctx, dbConnectionPool, "user@test.com")
 		assert.ErrorIs(t, err, ErrMissingInput)
 	})
 
 	t.Run("does not update payments when email is empty", func(t *testing.T) {
-		err := models.Payment.RetryFailedPayments(ctx, "", "payment-id")
+		err := models.Payment.RetryFailedPayments(ctx, dbConnectionPool, "", "payment-id")
 		assert.ErrorIs(t, err, ErrMissingInput)
 	})
 
@@ -743,7 +756,7 @@ func Test_PaymentModelRetryFailedPayments(t *testing.T) {
 			Asset:                *asset,
 		})
 
-		err := models.Payment.RetryFailedPayments(ctx, "user@test.com", payment1.ID, payment2.ID)
+		err := models.Payment.RetryFailedPayments(ctx, dbConnectionPool, "user@test.com", payment1.ID, payment2.ID)
 		assert.ErrorIs(t, err, ErrMismatchNumRowsAffected)
 
 		payment1DB, err := models.Payment.Get(ctx, payment1.ID, dbConnectionPool)
@@ -796,8 +809,11 @@ func Test_PaymentModelRetryFailedPayments(t *testing.T) {
 			Asset:                *asset,
 		})
 
-		err := models.Payment.RetryFailedPayments(ctx, "user@test.com", payment1.ID, payment2.ID, payment3.ID)
-		assert.ErrorIs(t, err, ErrMismatchNumRowsAffected)
+		_ = db.RunInTransaction(ctx, dbConnectionPool, nil, func(dbTx db.DBTransaction) error {
+			err := models.Payment.RetryFailedPayments(ctx, dbTx, "user@test.com", payment1.ID, payment2.ID, payment3.ID)
+			assert.ErrorIs(t, err, ErrMismatchNumRowsAffected)
+			return ErrMismatchNumRowsAffected
+		})
 
 		payment1DB, err := models.Payment.Get(ctx, payment1.ID, dbConnectionPool)
 		require.NoError(t, err)
@@ -847,7 +863,7 @@ func Test_PaymentModelRetryFailedPayments(t *testing.T) {
 			Asset:                *asset,
 		})
 
-		err := models.Payment.RetryFailedPayments(ctx, "user@test.com", payment1.ID, payment2.ID)
+		err := models.Payment.RetryFailedPayments(ctx, dbConnectionPool, "user@test.com", payment1.ID, payment2.ID)
 		require.NoError(t, err)
 
 		payment1DB, err := models.Payment.Get(ctx, payment1.ID, dbConnectionPool)
@@ -910,7 +926,7 @@ func Test_PaymentModelRetryFailedPayments(t *testing.T) {
 			Asset:                *asset,
 		})
 
-		err = models.Payment.RetryFailedPayments(ctx, "user@test.com", payment1.ID, payment2.ID)
+		err = models.Payment.RetryFailedPayments(ctx, dbConnectionPool, "user@test.com", payment1.ID, payment2.ID)
 		require.NoError(t, err)
 
 		payment1DB, err := models.Payment.Get(ctx, payment1.ID, dbConnectionPool)

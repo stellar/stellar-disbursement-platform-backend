@@ -42,8 +42,6 @@ type TransactionWorker struct {
 	txModel             store.TransactionStore
 	chAccModel          store.ChannelAccountStore
 	engine              *engine.SubmitterEngine
-	sigService          engine.SignatureService
-	maxBaseFee          int
 	crashTrackerClient  crashtracker.CrashTrackerClient
 	txProcessingLimiter *engine.TransactionProcessingLimiter
 	monitorSvc          tssMonitor.TSSMonitorService
@@ -55,8 +53,6 @@ func NewTransactionWorker(
 	txModel *store.TransactionModel,
 	chAccModel *store.ChannelAccountModel,
 	engine *engine.SubmitterEngine,
-	sigService engine.SignatureService,
-	maxBaseFee int,
 	crashTrackerClient crashtracker.CrashTrackerClient,
 	txProcessingLimiter *engine.TransactionProcessingLimiter,
 	monitorSvc tssMonitor.TSSMonitorService,
@@ -74,16 +70,11 @@ func NewTransactionWorker(
 		return TransactionWorker{}, fmt.Errorf("chAccModel cannot be nil")
 	}
 
-	if tssUtils.IsEmpty(engine) {
+	if engine == nil {
 		return TransactionWorker{}, fmt.Errorf("engine cannot be nil")
 	}
-
-	if tssUtils.IsEmpty(sigService) {
-		return TransactionWorker{}, fmt.Errorf("sigService cannot be nil")
-	}
-
-	if maxBaseFee < txnbuild.MinBaseFee {
-		return TransactionWorker{}, fmt.Errorf("maxBaseFee must be greater than or equal to %d", txnbuild.MinBaseFee)
+	if err := engine.Validate(); err != nil {
+		return TransactionWorker{}, fmt.Errorf("validating engine: %w", err)
 	}
 
 	if crashTrackerClient == nil {
@@ -103,8 +94,6 @@ func NewTransactionWorker(
 		txModel:             txModel,
 		chAccModel:          chAccModel,
 		engine:              engine,
-		sigService:          sigService,
-		maxBaseFee:          maxBaseFee,
 		crashTrackerClient:  crashTrackerClient,
 		txProcessingLimiter: txProcessingLimiter,
 		monitorSvc:          monitorSvc,
@@ -450,7 +439,7 @@ func (tw *TransactionWorker) prepareForSubmission(ctx context.Context, txJob *Tx
 	// Important: We need to save tx hash before submitting a transaction.
 	// If the script/server crashes after transaction is submitted but before the response
 	// is processed, we can easily determine whether tx was sent or not later using tx hash.
-	feeBumpTxHash, err := feeBumpTx.HashHex(tw.sigService.NetworkPassphrase())
+	feeBumpTxHash, err := feeBumpTx.HashHex(tw.engine.SignatureService.NetworkPassphrase())
 	if err != nil {
 		return nil, fmt.Errorf("hashing transaction for job %v: %w", txJob, err)
 	}
@@ -500,13 +489,13 @@ func (tw *TransactionWorker) buildAndSignTransaction(ctx context.Context, txJob 
 			},
 			Operations: []txnbuild.Operation{
 				&txnbuild.Payment{
-					SourceAccount: tw.sigService.DistributionAccount(),
+					SourceAccount: tw.engine.SignatureService.DistributionAccount(),
 					Amount:        strconv.FormatFloat(txJob.Transaction.Amount, 'f', 6, 32), // TODO find a better way to do this
 					Destination:   txJob.Transaction.Destination,
 					Asset:         asset,
 				},
 			},
-			BaseFee: int64(tw.maxBaseFee),
+			BaseFee: int64(tw.engine.MaxBaseFee),
 			Preconditions: txnbuild.Preconditions{
 				TimeBounds:   txnbuild.NewTimeout(300),                                                 // maximum 5 minutes
 				LedgerBounds: &txnbuild.LedgerBounds{MaxLedger: uint32(txJob.LockedUntilLedgerNumber)}, // currently, 8-10 ledgers in the future
@@ -518,25 +507,31 @@ func (tw *TransactionWorker) buildAndSignTransaction(ctx context.Context, txJob 
 		return nil, fmt.Errorf("building transaction for job %v: %w", txJob, err)
 	}
 
-	paymentTx, err = tw.sigService.SignStellarTransaction(ctx, paymentTx, tw.sigService.DistributionAccount(), txJob.ChannelAccount.PublicKey)
+	// Sign tx for the channel account:
+	paymentTx, err = tw.engine.ChAccountSigner.SignStellarTransaction(ctx, paymentTx, txJob.ChannelAccount.PublicKey)
 	if err != nil {
-		return nil, fmt.Errorf("signing transaction: for job %v: %w", txJob, err)
+		return nil, fmt.Errorf("signing transaction for channel account: for job %v: %w", txJob, err)
+	}
+	// Sign tx for the distribution account:
+	paymentTx, err = tw.engine.DistAccountSigner.SignStellarTransaction(ctx, paymentTx, tw.engine.SignatureService.DistributionAccount())
+	if err != nil {
+		return nil, fmt.Errorf("signing transaction for distribution account: for job %v: %w", txJob, err)
 	}
 
 	// build the outer fee-bump transaction
 	feeBumpTx, err = txnbuild.NewFeeBumpTransaction(
 		txnbuild.FeeBumpTransactionParams{
 			Inner:      paymentTx,
-			FeeAccount: tw.sigService.DistributionAccount(),
-			BaseFee:    int64(tw.maxBaseFee),
+			FeeAccount: tw.engine.SignatureService.DistributionAccount(),
+			BaseFee:    int64(tw.engine.MaxBaseFee),
 		},
 	)
 	if err != nil {
 		return nil, fmt.Errorf("building fee-bump transaction for job %v: %w", txJob, err)
 	}
 
-	// generate a random number to use as the fee-bump transaction's sequence number
-	feeBumpTx, err = tw.sigService.SignFeeBumpStellarTransaction(ctx, feeBumpTx, tw.sigService.DistributionAccount())
+	// Sign fee-bump tx for the distribution account:
+	feeBumpTx, err = tw.engine.DistAccountSigner.SignFeeBumpStellarTransaction(ctx, feeBumpTx, tw.engine.SignatureService.DistributionAccount())
 	if err != nil {
 		return nil, fmt.Errorf("signing fee-bump transaction for job %v: %w", txJob, err)
 	}

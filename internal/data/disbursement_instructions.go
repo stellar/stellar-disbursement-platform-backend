@@ -9,10 +9,11 @@ import (
 )
 
 type DisbursementInstruction struct {
-	Phone             string `csv:"phone"`
-	ID                string `csv:"id"`
-	Amount            string `csv:"amount"`
-	VerificationValue string `csv:"verification"`
+	Phone             string  `csv:"phone"`
+	ID                string  `csv:"id"`
+	Amount            string  `csv:"amount"`
+	VerificationValue string  `csv:"verification"`
+	ExternalPaymentId *string `csv:"paymentID"`
 }
 
 type DisbursementInstructionModel struct {
@@ -144,7 +145,6 @@ func (di DisbursementInstructionModel) ProcessAll(ctx context.Context, userID st
 						return fmt.Errorf("%w: receiver verification for %s doesn't match", ErrReceiverVerificationMismatch, receiver.PhoneNumber)
 					}
 					err = di.receiverVerificationModel.UpdateVerificationValue(ctx, dbTx, verification.ReceiverID, verification.VerificationField, instruction.VerificationValue)
-
 					if err != nil {
 						return fmt.Errorf("error updating receiver verification for disbursement id %s: %w", disbursement.ID, err)
 					}
@@ -194,11 +194,12 @@ func (di DisbursementInstructionModel) ProcessAll(ctx context.Context, userID st
 		for _, instruction := range instructions {
 			receiver := receiverMap[instruction.Phone]
 			payment := PaymentInsert{
-				ReceiverID:       receiver.ID,
-				DisbursementID:   disbursement.ID,
-				Amount:           instruction.Amount,
-				AssetID:          disbursement.Asset.ID,
-				ReceiverWalletID: receiverIDToReceiverWalletIDMap[receiver.ID],
+				ReceiverID:        receiver.ID,
+				DisbursementID:    disbursement.ID,
+				Amount:            instruction.Amount,
+				AssetID:           disbursement.Asset.ID,
+				ReceiverWalletID:  receiverIDToReceiverWalletIDMap[receiver.ID],
+				ExternalPaymentID: instruction.ExternalPaymentId,
 			}
 			payments = append(payments, payment)
 		}

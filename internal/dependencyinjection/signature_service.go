@@ -5,40 +5,39 @@ import (
 	"fmt"
 
 	"github.com/stellar/go/support/log"
-	"github.com/stellar/stellar-disbursement-platform-backend/db"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 )
 
-const signatureServiceInstanceName = "signature_service_instance"
+const SignatureServiceInstanceName = "signature_service_instance"
 
-type SignatureServiceOptions struct {
-	NetworkPassphrase      string
-	DBConnectionPool       db.DBConnectionPool
-	DistributionPrivateKey string
-	EncryptionPassphrase   string
+// buildSignatureServiceInstanceName returns the name of the signature service instance, based on the signature type
+// provided.
+func buildSignatureServiceInstanceName(sigType signing.SignatureClientType) string {
+	return fmt.Sprintf("%s-%s", SignatureServiceInstanceName, string(sigType))
 }
 
 // NewSignatureService creates a new signature service instance, or retrives an instance that was already
 // created before.
-func NewSignatureService(ctx context.Context, opts engine.SignatureServiceOptions) (engine.SignatureService, error) {
-	instanceName := signatureServiceInstanceName
+func NewSignatureService(ctx context.Context, opts signing.SignatureServiceOptions) (signing.SignatureService, error) {
+	instanceName := buildSignatureServiceInstanceName(opts.DistributionSignerType)
 
 	// Already initialized
-	if instance, ok := dependenciesStoreMap[instanceName]; ok {
-		if signatureServiceInstance, ok2 := instance.(engine.SignatureService); ok2 {
+	if instance, ok := GetInstance(instanceName); ok {
+		if signatureServiceInstance, ok2 := instance.(signing.SignatureService); ok2 {
 			return signatureServiceInstance, nil
 		}
-		return nil, fmt.Errorf("trying to cast an existing signature service instance")
+		return signing.SignatureService{}, fmt.Errorf("trying to cast an existing signature service instance")
 	}
 
-	// Setup a new signature service instance
-	log.Ctx(ctx).Infof("⚙️ Setting up Signature Service to: %v", opts.Type)
-	newSignatureService, err := engine.NewSignatureService(opts)
+	// TODO: in SDP-1077, implement a `NewDistributionAccountResolver` in the depencency injection and inject it into
+	// the SignatureServiceOptions before calling NewSignatureService.
+	log.Ctx(ctx).Infof("⚙️ Setting up Signature Service to: %v", opts.DistributionSignerType)
+	newInstance, err := signing.NewSignatureService(opts)
 	if err != nil {
-		return nil, fmt.Errorf("creating a new signature service instance: %w", err)
+		return signing.SignatureService{}, fmt.Errorf("creating a new signature service instance: %w", err)
 	}
 
-	SetInstance(instanceName, newSignatureService)
+	SetInstance(instanceName, newInstance)
 
-	return newSignatureService, nil
+	return newInstance, nil
 }

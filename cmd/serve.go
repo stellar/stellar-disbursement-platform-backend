@@ -15,7 +15,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/eventhandlers"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/scheduler"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 
 	"github.com/spf13/cobra"
 	"github.com/stellar/go/support/config"
@@ -260,7 +259,6 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			Required:    true,
 		},
 		cmdUtils.DistributionPublicKey(&serveOpts.DistributionPublicKey),
-		cmdUtils.DistributionSeed(&serveOpts.DistributionSeed),
 		{
 			Name:      "recaptcha-site-key",
 			Usage:     "The Google 'reCAPTCHA v2 - I'm not a robot' site key.",
@@ -276,15 +274,21 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			Required:  true,
 		},
 		{
-			Name:           "sdp-ui-base-url",
-			Usage:          "The SDP UI/dashboard Base URL.",
-			OptType:        types.String,
-			ConfigKey:      &serveOpts.UIBaseURL,
-			FlagDefault:    "http://localhost:3000",
-			CustomSetValue: cmdUtils.SetConfigOptionURLString,
-			Required:       true,
+			Name:        "disable-mfa",
+			Usage:       "Disables the email Multi-Factor Authentication (MFA).",
+			OptType:     types.Bool,
+			ConfigKey:   &serveOpts.DisableMFA,
+			FlagDefault: false,
+			Required:    false,
 		},
-		cmdUtils.HorizonURLConfigOption(&serveOpts.HorizonURL),
+		{
+			Name:        "disable-recaptcha",
+			Usage:       "Disables ReCAPTCHA for login and forgot password.",
+			OptType:     types.Bool,
+			ConfigKey:   &serveOpts.DisableReCAPTCHA,
+			FlagDefault: false,
+			Required:    false,
+		},
 		{
 			Name:        "enable-scheduler",
 			Usage:       "Enable Scheduler for SDP Backend Jobs",
@@ -390,8 +394,11 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 	configOpts = append(configOpts, cmdUtils.EventBrokerConfigOptions(&eventBrokerOptions)...)
 
 	// signature service config options:
-	sigServiceOptions := engine.SignatureServiceOptions{}
-	configOpts = append(configOpts, cmdUtils.BaseSignatureServiceConfigOptions(&sigServiceOptions)...)
+	txSubmitterOpts := di.TxSubmitterEngineOptions{}
+	configOpts = append(
+		configOpts,
+		cmdUtils.TransactionSubmitterEngineConfigOptions(&txSubmitterOpts)...,
+	)
 
 	cmd := &cobra.Command{
 		Use:   "serve",
@@ -483,14 +490,14 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 				}
 			}()
 
-			// Setup the signature service
-			sigServiceOptions.DBConnectionPool = tssDBConnectionPool
-			sigServiceOptions.NetworkPassphrase = globalOptions.NetworkPassphrase
-			sigServiceOptions.DistributionPrivateKey = serveOpts.DistributionSeed
-			serveOpts.SignatureService, err = di.NewSignatureService(ctx, sigServiceOptions)
+			// Setup the Submitter Engine
+			txSubmitterOpts.SignatureServiceOptions.DBConnectionPool = tssDBConnectionPool
+			txSubmitterOpts.SignatureServiceOptions.NetworkPassphrase = globalOptions.NetworkPassphrase
+			submitterEngine, err := di.NewTxSubmitterEngine(ctx, txSubmitterOpts)
 			if err != nil {
-				log.Ctx(ctx).Fatalf("error creating signature service: %v", err)
+				log.Ctx(ctx).Fatalf("error creating submitter engine: %v", err)
 			}
+			serveOpts.SubmitterEngine = submitterEngine
 
 			// Kafka (background)
 			if eventBrokerOptions.EventBrokerType == events.KafkaEventBrokerType {

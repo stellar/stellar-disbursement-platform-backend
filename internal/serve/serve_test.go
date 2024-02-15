@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -13,9 +14,9 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/stellar/go/keypair"
 	"github.com/stellar/go/network"
 	supporthttp "github.com/stellar/go/support/http"
+	"github.com/stellar/go/support/log"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
@@ -76,7 +77,6 @@ func Test_Serve(t *testing.T) {
 		AnchorPlatformOutgoingJWTSecret: "jwt_secret_1234567890",
 		Version:                         "x.y.z",
 		NetworkPassphrase:               network.TestNetworkPassphrase,
-		DistributionSeed:                keypair.MustRandom().Seed(),
 	}
 
 	// Mock supportHTTPRun
@@ -102,6 +102,81 @@ func Test_Serve(t *testing.T) {
 	require.NoError(t, err)
 	mHTTPServer.AssertExpectations(t)
 	mockCrashTrackerClient.AssertExpectations(t)
+}
+
+func Test_Serve_callsValidateSecurity(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+
+	serveOptions := getServeOptionsForTests(t, dbt.DSN)
+	defer serveOptions.dbConnectionPool.Close()
+
+	mHTTPServer := mockHTTPServer{}
+	serveOptions.NetworkPassphrase = network.PublicNetworkPassphrase
+
+	// Make sure MFA is enforced in pubnet
+	serveOptions.DisableMFA = true
+	err := Serve(serveOptions, &mHTTPServer)
+	require.EqualError(t, err, "validating security options: MFA cannot be disabled in pubnet")
+
+	// Make sure reCAPTCHA is enforced in pubnet
+	serveOptions.DisableMFA = false
+	serveOptions.DisableReCAPTCHA = true
+	err = Serve(serveOptions, &mHTTPServer)
+	require.EqualError(t, err, "validating security options: reCAPTCHA cannot be disabled in pubnet")
+}
+
+func Test_ServeOptions_ValidateSecurity(t *testing.T) {
+	t.Run("Pubnet + DisableMFA: should return error", func(t *testing.T) {
+		serveOptions := ServeOptions{
+			NetworkPassphrase: network.PublicNetworkPassphrase,
+			DisableMFA:        true,
+		}
+
+		err := serveOptions.ValidateSecurity()
+		require.EqualError(t, err, "MFA cannot be disabled in pubnet")
+	})
+
+	t.Run("Pubnet + DisableReCAPTCHA: should return error", func(t *testing.T) {
+		// Pubnet + DisableReCAPTCHA: should return error
+		serveOptions := ServeOptions{
+			NetworkPassphrase: network.PublicNetworkPassphrase,
+			DisableReCAPTCHA:  true,
+		}
+
+		err := serveOptions.ValidateSecurity()
+		require.EqualError(t, err, "reCAPTCHA cannot be disabled in pubnet")
+	})
+
+	t.Run("Testnet + DisableMFA: should not return error", func(t *testing.T) {
+		// Testnet + DisableMFA: should not return error
+		buf := new(strings.Builder)
+		log.DefaultLogger.SetOutput(buf)
+
+		serveOptions := ServeOptions{
+			NetworkPassphrase: network.TestNetworkPassphrase,
+			DisableMFA:        true,
+		}
+
+		err := serveOptions.ValidateSecurity()
+		require.NoError(t, err)
+		require.Contains(t, buf.String(), "MFA is disabled in network 'Test SDF Network ; September 2015'")
+	})
+
+	t.Run("Testnet + DisableReCAPTCHA: should not return error", func(t *testing.T) {
+		// Testnet + DisableReCAPTCHA: should not return error
+		buf := new(strings.Builder)
+		log.DefaultLogger.SetOutput(buf)
+
+		serveOptions := ServeOptions{
+			NetworkPassphrase: network.TestNetworkPassphrase,
+			DisableReCAPTCHA:  true,
+		}
+
+		err := serveOptions.ValidateSecurity()
+		require.NoError(t, err)
+		require.Contains(t, buf.String(), "reCAPTCHA is disabled in network 'Test SDF Network ; September 2015'")
+	})
 }
 
 func Test_handleHTTP_Health(t *testing.T) {
@@ -199,7 +274,7 @@ func getServeOptionsForTests(t *testing.T, databaseDSN string) ServeOptions {
 	messengerClientMock := message.MessengerClientMock{}
 	messengerClientMock.On("SendMessage", mock.Anything).Return(nil)
 
-	crasTrackerClient, err := crashtracker.NewDryRunClient()
+	crashTrackerClient, err := crashtracker.NewDryRunClient()
 	require.NoError(t, err)
 
 	mTenantManager := &tenant.TenantManagerMock{}
@@ -208,7 +283,7 @@ func getServeOptionsForTests(t *testing.T, databaseDSN string) ServeOptions {
 		Return(&tenant.Tenant{ID: "tenant1"}, nil)
 
 	serveOptions := ServeOptions{
-		CrashTrackerClient:              crasTrackerClient,
+		CrashTrackerClient:              crashTrackerClient,
 		DatabaseDSN:                     databaseDSN,
 		EC256PrivateKey:                 privateKeyStr,
 		EC256PublicKey:                  publicKeyStr,
@@ -223,7 +298,6 @@ func getServeOptionsForTests(t *testing.T, databaseDSN string) ServeOptions {
 		SMSMessengerClient:              &messengerClientMock,
 		Version:                         "x.y.z",
 		NetworkPassphrase:               network.TestNetworkPassphrase,
-		DistributionSeed:                keypair.MustRandom().Seed(),
 		EnableMultiTenantDB:             false,
 	}
 	err = serveOptions.SetupDependencies()
@@ -299,16 +373,18 @@ func Test_handleHTTP_authenticatedEndpoints(t *testing.T) {
 		{http.MethodGet, "/disbursements"},
 		{http.MethodGet, "/disbursements/1234"},
 		{http.MethodGet, "/disbursements/1234/receivers"},
-		{http.MethodGet, "/disbursements/1234/status"},
+		{http.MethodPatch, "/disbursements/1234/status"},
 		// Payments
 		{http.MethodGet, "/payments"},
 		{http.MethodGet, "/payments/1234"},
 		{http.MethodPatch, "/payments/retry"},
+		{http.MethodPatch, "/payments/1234/status"},
 		// Receivers
 		{http.MethodGet, "/receivers"},
 		{http.MethodGet, "/receivers/1234"},
 		{http.MethodPatch, "/receivers/1234"},
 		{http.MethodPatch, "/receivers/wallets/1234"},
+		{http.MethodGet, "/receivers/verification-types"},
 		// Countries
 		{http.MethodGet, "/countries"},
 		// Assets

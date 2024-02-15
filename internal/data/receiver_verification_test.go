@@ -2,6 +2,7 @@ package data
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -122,6 +123,63 @@ func Test_ReceiverVerificationModel_GetAllByReceiverId(t *testing.T) {
 				UpdatedAt:         verification3.UpdatedAt,
 			},
 		}, actualVerifications)
+	})
+}
+
+func Test_ReceiverVerificationModel_GetReceiverVerificationByReceiverId(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+
+	receiver := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{
+		PhoneNumber: "+13334445555",
+	})
+
+	t.Run("returns error when the receiver has no verifications registered", func(t *testing.T) {
+		receiverVerificationModel := ReceiverVerificationModel{dbConnectionPool: dbConnectionPool}
+		_, err := receiverVerificationModel.GetLatestByPhoneNumber(ctx, receiver.PhoneNumber)
+		require.Error(t, err, fmt.Errorf("cannot query any receiver verifications for phone number %s", receiver.PhoneNumber))
+	})
+
+	t.Run("returns the latest receiver verification for a list of receiver verifications", func(t *testing.T) {
+		earlierTime := time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC)
+		verification1 := CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, ReceiverVerificationInsert{
+			ReceiverID:        receiver.ID,
+			VerificationField: VerificationFieldDateOfBirth,
+			VerificationValue: "1990-01-01",
+		})
+		verification1.UpdatedAt = earlierTime
+
+		verification2 := CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, ReceiverVerificationInsert{
+			ReceiverID:        receiver.ID,
+			VerificationField: VerificationFieldPin,
+			VerificationValue: "1234",
+		})
+		verification2.UpdatedAt = earlierTime
+
+		verification3 := CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, ReceiverVerificationInsert{
+			ReceiverID:        receiver.ID,
+			VerificationField: VerificationFieldNationalID,
+			VerificationValue: "5678",
+		})
+
+		receiverVerificationModel := ReceiverVerificationModel{dbConnectionPool: dbConnectionPool}
+		actualVerification, err := receiverVerificationModel.GetLatestByPhoneNumber(ctx, receiver.PhoneNumber)
+		require.NoError(t, err)
+
+		assert.Equal(t,
+			ReceiverVerification{
+				ReceiverID:        receiver.ID,
+				VerificationField: VerificationFieldNationalID,
+				HashedValue:       verification3.HashedValue,
+				CreatedAt:         verification3.CreatedAt,
+				UpdatedAt:         verification3.UpdatedAt,
+			}, *actualVerification)
 	})
 }
 

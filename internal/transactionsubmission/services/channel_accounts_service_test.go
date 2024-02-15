@@ -18,9 +18,10 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
-	engineMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/mocks"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions"
+	preconditionsMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions/mocks"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 	storeMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store/mocks"
 )
@@ -32,7 +33,9 @@ func Test_ChannelAccountsService_validate(t *testing.T) {
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
 
-	mSigService := engineMocks.NewMockSignatureService(t)
+	mHorizonClient := &horizonclient.MockClient{}
+	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
+	sigService, _, _, _, _ := signing.NewMockSignatureService(t)
 
 	testCases := []struct {
 		name                      string
@@ -45,36 +48,65 @@ func Test_ChannelAccountsService_validate(t *testing.T) {
 			wantError: "tss db connection pool cannot be nil",
 		},
 		{
-			name: "TSSDBConnectionPool cannot be nil",
+			name: "SubmitterEngine cannot be empty",
 			serviceOptions: ChannelAccountsService{
 				TSSDBConnectionPool: dbConnectionPool,
 			},
-			wantError: "signing service cannot be nil",
+			wantError: "submitter engine cannot be empty",
 		},
 		{
-			name: "HorizonURL cannot be empty",
+			name: "Validating SubmitterEngine: horizon client cannot be nil",
 			serviceOptions: ChannelAccountsService{
 				TSSDBConnectionPool: dbConnectionPool,
-				SigningService:      mSigService,
+				SubmitterEngine: engine.SubmitterEngine{
+					MaxBaseFee: 100,
+				},
 			},
-			wantError: "horizon url cannot be empty",
+			wantError: "validating submitter engine: horizon client cannot be nil",
 		},
 		{
-			name: "maxBaseFee must be greater than or equal to 100",
+			name: "Validating SubmitterEngine: ledger number tracker cannot be nil",
 			serviceOptions: ChannelAccountsService{
 				TSSDBConnectionPool: dbConnectionPool,
-				SigningService:      mSigService,
-				HorizonURL:          "https://horizon-testnet.stellar.org",
+				SubmitterEngine: engine.SubmitterEngine{
+					HorizonClient: mHorizonClient,
+				},
 			},
-			wantError: "maxBaseFee must be greater than or equal to 100",
+			wantError: "validating submitter engine: ledger number tracker cannot be nil",
+		},
+		{
+			name: "Validating SubmitterEngine: signature service cannot be nil",
+			serviceOptions: ChannelAccountsService{
+				TSSDBConnectionPool: dbConnectionPool,
+				SubmitterEngine: engine.SubmitterEngine{
+					HorizonClient:       mHorizonClient,
+					LedgerNumberTracker: mLedgerNumberTracker,
+				},
+			},
+			wantError: "validating submitter engine: signature service cannot be empty",
+		},
+		{
+			name: "Validating SubmitterEngine: max base fee must be greater than or equal to 100",
+			serviceOptions: ChannelAccountsService{
+				TSSDBConnectionPool: dbConnectionPool,
+				SubmitterEngine: engine.SubmitterEngine{
+					HorizonClient:       mHorizonClient,
+					LedgerNumberTracker: mLedgerNumberTracker,
+					SignatureService:    sigService,
+				},
+			},
+			wantError: "validating submitter engine: maxBaseFee must be greater than or equal to 100",
 		},
 		{
 			name: "advisory lock with ID was unavailable",
 			serviceOptions: ChannelAccountsService{
 				TSSDBConnectionPool: dbConnectionPool,
-				SigningService:      mSigService,
-				HorizonURL:          "https://horizon-testnet.stellar.org",
-				MaxBaseFee:          100,
+				SubmitterEngine: engine.SubmitterEngine{
+					HorizonClient:       mHorizonClient,
+					LedgerNumberTracker: mLedgerNumberTracker,
+					SignatureService:    sigService,
+					MaxBaseFee:          100,
+				},
 			},
 			isAdvisoryLockUnavailable: true,
 			wantError:                 "failed getting db advisory lock: advisory lock is unavailable",
@@ -83,9 +115,12 @@ func Test_ChannelAccountsService_validate(t *testing.T) {
 			name: "🎉 Successfully validate service",
 			serviceOptions: ChannelAccountsService{
 				TSSDBConnectionPool: dbConnectionPool,
-				SigningService:      mSigService,
-				HorizonURL:          "https://horizon-testnet.stellar.org",
-				MaxBaseFee:          100,
+				SubmitterEngine: engine.SubmitterEngine{
+					HorizonClient:       mHorizonClient,
+					LedgerNumberTracker: mLedgerNumberTracker,
+					SignatureService:    sigService,
+					MaxBaseFee:          100,
+				},
 			},
 		},
 	}
@@ -137,64 +172,6 @@ func Test_ChannelAccountsService_GetChannelAccountStore(t *testing.T) {
 	})
 }
 
-func Test_ChannelAccountsService_GetHorizonClient(t *testing.T) {
-	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
-	defer dbt.Close()
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
-
-	t.Run("GetHorizonClient() instantiates a new Horizon Client if the current horizonClient value is empty", func(t *testing.T) {
-		chAccService := ChannelAccountsService{HorizonURL: "https://horizon-testnet.stellar.org"}
-		wantHorizonCLient := &horizonclient.Client{
-			HorizonURL: "https://horizon-testnet.stellar.org",
-			HTTP:       httpclient.DefaultClient(),
-		}
-		horizonClient := chAccService.GetHorizonClient()
-		require.Equal(t, wantHorizonCLient, horizonClient)
-		require.Equal(t, wantHorizonCLient, chAccService.horizonClient)
-		require.NotEqual(t, &wantHorizonCLient, &chAccService.horizonClient)
-		require.Equal(t, &horizonClient, &chAccService.horizonClient)
-	})
-
-	t.Run("GetHorizonClient() returns the existing horizonClient if the current value is NOT empty", func(t *testing.T) {
-		chAccService := ChannelAccountsService{HorizonURL: "https://horizon-testnet.stellar.org"}
-		chAccService.horizonClient = &horizonclient.MockClient{}
-		horizonClient := chAccService.GetHorizonClient()
-		require.Equal(t, &horizonClient, &chAccService.horizonClient)
-	})
-}
-
-func Test_ChannelAccountsService_GetLedgerNumberTracker(t *testing.T) {
-	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
-	defer dbt.Close()
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
-
-	t.Run("GetLedgerNumberTracker() instantiates a new LedgerNumberTracker if the current one is empty", func(t *testing.T) {
-		chAccService := ChannelAccountsService{HorizonURL: "https://horizon-testnet.stellar.org"}
-		wantLedgerNumberTracker, err := engine.NewLedgerNumberTracker(chAccService.GetHorizonClient())
-		require.NoError(t, err)
-
-		ledgerNumberTracker, err := chAccService.GetLedgerNumberTracker()
-		require.NoError(t, err)
-
-		require.Equal(t, wantLedgerNumberTracker, ledgerNumberTracker)
-		require.Equal(t, wantLedgerNumberTracker, chAccService.ledgerNumberTracker)
-		require.NotEqual(t, &wantLedgerNumberTracker, &chAccService.ledgerNumberTracker)
-		require.Equal(t, &ledgerNumberTracker, &chAccService.ledgerNumberTracker)
-	})
-
-	t.Run("GetLedgerNumberTracker() returns the existing LedgerNumberTracker if the current value is NOT empty", func(t *testing.T) {
-		chAccService := ChannelAccountsService{HorizonURL: "https://horizon-testnet.stellar.org"}
-		chAccService.ledgerNumberTracker = &engineMocks.MockLedgerNumberTracker{}
-		ledgerNumberTracker, err := chAccService.GetLedgerNumberTracker()
-		require.NoError(t, err)
-		require.Equal(t, &ledgerNumberTracker, &chAccService.ledgerNumberTracker)
-	})
-}
-
 func Test_ChannelAccounts_CreateAccount_Success(t *testing.T) {
 	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
@@ -204,27 +181,33 @@ func Test_ChannelAccounts_CreateAccount_Success(t *testing.T) {
 
 	ctx := context.Background()
 
-	mChannelAccountStore := &storeMocks.MockChannelAccountStore{}
-	defer mChannelAccountStore.AssertExpectations(t)
 	mHorizonClient := &horizonclient.MockClient{}
 	defer mHorizonClient.AssertExpectations(t)
-	mLedgerNumberTracker := &engineMocks.MockLedgerNumberTracker{}
-	defer mLedgerNumberTracker.AssertExpectations(t)
-	mSigService := engineMocks.NewMockSignatureService(t)
-	defer mSigService.AssertExpectations(t)
+	mChannelAccountStore := storeMocks.NewMockChannelAccountStore(t)
+	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
+	sigService, mChAccSigClient, _, mHostAccSigClient, mDistAccResolver := signing.NewMockSignatureService(t)
 
-	cas := ChannelAccountsService{
+	chAccService := ChannelAccountsService{
 		chAccStore:          mChannelAccountStore,
-		horizonClient:       mHorizonClient,
 		TSSDBConnectionPool: dbConnectionPool,
-		ledgerNumberTracker: mLedgerNumberTracker,
-		MaxBaseFee:          100,
-		SigningService:      mSigService,
-		HorizonURL:          "https://horizon-testnet.stellar.org",
+		SubmitterEngine: engine.SubmitterEngine{
+			HorizonClient:       mHorizonClient,
+			LedgerNumberTracker: mLedgerNumberTracker,
+			MaxBaseFee:          100,
+			SignatureService:    sigService,
+		},
 	}
 
 	rootAccount := keypair.MustParseFull("SBMW2WDSVTGT2N2PCBF3PV7WBOIKVTGGIEBUUYMDX3CKTDD5HY3UIHV4")
 	currLedgerNumber := 100
+	ledgerBounds := &txnbuild.LedgerBounds{
+		MaxLedger: uint32(currLedgerNumber + preconditions.IncrementForMaxLedgerBounds),
+	}
+
+	publicKeys := []string{
+		keypair.MustRandom().Address(),
+		keypair.MustRandom().Address(),
+	}
 
 	mHorizonClient.
 		On("AccountDetail", horizonclient.AccountRequest{AccountID: rootAccount.Address()}).
@@ -233,25 +216,30 @@ func Test_ChannelAccounts_CreateAccount_Success(t *testing.T) {
 		Return(horizon.Transaction{}, nil).
 		Once()
 	mLedgerNumberTracker.
-		On("GetLedgerNumber").
-		Return(currLedgerNumber, nil).
+		On("GetLedgerBounds").
+		Return(ledgerBounds, nil).
 		Once()
 	mChannelAccountStore.
 		On("Unlock", ctx, mock.Anything, mock.AnythingOfType("string")).
 		Return(nil, nil).
 		Twice()
-	mSigService.
-		On("DistributionAccount").
+	mDistAccResolver.
+		On("HostDistributionAccount").
 		Return(rootAccount.Address()).
-		Twice().
-		On("BatchInsert", ctx, mock.AnythingOfType("[]*keypair.Full"), true, currLedgerNumber).
-		Return(nil).
+		Twice()
+	mHostAccSigClient.
+		On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), mock.AnythingOfType("string")).
+		Return(&txnbuild.Transaction{}, nil).
+		Once()
+	mChAccSigClient.
+		On("BatchInsert", ctx, 2).
+		Return(publicKeys, nil).
 		Once().
-		On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), mock.AnythingOfType("string"), mock.AnythingOfType("string"), mock.AnythingOfType("string")).
+		On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), mock.AnythingOfType("string"), mock.AnythingOfType("string")).
 		Return(&txnbuild.Transaction{}, nil).
 		Once()
 
-	err = cas.CreateChannelAccounts(ctx, 2)
+	err = chAccService.CreateChannelAccounts(ctx, 2)
 	require.NoError(t, err)
 }
 
@@ -264,23 +252,21 @@ func Test_ChannelAccounts_CreateAccount_CannotFindRootAccount_Failure(t *testing
 
 	ctx := context.Background()
 
-	mChannelAccountStore := &storeMocks.MockChannelAccountStore{}
-	defer mChannelAccountStore.AssertExpectations(t)
 	mHorizonClient := &horizonclient.MockClient{}
 	defer mHorizonClient.AssertExpectations(t)
-	mLedgerNumberTracker := &engineMocks.MockLedgerNumberTracker{}
-	defer mLedgerNumberTracker.AssertExpectations(t)
-	mSigService := engineMocks.NewMockSignatureService(t)
-	defer mSigService.AssertExpectations(t)
+	mChannelAccountStore := storeMocks.NewMockChannelAccountStore(t)
+	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
+	sigService, _, _, _, mDistAccResolver := signing.NewMockSignatureService(t)
 
 	cas := ChannelAccountsService{
 		chAccStore:          mChannelAccountStore,
-		horizonClient:       mHorizonClient,
 		TSSDBConnectionPool: dbConnectionPool,
-		ledgerNumberTracker: mLedgerNumberTracker,
-		MaxBaseFee:          100,
-		SigningService:      mSigService,
-		HorizonURL:          "https://horizon-testnet.stellar.org",
+		SubmitterEngine: engine.SubmitterEngine{
+			HorizonClient:       mHorizonClient,
+			LedgerNumberTracker: mLedgerNumberTracker,
+			MaxBaseFee:          100,
+			SignatureService:    sigService,
+		},
 	}
 
 	rootAccount := keypair.MustParseFull("SDL4E4RF6BHX77DBKE63QC4H4LQG7S7D2PB4TSF64LTHDIHP7UUJHH2V")
@@ -289,17 +275,13 @@ func Test_ChannelAccounts_CreateAccount_CannotFindRootAccount_Failure(t *testing
 	mHorizonClient.
 		On("AccountDetail", horizonclient.AccountRequest{AccountID: rootAccount.Address()}).
 		Return(horizon.Account{}, errors.New("some random error"))
-	mLedgerNumberTracker.
-		On("GetLedgerNumber").
-		Return(currLedgerNumber, nil).
-		Once()
-	mSigService.
-		On("DistributionAccount").
+	mDistAccResolver.
+		On("HostDistributionAccount").
 		Return(rootAccount.Address()).
 		Once()
 
 	err = cas.CreateChannelAccounts(ctx, currLedgerNumber)
-	require.ErrorContains(t, err, "creating channel accounts onchain: failed to retrieve root account: some random error")
+	require.ErrorContains(t, err, "creating channel accounts onchain: failed to retrieve root account: horizon response error: some random error")
 }
 
 func Test_ChannelAccounts_CreateAccount_Insert_Failure(t *testing.T) {
@@ -311,40 +293,45 @@ func Test_ChannelAccounts_CreateAccount_Insert_Failure(t *testing.T) {
 
 	ctx := context.Background()
 
-	mChannelAccountStore := &storeMocks.MockChannelAccountStore{}
-	defer mChannelAccountStore.AssertExpectations(t)
 	mHorizonClient := &horizonclient.MockClient{}
 	defer mHorizonClient.AssertExpectations(t)
-	mLedgerNumberTracker := &engineMocks.MockLedgerNumberTracker{}
-	defer mLedgerNumberTracker.AssertExpectations(t)
-	mSigService := engineMocks.NewMockSignatureService(t)
-	defer mSigService.AssertExpectations(t)
+	mChannelAccountStore := storeMocks.NewMockChannelAccountStore(t)
+	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
+	sigService, mChAccSigClient, _, _, mDistAccResolver := signing.NewMockSignatureService(t)
 
 	cas := ChannelAccountsService{
 		chAccStore:          mChannelAccountStore,
-		horizonClient:       mHorizonClient,
 		TSSDBConnectionPool: dbConnectionPool,
-		ledgerNumberTracker: mLedgerNumberTracker,
-		MaxBaseFee:          100,
-		SigningService:      mSigService,
-		HorizonURL:          "https://horizon-testnet.stellar.org",
+		SubmitterEngine: engine.SubmitterEngine{
+			HorizonClient:       mHorizonClient,
+			LedgerNumberTracker: mLedgerNumberTracker,
+			MaxBaseFee:          100,
+			SignatureService:    sigService,
+		},
 	}
 
 	rootAccount := keypair.MustParseFull("SBMW2WDSVTGT2N2PCBF3PV7WBOIKVTGGIEBUUYMDX3CKTDD5HY3UIHV4")
+
+	// current ledger number
 	currLedgerNumber := 100
+	ledgerBounds := &txnbuild.LedgerBounds{
+		MaxLedger: uint32(currLedgerNumber + preconditions.IncrementForMaxLedgerBounds),
+	}
+
+	defer mLedgerNumberTracker.AssertExpectations(t)
 
 	mLedgerNumberTracker.
-		On("GetLedgerNumber").Return(currLedgerNumber, nil).
-		Once()
+		On("GetLedgerBounds").Return(ledgerBounds, nil).Once()
 	mHorizonClient.
 		On("AccountDetail", horizonclient.AccountRequest{AccountID: rootAccount.Address()}).
 		Return(horizon.Account{AccountID: rootAccount.Address()}, nil)
-	mSigService.
-		On("DistributionAccount").
+	mDistAccResolver.
+		On("HostDistributionAccount").
 		Return(rootAccount.Address()).
-		Once().
-		On("BatchInsert", ctx, mock.AnythingOfType("[]*keypair.Full"), true, 100).
-		Return(errors.New("failure inserting account"))
+		Once()
+	mChAccSigClient.
+		On("BatchInsert", ctx, 2).
+		Return(nil, errors.New("failure inserting account"))
 
 	err = cas.CreateChannelAccounts(ctx, 2)
 	require.EqualError(t, err, "creating channel accounts onchain: failed to insert channel accounts into signature service: failure inserting account")
@@ -357,23 +344,21 @@ func Test_ChannelAccounts_VerifyAccounts_Success(t *testing.T) {
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
 
-	mChannelAccountStore := &storeMocks.MockChannelAccountStore{}
-	defer mChannelAccountStore.AssertExpectations(t)
 	mHorizonClient := &horizonclient.MockClient{}
 	defer mHorizonClient.AssertExpectations(t)
-	mLedgerNumberTracker := &engineMocks.MockLedgerNumberTracker{}
-	defer mLedgerNumberTracker.AssertExpectations(t)
-	mSigService := engineMocks.NewMockSignatureService(t)
-	defer mSigService.AssertExpectations(t)
+	mChannelAccountStore := storeMocks.NewMockChannelAccountStore(t)
+	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
+	sigService, _, _, _, _ := signing.NewMockSignatureService(t)
 
 	cas := ChannelAccountsService{
 		chAccStore:          mChannelAccountStore,
-		horizonClient:       mHorizonClient,
 		TSSDBConnectionPool: dbConnectionPool,
-		ledgerNumberTracker: mLedgerNumberTracker,
-		MaxBaseFee:          100,
-		SigningService:      mSigService,
-		HorizonURL:          "https://horizon-testnet.stellar.org",
+		SubmitterEngine: engine.SubmitterEngine{
+			HorizonClient:       mHorizonClient,
+			LedgerNumberTracker: mLedgerNumberTracker,
+			MaxBaseFee:          100,
+			SignatureService:    sigService,
+		},
 	}
 
 	channelAccounts := []*store.ChannelAccount{
@@ -405,23 +390,21 @@ func Test_ChannelAccounts_VerifyAccounts_LoadChannelAccountsError_Failure(t *tes
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
 
-	mChannelAccountStore := &storeMocks.MockChannelAccountStore{}
-	defer mChannelAccountStore.AssertExpectations(t)
 	mHorizonClient := &horizonclient.MockClient{}
 	defer mHorizonClient.AssertExpectations(t)
-	mLedgerNumberTracker := &engineMocks.MockLedgerNumberTracker{}
-	defer mLedgerNumberTracker.AssertExpectations(t)
-	mSigService := engineMocks.NewMockSignatureService(t)
-	defer mSigService.AssertExpectations(t)
+	mChannelAccountStore := storeMocks.NewMockChannelAccountStore(t)
+	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
+	sigService, _, _, _, _ := signing.NewMockSignatureService(t)
 
 	cas := ChannelAccountsService{
 		chAccStore:          mChannelAccountStore,
-		horizonClient:       mHorizonClient,
 		TSSDBConnectionPool: dbConnectionPool,
-		ledgerNumberTracker: mLedgerNumberTracker,
-		MaxBaseFee:          100,
-		SigningService:      mSigService,
-		HorizonURL:          "https://horizon-testnet.stellar.org",
+		SubmitterEngine: engine.SubmitterEngine{
+			HorizonClient:       mHorizonClient,
+			LedgerNumberTracker: mLedgerNumberTracker,
+			MaxBaseFee:          100,
+			SignatureService:    sigService,
+		},
 	}
 
 	ctx := context.Background()
@@ -446,23 +429,21 @@ func Test_ChannelAccounts_VerifyAccounts_NotFound(t *testing.T) {
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
 
-	mChannelAccountStore := &storeMocks.MockChannelAccountStore{}
-	defer mChannelAccountStore.AssertExpectations(t)
 	mHorizonClient := &horizonclient.MockClient{}
 	defer mHorizonClient.AssertExpectations(t)
-	mLedgerNumberTracker := &engineMocks.MockLedgerNumberTracker{}
-	defer mLedgerNumberTracker.AssertExpectations(t)
-	mSigService := engineMocks.NewMockSignatureService(t)
-	defer mSigService.AssertExpectations(t)
+	mChannelAccountStore := storeMocks.NewMockChannelAccountStore(t)
+	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
+	sigService, _, _, _, _ := signing.NewMockSignatureService(t)
 
 	cas := ChannelAccountsService{
 		chAccStore:          mChannelAccountStore,
-		horizonClient:       mHorizonClient,
 		TSSDBConnectionPool: dbConnectionPool,
-		ledgerNumberTracker: mLedgerNumberTracker,
-		MaxBaseFee:          100,
-		SigningService:      mSigService,
-		HorizonURL:          "https://horizon-testnet.stellar.org",
+		SubmitterEngine: engine.SubmitterEngine{
+			HorizonClient:       mHorizonClient,
+			LedgerNumberTracker: mLedgerNumberTracker,
+			MaxBaseFee:          100,
+			SignatureService:    sigService,
+		},
 	}
 
 	channelAccounts := []*store.ChannelAccount{
@@ -509,23 +490,21 @@ func Test_ChannelAccounts_DeleteAccount_Success(t *testing.T) {
 
 	ctx := context.Background()
 
-	mChannelAccountStore := &storeMocks.MockChannelAccountStore{}
-	defer mChannelAccountStore.AssertExpectations(t)
 	mHorizonClient := &horizonclient.MockClient{}
 	defer mHorizonClient.AssertExpectations(t)
-	mLedgerNumberTracker := &engineMocks.MockLedgerNumberTracker{}
-	defer mLedgerNumberTracker.AssertExpectations(t)
-	mSigService := engineMocks.NewMockSignatureService(t)
-	defer mSigService.AssertExpectations(t)
+	mChannelAccountStore := storeMocks.NewMockChannelAccountStore(t)
+	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
+	sigService, mChAccSigClient, _, mHostAccSigClient, mDistAccResolver := signing.NewMockSignatureService(t)
 
 	cas := ChannelAccountsService{
 		chAccStore:          mChannelAccountStore,
-		horizonClient:       mHorizonClient,
 		TSSDBConnectionPool: dbConnectionPool,
-		ledgerNumberTracker: mLedgerNumberTracker,
-		MaxBaseFee:          100,
-		SigningService:      mSigService,
-		HorizonURL:          "https://horizon-testnet.stellar.org",
+		SubmitterEngine: engine.SubmitterEngine{
+			HorizonClient:       mHorizonClient,
+			LedgerNumberTracker: mLedgerNumberTracker,
+			MaxBaseFee:          100,
+			SignatureService:    sigService,
+		},
 	}
 
 	channelAccount := &store.ChannelAccount{
@@ -534,13 +513,17 @@ func Test_ChannelAccounts_DeleteAccount_Success(t *testing.T) {
 	}
 
 	rootAccount := keypair.MustParseFull("SBMW2WDSVTGT2N2PCBF3PV7WBOIKVTGGIEBUUYMDX3CKTDD5HY3UIHV4")
+
 	currLedgerNum := 100
+	ledgerBounds := &txnbuild.LedgerBounds{
+		MaxLedger: uint32(currLedgerNum + preconditions.IncrementForMaxLedgerBounds),
+	}
 
 	mLedgerNumberTracker.
-		On("GetLedgerNumber").
-		Return(currLedgerNum, nil)
+		On("GetLedgerNumber").Return(currLedgerNum, nil).Once().
+		On("GetLedgerBounds").Return(ledgerBounds, nil).Once()
 	mChannelAccountStore.
-		On("GetAndLock", ctx, channelAccount.PublicKey, currLedgerNum, currLedgerNum+engine.IncrementForMaxLedgerBounds).
+		On("GetAndLock", ctx, channelAccount.PublicKey, currLedgerNum, currLedgerNum+preconditions.IncrementForMaxLedgerBounds).
 		Return(channelAccount, nil).
 		Once()
 	mHorizonClient.
@@ -553,14 +536,19 @@ func Test_ChannelAccounts_DeleteAccount_Success(t *testing.T) {
 		On("SubmitTransactionWithOptions", mock.Anything, horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true}).
 		Return(horizon.Transaction{}, nil).
 		Once()
-	mSigService.
-		On("DistributionAccount").
+	mDistAccResolver.
+		On("HostDistributionAccount").
 		Return(rootAccount.Address()).
-		Twice().
-		On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), mock.AnythingOfType("string"), mock.AnythingOfType("string"), mock.AnythingOfType("string")).
+		Twice()
+	mHostAccSigClient.
+		On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), mock.AnythingOfType("string")).
+		Return(&txnbuild.Transaction{}, nil).
+		Once()
+	mChAccSigClient.
+		On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), mock.AnythingOfType("string"), mock.AnythingOfType("string")).
 		Return(&txnbuild.Transaction{}, nil).
 		Once().
-		On("Delete", ctx, channelAccount.PublicKey, currLedgerNum+engine.IncrementForMaxLedgerBounds).
+		On("Delete", ctx, channelAccount.PublicKey).
 		Return(nil).
 		Once()
 
@@ -580,23 +568,21 @@ func Test_ChannelAccounts_DeleteAccount_All_Success(t *testing.T) {
 
 	ctx := context.Background()
 
-	mChannelAccountStore := &storeMocks.MockChannelAccountStore{}
-	defer mChannelAccountStore.AssertExpectations(t)
 	mHorizonClient := &horizonclient.MockClient{}
 	defer mHorizonClient.AssertExpectations(t)
-	mLedgerNumberTracker := &engineMocks.MockLedgerNumberTracker{}
-	defer mLedgerNumberTracker.AssertExpectations(t)
-	mSigService := engineMocks.NewMockSignatureService(t)
-	defer mSigService.AssertExpectations(t)
+	mChannelAccountStore := storeMocks.NewMockChannelAccountStore(t)
+	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
+	sigService, mChAccSigClient, _, mHostAccSigClient, mDistAccResolver := signing.NewMockSignatureService(t)
 
 	cas := ChannelAccountsService{
 		chAccStore:          mChannelAccountStore,
-		horizonClient:       mHorizonClient,
 		TSSDBConnectionPool: dbConnectionPool,
-		ledgerNumberTracker: mLedgerNumberTracker,
-		MaxBaseFee:          100,
-		SigningService:      mSigService,
-		HorizonURL:          "https://horizon-testnet.stellar.org",
+		SubmitterEngine: engine.SubmitterEngine{
+			HorizonClient:       mHorizonClient,
+			LedgerNumberTracker: mLedgerNumberTracker,
+			MaxBaseFee:          100,
+			SignatureService:    sigService,
+		},
 	}
 
 	channelAccounts := []*store.ChannelAccount{
@@ -611,19 +597,22 @@ func Test_ChannelAccounts_DeleteAccount_All_Success(t *testing.T) {
 	}
 
 	rootAccount := keypair.MustParseFull("SBMW2WDSVTGT2N2PCBF3PV7WBOIKVTGGIEBUUYMDX3CKTDD5HY3UIHV4")
+
 	currLedgerNum := 1000
+	ledgerBounds := &txnbuild.LedgerBounds{
+		MaxLedger: uint32(currLedgerNum + preconditions.IncrementForMaxLedgerBounds),
+	}
 
 	mChannelAccountStore.
 		On("Count", ctx).
 		Return(len(channelAccounts), nil).
 		Once()
 	mLedgerNumberTracker.
-		On("GetLedgerNumber").
-		Return(currLedgerNum, nil).
-		Times(len(channelAccounts))
+		On("GetLedgerNumber").Return(currLedgerNum, nil).Times(len(channelAccounts)).
+		On("GetLedgerBounds").Return(ledgerBounds, nil).Times(len(channelAccounts))
 	for _, acc := range channelAccounts {
 		mChannelAccountStore.
-			On("GetAndLockAll", ctx, currLedgerNum, currLedgerNum+engine.IncrementForMaxLedgerBounds, 1).
+			On("GetAndLockAll", ctx, currLedgerNum, currLedgerNum+preconditions.IncrementForMaxLedgerBounds, 1).
 			Return([]*store.ChannelAccount{acc}, nil).
 			Once()
 		mHorizonClient.
@@ -636,14 +625,19 @@ func Test_ChannelAccounts_DeleteAccount_All_Success(t *testing.T) {
 			On("SubmitTransactionWithOptions", mock.Anything, horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true}).
 			Return(horizon.Transaction{}, nil).
 			Once()
-		mSigService.
-			On("DistributionAccount").
+		mDistAccResolver.
+			On("HostDistributionAccount").
 			Return(rootAccount.Address()).
-			Twice().
-			On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), mock.AnythingOfType("string"), mock.AnythingOfType("string"), mock.AnythingOfType("string")).
+			Twice()
+		mHostAccSigClient.
+			On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), mock.AnythingOfType("string")).
+			Return(&txnbuild.Transaction{}, nil).
+			Once()
+		mChAccSigClient.
+			On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), mock.AnythingOfType("string"), mock.AnythingOfType("string")).
 			Return(&txnbuild.Transaction{}, nil).
 			Once().
-			On("Delete", ctx, acc.PublicKey, currLedgerNum+engine.IncrementForMaxLedgerBounds).
+			On("Delete", ctx, acc.PublicKey).
 			Return(nil).
 			Once()
 	}
@@ -661,23 +655,21 @@ func Test_ChannelAccounts_DeleteAccount_FindByPublicKey_Failure(t *testing.T) {
 
 	ctx := context.Background()
 
-	mChannelAccountStore := &storeMocks.MockChannelAccountStore{}
-	defer mChannelAccountStore.AssertExpectations(t)
 	mHorizonClient := &horizonclient.MockClient{}
 	defer mHorizonClient.AssertExpectations(t)
-	mLedgerNumberTracker := &engineMocks.MockLedgerNumberTracker{}
-	defer mLedgerNumberTracker.AssertExpectations(t)
-	mSigService := engineMocks.NewMockSignatureService(t)
-	defer mSigService.AssertExpectations(t)
+	mChannelAccountStore := storeMocks.NewMockChannelAccountStore(t)
+	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
+	sigService, _, _, _, _ := signing.NewMockSignatureService(t)
 
 	cas := ChannelAccountsService{
 		chAccStore:          mChannelAccountStore,
-		horizonClient:       mHorizonClient,
 		TSSDBConnectionPool: dbConnectionPool,
-		ledgerNumberTracker: mLedgerNumberTracker,
-		MaxBaseFee:          100,
-		SigningService:      mSigService,
-		HorizonURL:          "https://horizon-testnet.stellar.org",
+		SubmitterEngine: engine.SubmitterEngine{
+			HorizonClient:       mHorizonClient,
+			LedgerNumberTracker: mLedgerNumberTracker,
+			MaxBaseFee:          100,
+			SignatureService:    sigService,
+		},
 	}
 
 	channelAccountID := "GDKMLSJSPHFWB26JV7ESWLJAKJ6KDTLQWYFT2T4ZVXFFHWBINUEJKASM"
@@ -688,7 +680,7 @@ func Test_ChannelAccounts_DeleteAccount_FindByPublicKey_Failure(t *testing.T) {
 		Return(currLedgerNum, nil).
 		Once()
 	mChannelAccountStore.
-		On("GetAndLock", ctx, channelAccountID, currLedgerNum, currLedgerNum+engine.IncrementForMaxLedgerBounds).
+		On("GetAndLock", ctx, channelAccountID, currLedgerNum, currLedgerNum+preconditions.IncrementForMaxLedgerBounds).
 		Return(nil, errors.New("db error")).
 		Once()
 
@@ -708,23 +700,21 @@ func Test_ChannelAccounts_DeleteAccount_DeleteFromSigServiceError(t *testing.T) 
 
 	ctx := context.Background()
 
-	mChannelAccountStore := &storeMocks.MockChannelAccountStore{}
-	defer mChannelAccountStore.AssertExpectations(t)
 	mHorizonClient := &horizonclient.MockClient{}
 	defer mHorizonClient.AssertExpectations(t)
-	mLedgerNumberTracker := &engineMocks.MockLedgerNumberTracker{}
-	defer mLedgerNumberTracker.AssertExpectations(t)
-	mSigService := engineMocks.NewMockSignatureService(t)
-	defer mSigService.AssertExpectations(t)
+	mChannelAccountStore := storeMocks.NewMockChannelAccountStore(t)
+	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
+	sigService, mChAccSigClient, _, _, _ := signing.NewMockSignatureService(t)
 
 	cas := ChannelAccountsService{
 		chAccStore:          mChannelAccountStore,
-		horizonClient:       mHorizonClient,
 		TSSDBConnectionPool: dbConnectionPool,
-		ledgerNumberTracker: mLedgerNumberTracker,
-		MaxBaseFee:          100,
-		SigningService:      mSigService,
-		HorizonURL:          "https://horizon-testnet.stellar.org",
+		SubmitterEngine: engine.SubmitterEngine{
+			HorizonClient:       mHorizonClient,
+			LedgerNumberTracker: mLedgerNumberTracker,
+			MaxBaseFee:          100,
+			SignatureService:    sigService,
+		},
 	}
 
 	channelAccount := &store.ChannelAccount{
@@ -739,7 +729,7 @@ func Test_ChannelAccounts_DeleteAccount_DeleteFromSigServiceError(t *testing.T) 
 		Return(currLedgerNum, nil).
 		Once()
 	mChannelAccountStore.
-		On("GetAndLock", ctx, channelAccount.PublicKey, currLedgerNum, currLedgerNum+engine.IncrementForMaxLedgerBounds).
+		On("GetAndLock", ctx, channelAccount.PublicKey, currLedgerNum, currLedgerNum+preconditions.IncrementForMaxLedgerBounds).
 		Return(channelAccount, nil).
 		Once()
 	mHorizonClient.
@@ -750,8 +740,8 @@ func Test_ChannelAccounts_DeleteAccount_DeleteFromSigServiceError(t *testing.T) 
 			},
 		}).
 		Once()
-	mSigService.
-		On("Delete", ctx, channelAccount.PublicKey, currLedgerNum+engine.IncrementForMaxLedgerBounds).
+	mChAccSigClient.
+		On("Delete", ctx, channelAccount.PublicKey).
 		Return(errors.New("sig service error")).
 		Once()
 
@@ -769,23 +759,21 @@ func Test_ChannelAccounts_DeleteAccount_SubmitTransaction_Failure(t *testing.T) 
 
 	ctx := context.Background()
 
-	mChannelAccountStore := &storeMocks.MockChannelAccountStore{}
-	defer mChannelAccountStore.AssertExpectations(t)
 	mHorizonClient := &horizonclient.MockClient{}
 	defer mHorizonClient.AssertExpectations(t)
-	mLedgerNumberTracker := &engineMocks.MockLedgerNumberTracker{}
-	defer mLedgerNumberTracker.AssertExpectations(t)
-	mSigService := engineMocks.NewMockSignatureService(t)
-	defer mSigService.AssertExpectations(t)
+	mChannelAccountStore := storeMocks.NewMockChannelAccountStore(t)
+	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
+	sigService, mChAccSigClient, _, mHostAccSigClient, mDistAccResolver := signing.NewMockSignatureService(t)
 
 	cas := ChannelAccountsService{
 		chAccStore:          mChannelAccountStore,
-		horizonClient:       mHorizonClient,
 		TSSDBConnectionPool: dbConnectionPool,
-		ledgerNumberTracker: mLedgerNumberTracker,
-		MaxBaseFee:          100,
-		SigningService:      mSigService,
-		HorizonURL:          "https://horizon-testnet.stellar.org",
+		SubmitterEngine: engine.SubmitterEngine{
+			HorizonClient:       mHorizonClient,
+			LedgerNumberTracker: mLedgerNumberTracker,
+			MaxBaseFee:          100,
+			SignatureService:    sigService,
+		},
 	}
 
 	channelAccount := &store.ChannelAccount{
@@ -794,14 +782,17 @@ func Test_ChannelAccounts_DeleteAccount_SubmitTransaction_Failure(t *testing.T) 
 	}
 
 	rootAccount := keypair.MustParseFull("SBMW2WDSVTGT2N2PCBF3PV7WBOIKVTGGIEBUUYMDX3CKTDD5HY3UIHV4")
+
 	currLedgerNum := 1000
+	ledgerBounds := &txnbuild.LedgerBounds{
+		MaxLedger: uint32(currLedgerNum + preconditions.IncrementForMaxLedgerBounds),
+	}
 
 	mLedgerNumberTracker.
-		On("GetLedgerNumber").
-		Return(currLedgerNum, nil).
-		Once()
+		On("GetLedgerNumber").Return(currLedgerNum, nil).Once().
+		On("GetLedgerBounds").Return(ledgerBounds, nil).Once()
 	mChannelAccountStore.
-		On("GetAndLock", ctx, channelAccount.PublicKey, currLedgerNum, currLedgerNum+engine.IncrementForMaxLedgerBounds).
+		On("GetAndLock", ctx, channelAccount.PublicKey, currLedgerNum, currLedgerNum+preconditions.IncrementForMaxLedgerBounds).
 		Return(channelAccount, nil).
 		Once()
 	mHorizonClient.
@@ -814,11 +805,16 @@ func Test_ChannelAccounts_DeleteAccount_SubmitTransaction_Failure(t *testing.T) 
 		On("SubmitTransactionWithOptions", mock.Anything, horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true}).
 		Return(horizon.Transaction{}, errors.New("foo bar")).
 		Once()
-	mSigService.
-		On("DistributionAccount").
+	mDistAccResolver.
+		On("HostDistributionAccount").
 		Return(rootAccount.Address()).
-		Twice().
-		On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), mock.AnythingOfType("string"), mock.AnythingOfType("string")).
+		Twice()
+	mHostAccSigClient.
+		On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), mock.AnythingOfType("string")).
+		Return(&txnbuild.Transaction{}, nil).
+		Once()
+	mChAccSigClient.
+		On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), mock.AnythingOfType("string")).
 		Return(&txnbuild.Transaction{}, nil).
 		Once()
 
@@ -838,23 +834,21 @@ func Test_ChannelAccounts_EnsureChannelAccounts_Exact_Success(t *testing.T) {
 
 	ctx := context.Background()
 
-	mChannelAccountStore := &storeMocks.MockChannelAccountStore{}
-	defer mChannelAccountStore.AssertExpectations(t)
 	mHorizonClient := &horizonclient.MockClient{}
 	defer mHorizonClient.AssertExpectations(t)
-	mLedgerNumberTracker := &engineMocks.MockLedgerNumberTracker{}
-	defer mLedgerNumberTracker.AssertExpectations(t)
-	mSigService := engineMocks.NewMockSignatureService(t)
-	defer mSigService.AssertExpectations(t)
+	mChannelAccountStore := storeMocks.NewMockChannelAccountStore(t)
+	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
+	sigService, _, _, _, _ := signing.NewMockSignatureService(t)
 
 	cas := ChannelAccountsService{
 		chAccStore:          mChannelAccountStore,
-		horizonClient:       mHorizonClient,
 		TSSDBConnectionPool: dbConnectionPool,
-		ledgerNumberTracker: mLedgerNumberTracker,
-		MaxBaseFee:          100,
-		SigningService:      mSigService,
-		HorizonURL:          "https://horizon-testnet.stellar.org",
+		SubmitterEngine: engine.SubmitterEngine{
+			HorizonClient:       mHorizonClient,
+			LedgerNumberTracker: mLedgerNumberTracker,
+			MaxBaseFee:          100,
+			SignatureService:    sigService,
+		},
 	}
 
 	ensureCount := 2
@@ -883,29 +877,37 @@ func Test_ChannelAccounts_EnsureChannelAccounts_Add_Success(t *testing.T) {
 
 	ctx := context.Background()
 
-	mChannelAccountStore := &storeMocks.MockChannelAccountStore{}
-	defer mChannelAccountStore.AssertExpectations(t)
 	mHorizonClient := &horizonclient.MockClient{}
 	defer mHorizonClient.AssertExpectations(t)
-	mLedgerNumberTracker := &engineMocks.MockLedgerNumberTracker{}
-	defer mLedgerNumberTracker.AssertExpectations(t)
-	mSigService := engineMocks.NewMockSignatureService(t)
-	defer mSigService.AssertExpectations(t)
+	mChannelAccountStore := storeMocks.NewMockChannelAccountStore(t)
+	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
+	sigService, mChAccSigClient, _, mHostAccSigClient, mDistAccResolver := signing.NewMockSignatureService(t)
 
 	cas := ChannelAccountsService{
 		chAccStore:          mChannelAccountStore,
-		horizonClient:       mHorizonClient,
 		TSSDBConnectionPool: dbConnectionPool,
-		ledgerNumberTracker: mLedgerNumberTracker,
-		MaxBaseFee:          100,
-		SigningService:      mSigService,
-		HorizonURL:          "https://horizon-testnet.stellar.org",
+		SubmitterEngine: engine.SubmitterEngine{
+			HorizonClient:       mHorizonClient,
+			LedgerNumberTracker: mLedgerNumberTracker,
+			MaxBaseFee:          100,
+			SignatureService:    sigService,
+		},
 	}
 
 	desiredCount := 5
 	rootAccount := keypair.MustParseFull("SBMW2WDSVTGT2N2PCBF3PV7WBOIKVTGGIEBUUYMDX3CKTDD5HY3UIHV4")
 	currChannelAccountsCount := 2
+
 	currLedgerNum := 100
+	ledgerBounds := &txnbuild.LedgerBounds{
+		MaxLedger: uint32(currLedgerNum + preconditions.IncrementForMaxLedgerBounds),
+	}
+
+	publicKeys := []string{
+		keypair.MustRandom().Address(),
+		keypair.MustRandom().Address(),
+		keypair.MustRandom().Address(),
+	}
 
 	mChannelAccountStore.
 		On("Count", ctx).
@@ -915,9 +917,7 @@ func Test_ChannelAccounts_EnsureChannelAccounts_Add_Success(t *testing.T) {
 		Return(nil, nil).
 		Times(desiredCount - currChannelAccountsCount)
 	mLedgerNumberTracker.
-		On("GetLedgerNumber").
-		Return(currLedgerNum, nil).
-		Once()
+		On("GetLedgerBounds").Return(ledgerBounds, nil).Once()
 	mHorizonClient.
 		On("AccountDetail", horizonclient.AccountRequest{AccountID: rootAccount.Address()}).
 		Return(horizon.Account{AccountID: rootAccount.Address()}, nil).
@@ -925,14 +925,19 @@ func Test_ChannelAccounts_EnsureChannelAccounts_Add_Success(t *testing.T) {
 		On("SubmitTransactionWithOptions", mock.Anything, horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true}).
 		Return(horizon.Transaction{}, nil).
 		Once()
-	mSigService.
-		On("DistributionAccount").
+	mDistAccResolver.
+		On("HostDistributionAccount").
 		Return(rootAccount.Address()).
-		Twice().
-		On("BatchInsert", ctx, mock.AnythingOfType("[]*keypair.Full"), true, currLedgerNum).
-		Return(nil).
+		Twice()
+	mHostAccSigClient.
+		On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), mock.AnythingOfType("string")).
+		Return(&txnbuild.Transaction{}, nil).
+		Once()
+	mChAccSigClient.
+		On("BatchInsert", ctx, desiredCount-currChannelAccountsCount).
+		Return(publicKeys, nil).
 		Once().
-		On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), mock.AnythingOfType("string"), mock.AnythingOfType("string"), mock.AnythingOfType("string"), mock.AnythingOfType("string")).
+		On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), mock.AnythingOfType("string"), mock.AnythingOfType("string"), mock.AnythingOfType("string")).
 		Return(&txnbuild.Transaction{}, nil).
 		Once()
 
@@ -949,23 +954,21 @@ func Test_ChannelAccounts_EnsureChannelAccounts_Delete_Success(t *testing.T) {
 
 	ctx := context.Background()
 
-	mChannelAccountStore := &storeMocks.MockChannelAccountStore{}
-	defer mChannelAccountStore.AssertExpectations(t)
 	mHorizonClient := &horizonclient.MockClient{}
 	defer mHorizonClient.AssertExpectations(t)
-	mLedgerNumberTracker := &engineMocks.MockLedgerNumberTracker{}
-	defer mLedgerNumberTracker.AssertExpectations(t)
-	mSigService := engineMocks.NewMockSignatureService(t)
-	defer mSigService.AssertExpectations(t)
+	mChannelAccountStore := storeMocks.NewMockChannelAccountStore(t)
+	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
+	sigService, mChAccSigClient, _, mHostAccSigClient, mDistAccResolver := signing.NewMockSignatureService(t)
 
 	cas := ChannelAccountsService{
 		chAccStore:          mChannelAccountStore,
-		horizonClient:       mHorizonClient,
 		TSSDBConnectionPool: dbConnectionPool,
-		ledgerNumberTracker: mLedgerNumberTracker,
-		MaxBaseFee:          100,
-		SigningService:      mSigService,
-		HorizonURL:          "https://horizon-testnet.stellar.org",
+		SubmitterEngine: engine.SubmitterEngine{
+			HorizonClient:       mHorizonClient,
+			LedgerNumberTracker: mLedgerNumberTracker,
+			MaxBaseFee:          100,
+			SignatureService:    sigService,
+		},
 	}
 
 	rootAccount := keypair.MustParseFull("SBMW2WDSVTGT2N2PCBF3PV7WBOIKVTGGIEBUUYMDX3CKTDD5HY3UIHV4")
@@ -982,8 +985,11 @@ func Test_ChannelAccounts_EnsureChannelAccounts_Delete_Success(t *testing.T) {
 		},
 	}
 
-	currLedgerNum := 1000
 	wantEnsureCount := 2
+	currLedgerNum := 1000
+	ledgerBounds := &txnbuild.LedgerBounds{
+		MaxLedger: uint32(currLedgerNum + preconditions.IncrementForMaxLedgerBounds),
+	}
 
 	mChannelAccountStore.
 		On("Count", ctx).
@@ -992,6 +998,9 @@ func Test_ChannelAccounts_EnsureChannelAccounts_Delete_Success(t *testing.T) {
 	mLedgerNumberTracker.
 		On("GetLedgerNumber").
 		Return(currLedgerNum, nil).
+		Times(currChannelAccountsCount-wantEnsureCount).
+		On("GetLedgerBounds").
+		Return(ledgerBounds, nil).
 		Times(currChannelAccountsCount - wantEnsureCount)
 	mHorizonClient.
 		On("AccountDetail", horizonclient.AccountRequest{AccountID: rootAccount.Address()}).
@@ -1000,21 +1009,26 @@ func Test_ChannelAccounts_EnsureChannelAccounts_Delete_Success(t *testing.T) {
 
 	for _, acc := range channelAccounts {
 		mChannelAccountStore.
-			On("GetAndLockAll", ctx, currLedgerNum, currLedgerNum+engine.IncrementForMaxLedgerBounds, 1).
+			On("GetAndLockAll", ctx, currLedgerNum, currLedgerNum+preconditions.IncrementForMaxLedgerBounds, 1).
 			Return([]*store.ChannelAccount{acc}, nil).
 			Once()
 		mHorizonClient.
 			On("AccountDetail", horizonclient.AccountRequest{AccountID: acc.PublicKey}).
 			Return(horizon.Account{}, nil).
 			Once()
-		mSigService.
-			On("DistributionAccount").
+		mDistAccResolver.
+			On("HostDistributionAccount").
 			Return(rootAccount.Address()).
-			Twice().
-			On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), mock.AnythingOfType("string"), mock.AnythingOfType("string")).
+			Twice()
+		mHostAccSigClient.
+			On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), mock.AnythingOfType("string")).
+			Return(&txnbuild.Transaction{}, nil).
+			Once()
+		mChAccSigClient.
+			On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), mock.AnythingOfType("string")).
 			Return(&txnbuild.Transaction{}, nil).
 			Once().
-			On("Delete", ctx, acc.PublicKey, currLedgerNum+engine.IncrementForMaxLedgerBounds).
+			On("Delete", ctx, acc.PublicKey).
 			Return(nil).
 			Once()
 	}
