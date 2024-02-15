@@ -241,7 +241,11 @@ const getPendingRegistrationReceiverWalletsBaseQuery = `
 		INNER JOIN payments p ON d.id = p.disbursement_id AND p.receiver_id = r.id
 	WHERE
 		rw.status = $1 -- 'READY'::receiver_wallet_status
-	%s
+		%s
+	GROUP BY
+		rw.id,
+		r.id,
+		w.id
 `
 
 var getPendingRegistrationReceiverWalletsBaseArgs = []any{ReadyReceiversWalletStatus}
