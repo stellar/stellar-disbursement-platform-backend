@@ -638,7 +638,7 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 		assert.EqualError(
 			t,
 			err,
-			fmt.Sprintf("running atomic function in RunInTransactionWithResult: publishing messages %s on event producer: unexpected error", expectedMessages),
+			fmt.Sprintf("running atomic function in RunInTransactionWithResult: producing events: publishing messages %s on event producer: unexpected error", expectedMessages),
 		)
 	})
 

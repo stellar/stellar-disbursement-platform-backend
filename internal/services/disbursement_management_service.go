@@ -376,7 +376,7 @@ func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, d
 		}
 
 		if err = s.produceEvents(ctx, msgs...); err != nil {
-			return err
+			return fmt.Errorf("producing events: %w", err)
 		}
 
 		return nil
@@ -385,12 +385,12 @@ func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, d
 
 func (s *DisbursementManagementService) produceEvents(ctx context.Context, msgs ...events.Message) error {
 	if s.eventProducer == nil {
-		log.Ctx(ctx).Errorf("event producer is nil, could not publish messages %s", msgs)
+		log.Ctx(ctx).Errorf("event producer is nil, could not publish messages %+v", msgs)
 		return nil
 	}
 
 	if err := s.eventProducer.WriteMessages(ctx, msgs...); err != nil {
-		return fmt.Errorf("publishing messages %s on event producer: %w", msgs, err)
+		return fmt.Errorf("publishing messages %+v on event producer: %w", msgs, err)
 	}
 
 	return nil
