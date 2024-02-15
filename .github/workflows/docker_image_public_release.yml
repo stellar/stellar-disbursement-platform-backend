@@ -22,7 +22,7 @@ jobs:
     secrets: inherit # pass all secrets
 
   e2e_integration_test:
-    if: github.ref == 'refs/heads/develop' # TODO: re-enable in SDP-968
+    if: github.ref != 'refs/heads/sdp-multitenant' # TODO: re-enable in SDP-968
     uses: ./.github/workflows/e2e_integration_test.yml # execute the callable e2e_integration_test.yml
     needs:
       - tests
