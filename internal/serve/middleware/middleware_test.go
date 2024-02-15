@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -626,9 +627,11 @@ func Test_LoggingMiddleware(t *testing.T) {
 	mTenantManager := &tenant.TenantManagerMock{}
 	mAuthManager := &auth.AuthManagerMock{}
 
-	t.Run("emits request started and finished logs", func(t *testing.T) {
+	t.Run("emits request started and finished logs with tenant info if tenant derived from context", func(t *testing.T) {
 		r := chi.NewRouter()
 		expectedRespBody := "ok"
+
+		infoEntries := log.DefaultLogger.StartTest(log.InfoLevel)
 
 		tenantName := "tenant123"
 		tenantID := "tenant_id"
@@ -646,10 +649,6 @@ func Test_LoggingMiddleware(t *testing.T) {
 			require.NoError(t, err)
 		})
 
-		buf := new(strings.Builder)
-		log.DefaultLogger.SetLevel(log.InfoLevel)
-		log.DefaultLogger.SetOutput(buf)
-
 		req, err := http.NewRequest(http.MethodGet, "/", nil)
 		require.NoError(t, err)
 
@@ -666,20 +665,31 @@ func Test_LoggingMiddleware(t *testing.T) {
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.Equal(t, expectedRespBody, string(respBody))
 
-		logs := buf.String()
+		logEntries := infoEntries()
+		for i, e := range logEntries {
+			entry, err := e.String()
+			require.NoError(t, err)
 
-		assert.Contains(t, logs, "starting request")
-		assert.Contains(t, logs, "finished request")
-		assert.Contains(t, logs, tenantName)
-		assert.Contains(t, logs, tenantID)
+			assert.Contains(t, entry, fmt.Sprintf("tenant_name=%s", tenantName))
+			assert.Contains(t, entry, fmt.Sprintf("tenant_id=%s", tenantID))
+
+			if i == 0 {
+				assert.Contains(t, e.Message, "starting request")
+			} else if i == 1 {
+				assert.Contains(t, e.Message, "finished request")
+			}
+		}
 	})
 
-	t.Run("responds with internal error if tenant cannot be derived from context", func(t *testing.T) {
+	t.Run("emits warning if tenant cannot be derived from the context", func(t *testing.T) {
 		r := chi.NewRouter()
+		expectedRespBody := "ok"
+
+		infoEntries := log.DefaultLogger.StartTest(log.InfoLevel)
 
 		r.Use(LoggingMiddleware())
 		r.Get("/", func(w http.ResponseWriter, r *http.Request) {
-			_, err := w.Write([]byte(""))
+			_, err := w.Write([]byte(expectedRespBody))
 			require.NoError(t, err)
 		})
 
@@ -693,7 +703,28 @@ func Test_LoggingMiddleware(t *testing.T) {
 		r.ServeHTTP(rr, req)
 
 		resp := rr.Result()
-		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.Equal(t, expectedRespBody, string(respBody))
+
+		logEntries := infoEntries()
+		for i, e := range logEntries {
+			entry, err := e.String()
+			require.NoError(t, err)
+
+			assert.NotContains(t, entry, "tenant_name")
+			assert.NotContains(t, entry, "tenant_id")
+
+			if i == 0 {
+				assert.Contains(t, e.Message, "tenant cannot be derived from context")
+			} else if i == 1 {
+				assert.Contains(t, e.Message, "starting request")
+			} else if i == 2 {
+				assert.Contains(t, e.Message, "finished request")
+			}
+		}
 	})
 
 	mTenantManager.AssertExpectations(t)

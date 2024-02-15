@@ -206,6 +206,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 	mux.Use(chimiddleware.RequestID)
 	mux.Use(chimiddleware.RealIP)
 	mux.Use(middleware.RecoverHandler)
+	mux.Use(middleware.LoggingMiddleware())
 	mux.Use(middleware.MetricsRequestHandler(o.MonitorService))
 	mux.Use(middleware.CSPMiddleware())
 	mux.Use(chimiddleware.CleanPath)
@@ -370,6 +371,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 	// Public routes that are tenant aware (they need to know the tenant ID)
 	mux.Group(func(r chi.Router) {
 		r.Use(middleware.TenantMiddleware(o.tenantManager, o.authManager))
+		r.Use(middleware.LoggingMiddleware())
 
 		// Even if the logo URL is under the public endpoints, it'll be authenticated. The `auth token` should be
 		// added in the URL's query params. Example: https://...?token=mytoken

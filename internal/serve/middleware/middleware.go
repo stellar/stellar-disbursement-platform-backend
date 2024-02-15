@@ -186,19 +186,20 @@ func LoggingMiddleware() func(http.Handler) http.Handler {
 			mw := mutil.WrapWriter(rw)
 
 			reqCtx := req.Context()
+			logFields := log.F{
+				"req": middleware.GetReqID(reqCtx),
+			}
+			logCtx := log.Set(reqCtx, log.Ctx(reqCtx).WithFields(logFields))
+
 			tenant, err := tenant.GetTenantFromContext(reqCtx)
 			if err != nil {
-				httperror.InternalError(reqCtx, "Cannot find tenant from context", err, nil).Render(rw)
-				return
+				log.Ctx(logCtx).Info("tenant cannot be derived from context")
 			}
-
-			logCtx := log.PushContext(reqCtx, func(l *log.Entry) *log.Entry {
-				return l.WithFields(log.F{
-					"req":         middleware.GetReqID(reqCtx),
-					"tenant_id":   tenant.ID,
-					"tenant_name": tenant.Name,
-				})
-			})
+			if tenant != nil {
+				logFields["tenant_name"] = tenant.Name
+				logFields["tenant_id"] = tenant.ID
+				logCtx = log.Set(reqCtx, log.Ctx(reqCtx).WithFields(logFields))
+			}
 
 			logRequestStart(logCtx, req)
 			started := time.Now()
