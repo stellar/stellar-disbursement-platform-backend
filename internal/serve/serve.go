@@ -209,7 +209,7 @@ func Serve(opts ServeOptions, httpServer HTTPServerInterface) error {
 }
 
 const (
-	rateLimitPer20Seconds = 30
+	rateLimitPer20Seconds = 10
 	rateLimitWindow       = 20 * time.Second
 )
 
@@ -218,9 +218,14 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 
 	// Middleware
 	mux.Use(middleware.CorsMiddleware(o.CorsAllowedOrigins))
+	// Rate limits requests made with the pair <IP, endpoint>.
+	mux.Use(httprate.Limit(
+		rateLimitPer20Seconds,
+		rateLimitWindow,
+		httprate.WithKeyFuncs(httprate.KeyByIP, httprate.KeyByEndpoint),
+	))
 	mux.Use(chimiddleware.RequestID)
 	mux.Use(chimiddleware.RealIP)
-	mux.Use(httprate.LimitAll(rateLimitPer20Seconds, rateLimitWindow))
 	mux.Use(supporthttp.LoggingMiddleware)
 	mux.Use(middleware.RecoverHandler)
 	mux.Use(middleware.MetricsRequestHandler(o.MonitorService))

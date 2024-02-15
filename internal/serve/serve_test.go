@@ -336,6 +336,8 @@ func Test_handleHTTP_authenticatedEndpoints(t *testing.T) {
 	serveOptions := getServeOptionsForTests(t, dbt.DSN)
 	defer serveOptions.dbConnectionPool.Close()
 
+	handlerMux := handleHTTP(serveOptions)
+
 	// Unauthenticated endpoints
 	authenticatedEndpoints := []struct { // TODO: body to requests
 		method string
@@ -395,8 +397,6 @@ func Test_handleHTTP_authenticatedEndpoints(t *testing.T) {
 	// Expect 401 as a response:
 	for _, endpoint := range authenticatedEndpoints {
 		t.Run(fmt.Sprintf("expect 401 for %s %s", endpoint.method, endpoint.path), func(t *testing.T) {
-			handlerMux := handleHTTP(serveOptions)
-
 			req := httptest.NewRequest(endpoint.method, endpoint.path, nil)
 			w := httptest.NewRecorder()
 			handlerMux.ServeHTTP(w, req)
@@ -415,17 +415,23 @@ func Test_handleHTTP_rateLimit(t *testing.T) {
 
 	handlerMux := handleHTTP(serveOptions)
 
-	// After the rate limit is reached, the next request should be rate limited
+	// 1. The first n requests to /health should return 200
+	// 2. the n+1 request to /health should return 429
+	// 3. an additional request to another endpoint should return something other than 429
+	expectedEndpoints := make([]string, rateLimitPer20Seconds)
 	expectedResponseCodes := make([]int, rateLimitPer20Seconds)
 	for i := 0; i < rateLimitPer20Seconds; i++ {
-		expectedResponseCodes[i] = http.StatusOK // 200 on the first n requests
+		expectedResponseCodes[i] = http.StatusOK
+		expectedEndpoints[i] = "/health"
 	}
-	expectedResponseCodes = append(expectedResponseCodes, http.StatusTooManyRequests) // 429 on the n+1 request
-	require.Len(t, expectedResponseCodes, rateLimitPer20Seconds+1)
+	expectedResponseCodes = append(expectedResponseCodes, http.StatusTooManyRequests, http.StatusNotFound)
+	expectedEndpoints = append(expectedEndpoints, "/health", "/not-found")
+	require.Len(t, expectedResponseCodes, rateLimitPer20Seconds+2)
+	require.Len(t, expectedEndpoints, rateLimitPer20Seconds+2)
 
 	actualResponseCodes := make([]int, len(expectedResponseCodes))
 	for i := 0; i < len(expectedResponseCodes); i++ {
-		req := httptest.NewRequest(http.MethodGet, "/health", nil)
+		req := httptest.NewRequest(http.MethodGet, expectedEndpoints[i], nil)
 		w := httptest.NewRecorder()
 		handlerMux.ServeHTTP(w, req)
 		resp := w.Result()
