@@ -32,6 +32,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
@@ -1245,7 +1246,9 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 	require.NoError(t, err)
 
 	token := "token"
+	tnt := tenant.Tenant{ID: "tenant-id"}
 	ctx := context.WithValue(context.Background(), middleware.TokenContextKey, token)
+	ctx = tenant.SaveTenantInContext(ctx, &tnt)
 	userID := "valid-user-id"
 	user := &auth.User{
 		ID:    userID,
@@ -1262,6 +1265,7 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 	handler := &DisbursementHandler{
 		Models:                        models,
 		AuthManager:                   authManagerMock,
+		DistributionPubKey:            distributionPubKey,
 		DisbursementManagementService: services.NewDisbursementManagementService(models, dbConnectionPool, authManagerMock, hMock, &mockEventProducer),
 	}
 
@@ -1403,6 +1407,11 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 			Return(approverUser, nil).
 			Once()
 
+		mockEventProducer.
+			On("WriteMessages", mock.Anything, mock.AnythingOfType("[]events.Message")).
+			Return(nil).
+			Once()
+
 		err := json.NewEncoder(reqBody).Encode(PatchDisbursementStatusRequest{Status: "Started"})
 		require.NoError(t, err)
 
@@ -1435,6 +1444,12 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 			On("GetUser", mock.Anything, token).
 			Return(user, nil).
 			Twice()
+
+		mockEventProducer.
+			On("WriteMessages", mock.Anything, mock.AnythingOfType("[]events.Message")).
+			Return(nil).
+			Once()
+
 		readyDisbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, handler.Models.Disbursements, &data.Disbursement{
 			Name:          "ready disbursement #3",
 			Status:        data.ReadyDisbursementStatus,

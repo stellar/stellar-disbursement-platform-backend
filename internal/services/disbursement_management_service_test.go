@@ -395,6 +395,28 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 		err = models.Organizations.Update(ctx, &data.OrganizationUpdate{IsApprovalRequired: &isApprovalRequired})
 		require.NoError(t, err)
 
+		mockEventProducer.
+			On("WriteMessages", ctx, mock.AnythingOfType("[]events.Message")).
+			Run(func(args mock.Arguments) {
+				msgs, ok := args.Get(1).([]events.Message)
+				require.True(t, ok)
+				require.Len(t, msgs, 1)
+
+				// Validating send invite msg
+				sendInviteMsg := msgs[0]
+				assert.Equal(t, events.ReceiverWalletNewInvitationTopic, sendInviteMsg.Topic)
+				assert.Equal(t, disbursement.ID, sendInviteMsg.Key)
+				assert.Equal(t, events.BatchReceiverWalletSMSInvitationType, sendInviteMsg.Type)
+				assert.Equal(t, tnt.ID, sendInviteMsg.TenantID)
+
+				eventData, ok := sendInviteMsg.Data.([]schemas.EventReceiverWalletSMSInvitationData)
+				require.True(t, ok)
+				require.Len(t, eventData, 1)
+				assert.Equal(t, schemas.EventReceiverWalletSMSInvitationData{ReceiverWalletID: rwReady.ID}, eventData[0])
+			}).
+			Return(nil).
+			Once()
+
 		err = service.StartDisbursement(ctx, disbursement.ID, user, distributionPubKey)
 		require.NoError(t, err)
 
