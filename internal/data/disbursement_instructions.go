@@ -25,6 +25,11 @@ type DisbursementInstructionModel struct {
 	disbursementModel         *DisbursementModel
 }
 
+type InstructionLine struct {
+	line                    int
+	disbursementInstruction *DisbursementInstruction
+}
+
 const MaxInstructionsPerDisbursement = 10000 // TODO: update this number with load testing results [SDP-524]
 
 // NewDisbursementInstructionModel creates a new DisbursementInstructionModel.
@@ -85,9 +90,12 @@ func (di DisbursementInstructionModel) ProcessAll(ctx context.Context, userID st
 			receiverMap[receiver.PhoneNumber] = receiver
 		}
 
-		instructionMap := make(map[string]*DisbursementInstruction)
-		for _, instruction := range instructions {
-			instructionMap[instruction.Phone] = instruction
+		instructionMap := make(map[string]InstructionLine)
+		for line, instruction := range instructions {
+			instructionMap[instruction.Phone] = InstructionLine{
+				line:                    line + 1,
+				disbursementInstruction: instruction,
+			}
 		}
 
 		for _, instruction := range instructions {
@@ -126,7 +134,7 @@ func (di DisbursementInstructionModel) ProcessAll(ctx context.Context, userID st
 			if !verificationExists {
 				verificationInsert := ReceiverVerificationInsert{
 					ReceiverID:        receiver.ID,
-					VerificationValue: instruction.VerificationValue,
+					VerificationValue: instruction.disbursementInstruction.VerificationValue,
 					VerificationField: disbursement.VerificationField,
 				}
 				hashedVerification, insertError := di.receiverVerificationModel.Insert(ctx, dbTx, verificationInsert)
@@ -140,11 +148,11 @@ func (di DisbursementInstructionModel) ProcessAll(ctx context.Context, userID st
 				}
 
 			} else {
-				if verified := CompareVerificationValue(verification.HashedValue, instruction.VerificationValue); !verified {
+				if verified := CompareVerificationValue(verification.HashedValue, instruction.disbursementInstruction.VerificationValue); !verified {
 					if verification.ConfirmedAt != nil {
-						return fmt.Errorf("%w: receiver verification for %s doesn't match", ErrReceiverVerificationMismatch, receiver.PhoneNumber)
+						return fmt.Errorf("%w: receiver verification for %s doesn't match. Check line %d on CSV file - Internal ID %s.", ErrReceiverVerificationMismatch, receiver.PhoneNumber, instruction.line, instruction.disbursementInstruction.ID)
 					}
-					err = di.receiverVerificationModel.UpdateVerificationValue(ctx, dbTx, verification.ReceiverID, verification.VerificationField, instruction.VerificationValue)
+					err = di.receiverVerificationModel.UpdateVerificationValue(ctx, dbTx, verification.ReceiverID, verification.VerificationField, instruction.disbursementInstruction.VerificationValue)
 
 					if err != nil {
 						return fmt.Errorf("error updating receiver verification for disbursement id %s: %w", disbursement.ID, err)
