@@ -8,6 +8,7 @@ import (
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
 )
@@ -65,7 +66,7 @@ func (s *ChannelAccountsService) validate() error {
 		return fmt.Errorf("validating submitter engine: %w", err)
 	}
 
-	if s.SubmitterEngine.HostSigner == nil {
+	if s.SubmitterEngine.HostAccountSigner == nil {
 		return fmt.Errorf("signature engine's host signer cannot be nil")
 	}
 
@@ -134,7 +135,7 @@ func (s *ChannelAccountsService) DeleteChannelAccount(ctx context.Context, opts 
 			return fmt.Errorf("retrieving current ledger number in DeleteChannelAccount: %w", err)
 		}
 
-		lockedUntilLedgerNumber := currLedgerNum + engine.IncrementForMaxLedgerBounds
+		lockedUntilLedgerNumber := currLedgerNum + preconditions.IncrementForMaxLedgerBounds
 		channelAccount, err := s.GetChannelAccountStore().GetAndLock(ctx, opts.ChannelAccountID, currLedgerNum, lockedUntilLedgerNumber)
 		if err != nil {
 			return fmt.Errorf(
@@ -174,7 +175,7 @@ func (s *ChannelAccountsService) deleteChannelAccounts(ctx context.Context, numA
 			return fmt.Errorf("retrieving current ledger number in DeleteChannelAccount: %w", err)
 		}
 
-		lockedUntilLedgerNumber := currLedgerNum + engine.IncrementForMaxLedgerBounds
+		lockedUntilLedgerNumber := currLedgerNum + preconditions.IncrementForMaxLedgerBounds
 		accounts, err := s.GetChannelAccountStore().GetAndLockAll(ctx, currLedgerNum, lockedUntilLedgerNumber, 1)
 		if err != nil {
 			return fmt.Errorf("cannot retrieve free channel account: %w", err)
@@ -202,7 +203,7 @@ func (s *ChannelAccountsService) deleteChannelAccount(ctx context.Context, publi
 		}
 
 		log.Ctx(ctx).Warnf("Account %s does not exist on the network", publicKey)
-		err = s.SignatureService.Delete(ctx, publicKey)
+		err = s.SignatureService.ChAccountSigner.Delete(ctx, publicKey)
 		if err != nil {
 			return fmt.Errorf("deleting %s from signature service: %w", publicKey, err)
 		}

@@ -12,7 +12,7 @@ import (
 	di "github.com/stellar/stellar-disbursement-platform-backend/internal/dependencyinjection"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 )
 
 // TwilioConfigOptions returns the config options for Twilio. Relevant for loading configs needed for the messenger type(s): `TWILIO_*`.
@@ -207,7 +207,7 @@ func TransactionSubmitterEngineConfigOptions(opts *di.TxSubmitterEngineOptions) 
 	)
 }
 
-func BaseSignatureServiceConfigOptions(opts *engine.SignatureServiceOptions) []*config.ConfigOption {
+func BaseSignatureServiceConfigOptions(opts *signing.SignatureServiceOptions) []*config.ConfigOption {
 	return []*config.ConfigOption{
 		{
 			Name:           "channel-account-encryption-passphrase",
@@ -226,12 +226,12 @@ func BaseSignatureServiceConfigOptions(opts *engine.SignatureServiceOptions) []*
 			Required:       true,
 		},
 		{
-			Name:           "signature-service-type",
-			Usage:          fmt.Sprintf("The type of the signature service. Options: %+v", engine.SignatureServiceType("").All()),
+			Name:           "distribution-signer-type",
+			Usage:          fmt.Sprintf("The type of the signature client used for distribution accounts. Options: %+v", signing.DistributionSignatureClientTypes()),
 			OptType:        types.String,
-			CustomSetValue: SetConfigOptionSignatureServiceType,
-			ConfigKey:      &opts.Type,
-			FlagDefault:    string(engine.SignatureServiceTypeDefault),
+			CustomSetValue: SetConfigOptionDistributionSignerType,
+			ConfigKey:      &opts.DistributionSignerType,
+			FlagDefault:    string(signing.DistributionAccountEnvSignatureClientType),
 			Required:       true,
 		},
 	}

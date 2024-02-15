@@ -11,11 +11,12 @@ import (
 	"github.com/stellar/go/strkey"
 	"github.com/stellar/go/support/config"
 	"github.com/stellar/go/support/log"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
@@ -55,15 +56,15 @@ func SetConfigOptionCrashTrackerType(co *config.ConfigOption) error {
 	return nil
 }
 
-func SetConfigOptionSignatureServiceType(co *config.ConfigOption) error {
+func SetConfigOptionDistributionSignerType(co *config.ConfigOption) error {
 	ssType := viper.GetString(co.Name)
 
-	ssTypeParsed, err := engine.ParseSignatureServiceType(ssType)
+	ssTypeParsed, err := signing.ParseSignatureClientDistributionType(ssType)
 	if err != nil {
-		return fmt.Errorf("couldn't parse signature service type in %s: %w", co.Name, err)
+		return fmt.Errorf("couldn't parse signature client distribution type in %s: %w", co.Name, err)
 	}
 
-	*(co.ConfigKey.(*engine.SignatureServiceType)) = ssTypeParsed
+	*(co.ConfigKey.(*signing.SignatureClientType)) = ssTypeParsed
 	return nil
 }
 

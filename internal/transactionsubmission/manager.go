@@ -15,6 +15,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions"
 	tssMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
@@ -216,7 +217,7 @@ func (m *Manager) loadReadyForProcessingBundles(ctx context.Context) ([]*store.C
 	if err != nil {
 		return nil, fmt.Errorf("getting current ledger number: %w", err)
 	}
-	lockToLedgerNumber := currentLedgerNumber + engine.IncrementForMaxLedgerBounds
+	lockToLedgerNumber := currentLedgerNumber + preconditions.IncrementForMaxLedgerBounds
 
 	chTxBundles, err := m.chTxBundleModel.LoadAndLockTuples(ctx, currentLedgerNumber, lockToLedgerNumber, m.txProcessingLimiter.LimitValue())
 	if err != nil {
