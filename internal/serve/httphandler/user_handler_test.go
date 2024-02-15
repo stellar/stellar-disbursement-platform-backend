@@ -416,7 +416,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 
 	t.Run("returns error when request body is invalid", func(t *testing.T) {
 		token := "mytoken"
-		ctx := context.WithValue(ctx, middleware.TokenContextKey, token)
+		ctx = context.WithValue(ctx, middleware.TokenContextKey, token)
 
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(`{}`))
 		require.NoError(t, err)
@@ -536,7 +536,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 
 	t.Run("returns error when Auth Manager fails", func(t *testing.T) {
 		token := "mytoken"
-		ctx := context.WithValue(ctx, middleware.TokenContextKey, token)
+		ctx = context.WithValue(ctx, middleware.TokenContextKey, token)
 
 		authManagerMock.
 			On("GetUserID", mock.Anything, token).
@@ -611,7 +611,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 
 	t.Run("returns Bad Request when user is duplicated", func(t *testing.T) {
 		token := "mytoken"
-		ctx := context.WithValue(ctx, middleware.TokenContextKey, token)
+		ctx = context.WithValue(ctx, middleware.TokenContextKey, token)
 
 		u := &auth.User{
 			FirstName: "First",
@@ -654,7 +654,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 
 	t.Run("returns error when sending email fails", func(t *testing.T) {
 		token := "mytoken"
-		ctx := context.WithValue(ctx, middleware.TokenContextKey, token)
+		ctx = context.WithValue(ctx, middleware.TokenContextKey, token)
 
 		u := &auth.User{
 			FirstName: "First",
@@ -798,7 +798,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 
 	t.Run("creates user successfully", func(t *testing.T) {
 		token := "mytoken"
-		ctx := context.WithValue(ctx, middleware.TokenContextKey, token)
+		ctx = context.WithValue(ctx, middleware.TokenContextKey, token)
 
 		buf := new(strings.Builder)
 		log.DefaultLogger.SetOutput(buf)
