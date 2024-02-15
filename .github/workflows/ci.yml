@@ -115,7 +115,7 @@ jobs:
           go-version: 1.19
 
       - name: Run tests
-        run: go test -race -coverpkg=./... -coverprofile=c.out ./...
+        run: go test -race -timeout 3m -coverpkg=./... -coverprofile=c.out ./...
 
       - name: Validate Test Coverage Threshold
         env:
