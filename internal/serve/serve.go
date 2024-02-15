@@ -67,7 +67,6 @@ type ServeOptions struct {
 	SEP24JWTSecret                  string
 	sep24JWTManager                 *anchorplatform.JWTManager
 	BaseURL                         string
-	UIBaseURL                       string
 	ResetTokenExpirationHours       int
 	NetworkPassphrase               string
 	SubmitterEngine                 engine.SubmitterEngine
@@ -238,7 +237,6 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			userHandler := httphandler.UserHandler{
 				AuthManager:     authManager,
 				MessengerClient: o.EmailMessengerClient,
-				UIBaseURL:       o.UIBaseURL,
 				Models:          o.Models,
 			}
 
@@ -400,7 +398,6 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 		r.Post("/forgot-password", httphandler.ForgotPasswordHandler{
 			AuthManager:        authManager,
 			MessengerClient:    o.EmailMessengerClient,
-			UIBaseURL:          o.UIBaseURL,
 			Models:             o.Models,
 			ReCAPTCHAValidator: reCAPTCHAValidator,
 			ReCAPTCHADisabled:  o.DisableReCAPTCHA,

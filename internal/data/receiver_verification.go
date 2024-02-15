@@ -169,7 +169,6 @@ func (m *ReceiverVerificationModel) UpdateVerificationValue(ctx context.Context,
 	`
 
 	_, err = sqlExec.ExecContext(ctx, query, hashedValue, receiverID, verificationField)
-
 	if err != nil {
 		return fmt.Errorf("error updating receiver verification: %w", err)
 	}

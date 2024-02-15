@@ -1,6 +1,7 @@
 package httphandler
 
 import (
+	"context"
 	"errors"
 	"io"
 	"net/http"
@@ -10,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 	"github.com/stretchr/testify/mock"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
@@ -41,16 +43,20 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 		auth.WithCustomAuthenticatorOption(authenticatorMock),
 	)
 
-	uiBaseURL := "https://sdp.com"
 	messengerClientMock := &message.MessengerClientMock{}
 	handler := &ForgotPasswordHandler{
 		AuthManager:        authManager,
 		MessengerClient:    messengerClientMock,
 		Models:             models,
-		UIBaseURL:          uiBaseURL,
 		ReCAPTCHAValidator: reCAPTCHAValidatorMock,
 		ReCAPTCHADisabled:  false,
 	}
+
+	uiBaseURL := "https://sdp.com"
+	tnt := tenant.Tenant{
+		SDPUIBaseURL: &uiBaseURL,
+	}
+	ctx := tenant.SaveTenantInContext(context.Background(), &tnt)
 
 	t.Run("Should return http status 200 on a valid request", func(t *testing.T) {
 		requestBody := `
@@ -60,7 +66,7 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 		}`
 
 		rr := httptest.NewRecorder()
-		req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(requestBody))
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(requestBody))
 		require.NoError(t, err)
 
 		authenticatorMock.
@@ -99,6 +105,11 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 	})
 
 	t.Run("Should return http status 500 when the reset password link is invalid", func(t *testing.T) {
+		tntInvalidUIBaseURL := tenant.Tenant{
+			SDPUIBaseURL: &[]string{"%invalid%"}[0],
+		}
+		ctxTenantWithInvalidUIBaseURL := tenant.SaveTenantInContext(context.Background(), &tntInvalidUIBaseURL)
+
 		requestBody := `
 		{ 
 			"email": "valid@email.com" ,
@@ -106,7 +117,7 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 		}`
 
 		rr := httptest.NewRecorder()
-		req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(requestBody))
+		req, err := http.NewRequestWithContext(ctxTenantWithInvalidUIBaseURL, http.MethodPost, url, strings.NewReader(requestBody))
 		require.NoError(t, err)
 
 		authenticatorMock.
@@ -122,7 +133,6 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 			AuthManager:        authManager,
 			MessengerClient:    messengerClientMock,
 			Models:             models,
-			UIBaseURL:          "%invalid%",
 			ReCAPTCHAValidator: reCAPTCHAValidatorMock,
 			ReCAPTCHADisabled:  false,
 		}.ServeHTTP).ServeHTTP(rr, req)
@@ -139,7 +149,7 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 		}`
 
 		rr := httptest.NewRecorder()
-		req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(requestBody))
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(requestBody))
 		require.NoError(t, err)
 
 		authenticatorMock.
@@ -166,7 +176,7 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 		}`
 
 		rr := httptest.NewRecorder()
-		req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(requestBody))
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(requestBody))
 		require.NoError(t, err)
 
 		authenticatorMock.
@@ -192,7 +202,7 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 		}`
 
 		rr := httptest.NewRecorder()
-		req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(requestBody))
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(requestBody))
 		require.NoError(t, err)
 
 		reCAPTCHAValidatorMock.
@@ -226,7 +236,7 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 		}`
 
 		rr := httptest.NewRecorder()
-		req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(requestBody))
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(requestBody))
 		require.NoError(t, err)
 
 		authenticatorMock.
@@ -281,7 +291,7 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 		}`
 
 		rr := httptest.NewRecorder()
-		req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(requestBody))
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(requestBody))
 		require.NoError(t, err)
 
 		authenticatorMock.
@@ -316,11 +326,11 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 		}`
 
 		rr := httptest.NewRecorder()
-		req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(requestBody))
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(requestBody))
 		require.NoError(t, err)
 
 		reCAPTCHAValidatorMock.
-			On("IsTokenValid", mock.Anything, "validToken").
+			On("IsTokenValid", req.Context(), "validToken").
 			Return(false, errors.New("error requesting verify reCAPTCHA token")).
 			Once()
 
@@ -347,7 +357,7 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 		}`
 
 		rr := httptest.NewRecorder()
-		req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(requestBody))
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(requestBody))
 		require.NoError(t, err)
 
 		reCAPTCHAValidatorMock.
@@ -368,6 +378,29 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 
 		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 		assert.JSONEq(t, wantsBody, string(respBody))
+	})
+
+	t.Run("returns Unauthorized when tenant is not in the context", func(t *testing.T) {
+		ctxWithoutTenant := context.Background()
+
+		requestBody := `
+		{ 
+			"email": "valid@email.com" ,
+			"recaptcha_token": "invalidToken"
+		}`
+
+		rr := httptest.NewRecorder()
+		req, err := http.NewRequestWithContext(ctxWithoutTenant, http.MethodPost, url, strings.NewReader(requestBody))
+		require.NoError(t, err)
+
+		http.HandlerFunc(handler.ServeHTTP).ServeHTTP(rr, req)
+
+		resp := rr.Result()
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+		assert.JSONEq(t, `{"error": "Not authorized."}`, string(respBody))
 	})
 
 	authenticatorMock.AssertExpectations(t)

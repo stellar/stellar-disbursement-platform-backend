@@ -139,7 +139,6 @@ func Test_serve(t *testing.T) {
 		CorsAllowedOrigins:              []string{"*"},
 		SEP24JWTSecret:                  "jwt_secret_1234567890",
 		BaseURL:                         "https://sdp.com",
-		UIBaseURL:                       "http://localhost:3000",
 		ResetTokenExpirationHours:       24,
 		NetworkPassphrase:               network.TestNetworkPassphrase,
 		Sep10SigningPublicKey:           "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",

@@ -274,15 +274,6 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			Required:  true,
 		},
 		{
-			Name:           "sdp-ui-base-url",
-			Usage:          "The SDP UI/dashboard Base URL.",
-			OptType:        types.String,
-			ConfigKey:      &serveOpts.UIBaseURL,
-			FlagDefault:    "http://localhost:3000",
-			CustomSetValue: cmdUtils.SetConfigOptionURLString,
-			Required:       true,
-		},
-		{
 			Name:        "disable-mfa",
 			Usage:       "Disables the email Multi-Factor Authentication (MFA).",
 			OptType:     types.Bool,
