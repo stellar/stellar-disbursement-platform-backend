@@ -4,15 +4,17 @@ import (
 	"testing"
 
 	"github.com/stellar/go/clients/horizonclient"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/mocks"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	preconditionsMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions/mocks"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 )
 
 func Test_SubmitterEngine_Validate(t *testing.T) {
 	hMock := &horizonclient.MockClient{}
-	mLedgerNumberTracker := mocks.NewMockLedgerNumberTracker(t)
-	mSigService := mocks.NewMockSignatureService(t)
+	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
+	sigService, _, mDistAccSigClient, _, _ := signing.NewMockSignatureService(t)
 
 	testCases := []struct {
 		name            string
@@ -36,14 +38,26 @@ func Test_SubmitterEngine_Validate(t *testing.T) {
 				HorizonClient:       hMock,
 				LedgerNumberTracker: mLedgerNumberTracker,
 			},
-			wantErrContains: "signature service cannot be nil",
+			wantErrContains: "signature service cannot be empty",
 		},
 		{
 			name: "returns an error if the max base fee is less than the minimum",
 			engine: SubmitterEngine{
 				HorizonClient:       hMock,
 				LedgerNumberTracker: mLedgerNumberTracker,
-				SignatureService:    mSigService,
+				SignatureService: signing.SignatureService{
+					DistAccountSigner: mDistAccSigClient,
+				},
+				MaxBaseFee: 99,
+			},
+			wantErrContains: "validating signature service: channel account signer cannot be nil",
+		},
+		{
+			name: "returns an error if the max base fee is less than the minimum",
+			engine: SubmitterEngine{
+				HorizonClient:       hMock,
+				LedgerNumberTracker: mLedgerNumberTracker,
+				SignatureService:    sigService,
 				MaxBaseFee:          99,
 			},
 			wantErrContains: "maxBaseFee must be greater than or equal to 100",
@@ -53,7 +67,7 @@ func Test_SubmitterEngine_Validate(t *testing.T) {
 			engine: SubmitterEngine{
 				HorizonClient:       hMock,
 				LedgerNumberTracker: mLedgerNumberTracker,
-				SignatureService:    mSigService,
+				SignatureService:    sigService,
 				MaxBaseFee:          100,
 			},
 		},

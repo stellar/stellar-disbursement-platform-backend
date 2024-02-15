@@ -49,12 +49,12 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 		MessengerClient:    messengerClientMock,
 		Models:             models,
 		ReCAPTCHAValidator: reCAPTCHAValidatorMock,
+		ReCAPTCHADisabled:  false,
 	}
 
 	uiBaseURL := "https://sdp.com"
 	tnt := tenant.Tenant{
-		EnableReCAPTCHA: true,
-		SDPUIBaseURL:    &uiBaseURL,
+		SDPUIBaseURL: &uiBaseURL,
 	}
 	ctx := tenant.SaveTenantInContext(context.Background(), &tnt)
 
@@ -106,8 +106,7 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 
 	t.Run("Should return http status 500 when the reset password link is invalid", func(t *testing.T) {
 		tntInvalidUIBaseURL := tenant.Tenant{
-			EnableReCAPTCHA: false,
-			SDPUIBaseURL:    &[]string{"%invalid%"}[0],
+			SDPUIBaseURL: &[]string{"%invalid%"}[0],
 		}
 		ctxTenantWithInvalidUIBaseURL := tenant.SaveTenantInContext(context.Background(), &tntInvalidUIBaseURL)
 
@@ -125,12 +124,17 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 			On("ForgotPassword", req.Context(), "valid@email.com").
 			Return("resetToken", nil).
 			Once()
+		reCAPTCHAValidatorMock.
+			On("IsTokenValid", mock.Anything, "validToken").
+			Return(true, nil).
+			Once()
 
 		http.HandlerFunc(ForgotPasswordHandler{
 			AuthManager:        authManager,
 			MessengerClient:    messengerClientMock,
 			Models:             models,
 			ReCAPTCHAValidator: reCAPTCHAValidatorMock,
+			ReCAPTCHADisabled:  false,
 		}.ServeHTTP).ServeHTTP(rr, req)
 
 		resp := rr.Result()
@@ -146,7 +150,6 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 
 		rr := httptest.NewRecorder()
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(requestBody))
-
 		require.NoError(t, err)
 
 		authenticatorMock.
@@ -374,34 +377,6 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
-		assert.JSONEq(t, wantsBody, string(respBody))
-	})
-
-	t.Run("Should return http status 401 when error getting tenant from context", func(t *testing.T) {
-		ctxWithoutTenant := context.Background()
-		requestBody := `
-			{ 
-				"email": "valid@email.com",
-				"recaptcha_token": "validToken"
-			}
-		`
-
-		rr := httptest.NewRecorder()
-		req, err := http.NewRequestWithContext(ctxWithoutTenant, http.MethodPost, url, strings.NewReader(requestBody))
-		require.NoError(t, err)
-
-		http.HandlerFunc(handler.ServeHTTP).ServeHTTP(rr, req)
-
-		wantsBody := `
-			{
-				"error": "Not authorized."
-			}
-		`
-		resp := rr.Result()
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-
-		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 		assert.JSONEq(t, wantsBody, string(respBody))
 	})
 

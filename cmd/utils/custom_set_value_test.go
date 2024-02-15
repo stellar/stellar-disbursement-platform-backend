@@ -13,7 +13,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -277,43 +277,43 @@ func Test_SetConfigOptionCrashTrackerType(t *testing.T) {
 	}
 }
 
-func Test_SetConfigOptionSignatureServiceType(t *testing.T) {
-	opts := struct{ sigServiceType engine.SignatureServiceType }{}
+func Test_SetConfigOptionDistributionSignerType(t *testing.T) {
+	opts := struct{ sigServiceType signing.SignatureClientType }{}
 
 	co := config.ConfigOption{
-		Name:           "signature-service-type",
+		Name:           "distribution-signer-type",
 		OptType:        types.String,
-		CustomSetValue: SetConfigOptionSignatureServiceType,
+		CustomSetValue: SetConfigOptionDistributionSignerType,
 		ConfigKey:      &opts.sigServiceType,
 	}
 
-	testCases := []customSetterTestCase[engine.SignatureServiceType]{
+	testCases := []customSetterTestCase[signing.SignatureClientType]{
 		{
 			name:            "returns an error if the value is empty",
 			args:            []string{},
-			wantErrContains: `couldn't parse signature service type in signature-service-type: invalid signature service type ""`,
+			wantErrContains: `couldn't parse signature client distribution type in distribution-signer-type: invalid signature client distribution type ""`,
 		},
 		{
 			name:            "returns an error if the value is not supported",
-			args:            []string{"--signature-service-type", "test"},
-			wantErrContains: `couldn't parse signature service type in signature-service-type: invalid signature service type "TEST"`,
+			args:            []string{"--distribution-signer-type", "test"},
+			wantErrContains: `couldn't parse signature client distribution type in distribution-signer-type: invalid signature client distribution type "TEST"`,
 		},
 		{
-			name:       "🎉 handles signature service type (through CLI args): DEFAULT",
-			args:       []string{"--signature-service-type", string(engine.SignatureServiceTypeDefault)},
-			wantResult: engine.SignatureServiceTypeDefault,
+			name:       "🎉 handles signature service type (through CLI args): DISTRIBUTION_ACCOUNT_ENV",
+			args:       []string{"--distribution-signer-type", string(signing.DistributionAccountEnvSignatureClientType)},
+			wantResult: signing.DistributionAccountEnvSignatureClientType,
 		},
 		{
-			name:       "🎉 handles signature service type (through ENV vars): DEFAULT",
-			envValue:   string(engine.SignatureServiceTypeDefault),
-			wantResult: engine.SignatureServiceTypeDefault,
+			name:       "🎉 handles signature service type (through ENV vars): DISTRIBUTION_ACCOUNT_ENV",
+			envValue:   string(signing.DistributionAccountEnvSignatureClientType),
+			wantResult: signing.DistributionAccountEnvSignatureClientType,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			opts.sigServiceType = ""
-			customSetterTester[engine.SignatureServiceType](t, tc, co)
+			customSetterTester[signing.SignatureClientType](t, tc, co)
 		})
 	}
 }

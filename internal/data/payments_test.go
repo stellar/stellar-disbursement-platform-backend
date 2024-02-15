@@ -343,7 +343,7 @@ func Test_PaymentModelGetAll(t *testing.T) {
 		assert.Equal(t, []Payment{*expectedPayment1, *expectedPayment2}, actualPayments)
 	})
 
-	t.Run("returns payments successfully with filter", func(t *testing.T) {
+	t.Run("returns payments successfully with one status filter", func(t *testing.T) {
 		filters := map[FilterKey]interface{}{
 			FilterKeyStatus: PendingPaymentStatus,
 		}
@@ -351,6 +351,19 @@ func Test_PaymentModelGetAll(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, 1, len(actualPayments))
 		assert.Equal(t, []Payment{*expectedPayment2}, actualPayments)
+	})
+
+	t.Run("returns payments successfully with list of status filters", func(t *testing.T) {
+		filters := map[FilterKey]interface{}{
+			FilterKeyStatus: []PaymentStatus{
+				DraftPaymentStatus,
+				PendingPaymentStatus,
+			},
+		}
+		actualPayments, err := paymentModel.GetAll(ctx, &QueryParams{Filters: filters}, dbConnectionPool)
+		require.NoError(t, err)
+		assert.Equal(t, 2, len(actualPayments))
+		assert.Equal(t, []Payment{*expectedPayment1, *expectedPayment2}, actualPayments)
 	})
 
 	t.Run("should not return duplicated entries when receiver are in more than one disbursements with different wallets", func(t *testing.T) {

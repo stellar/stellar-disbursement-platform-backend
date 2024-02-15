@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
-	engineMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/mocks"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 )
 
 func Test_dependencyinjection_NewTxSubmitterEngine(t *testing.T) {
@@ -19,10 +19,16 @@ func Test_dependencyinjection_NewTxSubmitterEngine(t *testing.T) {
 	t.Run("should create and return the same instance on the second call", func(t *testing.T) {
 		ClearInstancesTestHelper(t)
 
-		mSigService := engineMocks.NewMockSignatureService(t)
-		SetInstance(SignatureServiceInstanceName, mSigService)
+		sigService, _, _, _, _ := signing.NewMockSignatureService(t)
+		istanceName := buildSignatureServiceInstanceName(signing.DistributionAccountEnvSignatureClientType)
+		SetInstance(istanceName, sigService)
 
-		opts := TxSubmitterEngineOptions{MaxBaseFee: 100}
+		opts := TxSubmitterEngineOptions{
+			MaxBaseFee: 100,
+			SignatureServiceOptions: signing.SignatureServiceOptions{
+				DistributionSignerType: signing.DistributionAccountEnvSignatureClientType,
+			},
+		}
 		gotDependency, err := NewTxSubmitterEngine(ctx, opts)
 		require.NoError(t, err)
 

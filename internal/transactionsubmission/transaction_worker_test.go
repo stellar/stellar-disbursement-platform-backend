@@ -32,7 +32,9 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
-	engineMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/mocks"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions"
+	preconditionsMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions/mocks"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	tssMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 	storeMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store/mocks"
@@ -52,24 +54,24 @@ func getTransactionWorkerInstance(t *testing.T, dbConnectionPool db.DBConnection
 		HorizonURL: "https://horizon-testnet.stellar.org",
 		HTTP:       httpclient.DefaultClient(),
 	}
-	ledgerNumberTracker, err := engine.NewLedgerNumberTracker(hClient)
+	ledgerNumberTracker, err := preconditions.NewLedgerNumberTracker(hClient)
 	require.NoError(t, err)
 
 	distributionKP := keypair.MustRandom()
-	wantSigService, err := engine.NewDefaultSignatureService(engine.DefaultSignatureServiceOptions{
+	sigService, err := signing.NewSignatureService(signing.SignatureServiceOptions{
+		DistributionSignerType: signing.DistributionAccountEnvSignatureClientType,
 		NetworkPassphrase:      network.TestNetworkPassphrase,
 		DBConnectionPool:       dbConnectionPool,
 		DistributionPrivateKey: distributionKP.Seed(),
-		EncryptionPassphrase:   distributionKP.Seed(),
-		Encrypter:              &utils.PrivateKeyEncrypterMock{},
-		LedgerNumberTracker:    engineMocks.NewMockLedgerNumberTracker(t),
+		EncryptionPassphrase:   encryptionPassphrase,
+		LedgerNumberTracker:    preconditionsMocks.NewMockLedgerNumberTracker(t),
 	})
 	require.NoError(t, err)
 
-	wantSubmitterEngine := engine.SubmitterEngine{
+	submitterEngine := engine.SubmitterEngine{
 		HorizonClient:       hClient,
 		LedgerNumberTracker: ledgerNumberTracker,
-		SignatureService:    wantSigService,
+		SignatureService:    sigService,
 		MaxBaseFee:          100,
 	}
 
@@ -77,11 +79,16 @@ func getTransactionWorkerInstance(t *testing.T, dbConnectionPool db.DBConnection
 		dbConnectionPool:   dbConnectionPool,
 		txModel:            txModel,
 		chAccModel:         chAccModel,
-		engine:             &wantSubmitterEngine,
+		engine:             &submitterEngine,
 		crashTrackerClient: &crashtracker.MockCrashTrackerClient{},
 		eventProducer:      &events.MockProducer{},
 	}
 }
+
+var (
+	encrypter            = &utils.DefaultPrivateKeyEncrypter{}
+	encryptionPassphrase = keypair.MustRandom().Seed()
+)
 
 // createTxJobFixture is used to create the resoureces needed for a txJob, and return a txJob with these resources. It
 // can be customized according with the parameters passed.
@@ -102,7 +109,7 @@ func createTxJobFixture(t *testing.T, ctx context.Context, dbConnectionPool db.D
 		Amount:             1,
 		TenantID:           uuid.NewString(),
 	})
-	chAcc := store.CreateChannelAccountFixtures(t, ctx, dbConnectionPool, 1)[0]
+	chAcc := store.CreateChannelAccountFixturesEncrypted(t, ctx, dbConnectionPool, encrypter, encryptionPassphrase, 1)[0]
 
 	if shouldLock {
 		tx, err = txModel.Lock(ctx, dbConnectionPool, tx.ID, int32(currentLedger), int32(lockedToLedger))
@@ -128,13 +135,13 @@ func Test_NewTransactionWorker(t *testing.T) {
 	chAccModel := &store.ChannelAccountModel{DBConnectionPool: dbConnectionPool}
 
 	distributionKP := keypair.MustRandom()
-	wantSigService, err := engine.NewDefaultSignatureService(engine.DefaultSignatureServiceOptions{
+	wantSigService, err := signing.NewSignatureService(signing.SignatureServiceOptions{
+		DistributionSignerType: signing.DistributionAccountEnvSignatureClientType,
 		NetworkPassphrase:      network.TestNetworkPassphrase,
 		DBConnectionPool:       dbConnectionPool,
 		DistributionPrivateKey: distributionKP.Seed(),
-		EncryptionPassphrase:   distributionKP.Seed(),
-		Encrypter:              &utils.PrivateKeyEncrypterMock{},
-		LedgerNumberTracker:    engineMocks.NewMockLedgerNumberTracker(t),
+		EncryptionPassphrase:   encryptionPassphrase,
+		LedgerNumberTracker:    preconditionsMocks.NewMockLedgerNumberTracker(t),
 	})
 	require.NoError(t, err)
 
@@ -142,7 +149,7 @@ func Test_NewTransactionWorker(t *testing.T) {
 		HorizonURL: "https://horizon-testnet.stellar.org",
 		HTTP:       httpclient.DefaultClient(),
 	}
-	ledgerNumberTracker, err := engine.NewLedgerNumberTracker(hClient)
+	ledgerNumberTracker, err := preconditions.NewLedgerNumberTracker(hClient)
 	require.NoError(t, err)
 	wantSubmitterEngine := engine.SubmitterEngine{
 		HorizonClient:       hClient,
@@ -176,7 +183,7 @@ func Test_NewTransactionWorker(t *testing.T) {
 		txModel             *store.TransactionModel
 		chAccModel          *store.ChannelAccountModel
 		engine              *engine.SubmitterEngine
-		sigService          engine.SignatureService
+		sigService          signing.SignatureService
 		maxBaseFee          int
 		crashTrackerClient  crashtracker.CrashTrackerClient
 		txProcessingLimiter *engine.TransactionProcessingLimiter
@@ -233,7 +240,7 @@ func Test_NewTransactionWorker(t *testing.T) {
 				HorizonClient:       hClient,
 				LedgerNumberTracker: ledgerNumberTracker,
 			},
-			wantError: fmt.Errorf("validating engine: signature service cannot be nil"),
+			wantError: fmt.Errorf("validating engine: signature service cannot be empty"),
 		},
 		{
 			name:             "validate engine: max base fee",
@@ -723,7 +730,7 @@ func Test_TransactionWorker_reconcileSubmittedTransaction(t *testing.T) {
 			txJob.Transaction = *tx
 
 			// mock LedgerNumberTracker
-			mockLedgerNumberTracker := &engineMocks.MockLedgerNumberTracker{}
+			mockLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
 			mockLedgerNumberTracker.On("GetLedgerNumber").Return(currentLedger, nil).Once()
 			transactionWorker.engine.LedgerNumberTracker = mockLedgerNumberTracker
 
@@ -889,7 +896,7 @@ func Test_TransactionWorker_validateJob(t *testing.T) {
 				hMock.On("Root").Return(horizon.Root{}, horizonclient.Error{Problem: problem.P{Status: http.StatusBadGateway}}).Once()
 			}
 
-			ledgerNumberTracker, err := engine.NewLedgerNumberTracker(hMock)
+			ledgerNumberTracker, err := preconditions.NewLedgerNumberTracker(hMock)
 			require.NoError(t, err)
 
 			// Create a transaction worker:
@@ -952,13 +959,13 @@ func Test_TransactionWorker_buildAndSignTransaction(t *testing.T) {
 	const accountSequence = 123
 
 	distributionKP := keypair.MustRandom()
-	sigService, err := engine.NewDefaultSignatureService(engine.DefaultSignatureServiceOptions{
+	sigService, err := signing.NewSignatureService(signing.SignatureServiceOptions{
+		DistributionSignerType: signing.DistributionAccountEnvSignatureClientType,
 		NetworkPassphrase:      network.TestNetworkPassphrase,
 		DBConnectionPool:       dbConnectionPool,
 		DistributionPrivateKey: distributionKP.Seed(),
-		EncryptionPassphrase:   distributionKP.Seed(),
-		Encrypter:              &utils.PrivateKeyEncrypterMock{},
-		LedgerNumberTracker:    engineMocks.NewMockLedgerNumberTracker(t),
+		EncryptionPassphrase:   encryptionPassphrase,
+		LedgerNumberTracker:    preconditionsMocks.NewMockLedgerNumberTracker(t),
 	})
 	require.NoError(t, err)
 
@@ -1024,7 +1031,7 @@ func Test_TransactionWorker_buildAndSignTransaction(t *testing.T) {
 			mockStore.On("Get", ctx, mock.Anything, txJob.ChannelAccount.PublicKey, 0).Return(txJob.ChannelAccount, nil)
 
 			// Create a transaction worker:
-			mLedgerNumberTracker := engineMocks.NewMockLedgerNumberTracker(t)
+			mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
 			submitterEngine := &engine.SubmitterEngine{
 				HorizonClient:       mockHorizon,
 				LedgerNumberTracker: mLedgerNumberTracker,
@@ -1078,7 +1085,9 @@ func Test_TransactionWorker_buildAndSignTransaction(t *testing.T) {
 					},
 				)
 				require.NoError(t, err)
-				wantInnerTx, err = sigService.SignStellarTransaction(ctx, wantInnerTx, distributionKP.Address(), txJob.ChannelAccount.PublicKey)
+				wantInnerTx, err = sigService.ChAccountSigner.SignStellarTransaction(ctx, wantInnerTx, txJob.ChannelAccount.PublicKey)
+				require.NoError(t, err)
+				wantInnerTx, err = sigService.DistAccountSigner.SignStellarTransaction(ctx, wantInnerTx, distributionKP.Address())
 				require.NoError(t, err)
 
 				wantFeeBumpTx, err := txnbuild.NewFeeBumpTransaction(
@@ -1089,7 +1098,7 @@ func Test_TransactionWorker_buildAndSignTransaction(t *testing.T) {
 					},
 				)
 				require.NoError(t, err)
-				wantFeeBumpTx, err = sigService.SignFeeBumpStellarTransaction(ctx, wantFeeBumpTx, distributionKP.Address())
+				wantFeeBumpTx, err = sigService.DistAccountSigner.SignFeeBumpStellarTransaction(ctx, wantFeeBumpTx, distributionKP.Address())
 				require.NoError(t, err)
 				assert.Equal(t, wantFeeBumpTx, gotFeeBumpTx)
 			}

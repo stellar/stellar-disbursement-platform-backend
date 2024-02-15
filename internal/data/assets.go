@@ -5,9 +5,13 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/lib/pq"
+	"golang.org/x/exp/slices"
+
+	"github.com/stellar/go/protocols/horizon/base"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 )
 
@@ -18,6 +22,28 @@ type Asset struct {
 	CreatedAt *time.Time `json:"created_at,omitempty" db:"created_at"`
 	UpdatedAt *time.Time `json:"updated_at,omitempty" db:"updated_at"`
 	DeletedAt *time.Time `json:"deleted_at" db:"deleted_at"`
+}
+
+// IsNative returns true if the asset is the native asset (XLM).
+func (a Asset) IsNative() bool {
+	return strings.TrimSpace(a.Issuer) == "" &&
+		slices.Contains([]string{"XLM", "NATIVE"}, strings.ToUpper(a.Code))
+}
+
+// Equals returns true if the asset is the same as the other asset. Case-insensitive.
+func (a Asset) Equals(other Asset) bool {
+	if a.IsNative() && other.IsNative() {
+		return true
+	}
+	return strings.EqualFold(a.Code, other.Code) && strings.EqualFold(a.Issuer, other.Issuer)
+}
+
+func (a Asset) EqualsHorizonAsset(horizonAsset base.Asset) bool {
+	if a.IsNative() && horizonAsset.Type == "native" {
+		return true
+	}
+
+	return strings.EqualFold(a.Code, horizonAsset.Code) && strings.EqualFold(a.Issuer, horizonAsset.Issuer)
 }
 
 type AssetModel struct {
@@ -123,18 +149,22 @@ func (a *AssetModel) GetAll(ctx context.Context) ([]Asset, error) {
 	return assets, nil
 }
 
+// Insert is idempotent and returns a new asset if it doesn't exist or the existing one if it does, clearing the
+// deleted_at field if it was marked as deleted.
 func (a *AssetModel) Insert(ctx context.Context, sqlExec db.SQLExecuter, code string, issuer string) (*Asset, error) {
 	const query = `
-		INSERT INTO assets
-			(code, issuer)
-		VALUES
-			($1, $2)
-		ON CONFLICT (code, issuer) DO
-		UPDATE SET
-			deleted_at = NULL
-		WHERE
-			assets.deleted_at IS NOT NULL
-		RETURNING *
+		WITH upsert_asset AS (
+			INSERT INTO assets
+				(code, issuer)
+			VALUES
+				($1, $2)
+			ON CONFLICT (code, issuer) DO UPDATE
+				SET deleted_at = NULL WHERE assets.deleted_at IS NOT NULL
+			RETURNING *
+		)
+		SELECT * FROM upsert_asset
+		UNION ALL  -- // The UNION statement is applied to prevent the updated_at field from being autoupdated when the asset already exists.
+		SELECT * FROM assets WHERE code = $1 AND issuer = $2 AND NOT EXISTS (SELECT 1 FROM upsert_asset);
 	`
 
 	var asset Asset
@@ -194,9 +224,10 @@ func (a *AssetModel) SoftDelete(ctx context.Context, sqlExec db.SQLExecuter, id 
 }
 
 type ReceiverWalletAsset struct {
-	WalletID       string         `db:"wallet_id"`
-	ReceiverWallet ReceiverWallet `db:"receiver_wallet"`
-	Asset          Asset          `db:"asset"`
+	WalletID                string         `db:"wallet_id"`
+	ReceiverWallet          ReceiverWallet `db:"receiver_wallet"`
+	Asset                   Asset          `db:"asset"`
+	DisbursementSMSTemplate *string        `json:"-" db:"sms_registration_message_template"`
 }
 
 // GetAssetsPerReceiverWallet returns the assets associated with a READY payment for each receiver
@@ -214,6 +245,7 @@ func (a *AssetModel) GetAssetsPerReceiverWallet(ctx context.Context, receiverWal
 			SELECT
 				p.id AS payment_id,
 				d.wallet_id,
+				COALESCE(d.sms_registration_message_template, '') as sms_registration_message_template,
 				p.asset_id
 			FROM
 				payments p
@@ -222,7 +254,7 @@ func (a *AssetModel) GetAssetsPerReceiverWallet(ctx context.Context, receiverWal
 			WHERE
 				p.status = $1
 			GROUP BY
-				p.id, p.asset_id, d.wallet_id
+				p.id, p.asset_id, d.wallet_id, d.sms_registration_message_template
 			ORDER BY
 				p.updated_at DESC
 		), messages_resent_since_invitation AS (
@@ -247,6 +279,7 @@ func (a *AssetModel) GetAssetsPerReceiverWallet(ctx context.Context, receiverWal
 		)
 		SELECT DISTINCT
 			lpw.wallet_id,
+			lpw.sms_registration_message_template,
 			rw.id AS "receiver_wallet.id",
 			rw.invitation_sent_at AS "receiver_wallet.invitation_sent_at",
 			COALESCE(mrsi.total_invitation_sms_resent_attempts, 0) AS "receiver_wallet.total_invitation_sms_resent_attempts",

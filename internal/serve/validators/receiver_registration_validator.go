@@ -42,8 +42,19 @@ func (rv *ReceiverRegistrationValidator) ValidateReceiver(receiverInfo *data.Rec
 	// validate verification field
 	// date of birth with format 2006-01-02
 	if vt == data.VerificationFieldDateOfBirth {
-		_, err := time.Parse("2006-01-02", verification)
+		dob, err := time.Parse("2006-01-02", verification)
 		rv.CheckError(err, "verification", "invalid date of birth format. Correct format: 1990-01-01")
+
+		// check if date of birth is in the past
+		rv.Check(dob.Before(time.Now()), "verification", "date of birth cannot be in the future")
+	} else if vt == data.VerificationFieldPin {
+		if len(verification) < VERIFICATION_FIELD_PIN_MIN_LENGTH || len(verification) > VERIFICATION_FIELD_PIN_MAX_LENGTH {
+			rv.addError("verification", "invalid pin. Cannot have less than 4 or more than 8 characters in pin")
+		}
+	} else if vt == data.VerificationFieldNationalID {
+		if len(verification) > VERIFICATION_FIELD_MAX_ID_LENGTH {
+			rv.addError("verification", "invalid national id. Cannot have more than 50 characters in national id")
+		}
 	} else {
 		// TODO: validate other VerificationField types.
 		log.Warnf("Verification type %v is not being validated for ValidateReceiver", vt)

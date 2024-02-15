@@ -30,6 +30,7 @@ type Payment struct {
 	ReceiverWallet     *ReceiverWallet      `json:"receiver_wallet,omitempty" db:"receiver_wallet"`
 	CreatedAt          time.Time            `json:"created_at" db:"created_at"`
 	UpdatedAt          time.Time            `json:"updated_at" db:"updated_at"`
+	ExternalPaymentID  string               `json:"external_payment_id,omitempty" db:"external_payment_id"`
 }
 
 type PaymentStatusHistoryEntry struct {
@@ -50,11 +51,12 @@ var (
 )
 
 type PaymentInsert struct {
-	ReceiverID       string `db:"receiver_id"`
-	DisbursementID   string `db:"disbursement_id"`
-	Amount           string `db:"amount"`
-	AssetID          string `db:"asset_id"`
-	ReceiverWalletID string `db:"receiver_wallet_id"`
+	ReceiverID        string  `db:"receiver_id"`
+	DisbursementID    string  `db:"disbursement_id"`
+	Amount            string  `db:"amount"`
+	AssetID           string  `db:"asset_id"`
+	ReceiverWalletID  string  `db:"receiver_wallet_id"`
+	ExternalPaymentID *string `db:"external_payment_id"`
 }
 
 type PaymentUpdate struct {
@@ -150,6 +152,7 @@ func (p *PaymentModel) Get(ctx context.Context, id string, sqlExec db.SQLExecute
 			p.status_history,
 			p.created_at,
 			p.updated_at,
+			COALESCE(p.external_payment_id, '') as external_payment_id,
 			d.id as "disbursement.id",
 			d.name as "disbursement.name",
 			d.status as "disbursement.status",
@@ -229,6 +232,7 @@ func (p *PaymentModel) GetAll(ctx context.Context, queryParams *QueryParams, sql
 			p.status_history,
 			p.created_at,
 			p.updated_at,
+			COALESCE(p.external_payment_id, '') as external_payment_id,
 			d.id as "disbursement.id",
 			d.name as "disbursement.name",
 			d.status as "disbursement.status",
@@ -304,18 +308,20 @@ func (p *PaymentModel) InsertAll(ctx context.Context, sqlExec db.SQLExecuter, in
 			asset_id,
 			receiver_id,
 			disbursement_id,
-		    receiver_wallet_id
+		    receiver_wallet_id,
+			external_payment_id
 		) VALUES (
 			$1,
 			$2,
 			$3,
 			$4,
-		    $5
+			$5,
+			$6
 		)
 		`
 
 	for _, payment := range inserts {
-		_, err := sqlExec.ExecContext(ctx, query, payment.Amount, payment.AssetID, payment.ReceiverID, payment.DisbursementID, payment.ReceiverWalletID)
+		_, err := sqlExec.ExecContext(ctx, query, payment.Amount, payment.AssetID, payment.ReceiverID, payment.DisbursementID, payment.ReceiverWalletID, payment.ExternalPaymentID)
 		if err != nil {
 			return fmt.Errorf("error inserting payment: %w", err)
 		}
@@ -610,7 +616,13 @@ func (p *PaymentModel) GetByIDs(ctx context.Context, sqlExec db.SQLExecuter, pay
 func newPaymentQuery(baseQuery string, queryParams *QueryParams, paginated bool, sqlExec db.SQLExecuter) (string, []interface{}) {
 	qb := NewQueryBuilder(baseQuery)
 	if queryParams.Filters[FilterKeyStatus] != nil {
-		qb.AddCondition("p.status = ?", queryParams.Filters[FilterKeyStatus])
+		if statusSlice, ok := queryParams.Filters[FilterKeyStatus].([]PaymentStatus); ok {
+			if len(statusSlice) > 0 {
+				qb.AddCondition("p.status = ANY(?)", pq.Array(statusSlice))
+			}
+		} else {
+			qb.AddCondition("p.status = ?", queryParams.Filters[FilterKeyStatus])
+		}
 	}
 	if queryParams.Filters[FilterKeyReceiverID] != nil {
 		qb.AddCondition("p.receiver_id = ?", queryParams.Filters[FilterKeyReceiverID])

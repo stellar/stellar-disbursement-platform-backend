@@ -466,7 +466,7 @@ tss:
       KAFKA_SASL_USERNAME: #optional, depends on value of KAFKA_SECURITY_PROTOCOL
       KAFKA_SASL_PASSWORD: #optional, depends on value of KAFKA_SECURITY_PROTOCOL
 
-      
+
 
 
 # =========================== START dashboard ===========================
@@ -532,8 +532,8 @@ dashboard:
     className: "nginx"
     annotations: {}
     tls:
-    - hosts:
-      - '{{ include "dashboard.domain" . }}'
-      secretName: dashboard-tls-cert-name    # You need to create this secret manually. For more instructions, please refer to helmchart/docs/README.md
+      - hosts:
+          - '{{ include "dashboard.domain" . }}'
+        secretName: dashboard-tls-cert-name    # You need to create this secret manually. For more instructions, please refer to helmchart/docs/README.md
 
 

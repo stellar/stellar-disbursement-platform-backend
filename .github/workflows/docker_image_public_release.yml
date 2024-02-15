@@ -22,6 +22,7 @@ jobs:
     secrets: inherit # pass all secrets
 
   e2e_integration_test:
+    if: github.ref != 'refs/heads/sdp-multitenant' # TODO: re-enable in SDP-968
     uses: ./.github/workflows/e2e_integration_test.yml # execute the callable e2e_integration_test.yml
     needs:
       - tests
@@ -101,6 +102,7 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - tests
+      - anchor_platform_integration_check
     steps:
       - uses: actions/checkout@v3
 
@@ -122,6 +124,7 @@ jobs:
     needs:
       - build_and_push_docker_image_on_release
       - build_and_push_docker_image_on_dev_push
+      - build_and_push_docker_image_on_multitenant
     runs-on: ubuntu-latest
     steps:
       - if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')

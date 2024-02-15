@@ -53,9 +53,14 @@ func Test_ReceiverSendOTPHandler_ServeHTTP(t *testing.T) {
 
 	ctx := context.Background()
 
-	receiver1 := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{PhoneNumber: "+380443973607"})
+	phoneNumber := "+380443973607"
+	receiver1 := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{PhoneNumber: phoneNumber})
 	receiver2 := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
 	wallet1 := data.CreateWalletFixture(t, ctx, dbConnectionPool, "testWallet", "https://home.page", "home.page", "wallet123://")
+	data.CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, data.ReceiverVerificationInsert{
+		ReceiverID:        receiver1.ID,
+		VerificationField: data.VerificationFieldDateOfBirth,
+	})
 
 	_ = data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver1.ID, wallet1.ID, data.RegisteredReceiversWalletStatus)
 	_ = data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver2.ID, wallet1.ID, data.RegisteredReceiversWalletStatus)
@@ -157,7 +162,7 @@ func Test_ReceiverSendOTPHandler_ServeHTTP(t *testing.T) {
 		assert.JSONEq(t, `{"error": "request invalid", "extras": {"phone_number": "invalid phone number provided"}}`, string(respBody))
 	})
 
-	t.Run("returns 200 - Ok if the token is in the request context and body it's valid", func(t *testing.T) {
+	t.Run("returns 200 - Ok if the token is in the request context and body is valid", func(t *testing.T) {
 		reCAPTCHAValidator.
 			On("IsTokenValid", mock.Anything, "XyZ").
 			Return(true, nil).
@@ -193,7 +198,7 @@ func Test_ReceiverSendOTPHandler_ServeHTTP(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.Contains(t, resp.Header.Get("Content-Type"), "/json; charset=utf-8")
-		assert.JSONEq(t, string(respBody), `{"message":"if your phone number is registered, you'll receive an OTP"}`)
+		assert.JSONEq(t, string(respBody), `{"message":"if your phone number is registered, you'll receive an OTP", "verification_field":"DATE_OF_BIRTH"}`)
 	})
 
 	t.Run("returns 200 - parses a custom OTP message template successfully", func(t *testing.T) {
@@ -237,7 +242,7 @@ func Test_ReceiverSendOTPHandler_ServeHTTP(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.Contains(t, resp.Header.Get("Content-Type"), "/json; charset=utf-8")
-		assert.JSONEq(t, string(respBody), `{"message":"if your phone number is registered, you'll receive an OTP"}`)
+		assert.JSONEq(t, string(respBody), `{"message":"if your phone number is registered, you'll receive an OTP", "verification_field":"DATE_OF_BIRTH"}`)
 	})
 
 	t.Run("returns 500 - InternalServerError when something goes wrong when sending the SMS", func(t *testing.T) {
@@ -306,6 +311,45 @@ func Test_ReceiverSendOTPHandler_ServeHTTP(t *testing.T) {
 			}
 		`
 		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+		assert.JSONEq(t, wantsBody, string(respBody))
+	})
+
+	t.Run("returns 200 (DoB) - InternalServerError if phone number is not associated with receiver verification", func(t *testing.T) {
+		requestSendOTP := ReceiverSendOTPRequest{
+			PhoneNumber:    "+14152223333",
+			ReCAPTCHAToken: "XyZ",
+		}
+		reqBody, _ = json.Marshal(requestSendOTP)
+
+		reCAPTCHAValidator.
+			On("IsTokenValid", mock.Anything, "XyZ").
+			Return(true, nil).
+			Once()
+		req, err := http.NewRequest(http.MethodPost, "/wallet-registration/otp", strings.NewReader(string(reqBody)))
+		require.NoError(t, err)
+
+		validClaims := &anchorplatform.SEP24JWTClaims{
+			ClientDomainClaim: wallet1.SEP10ClientDomain,
+			RegisteredClaims: jwt.RegisteredClaims{
+				ID:        "test-transaction-id",
+				Subject:   "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444",
+				ExpiresAt: jwt.NewNumericDate(time.Now().Add(5 * time.Minute)),
+			},
+		}
+		req = req.WithContext(context.WithValue(req.Context(), anchorplatform.SEP24ClaimsContextKey, validClaims))
+
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+
+		resp := rr.Result()
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		wantsBody := `{
+			"message":"if your phone number is registered, you'll receive an OTP",
+			"verification_field":"DATE_OF_BIRTH"
+		}`
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.JSONEq(t, wantsBody, string(respBody))
 	})
 

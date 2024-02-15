@@ -274,6 +274,22 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			Required:  true,
 		},
 		{
+			Name:        "disable-mfa",
+			Usage:       "Disables the email Multi-Factor Authentication (MFA).",
+			OptType:     types.Bool,
+			ConfigKey:   &serveOpts.DisableMFA,
+			FlagDefault: false,
+			Required:    false,
+		},
+		{
+			Name:        "disable-recaptcha",
+			Usage:       "Disables ReCAPTCHA for login and forgot password.",
+			OptType:     types.Bool,
+			ConfigKey:   &serveOpts.DisableReCAPTCHA,
+			FlagDefault: false,
+			Required:    false,
+		},
+		{
 			Name:        "enable-scheduler",
 			Usage:       "Enable Scheduler for SDP Backend Jobs",
 			OptType:     types.Bool,

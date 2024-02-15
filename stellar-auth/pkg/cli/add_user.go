@@ -40,7 +40,7 @@ func AddUserCmd(databaseURLFlagName string, passwordPrompt PasswordPromptInterfa
 		},
 		{
 			Name:        "password",
-			Usage:       "Sets the user password, it should be at least 8 characters long, if omitted, the command will generate a random one.",
+			Usage:       fmt.Sprintf("Sets the user password, it should be at least %d characters long, if omitted, the command will generate a random one.", auth.MinPasswordLength),
 			OptType:     types.Bool,
 			ConfigKey:   &passwordFlag,
 			FlagDefault: false,
@@ -64,7 +64,7 @@ func AddUserCmd(databaseURLFlagName string, passwordPrompt PasswordPromptInterfa
 	addUser := &cobra.Command{
 		Use:   "add-user <email> <first name> <last name> [--owner] [--roles] [--password]",
 		Short: "Add user to the system",
-		Long:  "Add a user to the system. Email should be unique and password must be at least 8 characters long.",
+		Long:  fmt.Sprintf("Add a user to the system. Email should be unique and password must be at least %d characters long.", auth.MinPasswordLength),
 		Args:  cobra.ExactArgs(3),
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
 			ctx := cmd.Context()
@@ -105,7 +105,11 @@ func AddUserCmd(databaseURLFlagName string, passwordPrompt PasswordPromptInterfa
 					log.Fatalf("add-user error prompting password: %s", err)
 				}
 
-				err = utils.ValidatePassword(result)
+				pwValidator, err := utils.GetPasswordValidatorInstance()
+				if err != nil {
+					log.Fatalf("cannot initialize password validator: %s", err)
+				}
+				err = pwValidator.ValidatePassword(result)
 				if err != nil {
 					log.Fatalf("password is not valid: %v", err)
 				}
@@ -158,11 +162,12 @@ func execAddUser(ctx context.Context, dbUrl string, email, firstName, lastName, 
 		Roles:     roles,
 	}
 
-	_, err = authManager.CreateUser(ctx, newUser, password)
+	u, err := authManager.CreateUser(ctx, newUser, password)
 	if err != nil {
 		return fmt.Errorf("error creating user: %w", err)
 	}
 
+	log.Ctx(ctx).Infof("[CLI - CreateUserAccount] - Created user with account ID %s through CLI with roles %v", u.ID, roles)
 	return nil
 }
 

@@ -1616,3 +1616,24 @@ func Test_ReceiverHandler_BuildReceiversResponse(t *testing.T) {
 	err = dbTx.Commit()
 	require.NoError(t, err)
 }
+
+func Test_ReceiverHandler_GetReceiverVerificatioTypes(t *testing.T) {
+	handler := &ReceiverHandler{}
+
+	rr := httptest.NewRecorder()
+	req, err := http.NewRequest(http.MethodGet, "/receivers/verification-types", nil)
+	require.NoError(t, err)
+	http.HandlerFunc(handler.GetReceiverVerificationTypes).ServeHTTP(rr, req)
+
+	resp := rr.Result()
+	respBody, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	expectedBody := `[
+		"DATE_OF_BIRTH",
+		"PIN",
+		"NATIONAL_ID_NUMBER"
+	]`
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.JSONEq(t, expectedBody, string(respBody))
+}

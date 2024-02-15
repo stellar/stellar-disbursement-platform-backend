@@ -6,13 +6,14 @@ import (
 
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 )
 
 const TxSubmitterEngineInstanceName = "tx_submitter_engine_instance"
 
 type TxSubmitterEngineOptions struct {
 	HorizonURL              string
-	SignatureServiceOptions engine.SignatureServiceOptions
+	SignatureServiceOptions signing.SignatureServiceOptions
 	MaxBaseFee              int
 }
 
@@ -51,7 +52,6 @@ func NewTxSubmitterEngine(ctx context.Context, opts TxSubmitterEngineOptions) (e
 		HorizonClient:       horizonClient,
 		LedgerNumberTracker: ledgerNumberTracker,
 		SignatureService:    signatureService,
-		HostSigner:          signatureService,
 		MaxBaseFee:          opts.MaxBaseFee,
 	}
 	if err = newInstance.Validate(); err != nil {

@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"sync"
 	"testing"
 
@@ -27,7 +28,8 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
-	engineMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/mocks"
+	preconditionsMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions/mocks"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	serveadmin "github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/serve"
 )
 
@@ -106,15 +108,14 @@ func Test_serve(t *testing.T) {
 	mHorizonClient := &horizonclient.MockClient{}
 	di.SetInstance(di.HorizonClientInstanceName, mHorizonClient)
 
-	mLedgerNumberTracker := engineMocks.NewMockLedgerNumberTracker(t)
+	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
 	di.SetInstance(di.LedgerNumberTrackerInstanceName, mLedgerNumberTracker)
 
-	mSignatureService := engineMocks.NewMockSignatureService(t)
-	di.SetInstance(di.SignatureServiceInstanceName, mSignatureService)
+	sigService, _, _, _, _ := signing.NewMockSignatureService(t)
 
 	submitterEngine := engine.SubmitterEngine{
 		HorizonClient:       mHorizonClient,
-		SignatureService:    mSignatureService,
+		SignatureService:    sigService,
 		LedgerNumberTracker: mLedgerNumberTracker,
 		MaxBaseFee:          100 * txnbuild.MinBaseFee,
 	}
@@ -148,6 +149,8 @@ func Test_serve(t *testing.T) {
 		DistributionPublicKey:           "GBC2HVWFIFN7WJHFORVBCDKJORG6LWTW3O2QBHOURL3KHZPM4KMWTUSA",
 		ReCAPTCHASiteKey:                "reCAPTCHASiteKey",
 		ReCAPTCHASiteSecretKey:          "reCAPTCHASiteSecretKey",
+		DisableMFA:                      false,
+		DisableReCAPTCHA:                false,
 		EnableScheduler:                 true,
 		EnableMultiTenantDB:             false,
 		SubmitterEngine:                 submitterEngine,
@@ -253,6 +256,8 @@ func Test_serve(t *testing.T) {
 	t.Setenv("ANCHOR_PLATFORM_BASE_PLATFORM_URL", serveOpts.AnchorPlatformBasePlatformURL)
 	t.Setenv("ANCHOR_PLATFORM_OUTGOING_JWT_SECRET", serveOpts.AnchorPlatformOutgoingJWTSecret)
 	t.Setenv("DISTRIBUTION_PUBLIC_KEY", serveOpts.DistributionPublicKey)
+	t.Setenv("DISABLE_MFA", fmt.Sprintf("%t", serveOpts.DisableMFA))
+	t.Setenv("DISABLE_RECAPTCHA", fmt.Sprintf("%t", serveOpts.DisableMFA))
 	t.Setenv("DISTRIBUTION_SEED", distributionSeed)
 	t.Setenv("BASE_URL", serveOpts.BaseURL)
 	t.Setenv("RECAPTCHA_SITE_KEY", serveOpts.ReCAPTCHASiteKey)

@@ -89,8 +89,8 @@ func Test_Fixtures_CreateInstructionsFixture(t *testing.T) {
 
 	t.Run("writes records correctly", func(t *testing.T) {
 		instructions := []*DisbursementInstruction{
-			{"1234567890", "1", "123.12", "1995-02-20"},
-			{"0987654321", "2", "321", "1974-07-19"},
+			{"1234567890", "1", "123.12", "1995-02-20", nil},
+			{"0987654321", "2", "321", "1974-07-19", nil},
 		}
 		buf := CreateInstructionsFixture(t, instructions)
 		lines := strings.Split(string(buf), "\n")
@@ -116,9 +116,9 @@ func Test_Fixtures_UpdateDisbursementInstructionsFixture(t *testing.T) {
 	})
 
 	instructions := []*DisbursementInstruction{
-		{"1234567890", "1", "123.12", "1995-02-20"},
-		{"0987654321", "2", "321", "1974-07-19"},
-		{"0987654321", "3", "321", "1974-07-19"},
+		{"1234567890", "1", "123.12", "1995-02-20", nil},
+		{"0987654321", "2", "321", "1974-07-19", nil},
+		{"0987654321", "3", "321", "1974-07-19", nil},
 	}
 
 	t.Run("update instructions", func(t *testing.T) {

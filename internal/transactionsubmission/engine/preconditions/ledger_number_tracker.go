@@ -1,4 +1,4 @@
-package engine
+package preconditions
 
 import (
 	"fmt"
@@ -7,6 +7,7 @@ import (
 
 	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/txnbuild"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
 )
 
