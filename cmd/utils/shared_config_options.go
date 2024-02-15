@@ -227,7 +227,7 @@ func BaseSignatureServiceConfigOptions(opts *signing.SignatureServiceOptions) []
 		},
 		{
 			Name:           "distribution-signer-type",
-			Usage:          fmt.Sprintf("The type of the signature client used for distribution accounts. Options: %+v", signing.SignatureClientType("").AllDistribution()),
+			Usage:          fmt.Sprintf("The type of the signature client used for distribution accounts. Options: %+v", signing.DistributionSignatureClientTypes()),
 			OptType:        types.String,
 			CustomSetValue: SetConfigOptionDistributionSignerType,
 			ConfigKey:      &opts.DistributionSignerType,

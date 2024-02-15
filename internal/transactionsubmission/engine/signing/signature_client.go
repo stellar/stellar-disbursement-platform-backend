@@ -33,7 +33,7 @@ const (
 	HostAccountEnvSignatureClientType         SignatureClientType = "HOST_ACCOUNT_ENV"
 )
 
-func (t SignatureClientType) All() []SignatureClientType {
+func AllSignatureClientTypes() []SignatureClientType {
 	return []SignatureClientType{ChannelAccountDBSignatureClientType, DistributionAccountEnvSignatureClientType, HostAccountEnvSignatureClientType}
 }
 
@@ -41,14 +41,14 @@ func ParseSignatureClientType(sigClientType string) (SignatureClientType, error)
 	sigClientTypeStrUpper := strings.ToUpper(sigClientType)
 	scType := SignatureClientType(sigClientTypeStrUpper)
 
-	if slices.Contains(scType.All(), scType) {
+	if slices.Contains(AllSignatureClientTypes(), scType) {
 		return scType, nil
 	}
 
 	return "", fmt.Errorf("invalid signature client type %q", sigClientTypeStrUpper)
 }
 
-func (t SignatureClientType) AllDistribution() []SignatureClientType {
+func DistributionSignatureClientTypes() []SignatureClientType {
 	return []SignatureClientType{DistributionAccountEnvSignatureClientType}
 }
 
@@ -56,7 +56,7 @@ func ParseSignatureClientDistributionType(sigClientType string) (SignatureClient
 	sigClientTypeStrUpper := strings.ToUpper(sigClientType)
 	scType := SignatureClientType(sigClientTypeStrUpper)
 
-	if slices.Contains(scType.AllDistribution(), scType) {
+	if slices.Contains(DistributionSignatureClientTypes(), scType) {
 		return scType, nil
 	}
 

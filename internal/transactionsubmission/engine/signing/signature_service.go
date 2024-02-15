@@ -65,7 +65,7 @@ type SignatureServiceOptions struct {
 // NewSignatureService creates a new signature service instance, given the distribution signer type and the options.
 func NewSignatureService(opts SignatureServiceOptions) (SignatureService, error) {
 	distSignerType := opts.DistributionSignerType
-	if !slices.Contains(SignatureClientType("").AllDistribution(), distSignerType) {
+	if !slices.Contains(DistributionSignatureClientTypes(), distSignerType) {
 		return SignatureService{}, fmt.Errorf("invalid distribution signer type %q", distSignerType)
 	}
 
