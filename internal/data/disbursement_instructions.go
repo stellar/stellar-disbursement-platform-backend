@@ -150,10 +150,9 @@ func (di DisbursementInstructionModel) ProcessAll(ctx context.Context, userID st
 			} else {
 				if verified := CompareVerificationValue(verification.HashedValue, instruction.disbursementInstruction.VerificationValue); !verified {
 					if verification.ConfirmedAt != nil {
-						return fmt.Errorf("%w: receiver verification for %s doesn't match. Check line %d on CSV file - Internal ID %s.", ErrReceiverVerificationMismatch, receiver.PhoneNumber, instruction.line, instruction.disbursementInstruction.ID)
+						return fmt.Errorf("%w: receiver verification for %s doesn't match. Check line %d on CSV file - Internal ID %s", ErrReceiverVerificationMismatch, receiver.PhoneNumber, instruction.line, instruction.disbursementInstruction.ID)
 					}
 					err = di.receiverVerificationModel.UpdateVerificationValue(ctx, dbTx, verification.ReceiverID, verification.VerificationField, instruction.disbursementInstruction.VerificationValue)
-
 					if err != nil {
 						return fmt.Errorf("error updating receiver verification for disbursement id %s: %w", disbursement.ID, err)
 					}
