@@ -202,6 +202,8 @@ sdp:
     className: "nginx"
     annotations:
       nginx.ingress.kubernetes.io/custom-response-headers: "X-XSS-Protection: 1; mode=block || X-Frame-Options: DENY || X-Content-Type-Options: nosniff || Strict-Transport-Security: max-age=31536000; includeSubDomains"
+      nginx.ingress.kubernetes.io/limit-rpm: "120"
+      nginx.ingress.kubernetes.io/limit-burst-multiplier: "5"
     tls:
       - hosts:
           - '{{ include "sdp.domain" . }}'
@@ -345,6 +347,8 @@ anchorPlatform:
     className: "nginx"
     annotations:
       nginx.ingress.kubernetes.io/custom-response-headers: "X-XSS-Protection: 1; mode=block || X-Frame-Options: DENY || X-Content-Type-Options: nosniff || Strict-Transport-Security: max-age=31536000; includeSubDomains"
+      nginx.ingress.kubernetes.io/limit-rpm: "120"
+      nginx.ingress.kubernetes.io/limit-burst-multiplier: "5"
     tls:
       - hosts:
           - '{{ include "sdp.ap.domain" . }}'

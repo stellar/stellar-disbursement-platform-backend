@@ -407,6 +407,40 @@ func Test_handleHTTP_authenticatedEndpoints(t *testing.T) {
 	}
 }
 
+func Test_handleHTTP_rateLimit(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	serveOptions := getServeOptionsForTests(t, dbt.DSN)
+	defer serveOptions.dbConnectionPool.Close()
+
+	handlerMux := handleHTTP(serveOptions)
+
+	// 1. The first n requests to /health should return 200
+	// 2. the n+1 request to /health should return 429
+	// 3. an additional request to another endpoint should return something other than 429
+	expectedEndpoints := make([]string, rateLimitPer20Seconds)
+	expectedResponseCodes := make([]int, rateLimitPer20Seconds)
+	for i := 0; i < rateLimitPer20Seconds; i++ {
+		expectedResponseCodes[i] = http.StatusOK
+		expectedEndpoints[i] = "/health"
+	}
+	expectedResponseCodes = append(expectedResponseCodes, http.StatusTooManyRequests, http.StatusNotFound)
+	expectedEndpoints = append(expectedEndpoints, "/health", "/not-found")
+	require.Len(t, expectedResponseCodes, rateLimitPer20Seconds+2)
+	require.Len(t, expectedEndpoints, rateLimitPer20Seconds+2)
+
+	actualResponseCodes := make([]int, len(expectedResponseCodes))
+	for i := 0; i < len(expectedResponseCodes); i++ {
+		req := httptest.NewRequest(http.MethodGet, expectedEndpoints[i], nil)
+		w := httptest.NewRecorder()
+		handlerMux.ServeHTTP(w, req)
+		resp := w.Result()
+		actualResponseCodes[i] = resp.StatusCode
+	}
+
+	require.Equal(t, expectedResponseCodes, actualResponseCodes)
+}
+
 func Test_createAuthManager(t *testing.T) {
 	dbt := dbtest.OpenWithoutMigrations(t)
 	defer dbt.Close()
