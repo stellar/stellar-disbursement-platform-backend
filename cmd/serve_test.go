@@ -156,7 +156,7 @@ func Test_serve(t *testing.T) {
 	mServer.On("StartMetricsServe", serveMetricOpts, mock.AnythingOfType("*serve.HTTPServer")).Once()
 	mServer.On("StartServe", serveOpts, mock.AnythingOfType("*serve.HTTPServer")).Once()
 	mServer.
-		On("GetSchedulerJobRegistrars", mock.AnythingOfType("*context.emptyCtx"), serveOpts, schedulerOptions, mock.Anything).
+		On("GetSchedulerJobRegistrars", mock.AnythingOfType("context.backgroundCtx"), serveOpts, schedulerOptions, mock.Anything).
 		Return([]scheduler.SchedulerJobRegisterOption{}, nil).
 		Once()
 	mServer.wg.Add(1)
