@@ -32,11 +32,24 @@ jobs:
       - name: Run ./gomod.sh
         run: ./gomod.sh
 
-      - name: Install github.com/nishanths/exhaustive
-        run: go install github.com/nishanths/exhaustive/cmd/exhaustive@latest
+      - name: Install github.com/nishanths/exhaustive and golang.org/x/tools/cmd/deadcode@latest
+        run: |
+          go install github.com/nishanths/exhaustive/cmd/exhaustive@latest
+          go install golang.org/x/tools/cmd/deadcode@latest
 
-      - name: Run exhaustive
+      - name: Run `exhaustive`
         run: exhaustive -default-signifies-exhaustive ./...
+
+      - name: Run `deadcode`
+        run: |
+          output=$(deadcode -test ./...)
+          if [[ -n "$output" ]]; then
+            echo "🚨 Deadcode found:"
+            echo "$output"
+            exit 1
+          else
+            echo "✅ No deadcode found"
+          fi
 
   check-helm-readme:
     runs-on: ubuntu-latest
