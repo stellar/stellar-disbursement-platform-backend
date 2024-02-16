@@ -206,7 +206,6 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 	mux.Use(chimiddleware.RequestID)
 	mux.Use(chimiddleware.RealIP)
 	mux.Use(middleware.RecoverHandler)
-	mux.Use(middleware.LoggingMiddleware())
 	mux.Use(middleware.MetricsRequestHandler(o.MonitorService))
 	mux.Use(middleware.CSPMiddleware())
 	mux.Use(chimiddleware.CleanPath)
@@ -404,46 +403,51 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 		}.ServeHTTP)
 	})
 
-	mux.Get("/health", httphandler.HealthHandler{
-		ReleaseID: o.GitCommit,
-		ServiceID: ServiceID,
-		Version:   o.Version,
-	}.ServeHTTP)
+	// SEP-24 and miscellaneous endpoints that are tenant-unaware
+	mux.Group(func(r chi.Router) {
+		r.Use(middleware.LoggingMiddleware())
 
-	// START SEP-24 endpoints
-	mux.Get("/.well-known/stellar.toml", httphandler.StellarTomlHandler{
-		AnchorPlatformBaseSepURL: o.AnchorPlatformBaseSepURL,
-		DistributionPublicKey:    o.DistributionPublicKey,
-		NetworkPassphrase:        o.NetworkPassphrase,
-		Models:                   o.Models,
-		Sep10SigningPublicKey:    o.Sep10SigningPublicKey,
-		InstanceName:             o.InstanceName,
-	}.ServeHTTP)
+		r.Get("/health", httphandler.HealthHandler{
+			ReleaseID: o.GitCommit,
+			ServiceID: ServiceID,
+			Version:   o.Version,
+		}.ServeHTTP)
 
-	mux.Route("/wallet-registration", func(r chi.Router) {
-		sep24QueryTokenAuthenticationMiddleware := anchorplatform.SEP24QueryTokenAuthenticateMiddleware(o.sep24JWTManager, o.NetworkPassphrase, o.tenantManager)
-		r.With(sep24QueryTokenAuthenticationMiddleware).Get("/start", httphandler.ReceiverRegistrationHandler{
-			ReceiverWalletModel: o.Models.ReceiverWallet,
-			ReCAPTCHASiteKey:    o.ReCAPTCHASiteKey,
-		}.ServeHTTP) // This loads the SEP-24 PII registration webpage.
-
-		sep24HeaderTokenAuthenticationMiddleware := anchorplatform.SEP24HeaderTokenAuthenticateMiddleware(o.sep24JWTManager, o.NetworkPassphrase, o.tenantManager)
-		r.With(sep24HeaderTokenAuthenticationMiddleware).Post("/otp", httphandler.ReceiverSendOTPHandler{Models: o.Models, SMSMessengerClient: o.SMSMessengerClient, ReCAPTCHAValidator: reCAPTCHAValidator}.ServeHTTP)
-		r.With(sep24HeaderTokenAuthenticationMiddleware).Post("/verification", httphandler.VerifyReceiverRegistrationHandler{
-			AnchorPlatformAPIService: o.AnchorPlatformAPIService,
-			Models:                   o.Models,
-			ReCAPTCHAValidator:       reCAPTCHAValidator,
+		// START SEP-24 endpoints
+		r.Get("/.well-known/stellar.toml", httphandler.StellarTomlHandler{
+			AnchorPlatformBaseSepURL: o.AnchorPlatformBaseSepURL,
+			DistributionPublicKey:    o.DistributionPublicKey,
 			NetworkPassphrase:        o.NetworkPassphrase,
-			EventProducer:            o.EventProducer,
-		}.VerifyReceiverRegistration)
+			Models:                   o.Models,
+			Sep10SigningPublicKey:    o.Sep10SigningPublicKey,
+			InstanceName:             o.InstanceName,
+		}.ServeHTTP)
 
-		// This will be used for test purposes and will only be available when IsPubnet is false:
-		r.Group(func(r chi.Router) {
-			r.Use(middleware.TenantMiddleware(o.tenantManager, o.authManager))
-			r.Delete("/phone-number/{phone_number}", httphandler.DeletePhoneNumberHandler{Models: o.Models, NetworkPassphrase: o.NetworkPassphrase}.ServeHTTP)
+		r.Route("/wallet-registration", func(r chi.Router) {
+			sep24QueryTokenAuthenticationMiddleware := anchorplatform.SEP24QueryTokenAuthenticateMiddleware(o.sep24JWTManager, o.NetworkPassphrase, o.tenantManager)
+			r.With(sep24QueryTokenAuthenticationMiddleware).Get("/start", httphandler.ReceiverRegistrationHandler{
+				ReceiverWalletModel: o.Models.ReceiverWallet,
+				ReCAPTCHASiteKey:    o.ReCAPTCHASiteKey,
+			}.ServeHTTP) // This loads the SEP-24 PII registration webpage.
+
+			sep24HeaderTokenAuthenticationMiddleware := anchorplatform.SEP24HeaderTokenAuthenticateMiddleware(o.sep24JWTManager, o.NetworkPassphrase, o.tenantManager)
+			r.With(sep24HeaderTokenAuthenticationMiddleware).Post("/otp", httphandler.ReceiverSendOTPHandler{Models: o.Models, SMSMessengerClient: o.SMSMessengerClient, ReCAPTCHAValidator: reCAPTCHAValidator}.ServeHTTP)
+			r.With(sep24HeaderTokenAuthenticationMiddleware).Post("/verification", httphandler.VerifyReceiverRegistrationHandler{
+				AnchorPlatformAPIService: o.AnchorPlatformAPIService,
+				Models:                   o.Models,
+				ReCAPTCHAValidator:       reCAPTCHAValidator,
+				NetworkPassphrase:        o.NetworkPassphrase,
+				EventProducer:            o.EventProducer,
+			}.VerifyReceiverRegistration)
+
+			// This will be used for test purposes and will only be available when IsPubnet is false:
+			r.Group(func(r chi.Router) {
+				r.Use(middleware.TenantMiddleware(o.tenantManager, o.authManager))
+				r.Delete("/phone-number/{phone_number}", httphandler.DeletePhoneNumberHandler{Models: o.Models, NetworkPassphrase: o.NetworkPassphrase}.ServeHTTP)
+			})
 		})
+		// END SEP-24 endpoints
 	})
-	// END SEP-24 endpoints
 
 	return mux
 }
