@@ -44,3 +44,10 @@ type TransactionStore interface {
 	GetTransactionPendingUpdateByID(ctx context.Context, sqlExec db.SQLExecuter, txID string) (transaction *Transaction, err error)
 	UpdateSyncedTransactions(ctx context.Context, sqlExec db.SQLExecuter, txIDs []string) error
 }
+
+//go:generate mockery --name=StellarSignatoryStore --case=underscore --structname=MockStellarSignatoryStore
+type StellarSignatoryStore interface {
+	BatchInsert(ctx context.Context, stellarSignatories []*StellarSignatory) error
+	Get(ctx context.Context, publicKey string) (*StellarSignatory, error)
+	Delete(ctx context.Context, publicKey string) error
+}

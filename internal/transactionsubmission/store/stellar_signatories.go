@@ -112,4 +112,4 @@ func (m *StellarSignatoryModel) Delete(ctx context.Context, publicKey string) er
 	return nil
 }
 
-// var _ ChannelAccountStore = &ChannelAccountModel{}
+var _ StellarSignatoryStore = &StellarSignatoryModel{}
