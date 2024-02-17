@@ -67,7 +67,7 @@ func Test_NewSignatureClient(t *testing.T) {
 	require.NoError(t, outerErr)
 	defer dbConnectionPool.Close()
 
-	encryptionPassphrase := keypair.MustRandom().Seed()
+	chAccEncryptionPassphrase := keypair.MustRandom().Seed()
 	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
 	distributionKP := keypair.MustRandom()
 
@@ -88,16 +88,16 @@ func Test_NewSignatureClient(t *testing.T) {
 			name:    "🎉 successfully instantiate a Channel Account DB instance",
 			sigType: ChannelAccountDBSignatureClientType,
 			opts: SignatureClientOptions{
-				NetworkPassphrase:    network.TestNetworkPassphrase,
-				DBConnectionPool:     dbConnectionPool,
-				EncryptionPassphrase: encryptionPassphrase,
-				LedgerNumberTracker:  mLedgerNumberTracker,
+				NetworkPassphrase:         network.TestNetworkPassphrase,
+				DBConnectionPool:          dbConnectionPool,
+				ChAccEncryptionPassphrase: chAccEncryptionPassphrase,
+				LedgerNumberTracker:       mLedgerNumberTracker,
 			},
 			wantResult: &ChannelAccountDBSignatureClient{
 				chAccModel:           store.NewChannelAccountModel(dbConnectionPool),
 				dbConnectionPool:     dbConnectionPool,
 				encrypter:            &utils.DefaultPrivateKeyEncrypter{},
-				encryptionPassphrase: encryptionPassphrase,
+				encryptionPassphrase: chAccEncryptionPassphrase,
 				ledgerNumberTracker:  mLedgerNumberTracker,
 				networkPassphrase:    network.TestNetworkPassphrase,
 			},

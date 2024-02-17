@@ -53,10 +53,10 @@ type SignatureServiceOptions struct {
 	DistributionSignerType SignatureClientType
 
 	// ChannelAccountDB:
-	DBConnectionPool     db.DBConnectionPool
-	EncryptionPassphrase string
-	LedgerNumberTracker  preconditions.LedgerNumberTracker
-	Encrypter            utils.PrivateKeyEncrypter
+	DBConnectionPool          db.DBConnectionPool
+	ChAccEncryptionPassphrase string
+	LedgerNumberTracker       preconditions.LedgerNumberTracker
+	Encrypter                 utils.PrivateKeyEncrypter
 
 	// DistributionAccountResolver
 	DistributionAccountResolver
@@ -70,12 +70,12 @@ func NewSignatureService(opts SignatureServiceOptions) (SignatureService, error)
 	}
 
 	sigClientOpts := SignatureClientOptions{
-		NetworkPassphrase:      opts.NetworkPassphrase,
-		DistributionPrivateKey: opts.DistributionPrivateKey,
-		DBConnectionPool:       opts.DBConnectionPool,
-		EncryptionPassphrase:   opts.EncryptionPassphrase,
-		Encrypter:              opts.Encrypter,
-		LedgerNumberTracker:    opts.LedgerNumberTracker,
+		NetworkPassphrase:         opts.NetworkPassphrase,
+		DistributionPrivateKey:    opts.DistributionPrivateKey,
+		DBConnectionPool:          opts.DBConnectionPool,
+		ChAccEncryptionPassphrase: opts.ChAccEncryptionPassphrase,
+		Encrypter:                 opts.Encrypter,
+		LedgerNumberTracker:       opts.LedgerNumberTracker,
 	}
 
 	chAccountSigner, err := NewSignatureClient(ChannelAccountDBSignatureClientType, sigClientOpts)

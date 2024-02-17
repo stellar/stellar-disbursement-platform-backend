@@ -50,13 +50,13 @@ func Test_CreateChannelAccountsOnChain(t *testing.T) {
 	distributionKP := keypair.MustRandom()
 	encrypterPass := distributionKP.Seed()
 	sigService, err := signing.NewSignatureService(signing.SignatureServiceOptions{
-		DistributionSignerType: signing.DistributionAccountEnvSignatureClientType,
-		NetworkPassphrase:      network.TestNetworkPassphrase,
-		DBConnectionPool:       dbConnectionPool,
-		DistributionPrivateKey: distributionKP.Seed(),
-		EncryptionPassphrase:   encrypterPass,
-		Encrypter:              privateKeyEncrypterMock,
-		LedgerNumberTracker:    mLedgerNumberTracker,
+		DistributionSignerType:    signing.DistributionAccountEnvSignatureClientType,
+		NetworkPassphrase:         network.TestNetworkPassphrase,
+		DBConnectionPool:          dbConnectionPool,
+		DistributionPrivateKey:    distributionKP.Seed(),
+		ChAccEncryptionPassphrase: encrypterPass,
+		Encrypter:                 privateKeyEncrypterMock,
+		LedgerNumberTracker:       mLedgerNumberTracker,
 	})
 	require.NoError(t, err)
 

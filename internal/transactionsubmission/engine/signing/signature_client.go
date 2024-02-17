@@ -72,10 +72,10 @@ type SignatureClientOptions struct {
 	DistributionPrivateKey string
 
 	// ChannelAccountDB:
-	DBConnectionPool     db.DBConnectionPool
-	EncryptionPassphrase string
-	LedgerNumberTracker  preconditions.LedgerNumberTracker
-	Encrypter            utils.PrivateKeyEncrypter // (optional)
+	DBConnectionPool          db.DBConnectionPool
+	ChAccEncryptionPassphrase string
+	LedgerNumberTracker       preconditions.LedgerNumberTracker
+	Encrypter                 utils.PrivateKeyEncrypter // (optional)
 }
 
 func NewSignatureClient(sigType SignatureClientType, opts SignatureClientOptions) (SignatureClient, error) {
@@ -90,7 +90,7 @@ func NewSignatureClient(sigType SignatureClientType, opts SignatureClientOptions
 		return NewChannelAccountDBSignatureClient(ChannelAccountDBSignatureClientOptions{
 			NetworkPassphrase:    opts.NetworkPassphrase,
 			DBConnectionPool:     opts.DBConnectionPool,
-			EncryptionPassphrase: opts.EncryptionPassphrase,
+			EncryptionPassphrase: opts.ChAccEncryptionPassphrase,
 			LedgerNumberTracker:  opts.LedgerNumberTracker,
 			Encrypter:            opts.Encrypter,
 		})

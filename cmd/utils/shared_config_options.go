@@ -214,7 +214,7 @@ func BaseSignatureServiceConfigOptions(opts *signing.SignatureServiceOptions) []
 			Usage:          "A Stellar-compliant ed25519 private key used to encrypt/decrypt the channel accounts' private keys. When not set, it will default to the value of the 'distribution-seed' option.",
 			OptType:        types.String,
 			CustomSetValue: SetConfigOptionStellarPrivateKey,
-			ConfigKey:      &opts.EncryptionPassphrase,
+			ConfigKey:      &opts.ChAccEncryptionPassphrase,
 			Required:       false,
 		},
 		{

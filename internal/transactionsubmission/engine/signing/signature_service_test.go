@@ -94,14 +94,14 @@ func Test_NewSignatureService(t *testing.T) {
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
 
-	encryptionPassphrase := keypair.MustRandom().Seed()
+	chAccEncryptionPassphrase := keypair.MustRandom().Seed()
 	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
 	distributionKP := keypair.MustRandom()
 
 	wantChAccountSigner := &ChannelAccountDBSignatureClient{
 		networkPassphrase:    network.TestNetworkPassphrase,
 		dbConnectionPool:     dbConnectionPool,
-		encryptionPassphrase: encryptionPassphrase,
+		encryptionPassphrase: chAccEncryptionPassphrase,
 		ledgerNumberTracker:  mLedgerNumberTracker,
 		chAccModel:           store.NewChannelAccountModel(dbConnectionPool),
 		encrypter:            &utils.DefaultPrivateKeyEncrypter{},
@@ -133,22 +133,22 @@ func Test_NewSignatureService(t *testing.T) {
 		{
 			name: "returns an error if the options are invalid for the distribution account signer",
 			opts: SignatureServiceOptions{
-				DistributionSignerType: DistributionAccountEnvSignatureClientType,
-				NetworkPassphrase:      network.TestNetworkPassphrase,
-				DBConnectionPool:       dbConnectionPool,
-				EncryptionPassphrase:   encryptionPassphrase,
-				LedgerNumberTracker:    mLedgerNumberTracker,
+				DistributionSignerType:    DistributionAccountEnvSignatureClientType,
+				NetworkPassphrase:         network.TestNetworkPassphrase,
+				DBConnectionPool:          dbConnectionPool,
+				ChAccEncryptionPassphrase: chAccEncryptionPassphrase,
+				LedgerNumberTracker:       mLedgerNumberTracker,
 			},
 			wantErrContains: "creating a new distribution account signature client:",
 		},
 		{
 			name: "🎉 successfully instantiate new signature service",
 			opts: SignatureServiceOptions{
-				DistributionSignerType: DistributionAccountEnvSignatureClientType,
-				NetworkPassphrase:      network.TestNetworkPassphrase,
-				DBConnectionPool:       dbConnectionPool,
-				EncryptionPassphrase:   encryptionPassphrase,
-				LedgerNumberTracker:    mLedgerNumberTracker,
+				DistributionSignerType:    DistributionAccountEnvSignatureClientType,
+				NetworkPassphrase:         network.TestNetworkPassphrase,
+				DBConnectionPool:          dbConnectionPool,
+				ChAccEncryptionPassphrase: chAccEncryptionPassphrase,
+				LedgerNumberTracker:       mLedgerNumberTracker,
 
 				DistributionPrivateKey: distributionKP.Seed(),
 			},
@@ -163,11 +163,11 @@ func Test_NewSignatureService(t *testing.T) {
 		{
 			name: "🎉 successfully instantiate new signature with the provided DistributionAccountResolver",
 			opts: SignatureServiceOptions{
-				DistributionSignerType: DistributionAccountEnvSignatureClientType,
-				NetworkPassphrase:      network.TestNetworkPassphrase,
-				DBConnectionPool:       dbConnectionPool,
-				EncryptionPassphrase:   encryptionPassphrase,
-				LedgerNumberTracker:    mLedgerNumberTracker,
+				DistributionSignerType:    DistributionAccountEnvSignatureClientType,
+				NetworkPassphrase:         network.TestNetworkPassphrase,
+				DBConnectionPool:          dbConnectionPool,
+				ChAccEncryptionPassphrase: chAccEncryptionPassphrase,
+				LedgerNumberTracker:       mLedgerNumberTracker,
 
 				DistributionPrivateKey:      distributionKP.Seed(),
 				DistributionAccountResolver: mocks.NewMockDistributionAccountResolver(t),
