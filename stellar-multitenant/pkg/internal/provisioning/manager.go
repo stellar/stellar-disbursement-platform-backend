@@ -3,26 +3,30 @@ package provisioning
 import (
 	"context"
 	"embed"
+	"errors"
 	"fmt"
 
 	"github.com/lib/pq"
 	migrate "github.com/rubenv/sql-migrate"
 	"github.com/stellar/go/support/log"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	authmigrations "github.com/stellar/stellar-disbursement-platform-backend/db/migrations/auth-migrations"
 	sdpmigrations "github.com/stellar/stellar-disbursement-platform-backend/db/migrations/sdp-migrations"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 type Manager struct {
-	tenantManager   *tenant.Manager
-	db              db.DBConnectionPool
-	messengerClient message.MessengerClient
+	tenantManager    *tenant.Manager
+	db               db.DBConnectionPool
+	messengerClient  message.MessengerClient
+	signatureService signing.SignatureService
 }
 
 func (m *Manager) ProvisionNewTenant(
@@ -89,6 +93,19 @@ func (m *Manager) ProvisionNewTenant(
 		return nil, fmt.Errorf("updating organization's name: %w", err)
 	}
 
+	// Provision distribution account for tenant if necessary
+	distributionAccPubKey, err := m.signatureService.DistAccountSigner.BatchInsert(ctx, 1)
+	if err != nil {
+		if errors.Is(err, signing.ErrUnsupportedCommand) {
+			log.Infof(
+				"Account provisioning not needed for distribution account signature client type %s",
+				m.signatureService.DistAccountSigner.Type)
+		} else {
+			return nil, fmt.Errorf("provisioning distribution account: %w", err)
+		}
+	}
+	log.Infof("distribution account %s created for tenant %s", distributionAccPubKey, t.Name)
+
 	// Creating new user and sending invitation email
 	authManager := auth.NewAuthManager(
 		auth.WithDefaultAuthenticatorOption(tenantSchemaConnectionPool, auth.NewDefaultPasswordEncrypter(), 0),
@@ -152,5 +169,11 @@ func WithMessengerClient(messengerClient message.MessengerClient) Option {
 func WithTenantManager(tenantManager *tenant.Manager) Option {
 	return func(m *Manager) {
 		m.tenantManager = tenantManager
+	}
+}
+
+func WithSignatureService(signatureService signing.SignatureService) Option {
+	return func(m *Manager) {
+		m.signatureService = signatureService
 	}
 }

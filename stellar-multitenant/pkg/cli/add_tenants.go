@@ -6,14 +6,17 @@ import (
 	"go/types"
 	"regexp"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/internal/provisioning"
-
 	"github.com/spf13/cobra"
 	"github.com/stellar/go/support/config"
 	"github.com/stellar/go/support/log"
+
+	cmdUtils "github.com/stellar/stellar-disbursement-platform-backend/cmd/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/dependencyinjection"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/cli/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/internal/provisioning"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
@@ -27,8 +30,9 @@ type AddTenantsCommandOptions struct {
 
 func AddTenantsCmd() *cobra.Command {
 	opts := AddTenantsCommandOptions{}
+	sigOpts := signing.SignatureServiceOptions{}
 
-	configOptions := config.ConfigOptions{
+	configOptions := append(config.ConfigOptions{
 		{
 			Name:           "network-type",
 			Usage:          "The Stellar Network type",
@@ -76,7 +80,7 @@ func AddTenantsCmd() *cobra.Command {
 			ConfigKey: &opts.MessengerOptions.AWSRegion,
 			Required:  false,
 		},
-	}
+	}, cmdUtils.BaseSignatureServiceConfigOptions(&sigOpts)...)
 
 	cmd := cobra.Command{
 		Use:     "add-tenants",
@@ -104,7 +108,7 @@ func AddTenantsCmd() *cobra.Command {
 			ctx := cmd.Context()
 			if err := executeAddTenant(
 				ctx, globalOptions.multitenantDbURL, args[0], args[1], args[2], args[3], args[4],
-				*opts.SDPUIBaseURL, opts.NetworkType, messengerClient); err != nil {
+				*opts.SDPUIBaseURL, opts.NetworkType, messengerClient, sigOpts); err != nil {
 				log.Fatal(err)
 			}
 		},
@@ -127,6 +131,7 @@ func validateTenantNameArg(cmd *cobra.Command, args []string) error {
 func executeAddTenant(
 	ctx context.Context, dbURL, tenantName, userFirstName, userLastName, userEmail,
 	organizationName, uiBaseURL, networkType string, messengerClient message.MessengerClient,
+	sigOpts signing.SignatureServiceOptions,
 ) error {
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbURL)
 	if err != nil {
@@ -134,11 +139,17 @@ func executeAddTenant(
 	}
 	defer dbConnectionPool.Close()
 
+	sigService, err := dependencyinjection.NewSignatureService(ctx, sigOpts)
+	if err != nil {
+		return err
+	}
+
 	m := tenant.NewManager(tenant.WithDatabase(dbConnectionPool))
 	p := provisioning.NewManager(
 		provisioning.WithDatabase(dbConnectionPool),
 		provisioning.WithMessengerClient(messengerClient),
-		provisioning.WithTenantManager(m))
+		provisioning.WithTenantManager(m),
+		provisioning.WithSignatureService(sigService))
 
 	t, err := p.ProvisionNewTenant(ctx, tenantName, userFirstName, userLastName, userEmail, organizationName, uiBaseURL, networkType)
 	if err != nil {

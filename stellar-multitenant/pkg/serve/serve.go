@@ -12,6 +12,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/internal/httphandler"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/internal/provisioning"
@@ -40,6 +41,7 @@ type ServeOptions struct {
 	tenantManager             *tenant.Manager
 	tenantProvisioningManager *provisioning.Manager
 	Version                   string
+	signatureService          signing.SignatureService
 }
 
 // SetupDependencies uses the serve options to setup the dependencies for the server.
@@ -57,6 +59,7 @@ func (opts *ServeOptions) SetupDependencies() error {
 		provisioning.WithDatabase(dbConnectionPool),
 		provisioning.WithTenantManager(opts.tenantManager),
 		provisioning.WithMessengerClient(opts.EmailMessengerClient),
+		provisioning.WithSignatureService(opts.signatureService),
 	)
 
 	opts.networkType, err = utils.GetNetworkTypeFromNetworkPassphrase(opts.NetworkPassphrase)
