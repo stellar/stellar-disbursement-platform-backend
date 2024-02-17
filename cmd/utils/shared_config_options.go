@@ -218,6 +218,14 @@ func BaseSignatureServiceConfigOptions(opts *signing.SignatureServiceOptions) []
 			Required:       false,
 		},
 		{
+			Name:           "distribution-account-encryption-passphrase",
+			Usage:          "A Stellar-compliant ed25519 private key used to encrypt/decrypt the in-memory distribution accounts' private keys. It's mandatory when the distribution-signer-type is set to DISTRIBUTION_ACCOUNT_DB.",
+			OptType:        types.String,
+			CustomSetValue: SetConfigOptionStellarPrivateKey,
+			ConfigKey:      &opts.DistAccEncryptionPassphrase,
+			Required:       false,
+		},
+		{
 			Name:           "distribution-seed",
 			Usage:          "The private key of the Stellar distribution account that sends the disbursements.", // TODO: this will eventually be used for sponsoring tenant accounts.
 			OptType:        types.String,

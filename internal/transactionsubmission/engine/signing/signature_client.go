@@ -69,7 +69,8 @@ type SignatureClientOptions struct {
 	NetworkPassphrase string
 
 	// DistributionAccountEnv:
-	DistributionPrivateKey string
+	DistributionPrivateKey      string
+	DistAccEncryptionPassphrase string
 
 	// ChannelAccountDB:
 	DBConnectionPool          db.DBConnectionPool
@@ -92,6 +93,14 @@ func NewSignatureClient(sigType SignatureClientType, opts SignatureClientOptions
 			DBConnectionPool:     opts.DBConnectionPool,
 			EncryptionPassphrase: opts.ChAccEncryptionPassphrase,
 			LedgerNumberTracker:  opts.LedgerNumberTracker,
+			Encrypter:            opts.Encrypter,
+		})
+
+	case DistributionAccountDBSignatureClientType:
+		return NewDistributionAccountDBSignatureClient(DistributionAccountDBSignatureClientOptions{
+			NetworkPassphrase:    opts.NetworkPassphrase,
+			DBConnectionPool:     opts.DBConnectionPool,
+			EncryptionPassphrase: opts.DistAccEncryptionPassphrase,
 			Encrypter:            opts.Encrypter,
 		})
 
