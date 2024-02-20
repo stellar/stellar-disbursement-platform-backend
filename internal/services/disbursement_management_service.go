@@ -323,7 +323,7 @@ func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, d
 			return fmt.Errorf("error updating disbursement status to started for disbursement with id %s: %w", disbursementID, err)
 		}
 
-		// Step 7: Produce events to send invitation message to the receivers and to send payments to TSS
+		// 8. Produce events to send invitation message to the receivers
 		msgs := make([]events.Message, 0)
 
 		receiverWallets, err := s.models.ReceiverWallet.GetAllPendingRegistrationByDisbursementID(ctx, dbTx, disbursementID)
@@ -347,6 +347,7 @@ func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, d
 			log.Ctx(ctx).Infof("no receiver wallets to send invitation for disbursement ID %s", disbursementID)
 		}
 
+		// 9. Produce events to send payments to the TSS
 		payments, err := s.models.Payment.GetReadyByDisbursementID(ctx, dbTx, disbursementID)
 		if err != nil {
 			return fmt.Errorf("getting ready payments for disbursement with id %s: %w", disbursementID, err)
