@@ -17,12 +17,14 @@ import (
 
 	cmdDB "github.com/stellar/stellar-disbursement-platform-backend/cmd/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/cmd/mocks"
+	cmdUtils "github.com/stellar/stellar-disbursement-platform-backend/cmd/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 )
 
 func Test_ChannelAccountsCommand_Command(t *testing.T) {
+	cmdUtils.ClearTestEnvironment(t)
 	dbt := dbtest.OpenWithoutMigrations(t)
 	root := rootCmd()
 

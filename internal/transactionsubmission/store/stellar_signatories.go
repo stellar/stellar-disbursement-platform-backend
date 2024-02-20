@@ -104,9 +104,8 @@ func (m *StellarSignatoryModel) Delete(ctx context.Context, publicKey string) er
 	if err != nil {
 		return fmt.Errorf("getting number of rows affected: %w", err)
 	}
-
 	if numRowsAffected == 0 {
-		return fmt.Errorf("could not find nor delete account %q: %w", publicKey, ErrRecordNotFound)
+		return fmt.Errorf("could not find nor delete signatory %q: %w", publicKey, ErrRecordNotFound)
 	}
 
 	return nil
