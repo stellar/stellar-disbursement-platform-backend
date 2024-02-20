@@ -98,8 +98,11 @@ func DeleteAllTransactionFixtures(t *testing.T, ctx context.Context, sqlExec db.
 	require.NoError(t, err)
 }
 
-// CreateChannelAccountFixtures craetes count number of channel accounts
+// CreateChannelAccountFixtures creates 'count' number of channel accounts and store them in the DB, returning the
+// channel accounts.
 func CreateChannelAccountFixtures(t *testing.T, ctx context.Context, dbConnectionPool db.DBConnectionPool, count int) []*ChannelAccount {
+	t.Helper()
+
 	caModel := ChannelAccountModel{DBConnectionPool: dbConnectionPool}
 	for i := 0; i < count; i++ {
 		generatedKeypair := keypair.MustRandom()
@@ -113,8 +116,8 @@ func CreateChannelAccountFixtures(t *testing.T, ctx context.Context, dbConnectio
 	return channelAccounts
 }
 
-// CreateChannelAccountFixtures creates 'count' number of channel accounts, and store them in the DB with the private
-// keys encrypted, returning the channel accounts.
+// CreateChannelAccountFixturesEncrypted creates 'count' number of channel accounts, and store them in the DB with the
+// private keys encrypted, returning the channel accounts.
 func CreateChannelAccountFixturesEncrypted(
 	t *testing.T,
 	ctx context.Context,
@@ -141,8 +144,8 @@ func CreateChannelAccountFixturesEncrypted(
 	return channelAccounts
 }
 
-// CreateChannelAccountFixtures creates 'count' number of channel accounts, and store them in the DB with the private
-// keys encrypted, returning the Keypairs.
+// CreateChannelAccountFixturesEncryptedKPs creates 'count' number of channel accounts, and store them in the DB with
+// the private keys encrypted, returning the Keypairs.
 func CreateChannelAccountFixturesEncryptedKPs(
 	t *testing.T,
 	ctx context.Context,
@@ -169,5 +172,76 @@ func CreateChannelAccountFixturesEncryptedKPs(
 func DeleteAllFromChannelAccounts(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter) {
 	query := `DELETE FROM channel_accounts`
 	_, err := sqlExec.ExecContext(ctx, query)
+	require.NoError(t, err)
+}
+
+// CreateStellarSignatoryFixturesEncrypted creates 'count' number of stellar signatories, and store them in the DB with
+// the private keys encrypted, returning the stellar signatories.
+func CreateStellarSignatoryFixturesEncrypted(
+	t *testing.T,
+	ctx context.Context,
+	dbConnectionPool db.DBConnectionPool,
+	encrypter utils.PrivateKeyEncrypter,
+	encryptionPassphrase string,
+	count int,
+) []*StellarSignatory {
+	t.Helper()
+
+	ssModel := NewStellarSignatoryModel(dbConnectionPool)
+	stellarSignatories := make([]*StellarSignatory, count)
+	publicKeys := make([]string, count)
+	for i := 0; i < count; i++ {
+		kp := keypair.MustRandom()
+		publicKey := kp.Address()
+		privateKey := kp.Seed()
+		encryptedPrivateKey, err := encrypter.Encrypt(privateKey, encryptionPassphrase)
+		require.NoError(t, err)
+
+		stellarSignatories[i] = &StellarSignatory{
+			PublicKey:           publicKey,
+			EncryptedPrivateKey: encryptedPrivateKey,
+		}
+		publicKeys[i] = publicKey
+	}
+
+	err := ssModel.BatchInsert(ctx, stellarSignatories)
+	require.NoError(t, err)
+
+	err = dbConnectionPool.SelectContext(ctx, &stellarSignatories, "SELECT * FROM stellar_signatories WHERE public_key = ANY($1)", pq.Array(publicKeys))
+	require.NoError(t, err)
+
+	return stellarSignatories
+}
+
+// CreateStellarSignatoryFixturesEncryptedKPs creates 'count' number of stellar signatories, and store them in the DB
+// with the private keys encrypted, returning the Keypairs.
+func CreateStellarSignatoryFixturesEncryptedKPs(
+	t *testing.T,
+	ctx context.Context,
+	dbConnectionPool db.DBConnectionPool,
+	encrypter utils.PrivateKeyEncrypter,
+	encryptionPassphrase string,
+	count int,
+) []*keypair.Full {
+	t.Helper()
+
+	stellarSignatories := CreateStellarSignatoryFixturesEncrypted(t, ctx, dbConnectionPool, encrypter, encryptionPassphrase, count)
+	var kps []*keypair.Full
+	for _, ss := range stellarSignatories {
+		privateKey, err := encrypter.Decrypt(ss.EncryptedPrivateKey, encryptionPassphrase)
+		require.NoError(t, err)
+
+		kp, err := keypair.ParseFull(privateKey)
+		require.NoError(t, err)
+		kps = append(kps, kp)
+	}
+
+	return kps
+}
+
+func DeleteAllFromStellarSignatories(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter) {
+	t.Helper()
+
+	_, err := sqlExec.ExecContext(ctx, "DELETE FROM stellar_signatories")
 	require.NoError(t, err)
 }
