@@ -90,6 +90,7 @@ func Test_executeAddTenant(t *testing.T) {
 	organizationName := "My Org"
 	uiBaseURL := "http://localhost:3000"
 	networkType := "testnet"
+	horizonURL := "https://horizon-testnet.stellar.org"
 	encryptionPassphrase := keypair.MustRandom().Seed()
 	distributionAccPrivKey := keypair.MustRandom().Seed()
 
@@ -101,13 +102,18 @@ func Test_executeAddTenant(t *testing.T) {
 		DBConnectionPool:       dbConnectionPool,
 		LedgerNumberTracker:    &preconditionsMock.MockLedgerNumberTracker{},
 	}
+	tenantsOpts := AddTenantsCommandOptions{
+		SDPUIBaseURL: &uiBaseURL,
+		NetworkType:  networkType,
+		HorizonURL:   horizonURL,
+	}
 
 	t.Run("adds a new tenant successfully", func(t *testing.T) {
 		tenant.DeleteAllTenantsFixture(t, ctx, dbConnectionPool)
 
 		getEntries := log.DefaultLogger.StartTest(log.InfoLevel)
 
-		err := executeAddTenant(ctx, dbt.DSN, tenantName, userFirstName, userLastName, userEmail, organizationName, uiBaseURL, networkType, messengerClientMock, sigOpts)
+		err := executeAddTenant(ctx, dbt.DSN, tenantName, userFirstName, userLastName, userEmail, organizationName, messengerClientMock, tenantsOpts, sigOpts)
 		assert.Nil(t, err)
 
 		const q = "SELECT id FROM tenants WHERE name = $1"
@@ -116,9 +122,9 @@ func Test_executeAddTenant(t *testing.T) {
 		require.NoError(t, err)
 
 		entries := getEntries()
-		require.Len(t, entries, 18)
-		assert.Equal(t, "tenant myorg added successfully", entries[16].Message)
-		assert.Contains(t, fmt.Sprintf("tenant ID: %s", tenantID), entries[17].Message)
+		require.Len(t, entries, 20)
+		assert.Equal(t, "tenant myorg added successfully", entries[18].Message)
+		assert.Contains(t, fmt.Sprintf("tenant ID: %s", tenantID), entries[19].Message)
 	})
 
 	t.Run("duplicated tenant name", func(t *testing.T) {
@@ -126,10 +132,10 @@ func Test_executeAddTenant(t *testing.T) {
 
 		getEntries := log.DefaultLogger.StartTest(log.DebugLevel)
 
-		err := executeAddTenant(ctx, dbt.DSN, tenantName, userFirstName, userLastName, userEmail, organizationName, uiBaseURL, networkType, messengerClientMock, sigOpts)
+		err := executeAddTenant(ctx, dbt.DSN, tenantName, userFirstName, userLastName, userEmail, organizationName, messengerClientMock, tenantsOpts, sigOpts)
 		assert.Nil(t, err)
 
-		err = executeAddTenant(ctx, dbt.DSN, tenantName, userFirstName, userLastName, userEmail, organizationName, uiBaseURL, networkType, messengerClientMock, sigOpts)
+		err = executeAddTenant(ctx, dbt.DSN, tenantName, userFirstName, userLastName, userEmail, organizationName, messengerClientMock, tenantsOpts, sigOpts)
 		assert.ErrorIs(t, err, tenant.ErrDuplicatedTenantName)
 
 		const q = "SELECT id FROM tenants WHERE name = $1"
@@ -156,6 +162,8 @@ func Test_AddTenantsCmd(t *testing.T) {
 	ctx := context.Background()
 
 	t.Setenv("DISTRIBUTION_SEED", keypair.MustRandom().Seed())
+	t.Setenv("CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE", keypair.MustRandom().Seed())
+	t.Setenv("HORIZON_URL", "https://horizon-testnet.stellar.org/")
 
 	t.Run("shows usage", func(t *testing.T) {
 		out := new(strings.Builder)
@@ -183,6 +191,7 @@ Flags:
       --distribution-signer-type string                The type of the signature client used for distribution accounts. Options: [DISTRIBUTION_ACCOUNT_ENV] (DISTRIBUTION_SIGNER_TYPE) (default "DISTRIBUTION_ACCOUNT_ENV")
       --email-sender-type string                       The messenger type used to send invitations to new dashboard users. Options: [DRY_RUN AWS_EMAIL] (EMAIL_SENDER_TYPE)
   -h, --help                                           help for add-tenants
+      --horizon-url string                             The URL of the Stellar Horizon server where this application will communicate with. (HORIZON_URL) (default "https://horizon-testnet.stellar.org/")
       --network-type string                            The Stellar Network type (NETWORK_TYPE) (default "testnet")
       --sdp-ui-base-url string                         The Tenant SDP UI/dashboard Base URL. (SDP_UI_BASE_URL) (default "http://localhost:3000")
 
@@ -211,6 +220,7 @@ Flags:
       --distribution-signer-type string                The type of the signature client used for distribution accounts. Options: [DISTRIBUTION_ACCOUNT_ENV] (DISTRIBUTION_SIGNER_TYPE) (default "DISTRIBUTION_ACCOUNT_ENV")
       --email-sender-type string                       The messenger type used to send invitations to new dashboard users. Options: [DRY_RUN AWS_EMAIL] (EMAIL_SENDER_TYPE)
   -h, --help                                           help for add-tenants
+      --horizon-url string                             The URL of the Stellar Horizon server where this application will communicate with. (HORIZON_URL) (default "https://horizon-testnet.stellar.org/")
       --network-type string                            The Stellar Network type (NETWORK_TYPE) (default "testnet")
       --sdp-ui-base-url string                         The Tenant SDP UI/dashboard Base URL. (SDP_UI_BASE_URL) (default "http://localhost:3000")
 `

@@ -94,16 +94,21 @@ func (m *Manager) ProvisionNewTenant(
 	}
 
 	// Provision distribution account for tenant if necessary
-	distributionAccPubKey, err := m.signatureService.DistAccountSigner.BatchInsert(ctx, 1)
+	distributionAccPubKeys, err := m.signatureService.DistAccountSigner.BatchInsert(ctx, 1)
 	if err != nil {
 		if errors.Is(err, signing.ErrUnsupportedCommand) {
-			log.Infof(
+			log.Ctx(ctx).Warnf(
 				"Account provisioning not needed for distribution account signature client type %s",
 				m.signatureService.DistAccountSigner.Type())
 		} else {
 			return nil, fmt.Errorf("provisioning distribution account: %w", err)
 		}
 	}
+	if len(distributionAccPubKeys) != 1 {
+		return nil, fmt.Errorf("expected single distribution account public key, got %d", len(distributionAccPubKeys))
+	}
+
+	distributionAccPubKey := distributionAccPubKeys[0]
 	log.Infof("distribution account %s created for tenant %s", distributionAccPubKey, t.Name)
 
 	// Creating new user and sending invitation email
@@ -123,7 +128,14 @@ func (m *Manager) ProvisionNewTenant(
 	}
 
 	tenantStatus := tenant.ProvisionedTenantStatus
-	t, err = m.tenantManager.UpdateTenantConfig(ctx, &tenant.TenantUpdate{ID: t.ID, Status: &tenantStatus, SDPUIBaseURL: &uiBaseURL})
+	t, err = m.tenantManager.UpdateTenantConfig(
+		ctx,
+		&tenant.TenantUpdate{
+			ID:                  t.ID,
+			Status:              &tenantStatus,
+			SDPUIBaseURL:        &uiBaseURL,
+			DistributionAccount: &distributionAccPubKey,
+		})
 	if err != nil {
 		return nil, fmt.Errorf("updating tenant %s status to %s: %w", name, tenant.ProvisionedTenantStatus, err)
 	}

@@ -10,6 +10,7 @@ import (
 	"github.com/stellar/go/support/config"
 	"github.com/stellar/go/support/log"
 
+	"github.com/stellar/go/clients/horizonclient"
 	cmdUtils "github.com/stellar/stellar-disbursement-platform-backend/cmd/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/dependencyinjection"
@@ -26,10 +27,11 @@ type AddTenantsCommandOptions struct {
 	SDPUIBaseURL     *string
 	NetworkType      string
 	MessengerOptions message.MessengerOptions
+	HorizonURL       string
 }
 
 func AddTenantsCmd() *cobra.Command {
-	opts := AddTenantsCommandOptions{}
+	tenantsOpts := AddTenantsCommandOptions{}
 	sigOpts := signing.SignatureServiceOptions{}
 
 	configOptions := append(config.ConfigOptions{
@@ -38,7 +40,7 @@ func AddTenantsCmd() *cobra.Command {
 			Usage:          "The Stellar Network type",
 			OptType:        types.String,
 			CustomSetValue: utils.SetConfigOptionNetworkType,
-			ConfigKey:      &opts.NetworkType,
+			ConfigKey:      &tenantsOpts.NetworkType,
 			FlagDefault:    "testnet",
 			Required:       true,
 		},
@@ -47,7 +49,7 @@ func AddTenantsCmd() *cobra.Command {
 			Usage:          "The Tenant SDP UI/dashboard Base URL.",
 			OptType:        types.String,
 			CustomSetValue: utils.SetConfigOptionURLString,
-			ConfigKey:      &opts.SDPUIBaseURL,
+			ConfigKey:      &tenantsOpts.SDPUIBaseURL,
 			FlagDefault:    "http://localhost:3000",
 			Required:       true,
 		},
@@ -56,29 +58,37 @@ func AddTenantsCmd() *cobra.Command {
 			Usage:          fmt.Sprintf("The messenger type used to send invitations to new dashboard users. Options: %+v", message.MessengerType("").ValidEmailTypes()),
 			OptType:        types.String,
 			CustomSetValue: utils.SetConfigOptionMessengerType,
-			ConfigKey:      &opts.MessengerOptions.MessengerType,
+			ConfigKey:      &tenantsOpts.MessengerOptions.MessengerType,
 			Required:       true,
 		},
 		{
 			Name:      "aws-access-key-id",
 			Usage:     "The AWS access key ID",
 			OptType:   types.String,
-			ConfigKey: &opts.MessengerOptions.AWSAccessKeyID,
+			ConfigKey: &tenantsOpts.MessengerOptions.AWSAccessKeyID,
 			Required:  false,
 		},
 		{
 			Name:      "aws-secret-access-key",
 			Usage:     "The AWS secret access key",
 			OptType:   types.String,
-			ConfigKey: &opts.MessengerOptions.AWSSecretAccessKey,
+			ConfigKey: &tenantsOpts.MessengerOptions.AWSSecretAccessKey,
 			Required:  false,
 		},
 		{
 			Name:      "aws-region",
 			Usage:     "The AWS region",
 			OptType:   types.String,
-			ConfigKey: &opts.MessengerOptions.AWSRegion,
+			ConfigKey: &tenantsOpts.MessengerOptions.AWSRegion,
 			Required:  false,
+		},
+		&config.ConfigOption{
+			Name:        "horizon-url",
+			Usage:       "The URL of the Stellar Horizon server where this application will communicate with.",
+			OptType:     types.String,
+			ConfigKey:   &tenantsOpts.HorizonURL,
+			FlagDefault: horizonclient.DefaultTestNetClient.HorizonURL,
+			Required:    true,
 		},
 	}, cmdUtils.BaseSignatureServiceConfigOptions(&sigOpts)...)
 
@@ -100,7 +110,7 @@ func AddTenantsCmd() *cobra.Command {
 			}
 		},
 		Run: func(cmd *cobra.Command, args []string) {
-			messengerClient, err := message.GetClient(opts.MessengerOptions)
+			messengerClient, err := message.GetClient(tenantsOpts.MessengerOptions)
 			if err != nil {
 				log.Fatalf("creating email client: %v", err)
 			}
@@ -108,7 +118,7 @@ func AddTenantsCmd() *cobra.Command {
 			ctx := cmd.Context()
 			if err := executeAddTenant(
 				ctx, globalOptions.multitenantDbURL, args[0], args[1], args[2], args[3], args[4],
-				*opts.SDPUIBaseURL, opts.NetworkType, messengerClient, sigOpts); err != nil {
+				messengerClient, tenantsOpts, sigOpts); err != nil {
 				log.Fatal(err)
 			}
 		},
@@ -130,8 +140,7 @@ func validateTenantNameArg(cmd *cobra.Command, args []string) error {
 
 func executeAddTenant(
 	ctx context.Context, dbURL, tenantName, userFirstName, userLastName, userEmail,
-	organizationName, uiBaseURL, networkType string, messengerClient message.MessengerClient,
-	sigOpts signing.SignatureServiceOptions,
+	organizationName string, messengerClient message.MessengerClient, tenantsOpts AddTenantsCommandOptions, sigOpts signing.SignatureServiceOptions,
 ) error {
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbURL)
 	if err != nil {
@@ -139,9 +148,22 @@ func executeAddTenant(
 	}
 	defer dbConnectionPool.Close()
 
+	sigOpts.DBConnectionPool = dbConnectionPool
+
+	horizonClient, err := dependencyinjection.NewHorizonClient(ctx, tenantsOpts.HorizonURL)
+	if err != nil {
+		return fmt.Errorf("creating horizon client: %w", err)
+	}
+
+	ledgerNumberTracker, err := dependencyinjection.NewLedgerNumberTracker(ctx, horizonClient)
+	if err != nil {
+		return fmt.Errorf("creating ledger number tracker: %w", err)
+	}
+	sigOpts.LedgerNumberTracker = ledgerNumberTracker
+
 	sigService, err := dependencyinjection.NewSignatureService(ctx, sigOpts)
 	if err != nil {
-		return err
+		return fmt.Errorf("creating signature service: %w", err)
 	}
 
 	m := tenant.NewManager(tenant.WithDatabase(dbConnectionPool))
@@ -151,7 +173,7 @@ func executeAddTenant(
 		provisioning.WithTenantManager(m),
 		provisioning.WithSignatureService(sigService))
 
-	t, err := p.ProvisionNewTenant(ctx, tenantName, userFirstName, userLastName, userEmail, organizationName, uiBaseURL, networkType)
+	t, err := p.ProvisionNewTenant(ctx, tenantName, userFirstName, userLastName, userEmail, organizationName, *tenantsOpts.SDPUIBaseURL, tenantsOpts.NetworkType)
 	if err != nil {
 		return fmt.Errorf("adding tenant with name %s: %w", tenantName, err)
 	}

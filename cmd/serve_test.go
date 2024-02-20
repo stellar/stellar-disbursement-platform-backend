@@ -204,6 +204,11 @@ func Test_serve(t *testing.T) {
 		NetworkPassphrase:    network.TestNetworkPassphrase,
 		Port:                 8003,
 		Version:              "x.y.z",
+		SignatureServiceOptions: signing.SignatureServiceOptions{
+			EncryptionPassphrase:   encryptionPassphrase,
+			DistributionPrivateKey: distributionSeed,
+			DistributionSignerType: signing.DistributionAccountEnvSignatureClientType,
+		},
 	}
 
 	eventBrokerOptions := cmdUtils.EventBrokerOptions{

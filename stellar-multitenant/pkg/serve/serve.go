@@ -9,7 +9,9 @@ import (
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	supporthttp "github.com/stellar/go/support/http"
 	"github.com/stellar/go/support/log"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/dependencyinjection"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
@@ -35,13 +37,14 @@ type ServeOptions struct {
 	EmailMessengerClient      message.MessengerClient
 	Environment               string
 	GitCommit                 string
+	HorizonURL                string
 	NetworkPassphrase         string
 	networkType               utils.NetworkType
 	Port                      int
+	SignatureServiceOptions   signing.SignatureServiceOptions
 	tenantManager             *tenant.Manager
 	tenantProvisioningManager *provisioning.Manager
 	Version                   string
-	signatureService          signing.SignatureService
 }
 
 // SetupDependencies uses the serve options to setup the dependencies for the server.
@@ -55,11 +58,17 @@ func (opts *ServeOptions) SetupDependencies() error {
 	opts.dbConnectionPool = dbConnectionPool
 
 	opts.tenantManager = tenant.NewManager(tenant.WithDatabase(dbConnectionPool))
+
+	signSvc, err := dependencyinjection.NewSignatureService(context.Background(), opts.SignatureServiceOptions)
+	if err != nil {
+		return fmt.Errorf("creating signature service: %w", err)
+	}
+
 	opts.tenantProvisioningManager = provisioning.NewManager(
 		provisioning.WithDatabase(dbConnectionPool),
 		provisioning.WithTenantManager(opts.tenantManager),
 		provisioning.WithMessengerClient(opts.EmailMessengerClient),
-		provisioning.WithSignatureService(opts.signatureService),
+		provisioning.WithSignatureService(signSvc),
 	)
 
 	opts.networkType, err = utils.GetNetworkTypeFromNetworkPassphrase(opts.NetworkPassphrase)

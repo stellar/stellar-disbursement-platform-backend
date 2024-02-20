@@ -179,6 +179,11 @@ func (m *Manager) UpdateTenantConfig(ctx context.Context, tu *TenantUpdate) (*Te
 		args = append(args, *tu.Status)
 	}
 
+	if tu.DistributionAccount != nil {
+		fields = append(fields, "distribution_account = ?")
+		args = append(args, *tu.DistributionAccount)
+	}
+
 	args = append(args, tu.ID)
 	q = fmt.Sprintf(q, strings.Join(fields, ",\n"))
 	q = m.db.Rebind(q)
