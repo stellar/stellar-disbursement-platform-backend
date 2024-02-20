@@ -5,10 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/stellar/go/support/log"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 )
 
 type DisbursementInstruction struct {
@@ -65,7 +62,7 @@ var (
 //	|    |    |    |--- If the receiver wallet exists and it's not REGISTERED, retry the invitation SMS.
 //	|    |    |--- Delete all payments tied to this disbursement.
 //	|    |    |--- Create all payments passed in the instructions.
-func (di DisbursementInstructionModel) ProcessAll(ctx context.Context, userID string, instructions []*DisbursementInstruction, disbursement *Disbursement, update *DisbursementUpdate, maxNumberOfInstructions int, eventProducer events.Producer) error {
+func (di DisbursementInstructionModel) ProcessAll(ctx context.Context, userID string, instructions []*DisbursementInstruction, disbursement *Disbursement, update *DisbursementUpdate, maxNumberOfInstructions int) error {
 	if len(instructions) > maxNumberOfInstructions {
 		return ErrMaxInstructionsExceeded
 	}
@@ -165,7 +162,6 @@ func (di DisbursementInstructionModel) ProcessAll(ctx context.Context, userID st
 			receiverIDToReceiverWalletIDMap[receiverWallet.Receiver.ID] = receiverWallet.ID
 		}
 
-		eventData := make([]schemas.EventReceiverWalletSMSInvitationData, 0, len(receiverIDs))
 		for _, receiverId := range receiverIDs {
 			receiverWalletId, exists := receiverIDToReceiverWalletIDMap[receiverId]
 			if !exists {
@@ -178,16 +174,12 @@ func (di DisbursementInstructionModel) ProcessAll(ctx context.Context, userID st
 					return fmt.Errorf("error inserting receiver wallet for receiver id %s: %w", receiverId, insertErr)
 				}
 				receiverIDToReceiverWalletIDMap[receiverId] = rwID
-				eventData = append(eventData, schemas.EventReceiverWalletSMSInvitationData{ReceiverWalletID: rwID})
 			} else {
-				rw, retryErr := di.receiverWalletModel.RetryInvitationSMS(ctx, dbTx, receiverWalletId)
+				_, retryErr := di.receiverWalletModel.RetryInvitationSMS(ctx, dbTx, receiverWalletId)
 				if retryErr != nil {
 					if !errors.Is(retryErr, ErrRecordNotFound) {
 						return fmt.Errorf("error retrying invitation: %w", retryErr)
 					}
-				}
-				if rw != nil && rw.Status == ReadyReceiversWalletStatus {
-					eventData = append(eventData, schemas.EventReceiverWalletSMSInvitationData{ReceiverWalletID: rw.ID})
 				}
 			}
 		}
@@ -223,21 +215,6 @@ func (di DisbursementInstructionModel) ProcessAll(ctx context.Context, userID st
 		// Step 7: Update Disbursement Status
 		if err = di.disbursementModel.UpdateStatus(ctx, dbTx, userID, disbursement.ID, ReadyDisbursementStatus); err != nil {
 			return fmt.Errorf("error updating status: %w", err)
-		}
-
-		// Step 8: Produce event to send invitation message to the receivers
-		msg, err := events.NewMessage(ctx, events.ReceiverWalletNewInvitationTopic, disbursement.ID, events.BatchReceiverWalletSMSInvitationType, eventData)
-		if err != nil {
-			return fmt.Errorf("creating event producer message: %w", err)
-		}
-
-		if eventProducer != nil {
-			err = eventProducer.WriteMessages(ctx, *msg)
-			if err != nil {
-				return fmt.Errorf("publishing message %s on event producer: %w", msg.String(), err)
-			}
-		} else {
-			log.Ctx(ctx).Errorf("event producer is nil, could not publish message %s", msg.String())
 		}
 
 		return nil
