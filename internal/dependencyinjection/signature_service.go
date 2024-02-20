@@ -16,7 +16,7 @@ func buildSignatureServiceInstanceName(sigType signing.SignatureClientType) stri
 	return fmt.Sprintf("%s-%s", SignatureServiceInstanceName, string(sigType))
 }
 
-// NewSignatureService creates a new signature service instance, or retrives an instance that was already
+// NewSignatureService creates a new signature service instance, or retrieves an instance that was already
 // created before.
 func NewSignatureService(ctx context.Context, opts signing.SignatureServiceOptions) (signing.SignatureService, error) {
 	instanceName := buildSignatureServiceInstanceName(opts.DistributionSignerType)

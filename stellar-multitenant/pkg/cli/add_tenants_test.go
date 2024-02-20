@@ -9,15 +9,19 @@ import (
 	"testing"
 
 	"github.com/spf13/cobra"
+	"github.com/stellar/go/keypair"
+	"github.com/stellar/go/network"
 	"github.com/stellar/go/support/log"
-	"github.com/stellar/stellar-disbursement-platform-backend/db"
-	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
+	preconditionsMock "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions/mocks"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 func Test_validateTenantNameArg(t *testing.T) {
@@ -86,13 +90,23 @@ func Test_executeAddTenant(t *testing.T) {
 	organizationName := "My Org"
 	uiBaseURL := "http://localhost:3000"
 	networkType := "testnet"
+	encryptionPassphrase := keypair.MustRandom().Seed()
+	distributionAccPrivKey := keypair.MustRandom().Seed()
+
+	sigOpts := signing.SignatureServiceOptions{
+		DistributionSignerType: signing.DistributionAccountEnvSignatureClientType,
+		EncryptionPassphrase:   encryptionPassphrase,
+		DistributionPrivateKey: distributionAccPrivKey,
+		NetworkPassphrase:      network.TestNetworkPassphrase,
+		DBConnectionPool:       dbConnectionPool,
+		LedgerNumberTracker:    &preconditionsMock.MockLedgerNumberTracker{},
+	}
 
 	t.Run("adds a new tenant successfully", func(t *testing.T) {
 		tenant.DeleteAllTenantsFixture(t, ctx, dbConnectionPool)
 
 		getEntries := log.DefaultLogger.StartTest(log.InfoLevel)
 
-		sigOpts := signing.SignatureServiceOptions{}
 		err := executeAddTenant(ctx, dbt.DSN, tenantName, userFirstName, userLastName, userEmail, organizationName, uiBaseURL, networkType, messengerClientMock, sigOpts)
 		assert.Nil(t, err)
 
@@ -102,9 +116,9 @@ func Test_executeAddTenant(t *testing.T) {
 		require.NoError(t, err)
 
 		entries := getEntries()
-		require.Len(t, entries, 15)
-		assert.Equal(t, "tenant myorg added successfully", entries[13].Message)
-		assert.Contains(t, fmt.Sprintf("tenant ID: %s", tenantID), entries[14].Message)
+		require.Len(t, entries, 18)
+		assert.Equal(t, "tenant myorg added successfully", entries[16].Message)
+		assert.Contains(t, fmt.Sprintf("tenant ID: %s", tenantID), entries[17].Message)
 	})
 
 	t.Run("duplicated tenant name", func(t *testing.T) {
@@ -112,7 +126,6 @@ func Test_executeAddTenant(t *testing.T) {
 
 		getEntries := log.DefaultLogger.StartTest(log.DebugLevel)
 
-		sigOpts := signing.SignatureServiceOptions{}
 		err := executeAddTenant(ctx, dbt.DSN, tenantName, userFirstName, userLastName, userEmail, organizationName, uiBaseURL, networkType, messengerClientMock, sigOpts)
 		assert.Nil(t, err)
 
@@ -125,9 +138,9 @@ func Test_executeAddTenant(t *testing.T) {
 		require.NoError(t, err)
 
 		entries := getEntries()
-		require.Len(t, entries, 16)
-		assert.Equal(t, "tenant myorg added successfully", entries[13].Message)
-		assert.Contains(t, fmt.Sprintf("tenant ID: %s", tenantID), entries[14].Message)
+		require.Len(t, entries, 18)
+		assert.Equal(t, "tenant myorg added successfully", entries[15].Message)
+		assert.Contains(t, fmt.Sprintf("tenant ID: %s", tenantID), entries[16].Message)
 	})
 
 	messengerClientMock.AssertExpectations(t)
