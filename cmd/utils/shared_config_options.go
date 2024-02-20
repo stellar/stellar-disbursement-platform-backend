@@ -231,7 +231,7 @@ func BaseSignatureServiceConfigOptions(opts *signing.SignatureServiceOptions) []
 			OptType:        types.String,
 			CustomSetValue: SetConfigOptionStellarPrivateKey,
 			ConfigKey:      &opts.DistributionPrivateKey,
-			Required:       false,
+			Required:       true,
 		},
 		{
 			Name:           "distribution-signer-type",

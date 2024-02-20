@@ -155,6 +155,8 @@ func Test_AddTenantsCmd(t *testing.T) {
 
 	ctx := context.Background()
 
+	t.Setenv("DISTRIBUTION_SEED", keypair.MustRandom().Seed())
+
 	t.Run("shows usage", func(t *testing.T) {
 		out := new(strings.Builder)
 		mockCmd := cobra.Command{}
@@ -173,13 +175,16 @@ Examples:
 add-tenants [tenant name] [user first name] [user last name] [user email] [organization name]
 
 Flags:
-      --aws-access-key-id string       The AWS access key ID (AWS_ACCESS_KEY_ID)
-      --aws-region string              The AWS region (AWS_REGION)
-      --aws-secret-access-key string   The AWS secret access key (AWS_SECRET_ACCESS_KEY)
-      --email-sender-type string       The messenger type used to send invitations to new dashboard users. Options: [DRY_RUN AWS_EMAIL] (EMAIL_SENDER_TYPE)
-  -h, --help                           help for add-tenants
-      --network-type string            The Stellar Network type (NETWORK_TYPE) (default "testnet")
-      --sdp-ui-base-url string         The Tenant SDP UI/dashboard Base URL. (SDP_UI_BASE_URL) (default "http://localhost:3000")
+      --aws-access-key-id string                       The AWS access key ID (AWS_ACCESS_KEY_ID)
+      --aws-region string                              The AWS region (AWS_REGION)
+      --aws-secret-access-key string                   The AWS secret access key (AWS_SECRET_ACCESS_KEY)
+      --channel-account-encryption-passphrase string   A Stellar-compliant ed25519 private key used to encrypt/decrypt the channel accounts' private keys. When not set, it will default to the value of the 'distribution-seed' option. (CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE)
+      --distribution-seed string                       The private key of the Stellar distribution account that sends the disbursements. (DISTRIBUTION_SEED)
+      --distribution-signer-type string                The type of the signature client used for distribution accounts. Options: [DISTRIBUTION_ACCOUNT_ENV] (DISTRIBUTION_SIGNER_TYPE) (default "DISTRIBUTION_ACCOUNT_ENV")
+      --email-sender-type string                       The messenger type used to send invitations to new dashboard users. Options: [DRY_RUN AWS_EMAIL] (EMAIL_SENDER_TYPE)
+  -h, --help                                           help for add-tenants
+      --network-type string                            The Stellar Network type (NETWORK_TYPE) (default "testnet")
+      --sdp-ui-base-url string                         The Tenant SDP UI/dashboard Base URL. (SDP_UI_BASE_URL) (default "http://localhost:3000")
 
 `
 		assert.Equal(t, expectUsageMessage, out.String())
@@ -198,13 +203,16 @@ Examples:
 add-tenants [tenant name] [user first name] [user last name] [user email] [organization name]
 
 Flags:
-      --aws-access-key-id string       The AWS access key ID (AWS_ACCESS_KEY_ID)
-      --aws-region string              The AWS region (AWS_REGION)
-      --aws-secret-access-key string   The AWS secret access key (AWS_SECRET_ACCESS_KEY)
-      --email-sender-type string       The messenger type used to send invitations to new dashboard users. Options: [DRY_RUN AWS_EMAIL] (EMAIL_SENDER_TYPE)
-  -h, --help                           help for add-tenants
-      --network-type string            The Stellar Network type (NETWORK_TYPE) (default "testnet")
-      --sdp-ui-base-url string         The Tenant SDP UI/dashboard Base URL. (SDP_UI_BASE_URL) (default "http://localhost:3000")
+      --aws-access-key-id string                       The AWS access key ID (AWS_ACCESS_KEY_ID)
+      --aws-region string                              The AWS region (AWS_REGION)
+      --aws-secret-access-key string                   The AWS secret access key (AWS_SECRET_ACCESS_KEY)
+      --channel-account-encryption-passphrase string   A Stellar-compliant ed25519 private key used to encrypt/decrypt the channel accounts' private keys. When not set, it will default to the value of the 'distribution-seed' option. (CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE)
+      --distribution-seed string                       The private key of the Stellar distribution account that sends the disbursements. (DISTRIBUTION_SEED)
+      --distribution-signer-type string                The type of the signature client used for distribution accounts. Options: [DISTRIBUTION_ACCOUNT_ENV] (DISTRIBUTION_SIGNER_TYPE) (default "DISTRIBUTION_ACCOUNT_ENV")
+      --email-sender-type string                       The messenger type used to send invitations to new dashboard users. Options: [DRY_RUN AWS_EMAIL] (EMAIL_SENDER_TYPE)
+  -h, --help                                           help for add-tenants
+      --network-type string                            The Stellar Network type (NETWORK_TYPE) (default "testnet")
+      --sdp-ui-base-url string                         The Tenant SDP UI/dashboard Base URL. (SDP_UI_BASE_URL) (default "http://localhost:3000")
 `
 		assert.Equal(t, expectUsageMessage, out.String())
 	})

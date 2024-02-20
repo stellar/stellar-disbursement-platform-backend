@@ -11,9 +11,12 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/stellar/go/keypair"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/internal/provisioning"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
@@ -254,6 +257,10 @@ func Test_TenantHandler_Post(t *testing.T) {
 	require.NoError(t, outerErr)
 	defer dbConnectionPool.Close()
 
+	distAcc := keypair.MustRandom()
+	t.Setenv("DISTRIBUTION_SEED", distAcc.Seed())
+	signatureSvcMock, _, distAccSigClientMock, _, _ := signing.NewMockSignatureService(t)
+
 	ctx := context.Background()
 	messengerClientMock := message.MessengerClientMock{}
 	m := tenant.NewManager(tenant.WithDatabase(dbConnectionPool))
@@ -261,6 +268,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 		provisioning.WithDatabase(dbConnectionPool),
 		provisioning.WithTenantManager(m),
 		provisioning.WithMessengerClient(&messengerClientMock),
+		provisioning.WithSignatureService(signatureSvcMock),
 	)
 	handler := TenantsHandler{
 		Manager:             m,
@@ -312,6 +320,11 @@ func Test_TenantHandler_Post(t *testing.T) {
 				assert.Empty(t, msg.ToPhoneNumber)
 			}).
 			Return(nil).
+			Once()
+
+		distAccSigClientMock.
+			On("BatchInsert", ctx, 1).
+			Return([]string{distAcc.Address()}, nil).
 			Once()
 
 		reqBody := `
@@ -411,6 +424,11 @@ func Test_TenantHandler_Post(t *testing.T) {
 			Return(nil).
 			Once()
 
+		distAccSigClientMock.
+			On("BatchInsert", ctx, 1).
+			Return([]string{distAcc.Address()}, nil).
+			Once()
+
 		reqBody := `
 			{
 				"name": "my-aid-org",
@@ -456,6 +474,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 	})
 
 	messengerClientMock.AssertExpectations(t)
+	distAccSigClientMock.AssertExpectations(t)
 }
 
 func Test_TenantHandler_Patch(t *testing.T) {

@@ -7,16 +7,19 @@ import (
 	"testing"
 
 	migrate "github.com/rubenv/sql-migrate"
+	"github.com/stellar/go/keypair"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	authmigrations "github.com/stellar/stellar-disbursement-platform-backend/db/migrations/auth-migrations"
 	sdpmigrations "github.com/stellar/stellar-disbursement-platform-backend/db/migrations/sdp-migrations"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
-	"github.com/stretchr/testify/require"
 )
 
 func Test_Manager_ProvisionNewTenant(t *testing.T) {
@@ -30,17 +33,20 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 	ctx := context.Background()
 
 	messengerClientMock := message.MessengerClientMock{}
-
 	tenantManager := tenant.NewManager(tenant.WithDatabase(dbConnectionPool))
+	signatureSvcMock, _, distAccSigClientMock, _, _ := signing.NewMockSignatureService(t)
 	p := NewManager(
 		WithDatabase(dbConnectionPool),
 		WithMessengerClient(&messengerClientMock),
 		WithTenantManager(tenantManager),
+		WithSignatureService(signatureSvcMock),
 	)
 
 	messengerClientMock.
 		On("SendMessage", mock.AnythingOfType("message.Message")).
 		Return(nil)
+
+	distAcc := keypair.MustRandom()
 
 	t.Run("provision a new tenant for the testnet", func(t *testing.T) {
 		tenantName := "myorg-ukraine"
@@ -49,6 +55,10 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 		userEmail := "email@email.com"
 		organizationName := "My Org"
 		uiBaseURL := "http://localhost:3000"
+
+		distAccSigClientMock.
+			On("BatchInsert", ctx, 1).Return([]string{distAcc.Address()}, nil).
+			Once()
 
 		tnt, err := p.ProvisionNewTenant(ctx, tenantName, userFirstName, userLastName, userEmail, organizationName, uiBaseURL, string(utils.TestnetNetworkType))
 		require.NoError(t, err)
@@ -104,6 +114,10 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 		userEmail := "email@email.com"
 		organizationName := "My Org"
 		uiBaseURL := "http://localhost:3000"
+
+		distAccSigClientMock.
+			On("BatchInsert", ctx, 1).Return([]string{distAcc.Address()}, nil).
+			Once()
 
 		tnt, err := p.ProvisionNewTenant(ctx, tenantName, userFirstName, userLastName, userEmail, organizationName, uiBaseURL, string(utils.PubnetNetworkType))
 		require.NoError(t, err)
