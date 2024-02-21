@@ -3,11 +3,11 @@ package cli
 import (
 	"context"
 	"fmt"
-	"github.com/stellar/go/network"
 	"go/types"
 	"regexp"
 
 	"github.com/spf13/cobra"
+	"github.com/stellar/go/network"
 	"github.com/stellar/go/support/config"
 	"github.com/stellar/go/support/log"
 
