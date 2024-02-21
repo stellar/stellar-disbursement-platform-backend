@@ -61,14 +61,6 @@ func OpenWithAdminMigrationsOnly(t *testing.T) *dbtest.DB {
 	return openWithMigrations(t, adminMigrationsConfig)
 }
 
-func OpenWithSDPMigrationsOnly(t *testing.T) *dbtest.DB {
-	return openWithMigrations(t, sdpMigrationsConfig)
-}
-
-func OpenWithAuthMigrationsOnly(t *testing.T) *dbtest.DB {
-	return openWithMigrations(t, authMigrationsConfig)
-}
-
 func OpenWithTSSMigrationsOnly(t *testing.T) *dbtest.DB {
 	return openWithMigrations(t, tssMigrationsConfig)
 }
