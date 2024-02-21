@@ -276,7 +276,7 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 		instruction3.VerificationValue = "1990-01-07"
 		err = di.ProcessAll(ctx, "user-id", instructions, disbursement, disbursementUpdate, MaxInstructionsPerDisbursement)
 		require.Error(t, err)
-		assert.EqualError(t, err, "running atomic function in RunInTransactionWithResult: receiver verification mismatch: receiver verification for +380-12-345-673 doesn't match. Check line 3 on CSV file - Internal ID 123456783.")
+		assert.EqualError(t, err, "running atomic function in RunInTransactionWithResult: receiver verification mismatch: receiver verification for +380-12-345-673 doesn't match. Check line 3 on CSV file - Internal ID 123456783")
 	})
 }
 
