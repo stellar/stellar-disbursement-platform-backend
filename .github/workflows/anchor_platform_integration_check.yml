@@ -23,7 +23,7 @@ jobs:
       SEP10_SIGNING_PRIVATE_KEY: ${{ vars.SEP10_SIGNING_PRIVATE_KEY }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Run Docker Compose for SDP and Anchor Platform
         working-directory: dev
