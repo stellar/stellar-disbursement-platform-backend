@@ -11,8 +11,12 @@ services:
       file: docker-compose-sdp-anchor.yml
       service: sdp-api
     depends_on:
-      - db
-      - kafka
+      db:
+        condition: service_started
+      kafka:
+        condition: service_started
+      kafka-init:
+        condition: service_completed_successfully
   db-anchor-platform:
     extends:
       file: docker-compose-sdp-anchor.yml
@@ -48,6 +52,13 @@ services:
       service: kafka
     volumes:
       - kafka-data:/bitnami
+  kafka-init:
+    extends:
+      file: docker-compose-sdp-anchor.yml
+      service: kafka-init
+    depends_on:
+      kafka:
+        condition: service_healthy
   conduktor-platform:
     extends:
       file: docker-compose-sdp-anchor.yml
