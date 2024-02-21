@@ -13,16 +13,16 @@ import (
 	tssmigrations "github.com/stellar/stellar-disbursement-platform-backend/db/migrations/tss-migrations"
 )
 
-type migrationConfig struct {
+type migrationsConfig struct {
 	tableName string
 	fs        http.FileSystem
 }
 
 var (
-	adminMigrationsConfig = migrationConfig{tableName: "admin_migrations", fs: http.FS(adminmigrations.FS)}
-	sdpMigrationsConfig   = migrationConfig{tableName: "sdp_migrations", fs: http.FS(sdpmigrations.FS)}
-	authMigrationsConfig  = migrationConfig{tableName: "auth_migrations", fs: http.FS(authmigrations.FS)}
-	tssMigrationsConfig   = migrationConfig{tableName: "tss_migrations", fs: http.FS(tssmigrations.FS)}
+	adminMigrationsConfig = migrationsConfig{tableName: "admin_migrations", fs: http.FS(adminmigrations.FS)}
+	sdpMigrationsConfig   = migrationsConfig{tableName: "sdp_migrations", fs: http.FS(sdpmigrations.FS)}
+	authMigrationsConfig  = migrationsConfig{tableName: "auth_migrations", fs: http.FS(authmigrations.FS)}
+	tssMigrationsConfig   = migrationsConfig{tableName: "tss_migrations", fs: http.FS(tssmigrations.FS)}
 )
 
 func OpenWithoutMigrations(t *testing.T) *dbtest.DB {
@@ -30,7 +30,7 @@ func OpenWithoutMigrations(t *testing.T) *dbtest.DB {
 	return db
 }
 
-func openWithMigrations(t *testing.T, configs ...migrationConfig) *dbtest.DB {
+func openWithMigrations(t *testing.T, configs ...migrationsConfig) *dbtest.DB {
 	db := OpenWithoutMigrations(t)
 
 	conn := db.Open()
