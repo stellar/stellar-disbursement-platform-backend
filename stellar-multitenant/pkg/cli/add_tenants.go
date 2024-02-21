@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"fmt"
+	"github.com/stellar/go/network"
 	"go/types"
 	"regexp"
 
@@ -88,6 +89,14 @@ func AddTenantsCmd() *cobra.Command {
 			OptType:     types.String,
 			ConfigKey:   &tenantsOpts.HorizonURL,
 			FlagDefault: horizonclient.DefaultTestNetClient.HorizonURL,
+			Required:    true,
+		},
+		&config.ConfigOption{
+			Name:        "network-passphrase",
+			Usage:       "The Stellar Network passphrase",
+			OptType:     types.String,
+			FlagDefault: network.TestNetworkPassphrase,
+			ConfigKey:   &sigOpts.NetworkPassphrase,
 			Required:    true,
 		},
 	}, cmdUtils.BaseSignatureServiceConfigOptions(&sigOpts)...)

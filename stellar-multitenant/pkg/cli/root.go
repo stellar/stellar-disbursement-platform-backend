@@ -9,9 +9,10 @@ import (
 )
 
 type globalOptionsType struct {
-	version          string
-	gitCommit        string
-	multitenantDbURL string
+	version           string
+	gitCommit         string
+	multitenantDbURL  string
+	networkPassphrase string
 }
 
 var globalOptions globalOptionsType

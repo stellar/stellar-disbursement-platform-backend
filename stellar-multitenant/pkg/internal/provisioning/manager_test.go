@@ -167,6 +167,7 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 	})
 
 	messengerClientMock.AssertExpectations(t)
+	distAccSigClientMock.AssertExpectations(t)
 }
 
 func Test_Manager_RunMigrationsForTenant(t *testing.T) {

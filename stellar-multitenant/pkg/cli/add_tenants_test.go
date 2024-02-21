@@ -192,6 +192,7 @@ Flags:
       --email-sender-type string                       The messenger type used to send invitations to new dashboard users. Options: [DRY_RUN AWS_EMAIL] (EMAIL_SENDER_TYPE)
   -h, --help                                           help for add-tenants
       --horizon-url string                             The URL of the Stellar Horizon server where this application will communicate with. (HORIZON_URL) (default "https://horizon-testnet.stellar.org/")
+      --network-passphrase string                      The Stellar Network passphrase (NETWORK_PASSPHRASE) (default "Test SDF Network ; September 2015")
       --network-type string                            The Stellar Network type (NETWORK_TYPE) (default "testnet")
       --sdp-ui-base-url string                         The Tenant SDP UI/dashboard Base URL. (SDP_UI_BASE_URL) (default "http://localhost:3000")
 
@@ -221,6 +222,7 @@ Flags:
       --email-sender-type string                       The messenger type used to send invitations to new dashboard users. Options: [DRY_RUN AWS_EMAIL] (EMAIL_SENDER_TYPE)
   -h, --help                                           help for add-tenants
       --horizon-url string                             The URL of the Stellar Horizon server where this application will communicate with. (HORIZON_URL) (default "https://horizon-testnet.stellar.org/")
+      --network-passphrase string                      The Stellar Network passphrase (NETWORK_PASSPHRASE) (default "Test SDF Network ; September 2015")
       --network-type string                            The Stellar Network type (NETWORK_TYPE) (default "testnet")
       --sdp-ui-base-url string                         The Tenant SDP UI/dashboard Base URL. (SDP_UI_BASE_URL) (default "http://localhost:3000")
 `
@@ -252,9 +254,9 @@ Flags:
 		require.NoError(t, err)
 
 		entries := getEntries()
-		require.Len(t, entries, 17)
-		assert.Equal(t, "tenant unhcr added successfully", entries[15].Message)
-		assert.Contains(t, fmt.Sprintf("tenant ID: %s", tenantID), entries[16].Message)
+		require.Len(t, entries, 19)
+		assert.Equal(t, "tenant unhcr added successfully", entries[17].Message)
+		assert.Contains(t, fmt.Sprintf("tenant ID: %s", tenantID), entries[18].Message)
 
 		// Connecting to the new schema
 		schemaName := fmt.Sprintf("sdp_%s", tenantName)
@@ -319,9 +321,9 @@ Flags:
 		require.NoError(t, err)
 
 		entries := getEntries()
-		require.Len(t, entries, 17)
-		assert.Equal(t, "tenant irc added successfully", entries[15].Message)
-		assert.Contains(t, fmt.Sprintf("tenant ID: %s", tenantID), entries[16].Message)
+		require.Len(t, entries, 19)
+		assert.Equal(t, "tenant irc added successfully", entries[17].Message)
+		assert.Contains(t, fmt.Sprintf("tenant ID: %s", tenantID), entries[18].Message)
 
 		// Connecting to the new schema
 		schemaName := fmt.Sprintf("sdp_%s", tenantName)
