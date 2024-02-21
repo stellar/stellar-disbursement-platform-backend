@@ -224,7 +224,7 @@ func Test_serve(t *testing.T) {
 	mServer.On("StartServe", serveOpts, mock.AnythingOfType("*serve.HTTPServer")).Once()
 	mServer.On("StartAdminServe", serveTenantOpts, mock.AnythingOfType("*serve.HTTPServer")).Once()
 	mServer.
-		On("GetSchedulerJobRegistrars", mock.AnythingOfType("*context.emptyCtx"), serveOpts, scheduler.SchedulerOptions{}, mock.Anything).
+		On("GetSchedulerJobRegistrars", mock.Anything, serveOpts, scheduler.SchedulerOptions{}, mock.Anything).
 		Return([]scheduler.SchedulerJobRegisterOption{}, nil).
 		Once()
 	mServer.On("SetupConsumers", ctx, eventBrokerOptions, eventHandlerOptions, serveOpts).Return(TearDownFunc(func() { t.Log("tear down func called") }), nil).Once()

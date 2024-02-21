@@ -73,6 +73,7 @@ func (c AssetsHandler) CreateAsset(w http.ResponseWriter, r *http.Request) {
 	v.Check(assetRequest.Code != "", "code", "code is required")
 	if strings.ToUpper(assetRequest.Code) != stellarNativeAssetCode {
 		v.Check(assetRequest.Issuer != "", "issuer", "issuer is required")
+		assetRequest.Issuer = strings.TrimSpace(assetRequest.Issuer)
 		v.Check(strkey.IsValidEd25519PublicKey(assetRequest.Issuer), "issuer", "issuer is invalid")
 	}
 

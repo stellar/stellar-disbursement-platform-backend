@@ -2,12 +2,12 @@ package validators
 
 import (
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
-	"golang.org/x/exp/slices"
 )
 
 type QueryValidator struct {
