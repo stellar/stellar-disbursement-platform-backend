@@ -67,7 +67,7 @@ func Test_NewSignatureClient(t *testing.T) {
 	require.NoError(t, outerErr)
 	defer dbConnectionPool.Close()
 
-	chAccEncryptionPassphrase := keypair.MustRandom().Seed()
+	encryptionPassphrase := keypair.MustRandom().Seed()
 	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
 	distributionKP := keypair.MustRandom()
 
@@ -90,16 +90,32 @@ func Test_NewSignatureClient(t *testing.T) {
 			opts: SignatureClientOptions{
 				NetworkPassphrase:         network.TestNetworkPassphrase,
 				DBConnectionPool:          dbConnectionPool,
-				ChAccEncryptionPassphrase: chAccEncryptionPassphrase,
+				ChAccEncryptionPassphrase: encryptionPassphrase,
 				LedgerNumberTracker:       mLedgerNumberTracker,
 			},
 			wantResult: &ChannelAccountDBSignatureClient{
 				chAccModel:           store.NewChannelAccountModel(dbConnectionPool),
 				dbConnectionPool:     dbConnectionPool,
 				encrypter:            &utils.DefaultPrivateKeyEncrypter{},
-				encryptionPassphrase: chAccEncryptionPassphrase,
+				encryptionPassphrase: encryptionPassphrase,
 				ledgerNumberTracker:  mLedgerNumberTracker,
 				networkPassphrase:    network.TestNetworkPassphrase,
+			},
+		},
+		{
+			name:    "🎉 successfully instantiate a Distribution Account DB instance",
+			sigType: DistributionAccountDBSignatureClientType,
+			opts: SignatureClientOptions{
+				NetworkPassphrase:           network.TestNetworkPassphrase,
+				DBConnectionPool:            dbConnectionPool,
+				DistAccEncryptionPassphrase: encryptionPassphrase,
+				Encrypter:                   &utils.PrivateKeyEncrypterMock{},
+			},
+			wantResult: &DistributionAccountDBSignatureClient{
+				stellarSignatoryModel: store.NewStellarSignatoryModel(dbConnectionPool),
+				encrypter:             &utils.PrivateKeyEncrypterMock{},
+				encryptionPassphrase:  encryptionPassphrase,
+				networkPassphrase:     network.TestNetworkPassphrase,
 			},
 		},
 		{
@@ -121,10 +137,10 @@ func Test_NewSignatureClient(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			sigService, err := NewSignatureClient(tc.sigType, tc.opts)
 			if tc.wantErrorMsg != "" {
-				assert.EqualError(t, err, tc.wantErrorMsg)
+				require.EqualError(t, err, tc.wantErrorMsg)
 			} else {
-				assert.NoError(t, err)
-				assert.Equal(t, tc.wantResult, sigService)
+				require.NoError(t, err)
+				require.Equal(t, tc.wantResult, sigService)
 			}
 		})
 	}
