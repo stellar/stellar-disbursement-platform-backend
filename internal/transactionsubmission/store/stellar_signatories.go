@@ -27,7 +27,7 @@ func NewStellarSignatoryModel(dbConnectionPool db.DBConnectionPool) *StellarSign
 	return &StellarSignatoryModel{DBConnectionPool: dbConnectionPool}
 }
 
-// BatchInsert inserts a batch of (publicKey, privateKey) pairs into the database.
+// BatchInsert inserts a batch of (publicKey, encryptedPrivateKey) pairs into the database.
 func (m *StellarSignatoryModel) BatchInsert(ctx context.Context, stellarSignatories []*StellarSignatory) error {
 	if len(stellarSignatories) == 0 {
 		return nil
@@ -63,6 +63,7 @@ func (m *StellarSignatoryModel) BatchInsert(ctx context.Context, stellarSignator
 	return nil
 }
 
+// Get returns a StellarSignatory with the provided publicKey from the database.
 func (m *StellarSignatoryModel) Get(ctx context.Context, publicKey string) (*StellarSignatory, error) {
 	query := `
 		SELECT

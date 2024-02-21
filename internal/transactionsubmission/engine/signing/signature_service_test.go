@@ -1,6 +1,7 @@
 package signing
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stellar/go/keypair"
@@ -95,6 +96,7 @@ func Test_NewSignatureService(t *testing.T) {
 	defer dbConnectionPool.Close()
 
 	chAccEncryptionPassphrase := keypair.MustRandom().Seed()
+	distAccEncryptionPassphrase := keypair.MustRandom().Seed()
 	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
 	distributionKP := keypair.MustRandom()
 
@@ -110,6 +112,12 @@ func Test_NewSignatureService(t *testing.T) {
 		networkPassphrase:   network.TestNetworkPassphrase,
 		distributionAccount: distributionKP.Address(),
 		distributionKP:      distributionKP,
+	}
+	wantDistAccountDBSigner := &DistributionAccountDBSignatureClient{
+		networkPassphrase:     network.TestNetworkPassphrase,
+		encryptionPassphrase:  distAccEncryptionPassphrase,
+		stellarSignatoryModel: store.NewStellarSignatoryModel(dbConnectionPool),
+		encrypter:             &utils.DefaultPrivateKeyEncrypter{},
 	}
 
 	testCases := []struct {
@@ -139,10 +147,10 @@ func Test_NewSignatureService(t *testing.T) {
 				ChAccEncryptionPassphrase: chAccEncryptionPassphrase,
 				LedgerNumberTracker:       mLedgerNumberTracker,
 			},
-			wantErrContains: "creating a new distribution account signature client:",
+			wantErrContains: fmt.Sprintf("creating a new distribution account signature client with type %v", DistributionAccountEnvSignatureClientType),
 		},
 		{
-			name: "🎉 successfully instantiate new signature service",
+			name: "🎉 successfully instantiate new signature service (DISTRIBUTION_ACCOUNT_ENV)",
 			opts: SignatureServiceOptions{
 				DistributionSignerType:    DistributionAccountEnvSignatureClientType,
 				NetworkPassphrase:         network.TestNetworkPassphrase,
@@ -160,8 +168,31 @@ func Test_NewSignatureService(t *testing.T) {
 				DistributionAccountResolver: wantDistAccountEnvSigner,
 			},
 		},
+		// TODO: Update test for DISTRIBUTION_ACCOUNT_DB below once the DistributionAccountResolver is implemented
 		{
-			name: "🎉 successfully instantiate new signature with the provided DistributionAccountResolver",
+			name: "🎉 successfully instantiate new signature service (DISTRIBUTION_ACCOUNT_DB)",
+			opts: SignatureServiceOptions{
+				DistributionSignerType:    DistributionAccountDBSignatureClientType,
+				NetworkPassphrase:         network.TestNetworkPassphrase,
+				DBConnectionPool:          dbConnectionPool,
+				ChAccEncryptionPassphrase: chAccEncryptionPassphrase,
+				LedgerNumberTracker:       mLedgerNumberTracker,
+
+				DistAccEncryptionPassphrase: distAccEncryptionPassphrase,
+
+				DistributionPrivateKey: distributionKP.Seed(),
+			},
+
+			wantSigService: SignatureService{
+				ChAccountSigner:             wantChAccountSigner,
+				DistAccountSigner:           wantDistAccountDBSigner,
+				HostAccountSigner:           wantDistAccountEnvSigner,
+				DistributionAccountResolver: wantDistAccountEnvSigner,
+			},
+			wantErrContains: "trying to cast a distribution account signer to a distribution account resolver",
+		},
+		{
+			name: "🎉 successfully instantiate new signature (DISTRIBUTION_ACCOUNT_ENV) with the provided DistributionAccountResolver",
 			opts: SignatureServiceOptions{
 				DistributionSignerType:    DistributionAccountEnvSignatureClientType,
 				NetworkPassphrase:         network.TestNetworkPassphrase,

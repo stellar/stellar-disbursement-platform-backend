@@ -48,16 +48,21 @@ type SignatureServiceOptions struct {
 	NetworkPassphrase string
 
 	// DistributionAccount:
-	DistributionPrivateKey string
+	DistributionSignerType SignatureClientType
+
 	// DistributionAccountEnv:
-	DistributionSignerType      SignatureClientType
+	DistributionPrivateKey string
+
+	// DistributionAccountDB:
 	DistAccEncryptionPassphrase string
 
 	// ChannelAccountDB:
-	DBConnectionPool          db.DBConnectionPool
 	ChAccEncryptionPassphrase string
-	LedgerNumberTracker       preconditions.LedgerNumberTracker
-	Encrypter                 utils.PrivateKeyEncrypter
+
+	// *AccountDB:
+	DBConnectionPool    db.DBConnectionPool
+	LedgerNumberTracker preconditions.LedgerNumberTracker
+	Encrypter           utils.PrivateKeyEncrypter
 
 	// DistributionAccountResolver
 	DistributionAccountResolver
@@ -87,7 +92,7 @@ func NewSignatureService(opts SignatureServiceOptions) (SignatureService, error)
 
 	distAccSigner, err := NewSignatureClient(distSignerType, sigClientOpts)
 	if err != nil {
-		return SignatureService{}, fmt.Errorf("creating a new distribution account signature client: %w", err)
+		return SignatureService{}, fmt.Errorf("creating a new distribution account signature client with type %v: %w", distSignerType, err)
 	}
 
 	hostAccSigner, err := NewSignatureClient(HostAccountEnvSignatureClientType, sigClientOpts)

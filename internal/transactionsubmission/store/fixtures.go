@@ -126,6 +126,8 @@ func CreateChannelAccountFixturesEncrypted(
 	encryptionPassphrase string,
 	count int,
 ) []*ChannelAccount {
+	t.Helper()
+
 	caModel := ChannelAccountModel{DBConnectionPool: dbConnectionPool}
 	for i := 0; i < count; i++ {
 		kp := keypair.MustRandom()
@@ -154,6 +156,8 @@ func CreateChannelAccountFixturesEncryptedKPs(
 	encryptionPassphrase string,
 	count int,
 ) []*keypair.Full {
+	t.Helper()
+
 	channelAccounts := CreateChannelAccountFixturesEncrypted(t, ctx, dbConnectionPool, encrypter, encryptionPassphrase, count)
 	var kps []*keypair.Full
 	for _, ca := range channelAccounts {
