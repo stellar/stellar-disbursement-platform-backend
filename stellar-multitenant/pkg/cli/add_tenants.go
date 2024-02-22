@@ -155,10 +155,10 @@ func executeAddTenant(
 	}
 
 	distAccSigClient, err := signing.NewSignatureClient(sigOpts.DistributionSignerType, signing.SignatureClientOptions{
-		NetworkPassphrase:      sigOpts.NetworkPassphrase,
-		DistributionPrivateKey: sigOpts.DistributionPrivateKey,
-		DBConnectionPool:       dbConnectionPool,
-		EncryptionPassphrase:   sigOpts.EncryptionPassphrase,
+		NetworkPassphrase:           sigOpts.NetworkPassphrase,
+		DistributionPrivateKey:      sigOpts.DistributionPrivateKey,
+		DistAccEncryptionPassphrase: sigOpts.DistAccEncryptionPassphrase,
+		DBConnectionPool:            dbConnectionPool,
 	})
 	if err != nil {
 		return fmt.Errorf("creating a new distribution account signature client: %w", err)

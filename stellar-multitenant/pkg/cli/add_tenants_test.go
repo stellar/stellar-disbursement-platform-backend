@@ -19,7 +19,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
-	preconditionsMock "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
@@ -90,22 +89,18 @@ func Test_executeAddTenant(t *testing.T) {
 	organizationName := "My Org"
 	uiBaseURL := "http://localhost:3000"
 	networkType := "testnet"
-	horizonURL := "https://horizon-testnet.stellar.org"
 	encryptionPassphrase := keypair.MustRandom().Seed()
 	distributionAccPrivKey := keypair.MustRandom().Seed()
 
 	sigOpts := signing.SignatureServiceOptions{
-		DistributionSignerType: signing.DistributionAccountEnvSignatureClientType,
-		EncryptionPassphrase:   encryptionPassphrase,
-		DistributionPrivateKey: distributionAccPrivKey,
-		NetworkPassphrase:      network.TestNetworkPassphrase,
-		DBConnectionPool:       dbConnectionPool,
-		LedgerNumberTracker:    &preconditionsMock.MockLedgerNumberTracker{},
+		DistributionSignerType:      signing.DistributionAccountEnvSignatureClientType,
+		DistAccEncryptionPassphrase: encryptionPassphrase,
+		DistributionPrivateKey:      distributionAccPrivKey,
+		NetworkPassphrase:           network.TestNetworkPassphrase,
 	}
 	tenantsOpts := AddTenantsCommandOptions{
 		SDPUIBaseURL: &uiBaseURL,
 		NetworkType:  networkType,
-		HorizonURL:   horizonURL,
 	}
 
 	t.Run("adds a new tenant successfully", func(t *testing.T) {
@@ -122,9 +117,9 @@ func Test_executeAddTenant(t *testing.T) {
 		require.NoError(t, err)
 
 		entries := getEntries()
-		require.Len(t, entries, 20)
-		assert.Equal(t, "tenant myorg added successfully", entries[18].Message)
-		assert.Contains(t, fmt.Sprintf("tenant ID: %s", tenantID), entries[19].Message)
+		require.Len(t, entries, 18)
+		assert.Equal(t, "tenant myorg added successfully", entries[16].Message)
+		assert.Contains(t, fmt.Sprintf("tenant ID: %s", tenantID), entries[17].Message)
 	})
 
 	t.Run("duplicated tenant name", func(t *testing.T) {
@@ -144,9 +139,9 @@ func Test_executeAddTenant(t *testing.T) {
 		require.NoError(t, err)
 
 		entries := getEntries()
-		require.Len(t, entries, 18)
-		assert.Equal(t, "tenant myorg added successfully", entries[15].Message)
-		assert.Contains(t, fmt.Sprintf("tenant ID: %s", tenantID), entries[16].Message)
+		require.Len(t, entries, 19)
+		assert.Equal(t, "tenant myorg added successfully", entries[16].Message)
+		assert.Contains(t, fmt.Sprintf("tenant ID: %s", tenantID), entries[17].Message)
 	})
 
 	messengerClientMock.AssertExpectations(t)
@@ -183,17 +178,18 @@ Examples:
 add-tenants [tenant name] [user first name] [user last name] [user email] [organization name]
 
 Flags:
-      --aws-access-key-id string                       The AWS access key ID (AWS_ACCESS_KEY_ID)
-      --aws-region string                              The AWS region (AWS_REGION)
-      --aws-secret-access-key string                   The AWS secret access key (AWS_SECRET_ACCESS_KEY)
-      --channel-account-encryption-passphrase string   A Stellar-compliant ed25519 private key used to encrypt/decrypt the channel accounts' private keys. When not set, it will default to the value of the 'distribution-seed' option. (CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE)
-      --distribution-seed string                       The private key of the Stellar distribution account that sends the disbursements. (DISTRIBUTION_SEED)
-      --distribution-signer-type string                The type of the signature client used for distribution accounts. Options: [DISTRIBUTION_ACCOUNT_ENV] (DISTRIBUTION_SIGNER_TYPE) (default "DISTRIBUTION_ACCOUNT_ENV")
-      --email-sender-type string                       The messenger type used to send invitations to new dashboard users. Options: [DRY_RUN AWS_EMAIL] (EMAIL_SENDER_TYPE)
-  -h, --help                                           help for add-tenants
-      --network-passphrase string                      The Stellar Network passphrase (NETWORK_PASSPHRASE) (default "Test SDF Network ; September 2015")
-      --network-type string                            The Stellar Network type (NETWORK_TYPE) (default "testnet")
-      --sdp-ui-base-url string                         The Tenant SDP UI/dashboard Base URL. (SDP_UI_BASE_URL) (default "http://localhost:3000")
+      --aws-access-key-id string                            The AWS access key ID (AWS_ACCESS_KEY_ID)
+      --aws-region string                                   The AWS region (AWS_REGION)
+      --aws-secret-access-key string                        The AWS secret access key (AWS_SECRET_ACCESS_KEY)
+      --channel-account-encryption-passphrase string        A Stellar-compliant ed25519 private key used to encrypt/decrypt the channel accounts' private keys. When not set, it will default to the value of the 'distribution-seed' option. (CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE)
+      --distribution-account-encryption-passphrase string   A Stellar-compliant ed25519 private key used to encrypt/decrypt the in-memory distribution accounts' private keys. It's mandatory when the distribution-signer-type is set to DISTRIBUTION_ACCOUNT_DB. (DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE)
+      --distribution-seed string                            The private key of the Stellar distribution account that sends the disbursements. (DISTRIBUTION_SEED)
+      --distribution-signer-type string                     The type of the signature client used for distribution accounts. Options: [DISTRIBUTION_ACCOUNT_ENV DISTRIBUTION_ACCOUNT_DB] (DISTRIBUTION_SIGNER_TYPE) (default "DISTRIBUTION_ACCOUNT_ENV")
+      --email-sender-type string                            The messenger type used to send invitations to new dashboard users. Options: [DRY_RUN AWS_EMAIL] (EMAIL_SENDER_TYPE)
+  -h, --help                                                help for add-tenants
+      --network-passphrase string                           The Stellar Network passphrase (NETWORK_PASSPHRASE) (default "Test SDF Network ; September 2015")
+      --network-type string                                 The Stellar Network type (NETWORK_TYPE) (default "testnet")
+      --sdp-ui-base-url string                              The Tenant SDP UI/dashboard Base URL. (SDP_UI_BASE_URL) (default "http://localhost:3000")
 
 `
 		assert.Equal(t, expectUsageMessage, out.String())
@@ -212,17 +208,18 @@ Examples:
 add-tenants [tenant name] [user first name] [user last name] [user email] [organization name]
 
 Flags:
-      --aws-access-key-id string                       The AWS access key ID (AWS_ACCESS_KEY_ID)
-      --aws-region string                              The AWS region (AWS_REGION)
-      --aws-secret-access-key string                   The AWS secret access key (AWS_SECRET_ACCESS_KEY)
-      --channel-account-encryption-passphrase string   A Stellar-compliant ed25519 private key used to encrypt/decrypt the channel accounts' private keys. When not set, it will default to the value of the 'distribution-seed' option. (CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE)
-      --distribution-seed string                       The private key of the Stellar distribution account that sends the disbursements. (DISTRIBUTION_SEED)
-      --distribution-signer-type string                The type of the signature client used for distribution accounts. Options: [DISTRIBUTION_ACCOUNT_ENV] (DISTRIBUTION_SIGNER_TYPE) (default "DISTRIBUTION_ACCOUNT_ENV")
-      --email-sender-type string                       The messenger type used to send invitations to new dashboard users. Options: [DRY_RUN AWS_EMAIL] (EMAIL_SENDER_TYPE)
-  -h, --help                                           help for add-tenants
-      --network-passphrase string                      The Stellar Network passphrase (NETWORK_PASSPHRASE) (default "Test SDF Network ; September 2015")
-      --network-type string                            The Stellar Network type (NETWORK_TYPE) (default "testnet")
-      --sdp-ui-base-url string                         The Tenant SDP UI/dashboard Base URL. (SDP_UI_BASE_URL) (default "http://localhost:3000")
+      --aws-access-key-id string                            The AWS access key ID (AWS_ACCESS_KEY_ID)
+      --aws-region string                                   The AWS region (AWS_REGION)
+      --aws-secret-access-key string                        The AWS secret access key (AWS_SECRET_ACCESS_KEY)
+      --channel-account-encryption-passphrase string        A Stellar-compliant ed25519 private key used to encrypt/decrypt the channel accounts' private keys. When not set, it will default to the value of the 'distribution-seed' option. (CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE)
+      --distribution-account-encryption-passphrase string   A Stellar-compliant ed25519 private key used to encrypt/decrypt the in-memory distribution accounts' private keys. It's mandatory when the distribution-signer-type is set to DISTRIBUTION_ACCOUNT_DB. (DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE)
+      --distribution-seed string                            The private key of the Stellar distribution account that sends the disbursements. (DISTRIBUTION_SEED)
+      --distribution-signer-type string                     The type of the signature client used for distribution accounts. Options: [DISTRIBUTION_ACCOUNT_ENV DISTRIBUTION_ACCOUNT_DB] (DISTRIBUTION_SIGNER_TYPE) (default "DISTRIBUTION_ACCOUNT_ENV")
+      --email-sender-type string                            The messenger type used to send invitations to new dashboard users. Options: [DRY_RUN AWS_EMAIL] (EMAIL_SENDER_TYPE)
+  -h, --help                                                help for add-tenants
+      --network-passphrase string                           The Stellar Network passphrase (NETWORK_PASSPHRASE) (default "Test SDF Network ; September 2015")
+      --network-type string                                 The Stellar Network type (NETWORK_TYPE) (default "testnet")
+      --sdp-ui-base-url string                              The Tenant SDP UI/dashboard Base URL. (SDP_UI_BASE_URL) (default "http://localhost:3000")
 `
 		assert.Equal(t, expectUsageMessage, out.String())
 	})
@@ -252,9 +249,9 @@ Flags:
 		require.NoError(t, err)
 
 		entries := getEntries()
-		require.Len(t, entries, 19)
-		assert.Equal(t, "tenant unhcr added successfully", entries[17].Message)
-		assert.Contains(t, fmt.Sprintf("tenant ID: %s", tenantID), entries[18].Message)
+		require.Len(t, entries, 20)
+		assert.Equal(t, "tenant unhcr added successfully", entries[18].Message)
+		assert.Contains(t, fmt.Sprintf("tenant ID: %s", tenantID), entries[19].Message)
 
 		// Connecting to the new schema
 		schemaName := fmt.Sprintf("sdp_%s", tenantName)
@@ -319,9 +316,9 @@ Flags:
 		require.NoError(t, err)
 
 		entries := getEntries()
-		require.Len(t, entries, 19)
-		assert.Equal(t, "tenant irc added successfully", entries[17].Message)
-		assert.Contains(t, fmt.Sprintf("tenant ID: %s", tenantID), entries[18].Message)
+		require.Len(t, entries, 20)
+		assert.Equal(t, "tenant irc added successfully", entries[18].Message)
+		assert.Contains(t, fmt.Sprintf("tenant ID: %s", tenantID), entries[19].Message)
 
 		// Connecting to the new schema
 		schemaName := fmt.Sprintf("sdp_%s", tenantName)

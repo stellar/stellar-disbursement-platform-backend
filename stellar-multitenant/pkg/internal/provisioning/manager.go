@@ -98,7 +98,7 @@ func (m *Manager) ProvisionNewTenant(
 	if err != nil {
 		if errors.Is(err, signing.ErrUnsupportedCommand) {
 			log.Ctx(ctx).Warnf(
-				"Account provisioning not needed for distribution account signature client type %s: %w",
+				"Account provisioning not needed for distribution account signature client type %s: %v",
 				m.distAccSigClient.Type(), err)
 		} else {
 			return nil, fmt.Errorf("provisioning distribution account: %w", err)

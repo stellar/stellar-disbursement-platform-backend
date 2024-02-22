@@ -13,7 +13,6 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 )
 
@@ -35,8 +34,6 @@ func Test_Serve(t *testing.T) {
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
 
-	ledgerNumberTrackerMock := mocks.NewMockLedgerNumberTracker(t)
-
 	opts := ServeOptions{
 		DatabaseDSN:       dbt.DSN,
 		Environment:       "test",
@@ -46,12 +43,11 @@ func Test_Serve(t *testing.T) {
 		Port:              8003,
 		Version:           "x.y.z",
 		SignatureServiceOptions: signing.SignatureServiceOptions{
-			DBConnectionPool:       dbConnectionPool,
-			LedgerNumberTracker:    ledgerNumberTrackerMock,
-			NetworkPassphrase:      network.TestNetworkPassphrase,
-			EncryptionPassphrase:   keypair.MustRandom().Seed(),
-			DistributionPrivateKey: keypair.MustRandom().Seed(),
-			DistributionSignerType: signing.DistributionAccountEnvSignatureClientType,
+			DBConnectionPool:            dbConnectionPool,
+			NetworkPassphrase:           network.TestNetworkPassphrase,
+			DistAccEncryptionPassphrase: keypair.MustRandom().Seed(),
+			DistributionPrivateKey:      keypair.MustRandom().Seed(),
+			DistributionSignerType:      signing.DistributionAccountEnvSignatureClientType,
 		},
 	}
 

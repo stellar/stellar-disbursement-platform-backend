@@ -17,7 +17,7 @@ import (
 	authmigrations "github.com/stellar/stellar-disbursement-platform-backend/db/migrations/auth-migrations"
 	sdpmigrations "github.com/stellar/stellar-disbursement-platform-backend/db/migrations/sdp-migrations"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
+	sigMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
@@ -34,12 +34,12 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 
 	messengerClientMock := message.MessengerClientMock{}
 	tenantManager := tenant.NewManager(tenant.WithDatabase(dbConnectionPool))
-	signatureSvcMock, _, distAccSigClientMock, _, _ := signing.NewMockSignatureService(t)
+	distAccSigClientMock := sigMocks.NewMockSignatureClient(t)
 	p := NewManager(
 		WithDatabase(dbConnectionPool),
 		WithMessengerClient(&messengerClientMock),
 		WithTenantManager(tenantManager),
-		WithSignatureService(signatureSvcMock),
+		WithDistributionAccountSignatureClient(distAccSigClientMock),
 	)
 
 	messengerClientMock.

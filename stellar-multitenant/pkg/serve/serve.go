@@ -59,10 +59,10 @@ func (opts *ServeOptions) SetupDependencies() error {
 	opts.tenantManager = tenant.NewManager(tenant.WithDatabase(dbConnectionPool))
 
 	distAccSigClient, err := signing.NewSignatureClient(opts.SignatureServiceOptions.DistributionSignerType, signing.SignatureClientOptions{
-		NetworkPassphrase:      opts.SignatureServiceOptions.NetworkPassphrase,
-		DistributionPrivateKey: opts.SignatureServiceOptions.DistributionPrivateKey,
-		DBConnectionPool:       dbConnectionPool,
-		EncryptionPassphrase:   opts.SignatureServiceOptions.EncryptionPassphrase,
+		NetworkPassphrase:           opts.SignatureServiceOptions.NetworkPassphrase,
+		DistributionPrivateKey:      opts.SignatureServiceOptions.DistributionPrivateKey,
+		DistAccEncryptionPassphrase: opts.SignatureServiceOptions.DistAccEncryptionPassphrase,
+		DBConnectionPool:            dbConnectionPool,
 	})
 	if err != nil {
 		return fmt.Errorf("creating a new distribution account signature client: %w", err)
