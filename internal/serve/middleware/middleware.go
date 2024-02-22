@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"context"
+	"crypto/subtle"
 	"errors"
 	"fmt"
 	"net/http"
@@ -245,6 +246,34 @@ func TenantMiddleware(tenantManager tenant.ManagerInterface, authManager auth.Au
 			}
 			ctx = tenant.SaveTenantInContext(ctx, currentTenant)
 			next.ServeHTTP(rw, req.WithContext(ctx))
+		})
+	}
+}
+
+func BasicAuthMiddleware(adminAccount, adminApiKey string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+			ctx := req.Context()
+
+			if adminAccount == "" || adminApiKey == "" {
+				httperror.InternalError(ctx, "Admin account and API key are not set", nil, nil).Render(rw)
+				return
+			}
+
+			accountUserName, apiKey, ok := req.BasicAuth()
+			if !ok {
+				httperror.Unauthorized("", nil, nil).Render(rw)
+				return
+			}
+
+			// Using constant time comparison to avoid timing attacks
+			if accountUserName != adminAccount || subtle.ConstantTimeCompare([]byte(apiKey), []byte(adminApiKey)) != 1 {
+				httperror.Unauthorized("", nil, nil).Render(rw)
+				return
+			}
+
+			log.Ctx(ctx).Infof("[AdminAuth] - Admin authenticated with account %s", adminAccount)
+			next.ServeHTTP(rw, req)
 		})
 	}
 }

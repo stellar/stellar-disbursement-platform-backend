@@ -349,7 +349,7 @@ func Test_handleHTTP_authenticatedEndpoints(t *testing.T) {
 
 	handlerMux := handleHTTP(serveOptions)
 
-	// Unauthenticated endpoints
+	// Authenticated endpoints
 	authenticatedEndpoints := []struct { // TODO: body to requests
 		method string
 		path   string

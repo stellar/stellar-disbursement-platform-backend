@@ -40,8 +40,15 @@ services:
       CORS_ALLOWED_ORIGINS: "*"
       DISABLE_MFA: "true"
       DISABLE_RECAPTCHA: "true"
-      EVENT_BROKER_TYPE: "NONE"
+
+      # multi-tenant
       INSTANCE_NAME: "e2e-sdp"
+      ENABLE_SCHEDULER: "false"
+      EVENT_BROKER_TYPE: "NONE"
+
+      # multi-tenant secrets:
+      ADMIN_ACCOUNT: SDP-admin
+      ADMIN_API_KEY: api_key_1234567890
 
       # integration tests vars
       USER_EMAIL: ${USER_EMAIL}
