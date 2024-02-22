@@ -152,14 +152,14 @@ func Test_DistributionAccountDBSignatureClient_getKPsForAccounts(t *testing.T) {
 	defer dbConnectionPool.Close()
 
 	ctx := context.Background()
-	stellarSignatoryStore := store.NewStellarSignatoryModel(dbConnectionPool)
+	dbVaultStore := store.NewDBVaultModel(dbConnectionPool)
 
 	// create default encrypter
 	encrypter := &utils.DefaultPrivateKeyEncrypter{}
 	encrypterPass := keypair.MustRandom().Seed()
 
 	// create distribution accounts in the DB
-	distributionAccounts := store.CreateStellarSignatoryFixturesEncryptedKPs(t, ctx, dbConnectionPool, encrypter, encrypterPass, 2)
+	distributionAccounts := store.CreateDBVaultFixturesEncryptedKPs(t, ctx, dbConnectionPool, encrypter, encrypterPass, 2)
 	require.Len(t, distributionAccounts, 2)
 	distAccKP1, distAccKP2 := distributionAccounts[0], distributionAccounts[1]
 
@@ -171,7 +171,7 @@ func Test_DistributionAccountDBSignatureClient_getKPsForAccounts(t *testing.T) {
 	undecryptableKeyChAccKP := keypair.MustRandom()
 	undecryptableKeyChAccKPSeed, err := encrypter.Encrypt(undecryptableKeyChAccKP.Seed(), keypair.MustRandom().Seed())
 	require.NoError(t, err)
-	err = stellarSignatoryStore.BatchInsert(ctx, []*store.StellarSignatory{{PublicKey: undecryptableKeyChAccKP.Address(), EncryptedPrivateKey: undecryptableKeyChAccKPSeed}})
+	err = dbVaultStore.BatchInsert(ctx, []*store.DBVaultEntry{{PublicKey: undecryptableKeyChAccKP.Address(), EncryptedPrivateKey: undecryptableKeyChAccKPSeed}})
 	require.NoError(t, err)
 
 	// create signature client
@@ -251,7 +251,7 @@ func Test_DistributionAccountDBSignatureClient_SignStellarTransaction(t *testing
 	encrypter := &utils.DefaultPrivateKeyEncrypter{}
 
 	// create distribution accounts in the DB
-	distributionAccounts := store.CreateStellarSignatoryFixturesEncryptedKPs(t, ctx, dbConnectionPool, encrypter, encrypterPass, 2)
+	distributionAccounts := store.CreateDBVaultFixturesEncryptedKPs(t, ctx, dbConnectionPool, encrypter, encrypterPass, 2)
 	require.Len(t, distributionAccounts, 2)
 	distAccKP1, distAccKP2 := distributionAccounts[0], distributionAccounts[1]
 
@@ -346,7 +346,7 @@ func Test_DistributionAccountDBSignatureClient_SignFeeBumpStellarTransaction(t *
 	encrypter := &utils.DefaultPrivateKeyEncrypter{}
 
 	// create distribution accounts in the DB
-	distributionAccounts := store.CreateStellarSignatoryFixturesEncryptedKPs(t, ctx, dbConnectionPool, encrypter, encrypterPass, 2)
+	distributionAccounts := store.CreateDBVaultFixturesEncryptedKPs(t, ctx, dbConnectionPool, encrypter, encrypterPass, 2)
 	require.Len(t, distributionAccounts, 2)
 	distAccKP1, distAccKP2 := distributionAccounts[0], distributionAccounts[1]
 
@@ -438,13 +438,14 @@ func Test_DistributionAccountDBSignatureClient_SignFeeBumpStellarTransaction(t *
 	}
 }
 
-func stellarSignatoryAll(t *testing.T, ctx context.Context, dbConnectionPool db.DBConnectionPool) []store.StellarSignatory {
+// dbVaultAll is a test helper that returns all the dbVaultEntries from the DB.
+func dbVaultAll(t *testing.T, ctx context.Context, dbConnectionPool db.DBConnectionPool) []store.DBVaultEntry {
 	t.Helper()
 
-	var stellarSignatories []store.StellarSignatory
-	err := dbConnectionPool.SelectContext(ctx, &stellarSignatories, "SELECT * FROM stellar_signatories")
+	var dbVaultEntries []store.DBVaultEntry
+	err := dbConnectionPool.SelectContext(ctx, &dbVaultEntries, "SELECT * FROM vault")
 	require.NoError(t, err)
-	return stellarSignatories
+	return dbVaultEntries
 }
 
 func Test_DistributionAccountDBSignatureClient_BatchInsert(t *testing.T) {
@@ -486,8 +487,8 @@ func Test_DistributionAccountDBSignatureClient_BatchInsert(t *testing.T) {
 
 	for _, tc := range testCase {
 		t.Run(tc.name, func(t *testing.T) {
-			stellarSignatories := stellarSignatoryAll(t, ctx, dbConnectionPool)
-			require.Len(t, stellarSignatories, 0, "this test should have started with 0 distribution accounts")
+			dbVaultEntries := dbVaultAll(t, ctx, dbConnectionPool)
+			require.Len(t, dbVaultEntries, 0, "this test should have started with 0 distribution accounts")
 
 			publicKeys, err := sigClient.BatchInsert(ctx, tc.amount)
 			if tc.wantErrContains != "" {
@@ -497,13 +498,13 @@ func Test_DistributionAccountDBSignatureClient_BatchInsert(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 
-				stellarSignatories = stellarSignatoryAll(t, ctx, dbConnectionPool)
+				dbVaultEntries = dbVaultAll(t, ctx, dbConnectionPool)
 				assert.Equal(t, tc.amount, len(publicKeys))
-				assert.Equal(t, tc.amount, len(stellarSignatories))
+				assert.Equal(t, tc.amount, len(dbVaultEntries))
 
 				// compare the accounts
 				var alChAccPublicKeys []string
-				for _, distAccount := range stellarSignatories {
+				for _, distAccount := range dbVaultEntries {
 					alChAccPublicKeys = append(alChAccPublicKeys, distAccount.PublicKey)
 
 					// Check if the private key is the actual seed for the public key
@@ -516,7 +517,7 @@ func Test_DistributionAccountDBSignatureClient_BatchInsert(t *testing.T) {
 				assert.ElementsMatch(t, alChAccPublicKeys, publicKeys)
 			}
 
-			store.DeleteAllFromStellarSignatories(t, ctx, dbConnectionPool)
+			store.DeleteAllFromDBVaultEntries(t, ctx, dbConnectionPool)
 		})
 	}
 }
@@ -535,12 +536,12 @@ func Test_DistributionAccountDBSignatureClient_Delete(t *testing.T) {
 	encrypter := &utils.DefaultPrivateKeyEncrypter{}
 
 	// at start: count=0
-	allDistAccounts := stellarSignatoryAll(t, ctx, dbConnectionPool)
+	allDistAccounts := dbVaultAll(t, ctx, dbConnectionPool)
 	require.Len(t, allDistAccounts, 0)
 
 	// create 2 accounts: count=0->2
-	distributionAccounts := store.CreateStellarSignatoryFixturesEncryptedKPs(t, ctx, dbConnectionPool, encrypter, encrypterPass, 2)
-	allDistAccounts = stellarSignatoryAll(t, ctx, dbConnectionPool)
+	distributionAccounts := store.CreateDBVaultFixturesEncryptedKPs(t, ctx, dbConnectionPool, encrypter, encrypterPass, 2)
+	allDistAccounts = dbVaultAll(t, ctx, dbConnectionPool)
 	require.Len(t, allDistAccounts, 2)
 
 	sigClient, err := NewDistributionAccountDBSignatureClient(DistributionAccountDBSignatureClientOptions{
@@ -554,13 +555,13 @@ func Test_DistributionAccountDBSignatureClient_Delete(t *testing.T) {
 	// delete one account: count=2->1
 	err = sigClient.Delete(ctx, distributionAccounts[0].Address())
 	require.NoError(t, err)
-	allDistAccounts = stellarSignatoryAll(t, ctx, dbConnectionPool)
+	allDistAccounts = dbVaultAll(t, ctx, dbConnectionPool)
 	require.Len(t, allDistAccounts, 1)
 
 	// delete another account: count=1->0
 	err = sigClient.Delete(ctx, distributionAccounts[1].Address())
 	require.NoError(t, err)
-	allDistAccounts = stellarSignatoryAll(t, ctx, dbConnectionPool)
+	allDistAccounts = dbVaultAll(t, ctx, dbConnectionPool)
 	require.Len(t, allDistAccounts, 0)
 
 	// delete non-existing account: error expected

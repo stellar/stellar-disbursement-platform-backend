@@ -37,10 +37,10 @@ func (opts *DistributionAccountDBSignatureClientOptions) Validate() error {
 }
 
 type DistributionAccountDBSignatureClient struct {
-	networkPassphrase     string
-	stellarSignatoryModel store.StellarSignatoryStore
-	encrypter             utils.PrivateKeyEncrypter
-	encryptionPassphrase  string
+	networkPassphrase    string
+	dbVaultModel         store.DBVaultStore
+	encrypter            utils.PrivateKeyEncrypter
+	encryptionPassphrase string
 }
 
 // NewDistributionAccountDBSignatureClient returns a new DefaultSignatureService instance.
@@ -55,10 +55,10 @@ func NewDistributionAccountDBSignatureClient(opts DistributionAccountDBSignature
 	}
 
 	return &DistributionAccountDBSignatureClient{
-		networkPassphrase:     opts.NetworkPassphrase,
-		stellarSignatoryModel: store.NewStellarSignatoryModel(opts.DBConnectionPool),
-		encrypter:             encrypter,
-		encryptionPassphrase:  opts.EncryptionPassphrase,
+		networkPassphrase:    opts.NetworkPassphrase,
+		dbVaultModel:         store.NewDBVaultModel(opts.DBConnectionPool),
+		encrypter:            encrypter,
+		encryptionPassphrase: opts.EncryptionPassphrase,
 	}, nil
 }
 
@@ -82,12 +82,12 @@ func (c *DistributionAccountDBSignatureClient) getKPsForAccounts(ctx context.Con
 		}
 
 		// Can return ErrRecordNotFound
-		signatory, err := c.stellarSignatoryModel.Get(ctx, account)
+		dbVaultEntry, err := c.dbVaultModel.Get(ctx, account)
 		if err != nil {
 			return nil, fmt.Errorf("getting secret for distribution account %q: %w", account, err)
 		}
 
-		sigPrivateKey, err := c.encrypter.Decrypt(signatory.EncryptedPrivateKey, c.encryptionPassphrase)
+		sigPrivateKey, err := c.encrypter.Decrypt(dbVaultEntry.EncryptedPrivateKey, c.encryptionPassphrase)
 		if err != nil {
 			return nil, fmt.Errorf("cannot decrypt private key: %w", err)
 		}
@@ -143,7 +143,7 @@ func (c *DistributionAccountDBSignatureClient) BatchInsert(ctx context.Context, 
 		return nil, fmt.Errorf("the number of accounts to insert need to be greater than zero")
 	}
 
-	batchInsertPayload := []*store.StellarSignatory{}
+	batchInsertPayload := []*store.DBVaultEntry{}
 	for range make([]interface{}, number) {
 		kp, innerErr := keypair.Random()
 		if innerErr != nil {
@@ -157,14 +157,14 @@ func (c *DistributionAccountDBSignatureClient) BatchInsert(ctx context.Context, 
 			return nil, fmt.Errorf("encrypting distribution account private key: %w", innerErr)
 		}
 
-		batchInsertPayload = append(batchInsertPayload, &store.StellarSignatory{
+		batchInsertPayload = append(batchInsertPayload, &store.DBVaultEntry{
 			PublicKey:           publicKey,
 			EncryptedPrivateKey: encryptedPrivateKey,
 		})
 		publicKeys = append(publicKeys, publicKey)
 	}
 
-	err = c.stellarSignatoryModel.BatchInsert(ctx, batchInsertPayload)
+	err = c.dbVaultModel.BatchInsert(ctx, batchInsertPayload)
 	if err != nil {
 		return nil, fmt.Errorf("batch inserting distribution accounts: %w", err)
 	}
@@ -173,9 +173,9 @@ func (c *DistributionAccountDBSignatureClient) BatchInsert(ctx context.Context, 
 }
 
 func (c *DistributionAccountDBSignatureClient) Delete(ctx context.Context, publicKey string) error {
-	err := c.stellarSignatoryModel.Delete(ctx, publicKey)
+	err := c.dbVaultModel.Delete(ctx, publicKey)
 	if err != nil {
-		return fmt.Errorf("deleting stellar signatory %q from database: %w", publicKey, err)
+		return fmt.Errorf("deleting dbVaultEntry %q from database: %w", publicKey, err)
 	}
 
 	return nil

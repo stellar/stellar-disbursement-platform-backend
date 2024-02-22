@@ -179,20 +179,20 @@ func DeleteAllFromChannelAccounts(t *testing.T, ctx context.Context, sqlExec db.
 	require.NoError(t, err)
 }
 
-// CreateStellarSignatoryFixturesEncrypted creates 'count' number of stellar signatories, and store them in the DB with
-// the private keys encrypted, returning the stellar signatories.
-func CreateStellarSignatoryFixturesEncrypted(
+// CreateDBVaultFixturesEncrypted creates 'count' number of dbVaultEntries, and store them in the DB with the private
+// keys encrypted, returning the slice of dbVaultEntries.
+func CreateDBVaultFixturesEncrypted(
 	t *testing.T,
 	ctx context.Context,
 	dbConnectionPool db.DBConnectionPool,
 	encrypter utils.PrivateKeyEncrypter,
 	encryptionPassphrase string,
 	count int,
-) []*StellarSignatory {
+) []*DBVaultEntry {
 	t.Helper()
 
-	ssModel := NewStellarSignatoryModel(dbConnectionPool)
-	stellarSignatories := make([]*StellarSignatory, count)
+	ssModel := NewDBVaultModel(dbConnectionPool)
+	dbVaultEntries := make([]*DBVaultEntry, count)
 	publicKeys := make([]string, count)
 	for i := 0; i < count; i++ {
 		kp := keypair.MustRandom()
@@ -201,25 +201,25 @@ func CreateStellarSignatoryFixturesEncrypted(
 		encryptedPrivateKey, err := encrypter.Encrypt(privateKey, encryptionPassphrase)
 		require.NoError(t, err)
 
-		stellarSignatories[i] = &StellarSignatory{
+		dbVaultEntries[i] = &DBVaultEntry{
 			PublicKey:           publicKey,
 			EncryptedPrivateKey: encryptedPrivateKey,
 		}
 		publicKeys[i] = publicKey
 	}
 
-	err := ssModel.BatchInsert(ctx, stellarSignatories)
+	err := ssModel.BatchInsert(ctx, dbVaultEntries)
 	require.NoError(t, err)
 
-	err = dbConnectionPool.SelectContext(ctx, &stellarSignatories, "SELECT * FROM stellar_signatories WHERE public_key = ANY($1)", pq.Array(publicKeys))
+	err = dbConnectionPool.SelectContext(ctx, &dbVaultEntries, "SELECT * FROM vault WHERE public_key = ANY($1)", pq.Array(publicKeys))
 	require.NoError(t, err)
 
-	return stellarSignatories
+	return dbVaultEntries
 }
 
-// CreateStellarSignatoryFixturesEncryptedKPs creates 'count' number of stellar signatories, and store them in the DB
-// with the private keys encrypted, returning the Keypairs.
-func CreateStellarSignatoryFixturesEncryptedKPs(
+// CreateDBVaultFixturesEncryptedKPs creates 'count' number of dbVaultEntries, and store them in the DB with the private
+// keys encrypted, returning the slice of Keypairs.
+func CreateDBVaultFixturesEncryptedKPs(
 	t *testing.T,
 	ctx context.Context,
 	dbConnectionPool db.DBConnectionPool,
@@ -229,9 +229,9 @@ func CreateStellarSignatoryFixturesEncryptedKPs(
 ) []*keypair.Full {
 	t.Helper()
 
-	stellarSignatories := CreateStellarSignatoryFixturesEncrypted(t, ctx, dbConnectionPool, encrypter, encryptionPassphrase, count)
+	dbVaultEntries := CreateDBVaultFixturesEncrypted(t, ctx, dbConnectionPool, encrypter, encryptionPassphrase, count)
 	var kps []*keypair.Full
-	for _, ss := range stellarSignatories {
+	for _, ss := range dbVaultEntries {
 		privateKey, err := encrypter.Decrypt(ss.EncryptedPrivateKey, encryptionPassphrase)
 		require.NoError(t, err)
 
@@ -243,9 +243,9 @@ func CreateStellarSignatoryFixturesEncryptedKPs(
 	return kps
 }
 
-func DeleteAllFromStellarSignatories(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter) {
+func DeleteAllFromDBVaultEntries(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter) {
 	t.Helper()
 
-	_, err := sqlExec.ExecContext(ctx, "DELETE FROM stellar_signatories")
+	_, err := sqlExec.ExecContext(ctx, "DELETE FROM vault")
 	require.NoError(t, err)
 }

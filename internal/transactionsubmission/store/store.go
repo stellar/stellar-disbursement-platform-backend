@@ -45,9 +45,8 @@ type TransactionStore interface {
 	UpdateSyncedTransactions(ctx context.Context, sqlExec db.SQLExecuter, txIDs []string) error
 }
 
-//go:generate mockery --name=StellarSignatoryStore --case=underscore --structname=MockStellarSignatoryStore
-type StellarSignatoryStore interface {
-	BatchInsert(ctx context.Context, stellarSignatories []*StellarSignatory) error
-	Get(ctx context.Context, publicKey string) (*StellarSignatory, error)
+type DBVaultStore interface {
+	BatchInsert(ctx context.Context, dbVaultEntries []*DBVaultEntry) error
+	Get(ctx context.Context, publicKey string) (*DBVaultEntry, error)
 	Delete(ctx context.Context, publicKey string) error
 }

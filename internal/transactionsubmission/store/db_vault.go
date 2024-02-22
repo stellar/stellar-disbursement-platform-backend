@@ -12,31 +12,31 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 )
 
-type StellarSignatory struct {
+type DBVaultEntry struct {
 	PublicKey           string     `db:"public_key"`
 	EncryptedPrivateKey string     `db:"encrypted_private_key"`
 	UpdatedAt           *time.Time `db:"updated_at"`
 	CreatedAt           *time.Time `db:"created_at"`
 }
 
-type StellarSignatoryModel struct {
+type DBVaultModel struct {
 	DBConnectionPool db.DBConnectionPool
 }
 
-func NewStellarSignatoryModel(dbConnectionPool db.DBConnectionPool) *StellarSignatoryModel {
-	return &StellarSignatoryModel{DBConnectionPool: dbConnectionPool}
+func NewDBVaultModel(dbConnectionPool db.DBConnectionPool) *DBVaultModel {
+	return &DBVaultModel{DBConnectionPool: dbConnectionPool}
 }
 
 // BatchInsert inserts a batch of (publicKey, encryptedPrivateKey) pairs into the database.
-func (m *StellarSignatoryModel) BatchInsert(ctx context.Context, stellarSignatories []*StellarSignatory) error {
-	if len(stellarSignatories) == 0 {
+func (m *DBVaultModel) BatchInsert(ctx context.Context, dbVaultEntries []*DBVaultEntry) error {
+	if len(dbVaultEntries) == 0 {
 		return nil
 	}
 
-	publicKeys := make([]string, len(stellarSignatories))
-	encryptedPrivateKeys := make([]string, len(stellarSignatories))
+	publicKeys := make([]string, len(dbVaultEntries))
+	encryptedPrivateKeys := make([]string, len(dbVaultEntries))
 
-	for i, sAccKeys := range stellarSignatories {
+	for i, sAccKeys := range dbVaultEntries {
 		if sAccKeys.PublicKey == "" {
 			return fmt.Errorf("public key cannot be empty")
 		}
@@ -50,55 +50,55 @@ func (m *StellarSignatoryModel) BatchInsert(ctx context.Context, stellarSignator
 
 	const q = `
 		INSERT INTO 
-			stellar_signatories (public_key, encrypted_private_key)
+			vault (public_key, encrypted_private_key)
 		SELECT * 
 			FROM UNNEST($1::text[], $2::text[])
 	`
 
 	_, err := m.DBConnectionPool.ExecContext(ctx, q, pq.Array(publicKeys), pq.Array(encryptedPrivateKeys))
 	if err != nil {
-		return fmt.Errorf("inserting stellar signatory: %w", err)
+		return fmt.Errorf("inserting dbVaultEntry: %w", err)
 	}
 
 	return nil
 }
 
-// Get returns a StellarSignatory with the provided publicKey from the database.
-func (m *StellarSignatoryModel) Get(ctx context.Context, publicKey string) (*StellarSignatory, error) {
+// Get returns a DBVaultEntry with the provided publicKey from the database.
+func (m *DBVaultModel) Get(ctx context.Context, publicKey string) (*DBVaultEntry, error) {
 	query := `
 		SELECT
 			*
 		FROM
-			stellar_signatories 
+			vault 
 		WHERE
 			public_key = $1
 		`
 
-	var stellarSignatory StellarSignatory
-	err := m.DBConnectionPool.GetContext(ctx, &stellarSignatory, query, publicKey)
+	var dbVaultEntry DBVaultEntry
+	err := m.DBConnectionPool.GetContext(ctx, &dbVaultEntry, query, publicKey)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, fmt.Errorf("could not find stellar signatory %q: %w", publicKey, ErrRecordNotFound)
+			return nil, fmt.Errorf("could not find dbVaultEntry %q: %w", publicKey, ErrRecordNotFound)
 		}
-		return nil, fmt.Errorf("querying for stellar signatory %q: %w", publicKey, err)
+		return nil, fmt.Errorf("querying for dbVaultEntry %q: %w", publicKey, err)
 	}
 
-	return &stellarSignatory, nil
+	return &dbVaultEntry, nil
 }
 
 // Delete deletes a row with the provided publicKey from the database.
-func (m *StellarSignatoryModel) Delete(ctx context.Context, publicKey string) error {
+func (m *DBVaultModel) Delete(ctx context.Context, publicKey string) error {
 	query := `
 		DELETE
 		FROM
-			stellar_signatories
+			vault
 		WHERE
 			public_key = $1
 		`
 
 	res, err := m.DBConnectionPool.ExecContext(ctx, query, publicKey)
 	if err != nil {
-		return fmt.Errorf("deleting stellar signatory %q: %w", publicKey, err)
+		return fmt.Errorf("deleting dbVaultEntry %q: %w", publicKey, err)
 	}
 
 	numRowsAffected, err := res.RowsAffected()
@@ -106,10 +106,10 @@ func (m *StellarSignatoryModel) Delete(ctx context.Context, publicKey string) er
 		return fmt.Errorf("getting number of rows affected: %w", err)
 	}
 	if numRowsAffected == 0 {
-		return fmt.Errorf("could not find nor delete signatory %q: %w", publicKey, ErrRecordNotFound)
+		return fmt.Errorf("could not find nor delete dbVaultEntry %q: %w", publicKey, ErrRecordNotFound)
 	}
 
 	return nil
 }
 
-var _ StellarSignatoryStore = &StellarSignatoryModel{}
+var _ DBVaultStore = &DBVaultModel{}

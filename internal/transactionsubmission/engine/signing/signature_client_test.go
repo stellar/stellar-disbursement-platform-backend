@@ -112,10 +112,10 @@ func Test_NewSignatureClient(t *testing.T) {
 				Encrypter:                   &utils.PrivateKeyEncrypterMock{},
 			},
 			wantResult: &DistributionAccountDBSignatureClient{
-				stellarSignatoryModel: store.NewStellarSignatoryModel(dbConnectionPool),
-				encrypter:             &utils.PrivateKeyEncrypterMock{},
-				encryptionPassphrase:  encryptionPassphrase,
-				networkPassphrase:     network.TestNetworkPassphrase,
+				dbVaultModel:         store.NewDBVaultModel(dbConnectionPool),
+				encrypter:            &utils.PrivateKeyEncrypterMock{},
+				encryptionPassphrase: encryptionPassphrase,
+				networkPassphrase:    network.TestNetworkPassphrase,
 			},
 		},
 		{

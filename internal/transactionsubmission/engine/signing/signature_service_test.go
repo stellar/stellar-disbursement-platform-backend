@@ -114,10 +114,10 @@ func Test_NewSignatureService(t *testing.T) {
 		distributionKP:      distributionKP,
 	}
 	wantDistAccountDBSigner := &DistributionAccountDBSignatureClient{
-		networkPassphrase:     network.TestNetworkPassphrase,
-		encryptionPassphrase:  distAccEncryptionPassphrase,
-		stellarSignatoryModel: store.NewStellarSignatoryModel(dbConnectionPool),
-		encrypter:             &utils.DefaultPrivateKeyEncrypter{},
+		networkPassphrase:    network.TestNetworkPassphrase,
+		encryptionPassphrase: distAccEncryptionPassphrase,
+		dbVaultModel:         store.NewDBVaultModel(dbConnectionPool),
+		encrypter:            &utils.DefaultPrivateKeyEncrypter{},
 	}
 
 	testCases := []struct {
