@@ -324,14 +324,14 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 		},
 		&config.ConfigOption{
 			Name:      "admin-account",
-			Usage:     "The account ID of the admin account. This account is used to create and manage tenants.",
+			Usage:     "ID of the admin account. To use, add to the request header as 'Authorization', formatted as Base64-encoded 'ADMIN_ACCOUNT:ADMIN_API_KEY'.",
 			OptType:   types.String,
 			ConfigKey: &adminServeOpts.AdminAccount,
 			Required:  true,
 		},
 		&config.ConfigOption{
 			Name:      "admin-api-key",
-			Usage:     "The API key of the admin account. This key is used to authenticate the admin account.",
+			Usage:     "API key for the admin account. To use, add to the request header as 'Authorization', formatted as Base64-encoded 'ADMIN_ACCOUNT:ADMIN_API_KEY'.",
 			OptType:   types.String,
 			ConfigKey: &adminServeOpts.AdminApiKey,
 			Required:  true,
