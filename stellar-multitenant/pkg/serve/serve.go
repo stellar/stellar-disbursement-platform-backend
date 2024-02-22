@@ -40,6 +40,8 @@ type ServeOptions struct {
 	tenantManager             *tenant.Manager
 	tenantProvisioningManager *provisioning.Manager
 	Version                   string
+	AdminAccount              string
+	AdminApiKey               string
 }
 
 // SetupDependencies uses the serve options to setup the dependencies for the server.
@@ -113,16 +115,21 @@ func handleHTTP(opts *ServeOptions) *chi.Mux {
 		Version:   opts.Version,
 	}.ServeHTTP)
 
-	mux.Route("/tenants", func(r chi.Router) {
-		tenantsHandler := httphandler.TenantsHandler{
-			Manager:             opts.tenantManager,
-			ProvisioningManager: opts.tenantProvisioningManager,
-			NetworkType:         opts.networkType,
-		}
-		r.Get("/", tenantsHandler.GetAll)
-		r.Post("/", tenantsHandler.Post)
-		r.Get("/{arg}", tenantsHandler.GetByIDOrName)
-		r.Patch("/{id}", tenantsHandler.Patch)
+	// Authenticated Routes
+	mux.Group(func(r chi.Router) {
+		r.Use(middleware.BasicAuthMiddleware(opts.AdminAccount, opts.AdminApiKey))
+
+		r.Route("/tenants", func(r chi.Router) {
+			tenantsHandler := httphandler.TenantsHandler{
+				Manager:             opts.tenantManager,
+				ProvisioningManager: opts.tenantProvisioningManager,
+				NetworkType:         opts.networkType,
+			}
+			r.Get("/", tenantsHandler.GetAll)
+			r.Post("/", tenantsHandler.Post)
+			r.Get("/{arg}", tenantsHandler.GetByIDOrName)
+			r.Patch("/{id}", tenantsHandler.Patch)
+		})
 	})
 
 	return mux

@@ -321,6 +321,20 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			ConfigKey:   &adminServeOpts.Port,
 			FlagDefault: 8003,
 			Required:    true,
+		},
+		&config.ConfigOption{
+			Name:      "admin-account",
+			Usage:     "The account ID of the admin account. This account is used to create and manage tenants.",
+			OptType:   types.String,
+			ConfigKey: &adminServeOpts.AdminAccount,
+			Required:  true,
+		},
+		&config.ConfigOption{
+			Name:      "admin-api-key",
+			Usage:     "The API key of the admin account. This key is used to authenticate the admin account.",
+			OptType:   types.String,
+			ConfigKey: &adminServeOpts.AdminApiKey,
+			Required:  true,
 		})
 
 	// metrics server options
