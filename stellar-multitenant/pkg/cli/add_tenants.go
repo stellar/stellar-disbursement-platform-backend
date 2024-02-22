@@ -14,6 +14,7 @@ import (
 
 	cmdUtils "github.com/stellar/stellar-disbursement-platform-backend/cmd/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/db/router"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/cli/utils"
@@ -154,11 +155,18 @@ func executeAddTenant(
 		return fmt.Errorf("invalid distribution account signer type %q", sigOpts.DistributionSignerType)
 	}
 
+	// We need to use a dbConnectionPool that resolves to the tss namespace for the distribution account signature client.
+	tssDBConnectionPool, err := router.GetDBForTSSSchema(dbURL)
+	if err != nil {
+		return fmt.Errorf("getting TSS DBConnectionPool: %w", err)
+	}
+	defer tssDBConnectionPool.Close()
+
 	distAccSigClient, err := signing.NewSignatureClient(sigOpts.DistributionSignerType, signing.SignatureClientOptions{
 		NetworkPassphrase:           sigOpts.NetworkPassphrase,
 		DistributionPrivateKey:      sigOpts.DistributionPrivateKey,
 		DistAccEncryptionPassphrase: sigOpts.DistAccEncryptionPassphrase,
-		DBConnectionPool:            dbConnectionPool,
+		DBConnectionPool:            tssDBConnectionPool,
 	})
 	if err != nil {
 		return fmt.Errorf("creating a new distribution account signature client: %w", err)

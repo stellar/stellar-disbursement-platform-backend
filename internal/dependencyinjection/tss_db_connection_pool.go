@@ -28,13 +28,9 @@ func NewTSSDBConnectionPool(ctx context.Context, opts TSSDBConnectionPoolOptions
 	}
 
 	log.Ctx(ctx).Info("⚙️ Setting up TSS DBConnectionPool")
-	tssDNS, err := router.GetDNSForTSS(opts.DatabaseURL)
+	tssDBConnectionPool, err := router.GetDBForTSSSchema(opts.DatabaseURL)
 	if err != nil {
-		return nil, fmt.Errorf("getting TSS database DNS: %w", err)
-	}
-	tssDBConnectionPool, err := db.OpenDBConnectionPool(tssDNS)
-	if err != nil {
-		return nil, fmt.Errorf("opening TSS DB connection pool: %w", err)
+		return nil, fmt.Errorf("getting TSS DBConnectionPool: %w", err)
 	}
 
 	SetInstance(instanceName, tssDBConnectionPool)

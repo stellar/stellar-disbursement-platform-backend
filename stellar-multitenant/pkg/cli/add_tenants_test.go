@@ -157,8 +157,7 @@ func Test_AddTenantsCmd(t *testing.T) {
 	ctx := context.Background()
 
 	t.Setenv("DISTRIBUTION_SEED", keypair.MustRandom().Seed())
-	t.Setenv("CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE", keypair.MustRandom().Seed())
-	t.Setenv("HORIZON_URL", "https://horizon-testnet.stellar.org/")
+	t.Setenv("DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE", keypair.MustRandom().Seed())
 
 	t.Run("shows usage", func(t *testing.T) {
 		out := new(strings.Builder)

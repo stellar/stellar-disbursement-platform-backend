@@ -11,6 +11,7 @@ import (
 	"github.com/stellar/go/support/log"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/db/router"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
@@ -33,6 +34,7 @@ func (h *HTTPServer) Run(conf supporthttp.Config) {
 type ServeOptions struct {
 	DatabaseDSN               string
 	dbConnectionPool          db.DBConnectionPool
+	tssDBConnectionPool       db.DBConnectionPool
 	EmailMessengerClient      message.MessengerClient
 	Environment               string
 	GitCommit                 string
@@ -56,20 +58,26 @@ func (opts *ServeOptions) SetupDependencies() error {
 
 	opts.dbConnectionPool = dbConnectionPool
 
-	opts.tenantManager = tenant.NewManager(tenant.WithDatabase(dbConnectionPool))
+	// We need to use a dbConnectionPool that resolves to the tss namespace for the distribution account signature client.
+	tssDBConnectionPool, err := router.GetDBForTSSSchema(opts.DatabaseDSN)
+	if err != nil {
+		return fmt.Errorf("getting TSS DBConnectionPool: %w", err)
+	}
+	opts.tssDBConnectionPool = tssDBConnectionPool
 
+	opts.tenantManager = tenant.NewManager(tenant.WithDatabase(dbConnectionPool))
 	distAccSigClient, err := signing.NewSignatureClient(opts.SignatureServiceOptions.DistributionSignerType, signing.SignatureClientOptions{
-		NetworkPassphrase:           opts.SignatureServiceOptions.NetworkPassphrase,
+		NetworkPassphrase:           opts.NetworkPassphrase,
 		DistributionPrivateKey:      opts.SignatureServiceOptions.DistributionPrivateKey,
 		DistAccEncryptionPassphrase: opts.SignatureServiceOptions.DistAccEncryptionPassphrase,
-		DBConnectionPool:            dbConnectionPool,
+		DBConnectionPool:            tssDBConnectionPool,
 	})
 	if err != nil {
 		return fmt.Errorf("creating a new distribution account signature client: %w", err)
 	}
 
 	opts.tenantProvisioningManager = provisioning.NewManager(
-		provisioning.WithDatabase(dbConnectionPool),
+		provisioning.WithDatabase(opts.dbConnectionPool),
 		provisioning.WithTenantManager(opts.tenantManager),
 		provisioning.WithMessengerClient(opts.EmailMessengerClient),
 		provisioning.WithDistributionAccountSignatureClient(distAccSigClient),
@@ -104,9 +112,15 @@ func StartServe(opts ServeOptions, httpServer HTTPServerInterface) error {
 		},
 		OnStopping: func() {
 			log.Info("Closing the Tenant Server database connection pool")
-			err := db.CloseConnectionPoolIfNeeded(context.Background(), opts.dbConnectionPool)
+			ctx := context.Background()
+			err := db.CloseConnectionPoolIfNeeded(ctx, opts.dbConnectionPool)
 			if err != nil {
 				log.Errorf("error closing database connection: %v", err)
+			}
+
+			err = db.CloseConnectionPoolIfNeeded(ctx, opts.tssDBConnectionPool)
+			if err != nil {
+				log.Errorf("error closing tss database connection: %v", err)
 			}
 
 			log.Info("Stopping Tenant Server")

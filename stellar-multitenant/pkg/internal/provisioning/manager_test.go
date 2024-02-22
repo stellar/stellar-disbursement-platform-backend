@@ -3,6 +3,9 @@ package provisioning
 import (
 	"context"
 	"fmt"
+	"github.com/stellar/go/network"
+	"github.com/stellar/go/support/log"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	"net/url"
 	"testing"
 
@@ -17,13 +20,12 @@ import (
 	authmigrations "github.com/stellar/stellar-disbursement-platform-backend/db/migrations/auth-migrations"
 	sdpmigrations "github.com/stellar/stellar-disbursement-platform-backend/db/migrations/sdp-migrations"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
-	sigMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 func Test_Manager_ProvisionNewTenant(t *testing.T) {
-	dbt := dbtest.OpenWithAdminMigrationsOnly(t)
+	dbt := dbtest.Open(t)
 	defer dbt.Close()
 
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
@@ -34,13 +36,6 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 
 	messengerClientMock := message.MessengerClientMock{}
 	tenantManager := tenant.NewManager(tenant.WithDatabase(dbConnectionPool))
-	distAccSigClientMock := sigMocks.NewMockSignatureClient(t)
-	p := NewManager(
-		WithDatabase(dbConnectionPool),
-		WithMessengerClient(&messengerClientMock),
-		WithTenantManager(tenantManager),
-		WithDistributionAccountSignatureClient(distAccSigClientMock),
-	)
 
 	messengerClientMock.
 		On("SendMessage", mock.AnythingOfType("message.Message")).
@@ -49,38 +44,16 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 	distAcc := keypair.MustRandom()
 
 	t.Run("provision a new tenant for the testnet", func(t *testing.T) {
-		tenantName := "myorg-ukraine"
+		tenantName1 := "myorg-ukraine"
+		tenantName2 := "myorg-poland"
 		userFirstName := "First"
 		userLastName := "Last"
 		userEmail := "email@email.com"
 		organizationName := "My Org"
 		uiBaseURL := "http://localhost:3000"
 
-		distAccSigClientMock.
-			On("BatchInsert", ctx, 1).Return([]string{distAcc.Address()}, nil).
-			Once()
-
-		tnt, err := p.ProvisionNewTenant(ctx, tenantName, userFirstName, userLastName, userEmail, organizationName, uiBaseURL, string(utils.TestnetNetworkType))
-		require.NoError(t, err)
-
-		schemaName := fmt.Sprintf("sdp_%s", tenantName)
-		assert.Equal(t, tenantName, tnt.Name)
-		assert.Equal(t, uiBaseURL, *tnt.SDPUIBaseURL)
-		assert.Equal(t, tenant.ProvisionedTenantStatus, tnt.Status)
-		assert.True(t, tenant.CheckSchemaExistsFixture(t, ctx, dbConnectionPool, schemaName))
-
-		// Connecting to the new schema
-		dsn, err := dbConnectionPool.DSN(ctx)
-		require.NoError(t, err)
-		u, err := url.Parse(dsn)
-		require.NoError(t, err)
-		uq := u.Query()
-		uq.Set("search_path", schemaName)
-		u.RawQuery = uq.Encode()
-
-		tenantSchemaConnectionPool, err := db.OpenDBConnectionPool(u.String())
-		require.NoError(t, err)
-		defer tenantSchemaConnectionPool.Close()
+		schemaName1 := fmt.Sprintf("sdp_%s", tenantName1)
+		schemaName2 := fmt.Sprintf("sdp_%s", tenantName2)
 
 		expectedTablesAfterMigrationsApplied := []string{
 			"assets",
@@ -100,46 +73,116 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 			"wallets",
 			"wallets_assets",
 		}
-		tenant.TenantSchemaMatchTablesFixture(t, ctx, tenantSchemaConnectionPool, schemaName, expectedTablesAfterMigrationsApplied)
 
-		tenant.AssertRegisteredAssetsFixture(t, ctx, tenantSchemaConnectionPool, []string{"USDC:GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5", "XLM:"})
-		tenant.AssertRegisteredWalletsFixture(t, ctx, tenantSchemaConnectionPool, []string{"Demo Wallet", "Vibrant Assist"})
-		tenant.AssertRegisteredUserFixture(t, ctx, tenantSchemaConnectionPool, userFirstName, userLastName, userEmail)
+		t.Run("provision key using type DISTRIBUTION_ACCOUNT_ENV", func(t *testing.T) {
+			distAccSigClient, err := signing.NewSignatureClient(signing.DistributionAccountEnvSignatureClientType, signing.SignatureClientOptions{
+				NetworkPassphrase:      network.TestNetworkPassphrase,
+				DistributionPrivateKey: distAcc.Seed(),
+			})
+			require.NoError(t, err)
+
+			getEntries := log.DefaultLogger.StartTest(log.WarnLevel)
+			p := NewManager(
+				WithDatabase(dbConnectionPool),
+				WithMessengerClient(&messengerClientMock),
+				WithTenantManager(tenantManager),
+				WithDistributionAccountSignatureClient(distAccSigClient),
+			)
+
+			tnt, err := p.ProvisionNewTenant(ctx, tenantName1, userFirstName, userLastName, userEmail, organizationName, uiBaseURL, string(utils.TestnetNetworkType))
+			require.NoError(t, err)
+
+			entries := getEntries()
+			require.Len(t, entries, 2)
+			assert.Contains(t, entries[0].Message, "Account provisioning not needed for distribution account signature client type")
+
+			assert.Equal(t, tenantName1, tnt.Name)
+			assert.Equal(t, uiBaseURL, *tnt.SDPUIBaseURL)
+			assert.Equal(t, distAcc.Address(), *tnt.DistributionAccount)
+			assert.Equal(t, tenant.ProvisionedTenantStatus, tnt.Status)
+
+			// Connecting to the new schema
+			dsn, err := dbConnectionPool.DSN(ctx)
+			require.NoError(t, err)
+			u, err := url.Parse(dsn)
+			require.NoError(t, err)
+
+			uq := u.Query()
+			uq.Set("search_path", schemaName1)
+			u.RawQuery = uq.Encode()
+
+			assert.True(t, tenant.CheckSchemaExistsFixture(t, ctx, dbConnectionPool, schemaName1))
+
+			tenantSchemaConnectionPool, err := db.OpenDBConnectionPool(u.String())
+			require.NoError(t, err)
+			defer tenantSchemaConnectionPool.Close()
+
+			tenant.TenantSchemaMatchTablesFixture(t, ctx, tenantSchemaConnectionPool, schemaName1, expectedTablesAfterMigrationsApplied)
+
+			tenant.AssertRegisteredAssetsFixture(t, ctx, tenantSchemaConnectionPool, []string{"USDC:GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5", "XLM:"})
+			tenant.AssertRegisteredWalletsFixture(t, ctx, tenantSchemaConnectionPool, []string{"Demo Wallet", "Vibrant Assist"})
+			tenant.AssertRegisteredUserFixture(t, ctx, tenantSchemaConnectionPool, userFirstName, userLastName, userEmail)
+		})
+
+		t.Run("provision key using type DISTRIBUTION_ACCOUNT_DB", func(t *testing.T) {
+			distAccSigClient, err := signing.NewSignatureClient(signing.DistributionAccountDBSignatureClientType, signing.SignatureClientOptions{
+				NetworkPassphrase:           network.TestNetworkPassphrase,
+				DistAccEncryptionPassphrase: keypair.MustRandom().Seed(),
+				DBConnectionPool:            dbConnectionPool,
+			})
+			require.NoError(t, err)
+
+			p := NewManager(
+				WithDatabase(dbConnectionPool),
+				WithMessengerClient(&messengerClientMock),
+				WithTenantManager(tenantManager),
+				WithDistributionAccountSignatureClient(distAccSigClient),
+			)
+
+			tnt, err := p.ProvisionNewTenant(ctx, tenantName2, userFirstName, userLastName, userEmail, organizationName, uiBaseURL, string(utils.TestnetNetworkType))
+			require.NoError(t, err)
+
+			assert.Equal(t, tenantName2, tnt.Name)
+			assert.Equal(t, uiBaseURL, *tnt.SDPUIBaseURL)
+			assert.NotNil(t, *tnt.DistributionAccount)
+			assert.Equal(t, tenant.ProvisionedTenantStatus, tnt.Status)
+
+			// Connecting to the new schema
+			dsn, err := dbConnectionPool.DSN(ctx)
+			require.NoError(t, err)
+			u, err := url.Parse(dsn)
+			require.NoError(t, err)
+
+			uq := u.Query()
+			uq.Set("search_path", schemaName2)
+			u.RawQuery = uq.Encode()
+
+			assert.True(t, tenant.CheckSchemaExistsFixture(t, ctx, dbConnectionPool, schemaName2))
+
+			tenantSchemaConnectionPool, err := db.OpenDBConnectionPool(u.String())
+			require.NoError(t, err)
+			defer tenantSchemaConnectionPool.Close()
+
+			tenant.TenantSchemaMatchTablesFixture(t, ctx, tenantSchemaConnectionPool, schemaName2, expectedTablesAfterMigrationsApplied)
+
+			tenant.AssertRegisteredAssetsFixture(t, ctx, tenantSchemaConnectionPool, []string{"USDC:GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5", "XLM:"})
+			tenant.AssertRegisteredWalletsFixture(t, ctx, tenantSchemaConnectionPool, []string{"Demo Wallet", "Vibrant Assist"})
+			tenant.AssertRegisteredUserFixture(t, ctx, tenantSchemaConnectionPool, userFirstName, userLastName, userEmail)
+		})
 	})
 
 	t.Run("provision a new tenant for the pubnet", func(t *testing.T) {
-		tenantName := "myorg-us"
+		tenantName1 := "myorg-us"
+		tenantName2 := "myorg-canada"
+
 		userFirstName := "First"
 		userLastName := "Last"
 		userEmail := "email@email.com"
 		organizationName := "My Org"
 		uiBaseURL := "http://localhost:3000"
 
-		distAccSigClientMock.
-			On("BatchInsert", ctx, 1).Return([]string{distAcc.Address()}, nil).
-			Once()
-
-		tnt, err := p.ProvisionNewTenant(ctx, tenantName, userFirstName, userLastName, userEmail, organizationName, uiBaseURL, string(utils.PubnetNetworkType))
-		require.NoError(t, err)
-
-		schemaName := fmt.Sprintf("sdp_%s", tenantName)
-		assert.Equal(t, tenantName, tnt.Name)
-		assert.Equal(t, uiBaseURL, *tnt.SDPUIBaseURL)
-		assert.Equal(t, tenant.ProvisionedTenantStatus, tnt.Status)
-		assert.True(t, tenant.CheckSchemaExistsFixture(t, ctx, dbConnectionPool, schemaName))
-
-		// Connecting to the new schema
-		dsn, err := dbConnectionPool.DSN(ctx)
-		require.NoError(t, err)
-		u, err := url.Parse(dsn)
-		require.NoError(t, err)
-		uq := u.Query()
-		uq.Set("search_path", schemaName)
-		u.RawQuery = uq.Encode()
-
-		tenantSchemaConnectionPool, err := db.OpenDBConnectionPool(u.String())
-		require.NoError(t, err)
-		defer tenantSchemaConnectionPool.Close()
+		schemaName1 := fmt.Sprintf("sdp_%s", tenantName1)
+		schemaName2 := fmt.Sprintf("sdp_%s", tenantName2)
 
 		expectedTablesAfterMigrationsApplied := []string{
 			"assets",
@@ -159,15 +202,102 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 			"wallets",
 			"wallets_assets",
 		}
-		tenant.TenantSchemaMatchTablesFixture(t, ctx, tenantSchemaConnectionPool, schemaName, expectedTablesAfterMigrationsApplied)
 
-		tenant.AssertRegisteredAssetsFixture(t, ctx, tenantSchemaConnectionPool, []string{"USDC:GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN", "XLM:"})
-		tenant.AssertRegisteredWalletsFixture(t, ctx, tenantSchemaConnectionPool, []string{"Freedom Wallet", "Vibrant Assist RC", "Vibrant Assist"})
-		tenant.AssertRegisteredUserFixture(t, ctx, tenantSchemaConnectionPool, userFirstName, userLastName, userEmail)
+		t.Run("provision key using type DISTRIBUTION_ACCOUNT_ENV", func(t *testing.T) {
+			distAccSigClient, err := signing.NewSignatureClient(signing.DistributionAccountEnvSignatureClientType, signing.SignatureClientOptions{
+				NetworkPassphrase:      network.PublicNetworkPassphrase,
+				DistributionPrivateKey: distAcc.Seed(),
+			})
+			require.NoError(t, err)
+
+			getEntries := log.DefaultLogger.StartTest(log.WarnLevel)
+			p := NewManager(
+				WithDatabase(dbConnectionPool),
+				WithMessengerClient(&messengerClientMock),
+				WithTenantManager(tenantManager),
+				WithDistributionAccountSignatureClient(distAccSigClient),
+			)
+
+			tnt, err := p.ProvisionNewTenant(ctx, tenantName1, userFirstName, userLastName, userEmail, organizationName, uiBaseURL, string(utils.PubnetNetworkType))
+			require.NoError(t, err)
+
+			entries := getEntries()
+			require.Len(t, entries, 2)
+			assert.Contains(t, entries[0].Message, "Account provisioning not needed for distribution account signature client type")
+
+			assert.Equal(t, tenantName1, tnt.Name)
+			assert.Equal(t, uiBaseURL, *tnt.SDPUIBaseURL)
+			assert.Equal(t, distAcc.Address(), *tnt.DistributionAccount)
+			assert.Equal(t, tenant.ProvisionedTenantStatus, tnt.Status)
+
+			// Connecting to the new schema
+			dsn, err := dbConnectionPool.DSN(ctx)
+			require.NoError(t, err)
+			u, err := url.Parse(dsn)
+			require.NoError(t, err)
+			uq := u.Query()
+			uq.Set("search_path", schemaName1)
+			u.RawQuery = uq.Encode()
+
+			tenantSchemaConnectionPool, err := db.OpenDBConnectionPool(u.String())
+			require.NoError(t, err)
+			defer tenantSchemaConnectionPool.Close()
+
+			tenant.TenantSchemaMatchTablesFixture(t, ctx, tenantSchemaConnectionPool, schemaName1, expectedTablesAfterMigrationsApplied)
+
+			tenant.AssertRegisteredAssetsFixture(t, ctx, tenantSchemaConnectionPool, []string{"USDC:GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN", "XLM:"})
+			tenant.AssertRegisteredWalletsFixture(t, ctx, tenantSchemaConnectionPool, []string{"Freedom Wallet", "Vibrant Assist RC", "Vibrant Assist"})
+			tenant.AssertRegisteredUserFixture(t, ctx, tenantSchemaConnectionPool, userFirstName, userLastName, userEmail)
+		})
+
+		t.Run("provision key using type DISTRIBUTION_ACCOUNT_DB", func(t *testing.T) {
+			distAccSigClient, err := signing.NewSignatureClient(signing.DistributionAccountDBSignatureClientType, signing.SignatureClientOptions{
+				NetworkPassphrase:           network.PublicNetworkPassphrase,
+				DistAccEncryptionPassphrase: keypair.MustRandom().Seed(),
+				DBConnectionPool:            dbConnectionPool,
+			})
+			require.NoError(t, err)
+
+			p := NewManager(
+				WithDatabase(dbConnectionPool),
+				WithMessengerClient(&messengerClientMock),
+				WithTenantManager(tenantManager),
+				WithDistributionAccountSignatureClient(distAccSigClient),
+			)
+
+			tnt, err := p.ProvisionNewTenant(ctx, tenantName2, userFirstName, userLastName, userEmail, organizationName, uiBaseURL, string(utils.PubnetNetworkType))
+			require.NoError(t, err)
+
+			assert.Equal(t, tenantName2, tnt.Name)
+			assert.Equal(t, uiBaseURL, *tnt.SDPUIBaseURL)
+			assert.NotNil(t, *tnt.DistributionAccount)
+			assert.Equal(t, tenant.ProvisionedTenantStatus, tnt.Status)
+
+			// Connecting to the new schema
+			dsn, err := dbConnectionPool.DSN(ctx)
+			require.NoError(t, err)
+			u, err := url.Parse(dsn)
+			require.NoError(t, err)
+
+			uq := u.Query()
+			uq.Set("search_path", schemaName2)
+			u.RawQuery = uq.Encode()
+
+			assert.True(t, tenant.CheckSchemaExistsFixture(t, ctx, dbConnectionPool, schemaName2))
+
+			tenantSchemaConnectionPool, err := db.OpenDBConnectionPool(u.String())
+			require.NoError(t, err)
+			defer tenantSchemaConnectionPool.Close()
+
+			tenant.TenantSchemaMatchTablesFixture(t, ctx, tenantSchemaConnectionPool, schemaName2, expectedTablesAfterMigrationsApplied)
+
+			tenant.AssertRegisteredAssetsFixture(t, ctx, tenantSchemaConnectionPool, []string{"USDC:GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN", "XLM:"})
+			tenant.AssertRegisteredWalletsFixture(t, ctx, tenantSchemaConnectionPool, []string{"Freedom Wallet", "Vibrant Assist RC", "Vibrant Assist"})
+			tenant.AssertRegisteredUserFixture(t, ctx, tenantSchemaConnectionPool, userFirstName, userLastName, userEmail)
+		})
 	})
 
 	messengerClientMock.AssertExpectations(t)
-	distAccSigClientMock.AssertExpectations(t)
 }
 
 func Test_Manager_RunMigrationsForTenant(t *testing.T) {
