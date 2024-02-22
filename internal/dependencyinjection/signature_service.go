@@ -31,7 +31,7 @@ func NewSignatureService(ctx context.Context, opts signing.SignatureServiceOptio
 
 	// TODO: in SDP-1077, implement a `NewDistributionAccountResolver` in the depencency injection and inject it into
 	// the SignatureServiceOptions before calling NewSignatureService.
-	log.Ctx(ctx).Infof("⚙️ Setting up Signature Service to: %v", opts.DistributionSignerType)
+	log.Ctx(ctx).Infof("⚙️ Setting up Signature Service with distribution signer type: %v", opts.DistributionSignerType)
 	newInstance, err := signing.NewSignatureService(opts)
 	if err != nil {
 		return signing.SignatureService{}, fmt.Errorf("creating a new signature service instance: %w", err)

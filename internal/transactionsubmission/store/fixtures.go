@@ -98,8 +98,11 @@ func DeleteAllTransactionFixtures(t *testing.T, ctx context.Context, sqlExec db.
 	require.NoError(t, err)
 }
 
-// CreateChannelAccountFixtures craetes count number of channel accounts
+// CreateChannelAccountFixtures creates 'count' number of channel accounts and store them in the DB, returning the
+// channel accounts.
 func CreateChannelAccountFixtures(t *testing.T, ctx context.Context, dbConnectionPool db.DBConnectionPool, count int) []*ChannelAccount {
+	t.Helper()
+
 	caModel := ChannelAccountModel{DBConnectionPool: dbConnectionPool}
 	for i := 0; i < count; i++ {
 		generatedKeypair := keypair.MustRandom()
@@ -113,8 +116,8 @@ func CreateChannelAccountFixtures(t *testing.T, ctx context.Context, dbConnectio
 	return channelAccounts
 }
 
-// CreateChannelAccountFixtures creates 'count' number of channel accounts, and store them in the DB with the private
-// keys encrypted, returning the channel accounts.
+// CreateChannelAccountFixturesEncrypted creates 'count' number of channel accounts, and store them in the DB with the
+// private keys encrypted, returning the channel accounts.
 func CreateChannelAccountFixturesEncrypted(
 	t *testing.T,
 	ctx context.Context,
@@ -123,6 +126,8 @@ func CreateChannelAccountFixturesEncrypted(
 	encryptionPassphrase string,
 	count int,
 ) []*ChannelAccount {
+	t.Helper()
+
 	caModel := ChannelAccountModel{DBConnectionPool: dbConnectionPool}
 	for i := 0; i < count; i++ {
 		kp := keypair.MustRandom()
@@ -141,8 +146,8 @@ func CreateChannelAccountFixturesEncrypted(
 	return channelAccounts
 }
 
-// CreateChannelAccountFixtures creates 'count' number of channel accounts, and store them in the DB with the private
-// keys encrypted, returning the Keypairs.
+// CreateChannelAccountFixturesEncryptedKPs creates 'count' number of channel accounts, and store them in the DB with
+// the private keys encrypted, returning the Keypairs.
 func CreateChannelAccountFixturesEncryptedKPs(
 	t *testing.T,
 	ctx context.Context,
@@ -151,6 +156,8 @@ func CreateChannelAccountFixturesEncryptedKPs(
 	encryptionPassphrase string,
 	count int,
 ) []*keypair.Full {
+	t.Helper()
+
 	channelAccounts := CreateChannelAccountFixturesEncrypted(t, ctx, dbConnectionPool, encrypter, encryptionPassphrase, count)
 	var kps []*keypair.Full
 	for _, ca := range channelAccounts {
@@ -169,5 +176,76 @@ func CreateChannelAccountFixturesEncryptedKPs(
 func DeleteAllFromChannelAccounts(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter) {
 	query := `DELETE FROM channel_accounts`
 	_, err := sqlExec.ExecContext(ctx, query)
+	require.NoError(t, err)
+}
+
+// CreateDBVaultFixturesEncrypted creates 'count' number of dbVaultEntries, and store them in the DB with the private
+// keys encrypted, returning the slice of dbVaultEntries.
+func CreateDBVaultFixturesEncrypted(
+	t *testing.T,
+	ctx context.Context,
+	dbConnectionPool db.DBConnectionPool,
+	encrypter utils.PrivateKeyEncrypter,
+	encryptionPassphrase string,
+	count int,
+) []*DBVaultEntry {
+	t.Helper()
+
+	dbVault := NewDBVaultModel(dbConnectionPool)
+	dbVaultEntries := make([]*DBVaultEntry, count)
+	publicKeys := make([]string, count)
+	for i := 0; i < count; i++ {
+		kp := keypair.MustRandom()
+		publicKey := kp.Address()
+		privateKey := kp.Seed()
+		encryptedPrivateKey, err := encrypter.Encrypt(privateKey, encryptionPassphrase)
+		require.NoError(t, err)
+
+		dbVaultEntries[i] = &DBVaultEntry{
+			PublicKey:           publicKey,
+			EncryptedPrivateKey: encryptedPrivateKey,
+		}
+		publicKeys[i] = publicKey
+	}
+
+	err := dbVault.BatchInsert(ctx, dbVaultEntries)
+	require.NoError(t, err)
+
+	err = dbConnectionPool.SelectContext(ctx, &dbVaultEntries, "SELECT * FROM vault WHERE public_key = ANY($1)", pq.Array(publicKeys))
+	require.NoError(t, err)
+
+	return dbVaultEntries
+}
+
+// CreateDBVaultFixturesEncryptedKPs creates 'count' number of dbVaultEntries, and store them in the DB with the private
+// keys encrypted, returning the slice of Keypairs.
+func CreateDBVaultFixturesEncryptedKPs(
+	t *testing.T,
+	ctx context.Context,
+	dbConnectionPool db.DBConnectionPool,
+	encrypter utils.PrivateKeyEncrypter,
+	encryptionPassphrase string,
+	count int,
+) []*keypair.Full {
+	t.Helper()
+
+	dbVaultEntries := CreateDBVaultFixturesEncrypted(t, ctx, dbConnectionPool, encrypter, encryptionPassphrase, count)
+	var kps []*keypair.Full
+	for _, ss := range dbVaultEntries {
+		privateKey, err := encrypter.Decrypt(ss.EncryptedPrivateKey, encryptionPassphrase)
+		require.NoError(t, err)
+
+		kp, err := keypair.ParseFull(privateKey)
+		require.NoError(t, err)
+		kps = append(kps, kp)
+	}
+
+	return kps
+}
+
+func DeleteAllFromDBVaultEntries(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter) {
+	t.Helper()
+
+	_, err := sqlExec.ExecContext(ctx, "DELETE FROM vault")
 	require.NoError(t, err)
 }

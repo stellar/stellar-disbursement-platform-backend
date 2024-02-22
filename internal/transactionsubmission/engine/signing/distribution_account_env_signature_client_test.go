@@ -12,14 +12,31 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func Test_DistributionAccountEnvOptions_String_doesntContainPrivateKey(t *testing.T) {
+func Test_DistributionAccountEnvOptions_String_doesntLeakPrivateKey(t *testing.T) {
 	opts := DistributionAccountEnvOptions{
 		DistributionPrivateKey: "SOME_PRIVATE_KEY",
 		NetworkPassphrase:      "SOME_PASSPHRASE",
 	}
-	assert.NotContains(t, opts.String(), "SOME_PRIVATE_KEY")
-	assert.Contains(t, opts.String(), "SOME_PASSPHRASE")
-	assert.Contains(t, opts.String(), "*signing.DistributionAccountEnvOptions")
+
+	testCases := []struct {
+		name  string
+		value string
+	}{
+		{name: "opts.String()", value: opts.String()},
+		{name: "&opts.String()", value: (&opts).String()},
+		{name: "%%v value", value: fmt.Sprintf("%v", opts)},
+		{name: "%%v pointer", value: fmt.Sprintf("%v", &opts)},
+		{name: "%%+v value", value: fmt.Sprintf("%+v", opts)},
+		{name: "%%+v pointer", value: fmt.Sprintf("%+v", &opts)},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.NotContains(t, tc.value, "SOME_PRIVATE_KEY")
+			assert.Contains(t, tc.value, "SOME_PASSPHRASE")
+			assert.Contains(t, tc.value, fmt.Sprintf("%T", opts))
+		})
+	}
 }
 
 func Test_DistributionAccountEnvOptions_Validate(t *testing.T) {

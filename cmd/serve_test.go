@@ -186,7 +186,7 @@ func Test_serve(t *testing.T) {
 	mMonitorService.On("Start", metricOptions).Return(nil).Once()
 	defer mMonitorService.AssertExpectations(t)
 
-	encryptionPassphrase := keypair.MustRandom().Seed()
+	chAccEncryptionPassphrase := keypair.MustRandom().Seed()
 
 	serveMetricOpts := serve.MetricsServeOptions{
 		Port:        8002,
@@ -269,7 +269,7 @@ func Test_serve(t *testing.T) {
 	t.Setenv("EVENT_BROKER", "kafka")
 	t.Setenv("BROKER_URLS", "kafka:9092")
 	t.Setenv("CONSUMER_GROUP_ID", "group-id")
-	t.Setenv("CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE", encryptionPassphrase)
+	t.Setenv("CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE", chAccEncryptionPassphrase)
 	t.Setenv("ENVIRONMENT", "test")
 	t.Setenv("METRICS_TYPE", "PROMETHEUS")
 	t.Setenv("KAFKA_SECURITY_PROTOCOL", string(events.KafkaProtocolPlaintext))
