@@ -736,7 +736,92 @@ func Test_TenantMiddleware(t *testing.T) {
 	})
 }
 
-func TestExtractTenantNameFromRequest(t *testing.T) {
+func Test_BasicAuthMiddleware(t *testing.T) {
+	r := chi.NewRouter()
+
+	adminAccount := "admin"
+	adminApiKey := "secret"
+
+	r.Group(func(r chi.Router) {
+		r.Use(BasicAuthMiddleware(adminAccount, adminApiKey))
+
+		r.Get("/authenticated", func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, err := w.Write(json.RawMessage(`{"message":"🔐 secured content"}`))
+			require.NoError(t, err)
+		})
+	})
+
+	r.Get("/open", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, err := w.Write(json.RawMessage(`{"message":"🔓 open content"}`))
+		require.NoError(t, err)
+	})
+
+	t.Run("returns 401 error when no auth header is sent", func(t *testing.T) {
+		req, err := http.NewRequest(http.MethodGet, "/authenticated", nil)
+		assert.NoError(t, err)
+
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		resp := w.Result()
+		respBody, err := io.ReadAll(resp.Body)
+		assert.NoError(t, err)
+
+		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+		assert.JSONEq(t, `{"error":"Not authorized."}`, string(respBody))
+	})
+
+	t.Run("returns 401 error for incorrect credentials", func(t *testing.T) {
+		req, err := http.NewRequest(http.MethodGet, "/authenticated", nil)
+		assert.NoError(t, err)
+		req.SetBasicAuth("wrongUser", "wrongPass")
+
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		resp := w.Result()
+		respBody, err := io.ReadAll(resp.Body)
+		assert.NoError(t, err)
+
+		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+		assert.JSONEq(t, `{"error":"Not authorized."}`, string(respBody))
+	})
+
+	t.Run("🎉 200 response for correct credentials", func(t *testing.T) {
+		req, err := http.NewRequest(http.MethodGet, "/authenticated", nil)
+		assert.NoError(t, err)
+		req.SetBasicAuth(adminAccount, adminApiKey)
+
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		resp := w.Result()
+		respBody, err := io.ReadAll(resp.Body)
+		assert.NoError(t, err)
+
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.JSONEq(t, `{"message":"🔐 secured content"}`, string(respBody))
+	})
+
+	t.Run("🎉 200 response for open routes with no auth", func(t *testing.T) {
+		req, err := http.NewRequest(http.MethodGet, "/open", nil)
+		assert.NoError(t, err)
+
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		resp := w.Result()
+		respBody, err := io.ReadAll(resp.Body)
+		assert.NoError(t, err)
+
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.JSONEq(t, `{"message":"🔓 open content"}`, string(respBody))
+	})
+}
+
+func Test_ExtractTenantNameFromRequest(t *testing.T) {
 	t.Run("extract tenant name from header", func(t *testing.T) {
 		expectedTenant := "tenant123"
 		r, _ := http.NewRequest("GET", "http://example.com", nil)

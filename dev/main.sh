@@ -24,12 +24,18 @@ echo "====> ✅Step 2: finish calling docker-compose up"
 
 # Initialize tenants
 echo $DIVIDER
-echo "====> 👀Step 3: initialize tenants"
+echo "====> 👀Step 3: initialize tenants... (😴 10s sleep)"
 
 # Wait for docker containers to start
 sleep 10
 AdminTenantURL="http://localhost:8003/tenants"
-existingTenants=$(curl -s $AdminTenantURL)
+
+adminAccount="SDP-admin"
+adminApiKey="api_key_1234567890"
+encodedCredentials=$(echo -n "$adminAccount:$adminApiKey" | base64)
+AuthHeader="Authorization: Basic $encodedCredentials"
+
+existingTenants=$(curl -s -H "$AuthHeader" $AdminTenantURL)
 echo "Response from tenant check: $existingTenants"
 
 if [ "$existingTenants" == "[]" ]; then
@@ -47,6 +53,7 @@ if [ "$existingTenants" == "[]" ]; then
 
         curl -X POST $AdminTenantURL \
         -H "Content-Type: application/json" \
+        -H "$AuthHeader" \
         -d '{
                 "name": "'"$tenant"'",
                 "organization_name": "'"$tenant"'",

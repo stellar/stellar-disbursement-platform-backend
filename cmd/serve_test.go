@@ -209,6 +209,8 @@ func Test_serve(t *testing.T) {
 			DistributionPrivateKey:    distributionSeed,
 			DistributionSignerType:    signing.DistributionAccountEnvSignatureClientType,
 		},
+		AdminAccount:         "admin-account",
+		AdminApiKey:          "admin-api-key",
 	}
 
 	eventBrokerOptions := cmdUtils.EventBrokerOptions{
@@ -278,7 +280,8 @@ func Test_serve(t *testing.T) {
 	t.Setenv("ENVIRONMENT", "test")
 	t.Setenv("METRICS_TYPE", "PROMETHEUS")
 	t.Setenv("KAFKA_SECURITY_PROTOCOL", string(events.KafkaProtocolPlaintext))
-
+	t.Setenv("ADMIN_ACCOUNT", "admin-account")
+	t.Setenv("ADMIN_API_KEY", "admin-api-key")
 	// test & assert
 	rootCmd.SetArgs([]string{"serve"})
 	err = rootCmd.Execute()

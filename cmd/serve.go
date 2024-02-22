@@ -321,6 +321,20 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			ConfigKey:   &adminServeOpts.Port,
 			FlagDefault: 8003,
 			Required:    true,
+		},
+		&config.ConfigOption{
+			Name:      "admin-account",
+			Usage:     "ID of the admin account. To use, add to the request header as 'Authorization', formatted as Base64-encoded 'ADMIN_ACCOUNT:ADMIN_API_KEY'.",
+			OptType:   types.String,
+			ConfigKey: &adminServeOpts.AdminAccount,
+			Required:  true,
+		},
+		&config.ConfigOption{
+			Name:      "admin-api-key",
+			Usage:     "API key for the admin account. To use, add to the request header as 'Authorization', formatted as Base64-encoded 'ADMIN_ACCOUNT:ADMIN_API_KEY'.",
+			OptType:   types.String,
+			ConfigKey: &adminServeOpts.AdminApiKey,
+			Required:  true,
 		})
 
 	// metrics server options

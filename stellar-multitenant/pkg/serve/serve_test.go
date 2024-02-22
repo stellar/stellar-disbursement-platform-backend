@@ -1,6 +1,9 @@
 package serve
 
 import (
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -71,4 +74,68 @@ func Test_Serve(t *testing.T) {
 	err = StartServe(opts, &mHTTPServer)
 	require.NoError(t, err)
 	mHTTPServer.AssertExpectations(t)
+}
+
+func Test_handleHTTP_authenticatedAdminEndpoints(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+
+	serveOptions := ServeOptions{
+		AdminAccount: "SDP-admin",
+		AdminApiKey:  "api_key_1234567890",
+	}
+
+	handlerMux := handleHTTP(&serveOptions)
+
+	// Authenticated endpoints
+	authenticatedEndpoints := []struct { // TODO: body to requests
+		method string
+		path   string
+	}{
+		// Tenants
+		{http.MethodGet, "/tenants"},
+		{http.MethodPost, "/tenants"},
+		{http.MethodGet, "/tenants/1234"},
+		{http.MethodPatch, "/tenants/1234"},
+	}
+
+	// Expect 401 as a response:
+	for _, endpoint := range authenticatedEndpoints {
+		t.Run(fmt.Sprintf("expect 401 for %s %s", endpoint.method, endpoint.path), func(t *testing.T) {
+			req := httptest.NewRequest(endpoint.method, endpoint.path, nil)
+
+			w := httptest.NewRecorder()
+			handlerMux.ServeHTTP(w, req)
+
+			resp := w.Result()
+			assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+		})
+	}
+}
+
+func Test_handleHTTP_unauthenticatedAdminEndpoints(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+
+	handlerMux := handleHTTP(&ServeOptions{})
+
+	// Unauthenticated endpoints
+	unauthenticatedEndpoints := []struct {
+		method string
+		path   string
+	}{
+		{http.MethodGet, "/health"},
+	}
+
+	for _, endpoint := range unauthenticatedEndpoints {
+		t.Run(fmt.Sprintf("%s %s", endpoint.method, endpoint.path), func(t *testing.T) {
+			req := httptest.NewRequest(endpoint.method, endpoint.path, nil)
+
+			w := httptest.NewRecorder()
+			handlerMux.ServeHTTP(w, req)
+
+			resp := w.Result()
+			assert.Equal(t, http.StatusOK, resp.StatusCode)
+		})
+	}
 }

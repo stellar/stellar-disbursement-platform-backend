@@ -196,6 +196,8 @@ sdp:
   ## @param sdp.kubeSecrets.data.SENTRY_DSN The DSN for the Sentry service. it must be set if CRASH_TRACKER_TYPE is set to "SENTRY".
   ## @param sdp.kubeSecrets.data.KAFKA_SASL_USERNAME The username for SASL authentication to the Kafka broker. Required if KAFKA_SECURITY_PROTOCOL is set to "SASL_SSL" or "SASL_PLAINTEXT".
   ## @param sdp.kubeSecrets.data.KAFKA_SASL_PASSWORD The password for SASL authentication to the Kafka broker. Required if KAFKA_SECURITY_PROTOCOL is set to "SASL_SSL" or "SASL_PLAINTEXT".
+  ## @param sdp.kubeSecrets.data.ADMIN_ACCOUNT The ID of the admin account. To use, add to the request header as 'Authorization', formatted as Base64-encoded 'ADMIN_ACCOUNT:ADMIN_API_KEY'.",
+  ## @param sdp.kubeSecrets.data.ADMIN_API_KEY The API key for the admin account. To use, add to the request header as 'Authorization', formatted as Base64-encoded 'ADMIN_ACCOUNT:ADMIN_API_KEY'.",
   kubeSecrets:
     secretName: "sdp-backend-secret-name"
     create: false
@@ -222,6 +224,8 @@ sdp:
       CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE: #required
       KAFKA_SASL_USERNAME: #optional, depends on value of KAFKA_SECURITY_PROTOCOL
       KAFKA_SASL_PASSWORD: #optional, depends on value of KAFKA_SECURITY_PROTOCOL
+      ADMIN_ACCOUNT: #required
+      ADMIN_API_KEY: #required
 
 
   ## @extra sdp.ingress Configuration for the ingress controller for the SDP service.
