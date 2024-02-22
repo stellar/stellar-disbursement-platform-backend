@@ -13,10 +13,14 @@ import (
 )
 
 type DBVaultEntry struct {
-	PublicKey           string     `db:"public_key"`
-	EncryptedPrivateKey string     `db:"encrypted_private_key"`
-	UpdatedAt           *time.Time `db:"updated_at"`
-	CreatedAt           *time.Time `db:"created_at"`
+	PublicKey           string    `db:"public_key"`
+	EncryptedPrivateKey string    `db:"encrypted_private_key"`
+	UpdatedAt           time.Time `db:"updated_at"`
+	CreatedAt           time.Time `db:"created_at"`
+}
+
+func (e DBVaultEntry) String() string {
+	return fmt.Sprintf("%T{PublicKey: %s, CreatedAt: %v, UpdatedAt: %v}", e, e.PublicKey, e.CreatedAt, e.UpdatedAt)
 }
 
 type DBVaultModel struct {
@@ -27,7 +31,7 @@ func NewDBVaultModel(dbConnectionPool db.DBConnectionPool) *DBVaultModel {
 	return &DBVaultModel{DBConnectionPool: dbConnectionPool}
 }
 
-// BatchInsert inserts a batch of (publicKey, encryptedPrivateKey) pairs into the database.
+// BatchInsert inserts a batch of (publicKey, encryptedPrivateKey) pairs into the database vault.
 func (m *DBVaultModel) BatchInsert(ctx context.Context, dbVaultEntries []*DBVaultEntry) error {
 	if len(dbVaultEntries) == 0 {
 		return nil
@@ -63,7 +67,7 @@ func (m *DBVaultModel) BatchInsert(ctx context.Context, dbVaultEntries []*DBVaul
 	return nil
 }
 
-// Get returns a DBVaultEntry with the provided publicKey from the database.
+// Get returns a DBVaultEntry with the provided publicKey from the database vault.
 func (m *DBVaultModel) Get(ctx context.Context, publicKey string) (*DBVaultEntry, error) {
 	query := `
 		SELECT
@@ -86,7 +90,7 @@ func (m *DBVaultModel) Get(ctx context.Context, publicKey string) (*DBVaultEntry
 	return &dbVaultEntry, nil
 }
 
-// Delete deletes a row with the provided publicKey from the database.
+// Delete deletes an entry with the provided publicKey from the database vault.
 func (m *DBVaultModel) Delete(ctx context.Context, publicKey string) error {
 	query := `
 		DELETE
@@ -112,4 +116,4 @@ func (m *DBVaultModel) Delete(ctx context.Context, publicKey string) error {
 	return nil
 }
 
-var _ DBVaultStore = &DBVaultModel{}
+var _ DBVault = &DBVaultModel{}

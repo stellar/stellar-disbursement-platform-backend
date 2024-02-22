@@ -14,7 +14,7 @@ type DistributionAccountEnvOptions struct {
 	NetworkPassphrase      string
 }
 
-func (opts *DistributionAccountEnvOptions) String() string {
+func (opts DistributionAccountEnvOptions) String() string {
 	return fmt.Sprintf("%T{NetworkPassphrase: %s}", opts, opts.NetworkPassphrase)
 }
 

@@ -51,7 +51,7 @@ type ChannelAccountDBSignatureClient struct {
 	ledgerNumberTracker  preconditions.LedgerNumberTracker
 }
 
-// NewChannelAccountDBSignatureClient returns a new DefaultSignatureService instance.
+// NewChannelAccountDBSignatureClient returns a new instance of the ChannelAccountDB SignatureClient.
 func NewChannelAccountDBSignatureClient(opts ChannelAccountDBSignatureClientOptions) (*ChannelAccountDBSignatureClient, error) {
 	if err := opts.Validate(); err != nil {
 		return nil, fmt.Errorf("validating options: %w", err)
@@ -74,7 +74,7 @@ func NewChannelAccountDBSignatureClient(opts ChannelAccountDBSignatureClientOpti
 
 var _ SignatureClient = &ChannelAccountDBSignatureClient{}
 
-func (c *ChannelAccountDBSignatureClient) getKPsForAccounts(ctx context.Context, stellarAccounts ...string) ([]*keypair.Full, error) {
+func (c *ChannelAccountDBSignatureClient) getKPsForPublicKeys(ctx context.Context, stellarAccounts ...string) ([]*keypair.Full, error) {
 	if len(stellarAccounts) == 0 {
 		return nil, fmt.Errorf("no accounts provided")
 	}
@@ -117,7 +117,7 @@ func (c *ChannelAccountDBSignatureClient) SignStellarTransaction(ctx context.Con
 		return nil, fmt.Errorf("stellarTx cannot be nil in %s", c.Type())
 	}
 
-	kps, err := c.getKPsForAccounts(ctx, stellarAccounts...)
+	kps, err := c.getKPsForPublicKeys(ctx, stellarAccounts...)
 	if err != nil {
 		return nil, fmt.Errorf("getting keypairs for accounts %v in %s: %w", stellarAccounts, c.Type(), err)
 	}
@@ -135,7 +135,7 @@ func (c *ChannelAccountDBSignatureClient) SignFeeBumpStellarTransaction(ctx cont
 		return nil, fmt.Errorf("stellarTx cannot be nil in %s", c.Type())
 	}
 
-	kps, err := c.getKPsForAccounts(ctx, stellarAccounts...)
+	kps, err := c.getKPsForPublicKeys(ctx, stellarAccounts...)
 	if err != nil {
 		return nil, fmt.Errorf("getting keypairs for accounts %v in %s: %w", stellarAccounts, c.Type(), err)
 	}

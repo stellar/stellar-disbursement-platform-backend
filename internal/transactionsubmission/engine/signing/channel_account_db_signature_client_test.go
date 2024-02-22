@@ -239,7 +239,7 @@ func Test_ChannelAccountDBSignatureClient_getKPsForAccounts(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			kps, err := sigClient.getKPsForAccounts(ctx, tc.accounts...)
+			kps, err := sigClient.getKPsForPublicKeys(ctx, tc.accounts...)
 			if tc.wantErrContains != "" {
 				require.Error(t, err)
 				assert.ErrorContains(t, err, tc.wantErrContains)

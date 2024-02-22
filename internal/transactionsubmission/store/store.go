@@ -45,7 +45,7 @@ type TransactionStore interface {
 	UpdateSyncedTransactions(ctx context.Context, sqlExec db.SQLExecuter, txIDs []string) error
 }
 
-type DBVaultStore interface {
+type DBVault interface {
 	BatchInsert(ctx context.Context, dbVaultEntries []*DBVaultEntry) error
 	Get(ctx context.Context, publicKey string) (*DBVaultEntry, error)
 	Delete(ctx context.Context, publicKey string) error

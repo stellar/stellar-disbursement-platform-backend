@@ -85,7 +85,7 @@ func Test_NewSignatureClient(t *testing.T) {
 			wantErrorMsg: "invalid signature client type: INVALID",
 		},
 		{
-			name:    "🎉 successfully instantiate a Channel Account DB instance",
+			name:    "🎉 successfully instantiate a ChannelAccountDB instance",
 			sigType: ChannelAccountDBSignatureClientType,
 			opts: SignatureClientOptions{
 				NetworkPassphrase:         network.TestNetworkPassphrase,
@@ -103,7 +103,7 @@ func Test_NewSignatureClient(t *testing.T) {
 			},
 		},
 		{
-			name:    "🎉 successfully instantiate a Distribution Account DB instance",
+			name:    "🎉 successfully instantiate a DistributionAccountDB",
 			sigType: DistributionAccountDBSignatureClientType,
 			opts: SignatureClientOptions{
 				NetworkPassphrase:           network.TestNetworkPassphrase,
@@ -112,7 +112,7 @@ func Test_NewSignatureClient(t *testing.T) {
 				Encrypter:                   &utils.PrivateKeyEncrypterMock{},
 			},
 			wantResult: &DistributionAccountDBSignatureClient{
-				dbVaultModel:         store.NewDBVaultModel(dbConnectionPool),
+				dbVault:              store.NewDBVaultModel(dbConnectionPool),
 				encrypter:            &utils.PrivateKeyEncrypterMock{},
 				encryptionPassphrase: encryptionPassphrase,
 				networkPassphrase:    network.TestNetworkPassphrase,
@@ -137,10 +137,10 @@ func Test_NewSignatureClient(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			sigService, err := NewSignatureClient(tc.sigType, tc.opts)
 			if tc.wantErrorMsg != "" {
-				require.EqualError(t, err, tc.wantErrorMsg)
+				assert.EqualError(t, err, tc.wantErrorMsg)
 			} else {
-				require.NoError(t, err)
-				require.Equal(t, tc.wantResult, sigService)
+				assert.NoError(t, err)
+				assert.Equal(t, tc.wantResult, sigService)
 			}
 		})
 	}

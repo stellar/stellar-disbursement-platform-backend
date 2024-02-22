@@ -192,12 +192,12 @@ func Test_DistributionAccountDBSignatureClient_getKPsForAccounts(t *testing.T) {
 		{
 			name:            "return an error if no accounts are passed",
 			accounts:        []string{},
-			wantErrContains: "no accounts provided",
+			wantErrContains: "no publicKeys provided",
 		},
 		{
 			name:            "return an error if one of the accounts is empty",
 			accounts:        []string{""},
-			wantErrContains: "account 0 is empty",
+			wantErrContains: "publicKey 0 is empty",
 		},
 		{
 			name:            "return an error if one of the accounts doesn't exist in the database",
@@ -223,7 +223,7 @@ func Test_DistributionAccountDBSignatureClient_getKPsForAccounts(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			kps, err := sigClient.getKPsForAccounts(ctx, tc.accounts...)
+			kps, err := sigClient.getKPsForPublicKeys(ctx, tc.accounts...)
 			if tc.wantErrContains != "" {
 				require.Error(t, err)
 				assert.ErrorContains(t, err, tc.wantErrContains)
@@ -301,7 +301,7 @@ func Test_DistributionAccountDBSignatureClient_SignStellarTransaction(t *testing
 			name:            "return an error if no accounts are passed",
 			stellarTx:       stellarTx,
 			accounts:        []string{},
-			wantErrContains: "no accounts provided",
+			wantErrContains: "no publicKeys provided",
 		},
 		{
 			name:                "🎉 Successfully sign transaction when all incoming addresses are correct",
@@ -393,39 +393,39 @@ func Test_DistributionAccountDBSignatureClient_SignFeeBumpStellarTransaction(t *
 	testCases := []struct {
 		name                       string
 		feeBumpStellarTx           *txnbuild.FeeBumpTransaction
-		accounts                   []string
+		publicKeys                 []string
 		wantErrContains            string
 		wantSignedFeeBumpStellarTx *txnbuild.FeeBumpTransaction
 	}{
 		{
 			name:             "return an error if stellar transaction is nil",
 			feeBumpStellarTx: nil,
-			accounts:         []string{},
+			publicKeys:       []string{},
 			wantErrContains:  "stellarTx cannot be nil",
 		},
 		{
 			name:             "return an error if no accounts are passed",
 			feeBumpStellarTx: feeBumpStellarTx,
-			accounts:         []string{},
-			wantErrContains:  "no accounts provided",
+			publicKeys:       []string{},
+			wantErrContains:  "no publicKeys provided",
 		},
 		{
-			name:                       "🎉 Successfully sign transaction when all incoming addresses are correct",
+			name:                       "🎉 Successfully sign transaction when all incoming publicKeys are correct",
 			feeBumpStellarTx:           feeBumpStellarTx,
-			accounts:                   []string{distAccKP2.Address()},
+			publicKeys:                 []string{distAccKP2.Address()},
 			wantSignedFeeBumpStellarTx: wantSignedFeeBumpStellarTx,
 		},
 		{
-			name:                       "🎉 Successfully sign transaction when all some address are repeated",
+			name:                       "🎉 Successfully sign transaction when all publicKeys are repeated",
 			feeBumpStellarTx:           feeBumpStellarTx,
-			accounts:                   []string{distAccKP2.Address(), distAccKP2.Address()},
+			publicKeys:                 []string{distAccKP2.Address(), distAccKP2.Address()},
 			wantSignedFeeBumpStellarTx: wantSignedFeeBumpStellarTx,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			gotSignedFeeBumpStellarTx, err := sigClient.SignFeeBumpStellarTransaction(ctx, tc.feeBumpStellarTx, tc.accounts...)
+			gotSignedFeeBumpStellarTx, err := sigClient.SignFeeBumpStellarTransaction(ctx, tc.feeBumpStellarTx, tc.publicKeys...)
 			if tc.wantErrContains != "" {
 				require.Error(t, err)
 				assert.ErrorContains(t, err, tc.wantErrContains)
@@ -438,8 +438,8 @@ func Test_DistributionAccountDBSignatureClient_SignFeeBumpStellarTransaction(t *
 	}
 }
 
-// dbVaultAll is a test helper that returns all the dbVaultEntries from the DB.
-func dbVaultAll(t *testing.T, ctx context.Context, dbConnectionPool db.DBConnectionPool) []store.DBVaultEntry {
+// allDBVaultEntries is a test helper that returns all the dbVaultEntries from the DB.
+func allDBVaultEntries(t *testing.T, ctx context.Context, dbConnectionPool db.DBConnectionPool) []store.DBVaultEntry {
 	t.Helper()
 
 	var dbVaultEntries []store.DBVaultEntry
@@ -467,7 +467,7 @@ func Test_DistributionAccountDBSignatureClient_BatchInsert(t *testing.T) {
 	}{
 		{
 			name:            "if number<=0, return an error",
-			wantErrContains: "the number of accounts to insert need to be greater than zero",
+			wantErrContains: "the number of publicKeys to insert needs to be greater than zero",
 		},
 		{
 			name:   "🎉 successfully bulk insert",
@@ -487,7 +487,7 @@ func Test_DistributionAccountDBSignatureClient_BatchInsert(t *testing.T) {
 
 	for _, tc := range testCase {
 		t.Run(tc.name, func(t *testing.T) {
-			dbVaultEntries := dbVaultAll(t, ctx, dbConnectionPool)
+			dbVaultEntries := allDBVaultEntries(t, ctx, dbConnectionPool)
 			require.Len(t, dbVaultEntries, 0, "this test should have started with 0 distribution accounts")
 
 			publicKeys, err := sigClient.BatchInsert(ctx, tc.amount)
@@ -498,7 +498,7 @@ func Test_DistributionAccountDBSignatureClient_BatchInsert(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 
-				dbVaultEntries = dbVaultAll(t, ctx, dbConnectionPool)
+				dbVaultEntries = allDBVaultEntries(t, ctx, dbConnectionPool)
 				assert.Equal(t, tc.amount, len(publicKeys))
 				assert.Equal(t, tc.amount, len(dbVaultEntries))
 
@@ -536,12 +536,12 @@ func Test_DistributionAccountDBSignatureClient_Delete(t *testing.T) {
 	encrypter := &utils.DefaultPrivateKeyEncrypter{}
 
 	// at start: count=0
-	allDistAccounts := dbVaultAll(t, ctx, dbConnectionPool)
+	allDistAccounts := allDBVaultEntries(t, ctx, dbConnectionPool)
 	require.Len(t, allDistAccounts, 0)
 
 	// create 2 accounts: count=0->2
 	distributionAccounts := store.CreateDBVaultFixturesEncryptedKPs(t, ctx, dbConnectionPool, encrypter, encrypterPass, 2)
-	allDistAccounts = dbVaultAll(t, ctx, dbConnectionPool)
+	allDistAccounts = allDBVaultEntries(t, ctx, dbConnectionPool)
 	require.Len(t, allDistAccounts, 2)
 
 	sigClient, err := NewDistributionAccountDBSignatureClient(DistributionAccountDBSignatureClientOptions{
@@ -555,13 +555,13 @@ func Test_DistributionAccountDBSignatureClient_Delete(t *testing.T) {
 	// delete one account: count=2->1
 	err = sigClient.Delete(ctx, distributionAccounts[0].Address())
 	require.NoError(t, err)
-	allDistAccounts = dbVaultAll(t, ctx, dbConnectionPool)
+	allDistAccounts = allDBVaultEntries(t, ctx, dbConnectionPool)
 	require.Len(t, allDistAccounts, 1)
 
 	// delete another account: count=1->0
 	err = sigClient.Delete(ctx, distributionAccounts[1].Address())
 	require.NoError(t, err)
-	allDistAccounts = dbVaultAll(t, ctx, dbConnectionPool)
+	allDistAccounts = allDBVaultEntries(t, ctx, dbConnectionPool)
 	require.Len(t, allDistAccounts, 0)
 
 	// delete non-existing account: error expected

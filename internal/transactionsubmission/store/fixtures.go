@@ -191,7 +191,7 @@ func CreateDBVaultFixturesEncrypted(
 ) []*DBVaultEntry {
 	t.Helper()
 
-	ssModel := NewDBVaultModel(dbConnectionPool)
+	dbVault := NewDBVaultModel(dbConnectionPool)
 	dbVaultEntries := make([]*DBVaultEntry, count)
 	publicKeys := make([]string, count)
 	for i := 0; i < count; i++ {
@@ -208,7 +208,7 @@ func CreateDBVaultFixturesEncrypted(
 		publicKeys[i] = publicKey
 	}
 
-	err := ssModel.BatchInsert(ctx, dbVaultEntries)
+	err := dbVault.BatchInsert(ctx, dbVaultEntries)
 	require.NoError(t, err)
 
 	err = dbConnectionPool.SelectContext(ctx, &dbVaultEntries, "SELECT * FROM vault WHERE public_key = ANY($1)", pq.Array(publicKeys))

@@ -116,7 +116,7 @@ func Test_NewSignatureService(t *testing.T) {
 	wantDistAccountDBSigner := &DistributionAccountDBSignatureClient{
 		networkPassphrase:    network.TestNetworkPassphrase,
 		encryptionPassphrase: distAccEncryptionPassphrase,
-		dbVaultModel:         store.NewDBVaultModel(dbConnectionPool),
+		dbVault:              store.NewDBVaultModel(dbConnectionPool),
 		encrypter:            &utils.DefaultPrivateKeyEncrypter{},
 	}
 
@@ -139,7 +139,7 @@ func Test_NewSignatureService(t *testing.T) {
 			wantErrContains: "creating a new channel account signature client:",
 		},
 		{
-			name: "returns an error if the options are invalid for the distribution account signer",
+			name: "returns an error if the options are invalid for the distribution account signer (DISTRIBUTION_ACCOUNT_ENV)",
 			opts: SignatureServiceOptions{
 				DistributionSignerType:    DistributionAccountEnvSignatureClientType,
 				NetworkPassphrase:         network.TestNetworkPassphrase,
@@ -168,7 +168,8 @@ func Test_NewSignatureService(t *testing.T) {
 				DistributionAccountResolver: wantDistAccountEnvSigner,
 			},
 		},
-		// TODO: Update test for DISTRIBUTION_ACCOUNT_DB below once the DistributionAccountResolver is implemented
+		// TODO: in SDP-1077 - 01: test "returns an error if the options are invalid for the distribution account signer (DISTRIBUTION_ACCOUNT_DB)",
+		// TODO: in SDP-1077 - 02: after the DistributionAccountResolver is working, update the test below to not fail anymore.
 		{
 			name: "🎉 successfully instantiate new signature service (DISTRIBUTION_ACCOUNT_DB)",
 			opts: SignatureServiceOptions{

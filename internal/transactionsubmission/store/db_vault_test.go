@@ -5,14 +5,16 @@ import (
 	"fmt"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-// dbVaultAll is a test helper that returns all the dbVaultEntries from the DB.
-func dbVaultAll(t *testing.T, ctx context.Context, dbConnectionPool db.DBConnectionPool) []*DBVaultEntry {
+// allDBVaultEntries is a test helper that returns all the dbVaultEntries from the DB.
+func allDBVaultEntries(t *testing.T, ctx context.Context, dbConnectionPool db.DBConnectionPool) []*DBVaultEntry {
 	t.Helper()
 
 	var dbVaultEntries []*DBVaultEntry
@@ -26,6 +28,40 @@ var (
 	dbVaultEntry1 = &DBVaultEntry{PublicKey: "GDSBW3RDJ3H6V3QPKI4YJD4QEOO2SR4FYJHV3JSLE2BWA2RSGLKE3NPO", EncryptedPrivateKey: "5CXbLHEFmH696kgHv1obFurnCr+GvGSAap5kiiYKwG6Ndpnl26TCia49rVM0GtaVtSCUQqwHMlG4LhpsD0atn6BgV/WSRWUphrCG3b+vF+vJ8WnC"}
 	dbVaultEntry2 = &DBVaultEntry{PublicKey: "GAIF2YDAESNBDTKGB6FVLQMREVAYUMZSIQIQZBJ72OBXUEQRM263PSFK", EncryptedPrivateKey: "l8fxfRA5TY9QArsHGUzBWTmARNFM+MjP3nMyOiz0JPgo3iGGUP+FCN2TIihjFuB9FM+61DhtsnqL34ZB84b0iX/E1FYp1jwqk6LTWWdS5kzMRIJl"}
 )
+
+func Test_DBVaultEntry_String_doesntLeakPrivateKey(t *testing.T) {
+	updatedAt := time.Now()
+	createdAt := updatedAt.Add(-time.Hour)
+	opts := DBVaultEntry{
+		PublicKey:           "SOME_PUBLIC_KEY",
+		EncryptedPrivateKey: "SOME_PRIVATE_KEY",
+		UpdatedAt:           updatedAt,
+		CreatedAt:           createdAt,
+	}
+
+	testCases := []struct {
+		name  string
+		value string
+	}{
+		{name: "opts.String()", value: opts.String()},
+		{name: "&opts.String()", value: (&opts).String()},
+		{name: "%%v value", value: fmt.Sprintf("%v", opts)},
+		{name: "%%v pointer", value: fmt.Sprintf("%v", &opts)},
+		{name: "%%+v value", value: fmt.Sprintf("%+v", opts)},
+		{name: "%%+v pointer", value: fmt.Sprintf("%+v", &opts)},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.NotContains(t, tc.value, "EncryptedPrivateKey")
+			assert.NotContains(t, tc.value, "SOME_PRIVATE_KEY")
+			assert.Contains(t, tc.value, "SOME_PUBLIC_KEY")
+			assert.Contains(t, tc.value, createdAt.String())
+			assert.Contains(t, tc.value, updatedAt.String())
+			assert.Contains(t, tc.value, fmt.Sprintf("%T", opts))
+		})
+	}
+}
 
 func Test_DBVaultModel_BatchInsert(t *testing.T) {
 	dbt := dbtest.Open(t)
@@ -75,7 +111,7 @@ func Test_DBVaultModel_BatchInsert(t *testing.T) {
 			ctx := context.Background()
 			defer DeleteAllFromDBVaultEntries(t, ctx, dbConnectionPool)
 
-			dbVaultEntries := dbVaultAll(t, ctx, dbConnectionPool)
+			dbVaultEntries := allDBVaultEntries(t, ctx, dbConnectionPool)
 			require.Len(t, dbVaultEntries, 0, "this test should have started with 0 distribution accounts")
 
 			err := dbVaultModel.BatchInsert(ctx, tc.dbVaultEntries)
@@ -83,7 +119,7 @@ func Test_DBVaultModel_BatchInsert(t *testing.T) {
 			if tc.wantErrContains == "" {
 				require.NoError(t, err)
 
-				dbVaultEntries = dbVaultAll(t, ctx, dbConnectionPool)
+				dbVaultEntries = allDBVaultEntries(t, ctx, dbConnectionPool)
 				require.Len(t, dbVaultEntries, tc.wantFinalCount)
 
 				// check if dbVaultEntries contains exactly the same elements as tc.dbVaultEntries, order doesn't matter and the only fields that matter are PublicKey and EncryptedPrivateKey
@@ -93,7 +129,7 @@ func Test_DBVaultModel_BatchInsert(t *testing.T) {
 				require.Truef(t, areSlicesEqual, "the intended and inserted %T slices are not equal", tc.dbVaultEntries)
 			} else {
 				require.ErrorContains(t, err, tc.wantErrContains)
-				dbVaultEntries = dbVaultAll(t, ctx, dbConnectionPool)
+				dbVaultEntries = allDBVaultEntries(t, ctx, dbConnectionPool)
 				require.Len(t, dbVaultEntries, 0)
 			}
 		})
@@ -111,7 +147,7 @@ func Test_DBVaultModel_Get(t *testing.T) {
 	ctx := context.Background()
 
 	// Ensure there are no dbVaultEntries in the DB
-	dbVaultEntries := dbVaultAll(t, ctx, dbConnectionPool)
+	dbVaultEntries := allDBVaultEntries(t, ctx, dbConnectionPool)
 	require.Len(t, dbVaultEntries, 0, "this test should have started with 0 distribution accounts")
 
 	// Insert a dbVaultEntry
@@ -119,10 +155,10 @@ func Test_DBVaultModel_Get(t *testing.T) {
 	require.NoError(t, err)
 
 	// Assert that the total number of dbVaultEntries is 2
-	dbVaultEntries = dbVaultAll(t, ctx, dbConnectionPool)
+	dbVaultEntries = allDBVaultEntries(t, ctx, dbConnectionPool)
 	require.Len(t, dbVaultEntries, 2)
 
-	// Assert dbVaultEntry1 is returned:
+	// Assert the values in dbVaultEntry1:
 	gotDBVaultEntry, err := dbVaultModel.Get(ctx, dbVaultEntry1.PublicKey)
 	require.NoError(t, err)
 	require.Equal(t, dbVaultEntry1.PublicKey, gotDBVaultEntry.PublicKey)
@@ -130,7 +166,7 @@ func Test_DBVaultModel_Get(t *testing.T) {
 	require.NotEmpty(t, gotDBVaultEntry.CreatedAt)
 	require.NotEmpty(t, gotDBVaultEntry.UpdatedAt)
 
-	// Assert dbVaultEntry2 is returned:
+	// Assert the values in dbVaultEntry2:
 	gotDBVaultEntry, err = dbVaultModel.Get(ctx, dbVaultEntry2.PublicKey)
 	require.NoError(t, err)
 	require.Equal(t, dbVaultEntry2.PublicKey, gotDBVaultEntry.PublicKey)
@@ -150,34 +186,34 @@ func Test_DBVaultModel_Delete(t *testing.T) {
 	dbVaultModel := NewDBVaultModel(dbConnectionPool)
 
 	testCases := []struct {
-		name                string
-		dbVaultToInsert     *DBVaultEntry
-		dbVaultToDelete     *DBVaultEntry
-		expectedErrorFormat string
+		name                 string
+		dbVaultEntryToInsert *DBVaultEntry
+		dbVaultEntryToDelete *DBVaultEntry
+		expectedError        string
 	}{
 		{
-			name:            "🎉 successfully add & delete dbVaultEntry",
-			dbVaultToInsert: dbVaultEntry1,
-			dbVaultToDelete: dbVaultEntry1,
+			name:                 "🎉 successfully add & delete dbVaultEntry",
+			dbVaultEntryToInsert: dbVaultEntry1,
+			dbVaultEntryToDelete: dbVaultEntry1,
 		},
 		{
-			name:                "returns an error when trying to delete a dbVaultEntry that does not exist",
-			dbVaultToInsert:     dbVaultEntry1,
-			dbVaultToDelete:     dbVaultEntry2,
-			expectedErrorFormat: "could not find nor delete dbVaultEntry %q: record not found",
+			name:                 "returns an error when trying to delete a dbVaultEntry that does not exist",
+			dbVaultEntryToInsert: dbVaultEntry1,
+			dbVaultEntryToDelete: dbVaultEntry2,
+			expectedError:        fmt.Sprintf("could not find nor delete dbVaultEntry %q: record not found", dbVaultEntry2.PublicKey),
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			defer DeleteAllFromDBVaultEntries(t, ctx, dbConnectionPool)
-			err = dbVaultModel.BatchInsert(ctx, []*DBVaultEntry{tc.dbVaultToInsert})
+			err = dbVaultModel.BatchInsert(ctx, []*DBVaultEntry{tc.dbVaultEntryToInsert})
 			require.NoError(t, err)
 
-			err = dbVaultModel.Delete(ctx, tc.dbVaultToDelete.PublicKey)
-			if tc.expectedErrorFormat != "" {
+			err = dbVaultModel.Delete(ctx, tc.dbVaultEntryToDelete.PublicKey)
+			if tc.expectedError != "" {
 				require.Error(t, err)
-				require.EqualError(t, fmt.Errorf(tc.expectedErrorFormat, tc.dbVaultToDelete.PublicKey), err.Error())
+				require.EqualError(t, err, tc.expectedError)
 			} else {
 				require.NoError(t, err)
 			}
