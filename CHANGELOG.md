@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 None
 
+## [1.1.4](https://github.com/stellar/stellar-disbursement-platform-backend/compare/1.1.3...1.1.4)
+
+### Fixed
+
+- Fix the insufficient balance validation by only considering payments with same asset of the disbursement being started [#202](https://github.com/stellar/stellar-disbursement-platform-backend/pull/202)
+- Update `golang.org/x/crypto` version to v0.17.0 for security reasons. See this [security alert](https://github.com/stellar/stellar-disbursement-platform-backend/security/dependabot/3) for more details [#202](https://github.com/stellar/stellar-disbursement-platform-backend/pull/202)
+
 ## [1.1.3](https://github.com/stellar/stellar-disbursement-platform-backend/compare/1.1.2...1.1.3)
 
 ### Fixed
