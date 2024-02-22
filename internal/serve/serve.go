@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
+	"github.com/go-chi/httprate"
 	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/network"
 	supporthttp "github.com/stellar/go/support/http"
@@ -207,17 +208,30 @@ func Serve(opts ServeOptions, httpServer HTTPServerInterface) error {
 	return nil
 }
 
+const (
+	rateLimitPer20Seconds = 10
+	rateLimitWindow       = 20 * time.Second
+)
+
 func handleHTTP(o ServeOptions) *chi.Mux {
 	mux := chi.NewMux()
 
 	// Middleware
 	mux.Use(middleware.CorsMiddleware(o.CorsAllowedOrigins))
+	// Rate limits requests made with the pair <IP, endpoint>.
+	mux.Use(httprate.Limit(
+		rateLimitPer20Seconds,
+		rateLimitWindow,
+		httprate.WithKeyFuncs(httprate.KeyByIP, httprate.KeyByEndpoint),
+	))
 	mux.Use(chimiddleware.RequestID)
 	mux.Use(chimiddleware.RealIP)
 	mux.Use(supporthttp.LoggingMiddleware)
 	mux.Use(middleware.RecoverHandler)
 	mux.Use(middleware.MetricsRequestHandler(o.MonitorService))
 	mux.Use(middleware.CSPMiddleware())
+	mux.Use(chimiddleware.CleanPath)
+	mux.Use(chimiddleware.Compress(5))
 
 	// Create a route along /static that will serve contents from the ./public_files folder.
 	staticFileServer(mux, publicfiles.PublicFiles)

@@ -3,6 +3,7 @@ package utils
 import (
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 
 	"github.com/stellar/go/clients/horizonclient"
@@ -10,7 +11,6 @@ import (
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/support/render/problem"
 	sdpUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
-	"golang.org/x/exp/slices"
 )
 
 // TransactionStatusUpdateError is an error that occurs when failing to update a transaction's status.
