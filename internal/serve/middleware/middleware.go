@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"context"
+	"crypto/subtle"
 	"errors"
 	"fmt"
 	"net/http"
@@ -260,7 +261,13 @@ func BasicAuthMiddleware(adminAccount, adminApiKey string) func(http.Handler) ht
 			}
 
 			accountUserName, apiKey, ok := req.BasicAuth()
-			if !ok || accountUserName != adminAccount || apiKey != adminApiKey {
+			if !ok {
+				httperror.Unauthorized("", nil, nil).Render(rw)
+				return
+			}
+
+			// Using constant time comparison to avoid timing attacks
+			if accountUserName != adminAccount || subtle.ConstantTimeCompare([]byte(apiKey), []byte(adminApiKey)) != 1 {
 				httperror.Unauthorized("", nil, nil).Render(rw)
 				return
 			}
