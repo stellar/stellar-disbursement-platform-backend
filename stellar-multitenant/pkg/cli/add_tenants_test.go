@@ -191,7 +191,6 @@ Flags:
       --distribution-signer-type string                The type of the signature client used for distribution accounts. Options: [DISTRIBUTION_ACCOUNT_ENV] (DISTRIBUTION_SIGNER_TYPE) (default "DISTRIBUTION_ACCOUNT_ENV")
       --email-sender-type string                       The messenger type used to send invitations to new dashboard users. Options: [DRY_RUN AWS_EMAIL] (EMAIL_SENDER_TYPE)
   -h, --help                                           help for add-tenants
-      --horizon-url string                             The URL of the Stellar Horizon server where this application will communicate with. (HORIZON_URL) (default "https://horizon-testnet.stellar.org/")
       --network-passphrase string                      The Stellar Network passphrase (NETWORK_PASSPHRASE) (default "Test SDF Network ; September 2015")
       --network-type string                            The Stellar Network type (NETWORK_TYPE) (default "testnet")
       --sdp-ui-base-url string                         The Tenant SDP UI/dashboard Base URL. (SDP_UI_BASE_URL) (default "http://localhost:3000")
@@ -221,7 +220,6 @@ Flags:
       --distribution-signer-type string                The type of the signature client used for distribution accounts. Options: [DISTRIBUTION_ACCOUNT_ENV] (DISTRIBUTION_SIGNER_TYPE) (default "DISTRIBUTION_ACCOUNT_ENV")
       --email-sender-type string                       The messenger type used to send invitations to new dashboard users. Options: [DRY_RUN AWS_EMAIL] (EMAIL_SENDER_TYPE)
   -h, --help                                           help for add-tenants
-      --horizon-url string                             The URL of the Stellar Horizon server where this application will communicate with. (HORIZON_URL) (default "https://horizon-testnet.stellar.org/")
       --network-passphrase string                      The Stellar Network passphrase (NETWORK_PASSPHRASE) (default "Test SDF Network ; September 2015")
       --network-type string                            The Stellar Network type (NETWORK_TYPE) (default "testnet")
       --sdp-ui-base-url string                         The Tenant SDP UI/dashboard Base URL. (SDP_UI_BASE_URL) (default "http://localhost:3000")

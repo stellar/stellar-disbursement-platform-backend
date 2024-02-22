@@ -26,7 +26,7 @@ type Manager struct {
 	tenantManager    *tenant.Manager
 	db               db.DBConnectionPool
 	messengerClient  message.MessengerClient
-	signatureService signing.SignatureService
+	distAccSigClient signing.SignatureClient
 }
 
 func (m *Manager) ProvisionNewTenant(
@@ -94,12 +94,12 @@ func (m *Manager) ProvisionNewTenant(
 	}
 
 	// Provision distribution account for tenant if necessary
-	distributionAccPubKeys, err := m.signatureService.DistAccountSigner.BatchInsert(ctx, 1)
+	distributionAccPubKeys, err := m.distAccSigClient.BatchInsert(ctx, 1)
 	if err != nil {
 		if errors.Is(err, signing.ErrUnsupportedCommand) {
 			log.Ctx(ctx).Warnf(
-				"Account provisioning not needed for distribution account signature client type %s",
-				m.signatureService.DistAccountSigner.Type())
+				"Account provisioning not needed for distribution account signature client type %s: %w",
+				m.distAccSigClient.Type(), err)
 		} else {
 			return nil, fmt.Errorf("provisioning distribution account: %w", err)
 		}
@@ -184,8 +184,8 @@ func WithTenantManager(tenantManager *tenant.Manager) Option {
 	}
 }
 
-func WithSignatureService(signatureService signing.SignatureService) Option {
+func WithDistributionAccountSignatureClient(distAccSigClient signing.SignatureClient) Option {
 	return func(m *Manager) {
-		m.signatureService = signatureService
+		m.distAccSigClient = distAccSigClient
 	}
 }

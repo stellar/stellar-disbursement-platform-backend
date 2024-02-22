@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/lib/pq"
+	"github.com/stellar/go/support/log"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/router"
@@ -182,6 +183,8 @@ func (m *Manager) UpdateTenantConfig(ctx context.Context, tu *TenantUpdate) (*Te
 	if tu.DistributionAccount != nil {
 		fields = append(fields, "distribution_account = ?")
 		args = append(args, *tu.DistributionAccount)
+
+		log.Ctx(ctx).Warnf("distribution account updated to %s", *tu.DistributionAccount)
 	}
 
 	args = append(args, tu.ID)

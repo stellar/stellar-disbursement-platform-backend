@@ -11,7 +11,6 @@ import (
 	"github.com/stellar/go/support/log"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/dependencyinjection"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
@@ -59,16 +58,21 @@ func (opts *ServeOptions) SetupDependencies() error {
 
 	opts.tenantManager = tenant.NewManager(tenant.WithDatabase(dbConnectionPool))
 
-	signSvc, err := dependencyinjection.NewSignatureService(context.Background(), opts.SignatureServiceOptions)
+	distAccSigClient, err := signing.NewSignatureClient(opts.SignatureServiceOptions.DistributionSignerType, signing.SignatureClientOptions{
+		NetworkPassphrase:      opts.SignatureServiceOptions.NetworkPassphrase,
+		DistributionPrivateKey: opts.SignatureServiceOptions.DistributionPrivateKey,
+		DBConnectionPool:       dbConnectionPool,
+		EncryptionPassphrase:   opts.SignatureServiceOptions.EncryptionPassphrase,
+	})
 	if err != nil {
-		return fmt.Errorf("creating signature service: %w", err)
+		return fmt.Errorf("creating a new distribution account signature client: %w", err)
 	}
 
 	opts.tenantProvisioningManager = provisioning.NewManager(
 		provisioning.WithDatabase(dbConnectionPool),
 		provisioning.WithTenantManager(opts.tenantManager),
 		provisioning.WithMessengerClient(opts.EmailMessengerClient),
-		provisioning.WithSignatureService(signSvc),
+		provisioning.WithDistributionAccountSignatureClient(distAccSigClient),
 	)
 
 	opts.networkType, err = utils.GetNetworkTypeFromNetworkPassphrase(opts.NetworkPassphrase)

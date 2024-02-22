@@ -10,11 +10,10 @@ import (
 	"github.com/stellar/go/network"
 	"github.com/stellar/go/support/config"
 	"github.com/stellar/go/support/log"
+	"golang.org/x/exp/slices"
 
-	"github.com/stellar/go/clients/horizonclient"
 	cmdUtils "github.com/stellar/stellar-disbursement-platform-backend/cmd/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/dependencyinjection"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/cli/utils"
@@ -33,9 +32,7 @@ type AddTenantsCommandOptions struct {
 
 func AddTenantsCmd() *cobra.Command {
 	tenantsOpts := AddTenantsCommandOptions{}
-	sigOpts := signing.SignatureServiceOptions{}
-
-	configOptions := append(config.ConfigOptions{
+	configOptions := config.ConfigOptions{
 		{
 			Name:           "network-type",
 			Usage:          "The Stellar Network type",
@@ -83,14 +80,10 @@ func AddTenantsCmd() *cobra.Command {
 			ConfigKey: &tenantsOpts.MessengerOptions.AWSRegion,
 			Required:  false,
 		},
-		&config.ConfigOption{
-			Name:        "horizon-url",
-			Usage:       "The URL of the Stellar Horizon server where this application will communicate with.",
-			OptType:     types.String,
-			ConfigKey:   &tenantsOpts.HorizonURL,
-			FlagDefault: horizonclient.DefaultTestNetClient.HorizonURL,
-			Required:    true,
-		},
+	}
+
+	sigOpts := signing.SignatureServiceOptions{}
+	configOptions = append(configOptions,
 		&config.ConfigOption{
 			Name:        "network-passphrase",
 			Usage:       "The Stellar Network passphrase",
@@ -98,8 +91,8 @@ func AddTenantsCmd() *cobra.Command {
 			FlagDefault: network.TestNetworkPassphrase,
 			ConfigKey:   &sigOpts.NetworkPassphrase,
 			Required:    true,
-		},
-	}, cmdUtils.BaseSignatureServiceConfigOptions(&sigOpts)...)
+		})
+	configOptions = append(configOptions, cmdUtils.BaseSignatureServiceConfigOptions(&sigOpts)...)
 
 	cmd := cobra.Command{
 		Use:     "add-tenants",
@@ -157,22 +150,18 @@ func executeAddTenant(
 	}
 	defer dbConnectionPool.Close()
 
-	sigOpts.DBConnectionPool = dbConnectionPool
-
-	horizonClient, err := dependencyinjection.NewHorizonClient(ctx, tenantsOpts.HorizonURL)
-	if err != nil {
-		return fmt.Errorf("creating horizon client: %w", err)
+	if !slices.Contains(signing.DistributionSignatureClientTypes(), sigOpts.DistributionSignerType) {
+		return fmt.Errorf("invalid distribution account signer type %q", sigOpts.DistributionSignerType)
 	}
 
-	ledgerNumberTracker, err := dependencyinjection.NewLedgerNumberTracker(ctx, horizonClient)
+	distAccSigClient, err := signing.NewSignatureClient(sigOpts.DistributionSignerType, signing.SignatureClientOptions{
+		NetworkPassphrase:      sigOpts.NetworkPassphrase,
+		DistributionPrivateKey: sigOpts.DistributionPrivateKey,
+		DBConnectionPool:       dbConnectionPool,
+		EncryptionPassphrase:   sigOpts.EncryptionPassphrase,
+	})
 	if err != nil {
-		return fmt.Errorf("creating ledger number tracker: %w", err)
-	}
-	sigOpts.LedgerNumberTracker = ledgerNumberTracker
-
-	sigService, err := dependencyinjection.NewSignatureService(ctx, sigOpts)
-	if err != nil {
-		return fmt.Errorf("creating signature service: %w", err)
+		return fmt.Errorf("creating a new distribution account signature client: %w", err)
 	}
 
 	m := tenant.NewManager(tenant.WithDatabase(dbConnectionPool))
@@ -180,7 +169,8 @@ func executeAddTenant(
 		provisioning.WithDatabase(dbConnectionPool),
 		provisioning.WithMessengerClient(messengerClient),
 		provisioning.WithTenantManager(m),
-		provisioning.WithSignatureService(sigService))
+		provisioning.WithDistributionAccountSignatureClient(distAccSigClient),
+	)
 
 	t, err := p.ProvisionNewTenant(ctx, tenantName, userFirstName, userLastName, userEmail, organizationName, *tenantsOpts.SDPUIBaseURL, tenantsOpts.NetworkType)
 	if err != nil {

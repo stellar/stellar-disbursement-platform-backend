@@ -19,7 +19,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
+	sigMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/internal/provisioning"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
@@ -263,7 +263,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 
 	distAcc := keypair.MustRandom()
 	t.Setenv("DISTRIBUTION_SEED", distAcc.Seed())
-	signatureSvcMock, _, distAccSigClientMock, _, _ := signing.NewMockSignatureService(t)
+	distAccSigClientMock := sigMocks.NewMockSignatureClient(t)
 
 	ctx := context.Background()
 	messengerClientMock := message.MessengerClientMock{}
@@ -272,7 +272,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 		provisioning.WithDatabase(dbConnectionPool),
 		provisioning.WithTenantManager(m),
 		provisioning.WithMessengerClient(&messengerClientMock),
-		provisioning.WithSignatureService(signatureSvcMock),
+		provisioning.WithDistributionAccountSignatureClient(distAccSigClientMock),
 	)
 	handler := TenantsHandler{
 		Manager:             m,
@@ -479,7 +479,6 @@ func Test_TenantHandler_Post(t *testing.T) {
 	})
 
 	messengerClientMock.AssertExpectations(t)
-	distAccSigClientMock.AssertExpectations(t)
 }
 
 func Test_TenantHandler_Patch(t *testing.T) {
