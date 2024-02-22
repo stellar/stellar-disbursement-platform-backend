@@ -85,13 +85,13 @@ func Test_NewSignatureClient(t *testing.T) {
 			wantErrorMsg: "invalid signature client type: INVALID",
 		},
 		{
-			name:    "🎉 successfully instantiate a Channel Account DB instance",
+			name:    "🎉 successfully instantiate a ChannelAccountDB instance",
 			sigType: ChannelAccountDBSignatureClientType,
 			opts: SignatureClientOptions{
-				NetworkPassphrase:    network.TestNetworkPassphrase,
-				DBConnectionPool:     dbConnectionPool,
-				EncryptionPassphrase: encryptionPassphrase,
-				LedgerNumberTracker:  mLedgerNumberTracker,
+				NetworkPassphrase:         network.TestNetworkPassphrase,
+				DBConnectionPool:          dbConnectionPool,
+				ChAccEncryptionPassphrase: encryptionPassphrase,
+				LedgerNumberTracker:       mLedgerNumberTracker,
 			},
 			wantResult: &ChannelAccountDBSignatureClient{
 				chAccModel:           store.NewChannelAccountModel(dbConnectionPool),
@@ -99,6 +99,22 @@ func Test_NewSignatureClient(t *testing.T) {
 				encrypter:            &utils.DefaultPrivateKeyEncrypter{},
 				encryptionPassphrase: encryptionPassphrase,
 				ledgerNumberTracker:  mLedgerNumberTracker,
+				networkPassphrase:    network.TestNetworkPassphrase,
+			},
+		},
+		{
+			name:    "🎉 successfully instantiate a DistributionAccountDB",
+			sigType: DistributionAccountDBSignatureClientType,
+			opts: SignatureClientOptions{
+				NetworkPassphrase:           network.TestNetworkPassphrase,
+				DBConnectionPool:            dbConnectionPool,
+				DistAccEncryptionPassphrase: encryptionPassphrase,
+				Encrypter:                   &utils.PrivateKeyEncrypterMock{},
+			},
+			wantResult: &DistributionAccountDBSignatureClient{
+				dbVault:              store.NewDBVaultModel(dbConnectionPool),
+				encrypter:            &utils.PrivateKeyEncrypterMock{},
+				encryptionPassphrase: encryptionPassphrase,
 				networkPassphrase:    network.TestNetworkPassphrase,
 			},
 		},

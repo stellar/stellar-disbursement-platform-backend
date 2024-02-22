@@ -2,7 +2,6 @@ package signing
 
 import (
 	"context"
-	"math"
 	"reflect"
 	"testing"
 
@@ -14,12 +13,11 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
-	preconditionsMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
 )
 
-func Test_ChannelAccountDBSignatureClientOptions_Validate(t *testing.T) {
+func Test_DistributionAccountDBSignatureClientOptions_Validate(t *testing.T) {
 	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
@@ -28,7 +26,7 @@ func Test_ChannelAccountDBSignatureClientOptions_Validate(t *testing.T) {
 
 	testCases := []struct {
 		name            string
-		opts            ChannelAccountDBSignatureClientOptions
+		opts            DistributionAccountDBSignatureClientOptions
 		wantErrContains string
 	}{
 		{
@@ -37,14 +35,14 @@ func Test_ChannelAccountDBSignatureClientOptions_Validate(t *testing.T) {
 		},
 		{
 			name: "return an error if dbConnectionPool is nil",
-			opts: ChannelAccountDBSignatureClientOptions{
+			opts: DistributionAccountDBSignatureClientOptions{
 				NetworkPassphrase: network.TestNetworkPassphrase,
 			},
 			wantErrContains: "database connection pool cannot be nil",
 		},
 		{
 			name: "return an error if encryption passphrase is empty",
-			opts: ChannelAccountDBSignatureClientOptions{
+			opts: DistributionAccountDBSignatureClientOptions{
 				NetworkPassphrase: network.TestNetworkPassphrase,
 				DBConnectionPool:  dbConnectionPool,
 			},
@@ -52,7 +50,7 @@ func Test_ChannelAccountDBSignatureClientOptions_Validate(t *testing.T) {
 		},
 		{
 			name: "return an error if encryption passphrase is invalid",
-			opts: ChannelAccountDBSignatureClientOptions{
+			opts: DistributionAccountDBSignatureClientOptions{
 				NetworkPassphrase:    network.TestNetworkPassphrase,
 				DBConnectionPool:     dbConnectionPool,
 				EncryptionPassphrase: "invalid",
@@ -60,21 +58,11 @@ func Test_ChannelAccountDBSignatureClientOptions_Validate(t *testing.T) {
 			wantErrContains: "encryption passphrase is not a valid Ed25519 secret",
 		},
 		{
-			name: "return an error if the ledger number tracker is nil",
-			opts: ChannelAccountDBSignatureClientOptions{
-				NetworkPassphrase:    network.TestNetworkPassphrase,
-				DBConnectionPool:     dbConnectionPool,
-				EncryptionPassphrase: "SCPGNK3MRMXKNWGZ4ET3JZ6RUJIN7FMHT4ASVXDG7YPBL4WKBQNEL63F",
-			},
-			wantErrContains: "ledger number tracker cannot be nil",
-		},
-		{
 			name: "🎉 Successfully validates options",
-			opts: ChannelAccountDBSignatureClientOptions{
+			opts: DistributionAccountDBSignatureClientOptions{
 				NetworkPassphrase:    network.TestNetworkPassphrase,
 				DBConnectionPool:     dbConnectionPool,
 				EncryptionPassphrase: "SCPGNK3MRMXKNWGZ4ET3JZ6RUJIN7FMHT4ASVXDG7YPBL4WKBQNEL63F",
-				LedgerNumberTracker:  preconditionsMocks.NewMockLedgerNumberTracker(t),
 			},
 		},
 	}
@@ -92,18 +80,16 @@ func Test_ChannelAccountDBSignatureClientOptions_Validate(t *testing.T) {
 	}
 }
 
-func Test_NewChannelAccountDBSignatureClient(t *testing.T) {
+func Test_NewDistributionAccountDBSignatureClient(t *testing.T) {
 	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
 
-	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
-
 	testCases := []struct {
 		name                  string
-		opts                  ChannelAccountDBSignatureClientOptions
+		opts                  DistributionAccountDBSignatureClientOptions
 		wantEncrypterTypeName string
 		wantErrContains       string
 	}{
@@ -112,22 +98,20 @@ func Test_NewChannelAccountDBSignatureClient(t *testing.T) {
 			wantErrContains: "validating options: network passphrase cannot be empty",
 		},
 		{
-			name: "🎉 Successfully instantiates a new channel account DB signature client with default encrypter",
-			opts: ChannelAccountDBSignatureClientOptions{
+			name: "🎉 Successfully instantiates a new distribution account DB signature client with default encrypter",
+			opts: DistributionAccountDBSignatureClientOptions{
 				NetworkPassphrase:    network.TestNetworkPassphrase,
 				DBConnectionPool:     dbConnectionPool,
 				EncryptionPassphrase: "SCPGNK3MRMXKNWGZ4ET3JZ6RUJIN7FMHT4ASVXDG7YPBL4WKBQNEL63F",
-				LedgerNumberTracker:  mLedgerNumberTracker,
 			},
 			wantEncrypterTypeName: reflect.TypeOf(&utils.DefaultPrivateKeyEncrypter{}).String(),
 		},
 		{
-			name: "🎉 Successfully instantiates a new channel account DB signature client with a custom encrypter",
-			opts: ChannelAccountDBSignatureClientOptions{
+			name: "🎉 Successfully instantiates a new distribution account DB signature client with a custom encrypter",
+			opts: DistributionAccountDBSignatureClientOptions{
 				NetworkPassphrase:    network.TestNetworkPassphrase,
 				DBConnectionPool:     dbConnectionPool,
 				EncryptionPassphrase: "SCPGNK3MRMXKNWGZ4ET3JZ6RUJIN7FMHT4ASVXDG7YPBL4WKBQNEL63F",
-				LedgerNumberTracker:  mLedgerNumberTracker,
 				Encrypter:            &utils.PrivateKeyEncrypterMock{},
 			},
 			wantEncrypterTypeName: reflect.TypeOf(&utils.PrivateKeyEncrypterMock{}).String(),
@@ -136,7 +120,7 @@ func Test_NewChannelAccountDBSignatureClient(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			sigClient, err := NewChannelAccountDBSignatureClient(tc.opts)
+			sigClient, err := NewDistributionAccountDBSignatureClient(tc.opts)
 			if tc.wantErrContains != "" {
 				require.Error(t, err)
 				assert.ErrorContains(t, err, tc.wantErrContains)
@@ -150,17 +134,17 @@ func Test_NewChannelAccountDBSignatureClient(t *testing.T) {
 	}
 }
 
-func Test_ChannelAccountDBSignatureClientOptions_NetworkPassphrase(t *testing.T) {
+func Test_DistributionAccountDBSignatureClientOptions_NetworkPassphrase(t *testing.T) {
 	// test with testnet passphrase
-	sigClient := &ChannelAccountDBSignatureClient{networkPassphrase: network.TestNetworkPassphrase}
+	sigClient := &DistributionAccountDBSignatureClient{networkPassphrase: network.TestNetworkPassphrase}
 	assert.Equal(t, network.TestNetworkPassphrase, sigClient.NetworkPassphrase())
 
 	// test with public network passphrase, to make sure it's changing accordingly
-	sigClient = &ChannelAccountDBSignatureClient{networkPassphrase: network.PublicNetworkPassphrase}
+	sigClient = &DistributionAccountDBSignatureClient{networkPassphrase: network.PublicNetworkPassphrase}
 	assert.Equal(t, network.PublicNetworkPassphrase, sigClient.NetworkPassphrase())
 }
 
-func Test_ChannelAccountDBSignatureClient_getKPsForAccounts(t *testing.T) {
+func Test_DistributionAccountDBSignatureClient_getKPsForAccounts(t *testing.T) {
 	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
@@ -168,34 +152,34 @@ func Test_ChannelAccountDBSignatureClient_getKPsForAccounts(t *testing.T) {
 	defer dbConnectionPool.Close()
 
 	ctx := context.Background()
-	chAccountStore := store.NewChannelAccountModel(dbConnectionPool)
+	dbVaultStore := store.NewDBVaultModel(dbConnectionPool)
 
 	// create default encrypter
 	encrypter := &utils.DefaultPrivateKeyEncrypter{}
 	encrypterPass := keypair.MustRandom().Seed()
 
-	// create channel accounts in the DB
-	channelAccounts := store.CreateChannelAccountFixturesEncryptedKPs(t, ctx, dbConnectionPool, encrypter, encrypterPass, 2)
-	chAccKP1, chAccKP2 := channelAccounts[0], channelAccounts[1]
+	// create distribution accounts in the DB
+	distributionAccounts := store.CreateDBVaultFixturesEncryptedKPs(t, ctx, dbConnectionPool, encrypter, encrypterPass, 2)
+	require.Len(t, distributionAccounts, 2)
+	distAccKP1, distAccKP2 := distributionAccounts[0], distributionAccounts[1]
 
-	// create channel account that's not in the DB
-	nonExistentChannelAccountKP, err := keypair.Random()
+	// create distribution account that's not in the DB
+	nonExistentDistributionAccountKP, err := keypair.Random()
 	require.NoError(t, err)
 
-	// create Channel account with private key encrypted by a different passphrase
+	// create Distribution account with private key encrypted by a different passphrase
 	undecryptableKeyChAccKP := keypair.MustRandom()
 	undecryptableKeyChAccKPSeed, err := encrypter.Encrypt(undecryptableKeyChAccKP.Seed(), keypair.MustRandom().Seed())
 	require.NoError(t, err)
-	err = chAccountStore.Insert(ctx, chAccountStore.DBConnectionPool, undecryptableKeyChAccKP.Address(), undecryptableKeyChAccKPSeed)
+	err = dbVaultStore.BatchInsert(ctx, []*store.DBVaultEntry{{PublicKey: undecryptableKeyChAccKP.Address(), EncryptedPrivateKey: undecryptableKeyChAccKPSeed}})
 	require.NoError(t, err)
 
 	// create signature client
-	sigClient, err := NewChannelAccountDBSignatureClient(ChannelAccountDBSignatureClientOptions{
+	sigClient, err := NewDistributionAccountDBSignatureClient(DistributionAccountDBSignatureClientOptions{
 		NetworkPassphrase:    network.TestNetworkPassphrase,
 		DBConnectionPool:     dbConnectionPool,
 		EncryptionPassphrase: encrypterPass,
 		Encrypter:            encrypter,
-		LedgerNumberTracker:  preconditionsMocks.NewMockLedgerNumberTracker(t),
 	})
 	require.NoError(t, err)
 
@@ -208,27 +192,27 @@ func Test_ChannelAccountDBSignatureClient_getKPsForAccounts(t *testing.T) {
 		{
 			name:            "return an error if no accounts are passed",
 			accounts:        []string{},
-			wantErrContains: "no accounts provided",
+			wantErrContains: "no publicKeys provided",
 		},
 		{
 			name:            "return an error if one of the accounts is empty",
 			accounts:        []string{""},
-			wantErrContains: "account 0 is empty",
+			wantErrContains: "publicKey 0 is empty",
 		},
 		{
 			name:            "return an error if one of the accounts doesn't exist in the database",
-			accounts:        []string{nonExistentChannelAccountKP.Address()},
+			accounts:        []string{nonExistentDistributionAccountKP.Address()},
 			wantErrContains: store.ErrRecordNotFound.Error(),
 		},
 		{
 			name:         "🎉 Successfully one result if there are repeated values in the input array",
-			accounts:     []string{chAccKP1.Address(), chAccKP1.Address()},
-			wantKeypairs: []*keypair.Full{chAccKP1},
+			accounts:     []string{distAccKP1.Address(), distAccKP1.Address()},
+			wantKeypairs: []*keypair.Full{distAccKP1},
 		},
 		{
 			name:         "🎉 Successfully returns all results if they're all distinct addresses in the DB",
-			accounts:     []string{chAccKP1.Address(), chAccKP2.Address()},
-			wantKeypairs: []*keypair.Full{chAccKP1, chAccKP2},
+			accounts:     []string{distAccKP1.Address(), distAccKP2.Address()},
+			wantKeypairs: []*keypair.Full{distAccKP1, distAccKP2},
 		},
 		{
 			name:            "return an error if one of the encrypted seeds cannot be decrypted with the expected passphrase",
@@ -253,7 +237,7 @@ func Test_ChannelAccountDBSignatureClient_getKPsForAccounts(t *testing.T) {
 	}
 }
 
-func Test_ChannelAccountDBSignatureClient_SignStellarTransaction(t *testing.T) {
+func Test_DistributionAccountDBSignatureClient_SignStellarTransaction(t *testing.T) {
 	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
@@ -266,30 +250,30 @@ func Test_ChannelAccountDBSignatureClient_SignStellarTransaction(t *testing.T) {
 	encrypterPass := keypair.MustRandom().Seed()
 	encrypter := &utils.DefaultPrivateKeyEncrypter{}
 
-	// create channel accounts in the DB
-	channelAccounts := store.CreateChannelAccountFixturesEncryptedKPs(t, ctx, dbConnectionPool, encrypter, encrypterPass, 2)
-	chAccKP1, chAccKP2 := channelAccounts[0], channelAccounts[1]
+	// create distribution accounts in the DB
+	distributionAccounts := store.CreateDBVaultFixturesEncryptedKPs(t, ctx, dbConnectionPool, encrypter, encrypterPass, 2)
+	require.Len(t, distributionAccounts, 2)
+	distAccKP1, distAccKP2 := distributionAccounts[0], distributionAccounts[1]
 
-	sigClient, err := NewChannelAccountDBSignatureClient(ChannelAccountDBSignatureClientOptions{
+	sigClient, err := NewDistributionAccountDBSignatureClient(DistributionAccountDBSignatureClientOptions{
 		NetworkPassphrase:    network.TestNetworkPassphrase,
 		DBConnectionPool:     dbConnectionPool,
 		EncryptionPassphrase: encrypterPass,
 		Encrypter:            encrypter,
-		LedgerNumberTracker:  preconditionsMocks.NewMockLedgerNumberTracker(t),
 	})
 	require.NoError(t, err)
 
 	// create stellar transaction
-	chSourceAccount := txnbuild.NewSimpleAccount(chAccKP1.Address(), int64(9605939170639897))
+	distSourceAccount := txnbuild.NewSimpleAccount(distAccKP1.Address(), int64(9605939170639897))
 	stellarTx, err := txnbuild.NewTransaction(
 		txnbuild.TransactionParams{
-			SourceAccount:        &chSourceAccount,
+			SourceAccount:        &distSourceAccount,
 			IncrementSequenceNum: true,
 			Operations: []txnbuild.Operation{&txnbuild.Payment{
 				Destination:   "GCCOBXW2XQNUSL467IEILE6MMCNRR66SSVL4YQADUNYYNUVREF3FIV2Z",
 				Amount:        "10",
 				Asset:         txnbuild.NativeAsset{},
-				SourceAccount: chAccKP2.Address(),
+				SourceAccount: distAccKP2.Address(),
 			}},
 			BaseFee:       txnbuild.MinBaseFee,
 			Preconditions: txnbuild.Preconditions{TimeBounds: txnbuild.NewTimeout(60)},
@@ -297,7 +281,7 @@ func Test_ChannelAccountDBSignatureClient_SignStellarTransaction(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	wantSignedStellarTx, err := stellarTx.Sign(network.TestNetworkPassphrase, chAccKP1, chAccKP2)
+	wantSignedStellarTx, err := stellarTx.Sign(network.TestNetworkPassphrase, distAccKP1, distAccKP2)
 	require.NoError(t, err)
 
 	testCases := []struct {
@@ -317,18 +301,18 @@ func Test_ChannelAccountDBSignatureClient_SignStellarTransaction(t *testing.T) {
 			name:            "return an error if no accounts are passed",
 			stellarTx:       stellarTx,
 			accounts:        []string{},
-			wantErrContains: "no accounts provided",
+			wantErrContains: "no publicKeys provided",
 		},
 		{
 			name:                "🎉 Successfully sign transaction when all incoming addresses are correct",
 			stellarTx:           stellarTx,
-			accounts:            []string{chAccKP1.Address(), chAccKP2.Address()},
+			accounts:            []string{distAccKP1.Address(), distAccKP2.Address()},
 			wantSignedStellarTx: wantSignedStellarTx,
 		},
 		{
 			name:                "🎉 Successfully sign transaction when some incoming address are repeated",
 			stellarTx:           stellarTx,
-			accounts:            []string{chAccKP1.Address(), chAccKP2.Address(), chAccKP2.Address()},
+			accounts:            []string{distAccKP1.Address(), distAccKP2.Address(), distAccKP2.Address()},
 			wantSignedStellarTx: wantSignedStellarTx,
 		},
 	}
@@ -348,7 +332,7 @@ func Test_ChannelAccountDBSignatureClient_SignStellarTransaction(t *testing.T) {
 	}
 }
 
-func Test_ChannelAccountDBSignatureClient_SignFeeBumpStellarTransaction(t *testing.T) {
+func Test_DistributionAccountDBSignatureClient_SignFeeBumpStellarTransaction(t *testing.T) {
 	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
@@ -361,87 +345,87 @@ func Test_ChannelAccountDBSignatureClient_SignFeeBumpStellarTransaction(t *testi
 	encrypterPass := keypair.MustRandom().Seed()
 	encrypter := &utils.DefaultPrivateKeyEncrypter{}
 
-	// create channel accounts in the DB
-	channelAccounts := store.CreateChannelAccountFixturesEncryptedKPs(t, ctx, dbConnectionPool, encrypter, encrypterPass, 2)
-	chAccKP1, chAccKP2 := channelAccounts[0], channelAccounts[1]
+	// create distribution accounts in the DB
+	distributionAccounts := store.CreateDBVaultFixturesEncryptedKPs(t, ctx, dbConnectionPool, encrypter, encrypterPass, 2)
+	require.Len(t, distributionAccounts, 2)
+	distAccKP1, distAccKP2 := distributionAccounts[0], distributionAccounts[1]
 
-	sigClient, err := NewChannelAccountDBSignatureClient(ChannelAccountDBSignatureClientOptions{
+	sigClient, err := NewDistributionAccountDBSignatureClient(DistributionAccountDBSignatureClientOptions{
 		NetworkPassphrase:    network.TestNetworkPassphrase,
 		DBConnectionPool:     dbConnectionPool,
 		EncryptionPassphrase: encrypterPass,
 		Encrypter:            &utils.DefaultPrivateKeyEncrypter{},
-		LedgerNumberTracker:  preconditionsMocks.NewMockLedgerNumberTracker(t),
 	})
 	require.NoError(t, err)
 
 	// create stellar transaction
-	chSourceAccount := txnbuild.NewSimpleAccount(chAccKP1.Address(), int64(9605939170639897))
+	distSourceAccount := txnbuild.NewSimpleAccount(distAccKP1.Address(), int64(9605939170639897))
 	stellarTx, err := txnbuild.NewTransaction(
 		txnbuild.TransactionParams{
-			SourceAccount:        &chSourceAccount,
+			SourceAccount:        &distSourceAccount,
 			IncrementSequenceNum: true,
 			Operations: []txnbuild.Operation{&txnbuild.Payment{
 				Destination:   "GCCOBXW2XQNUSL467IEILE6MMCNRR66SSVL4YQADUNYYNUVREF3FIV2Z",
 				Amount:        "10",
 				Asset:         txnbuild.NativeAsset{},
-				SourceAccount: chAccKP2.Address(),
+				SourceAccount: distAccKP2.Address(),
 			}},
 			BaseFee:       txnbuild.MinBaseFee,
 			Preconditions: txnbuild.Preconditions{TimeBounds: txnbuild.NewTimeout(60)},
 		},
 	)
 	require.NoError(t, err)
-	signedStellarTx, err := stellarTx.Sign(network.TestNetworkPassphrase, chAccKP1, chAccKP2)
+	signedStellarTx, err := stellarTx.Sign(network.TestNetworkPassphrase, distAccKP1, distAccKP2)
 	require.NoError(t, err)
 
 	feeBumpStellarTx, err := txnbuild.NewFeeBumpTransaction(
 		txnbuild.FeeBumpTransactionParams{
 			Inner:      signedStellarTx,
-			FeeAccount: chAccKP2.Address(),
+			FeeAccount: distAccKP2.Address(),
 			BaseFee:    txnbuild.MinBaseFee,
 		},
 	)
 	require.NoError(t, err)
 
-	wantSignedFeeBumpStellarTx, err := feeBumpStellarTx.Sign(network.TestNetworkPassphrase, chAccKP2)
+	wantSignedFeeBumpStellarTx, err := feeBumpStellarTx.Sign(network.TestNetworkPassphrase, distAccKP2)
 	assert.NoError(t, err)
 
 	testCases := []struct {
 		name                       string
 		feeBumpStellarTx           *txnbuild.FeeBumpTransaction
-		accounts                   []string
+		publicKeys                 []string
 		wantErrContains            string
 		wantSignedFeeBumpStellarTx *txnbuild.FeeBumpTransaction
 	}{
 		{
 			name:             "return an error if stellar transaction is nil",
 			feeBumpStellarTx: nil,
-			accounts:         []string{},
+			publicKeys:       []string{},
 			wantErrContains:  "stellarTx cannot be nil",
 		},
 		{
 			name:             "return an error if no accounts are passed",
 			feeBumpStellarTx: feeBumpStellarTx,
-			accounts:         []string{},
-			wantErrContains:  "no accounts provided",
+			publicKeys:       []string{},
+			wantErrContains:  "no publicKeys provided",
 		},
 		{
-			name:                       "🎉 Successfully sign transaction when all incoming addresses are correct",
+			name:                       "🎉 Successfully sign transaction when all incoming publicKeys are correct",
 			feeBumpStellarTx:           feeBumpStellarTx,
-			accounts:                   []string{chAccKP2.Address()},
+			publicKeys:                 []string{distAccKP2.Address()},
 			wantSignedFeeBumpStellarTx: wantSignedFeeBumpStellarTx,
 		},
 		{
-			name:                       "🎉 Successfully sign transaction when all some address are repeated",
+			name:                       "🎉 Successfully sign transaction when all publicKeys are repeated",
 			feeBumpStellarTx:           feeBumpStellarTx,
-			accounts:                   []string{chAccKP2.Address(), chAccKP2.Address()},
+			publicKeys:                 []string{distAccKP2.Address(), distAccKP2.Address()},
 			wantSignedFeeBumpStellarTx: wantSignedFeeBumpStellarTx,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			gotSignedFeeBumpStellarTx, err := sigClient.SignFeeBumpStellarTransaction(ctx, tc.feeBumpStellarTx, tc.accounts...)
+			gotSignedFeeBumpStellarTx, err := sigClient.SignFeeBumpStellarTransaction(ctx, tc.feeBumpStellarTx, tc.publicKeys...)
 			if tc.wantErrContains != "" {
 				require.Error(t, err)
 				assert.ErrorContains(t, err, tc.wantErrContains)
@@ -454,7 +438,17 @@ func Test_ChannelAccountDBSignatureClient_SignFeeBumpStellarTransaction(t *testi
 	}
 }
 
-func Test_ChannelAccountDBSignatureClient_BatchInsert(t *testing.T) {
+// allDBVaultEntries is a test helper that returns all the dbVaultEntries from the DB.
+func allDBVaultEntries(t *testing.T, ctx context.Context, dbConnectionPool db.DBConnectionPool) []store.DBVaultEntry {
+	t.Helper()
+
+	var dbVaultEntries []store.DBVaultEntry
+	err := dbConnectionPool.SelectContext(ctx, &dbVaultEntries, "SELECT * FROM vault")
+	require.NoError(t, err)
+	return dbVaultEntries
+}
+
+func Test_DistributionAccountDBSignatureClient_BatchInsert(t *testing.T) {
 	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
@@ -462,7 +456,6 @@ func Test_ChannelAccountDBSignatureClient_BatchInsert(t *testing.T) {
 	defer dbConnectionPool.Close()
 
 	ctx := context.Background()
-	chAccountStore := store.NewChannelAccountModel(dbConnectionPool)
 
 	distributionKP, err := keypair.Random()
 	require.NoError(t, err)
@@ -474,7 +467,7 @@ func Test_ChannelAccountDBSignatureClient_BatchInsert(t *testing.T) {
 	}{
 		{
 			name:            "if number<=0, return an error",
-			wantErrContains: "the number of accounts to insert need to be greater than zero",
+			wantErrContains: "the number of publicKeys to insert needs to be greater than zero",
 		},
 		{
 			name:   "🎉 successfully bulk insert",
@@ -482,25 +475,20 @@ func Test_ChannelAccountDBSignatureClient_BatchInsert(t *testing.T) {
 		},
 	}
 
-	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
-	mLedgerNumberTracker.On("GetLedgerNumber").Return(100, nil).Once()
-
 	defaultEncrypter := &utils.DefaultPrivateKeyEncrypter{}
 	encrypterPass := distributionKP.Seed()
-	sigClient, err := NewChannelAccountDBSignatureClient(ChannelAccountDBSignatureClientOptions{
+	sigClient, err := NewDistributionAccountDBSignatureClient(DistributionAccountDBSignatureClientOptions{
 		NetworkPassphrase:    network.TestNetworkPassphrase,
 		DBConnectionPool:     dbConnectionPool,
 		EncryptionPassphrase: encrypterPass,
 		Encrypter:            defaultEncrypter,
-		LedgerNumberTracker:  mLedgerNumberTracker,
 	})
 	require.NoError(t, err)
 
 	for _, tc := range testCase {
 		t.Run(tc.name, func(t *testing.T) {
-			count, err := chAccountStore.Count(ctx)
-			require.NoError(t, err)
-			require.Equal(t, 0, count, "this test should have started with 0 channel accounts")
+			dbVaultEntries := allDBVaultEntries(t, ctx, dbConnectionPool)
+			require.Len(t, dbVaultEntries, 0, "this test should have started with 0 distribution accounts")
 
 			publicKeys, err := sigClient.BatchInsert(ctx, tc.amount)
 			if tc.wantErrContains != "" {
@@ -510,33 +498,31 @@ func Test_ChannelAccountDBSignatureClient_BatchInsert(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 
-				allChAccounts, err := chAccountStore.GetAll(ctx, dbConnectionPool, math.MaxInt32, 0)
-				require.NoError(t, err)
+				dbVaultEntries = allDBVaultEntries(t, ctx, dbConnectionPool)
 				assert.Equal(t, tc.amount, len(publicKeys))
-				assert.Equal(t, tc.amount, len(allChAccounts))
+				assert.Equal(t, tc.amount, len(dbVaultEntries))
 
 				// compare the accounts
 				var alChAccPublicKeys []string
-				for _, chAccount := range allChAccounts {
-					alChAccPublicKeys = append(alChAccPublicKeys, chAccount.PublicKey)
+				for _, distAccount := range dbVaultEntries {
+					alChAccPublicKeys = append(alChAccPublicKeys, distAccount.PublicKey)
 
 					// Check if the private key is the actual seed for the public key
-					encryptedPrivateKey := chAccount.PrivateKey
-					privateKey, err := defaultEncrypter.Decrypt(encryptedPrivateKey, encrypterPass)
+					privateKey, err := defaultEncrypter.Decrypt(distAccount.EncryptedPrivateKey, encrypterPass)
 					require.NoError(t, err)
 					kp := keypair.MustParseFull(privateKey)
-					assert.Equal(t, chAccount.PublicKey, kp.Address())
+					assert.Equal(t, distAccount.PublicKey, kp.Address())
 				}
 
 				assert.ElementsMatch(t, alChAccPublicKeys, publicKeys)
 			}
 
-			store.DeleteAllFromChannelAccounts(t, ctx, dbConnectionPool)
+			store.DeleteAllFromDBVaultEntries(t, ctx, dbConnectionPool)
 		})
 	}
 }
 
-func Test_ChannelAccountDBSignatureClient_Delete(t *testing.T) {
+func Test_DistributionAccountDBSignatureClient_Delete(t *testing.T) {
 	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
@@ -544,59 +530,39 @@ func Test_ChannelAccountDBSignatureClient_Delete(t *testing.T) {
 	defer dbConnectionPool.Close()
 
 	ctx := context.Background()
-	chAccountStore := store.NewChannelAccountModel(dbConnectionPool)
 
 	// create default encrypter
 	encrypterPass := keypair.MustRandom().Seed()
 	encrypter := &utils.DefaultPrivateKeyEncrypter{}
 
-	// current ledger number
-	currLedgerNumber := 0
-	lockUntilLedgerNumber := 10
-	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
-	mLedgerNumberTracker.
-		On("GetLedgerNumber").
-		Return(currLedgerNumber, nil).
-		Times(3)
-
 	// at start: count=0
-	count, err := chAccountStore.Count(ctx)
-	require.NoError(t, err)
-	assert.Equal(t, 0, count)
+	allDistAccounts := allDBVaultEntries(t, ctx, dbConnectionPool)
+	require.Len(t, allDistAccounts, 0)
 
 	// create 2 accounts: count=0->2
-	channelAccounts := store.CreateChannelAccountFixtures(t, ctx, dbConnectionPool, 2)
-	count, err = chAccountStore.Count(ctx)
-	require.NoError(t, err)
-	assert.Equal(t, 2, count)
+	distributionAccounts := store.CreateDBVaultFixturesEncryptedKPs(t, ctx, dbConnectionPool, encrypter, encrypterPass, 2)
+	allDistAccounts = allDBVaultEntries(t, ctx, dbConnectionPool)
+	require.Len(t, allDistAccounts, 2)
 
-	for _, chAcc := range channelAccounts {
-		_, err = chAccountStore.Lock(ctx, chAccountStore.DBConnectionPool, chAcc.PublicKey, int32(currLedgerNumber), int32(lockUntilLedgerNumber))
-		require.NoError(t, err)
-	}
-
-	sigClient, err := NewChannelAccountDBSignatureClient(ChannelAccountDBSignatureClientOptions{
+	sigClient, err := NewDistributionAccountDBSignatureClient(DistributionAccountDBSignatureClientOptions{
 		NetworkPassphrase:    network.TestNetworkPassphrase,
 		DBConnectionPool:     dbConnectionPool,
 		EncryptionPassphrase: encrypterPass,
 		Encrypter:            encrypter,
-		LedgerNumberTracker:  mLedgerNumberTracker,
 	})
 	require.NoError(t, err)
 
 	// delete one account: count=2->1
-	err = sigClient.Delete(ctx, channelAccounts[0].PublicKey)
+	err = sigClient.Delete(ctx, distributionAccounts[0].Address())
 	require.NoError(t, err)
-	count, err = chAccountStore.Count(ctx)
-	require.NoError(t, err)
-	assert.Equal(t, 1, count)
+	allDistAccounts = allDBVaultEntries(t, ctx, dbConnectionPool)
+	require.Len(t, allDistAccounts, 1)
 
 	// delete another account: count=1->0
-	err = sigClient.Delete(ctx, channelAccounts[1].PublicKey)
+	err = sigClient.Delete(ctx, distributionAccounts[1].Address())
 	require.NoError(t, err)
-	count, err = chAccountStore.Count(ctx)
-	require.NoError(t, err)
-	assert.Equal(t, 0, count)
+	allDistAccounts = allDBVaultEntries(t, ctx, dbConnectionPool)
+	require.Len(t, allDistAccounts, 0)
 
 	// delete non-existing account: error expected
 	err = sigClient.Delete(ctx, "non-existent-account")

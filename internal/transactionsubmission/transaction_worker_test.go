@@ -59,12 +59,12 @@ func getTransactionWorkerInstance(t *testing.T, dbConnectionPool db.DBConnection
 
 	distributionKP := keypair.MustRandom()
 	sigService, err := signing.NewSignatureService(signing.SignatureServiceOptions{
-		DistributionSignerType: signing.DistributionAccountEnvSignatureClientType,
-		NetworkPassphrase:      network.TestNetworkPassphrase,
-		DBConnectionPool:       dbConnectionPool,
-		DistributionPrivateKey: distributionKP.Seed(),
-		EncryptionPassphrase:   encryptionPassphrase,
-		LedgerNumberTracker:    preconditionsMocks.NewMockLedgerNumberTracker(t),
+		DistributionSignerType:    signing.DistributionAccountEnvSignatureClientType,
+		NetworkPassphrase:         network.TestNetworkPassphrase,
+		DBConnectionPool:          dbConnectionPool,
+		DistributionPrivateKey:    distributionKP.Seed(),
+		ChAccEncryptionPassphrase: chAccEncryptionPassphrase,
+		LedgerNumberTracker:       preconditionsMocks.NewMockLedgerNumberTracker(t),
 	})
 	require.NoError(t, err)
 
@@ -86,8 +86,8 @@ func getTransactionWorkerInstance(t *testing.T, dbConnectionPool db.DBConnection
 }
 
 var (
-	encrypter            = &utils.DefaultPrivateKeyEncrypter{}
-	encryptionPassphrase = keypair.MustRandom().Seed()
+	encrypter                 = &utils.DefaultPrivateKeyEncrypter{}
+	chAccEncryptionPassphrase = keypair.MustRandom().Seed()
 )
 
 // createTxJobFixture is used to create the resoureces needed for a txJob, and return a txJob with these resources. It
@@ -109,7 +109,7 @@ func createTxJobFixture(t *testing.T, ctx context.Context, dbConnectionPool db.D
 		Amount:             1,
 		TenantID:           uuid.NewString(),
 	})
-	chAcc := store.CreateChannelAccountFixturesEncrypted(t, ctx, dbConnectionPool, encrypter, encryptionPassphrase, 1)[0]
+	chAcc := store.CreateChannelAccountFixturesEncrypted(t, ctx, dbConnectionPool, encrypter, chAccEncryptionPassphrase, 1)[0]
 
 	if shouldLock {
 		tx, err = txModel.Lock(ctx, dbConnectionPool, tx.ID, int32(currentLedger), int32(lockedToLedger))
@@ -136,12 +136,12 @@ func Test_NewTransactionWorker(t *testing.T) {
 
 	distributionKP := keypair.MustRandom()
 	wantSigService, err := signing.NewSignatureService(signing.SignatureServiceOptions{
-		DistributionSignerType: signing.DistributionAccountEnvSignatureClientType,
-		NetworkPassphrase:      network.TestNetworkPassphrase,
-		DBConnectionPool:       dbConnectionPool,
-		DistributionPrivateKey: distributionKP.Seed(),
-		EncryptionPassphrase:   encryptionPassphrase,
-		LedgerNumberTracker:    preconditionsMocks.NewMockLedgerNumberTracker(t),
+		DistributionSignerType:    signing.DistributionAccountEnvSignatureClientType,
+		NetworkPassphrase:         network.TestNetworkPassphrase,
+		DBConnectionPool:          dbConnectionPool,
+		DistributionPrivateKey:    distributionKP.Seed(),
+		ChAccEncryptionPassphrase: chAccEncryptionPassphrase,
+		LedgerNumberTracker:       preconditionsMocks.NewMockLedgerNumberTracker(t),
 	})
 	require.NoError(t, err)
 
@@ -960,12 +960,12 @@ func Test_TransactionWorker_buildAndSignTransaction(t *testing.T) {
 
 	distributionKP := keypair.MustRandom()
 	sigService, err := signing.NewSignatureService(signing.SignatureServiceOptions{
-		DistributionSignerType: signing.DistributionAccountEnvSignatureClientType,
-		NetworkPassphrase:      network.TestNetworkPassphrase,
-		DBConnectionPool:       dbConnectionPool,
-		DistributionPrivateKey: distributionKP.Seed(),
-		EncryptionPassphrase:   encryptionPassphrase,
-		LedgerNumberTracker:    preconditionsMocks.NewMockLedgerNumberTracker(t),
+		DistributionSignerType:    signing.DistributionAccountEnvSignatureClientType,
+		NetworkPassphrase:         network.TestNetworkPassphrase,
+		DBConnectionPool:          dbConnectionPool,
+		DistributionPrivateKey:    distributionKP.Seed(),
+		ChAccEncryptionPassphrase: chAccEncryptionPassphrase,
+		LedgerNumberTracker:       preconditionsMocks.NewMockLedgerNumberTracker(t),
 	})
 	require.NoError(t, err)
 

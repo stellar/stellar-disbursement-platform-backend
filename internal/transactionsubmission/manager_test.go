@@ -379,16 +379,16 @@ func Test_Manager_ProcessTransactions(t *testing.T) {
 
 	// Signature service
 	encrypter := &utils.DefaultPrivateKeyEncrypter{}
-	encryptionPassphrase := keypair.MustRandom().Seed()
+	chAccEncryptionPassphrase := keypair.MustRandom().Seed()
 	distributionKP := keypair.MustRandom()
 	sigService, err := signing.NewSignatureService(signing.SignatureServiceOptions{
-		DistributionSignerType: signing.DistributionAccountEnvSignatureClientType,
-		NetworkPassphrase:      network.TestNetworkPassphrase,
-		DistributionPrivateKey: distributionKP.Seed(),
-		DBConnectionPool:       dbConnectionPool,
-		EncryptionPassphrase:   encryptionPassphrase,
-		LedgerNumberTracker:    preconditionsMocks.NewMockLedgerNumberTracker(t),
-		Encrypter:              encrypter,
+		DistributionSignerType:    signing.DistributionAccountEnvSignatureClientType,
+		NetworkPassphrase:         network.TestNetworkPassphrase,
+		DistributionPrivateKey:    distributionKP.Seed(),
+		DBConnectionPool:          dbConnectionPool,
+		ChAccEncryptionPassphrase: chAccEncryptionPassphrase,
+		LedgerNumberTracker:       preconditionsMocks.NewMockLedgerNumberTracker(t),
+		Encrypter:                 encrypter,
 	})
 	require.NoError(t, err)
 
@@ -418,7 +418,7 @@ func Test_Manager_ProcessTransactions(t *testing.T) {
 			defer store.DeleteAllTransactionFixtures(t, context.Background(), dbConnectionPool)
 
 			// Create channel accounts to be used by the tx submitter
-			channelAccounts := store.CreateChannelAccountFixturesEncrypted(t, ctx, dbConnectionPool, encrypter, encryptionPassphrase, 2)
+			channelAccounts := store.CreateChannelAccountFixturesEncrypted(t, ctx, dbConnectionPool, encrypter, chAccEncryptionPassphrase, 2)
 			assert.Len(t, channelAccounts, 2)
 			channelAccountsMap := map[string]*store.ChannelAccount{}
 			for _, ca := range channelAccounts {
