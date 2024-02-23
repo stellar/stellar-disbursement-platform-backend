@@ -3,8 +3,6 @@ package router
 import (
 	"fmt"
 	"net/url"
-
-	"github.com/stellar/stellar-disbursement-platform-backend/db"
 )
 
 const (
@@ -41,17 +39,4 @@ func GetDSNForTenant(dataSourceName, tenantName string) (string, error) {
 	u.RawQuery = q.Encode()
 
 	return u.String(), nil
-}
-
-func GetDBForTSSSchema(dbURL string) (db.DBConnectionPool, error) {
-	tssDNS, err := GetDNSForTSS(dbURL)
-	if err != nil {
-		return nil, fmt.Errorf("getting TSS database DNS: %w", err)
-	}
-	dbConnectionPool, err := db.OpenDBConnectionPool(tssDNS)
-	if err != nil {
-		return nil, fmt.Errorf("opening TSS DB connection pool: %w", err)
-	}
-
-	return dbConnectionPool, nil
 }

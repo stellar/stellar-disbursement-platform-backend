@@ -14,7 +14,7 @@ import (
 
 	cmdUtils "github.com/stellar/stellar-disbursement-platform-backend/cmd/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
-	"github.com/stellar/stellar-disbursement-platform-backend/db/router"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/dependencyinjection"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/cli/utils"
@@ -92,7 +92,7 @@ func AddTenantsCmd() *cobra.Command {
 			ConfigKey:   &sigOpts.NetworkPassphrase,
 			Required:    true,
 		})
-	configOptions = append(configOptions, cmdUtils.BaseSignatureServiceConfigOptions(&sigOpts)...)
+	configOptions = append(configOptions, cmdUtils.BaseDistributionSignatureClientConfigOptions(&sigOpts)...)
 
 	cmd := cobra.Command{
 		Use:     "add-tenants",
@@ -155,7 +155,7 @@ func executeAddTenant(
 	}
 
 	// We need to use a dbConnectionPool that resolves to the tss namespace for the distribution account signature client.
-	tssDBConnectionPool, err := router.GetDBForTSSSchema(dbURL)
+	tssDBConnectionPool, err := dependencyinjection.NewTSSDBConnectionPool(ctx, dependencyinjection.TSSDBConnectionPoolOptions{DatabaseURL: dbURL})
 	if err != nil {
 		return fmt.Errorf("getting TSS DBConnectionPool: %w", err)
 	}

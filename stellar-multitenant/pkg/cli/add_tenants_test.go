@@ -117,9 +117,9 @@ func Test_executeAddTenant(t *testing.T) {
 		require.NoError(t, err)
 
 		entries := getEntries()
-		require.Len(t, entries, 18)
-		assert.Equal(t, "tenant myorg added successfully", entries[16].Message)
-		assert.Contains(t, fmt.Sprintf("tenant ID: %s", tenantID), entries[17].Message)
+		require.Len(t, entries, 19)
+		assert.Equal(t, "tenant myorg added successfully", entries[17].Message)
+		assert.Contains(t, fmt.Sprintf("tenant ID: %s", tenantID), entries[18].Message)
 	})
 
 	t.Run("duplicated tenant name", func(t *testing.T) {
@@ -180,7 +180,6 @@ Flags:
       --aws-access-key-id string                            The AWS access key ID (AWS_ACCESS_KEY_ID)
       --aws-region string                                   The AWS region (AWS_REGION)
       --aws-secret-access-key string                        The AWS secret access key (AWS_SECRET_ACCESS_KEY)
-      --channel-account-encryption-passphrase string        A Stellar-compliant ed25519 private key used to encrypt/decrypt the channel accounts' private keys. When not set, it will default to the value of the 'distribution-seed' option. (CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE)
       --distribution-account-encryption-passphrase string   A Stellar-compliant ed25519 private key used to encrypt/decrypt the in-memory distribution accounts' private keys. It's mandatory when the distribution-signer-type is set to DISTRIBUTION_ACCOUNT_DB. (DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE)
       --distribution-seed string                            The private key of the Stellar distribution account that sends the disbursements. (DISTRIBUTION_SEED)
       --distribution-signer-type string                     The type of the signature client used for distribution accounts. Options: [DISTRIBUTION_ACCOUNT_ENV DISTRIBUTION_ACCOUNT_DB] (DISTRIBUTION_SIGNER_TYPE) (default "DISTRIBUTION_ACCOUNT_ENV")
@@ -210,7 +209,6 @@ Flags:
       --aws-access-key-id string                            The AWS access key ID (AWS_ACCESS_KEY_ID)
       --aws-region string                                   The AWS region (AWS_REGION)
       --aws-secret-access-key string                        The AWS secret access key (AWS_SECRET_ACCESS_KEY)
-      --channel-account-encryption-passphrase string        A Stellar-compliant ed25519 private key used to encrypt/decrypt the channel accounts' private keys. When not set, it will default to the value of the 'distribution-seed' option. (CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE)
       --distribution-account-encryption-passphrase string   A Stellar-compliant ed25519 private key used to encrypt/decrypt the in-memory distribution accounts' private keys. It's mandatory when the distribution-signer-type is set to DISTRIBUTION_ACCOUNT_DB. (DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE)
       --distribution-seed string                            The private key of the Stellar distribution account that sends the disbursements. (DISTRIBUTION_SEED)
       --distribution-signer-type string                     The type of the signature client used for distribution accounts. Options: [DISTRIBUTION_ACCOUNT_ENV DISTRIBUTION_ACCOUNT_DB] (DISTRIBUTION_SIGNER_TYPE) (default "DISTRIBUTION_ACCOUNT_ENV")

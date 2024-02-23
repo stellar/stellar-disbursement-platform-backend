@@ -460,7 +460,6 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			adminServeOpts.GitCommit = globalOptions.GitCommit
 			adminServeOpts.Version = globalOptions.Version
 			adminServeOpts.NetworkPassphrase = globalOptions.NetworkPassphrase
-			adminServeOpts.SignatureServiceOptions = txSubmitterOpts.SignatureServiceOptions
 		},
 		Run: func(cmd *cobra.Command, _ []string) {
 			ctx := cmd.Context()
@@ -513,6 +512,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 				log.Ctx(ctx).Fatalf("error creating submitter engine: %v", err)
 			}
 			serveOpts.SubmitterEngine = submitterEngine
+			adminServeOpts.DistAccSigClient = submitterEngine.SignatureService.DistAccountSigner
 
 			// Kafka (background)
 			if eventBrokerOptions.EventBrokerType == events.KafkaEventBrokerType {

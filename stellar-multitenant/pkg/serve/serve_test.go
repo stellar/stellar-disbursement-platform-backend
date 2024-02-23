@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stellar/go/keypair"
 	"github.com/stellar/go/network"
 	supporthttp "github.com/stellar/go/support/http"
 	"github.com/stretchr/testify/assert"
@@ -16,7 +15,7 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
+	sigMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing/mocks"
 )
 
 type mockHTTPServer struct {
@@ -44,13 +43,7 @@ func Test_Serve(t *testing.T) {
 		NetworkPassphrase: network.TestNetworkPassphrase,
 		Port:              8003,
 		Version:           "x.y.z",
-		SignatureServiceOptions: signing.SignatureServiceOptions{
-			DBConnectionPool:            dbConnectionPool,
-			NetworkPassphrase:           network.TestNetworkPassphrase,
-			DistAccEncryptionPassphrase: keypair.MustRandom().Seed(),
-			DistributionPrivateKey:      keypair.MustRandom().Seed(),
-			DistributionSignerType:      signing.DistributionAccountEnvSignatureClientType,
-		},
+		DistAccSigClient:  sigMocks.NewMockSignatureClient(t),
 	}
 
 	// Mock supportHTTPRun

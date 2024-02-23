@@ -208,7 +208,7 @@ func TransactionSubmitterEngineConfigOptions(opts *di.TxSubmitterEngineOptions) 
 }
 
 func BaseSignatureServiceConfigOptions(opts *signing.SignatureServiceOptions) []*config.ConfigOption {
-	return []*config.ConfigOption{
+	return append([]*config.ConfigOption{
 		{
 			Name:           "channel-account-encryption-passphrase",
 			Usage:          "A Stellar-compliant ed25519 private key used to encrypt/decrypt the channel accounts' private keys. When not set, it will default to the value of the 'distribution-seed' option.",
@@ -217,6 +217,11 @@ func BaseSignatureServiceConfigOptions(opts *signing.SignatureServiceOptions) []
 			ConfigKey:      &opts.ChAccEncryptionPassphrase,
 			Required:       false,
 		},
+	}, BaseDistributionSignatureClientConfigOptions(opts)...)
+}
+
+func BaseDistributionSignatureClientConfigOptions(opts *signing.SignatureServiceOptions) []*config.ConfigOption {
+	return []*config.ConfigOption{
 		{
 			Name:           "distribution-account-encryption-passphrase",
 			Usage:          "A Stellar-compliant ed25519 private key used to encrypt/decrypt the in-memory distribution accounts' private keys. It's mandatory when the distribution-signer-type is set to DISTRIBUTION_ACCOUNT_DB.",

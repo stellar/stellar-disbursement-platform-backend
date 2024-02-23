@@ -204,13 +204,9 @@ func Test_serve(t *testing.T) {
 		NetworkPassphrase:    networkPassphrase,
 		Port:                 8003,
 		Version:              "x.y.z",
-		SignatureServiceOptions: signing.SignatureServiceOptions{
-			ChAccEncryptionPassphrase: chAccEncryptionPassphrase,
-			DistributionPrivateKey:    distributionSeed,
-			DistributionSignerType:    signing.DistributionAccountEnvSignatureClientType,
-		},
-		AdminAccount: "admin-account",
-		AdminApiKey:  "admin-api-key",
+		DistAccSigClient:     submitterEngine.DistAccountSigner,
+		AdminAccount:         "admin-account",
+		AdminApiKey:          "admin-api-key",
 	}
 
 	eventBrokerOptions := cmdUtils.EventBrokerOptions{

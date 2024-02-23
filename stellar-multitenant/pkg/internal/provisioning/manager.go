@@ -137,7 +137,16 @@ func (m *Manager) ProvisionNewTenant(
 			DistributionAccount: &distributionAccPubKey,
 		})
 	if err != nil {
-		return nil, fmt.Errorf("updating tenant %s status to %s: %w", name, tenant.ProvisionedTenantStatus, err)
+		errMsg := fmt.Sprintf("updating tenant %s status to %s: %w", name, tenant.ProvisionedTenantStatus, err)
+		// Rollback distribution account provisioning
+		sigClientDeleteKeyErr := m.distAccSigClient.Delete(ctx, distributionAccPubKey)
+		if sigClientDeleteKeyErr != nil {
+			sigClientDeleteKeyErrMsg := fmt.Sprintf("unable to delete distribution account public key %s: %v", distributionAccPubKey, sigClientDeleteKeyErr)
+			log.Ctx(ctx).Error(sigClientDeleteKeyErrMsg)
+			errMsg += fmt.Sprintf(". %s", sigClientDeleteKeyErrMsg)
+		}
+
+		return nil, errors.New(errMsg)
 	}
 
 	return t, nil
