@@ -70,8 +70,6 @@ func AssertRegisteredWalletsFixture(t *testing.T, ctx context.Context, dbConnect
 	`
 	err := dbConnectionPool.SelectContext(ctx, &registeredWallets, queryRegisteredWallets)
 	require.NoError(t, err)
-	fmt.Println("registeredWallets", registeredWallets)
-	fmt.Println("expectedWallets", expectedWallets)
 	assert.ElementsMatch(t, expectedWallets, registeredWallets)
 }
 

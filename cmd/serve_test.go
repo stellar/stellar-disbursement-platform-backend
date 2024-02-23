@@ -209,8 +209,8 @@ func Test_serve(t *testing.T) {
 			DistributionPrivateKey:    distributionSeed,
 			DistributionSignerType:    signing.DistributionAccountEnvSignatureClientType,
 		},
-		AdminAccount:         "admin-account",
-		AdminApiKey:          "admin-api-key",
+		AdminAccount: "admin-account",
+		AdminApiKey:  "admin-api-key",
 	}
 
 	eventBrokerOptions := cmdUtils.EventBrokerOptions{

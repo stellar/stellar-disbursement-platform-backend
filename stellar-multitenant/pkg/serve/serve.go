@@ -38,7 +38,6 @@ type ServeOptions struct {
 	EmailMessengerClient      message.MessengerClient
 	Environment               string
 	GitCommit                 string
-	HorizonURL                string
 	NetworkPassphrase         string
 	networkType               utils.NetworkType
 	Port                      int

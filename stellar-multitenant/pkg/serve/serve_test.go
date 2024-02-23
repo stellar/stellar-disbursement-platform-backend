@@ -41,7 +41,6 @@ func Test_Serve(t *testing.T) {
 		DatabaseDSN:       dbt.DSN,
 		Environment:       "test",
 		GitCommit:         "1234567890abcdef",
-		HorizonURL:        "https://horizon-testnet.stellar.org",
 		NetworkPassphrase: network.TestNetworkPassphrase,
 		Port:              8003,
 		Version:           "x.y.z",

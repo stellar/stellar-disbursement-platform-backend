@@ -109,7 +109,7 @@ func (m *Manager) ProvisionNewTenant(
 	}
 
 	distributionAccPubKey := distributionAccPubKeys[0]
-	log.Infof("distribution account %s created for tenant %s", distributionAccPubKey, t.Name)
+	log.Ctx(ctx).Infof("distribution account %s created for tenant %s", distributionAccPubKey, t.Name)
 
 	// Creating new user and sending invitation email
 	authManager := auth.NewAuthManager(

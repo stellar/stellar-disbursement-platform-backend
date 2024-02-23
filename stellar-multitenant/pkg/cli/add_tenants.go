@@ -28,7 +28,6 @@ type AddTenantsCommandOptions struct {
 	SDPUIBaseURL     *string
 	NetworkType      string
 	MessengerOptions message.MessengerOptions
-	HorizonURL       string
 }
 
 func AddTenantsCmd() *cobra.Command {

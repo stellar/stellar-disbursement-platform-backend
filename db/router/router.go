@@ -2,8 +2,9 @@ package router
 
 import (
 	"fmt"
-	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"net/url"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
 )
 
 const (
