@@ -141,9 +141,15 @@ func (m *Manager) ProvisionNewTenant(
 		// Rollback distribution account provisioning
 		sigClientDeleteKeyErr := m.distAccSigClient.Delete(ctx, distributionAccPubKey)
 		if sigClientDeleteKeyErr != nil {
-			sigClientDeleteKeyErrMsg := fmt.Sprintf("unable to delete distribution account public key %s: %v", distributionAccPubKey, sigClientDeleteKeyErr)
-			log.Ctx(ctx).Error(sigClientDeleteKeyErrMsg)
-			errMsg += fmt.Sprintf(". %s", sigClientDeleteKeyErrMsg)
+			sigClientDeleteKeyErrMsg := fmt.Sprintf("unable to delete distribution account private key: %v", sigClientDeleteKeyErr)
+			if errors.Is(err, signing.ErrUnsupportedCommand) {
+				log.Ctx(ctx).Warnf(
+					"Private key deletion not needed for distribution account signature client type %s: %v",
+					m.distAccSigClient.Type(), err)
+			} else {
+				log.Ctx(ctx).Error(sigClientDeleteKeyErrMsg)
+				errMsg += fmt.Sprintf(". %s", sigClientDeleteKeyErrMsg)
+			}
 		}
 
 		return nil, errors.New(errMsg)
