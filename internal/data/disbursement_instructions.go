@@ -5,10 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/stellar/go/support/log"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 )
 
 type DisbursementInstruction struct {
@@ -26,6 +23,11 @@ type DisbursementInstructionModel struct {
 	receiverModel             *ReceiverModel
 	paymentModel              *PaymentModel
 	disbursementModel         *DisbursementModel
+}
+
+type InstructionLine struct {
+	line                    int
+	disbursementInstruction *DisbursementInstruction
 }
 
 const MaxInstructionsPerDisbursement = 10000 // TODO: update this number with load testing results [SDP-524]
@@ -65,7 +67,7 @@ var (
 //	|    |    |    |--- If the receiver wallet exists and it's not REGISTERED, retry the invitation SMS.
 //	|    |    |--- Delete all payments tied to this disbursement.
 //	|    |    |--- Create all payments passed in the instructions.
-func (di DisbursementInstructionModel) ProcessAll(ctx context.Context, userID string, instructions []*DisbursementInstruction, disbursement *Disbursement, update *DisbursementUpdate, maxNumberOfInstructions int, eventProducer events.Producer) error {
+func (di DisbursementInstructionModel) ProcessAll(ctx context.Context, userID string, instructions []*DisbursementInstruction, disbursement *Disbursement, update *DisbursementUpdate, maxNumberOfInstructions int) error {
 	if len(instructions) > maxNumberOfInstructions {
 		return ErrMaxInstructionsExceeded
 	}
@@ -88,9 +90,12 @@ func (di DisbursementInstructionModel) ProcessAll(ctx context.Context, userID st
 			receiverMap[receiver.PhoneNumber] = receiver
 		}
 
-		instructionMap := make(map[string]*DisbursementInstruction)
-		for _, instruction := range instructions {
-			instructionMap[instruction.Phone] = instruction
+		instructionMap := make(map[string]InstructionLine)
+		for line, instruction := range instructions {
+			instructionMap[instruction.Phone] = InstructionLine{
+				line:                    line + 1,
+				disbursementInstruction: instruction,
+			}
 		}
 
 		for _, instruction := range instructions {
@@ -129,7 +134,7 @@ func (di DisbursementInstructionModel) ProcessAll(ctx context.Context, userID st
 			if !verificationExists {
 				verificationInsert := ReceiverVerificationInsert{
 					ReceiverID:        receiver.ID,
-					VerificationValue: instruction.VerificationValue,
+					VerificationValue: instruction.disbursementInstruction.VerificationValue,
 					VerificationField: disbursement.VerificationField,
 				}
 				hashedVerification, insertError := di.receiverVerificationModel.Insert(ctx, dbTx, verificationInsert)
@@ -143,11 +148,11 @@ func (di DisbursementInstructionModel) ProcessAll(ctx context.Context, userID st
 				}
 
 			} else {
-				if verified := CompareVerificationValue(verification.HashedValue, instruction.VerificationValue); !verified {
+				if verified := CompareVerificationValue(verification.HashedValue, instruction.disbursementInstruction.VerificationValue); !verified {
 					if verification.ConfirmedAt != nil {
-						return fmt.Errorf("%w: receiver verification for %s doesn't match", ErrReceiverVerificationMismatch, receiver.PhoneNumber)
+						return fmt.Errorf("%w: receiver verification for %s doesn't match. Check line %d on CSV file - Internal ID %s", ErrReceiverVerificationMismatch, receiver.PhoneNumber, instruction.line, instruction.disbursementInstruction.ID)
 					}
-					err = di.receiverVerificationModel.UpdateVerificationValue(ctx, dbTx, verification.ReceiverID, verification.VerificationField, instruction.VerificationValue)
+					err = di.receiverVerificationModel.UpdateVerificationValue(ctx, dbTx, verification.ReceiverID, verification.VerificationField, instruction.disbursementInstruction.VerificationValue)
 					if err != nil {
 						return fmt.Errorf("error updating receiver verification for disbursement id %s: %w", disbursement.ID, err)
 					}
@@ -165,7 +170,6 @@ func (di DisbursementInstructionModel) ProcessAll(ctx context.Context, userID st
 			receiverIDToReceiverWalletIDMap[receiverWallet.Receiver.ID] = receiverWallet.ID
 		}
 
-		eventData := make([]schemas.EventReceiverWalletSMSInvitationData, 0, len(receiverIDs))
 		for _, receiverId := range receiverIDs {
 			receiverWalletId, exists := receiverIDToReceiverWalletIDMap[receiverId]
 			if !exists {
@@ -178,16 +182,12 @@ func (di DisbursementInstructionModel) ProcessAll(ctx context.Context, userID st
 					return fmt.Errorf("error inserting receiver wallet for receiver id %s: %w", receiverId, insertErr)
 				}
 				receiverIDToReceiverWalletIDMap[receiverId] = rwID
-				eventData = append(eventData, schemas.EventReceiverWalletSMSInvitationData{ReceiverWalletID: rwID})
 			} else {
-				rw, retryErr := di.receiverWalletModel.RetryInvitationSMS(ctx, dbTx, receiverWalletId)
+				_, retryErr := di.receiverWalletModel.RetryInvitationSMS(ctx, dbTx, receiverWalletId)
 				if retryErr != nil {
 					if !errors.Is(retryErr, ErrRecordNotFound) {
 						return fmt.Errorf("error retrying invitation: %w", retryErr)
 					}
-				}
-				if rw != nil && rw.Status == ReadyReceiversWalletStatus {
-					eventData = append(eventData, schemas.EventReceiverWalletSMSInvitationData{ReceiverWalletID: rw.ID})
 				}
 			}
 		}
@@ -223,21 +223,6 @@ func (di DisbursementInstructionModel) ProcessAll(ctx context.Context, userID st
 		// Step 7: Update Disbursement Status
 		if err = di.disbursementModel.UpdateStatus(ctx, dbTx, userID, disbursement.ID, ReadyDisbursementStatus); err != nil {
 			return fmt.Errorf("error updating status: %w", err)
-		}
-
-		// Step 8: Produce event to send invitation message to the receivers
-		msg, err := events.NewMessage(ctx, events.ReceiverWalletNewInvitationTopic, disbursement.ID, events.BatchReceiverWalletSMSInvitationType, eventData)
-		if err != nil {
-			return fmt.Errorf("creating event producer message: %w", err)
-		}
-
-		if eventProducer != nil {
-			err = eventProducer.WriteMessages(ctx, *msg)
-			if err != nil {
-				return fmt.Errorf("publishing message %s on event producer: %w", msg.String(), err)
-			}
-		} else {
-			log.Ctx(ctx).Errorf("event producer is nil, could not publish message %s", msg.String())
 		}
 
 		return nil

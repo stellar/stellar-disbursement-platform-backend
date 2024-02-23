@@ -17,13 +17,6 @@ const (
 	MaxOpenDBConns    = 30
 )
 
-// DBConnectionPoolFromSqlDB returns a new DBConnectionPool wrapper for a PRE-EXISTING *sql.DB. The driverName of the
-// original database is required for named query support. ATTENTION: this will not start a new connection pool, just
-// create a wrap aroung the pre-existing connection pool.
-func DBConnectionPoolFromSqlDB(sqlDB *sql.DB, driverName string) DBConnectionPool {
-	return &DBConnectionPoolImplementation{DB: sqlx.NewDb(sqlDB, driverName)}
-}
-
 // DBConnectionPool is an interface that wraps the sqlx.DB structs methods and includes the RunInTransaction helper.
 type DBConnectionPool interface {
 	SQLExecuter

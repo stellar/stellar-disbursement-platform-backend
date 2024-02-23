@@ -30,11 +30,12 @@ type SignatureClientType string
 const (
 	ChannelAccountDBSignatureClientType       SignatureClientType = "CHANNEL_ACCOUNT_DB"
 	DistributionAccountEnvSignatureClientType SignatureClientType = "DISTRIBUTION_ACCOUNT_ENV"
+	DistributionAccountDBSignatureClientType  SignatureClientType = "DISTRIBUTION_ACCOUNT_DB"
 	HostAccountEnvSignatureClientType         SignatureClientType = "HOST_ACCOUNT_ENV"
 )
 
 func AllSignatureClientTypes() []SignatureClientType {
-	return []SignatureClientType{ChannelAccountDBSignatureClientType, DistributionAccountEnvSignatureClientType, HostAccountEnvSignatureClientType}
+	return []SignatureClientType{ChannelAccountDBSignatureClientType, DistributionAccountEnvSignatureClientType, DistributionAccountDBSignatureClientType, HostAccountEnvSignatureClientType}
 }
 
 func ParseSignatureClientType(sigClientType string) (SignatureClientType, error) {
@@ -49,7 +50,7 @@ func ParseSignatureClientType(sigClientType string) (SignatureClientType, error)
 }
 
 func DistributionSignatureClientTypes() []SignatureClientType {
-	return []SignatureClientType{DistributionAccountEnvSignatureClientType}
+	return []SignatureClientType{DistributionAccountEnvSignatureClientType, DistributionAccountDBSignatureClientType}
 }
 
 func ParseSignatureClientDistributionType(sigClientType string) (SignatureClientType, error) {
@@ -70,11 +71,16 @@ type SignatureClientOptions struct {
 	// DistributionAccountEnv:
 	DistributionPrivateKey string
 
+	// DistributionAccountDB:
+	DistAccEncryptionPassphrase string
+
 	// ChannelAccountDB:
-	DBConnectionPool     db.DBConnectionPool
-	EncryptionPassphrase string
-	LedgerNumberTracker  preconditions.LedgerNumberTracker
-	Encrypter            utils.PrivateKeyEncrypter // (optional)
+	ChAccEncryptionPassphrase string
+
+	// *AccountDB:
+	DBConnectionPool    db.DBConnectionPool
+	LedgerNumberTracker preconditions.LedgerNumberTracker
+	Encrypter           utils.PrivateKeyEncrypter // (optional)
 }
 
 func NewSignatureClient(sigType SignatureClientType, opts SignatureClientOptions) (SignatureClient, error) {
@@ -89,8 +95,16 @@ func NewSignatureClient(sigType SignatureClientType, opts SignatureClientOptions
 		return NewChannelAccountDBSignatureClient(ChannelAccountDBSignatureClientOptions{
 			NetworkPassphrase:    opts.NetworkPassphrase,
 			DBConnectionPool:     opts.DBConnectionPool,
-			EncryptionPassphrase: opts.EncryptionPassphrase,
+			EncryptionPassphrase: opts.ChAccEncryptionPassphrase,
 			LedgerNumberTracker:  opts.LedgerNumberTracker,
+			Encrypter:            opts.Encrypter,
+		})
+
+	case DistributionAccountDBSignatureClientType:
+		return NewDistributionAccountDBSignatureClient(DistributionAccountDBSignatureClientOptions{
+			NetworkPassphrase:    opts.NetworkPassphrase,
+			DBConnectionPool:     opts.DBConnectionPool,
+			EncryptionPassphrase: opts.DistAccEncryptionPassphrase,
 			Encrypter:            opts.Encrypter,
 		})
 

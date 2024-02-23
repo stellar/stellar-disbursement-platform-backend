@@ -308,6 +308,16 @@ func Test_SetConfigOptionDistributionSignerType(t *testing.T) {
 			envValue:   string(signing.DistributionAccountEnvSignatureClientType),
 			wantResult: signing.DistributionAccountEnvSignatureClientType,
 		},
+		{
+			name:       "🎉 handles signature service type (through CLI args): DISTRIBUTION_ACCOUNT_DB",
+			args:       []string{"--distribution-signer-type", string(signing.DistributionAccountDBSignatureClientType)},
+			wantResult: signing.DistributionAccountDBSignatureClientType,
+		},
+		{
+			name:       "🎉 handles signature service type (through ENV vars): DISTRIBUTION_ACCOUNT_DB",
+			envValue:   string(signing.DistributionAccountDBSignatureClientType),
+			wantResult: signing.DistributionAccountDBSignatureClientType,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -490,8 +500,7 @@ func Test_SetConfigOptionStellarPrivateKey(t *testing.T) {
 
 	testCases := []customSetterTestCase[string]{
 		{
-			name:            "returns an error if the private key is empty",
-			wantErrContains: `error validating private key in sep10-signing-private-key: ""`,
+			name: "doesn't return an error if the private key is empty",
 		},
 		{
 			name:            "returns an error if the private key is invalid",

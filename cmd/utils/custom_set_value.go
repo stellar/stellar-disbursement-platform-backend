@@ -183,6 +183,9 @@ func SetConfigOptionStellarPublicKey(co *config.ConfigOption) error {
 
 func SetConfigOptionStellarPrivateKey(co *config.ConfigOption) error {
 	privateKey := viper.GetString(co.Name)
+	if privateKey == "" {
+		return nil
+	}
 
 	isValid := strkey.IsValidEd25519SecretSeed(privateKey)
 	if !isValid {

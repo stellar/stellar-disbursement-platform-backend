@@ -3,7 +3,7 @@
 # To push:
 #    make docker-push
 
-FROM golang:1.20-bullseye as build
+FROM golang:1.22-bullseye as build
 ARG GIT_COMMIT
 
 WORKDIR /src/stellar-disbursement-platform

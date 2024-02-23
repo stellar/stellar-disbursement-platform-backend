@@ -91,13 +91,6 @@ func BadRequest(msg string, originalErr error, extras map[string]interface{}) *H
 	return NewHTTPError(http.StatusBadRequest, msg, originalErr, extras)
 }
 
-func NotImplemented(msg string, originalErr error, extras map[string]interface{}) *HTTPError {
-	if msg == "" {
-		msg = "This feature is not implemented yet."
-	}
-	return NewHTTPError(http.StatusNotImplemented, msg, originalErr, extras)
-}
-
 func Unauthorized(msg string, originalErr error, extras map[string]interface{}) *HTTPError {
 	if msg == "" {
 		msg = "Not authorized."

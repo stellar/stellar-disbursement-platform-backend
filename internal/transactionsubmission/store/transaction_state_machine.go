@@ -2,9 +2,9 @@ package store
 
 import (
 	"fmt"
+	"slices"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
-	"golang.org/x/exp/slices"
 )
 
 type TransactionStatus string

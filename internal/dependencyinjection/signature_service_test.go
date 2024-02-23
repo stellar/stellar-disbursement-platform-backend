@@ -23,19 +23,19 @@ func Test_dependencyinjection_NewSignatureService(t *testing.T) {
 	defer dbConnectionPool.Close()
 
 	distributionPrivateKey := keypair.MustRandom().Seed()
-	encryptionPassphrase := keypair.MustRandom().Seed()
+	chAccEncryptionPassphrase := keypair.MustRandom().Seed()
 
 	ctx := context.Background()
 	t.Run("should create and return the same instance on the second call", func(t *testing.T) {
 		ClearInstancesTestHelper(t)
 
 		opts := signing.SignatureServiceOptions{
-			DistributionSignerType: signing.DistributionAccountEnvSignatureClientType,
-			NetworkPassphrase:      network.TestNetworkPassphrase,
-			DBConnectionPool:       dbConnectionPool,
-			DistributionPrivateKey: distributionPrivateKey,
-			EncryptionPassphrase:   encryptionPassphrase,
-			LedgerNumberTracker:    preconditionsMocks.NewMockLedgerNumberTracker(t),
+			DistributionSignerType:    signing.DistributionAccountEnvSignatureClientType,
+			NetworkPassphrase:         network.TestNetworkPassphrase,
+			DBConnectionPool:          dbConnectionPool,
+			DistributionPrivateKey:    distributionPrivateKey,
+			ChAccEncryptionPassphrase: chAccEncryptionPassphrase,
+			LedgerNumberTracker:       preconditionsMocks.NewMockLedgerNumberTracker(t),
 		}
 
 		gotDependency, err := NewSignatureService(ctx, opts)
@@ -74,11 +74,11 @@ func Test_dependencyinjection_NewSignatureService(t *testing.T) {
 		SetInstance(instanceName, false)
 
 		opts := signing.SignatureServiceOptions{
-			DistributionSignerType: distributionSignerType,
-			NetworkPassphrase:      network.TestNetworkPassphrase,
-			DBConnectionPool:       dbConnectionPool,
-			DistributionPrivateKey: distributionPrivateKey,
-			EncryptionPassphrase:   encryptionPassphrase,
+			DistributionSignerType:    distributionSignerType,
+			NetworkPassphrase:         network.TestNetworkPassphrase,
+			DBConnectionPool:          dbConnectionPool,
+			DistributionPrivateKey:    distributionPrivateKey,
+			ChAccEncryptionPassphrase: chAccEncryptionPassphrase,
 		}
 		gotDependency, err := NewSignatureService(ctx, opts)
 		assert.Empty(t, gotDependency)

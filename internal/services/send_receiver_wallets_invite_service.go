@@ -6,6 +6,7 @@ import (
 	"html/template"
 	"net/url"
 	"path"
+	"slices"
 	"strings"
 	"time"
 
@@ -17,7 +18,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
-	"golang.org/x/exp/slices"
 )
 
 type SendReceiverWalletInviteServiceInterface interface {
@@ -94,7 +94,7 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context, receive
 		receiverWalletIDsPendingRegistration = append(receiverWalletIDsPendingRegistration, receiverWallet.ReceiverWalletID)
 	}
 
-	receiverWallets, err := s.Models.ReceiverWallet.GetAllPendingRegistrationByReceiverWalletIDs(ctx, receiverWalletIDsPendingRegistration)
+	receiverWallets, err := s.Models.ReceiverWallet.GetAllPendingRegistrationByReceiverWalletIDs(ctx, s.Models.DBConnectionPool, receiverWalletIDsPendingRegistration)
 	if err != nil {
 		return fmt.Errorf("error getting receiver wallets pending registration: %w", err)
 	}

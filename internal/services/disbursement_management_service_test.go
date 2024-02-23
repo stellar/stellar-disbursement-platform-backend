@@ -200,6 +200,7 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 	require.NoError(t, err)
 
 	mockEventProducer := events.MockProducer{}
+	defer mockEventProducer.AssertExpectations(t)
 
 	ctx := context.Background()
 
@@ -394,6 +395,28 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 		err = models.Organizations.Update(ctx, &data.OrganizationUpdate{IsApprovalRequired: &isApprovalRequired})
 		require.NoError(t, err)
 
+		mockEventProducer.
+			On("WriteMessages", ctx, mock.AnythingOfType("[]events.Message")).
+			Run(func(args mock.Arguments) {
+				msgs, ok := args.Get(1).([]events.Message)
+				require.True(t, ok)
+				require.Len(t, msgs, 1)
+
+				// Validating send invite msg
+				sendInviteMsg := msgs[0]
+				assert.Equal(t, events.ReceiverWalletNewInvitationTopic, sendInviteMsg.Topic)
+				assert.Equal(t, disbursement.ID, sendInviteMsg.Key)
+				assert.Equal(t, events.BatchReceiverWalletSMSInvitationType, sendInviteMsg.Type)
+				assert.Equal(t, tnt.ID, sendInviteMsg.TenantID)
+
+				eventData, ok := sendInviteMsg.Data.([]schemas.EventReceiverWalletSMSInvitationData)
+				require.True(t, ok)
+				require.Len(t, eventData, 1)
+				assert.Equal(t, schemas.EventReceiverWalletSMSInvitationData{ReceiverWalletID: rwReady.ID}, eventData[0])
+			}).
+			Return(nil).
+			Once()
+
 		err = service.StartDisbursement(ctx, disbursement.ID, user, distributionPubKey)
 		require.NoError(t, err)
 
@@ -410,8 +433,26 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 
 	t.Run("disbursement started", func(t *testing.T) {
 		mockEventProducer.
-			On("WriteMessages", ctx, []events.Message{
-				{
+			On("WriteMessages", ctx, mock.AnythingOfType("[]events.Message")).
+			Run(func(args mock.Arguments) {
+				msgs, ok := args.Get(1).([]events.Message)
+				require.True(t, ok)
+				require.Len(t, msgs, 2)
+
+				// Validating send invite msg
+				sendInviteMsg := msgs[0]
+				assert.Equal(t, events.ReceiverWalletNewInvitationTopic, sendInviteMsg.Topic)
+				assert.Equal(t, readyDisbursement.ID, sendInviteMsg.Key)
+				assert.Equal(t, events.BatchReceiverWalletSMSInvitationType, sendInviteMsg.Type)
+				assert.Equal(t, tnt.ID, sendInviteMsg.TenantID)
+
+				eventData, ok := sendInviteMsg.Data.([]schemas.EventReceiverWalletSMSInvitationData)
+				require.True(t, ok)
+				assert.Len(t, eventData, 3)
+
+				// Validating payments ready to pay msg
+				paymentsReadyToPayMsg := msgs[1]
+				assert.Equal(t, events.Message{
 					Topic:    events.PaymentReadyToPayTopic,
 					Key:      readyDisbursement.ID,
 					TenantID: tnt.ID,
@@ -424,7 +465,7 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 							},
 						},
 					},
-				},
+				}, paymentsReadyToPayMsg)
 			}).
 			Return(nil).
 			Once()
@@ -529,7 +570,7 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 				UserID: userID,
 			},
 		}
-		disbursement := data.CreateDisbursementFixture(t, context.Background(), dbConnectionPool, models.Disbursements, &data.Disbursement{
+		disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
 			Name:          "disbursement #3",
 			Status:        data.ReadyDisbursementStatus,
 			Asset:         asset,
@@ -546,16 +587,37 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 			Status:         data.ReadyPaymentStatus,
 		})
 
-		expectedMessage := events.Message{
-			Topic:    events.PaymentReadyToPayTopic,
-			Key:      disbursement.ID,
-			TenantID: tnt.ID,
-			Type:     events.PaymentReadyToPayDisbursementStarted,
-			Data: schemas.EventPaymentsReadyToPayData{
+		_ = data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+			ReceiverWallet: rwReady,
+			Disbursement:   disbursement,
+			Asset:          *asset,
+			Amount:         "100",
+			Status:         data.ReadyPaymentStatus,
+		})
+
+		expectedMessages := []events.Message{
+			{
+				Topic:    events.ReceiverWalletNewInvitationTopic,
+				Key:      disbursement.ID,
 				TenantID: tnt.ID,
-				Payments: []schemas.PaymentReadyToPay{
+				Type:     events.BatchReceiverWalletSMSInvitationType,
+				Data: []schemas.EventReceiverWalletSMSInvitationData{
 					{
-						ID: payment.ID,
+						ReceiverWalletID: rwReady.ID, // Receiver that can receive SMS
+					},
+				},
+			},
+			{
+				Topic:    events.PaymentReadyToPayTopic,
+				Key:      disbursement.ID,
+				TenantID: tnt.ID,
+				Type:     events.PaymentReadyToPayDisbursementStarted,
+				Data: schemas.EventPaymentsReadyToPayData{
+					TenantID: tnt.ID,
+					Payments: []schemas.PaymentReadyToPay{
+						{
+							ID: payment.ID,
+						},
 					},
 				},
 			},
@@ -563,7 +625,7 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 		mockDisbursementBalance.Once()
 
 		mockEventProducer.
-			On("WriteMessages", ctx, []events.Message{expectedMessage}).
+			On("WriteMessages", ctx, expectedMessages).
 			Return(errors.New("unexpected error")).
 			Once()
 
@@ -576,7 +638,7 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 		assert.EqualError(
 			t,
 			err,
-			fmt.Sprintf("running atomic function in RunInTransactionWithResult: writing message %s on event producer: unexpected error", expectedMessage.String()),
+			fmt.Sprintf("running atomic function in RunInTransactionWithResult: producing events: publishing messages %s on event producer: unexpected error", expectedMessages),
 		)
 	})
 
@@ -609,6 +671,23 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 			Status:         data.ReadyPaymentStatus,
 		})
 
+		mockEventProducer.
+			On("WriteMessages", ctx, []events.Message{
+				{
+					Topic:    events.ReceiverWalletNewInvitationTopic,
+					Key:      disbursement.ID,
+					TenantID: tnt.ID,
+					Type:     events.BatchReceiverWalletSMSInvitationType,
+					Data: []schemas.EventReceiverWalletSMSInvitationData{
+						{
+							ReceiverWalletID: rwReady.ID, // Receiver that can receive SMS
+						},
+					},
+				},
+			}).
+			Return(nil).
+			Once()
+
 		getEntries := log.DefaultLogger.StartTest(log.InfoLevel)
 
 		user := &auth.User{
@@ -639,7 +718,7 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 				UserID: userID,
 			},
 		}
-		disbursement := data.CreateDisbursementFixture(t, context.Background(), dbConnectionPool, models.Disbursements, &data.Disbursement{
+		disbursement := data.CreateDisbursementFixture(t, ctxWithoutTenant, dbConnectionPool, models.Disbursements, &data.Disbursement{
 			Name:          "disbursement #5",
 			Status:        data.ReadyDisbursementStatus,
 			Asset:         asset,
@@ -648,7 +727,7 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 			StatusHistory: statusHistory,
 		})
 
-		_ = data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+		_ = data.CreatePaymentFixture(t, ctxWithoutTenant, dbConnectionPool, models.Payment, &data.Payment{
 			ReceiverWallet: rwRegistered,
 			Disbursement:   disbursement,
 			Asset:          *asset,
@@ -678,7 +757,7 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 				UserID: userID,
 			},
 		}
-		disbursement := data.CreateDisbursementFixture(t, context.Background(), dbConnectionPool, models.Disbursements, &data.Disbursement{
+		disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
 			Name:          "disbursement #6",
 			Status:        data.ReadyDisbursementStatus,
 			Asset:         asset,
@@ -687,8 +766,16 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 			StatusHistory: statusHistory,
 		})
 
-		payment := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+		paymentReady := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
 			ReceiverWallet: rwRegistered,
+			Disbursement:   disbursement,
+			Asset:          *asset,
+			Amount:         "100",
+			Status:         data.ReadyPaymentStatus,
+		})
+
+		_ = data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+			ReceiverWallet: rwReady,
 			Disbursement:   disbursement,
 			Asset:          *asset,
 			Amount:         "100",
@@ -706,16 +793,29 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 		err = service.StartDisbursement(ctx, disbursement.ID, user, distributionPubKey)
 		require.NoError(t, err)
 
-		msg := events.Message{
-			Topic:    events.PaymentReadyToPayTopic,
-			Key:      disbursement.ID,
-			TenantID: tnt.ID,
-			Type:     events.PaymentReadyToPayDisbursementStarted,
-			Data: schemas.EventPaymentsReadyToPayData{
+		msgs := []events.Message{
+			{
+				Topic:    events.ReceiverWalletNewInvitationTopic,
+				Key:      disbursement.ID,
 				TenantID: tnt.ID,
-				Payments: []schemas.PaymentReadyToPay{
+				Type:     events.BatchReceiverWalletSMSInvitationType,
+				Data: []schemas.EventReceiverWalletSMSInvitationData{
 					{
-						ID: payment.ID,
+						ReceiverWalletID: rwReady.ID,
+					},
+				},
+			},
+			{
+				Topic:    events.PaymentReadyToPayTopic,
+				Key:      disbursement.ID,
+				TenantID: tnt.ID,
+				Type:     events.PaymentReadyToPayDisbursementStarted,
+				Data: schemas.EventPaymentsReadyToPayData{
+					TenantID: tnt.ID,
+					Payments: []schemas.PaymentReadyToPay{
+						{
+							ID: paymentReady.ID,
+						},
 					},
 				},
 			},
@@ -723,7 +823,7 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 
 		entries := getEntries()
 		require.Len(t, entries, 1)
-		assert.Contains(t, fmt.Sprintf("event producer is nil, could not publish message %s", msg.String()), entries[0].Message)
+		assert.Contains(t, fmt.Sprintf("event producer is nil, could not publish messages %s", msgs), entries[0].Message)
 	})
 	hMock.AssertExpectations(t)
 }

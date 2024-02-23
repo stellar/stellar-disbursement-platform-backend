@@ -48,15 +48,21 @@ type SignatureServiceOptions struct {
 	NetworkPassphrase string
 
 	// DistributionAccount:
-	DistributionPrivateKey string
-	// DistributionAccountEnv:
 	DistributionSignerType SignatureClientType
 
+	// DistributionAccountEnv:
+	DistributionPrivateKey string
+
+	// DistributionAccountDB:
+	DistAccEncryptionPassphrase string
+
 	// ChannelAccountDB:
-	DBConnectionPool     db.DBConnectionPool
-	EncryptionPassphrase string
-	LedgerNumberTracker  preconditions.LedgerNumberTracker
-	Encrypter            utils.PrivateKeyEncrypter
+	ChAccEncryptionPassphrase string
+
+	// *AccountDB:
+	DBConnectionPool    db.DBConnectionPool
+	LedgerNumberTracker preconditions.LedgerNumberTracker
+	Encrypter           utils.PrivateKeyEncrypter
 
 	// DistributionAccountResolver
 	DistributionAccountResolver
@@ -70,12 +76,13 @@ func NewSignatureService(opts SignatureServiceOptions) (SignatureService, error)
 	}
 
 	sigClientOpts := SignatureClientOptions{
-		NetworkPassphrase:      opts.NetworkPassphrase,
-		DistributionPrivateKey: opts.DistributionPrivateKey,
-		DBConnectionPool:       opts.DBConnectionPool,
-		EncryptionPassphrase:   opts.EncryptionPassphrase,
-		Encrypter:              opts.Encrypter,
-		LedgerNumberTracker:    opts.LedgerNumberTracker,
+		NetworkPassphrase:           opts.NetworkPassphrase,
+		DistributionPrivateKey:      opts.DistributionPrivateKey,
+		DBConnectionPool:            opts.DBConnectionPool,
+		ChAccEncryptionPassphrase:   opts.ChAccEncryptionPassphrase,
+		DistAccEncryptionPassphrase: opts.DistAccEncryptionPassphrase,
+		Encrypter:                   opts.Encrypter,
+		LedgerNumberTracker:         opts.LedgerNumberTracker,
 	}
 
 	chAccountSigner, err := NewSignatureClient(ChannelAccountDBSignatureClientType, sigClientOpts)
@@ -85,7 +92,7 @@ func NewSignatureService(opts SignatureServiceOptions) (SignatureService, error)
 
 	distAccSigner, err := NewSignatureClient(distSignerType, sigClientOpts)
 	if err != nil {
-		return SignatureService{}, fmt.Errorf("creating a new distribution account signature client: %w", err)
+		return SignatureService{}, fmt.Errorf("creating a new distribution account signature client with type %v: %w", distSignerType, err)
 	}
 
 	hostAccSigner, err := NewSignatureClient(HostAccountEnvSignatureClientType, sigClientOpts)
