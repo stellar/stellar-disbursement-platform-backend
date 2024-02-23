@@ -109,6 +109,7 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 			NetworkPassphrase:      networkPassphrase,
 			DistributionPrivateKey: distAcc.Seed(),
 		})
+		require.NoError(t, err)
 		if sigClientType == signing.DistributionAccountDBSignatureClientType {
 			distAccSigClient, err = signing.NewSignatureClient(signing.DistributionAccountDBSignatureClientType, signing.SignatureClientOptions{
 				NetworkPassphrase:           networkPassphrase,
