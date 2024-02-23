@@ -65,8 +65,8 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 		require.NoError(t, err)
 
 		tenantDB, err := db.OpenDBConnectionPool(tenantDSN)
-		defer tenantDB.Close()
 		require.NoError(t, err)
+		defer tenantDB.Close()
 
 		schemaName := fmt.Sprintf("%s%s", router.SDPSchemaNamePrefix, tenantName)
 		assert.True(t, tenant.CheckSchemaExistsFixture(t, ctx, tenantDB, schemaName))
@@ -218,16 +218,16 @@ func Test_Manager_RunMigrationsForTenant(t *testing.T) {
 	require.NoError(t, err)
 
 	tenant1DB, err := db.OpenDBConnectionPool(tenant1DSN)
-	defer tenant1DB.Close()
 	require.NoError(t, err)
+	defer tenant1DB.Close()
 
 	// Tenant 2 DB connection
 	tenant2DSN, err := router.GetDSNForTenant(dbt.DSN, tnt2.Name)
 	require.NoError(t, err)
 
 	tenant2DB, err := db.OpenDBConnectionPool(tenant2DSN)
-	defer tenant2DB.Close()
 	require.NoError(t, err)
+	defer tenant2DB.Close()
 
 	p := NewManager(WithDatabase(tenant1DB))
 	err = p.RunMigrationsForTenant(ctx, tnt1, tenant1DSN, migrate.Up, 0, sdpmigrations.FS, db.StellarPerTenantSDPMigrationsTableName)
