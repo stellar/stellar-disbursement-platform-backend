@@ -92,7 +92,7 @@ func AddTenantsCmd() *cobra.Command {
 			ConfigKey:   &sigOpts.NetworkPassphrase,
 			Required:    true,
 		})
-	configOptions = append(configOptions, cmdUtils.BaseDistributionSignatureClientConfigOptions(&sigOpts)...)
+	configOptions = append(configOptions, cmdUtils.BaseDistributionAccountSignatureClientConfigOptions(&sigOpts)...)
 
 	cmd := cobra.Command{
 		Use:     "add-tenants",

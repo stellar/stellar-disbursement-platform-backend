@@ -94,8 +94,7 @@ func StartServe(opts ServeOptions, httpServer HTTPServerInterface) error {
 		},
 		OnStopping: func() {
 			log.Info("Closing the Tenant Server database connection pool")
-			ctx := context.Background()
-			err := db.CloseConnectionPoolIfNeeded(ctx, opts.dbConnectionPool)
+			err := db.CloseConnectionPoolIfNeeded(context.Background(), opts.dbConnectionPool)
 			if err != nil {
 				log.Errorf("error closing database connection: %v", err)
 			}

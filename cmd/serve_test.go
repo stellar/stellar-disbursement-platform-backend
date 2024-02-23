@@ -187,11 +187,9 @@ func Test_serve(t *testing.T) {
 	defer mMonitorService.AssertExpectations(t)
 
 	chAccEncryptionPassphrase := keypair.MustRandom().Seed()
-	networkPassphrase := network.TestNetworkPassphrase
 	serveMetricOpts := serve.MetricsServeOptions{
-		Port:        8002,
-		Environment: "test",
-
+		Port:           8002,
+		Environment:    "test",
 		MetricType:     monitor.MetricTypePrometheus,
 		MonitorService: &mMonitorService,
 	}
@@ -201,7 +199,7 @@ func Test_serve(t *testing.T) {
 		EmailMessengerClient: messengerClient,
 		DatabaseDSN:          dbt.DSN,
 		GitCommit:            "1234567890abcdef",
-		NetworkPassphrase:    networkPassphrase,
+		NetworkPassphrase:    network.TestNetworkPassphrase,
 		Port:                 8003,
 		Version:              "x.y.z",
 		DistAccSigClient:     submitterEngine.DistAccountSigner,

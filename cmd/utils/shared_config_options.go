@@ -217,10 +217,10 @@ func BaseSignatureServiceConfigOptions(opts *signing.SignatureServiceOptions) []
 			ConfigKey:      &opts.ChAccEncryptionPassphrase,
 			Required:       false,
 		},
-	}, BaseDistributionSignatureClientConfigOptions(opts)...)
+	}, BaseDistributionAccountSignatureClientConfigOptions(opts)...)
 }
 
-func BaseDistributionSignatureClientConfigOptions(opts *signing.SignatureServiceOptions) []*config.ConfigOption {
+func BaseDistributionAccountSignatureClientConfigOptions(opts *signing.SignatureServiceOptions) []*config.ConfigOption {
 	return []*config.ConfigOption{
 		{
 			Name:           "distribution-account-encryption-passphrase",
