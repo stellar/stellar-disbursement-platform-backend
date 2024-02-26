@@ -5,6 +5,7 @@ import (
 	"go/types"
 
 	"github.com/stellar/go/clients/horizonclient"
+	"github.com/stellar/go/network"
 	"github.com/stellar/go/support/config"
 	"github.com/stellar/go/txnbuild"
 
@@ -208,7 +209,7 @@ func TransactionSubmitterEngineConfigOptions(opts *di.TxSubmitterEngineOptions) 
 }
 
 func BaseSignatureServiceConfigOptions(opts *signing.SignatureServiceOptions) []*config.ConfigOption {
-	return []*config.ConfigOption{
+	return append([]*config.ConfigOption{
 		{
 			Name:           "channel-account-encryption-passphrase",
 			Usage:          "A Stellar-compliant ed25519 private key used to encrypt/decrypt the channel accounts' private keys. When not set, it will default to the value of the 'distribution-seed' option.",
@@ -217,6 +218,11 @@ func BaseSignatureServiceConfigOptions(opts *signing.SignatureServiceOptions) []
 			ConfigKey:      &opts.ChAccEncryptionPassphrase,
 			Required:       false,
 		},
+	}, BaseDistributionAccountSignatureClientConfigOptions(opts)...)
+}
+
+func BaseDistributionAccountSignatureClientConfigOptions(opts *signing.SignatureServiceOptions) []*config.ConfigOption {
+	return []*config.ConfigOption{
 		{
 			Name:           "distribution-account-encryption-passphrase",
 			Usage:          "A Stellar-compliant ed25519 private key used to encrypt/decrypt the in-memory distribution accounts' private keys. It's mandatory when the distribution-signer-type is set to DISTRIBUTION_ACCOUNT_DB.",
@@ -265,6 +271,17 @@ func DistributionPublicKey(targetPointer interface{}) *config.ConfigOption {
 		CustomSetValue: SetConfigOptionStellarPublicKey,
 		ConfigKey:      targetPointer,
 		Required:       true,
+	}
+}
+
+func NetworkPassphrase(targetPointer interface{}) *config.ConfigOption {
+	return &config.ConfigOption{
+		Name:        "network-passphrase",
+		Usage:       "The Stellar Network passphrase",
+		OptType:     types.String,
+		FlagDefault: network.TestNetworkPassphrase,
+		ConfigKey:   targetPointer,
+		Required:    true,
 	}
 }
 

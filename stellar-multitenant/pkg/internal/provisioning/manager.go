@@ -3,33 +3,37 @@ package provisioning
 import (
 	"context"
 	"embed"
+	"errors"
 	"fmt"
 
 	"github.com/lib/pq"
 	migrate "github.com/rubenv/sql-migrate"
 	"github.com/stellar/go/support/log"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	authmigrations "github.com/stellar/stellar-disbursement-platform-backend/db/migrations/auth-migrations"
 	sdpmigrations "github.com/stellar/stellar-disbursement-platform-backend/db/migrations/sdp-migrations"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 type Manager struct {
-	tenantManager   *tenant.Manager
-	db              db.DBConnectionPool
-	messengerClient message.MessengerClient
+	tenantManager    *tenant.Manager
+	db               db.DBConnectionPool
+	messengerClient  message.MessengerClient
+	distAccSigClient signing.SignatureClient
 }
 
 func (m *Manager) ProvisionNewTenant(
 	ctx context.Context, name, userFirstName, userLastName, userEmail,
 	organizationName, uiBaseURL, networkType string,
 ) (*tenant.Tenant, error) {
-	// TODO: Run this in a database transaction.
+	// TODO (SDP-1107): Run this in a database transaction.
 	log.Infof("adding tenant %s", name)
 	t, err := m.tenantManager.AddTenant(ctx, name)
 	if err != nil {
@@ -89,6 +93,24 @@ func (m *Manager) ProvisionNewTenant(
 		return nil, fmt.Errorf("updating organization's name: %w", err)
 	}
 
+	// Provision distribution account for tenant if necessary
+	distributionAccPubKeys, err := m.distAccSigClient.BatchInsert(ctx, 1)
+	if err != nil {
+		if errors.Is(err, signing.ErrUnsupportedCommand) {
+			log.Ctx(ctx).Warnf(
+				"Account provisioning not needed for distribution account signature client type %s: %v",
+				m.distAccSigClient.Type(), err)
+		} else {
+			return nil, fmt.Errorf("provisioning distribution account: %w", err)
+		}
+	}
+	if len(distributionAccPubKeys) != 1 {
+		return nil, fmt.Errorf("expected single distribution account public key, got %d", len(distributionAccPubKeys))
+	}
+
+	distributionAccPubKey := distributionAccPubKeys[0]
+	log.Ctx(ctx).Infof("distribution account %s created for tenant %s", distributionAccPubKey, t.Name)
+
 	// Creating new user and sending invitation email
 	authManager := auth.NewAuthManager(
 		auth.WithDefaultAuthenticatorOption(tenantSchemaConnectionPool, auth.NewDefaultPasswordEncrypter(), 0),
@@ -106,9 +128,31 @@ func (m *Manager) ProvisionNewTenant(
 	}
 
 	tenantStatus := tenant.ProvisionedTenantStatus
-	t, err = m.tenantManager.UpdateTenantConfig(ctx, &tenant.TenantUpdate{ID: t.ID, Status: &tenantStatus, SDPUIBaseURL: &uiBaseURL})
+	t, err = m.tenantManager.UpdateTenantConfig(
+		ctx,
+		&tenant.TenantUpdate{
+			ID:                  t.ID,
+			Status:              &tenantStatus,
+			SDPUIBaseURL:        &uiBaseURL,
+			DistributionAccount: &distributionAccPubKey,
+		})
 	if err != nil {
-		return nil, fmt.Errorf("updating tenant %s status to %s: %w", name, tenant.ProvisionedTenantStatus, err)
+		updateTenantErrMsg := fmt.Errorf("updating tenant %s status to %s: %w", name, tenant.ProvisionedTenantStatus, err)
+		// Rollback distribution account provisioning
+		sigClientDeleteKeyErr := m.distAccSigClient.Delete(ctx, distributionAccPubKey)
+		if sigClientDeleteKeyErr != nil {
+			sigClientDeleteKeyErrMsg := fmt.Errorf("unable to delete distribution account private key: %w", sigClientDeleteKeyErr)
+			if errors.Is(sigClientDeleteKeyErr, signing.ErrUnsupportedCommand) {
+				log.Ctx(ctx).Warnf(
+					"Private key deletion not needed for distribution account signature client type %s: %v",
+					m.distAccSigClient.Type(), sigClientDeleteKeyErr)
+			} else {
+				log.Ctx(ctx).Error(sigClientDeleteKeyErrMsg)
+				updateTenantErrMsg = fmt.Errorf("%w. %w", updateTenantErrMsg, sigClientDeleteKeyErrMsg)
+			}
+		}
+
+		return nil, updateTenantErrMsg
 	}
 
 	return t, nil
@@ -152,5 +196,11 @@ func WithMessengerClient(messengerClient message.MessengerClient) Option {
 func WithTenantManager(tenantManager *tenant.Manager) Option {
 	return func(m *Manager) {
 		m.tenantManager = tenantManager
+	}
+}
+
+func WithDistributionAccountSignatureClient(distAccSigClient signing.SignatureClient) Option {
+	return func(m *Manager) {
+		m.distAccSigClient = distAccSigClient
 	}
 }

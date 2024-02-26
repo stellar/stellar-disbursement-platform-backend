@@ -5,6 +5,10 @@ import (
 	"fmt"
 	"go/types"
 
+	"github.com/spf13/cobra"
+	"github.com/stellar/go/support/config"
+	"github.com/stellar/go/support/log"
+
 	cmdUtils "github.com/stellar/stellar-disbursement-platform-backend/cmd/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
@@ -14,12 +18,8 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/eventhandlers"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/scheduler"
-
-	"github.com/spf13/cobra"
-	"github.com/stellar/go/support/config"
-	"github.com/stellar/go/support/log"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/scheduler"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve"
 	serveadmin "github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/serve"
 )
@@ -512,6 +512,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 				log.Ctx(ctx).Fatalf("error creating submitter engine: %v", err)
 			}
 			serveOpts.SubmitterEngine = submitterEngine
+			adminServeOpts.DistAccSigClient = submitterEngine.SignatureService.DistAccountSigner
 
 			// Kafka (background)
 			if eventBrokerOptions.EventBrokerType == events.KafkaEventBrokerType {

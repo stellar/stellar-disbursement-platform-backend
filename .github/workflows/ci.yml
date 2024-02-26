@@ -30,6 +30,8 @@ jobs:
         with:
           version: v1.56.2 # this is the golangci-lint version
           args: --timeout 5m0s
+          skip-build-cache: true
+          skip-pkg-cache: true
 
       - name: Run ./gomod.sh
         run: ./gomod.sh

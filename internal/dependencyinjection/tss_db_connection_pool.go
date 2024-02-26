@@ -32,6 +32,7 @@ func NewTSSDBConnectionPool(ctx context.Context, opts TSSDBConnectionPoolOptions
 	if err != nil {
 		return nil, fmt.Errorf("getting TSS database DNS: %w", err)
 	}
+
 	tssDBConnectionPool, err := db.OpenDBConnectionPool(tssDNS)
 	if err != nil {
 		return nil, fmt.Errorf("opening TSS DB connection pool: %w", err)

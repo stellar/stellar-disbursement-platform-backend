@@ -11,15 +11,18 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/stellar/stellar-disbursement-platform-backend/db"
-	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/internal/provisioning"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
+	"github.com/stellar/go/keypair"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
+	sigMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing/mocks"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/internal/provisioning"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 func runBadRequestPatchTest(t *testing.T, r *chi.Mux, url, fieldName, errorMsg string) {
@@ -138,6 +141,7 @@ func Test_TenantHandler_Get(t *testing.T) {
 					"base_url": null,
 					"sdp_ui_base_url": null,
 					"status": "TENANT_CREATED",
+					"distribution_account": null,
 					"created_at": %q,
 					"updated_at": %q
 				},
@@ -151,12 +155,13 @@ func Test_TenantHandler_Get(t *testing.T) {
 					"base_url": null,
 					"sdp_ui_base_url": null,
 					"status": "TENANT_CREATED",
+					"distribution_account": null,
 					"created_at": %q,
 					"updated_at": %q
 				}
 			]
 		`, tnt1.ID, tnt1.Name, tnt1.CreatedAt.Format(time.RFC3339Nano), tnt1.UpdatedAt.Format(time.RFC3339Nano), tnt2.ID, tnt2.Name, tnt2.CreatedAt.Format(time.RFC3339Nano), tnt2.UpdatedAt.Format(time.RFC3339Nano))
-		assert.JSONEq(t, string(expectedRespBody), string(respBody))
+		assert.JSONEq(t, expectedRespBody, string(respBody))
 	})
 
 	t.Run("successfully returns a tenant by ID", func(t *testing.T) {
@@ -185,11 +190,12 @@ func Test_TenantHandler_Get(t *testing.T) {
 				"base_url": null,
 				"sdp_ui_base_url": null,
 				"status": "TENANT_CREATED",
+				"distribution_account": null,
 				"created_at": %q,
 				"updated_at": %q
 			}
 		`, tnt1.ID, tnt1.Name, tnt1.CreatedAt.Format(time.RFC3339Nano), tnt1.UpdatedAt.Format(time.RFC3339Nano))
-		assert.JSONEq(t, string(expectedRespBody), string(respBody))
+		assert.JSONEq(t, expectedRespBody, string(respBody))
 	})
 
 	t.Run("successfully returns a tenant by name", func(t *testing.T) {
@@ -218,11 +224,12 @@ func Test_TenantHandler_Get(t *testing.T) {
 				"base_url": null,
 				"sdp_ui_base_url": null,
 				"status": "TENANT_CREATED",
+				"distribution_account": null,
 				"created_at": %q,
 				"updated_at": %q
 			}
 		`, tnt2.ID, tnt2.Name, tnt2.CreatedAt.Format(time.RFC3339Nano), tnt2.UpdatedAt.Format(time.RFC3339Nano))
-		assert.JSONEq(t, string(expectedRespBody), string(respBody))
+		assert.JSONEq(t, expectedRespBody, string(respBody))
 	})
 
 	t.Run("returns NotFound when tenant does not exist", func(t *testing.T) {
@@ -242,7 +249,7 @@ func Test_TenantHandler_Get(t *testing.T) {
 		expectedRespBody := `
 			{"error": "tenant unknown does not exist"}
 		`
-		assert.JSONEq(t, string(expectedRespBody), string(respBody))
+		assert.JSONEq(t, expectedRespBody, string(respBody))
 	})
 }
 
@@ -254,6 +261,10 @@ func Test_TenantHandler_Post(t *testing.T) {
 	require.NoError(t, outerErr)
 	defer dbConnectionPool.Close()
 
+	distAcc := keypair.MustRandom()
+	t.Setenv("DISTRIBUTION_SEED", distAcc.Seed())
+	distAccSigClientMock := sigMocks.NewMockSignatureClient(t)
+
 	ctx := context.Background()
 	messengerClientMock := message.MessengerClientMock{}
 	m := tenant.NewManager(tenant.WithDatabase(dbConnectionPool))
@@ -261,6 +272,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 		provisioning.WithDatabase(dbConnectionPool),
 		provisioning.WithTenantManager(m),
 		provisioning.WithMessengerClient(&messengerClientMock),
+		provisioning.WithDistributionAccountSignatureClient(distAccSigClientMock),
 	)
 	handler := TenantsHandler{
 		Manager:             m,
@@ -314,6 +326,11 @@ func Test_TenantHandler_Post(t *testing.T) {
 			Return(nil).
 			Once()
 
+		distAccSigClientMock.
+			On("BatchInsert", ctx, 1).
+			Return([]string{distAcc.Address()}, nil).
+			Once()
+
 		reqBody := `
 			{
 				"name": "aid-org",
@@ -356,11 +373,12 @@ func Test_TenantHandler_Post(t *testing.T) {
 				"base_url": "https://backend.sdp.org",
 				"sdp_ui_base_url": "https://aid-org.sdp.org",
 				"status": "TENANT_PROVISIONED",
+				"distribution_account": %q,
 				"created_at": %q,
 				"updated_at": %q
 			}
-		`, tnt.ID, tnt.CreatedAt.Format(time.RFC3339Nano), tnt.UpdatedAt.Format(time.RFC3339Nano))
-		assert.JSONEq(t, string(expectedRespBody), string(respBody))
+		`, tnt.ID, distAcc.Address(), tnt.CreatedAt.Format(time.RFC3339Nano), tnt.UpdatedAt.Format(time.RFC3339Nano))
+		assert.JSONEq(t, expectedRespBody, string(respBody))
 
 		// Validating infrastructure
 		expectedSchema := "sdp_aid-org"
@@ -409,6 +427,11 @@ func Test_TenantHandler_Post(t *testing.T) {
 				assert.Empty(t, msg.ToPhoneNumber)
 			}).
 			Return(nil).
+			Once()
+
+		distAccSigClientMock.
+			On("BatchInsert", ctx, 1).
+			Return([]string{distAcc.Address()}, nil).
 			Once()
 
 		reqBody := `
@@ -543,6 +566,7 @@ func Test_TenantHandler_Patch(t *testing.T) {
 			"base_url": null,
 			"sdp_ui_base_url": null,
 			"status": "TENANT_CREATED",
+			"distribution_account": null,
 		`
 
 		runSuccessfulRequestPatchTest(t, r, ctx, dbConnectionPool, handler, reqBody, expectedRespBody)
@@ -558,6 +582,7 @@ func Test_TenantHandler_Patch(t *testing.T) {
 			"base_url": null,
 			"sdp_ui_base_url": null,
 			"status": "TENANT_CREATED",
+			"distribution_account": null,
 		`
 
 		runSuccessfulRequestPatchTest(t, r, ctx, dbConnectionPool, handler, reqBody, expectedRespBody)
@@ -573,6 +598,7 @@ func Test_TenantHandler_Patch(t *testing.T) {
 			"base_url": null,
 			"sdp_ui_base_url": null,
 			"status": "TENANT_CREATED",
+			"distribution_account": null,
 		`
 
 		runSuccessfulRequestPatchTest(t, r, ctx, dbConnectionPool, handler, reqBody, expectedRespBody)
@@ -588,6 +614,7 @@ func Test_TenantHandler_Patch(t *testing.T) {
 			"base_url": null,
 			"sdp_ui_base_url": null,
 			"status": "TENANT_CREATED",
+			"distribution_account": null,
 		`
 
 		runSuccessfulRequestPatchTest(t, r, ctx, dbConnectionPool, handler, reqBody, expectedRespBody)
@@ -603,6 +630,7 @@ func Test_TenantHandler_Patch(t *testing.T) {
 			"base_url": "http://valid.com",
 			"sdp_ui_base_url": null,
 			"status": "TENANT_CREATED",
+			"distribution_account": null,
 		`
 
 		runSuccessfulRequestPatchTest(t, r, ctx, dbConnectionPool, handler, reqBody, expectedRespBody)
@@ -618,6 +646,7 @@ func Test_TenantHandler_Patch(t *testing.T) {
 			"base_url": null,
 			"sdp_ui_base_url": "http://valid.com",
 			"status": "TENANT_CREATED",
+			"distribution_account": null,
 		`
 
 		runSuccessfulRequestPatchTest(t, r, ctx, dbConnectionPool, handler, reqBody, expectedRespBody)
@@ -633,6 +662,23 @@ func Test_TenantHandler_Patch(t *testing.T) {
 			"base_url": null,
 			"sdp_ui_base_url": null,
 			"status": "TENANT_ACTIVATED",
+			"distribution_account": null,
+		`
+
+		runSuccessfulRequestPatchTest(t, r, ctx, dbConnectionPool, handler, reqBody, expectedRespBody)
+	})
+
+	t.Run("successfully updates Distribution Account of a tenant", func(t *testing.T) {
+		reqBody := `{"distribution_account": "GAAFQ2NZRRELBKLNLRZ5CT5RENLQGJPHDM6YY5UKV5UDAFNZ6KD6J4W7"}`
+		expectedRespBody := `
+			"email_sender_type": "DRY_RUN",
+			"sms_sender_type": "DRY_RUN",
+			"enable_mfa": true,
+			"enable_recaptcha": true,
+			"base_url": null,
+			"sdp_ui_base_url": null,
+			"status": "TENANT_CREATED",
+			"distribution_account": "GAAFQ2NZRRELBKLNLRZ5CT5RENLQGJPHDM6YY5UKV5UDAFNZ6KD6J4W7",
 		`
 
 		runSuccessfulRequestPatchTest(t, r, ctx, dbConnectionPool, handler, reqBody, expectedRespBody)
@@ -646,7 +692,8 @@ func Test_TenantHandler_Patch(t *testing.T) {
 			"enable_recaptcha": false,
 			"base_url": "http://valid.com",
 			"sdp_ui_base_url": "http://valid.com",
-			"status": "TENANT_ACTIVATED"
+			"status": "TENANT_ACTIVATED",
+			"distribution_account": "GAAFQ2NZRRELBKLNLRZ5CT5RENLQGJPHDM6YY5UKV5UDAFNZ6KD6J4W7"
 		}`
 
 		expectedRespBody := `
@@ -657,6 +704,7 @@ func Test_TenantHandler_Patch(t *testing.T) {
 			"base_url": "http://valid.com",
 			"sdp_ui_base_url": "http://valid.com",
 			"status": "TENANT_ACTIVATED",
+			"distribution_account": "GAAFQ2NZRRELBKLNLRZ5CT5RENLQGJPHDM6YY5UKV5UDAFNZ6KD6J4W7",
 		`
 
 		runSuccessfulRequestPatchTest(t, r, ctx, dbConnectionPool, handler, reqBody, expectedRespBody)
