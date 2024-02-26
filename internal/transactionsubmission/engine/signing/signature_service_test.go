@@ -166,6 +166,7 @@ func Test_NewSignatureService(t *testing.T) {
 				DistAccountSigner:           wantDistAccountEnvSigner,
 				HostAccountSigner:           wantDistAccountEnvSigner,
 				DistributionAccountResolver: wantDistAccountEnvSigner,
+				networkPassphrase:           network.TestNetworkPassphrase,
 			},
 		},
 		// TODO: in SDP-1077 - 01: test "returns an error if the options are invalid for the distribution account signer (DISTRIBUTION_ACCOUNT_DB)",
@@ -189,6 +190,7 @@ func Test_NewSignatureService(t *testing.T) {
 				DistAccountSigner:           wantDistAccountDBSigner,
 				HostAccountSigner:           wantDistAccountEnvSigner,
 				DistributionAccountResolver: wantDistAccountEnvSigner,
+				networkPassphrase:           network.TestNetworkPassphrase,
 			},
 			wantErrContains: "trying to cast a distribution account signer to a distribution account resolver",
 		},
@@ -210,6 +212,7 @@ func Test_NewSignatureService(t *testing.T) {
 				DistAccountSigner:           wantDistAccountEnvSigner,
 				HostAccountSigner:           wantDistAccountEnvSigner,
 				DistributionAccountResolver: mocks.NewMockDistributionAccountResolver(t),
+				networkPassphrase:           network.TestNetworkPassphrase,
 			},
 		},
 	}

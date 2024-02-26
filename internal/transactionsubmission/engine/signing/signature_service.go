@@ -15,6 +15,7 @@ type SignatureService struct {
 	DistAccountSigner SignatureClient
 	HostAccountSigner SignatureClient
 	DistributionAccountResolver
+	networkPassphrase string
 }
 
 var _ DistributionAccountResolver = (*SignatureService)(nil)
@@ -114,5 +115,10 @@ func NewSignatureService(opts SignatureServiceOptions) (SignatureService, error)
 		DistAccountSigner:           distAccSigner,
 		HostAccountSigner:           hostAccSigner,
 		DistributionAccountResolver: distAccResolver,
+		networkPassphrase:           opts.NetworkPassphrase,
 	}, nil
+}
+
+func (ss *SignatureService) NetworkPassphrase() string {
+	return ss.networkPassphrase
 }
