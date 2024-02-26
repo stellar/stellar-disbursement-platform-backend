@@ -9,9 +9,11 @@ import (
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	supporthttp "github.com/stellar/go/support/http"
 	"github.com/stellar/go/support/log"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/internal/httphandler"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/internal/provisioning"
@@ -37,6 +39,7 @@ type ServeOptions struct {
 	NetworkPassphrase         string
 	networkType               utils.NetworkType
 	Port                      int
+	DistAccSigClient          signing.SignatureClient
 	tenantManager             *tenant.Manager
 	tenantProvisioningManager *provisioning.Manager
 	Version                   string
@@ -56,9 +59,10 @@ func (opts *ServeOptions) SetupDependencies() error {
 
 	opts.tenantManager = tenant.NewManager(tenant.WithDatabase(dbConnectionPool))
 	opts.tenantProvisioningManager = provisioning.NewManager(
-		provisioning.WithDatabase(dbConnectionPool),
+		provisioning.WithDatabase(opts.dbConnectionPool),
 		provisioning.WithTenantManager(opts.tenantManager),
 		provisioning.WithMessengerClient(opts.EmailMessengerClient),
+		provisioning.WithDistributionAccountSignatureClient(opts.DistAccSigClient),
 	)
 
 	opts.networkType, err = utils.GetNetworkTypeFromNetworkPassphrase(opts.NetworkPassphrase)

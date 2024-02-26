@@ -6,14 +6,18 @@ import (
 	"go/types"
 	"regexp"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/internal/provisioning"
-
 	"github.com/spf13/cobra"
 	"github.com/stellar/go/support/config"
 	"github.com/stellar/go/support/log"
+	"golang.org/x/exp/slices"
+
+	cmdUtils "github.com/stellar/stellar-disbursement-platform-backend/cmd/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/dependencyinjection"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/cli/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/internal/provisioning"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
@@ -26,15 +30,14 @@ type AddTenantsCommandOptions struct {
 }
 
 func AddTenantsCmd() *cobra.Command {
-	opts := AddTenantsCommandOptions{}
-
+	tenantsOpts := AddTenantsCommandOptions{}
 	configOptions := config.ConfigOptions{
 		{
 			Name:           "network-type",
 			Usage:          "The Stellar Network type",
 			OptType:        types.String,
 			CustomSetValue: utils.SetConfigOptionNetworkType,
-			ConfigKey:      &opts.NetworkType,
+			ConfigKey:      &tenantsOpts.NetworkType,
 			FlagDefault:    "testnet",
 			Required:       true,
 		},
@@ -43,7 +46,7 @@ func AddTenantsCmd() *cobra.Command {
 			Usage:          "The Tenant SDP UI/dashboard Base URL.",
 			OptType:        types.String,
 			CustomSetValue: utils.SetConfigOptionURLString,
-			ConfigKey:      &opts.SDPUIBaseURL,
+			ConfigKey:      &tenantsOpts.SDPUIBaseURL,
 			FlagDefault:    "http://localhost:3000",
 			Required:       true,
 		},
@@ -52,31 +55,35 @@ func AddTenantsCmd() *cobra.Command {
 			Usage:          fmt.Sprintf("The messenger type used to send invitations to new dashboard users. Options: %+v", message.MessengerType("").ValidEmailTypes()),
 			OptType:        types.String,
 			CustomSetValue: utils.SetConfigOptionMessengerType,
-			ConfigKey:      &opts.MessengerOptions.MessengerType,
+			ConfigKey:      &tenantsOpts.MessengerOptions.MessengerType,
 			Required:       true,
 		},
 		{
 			Name:      "aws-access-key-id",
 			Usage:     "The AWS access key ID",
 			OptType:   types.String,
-			ConfigKey: &opts.MessengerOptions.AWSAccessKeyID,
+			ConfigKey: &tenantsOpts.MessengerOptions.AWSAccessKeyID,
 			Required:  false,
 		},
 		{
 			Name:      "aws-secret-access-key",
 			Usage:     "The AWS secret access key",
 			OptType:   types.String,
-			ConfigKey: &opts.MessengerOptions.AWSSecretAccessKey,
+			ConfigKey: &tenantsOpts.MessengerOptions.AWSSecretAccessKey,
 			Required:  false,
 		},
 		{
 			Name:      "aws-region",
 			Usage:     "The AWS region",
 			OptType:   types.String,
-			ConfigKey: &opts.MessengerOptions.AWSRegion,
+			ConfigKey: &tenantsOpts.MessengerOptions.AWSRegion,
 			Required:  false,
 		},
 	}
+
+	sigOpts := signing.SignatureServiceOptions{}
+	configOptions = append(configOptions, cmdUtils.BaseDistributionAccountSignatureClientConfigOptions(&sigOpts)...)
+	configOptions = append(configOptions, cmdUtils.NetworkPassphrase(&sigOpts.NetworkPassphrase))
 
 	cmd := cobra.Command{
 		Use:     "add-tenants",
@@ -96,7 +103,7 @@ func AddTenantsCmd() *cobra.Command {
 			}
 		},
 		Run: func(cmd *cobra.Command, args []string) {
-			messengerClient, err := message.GetClient(opts.MessengerOptions)
+			messengerClient, err := message.GetClient(tenantsOpts.MessengerOptions)
 			if err != nil {
 				log.Fatalf("creating email client: %v", err)
 			}
@@ -104,7 +111,7 @@ func AddTenantsCmd() *cobra.Command {
 			ctx := cmd.Context()
 			if err := executeAddTenant(
 				ctx, globalOptions.multitenantDbURL, args[0], args[1], args[2], args[3], args[4],
-				*opts.SDPUIBaseURL, opts.NetworkType, messengerClient); err != nil {
+				messengerClient, tenantsOpts, sigOpts); err != nil {
 				log.Fatal(err)
 			}
 		},
@@ -126,7 +133,7 @@ func validateTenantNameArg(cmd *cobra.Command, args []string) error {
 
 func executeAddTenant(
 	ctx context.Context, dbURL, tenantName, userFirstName, userLastName, userEmail,
-	organizationName, uiBaseURL, networkType string, messengerClient message.MessengerClient,
+	organizationName string, messengerClient message.MessengerClient, tenantsOpts AddTenantsCommandOptions, sigOpts signing.SignatureServiceOptions,
 ) error {
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbURL)
 	if err != nil {
@@ -134,13 +141,36 @@ func executeAddTenant(
 	}
 	defer dbConnectionPool.Close()
 
+	if !slices.Contains(signing.DistributionSignatureClientTypes(), sigOpts.DistributionSignerType) {
+		return fmt.Errorf("invalid distribution account signer type %q", sigOpts.DistributionSignerType)
+	}
+
+	// We need to use a dbConnectionPool that resolves to the tss namespace for the distribution account signature client.
+	tssDBConnectionPool, err := dependencyinjection.NewTSSDBConnectionPool(ctx, dependencyinjection.TSSDBConnectionPoolOptions{DatabaseURL: dbURL})
+	if err != nil {
+		return fmt.Errorf("getting TSS DBConnectionPool: %w", err)
+	}
+	defer tssDBConnectionPool.Close()
+
+	distAccSigClient, err := signing.NewSignatureClient(sigOpts.DistributionSignerType, signing.SignatureClientOptions{
+		NetworkPassphrase:           sigOpts.NetworkPassphrase,
+		DistributionPrivateKey:      sigOpts.DistributionPrivateKey,
+		DistAccEncryptionPassphrase: sigOpts.DistAccEncryptionPassphrase,
+		DBConnectionPool:            tssDBConnectionPool,
+	})
+	if err != nil {
+		return fmt.Errorf("creating a new distribution account signature client: %w", err)
+	}
+
 	m := tenant.NewManager(tenant.WithDatabase(dbConnectionPool))
 	p := provisioning.NewManager(
 		provisioning.WithDatabase(dbConnectionPool),
 		provisioning.WithMessengerClient(messengerClient),
-		provisioning.WithTenantManager(m))
+		provisioning.WithTenantManager(m),
+		provisioning.WithDistributionAccountSignatureClient(distAccSigClient),
+	)
 
-	t, err := p.ProvisionNewTenant(ctx, tenantName, userFirstName, userLastName, userEmail, organizationName, uiBaseURL, networkType)
+	t, err := p.ProvisionNewTenant(ctx, tenantName, userFirstName, userLastName, userEmail, organizationName, *tenantsOpts.SDPUIBaseURL, tenantsOpts.NetworkType)
 	if err != nil {
 		return fmt.Errorf("adding tenant with name %s: %w", tenantName, err)
 	}

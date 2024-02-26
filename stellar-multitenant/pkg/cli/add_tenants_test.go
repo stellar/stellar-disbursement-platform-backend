@@ -9,14 +9,18 @@ import (
 	"testing"
 
 	"github.com/spf13/cobra"
+	"github.com/stellar/go/keypair"
+	"github.com/stellar/go/network"
 	"github.com/stellar/go/support/log"
-	"github.com/stellar/stellar-disbursement-platform-backend/db"
-	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 func Test_validateTenantNameArg(t *testing.T) {
@@ -85,13 +89,26 @@ func Test_executeAddTenant(t *testing.T) {
 	organizationName := "My Org"
 	uiBaseURL := "http://localhost:3000"
 	networkType := "testnet"
+	encryptionPassphrase := keypair.MustRandom().Seed()
+	distributionAccPrivKey := keypair.MustRandom().Seed()
+
+	sigOpts := signing.SignatureServiceOptions{
+		DistributionSignerType:      signing.DistributionAccountEnvSignatureClientType,
+		DistAccEncryptionPassphrase: encryptionPassphrase,
+		DistributionPrivateKey:      distributionAccPrivKey,
+		NetworkPassphrase:           network.TestNetworkPassphrase,
+	}
+	tenantsOpts := AddTenantsCommandOptions{
+		SDPUIBaseURL: &uiBaseURL,
+		NetworkType:  networkType,
+	}
 
 	t.Run("adds a new tenant successfully", func(t *testing.T) {
 		tenant.DeleteAllTenantsFixture(t, ctx, dbConnectionPool)
 
 		getEntries := log.DefaultLogger.StartTest(log.InfoLevel)
 
-		err := executeAddTenant(ctx, dbt.DSN, tenantName, userFirstName, userLastName, userEmail, organizationName, uiBaseURL, networkType, messengerClientMock)
+		err := executeAddTenant(ctx, dbt.DSN, tenantName, userFirstName, userLastName, userEmail, organizationName, messengerClientMock, tenantsOpts, sigOpts)
 		assert.Nil(t, err)
 
 		const q = "SELECT id FROM tenants WHERE name = $1"
@@ -100,9 +117,9 @@ func Test_executeAddTenant(t *testing.T) {
 		require.NoError(t, err)
 
 		entries := getEntries()
-		require.Len(t, entries, 15)
-		assert.Equal(t, "tenant myorg added successfully", entries[13].Message)
-		assert.Contains(t, fmt.Sprintf("tenant ID: %s", tenantID), entries[14].Message)
+		require.Len(t, entries, 19)
+		assert.Equal(t, "tenant myorg added successfully", entries[17].Message)
+		assert.Contains(t, fmt.Sprintf("tenant ID: %s", tenantID), entries[18].Message)
 	})
 
 	t.Run("duplicated tenant name", func(t *testing.T) {
@@ -110,10 +127,10 @@ func Test_executeAddTenant(t *testing.T) {
 
 		getEntries := log.DefaultLogger.StartTest(log.DebugLevel)
 
-		err := executeAddTenant(ctx, dbt.DSN, tenantName, userFirstName, userLastName, userEmail, organizationName, uiBaseURL, networkType, messengerClientMock)
+		err := executeAddTenant(ctx, dbt.DSN, tenantName, userFirstName, userLastName, userEmail, organizationName, messengerClientMock, tenantsOpts, sigOpts)
 		assert.Nil(t, err)
 
-		err = executeAddTenant(ctx, dbt.DSN, tenantName, userFirstName, userLastName, userEmail, organizationName, uiBaseURL, networkType, messengerClientMock)
+		err = executeAddTenant(ctx, dbt.DSN, tenantName, userFirstName, userLastName, userEmail, organizationName, messengerClientMock, tenantsOpts, sigOpts)
 		assert.ErrorIs(t, err, tenant.ErrDuplicatedTenantName)
 
 		const q = "SELECT id FROM tenants WHERE name = $1"
@@ -122,9 +139,9 @@ func Test_executeAddTenant(t *testing.T) {
 		require.NoError(t, err)
 
 		entries := getEntries()
-		require.Len(t, entries, 16)
-		assert.Equal(t, "tenant myorg added successfully", entries[13].Message)
-		assert.Contains(t, fmt.Sprintf("tenant ID: %s", tenantID), entries[14].Message)
+		require.Len(t, entries, 19)
+		assert.Equal(t, "tenant myorg added successfully", entries[16].Message)
+		assert.Contains(t, fmt.Sprintf("tenant ID: %s", tenantID), entries[17].Message)
 	})
 
 	messengerClientMock.AssertExpectations(t)
@@ -138,6 +155,9 @@ func Test_AddTenantsCmd(t *testing.T) {
 	defer dbConnectionPool.Close()
 
 	ctx := context.Background()
+
+	t.Setenv("DISTRIBUTION_SEED", keypair.MustRandom().Seed())
+	t.Setenv("DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE", keypair.MustRandom().Seed())
 
 	t.Run("shows usage", func(t *testing.T) {
 		out := new(strings.Builder)
@@ -157,13 +177,17 @@ Examples:
 add-tenants [tenant name] [user first name] [user last name] [user email] [organization name]
 
 Flags:
-      --aws-access-key-id string       The AWS access key ID (AWS_ACCESS_KEY_ID)
-      --aws-region string              The AWS region (AWS_REGION)
-      --aws-secret-access-key string   The AWS secret access key (AWS_SECRET_ACCESS_KEY)
-      --email-sender-type string       The messenger type used to send invitations to new dashboard users. Options: [DRY_RUN AWS_EMAIL] (EMAIL_SENDER_TYPE)
-  -h, --help                           help for add-tenants
-      --network-type string            The Stellar Network type (NETWORK_TYPE) (default "testnet")
-      --sdp-ui-base-url string         The Tenant SDP UI/dashboard Base URL. (SDP_UI_BASE_URL) (default "http://localhost:3000")
+      --aws-access-key-id string                            The AWS access key ID (AWS_ACCESS_KEY_ID)
+      --aws-region string                                   The AWS region (AWS_REGION)
+      --aws-secret-access-key string                        The AWS secret access key (AWS_SECRET_ACCESS_KEY)
+      --distribution-account-encryption-passphrase string   A Stellar-compliant ed25519 private key used to encrypt/decrypt the in-memory distribution accounts' private keys. It's mandatory when the distribution-signer-type is set to DISTRIBUTION_ACCOUNT_DB. (DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE)
+      --distribution-seed string                            The private key of the Stellar distribution account that sends the disbursements. (DISTRIBUTION_SEED)
+      --distribution-signer-type string                     The type of the signature client used for distribution accounts. Options: [DISTRIBUTION_ACCOUNT_ENV DISTRIBUTION_ACCOUNT_DB] (DISTRIBUTION_SIGNER_TYPE) (default "DISTRIBUTION_ACCOUNT_ENV")
+      --email-sender-type string                            The messenger type used to send invitations to new dashboard users. Options: [DRY_RUN AWS_EMAIL] (EMAIL_SENDER_TYPE)
+  -h, --help                                                help for add-tenants
+      --network-passphrase string                           The Stellar Network passphrase (NETWORK_PASSPHRASE) (default "Test SDF Network ; September 2015")
+      --network-type string                                 The Stellar Network type (NETWORK_TYPE) (default "testnet")
+      --sdp-ui-base-url string                              The Tenant SDP UI/dashboard Base URL. (SDP_UI_BASE_URL) (default "http://localhost:3000")
 
 `
 		assert.Equal(t, expectUsageMessage, out.String())
@@ -182,13 +206,17 @@ Examples:
 add-tenants [tenant name] [user first name] [user last name] [user email] [organization name]
 
 Flags:
-      --aws-access-key-id string       The AWS access key ID (AWS_ACCESS_KEY_ID)
-      --aws-region string              The AWS region (AWS_REGION)
-      --aws-secret-access-key string   The AWS secret access key (AWS_SECRET_ACCESS_KEY)
-      --email-sender-type string       The messenger type used to send invitations to new dashboard users. Options: [DRY_RUN AWS_EMAIL] (EMAIL_SENDER_TYPE)
-  -h, --help                           help for add-tenants
-      --network-type string            The Stellar Network type (NETWORK_TYPE) (default "testnet")
-      --sdp-ui-base-url string         The Tenant SDP UI/dashboard Base URL. (SDP_UI_BASE_URL) (default "http://localhost:3000")
+      --aws-access-key-id string                            The AWS access key ID (AWS_ACCESS_KEY_ID)
+      --aws-region string                                   The AWS region (AWS_REGION)
+      --aws-secret-access-key string                        The AWS secret access key (AWS_SECRET_ACCESS_KEY)
+      --distribution-account-encryption-passphrase string   A Stellar-compliant ed25519 private key used to encrypt/decrypt the in-memory distribution accounts' private keys. It's mandatory when the distribution-signer-type is set to DISTRIBUTION_ACCOUNT_DB. (DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE)
+      --distribution-seed string                            The private key of the Stellar distribution account that sends the disbursements. (DISTRIBUTION_SEED)
+      --distribution-signer-type string                     The type of the signature client used for distribution accounts. Options: [DISTRIBUTION_ACCOUNT_ENV DISTRIBUTION_ACCOUNT_DB] (DISTRIBUTION_SIGNER_TYPE) (default "DISTRIBUTION_ACCOUNT_ENV")
+      --email-sender-type string                            The messenger type used to send invitations to new dashboard users. Options: [DRY_RUN AWS_EMAIL] (EMAIL_SENDER_TYPE)
+  -h, --help                                                help for add-tenants
+      --network-passphrase string                           The Stellar Network passphrase (NETWORK_PASSPHRASE) (default "Test SDF Network ; September 2015")
+      --network-type string                                 The Stellar Network type (NETWORK_TYPE) (default "testnet")
+      --sdp-ui-base-url string                              The Tenant SDP UI/dashboard Base URL. (SDP_UI_BASE_URL) (default "http://localhost:3000")
 `
 		assert.Equal(t, expectUsageMessage, out.String())
 	})
@@ -218,9 +246,9 @@ Flags:
 		require.NoError(t, err)
 
 		entries := getEntries()
-		require.Len(t, entries, 17)
-		assert.Equal(t, "tenant unhcr added successfully", entries[15].Message)
-		assert.Contains(t, fmt.Sprintf("tenant ID: %s", tenantID), entries[16].Message)
+		require.Len(t, entries, 20)
+		assert.Equal(t, "tenant unhcr added successfully", entries[18].Message)
+		assert.Contains(t, fmt.Sprintf("tenant ID: %s", tenantID), entries[19].Message)
 
 		// Connecting to the new schema
 		schemaName := fmt.Sprintf("sdp_%s", tenantName)
@@ -285,9 +313,9 @@ Flags:
 		require.NoError(t, err)
 
 		entries := getEntries()
-		require.Len(t, entries, 17)
-		assert.Equal(t, "tenant irc added successfully", entries[15].Message)
-		assert.Contains(t, fmt.Sprintf("tenant ID: %s", tenantID), entries[16].Message)
+		require.Len(t, entries, 20)
+		assert.Equal(t, "tenant irc added successfully", entries[18].Message)
+		assert.Contains(t, fmt.Sprintf("tenant ID: %s", tenantID), entries[19].Message)
 
 		// Connecting to the new schema
 		schemaName := fmt.Sprintf("sdp_%s", tenantName)
