@@ -277,7 +277,7 @@ func DistributionPublicKey(targetPointer interface{}) *config.ConfigOption {
 func NetworkPassphrase(targetPointer interface{}) *config.ConfigOption {
 	return &config.ConfigOption{
 		Name:        "network-passphrase",
-		Usage:       "The Stellar Network passphrase",
+		Usage:       "The Stellar network passphrase",
 		OptType:     types.String,
 		FlagDefault: network.TestNetworkPassphrase,
 		ConfigKey:   targetPointer,
