@@ -198,6 +198,25 @@ services:
       - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092,EXTERNAL://localhost:9094
       - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT
       - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
+    healthcheck:
+      test: kafka-topics.sh --bootstrap-server kafka:9092 --list || exit -1
+      start_period: 10s
+      interval: 10s
+      timeout: 10s
+      retries: 5
+
+  kafka-init:
+    image: docker.io/bitnami/kafka:3.6
+    entrypoint: [ "/bin/bash", "-c" ]
+    depends_on:
+      kafka:
+        condition: service_healthy
+    command: |
+      "
+        kafka-topics.sh --create --if-not-exists --topic events.receiver-wallets.new_invitation --bootstrap-server kafka:9092
+        kafka-topics.sh --create --if-not-exists --topic events.payment.payment_completed --bootstrap-server kafka:9092
+        kafka-topics.sh --create --if-not-exists --topic events.payment.ready_to_pay --bootstrap-server kafka:9092
+      "
 
   db-conduktor:
     image: postgres:14
