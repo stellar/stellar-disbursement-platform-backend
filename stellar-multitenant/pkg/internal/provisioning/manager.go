@@ -5,6 +5,7 @@ import (
 	"embed"
 	"errors"
 	"fmt"
+
 	"github.com/lib/pq"
 	migrate "github.com/rubenv/sql-migrate"
 	"github.com/stellar/go/support/log"
