@@ -8,6 +8,7 @@ import (
 	migrate "github.com/rubenv/sql-migrate"
 	"github.com/stellar/go/keypair"
 	"github.com/stellar/go/network"
+	"github.com/stellar/go/strkey"
 	"github.com/stellar/go/support/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -64,30 +65,28 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 		tenantDSN, err := router.GetDSNForTenant(dbt.DSN, tenantName)
 		require.NoError(t, err)
 
-		tenantDB, err := db.OpenDBConnectionPool(tenantDSN)
+		tenantDBConnectionPool, err := db.OpenDBConnectionPool(tenantDSN)
 		require.NoError(t, err)
-		defer tenantDB.Close()
+		defer tenantDBConnectionPool.Close()
 
 		schemaName := fmt.Sprintf("%s%s", router.SDPSchemaNamePrefix, tenantName)
-		assert.True(t, tenant.CheckSchemaExistsFixture(t, ctx, tenantDB, schemaName))
+		assert.True(t, tenant.CheckSchemaExistsFixture(t, ctx, tenantDBConnectionPool, schemaName))
 
-		tenant.TenantSchemaMatchTablesFixture(t, ctx, tenantDB, schemaName, getExpectedTablesAfterMigrationsApplied())
+		tenant.TenantSchemaMatchTablesFixture(t, ctx, tenantDBConnectionPool, schemaName, getExpectedTablesAfterMigrationsApplied())
 
-		var assets []string
-		var wallets []string
+		assets := pubnetAssets
+		wallets := pubnetWallets
 		if isTestnet {
 			assets = testnetAssets
 			wallets = testnetWallets
-		} else {
-			assets = pubnetAssets
-			wallets = pubnetWallets
 		}
-		tenant.AssertRegisteredAssetsFixture(t, ctx, tenantDB, assets)
-		tenant.AssertRegisteredWalletsFixture(t, ctx, tenantDB, wallets)
 
-		tenant.AssertRegisteredUserFixture(t, ctx, tenantDB, user.FirstName, user.LastName, user.Email)
+		tenant.AssertRegisteredAssetsFixture(t, ctx, tenantDBConnectionPool, assets)
+		tenant.AssertRegisteredWalletsFixture(t, ctx, tenantDBConnectionPool, wallets)
 
-		tenant.TenantSchemaMatchTablesFixture(t, context.Background(), tenantDB, schemaName, getExpectedTablesAfterMigrationsApplied())
+		tenant.AssertRegisteredUserFixture(t, ctx, tenantDBConnectionPool, user.FirstName, user.LastName, user.Email)
+
+		tenant.TenantSchemaMatchTablesFixture(t, context.Background(), tenantDBConnectionPool, schemaName, getExpectedTablesAfterMigrationsApplied())
 	}
 
 	provisionAndValidateNewTenant := func(
@@ -141,7 +140,7 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 		if sigClientType == signing.DistributionAccountEnvSignatureClientType {
 			assert.Equal(t, distAcc.Address(), *tnt.DistributionAccount)
 		} else {
-			assert.NotNil(t, *tnt.DistributionAccount)
+			assert.True(t, strkey.IsValidEd25519PublicKey(*tnt.DistributionAccount))
 		}
 		assert.Equal(t, tenant.ProvisionedTenantStatus, tnt.Status)
 	}

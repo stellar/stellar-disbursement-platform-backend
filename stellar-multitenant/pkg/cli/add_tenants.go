@@ -7,7 +7,6 @@ import (
 	"regexp"
 
 	"github.com/spf13/cobra"
-	"github.com/stellar/go/network"
 	"github.com/stellar/go/support/config"
 	"github.com/stellar/go/support/log"
 	"golang.org/x/exp/slices"
@@ -83,16 +82,8 @@ func AddTenantsCmd() *cobra.Command {
 	}
 
 	sigOpts := signing.SignatureServiceOptions{}
-	configOptions = append(configOptions,
-		&config.ConfigOption{
-			Name:        "network-passphrase",
-			Usage:       "The Stellar Network passphrase",
-			OptType:     types.String,
-			FlagDefault: network.TestNetworkPassphrase,
-			ConfigKey:   &sigOpts.NetworkPassphrase,
-			Required:    true,
-		})
 	configOptions = append(configOptions, cmdUtils.BaseDistributionAccountSignatureClientConfigOptions(&sigOpts)...)
+	configOptions = append(configOptions, cmdUtils.NetworkPassphrase(&sigOpts.NetworkPassphrase))
 
 	cmd := cobra.Command{
 		Use:     "add-tenants",

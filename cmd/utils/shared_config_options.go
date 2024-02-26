@@ -5,6 +5,7 @@ import (
 	"go/types"
 
 	"github.com/stellar/go/clients/horizonclient"
+	"github.com/stellar/go/network"
 	"github.com/stellar/go/support/config"
 	"github.com/stellar/go/txnbuild"
 
@@ -270,6 +271,17 @@ func DistributionPublicKey(targetPointer interface{}) *config.ConfigOption {
 		CustomSetValue: SetConfigOptionStellarPublicKey,
 		ConfigKey:      targetPointer,
 		Required:       true,
+	}
+}
+
+func NetworkPassphrase(targetPointer interface{}) *config.ConfigOption {
+	return &config.ConfigOption{
+		Name:        "network-passphrase",
+		Usage:       "The Stellar Network passphrase",
+		OptType:     types.String,
+		FlagDefault: network.TestNetworkPassphrase,
+		ConfigKey:   targetPointer,
+		Required:    true,
 	}
 }
 

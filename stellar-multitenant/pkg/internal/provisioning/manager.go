@@ -5,7 +5,6 @@ import (
 	"embed"
 	"errors"
 	"fmt"
-
 	"github.com/lib/pq"
 	migrate "github.com/rubenv/sql-migrate"
 	"github.com/stellar/go/support/log"
@@ -33,7 +32,7 @@ func (m *Manager) ProvisionNewTenant(
 	ctx context.Context, name, userFirstName, userLastName, userEmail,
 	organizationName, uiBaseURL, networkType string,
 ) (*tenant.Tenant, error) {
-	// TODO: Run this in a database transaction.
+	// TODO (SDP-1107): Run this in a database transaction.
 	log.Infof("adding tenant %s", name)
 	t, err := m.tenantManager.AddTenant(ctx, name)
 	if err != nil {
@@ -137,22 +136,22 @@ func (m *Manager) ProvisionNewTenant(
 			DistributionAccount: &distributionAccPubKey,
 		})
 	if err != nil {
-		errMsg := fmt.Sprintf("updating tenant %s status to %s: %v", name, tenant.ProvisionedTenantStatus, err)
+		updateTenantErrMsg := fmt.Errorf("updating tenant %s status to %s: %w", name, tenant.ProvisionedTenantStatus, err)
 		// Rollback distribution account provisioning
 		sigClientDeleteKeyErr := m.distAccSigClient.Delete(ctx, distributionAccPubKey)
 		if sigClientDeleteKeyErr != nil {
-			sigClientDeleteKeyErrMsg := fmt.Sprintf("unable to delete distribution account private key: %v", sigClientDeleteKeyErr)
-			if errors.Is(err, signing.ErrUnsupportedCommand) {
+			sigClientDeleteKeyErrMsg := fmt.Errorf("unable to delete distribution account private key: %w", sigClientDeleteKeyErr)
+			if errors.Is(sigClientDeleteKeyErr, signing.ErrUnsupportedCommand) {
 				log.Ctx(ctx).Warnf(
 					"Private key deletion not needed for distribution account signature client type %s: %v",
-					m.distAccSigClient.Type(), err)
+					m.distAccSigClient.Type(), sigClientDeleteKeyErr)
 			} else {
 				log.Ctx(ctx).Error(sigClientDeleteKeyErrMsg)
-				errMsg += fmt.Sprintf(". %s", sigClientDeleteKeyErrMsg)
+				updateTenantErrMsg = fmt.Errorf("%w. %w", updateTenantErrMsg, sigClientDeleteKeyErrMsg)
 			}
 		}
 
-		return nil, errors.New(errMsg)
+		return nil, updateTenantErrMsg
 	}
 
 	return t, nil

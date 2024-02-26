@@ -184,7 +184,7 @@ func (m *Manager) UpdateTenantConfig(ctx context.Context, tu *TenantUpdate) (*Te
 		fields = append(fields, "distribution_account = ?")
 		args = append(args, *tu.DistributionAccount)
 
-		log.Ctx(ctx).Warnf("distribution account updated to %s", *tu.DistributionAccount)
+		log.Ctx(ctx).Warnf("distribution account for tenant id %s updated to %s", tu.ID, *tu.DistributionAccount)
 	}
 
 	args = append(args, tu.ID)
