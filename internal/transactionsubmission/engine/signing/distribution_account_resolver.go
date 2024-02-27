@@ -18,12 +18,12 @@ type DistributionAccountResolver interface {
 	HostDistributionAccount() string
 }
 
-type DistributionAccountResolverConfig struct {
+type DistributionAccountResolverOptions struct {
 	AdminDBConnectionPool            db.DBConnectionPool
 	HostDistributionAccountPublicKey string
 }
 
-func (c DistributionAccountResolverConfig) Validate() error {
+func (c DistributionAccountResolverOptions) Validate() error {
 	if c.AdminDBConnectionPool == nil {
 		return fmt.Errorf("AdminDBConnectionPool cannot be nil")
 	}
@@ -38,7 +38,7 @@ func (c DistributionAccountResolverConfig) Validate() error {
 	return nil
 }
 
-func NewDistributionAccountResolver(config DistributionAccountResolverConfig) (DistributionAccountResolver, error) {
+func NewDistributionAccountResolver(config DistributionAccountResolverOptions) (DistributionAccountResolver, error) {
 	if err := config.Validate(); err != nil {
 		return nil, fmt.Errorf("validating config in NewDistributionAccountResolver: %w", err)
 	}

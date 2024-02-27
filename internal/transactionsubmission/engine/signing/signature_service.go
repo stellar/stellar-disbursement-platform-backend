@@ -109,7 +109,7 @@ func NewSignatureService(opts SignatureServiceOptions) (SignatureService, error)
 			return SignatureService{}, fmt.Errorf("parsing distribution private key: %w", err)
 		}
 
-		distAccResolver, err = NewDistributionAccountResolver(DistributionAccountResolverConfig{
+		distAccResolver, err = NewDistributionAccountResolver(DistributionAccountResolverOptions{
 			HostDistributionAccountPublicKey: hostAccKP.Address(),
 			AdminDBConnectionPool:            opts.DBConnectionPool,
 		})

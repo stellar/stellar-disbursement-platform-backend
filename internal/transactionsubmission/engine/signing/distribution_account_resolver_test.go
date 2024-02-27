@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func Test_DistributionAccountResolverConfig_Validate(t *testing.T) {
+func Test_DistributionAccountResolverOptions_Validate(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
@@ -19,19 +19,19 @@ func Test_DistributionAccountResolverConfig_Validate(t *testing.T) {
 
 	testCases := []struct {
 		name            string
-		config          DistributionAccountResolverConfig
+		config          DistributionAccountResolverOptions
 		wantErrContains string
 	}{
 		{
 			name: "return an error if AdminDBConnectionPool is nil",
-			config: DistributionAccountResolverConfig{
+			config: DistributionAccountResolverOptions{
 				AdminDBConnectionPool: nil,
 			},
 			wantErrContains: "AdminDBConnectionPool cannot be nil",
 		},
 		{
 			name: "return an error if HostDistributionAccountPublicKey is empty",
-			config: DistributionAccountResolverConfig{
+			config: DistributionAccountResolverOptions{
 				AdminDBConnectionPool:            dbConnectionPool,
 				HostDistributionAccountPublicKey: "",
 			},
@@ -39,7 +39,7 @@ func Test_DistributionAccountResolverConfig_Validate(t *testing.T) {
 		},
 		{
 			name: "return an error if HostDistributionAccountPublicKey is not a valid ed25519 public key",
-			config: DistributionAccountResolverConfig{
+			config: DistributionAccountResolverOptions{
 				AdminDBConnectionPool:            dbConnectionPool,
 				HostDistributionAccountPublicKey: "not-a-valid-ed25519-public-key",
 			},
@@ -47,7 +47,7 @@ func Test_DistributionAccountResolverConfig_Validate(t *testing.T) {
 		},
 		{
 			name: "🎉 successfully validate the config",
-			config: DistributionAccountResolverConfig{
+			config: DistributionAccountResolverOptions{
 				AdminDBConnectionPool:            dbConnectionPool,
 				HostDistributionAccountPublicKey: keypair.MustRandom().Address(),
 			},
@@ -77,13 +77,13 @@ func Test_NewDistributionAccountResolver(t *testing.T) {
 
 	testCases := []struct {
 		name            string
-		config          DistributionAccountResolverConfig
+		config          DistributionAccountResolverOptions
 		wantErrContains string
 		wantResult      DistributionAccountResolver
 	}{
 		{
 			name: "return an error if config is invalid",
-			config: DistributionAccountResolverConfig{
+			config: DistributionAccountResolverOptions{
 				AdminDBConnectionPool:            nil,
 				HostDistributionAccountPublicKey: "",
 			},
@@ -91,7 +91,7 @@ func Test_NewDistributionAccountResolver(t *testing.T) {
 		},
 		{
 			name: "🎉 successfully create a new DistributionAccountResolver",
-			config: DistributionAccountResolverConfig{
+			config: DistributionAccountResolverOptions{
 				AdminDBConnectionPool:            dbConnectionPool,
 				HostDistributionAccountPublicKey: hostDistPublicKey,
 			},
