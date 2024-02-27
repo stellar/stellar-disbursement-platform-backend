@@ -37,13 +37,13 @@ func Test_Serve(t *testing.T) {
 	defer dbConnectionPool.Close()
 
 	opts := ServeOptions{
-		DatabaseDSN:       dbt.DSN,
-		Environment:       "test",
-		GitCommit:         "1234567890abcdef",
-		NetworkPassphrase: network.TestNetworkPassphrase,
-		Port:              8003,
-		Version:           "x.y.z",
-		DistAccSigClient:  sigMocks.NewMockSignatureClient(t),
+		AdminDBConnectionPool: dbConnectionPool,
+		Environment:           "test",
+		GitCommit:             "1234567890abcdef",
+		NetworkPassphrase:     network.TestNetworkPassphrase,
+		Port:                  8003,
+		Version:               "x.y.z",
+		DistAccSigClient:      sigMocks.NewMockSignatureClient(t),
 	}
 
 	// Mock supportHTTPRun

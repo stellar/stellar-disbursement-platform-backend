@@ -438,7 +438,6 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			metricsServeOpts.Environment = globalOptions.Environment
 
 			// Inject tenant server dependencies
-			adminServeOpts.DatabaseDSN = globalOptions.DatabaseURL
 			adminServeOpts.Environment = globalOptions.Environment
 			adminServeOpts.GitCommit = globalOptions.GitCommit
 			adminServeOpts.Version = globalOptions.Version
@@ -456,6 +455,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 				_ = db.CloseConnectionPoolIfNeeded(ctx, adminDBConnectionPool)
 			}()
 			serveOpts.AdminDBConnectionPool = adminDBConnectionPool
+			adminServeOpts.AdminDBConnectionPool = adminDBConnectionPool
 
 			// Setup the Multi-tenant DB connection pool
 			if serveOpts.EnableMultiTenantDB {

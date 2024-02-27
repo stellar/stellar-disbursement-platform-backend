@@ -135,8 +135,8 @@ func Test_serve(t *testing.T) {
 		Version:                         "x.y.z",
 		InstanceName:                    "SDP Testnet",
 		MonitorService:                  &mMonitorService,
-		MTNDBConnectionPool:             dbConnectionPool,
 		AdminDBConnectionPool:           dbConnectionPool,
+		MTNDBConnectionPool:             dbConnectionPool,
 		EC256PublicKey:                  "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAER88h7AiQyVDysRTxKvBB6CaiO/kS\ncvGyimApUE/12gFhNTRf37SE19CSCllKxstnVFOpLLWB7Qu5OJ0Wvcz3hg==\n-----END PUBLIC KEY-----",
 		EC256PrivateKey:                 "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgIqI1MzMZIw2pQDLx\nJn0+FcNT/hNjwtn2TW43710JKZqhRANCAARHzyHsCJDJUPKxFPEq8EHoJqI7+RJy\n8bKKYClQT/XaAWE1NF/ftITX0JIKWUrGy2dUU6kstYHtC7k4nRa9zPeG\n-----END PRIVATE KEY-----",
 		CorsAllowedOrigins:              []string{"*"},
@@ -198,16 +198,16 @@ func Test_serve(t *testing.T) {
 	}
 
 	serveTenantOpts := serveadmin.ServeOptions{
-		Environment:          "test",
-		EmailMessengerClient: messengerClient,
-		DatabaseDSN:          dbt.DSN,
-		GitCommit:            "1234567890abcdef",
-		NetworkPassphrase:    network.TestNetworkPassphrase,
-		Port:                 8003,
-		Version:              "x.y.z",
-		DistAccSigClient:     submitterEngine.DistAccountSigner,
-		AdminAccount:         "admin-account",
-		AdminApiKey:          "admin-api-key",
+		Environment:           "test",
+		EmailMessengerClient:  messengerClient,
+		AdminDBConnectionPool: dbConnectionPool,
+		GitCommit:             "1234567890abcdef",
+		NetworkPassphrase:     network.TestNetworkPassphrase,
+		Port:                  8003,
+		Version:               "x.y.z",
+		DistAccSigClient:      submitterEngine.DistAccountSigner,
+		AdminAccount:          "admin-account",
+		AdminApiKey:           "admin-api-key",
 	}
 
 	eventBrokerOptions := cmdUtils.EventBrokerOptions{

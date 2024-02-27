@@ -31,8 +31,7 @@ func (h *HTTPServer) Run(conf supporthttp.Config) {
 }
 
 type ServeOptions struct {
-	DatabaseDSN               string
-	dbConnectionPool          db.DBConnectionPool
+	AdminDBConnectionPool     db.DBConnectionPool
 	EmailMessengerClient      message.MessengerClient
 	Environment               string
 	GitCommit                 string
@@ -49,22 +48,15 @@ type ServeOptions struct {
 
 // SetupDependencies uses the serve options to setup the dependencies for the server.
 func (opts *ServeOptions) SetupDependencies() error {
-	// Setup Database:
-	dbConnectionPool, err := db.OpenDBConnectionPool(opts.DatabaseDSN)
-	if err != nil {
-		return fmt.Errorf("connecting to the database: %w", err)
-	}
-
-	opts.dbConnectionPool = dbConnectionPool
-
-	opts.tenantManager = tenant.NewManager(tenant.WithDatabase(dbConnectionPool))
+	opts.tenantManager = tenant.NewManager(tenant.WithDatabase(opts.AdminDBConnectionPool))
 	opts.tenantProvisioningManager = provisioning.NewManager(
-		provisioning.WithDatabase(opts.dbConnectionPool),
+		provisioning.WithDatabase(opts.AdminDBConnectionPool),
 		provisioning.WithTenantManager(opts.tenantManager),
 		provisioning.WithMessengerClient(opts.EmailMessengerClient),
 		provisioning.WithDistributionAccountSignatureClient(opts.DistAccSigClient),
 	)
 
+	var err error
 	opts.networkType, err = utils.GetNetworkTypeFromNetworkPassphrase(opts.NetworkPassphrase)
 	if err != nil {
 		return fmt.Errorf("parsing network type: %w", err)
@@ -94,7 +86,7 @@ func StartServe(opts ServeOptions, httpServer HTTPServerInterface) error {
 		},
 		OnStopping: func() {
 			log.Info("Closing the Tenant Server database connection pool")
-			err := db.CloseConnectionPoolIfNeeded(context.Background(), opts.dbConnectionPool)
+			err := db.CloseConnectionPoolIfNeeded(context.Background(), opts.AdminDBConnectionPool)
 			if err != nil {
 				log.Errorf("error closing database connection: %v", err)
 			}
