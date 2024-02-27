@@ -6,6 +6,7 @@ import (
 
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/db/router"
 )
 
 const AdminDBConnectionPoolInstanceName = "admin_db_connection_pool_instance"
@@ -27,7 +28,12 @@ func NewAdminDBConnectionPool(ctx context.Context, opts AdminDBConnectionPoolOpt
 	}
 
 	log.Ctx(ctx).Info("⚙️ Setting up Admin DBConnectionPool")
-	dbConnectionPool, err := db.OpenDBConnectionPool(opts.DatabaseURL)
+	adminDNS, err := router.GetDNSForAdmin(opts.DatabaseURL)
+	if err != nil {
+		return nil, fmt.Errorf("getting Admin database DNS: %w", err)
+	}
+
+	dbConnectionPool, err := db.OpenDBConnectionPool(adminDNS)
 	if err != nil {
 		return nil, fmt.Errorf("opening Admin DB connection pool: %w", err)
 	}

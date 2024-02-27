@@ -27,6 +27,10 @@ func Test_dependencyinjection_NewAdminDBConnectionPool(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Equal(t, &gotDependency, &gotDependencyDuplicate)
+
+		adminDatabaseDSN, err := gotDependency.DSN(context.Background())
+		require.NoError(t, err)
+		assert.NotContains(t, adminDatabaseDSN, "search_path")
 	})
 
 	t.Run("should return an error on a invalid option", func(t *testing.T) {

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
+	"github.com/stellar/stellar-disbursement-platform-backend/db/router"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -27,6 +28,10 @@ func Test_dependencyinjection_NewTSSDBConnectionPool(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Equal(t, &gotDependency, &gotDependencyDuplicate)
+
+		tssDatabaseDSN, err := gotDependency.DSN(context.Background())
+		require.NoError(t, err)
+		assert.Contains(t, tssDatabaseDSN, "search_path="+router.TSSSchemaName)
 	})
 
 	t.Run("should return an error on a invalid option", func(t *testing.T) {
