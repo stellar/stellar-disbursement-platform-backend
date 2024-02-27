@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/stellar/go/support/log"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/router"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
@@ -30,6 +31,7 @@ func NewMtnDBConnectionPool(ctx context.Context, databaseURL string) (db.DBConne
 	if err != nil {
 		return nil, fmt.Errorf("opening Admin DB connection pool from NewMtnDBConnectionPool: %w", err)
 	}
+	log.Ctx(ctx).Info("⚙️ Setting up Multi-tenant DBConnectionPool")
 	tm := tenant.NewManager(tenant.WithDatabase(adminDBConnectionPool))
 	tr := router.NewMultiTenantDataSourceRouter(tm)
 	mtnDBConnectionPool, err := db.NewConnectionPoolWithRouter(tr)

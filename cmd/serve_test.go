@@ -104,6 +104,8 @@ func Test_serve(t *testing.T) {
 
 	// Populate dependency injection:
 	di.SetInstance(di.TSSDBConnectionPoolInstanceName, dbConnectionPool)
+	di.SetInstance(di.AdminDBConnectionPoolInstanceName, dbConnectionPool)
+	di.SetInstance(di.MtnDBConnectionPoolInstanceName, dbConnectionPool)
 
 	mHorizonClient := &horizonclient.MockClient{}
 	di.SetInstance(di.HorizonClientInstanceName, mHorizonClient)
@@ -133,7 +135,8 @@ func Test_serve(t *testing.T) {
 		Version:                         "x.y.z",
 		InstanceName:                    "SDP Testnet",
 		MonitorService:                  &mMonitorService,
-		DatabaseDSN:                     dbt.DSN,
+		MTNDBConnectionPool:             dbConnectionPool,
+		AdminDBConnectionPool:           dbConnectionPool,
 		EC256PublicKey:                  "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAER88h7AiQyVDysRTxKvBB6CaiO/kS\ncvGyimApUE/12gFhNTRf37SE19CSCllKxstnVFOpLLWB7Qu5OJ0Wvcz3hg==\n-----END PUBLIC KEY-----",
 		EC256PrivateKey:                 "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgIqI1MzMZIw2pQDLx\nJn0+FcNT/hNjwtn2TW43710JKZqhRANCAARHzyHsCJDJUPKxFPEq8EHoJqI7+RJy\n8bKKYClQT/XaAWE1NF/ftITX0JIKWUrGy2dUU6kstYHtC7k4nRa9zPeG\n-----END PRIVATE KEY-----",
 		CorsAllowedOrigins:              []string{"*"},
@@ -247,7 +250,7 @@ func Test_serve(t *testing.T) {
 	}
 	require.True(t, serveCmdFound, "serve command not found")
 
-	t.Setenv("DATABASE_URL", serveOpts.DatabaseDSN)
+	t.Setenv("DATABASE_URL", dbt.DSN)
 	t.Setenv("EC256_PUBLIC_KEY", serveOpts.EC256PublicKey)
 	t.Setenv("EC256_PRIVATE_KEY", serveOpts.EC256PrivateKey)
 	t.Setenv("SEP24_JWT_SECRET", serveOpts.SEP24JWTSecret)

@@ -444,7 +444,6 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			// Inject server dependencies
 			serveOpts.Environment = globalOptions.Environment
 			serveOpts.GitCommit = globalOptions.GitCommit
-			serveOpts.DatabaseDSN = globalOptions.DatabaseURL
 			serveOpts.Version = globalOptions.Version
 			serveOpts.MonitorService = monitorService
 			serveOpts.BaseURL = globalOptions.BaseURL
@@ -463,6 +462,24 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 		},
 		Run: func(cmd *cobra.Command, _ []string) {
 			ctx := cmd.Context()
+
+			// Setup the Admin DB connection pool
+			adminDBConnectionPool, err := di.NewAdminDBConnectionPool(ctx, di.AdminDBConnectionPoolOptions{DatabaseURL: globalOptions.DatabaseURL})
+			if err != nil {
+				log.Ctx(ctx).Fatalf("error getting Admin DB connection pool: %v", err)
+			}
+			serveOpts.AdminDBConnectionPool = adminDBConnectionPool
+
+			// Setup the Multi-tenant DB connection pool
+			if serveOpts.EnableMultiTenantDB {
+				serveOpts.MTNDBConnectionPool, err = di.NewMtnDBConnectionPool(ctx, globalOptions.DatabaseURL)
+				if err != nil {
+					log.Ctx(ctx).Fatalf("error getting Multi-tenant DB connection pool: %v", err)
+				}
+			} else {
+				log.Ctx(ctx).Warn("Multi-tenant DB is disabled.")
+				serveOpts.MTNDBConnectionPool = adminDBConnectionPool
+			}
 
 			// Setup the Crash Tracker client
 			crashTrackerClient, err := di.NewCrashTracker(ctx, crashTrackerOptions)
