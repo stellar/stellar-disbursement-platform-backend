@@ -119,6 +119,10 @@ func Test_NewSignatureService(t *testing.T) {
 		dbVault:              store.NewDBVaultModel(dbConnectionPool),
 		encrypter:            &utils.DefaultPrivateKeyEncrypter{},
 	}
+	wantDistAccountResolver := &DistributionAccountResolverImpl{
+		dbConnectionPool:              dbConnectionPool,
+		hostDistributionAccountPubKey: distributionKP.Address(),
+	}
 
 	testCases := []struct {
 		name            string
@@ -165,12 +169,10 @@ func Test_NewSignatureService(t *testing.T) {
 				ChAccountSigner:             wantChAccountSigner,
 				DistAccountSigner:           wantDistAccountEnvSigner,
 				HostAccountSigner:           wantDistAccountEnvSigner,
-				DistributionAccountResolver: wantDistAccountEnvSigner,
+				DistributionAccountResolver: wantDistAccountResolver,
 				networkPassphrase:           network.TestNetworkPassphrase,
 			},
 		},
-		// TODO: in SDP-1077 - 01: test "returns an error if the options are invalid for the distribution account signer (DISTRIBUTION_ACCOUNT_DB)",
-		// TODO: in SDP-1077 - 02: after the DistributionAccountResolver is working, update the test below to not fail anymore.
 		{
 			name: "🎉 successfully instantiate new signature service (DISTRIBUTION_ACCOUNT_DB)",
 			opts: SignatureServiceOptions{
@@ -189,10 +191,9 @@ func Test_NewSignatureService(t *testing.T) {
 				ChAccountSigner:             wantChAccountSigner,
 				DistAccountSigner:           wantDistAccountDBSigner,
 				HostAccountSigner:           wantDistAccountEnvSigner,
-				DistributionAccountResolver: wantDistAccountEnvSigner,
+				DistributionAccountResolver: wantDistAccountResolver,
 				networkPassphrase:           network.TestNetworkPassphrase,
 			},
-			wantErrContains: "trying to cast a distribution account signer to a distribution account resolver",
 		},
 		{
 			name: "🎉 successfully instantiate new signature (DISTRIBUTION_ACCOUNT_ENV) with the provided DistributionAccountResolver",

@@ -475,6 +475,11 @@ func (tw *TransactionWorker) buildAndSignTransaction(ctx context.Context, txJob 
 		}
 	}
 
+	distributionAccount, err := tw.engine.DistributionAccountResolver.DistributionAccount(ctx, txJob.Transaction.TenantID)
+	if err != nil {
+		return nil, fmt.Errorf("resolving distribution account for tenantID %s: %w", txJob.Transaction.TenantID, err)
+	}
+
 	horizonAccount, err := tw.engine.HorizonClient.AccountDetail(horizonclient.AccountRequest{AccountID: txJob.ChannelAccount.PublicKey})
 	if err != nil {
 		return nil, utils.NewHorizonErrorWrapper(err)
@@ -489,7 +494,7 @@ func (tw *TransactionWorker) buildAndSignTransaction(ctx context.Context, txJob 
 			},
 			Operations: []txnbuild.Operation{
 				&txnbuild.Payment{
-					SourceAccount: tw.engine.SignatureService.DistributionAccount(),
+					SourceAccount: distributionAccount,
 					Amount:        strconv.FormatFloat(txJob.Transaction.Amount, 'f', 6, 32), // TODO find a better way to do this
 					Destination:   txJob.Transaction.Destination,
 					Asset:         asset,
@@ -513,7 +518,7 @@ func (tw *TransactionWorker) buildAndSignTransaction(ctx context.Context, txJob 
 		return nil, fmt.Errorf("signing transaction for channel account: for job %v: %w", txJob, err)
 	}
 	// Sign tx for the distribution account:
-	paymentTx, err = tw.engine.DistAccountSigner.SignStellarTransaction(ctx, paymentTx, tw.engine.SignatureService.DistributionAccount())
+	paymentTx, err = tw.engine.DistAccountSigner.SignStellarTransaction(ctx, paymentTx, distributionAccount)
 	if err != nil {
 		return nil, fmt.Errorf("signing transaction for distribution account: for job %v: %w", txJob, err)
 	}
@@ -522,7 +527,7 @@ func (tw *TransactionWorker) buildAndSignTransaction(ctx context.Context, txJob 
 	feeBumpTx, err = txnbuild.NewFeeBumpTransaction(
 		txnbuild.FeeBumpTransactionParams{
 			Inner:      paymentTx,
-			FeeAccount: tw.engine.SignatureService.DistributionAccount(),
+			FeeAccount: distributionAccount,
 			BaseFee:    int64(tw.engine.MaxBaseFee),
 		},
 	)
@@ -531,7 +536,7 @@ func (tw *TransactionWorker) buildAndSignTransaction(ctx context.Context, txJob 
 	}
 
 	// Sign fee-bump tx for the distribution account:
-	feeBumpTx, err = tw.engine.DistAccountSigner.SignFeeBumpStellarTransaction(ctx, feeBumpTx, tw.engine.SignatureService.DistributionAccount())
+	feeBumpTx, err = tw.engine.DistAccountSigner.SignFeeBumpStellarTransaction(ctx, feeBumpTx, distributionAccount)
 	if err != nil {
 		return nil, fmt.Errorf("signing fee-bump transaction for job %v: %w", txJob, err)
 	}

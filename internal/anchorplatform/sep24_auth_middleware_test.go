@@ -230,7 +230,7 @@ func Test_SEP24QueryTokenAuthenticateMiddleware(t *testing.T) {
 		require.Contains(t, buf.String(), "parsing the token claims: parsing SEP24 token: signature is invalid")
 	})
 
-	tenant.CreateTenantFixture(t, ctx, dbConnectionPool, "tenant")
+	tenant.CreateTenantFixture(t, ctx, dbConnectionPool, "tenant", "GCTNUNQVX7BNIP5AUWW2R4YC7G6R3JGUDNMGT7H62BGBUY4A4V6ROAAH")
 	t.Run("both the token and the transaction_id are valid 🎉", func(t *testing.T) {
 		var contextClaims *SEP24JWTClaims
 		require.Nil(t, contextClaims)
@@ -550,7 +550,7 @@ func Test_SEP24HeaderTokenAuthenticateMiddleware(t *testing.T) {
 		require.Contains(t, buf.String(), "parsing the token claims: parsing SEP24 token: signature is invalid")
 	})
 
-	tenant.CreateTenantFixture(t, ctx, dbConnectionPool, "tenant")
+	tenant.CreateTenantFixture(t, ctx, dbConnectionPool, "tenant", "GCTNUNQVX7BNIP5AUWW2R4YC7G6R3JGUDNMGT7H62BGBUY4A4V6ROAAH")
 	t.Run("token is valid 🎉", func(t *testing.T) {
 		var contextClaims *SEP24JWTClaims
 		require.Nil(t, contextClaims)

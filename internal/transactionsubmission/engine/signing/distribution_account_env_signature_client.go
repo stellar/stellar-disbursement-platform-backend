@@ -140,13 +140,3 @@ func (c *DistributionAccountEnvSignatureClient) Type() string {
 func (c *DistributionAccountEnvSignatureClient) NetworkPassphrase() string {
 	return c.networkPassphrase
 }
-
-var _ DistributionAccountResolver = (*DistributionAccountEnvSignatureClient)(nil)
-
-func (c *DistributionAccountEnvSignatureClient) DistributionAccount() string {
-	return c.distributionAccount
-}
-
-func (c *DistributionAccountEnvSignatureClient) HostDistributionAccount() string {
-	return c.distributionAccount
-}

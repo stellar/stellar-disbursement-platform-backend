@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/keypair"
 	"github.com/stellar/go/network"
@@ -30,6 +29,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 	storeMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 func Test_SubmitterOptions_validate(t *testing.T) {
@@ -371,7 +371,7 @@ func Test_NewManager(t *testing.T) {
 }
 
 func Test_Manager_ProcessTransactions(t *testing.T) {
-	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
+	dbt := dbtest.Open(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
@@ -412,10 +412,12 @@ func Test_Manager_ProcessTransactions(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(string(tc.signalType), func(t *testing.T) {
-			ctx, cancel := context.WithCancel(context.Background())
+			rawCtx := context.Background()
+			ctx, cancel := context.WithCancel(rawCtx)
 
-			defer store.DeleteAllFromChannelAccounts(t, context.Background(), dbConnectionPool)
-			defer store.DeleteAllTransactionFixtures(t, context.Background(), dbConnectionPool)
+			defer store.DeleteAllFromChannelAccounts(t, rawCtx, dbConnectionPool)
+			defer store.DeleteAllTransactionFixtures(t, rawCtx, dbConnectionPool)
+			defer tenant.DeleteAllTenantsFixture(t, rawCtx, dbConnectionPool)
 
 			// Create channel accounts to be used by the tx submitter
 			channelAccounts := store.CreateChannelAccountFixturesEncrypted(t, ctx, dbConnectionPool, encrypter, chAccEncryptionPassphrase, 2)
@@ -426,13 +428,14 @@ func Test_Manager_ProcessTransactions(t *testing.T) {
 			}
 
 			// Create transactions to be used by the tx submitter
+			tnt := tenant.CreateTenantFixture(t, ctx, dbConnectionPool, "test-tenant", distributionKP.Address())
 			transactions := store.CreateTransactionFixturesNew(t, ctx, dbConnectionPool, 10, store.TransactionFixture{
 				AssetCode:          "USDC",
 				AssetIssuer:        "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
 				DestinationAddress: keypair.MustRandom().Address(),
 				Status:             store.TransactionStatusPending,
 				Amount:             1,
-				TenantID:           uuid.NewString(),
+				TenantID:           tnt.ID,
 			})
 
 			assert.Len(t, transactions, 10)
