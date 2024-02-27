@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/router"
 	"github.com/stretchr/testify/assert"
@@ -23,6 +24,7 @@ func Test_dependencyinjection_NewTSSDBConnectionPool(t *testing.T) {
 		gotDependency, err := NewTSSDBConnectionPool(ctx, opts)
 		require.NoError(t, err)
 		defer gotDependency.Close()
+		assert.IsType(t, &db.DBConnectionPoolImplementation{}, gotDependency)
 
 		gotDependencyDuplicate, err := NewTSSDBConnectionPool(ctx, opts)
 		require.NoError(t, err)

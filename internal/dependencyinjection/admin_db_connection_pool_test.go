@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -21,6 +22,7 @@ func Test_dependencyinjection_NewAdminDBConnectionPool(t *testing.T) {
 
 		gotDependency, err := NewAdminDBConnectionPool(ctx, opts)
 		require.NoError(t, err)
+		assert.IsType(t, &db.DBConnectionPoolImplementation{}, gotDependency)
 		defer gotDependency.Close()
 
 		gotDependencyDuplicate, err := NewAdminDBConnectionPool(ctx, opts)
