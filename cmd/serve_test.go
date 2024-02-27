@@ -64,9 +64,9 @@ func (m *mockServer) GetSchedulerJobRegistrars(ctx context.Context, serveOpts se
 	return args.Get(0).([]scheduler.SchedulerJobRegisterOption), args.Error(1)
 }
 
-func (m *mockServer) SetupConsumers(ctx context.Context, eventBrokerOptions cmdUtils.EventBrokerOptions, eventHandlerOptions events.EventHandlerOptions, serveOpts serve.ServeOptions) (TearDownFunc, error) {
-	args := m.Called(ctx, eventBrokerOptions, eventHandlerOptions, serveOpts)
-	return args.Get(0).(TearDownFunc), args.Error(1)
+func (m *mockServer) SetupConsumers(ctx context.Context, o SetupConsumersOptions) error {
+	args := m.Called(ctx, o)
+	return args.Error(0)
 }
 
 func Test_serve_wasCalled(t *testing.T) {
@@ -231,7 +231,14 @@ func Test_serve(t *testing.T) {
 		On("GetSchedulerJobRegistrars", mock.Anything, serveOpts, scheduler.SchedulerOptions{}, mock.Anything).
 		Return([]scheduler.SchedulerJobRegisterOption{}, nil).
 		Once()
-	mServer.On("SetupConsumers", ctx, eventBrokerOptions, eventHandlerOptions, serveOpts).Return(TearDownFunc(func() { t.Log("tear down func called") }), nil).Once()
+	mServer.On("SetupConsumers", ctx, SetupConsumersOptions{
+		EventBrokerOptions:  eventBrokerOptions,
+		EventHandlerOptions: eventHandlerOptions,
+		ServeOpts:           serveOpts,
+		TSSDBConnectionPool: dbConnectionPool,
+	}).
+		Return(nil).
+		Once()
 	mServer.wg.Add(2)
 	defer mServer.AssertExpectations(t)
 

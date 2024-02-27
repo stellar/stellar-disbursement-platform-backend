@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/stellar/go/support/log"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
@@ -13,14 +14,14 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/router"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 type PatchAnchorPlatformTransactionCompletionEventHandlerOptions struct {
-	DBConnectionPool   db.DBConnectionPool
-	APapiSvc           anchorplatform.AnchorPlatformAPIServiceInterface
-	CrashTrackerClient crashtracker.CrashTrackerClient
+	AdminDBConnectionPool db.DBConnectionPool
+	MTNDBConnectionPool   db.DBConnectionPool
+	APapiSvc              anchorplatform.AnchorPlatformAPIServiceInterface
+	CrashTrackerClient    crashtracker.CrashTrackerClient
 }
 
 type PatchAnchorPlatformTransactionCompletionEventHandler struct {
@@ -32,14 +33,9 @@ type PatchAnchorPlatformTransactionCompletionEventHandler struct {
 var _ events.EventHandler = new(PatchAnchorPlatformTransactionCompletionEventHandler)
 
 func NewPatchAnchorPlatformTransactionCompletionEventHandler(options PatchAnchorPlatformTransactionCompletionEventHandlerOptions) *PatchAnchorPlatformTransactionCompletionEventHandler {
-	tm := tenant.NewManager(tenant.WithDatabase(options.DBConnectionPool))
-	tr := router.NewMultiTenantDataSourceRouter(tm)
-	mtnDBConnectionPool, err := db.NewConnectionPoolWithRouter(tr)
-	if err != nil {
-		log.Fatalf("error getting tenant DB Connection Pool: %s", err.Error())
-	}
+	tm := tenant.NewManager(tenant.WithDatabase(options.AdminDBConnectionPool))
 
-	models, err := data.NewModels(mtnDBConnectionPool)
+	models, err := data.NewModels(options.MTNDBConnectionPool)
 	if err != nil {
 		log.Fatalf("error getting models: %s", err.Error())
 	}
@@ -50,7 +46,7 @@ func NewPatchAnchorPlatformTransactionCompletionEventHandler(options PatchAnchor
 	}
 
 	return &PatchAnchorPlatformTransactionCompletionEventHandler{
-		tenantManager:      tenant.NewManager(tenant.WithDatabase(options.DBConnectionPool)),
+		tenantManager:      tm,
 		service:            s,
 		crashTrackerClient: options.CrashTrackerClient,
 	}
