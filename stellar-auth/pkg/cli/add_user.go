@@ -89,6 +89,7 @@ func AddUserCmd(databaseURLFlagName string, passwordPrompt PasswordPromptInterfa
 		Run: func(cmd *cobra.Command, args []string) {
 			ctx := cmd.Context()
 
+			// TODO: in SEP-1074, use --tenant-id flag to cast the right dbConnectionPool
 			dbUrl := globalOptions.databaseURL
 			if dbUrl == "" {
 				dbUrl = viper.GetString(databaseURLFlagName)
