@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func Test_dependencyinjection_NewDBConnectionPool(t *testing.T) {
+func Test_dependencyinjection_NewAdminDBConnectionPool(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 
@@ -17,13 +17,13 @@ func Test_dependencyinjection_NewDBConnectionPool(t *testing.T) {
 	t.Run("should create and return the same instance on the second call", func(t *testing.T) {
 		ClearInstancesTestHelper(t)
 
-		opts := DBConnectionPoolOptions{DatabaseURL: dbt.DSN}
+		opts := AdminDBConnectionPoolOptions{DatabaseURL: dbt.DSN}
 
-		gotDependency, err := NewDBConnectionPool(ctx, opts)
+		gotDependency, err := NewAdminDBConnectionPool(ctx, opts)
 		require.NoError(t, err)
 		defer gotDependency.Close()
 
-		gotDependencyDuplicate, err := NewDBConnectionPool(ctx, opts)
+		gotDependencyDuplicate, err := NewAdminDBConnectionPool(ctx, opts)
 		require.NoError(t, err)
 
 		assert.Equal(t, &gotDependency, &gotDependencyDuplicate)
@@ -32,20 +32,20 @@ func Test_dependencyinjection_NewDBConnectionPool(t *testing.T) {
 	t.Run("should return an error on a invalid option", func(t *testing.T) {
 		ClearInstancesTestHelper(t)
 
-		opts := DBConnectionPoolOptions{}
-		gotDependency, err := NewDBConnectionPool(ctx, opts)
+		opts := AdminDBConnectionPoolOptions{}
+		gotDependency, err := NewAdminDBConnectionPool(ctx, opts)
 		assert.Nil(t, gotDependency)
-		assert.ErrorContains(t, err, "opening DB connection pool: error pinging app DB connection pool")
+		assert.ErrorContains(t, err, "opening Admin DB connection pool: error pinging app DB connection pool")
 	})
 
 	t.Run("should return an error if there's an invalid instance pre-stored", func(t *testing.T) {
 		ClearInstancesTestHelper(t)
 
-		SetInstance(dbConnectionPoolInstanceName, false)
+		SetInstance(AdminDBConnectionPoolInstanceName, false)
 
-		opts := DBConnectionPoolOptions{DatabaseURL: dbt.DSN}
-		gotDependency, err := NewDBConnectionPool(ctx, opts)
+		opts := AdminDBConnectionPoolOptions{DatabaseURL: dbt.DSN}
+		gotDependency, err := NewAdminDBConnectionPool(ctx, opts)
 		assert.Nil(t, gotDependency)
-		assert.EqualError(t, err, "trying to cast DBConnectionPool client for depencency injection")
+		assert.EqualError(t, err, "trying to cast Admin DBConnectionPool for depencency injection")
 	})
 }
