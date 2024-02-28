@@ -74,9 +74,9 @@ func (h UpdateReceiverHandler) UpdateReceiver(rw http.ResponseWriter, req *http.
 	receiverVerifications := createVerificationInsert(&reqBody, receiverID)
 	receiver, err := db.RunInTransactionWithResult(ctx, h.DBConnectionPool, nil, func(dbTx db.DBTransaction) (response *data.Receiver, innerErr error) {
 		for _, rv := range receiverVerifications {
-			innerErr = h.Models.ReceiverVerification.UpdateVerificationValue(
+			innerErr = h.Models.ReceiverVerification.UpsertVerificationValue(
 				req.Context(),
-				h.Models.DBConnectionPool,
+				dbTx,
 				rv.ReceiverID,
 				rv.VerificationField,
 				rv.VerificationValue,
@@ -97,7 +97,7 @@ func (h UpdateReceiverHandler) UpdateReceiver(rw http.ResponseWriter, req *http.
 			}
 		}
 
-		receiver, innerErr := h.Models.Receiver.Get(ctx, h.Models.DBConnectionPool, receiverID)
+		receiver, innerErr := h.Models.Receiver.Get(ctx, dbTx, receiverID)
 		if innerErr != nil {
 			return nil, fmt.Errorf("error querying receiver with ID %s: %w", receiverID, innerErr)
 		}
@@ -106,7 +106,8 @@ func (h UpdateReceiverHandler) UpdateReceiver(rw http.ResponseWriter, req *http.
 	})
 	if err != nil {
 		httperror.InternalError(ctx, "", err, nil).Render(rw)
+		return
 	}
 
-	httpjson.RenderStatus(rw, http.StatusOK, receiver, httpjson.JSON)
+	httpjson.Render(rw, receiver, httpjson.JSON)
 }
