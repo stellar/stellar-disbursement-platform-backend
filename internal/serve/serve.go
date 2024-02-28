@@ -189,7 +189,7 @@ func Serve(opts ServeOptions, httpServer HTTPServerInterface) error {
 }
 
 const (
-	rateLimitPer20Seconds = 10
+	rateLimitPer20Seconds = 20
 	rateLimitWindow       = 20 * time.Second
 )
 
