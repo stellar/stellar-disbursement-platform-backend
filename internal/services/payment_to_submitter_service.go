@@ -59,11 +59,16 @@ func (s PaymentToSubmitterService) sendPaymentsReadyToPay(ctx context.Context, d
 	for _, paymentReadyToPay := range paymentsReadyToPay.Payments {
 		paymentIDs = append(paymentIDs, paymentReadyToPay.ID)
 	}
+	log.Ctx(ctx).Infof("Sending %d payments to TSS: %v", len(paymentIDs), paymentIDs)
 
 	// Double checking the payments passed by parameter
 	payments, err := s.sdpModels.Payment.GetReadyByID(ctx, dbTx, paymentIDs...)
 	if err != nil {
 		return fmt.Errorf("getting payments ready to be sent: %w", err)
+	}
+
+	if len(payments) != len(paymentIDs) {
+		log.Ctx(ctx).Errorf("[PaymentToSubmitterService] The number of incoming payments to be processed (%d) is different from the number ready to be processed found in the database (%d)", len(paymentIDs), len(payments))
 	}
 
 	var transactions []txSubStore.Transaction
