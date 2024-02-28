@@ -263,8 +263,8 @@ func Test_ReceiverVerificationModel_UpsertVerificationValue(t *testing.T) {
 	getReceiverVerificationHashedValue := func(t *testing.T, ctx context.Context, dbConnectionPool db.DBConnectionPool, receiverID string, verificationField VerificationField) string {
 		const q = "SELECT hashed_value FROM receiver_verifications WHERE receiver_id = $1 AND verification_field = $2"
 		var hashedValue string
-		err := dbConnectionPool.GetContext(ctx, &hashedValue, q, receiverID, verificationField)
-		require.NoError(t, err)
+		qErr := dbConnectionPool.GetContext(ctx, &hashedValue, q, receiverID, verificationField)
+		require.NoError(t, qErr)
 		return hashedValue
 	}
 
