@@ -84,7 +84,6 @@ type ServeOptions struct {
 	DisableReCAPTCHA                bool
 	PasswordValidator               *authUtils.PasswordValidator
 	EnableScheduler                 bool
-	EnableMultiTenantDB             bool
 	tenantManager                   tenant.ManagerInterface
 	EventProducer                   events.Producer
 }

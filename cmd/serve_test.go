@@ -155,7 +155,6 @@ func Test_serve(t *testing.T) {
 		DisableMFA:                      false,
 		DisableReCAPTCHA:                false,
 		EnableScheduler:                 true,
-		EnableMultiTenantDB:             false,
 		SubmitterEngine:                 submitterEngine,
 	}
 	serveOpts.AnchorPlatformAPIService, err = anchorplatform.NewAnchorPlatformAPIService(httpclient.DefaultClient(), serveOpts.AnchorPlatformBasePlatformURL, serveOpts.AnchorPlatformOutgoingJWTSecret)
@@ -276,7 +275,6 @@ func Test_serve(t *testing.T) {
 	t.Setenv("CORS_ALLOWED_ORIGINS", "*")
 	t.Setenv("INSTANCE_NAME", serveOpts.InstanceName)
 	t.Setenv("ENABLE_SCHEDULER", "true")
-	t.Setenv("ENABLE_MULTITENANT_DB", "false")
 	t.Setenv("EVENT_BROKER", "kafka")
 	t.Setenv("BROKER_URLS", "kafka:9092")
 	t.Setenv("CONSUMER_GROUP_ID", "group-id")

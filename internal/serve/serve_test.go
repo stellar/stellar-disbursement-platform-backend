@@ -301,7 +301,6 @@ func getServeOptionsForTests(t *testing.T, dbConnectionPool db.DBConnectionPool)
 		SMSMessengerClient:              &messengerClientMock,
 		Version:                         "x.y.z",
 		NetworkPassphrase:               network.TestNetworkPassphrase,
-		EnableMultiTenantDB:             false,
 	}
 	err = serveOptions.SetupDependencies()
 	require.NoError(t, err)

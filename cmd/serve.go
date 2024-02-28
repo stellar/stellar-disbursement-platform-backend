@@ -281,14 +281,6 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			FlagDefault: true,
 			Required:    false,
 		},
-		{
-			Name:        "enable-multitenant-db",
-			Usage:       "Enable Multi-tenant DB for SDP Backend API",
-			OptType:     types.Bool,
-			ConfigKey:   &serveOpts.EnableMultiTenantDB,
-			FlagDefault: true,
-			Required:    false,
-		},
 	}
 
 	// crash tracker options
@@ -458,18 +450,13 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			adminServeOpts.AdminDBConnectionPool = adminDBConnectionPool
 
 			// Setup the Multi-tenant DB connection pool
-			if serveOpts.EnableMultiTenantDB {
-				serveOpts.MTNDBConnectionPool, err = di.NewMtnDBConnectionPool(ctx, globalOptions.DatabaseURL)
-				if err != nil {
-					log.Ctx(ctx).Fatalf("error getting Multi-tenant DB connection pool: %v", err)
-				}
-				defer func() {
-					_ = db.CloseConnectionPoolIfNeeded(ctx, serveOpts.MTNDBConnectionPool)
-				}()
-			} else {
-				log.Ctx(ctx).Warn("Multi-tenant DB is disabled.")
-				serveOpts.MTNDBConnectionPool = adminDBConnectionPool
+			serveOpts.MTNDBConnectionPool, err = di.NewMtnDBConnectionPool(ctx, globalOptions.DatabaseURL)
+			if err != nil {
+				log.Ctx(ctx).Fatalf("error getting Multi-tenant DB connection pool: %v", err)
 			}
+			defer func() {
+				_ = db.CloseConnectionPoolIfNeeded(ctx, serveOpts.MTNDBConnectionPool)
+			}()
 
 			// Setup the TSSDBConnectionPool
 			tssDBConnectionPool, err := di.NewTSSDBConnectionPool(ctx, di.TSSDBConnectionPoolOptions{DatabaseURL: globalOptions.DatabaseURL})
