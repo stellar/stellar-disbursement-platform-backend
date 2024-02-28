@@ -13,7 +13,7 @@ import (
 
 	cmdUtils "github.com/stellar/stellar-disbursement-platform-backend/cmd/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/dependencyinjection"
+	di "github.com/stellar/stellar-disbursement-platform-backend/internal/dependencyinjection"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/cli/utils"
@@ -103,18 +103,37 @@ func AddTenantsCmd() *cobra.Command {
 			}
 		},
 		Run: func(cmd *cobra.Command, args []string) {
-			messengerClient, err := message.GetClient(tenantsOpts.MessengerOptions)
+			ctx := cmd.Context()
+
+			// Get messenger client
+			emailMessengerClient, err := di.NewEmailClient(di.EmailClientOptions{
+				EmailType:        tenantsOpts.MessengerOptions.MessengerType,
+				MessengerOptions: &tenantsOpts.MessengerOptions,
+			})
 			if err != nil {
 				log.Fatalf("creating email client: %v", err)
 			}
 
-			ctx := cmd.Context()
+			// Get TSS DB connection pool
+			tssDBConnectionPool, err := di.NewTSSDBConnectionPool(ctx, di.TSSDBConnectionPoolOptions{DatabaseURL: globalOptions.multitenantDbURL})
+			if err != nil {
+				log.Fatalf("getting TSS DBConnectionPool: %v", err)
+			}
+			defer tssDBConnectionPool.Close()
+
+			// Get Admin DB connection pool
+			adminDBConnectionPool, err := di.NewAdminDBConnectionPool(ctx, di.AdminDBConnectionPoolOptions{DatabaseURL: globalOptions.multitenantDbURL})
+			if err != nil {
+				log.Fatalf("getting Admin database connection pool: %v", err)
+			}
+			defer adminDBConnectionPool.Close()
+
 			tenantName, userFirstName, userLastName, userEmail, organizationName := args[0], args[1], args[2], args[3], args[4]
 			err = executeAddTenant(
 				ctx,
-				globalOptions.multitenantDbURL,
+				adminDBConnectionPool, tssDBConnectionPool,
 				tenantName, userFirstName, userLastName, userEmail, organizationName,
-				messengerClient,
+				emailMessengerClient,
 				tenantsOpts,
 				sigOpts,
 			)
@@ -140,28 +159,15 @@ func validateTenantNameArg(cmd *cobra.Command, args []string) error {
 
 func executeAddTenant(
 	ctx context.Context,
-	dbURL,
+	adminDBConnectionPool, tssDBConnectionPool db.DBConnectionPool,
 	tenantName, userFirstName, userLastName, userEmail, organizationName string,
 	messengerClient message.MessengerClient,
 	tenantsOpts AddTenantsCommandOptions,
 	sigOpts signing.SignatureServiceOptions,
 ) error {
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbURL)
-	if err != nil {
-		return fmt.Errorf("opening database connection pool: %w", err)
-	}
-	defer dbConnectionPool.Close()
-
 	if !slices.Contains(signing.DistributionSignatureClientTypes(), sigOpts.DistributionSignerType) {
 		return fmt.Errorf("invalid distribution account signer type %q", sigOpts.DistributionSignerType)
 	}
-
-	// We need to use a dbConnectionPool that resolves to the tss namespace for the distribution account signature client.
-	tssDBConnectionPool, err := dependencyinjection.NewTSSDBConnectionPool(ctx, dependencyinjection.TSSDBConnectionPoolOptions{DatabaseURL: dbURL})
-	if err != nil {
-		return fmt.Errorf("getting TSS DBConnectionPool: %w", err)
-	}
-	defer tssDBConnectionPool.Close()
 
 	distAccSigClient, err := signing.NewSignatureClient(sigOpts.DistributionSignerType, signing.SignatureClientOptions{
 		NetworkPassphrase:           sigOpts.NetworkPassphrase,
@@ -173,11 +179,10 @@ func executeAddTenant(
 		return fmt.Errorf("creating a new distribution account signature client: %w", err)
 	}
 
-	m := tenant.NewManager(tenant.WithDatabase(dbConnectionPool))
 	p := provisioning.NewManager(
-		provisioning.WithDatabase(dbConnectionPool),
+		provisioning.WithDatabase(adminDBConnectionPool),
 		provisioning.WithMessengerClient(messengerClient),
-		provisioning.WithTenantManager(m),
+		provisioning.WithTenantManager(tenant.NewManager(tenant.WithDatabase(adminDBConnectionPool))),
 		provisioning.WithDistributionAccountSignatureClient(distAccSigClient),
 	)
 
