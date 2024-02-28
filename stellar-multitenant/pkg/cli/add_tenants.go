@@ -109,10 +109,17 @@ func AddTenantsCmd() *cobra.Command {
 			}
 
 			ctx := cmd.Context()
-			if err := executeAddTenant(
-				ctx, globalOptions.multitenantDbURL, args[0], args[1], args[2], args[3], args[4],
-				messengerClient, tenantsOpts, sigOpts); err != nil {
-				log.Fatal(err)
+			tenantName, userFirstName, userLastName, userEmail, organizationName := args[0], args[1], args[2], args[3], args[4]
+			err = executeAddTenant(
+				ctx,
+				globalOptions.multitenantDbURL,
+				tenantName, userFirstName, userLastName, userEmail, organizationName,
+				messengerClient,
+				tenantsOpts,
+				sigOpts,
+			)
+			if err != nil {
+				log.Ctx(ctx).Fatalf("Error adding tenant: %v", err)
 			}
 		},
 	}
@@ -132,8 +139,12 @@ func validateTenantNameArg(cmd *cobra.Command, args []string) error {
 }
 
 func executeAddTenant(
-	ctx context.Context, dbURL, tenantName, userFirstName, userLastName, userEmail,
-	organizationName string, messengerClient message.MessengerClient, tenantsOpts AddTenantsCommandOptions, sigOpts signing.SignatureServiceOptions,
+	ctx context.Context,
+	dbURL,
+	tenantName, userFirstName, userLastName, userEmail, organizationName string,
+	messengerClient message.MessengerClient,
+	tenantsOpts AddTenantsCommandOptions,
+	sigOpts signing.SignatureServiceOptions,
 ) error {
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbURL)
 	if err != nil {
