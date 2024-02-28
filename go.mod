@@ -22,7 +22,7 @@ require (
 	github.com/rubenv/sql-migrate v1.5.2
 	github.com/segmentio/kafka-go v0.4.46
 	github.com/sirupsen/logrus v1.9.3
-	github.com/spf13/cobra v1.7.0
+	github.com/spf13/cobra v1.8.0
 	github.com/spf13/viper v1.17.0
 	github.com/stellar/go v0.0.0-20231212225359-bc7173e667a6
 	github.com/stretchr/testify v1.8.4
