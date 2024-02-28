@@ -436,9 +436,10 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 		}.VerifyReceiverRegistration)
 
 		// This will be used for test purposes and will only be available when IsPubnet is false:
-		if o.NetworkPassphrase == network.TestNetworkPassphrase {
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.TenantMiddleware(o.tenantManager, o.authManager))
 			r.Delete("/phone-number/{phone_number}", httphandler.DeletePhoneNumberHandler{Models: o.Models, NetworkPassphrase: o.NetworkPassphrase}.ServeHTTP)
-		}
+		})
 	})
 	// END SEP-24 endpoints
 
