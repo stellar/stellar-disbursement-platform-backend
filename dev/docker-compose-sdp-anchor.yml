@@ -208,9 +208,6 @@ services:
   kafka-init:
     image: docker.io/bitnami/kafka:3.6
     entrypoint: [ "/bin/bash", "-c" ]
-    depends_on:
-      kafka:
-        condition: service_healthy
     command: |
       "
         kafka-topics.sh --create --if-not-exists --topic events.receiver-wallets.new_invitation --bootstrap-server kafka:9092
@@ -231,8 +228,6 @@ services:
 
   conduktor-platform:
     image: conduktor/conduktor-platform:1.19.2
-    depends_on:
-      - db-conduktor
     ports:
       - "9090:8080"
     volumes:
