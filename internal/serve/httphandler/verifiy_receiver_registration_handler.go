@@ -258,48 +258,45 @@ func (v VerifyReceiverRegistrationHandler) VerifyReceiverRegistration(w http.Res
 
 	truncatedPhoneNumber := utils.TruncateString(receiverRegistrationRequest.PhoneNumber, 3)
 
-	atomicFnErr := db.RunInTransaction(ctx, v.Models.DBConnectionPool, nil, func(dbTx db.DBTransaction) error {
+	atomicFnErr := db.RunInTransactionWithPostCommit(ctx, v.Models.DBConnectionPool, nil, func(dbTx db.DBTransaction) (func() error, error) {
 		// STEP 2: find the receivers with the given phone number
 		receivers, err := v.Models.Receiver.GetByPhoneNumbers(ctx, dbTx, []string{receiverRegistrationRequest.PhoneNumber})
 		if err != nil {
 			err = fmt.Errorf("error retrieving receiver with phone number %s: %w", truncatedPhoneNumber, err)
-			return err
+			return nil, err
 		}
 		if len(receivers) == 0 {
 			err = fmt.Errorf("receiver with phone number %s not found in our server", truncatedPhoneNumber)
-			return &ErrorInformationNotFound{cause: err}
+			return nil, &ErrorInformationNotFound{cause: err}
 		}
 
 		// STEP 3: process receiverVerification PII info that matches the pair [receiverID, verificationType]
 		receiver := receivers[0]
 		err = v.processReceiverVerificationPII(ctx, dbTx, *receiver, receiverRegistrationRequest)
 		if err != nil {
-			return fmt.Errorf("processing receiver verification entry for receiver with phone number %s: %w", truncatedPhoneNumber, err)
+			return nil, fmt.Errorf("processing receiver verification entry for receiver with phone number %s: %w", truncatedPhoneNumber, err)
 		}
 
 		// STEP 4: process OTP
 		receiverWallet, wasAlreadyRegistered, err := v.processReceiverWalletOTP(ctx, dbTx, *sep24Claims, *receiver, receiverRegistrationRequest.OTP)
 		if err != nil {
-			return fmt.Errorf("processing OTP for receiver with phone number %s: %w", truncatedPhoneNumber, err)
+			return nil, fmt.Errorf("processing OTP for receiver with phone number %s: %w", truncatedPhoneNumber, err)
 		}
 
 		// STEP 5: produce event to send receiver's ready payments to TSS
-		err = v.producePaymentsReadyToPayEvent(ctx, dbTx, &receiverWallet)
-		if err != nil {
-			return fmt.Errorf("producing payments ready to pay event: %w", err)
-		}
-
-		if wasAlreadyRegistered {
-			return nil
+		postCommitFn := func() error {
+			return v.producePaymentsReadyToPayEvent(ctx, v.Models.DBConnectionPool, &receiverWallet)
 		}
 
 		// STEP 6: PATCH transaction on the AnchorPlatform and update the receiver wallet with the anchor platform tx ID
-		err = v.processAnchorPlatformID(ctx, dbTx, *sep24Claims, receiverWallet)
-		if err != nil {
-			return fmt.Errorf("processing anchor platform transaction ID: %w", err)
+		if !wasAlreadyRegistered {
+			err = v.processAnchorPlatformID(ctx, dbTx, *sep24Claims, receiverWallet)
+			if err != nil {
+				return nil, fmt.Errorf("processing anchor platform transaction ID: %w", err)
+			}
 		}
 
-		return nil
+		return postCommitFn, nil
 	})
 	if atomicFnErr != nil {
 		var errorInformationNotFound *ErrorInformationNotFound
