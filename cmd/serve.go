@@ -61,7 +61,7 @@ func (s *ServerService) StartAdminServe(opts serveadmin.ServeOptions, httpServer
 }
 
 func (s *ServerService) GetSchedulerJobRegistrars(ctx context.Context, serveOpts serve.ServeOptions, schedulerOptions scheduler.SchedulerOptions, apAPIService anchorplatform.AnchorPlatformAPIServiceInterface) ([]scheduler.SchedulerJobRegisterOption, error) {
-	// TODO: in SEP-1111, inject the remaining dbCOnnectionPools needed here.
+	// TODO: in SEP-1111, inject the remaining dbConnectionPools needed here.
 	models, err := data.NewModels(serveOpts.MTNDBConnectionPool)
 	if err != nil {
 		log.Ctx(ctx).Fatalf("error creating models in Job Scheduler: %s", err.Error())

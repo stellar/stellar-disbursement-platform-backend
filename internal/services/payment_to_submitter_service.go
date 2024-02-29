@@ -59,7 +59,7 @@ func (s PaymentToSubmitterService) sendPaymentsReadyToPay(ctx context.Context, d
 	for _, paymentReadyToPay := range paymentsReadyToPay.Payments {
 		paymentIDs = append(paymentIDs, paymentReadyToPay.ID)
 	}
-	log.Ctx(ctx).Infof("Sending %d payments to TSS: %v", len(paymentIDs), paymentIDs)
+	log.Ctx(ctx).Infof("Registering %d payments into the TSS, paymentIDs=%v", len(paymentIDs), paymentIDs)
 
 	// Double checking the payments passed by parameter
 	payments, err := s.sdpModels.Payment.GetReadyByID(ctx, dbTx, paymentIDs...)
