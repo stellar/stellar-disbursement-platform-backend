@@ -258,9 +258,9 @@ func (v VerifyReceiverRegistrationHandler) VerifyReceiverRegistration(w http.Res
 
 	truncatedPhoneNumber := utils.TruncateString(receiverRegistrationRequest.PhoneNumber, 3)
 
-	txOpts := &db.TransactionOptions{
+	opts := db.TransactionOptions{
 		DBConnectionPool: v.Models.DBConnectionPool,
-		AtomicFunctionWithPostCommit: func(dbTx db.DBTransaction) (db.PostCommitFunction, error) {
+		AtomicFunctionWithPostCommit: func(dbTx db.DBTransaction) (postCommitFn db.PostCommitFunction, err error) {
 			// STEP 2: find the receivers with the given phone number
 			receivers, err := v.Models.Receiver.GetByPhoneNumbers(ctx, dbTx, []string{receiverRegistrationRequest.PhoneNumber})
 			if err != nil {
@@ -286,7 +286,7 @@ func (v VerifyReceiverRegistrationHandler) VerifyReceiverRegistration(w http.Res
 			}
 
 			// STEP 5: produce event to send receiver's ready payments to TSS
-			postCommitFn := func() error {
+			postCommitFn = func() error {
 				return v.producePaymentsReadyToPayEvent(ctx, v.Models.DBConnectionPool, &receiverWallet)
 			}
 
@@ -301,7 +301,7 @@ func (v VerifyReceiverRegistrationHandler) VerifyReceiverRegistration(w http.Res
 			return postCommitFn, nil
 		},
 	}
-	atomicFnErr := db.RunInTransactionWithPostCommit(ctx, txOpts)
+	atomicFnErr := db.RunInTransactionWithPostCommit(ctx, &opts)
 	if atomicFnErr != nil {
 		var errorInformationNotFound *ErrorInformationNotFound
 		if errors.As(atomicFnErr, &errorInformationNotFound) {

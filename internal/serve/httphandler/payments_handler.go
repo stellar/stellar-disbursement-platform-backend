@@ -127,43 +127,31 @@ func (p PaymentsHandler) RetryPayments(rw http.ResponseWriter, req *http.Request
 		return
 	}
 
-	err = db.RunInTransaction(ctx, p.Models.DBConnectionPool, nil, func(dbTx db.DBTransaction) error {
-		err = p.Models.Payment.RetryFailedPayments(ctx, dbTx, user.Email, reqBody.PaymentIDs...)
-		if err != nil {
-			return fmt.Errorf("retrying failed payments: %w", err)
-		}
-
-		// Producing event to send ready payments to TSS
-		var payments []*data.Payment
-		payments, err = p.Models.Payment.GetReadyByID(ctx, dbTx, reqBody.PaymentIDs...)
-		if err != nil {
-			return fmt.Errorf("getting ready payments by IDs: %w", err)
-		}
-
-		if len(payments) > 0 {
-			msg, msgErr := events.NewMessage(ctx, events.PaymentReadyToPayTopic, "", events.PaymentReadyToPayRetryFailedPayment, nil)
-			if msgErr != nil {
-				return fmt.Errorf("create new message: %w", msgErr)
+	opts := db.TransactionOptions{
+		DBConnectionPool: p.DBConnectionPool,
+		AtomicFunctionWithPostCommit: func(dbTx db.DBTransaction) (postCommitFn db.PostCommitFunction, err error) {
+			err = p.Models.Payment.RetryFailedPayments(ctx, dbTx, user.Email, reqBody.PaymentIDs...)
+			if err != nil {
+				return nil, fmt.Errorf("retrying failed payments: %w", err)
 			}
 
-			paymentsReadyToPay := schemas.EventPaymentsReadyToPayData{TenantID: msg.TenantID}
-			for _, payment := range payments {
-				paymentsReadyToPay.Payments = append(paymentsReadyToPay.Payments, schemas.PaymentReadyToPay{ID: payment.ID})
+			// Producing event to send ready payments to TSS
+			var payments []*data.Payment
+			payments, err = p.Models.Payment.GetReadyByID(ctx, dbTx, reqBody.PaymentIDs...)
+			if err != nil {
+				return nil, fmt.Errorf("getting ready payments by IDs: %w", err)
 			}
-			msg.Data = paymentsReadyToPay
 
-			if p.EventProducer != nil {
-				err = p.EventProducer.WriteMessages(ctx, *msg)
-				if err != nil {
-					return fmt.Errorf("writing message %s on event producer: %w", msg, err)
+			if len(payments) > 0 {
+				postCommitFn = func() error {
+					return p.producePaymentsReadyEvents(ctx, payments)
 				}
-			} else {
-				log.Ctx(ctx).Errorf("event producer is nil, could not publish message %s", msg.String())
 			}
-		}
 
-		return nil
-	})
+			return postCommitFn, nil
+		},
+	}
+	err = db.RunInTransactionWithPostCommit(ctx, &opts)
 	if err != nil {
 		if errors.Is(err, data.ErrMismatchNumRowsAffected) {
 			httperror.BadRequest("Invalid payment ID(s) provided. All payment IDs must exist and be in the 'FAILED' state.", err, nil).Render(rw)
@@ -175,6 +163,29 @@ func (p PaymentsHandler) RetryPayments(rw http.ResponseWriter, req *http.Request
 	}
 
 	httpjson.RenderStatus(rw, http.StatusOK, map[string]string{"message": "Payments retried successfully"}, httpjson.JSON)
+}
+
+func (p PaymentsHandler) producePaymentsReadyEvents(ctx context.Context, payments []*data.Payment) error {
+	msg, msgErr := events.NewMessage(ctx, events.PaymentReadyToPayTopic, "", events.PaymentReadyToPayRetryFailedPayment, nil)
+	if msgErr != nil {
+		return fmt.Errorf("creating a new message: %w", msgErr)
+	}
+
+	paymentsReadyToPay := schemas.EventPaymentsReadyToPayData{TenantID: msg.TenantID}
+	for _, payment := range payments {
+		paymentsReadyToPay.Payments = append(paymentsReadyToPay.Payments, schemas.PaymentReadyToPay{ID: payment.ID})
+	}
+	msg.Data = paymentsReadyToPay
+
+	if p.EventProducer != nil {
+		err := p.EventProducer.WriteMessages(ctx, *msg)
+		if err != nil {
+			return fmt.Errorf("writing message %s on event producer: %w", msg, err)
+		}
+	} else {
+		log.Ctx(ctx).Errorf("event producer is nil, could not publish message %s", msg.String())
+	}
+	return nil
 }
 
 func (p PaymentsHandler) getPaymentsWithCount(ctx context.Context, queryParams *data.QueryParams) (*utils.ResultWithTotal, error) {
