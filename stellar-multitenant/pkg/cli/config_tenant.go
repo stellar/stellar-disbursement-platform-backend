@@ -109,7 +109,7 @@ func ConfigTenantCmd() *cobra.Command {
 			}
 
 			if err := executeConfigTenant(ctx, &to, adminDBConnectionPool); err != nil {
-				log.Fatal(err)
+				log.Ctx(ctx).Fatal(err)
 			}
 		},
 		PersistentPostRun: func(cmd *cobra.Command, args []string) {
@@ -118,7 +118,7 @@ func ConfigTenantCmd() *cobra.Command {
 	}
 
 	if err := configOptions.Init(&cmd); err != nil {
-		log.Fatalf("initializing ConfigTenantCmd config options: %v", err)
+		log.Ctx(cmd.Context()).Fatalf("initializing ConfigTenantCmd config options: %v", err)
 	}
 
 	return &cmd

@@ -29,6 +29,7 @@ func NewMtnDBConnectionPool(ctx context.Context, opts DBConnectionPoolOptions) (
 	if err != nil {
 		return nil, fmt.Errorf("opening Admin DB connection pool from NewMtnDBConnectionPool: %w", err)
 	}
+
 	log.Ctx(ctx).Info("⚙️ Setting up Multi-tenant DBConnectionPool")
 	tm := tenant.NewManager(tenant.WithDatabase(adminDBConnectionPool))
 	tr := router.NewMultiTenantDataSourceRouter(tm)

@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/stellar/go/support/log"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/router"
 )
@@ -23,13 +24,13 @@ func NewAdminDBConnectionPool(ctx context.Context, opts DBConnectionPoolOptions)
 		return nil, fmt.Errorf("trying to cast Admin DBConnectionPool for depencency injection")
 	}
 
-	log.Ctx(ctx).Info("⚙️ Setting up Admin DBConnectionPool")
+	log.Ctx(ctx).Infof("⚙️ Setting up Admin DBConnectionPool (withMetrics=%t)", opts.MonitorService != nil)
 	adminDNS, err := router.GetDNSForAdmin(opts.DatabaseURL)
 	if err != nil {
 		return nil, fmt.Errorf("getting Admin database DNS: %w", err)
 	}
 
-	dbConnectionPool, err := db.OpenDBConnectionPool(adminDNS)
+	dbConnectionPool, err := openDBConnectionPool(adminDNS, opts.MonitorService)
 	if err != nil {
 		return nil, fmt.Errorf("opening Admin DB connection pool: %w", err)
 	}

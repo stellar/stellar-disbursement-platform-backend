@@ -4,10 +4,12 @@ import (
 	"context"
 	"testing"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/db"
-	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 )
 
 func Test_dependencyinjection_NewAdminDBConnectionPool(t *testing.T) {
@@ -15,7 +17,8 @@ func Test_dependencyinjection_NewAdminDBConnectionPool(t *testing.T) {
 	defer dbt.Close()
 
 	ctx := context.Background()
-	t.Run("should create and return the same instance on the second call", func(t *testing.T) {
+
+	t.Run("should create and return the same instance on the second call (without Metrics)", func(t *testing.T) {
 		ClearInstancesTestHelper(t)
 
 		opts := DBConnectionPoolOptions{DatabaseURL: dbt.DSN}
@@ -23,6 +26,27 @@ func Test_dependencyinjection_NewAdminDBConnectionPool(t *testing.T) {
 		gotDependency, err := NewAdminDBConnectionPool(ctx, opts)
 		require.NoError(t, err)
 		assert.IsType(t, &db.DBConnectionPoolImplementation{}, gotDependency)
+		defer gotDependency.Close()
+
+		gotDependencyDuplicate, err := NewAdminDBConnectionPool(ctx, opts)
+		require.NoError(t, err)
+
+		assert.Equal(t, &gotDependency, &gotDependencyDuplicate)
+
+		adminDatabaseDSN, err := gotDependency.DSN(context.Background())
+		require.NoError(t, err)
+		assert.NotContains(t, adminDatabaseDSN, "search_path")
+	})
+
+	t.Run("should create and return the same instance on the second call (with Metrics)", func(t *testing.T) {
+		ClearInstancesTestHelper(t)
+
+		mMonitorService := &monitor.MockMonitorService{}
+		opts := DBConnectionPoolOptions{DatabaseURL: dbt.DSN, MonitorService: mMonitorService}
+
+		gotDependency, err := NewAdminDBConnectionPool(ctx, opts)
+		require.NoError(t, err)
+		assert.IsType(t, &db.DBConnectionPoolWithMetrics{}, gotDependency)
 		defer gotDependency.Close()
 
 		gotDependencyDuplicate, err := NewAdminDBConnectionPool(ctx, opts)

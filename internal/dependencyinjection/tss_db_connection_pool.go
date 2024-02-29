@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/stellar/go/support/log"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/router"
 )
@@ -23,13 +24,13 @@ func NewTSSDBConnectionPool(ctx context.Context, opts DBConnectionPoolOptions) (
 		return nil, fmt.Errorf("trying to cast TSS DBConnectionPool client for depencency injection")
 	}
 
-	log.Ctx(ctx).Info("⚙️ Setting up TSS DBConnectionPool")
+	log.Ctx(ctx).Infof("⚙️ Setting up TSS DBConnectionPool (withMetrics=%t)", opts.MonitorService != nil)
 	tssDNS, err := router.GetDNSForTSS(opts.DatabaseURL)
 	if err != nil {
 		return nil, fmt.Errorf("getting TSS database DNS: %w", err)
 	}
 
-	tssDBConnectionPool, err := db.OpenDBConnectionPool(tssDNS)
+	tssDBConnectionPool, err := openDBConnectionPool(tssDNS, opts.MonitorService)
 	if err != nil {
 		return nil, fmt.Errorf("opening TSS DB connection pool: %w", err)
 	}
