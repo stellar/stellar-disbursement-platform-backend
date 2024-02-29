@@ -1,13 +1,15 @@
 package dependencyinjection
 
-import "testing"
+import (
+	"context"
+	"testing"
+)
 
 func ClearInstancesTestHelper(t *testing.T) {
 	t.Helper()
 
 	// Range over the map and delete each entry.
-	dependenciesStore.Range(func(key, value interface{}) bool {
-		dependenciesStore.Delete(key)
-		return true // Continue iteration
-	})
+	for instanceName := range dependenciesStore {
+		DeleteInstanceByKey(context.Background(), instanceName)
+	}
 }

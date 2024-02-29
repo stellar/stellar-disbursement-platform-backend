@@ -39,17 +39,17 @@ func (c *DatabaseCommand) Command(globalOptions *utils.GlobalOptionsType) *cobra
 			}
 			c.adminDBConnectionPool = adminDBConnectionPool
 		},
-		PersistentPostRunE: func(cmd *cobra.Command, args []string) error {
-			return db.CloseConnectionPoolIfNeeded(cmd.Context(), c.adminDBConnectionPool)
-		},
 		RunE: utils.CallHelpCommand,
+		PersistentPostRun: func(cmd *cobra.Command, args []string) {
+			di.DeleteInstanceByValue(cmd.Context(), c.adminDBConnectionPool)
+		},
 	}
 
 	// ADD SUBCOMMANDs:
 	// The following commands use --all and --tenant-id flags.
-	cmd.AddCommand(c.setupForNetworkCmd(cmd.Context(), globalOptions))         // 'setup-for-network'
-	cmd.AddCommand(c.sdpPerTenantMigrationsCmd(cmd.Context(), globalOptions))  // 'sdp migrate up|down'
-	cmd.AddCommand(c.authPerTenantMigrationsCmd(cmd.Context(), globalOptions)) // 'auth migrate up|down'
+	cmd.AddCommand(c.setupForNetworkCmd(globalOptions))         // 'setup-for-network'
+	cmd.AddCommand(c.sdpPerTenantMigrationsCmd(cmd.Context()))  // 'sdp migrate up|down'
+	cmd.AddCommand(c.authPerTenantMigrationsCmd(cmd.Context())) // 'auth migrate up|down'
 
 	// The following command does NOT use --all and --tenant-id flags.
 	cmd.AddCommand(c.adminMigrationsCmd(cmd.Context(), globalOptions)) // 'admin migrate up|down'
@@ -60,7 +60,7 @@ func (c *DatabaseCommand) Command(globalOptions *utils.GlobalOptionsType) *cobra
 
 // setupForNetworkCmd returns a cobra.Command responsible for setting up the assets and wallets registered in the
 // database based on the network passphrase.
-func (c *DatabaseCommand) setupForNetworkCmd(ctx context.Context, globalOptions *utils.GlobalOptionsType) *cobra.Command {
+func (c *DatabaseCommand) setupForNetworkCmd(globalOptions *utils.GlobalOptionsType) *cobra.Command {
 	opts := utils.TenantRoutingOptions{}
 	var configOptions config.ConfigOptions = utils.TenantRoutingConfigOptions(&opts)
 
@@ -82,7 +82,7 @@ func (c *DatabaseCommand) setupForNetworkCmd(ctx context.Context, globalOptions 
 				log.Ctx(ctx).Fatal(err.Error())
 			}
 
-			tenantIDToDNSMap, err := getTenantIDToDSNMapping(ctx, globalOptions.DatabaseURL)
+			tenantIDToDNSMap, err := getTenantIDToDSNMapping(ctx, c.adminDBConnectionPool)
 			if err != nil {
 				log.Ctx(ctx).Fatalf("getting tenants schemas: %s", err.Error())
 			}
@@ -128,7 +128,7 @@ func (c *DatabaseCommand) setupForNetworkCmd(ctx context.Context, globalOptions 
 
 // sdpPerTenantMigrationsCmd returns a cobra.Command responsible for running the migrations of the `sdp-migrations`
 // folder on the desired tenant(s).
-func (c *DatabaseCommand) sdpPerTenantMigrationsCmd(ctx context.Context, globalOptions *utils.GlobalOptionsType) *cobra.Command {
+func (c *DatabaseCommand) sdpPerTenantMigrationsCmd(ctx context.Context) *cobra.Command {
 	opts := utils.TenantRoutingOptions{}
 	var configOptions config.ConfigOptions = utils.TenantRoutingConfigOptions(&opts)
 
@@ -146,7 +146,7 @@ func (c *DatabaseCommand) sdpPerTenantMigrationsCmd(ctx context.Context, globalO
 	}
 
 	executeMigrationsFn := func(ctx context.Context, dir migrate.MigrationDirection, count int) error {
-		if err := executeMigrationsPerTenant(ctx, globalOptions.DatabaseURL, opts, dir, count, sdpmigrations.FS, db.StellarPerTenantSDPMigrationsTableName); err != nil {
+		if err := executeMigrationsPerTenant(ctx, c.adminDBConnectionPool, opts, dir, count, sdpmigrations.FS, db.StellarPerTenantSDPMigrationsTableName); err != nil {
 			return fmt.Errorf("executing migrations for %s: %w", sdpCmd.Name(), err)
 		}
 		return nil
@@ -162,7 +162,7 @@ func (c *DatabaseCommand) sdpPerTenantMigrationsCmd(ctx context.Context, globalO
 
 // authPerTenantMigrationsCmd returns a cobra.Command responsible for running the migrations of the `auth-migrations`
 // folder on the desired tenant(s).
-func (c *DatabaseCommand) authPerTenantMigrationsCmd(ctx context.Context, globalOptions *utils.GlobalOptionsType) *cobra.Command {
+func (c *DatabaseCommand) authPerTenantMigrationsCmd(ctx context.Context) *cobra.Command {
 	opts := utils.TenantRoutingOptions{}
 	var configOptions config.ConfigOptions = utils.TenantRoutingConfigOptions(&opts)
 
@@ -180,7 +180,7 @@ func (c *DatabaseCommand) authPerTenantMigrationsCmd(ctx context.Context, global
 	}
 
 	executeMigrationsFn := func(ctx context.Context, dir migrate.MigrationDirection, count int) error {
-		if err := executeMigrationsPerTenant(ctx, globalOptions.DatabaseURL, opts, dir, count, authmigrations.FS, db.StellarPerTenantAuthMigrationsTableName); err != nil {
+		if err := executeMigrationsPerTenant(ctx, c.adminDBConnectionPool, opts, dir, count, authmigrations.FS, db.StellarPerTenantAuthMigrationsTableName); err != nil {
 			return fmt.Errorf("executing migrations for %s: %w", authCmd.Name(), err)
 		}
 		return nil
