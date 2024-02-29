@@ -91,6 +91,9 @@ func (c *ChannelAccountsCommand) Command(cmdService ChAccCmdServiceInterface) *c
 				log.Ctx(ctx).Fatalf("Error creating crash tracker client: %v", err)
 			}
 		},
+		PersistentPostRun: func(cmd *cobra.Command, args []string) {
+			di.DeleteInstanceByValue(cmd.Context(), c.TSSDBConnectionPool)
+		},
 	}
 	err := configOpts.Init(channelAccountsCmd)
 	if err != nil {

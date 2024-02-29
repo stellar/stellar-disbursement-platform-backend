@@ -119,14 +119,18 @@ func AddTenantsCmd() *cobra.Command {
 			if err != nil {
 				log.Fatalf("getting TSS DBConnectionPool: %v", err)
 			}
-			defer tssDBConnectionPool.Close()
+			defer func() {
+				di.DeleteInstanceByValue(ctx, tssDBConnectionPool)
+			}()
 
 			// Get Admin DB connection pool
 			adminDBConnectionPool, err := di.NewAdminDBConnectionPool(ctx, di.AdminDBConnectionPoolOptions{DatabaseURL: globalOptions.multitenantDbURL})
 			if err != nil {
 				log.Fatalf("getting Admin database connection pool: %v", err)
 			}
-			defer adminDBConnectionPool.Close()
+			defer func() {
+				di.DeleteInstanceByValue(ctx, adminDBConnectionPool)
+			}()
 
 			tenantName, userFirstName, userLastName, userEmail, organizationName := args[0], args[1], args[2], args[3], args[4]
 			err = executeAddTenant(

@@ -158,6 +158,9 @@ func (c *TxSubmitterCommand) Command(submitterService TxSubmitterServiceInterfac
 			if err != nil {
 				log.Ctx(ctx).Fatalf("error getting TSS DB connection pool: %v", err)
 			}
+			defer func() {
+				di.DeleteInstanceByValue(ctx, tssDBConnectionPool)
+			}()
 
 			// Setup the Submitter Engine
 			txSubmitterOpts.SignatureServiceOptions.DBConnectionPool = tssDBConnectionPool
