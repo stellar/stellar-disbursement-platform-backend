@@ -30,7 +30,7 @@ type InstructionLine struct {
 	disbursementInstruction *DisbursementInstruction
 }
 
-const MaxInstructionsPerDisbursement = 10000 // TODO: update this number with load testing results [SDP-524]
+const MaxInstructionsPerDisbursement = 10000
 
 // NewDisbursementInstructionModel creates a new DisbursementInstructionModel.
 func NewDisbursementInstructionModel(dbConnectionPool db.DBConnectionPool) *DisbursementInstructionModel {
