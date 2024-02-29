@@ -16,14 +16,14 @@ import (
 )
 
 type ReceiverVerification struct {
-	ReceiverID        string            `db:"receiver_id"`
-	VerificationField VerificationField `db:"verification_field"`
-	HashedValue       string            `db:"hashed_value"`
-	Attempts          int               `db:"attempts"`
-	CreatedAt         time.Time         `db:"created_at"`
-	UpdatedAt         time.Time         `db:"updated_at"`
-	ConfirmedAt       *time.Time        `db:"confirmed_at"`
-	FailedAt          *time.Time        `db:"failed_at"`
+	ReceiverID        string            `json:"receiver_id" db:"receiver_id"`
+	VerificationField VerificationField `json:"verification_field" db:"verification_field"`
+	HashedValue       string            `json:"hashed_value" db:"hashed_value"`
+	Attempts          int               `json:"attempts" db:"attempts"`
+	CreatedAt         time.Time         `json:"created_at" db:"created_at"`
+	UpdatedAt         time.Time         `json:"updated_at" db:"updated_at"`
+	ConfirmedAt       *time.Time        `json:"confirmed_at" db:"confirmed_at"`
+	FailedAt          *time.Time        `json:"failed_at" db:"failed_at"`
 }
 
 type ReceiverVerificationModel struct {
@@ -176,7 +176,37 @@ func (m *ReceiverVerificationModel) UpdateVerificationValue(ctx context.Context,
 	return nil
 }
 
-// UpdateVerificationValue updates the hashed value of a receiver verification.
+// UpsertVerificationValue creates or updates the receiver's verification. In case the verification exists and it's already confirmed by the receiver
+// it's not updated.
+func (m *ReceiverVerificationModel) UpsertVerificationValue(ctx context.Context, sqlExec db.SQLExecuter, receiverID string, verificationField VerificationField, verificationValue string) error {
+	log.Ctx(ctx).Infof("Calling UpsertVerificationValue for receiver %s and verification field %s", receiverID, verificationField)
+	hashedValue, err := HashVerificationValue(verificationValue)
+	if err != nil {
+		return fmt.Errorf("hashing verification value: %w", err)
+	}
+
+	query := `
+		INSERT INTO receiver_verifications
+			(receiver_id, verification_field, hashed_value)
+		VALUES
+			($1, $2, $3)
+		ON CONFLICT (receiver_id, verification_field)
+		DO UPDATE SET
+			hashed_value = EXCLUDED.hashed_value,
+			updated_at = NOW()
+		WHERE
+			receiver_verifications.confirmed_at IS NULL
+	`
+
+	_, err = sqlExec.ExecContext(ctx, query, receiverID, verificationField, hashedValue)
+	if err != nil {
+		return fmt.Errorf("upserting receiver verification: %w", err)
+	}
+
+	return nil
+}
+
+// UpdateReceiverVerification updates the attempts, confirmed_at, and failed_at values of a receiver verification.
 func (m *ReceiverVerificationModel) UpdateReceiverVerification(ctx context.Context, receiverVerification ReceiverVerification, sqlExec db.SQLExecuter) error {
 	query := `
 		UPDATE 

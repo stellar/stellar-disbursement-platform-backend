@@ -249,6 +249,92 @@ func Test_ReceiverVerificationModel_UpdateVerificationValue(t *testing.T) {
 	assert.True(t, verified)
 }
 
+func Test_ReceiverVerificationModel_UpsertVerificationValue(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+	receiver := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
+	receiverVerificationModel := ReceiverVerificationModel{}
+	getReceiverVerificationHashedValue := func(t *testing.T, ctx context.Context, dbConnectionPool db.DBConnectionPool, receiverID string, verificationField VerificationField) string {
+		const q = "SELECT hashed_value FROM receiver_verifications WHERE receiver_id = $1 AND verification_field = $2"
+		var hashedValue string
+		qErr := dbConnectionPool.GetContext(ctx, &hashedValue, q, receiverID, verificationField)
+		require.NoError(t, qErr)
+		return hashedValue
+	}
+
+	t.Run("upserts the verification value successfully", func(t *testing.T) {
+		// Inserts the verification value
+		firstVerificationValue := "123456"
+		err = receiverVerificationModel.UpsertVerificationValue(ctx, dbConnectionPool, receiver.ID, VerificationFieldPin, firstVerificationValue)
+		require.NoError(t, err)
+
+		currentHashedValue := getReceiverVerificationHashedValue(t, ctx, dbConnectionPool, receiver.ID, VerificationFieldPin)
+		assert.NotEmpty(t, currentHashedValue)
+		verified := CompareVerificationValue(currentHashedValue, firstVerificationValue)
+		assert.True(t, verified)
+
+		// Updates the verification value
+		newVerificationValue := "654321"
+		err = receiverVerificationModel.UpsertVerificationValue(ctx, dbConnectionPool, receiver.ID, VerificationFieldPin, newVerificationValue)
+		require.NoError(t, err)
+
+		afterUpdateHashedValue := getReceiverVerificationHashedValue(t, ctx, dbConnectionPool, receiver.ID, VerificationFieldPin)
+		assert.NotEmpty(t, afterUpdateHashedValue)
+
+		// Checking if the hashed value is NOT the first one.
+		verified = CompareVerificationValue(afterUpdateHashedValue, firstVerificationValue)
+		assert.False(t, verified)
+		// Checking if the hashed value is equal the updated verification value
+		verified = CompareVerificationValue(afterUpdateHashedValue, newVerificationValue)
+		assert.True(t, verified)
+	})
+
+	t.Run("doesn't update the verification value when it was confirmed by the receiver", func(t *testing.T) {
+		// Inserts the verification value
+		firstVerificationValue := "0301016957187"
+		err := receiverVerificationModel.UpsertVerificationValue(ctx, dbConnectionPool, receiver.ID, VerificationFieldNationalID, firstVerificationValue)
+		require.NoError(t, err)
+
+		currentHashedValue := getReceiverVerificationHashedValue(t, ctx, dbConnectionPool, receiver.ID, VerificationFieldNationalID)
+		assert.NotEmpty(t, currentHashedValue)
+		verified := CompareVerificationValue(currentHashedValue, firstVerificationValue)
+		assert.True(t, verified)
+
+		// Receiver confirmed the verification value
+		now := time.Now()
+		err = receiverVerificationModel.UpdateReceiverVerification(ctx, ReceiverVerification{
+			ReceiverID:        receiver.ID,
+			VerificationField: VerificationFieldNationalID,
+			Attempts:          0,
+			ConfirmedAt:       &now,
+			FailedAt:          nil,
+		}, dbConnectionPool)
+		require.NoError(t, err)
+
+		newVerificationValue := "0301017821085"
+		err = receiverVerificationModel.UpsertVerificationValue(ctx, dbConnectionPool, receiver.ID, VerificationFieldNationalID, newVerificationValue)
+		require.NoError(t, err)
+
+		afterUpdateHashedValue := getReceiverVerificationHashedValue(t, ctx, dbConnectionPool, receiver.ID, VerificationFieldNationalID)
+		assert.NotEmpty(t, currentHashedValue)
+
+		// Checking if the hashed value is NOT the new one.
+		verified = CompareVerificationValue(afterUpdateHashedValue, newVerificationValue)
+		assert.False(t, verified)
+		// Checking if the hashed value is equal the first verification value
+		verified = CompareVerificationValue(afterUpdateHashedValue, firstVerificationValue)
+		assert.True(t, verified)
+
+		assert.Equal(t, currentHashedValue, afterUpdateHashedValue)
+	})
+}
+
 func Test_ReceiverVerificationModel_UpdateReceiverVerification(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
