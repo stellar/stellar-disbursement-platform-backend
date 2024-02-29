@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"strings"
 	"time"
 
@@ -22,6 +23,14 @@ const (
 )
 
 func NewSQLExecuterWithMetrics(sqlExec SQLExecuter, monitorServiceInterface monitor.MonitorServiceInterface) (*SQLExecuterWithMetrics, error) {
+	if sqlExec == nil {
+		return nil, fmt.Errorf("sqlExec cannot be nil")
+	}
+
+	if monitorServiceInterface == nil {
+		return nil, fmt.Errorf("monitorServiceInterface cannot be nil")
+	}
+
 	return &SQLExecuterWithMetrics{
 		SQLExecuter:             sqlExec,
 		monitorServiceInterface: monitorServiceInterface,

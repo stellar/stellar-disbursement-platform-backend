@@ -17,6 +17,8 @@ type MonitorServiceInterface interface {
 	MonitorHistogram(value float64, tag MetricTag, labels map[string]string) error
 }
 
+var _ MonitorServiceInterface = (*MonitorService)(nil)
+
 type MonitorService struct {
 	monitorClient MonitorClient
 }
