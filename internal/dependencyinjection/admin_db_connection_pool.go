@@ -11,13 +11,9 @@ import (
 
 const AdminDBConnectionPoolInstanceName = "admin_db_connection_pool_instance"
 
-type AdminDBConnectionPoolOptions struct {
-	DatabaseURL string
-}
-
 // NewAdminDBConnectionPool creates a new admin db connection pool instance, or retrives an instance that was already
 // created before.
-func NewAdminDBConnectionPool(ctx context.Context, opts AdminDBConnectionPoolOptions) (db.DBConnectionPool, error) {
+func NewAdminDBConnectionPool(ctx context.Context, opts DBConnectionPoolOptions) (db.DBConnectionPool, error) {
 	// If there is already an instance of the service, we return the same instance
 	instanceName := AdminDBConnectionPoolInstanceName
 	if instance, ok := GetInstance(instanceName); ok {

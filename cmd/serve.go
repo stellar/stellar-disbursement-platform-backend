@@ -439,7 +439,8 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			ctx := cmd.Context()
 
 			// Setup the Admin DB connection pool
-			adminDBConnectionPool, err := di.NewAdminDBConnectionPool(ctx, di.AdminDBConnectionPoolOptions{DatabaseURL: globalOptions.DatabaseURL})
+			dbcpOptions := di.DBConnectionPoolOptions{DatabaseURL: globalOptions.DatabaseURL}
+			adminDBConnectionPool, err := di.NewAdminDBConnectionPool(ctx, dbcpOptions)
 			if err != nil {
 				log.Ctx(ctx).Fatalf("error getting Admin DB connection pool: %v", err)
 			}
@@ -450,7 +451,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			adminServeOpts.AdminDBConnectionPool = adminDBConnectionPool
 
 			// Setup the Multi-tenant DB connection pool
-			serveOpts.MTNDBConnectionPool, err = di.NewMtnDBConnectionPool(ctx, globalOptions.DatabaseURL)
+			serveOpts.MTNDBConnectionPool, err = di.NewMtnDBConnectionPool(ctx, dbcpOptions)
 			if err != nil {
 				log.Ctx(ctx).Fatalf("error getting Multi-tenant DB connection pool: %v", err)
 			}
@@ -459,7 +460,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			}()
 
 			// Setup the TSSDBConnectionPool
-			tssDBConnectionPool, err := di.NewTSSDBConnectionPool(ctx, di.TSSDBConnectionPoolOptions{DatabaseURL: globalOptions.DatabaseURL})
+			tssDBConnectionPool, err := di.NewTSSDBConnectionPool(ctx, dbcpOptions)
 			if err != nil {
 				log.Ctx(ctx).Fatalf("error getting TSS DB connection pool: %v", err)
 			}

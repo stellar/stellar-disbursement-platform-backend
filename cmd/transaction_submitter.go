@@ -154,7 +154,7 @@ func (c *TxSubmitterCommand) Command(submitterService TxSubmitterServiceInterfac
 			metricsServeOpts.MonitorService = &tssMonitorSvc
 
 			// Setup the TSSDBConnectionPool
-			tssDBConnectionPool, err := di.NewTSSDBConnectionPool(ctx, di.TSSDBConnectionPoolOptions{DatabaseURL: globalOptions.DatabaseURL})
+			tssDBConnectionPool, err := di.NewTSSDBConnectionPool(ctx, di.DBConnectionPoolOptions{DatabaseURL: globalOptions.DatabaseURL})
 			if err != nil {
 				log.Ctx(ctx).Fatalf("error getting TSS DB connection pool: %v", err)
 			}

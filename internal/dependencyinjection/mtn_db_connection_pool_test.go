@@ -20,16 +20,16 @@ func Test_dependencyinjection_NewMtnDBConnectionPool(t *testing.T) {
 		ClearInstancesTestHelper(t)
 
 		// adminDBConnectionPool is retrieved here because it's a dependency of the MtnDBConnectionPool that needs to be closed.
-		adminDBConnectionPool, err := NewAdminDBConnectionPool(ctx, AdminDBConnectionPoolOptions{DatabaseURL: dbt.DSN})
+		adminDBConnectionPool, err := NewAdminDBConnectionPool(ctx, DBConnectionPoolOptions{DatabaseURL: dbt.DSN})
 		require.NoError(t, err)
 		defer adminDBConnectionPool.Close()
 
-		gotDependency, err := NewMtnDBConnectionPool(ctx, dbt.DSN)
+		gotDependency, err := NewMtnDBConnectionPool(ctx, DBConnectionPoolOptions{DatabaseURL: dbt.DSN})
 		require.NoError(t, err)
 		defer gotDependency.Close()
 		assert.IsType(t, &db.ConnectionPoolWithRouter{}, gotDependency)
 
-		gotDependencyDuplicate, err := NewMtnDBConnectionPool(ctx, dbt.DSN)
+		gotDependencyDuplicate, err := NewMtnDBConnectionPool(ctx, DBConnectionPoolOptions{DatabaseURL: dbt.DSN})
 		require.NoError(t, err)
 
 		assert.Equal(t, &gotDependency, &gotDependencyDuplicate)
@@ -46,7 +46,7 @@ func Test_dependencyinjection_NewMtnDBConnectionPool(t *testing.T) {
 	t.Run("should return an error on a invalid option", func(t *testing.T) {
 		ClearInstancesTestHelper(t)
 
-		gotDependency, err := NewMtnDBConnectionPool(ctx, "")
+		gotDependency, err := NewMtnDBConnectionPool(ctx, DBConnectionPoolOptions{})
 		assert.Nil(t, gotDependency)
 		assert.ErrorContains(t, err, "opening Admin DB connection pool from NewMtnDBConnectionPool")
 		assert.ErrorContains(t, err, "error pinging app DB connection pool")
@@ -57,7 +57,7 @@ func Test_dependencyinjection_NewMtnDBConnectionPool(t *testing.T) {
 
 		SetInstance(MtnDBConnectionPoolInstanceName, false)
 
-		gotDependency, err := NewMtnDBConnectionPool(ctx, dbt.DSN)
+		gotDependency, err := NewMtnDBConnectionPool(ctx, DBConnectionPoolOptions{DatabaseURL: dbt.DSN})
 		assert.Nil(t, gotDependency)
 		assert.EqualError(t, err, "trying to cast multitenant DBConnectionPool for depencency injection")
 	})

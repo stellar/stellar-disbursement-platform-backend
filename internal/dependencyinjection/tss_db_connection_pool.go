@@ -11,13 +11,9 @@ import (
 
 const TSSDBConnectionPoolInstanceName = "tss_db_connection_pool_instance"
 
-type TSSDBConnectionPoolOptions struct {
-	DatabaseURL string
-}
-
 // NewTSSDBConnectionPool creates a new TSS db connection pool instance, or retrives a instance that
 // was already created before.
-func NewTSSDBConnectionPool(ctx context.Context, opts TSSDBConnectionPoolOptions) (db.DBConnectionPool, error) {
+func NewTSSDBConnectionPool(ctx context.Context, opts DBConnectionPoolOptions) (db.DBConnectionPool, error) {
 	instanceName := TSSDBConnectionPoolInstanceName
 
 	if instance, ok := GetInstance(instanceName); ok {

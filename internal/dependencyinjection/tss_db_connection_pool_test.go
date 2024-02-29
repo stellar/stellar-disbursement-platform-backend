@@ -19,7 +19,7 @@ func Test_dependencyinjection_NewTSSDBConnectionPool(t *testing.T) {
 	t.Run("should create and return the same instance on the second call", func(t *testing.T) {
 		ClearInstancesTestHelper(t)
 
-		opts := TSSDBConnectionPoolOptions{DatabaseURL: dbt.DSN}
+		opts := DBConnectionPoolOptions{DatabaseURL: dbt.DSN}
 
 		gotDependency, err := NewTSSDBConnectionPool(ctx, opts)
 		require.NoError(t, err)
@@ -39,7 +39,7 @@ func Test_dependencyinjection_NewTSSDBConnectionPool(t *testing.T) {
 	t.Run("should return an error on a invalid option", func(t *testing.T) {
 		ClearInstancesTestHelper(t)
 
-		opts := TSSDBConnectionPoolOptions{}
+		opts := DBConnectionPoolOptions{}
 		gotDependency, err := NewTSSDBConnectionPool(ctx, opts)
 		assert.Nil(t, gotDependency)
 		assert.ErrorContains(t, err, "opening TSS DB connection pool: error pinging app DB connection pool")
@@ -50,7 +50,7 @@ func Test_dependencyinjection_NewTSSDBConnectionPool(t *testing.T) {
 
 		SetInstance(TSSDBConnectionPoolInstanceName, false)
 
-		opts := TSSDBConnectionPoolOptions{DatabaseURL: dbt.DSN}
+		opts := DBConnectionPoolOptions{DatabaseURL: dbt.DSN}
 		gotDependency, err := NewTSSDBConnectionPool(ctx, opts)
 		assert.Nil(t, gotDependency)
 		assert.EqualError(t, err, "trying to cast TSS DBConnectionPool client for depencency injection")

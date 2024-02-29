@@ -115,7 +115,8 @@ func AddTenantsCmd() *cobra.Command {
 			}
 
 			// Get TSS DB connection pool
-			tssDBConnectionPool, err := di.NewTSSDBConnectionPool(ctx, di.TSSDBConnectionPoolOptions{DatabaseURL: globalOptions.multitenantDbURL})
+			dbcpOptions := di.DBConnectionPoolOptions{DatabaseURL: globalOptions.multitenantDbURL}
+			tssDBConnectionPool, err := di.NewTSSDBConnectionPool(ctx, dbcpOptions)
 			if err != nil {
 				log.Fatalf("getting TSS DBConnectionPool: %v", err)
 			}
@@ -124,7 +125,7 @@ func AddTenantsCmd() *cobra.Command {
 			}()
 
 			// Get Admin DB connection pool
-			adminDBConnectionPool, err := di.NewAdminDBConnectionPool(ctx, di.AdminDBConnectionPoolOptions{DatabaseURL: globalOptions.multitenantDbURL})
+			adminDBConnectionPool, err := di.NewAdminDBConnectionPool(ctx, dbcpOptions)
 			if err != nil {
 				log.Fatalf("getting Admin database connection pool: %v", err)
 			}

@@ -18,7 +18,7 @@ func Test_dependencyinjection_NewAdminDBConnectionPool(t *testing.T) {
 	t.Run("should create and return the same instance on the second call", func(t *testing.T) {
 		ClearInstancesTestHelper(t)
 
-		opts := AdminDBConnectionPoolOptions{DatabaseURL: dbt.DSN}
+		opts := DBConnectionPoolOptions{DatabaseURL: dbt.DSN}
 
 		gotDependency, err := NewAdminDBConnectionPool(ctx, opts)
 		require.NoError(t, err)
@@ -38,7 +38,7 @@ func Test_dependencyinjection_NewAdminDBConnectionPool(t *testing.T) {
 	t.Run("should return an error on a invalid option", func(t *testing.T) {
 		ClearInstancesTestHelper(t)
 
-		opts := AdminDBConnectionPoolOptions{}
+		opts := DBConnectionPoolOptions{}
 		gotDependency, err := NewAdminDBConnectionPool(ctx, opts)
 		assert.Nil(t, gotDependency)
 		assert.ErrorContains(t, err, "opening Admin DB connection pool: error pinging app DB connection pool")
@@ -49,7 +49,7 @@ func Test_dependencyinjection_NewAdminDBConnectionPool(t *testing.T) {
 
 		SetInstance(AdminDBConnectionPoolInstanceName, false)
 
-		opts := AdminDBConnectionPoolOptions{DatabaseURL: dbt.DSN}
+		opts := DBConnectionPoolOptions{DatabaseURL: dbt.DSN}
 		gotDependency, err := NewAdminDBConnectionPool(ctx, opts)
 		assert.Nil(t, gotDependency)
 		assert.EqualError(t, err, "trying to cast Admin DBConnectionPool for depencency injection")

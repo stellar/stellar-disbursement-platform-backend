@@ -103,7 +103,7 @@ func ConfigTenantCmd() *cobra.Command {
 			ctx := cmd.Context()
 
 			var err error
-			adminDBConnectionPool, err = di.NewAdminDBConnectionPool(ctx, di.AdminDBConnectionPoolOptions{DatabaseURL: globalOptions.multitenantDbURL})
+			adminDBConnectionPool, err = di.NewAdminDBConnectionPool(ctx, di.DBConnectionPoolOptions{DatabaseURL: globalOptions.multitenantDbURL})
 			if err != nil {
 				log.Ctx(ctx).Fatal("getting admin db connection pool", err)
 			}
