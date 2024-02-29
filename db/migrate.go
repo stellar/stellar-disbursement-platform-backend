@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	migrate "github.com/rubenv/sql-migrate"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/utils"
 )
 

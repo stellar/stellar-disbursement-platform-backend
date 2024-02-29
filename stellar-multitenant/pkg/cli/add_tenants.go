@@ -87,7 +87,7 @@ func AddTenantsCmd() *cobra.Command {
 
 	cmd := cobra.Command{
 		Use:     "add-tenants",
-		Short:   "Add a new tenant.",
+		Short:   "Add a new tenant",
 		Example: "add-tenants [tenant name] [user first name] [user last name] [user email] [organization name]",
 		Long:    "Add a new tenant. The tenant name should only contain lower case characters and dash (-)",
 		Args: cobra.MatchAll(

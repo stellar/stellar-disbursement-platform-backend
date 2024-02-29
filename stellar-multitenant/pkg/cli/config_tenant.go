@@ -8,7 +8,9 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/stellar/go/support/config"
 	"github.com/stellar/go/support/log"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	di "github.com/stellar/stellar-disbursement-platform-backend/internal/dependencyinjection"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/cli/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
@@ -83,9 +85,11 @@ func ConfigTenantCmd() *cobra.Command {
 		},
 	}
 
+	var adminDBConnectionPool db.DBConnectionPool
 	cmd := cobra.Command{
 		Use:     "config-tenant",
-		Short:   "",
+		Short:   "Configure an existing tenant",
+		Long:    "Configure an existing tenant by updating their existing configuration",
 		Aliases: []string{"ct"},
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
 			cmd.Parent().PersistentPreRun(cmd.Parent(), args)
@@ -97,9 +101,19 @@ func ConfigTenantCmd() *cobra.Command {
 		},
 		Run: func(cmd *cobra.Command, args []string) {
 			ctx := cmd.Context()
-			if err := executeConfigTenant(ctx, &to, globalOptions.multitenantDbURL); err != nil {
+
+			var err error
+			adminDBConnectionPool, err = di.NewAdminDBConnectionPool(ctx, di.AdminDBConnectionPoolOptions{DatabaseURL: globalOptions.multitenantDbURL})
+			if err != nil {
+				log.Ctx(ctx).Fatal("getting admin db connection pool", err)
+			}
+
+			if err := executeConfigTenant(ctx, &to, adminDBConnectionPool); err != nil {
 				log.Fatal(err)
 			}
+		},
+		PersistentPostRun: func(cmd *cobra.Command, args []string) {
+			di.DeleteInstanceByValue(cmd.Context(), adminDBConnectionPool)
 		},
 	}
 
@@ -110,15 +124,9 @@ func ConfigTenantCmd() *cobra.Command {
 	return &cmd
 }
 
-func executeConfigTenant(ctx context.Context, to *tenantOptions, dbURL string) error {
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbURL)
-	if err != nil {
-		return fmt.Errorf("opening database connection pool: %w", err)
-	}
-	defer dbConnectionPool.Close()
-
+func executeConfigTenant(ctx context.Context, to *tenantOptions, dbConnectionPool db.DBConnectionPool) error {
 	m := tenant.NewManager(tenant.WithDatabase(dbConnectionPool))
-	_, err = m.UpdateTenantConfig(ctx, &tenant.TenantUpdate{
+	_, err := m.UpdateTenantConfig(ctx, &tenant.TenantUpdate{
 		ID:              to.ID,
 		EmailSenderType: to.EmailSenderType,
 		SMSSenderType:   to.SMSSenderType,
