@@ -28,6 +28,16 @@ type DBConnectionPool interface {
 	DSN(ctx context.Context) (string, error)
 }
 
+type (
+	PostCommitFunction           func() error
+	AtomicFunctionWithPostCommit func(dbTx DBTransaction) (PostCommitFunction, error)
+	TransactionOptions           struct {
+		DBConnectionPool             DBConnectionPool
+		AtomicFunctionWithPostCommit AtomicFunctionWithPostCommit
+		TxOptions                    *sql.TxOptions
+	}
+)
+
 // DBConnectionPoolImplementation is a wrapper around sqlx.DB that implements DBConnectionPool.
 type DBConnectionPoolImplementation struct {
 	*sqlx.DB
@@ -87,8 +97,12 @@ func RunInTransactionWithResult[T any](ctx context.Context, dbConnectionPool DBC
 
 // RunInTransactionWithPostCommit runs the given atomic function in an atomic database transaction.
 // If the atomic function succeeds, it returns a postCommit function to be executed after the transaction is committed.
-func RunInTransactionWithPostCommit(ctx context.Context, dbConnectionPool DBConnectionPool, opts *sql.TxOptions, atomicFunction func(dbTx DBTransaction) (func() error, error)) error {
-	dbTx, err := dbConnectionPool.BeginTxx(ctx, opts)
+func RunInTransactionWithPostCommit(ctx context.Context, opts *TransactionOptions) error {
+	dbConnectionPool := opts.DBConnectionPool
+	atomicFunction := opts.AtomicFunctionWithPostCommit
+	txOpts := opts.TxOptions
+
+	dbTx, err := dbConnectionPool.BeginTxx(ctx, txOpts)
 	if err != nil {
 		return fmt.Errorf("creating db transaction for RunInTransactionWithResult: %w", err)
 	}

@@ -258,46 +258,50 @@ func (v VerifyReceiverRegistrationHandler) VerifyReceiverRegistration(w http.Res
 
 	truncatedPhoneNumber := utils.TruncateString(receiverRegistrationRequest.PhoneNumber, 3)
 
-	atomicFnErr := db.RunInTransactionWithPostCommit(ctx, v.Models.DBConnectionPool, nil, func(dbTx db.DBTransaction) (func() error, error) {
-		// STEP 2: find the receivers with the given phone number
-		receivers, err := v.Models.Receiver.GetByPhoneNumbers(ctx, dbTx, []string{receiverRegistrationRequest.PhoneNumber})
-		if err != nil {
-			err = fmt.Errorf("error retrieving receiver with phone number %s: %w", truncatedPhoneNumber, err)
-			return nil, err
-		}
-		if len(receivers) == 0 {
-			err = fmt.Errorf("receiver with phone number %s not found in our server", truncatedPhoneNumber)
-			return nil, &ErrorInformationNotFound{cause: err}
-		}
-
-		// STEP 3: process receiverVerification PII info that matches the pair [receiverID, verificationType]
-		receiver := receivers[0]
-		err = v.processReceiverVerificationPII(ctx, dbTx, *receiver, receiverRegistrationRequest)
-		if err != nil {
-			return nil, fmt.Errorf("processing receiver verification entry for receiver with phone number %s: %w", truncatedPhoneNumber, err)
-		}
-
-		// STEP 4: process OTP
-		receiverWallet, wasAlreadyRegistered, err := v.processReceiverWalletOTP(ctx, dbTx, *sep24Claims, *receiver, receiverRegistrationRequest.OTP)
-		if err != nil {
-			return nil, fmt.Errorf("processing OTP for receiver with phone number %s: %w", truncatedPhoneNumber, err)
-		}
-
-		// STEP 5: produce event to send receiver's ready payments to TSS
-		postCommitFn := func() error {
-			return v.producePaymentsReadyToPayEvent(ctx, v.Models.DBConnectionPool, &receiverWallet)
-		}
-
-		// STEP 6: PATCH transaction on the AnchorPlatform and update the receiver wallet with the anchor platform tx ID
-		if !wasAlreadyRegistered {
-			err = v.processAnchorPlatformID(ctx, dbTx, *sep24Claims, receiverWallet)
+	txOpts := &db.TransactionOptions{
+		DBConnectionPool: v.Models.DBConnectionPool,
+		AtomicFunctionWithPostCommit: func(dbTx db.DBTransaction) (db.PostCommitFunction, error) {
+			// STEP 2: find the receivers with the given phone number
+			receivers, err := v.Models.Receiver.GetByPhoneNumbers(ctx, dbTx, []string{receiverRegistrationRequest.PhoneNumber})
 			if err != nil {
-				return nil, fmt.Errorf("processing anchor platform transaction ID: %w", err)
+				err = fmt.Errorf("error retrieving receiver with phone number %s: %w", truncatedPhoneNumber, err)
+				return nil, err
 			}
-		}
+			if len(receivers) == 0 {
+				err = fmt.Errorf("receiver with phone number %s not found in our server", truncatedPhoneNumber)
+				return nil, &ErrorInformationNotFound{cause: err}
+			}
 
-		return postCommitFn, nil
-	})
+			// STEP 3: process receiverVerification PII info that matches the pair [receiverID, verificationType]
+			receiver := receivers[0]
+			err = v.processReceiverVerificationPII(ctx, dbTx, *receiver, receiverRegistrationRequest)
+			if err != nil {
+				return nil, fmt.Errorf("processing receiver verification entry for receiver with phone number %s: %w", truncatedPhoneNumber, err)
+			}
+
+			// STEP 4: process OTP
+			receiverWallet, wasAlreadyRegistered, err := v.processReceiverWalletOTP(ctx, dbTx, *sep24Claims, *receiver, receiverRegistrationRequest.OTP)
+			if err != nil {
+				return nil, fmt.Errorf("processing OTP for receiver with phone number %s: %w", truncatedPhoneNumber, err)
+			}
+
+			// STEP 5: produce event to send receiver's ready payments to TSS
+			postCommitFn := func() error {
+				return v.producePaymentsReadyToPayEvent(ctx, v.Models.DBConnectionPool, &receiverWallet)
+			}
+
+			// STEP 6: PATCH transaction on the AnchorPlatform and update the receiver wallet with the anchor platform tx ID
+			if !wasAlreadyRegistered {
+				err = v.processAnchorPlatformID(ctx, dbTx, *sep24Claims, receiverWallet)
+				if err != nil {
+					return nil, fmt.Errorf("processing anchor platform transaction ID: %w", err)
+				}
+			}
+
+			return postCommitFn, nil
+		},
+	}
+	atomicFnErr := db.RunInTransactionWithPostCommit(ctx, txOpts)
 	if atomicFnErr != nil {
 		var errorInformationNotFound *ErrorInformationNotFound
 		if errors.As(atomicFnErr, &errorInformationNotFound) {
