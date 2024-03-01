@@ -197,7 +197,7 @@ Flags:
       --aws-region string                                   The AWS region (AWS_REGION)
       --aws-secret-access-key string                        The AWS secret access key (AWS_SECRET_ACCESS_KEY)
       --distribution-account-encryption-passphrase string   A Stellar-compliant ed25519 private key used to encrypt/decrypt the in-memory distribution accounts' private keys. It's mandatory when the distribution-signer-type is set to DISTRIBUTION_ACCOUNT_DB. (DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE)
-      --distribution-seed string                            The private key of the Stellar distribution account that sends the disbursements. (DISTRIBUTION_SEED)
+      --distribution-seed string                            The private key of the HOST's Stellar distribution account, used to create channel accounts (DISTRIBUTION_SEED)
       --distribution-signer-type string                     The type of the signature client used for distribution accounts. Options: [DISTRIBUTION_ACCOUNT_ENV DISTRIBUTION_ACCOUNT_DB] (DISTRIBUTION_SIGNER_TYPE) (default "DISTRIBUTION_ACCOUNT_ENV")
       --email-sender-type string                            The messenger type used to send invitations to new dashboard users. Options: [DRY_RUN AWS_EMAIL] (EMAIL_SENDER_TYPE)
   -h, --help                                                help for add-tenants
@@ -226,7 +226,7 @@ Flags:
       --aws-region string                                   The AWS region (AWS_REGION)
       --aws-secret-access-key string                        The AWS secret access key (AWS_SECRET_ACCESS_KEY)
       --distribution-account-encryption-passphrase string   A Stellar-compliant ed25519 private key used to encrypt/decrypt the in-memory distribution accounts' private keys. It's mandatory when the distribution-signer-type is set to DISTRIBUTION_ACCOUNT_DB. (DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE)
-      --distribution-seed string                            The private key of the Stellar distribution account that sends the disbursements. (DISTRIBUTION_SEED)
+      --distribution-seed string                            The private key of the HOST's Stellar distribution account, used to create channel accounts (DISTRIBUTION_SEED)
       --distribution-signer-type string                     The type of the signature client used for distribution accounts. Options: [DISTRIBUTION_ACCOUNT_ENV DISTRIBUTION_ACCOUNT_DB] (DISTRIBUTION_SIGNER_TYPE) (default "DISTRIBUTION_ACCOUNT_ENV")
       --email-sender-type string                            The messenger type used to send invitations to new dashboard users. Options: [DRY_RUN AWS_EMAIL] (EMAIL_SENDER_TYPE)
   -h, --help                                                help for add-tenants

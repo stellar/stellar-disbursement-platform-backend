@@ -233,7 +233,7 @@ func BaseDistributionAccountSignatureClientConfigOptions(opts *signing.Signature
 		},
 		{
 			Name:           "distribution-seed",
-			Usage:          "The private key of the Stellar distribution account that sends the disbursements.", // TODO: this will eventually be used for sponsoring tenant accounts.
+			Usage:          "The private key of the HOST's Stellar distribution account, used to create channel accounts", // TODO: this will eventually be used for sponsoring tenant accounts.
 			OptType:        types.String,
 			CustomSetValue: SetConfigOptionStellarPrivateKey,
 			ConfigKey:      &opts.DistributionPrivateKey,
@@ -266,7 +266,7 @@ func CrashTrackerTypeConfigOption(targetPointer interface{}) *config.ConfigOptio
 func DistributionPublicKey(targetPointer interface{}) *config.ConfigOption {
 	return &config.ConfigOption{
 		Name:           "distribution-public-key",
-		Usage:          "The public key of the Stellar distribution account that sends the disbursements.",
+		Usage:          "The public key of the HOST's Stellar distribution account, used to create channel accounts",
 		OptType:        types.String,
 		CustomSetValue: SetConfigOptionStellarPublicKey,
 		ConfigKey:      targetPointer,
