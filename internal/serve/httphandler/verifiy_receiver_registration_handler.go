@@ -348,12 +348,12 @@ func (v VerifyReceiverRegistrationHandler) producePaymentsReadyToPayEvent(ctx co
 	msg.Data = paymentsReadyToPay
 
 	if v.EventProducer != nil {
-		err := v.EventProducer.WriteMessages(ctx, *msg)
+		err = v.EventProducer.WriteMessages(ctx, *msg)
 		if err != nil {
 			return fmt.Errorf("writing message %s on event producer: %w", msg, err)
 		}
 	} else {
-		log.Ctx(ctx).Errorf("event producer is nil, could not publish message %s", msg.String())
+		log.Ctx(ctx).Errorf("event producer is nil, could not publish message %+v", msg)
 	}
 
 	return nil
