@@ -203,185 +203,188 @@ func (s *DisbursementManagementService) GetDisbursementReceiversWithCount(ctx co
 
 // StartDisbursement starts a disbursement and all its payments and receivers wallets.
 func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, disbursementID string, user *auth.User, distributionPubKey string) error {
-	return db.RunInTransaction(ctx, s.dbConnectionPool, nil, func(dbTx db.DBTransaction) error {
-		disbursement, err := s.models.Disbursements.GetWithStatistics(ctx, disbursementID)
-		if err != nil {
-			if errors.Is(err, data.ErrRecordNotFound) {
-				return ErrDisbursementNotFound
-			} else {
-				return fmt.Errorf("error getting disbursement with id %s: %w", disbursementID, err)
-			}
-		}
-
-		// 1. Verify Wallet is Enabled
-		if !disbursement.Wallet.Enabled {
-			return ErrDisbursementWalletDisabled
-		}
-		// 2. Verify Transition is Possible
-		err = disbursement.Status.TransitionTo(data.StartedDisbursementStatus)
-		if err != nil {
-			return ErrDisbursementNotReadyToStart
-		}
-
-		// 3. Check if approval Workflow is enabled for this organization
-		organization, err := s.models.Organizations.Get(ctx)
-		if err != nil {
-			return fmt.Errorf("error getting organization: %w", err)
-		}
-
-		if organization.IsApprovalRequired {
-			// check that the user starting the disbursement isn't the same as the one who created it
-			for _, sh := range disbursement.StatusHistory {
-				if sh.UserID == user.ID && (sh.Status == data.DraftDisbursementStatus || sh.Status == data.ReadyDisbursementStatus) {
-					return ErrDisbursementStartedByCreator
+	opts := db.TransactionOptions{
+		DBConnectionPool: s.dbConnectionPool,
+		AtomicFunctionWithPostCommit: func(dbTx db.DBTransaction) (postCommitFn db.PostCommitFunction, err error) {
+			disbursement, err := s.models.Disbursements.GetWithStatistics(ctx, disbursementID)
+			if err != nil {
+				if errors.Is(err, data.ErrRecordNotFound) {
+					return nil, ErrDisbursementNotFound
+				} else {
+					return nil, fmt.Errorf("error getting disbursement with id %s: %w", disbursementID, err)
 				}
 			}
-		}
 
-		// 4. Check if there is enough balance from the distribution wallet for this disbursement along with any pending disbursements
-		rootAccount, err := s.horizonClient.AccountDetail(
-			horizonclient.AccountRequest{AccountID: distributionPubKey})
-		if err != nil {
-			err = tssUtils.NewHorizonErrorWrapper(err)
-			return fmt.Errorf("cannot get details for root account from horizon client: %w", err)
-		}
+			// 1. Verify Wallet is Enabled
+			if !disbursement.Wallet.Enabled {
+				return nil, ErrDisbursementWalletDisabled
+			}
+			// 2. Verify Transition is Possible
+			err = disbursement.Status.TransitionTo(data.StartedDisbursementStatus)
+			if err != nil {
+				return nil, ErrDisbursementNotReadyToStart
+			}
 
-		var availableBalance float64
-		for _, b := range rootAccount.Balances {
-			if disbursement.Asset.EqualsHorizonAsset(b.Asset) {
-				availableBalance, err = strconv.ParseFloat(b.Balance, 64)
-				if err != nil {
-					return fmt.Errorf("cannot convert Horizon distribution account balance %s into float: %w", b.Balance, err)
+			// 3. Check if approval Workflow is enabled for this organization
+			organization, err := s.models.Organizations.Get(ctx)
+			if err != nil {
+				return nil, fmt.Errorf("error getting organization: %w", err)
+			}
+
+			if organization.IsApprovalRequired {
+				// check that the user starting the disbursement isn't the same as the one who created it
+				for _, sh := range disbursement.StatusHistory {
+					if sh.UserID == user.ID && (sh.Status == data.DraftDisbursementStatus || sh.Status == data.ReadyDisbursementStatus) {
+						return nil, ErrDisbursementStartedByCreator
+					}
 				}
 			}
-		}
 
-		disbursementAmount, err := strconv.ParseFloat(disbursement.TotalAmount, 64)
-		if err != nil {
-			return fmt.Errorf(
-				"cannot convert total amount %s for disbursement id %s into float: %w",
-				disbursement.TotalAmount,
-				disbursementID,
-				err,
-			)
-		}
-
-		var totalPendingAmount float64 = 0.0
-		incompletePayments, err := s.models.Payment.GetAll(ctx, &data.QueryParams{
-			Filters: map[data.FilterKey]interface{}{
-				data.FilterKeyStatus: data.PaymentInProgressStatuses(),
-			},
-		}, dbTx)
-		if err != nil {
-			return fmt.Errorf("cannot retrieve incomplete payments: %w", err)
-		}
-
-		for _, ip := range incompletePayments {
-			if ip.Disbursement.ID == disbursementID {
-				continue
+			// 4. Check if there is enough balance from the distribution wallet for this disbursement along with any pending disbursements
+			rootAccount, err := s.horizonClient.AccountDetail(
+				horizonclient.AccountRequest{AccountID: distributionPubKey})
+			if err != nil {
+				err = tssUtils.NewHorizonErrorWrapper(err)
+				return nil, fmt.Errorf("cannot get details for root account from horizon client: %w", err)
 			}
 
-			paymentAmount, parsePaymentAmountErr := strconv.ParseFloat(ip.Amount, 64)
-			if parsePaymentAmountErr != nil {
-				return fmt.Errorf(
-					"cannot convert amount %s for paymment id %s into float: %w",
-					ip.Amount,
-					ip.ID,
+			var availableBalance float64
+			for _, b := range rootAccount.Balances {
+				if disbursement.Asset.EqualsHorizonAsset(b.Asset) {
+					availableBalance, err = strconv.ParseFloat(b.Balance, 64)
+					if err != nil {
+						return nil, fmt.Errorf("cannot convert Horizon distribution account balance %s into float: %w", b.Balance, err)
+					}
+				}
+			}
+
+			disbursementAmount, err := strconv.ParseFloat(disbursement.TotalAmount, 64)
+			if err != nil {
+				return nil, fmt.Errorf(
+					"cannot convert total amount %s for disbursement id %s into float: %w",
+					disbursement.TotalAmount,
+					disbursementID,
 					err,
 				)
 			}
-			totalPendingAmount += paymentAmount
-		}
 
-		if (availableBalance - (disbursementAmount + totalPendingAmount)) < 0 {
-			err = InsufficientBalanceError{
-				DisbursementAsset:  *disbursement.Asset,
-				DisbursementID:     disbursementID,
-				AvailableBalance:   availableBalance,
-				DisbursementAmount: disbursementAmount,
-				TotalPendingAmount: totalPendingAmount,
-			}
-			log.Ctx(ctx).Error(err)
-			return err
-		}
-
-		// 5. Update all correct payment status to `ready`
-		err = s.models.Payment.UpdateStatusByDisbursementID(ctx, dbTx, disbursementID, data.ReadyPaymentStatus)
-		if err != nil {
-			return fmt.Errorf("error updating payment status to ready for disbursement with id %s: %w", disbursementID, err)
-		}
-
-		// 6. Update all receiver_wallets from `draft` to `ready`
-		err = s.models.ReceiverWallet.UpdateStatusByDisbursementID(ctx, dbTx, disbursementID, data.DraftReceiversWalletStatus, data.ReadyReceiversWalletStatus)
-		if err != nil {
-			return fmt.Errorf("error updating receiver wallet status to ready for disbursement with id %s: %w", disbursementID, err)
-		}
-
-		// 7. Update disbursement status to `started`
-		err = s.models.Disbursements.UpdateStatus(ctx, dbTx, user.ID, disbursementID, data.StartedDisbursementStatus)
-		if err != nil {
-			return fmt.Errorf("error updating disbursement status to started for disbursement with id %s: %w", disbursementID, err)
-		}
-
-		// 8. Produce events to send invitation message to the receivers
-		msgs := make([]events.Message, 0)
-
-		receiverWallets, err := s.models.ReceiverWallet.GetAllPendingRegistrationByDisbursementID(ctx, dbTx, disbursementID)
-		if err != nil {
-			return fmt.Errorf("getting pending registration receiver wallets: %w", err)
-		}
-
-		if len(receiverWallets) != 0 {
-			eventData := make([]schemas.EventReceiverWalletSMSInvitationData, 0, len(receiverWallets))
-			for _, receiverWallet := range receiverWallets {
-				eventData = append(eventData, schemas.EventReceiverWalletSMSInvitationData{ReceiverWalletID: receiverWallet.ID})
+			var totalPendingAmount float64 = 0.0
+			incompletePayments, err := s.models.Payment.GetAll(ctx, &data.QueryParams{
+				Filters: map[data.FilterKey]interface{}{
+					data.FilterKeyStatus: data.PaymentInProgressStatuses(),
+				},
+			}, dbTx)
+			if err != nil {
+				return nil, fmt.Errorf("cannot retrieve incomplete payments: %w", err)
 			}
 
-			sendInviteMsg, msgErr := events.NewMessage(ctx, events.ReceiverWalletNewInvitationTopic, disbursement.ID, events.BatchReceiverWalletSMSInvitationType, eventData)
-			if msgErr != nil {
-				return fmt.Errorf("creating new message: %w", msgErr)
+			for _, ip := range incompletePayments {
+				if ip.Disbursement.ID == disbursementID {
+					continue
+				}
+
+				paymentAmount, parsePaymentAmountErr := strconv.ParseFloat(ip.Amount, 64)
+				if parsePaymentAmountErr != nil {
+					return nil, fmt.Errorf(
+						"cannot convert amount %s for paymment id %s into float: %w",
+						ip.Amount,
+						ip.ID,
+						err,
+					)
+				}
+				totalPendingAmount += paymentAmount
 			}
 
-			msgs = append(msgs, *sendInviteMsg)
-		} else {
-			log.Ctx(ctx).Infof("no receiver wallets to send invitation for disbursement ID %s", disbursementID)
-		}
-
-		// 9. Produce events to send payments to the TSS
-		payments, err := s.models.Payment.GetReadyByDisbursementID(ctx, dbTx, disbursementID)
-		if err != nil {
-			return fmt.Errorf("getting ready payments for disbursement with id %s: %w", disbursementID, err)
-		}
-
-		if len(payments) != 0 {
-			paymentsReadyToPayMsg, msgErr := events.NewMessage(ctx, events.PaymentReadyToPayTopic, disbursementID, events.PaymentReadyToPayDisbursementStarted, nil)
-			if msgErr != nil {
-				return fmt.Errorf("creating new message: %w", msgErr)
+			if (availableBalance - (disbursementAmount + totalPendingAmount)) < 0 {
+				err = InsufficientBalanceError{
+					DisbursementAsset:  *disbursement.Asset,
+					DisbursementID:     disbursementID,
+					AvailableBalance:   availableBalance,
+					DisbursementAmount: disbursementAmount,
+					TotalPendingAmount: totalPendingAmount,
+				}
+				log.Ctx(ctx).Error(err)
+				return nil, err
 			}
 
-			paymentsReadyToPay := schemas.EventPaymentsReadyToPayData{TenantID: paymentsReadyToPayMsg.TenantID}
-			for _, payment := range payments {
-				paymentsReadyToPay.Payments = append(paymentsReadyToPay.Payments, schemas.PaymentReadyToPay{ID: payment.ID})
+			// 5. Update all correct payment status to `ready`
+			err = s.models.Payment.UpdateStatusByDisbursementID(ctx, dbTx, disbursementID, data.ReadyPaymentStatus)
+			if err != nil {
+				return nil, fmt.Errorf("error updating payment status to ready for disbursement with id %s: %w", disbursementID, err)
 			}
-			paymentsReadyToPayMsg.Data = paymentsReadyToPay
 
-			msgs = append(msgs, *paymentsReadyToPayMsg)
-		} else {
-			log.Ctx(ctx).Infof("no payments ready to pay for disbursement ID %s", disbursementID)
-		}
+			// 6. Update all receiver_wallets from `draft` to `ready`
+			err = s.models.ReceiverWallet.UpdateStatusByDisbursementID(ctx, dbTx, disbursementID, data.DraftReceiversWalletStatus, data.ReadyReceiversWalletStatus)
+			if err != nil {
+				return nil, fmt.Errorf("error updating receiver wallet status to ready for disbursement with id %s: %w", disbursementID, err)
+			}
 
-		// If there's no message to publish we only log it.
-		if len(msgs) == 0 {
-			log.Ctx(ctx).Infof("no messages to be published for disbursement ID %s", disbursementID)
-			return nil
-		}
+			// 7. Update disbursement status to `started`
+			err = s.models.Disbursements.UpdateStatus(ctx, dbTx, user.ID, disbursementID, data.StartedDisbursementStatus)
+			if err != nil {
+				return nil, fmt.Errorf("error updating disbursement status to started for disbursement with id %s: %w", disbursementID, err)
+			}
 
-		if err = s.produceEvents(ctx, msgs...); err != nil {
-			return fmt.Errorf("producing events: %w", err)
-		}
+			// 8. Produce events to send invitation message to the receivers
+			msgs := make([]events.Message, 0)
 
-		return nil
-	})
+			receiverWallets, err := s.models.ReceiverWallet.GetAllPendingRegistrationByDisbursementID(ctx, dbTx, disbursementID)
+			if err != nil {
+				return nil, fmt.Errorf("getting pending registration receiver wallets: %w", err)
+			}
+
+			if len(receiverWallets) != 0 {
+				eventData := make([]schemas.EventReceiverWalletSMSInvitationData, 0, len(receiverWallets))
+				for _, receiverWallet := range receiverWallets {
+					eventData = append(eventData, schemas.EventReceiverWalletSMSInvitationData{ReceiverWalletID: receiverWallet.ID})
+				}
+
+				sendInviteMsg, msgErr := events.NewMessage(ctx, events.ReceiverWalletNewInvitationTopic, disbursement.ID, events.BatchReceiverWalletSMSInvitationType, eventData)
+				if msgErr != nil {
+					return nil, fmt.Errorf("creating new message: %w", msgErr)
+				}
+
+				msgs = append(msgs, *sendInviteMsg)
+			} else {
+				log.Ctx(ctx).Infof("no receiver wallets to send invitation for disbursement ID %s", disbursementID)
+			}
+
+			// 9. Produce events to send payments to the TSS
+			payments, err := s.models.Payment.GetReadyByDisbursementID(ctx, dbTx, disbursementID)
+			if err != nil {
+				return nil, fmt.Errorf("getting ready payments for disbursement with id %s: %w", disbursementID, err)
+			}
+
+			if len(payments) != 0 {
+				paymentsReadyToPayMsg, msgErr := events.NewMessage(ctx, events.PaymentReadyToPayTopic, disbursementID, events.PaymentReadyToPayDisbursementStarted, nil)
+				if msgErr != nil {
+					return nil, fmt.Errorf("creating new message: %w", msgErr)
+				}
+
+				paymentsReadyToPay := schemas.EventPaymentsReadyToPayData{TenantID: paymentsReadyToPayMsg.TenantID}
+				for _, payment := range payments {
+					paymentsReadyToPay.Payments = append(paymentsReadyToPay.Payments, schemas.PaymentReadyToPay{ID: payment.ID})
+				}
+				paymentsReadyToPayMsg.Data = paymentsReadyToPay
+
+				msgs = append(msgs, *paymentsReadyToPayMsg)
+			} else {
+				log.Ctx(ctx).Infof("no payments ready to pay for disbursement ID %s", disbursementID)
+			}
+
+			// If there's no message to publish we only log it.
+			if len(msgs) == 0 {
+				log.Ctx(ctx).Infof("no messages to be published for disbursement ID %s", disbursementID)
+			} else {
+				postCommitFn = func() error {
+					return s.produceEvents(ctx, msgs...)
+				}
+			}
+
+			return postCommitFn, nil
+		},
+	}
+	return db.RunInTransactionWithPostCommit(ctx, &opts)
 }
 
 func (s *DisbursementManagementService) produceEvents(ctx context.Context, msgs ...events.Message) error {

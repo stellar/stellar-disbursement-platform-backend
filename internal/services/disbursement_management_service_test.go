@@ -551,7 +551,7 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 			TotalPendingAmount: 1100.0,
 		}
 		err = service.StartDisbursement(ctx, disbursement.ID, nil, distributionPubKey)
-		require.EqualError(t, err, fmt.Sprintf("running atomic function in RunInTransactionWithResult: %v", expectedErr))
+		require.EqualError(t, err, fmt.Sprintf("running atomic function in RunInTransactionWithPostCommit: %v", expectedErr))
 
 		// PendingTotal includes payments associated with 'readyDisbursement' that were moved from the draft to ready status
 		expectedErrStr := fmt.Sprintf("the disbursement %s failed due to an account balance (11111.00) that was insufficient to fulfill new amount (22222.00) along with the pending amount (1100.00). To complete this action, your distribution account needs to be recharged with at least 12211.00 USDC", disbursement.ID)
@@ -638,7 +638,7 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 		assert.EqualError(
 			t,
 			err,
-			fmt.Sprintf("running atomic function in RunInTransactionWithResult: producing events: publishing messages %s on event producer: unexpected error", expectedMessages),
+			fmt.Sprintf("executing postCommit function: publishing messages %s on event producer: unexpected error", expectedMessages),
 		)
 	})
 
@@ -742,7 +742,7 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 
 		mockDisbursementBalance.Once()
 		err = service.StartDisbursement(ctxWithoutTenant, disbursement.ID, user, distributionPubKey)
-		assert.EqualError(t, err, "running atomic function in RunInTransactionWithResult: creating new message: getting tenant from context: tenant not found in context")
+		assert.EqualError(t, err, "running atomic function in RunInTransactionWithPostCommit: creating new message: getting tenant from context: tenant not found in context")
 	})
 
 	t.Run("logs when couldn't write message because EventProducer is nil", func(t *testing.T) {
