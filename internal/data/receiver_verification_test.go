@@ -402,6 +402,31 @@ func Test_ReceiverVerificationModel_CheckTotalAttempts(t *testing.T) {
 	})
 }
 
+func Test_ReceiverVerificationModel_GetLatestByPhoneNumber(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+
+	receiver := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
+	receiverVerificationModel := ReceiverVerificationModel{dbConnectionPool: dbConnectionPool}
+
+	err = receiverVerificationModel.UpsertVerificationValue(ctx, dbConnectionPool, receiver.ID, VerificationFieldDateOfBirth, "1990-01-01")
+	require.NoError(t, err)
+	err = receiverVerificationModel.UpsertVerificationValue(ctx, dbConnectionPool, receiver.ID, VerificationFieldPin, "123456")
+	require.NoError(t, err)
+
+	verification, err := receiverVerificationModel.GetLatestByPhoneNumber(ctx, receiver.PhoneNumber)
+	require.NoError(t, err)
+
+	assert.Equal(t, VerificationFieldPin, verification.VerificationField)
+	assert.True(t, CompareVerificationValue(verification.HashedValue, "123456"))
+}
+
 func Test_ReceiverVerification_HashAndCompareVerificationValue(t *testing.T) {
 	verificationValue := "1987-01-01"
 	hashedVerificationInfo, err := HashVerificationValue(verificationValue)

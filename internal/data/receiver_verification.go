@@ -107,7 +107,8 @@ func (m *ReceiverVerificationModel) GetLatestByPhoneNumber(ctx context.Context, 
 		WHERE 
 		    r.phone_number = $1
 		ORDER BY
-		    rv.updated_at DESC
+		    rv.updated_at DESC,
+			rv.verification_field ASC
 		LIMIT 1
 	`
 
