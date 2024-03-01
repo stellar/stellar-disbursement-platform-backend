@@ -3,7 +3,6 @@ package utils
 import (
 	"fmt"
 	"net/url"
-	"strconv"
 
 	"github.com/spf13/viper"
 	"github.com/stellar/go/support/config"
@@ -59,25 +58,6 @@ func SetConfigOptionURLString(co *config.ConfigOption) error {
 	}
 	*key = &u
 
-	return nil
-}
-
-func SetConfigOptionOptionalBoolean(co *config.ConfigOption) error {
-	b := viper.GetString(co.Name)
-	if b == "" {
-		return nil
-	}
-
-	value, err := strconv.ParseBool(b)
-	if err != nil {
-		return fmt.Errorf("parsing %q as a boolean value: %w", b, err)
-	}
-
-	key, ok := co.ConfigKey.(**bool)
-	if !ok {
-		return fmt.Errorf("the expected type for this config key is a boolean, but got a %T instead", co.ConfigKey)
-	}
-	*key = &value
 	return nil
 }
 
