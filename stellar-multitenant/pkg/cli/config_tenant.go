@@ -103,6 +103,7 @@ func ConfigTenantCmd() *cobra.Command {
 			ctx := cmd.Context()
 
 			var err error
+			// TODO: in SDP-874, make sure to add metrics to this DB options, like we do in cmd/serve.go
 			adminDBConnectionPool, err = di.NewAdminDBConnectionPool(ctx, di.DBConnectionPoolOptions{DatabaseURL: globalOptions.multitenantDbURL})
 			if err != nil {
 				log.Ctx(ctx).Fatal("getting admin db connection pool", err)

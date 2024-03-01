@@ -115,6 +115,7 @@ func AddTenantsCmd() *cobra.Command {
 			}
 
 			// Get TSS DB connection pool
+			// TODO: in SDP-874, make sure to add metrics to this DB options, like we do in cmd/serve.go
 			dbcpOptions := di.DBConnectionPoolOptions{DatabaseURL: globalOptions.multitenantDbURL}
 			tssDBConnectionPool, err := di.NewTSSDBConnectionPool(ctx, dbcpOptions)
 			if err != nil {
