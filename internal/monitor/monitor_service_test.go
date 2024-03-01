@@ -55,8 +55,8 @@ func Test_MetricsService_Start(t *testing.T) {
 		err := monitorService.Start(metricOptions)
 		require.NoError(t, err)
 
-		require.IsType(t, &prometheusClient{}, monitorService.monitorClient)
-		assert.NotNil(t, monitorService.monitorClient)
+		require.IsType(t, &prometheusClient{}, monitorService.MonitorClient)
+		assert.NotNil(t, monitorService.MonitorClient)
 	})
 
 	t.Run("error monitor service already initialized", func(t *testing.T) {
@@ -67,7 +67,7 @@ func Test_MetricsService_Start(t *testing.T) {
 	})
 
 	t.Run("error unknown metric type", func(t *testing.T) {
-		monitorService.monitorClient = nil
+		monitorService.MonitorClient = nil
 
 		metricOptions.MetricType = "MOCK_METRIC_TYPE"
 		err := monitorService.Start(metricOptions)
@@ -79,7 +79,7 @@ func Test_MetricsService_GetMetricHttpHandler(t *testing.T) {
 	monitorService := &MonitorService{}
 
 	mMonitorClient := &mockMonitorClient{}
-	monitorService.monitorClient = mMonitorClient
+	monitorService.MonitorClient = mMonitorClient
 
 	t.Run("running HttpServe with metric http handler", func(t *testing.T) {
 		mHttpHandler := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
@@ -107,7 +107,7 @@ func Test_MetricsService_GetMetricHttpHandler(t *testing.T) {
 	})
 
 	t.Run("error monitor client not initialized", func(t *testing.T) {
-		monitorService.monitorClient = nil
+		monitorService.MonitorClient = nil
 
 		_, err := monitorService.GetMetricHttpHandler()
 		require.EqualError(t, err, "client was not initialized")
@@ -118,7 +118,7 @@ func Test_MetricsService_GetMetricType(t *testing.T) {
 	monitorService := &MonitorService{}
 
 	mMonitorClient := &mockMonitorClient{}
-	monitorService.monitorClient = mMonitorClient
+	monitorService.MonitorClient = mMonitorClient
 
 	t.Run("returns metric type", func(t *testing.T) {
 		mMonitorClient.On("GetMetricType").Return(MetricType("MOCKMETRICTYPE")).Once()
@@ -131,7 +131,7 @@ func Test_MetricsService_GetMetricType(t *testing.T) {
 	})
 
 	t.Run("error monitor client not initialized", func(t *testing.T) {
-		monitorService.monitorClient = nil
+		monitorService.MonitorClient = nil
 
 		_, err := monitorService.GetMetricType()
 		require.EqualError(t, err, "client was not initialized")
@@ -142,7 +142,7 @@ func Test_MetricsService_MonitorRequestTime(t *testing.T) {
 	monitorService := &MonitorService{}
 
 	mMonitorClient := &mockMonitorClient{}
-	monitorService.monitorClient = mMonitorClient
+	monitorService.MonitorClient = mMonitorClient
 
 	mLabels := HttpRequestLabels{
 		Status: "200",
@@ -161,7 +161,7 @@ func Test_MetricsService_MonitorRequestTime(t *testing.T) {
 	})
 
 	t.Run("error monitor client not initialized", func(t *testing.T) {
-		monitorService.monitorClient = nil
+		monitorService.MonitorClient = nil
 
 		err := monitorService.MonitorHttpRequestDuration(mDuration, mLabels)
 		require.EqualError(t, err, "client was not initialized")
@@ -172,7 +172,7 @@ func Test_MetricsService_MonitorDBQueryDuration(t *testing.T) {
 	monitorService := &MonitorService{}
 
 	mMonitorClient := &mockMonitorClient{}
-	monitorService.monitorClient = mMonitorClient
+	monitorService.MonitorClient = mMonitorClient
 
 	mLabels := DBQueryLabels{
 		QueryType: "SELECT",
@@ -191,7 +191,7 @@ func Test_MetricsService_MonitorDBQueryDuration(t *testing.T) {
 	})
 
 	t.Run("error monitor client not initialized", func(t *testing.T) {
-		monitorService.monitorClient = nil
+		monitorService.MonitorClient = nil
 
 		err := monitorService.MonitorDBQueryDuration(mDuration, mMetricTag, mLabels)
 		require.EqualError(t, err, "client was not initialized")
@@ -202,7 +202,7 @@ func Test_MetricsService_MonitorCounter(t *testing.T) {
 	monitorService := &MonitorService{}
 
 	mMonitorClient := &mockMonitorClient{}
-	monitorService.monitorClient = mMonitorClient
+	monitorService.MonitorClient = mMonitorClient
 
 	mMetricTag := MetricTag("mock")
 
@@ -227,7 +227,7 @@ func Test_MetricsService_MonitorCounter(t *testing.T) {
 	})
 
 	t.Run("error monitor client not initialized", func(t *testing.T) {
-		monitorService.monitorClient = nil
+		monitorService.MonitorClient = nil
 
 		err := monitorService.MonitorCounters(mMetricTag, nil)
 		require.EqualError(t, err, "client was not initialized")

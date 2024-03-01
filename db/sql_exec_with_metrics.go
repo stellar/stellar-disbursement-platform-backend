@@ -52,6 +52,7 @@ func (sqlExec *SQLExecuterWithMetrics) monitorDBQueryDuration(duration time.Dura
 	labels := monitor.DBQueryLabels{
 		QueryType: string(getQueryType(query)),
 	}
+
 	errMetric := sqlExec.monitorServiceInterface.MonitorDBQueryDuration(duration, getMetricTag(err), labels)
 	if errMetric != nil {
 		log.Errorf("Error trying to monitor db query duration: %s", errMetric)
