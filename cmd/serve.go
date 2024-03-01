@@ -439,7 +439,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			ctx := cmd.Context()
 
 			// Setup the Admin DB connection pool
-			dbcpOptions := di.DBConnectionPoolOptions{DatabaseURL: globalOptions.DatabaseURL}
+			dbcpOptions := di.DBConnectionPoolOptions{DatabaseURL: globalOptions.DatabaseURL, MonitorService: monitorService}
 			adminDBConnectionPool, err := di.NewAdminDBConnectionPool(ctx, dbcpOptions)
 			if err != nil {
 				log.Ctx(ctx).Fatalf("error getting Admin DB connection pool: %v", err)
