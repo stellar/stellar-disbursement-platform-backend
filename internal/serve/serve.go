@@ -338,13 +338,13 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 		})
 
 		profileHandler := httphandler.ProfileHandler{
-			Models:                o.Models,
-			AuthManager:           authManager,
-			MaxMemoryAllocation:   httphandler.DefaultMaxMemoryAllocation,
-			BaseURL:               o.BaseURL,
-			DistributionPublicKey: o.DistributionPublicKey,
-			PasswordValidator:     o.PasswordValidator,
-			PublicFilesFS:         publicfiles.PublicFiles,
+			Models:                      o.Models,
+			AuthManager:                 authManager,
+			MaxMemoryAllocation:         httphandler.DefaultMaxMemoryAllocation,
+			BaseURL:                     o.BaseURL,
+			DistributionAccountResolver: o.SubmitterEngine.DistributionAccountResolver,
+			PasswordValidator:           o.PasswordValidator,
+			PublicFilesFS:               publicfiles.PublicFiles,
 		}
 		r.Route("/profile", func(r chi.Router) {
 			r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...)).
