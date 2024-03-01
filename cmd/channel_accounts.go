@@ -14,6 +14,9 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	di "github.com/stellar/stellar-disbursement-platform-backend/internal/dependencyinjection"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve"
+	tssMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/monitor"
 	txSubSvc "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/services"
 )
 
@@ -62,6 +65,28 @@ func (c *ChannelAccountsCommand) Command(cmdService ChAccCmdServiceInterface) *c
 	configOpts := config.ConfigOptions{
 		cmdUtils.CrashTrackerTypeConfigOption(&crashTrackerOptions.CrashTrackerType),
 	}
+
+	// metrics server options
+	metricsServeOpts := serve.MetricsServeOptions{}
+	configOpts = append(configOpts,
+		&config.ConfigOption{
+			Name:           "tss-metrics-type",
+			Usage:          `Metric monitor type. Options: "TSS_PROMETHEUS"`,
+			OptType:        types.String,
+			CustomSetValue: cmdUtils.SetConfigOptionMetricType,
+			ConfigKey:      &metricsServeOpts.MetricType,
+			FlagDefault:    "TSS_PROMETHEUS",
+			Required:       true,
+		},
+		&config.ConfigOption{
+			Name:        "tss-metrics-port",
+			Usage:       `Port where the metrics server will be listening on. Default: 9002"`,
+			OptType:     types.Int,
+			ConfigKey:   &metricsServeOpts.Port,
+			FlagDefault: 9002,
+			Required:    true,
+		})
+
 	channelAccountsCmd := &cobra.Command{
 		Use:   "channel-accounts",
 		Short: "Channel accounts related commands",
@@ -79,7 +104,23 @@ func (c *ChannelAccountsCommand) Command(cmdService ChAccCmdServiceInterface) *c
 				log.Ctx(ctx).Fatalf("Error setting values of config options: %v", err)
 			}
 
-			c.TSSDBConnectionPool, err = di.NewTSSDBConnectionPool(ctx, di.DBConnectionPoolOptions{DatabaseURL: globalOptions.DatabaseURL})
+			// Initializing the monitor service
+			tssMonitorSvc := tssMonitor.TSSMonitorService{
+				GitCommitHash: globalOptions.GitCommit,
+				Version:       globalOptions.Version,
+			}
+			err = tssMonitorSvc.Start(monitor.MetricOptions{
+				MetricType:  metricsServeOpts.MetricType,
+				Environment: globalOptions.Environment,
+			})
+			if err != nil {
+				log.Ctx(ctx).Fatalf("error starting TSS monitor service: %v", err)
+			}
+			metricsServeOpts.MonitorService = &tssMonitorSvc
+
+			// Setup the TSSDBConnectionPool
+			dbcpOptions := di.DBConnectionPoolOptions{DatabaseURL: globalOptions.DatabaseURL, MonitorService: &tssMonitorSvc}
+			c.TSSDBConnectionPool, err = di.NewTSSDBConnectionPool(ctx, dbcpOptions)
 			if err != nil {
 				log.Ctx(ctx).Fatalf("Error creating TSS DB connection pool: %v", err)
 			}

@@ -149,7 +149,6 @@ func (c *TxSubmitterCommand) Command(submitterService TxSubmitterServiceInterfac
 			metricsServeOpts.MonitorService = &tssMonitorSvc
 
 			// Setup the TSSDBConnectionPool
-			// TODO: send metrics in the constructor
 			dbcpOptions := di.DBConnectionPoolOptions{DatabaseURL: globalOptions.DatabaseURL, MonitorService: &tssMonitorSvc}
 			tssDBConnectionPool, err := di.NewTSSDBConnectionPool(ctx, dbcpOptions)
 			if err != nil {
