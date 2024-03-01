@@ -11,13 +11,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	cmdUtils "github.com/stellar/stellar-disbursement-platform-backend/cmd/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 )
 
 func Test_persistentPostRun(t *testing.T) {
-	cmdUtils.ClearTestEnvironment(t)
-
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 
