@@ -35,14 +35,14 @@ func Test_GetInstance(t *testing.T) {
 	assert.Nil(t, instance)
 }
 
-func Test_DeleteInstanceByKey(t *testing.T) {
+func Test_DeleteAndCloseInstanceByKey(t *testing.T) {
 	defer ClearInstancesTestHelper(t)
 	ctx := context.Background()
 
 	t.Run("attempting to delete a non-existing key should not panic", func(t *testing.T) {
 		defer ClearInstancesTestHelper(t)
 
-		assert.NotPanics(t, func() { DeleteInstanceByKey(ctx, "testKey") })
+		assert.NotPanics(t, func() { DeleteAndCloseInstanceByKey(ctx, "testKey") })
 	})
 
 	t.Run("deleting something that's not a dbConnectionPool", func(t *testing.T) {
@@ -52,7 +52,7 @@ func Test_DeleteInstanceByKey(t *testing.T) {
 		_, ok := GetInstance("testKey")
 		assert.True(t, ok)
 
-		DeleteInstanceByKey(ctx, "testKey")
+		DeleteAndCloseInstanceByKey(ctx, "testKey")
 		_, ok = GetInstance("testKey")
 		assert.False(t, ok)
 	})
@@ -70,7 +70,7 @@ func Test_DeleteInstanceByKey(t *testing.T) {
 		_, ok := GetInstance("dbKey")
 		assert.True(t, ok)
 
-		DeleteInstanceByKey(ctx, "dbKey")
+		DeleteAndCloseInstanceByKey(ctx, "dbKey")
 		_, ok = GetInstance("dbKey")
 		assert.False(t, ok)
 		err = dbConnectionPool.Ping(ctx)
@@ -78,7 +78,7 @@ func Test_DeleteInstanceByKey(t *testing.T) {
 	})
 }
 
-func Test_DeleteInstanceByValue(t *testing.T) {
+func Test_DeleteAndCloseInstanceByValue(t *testing.T) {
 	defer ClearInstancesTestHelper(t)
 
 	ctx := context.Background()
@@ -86,7 +86,7 @@ func Test_DeleteInstanceByValue(t *testing.T) {
 	t.Run("attempting to delete a non-existing value should not panic", func(t *testing.T) {
 		defer ClearInstancesTestHelper(t)
 
-		assert.NotPanics(t, func() { DeleteInstanceByValue(ctx, "testValue") })
+		assert.NotPanics(t, func() { DeleteAndCloseInstanceByValue(ctx, "testValue") })
 	})
 
 	t.Run("deleting something that's not a dbConnectionPool", func(t *testing.T) {
@@ -96,7 +96,7 @@ func Test_DeleteInstanceByValue(t *testing.T) {
 		_, ok := GetInstance("testKey")
 		assert.True(t, ok)
 
-		DeleteInstanceByValue(ctx, "testValue")
+		DeleteAndCloseInstanceByValue(ctx, "testValue")
 		_, ok = GetInstance("testKey")
 		assert.False(t, ok)
 	})
@@ -121,7 +121,7 @@ func Test_DeleteInstanceByValue(t *testing.T) {
 			require.Truef(t, ok, "instance missing for index %d", i)
 		}
 
-		DeleteInstanceByValue(ctx, dbConnectionPool1)
+		DeleteAndCloseInstanceByValue(ctx, dbConnectionPool1)
 		for i, keyName := range keyNames {
 			_, ok := GetInstance(keyName)
 			require.Falsef(t, ok, "instance %d should have been deleted", i)

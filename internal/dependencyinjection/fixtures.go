@@ -10,6 +10,6 @@ func ClearInstancesTestHelper(t *testing.T) {
 
 	// Range over the map and delete each entry.
 	for instanceName := range dependenciesStore {
-		DeleteInstanceByKey(context.Background(), instanceName)
+		DeleteAndCloseInstanceByKey(context.Background(), instanceName)
 	}
 }

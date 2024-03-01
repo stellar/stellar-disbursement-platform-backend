@@ -2,9 +2,10 @@ package dependencyinjection
 
 import (
 	"context"
+	"io"
 	"sync"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/go/support/log"
 )
 
 var (
@@ -29,9 +30,9 @@ func GetInstance(instanceName string) (interface{}, bool) {
 	return instance, ok
 }
 
-// DeleteInstanceByKey removes a service instance from the store by key and test if it is a dbConnectionPool, in which
+// DeleteAndCloseInstanceByKey removes a service instance from the store by key and test if it is a dbConnectionPool, in which
 // case, the pool is closed.
-func DeleteInstanceByKey(ctx context.Context, instanceName string) {
+func DeleteAndCloseInstanceByKey(ctx context.Context, instanceName string) {
 	m.Lock()
 	defer m.Unlock()
 
@@ -41,14 +42,15 @@ func DeleteInstanceByKey(ctx context.Context, instanceName string) {
 	}
 	delete(dependenciesStore, instanceName)
 
-	if dbConnectionPool, ok := instanceToDelete.(db.DBConnectionPool); ok {
-		_ = db.CloseConnectionPoolIfNeeded(ctx, dbConnectionPool)
+	if closeableInstance, ok := instanceToDelete.(io.Closer); ok {
+		err := closeableInstance.Close()
+		log.Ctx(ctx).Errorf("error closing instance %s: %v", instanceName, err)
 	}
 }
 
-// DeleteInstance removes a service instance from the store by value and test if it is a dbConnectionPool, in which
+// DeleteAndCloseInstanceByValue removes a service instance from the store by value and checks if it is a dbConnectionPool, in which
 // case, the pool is closed.
-func DeleteInstanceByValue(ctx context.Context, instance interface{}) {
+func DeleteAndCloseInstanceByValue(ctx context.Context, instance interface{}) {
 	m.Lock()
 	defer m.Unlock()
 
@@ -66,8 +68,9 @@ func DeleteInstanceByValue(ctx context.Context, instance interface{}) {
 		}
 		delete(dependenciesStore, k)
 
-		if dbConnectionPool, ok2 := instanceToDelete.(db.DBConnectionPool); ok2 {
-			_ = db.CloseConnectionPoolIfNeeded(ctx, dbConnectionPool)
+		if closeableInstance, ok2 := instanceToDelete.(io.Closer); ok2 {
+			err := closeableInstance.Close()
+			log.Ctx(ctx).Errorf("error closing instance %s: %v", k, err)
 		}
 	}
 }

@@ -41,7 +41,7 @@ func (c *DatabaseCommand) Command(globalOptions *utils.GlobalOptionsType) *cobra
 		},
 		RunE: utils.CallHelpCommand,
 		PersistentPostRun: func(cmd *cobra.Command, args []string) {
-			di.DeleteInstanceByValue(cmd.Context(), c.adminDBConnectionPool)
+			di.DeleteAndCloseInstanceByValue(cmd.Context(), c.adminDBConnectionPool)
 		},
 	}
 

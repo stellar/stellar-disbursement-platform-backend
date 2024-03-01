@@ -198,7 +198,7 @@ func (c *TxSubmitterCommand) Command(submitterService TxSubmitterServiceInterfac
 			submitterService.StartSubmitter(ctx, tssOpts)
 		},
 		PersistentPostRun: func(cmd *cobra.Command, args []string) {
-			di.DeleteInstanceByValue(cmd.Context(), tssOpts.DBConnectionPool)
+			di.DeleteAndCloseInstanceByValue(cmd.Context(), tssOpts.DBConnectionPool)
 		},
 	}
 	err := configOpts.Init(cmd)

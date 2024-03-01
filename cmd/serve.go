@@ -445,7 +445,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 				log.Ctx(ctx).Fatalf("error getting Admin DB connection pool: %v", err)
 			}
 			defer func() {
-				di.DeleteInstanceByValue(ctx, adminDBConnectionPool)
+				di.DeleteAndCloseInstanceByValue(ctx, adminDBConnectionPool)
 			}()
 			serveOpts.AdminDBConnectionPool = adminDBConnectionPool
 			adminServeOpts.AdminDBConnectionPool = adminDBConnectionPool
@@ -456,7 +456,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 				log.Ctx(ctx).Fatalf("error getting Multi-tenant DB connection pool: %v", err)
 			}
 			defer func() {
-				di.DeleteInstanceByValue(ctx, serveOpts.MtnDBConnectionPool)
+				di.DeleteAndCloseInstanceByValue(ctx, serveOpts.MtnDBConnectionPool)
 			}()
 
 			// Setup the TSSDBConnectionPool
@@ -465,7 +465,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 				log.Ctx(ctx).Fatalf("error getting TSS DB connection pool: %v", err)
 			}
 			defer func() {
-				di.DeleteInstanceByValue(ctx, tssDBConnectionPool)
+				di.DeleteAndCloseInstanceByValue(ctx, tssDBConnectionPool)
 			}()
 
 			// Setup the Crash Tracker client

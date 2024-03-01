@@ -133,7 +133,7 @@ func (c *ChannelAccountsCommand) Command(cmdService ChAccCmdServiceInterface) *c
 			}
 		},
 		PersistentPostRun: func(cmd *cobra.Command, args []string) {
-			di.DeleteInstanceByValue(cmd.Context(), c.TSSDBConnectionPool)
+			di.DeleteAndCloseInstanceByValue(cmd.Context(), c.TSSDBConnectionPool)
 		},
 	}
 	err := configOpts.Init(channelAccountsCmd)

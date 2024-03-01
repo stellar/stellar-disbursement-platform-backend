@@ -122,7 +122,7 @@ func AddTenantsCmd() *cobra.Command {
 				log.Fatalf("getting TSS DBConnectionPool: %v", err)
 			}
 			defer func() {
-				di.DeleteInstanceByValue(ctx, tssDBConnectionPool)
+				di.DeleteAndCloseInstanceByValue(ctx, tssDBConnectionPool)
 			}()
 
 			// Get Admin DB connection pool
@@ -131,7 +131,7 @@ func AddTenantsCmd() *cobra.Command {
 				log.Fatalf("getting Admin database connection pool: %v", err)
 			}
 			defer func() {
-				di.DeleteInstanceByValue(ctx, adminDBConnectionPool)
+				di.DeleteAndCloseInstanceByValue(ctx, adminDBConnectionPool)
 			}()
 
 			tenantName, userFirstName, userLastName, userEmail, organizationName := args[0], args[1], args[2], args[3], args[4]
