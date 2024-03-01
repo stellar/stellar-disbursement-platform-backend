@@ -46,7 +46,7 @@ func Test_DisbursementModelInsert(t *testing.T) {
 		SMSRegistrationMessageTemplate: smsTemplate,
 	}
 
-	t.Run("returns error when disbursement already exists is not found", func(t *testing.T) {
+	t.Run("returns error when disbursement already exists", func(t *testing.T) {
 		_, err := disbursementModel.Insert(ctx, &disbursement)
 		require.NoError(t, err)
 		_, err = disbursementModel.Insert(ctx, &disbursement)

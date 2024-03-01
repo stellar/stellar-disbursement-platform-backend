@@ -8,6 +8,8 @@ import (
 	"github.com/stellar/go/support/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 )
 
 func TestOpen_OpenDBConnectionPool(t *testing.T) {
@@ -22,6 +24,27 @@ func TestOpen_OpenDBConnectionPool(t *testing.T) {
 
 	ctx := context.Background()
 	err = dbConnectionPool.Ping(ctx)
+	require.NoError(t, err)
+}
+
+func TestOpen_OpenDBConnectionPoolWithMetrics(t *testing.T) {
+	db := dbtest.Postgres(t)
+	defer db.Close()
+
+	mMonitorService := &monitor.MockMonitorService{}
+	dbConnectionPool, err := OpenDBConnectionPoolWithMetrics(db.DSN, mMonitorService)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	dbConnectionPoolWithMetrics, ok := dbConnectionPool.(*DBConnectionPoolWithMetrics)
+	require.True(t, ok)
+	innerDBConnectionPool := dbConnectionPoolWithMetrics.dbConnectionPool
+	assert.IsType(t, &DBConnectionPoolImplementation{}, innerDBConnectionPool)
+	assert.Equal(t, innerDBConnectionPool, dbConnectionPoolWithMetrics.SQLExecuterWithMetrics.SQLExecuter)
+	assert.Equal(t, mMonitorService, dbConnectionPoolWithMetrics.SQLExecuterWithMetrics.monitorServiceInterface)
+
+	assert.Equal(t, "postgres", dbConnectionPool.DriverName())
+	err = dbConnectionPool.Ping(context.Background())
 	require.NoError(t, err)
 }
 

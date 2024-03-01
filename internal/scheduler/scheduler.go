@@ -46,7 +46,7 @@ func StartScheduler(crashTrackerClient crashtracker.CrashTrackerClient, schedule
 	signalChan := make(chan os.Signal, 1)
 
 	// register signal listeners for graceful shutdown
-	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
+	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 
 	scheduler := newScheduler(cancel)
 	// add crashTrackerClient to scheduler object

@@ -10,6 +10,21 @@ const (
 	SDPSchemaNamePrefix string = "sdp_"
 )
 
+// GetDNSForAdmin returns the database DSN for the Admin schema. It is the same as the root database DSN, clearing the
+// `search_path` if it exists.
+func GetDNSForAdmin(dataSourceName string) (string, error) {
+	u, err := url.Parse(dataSourceName)
+	if err != nil {
+		return "", fmt.Errorf("parsing database DSN: %w", err)
+	}
+
+	q := u.Query()
+	q.Del("search_path")
+	u.RawQuery = q.Encode()
+
+	return u.String(), nil
+}
+
 // GetDSNForTSS returns the database DSN for the TSS schema. It is basically the same as the root database DSN, but
 // with the `search_path` query parameter (AKA schema) set to `tss`.
 func GetDNSForTSS(dataSourceName string) (string, error) {

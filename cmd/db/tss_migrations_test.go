@@ -16,29 +16,34 @@ import (
 func Test_NewTSSDatabaseMigrationManager(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
 
 	t.Run("returns a proper dbConnectionPool", func(t *testing.T) {
-		manager, err := NewTSSDatabaseMigrationManager(dbt.DSN)
+		manager, err := NewTSSDatabaseMigrationManager(dbConnectionPool)
 		require.NoError(t, err)
 
-		assert.Equal(t, dbt.DSN, manager.RootDatabaseDSN)
-		require.NotNil(t, manager.RootDBConnectionPool)
-		defer manager.RootDBConnectionPool.Close()
+		wantManager := &TSSDatabaseMigrationManager{RootDBConnectionPool: dbConnectionPool}
+		assert.Equal(t, wantManager, manager)
 	})
 
-	t.Run("returns an error if the database DSN is invalid", func(t *testing.T) {
-		manager, err := NewTSSDatabaseMigrationManager("invalid-dsn")
-		require.Error(t, err)
+	t.Run("returns an error if the provided connectionPool is nil", func(t *testing.T) {
+		manager, err := NewTSSDatabaseMigrationManager(nil)
 		assert.Nil(t, manager)
+		assert.EqualError(t, err, "rootDBConnectionPool cannot be nil")
 	})
 }
 
 func Test_TSSDatabaseMigrationManager_createTSSSchemaIfNeeded(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
-	manager, err := NewTSSDatabaseMigrationManager(dbt.DSN)
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
-	defer manager.RootDBConnectionPool.Close()
+	defer dbConnectionPool.Close()
+
+	manager, err := NewTSSDatabaseMigrationManager(dbConnectionPool)
+	require.NoError(t, err)
 
 	ctx := context.Background()
 
@@ -73,9 +78,12 @@ func Test_TSSDatabaseMigrationManager_createTSSSchemaIfNeeded(t *testing.T) {
 func Test_TSSDatabaseMigrationManager_deleteTSSSchemaIfNeeded(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
-	manager, err := NewTSSDatabaseMigrationManager(dbt.DSN)
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
-	defer manager.RootDBConnectionPool.Close()
+	defer dbConnectionPool.Close()
+
+	manager, err := NewTSSDatabaseMigrationManager(dbConnectionPool)
+	require.NoError(t, err)
 
 	ctx := context.Background()
 
