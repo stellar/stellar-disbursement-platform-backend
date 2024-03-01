@@ -9,6 +9,8 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
+var ErrDistributionAccountIsEmpty = fmt.Errorf("distribution account is empty")
+
 // DistributionAccountResolver is an interface that provides the distribution iven the provided keyword.
 //
 //go:generate mockery --name=DistributionAccountResolver --case=underscore --structname=MockDistributionAccountResolver
@@ -44,7 +46,7 @@ func NewDistributionAccountResolver(config DistributionAccountResolverOptions) (
 	}
 
 	return &DistributionAccountResolverImpl{
-		dbConnectionPool:              config.AdminDBConnectionPool,
+		tenantManager:                 tenant.NewManager(tenant.WithDatabase(config.AdminDBConnectionPool)),
 		hostDistributionAccountPubKey: config.HostDistributionAccountPublicKey,
 	}, nil
 }
@@ -53,28 +55,26 @@ var _ DistributionAccountResolver = (*DistributionAccountResolverImpl)(nil)
 
 // DistributionAccountResolverImpl is a DistributionAccountResolver that resolves the distribution account from the database.
 type DistributionAccountResolverImpl struct {
-	dbConnectionPool              db.DBConnectionPool
+	tenantManager                 tenant.ManagerInterface
 	hostDistributionAccountPubKey string
 }
 
-// DistributionAccount returns the distribution account from the database.
+// DistributionAccount returns the tenant's distribution account stored in the database.
 func (r *DistributionAccountResolverImpl) DistributionAccount(ctx context.Context, tenantID string) (string, error) {
-	const query = `
-		SELECT distribution_account
-		FROM tenants
-		WHERE id = $1
-	`
-
-	var distributionAccPubKey string
-	err := r.dbConnectionPool.GetContext(ctx, &distributionAccPubKey, query, tenantID)
+	tnt, err := r.tenantManager.GetTenantByID(ctx, tenantID)
 	if err != nil {
-		return "", fmt.Errorf("selecting distribution account from the database: %w", err)
+		return "", fmt.Errorf("getting tenant by ID: %w", err)
 	}
 
-	return distributionAccPubKey, nil
+	if tnt.DistributionAccount == nil {
+		return "", ErrDistributionAccountIsEmpty
+	}
+
+	return *tnt.DistributionAccount, nil
 }
 
-// DistributionAccountFromContext returns the distribution account from the tenant stored in the context.
+// DistributionAccountFromContext returns the tenant's distribution account from the tenant object stored in the context
+// provided.
 func (r *DistributionAccountResolverImpl) DistributionAccountFromContext(ctx context.Context) (string, error) {
 	tnt, err := tenant.GetTenantFromContext(ctx)
 	if err != nil {

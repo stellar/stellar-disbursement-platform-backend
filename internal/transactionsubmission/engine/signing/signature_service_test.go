@@ -14,6 +14,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 func Test_SignatureService_Validate(t *testing.T) {
@@ -120,7 +121,7 @@ func Test_NewSignatureService(t *testing.T) {
 		encrypter:            &utils.DefaultPrivateKeyEncrypter{},
 	}
 	wantDistAccountResolver := &DistributionAccountResolverImpl{
-		dbConnectionPool:              dbConnectionPool,
+		tenantManager:                 tenant.NewManager(tenant.WithDatabase(dbConnectionPool)),
 		hostDistributionAccountPubKey: distributionKP.Address(),
 	}
 
