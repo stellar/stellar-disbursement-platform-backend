@@ -19,7 +19,7 @@ import (
 
 type PatchAnchorPlatformTransactionCompletionEventHandlerOptions struct {
 	AdminDBConnectionPool db.DBConnectionPool
-	MTNDBConnectionPool   db.DBConnectionPool
+	MtnDBConnectionPool   db.DBConnectionPool
 	APapiSvc              anchorplatform.AnchorPlatformAPIServiceInterface
 	CrashTrackerClient    crashtracker.CrashTrackerClient
 }
@@ -35,7 +35,7 @@ var _ events.EventHandler = new(PatchAnchorPlatformTransactionCompletionEventHan
 func NewPatchAnchorPlatformTransactionCompletionEventHandler(options PatchAnchorPlatformTransactionCompletionEventHandlerOptions) *PatchAnchorPlatformTransactionCompletionEventHandler {
 	tm := tenant.NewManager(tenant.WithDatabase(options.AdminDBConnectionPool))
 
-	models, err := data.NewModels(options.MTNDBConnectionPool)
+	models, err := data.NewModels(options.MtnDBConnectionPool)
 	if err != nil {
 		log.Fatalf("error getting models: %s", err.Error())
 	}

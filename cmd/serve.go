@@ -62,7 +62,7 @@ func (s *ServerService) StartAdminServe(opts serveadmin.ServeOptions, httpServer
 
 func (s *ServerService) GetSchedulerJobRegistrars(ctx context.Context, serveOpts serve.ServeOptions, schedulerOptions scheduler.SchedulerOptions, apAPIService anchorplatform.AnchorPlatformAPIServiceInterface) ([]scheduler.SchedulerJobRegisterOption, error) {
 	// TODO: in SEP-1111, inject the remaining dbConnectionPools needed here.
-	models, err := data.NewModels(serveOpts.MTNDBConnectionPool)
+	models, err := data.NewModels(serveOpts.MtnDBConnectionPool)
 	if err != nil {
 		log.Ctx(ctx).Fatalf("error creating models in Job Scheduler: %s", err.Error())
 	}
@@ -88,7 +88,7 @@ func (s *ServerService) SetupConsumers(ctx context.Context, o SetupConsumersOpti
 		events.ReceiverWalletNewInvitationTopic,
 		o.EventBrokerOptions.ConsumerGroupID,
 		eventhandlers.NewSendReceiverWalletsSMSInvitationEventHandler(eventhandlers.SendReceiverWalletsSMSInvitationEventHandlerOptions{
-			MTNDBConnectionPool:            o.ServeOpts.MTNDBConnectionPool,
+			MtnDBConnectionPool:            o.ServeOpts.MtnDBConnectionPool,
 			AdminDBConnectionPool:          o.ServeOpts.AdminDBConnectionPool,
 			AnchorPlatformBaseSepURL:       o.ServeOpts.AnchorPlatformBasePlatformURL,
 			MessengerClient:                o.ServeOpts.SMSMessengerClient,
@@ -107,13 +107,13 @@ func (s *ServerService) SetupConsumers(ctx context.Context, o SetupConsumersOpti
 		o.EventBrokerOptions.ConsumerGroupID,
 		eventhandlers.NewPaymentFromSubmitterEventHandler(eventhandlers.PaymentFromSubmitterEventHandlerOptions{
 			AdminDBConnectionPool: o.ServeOpts.AdminDBConnectionPool,
-			MTNDBConnectionPool:   o.ServeOpts.MTNDBConnectionPool,
+			MtnDBConnectionPool:   o.ServeOpts.MtnDBConnectionPool,
 			TSSDBConnectionPool:   o.TSSDBConnectionPool,
 			CrashTrackerClient:    o.ServeOpts.CrashTrackerClient.Clone(),
 		}),
 		eventhandlers.NewPatchAnchorPlatformTransactionCompletionEventHandler(eventhandlers.PatchAnchorPlatformTransactionCompletionEventHandlerOptions{
 			AdminDBConnectionPool: o.ServeOpts.AdminDBConnectionPool,
-			MTNDBConnectionPool:   o.ServeOpts.MTNDBConnectionPool,
+			MtnDBConnectionPool:   o.ServeOpts.MtnDBConnectionPool,
 			APapiSvc:              o.ServeOpts.AnchorPlatformAPIService,
 			CrashTrackerClient:    o.ServeOpts.CrashTrackerClient.Clone(),
 		}),
@@ -128,7 +128,7 @@ func (s *ServerService) SetupConsumers(ctx context.Context, o SetupConsumersOpti
 		o.EventBrokerOptions.ConsumerGroupID,
 		eventhandlers.NewPaymentToSubmitterEventHandler(eventhandlers.PaymentToSubmitterEventHandlerOptions{
 			AdminDBConnectionPool: o.ServeOpts.AdminDBConnectionPool,
-			MTNDBConnectionPool:   o.ServeOpts.MTNDBConnectionPool,
+			MtnDBConnectionPool:   o.ServeOpts.MtnDBConnectionPool,
 			TSSDBConnectionPool:   o.TSSDBConnectionPool,
 			CrashTrackerClient:    o.ServeOpts.CrashTrackerClient.Clone(),
 		}),
@@ -451,12 +451,12 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			adminServeOpts.AdminDBConnectionPool = adminDBConnectionPool
 
 			// Setup the Multi-tenant DB connection pool
-			serveOpts.MTNDBConnectionPool, err = di.NewMtnDBConnectionPool(ctx, dbcpOptions)
+			serveOpts.MtnDBConnectionPool, err = di.NewMtnDBConnectionPool(ctx, dbcpOptions)
 			if err != nil {
 				log.Ctx(ctx).Fatalf("error getting Multi-tenant DB connection pool: %v", err)
 			}
 			defer func() {
-				di.DeleteInstanceByValue(ctx, serveOpts.MTNDBConnectionPool)
+				di.DeleteInstanceByValue(ctx, serveOpts.MtnDBConnectionPool)
 			}()
 
 			// Setup the TSSDBConnectionPool

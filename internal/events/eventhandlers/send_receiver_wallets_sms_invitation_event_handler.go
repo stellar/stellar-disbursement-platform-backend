@@ -19,7 +19,7 @@ import (
 
 type SendReceiverWalletsSMSInvitationEventHandlerOptions struct {
 	AdminDBConnectionPool          db.DBConnectionPool
-	MTNDBConnectionPool            db.DBConnectionPool
+	MtnDBConnectionPool            db.DBConnectionPool
 	AnchorPlatformBaseSepURL       string
 	MessengerClient                message.MessengerClient
 	MaxInvitationSMSResendAttempts int64
@@ -39,7 +39,7 @@ var _ events.EventHandler = new(SendReceiverWalletsSMSInvitationEventHandler)
 func NewSendReceiverWalletsSMSInvitationEventHandler(options SendReceiverWalletsSMSInvitationEventHandlerOptions) *SendReceiverWalletsSMSInvitationEventHandler {
 	tm := tenant.NewManager(tenant.WithDatabase(options.AdminDBConnectionPool))
 
-	models, err := data.NewModels(options.MTNDBConnectionPool)
+	models, err := data.NewModels(options.MtnDBConnectionPool)
 	if err != nil {
 		log.Fatalf("error getting models: %s", err.Error())
 	}
@@ -58,7 +58,7 @@ func NewSendReceiverWalletsSMSInvitationEventHandler(options SendReceiverWallets
 
 	return &SendReceiverWalletsSMSInvitationEventHandler{
 		tenantManager:       tm,
-		mtnDBConnectionPool: options.MTNDBConnectionPool,
+		mtnDBConnectionPool: options.MtnDBConnectionPool,
 		service:             s,
 		crashTrackerClient:  options.CrashTrackerClient,
 	}

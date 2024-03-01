@@ -55,7 +55,7 @@ type ServeOptions struct {
 	Version                         string
 	InstanceName                    string
 	MonitorService                  monitor.MonitorServiceInterface
-	MTNDBConnectionPool             db.DBConnectionPool
+	MtnDBConnectionPool             db.DBConnectionPool
 	AdminDBConnectionPool           db.DBConnectionPool
 	EC256PublicKey                  string
 	EC256PrivateKey                 string
@@ -102,14 +102,14 @@ func (opts *ServeOptions) SetupDependencies() error {
 	opts.tenantManager = tenant.NewManager(tenant.WithDatabase(opts.AdminDBConnectionPool))
 
 	var err error
-	opts.Models, err = data.NewModels(opts.MTNDBConnectionPool)
+	opts.Models, err = data.NewModels(opts.MtnDBConnectionPool)
 	if err != nil {
 		return fmt.Errorf("error creating models for Serve: %w", err)
 	}
 
 	// Setup Stellar Auth JWT manager
 	opts.authManager, err = createAuthManager(
-		opts.MTNDBConnectionPool, opts.EC256PublicKey, opts.EC256PrivateKey, opts.ResetTokenExpirationHours,
+		opts.MtnDBConnectionPool, opts.EC256PublicKey, opts.EC256PrivateKey, opts.ResetTokenExpirationHours,
 	)
 	if err != nil {
 		return fmt.Errorf("error creating Stellar Auth manager: %w", err)
@@ -175,7 +175,7 @@ func Serve(opts ServeOptions, httpServer HTTPServerInterface) error {
 		},
 		OnStopping: func() {
 			log.Info("Closing the SDP Server database connection pool")
-			err := db.CloseConnectionPoolIfNeeded(context.Background(), opts.MTNDBConnectionPool)
+			err := db.CloseConnectionPoolIfNeeded(context.Background(), opts.MtnDBConnectionPool)
 			if err != nil {
 				log.Errorf("error closing database connection: %v", err)
 			}
@@ -222,7 +222,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 		r.Use(middleware.TenantMiddleware(o.tenantManager, o.authManager))
 
 		r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...)).Route("/statistics", func(r chi.Router) {
-			statisticsHandler := httphandler.StatisticsHandler{DBConnectionPool: o.MTNDBConnectionPool}
+			statisticsHandler := httphandler.StatisticsHandler{DBConnectionPool: o.MtnDBConnectionPool}
 			r.Get("/", statisticsHandler.GetStatistics)
 			r.Get("/{id}", statisticsHandler.GetStatisticsByDisbursement)
 		})
@@ -250,7 +250,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 				DistributionPubKey: o.DistributionPublicKey,
 				DisbursementManagementService: services.NewDisbursementManagementService(
 					o.Models,
-					o.MTNDBConnectionPool,
+					o.MtnDBConnectionPool,
 					authManager,
 					o.SubmitterEngine.HorizonClient,
 					o.EventProducer),
@@ -278,7 +278,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 		})
 
 		r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole, data.BusinessUserRole)).Route("/payments", func(r chi.Router) {
-			paymentsHandler := httphandler.PaymentsHandler{Models: o.Models, DBConnectionPool: o.MTNDBConnectionPool, AuthManager: o.authManager, EventProducer: o.EventProducer}
+			paymentsHandler := httphandler.PaymentsHandler{Models: o.Models, DBConnectionPool: o.MtnDBConnectionPool, AuthManager: o.authManager, EventProducer: o.EventProducer}
 			r.Get("/", paymentsHandler.GetPayments)
 			r.Get("/{id}", paymentsHandler.GetPayment)
 			r.Patch("/retry", paymentsHandler.RetryPayments)
@@ -287,7 +287,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 		})
 
 		r.Route("/receivers", func(r chi.Router) {
-			receiversHandler := httphandler.ReceiverHandler{Models: o.Models, DBConnectionPool: o.MTNDBConnectionPool}
+			receiversHandler := httphandler.ReceiverHandler{Models: o.Models, DBConnectionPool: o.MtnDBConnectionPool}
 			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole, data.BusinessUserRole)).
 				Get("/", receiversHandler.GetReceivers)
 			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole, data.BusinessUserRole)).
@@ -296,7 +296,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...)).
 				Get("/verification-types", receiversHandler.GetReceiverVerificationTypes)
 
-			updateReceiverHandler := httphandler.UpdateReceiverHandler{Models: o.Models, DBConnectionPool: o.MTNDBConnectionPool}
+			updateReceiverHandler := httphandler.UpdateReceiverHandler{Models: o.Models, DBConnectionPool: o.MtnDBConnectionPool}
 			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole)).
 				Patch("/{id}", updateReceiverHandler.UpdateReceiver)
 

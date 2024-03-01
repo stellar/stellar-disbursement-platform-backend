@@ -63,7 +63,7 @@ func Test_Serve(t *testing.T) {
 
 	opts := ServeOptions{
 		CrashTrackerClient:              mockCrashTrackerClient,
-		MTNDBConnectionPool:             dbConnectionPool,
+		MtnDBConnectionPool:             dbConnectionPool,
 		AdminDBConnectionPool:           dbConnectionPool,
 		EC256PrivateKey:                 privateKeyStr,
 		EC256PublicKey:                  publicKeyStr,
@@ -286,7 +286,7 @@ func getServeOptionsForTests(t *testing.T, dbConnectionPool db.DBConnectionPool)
 
 	serveOptions := ServeOptions{
 		CrashTrackerClient:              crashTrackerClient,
-		MTNDBConnectionPool:             dbConnectionPool,
+		MtnDBConnectionPool:             dbConnectionPool,
 		AdminDBConnectionPool:           dbConnectionPool,
 		EC256PrivateKey:                 privateKeyStr,
 		EC256PublicKey:                  publicKeyStr,

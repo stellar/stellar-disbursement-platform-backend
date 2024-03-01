@@ -10,6 +10,7 @@ type DBConnectionPoolOptions struct {
 	MonitorService monitor.MonitorServiceInterface
 }
 
+// OpenDBConnectionPool opens a connection pool in different ways based on the options
 func openDBConnectionPool(dns string, metricsService monitor.MonitorServiceInterface) (db.DBConnectionPool, error) {
 	if metricsService == nil {
 		return db.OpenDBConnectionPool(dns)
