@@ -37,7 +37,7 @@ func MigrateCmd(databaseFlagName string) *cobra.Command {
 				}
 			}
 
-			// TODO: in SEP-1074, use --tenant-id flag to cast the right dbConnectionPool, or delete this file.
+			// TODO: in SDP-1074, use --tenant-id flag to cast the right dbConnectionPool, or delete this file.
 			dbURL := globalOptions.databaseURL
 			if globalOptions.databaseURL == "" {
 				dbURL = viper.GetString(databaseFlagName)
