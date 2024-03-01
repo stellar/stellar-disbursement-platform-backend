@@ -51,8 +51,6 @@ func Test_TenantUpdate_Validate(t *testing.T) {
 			ID:              "abc",
 			EmailSenderType: &AWSEmailSenderType,
 			SMSSenderType:   &TwilioSMSSenderType,
-			EnableMFA:       &[]bool{true}[0],
-			EnableReCAPTCHA: &[]bool{true}[0],
 			BaseURL:         &[]string{"https://myorg.backend.io"}[0],
 			SDPUIBaseURL:    &[]string{"https://myorg.frontend.io"}[0],
 			Status:          &[]TenantStatus{ProvisionedTenantStatus}[0],
