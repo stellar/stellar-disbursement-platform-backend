@@ -19,7 +19,7 @@ func NewMtnDBConnectionPool(ctx context.Context, opts DBConnectionPoolOptions) (
 	// If there is already an instance of the service, we return the same instance
 	instanceName := MtnDBConnectionPoolInstanceName
 	if instance, ok := GetInstance(instanceName); ok {
-		if dbConnectionPoolInstance, ok := instance.(db.DBConnectionPool); ok {
+		if dbConnectionPoolInstance, ok2 := instance.(db.DBConnectionPool); ok2 {
 			return dbConnectionPoolInstance, nil
 		}
 		return nil, fmt.Errorf("trying to cast multitenant DBConnectionPool for depencency injection")

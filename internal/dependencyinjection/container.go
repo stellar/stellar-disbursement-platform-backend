@@ -66,7 +66,7 @@ func DeleteInstanceByValue(ctx context.Context, instance interface{}) {
 		}
 		delete(dependenciesStore, k)
 
-		if dbConnectionPool, ok := instanceToDelete.(db.DBConnectionPool); ok {
+		if dbConnectionPool, ok2 := instanceToDelete.(db.DBConnectionPool); ok2 {
 			_ = db.CloseConnectionPoolIfNeeded(ctx, dbConnectionPool)
 		}
 	}
