@@ -81,6 +81,10 @@ func (r *DistributionAccountResolverImpl) DistributionAccountFromContext(ctx con
 		return "", fmt.Errorf("getting tenant from context: %w", err)
 	}
 
+	if tnt.DistributionAccount == nil {
+		return "", ErrDistributionAccountIsEmpty
+	}
+
 	return *tnt.DistributionAccount, nil
 }
 

@@ -194,6 +194,15 @@ func Test_DistributionAccountResolverImpl_DistributionAccountFromContext(t *test
 		assert.Empty(t, distAccount)
 	})
 
+	t.Run("return an error if the tenant exists in the context but its distribution account is empty", func(t *testing.T) {
+		tnt := &tenant.Tenant{ID: "95e788b6-c80e-4975-9d12-141001fe6e44", Name: "aid-org-1"}
+		ctxWithTenant := tenant.SaveTenantInContext(context.Background(), tnt)
+
+		distAccount, err := distAccResolver.DistributionAccountFromContext(ctxWithTenant)
+		assert.Empty(t, distAccount)
+		assert.ErrorIs(t, err, ErrDistributionAccountIsEmpty)
+	})
+
 	t.Run("successfully return the distribution account from the tenant stored in the context", func(t *testing.T) {
 		distribututionPublicKey := keypair.MustRandom().Address()
 		ctxTenant := &tenant.Tenant{ID: "95e788b6-c80e-4975-9d12-141001fe6e44", Name: "aid-org-1", DistributionAccount: &distribututionPublicKey}

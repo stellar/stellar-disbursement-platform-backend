@@ -763,10 +763,6 @@ func Test_AssetHandler_handleUpdateAssetTrustlineForDistributionAccount(t *testi
 
 	ctx := context.Background()
 
-	distAccResolver.
-		On("DistributionAccountFromContext", ctx).
-		Return(distributionKP.Address(), nil)
-
 	t.Run("returns error if no asset is provided", func(t *testing.T) {
 		err := handler.handleUpdateAssetTrustlineForDistributionAccount(ctx, nil, nil)
 		assert.EqualError(t, err, "should provide at least one asset")
@@ -776,6 +772,19 @@ func Test_AssetHandler_handleUpdateAssetTrustlineForDistributionAccount(t *testi
 		err := handler.handleUpdateAssetTrustlineForDistributionAccount(ctx, assetToRemoveTrustline, assetToRemoveTrustline)
 		assert.EqualError(t, err, "should provide different assets")
 	})
+
+	t.Run("returns error if fails getting distribution account from the resolver", func(t *testing.T) {
+		distAccResolver.
+			On("DistributionAccountFromContext", ctx).
+			Return("", errors.New("resolver error")).
+			Once()
+		err := handler.handleUpdateAssetTrustlineForDistributionAccount(ctx, assetToAddTrustline, assetToRemoveTrustline)
+		require.EqualError(t, err, "resolving distribution account from context: resolver error")
+	})
+
+	distAccResolver.
+		On("DistributionAccountFromContext", ctx).
+		Return(distributionKP.Address(), nil)
 
 	t.Run("returns error if fails getting distribution account details", func(t *testing.T) {
 		horizonClientMock.
@@ -1166,14 +1175,23 @@ func Test_AssetHandler_submitChangeTrustTransaction(t *testing.T) {
 
 	ctx := context.Background()
 
-	distAccResolver.
-		On("DistributionAccountFromContext", ctx).
-		Return(distributionKP.Address(), nil)
-
 	t.Run("returns error if no change trust operations is passed", func(t *testing.T) {
 		err := handler.submitChangeTrustTransaction(ctx, acc, []*txnbuild.ChangeTrust{})
 		assert.EqualError(t, err, "should have at least one change trust operation")
 	})
+
+	t.Run("returns error if fails getting distribution account from the resolver", func(t *testing.T) {
+		distAccResolver.
+			On("DistributionAccountFromContext", ctx).
+			Return("", errors.New("resolver error")).
+			Once()
+		err := handler.submitChangeTrustTransaction(ctx, acc, []*txnbuild.ChangeTrust{{}})
+		require.EqualError(t, err, "resolving distribution account from context: resolver error")
+	})
+
+	distAccResolver.
+		On("DistributionAccountFromContext", ctx).
+		Return(distributionKP.Address(), nil)
 
 	t.Run("returns error when fails signing transaction", func(t *testing.T) {
 		tx, err := txnbuild.NewTransaction(

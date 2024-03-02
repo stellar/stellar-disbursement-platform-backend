@@ -11,8 +11,8 @@ import (
 
 const DistributionAccountResolverInstanceName = "distribution_account_resolver_instance"
 
-// NewSignatureService creates a new distribution account resolver instance, or retrieves an instance that was already
-// created before.
+// NewDistributionAccountResolver creates a new distribution account resolver instance, or retrieves an instance that
+// was already created before.
 func NewDistributionAccountResolver(ctx context.Context, opts signing.DistributionAccountResolverOptions) (signing.DistributionAccountResolver, error) {
 	instanceName := DistributionAccountResolverInstanceName
 
