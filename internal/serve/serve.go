@@ -244,10 +244,10 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 
 		r.Route("/disbursements", func(r chi.Router) {
 			handler := httphandler.DisbursementHandler{
-				Models:             o.Models,
-				AuthManager:        authManager,
-				MonitorService:     o.MonitorService,
-				DistributionPubKey: o.DistributionPublicKey,
+				Models:                      o.Models,
+				AuthManager:                 authManager,
+				MonitorService:              o.MonitorService,
+				DistributionAccountResolver: o.SubmitterEngine.DistributionAccountResolver,
 				DisbursementManagementService: services.NewDisbursementManagementService(
 					o.Models,
 					o.MtnDBConnectionPool,

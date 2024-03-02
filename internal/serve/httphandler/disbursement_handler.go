@@ -21,6 +21,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 )
 
@@ -29,7 +30,7 @@ type DisbursementHandler struct {
 	MonitorService                monitor.MonitorServiceInterface
 	AuthManager                   auth.AuthManager
 	DisbursementManagementService *services.DisbursementManagementService
-	DistributionPubKey            string
+	DistributionAccountResolver   signing.DistributionAccountResolver
 }
 
 type PostDisbursementRequest struct {
@@ -334,8 +335,15 @@ type UpdateDisbursementStatusResponseBody struct {
 
 // PatchDisbursementStatus updates the status of a disbursement
 func (d DisbursementHandler) PatchDisbursementStatus(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	distributionPublicKey, err := d.DistributionAccountResolver.DistributionAccountFromContext(ctx)
+	if err != nil {
+		httperror.InternalError(ctx, "Cannot get distribution account public key", err, nil).Render(w)
+		return
+	}
+
 	var patchRequest PatchDisbursementStatusRequest
-	err := json.NewDecoder(r.Body).Decode(&patchRequest)
+	err = json.NewDecoder(r.Body).Decode(&patchRequest)
 	if err != nil {
 		httperror.BadRequest("invalid request body", err, nil).Render(w)
 		return
@@ -350,7 +358,6 @@ func (d DisbursementHandler) PatchDisbursementStatus(w http.ResponseWriter, r *h
 
 	response := UpdateDisbursementStatusResponseBody{}
 
-	ctx := r.Context()
 	disbursementID := chi.URLParam(r, "id")
 
 	token, ok := ctx.Value(middleware.TokenContextKey).(string)
@@ -364,7 +371,7 @@ func (d DisbursementHandler) PatchDisbursementStatus(w http.ResponseWriter, r *h
 
 	switch toStatus {
 	case data.StartedDisbursementStatus:
-		err = d.DisbursementManagementService.StartDisbursement(ctx, disbursementID, user, d.DistributionPubKey)
+		err = d.DisbursementManagementService.StartDisbursement(ctx, disbursementID, user, distributionPublicKey)
 		response.Message = "Disbursement started"
 	case data.PausedDisbursementStatus:
 		err = d.DisbursementManagementService.PauseDisbursement(ctx, disbursementID, user)
