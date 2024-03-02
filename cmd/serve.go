@@ -504,7 +504,6 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			serveOpts.AnchorPlatformAPIService = apAPIService
 
 			// Setup Distribution Account Resolver
-			serveOpts.DistributionPublicKey = distAccResolverOpts.HostDistributionAccountPublicKey
 			distAccResolverOpts.AdminDBConnectionPool = adminDBConnectionPool
 			distAccResolver, err := signing.NewDistributionAccountResolver(distAccResolverOpts)
 			if err != nil {

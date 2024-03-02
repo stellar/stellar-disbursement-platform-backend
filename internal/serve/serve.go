@@ -77,7 +77,6 @@ type ServeOptions struct {
 	AnchorPlatformOutgoingJWTSecret string
 	AnchorPlatformAPIService        anchorplatform.AnchorPlatformAPIServiceInterface
 	CrashTrackerClient              crashtracker.CrashTrackerClient
-	DistributionPublicKey           string
 	ReCAPTCHASiteKey                string
 	ReCAPTCHASiteSecretKey          string
 	DisableMFA                      bool
