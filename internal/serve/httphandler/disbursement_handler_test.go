@@ -855,17 +855,6 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 			expectedMessage: "File uploaded successfully",
 		},
 		{
-			name:           "valid input",
-			disbursementID: draftDisbursement.ID,
-			csvRecords: [][]string{
-				{"phone", "id", "amount", "verification"},
-				{"+380445555555", "123456789", "100.5", "1990-01-01"},
-				{"+380445555555", "123456789", "100.5", "1990-01-01"},
-			},
-			expectedStatus:  http.StatusOK,
-			expectedMessage: "File uploaded successfully",
-		},
-		{
 			name:           "invalid date of birth",
 			disbursementID: draftDisbursement.ID,
 			csvRecords: [][]string{
