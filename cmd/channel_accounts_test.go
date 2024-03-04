@@ -17,13 +17,16 @@ import (
 
 	cmdDB "github.com/stellar/stellar-disbursement-platform-backend/cmd/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/cmd/mocks"
+	cmdUtils "github.com/stellar/stellar-disbursement-platform-backend/cmd/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 )
 
 func Test_ChannelAccountsCommand_Command(t *testing.T) {
+	cmdUtils.ClearTestEnvironment(t)
 	dbt := dbtest.OpenWithoutMigrations(t)
+
 	root := rootCmd()
 
 	// Run tss migrations:
@@ -45,11 +48,13 @@ func Test_ChannelAccountsCommand_Command(t *testing.T) {
 	// Run channel accounts verify:
 	caCommand := (&ChannelAccountsCommand{}).Command(&ChAccCmdService{})
 	root.AddCommand(caCommand)
+	distributionKP := keypair.MustRandom()
 	root.SetArgs([]string{
 		"channel-accounts",
 		"verify",
 		"--database-url", dbt.DSN,
-		"--distribution-seed", keypair.MustRandom().Seed(),
+		"--distribution-seed", distributionKP.Seed(),
+		"--distribution-public-key", distributionKP.Address(),
 		"--channel-account-encryption-passphrase", keypair.MustRandom().Seed(),
 	})
 	err = caCommand.Execute()
