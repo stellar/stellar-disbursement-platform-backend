@@ -137,9 +137,17 @@ func Test_NewSignatureService(t *testing.T) {
 			wantErrContains: `invalid distribution signer type "invalid"`,
 		},
 		{
-			name: "returns an error if the options are invalid for the channel account signer",
+			name: "returns an error if the distribution account resolver is nil",
 			opts: SignatureServiceOptions{
 				DistributionSignerType: DistributionAccountEnvSignatureClientType,
+			},
+			wantErrContains: "distribution account resolver cannot be nil",
+		},
+		{
+			name: "returns an error if the options are invalid for the channel account signer",
+			opts: SignatureServiceOptions{
+				DistributionSignerType:      DistributionAccountEnvSignatureClientType,
+				DistributionAccountResolver: wantDistAccountResolver,
 			},
 			wantErrContains: "creating a new channel account signature client:",
 		},
@@ -151,6 +159,8 @@ func Test_NewSignatureService(t *testing.T) {
 				DBConnectionPool:          dbConnectionPool,
 				ChAccEncryptionPassphrase: chAccEncryptionPassphrase,
 				LedgerNumberTracker:       mLedgerNumberTracker,
+
+				DistributionAccountResolver: wantDistAccountResolver,
 			},
 			wantErrContains: fmt.Sprintf("creating a new distribution account signature client with type %v", DistributionAccountEnvSignatureClientType),
 		},
@@ -164,6 +174,8 @@ func Test_NewSignatureService(t *testing.T) {
 				LedgerNumberTracker:       mLedgerNumberTracker,
 
 				DistributionPrivateKey: distributionKP.Seed(),
+
+				DistributionAccountResolver: wantDistAccountResolver,
 			},
 
 			wantSigService: SignatureService{
@@ -186,6 +198,8 @@ func Test_NewSignatureService(t *testing.T) {
 				DistAccEncryptionPassphrase: distAccEncryptionPassphrase,
 
 				DistributionPrivateKey: distributionKP.Seed(),
+
+				DistributionAccountResolver: wantDistAccountResolver,
 			},
 
 			wantSigService: SignatureService{
@@ -193,27 +207,6 @@ func Test_NewSignatureService(t *testing.T) {
 				DistAccountSigner:           wantDistAccountDBSigner,
 				HostAccountSigner:           wantDistAccountEnvSigner,
 				DistributionAccountResolver: wantDistAccountResolver,
-				networkPassphrase:           network.TestNetworkPassphrase,
-			},
-		},
-		{
-			name: "🎉 successfully instantiate new signature (DISTRIBUTION_ACCOUNT_ENV) with the provided DistributionAccountResolver",
-			opts: SignatureServiceOptions{
-				DistributionSignerType:    DistributionAccountEnvSignatureClientType,
-				NetworkPassphrase:         network.TestNetworkPassphrase,
-				DBConnectionPool:          dbConnectionPool,
-				ChAccEncryptionPassphrase: chAccEncryptionPassphrase,
-				LedgerNumberTracker:       mLedgerNumberTracker,
-
-				DistributionPrivateKey:      distributionKP.Seed(),
-				DistributionAccountResolver: mocks.NewMockDistributionAccountResolver(t),
-			},
-
-			wantSigService: SignatureService{
-				ChAccountSigner:             wantChAccountSigner,
-				DistAccountSigner:           wantDistAccountEnvSigner,
-				HostAccountSigner:           wantDistAccountEnvSigner,
-				DistributionAccountResolver: mocks.NewMockDistributionAccountResolver(t),
 				networkPassphrase:           network.TestNetworkPassphrase,
 			},
 		},

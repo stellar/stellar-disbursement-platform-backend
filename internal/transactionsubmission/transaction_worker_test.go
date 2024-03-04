@@ -35,6 +35,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions"
 	preconditionsMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
+	sigMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing/mocks"
 	tssMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 	storeMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store/mocks"
@@ -59,13 +60,21 @@ func getTransactionWorkerInstance(t *testing.T, dbConnectionPool db.DBConnection
 	require.NoError(t, err)
 
 	distributionKP := keypair.MustRandom()
+
+	mDistAccResolver := sigMocks.NewMockDistributionAccountResolver(t)
+	mDistAccResolver.
+		On("DistributionAccount", mock.Anything, mock.AnythingOfType("string")).
+		Return(distributionKP.Address(), nil).
+		Maybe()
+
 	sigService, err := signing.NewSignatureService(signing.SignatureServiceOptions{
-		DistributionSignerType:    signing.DistributionAccountEnvSignatureClientType,
-		NetworkPassphrase:         network.TestNetworkPassphrase,
-		DBConnectionPool:          dbConnectionPool,
-		DistributionPrivateKey:    distributionKP.Seed(),
-		ChAccEncryptionPassphrase: chAccEncryptionPassphrase,
-		LedgerNumberTracker:       preconditionsMocks.NewMockLedgerNumberTracker(t),
+		DistributionSignerType:      signing.DistributionAccountEnvSignatureClientType,
+		NetworkPassphrase:           network.TestNetworkPassphrase,
+		DBConnectionPool:            dbConnectionPool,
+		DistributionPrivateKey:      distributionKP.Seed(),
+		ChAccEncryptionPassphrase:   chAccEncryptionPassphrase,
+		LedgerNumberTracker:         preconditionsMocks.NewMockLedgerNumberTracker(t),
+		DistributionAccountResolver: mDistAccResolver,
 	})
 	require.NoError(t, err)
 
@@ -136,6 +145,7 @@ func Test_NewTransactionWorker(t *testing.T) {
 	chAccModel := &store.ChannelAccountModel{DBConnectionPool: dbConnectionPool}
 
 	distributionKP := keypair.MustRandom()
+
 	wantSigService, err := signing.NewSignatureService(signing.SignatureServiceOptions{
 		DistributionSignerType:    signing.DistributionAccountEnvSignatureClientType,
 		NetworkPassphrase:         network.TestNetworkPassphrase,
@@ -143,6 +153,8 @@ func Test_NewTransactionWorker(t *testing.T) {
 		DistributionPrivateKey:    distributionKP.Seed(),
 		ChAccEncryptionPassphrase: chAccEncryptionPassphrase,
 		LedgerNumberTracker:       preconditionsMocks.NewMockLedgerNumberTracker(t),
+
+		DistributionAccountResolver: sigMocks.NewMockDistributionAccountResolver(t),
 	})
 	require.NoError(t, err)
 
@@ -960,6 +972,12 @@ func Test_TransactionWorker_buildAndSignTransaction(t *testing.T) {
 	const accountSequence = 123
 
 	distributionKP := keypair.MustRandom()
+
+	mDistAccResolver := sigMocks.NewMockDistributionAccountResolver(t)
+	mDistAccResolver.
+		On("DistributionAccount", ctx, mock.AnythingOfType("string")).
+		Return(distributionKP.Address(), nil)
+
 	sigService, err := signing.NewSignatureService(signing.SignatureServiceOptions{
 		DistributionSignerType:    signing.DistributionAccountEnvSignatureClientType,
 		NetworkPassphrase:         network.TestNetworkPassphrase,
@@ -967,6 +985,8 @@ func Test_TransactionWorker_buildAndSignTransaction(t *testing.T) {
 		DistributionPrivateKey:    distributionKP.Seed(),
 		ChAccEncryptionPassphrase: chAccEncryptionPassphrase,
 		LedgerNumberTracker:       preconditionsMocks.NewMockLedgerNumberTracker(t),
+
+		DistributionAccountResolver: mDistAccResolver,
 	})
 	require.NoError(t, err)
 

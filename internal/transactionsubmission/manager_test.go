@@ -25,6 +25,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	preconditionsMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
+	sigMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing/mocks"
 	tssMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 	storeMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store/mocks"
@@ -381,6 +382,12 @@ func Test_Manager_ProcessTransactions(t *testing.T) {
 	encrypter := &utils.DefaultPrivateKeyEncrypter{}
 	chAccEncryptionPassphrase := keypair.MustRandom().Seed()
 	distributionKP := keypair.MustRandom()
+
+	mDistAccResolver := sigMocks.NewMockDistributionAccountResolver(t)
+	mDistAccResolver.
+		On("DistributionAccount", mock.Anything, mock.AnythingOfType("string")).
+		Return(distributionKP.Address(), nil)
+
 	sigService, err := signing.NewSignatureService(signing.SignatureServiceOptions{
 		DistributionSignerType:    signing.DistributionAccountEnvSignatureClientType,
 		NetworkPassphrase:         network.TestNetworkPassphrase,
@@ -389,6 +396,8 @@ func Test_Manager_ProcessTransactions(t *testing.T) {
 		ChAccEncryptionPassphrase: chAccEncryptionPassphrase,
 		LedgerNumberTracker:       preconditionsMocks.NewMockLedgerNumberTracker(t),
 		Encrypter:                 encrypter,
+
+		DistributionAccountResolver: mDistAccResolver,
 	})
 	require.NoError(t, err)
 

@@ -5,7 +5,6 @@ import (
 
 	"golang.org/x/exp/slices"
 
-	"github.com/stellar/go/keypair"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
@@ -77,6 +76,10 @@ func NewSignatureService(opts SignatureServiceOptions) (SignatureService, error)
 		return SignatureService{}, fmt.Errorf("invalid distribution signer type %q", distSignerType)
 	}
 
+	if opts.DistributionAccountResolver == nil {
+		return SignatureService{}, fmt.Errorf("distribution account resolver cannot be nil")
+	}
+
 	sigClientOpts := SignatureClientOptions{
 		NetworkPassphrase:           opts.NetworkPassphrase,
 		DistributionPrivateKey:      opts.DistributionPrivateKey,
@@ -102,27 +105,11 @@ func NewSignatureService(opts SignatureServiceOptions) (SignatureService, error)
 		return SignatureService{}, fmt.Errorf("creating a new host account signature client: %w", err)
 	}
 
-	distAccResolver := opts.DistributionAccountResolver
-	if distAccResolver == nil {
-		hostAccKP, err := keypair.ParseFull(opts.DistributionPrivateKey)
-		if err != nil {
-			return SignatureService{}, fmt.Errorf("parsing distribution private key: %w", err)
-		}
-
-		distAccResolver, err = NewDistributionAccountResolver(DistributionAccountResolverOptions{
-			HostDistributionAccountPublicKey: hostAccKP.Address(),
-			AdminDBConnectionPool:            opts.DBConnectionPool,
-		})
-		if err != nil {
-			return SignatureService{}, fmt.Errorf("creating a new distribution account resolver: %w", err)
-		}
-	}
-
 	return SignatureService{
 		ChAccountSigner:             chAccountSigner,
 		DistAccountSigner:           distAccSigner,
 		HostAccountSigner:           hostAccSigner,
-		DistributionAccountResolver: distAccResolver,
+		DistributionAccountResolver: opts.DistributionAccountResolver,
 		networkPassphrase:           opts.NetworkPassphrase,
 	}, nil
 }

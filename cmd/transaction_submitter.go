@@ -18,6 +18,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve"
 	txSub "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	tssMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/monitor"
 )
 
@@ -109,6 +110,13 @@ func (c *TxSubmitterCommand) Command(submitterService TxSubmitterServiceInterfac
 	crashTrackerOptions := crashtracker.CrashTrackerOptions{}
 	configOpts = append(configOpts, cmdUtils.CrashTrackerTypeConfigOption(&crashTrackerOptions.CrashTrackerType))
 
+	// distribution account resolver options:
+	distAccResolverOpts := signing.DistributionAccountResolverOptions{}
+	configOpts = append(
+		configOpts,
+		cmdUtils.DistributionPublicKey(&distAccResolverOpts.HostDistributionAccountPublicKey),
+	)
+
 	// txSubmitterOpts
 	txSubmitterOpts := di.TxSubmitterEngineOptions{}
 	configOpts = append(
@@ -134,7 +142,7 @@ func (c *TxSubmitterCommand) Command(submitterService TxSubmitterServiceInterfac
 				log.Ctx(ctx).Fatalf("Error setting values of config options: %s", err.Error())
 			}
 
-			// Initializing monitor service
+			// Initializing the MonitorService
 			tssMonitorSvc := tssMonitor.TSSMonitorService{
 				GitCommitHash: globalOptions.GitCommit,
 				Version:       globalOptions.Version,
@@ -147,30 +155,41 @@ func (c *TxSubmitterCommand) Command(submitterService TxSubmitterServiceInterfac
 				log.Ctx(ctx).Fatalf("error starting TSS monitor service: %v", err)
 			}
 			metricsServeOpts.MonitorService = &tssMonitorSvc
+			tssOpts.MonitorService = tssMonitorSvc
 
-			// Setup the TSSDBConnectionPool
+			// Initializing the TSSDBConnectionPool
 			dbcpOptions := di.DBConnectionPoolOptions{DatabaseURL: globalOptions.DatabaseURL, MonitorService: &tssMonitorSvc}
 			tssDBConnectionPool, err := di.NewTSSDBConnectionPool(ctx, dbcpOptions)
 			if err != nil {
 				log.Ctx(ctx).Fatalf("error getting TSS DB connection pool: %v", err)
 			}
+			tssOpts.DBConnectionPool = tssDBConnectionPool
 
-			// Setup the Submitter Engine
+			// Initializing the AdminDBConnectionPool
+			adminDBConnectionPool, err := di.NewAdminDBConnectionPool(ctx, dbcpOptions)
+			if err != nil {
+				log.Ctx(ctx).Fatalf("error getting Admin DB connection pool: %v", err)
+			}
+			distAccResolverOpts.AdminDBConnectionPool = adminDBConnectionPool
+
+			// Initializing the DistributionAccountResolver
+			distributionAccountResolver, err := di.NewDistributionAccountResolver(ctx, distAccResolverOpts)
+			if err != nil {
+				log.Ctx(ctx).Fatalf("error creating distribution account resolver: %v", err)
+			}
+			txSubmitterOpts.SignatureServiceOptions.DistributionAccountResolver = distributionAccountResolver
+
+			// Initializing the Submitter Engine
 			txSubmitterOpts.SignatureServiceOptions.DBConnectionPool = tssDBConnectionPool
 			txSubmitterOpts.SignatureServiceOptions.NetworkPassphrase = globalOptions.NetworkPassphrase
 			submitterEngine, err := di.NewTxSubmitterEngine(ctx, txSubmitterOpts)
 			if err != nil {
 				log.Ctx(ctx).Fatalf("error creating submitter engine: %v", err)
 			}
-
-			// Inject server dependencies
 			tssOpts.SubmitterEngine = submitterEngine
-			tssOpts.DBConnectionPool = tssDBConnectionPool
-			tssOpts.MonitorService = tssMonitorSvc
 
-			// Inject crash tracker options dependencies
-			globalOptions.PopulateCrashTrackerOptions(&crashTrackerOptions)
-			// Setup default Crash Tracker client
+			// Initializing the CrashTrackerClient
+			globalOptions.PopulateCrashTrackerOptions(&crashTrackerOptions) // parses globalOptions relevant to the crash crash tracker
 			crashTrackerClient, err := di.NewCrashTracker(ctx, crashTrackerOptions)
 			if err != nil {
 				log.Ctx(ctx).Fatalf("error creating crash tracker client: %s", err.Error())
@@ -199,6 +218,7 @@ func (c *TxSubmitterCommand) Command(submitterService TxSubmitterServiceInterfac
 		},
 		PersistentPostRun: func(cmd *cobra.Command, args []string) {
 			di.DeleteAndCloseInstanceByValue(cmd.Context(), tssOpts.DBConnectionPool)
+			di.DeleteAndCloseInstanceByKey(cmd.Context(), di.AdminDBConnectionPoolInstanceName)
 		},
 	}
 	err := configOpts.Init(cmd)
