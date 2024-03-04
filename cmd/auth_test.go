@@ -8,9 +8,10 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 )
 
 func Test_persistentPostRun(t *testing.T) {

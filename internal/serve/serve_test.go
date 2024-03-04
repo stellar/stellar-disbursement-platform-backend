@@ -63,7 +63,8 @@ func Test_Serve(t *testing.T) {
 
 	opts := ServeOptions{
 		CrashTrackerClient:              mockCrashTrackerClient,
-		DatabaseDSN:                     dbt.DSN,
+		MtnDBConnectionPool:             dbConnectionPool,
+		AdminDBConnectionPool:           dbConnectionPool,
 		EC256PrivateKey:                 privateKeyStr,
 		EC256PublicKey:                  publicKeyStr,
 		Environment:                     "test",
@@ -106,16 +107,18 @@ func Test_Serve(t *testing.T) {
 func Test_Serve_callsValidateSecurity(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
 
-	serveOptions := getServeOptionsForTests(t, dbt.DSN)
-	defer serveOptions.dbConnectionPool.Close()
+	serveOptions := getServeOptionsForTests(t, dbConnectionPool)
 
 	mHTTPServer := mockHTTPServer{}
 	serveOptions.NetworkPassphrase = network.PublicNetworkPassphrase
 
 	// Make sure MFA is enforced in pubnet
 	serveOptions.DisableMFA = true
-	err := Serve(serveOptions, &mHTTPServer)
+	err = Serve(serveOptions, &mHTTPServer)
 	require.EqualError(t, err, "validating security options: MFA cannot be disabled in pubnet")
 
 	// Make sure reCAPTCHA is enforced in pubnet
@@ -264,7 +267,7 @@ func Test_staticFileServer(t *testing.T) {
 
 // getServeOptionsForTests returns an instance of ServeOptions for testing purposes.
 // 🚨 Don't forget to call `defer serveOptions.dbConnectionPool.Close()` in your test 🚨.
-func getServeOptionsForTests(t *testing.T, databaseDSN string) ServeOptions {
+func getServeOptionsForTests(t *testing.T, dbConnectionPool db.DBConnectionPool) ServeOptions {
 	t.Helper()
 
 	mMonitorService := &monitor.MockMonitorService{}
@@ -283,7 +286,8 @@ func getServeOptionsForTests(t *testing.T, databaseDSN string) ServeOptions {
 
 	serveOptions := ServeOptions{
 		CrashTrackerClient:              crashTrackerClient,
-		DatabaseDSN:                     databaseDSN,
+		MtnDBConnectionPool:             dbConnectionPool,
+		AdminDBConnectionPool:           dbConnectionPool,
 		EC256PrivateKey:                 privateKeyStr,
 		EC256PublicKey:                  publicKeyStr,
 		EmailMessengerClient:            &messengerClientMock,
@@ -297,7 +301,6 @@ func getServeOptionsForTests(t *testing.T, databaseDSN string) ServeOptions {
 		SMSMessengerClient:              &messengerClientMock,
 		Version:                         "x.y.z",
 		NetworkPassphrase:               network.TestNetworkPassphrase,
-		EnableMultiTenantDB:             false,
 	}
 	err = serveOptions.SetupDependencies()
 	require.NoError(t, err)
@@ -310,9 +313,11 @@ func getServeOptionsForTests(t *testing.T, databaseDSN string) ServeOptions {
 func Test_handleHTTP_unauthenticatedEndpoints(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
 
-	serveOptions := getServeOptionsForTests(t, dbt.DSN)
-	defer serveOptions.dbConnectionPool.Close()
+	serveOptions := getServeOptionsForTests(t, dbConnectionPool)
 
 	handlerMux := handleHTTP(serveOptions)
 
@@ -343,9 +348,11 @@ func Test_handleHTTP_unauthenticatedEndpoints(t *testing.T) {
 func Test_handleHTTP_authenticatedEndpoints(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
 
-	serveOptions := getServeOptionsForTests(t, dbt.DSN)
-	defer serveOptions.dbConnectionPool.Close()
+	serveOptions := getServeOptionsForTests(t, dbConnectionPool)
 
 	handlerMux := handleHTTP(serveOptions)
 
@@ -423,8 +430,11 @@ func Test_handleHTTP_authenticatedEndpoints(t *testing.T) {
 func Test_handleHTTP_rateLimit(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
-	serveOptions := getServeOptionsForTests(t, dbt.DSN)
-	defer serveOptions.dbConnectionPool.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	serveOptions := getServeOptionsForTests(t, dbConnectionPool)
 
 	handlerMux := handleHTTP(serveOptions)
 

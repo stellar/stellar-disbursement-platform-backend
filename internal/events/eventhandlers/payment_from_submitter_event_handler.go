@@ -12,14 +12,14 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/router"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 type PaymentFromSubmitterEventHandlerOptions struct {
-	DBConnectionPool    db.DBConnectionPool
-	TSSDBConnectionPool db.DBConnectionPool
-	CrashTrackerClient  crashtracker.CrashTrackerClient
+	AdminDBConnectionPool db.DBConnectionPool
+	MtnDBConnectionPool   db.DBConnectionPool
+	TSSDBConnectionPool   db.DBConnectionPool
+	CrashTrackerClient    crashtracker.CrashTrackerClient
 }
 
 type PaymentFromSubmitterEventHandler struct {
@@ -31,14 +31,9 @@ type PaymentFromSubmitterEventHandler struct {
 var _ events.EventHandler = new(PaymentFromSubmitterEventHandler)
 
 func NewPaymentFromSubmitterEventHandler(options PaymentFromSubmitterEventHandlerOptions) *PaymentFromSubmitterEventHandler {
-	tm := tenant.NewManager(tenant.WithDatabase(options.DBConnectionPool))
-	tr := router.NewMultiTenantDataSourceRouter(tm)
-	mtnDBConnectionPool, err := db.NewConnectionPoolWithRouter(tr)
-	if err != nil {
-		log.Fatalf("error getting tenant DB Connection Pool: %s", err.Error())
-	}
+	tm := tenant.NewManager(tenant.WithDatabase(options.AdminDBConnectionPool))
 
-	models, err := data.NewModels(mtnDBConnectionPool)
+	models, err := data.NewModels(options.MtnDBConnectionPool)
 	if err != nil {
 		log.Fatalf("error getting models: %s", err.Error())
 	}

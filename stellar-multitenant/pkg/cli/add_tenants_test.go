@@ -5,9 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"slices"
 	"strings"
 	"testing"
 
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/stellar/go/keypair"
 	"github.com/stellar/go/network"
@@ -18,10 +20,22 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
+	di "github.com/stellar/stellar-disbursement-platform-backend/internal/dependencyinjection"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
+
+// AssertEntriesContains asserts that the entries []logrus.Entry slice contain the provided message.
+var AssertEntriesContains = func(t *testing.T, entries []logrus.Entry, message string) {
+	t.Helper()
+
+	entriesContain := slices.ContainsFunc(entries, func(e logrus.Entry) bool {
+		return e.Message == message
+	})
+
+	assert.True(t, entriesContain, fmt.Sprintf("entries should contain message: %s", message))
+}
 
 func Test_validateTenantNameArg(t *testing.T) {
 	testCases := []struct {
@@ -104,11 +118,12 @@ func Test_executeAddTenant(t *testing.T) {
 	}
 
 	t.Run("adds a new tenant successfully", func(t *testing.T) {
+		di.ClearInstancesTestHelper(t)
 		tenant.DeleteAllTenantsFixture(t, ctx, dbConnectionPool)
 
 		getEntries := log.DefaultLogger.StartTest(log.InfoLevel)
 
-		err := executeAddTenant(ctx, dbt.DSN, tenantName, userFirstName, userLastName, userEmail, organizationName, messengerClientMock, tenantsOpts, sigOpts)
+		err := executeAddTenant(ctx, dbConnectionPool, dbConnectionPool, tenantName, userFirstName, userLastName, userEmail, organizationName, messengerClientMock, tenantsOpts, sigOpts)
 		assert.Nil(t, err)
 
 		const q = "SELECT id FROM tenants WHERE name = $1"
@@ -117,20 +132,20 @@ func Test_executeAddTenant(t *testing.T) {
 		require.NoError(t, err)
 
 		entries := getEntries()
-		require.Len(t, entries, 19)
-		assert.Equal(t, "tenant myorg added successfully", entries[17].Message)
-		assert.Contains(t, fmt.Sprintf("tenant ID: %s", tenantID), entries[18].Message)
+		AssertEntriesContains(t, entries, "tenant myorg added successfully")
+		AssertEntriesContains(t, entries, fmt.Sprintf("tenant ID: %s", tenantID))
 	})
 
 	t.Run("duplicated tenant name", func(t *testing.T) {
+		di.ClearInstancesTestHelper(t)
 		tenant.DeleteAllTenantsFixture(t, ctx, dbConnectionPool)
 
 		getEntries := log.DefaultLogger.StartTest(log.DebugLevel)
 
-		err := executeAddTenant(ctx, dbt.DSN, tenantName, userFirstName, userLastName, userEmail, organizationName, messengerClientMock, tenantsOpts, sigOpts)
+		err := executeAddTenant(ctx, dbConnectionPool, dbConnectionPool, tenantName, userFirstName, userLastName, userEmail, organizationName, messengerClientMock, tenantsOpts, sigOpts)
 		assert.Nil(t, err)
 
-		err = executeAddTenant(ctx, dbt.DSN, tenantName, userFirstName, userLastName, userEmail, organizationName, messengerClientMock, tenantsOpts, sigOpts)
+		err = executeAddTenant(ctx, dbConnectionPool, dbConnectionPool, tenantName, userFirstName, userLastName, userEmail, organizationName, messengerClientMock, tenantsOpts, sigOpts)
 		assert.ErrorIs(t, err, tenant.ErrDuplicatedTenantName)
 
 		const q = "SELECT id FROM tenants WHERE name = $1"
@@ -139,9 +154,8 @@ func Test_executeAddTenant(t *testing.T) {
 		require.NoError(t, err)
 
 		entries := getEntries()
-		require.Len(t, entries, 19)
-		assert.Equal(t, "tenant myorg added successfully", entries[16].Message)
-		assert.Contains(t, fmt.Sprintf("tenant ID: %s", tenantID), entries[17].Message)
+		AssertEntriesContains(t, entries, "tenant myorg added successfully")
+		AssertEntriesContains(t, entries, fmt.Sprintf("tenant ID: %s", tenantID))
 	})
 
 	messengerClientMock.AssertExpectations(t)
@@ -150,8 +164,8 @@ func Test_executeAddTenant(t *testing.T) {
 func Test_AddTenantsCmd(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
+	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, outerErr)
 	defer dbConnectionPool.Close()
 
 	ctx := context.Background()
@@ -160,6 +174,8 @@ func Test_AddTenantsCmd(t *testing.T) {
 	t.Setenv("DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE", keypair.MustRandom().Seed())
 
 	t.Run("shows usage", func(t *testing.T) {
+		di.ClearInstancesTestHelper(t)
+
 		out := new(strings.Builder)
 		mockCmd := cobra.Command{}
 		mockCmd.AddCommand(AddTenantsCmd())
@@ -222,6 +238,8 @@ Flags:
 	})
 
 	t.Run("adds new tenant successfully testnet", func(t *testing.T) {
+		di.ClearInstancesTestHelper(t)
+
 		tenantName := "unhcr"
 		userFirstName := "First"
 		userLastName := "Last"
@@ -246,9 +264,8 @@ Flags:
 		require.NoError(t, err)
 
 		entries := getEntries()
-		require.Len(t, entries, 20)
-		assert.Equal(t, "tenant unhcr added successfully", entries[18].Message)
-		assert.Contains(t, fmt.Sprintf("tenant ID: %s", tenantID), entries[19].Message)
+		AssertEntriesContains(t, entries, "tenant unhcr added successfully")
+		AssertEntriesContains(t, entries, fmt.Sprintf("tenant ID: %s", tenantID))
 
 		// Connecting to the new schema
 		schemaName := fmt.Sprintf("sdp_%s", tenantName)
@@ -289,6 +306,8 @@ Flags:
 	})
 
 	t.Run("adds new tenant successfully pubnet", func(t *testing.T) {
+		di.ClearInstancesTestHelper(t)
+
 		tenantName := "irc"
 		userFirstName := "First"
 		userLastName := "Last"
@@ -313,9 +332,8 @@ Flags:
 		require.NoError(t, err)
 
 		entries := getEntries()
-		require.Len(t, entries, 20)
-		assert.Equal(t, "tenant irc added successfully", entries[18].Message)
-		assert.Contains(t, fmt.Sprintf("tenant ID: %s", tenantID), entries[19].Message)
+		AssertEntriesContains(t, entries, "tenant irc added successfully")
+		AssertEntriesContains(t, entries, fmt.Sprintf("tenant ID: %s", tenantID))
 
 		// Connecting to the new schema
 		schemaName := fmt.Sprintf("sdp_%s", tenantName)

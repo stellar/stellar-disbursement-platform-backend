@@ -53,7 +53,7 @@ type IntegrationTestsService struct {
 
 // NewIntegrationTestsService is a function that create a new IntegrationTestsService instance.
 func NewIntegrationTestsService(opts IntegrationTestsOpts) (*IntegrationTestsService, error) {
-	// initialize dbConnection and data.Models
+	// TODO: in SDP-968, inject the correct database connection pools for the tests
 	dbConnectionPool, err := db.OpenDBConnectionPool(opts.DatabaseDSN)
 	if err != nil {
 		return nil, fmt.Errorf("error connecting to the database: %w", err)

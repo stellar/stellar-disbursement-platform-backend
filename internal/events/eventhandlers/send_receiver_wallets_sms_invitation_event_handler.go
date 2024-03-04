@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/stellar/go/support/log"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
@@ -13,12 +14,12 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/router"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 type SendReceiverWalletsSMSInvitationEventHandlerOptions struct {
-	DBConnectionPool               db.DBConnectionPool
+	AdminDBConnectionPool          db.DBConnectionPool
+	MtnDBConnectionPool            db.DBConnectionPool
 	AnchorPlatformBaseSepURL       string
 	MessengerClient                message.MessengerClient
 	MaxInvitationSMSResendAttempts int64
@@ -36,14 +37,9 @@ type SendReceiverWalletsSMSInvitationEventHandler struct {
 var _ events.EventHandler = new(SendReceiverWalletsSMSInvitationEventHandler)
 
 func NewSendReceiverWalletsSMSInvitationEventHandler(options SendReceiverWalletsSMSInvitationEventHandlerOptions) *SendReceiverWalletsSMSInvitationEventHandler {
-	tm := tenant.NewManager(tenant.WithDatabase(options.DBConnectionPool))
-	tr := router.NewMultiTenantDataSourceRouter(tm)
-	mtnDBConnectionPool, err := db.NewConnectionPoolWithRouter(tr)
-	if err != nil {
-		log.Fatalf("error getting tenant DB Connection Pool: %s", err.Error())
-	}
+	tm := tenant.NewManager(tenant.WithDatabase(options.AdminDBConnectionPool))
 
-	models, err := data.NewModels(mtnDBConnectionPool)
+	models, err := data.NewModels(options.MtnDBConnectionPool)
 	if err != nil {
 		log.Fatalf("error getting models: %s", err.Error())
 	}
@@ -62,7 +58,7 @@ func NewSendReceiverWalletsSMSInvitationEventHandler(options SendReceiverWallets
 
 	return &SendReceiverWalletsSMSInvitationEventHandler{
 		tenantManager:       tm,
-		mtnDBConnectionPool: mtnDBConnectionPool,
+		mtnDBConnectionPool: options.MtnDBConnectionPool,
 		service:             s,
 		crashTrackerClient:  options.CrashTrackerClient,
 	}

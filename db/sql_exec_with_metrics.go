@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"strings"
 	"time"
 
@@ -22,6 +23,15 @@ const (
 )
 
 func NewSQLExecuterWithMetrics(sqlExec SQLExecuter, monitorServiceInterface monitor.MonitorServiceInterface) (*SQLExecuterWithMetrics, error) {
+	// TODO: in SDP-874, include the value of {schema_name() || 'public'} in the data sent to the monitoring service.
+	if sqlExec == nil {
+		return nil, fmt.Errorf("sqlExec cannot be nil")
+	}
+
+	if monitorServiceInterface == nil {
+		return nil, fmt.Errorf("monitorServiceInterface cannot be nil")
+	}
+
 	return &SQLExecuterWithMetrics{
 		SQLExecuter:             sqlExec,
 		monitorServiceInterface: monitorServiceInterface,
@@ -42,6 +52,7 @@ func (sqlExec *SQLExecuterWithMetrics) monitorDBQueryDuration(duration time.Dura
 	labels := monitor.DBQueryLabels{
 		QueryType: string(getQueryType(query)),
 	}
+
 	errMetric := sqlExec.monitorServiceInterface.MonitorDBQueryDuration(duration, getMetricTag(err), labels)
 	if errMetric != nil {
 		log.Errorf("Error trying to monitor db query duration: %s", errMetric)
