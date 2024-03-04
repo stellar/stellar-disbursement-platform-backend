@@ -126,7 +126,7 @@ func (tw *TransactionWorker) runJob(ctx context.Context, txJob *TxJob) error {
 
 // TODO: add tests
 // handleFailedTransaction will wrap up the job when the transaction was submitted to the network but failed.
-// This method will only return an error if something goes wromg when handling the result and marking the transaction as ERROR.
+// This method will only return an error if something goes wrong when handling the result and marking the transaction as ERROR.
 func (tw *TransactionWorker) handleFailedTransaction(ctx context.Context, txJob *TxJob, hTxResp horizon.Transaction, hErr error) error {
 	log.Ctx(ctx).Errorf("🔴 Error processing job: %v", hErr)
 
@@ -158,11 +158,13 @@ func (tw *TransactionWorker) handleFailedTransaction(ctx context.Context, txJob 
 	}()
 
 	if errors.As(hErr, &hErrWrapper) {
+		// TODO: are we logging the error that we save in the DB?
 		tw.txProcessingLimiter.AdjustLimitIfNeeded(hErrWrapper)
 
 		if hErrWrapper.ResultCodes != nil {
 			isHorizonErr = true
 
+			// Errors that are not marked as definitive errors: 504: Timeouts, 429: Too Many Requests, 400's with error code tx_insufficient_fee, tx_too_late, tx_bad_seq
 			if hErrWrapper.ShouldMarkAsError() {
 				var updatedTx *store.Transaction
 				updatedTx, err = tw.txModel.UpdateStatusToError(ctx, txJob.Transaction, hErrWrapper.Error())
@@ -322,6 +324,7 @@ func (tw *TransactionWorker) reconcileSubmittedTransaction(ctx context.Context, 
 			ErrStack:         hWrapperErr.Error(),
 			PaymentEventType: sdpMonitor.PaymentReconciliationUnexpectedErrorLabel,
 		})
+		// TODO: review if we're covering 429s here.
 		return fmt.Errorf("unexpected error: %w", hWrapperErr)
 	}
 
