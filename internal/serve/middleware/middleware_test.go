@@ -666,6 +666,7 @@ func Test_LoggingMiddleware(t *testing.T) {
 		assert.Equal(t, expectedRespBody, string(respBody))
 
 		logEntries := infoEntries()
+		assert.Len(t, logEntries, 2)
 		for i, e := range logEntries {
 			entry, err := e.String()
 			require.NoError(t, err)
@@ -710,6 +711,7 @@ func Test_LoggingMiddleware(t *testing.T) {
 		assert.Equal(t, expectedRespBody, string(respBody))
 
 		logEntries := infoEntries()
+		assert.Len(t, logEntries, 3)
 		for i, e := range logEntries {
 			entry, err := e.String()
 			require.NoError(t, err)
