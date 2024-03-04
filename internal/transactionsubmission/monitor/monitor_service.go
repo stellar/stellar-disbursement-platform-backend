@@ -22,11 +22,29 @@ type TSSMonitorService struct {
 	Version       string
 }
 
+var _ sdpMonitor.MonitorServiceInterface = &TSSMonitorService{}
+
 type TxMetadata struct {
 	SrcChannelAcc    string
 	PaymentEventType string
 	IsHorizonErr     bool
 	ErrStack         string
+}
+
+func (ms *TSSMonitorService) Start(opts sdpMonitor.MetricOptions) error {
+	if ms.Client != nil {
+		return fmt.Errorf("service already initialized")
+	}
+
+	underlyingMonitorService := &sdpMonitor.MonitorService{}
+	if err := underlyingMonitorService.Start(opts); err != nil {
+		return fmt.Errorf("starting underlying monitor service: %w", err)
+	}
+
+	ms.Client = underlyingMonitorService.MonitorClient
+	ms.MonitorServiceInterface = underlyingMonitorService
+
+	return nil
 }
 
 // MonitorPayment sends a metric about a payment tx to the observer, linking it to a entry in the logs that contains specific metadata about said tx.

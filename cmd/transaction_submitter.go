@@ -38,7 +38,7 @@ func (t *TxSubmitterService) StartSubmitter(ctx context.Context, opts txSub.Subm
 	go func() {
 		// Wait for a termination signal
 		sig := make(chan os.Signal, 1)
-		signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
+		signal.Notify(sig, os.Interrupt, syscall.SIGTERM, syscall.SIGINT, syscall.SIGQUIT)
 		<-sig
 
 		// Cancel the context to signal the submitterService to exit
@@ -47,7 +47,6 @@ func (t *TxSubmitterService) StartSubmitter(ctx context.Context, opts txSub.Subm
 
 	tssManager, err := txSub.NewManager(ctx, opts)
 	if err != nil {
-		defer opts.DBConnectionPool.Close()
 		opts.CrashTrackerClient.LogAndReportErrors(ctx, err, "Cannot start submitter service")
 		log.Fatalf("Error starting transaction submission service: %s", err.Error())
 	}
@@ -136,25 +135,22 @@ func (c *TxSubmitterCommand) Command(submitterService TxSubmitterServiceInterfac
 			}
 
 			// Initializing monitor service
-			metricOptions := monitor.MetricOptions{
-				MetricType:  metricsServeOpts.MetricType,
-				Environment: globalOptions.Environment,
-			}
-
-			monitorClient, err := monitor.GetClient(metricOptions)
-			if err != nil {
-				log.Ctx(ctx).Fatalf("Error creating monitor client: %s", err.Error())
-			}
-
 			tssMonitorSvc := tssMonitor.TSSMonitorService{
-				Client:        monitorClient,
 				GitCommitHash: globalOptions.GitCommit,
 				Version:       globalOptions.Version,
+			}
+			err = tssMonitorSvc.Start(monitor.MetricOptions{
+				MetricType:  metricsServeOpts.MetricType,
+				Environment: globalOptions.Environment,
+			})
+			if err != nil {
+				log.Ctx(ctx).Fatalf("error starting TSS monitor service: %v", err)
 			}
 			metricsServeOpts.MonitorService = &tssMonitorSvc
 
 			// Setup the TSSDBConnectionPool
-			tssDBConnectionPool, err := di.NewTSSDBConnectionPool(ctx, di.TSSDBConnectionPoolOptions{DatabaseURL: globalOptions.DatabaseURL})
+			dbcpOptions := di.DBConnectionPoolOptions{DatabaseURL: globalOptions.DatabaseURL, MonitorService: &tssMonitorSvc}
+			tssDBConnectionPool, err := di.NewTSSDBConnectionPool(ctx, dbcpOptions)
 			if err != nil {
 				log.Ctx(ctx).Fatalf("error getting TSS DB connection pool: %v", err)
 			}
@@ -200,6 +196,9 @@ func (c *TxSubmitterCommand) Command(submitterService TxSubmitterServiceInterfac
 
 			// Start transaction submission service
 			submitterService.StartSubmitter(ctx, tssOpts)
+		},
+		PersistentPostRun: func(cmd *cobra.Command, args []string) {
+			di.DeleteAndCloseInstanceByValue(cmd.Context(), tssOpts.DBConnectionPool)
 		},
 	}
 	err := configOpts.Init(cmd)

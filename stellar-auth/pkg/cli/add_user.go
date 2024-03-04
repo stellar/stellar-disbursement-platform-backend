@@ -89,6 +89,7 @@ func AddUserCmd(databaseURLFlagName string, passwordPrompt PasswordPromptInterfa
 		Run: func(cmd *cobra.Command, args []string) {
 			ctx := cmd.Context()
 
+			// TODO: in SDP-1074, use --tenant-id flag to cast the right dbConnectionPool
 			dbUrl := globalOptions.databaseURL
 			if dbUrl == "" {
 				dbUrl = viper.GetString(databaseURLFlagName)
@@ -144,6 +145,7 @@ func NewDefaultPasswordPrompt() *promptui.Prompt {
 // execAddUser creates a new user and inserts it into the database, the user will have
 // it's password encrypted for security reasons.
 func execAddUser(ctx context.Context, dbUrl string, email, firstName, lastName, password string, isOwner bool, roles []string) error {
+	// TODO: in SDP-1074, use --tenant-id flag to cast the right dbConnectionPool.
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbUrl)
 	if err != nil {
 		return fmt.Errorf("error getting dbConnectionPool in execAddUser: %w", err)

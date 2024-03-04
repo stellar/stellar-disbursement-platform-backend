@@ -15,12 +15,20 @@ import (
 
 // executeMigrationsPerTenant executes the migrations on the database for all tenants or a specific tenant, according
 // with the direction and count.
-func executeMigrationsPerTenant(ctx context.Context, databaseURL string, opts utils.TenantRoutingOptions, dir migrate.MigrationDirection, count int, migrationFiles embed.FS, tableName db.MigrationTableName) error {
+func executeMigrationsPerTenant(
+	ctx context.Context,
+	adminDBConnectionPool db.DBConnectionPool,
+	opts utils.TenantRoutingOptions,
+	dir migrate.MigrationDirection,
+	count int,
+	migrationFiles embed.FS,
+	tableName db.MigrationTableName,
+) error {
 	if err := opts.ValidateFlags(); err != nil {
 		log.Ctx(ctx).Fatal(err.Error())
 	}
 
-	tenantIDToDNSMap, err := getTenantIDToDSNMapping(ctx, databaseURL)
+	tenantIDToDNSMap, err := getTenantIDToDSNMapping(ctx, adminDBConnectionPool)
 	if err != nil {
 		return fmt.Errorf("getting tenants schemas: %w", err)
 	}
@@ -45,14 +53,8 @@ func executeMigrationsPerTenant(ctx context.Context, databaseURL string, opts ut
 }
 
 // getTenantIDToDSNMapping returns a map of tenant IDs to their Database's DSN.
-func getTenantIDToDSNMapping(ctx context.Context, dbURL string) (map[string]string, error) {
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbURL)
-	if err != nil {
-		return nil, fmt.Errorf("opening database connection pool: %w", err)
-	}
-	defer dbConnectionPool.Close()
-
-	m := tenant.NewManager(tenant.WithDatabase(dbConnectionPool))
+func getTenantIDToDSNMapping(ctx context.Context, adminDBConnectionPool db.DBConnectionPool) (map[string]string, error) {
+	m := tenant.NewManager(tenant.WithDatabase(adminDBConnectionPool))
 	tenants, err := m.GetAllTenants(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("getting all tenants: %w", err)

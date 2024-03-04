@@ -13,7 +13,7 @@ import (
 
 	cmdUtils "github.com/stellar/stellar-disbursement-platform-backend/cmd/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/dependencyinjection"
+	di "github.com/stellar/stellar-disbursement-platform-backend/internal/dependencyinjection"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/cli/utils"
@@ -87,7 +87,7 @@ func AddTenantsCmd() *cobra.Command {
 
 	cmd := cobra.Command{
 		Use:     "add-tenants",
-		Short:   "Add a new tenant.",
+		Short:   "Add a new tenant",
 		Example: "add-tenants [tenant name] [user first name] [user last name] [user email] [organization name]",
 		Long:    "Add a new tenant. The tenant name should only contain lower case characters and dash (-)",
 		Args: cobra.MatchAll(
@@ -103,16 +103,48 @@ func AddTenantsCmd() *cobra.Command {
 			}
 		},
 		Run: func(cmd *cobra.Command, args []string) {
-			messengerClient, err := message.GetClient(tenantsOpts.MessengerOptions)
+			ctx := cmd.Context()
+
+			// Get messenger client
+			emailMessengerClient, err := di.NewEmailClient(di.EmailClientOptions{
+				EmailType:        tenantsOpts.MessengerOptions.MessengerType,
+				MessengerOptions: &tenantsOpts.MessengerOptions,
+			})
 			if err != nil {
 				log.Fatalf("creating email client: %v", err)
 			}
 
-			ctx := cmd.Context()
-			if err := executeAddTenant(
-				ctx, globalOptions.multitenantDbURL, args[0], args[1], args[2], args[3], args[4],
-				messengerClient, tenantsOpts, sigOpts); err != nil {
-				log.Fatal(err)
+			// Get TSS DB connection pool
+			// TODO: in SDP-874, make sure to add metrics to this DB options, like we do in cmd/serve.go
+			dbcpOptions := di.DBConnectionPoolOptions{DatabaseURL: globalOptions.multitenantDbURL}
+			tssDBConnectionPool, err := di.NewTSSDBConnectionPool(ctx, dbcpOptions)
+			if err != nil {
+				log.Fatalf("getting TSS DBConnectionPool: %v", err)
+			}
+			defer func() {
+				di.DeleteAndCloseInstanceByValue(ctx, tssDBConnectionPool)
+			}()
+
+			// Get Admin DB connection pool
+			adminDBConnectionPool, err := di.NewAdminDBConnectionPool(ctx, dbcpOptions)
+			if err != nil {
+				log.Fatalf("getting Admin database connection pool: %v", err)
+			}
+			defer func() {
+				di.DeleteAndCloseInstanceByValue(ctx, adminDBConnectionPool)
+			}()
+
+			tenantName, userFirstName, userLastName, userEmail, organizationName := args[0], args[1], args[2], args[3], args[4]
+			err = executeAddTenant(
+				ctx,
+				adminDBConnectionPool, tssDBConnectionPool,
+				tenantName, userFirstName, userLastName, userEmail, organizationName,
+				emailMessengerClient,
+				tenantsOpts,
+				sigOpts,
+			)
+			if err != nil {
+				log.Ctx(ctx).Fatalf("Error adding tenant: %v", err)
 			}
 		},
 	}
@@ -132,25 +164,16 @@ func validateTenantNameArg(cmd *cobra.Command, args []string) error {
 }
 
 func executeAddTenant(
-	ctx context.Context, dbURL, tenantName, userFirstName, userLastName, userEmail,
-	organizationName string, messengerClient message.MessengerClient, tenantsOpts AddTenantsCommandOptions, sigOpts signing.SignatureServiceOptions,
+	ctx context.Context,
+	adminDBConnectionPool, tssDBConnectionPool db.DBConnectionPool,
+	tenantName, userFirstName, userLastName, userEmail, organizationName string,
+	messengerClient message.MessengerClient,
+	tenantsOpts AddTenantsCommandOptions,
+	sigOpts signing.SignatureServiceOptions,
 ) error {
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbURL)
-	if err != nil {
-		return fmt.Errorf("opening database connection pool: %w", err)
-	}
-	defer dbConnectionPool.Close()
-
 	if !slices.Contains(signing.DistributionSignatureClientTypes(), sigOpts.DistributionSignerType) {
 		return fmt.Errorf("invalid distribution account signer type %q", sigOpts.DistributionSignerType)
 	}
-
-	// We need to use a dbConnectionPool that resolves to the tss namespace for the distribution account signature client.
-	tssDBConnectionPool, err := dependencyinjection.NewTSSDBConnectionPool(ctx, dependencyinjection.TSSDBConnectionPoolOptions{DatabaseURL: dbURL})
-	if err != nil {
-		return fmt.Errorf("getting TSS DBConnectionPool: %w", err)
-	}
-	defer tssDBConnectionPool.Close()
 
 	distAccSigClient, err := signing.NewSignatureClient(sigOpts.DistributionSignerType, signing.SignatureClientOptions{
 		NetworkPassphrase:           sigOpts.NetworkPassphrase,
@@ -162,11 +185,10 @@ func executeAddTenant(
 		return fmt.Errorf("creating a new distribution account signature client: %w", err)
 	}
 
-	m := tenant.NewManager(tenant.WithDatabase(dbConnectionPool))
 	p := provisioning.NewManager(
-		provisioning.WithDatabase(dbConnectionPool),
+		provisioning.WithDatabase(adminDBConnectionPool),
 		provisioning.WithMessengerClient(messengerClient),
-		provisioning.WithTenantManager(m),
+		provisioning.WithTenantManager(tenant.NewManager(tenant.WithDatabase(adminDBConnectionPool))),
 		provisioning.WithDistributionAccountSignatureClient(distAccSigClient),
 	)
 

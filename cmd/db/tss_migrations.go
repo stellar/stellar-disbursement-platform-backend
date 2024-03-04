@@ -13,7 +13,6 @@ import (
 )
 
 type TSSDatabaseMigrationManager struct {
-	RootDatabaseDSN      string
 	RootDBConnectionPool db.DBConnectionPool
 }
 
@@ -21,14 +20,12 @@ func (m *TSSDatabaseMigrationManager) SchemaName() string {
 	return router.TSSSchemaName
 }
 
-func NewTSSDatabaseMigrationManager(rootDatabaseDSN string) (*TSSDatabaseMigrationManager, error) {
-	rootDBConnectionPool, err := db.OpenDBConnectionPool(rootDatabaseDSN)
-	if err != nil {
-		return nil, fmt.Errorf("opening root database connection pool: %w", err)
+func NewTSSDatabaseMigrationManager(rootDBConnectionPool db.DBConnectionPool) (*TSSDatabaseMigrationManager, error) {
+	if rootDBConnectionPool == nil {
+		return nil, fmt.Errorf("rootDBConnectionPool cannot be nil")
 	}
 
 	return &TSSDatabaseMigrationManager{
-		RootDatabaseDSN:      rootDatabaseDSN,
 		RootDBConnectionPool: rootDBConnectionPool,
 	}, nil
 }

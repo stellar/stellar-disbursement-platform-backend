@@ -24,8 +24,6 @@ import (
 	serveadmin "github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/serve"
 )
 
-type TearDownFunc func()
-
 type ServeCommand struct{}
 
 type ServerServiceInterface interface {
@@ -33,7 +31,7 @@ type ServerServiceInterface interface {
 	StartMetricsServe(opts serve.MetricsServeOptions, httpServer serve.HTTPServerInterface)
 	StartAdminServe(opts serveadmin.ServeOptions, httpServer serveadmin.HTTPServerInterface)
 	GetSchedulerJobRegistrars(ctx context.Context, serveOpts serve.ServeOptions, schedulerOptions scheduler.SchedulerOptions, apAPIService anchorplatform.AnchorPlatformAPIServiceInterface) ([]scheduler.SchedulerJobRegisterOption, error)
-	SetupConsumers(ctx context.Context, eventBrokerOptions cmdUtils.EventBrokerOptions, eventHandlerOptions events.EventHandlerOptions, serveOpts serve.ServeOptions) (_ TearDownFunc, err error)
+	SetupConsumers(ctx context.Context, o SetupConsumersOptions) error
 }
 
 type ServerService struct{}
@@ -63,12 +61,8 @@ func (s *ServerService) StartAdminServe(opts serveadmin.ServeOptions, httpServer
 }
 
 func (s *ServerService) GetSchedulerJobRegistrars(ctx context.Context, serveOpts serve.ServeOptions, schedulerOptions scheduler.SchedulerOptions, apAPIService anchorplatform.AnchorPlatformAPIServiceInterface) ([]scheduler.SchedulerJobRegisterOption, error) {
-	// TODO: inject these in the server options, to do the Dependency Injection properly.
-	dbConnectionPool, err := db.OpenDBConnectionPool(globalOptions.DatabaseURL)
-	if err != nil {
-		log.Ctx(ctx).Fatalf("error getting DB connection in Job Scheduler: %s", err.Error())
-	}
-	models, err := data.NewModels(dbConnectionPool)
+	// TODO: in SEP-1111, inject the remaining dbConnectionPools needed here.
+	models, err := data.NewModels(serveOpts.MtnDBConnectionPool)
 	if err != nil {
 		log.Ctx(ctx).Fatalf("error creating models in Job Scheduler: %s", err.Error())
 	}
@@ -79,85 +73,75 @@ func (s *ServerService) GetSchedulerJobRegistrars(ctx context.Context, serveOpts
 	}, nil
 }
 
-func (s *ServerService) SetupConsumers(ctx context.Context, eventBrokerOptions cmdUtils.EventBrokerOptions, eventHandlerOptions events.EventHandlerOptions, serveOpts serve.ServeOptions) (_ TearDownFunc, err error) {
-	dbConnectionPool, err := db.OpenDBConnectionPool(globalOptions.DatabaseURL)
-	if err != nil {
-		log.Ctx(ctx).Fatalf("error getting DB connection in Setup Consumers: %s", err.Error())
-	}
-	defer func() {
-		if err != nil && dbConnectionPool != nil {
-			dbConnectionPool.Close()
-		}
-	}()
+type SetupConsumersOptions struct {
+	EventBrokerOptions  cmdUtils.EventBrokerOptions
+	EventHandlerOptions events.EventHandlerOptions
+	ServeOpts           serve.ServeOptions
+	TSSDBConnectionPool db.DBConnectionPool
+}
 
-	tssDBConnectionPool, err := di.NewTSSDBConnectionPool(ctx, di.TSSDBConnectionPoolOptions{DatabaseURL: globalOptions.DatabaseURL})
-	if err != nil {
-		return nil, fmt.Errorf("getting TSS DB connection pool: %w", err)
-	}
-	defer func() {
-		if err != nil && tssDBConnectionPool != nil {
-			tssDBConnectionPool.Close()
-		}
-	}()
+func (s *ServerService) SetupConsumers(ctx context.Context, o SetupConsumersOptions) error {
+	kafkaConfig := cmdUtils.KafkaConfig(o.EventBrokerOptions)
 
 	smsInvitationConsumer, err := events.NewKafkaConsumer(
-		cmdUtils.KafkaConfig(eventBrokerOptions),
+		kafkaConfig,
 		events.ReceiverWalletNewInvitationTopic,
-		eventBrokerOptions.ConsumerGroupID,
+		o.EventBrokerOptions.ConsumerGroupID,
 		eventhandlers.NewSendReceiverWalletsSMSInvitationEventHandler(eventhandlers.SendReceiverWalletsSMSInvitationEventHandlerOptions{
-			DBConnectionPool:               dbConnectionPool,
-			AnchorPlatformBaseSepURL:       serveOpts.AnchorPlatformBasePlatformURL,
-			MessengerClient:                serveOpts.SMSMessengerClient,
-			MaxInvitationSMSResendAttempts: int64(eventHandlerOptions.MaxInvitationSMSResendAttempts),
-			Sep10SigningPrivateKey:         serveOpts.Sep10SigningPrivateKey,
-			CrashTrackerClient:             serveOpts.CrashTrackerClient.Clone(),
+			MtnDBConnectionPool:            o.ServeOpts.MtnDBConnectionPool,
+			AdminDBConnectionPool:          o.ServeOpts.AdminDBConnectionPool,
+			AnchorPlatformBaseSepURL:       o.ServeOpts.AnchorPlatformBasePlatformURL,
+			MessengerClient:                o.ServeOpts.SMSMessengerClient,
+			MaxInvitationSMSResendAttempts: int64(o.EventHandlerOptions.MaxInvitationSMSResendAttempts),
+			Sep10SigningPrivateKey:         o.ServeOpts.Sep10SigningPrivateKey,
+			CrashTrackerClient:             o.ServeOpts.CrashTrackerClient.Clone(),
 		}),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("creating SMS Invitation Kafka Consumer: %w", err)
+		return fmt.Errorf("creating SMS Invitation Kafka Consumer: %w", err)
 	}
 
 	paymentCompletedConsumer, err := events.NewKafkaConsumer(
-		cmdUtils.KafkaConfig(eventBrokerOptions),
+		kafkaConfig,
 		events.PaymentCompletedTopic,
-		eventBrokerOptions.ConsumerGroupID,
+		o.EventBrokerOptions.ConsumerGroupID,
 		eventhandlers.NewPaymentFromSubmitterEventHandler(eventhandlers.PaymentFromSubmitterEventHandlerOptions{
-			DBConnectionPool:    dbConnectionPool,
-			TSSDBConnectionPool: tssDBConnectionPool,
-			CrashTrackerClient:  serveOpts.CrashTrackerClient.Clone(),
+			AdminDBConnectionPool: o.ServeOpts.AdminDBConnectionPool,
+			MtnDBConnectionPool:   o.ServeOpts.MtnDBConnectionPool,
+			TSSDBConnectionPool:   o.TSSDBConnectionPool,
+			CrashTrackerClient:    o.ServeOpts.CrashTrackerClient.Clone(),
 		}),
 		eventhandlers.NewPatchAnchorPlatformTransactionCompletionEventHandler(eventhandlers.PatchAnchorPlatformTransactionCompletionEventHandlerOptions{
-			DBConnectionPool:   dbConnectionPool,
-			APapiSvc:           serveOpts.AnchorPlatformAPIService,
-			CrashTrackerClient: serveOpts.CrashTrackerClient.Clone(),
+			AdminDBConnectionPool: o.ServeOpts.AdminDBConnectionPool,
+			MtnDBConnectionPool:   o.ServeOpts.MtnDBConnectionPool,
+			APapiSvc:              o.ServeOpts.AnchorPlatformAPIService,
+			CrashTrackerClient:    o.ServeOpts.CrashTrackerClient.Clone(),
 		}),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("creating Payment Completed Kafka Consumer: %w", err)
+		return fmt.Errorf("creating Payment Completed Kafka Consumer: %w", err)
 	}
 
 	paymentReadyToPayConsumer, err := events.NewKafkaConsumer(
-		cmdUtils.KafkaConfig(eventBrokerOptions),
+		kafkaConfig,
 		events.PaymentReadyToPayTopic,
-		eventBrokerOptions.ConsumerGroupID,
+		o.EventBrokerOptions.ConsumerGroupID,
 		eventhandlers.NewPaymentToSubmitterEventHandler(eventhandlers.PaymentToSubmitterEventHandlerOptions{
-			DBConnectionPool:    dbConnectionPool,
-			TSSDBConnectionPool: tssDBConnectionPool,
-			CrashTrackerClient:  serveOpts.CrashTrackerClient.Clone(),
+			AdminDBConnectionPool: o.ServeOpts.AdminDBConnectionPool,
+			MtnDBConnectionPool:   o.ServeOpts.MtnDBConnectionPool,
+			TSSDBConnectionPool:   o.TSSDBConnectionPool,
+			CrashTrackerClient:    o.ServeOpts.CrashTrackerClient.Clone(),
 		}),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("creating Payment Ready to Pay Kafka Consumer: %w", err)
+		return fmt.Errorf("creating Payment Ready to Pay Kafka Consumer: %w", err)
 	}
 
-	go events.Consume(ctx, smsInvitationConsumer, serveOpts.CrashTrackerClient.Clone())
-	go events.Consume(ctx, paymentCompletedConsumer, serveOpts.CrashTrackerClient.Clone())
-	go events.Consume(ctx, paymentReadyToPayConsumer, serveOpts.CrashTrackerClient.Clone())
+	go events.Consume(ctx, smsInvitationConsumer, o.ServeOpts.CrashTrackerClient.Clone())
+	go events.Consume(ctx, paymentCompletedConsumer, o.ServeOpts.CrashTrackerClient.Clone())
+	go events.Consume(ctx, paymentReadyToPayConsumer, o.ServeOpts.CrashTrackerClient.Clone())
 
-	return TearDownFunc(func() {
-		defer dbConnectionPool.Close()
-		defer tssDBConnectionPool.Close()
-	}), nil
+	return nil
 }
 
 func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorService monitor.MonitorServiceInterface) *cobra.Command {
@@ -294,14 +278,6 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			Usage:       "Enable Scheduler for SDP Backend Jobs",
 			OptType:     types.Bool,
 			ConfigKey:   &serveOpts.EnableScheduler,
-			FlagDefault: true,
-			Required:    false,
-		},
-		{
-			Name:        "enable-multitenant-db",
-			Usage:       "Enable Multi-tenant DB for SDP Backend API",
-			OptType:     types.Bool,
-			ConfigKey:   &serveOpts.EnableMultiTenantDB,
 			FlagDefault: true,
 			Required:    false,
 		},
@@ -444,7 +420,6 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			// Inject server dependencies
 			serveOpts.Environment = globalOptions.Environment
 			serveOpts.GitCommit = globalOptions.GitCommit
-			serveOpts.DatabaseDSN = globalOptions.DatabaseURL
 			serveOpts.Version = globalOptions.Version
 			serveOpts.MonitorService = monitorService
 			serveOpts.BaseURL = globalOptions.BaseURL
@@ -455,7 +430,6 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			metricsServeOpts.Environment = globalOptions.Environment
 
 			// Inject tenant server dependencies
-			adminServeOpts.DatabaseDSN = globalOptions.DatabaseURL
 			adminServeOpts.Environment = globalOptions.Environment
 			adminServeOpts.GitCommit = globalOptions.GitCommit
 			adminServeOpts.Version = globalOptions.Version
@@ -463,6 +437,36 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 		},
 		Run: func(cmd *cobra.Command, _ []string) {
 			ctx := cmd.Context()
+
+			// Setup the Admin DB connection pool
+			dbcpOptions := di.DBConnectionPoolOptions{DatabaseURL: globalOptions.DatabaseURL, MonitorService: monitorService}
+			adminDBConnectionPool, err := di.NewAdminDBConnectionPool(ctx, dbcpOptions)
+			if err != nil {
+				log.Ctx(ctx).Fatalf("error getting Admin DB connection pool: %v", err)
+			}
+			defer func() {
+				di.DeleteAndCloseInstanceByValue(ctx, adminDBConnectionPool)
+			}()
+			serveOpts.AdminDBConnectionPool = adminDBConnectionPool
+			adminServeOpts.AdminDBConnectionPool = adminDBConnectionPool
+
+			// Setup the Multi-tenant DB connection pool
+			serveOpts.MtnDBConnectionPool, err = di.NewMtnDBConnectionPool(ctx, dbcpOptions)
+			if err != nil {
+				log.Ctx(ctx).Fatalf("error getting Multi-tenant DB connection pool: %v", err)
+			}
+			defer func() {
+				di.DeleteAndCloseInstanceByValue(ctx, serveOpts.MtnDBConnectionPool)
+			}()
+
+			// Setup the TSSDBConnectionPool
+			tssDBConnectionPool, err := di.NewTSSDBConnectionPool(ctx, dbcpOptions)
+			if err != nil {
+				log.Ctx(ctx).Fatalf("error getting TSS DB connection pool: %v", err)
+			}
+			defer func() {
+				di.DeleteAndCloseInstanceByValue(ctx, tssDBConnectionPool)
+			}()
 
 			// Setup the Crash Tracker client
 			crashTrackerClient, err := di.NewCrashTracker(ctx, crashTrackerOptions)
@@ -492,18 +496,6 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			}
 			serveOpts.AnchorPlatformAPIService = apAPIService
 
-			// Setup the TSSDBConnectionPool
-			tssDBConnectionPool, err := di.NewTSSDBConnectionPool(ctx, di.TSSDBConnectionPoolOptions{DatabaseURL: globalOptions.DatabaseURL})
-			if err != nil {
-				log.Ctx(ctx).Fatalf("error getting TSS DB connection pool: %v", err)
-			}
-			defer func() {
-				err = db.CloseConnectionPoolIfNeeded(ctx, tssDBConnectionPool)
-				if err != nil {
-					log.Ctx(ctx).Errorf("closing TSS DB connection pool: %v", err)
-				}
-			}()
-
 			// Setup the Submitter Engine
 			txSubmitterOpts.SignatureServiceOptions.DBConnectionPool = tssDBConnectionPool
 			txSubmitterOpts.SignatureServiceOptions.NetworkPassphrase = globalOptions.NetworkPassphrase
@@ -523,11 +515,15 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 				defer kafkaProducer.Close()
 				serveOpts.EventProducer = kafkaProducer
 
-				tearDownFunc, err := serverService.SetupConsumers(ctx, eventBrokerOptions, eventHandlerOptions, serveOpts)
+				err = serverService.SetupConsumers(ctx, SetupConsumersOptions{
+					EventBrokerOptions:  eventBrokerOptions,
+					EventHandlerOptions: eventHandlerOptions,
+					ServeOpts:           serveOpts,
+					TSSDBConnectionPool: tssDBConnectionPool,
+				})
 				if err != nil {
 					log.Fatalf("error setting up consumers: %v", err)
 				}
-				defer tearDownFunc()
 			} else {
 				log.Ctx(ctx).Warn("Event Broker Type is NONE.")
 			}

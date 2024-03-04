@@ -15,27 +15,41 @@ import (
 	authmigrations "github.com/stellar/stellar-disbursement-platform-backend/db/migrations/auth-migrations"
 	sdpmigrations "github.com/stellar/stellar-disbursement-platform-backend/db/migrations/sdp-migrations"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/router"
+	di "github.com/stellar/stellar-disbursement-platform-backend/internal/dependencyinjection"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	sdpUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
 const DBConfigOptionFlagName = "database-url"
 
-type DatabaseCommand struct{}
+type DatabaseCommand struct {
+	adminDBConnectionPool db.DBConnectionPool
+}
 
 func (c *DatabaseCommand) Command(globalOptions *utils.GlobalOptionsType) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:              "db",
-		Short:            "Database related commands",
-		PersistentPreRun: utils.PropagatePersistentPreRun,
-		RunE:             utils.CallHelpCommand,
+		Use:   "db",
+		Short: "Database related commands",
+		PersistentPreRun: func(cmd *cobra.Command, args []string) {
+			utils.PropagatePersistentPreRun(cmd, args)
+
+			adminDBConnectionPool, err := di.NewAdminDBConnectionPool(cmd.Context(), di.DBConnectionPoolOptions{DatabaseURL: globalOptions.DatabaseURL})
+			if err != nil {
+				log.Ctx(cmd.Context()).Fatalf("getting Admin database connection pool: %v", err)
+			}
+			c.adminDBConnectionPool = adminDBConnectionPool
+		},
+		RunE: utils.CallHelpCommand,
+		PersistentPostRun: func(cmd *cobra.Command, args []string) {
+			di.DeleteAndCloseInstanceByValue(cmd.Context(), c.adminDBConnectionPool)
+		},
 	}
 
 	// ADD SUBCOMMANDs:
 	// The following commands use --all and --tenant-id flags.
-	cmd.AddCommand(c.setupForNetworkCmd(cmd.Context(), globalOptions))         // 'setup-for-network'
-	cmd.AddCommand(c.sdpPerTenantMigrationsCmd(cmd.Context(), globalOptions))  // 'sdp migrate up|down'
-	cmd.AddCommand(c.authPerTenantMigrationsCmd(cmd.Context(), globalOptions)) // 'auth migrate up|down'
+	cmd.AddCommand(c.setupForNetworkCmd(globalOptions))         // 'setup-for-network'
+	cmd.AddCommand(c.sdpPerTenantMigrationsCmd(cmd.Context()))  // 'sdp migrate up|down'
+	cmd.AddCommand(c.authPerTenantMigrationsCmd(cmd.Context())) // 'auth migrate up|down'
 
 	// The following command does NOT use --all and --tenant-id flags.
 	cmd.AddCommand(c.adminMigrationsCmd(cmd.Context(), globalOptions)) // 'admin migrate up|down'
@@ -46,7 +60,7 @@ func (c *DatabaseCommand) Command(globalOptions *utils.GlobalOptionsType) *cobra
 
 // setupForNetworkCmd returns a cobra.Command responsible for setting up the assets and wallets registered in the
 // database based on the network passphrase.
-func (c *DatabaseCommand) setupForNetworkCmd(ctx context.Context, globalOptions *utils.GlobalOptionsType) *cobra.Command {
+func (c *DatabaseCommand) setupForNetworkCmd(globalOptions *utils.GlobalOptionsType) *cobra.Command {
 	opts := utils.TenantRoutingOptions{}
 	var configOptions config.ConfigOptions = utils.TenantRoutingConfigOptions(&opts)
 
@@ -68,7 +82,7 @@ func (c *DatabaseCommand) setupForNetworkCmd(ctx context.Context, globalOptions 
 				log.Ctx(ctx).Fatal(err.Error())
 			}
 
-			tenantIDToDNSMap, err := getTenantIDToDSNMapping(ctx, globalOptions.DatabaseURL)
+			tenantIDToDNSMap, err := getTenantIDToDSNMapping(ctx, c.adminDBConnectionPool)
 			if err != nil {
 				log.Ctx(ctx).Fatalf("getting tenants schemas: %s", err.Error())
 			}
@@ -83,22 +97,22 @@ func (c *DatabaseCommand) setupForNetworkCmd(ctx context.Context, globalOptions 
 
 			for tenantID, dsn := range tenantIDToDNSMap {
 				log.Ctx(ctx).Infof("running for tenant ID %s", tenantID)
-				dbConnectionPool, err := db.OpenDBConnectionPool(dsn)
+				tenantDBConnectionPool, err := db.OpenDBConnectionPool(dsn)
 				if err != nil {
 					log.Ctx(ctx).Fatalf("error connection to the database: %s", err.Error())
 				}
-				defer dbConnectionPool.Close()
+				defer tenantDBConnectionPool.Close()
 
 				networkType, err := sdpUtils.GetNetworkTypeFromNetworkPassphrase(globalOptions.NetworkPassphrase)
 				if err != nil {
 					log.Ctx(ctx).Fatalf("error getting network type: %s", err.Error())
 				}
 
-				if err := services.SetupAssetsForProperNetwork(ctx, dbConnectionPool, networkType, services.DefaultAssetsNetworkMap); err != nil {
+				if err := services.SetupAssetsForProperNetwork(ctx, tenantDBConnectionPool, networkType, services.DefaultAssetsNetworkMap); err != nil {
 					log.Ctx(ctx).Fatalf("error upserting assets for proper network: %s", err.Error())
 				}
 
-				if err := services.SetupWalletsForProperNetwork(ctx, dbConnectionPool, networkType, services.DefaultWalletsNetworkMap); err != nil {
+				if err := services.SetupWalletsForProperNetwork(ctx, tenantDBConnectionPool, networkType, services.DefaultWalletsNetworkMap); err != nil {
 					log.Ctx(ctx).Fatalf("error upserting wallets for proper network: %s", err.Error())
 				}
 			}
@@ -114,7 +128,7 @@ func (c *DatabaseCommand) setupForNetworkCmd(ctx context.Context, globalOptions 
 
 // sdpPerTenantMigrationsCmd returns a cobra.Command responsible for running the migrations of the `sdp-migrations`
 // folder on the desired tenant(s).
-func (c *DatabaseCommand) sdpPerTenantMigrationsCmd(ctx context.Context, globalOptions *utils.GlobalOptionsType) *cobra.Command {
+func (c *DatabaseCommand) sdpPerTenantMigrationsCmd(ctx context.Context) *cobra.Command {
 	opts := utils.TenantRoutingOptions{}
 	var configOptions config.ConfigOptions = utils.TenantRoutingConfigOptions(&opts)
 
@@ -132,7 +146,7 @@ func (c *DatabaseCommand) sdpPerTenantMigrationsCmd(ctx context.Context, globalO
 	}
 
 	executeMigrationsFn := func(ctx context.Context, dir migrate.MigrationDirection, count int) error {
-		if err := executeMigrationsPerTenant(ctx, globalOptions.DatabaseURL, opts, dir, count, sdpmigrations.FS, db.StellarPerTenantSDPMigrationsTableName); err != nil {
+		if err := executeMigrationsPerTenant(ctx, c.adminDBConnectionPool, opts, dir, count, sdpmigrations.FS, db.StellarPerTenantSDPMigrationsTableName); err != nil {
 			return fmt.Errorf("executing migrations for %s: %w", sdpCmd.Name(), err)
 		}
 		return nil
@@ -148,7 +162,7 @@ func (c *DatabaseCommand) sdpPerTenantMigrationsCmd(ctx context.Context, globalO
 
 // authPerTenantMigrationsCmd returns a cobra.Command responsible for running the migrations of the `auth-migrations`
 // folder on the desired tenant(s).
-func (c *DatabaseCommand) authPerTenantMigrationsCmd(ctx context.Context, globalOptions *utils.GlobalOptionsType) *cobra.Command {
+func (c *DatabaseCommand) authPerTenantMigrationsCmd(ctx context.Context) *cobra.Command {
 	opts := utils.TenantRoutingOptions{}
 	var configOptions config.ConfigOptions = utils.TenantRoutingConfigOptions(&opts)
 
@@ -166,7 +180,7 @@ func (c *DatabaseCommand) authPerTenantMigrationsCmd(ctx context.Context, global
 	}
 
 	executeMigrationsFn := func(ctx context.Context, dir migrate.MigrationDirection, count int) error {
-		if err := executeMigrationsPerTenant(ctx, globalOptions.DatabaseURL, opts, dir, count, authmigrations.FS, db.StellarPerTenantAuthMigrationsTableName); err != nil {
+		if err := executeMigrationsPerTenant(ctx, c.adminDBConnectionPool, opts, dir, count, authmigrations.FS, db.StellarPerTenantAuthMigrationsTableName); err != nil {
 			return fmt.Errorf("executing migrations for %s: %w", authCmd.Name(), err)
 		}
 		return nil
@@ -213,7 +227,7 @@ func (c *DatabaseCommand) tssMigrationsCmd(ctx context.Context, globalOptions *u
 	}
 
 	executeMigrationsFn := func(ctx context.Context, dir migrate.MigrationDirection, count int) error {
-		tssMigrationsManager, err := NewTSSDatabaseMigrationManager(globalOptions.DatabaseURL)
+		tssMigrationsManager, err := NewTSSDatabaseMigrationManager(c.adminDBConnectionPool)
 		if err != nil {
 			return fmt.Errorf("creating TSS database migration manager: %w", err)
 		}
@@ -223,7 +237,7 @@ func (c *DatabaseCommand) tssMigrationsCmd(ctx context.Context, globalOptions *u
 			return fmt.Errorf("creating the 'tss' database schema if needed: %w", err)
 		}
 
-		dbURL, err := router.GetDNSForTSS(tssMigrationsManager.RootDatabaseDSN)
+		dbURL, err := router.GetDNSForTSS(globalOptions.DatabaseURL)
 		if err != nil {
 			return fmt.Errorf("getting the TSS database DSN: %w", err)
 		}

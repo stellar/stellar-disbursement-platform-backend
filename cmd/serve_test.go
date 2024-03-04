@@ -64,9 +64,9 @@ func (m *mockServer) GetSchedulerJobRegistrars(ctx context.Context, serveOpts se
 	return args.Get(0).([]scheduler.SchedulerJobRegisterOption), args.Error(1)
 }
 
-func (m *mockServer) SetupConsumers(ctx context.Context, eventBrokerOptions cmdUtils.EventBrokerOptions, eventHandlerOptions events.EventHandlerOptions, serveOpts serve.ServeOptions) (TearDownFunc, error) {
-	args := m.Called(ctx, eventBrokerOptions, eventHandlerOptions, serveOpts)
-	return args.Get(0).(TearDownFunc), args.Error(1)
+func (m *mockServer) SetupConsumers(ctx context.Context, o SetupConsumersOptions) error {
+	args := m.Called(ctx, o)
+	return args.Error(0)
 }
 
 func Test_serve_wasCalled(t *testing.T) {
@@ -104,6 +104,8 @@ func Test_serve(t *testing.T) {
 
 	// Populate dependency injection:
 	di.SetInstance(di.TSSDBConnectionPoolInstanceName, dbConnectionPool)
+	di.SetInstance(di.AdminDBConnectionPoolInstanceName, dbConnectionPool)
+	di.SetInstance(di.MtnDBConnectionPoolInstanceName, dbConnectionPool)
 
 	mHorizonClient := &horizonclient.MockClient{}
 	di.SetInstance(di.HorizonClientInstanceName, mHorizonClient)
@@ -133,7 +135,8 @@ func Test_serve(t *testing.T) {
 		Version:                         "x.y.z",
 		InstanceName:                    "SDP Testnet",
 		MonitorService:                  &mMonitorService,
-		DatabaseDSN:                     dbt.DSN,
+		AdminDBConnectionPool:           dbConnectionPool,
+		MtnDBConnectionPool:             dbConnectionPool,
 		EC256PublicKey:                  "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAER88h7AiQyVDysRTxKvBB6CaiO/kS\ncvGyimApUE/12gFhNTRf37SE19CSCllKxstnVFOpLLWB7Qu5OJ0Wvcz3hg==\n-----END PUBLIC KEY-----",
 		EC256PrivateKey:                 "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgIqI1MzMZIw2pQDLx\nJn0+FcNT/hNjwtn2TW43710JKZqhRANCAARHzyHsCJDJUPKxFPEq8EHoJqI7+RJy\n8bKKYClQT/XaAWE1NF/ftITX0JIKWUrGy2dUU6kstYHtC7k4nRa9zPeG\n-----END PRIVATE KEY-----",
 		CorsAllowedOrigins:              []string{"*"},
@@ -152,7 +155,6 @@ func Test_serve(t *testing.T) {
 		DisableMFA:                      false,
 		DisableReCAPTCHA:                false,
 		EnableScheduler:                 true,
-		EnableMultiTenantDB:             false,
 		SubmitterEngine:                 submitterEngine,
 	}
 	serveOpts.AnchorPlatformAPIService, err = anchorplatform.NewAnchorPlatformAPIService(httpclient.DefaultClient(), serveOpts.AnchorPlatformBasePlatformURL, serveOpts.AnchorPlatformOutgoingJWTSecret)
@@ -195,16 +197,16 @@ func Test_serve(t *testing.T) {
 	}
 
 	serveTenantOpts := serveadmin.ServeOptions{
-		Environment:          "test",
-		EmailMessengerClient: messengerClient,
-		DatabaseDSN:          dbt.DSN,
-		GitCommit:            "1234567890abcdef",
-		NetworkPassphrase:    network.TestNetworkPassphrase,
-		Port:                 8003,
-		Version:              "x.y.z",
-		DistAccSigClient:     submitterEngine.DistAccountSigner,
-		AdminAccount:         "admin-account",
-		AdminApiKey:          "admin-api-key",
+		Environment:           "test",
+		EmailMessengerClient:  messengerClient,
+		AdminDBConnectionPool: dbConnectionPool,
+		GitCommit:             "1234567890abcdef",
+		NetworkPassphrase:     network.TestNetworkPassphrase,
+		Port:                  8003,
+		Version:               "x.y.z",
+		DistAccSigClient:      submitterEngine.DistAccountSigner,
+		AdminAccount:          "admin-account",
+		AdminApiKey:           "admin-api-key",
 	}
 
 	eventBrokerOptions := cmdUtils.EventBrokerOptions{
@@ -228,7 +230,14 @@ func Test_serve(t *testing.T) {
 		On("GetSchedulerJobRegistrars", mock.Anything, serveOpts, scheduler.SchedulerOptions{}, mock.Anything).
 		Return([]scheduler.SchedulerJobRegisterOption{}, nil).
 		Once()
-	mServer.On("SetupConsumers", ctx, eventBrokerOptions, eventHandlerOptions, serveOpts).Return(TearDownFunc(func() { t.Log("tear down func called") }), nil).Once()
+	mServer.On("SetupConsumers", ctx, SetupConsumersOptions{
+		EventBrokerOptions:  eventBrokerOptions,
+		EventHandlerOptions: eventHandlerOptions,
+		ServeOpts:           serveOpts,
+		TSSDBConnectionPool: dbConnectionPool,
+	}).
+		Return(nil).
+		Once()
 	mServer.wg.Add(2)
 	defer mServer.AssertExpectations(t)
 
@@ -247,7 +256,7 @@ func Test_serve(t *testing.T) {
 	}
 	require.True(t, serveCmdFound, "serve command not found")
 
-	t.Setenv("DATABASE_URL", serveOpts.DatabaseDSN)
+	t.Setenv("DATABASE_URL", dbt.DSN)
 	t.Setenv("EC256_PUBLIC_KEY", serveOpts.EC256PublicKey)
 	t.Setenv("EC256_PRIVATE_KEY", serveOpts.EC256PrivateKey)
 	t.Setenv("SEP24_JWT_SECRET", serveOpts.SEP24JWTSecret)
@@ -266,7 +275,6 @@ func Test_serve(t *testing.T) {
 	t.Setenv("CORS_ALLOWED_ORIGINS", "*")
 	t.Setenv("INSTANCE_NAME", serveOpts.InstanceName)
 	t.Setenv("ENABLE_SCHEDULER", "true")
-	t.Setenv("ENABLE_MULTITENANT_DB", "false")
 	t.Setenv("EVENT_BROKER", "kafka")
 	t.Setenv("BROKER_URLS", "kafka:9092")
 	t.Setenv("CONSUMER_GROUP_ID", "group-id")

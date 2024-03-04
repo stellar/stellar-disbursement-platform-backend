@@ -12,6 +12,39 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func Test_NewSQLExecuterWithMetrics(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, err := OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	mMonitorService := &monitor.MockMonitorService{}
+
+	t.Run("return error when sqlExec is nil", func(t *testing.T) {
+		sqlExecWithMetrics, err := NewSQLExecuterWithMetrics(nil, mMonitorService)
+
+		require.EqualError(t, err, "sqlExec cannot be nil")
+		assert.Nil(t, sqlExecWithMetrics)
+	})
+
+	t.Run("return error when monitorServiceInterface is nil", func(t *testing.T) {
+		sqlExecWithMetrics, err := NewSQLExecuterWithMetrics(dbConnectionPool, nil)
+
+		require.EqualError(t, err, "monitorServiceInterface cannot be nil")
+		assert.Nil(t, sqlExecWithMetrics)
+	})
+
+	t.Run("🎉 successfully returns a SQLExecuterWithMetrics instance", func(t *testing.T) {
+		sqlExecWithMetrics, err := NewSQLExecuterWithMetrics(dbConnectionPool, mMonitorService)
+
+		require.NoError(t, err)
+		assert.NotNil(t, sqlExecWithMetrics)
+		assert.Equal(t, dbConnectionPool, sqlExecWithMetrics.SQLExecuter)
+		assert.Equal(t, mMonitorService, sqlExecWithMetrics.monitorServiceInterface)
+	})
+}
+
 func TestSQLExecWithMetrics_GetContext(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
