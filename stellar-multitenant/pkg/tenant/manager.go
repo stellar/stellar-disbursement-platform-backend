@@ -155,16 +155,6 @@ func (m *Manager) UpdateTenantConfig(ctx context.Context, tu *TenantUpdate) (*Te
 		args = append(args, *tu.SMSSenderType)
 	}
 
-	if tu.EnableMFA != nil {
-		fields = append(fields, "enable_mfa = ?")
-		args = append(args, *tu.EnableMFA)
-	}
-
-	if tu.EnableReCAPTCHA != nil {
-		fields = append(fields, "enable_recaptcha = ?")
-		args = append(args, *tu.EnableReCAPTCHA)
-	}
-
 	if tu.BaseURL != nil {
 		fields = append(fields, "base_url = ?")
 		args = append(args, *tu.BaseURL)

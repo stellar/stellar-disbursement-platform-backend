@@ -387,6 +387,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			AuthManager:        authManager,
 			ReCAPTCHAValidator: reCAPTCHAValidator,
 			Models:             o.Models,
+			ReCAPTCHADisabled:  o.DisableReCAPTCHA,
 		}.ServeHTTP)
 		r.Post("/forgot-password", httphandler.ForgotPasswordHandler{
 			AuthManager:        authManager,

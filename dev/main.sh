@@ -59,8 +59,6 @@ if [ "$existingTenants" == "[]" ]; then
                 "organization_name": "'"$tenant"'",
                 "email_sender_type": "DRY_RUN",
                 "sms_sender_type": "DRY_RUN",
-                "enable_mfa": false,
-                "enable_recaptcha": false,
                 "base_url": "'"$baseURL"'",
                 "sdp_ui_base_url": "'"$sdpUIBaseURL"'",
                 "cors_allowed_origins": ["*"],

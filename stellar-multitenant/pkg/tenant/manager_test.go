@@ -86,8 +86,6 @@ func Test_Manager_UpdateTenantConfig(t *testing.T) {
 		tntDB = ResetTenantConfigFixture(t, ctx, dbConnectionPool, tntDB.ID)
 		assert.Equal(t, tntDB.EmailSenderType, DryRunEmailSenderType)
 		assert.Equal(t, tntDB.SMSSenderType, DryRunSMSSenderType)
-		assert.True(t, tntDB.EnableMFA)
-		assert.True(t, tntDB.EnableReCAPTCHA)
 		assert.Nil(t, tntDB.BaseURL)
 		assert.Nil(t, tntDB.SDPUIBaseURL)
 
@@ -95,30 +93,24 @@ func Test_Manager_UpdateTenantConfig(t *testing.T) {
 		tnt, err := m.UpdateTenantConfig(ctx, &TenantUpdate{
 			ID:              tntDB.ID,
 			EmailSenderType: &AWSEmailSenderType,
-			EnableMFA:       &[]bool{false}[0],
 			SDPUIBaseURL:    &[]string{"https://myorg.frontend.io"}[0],
 		})
 		require.NoError(t, err)
 
 		assert.Equal(t, tnt.EmailSenderType, AWSEmailSenderType)
 		assert.Equal(t, tnt.SMSSenderType, DryRunSMSSenderType)
-		assert.False(t, tnt.EnableMFA)
-		assert.True(t, tnt.EnableReCAPTCHA)
 		assert.Nil(t, tnt.BaseURL)
 		assert.Equal(t, "https://myorg.frontend.io", *tnt.SDPUIBaseURL)
 
 		tnt, err = m.UpdateTenantConfig(ctx, &TenantUpdate{
-			ID:              tntDB.ID,
-			SMSSenderType:   &TwilioSMSSenderType,
-			EnableReCAPTCHA: &[]bool{false}[0],
-			BaseURL:         &[]string{"https://myorg.backend.io"}[0],
+			ID:            tntDB.ID,
+			SMSSenderType: &TwilioSMSSenderType,
+			BaseURL:       &[]string{"https://myorg.backend.io"}[0],
 		})
 		require.NoError(t, err)
 
 		assert.Equal(t, tnt.EmailSenderType, AWSEmailSenderType)
 		assert.Equal(t, tnt.SMSSenderType, TwilioSMSSenderType)
-		assert.False(t, tnt.EnableMFA)
-		assert.False(t, tnt.EnableReCAPTCHA)
 		assert.Equal(t, "https://myorg.backend.io", *tnt.BaseURL)
 		assert.Equal(t, "https://myorg.frontend.io", *tnt.SDPUIBaseURL)
 	})

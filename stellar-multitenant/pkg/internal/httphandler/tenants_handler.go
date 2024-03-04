@@ -87,8 +87,6 @@ func (h TenantsHandler) Post(rw http.ResponseWriter, req *http.Request) {
 		ID:              tnt.ID,
 		EmailSenderType: &reqBody.EmailSenderType,
 		SMSSenderType:   &reqBody.SMSSenderType,
-		EnableMFA:       &reqBody.EnableMFA,
-		EnableReCAPTCHA: &reqBody.EnableReCAPTCHA,
 		BaseURL:         &reqBody.BaseURL,
 	})
 	if err != nil {
@@ -123,8 +121,6 @@ func (t TenantsHandler) Patch(w http.ResponseWriter, r *http.Request) {
 		ID:                  tenantID,
 		EmailSenderType:     reqBody.EmailSenderType,
 		SMSSenderType:       reqBody.SMSSenderType,
-		EnableMFA:           reqBody.EnableMFA,
-		EnableReCAPTCHA:     reqBody.EnableReCAPTCHA,
 		BaseURL:             reqBody.BaseURL,
 		SDPUIBaseURL:        reqBody.SDPUIBaseURL,
 		Status:              reqBody.Status,

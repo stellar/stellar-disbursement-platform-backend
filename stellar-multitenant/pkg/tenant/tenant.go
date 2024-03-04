@@ -47,8 +47,6 @@ type Tenant struct {
 	Name                string          `json:"name" db:"name"`
 	EmailSenderType     EmailSenderType `json:"email_sender_type" db:"email_sender_type"`
 	SMSSenderType       SMSSenderType   `json:"sms_sender_type" db:"sms_sender_type"`
-	EnableMFA           bool            `json:"enable_mfa" db:"enable_mfa"`
-	EnableReCAPTCHA     bool            `json:"enable_recaptcha" db:"enable_recaptcha"`
 	BaseURL             *string         `json:"base_url" db:"base_url"`
 	SDPUIBaseURL        *string         `json:"sdp_ui_base_url" db:"sdp_ui_base_url"`
 	Status              TenantStatus    `json:"status" db:"status"`
@@ -61,8 +59,6 @@ type TenantUpdate struct {
 	ID                  string           `db:"id"`
 	EmailSenderType     *EmailSenderType `db:"email_sender_type"`
 	SMSSenderType       *SMSSenderType   `db:"sms_sender_type"`
-	EnableMFA           *bool            `db:"enable_mfa"`
-	EnableReCAPTCHA     *bool            `db:"enable_recaptcha"`
 	BaseURL             *string          `db:"base_url"`
 	SDPUIBaseURL        *string          `db:"sdp_ui_base_url"`
 	Status              *TenantStatus    `db:"status"`
@@ -126,8 +122,6 @@ func (tu *TenantUpdate) Validate() error {
 func (tu *TenantUpdate) areAllFieldsEmpty() bool {
 	return (tu.EmailSenderType == nil &&
 		tu.SMSSenderType == nil &&
-		tu.EnableMFA == nil &&
-		tu.EnableReCAPTCHA == nil &&
 		tu.BaseURL == nil &&
 		tu.SDPUIBaseURL == nil &&
 		tu.Status == nil &&

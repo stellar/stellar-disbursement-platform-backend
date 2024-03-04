@@ -732,8 +732,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 
 	t.Run("returns error when joining the forgot password link", func(t *testing.T) {
 		tntInvalidUIBaseURL := tenant.Tenant{
-			EnableReCAPTCHA: false,
-			SDPUIBaseURL:    &[]string{"%invalid%"}[0],
+			SDPUIBaseURL: &[]string{"%invalid%"}[0],
 		}
 		token := "mytoken"
 		ctxTenantWithInvalidUIBaseURL := tenant.SaveTenantInContext(context.Background(), &tntInvalidUIBaseURL)
