@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"slices"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/gorilla/schema"
 
+	"github.com/stellar/go/support/log"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
@@ -135,8 +137,14 @@ func (a *AnchorPlatformAPIService) updateAnchorTransactions(ctx context.Context,
 		return fmt.Errorf("error making request to anchor platform: %w", err)
 	}
 
+	body, err := io.ReadAll(response.Body)
+	if err != nil {
+		log.Ctx(ctx).Errorf("reading response body: %v", err)
+	}
+	defer response.Body.Close()
+
 	if response.StatusCode/100 != 2 {
-		return fmt.Errorf("error updating transaction on anchor platform, response.StatusCode: %d", response.StatusCode)
+		return fmt.Errorf("error updating transaction on anchor platform, response.StatusCode=%d, response.body=%v", response.StatusCode, string(body))
 	}
 
 	return nil
