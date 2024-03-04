@@ -30,7 +30,7 @@ func NewTSSDatabaseMigrationManager(rootDBConnectionPool db.DBConnectionPool) (*
 	}, nil
 }
 
-func (m *TSSDatabaseMigrationManager) createTSSSchemaIfNeeded(ctx context.Context) error {
+func (m *TSSDatabaseMigrationManager) CreateTSSSchemaIfNeeded(ctx context.Context) error {
 	query := fmt.Sprintf("CREATE SCHEMA IF NOT EXISTS %s", m.SchemaName())
 	_, err := m.RootDBConnectionPool.ExecContext(ctx, query)
 	if err != nil {
@@ -70,7 +70,7 @@ func (m *TSSDatabaseMigrationManager) deleteTSSSchemaIfNeeded(ctx context.Contex
 	return nil
 }
 
-func runTSSMigrations(ctx context.Context, dbURL string, dir migrate.MigrationDirection, count int) error {
+func RunTSSMigrations(ctx context.Context, dbURL string, dir migrate.MigrationDirection, count int) error {
 	err := ExecuteMigrations(ctx, dbURL, dir, count, tssmigrations.FS, db.StellarTSSMigrationsTableName)
 	if err != nil {
 		return fmt.Errorf("executing TSS migrations: %w", err)
