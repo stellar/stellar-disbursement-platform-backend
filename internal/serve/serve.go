@@ -77,7 +77,6 @@ type ServeOptions struct {
 	AnchorPlatformOutgoingJWTSecret string
 	AnchorPlatformAPIService        anchorplatform.AnchorPlatformAPIServiceInterface
 	CrashTrackerClient              crashtracker.CrashTrackerClient
-	DistributionPublicKey           string
 	ReCAPTCHASiteKey                string
 	ReCAPTCHASiteSecretKey          string
 	DisableMFA                      bool
@@ -244,10 +243,10 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 
 		r.Route("/disbursements", func(r chi.Router) {
 			handler := httphandler.DisbursementHandler{
-				Models:             o.Models,
-				AuthManager:        authManager,
-				MonitorService:     o.MonitorService,
-				DistributionPubKey: o.DistributionPublicKey,
+				Models:                      o.Models,
+				AuthManager:                 authManager,
+				MonitorService:              o.MonitorService,
+				DistributionAccountResolver: o.SubmitterEngine.DistributionAccountResolver,
 				DisbursementManagementService: services.NewDisbursementManagementService(
 					o.Models,
 					o.MtnDBConnectionPool,
@@ -338,13 +337,13 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 		})
 
 		profileHandler := httphandler.ProfileHandler{
-			Models:                o.Models,
-			AuthManager:           authManager,
-			MaxMemoryAllocation:   httphandler.DefaultMaxMemoryAllocation,
-			BaseURL:               o.BaseURL,
-			DistributionPublicKey: o.DistributionPublicKey,
-			PasswordValidator:     o.PasswordValidator,
-			PublicFilesFS:         publicfiles.PublicFiles,
+			Models:                      o.Models,
+			AuthManager:                 authManager,
+			MaxMemoryAllocation:         httphandler.DefaultMaxMemoryAllocation,
+			BaseURL:                     o.BaseURL,
+			DistributionAccountResolver: o.SubmitterEngine.DistributionAccountResolver,
+			PasswordValidator:           o.PasswordValidator,
+			PublicFilesFS:               publicfiles.PublicFiles,
 		}
 		r.Route("/profile", func(r chi.Router) {
 			r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...)).
@@ -410,12 +409,12 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 
 	// START SEP-24 endpoints
 	mux.Get("/.well-known/stellar.toml", httphandler.StellarTomlHandler{
-		AnchorPlatformBaseSepURL: o.AnchorPlatformBaseSepURL,
-		DistributionPublicKey:    o.DistributionPublicKey,
-		NetworkPassphrase:        o.NetworkPassphrase,
-		Models:                   o.Models,
-		Sep10SigningPublicKey:    o.Sep10SigningPublicKey,
-		InstanceName:             o.InstanceName,
+		AnchorPlatformBaseSepURL:    o.AnchorPlatformBaseSepURL,
+		DistributionAccountResolver: o.SubmitterEngine.DistributionAccountResolver,
+		NetworkPassphrase:           o.NetworkPassphrase,
+		Models:                      o.Models,
+		Sep10SigningPublicKey:       o.Sep10SigningPublicKey,
+		InstanceName:                o.InstanceName,
 	}.ServeHTTP)
 
 	mux.Route("/wallet-registration", func(r chi.Router) {

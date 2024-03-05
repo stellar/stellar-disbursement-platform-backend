@@ -92,7 +92,9 @@ func AssertRegisteredUserFixture(t *testing.T, ctx context.Context, dbConnection
 	assert.True(t, user.IsOwner)
 }
 
-func CreateTenantFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, name string) *Tenant {
+func CreateTenantFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, name, distributionPubKey string) *Tenant {
+	t.Helper()
+
 	tenantName := name
 	if name == "" {
 		name, err := utils.RandomString(56)
@@ -102,10 +104,10 @@ func CreateTenantFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecut
 
 	const query = `
 		WITH create_tenant AS (
-			INSERT INTO tenants 
-				(name) 
-			VALUES 
-				($1) 
+			INSERT INTO tenants
+				(name, distribution_account)
+			VALUES
+				($1, $2)
 			ON CONFLICT DO NOTHING
 			RETURNING *
 		)
@@ -113,10 +115,11 @@ func CreateTenantFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecut
 	`
 
 	tnt := &Tenant{
-		Name: tenantName,
+		Name:                tenantName,
+		DistributionAccount: &distributionPubKey,
 	}
 
-	err := sqlExec.GetContext(ctx, tnt, query, tnt.Name)
+	err := sqlExec.GetContext(ctx, tnt, query, tnt.Name, tnt.DistributionAccount)
 	require.Nil(t, err)
 
 	return tnt
@@ -124,7 +127,8 @@ func CreateTenantFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecut
 
 func LoadDefaultTenantInContext(t *testing.T, dbConnectionPool db.DBConnectionPool) context.Context {
 	ctx := context.Background()
-	tnt := CreateTenantFixture(t, ctx, dbConnectionPool, "default-tenant")
+	const publicKey = "GDIVVKL6QYF6C6K3C5PZZBQ2NQDLN2OSLMVIEQRHS6DZE7WRL33ZDNXL"
+	tnt := CreateTenantFixture(t, ctx, dbConnectionPool, "default-tenant", publicKey)
 	return SaveTenantInContext(ctx, tnt)
 }
 

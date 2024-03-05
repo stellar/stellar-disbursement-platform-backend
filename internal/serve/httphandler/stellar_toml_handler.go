@@ -1,26 +1,29 @@
 package httphandler
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strings"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
-
 	"github.com/stellar/go/network"
+	"github.com/stellar/go/support/log"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 type StellarTomlHandler struct {
-	AnchorPlatformBaseSepURL string
-	DistributionPublicKey    string
-	NetworkPassphrase        string
-	Models                   *data.Models
-	Sep10SigningPublicKey    string
-	InstanceName             string
+	AnchorPlatformBaseSepURL    string
+	DistributionAccountResolver signing.DistributionAccountResolver
+	NetworkPassphrase           string
+	Models                      *data.Models
+	Sep10SigningPublicKey       string
+	InstanceName                string
 }
 
 const (
@@ -36,10 +39,16 @@ func (s *StellarTomlHandler) horizonURL() string {
 }
 
 // buildGeneralInformation will create the general informations based on the env vars injected into the handler.
-func (s *StellarTomlHandler) buildGeneralInformation() string {
+func (s *StellarTomlHandler) buildGeneralInformation(ctx context.Context, req *http.Request) string {
+	distributionPublicKey, err := s.DistributionAccountResolver.DistributionAccountFromContext(ctx)
+	if err != nil {
+		log.Warnf("Couldn't get distribution account from context in %s%s", req.Host, req.URL.Path)
+		distributionPublicKey = s.DistributionAccountResolver.HostDistributionAccount()
+	}
+
 	webAuthEndpoint := s.AnchorPlatformBaseSepURL + "/auth"
 	transferServerSep0024 := s.AnchorPlatformBaseSepURL + "/sep24"
-	accounts := fmt.Sprintf("[%q, %q]", s.DistributionPublicKey, s.Sep10SigningPublicKey)
+	accounts := fmt.Sprintf("[%q, %q]", distributionPublicKey, s.Sep10SigningPublicKey)
 
 	return fmt.Sprintf(`
 		ACCOUNTS=%s
@@ -100,7 +109,7 @@ func (s StellarTomlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		instanceAssets := services.DefaultAssetsNetworkMap[networkType]
-		stellarToml = s.buildGeneralInformation() + s.buildOrganizationDocumentation(s.InstanceName) + s.buildCurrencyInformation(instanceAssets)
+		stellarToml = s.buildGeneralInformation(ctx, r) + s.buildOrganizationDocumentation(s.InstanceName) + s.buildCurrencyInformation(instanceAssets)
 	} else {
 		// return a stellar.toml file for this tenant.
 		organization, innerErr := s.Models.Organizations.Get(r.Context())
@@ -115,7 +124,7 @@ func (s StellarTomlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		stellarToml = s.buildGeneralInformation() + s.buildOrganizationDocumentation(organization.Name) + s.buildCurrencyInformation(assets)
+		stellarToml = s.buildGeneralInformation(ctx, r) + s.buildOrganizationDocumentation(organization.Name) + s.buildCurrencyInformation(assets)
 	}
 
 	stellarToml = strings.TrimSpace(stellarToml)

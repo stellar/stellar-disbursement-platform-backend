@@ -15,6 +15,7 @@ type SignatureService struct {
 	DistAccountSigner SignatureClient
 	HostAccountSigner SignatureClient
 	DistributionAccountResolver
+	networkPassphrase string
 }
 
 var _ DistributionAccountResolver = (*SignatureService)(nil)
@@ -75,6 +76,10 @@ func NewSignatureService(opts SignatureServiceOptions) (SignatureService, error)
 		return SignatureService{}, fmt.Errorf("invalid distribution signer type %q", distSignerType)
 	}
 
+	if opts.DistributionAccountResolver == nil {
+		return SignatureService{}, fmt.Errorf("distribution account resolver cannot be nil")
+	}
+
 	sigClientOpts := SignatureClientOptions{
 		NetworkPassphrase:           opts.NetworkPassphrase,
 		DistributionPrivateKey:      opts.DistributionPrivateKey,
@@ -100,19 +105,15 @@ func NewSignatureService(opts SignatureServiceOptions) (SignatureService, error)
 		return SignatureService{}, fmt.Errorf("creating a new host account signature client: %w", err)
 	}
 
-	distAccResolver := opts.DistributionAccountResolver
-	if distAccResolver == nil {
-		var ok bool
-		distAccResolver, ok = distAccSigner.(DistributionAccountResolver)
-		if !ok {
-			return SignatureService{}, fmt.Errorf("trying to cast a distribution account signer to a distribution account resolver")
-		}
-	}
-
 	return SignatureService{
 		ChAccountSigner:             chAccountSigner,
 		DistAccountSigner:           distAccSigner,
 		HostAccountSigner:           hostAccSigner,
-		DistributionAccountResolver: distAccResolver,
+		DistributionAccountResolver: opts.DistributionAccountResolver,
+		networkPassphrase:           opts.NetworkPassphrase,
 	}, nil
+}
+
+func (ss *SignatureService) NetworkPassphrase() string {
+	return ss.networkPassphrase
 }

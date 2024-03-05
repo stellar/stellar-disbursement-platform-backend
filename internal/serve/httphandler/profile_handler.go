@@ -24,10 +24,12 @@ import (
 	"github.com/stellar/go/support/http/httpdecode"
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/support/render/httpjson"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 	authUtils "github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/utils"
@@ -38,13 +40,13 @@ import (
 const DefaultMaxMemoryAllocation = 2 * 1024 * 1024
 
 type ProfileHandler struct {
-	Models                *data.Models
-	AuthManager           auth.AuthManager
-	MaxMemoryAllocation   int64
-	BaseURL               string
-	PublicFilesFS         fs.FS
-	DistributionPublicKey string
-	PasswordValidator     *authUtils.PasswordValidator
+	Models                      *data.Models
+	AuthManager                 auth.AuthManager
+	MaxMemoryAllocation         int64
+	BaseURL                     string
+	PublicFilesFS               fs.FS
+	DistributionAccountResolver signing.DistributionAccountResolver
+	PasswordValidator           *authUtils.PasswordValidator
 }
 
 type PatchOrganizationProfileRequest struct {
@@ -349,10 +351,16 @@ func (h ProfileHandler) GetOrganizationInfo(rw http.ResponseWriter, req *http.Re
 		return
 	}
 
+	distributionPublicKey, err := h.DistributionAccountResolver.DistributionAccountFromContext(ctx)
+	if err != nil {
+		httperror.InternalError(ctx, "Cannot get distribution account public key", err, nil).Render(rw)
+		return
+	}
+
 	resp := map[string]interface{}{
 		"name":                             org.Name,
 		"logo_url":                         lu.String(),
-		"distribution_account_public_key":  h.DistributionPublicKey,
+		"distribution_account_public_key":  distributionPublicKey,
 		"timezone_utc_offset":              org.TimezoneUTCOffset,
 		"is_approval_required":             org.IsApprovalRequired,
 		"sms_resend_interval":              0,

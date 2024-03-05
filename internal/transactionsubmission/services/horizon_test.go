@@ -25,6 +25,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions"
 	preconditionsMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
+	sigMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
 )
@@ -49,14 +50,21 @@ func Test_CreateChannelAccountsOnChain(t *testing.T) {
 
 	distributionKP := keypair.MustRandom()
 	encrypterPass := distributionKP.Seed()
+
+	mDistAccResolver := sigMocks.NewMockDistributionAccountResolver(t)
+	mDistAccResolver.
+		On("HostDistributionAccount").
+		Return(distributionKP.Address())
+
 	sigService, err := signing.NewSignatureService(signing.SignatureServiceOptions{
-		DistributionSignerType:    signing.DistributionAccountEnvSignatureClientType,
-		NetworkPassphrase:         network.TestNetworkPassphrase,
-		DBConnectionPool:          dbConnectionPool,
-		DistributionPrivateKey:    distributionKP.Seed(),
-		ChAccEncryptionPassphrase: encrypterPass,
-		Encrypter:                 privateKeyEncrypterMock,
-		LedgerNumberTracker:       mLedgerNumberTracker,
+		DistributionSignerType:      signing.DistributionAccountEnvSignatureClientType,
+		NetworkPassphrase:           network.TestNetworkPassphrase,
+		DBConnectionPool:            dbConnectionPool,
+		DistributionPrivateKey:      distributionKP.Seed(),
+		ChAccEncryptionPassphrase:   encrypterPass,
+		Encrypter:                   privateKeyEncrypterMock,
+		LedgerNumberTracker:         mLedgerNumberTracker,
+		DistributionAccountResolver: mDistAccResolver,
 	})
 	require.NoError(t, err)
 

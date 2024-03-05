@@ -124,13 +124,11 @@ func Test_AssetHandler_CreateAsset(t *testing.T) {
 
 	code := "USDT"
 	issuer := "GBHC5ADV2XYITXCYC5F6X6BM2OYTYHV4ZU2JF6QWJORJQE2O7RKH2LAQ"
+	ctx := context.Background()
 
 	distAccResolver.
-		On("DistributionAccount").
-		Return(distributionKP.Address()).
-		Maybe()
-
-	ctx := context.Background()
+		On("DistributionAccountFromContext", ctx).
+		Return(distributionKP.Address(), nil)
 
 	t.Run("successfully create an asset", func(t *testing.T) {
 		getEntries := log.DefaultLogger.StartTest(log.InfoLevel)
@@ -550,9 +548,8 @@ func Test_AssetHandler_DeleteAsset(t *testing.T) {
 	r.Delete("/assets/{id}", handler.DeleteAsset)
 
 	distAccResolver.
-		On("DistributionAccount").
-		Return(distributionKP.Address()).
-		Maybe()
+		On("DistributionAccountFromContext", mock.AnythingOfType("*context.valueCtx")).
+		Return(distributionKP.Address(), nil)
 
 	t.Run("successfully delete an asset and remove the trustline", func(t *testing.T) {
 		data.DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
@@ -766,11 +763,6 @@ func Test_AssetHandler_handleUpdateAssetTrustlineForDistributionAccount(t *testi
 
 	ctx := context.Background()
 
-	distAccResolver.
-		On("DistributionAccount").
-		Return(distributionKP.Address()).
-		Maybe()
-
 	t.Run("returns error if no asset is provided", func(t *testing.T) {
 		err := handler.handleUpdateAssetTrustlineForDistributionAccount(ctx, nil, nil)
 		assert.EqualError(t, err, "should provide at least one asset")
@@ -780,6 +772,19 @@ func Test_AssetHandler_handleUpdateAssetTrustlineForDistributionAccount(t *testi
 		err := handler.handleUpdateAssetTrustlineForDistributionAccount(ctx, assetToRemoveTrustline, assetToRemoveTrustline)
 		assert.EqualError(t, err, "should provide different assets")
 	})
+
+	t.Run("returns error if fails getting distribution account from the resolver", func(t *testing.T) {
+		distAccResolver.
+			On("DistributionAccountFromContext", ctx).
+			Return("", errors.New("resolver error")).
+			Once()
+		err := handler.handleUpdateAssetTrustlineForDistributionAccount(ctx, assetToAddTrustline, assetToRemoveTrustline)
+		require.EqualError(t, err, "resolving distribution account from context: resolver error")
+	})
+
+	distAccResolver.
+		On("DistributionAccountFromContext", ctx).
+		Return(distributionKP.Address(), nil)
 
 	t.Run("returns error if fails getting distribution account details", func(t *testing.T) {
 		horizonClientMock.
@@ -1170,14 +1175,23 @@ func Test_AssetHandler_submitChangeTrustTransaction(t *testing.T) {
 
 	ctx := context.Background()
 
-	distAccResolver.
-		On("DistributionAccount").
-		Return(distributionKP.Address())
-
 	t.Run("returns error if no change trust operations is passed", func(t *testing.T) {
 		err := handler.submitChangeTrustTransaction(ctx, acc, []*txnbuild.ChangeTrust{})
 		assert.EqualError(t, err, "should have at least one change trust operation")
 	})
+
+	t.Run("returns error if fails getting distribution account from the resolver", func(t *testing.T) {
+		distAccResolver.
+			On("DistributionAccountFromContext", ctx).
+			Return("", errors.New("resolver error")).
+			Once()
+		err := handler.submitChangeTrustTransaction(ctx, acc, []*txnbuild.ChangeTrust{{}})
+		require.EqualError(t, err, "resolving distribution account from context: resolver error")
+	})
+
+	distAccResolver.
+		On("DistributionAccountFromContext", ctx).
+		Return(distributionKP.Address(), nil)
 
 	t.Run("returns error when fails signing transaction", func(t *testing.T) {
 		tx, err := txnbuild.NewTransaction(
@@ -1362,8 +1376,8 @@ func newAssetTestMock(t *testing.T, distributionAccountAddress string) *assetTes
 	horizonClientMock := &horizonclient.MockClient{}
 	signatureService, _, distAccSigClient, _, distAccResolver := signing.NewMockSignatureService(t)
 	distAccResolver.
-		On("DistributionAccount").
-		Return(distributionAccountAddress)
+		On("DistributionAccountFromContext", mock.Anything).
+		Return(distributionAccountAddress, nil)
 
 	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
 

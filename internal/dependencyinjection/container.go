@@ -43,8 +43,9 @@ func DeleteAndCloseInstanceByKey(ctx context.Context, instanceName string) {
 	delete(dependenciesStore, instanceName)
 
 	if closeableInstance, ok := instanceToDelete.(io.Closer); ok {
-		err := closeableInstance.Close()
-		log.Ctx(ctx).Errorf("error closing instance %s: %v", instanceName, err)
+		if err := closeableInstance.Close(); err != nil {
+			log.Ctx(ctx).Errorf("error closing instance=%s in DeleteAndCloseInstanceByKey: %v", instanceName, err)
+		}
 	}
 }
 
@@ -69,8 +70,9 @@ func DeleteAndCloseInstanceByValue(ctx context.Context, instance interface{}) {
 		delete(dependenciesStore, k)
 
 		if closeableInstance, ok2 := instanceToDelete.(io.Closer); ok2 {
-			err := closeableInstance.Close()
-			log.Ctx(ctx).Errorf("error closing instance %s: %v", k, err)
+			if err := closeableInstance.Close(); err != nil {
+				log.Ctx(ctx).Errorf("error closing instance=%s in DeleteAndCloseInstanceByValue: %v", k, err)
+			}
 		}
 	}
 }

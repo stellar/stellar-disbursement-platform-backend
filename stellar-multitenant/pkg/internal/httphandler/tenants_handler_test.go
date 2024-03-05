@@ -49,7 +49,7 @@ func runBadRequestPatchTest(t *testing.T, r *chi.Mux, url, fieldName, errorMsg s
 
 func runSuccessfulRequestPatchTest(t *testing.T, r *chi.Mux, ctx context.Context, dbConnectionPool db.DBConnectionPool, handler TenantsHandler, reqBody, expectedRespBody string) {
 	tenant.DeleteAllTenantsFixture(t, ctx, dbConnectionPool)
-	tnt := tenant.CreateTenantFixture(t, ctx, dbConnectionPool, "aid-org")
+	tnt := tenant.CreateTenantFixture(t, ctx, dbConnectionPool, "aid-org", "GCTNUNQVX7BNIP5AUWW2R4YC7G6R3JGUDNMGT7H62BGBUY4A4V6ROAAH")
 	url := fmt.Sprintf("/tenants/%s", tnt.ID)
 
 	rr := httptest.NewRecorder()
@@ -112,8 +112,8 @@ func Test_TenantHandler_Get(t *testing.T) {
 	})
 
 	tenant.DeleteAllTenantsFixture(t, ctx, dbConnectionPool)
-	tnt1 := tenant.CreateTenantFixture(t, ctx, dbConnectionPool, "myorg1")
-	tnt2 := tenant.CreateTenantFixture(t, ctx, dbConnectionPool, "myorg2")
+	tnt1 := tenant.CreateTenantFixture(t, ctx, dbConnectionPool, "myorg1", "GCTNUNQVX7BNIP5AUWW2R4YC7G6R3JGUDNMGT7H62BGBUY4A4V6ROAAH")
+	tnt2 := tenant.CreateTenantFixture(t, ctx, dbConnectionPool, "myorg2", "GB37V3J5C3RAJY6BI52MAAWF6AVKJH7J4L2DVBMOP7WQJHQPNIBR3FKH")
 
 	t.Run("GetAll successfully returns a list of all tenants", func(t *testing.T) {
 		rr := httptest.NewRecorder()
@@ -139,7 +139,7 @@ func Test_TenantHandler_Get(t *testing.T) {
 					"base_url": null,
 					"sdp_ui_base_url": null,
 					"status": "TENANT_CREATED",
-					"distribution_account": null,
+					"distribution_account": %q,
 					"created_at": %q,
 					"updated_at": %q
 				},
@@ -151,12 +151,14 @@ func Test_TenantHandler_Get(t *testing.T) {
 					"base_url": null,
 					"sdp_ui_base_url": null,
 					"status": "TENANT_CREATED",
-					"distribution_account": null,
+					"distribution_account": %q,
 					"created_at": %q,
 					"updated_at": %q
 				}
 			]
-		`, tnt1.ID, tnt1.Name, tnt1.CreatedAt.Format(time.RFC3339Nano), tnt1.UpdatedAt.Format(time.RFC3339Nano), tnt2.ID, tnt2.Name, tnt2.CreatedAt.Format(time.RFC3339Nano), tnt2.UpdatedAt.Format(time.RFC3339Nano))
+		`,
+			tnt1.ID, tnt1.Name, *tnt1.DistributionAccount, tnt1.CreatedAt.Format(time.RFC3339Nano), tnt1.UpdatedAt.Format(time.RFC3339Nano),
+			tnt2.ID, tnt2.Name, *tnt2.DistributionAccount, tnt2.CreatedAt.Format(time.RFC3339Nano), tnt2.UpdatedAt.Format(time.RFC3339Nano))
 		assert.JSONEq(t, expectedRespBody, string(respBody))
 	})
 
@@ -184,11 +186,11 @@ func Test_TenantHandler_Get(t *testing.T) {
 				"base_url": null,
 				"sdp_ui_base_url": null,
 				"status": "TENANT_CREATED",
-				"distribution_account": null,
+				"distribution_account": %q,
 				"created_at": %q,
 				"updated_at": %q
 			}
-		`, tnt1.ID, tnt1.Name, tnt1.CreatedAt.Format(time.RFC3339Nano), tnt1.UpdatedAt.Format(time.RFC3339Nano))
+		`, tnt1.ID, tnt1.Name, *tnt1.DistributionAccount, tnt1.CreatedAt.Format(time.RFC3339Nano), tnt1.UpdatedAt.Format(time.RFC3339Nano))
 		assert.JSONEq(t, expectedRespBody, string(respBody))
 	})
 
@@ -216,11 +218,11 @@ func Test_TenantHandler_Get(t *testing.T) {
 				"base_url": null,
 				"sdp_ui_base_url": null,
 				"status": "TENANT_CREATED",
-				"distribution_account": null,
+				"distribution_account": %q,
 				"created_at": %q,
 				"updated_at": %q
 			}
-		`, tnt2.ID, tnt2.Name, tnt2.CreatedAt.Format(time.RFC3339Nano), tnt2.UpdatedAt.Format(time.RFC3339Nano))
+		`, tnt2.ID, tnt2.Name, *tnt2.DistributionAccount, tnt2.CreatedAt.Format(time.RFC3339Nano), tnt2.UpdatedAt.Format(time.RFC3339Nano))
 		assert.JSONEq(t, expectedRespBody, string(respBody))
 	})
 
@@ -485,7 +487,7 @@ func Test_TenantHandler_Patch(t *testing.T) {
 	r.Patch("/tenants/{id}", handler.Patch)
 
 	tenant.DeleteAllTenantsFixture(t, ctx, dbConnectionPool)
-	tnt := tenant.CreateTenantFixture(t, ctx, dbConnectionPool, "aid-org")
+	tnt := tenant.CreateTenantFixture(t, ctx, dbConnectionPool, "aid-org", "GCTNUNQVX7BNIP5AUWW2R4YC7G6R3JGUDNMGT7H62BGBUY4A4V6ROAAH")
 	url := fmt.Sprintf("/tenants/%s", tnt.ID)
 
 	t.Run("returns BadRequest with empty body", func(t *testing.T) {
@@ -550,7 +552,7 @@ func Test_TenantHandler_Patch(t *testing.T) {
 			"base_url": null,
 			"sdp_ui_base_url": null,
 			"status": "TENANT_CREATED",
-			"distribution_account": null,
+			"distribution_account": "GCTNUNQVX7BNIP5AUWW2R4YC7G6R3JGUDNMGT7H62BGBUY4A4V6ROAAH",
 		`
 
 		runSuccessfulRequestPatchTest(t, r, ctx, dbConnectionPool, handler, reqBody, expectedRespBody)
@@ -564,7 +566,7 @@ func Test_TenantHandler_Patch(t *testing.T) {
 			"base_url": null,
 			"sdp_ui_base_url": null,
 			"status": "TENANT_CREATED",
-			"distribution_account": null,
+			"distribution_account": "GCTNUNQVX7BNIP5AUWW2R4YC7G6R3JGUDNMGT7H62BGBUY4A4V6ROAAH",
 		`
 
 		runSuccessfulRequestPatchTest(t, r, ctx, dbConnectionPool, handler, reqBody, expectedRespBody)
@@ -578,7 +580,7 @@ func Test_TenantHandler_Patch(t *testing.T) {
 			"base_url": "http://valid.com",
 			"sdp_ui_base_url": null,
 			"status": "TENANT_CREATED",
-			"distribution_account": null,
+			"distribution_account": "GCTNUNQVX7BNIP5AUWW2R4YC7G6R3JGUDNMGT7H62BGBUY4A4V6ROAAH",
 		`
 
 		runSuccessfulRequestPatchTest(t, r, ctx, dbConnectionPool, handler, reqBody, expectedRespBody)
@@ -592,7 +594,7 @@ func Test_TenantHandler_Patch(t *testing.T) {
 			"base_url": null,
 			"sdp_ui_base_url": "http://valid.com",
 			"status": "TENANT_CREATED",
-			"distribution_account": null,
+			"distribution_account": "GCTNUNQVX7BNIP5AUWW2R4YC7G6R3JGUDNMGT7H62BGBUY4A4V6ROAAH",
 		`
 
 		runSuccessfulRequestPatchTest(t, r, ctx, dbConnectionPool, handler, reqBody, expectedRespBody)
@@ -606,7 +608,7 @@ func Test_TenantHandler_Patch(t *testing.T) {
 			"base_url": null,
 			"sdp_ui_base_url": null,
 			"status": "TENANT_ACTIVATED",
-			"distribution_account": null,
+			"distribution_account": "GCTNUNQVX7BNIP5AUWW2R4YC7G6R3JGUDNMGT7H62BGBUY4A4V6ROAAH",
 		`
 
 		runSuccessfulRequestPatchTest(t, r, ctx, dbConnectionPool, handler, reqBody, expectedRespBody)

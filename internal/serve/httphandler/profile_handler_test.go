@@ -22,6 +22,7 @@ import (
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -29,6 +30,8 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/publicfiles"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
+	sigMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/utils"
 )
@@ -1004,7 +1007,6 @@ func Test_ProfileHandler_GetProfile(t *testing.T) {
 func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
-
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
@@ -1012,11 +1014,17 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
-	distributionAccountPK := keypair.MustRandom().Address()
-	handler := &ProfileHandler{Models: models, BaseURL: "http://localhost:8000", DistributionPublicKey: distributionAccountPK}
+	hostDistAccPublicKey := keypair.MustRandom().Address()
+	defaultTenantDistAcc := "GDIVVKL6QYF6C6K3C5PZZBQ2NQDLN2OSLMVIEQRHS6DZE7WRL33ZDNXL"
+	distAccResolver, err := signing.NewDistributionAccountResolver(signing.DistributionAccountResolverOptions{
+		AdminDBConnectionPool:            dbConnectionPool,
+		HostDistributionAccountPublicKey: hostDistAccPublicKey,
+	})
+	require.NoError(t, err)
+	handler := &ProfileHandler{Models: models, BaseURL: "http://localhost:8000", DistributionAccountResolver: distAccResolver}
 	url := "/profile/info"
 
-	ctx := context.Background()
+	ctx := tenant.LoadDefaultTenantInContext(t, dbConnectionPool)
 
 	t.Run("returns Unauthorized error when no token is found", func(t *testing.T) {
 		w := httptest.NewRecorder()
@@ -1058,6 +1066,35 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 		assert.Equal(t, `Cannot get logo URL: parse "%invalid%": invalid URL escape "%in"`, entries[0].Message)
 	})
 
+	t.Run("returns InternalServerError if getting the distribution account public key fails", func(t *testing.T) {
+		ctx = context.WithValue(ctx, middleware.TokenContextKey, "mytoken")
+
+		w := httptest.NewRecorder()
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+		require.NoError(t, err)
+
+		getEntries := log.DefaultLogger.StartTest(log.ErrorLevel)
+
+		mDistAccResolver := sigMocks.NewMockDistributionAccountResolver(t)
+		mDistAccResolver.
+			On("DistributionAccountFromContext", ctx).
+			Return("", errors.New("unexpected error")).
+			Once()
+		h := &ProfileHandler{Models: models, BaseURL: "http://localhost:8000", DistributionAccountResolver: mDistAccResolver}
+		http.HandlerFunc(h.GetOrganizationInfo).ServeHTTP(w, req)
+
+		resp := w.Result()
+
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+		assert.JSONEq(t, `{"error": "Cannot get distribution account public key"}`, string(respBody))
+
+		entries := getEntries()
+		assert.Equal(t, "Cannot get distribution account public key: unexpected error", entries[0].Message)
+	})
+
 	t.Run("returns the organization info successfully", func(t *testing.T) {
 		ctx = context.WithValue(ctx, middleware.TokenContextKey, "mytoken")
 
@@ -1082,7 +1119,7 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 				"sms_resend_interval": 0,
 				"payment_cancellation_period_days": 0
 			}
-		`, distributionAccountPK)
+		`, defaultTenantDistAcc)
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.JSONEq(t, wantsBody, string(respBody))
@@ -1118,7 +1155,7 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 				"sms_resend_interval": 0,
 				"payment_cancellation_period_days": 0
 			}
-		`, distributionAccountPK)
+		`, defaultTenantDistAcc)
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.JSONEq(t, wantsBody, string(respBody))
@@ -1151,7 +1188,7 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 				"sms_resend_interval": 0,
 				"payment_cancellation_period_days": 0
 			}
-		`, distributionAccountPK)
+		`, defaultTenantDistAcc)
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.JSONEq(t, wantsBody, string(respBody))
@@ -1188,7 +1225,7 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 				"sms_resend_interval": 2,
 				"payment_cancellation_period_days": 0
 			}
-		`, distributionAccountPK)
+		`, defaultTenantDistAcc)
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.JSONEq(t, wantsBody, string(respBody))
@@ -1225,7 +1262,7 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 				"sms_resend_interval": 0,
 				"payment_cancellation_period_days": 5
 			}
-		`, distributionAccountPK)
+		`, defaultTenantDistAcc)
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.JSONEq(t, wantsBody, string(respBody))

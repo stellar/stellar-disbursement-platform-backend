@@ -21,6 +21,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/scheduler"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	serveadmin "github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/serve"
 )
 
@@ -242,7 +243,6 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			FlagDefault: 24,
 			Required:    true,
 		},
-		cmdUtils.DistributionPublicKey(&serveOpts.DistributionPublicKey),
 		{
 			Name:      "recaptcha-site-key",
 			Usage:     "The Google 'reCAPTCHA v2 - I'm not a robot' site key.",
@@ -383,6 +383,13 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 	eventBrokerOptions := cmdUtils.EventBrokerOptions{}
 	configOpts = append(configOpts, cmdUtils.EventBrokerConfigOptions(&eventBrokerOptions)...)
 
+	// distribution account resolver options:
+	distAccResolverOpts := signing.DistributionAccountResolverOptions{}
+	configOpts = append(
+		configOpts,
+		cmdUtils.DistributionPublicKey(&distAccResolverOpts.HostDistributionAccountPublicKey),
+	)
+
 	// signature service config options:
 	txSubmitterOpts := di.TxSubmitterEngineOptions{}
 	configOpts = append(
@@ -495,6 +502,14 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 				log.Ctx(ctx).Fatalf("error creating Anchor Platform API Service: %v", err)
 			}
 			serveOpts.AnchorPlatformAPIService = apAPIService
+
+			// Setup Distribution Account Resolver
+			distAccResolverOpts.AdminDBConnectionPool = adminDBConnectionPool
+			distAccResolver, err := di.NewDistributionAccountResolver(ctx, distAccResolverOpts)
+			if err != nil {
+				log.Ctx(ctx).Fatalf("error creating distribution account resolver: %v", err)
+			}
+			txSubmitterOpts.SignatureServiceOptions.DistributionAccountResolver = distAccResolver
 
 			// Setup the Submitter Engine
 			txSubmitterOpts.SignatureServiceOptions.DBConnectionPool = tssDBConnectionPool
