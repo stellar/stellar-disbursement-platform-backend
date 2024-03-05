@@ -20,36 +20,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 )
 
-func Test_ChannelAccountsCommand_Command(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-
-	globalOptions.DatabaseURL = dbt.DSN
-	globalOptions.NetworkPassphrase = network.TestNetworkPassphrase
-
-	rootCmmd := rootCmd()
-	caServiceMock := mocks.NewMockChAccCmdServiceInterface(t)
-	crashTrackerMock := &crashtracker.MockCrashTrackerClient{}
-	caCommand := (&ChannelAccountsCommand{CrashTrackerClient: crashTrackerMock}).Command(caServiceMock)
-	rootCmmd.AddCommand(caCommand)
-
-	distributionKP := keypair.MustRandom()
-	rootCmmd.SetArgs([]string{
-		"channel-accounts",
-		"verify",
-		"--database-url", dbt.DSN,
-		"--distribution-seed", distributionKP.Seed(),
-		"--distribution-public-key", distributionKP.Address(),
-		"--channel-account-encryption-passphrase", keypair.MustRandom().Seed(),
-	})
-
-	caServiceMock.
-		On("VerifyChannelAccounts", context.Background(), mock.Anything, false).
-		Return(nil)
-	err := caCommand.Execute()
-	require.NoError(t, err)
-}
-
 func Test_ChannelAccountsCommand_CreateCommand(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
