@@ -16,6 +16,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
@@ -27,6 +28,7 @@ type Manager struct {
 	db               db.DBConnectionPool
 	messengerClient  message.MessengerClient
 	distAccSigClient signing.SignatureClient
+	engine.SubmitterEngine
 }
 
 func (m *Manager) ProvisionNewTenant(

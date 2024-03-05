@@ -31,6 +31,10 @@ const MinNumberOfChannelAccounts = 1
 // The amount will be send back to the sponsoring account once the sponsored account is deleted onchain.
 const DefaultRevokeSponsorshipReserveAmount = "1.5"
 
+// DefaultTenantDistributionAccountAmount is the amount of the native asset that the host distribution account will send
+// to the tenant distribution account to boostrap it.
+const DefaultTenantDistributionAccountAmount = "5"
+
 // CreateChannelAccountsOnChain will create up to 19 accounts per Transaction due to the 20 signatures per tx limit This
 // is also a good opportunity to periodically write the generated accounts to persistent storage if generating large
 // amounts of channel accounts.
@@ -215,6 +219,66 @@ func DeleteChannelAccountOnChain(ctx context.Context, submiterEngine engine.Subm
 	err = submiterEngine.ChAccountSigner.Delete(ctx, chAccAddress)
 	if err != nil {
 		return fmt.Errorf("deleting channel account %s from the store: %w", chAccAddress, err)
+	}
+
+	return nil
+}
+
+func FundDistributionAccount(ctx context.Context, submitterEngine engine.SubmitterEngine, destinationAccount string) error {
+	hostAccount, err := submitterEngine.HorizonClient.AccountDetail(horizonclient.AccountRequest{
+		AccountID: submitterEngine.HostDistributionAccount(),
+	})
+	if err != nil {
+		err = utils.NewHorizonErrorWrapper(err)
+		return fmt.Errorf("failed to retrieve root account: %w", err)
+	}
+
+	if hostAccount.AccountID != destinationAccount {
+		return errors.New("destination account cannot be the same as the host account")
+	}
+
+	tx, err := txnbuild.NewTransaction(
+		txnbuild.TransactionParams{
+			SourceAccount:        &hostAccount,
+			IncrementSequenceNum: true,
+			BaseFee:              txnbuild.MinBaseFee,
+			Preconditions: txnbuild.Preconditions{
+				TimeBounds: txnbuild.NewInfiniteTimeout(), // Use a real timeout in production!
+			},
+			Operations: []txnbuild.Operation{
+				&txnbuild.Payment{
+					Destination: destinationAccount,
+					Amount:      DefaultTenantDistributionAccountAmount,
+					Asset:       txnbuild.NativeAsset{},
+				},
+			},
+		},
+	)
+	if err != nil {
+		return fmt.Errorf(
+			"creating raw payment tx from %s to %s: %w",
+			hostAccount.AccountID,
+			destinationAccount,
+			err,
+		)
+	}
+
+	// Host distribution account signing:
+	tx, err = submitterEngine.HostAccountSigner.SignStellarTransaction(ctx, tx, submitterEngine.HostDistributionAccount())
+	if err != nil {
+		return fmt.Errorf(
+			"signing payment tx from %s to %s: %w",
+			hostAccount.AccountID,
+			destinationAccount,
+			err,
+		)
+	}
+
+	_, err = submitterEngine.HorizonClient.SubmitTransactionWithOptions(tx, horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true})
+	if err != nil {
+		hError := utils.NewHorizonErrorWrapper(err)
+		return fmt.Errorf("submitting payment tx from %s to %s to the Stellar network: %w", hostAccount.AccountID,
+			destinationAccount, hError)
 	}
 
 	return nil
