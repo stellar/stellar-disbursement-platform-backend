@@ -631,7 +631,7 @@ func Test_LoggingMiddleware(t *testing.T) {
 		r := chi.NewRouter()
 		expectedRespBody := "ok"
 
-		infoEntries := log.DefaultLogger.StartTest(log.InfoLevel)
+		debugEntries := log.DefaultLogger.StartTest(log.DebugLevel)
 
 		tenantName := "tenant123"
 		tenantID := "tenant_id"
@@ -665,7 +665,7 @@ func Test_LoggingMiddleware(t *testing.T) {
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.Equal(t, expectedRespBody, string(respBody))
 
-		logEntries := infoEntries()
+		logEntries := debugEntries()
 		assert.Len(t, logEntries, 2)
 		for i, e := range logEntries {
 			entry, err := e.String()
@@ -679,6 +679,7 @@ func Test_LoggingMiddleware(t *testing.T) {
 			} else if i == 1 {
 				assert.Contains(t, e.Message, "finished request")
 			}
+			assert.Equal(t, log.InfoLevel, e.Level)
 		}
 	})
 
@@ -686,7 +687,7 @@ func Test_LoggingMiddleware(t *testing.T) {
 		r := chi.NewRouter()
 		expectedRespBody := "ok"
 
-		infoEntries := log.DefaultLogger.StartTest(log.InfoLevel)
+		debugEntries := log.DefaultLogger.StartTest(log.DebugLevel)
 
 		r.Use(LoggingMiddleware())
 		r.Get("/", func(w http.ResponseWriter, r *http.Request) {
@@ -710,7 +711,8 @@ func Test_LoggingMiddleware(t *testing.T) {
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.Equal(t, expectedRespBody, string(respBody))
 
-		logEntries := infoEntries()
+		logEntries := debugEntries()
+
 		assert.Len(t, logEntries, 3)
 		for i, e := range logEntries {
 			entry, err := e.String()
@@ -721,10 +723,13 @@ func Test_LoggingMiddleware(t *testing.T) {
 
 			if i == 0 {
 				assert.Contains(t, e.Message, "tenant cannot be derived from context")
+				assert.Equal(t, log.DebugLevel, e.Level)
 			} else if i == 1 {
 				assert.Contains(t, e.Message, "starting request")
+				assert.Equal(t, log.InfoLevel, e.Level)
 			} else if i == 2 {
 				assert.Contains(t, e.Message, "finished request")
+				assert.Equal(t, log.InfoLevel, e.Level)
 			}
 		}
 	})

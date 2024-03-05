@@ -401,6 +401,12 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			AuthManager:       authManager,
 			PasswordValidator: o.PasswordValidator,
 		}.ServeHTTP)
+
+		// This will be used for test purposes and will only be available when IsPubnet is false:
+		r.Delete("/wallet-registration/phone-number/{phone_number}", httphandler.DeletePhoneNumberHandler{
+			Models:            o.Models,
+			NetworkPassphrase: o.NetworkPassphrase,
+		}.ServeHTTP)
 	})
 
 	// SEP-24 and miscellaneous endpoints that are tenant-unaware
@@ -439,12 +445,6 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 				NetworkPassphrase:        o.NetworkPassphrase,
 				EventProducer:            o.EventProducer,
 			}.VerifyReceiverRegistration)
-
-			// This will be used for test purposes and will only be available when IsPubnet is false:
-			r.Group(func(r chi.Router) {
-				r.Use(middleware.TenantMiddleware(o.tenantManager, o.authManager))
-				r.Delete("/phone-number/{phone_number}", httphandler.DeletePhoneNumberHandler{Models: o.Models, NetworkPassphrase: o.NetworkPassphrase}.ServeHTTP)
-			})
 		})
 		// END SEP-24 endpoints
 	})

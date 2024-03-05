@@ -191,31 +191,34 @@ func LoggingMiddleware() func(http.Handler) http.Handler {
 			}
 			logCtx := log.Set(reqCtx, log.Ctx(reqCtx).WithFields(logFields))
 
-			tenant, err := tenant.GetTenantFromContext(reqCtx)
+			ctxTenant, err := tenant.GetTenantFromContext(reqCtx)
 			if err != nil {
-				log.Ctx(logCtx).Info("tenant cannot be derived from context")
+				// Log for auditing purposes when we cannot derive the tenant from the context in the case of
+				// tenant-unaware endpoints
+				log.Ctx(logCtx).Debug("tenant cannot be derived from context")
 			}
-			if tenant != nil {
-				logFields["tenant_name"] = tenant.Name
-				logFields["tenant_id"] = tenant.ID
+			if ctxTenant != nil {
+				logFields["tenant_name"] = ctxTenant.Name
+				logFields["tenant_id"] = ctxTenant.ID
 				logCtx = log.Set(reqCtx, log.Ctx(reqCtx).WithFields(logFields))
 			}
 
-			logRequestStart(logCtx, req)
-			started := time.Now()
 			req = req.WithContext(logCtx)
+
+			logRequestStart(req)
+			started := time.Now()
 
 			next.ServeHTTP(mw, req)
 			ended := time.Since(started)
-			logRequestEnd(logCtx, req, mw, ended)
+			logRequestEnd(req, mw, ended)
 		})
 	}
 }
 
-func logRequestStart(ctx context.Context, req *http.Request) {
-	l := log.Ctx(ctx).WithFields(
+func logRequestStart(req *http.Request) {
+	l := log.Ctx(req.Context()).WithFields(
 		log.F{
-			"subsys":    "htttp",
+			"subsys":    "http",
 			"path":      req.URL.String(),
 			"method":    req.Method,
 			"ip":        req.RemoteAddr,
@@ -227,8 +230,8 @@ func logRequestStart(ctx context.Context, req *http.Request) {
 	l.Info("starting request")
 }
 
-func logRequestEnd(ctx context.Context, req *http.Request, mw mutil.WriterProxy, duration time.Duration) {
-	l := log.Ctx(ctx).WithFields(log.F{
+func logRequestEnd(req *http.Request, mw mutil.WriterProxy, duration time.Duration) {
+	l := log.Ctx(req.Context()).WithFields(log.F{
 		"subsys":   "http",
 		"path":     req.URL.String(),
 		"method":   req.Method,
