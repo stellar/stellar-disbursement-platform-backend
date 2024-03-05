@@ -163,7 +163,10 @@ func (tw *TransactionWorker) handleFailedTransaction(ctx context.Context, txJob 
 		if hErrWrapper.IsHorizonError() {
 			isHorizonErr = true
 
-			// Errors that are not marked as definitive errors: 504: Timeouts, 429: Too Many Requests, 400's with error code tx_insufficient_fee, tx_too_late, tx_bad_seq
+			// Errors that are not marked as definitive errors:
+			//   - 504: Timeout
+			//   - 429: Too Many Requests
+			//   - 400: with any of the codes: [tx_insufficient_fee, tx_too_late, tx_bad_seq]
 			if hErrWrapper.ShouldMarkAsError() {
 				var updatedTx *store.Transaction
 				updatedTx, err = tw.txModel.UpdateStatusToError(ctx, txJob.Transaction, hErrWrapper.Error())
