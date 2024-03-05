@@ -327,7 +327,9 @@ func Test_handleHTTP_unauthenticatedEndpoints(t *testing.T) {
 		path   string
 	}{
 		{http.MethodGet, "/health"},
+		{http.MethodGet, "/.well-known/stellar.toml"},
 		{http.MethodPost, "/login"},
+		{http.MethodPost, "/mfa"},
 		{http.MethodPost, "/forgot-password"},
 		{http.MethodPost, "/reset-password"},
 	}
@@ -410,6 +412,7 @@ func Test_handleHTTP_authenticatedEndpoints(t *testing.T) {
 		// Organization
 		{http.MethodGet, "/organization"},
 		{http.MethodPatch, "/organization"},
+		{http.MethodGet, "/organization/logo"},
 	}
 
 	// Expect 401 as a response:
