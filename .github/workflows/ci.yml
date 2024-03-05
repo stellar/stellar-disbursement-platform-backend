@@ -136,7 +136,7 @@ jobs:
           cache-dependency-path: go.sum
 
       - name: Run tests
-        run: go test -race -timeout 3m -coverpkg=./... -coverprofile=c.out ./...
+        run: go test -race -timeout 3m -coverpkg=./... -coverprofile=c.out ./... -v
 
       - name: Validate Test Coverage Threshold
         env:
