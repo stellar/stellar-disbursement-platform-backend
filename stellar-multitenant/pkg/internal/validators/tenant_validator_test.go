@@ -195,8 +195,8 @@ func TestTenantValidator_ValidateUpdateTenantRequest(t *testing.T) {
 		tv := NewTenantValidator()
 		invalidValue := "invalid"
 		reqBody := &UpdateTenantRequest{
-			BaseURL:      &invalidValue,
-			SDPUIBaseURL: &invalidValue,
+			BaseURL:      &[]string{invalidValue}[0],
+			SDPUIBaseURL: &[]string{invalidValue}[0],
 		}
 		tv.ValidateUpdateTenantRequest(reqBody)
 		assert.True(t, tv.HasErrors())
