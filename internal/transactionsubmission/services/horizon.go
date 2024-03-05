@@ -224,17 +224,17 @@ func DeleteChannelAccountOnChain(ctx context.Context, submiterEngine engine.Subm
 	return nil
 }
 
-func FundDistributionAccount(ctx context.Context, submitterEngine engine.SubmitterEngine, destinationAccount string) error {
+func FundDistributionAccount(ctx context.Context, submitterEngine engine.SubmitterEngine) error {
+	// use dist account resolver to get the destination account
+	destinationAccount := ""
+	// compare host distribution account with the destination account, exit early if they are the same
+
 	hostAccount, err := submitterEngine.HorizonClient.AccountDetail(horizonclient.AccountRequest{
 		AccountID: submitterEngine.HostDistributionAccount(),
 	})
 	if err != nil {
 		err = utils.NewHorizonErrorWrapper(err)
 		return fmt.Errorf("failed to retrieve root account: %w", err)
-	}
-
-	if hostAccount.AccountID != destinationAccount {
-		return errors.New("destination account cannot be the same as the host account")
 	}
 
 	tx, err := txnbuild.NewTransaction(
