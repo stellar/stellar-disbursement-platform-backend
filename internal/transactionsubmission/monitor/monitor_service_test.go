@@ -16,7 +16,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 )
 
-func Test_TSSMonitorService_MonitorPayment(t *testing.T) {
+func Test_TSSMonitorService_LogAndMonitorPayment(t *testing.T) {
 	mMonitorClient := sdpMonitorMocks.MockMonitorClient{}
 	tssMonitorSvc := TSSMonitorService{
 		Client:        &mMonitorClient,
@@ -129,7 +129,7 @@ func Test_TSSMonitorService_MonitorPayment(t *testing.T) {
 			ctx := context.Background()
 
 			mMonitorClient.On("MonitorCounters", tc.metricTag, mock.Anything).Return(nil).Once()
-			tssMonitorSvc.MonitorPayment(ctx, tc.txModel, tc.metricTag, tc.txMetadata)
+			tssMonitorSvc.LogAndMonitorPayment(ctx, tc.txModel, tc.metricTag, tc.txMetadata)
 
 			logEntries := getLogEntries()
 			assert.NotEmpty(t, logEntries[0])

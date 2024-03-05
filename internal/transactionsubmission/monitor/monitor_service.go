@@ -47,8 +47,9 @@ func (ms *TSSMonitorService) Start(opts sdpMonitor.MetricOptions) error {
 	return nil
 }
 
-// MonitorPayment sends a metric about a payment tx to the observer, linking it to a entry in the logs that contains specific metadata about said tx.
-func (ms *TSSMonitorService) MonitorPayment(ctx context.Context, tx store.Transaction, metricTag sdpMonitor.MetricTag, txMetadata TxMetadata) {
+// LogAndMonitorPayment sends a metric about a payment tx to the observer, and logs the event and some additional data.
+// The event and the log can be correlated through the event_id field.
+func (ms *TSSMonitorService) LogAndMonitorPayment(ctx context.Context, tx store.Transaction, metricTag sdpMonitor.MetricTag, txMetadata TxMetadata) {
 	eventID := uuid.New().String()
 	paymentLogMessage := paymentLogMessage(eventID, metricTag)
 
