@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"slices"
 	"time"
 
 	"github.com/google/uuid"
@@ -57,34 +58,30 @@ func (ms *TSSMonitorService) LogAndMonitorPayment(ctx context.Context, tx store.
 		"event_id":        eventID,
 		"event_type":      txMetadata.PaymentEventType,
 		"tx_id":           tx.ID,
+		"tenant_id":       tx.TenantID,
 		"event_time":      time.Now().String(),
 		"app_version":     ms.Version,
 		"git_commit_hash": ms.GitCommitHash,
 	}
+	paymentLog := log.Ctx(ctx).WithFields(log.F{
+		"created_at":          tx.CreatedAt.String(),
+		"updated_at":          tx.UpdatedAt.String(),
+		"asset":               tx.AssetCode,
+		"channel_account":     txMetadata.SrcChannelAcc,
+		"destination_account": tx.Destination,
+	})
+	for key, value := range labels {
+		paymentLog = paymentLog.WithField(key, value)
+	}
 
 	err := ms.MonitorCounters(metricTag, labels)
 	if err != nil {
-		log.Ctx(ctx).Errorf(
+		paymentLog.Errorf(
 			"cannot send counters metric for event id with event type: %s, %s",
 			eventID,
 			txMetadata.PaymentEventType,
 		)
 	}
-
-	paymentLog := log.Ctx(ctx)
-	for label_name, value := range labels {
-		paymentLog = paymentLog.WithField(label_name, value)
-	}
-
-	paymentLog = paymentLog.WithFields(
-		log.F{
-			"created_at":          tx.CreatedAt.String(),
-			"updated_at":          tx.UpdatedAt.String(),
-			"asset":               tx.AssetCode,
-			"channel_account":     txMetadata.SrcChannelAcc,
-			"destination_account": tx.Destination,
-		},
-	)
 
 	if metricTag == sdpMonitor.PaymentProcessingStartedTag {
 		paymentLog.Debug(paymentLogMessage)
@@ -105,32 +102,24 @@ func (ms *TSSMonitorService) LogAndMonitorPayment(ctx context.Context, tx store.
 	}
 
 	// successful transactions
-	if (metricTag == sdpMonitor.PaymentReconciliationSuccessfulTag && txMetadata.PaymentEventType == sdpMonitor.PaymentReconciliationTransactionSuccessfulLabel) ||
-		metricTag == sdpMonitor.PaymentTransactionSuccessfulTag {
+	isSuccessful := (metricTag == sdpMonitor.PaymentTransactionSuccessfulTag) ||
+		(metricTag == sdpMonitor.PaymentReconciliationSuccessfulTag && txMetadata.PaymentEventType == sdpMonitor.PaymentReconciliationTransactionSuccessfulLabel)
+	if isSuccessful {
 		paymentLog.
-			WithFields(
-				log.F{
-					"tx_hash":      tx.StellarTransactionHash.String,
-					"completed_at": tx.CompletedAt.String(),
-				},
-			).Info(paymentLogMessage)
-
-		return
-	}
-
-	// unsuccessful transactions
-	if metricTag == sdpMonitor.PaymentErrorTag || metricTag == sdpMonitor.PaymentReconciliationFailureTag {
+			WithFields(log.F{
+				"tx_hash":      tx.StellarTransactionHash.String,
+				"completed_at": tx.CompletedAt.String(),
+			}).Info(paymentLogMessage)
+	} else if slices.Contains([]sdpMonitor.MetricTag{sdpMonitor.PaymentErrorTag, sdpMonitor.PaymentReconciliationFailureTag}, metricTag) {
+		// unsuccessful transactions
 		paymentLog.
-			WithFields(
-				log.F{
-					"horizon_error?": txMetadata.IsHorizonErr,
-					"error":          txMetadata.ErrStack,
-				},
-			).Error(paymentLogMessage)
-		return
+			WithFields(log.F{
+				"horizon_error?": txMetadata.IsHorizonErr,
+				"error":          txMetadata.ErrStack,
+			}).Error(paymentLogMessage)
+	} else {
+		paymentLog.Errorf("Cannot recognize metricTag=%s for event=%s with PaymentEventType=%s", metricTag, eventID, txMetadata.PaymentEventType)
 	}
-
-	log.Ctx(ctx).Errorf("Cannot recognize metric tag %s for event %s", metricTag, eventID)
 }
 
 func (ms *TSSMonitorService) GetMetricHttpHandler() (http.Handler, error) {
