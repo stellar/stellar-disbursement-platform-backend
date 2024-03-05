@@ -420,12 +420,12 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 
 		// START SEP-24 endpoints
 		r.Get("/.well-known/stellar.toml", httphandler.StellarTomlHandler{
-			AnchorPlatformBaseSepURL: o.AnchorPlatformBaseSepURL,
-			DistributionPublicKey:    o.DistributionPublicKey,
-			NetworkPassphrase:        o.NetworkPassphrase,
-			Models:                   o.Models,
-			Sep10SigningPublicKey:    o.Sep10SigningPublicKey,
-			InstanceName:             o.InstanceName,
+			AnchorPlatformBaseSepURL:    o.AnchorPlatformBaseSepURL,
+			DistributionAccountResolver: o.SubmitterEngine.DistributionAccountResolver,
+			NetworkPassphrase:           o.NetworkPassphrase,
+			Models:                      o.Models,
+			Sep10SigningPublicKey:       o.Sep10SigningPublicKey,
+			InstanceName:                o.InstanceName,
 		}.ServeHTTP)
 
 		r.Route("/wallet-registration", func(r chi.Router) {
