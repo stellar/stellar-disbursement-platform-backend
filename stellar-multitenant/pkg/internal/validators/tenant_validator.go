@@ -21,8 +21,6 @@ type TenantRequest struct {
 	OrganizationName    string                 `json:"organization_name"`
 	EmailSenderType     tenant.EmailSenderType `json:"email_sender_type"`
 	SMSSenderType       tenant.SMSSenderType   `json:"sms_sender_type"`
-	EnableMFA           bool                   `json:"enable_mfa"`
-	EnableReCAPTCHA     bool                   `json:"enable_recaptcha"`
 	BaseURL             string                 `json:"base_url"`
 	SDPUIBaseURL        string                 `json:"sdp_ui_base_url"`
 	DistributionAccount string                 `json:"distribution_account"`
@@ -31,8 +29,6 @@ type TenantRequest struct {
 type UpdateTenantRequest struct {
 	EmailSenderType     *tenant.EmailSenderType `json:"email_sender_type"`
 	SMSSenderType       *tenant.SMSSenderType   `json:"sms_sender_type"`
-	EnableMFA           *bool                   `json:"enable_mfa"`
-	EnableReCAPTCHA     *bool                   `json:"enable_recaptcha"`
 	BaseURL             *string                 `json:"base_url"`
 	SDPUIBaseURL        *string                 `json:"sdp_ui_base_url"`
 	Status              *tenant.TenantStatus    `json:"status"`

@@ -59,8 +59,6 @@ func TestTenantValidator_ValidateCreateTenantRequest(t *testing.T) {
 			OrganizationName: "Aid Org",
 			EmailSenderType:  tenant.AWSEmailSenderType,
 			SMSSenderType:    tenant.TwilioSMSSenderType,
-			EnableMFA:        true,
-			EnableReCAPTCHA:  true,
 			SDPUIBaseURL:     "http://localhost:3000",
 			BaseURL:          "http://localhost:8000",
 		}
@@ -82,8 +80,6 @@ func TestTenantValidator_ValidateCreateTenantRequest(t *testing.T) {
 			OrganizationName: "",
 			EmailSenderType:  tenant.AWSEmailSenderType,
 			SMSSenderType:    tenant.TwilioSMSSenderType,
-			EnableMFA:        true,
-			EnableReCAPTCHA:  true,
 			BaseURL:          "http://localhost:8000",
 			SDPUIBaseURL:     "http://localhost:3000",
 		}
@@ -117,15 +113,15 @@ func TestTenantValidator_ValidateCreateTenantRequest(t *testing.T) {
 			OrganizationName: "Aid Org",
 			EmailSenderType:  "invalid",
 			SMSSenderType:    tenant.TwilioSMSSenderType,
-			EnableMFA:        true,
-			EnableReCAPTCHA:  true,
 			SDPUIBaseURL:     "http://localhost:3000",
 			BaseURL:          "http://localhost:8000",
 		}
 
 		tv.ValidateCreateTenantRequest(reqBody)
 		assert.True(t, tv.HasErrors())
-		assert.Equal(t, map[string]interface{}{"email_sender_type": "invalid email sender type. Expected one of these values: [AWS_EMAIL DRY_RUN]"}, tv.Errors)
+		assert.Equal(t, map[string]interface{}{
+			"email_sender_type": "invalid email sender type. Expected one of these values: [AWS_EMAIL DRY_RUN]",
+		}, tv.Errors)
 
 		reqBody.EmailSenderType = tenant.DryRunEmailSenderType
 		tv.Errors = map[string]interface{}{}
@@ -143,15 +139,15 @@ func TestTenantValidator_ValidateCreateTenantRequest(t *testing.T) {
 			OrganizationName: "Aid Org",
 			EmailSenderType:  tenant.AWSEmailSenderType,
 			SMSSenderType:    "invalid",
-			EnableMFA:        true,
-			EnableReCAPTCHA:  true,
 			SDPUIBaseURL:     "http://localhost:3000",
 			BaseURL:          "http://localhost:8000",
 		}
 
 		tv.ValidateCreateTenantRequest(reqBody)
 		assert.True(t, tv.HasErrors())
-		assert.Equal(t, map[string]interface{}{"sms_sender_type": "invalid sms sender type. Expected one of these values: [TWILIO_SMS AWS_SMS DRY_RUN]"}, tv.Errors)
+		assert.Equal(t, map[string]interface{}{
+			"sms_sender_type": "invalid sms sender type. Expected one of these values: [TWILIO_SMS AWS_SMS DRY_RUN]",
+		}, tv.Errors)
 
 		reqBody.SMSSenderType = tenant.DryRunSMSSenderType
 		tv.Errors = map[string]interface{}{}
@@ -169,8 +165,6 @@ func TestTenantValidator_ValidateCreateTenantRequest(t *testing.T) {
 			OrganizationName: "Aid Org",
 			EmailSenderType:  tenant.AWSEmailSenderType,
 			SMSSenderType:    tenant.TwilioSMSSenderType,
-			EnableMFA:        true,
-			EnableReCAPTCHA:  true,
 			SDPUIBaseURL:     "%invalid%",
 			BaseURL:          "%invalid%",
 		}
@@ -229,13 +223,10 @@ func TestTenantValidator_ValidateUpdateTenantRequest(t *testing.T) {
 
 	t.Run("validates request body successfully", func(t *testing.T) {
 		tv := NewTenantValidator()
-		enable := false
-		url := "valid.com"
+		url := "valid.com:3000"
 		reqBody := &UpdateTenantRequest{
 			EmailSenderType: &tenant.AWSEmailSenderType,
 			SMSSenderType:   &tenant.AWSSMSSenderType,
-			EnableMFA:       &enable,
-			EnableReCAPTCHA: &enable,
 			BaseURL:         &url,
 			SDPUIBaseURL:    &url,
 		}

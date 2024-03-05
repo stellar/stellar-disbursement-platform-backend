@@ -136,8 +136,6 @@ func Test_TenantHandler_Get(t *testing.T) {
 					"name": %q,
 					"email_sender_type": "DRY_RUN",
 					"sms_sender_type": "DRY_RUN",
-					"enable_mfa": true,
-					"enable_recaptcha": true,
 					"base_url": null,
 					"sdp_ui_base_url": null,
 					"status": "TENANT_CREATED",
@@ -150,8 +148,6 @@ func Test_TenantHandler_Get(t *testing.T) {
 					"name": %q,
 					"email_sender_type": "DRY_RUN",
 					"sms_sender_type": "DRY_RUN",
-					"enable_mfa": true,
-					"enable_recaptcha": true,
 					"base_url": null,
 					"sdp_ui_base_url": null,
 					"status": "TENANT_CREATED",
@@ -185,8 +181,6 @@ func Test_TenantHandler_Get(t *testing.T) {
 				"name": %q,
 				"email_sender_type": "DRY_RUN",
 				"sms_sender_type": "DRY_RUN",
-				"enable_mfa": true,
-				"enable_recaptcha": true,
 				"base_url": null,
 				"sdp_ui_base_url": null,
 				"status": "TENANT_CREATED",
@@ -219,8 +213,6 @@ func Test_TenantHandler_Get(t *testing.T) {
 				"name": %q,
 				"email_sender_type": "DRY_RUN",
 				"sms_sender_type": "DRY_RUN",
-				"enable_mfa": true,
-				"enable_recaptcha": true,
 				"base_url": null,
 				"sdp_ui_base_url": null,
 				"status": "TENANT_CREATED",
@@ -340,8 +332,6 @@ func Test_TenantHandler_Post(t *testing.T) {
 				"organization_name": "My Aid Org",
 				"email_sender_type": "DRY_RUN",
 				"sms_sender_type": "DRY_RUN",
-				"enable_recaptcha": true,
-				"enable_mfa": false,
 				"base_url": "https://backend.sdp.org",
 				"sdp_ui_base_url": "https://aid-org.sdp.org"
 			}
@@ -368,8 +358,6 @@ func Test_TenantHandler_Post(t *testing.T) {
 				"name": "aid-org",
 				"email_sender_type": "DRY_RUN",
 				"sms_sender_type": "DRY_RUN",
-				"enable_mfa": false,
-				"enable_recaptcha": true,
 				"base_url": "https://backend.sdp.org",
 				"sdp_ui_base_url": "https://aid-org.sdp.org",
 				"status": "TENANT_PROVISIONED",
@@ -443,8 +431,6 @@ func Test_TenantHandler_Post(t *testing.T) {
 				"organization_name": "My Aid Org",
 				"email_sender_type": "DRY_RUN",
 				"sms_sender_type": "DRY_RUN",
-				"enable_recaptcha": true,
-				"enable_mfa": false,
 				"base_url": "https://backend.sdp.org",
 				"sdp_ui_base_url": "https://aid-org.sdp.org"
 			}
@@ -561,8 +547,6 @@ func Test_TenantHandler_Patch(t *testing.T) {
 		expectedRespBody := `
 			"email_sender_type": "AWS_EMAIL",
 			"sms_sender_type": "DRY_RUN",
-			"enable_mfa": true,
-			"enable_recaptcha": true,
 			"base_url": null,
 			"sdp_ui_base_url": null,
 			"status": "TENANT_CREATED",
@@ -577,40 +561,6 @@ func Test_TenantHandler_Patch(t *testing.T) {
 		expectedRespBody := `
 			"email_sender_type": "DRY_RUN",
 			"sms_sender_type": "TWILIO_SMS",
-			"enable_mfa": true,
-			"enable_recaptcha": true,
-			"base_url": null,
-			"sdp_ui_base_url": null,
-			"status": "TENANT_CREATED",
-			"distribution_account": null,
-		`
-
-		runSuccessfulRequestPatchTest(t, r, ctx, dbConnectionPool, handler, reqBody, expectedRespBody)
-	})
-
-	t.Run("successfully updates EnableMFA of a tenant", func(t *testing.T) {
-		reqBody := `{"enable_mfa": false}`
-		expectedRespBody := `
-			"email_sender_type": "DRY_RUN",
-			"sms_sender_type": "DRY_RUN",
-			"enable_mfa": false,
-			"enable_recaptcha": true,
-			"base_url": null,
-			"sdp_ui_base_url": null,
-			"status": "TENANT_CREATED",
-			"distribution_account": null,
-		`
-
-		runSuccessfulRequestPatchTest(t, r, ctx, dbConnectionPool, handler, reqBody, expectedRespBody)
-	})
-
-	t.Run("successfully updates EnableReCAPTCHA of a tenant", func(t *testing.T) {
-		reqBody := `{"enable_recaptcha": false}`
-		expectedRespBody := `
-			"email_sender_type": "DRY_RUN",
-			"sms_sender_type": "DRY_RUN",
-			"enable_mfa": true,
-			"enable_recaptcha": false,
 			"base_url": null,
 			"sdp_ui_base_url": null,
 			"status": "TENANT_CREATED",
@@ -625,8 +575,6 @@ func Test_TenantHandler_Patch(t *testing.T) {
 		expectedRespBody := `
 			"email_sender_type": "DRY_RUN",
 			"sms_sender_type": "DRY_RUN",
-			"enable_mfa": true,
-			"enable_recaptcha": true,
 			"base_url": "http://valid.com",
 			"sdp_ui_base_url": null,
 			"status": "TENANT_CREATED",
@@ -641,8 +589,6 @@ func Test_TenantHandler_Patch(t *testing.T) {
 		expectedRespBody := `
 			"email_sender_type": "DRY_RUN",
 			"sms_sender_type": "DRY_RUN",
-			"enable_mfa": true,
-			"enable_recaptcha": true,
 			"base_url": null,
 			"sdp_ui_base_url": "http://valid.com",
 			"status": "TENANT_CREATED",
@@ -657,8 +603,6 @@ func Test_TenantHandler_Patch(t *testing.T) {
 		expectedRespBody := `
 			"email_sender_type": "DRY_RUN",
 			"sms_sender_type": "DRY_RUN",
-			"enable_mfa": true,
-			"enable_recaptcha": true,
 			"base_url": null,
 			"sdp_ui_base_url": null,
 			"status": "TENANT_ACTIVATED",
@@ -673,8 +617,6 @@ func Test_TenantHandler_Patch(t *testing.T) {
 		expectedRespBody := `
 			"email_sender_type": "DRY_RUN",
 			"sms_sender_type": "DRY_RUN",
-			"enable_mfa": true,
-			"enable_recaptcha": true,
 			"base_url": null,
 			"sdp_ui_base_url": null,
 			"status": "TENANT_CREATED",
@@ -688,8 +630,6 @@ func Test_TenantHandler_Patch(t *testing.T) {
 		reqBody := `{
 			"email_sender_type": "AWS_EMAIL",
 			"sms_sender_type": "AWS_SMS",
-			"enable_mfa": false,
-			"enable_recaptcha": false,
 			"base_url": "http://valid.com",
 			"sdp_ui_base_url": "http://valid.com",
 			"status": "TENANT_ACTIVATED",
@@ -699,8 +639,6 @@ func Test_TenantHandler_Patch(t *testing.T) {
 		expectedRespBody := `
 			"email_sender_type": "AWS_EMAIL",
 			"sms_sender_type": "AWS_SMS",
-			"enable_mfa": false,
-			"enable_recaptcha": false,
 			"base_url": "http://valid.com",
 			"sdp_ui_base_url": "http://valid.com",
 			"status": "TENANT_ACTIVATED",

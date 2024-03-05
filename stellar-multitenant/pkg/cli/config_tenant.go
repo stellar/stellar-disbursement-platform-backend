@@ -19,8 +19,6 @@ type tenantOptions struct {
 	ID              string
 	EmailSenderType *tenant.EmailSenderType
 	SMSSenderType   *tenant.SMSSenderType
-	EnableMFA       *bool
-	EnableReCAPTCHA *bool
 	BaseURL         *string
 	SDPUIBaseURL    *string
 }
@@ -49,22 +47,6 @@ func ConfigTenantCmd() *cobra.Command {
 			OptType:        types.String,
 			CustomSetValue: utils.SetConfigOptionSMSSenderType,
 			ConfigKey:      &to.SMSSenderType,
-			Required:       false,
-		},
-		{
-			Name:           "enable-mfa",
-			Usage:          "Enable MFA using email.",
-			OptType:        types.String,
-			CustomSetValue: utils.SetConfigOptionOptionalBoolean,
-			ConfigKey:      &to.EnableMFA,
-			Required:       false,
-		},
-		{
-			Name:           "enable-recaptcha",
-			Usage:          "Enable ReCAPTCHA for login and forgot password.",
-			OptType:        types.String,
-			CustomSetValue: utils.SetConfigOptionOptionalBoolean,
-			ConfigKey:      &to.EnableReCAPTCHA,
 			Required:       false,
 		},
 		{
@@ -131,8 +113,6 @@ func executeConfigTenant(ctx context.Context, to *tenantOptions, dbConnectionPoo
 		ID:              to.ID,
 		EmailSenderType: to.EmailSenderType,
 		SMSSenderType:   to.SMSSenderType,
-		EnableMFA:       to.EnableMFA,
-		EnableReCAPTCHA: to.EnableReCAPTCHA,
 		BaseURL:         to.BaseURL,
 		SDPUIBaseURL:    to.SDPUIBaseURL,
 	})

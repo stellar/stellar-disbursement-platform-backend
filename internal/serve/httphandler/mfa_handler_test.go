@@ -50,7 +50,7 @@ func Test_MFAHandler_ServeHTTP(t *testing.T) {
 		AuthManager:        authManager,
 		ReCAPTCHAValidator: reCAPTCHAValidatorMock,
 		Models:             models,
-		ReCAPTCHAEnabled:   true,
+		ReCAPTCHADisabled:  false,
 	}
 
 	deviceID := "safari-xyz"
