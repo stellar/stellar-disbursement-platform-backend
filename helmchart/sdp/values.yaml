@@ -136,7 +136,7 @@ sdp:
   ## @param sdp.configMap.data.ENVIRONMENT Specifies the environment SDP is running in (e.g. "localhost").
   ## @param sdp.configMap.data.LOG_LEVEL Determines the verbosity level of logs. Options: "TRACE", "DEBUG", "INFO", "WARN", "ERROR", "FATAL", "PANIC"
   ## @param sdp.configMap.data.SEP10_SIGNING_PUBLIC_KEY Anchor platform SEP10 signing public key.
-  ## @param sdp.configMap.data.DISTRIBUTION_PUBLIC_KEY The public key of the Stellar distribution account that sends the Stellar payments.
+  ## @param sdp.configMap.data.DISTRIBUTION_PUBLIC_KEY The public key of the HOST's Stellar distribution account, used to create channel accounts.
   ## @param sdp.configMap.data.METRICS_TYPE Defines the type of metrics system in use. Options: "PROMETHEUS".
   ## @param sdp.configMap.data.EMAIL_SENDER_TYPE The messenger type used to send invitations to new dashboard users. Options: "DRY_RUN", "AWS_EMAIL".
   ## @param sdp.configMap.data.SMS_SENDER_TYPE The messenger type used to send text messages to recipients. Options: "DRY_RUN", "TWILIO_SMS".
@@ -439,6 +439,7 @@ tss:
   ## @param tss.configMap.annotations Annotations to be added to the ConfigMap.
   ## @extra tss.configMap.data Used to inject non-sensitive environment variables into the TSS deployment; for the latest variables, consult the application's CLI `-h` command.
   ## @param tss.configMap.data.CRASH_TRACKER_TYPE Determines the type of crash tracker in use. Options: "DRY_RUN", "SENTRY".
+  ## @param tss.configMap.data.DISTRIBUTION_PUBLIC_KEY The public key of the HOST's Stellar distribution account, used to create channel accounts.
   ## @param tss.configMap.data.NUM_CHANNEL_ACCOUNTS The number of channel accounts the TSS will create/use. Channel accounts provide a method for submitting transactions to the network at a high rate.
   ## @param tss.configMap.data.MAX_BASE_FEE Specifies the maximum base fee (in stroops) the TSS is willing to pay per transaction. This helps to control costs and ensures transactions are economically feasible.
   ## @param tss.configMap.data.TSS_METRICS_TYPE Defines the type of metrics system that the TSS should use. Options: "TSS_PROMETHEUS".
@@ -449,6 +450,7 @@ tss:
     annotations:
     data:
       CRASH_TRACKER_TYPE: "DRY_RUN"
+      DISTRIBUTION_PUBLIC_KEY: #required
       NUM_CHANNEL_ACCOUNTS: "1"
       MAX_BASE_FEE: "100000"
       TSS_METRICS_TYPE: "TSS_PROMETHEUS"

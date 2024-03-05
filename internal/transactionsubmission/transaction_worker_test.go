@@ -35,11 +35,13 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions"
 	preconditionsMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
+	sigMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing/mocks"
 	tssMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 	storeMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
 	sdpUtlis "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 // getTransactionWorkerInstance is used to create a valid instance of the class TransactionWorker, which is needed in
@@ -58,13 +60,21 @@ func getTransactionWorkerInstance(t *testing.T, dbConnectionPool db.DBConnection
 	require.NoError(t, err)
 
 	distributionKP := keypair.MustRandom()
+
+	mDistAccResolver := sigMocks.NewMockDistributionAccountResolver(t)
+	mDistAccResolver.
+		On("DistributionAccount", mock.Anything, mock.AnythingOfType("string")).
+		Return(distributionKP.Address(), nil).
+		Maybe()
+
 	sigService, err := signing.NewSignatureService(signing.SignatureServiceOptions{
-		DistributionSignerType:    signing.DistributionAccountEnvSignatureClientType,
-		NetworkPassphrase:         network.TestNetworkPassphrase,
-		DBConnectionPool:          dbConnectionPool,
-		DistributionPrivateKey:    distributionKP.Seed(),
-		ChAccEncryptionPassphrase: chAccEncryptionPassphrase,
-		LedgerNumberTracker:       preconditionsMocks.NewMockLedgerNumberTracker(t),
+		DistributionSignerType:      signing.DistributionAccountEnvSignatureClientType,
+		NetworkPassphrase:           network.TestNetworkPassphrase,
+		DBConnectionPool:            dbConnectionPool,
+		DistributionPrivateKey:      distributionKP.Seed(),
+		ChAccEncryptionPassphrase:   chAccEncryptionPassphrase,
+		LedgerNumberTracker:         preconditionsMocks.NewMockLedgerNumberTracker(t),
+		DistributionAccountResolver: mDistAccResolver,
 	})
 	require.NoError(t, err)
 
@@ -92,7 +102,7 @@ var (
 
 // createTxJobFixture is used to create the resoureces needed for a txJob, and return a txJob with these resources. It
 // can be customized according with the parameters passed.
-func createTxJobFixture(t *testing.T, ctx context.Context, dbConnectionPool db.DBConnectionPool, shouldLock bool, currentLedger, lockedToLedger int) TxJob {
+func createTxJobFixture(t *testing.T, ctx context.Context, dbConnectionPool db.DBConnectionPool, shouldLock bool, currentLedger, lockedToLedger int, tenantID string) TxJob {
 	t.Helper()
 	var err error
 
@@ -107,7 +117,7 @@ func createTxJobFixture(t *testing.T, ctx context.Context, dbConnectionPool db.D
 		DestinationAddress: "GCBIRB7Q5T53H4L6P5QSI3O6LPD5MBWGM5GHE7A5NY4XT5OT4VCOEZFX",
 		Status:             store.TransactionStatusProcessing,
 		Amount:             1,
-		TenantID:           uuid.NewString(),
+		TenantID:           tenantID,
 	})
 	chAcc := store.CreateChannelAccountFixturesEncrypted(t, ctx, dbConnectionPool, encrypter, chAccEncryptionPassphrase, 1)[0]
 
@@ -135,6 +145,7 @@ func Test_NewTransactionWorker(t *testing.T) {
 	chAccModel := &store.ChannelAccountModel{DBConnectionPool: dbConnectionPool}
 
 	distributionKP := keypair.MustRandom()
+
 	wantSigService, err := signing.NewSignatureService(signing.SignatureServiceOptions{
 		DistributionSignerType:    signing.DistributionAccountEnvSignatureClientType,
 		NetworkPassphrase:         network.TestNetworkPassphrase,
@@ -142,6 +153,8 @@ func Test_NewTransactionWorker(t *testing.T) {
 		DistributionPrivateKey:    distributionKP.Seed(),
 		ChAccEncryptionPassphrase: chAccEncryptionPassphrase,
 		LedgerNumberTracker:       preconditionsMocks.NewMockLedgerNumberTracker(t),
+
+		DistributionAccountResolver: sigMocks.NewMockDistributionAccountResolver(t),
 	})
 	require.NoError(t, err)
 
@@ -331,7 +344,7 @@ func Test_TransactionWorker_handleSuccessfulTransaction(t *testing.T) {
 		defer store.DeleteAllTransactionFixtures(t, ctx, dbConnectionPool)
 
 		transactionWorker := getTransactionWorkerInstance(t, dbConnectionPool)
-		txJob := createTxJobFixture(t, ctx, dbConnectionPool, true, currentLedger, lockedToLedger)
+		txJob := createTxJobFixture(t, ctx, dbConnectionPool, true, currentLedger, lockedToLedger, uuid.NewString())
 		require.NotEmpty(t, txJob)
 
 		// mock UpdateStatusToSuccess FAIL
@@ -370,7 +383,7 @@ func Test_TransactionWorker_handleSuccessfulTransaction(t *testing.T) {
 		defer store.DeleteAllTransactionFixtures(t, ctx, dbConnectionPool)
 
 		transactionWorker := getTransactionWorkerInstance(t, dbConnectionPool)
-		txJob := createTxJobFixture(t, ctx, dbConnectionPool, true, currentLedger, lockedToLedger)
+		txJob := createTxJobFixture(t, ctx, dbConnectionPool, true, currentLedger, lockedToLedger, uuid.NewString())
 		require.NotEmpty(t, txJob)
 
 		// mock UpdateStatusToSuccess ✅
@@ -438,7 +451,7 @@ func Test_TransactionWorker_handleSuccessfulTransaction(t *testing.T) {
 		defer store.DeleteAllTransactionFixtures(t, ctx, dbConnectionPool)
 
 		transactionWorker := getTransactionWorkerInstance(t, dbConnectionPool)
-		txJob := createTxJobFixture(t, ctx, dbConnectionPool, true, currentLedger, lockedToLedger)
+		txJob := createTxJobFixture(t, ctx, dbConnectionPool, true, currentLedger, lockedToLedger, uuid.NewString())
 		require.NotEmpty(t, txJob)
 
 		// mock UpdateStatusToSuccess ✅
@@ -506,7 +519,7 @@ func Test_TransactionWorker_handleSuccessfulTransaction(t *testing.T) {
 		defer store.DeleteAllTransactionFixtures(t, ctx, dbConnectionPool)
 
 		transactionWorker := getTransactionWorkerInstance(t, dbConnectionPool)
-		txJob := createTxJobFixture(t, ctx, dbConnectionPool, true, currentLedger, lockedToLedger)
+		txJob := createTxJobFixture(t, ctx, dbConnectionPool, true, currentLedger, lockedToLedger, uuid.NewString())
 		require.NotEmpty(t, txJob)
 
 		// mock UpdateStatusToSuccess ✅
@@ -591,7 +604,7 @@ func Test_TransactionWorker_handleSuccessfulTransaction(t *testing.T) {
 
 		transactionWorker.monitorSvc = tssMonitorService
 
-		txJob := createTxJobFixture(t, ctx, dbConnectionPool, true, currentLedger, lockedToLedger)
+		txJob := createTxJobFixture(t, ctx, dbConnectionPool, true, currentLedger, lockedToLedger, uuid.NewString())
 		require.NotEmpty(t, txJob)
 
 		// mock eventProducer WriteMessages ✅
@@ -650,7 +663,7 @@ func Test_TransactionWorker_handleSuccessfulTransaction(t *testing.T) {
 		transactionWorker := getTransactionWorkerInstance(t, dbConnectionPool)
 		require.NotEmpty(t, transactionWorker)
 
-		txJob := createTxJobFixture(t, ctx, dbConnectionPool, true, currentLedger, lockedToLedger)
+		txJob := createTxJobFixture(t, ctx, dbConnectionPool, true, currentLedger, lockedToLedger, uuid.NewString())
 		require.NotEmpty(t, txJob)
 
 		// Run test:
@@ -724,7 +737,7 @@ func Test_TransactionWorker_reconcileSubmittedTransaction(t *testing.T) {
 			const txHash = "3389e9f0f1a65f19736cacf544c2e825313e8447f569233bb8db39aa607c8889"
 			const envelopeXDR = "AAAAAGL8HQvQkbK2HA3WVjRrKmjX00fG8sLI7m0ERwJW/AX3AAAACgAAAAAAAAABAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAArqN6LeOagjxMaUP96Bzfs9e0corNZXzBWJkFoK7kvkwAAAAAO5rKAAAAAAAAAAABVvwF9wAAAEAKZ7IPj/46PuWU6ZOtyMosctNAkXRNX9WCAI5RnfRk+AyxDLoDZP/9l3NvsxQtWj9juQOuoBlFLnWu8intgxQA"
 
-			txJob := createTxJobFixture(t, ctx, dbConnectionPool, true, currentLedger, lockedToLedger)
+			txJob := createTxJobFixture(t, ctx, dbConnectionPool, true, currentLedger, lockedToLedger, uuid.NewString())
 			tx, err := transactionWorker.txModel.UpdateStellarTransactionHashAndXDRSent(ctx, txJob.Transaction.ID, txHash, envelopeXDR)
 			require.NoError(t, err)
 			txJob.Transaction = *tx
@@ -911,7 +924,7 @@ func Test_TransactionWorker_validateJob(t *testing.T) {
 			}
 
 			// create txJob:
-			txJob := createTxJobFixture(t, ctx, dbConnectionPool, false, int(currentLedger), int(lockedToLedger))
+			txJob := createTxJobFixture(t, ctx, dbConnectionPool, false, int(currentLedger), int(lockedToLedger), uuid.NewString())
 
 			// Update status for txJob.Transaction
 			var updatedTx store.Transaction
@@ -947,7 +960,7 @@ func Test_TransactionWorker_validateJob(t *testing.T) {
 }
 
 func Test_TransactionWorker_buildAndSignTransaction(t *testing.T) {
-	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
+	dbt := dbtest.Open(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
@@ -959,6 +972,12 @@ func Test_TransactionWorker_buildAndSignTransaction(t *testing.T) {
 	const accountSequence = 123
 
 	distributionKP := keypair.MustRandom()
+
+	mDistAccResolver := sigMocks.NewMockDistributionAccountResolver(t)
+	mDistAccResolver.
+		On("DistributionAccount", ctx, mock.AnythingOfType("string")).
+		Return(distributionKP.Address(), nil)
+
 	sigService, err := signing.NewSignatureService(signing.SignatureServiceOptions{
 		DistributionSignerType:    signing.DistributionAccountEnvSignatureClientType,
 		NetworkPassphrase:         network.TestNetworkPassphrase,
@@ -966,6 +985,8 @@ func Test_TransactionWorker_buildAndSignTransaction(t *testing.T) {
 		DistributionPrivateKey:    distributionKP.Seed(),
 		ChAccEncryptionPassphrase: chAccEncryptionPassphrase,
 		LedgerNumberTracker:       preconditionsMocks.NewMockLedgerNumberTracker(t),
+
+		DistributionAccountResolver: mDistAccResolver,
 	})
 	require.NoError(t, err)
 
@@ -1013,8 +1034,10 @@ func Test_TransactionWorker_buildAndSignTransaction(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			defer store.DeleteAllFromChannelAccounts(t, ctx, dbConnectionPool)
 			defer store.DeleteAllTransactionFixtures(t, ctx, dbConnectionPool)
+			defer tenant.DeleteAllTenantsFixture(t, ctx, dbConnectionPool)
 
-			txJob := createTxJobFixture(t, ctx, dbConnectionPool, true, currentLedger, lockedToLedger)
+			tnt := tenant.CreateTenantFixture(t, ctx, dbConnectionPool, "test-tenant", distributionKP.Address())
+			txJob := createTxJobFixture(t, ctx, dbConnectionPool, true, currentLedger, lockedToLedger, tnt.ID)
 			txJob.Transaction.AssetCode = tc.assetCode
 			txJob.Transaction.AssetIssuer = tc.assetIssuer
 
@@ -1159,7 +1182,7 @@ func Test_TransactionWorker_submit(t *testing.T) {
 			defer store.DeleteAllFromChannelAccounts(t, ctx, dbConnectionPool)
 			defer store.DeleteAllTransactionFixtures(t, ctx, dbConnectionPool)
 
-			txJob := createTxJobFixture(t, ctx, dbConnectionPool, true, 1, 2)
+			txJob := createTxJobFixture(t, ctx, dbConnectionPool, true, 1, 2, uuid.NewString())
 			feeBumpTx := &txnbuild.FeeBumpTransaction{}
 
 			mockHorizonClient := &horizonclient.MockClient{}

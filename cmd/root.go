@@ -4,7 +4,6 @@ import (
 	"go/types"
 
 	"github.com/spf13/cobra"
-	"github.com/stellar/go/network"
 	"github.com/stellar/go/support/config"
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/stellar-disbursement-platform-backend/cmd/db"
@@ -58,14 +57,7 @@ func rootCmd() *cobra.Command {
 			FlagDefault: "http://localhost:8000",
 			Required:    true,
 		},
-		{
-			Name:        "network-passphrase",
-			Usage:       "The Stellar network passphrase",
-			OptType:     types.String,
-			ConfigKey:   &globalOptions.NetworkPassphrase,
-			FlagDefault: network.TestNetworkPassphrase,
-			Required:    true,
-		},
+		cmdUtils.NetworkPassphrase(&globalOptions.NetworkPassphrase),
 	}
 
 	rootCmd := &cobra.Command{

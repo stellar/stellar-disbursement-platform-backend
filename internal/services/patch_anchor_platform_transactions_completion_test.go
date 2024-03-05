@@ -136,6 +136,7 @@ func Test_PatchAnchorPlatformTransactionCompletionService_PatchTransactionsCompl
 			StellarTransactionID: "tx-hash",
 		}
 
+		compledtedAtUTC := tx.PaymentCompletedAt.UTC()
 		apAPISvcMock.
 			On("PatchAnchorTransactionsPostSuccessCompletion", ctx, anchorplatform.APSep24TransactionPatchPostSuccess{
 				ID:     receiverWallet.AnchorPlatformTransactionID,
@@ -148,7 +149,7 @@ func Test_PatchAnchorPlatformTransactionCompletionService_PatchTransactionsCompl
 						MemoType: receiverWallet.StellarMemoType,
 					},
 				},
-				CompletedAt: &tx.PaymentCompletedAt,
+				CompletedAt: &compledtedAtUTC,
 				AmountOut: anchorplatform.APAmount{
 					Amount: payment.Amount,
 					Asset:  anchorplatform.NewStellarAssetInAIF(payment.Asset.Code, payment.Asset.Issuer),
@@ -258,6 +259,7 @@ func Test_PatchAnchorPlatformTransactionCompletionService_PatchTransactionsCompl
 			StellarTransactionID: "tx-hash",
 		}
 
+		completedAtUTC := tx.PaymentCompletedAt.UTC()
 		apAPISvcMock.
 			On("PatchAnchorTransactionsPostSuccessCompletion", ctx, anchorplatform.APSep24TransactionPatchPostSuccess{
 				ID:     receiverWallet.AnchorPlatformTransactionID,
@@ -270,7 +272,7 @@ func Test_PatchAnchorPlatformTransactionCompletionService_PatchTransactionsCompl
 						MemoType: receiverWallet.StellarMemoType,
 					},
 				},
-				CompletedAt: &tx.PaymentCompletedAt,
+				CompletedAt: &completedAtUTC,
 				AmountOut: anchorplatform.APAmount{
 					Amount: payment.Amount,
 					Asset:  anchorplatform.NewStellarAssetInAIF(payment.Asset.Code, payment.Asset.Issuer),

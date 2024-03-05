@@ -61,6 +61,7 @@ func (s *PatchAnchorPlatformTransactionCompletionService) PatchTransactionComple
 
 	// Step 2: patch the transaction on the AP with the respective status.
 	if paymentStatus == data.SuccessPaymentStatus {
+		createdAt := tx.PaymentCompletedAt.UTC()
 		err = s.apAPISvc.PatchAnchorTransactionsPostSuccessCompletion(ctx, anchorplatform.APSep24TransactionPatchPostSuccess{
 			ID:     payment.ReceiverWallet.AnchorPlatformTransactionID,
 			SEP:    "24",
@@ -72,7 +73,7 @@ func (s *PatchAnchorPlatformTransactionCompletionService) PatchTransactionComple
 					MemoType: payment.ReceiverWallet.StellarMemoType,
 				},
 			},
-			CompletedAt: &tx.PaymentCompletedAt,
+			CompletedAt: &createdAt,
 			AmountOut: anchorplatform.APAmount{
 				Amount: payment.Amount,
 				Asset:  anchorplatform.NewStellarAssetInAIF(payment.Asset.Code, payment.Asset.Issuer),

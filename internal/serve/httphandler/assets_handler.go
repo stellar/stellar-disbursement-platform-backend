@@ -175,8 +175,13 @@ func (c AssetsHandler) handleUpdateAssetTrustlineForDistributionAccount(ctx cont
 		return fmt.Errorf("should provide different assets")
 	}
 
+	distributionAccountPubKey, err := c.DistributionAccountResolver.DistributionAccountFromContext(ctx)
+	if err != nil {
+		return fmt.Errorf("resolving distribution account from context: %w", err)
+	}
+
 	acc, err := c.HorizonClient.AccountDetail(horizonclient.AccountRequest{
-		AccountID: c.SignatureService.DistributionAccount(),
+		AccountID: distributionAccountPubKey,
 	})
 	if err != nil {
 		return fmt.Errorf("getting distribution account details: %w", err)
@@ -206,7 +211,7 @@ func (c AssetsHandler) handleUpdateAssetTrustlineForDistributionAccount(ctx cont
 						Asset: *assetToRemoveTrustline,
 					},
 					Limit:         "0", // 0 means remove trustline
-					SourceAccount: c.SignatureService.DistributionAccount(),
+					SourceAccount: distributionAccountPubKey,
 				})
 
 				break
@@ -239,7 +244,7 @@ func (c AssetsHandler) handleUpdateAssetTrustlineForDistributionAccount(ctx cont
 					Asset: *assetToAddTrustline,
 				},
 				Limit:         "", // empty means no limit
-				SourceAccount: c.SignatureService.DistributionAccount(),
+				SourceAccount: distributionAccountPubKey,
 			})
 		}
 	}
@@ -262,6 +267,11 @@ func (c AssetsHandler) submitChangeTrustTransaction(ctx context.Context, acc *ho
 		return fmt.Errorf("should have at least one change trust operation")
 	}
 
+	distributionAccountPubKey, err := c.DistributionAccountResolver.DistributionAccountFromContext(ctx)
+	if err != nil {
+		return fmt.Errorf("resolving distribution account from context: %w", err)
+	}
+
 	operations := make([]txnbuild.Operation, 0, len(changeTrustOperations))
 	for _, ctOp := range changeTrustOperations {
 		operations = append(operations, ctOp)
@@ -274,7 +284,7 @@ func (c AssetsHandler) submitChangeTrustTransaction(ctx context.Context, acc *ho
 	tx, err := txnbuild.NewTransaction(
 		txnbuild.TransactionParams{
 			SourceAccount: &txnbuild.SimpleAccount{
-				AccountID: c.SignatureService.DistributionAccount(),
+				AccountID: distributionAccountPubKey,
 				Sequence:  acc.Sequence,
 			},
 			IncrementSequenceNum: true,
@@ -287,7 +297,7 @@ func (c AssetsHandler) submitChangeTrustTransaction(ctx context.Context, acc *ho
 		return fmt.Errorf("creating change trust transaction: %w", err)
 	}
 
-	tx, err = c.DistAccountSigner.SignStellarTransaction(ctx, tx, c.SignatureService.DistributionAccount())
+	tx, err = c.DistAccountSigner.SignStellarTransaction(ctx, tx, distributionAccountPubKey)
 	if err != nil {
 		return fmt.Errorf("signing change trust transaction: %w", err)
 	}

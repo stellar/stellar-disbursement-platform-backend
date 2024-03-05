@@ -16,6 +16,7 @@ import (
 	di "github.com/stellar/stellar-disbursement-platform-backend/internal/dependencyinjection"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	tssMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/monitor"
 	txSubSvc "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/services"
 )
@@ -57,6 +58,7 @@ type ChannelAccountsCommand struct {
 	// Shared:
 	CrashTrackerClient  crashtracker.CrashTrackerClient
 	TSSDBConnectionPool db.DBConnectionPool
+	DistAccResolver     signing.DistributionAccountResolver
 }
 
 func (c *ChannelAccountsCommand) Command(cmdService ChAccCmdServiceInterface) *cobra.Command {
@@ -86,6 +88,13 @@ func (c *ChannelAccountsCommand) Command(cmdService ChAccCmdServiceInterface) *c
 			FlagDefault: 9002,
 			Required:    true,
 		})
+
+	// distribution account resolver options:
+	distAccResolverOpts := signing.DistributionAccountResolverOptions{}
+	configOpts = append(
+		configOpts,
+		cmdUtils.DistributionPublicKey(&distAccResolverOpts.HostDistributionAccountPublicKey),
+	)
 
 	channelAccountsCmd := &cobra.Command{
 		Use:   "channel-accounts",
@@ -125,6 +134,20 @@ func (c *ChannelAccountsCommand) Command(cmdService ChAccCmdServiceInterface) *c
 				log.Ctx(ctx).Fatalf("Error creating TSS DB connection pool: %v", err)
 			}
 
+			// Initializing the AdminDBConnectionPool
+			adminDBConnectionPool, err := di.NewAdminDBConnectionPool(ctx, dbcpOptions)
+			if err != nil {
+				log.Ctx(ctx).Fatalf("error getting Admin DB connection pool: %v", err)
+			}
+			distAccResolverOpts.AdminDBConnectionPool = adminDBConnectionPool
+
+			// Initializing the DistributionAccountResolver
+			distributionAccountResolver, err := di.NewDistributionAccountResolver(ctx, distAccResolverOpts)
+			if err != nil {
+				log.Ctx(ctx).Fatalf("error creating distribution account resolver: %v", err)
+			}
+			c.DistAccResolver = distributionAccountResolver
+
 			// Inject crash tracker options dependencies
 			globalOptions.PopulateCrashTrackerOptions(&crashTrackerOptions)
 			c.CrashTrackerClient, err = di.NewCrashTracker(ctx, crashTrackerOptions)
@@ -133,7 +156,8 @@ func (c *ChannelAccountsCommand) Command(cmdService ChAccCmdServiceInterface) *c
 			}
 		},
 		PersistentPostRun: func(cmd *cobra.Command, args []string) {
-			di.DeleteAndCloseInstanceByValue(cmd.Context(), c.TSSDBConnectionPool)
+			di.CleanupInstanceByValue(cmd.Context(), c.TSSDBConnectionPool)
+			di.CleanupInstanceByKey(cmd.Context(), di.AdminDBConnectionPoolInstanceName)
 		},
 	}
 	err := configOpts.Init(channelAccountsCmd)
@@ -349,6 +373,7 @@ func (c *ChannelAccountsCommand) chAccServicePersistentPreRun(
 	// Prepare the signature service
 	txSubmitterOpts.SignatureServiceOptions.DBConnectionPool = c.TSSDBConnectionPool
 	txSubmitterOpts.SignatureServiceOptions.NetworkPassphrase = globalOptions.NetworkPassphrase
+	txSubmitterOpts.SignatureServiceOptions.DistributionAccountResolver = c.DistAccResolver
 	submitterEngine, err := di.NewTxSubmitterEngine(ctx, *txSubmitterOpts)
 	if err != nil {
 		log.Ctx(ctx).Fatalf("error creating submitter engine: %v", err)

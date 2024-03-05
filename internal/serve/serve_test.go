@@ -10,9 +10,11 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/network"
 	supporthttp "github.com/stellar/go/support/http"
 	"github.com/stellar/go/support/log"
+	"github.com/stellar/go/txnbuild"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -25,6 +27,9 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
 	publicfiles "github.com/stellar/stellar-disbursement-platform-backend/internal/serve/publicfiles"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
+	preconditionsMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions/mocks"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
@@ -47,6 +52,7 @@ MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgIqI1MzMZIw2pQDLx
 Jn0+FcNT/hNjwtn2TW43710JKZqhRANCAARHzyHsCJDJUPKxFPEq8EHoJqI7+RJy
 8bKKYClQT/XaAWE1NF/ftITX0JIKWUrGy2dUU6kstYHtC7k4nRa9zPeG
 -----END PRIVATE KEY-----`
+	distAccPublicKey = "GBQQ7ATXREG5PXUTZ6UXR6LQRWVKVRTXLJKMN6UJCN6TGTFY7FKFUCBC"
 )
 
 func Test_Serve(t *testing.T) {
@@ -284,6 +290,20 @@ func getServeOptionsForTests(t *testing.T, dbConnectionPool db.DBConnectionPool)
 		On("GetTenantByName", mock.Anything, "aid-org").
 		Return(&tenant.Tenant{ID: "tenant1"}, nil)
 
+	mHorizonClient := &horizonclient.MockClient{}
+	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
+	sigService, _, _, _, distAccResolver := signing.NewMockSignatureService(t)
+	submitterEngine := engine.SubmitterEngine{
+		HorizonClient:       mHorizonClient,
+		SignatureService:    sigService,
+		LedgerNumberTracker: mLedgerNumberTracker,
+		MaxBaseFee:          100 * txnbuild.MinBaseFee,
+	}
+	distAccResolver.
+		On("DistributionAccountFromContext", mock.Anything).
+		Return(distAccPublicKey, nil).
+		Maybe()
+
 	serveOptions := ServeOptions{
 		CrashTrackerClient:              crashTrackerClient,
 		MtnDBConnectionPool:             dbConnectionPool,
@@ -301,6 +321,7 @@ func getServeOptionsForTests(t *testing.T, dbConnectionPool db.DBConnectionPool)
 		SMSMessengerClient:              &messengerClientMock,
 		Version:                         "x.y.z",
 		NetworkPassphrase:               network.TestNetworkPassphrase,
+		SubmitterEngine:                 submitterEngine,
 	}
 	err = serveOptions.SetupDependencies()
 	require.NoError(t, err)
@@ -327,7 +348,9 @@ func Test_handleHTTP_unauthenticatedEndpoints(t *testing.T) {
 		path   string
 	}{
 		{http.MethodGet, "/health"},
+		{http.MethodGet, "/.well-known/stellar.toml"},
 		{http.MethodPost, "/login"},
+		{http.MethodPost, "/mfa"},
 		{http.MethodPost, "/forgot-password"},
 		{http.MethodPost, "/reset-password"},
 	}
@@ -410,6 +433,7 @@ func Test_handleHTTP_authenticatedEndpoints(t *testing.T) {
 		// Organization
 		{http.MethodGet, "/organization"},
 		{http.MethodPatch, "/organization"},
+		{http.MethodGet, "/organization/logo"},
 	}
 
 	// Expect 401 as a response:

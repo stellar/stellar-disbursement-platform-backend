@@ -77,7 +77,6 @@ type ServeOptions struct {
 	AnchorPlatformOutgoingJWTSecret string
 	AnchorPlatformAPIService        anchorplatform.AnchorPlatformAPIServiceInterface
 	CrashTrackerClient              crashtracker.CrashTrackerClient
-	DistributionPublicKey           string
 	ReCAPTCHASiteKey                string
 	ReCAPTCHASiteSecretKey          string
 	DisableMFA                      bool
@@ -244,10 +243,10 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 
 		r.Route("/disbursements", func(r chi.Router) {
 			handler := httphandler.DisbursementHandler{
-				Models:             o.Models,
-				AuthManager:        authManager,
-				MonitorService:     o.MonitorService,
-				DistributionPubKey: o.DistributionPublicKey,
+				Models:                      o.Models,
+				AuthManager:                 authManager,
+				MonitorService:              o.MonitorService,
+				DistributionAccountResolver: o.SubmitterEngine.DistributionAccountResolver,
 				DisbursementManagementService: services.NewDisbursementManagementService(
 					o.Models,
 					o.MtnDBConnectionPool,
@@ -338,12 +337,13 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 		})
 
 		profileHandler := httphandler.ProfileHandler{
-			Models:                o.Models,
-			AuthManager:           authManager,
-			MaxMemoryAllocation:   httphandler.DefaultMaxMemoryAllocation,
-			BaseURL:               o.BaseURL,
-			DistributionPublicKey: o.DistributionPublicKey,
-			PasswordValidator:     o.PasswordValidator,
+			Models:                      o.Models,
+			AuthManager:                 authManager,
+			MaxMemoryAllocation:         httphandler.DefaultMaxMemoryAllocation,
+			BaseURL:                     o.BaseURL,
+			DistributionAccountResolver: o.SubmitterEngine.DistributionAccountResolver,
+			PasswordValidator:           o.PasswordValidator,
+			PublicFilesFS:               publicfiles.PublicFiles,
 		}
 		r.Route("/profile", func(r chi.Router) {
 			r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...)).
@@ -362,6 +362,9 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 
 			r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...)).
 				Get("/", profileHandler.GetOrganizationInfo)
+
+			r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...)).
+				Get("/logo", profileHandler.GetOrganizationLogo)
 		})
 	})
 
@@ -371,10 +374,6 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 	mux.Group(func(r chi.Router) {
 		r.Use(middleware.TenantMiddleware(o.tenantManager, o.authManager))
 		r.Use(middleware.LoggingMiddleware())
-
-		// Even if the logo URL is under the public endpoints, it'll be authenticated. The `auth token` should be
-		// added in the URL's query params. Example: https://...?token=mytoken
-		r.Get("/organization/logo", httphandler.ProfileHandler{Models: o.Models, PublicFilesFS: publicfiles.PublicFiles}.GetOrganizationLogo)
 
 		r.Post("/login", httphandler.LoginHandler{
 			AuthManager:        authManager,

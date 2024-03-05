@@ -41,7 +41,7 @@ func (c *DatabaseCommand) Command(globalOptions *utils.GlobalOptionsType) *cobra
 		},
 		RunE: utils.CallHelpCommand,
 		PersistentPostRun: func(cmd *cobra.Command, args []string) {
-			di.DeleteAndCloseInstanceByValue(cmd.Context(), c.adminDBConnectionPool)
+			di.CleanupInstanceByValue(cmd.Context(), c.adminDBConnectionPool)
 		},
 	}
 
@@ -232,7 +232,7 @@ func (c *DatabaseCommand) tssMigrationsCmd(ctx context.Context, globalOptions *u
 			return fmt.Errorf("creating TSS database migration manager: %w", err)
 		}
 
-		err = tssMigrationsManager.createTSSSchemaIfNeeded(ctx)
+		err = tssMigrationsManager.CreateTSSSchemaIfNeeded(ctx)
 		if err != nil {
 			return fmt.Errorf("creating the 'tss' database schema if needed: %w", err)
 		}
@@ -242,7 +242,7 @@ func (c *DatabaseCommand) tssMigrationsCmd(ctx context.Context, globalOptions *u
 			return fmt.Errorf("getting the TSS database DSN: %w", err)
 		}
 
-		if err = runTSSMigrations(ctx, dbURL, dir, count); err != nil {
+		if err = RunTSSMigrations(ctx, dbURL, dir, count); err != nil {
 			return fmt.Errorf("running TSS migrations: %w", err)
 		}
 
