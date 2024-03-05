@@ -158,10 +158,9 @@ func (tw *TransactionWorker) handleFailedTransaction(ctx context.Context, txJob 
 	}()
 
 	if errors.As(hErr, &hErrWrapper) {
-		// TODO: are we logging the error that we save in the DB?
 		tw.txProcessingLimiter.AdjustLimitIfNeeded(hErrWrapper)
 
-		if hErrWrapper.ResultCodes != nil {
+		if hErrWrapper.IsHorizonError() {
 			isHorizonErr = true
 
 			// Errors that are not marked as definitive errors: 504: Timeouts, 429: Too Many Requests, 400's with error code tx_insufficient_fee, tx_too_late, tx_bad_seq
