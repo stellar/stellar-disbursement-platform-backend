@@ -344,6 +344,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			BaseURL:               o.BaseURL,
 			DistributionPublicKey: o.DistributionPublicKey,
 			PasswordValidator:     o.PasswordValidator,
+			PublicFilesFS:         publicfiles.PublicFiles,
 		}
 		r.Route("/profile", func(r chi.Router) {
 			r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...)).
@@ -362,6 +363,9 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 
 			r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...)).
 				Get("/", profileHandler.GetOrganizationInfo)
+
+			r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...)).
+				Get("/logo", profileHandler.GetOrganizationLogo)
 		})
 	})
 
@@ -370,10 +374,6 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 	// Public routes that are tenant aware (they need to know the tenant ID)
 	mux.Group(func(r chi.Router) {
 		r.Use(middleware.TenantMiddleware(o.tenantManager, o.authManager))
-
-		// Even if the logo URL is under the public endpoints, it'll be authenticated. The `auth token` should be
-		// added in the URL's query params. Example: https://...?token=mytoken
-		r.Get("/organization/logo", httphandler.ProfileHandler{Models: o.Models, PublicFilesFS: publicfiles.PublicFiles}.GetOrganizationLogo)
 
 		r.Post("/login", httphandler.LoginHandler{
 			AuthManager:        authManager,
