@@ -30,9 +30,9 @@ func GetInstance(instanceName string) (interface{}, bool) {
 	return instance, ok
 }
 
-// DeleteAndCloseInstanceByKey removes a service instance from the store by key and test if it is a dbConnectionPool, in which
-// case, the pool is closed.
-func DeleteAndCloseInstanceByKey(ctx context.Context, instanceName string) {
+// CleanupInstanceByKey removes a service instance from the store by key and test if it is closeable, in which case, its
+// Close() method is called.
+func CleanupInstanceByKey(ctx context.Context, instanceName string) {
 	m.Lock()
 	defer m.Unlock()
 
@@ -44,14 +44,14 @@ func DeleteAndCloseInstanceByKey(ctx context.Context, instanceName string) {
 
 	if closeableInstance, ok := instanceToDelete.(io.Closer); ok {
 		if err := closeableInstance.Close(); err != nil {
-			log.Ctx(ctx).Errorf("error closing instance=%s in DeleteAndCloseInstanceByKey: %v", instanceName, err)
+			log.Ctx(ctx).Errorf("error closing instance=%s in CleanupInstanceByKey: %v", instanceName, err)
 		}
 	}
 }
 
-// DeleteAndCloseInstanceByValue removes a service instance from the store by value and checks if it is a dbConnectionPool, in which
-// case, the pool is closed.
-func DeleteAndCloseInstanceByValue(ctx context.Context, instance interface{}) {
+// CleanupInstanceByValue removes a service instance from the store by value and checks if it is closeable, in which
+// case, its Close() method is called.
+func CleanupInstanceByValue(ctx context.Context, instance interface{}) {
 	m.Lock()
 	defer m.Unlock()
 
@@ -71,7 +71,7 @@ func DeleteAndCloseInstanceByValue(ctx context.Context, instance interface{}) {
 
 		if closeableInstance, ok2 := instanceToDelete.(io.Closer); ok2 {
 			if err := closeableInstance.Close(); err != nil {
-				log.Ctx(ctx).Errorf("error closing instance=%s in DeleteAndCloseInstanceByValue: %v", k, err)
+				log.Ctx(ctx).Errorf("error closing instance=%s in CleanupInstanceByValue: %v", k, err)
 			}
 		}
 	}
