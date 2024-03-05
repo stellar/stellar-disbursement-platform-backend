@@ -399,7 +399,7 @@ func (d DisbursementHandler) PatchDisbursementStatus(w http.ResponseWriter, r *h
 			log.Ctx(ctx).Error(insufficientBalanceErr)
 			httperror.Conflict(insufficientBalanceErr.Error(), err, nil).Render(w)
 		default:
-			msg := fmt.Sprintf("Cannot update disbursement ID %s with status: %s", disbursementID, toStatus)
+			msg := fmt.Sprintf("Cannot update disbursementID=%s with status=%s: %v", disbursementID, toStatus, err)
 			httperror.InternalError(ctx, msg, err, nil).Render(w)
 		}
 		return
