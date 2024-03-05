@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -122,4 +123,60 @@ func Test_SignURL_VerifySignedURL(t *testing.T) {
 	isValid, err := VerifySignedURL(gotSignedURL, kp.Address())
 	require.NoError(t, err)
 	require.True(t, isValid)
+}
+
+func Test_SetURLSchemeIfEmpty(t *testing.T) {
+	testCases := []struct {
+		name, rawURL, expectedURL string
+		expectedErr               error
+	}{
+		{
+			name:        "returns the same URL when it has URL scheme",
+			rawURL:      "http://bluecorp.org.local",
+			expectedURL: "http://bluecorp.org.local",
+			expectedErr: nil,
+		},
+		{
+			name:        "sets the URL scheme successfully",
+			rawURL:      "bluecorp.org.local",
+			expectedURL: "http://bluecorp.org.local",
+			expectedErr: nil,
+		},
+		{
+			name:        "sets the URL scheme successfully when it has port",
+			rawURL:      "bluecorp.org.local:3000",
+			expectedURL: "http://bluecorp.org.local:3000",
+			expectedErr: nil,
+		},
+		{
+			name:        "returns the same URL when it has URL scheme and port",
+			rawURL:      "http://bluecorp.org.local:3000",
+			expectedURL: "http://bluecorp.org.local:3000",
+			expectedErr: nil,
+		},
+		{
+			name:        "returns error when missing protocol scheme",
+			rawURL:      "://bluecorp.org.local:3000",
+			expectedURL: "",
+			expectedErr: fmt.Errorf(`parsing url: parse "://bluecorp.org.local:3000": missing protocol scheme`),
+		},
+		{
+			name:        "returns correct URL when it starts with //",
+			rawURL:      "//bluecorp.org.local:3000",
+			expectedURL: "http://bluecorp.org.local:3000",
+			expectedErr: nil,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			gotURL, err := SetURLSchemeIfEmpty(tc.rawURL)
+			if tc.expectedErr != nil {
+				assert.EqualError(t, err, tc.expectedErr.Error())
+			} else {
+				require.NoError(t, err)
+			}
+			assert.Equal(t, tc.expectedURL, gotURL)
+		})
+	}
 }

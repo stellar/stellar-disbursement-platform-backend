@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net/url"
+	"strings"
 
 	"github.com/stellar/go/keypair"
 )
@@ -71,4 +72,20 @@ func VerifySignedURL(signedURL string, expectedPublicKey string) (bool, error) {
 	}
 
 	return true, nil
+}
+
+func SetURLSchemeIfEmpty(rawURL string) (string, error) {
+	parsedURL, err := url.Parse(rawURL)
+	if err != nil {
+		return "", fmt.Errorf("parsing url: %w", err)
+	}
+
+	if parsedURL.Scheme == "" || !strings.Contains("http https", parsedURL.Scheme) {
+		rawURL, err = url.JoinPath("http://", rawURL)
+		if err != nil {
+			return "", fmt.Errorf("joining scheme to raw URL: %w", err)
+		}
+	}
+
+	return rawURL, nil
 }
