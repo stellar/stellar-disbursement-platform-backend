@@ -15,38 +15,26 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
-	cmdDB "github.com/stellar/stellar-disbursement-platform-backend/cmd/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/cmd/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 )
 
 func Test_ChannelAccountsCommand_Command(t *testing.T) {
-	dbt := dbtest.OpenWithoutMigrations(t)
+	dbt := dbtest.Open(t)
 	defer dbt.Close()
 
-	// Run tss migrations:
 	globalOptions.DatabaseURL = dbt.DSN
 	globalOptions.NetworkPassphrase = network.TestNetworkPassphrase
 
-	root := rootCmd()
-	dbCommand := (&cmdDB.DatabaseCommand{}).Command(&globalOptions)
-	root.AddCommand(dbCommand)
-	root.SetArgs([]string{
-		"db",
-		"tss",
-		"migrate",
-		"up",
-		"--database-url", dbt.DSN,
-	})
-	err := dbCommand.Execute()
-	require.NoError(t, err)
+	rootCmmd := rootCmd()
+	caServiceMock := mocks.NewMockChAccCmdServiceInterface(t)
+	crashTrackerMock := &crashtracker.MockCrashTrackerClient{}
+	caCommand := (&ChannelAccountsCommand{CrashTrackerClient: crashTrackerMock}).Command(caServiceMock)
+	rootCmmd.AddCommand(caCommand)
 
-	// Run channel accounts verify:
-	caCommand := (&ChannelAccountsCommand{}).Command(&ChAccCmdService{})
-	root.AddCommand(caCommand)
 	distributionKP := keypair.MustRandom()
-	root.SetArgs([]string{
+	rootCmmd.SetArgs([]string{
 		"channel-accounts",
 		"verify",
 		"--database-url", dbt.DSN,
@@ -54,7 +42,11 @@ func Test_ChannelAccountsCommand_Command(t *testing.T) {
 		"--distribution-public-key", distributionKP.Address(),
 		"--channel-account-encryption-passphrase", keypair.MustRandom().Seed(),
 	})
-	err = caCommand.Execute()
+
+	caServiceMock.
+		On("VerifyChannelAccounts", context.Background(), mock.Anything, false).
+		Return(nil)
+	err := caCommand.Execute()
 	require.NoError(t, err)
 }
 
