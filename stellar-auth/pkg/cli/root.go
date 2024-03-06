@@ -47,7 +47,7 @@ func rootCmd() *cobra.Command {
 			configOptions.Require()
 			err := configOptions.SetValues()
 			if err != nil {
-				log.Fatalf("Error setting values of config options: %s", err.Error())
+				log.Ctx(ctx).Fatalf("Error setting values of config options: %s", err.Error())
 			}
 
 			log.Ctx(ctx).Info("Version: ", globalOptions.version)
@@ -61,7 +61,7 @@ func rootCmd() *cobra.Command {
 	}
 
 	if err := configOptions.Init(cmd); err != nil {
-		log.Fatalf("Error initializing a config option: %s", err.Error())
+		log.Ctx(cmd.Context()).Fatalf("Error initializing a config option: %s", err.Error())
 	}
 
 	return cmd

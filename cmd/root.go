@@ -70,7 +70,7 @@ func rootCmd() *cobra.Command {
 			configOpts.Require()
 			err := configOpts.SetValues()
 			if err != nil {
-				log.Fatalf("Error setting values of config options: %s", err.Error())
+				log.Ctx(ctx).Fatalf("Error setting values of config options: %s", err.Error())
 			}
 			log.Ctx(ctx).Info("Version: ", globalOptions.Version)
 			log.Ctx(ctx).Info("GitCommit: ", globalOptions.GitCommit)
@@ -78,14 +78,14 @@ func rootCmd() *cobra.Command {
 		Run: func(cmd *cobra.Command, args []string) {
 			err := cmd.Help()
 			if err != nil {
-				log.Fatalf("Error calling help command: %s", err.Error())
+				log.Ctx(cmd.Context()).Fatalf("Error calling help command: %s", err.Error())
 			}
 		},
 	}
 
 	err := configOpts.Init(rootCmd)
 	if err != nil {
-		log.Fatalf("Error initializing a config option: %s", err.Error())
+		log.Ctx(rootCmd.Context()).Fatalf("Error initializing a config option: %s", err.Error())
 	}
 
 	return rootCmd

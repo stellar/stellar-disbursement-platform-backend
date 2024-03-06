@@ -162,7 +162,7 @@ func (c *ChannelAccountsCommand) Command(cmdService ChAccCmdServiceInterface) *c
 	}
 	err := configOpts.Init(channelAccountsCmd)
 	if err != nil {
-		log.Fatalf("Error initializing %s command: %v", channelAccountsCmd.Name(), err)
+		log.Ctx(channelAccountsCmd.Context()).Fatalf("Error initializing %s command: %v", channelAccountsCmd.Name(), err)
 	}
 
 	channelAccountsCmd.AddCommand(c.ViewCommand(cmdService))
@@ -203,7 +203,7 @@ func (c *ChannelAccountsCommand) CreateCommand(cmdService ChAccCmdServiceInterfa
 		},
 	}
 	if err := configOpts.Init(createCmd); err != nil {
-		log.Fatalf("Error initializing %s command: %v", createCmd.Name(), err)
+		log.Ctx(createCmd.Context()).Fatalf("Error initializing %s command: %v", createCmd.Name(), err)
 	}
 
 	return createCmd
@@ -241,7 +241,7 @@ func (c *ChannelAccountsCommand) VerifyCommand(cmdService ChAccCmdServiceInterfa
 		},
 	}
 	if err := configOpts.Init(verifyCmd); err != nil {
-		log.Fatalf("Error initializing %s command: %v", verifyCmd.Name(), err)
+		log.Ctx(verifyCmd.Context()).Fatalf("Error initializing %s command: %v", verifyCmd.Name(), err)
 	}
 
 	return verifyCmd
@@ -278,7 +278,7 @@ func (c *ChannelAccountsCommand) EnsureCommand(cmdService ChAccCmdServiceInterfa
 		},
 	}
 	if err := configOpts.Init(ensureCmd); err != nil {
-		log.Fatalf("Error initializing %s command: %v", ensureCmd.Name(), err)
+		log.Ctx(ensureCmd.Context()).Fatalf("Error initializing %s command: %v", ensureCmd.Name(), err)
 	}
 
 	return ensureCmd
@@ -325,7 +325,7 @@ func (c *ChannelAccountsCommand) DeleteCommand(cmdService ChAccCmdServiceInterfa
 		},
 	}
 	if err := configOpts.Init(deleteCmd); err != nil {
-		log.Fatalf("Error initializing %s command: %v", deleteCmd.Name(), err)
+		log.Ctx(deleteCmd.Context()).Fatalf("Error initializing %s command: %v", deleteCmd.Name(), err)
 	}
 
 	deleteCmd.MarkFlagsMutuallyExclusive("channel-account-id", "delete-all-accounts")

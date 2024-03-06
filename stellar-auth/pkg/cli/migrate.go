@@ -18,7 +18,7 @@ func MigrateCmd(databaseFlagName string) *cobra.Command {
 		Short: "Apply Stellar Auth database migrations",
 		Run: func(cmd *cobra.Command, args []string) {
 			if err := cmd.Help(); err != nil {
-				log.Fatalf("Error calling help command: %s", err.Error())
+				log.Ctx(cmd.Context()).Fatalf("Error calling help command: %s", err.Error())
 			}
 		},
 	}
@@ -28,12 +28,13 @@ func MigrateCmd(databaseFlagName string) *cobra.Command {
 		Short: "Migrates database up [count] migrations",
 		Args:  cobra.MaximumNArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
+			ctx := cmd.Context()
 			var count int
 			if len(args) > 0 {
 				var err error
 				count, err = strconv.Atoi(args[0])
 				if err != nil {
-					log.Fatalf("Invalid [count] argument: %s", args[0])
+					log.Ctx(ctx).Fatalf("Invalid [count] argument: %s", args[0])
 				}
 			}
 
@@ -45,7 +46,7 @@ func MigrateCmd(databaseFlagName string) *cobra.Command {
 
 			err := runMigration(dbURL, migrate.Up, count)
 			if err != nil {
-				log.Fatalf("Error migrating database Up: %s", err.Error())
+				log.Ctx(ctx).Fatalf("Error migrating database Up: %s", err.Error())
 			}
 		},
 	}
@@ -56,9 +57,10 @@ func MigrateCmd(databaseFlagName string) *cobra.Command {
 		Short: "Migrates database down [count] migrations",
 		Args:  cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
+			ctx := cmd.Context()
 			count, err := strconv.Atoi(args[0])
 			if err != nil {
-				log.Fatalf("Invalid [count] argument: %s", args[0])
+				log.Ctx(ctx).Fatalf("Invalid [count] argument: %s", args[0])
 			}
 
 			dbURL := globalOptions.databaseURL
@@ -68,7 +70,7 @@ func MigrateCmd(databaseFlagName string) *cobra.Command {
 
 			err = runMigration(dbURL, migrate.Down, count)
 			if err != nil {
-				log.Fatalf("Error migrating database Down: %s", err.Error())
+				log.Ctx(ctx).Fatalf("Error migrating database Down: %s", err.Error())
 			}
 		},
 	}

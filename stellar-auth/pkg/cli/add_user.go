@@ -103,30 +103,30 @@ func AddUserCmd(databaseURLFlagName string, passwordPrompt PasswordPromptInterfa
 			if passwordFlag {
 				result, err := passwordPrompt.Run()
 				if err != nil {
-					log.Fatalf("add-user error prompting password: %s", err)
+					log.Ctx(ctx).Fatalf("add-user error prompting password: %s", err)
 				}
 
 				pwValidator, err := utils.GetPasswordValidatorInstance()
 				if err != nil {
-					log.Fatalf("cannot initialize password validator: %s", err)
+					log.Ctx(ctx).Fatalf("cannot initialize password validator: %s", err)
 				}
 				err = pwValidator.ValidatePassword(result)
 				if err != nil {
-					log.Fatalf("password is not valid: %v", err)
+					log.Ctx(ctx).Fatalf("password is not valid: %v", err)
 				}
 				password = result
 			}
 
 			err := execAddUser(ctx, dbUrl, email, firstName, lastName, password, isOwner, rolesConfigKey)
 			if err != nil {
-				log.Fatalf("add-user command error: %s", err)
+				log.Ctx(ctx).Fatalf("add-user command error: %s", err)
 			}
 			log.Ctx(ctx).Infof("user inserted: %s", args[0])
 		},
 	}
 	err := addUserCmdConfigOpts.Init(addUser)
 	if err != nil {
-		log.Fatalf("error initializing addUserCmd config option: %s", err.Error())
+		log.Ctx(addUser.Context()).Fatalf("error initializing addUserCmd config option: %s", err.Error())
 	}
 
 	return addUser

@@ -66,7 +66,7 @@ func (a *AuthCommand) Command() *cobra.Command {
 			authCmdConfigOpts.Require()
 			err := authCmdConfigOpts.SetValues()
 			if err != nil {
-				log.Fatalf("error setting values of config options: %s", err.Error())
+				log.Ctx(ctx).Fatalf("error setting values of config options: %s", err.Error())
 			}
 
 			if cmd.Name() == addUserSubcommand.Name() && !viper.GetBool("password") {
@@ -79,7 +79,7 @@ func (a *AuthCommand) Command() *cobra.Command {
 		},
 		Run: func(cmd *cobra.Command, args []string) {
 			if err := cmd.Help(); err != nil {
-				log.Fatalf("Error calling auth command: %s", err.Error())
+				log.Ctx(cmd.Context()).Fatalf("Error calling auth command: %s", err.Error())
 			}
 		},
 		PersistentPostRun: func(cmd *cobra.Command, args []string) {
@@ -141,7 +141,7 @@ func (a *AuthCommand) Command() *cobra.Command {
 	}
 
 	if err := authCmdConfigOpts.Init(authCmd); err != nil {
-		log.Fatalf("error initializing authCmd config options: %s", err.Error())
+		log.Ctx(authCmd.Context()).Fatalf("error initializing authCmd config options: %s", err.Error())
 	}
 
 	authCmd.AddCommand(addUserSubcommand)

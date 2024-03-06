@@ -49,7 +49,7 @@ func (t *TxSubmitterService) StartSubmitter(ctx context.Context, opts txSub.Subm
 	tssManager, err := txSub.NewManager(ctx, opts)
 	if err != nil {
 		opts.CrashTrackerClient.LogAndReportErrors(ctx, err, "Cannot start submitter service")
-		log.Fatalf("Error starting transaction submission service: %s", err.Error())
+		log.Ctx(ctx).Fatalf("Error starting transaction submission service: %s", err.Error())
 	}
 
 	tssManager.ProcessTransactions(ctx)
@@ -59,7 +59,7 @@ func (s *TxSubmitterService) StartMetricsServe(ctx context.Context, opts serve.M
 	err := serve.MetricsServe(opts, httpServer)
 	if err != nil {
 		crashTrackerClient.LogAndReportErrors(ctx, err, "Cannot start metrics service")
-		log.Fatalf("Error starting metrics server: %s", err.Error())
+		log.Ctx(ctx).Fatalf("Error starting metrics server: %s", err.Error())
 	}
 }
 
@@ -223,7 +223,7 @@ func (c *TxSubmitterCommand) Command(submitterService TxSubmitterServiceInterfac
 	}
 	err := configOpts.Init(cmd)
 	if err != nil {
-		log.Fatalf("Error initializing a config option: %s", err.Error())
+		log.Ctx(cmd.Context()).Fatalf("Error initializing a config option: %s", err.Error())
 	}
 
 	return cmd

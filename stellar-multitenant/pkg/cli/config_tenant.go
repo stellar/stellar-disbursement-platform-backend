@@ -9,6 +9,7 @@ import (
 	"github.com/stellar/go/support/config"
 	"github.com/stellar/go/support/log"
 
+	cmdUtils "github.com/stellar/stellar-disbursement-platform-backend/cmd/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	di "github.com/stellar/stellar-disbursement-platform-backend/internal/dependencyinjection"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/cli/utils"
@@ -74,11 +75,11 @@ func ConfigTenantCmd() *cobra.Command {
 		Long:    "Configure an existing tenant by updating their existing configuration",
 		Aliases: []string{"ct"},
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
-			cmd.Parent().PersistentPreRun(cmd.Parent(), args)
+			cmdUtils.PropagatePersistentPreRun(cmd, args)
 			configOptions.Require()
 			err := configOptions.SetValues()
 			if err != nil {
-				log.Fatalf("Error setting values of config options: %s", err.Error())
+				log.Ctx(cmd.Context()).Fatalf("Error setting values of config options: %s", err.Error())
 			}
 		},
 		Run: func(cmd *cobra.Command, args []string) {
