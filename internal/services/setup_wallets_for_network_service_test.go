@@ -100,7 +100,7 @@ func Test_SetupWalletsForProperNetwork(t *testing.T) {
 				{
 					Name:              "Vibrant Assist",
 					Homepage:          "https://vibrantapp.com/vibrant-assist",
-					DeepLinkSchema:    "https://aidpubnet.netlify.app",
+					DeepLinkSchema:    "https://vibrantapp.com/sdp-dev",
 					SEP10ClientDomain: "vibrantapp.com",
 				},
 				{
@@ -131,7 +131,7 @@ func Test_SetupWalletsForProperNetwork(t *testing.T) {
 		assert.Equal(t, "Vibrant Assist", wallets[1].Name)
 		assert.Equal(t, "https://vibrantapp.com/vibrant-assist", wallets[1].Homepage)
 		assert.Equal(t, "vibrantapp.com", wallets[1].SEP10ClientDomain)
-		assert.Equal(t, "https://aidpubnet.netlify.app", wallets[1].DeepLinkSchema)
+		assert.Equal(t, "https://vibrantapp.com/sdp-dev", wallets[1].DeepLinkSchema)
 
 		expectedLogs := []string{
 			"updating/inserting wallets for the 'pubnet' network",
@@ -141,7 +141,7 @@ func Test_SetupWalletsForProperNetwork(t *testing.T) {
 			"SEP-10 Client Domain: www.walletbyboss.com",
 			"Name: Vibrant Assist",
 			"Homepage: https://vibrantapp.com/vibrant-assist",
-			"Deep Link Schema: https://aidpubnet.netlify.app",
+			"Deep Link Schema: https://vibrantapp.com/sdp-dev",
 			"SEP-10 Client Domain: vibrantapp.com",
 		}
 
@@ -163,7 +163,7 @@ func Test_SetupWalletsForProperNetwork(t *testing.T) {
 				{
 					Name:              "Vibrant Assist",
 					Homepage:          "https://vibrantapp.com/vibrant-assist",
-					DeepLinkSchema:    "https://aidpubnet.netlify.app",
+					DeepLinkSchema:    "https://vibrantapp.com/sdp-dev",
 					SEP10ClientDomain: "vibrantapp.com",
 					Assets: []data.Asset{
 						{
@@ -252,7 +252,7 @@ func Test_SetupWalletsForProperNetwork(t *testing.T) {
 			"* XLM",
 			"Name: Vibrant Assist",
 			"Homepage: https://vibrantapp.com/vibrant-assist",
-			"Deep Link Schema: https://aidpubnet.netlify.app",
+			"Deep Link Schema: https://vibrantapp.com/sdp-dev",
 			"SEP-10 Client Domain: vibrantapp.com",
 			"Assets:",
 			"* USDC - GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
