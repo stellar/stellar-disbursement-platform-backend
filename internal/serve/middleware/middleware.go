@@ -187,7 +187,9 @@ func LoggingMiddleware() func(http.Handler) http.Handler {
 
 			reqCtx := req.Context()
 			logFields := log.F{
-				"req": middleware.GetReqID(reqCtx),
+				"method": req.Method,
+				"path":   req.URL.String(),
+				"req":    middleware.GetReqID(reqCtx),
 			}
 			logCtx := log.Set(reqCtx, log.Ctx(reqCtx).WithFields(logFields))
 
@@ -219,8 +221,6 @@ func logRequestStart(req *http.Request) {
 	l := log.Ctx(req.Context()).WithFields(
 		log.F{
 			"subsys":    "http",
-			"path":      req.URL.String(),
-			"method":    req.Method,
 			"ip":        req.RemoteAddr,
 			"host":      req.Host,
 			"useragent": req.Header.Get("User-Agent"),
@@ -233,8 +233,6 @@ func logRequestStart(req *http.Request) {
 func logRequestEnd(req *http.Request, mw mutil.WriterProxy, duration time.Duration) {
 	l := log.Ctx(req.Context()).WithFields(log.F{
 		"subsys":   "http",
-		"path":     req.URL.String(),
-		"method":   req.Method,
 		"status":   mw.Status(),
 		"bytes":    mw.BytesWritten(),
 		"duration": duration,

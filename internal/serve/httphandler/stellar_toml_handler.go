@@ -42,7 +42,7 @@ func (s *StellarTomlHandler) horizonURL() string {
 func (s *StellarTomlHandler) buildGeneralInformation(ctx context.Context, req *http.Request) string {
 	distributionPublicKey, err := s.DistributionAccountResolver.DistributionAccountFromContext(ctx)
 	if err != nil {
-		log.Warnf("Couldn't get distribution account from context in %s%s", req.Host, req.URL.Path)
+		log.Ctx(ctx).Warnf("Couldn't get distribution account from context in %s%s", req.Host, req.URL.Path)
 		distributionPublicKey = s.DistributionAccountResolver.HostDistributionAccount()
 	}
 
