@@ -8,6 +8,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 None
 
+## [1.1.5](https://github.com/stellar/stellar-disbursement-platform-backend/compare/1.1.4...1.1.5)
+
+### Fixed
+
+- Trim whitespaces for all disbursement instruction fields during CSV upload to avoid duplication of data  [#211](https://github.com/stellar/stellar-disbursement-platform-backend/pull/211)
+
+### Security
+
+- Upgrade golang version to 1.22.1 for security reasons [#216](https://github.com/stellar/stellar-disbursement-platform-backend/pull/216)
+
 ## [1.1.4](https://github.com/stellar/stellar-disbursement-platform-backend/compare/1.1.3...1.1.4)
 
 ### Fixed

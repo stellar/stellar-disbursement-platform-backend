@@ -145,7 +145,6 @@ func (di DisbursementInstructionModel) ProcessAll(ctx context.Context, userID st
 						return fmt.Errorf("%w: receiver verification for %s doesn't match", ErrReceiverVerificationMismatch, receiver.PhoneNumber)
 					}
 					err = di.receiverVerificationModel.UpdateVerificationValue(ctx, dbTx, verification.ReceiverID, verification.VerificationField, instruction.VerificationValue)
-
 					if err != nil {
 						return fmt.Errorf("error updating receiver verification for disbursement id %s: %w", disbursement.ID, err)
 					}
