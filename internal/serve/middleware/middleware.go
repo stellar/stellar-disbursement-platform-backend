@@ -9,8 +9,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/rs/cors"
+	"github.com/stellar/go/support/http/mutil"
 	"github.com/stellar/go/support/log"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
@@ -175,6 +177,73 @@ type cspItem struct {
 
 func (c cspItem) String() string {
 	return fmt.Sprintf("%s %s;", c.ContentType, strings.Join(c.Policy, " "))
+}
+
+// LoggingMiddleware is a middleware that logs requests to the logger.
+func LoggingMiddleware() func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+			mw := mutil.WrapWriter(rw)
+
+			reqCtx := req.Context()
+			logFields := log.F{
+				"req": middleware.GetReqID(reqCtx),
+			}
+			logCtx := log.Set(reqCtx, log.Ctx(reqCtx).WithFields(logFields))
+
+			ctxTenant, err := tenant.GetTenantFromContext(reqCtx)
+			if err != nil {
+				// Log for auditing purposes when we cannot derive the tenant from the context in the case of
+				// tenant-unaware endpoints
+				log.Ctx(logCtx).Debug("tenant cannot be derived from context")
+			}
+			if ctxTenant != nil {
+				logFields["tenant_name"] = ctxTenant.Name
+				logFields["tenant_id"] = ctxTenant.ID
+				logCtx = log.Set(reqCtx, log.Ctx(reqCtx).WithFields(logFields))
+			}
+
+			req = req.WithContext(logCtx)
+
+			logRequestStart(req)
+			started := time.Now()
+
+			next.ServeHTTP(mw, req)
+			ended := time.Since(started)
+			logRequestEnd(req, mw, ended)
+		})
+	}
+}
+
+func logRequestStart(req *http.Request) {
+	l := log.Ctx(req.Context()).WithFields(
+		log.F{
+			"subsys":    "http",
+			"path":      req.URL.String(),
+			"method":    req.Method,
+			"ip":        req.RemoteAddr,
+			"host":      req.Host,
+			"useragent": req.Header.Get("User-Agent"),
+		},
+	)
+
+	l.Info("starting request")
+}
+
+func logRequestEnd(req *http.Request, mw mutil.WriterProxy, duration time.Duration) {
+	l := log.Ctx(req.Context()).WithFields(log.F{
+		"subsys":   "http",
+		"path":     req.URL.String(),
+		"method":   req.Method,
+		"status":   mw.Status(),
+		"bytes":    mw.BytesWritten(),
+		"duration": duration,
+	})
+	if routeContext := chi.RouteContext(req.Context()); routeContext != nil {
+		l = l.WithField("route", routeContext.RoutePattern())
+	}
+
+	l.Info("finished request")
 }
 
 // CSPMiddleware is the middleware that sets the content security policy, restricting content to only be accessed
