@@ -420,6 +420,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 
 		// START SEP-24 endpoints
 		r.Get("/.well-known/stellar.toml", httphandler.StellarTomlHandler{
+			// TODO: add tenant middleware for this handler
 			AnchorPlatformBaseSepURL:    o.AnchorPlatformBaseSepURL,
 			DistributionAccountResolver: o.SubmitterEngine.DistributionAccountResolver,
 			NetworkPassphrase:           o.NetworkPassphrase,
