@@ -121,7 +121,7 @@ func AddUserCmd(databaseURLFlagName string, passwordPrompt PasswordPromptInterfa
 			if err != nil {
 				log.Fatalf("add-user command error: %s", err)
 			}
-			log.Infof("user inserted: %s", args[0])
+			log.Ctx(ctx).Infof("user inserted: %s", args[0])
 		},
 	}
 	err := addUserCmdConfigOpts.Init(addUser)

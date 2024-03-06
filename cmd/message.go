@@ -70,7 +70,7 @@ func (s *MessageCommand) Command(messengerService MessengerServiceInterface) *co
 				log.Fatalf("Error calling help command: %s", err.Error())
 			}
 
-			log.Infof("🎉 Successfully mounted messenger client for type %s", opts.MessengerType)
+			log.Ctx(cmd.Context()).Infof("🎉 Successfully mounted messenger client for type %s", opts.MessengerType)
 		},
 	}
 	err := messageCmdConfigOpts.Init(messageCmd)

@@ -73,7 +73,7 @@ func (h ResetPasswordHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	log.Infof("[ResetUserPassword] - Reset password for user with token %s",
+	log.Ctx(ctx).Infof("[ResetUserPassword] - Reset password for user with token %s",
 		utils.TruncateString(resetPasswordRequest.ResetToken, len(resetPasswordRequest.ResetToken)/4))
 	httpjson.RenderStatus(w, http.StatusOK, nil, httpjson.JSON)
 }

@@ -32,14 +32,15 @@ func rootCmd() *cobra.Command {
 		Use:   "mtn",
 		Short: "Stellar Disbursement Platform Multi-tenant Configuration.",
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
+			ctx := cmd.Context()
 			configOptions.Require()
 			err := configOptions.SetValues()
 			if err != nil {
 				log.Fatalf("Error setting values of config options: %s", err.Error())
 			}
 
-			log.Info("Version: ", globalOptions.version)
-			log.Info("GitCommit: ", globalOptions.gitCommit)
+			log.Ctx(ctx).Info("Version: ", globalOptions.version)
+			log.Ctx(ctx).Info("GitCommit: ", globalOptions.gitCommit)
 		},
 		Run: func(cmd *cobra.Command, args []string) {
 			if err := cmd.Help(); err != nil {

@@ -76,7 +76,7 @@ func MetricsRequestHandler(monitorService monitor.MonitorServiceInterface) func(
 
 			err := monitorService.MonitorHttpRequestDuration(duration, labels)
 			if err != nil {
-				log.Errorf("Error trying to monitor request time: %s", err)
+				log.Ctx(req.Context()).Errorf("Error trying to monitor request time: %s", err)
 			}
 		})
 	}

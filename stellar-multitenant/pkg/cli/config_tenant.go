@@ -120,7 +120,7 @@ func executeConfigTenant(ctx context.Context, to *tenantOptions, dbConnectionPoo
 		return fmt.Errorf("updating tenant config: %w", err)
 	}
 
-	log.Infof("tenant ID %s configuration updated successfully", to.ID)
+	log.Ctx(ctx).Infof("tenant ID %s configuration updated successfully", to.ID)
 
 	return nil
 }

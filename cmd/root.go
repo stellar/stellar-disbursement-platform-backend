@@ -66,13 +66,14 @@ func rootCmd() *cobra.Command {
 		Long:    "The Stellar Disbursement Platform (SDP) enables organizations to disburse bulk payments to recipients using Stellar.",
 		Version: globalOptions.Version,
 		PersistentPreRun: func(cmd *cobra.Command, _ []string) {
+			ctx := cmd.Context()
 			configOpts.Require()
 			err := configOpts.SetValues()
 			if err != nil {
 				log.Fatalf("Error setting values of config options: %s", err.Error())
 			}
-			log.Info("Version: ", globalOptions.Version)
-			log.Info("GitCommit: ", globalOptions.GitCommit)
+			log.Ctx(ctx).Info("Version: ", globalOptions.Version)
+			log.Ctx(ctx).Info("GitCommit: ", globalOptions.GitCommit)
 		},
 		Run: func(cmd *cobra.Command, args []string) {
 			err := cmd.Help()
