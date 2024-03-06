@@ -225,7 +225,6 @@ func getReceiverWalletsStats(ctx context.Context, sqlExec db.SQLExecuter, disbur
 		)
 
 		err = rows.Scan(&status, &count)
-
 		if err != nil {
 			return nil, fmt.Errorf("attributing values to rows: %w", err)
 		}
