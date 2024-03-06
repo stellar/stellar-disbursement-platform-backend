@@ -96,7 +96,7 @@ func ConfigTenantCmd() *cobra.Command {
 			}
 		},
 		PersistentPostRun: func(cmd *cobra.Command, args []string) {
-			di.DeleteAndCloseInstanceByValue(cmd.Context(), adminDBConnectionPool)
+			di.CleanupInstanceByValue(cmd.Context(), adminDBConnectionPool)
 		},
 	}
 

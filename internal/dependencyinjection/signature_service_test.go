@@ -13,6 +13,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	preconditionsMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
+	sigMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing/mocks"
 )
 
 func Test_dependencyinjection_NewSignatureService(t *testing.T) {
@@ -24,6 +25,7 @@ func Test_dependencyinjection_NewSignatureService(t *testing.T) {
 
 	distributionPrivateKey := keypair.MustRandom().Seed()
 	chAccEncryptionPassphrase := keypair.MustRandom().Seed()
+	mDistAccResolver := sigMocks.NewMockDistributionAccountResolver(t)
 
 	ctx := context.Background()
 	t.Run("should create and return the same instance on the second call", func(t *testing.T) {
@@ -36,6 +38,8 @@ func Test_dependencyinjection_NewSignatureService(t *testing.T) {
 			DistributionPrivateKey:    distributionPrivateKey,
 			ChAccEncryptionPassphrase: chAccEncryptionPassphrase,
 			LedgerNumberTracker:       preconditionsMocks.NewMockLedgerNumberTracker(t),
+
+			DistributionAccountResolver: mDistAccResolver,
 		}
 
 		gotDependency, err := NewSignatureService(ctx, opts)
@@ -59,7 +63,10 @@ func Test_dependencyinjection_NewSignatureService(t *testing.T) {
 	t.Run("should return an error on a invalid option", func(t *testing.T) {
 		ClearInstancesTestHelper(t)
 
-		opts := signing.SignatureServiceOptions{DistributionSignerType: signing.DistributionAccountEnvSignatureClientType}
+		opts := signing.SignatureServiceOptions{
+			DistributionSignerType:      signing.DistributionAccountEnvSignatureClientType,
+			DistributionAccountResolver: mDistAccResolver,
+		}
 		gotDependency, err := NewSignatureService(ctx, opts)
 		assert.Empty(t, gotDependency)
 		assert.ErrorContains(t, err, "creating a new signature service instance:")
@@ -74,11 +81,12 @@ func Test_dependencyinjection_NewSignatureService(t *testing.T) {
 		SetInstance(instanceName, false)
 
 		opts := signing.SignatureServiceOptions{
-			DistributionSignerType:    distributionSignerType,
-			NetworkPassphrase:         network.TestNetworkPassphrase,
-			DBConnectionPool:          dbConnectionPool,
-			DistributionPrivateKey:    distributionPrivateKey,
-			ChAccEncryptionPassphrase: chAccEncryptionPassphrase,
+			DistributionSignerType:      distributionSignerType,
+			NetworkPassphrase:           network.TestNetworkPassphrase,
+			DBConnectionPool:            dbConnectionPool,
+			DistributionPrivateKey:      distributionPrivateKey,
+			ChAccEncryptionPassphrase:   chAccEncryptionPassphrase,
+			DistributionAccountResolver: mDistAccResolver,
 		}
 		gotDependency, err := NewSignatureService(ctx, opts)
 		assert.Empty(t, gotDependency)

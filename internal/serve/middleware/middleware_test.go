@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -620,6 +621,121 @@ func Test_CorsMiddleware(t *testing.T) {
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.Equal(t, expectedRespBody, string(respBody))
 	})
+}
+
+func Test_LoggingMiddleware(t *testing.T) {
+	mTenantManager := &tenant.TenantManagerMock{}
+	mAuthManager := &auth.AuthManagerMock{}
+
+	t.Run("emits request started and finished logs with tenant info if tenant derived from context", func(t *testing.T) {
+		r := chi.NewRouter()
+		expectedRespBody := "ok"
+
+		debugEntries := log.DefaultLogger.StartTest(log.DebugLevel)
+
+		tenantName := "tenant123"
+		tenantID := "tenant_id"
+		token := "valid_token"
+		mAuthManager.On("GetTenantID", mock.Anything, token).Return(tenantID, nil).Once()
+		mTenantManager.On("GetTenantByID", mock.Anything, tenantID).Return(&tenant.Tenant{
+			ID:   "tenant_id",
+			Name: tenantName,
+		}, nil).Once()
+
+		r.Use(TenantMiddleware(mTenantManager, mAuthManager))
+		r.Use(LoggingMiddleware())
+		r.Get("/", func(w http.ResponseWriter, r *http.Request) {
+			_, err := w.Write([]byte(expectedRespBody))
+			require.NoError(t, err)
+		})
+
+		req, err := http.NewRequest(http.MethodGet, "/", nil)
+		require.NoError(t, err)
+
+		ctx := context.WithValue(req.Context(), TokenContextKey, token)
+		req = req.WithContext(ctx)
+
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+
+		resp := rr.Result()
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.Equal(t, expectedRespBody, string(respBody))
+
+		logEntries := debugEntries()
+		assert.Len(t, logEntries, 2)
+		for i, e := range logEntries {
+			entry, err := e.String()
+			require.NoError(t, err)
+
+			assert.Contains(t, entry, fmt.Sprintf("tenant_name=%s", tenantName))
+			assert.Contains(t, entry, fmt.Sprintf("tenant_id=%s", tenantID))
+
+			if i == 0 {
+				assert.Contains(t, e.Message, "starting request")
+			} else if i == 1 {
+				assert.Contains(t, e.Message, "finished request")
+			}
+			assert.Equal(t, log.InfoLevel, e.Level)
+		}
+	})
+
+	t.Run("emits warning if tenant cannot be derived from the context", func(t *testing.T) {
+		r := chi.NewRouter()
+		expectedRespBody := "ok"
+
+		debugEntries := log.DefaultLogger.StartTest(log.DebugLevel)
+
+		r.Use(LoggingMiddleware())
+		r.Get("/", func(w http.ResponseWriter, r *http.Request) {
+			_, err := w.Write([]byte(expectedRespBody))
+			require.NoError(t, err)
+		})
+
+		req, err := http.NewRequest(http.MethodGet, "/", nil)
+		require.NoError(t, err)
+
+		ctx := context.Background()
+		req = req.WithContext(ctx)
+
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+
+		resp := rr.Result()
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.Equal(t, expectedRespBody, string(respBody))
+
+		logEntries := debugEntries()
+
+		assert.Len(t, logEntries, 3)
+		for i, e := range logEntries {
+			entry, err := e.String()
+			require.NoError(t, err)
+
+			assert.NotContains(t, entry, "tenant_name")
+			assert.NotContains(t, entry, "tenant_id")
+
+			if i == 0 {
+				assert.Contains(t, e.Message, "tenant cannot be derived from context")
+				assert.Equal(t, log.DebugLevel, e.Level)
+			} else if i == 1 {
+				assert.Contains(t, e.Message, "starting request")
+				assert.Equal(t, log.InfoLevel, e.Level)
+			} else if i == 2 {
+				assert.Contains(t, e.Message, "finished request")
+				assert.Equal(t, log.InfoLevel, e.Level)
+			}
+		}
+	})
+
+	mTenantManager.AssertExpectations(t)
+	mAuthManager.AssertExpectations(t)
 }
 
 func Test_CSPMiddleware(t *testing.T) {

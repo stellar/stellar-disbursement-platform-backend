@@ -35,7 +35,7 @@ func Test_NewTSSDatabaseMigrationManager(t *testing.T) {
 	})
 }
 
-func Test_TSSDatabaseMigrationManager_createTSSSchemaIfNeeded(t *testing.T) {
+func Test_TSSDatabaseMigrationManager_CreateTSSSchemaIfNeeded(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
@@ -59,7 +59,7 @@ func Test_TSSDatabaseMigrationManager_createTSSSchemaIfNeeded(t *testing.T) {
 	assert.False(t, exists)
 
 	// Creates the tss schema.
-	err = manager.createTSSSchemaIfNeeded(ctx)
+	err = manager.CreateTSSSchemaIfNeeded(ctx)
 	require.NoError(t, err)
 
 	// Checks that the tss schema exists.
@@ -67,8 +67,8 @@ func Test_TSSDatabaseMigrationManager_createTSSSchemaIfNeeded(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, exists)
 
-	// Runs the createTSSSchemaIfNeeded function again, it should be a no-op.
-	err = manager.createTSSSchemaIfNeeded(ctx)
+	// Runs the CreateTSSSchemaIfNeeded function again, it should be a no-op.
+	err = manager.CreateTSSSchemaIfNeeded(ctx)
 	require.NoError(t, err)
 	err = manager.RootDBConnectionPool.GetContext(ctx, &exists, query)
 	require.NoError(t, err)
@@ -88,7 +88,7 @@ func Test_TSSDatabaseMigrationManager_deleteTSSSchemaIfNeeded(t *testing.T) {
 	ctx := context.Background()
 
 	// Creates the tss schema.
-	err = manager.createTSSSchemaIfNeeded(ctx)
+	err = manager.CreateTSSSchemaIfNeeded(ctx)
 	require.NoError(t, err)
 
 	// Checks that the tss schema exists.
@@ -119,7 +119,7 @@ func Test_TSSDatabaseMigrationManager_deleteTSSSchemaIfNeeded(t *testing.T) {
 	assert.False(t, exists)
 }
 
-func Test_runTSSMigrations(t *testing.T) {
+func Test_RunTSSMigrations(t *testing.T) {
 	dbt := dbtest.OpenWithoutMigrations(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
@@ -139,15 +139,15 @@ func Test_runTSSMigrations(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	err = runTSSMigrations(ctx, dbt.DSN, migrate.Up, count)
+	err = RunTSSMigrations(ctx, dbt.DSN, migrate.Up, count)
 	require.NoError(t, err)
 
-	err = runTSSMigrations(ctx, dbt.DSN, migrate.Down, count)
+	err = RunTSSMigrations(ctx, dbt.DSN, migrate.Down, count)
 	require.NoError(t, err)
 
-	err = runTSSMigrations(ctx, dbt.DSN, migrate.Up, count)
+	err = RunTSSMigrations(ctx, dbt.DSN, migrate.Up, count)
 	require.NoError(t, err)
 
-	err = runTSSMigrations(ctx, dbt.DSN, migrate.Down, count)
+	err = RunTSSMigrations(ctx, dbt.DSN, migrate.Down, count)
 	require.NoError(t, err)
 }

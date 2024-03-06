@@ -8,15 +8,17 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
-
 	"github.com/go-chi/chi/v5"
 	"github.com/stellar/go/network"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
+	sigMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing/mocks"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 func Test_StellarTomlHandler_horizonURL(t *testing.T) {
@@ -46,50 +48,120 @@ func Test_StellarTomlHandler_horizonURL(t *testing.T) {
 }
 
 func Test_StellarTomlHandler_buildGeneralInformation(t *testing.T) {
+	req := httptest.NewRequest("GET", "https://test.com/.well-known/stellar.toml", nil)
+	req.Host = "test.com"
+	hostDistAccPublicKey := "GC5HD2HELPBY7G43C6AXEGVWYTFZJ5RGZDFFX5KRSS56FCUPGREUKWXQ"
+	tenantDistAccPublicKey := "GDEWLTJMGKABNF3GBA3VTVBYPES3FXQHHJVJVI6X3CRKKFH5EMLRT5JZ"
+
 	testCases := []struct {
-		name string
-		s    StellarTomlHandler
-		want string
+		name              string
+		isTenantInContext bool
+		s                 StellarTomlHandler
+		wantLines         []string
 	}{
 		{
-			name: "pubnet",
+			name:              "pubnet (without tenant in context)",
+			isTenantInContext: false,
 			s: StellarTomlHandler{
-				DistributionPublicKey:    "GBC2HVWFIFN7WJHFORVBCDKJORG6LWTW3O2QBHOURL3KHZPM4KMWTUSA",
+				// DistributionAccountResolver: <---- this is being injected in the test below
 				NetworkPassphrase:        network.PublicNetworkPassphrase,
 				Sep10SigningPublicKey:    "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
 				AnchorPlatformBaseSepURL: "https://anchor-platform-domain",
 			},
-			want: fmt.Sprintf(`
-		ACCOUNTS=["GBC2HVWFIFN7WJHFORVBCDKJORG6LWTW3O2QBHOURL3KHZPM4KMWTUSA", "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"]
-		SIGNING_KEY="GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"
-		NETWORK_PASSPHRASE=%q
-		HORIZON_URL=%q
-		WEB_AUTH_ENDPOINT="https://anchor-platform-domain/auth"
-		TRANSFER_SERVER_SEP0024="https://anchor-platform-domain/sep24"
-	`, network.PublicNetworkPassphrase, horizonPubnetURL),
+			wantLines: []string{
+				fmt.Sprintf(`ACCOUNTS=[%q, "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"]`, hostDistAccPublicKey),
+				`SIGNING_KEY="GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"`,
+				fmt.Sprintf("NETWORK_PASSPHRASE=%q", network.PublicNetworkPassphrase),
+				fmt.Sprintf("HORIZON_URL=%q", horizonPubnetURL),
+				`WEB_AUTH_ENDPOINT="https://anchor-platform-domain/auth"`,
+				`TRANSFER_SERVER_SEP0024="https://anchor-platform-domain/sep24"`,
+			},
 		},
 		{
-			name: "testnet",
+			name:              "pubnet (with tenant in context)",
+			isTenantInContext: true,
 			s: StellarTomlHandler{
-				DistributionPublicKey:    "GBC2HVWFIFN7WJHFORVBCDKJORG6LWTW3O2QBHOURL3KHZPM4KMWTUSA",
+				// DistributionAccountResolver: <---- this is being injected in the test below
+				NetworkPassphrase:        network.PublicNetworkPassphrase,
+				Sep10SigningPublicKey:    "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
+				AnchorPlatformBaseSepURL: "https://anchor-platform-domain",
+			},
+			wantLines: []string{
+				fmt.Sprintf(`ACCOUNTS=[%q, "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"]`, tenantDistAccPublicKey),
+				`SIGNING_KEY="GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"`,
+				fmt.Sprintf("NETWORK_PASSPHRASE=%q", network.PublicNetworkPassphrase),
+				fmt.Sprintf("HORIZON_URL=%q", horizonPubnetURL),
+				`WEB_AUTH_ENDPOINT="https://anchor-platform-domain/auth"`,
+				`TRANSFER_SERVER_SEP0024="https://anchor-platform-domain/sep24"`,
+			},
+		},
+		{
+			name:              "testnet (without tenant in context)",
+			isTenantInContext: false,
+			s: StellarTomlHandler{
+				// DistributionAccountResolver: <---- this is being injected in the test below
 				NetworkPassphrase:        network.TestNetworkPassphrase,
 				Sep10SigningPublicKey:    "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
 				AnchorPlatformBaseSepURL: "https://anchor-platform-domain",
 			},
-			want: fmt.Sprintf(`
-		ACCOUNTS=["GBC2HVWFIFN7WJHFORVBCDKJORG6LWTW3O2QBHOURL3KHZPM4KMWTUSA", "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"]
-		SIGNING_KEY="GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"
-		NETWORK_PASSPHRASE=%q
-		HORIZON_URL=%q
-		WEB_AUTH_ENDPOINT="https://anchor-platform-domain/auth"
-		TRANSFER_SERVER_SEP0024="https://anchor-platform-domain/sep24"
-	`, network.TestNetworkPassphrase, horizonTestnetURL),
+			wantLines: []string{
+				fmt.Sprintf(`ACCOUNTS=[%q, "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"]`, hostDistAccPublicKey),
+				`SIGNING_KEY="GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"`,
+				fmt.Sprintf("NETWORK_PASSPHRASE=%q", network.TestNetworkPassphrase),
+				fmt.Sprintf("HORIZON_URL=%q", horizonTestnetURL),
+				`WEB_AUTH_ENDPOINT="https://anchor-platform-domain/auth"`,
+				`TRANSFER_SERVER_SEP0024="https://anchor-platform-domain/sep24"`,
+			},
+		},
+		{
+			name:              "testnet (with tenant in context)",
+			isTenantInContext: true,
+			s: StellarTomlHandler{
+				// DistributionAccountResolver: <---- this is being injected in the test below
+				NetworkPassphrase:        network.TestNetworkPassphrase,
+				Sep10SigningPublicKey:    "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
+				AnchorPlatformBaseSepURL: "https://anchor-platform-domain",
+			},
+			wantLines: []string{
+				fmt.Sprintf(`ACCOUNTS=[%q, "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"]`, tenantDistAccPublicKey),
+				`SIGNING_KEY="GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"`,
+				fmt.Sprintf("NETWORK_PASSPHRASE=%q", network.TestNetworkPassphrase),
+				fmt.Sprintf("HORIZON_URL=%q", horizonTestnetURL),
+				`WEB_AUTH_ENDPOINT="https://anchor-platform-domain/auth"`,
+				`TRANSFER_SERVER_SEP0024="https://anchor-platform-domain/sep24"`,
+			},
 		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			genaralInformation := tc.s.buildGeneralInformation()
-			assert.Equal(t, tc.want, genaralInformation)
+			ctx := context.Background()
+
+			// Prepare mock
+			mDistAccResolver := sigMocks.NewMockDistributionAccountResolver(t)
+			if tc.isTenantInContext {
+				mDistAccResolver.
+					On("DistributionAccountFromContext", ctx).
+					Return(tenantDistAccPublicKey, nil).
+					Once()
+			} else {
+				mDistAccResolver.
+					On("DistributionAccountFromContext", ctx).
+					Return("", tenant.ErrTenantNotFoundInContext).
+					Once()
+				mDistAccResolver.
+					On("HostDistributionAccount").
+					Return(hostDistAccPublicKey).
+					Once()
+			}
+			tc.s.DistributionAccountResolver = mDistAccResolver
+
+			generalInformation := tc.s.buildGeneralInformation(ctx, req)
+			generalInformation = strings.TrimSpace(generalInformation)
+			generalInformation = strings.Replace(generalInformation, "\t", "", -1)
+
+			generalInformationLines := strings.Split(generalInformation, "\n")
+			assert.Equal(t, len(tc.wantLines), len(generalInformationLines))
+			assert.ElementsMatch(t, tc.wantLines, generalInformationLines)
 		})
 	}
 }
@@ -117,8 +189,8 @@ func Test_StellarTomlHandler_buildOrganizationDocumentation(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			genaralInformation := stellarTomlHandler.buildOrganizationDocumentation(tc.name)
-			assert.Equal(t, tc.want, genaralInformation)
+			orgInformation := stellarTomlHandler.buildOrganizationDocumentation(tc.name)
+			assert.Equal(t, tc.want, orgInformation)
 		})
 	}
 }
@@ -211,7 +283,6 @@ func Test_StellarTomlHandler_buildCurrencyInformation(t *testing.T) {
 func Test_StellarTomlHandler_ServeHTTP(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
-
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
@@ -222,13 +293,19 @@ func Test_StellarTomlHandler_ServeHTTP(t *testing.T) {
 	ctx := tenant.LoadDefaultTenantInContext(t, dbConnectionPool)
 	data.ClearAndCreateAssetFixtures(t, ctx, dbConnectionPool)
 
+	distAccResolver, err := signing.NewDistributionAccountResolver(signing.DistributionAccountResolverOptions{
+		AdminDBConnectionPool:            dbConnectionPool,
+		HostDistributionAccountPublicKey: "GCWFIKOB7FO6KTXUKZIPPPZ42UT2V7HVZD5STVROKVJVQU24FSP7OLZK",
+	})
+	require.NoError(t, err)
+
 	t.Run("build testnet toml for org", func(t *testing.T) {
 		tomlHandler := StellarTomlHandler{
-			DistributionPublicKey:    "GBC2HVWFIFN7WJHFORVBCDKJORG6LWTW3O2QBHOURL3KHZPM4KMWTUSA",
-			NetworkPassphrase:        network.TestNetworkPassphrase,
-			Sep10SigningPublicKey:    "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
-			AnchorPlatformBaseSepURL: "https://anchor-platform-domain",
-			Models:                   models,
+			DistributionAccountResolver: distAccResolver,
+			NetworkPassphrase:           network.TestNetworkPassphrase,
+			Sep10SigningPublicKey:       "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
+			AnchorPlatformBaseSepURL:    "https://anchor-platform-domain",
+			Models:                      models,
 		}
 
 		r := chi.NewRouter()
@@ -241,7 +318,7 @@ func Test_StellarTomlHandler_ServeHTTP(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 		wantToml := fmt.Sprintf(`
-			ACCOUNTS=["GBC2HVWFIFN7WJHFORVBCDKJORG6LWTW3O2QBHOURL3KHZPM4KMWTUSA", "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"]
+			ACCOUNTS=["GDIVVKL6QYF6C6K3C5PZZBQ2NQDLN2OSLMVIEQRHS6DZE7WRL33ZDNXL", "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"]
 			SIGNING_KEY="GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"
 			NETWORK_PASSPHRASE=%q
 			HORIZON_URL=%q
@@ -274,11 +351,11 @@ func Test_StellarTomlHandler_ServeHTTP(t *testing.T) {
 
 	t.Run("build pubnet toml", func(t *testing.T) {
 		tomlHandler := StellarTomlHandler{
-			DistributionPublicKey:    "GBC2HVWFIFN7WJHFORVBCDKJORG6LWTW3O2QBHOURL3KHZPM4KMWTUSA",
-			NetworkPassphrase:        network.PublicNetworkPassphrase,
-			Sep10SigningPublicKey:    "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
-			AnchorPlatformBaseSepURL: "https://anchor-platform-domain",
-			Models:                   models,
+			DistributionAccountResolver: distAccResolver,
+			NetworkPassphrase:           network.PublicNetworkPassphrase,
+			Sep10SigningPublicKey:       "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
+			AnchorPlatformBaseSepURL:    "https://anchor-platform-domain",
+			Models:                      models,
 		}
 
 		r := chi.NewRouter()
@@ -291,7 +368,7 @@ func Test_StellarTomlHandler_ServeHTTP(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 		wantToml := fmt.Sprintf(`
-			ACCOUNTS=["GBC2HVWFIFN7WJHFORVBCDKJORG6LWTW3O2QBHOURL3KHZPM4KMWTUSA", "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"]
+			ACCOUNTS=["GDIVVKL6QYF6C6K3C5PZZBQ2NQDLN2OSLMVIEQRHS6DZE7WRL33ZDNXL", "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"]
 			SIGNING_KEY="GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"
 			NETWORK_PASSPHRASE=%q
 			HORIZON_URL=%q
@@ -324,12 +401,12 @@ func Test_StellarTomlHandler_ServeHTTP(t *testing.T) {
 
 	t.Run("build general pubnet toml for instance", func(t *testing.T) {
 		tomlHandler := StellarTomlHandler{
-			DistributionPublicKey:    "GBC2HVWFIFN7WJHFORVBCDKJORG6LWTW3O2QBHOURL3KHZPM4KMWTUSA",
-			NetworkPassphrase:        network.PublicNetworkPassphrase,
-			Sep10SigningPublicKey:    "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
-			AnchorPlatformBaseSepURL: "https://anchor-platform-domain",
-			Models:                   models,
-			InstanceName:             "SDP Pubnet",
+			DistributionAccountResolver: distAccResolver,
+			NetworkPassphrase:           network.PublicNetworkPassphrase,
+			Sep10SigningPublicKey:       "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
+			AnchorPlatformBaseSepURL:    "https://anchor-platform-domain",
+			Models:                      models,
+			InstanceName:                "SDP Pubnet",
 		}
 
 		r := chi.NewRouter()
@@ -342,7 +419,7 @@ func Test_StellarTomlHandler_ServeHTTP(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 		wantToml := fmt.Sprintf(`
-			ACCOUNTS=["GBC2HVWFIFN7WJHFORVBCDKJORG6LWTW3O2QBHOURL3KHZPM4KMWTUSA", "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"]
+			ACCOUNTS=["GCWFIKOB7FO6KTXUKZIPPPZ42UT2V7HVZD5STVROKVJVQU24FSP7OLZK", "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"]
 			SIGNING_KEY="GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"
 			NETWORK_PASSPHRASE=%q
 			HORIZON_URL=%q
@@ -376,11 +453,11 @@ func Test_StellarTomlHandler_ServeHTTP(t *testing.T) {
 		data.DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
 
 		tomlHandler := StellarTomlHandler{
-			DistributionPublicKey:    "GBC2HVWFIFN7WJHFORVBCDKJORG6LWTW3O2QBHOURL3KHZPM4KMWTUSA",
-			NetworkPassphrase:        network.PublicNetworkPassphrase,
-			Sep10SigningPublicKey:    "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
-			AnchorPlatformBaseSepURL: "https://anchor-platform-domain",
-			Models:                   models,
+			DistributionAccountResolver: distAccResolver,
+			NetworkPassphrase:           network.PublicNetworkPassphrase,
+			Sep10SigningPublicKey:       "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
+			AnchorPlatformBaseSepURL:    "https://anchor-platform-domain",
+			Models:                      models,
 		}
 
 		r := chi.NewRouter()
@@ -393,7 +470,7 @@ func Test_StellarTomlHandler_ServeHTTP(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 		wantToml := fmt.Sprintf(`
-			ACCOUNTS=["GBC2HVWFIFN7WJHFORVBCDKJORG6LWTW3O2QBHOURL3KHZPM4KMWTUSA", "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"]
+			ACCOUNTS=["GDIVVKL6QYF6C6K3C5PZZBQ2NQDLN2OSLMVIEQRHS6DZE7WRL33ZDNXL", "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"]
 			SIGNING_KEY="GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"
 			NETWORK_PASSPHRASE=%q
 			HORIZON_URL=%q

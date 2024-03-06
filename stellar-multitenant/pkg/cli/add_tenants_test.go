@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	migrate "github.com/rubenv/sql-migrate"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/stellar/go/keypair"
@@ -18,8 +19,10 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	cmdDB "github.com/stellar/stellar-disbursement-platform-backend/cmd/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
+	"github.com/stellar/stellar-disbursement-platform-backend/db/router"
 	di "github.com/stellar/stellar-disbursement-platform-backend/internal/dependencyinjection"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
@@ -162,13 +165,23 @@ func Test_executeAddTenant(t *testing.T) {
 }
 
 func Test_AddTenantsCmd(t *testing.T) {
-	dbt := dbtest.Open(t)
+	dbt := dbtest.OpenWithAdminMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, outerErr)
 	defer dbConnectionPool.Close()
 
 	ctx := context.Background()
+
+	// Run TSS migrations in tss schema:
+	manager, err := cmdDB.NewTSSDatabaseMigrationManager(dbConnectionPool)
+	require.NoError(t, err)
+	err = manager.CreateTSSSchemaIfNeeded(ctx)
+	require.NoError(t, err)
+	tssDNS, err := router.GetDNSForTSS(dbt.DSN)
+	require.NoError(t, err)
+	err = cmdDB.RunTSSMigrations(ctx, tssDNS, migrate.Up, 0)
+	require.NoError(t, err)
 
 	t.Setenv("DISTRIBUTION_SEED", keypair.MustRandom().Seed())
 	t.Setenv("DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE", keypair.MustRandom().Seed())
@@ -197,11 +210,11 @@ Flags:
       --aws-region string                                   The AWS region (AWS_REGION)
       --aws-secret-access-key string                        The AWS secret access key (AWS_SECRET_ACCESS_KEY)
       --distribution-account-encryption-passphrase string   A Stellar-compliant ed25519 private key used to encrypt/decrypt the in-memory distribution accounts' private keys. It's mandatory when the distribution-signer-type is set to DISTRIBUTION_ACCOUNT_DB. (DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE)
-      --distribution-seed string                            The private key of the Stellar distribution account that sends the disbursements. (DISTRIBUTION_SEED)
+      --distribution-seed string                            The private key of the HOST's Stellar distribution account, used to create channel accounts (DISTRIBUTION_SEED)
       --distribution-signer-type string                     The type of the signature client used for distribution accounts. Options: [DISTRIBUTION_ACCOUNT_ENV DISTRIBUTION_ACCOUNT_DB] (DISTRIBUTION_SIGNER_TYPE) (default "DISTRIBUTION_ACCOUNT_ENV")
       --email-sender-type string                            The messenger type used to send invitations to new dashboard users. Options: [DRY_RUN AWS_EMAIL] (EMAIL_SENDER_TYPE)
   -h, --help                                                help for add-tenants
-      --network-passphrase string                           The Stellar Network passphrase (NETWORK_PASSPHRASE) (default "Test SDF Network ; September 2015")
+      --network-passphrase string                           The Stellar network passphrase (NETWORK_PASSPHRASE) (default "Test SDF Network ; September 2015")
       --network-type string                                 The Stellar Network type (NETWORK_TYPE) (default "testnet")
       --sdp-ui-base-url string                              The Tenant SDP UI/dashboard Base URL. (SDP_UI_BASE_URL) (default "http://localhost:3000")
 
@@ -226,11 +239,11 @@ Flags:
       --aws-region string                                   The AWS region (AWS_REGION)
       --aws-secret-access-key string                        The AWS secret access key (AWS_SECRET_ACCESS_KEY)
       --distribution-account-encryption-passphrase string   A Stellar-compliant ed25519 private key used to encrypt/decrypt the in-memory distribution accounts' private keys. It's mandatory when the distribution-signer-type is set to DISTRIBUTION_ACCOUNT_DB. (DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE)
-      --distribution-seed string                            The private key of the Stellar distribution account that sends the disbursements. (DISTRIBUTION_SEED)
+      --distribution-seed string                            The private key of the HOST's Stellar distribution account, used to create channel accounts (DISTRIBUTION_SEED)
       --distribution-signer-type string                     The type of the signature client used for distribution accounts. Options: [DISTRIBUTION_ACCOUNT_ENV DISTRIBUTION_ACCOUNT_DB] (DISTRIBUTION_SIGNER_TYPE) (default "DISTRIBUTION_ACCOUNT_ENV")
       --email-sender-type string                            The messenger type used to send invitations to new dashboard users. Options: [DRY_RUN AWS_EMAIL] (EMAIL_SENDER_TYPE)
   -h, --help                                                help for add-tenants
-      --network-passphrase string                           The Stellar Network passphrase (NETWORK_PASSPHRASE) (default "Test SDF Network ; September 2015")
+      --network-passphrase string                           The Stellar network passphrase (NETWORK_PASSPHRASE) (default "Test SDF Network ; September 2015")
       --network-type string                                 The Stellar Network type (NETWORK_TYPE) (default "testnet")
       --sdp-ui-base-url string                              The Tenant SDP UI/dashboard Base URL. (SDP_UI_BASE_URL) (default "http://localhost:3000")
 `
@@ -251,7 +264,12 @@ Flags:
 		rootCmd.AddCommand(AddTenantsCmd())
 		rootCmd.SetOut(out)
 		rootCmd.SetErr(out)
-		rootCmd.SetArgs([]string{"add-tenants", tenantName, userFirstName, userLastName, userEmail, organizationName, "--email-sender-type", "DRY_RUN", "--network-type", "testnet", "--multitenant-db-url", dbt.DSN})
+		rootCmd.SetArgs([]string{
+			"add-tenants", tenantName, userFirstName, userLastName, userEmail, organizationName,
+			"--email-sender-type", "DRY_RUN",
+			"--network-type", "testnet",
+			"--multitenant-db-url", dbt.DSN,
+		})
 		getEntries := log.DefaultLogger.StartTest(log.InfoLevel)
 
 		err := rootCmd.ExecuteContext(ctx)

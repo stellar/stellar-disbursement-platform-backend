@@ -77,7 +77,6 @@ type ServeOptions struct {
 	AnchorPlatformOutgoingJWTSecret string
 	AnchorPlatformAPIService        anchorplatform.AnchorPlatformAPIServiceInterface
 	CrashTrackerClient              crashtracker.CrashTrackerClient
-	DistributionPublicKey           string
 	ReCAPTCHASiteKey                string
 	ReCAPTCHASiteSecretKey          string
 	DisableMFA                      bool
@@ -205,7 +204,6 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 	))
 	mux.Use(chimiddleware.RequestID)
 	mux.Use(chimiddleware.RealIP)
-	mux.Use(supporthttp.LoggingMiddleware)
 	mux.Use(middleware.RecoverHandler)
 	mux.Use(middleware.MetricsRequestHandler(o.MonitorService))
 	mux.Use(middleware.CSPMiddleware())
@@ -220,6 +218,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 	mux.Group(func(r chi.Router) {
 		r.Use(middleware.AuthenticateMiddleware(authManager))
 		r.Use(middleware.TenantMiddleware(o.tenantManager, o.authManager))
+		r.Use(middleware.LoggingMiddleware())
 
 		r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...)).Route("/statistics", func(r chi.Router) {
 			statisticsHandler := httphandler.StatisticsHandler{DBConnectionPool: o.MtnDBConnectionPool}
@@ -244,10 +243,10 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 
 		r.Route("/disbursements", func(r chi.Router) {
 			handler := httphandler.DisbursementHandler{
-				Models:             o.Models,
-				AuthManager:        authManager,
-				MonitorService:     o.MonitorService,
-				DistributionPubKey: o.DistributionPublicKey,
+				Models:                      o.Models,
+				AuthManager:                 authManager,
+				MonitorService:              o.MonitorService,
+				DistributionAccountResolver: o.SubmitterEngine.DistributionAccountResolver,
 				DisbursementManagementService: services.NewDisbursementManagementService(
 					o.Models,
 					o.MtnDBConnectionPool,
@@ -338,13 +337,13 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 		})
 
 		profileHandler := httphandler.ProfileHandler{
-			Models:                o.Models,
-			AuthManager:           authManager,
-			MaxMemoryAllocation:   httphandler.DefaultMaxMemoryAllocation,
-			BaseURL:               o.BaseURL,
-			DistributionPublicKey: o.DistributionPublicKey,
-			PasswordValidator:     o.PasswordValidator,
-			PublicFilesFS:         publicfiles.PublicFiles,
+			Models:                      o.Models,
+			AuthManager:                 authManager,
+			MaxMemoryAllocation:         httphandler.DefaultMaxMemoryAllocation,
+			BaseURL:                     o.BaseURL,
+			DistributionAccountResolver: o.SubmitterEngine.DistributionAccountResolver,
+			PasswordValidator:           o.PasswordValidator,
+			PublicFilesFS:               publicfiles.PublicFiles,
 		}
 		r.Route("/profile", func(r chi.Router) {
 			r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...)).
@@ -374,6 +373,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 	// Public routes that are tenant aware (they need to know the tenant ID)
 	mux.Group(func(r chi.Router) {
 		r.Use(middleware.TenantMiddleware(o.tenantManager, o.authManager))
+		r.Use(middleware.LoggingMiddleware())
 
 		r.Post("/login", httphandler.LoginHandler{
 			AuthManager:        authManager,
@@ -400,48 +400,53 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			AuthManager:       authManager,
 			PasswordValidator: o.PasswordValidator,
 		}.ServeHTTP)
-	})
-
-	mux.Get("/health", httphandler.HealthHandler{
-		ReleaseID: o.GitCommit,
-		ServiceID: ServiceID,
-		Version:   o.Version,
-	}.ServeHTTP)
-
-	// START SEP-24 endpoints
-	mux.Get("/.well-known/stellar.toml", httphandler.StellarTomlHandler{
-		AnchorPlatformBaseSepURL: o.AnchorPlatformBaseSepURL,
-		DistributionPublicKey:    o.DistributionPublicKey,
-		NetworkPassphrase:        o.NetworkPassphrase,
-		Models:                   o.Models,
-		Sep10SigningPublicKey:    o.Sep10SigningPublicKey,
-		InstanceName:             o.InstanceName,
-	}.ServeHTTP)
-
-	mux.Route("/wallet-registration", func(r chi.Router) {
-		sep24QueryTokenAuthenticationMiddleware := anchorplatform.SEP24QueryTokenAuthenticateMiddleware(o.sep24JWTManager, o.NetworkPassphrase, o.tenantManager)
-		r.With(sep24QueryTokenAuthenticationMiddleware).Get("/start", httphandler.ReceiverRegistrationHandler{
-			ReceiverWalletModel: o.Models.ReceiverWallet,
-			ReCAPTCHASiteKey:    o.ReCAPTCHASiteKey,
-		}.ServeHTTP) // This loads the SEP-24 PII registration webpage.
-
-		sep24HeaderTokenAuthenticationMiddleware := anchorplatform.SEP24HeaderTokenAuthenticateMiddleware(o.sep24JWTManager, o.NetworkPassphrase, o.tenantManager)
-		r.With(sep24HeaderTokenAuthenticationMiddleware).Post("/otp", httphandler.ReceiverSendOTPHandler{Models: o.Models, SMSMessengerClient: o.SMSMessengerClient, ReCAPTCHAValidator: reCAPTCHAValidator}.ServeHTTP)
-		r.With(sep24HeaderTokenAuthenticationMiddleware).Post("/verification", httphandler.VerifyReceiverRegistrationHandler{
-			AnchorPlatformAPIService: o.AnchorPlatformAPIService,
-			Models:                   o.Models,
-			ReCAPTCHAValidator:       reCAPTCHAValidator,
-			NetworkPassphrase:        o.NetworkPassphrase,
-			EventProducer:            o.EventProducer,
-		}.VerifyReceiverRegistration)
 
 		// This will be used for test purposes and will only be available when IsPubnet is false:
-		r.Group(func(r chi.Router) {
-			r.Use(middleware.TenantMiddleware(o.tenantManager, o.authManager))
-			r.Delete("/phone-number/{phone_number}", httphandler.DeletePhoneNumberHandler{Models: o.Models, NetworkPassphrase: o.NetworkPassphrase}.ServeHTTP)
-		})
+		r.Delete("/wallet-registration/phone-number/{phone_number}", httphandler.DeletePhoneNumberHandler{
+			Models:            o.Models,
+			NetworkPassphrase: o.NetworkPassphrase,
+		}.ServeHTTP)
 	})
-	// END SEP-24 endpoints
+
+	// SEP-24 and miscellaneous endpoints that are tenant-unaware
+	mux.Group(func(r chi.Router) {
+		r.Use(middleware.LoggingMiddleware())
+
+		r.Get("/health", httphandler.HealthHandler{
+			ReleaseID: o.GitCommit,
+			ServiceID: ServiceID,
+			Version:   o.Version,
+		}.ServeHTTP)
+
+		// START SEP-24 endpoints
+		r.Get("/.well-known/stellar.toml", httphandler.StellarTomlHandler{
+			AnchorPlatformBaseSepURL:    o.AnchorPlatformBaseSepURL,
+			DistributionAccountResolver: o.SubmitterEngine.DistributionAccountResolver,
+			NetworkPassphrase:           o.NetworkPassphrase,
+			Models:                      o.Models,
+			Sep10SigningPublicKey:       o.Sep10SigningPublicKey,
+			InstanceName:                o.InstanceName,
+		}.ServeHTTP)
+
+		r.Route("/wallet-registration", func(r chi.Router) {
+			sep24QueryTokenAuthenticationMiddleware := anchorplatform.SEP24QueryTokenAuthenticateMiddleware(o.sep24JWTManager, o.NetworkPassphrase, o.tenantManager)
+			r.With(sep24QueryTokenAuthenticationMiddleware).Get("/start", httphandler.ReceiverRegistrationHandler{
+				ReceiverWalletModel: o.Models.ReceiverWallet,
+				ReCAPTCHASiteKey:    o.ReCAPTCHASiteKey,
+			}.ServeHTTP) // This loads the SEP-24 PII registration webpage.
+
+			sep24HeaderTokenAuthenticationMiddleware := anchorplatform.SEP24HeaderTokenAuthenticateMiddleware(o.sep24JWTManager, o.NetworkPassphrase, o.tenantManager)
+			r.With(sep24HeaderTokenAuthenticationMiddleware).Post("/otp", httphandler.ReceiverSendOTPHandler{Models: o.Models, SMSMessengerClient: o.SMSMessengerClient, ReCAPTCHAValidator: reCAPTCHAValidator}.ServeHTTP)
+			r.With(sep24HeaderTokenAuthenticationMiddleware).Post("/verification", httphandler.VerifyReceiverRegistrationHandler{
+				AnchorPlatformAPIService: o.AnchorPlatformAPIService,
+				Models:                   o.Models,
+				ReCAPTCHAValidator:       reCAPTCHAValidator,
+				NetworkPassphrase:        o.NetworkPassphrase,
+				EventProducer:            o.EventProducer,
+			}.VerifyReceiverRegistration)
+		})
+		// END SEP-24 endpoints
+	})
 
 	return mux
 }
