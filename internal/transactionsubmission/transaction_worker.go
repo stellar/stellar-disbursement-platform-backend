@@ -168,7 +168,7 @@ func (tw *TransactionWorker) handleFailedTransaction(ctx context.Context, txJob 
 			//   - 429: Too Many Requests
 			//   - 400: with any of the codes: [tx_insufficient_fee, tx_too_late, tx_bad_seq]
 			//   - 5xx
-			// 	 - random network errors
+			//   - random network errors
 			if hErrWrapper.ShouldMarkAsError() {
 				var updatedTx *store.Transaction
 				updatedTx, err = tw.txModel.UpdateStatusToError(ctx, txJob.Transaction, hErrWrapper.Error())
