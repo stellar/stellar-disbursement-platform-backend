@@ -55,20 +55,23 @@ func (ms *TSSMonitorService) LogAndMonitorPayment(ctx context.Context, tx store.
 	paymentLogMessage := paymentLogMessage(eventID, metricTag)
 
 	labels := map[string]string{
-		"event_id":        eventID,
-		"event_type":      txMetadata.PaymentEventType,
-		"tx_id":           tx.ID,
-		"tenant_id":       tx.TenantID,
-		"event_time":      time.Now().String(),
+		// Instance info
 		"app_version":     ms.Version,
 		"git_commit_hash": ms.GitCommitHash,
+		// Event info
+		"event_id":   eventID,
+		"event_type": txMetadata.PaymentEventType,
+		"event_time": time.Now().String(),
+		// Transaction info
+		"tx_id":           tx.ID,
+		"tenant_id":       tx.TenantID,
+		"channel_account": txMetadata.SrcChannelAcc,
 	}
 	paymentLog := log.Ctx(ctx).WithFields(log.F{
+		"asset":               tx.AssetCode,
+		"destination_account": tx.Destination,
 		"created_at":          tx.CreatedAt.String(),
 		"updated_at":          tx.UpdatedAt.String(),
-		"asset":               tx.AssetCode,
-		"channel_account":     txMetadata.SrcChannelAcc,
-		"destination_account": tx.Destination,
 	})
 	for key, value := range labels {
 		paymentLog = paymentLog.WithField(key, value)
