@@ -158,16 +158,16 @@ func Test_MetricsRequestHandler(t *testing.T) {
 func Test_AuthenticateMiddleware(t *testing.T) {
 	r := chi.NewRouter()
 
-	jwtManagerMock := &auth.JWTManagerMock{}
-	authManager := auth.NewAuthManager(auth.WithCustomJWTManagerOption(jwtManagerMock))
+	mAuthManager := &auth.AuthManagerMock{}
 
 	r.Group(func(r chi.Router) {
-		r.Use(AuthenticateMiddleware(authManager))
+		r.Use(AuthenticateMiddleware(mAuthManager))
 
 		r.Get("/authenticated", func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 			_, err := w.Write(json.RawMessage(`{"status":"ok"}`))
 			require.NoError(t, err)
+			log.Ctx(r.Context()).Info("authenticated route")
 		})
 	})
 
@@ -232,9 +232,9 @@ func Test_AuthenticateMiddleware(t *testing.T) {
 
 		req.Header.Set("Authorization", "Bearer token")
 
-		jwtManagerMock.
-			On("ValidateToken", mock.Anything, "token").
-			Return(false, errors.New("unexpected error")).
+		mAuthManager.
+			On("GetUserID", mock.Anything, "token").
+			Return("", errors.New("unexpected error")).
 			Once()
 
 		getEntries := log.DefaultLogger.StartTest(log.ErrorLevel)
@@ -251,7 +251,7 @@ func Test_AuthenticateMiddleware(t *testing.T) {
 
 		entries := getEntries()
 		assert.NotEmpty(t, entries)
-		assert.Equal(t, `error validating auth token: validating token: unexpected error`, entries[0].Message)
+		assert.Equal(t, `error validating auth token: unexpected error`, entries[0].Message)
 	})
 
 	t.Run("returns Unauthorized when the token is invalid", func(t *testing.T) {
@@ -260,9 +260,9 @@ func Test_AuthenticateMiddleware(t *testing.T) {
 
 		req.Header.Set("Authorization", "Bearer token")
 
-		jwtManagerMock.
-			On("ValidateToken", mock.Anything, "token").
-			Return(false, nil).
+		mAuthManager.
+			On("GetUserID", mock.Anything, "token").
+			Return("", auth.ErrInvalidToken).
 			Once()
 
 		w := httptest.NewRecorder()
@@ -282,10 +282,12 @@ func Test_AuthenticateMiddleware(t *testing.T) {
 
 		req.Header.Set("Authorization", "Bearer token")
 
-		jwtManagerMock.
-			On("ValidateToken", mock.Anything, "token").
-			Return(true, nil).
+		mAuthManager.
+			On("GetUserID", mock.Anything, "token").
+			Return("test_user_id", nil).
 			Once()
+
+		getEntries := log.DefaultLogger.StartTest(log.InfoLevel)
 
 		w := httptest.NewRecorder()
 		r.ServeHTTP(w, req)
@@ -296,6 +298,12 @@ func Test_AuthenticateMiddleware(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.JSONEq(t, `{"status":"ok"}`, string(respBody))
+
+		// assert if user_id is in the logs:
+		entries := getEntries()
+		assert.NotEmpty(t, entries)
+		assert.Contains(t, entries[0].Message, "authenticated route")
+		assert.Equal(t, entries[0].Data["user_id"], "test_user_id")
 	})
 
 	t.Run("doesn't return Unauthorized for unauthenticated routes", func(t *testing.T) {
@@ -643,7 +651,7 @@ func Test_LoggingMiddleware(t *testing.T) {
 		}, nil).Once()
 
 		r.Use(TenantMiddleware(mTenantManager, mAuthManager))
-		r.Use(LoggingMiddleware())
+		r.Use(LoggingMiddleware)
 		r.Get("/", func(w http.ResponseWriter, r *http.Request) {
 			_, err := w.Write([]byte(expectedRespBody))
 			require.NoError(t, err)
@@ -689,7 +697,7 @@ func Test_LoggingMiddleware(t *testing.T) {
 
 		debugEntries := log.DefaultLogger.StartTest(log.DebugLevel)
 
-		r.Use(LoggingMiddleware())
+		r.Use(LoggingMiddleware)
 		r.Get("/", func(w http.ResponseWriter, r *http.Request) {
 			_, err := w.Write([]byte(expectedRespBody))
 			require.NoError(t, err)

@@ -95,11 +95,11 @@ func AddTenantsCmd() *cobra.Command {
 			validateTenantNameArg,
 		),
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
-			cmd.Parent().PersistentPreRun(cmd.Parent(), args)
+			cmdUtils.PropagatePersistentPreRun(cmd, args)
 			configOptions.Require()
 			err := configOptions.SetValues()
 			if err != nil {
-				log.Fatalf("Error setting values of config options: %s", err.Error())
+				log.Ctx(cmd.Context()).Fatalf("Error setting values of config options: %s", err.Error())
 			}
 		},
 		Run: func(cmd *cobra.Command, args []string) {
@@ -111,7 +111,7 @@ func AddTenantsCmd() *cobra.Command {
 				MessengerOptions: &tenantsOpts.MessengerOptions,
 			})
 			if err != nil {
-				log.Fatalf("creating email client: %v", err)
+				log.Ctx(ctx).Fatalf("creating email client: %v", err)
 			}
 
 			// Get TSS DB connection pool
@@ -119,7 +119,7 @@ func AddTenantsCmd() *cobra.Command {
 			dbcpOptions := di.DBConnectionPoolOptions{DatabaseURL: globalOptions.multitenantDbURL}
 			tssDBConnectionPool, err := di.NewTSSDBConnectionPool(ctx, dbcpOptions)
 			if err != nil {
-				log.Fatalf("getting TSS DBConnectionPool: %v", err)
+				log.Ctx(ctx).Fatalf("getting TSS DBConnectionPool: %v", err)
 			}
 			defer func() {
 				di.CleanupInstanceByValue(ctx, tssDBConnectionPool)
@@ -128,7 +128,7 @@ func AddTenantsCmd() *cobra.Command {
 			// Get Admin DB connection pool
 			adminDBConnectionPool, err := di.NewAdminDBConnectionPool(ctx, dbcpOptions)
 			if err != nil {
-				log.Fatalf("getting Admin database connection pool: %v", err)
+				log.Ctx(ctx).Fatalf("getting Admin database connection pool: %v", err)
 			}
 			defer func() {
 				di.CleanupInstanceByValue(ctx, adminDBConnectionPool)
@@ -150,7 +150,7 @@ func AddTenantsCmd() *cobra.Command {
 	}
 
 	if err := configOptions.Init(&cmd); err != nil {
-		log.Fatalf("initializing config options: %v", err)
+		log.Ctx(cmd.Context()).Fatalf("initializing config options: %v", err)
 	}
 
 	return &cmd

@@ -19,6 +19,6 @@ func main() {
 
 	cmd := cli.SetupCLI(Version, GitCommit)
 	if err := cmd.Execute(); err != nil {
-		log.Fatalf("error executing: %s", err.Error())
+		log.Ctx(cmd.Context()).Fatalf("error executing: %s", err.Error())
 	}
 }

@@ -669,7 +669,7 @@ func (p *PaymentModel) CancelPaymentsWithinPeriodDays(ctx context.Context, sqlEx
 		return fmt.Errorf("error getting number of rows affected: %w", err)
 	}
 	if numRowsAffected == 0 {
-		log.Debug("No payments were canceled")
+		log.Ctx(ctx).Debug("No payments were canceled")
 	}
 
 	return nil

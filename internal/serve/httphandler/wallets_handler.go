@@ -51,7 +51,7 @@ func (h WalletsHandler) PostWallets(rw http.ResponseWriter, req *http.Request) {
 	}
 
 	validator := validators.NewWalletValidator()
-	reqBody = validator.ValidateCreateWalletRequest(reqBody)
+	reqBody = validator.ValidateCreateWalletRequest(ctx, reqBody)
 	if validator.HasErrors() {
 		httperror.BadRequest("invalid request body", nil, validator.Errors).Render(rw)
 		return

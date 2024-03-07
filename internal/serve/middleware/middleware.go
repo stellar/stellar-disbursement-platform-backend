@@ -76,7 +76,7 @@ func MetricsRequestHandler(monitorService monitor.MonitorServiceInterface) func(
 
 			err := monitorService.MonitorHttpRequestDuration(duration, labels)
 			if err != nil {
-				log.Errorf("Error trying to monitor request time: %s", err)
+				log.Ctx(req.Context()).Errorf("Error trying to monitor request time: %s", err)
 			}
 		})
 	}
@@ -101,21 +101,22 @@ func AuthenticateMiddleware(authManager auth.AuthManager) func(http.Handler) htt
 
 			ctx := req.Context()
 			token := authHeaderParts[1]
-			isValid, err := authManager.ValidateToken(ctx, token)
+			userID, err := authManager.GetUserID(ctx, token)
 			if err != nil {
-				err = fmt.Errorf("error validating auth token: %w", err)
-				log.Ctx(ctx).Error(err)
-				httperror.Unauthorized("", err, nil).Render(rw)
-				return
-			}
-
-			if !isValid {
+				if !errors.Is(err, auth.ErrInvalidToken) && !errors.Is(err, auth.ErrUserNotFound) {
+					err = fmt.Errorf("error validating auth token: %w", err)
+					log.Ctx(ctx).Error(err)
+				}
 				httperror.Unauthorized("", nil, nil).Render(rw)
 				return
 			}
 
 			// Add the token to the request context
 			ctx = context.WithValue(ctx, TokenContextKey, token)
+
+			// Add the user ID to the request context logger
+			ctx = log.Set(ctx, log.Ctx(ctx).WithField("user_id", userID))
+
 			req = req.WithContext(ctx)
 
 			next.ServeHTTP(rw, req)
@@ -180,47 +181,45 @@ func (c cspItem) String() string {
 }
 
 // LoggingMiddleware is a middleware that logs requests to the logger.
-func LoggingMiddleware() func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
-			mw := mutil.WrapWriter(rw)
+func LoggingMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+		mw := mutil.WrapWriter(rw)
 
-			reqCtx := req.Context()
-			logFields := log.F{
-				"req": middleware.GetReqID(reqCtx),
-			}
-			logCtx := log.Set(reqCtx, log.Ctx(reqCtx).WithFields(logFields))
+		reqCtx := req.Context()
+		logFields := log.F{
+			"method": req.Method,
+			"path":   req.URL.String(),
+			"req":    middleware.GetReqID(reqCtx),
+		}
+		logCtx := log.Set(reqCtx, log.Ctx(reqCtx).WithFields(logFields))
 
-			ctxTenant, err := tenant.GetTenantFromContext(reqCtx)
-			if err != nil {
-				// Log for auditing purposes when we cannot derive the tenant from the context in the case of
-				// tenant-unaware endpoints
-				log.Ctx(logCtx).Debug("tenant cannot be derived from context")
-			}
-			if ctxTenant != nil {
-				logFields["tenant_name"] = ctxTenant.Name
-				logFields["tenant_id"] = ctxTenant.ID
-				logCtx = log.Set(reqCtx, log.Ctx(reqCtx).WithFields(logFields))
-			}
+		ctxTenant, err := tenant.GetTenantFromContext(reqCtx)
+		if err != nil {
+			// Log for auditing purposes when we cannot derive the tenant from the context in the case of
+			// tenant-unaware endpoints
+			log.Ctx(logCtx).Debug("tenant cannot be derived from context")
+		}
+		if ctxTenant != nil {
+			logFields["tenant_name"] = ctxTenant.Name
+			logFields["tenant_id"] = ctxTenant.ID
+			logCtx = log.Set(reqCtx, log.Ctx(reqCtx).WithFields(logFields))
+		}
 
-			req = req.WithContext(logCtx)
+		req = req.WithContext(logCtx)
 
-			logRequestStart(req)
-			started := time.Now()
+		logRequestStart(req)
+		started := time.Now()
 
-			next.ServeHTTP(mw, req)
-			ended := time.Since(started)
-			logRequestEnd(req, mw, ended)
-		})
-	}
+		next.ServeHTTP(mw, req)
+		ended := time.Since(started)
+		logRequestEnd(req, mw, ended)
+	})
 }
 
 func logRequestStart(req *http.Request) {
 	l := log.Ctx(req.Context()).WithFields(
 		log.F{
 			"subsys":    "http",
-			"path":      req.URL.String(),
-			"method":    req.Method,
 			"ip":        req.RemoteAddr,
 			"host":      req.Host,
 			"useragent": req.Header.Get("User-Agent"),
@@ -233,8 +232,6 @@ func logRequestStart(req *http.Request) {
 func logRequestEnd(req *http.Request, mw mutil.WriterProxy, duration time.Duration) {
 	l := log.Ctx(req.Context()).WithFields(log.F{
 		"subsys":   "http",
-		"path":     req.URL.String(),
-		"method":   req.Method,
 		"status":   mw.Status(),
 		"bytes":    mw.BytesWritten(),
 		"duration": duration,

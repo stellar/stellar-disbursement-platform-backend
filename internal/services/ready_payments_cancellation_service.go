@@ -32,7 +32,7 @@ func (s ReadyPaymentsCancellationService) CancelReadyPayments(ctx context.Contex
 	}
 
 	if organization.PaymentCancellationPeriodDays == nil {
-		log.Debug("automatic ready payment cancellation is deactivated. Set a valid value to the organization's payment_cancellation_period_days to activate it.")
+		log.Ctx(ctx).Debug("automatic ready payment cancellation is deactivated. Set a valid value to the organization's payment_cancellation_period_days to activate it.")
 		return nil
 	}
 

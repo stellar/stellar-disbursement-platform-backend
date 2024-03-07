@@ -2,6 +2,7 @@ package httphandler
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -219,7 +220,7 @@ func (d DisbursementHandler) PostDisbursementInstructions(w http.ResponseWriter,
 	var buf bytes.Buffer
 	reader := io.TeeReader(file, &buf)
 
-	instructions, v := parseInstructionsFromCSV(reader, disbursement.VerificationField)
+	instructions, v := parseInstructionsFromCSV(ctx, reader, disbursement.VerificationField)
 	if v != nil && v.HasErrors() {
 		httperror.BadRequest("could not parse csv file", err, v.Errors).Render(w)
 		return
@@ -434,12 +435,12 @@ func (d DisbursementHandler) GetDisbursementInstructions(w http.ResponseWriter, 
 	}
 }
 
-func parseInstructionsFromCSV(file io.Reader, verificationField data.VerificationField) ([]*data.DisbursementInstruction, *validators.DisbursementInstructionsValidator) {
+func parseInstructionsFromCSV(ctx context.Context, file io.Reader, verificationField data.VerificationField) ([]*data.DisbursementInstruction, *validators.DisbursementInstructionsValidator) {
 	validator := validators.NewDisbursementInstructionsValidator(verificationField)
 
 	instructions := []*data.DisbursementInstruction{}
 	if err := gocsv.Unmarshal(file, &instructions); err != nil {
-		log.Errorf("error parsing csv file: %s", err.Error())
+		log.Ctx(ctx).Errorf("error parsing csv file: %s", err.Error())
 		validator.Errors["file"] = "could not parse file"
 		return nil, validator
 	}

@@ -66,25 +66,26 @@ func rootCmd() *cobra.Command {
 		Long:    "The Stellar Disbursement Platform (SDP) enables organizations to disburse bulk payments to recipients using Stellar.",
 		Version: globalOptions.Version,
 		PersistentPreRun: func(cmd *cobra.Command, _ []string) {
+			ctx := cmd.Context()
 			configOpts.Require()
 			err := configOpts.SetValues()
 			if err != nil {
-				log.Fatalf("Error setting values of config options: %s", err.Error())
+				log.Ctx(ctx).Fatalf("Error setting values of config options: %s", err.Error())
 			}
-			log.Info("Version: ", globalOptions.Version)
-			log.Info("GitCommit: ", globalOptions.GitCommit)
+			log.Ctx(ctx).Info("Version: ", globalOptions.Version)
+			log.Ctx(ctx).Info("GitCommit: ", globalOptions.GitCommit)
 		},
 		Run: func(cmd *cobra.Command, args []string) {
 			err := cmd.Help()
 			if err != nil {
-				log.Fatalf("Error calling help command: %s", err.Error())
+				log.Ctx(cmd.Context()).Fatalf("Error calling help command: %s", err.Error())
 			}
 		},
 	}
 
 	err := configOpts.Init(rootCmd)
 	if err != nil {
-		log.Fatalf("Error initializing a config option: %s", err.Error())
+		log.Ctx(rootCmd.Context()).Fatalf("Error initializing a config option: %s", err.Error())
 	}
 
 	return rootCmd
