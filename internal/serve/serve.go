@@ -218,7 +218,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 	mux.Group(func(r chi.Router) {
 		r.Use(middleware.AuthenticateMiddleware(authManager))
 		r.Use(middleware.TenantMiddleware(o.tenantManager, o.authManager))
-		r.Use(middleware.LoggingMiddleware())
+		r.Use(middleware.LoggingMiddleware)
 
 		r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...)).Route("/statistics", func(r chi.Router) {
 			statisticsHandler := httphandler.StatisticsHandler{DBConnectionPool: o.MtnDBConnectionPool}
@@ -373,7 +373,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 	// Public routes that are tenant aware (they need to know the tenant ID)
 	mux.Group(func(r chi.Router) {
 		r.Use(middleware.TenantMiddleware(o.tenantManager, o.authManager))
-		r.Use(middleware.LoggingMiddleware())
+		r.Use(middleware.LoggingMiddleware)
 
 		r.Post("/login", httphandler.LoginHandler{
 			AuthManager:        authManager,
@@ -410,7 +410,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 
 	// SEP-24 and miscellaneous endpoints that are tenant-unaware
 	mux.Group(func(r chi.Router) {
-		r.Use(middleware.LoggingMiddleware())
+		r.Use(middleware.LoggingMiddleware)
 
 		r.Get("/health", httphandler.HealthHandler{
 			ReleaseID: o.GitCommit,

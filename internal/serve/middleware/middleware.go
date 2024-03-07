@@ -180,41 +180,39 @@ func (c cspItem) String() string {
 }
 
 // LoggingMiddleware is a middleware that logs requests to the logger.
-func LoggingMiddleware() func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
-			mw := mutil.WrapWriter(rw)
+func LoggingMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+		mw := mutil.WrapWriter(rw)
 
-			reqCtx := req.Context()
-			logFields := log.F{
-				"method": req.Method,
-				"path":   req.URL.String(),
-				"req":    middleware.GetReqID(reqCtx),
-			}
-			logCtx := log.Set(reqCtx, log.Ctx(reqCtx).WithFields(logFields))
+		reqCtx := req.Context()
+		logFields := log.F{
+			"method": req.Method,
+			"path":   req.URL.String(),
+			"req":    middleware.GetReqID(reqCtx),
+		}
+		logCtx := log.Set(reqCtx, log.Ctx(reqCtx).WithFields(logFields))
 
-			ctxTenant, err := tenant.GetTenantFromContext(reqCtx)
-			if err != nil {
-				// Log for auditing purposes when we cannot derive the tenant from the context in the case of
-				// tenant-unaware endpoints
-				log.Ctx(logCtx).Debug("tenant cannot be derived from context")
-			}
-			if ctxTenant != nil {
-				logFields["tenant_name"] = ctxTenant.Name
-				logFields["tenant_id"] = ctxTenant.ID
-				logCtx = log.Set(reqCtx, log.Ctx(reqCtx).WithFields(logFields))
-			}
+		ctxTenant, err := tenant.GetTenantFromContext(reqCtx)
+		if err != nil {
+			// Log for auditing purposes when we cannot derive the tenant from the context in the case of
+			// tenant-unaware endpoints
+			log.Ctx(logCtx).Debug("tenant cannot be derived from context")
+		}
+		if ctxTenant != nil {
+			logFields["tenant_name"] = ctxTenant.Name
+			logFields["tenant_id"] = ctxTenant.ID
+			logCtx = log.Set(reqCtx, log.Ctx(reqCtx).WithFields(logFields))
+		}
 
-			req = req.WithContext(logCtx)
+		req = req.WithContext(logCtx)
 
-			logRequestStart(req)
-			started := time.Now()
+		logRequestStart(req)
+		started := time.Now()
 
-			next.ServeHTTP(mw, req)
-			ended := time.Since(started)
-			logRequestEnd(req, mw, ended)
-		})
-	}
+		next.ServeHTTP(mw, req)
+		ended := time.Since(started)
+		logRequestEnd(req, mw, ended)
+	})
 }
 
 func logRequestStart(req *http.Request) {

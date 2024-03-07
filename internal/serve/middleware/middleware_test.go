@@ -643,7 +643,7 @@ func Test_LoggingMiddleware(t *testing.T) {
 		}, nil).Once()
 
 		r.Use(TenantMiddleware(mTenantManager, mAuthManager))
-		r.Use(LoggingMiddleware())
+		r.Use(LoggingMiddleware)
 		r.Get("/", func(w http.ResponseWriter, r *http.Request) {
 			_, err := w.Write([]byte(expectedRespBody))
 			require.NoError(t, err)
@@ -689,7 +689,7 @@ func Test_LoggingMiddleware(t *testing.T) {
 
 		debugEntries := log.DefaultLogger.StartTest(log.DebugLevel)
 
-		r.Use(LoggingMiddleware())
+		r.Use(LoggingMiddleware)
 		r.Get("/", func(w http.ResponseWriter, r *http.Request) {
 			_, err := w.Write([]byte(expectedRespBody))
 			require.NoError(t, err)
