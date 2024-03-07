@@ -274,6 +274,38 @@ func CSPMiddleware() func(http.Handler) http.Handler {
 	}
 }
 
+// InjectTenantMiddleware is a middleware that injects the tenant into the request context, if it can be found in either
+// the authentication token, the request HEADER, or the hostname prefix.
+func InjectTenantMiddleware(tenantManager tenant.ManagerInterface, authManager auth.AuthManager) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+			ctx := req.Context()
+
+			var currentTenant *tenant.Tenant
+			// Attempt 1. Attempt fetching tenant ID from token
+			if token, ok := ctx.Value(TokenContextKey).(string); ok {
+				if tenantID, err := authManager.GetTenantID(ctx, token); err == nil {
+					currentTenant, _ = tenantManager.GetTenantByID(ctx, tenantID)
+				}
+			}
+
+			// Attempt 2. Attempt fetching tenant name from request
+			if currentTenant == nil {
+				if tenantName, err := extractTenantNameFromRequest(req); err == nil && tenantName != "" {
+					currentTenant, _ = tenantManager.GetTenantByName(ctx, tenantName)
+				}
+			}
+
+			if currentTenant != nil {
+				ctx = tenant.SaveTenantInContext(ctx, currentTenant)
+				next.ServeHTTP(rw, req.WithContext(ctx))
+			} else {
+				next.ServeHTTP(rw, req)
+			}
+		})
+	}
+}
+
 func TenantMiddleware(tenantManager tenant.ManagerInterface, authManager auth.AuthManager) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
@@ -344,6 +376,7 @@ func BasicAuthMiddleware(adminAccount, adminApiKey string) func(http.Handler) ht
 	}
 }
 
+// extractTenantNameFromRequest attempts to extract the tenant name from the request HEADER[tenantHeaderKey] or the hostname prefix.
 func extractTenantNameFromRequest(r *http.Request) (string, error) {
 	// 1. Try extracting from the TenantHeaderKey header first
 	tenantName := r.Header.Get(TenantHeaderKey)

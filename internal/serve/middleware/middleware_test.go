@@ -11,18 +11,18 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
-
 	"github.com/go-chi/chi/v5"
 	"github.com/sirupsen/logrus"
 	"github.com/stellar/go/support/log"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
-	"github.com/stretchr/testify/require"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 func Test_RecoverHandler(t *testing.T) {
@@ -858,6 +858,202 @@ func Test_TenantMiddleware(t *testing.T) {
 		resp := w.Result()
 		require.Equal(t, http.StatusOK, resp.StatusCode)
 	})
+}
+
+func Test_InjectTenantMiddleware(t *testing.T) {
+	validTnt := &tenant.Tenant{ID: "tenant_id", Name: "tenant_name"}
+
+	testCases := []struct {
+		name              string
+		token             string
+		tenantHeaderValue string
+		hostnamePrefix    string
+		prepareMocksFn    func(mTenantManager *tenant.TenantManagerMock, mAuthManager *auth.AuthManagerMock)
+		expectedStatus    int
+		expectedRespBody  string
+		expectedTenant    *tenant.Tenant
+	}{
+		{
+			name:              "🔴 has a token but the method GetTenantID fails",
+			token:             "valid_token",
+			tenantHeaderValue: "",
+			hostnamePrefix:    "",
+			prepareMocksFn: func(_ *tenant.TenantManagerMock, mAuthManager *auth.AuthManagerMock) {
+				expectedErr := errors.New("error fetching tenant ID from token")
+				mAuthManager.
+					On("GetTenantID", mock.Anything, "valid_token").
+					Return("", expectedErr).
+					Once()
+			},
+			expectedStatus:   http.StatusOK,
+			expectedRespBody: `{"status":"ok"}`,
+			expectedTenant:   nil,
+		},
+		{
+			name:              "🔴 has a token and the method GetTenantID succeeds, but GetTenantByID fails",
+			token:             "valid_token",
+			tenantHeaderValue: "",
+			hostnamePrefix:    "",
+			prepareMocksFn: func(mTenantManager *tenant.TenantManagerMock, mAuthManager *auth.AuthManagerMock) {
+				mAuthManager.
+					On("GetTenantID", mock.Anything, "valid_token").
+					Return("tenant_id", nil).
+					Once()
+
+				expectedErr := errors.New("error fetching tenant from its ID")
+				mTenantManager.
+					On("GetTenantByID", mock.Anything, "tenant_id").
+					Return(nil, expectedErr).
+					Once()
+			},
+			expectedStatus:   http.StatusOK,
+			expectedRespBody: `{"status":"ok"}`,
+			expectedTenant:   nil,
+		},
+		{
+			name:              "🔴 has no token and the tenant name from the header cannot be found in GetTenantByName",
+			token:             "",
+			tenantHeaderValue: "tenant_name",
+			hostnamePrefix:    "",
+			prepareMocksFn: func(mTenantManager *tenant.TenantManagerMock, _ *auth.AuthManagerMock) {
+				expectedErr := errors.New("error fetching tenant from its name")
+				mTenantManager.
+					On("GetTenantByName", mock.Anything, "tenant_name").
+					Return(nil, expectedErr).
+					Once()
+			},
+			expectedStatus:   http.StatusOK,
+			expectedRespBody: `{"status":"ok"}`,
+			expectedTenant:   nil,
+		},
+		{
+			name:              "🔴 has no token and the tenant name from the host prefix cannot be found in GetTenantByName",
+			token:             "",
+			tenantHeaderValue: "",
+			hostnamePrefix:    "tenant_hostname",
+			prepareMocksFn: func(mTenantManager *tenant.TenantManagerMock, _ *auth.AuthManagerMock) {
+				expectedErr := errors.New("error fetching tenant from its name")
+				mTenantManager.
+					On("GetTenantByName", mock.Anything, "tenant_hostname").
+					Return(nil, expectedErr).
+					Once()
+			},
+			expectedStatus:   http.StatusOK,
+			expectedRespBody: `{"status":"ok"}`,
+			expectedTenant:   nil,
+		},
+		{
+			name:              "🟢 successfully grabs the tenant from the token",
+			token:             "valid_token",
+			tenantHeaderValue: "",
+			hostnamePrefix:    "",
+			prepareMocksFn: func(mTenantManager *tenant.TenantManagerMock, mAuthManager *auth.AuthManagerMock) {
+				mAuthManager.
+					On("GetTenantID", mock.Anything, "valid_token").
+					Return("tenant_id", nil).
+					Once()
+
+				mTenantManager.
+					On("GetTenantByID", mock.Anything, "tenant_id").
+					Return(validTnt, nil).
+					Once()
+			},
+			expectedStatus:   http.StatusOK,
+			expectedRespBody: `{"status":"ok"}`,
+			expectedTenant:   validTnt,
+		},
+		{
+			name:              "🟢 successfully grabs the tenant from the request HEADER",
+			token:             "",
+			tenantHeaderValue: "tenant_name",
+			hostnamePrefix:    "",
+			prepareMocksFn: func(mTenantManager *tenant.TenantManagerMock, _ *auth.AuthManagerMock) {
+				mTenantManager.
+					On("GetTenantByName", mock.Anything, "tenant_name").
+					Return(validTnt, nil).
+					Once()
+			},
+			expectedStatus:   http.StatusOK,
+			expectedRespBody: `{"status":"ok"}`,
+			expectedTenant:   validTnt,
+		},
+		{
+			name:              "🟢 successfully grabs the tenant from the request host prefix",
+			token:             "",
+			tenantHeaderValue: "",
+			hostnamePrefix:    "tenant_hostname",
+			prepareMocksFn: func(mTenantManager *tenant.TenantManagerMock, _ *auth.AuthManagerMock) {
+				mTenantManager.
+					On("GetTenantByName", mock.Anything, "tenant_hostname").
+					Return(validTnt, nil).
+					Once()
+			},
+			expectedStatus:   http.StatusOK,
+			expectedRespBody: `{"status":"ok"}`,
+			expectedTenant:   validTnt,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			mTenantManager := &tenant.TenantManagerMock{}
+			mAuthManager := &auth.AuthManagerMock{}
+
+			// prepare mocks
+			if tc.prepareMocksFn != nil {
+				tc.prepareMocksFn(mTenantManager, mAuthManager)
+			}
+
+			var updatedCtx context.Context
+			// prepare router
+			r := chi.NewRouter()
+			r.
+				With(InjectTenantMiddleware(mTenantManager, mAuthManager)).
+				Get("/test", func(w http.ResponseWriter, r *http.Request) {
+					updatedCtx = r.Context()
+					w.WriteHeader(http.StatusOK)
+					_, err := w.Write([]byte(`{"status":"ok"}`))
+					require.NoError(t, err)
+				})
+
+			// prepare request
+			req, err := http.NewRequest(http.MethodGet, "/test", nil)
+			require.NoError(t, err)
+			if tc.token != "" {
+				ctx := context.WithValue(req.Context(), TokenContextKey, tc.token)
+				req = req.WithContext(ctx)
+			}
+			if tc.tenantHeaderValue != "" {
+				req.Header.Set(TenantHeaderKey, tc.tenantHeaderValue)
+			}
+			if tc.hostnamePrefix != "" {
+				req.Host = fmt.Sprintf("%s.example.com", tc.hostnamePrefix)
+			}
+
+			// execute the request
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, req)
+			resp := w.Result()
+
+			// assert the response
+			assert.NotEmpty(t, updatedCtx)
+			defer resp.Body.Close()
+			respBody, err := io.ReadAll(resp.Body)
+			assert.NoError(t, err)
+			assert.Equal(t, tc.expectedStatus, resp.StatusCode)
+			assert.JSONEq(t, tc.expectedRespBody, string(respBody))
+
+			// assert tenant in context
+			tnt, err := tenant.GetTenantFromContext(updatedCtx)
+			if tc.expectedTenant != nil {
+				assert.NoError(t, err)
+				assert.Equal(t, tc.expectedTenant, tnt)
+			} else {
+				assert.Error(t, err)
+				assert.Nil(t, tnt)
+			}
+		})
+	}
 }
 
 func Test_BasicAuthMiddleware(t *testing.T) {
