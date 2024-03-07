@@ -101,21 +101,22 @@ func AuthenticateMiddleware(authManager auth.AuthManager) func(http.Handler) htt
 
 			ctx := req.Context()
 			token := authHeaderParts[1]
-			isValid, err := authManager.ValidateToken(ctx, token)
+			userID, err := authManager.GetUserID(ctx, token)
 			if err != nil {
-				err = fmt.Errorf("error validating auth token: %w", err)
-				log.Ctx(ctx).Error(err)
-				httperror.Unauthorized("", err, nil).Render(rw)
-				return
-			}
-
-			if !isValid {
+				if !errors.Is(err, auth.ErrInvalidToken) && !errors.Is(err, auth.ErrUserNotFound) {
+					err = fmt.Errorf("error validating auth token: %w", err)
+					log.Ctx(ctx).Error(err)
+				}
 				httperror.Unauthorized("", nil, nil).Render(rw)
 				return
 			}
 
 			// Add the token to the request context
 			ctx = context.WithValue(ctx, TokenContextKey, token)
+
+			// Add the user ID to the request context logger
+			ctx = log.Set(ctx, log.Ctx(ctx).WithField("user_id", userID))
+
 			req = req.WithContext(ctx)
 
 			next.ServeHTTP(rw, req)
