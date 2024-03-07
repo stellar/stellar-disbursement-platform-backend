@@ -651,7 +651,7 @@ func Test_LoggingMiddleware(t *testing.T) {
 		}, nil).Once()
 
 		r.Use(InjectTenantMiddleware(mTenantManager, mAuthManager))
-		r.Use(EnsureTenantMiddleware())
+		r.Use(EnsureTenantMiddleware)
 		r.Use(LoggingMiddleware)
 		r.Get("/", func(w http.ResponseWriter, r *http.Request) {
 			_, err := w.Write([]byte(expectedRespBody))
@@ -1003,7 +1003,7 @@ func Test_EnsureTenantMiddleware(t *testing.T) {
 			// prepare router
 			r := chi.NewRouter()
 			r.
-				With(EnsureTenantMiddleware()).
+				With(EnsureTenantMiddleware).
 				Get("/test", func(w http.ResponseWriter, r *http.Request) {
 					w.WriteHeader(http.StatusOK)
 					_, err := w.Write([]byte(`{"status":"ok"}`))

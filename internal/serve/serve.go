@@ -219,7 +219,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 	authManager := o.authManager
 	mux.Group(func(r chi.Router) {
 		r.Use(middleware.AuthenticateMiddleware(authManager))
-		r.Use(middleware.EnsureTenantMiddleware())
+		r.Use(middleware.EnsureTenantMiddleware)
 
 		r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...)).Route("/statistics", func(r chi.Router) {
 			statisticsHandler := httphandler.StatisticsHandler{DBConnectionPool: o.MtnDBConnectionPool}
@@ -373,7 +373,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 
 	// Public routes that are tenant aware (they need to know the tenant ID)
 	mux.Group(func(r chi.Router) {
-		r.Use(middleware.EnsureTenantMiddleware())
+		r.Use(middleware.EnsureTenantMiddleware)
 
 		r.Post("/login", httphandler.LoginHandler{
 			AuthManager:        authManager,
@@ -439,7 +439,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 		})
 
 		// This will be used for test purposes and will only be available when IsPubnet is false:
-		r.With(middleware.EnsureTenantMiddleware()).Delete("/phone-number/{phone_number}", httphandler.DeletePhoneNumberHandler{
+		r.With(middleware.EnsureTenantMiddleware).Delete("/phone-number/{phone_number}", httphandler.DeletePhoneNumberHandler{
 			Models:            o.Models,
 			NetworkPassphrase: o.NetworkPassphrase,
 		}.ServeHTTP)
