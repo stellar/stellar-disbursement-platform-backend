@@ -913,7 +913,9 @@ func Test_InjectTenantMiddleware(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			mTenantManager := &tenant.TenantManagerMock{}
+			defer mTenantManager.AssertExpectations(t)
 			mAuthManager := &auth.AuthManagerMock{}
+			defer mAuthManager.AssertExpectations(t)
 
 			// prepare mocks
 			if tc.prepareMocksFn != nil {
