@@ -145,7 +145,7 @@ func (tw *TransactionWorker) handleFailedTransaction(ctx context.Context, txJob 
 			eventType = sdpMonitor.PaymentMarkedForReprocessingLabel
 		}
 
-		tw.monitorSvc.LogAndMonitorPayment(
+		tw.monitorSvc.LogAndMonitorTransaction(
 			ctx,
 			txJob.Transaction,
 			metricTag,
@@ -305,7 +305,7 @@ func (tw *TransactionWorker) reconcileSubmittedTransaction(ctx context.Context, 
 	if err == nil && txDetail.Successful {
 		err = tw.handleSuccessfulTransaction(ctx, txJob, txDetail)
 		if err != nil {
-			tw.monitorSvc.LogAndMonitorPayment(ctx, txJob.Transaction, sdpMonitor.PaymentReconciliationFailureTag, tssMonitor.TxMetadata{
+			tw.monitorSvc.LogAndMonitorTransaction(ctx, txJob.Transaction, sdpMonitor.PaymentReconciliationFailureTag, tssMonitor.TxMetadata{
 				SrcChannelAcc:    txJob.ChannelAccount.PublicKey,
 				IsHorizonErr:     false,
 				ErrStack:         err.Error(),
@@ -314,7 +314,7 @@ func (tw *TransactionWorker) reconcileSubmittedTransaction(ctx context.Context, 
 			return fmt.Errorf("handling successful transaction: %w", err)
 		}
 
-		tw.monitorSvc.LogAndMonitorPayment(ctx, txJob.Transaction, sdpMonitor.PaymentReconciliationSuccessfulTag, tssMonitor.TxMetadata{
+		tw.monitorSvc.LogAndMonitorTransaction(ctx, txJob.Transaction, sdpMonitor.PaymentReconciliationSuccessfulTag, tssMonitor.TxMetadata{
 			SrcChannelAcc:    txJob.ChannelAccount.PublicKey,
 			PaymentEventType: sdpMonitor.PaymentReconciliationTransactionSuccessfulLabel,
 		})
@@ -322,7 +322,7 @@ func (tw *TransactionWorker) reconcileSubmittedTransaction(ctx context.Context, 
 	} else if (err != nil || txDetail.Successful) && !hWrapperErr.IsNotFound() {
 		log.Ctx(ctx).Warnf("received unexpected horizon error: %v", hWrapperErr)
 
-		tw.monitorSvc.LogAndMonitorPayment(ctx, txJob.Transaction, sdpMonitor.PaymentReconciliationFailureTag, tssMonitor.TxMetadata{
+		tw.monitorSvc.LogAndMonitorTransaction(ctx, txJob.Transaction, sdpMonitor.PaymentReconciliationFailureTag, tssMonitor.TxMetadata{
 			SrcChannelAcc:    txJob.ChannelAccount.PublicKey,
 			IsHorizonErr:     true,
 			ErrStack:         hWrapperErr.Error(),
@@ -344,7 +344,7 @@ func (tw *TransactionWorker) reconcileSubmittedTransaction(ctx context.Context, 
 		return fmt.Errorf("unlocking job: %w", err)
 	}
 
-	tw.monitorSvc.LogAndMonitorPayment(ctx, txJob.Transaction, sdpMonitor.PaymentReconciliationSuccessfulTag, tssMonitor.TxMetadata{
+	tw.monitorSvc.LogAndMonitorTransaction(ctx, txJob.Transaction, sdpMonitor.PaymentReconciliationSuccessfulTag, tssMonitor.TxMetadata{
 		SrcChannelAcc:    txJob.ChannelAccount.PublicKey,
 		PaymentEventType: sdpMonitor.PaymentReconciliationMarkedForReprocessingLabel,
 	})
@@ -387,7 +387,7 @@ func (tw *TransactionWorker) producePaymentCompletedEvent(ctx context.Context, e
 func (tw *TransactionWorker) processTransactionSubmission(ctx context.Context, txJob *TxJob) error {
 	log.Ctx(ctx).Infof("🚧 Processing transaction submission for job %v...", txJob)
 
-	tw.monitorSvc.LogAndMonitorPayment(ctx, txJob.Transaction, sdpMonitor.PaymentProcessingStartedTag, tssMonitor.TxMetadata{
+	tw.monitorSvc.LogAndMonitorTransaction(ctx, txJob.Transaction, sdpMonitor.PaymentProcessingStartedTag, tssMonitor.TxMetadata{
 		SrcChannelAcc:    txJob.ChannelAccount.PublicKey,
 		PaymentEventType: sdpMonitor.PaymentProcessingStartedLabel,
 	})
@@ -569,7 +569,7 @@ func (tw *TransactionWorker) submit(ctx context.Context, txJob *TxJob, feeBumpTx
 			eventType = sdpMonitor.PaymentReprocessingSuccessfulLabel
 		}
 
-		tw.monitorSvc.LogAndMonitorPayment(ctx, txJob.Transaction, sdpMonitor.PaymentTransactionSuccessfulTag, tssMonitor.TxMetadata{
+		tw.monitorSvc.LogAndMonitorTransaction(ctx, txJob.Transaction, sdpMonitor.PaymentTransactionSuccessfulTag, tssMonitor.TxMetadata{
 			SrcChannelAcc:    txJob.ChannelAccount.PublicKey,
 			IsHorizonErr:     false,
 			PaymentEventType: eventType,
