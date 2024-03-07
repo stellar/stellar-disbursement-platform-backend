@@ -650,7 +650,8 @@ func Test_LoggingMiddleware(t *testing.T) {
 			Name: tenantName,
 		}, nil).Once()
 
-		r.Use(TenantMiddleware(mTenantManager, mAuthManager))
+		r.Use(InjectTenantMiddleware(mTenantManager, mAuthManager))
+		r.Use(EnsureTenantMiddleware())
 		r.Use(LoggingMiddleware)
 		r.Get("/", func(w http.ResponseWriter, r *http.Request) {
 			_, err := w.Write([]byte(expectedRespBody))
@@ -772,91 +773,6 @@ func Test_CSPMiddleware(t *testing.T) {
 		gotCSP := resp.Header.Get("Content-Security-Policy")
 		assert.Equal(t, wantCSP, gotCSP)
 		assert.Equal(t, expectedRespBody, string(respBody))
-	})
-}
-
-func Test_TenantMiddleware(t *testing.T) {
-	r := chi.NewRouter()
-
-	mTenantManager := &tenant.TenantManagerMock{}
-	mAuthManager := &auth.AuthManagerMock{}
-
-	r.Use(TenantMiddleware(mTenantManager, mAuthManager))
-
-	r.Get("/test", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, err := w.Write([]byte(`{"status":"ok"}`))
-		require.NoError(t, err)
-	})
-
-	t.Run("failed to fetch tenant ID from token", func(t *testing.T) {
-		req, err := http.NewRequest(http.MethodGet, "/test", nil)
-		require.NoError(t, err)
-
-		ctx := context.WithValue(req.Context(), TokenContextKey, "valid_token")
-		req = req.WithContext(ctx)
-
-		expectedErr := errors.New("error fetching tenant ID from token")
-		mAuthManager.
-			On("GetTenantID", mock.Anything, "valid_token").
-			Return("", expectedErr).
-			Once()
-
-		w := httptest.NewRecorder()
-		r.ServeHTTP(w, req)
-
-		resp := w.Result()
-		require.Equal(t, http.StatusInternalServerError, resp.StatusCode)
-		require.Contains(t, w.Body.String(), "Failed to get tenant ID from token")
-	})
-
-	t.Run("tenant name not found in request", func(t *testing.T) {
-		req, err := http.NewRequest(http.MethodGet, "/test", nil)
-		require.NoError(t, err)
-
-		w := httptest.NewRecorder()
-		r.ServeHTTP(w, req)
-
-		resp := w.Result()
-		require.Equal(t, http.StatusBadRequest, resp.StatusCode)
-		require.Contains(t, w.Body.String(), "Tenant name not found in request or invalid")
-	})
-
-	t.Run("failed to load tenant by name", func(t *testing.T) {
-		req, err := http.NewRequest(http.MethodGet, "/test", nil)
-		require.NoError(t, err)
-
-		req.Header.Set(TenantHeaderKey, "tenant_name")
-
-		expectedErr := errors.New("error fetching tenant ID from token")
-		mTenantManager.
-			On("GetTenantByName", mock.Anything, "tenant_name").
-			Return(nil, expectedErr).
-			Once()
-
-		w := httptest.NewRecorder()
-		r.ServeHTTP(w, req)
-
-		resp := w.Result()
-		require.Equal(t, http.StatusInternalServerError, resp.StatusCode)
-		require.Contains(t, w.Body.String(), "Failed to load tenant by name")
-	})
-
-	t.Run("successfully extracts tenant ID from token", func(t *testing.T) {
-		req, err := http.NewRequest(http.MethodGet, "/test", nil)
-		require.NoError(t, err)
-
-		ctx := context.WithValue(req.Context(), TokenContextKey, "valid_token")
-		req = req.WithContext(ctx)
-
-		mAuthManager.On("GetTenantID", mock.Anything, "valid_token").Return("tenant_id", nil)
-		mTenantManager.On("GetTenantByID", mock.Anything, "tenant_id").Return(&tenant.Tenant{}, nil)
-
-		w := httptest.NewRecorder()
-		r.ServeHTTP(w, req)
-
-		resp := w.Result()
-		require.Equal(t, http.StatusOK, resp.StatusCode)
 	})
 }
 

@@ -322,48 +322,6 @@ func EnsureTenantMiddleware() func(http.Handler) http.Handler {
 	}
 }
 
-func TenantMiddleware(tenantManager tenant.ManagerInterface, authManager auth.AuthManager) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
-			ctx := req.Context()
-
-			// 1. Attempt fetching tenant ID from token
-			token, ok := ctx.Value(TokenContextKey).(string)
-			if ok {
-				tenantID, err := authManager.GetTenantID(ctx, token)
-				if err != nil {
-					httperror.InternalError(ctx, "Failed to get tenant ID from token", err, nil).Render(rw)
-					return
-				}
-				currentTenant, err := tenantManager.GetTenantByID(ctx, tenantID)
-				if err != nil {
-					httpErr := fmt.Errorf("failed to load tenant by ID for tenant ID %s: %w", tenantID, err)
-					httperror.InternalError(ctx, "Failed to load tenant by ID", httpErr, nil).Render(rw)
-					return
-				}
-				ctx = tenant.SaveTenantInContext(ctx, currentTenant)
-				next.ServeHTTP(rw, req.WithContext(ctx))
-				return
-			}
-
-			// 2. Attempt fetching tenant name from request
-			tenantName, err := extractTenantNameFromRequest(req)
-			if err != nil || tenantName == "" {
-				httperror.BadRequest("Tenant name not found in request or invalid", err, nil).Render(rw)
-				return
-			}
-			currentTenant, err := tenantManager.GetTenantByName(ctx, tenantName)
-			if err != nil {
-				httpErr := fmt.Errorf("failed to load tenant by name for tenant name %s: %w", tenantName, err)
-				httperror.InternalError(ctx, "Failed to load tenant by name", httpErr, nil).Render(rw)
-				return
-			}
-			ctx = tenant.SaveTenantInContext(ctx, currentTenant)
-			next.ServeHTTP(rw, req.WithContext(ctx))
-		})
-	}
-}
-
 func BasicAuthMiddleware(adminAccount, adminApiKey string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
