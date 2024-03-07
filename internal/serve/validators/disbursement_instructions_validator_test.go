@@ -214,3 +214,56 @@ func Test_DisbursementInstructionsValidator_ValidateAndGetInstruction(t *testing
 		})
 	}
 }
+
+func Test_DisbursementInstructionsValidator_SanitizeInstruction(t *testing.T) {
+	externalPaymentID := "123456789"
+	externalPaymentIDWithSpaces := "  123456789  "
+	tests := []struct {
+		name                string
+		actual              *data.DisbursementInstruction
+		expectedInstruction *data.DisbursementInstruction
+	}{
+		{
+			name: "Sanitized instruction",
+			actual: &data.DisbursementInstruction{
+				Phone:             "  +380445555555  ",
+				ID:                "  123456789  ",
+				Amount:            "  100.5  ",
+				VerificationValue: "  1990-01-01  ",
+			},
+			expectedInstruction: &data.DisbursementInstruction{
+				Phone:             "+380445555555",
+				ID:                "123456789",
+				Amount:            "100.5",
+				VerificationValue: "1990-01-01",
+				ExternalPaymentId: nil,
+			},
+		},
+		{
+			name: "Sanitized instruction with external payment id",
+			actual: &data.DisbursementInstruction{
+				Phone:             "  +380445555555  ",
+				ID:                "  123456789  ",
+				Amount:            "  100.5  ",
+				VerificationValue: "  1990-01-01  ",
+				ExternalPaymentId: &externalPaymentIDWithSpaces,
+			},
+			expectedInstruction: &data.DisbursementInstruction{
+				Phone:             "+380445555555",
+				ID:                "123456789",
+				Amount:            "100.5",
+				VerificationValue: "1990-01-01",
+				ExternalPaymentId: &externalPaymentID,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			iv := NewDisbursementInstructionsValidator(data.VerificationFieldDateOfBirth)
+			sanitizedInstruction := iv.SanitizeInstruction(tt.actual)
+
+			assert.Equal(t, tt.expectedInstruction, sanitizedInstruction)
+		})
+	}
+}
