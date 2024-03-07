@@ -306,6 +306,22 @@ func InjectTenantMiddleware(tenantManager tenant.ManagerInterface, authManager a
 	}
 }
 
+// EnsureTenantMiddleware is a middleware that ensures the tenant is in the request context.
+func EnsureTenantMiddleware() func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+			ctx := req.Context()
+
+			if _, err := tenant.GetTenantFromContext(ctx); err != nil {
+				httperror.BadRequest("Tenant not found in context", err, nil).Render(rw)
+				return
+			}
+
+			next.ServeHTTP(rw, req)
+		})
+	}
+}
+
 func TenantMiddleware(tenantManager tenant.ManagerInterface, authManager auth.AuthManager) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {

@@ -1056,6 +1056,67 @@ func Test_InjectTenantMiddleware(t *testing.T) {
 	}
 }
 
+func Test_EnsureTenantMiddleware(t *testing.T) {
+	validTnt := &tenant.Tenant{ID: "tenant_id", Name: "tenant_name"}
+
+	testCases := []struct {
+		name                 string
+		hasTenantInCtx       bool
+		expectedStatus       int
+		expectedBodyContains string
+		expectedTenant       *tenant.Tenant
+	}{
+		{
+			name:                 "🔴 fails if there's no tenant in the context",
+			hasTenantInCtx:       false,
+			expectedStatus:       http.StatusBadRequest,
+			expectedBodyContains: `{"error":"Tenant not found in context"}`,
+			expectedTenant:       nil,
+		},
+		{
+			name:                 "🟢 when there's a tenant in the context",
+			hasTenantInCtx:       true,
+			expectedStatus:       http.StatusOK,
+			expectedBodyContains: `{"status":"ok"}`,
+			expectedTenant:       nil,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// prepare router
+			r := chi.NewRouter()
+			r.
+				With(EnsureTenantMiddleware()).
+				Get("/test", func(w http.ResponseWriter, r *http.Request) {
+					w.WriteHeader(http.StatusOK)
+					_, err := w.Write([]byte(`{"status":"ok"}`))
+					require.NoError(t, err)
+				})
+
+			// prepare request
+			req, err := http.NewRequest(http.MethodGet, "/test", nil)
+			require.NoError(t, err)
+			if tc.hasTenantInCtx {
+				ctx := tenant.SaveTenantInContext(req.Context(), validTnt)
+				req = req.WithContext(ctx)
+			}
+
+			// execute the request
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, req)
+			resp := w.Result()
+
+			// assert the response
+			defer resp.Body.Close()
+			respBody, err := io.ReadAll(resp.Body)
+			assert.NoError(t, err)
+			assert.Equal(t, tc.expectedStatus, resp.StatusCode)
+			assert.JSONEq(t, tc.expectedBodyContains, string(respBody))
+		})
+	}
+}
+
 func Test_BasicAuthMiddleware(t *testing.T) {
 	r := chi.NewRouter()
 
