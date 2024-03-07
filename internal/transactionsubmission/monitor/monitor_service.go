@@ -103,23 +103,22 @@ func (ms *TSSMonitorService) LogAndMonitorPayment(ctx context.Context, tx store.
 	if tx.XDRReceived.Valid {
 		paymentLog = paymentLog.WithField("xdr_received", tx.XDRReceived.String)
 	}
+	if tx.StellarTransactionHash.Valid {
+		paymentLog = paymentLog.WithField("tx_hash", tx.StellarTransactionHash.String)
+	}
 
-	// successful transactions
 	isSuccessful := (metricTag == sdpMonitor.PaymentTransactionSuccessfulTag) ||
 		(metricTag == sdpMonitor.PaymentReconciliationSuccessfulTag && txMetadata.PaymentEventType == sdpMonitor.PaymentReconciliationTransactionSuccessfulLabel)
 	if isSuccessful {
+		// successful transactions
 		paymentLog.
-			WithFields(log.F{
-				"tx_hash":      tx.StellarTransactionHash.String,
-				"completed_at": tx.CompletedAt.String(),
-			}).Info(paymentLogMessage)
+			WithField("completed_at", tx.CompletedAt.String()).
+			Info(paymentLogMessage)
 	} else if slices.Contains([]sdpMonitor.MetricTag{sdpMonitor.PaymentErrorTag, sdpMonitor.PaymentReconciliationFailureTag}, metricTag) {
 		// unsuccessful transactions
 		paymentLog.
-			WithFields(log.F{
-				"horizon_error?": txMetadata.IsHorizonErr,
-				"error":          txMetadata.ErrStack,
-			}).Error(paymentLogMessage)
+			WithFields(log.F{"horizon_error?": txMetadata.IsHorizonErr, "error": txMetadata.ErrStack}).
+			Error(paymentLogMessage)
 	} else {
 		paymentLog.Errorf("Cannot recognize metricTag=%s for event=%s with PaymentEventType=%s", metricTag, eventID, txMetadata.PaymentEventType)
 	}
