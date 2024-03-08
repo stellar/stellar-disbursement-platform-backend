@@ -709,8 +709,9 @@ func Test_TransactionWorker_reconcileSubmittedTransaction(t *testing.T) {
 		shouldBePushedBackToQueue  bool
 	}{
 		{
-			name:              "🎉 successfully verifies the tx went through and marks it as successful",
-			horizonTxResponse: horizon.Transaction{Successful: true, ResultXdr: resultXDR},
+			name:                      "🎉 successfully verifies the tx went through and marks it as successful",
+			horizonTxResponse:         horizon.Transaction{Successful: true, ResultXdr: resultXDR},
+			shouldBePushedBackToQueue: false,
 		},
 		{
 			name:                      "🎉 successfully verifies the tx failed and mark it for resubmission",
