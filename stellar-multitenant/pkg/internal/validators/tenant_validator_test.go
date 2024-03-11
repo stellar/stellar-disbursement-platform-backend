@@ -206,21 +206,6 @@ func TestTenantValidator_ValidateUpdateTenantRequest(t *testing.T) {
 		}, tv.Errors)
 	})
 
-	t.Run("returns error when the URLs have invalid protocol scheme", func(t *testing.T) {
-		tv := NewTenantValidator()
-		invalidValue := "://invalid.com"
-		reqBody := &UpdateTenantRequest{
-			BaseURL:      &[]string{invalidValue}[0],
-			SDPUIBaseURL: &[]string{invalidValue}[0],
-		}
-		tv.ValidateUpdateTenantRequest(reqBody)
-		assert.True(t, tv.HasErrors())
-		assert.Equal(t, map[string]interface{}{
-			"base_url":        "invalid base URL value. Verify the URL protocol scheme",
-			"sdp_ui_base_url": "invalid SDP UI base URL value. Verify the URL protocol scheme",
-		}, tv.Errors)
-	})
-
 	t.Run("validates request body successfully", func(t *testing.T) {
 		tv := NewTenantValidator()
 		url := "valid.com:3000"

@@ -105,9 +105,11 @@ func (tv *TenantValidator) ValidateUpdateTenantRequest(reqBody *UpdateTenantRequ
 			tv.Check(false, "base_url", "invalid base URL value")
 		}
 
-		*reqBody.BaseURL, err = utils.GetURLWithScheme(*reqBody.BaseURL)
-		if err != nil {
-			tv.Check(false, "base_url", "invalid base URL value. Verify the URL protocol scheme")
+		if _, ok := tv.Errors["base_url"]; !ok {
+			*reqBody.BaseURL, err = utils.GetURLWithScheme(*reqBody.BaseURL)
+			if err != nil {
+				tv.Check(false, "base_url", "invalid base URL value. Verify the URL protocol scheme")
+			}
 		}
 	}
 
@@ -116,9 +118,11 @@ func (tv *TenantValidator) ValidateUpdateTenantRequest(reqBody *UpdateTenantRequ
 			tv.Check(false, "sdp_ui_base_url", "invalid SDP UI base URL value")
 		}
 
-		*reqBody.SDPUIBaseURL, err = utils.GetURLWithScheme(*reqBody.SDPUIBaseURL)
-		if err != nil {
-			tv.Check(false, "sdp_ui_base_url", "invalid SDP UI base URL value. Verify the URL protocol scheme")
+		if _, ok := tv.Errors["sdp_ui_base_url"]; !ok {
+			*reqBody.SDPUIBaseURL, err = utils.GetURLWithScheme(*reqBody.SDPUIBaseURL)
+			if err != nil {
+				tv.Check(false, "sdp_ui_base_url", "invalid SDP UI base URL value. Verify the URL protocol scheme")
+			}
 		}
 	}
 
