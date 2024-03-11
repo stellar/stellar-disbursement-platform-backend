@@ -34,13 +34,13 @@ func (m *Manager) ProvisionNewTenant(
 	organizationName, uiBaseURL, networkType string,
 ) (*tenant.Tenant, error) {
 	// TODO (SDP-1107): Run this in a database transaction.
-	log.Infof("adding tenant %s", name)
+	log.Ctx(ctx).Infof("adding tenant %s", name)
 	t, err := m.tenantManager.AddTenant(ctx, name)
 	if err != nil {
 		return nil, err
 	}
 
-	log.Infof("creating tenant %s database schema", t.Name)
+	log.Ctx(ctx).Infof("creating tenant %s database schema", t.Name)
 	schemaName := fmt.Sprintf("sdp_%s", t.Name)
 	_, err = m.db.ExecContext(ctx, fmt.Sprintf("CREATE SCHEMA %s", pq.QuoteIdentifier(schemaName)))
 	if err != nil {
@@ -53,13 +53,13 @@ func (m *Manager) ProvisionNewTenant(
 	}
 
 	// Applying migrations
-	log.Infof("applying SDP migrations on the tenant %s schema", t.Name)
+	log.Ctx(ctx).Infof("applying SDP migrations on the tenant %s schema", t.Name)
 	err = m.RunMigrationsForTenant(ctx, t, u, migrate.Up, 0, sdpmigrations.FS, db.StellarPerTenantSDPMigrationsTableName)
 	if err != nil {
 		return nil, fmt.Errorf("applying SDP migrations: %w", err)
 	}
 
-	log.Infof("applying stellar-auth migrations on the tenant %s schema", t.Name)
+	log.Ctx(ctx).Infof("applying stellar-auth migrations on the tenant %s schema", t.Name)
 	err = m.RunMigrationsForTenant(ctx, t, u, migrate.Up, 0, authmigrations.FS, db.StellarPerTenantAuthMigrationsTableName)
 	if err != nil {
 		return nil, fmt.Errorf("applying stellar-auth migrations: %w", err)
@@ -167,7 +167,7 @@ func (m *Manager) RunMigrationsForTenant(
 	if err != nil {
 		return fmt.Errorf("applying SDP migrations: %w", err)
 	}
-	log.Infof("successful applied %d migrations", n)
+	log.Ctx(ctx).Infof("successful applied %d migrations", n)
 	return nil
 }
 

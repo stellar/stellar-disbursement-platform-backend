@@ -214,6 +214,7 @@ func Test_handleHTTP_Health(t *testing.T) {
 		MonitorService:  mMonitorService,
 		SEP24JWTSecret:  "jwt_secret_1234567890",
 		Version:         "x.y.z",
+		tenantManager:   tenant.NewManager(tenant.WithDatabase(dbConnectionPool)),
 	})
 
 	req := httptest.NewRequest("GET", "/health", nil)

@@ -89,12 +89,14 @@ sdp:
   ## @extra sdp.route Configuration related to the routing of the SDP service.
   ## @param sdp.route.schema Protocol scheme used for the service. Can be "http" or "https".
   ## @param sdp.route.domain Public domain/address of the SDP service. If using localhost, consider including the port as part of the domain.
+  ## @param sdp.route.mtnDomain Public domain/address of the multi-tenant SDP service. This is a wild-card domain used for multi-tenant setups e.g. "*.sdp.localhost.com".
   ## @param sdp.route.port Primary port on which the SDP service listens.
   ## @param sdp.route.metricsPort Port dedicated to metrics collection for the SDP service.
   ## @param sdp.route.adminPort Port dedicated to serve the SDP admin endpoints, used to manage new or existing tenants.
   route:
     schema: "https"
     domain: sdp.localhost.com
+    mtnDomain: "*.sdp.localhost.com"
     port: "8000"
     metricsPort: "8002"
     adminPort: "8003"
@@ -500,10 +502,12 @@ dashboard:
   ## @extra dashboard.route Configuration related to the routing of the Dashboard.
   ## @param dashboard.route.schema Protocol scheme used for the service. Can be "http" or "https".
   ## @param dashboard.route.domain Public domain/address of the Dashboard.
+  ## @param dashboard.route.mtnDomain Public domain/address of the multi-tenant Dashboard. This is a wild-card domain used for multi-tenant setups e.g. "*.sdp-dashboard.localhost.com".
   ## @param dashboard.route.port Primary port on which the Dashboard listens.
   route:
     schema: "https"
     domain: "sdp-dashboard.localhost.com"
+    mtnDomain: "*.sdp-dashboard.localhost.com"
     port: "80"
 
   ## @extra dashboard.image Configuration related to the Docker image used by the Dashboard.

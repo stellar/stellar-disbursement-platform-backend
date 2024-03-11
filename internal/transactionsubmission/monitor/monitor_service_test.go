@@ -3,6 +3,7 @@ package monitor
 import (
 	"context"
 	"database/sql"
+	"slices"
 	"testing"
 	"time"
 
@@ -16,7 +17,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 )
 
-func Test_TSSMonitorService_MonitorPayment(t *testing.T) {
+func Test_TSSMonitorService_LogAndMonitorTransaction(t *testing.T) {
 	mMonitorClient := sdpMonitorMocks.MockMonitorClient{}
 	tssMonitorSvc := TSSMonitorService{
 		Client:        &mMonitorClient,
@@ -30,6 +31,8 @@ func Test_TSSMonitorService_MonitorPayment(t *testing.T) {
 	destAcc := "0xDEST"
 	xdr := sql.NullString{String: "AAAAAAAAAMgAAAAAAAAAAgAAAAAAAAAGAAAAAAAAAAAAAAAFAAAAAAAAAAA=", Valid: true}
 	txHash := "0xSUCCESS"
+	tenantID := "test_tenant_id"
+	txID := "test_tx_id"
 	errStr := "error!"
 
 	testCases := []struct {
@@ -39,7 +42,7 @@ func Test_TSSMonitorService_MonitorPayment(t *testing.T) {
 		txMetadata TxMetadata
 		eventType  string
 		logLevel   logrus.Level
-		fieldsMap  map[string]string
+		fieldsMap  map[string]interface{}
 	}{
 		{
 			name:      "monitor payment_processing_started",
@@ -49,18 +52,25 @@ func Test_TSSMonitorService_MonitorPayment(t *testing.T) {
 				SrcChannelAcc:    srcChannelAcc,
 			},
 			txModel: store.Transaction{
+				ID:          "test_tx_id",
 				CreatedAt:   &time,
 				UpdatedAt:   &time,
 				AssetCode:   assetCode,
 				Destination: destAcc,
+				TenantID:    "test_tenant_id",
 			},
 			logLevel: log.DebugLevel,
-			fieldsMap: map[string]string{
-				"created_at":          time.String(),
-				"updated_at":          time.String(),
+			fieldsMap: map[string]interface{}{
+				"app_version":         tssMonitorSvc.Version,
 				"asset":               assetCode,
 				"channel_account":     srcChannelAcc,
+				"created_at":          time.String(),
 				"destination_account": destAcc,
+				"event_type":          sdpMonitor.PaymentProcessingStartedLabel,
+				"git_commit_hash":     tssMonitorSvc.GitCommitHash,
+				"tenant_id":           tenantID,
+				"tx_id":               txID,
+				"updated_at":          time.String(),
 			},
 		},
 		{
@@ -71,6 +81,8 @@ func Test_TSSMonitorService_MonitorPayment(t *testing.T) {
 				SrcChannelAcc:    srcChannelAcc,
 			},
 			txModel: store.Transaction{
+				ID:                     txID,
+				TenantID:               tenantID,
 				CreatedAt:              &time,
 				UpdatedAt:              &time,
 				CompletedAt:            &time,
@@ -81,16 +93,21 @@ func Test_TSSMonitorService_MonitorPayment(t *testing.T) {
 				StellarTransactionHash: sql.NullString{String: txHash, Valid: true},
 			},
 			logLevel: log.InfoLevel,
-			fieldsMap: map[string]string{
-				"created_at":          time.String(),
-				"updated_at":          time.String(),
+			fieldsMap: map[string]interface{}{
+				"app_version":         tssMonitorSvc.Version,
 				"asset":               assetCode,
 				"channel_account":     srcChannelAcc,
-				"destination_account": destAcc,
-				"xdr_sent":            xdr.String,
-				"xdr_received":        xdr.String,
 				"completed_at":        time.String(),
+				"created_at":          time.String(),
+				"destination_account": destAcc,
+				"event_type":          sdpMonitor.PaymentReconciliationTransactionSuccessfulLabel,
+				"git_commit_hash":     tssMonitorSvc.GitCommitHash,
+				"tenant_id":           tenantID,
+				"tx_id":               txID,
 				"tx_hash":             txHash,
+				"updated_at":          time.String(),
+				"xdr_received":        xdr.String,
+				"xdr_sent":            xdr.String,
 			},
 		},
 		{
@@ -103,21 +120,31 @@ func Test_TSSMonitorService_MonitorPayment(t *testing.T) {
 				ErrStack:         errStr,
 			},
 			txModel: store.Transaction{
-				CreatedAt:   &time,
-				UpdatedAt:   &time,
-				AssetCode:   assetCode,
-				Destination: destAcc,
-				XDRSent:     xdr,
+				ID:                     txID,
+				TenantID:               tenantID,
+				CreatedAt:              &time,
+				UpdatedAt:              &time,
+				AssetCode:              assetCode,
+				Destination:            destAcc,
+				XDRSent:                xdr,
+				StellarTransactionHash: sql.NullString{String: txHash, Valid: true},
 			},
 			logLevel: log.InfoLevel,
-			fieldsMap: map[string]string{
-				"created_at":          time.String(),
-				"updated_at":          time.String(),
+			fieldsMap: map[string]interface{}{
+				"app_version":         tssMonitorSvc.Version,
 				"asset":               assetCode,
 				"channel_account":     srcChannelAcc,
+				"created_at":          time.String(),
 				"destination_account": destAcc,
-				"xdr_sent":            xdr.String,
 				"error":               errStr,
+				"event_type":          sdpMonitor.PaymentFailedLabel,
+				"git_commit_hash":     tssMonitorSvc.GitCommitHash,
+				"horizon_error?":      true,
+				"tenant_id":           tenantID,
+				"tx_hash":             txHash,
+				"tx_id":               txID,
+				"updated_at":          time.String(),
+				"xdr_sent":            xdr.String,
 			},
 		},
 	}
@@ -129,14 +156,19 @@ func Test_TSSMonitorService_MonitorPayment(t *testing.T) {
 			ctx := context.Background()
 
 			mMonitorClient.On("MonitorCounters", tc.metricTag, mock.Anything).Return(nil).Once()
-			tssMonitorSvc.MonitorPayment(ctx, tc.txModel, tc.metricTag, tc.txMetadata)
+			tssMonitorSvc.LogAndMonitorTransaction(ctx, tc.txModel, tc.metricTag, tc.txMetadata)
 
 			logEntries := getLogEntries()
 			assert.NotEmpty(t, logEntries[0])
 
-			data := logEntries[0].Data
-			for k, v := range tc.fieldsMap {
-				assert.Equal(t, v, data[k])
+			logFieldsThatCannotBeAsserted := []string{"event_id", "event_time", "pid"}
+			assert.Len(t, logEntries[0].Data, len(tc.fieldsMap)+len(logFieldsThatCannotBeAsserted))
+
+			for k, v := range logEntries[0].Data {
+				if slices.Contains(logFieldsThatCannotBeAsserted, k) {
+					continue
+				}
+				assert.Equal(t, v, tc.fieldsMap[k], "failed value comparison for key: %s", k)
 			}
 
 			assert.Contains(t, logEntries[0].Message, string(tc.metricTag))

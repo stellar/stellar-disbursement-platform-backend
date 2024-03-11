@@ -76,7 +76,7 @@ func MetricsRequestHandler(monitorService monitor.MonitorServiceInterface) func(
 
 			err := monitorService.MonitorHttpRequestDuration(duration, labels)
 			if err != nil {
-				log.Errorf("Error trying to monitor request time: %s", err)
+				log.Ctx(req.Context()).Errorf("Error trying to monitor request time: %s", err)
 			}
 		})
 	}
@@ -101,21 +101,22 @@ func AuthenticateMiddleware(authManager auth.AuthManager) func(http.Handler) htt
 
 			ctx := req.Context()
 			token := authHeaderParts[1]
-			isValid, err := authManager.ValidateToken(ctx, token)
+			userID, err := authManager.GetUserID(ctx, token)
 			if err != nil {
-				err = fmt.Errorf("error validating auth token: %w", err)
-				log.Ctx(ctx).Error(err)
-				httperror.Unauthorized("", err, nil).Render(rw)
-				return
-			}
-
-			if !isValid {
+				if !errors.Is(err, auth.ErrInvalidToken) && !errors.Is(err, auth.ErrUserNotFound) {
+					err = fmt.Errorf("error validating auth token: %w", err)
+					log.Ctx(ctx).Error(err)
+				}
 				httperror.Unauthorized("", nil, nil).Render(rw)
 				return
 			}
 
 			// Add the token to the request context
 			ctx = context.WithValue(ctx, TokenContextKey, token)
+
+			// Add the user ID to the request context logger
+			ctx = log.Set(ctx, log.Ctx(ctx).WithField("user_id", userID))
+
 			req = req.WithContext(ctx)
 
 			next.ServeHTTP(rw, req)
@@ -180,47 +181,45 @@ func (c cspItem) String() string {
 }
 
 // LoggingMiddleware is a middleware that logs requests to the logger.
-func LoggingMiddleware() func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
-			mw := mutil.WrapWriter(rw)
+func LoggingMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+		mw := mutil.WrapWriter(rw)
 
-			reqCtx := req.Context()
-			logFields := log.F{
-				"req": middleware.GetReqID(reqCtx),
-			}
-			logCtx := log.Set(reqCtx, log.Ctx(reqCtx).WithFields(logFields))
+		reqCtx := req.Context()
+		logFields := log.F{
+			"method": req.Method,
+			"path":   req.URL.String(),
+			"req":    middleware.GetReqID(reqCtx),
+		}
+		logCtx := log.Set(reqCtx, log.Ctx(reqCtx).WithFields(logFields))
 
-			ctxTenant, err := tenant.GetTenantFromContext(reqCtx)
-			if err != nil {
-				// Log for auditing purposes when we cannot derive the tenant from the context in the case of
-				// tenant-unaware endpoints
-				log.Ctx(logCtx).Debug("tenant cannot be derived from context")
-			}
-			if ctxTenant != nil {
-				logFields["tenant_name"] = ctxTenant.Name
-				logFields["tenant_id"] = ctxTenant.ID
-				logCtx = log.Set(reqCtx, log.Ctx(reqCtx).WithFields(logFields))
-			}
+		ctxTenant, err := tenant.GetTenantFromContext(reqCtx)
+		if err != nil {
+			// Log for auditing purposes when we cannot derive the tenant from the context in the case of
+			// tenant-unaware endpoints
+			log.Ctx(logCtx).Debug("tenant cannot be derived from context")
+		}
+		if ctxTenant != nil {
+			logFields["tenant_name"] = ctxTenant.Name
+			logFields["tenant_id"] = ctxTenant.ID
+			logCtx = log.Set(reqCtx, log.Ctx(reqCtx).WithFields(logFields))
+		}
 
-			req = req.WithContext(logCtx)
+		req = req.WithContext(logCtx)
 
-			logRequestStart(req)
-			started := time.Now()
+		logRequestStart(req)
+		started := time.Now()
 
-			next.ServeHTTP(mw, req)
-			ended := time.Since(started)
-			logRequestEnd(req, mw, ended)
-		})
-	}
+		next.ServeHTTP(mw, req)
+		ended := time.Since(started)
+		logRequestEnd(req, mw, ended)
+	})
 }
 
 func logRequestStart(req *http.Request) {
 	l := log.Ctx(req.Context()).WithFields(
 		log.F{
 			"subsys":    "http",
-			"path":      req.URL.String(),
-			"method":    req.Method,
 			"ip":        req.RemoteAddr,
 			"host":      req.Host,
 			"useragent": req.Header.Get("User-Agent"),
@@ -233,8 +232,6 @@ func logRequestStart(req *http.Request) {
 func logRequestEnd(req *http.Request, mw mutil.WriterProxy, duration time.Duration) {
 	l := log.Ctx(req.Context()).WithFields(log.F{
 		"subsys":   "http",
-		"path":     req.URL.String(),
-		"method":   req.Method,
 		"status":   mw.Status(),
 		"bytes":    mw.BytesWritten(),
 		"duration": duration,
@@ -277,46 +274,50 @@ func CSPMiddleware() func(http.Handler) http.Handler {
 	}
 }
 
-func TenantMiddleware(tenantManager tenant.ManagerInterface, authManager auth.AuthManager) func(http.Handler) http.Handler {
+// InjectTenantMiddleware is a middleware that injects the tenant into the request context, if it can be found in either
+// the authentication token, the request HEADER, or the hostname prefix.
+func InjectTenantMiddleware(tenantManager tenant.ManagerInterface, authManager auth.AuthManager) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 			ctx := req.Context()
 
-			// 1. Attempt fetching tenant ID from token
-			token, ok := ctx.Value(TokenContextKey).(string)
-			if ok {
-				tenantID, err := authManager.GetTenantID(ctx, token)
-				if err != nil {
-					httperror.InternalError(ctx, "Failed to get tenant ID from token", err, nil).Render(rw)
-					return
+			var currentTenant *tenant.Tenant
+			// Attempt 1. Attempt fetching tenant ID from token
+			if token, ok := ctx.Value(TokenContextKey).(string); ok {
+				if tenantID, err := authManager.GetTenantID(ctx, token); err == nil {
+					currentTenant, _ = tenantManager.GetTenantByID(ctx, tenantID)
 				}
-				currentTenant, err := tenantManager.GetTenantByID(ctx, tenantID)
-				if err != nil {
-					httpErr := fmt.Errorf("failed to load tenant by ID for tenant ID %s: %w", tenantID, err)
-					httperror.InternalError(ctx, "Failed to load tenant by ID", httpErr, nil).Render(rw)
-					return
-				}
-				ctx = tenant.SaveTenantInContext(ctx, currentTenant)
-				next.ServeHTTP(rw, req.WithContext(ctx))
-				return
 			}
 
-			// 2. Attempt fetching tenant name from request
-			tenantName, err := extractTenantNameFromRequest(req)
-			if err != nil || tenantName == "" {
-				httperror.BadRequest("Tenant name not found in request or invalid", err, nil).Render(rw)
-				return
+			// Attempt 2. Attempt fetching tenant name from request
+			if currentTenant == nil {
+				if tenantName, err := extractTenantNameFromRequest(req); err == nil && tenantName != "" {
+					currentTenant, _ = tenantManager.GetTenantByName(ctx, tenantName)
+				}
 			}
-			currentTenant, err := tenantManager.GetTenantByName(ctx, tenantName)
-			if err != nil {
-				httpErr := fmt.Errorf("failed to load tenant by name for tenant name %s: %w", tenantName, err)
-				httperror.InternalError(ctx, "Failed to load tenant by name", httpErr, nil).Render(rw)
-				return
+
+			if currentTenant != nil {
+				ctx = tenant.SaveTenantInContext(ctx, currentTenant)
+				next.ServeHTTP(rw, req.WithContext(ctx))
+			} else {
+				next.ServeHTTP(rw, req)
 			}
-			ctx = tenant.SaveTenantInContext(ctx, currentTenant)
-			next.ServeHTTP(rw, req.WithContext(ctx))
 		})
 	}
+}
+
+// EnsureTenantMiddleware is a middleware that ensures the tenant is in the request context.
+func EnsureTenantMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+		ctx := req.Context()
+
+		if _, err := tenant.GetTenantFromContext(ctx); err != nil {
+			httperror.BadRequest("Tenant not found in context", err, nil).Render(rw)
+			return
+		}
+
+		next.ServeHTTP(rw, req)
+	})
 }
 
 func BasicAuthMiddleware(adminAccount, adminApiKey string) func(http.Handler) http.Handler {
@@ -347,6 +348,7 @@ func BasicAuthMiddleware(adminAccount, adminApiKey string) func(http.Handler) ht
 	}
 }
 
+// extractTenantNameFromRequest attempts to extract the tenant name from the request HEADER[tenantHeaderKey] or the hostname prefix.
 func extractTenantNameFromRequest(r *http.Request) (string, error) {
 	// 1. Try extracting from the TenantHeaderKey header first
 	tenantName := r.Header.Get(TenantHeaderKey)

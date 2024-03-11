@@ -126,7 +126,7 @@ func (tw *TransactionWorker) runJob(ctx context.Context, txJob *TxJob) error {
 
 // TODO: add tests
 // handleFailedTransaction will wrap up the job when the transaction was submitted to the network but failed.
-// This method will only return an error if something goes wromg when handling the result and marking the transaction as ERROR.
+// This method will only return an error if something goes wrong when handling the result and marking the transaction as ERROR.
 func (tw *TransactionWorker) handleFailedTransaction(ctx context.Context, txJob *TxJob, hTxResp horizon.Transaction, hErr error) error {
 	log.Ctx(ctx).Errorf("🔴 Error processing job: %v", hErr)
 
@@ -145,7 +145,7 @@ func (tw *TransactionWorker) handleFailedTransaction(ctx context.Context, txJob 
 			eventType = sdpMonitor.PaymentMarkedForReprocessingLabel
 		}
 
-		tw.monitorSvc.MonitorPayment(
+		tw.monitorSvc.LogAndMonitorTransaction(
 			ctx,
 			txJob.Transaction,
 			metricTag,
@@ -160,9 +160,15 @@ func (tw *TransactionWorker) handleFailedTransaction(ctx context.Context, txJob 
 	if errors.As(hErr, &hErrWrapper) {
 		tw.txProcessingLimiter.AdjustLimitIfNeeded(hErrWrapper)
 
-		if hErrWrapper.ResultCodes != nil {
+		if hErrWrapper.IsHorizonError() {
 			isHorizonErr = true
 
+			// Errors that are not marked as definitive errors:
+			//   - 504: Timeout
+			//   - 429: Too Many Requests
+			//   - 400: with any of the codes: [tx_insufficient_fee, tx_too_late, tx_bad_seq]
+			//   - 5xx
+			//   - random network errors
 			if hErrWrapper.ShouldMarkAsError() {
 				var updatedTx *store.Transaction
 				updatedTx, err = tw.txModel.UpdateStatusToError(ctx, txJob.Transaction, hErrWrapper.Error())
@@ -299,7 +305,7 @@ func (tw *TransactionWorker) reconcileSubmittedTransaction(ctx context.Context, 
 	if err == nil && txDetail.Successful {
 		err = tw.handleSuccessfulTransaction(ctx, txJob, txDetail)
 		if err != nil {
-			tw.monitorSvc.MonitorPayment(ctx, txJob.Transaction, sdpMonitor.PaymentReconciliationFailureTag, tssMonitor.TxMetadata{
+			tw.monitorSvc.LogAndMonitorTransaction(ctx, txJob.Transaction, sdpMonitor.PaymentReconciliationFailureTag, tssMonitor.TxMetadata{
 				SrcChannelAcc:    txJob.ChannelAccount.PublicKey,
 				IsHorizonErr:     false,
 				ErrStack:         err.Error(),
@@ -308,7 +314,7 @@ func (tw *TransactionWorker) reconcileSubmittedTransaction(ctx context.Context, 
 			return fmt.Errorf("handling successful transaction: %w", err)
 		}
 
-		tw.monitorSvc.MonitorPayment(ctx, txJob.Transaction, sdpMonitor.PaymentReconciliationSuccessfulTag, tssMonitor.TxMetadata{
+		tw.monitorSvc.LogAndMonitorTransaction(ctx, txJob.Transaction, sdpMonitor.PaymentReconciliationSuccessfulTag, tssMonitor.TxMetadata{
 			SrcChannelAcc:    txJob.ChannelAccount.PublicKey,
 			PaymentEventType: sdpMonitor.PaymentReconciliationTransactionSuccessfulLabel,
 		})
@@ -316,12 +322,13 @@ func (tw *TransactionWorker) reconcileSubmittedTransaction(ctx context.Context, 
 	} else if (err != nil || txDetail.Successful) && !hWrapperErr.IsNotFound() {
 		log.Ctx(ctx).Warnf("received unexpected horizon error: %v", hWrapperErr)
 
-		tw.monitorSvc.MonitorPayment(ctx, txJob.Transaction, sdpMonitor.PaymentReconciliationFailureTag, tssMonitor.TxMetadata{
+		tw.monitorSvc.LogAndMonitorTransaction(ctx, txJob.Transaction, sdpMonitor.PaymentReconciliationFailureTag, tssMonitor.TxMetadata{
 			SrcChannelAcc:    txJob.ChannelAccount.PublicKey,
 			IsHorizonErr:     true,
 			ErrStack:         hWrapperErr.Error(),
 			PaymentEventType: sdpMonitor.PaymentReconciliationUnexpectedErrorLabel,
 		})
+
 		return fmt.Errorf("unexpected error: %w", hWrapperErr)
 	}
 
@@ -337,7 +344,7 @@ func (tw *TransactionWorker) reconcileSubmittedTransaction(ctx context.Context, 
 		return fmt.Errorf("unlocking job: %w", err)
 	}
 
-	tw.monitorSvc.MonitorPayment(ctx, txJob.Transaction, sdpMonitor.PaymentReconciliationSuccessfulTag, tssMonitor.TxMetadata{
+	tw.monitorSvc.LogAndMonitorTransaction(ctx, txJob.Transaction, sdpMonitor.PaymentReconciliationSuccessfulTag, tssMonitor.TxMetadata{
 		SrcChannelAcc:    txJob.ChannelAccount.PublicKey,
 		PaymentEventType: sdpMonitor.PaymentReconciliationMarkedForReprocessingLabel,
 	})
@@ -380,7 +387,7 @@ func (tw *TransactionWorker) producePaymentCompletedEvent(ctx context.Context, e
 func (tw *TransactionWorker) processTransactionSubmission(ctx context.Context, txJob *TxJob) error {
 	log.Ctx(ctx).Infof("🚧 Processing transaction submission for job %v...", txJob)
 
-	tw.monitorSvc.MonitorPayment(ctx, txJob.Transaction, sdpMonitor.PaymentProcessingStartedTag, tssMonitor.TxMetadata{
+	tw.monitorSvc.LogAndMonitorTransaction(ctx, txJob.Transaction, sdpMonitor.PaymentProcessingStartedTag, tssMonitor.TxMetadata{
 		SrcChannelAcc:    txJob.ChannelAccount.PublicKey,
 		PaymentEventType: sdpMonitor.PaymentProcessingStartedLabel,
 	})
@@ -562,7 +569,7 @@ func (tw *TransactionWorker) submit(ctx context.Context, txJob *TxJob, feeBumpTx
 			eventType = sdpMonitor.PaymentReprocessingSuccessfulLabel
 		}
 
-		tw.monitorSvc.MonitorPayment(ctx, txJob.Transaction, sdpMonitor.PaymentTransactionSuccessfulTag, tssMonitor.TxMetadata{
+		tw.monitorSvc.LogAndMonitorTransaction(ctx, txJob.Transaction, sdpMonitor.PaymentTransactionSuccessfulTag, tssMonitor.TxMetadata{
 			SrcChannelAcc:    txJob.ChannelAccount.PublicKey,
 			IsHorizonErr:     false,
 			PaymentEventType: eventType,

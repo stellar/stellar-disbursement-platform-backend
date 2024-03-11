@@ -102,7 +102,7 @@ func (s *Scheduler) start(ctx context.Context) {
 			for {
 				select {
 				case <-ticker.C:
-					log.Debugf("Enqueuing job: %s", job.GetName())
+					log.Ctx(ctx).Debugf("Enqueuing job: %s", job.GetName())
 					s.jobQueue <- job
 				case <-ctx.Done():
 					ticker.Stop()
@@ -123,20 +123,20 @@ func (s *Scheduler) stop() {
 func worker(ctx context.Context, workerID int, crashTrackerClient crashtracker.CrashTrackerClient, jobQueue <-chan jobs.Job) {
 	defer func() {
 		if r := recover(); r != nil {
-			log.Errorf("Worker %d encountered a panic while processing a job: %v", workerID, r)
+			log.Ctx(ctx).Errorf("Worker %d encountered a panic while processing a job: %v", workerID, r)
 		}
 	}()
 	for {
 		select {
 		case job := <-jobQueue:
-			log.Debugf("Worker %d processing job: %s", workerID, job.GetName())
+			log.Ctx(ctx).Debugf("Worker %d processing job: %s", workerID, job.GetName())
 			if err := job.Execute(ctx); err != nil {
 				msg := fmt.Sprintf("error processing job %s on worker %d", job.GetName(), workerID)
 				// call crash tracker client to log and report error
 				crashTrackerClient.LogAndReportErrors(ctx, err, msg)
 			}
 		case <-ctx.Done():
-			log.Infof("Worker %d stopping...", workerID)
+			log.Ctx(ctx).Infof("Worker %d stopping...", workerID)
 			return
 		}
 	}

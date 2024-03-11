@@ -53,7 +53,7 @@ func (s *MessageCommand) Command(messengerService MessengerServiceInterface) *co
 		Use:   "message",
 		Short: "Messenger related commands",
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
-			cmd.Parent().PersistentPreRun(cmd.Parent(), args)
+			cmdUtils.PropagatePersistentPreRun(cmd, args)
 			// Inject dependencies:
 			opts.Environment = globalOptions.Environment
 
@@ -61,21 +61,22 @@ func (s *MessageCommand) Command(messengerService MessengerServiceInterface) *co
 			messageCmdConfigOpts.Require()
 			err := messageCmdConfigOpts.SetValues()
 			if err != nil {
-				log.Fatalf("Error setting values of config options: %s", err.Error())
+				log.Ctx(cmd.Context()).Fatalf("Error setting values of config options: %s", err.Error())
 			}
 		},
 		Run: func(cmd *cobra.Command, _ []string) {
+			ctx := cmd.Context()
 			_, err := messengerService.GetClient(opts)
 			if err != nil {
-				log.Fatalf("Error calling help command: %s", err.Error())
+				log.Ctx(ctx).Fatalf("Error calling help command: %s", err.Error())
 			}
 
-			log.Infof("🎉 Successfully mounted messenger client for type %s", opts.MessengerType)
+			log.Ctx(ctx).Infof("🎉 Successfully mounted messenger client for type %s", opts.MessengerType)
 		},
 	}
 	err := messageCmdConfigOpts.Init(messageCmd)
 	if err != nil {
-		log.Fatalf("Error initializing messageCmd config option: %s", err.Error())
+		log.Ctx(messageCmd.Context()).Fatalf("Error initializing messageCmd config option: %s", err.Error())
 	}
 
 	sendMessageCmd := s.sendMessageCommand(messengerService, &opts)
@@ -121,25 +122,25 @@ func (s *MessageCommand) sendMessageCommand(messengerService MessengerServiceInt
 		Use:   "send",
 		Short: "Send a message",
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
-			cmd.Parent().PersistentPreRun(cmd.Parent(), args)
+			cmdUtils.PropagatePersistentPreRun(cmd, args)
 
 			// Validate & ingest input parameters
 			sendMessageCmdConfigOpts.Require()
 			err := sendMessageCmdConfigOpts.SetValues()
 			if err != nil {
-				log.Fatalf("Error setting values of config options: %s", err.Error())
+				log.Ctx(cmd.Context()).Fatalf("Error setting values of config options: %s", err.Error())
 			}
 		},
-		Run: func(_ *cobra.Command, _ []string) {
+		Run: func(cmd *cobra.Command, _ []string) {
 			err := messengerService.SendMessage(*messageOptions, msg)
 			if err != nil {
-				log.Fatalf("Error sending message: %s", err.Error())
+				log.Ctx(cmd.Context()).Fatalf("Error sending message: %s", err.Error())
 			}
 		},
 	}
 	err := sendMessageCmdConfigOpts.Init(sendMessageCmd)
 	if err != nil {
-		log.Fatalf("Error initializing a sendMessageCmd option: %s", err.Error())
+		log.Ctx(sendMessageCmd.Context()).Fatalf("Error initializing a sendMessageCmd option: %s", err.Error())
 	}
 
 	return sendMessageCmd

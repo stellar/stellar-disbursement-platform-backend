@@ -42,7 +42,7 @@ func (s *StellarTomlHandler) horizonURL() string {
 func (s *StellarTomlHandler) buildGeneralInformation(ctx context.Context, req *http.Request) string {
 	distributionPublicKey, err := s.DistributionAccountResolver.DistributionAccountFromContext(ctx)
 	if err != nil {
-		log.Warnf("Couldn't get distribution account from context in %s%s", req.Host, req.URL.Path)
+		log.Ctx(ctx).Warnf("Couldn't get distribution account from context in %s%s", req.Host, req.URL.Path)
 		distributionPublicKey = s.DistributionAccountResolver.HostDistributionAccount()
 	}
 
@@ -112,7 +112,7 @@ func (s StellarTomlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		stellarToml = s.buildGeneralInformation(ctx, r) + s.buildOrganizationDocumentation(s.InstanceName) + s.buildCurrencyInformation(instanceAssets)
 	} else {
 		// return a stellar.toml file for this tenant.
-		organization, innerErr := s.Models.Organizations.Get(r.Context())
+		organization, innerErr := s.Models.Organizations.Get(ctx)
 		if innerErr != nil {
 			httperror.InternalError(ctx, "Cannot retrieve organization", err, nil).Render(w)
 			return

@@ -54,7 +54,7 @@ type sentryClient struct {
 func (s *sentryClient) LogAndReportErrors(ctx context.Context, err error, msg string) {
 	// check if error is context canceled:
 	if errors.Is(err, context.Canceled) {
-		log.Warn("context canceled, not reporting error to sentry")
+		log.Ctx(ctx).Warn("context canceled, not reporting error to sentry")
 		return
 	}
 

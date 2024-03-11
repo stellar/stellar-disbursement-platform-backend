@@ -11,18 +11,18 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
-
 	"github.com/go-chi/chi/v5"
 	"github.com/sirupsen/logrus"
 	"github.com/stellar/go/support/log"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
-	"github.com/stretchr/testify/require"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 func Test_RecoverHandler(t *testing.T) {
@@ -158,16 +158,16 @@ func Test_MetricsRequestHandler(t *testing.T) {
 func Test_AuthenticateMiddleware(t *testing.T) {
 	r := chi.NewRouter()
 
-	jwtManagerMock := &auth.JWTManagerMock{}
-	authManager := auth.NewAuthManager(auth.WithCustomJWTManagerOption(jwtManagerMock))
+	mAuthManager := &auth.AuthManagerMock{}
 
 	r.Group(func(r chi.Router) {
-		r.Use(AuthenticateMiddleware(authManager))
+		r.Use(AuthenticateMiddleware(mAuthManager))
 
 		r.Get("/authenticated", func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 			_, err := w.Write(json.RawMessage(`{"status":"ok"}`))
 			require.NoError(t, err)
+			log.Ctx(r.Context()).Info("authenticated route")
 		})
 	})
 
@@ -232,9 +232,9 @@ func Test_AuthenticateMiddleware(t *testing.T) {
 
 		req.Header.Set("Authorization", "Bearer token")
 
-		jwtManagerMock.
-			On("ValidateToken", mock.Anything, "token").
-			Return(false, errors.New("unexpected error")).
+		mAuthManager.
+			On("GetUserID", mock.Anything, "token").
+			Return("", errors.New("unexpected error")).
 			Once()
 
 		getEntries := log.DefaultLogger.StartTest(log.ErrorLevel)
@@ -251,7 +251,7 @@ func Test_AuthenticateMiddleware(t *testing.T) {
 
 		entries := getEntries()
 		assert.NotEmpty(t, entries)
-		assert.Equal(t, `error validating auth token: validating token: unexpected error`, entries[0].Message)
+		assert.Equal(t, `error validating auth token: unexpected error`, entries[0].Message)
 	})
 
 	t.Run("returns Unauthorized when the token is invalid", func(t *testing.T) {
@@ -260,9 +260,9 @@ func Test_AuthenticateMiddleware(t *testing.T) {
 
 		req.Header.Set("Authorization", "Bearer token")
 
-		jwtManagerMock.
-			On("ValidateToken", mock.Anything, "token").
-			Return(false, nil).
+		mAuthManager.
+			On("GetUserID", mock.Anything, "token").
+			Return("", auth.ErrInvalidToken).
 			Once()
 
 		w := httptest.NewRecorder()
@@ -282,10 +282,12 @@ func Test_AuthenticateMiddleware(t *testing.T) {
 
 		req.Header.Set("Authorization", "Bearer token")
 
-		jwtManagerMock.
-			On("ValidateToken", mock.Anything, "token").
-			Return(true, nil).
+		mAuthManager.
+			On("GetUserID", mock.Anything, "token").
+			Return("test_user_id", nil).
 			Once()
+
+		getEntries := log.DefaultLogger.StartTest(log.InfoLevel)
 
 		w := httptest.NewRecorder()
 		r.ServeHTTP(w, req)
@@ -296,6 +298,12 @@ func Test_AuthenticateMiddleware(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.JSONEq(t, `{"status":"ok"}`, string(respBody))
+
+		// assert if user_id is in the logs:
+		entries := getEntries()
+		assert.NotEmpty(t, entries)
+		assert.Contains(t, entries[0].Message, "authenticated route")
+		assert.Equal(t, entries[0].Data["user_id"], "test_user_id")
 	})
 
 	t.Run("doesn't return Unauthorized for unauthenticated routes", func(t *testing.T) {
@@ -642,8 +650,9 @@ func Test_LoggingMiddleware(t *testing.T) {
 			Name: tenantName,
 		}, nil).Once()
 
-		r.Use(TenantMiddleware(mTenantManager, mAuthManager))
-		r.Use(LoggingMiddleware())
+		r.Use(InjectTenantMiddleware(mTenantManager, mAuthManager))
+		r.Use(EnsureTenantMiddleware)
+		r.Use(LoggingMiddleware)
 		r.Get("/", func(w http.ResponseWriter, r *http.Request) {
 			_, err := w.Write([]byte(expectedRespBody))
 			require.NoError(t, err)
@@ -689,7 +698,7 @@ func Test_LoggingMiddleware(t *testing.T) {
 
 		debugEntries := log.DefaultLogger.StartTest(log.DebugLevel)
 
-		r.Use(LoggingMiddleware())
+		r.Use(LoggingMiddleware)
 		r.Get("/", func(w http.ResponseWriter, r *http.Request) {
 			_, err := w.Write([]byte(expectedRespBody))
 			require.NoError(t, err)
@@ -767,89 +776,263 @@ func Test_CSPMiddleware(t *testing.T) {
 	})
 }
 
-func Test_TenantMiddleware(t *testing.T) {
-	r := chi.NewRouter()
+func Test_InjectTenantMiddleware(t *testing.T) {
+	validTnt := &tenant.Tenant{ID: "tenant_id", Name: "tenant_name"}
 
-	mTenantManager := &tenant.TenantManagerMock{}
-	mAuthManager := &auth.AuthManagerMock{}
+	testCases := []struct {
+		name              string
+		token             string
+		tenantHeaderValue string
+		hostnamePrefix    string
+		prepareMocksFn    func(mTenantManager *tenant.TenantManagerMock, mAuthManager *auth.AuthManagerMock)
+		expectedStatus    int
+		expectedRespBody  string
+		expectedTenant    *tenant.Tenant
+	}{
+		{
+			name:              "🔴 has a token but the method GetTenantID fails",
+			token:             "valid_token",
+			tenantHeaderValue: "",
+			hostnamePrefix:    "",
+			prepareMocksFn: func(_ *tenant.TenantManagerMock, mAuthManager *auth.AuthManagerMock) {
+				expectedErr := errors.New("error fetching tenant ID from token")
+				mAuthManager.
+					On("GetTenantID", mock.Anything, "valid_token").
+					Return("", expectedErr).
+					Once()
+			},
+			expectedStatus:   http.StatusOK,
+			expectedRespBody: `{"status":"ok"}`,
+			expectedTenant:   nil,
+		},
+		{
+			name:              "🔴 has a token and the method GetTenantID succeeds, but GetTenantByID fails",
+			token:             "valid_token",
+			tenantHeaderValue: "",
+			hostnamePrefix:    "",
+			prepareMocksFn: func(mTenantManager *tenant.TenantManagerMock, mAuthManager *auth.AuthManagerMock) {
+				mAuthManager.
+					On("GetTenantID", mock.Anything, "valid_token").
+					Return("tenant_id", nil).
+					Once()
 
-	r.Use(TenantMiddleware(mTenantManager, mAuthManager))
+				expectedErr := errors.New("error fetching tenant from its ID")
+				mTenantManager.
+					On("GetTenantByID", mock.Anything, "tenant_id").
+					Return(nil, expectedErr).
+					Once()
+			},
+			expectedStatus:   http.StatusOK,
+			expectedRespBody: `{"status":"ok"}`,
+			expectedTenant:   nil,
+		},
+		{
+			name:              "🔴 has no token and the tenant name from the header cannot be found in GetTenantByName",
+			token:             "",
+			tenantHeaderValue: "tenant_name",
+			hostnamePrefix:    "",
+			prepareMocksFn: func(mTenantManager *tenant.TenantManagerMock, _ *auth.AuthManagerMock) {
+				expectedErr := errors.New("error fetching tenant from its name")
+				mTenantManager.
+					On("GetTenantByName", mock.Anything, "tenant_name").
+					Return(nil, expectedErr).
+					Once()
+			},
+			expectedStatus:   http.StatusOK,
+			expectedRespBody: `{"status":"ok"}`,
+			expectedTenant:   nil,
+		},
+		{
+			name:              "🔴 has no token and the tenant name from the host prefix cannot be found in GetTenantByName",
+			token:             "",
+			tenantHeaderValue: "",
+			hostnamePrefix:    "tenant_hostname",
+			prepareMocksFn: func(mTenantManager *tenant.TenantManagerMock, _ *auth.AuthManagerMock) {
+				expectedErr := errors.New("error fetching tenant from its name")
+				mTenantManager.
+					On("GetTenantByName", mock.Anything, "tenant_hostname").
+					Return(nil, expectedErr).
+					Once()
+			},
+			expectedStatus:   http.StatusOK,
+			expectedRespBody: `{"status":"ok"}`,
+			expectedTenant:   nil,
+		},
+		{
+			name:              "🟢 successfully grabs the tenant from the token",
+			token:             "valid_token",
+			tenantHeaderValue: "",
+			hostnamePrefix:    "",
+			prepareMocksFn: func(mTenantManager *tenant.TenantManagerMock, mAuthManager *auth.AuthManagerMock) {
+				mAuthManager.
+					On("GetTenantID", mock.Anything, "valid_token").
+					Return("tenant_id", nil).
+					Once()
 
-	r.Get("/test", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, err := w.Write([]byte(`{"status":"ok"}`))
-		require.NoError(t, err)
-	})
+				mTenantManager.
+					On("GetTenantByID", mock.Anything, "tenant_id").
+					Return(validTnt, nil).
+					Once()
+			},
+			expectedStatus:   http.StatusOK,
+			expectedRespBody: `{"status":"ok"}`,
+			expectedTenant:   validTnt,
+		},
+		{
+			name:              "🟢 successfully grabs the tenant from the request HEADER",
+			token:             "",
+			tenantHeaderValue: "tenant_name",
+			hostnamePrefix:    "",
+			prepareMocksFn: func(mTenantManager *tenant.TenantManagerMock, _ *auth.AuthManagerMock) {
+				mTenantManager.
+					On("GetTenantByName", mock.Anything, "tenant_name").
+					Return(validTnt, nil).
+					Once()
+			},
+			expectedStatus:   http.StatusOK,
+			expectedRespBody: `{"status":"ok"}`,
+			expectedTenant:   validTnt,
+		},
+		{
+			name:              "🟢 successfully grabs the tenant from the request host prefix",
+			token:             "",
+			tenantHeaderValue: "",
+			hostnamePrefix:    "tenant_hostname",
+			prepareMocksFn: func(mTenantManager *tenant.TenantManagerMock, _ *auth.AuthManagerMock) {
+				mTenantManager.
+					On("GetTenantByName", mock.Anything, "tenant_hostname").
+					Return(validTnt, nil).
+					Once()
+			},
+			expectedStatus:   http.StatusOK,
+			expectedRespBody: `{"status":"ok"}`,
+			expectedTenant:   validTnt,
+		},
+	}
 
-	t.Run("failed to fetch tenant ID from token", func(t *testing.T) {
-		req, err := http.NewRequest(http.MethodGet, "/test", nil)
-		require.NoError(t, err)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			mTenantManager := &tenant.TenantManagerMock{}
+			defer mTenantManager.AssertExpectations(t)
+			mAuthManager := &auth.AuthManagerMock{}
+			defer mAuthManager.AssertExpectations(t)
 
-		ctx := context.WithValue(req.Context(), TokenContextKey, "valid_token")
-		req = req.WithContext(ctx)
+			// prepare mocks
+			if tc.prepareMocksFn != nil {
+				tc.prepareMocksFn(mTenantManager, mAuthManager)
+			}
 
-		expectedErr := errors.New("error fetching tenant ID from token")
-		mAuthManager.
-			On("GetTenantID", mock.Anything, "valid_token").
-			Return("", expectedErr).
-			Once()
+			var updatedCtx context.Context
+			// prepare router
+			r := chi.NewRouter()
+			r.
+				With(InjectTenantMiddleware(mTenantManager, mAuthManager)).
+				Get("/test", func(w http.ResponseWriter, r *http.Request) {
+					updatedCtx = r.Context()
+					w.WriteHeader(http.StatusOK)
+					_, err := w.Write([]byte(`{"status":"ok"}`))
+					require.NoError(t, err)
+				})
 
-		w := httptest.NewRecorder()
-		r.ServeHTTP(w, req)
+			// prepare request
+			req, err := http.NewRequest(http.MethodGet, "/test", nil)
+			require.NoError(t, err)
+			if tc.token != "" {
+				ctx := context.WithValue(req.Context(), TokenContextKey, tc.token)
+				req = req.WithContext(ctx)
+			}
+			if tc.tenantHeaderValue != "" {
+				req.Header.Set(TenantHeaderKey, tc.tenantHeaderValue)
+			}
+			if tc.hostnamePrefix != "" {
+				req.Host = fmt.Sprintf("%s.example.com", tc.hostnamePrefix)
+			}
 
-		resp := w.Result()
-		require.Equal(t, http.StatusInternalServerError, resp.StatusCode)
-		require.Contains(t, w.Body.String(), "Failed to get tenant ID from token")
-	})
+			// execute the request
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, req)
+			resp := w.Result()
 
-	t.Run("tenant name not found in request", func(t *testing.T) {
-		req, err := http.NewRequest(http.MethodGet, "/test", nil)
-		require.NoError(t, err)
+			// assert the response
+			assert.NotEmpty(t, updatedCtx)
+			defer resp.Body.Close()
+			respBody, err := io.ReadAll(resp.Body)
+			assert.NoError(t, err)
+			assert.Equal(t, tc.expectedStatus, resp.StatusCode)
+			assert.JSONEq(t, tc.expectedRespBody, string(respBody))
 
-		w := httptest.NewRecorder()
-		r.ServeHTTP(w, req)
+			// assert tenant in context
+			tnt, err := tenant.GetTenantFromContext(updatedCtx)
+			if tc.expectedTenant != nil {
+				assert.NoError(t, err)
+				assert.Equal(t, tc.expectedTenant, tnt)
+			} else {
+				assert.Error(t, err)
+				assert.Nil(t, tnt)
+			}
+		})
+	}
+}
 
-		resp := w.Result()
-		require.Equal(t, http.StatusBadRequest, resp.StatusCode)
-		require.Contains(t, w.Body.String(), "Tenant name not found in request or invalid")
-	})
+func Test_EnsureTenantMiddleware(t *testing.T) {
+	validTnt := &tenant.Tenant{ID: "tenant_id", Name: "tenant_name"}
 
-	t.Run("failed to load tenant by name", func(t *testing.T) {
-		req, err := http.NewRequest(http.MethodGet, "/test", nil)
-		require.NoError(t, err)
+	testCases := []struct {
+		name                 string
+		hasTenantInCtx       bool
+		expectedStatus       int
+		expectedBodyContains string
+		expectedTenant       *tenant.Tenant
+	}{
+		{
+			name:                 "🔴 fails if there's no tenant in the context",
+			hasTenantInCtx:       false,
+			expectedStatus:       http.StatusBadRequest,
+			expectedBodyContains: `{"error":"Tenant not found in context"}`,
+			expectedTenant:       nil,
+		},
+		{
+			name:                 "🟢 when there's a tenant in the context",
+			hasTenantInCtx:       true,
+			expectedStatus:       http.StatusOK,
+			expectedBodyContains: `{"status":"ok"}`,
+			expectedTenant:       nil,
+		},
+	}
 
-		req.Header.Set(TenantHeaderKey, "tenant_name")
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// prepare router
+			r := chi.NewRouter()
+			r.
+				With(EnsureTenantMiddleware).
+				Get("/test", func(w http.ResponseWriter, r *http.Request) {
+					w.WriteHeader(http.StatusOK)
+					_, err := w.Write([]byte(`{"status":"ok"}`))
+					require.NoError(t, err)
+				})
 
-		expectedErr := errors.New("error fetching tenant ID from token")
-		mTenantManager.
-			On("GetTenantByName", mock.Anything, "tenant_name").
-			Return(nil, expectedErr).
-			Once()
+			// prepare request
+			req, err := http.NewRequest(http.MethodGet, "/test", nil)
+			require.NoError(t, err)
+			if tc.hasTenantInCtx {
+				ctx := tenant.SaveTenantInContext(req.Context(), validTnt)
+				req = req.WithContext(ctx)
+			}
 
-		w := httptest.NewRecorder()
-		r.ServeHTTP(w, req)
+			// execute the request
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, req)
+			resp := w.Result()
 
-		resp := w.Result()
-		require.Equal(t, http.StatusInternalServerError, resp.StatusCode)
-		require.Contains(t, w.Body.String(), "Failed to load tenant by name")
-	})
-
-	t.Run("successfully extracts tenant ID from token", func(t *testing.T) {
-		req, err := http.NewRequest(http.MethodGet, "/test", nil)
-		require.NoError(t, err)
-
-		ctx := context.WithValue(req.Context(), TokenContextKey, "valid_token")
-		req = req.WithContext(ctx)
-
-		mAuthManager.On("GetTenantID", mock.Anything, "valid_token").Return("tenant_id", nil)
-		mTenantManager.On("GetTenantByID", mock.Anything, "tenant_id").Return(&tenant.Tenant{}, nil)
-
-		w := httptest.NewRecorder()
-		r.ServeHTTP(w, req)
-
-		resp := w.Result()
-		require.Equal(t, http.StatusOK, resp.StatusCode)
-	})
+			// assert the response
+			defer resp.Body.Close()
+			respBody, err := io.ReadAll(resp.Body)
+			assert.NoError(t, err)
+			assert.Equal(t, tc.expectedStatus, resp.StatusCode)
+			assert.JSONEq(t, tc.expectedBodyContains, string(respBody))
+		})
+	}
 }
 
 func Test_BasicAuthMiddleware(t *testing.T) {
