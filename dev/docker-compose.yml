@@ -65,6 +65,8 @@ services:
       service: conduktor-platform
     volumes:
       - conduktor-platform-data:/var/conduktor
+    depends_on:
+      - db-conduktor
   db-conduktor:
     extends:
       file: docker-compose-sdp-anchor.yml

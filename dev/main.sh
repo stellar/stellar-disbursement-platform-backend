@@ -47,8 +47,8 @@ if [ "$existingTenants" == "[]" ]; then
     for tenant in "${tenants[@]}"
     do
         echo "🐈Provisioning tenant: $tenant"
-        baseURL="$tenant.stellar.local:8000"
-        sdpUIBaseURL="$tenant.stellar.local:3000"
+        baseURL="http://$tenant.stellar.local:8000"
+        sdpUIBaseURL="http://$tenant.stellar.local:3000"
         ownerEmail="john.doe@$tenant.org"
 
         curl -X POST $AdminTenantURL \

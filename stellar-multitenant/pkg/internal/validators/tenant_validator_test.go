@@ -195,8 +195,8 @@ func TestTenantValidator_ValidateUpdateTenantRequest(t *testing.T) {
 		tv := NewTenantValidator()
 		invalidValue := "invalid"
 		reqBody := &UpdateTenantRequest{
-			BaseURL:      &invalidValue,
-			SDPUIBaseURL: &invalidValue,
+			BaseURL:      &[]string{invalidValue}[0],
+			SDPUIBaseURL: &[]string{invalidValue}[0],
 		}
 		tv.ValidateUpdateTenantRequest(reqBody)
 		assert.True(t, tv.HasErrors())
@@ -208,7 +208,7 @@ func TestTenantValidator_ValidateUpdateTenantRequest(t *testing.T) {
 
 	t.Run("validates request body successfully", func(t *testing.T) {
 		tv := NewTenantValidator()
-		url := "http://valid.com"
+		url := "valid.com:3000"
 		reqBody := &UpdateTenantRequest{
 			EmailSenderType: &tenant.AWSEmailSenderType,
 			SMSSenderType:   &tenant.AWSSMSSenderType,
