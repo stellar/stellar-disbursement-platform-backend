@@ -341,7 +341,7 @@ func (wdl WalletDeepLink) TomlFileDomain() (string, error) {
 		return "", fmt.Errorf("AnchorPlatformBaseSepURL can't be empty")
 	}
 
-	anchorPlatformBaseSepURL, err := utils.SetURLSchemeIfEmpty(wdl.AnchorPlatformBaseSepURL)
+	anchorPlatformBaseSepURL, err := utils.GetURLWithScheme(wdl.AnchorPlatformBaseSepURL)
 	if err != nil {
 		return "", fmt.Errorf("setting the protocol scheme: %w", err)
 	}

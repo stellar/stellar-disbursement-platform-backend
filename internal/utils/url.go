@@ -74,7 +74,7 @@ func VerifySignedURL(signedURL string, expectedPublicKey string) (bool, error) {
 	return true, nil
 }
 
-func SetURLSchemeIfEmpty(rawURL string) (string, error) {
+func GetURLWithScheme(rawURL string) (string, error) {
 	parsedURL, err := url.Parse(rawURL)
 	if err != nil {
 		return "", fmt.Errorf("parsing url: %w", err)

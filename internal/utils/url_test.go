@@ -125,7 +125,7 @@ func Test_SignURL_VerifySignedURL(t *testing.T) {
 	require.True(t, isValid)
 }
 
-func Test_SetURLSchemeIfEmpty(t *testing.T) {
+func Test_GetURLWithScheme(t *testing.T) {
 	testCases := []struct {
 		name, rawURL, expectedURL string
 		expectedErr               error
@@ -170,7 +170,7 @@ func Test_SetURLSchemeIfEmpty(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			gotURL, err := SetURLSchemeIfEmpty(tc.rawURL)
+			gotURL, err := GetURLWithScheme(tc.rawURL)
 			if tc.expectedErr != nil {
 				assert.EqualError(t, err, tc.expectedErr.Error())
 			} else {
