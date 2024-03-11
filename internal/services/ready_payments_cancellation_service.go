@@ -32,11 +32,11 @@ func (s ReadyPaymentsCancellationService) CancelReadyPayments(ctx context.Contex
 	}
 
 	if organization.PaymentCancellationPeriodDays == nil {
-		log.Ctx(ctx).Debug("automatic ready payment cancellation is deactivated. Set a valid value to the organization's payment_cancellation_period_days to activate it.")
+		log.Ctx(ctx).Debugf("automatic ready payment cancellation is deactivated for %s. Set a valid value to the organization's payment_cancellation_period_days to activate it.", organization.Name)
 		return nil
 	}
 
-	if err := s.sdpModels.Payment.CancelPaymentsWithinPeriodDays(ctx, s.sdpModels.DBConnectionPool, *organization.PaymentCancellationPeriodDays); err != nil {
+	if err = s.sdpModels.Payment.CancelPaymentsWithinPeriodDays(ctx, s.sdpModels.DBConnectionPool, *organization.PaymentCancellationPeriodDays); err != nil {
 		return fmt.Errorf("canceling ready payments after %d days: %w", int(*organization.PaymentCancellationPeriodDays), err)
 	}
 	return nil
