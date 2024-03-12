@@ -136,7 +136,7 @@ func worker(ctx context.Context, workerID int, crashTrackerClient crashtracker.C
 		case job := <-jobQueue:
 			executeJob(ctx, job, workerID, crashTrackerClient, tenantManager)
 		case <-ctx.Done():
-			log.Infof("Worker %d stopping...", workerID)
+			log.Ctx(ctx).Infof("Worker %d stopping...", workerID)
 			return
 		}
 	}
@@ -154,7 +154,7 @@ func executeJob(ctx context.Context, job jobs.Job, workerID int, crashTrackerCli
 		}
 		for _, t := range tenants {
 			log.Ctx(ctx).Debugf("Processing job %s for tenant %s on worker %d", job.GetName(), t.ID, workerID)
-			tenantCtx := tenant.SaveTenantInContext(ctx, &t)
+			tenantCtx := tenant.SaveTenantInContext(context.Background(), &t)
 			if jobErr := job.Execute(tenantCtx); jobErr != nil {
 				msg := fmt.Sprintf("error processing job %s for tenant %s on worker %d", job.GetName(), t.ID, workerID)
 				crashTrackerClient.LogAndReportErrors(tenantCtx, err, msg)

@@ -17,7 +17,9 @@ import (
 )
 
 func TestScheduler(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	t.Parallel()
+
+	_, cancel := context.WithCancel(context.Background())
 	scheduler := newScheduler(cancel)
 
 	mockCrashTrackerClient := &crashtracker.MockCrashTrackerClient{}
@@ -42,7 +44,7 @@ func TestScheduler(t *testing.T) {
 	scheduler.addJob(mockJob2)
 
 	// Start the scheduler and wait for a short period to let the job run
-	scheduler.start(ctx)
+	scheduler.start(context.Background())
 	time.Sleep(2 * time.Second)
 
 	job1Executions := mockJob1.GetExecutions()
@@ -59,7 +61,9 @@ func TestScheduler(t *testing.T) {
 }
 
 func TestMultiTenantScheduler(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	t.Parallel()
+
+	_, cancel := context.WithCancel(context.Background())
 	scheduler := newScheduler(cancel)
 
 	mockCrashTrackerClient := &crashtracker.MockCrashTrackerClient{}
@@ -86,7 +90,7 @@ func TestMultiTenantScheduler(t *testing.T) {
 	scheduler.addJob(mockJob)
 
 	// Start the scheduler and wait for a short period to let the job run
-	scheduler.start(ctx)
+	scheduler.start(context.Background())
 	time.Sleep(2 * time.Second)
 
 	tenant1Executions := mockJob.GetExecutions(tenant1.ID)
