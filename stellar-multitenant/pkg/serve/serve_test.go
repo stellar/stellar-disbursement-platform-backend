@@ -7,15 +7,20 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/network"
 	supporthttp "github.com/stellar/go/support/http"
+	"github.com/stellar/go/txnbuild"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
-	sigMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing/mocks"
+	di "github.com/stellar/stellar-disbursement-platform-backend/internal/dependencyinjection"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
+	preconditionsMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions/mocks"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 )
 
 type mockHTTPServer struct {
@@ -36,6 +41,22 @@ func Test_Serve(t *testing.T) {
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
 
+	mHorizonClient := &horizonclient.MockClient{}
+	di.SetInstance(di.HorizonClientInstanceName, mHorizonClient)
+
+	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
+	di.SetInstance(di.LedgerNumberTrackerInstanceName, mLedgerNumberTracker)
+
+	sigService, _, _, _, _ := signing.NewMockSignatureService(t)
+
+	submitterEngine := engine.SubmitterEngine{
+		HorizonClient:       mHorizonClient,
+		SignatureService:    sigService,
+		LedgerNumberTracker: mLedgerNumberTracker,
+		MaxBaseFee:          100 * txnbuild.MinBaseFee,
+	}
+	di.SetInstance(di.TxSubmitterEngineInstanceName, submitterEngine)
+
 	opts := ServeOptions{
 		AdminDBConnectionPool: dbConnectionPool,
 		Environment:           "test",
@@ -43,7 +64,7 @@ func Test_Serve(t *testing.T) {
 		NetworkPassphrase:     network.TestNetworkPassphrase,
 		Port:                  8003,
 		Version:               "x.y.z",
-		DistAccSigClient:      sigMocks.NewMockSignatureClient(t),
+		SubmitterEngine:       submitterEngine,
 	}
 
 	// Mock supportHTTPRun

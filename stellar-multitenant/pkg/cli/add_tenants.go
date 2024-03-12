@@ -7,6 +7,7 @@ import (
 	"regexp"
 
 	"github.com/spf13/cobra"
+	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/support/config"
 	"github.com/stellar/go/support/log"
 	"golang.org/x/exp/slices"
@@ -15,7 +16,11 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	di "github.com/stellar/stellar-disbursement-platform-backend/internal/dependencyinjection"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
+	tssSvc "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/cli/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/internal/provisioning"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
@@ -27,6 +32,7 @@ type AddTenantsCommandOptions struct {
 	SDPUIBaseURL     *string
 	NetworkType      string
 	MessengerOptions message.MessengerOptions
+	HorizonURL       string
 }
 
 func AddTenantsCmd() *cobra.Command {
@@ -81,9 +87,12 @@ func AddTenantsCmd() *cobra.Command {
 		},
 	}
 
-	sigOpts := signing.SignatureServiceOptions{}
-	configOptions = append(configOptions, cmdUtils.BaseDistributionAccountSignatureClientConfigOptions(&sigOpts)...)
-	configOptions = append(configOptions, cmdUtils.NetworkPassphrase(&sigOpts.NetworkPassphrase))
+	txSubOpts := di.TxSubmitterEngineOptions{}
+	configOptions = append(configOptions, cmdUtils.TransactionSubmitterEngineConfigOptions(&txSubOpts)...)
+	configOptions = append(configOptions, cmdUtils.NetworkPassphrase(&txSubOpts.SignatureServiceOptions.NetworkPassphrase))
+
+	distAccResolverOpts := signing.DistributionAccountResolverOptions{}
+	configOptions = append(configOptions, cmdUtils.DistributionPublicKey(&distAccResolverOpts.HostDistributionAccountPublicKey))
 
 	cmd := cobra.Command{
 		Use:     "add-tenants",
@@ -141,7 +150,8 @@ func AddTenantsCmd() *cobra.Command {
 				tenantName, userFirstName, userLastName, userEmail, organizationName,
 				emailMessengerClient,
 				tenantsOpts,
-				sigOpts,
+				txSubOpts,
+				distAccResolverOpts,
 			)
 			if err != nil {
 				log.Ctx(ctx).Fatalf("Error adding tenant: %v", err)
@@ -169,27 +179,52 @@ func executeAddTenant(
 	tenantName, userFirstName, userLastName, userEmail, organizationName string,
 	messengerClient message.MessengerClient,
 	tenantsOpts AddTenantsCommandOptions,
-	sigOpts signing.SignatureServiceOptions,
+	txSubOpts di.TxSubmitterEngineOptions,
+	distAccResolverOpts signing.DistributionAccountResolverOptions,
 ) error {
-	if !slices.Contains(signing.DistributionSignatureClientTypes(), sigOpts.DistributionSignerType) {
-		return fmt.Errorf("invalid distribution account signer type %q", sigOpts.DistributionSignerType)
+	if !slices.Contains(signing.DistributionSignatureClientTypes(), txSubOpts.SignatureServiceOptions.DistributionSignerType) {
+		return fmt.Errorf("invalid distribution account signer type %q", txSubOpts.SignatureServiceOptions.DistributionSignerType)
+	}
+	txSubOpts.SignatureServiceOptions.DBConnectionPool = tssDBConnectionPool
+
+	horizonClient := &horizonclient.Client{
+		HorizonURL: txSubOpts.HorizonURL,
+		HTTP:       httpclient.DefaultClient(),
 	}
 
-	distAccSigClient, err := signing.NewSignatureClient(sigOpts.DistributionSignerType, signing.SignatureClientOptions{
-		NetworkPassphrase:           sigOpts.NetworkPassphrase,
-		DistributionPrivateKey:      sigOpts.DistributionPrivateKey,
-		DistAccEncryptionPassphrase: sigOpts.DistAccEncryptionPassphrase,
-		DBConnectionPool:            tssDBConnectionPool,
+	distAccResolver, err := signing.NewDistributionAccountResolver(signing.DistributionAccountResolverOptions{
+		AdminDBConnectionPool:            adminDBConnectionPool,
+		HostDistributionAccountPublicKey: distAccResolverOpts.HostDistributionAccountPublicKey,
 	})
 	if err != nil {
-		return fmt.Errorf("creating a new distribution account signature client: %w", err)
+		return fmt.Errorf("creating a new distribution account resolver instance: %w", err)
+	}
+	txSubOpts.SignatureServiceOptions.DistributionAccountResolver = distAccResolver
+
+	ledgerNumberTracker, err := preconditions.NewLedgerNumberTracker(horizonClient)
+	if err != nil {
+		return fmt.Errorf("grabbing ledger number tracker instance: %w", err)
+	}
+	txSubOpts.SignatureServiceOptions.LedgerNumberTracker = ledgerNumberTracker
+
+	signatureService, err := signing.NewSignatureService(txSubOpts.SignatureServiceOptions)
+	if err != nil {
+		return fmt.Errorf("grabbing signature service instance: %w", err)
+	}
+
+	txSubmitterEngine := engine.SubmitterEngine{
+		HorizonClient:       horizonClient,
+		LedgerNumberTracker: ledgerNumberTracker,
+		SignatureService:    signatureService,
+		MaxBaseFee:          txSubOpts.MaxBaseFee,
 	}
 
 	p := provisioning.NewManager(
 		provisioning.WithDatabase(adminDBConnectionPool),
 		provisioning.WithMessengerClient(messengerClient),
 		provisioning.WithTenantManager(tenant.NewManager(tenant.WithDatabase(adminDBConnectionPool))),
-		provisioning.WithDistributionAccountSignatureClient(distAccSigClient),
+		provisioning.WithSubmitterEngine(txSubmitterEngine),
+		provisioning.WithNativeAssetBootstrapAmount(tssSvc.MinTenantDistributionAccountAmount),
 	)
 
 	t, err := p.ProvisionNewTenant(ctx, tenantName, userFirstName, userLastName, userEmail, organizationName, *tenantsOpts.SDPUIBaseURL, tenantsOpts.NetworkType)

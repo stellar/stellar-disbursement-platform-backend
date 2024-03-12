@@ -12,6 +12,7 @@ import (
 	migrate "github.com/rubenv/sql-migrate"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/keypair"
 	"github.com/stellar/go/network"
 	"github.com/stellar/go/support/log"
@@ -107,14 +108,31 @@ func Test_executeAddTenant(t *testing.T) {
 	uiBaseURL := "http://localhost:3000"
 	networkType := "testnet"
 	encryptionPassphrase := keypair.MustRandom().Seed()
-	distributionAccPrivKey := keypair.MustRandom().Seed()
+	distributionAcc := keypair.MustRandom()
+	distributionAccPrivKey := distributionAcc.Seed()
+	distributionAccPubKey := distributionAcc.Address()
 
-	sigOpts := signing.SignatureServiceOptions{
-		DistributionSignerType:      signing.DistributionAccountEnvSignatureClientType,
-		DistAccEncryptionPassphrase: encryptionPassphrase,
-		DistributionPrivateKey:      distributionAccPrivKey,
-		NetworkPassphrase:           network.TestNetworkPassphrase,
+	distAccResolverOpts := signing.DistributionAccountResolverOptions{
+		AdminDBConnectionPool:            dbConnectionPool,
+		HostDistributionAccountPublicKey: distributionAccPubKey,
 	}
+	distAccResolver, err := signing.NewDistributionAccountResolver(distAccResolverOpts)
+	require.NoError(t, err)
+
+	txSubOpts := di.TxSubmitterEngineOptions{
+		SignatureServiceOptions: signing.SignatureServiceOptions{
+			DistributionSignerType:      signing.DistributionAccountEnvSignatureClientType,
+			DistAccEncryptionPassphrase: encryptionPassphrase,
+			ChAccEncryptionPassphrase:   encryptionPassphrase,
+			DistributionPrivateKey:      distributionAccPrivKey,
+			NetworkPassphrase:           network.TestNetworkPassphrase,
+			DistributionAccountResolver: distAccResolver,
+			DBConnectionPool:            dbConnectionPool,
+		},
+		HorizonURL: horizonclient.DefaultTestNetClient.HorizonURL,
+		MaxBaseFee: 100,
+	}
+
 	tenantsOpts := AddTenantsCommandOptions{
 		SDPUIBaseURL: &uiBaseURL,
 		NetworkType:  networkType,
@@ -126,7 +144,7 @@ func Test_executeAddTenant(t *testing.T) {
 
 		getEntries := log.DefaultLogger.StartTest(log.InfoLevel)
 
-		err := executeAddTenant(ctx, dbConnectionPool, dbConnectionPool, tenantName, userFirstName, userLastName, userEmail, organizationName, messengerClientMock, tenantsOpts, sigOpts)
+		err := executeAddTenant(ctx, dbConnectionPool, dbConnectionPool, tenantName, userFirstName, userLastName, userEmail, organizationName, messengerClientMock, tenantsOpts, txSubOpts, distAccResolverOpts)
 		assert.Nil(t, err)
 
 		const q = "SELECT id FROM tenants WHERE name = $1"
@@ -145,10 +163,10 @@ func Test_executeAddTenant(t *testing.T) {
 
 		getEntries := log.DefaultLogger.StartTest(log.DebugLevel)
 
-		err := executeAddTenant(ctx, dbConnectionPool, dbConnectionPool, tenantName, userFirstName, userLastName, userEmail, organizationName, messengerClientMock, tenantsOpts, sigOpts)
+		err := executeAddTenant(ctx, dbConnectionPool, dbConnectionPool, tenantName, userFirstName, userLastName, userEmail, organizationName, messengerClientMock, tenantsOpts, txSubOpts, distAccResolverOpts)
 		assert.Nil(t, err)
 
-		err = executeAddTenant(ctx, dbConnectionPool, dbConnectionPool, tenantName, userFirstName, userLastName, userEmail, organizationName, messengerClientMock, tenantsOpts, sigOpts)
+		err = executeAddTenant(ctx, dbConnectionPool, dbConnectionPool, tenantName, userFirstName, userLastName, userEmail, organizationName, messengerClientMock, tenantsOpts, txSubOpts, distAccResolverOpts)
 		assert.ErrorIs(t, err, tenant.ErrDuplicatedTenantName)
 
 		const q = "SELECT id FROM tenants WHERE name = $1"
@@ -183,8 +201,10 @@ func Test_AddTenantsCmd(t *testing.T) {
 	err = cmdDB.RunTSSMigrations(ctx, tssDNS, migrate.Up, 0)
 	require.NoError(t, err)
 
-	t.Setenv("DISTRIBUTION_SEED", keypair.MustRandom().Seed())
+	t.Setenv("CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE", keypair.MustRandom().Seed())
 	t.Setenv("DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE", keypair.MustRandom().Seed())
+	t.Setenv("DISTRIBUTION_PUBLIC_KEY", keypair.MustRandom().Address())
+	t.Setenv("DISTRIBUTION_SEED", keypair.MustRandom().Seed())
 
 	t.Run("shows usage", func(t *testing.T) {
 		di.ClearInstancesTestHelper(t)
@@ -209,11 +229,15 @@ Flags:
       --aws-access-key-id string                            The AWS access key ID (AWS_ACCESS_KEY_ID)
       --aws-region string                                   The AWS region (AWS_REGION)
       --aws-secret-access-key string                        The AWS secret access key (AWS_SECRET_ACCESS_KEY)
+      --channel-account-encryption-passphrase string        A Stellar-compliant ed25519 private key used to encrypt/decrypt the channel accounts' private keys. When not set, it will default to the value of the 'distribution-seed' option. (CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE)
       --distribution-account-encryption-passphrase string   A Stellar-compliant ed25519 private key used to encrypt/decrypt the in-memory distribution accounts' private keys. It's mandatory when the distribution-signer-type is set to DISTRIBUTION_ACCOUNT_DB. (DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE)
+      --distribution-public-key string                      The public key of the HOST's Stellar distribution account, used to create channel accounts (DISTRIBUTION_PUBLIC_KEY)
       --distribution-seed string                            The private key of the HOST's Stellar distribution account, used to create channel accounts (DISTRIBUTION_SEED)
       --distribution-signer-type string                     The type of the signature client used for distribution accounts. Options: [DISTRIBUTION_ACCOUNT_ENV DISTRIBUTION_ACCOUNT_DB] (DISTRIBUTION_SIGNER_TYPE) (default "DISTRIBUTION_ACCOUNT_ENV")
       --email-sender-type string                            The messenger type used to send invitations to new dashboard users. Options: [DRY_RUN AWS_EMAIL] (EMAIL_SENDER_TYPE)
   -h, --help                                                help for add-tenants
+      --horizon-url string                                  The URL of the Stellar Horizon server where this application will communicate with. (HORIZON_URL) (default "https://horizon-testnet.stellar.org/")
+      --max-base-fee int                                    The max base fee for submitting a Stellar transaction (MAX_BASE_FEE) (default 10000)
       --network-passphrase string                           The Stellar network passphrase (NETWORK_PASSPHRASE) (default "Test SDF Network ; September 2015")
       --network-type string                                 The Stellar Network type (NETWORK_TYPE) (default "testnet")
       --sdp-ui-base-url string                              The Tenant SDP UI/dashboard Base URL. (SDP_UI_BASE_URL) (default "http://localhost:3000")
@@ -238,11 +262,15 @@ Flags:
       --aws-access-key-id string                            The AWS access key ID (AWS_ACCESS_KEY_ID)
       --aws-region string                                   The AWS region (AWS_REGION)
       --aws-secret-access-key string                        The AWS secret access key (AWS_SECRET_ACCESS_KEY)
+      --channel-account-encryption-passphrase string        A Stellar-compliant ed25519 private key used to encrypt/decrypt the channel accounts' private keys. When not set, it will default to the value of the 'distribution-seed' option. (CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE)
       --distribution-account-encryption-passphrase string   A Stellar-compliant ed25519 private key used to encrypt/decrypt the in-memory distribution accounts' private keys. It's mandatory when the distribution-signer-type is set to DISTRIBUTION_ACCOUNT_DB. (DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE)
+      --distribution-public-key string                      The public key of the HOST's Stellar distribution account, used to create channel accounts (DISTRIBUTION_PUBLIC_KEY)
       --distribution-seed string                            The private key of the HOST's Stellar distribution account, used to create channel accounts (DISTRIBUTION_SEED)
       --distribution-signer-type string                     The type of the signature client used for distribution accounts. Options: [DISTRIBUTION_ACCOUNT_ENV DISTRIBUTION_ACCOUNT_DB] (DISTRIBUTION_SIGNER_TYPE) (default "DISTRIBUTION_ACCOUNT_ENV")
       --email-sender-type string                            The messenger type used to send invitations to new dashboard users. Options: [DRY_RUN AWS_EMAIL] (EMAIL_SENDER_TYPE)
   -h, --help                                                help for add-tenants
+      --horizon-url string                                  The URL of the Stellar Horizon server where this application will communicate with. (HORIZON_URL) (default "https://horizon-testnet.stellar.org/")
+      --max-base-fee int                                    The max base fee for submitting a Stellar transaction (MAX_BASE_FEE) (default 10000)
       --network-passphrase string                           The Stellar network passphrase (NETWORK_PASSPHRASE) (default "Test SDF Network ; September 2015")
       --network-type string                                 The Stellar Network type (NETWORK_TYPE) (default "testnet")
       --sdp-ui-base-url string                              The Tenant SDP UI/dashboard Base URL. (SDP_UI_BASE_URL) (default "http://localhost:3000")

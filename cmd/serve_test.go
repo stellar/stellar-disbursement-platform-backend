@@ -196,16 +196,17 @@ func Test_serve(t *testing.T) {
 	}
 
 	serveTenantOpts := serveadmin.ServeOptions{
-		Environment:           "test",
-		EmailMessengerClient:  messengerClient,
-		AdminDBConnectionPool: dbConnectionPool,
-		GitCommit:             "1234567890abcdef",
-		NetworkPassphrase:     network.TestNetworkPassphrase,
-		Port:                  8003,
-		Version:               "x.y.z",
-		DistAccSigClient:      submitterEngine.DistAccountSigner,
-		AdminAccount:          "admin-account",
-		AdminApiKey:           "admin-api-key",
+		Environment:                             "test",
+		EmailMessengerClient:                    messengerClient,
+		AdminDBConnectionPool:                   dbConnectionPool,
+		GitCommit:                               "1234567890abcdef",
+		NetworkPassphrase:                       network.TestNetworkPassphrase,
+		Port:                                    8003,
+		Version:                                 "x.y.z",
+		SubmitterEngine:                         submitterEngine,
+		TenantAccountNativeAssetBootstrapAmount: 5,
+		AdminAccount:                            "admin-account",
+		AdminApiKey:                             "admin-api-key",
 	}
 
 	eventBrokerOptions := cmdUtils.EventBrokerOptions{

@@ -3,11 +3,10 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"go/types"
-
 	"github.com/spf13/cobra"
 	"github.com/stellar/go/support/config"
 	"github.com/stellar/go/support/log"
+	"go/types"
 
 	cmdUtils "github.com/stellar/stellar-disbursement-platform-backend/cmd/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
@@ -22,6 +21,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/scheduler"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
+	tsSvc "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/services"
 	serveadmin "github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/serve"
 )
 
@@ -311,7 +311,15 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			OptType:   types.String,
 			ConfigKey: &adminServeOpts.AdminApiKey,
 			Required:  true,
-		})
+		},
+		&config.ConfigOption{
+			Name:        "tenant-account-native-asset-bootstrap-amount",
+			Usage:       "The amount of the native asset that will be sent to the tenant distribution account from the host distribution account when it's created if applicable.",
+			OptType:     types.Int,
+			ConfigKey:   &adminServeOpts.TenantAccountNativeAssetBootstrapAmount,
+			FlagDefault: tsSvc.MinTenantDistributionAccountAmount,
+		},
+	)
 
 	// metrics server options
 	metricsServeOpts := serve.MetricsServeOptions{}
@@ -519,7 +527,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 				log.Ctx(ctx).Fatalf("error creating submitter engine: %v", err)
 			}
 			serveOpts.SubmitterEngine = submitterEngine
-			adminServeOpts.DistAccSigClient = submitterEngine.SignatureService.DistAccountSigner
+			adminServeOpts.SubmitterEngine = submitterEngine
 
 			// Kafka (background)
 			if eventBrokerOptions.EventBrokerType == events.KafkaEventBrokerType {

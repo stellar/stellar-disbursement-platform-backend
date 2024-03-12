@@ -5,8 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strconv"
 
 	"github.com/stellar/go/clients/horizonclient"
+	"github.com/stellar/go/protocols/horizon"
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/txnbuild"
 
@@ -33,7 +35,16 @@ const DefaultRevokeSponsorshipReserveAmount = "1.5"
 
 // DefaultTenantDistributionAccountAmount is the amount of the native asset that the host distribution account will send
 // to the tenant distribution account to boostrap it.
+// rename to min
 const DefaultTenantDistributionAccountAmount = "5"
+
+// MinTenantDistributionAccountAmount is the minimum amount of the native asset that the host distribution account is allowed to
+// send to the tenant distribution account at a time
+const MinTenantDistributionAccountAmount = 5
+
+// MaxTenantDistributionAccountAmount is the maximum amount of the native asset that the host distribution account is allowed to
+// send to the tenant distribution account at a time
+const MaxTenantDistributionAccountAmount = 50
 
 // CreateChannelAccountsOnChain will create up to 19 accounts per Transaction due to the 20 signatures per tx limit This
 // is also a good opportunity to periodically write the generated accounts to persistent storage if generating large
@@ -224,31 +235,48 @@ func DeleteChannelAccountOnChain(ctx context.Context, submiterEngine engine.Subm
 	return nil
 }
 
-func FundDistributionAccount(ctx context.Context, submitterEngine engine.SubmitterEngine) error {
-	// use dist account resolver to get the destination account
-	destinationAccount := ""
-	// compare host distribution account with the destination account, exit early if they are the same
+func FundDistributionAccount(ctx context.Context, submitterEngine engine.SubmitterEngine, tenantID string, amountNativeAssetToSend int) error {
+	if amountNativeAssetToSend < MinTenantDistributionAccountAmount || amountNativeAssetToSend > MaxTenantDistributionAccountAmount {
+		if amountNativeAssetToSend <= 0 {
+			return fmt.Errorf("invalid amount of native asset to send: %d", amountNativeAssetToSend)
+		}
 
-	hostAccount, err := submitterEngine.HorizonClient.AccountDetail(horizonclient.AccountRequest{
-		AccountID: submitterEngine.HostDistributionAccount(),
-	})
+		return fmt.Errorf("amount of native asset to send must be between %d and %d", MinTenantDistributionAccountAmount, MaxTenantDistributionAccountAmount)
+	}
+
+	tenantDistributionAcc, err := submitterEngine.DistributionAccount(ctx, tenantID)
 	if err != nil {
-		err = utils.NewHorizonErrorWrapper(err)
-		return fmt.Errorf("failed to retrieve root account: %w", err)
+		return fmt.Errorf("retrieving distribution account for tenant %s: %w", tenantID, err)
+	}
+
+	hostDistributionAcc := submitterEngine.HostDistributionAccount()
+	if tenantDistributionAcc == hostDistributionAcc {
+		log.Ctx(ctx).Info("Host distribution account and tenant distribution account are the same, no need to initiate funding.")
+		return nil
+	}
+
+	_, err = getAccountDetails(submitterEngine.HorizonClient, tenantDistributionAcc)
+	if err != nil {
+		return fmt.Errorf("getting details for tenant distribution account: %w", err)
+	}
+
+	hostAccount, err := getAccountDetails(submitterEngine.HorizonClient, hostDistributionAcc)
+	if err != nil {
+		return fmt.Errorf("getting details for host distribution account: %w", err)
 	}
 
 	tx, err := txnbuild.NewTransaction(
 		txnbuild.TransactionParams{
-			SourceAccount:        &hostAccount,
+			SourceAccount:        hostAccount,
 			IncrementSequenceNum: true,
 			BaseFee:              txnbuild.MinBaseFee,
 			Preconditions: txnbuild.Preconditions{
-				TimeBounds: txnbuild.NewInfiniteTimeout(), // Use a real timeout in production!
+				TimeBounds: txnbuild.NewInfiniteTimeout(), // 30 seconds
 			},
 			Operations: []txnbuild.Operation{
 				&txnbuild.Payment{
-					Destination: destinationAccount,
-					Amount:      DefaultTenantDistributionAccountAmount,
+					Destination: tenantDistributionAcc,
+					Amount:      strconv.Itoa(amountNativeAssetToSend),
 					Asset:       txnbuild.NativeAsset{},
 				},
 			},
@@ -258,18 +286,18 @@ func FundDistributionAccount(ctx context.Context, submitterEngine engine.Submitt
 		return fmt.Errorf(
 			"creating raw payment tx from %s to %s: %w",
 			hostAccount.AccountID,
-			destinationAccount,
+			tenantDistributionAcc,
 			err,
 		)
 	}
 
 	// Host distribution account signing:
-	tx, err = submitterEngine.HostAccountSigner.SignStellarTransaction(ctx, tx, submitterEngine.HostDistributionAccount())
+	tx, err = submitterEngine.HostAccountSigner.SignStellarTransaction(ctx, tx, hostDistributionAcc)
 	if err != nil {
 		return fmt.Errorf(
 			"signing payment tx from %s to %s: %w",
 			hostAccount.AccountID,
-			destinationAccount,
+			tenantDistributionAcc,
 			err,
 		)
 	}
@@ -278,8 +306,19 @@ func FundDistributionAccount(ctx context.Context, submitterEngine engine.Submitt
 	if err != nil {
 		hError := utils.NewHorizonErrorWrapper(err)
 		return fmt.Errorf("submitting payment tx from %s to %s to the Stellar network: %w", hostAccount.AccountID,
-			destinationAccount, hError)
+			tenantDistributionAcc, hError)
 	}
 
 	return nil
+}
+
+func getAccountDetails(client horizonclient.ClientInterface, accountID string) (*horizon.Account, error) {
+	account, err := client.AccountDetail(horizonclient.AccountRequest{
+		AccountID: accountID,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("cannot find account on the network %s: %w", accountID, err)
+	}
+
+	return &account, nil
 }
