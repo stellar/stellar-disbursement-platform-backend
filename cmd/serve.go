@@ -62,7 +62,7 @@ func (s *ServerService) StartAdminServe(opts serveadmin.ServeOptions, httpServer
 }
 
 func (s *ServerService) GetSchedulerJobRegistrars(ctx context.Context, serveOpts serve.ServeOptions, schedulerOptions scheduler.SchedulerOptions, apAPIService anchorplatform.AnchorPlatformAPIServiceInterface) ([]scheduler.SchedulerJobRegisterOption, error) {
-	// TODO: in SEP-1111, inject the remaining dbConnectionPools needed here.
+	// TODO: in SDP-1111, inject the remaining dbConnectionPools needed here.
 	models, err := data.NewModels(serveOpts.MtnDBConnectionPool)
 	if err != nil {
 		log.Ctx(ctx).Fatalf("error creating models in Job Scheduler: %s", err.Error())
@@ -550,7 +550,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 				if innerErr != nil {
 					log.Ctx(ctx).Fatalf("Error getting scheduler job registrars: %v", innerErr)
 				}
-				go scheduler.StartScheduler(crashTrackerClient.Clone(), schedulerJobRegistrars...)
+				go scheduler.StartScheduler(serveOpts.AdminDBConnectionPool, crashTrackerClient.Clone(), schedulerJobRegistrars...)
 			} else {
 				log.Ctx(ctx).Warn("Scheduler Service is disabled.")
 			}

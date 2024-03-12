@@ -36,9 +36,15 @@ func (j ReadyPaymentsCancellationJob) Execute(ctx context.Context) error {
 	return nil
 }
 
+func (j ReadyPaymentsCancellationJob) IsJobMultiTenant() bool {
+	return true
+}
+
 func NewReadyPaymentsCancellationJob(models *data.Models) *ReadyPaymentsCancellationJob {
 	s := services.NewReadyPaymentsCancellationService(models)
 	return &ReadyPaymentsCancellationJob{
 		service: s,
 	}
 }
+
+var _ Job = new(ReadyPaymentsCancellationJob)

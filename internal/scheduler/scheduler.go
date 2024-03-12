@@ -8,6 +8,9 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
+
 	"github.com/stellar/go/support/log"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
@@ -24,6 +27,7 @@ type Scheduler struct {
 	cancel             context.CancelFunc
 	jobQueue           chan jobs.Job
 	crashTrackerClient crashtracker.CrashTrackerClient
+	tenantManager      tenant.ManagerInterface
 }
 
 type SchedulerOptions struct{}
@@ -34,7 +38,7 @@ type SchedulerJobRegisterOption func(*Scheduler)
 const SchedulerWorkerCount = 5
 
 // StartScheduler initializes and starts the scheduler. This method blocks until the scheduler is stopped.
-func StartScheduler(crashTrackerClient crashtracker.CrashTrackerClient, schedulerJobRegisters ...SchedulerJobRegisterOption) {
+func StartScheduler(adminDBConnectionPool db.DBConnectionPool, crashTrackerClient crashtracker.CrashTrackerClient, schedulerJobRegisters ...SchedulerJobRegisterOption) {
 	// Call crash tracker FlushEvents to flush buffered events before the scheduler terminates
 	defer crashTrackerClient.FlushEvents(2 * time.Second)
 	// Call crash tracker Recover for recover from unhandled panics
@@ -51,6 +55,7 @@ func StartScheduler(crashTrackerClient crashtracker.CrashTrackerClient, schedule
 	scheduler := newScheduler(cancel)
 	// add crashTrackerClient to scheduler object
 	scheduler.crashTrackerClient = crashTrackerClient
+	scheduler.tenantManager = tenant.NewManager(tenant.WithDatabase(adminDBConnectionPool))
 
 	// Registering jobs
 	for _, schedulerJobRegister := range schedulerJobRegisters {
@@ -91,7 +96,7 @@ func (s *Scheduler) start(ctx context.Context) {
 	// 1. We start all the workers that will process jobs from the job queue.
 	for i := 1; i <= SchedulerWorkerCount; i++ {
 		// start a new worker passing a CrashTrackerClient clone to report errors when the job is executed
-		go worker(ctx, i, s.crashTrackerClient.Clone(), s.jobQueue)
+		go worker(ctx, i, s.crashTrackerClient.Clone(), s.tenantManager, s.jobQueue)
 	}
 
 	// 2. Enqueue jobs to jobQueue.
@@ -120,7 +125,7 @@ func (s *Scheduler) stop() {
 }
 
 // worker is a goroutine that processes jobs from the job queue.
-func worker(ctx context.Context, workerID int, crashTrackerClient crashtracker.CrashTrackerClient, jobQueue <-chan jobs.Job) {
+func worker(ctx context.Context, workerID int, crashTrackerClient crashtracker.CrashTrackerClient, tenantManager tenant.ManagerInterface, jobQueue <-chan jobs.Job) {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Ctx(ctx).Errorf("Worker %d encountered a panic while processing a job: %v", workerID, r)
@@ -129,15 +134,37 @@ func worker(ctx context.Context, workerID int, crashTrackerClient crashtracker.C
 	for {
 		select {
 		case job := <-jobQueue:
-			log.Ctx(ctx).Debugf("Worker %d processing job: %s", workerID, job.GetName())
-			if err := job.Execute(ctx); err != nil {
-				msg := fmt.Sprintf("error processing job %s on worker %d", job.GetName(), workerID)
-				// call crash tracker client to log and report error
-				crashTrackerClient.LogAndReportErrors(ctx, err, msg)
-			}
+			executeJob(ctx, job, workerID, crashTrackerClient, tenantManager)
 		case <-ctx.Done():
 			log.Ctx(ctx).Infof("Worker %d stopping...", workerID)
 			return
+		}
+	}
+}
+
+// executeJob executes a job and reports any errors to the crash tracker.
+func executeJob(ctx context.Context, job jobs.Job, workerID int, crashTrackerClient crashtracker.CrashTrackerClient, tenantManager tenant.ManagerInterface) {
+	// Handle multi-tenant jobs.
+	if job.IsJobMultiTenant() {
+		tenants, err := tenantManager.GetAllTenants(ctx)
+		if err != nil {
+			msg := fmt.Sprintf("error getting all tenants for job %s on worker %d", job.GetName(), workerID)
+			crashTrackerClient.LogAndReportErrors(ctx, err, msg)
+			return
+		}
+		for _, t := range tenants {
+			log.Ctx(ctx).Debugf("Processing job %s for tenant %s on worker %d", job.GetName(), t.ID, workerID)
+			tenantCtx := tenant.SaveTenantInContext(context.Background(), &t)
+			if jobErr := job.Execute(tenantCtx); jobErr != nil {
+				msg := fmt.Sprintf("error processing job %s for tenant %s on worker %d", job.GetName(), t.ID, workerID)
+				crashTrackerClient.LogAndReportErrors(tenantCtx, err, msg)
+			}
+		}
+	} else {
+		log.Ctx(ctx).Debugf("Processing job %s on worker %d", job.GetName(), workerID)
+		if err := job.Execute(ctx); err != nil {
+			msg := fmt.Sprintf("error processing job %s on worker %d", job.GetName(), workerID)
+			crashTrackerClient.LogAndReportErrors(ctx, err, msg)
 		}
 	}
 }
