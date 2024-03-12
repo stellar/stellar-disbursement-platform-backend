@@ -279,7 +279,7 @@ func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, d
 			}
 
 			for _, ip := range incompletePayments {
-				if ip.Disbursement.ID == disbursementID {
+				if ip.Disbursement.ID == disbursementID || !ip.Asset.Equals(*disbursement.Asset) {
 					continue
 				}
 
