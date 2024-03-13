@@ -30,6 +30,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	preconditionsMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
+	tssSvc "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/services"
 	serveadmin "github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/serve"
 )
 
@@ -204,7 +205,7 @@ func Test_serve(t *testing.T) {
 		Port:                                    8003,
 		Version:                                 "x.y.z",
 		SubmitterEngine:                         submitterEngine,
-		TenantAccountNativeAssetBootstrapAmount: 5,
+		TenantAccountNativeAssetBootstrapAmount: tssSvc.MinTenantDistributionAccountAmount,
 		AdminAccount:                            "admin-account",
 		AdminApiKey:                             "admin-api-key",
 	}

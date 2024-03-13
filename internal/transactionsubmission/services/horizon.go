@@ -262,7 +262,7 @@ func CreateAndFundDistributionAccount(ctx context.Context, submitterEngine engin
 			IncrementSequenceNum: true,
 			BaseFee:              txnbuild.MinBaseFee,
 			Preconditions: txnbuild.Preconditions{
-				TimeBounds: txnbuild.NewInfiniteTimeout(), // 30 seconds
+				TimeBounds: txnbuild.NewTimeout(30), // 30 seconds
 			},
 			Operations: []txnbuild.Operation{
 				&txnbuild.CreateAccount{
@@ -275,7 +275,7 @@ func CreateAndFundDistributionAccount(ctx context.Context, submitterEngine engin
 	if err != nil {
 		return fmt.Errorf(
 			"creating raw payment tx from %s to %s: %w",
-			hostAccount.AccountID,
+			hostDistributionAcc,
 			tenantDistributionAcc,
 			err,
 		)
@@ -286,7 +286,7 @@ func CreateAndFundDistributionAccount(ctx context.Context, submitterEngine engin
 	if err != nil {
 		return fmt.Errorf(
 			"signing payment tx from %s to %s: %w",
-			hostAccount.AccountID,
+			hostDistributionAcc,
 			tenantDistributionAcc,
 			err,
 		)
@@ -295,7 +295,7 @@ func CreateAndFundDistributionAccount(ctx context.Context, submitterEngine engin
 	_, err = submitterEngine.HorizonClient.SubmitTransactionWithOptions(tx, horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true})
 	if err != nil {
 		hError := utils.NewHorizonErrorWrapper(err)
-		return fmt.Errorf("submitting payment tx from %s to %s to the Stellar network: %w", hostAccount.AccountID,
+		return fmt.Errorf("submitting payment tx from %s to %s to the Stellar network: %w", hostDistributionAcc,
 			tenantDistributionAcc, hError)
 	}
 

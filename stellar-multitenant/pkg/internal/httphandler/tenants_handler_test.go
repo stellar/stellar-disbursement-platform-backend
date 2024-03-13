@@ -269,8 +269,8 @@ func Test_TenantHandler_Post(t *testing.T) {
 	sigService, _, distAccSigClient, _, distAccResolver := signing.NewMockSignatureService(t)
 
 	distAcc := keypair.MustRandom().Address()
-	distAccResolver.On("HostDistributionAccount").Return(distAcc, nil)
-	distAccResolver.On("DistributionAccount", ctx, mock.Anything).Return(distAcc, nil)
+	distAccResolver.On("HostDistributionAccount").Return(distAcc, nil).Twice()
+	distAccResolver.On("DistributionAccount", ctx, mock.Anything).Return(distAcc, nil).Twice()
 
 	submitterEngine := engine.SubmitterEngine{
 		HorizonClient:       mHorizonClient,
@@ -540,7 +540,7 @@ func Test_TenantHandler_Patch(t *testing.T) {
 		assert.Equal(t, http.StatusNotFound, resp.StatusCode)
 
 		expectedRespBody := `{"error":"updating tenant: tenant unknown does not exist"}`
-		assert.JSONEq(t, string(expectedRespBody), string(respBody))
+		assert.JSONEq(t, expectedRespBody, string(respBody))
 	})
 
 	t.Run("returns BadRequest when EmailSenderType is not valid", func(t *testing.T) {

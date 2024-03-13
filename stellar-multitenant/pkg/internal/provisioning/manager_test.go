@@ -23,7 +23,6 @@ import (
 	authmigrations "github.com/stellar/stellar-disbursement-platform-backend/db/migrations/auth-migrations"
 	sdpmigrations "github.com/stellar/stellar-disbursement-platform-backend/db/migrations/sdp-migrations"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/router"
-	di "github.com/stellar/stellar-disbursement-platform-backend/internal/dependencyinjection"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	preconditionsMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions/mocks"
@@ -111,10 +110,7 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 		}
 
 		mHorizonClient := &horizonclient.MockClient{}
-		di.SetInstance(di.HorizonClientInstanceName, mHorizonClient)
-
 		mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
-		di.SetInstance(di.LedgerNumberTrackerInstanceName, mLedgerNumberTracker)
 
 		sigService, _, _, hostAccSigClient, distAccResolver := signing.NewMockSignatureService(t)
 
@@ -146,12 +142,9 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 			distAccResolver.On("DistributionAccount", ctx, mock.Anything).Return(distAcc.Address(), nil).Once()
 			distAccResolver.On("HostDistributionAccount").Return(distAcc.Address(), nil).Once()
 
-		} else if sigClientType == signing.DistributionAccountDBSignatureClientType {
+		} else {
 			distAccResolver.On("DistributionAccount", ctx, mock.Anything).Return(tenantAcc.Address(), nil).Once()
 			distAccResolver.On("HostDistributionAccount").Return(distAcc.Address(), nil).Twice()
-		}
-
-		if sigClientType == signing.DistributionAccountDBSignatureClientType {
 			mHorizonClient.
 				On("AccountDetail", horizonclient.AccountRequest{AccountID: sigService.HostDistributionAccount()}).
 				Return(horizon.Account{

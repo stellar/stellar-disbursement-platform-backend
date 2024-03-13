@@ -22,7 +22,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/scheduler"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
-	tsSvc "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/services"
+	tssSvc "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/services"
 	serveadmin "github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/serve"
 )
 
@@ -318,7 +318,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			Usage:       "The amount of the native asset that will be sent to the tenant distribution account from the host distribution account when it's created if applicable.",
 			OptType:     types.Int,
 			ConfigKey:   &adminServeOpts.TenantAccountNativeAssetBootstrapAmount,
-			FlagDefault: tsSvc.MinTenantDistributionAccountAmount,
+			FlagDefault: tssSvc.MinTenantDistributionAccountAmount,
 		},
 	)
 

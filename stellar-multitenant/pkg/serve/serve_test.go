@@ -17,7 +17,6 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
-	di "github.com/stellar/stellar-disbursement-platform-backend/internal/dependencyinjection"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	preconditionsMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
@@ -42,10 +41,7 @@ func Test_Serve(t *testing.T) {
 	defer dbConnectionPool.Close()
 
 	mHorizonClient := &horizonclient.MockClient{}
-	di.SetInstance(di.HorizonClientInstanceName, mHorizonClient)
-
 	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
-	di.SetInstance(di.LedgerNumberTrackerInstanceName, mLedgerNumberTracker)
 
 	sigService, _, _, _, _ := signing.NewMockSignatureService(t)
 
@@ -55,7 +51,6 @@ func Test_Serve(t *testing.T) {
 		LedgerNumberTracker: mLedgerNumberTracker,
 		MaxBaseFee:          100 * txnbuild.MinBaseFee,
 	}
-	di.SetInstance(di.TxSubmitterEngineInstanceName, submitterEngine)
 
 	opts := ServeOptions{
 		AdminDBConnectionPool: dbConnectionPool,
