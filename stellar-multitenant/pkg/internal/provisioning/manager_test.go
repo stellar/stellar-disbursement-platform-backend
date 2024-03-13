@@ -153,20 +153,12 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 
 		if sigClientType == signing.DistributionAccountDBSignatureClientType {
 			mHorizonClient.
-				On("AccountDetail", horizonclient.AccountRequest{AccountID: tenantAcc.Address()}).
-				Return(horizon.Account{
-					AccountID: tenantAcc.Address(),
-					Sequence:  1,
-				}, nil).
-				Once()
-			mHorizonClient.
 				On("AccountDetail", horizonclient.AccountRequest{AccountID: sigService.HostDistributionAccount()}).
 				Return(horizon.Account{
 					AccountID: distAcc.Address(),
 					Sequence:  1,
 				}, nil).
 				Once()
-
 			hostAccSigClient.On(
 				"SignStellarTransaction",
 				ctx,
@@ -177,6 +169,13 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 				mock.AnythingOfType("*txnbuild.Transaction"),
 				horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true},
 			).Return(horizon.Transaction{}, nil).Once()
+			mHorizonClient.
+				On("AccountDetail", horizonclient.AccountRequest{AccountID: tenantAcc.Address()}).
+				Return(horizon.Account{
+					AccountID: tenantAcc.Address(),
+					Sequence:  1,
+				}, nil).
+				Once()
 		}
 
 		submitterEngine := engine.SubmitterEngine{

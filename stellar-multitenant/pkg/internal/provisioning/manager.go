@@ -142,10 +142,6 @@ func (m *Manager) ProvisionNewTenant(
 	if err != nil {
 		updateTenantErrMsg := fmt.Errorf("updating tenant %s status to %s: %w", name, tenant.ProvisionedTenantStatus, err)
 		// Rollback distribution account provisioning
-		fmt.Println("_______--")
-		fmt.Println(err)
-		fmt.Println("_______--")
-
 		sigClientDeleteKeyErr := m.SubmitterEngine.DistAccountSigner.Delete(ctx, distributionAccPubKey)
 		if sigClientDeleteKeyErr != nil {
 			sigClientDeleteKeyErrMsg := fmt.Errorf("unable to delete distribution account private key: %w", sigClientDeleteKeyErr)
@@ -162,7 +158,7 @@ func (m *Manager) ProvisionNewTenant(
 		return nil, updateTenantErrMsg
 	}
 
-	err = tsSvc.FundDistributionAccount(ctx, m.SubmitterEngine, t.ID, m.nativeAssetBootstrapAmount)
+	err = tsSvc.CreateAndFundDistributionAccount(ctx, m.SubmitterEngine, t.ID, m.nativeAssetBootstrapAmount)
 	if err != nil {
 		return nil, fmt.Errorf("bootstrapping tenant distribution account with native asset: %w", err)
 	}

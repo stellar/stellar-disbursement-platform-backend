@@ -201,10 +201,12 @@ func Test_AddTenantsCmd(t *testing.T) {
 	err = cmdDB.RunTSSMigrations(ctx, tssDNS, migrate.Up, 0)
 	require.NoError(t, err)
 
-	t.Setenv("CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE", keypair.MustRandom().Seed())
-	t.Setenv("DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE", keypair.MustRandom().Seed())
-	t.Setenv("DISTRIBUTION_PUBLIC_KEY", keypair.MustRandom().Address())
-	t.Setenv("DISTRIBUTION_SEED", keypair.MustRandom().Seed())
+	t.Setenv("DISTRIBUTION_SIGNER_TYPE", "DISTRIBUTION_ACCOUNT_ENV")
+	encryptionPassphrase := keypair.MustRandom().Seed()
+	t.Setenv("CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE", encryptionPassphrase)
+	t.Setenv("DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE", encryptionPassphrase)
+	t.Setenv("DISTRIBUTION_PUBLIC_KEY", "GDAZUHI4ARV73G3FI4JEZP57MPQTJ5I6BW7VZLNVHQJPANKPUGY2SDUY")
+	t.Setenv("DISTRIBUTION_SEED", "SBIIOER5NAQTMFIPCRDDSQSCIMVPMIEPZEIZSBIGYPDCU6I5LLRSODK7")
 
 	t.Run("shows usage", func(t *testing.T) {
 		di.ClearInstancesTestHelper(t)
