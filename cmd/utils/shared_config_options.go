@@ -2,6 +2,7 @@ package utils
 
 import (
 	"fmt"
+	tssSvc "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/services"
 	"go/types"
 
 	"github.com/stellar/go/clients/horizonclient"
@@ -264,6 +265,16 @@ func BaseDistributionAccountSignatureClientConfigOptions(opts *signing.Signature
 			FlagDefault:    string(signing.DistributionAccountEnvSignatureClientType),
 			Required:       true,
 		},
+	}
+}
+
+func TenantAccountNativeAssetBootstrapAmount(targetPointer interface{}) *config.ConfigOption {
+	return &config.ConfigOption{
+		Name:        "tenant-account-native-asset-bootstrap-amount",
+		Usage:       "The amount of the native asset that will be sent to the tenant distribution account from the host distribution account when it's created if applicable.",
+		OptType:     types.Int,
+		ConfigKey:   targetPointer,
+		FlagDefault: tssSvc.MinTenantDistributionAccountAmount,
 	}
 }
 

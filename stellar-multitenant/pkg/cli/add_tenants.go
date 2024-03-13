@@ -20,7 +20,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
-	tssSvc "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/cli/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/internal/provisioning"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
@@ -29,10 +28,10 @@ import (
 var validTenantName *regexp.Regexp = regexp.MustCompile(`^[a-z-]+$`)
 
 type AddTenantsCommandOptions struct {
-	SDPUIBaseURL     *string
-	NetworkType      string
-	MessengerOptions message.MessengerOptions
-	HorizonURL       string
+	SDPUIBaseURL                            *string
+	NetworkType                             string
+	MessengerOptions                        message.MessengerOptions
+	TenantAccountNativeAssetBootstrapAmount int
 }
 
 func AddTenantsCmd() *cobra.Command {
@@ -85,6 +84,7 @@ func AddTenantsCmd() *cobra.Command {
 			ConfigKey: &tenantsOpts.MessengerOptions.AWSRegion,
 			Required:  false,
 		},
+		cmdUtils.TenantAccountNativeAssetBootstrapAmount(&tenantsOpts.TenantAccountNativeAssetBootstrapAmount),
 	}
 
 	txSubOpts := di.TxSubmitterEngineOptions{}
@@ -224,7 +224,7 @@ func executeAddTenant(
 		provisioning.WithMessengerClient(messengerClient),
 		provisioning.WithTenantManager(tenant.NewManager(tenant.WithDatabase(adminDBConnectionPool))),
 		provisioning.WithSubmitterEngine(txSubmitterEngine),
-		provisioning.WithNativeAssetBootstrapAmount(tssSvc.MinTenantDistributionAccountAmount),
+		provisioning.WithNativeAssetBootstrapAmount(tenantsOpts.TenantAccountNativeAssetBootstrapAmount),
 	)
 
 	t, err := p.ProvisionNewTenant(ctx, tenantName, userFirstName, userLastName, userEmail, organizationName, *tenantsOpts.SDPUIBaseURL, tenantsOpts.NetworkType)
