@@ -2,8 +2,9 @@ package utils
 
 import (
 	"fmt"
-	tssSvc "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/services"
 	"go/types"
+
+	tssSvc "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/services"
 
 	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/network"
