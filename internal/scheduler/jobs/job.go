@@ -9,4 +9,5 @@ type Job interface {
 	Execute(context.Context) error
 	GetInterval() time.Duration
 	GetName() string
+	IsJobMultiTenant() bool
 }

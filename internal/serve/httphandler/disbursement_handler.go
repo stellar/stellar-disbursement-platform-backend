@@ -445,16 +445,19 @@ func parseInstructionsFromCSV(ctx context.Context, file io.Reader, verificationF
 		return nil, validator
 	}
 
+	var sanitizedInstructions []*data.DisbursementInstruction
 	for i, instruction := range instructions {
+		sanitizedInstruction := validator.SanitizeInstruction(instruction)
 		lineNumber := i + 2 // +1 for header row, +1 for 0-index
-		validator.ValidateInstruction(instruction, lineNumber)
+		validator.ValidateInstruction(sanitizedInstruction, lineNumber)
+		sanitizedInstructions = append(sanitizedInstructions, sanitizedInstruction)
 	}
 
-	validator.Check(len(instructions) > 0, "instructions", "no valid instructions found")
+	validator.Check(len(sanitizedInstructions) > 0, "instructions", "no valid instructions found")
 
 	if validator.HasErrors() {
 		return nil, validator
 	}
 
-	return instructions, nil
+	return sanitizedInstructions, nil
 }

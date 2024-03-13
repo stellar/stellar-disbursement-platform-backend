@@ -75,4 +75,8 @@ func (job AnchorPlatformAuthMonitoringJob) Execute(ctx context.Context) error {
 	return nil
 }
 
+func (job AnchorPlatformAuthMonitoringJob) IsJobMultiTenant() bool {
+	return false
+}
+
 var _ Job = new(AnchorPlatformAuthMonitoringJob)

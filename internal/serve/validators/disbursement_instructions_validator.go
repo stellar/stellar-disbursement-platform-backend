@@ -29,10 +29,10 @@ func NewDisbursementInstructionsValidator(verificationField data.VerificationFie
 }
 
 func (iv *DisbursementInstructionsValidator) ValidateInstruction(instruction *data.DisbursementInstruction, lineNumber int) {
-	phone := strings.TrimSpace(instruction.Phone)
-	id := strings.TrimSpace(instruction.ID)
-	amount := strings.TrimSpace(instruction.Amount)
-	verification := strings.TrimSpace(instruction.VerificationValue)
+	phone := instruction.Phone
+	id := instruction.ID
+	amount := instruction.Amount
+	verification := instruction.VerificationValue
 
 	// validate phone field
 	iv.CheckError(utils.ValidatePhoneNumber(phone), fmt.Sprintf("line %d - phone", lineNumber), "invalid phone format. Correct format: +380445555555")
@@ -62,4 +62,18 @@ func (iv *DisbursementInstructionsValidator) ValidateInstruction(instruction *da
 			iv.addError(fmt.Sprintf("line %d - national id", lineNumber), "invalid national id. Cannot have more than 50 characters in national id")
 		}
 	}
+}
+
+func (iv *DisbursementInstructionsValidator) SanitizeInstruction(instruction *data.DisbursementInstruction) *data.DisbursementInstruction {
+	var sanitizedInstruction data.DisbursementInstruction
+	sanitizedInstruction.Phone = strings.TrimSpace(instruction.Phone)
+	sanitizedInstruction.ID = strings.TrimSpace(instruction.ID)
+	sanitizedInstruction.Amount = strings.TrimSpace(instruction.Amount)
+	sanitizedInstruction.VerificationValue = strings.TrimSpace(instruction.VerificationValue)
+
+	if instruction.ExternalPaymentId != nil {
+		externalPaymentId := strings.TrimSpace(*instruction.ExternalPaymentId)
+		sanitizedInstruction.ExternalPaymentId = &externalPaymentId
+	}
+	return &sanitizedInstruction
 }
