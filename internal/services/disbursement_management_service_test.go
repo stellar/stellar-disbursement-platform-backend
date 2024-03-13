@@ -286,7 +286,7 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 	).Return(horizon.Account{
 		Balances: []horizon.Balance{
 			{
-				Balance: "100000",
+				Balance: "10000000",
 				Asset: base.Asset{
 					Code:   asset.Code,
 					Issuer: asset.Issuer,
@@ -511,6 +511,8 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 	})
 
 	t.Run("disbursement cannot be started because insufficient balance on distribution account", func(t *testing.T) {
+		usdt := data.CreateAssetFixture(t, ctx, dbConnectionPool, "USDT", "GBVHJTRLQRMIHRYTXZQOPVYCVVH7IRJN3DOFT7VC6U75CBWWBVDTWURG")
+
 		hMock.On(
 			"AccountDetail", horizonclient.AccountRequest{AccountID: distributionPubKey},
 		).Return(horizon.Account{
@@ -518,24 +520,56 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 				{
 					Balance: "11111",
 					Asset: base.Asset{
-						Code:   asset.Code,
-						Issuer: asset.Issuer,
+						Code:   usdt.Code,
+						Issuer: usdt.Issuer,
 					},
 				},
 			},
 		}, nil).Once()
 
-		disbursement := data.CreateDisbursementFixture(t, context.Background(), dbConnectionPool, models.Disbursements, &data.Disbursement{
+		disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
 			Name:    "disbursement - balance insufficient",
-			Status:  data.ReadyDisbursementStatus,
+			Status:  data.StartedDisbursementStatus,
+			Asset:   usdt,
+			Wallet:  wallet,
+			Country: country,
+		})
+		// should consider this payment since it's the same asset
+		data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+			ReceiverWallet: rwReady,
+			Disbursement:   disbursement,
+			Asset:          *usdt,
+			Amount:         "1100",
+			Status:         data.PendingPaymentStatus,
+		})
+
+		disbursement2 := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
+			Name:    "disbursement #4",
+			Status:  data.StartedDisbursementStatus,
 			Asset:   asset,
+			Wallet:  wallet,
+			Country: country,
+		})
+		// should NOT consider this payment since it's NOT the same asset
+		data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+			ReceiverWallet: rwReady,
+			Disbursement:   disbursement2,
+			Asset:          *asset,
+			Amount:         "5555555",
+			Status:         data.PendingPaymentStatus,
+		})
+
+		disbursementInsufficientBalance := data.CreateDisbursementFixture(t, context.Background(), dbConnectionPool, models.Disbursements, &data.Disbursement{
+			Name:    "disbursement - insufficient balance",
+			Status:  data.ReadyDisbursementStatus,
+			Asset:   usdt,
 			Wallet:  wallet,
 			Country: country,
 		})
 		data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
 			ReceiverWallet: rwReady,
-			Disbursement:   disbursement,
-			Asset:          *asset,
+			Disbursement:   disbursementInsufficientBalance,
+			Asset:          *usdt,
 			Amount:         "22222",
 			Status:         data.ReadyPaymentStatus,
 		})
@@ -544,17 +578,17 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 		log.DefaultLogger.SetOutput(buf)
 
 		expectedErr := InsufficientBalanceError{
-			DisbursementAsset:  *asset,
-			DisbursementID:     disbursement.ID,
+			DisbursementAsset:  *usdt,
+			DisbursementID:     disbursementInsufficientBalance.ID,
 			AvailableBalance:   11111.0,
 			DisbursementAmount: 22222.0,
 			TotalPendingAmount: 1100.0,
 		}
-		err = service.StartDisbursement(ctx, disbursement.ID, nil, distributionPubKey)
+		err = service.StartDisbursement(ctx, disbursementInsufficientBalance.ID, nil, distributionPubKey)
 		require.EqualError(t, err, fmt.Sprintf("running atomic function in RunInTransactionWithPostCommit: %v", expectedErr))
 
 		// PendingTotal includes payments associated with 'readyDisbursement' that were moved from the draft to ready status
-		expectedErrStr := fmt.Sprintf("the disbursement %s failed due to an account balance (11111.00) that was insufficient to fulfill new amount (22222.00) along with the pending amount (1100.00). To complete this action, your distribution account needs to be recharged with at least 12211.00 USDC", disbursement.ID)
+		expectedErrStr := fmt.Sprintf("the disbursement %s failed due to an account balance (11111.00) that was insufficient to fulfill new amount (22222.00) along with the pending amount (1100.00). To complete this action, your distribution account needs to be recharged with at least 12211.00 USDT", disbursementInsufficientBalance.ID)
 		assert.Contains(t, buf.String(), expectedErrStr)
 	})
 
@@ -655,7 +689,7 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 			},
 		}
 		disbursement := data.CreateDisbursementFixture(t, context.Background(), dbConnectionPool, models.Disbursements, &data.Disbursement{
-			Name:          "disbursement #4",
+			Name:          "disbursement with no payments ready to pay",
 			Status:        data.ReadyDisbursementStatus,
 			Asset:         asset,
 			Wallet:        wallet,
