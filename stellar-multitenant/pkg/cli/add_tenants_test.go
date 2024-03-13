@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	tssSvc "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/services"
 	"net/url"
 	"slices"
 	"strings"
@@ -28,6 +27,7 @@ import (
 	di "github.com/stellar/stellar-disbursement-platform-backend/internal/dependencyinjection"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
+	tssSvc "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
