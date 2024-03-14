@@ -222,6 +222,7 @@ func DeleteChannelAccountOnChain(ctx context.Context, submiterEngine engine.Subm
 	return nil
 }
 
+// CreateAndFundAccount creates and funds a new destination account on the Stellar network with the given amount of native asset from the source account.
 func CreateAndFundAccount(ctx context.Context, submitterEngine engine.SubmitterEngine, amountNativeAssetToSend int, sourceAcc, destinationAcc string) error {
 	if sourceAcc == destinationAcc {
 		return fmt.Errorf("funding source account and destination account cannot be the same: %s", sourceAcc)
@@ -260,7 +261,7 @@ func CreateAndFundAccount(ctx context.Context, submitterEngine engine.SubmitterE
 	tx, err = submitterEngine.HostAccountSigner.SignStellarTransaction(ctx, tx, sourceAcc)
 	if err != nil {
 		return fmt.Errorf(
-			"signing create account tx for account %s to the Stellar network: %w",
+			"signing create account tx for account %s: %w",
 			destinationAcc,
 			err,
 		)
