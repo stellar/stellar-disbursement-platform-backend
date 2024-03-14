@@ -33,15 +33,6 @@ const MinNumberOfChannelAccounts = 1
 // The amount will be send back to the sponsoring account once the sponsored account is deleted onchain.
 const DefaultRevokeSponsorshipReserveAmount = "1.5"
 
-// MinTenantDistributionAccountAmount is the minimum amount of the native asset that the host distribution account is allowed to
-// send to the tenant distribution account at a time. It is also used as the default amount to bootstrap a tenant distribution account,
-// when non is specified.
-const MinTenantDistributionAccountAmount = 5
-
-// MaxTenantDistributionAccountAmount is the maximum amount of the native asset that the host distribution account is allowed to
-// send to the tenant distribution account at a time.
-const MaxTenantDistributionAccountAmount = 50
-
 // CreateChannelAccountsOnChain will create up to 19 accounts per Transaction due to the 20 signatures per tx limit This
 // is also a good opportunity to periodically write the generated accounts to persistent storage if generating large
 // amounts of channel accounts.
@@ -231,34 +222,19 @@ func DeleteChannelAccountOnChain(ctx context.Context, submiterEngine engine.Subm
 	return nil
 }
 
-func CreateAndFundDistributionAccount(ctx context.Context, submitterEngine engine.SubmitterEngine, tenantID string, amountNativeAssetToSend int) error {
-	if amountNativeAssetToSend < MinTenantDistributionAccountAmount || amountNativeAssetToSend > MaxTenantDistributionAccountAmount {
-		if amountNativeAssetToSend <= 0 {
-			return fmt.Errorf("invalid amount of native asset to send: %d", amountNativeAssetToSend)
-		}
-
-		return fmt.Errorf("amount of native asset to send must be between %d and %d", MinTenantDistributionAccountAmount, MaxTenantDistributionAccountAmount)
+func CreateAndFundAccount(ctx context.Context, submitterEngine engine.SubmitterEngine, amountNativeAssetToSend int, sourceAcc, destinationAcc string) error {
+	if sourceAcc == destinationAcc {
+		return fmt.Errorf("funding source account and destination account cannot be the same: %s", sourceAcc)
 	}
 
-	tenantDistributionAcc, err := submitterEngine.DistributionAccount(ctx, tenantID)
+	srcAccDetails, err := getAccountDetails(submitterEngine.HorizonClient, sourceAcc)
 	if err != nil {
-		return fmt.Errorf("retrieving distribution account for tenant %s: %w", tenantID, err)
-	}
-
-	hostDistributionAcc := submitterEngine.HostDistributionAccount()
-	if tenantDistributionAcc == hostDistributionAcc {
-		log.Ctx(ctx).Info("Host distribution account and tenant distribution account are the same, no need to initiate funding.")
-		return nil
-	}
-
-	hostAccount, err := getAccountDetails(submitterEngine.HorizonClient, hostDistributionAcc)
-	if err != nil {
-		return fmt.Errorf("getting details for host distribution account: %w", err)
+		return fmt.Errorf("getting details for source account: %w", err)
 	}
 
 	tx, err := txnbuild.NewTransaction(
 		txnbuild.TransactionParams{
-			SourceAccount:        hostAccount,
+			SourceAccount:        srcAccDetails,
 			IncrementSequenceNum: true,
 			BaseFee:              txnbuild.MinBaseFee,
 			Preconditions: txnbuild.Preconditions{
@@ -266,7 +242,7 @@ func CreateAndFundDistributionAccount(ctx context.Context, submitterEngine engin
 			},
 			Operations: []txnbuild.Operation{
 				&txnbuild.CreateAccount{
-					Destination: tenantDistributionAcc,
+					Destination: destinationAcc,
 					Amount:      strconv.Itoa(amountNativeAssetToSend),
 				},
 			},
@@ -274,20 +250,18 @@ func CreateAndFundDistributionAccount(ctx context.Context, submitterEngine engin
 	)
 	if err != nil {
 		return fmt.Errorf(
-			"creating raw payment tx from %s to %s: %w",
-			hostDistributionAcc,
-			tenantDistributionAcc,
+			"creating raw create account tx for account %s: %w",
+			destinationAcc,
 			err,
 		)
 	}
 
 	// Host distribution account signing:
-	tx, err = submitterEngine.HostAccountSigner.SignStellarTransaction(ctx, tx, hostDistributionAcc)
+	tx, err = submitterEngine.HostAccountSigner.SignStellarTransaction(ctx, tx, sourceAcc)
 	if err != nil {
 		return fmt.Errorf(
-			"signing payment tx from %s to %s: %w",
-			hostDistributionAcc,
-			tenantDistributionAcc,
+			"signing create account tx for account %s to the Stellar network: %w",
+			destinationAcc,
 			err,
 		)
 	}
@@ -295,13 +269,12 @@ func CreateAndFundDistributionAccount(ctx context.Context, submitterEngine engin
 	_, err = submitterEngine.HorizonClient.SubmitTransactionWithOptions(tx, horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true})
 	if err != nil {
 		hError := utils.NewHorizonErrorWrapper(err)
-		return fmt.Errorf("submitting payment tx from %s to %s to the Stellar network: %w", hostDistributionAcc,
-			tenantDistributionAcc, hError)
+		return fmt.Errorf("submitting create account tx for account %s to the Stellar network: %w", destinationAcc, hError)
 	}
 
-	_, err = getAccountDetails(submitterEngine.HorizonClient, tenantDistributionAcc)
+	_, err = getAccountDetails(submitterEngine.HorizonClient, destinationAcc)
 	if err != nil {
-		return fmt.Errorf("getting details for tenant distribution account: %w", err)
+		return fmt.Errorf("getting details for destination account: %w", err)
 	}
 
 	return nil

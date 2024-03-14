@@ -27,7 +27,6 @@ import (
 	di "github.com/stellar/stellar-disbursement-platform-backend/internal/dependencyinjection"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
-	tssSvc "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
@@ -137,7 +136,7 @@ func Test_executeAddTenant(t *testing.T) {
 	tenantsOpts := AddTenantsCommandOptions{
 		SDPUIBaseURL:                            &uiBaseURL,
 		NetworkType:                             networkType,
-		TenantAccountNativeAssetBootstrapAmount: tssSvc.MinTenantDistributionAccountAmount,
+		TenantAccountNativeAssetBootstrapAmount: tenant.MinTenantDistributionAccountAmount,
 	}
 
 	t.Run("adds a new tenant successfully", func(t *testing.T) {
@@ -245,7 +244,7 @@ Flags:
       --network-passphrase string                           The Stellar network passphrase (NETWORK_PASSPHRASE) (default "Test SDF Network ; September 2015")
       --network-type string                                 The Stellar Network type (NETWORK_TYPE) (default "testnet")
       --sdp-ui-base-url string                              The Tenant SDP UI/dashboard Base URL. (SDP_UI_BASE_URL) (default "http://localhost:3000")
-      --tenant-account-native-asset-bootstrap-amount int    The amount of the native asset that will be sent to the tenant distribution account from the host distribution account when it's created if applicable. (TENANT_ACCOUNT_NATIVE_ASSET_BOOTSTRAP_AMOUNT) (default 5)
+      --tenant-xlm-bootstrap-amount int                     The amount of the native asset that will be sent to the tenant distribution account from the host distribution account when it's created if applicable. (TENANT_XLM_BOOTSTRAP_AMOUNT) (default 5)
 
 `
 		assert.Equal(t, expectUsageMessage, out.String())
@@ -279,7 +278,7 @@ Flags:
       --network-passphrase string                           The Stellar network passphrase (NETWORK_PASSPHRASE) (default "Test SDF Network ; September 2015")
       --network-type string                                 The Stellar Network type (NETWORK_TYPE) (default "testnet")
       --sdp-ui-base-url string                              The Tenant SDP UI/dashboard Base URL. (SDP_UI_BASE_URL) (default "http://localhost:3000")
-      --tenant-account-native-asset-bootstrap-amount int    The amount of the native asset that will be sent to the tenant distribution account from the host distribution account when it's created if applicable. (TENANT_ACCOUNT_NATIVE_ASSET_BOOTSTRAP_AMOUNT) (default 5)
+      --tenant-xlm-bootstrap-amount int                     The amount of the native asset that will be sent to the tenant distribution account from the host distribution account when it's created if applicable. (TENANT_XLM_BOOTSTRAP_AMOUNT) (default 5)
 `
 		assert.Equal(t, expectUsageMessage, out.String())
 	})

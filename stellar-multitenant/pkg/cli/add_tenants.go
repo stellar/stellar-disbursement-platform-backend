@@ -84,7 +84,7 @@ func AddTenantsCmd() *cobra.Command {
 			ConfigKey: &tenantsOpts.MessengerOptions.AWSRegion,
 			Required:  false,
 		},
-		cmdUtils.TenantAccountNativeAssetBootstrapAmount(&tenantsOpts.TenantAccountNativeAssetBootstrapAmount),
+		cmdUtils.TenantXLMBootstrapAmount(&tenantsOpts.TenantAccountNativeAssetBootstrapAmount),
 	}
 
 	txSubOpts := di.TxSubmitterEngineOptions{}

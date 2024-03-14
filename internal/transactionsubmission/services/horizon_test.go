@@ -28,6 +28,7 @@ import (
 	sigMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 func Test_CreateChannelAccountsOnChain(t *testing.T) {
@@ -453,82 +454,54 @@ func Test_FundDistributionAccount(t *testing.T) {
 	horizonClientMock := &horizonclient.MockClient{}
 	ctx := context.Background()
 
-	hostDistributionKP := keypair.MustRandom()
-	hostDistributionAddress := hostDistributionKP.Address()
-
-	tntDistributionKP := keypair.MustRandom()
-	tntDistributionAddress := tntDistributionKP.Address()
-	sigService, _, _, mHostAccSigClient, mDistAccResolver := signing.NewMockSignatureService(t)
-
+	sigService, _, _, mHostAccSigClient, _ := signing.NewMockSignatureService(t)
 	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
 
-	tenantID := "ABC"
-	tenantDistributionFundingAmount := MinTenantDistributionAccountAmount
+	srcAcc := keypair.MustRandom().Address()
+	dstAcc := keypair.MustRandom().Address()
+	tenantDistributionFundingAmount := tenant.MinTenantDistributionAccountAmount
 	require.NoError(t, err)
 
 	testCases := []struct {
 		name            string
 		prepareMocksFn  func()
 		amountToFund    int
+		srcAcc          string
+		dstAcc          string
 		wantErrContains string
 	}{
 		{
-			name:            "amount to fund tenant distribution is not a valid amount",
-			prepareMocksFn:  func() {},
-			amountToFund:    0,
-			wantErrContains: "invalid amount of native asset to send: 0",
-		},
-		{
-			name:            "amount to fund tenant distribution account not in acceptable range",
-			prepareMocksFn:  func() {},
-			amountToFund:    1,
-			wantErrContains: fmt.Sprintf("amount of native asset to send must be between %d and %d", MinTenantDistributionAccountAmount, MaxTenantDistributionAccountAmount),
-		},
-		{
-			name: "host distribution account is same as tenant distribution account",
-			prepareMocksFn: func() {
-				mDistAccResolver.
-					On("DistributionAccount", ctx, tenantID).Return(hostDistributionAddress, nil).Once()
-				mDistAccResolver.
-					On("HostDistributionAccount").Return(hostDistributionAddress).Once()
-			},
-			amountToFund: tenantDistributionFundingAmount,
+			name:            "source account is the same as destination account",
+			amountToFund:    tenantDistributionFundingAmount,
+			srcAcc:          srcAcc,
+			dstAcc:          srcAcc,
+			wantErrContains: "source account and destination account cannot be the same",
 		},
 		{
 			name: "returns error when HorizonClient fails getting host distribution AccountDetails",
 			prepareMocksFn: func() {
-				mDistAccResolver.
-					On("DistributionAccount", ctx, tenantID).Return(tntDistributionAddress, nil).Once()
-				mDistAccResolver.
-					On("HostDistributionAccount").
-					Return(hostDistributionAddress).
-					Once()
 				horizonClientMock.
-					On("AccountDetail", horizonclient.AccountRequest{AccountID: hostDistributionAddress}).
+					On("AccountDetail", horizonclient.AccountRequest{AccountID: srcAcc}).
 					Return(horizon.Account{}, horizonclient.Error{Problem: problem.NotFound}).
 					Once()
 			},
 			amountToFund: tenantDistributionFundingAmount,
+			srcAcc:       srcAcc,
+			dstAcc:       dstAcc,
 			wantErrContains: fmt.Sprintf(
-				`getting details for host distribution account: cannot find account on the network %s: horizon error: "Resource Missing" - check horizon.Error.Problem for more information`,
-				hostDistributionAddress,
+				`getting details for source account: cannot find account on the network %s: horizon error: "Resource Missing" - check horizon.Error.Problem for more information`,
+				srcAcc,
 			),
 		},
 		{
 			name: "returns error when failing to submit tx over Horizon",
 			prepareMocksFn: func() {
-				mDistAccResolver.
-					On("DistributionAccount", ctx, tenantID).Return(tntDistributionAddress, nil).Once()
-				mDistAccResolver.
-					On("HostDistributionAccount").
-					Return(hostDistributionAddress).
-					Once()
 				horizonClientMock.
-					On("AccountDetail", horizonclient.AccountRequest{AccountID: hostDistributionAddress}).
-					Return(horizon.Account{AccountID: hostDistributionAddress}, nil).
+					On("AccountDetail", horizonclient.AccountRequest{AccountID: srcAcc}).
+					Return(horizon.Account{AccountID: srcAcc}, nil).
 					Once()
 				mHostAccSigClient.
-					On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), hostDistributionAddress).
+					On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), srcAcc).
 					Return(&txnbuild.Transaction{}, nil).
 					Once()
 				horizonClientMock.On("SubmitTransactionWithOptions", mock.AnythingOfType("*txnbuild.Transaction"), horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true}).
@@ -542,38 +515,35 @@ func Test_FundDistributionAccount(t *testing.T) {
 					Once()
 			},
 			amountToFund: tenantDistributionFundingAmount,
+			srcAcc:       srcAcc,
+			dstAcc:       dstAcc,
 			wantErrContains: fmt.Sprintf(
-				`submitting payment tx from %s to %s to the Stellar network: horizon response error: StatusCode=408, Type=https://stellar.org/horizon-errors/timeout, Title=Timeout`,
-				hostDistributionAddress,
-				tntDistributionAddress,
+				`submitting create account tx for account %s to the Stellar network: horizon response error: StatusCode=408, Type=https://stellar.org/horizon-errors/timeout, Title=Timeout`,
+				dstAcc,
 			),
 		},
 		{
 			name: "successfully creates and funds tenant distribution account",
 			prepareMocksFn: func() {
-				mDistAccResolver.
-					On("DistributionAccount", ctx, tenantID).Return(tntDistributionAddress, nil).Once()
-				mDistAccResolver.
-					On("HostDistributionAccount").
-					Return(hostDistributionAddress).
-					Once()
 				horizonClientMock.
-					On("AccountDetail", horizonclient.AccountRequest{AccountID: hostDistributionAddress}).
-					Return(horizon.Account{AccountID: hostDistributionAddress}, nil).
+					On("AccountDetail", horizonclient.AccountRequest{AccountID: srcAcc}).
+					Return(horizon.Account{AccountID: srcAcc}, nil).
 					Once()
 				mHostAccSigClient.
-					On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), hostDistributionAddress).
+					On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), srcAcc).
 					Return(&txnbuild.Transaction{}, nil).
 					Once()
 				horizonClientMock.On("SubmitTransactionWithOptions", mock.AnythingOfType("*txnbuild.Transaction"), horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true}).
 					Return(horizon.Transaction{}, nil).
 					Once()
 				horizonClientMock.
-					On("AccountDetail", horizonclient.AccountRequest{AccountID: tntDistributionAddress}).
-					Return(horizon.Account{AccountID: tntDistributionAddress}, nil).
+					On("AccountDetail", horizonclient.AccountRequest{AccountID: dstAcc}).
+					Return(horizon.Account{AccountID: dstAcc}, nil).
 					Once()
 			},
 			amountToFund: tenantDistributionFundingAmount,
+			srcAcc:       srcAcc,
+			dstAcc:       dstAcc,
 		},
 	}
 
@@ -590,7 +560,7 @@ func Test_FundDistributionAccount(t *testing.T) {
 				LedgerNumberTracker: mLedgerNumberTracker,
 			}
 
-			err = CreateAndFundDistributionAccount(ctx, submitterEngine, tenantID, tc.amountToFund)
+			err = CreateAndFundAccount(ctx, submitterEngine, tc.amountToFund, tc.srcAcc, tc.dstAcc)
 			if tc.wantErrContains != "" {
 				require.Error(t, err)
 				assert.ErrorContains(t, err, tc.wantErrContains)

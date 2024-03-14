@@ -18,7 +18,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
-	tsSvc "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/services"
+	tssSvc "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
@@ -158,9 +158,20 @@ func (m *Manager) ProvisionNewTenant(
 		return nil, updateTenantErrMsg
 	}
 
-	err = tsSvc.CreateAndFundDistributionAccount(ctx, m.SubmitterEngine, t.ID, m.nativeAssetBootstrapAmount)
-	if err != nil {
-		return nil, fmt.Errorf("bootstrapping tenant distribution account with native asset: %w", err)
+	hostDistributionAccPubKey := m.SubmitterEngine.HostDistributionAccount()
+	if distributionAccPubKey != hostDistributionAccPubKey {
+		err = tenant.ValidateNativeAssetBootstrapAmount(m.nativeAssetBootstrapAmount)
+		if err != nil {
+			return nil, fmt.Errorf("invalid native asset bootstrap amount: %w", err)
+		}
+
+		// Bootstrap tenant distribution account with native asset
+		err = tssSvc.CreateAndFundAccount(ctx, m.SubmitterEngine, m.nativeAssetBootstrapAmount, hostDistributionAccPubKey, distributionAccPubKey)
+		if err != nil {
+			return nil, fmt.Errorf("bootstrapping tenant distribution account with native asset: %w", err)
+		}
+	} else {
+		log.Ctx(ctx).Info("Host distribution account and tenant distribution account are the same, no need to initiate funding.")
 	}
 
 	return t, nil

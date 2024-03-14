@@ -24,7 +24,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	preconditionsMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
-	tssSvc "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/internal/provisioning"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
@@ -270,7 +269,6 @@ func Test_TenantHandler_Post(t *testing.T) {
 
 	distAcc := keypair.MustRandom().Address()
 	distAccResolver.On("HostDistributionAccount").Return(distAcc, nil).Twice()
-	distAccResolver.On("DistributionAccount", ctx, mock.Anything).Return(distAcc, nil).Twice()
 
 	submitterEngine := engine.SubmitterEngine{
 		HorizonClient:       mHorizonClient,
@@ -284,7 +282,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 		provisioning.WithTenantManager(m),
 		provisioning.WithMessengerClient(&messengerClientMock),
 		provisioning.WithSubmitterEngine(submitterEngine),
-		provisioning.WithNativeAssetBootstrapAmount(tssSvc.MinTenantDistributionAccountAmount),
+		provisioning.WithNativeAssetBootstrapAmount(tenant.MinTenantDistributionAccountAmount),
 	)
 
 	handler := TenantsHandler{

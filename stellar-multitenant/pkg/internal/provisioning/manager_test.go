@@ -27,7 +27,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	preconditionsMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
-	tssSvc "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
@@ -115,9 +114,11 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 		sigService, _, _, hostAccSigClient, distAccResolver := signing.NewMockSignatureService(t)
 
 		distAcc := keypair.MustRandom()
+		distAccPrivKey := distAcc.Seed()
+		distAccPubKey := distAcc.Address()
 		distAccSigClient, err := signing.NewSignatureClient(signing.DistributionAccountEnvSignatureClientType, signing.SignatureClientOptions{
 			NetworkPassphrase:      networkPassphrase,
-			DistributionPrivateKey: distAcc.Seed(),
+			DistributionPrivateKey: distAccPrivKey,
 		})
 		require.NoError(t, err)
 
@@ -138,17 +139,14 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 		sigService.DistAccountSigner = distAccSigClient
 
 		tenantAcc := keypair.MustRandom()
-		if sigClientType == signing.DistributionAccountEnvSignatureClientType {
-			distAccResolver.On("DistributionAccount", ctx, mock.Anything).Return(distAcc.Address(), nil).Once()
-			distAccResolver.On("HostDistributionAccount").Return(distAcc.Address(), nil).Once()
+		tenantAccPubKey := tenantAcc.Address()
+		distAccResolver.On("HostDistributionAccount").Return(distAccPubKey, nil).Once()
 
-		} else {
-			distAccResolver.On("DistributionAccount", ctx, mock.Anything).Return(tenantAcc.Address(), nil).Once()
-			distAccResolver.On("HostDistributionAccount").Return(distAcc.Address(), nil).Twice()
+		if sigClientType == signing.DistributionAccountDBSignatureClientType {
 			mHorizonClient.
-				On("AccountDetail", horizonclient.AccountRequest{AccountID: sigService.HostDistributionAccount()}).
+				On("AccountDetail", horizonclient.AccountRequest{AccountID: distAccPubKey}).
 				Return(horizon.Account{
-					AccountID: distAcc.Address(),
+					AccountID: distAccPubKey,
 					Sequence:  1,
 				}, nil).
 				Once()
@@ -156,16 +154,16 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 				"SignStellarTransaction",
 				ctx,
 				mock.AnythingOfType("*txnbuild.Transaction"),
-				distAcc.Address()).Return(&txnbuild.Transaction{}, nil).Once()
+				distAccPubKey).Return(&txnbuild.Transaction{}, nil).Once()
 			mHorizonClient.On(
 				"SubmitTransactionWithOptions",
 				mock.AnythingOfType("*txnbuild.Transaction"),
 				horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true},
 			).Return(horizon.Transaction{}, nil).Once()
 			mHorizonClient.
-				On("AccountDetail", horizonclient.AccountRequest{AccountID: tenantAcc.Address()}).
+				On("AccountDetail", mock.AnythingOfType("horizonclient.AccountRequest")).
 				Return(horizon.Account{
-					AccountID: tenantAcc.Address(),
+					AccountID: tenantAccPubKey,
 					Sequence:  1,
 				}, nil).
 				Once()
@@ -183,7 +181,7 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 			WithMessengerClient(&messengerClientMock),
 			WithTenantManager(tenantManager),
 			WithSubmitterEngine(submitterEngine),
-			WithNativeAssetBootstrapAmount(tssSvc.MinTenantDistributionAccountAmount),
+			WithNativeAssetBootstrapAmount(tenant.MinTenantDistributionAccountAmount),
 		)
 
 		uiBaseURL := "http://localhost:3000"
