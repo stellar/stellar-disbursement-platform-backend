@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"slices"
 	"strconv"
+	"time"
 
 	"github.com/avast/retry-go"
 	"github.com/stellar/go/clients/horizonclient"
@@ -232,45 +233,46 @@ func CreateAndFundAccount(ctx context.Context, submitterEngine engine.SubmitterE
 		return fmt.Errorf("funding source account and destination account cannot be the same: %s", sourceAcc)
 	}
 
-	srcAccDetails, err := getAccountDetails(submitterEngine.HorizonClient, sourceAcc)
-	if err != nil {
-		return fmt.Errorf("getting details for source account: %w", err)
-	}
+	log.Ctx(ctx).Info("Initiating transaction...")
+	if err := retry.Do(func() error {
+		srcAccDetails, err := getAccountDetails(submitterEngine.HorizonClient, sourceAcc)
+		if err != nil {
+			return fmt.Errorf("getting details for source account: %w", err)
+		}
 
-	tx, err := txnbuild.NewTransaction(
-		txnbuild.TransactionParams{
-			SourceAccount:        srcAccDetails,
-			IncrementSequenceNum: true,
-			BaseFee:              int64(submitterEngine.MaxBaseFee),
-			Preconditions: txnbuild.Preconditions{
-				TimeBounds: txnbuild.NewTimeout(60),
-			},
-			Operations: []txnbuild.Operation{
-				&txnbuild.CreateAccount{
-					Destination: destinationAcc,
-					Amount:      strconv.Itoa(amountNativeAssetToSend),
+		tx, err := txnbuild.NewTransaction(
+			txnbuild.TransactionParams{
+				SourceAccount:        srcAccDetails,
+				IncrementSequenceNum: true,
+				BaseFee:              int64(submitterEngine.MaxBaseFee),
+				Preconditions: txnbuild.Preconditions{
+					TimeBounds: txnbuild.NewTimeout(30),
+				},
+				Operations: []txnbuild.Operation{
+					&txnbuild.CreateAccount{
+						Destination: destinationAcc,
+						Amount:      strconv.Itoa(amountNativeAssetToSend),
+					},
 				},
 			},
-		},
-	)
-	if err != nil {
-		return fmt.Errorf(
-			"creating raw create account tx for account %s: %w",
-			destinationAcc,
-			err,
 		)
-	}
-	// Host distribution account signing:
-	tx, err = submitterEngine.HostAccountSigner.SignStellarTransaction(ctx, tx, sourceAcc)
-	if err != nil {
-		return fmt.Errorf(
-			"signing create account tx for account %s: %w",
-			destinationAcc,
-			err,
-		)
-	}
+		if err != nil {
+			return fmt.Errorf(
+				"creating raw create account tx for account %s: %w",
+				destinationAcc,
+				err,
+			)
+		}
+		// Host distribution account signing:
+		tx, err = submitterEngine.HostAccountSigner.SignStellarTransaction(ctx, tx, sourceAcc)
+		if err != nil {
+			return fmt.Errorf(
+				"signing create account tx for account %s: %w",
+				destinationAcc,
+				err,
+			)
+		}
 
-	if err = retry.Do(func() error {
 		_, err = submitterEngine.HorizonClient.SubmitTransactionWithOptions(tx, horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true})
 		if err != nil {
 			return err
@@ -279,9 +281,14 @@ func CreateAndFundAccount(ctx context.Context, submitterEngine engine.SubmitterE
 		return nil
 	},
 		retry.Attempts(CreateAndFundAccountRetryAttempts),
+		retry.MaxDelay(1*time.Minute),
+		retry.DelayType(retry.BackOffDelay),
 		retry.RetryIf(func(err error) bool {
 			hError := utils.NewHorizonErrorWrapper(err)
-			if !hError.ShouldMarkAsError() {
+			// issues not related to the tx submission on the network should be retried
+			if !hError.IsHorizonError() {
+				return true
+			} else if !hError.ShouldMarkAsError() {
 				log.Ctx(ctx).Warnf("submitting create account tx for account %s to the Stellar network - retriable error: %v", destinationAcc, hError)
 				return true
 			}
@@ -291,8 +298,9 @@ func CreateAndFundAccount(ctx context.Context, submitterEngine engine.SubmitterE
 	); err != nil {
 		return fmt.Errorf("maximum number of retries reached or terminal error encountered: %w", utils.NewHorizonErrorWrapper(err))
 	}
+	log.Ctx(ctx).Info("Transaction completed.")
 
-	_, err = getAccountDetails(submitterEngine.HorizonClient, destinationAcc)
+	_, err := getAccountDetails(submitterEngine.HorizonClient, destinationAcc)
 	if err != nil {
 		return fmt.Errorf("getting details for destination account: %w", err)
 	}

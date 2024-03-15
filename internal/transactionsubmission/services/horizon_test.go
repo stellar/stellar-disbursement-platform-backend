@@ -482,8 +482,8 @@ func Test_FundDistributionAccount(t *testing.T) {
 			prepareMocksFn: func() {
 				horizonClientMock.
 					On("AccountDetail", horizonclient.AccountRequest{AccountID: srcAcc}).
-					Return(horizon.Account{}, horizonclient.Error{Problem: problem.NotFound}).
-					Once()
+					Return(horizon.Account{AccountID: srcAcc}, horizonclient.Error{Problem: problem.NotFound}).
+					Times(CreateAndFundAccountRetryAttempts)
 			},
 			amountToFund: tenantDistributionFundingAmount,
 			srcAcc:       srcAcc,
@@ -494,16 +494,36 @@ func Test_FundDistributionAccount(t *testing.T) {
 			),
 		},
 		{
+			name: "returns error when failing to sign raw transaction",
+			prepareMocksFn: func() {
+				horizonClientMock.
+					On("AccountDetail", horizonclient.AccountRequest{AccountID: srcAcc}).
+					Return(horizon.Account{AccountID: srcAcc}, nil).
+					Times(CreateAndFundAccountRetryAttempts)
+				mHostAccSigClient.
+					On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), srcAcc).
+					Return(&txnbuild.Transaction{}, errors.New("failed to sign raw tx")).
+					Times(CreateAndFundAccountRetryAttempts)
+			},
+			amountToFund: tenantDistributionFundingAmount,
+			srcAcc:       srcAcc,
+			dstAcc:       dstAcc,
+			wantErrContains: fmt.Sprintf(
+				`signing create account tx for account %s:`,
+				dstAcc,
+			),
+		},
+		{
 			name: "returns error when failing to submit tx over Horizon - maximum retries reached",
 			prepareMocksFn: func() {
 				horizonClientMock.
 					On("AccountDetail", horizonclient.AccountRequest{AccountID: srcAcc}).
 					Return(horizon.Account{AccountID: srcAcc}, nil).
-					Once()
+					Times(CreateAndFundAccountRetryAttempts)
 				mHostAccSigClient.
 					On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), srcAcc).
 					Return(&txnbuild.Transaction{}, nil).
-					Once()
+					Times(CreateAndFundAccountRetryAttempts)
 				horizonClientMock.On("SubmitTransactionWithOptions", mock.AnythingOfType("*txnbuild.Transaction"), horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true}).
 					Return(horizon.Transaction{}, horizonclient.Error{
 						Problem: problem.P{
