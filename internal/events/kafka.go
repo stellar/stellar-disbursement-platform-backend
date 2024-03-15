@@ -2,6 +2,7 @@ package events
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -40,10 +41,12 @@ func ParseKafkaSecurityProtocol(protocol string) (KafkaSecurityProtocol, error) 
 }
 
 type KafkaConfig struct {
-	Brokers          []string
-	SecurityProtocol KafkaSecurityProtocol
-	SASLUsername     string
-	SASLPassword     string
+	Brokers              []string
+	SecurityProtocol     KafkaSecurityProtocol
+	SASLUsername         string
+	SASLPassword         string
+	SSLAccessKey         string
+	SSLAccessCertificate string
 }
 
 func (kc *KafkaConfig) Validate() error {
@@ -61,9 +64,11 @@ func (kc *KafkaConfig) Validate() error {
 		}
 	}
 
-	if slices.Contains(SSLProtocols, kc.SecurityProtocol) {
-		// TODO: SDP-1071 Add additional validation for SASL_SSL and SSL
-		return fmt.Errorf("security protocols SASL_SSL and SSL are not yet supported")
+	// Specific validation for the SSL
+	if kc.SecurityProtocol == KafkaProtocolSSL {
+		if _, err := tls.X509KeyPair([]byte(kc.SSLAccessCertificate), []byte(kc.SSLAccessKey)); err != nil {
+			return fmt.Errorf("validating Kafka SSL Access Key/Certificate: %w", err)
+		}
 	}
 
 	return nil
@@ -84,13 +89,30 @@ func NewKafkaProducer(config KafkaConfig) (*KafkaProducer, error) {
 		return nil, fmt.Errorf("invalid kafka config: %w", err)
 	}
 
+	var tlsConfig *tls.Config
 	transport := kafka.DefaultTransport
+	if slices.Contains(SSLProtocols, config.SecurityProtocol) {
+		tlsConfig = &tls.Config{}
+		if config.SecurityProtocol == KafkaProtocolSSL {
+			cert, err := tls.X509KeyPair([]byte(config.SSLAccessCertificate), []byte(config.SSLAccessKey))
+			if err != nil {
+				return nil, fmt.Errorf("parsing SSL access key and certificate: %w", err)
+			}
+			tlsConfig.Certificates = []tls.Certificate{cert}
+		}
+
+		transport = &kafka.Transport{
+			TLS: tlsConfig,
+		}
+	}
+
 	if config.SecurityProtocol == KafkaProtocolSASLPlaintext || config.SecurityProtocol == KafkaProtocolSASLSSL {
 		transport = &kafka.Transport{
 			SASL: plain.Mechanism{
 				Username: config.SASLUsername,
 				Password: config.SASLPassword,
 			},
+			TLS: tlsConfig,
 		}
 	}
 
@@ -152,13 +174,30 @@ func NewKafkaConsumer(config KafkaConfig, topic string, consumerGroupID string, 
 		return nil, fmt.Errorf("invalid kafka config: %w", err)
 	}
 
+	var tlsConfig *tls.Config
 	dialer := kafka.DefaultDialer
+	if slices.Contains(SSLProtocols, config.SecurityProtocol) {
+		tlsConfig = &tls.Config{}
+		if config.SecurityProtocol == KafkaProtocolSSL {
+			cert, err := tls.X509KeyPair([]byte(config.SSLAccessCertificate), []byte(config.SSLAccessKey))
+			if err != nil {
+				return nil, fmt.Errorf("parsing SSL access key and certificate: %w", err)
+			}
+			tlsConfig.Certificates = []tls.Certificate{cert}
+		}
+
+		dialer = &kafka.Dialer{
+			TLS: tlsConfig,
+		}
+	}
+
 	if config.SecurityProtocol == KafkaProtocolSASLPlaintext || config.SecurityProtocol == KafkaProtocolSASLSSL {
 		dialer = &kafka.Dialer{
 			SASLMechanism: plain.Mechanism{
 				Username: config.SASLUsername,
 				Password: config.SASLPassword,
 			},
+			TLS: tlsConfig,
 		}
 	}
 

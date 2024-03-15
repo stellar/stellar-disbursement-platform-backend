@@ -129,9 +129,11 @@ type EventBrokerOptions struct {
 	ConsumerGroupID string
 
 	// KAFKA specific options
-	KafkaSecurityProtocol events.KafkaSecurityProtocol
-	KafkaSASLUsername     string
-	KafkaSASLPassword     string
+	KafkaSecurityProtocol  events.KafkaSecurityProtocol
+	KafkaSASLUsername      string
+	KafkaSASLPassword      string
+	KafkaAccessKey         string
+	KafkaAccessCertificate string
 }
 
 func EventBrokerConfigOptions(opts *EventBrokerOptions) []*config.ConfigOption {
@@ -181,6 +183,20 @@ func EventBrokerConfigOptions(opts *EventBrokerOptions) []*config.ConfigOption {
 			Usage:     "Kafka SASL Password",
 			OptType:   types.String,
 			ConfigKey: &opts.KafkaSASLPassword,
+			Required:  false,
+		},
+		{
+			Name:      "kafka-ssl-access-key",
+			Usage:     "The Kafka Access Key (keystore) on PEM format",
+			OptType:   types.String,
+			ConfigKey: &opts.KafkaAccessKey,
+			Required:  false,
+		},
+		{
+			Name:      "kafka-ssl-access-certificate",
+			Usage:     "Kafka SSL Access Certificate on PEM format that matches with the Kafka Access Key",
+			OptType:   types.String,
+			ConfigKey: &opts.KafkaAccessCertificate,
 			Required:  false,
 		},
 	}
@@ -287,9 +303,11 @@ func NetworkPassphrase(targetPointer interface{}) *config.ConfigOption {
 
 func KafkaConfig(opts EventBrokerOptions) events.KafkaConfig {
 	return events.KafkaConfig{
-		Brokers:          opts.BrokerURLs,
-		SecurityProtocol: opts.KafkaSecurityProtocol,
-		SASLUsername:     opts.KafkaSASLUsername,
-		SASLPassword:     opts.KafkaSASLPassword,
+		Brokers:              opts.BrokerURLs,
+		SecurityProtocol:     opts.KafkaSecurityProtocol,
+		SASLUsername:         opts.KafkaSASLUsername,
+		SASLPassword:         opts.KafkaSASLPassword,
+		SSLAccessKey:         opts.KafkaAccessKey,
+		SSLAccessCertificate: opts.KafkaAccessCertificate,
 	}
 }
