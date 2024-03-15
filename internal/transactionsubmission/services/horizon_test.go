@@ -494,7 +494,7 @@ func Test_FundDistributionAccount(t *testing.T) {
 			),
 		},
 		{
-			name: "returns error when failing to submit tx over Horizon",
+			name: "returns error when failing to submit tx over Horizon - maximum retries reached",
 			prepareMocksFn: func() {
 				horizonClientMock.
 					On("AccountDetail", horizonclient.AccountRequest{AccountID: srcAcc}).
@@ -510,9 +510,41 @@ func Test_FundDistributionAccount(t *testing.T) {
 							Type:   "https://stellar.org/horizon-errors/timeout",
 							Title:  "Timeout",
 							Status: http.StatusRequestTimeout,
+							Extras: map[string]interface{}{
+								"result_codes": map[string]interface{}{},
+							},
 						},
 					}).
 					Times(CreateAndFundAccountRetryAttempts)
+			},
+			amountToFund:    tenantDistributionFundingAmount,
+			srcAcc:          srcAcc,
+			dstAcc:          dstAcc,
+			wantErrContains: "maximum number of retries reached or terminal error encountered",
+		},
+		{
+			name: "returns error when failing to submit tx over Horizon - terminal error encountered",
+			prepareMocksFn: func() {
+				horizonClientMock.
+					On("AccountDetail", horizonclient.AccountRequest{AccountID: srcAcc}).
+					Return(horizon.Account{AccountID: srcAcc}, nil).
+					Once()
+				mHostAccSigClient.
+					On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), srcAcc).
+					Return(&txnbuild.Transaction{}, nil).
+					Once()
+				horizonClientMock.On("SubmitTransactionWithOptions", mock.AnythingOfType("*txnbuild.Transaction"), horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true}).
+					Return(horizon.Transaction{}, horizonclient.Error{
+						Problem: problem.P{
+							Status: http.StatusBadRequest,
+							Extras: map[string]interface{}{
+								"result_codes": map[string]interface{}{
+									"transaction": "tx_insufficient_balance",
+								},
+							},
+						},
+					}).
+					Once()
 			},
 			amountToFund:    tenantDistributionFundingAmount,
 			srcAcc:          srcAcc,

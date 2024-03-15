@@ -273,22 +273,23 @@ func CreateAndFundAccount(ctx context.Context, submitterEngine engine.SubmitterE
 	if err = retry.Do(func() error {
 		_, err = submitterEngine.HorizonClient.SubmitTransactionWithOptions(tx, horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true})
 		if err != nil {
-			hError := utils.NewHorizonErrorWrapper(err)
-			retry.RetryIf(func(err error) bool {
-				if !hError.ShouldMarkAsError() {
-					log.Ctx(ctx).Warnf("submitting create account tx for account %s to the Stellar network - retriable error: %v", destinationAcc, hError)
-					return true
-				}
-				// if any terminal errors encountered, we should not retry
-				return false
-			})
-
-			return fmt.Errorf("submitting create account tx for account %s to the Stellar network - most recent error: %w", destinationAcc, hError)
+			return err
 		}
 
 		return nil
-	}, retry.Attempts(CreateAndFundAccountRetryAttempts)); err != nil {
-		return fmt.Errorf("maximum number of retries reached or terminal error encountered: %w", err)
+	},
+		retry.Attempts(CreateAndFundAccountRetryAttempts),
+		retry.RetryIf(func(err error) bool {
+			hError := utils.NewHorizonErrorWrapper(err)
+			if !hError.ShouldMarkAsError() {
+				log.Ctx(ctx).Warnf("submitting create account tx for account %s to the Stellar network - retriable error: %v", destinationAcc, hError)
+				return true
+			}
+			// if any terminal errors encountered, we should not retry
+			return false
+		}),
+	); err != nil {
+		return fmt.Errorf("maximum number of retries reached or terminal error encountered: %w", utils.NewHorizonErrorWrapper(err))
 	}
 
 	_, err = getAccountDetails(submitterEngine.HorizonClient, destinationAcc)
