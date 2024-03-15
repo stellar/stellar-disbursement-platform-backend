@@ -512,15 +512,12 @@ func Test_FundDistributionAccount(t *testing.T) {
 							Status: http.StatusRequestTimeout,
 						},
 					}).
-					Once()
+					Times(CreateAndFundAccountRetryAttempts)
 			},
-			amountToFund: tenantDistributionFundingAmount,
-			srcAcc:       srcAcc,
-			dstAcc:       dstAcc,
-			wantErrContains: fmt.Sprintf(
-				`submitting create account tx for account %s to the Stellar network: horizon response error: StatusCode=408, Type=https://stellar.org/horizon-errors/timeout, Title=Timeout`,
-				dstAcc,
-			),
+			amountToFund:    tenantDistributionFundingAmount,
+			srcAcc:          srcAcc,
+			dstAcc:          dstAcc,
+			wantErrContains: "maximum number of retries reached or terminal error encountered",
 		},
 		{
 			name: "successfully creates and funds tenant distribution account",

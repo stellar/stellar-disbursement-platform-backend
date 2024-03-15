@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strconv"
 
+	"github.com/avast/retry-go"
 	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/protocols/horizon"
 	"github.com/stellar/go/support/log"
@@ -28,9 +29,12 @@ const MaxNumberOfChannelAccounts = 1000
 // MinNumberOfChannelAccounts is the minimum number of accounts tx submission service should manage.
 const MinNumberOfChannelAccounts = 1
 
+// CreateAndFundAccountRetryAttempts is the maximum number of attempts to create and fund an account on the Stellar network.
+const CreateAndFundAccountRetryAttempts = 5
+
 // DefaultRevokeSponsorshipReserveAmount is the amount of the native asset that the sponsoring account will send
 // to the sponsored account to cover the reserve that is needed to for revoking account sponsorship.
-// The amount will be send back to the sponsoring account once the sponsored account is deleted onchain.
+// The amount will be sent back to the sponsoring account once the sponsored account is deleted onchain.
 const DefaultRevokeSponsorshipReserveAmount = "1.5"
 
 // CreateChannelAccountsOnChain will create up to 19 accounts per Transaction due to the 20 signatures per tx limit This
@@ -237,9 +241,9 @@ func CreateAndFundAccount(ctx context.Context, submitterEngine engine.SubmitterE
 		txnbuild.TransactionParams{
 			SourceAccount:        srcAccDetails,
 			IncrementSequenceNum: true,
-			BaseFee:              txnbuild.MinBaseFee,
+			BaseFee:              int64(submitterEngine.MaxBaseFee),
 			Preconditions: txnbuild.Preconditions{
-				TimeBounds: txnbuild.NewTimeout(30), // 30 seconds
+				TimeBounds: txnbuild.NewTimeout(60),
 			},
 			Operations: []txnbuild.Operation{
 				&txnbuild.CreateAccount{
@@ -256,7 +260,6 @@ func CreateAndFundAccount(ctx context.Context, submitterEngine engine.SubmitterE
 			err,
 		)
 	}
-
 	// Host distribution account signing:
 	tx, err = submitterEngine.HostAccountSigner.SignStellarTransaction(ctx, tx, sourceAcc)
 	if err != nil {
@@ -267,10 +270,25 @@ func CreateAndFundAccount(ctx context.Context, submitterEngine engine.SubmitterE
 		)
 	}
 
-	_, err = submitterEngine.HorizonClient.SubmitTransactionWithOptions(tx, horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true})
-	if err != nil {
-		hError := utils.NewHorizonErrorWrapper(err)
-		return fmt.Errorf("submitting create account tx for account %s to the Stellar network: %w", destinationAcc, hError)
+	if err = retry.Do(func() error {
+		_, err = submitterEngine.HorizonClient.SubmitTransactionWithOptions(tx, horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true})
+		if err != nil {
+			hError := utils.NewHorizonErrorWrapper(err)
+			retry.RetryIf(func(err error) bool {
+				if !hError.ShouldMarkAsError() {
+					log.Ctx(ctx).Warnf("submitting create account tx for account %s to the Stellar network - retriable error: %v", destinationAcc, hError)
+					return true
+				}
+				// if any terminal errors encountered, we should not retry
+				return false
+			})
+
+			return fmt.Errorf("submitting create account tx for account %s to the Stellar network - most recent error: %w", destinationAcc, hError)
+		}
+
+		return nil
+	}, retry.Attempts(CreateAndFundAccountRetryAttempts)); err != nil {
+		return fmt.Errorf("maximum number of retries reached or terminal error encountered: %w", err)
 	}
 
 	_, err = getAccountDetails(submitterEngine.HorizonClient, destinationAcc)
