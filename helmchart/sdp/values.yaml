@@ -173,7 +173,7 @@ sdp:
       # like the following to allow the deployment to work:
       INSTANCE_NAME: "SDP Testnet Preview"
       ENABLE_SCHEDULER: "false"
-      TENANT_XLM_BOOTSTRAP_AMOUNT: 5
+      TENANT_XLM_BOOTSTRAP_AMOUNT: "5"
 
   ## @extra sdp.kubeSecrets Kubernetes secrets are used to manage sensitive information, such as API keys and private keys. It's crucial that these details are kept private.
   ## @param sdp.kubeSecrets.secretName The name of the Kubernetes secret object. Only use this if create is false.
