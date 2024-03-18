@@ -77,7 +77,7 @@ func AddUserCmd(databaseURLFlagName string, passwordPrompt PasswordPromptInterfa
 	}
 
 	addUser := &cobra.Command{
-		Use:   "add-user <email> <first name> <last name> [--owner] [--roles] [--password] [--tenant-id]",
+		Use:   "add-user <email> <first name> <last name> [--owner] [--roles] [--password] --tenant-id",
 		Short: "Add user to the system",
 		Long:  fmt.Sprintf("Add a user to the system. Email should be unique and password must be at least %d characters long.", auth.MinPasswordLength),
 		Args:  cobra.ExactArgs(3),

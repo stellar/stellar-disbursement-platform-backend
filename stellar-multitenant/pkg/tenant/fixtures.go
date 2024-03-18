@@ -19,6 +19,8 @@ import (
 )
 
 func DeleteAllTenantsFixture(t *testing.T, ctx context.Context, dbConnectionPool db.DBConnectionPool) {
+	t.Helper()
+
 	q := "DELETE FROM tenants"
 	_, err := dbConnectionPool.ExecContext(ctx, q)
 	require.NoError(t, err)
@@ -56,6 +58,8 @@ func ResetTenantConfigFixture(t *testing.T, ctx context.Context, dbConnectionPoo
 }
 
 func AssertRegisteredAssetsFixture(t *testing.T, ctx context.Context, dbConnectionPool db.DBConnectionPool, expectedAssets []string) {
+	t.Helper()
+
 	var registeredAssets []string
 	queryRegisteredAssets := `
 		SELECT CONCAT(code, ':', issuer) FROM assets
@@ -66,6 +70,8 @@ func AssertRegisteredAssetsFixture(t *testing.T, ctx context.Context, dbConnecti
 }
 
 func AssertRegisteredWalletsFixture(t *testing.T, ctx context.Context, dbConnectionPool db.DBConnectionPool, expectedWallets []string) {
+	t.Helper()
+
 	var registeredWallets []string
 	queryRegisteredWallets := `
 		SELECT name FROM wallets
@@ -76,6 +82,8 @@ func AssertRegisteredWalletsFixture(t *testing.T, ctx context.Context, dbConnect
 }
 
 func AssertRegisteredUserFixture(t *testing.T, ctx context.Context, dbConnectionPool db.DBConnectionPool, userFirstName, userLastName, userEmail string) {
+	t.Helper()
+
 	var user struct {
 		FirstName string         `db:"first_name"`
 		LastName  string         `db:"last_name"`
@@ -180,6 +188,8 @@ func ApplyMigrationsForTenantFixture(t *testing.T, ctx context.Context, dbConnec
 }
 
 func PrepareDBForTenant(t *testing.T, dbt *dbtest.DB, tenantName string) string {
+	t.Helper()
+
 	conn := dbt.Open()
 	defer conn.Close()
 

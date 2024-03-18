@@ -138,7 +138,7 @@ func Test_authAddUserCommand(t *testing.T) {
 		expectedUsage := fmt.Sprintf(`Add a user to the system. Email should be unique and password must be at least %d characters long.
 
 Usage:
-  test add-user <email> <first name> <last name> [--owner] [--roles] [--password] [--tenant-id] [flags]
+  test add-user <email> <first name> <last name> [--owner] [--roles] [--password] --tenant-id [flags]
 
 Flags:
   -h, --help               help for add-user
@@ -162,7 +162,7 @@ Flags:
 		expectedUsage = fmt.Sprintf(`Add a user to the system. Email should be unique and password must be at least %d characters long.
 
 Usage:
-  test add-user <email> <first name> <last name> [--owner] [--roles] [--password] [--tenant-id] [flags]
+  test add-user <email> <first name> <last name> [--owner] [--roles] [--password] --tenant-id [flags]
 
 Flags:
   -h, --help               help for add-user
