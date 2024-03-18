@@ -5,6 +5,11 @@ import (
 	"go/types"
 	"net/url"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/db/router"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
+
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"github.com/stellar/go/support/config"
@@ -12,7 +17,6 @@ import (
 
 	cmdDB "github.com/stellar/stellar-disbursement-platform-backend/cmd/db"
 	cmdUtils "github.com/stellar/stellar-disbursement-platform-backend/cmd/utils"
-	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	di "github.com/stellar/stellar-disbursement-platform-backend/internal/dependencyinjection"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/htmltemplate"
@@ -93,16 +97,38 @@ func (a *AuthCommand) Command() *cobra.Command {
 				// We don't need to validate the content since it was already validated
 				// in the stellar-auth
 				role := viper.GetString("roles")
+				tenantID := viper.GetString("tenant-id")
+				if tenantID == "" {
+					log.Ctx(ctx).Fatalf("tenant-id is required")
+				}
 
 				forgotPasswordLink, err := url.JoinPath(uiBaseURL, "forgot-password")
 				if err != nil {
 					log.Ctx(ctx).Fatalf("error getting forgot password link: %s", err.Error())
 				}
 
-				// TODO: in SDP-1074, use --tenant-id flag to cast the right dbConnectionPool
-				dbConnectionPool, err := db.OpenDBConnectionPool(globalOptions.DatabaseURL)
+				// 1. Get Tenant and save it in context.
+				adminDNS, err := router.GetDNSForAdmin(globalOptions.DatabaseURL)
 				if err != nil {
-					log.Ctx(ctx).Fatalf("error getting database connection: %s", err.Error())
+					log.Ctx(ctx).Fatalf("error getting Admin DB DNS: %s", err.Error())
+				}
+				adminDBConnectionPool, err := db.OpenDBConnectionPool(adminDNS)
+				if err != nil {
+					log.Ctx(ctx).Fatalf("error opening Admin DB connection pool: %s", err.Error())
+				}
+				defer adminDBConnectionPool.Close()
+				tm := tenant.NewManager(tenant.WithDatabase(adminDBConnectionPool))
+				t, err := tm.GetTenantByID(ctx, tenantID)
+				if err != nil {
+					log.Ctx(ctx).Fatalf("error getting tenant by id %s: %s", tenantID, err.Error())
+				}
+				ctx = tenant.SaveTenantInContext(ctx, t)
+
+				// 2. Create user using multi-tenant connection pool
+				tr := tenant.NewMultiTenantDataSourceRouter(tm)
+				dbConnectionPool, err := db.NewConnectionPoolWithRouter(tr)
+				if err != nil {
+					log.Ctx(ctx).Fatalf("error getting dbConnectionPool in execAddUser: %s", err.Error())
 				}
 				defer dbConnectionPool.Close()
 

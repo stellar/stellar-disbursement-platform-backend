@@ -73,7 +73,6 @@ func SetupCLI(version, gitCommit string) *cobra.Command {
 
 	cmd := rootCmd()
 
-	cmd.AddCommand(MigrateCmd(""))
 	cmd.AddCommand(AddUserCmd("", NewDefaultPasswordPrompt(), []string{}))
 
 	return cmd

@@ -1,4 +1,4 @@
-package router
+package tenant
 
 import (
 	"context"
@@ -6,7 +6,6 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 	"github.com/stretchr/testify/require"
 )
 
@@ -18,7 +17,7 @@ func TestMultiTenantDataSourceRouter_GetDataSource(t *testing.T) {
 	require.NoError(t, outerErr)
 	defer dbConnectionPool.Close()
 
-	tenantManager := tenant.NewManager(tenant.WithDatabase(dbConnectionPool))
+	tenantManager := NewManager(WithDatabase(dbConnectionPool))
 
 	router := NewMultiTenantDataSourceRouter(tenantManager)
 
@@ -27,13 +26,13 @@ func TestMultiTenantDataSourceRouter_GetDataSource(t *testing.T) {
 	t.Run("error tenant not found in context", func(t *testing.T) {
 		dbcp, err := router.GetDataSource(ctx)
 		require.Nil(t, dbcp)
-		require.EqualError(t, err, tenant.ErrTenantNotFoundInContext.Error())
+		require.EqualError(t, err, ErrTenantNotFoundInContext.Error())
 	})
 
 	t.Run("successfully getting data source", func(t *testing.T) {
 		// Create a new context with tenant information
-		tenantInfo := &tenant.Tenant{ID: "95e788b6-c80e-4975-9d12-141001fe6e44", Name: "aid-org-1"}
-		ctx = tenant.SaveTenantInContext(ctx, tenantInfo)
+		tenantInfo := &Tenant{ID: "95e788b6-c80e-4975-9d12-141001fe6e44", Name: "aid-org-1"}
+		ctx = SaveTenantInContext(ctx, tenantInfo)
 
 		dbcp, err := router.GetDataSource(ctx)
 		require.NotNil(t, dbcp)
@@ -54,7 +53,7 @@ func TestMultiTenantDataSourceRouter_GetAllDataSources(t *testing.T) {
 	require.NoError(t, outerErr)
 	defer dbConnectionPool.Close()
 
-	tenantManager := tenant.NewManager(tenant.WithDatabase(dbConnectionPool))
+	tenantManager := NewManager(WithDatabase(dbConnectionPool))
 
 	router := NewMultiTenantDataSourceRouter(tenantManager)
 
@@ -67,16 +66,16 @@ func TestMultiTenantDataSourceRouter_GetAllDataSources(t *testing.T) {
 
 	t.Run("successfully getting data sources", func(t *testing.T) {
 		// Store DB Connection Pool for aid-org-1
-		tenantInfo := &tenant.Tenant{ID: "95e788b6-c80e-4975-9d12-141001fe6e44", Name: "aid-org-1"}
-		ctx := tenant.SaveTenantInContext(context.Background(), tenantInfo)
+		tenantInfo := &Tenant{ID: "95e788b6-c80e-4975-9d12-141001fe6e44", Name: "aid-org-1"}
+		ctx := SaveTenantInContext(context.Background(), tenantInfo)
 		dbcp1, err := router.GetDataSource(ctx)
 		require.NoError(t, err)
 		require.NotNil(t, dbcp1)
 		defer dbcp1.Close()
 
 		// Store DB Connection Pool for aid-org-2
-		tenantInfo = &tenant.Tenant{ID: "95e788b6-c80e-4975-9d12-141001fe6e45", Name: "aid-org-2"}
-		ctx = tenant.SaveTenantInContext(context.Background(), tenantInfo)
+		tenantInfo = &Tenant{ID: "95e788b6-c80e-4975-9d12-141001fe6e45", Name: "aid-org-2"}
+		ctx = SaveTenantInContext(context.Background(), tenantInfo)
 		dbcp2, err := router.GetDataSource(ctx)
 		require.NoError(t, err)
 		require.NotNil(t, dbcp2)
@@ -100,7 +99,7 @@ func TestMultiTenantDataSourceRouter_AnyDataSource(t *testing.T) {
 	require.NoError(t, outerErr)
 	defer dbConnectionPool.Close()
 
-	tenantManager := tenant.NewManager(tenant.WithDatabase(dbConnectionPool))
+	tenantManager := NewManager(WithDatabase(dbConnectionPool))
 
 	router := NewMultiTenantDataSourceRouter(tenantManager)
 
@@ -112,8 +111,8 @@ func TestMultiTenantDataSourceRouter_AnyDataSource(t *testing.T) {
 
 	t.Run("successfully getting data source", func(t *testing.T) {
 		// Store DB Connection Pool for aid-org-1
-		tenantInfo := &tenant.Tenant{ID: "95e788b6-c80e-4975-9d12-141001fe6e44", Name: "aid-org-1"}
-		ctx := tenant.SaveTenantInContext(context.Background(), tenantInfo)
+		tenantInfo := &Tenant{ID: "95e788b6-c80e-4975-9d12-141001fe6e44", Name: "aid-org-1"}
+		ctx := SaveTenantInContext(context.Background(), tenantInfo)
 		dbcp1, err := router.GetDataSource(ctx)
 		require.NoError(t, err)
 		require.NotNil(t, dbcp1)

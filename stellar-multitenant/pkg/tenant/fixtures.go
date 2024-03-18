@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/stellar/go/support/db/dbtest"
+	"github.com/stellar/stellar-disbursement-platform-backend/db/router"
+
 	"github.com/lib/pq"
 	migrate "github.com/rubenv/sql-migrate"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
@@ -16,6 +19,8 @@ import (
 )
 
 func DeleteAllTenantsFixture(t *testing.T, ctx context.Context, dbConnectionPool db.DBConnectionPool) {
+	t.Helper()
+
 	q := "DELETE FROM tenants"
 	_, err := dbConnectionPool.ExecContext(ctx, q)
 	require.NoError(t, err)
@@ -53,6 +58,8 @@ func ResetTenantConfigFixture(t *testing.T, ctx context.Context, dbConnectionPoo
 }
 
 func AssertRegisteredAssetsFixture(t *testing.T, ctx context.Context, dbConnectionPool db.DBConnectionPool, expectedAssets []string) {
+	t.Helper()
+
 	var registeredAssets []string
 	queryRegisteredAssets := `
 		SELECT CONCAT(code, ':', issuer) FROM assets
@@ -63,6 +70,8 @@ func AssertRegisteredAssetsFixture(t *testing.T, ctx context.Context, dbConnecti
 }
 
 func AssertRegisteredWalletsFixture(t *testing.T, ctx context.Context, dbConnectionPool db.DBConnectionPool, expectedWallets []string) {
+	t.Helper()
+
 	var registeredWallets []string
 	queryRegisteredWallets := `
 		SELECT name FROM wallets
@@ -73,6 +82,8 @@ func AssertRegisteredWalletsFixture(t *testing.T, ctx context.Context, dbConnect
 }
 
 func AssertRegisteredUserFixture(t *testing.T, ctx context.Context, dbConnectionPool db.DBConnectionPool, userFirstName, userLastName, userEmail string) {
+	t.Helper()
+
 	var user struct {
 		FirstName string         `db:"first_name"`
 		LastName  string         `db:"last_name"`
@@ -174,4 +185,27 @@ func ApplyMigrationsForTenantFixture(t *testing.T, ctx context.Context, dbConnec
 	require.NoError(t, err)
 	_, err = db.Migrate(dsn, migrate.Up, 0, authmigrations.FS, db.StellarPerTenantAuthMigrationsTableName)
 	require.NoError(t, err)
+}
+
+func PrepareDBForTenant(t *testing.T, dbt *dbtest.DB, tenantName string) string {
+	t.Helper()
+
+	conn := dbt.Open()
+	defer conn.Close()
+
+	ctx := context.Background()
+	schemaName := fmt.Sprintf("sdp_%s", tenantName)
+	_, err := conn.ExecContext(ctx, fmt.Sprintf("CREATE SCHEMA %s", pq.QuoteIdentifier(schemaName)))
+	require.NoError(t, err)
+
+	tDSN, err := router.GetDSNForTenant(dbt.DSN, tenantName)
+	require.NoError(t, err)
+
+	_, err = db.Migrate(tDSN, migrate.Up, 0, sdpmigrations.FS, db.StellarPerTenantSDPMigrationsTableName)
+	require.NoError(t, err)
+
+	_, err = db.Migrate(tDSN, migrate.Up, 0, authmigrations.FS, db.StellarPerTenantAuthMigrationsTableName)
+	require.NoError(t, err)
+
+	return tDSN
 }

@@ -15,7 +15,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	servicesMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/services/mocks"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/router"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
@@ -28,7 +27,7 @@ func Test_SendReceiverWalletsSMSInvitationEventHandler_Handle(t *testing.T) {
 	defer dbConnectionPool.Close()
 
 	tenantManager := tenant.NewManager(tenant.WithDatabase(dbConnectionPool))
-	tenantRouter := router.NewMultiTenantDataSourceRouter(tenantManager)
+	tenantRouter := tenant.NewMultiTenantDataSourceRouter(tenantManager)
 	mtnDBConnectionPool, err := db.NewConnectionPoolWithRouter(tenantRouter)
 	require.NoError(t, err)
 
