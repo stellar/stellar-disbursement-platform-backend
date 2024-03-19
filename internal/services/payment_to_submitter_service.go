@@ -37,8 +37,13 @@ func NewPaymentToSubmitterService(models *data.Models, tssDBConnectionPool db.DB
 
 // SendPaymentsReadyToPay sends SDP's ready-to-pay payments (in batches) to the transaction submission service.
 func (s PaymentToSubmitterService) SendPaymentsReadyToPay(ctx context.Context, paymentsReadyToPay schemas.EventPaymentsReadyToPayData) error {
+	paymentIDs := make([]string, 0, len(paymentsReadyToPay.Payments))
+	for _, paymentReadyToPay := range paymentsReadyToPay.Payments {
+		paymentIDs = append(paymentIDs, paymentReadyToPay.ID)
+	}
+
 	err := db.RunInTransaction(ctx, s.sdpModels.DBConnectionPool, nil, func(dbTx db.DBTransaction) error {
-		return s.sendPaymentsReadyToPay(ctx, dbTx, paymentsReadyToPay)
+		return s.sendPaymentsReadyToPay(ctx, dbTx, paymentsReadyToPay.TenantID, paymentIDs)
 	})
 	if err != nil {
 		return fmt.Errorf("sending payments: %w", err)
@@ -49,16 +54,12 @@ func (s PaymentToSubmitterService) SendPaymentsReadyToPay(ctx context.Context, p
 
 // sendPaymentsReadyToPay sends SDP's ready-to-pay payments to the transaction submission service, inside a DB
 // transaction.
-func (s PaymentToSubmitterService) sendPaymentsReadyToPay(ctx context.Context, dbTx db.DBTransaction, paymentsReadyToPay schemas.EventPaymentsReadyToPayData) error {
+func (s PaymentToSubmitterService) sendPaymentsReadyToPay(ctx context.Context, dbTx db.DBTransaction, tenantID string, paymentIDs []string) error {
 	// 1. Get payments that are ready to be sent. This will lock the rows.
 	// Payments Ready to be sent means:
 	//    a. Payment is in `READY` status
 	//    b. Receiver Wallet is in `REGISTERED` status
 	//    c. Disbursement is in `STARTED` status
-	paymentIDs := make([]string, 0, len(paymentsReadyToPay.Payments))
-	for _, paymentReadyToPay := range paymentsReadyToPay.Payments {
-		paymentIDs = append(paymentIDs, paymentReadyToPay.ID)
-	}
 	log.Ctx(ctx).Infof("Registering %d payments into the TSS, paymentIDs=%v", len(paymentIDs), paymentIDs)
 
 	// Double checking the payments passed by parameter
@@ -94,7 +95,7 @@ func (s PaymentToSubmitterService) sendPaymentsReadyToPay(ctx context.Context, d
 			AssetIssuer: payment.Asset.Issuer,
 			Amount:      amount,
 			Destination: payment.ReceiverWallet.StellarAddress,
-			TenantID:    paymentsReadyToPay.TenantID,
+			TenantID:    tenantID,
 		}
 		transactions = append(transactions, transaction)
 		pendingPayments = append(pendingPayments, payment)
