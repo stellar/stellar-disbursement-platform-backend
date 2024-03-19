@@ -41,12 +41,12 @@ type CreateTenantRequest struct {
 func (aa AdminApiIntegrationTests) CreateTenant(ctx context.Context, body CreateTenantRequest) (*tenant.Tenant, error) {
 	reqURL, err := url.JoinPath(aa.AdminApiBaseURL, "tenants")
 	if err != nil {
-		return nil, fmt.Errorf("building url to POST /tenants: %w", err)
+		return nil, fmt.Errorf("building url to create tenant: %w", err)
 	}
 
 	reqBody, err := json.Marshal(body)
 	if err != nil {
-		return nil, fmt.Errorf("marshalling body for POST /tenants request: %w", err)
+		return nil, fmt.Errorf("marshalling body for CreateTenantRequest: %w", err)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, reqURL, bytes.NewBuffer(reqBody))
