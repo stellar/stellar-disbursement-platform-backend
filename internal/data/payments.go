@@ -195,6 +195,52 @@ func (p *PaymentModel) Get(ctx context.Context, id string, sqlExec db.SQLExecute
 	return &payment, nil
 }
 
+func (p *PaymentModel) GetBatchForUpdate(ctx context.Context, dbTx db.DBTransaction, batchSize int) ([]*Payment, error) {
+	if batchSize <= 0 {
+		return nil, fmt.Errorf("batch size must be greater than 0")
+	}
+
+	query := `
+		SELECT
+			p.id,
+			p.amount,
+			COALESCE(p.stellar_transaction_id, '') as "stellar_transaction_id",
+			COALESCE(p.stellar_operation_id, '') as "stellar_operation_id",
+			p.status,
+			p.created_at,
+			p.updated_at,
+			d.id as "disbursement.id",
+			d.status as "disbursement.status",
+			a.id as "asset.id",
+			a.code as "asset.code",
+			a.issuer as "asset.issuer",
+			rw.id as "receiver_wallet.id",
+			rw.receiver_id as "receiver_wallet.receiver.id",
+			COALESCE(rw.stellar_address, '') as "receiver_wallet.stellar_address",
+			COALESCE(rw.stellar_memo, '') as "receiver_wallet.stellar_memo",
+			COALESCE(rw.stellar_memo_type, '') as "receiver_wallet.stellar_memo_type",
+			rw.status as "receiver_wallet.status"
+		FROM
+			payments p
+				JOIN assets a on p.asset_id = a.id
+				JOIN receiver_wallets rw on p.receiver_wallet_id = rw.id
+				JOIN disbursements d on p.disbursement_id = d.id
+		WHERE p.status = $1 -- 'READY'::payment_status
+		AND rw.status = $2 -- 'REGISTERED'::receiver_wallet_status
+		AND d.status = $3 -- 'STARTED'::disbursement_status
+		ORDER BY p.disbursement_id ASC, p.updated_at ASC
+		LIMIT $4
+		FOR UPDATE SKIP LOCKED
+		`
+
+	var payments []*Payment
+	err := dbTx.SelectContext(ctx, &payments, query, ReadyPaymentStatus, RegisteredReceiversWalletStatus, StartedDisbursementStatus, batchSize)
+	if err != nil {
+		return nil, fmt.Errorf("error getting ready payments: %w", err)
+	}
+	return payments, nil
+}
+
 // Count returns the number of payments matching the given query parameters.
 func (p *PaymentModel) Count(ctx context.Context, queryParams *QueryParams, sqlExec db.SQLExecuter) (int, error) {
 	var count int

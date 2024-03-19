@@ -175,7 +175,7 @@ func WithAPAuthEnforcementJob(apService anchorplatform.AnchorPlatformAPIServiceI
 		if err != nil {
 			log.Errorf("error creating %s job: %s", j.GetName(), err)
 		}
-		log.Infof("registering %s job to scheduler", j.GetName())
+		printJobRegistrationMessage(j)
 		s.addJob(j)
 	}
 }
@@ -183,7 +183,19 @@ func WithAPAuthEnforcementJob(apService anchorplatform.AnchorPlatformAPIServiceI
 func WithReadyPaymentsCancellationJobOption(models *data.Models) SchedulerJobRegisterOption {
 	return func(s *Scheduler) {
 		j := jobs.NewReadyPaymentsCancellationJob(models)
-		log.Infof("registering %s job to scheduler", j.GetName())
+		printJobRegistrationMessage(j)
 		s.addJob(j)
 	}
+}
+
+func WithPaymentToSubmitterJobOption(models *data.Models, tssDBConnectionPool db.DBConnectionPool) SchedulerJobRegisterOption {
+	return func(s *Scheduler) {
+		j := jobs.NewPaymentToSubmitterJob(models, tssDBConnectionPool)
+		printJobRegistrationMessage(j)
+		s.addJob(j)
+	}
+}
+
+func printJobRegistrationMessage(j jobs.Job) {
+	log.Infof("registering job to scheduler [name: %s], [interval: %s], [isMultiTenant: %t]", j.GetName(), j.GetInterval(), j.IsJobMultiTenant())
 }

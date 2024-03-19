@@ -31,7 +31,11 @@ type ServerServiceInterface interface {
 	StartServe(opts serve.ServeOptions, httpServer serve.HTTPServerInterface)
 	StartMetricsServe(opts serve.MetricsServeOptions, httpServer serve.HTTPServerInterface)
 	StartAdminServe(opts serveadmin.ServeOptions, httpServer serveadmin.HTTPServerInterface)
-	GetSchedulerJobRegistrars(ctx context.Context, serveOpts serve.ServeOptions, schedulerOptions scheduler.SchedulerOptions, apAPIService anchorplatform.AnchorPlatformAPIServiceInterface) ([]scheduler.SchedulerJobRegisterOption, error)
+	GetSchedulerJobRegistrars(ctx context.Context,
+		serveOpts serve.ServeOptions,
+		schedulerOptions scheduler.SchedulerOptions,
+		apAPIService anchorplatform.AnchorPlatformAPIServiceInterface,
+		tssDBConnectionPool db.DBConnectionPool) ([]scheduler.SchedulerJobRegisterOption, error)
 	SetupConsumers(ctx context.Context, o SetupConsumersOptions) error
 }
 
@@ -61,7 +65,13 @@ func (s *ServerService) StartAdminServe(opts serveadmin.ServeOptions, httpServer
 	}
 }
 
-func (s *ServerService) GetSchedulerJobRegistrars(ctx context.Context, serveOpts serve.ServeOptions, schedulerOptions scheduler.SchedulerOptions, apAPIService anchorplatform.AnchorPlatformAPIServiceInterface) ([]scheduler.SchedulerJobRegisterOption, error) {
+func (s *ServerService) GetSchedulerJobRegistrars(
+	ctx context.Context,
+	serveOpts serve.ServeOptions,
+	schedulerOptions scheduler.SchedulerOptions,
+	apAPIService anchorplatform.AnchorPlatformAPIServiceInterface,
+	tssDBConnectionPool db.DBConnectionPool,
+) ([]scheduler.SchedulerJobRegisterOption, error) {
 	// TODO: in SDP-1111, inject the remaining dbConnectionPools needed here.
 	models, err := data.NewModels(serveOpts.MtnDBConnectionPool)
 	if err != nil {
@@ -71,6 +81,7 @@ func (s *ServerService) GetSchedulerJobRegistrars(ctx context.Context, serveOpts
 	return []scheduler.SchedulerJobRegisterOption{
 		scheduler.WithAPAuthEnforcementJob(apAPIService, serveOpts.MonitorService, serveOpts.CrashTrackerClient.Clone()),
 		scheduler.WithReadyPaymentsCancellationJobOption(models),
+		scheduler.WithPaymentToSubmitterJobOption(models, tssDBConnectionPool),
 	}, nil
 }
 
@@ -547,7 +558,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			// Starting Scheduler Service (background job) if enabled
 			if serveOpts.EnableScheduler {
 				log.Ctx(ctx).Info("Starting Scheduler Service...")
-				schedulerJobRegistrars, innerErr := serverService.GetSchedulerJobRegistrars(ctx, serveOpts, schedulerOptions, apAPIService)
+				schedulerJobRegistrars, innerErr := serverService.GetSchedulerJobRegistrars(ctx, serveOpts, schedulerOptions, apAPIService, tssDBConnectionPool)
 				if innerErr != nil {
 					log.Ctx(ctx).Fatalf("Error getting scheduler job registrars: %v", innerErr)
 				}

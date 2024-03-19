@@ -57,8 +57,13 @@ func (m *mockServer) StartAdminServe(opts serveadmin.ServeOptions, httpServer se
 	m.wg.Done()
 }
 
-func (m *mockServer) GetSchedulerJobRegistrars(ctx context.Context, serveOpts serve.ServeOptions, schedulerOptions scheduler.SchedulerOptions, apAPIService anchorplatform.AnchorPlatformAPIServiceInterface) ([]scheduler.SchedulerJobRegisterOption, error) {
-	args := m.Called(ctx, serveOpts, schedulerOptions, apAPIService)
+func (m *mockServer) GetSchedulerJobRegistrars(ctx context.Context,
+	serveOpts serve.ServeOptions,
+	schedulerOptions scheduler.SchedulerOptions,
+	apAPIService anchorplatform.AnchorPlatformAPIServiceInterface,
+	tssDBConnectinPool db.DBConnectionPool,
+) ([]scheduler.SchedulerJobRegisterOption, error) {
+	args := m.Called(ctx, serveOpts, schedulerOptions, apAPIService, tssDBConnectinPool)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
