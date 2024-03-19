@@ -149,7 +149,7 @@ sdp:
   ## @param sdp.configMap.data.SDP_UI_BASE_URL The base URL of the SDP UI/dashboard.
   ## @param sdp.configMap.data.INSTANCE_NAME The name of the SDP instance. Example: "SDP Testnet".
   ## @param sdp.configMap.data.ENABLE_SCHEDULER Whether the scheduled jobs be enabled in this instance ("true" or "false").
-  ## @param sdp.configMap.data.TENANT_XLM_BOOTSTRAP_AMOUNT The amount of XLM to be sent to be sent to a newly created tenant distribution account.
+  ## @param sdp.configMap.data.TENANT_XLM_BOOTSTRAP_AMOUNT The amount of XLM to be sent to a newly created tenant distribution account.
   configMap:
     annotations:
     data:

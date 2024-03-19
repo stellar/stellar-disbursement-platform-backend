@@ -233,7 +233,6 @@ func CreateAndFundAccount(ctx context.Context, submitterEngine engine.SubmitterE
 		return fmt.Errorf("funding source account and destination account cannot be the same: %s", sourceAcc)
 	}
 
-	log.Ctx(ctx).Info("Initiating transaction...")
 	if err := retry.Do(func() error {
 		srcAccDetails, err := getAccountDetails(submitterEngine.HorizonClient, sourceAcc)
 		if err != nil {
@@ -274,11 +273,7 @@ func CreateAndFundAccount(ctx context.Context, submitterEngine engine.SubmitterE
 		}
 
 		_, err = submitterEngine.HorizonClient.SubmitTransactionWithOptions(tx, horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true})
-		if err != nil {
-			return err
-		}
-
-		return nil
+		return err
 	},
 		retry.Attempts(CreateAndFundAccountRetryAttempts),
 		retry.MaxDelay(1*time.Minute),
@@ -295,10 +290,15 @@ func CreateAndFundAccount(ctx context.Context, submitterEngine engine.SubmitterE
 			// if any terminal errors encountered, we should not retry
 			return false
 		}),
+		retry.OnRetry(func(n uint, err error) {
+			log.Ctx(ctx).Warnf("submitting create account tx for account %s - attempt %d failed with error: %v",
+				destinationAcc,
+				n+1,
+				err)
+		}),
 	); err != nil {
 		return fmt.Errorf("maximum number of retries reached or terminal error encountered: %w", utils.NewHorizonErrorWrapper(err))
 	}
-	log.Ctx(ctx).Info("Transaction completed.")
 
 	_, err := getAccountDetails(submitterEngine.HorizonClient, destinationAcc)
 	if err != nil {
