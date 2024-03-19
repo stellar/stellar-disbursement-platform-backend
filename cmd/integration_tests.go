@@ -48,6 +48,48 @@ func (c *IntegrationTestsCommand) Command() *cobra.Command {
 			FlagDefault: "Integration test wallet",
 			Required:    true,
 		},
+		{
+			Name:      "admin-server-base-url",
+			Usage:     "The Base URL of the admin API of the SDP used for managing tenants",
+			OptType:   types.String,
+			ConfigKey: &integrationTestsOpts.AdminServerBaseURL,
+			Required:  true,
+		},
+		{
+			Name:      "admin-server-account-id",
+			Usage:     "The account id of the admin server api",
+			OptType:   types.String,
+			ConfigKey: &integrationTestsOpts.AdminServerAccountId,
+			Required:  true,
+		},
+		{
+			Name:      "admin-server-api-key",
+			Usage:     "The api key of the admin server api",
+			OptType:   types.String,
+			ConfigKey: &integrationTestsOpts.AdminServerApiKey,
+			Required:  true,
+		},
+		{
+			Name:      "tenant-name",
+			Usage:     "Tenant name to be used in integration tests",
+			OptType:   types.String,
+			ConfigKey: &integrationTestsOpts.TenantName,
+			Required:  true,
+		},
+		{
+			Name:      "user-email",
+			Usage:     "Email from SDP authenticated user with all roles",
+			OptType:   types.String,
+			ConfigKey: &integrationTestsOpts.UserEmail,
+			Required:  true,
+		},
+		{
+			Name:      "user-password",
+			Usage:     "Password from SDP authenticated user with all roles",
+			OptType:   types.String,
+			ConfigKey: &integrationTestsOpts.UserPassword,
+			Required:  true,
+		},
 	}
 	integrationTestsCmd := &cobra.Command{
 		Use:   "integration-tests",
@@ -86,20 +128,6 @@ func (c *IntegrationTestsCommand) Command() *cobra.Command {
 
 func (c *IntegrationTestsCommand) StartIntegrationTestsCommand(integrationTestsOpts *integrationtests.IntegrationTestsOpts) *cobra.Command {
 	configOpts := config.ConfigOptions{
-		{
-			Name:      "user-email",
-			Usage:     "Email from SDP authenticated user with all roles",
-			OptType:   types.String,
-			ConfigKey: &integrationTestsOpts.UserEmail,
-			Required:  true,
-		},
-		{
-			Name:      "user-password",
-			Usage:     "Password from SDP authenticated user with all roles",
-			OptType:   types.String,
-			ConfigKey: &integrationTestsOpts.UserPassword,
-			Required:  true,
-		},
 		{
 			Name:           "receiver-account-public-key",
 			Usage:          "Integration test receiver public stellar account key",
