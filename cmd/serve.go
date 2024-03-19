@@ -311,7 +311,8 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			OptType:   types.String,
 			ConfigKey: &adminServeOpts.AdminApiKey,
 			Required:  true,
-		})
+		}, cmdUtils.TenantXLMBootstrapAmount(&adminServeOpts.TenantAccountNativeAssetBootstrapAmount),
+	)
 
 	// metrics server options
 	metricsServeOpts := serve.MetricsServeOptions{}
@@ -519,7 +520,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 				log.Ctx(ctx).Fatalf("error creating submitter engine: %v", err)
 			}
 			serveOpts.SubmitterEngine = submitterEngine
-			adminServeOpts.DistAccSigClient = submitterEngine.SignatureService.DistAccountSigner
+			adminServeOpts.SubmitterEngine = submitterEngine
 
 			// Kafka (background)
 			if eventBrokerOptions.EventBrokerType == events.KafkaEventBrokerType {

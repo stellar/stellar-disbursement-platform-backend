@@ -5,8 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strconv"
+	"time"
 
+	"github.com/avast/retry-go"
 	"github.com/stellar/go/clients/horizonclient"
+	"github.com/stellar/go/protocols/horizon"
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/txnbuild"
 
@@ -26,9 +30,12 @@ const MaxNumberOfChannelAccounts = 1000
 // MinNumberOfChannelAccounts is the minimum number of accounts tx submission service should manage.
 const MinNumberOfChannelAccounts = 1
 
+// CreateAndFundAccountRetryAttempts is the maximum number of attempts to create and fund an account on the Stellar network.
+const CreateAndFundAccountRetryAttempts = 5
+
 // DefaultRevokeSponsorshipReserveAmount is the amount of the native asset that the sponsoring account will send
 // to the sponsored account to cover the reserve that is needed to for revoking account sponsorship.
-// The amount will be send back to the sponsoring account once the sponsored account is deleted onchain.
+// The amount will be sent back to the sponsoring account once the sponsored account is deleted onchain.
 const DefaultRevokeSponsorshipReserveAmount = "1.5"
 
 // CreateChannelAccountsOnChain will create up to 19 accounts per Transaction due to the 20 signatures per tx limit This
@@ -218,4 +225,96 @@ func DeleteChannelAccountOnChain(ctx context.Context, submiterEngine engine.Subm
 	}
 
 	return nil
+}
+
+// CreateAndFundAccount creates and funds a new destination account on the Stellar network with the given amount of native asset from the source account.
+func CreateAndFundAccount(ctx context.Context, submitterEngine engine.SubmitterEngine, amountNativeAssetToSend int, sourceAcc, destinationAcc string) error {
+	if sourceAcc == destinationAcc {
+		return fmt.Errorf("funding source account and destination account cannot be the same: %s", sourceAcc)
+	}
+
+	if err := retry.Do(func() error {
+		srcAccDetails, err := getAccountDetails(submitterEngine.HorizonClient, sourceAcc)
+		if err != nil {
+			return fmt.Errorf("getting details for source account: %w", err)
+		}
+
+		tx, err := txnbuild.NewTransaction(
+			txnbuild.TransactionParams{
+				SourceAccount:        srcAccDetails,
+				IncrementSequenceNum: true,
+				BaseFee:              int64(submitterEngine.MaxBaseFee),
+				Preconditions: txnbuild.Preconditions{
+					TimeBounds: txnbuild.NewTimeout(30),
+				},
+				Operations: []txnbuild.Operation{
+					&txnbuild.CreateAccount{
+						Destination: destinationAcc,
+						Amount:      strconv.Itoa(amountNativeAssetToSend),
+					},
+				},
+			},
+		)
+		if err != nil {
+			return fmt.Errorf(
+				"creating raw create account tx for account %s: %w",
+				destinationAcc,
+				err,
+			)
+		}
+		// Host distribution account signing:
+		tx, err = submitterEngine.HostAccountSigner.SignStellarTransaction(ctx, tx, sourceAcc)
+		if err != nil {
+			return fmt.Errorf(
+				"signing create account tx for account %s: %w",
+				destinationAcc,
+				err,
+			)
+		}
+
+		_, err = submitterEngine.HorizonClient.SubmitTransactionWithOptions(tx, horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true})
+		return err
+	},
+		retry.Attempts(CreateAndFundAccountRetryAttempts),
+		retry.MaxDelay(1*time.Minute),
+		retry.DelayType(retry.BackOffDelay),
+		retry.RetryIf(func(err error) bool {
+			hError := utils.NewHorizonErrorWrapper(err)
+			// issues not related to the tx submission on the network should be retried
+			if !hError.IsHorizonError() {
+				return true
+			} else if !hError.ShouldMarkAsError() {
+				log.Ctx(ctx).Warnf("submitting create account tx for account %s to the Stellar network - retriable error: %v", destinationAcc, hError)
+				return true
+			}
+			// if any terminal errors encountered, we should not retry
+			return false
+		}),
+		retry.OnRetry(func(n uint, err error) {
+			log.Ctx(ctx).Warnf("submitting create account tx for account %s - attempt %d failed with error: %v",
+				destinationAcc,
+				n+1,
+				err)
+		}),
+	); err != nil {
+		return fmt.Errorf("maximum number of retries reached or terminal error encountered: %w", utils.NewHorizonErrorWrapper(err))
+	}
+
+	_, err := getAccountDetails(submitterEngine.HorizonClient, destinationAcc)
+	if err != nil {
+		return fmt.Errorf("getting details for destination account: %w", err)
+	}
+
+	return nil
+}
+
+func getAccountDetails(client horizonclient.ClientInterface, accountID string) (*horizon.Account, error) {
+	account, err := client.AccountDetail(horizonclient.AccountRequest{
+		AccountID: accountID,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("cannot find account on the network %s: %w", accountID, err)
+	}
+
+	return &account, nil
 }

@@ -6,10 +6,13 @@ import (
 	"testing"
 
 	migrate "github.com/rubenv/sql-migrate"
+	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/keypair"
 	"github.com/stellar/go/network"
+	"github.com/stellar/go/protocols/horizon"
 	"github.com/stellar/go/strkey"
 	"github.com/stellar/go/support/log"
+	"github.com/stellar/go/txnbuild"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -21,6 +24,8 @@ import (
 	sdpmigrations "github.com/stellar/stellar-disbursement-platform-backend/db/migrations/sdp-migrations"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/router"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
+	preconditionsMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
@@ -103,12 +108,20 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 			networkPassphrase = network.TestNetworkPassphrase
 		}
 
+		mHorizonClient := &horizonclient.MockClient{}
+		mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
+
+		sigService, _, _, hostAccSigClient, distAccResolver := signing.NewMockSignatureService(t)
+
 		distAcc := keypair.MustRandom()
+		distAccPrivKey := distAcc.Seed()
+		distAccPubKey := distAcc.Address()
 		distAccSigClient, err := signing.NewSignatureClient(signing.DistributionAccountEnvSignatureClientType, signing.SignatureClientOptions{
 			NetworkPassphrase:      networkPassphrase,
-			DistributionPrivateKey: distAcc.Seed(),
+			DistributionPrivateKey: distAccPrivKey,
 		})
 		require.NoError(t, err)
+
 		if sigClientType == signing.DistributionAccountDBSignatureClientType {
 			distAccSigClient, err = signing.NewSignatureClient(signing.DistributionAccountDBSignatureClientType, signing.SignatureClientOptions{
 				NetworkPassphrase:           networkPassphrase,
@@ -123,12 +136,52 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 		} else {
 			assert.IsType(t, &signing.DistributionAccountDBSignatureClient{}, distAccSigClient)
 		}
+		sigService.DistAccountSigner = distAccSigClient
+
+		tenantAcc := keypair.MustRandom()
+		tenantAccPubKey := tenantAcc.Address()
+		distAccResolver.On("HostDistributionAccount").Return(distAccPubKey, nil).Once()
+
+		if sigClientType == signing.DistributionAccountDBSignatureClientType {
+			mHorizonClient.
+				On("AccountDetail", horizonclient.AccountRequest{AccountID: distAccPubKey}).
+				Return(horizon.Account{
+					AccountID: distAccPubKey,
+					Sequence:  1,
+				}, nil).
+				Once()
+			hostAccSigClient.On(
+				"SignStellarTransaction",
+				ctx,
+				mock.AnythingOfType("*txnbuild.Transaction"),
+				distAccPubKey).Return(&txnbuild.Transaction{}, nil).Once()
+			mHorizonClient.On(
+				"SubmitTransactionWithOptions",
+				mock.AnythingOfType("*txnbuild.Transaction"),
+				horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true},
+			).Return(horizon.Transaction{}, nil).Once()
+			mHorizonClient.
+				On("AccountDetail", mock.AnythingOfType("horizonclient.AccountRequest")).
+				Return(horizon.Account{
+					AccountID: tenantAccPubKey,
+					Sequence:  1,
+				}, nil).
+				Once()
+		}
+
+		submitterEngine := engine.SubmitterEngine{
+			HorizonClient:       mHorizonClient,
+			SignatureService:    sigService,
+			LedgerNumberTracker: mLedgerNumberTracker,
+			MaxBaseFee:          100 * txnbuild.MinBaseFee,
+		}
 
 		p := NewManager(
 			WithDatabase(dbConnectionPool),
 			WithMessengerClient(&messengerClientMock),
 			WithTenantManager(tenantManager),
-			WithDistributionAccountSignatureClient(distAccSigClient),
+			WithSubmitterEngine(submitterEngine),
+			WithNativeAssetBootstrapAmount(tenant.MinTenantDistributionAccountAmount),
 		)
 
 		uiBaseURL := "http://localhost:3000"
@@ -143,6 +196,8 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 			assert.True(t, strkey.IsValidEd25519PublicKey(*tnt.DistributionAccount))
 		}
 		assert.Equal(t, tenant.ProvisionedTenantStatus, tnt.Status)
+
+		mHorizonClient.AssertExpectations(t)
 	}
 
 	t.Run("provision a new tenant for the testnet", func(t *testing.T) {

@@ -28,6 +28,7 @@ import (
 	sigMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 func Test_CreateChannelAccountsOnChain(t *testing.T) {
@@ -441,4 +442,182 @@ func Test_DeleteChannelAccountOnChain(t *testing.T) {
 
 	horizonClientMock.AssertExpectations(t)
 	privateKeyEncrypterMock.AssertExpectations(t)
+}
+
+func Test_FundDistributionAccount(t *testing.T) {
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	horizonClientMock := &horizonclient.MockClient{}
+	ctx := context.Background()
+
+	sigService, _, _, mHostAccSigClient, _ := signing.NewMockSignatureService(t)
+	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
+
+	srcAcc := keypair.MustRandom().Address()
+	dstAcc := keypair.MustRandom().Address()
+	tenantDistributionFundingAmount := tenant.MinTenantDistributionAccountAmount
+	require.NoError(t, err)
+
+	testCases := []struct {
+		name            string
+		prepareMocksFn  func()
+		amountToFund    int
+		srcAcc          string
+		dstAcc          string
+		wantErrContains string
+	}{
+		{
+			name:            "source account is the same as destination account",
+			amountToFund:    tenantDistributionFundingAmount,
+			srcAcc:          srcAcc,
+			dstAcc:          srcAcc,
+			wantErrContains: "source account and destination account cannot be the same",
+		},
+		{
+			name: "returns error when HorizonClient fails getting host distribution AccountDetails",
+			prepareMocksFn: func() {
+				horizonClientMock.
+					On("AccountDetail", horizonclient.AccountRequest{AccountID: srcAcc}).
+					Return(horizon.Account{AccountID: srcAcc}, horizonclient.Error{Problem: problem.NotFound}).
+					Times(CreateAndFundAccountRetryAttempts)
+			},
+			amountToFund: tenantDistributionFundingAmount,
+			srcAcc:       srcAcc,
+			dstAcc:       dstAcc,
+			wantErrContains: fmt.Sprintf(
+				`getting details for source account: cannot find account on the network %s: horizon error: "Resource Missing" - check horizon.Error.Problem for more information`,
+				srcAcc,
+			),
+		},
+		{
+			name: "returns error when failing to sign raw transaction",
+			prepareMocksFn: func() {
+				horizonClientMock.
+					On("AccountDetail", horizonclient.AccountRequest{AccountID: srcAcc}).
+					Return(horizon.Account{AccountID: srcAcc}, nil).
+					Times(CreateAndFundAccountRetryAttempts)
+				mHostAccSigClient.
+					On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), srcAcc).
+					Return(&txnbuild.Transaction{}, errors.New("failed to sign raw tx")).
+					Times(CreateAndFundAccountRetryAttempts)
+			},
+			amountToFund: tenantDistributionFundingAmount,
+			srcAcc:       srcAcc,
+			dstAcc:       dstAcc,
+			wantErrContains: fmt.Sprintf(
+				`signing create account tx for account %s:`,
+				dstAcc,
+			),
+		},
+		{
+			name: "returns error when failing to submit tx over Horizon - maximum retries reached",
+			prepareMocksFn: func() {
+				horizonClientMock.
+					On("AccountDetail", horizonclient.AccountRequest{AccountID: srcAcc}).
+					Return(horizon.Account{AccountID: srcAcc}, nil).
+					Times(CreateAndFundAccountRetryAttempts)
+				mHostAccSigClient.
+					On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), srcAcc).
+					Return(&txnbuild.Transaction{}, nil).
+					Times(CreateAndFundAccountRetryAttempts)
+				horizonClientMock.On("SubmitTransactionWithOptions", mock.AnythingOfType("*txnbuild.Transaction"), horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true}).
+					Return(horizon.Transaction{}, horizonclient.Error{
+						Problem: problem.P{
+							Type:   "https://stellar.org/horizon-errors/timeout",
+							Title:  "Timeout",
+							Status: http.StatusRequestTimeout,
+							Extras: map[string]interface{}{
+								"result_codes": map[string]interface{}{},
+							},
+						},
+					}).
+					Times(CreateAndFundAccountRetryAttempts)
+			},
+			amountToFund:    tenantDistributionFundingAmount,
+			srcAcc:          srcAcc,
+			dstAcc:          dstAcc,
+			wantErrContains: "maximum number of retries reached or terminal error encountered",
+		},
+		{
+			name: "returns error when failing to submit tx over Horizon - terminal error encountered",
+			prepareMocksFn: func() {
+				horizonClientMock.
+					On("AccountDetail", horizonclient.AccountRequest{AccountID: srcAcc}).
+					Return(horizon.Account{AccountID: srcAcc}, nil).
+					Once()
+				mHostAccSigClient.
+					On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), srcAcc).
+					Return(&txnbuild.Transaction{}, nil).
+					Once()
+				horizonClientMock.On("SubmitTransactionWithOptions", mock.AnythingOfType("*txnbuild.Transaction"), horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true}).
+					Return(horizon.Transaction{}, horizonclient.Error{
+						Problem: problem.P{
+							Status: http.StatusBadRequest,
+							Extras: map[string]interface{}{
+								"result_codes": map[string]interface{}{
+									"transaction": "tx_insufficient_balance",
+								},
+							},
+						},
+					}).
+					Once()
+			},
+			amountToFund:    tenantDistributionFundingAmount,
+			srcAcc:          srcAcc,
+			dstAcc:          dstAcc,
+			wantErrContains: "maximum number of retries reached or terminal error encountered",
+		},
+		{
+			name: "successfully creates and funds tenant distribution account",
+			prepareMocksFn: func() {
+				horizonClientMock.
+					On("AccountDetail", horizonclient.AccountRequest{AccountID: srcAcc}).
+					Return(horizon.Account{AccountID: srcAcc}, nil).
+					Once()
+				mHostAccSigClient.
+					On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), srcAcc).
+					Return(&txnbuild.Transaction{}, nil).
+					Once()
+				horizonClientMock.On("SubmitTransactionWithOptions", mock.AnythingOfType("*txnbuild.Transaction"), horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true}).
+					Return(horizon.Transaction{}, nil).
+					Once()
+				horizonClientMock.
+					On("AccountDetail", horizonclient.AccountRequest{AccountID: dstAcc}).
+					Return(horizon.Account{AccountID: dstAcc}, nil).
+					Once()
+			},
+			amountToFund: tenantDistributionFundingAmount,
+			srcAcc:       srcAcc,
+			dstAcc:       dstAcc,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.prepareMocksFn != nil {
+				tc.prepareMocksFn()
+			}
+
+			submitterEngine := engine.SubmitterEngine{
+				HorizonClient:       horizonClientMock,
+				SignatureService:    sigService,
+				MaxBaseFee:          txnbuild.MinBaseFee,
+				LedgerNumberTracker: mLedgerNumberTracker,
+			}
+
+			err = CreateAndFundAccount(ctx, submitterEngine, tc.amountToFund, tc.srcAcc, tc.dstAcc)
+			if tc.wantErrContains != "" {
+				require.Error(t, err)
+				assert.ErrorContains(t, err, tc.wantErrContains)
+			} else {
+				require.NoError(t, err)
+			}
+
+			horizonClientMock.AssertExpectations(t)
+		})
+	}
 }

@@ -16,17 +16,20 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
+	tssSvc "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 type Manager struct {
-	tenantManager    *tenant.Manager
-	db               db.DBConnectionPool
-	messengerClient  message.MessengerClient
-	distAccSigClient signing.SignatureClient
+	tenantManager   *tenant.Manager
+	db              db.DBConnectionPool
+	messengerClient message.MessengerClient
+	engine.SubmitterEngine
+	nativeAssetBootstrapAmount int
 }
 
 func (m *Manager) ProvisionNewTenant(
@@ -94,12 +97,12 @@ func (m *Manager) ProvisionNewTenant(
 	}
 
 	// Provision distribution account for tenant if necessary
-	distributionAccPubKeys, err := m.distAccSigClient.BatchInsert(ctx, 1)
+	distributionAccPubKeys, err := m.SubmitterEngine.DistAccountSigner.BatchInsert(ctx, 1)
 	if err != nil {
 		if errors.Is(err, signing.ErrUnsupportedCommand) {
 			log.Ctx(ctx).Warnf(
 				"Account provisioning not needed for distribution account signature client type %s: %v",
-				m.distAccSigClient.Type(), err)
+				m.SubmitterEngine.DistAccountSigner.Type(), err)
 		} else {
 			return nil, fmt.Errorf("provisioning distribution account: %w", err)
 		}
@@ -139,13 +142,13 @@ func (m *Manager) ProvisionNewTenant(
 	if err != nil {
 		updateTenantErrMsg := fmt.Errorf("updating tenant %s status to %s: %w", name, tenant.ProvisionedTenantStatus, err)
 		// Rollback distribution account provisioning
-		sigClientDeleteKeyErr := m.distAccSigClient.Delete(ctx, distributionAccPubKey)
+		sigClientDeleteKeyErr := m.SubmitterEngine.DistAccountSigner.Delete(ctx, distributionAccPubKey)
 		if sigClientDeleteKeyErr != nil {
 			sigClientDeleteKeyErrMsg := fmt.Errorf("unable to delete distribution account private key: %w", sigClientDeleteKeyErr)
 			if errors.Is(sigClientDeleteKeyErr, signing.ErrUnsupportedCommand) {
 				log.Ctx(ctx).Warnf(
 					"Private key deletion not needed for distribution account signature client type %s: %v",
-					m.distAccSigClient.Type(), sigClientDeleteKeyErr)
+					m.SubmitterEngine.DistAccountSigner.Type(), sigClientDeleteKeyErr)
 			} else {
 				log.Ctx(ctx).Error(sigClientDeleteKeyErrMsg)
 				updateTenantErrMsg = fmt.Errorf("%w. %w", updateTenantErrMsg, sigClientDeleteKeyErrMsg)
@@ -153,6 +156,22 @@ func (m *Manager) ProvisionNewTenant(
 		}
 
 		return nil, updateTenantErrMsg
+	}
+
+	hostDistributionAccPubKey := m.SubmitterEngine.HostDistributionAccount()
+	if distributionAccPubKey != hostDistributionAccPubKey {
+		err = tenant.ValidateNativeAssetBootstrapAmount(m.nativeAssetBootstrapAmount)
+		if err != nil {
+			return nil, fmt.Errorf("invalid native asset bootstrap amount: %w", err)
+		}
+
+		// Bootstrap tenant distribution account with native asset
+		err = tssSvc.CreateAndFundAccount(ctx, m.SubmitterEngine, m.nativeAssetBootstrapAmount, hostDistributionAccPubKey, distributionAccPubKey)
+		if err != nil {
+			return nil, fmt.Errorf("bootstrapping tenant distribution account with native asset: %w", err)
+		}
+	} else {
+		log.Ctx(ctx).Info("Host distribution account and tenant distribution account are the same, no need to initiate funding.")
 	}
 
 	return t, nil
@@ -199,8 +218,14 @@ func WithTenantManager(tenantManager *tenant.Manager) Option {
 	}
 }
 
-func WithDistributionAccountSignatureClient(distAccSigClient signing.SignatureClient) Option {
+func WithSubmitterEngine(submitterEngine engine.SubmitterEngine) Option {
 	return func(m *Manager) {
-		m.distAccSigClient = distAccSigClient
+		m.SubmitterEngine = submitterEngine
+	}
+}
+
+func WithNativeAssetBootstrapAmount(nativeAssetBootstrapAmount int) Option {
+	return func(m *Manager) {
+		m.nativeAssetBootstrapAmount = nativeAssetBootstrapAmount
 	}
 }

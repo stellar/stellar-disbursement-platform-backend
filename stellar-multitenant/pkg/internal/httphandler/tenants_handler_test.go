@@ -11,7 +11,9 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/keypair"
+	"github.com/stellar/go/txnbuild"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -19,7 +21,9 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
-	sigMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing/mocks"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
+	preconditionsMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions/mocks"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/internal/provisioning"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
@@ -44,7 +48,7 @@ func runBadRequestPatchTest(t *testing.T, r *chi.Mux, url, fieldName, errorMsg s
 			"%s": "%s"
 		}
 	}`, fieldName, errorMsg)
-	assert.JSONEq(t, string(expectedRespBody), string(respBody))
+	assert.JSONEq(t, expectedRespBody, string(respBody))
 }
 
 func runSuccessfulRequestPatchTest(t *testing.T, r *chi.Mux, ctx context.Context, dbConnectionPool db.DBConnectionPool, handler TenantsHandler, reqBody, expectedRespBody string) {
@@ -255,19 +259,32 @@ func Test_TenantHandler_Post(t *testing.T) {
 	require.NoError(t, outerErr)
 	defer dbConnectionPool.Close()
 
-	distAcc := keypair.MustRandom()
-	t.Setenv("DISTRIBUTION_SEED", distAcc.Seed())
-	distAccSigClientMock := sigMocks.NewMockSignatureClient(t)
-
 	ctx := context.Background()
 	messengerClientMock := message.MessengerClientMock{}
 	m := tenant.NewManager(tenant.WithDatabase(dbConnectionPool))
+
+	mHorizonClient := &horizonclient.MockClient{}
+	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
+	sigService, _, distAccSigClient, _, distAccResolver := signing.NewMockSignatureService(t)
+
+	distAcc := keypair.MustRandom().Address()
+	distAccResolver.On("HostDistributionAccount").Return(distAcc, nil).Twice()
+
+	submitterEngine := engine.SubmitterEngine{
+		HorizonClient:       mHorizonClient,
+		SignatureService:    sigService,
+		LedgerNumberTracker: mLedgerNumberTracker,
+		MaxBaseFee:          100 * txnbuild.MinBaseFee,
+	}
+
 	p := provisioning.NewManager(
 		provisioning.WithDatabase(dbConnectionPool),
 		provisioning.WithTenantManager(m),
 		provisioning.WithMessengerClient(&messengerClientMock),
-		provisioning.WithDistributionAccountSignatureClient(distAccSigClientMock),
+		provisioning.WithSubmitterEngine(submitterEngine),
+		provisioning.WithNativeAssetBootstrapAmount(tenant.MinTenantDistributionAccountAmount),
 	)
+
 	handler := TenantsHandler{
 		Manager:             m,
 		ProvisioningManager: p,
@@ -320,9 +337,9 @@ func Test_TenantHandler_Post(t *testing.T) {
 			Return(nil).
 			Once()
 
-		distAccSigClientMock.
+		distAccSigClient.
 			On("BatchInsert", ctx, 1).
-			Return([]string{distAcc.Address()}, nil).
+			Return([]string{distAcc}, nil).
 			Once()
 
 		reqBody := `
@@ -367,7 +384,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 				"created_at": %q,
 				"updated_at": %q
 			}
-		`, tnt.ID, distAcc.Address(), tnt.CreatedAt.Format(time.RFC3339Nano), tnt.UpdatedAt.Format(time.RFC3339Nano))
+		`, tnt.ID, distAcc, tnt.CreatedAt.Format(time.RFC3339Nano), tnt.UpdatedAt.Format(time.RFC3339Nano))
 		assert.JSONEq(t, expectedRespBody, string(respBody))
 
 		// Validating infrastructure
@@ -419,9 +436,9 @@ func Test_TenantHandler_Post(t *testing.T) {
 			Return(nil).
 			Once()
 
-		distAccSigClientMock.
+		distAccSigClient.
 			On("BatchInsert", ctx, 1).
-			Return([]string{distAcc.Address()}, nil).
+			Return([]string{distAcc}, nil).
 			Once()
 
 		reqBody := `
@@ -521,7 +538,7 @@ func Test_TenantHandler_Patch(t *testing.T) {
 		assert.Equal(t, http.StatusNotFound, resp.StatusCode)
 
 		expectedRespBody := `{"error":"updating tenant: tenant unknown does not exist"}`
-		assert.JSONEq(t, string(expectedRespBody), string(respBody))
+		assert.JSONEq(t, expectedRespBody, string(respBody))
 	})
 
 	t.Run("returns BadRequest when EmailSenderType is not valid", func(t *testing.T) {

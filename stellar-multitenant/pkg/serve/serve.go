@@ -13,7 +13,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/internal/httphandler"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/internal/provisioning"
@@ -31,19 +31,20 @@ func (h *HTTPServer) Run(conf supporthttp.Config) {
 }
 
 type ServeOptions struct {
-	AdminDBConnectionPool     db.DBConnectionPool
-	EmailMessengerClient      message.MessengerClient
-	Environment               string
-	GitCommit                 string
-	NetworkPassphrase         string
-	networkType               utils.NetworkType
-	Port                      int
-	DistAccSigClient          signing.SignatureClient
-	tenantManager             *tenant.Manager
-	tenantProvisioningManager *provisioning.Manager
-	Version                   string
-	AdminAccount              string
-	AdminApiKey               string
+	AdminDBConnectionPool                   db.DBConnectionPool
+	EmailMessengerClient                    message.MessengerClient
+	Environment                             string
+	GitCommit                               string
+	NetworkPassphrase                       string
+	networkType                             utils.NetworkType
+	Port                                    int
+	SubmitterEngine                         engine.SubmitterEngine
+	TenantAccountNativeAssetBootstrapAmount int
+	tenantManager                           *tenant.Manager
+	tenantProvisioningManager               *provisioning.Manager
+	Version                                 string
+	AdminAccount                            string
+	AdminApiKey                             string
 }
 
 // SetupDependencies uses the serve options to setup the dependencies for the server.
@@ -53,7 +54,8 @@ func (opts *ServeOptions) SetupDependencies() error {
 		provisioning.WithDatabase(opts.AdminDBConnectionPool),
 		provisioning.WithTenantManager(opts.tenantManager),
 		provisioning.WithMessengerClient(opts.EmailMessengerClient),
-		provisioning.WithDistributionAccountSignatureClient(opts.DistAccSigClient),
+		provisioning.WithSubmitterEngine(opts.SubmitterEngine),
+		provisioning.WithNativeAssetBootstrapAmount(opts.TenantAccountNativeAssetBootstrapAmount),
 	)
 
 	var err error

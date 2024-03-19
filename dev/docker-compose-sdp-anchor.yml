@@ -54,6 +54,7 @@ services:
       BROKER_URLS: "kafka:9092"
       CONSUMER_GROUP_ID: "group-id"
       KAFKA_SECURITY_PROTOCOL: "PLAINTEXT"
+      TENANT_XLM_BOOTSTRAP_AMOUNT: 5
 
       # multi-tenant secrets:
       ADMIN_ACCOUNT: SDP-admin

@@ -14,6 +14,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 // TwilioConfigOptions returns the config options for Twilio. Relevant for loading configs needed for the messenger type(s): `TWILIO_*`.
@@ -264,6 +265,16 @@ func BaseDistributionAccountSignatureClientConfigOptions(opts *signing.Signature
 			FlagDefault:    string(signing.DistributionAccountEnvSignatureClientType),
 			Required:       true,
 		},
+	}
+}
+
+func TenantXLMBootstrapAmount(targetPointer interface{}) *config.ConfigOption {
+	return &config.ConfigOption{
+		Name:        "tenant-xlm-bootstrap-amount",
+		Usage:       "The amount of the native asset that will be sent to the tenant distribution account from the host distribution account when it's created if applicable.",
+		OptType:     types.Int,
+		ConfigKey:   targetPointer,
+		FlagDefault: tenant.MinTenantDistributionAccountAmount,
 	}
 }
 
