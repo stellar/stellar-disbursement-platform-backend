@@ -53,7 +53,7 @@ var SummaryTSSVecMetrics = map[MetricTag]*prometheus.SummaryVec{
 
 var CounterTSSMetrics = map[MetricTag]prometheus.Counter{}
 
-var paymentLabelNames = []string{"event_id", "event_type", "tx_id", "event_time", "app_version", "git_commit_hash"}
+var paymentLabelNames = []string{"event_id", "event_type", "tx_id", "event_time", "app_version", "git_commit_hash", "tenant_id", "channel_account"}
 
 var CounterTSSVecMetrics = map[MetricTag]*prometheus.CounterVec{
 	TransactionProcessedCounterTag: prometheus.NewCounterVec(prometheus.CounterOpts{

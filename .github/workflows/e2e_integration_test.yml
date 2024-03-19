@@ -5,13 +5,11 @@ on:
     branches:
       - main
       - develop
+      - sdp-multitenant
       - "release/**"
       - "releases/**"
       - "hotfix/**"
   pull_request:
-    branches-ignore:
-      - sdp-multitenant # TODO: SDP-968 - re-enable end to end tests for multi-tenant SDP
-
   workflow_call: # allows this workflow to be called from another workflow
 
 env:
@@ -42,10 +40,6 @@ jobs:
 
       - name: Install curl
         run: sudo apt-get update && sudo apt-get install -y curl
-
-      - name: Create authenticated user
-        run: |
-          docker exec e2e-sdp-api bash -c "echo '$USER_PASSWORD' | ./stellar-disbursement-platform auth add-user '$USER_EMAIL' joe yabuki --password --owner --roles owner"
 
       - name: Create integration test data
         run: |

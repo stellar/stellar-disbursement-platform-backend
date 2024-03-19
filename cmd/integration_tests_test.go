@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/spf13/cobra"
-	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/integrationtests"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -29,31 +28,6 @@ func (m *mockIntegrationTests) StartIntegrationTests(ctx context.Context, opts i
 
 func (m *mockIntegrationTests) CreateTestData(ctx context.Context, opts integrationtests.IntegrationTestsOpts) error {
 	return m.Called(ctx, opts).Error(0)
-}
-
-func Test_IntegrationTestsCommand_Command(t *testing.T) {
-	dbt := dbtest.Open(t)
-
-	command := &IntegrationTestsCommand{}
-
-	root := rootCmd()
-	cmd := command.Command()
-	root.AddCommand(cmd)
-
-	t.Setenv("DISBURSED_ASSET_CODE", "USDC")
-	t.Setenv("DISBURSED_ASSET_ISSUER", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
-	t.Setenv("WALLET_NAME", "walletTest")
-	t.Setenv("WALLET_HOMEPAGE", "https://www.test_wallet.com")
-	t.Setenv("WALLET_DEEPLINK", "test_wallet://")
-
-	root.SetArgs([]string{
-		"integration-tests",
-		"create-data",
-		"--database-url",
-		dbt.DSN,
-	})
-	err := cmd.Execute()
-	require.NoError(t, err)
 }
 
 func Test_IntegrationTestsCommand_StartIntegrationTestsCommand(t *testing.T) {
