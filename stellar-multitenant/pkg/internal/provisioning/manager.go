@@ -75,25 +75,49 @@ func (m *Manager) ProvisionNewTenant(
 	}
 	defer tenantSchemaConnectionPool.Close()
 
-	err = services.SetupAssetsForProperNetwork(ctx, tenantSchemaConnectionPool, utils.NetworkType(networkType), services.DefaultAssetsNetworkMap)
-	if err != nil {
-		return nil, fmt.Errorf("running setup assets for proper network: %w", err)
-	}
+	err = db.RunInTransaction(ctx, tenantSchemaConnectionPool, nil, func(dbTx db.DBTransaction) error {
+		err = services.SetupAssetsForProperNetwork(ctx, tenantSchemaConnectionPool, dbTx, utils.NetworkType(networkType), services.DefaultAssetsNetworkMap)
+		if err != nil {
+			return fmt.Errorf("running setup assets for proper network: %w", err)
+		}
 
-	err = services.SetupWalletsForProperNetwork(ctx, tenantSchemaConnectionPool, utils.NetworkType(networkType), services.DefaultWalletsNetworkMap)
-	if err != nil {
-		return nil, fmt.Errorf("running setup wallets for proper network: %w", err)
-	}
+		err = services.SetupWalletsForProperNetwork(ctx, tenantSchemaConnectionPool, dbTx, utils.NetworkType(networkType), services.DefaultWalletsNetworkMap)
+		if err != nil {
+			return fmt.Errorf("running setup wallets for proper network: %w", err)
+		}
 
-	// Updating organization's name
-	models, err := data.NewModels(tenantSchemaConnectionPool)
-	if err != nil {
-		return nil, fmt.Errorf("getting models: %w", err)
-	}
+		// Updating organization's name
+		models, err := data.NewModels(tenantSchemaConnectionPool)
+		if err != nil {
+			return fmt.Errorf("getting models: %w", err)
+		}
 
-	err = models.Organizations.Update(ctx, &data.OrganizationUpdate{Name: organizationName})
+		err = models.Organizations.Update(ctx, dbTx, &data.OrganizationUpdate{Name: organizationName})
+		if err != nil {
+			return fmt.Errorf("updating organization's name: %w", err)
+		}
+
+		// Creating new user and sending invitation email
+		authManager := auth.NewAuthManager(
+			auth.WithDefaultAuthenticatorOption(tenantSchemaConnectionPool, auth.NewDefaultPasswordEncrypter(), 0),
+		)
+		s := services.NewCreateUserService(models, tenantSchemaConnectionPool, authManager, m.messengerClient)
+		_, err = s.CreateUser(ctx, dbTx, auth.User{
+			FirstName: userFirstName,
+			LastName:  userLastName,
+			Email:     userEmail,
+			IsOwner:   true,
+			Roles:     []string{"owner"},
+		}, uiBaseURL)
+		if err != nil {
+			return fmt.Errorf("creating user: %w", err)
+		}
+
+		return nil
+	})
 	if err != nil {
-		return nil, fmt.Errorf("updating organization's name: %w", err)
+		// modify this err msg
+		return nil, fmt.Errorf("running tenant setup: %w", err)
 	}
 
 	// Provision distribution account for tenant if necessary
@@ -113,22 +137,6 @@ func (m *Manager) ProvisionNewTenant(
 
 	distributionAccPubKey := distributionAccPubKeys[0]
 	log.Ctx(ctx).Infof("distribution account %s created for tenant %s", distributionAccPubKey, t.Name)
-
-	// Creating new user and sending invitation email
-	authManager := auth.NewAuthManager(
-		auth.WithDefaultAuthenticatorOption(tenantSchemaConnectionPool, auth.NewDefaultPasswordEncrypter(), 0),
-	)
-	s := services.NewCreateUserService(models, tenantSchemaConnectionPool, authManager, m.messengerClient)
-	_, err = s.CreateUser(ctx, auth.User{
-		FirstName: userFirstName,
-		LastName:  userLastName,
-		Email:     userEmail,
-		IsOwner:   true,
-		Roles:     []string{"owner"},
-	}, uiBaseURL)
-	if err != nil {
-		return nil, fmt.Errorf("creating user: %w", err)
-	}
 
 	tenantStatus := tenant.ProvisionedTenantStatus
 	t, err = m.tenantManager.UpdateTenantConfig(

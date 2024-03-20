@@ -15,10 +15,10 @@ import (
 
 	"github.com/lib/pq"
 	"github.com/stellar/go/keypair"
+	"github.com/stretchr/testify/require"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
-
-	"github.com/stretchr/testify/require"
 )
 
 const (
@@ -644,14 +644,14 @@ func CreateMessageFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecu
 // EnableDisbursementApproval enables disbursement workflow approval for the given organization.
 func EnableDisbursementApproval(t *testing.T, ctx context.Context, orgModel *OrganizationModel) {
 	isApprovalRequired := true
-	err := orgModel.Update(ctx, &OrganizationUpdate{IsApprovalRequired: &isApprovalRequired})
+	err := orgModel.Update(ctx, orgModel.dbConnectionPool, &OrganizationUpdate{IsApprovalRequired: &isApprovalRequired})
 	require.NoError(t, err)
 }
 
 // DisableDisbursementApproval disables disbursement workflow approval for the given organization.
 func DisableDisbursementApproval(t *testing.T, ctx context.Context, orgModel *OrganizationModel) {
 	isApprovalRequired := false
-	err := orgModel.Update(ctx, &OrganizationUpdate{IsApprovalRequired: &isApprovalRequired})
+	err := orgModel.Update(ctx, orgModel.dbConnectionPool, &OrganizationUpdate{IsApprovalRequired: &isApprovalRequired})
 	require.NoError(t, err)
 }
 

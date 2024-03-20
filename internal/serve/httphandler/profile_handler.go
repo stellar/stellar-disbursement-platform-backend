@@ -185,7 +185,7 @@ func (h ProfileHandler) PatchOrganizationProfile(rw http.ResponseWriter, req *ht
 	sort.Strings(nonEmptyChanges)
 
 	log.Ctx(ctx).Warnf("[PatchOrganizationProfile] - userID %s will update the organization fields [%s]", user.ID, strings.Join(nonEmptyChanges, ", "))
-	err = h.Models.Organizations.Update(ctx, &organizationUpdate)
+	err = h.Models.Organizations.Update(ctx, h.Models.DBConnectionPool, &organizationUpdate)
 	if err != nil {
 		httperror.InternalError(ctx, "Cannot update organization", err, nil).Render(rw)
 		return
