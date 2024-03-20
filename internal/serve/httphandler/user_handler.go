@@ -213,7 +213,7 @@ func (h UserHandler) CreateUser(rw http.ResponseWriter, req *http.Request) {
 	}
 
 	s := services.NewCreateUserService(h.Models, h.Models.DBConnectionPool, h.AuthManager, h.MessengerClient)
-	u, err := s.CreateUser(ctx, newUser, *tnt.SDPUIBaseURL)
+	u, err := s.CreateUser(ctx, h.Models.DBConnectionPool, newUser, *tnt.SDPUIBaseURL)
 	if err != nil {
 		if errors.Is(err, auth.ErrUserEmailAlreadyExists) {
 			httperror.BadRequest(auth.ErrUserEmailAlreadyExists.Error(), err, nil).Render(rw)

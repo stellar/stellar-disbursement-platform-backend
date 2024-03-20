@@ -30,9 +30,9 @@ func NewCreateUserService(models *data.Models, dbConnectionPool db.DBConnectionP
 	}
 }
 
-func (s *CreateAuthUserService) CreateUser(ctx context.Context, newUser auth.User, uiBaseURL string) (*auth.User, error) {
+func (s *CreateAuthUserService) CreateUser(ctx context.Context, sqlExecutor db.SQLExecuter, newUser auth.User, uiBaseURL string) (*auth.User, error) {
 	// The password is empty so the AuthManager will generate one automatically.
-	u, err := s.authManager.CreateUser(ctx, &newUser, "")
+	u, err := s.authManager.CreateUser(ctx, sqlExecutor, &newUser, "")
 	if err != nil {
 		return nil, fmt.Errorf("creating new user: %w", err)
 	}

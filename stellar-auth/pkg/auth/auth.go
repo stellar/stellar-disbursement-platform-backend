@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"time"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
 )
 
 var ErrInvalidToken = errors.New("invalid token")
@@ -15,7 +17,7 @@ type AuthManager interface {
 	ValidateToken(ctx context.Context, tokenString string) (bool, error)
 	AllRolesInTokenUser(ctx context.Context, tokenString string, roleNames []string) (bool, error)
 	AnyRolesInTokenUser(ctx context.Context, tokenString string, roleNames []string) (bool, error)
-	CreateUser(ctx context.Context, user *User, password string) (*User, error)
+	CreateUser(ctx context.Context, sqlExecutor db.SQLExecuter, user *User, password string) (*User, error)
 	UpdateUser(ctx context.Context, tokenString, firstName, lastName, email, password string) error
 	ForgotPassword(ctx context.Context, email string) (string, error)
 	ResetPassword(ctx context.Context, tokenString, password string) error
@@ -140,8 +142,8 @@ func (am *defaultAuthManager) AnyRolesInTokenUser(ctx context.Context, tokenStri
 }
 
 // CreateUser creates a new user using Authenticator's CreateUser method.
-func (am *defaultAuthManager) CreateUser(ctx context.Context, user *User, password string) (*User, error) {
-	user, err := am.authenticator.CreateUser(ctx, user, password)
+func (am *defaultAuthManager) CreateUser(ctx context.Context, sqlExecutor db.SQLExecuter, user *User, password string) (*User, error) {
+	user, err := am.authenticator.CreateUser(ctx, sqlExecutor, user, password)
 	if err != nil {
 		return nil, fmt.Errorf("error creating user: %w", err)
 	}
