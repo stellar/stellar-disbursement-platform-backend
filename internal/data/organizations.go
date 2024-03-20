@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"image"
 	"regexp"
+	"strings"
+	"time"
 
 	// Don't remove the `image/jpeg` and `image/png` packages import unless
 	// the `image` package is no longer necessary.
@@ -15,8 +17,6 @@ import (
 	// See https://pkg.go.dev/image#pkg-overview
 	_ "image/jpeg"
 	_ "image/png"
-	"strings"
-	"time"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 )
@@ -144,7 +144,7 @@ func (om *OrganizationModel) Get(ctx context.Context) (*Organization, error) {
 	return &organization, nil
 }
 
-func (om *OrganizationModel) Update(ctx context.Context, ou *OrganizationUpdate) error {
+func (om *OrganizationModel) Update(ctx context.Context, sqlExecutor db.SQLExecuter, ou *OrganizationUpdate) error {
 	if err := ou.validate(); err != nil {
 		return fmt.Errorf("invalid organization update: %w", err)
 	}
@@ -222,9 +222,9 @@ func (om *OrganizationModel) Update(ctx context.Context, ou *OrganizationUpdate)
 		}
 	}
 
-	query = om.dbConnectionPool.Rebind(fmt.Sprintf(query, strings.Join(fields, ", ")))
+	query = sqlExecutor.Rebind(fmt.Sprintf(query, strings.Join(fields, ", ")))
 
-	_, err := om.dbConnectionPool.ExecContext(ctx, query, args...)
+	_, err := sqlExecutor.ExecContext(ctx, query, args...)
 	if err != nil {
 		return fmt.Errorf("error updating organization: %w", err)
 	}

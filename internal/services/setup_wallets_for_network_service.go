@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/wallets"
-
 	"github.com/lib/pq"
 	"github.com/stellar/go/support/log"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/wallets"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
@@ -23,7 +23,7 @@ var DefaultWalletsNetworkMap = WalletsNetworkMapType{
 
 // SetupWalletsForProperNetwork updates and inserts wallets for the given Network Passphrase (`network`). So it avoids the application having
 // wallets that doesn't support the given network.
-func SetupWalletsForProperNetwork(ctx context.Context, dbConnectionPool db.DBConnectionPool, network utils.NetworkType, walletsNetworkMap WalletsNetworkMapType) error {
+func SetupWalletsForProperNetwork(ctx context.Context, dbConnectionPool db.DBConnectionPool, dbTx db.DBTransaction, network utils.NetworkType, walletsNetworkMap WalletsNetworkMapType) error {
 	log.Ctx(ctx).Infof("updating/inserting wallets for the '%s' network", network)
 
 	wallets, ok := walletsNetworkMap[network]
@@ -46,9 +46,7 @@ func SetupWalletsForProperNetwork(ctx context.Context, dbConnectionPool db.DBCon
 	}
 
 	log.Ctx(ctx).Info(buf.String())
-
-	err := db.RunInTransaction(ctx, dbConnectionPool, nil, func(dbTx db.DBTransaction) error {
-		// 1. Upsert Wallets
+	upsertWallets := func(dbTx db.DBTransaction) error {
 		query := `
 			WITH wallets_to_update_or_insert AS (
 				-- gather all wallets passed as parameters for the query and turn into SQL rows
@@ -90,7 +88,6 @@ func SetupWalletsForProperNetwork(ctx context.Context, dbConnectionPool db.DBCon
 			WHERE
 				wtui.name NOT IN (SELECT name FROM existing_wallets)
 		`
-
 		_, err := dbTx.ExecContext(ctx, query, pq.Array(names), pq.Array(homepages), pq.Array(deepLinkSchemas), pq.Array(sep10ClientDomains))
 		if err != nil {
 			return fmt.Errorf("error upserting wallets: %w", err)
@@ -160,7 +157,22 @@ func SetupWalletsForProperNetwork(ctx context.Context, dbConnectionPool db.DBCon
 		}
 		log.Ctx(ctx).Infof("associated %d wallet assets", rowsAffected)
 		return nil
-	})
+	}
+
+	// 1. Upsert Wallets
+	var err error
+	if dbTx != nil {
+		err = upsertWallets(dbTx)
+	} else {
+		err = db.RunInTransaction(ctx, dbConnectionPool, nil, func(dbTx db.DBTransaction) error {
+			upsertWalletErr := upsertWallets(dbTx)
+			if upsertWalletErr != nil {
+				return upsertWalletErr
+			}
+
+			return nil
+		})
+	}
 	if err != nil {
 		return fmt.Errorf("upserting wallets for the proper network: %w", err)
 	}
