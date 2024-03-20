@@ -82,6 +82,7 @@ func (s *ServerService) GetSchedulerJobRegistrars(
 		scheduler.WithAPAuthEnforcementJob(apAPIService, serveOpts.MonitorService, serveOpts.CrashTrackerClient.Clone()),
 		scheduler.WithReadyPaymentsCancellationJobOption(models),
 		scheduler.WithPaymentToSubmitterJobOption(models, tssDBConnectionPool),
+		scheduler.WithPaymentFromSubmitterJobOption(models, tssDBConnectionPool),
 	}, nil
 }
 

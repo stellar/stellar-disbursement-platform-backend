@@ -34,10 +34,34 @@ func NewPaymentFromSubmitterService(models *data.Models, tssDBConnectionPool db.
 	}
 }
 
+// SyncBatchTransactions monitors TSS transactions that were complete and sync their completion state with the SDP payments.
+func (s PaymentFromSubmitterService) SyncBatchTransactions(ctx context.Context, batchSize int) error {
+	err := db.RunInTransaction(ctx, s.sdpModels.DBConnectionPool, nil, func(sdpDBTx db.DBTransaction) error {
+		return db.RunInTransaction(ctx, s.tssModel.DBConnectionPool, nil, func(tssDBTx db.DBTransaction) error {
+			transactions, err := s.tssModel.GetTransactionBatchForUpdate(ctx, tssDBTx, batchSize)
+			if err != nil {
+				return fmt.Errorf("getting transactions for update: %w", err)
+			}
+			return s.syncTransactions(ctx, sdpDBTx, tssDBTx, transactions)
+		})
+	})
+	if err != nil {
+		return fmt.Errorf("synching payments from submitter: %w", err)
+	}
+
+	return nil
+}
+
 // SyncTransaction syncs the completed TSS transaction with the SDP's payment.
 func (s PaymentFromSubmitterService) SyncTransaction(ctx context.Context, tx *schemas.EventPaymentCompletedData) error {
-	err := db.RunInTransaction(ctx, s.sdpModels.DBConnectionPool, nil, func(dbTx db.DBTransaction) error {
-		return s.syncTransaction(ctx, dbTx, tx)
+	err := db.RunInTransaction(ctx, s.sdpModels.DBConnectionPool, nil, func(sdpDBTx db.DBTransaction) error {
+		return db.RunInTransaction(ctx, s.tssModel.DBConnectionPool, nil, func(tssDBTx db.DBTransaction) error {
+			transaction, err := s.tssModel.GetTransactionPendingUpdateByID(ctx, tssDBTx, tx.TransactionID)
+			if err != nil {
+				return fmt.Errorf("getting transaction ID %s for update: %w", tx.TransactionID, err)
+			}
+			return s.syncTransactions(ctx, sdpDBTx, tssDBTx, []*store.Transaction{transaction})
+		})
 	})
 	if err != nil {
 		return fmt.Errorf("synching payment from submitter: %w", err)
@@ -46,49 +70,48 @@ func (s PaymentFromSubmitterService) SyncTransaction(ctx context.Context, tx *sc
 	return nil
 }
 
-// MonitorTransactions monitors TSS transactions that were complete and sync their completion state with the SDP payments. It
+// syncTransactions synchronizes TSS transactions that were completed with the SDP payments. It
 // should be called within a DB transaction.
-func (s PaymentFromSubmitterService) syncTransaction(ctx context.Context, dbTx db.DBTransaction, tx *schemas.EventPaymentCompletedData) error {
-	if s.sdpModels == nil {
-		return fmt.Errorf("PaymentFromSubmitterService.sdpModels cannot be nil")
+func (s PaymentFromSubmitterService) syncTransactions(ctx context.Context, sdpDBTx, tssDBTx db.DBTransaction, transactions []*store.Transaction) error {
+	if s.sdpModels == nil || s.tssModel == nil {
+		return fmt.Errorf("PaymentFromSubmitterService sdpModels and tssModel cannot be nil")
 	}
 
-	// 1. Get transaction passed by parameter which is in a final state (status=SUCCESS or status=ERROR)
-	//     this operation will lock the row.
-	transaction, err := s.tssModel.GetTransactionPendingUpdateByID(ctx, s.tssModel.DBConnectionPool, tx.TransactionID)
+	if len(transactions) == 0 {
+		log.Ctx(ctx).Debug("No transactions to sync from submitter to SDP")
+		return nil
+	}
+
+	// 1. Sync payments with Transactions
+	transactionIDs := make([]string, 0, len(transactions))
+	for _, transaction := range transactions {
+		if !transaction.StellarTransactionHash.Valid {
+			return fmt.Errorf("expected transaction %s to have a stellar transaction hash", transaction.ID)
+		}
+		if transaction.Status != txSubStore.TransactionStatusSuccess && transaction.Status != txSubStore.TransactionStatusError {
+			return fmt.Errorf("transaction id %s is in an unexpected status %s", transaction.ID, transaction.Status)
+		}
+
+		errPayments := s.syncPaymentWithTransaction(ctx, sdpDBTx, transaction)
+		if errPayments != nil {
+			return fmt.Errorf("syncing payments for transaction ID %s: %w", transaction.ID, errPayments)
+		}
+		transactionIDs = append(transactionIDs, transaction.ID)
+	}
+
+	// 2. Set synced_at for all synced transactions
+	err := s.tssModel.UpdateSyncedTransactions(ctx, tssDBTx, transactionIDs)
 	if err != nil {
-		return fmt.Errorf("getting transaction ID %s for update: %w", tx.TransactionID, err)
+		return fmt.Errorf("updating transactions as synced: %w", err)
 	}
-
-	if !transaction.StellarTransactionHash.Valid {
-		return fmt.Errorf("expected transaction %s to have a stellar transaction hash", transaction.ID)
-	}
-
-	if transaction.Status != txSubStore.TransactionStatusSuccess && transaction.Status != txSubStore.TransactionStatusError {
-		return fmt.Errorf("transaction id %s is in an unexpected status: %s", transaction.ID, transaction.Status)
-	}
-
-	// 3. Update payments based on the transaction status
-	err = s.syncPaymentWithTransaction(ctx, dbTx, transaction)
-	if err != nil {
-		return fmt.Errorf("synching payments for transaction ID %s: %w", transaction.ID, err)
-	}
-
-	// 4. Set synced_at for the synced transaction
-	err = db.RunInTransaction(ctx, s.tssModel.DBConnectionPool, nil, func(tssDBTx db.DBTransaction) error {
-		return s.tssModel.UpdateSyncedTransactions(ctx, tssDBTx, []string{transaction.ID})
-	})
-	if err != nil {
-		return fmt.Errorf("updating transaction ID %s as synced: %w", transaction.ID, err)
-	}
-	log.Ctx(ctx).Infof("Updated transaction ID %s as synced", transaction.ID)
+	log.Ctx(ctx).Infof("Updated %d transactions as synced", len(transactions))
 
 	return nil
 }
 
-// syncPaymentWithTransaction updates the status of the payments based on the status of the transactions.
-func (s PaymentFromSubmitterService) syncPaymentWithTransaction(ctx context.Context, dbTx db.DBTransaction, transaction *txSubStore.Transaction) error {
-	payments, err := s.sdpModels.Payment.GetByIDs(ctx, dbTx, []string{transaction.ExternalID})
+// syncPaymentWithTransaction updates the status of the payment based on the status of the transaction.
+func (s PaymentFromSubmitterService) syncPaymentWithTransaction(ctx context.Context, sdpDBTx db.DBTransaction, transaction *txSubStore.Transaction) error {
+	payments, err := s.sdpModels.Payment.GetByIDs(ctx, sdpDBTx, []string{transaction.ExternalID})
 	if err != nil {
 		return fmt.Errorf("getting payments by IDs: %w", err)
 	}
@@ -113,13 +136,13 @@ func (s PaymentFromSubmitterService) syncPaymentWithTransaction(ctx context.Cont
 		StatusMessage:        transaction.StatusMessage.String,
 		StellarTransactionID: transaction.StellarTransactionHash.String,
 	}
-	err = s.sdpModels.Payment.Update(ctx, dbTx, payment, paymentUpdate)
+	err = s.sdpModels.Payment.Update(ctx, sdpDBTx, payment, paymentUpdate)
 	if err != nil {
 		return fmt.Errorf("updating payment ID %s for transaction ID %s: %w", payment.ID, transaction.ID, err)
 	}
 
 	// Update the disbursement to complete if it has all payments in the end state.
-	err = s.sdpModels.Disbursements.CompleteDisbursements(ctx, dbTx, []string{payment.Disbursement.ID})
+	err = s.sdpModels.Disbursements.CompleteDisbursements(ctx, sdpDBTx, []string{payment.Disbursement.ID})
 	if err != nil {
 		return fmt.Errorf("completing disbursement: %w", err)
 	}
