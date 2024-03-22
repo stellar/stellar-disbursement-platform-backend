@@ -55,6 +55,30 @@ func (m *TenantManagerMock) AddTenant(ctx context.Context, name string) (*Tenant
 	return args.Get(0).(*Tenant), args.Error(1)
 }
 
+func (m *TenantManagerMock) DeleteTenantByName(ctx context.Context, name string) error {
+	args := m.Called(ctx, name)
+	if args.Get(0) == nil {
+		return args.Error(0)
+	}
+	return args.Error(0)
+}
+
+func (m *TenantManagerMock) CreateTenantSchema(ctx context.Context, name string) error {
+	args := m.Called(ctx, name)
+	if args.Get(0) == nil {
+		return args.Error(0)
+	}
+	return args.Error(0)
+}
+
+func (m *TenantManagerMock) DropTenantSchema(ctx context.Context, name string) error {
+	args := m.Called(ctx, name)
+	if args.Get(0) == nil {
+		return args.Error(0)
+	}
+	return args.Error(0)
+}
+
 func (m *TenantManagerMock) UpdateTenantConfig(ctx context.Context, tu *TenantUpdate) (*Tenant, error) {
 	args := m.Called(ctx, tu)
 	if args.Get(0) == nil {

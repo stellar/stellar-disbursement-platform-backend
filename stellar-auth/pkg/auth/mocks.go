@@ -2,7 +2,6 @@ package auth
 
 import (
 	"context"
-	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"time"
 
 	"github.com/stretchr/testify/mock"
@@ -73,8 +72,8 @@ func (am *AuthenticatorMock) ValidateCredentials(ctx context.Context, email, pas
 	return args.Get(0).(*User), args.Error(1)
 }
 
-func (am *AuthenticatorMock) CreateUser(ctx context.Context, sqlExecutor db.SQLExecuter, user *User, password string) (*User, error) {
-	args := am.Called(ctx, sqlExecutor, user, password)
+func (am *AuthenticatorMock) CreateUser(ctx context.Context, user *User, password string) (*User, error) {
+	args := am.Called(ctx, user, password)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -228,8 +227,8 @@ func (am *AuthManagerMock) AnyRolesInTokenUser(ctx context.Context, tokenString 
 	return args.Get(0).(bool), args.Error(1)
 }
 
-func (am *AuthManagerMock) CreateUser(ctx context.Context, sqlExecutor db.SQLExecuter, user *User, password string) (*User, error) {
-	args := am.Called(ctx, sqlExecutor, user, password)
+func (am *AuthManagerMock) CreateUser(ctx context.Context, user *User, password string) (*User, error) {
+	args := am.Called(ctx, user, password)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}

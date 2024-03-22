@@ -31,7 +31,7 @@ const (
 type Authenticator interface {
 	ValidateCredentials(ctx context.Context, email, password string) (*User, error)
 	// CreateUser creates a new user it receives a user object and the password
-	CreateUser(ctx context.Context, sqlExecutor db.SQLExecuter, user *User, password string) (*User, error)
+	CreateUser(ctx context.Context, user *User, password string) (*User, error)
 	UpdateUser(ctx context.Context, ID, firstName, lastName, email, password string) error
 	ActivateUser(ctx context.Context, userID string) error
 	DeactivateUser(ctx context.Context, userID string) error
@@ -98,7 +98,7 @@ func (a *defaultAuthenticator) ValidateCredentials(ctx context.Context, email, p
 
 // CreateUser creates a user in the database. If a empty password is passed by parameter, a random password is generated,
 // so the user can go through the ForgotPassword flow.
-func (a *defaultAuthenticator) CreateUser(ctx context.Context, sqlExecutor db.SQLExecuter, user *User, password string) (*User, error) {
+func (a *defaultAuthenticator) CreateUser(ctx context.Context, user *User, password string) (*User, error) {
 	if err := user.Validate(); err != nil {
 		return nil, fmt.Errorf("error validating user fields: %w", err)
 	}
@@ -132,7 +132,7 @@ func (a *defaultAuthenticator) CreateUser(ctx context.Context, sqlExecutor db.SQ
 	`
 
 	var userID string
-	err = sqlExecutor.GetContext(ctx, &userID, query, user.Email, encryptedPassword, user.FirstName, user.LastName, pq.Array(user.Roles), user.IsOwner)
+	err = a.dbConnectionPool.GetContext(ctx, &userID, query, user.Email, encryptedPassword, user.FirstName, user.LastName, pq.Array(user.Roles), user.IsOwner)
 	if err != nil {
 		if pqError, ok := err.(*pq.Error); ok && pqError.Constraint == "auth_users_email_key" {
 			return nil, ErrUserEmailAlreadyExists

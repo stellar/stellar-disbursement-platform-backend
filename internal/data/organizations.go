@@ -144,7 +144,7 @@ func (om *OrganizationModel) Get(ctx context.Context) (*Organization, error) {
 	return &organization, nil
 }
 
-func (om *OrganizationModel) Update(ctx context.Context, sqlExecutor db.SQLExecuter, ou *OrganizationUpdate) error {
+func (om *OrganizationModel) Update(ctx context.Context, ou *OrganizationUpdate) error {
 	if err := ou.validate(); err != nil {
 		return fmt.Errorf("invalid organization update: %w", err)
 	}
@@ -222,9 +222,9 @@ func (om *OrganizationModel) Update(ctx context.Context, sqlExecutor db.SQLExecu
 		}
 	}
 
-	query = sqlExecutor.Rebind(fmt.Sprintf(query, strings.Join(fields, ", ")))
+	query = om.dbConnectionPool.Rebind(fmt.Sprintf(query, strings.Join(fields, ", ")))
 
-	_, err := sqlExecutor.ExecContext(ctx, query, args...)
+	_, err := om.dbConnectionPool.ExecContext(ctx, query, args...)
 	if err != nil {
 		return fmt.Errorf("error updating organization: %w", err)
 	}
