@@ -67,28 +67,35 @@ func (m *Manager) ProvisionNewTenant(
 			return nil, fmt.Errorf("%w: adding tenant %s: %w", ErrTenantCreationFailed, name, err)
 		}
 
-		u, err := m.tenantManager.GetDSNForTenant(ctx, name)
-		if err != nil {
-			return nil, fmt.Errorf("%w: getting database DSN for tenant %s: %w", ErrTenantSchemaFailed, name, err)
-		}
+		u, tenantSchemaFailedErr := func() (string, error) {
+			u, err := m.tenantManager.GetDSNForTenant(ctx, name)
+			if err != nil {
+				return "", fmt.Errorf("getting database DSN for tenant %s: %w", name, err)
+			}
 
-		log.Ctx(ctx).Infof("creating tenant %s database schema", name)
-		err = m.tenantManager.CreateTenantSchema(ctx, name)
-		if err != nil {
-			return nil, fmt.Errorf("%w: creating tenant %s database schema: %w", ErrTenantSchemaFailed, name, err)
-		}
+			log.Ctx(ctx).Infof("creating tenant %s database schema", name)
+			err = m.tenantManager.CreateTenantSchema(ctx, name)
+			if err != nil {
+				return "", fmt.Errorf("creating tenant %s database schema: %w", name, err)
+			}
 
-		// Applying migrations
-		log.Ctx(ctx).Infof("applying SDP migrations on the tenant %s schema", name)
-		err = m.RunMigrationsForTenant(ctx, u, migrate.Up, 0, sdpmigrations.FS, db.StellarPerTenantSDPMigrationsTableName)
-		if err != nil {
-			return nil, fmt.Errorf("%w: applying SDP migrations: %w", ErrTenantSchemaFailed, err)
-		}
+			// Applying migrations
+			log.Ctx(ctx).Infof("applying SDP migrations on the tenant %s schema", name)
+			err = m.RunMigrationsForTenant(ctx, u, migrate.Up, 0, sdpmigrations.FS, db.StellarPerTenantSDPMigrationsTableName)
+			if err != nil {
+				return "", fmt.Errorf("applying SDP migrations: %w", err)
+			}
 
-		log.Ctx(ctx).Infof("applying stellar-auth migrations on the tenant %s schema", name)
-		err = m.RunMigrationsForTenant(ctx, u, migrate.Up, 0, authmigrations.FS, db.StellarPerTenantAuthMigrationsTableName)
-		if err != nil {
-			return nil, fmt.Errorf("%w: applying stellar-auth migrations: %w", ErrTenantSchemaFailed, err)
+			log.Ctx(ctx).Infof("applying stellar-auth migrations on the tenant %s schema", name)
+			err = m.RunMigrationsForTenant(ctx, u, migrate.Up, 0, authmigrations.FS, db.StellarPerTenantAuthMigrationsTableName)
+			if err != nil {
+				return "", fmt.Errorf("applying stellar-auth migrations: %w", err)
+			}
+
+			return u, nil
+		}()
+		if tenantSchemaFailedErr != nil {
+			return nil, fmt.Errorf("%w: %w", ErrTenantSchemaFailed, tenantSchemaFailedErr)
 		}
 
 		// Connecting to the tenant database schema
@@ -139,7 +146,7 @@ func (m *Manager) ProvisionNewTenant(
 			return nil
 		}()
 		if tenantDataSetupErr != nil {
-			return nil, fmt.Errorf("%w: %w", ErrTenantDataSetupFailed, err)
+			return nil, fmt.Errorf("%w: %w", ErrTenantDataSetupFailed, tenantDataSetupErr)
 		}
 
 		// Provision distribution account for tenant if necessary
