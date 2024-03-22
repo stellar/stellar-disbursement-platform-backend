@@ -178,6 +178,8 @@ func (m *Manager) ProvisionNewTenant(
 		return t, nil
 	}()
 	if err != nil {
+		provisioningErr := fmt.Errorf("provisioning error: %w", err)
+
 		if errors.Is(err, ErrUpdateTenantFailed) {
 			log.Ctx(ctx).Errorf("tenant record not updated")
 		}
@@ -188,7 +190,7 @@ func (m *Manager) ProvisionNewTenant(
 				// We should not let any failures from key deletion block us from completing the tenant cleanup process
 				if deleteDistributionKeyErr != nil {
 					deleteDistributionKeyErrPrefixMsg := fmt.Sprintf("deleting distribution account private key %s", *t.DistributionAccount)
-					err = fmt.Errorf("%w. [additional errors]: %s: %w", err, deleteDistributionKeyErrPrefixMsg, deleteDistributionAccFromVaultErr)
+					provisioningErr = fmt.Errorf("%w. [additional errors]: %s: %w", provisioningErr, deleteDistributionKeyErrPrefixMsg, deleteDistributionAccFromVaultErr)
 					log.Ctx(ctx).Errorf("%s: %v", deleteDistributionKeyErrPrefixMsg, deleteDistributionAccFromVaultErr)
 				}
 
@@ -208,7 +210,7 @@ func (m *Manager) ProvisionNewTenant(
 			if errors.Is(err, rollbackTenantCreationErr) {
 				deleteTenantErr := m.tenantManager.DeleteTenantByName(ctx, name)
 				if deleteTenantErr != nil {
-					return nil, deleteTenantErr
+					return nil, fmt.Errorf("%w. [rollback error] %w", provisioningErr, deleteTenantErr)
 				}
 
 				log.Ctx(ctx).Errorf("tenant %s deleted", name)
@@ -220,7 +222,7 @@ func (m *Manager) ProvisionNewTenant(
 			if errors.Is(err, rollbackTenantSchemaErr) {
 				dropTenantSchemaErr := m.tenantManager.DropTenantSchema(ctx, name)
 				if dropTenantSchemaErr != nil {
-					return nil, dropTenantSchemaErr
+					return nil, fmt.Errorf("%w. [rollback error] %w", provisioningErr, dropTenantSchemaErr)
 				}
 
 				log.Ctx(ctx).Errorf("tenant schema sdp_%s dropped", name)
@@ -228,7 +230,7 @@ func (m *Manager) ProvisionNewTenant(
 			}
 		}
 
-		return nil, fmt.Errorf("provisioning error: %w", err)
+		return nil, provisioningErr
 	}
 
 	hostDistributionAccPubKey := m.SubmitterEngine.HostDistributionAccount()
