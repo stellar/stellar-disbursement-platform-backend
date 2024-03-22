@@ -528,7 +528,7 @@ func (rw *ReceiverWalletModel) GetByStellarAccountAndMemo(ctx context.Context, s
 	return &receiverWallets, nil
 }
 
-func (rw *ReceiverWalletModel) UpdateAnchorPlatformTransactionSyncedAt(ctx context.Context, receiverWalletID ...string) ([]ReceiverWallet, error) {
+func (rw *ReceiverWalletModel) UpdateAnchorPlatformTransactionSyncedAt(ctx context.Context, sqlExec db.SQLExecuter, receiverWalletID ...string) ([]ReceiverWallet, error) {
 	const query = `
 		UPDATE
 			receiver_wallets
@@ -546,7 +546,7 @@ func (rw *ReceiverWalletModel) UpdateAnchorPlatformTransactionSyncedAt(ctx conte
 	`
 
 	var receiverWallets []ReceiverWallet
-	err := rw.dbConnectionPool.SelectContext(ctx, &receiverWallets, query, pq.Array(receiverWalletID), RegisteredReceiversWalletStatus)
+	err := sqlExec.SelectContext(ctx, &receiverWallets, query, pq.Array(receiverWalletID), RegisteredReceiversWalletStatus)
 	if err != nil {
 		return nil, fmt.Errorf("updating anchor platform transaction synced at: %w", err)
 	}

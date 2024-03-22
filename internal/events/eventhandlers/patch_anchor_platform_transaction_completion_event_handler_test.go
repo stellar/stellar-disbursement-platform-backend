@@ -78,7 +78,7 @@ func Test_PatchAnchorPlatformTransactionCompletionEventHandler(t *testing.T) {
 		}
 
 		service.
-			On("PatchTransactionCompletion", mock.Anything, tx).
+			On("PatchAPTransactionForPaymentEvent", mock.Anything, tx).
 			Return(errors.New("unexpected error")).
 			Once()
 
@@ -108,7 +108,7 @@ func Test_PatchAnchorPlatformTransactionCompletionEventHandler(t *testing.T) {
 		}
 
 		service.
-			On("PatchTransactionCompletion", mock.Anything, tx).
+			On("PatchAPTransactionForPaymentEvent", mock.Anything, tx).
 			Return(nil).
 			Once()
 

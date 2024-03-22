@@ -87,7 +87,7 @@ func (s *ServerService) GetSchedulerJobRegistrars(
 
 	if schedulerOptions.PaymentJobIntervalSeconds > 0 {
 		sj = append(sj,
-			scheduler.WithPaymentToSubmitterJobOption(schedulerOptions.PaymentJobIntervalSeconds, models, tssDBConnectionPool),
+			scheduler.WithPaymentToSubmitterJobOption(schedulerOptions.PaymentJobIntervalSeconds, models, tssDBConnectionPool, apAPIService),
 			scheduler.WithPaymentFromSubmitterJobOption(schedulerOptions.PaymentJobIntervalSeconds, models, tssDBConnectionPool),
 		)
 	}

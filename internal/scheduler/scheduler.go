@@ -191,9 +191,13 @@ func WithReadyPaymentsCancellationJobOption(models *data.Models) SchedulerJobReg
 	}
 }
 
-func WithPaymentToSubmitterJobOption(jobIntervalSeconds int, models *data.Models, tssDBConnectionPool db.DBConnectionPool) SchedulerJobRegisterOption {
+func WithPaymentToSubmitterJobOption(jobIntervalSeconds int,
+	models *data.Models,
+	tssDBConnectionPool db.DBConnectionPool,
+	apAPISvc anchorplatform.AnchorPlatformAPIServiceInterface,
+) SchedulerJobRegisterOption {
 	return func(s *Scheduler) {
-		j := jobs.NewPaymentToSubmitterJob(jobIntervalSeconds, models, tssDBConnectionPool)
+		j := jobs.NewPaymentToSubmitterJob(jobIntervalSeconds, models, tssDBConnectionPool, apAPISvc)
 		s.addJob(j)
 	}
 }

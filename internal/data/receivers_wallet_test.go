@@ -1333,7 +1333,7 @@ func Test_ReceiverWalletModelUpdateAnchorPlatformTransactionSyncedAt(t *testing.
 	receiverWalletModel := ReceiverWalletModel{dbConnectionPool: dbConnectionPool}
 
 	t.Run("doesn't update when there's no receiver wallet IDs", func(t *testing.T) {
-		receiverWallets, err := receiverWalletModel.UpdateAnchorPlatformTransactionSyncedAt(ctx)
+		receiverWallets, err := receiverWalletModel.UpdateAnchorPlatformTransactionSyncedAt(ctx, dbConnectionPool)
 		require.NoError(t, err)
 		assert.Empty(t, receiverWallets)
 	})
@@ -1347,7 +1347,7 @@ func Test_ReceiverWalletModelUpdateAnchorPlatformTransactionSyncedAt(t *testing.
 		receiver := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
 		receiverWallet := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, ReadyReceiversWalletStatus)
 
-		receiverWallets, err := receiverWalletModel.UpdateAnchorPlatformTransactionSyncedAt(ctx, receiverWallet.ID)
+		receiverWallets, err := receiverWalletModel.UpdateAnchorPlatformTransactionSyncedAt(ctx, dbConnectionPool, receiverWallet.ID)
 		require.NoError(t, err)
 		assert.Empty(t, receiverWallets)
 	})
@@ -1361,7 +1361,7 @@ func Test_ReceiverWalletModelUpdateAnchorPlatformTransactionSyncedAt(t *testing.
 		receiver := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
 		receiverWallet := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, RegisteredReceiversWalletStatus)
 
-		receiverWallets, err := receiverWalletModel.UpdateAnchorPlatformTransactionSyncedAt(ctx, receiverWallet.ID)
+		receiverWallets, err := receiverWalletModel.UpdateAnchorPlatformTransactionSyncedAt(ctx, dbConnectionPool, receiverWallet.ID)
 		require.NoError(t, err)
 		require.Len(t, receiverWallets, 1)
 		assert.Equal(t, receiverWallet.ID, receiverWallets[0].ID)
@@ -1380,7 +1380,7 @@ func Test_ReceiverWalletModelUpdateAnchorPlatformTransactionSyncedAt(t *testing.
 		_, err := dbConnectionPool.ExecContext(ctx, q, receiverWallet.ID)
 		require.NoError(t, err)
 
-		receiverWallets, err := receiverWalletModel.UpdateAnchorPlatformTransactionSyncedAt(ctx, receiverWallet.ID)
+		receiverWallets, err := receiverWalletModel.UpdateAnchorPlatformTransactionSyncedAt(ctx, dbConnectionPool, receiverWallet.ID)
 		require.NoError(t, err)
 		assert.Empty(t, receiverWallets)
 	})

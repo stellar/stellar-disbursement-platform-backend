@@ -14,7 +14,12 @@ type MockPatchAnchorPlatformTransactionCompletionService struct {
 
 var _ services.PatchAnchorPlatformTransactionCompletionServiceInterface = new(MockPatchAnchorPlatformTransactionCompletionService)
 
-func (s *MockPatchAnchorPlatformTransactionCompletionService) PatchTransactionCompletion(ctx context.Context, tx schemas.EventPaymentCompletedData) error {
+func (s *MockPatchAnchorPlatformTransactionCompletionService) PatchAPTransactionsForPayments(ctx context.Context) error {
+	args := s.Called(ctx)
+	return args.Error(0)
+}
+
+func (s *MockPatchAnchorPlatformTransactionCompletionService) PatchAPTransactionForPaymentEvent(ctx context.Context, tx schemas.EventPaymentCompletedData) error {
 	args := s.Called(ctx, tx)
 	return args.Error(0)
 }

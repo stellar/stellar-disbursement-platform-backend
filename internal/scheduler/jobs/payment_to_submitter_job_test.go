@@ -14,17 +14,17 @@ import (
 
 func Test_PaymentToSubmitterJob_GetInterval(t *testing.T) {
 	interval := 5
-	p := NewPaymentToSubmitterJob(interval, &data.Models{}, nil)
+	p := NewPaymentToSubmitterJob(interval, &data.Models{}, nil, nil)
 	require.Equal(t, time.Duration(interval)*time.Second, p.GetInterval())
 }
 
 func Test_PaymentToSubmitterJob_GetName(t *testing.T) {
-	p := NewPaymentToSubmitterJob(5, &data.Models{}, nil)
+	p := NewPaymentToSubmitterJob(5, &data.Models{}, nil, nil)
 	require.Equal(t, PaymentToSubmitterJobName, p.GetName())
 }
 
 func Test_PaymentToSubmitterJob_IsJobMultiTenant(t *testing.T) {
-	p := NewPaymentToSubmitterJob(5, &data.Models{}, nil)
+	p := NewPaymentToSubmitterJob(5, &data.Models{}, nil, nil)
 	require.Equal(t, true, p.IsJobMultiTenant())
 }
 
@@ -57,7 +57,7 @@ func Test_PaymentToSubmitterJob_Execute(t *testing.T) {
 				Return(tt.sendPayments(nil, PaymentToSubmitterBatchSize))
 
 			p := PaymentToSubmitterJob{
-				service: mockPaymentToSubmitterService,
+				paymentToSubmitterSvc: mockPaymentToSubmitterService,
 			}
 
 			err := p.Execute(context.Background())

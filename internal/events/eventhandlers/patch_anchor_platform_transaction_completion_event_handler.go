@@ -75,7 +75,7 @@ func (h *PatchAnchorPlatformTransactionCompletionEventHandler) Handle(ctx contex
 
 	ctx = tenant.SaveTenantInContext(ctx, tnt)
 
-	if err := h.service.PatchTransactionCompletion(ctx, payment); err != nil {
+	if err := h.service.PatchAPTransactionForPaymentEvent(ctx, payment); err != nil {
 		h.crashTrackerClient.LogAndReportErrors(ctx, err, fmt.Sprintf("[%s] patching anchor platform transaction", h.Name()))
 		return
 	}

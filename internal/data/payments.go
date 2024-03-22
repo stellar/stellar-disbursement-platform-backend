@@ -139,6 +139,47 @@ func (p *PaymentUpdate) Validate() error {
 	return nil
 }
 
+func (p *PaymentModel) GetAllReadyToPatchCompletionAnchorTransactions(ctx context.Context, sqlExec db.SQLExecuter) ([]Payment, error) {
+	const query = `
+		SELECT
+			p.id,
+			p.amount,
+			p.stellar_transaction_id,
+			p.status,
+			p.status_history,
+			p.updated_at,
+			a.id AS "asset.id",
+			a.code AS "asset.code",
+			a.issuer AS "asset.issuer",
+			rw.id AS "receiver_wallet.id",
+			COALESCE(rw.stellar_memo, '') AS "receiver_wallet.stellar_memo",
+			COALESCE(rw.stellar_memo_type, '') AS "receiver_wallet.stellar_memo_type",
+			rw.anchor_platform_transaction_id AS "receiver_wallet.anchor_platform_transaction_id",
+			rw.anchor_platform_transaction_synced_at AS "receiver_wallet.anchor_platform_transaction_synced_at"
+		FROM
+			payments p
+			INNER JOIN disbursements d ON p.disbursement_id = d.id
+			INNER JOIN assets a ON a.id = d.asset_id
+			INNER JOIN wallets w ON d.wallet_id = w.id
+			INNER JOIN receiver_wallets rw ON rw.receiver_id = p.receiver_id AND rw.wallet_id = w.id
+		WHERE
+			p.status = ANY($1) -- ARRAY['SUCCESS', 'FAILURE']::payment_status[]
+			AND rw.status = $2 -- 'REGISTERED'::receiver_wallet_status
+			AND rw.anchor_platform_transaction_synced_at IS NULL
+		ORDER BY
+			p.created_at
+		FOR UPDATE SKIP LOCKED
+	`
+
+	payments := make([]Payment, 0)
+	err := sqlExec.SelectContext(ctx, &payments, query, pq.Array([]PaymentStatus{SuccessPaymentStatus, FailedPaymentStatus}), RegisteredReceiversWalletStatus)
+	if err != nil {
+		return nil, fmt.Errorf("getting payments: %w", err)
+	}
+
+	return payments, nil
+}
+
 func (p *PaymentModel) Get(ctx context.Context, id string, sqlExec db.SQLExecuter) (*Payment, error) {
 	payment := Payment{}
 
