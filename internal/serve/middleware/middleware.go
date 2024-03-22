@@ -84,7 +84,7 @@ func MetricsRequestHandler(monitorService monitor.MonitorServiceInterface) func(
 
 // AuthenticateMiddleware is a middleware that validates the Authorization header for
 // authenticated endpoints.
-func AuthenticateMiddleware(authManager auth.AuthManager) func(http.Handler) http.Handler {
+func AuthenticateMiddleware(authManager auth.AuthManager, tenantManager tenant.ManagerInterface) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 			authHeader := req.Header.Get("Authorization")
@@ -113,6 +113,15 @@ func AuthenticateMiddleware(authManager auth.AuthManager) func(http.Handler) htt
 
 			// Add the token to the request context
 			ctx = context.WithValue(ctx, TokenContextKey, token)
+
+			// Attempt fetching tenant ID from token
+			tenantID, err := authManager.GetTenantID(ctx, token)
+			if err == nil && tenantID != "" {
+				currentTenant, tenantErr := tenantManager.GetTenantByID(ctx, tenantID)
+				if tenantErr == nil && currentTenant != nil {
+					ctx = tenant.SaveTenantInContext(ctx, currentTenant)
+				}
+			}
 
 			// Add the user ID to the request context logger
 			ctx = log.Set(ctx, log.Ctx(ctx).WithField("user_id", userID))
@@ -274,26 +283,18 @@ func CSPMiddleware() func(http.Handler) http.Handler {
 	}
 }
 
-// InjectTenantMiddleware is a middleware that injects the tenant into the request context, if it can be found in either
-// the authentication token, the request HEADER, or the hostname prefix.
-func InjectTenantMiddleware(tenantManager tenant.ManagerInterface, authManager auth.AuthManager) func(http.Handler) http.Handler {
+// ResolveTenantFromRequestMiddleware is a middleware that injects the tenant into the request context, if it can be found in
+// the request HEADER, or the hostname prefix.
+func ResolveTenantFromRequestMiddleware(tenantManager tenant.ManagerInterface) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 			ctx := req.Context()
 
 			var currentTenant *tenant.Tenant
-			// Attempt 1. Attempt fetching tenant ID from token
-			if token, ok := ctx.Value(TokenContextKey).(string); ok {
-				if tenantID, err := authManager.GetTenantID(ctx, token); err == nil {
-					currentTenant, _ = tenantManager.GetTenantByID(ctx, tenantID)
-				}
-			}
 
-			// Attempt 2. Attempt fetching tenant name from request
-			if currentTenant == nil {
-				if tenantName, err := extractTenantNameFromRequest(req); err == nil && tenantName != "" {
-					currentTenant, _ = tenantManager.GetTenantByName(ctx, tenantName)
-				}
+			// Attempt fetching tenant name from request
+			if tenantName, err := extractTenantNameFromRequest(req); err == nil && tenantName != "" {
+				currentTenant, _ = tenantManager.GetTenantByName(ctx, tenantName)
 			}
 
 			if currentTenant != nil {

@@ -650,7 +650,7 @@ func Test_LoggingMiddleware(t *testing.T) {
 			Name: tenantName,
 		}, nil).Once()
 
-		r.Use(InjectTenantMiddleware(mTenantManager, mAuthManager))
+		r.Use(ResolveTenantFromRequestMiddleware(mTenantManager, mAuthManager))
 		r.Use(EnsureTenantMiddleware)
 		r.Use(LoggingMiddleware)
 		r.Get("/", func(w http.ResponseWriter, r *http.Request) {
@@ -926,7 +926,7 @@ func Test_InjectTenantMiddleware(t *testing.T) {
 			// prepare router
 			r := chi.NewRouter()
 			r.
-				With(InjectTenantMiddleware(mTenantManager, mAuthManager)).
+				With(ResolveTenantFromRequestMiddleware(mTenantManager, mAuthManager)).
 				Get("/test", func(w http.ResponseWriter, r *http.Request) {
 					updatedCtx = r.Context()
 					w.WriteHeader(http.StatusOK)

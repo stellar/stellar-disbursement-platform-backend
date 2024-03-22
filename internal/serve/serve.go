@@ -204,7 +204,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 	))
 	mux.Use(chimiddleware.RequestID)
 	mux.Use(chimiddleware.RealIP)
-	mux.Use(middleware.InjectTenantMiddleware(o.tenantManager, o.authManager))
+	mux.Use(middleware.ResolveTenantFromRequestMiddleware(o.tenantManager))
 	mux.Use(middleware.LoggingMiddleware)
 	mux.Use(middleware.RecoverHandler)
 	mux.Use(middleware.MetricsRequestHandler(o.MonitorService))
@@ -218,7 +218,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 	// Authenticated Routes
 	authManager := o.authManager
 	mux.Group(func(r chi.Router) {
-		r.Use(middleware.AuthenticateMiddleware(authManager))
+		r.Use(middleware.AuthenticateMiddleware(authManager, o.tenantManager))
 		r.Use(middleware.EnsureTenantMiddleware)
 
 		r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...)).Route("/statistics", func(r chi.Router) {
