@@ -108,11 +108,11 @@ func (c *DatabaseCommand) setupForNetworkCmd(globalOptions *utils.GlobalOptionsT
 					log.Ctx(ctx).Fatalf("error getting network type: %s", err.Error())
 				}
 
-				if err := services.SetupAssetsForProperNetwork(ctx, tenantDBConnectionPool, nil, networkType, services.DefaultAssetsNetworkMap); err != nil {
+				if err := services.SetupAssetsForProperNetwork(ctx, tenantDBConnectionPool, networkType, services.DefaultAssetsNetworkMap); err != nil {
 					log.Ctx(ctx).Fatalf("error upserting assets for proper network: %s", err.Error())
 				}
 
-				if err := services.SetupWalletsForProperNetwork(ctx, tenantDBConnectionPool, nil, networkType, services.DefaultWalletsNetworkMap); err != nil {
+				if err := services.SetupWalletsForProperNetwork(ctx, tenantDBConnectionPool, networkType, services.DefaultWalletsNetworkMap); err != nil {
 					log.Ctx(ctx).Fatalf("error upserting wallets for proper network: %s", err.Error())
 				}
 			}

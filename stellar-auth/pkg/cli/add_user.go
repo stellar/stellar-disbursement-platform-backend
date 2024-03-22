@@ -195,7 +195,7 @@ func execAddUser(ctx context.Context, dbUrl string, email, firstName, lastName, 
 		Roles:     roles,
 	}
 
-	u, err := authManager.CreateUser(ctx, dbConnectionPool, newUser, password)
+	u, err := authManager.CreateUser(ctx, newUser, password)
 	if err != nil {
 		return fmt.Errorf("error creating user: %w", err)
 	}

@@ -31,6 +31,9 @@ type ManagerInterface interface {
 	GetTenantByName(ctx context.Context, name string) (*Tenant, error)
 	GetTenantByIDOrName(ctx context.Context, arg string) (*Tenant, error)
 	AddTenant(ctx context.Context, name string) (*Tenant, error)
+	DeleteTenantByName(ctx context.Context, name string) error
+	CreateTenantSchema(ctx context.Context, tenantName string) error
+	DropTenantSchema(ctx context.Context, tenantName string) error
 	UpdateTenantConfig(ctx context.Context, tu *TenantUpdate) (*Tenant, error)
 }
 
@@ -123,6 +126,39 @@ func (m *Manager) AddTenant(ctx context.Context, name string) (*Tenant, error) {
 		return nil, fmt.Errorf("inserting tenant %s: %w", name, err)
 	}
 	return &t, nil
+}
+
+func (m *Manager) DeleteTenantByName(ctx context.Context, name string) error {
+	if name == "" {
+		return ErrEmptyTenantName
+	}
+
+	q := "DELETE FROM tenants WHERE name = $1"
+	_, err := m.db.ExecContext(ctx, q, name)
+	if err != nil {
+		return fmt.Errorf("deleting tenant %s: %w", name, err)
+	}
+	return nil
+}
+
+func (m *Manager) CreateTenantSchema(ctx context.Context, tenantName string) error {
+	schemaName := fmt.Sprintf("sdp_%s", tenantName)
+	_, err := m.db.ExecContext(ctx, fmt.Sprintf("CREATE SCHEMA %s", pq.QuoteIdentifier(schemaName)))
+	if err != nil {
+		return fmt.Errorf("creating schema for tenant %s: %w", schemaName, err)
+	}
+
+	return nil
+}
+
+func (m *Manager) DropTenantSchema(ctx context.Context, tenantName string) error {
+	schemaName := fmt.Sprintf("sdp_%s", tenantName)
+	_, err := m.db.ExecContext(ctx, fmt.Sprintf("DROP SCHEMA IF EXISTS %s CASCADE", pq.QuoteIdentifier(schemaName)))
+	if err != nil {
+		return fmt.Errorf("dropping schema for tenant %s: %w", schemaName, err)
+	}
+
+	return nil
 }
 
 func (m *Manager) UpdateTenantConfig(ctx context.Context, tu *TenantUpdate) (*Tenant, error) {

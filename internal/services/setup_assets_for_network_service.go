@@ -7,7 +7,6 @@ import (
 
 	"github.com/lib/pq"
 	"github.com/stellar/go/support/log"
-
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/assets"
@@ -23,7 +22,7 @@ var DefaultAssetsNetworkMap = AssetsNetworkMapType{
 
 // SetupAssetsForProperNetwork updates and inserts assets for the given Network Passphrase (`network`). So it avoids the application having
 // same asset code with multiple issuers.
-func SetupAssetsForProperNetwork(ctx context.Context, dbConnectionPool db.DBConnectionPool, sqlExecutor db.SQLExecuter, network utils.NetworkType, assetsNetworkMap AssetsNetworkMapType) error {
+func SetupAssetsForProperNetwork(ctx context.Context, dbConnectionPool db.DBConnectionPool, network utils.NetworkType, assetsNetworkMap AssetsNetworkMapType) error {
 	log.Ctx(ctx).Infof("updating/inserting assets for the '%s' network", network)
 
 	assets, ok := assetsNetworkMap[network]
@@ -44,7 +43,8 @@ func SetupAssetsForProperNetwork(ctx context.Context, dbConnectionPool db.DBConn
 	}
 
 	log.Ctx(ctx).Info(buf.String())
-	query := `
+	err := db.RunInTransaction(ctx, dbConnectionPool, nil, func(dbTx db.DBTransaction) error {
+		query := `
 			WITH assets_to_update_or_insert AS (
 				-- gather all assets passed as parameters for the query and turn into SQL rows
 				SELECT UNNEST($1::text[]) AS code, UNNEST($2::text[]) AS issuer
@@ -82,23 +82,13 @@ func SetupAssetsForProperNetwork(ctx context.Context, dbConnectionPool db.DBConn
 				atui.code NOT IN (SELECT code FROM existing_assets)
 		`
 
-	var err error
-	log.Debug("---")
-	log.Debug(dbConnectionPool)
-	log.Debug("---")
-	if sqlExecutor != nil {
-		_, err = sqlExecutor.ExecContext(ctx, query, pq.Array(codes), pq.Array(issuers))
-	} else {
-		log.Debug("i'm here")
-		err = db.RunInTransaction(ctx, dbConnectionPool, nil, func(dbTx db.DBTransaction) error {
-			_, err = dbTx.ExecContext(ctx, query, pq.Array(codes), pq.Array(issuers))
-			if err != nil {
-				return fmt.Errorf("error upserting assets: %w", err)
-			}
+		_, err := dbTx.ExecContext(ctx, query, pq.Array(codes), pq.Array(issuers))
+		if err != nil {
+			return fmt.Errorf("error upserting assets: %w", err)
+		}
 
-			return nil
-		})
-	}
+		return nil
+	})
 	if err != nil {
 		return fmt.Errorf("error upserting assets for the proper network: %w", err)
 	}
