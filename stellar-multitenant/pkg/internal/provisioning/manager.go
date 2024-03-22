@@ -110,8 +110,8 @@ func (m *Manager) ProvisionNewTenant(
 			}
 
 			// Updating organization's name
-			models, err := data.NewModels(tenantSchemaConnectionPool)
-			if err != nil {
+			models, getTntModelsErr := data.NewModels(tenantSchemaConnectionPool)
+			if getTntModelsErr != nil {
 				return fmt.Errorf("getting models: %w", err)
 			}
 
@@ -187,9 +187,13 @@ func (m *Manager) ProvisionNewTenant(
 				deleteDistributionAccFromVaultErr := m.deleteDistributionAccountKey(ctx, t)
 				// We should not let any failures from key deletion block us from completing the tenant cleanup process
 				if deleteDistributionKeyErr != nil {
-					log.Ctx(ctx).Errorf("deleting distribution account private key %s: %v", *t.DistributionAccount, deleteDistributionAccFromVaultErr)
+					deleteDistributionKeyErrPrefixMsg := fmt.Sprintf("deleting distribution account private key %s", *t.DistributionAccount)
+					err = fmt.Errorf("%w. [additional errors]: %s: %w", err, deleteDistributionKeyErrPrefixMsg, deleteDistributionAccFromVaultErr)
+					log.Ctx(ctx).Errorf("%s: %v", deleteDistributionKeyErrPrefixMsg, deleteDistributionAccFromVaultErr)
 				}
+
 				log.Ctx(ctx).Errorf("distribution account cleanup successful")
+				break
 			}
 		}
 
@@ -206,6 +210,7 @@ func (m *Manager) ProvisionNewTenant(
 				if deleteTenantErr != nil {
 					return nil, deleteTenantErr
 				}
+
 				log.Ctx(ctx).Errorf("tenant %s deleted", name)
 				break
 			}
@@ -217,6 +222,7 @@ func (m *Manager) ProvisionNewTenant(
 				if dropTenantSchemaErr != nil {
 					return nil, dropTenantSchemaErr
 				}
+
 				log.Ctx(ctx).Errorf("tenant schema sdp_%s dropped", name)
 				break
 			}

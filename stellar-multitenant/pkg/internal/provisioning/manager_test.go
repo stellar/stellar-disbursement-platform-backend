@@ -382,6 +382,7 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 			mockTntManagerFn: func(tntManagerMock *tenant.TenantManagerMock) {
 				tntManagerMock.On("AddTenant", ctx, tenantName).Return(nil, errors.New("foobar")).Once()
 
+				// expected rollback operations
 				tntManagerMock.On("DropTenantSchema", ctx, tenantName).Return(nil).Once()
 			},
 			expectedErr: ErrTenantCreationFailed,
@@ -394,6 +395,7 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 				tntManagerMock.On("GetDSNForTenant", ctx, tenantName).Return("", nil).Once()
 				tntManagerMock.On("CreateTenantSchema", ctx, tenantName).Return(errors.New("foobar")).Once()
 
+				// expected rollback operations
 				tntManagerMock.On("DropTenantSchema", ctx, tenantName).Return(nil).Once()
 				tntManagerMock.On("DeleteTenantByName", ctx, tenantName).Return(nil).Once()
 			},
@@ -412,6 +414,7 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 				tntManagerMock.On("CreateTenantSchema", ctx, tenantName).Return(nil).Once()
 				distAcc := keypair.MustRandom().Address()
 				distAccSigClient.On("BatchInsert", ctx, 1).Return([]string{distAcc}, nil)
+
 				tStatus := tenant.ProvisionedTenantStatus
 				t.DistributionAccount = &distAcc
 				tntManagerMock.On("UpdateTenantConfig", ctx, &tenant.TenantUpdate{
@@ -421,6 +424,7 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 					Status:              &tStatus,
 				}).Return(&t, errors.New("foobar")).Once()
 
+				// expected rollback operations
 				tntManagerMock.On("DropTenantSchema", ctx, tenantName).Return(nil).Once()
 				tntManagerMock.On("DeleteTenantByName", ctx, tenantName).Return(nil).Once()
 				distAccSigClient.On("Delete", ctx, distAcc).Return(nil).Once()
