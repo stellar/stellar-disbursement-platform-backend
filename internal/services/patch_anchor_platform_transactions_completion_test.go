@@ -117,7 +117,6 @@ func Test_PatchAnchorPlatformTransactionCompletionService_PatchAPTransactionForP
 			VerificationField: data.VerificationFieldDateOfBirth,
 		})
 
-		paymentCompletedAt := time.Now()
 		payment := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
 			Amount:               "1",
 			StellarTransactionID: "tx-hash",
@@ -126,20 +125,19 @@ func Test_PatchAnchorPlatformTransactionCompletionService_PatchAPTransactionForP
 			Disbursement:         disbursement,
 			ReceiverWallet:       receiverWallet,
 			Asset:                *asset,
-			UpdatedAt:            paymentCompletedAt,
 		})
 
 		getEntries := log.DefaultLogger.StartTest(log.DebugLevel)
 
+		completedAtUTC := payment.UpdatedAt.UTC()
 		tx := schemas.EventPaymentCompletedData{
 			PaymentID:            payment.ID,
 			PaymentStatus:        string(data.SuccessPaymentStatus),
 			PaymentStatusMessage: "",
-			PaymentCompletedAt:   paymentCompletedAt,
+			PaymentCompletedAt:   completedAtUTC,
 			StellarTransactionID: "tx-hash",
 		}
 
-		compledtedAtUTC := tx.PaymentCompletedAt.UTC()
 		apAPISvcMock.
 			On("PatchAnchorTransactionsPostSuccessCompletion", ctx, anchorplatform.APSep24TransactionPatchPostSuccess{
 				ID:     receiverWallet.AnchorPlatformTransactionID,
@@ -152,7 +150,7 @@ func Test_PatchAnchorPlatformTransactionCompletionService_PatchAPTransactionForP
 						MemoType: receiverWallet.StellarMemoType,
 					},
 				},
-				CompletedAt: &compledtedAtUTC,
+				CompletedAt: &completedAtUTC,
 				AmountOut: anchorplatform.APAmount{
 					Amount: payment.Amount,
 					Asset:  anchorplatform.NewStellarAssetInAIF(payment.Asset.Code, payment.Asset.Issuer),
@@ -244,7 +242,6 @@ func Test_PatchAnchorPlatformTransactionCompletionService_PatchAPTransactionForP
 			VerificationField: data.VerificationFieldDateOfBirth,
 		})
 
-		paymentCompletedAt := time.Now()
 		payment := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
 			Amount:               "1",
 			StellarTransactionID: "stellar-transaction-id-1",
@@ -253,18 +250,17 @@ func Test_PatchAnchorPlatformTransactionCompletionService_PatchAPTransactionForP
 			Disbursement:         disbursement,
 			ReceiverWallet:       receiverWallet,
 			Asset:                *asset,
-			UpdatedAt:            paymentCompletedAt,
 		})
 
+		completedAtUTC := payment.UpdatedAt.UTC()
 		tx := schemas.EventPaymentCompletedData{
 			PaymentID:            payment.ID,
 			PaymentStatus:        string(data.SuccessPaymentStatus),
 			PaymentStatusMessage: "",
-			PaymentCompletedAt:   paymentCompletedAt,
+			PaymentCompletedAt:   completedAtUTC,
 			StellarTransactionID: "stellar-transaction-id-1",
 		}
 
-		completedAtUTC := tx.PaymentCompletedAt.UTC()
 		apAPISvcMock.
 			On("PatchAnchorTransactionsPostSuccessCompletion", ctx, anchorplatform.APSep24TransactionPatchPostSuccess{
 				ID:     receiverWallet.AnchorPlatformTransactionID,

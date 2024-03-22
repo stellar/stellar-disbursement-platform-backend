@@ -1440,7 +1440,7 @@ func Test_PaymentModel_GetReadyByReceiverWalletID(t *testing.T) {
 	})
 }
 
-func Test_PaymentModelGetAllReadyToPatchCompletionAnchorTransactions(t *testing.T) {
+func Test_PaymentModel_GetAllReadyToPatchCompletionAnchorTransactions(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 
@@ -1753,5 +1753,80 @@ func Test_PaymentModelGetAllReadyToPatchCompletionAnchorTransactions(t *testing.
 		assert.Equal(t, payment.ID, payments[0].ID)
 		assert.Equal(t, payment.Status, payments[0].Status)
 		assert.Equal(t, receiverWallet.AnchorPlatformTransactionID, payments[0].ReceiverWallet.AnchorPlatformTransactionID)
+	})
+}
+
+func Test_PaymentModel_GetBatchForUpdate(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+
+	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, outerErr)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+
+	models, outerErr := NewModels(dbConnectionPool)
+	require.NoError(t, outerErr)
+
+	// fixtures
+	disbursement := CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &Disbursement{Status: StartedDisbursementStatus})
+	receiver1 := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
+	rw1 := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver1.ID, disbursement.Wallet.ID, RegisteredReceiversWalletStatus)
+	paymentReady := CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
+		Amount:         "1",
+		Disbursement:   disbursement,
+		Asset:          *disbursement.Asset,
+		ReceiverWallet: rw1,
+		Status:         ReadyPaymentStatus,
+	})
+	CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
+		Amount:         "2",
+		Disbursement:   disbursement,
+		Asset:          *disbursement.Asset,
+		ReceiverWallet: rw1,
+		Status:         PendingPaymentStatus,
+	})
+	CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
+		Amount:         "3",
+		Disbursement:   disbursement,
+		Asset:          *disbursement.Asset,
+		ReceiverWallet: rw1,
+		Status:         FailedPaymentStatus,
+	})
+
+	t.Run("returns error for invalid batch size", func(t *testing.T) {
+		payments, err := models.Payment.GetBatchForUpdate(ctx, dbConnectionPool, 0)
+		assert.EqualError(t, err, "batch size must be greater than 0")
+		assert.Nil(t, payments)
+	})
+
+	t.Run("returns correct batch of payments", func(t *testing.T) {
+		dbTx1, err := dbConnectionPool.BeginTxx(ctx, nil)
+		require.NoError(t, err)
+		defer func() {
+			err = dbTx1.Rollback()
+			require.NoError(t, err)
+		}()
+
+		batchSize := 2
+
+		payments, err := models.Payment.GetBatchForUpdate(ctx, dbTx1, batchSize)
+		require.NoError(t, err)
+		assert.Len(t, payments, 1) // Only 1 payment is ready.
+		assert.Equal(t, paymentReady.ID, payments[0].ID)
+
+		// check row is locked
+		dbTx2, err := dbConnectionPool.BeginTxx(ctx, nil)
+		require.NoError(t, err)
+		defer func() {
+			err = dbTx2.Rollback()
+			require.NoError(t, err)
+		}()
+
+		_, err = dbTx2.ExecContext(ctx, "SET LOCAL lock_timeout = '1s'")
+		require.NoError(t, err)
+		_, err = dbTx2.ExecContext(ctx, "UPDATE payments SET status = 'FAILED' WHERE id = $1", paymentReady.ID)
+		assert.EqualError(t, err, "pq: canceling statement due to lock timeout")
 	})
 }

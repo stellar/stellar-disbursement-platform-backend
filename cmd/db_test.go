@@ -117,7 +117,11 @@ func Test_DatabaseCommand_db_sdp_migrate(t *testing.T) {
 
 	t.Run("migrate usage", func(t *testing.T) {
 		rootCmd := SetupCLI("x.y.z", "1234567890abcdef")
-		rootCmd.SetArgs([]string{"db", "sdp", "migrate"})
+		rootCmd.SetArgs([]string{
+			"db", "sdp", "migrate",
+			"--database-url",
+			dbt.DSN,
+		})
 		rootCmd.SetOut(buf)
 		err = rootCmd.Execute()
 		require.NoError(t, err)

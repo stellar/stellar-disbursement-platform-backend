@@ -13,7 +13,7 @@ echo "====> ✅Step 1: finish preparation"
 echo $DIVIDER
 echo "====> 👀Step 2: build sdp-api, anchor-platform and tss"
 docker-compose -f docker-compose-e2e-tests.yml up --build -d
-sleep 10
+sleep 20
 echo "====> ✅Step 2: finishing build"
 
 # Create integration test data

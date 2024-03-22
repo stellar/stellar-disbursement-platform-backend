@@ -236,7 +236,7 @@ func (p *PaymentModel) Get(ctx context.Context, id string, sqlExec db.SQLExecute
 	return &payment, nil
 }
 
-func (p *PaymentModel) GetBatchForUpdate(ctx context.Context, dbTx db.DBTransaction, batchSize int) ([]*Payment, error) {
+func (p *PaymentModel) GetBatchForUpdate(ctx context.Context, sqlExec db.SQLExecuter, batchSize int) ([]*Payment, error) {
 	if batchSize <= 0 {
 		return nil, fmt.Errorf("batch size must be greater than 0")
 	}
@@ -275,7 +275,7 @@ func (p *PaymentModel) GetBatchForUpdate(ctx context.Context, dbTx db.DBTransact
 		`
 
 	var payments []*Payment
-	err := dbTx.SelectContext(ctx, &payments, query, ReadyPaymentStatus, RegisteredReceiversWalletStatus, StartedDisbursementStatus, batchSize)
+	err := sqlExec.SelectContext(ctx, &payments, query, ReadyPaymentStatus, RegisteredReceiversWalletStatus, StartedDisbursementStatus, batchSize)
 	if err != nil {
 		return nil, fmt.Errorf("error getting ready payments: %w", err)
 	}

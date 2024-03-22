@@ -74,7 +74,6 @@ func (s *ServerService) GetSchedulerJobRegistrars(
 	apAPIService anchorplatform.AnchorPlatformAPIServiceInterface,
 	tssDBConnectionPool db.DBConnectionPool,
 ) ([]scheduler.SchedulerJobRegisterOption, error) {
-	// TODO: in SDP-1111, inject the remaining dbConnectionPools needed here.
 	models, err := data.NewModels(serveOpts.MtnDBConnectionPool)
 	if err != nil {
 		log.Ctx(ctx).Fatalf("error creating models in Job Scheduler: %s", err.Error())

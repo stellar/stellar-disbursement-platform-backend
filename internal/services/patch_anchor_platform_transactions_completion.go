@@ -156,6 +156,7 @@ func failedStatusMessageFromPayment(payment data.Payment) string {
 // patchAnchorPaymentTransaction patches the anchor platform transaction with the respective status.
 func (s *PatchAnchorPlatformTransactionCompletionService) patchAnchorPaymentTransaction(ctx context.Context, payment data.Payment, statusMessage string) error {
 	if payment.Status == data.SuccessPaymentStatus {
+		paymentLastUpdatedAtUTC := payment.UpdatedAt.UTC()
 		err := s.apAPISvc.PatchAnchorTransactionsPostSuccessCompletion(ctx, anchorplatform.APSep24TransactionPatchPostSuccess{
 			ID:     payment.ReceiverWallet.AnchorPlatformTransactionID,
 			SEP:    "24",
@@ -167,7 +168,7 @@ func (s *PatchAnchorPlatformTransactionCompletionService) patchAnchorPaymentTran
 					MemoType: payment.ReceiverWallet.StellarMemoType,
 				},
 			},
-			CompletedAt: &payment.UpdatedAt,
+			CompletedAt: &paymentLastUpdatedAtUTC,
 			AmountOut: anchorplatform.APAmount{
 				Amount: payment.Amount,
 				Asset:  anchorplatform.NewStellarAssetInAIF(payment.Asset.Code, payment.Asset.Issuer),

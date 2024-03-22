@@ -15,6 +15,7 @@ import (
 
 type PaymentFromSubmitterServiceInterface interface {
 	SyncTransaction(ctx context.Context, tx *schemas.EventPaymentCompletedData) error
+	SyncBatchTransactions(ctx context.Context, batchSize int) error
 }
 
 // PaymentFromSubmitterService is a service that monitors TSS transactions that were complete and sync their completion

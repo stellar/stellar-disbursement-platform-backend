@@ -224,13 +224,17 @@ func Test_serve(t *testing.T) {
 		KafkaSecurityProtocol: events.KafkaProtocolPlaintext,
 	}
 
+	schedulerOpts := scheduler.SchedulerOptions{}
+	schedulerOpts.ReceiverInvitationJobIntervalSeconds = 600
+	schedulerOpts.PaymentJobIntervalSeconds = 600
+
 	// mock server
 	mServer := mockServer{}
 	mServer.On("StartMetricsServe", serveMetricOpts, mock.AnythingOfType("*serve.HTTPServer")).Once()
 	mServer.On("StartServe", serveOpts, mock.AnythingOfType("*serve.HTTPServer")).Once()
 	mServer.On("StartAdminServe", serveTenantOpts, mock.AnythingOfType("*serve.HTTPServer")).Once()
 	mServer.
-		On("GetSchedulerJobRegistrars", mock.Anything, serveOpts, scheduler.SchedulerOptions{}, mock.Anything).
+		On("GetSchedulerJobRegistrars", mock.Anything, serveOpts, schedulerOpts, serveOpts.AnchorPlatformAPIService, mock.Anything).
 		Return([]scheduler.SchedulerJobRegisterOption{}, nil).
 		Once()
 	mServer.On("SetupConsumers", ctx, SetupConsumersOptions{
@@ -286,6 +290,7 @@ func Test_serve(t *testing.T) {
 	t.Setenv("KAFKA_SECURITY_PROTOCOL", string(events.KafkaProtocolPlaintext))
 	t.Setenv("ADMIN_ACCOUNT", "admin-account")
 	t.Setenv("ADMIN_API_KEY", "admin-api-key")
+
 	// test & assert
 	rootCmd.SetArgs([]string{"serve"})
 	err = rootCmd.Execute()

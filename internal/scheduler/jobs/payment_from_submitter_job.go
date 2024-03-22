@@ -19,7 +19,7 @@ const (
 // PaymentFromSubmitterJob is a job that periodically monitors TSS transactions that were complete and sync their status
 // with SDP.
 type PaymentFromSubmitterJob struct {
-	service            *services.PaymentFromSubmitterService
+	service            services.PaymentFromSubmitterServiceInterface
 	jobIntervalSeconds int
 }
 
