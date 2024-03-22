@@ -132,7 +132,7 @@ func Test_ProfileHandler_PatchOrganizationProfile_Failures(t *testing.T) {
 		name              string
 		token             string
 		getRequestFn      func(t *testing.T, ctx context.Context) *http.Request
-		`mockAuthManagerFn func(authManagerMock *auth.AuthManagerMock)`
+		mockAuthManagerFn func(authManagerMock *auth.AuthManagerMock)
 		wantStatusCode    int
 		wantRespBody      string
 	}{
