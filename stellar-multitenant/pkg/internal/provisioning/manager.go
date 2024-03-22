@@ -228,7 +228,7 @@ func (m *Manager) ProvisionNewTenant(
 			}
 		}
 
-		return nil, fmt.Errorf("most recent error: %w", err)
+		return nil, fmt.Errorf("provisioning error: %w", err)
 	}
 
 	hostDistributionAccPubKey := m.SubmitterEngine.HostDistributionAccount()
