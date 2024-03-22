@@ -98,7 +98,7 @@ func (s *ServerService) GetSchedulerJobRegistrars(
 				AnchorPlatformBaseSepURL:       serveOpts.AnchorPlatformBaseSepURL,
 				Models:                         models,
 				MessengerClient:                serveOpts.SMSMessengerClient,
-				MaxInvitationSMSResendAttempts: int64(schedulerOptions.MaxInvitationSMSResendAttempts),
+				MaxInvitationSMSResendAttempts: int64(serveOpts.MaxInvitationSMSResendAttempts),
 				Sep10SigningPrivateKey:         serveOpts.Sep10SigningPrivateKey,
 				CrashTrackerClient:             serveOpts.CrashTrackerClient.Clone(),
 				JobIntervalSeconds:             schedulerOptions.ReceiverInvitationJobIntervalSeconds,
@@ -111,7 +111,6 @@ func (s *ServerService) GetSchedulerJobRegistrars(
 
 type SetupConsumersOptions struct {
 	EventBrokerOptions  cmdUtils.EventBrokerOptions
-	EventHandlerOptions events.EventHandlerOptions
 	ServeOpts           serve.ServeOptions
 	TSSDBConnectionPool db.DBConnectionPool
 }
@@ -128,7 +127,7 @@ func (s *ServerService) SetupConsumers(ctx context.Context, o SetupConsumersOpti
 			AdminDBConnectionPool:          o.ServeOpts.AdminDBConnectionPool,
 			AnchorPlatformBaseSepURL:       o.ServeOpts.AnchorPlatformBasePlatformURL,
 			MessengerClient:                o.ServeOpts.SMSMessengerClient,
-			MaxInvitationSMSResendAttempts: int64(o.EventHandlerOptions.MaxInvitationSMSResendAttempts),
+			MaxInvitationSMSResendAttempts: int64(o.ServeOpts.MaxInvitationSMSResendAttempts),
 			Sep10SigningPrivateKey:         o.ServeOpts.Sep10SigningPrivateKey,
 			CrashTrackerClient:             o.ServeOpts.CrashTrackerClient.Clone(),
 		}),
@@ -182,7 +181,6 @@ func (s *ServerService) SetupConsumers(ctx context.Context, o SetupConsumersOpti
 
 func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorService monitor.MonitorServiceInterface) *cobra.Command {
 	serveOpts := serve.ServeOptions{}
-	schedulerOptions := scheduler.SchedulerOptions{}
 
 	configOpts := config.ConfigOptions{
 		{
@@ -316,6 +314,14 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			FlagDefault: true,
 			Required:    false,
 		},
+		{
+			Name:        "max-invitation-sms-resend-attempts",
+			Usage:       "The maximum number of attempts to resend the SMS invitation to the Receiver Wallets.",
+			OptType:     types.Int,
+			ConfigKey:   &serveOpts.MaxInvitationSMSResendAttempts,
+			FlagDefault: 3,
+			Required:    true,
+		},
 	}
 
 	// crash tracker options
@@ -370,18 +376,6 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			Required:    true,
 		})
 
-	// event handler options
-	eventHandlerOptions := events.EventHandlerOptions{}
-	configOpts = append(configOpts,
-		&config.ConfigOption{
-			Name:        "max-invitation-sms-resend-attempts",
-			Usage:       "The maximum number of attempts to resend the SMS invitation to the Receiver Wallets.",
-			OptType:     types.Int,
-			ConfigKey:   &eventHandlerOptions.MaxInvitationSMSResendAttempts,
-			FlagDefault: 3,
-			Required:    true,
-		})
-
 	// messenger config options:
 	messengerOptions := message.MessengerOptions{}
 	configOpts = append(configOpts, cmdUtils.TwilioConfigOptions(&messengerOptions)...)
@@ -431,6 +425,13 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 	configOpts = append(
 		configOpts,
 		cmdUtils.TransactionSubmitterEngineConfigOptions(&txSubmitterOpts)...,
+	)
+
+	// scheduler options
+	schedulerOpts := scheduler.SchedulerOptions{}
+	configOpts = append(
+		configOpts,
+		cmdUtils.SchedulerConfigOptions(&schedulerOpts)...,
 	)
 
 	cmd := &cobra.Command{
@@ -568,7 +569,6 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 
 				err = serverService.SetupConsumers(ctx, SetupConsumersOptions{
 					EventBrokerOptions:  eventBrokerOptions,
-					EventHandlerOptions: eventHandlerOptions,
 					ServeOpts:           serveOpts,
 					TSSDBConnectionPool: tssDBConnectionPool,
 				})
@@ -581,10 +581,8 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 
 			// Starting Scheduler Service (background job) if enabled
 			if serveOpts.EnableScheduler {
-				// TODO: Clean this up in SDP-1111
-				schedulerOptions.MaxInvitationSMSResendAttempts = eventHandlerOptions.MaxInvitationSMSResendAttempts
 				log.Ctx(ctx).Info("Starting Scheduler Service...")
-				schedulerJobRegistrars, innerErr := serverService.GetSchedulerJobRegistrars(ctx, serveOpts, schedulerOptions, apAPIService, tssDBConnectionPool)
+				schedulerJobRegistrars, innerErr := serverService.GetSchedulerJobRegistrars(ctx, serveOpts, schedulerOpts, apAPIService, tssDBConnectionPool)
 				if innerErr != nil {
 					log.Ctx(ctx).Fatalf("Error getting scheduler job registrars: %v", innerErr)
 				}

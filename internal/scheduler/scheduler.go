@@ -31,7 +31,6 @@ type Scheduler struct {
 }
 
 type SchedulerOptions struct {
-	MaxInvitationSMSResendAttempts       int
 	PaymentJobIntervalSeconds            int
 	ReceiverInvitationJobIntervalSeconds int
 }

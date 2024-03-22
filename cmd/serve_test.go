@@ -161,6 +161,7 @@ func Test_serve(t *testing.T) {
 		DisableReCAPTCHA:                false,
 		EnableScheduler:                 true,
 		SubmitterEngine:                 submitterEngine,
+		MaxInvitationSMSResendAttempts:  3,
 	}
 	serveOpts.AnchorPlatformAPIService, err = anchorplatform.NewAnchorPlatformAPIService(httpclient.DefaultClient(), serveOpts.AnchorPlatformBasePlatformURL, serveOpts.AnchorPlatformOutgoingJWTSecret)
 	require.NoError(t, err)
@@ -223,10 +224,6 @@ func Test_serve(t *testing.T) {
 		KafkaSecurityProtocol: events.KafkaProtocolPlaintext,
 	}
 
-	eventHandlerOptions := events.EventHandlerOptions{
-		MaxInvitationSMSResendAttempts: 3,
-	}
-
 	// mock server
 	mServer := mockServer{}
 	mServer.On("StartMetricsServe", serveMetricOpts, mock.AnythingOfType("*serve.HTTPServer")).Once()
@@ -238,7 +235,6 @@ func Test_serve(t *testing.T) {
 		Once()
 	mServer.On("SetupConsumers", ctx, SetupConsumersOptions{
 		EventBrokerOptions:  eventBrokerOptions,
-		EventHandlerOptions: eventHandlerOptions,
 		ServeOpts:           serveOpts,
 		TSSDBConnectionPool: dbConnectionPool,
 	}).
