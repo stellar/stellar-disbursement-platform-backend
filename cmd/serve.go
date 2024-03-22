@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"go/types"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/scheduler/jobs"
+
 	"github.com/spf13/cobra"
 	"github.com/stellar/go/support/config"
 	"github.com/stellar/go/support/log"
@@ -78,12 +80,33 @@ func (s *ServerService) GetSchedulerJobRegistrars(
 		log.Ctx(ctx).Fatalf("error creating models in Job Scheduler: %s", err.Error())
 	}
 
-	return []scheduler.SchedulerJobRegisterOption{
+	sj := []scheduler.SchedulerJobRegisterOption{
 		scheduler.WithAPAuthEnforcementJob(apAPIService, serveOpts.MonitorService, serveOpts.CrashTrackerClient.Clone()),
 		scheduler.WithReadyPaymentsCancellationJobOption(models),
-		scheduler.WithPaymentToSubmitterJobOption(models, tssDBConnectionPool),
-		scheduler.WithPaymentFromSubmitterJobOption(models, tssDBConnectionPool),
-	}, nil
+	}
+
+	if schedulerOptions.PaymentJobIntervalSeconds > 0 {
+		sj = append(sj,
+			scheduler.WithPaymentToSubmitterJobOption(schedulerOptions.PaymentJobIntervalSeconds, models, tssDBConnectionPool),
+			scheduler.WithPaymentFromSubmitterJobOption(schedulerOptions.PaymentJobIntervalSeconds, models, tssDBConnectionPool),
+		)
+	}
+
+	if schedulerOptions.ReceiverInvitationJobIntervalSeconds > 0 {
+		sj = append(sj,
+			scheduler.WithSendReceiverWalletsSMSInvitationJobOption(jobs.SendReceiverWalletsSMSInvitationJobOptions{
+				AnchorPlatformBaseSepURL:       serveOpts.AnchorPlatformBaseSepURL,
+				Models:                         models,
+				MessengerClient:                serveOpts.SMSMessengerClient,
+				MaxInvitationSMSResendAttempts: int64(schedulerOptions.MaxInvitationSMSResendAttempts),
+				Sep10SigningPrivateKey:         serveOpts.Sep10SigningPrivateKey,
+				CrashTrackerClient:             serveOpts.CrashTrackerClient.Clone(),
+				JobIntervalSeconds:             schedulerOptions.ReceiverInvitationJobIntervalSeconds,
+			}),
+		)
+	}
+
+	return sj, nil
 }
 
 type SetupConsumersOptions struct {
@@ -558,6 +581,8 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 
 			// Starting Scheduler Service (background job) if enabled
 			if serveOpts.EnableScheduler {
+				// TODO: Clean this up in SDP-1111
+				schedulerOptions.MaxInvitationSMSResendAttempts = eventHandlerOptions.MaxInvitationSMSResendAttempts
 				log.Ctx(ctx).Info("Starting Scheduler Service...")
 				schedulerJobRegistrars, innerErr := serverService.GetSchedulerJobRegistrars(ctx, serveOpts, schedulerOptions, apAPIService, tssDBConnectionPool)
 				if innerErr != nil {

@@ -250,6 +250,18 @@ const getPendingRegistrationReceiverWalletsBaseQuery = `
 
 var getPendingRegistrationReceiverWalletsBaseArgs = []any{ReadyReceiversWalletStatus}
 
+func (rw *ReceiverWalletModel) GetAllPendingRegistrations(ctx context.Context, sqlExec db.SQLExecuter) ([]*ReceiverWallet, error) {
+	query := fmt.Sprintf(getPendingRegistrationReceiverWalletsBaseQuery, "")
+
+	receiverWallets := make([]*ReceiverWallet, 0)
+	err := sqlExec.SelectContext(ctx, &receiverWallets, query, getPendingRegistrationReceiverWalletsBaseArgs...)
+	if err != nil {
+		return nil, fmt.Errorf("error querying pending registration receiver wallets: %w", err)
+	}
+
+	return receiverWallets, nil
+}
+
 func (rw *ReceiverWalletModel) GetAllPendingRegistrationByReceiverWalletIDs(ctx context.Context, sqlExec db.SQLExecuter, receiverWalletIDs []string) ([]*ReceiverWallet, error) {
 	query := fmt.Sprintf(getPendingRegistrationReceiverWalletsBaseQuery, "AND rw.id = ANY($2)")
 

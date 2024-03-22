@@ -30,7 +30,11 @@ type Scheduler struct {
 	tenantManager      tenant.ManagerInterface
 }
 
-type SchedulerOptions struct{}
+type SchedulerOptions struct {
+	MaxInvitationSMSResendAttempts       int
+	PaymentJobIntervalSeconds            int
+	ReceiverInvitationJobIntervalSeconds int
+}
 
 type SchedulerJobRegisterOption func(*Scheduler)
 
@@ -188,16 +192,23 @@ func WithReadyPaymentsCancellationJobOption(models *data.Models) SchedulerJobReg
 	}
 }
 
-func WithPaymentToSubmitterJobOption(models *data.Models, tssDBConnectionPool db.DBConnectionPool) SchedulerJobRegisterOption {
+func WithPaymentToSubmitterJobOption(jobIntervalSeconds int, models *data.Models, tssDBConnectionPool db.DBConnectionPool) SchedulerJobRegisterOption {
 	return func(s *Scheduler) {
-		j := jobs.NewPaymentToSubmitterJob(models, tssDBConnectionPool)
+		j := jobs.NewPaymentToSubmitterJob(jobIntervalSeconds, models, tssDBConnectionPool)
 		s.addJob(j)
 	}
 }
 
-func WithPaymentFromSubmitterJobOption(models *data.Models, tssDBConnectionPool db.DBConnectionPool) SchedulerJobRegisterOption {
+func WithPaymentFromSubmitterJobOption(paymentJobInterval int, models *data.Models, tssDBConnectionPool db.DBConnectionPool) SchedulerJobRegisterOption {
 	return func(s *Scheduler) {
-		j := jobs.NewPaymentFromSubmitterJob(models, tssDBConnectionPool)
+		j := jobs.NewPaymentFromSubmitterJob(paymentJobInterval, models, tssDBConnectionPool)
+		s.addJob(j)
+	}
+}
+
+func WithSendReceiverWalletsSMSInvitationJobOption(o jobs.SendReceiverWalletsSMSInvitationJobOptions) SchedulerJobRegisterOption {
+	return func(s *Scheduler) {
+		j := jobs.NewSendReceiverWalletsSMSInvitationJob(o)
 		s.addJob(j)
 	}
 }

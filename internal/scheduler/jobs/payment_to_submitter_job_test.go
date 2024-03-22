@@ -13,17 +13,18 @@ import (
 )
 
 func Test_PaymentToSubmitterJob_GetInterval(t *testing.T) {
-	p := NewPaymentToSubmitterJob(&data.Models{}, nil)
-	require.Equal(t, PaymentToSubmitterJobIntervalSeconds*time.Second, p.GetInterval())
+	interval := 5
+	p := NewPaymentToSubmitterJob(interval, &data.Models{}, nil)
+	require.Equal(t, time.Duration(interval)*time.Second, p.GetInterval())
 }
 
 func Test_PaymentToSubmitterJob_GetName(t *testing.T) {
-	p := NewPaymentToSubmitterJob(&data.Models{}, nil)
+	p := NewPaymentToSubmitterJob(5, &data.Models{}, nil)
 	require.Equal(t, PaymentToSubmitterJobName, p.GetName())
 }
 
 func Test_PaymentToSubmitterJob_IsJobMultiTenant(t *testing.T) {
-	p := NewPaymentToSubmitterJob(&data.Models{}, nil)
+	p := NewPaymentToSubmitterJob(5, &data.Models{}, nil)
 	require.Equal(t, true, p.IsJobMultiTenant())
 }
 
