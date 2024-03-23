@@ -53,7 +53,7 @@ func rollbackTenantCreationErrors() []error {
 }
 
 func rollbackTenantSchemaErrors() []error {
-	return []error{ErrUpdateTenantFailed, ErrProvisionTenantDistributionAccountFailed, ErrTenantDataSetupFailed, ErrOpenTenantSchemaDBConnectionFailed, ErrTenantSchemaFailed, ErrTenantCreationFailed}
+	return []error{ErrUpdateTenantFailed, ErrProvisionTenantDistributionAccountFailed, ErrTenantDataSetupFailed, ErrOpenTenantSchemaDBConnectionFailed, ErrTenantSchemaFailed}
 }
 
 func (m *Manager) ProvisionNewTenant(
@@ -62,34 +62,34 @@ func (m *Manager) ProvisionNewTenant(
 ) (*tenant.Tenant, error) {
 	log.Ctx(ctx).Infof("adding tenant %s", name)
 	t, err := func() (*tenant.Tenant, error) {
-		t, err := m.tenantManager.AddTenant(ctx, name)
-		if err != nil {
-			return nil, fmt.Errorf("%w: adding tenant %s: %w", ErrTenantCreationFailed, name, err)
+		t, addTntErr := m.tenantManager.AddTenant(ctx, name)
+		if addTntErr != nil {
+			return nil, fmt.Errorf("%w: adding tenant %s: %w", ErrTenantCreationFailed, name, addTntErr)
 		}
 
 		u, tenantSchemaFailedErr := func() (string, error) {
-			u, err := m.tenantManager.GetDSNForTenant(ctx, name)
-			if err != nil {
-				return "", fmt.Errorf("getting database DSN for tenant %s: %w", name, err)
+			u, getDSNForTntErr := m.tenantManager.GetDSNForTenant(ctx, name)
+			if getDSNForTntErr != nil {
+				return "", fmt.Errorf("getting database DSN for tenant %s: %w", name, getDSNForTntErr)
 			}
 
 			log.Ctx(ctx).Infof("creating tenant %s database schema", name)
-			err = m.tenantManager.CreateTenantSchema(ctx, name)
-			if err != nil {
-				return "", fmt.Errorf("creating tenant %s database schema: %w", name, err)
+			createTntSchemaErr := m.tenantManager.CreateTenantSchema(ctx, name)
+			if createTntSchemaErr != nil {
+				return "", fmt.Errorf("creating tenant %s database schema: %w", name, createTntSchemaErr)
 			}
 
 			// Applying migrations
 			log.Ctx(ctx).Infof("applying SDP migrations on the tenant %s schema", name)
-			err = m.RunMigrationsForTenant(ctx, u, migrate.Up, 0, sdpmigrations.FS, db.StellarPerTenantSDPMigrationsTableName)
-			if err != nil {
-				return "", fmt.Errorf("applying SDP migrations: %w", err)
+			runTntMigrationsErr := m.RunMigrationsForTenant(ctx, u, migrate.Up, 0, sdpmigrations.FS, db.StellarPerTenantSDPMigrationsTableName)
+			if runTntMigrationsErr != nil {
+				return "", fmt.Errorf("applying SDP migrations: %w", runTntMigrationsErr)
 			}
 
 			log.Ctx(ctx).Infof("applying stellar-auth migrations on the tenant %s schema", name)
-			err = m.RunMigrationsForTenant(ctx, u, migrate.Up, 0, authmigrations.FS, db.StellarPerTenantAuthMigrationsTableName)
-			if err != nil {
-				return "", fmt.Errorf("applying stellar-auth migrations: %w", err)
+			runTntAuthMigrationsErr := m.RunMigrationsForTenant(ctx, u, migrate.Up, 0, authmigrations.FS, db.StellarPerTenantAuthMigrationsTableName)
+			if runTntAuthMigrationsErr != nil {
+				return "", fmt.Errorf("applying stellar-auth migrations: %w", runTntAuthMigrationsErr)
 			}
 
 			return u, nil
@@ -185,6 +185,11 @@ func (m *Manager) ProvisionNewTenant(
 		return t, nil
 	}()
 	if err != nil {
+		// We don't want to roll back an existing tenant
+		if errors.Is(err, tenant.ErrDuplicatedTenantName) {
+			return nil, err
+		}
+
 		provisioningErr := fmt.Errorf("provisioning error: %w", err)
 
 		if errors.Is(err, ErrUpdateTenantFailed) {
