@@ -378,12 +378,9 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 		expectedErr      error
 	}{
 		{
-			name: "rollback and return error when failing to add tenant",
+			name: "return error when failing to add tenant",
 			mockTntManagerFn: func(tntManagerMock *tenant.TenantManagerMock) {
 				tntManagerMock.On("AddTenant", ctx, tenantName).Return(nil, errors.New("foobar")).Once()
-
-				// expected rollback operations
-				tntManagerMock.On("DropTenantSchema", ctx, tenantName).Return(nil).Once()
 			},
 			expectedErr: ErrTenantCreationFailed,
 		},
