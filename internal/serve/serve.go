@@ -204,6 +204,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 	))
 	mux.Use(chimiddleware.RequestID)
 	mux.Use(chimiddleware.RealIP)
+	mux.Use(middleware.ResolveTenantFromRequestMiddleware(o.tenantManager))
 	mux.Use(middleware.LoggingMiddleware)
 	mux.Use(middleware.RecoverHandler)
 	mux.Use(middleware.MetricsRequestHandler(o.MonitorService))
@@ -217,8 +218,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 	// Authenticated Routes
 	authManager := o.authManager
 	mux.Group(func(r chi.Router) {
-		r.Use(middleware.AuthenticateMiddleware(authManager))
-		r.Use(middleware.InjectTenantMiddleware(o.tenantManager, o.authManager))
+		r.Use(middleware.AuthenticateMiddleware(authManager, o.tenantManager))
 		r.Use(middleware.EnsureTenantMiddleware)
 
 		r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...)).Route("/statistics", func(r chi.Router) {
@@ -373,7 +373,6 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 
 	// Public routes that are tenant aware (they need to know the tenant ID)
 	mux.Group(func(r chi.Router) {
-		r.Use(middleware.InjectTenantMiddleware(o.tenantManager, o.authManager))
 		r.Use(middleware.EnsureTenantMiddleware)
 
 		r.Post("/login", httphandler.LoginHandler{
@@ -405,7 +404,6 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 
 	// SEP-24 and miscellaneous endpoints that are tenant-unaware
 	mux.Group(func(r chi.Router) {
-		r.Use(middleware.InjectTenantMiddleware(o.tenantManager, o.authManager))
 		r.Get("/health", httphandler.HealthHandler{
 			ReleaseID: o.GitCommit,
 			ServiceID: ServiceID,
