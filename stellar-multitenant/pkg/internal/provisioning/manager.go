@@ -34,7 +34,6 @@ type Manager struct {
 var (
 	ErrTenantCreationFailed                     = errors.New("tenant creation failed")
 	ErrTenantSchemaFailed                       = errors.New("database schema creation for tenant failed")
-	ErrOpenTenantSchemaDBConnectionFailed       = errors.New("opening tenant schema database connection failed")
 	ErrTenantDataSetupFailed                    = errors.New("tenant data setup failed")
 	ErrProvisionTenantDistributionAccountFailed = errors.New("tenant distribution account provisioning failed")
 	ErrUpdateTenantFailed                       = errors.New("tenant update failed")
@@ -49,11 +48,11 @@ func rollbackTenantDataSetupErrors() []error {
 }
 
 func rollbackTenantCreationErrors() []error {
-	return []error{ErrUpdateTenantFailed, ErrProvisionTenantDistributionAccountFailed, ErrTenantDataSetupFailed, ErrOpenTenantSchemaDBConnectionFailed, ErrTenantSchemaFailed}
+	return []error{ErrUpdateTenantFailed, ErrProvisionTenantDistributionAccountFailed, ErrTenantDataSetupFailed, ErrTenantSchemaFailed}
 }
 
 func rollbackTenantSchemaErrors() []error {
-	return []error{ErrUpdateTenantFailed, ErrProvisionTenantDistributionAccountFailed, ErrTenantDataSetupFailed, ErrOpenTenantSchemaDBConnectionFailed, ErrTenantSchemaFailed}
+	return []error{ErrUpdateTenantFailed, ErrProvisionTenantDistributionAccountFailed, ErrTenantDataSetupFailed, ErrTenantSchemaFailed}
 }
 
 func (m *Manager) ProvisionNewTenant(
@@ -61,226 +60,240 @@ func (m *Manager) ProvisionNewTenant(
 	organizationName, uiBaseURL, networkType string,
 ) (*tenant.Tenant, error) {
 	log.Ctx(ctx).Infof("adding tenant %s", name)
-	t, err := func() (*tenant.Tenant, error) {
-		t, addTntErr := m.tenantManager.AddTenant(ctx, name)
-		if addTntErr != nil {
-			return nil, fmt.Errorf("%w: adding tenant %s: %w", ErrTenantCreationFailed, name, addTntErr)
-		}
-
-		u, tenantSchemaFailedErr := func() (string, error) {
-			u, getDSNForTntErr := m.tenantManager.GetDSNForTenant(ctx, name)
-			if getDSNForTntErr != nil {
-				return "", fmt.Errorf("getting database DSN for tenant %s: %w", name, getDSNForTntErr)
-			}
-
-			log.Ctx(ctx).Infof("creating tenant %s database schema", name)
-			createTntSchemaErr := m.tenantManager.CreateTenantSchema(ctx, name)
-			if createTntSchemaErr != nil {
-				return "", fmt.Errorf("creating tenant %s database schema: %w", name, createTntSchemaErr)
-			}
-
-			// Applying migrations
-			log.Ctx(ctx).Infof("applying SDP migrations on the tenant %s schema", name)
-			runTntMigrationsErr := m.RunMigrationsForTenant(ctx, u, migrate.Up, 0, sdpmigrations.FS, db.StellarPerTenantSDPMigrationsTableName)
-			if runTntMigrationsErr != nil {
-				return "", fmt.Errorf("applying SDP migrations: %w", runTntMigrationsErr)
-			}
-
-			log.Ctx(ctx).Infof("applying stellar-auth migrations on the tenant %s schema", name)
-			runTntAuthMigrationsErr := m.RunMigrationsForTenant(ctx, u, migrate.Up, 0, authmigrations.FS, db.StellarPerTenantAuthMigrationsTableName)
-			if runTntAuthMigrationsErr != nil {
-				return "", fmt.Errorf("applying stellar-auth migrations: %w", runTntAuthMigrationsErr)
-			}
-
-			return u, nil
-		}()
-		if tenantSchemaFailedErr != nil {
-			return nil, fmt.Errorf("%w: %w", ErrTenantSchemaFailed, tenantSchemaFailedErr)
-		}
-
-		// Connecting to the tenant database schema
-		tenantSchemaConnectionPool, err := db.OpenDBConnectionPool(u)
-		if err != nil {
-			return nil, fmt.Errorf("%w: opening database connection on tenant schema: %w", ErrOpenTenantSchemaDBConnectionFailed, err)
-		}
-		defer tenantSchemaConnectionPool.Close()
-
-		tenantDataSetupErr := func() error {
-			err = services.SetupAssetsForProperNetwork(ctx, tenantSchemaConnectionPool, utils.NetworkType(networkType), services.DefaultAssetsNetworkMap)
-			if err != nil {
-				return fmt.Errorf("running setup assets for proper network: %w", err)
-			}
-
-			err = services.SetupWalletsForProperNetwork(ctx, tenantSchemaConnectionPool, utils.NetworkType(networkType), services.DefaultWalletsNetworkMap)
-			if err != nil {
-				return fmt.Errorf("running setup wallets for proper network: %w", err)
-			}
-
-			// Updating organization's name
-			models, getTntModelsErr := data.NewModels(tenantSchemaConnectionPool)
-			if getTntModelsErr != nil {
-				return fmt.Errorf("getting models: %w", err)
-			}
-
-			err = models.Organizations.Update(ctx, &data.OrganizationUpdate{Name: organizationName})
-			if err != nil {
-				return fmt.Errorf("updating organization's name: %w", err)
-			}
-
-			// Creating new user and sending invitation email
-			authManager := auth.NewAuthManager(
-				auth.WithDefaultAuthenticatorOption(tenantSchemaConnectionPool, auth.NewDefaultPasswordEncrypter(), 0),
-			)
-			s := services.NewCreateUserService(models, tenantSchemaConnectionPool, authManager, m.messengerClient)
-			_, err = s.CreateUser(ctx, auth.User{
-				FirstName: userFirstName,
-				LastName:  userLastName,
-				Email:     userEmail,
-				IsOwner:   true,
-				Roles:     []string{"owner"},
-			}, uiBaseURL)
-			if err != nil {
-				return fmt.Errorf("creating user: %w", err)
-			}
-
-			return nil
-		}()
-		if tenantDataSetupErr != nil {
-			return nil, fmt.Errorf("%w: %w", ErrTenantDataSetupFailed, tenantDataSetupErr)
-		}
-
-		// Provision distribution account for tenant if necessary
-		distributionAccPubKeys, err := m.SubmitterEngine.DistAccountSigner.BatchInsert(ctx, 1)
-		if err != nil {
-			if errors.Is(err, signing.ErrUnsupportedCommand) {
-				log.Ctx(ctx).Warnf(
-					"Account provisioning not needed for distribution account signature client type %s: %v",
-					m.SubmitterEngine.DistAccountSigner.Type(), err)
-			} else {
-				return nil, fmt.Errorf("%w: provisioning distribution account: %w", ErrProvisionTenantDistributionAccountFailed, err)
-			}
-		}
-
-		// Assigning the account key to the tenant so that it can be referenced if it needs to be deleted in the vault if any subsequent errors are encountered
-		t.DistributionAccount = &distributionAccPubKeys[0]
-		if len(distributionAccPubKeys) != 1 {
-			return t, fmt.Errorf("%w: expected single distribution account public key, got %d", ErrUpdateTenantFailed, len(distributionAccPubKeys))
-		}
-		log.Ctx(ctx).Infof("distribution account %s created for tenant %s", *t.DistributionAccount, name)
-
-		tenantStatus := tenant.ProvisionedTenantStatus
-		t, err = m.tenantManager.UpdateTenantConfig(
-			ctx,
-			&tenant.TenantUpdate{
-				ID:                  t.ID,
-				Status:              &tenantStatus,
-				SDPUIBaseURL:        &uiBaseURL,
-				DistributionAccount: t.DistributionAccount,
-			})
-		if err != nil {
-			updateTenantErrMsg := fmt.Errorf("%w: updating tenant %s status to %s: %w", ErrUpdateTenantFailed, name, tenant.ProvisionedTenantStatus, err)
-			return t, updateTenantErrMsg
-		}
-
-		return t, nil
-	}()
-	if err != nil {
-		// We don't want to roll back an existing tenant
-		if errors.Is(err, tenant.ErrDuplicatedTenantName) {
-			return nil, err
-		}
-
-		provisioningErr := fmt.Errorf("provisioning error: %w", err)
-
-		if errors.Is(err, ErrUpdateTenantFailed) {
-			log.Ctx(ctx).Errorf("tenant record not updated")
-		}
-
-		for _, deleteDistributionKeyErr := range deleteDistributionKeyErrors() {
-			if errors.Is(err, deleteDistributionKeyErr) {
-				deleteDistributionAccFromVaultErr := m.deleteDistributionAccountKey(ctx, t)
-				// We should not let any failures from key deletion block us from completing the tenant cleanup process
-				if deleteDistributionKeyErr != nil {
-					deleteDistributionKeyErrPrefixMsg := fmt.Sprintf("deleting distribution account private key %s", *t.DistributionAccount)
-					provisioningErr = fmt.Errorf("%w. [additional errors]: %s: %w", provisioningErr, deleteDistributionKeyErrPrefixMsg, deleteDistributionAccFromVaultErr)
-					log.Ctx(ctx).Errorf("%s: %v", deleteDistributionKeyErrPrefixMsg, deleteDistributionAccFromVaultErr)
-				}
-
-				log.Ctx(ctx).Errorf("distribution account cleanup successful")
-				break
-			}
-		}
-
-		for _, rollbackTenantDataSetupErr := range rollbackTenantDataSetupErrors() {
-			if errors.Is(err, rollbackTenantDataSetupErr) {
-				log.Ctx(ctx).Errorf("tenant data setup requires rollback")
-				break
-			}
-		}
-
-		for _, rollbackTenantCreationErr := range rollbackTenantCreationErrors() {
-			if errors.Is(err, rollbackTenantCreationErr) {
-				deleteTenantErr := m.tenantManager.DeleteTenantByName(ctx, name)
-				if deleteTenantErr != nil {
-					return nil, fmt.Errorf("%w. [rollback error] %w", provisioningErr, deleteTenantErr)
-				}
-
-				log.Ctx(ctx).Errorf("tenant %s deleted", name)
-				break
-			}
-		}
-
-		for _, rollbackTenantSchemaErr := range rollbackTenantSchemaErrors() {
-			if errors.Is(err, rollbackTenantSchemaErr) {
-				dropTenantSchemaErr := m.tenantManager.DropTenantSchema(ctx, name)
-				if dropTenantSchemaErr != nil {
-					return nil, fmt.Errorf("%w. [rollback error] %w", provisioningErr, dropTenantSchemaErr)
-				}
-
-				log.Ctx(ctx).Errorf("tenant schema sdp_%s dropped", name)
-				break
-			}
-		}
-
-		return nil, provisioningErr
+	t, provisionErr := m.provisionTenant(ctx, name, networkType, organizationName, userFirstName, userLastName, userEmail, uiBaseURL)
+	if provisionErr != nil {
+		return nil, m.handleProvisioningError(ctx, name, provisionErr, t)
 	}
 
-	hostDistributionAccPubKey := m.SubmitterEngine.HostDistributionAccount()
-	if *t.DistributionAccount != hostDistributionAccPubKey {
-		err = tenant.ValidateNativeAssetBootstrapAmount(m.nativeAssetBootstrapAmount)
-		if err != nil {
-			return nil, fmt.Errorf("invalid native asset bootstrap amount: %w", err)
-		}
-
-		// Bootstrap tenant distribution account with native asset
-		err = tssSvc.CreateAndFundAccount(ctx, m.SubmitterEngine, m.nativeAssetBootstrapAmount, hostDistributionAccPubKey, *t.DistributionAccount)
-		if err != nil {
-			return nil, fmt.Errorf("bootstrapping tenant distribution account with native asset: %w", err)
-		}
-	} else {
-		log.Ctx(ctx).Info("Host distribution account and tenant distribution account are the same, no need to initiate funding.")
+	// Last step when no errors - fund tenant distribution account
+	fundErr := m.fundTenantDistributionAccount(ctx, *t.DistributionAccount)
+	if fundErr != nil {
+		// error already wrapped
+		return nil, fundErr
 	}
 
 	return t, nil
 }
 
-func (m *Manager) deleteDistributionAccountKey(ctx context.Context, t *tenant.Tenant) error {
-	sigClientDeleteKeyErr := m.SubmitterEngine.DistAccountSigner.Delete(ctx, *t.DistributionAccount)
-	if sigClientDeleteKeyErr != nil {
-		sigClientDeleteKeyErrMsg := fmt.Errorf("unable to delete distribution account private key: %w", sigClientDeleteKeyErr)
-		if errors.Is(sigClientDeleteKeyErr, signing.ErrUnsupportedCommand) {
-			log.Ctx(ctx).Warnf(
-				"Private key deletion not needed for distribution account signature client type %s: %v",
-				m.SubmitterEngine.DistAccountSigner.Type(), sigClientDeleteKeyErr)
-		} else {
-			return sigClientDeleteKeyErrMsg
+func (m *Manager) handleProvisioningError(ctx context.Context, name string, err error, t *tenant.Tenant) error {
+	// We don't want to roll back an existing tenant
+	if errors.Is(err, tenant.ErrDuplicatedTenantName) {
+		return err
+	}
+
+	provisioningErr := fmt.Errorf("provisioning error: %w", err)
+
+	if errors.Is(err, ErrUpdateTenantFailed) {
+		log.Ctx(ctx).Errorf("tenant record not updated")
+	}
+
+	if isErrorInArray(err, deleteDistributionKeyErrors()) {
+		deleteDistributionAccFromVaultErr := m.deleteDistributionAccountKey(ctx, t)
+		// We should not let any failures from key deletion block us from completing the tenant cleanup process
+		if deleteDistributionAccFromVaultErr != nil {
+			deleteDistributionKeyErrPrefixMsg := fmt.Sprintf("deleting distribution account private key %s", *t.DistributionAccount)
+			provisioningErr = fmt.Errorf("%w. [additional errors]: %s: %w", provisioningErr, deleteDistributionKeyErrPrefixMsg, deleteDistributionAccFromVaultErr)
+			log.Ctx(ctx).Errorf("%s: %v", deleteDistributionKeyErrPrefixMsg, deleteDistributionAccFromVaultErr)
 		}
+		log.Ctx(ctx).Errorf("distribution account cleanup successful")
+	}
+
+	if isErrorInArray(err, rollbackTenantDataSetupErrors()) {
+		log.Ctx(ctx).Errorf("tenant data setup requires rollback")
+	}
+
+	if isErrorInArray(err, rollbackTenantCreationErrors()) {
+		deleteTenantErr := m.tenantManager.DeleteTenantByName(ctx, name)
+		if deleteTenantErr != nil {
+			return fmt.Errorf("%w. [rollback error] %w", provisioningErr, deleteTenantErr)
+		}
+
+		log.Ctx(ctx).Errorf("tenant %s deleted", name)
+	}
+
+	if isErrorInArray(err, rollbackTenantSchemaErrors()) {
+		dropTenantSchemaErr := m.tenantManager.DropTenantSchema(ctx, name)
+		if dropTenantSchemaErr != nil {
+			return fmt.Errorf("%w. [rollback error] %w", provisioningErr, dropTenantSchemaErr)
+		}
+
+		log.Ctx(ctx).Errorf("tenant schema sdp_%s dropped", name)
+	}
+
+	return provisioningErr
+}
+
+func (m *Manager) provisionTenant(ctx context.Context, name string, networkType string, organizationName string, userFirstName string, userLastName string, userEmail string, uiBaseURL string) (*tenant.Tenant, error) {
+	t, addTntErr := m.tenantManager.AddTenant(ctx, name)
+	if addTntErr != nil {
+		return nil, fmt.Errorf("%w: adding tenant %s: %w", ErrTenantCreationFailed, name, addTntErr)
+	}
+
+	u, tenantSchemaFailedErr := m.createSchemaAndRunMigrations(ctx, name)
+	if tenantSchemaFailedErr != nil {
+		return nil, fmt.Errorf("%w: %w", ErrTenantSchemaFailed, tenantSchemaFailedErr)
+	}
+
+	tenantDataSetupErr := m.setupTenantData(ctx, u, networkType, organizationName, userFirstName, userLastName, userEmail, uiBaseURL)
+	if tenantDataSetupErr != nil {
+		return nil, fmt.Errorf("%w: %w", ErrTenantDataSetupFailed, tenantDataSetupErr)
+	}
+
+	// Provision distribution account for tenant if necessary
+	err := m.provisionDistributionAccount(ctx, t)
+	if err != nil {
+		// error already wrapped
+		return nil, err
+	}
+
+	tenantStatus := tenant.ProvisionedTenantStatus
+	t, err = m.tenantManager.UpdateTenantConfig(
+		ctx,
+		&tenant.TenantUpdate{
+			ID:                  t.ID,
+			Status:              &tenantStatus,
+			SDPUIBaseURL:        &uiBaseURL,
+			DistributionAccount: t.DistributionAccount,
+		})
+	if err != nil {
+		updateTenantErrMsg := fmt.Errorf("%w: updating tenant %s status to %s: %w", ErrUpdateTenantFailed, name, tenant.ProvisionedTenantStatus, err)
+		return t, updateTenantErrMsg
+	}
+
+	return t, nil
+}
+
+func (m *Manager) fundTenantDistributionAccount(ctx context.Context, distributionAccount string) error {
+	hostDistributionAccPubKey := m.SubmitterEngine.HostDistributionAccount()
+	if distributionAccount != hostDistributionAccPubKey {
+		err := tenant.ValidateNativeAssetBootstrapAmount(m.nativeAssetBootstrapAmount)
+		if err != nil {
+			return fmt.Errorf("invalid native asset bootstrap amount: %w", err)
+		}
+
+		// Bootstrap tenant distribution account with native asset
+		err = tssSvc.CreateAndFundAccount(ctx, m.SubmitterEngine, m.nativeAssetBootstrapAmount, hostDistributionAccPubKey, distributionAccount)
+		if err != nil {
+			return fmt.Errorf("bootstrapping tenant distribution account with native asset: %w", err)
+		}
+	} else {
+		log.Ctx(ctx).Info("host distribution account and tenant distribution account are the same, no need to initiate funding.")
+	}
+	return nil
+}
+
+func (m *Manager) provisionDistributionAccount(ctx context.Context, t *tenant.Tenant) error {
+	distributionAccPubKeys, err := m.SubmitterEngine.DistAccountSigner.BatchInsert(ctx, 1)
+	if err != nil {
+		if errors.Is(err, signing.ErrUnsupportedCommand) {
+			log.Ctx(ctx).Warnf(
+				"Account provisioning not needed for distribution account signature client type %s: %v",
+				m.SubmitterEngine.DistAccountSigner.Type(), err)
+		} else {
+			return fmt.Errorf("%w: provisioning distribution account: %w", ErrProvisionTenantDistributionAccountFailed, err)
+		}
+	}
+
+	// Assigning the account key to the tenant so that it can be referenced if it needs to be deleted in the vault if any subsequent errors are encountered
+	t.DistributionAccount = &distributionAccPubKeys[0]
+	if len(distributionAccPubKeys) != 1 {
+		return fmt.Errorf("%w: expected single distribution account public key, got %d", ErrUpdateTenantFailed, len(distributionAccPubKeys))
+	}
+	log.Ctx(ctx).Infof("distribution account %s created for tenant %s", *t.DistributionAccount, t.Name)
+	return nil
+}
+
+func (m *Manager) setupTenantData(ctx context.Context, tenantSchemaDSN, networkType, organizationName, userFirstName, userLastName, userEmail, uiBaseURL string) error {
+	// Connecting to the tenant database schema
+	tenantSchemaConnectionPool, err := db.OpenDBConnectionPool(tenantSchemaDSN)
+	if err != nil {
+		return fmt.Errorf("opening database connection on tenant schema: %w", err)
+	}
+	defer tenantSchemaConnectionPool.Close()
+
+	err = services.SetupAssetsForProperNetwork(ctx, tenantSchemaConnectionPool, utils.NetworkType(networkType), services.DefaultAssetsNetworkMap)
+	if err != nil {
+		return fmt.Errorf("running setup assets for proper network: %w", err)
+	}
+
+	err = services.SetupWalletsForProperNetwork(ctx, tenantSchemaConnectionPool, utils.NetworkType(networkType), services.DefaultWalletsNetworkMap)
+	if err != nil {
+		return fmt.Errorf("running setup wallets for proper network: %w", err)
+	}
+
+	// Updating organization's name
+	models, getTntModelsErr := data.NewModels(tenantSchemaConnectionPool)
+	if getTntModelsErr != nil {
+		return fmt.Errorf("getting models: %w", err)
+	}
+
+	err = models.Organizations.Update(ctx, &data.OrganizationUpdate{Name: organizationName})
+	if err != nil {
+		return fmt.Errorf("updating organization's name: %w", err)
+	}
+
+	// Creating new user and sending invitation email
+	authManager := auth.NewAuthManager(
+		auth.WithDefaultAuthenticatorOption(tenantSchemaConnectionPool, auth.NewDefaultPasswordEncrypter(), 0),
+	)
+	s := services.NewCreateUserService(models, tenantSchemaConnectionPool, authManager, m.messengerClient)
+	_, err = s.CreateUser(ctx, auth.User{
+		FirstName: userFirstName,
+		LastName:  userLastName,
+		Email:     userEmail,
+		IsOwner:   true,
+		Roles:     []string{"owner"},
+	}, uiBaseURL)
+	if err != nil {
+		return fmt.Errorf("creating user: %w", err)
 	}
 
 	return nil
 }
 
-func (m *Manager) RunMigrationsForTenant(
+func (m *Manager) createSchemaAndRunMigrations(ctx context.Context, name string) (string, error) {
+	u, getDSNForTntErr := m.tenantManager.GetDSNForTenant(ctx, name)
+	if getDSNForTntErr != nil {
+		return "", fmt.Errorf("getting database DSN for tenant %s: %w", name, getDSNForTntErr)
+	}
+
+	log.Ctx(ctx).Infof("creating tenant %s database schema", name)
+	createTntSchemaErr := m.tenantManager.CreateTenantSchema(ctx, name)
+	if createTntSchemaErr != nil {
+		return "", fmt.Errorf("creating tenant %s database schema: %w", name, createTntSchemaErr)
+	}
+
+	// Applying migrations
+	log.Ctx(ctx).Infof("applying SDP migrations on the tenant %s schema", name)
+	runTntMigrationsErr := m.runMigrationsForTenant(ctx, u, migrate.Up, 0, sdpmigrations.FS, db.StellarPerTenantSDPMigrationsTableName)
+	if runTntMigrationsErr != nil {
+		return "", fmt.Errorf("applying SDP migrations: %w", runTntMigrationsErr)
+	}
+
+	log.Ctx(ctx).Infof("applying stellar-auth migrations on the tenant %s schema", name)
+	runTntAuthMigrationsErr := m.runMigrationsForTenant(ctx, u, migrate.Up, 0, authmigrations.FS, db.StellarPerTenantAuthMigrationsTableName)
+	if runTntAuthMigrationsErr != nil {
+		return "", fmt.Errorf("applying stellar-auth migrations: %w", runTntAuthMigrationsErr)
+	}
+
+	return u, nil
+}
+
+func (m *Manager) deleteDistributionAccountKey(ctx context.Context, t *tenant.Tenant) error {
+	sigClientDeleteKeyErr := m.SubmitterEngine.DistAccountSigner.Delete(ctx, *t.DistributionAccount)
+	if sigClientDeleteKeyErr != nil {
+		if errors.Is(sigClientDeleteKeyErr, signing.ErrUnsupportedCommand) {
+			log.Ctx(ctx).Warnf(
+				"Private key deletion not needed for distribution account signature client type %s: %v",
+				m.SubmitterEngine.DistAccountSigner.Type(), sigClientDeleteKeyErr)
+		} else {
+			return fmt.Errorf("unable to delete distribution account private key: %w", sigClientDeleteKeyErr)
+		}
+	}
+	return nil
+}
+
+func (m *Manager) runMigrationsForTenant(
 	ctx context.Context, dbURL string,
 	dir migrate.MigrationDirection, count int,
 	migrationFiles embed.FS, migrationTableName db.MigrationTableName,
@@ -331,4 +344,13 @@ func WithNativeAssetBootstrapAmount(nativeAssetBootstrapAmount int) Option {
 	return func(m *Manager) {
 		m.nativeAssetBootstrapAmount = nativeAssetBootstrapAmount
 	}
+}
+
+func isErrorInArray(target error, errArray []error) bool {
+	for _, err := range errArray {
+		if errors.Is(target, err) {
+			return true
+		}
+	}
+	return false
 }
