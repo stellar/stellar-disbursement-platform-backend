@@ -62,10 +62,18 @@ func getAuthMigrationsApplied(t *testing.T, ctx context.Context, db db.DBConnect
 }
 
 func Test_DatabaseCommand_db_help(t *testing.T) {
+	dbt := dbtest.OpenWithAdminMigrationsOnly(t)
+	defer dbt.Close()
+
 	buf := new(strings.Builder)
 
 	rootCmd := SetupCLI("x.y.z", "1234567890abcdef")
-	rootCmd.SetArgs([]string{"db"})
+
+	rootCmd.SetArgs([]string{
+		"db",
+		"--database-url",
+		dbt.DSN,
+	})
 	rootCmd.SetOut(buf)
 	err := rootCmd.Execute()
 	require.NoError(t, err)

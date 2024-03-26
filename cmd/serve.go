@@ -84,15 +84,19 @@ func (s *ServerService) GetSchedulerJobRegistrars(
 		scheduler.WithReadyPaymentsCancellationJobOption(models),
 	}
 
-	if schedulerOptions.PaymentJobIntervalSeconds > 0 {
-		sj = append(sj,
-			scheduler.WithPaymentToSubmitterJobOption(schedulerOptions.PaymentJobIntervalSeconds, models, tssDBConnectionPool, apAPIService),
-			scheduler.WithPaymentFromSubmitterJobOption(schedulerOptions.PaymentJobIntervalSeconds, models, tssDBConnectionPool),
-		)
-	}
+	if serveOpts.EnableScheduler {
+		if schedulerOptions.PaymentJobIntervalSeconds < jobs.DefaultMinimumJobIntervalSeconds {
+			log.Fatalf("PaymentJobIntervalSeconds is lower than the default value of %d", jobs.DefaultMinimumJobIntervalSeconds)
+		}
 
-	if schedulerOptions.ReceiverInvitationJobIntervalSeconds > 0 {
+		if schedulerOptions.ReceiverInvitationJobIntervalSeconds < jobs.DefaultMinimumJobIntervalSeconds {
+			log.Fatalf("ReceiverInvitationJobIntervalSeconds is lower than the default value of %d", jobs.DefaultMinimumJobIntervalSeconds)
+		}
+
 		sj = append(sj,
+			scheduler.WithPaymentToSubmitterJobOption(schedulerOptions.PaymentJobIntervalSeconds, models, tssDBConnectionPool),
+			scheduler.WithPaymentFromSubmitterJobOption(schedulerOptions.PaymentJobIntervalSeconds, models, tssDBConnectionPool),
+			scheduler.WithPatchAnchorPlatformTransactionsCompletionJobOption(schedulerOptions.PaymentJobIntervalSeconds, apAPIService, models),
 			scheduler.WithSendReceiverWalletsSMSInvitationJobOption(jobs.SendReceiverWalletsSMSInvitationJobOptions{
 				AnchorPlatformBaseSepURL:       serveOpts.AnchorPlatformBaseSepURL,
 				Models:                         models,
@@ -307,10 +311,10 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 		},
 		{
 			Name:        "enable-scheduler",
-			Usage:       "Enable Scheduler for SDP Backend Jobs",
+			Usage:       "Enable Scheduler Jobs. Either this or Event Brokers must be enabled.",
 			OptType:     types.Bool,
 			ConfigKey:   &serveOpts.EnableScheduler,
-			FlagDefault: true,
+			FlagDefault: false,
 			Required:    false,
 		},
 		{
@@ -557,38 +561,42 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			serveOpts.SubmitterEngine = submitterEngine
 			adminServeOpts.SubmitterEngine = submitterEngine
 
+			// Validate the Event Broker Type and Scheduler Jobs
+			if eventBrokerOptions.EventBrokerType == events.NoneEventBrokerType && !serveOpts.EnableScheduler {
+				log.Ctx(ctx).Fatalf("Both Event Brokers and Scheduler are disabled. Please enable one.")
+			}
+			if eventBrokerOptions.EventBrokerType != events.NoneEventBrokerType && serveOpts.EnableScheduler {
+				log.Ctx(ctx).Fatalf("Both Event Brokers and Scheduler are enabled. Please enable only one.")
+			}
+
 			// Kafka (background)
 			if eventBrokerOptions.EventBrokerType == events.KafkaEventBrokerType {
-				kafkaProducer, err := events.NewKafkaProducer(cmdUtils.KafkaConfig(eventBrokerOptions))
-				if err != nil {
-					log.Ctx(ctx).Fatalf("error creating Kafka Producer: %v", err)
+				kafkaProducer, kafkaErr := events.NewKafkaProducer(cmdUtils.KafkaConfig(eventBrokerOptions))
+				if kafkaErr != nil {
+					log.Ctx(ctx).Fatalf("error creating Kafka Producer: %v", kafkaErr)
 				}
 				defer kafkaProducer.Close()
 				serveOpts.EventProducer = kafkaProducer
 
-				err = serverService.SetupConsumers(ctx, SetupConsumersOptions{
+				kafkaErr = serverService.SetupConsumers(ctx, SetupConsumersOptions{
 					EventBrokerOptions:  eventBrokerOptions,
 					ServeOpts:           serveOpts,
 					TSSDBConnectionPool: tssDBConnectionPool,
 				})
-				if err != nil {
-					log.Fatalf("error setting up consumers: %v", err)
+				if kafkaErr != nil {
+					log.Fatalf("error setting up consumers: %v", kafkaErr)
 				}
 			} else {
 				log.Ctx(ctx).Warn("Event Broker Type is NONE.")
 			}
 
 			// Starting Scheduler Service (background job) if enabled
-			if serveOpts.EnableScheduler {
-				log.Ctx(ctx).Info("Starting Scheduler Service...")
-				schedulerJobRegistrars, innerErr := serverService.GetSchedulerJobRegistrars(ctx, serveOpts, schedulerOpts, apAPIService, tssDBConnectionPool)
-				if innerErr != nil {
-					log.Ctx(ctx).Fatalf("Error getting scheduler job registrars: %v", innerErr)
-				}
-				go scheduler.StartScheduler(serveOpts.AdminDBConnectionPool, crashTrackerClient.Clone(), schedulerJobRegistrars...)
-			} else {
-				log.Ctx(ctx).Warn("Scheduler Service is disabled.")
+			log.Ctx(ctx).Info("Starting Scheduler Service...")
+			schedulerJobRegistrars, innerErr := serverService.GetSchedulerJobRegistrars(ctx, serveOpts, schedulerOpts, apAPIService, tssDBConnectionPool)
+			if innerErr != nil {
+				log.Ctx(ctx).Fatalf("Error getting scheduler job registrars: %v", innerErr)
 			}
+			go scheduler.StartScheduler(serveOpts.AdminDBConnectionPool, crashTrackerClient.Clone(), schedulerJobRegistrars...)
 
 			// Starting Metrics Server (background job)
 			log.Ctx(ctx).Info("Starting Metrics Server...")

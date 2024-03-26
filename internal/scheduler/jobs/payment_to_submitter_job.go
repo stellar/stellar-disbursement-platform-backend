@@ -3,11 +3,9 @@ package jobs
 import (
 	"context"
 	"fmt"
-	"log"
 	"time"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
-
+	"github.com/stellar/go/support/log"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 
@@ -15,48 +13,49 @@ import (
 )
 
 const (
-	PaymentToSubmitterJobName   = "payment_to_submitter_job"
-	PaymentToSubmitterBatchSize = 100
+	paymentToSubmitterJobName   = "payment_to_submitter_job"
+	paymentToSubmitterBatchSize = 100
 )
 
-// PaymentToSubmitterJob is a job that periodically sends any ready-to-pay SDP payments to the transaction submission
+// paymentToSubmitterJob is a job that periodically sends any ready-to-pay SDP payments to the transaction submission
 // service.
-type PaymentToSubmitterJob struct {
-	paymentToSubmitterSvc              services.PaymentToSubmitterServiceInterface
-	patchAnchorPlatformTransactionsSvc services.PatchAnchorPlatformTransactionCompletionServiceInterface
-	jobIntervalSeconds                 int
+type paymentToSubmitterJob struct {
+	paymentToSubmitterSvc services.PaymentToSubmitterServiceInterface
+	jobIntervalSeconds    int
 }
 
-func (d PaymentToSubmitterJob) IsJobMultiTenant() bool {
+func NewPaymentToSubmitterJob(jobIntervalSeconds int, models *data.Models, tssDBConnectionPool db.DBConnectionPool) Job {
+	if jobIntervalSeconds < DefaultMinimumJobIntervalSeconds {
+		log.Fatalf("job interval is not set for %s. Instantiation failed", paymentToSubmitterJobName)
+	}
+	return &paymentToSubmitterJob{
+		paymentToSubmitterSvc: services.NewPaymentToSubmitterService(models, tssDBConnectionPool),
+		jobIntervalSeconds:    jobIntervalSeconds,
+	}
+}
+
+func (d paymentToSubmitterJob) IsJobMultiTenant() bool {
 	return true
 }
 
-func (d PaymentToSubmitterJob) GetInterval() time.Duration {
+func (d paymentToSubmitterJob) GetInterval() time.Duration {
+	if d.jobIntervalSeconds == 0 {
+		log.Warnf("job interval is not set for %s. Using default interval: %d seconds", d.GetName(), DefaultMinimumJobIntervalSeconds)
+		return DefaultMinimumJobIntervalSeconds * time.Second
+	}
 	return time.Duration(d.jobIntervalSeconds) * time.Second
 }
 
-func (d PaymentToSubmitterJob) GetName() string {
-	return PaymentToSubmitterJobName
+func (d paymentToSubmitterJob) GetName() string {
+	return paymentToSubmitterJobName
 }
 
-func (d PaymentToSubmitterJob) Execute(ctx context.Context) error {
-	err := d.paymentToSubmitterSvc.SendBatchPayments(ctx, PaymentToSubmitterBatchSize)
+func (d paymentToSubmitterJob) Execute(ctx context.Context) error {
+	err := d.paymentToSubmitterSvc.SendBatchPayments(ctx, paymentToSubmitterBatchSize)
 	if err != nil {
-		return fmt.Errorf("error executing PaymentToSubmitterJob: %w", err)
+		return fmt.Errorf("error executing paymentToSubmitterJob: %w", err)
 	}
 	return nil
 }
 
-func NewPaymentToSubmitterJob(jobIntervalSeconds int, models *data.Models, tssDBConnectionPool db.DBConnectionPool, apAPISvc anchorplatform.AnchorPlatformAPIServiceInterface) *PaymentToSubmitterJob {
-	apAPIService, err := services.NewPatchAnchorPlatformTransactionCompletionService(apAPISvc, models)
-	if err != nil {
-		log.Fatalf("instantiating anchor platform service: %v", err)
-	}
-	return &PaymentToSubmitterJob{
-		paymentToSubmitterSvc:              services.NewPaymentToSubmitterService(models, tssDBConnectionPool),
-		patchAnchorPlatformTransactionsSvc: apAPIService,
-		jobIntervalSeconds:                 jobIntervalSeconds,
-	}
-}
-
-var _ Job = (*PaymentToSubmitterJob)(nil)
+var _ Job = (*paymentToSubmitterJob)(nil)

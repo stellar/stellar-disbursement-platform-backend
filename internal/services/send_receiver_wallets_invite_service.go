@@ -203,6 +203,7 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context, receive
 }
 
 // resolveReceiverWalletsPendingRegistration returns the receiver wallets pending registration based on the receiverWalletInvitationData.
+// If the receiverWalletInvitationData is empty, it will return all receiver wallets pending registration.
 func (s SendReceiverWalletInviteService) resolveReceiverWalletsPendingRegistration(ctx context.Context, receiverWalletInvitationData []schemas.EventReceiverWalletSMSInvitationData) ([]*data.ReceiverWallet, error) {
 	var err error
 	var receiverWallets []*data.ReceiverWallet

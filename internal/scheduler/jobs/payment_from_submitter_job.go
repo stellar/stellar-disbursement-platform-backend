@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/stellar/go/support/log"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 
@@ -12,42 +13,45 @@ import (
 )
 
 const (
-	PaymentFromSubmitterJobName   = "payment_from_submitter_job"
-	PaymentFromSubmitterBatchSize = 100
+	paymentFromSubmitterJobName   = "payment_from_submitter_job"
+	paymentFromSubmitterBatchSize = 100
 )
 
-// PaymentFromSubmitterJob is a job that periodically monitors TSS transactions that were complete and sync their status
+// paymentFromSubmitterJob is a job that periodically monitors TSS transactions that were complete and sync their status
 // with SDP.
-type PaymentFromSubmitterJob struct {
+type paymentFromSubmitterJob struct {
 	service            services.PaymentFromSubmitterServiceInterface
 	jobIntervalSeconds int
 }
 
-func (d PaymentFromSubmitterJob) GetInterval() time.Duration {
-	return time.Duration(d.jobIntervalSeconds) * time.Second
-}
-
-func (d PaymentFromSubmitterJob) GetName() string {
-	return PaymentFromSubmitterJobName
-}
-
-func (d PaymentFromSubmitterJob) IsJobMultiTenant() bool {
-	return true
-}
-
-func (d PaymentFromSubmitterJob) Execute(ctx context.Context) error {
-	err := d.service.SyncBatchTransactions(ctx, PaymentFromSubmitterBatchSize)
-	if err != nil {
-		return fmt.Errorf("error executing PaymentFromSubmitterJob: %w", err)
+func NewPaymentFromSubmitterJob(paymentJobInterval int, models *data.Models, tssDBConnectionPool db.DBConnectionPool) Job {
+	if paymentJobInterval < DefaultMinimumJobIntervalSeconds {
+		log.Fatalf("job interval is not set for %s. Instantiation failed", paymentFromSubmitterJobName)
 	}
-	return nil
-}
-
-func NewPaymentFromSubmitterJob(paymentJobInterval int, models *data.Models, tssDBConnectionPool db.DBConnectionPool) *PaymentFromSubmitterJob {
-	return &PaymentFromSubmitterJob{
+	return &paymentFromSubmitterJob{
 		service:            services.NewPaymentFromSubmitterService(models, tssDBConnectionPool),
 		jobIntervalSeconds: paymentJobInterval,
 	}
 }
 
-var _ Job = (*PaymentFromSubmitterJob)(nil)
+func (d paymentFromSubmitterJob) GetInterval() time.Duration {
+	return time.Duration(d.jobIntervalSeconds) * time.Second
+}
+
+func (d paymentFromSubmitterJob) GetName() string {
+	return paymentFromSubmitterJobName
+}
+
+func (d paymentFromSubmitterJob) IsJobMultiTenant() bool {
+	return true
+}
+
+func (d paymentFromSubmitterJob) Execute(ctx context.Context) error {
+	err := d.service.SyncBatchTransactions(ctx, paymentFromSubmitterBatchSize)
+	if err != nil {
+		return fmt.Errorf("error executing paymentFromSubmitterJob: %w", err)
+	}
+	return nil
+}
+
+var _ Job = (*paymentFromSubmitterJob)(nil)

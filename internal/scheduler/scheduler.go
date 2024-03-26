@@ -194,10 +194,9 @@ func WithReadyPaymentsCancellationJobOption(models *data.Models) SchedulerJobReg
 func WithPaymentToSubmitterJobOption(jobIntervalSeconds int,
 	models *data.Models,
 	tssDBConnectionPool db.DBConnectionPool,
-	apAPISvc anchorplatform.AnchorPlatformAPIServiceInterface,
 ) SchedulerJobRegisterOption {
 	return func(s *Scheduler) {
-		j := jobs.NewPaymentToSubmitterJob(jobIntervalSeconds, models, tssDBConnectionPool, apAPISvc)
+		j := jobs.NewPaymentToSubmitterJob(jobIntervalSeconds, models, tssDBConnectionPool)
 		s.addJob(j)
 	}
 }
@@ -212,6 +211,13 @@ func WithPaymentFromSubmitterJobOption(paymentJobInterval int, models *data.Mode
 func WithSendReceiverWalletsSMSInvitationJobOption(o jobs.SendReceiverWalletsSMSInvitationJobOptions) SchedulerJobRegisterOption {
 	return func(s *Scheduler) {
 		j := jobs.NewSendReceiverWalletsSMSInvitationJob(o)
+		s.addJob(j)
+	}
+}
+
+func WithPatchAnchorPlatformTransactionsCompletionJobOption(paymentJobInterval int, apAPISvc anchorplatform.AnchorPlatformAPIServiceInterface, models *data.Models) SchedulerJobRegisterOption {
+	return func(s *Scheduler) {
+		j := jobs.NewPatchAnchorPlatformTransactionsCompletionJob(paymentJobInterval, apAPISvc, models)
 		s.addJob(j)
 	}
 }

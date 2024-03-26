@@ -25,10 +25,11 @@ func (s *mockReadyPaymentsCancellation) CancelReadyPayments(ctx context.Context)
 }
 
 func Test_ReadyPaymentsCancellationJob(t *testing.T) {
-	j := ReadyPaymentsCancellationJob{}
+	j := readyPaymentsCancellationJob{}
 
-	assert.Equal(t, ReadyPaymentsCancellationJobName, j.GetName())
-	assert.Equal(t, ReadyPaymentsCancellationJobInterval*time.Minute, j.GetInterval())
+	assert.Equal(t, readyPaymentsCancellationJobName, j.GetName())
+	assert.Equal(t, readyPaymentsCancellationJobInterval*time.Minute, j.GetInterval())
+	assert.True(t, j.IsJobMultiTenant())
 }
 
 func Test_ReadyPaymentsCancellationJob_Execute(t *testing.T) {
@@ -42,7 +43,7 @@ func Test_ReadyPaymentsCancellationJob_Execute(t *testing.T) {
 	ctx := context.Background()
 
 	mockService := mockReadyPaymentsCancellation{}
-	j := &ReadyPaymentsCancellationJob{
+	j := &readyPaymentsCancellationJob{
 		service: &mockService,
 	}
 

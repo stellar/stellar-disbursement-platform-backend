@@ -159,7 +159,7 @@ func Test_serve(t *testing.T) {
 		ReCAPTCHASiteSecretKey:          "reCAPTCHASiteSecretKey",
 		DisableMFA:                      false,
 		DisableReCAPTCHA:                false,
-		EnableScheduler:                 true,
+		EnableScheduler:                 false,
 		SubmitterEngine:                 submitterEngine,
 		MaxInvitationSMSResendAttempts:  3,
 	}
@@ -280,7 +280,7 @@ func Test_serve(t *testing.T) {
 	t.Setenv("RECAPTCHA_SITE_SECRET_KEY", serveOpts.ReCAPTCHASiteSecretKey)
 	t.Setenv("CORS_ALLOWED_ORIGINS", "*")
 	t.Setenv("INSTANCE_NAME", serveOpts.InstanceName)
-	t.Setenv("ENABLE_SCHEDULER", "true")
+	t.Setenv("ENABLE_SCHEDULER", "false")
 	t.Setenv("EVENT_BROKER", "kafka")
 	t.Setenv("BROKER_URLS", "kafka:9092")
 	t.Setenv("CONSUMER_GROUP_ID", "group-id")
@@ -290,6 +290,8 @@ func Test_serve(t *testing.T) {
 	t.Setenv("KAFKA_SECURITY_PROTOCOL", string(events.KafkaProtocolPlaintext))
 	t.Setenv("ADMIN_ACCOUNT", "admin-account")
 	t.Setenv("ADMIN_API_KEY", "admin-api-key")
+	t.Setenv("SCHEDULER_RECEIVER_INVITATION_JOB_SECONDS", "600")
+	t.Setenv("SCHEDULER_PAYMENT_JOB_SECONDS", "600")
 
 	// test & assert
 	rootCmd.SetArgs([]string{"serve"})

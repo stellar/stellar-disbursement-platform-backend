@@ -26,9 +26,9 @@ type PatchAnchorPlatformTransactionCompletionService struct {
 
 var _ PatchAnchorPlatformTransactionCompletionServiceInterface = new(PatchAnchorPlatformTransactionCompletionService)
 
-func NewPatchAnchorPlatformTransactionCompletionService(apAPISvc anchorplatform.AnchorPlatformAPIServiceInterface, sdpModels *data.Models) (*PatchAnchorPlatformTransactionCompletionService, error) {
-	if apAPISvc == nil {
-		return nil, fmt.Errorf("anchor platform API service is required")
+func NewPatchAnchorPlatformTransactionCompletionService(apAPISvc anchorplatform.AnchorPlatformAPIServiceInterface, sdpModels *data.Models) (PatchAnchorPlatformTransactionCompletionServiceInterface, error) {
+	if apAPISvc == nil || sdpModels == nil {
+		return nil, fmt.Errorf("anchor platform API service and SDP models are required")
 	}
 
 	return &PatchAnchorPlatformTransactionCompletionService{
@@ -38,10 +38,6 @@ func NewPatchAnchorPlatformTransactionCompletionService(apAPISvc anchorplatform.
 }
 
 func (s *PatchAnchorPlatformTransactionCompletionService) PatchAPTransactionForPaymentEvent(ctx context.Context, tx schemas.EventPaymentCompletedData) error {
-	if s.sdpModels == nil {
-		return fmt.Errorf("SDP models are required")
-	}
-
 	return db.RunInTransaction(ctx, s.sdpModels.DBConnectionPool, nil, func(dbTx db.DBTransaction) error {
 		// Step 1: Get the requested payment.
 		payment, err := s.sdpModels.Payment.Get(ctx, tx.PaymentID, dbTx)

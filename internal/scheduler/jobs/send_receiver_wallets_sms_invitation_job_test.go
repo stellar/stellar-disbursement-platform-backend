@@ -95,6 +95,7 @@ func Test_NewSendReceiverWalletsSMSInvitationJob(t *testing.T) {
 			MessengerClient:                messageDryRunClient,
 			AnchorPlatformBaseSepURL:       anchorPlatformBaseSepURL,
 			MaxInvitationSMSResendAttempts: 3,
+			JobIntervalSeconds:             DefaultMinimumJobIntervalSeconds,
 		}
 
 		j := NewSendReceiverWalletsSMSInvitationJob(o)
@@ -104,11 +105,11 @@ func Test_NewSendReceiverWalletsSMSInvitationJob(t *testing.T) {
 }
 
 func Test_SendReceiverWalletsSMSInvitationJob(t *testing.T) {
-	j := SendReceiverWalletsSMSInvitationJob{
+	j := sendReceiverWalletsSMSInvitationJob{
 		jobIntervalSeconds: 5,
 	}
 
-	assert.Equal(t, SendReceiverWalletsSMSInvitationJobName, j.GetName())
+	assert.Equal(t, sendReceiverWalletsSMSInvitationJobName, j.GetName())
 	assert.Equal(t, time.Duration(5)*time.Second, j.GetInterval())
 }
 

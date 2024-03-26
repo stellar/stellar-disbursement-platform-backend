@@ -20,7 +20,7 @@ func Test_PaymentFromSubmitterJob_GetInterval(t *testing.T) {
 
 func Test_PaymentFromSubmitterJob_GetName(t *testing.T) {
 	p := NewPaymentFromSubmitterJob(5, &data.Models{}, nil)
-	require.Equal(t, PaymentFromSubmitterJobName, p.GetName())
+	require.Equal(t, paymentFromSubmitterJobName, p.GetName())
 }
 
 func Test_PaymentFromSubmitterJob_IsJobMultiTenant(t *testing.T) {
@@ -53,16 +53,16 @@ func Test_PaymentFromSubmitterJob_Execute(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mockPaymentFromSubmitterService := &mocks.MockPaymentFromSubmitterService{}
-			mockPaymentFromSubmitterService.On("SyncBatchTransactions", mock.Anything, PaymentFromSubmitterBatchSize).
-				Return(tt.syncTransactions(nil, PaymentFromSubmitterBatchSize))
+			mockPaymentFromSubmitterService.On("SyncBatchTransactions", mock.Anything, paymentFromSubmitterBatchSize).
+				Return(tt.syncTransactions(nil, paymentFromSubmitterBatchSize))
 
-			p := PaymentFromSubmitterJob{
+			p := paymentFromSubmitterJob{
 				service: mockPaymentFromSubmitterService,
 			}
 
 			err := p.Execute(context.Background())
 			if (err != nil) != tt.wantErr {
-				t.Errorf("PaymentFromSubmitterJob.Execute() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("paymentFromSubmitterJob.Execute() error = %v, wantErr %v", err, tt.wantErr)
 			}
 
 			mockPaymentFromSubmitterService.AssertExpectations(t)

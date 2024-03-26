@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	SendReceiverWalletsSMSInvitationJobName = "send_receiver_wallets_sms_invitation_job"
+	sendReceiverWalletsSMSInvitationJobName = "send_receiver_wallets_sms_invitation_job"
 )
 
 type SendReceiverWalletsSMSInvitationJobOptions struct {
@@ -26,25 +26,25 @@ type SendReceiverWalletsSMSInvitationJobOptions struct {
 	JobIntervalSeconds             int
 }
 
-// SendReceiverWalletsSMSInvitationJob is a job that periodically sends SMS invitations to receiver wallets.
-type SendReceiverWalletsSMSInvitationJob struct {
+// sendReceiverWalletsSMSInvitationJob is a job that periodically sends SMS invitations to receiver wallets.
+type sendReceiverWalletsSMSInvitationJob struct {
 	service            *services.SendReceiverWalletInviteService
 	jobIntervalSeconds int
 }
 
-func (j SendReceiverWalletsSMSInvitationJob) GetName() string {
-	return SendReceiverWalletsSMSInvitationJobName
+func (j sendReceiverWalletsSMSInvitationJob) GetName() string {
+	return sendReceiverWalletsSMSInvitationJobName
 }
 
-func (j SendReceiverWalletsSMSInvitationJob) GetInterval() time.Duration {
-	return time.Second * time.Duration(j.jobIntervalSeconds)
+func (j sendReceiverWalletsSMSInvitationJob) GetInterval() time.Duration {
+	return time.Duration(j.jobIntervalSeconds) * time.Second
 }
 
-func (j SendReceiverWalletsSMSInvitationJob) IsJobMultiTenant() bool {
+func (j sendReceiverWalletsSMSInvitationJob) IsJobMultiTenant() bool {
 	return true
 }
 
-func (j SendReceiverWalletsSMSInvitationJob) Execute(ctx context.Context) error {
+func (j sendReceiverWalletsSMSInvitationJob) Execute(ctx context.Context) error {
 	if err := j.service.SendInvite(ctx); err != nil {
 		err = fmt.Errorf("error sending invitation SMS to receiver wallets: %w", err)
 		log.Ctx(ctx).Error(err)
@@ -53,7 +53,10 @@ func (j SendReceiverWalletsSMSInvitationJob) Execute(ctx context.Context) error 
 	return nil
 }
 
-func NewSendReceiverWalletsSMSInvitationJob(options SendReceiverWalletsSMSInvitationJobOptions) *SendReceiverWalletsSMSInvitationJob {
+func NewSendReceiverWalletsSMSInvitationJob(options SendReceiverWalletsSMSInvitationJobOptions) Job {
+	if options.JobIntervalSeconds < DefaultMinimumJobIntervalSeconds {
+		log.Fatalf("job interval is not set for %s. Instantiation failed", sendReceiverWalletsSMSInvitationJobName)
+	}
 	s, err := services.NewSendReceiverWalletInviteService(
 		options.Models,
 		options.MessengerClient,
@@ -66,10 +69,10 @@ func NewSendReceiverWalletsSMSInvitationJob(options SendReceiverWalletsSMSInvita
 		log.Fatalf("error instantiating service: %s", err.Error())
 	}
 
-	return &SendReceiverWalletsSMSInvitationJob{
+	return &sendReceiverWalletsSMSInvitationJob{
 		service:            s,
 		jobIntervalSeconds: options.JobIntervalSeconds,
 	}
 }
 
-var _ Job = (*SendReceiverWalletsSMSInvitationJob)(nil)
+var _ Job = (*sendReceiverWalletsSMSInvitationJob)(nil)

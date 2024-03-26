@@ -63,22 +63,24 @@ func Test_NewAnchorPlatformAuthMonitoringJob(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 				require.NotNil(t, apAuthMonitoringJob)
-				assert.Equal(t, tc.apService, apAuthMonitoringJob.apService)
-				assert.Equal(t, tc.monitorService, apAuthMonitoringJob.monitorService)
-				assert.Equal(t, tc.crashTrackerClient, apAuthMonitoringJob.crashTrackerClient)
 			}
 		})
 	}
 }
 
 func Test_AnchorPlatformAuthMonitoringJob_GetInterval(t *testing.T) {
-	apAuthMonitoringJob := &AnchorPlatformAuthMonitoringJob{}
+	apAuthMonitoringJob := &anchorPlatformAuthMonitoringJob{}
 	gotInterval := apAuthMonitoringJob.GetInterval()
 	assert.Equal(t, apAuthMonitoringJobIntervalSeconds*time.Second, gotInterval)
 }
 
+func Test_AnchorPlatformAuthMonitoringJob_IsJobMultiTenant(t *testing.T) {
+	apAuthMonitoringJob := &anchorPlatformAuthMonitoringJob{}
+	assert.False(t, apAuthMonitoringJob.IsJobMultiTenant())
+}
+
 func Test_AnchorPlatformAuthMonitoringJob_GetName(t *testing.T) {
-	apAuthMonitoringJob := &AnchorPlatformAuthMonitoringJob{}
+	apAuthMonitoringJob := &anchorPlatformAuthMonitoringJob{}
 	gotName := apAuthMonitoringJob.GetName()
 	assert.Equal(t, apAuthMonitoringJobName, gotName)
 }
@@ -100,7 +102,7 @@ func Test_AnchorPlatformAuthMonitoringJob_Execute(t *testing.T) {
 
 		// execute and assert result
 		err := apAuthMonitoringJob.Execute(ctx)
-		require.EqualError(t, err, "executing AnchorPlatformAuthMonitoringJob: apService error")
+		require.EqualError(t, err, "executing anchorPlatformAuthMonitoringJob: apService error")
 
 		// assert mocks
 		apService.AssertExpectations(t)
