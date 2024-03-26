@@ -57,8 +57,13 @@ func (m *mockServer) StartAdminServe(opts serveadmin.ServeOptions, httpServer se
 	m.wg.Done()
 }
 
-func (m *mockServer) GetSchedulerJobRegistrars(ctx context.Context, serveOpts serve.ServeOptions, schedulerOptions scheduler.SchedulerOptions, apAPIService anchorplatform.AnchorPlatformAPIServiceInterface) ([]scheduler.SchedulerJobRegisterOption, error) {
-	args := m.Called(ctx, serveOpts, schedulerOptions, apAPIService)
+func (m *mockServer) GetSchedulerJobRegistrars(ctx context.Context,
+	serveOpts serve.ServeOptions,
+	schedulerOptions scheduler.SchedulerOptions,
+	apAPIService anchorplatform.AnchorPlatformAPIServiceInterface,
+	tssDBConnectinPool db.DBConnectionPool,
+) ([]scheduler.SchedulerJobRegisterOption, error) {
+	args := m.Called(ctx, serveOpts, schedulerOptions, apAPIService, tssDBConnectinPool)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -154,8 +159,9 @@ func Test_serve(t *testing.T) {
 		ReCAPTCHASiteSecretKey:          "reCAPTCHASiteSecretKey",
 		DisableMFA:                      false,
 		DisableReCAPTCHA:                false,
-		EnableScheduler:                 true,
+		EnableScheduler:                 false,
 		SubmitterEngine:                 submitterEngine,
+		MaxInvitationSMSResendAttempts:  3,
 	}
 	serveOpts.AnchorPlatformAPIService, err = anchorplatform.NewAnchorPlatformAPIService(httpclient.DefaultClient(), serveOpts.AnchorPlatformBasePlatformURL, serveOpts.AnchorPlatformOutgoingJWTSecret)
 	require.NoError(t, err)
@@ -218,9 +224,9 @@ func Test_serve(t *testing.T) {
 		KafkaSecurityProtocol: events.KafkaProtocolPlaintext,
 	}
 
-	eventHandlerOptions := events.EventHandlerOptions{
-		MaxInvitationSMSResendAttempts: 3,
-	}
+	schedulerOpts := scheduler.SchedulerOptions{}
+	schedulerOpts.ReceiverInvitationJobIntervalSeconds = 600
+	schedulerOpts.PaymentJobIntervalSeconds = 600
 
 	// mock server
 	mServer := mockServer{}
@@ -228,12 +234,11 @@ func Test_serve(t *testing.T) {
 	mServer.On("StartServe", serveOpts, mock.AnythingOfType("*serve.HTTPServer")).Once()
 	mServer.On("StartAdminServe", serveTenantOpts, mock.AnythingOfType("*serve.HTTPServer")).Once()
 	mServer.
-		On("GetSchedulerJobRegistrars", mock.Anything, serveOpts, scheduler.SchedulerOptions{}, mock.Anything).
+		On("GetSchedulerJobRegistrars", mock.Anything, serveOpts, schedulerOpts, serveOpts.AnchorPlatformAPIService, mock.Anything).
 		Return([]scheduler.SchedulerJobRegisterOption{}, nil).
 		Once()
 	mServer.On("SetupConsumers", ctx, SetupConsumersOptions{
 		EventBrokerOptions:  eventBrokerOptions,
-		EventHandlerOptions: eventHandlerOptions,
 		ServeOpts:           serveOpts,
 		TSSDBConnectionPool: dbConnectionPool,
 	}).
@@ -275,7 +280,7 @@ func Test_serve(t *testing.T) {
 	t.Setenv("RECAPTCHA_SITE_SECRET_KEY", serveOpts.ReCAPTCHASiteSecretKey)
 	t.Setenv("CORS_ALLOWED_ORIGINS", "*")
 	t.Setenv("INSTANCE_NAME", serveOpts.InstanceName)
-	t.Setenv("ENABLE_SCHEDULER", "true")
+	t.Setenv("ENABLE_SCHEDULER", "false")
 	t.Setenv("EVENT_BROKER", "kafka")
 	t.Setenv("BROKER_URLS", "kafka:9092")
 	t.Setenv("CONSUMER_GROUP_ID", "group-id")
@@ -285,6 +290,9 @@ func Test_serve(t *testing.T) {
 	t.Setenv("KAFKA_SECURITY_PROTOCOL", string(events.KafkaProtocolPlaintext))
 	t.Setenv("ADMIN_ACCOUNT", "admin-account")
 	t.Setenv("ADMIN_API_KEY", "admin-api-key")
+	t.Setenv("SCHEDULER_RECEIVER_INVITATION_JOB_SECONDS", "600")
+	t.Setenv("SCHEDULER_PAYMENT_JOB_SECONDS", "600")
+
 	// test & assert
 	rootCmd.SetArgs([]string{"serve"})
 	err = rootCmd.Execute()

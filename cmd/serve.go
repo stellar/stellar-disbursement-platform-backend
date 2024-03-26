@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"go/types"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/scheduler/jobs"
+
 	"github.com/spf13/cobra"
 	"github.com/stellar/go/support/config"
 	"github.com/stellar/go/support/log"
@@ -31,7 +33,11 @@ type ServerServiceInterface interface {
 	StartServe(opts serve.ServeOptions, httpServer serve.HTTPServerInterface)
 	StartMetricsServe(opts serve.MetricsServeOptions, httpServer serve.HTTPServerInterface)
 	StartAdminServe(opts serveadmin.ServeOptions, httpServer serveadmin.HTTPServerInterface)
-	GetSchedulerJobRegistrars(ctx context.Context, serveOpts serve.ServeOptions, schedulerOptions scheduler.SchedulerOptions, apAPIService anchorplatform.AnchorPlatformAPIServiceInterface) ([]scheduler.SchedulerJobRegisterOption, error)
+	GetSchedulerJobRegistrars(ctx context.Context,
+		serveOpts serve.ServeOptions,
+		schedulerOptions scheduler.SchedulerOptions,
+		apAPIService anchorplatform.AnchorPlatformAPIServiceInterface,
+		tssDBConnectionPool db.DBConnectionPool) ([]scheduler.SchedulerJobRegisterOption, error)
 	SetupConsumers(ctx context.Context, o SetupConsumersOptions) error
 }
 
@@ -61,22 +67,53 @@ func (s *ServerService) StartAdminServe(opts serveadmin.ServeOptions, httpServer
 	}
 }
 
-func (s *ServerService) GetSchedulerJobRegistrars(ctx context.Context, serveOpts serve.ServeOptions, schedulerOptions scheduler.SchedulerOptions, apAPIService anchorplatform.AnchorPlatformAPIServiceInterface) ([]scheduler.SchedulerJobRegisterOption, error) {
-	// TODO: in SDP-1111, inject the remaining dbConnectionPools needed here.
+func (s *ServerService) GetSchedulerJobRegistrars(
+	ctx context.Context,
+	serveOpts serve.ServeOptions,
+	schedulerOptions scheduler.SchedulerOptions,
+	apAPIService anchorplatform.AnchorPlatformAPIServiceInterface,
+	tssDBConnectionPool db.DBConnectionPool,
+) ([]scheduler.SchedulerJobRegisterOption, error) {
 	models, err := data.NewModels(serveOpts.MtnDBConnectionPool)
 	if err != nil {
 		log.Ctx(ctx).Fatalf("error creating models in Job Scheduler: %s", err.Error())
 	}
 
-	return []scheduler.SchedulerJobRegisterOption{
+	sj := []scheduler.SchedulerJobRegisterOption{
 		scheduler.WithAPAuthEnforcementJob(apAPIService, serveOpts.MonitorService, serveOpts.CrashTrackerClient.Clone()),
 		scheduler.WithReadyPaymentsCancellationJobOption(models),
-	}, nil
+	}
+
+	if serveOpts.EnableScheduler {
+		if schedulerOptions.PaymentJobIntervalSeconds < jobs.DefaultMinimumJobIntervalSeconds {
+			log.Fatalf("PaymentJobIntervalSeconds is lower than the default value of %d", jobs.DefaultMinimumJobIntervalSeconds)
+		}
+
+		if schedulerOptions.ReceiverInvitationJobIntervalSeconds < jobs.DefaultMinimumJobIntervalSeconds {
+			log.Fatalf("ReceiverInvitationJobIntervalSeconds is lower than the default value of %d", jobs.DefaultMinimumJobIntervalSeconds)
+		}
+
+		sj = append(sj,
+			scheduler.WithPaymentToSubmitterJobOption(schedulerOptions.PaymentJobIntervalSeconds, models, tssDBConnectionPool),
+			scheduler.WithPaymentFromSubmitterJobOption(schedulerOptions.PaymentJobIntervalSeconds, models, tssDBConnectionPool),
+			scheduler.WithPatchAnchorPlatformTransactionsCompletionJobOption(schedulerOptions.PaymentJobIntervalSeconds, apAPIService, models),
+			scheduler.WithSendReceiverWalletsSMSInvitationJobOption(jobs.SendReceiverWalletsSMSInvitationJobOptions{
+				AnchorPlatformBaseSepURL:       serveOpts.AnchorPlatformBaseSepURL,
+				Models:                         models,
+				MessengerClient:                serveOpts.SMSMessengerClient,
+				MaxInvitationSMSResendAttempts: int64(serveOpts.MaxInvitationSMSResendAttempts),
+				Sep10SigningPrivateKey:         serveOpts.Sep10SigningPrivateKey,
+				CrashTrackerClient:             serveOpts.CrashTrackerClient.Clone(),
+				JobIntervalSeconds:             schedulerOptions.ReceiverInvitationJobIntervalSeconds,
+			}),
+		)
+	}
+
+	return sj, nil
 }
 
 type SetupConsumersOptions struct {
 	EventBrokerOptions  cmdUtils.EventBrokerOptions
-	EventHandlerOptions events.EventHandlerOptions
 	ServeOpts           serve.ServeOptions
 	TSSDBConnectionPool db.DBConnectionPool
 }
@@ -93,7 +130,7 @@ func (s *ServerService) SetupConsumers(ctx context.Context, o SetupConsumersOpti
 			AdminDBConnectionPool:          o.ServeOpts.AdminDBConnectionPool,
 			AnchorPlatformBaseSepURL:       o.ServeOpts.AnchorPlatformBasePlatformURL,
 			MessengerClient:                o.ServeOpts.SMSMessengerClient,
-			MaxInvitationSMSResendAttempts: int64(o.EventHandlerOptions.MaxInvitationSMSResendAttempts),
+			MaxInvitationSMSResendAttempts: int64(o.ServeOpts.MaxInvitationSMSResendAttempts),
 			Sep10SigningPrivateKey:         o.ServeOpts.Sep10SigningPrivateKey,
 			CrashTrackerClient:             o.ServeOpts.CrashTrackerClient.Clone(),
 		}),
@@ -147,7 +184,6 @@ func (s *ServerService) SetupConsumers(ctx context.Context, o SetupConsumersOpti
 
 func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorService monitor.MonitorServiceInterface) *cobra.Command {
 	serveOpts := serve.ServeOptions{}
-	schedulerOptions := scheduler.SchedulerOptions{}
 
 	configOpts := config.ConfigOptions{
 		{
@@ -275,11 +311,19 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 		},
 		{
 			Name:        "enable-scheduler",
-			Usage:       "Enable Scheduler for SDP Backend Jobs",
+			Usage:       "Enable Scheduler Jobs. Either this or Event Brokers must be enabled.",
 			OptType:     types.Bool,
 			ConfigKey:   &serveOpts.EnableScheduler,
-			FlagDefault: true,
+			FlagDefault: false,
 			Required:    false,
+		},
+		{
+			Name:        "max-invitation-sms-resend-attempts",
+			Usage:       "The maximum number of attempts to resend the SMS invitation to the Receiver Wallets.",
+			OptType:     types.Int,
+			ConfigKey:   &serveOpts.MaxInvitationSMSResendAttempts,
+			FlagDefault: 3,
+			Required:    true,
 		},
 	}
 
@@ -335,18 +379,6 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			Required:    true,
 		})
 
-	// event handler options
-	eventHandlerOptions := events.EventHandlerOptions{}
-	configOpts = append(configOpts,
-		&config.ConfigOption{
-			Name:        "max-invitation-sms-resend-attempts",
-			Usage:       "The maximum number of attempts to resend the SMS invitation to the Receiver Wallets.",
-			OptType:     types.Int,
-			ConfigKey:   &eventHandlerOptions.MaxInvitationSMSResendAttempts,
-			FlagDefault: 3,
-			Required:    true,
-		})
-
 	// messenger config options:
 	messengerOptions := message.MessengerOptions{}
 	configOpts = append(configOpts, cmdUtils.TwilioConfigOptions(&messengerOptions)...)
@@ -396,6 +428,13 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 	configOpts = append(
 		configOpts,
 		cmdUtils.TransactionSubmitterEngineConfigOptions(&txSubmitterOpts)...,
+	)
+
+	// scheduler options
+	schedulerOpts := scheduler.SchedulerOptions{}
+	configOpts = append(
+		configOpts,
+		cmdUtils.SchedulerConfigOptions(&schedulerOpts)...,
 	)
 
 	cmd := &cobra.Command{
@@ -522,39 +561,42 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			serveOpts.SubmitterEngine = submitterEngine
 			adminServeOpts.SubmitterEngine = submitterEngine
 
+			// Validate the Event Broker Type and Scheduler Jobs
+			if eventBrokerOptions.EventBrokerType == events.NoneEventBrokerType && !serveOpts.EnableScheduler {
+				log.Ctx(ctx).Fatalf("Both Event Brokers and Scheduler are disabled. Please enable one.")
+			}
+			if eventBrokerOptions.EventBrokerType != events.NoneEventBrokerType && serveOpts.EnableScheduler {
+				log.Ctx(ctx).Fatalf("Both Event Brokers and Scheduler are enabled. Please enable only one.")
+			}
+
 			// Kafka (background)
 			if eventBrokerOptions.EventBrokerType == events.KafkaEventBrokerType {
-				kafkaProducer, err := events.NewKafkaProducer(cmdUtils.KafkaConfig(eventBrokerOptions))
-				if err != nil {
-					log.Ctx(ctx).Fatalf("error creating Kafka Producer: %v", err)
+				kafkaProducer, kafkaErr := events.NewKafkaProducer(cmdUtils.KafkaConfig(eventBrokerOptions))
+				if kafkaErr != nil {
+					log.Ctx(ctx).Fatalf("error creating Kafka Producer: %v", kafkaErr)
 				}
 				defer kafkaProducer.Close()
 				serveOpts.EventProducer = kafkaProducer
 
-				err = serverService.SetupConsumers(ctx, SetupConsumersOptions{
+				kafkaErr = serverService.SetupConsumers(ctx, SetupConsumersOptions{
 					EventBrokerOptions:  eventBrokerOptions,
-					EventHandlerOptions: eventHandlerOptions,
 					ServeOpts:           serveOpts,
 					TSSDBConnectionPool: tssDBConnectionPool,
 				})
-				if err != nil {
-					log.Fatalf("error setting up consumers: %v", err)
+				if kafkaErr != nil {
+					log.Fatalf("error setting up consumers: %v", kafkaErr)
 				}
 			} else {
 				log.Ctx(ctx).Warn("Event Broker Type is NONE.")
 			}
 
 			// Starting Scheduler Service (background job) if enabled
-			if serveOpts.EnableScheduler {
-				log.Ctx(ctx).Info("Starting Scheduler Service...")
-				schedulerJobRegistrars, innerErr := serverService.GetSchedulerJobRegistrars(ctx, serveOpts, schedulerOptions, apAPIService)
-				if innerErr != nil {
-					log.Ctx(ctx).Fatalf("Error getting scheduler job registrars: %v", innerErr)
-				}
-				go scheduler.StartScheduler(serveOpts.AdminDBConnectionPool, crashTrackerClient.Clone(), schedulerJobRegistrars...)
-			} else {
-				log.Ctx(ctx).Warn("Scheduler Service is disabled.")
+			log.Ctx(ctx).Info("Starting Scheduler Service...")
+			schedulerJobRegistrars, innerErr := serverService.GetSchedulerJobRegistrars(ctx, serveOpts, schedulerOpts, apAPIService, tssDBConnectionPool)
+			if innerErr != nil {
+				log.Ctx(ctx).Fatalf("Error getting scheduler job registrars: %v", innerErr)
 			}
+			go scheduler.StartScheduler(serveOpts.AdminDBConnectionPool, crashTrackerClient.Clone(), schedulerJobRegistrars...)
 
 			// Starting Metrics Server (background job)
 			log.Ctx(ctx).Info("Starting Metrics Server...")

@@ -4,6 +4,10 @@ import (
 	"fmt"
 	"go/types"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/scheduler/jobs"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/scheduler"
+
 	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/network"
 	"github.com/stellar/go/support/config"
@@ -287,6 +291,27 @@ func CrashTrackerTypeConfigOption(targetPointer interface{}) *config.ConfigOptio
 		ConfigKey:      targetPointer,
 		FlagDefault:    string(crashtracker.CrashTrackerTypeDryRun),
 		Required:       true,
+	}
+}
+
+func SchedulerConfigOptions(opts *scheduler.SchedulerOptions) []*config.ConfigOption {
+	return []*config.ConfigOption{
+		{
+			Name:        "scheduler-payment-job-seconds",
+			Usage:       fmt.Sprintf("The interval in seconds for the payment jobs that synchronize transactions between SDP and TSS. Must be greater than %d seconds.", jobs.DefaultMinimumJobIntervalSeconds),
+			OptType:     types.Int,
+			ConfigKey:   &opts.PaymentJobIntervalSeconds,
+			FlagDefault: 30,
+			Required:    false,
+		},
+		{
+			Name:        "scheduler-receiver-invitation-job-seconds",
+			Usage:       fmt.Sprintf("The interval in seconds for the receiver invitation job that sends invitations to new receivers. Must be greater than %d seconds.", jobs.DefaultMinimumJobIntervalSeconds),
+			OptType:     types.Int,
+			ConfigKey:   &opts.ReceiverInvitationJobIntervalSeconds,
+			FlagDefault: 30,
+			Required:    false,
+		},
 	}
 }
 

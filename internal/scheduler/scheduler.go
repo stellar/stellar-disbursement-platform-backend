@@ -30,7 +30,10 @@ type Scheduler struct {
 	tenantManager      tenant.ManagerInterface
 }
 
-type SchedulerOptions struct{}
+type SchedulerOptions struct {
+	PaymentJobIntervalSeconds            int
+	ReceiverInvitationJobIntervalSeconds int
+}
 
 type SchedulerJobRegisterOption func(*Scheduler)
 
@@ -81,6 +84,8 @@ func newScheduler(cancel context.CancelFunc) *Scheduler {
 
 // addJob adds a job to the scheduler. This method does not start the job. To start the job, call start().
 func (s *Scheduler) addJob(job jobs.Job) {
+	log.Infof("registering job to scheduler [name: %s], [interval: %s], [isMultiTenant: %t]",
+		job.GetName(), job.GetInterval(), job.IsJobMultiTenant())
 	s.jobs[job.GetName()] = job
 }
 
@@ -175,7 +180,6 @@ func WithAPAuthEnforcementJob(apService anchorplatform.AnchorPlatformAPIServiceI
 		if err != nil {
 			log.Errorf("error creating %s job: %s", j.GetName(), err)
 		}
-		log.Infof("registering %s job to scheduler", j.GetName())
 		s.addJob(j)
 	}
 }
@@ -183,7 +187,37 @@ func WithAPAuthEnforcementJob(apService anchorplatform.AnchorPlatformAPIServiceI
 func WithReadyPaymentsCancellationJobOption(models *data.Models) SchedulerJobRegisterOption {
 	return func(s *Scheduler) {
 		j := jobs.NewReadyPaymentsCancellationJob(models)
-		log.Infof("registering %s job to scheduler", j.GetName())
+		s.addJob(j)
+	}
+}
+
+func WithPaymentToSubmitterJobOption(jobIntervalSeconds int,
+	models *data.Models,
+	tssDBConnectionPool db.DBConnectionPool,
+) SchedulerJobRegisterOption {
+	return func(s *Scheduler) {
+		j := jobs.NewPaymentToSubmitterJob(jobIntervalSeconds, models, tssDBConnectionPool)
+		s.addJob(j)
+	}
+}
+
+func WithPaymentFromSubmitterJobOption(paymentJobInterval int, models *data.Models, tssDBConnectionPool db.DBConnectionPool) SchedulerJobRegisterOption {
+	return func(s *Scheduler) {
+		j := jobs.NewPaymentFromSubmitterJob(paymentJobInterval, models, tssDBConnectionPool)
+		s.addJob(j)
+	}
+}
+
+func WithSendReceiverWalletsSMSInvitationJobOption(o jobs.SendReceiverWalletsSMSInvitationJobOptions) SchedulerJobRegisterOption {
+	return func(s *Scheduler) {
+		j := jobs.NewSendReceiverWalletsSMSInvitationJob(o)
+		s.addJob(j)
+	}
+}
+
+func WithPatchAnchorPlatformTransactionsCompletionJobOption(paymentJobInterval int, apAPISvc anchorplatform.AnchorPlatformAPIServiceInterface, models *data.Models) SchedulerJobRegisterOption {
+	return func(s *Scheduler) {
+		j := jobs.NewPatchAnchorPlatformTransactionsCompletionJob(paymentJobInterval, apAPISvc, models)
 		s.addJob(j)
 	}
 }

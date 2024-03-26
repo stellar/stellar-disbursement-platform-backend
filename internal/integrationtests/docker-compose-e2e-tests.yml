@@ -49,6 +49,8 @@ services:
       BROKER_URLS: "kafka:9092"
       CONSUMER_GROUP_ID: "group-id"
       KAFKA_SECURITY_PROTOCOL: "PLAINTEXT"
+      SCHEDULER_RECEIVER_INVITATION_JOB_SECONDS: "0" # disabled - we're using kafka for this.
+      SCHEDULER_PAYMENT_JOB_SECONDS: "0" # disabled - we're using kafka for this.
 
       # multi-tenant secrets:
       ADMIN_ACCOUNT: SDP-admin

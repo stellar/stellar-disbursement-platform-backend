@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
+
 	"github.com/stellar/go/support/log"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
@@ -17,6 +19,7 @@ import (
 
 type PaymentToSubmitterServiceInterface interface {
 	SendPaymentsReadyToPay(ctx context.Context, paymentsReadyToPay schemas.EventPaymentsReadyToPayData) error
+	SendBatchPayments(ctx context.Context, batchSize int) error
 }
 
 // Making sure that ServerService implements ServerServiceInterface:
@@ -37,8 +40,21 @@ func NewPaymentToSubmitterService(models *data.Models, tssDBConnectionPool db.DB
 
 // SendPaymentsReadyToPay sends SDP's ready-to-pay payments (in batches) to the transaction submission service.
 func (s PaymentToSubmitterService) SendPaymentsReadyToPay(ctx context.Context, paymentsReadyToPay schemas.EventPaymentsReadyToPayData) error {
+	paymentIDs := make([]string, 0, len(paymentsReadyToPay.Payments))
+	for _, paymentReadyToPay := range paymentsReadyToPay.Payments {
+		paymentIDs = append(paymentIDs, paymentReadyToPay.ID)
+	}
+
 	err := db.RunInTransaction(ctx, s.sdpModels.DBConnectionPool, nil, func(dbTx db.DBTransaction) error {
-		return s.sendPaymentsReadyToPay(ctx, dbTx, paymentsReadyToPay)
+		log.Ctx(ctx).Infof("Registering %d payments into the TSS, paymentIDs=%v", len(paymentIDs), paymentIDs)
+		payments, err := s.sdpModels.Payment.GetReadyByID(ctx, dbTx, paymentIDs...)
+		if err != nil {
+			return fmt.Errorf("getting payments ready to be sent: %w", err)
+		}
+		if len(payments) != len(paymentIDs) {
+			log.Ctx(ctx).Errorf("[PaymentToSubmitterService] The number of incoming payments to be processed (%d) is different from the number ready to be processed found in the database (%d)", len(paymentIDs), len(payments))
+		}
+		return s.sendPaymentsReadyToPay(ctx, dbTx, paymentsReadyToPay.TenantID, payments)
 	})
 	if err != nil {
 		return fmt.Errorf("sending payments: %w", err)
@@ -47,30 +63,34 @@ func (s PaymentToSubmitterService) SendPaymentsReadyToPay(ctx context.Context, p
 	return nil
 }
 
-// sendPaymentsReadyToPay sends SDP's ready-to-pay payments to the transaction submission service, inside a DB
-// transaction.
-func (s PaymentToSubmitterService) sendPaymentsReadyToPay(ctx context.Context, dbTx db.DBTransaction, paymentsReadyToPay schemas.EventPaymentsReadyToPayData) error {
-	// 1. Get payments that are ready to be sent. This will lock the rows.
-	// Payments Ready to be sent means:
-	//    a. Payment is in `READY` status
-	//    b. Receiver Wallet is in `REGISTERED` status
-	//    c. Disbursement is in `STARTED` status
-	paymentIDs := make([]string, 0, len(paymentsReadyToPay.Payments))
-	for _, paymentReadyToPay := range paymentsReadyToPay.Payments {
-		paymentIDs = append(paymentIDs, paymentReadyToPay.ID)
+// SendBatchPayments sends SDP's ready-to-pay payments (in batches) to the transaction submission service.
+func (s PaymentToSubmitterService) SendBatchPayments(ctx context.Context, batchSize int) error {
+	tenant, tenantErr := tenant.GetTenantFromContext(ctx)
+	if tenantErr != nil {
+		return fmt.Errorf("getting tenant from context: %w", tenantErr)
 	}
-	log.Ctx(ctx).Infof("Registering %d payments into the TSS, paymentIDs=%v", len(paymentIDs), paymentIDs)
-
-	// Double checking the payments passed by parameter
-	payments, err := s.sdpModels.Payment.GetReadyByID(ctx, dbTx, paymentIDs...)
+	err := db.RunInTransaction(ctx, s.sdpModels.DBConnectionPool, nil, func(dbTx db.DBTransaction) error {
+		// Get payments that are ready to be sent. This will lock the rows.
+		payments, err := s.sdpModels.Payment.GetBatchForUpdate(ctx, dbTx, batchSize)
+		if err != nil {
+			return fmt.Errorf("getting payments ready to be sent: %w", err)
+		}
+		return s.sendPaymentsReadyToPay(ctx, dbTx, tenant.ID, payments)
+	})
 	if err != nil {
-		return fmt.Errorf("getting payments ready to be sent: %w", err)
+		return fmt.Errorf("sending payments: %w", err)
 	}
 
-	if len(payments) != len(paymentIDs) {
-		log.Ctx(ctx).Errorf("[PaymentToSubmitterService] The number of incoming payments to be processed (%d) is different from the number ready to be processed found in the database (%d)", len(paymentIDs), len(payments))
-	}
+	return nil
+}
 
+// sendPaymentsReadyToPay sends SDP's ready-to-pay payments to the transaction submission service, inside a DB transaction.
+// Payments Ready to be sent means:
+//
+//	a. Payment is in `READY` status
+//	b. Receiver Wallet is in `REGISTERED` status
+//	c. Disbursement is in `STARTED` status
+func (s PaymentToSubmitterService) sendPaymentsReadyToPay(ctx context.Context, dbTx db.DBTransaction, tenantID string, payments []*data.Payment) error {
 	var transactions []txSubStore.Transaction
 	var failedPayments []*data.Payment
 	var pendingPayments []*data.Payment
@@ -94,7 +114,7 @@ func (s PaymentToSubmitterService) sendPaymentsReadyToPay(ctx context.Context, d
 			AssetIssuer: payment.Asset.Issuer,
 			Amount:      amount,
 			Destination: payment.ReceiverWallet.StellarAddress,
-			TenantID:    paymentsReadyToPay.TenantID,
+			TenantID:    tenantID,
 		}
 		transactions = append(transactions, transaction)
 		pendingPayments = append(pendingPayments, payment)

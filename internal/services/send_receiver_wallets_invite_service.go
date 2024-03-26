@@ -89,14 +89,9 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context, receive
 		walletsMap[wallet.ID] = wallet
 	}
 
-	receiverWalletIDsPendingRegistration := make([]string, 0, len(receiverWalletInvitationData))
-	for _, receiverWallet := range receiverWalletInvitationData {
-		receiverWalletIDsPendingRegistration = append(receiverWalletIDsPendingRegistration, receiverWallet.ReceiverWalletID)
-	}
-
-	receiverWallets, err := s.Models.ReceiverWallet.GetAllPendingRegistrationByReceiverWalletIDs(ctx, s.Models.DBConnectionPool, receiverWalletIDsPendingRegistration)
+	receiverWallets, err := s.resolveReceiverWalletsPendingRegistration(ctx, receiverWalletInvitationData)
 	if err != nil {
-		return fmt.Errorf("error getting receiver wallets pending registration: %w", err)
+		return fmt.Errorf("error resolving receiver wallets pending registration: %w", err)
 	}
 
 	receiverWalletsAsset, err := s.Models.Assets.GetAssetsPerReceiverWallet(ctx, receiverWallets...)
@@ -205,6 +200,29 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context, receive
 
 		return nil
 	})
+}
+
+// resolveReceiverWalletsPendingRegistration returns the receiver wallets pending registration based on the receiverWalletInvitationData.
+// If the receiverWalletInvitationData is empty, it will return all receiver wallets pending registration.
+func (s SendReceiverWalletInviteService) resolveReceiverWalletsPendingRegistration(ctx context.Context, receiverWalletInvitationData []schemas.EventReceiverWalletSMSInvitationData) ([]*data.ReceiverWallet, error) {
+	var err error
+	var receiverWallets []*data.ReceiverWallet
+	if len(receiverWalletInvitationData) == 0 {
+		receiverWallets, err = s.Models.ReceiverWallet.GetAllPendingRegistrations(ctx, s.Models.DBConnectionPool)
+		if err != nil {
+			return nil, fmt.Errorf("getting all receiver wallets pending registration: %w", err)
+		}
+	} else {
+		receiverWalletIDsPendingRegistration := make([]string, 0, len(receiverWalletInvitationData))
+		for _, receiverWallet := range receiverWalletInvitationData {
+			receiverWalletIDsPendingRegistration = append(receiverWalletIDsPendingRegistration, receiverWallet.ReceiverWalletID)
+		}
+		receiverWallets, err = s.Models.ReceiverWallet.GetAllPendingRegistrationByReceiverWalletIDs(ctx, s.Models.DBConnectionPool, receiverWalletIDsPendingRegistration)
+		if err != nil {
+			return nil, fmt.Errorf("getting receiver wallets pending registration by rw ids %v: %w", receiverWalletIDsPendingRegistration, err)
+		}
+	}
+	return receiverWallets, err
 }
 
 // shouldSendInvitationSMS returns true if we should send the invitation SMS to the receiver. It will be used to either

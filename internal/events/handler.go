@@ -31,7 +31,3 @@ type EventHandler interface {
 	CanHandleMessage(ctx context.Context, message *Message) bool
 	Handle(ctx context.Context, message *Message)
 }
-
-type EventHandlerOptions struct {
-	MaxInvitationSMSResendAttempts int
-}

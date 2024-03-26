@@ -8,6 +8,8 @@ import (
 	"os/exec"
 	"testing"
 
+	di "github.com/stellar/stellar-disbursement-platform-backend/internal/dependencyinjection"
+
 	"github.com/spf13/cobra"
 	"github.com/stellar/go/keypair"
 	"github.com/stellar/go/network"
@@ -38,6 +40,7 @@ func Test_ChannelAccountsCommand_CreateCommand(t *testing.T) {
 		"--distribution-seed", distributionKP.Seed(),
 		"--distribution-public-key", distributionKP.Address(),
 		"--channel-account-encryption-passphrase", keypair.MustRandom().Seed(),
+		"--database-url", dbt.DSN,
 	})
 
 	t.Run("exit with status 1 when ChannelAccountsService fails", func(t *testing.T) {
@@ -101,6 +104,7 @@ func Test_ChannelAccountsCommand_VerifyCommand(t *testing.T) {
 		"--distribution-seed", distributionKP.Seed(),
 		"--distribution-public-key", distributionKP.Address(),
 		"--channel-account-encryption-passphrase", keypair.MustRandom().Seed(),
+		"--database-url", dbt.DSN,
 	})
 
 	t.Run("exit with status 1 when ChannelAccountsService fails", func(t *testing.T) {
@@ -167,6 +171,7 @@ func Test_ChannelAccountsCommand_EnsureCommand(t *testing.T) {
 		"--distribution-seed", distributionKP.Seed(),
 		"--distribution-public-key", distributionKP.Address(),
 		"--channel-account-encryption-passphrase", keypair.MustRandom().Seed(),
+		"--database-url", dbt.DSN,
 	})
 
 	t.Run("exit with status 1 when ChannelAccountsService fails", func(t *testing.T) {
@@ -232,6 +237,7 @@ func Test_ChannelAccountsCommand_DeleteCommand(t *testing.T) {
 		"--distribution-public-key", distributionKP.Address(),
 		"--channel-account-encryption-passphrase", keypair.MustRandom().Seed(),
 		"--channel-account-id", "acc-id",
+		"--database-url", dbt.DSN,
 	}
 
 	t.Run("exit with status 1 when ChannelAccountsService fails", func(t *testing.T) {
@@ -281,6 +287,7 @@ func Test_ChannelAccountsCommand_DeleteCommand(t *testing.T) {
 
 	t.Run("delete command fails when both channel-account-id and delete-all-accounts are set", func(t *testing.T) {
 		rootCmmd.SetArgs(append(args, "--delete-all-accounts"))
+		defer di.ClearInstancesTestHelper(t)
 
 		err := rootCmmd.Execute()
 		require.EqualError(

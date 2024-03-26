@@ -148,7 +148,10 @@ sdp:
   ## @param sdp.configMap.data.DISABLE_MFA Determines if email-based MFA should be disabled during login ("true" or "false").
   ## @param sdp.configMap.data.SDP_UI_BASE_URL The base URL of the SDP UI/dashboard.
   ## @param sdp.configMap.data.INSTANCE_NAME The name of the SDP instance. Example: "SDP Testnet".
-  ## @param sdp.configMap.data.ENABLE_SCHEDULER Whether the scheduled jobs be enabled in this instance ("true" or "false").
+  ## @param sdp.configMap.data.ENABLE_SCHEDULER Wether or not the scheduled jobs be enabled in this instance ("true" or "false").
+  ## @param sdp.configMap.data.SCHEDULER_PAYMENT_JOB_SECONDS The interval in seconds for the payment job that syncs payments between the SDP and the TSS.
+  ## @param sdp.configMap.data.SCHEDULER_RECEIVER_INVITATION_JOB_SECONDS The interval in seconds for the receiver invitation job that sends invitations to new receivers. 0 or negative values disable the job.
+  ## @param sdp.configMap.data.MAX_INVITATION_SMS_RESEND_ATTEMPTS The maximum number of times an invitation SMS can be resent. 0 or negative values disable the job.
   ## @param sdp.configMap.data.TENANT_XLM_BOOTSTRAP_AMOUNT The amount of XLM to be sent to a newly created tenant distribution account.
   configMap:
     annotations:
@@ -173,6 +176,9 @@ sdp:
       # like the following to allow the deployment to work:
       INSTANCE_NAME: "SDP Testnet Preview"
       ENABLE_SCHEDULER: "false"
+      SCHEDULER_PAYMENT_JOB_SECONDS: "3600"
+      SCHEDULER_RECEIVER_INVITATION_JOB_SECONDS: "3600"
+      MAX_INVITATION_SMS_RESEND_ATTEMPTS: "3"
       TENANT_XLM_BOOTSTRAP_AMOUNT: "5"
 
   ## @extra sdp.kubeSecrets Kubernetes secrets are used to manage sensitive information, such as API keys and private keys. It's crucial that these details are kept private.

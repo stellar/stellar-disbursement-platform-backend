@@ -85,6 +85,7 @@ type ServeOptions struct {
 	EnableScheduler                 bool
 	tenantManager                   tenant.ManagerInterface
 	EventProducer                   events.Producer
+	MaxInvitationSMSResendAttempts  int
 }
 
 // SetupDependencies uses the serve options to setup the dependencies for the server.
