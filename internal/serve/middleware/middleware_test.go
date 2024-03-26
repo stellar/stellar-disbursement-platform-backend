@@ -165,6 +165,18 @@ func Test_AuthenticateMiddleware(t *testing.T) {
 	r.Group(func(r chi.Router) {
 		r.Use(AuthenticateMiddleware(mAuthManager, mTenantManager))
 
+		r.Use(func(next http.Handler) http.Handler {
+			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				// Assert that the tenant is properly saved to the context
+				ctx := r.Context()
+				savedTenant, err := tenant.GetTenantFromContext(ctx)
+				require.NoError(t, err)
+				assert.Equal(t, "test_tenant_id", savedTenant.ID)
+				assert.Equal(t, "test_tenant", savedTenant.Name)
+				next.ServeHTTP(w, r)
+			})
+		})
+
 		r.Get("/authenticated", func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 			_, err := w.Write(json.RawMessage(`{"status":"ok"}`))
@@ -294,7 +306,10 @@ func Test_AuthenticateMiddleware(t *testing.T) {
 			Once()
 		mTenantManager.
 			On("GetTenantByID", mock.Anything, "test_tenant_id").
-			Return(&tenant.Tenant{}, nil).
+			Return(&tenant.Tenant{
+				ID:   "test_tenant_id",
+				Name: "test_tenant",
+			}, nil).
 			Once()
 
 		getEntries := log.DefaultLogger.StartTest(log.InfoLevel)
