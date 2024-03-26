@@ -10,9 +10,11 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/sirupsen/logrus"
+	"github.com/stellar/go/support/http/mutil"
 	"github.com/stellar/go/support/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -159,9 +161,10 @@ func Test_AuthenticateMiddleware(t *testing.T) {
 	r := chi.NewRouter()
 
 	mAuthManager := &auth.AuthManagerMock{}
+	mTenantManager := &tenant.TenantManagerMock{}
 
 	r.Group(func(r chi.Router) {
-		r.Use(AuthenticateMiddleware(mAuthManager))
+		r.Use(AuthenticateMiddleware(mAuthManager, mTenantManager))
 
 		r.Get("/authenticated", func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
@@ -285,6 +288,14 @@ func Test_AuthenticateMiddleware(t *testing.T) {
 		mAuthManager.
 			On("GetUserID", mock.Anything, "token").
 			Return("test_user_id", nil).
+			Once()
+		mAuthManager.
+			On("GetTenantID", mock.Anything, "token").
+			Return("test_tenant_id", nil).
+			Once()
+		mTenantManager.
+			On("GetTenantByID", mock.Anything, "test_tenant_id").
+			Return(&tenant.Tenant{}, nil).
 			Once()
 
 		getEntries := log.DefaultLogger.StartTest(log.InfoLevel)
@@ -646,13 +657,19 @@ func Test_LoggingMiddleware(t *testing.T) {
 		token := "valid_token"
 		mAuthManager.On("GetTenantID", mock.Anything, token).Return(tenantID, nil).Once()
 		mTenantManager.On("GetTenantByID", mock.Anything, tenantID).Return(&tenant.Tenant{
-			ID:   "tenant_id",
+			ID:   tenantID,
 			Name: tenantName,
 		}, nil).Once()
 
-		r.Use(InjectTenantMiddleware(mTenantManager, mAuthManager))
-		r.Use(EnsureTenantMiddleware)
-		r.Use(LoggingMiddleware)
+		r.Use(ResolveTenantFromRequestMiddleware(mTenantManager))
+		r.Use(func(next http.Handler) http.Handler {
+			return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+				mw := mutil.WrapWriter(rw)
+				logRequestStart(req)
+				next.ServeHTTP(mw, req)
+				logRequestEnd(req, mw, time.Since(time.Now()))
+			})
+		})
 		r.Get("/", func(w http.ResponseWriter, r *http.Request) {
 			_, err := w.Write([]byte(expectedRespBody))
 			require.NoError(t, err)
@@ -776,7 +793,7 @@ func Test_CSPMiddleware(t *testing.T) {
 	})
 }
 
-func Test_InjectTenantMiddleware(t *testing.T) {
+func Test_ResolveTenantFromRequestMiddleware(t *testing.T) {
 	validTnt := &tenant.Tenant{ID: "tenant_id", Name: "tenant_name"}
 
 	testCases := []struct {
@@ -790,44 +807,7 @@ func Test_InjectTenantMiddleware(t *testing.T) {
 		expectedTenant    *tenant.Tenant
 	}{
 		{
-			name:              "🔴 has a token but the method GetTenantID fails",
-			token:             "valid_token",
-			tenantHeaderValue: "",
-			hostnamePrefix:    "",
-			prepareMocksFn: func(_ *tenant.TenantManagerMock, mAuthManager *auth.AuthManagerMock) {
-				expectedErr := errors.New("error fetching tenant ID from token")
-				mAuthManager.
-					On("GetTenantID", mock.Anything, "valid_token").
-					Return("", expectedErr).
-					Once()
-			},
-			expectedStatus:   http.StatusOK,
-			expectedRespBody: `{"status":"ok"}`,
-			expectedTenant:   nil,
-		},
-		{
-			name:              "🔴 has a token and the method GetTenantID succeeds, but GetTenantByID fails",
-			token:             "valid_token",
-			tenantHeaderValue: "",
-			hostnamePrefix:    "",
-			prepareMocksFn: func(mTenantManager *tenant.TenantManagerMock, mAuthManager *auth.AuthManagerMock) {
-				mAuthManager.
-					On("GetTenantID", mock.Anything, "valid_token").
-					Return("tenant_id", nil).
-					Once()
-
-				expectedErr := errors.New("error fetching tenant from its ID")
-				mTenantManager.
-					On("GetTenantByID", mock.Anything, "tenant_id").
-					Return(nil, expectedErr).
-					Once()
-			},
-			expectedStatus:   http.StatusOK,
-			expectedRespBody: `{"status":"ok"}`,
-			expectedTenant:   nil,
-		},
-		{
-			name:              "🔴 has no token and the tenant name from the header cannot be found in GetTenantByName",
+			name:              "🔴 tenant name from the header cannot be found in GetTenantByName",
 			token:             "",
 			tenantHeaderValue: "tenant_name",
 			hostnamePrefix:    "",
@@ -843,7 +823,7 @@ func Test_InjectTenantMiddleware(t *testing.T) {
 			expectedTenant:   nil,
 		},
 		{
-			name:              "🔴 has no token and the tenant name from the host prefix cannot be found in GetTenantByName",
+			name:              "🔴 tenant name from the host prefix cannot be found in GetTenantByName",
 			token:             "",
 			tenantHeaderValue: "",
 			hostnamePrefix:    "tenant_hostname",
@@ -857,26 +837,6 @@ func Test_InjectTenantMiddleware(t *testing.T) {
 			expectedStatus:   http.StatusOK,
 			expectedRespBody: `{"status":"ok"}`,
 			expectedTenant:   nil,
-		},
-		{
-			name:              "🟢 successfully grabs the tenant from the token",
-			token:             "valid_token",
-			tenantHeaderValue: "",
-			hostnamePrefix:    "",
-			prepareMocksFn: func(mTenantManager *tenant.TenantManagerMock, mAuthManager *auth.AuthManagerMock) {
-				mAuthManager.
-					On("GetTenantID", mock.Anything, "valid_token").
-					Return("tenant_id", nil).
-					Once()
-
-				mTenantManager.
-					On("GetTenantByID", mock.Anything, "tenant_id").
-					Return(validTnt, nil).
-					Once()
-			},
-			expectedStatus:   http.StatusOK,
-			expectedRespBody: `{"status":"ok"}`,
-			expectedTenant:   validTnt,
 		},
 		{
 			name:              "🟢 successfully grabs the tenant from the request HEADER",
@@ -926,7 +886,7 @@ func Test_InjectTenantMiddleware(t *testing.T) {
 			// prepare router
 			r := chi.NewRouter()
 			r.
-				With(InjectTenantMiddleware(mTenantManager, mAuthManager)).
+				With(ResolveTenantFromRequestMiddleware(mTenantManager)).
 				Get("/test", func(w http.ResponseWriter, r *http.Request) {
 					updatedCtx = r.Context()
 					w.WriteHeader(http.StatusOK)
