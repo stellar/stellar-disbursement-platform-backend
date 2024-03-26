@@ -10,11 +10,10 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/sirupsen/logrus"
-	"github.com/stellar/go/support/http/mutil"
+
 	"github.com/stellar/go/support/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -644,7 +643,6 @@ func Test_CorsMiddleware(t *testing.T) {
 
 func Test_LoggingMiddleware(t *testing.T) {
 	mTenantManager := &tenant.TenantManagerMock{}
-	mAuthManager := &auth.AuthManagerMock{}
 
 	t.Run("emits request started and finished logs with tenant info if tenant derived from context", func(t *testing.T) {
 		r := chi.NewRouter()
@@ -655,21 +653,13 @@ func Test_LoggingMiddleware(t *testing.T) {
 		tenantName := "tenant123"
 		tenantID := "tenant_id"
 		token := "valid_token"
-		mAuthManager.On("GetTenantID", mock.Anything, token).Return(tenantID, nil).Once()
-		mTenantManager.On("GetTenantByID", mock.Anything, tenantID).Return(&tenant.Tenant{
-			ID:   tenantID,
-			Name: tenantName,
-		}, nil).Once()
-
+		mTenantManager.
+			On("GetTenantByName", mock.Anything, tenantName).
+			Return(&tenant.Tenant{ID: tenantID, Name: tenantName}, nil).
+			Once()
 		r.Use(ResolveTenantFromRequestMiddleware(mTenantManager))
-		r.Use(func(next http.Handler) http.Handler {
-			return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
-				mw := mutil.WrapWriter(rw)
-				logRequestStart(req)
-				next.ServeHTTP(mw, req)
-				logRequestEnd(req, mw, time.Since(time.Now()))
-			})
-		})
+		r.Use(EnsureTenantMiddleware)
+		r.Use(LoggingMiddleware)
 		r.Get("/", func(w http.ResponseWriter, r *http.Request) {
 			_, err := w.Write([]byte(expectedRespBody))
 			require.NoError(t, err)
@@ -677,6 +667,7 @@ func Test_LoggingMiddleware(t *testing.T) {
 
 		req, err := http.NewRequest(http.MethodGet, "/", nil)
 		require.NoError(t, err)
+		req.Header.Set(TenantHeaderKey, tenantName)
 
 		ctx := context.WithValue(req.Context(), TokenContextKey, token)
 		req = req.WithContext(ctx)
@@ -761,7 +752,6 @@ func Test_LoggingMiddleware(t *testing.T) {
 	})
 
 	mTenantManager.AssertExpectations(t)
-	mAuthManager.AssertExpectations(t)
 }
 
 func Test_CSPMiddleware(t *testing.T) {
