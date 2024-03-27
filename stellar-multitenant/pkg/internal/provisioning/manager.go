@@ -79,8 +79,8 @@ func (m *Manager) ProvisionNewTenant(
 		orgName:       organizationName,
 		networkType:   networkType,
 	}
-  
-  log.Ctx(ctx).Infof("adding tenant %s", name)
+
+	log.Ctx(ctx).Infof("adding tenant %s", name)
 	t, provisionErr := m.provisionTenant(ctx, pt)
 	if provisionErr != nil {
 		return nil, m.handleProvisioningError(ctx, name, provisionErr, t)
