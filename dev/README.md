@@ -46,8 +46,13 @@ cp .env.example .env
 
 4. Execute the following command to create all the necessary Docker containers needed to run SDP:
 ```sh
-docker-compose up
+./main.sh
 ```
+
+5. In order to start the sdp containers with monitoring services, run the following command:
+```sh
+docker-compose -f docker-compose.yml -f docker-compose-monitoring.yml up
+````
 
 This will spin up the following services:
 
