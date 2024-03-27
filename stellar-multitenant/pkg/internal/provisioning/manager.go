@@ -70,7 +70,6 @@ func (m *Manager) ProvisionNewTenant(
 	ctx context.Context, name, userFirstName, userLastName, userEmail,
 	organizationName, uiBaseURL, networkType string,
 ) (*tenant.Tenant, error) {
-	log.Ctx(ctx).Infof("adding tenant %s", name)
 	pt := &ProvisionTenant{
 		name:          name,
 		userFirstName: userFirstName,
@@ -80,6 +79,8 @@ func (m *Manager) ProvisionNewTenant(
 		orgName:       organizationName,
 		networkType:   networkType,
 	}
+  
+  log.Ctx(ctx).Infof("adding tenant %s", name)
 	t, provisionErr := m.provisionTenant(ctx, pt)
 	if provisionErr != nil {
 		return nil, m.handleProvisioningError(ctx, name, provisionErr, t)
