@@ -31,6 +31,17 @@ type Manager struct {
 	nativeAssetBootstrapAmount int
 }
 
+// ProvisionTenant contains all the metadata about a tenant to provision one
+type ProvisionTenant struct {
+	name          string
+	userFirstName string
+	userLastName  string
+	userEmail     string
+	orgName       string
+	uiBaseURL     string
+	networkType   string
+}
+
 var (
 	ErrTenantCreationFailed                     = errors.New("tenant creation failed")
 	ErrTenantSchemaFailed                       = errors.New("database schema creation for tenant failed")
@@ -60,7 +71,16 @@ func (m *Manager) ProvisionNewTenant(
 	organizationName, uiBaseURL, networkType string,
 ) (*tenant.Tenant, error) {
 	log.Ctx(ctx).Infof("adding tenant %s", name)
-	t, provisionErr := m.provisionTenant(ctx, name, networkType, organizationName, userFirstName, userLastName, userEmail, uiBaseURL)
+	pt := &ProvisionTenant{
+		name:          name,
+		userFirstName: userFirstName,
+		userLastName:  userLastName,
+		userEmail:     userEmail,
+		uiBaseURL:     uiBaseURL,
+		orgName:       organizationName,
+		networkType:   networkType,
+	}
+	t, provisionErr := m.provisionTenant(ctx, pt)
 	if provisionErr != nil {
 		return nil, m.handleProvisioningError(ctx, name, provisionErr, t)
 	}
@@ -123,18 +143,18 @@ func (m *Manager) handleProvisioningError(ctx context.Context, name string, err 
 	return provisioningErr
 }
 
-func (m *Manager) provisionTenant(ctx context.Context, name string, networkType string, organizationName string, userFirstName string, userLastName string, userEmail string, uiBaseURL string) (*tenant.Tenant, error) {
-	t, addTntErr := m.tenantManager.AddTenant(ctx, name)
+func (m *Manager) provisionTenant(ctx context.Context, pt *ProvisionTenant) (*tenant.Tenant, error) {
+	t, addTntErr := m.tenantManager.AddTenant(ctx, pt.name)
 	if addTntErr != nil {
-		return nil, fmt.Errorf("%w: adding tenant %s: %w", ErrTenantCreationFailed, name, addTntErr)
+		return nil, fmt.Errorf("%w: adding tenant %s: %w", ErrTenantCreationFailed, pt.name, addTntErr)
 	}
 
-	u, tenantSchemaFailedErr := m.createSchemaAndRunMigrations(ctx, name)
+	u, tenantSchemaFailedErr := m.createSchemaAndRunMigrations(ctx, pt.name)
 	if tenantSchemaFailedErr != nil {
 		return nil, fmt.Errorf("%w: %w", ErrTenantSchemaFailed, tenantSchemaFailedErr)
 	}
 
-	tenantDataSetupErr := m.setupTenantData(ctx, u, networkType, organizationName, userFirstName, userLastName, userEmail, uiBaseURL)
+	tenantDataSetupErr := m.setupTenantData(ctx, u, pt)
 	if tenantDataSetupErr != nil {
 		return nil, fmt.Errorf("%w: %w", ErrTenantDataSetupFailed, tenantDataSetupErr)
 	}
@@ -152,12 +172,11 @@ func (m *Manager) provisionTenant(ctx context.Context, name string, networkType 
 		&tenant.TenantUpdate{
 			ID:                  t.ID,
 			Status:              &tenantStatus,
-			SDPUIBaseURL:        &uiBaseURL,
+			SDPUIBaseURL:        &pt.uiBaseURL,
 			DistributionAccount: t.DistributionAccount,
 		})
 	if err != nil {
-		updateTenantErrMsg := fmt.Errorf("%w: updating tenant %s status to %s: %w", ErrUpdateTenantFailed, name, tenant.ProvisionedTenantStatus, err)
-		return t, updateTenantErrMsg
+		return t, fmt.Errorf("%w: updating tenant %s status to %s: %w", ErrUpdateTenantFailed, pt.name, tenant.ProvisionedTenantStatus, err)
 	}
 
 	return t, nil
@@ -203,7 +222,7 @@ func (m *Manager) provisionDistributionAccount(ctx context.Context, t *tenant.Te
 	return nil
 }
 
-func (m *Manager) setupTenantData(ctx context.Context, tenantSchemaDSN, networkType, organizationName, userFirstName, userLastName, userEmail, uiBaseURL string) error {
+func (m *Manager) setupTenantData(ctx context.Context, tenantSchemaDSN string, pt *ProvisionTenant) error {
 	// Connecting to the tenant database schema
 	tenantSchemaConnectionPool, err := db.OpenDBConnectionPool(tenantSchemaDSN)
 	if err != nil {
@@ -211,12 +230,12 @@ func (m *Manager) setupTenantData(ctx context.Context, tenantSchemaDSN, networkT
 	}
 	defer tenantSchemaConnectionPool.Close()
 
-	err = services.SetupAssetsForProperNetwork(ctx, tenantSchemaConnectionPool, utils.NetworkType(networkType), services.DefaultAssetsNetworkMap)
+	err = services.SetupAssetsForProperNetwork(ctx, tenantSchemaConnectionPool, utils.NetworkType(pt.networkType), services.DefaultAssetsNetworkMap)
 	if err != nil {
 		return fmt.Errorf("running setup assets for proper network: %w", err)
 	}
 
-	err = services.SetupWalletsForProperNetwork(ctx, tenantSchemaConnectionPool, utils.NetworkType(networkType), services.DefaultWalletsNetworkMap)
+	err = services.SetupWalletsForProperNetwork(ctx, tenantSchemaConnectionPool, utils.NetworkType(pt.networkType), services.DefaultWalletsNetworkMap)
 	if err != nil {
 		return fmt.Errorf("running setup wallets for proper network: %w", err)
 	}
@@ -227,7 +246,7 @@ func (m *Manager) setupTenantData(ctx context.Context, tenantSchemaDSN, networkT
 		return fmt.Errorf("getting models: %w", err)
 	}
 
-	err = models.Organizations.Update(ctx, &data.OrganizationUpdate{Name: organizationName})
+	err = models.Organizations.Update(ctx, &data.OrganizationUpdate{Name: pt.orgName})
 	if err != nil {
 		return fmt.Errorf("updating organization's name: %w", err)
 	}
@@ -238,12 +257,12 @@ func (m *Manager) setupTenantData(ctx context.Context, tenantSchemaDSN, networkT
 	)
 	s := services.NewCreateUserService(models, tenantSchemaConnectionPool, authManager, m.messengerClient)
 	_, err = s.CreateUser(ctx, auth.User{
-		FirstName: userFirstName,
-		LastName:  userLastName,
-		Email:     userEmail,
+		FirstName: pt.userFirstName,
+		LastName:  pt.userLastName,
+		Email:     pt.userEmail,
 		IsOwner:   true,
 		Roles:     []string{"owner"},
-	}, uiBaseURL)
+	}, pt.uiBaseURL)
 	if err != nil {
 		return fmt.Errorf("creating user: %w", err)
 	}
