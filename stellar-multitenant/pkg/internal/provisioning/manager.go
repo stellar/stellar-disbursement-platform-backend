@@ -58,11 +58,7 @@ func rollbackTenantDataSetupErrors() []error {
 	return []error{ErrUpdateTenantFailed, ErrProvisionTenantDistributionAccountFailed, ErrTenantDataSetupFailed}
 }
 
-func rollbackTenantCreationErrors() []error {
-	return []error{ErrUpdateTenantFailed, ErrProvisionTenantDistributionAccountFailed, ErrTenantDataSetupFailed, ErrTenantSchemaFailed}
-}
-
-func rollbackTenantSchemaErrors() []error {
+func rollbackTenantCreationAndSchemaErrors() []error {
 	return []error{ErrUpdateTenantFailed, ErrProvisionTenantDistributionAccountFailed, ErrTenantDataSetupFailed, ErrTenantSchemaFailed}
 }
 
@@ -83,7 +79,7 @@ func (m *Manager) ProvisionNewTenant(
 	log.Ctx(ctx).Infof("adding tenant %s", name)
 	t, provisionErr := m.provisionTenant(ctx, pt)
 	if provisionErr != nil {
-		return nil, m.handleProvisioningError(ctx, name, provisionErr, t)
+		return nil, m.handleProvisioningError(ctx, provisionErr, t)
 	}
 
 	// Last step when no errors - fund tenant distribution account
@@ -96,7 +92,7 @@ func (m *Manager) ProvisionNewTenant(
 	return t, nil
 }
 
-func (m *Manager) handleProvisioningError(ctx context.Context, name string, err error, t *tenant.Tenant) error {
+func (m *Manager) handleProvisioningError(ctx context.Context, err error, t *tenant.Tenant) error {
 	// We don't want to roll back an existing tenant
 	if errors.Is(err, tenant.ErrDuplicatedTenantName) {
 		return err
@@ -123,22 +119,20 @@ func (m *Manager) handleProvisioningError(ctx context.Context, name string, err 
 		log.Ctx(ctx).Errorf("tenant data setup requires rollback")
 	}
 
-	if isErrorInArray(err, rollbackTenantCreationErrors()) {
-		deleteTenantErr := m.tenantManager.DeleteTenantByName(ctx, name)
+	if isErrorInArray(err, rollbackTenantCreationAndSchemaErrors()) {
+		deleteTenantErr := m.tenantManager.DeleteTenantByName(ctx, t.Name)
 		if deleteTenantErr != nil {
-			return fmt.Errorf("%w. [rollback error] %w", provisioningErr, deleteTenantErr)
+			return fmt.Errorf("%w. [rollback error]: %w", provisioningErr, deleteTenantErr)
 		}
 
-		log.Ctx(ctx).Errorf("tenant %s deleted", name)
-	}
+		log.Ctx(ctx).Errorf("tenant %s deleted", t.Name)
 
-	if isErrorInArray(err, rollbackTenantSchemaErrors()) {
-		dropTenantSchemaErr := m.tenantManager.DropTenantSchema(ctx, name)
+		dropTenantSchemaErr := m.tenantManager.DropTenantSchema(ctx, t.Name)
 		if dropTenantSchemaErr != nil {
-			return fmt.Errorf("%w. [rollback error] %w", provisioningErr, dropTenantSchemaErr)
+			return fmt.Errorf("%w. [rollback error]: %w", provisioningErr, dropTenantSchemaErr)
 		}
 
-		log.Ctx(ctx).Errorf("tenant schema sdp_%s dropped", name)
+		log.Ctx(ctx).Errorf("tenant schema sdp_%s dropped", t.Name)
 	}
 
 	return provisioningErr
