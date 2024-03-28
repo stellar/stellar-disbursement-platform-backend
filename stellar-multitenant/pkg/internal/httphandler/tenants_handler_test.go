@@ -631,28 +631,13 @@ func Test_TenantHandler_Patch(t *testing.T) {
 		runSuccessfulRequestPatchTest(t, r, ctx, dbConnectionPool, handler, reqBody, expectedRespBody)
 	})
 
-	t.Run("successfully updates Distribution Account of a tenant", func(t *testing.T) {
-		reqBody := `{"distribution_account": "GAAFQ2NZRRELBKLNLRZ5CT5RENLQGJPHDM6YY5UKV5UDAFNZ6KD6J4W7"}`
-		expectedRespBody := `
-			"email_sender_type": "DRY_RUN",
-			"sms_sender_type": "DRY_RUN",
-			"base_url": null,
-			"sdp_ui_base_url": null,
-			"status": "TENANT_CREATED",
-			"distribution_account": "GAAFQ2NZRRELBKLNLRZ5CT5RENLQGJPHDM6YY5UKV5UDAFNZ6KD6J4W7",
-		`
-
-		runSuccessfulRequestPatchTest(t, r, ctx, dbConnectionPool, handler, reqBody, expectedRespBody)
-	})
-
 	t.Run("successfully updates all fields of a tenant", func(t *testing.T) {
 		reqBody := `{
 			"email_sender_type": "AWS_EMAIL",
 			"sms_sender_type": "AWS_SMS",
 			"base_url": "http://valid.com",
 			"sdp_ui_base_url": "http://valid.com",
-			"status": "TENANT_ACTIVATED",
-			"distribution_account": "GAAFQ2NZRRELBKLNLRZ5CT5RENLQGJPHDM6YY5UKV5UDAFNZ6KD6J4W7"
+			"status": "TENANT_ACTIVATED"
 		}`
 
 		expectedRespBody := `
@@ -661,7 +646,7 @@ func Test_TenantHandler_Patch(t *testing.T) {
 			"base_url": "http://valid.com",
 			"sdp_ui_base_url": "http://valid.com",
 			"status": "TENANT_ACTIVATED",
-			"distribution_account": "GAAFQ2NZRRELBKLNLRZ5CT5RENLQGJPHDM6YY5UKV5UDAFNZ6KD6J4W7",
+			"distribution_account": "GCTNUNQVX7BNIP5AUWW2R4YC7G6R3JGUDNMGT7H62BGBUY4A4V6ROAAH",
 		`
 
 		runSuccessfulRequestPatchTest(t, r, ctx, dbConnectionPool, handler, reqBody, expectedRespBody)
