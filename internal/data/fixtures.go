@@ -15,10 +15,10 @@ import (
 
 	"github.com/lib/pq"
 	"github.com/stellar/go/keypair"
+	"github.com/stretchr/testify/require"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
-
-	"github.com/stretchr/testify/require"
 )
 
 const (

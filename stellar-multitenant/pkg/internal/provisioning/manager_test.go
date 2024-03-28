@@ -2,6 +2,7 @@ package provisioning
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 
@@ -285,9 +286,9 @@ func Test_Manager_RunMigrationsForTenant(t *testing.T) {
 	defer tenant2DB.Close()
 
 	p := NewManager(WithDatabase(tenant1DB))
-	err = p.RunMigrationsForTenant(ctx, tnt1, tenant1DSN, migrate.Up, 0, sdpmigrations.FS, db.StellarPerTenantSDPMigrationsTableName)
+	err = p.runMigrationsForTenant(ctx, tenant1DSN, migrate.Up, 0, sdpmigrations.FS, db.StellarPerTenantSDPMigrationsTableName)
 	require.NoError(t, err)
-	err = p.RunMigrationsForTenant(ctx, tnt1, tenant1DSN, migrate.Up, 0, authmigrations.FS, db.StellarPerTenantAuthMigrationsTableName)
+	err = p.runMigrationsForTenant(ctx, tenant1DSN, migrate.Up, 0, authmigrations.FS, db.StellarPerTenantAuthMigrationsTableName)
 	require.NoError(t, err)
 
 	tenant.TenantSchemaMatchTablesFixture(t, ctx, dbConnectionPool, tnt1SchemaName, getExpectedTablesAfterMigrationsApplied())
@@ -295,9 +296,9 @@ func Test_Manager_RunMigrationsForTenant(t *testing.T) {
 	// Asserting if the Tenant 2 DB Schema wasn't affected by Tenant 1 schema migrations
 	tenant.TenantSchemaMatchTablesFixture(t, ctx, dbConnectionPool, tnt2SchemaName, []string{})
 
-	err = p.RunMigrationsForTenant(ctx, tnt2, tenant2DSN, migrate.Up, 0, sdpmigrations.FS, db.StellarPerTenantSDPMigrationsTableName)
+	err = p.runMigrationsForTenant(ctx, tenant2DSN, migrate.Up, 0, sdpmigrations.FS, db.StellarPerTenantSDPMigrationsTableName)
 	require.NoError(t, err)
-	err = p.RunMigrationsForTenant(ctx, tnt2, tenant2DSN, migrate.Up, 0, authmigrations.FS, db.StellarPerTenantAuthMigrationsTableName)
+	err = p.runMigrationsForTenant(ctx, tenant2DSN, migrate.Up, 0, authmigrations.FS, db.StellarPerTenantAuthMigrationsTableName)
 	require.NoError(t, err)
 
 	tenant.TenantSchemaMatchTablesFixture(t, ctx, dbConnectionPool, tnt2SchemaName, getExpectedTablesAfterMigrationsApplied())
@@ -321,5 +322,127 @@ func getExpectedTablesAfterMigrationsApplied() []string {
 		"receivers",
 		"wallets",
 		"wallets_assets",
+	}
+}
+
+func Test_Manager_RollbackOnErrors(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+
+	messengerClientMock := message.MessengerClientMock{}
+	messengerClientMock.
+		On("SendMessage", mock.AnythingOfType("message.Message")).
+		Return(nil)
+
+	mHorizonClient := &horizonclient.MockClient{}
+	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
+	sigService, _, distAccSigClient, _, _ := signing.NewMockSignatureService(t)
+
+	submitterEngine := engine.SubmitterEngine{
+		HorizonClient:       mHorizonClient,
+		SignatureService:    sigService,
+		LedgerNumberTracker: mLedgerNumberTracker,
+		MaxBaseFee:          100 * txnbuild.MinBaseFee,
+	}
+
+	tenantManagerMock := tenant.TenantManagerMock{}
+	tenantManager := NewManager(
+		WithDatabase(dbConnectionPool),
+		WithMessengerClient(&messengerClientMock),
+		WithTenantManager(&tenantManagerMock),
+		WithSubmitterEngine(submitterEngine),
+		WithNativeAssetBootstrapAmount(tenant.MinTenantDistributionAccountAmount),
+	)
+
+	tenantName := "myorg1"
+	orgName := "My Org"
+	firstName := "First"
+	lastName := "Last"
+	email := "first.last@email.com"
+	uiBaseURL := "http://localhost:3000"
+	networkType := utils.TestnetNetworkType
+
+	tenantDSN, err := router.GetDSNForTenant(dbt.DSN, tenantName)
+
+	require.NoError(t, err)
+
+	testCases := []struct {
+		name             string
+		mockTntManagerFn func(tntManagerMock *tenant.TenantManagerMock)
+		expectedErr      error
+	}{
+		{
+			name: "return error when failing to add tenant",
+			mockTntManagerFn: func(tntManagerMock *tenant.TenantManagerMock) {
+				tntManagerMock.On("AddTenant", ctx, tenantName).Return(nil, errors.New("foobar")).Once()
+			},
+			expectedErr: ErrTenantCreationFailed,
+		},
+		{
+			name: "rollback and return error when failing to create tenant schema",
+			mockTntManagerFn: func(tntManagerMock *tenant.TenantManagerMock) {
+				tntManagerMock.On("AddTenant", ctx, tenantName).
+					Return(&tenant.Tenant{Name: tenantName, ID: "abc"}, nil).Once()
+				tntManagerMock.On("GetDSNForTenant", ctx, tenantName).Return(tenantDSN, nil).Once()
+				tntManagerMock.On("CreateTenantSchema", ctx, tenantName).Return(errors.New("foobar")).Once()
+
+				// expected rollback operations
+				tntManagerMock.On("DropTenantSchema", ctx, tenantName).Return(nil).Once()
+				tntManagerMock.On("DeleteTenantByName", ctx, tenantName).Return(nil).Once()
+			},
+			expectedErr: ErrTenantSchemaFailed,
+		},
+		{
+			name: "rollback and return error when failing to update tenant record",
+			mockTntManagerFn: func(tntManagerMock *tenant.TenantManagerMock) {
+				_, err = dbConnectionPool.ExecContext(ctx, fmt.Sprintf("CREATE SCHEMA %s", fmt.Sprintf("sdp_%s", tenantName)))
+				require.NoError(t, err)
+
+				tnt := tenant.Tenant{Name: tenantName, ID: "abc"}
+				tntManagerMock.On("AddTenant", ctx, tenantName).
+					Return(&tnt, nil).Once()
+				tntManagerMock.On("GetDSNForTenant", ctx, tenantName).Return(tenantDSN, nil).Once()
+				tntManagerMock.On("CreateTenantSchema", ctx, tenantName).Return(nil).Once()
+				distAcc := keypair.MustRandom().Address()
+				distAccSigClient.On("BatchInsert", ctx, 1).Return([]string{distAcc}, nil)
+
+				tStatus := tenant.ProvisionedTenantStatus
+				tnt.DistributionAccount = &distAcc
+				tntManagerMock.On("UpdateTenantConfig", ctx, &tenant.TenantUpdate{
+					ID:                  tnt.ID,
+					DistributionAccount: &distAcc,
+					SDPUIBaseURL:        &uiBaseURL,
+					Status:              &tStatus,
+				}).Return(&tnt, errors.New("foobar")).Once()
+
+				// expected rollback operations
+				tntManagerMock.On("DropTenantSchema", ctx, tenantName).Return(nil).Once()
+				tntManagerMock.On("DeleteTenantByName", ctx, tenantName).Return(nil).Once()
+				distAccSigClient.On("Delete", ctx, distAcc).Return(nil).Once()
+			},
+			expectedErr: ErrUpdateTenantFailed,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.mockTntManagerFn(&tenantManagerMock)
+
+			_, err := tenantManager.ProvisionNewTenant(ctx, tenantName, firstName, lastName, email, orgName, uiBaseURL, string(networkType))
+			if tc.expectedErr != nil {
+				require.Error(t, err)
+				assert.ErrorContains(t, err, tc.expectedErr.Error())
+			} else {
+				require.NoError(t, err)
+			}
+		})
+
+		tenantManagerMock.AssertExpectations(t)
 	}
 }

@@ -59,24 +59,6 @@ services:
     depends_on:
       kafka:
         condition: service_healthy
-  conduktor-platform:
-    extends:
-      file: docker-compose-sdp-anchor.yml
-      service: conduktor-platform
-    volumes:
-      - conduktor-platform-data:/var/conduktor
-    depends_on:
-      - db-conduktor
-  db-conduktor:
-    extends:
-      file: docker-compose-sdp-anchor.yml
-      service: db-conduktor
-    volumes:
-      - db-conduktor-data:/var/lib/postgresql/data
-  conduktor-monitoring:
-    extends:
-      file: docker-compose-sdp-anchor.yml
-      service: conduktor-monitoring
 
 volumes:
   postgres-db:
@@ -85,8 +67,3 @@ volumes:
     driver: local
   kafka-data:
     driver: local
-  db-conduktor-data:
-    driver: local
-  conduktor-platform-data:
-    driver: local
-

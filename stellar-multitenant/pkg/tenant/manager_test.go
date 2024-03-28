@@ -2,6 +2,7 @@ package tenant
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
@@ -229,4 +230,84 @@ func Test_Manager_GetTenantByIDOrName(t *testing.T) {
 		assert.ErrorIs(t, err, ErrTenantDoesNotExist)
 		assert.Nil(t, tntDB)
 	})
+}
+
+func Test_Manager_DeleteTenantByName(t *testing.T) {
+	dbt := dbtest.OpenWithAdminMigrationsOnly(t)
+	defer dbt.Close()
+
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+
+	m := NewManager(WithDatabase(dbConnectionPool))
+	tnt, err := m.AddTenant(ctx, "myorg1")
+	require.NoError(t, err)
+
+	t.Run("deletes tenant successfully", func(t *testing.T) {
+		err := m.DeleteTenantByName(ctx, tnt.Name)
+		require.NoError(t, err)
+
+		_, err = m.GetTenantByName(ctx, tnt.Name)
+		assert.ErrorIs(t, err, ErrTenantDoesNotExist)
+	})
+
+	t.Run("returns error when tenant name is empty", func(t *testing.T) {
+		err := m.DeleteTenantByName(ctx, "")
+		assert.ErrorIs(t, err, ErrEmptyTenantName)
+	})
+}
+
+func Test_Manager_DropTenantSchema(t *testing.T) {
+	dbt := dbtest.OpenWithAdminMigrationsOnly(t)
+	defer dbt.Close()
+
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+
+	m := NewManager(WithDatabase(dbConnectionPool))
+	orgName := "myorg1"
+	require.NoError(t, err)
+
+	err = m.DropTenantSchema(ctx, orgName)
+	require.NoError(t, err)
+
+	query := "SELECT exists(select schema_name FROM information_schema.schemata WHERE schema_name = $1)"
+	var exists bool
+	err = dbConnectionPool.GetContext(ctx, &exists, query, fmt.Sprintf("sdp_%s", orgName))
+	require.NoError(t, err)
+	assert.False(t, exists)
+}
+
+func Test_Manager_CreateTenantSchema(t *testing.T) {
+	dbt := dbtest.OpenWithAdminMigrationsOnly(t)
+	defer dbt.Close()
+
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+
+	m := NewManager(WithDatabase(dbConnectionPool))
+	orgName := "myorg1"
+	require.NoError(t, err)
+
+	err = m.CreateTenantSchema(ctx, orgName)
+	require.NoError(t, err)
+
+	query := "SELECT exists(select schema_name FROM information_schema.schemata WHERE schema_name = $1)"
+	var exists bool
+	err = dbConnectionPool.GetContext(ctx, &exists, query, fmt.Sprintf("sdp_%s", orgName))
+	require.NoError(t, err)
+	assert.True(t, exists)
+
+	// attempt to create the same schema again, which fails
+	err = m.CreateTenantSchema(ctx, orgName)
+	require.ErrorContains(t, err, fmt.Sprintf("creating schema for tenant sdp_%s: pq: schema \"sdp_%s\" already exists", orgName, orgName))
 }

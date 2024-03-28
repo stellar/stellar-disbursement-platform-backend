@@ -192,14 +192,14 @@ func EventBrokerConfigOptions(opts *EventBrokerOptions) []*config.ConfigOption {
 		},
 		{
 			Name:      "kafka-ssl-access-key",
-			Usage:     "The Kafka Access Key (keystore) on PEM format",
+			Usage:     "The Kafka Access Key (keystore) in PEM format",
 			OptType:   types.String,
 			ConfigKey: &opts.KafkaAccessKey,
 			Required:  false,
 		},
 		{
 			Name:      "kafka-ssl-access-certificate",
-			Usage:     "Kafka SSL Access Certificate on PEM format that matches with the Kafka Access Key",
+			Usage:     "Kafka SSL Access Certificate in PEM format that matches with the Kafka Access Key",
 			OptType:   types.String,
 			ConfigKey: &opts.KafkaAccessCertificate,
 			Required:  false,
