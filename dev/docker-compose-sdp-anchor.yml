@@ -222,6 +222,13 @@ services:
         kafka-topics.sh --create --if-not-exists --topic events.payment.payment_completed --bootstrap-server kafka:9092
         kafka-topics.sh --create --if-not-exists --topic events.payment.ready_to_pay --bootstrap-server kafka:9092
       "
+  
+  demo-wallet:
+    image: 
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./env-config-demo-wallet.js:/usr/share/nginx/html/settings/env-config.js
 
 volumes:
   postgres-db:
