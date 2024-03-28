@@ -72,13 +72,10 @@ This will spin up the following services:
 
 ### New Tenant Provisioning Process
 
-To provision new tenants, you must run `main.sh`, which will create `tenants=("redcorp" "bluecorp")`. 
+When you ran `main.sh` file, you've already created new tenants: `tenants=("redcorp" "bluecorp")`. 
+To add more tenants, simply append them separated by spaces to that variable like so: `tenants=("redcorp" "bluecorp" "greencorp")` and run `main.sh` again.
 
-```
-./main.sh
-```
-
-Be sure that both hosts are included in the host configuration file.
+Be sure that the added tenant hosts are included in the host configuration file.
 To check it, you can run the command `cat /etc/hosts`.
 To include them, you can run command `sudo nano /etc/hosts` and insert the lines below:
 
