@@ -65,7 +65,7 @@ This will spin up the following services:
 - `sdp-frontend`: SDP frontend service running on port `3000`.
 - `kafka`: Kafka service running on port `9092`.
 - `kafka-init`:  Initial workflow to exec into the Kafka container and create topics.
-- `db-conduktor`: Conduktor service.
+- `db-conduktor`: Database instance for the Conduktor service.
 - `conduktor-monitoring`: Conduktor Monitoring service integrated into the Conduktor Platform.
 - `conduktor-platform`: Provides solutions for Kafka management, testing, monitoring, data quality, security, and data governance.
 
