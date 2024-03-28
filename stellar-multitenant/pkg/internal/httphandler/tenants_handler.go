@@ -118,13 +118,12 @@ func (t TenantsHandler) Patch(w http.ResponseWriter, r *http.Request) {
 	tenantID := chi.URLParam(r, "id")
 
 	tnt, err := t.Manager.UpdateTenantConfig(ctx, &tenant.TenantUpdate{
-		ID:                  tenantID,
-		EmailSenderType:     reqBody.EmailSenderType,
-		SMSSenderType:       reqBody.SMSSenderType,
-		BaseURL:             reqBody.BaseURL,
-		SDPUIBaseURL:        reqBody.SDPUIBaseURL,
-		Status:              reqBody.Status,
-		DistributionAccount: reqBody.DistributionAccount,
+		ID:              tenantID,
+		EmailSenderType: reqBody.EmailSenderType,
+		SMSSenderType:   reqBody.SMSSenderType,
+		BaseURL:         reqBody.BaseURL,
+		SDPUIBaseURL:    reqBody.SDPUIBaseURL,
+		Status:          reqBody.Status,
 	})
 	if err != nil {
 		if errors.Is(tenant.ErrEmptyUpdateTenant, err) {

@@ -5,8 +5,6 @@ import (
 	"net/url"
 	"regexp"
 
-	"github.com/stellar/go/strkey"
-
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
@@ -14,25 +12,23 @@ import (
 var validTenantName *regexp.Regexp = regexp.MustCompile(`^[a-z-]+$`)
 
 type TenantRequest struct {
-	Name                string                 `json:"name"`
-	OwnerEmail          string                 `json:"owner_email"`
-	OwnerFirstName      string                 `json:"owner_first_name"`
-	OwnerLastName       string                 `json:"owner_last_name"`
-	OrganizationName    string                 `json:"organization_name"`
-	EmailSenderType     tenant.EmailSenderType `json:"email_sender_type"`
-	SMSSenderType       tenant.SMSSenderType   `json:"sms_sender_type"`
-	BaseURL             string                 `json:"base_url"`
-	SDPUIBaseURL        string                 `json:"sdp_ui_base_url"`
-	DistributionAccount string                 `json:"distribution_account"`
+	Name             string                 `json:"name"`
+	OwnerEmail       string                 `json:"owner_email"`
+	OwnerFirstName   string                 `json:"owner_first_name"`
+	OwnerLastName    string                 `json:"owner_last_name"`
+	OrganizationName string                 `json:"organization_name"`
+	EmailSenderType  tenant.EmailSenderType `json:"email_sender_type"`
+	SMSSenderType    tenant.SMSSenderType   `json:"sms_sender_type"`
+	BaseURL          string                 `json:"base_url"`
+	SDPUIBaseURL     string                 `json:"sdp_ui_base_url"`
 }
 
 type UpdateTenantRequest struct {
-	EmailSenderType     *tenant.EmailSenderType `json:"email_sender_type"`
-	SMSSenderType       *tenant.SMSSenderType   `json:"sms_sender_type"`
-	BaseURL             *string                 `json:"base_url"`
-	SDPUIBaseURL        *string                 `json:"sdp_ui_base_url"`
-	Status              *tenant.TenantStatus    `json:"status"`
-	DistributionAccount *string                 `json:"distribution_account"`
+	EmailSenderType *tenant.EmailSenderType `json:"email_sender_type"`
+	SMSSenderType   *tenant.SMSSenderType   `json:"sms_sender_type"`
+	BaseURL         *string                 `json:"base_url"`
+	SDPUIBaseURL    *string                 `json:"sdp_ui_base_url"`
+	Status          *tenant.TenantStatus    `json:"status"`
 }
 
 type TenantValidator struct {
@@ -68,10 +64,6 @@ func (tv *TenantValidator) ValidateCreateTenantRequest(reqBody *TenantRequest) *
 
 	if _, err = url.ParseRequestURI(reqBody.SDPUIBaseURL); err != nil {
 		tv.Check(false, "sdp_ui_base_url", "invalid SDP UI base URL value")
-	}
-
-	if reqBody.DistributionAccount != "" {
-		tv.Check(strkey.IsValidEd25519PublicKey(reqBody.DistributionAccount), "distribution_account", "invalid distribution account value")
 	}
 
 	if tv.HasErrors() {
@@ -128,10 +120,6 @@ func (tv *TenantValidator) ValidateUpdateTenantRequest(reqBody *UpdateTenantRequ
 
 	if reqBody.Status != nil {
 		tv.Check((*reqBody.Status).IsValid(), "status", "invalid status value")
-	}
-
-	if reqBody.DistributionAccount != nil {
-		tv.Check(strkey.IsValidEd25519PublicKey(*reqBody.DistributionAccount), "distribution_account", "invalid distribution account value")
 	}
 
 	if tv.HasErrors() {
