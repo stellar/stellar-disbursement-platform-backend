@@ -5,7 +5,8 @@
   - [Prerequisites](#prerequisites)
   - [Setup](#setup)
     - [Build Docker Containers](#build-docker-containers)
-    - [Create an Owner SDP User](#create-an-owner-sdp-user)
+    - [New Tenant Provisioning Process](#new-tenant-provisioning-process)
+    - [Setup Owner User Password for each tenant](#setup-owner-user-password-for-each-tenant)
   - [Disbursement](#disbursement)
     - [Create First Disbursement](#create-first-disbursement)
     - [Deposit Money](#deposit-money)
@@ -52,7 +53,7 @@ cp .env.example .env
 5. In order to start the sdp containers with monitoring services, run the following command:
 ```sh
 docker-compose -f docker-compose.yml -f docker-compose-monitoring.yml up
-````
+```
 
 This will spin up the following services:
 
@@ -62,17 +63,34 @@ This will spin up the following services:
 - `sdp-api`: SDP service running on port `8000`.
 - `sdp-tss`: Transaction Submission service.
 - `sdp-frontend`: SDP frontend service running on port `3000`.
+- `kafka`: Kafka service running on ports `9092`, `9094`(external).
+- `kafka-init`:  Initial workflow to exec into the Kafka container and create topics.
 
-### Create an Owner SDP User
+The following are optional monitoring services that can be started through `docker-compose-monitoring.yml` and are primarily used for monitoring Kafka: 
+- `db-conduktor`: Database instance for the Conduktor service. 
+- `conduktor-monitoring`: Conduktor Monitoring service integrated into the Conduktor Platform. 
+- `conduktor-platform`: Provides solutions for Kafka management, testing, monitoring, data quality, security, and data governance.
 
-Open a terminal for the `sdp-api` container and run the following command to create an owner user:
+### New Tenant Provisioning Process
 
-```sh
-docker exec -it sdp-api bash # Or use Docker Desktop to open terminal
-./stellar-disbursement-platform auth add-user owner@stellar.org joe yabuki --password --owner --roles owner
+When you ran `main.sh` file, you've already created new tenants: `tenants=("redcorp" "bluecorp")`. 
+To add more tenants, simply append them separated by spaces to that variable like so: `tenants=("redcorp" "bluecorp" "greencorp")` and run `main.sh` again.
+
+Be sure that the added tenant hosts are included in the host configuration file.
+To check it, you can run the command `cat /etc/hosts`.
+To include them, you can run command `sudo nano /etc/hosts` and insert the lines below:
+```
+127.0.0.1       bluecorp.sdp.local
+127.0.0.1       redcorp.sdp.local
 ```
 
-You will be prompted to enter a password for the user. Be sure to remember it as it will be required for future authentications.
+### Setup Owner User Password for each tenant
+
+Go through the forgot password flow to be able to login as an owner user.
+
+Go to Forgot Password page on `http://${tenant}.stellar.local:3000/forgot-password` and enter the tenant and owner email `john.doe@${tenant}.org`.
+
+A token will be generated, and it's possible to check it on `sdp-api` logs. This token will be needed to Reset Password on `http://${tenant}.stellar.local:3000/reset-password`.
 
 ## Disbursement
 
