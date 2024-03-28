@@ -34,7 +34,7 @@ stellar-disbursement-platform --help
 
 > [!WARNING]  
 > We're in the process of releasing a new multi-tenant version of the SDP. Develop branch currently contains the release candidate of multi-tenant SDP. 
-> For the stable single-tenant version, please use the latest `v1.x.x` tag.
+> For the stable single-tenant version, [please use the latest `v1.x.x` tag](https://github.com/stellar/stellar-disbursement-platform-backend/releases).
 
 ## Quick Start
 
@@ -236,8 +236,8 @@ In order to use Kafka, you need to set the following environment variables for S
   KAFKA_SECURITY_PROTOCOL: # possible values "PLAINTEXT", "SASL_SSL", "SASL_PLAINTEXT" or "SSL"
   KAFKA_SASL_USERNAME: # username for SASL authentication. Required if KAFKA_SECURITY_PROTOCOL is "SASL_SSL" or "SASL_PLAINTEXT"
   KAFKA_SASL_PASSWORD: # password for SASL authentication. Required if KAFKA_SECURITY_PROTOCOL is "SASL_SSL" or "SASL_PLAINTEXT"
-  KAFKA_SSL_ACCESS_KEY: # access key (keystore) in PEM format. Required if KAFKA_SECURITY_PROTOCOL is "SSL" or "SASL_SSL"
-  KAFKA_SSL_ACCESS_CERTIFICATE: # certificate in PEM format that matches the access key. Required if KAFKA_SECURITY_PROTOCOL is "SSL" or "SASL_SSL"
+  KAFKA_SSL_ACCESS_KEY: # access key (keystore) in PEM format. Required if KAFKA_SECURITY_PROTOCOL is "SSL"
+  KAFKA_SSL_ACCESS_CERTIFICATE: # certificate in PEM format that matches the access key. Required if KAFKA_SECURITY_PROTOCOL is "SSL"
 ```
 
 #### Background Jobs
@@ -251,7 +251,7 @@ We recommend Background Jobs for organizations that require a simpler setup and 
 * `send_receiver_wallets_sms_invitation_job`: This job is used to send disbursement invites to recipients. Its interval is configured through the `SCHEDULER_RECEIVER_INVITATION_JOB_SECONDS` environment variable.
 * `payment_to_submitter_job`: This job is used to submit payments from Core to the TSS. Its interval is configured through the `SCHEDULER_PAYMENT_JOB_SECONDS` environment variable.
 * `payment_from_submitter_job`: This job is used to notify Core that a payment has been completed. Its interval is configured through the `SCHEDULER_PAYMENT_JOB_SECONDS` environment variable.
-* `patch_anchor_platform_transactions_completion`: This job is used to patch transactions in Anchor Platform once payments reach a final state. Its interval is configured through the `SCHEDULER_PAYMENT_JOB_SECONDS` environment variable.
+* `patch_anchor_platform_transactions_completion`: This job is used to patch transactions in Anchor Platform once payments reach the final state 'SUCCESS' or 'FAILED'. Its interval is configured through the `SCHEDULER_PAYMENT_JOB_SECONDS` environment variable.
 
 **2. Configuration**
 
