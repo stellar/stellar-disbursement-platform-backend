@@ -6,7 +6,7 @@
   - [Setup](#setup)
     - [Build Docker Containers](#build-docker-containers)
     - [New Tenant Provisioning Process](#new-tenant-provisioning-process)
-    - [Create an Owner SDP User](#create-an-owner-sdp-user)
+    - [Setup Owner User Password for each tenant](#setup-owner-user-password-for-each-tenant)
   - [Disbursement](#disbursement)
     - [Create First Disbursement](#create-first-disbursement)
     - [Deposit Money](#deposit-money)
@@ -84,22 +84,13 @@ To include them, you can run command `sudo nano /etc/hosts` and insert the lines
 127.0.0.1       redcorp.sdp.local
 ```
 
-### Create an Owner SDP User
+### Setup Owner User Password for each tenant
 
-The `main.sh` file creates an owner user for each one of the tenants. If you want to create a new user, open a terminal for the `sdp-api` container and run the following command:
+Go through the forgot password flow to be able to login as an owner user.
 
-```sh
-docker exec -it sdp-api bash # Or use Docker Desktop to open terminal
-./stellar-disbursement-platform auth add-user <email>@<tenant>.org <name> <las_name> --password --roles <role> --tenant-id <tenant_id>
-```
-If new user is an owner, you must include `--owner` flag to this command.
+Go to Forgot Password page on `http://${tenant}.stellar.local:3000/forgot-password` and enter the tenant and owner email `john.doe@${tenant}.org`.
 
-You will also need to get the tenant ID from the database:
-```sql
-SELECT id, name FROM public.tenants
-```
-
-You will be prompted to enter a password for the user. Be sure to remember it as it will be required for future authentications.
+A token will be generated, and it's possible to check it on `sdp-api` logs. This token will be needed to Reset Password on `http://${tenant}.stellar.local:3000/reset-password`.
 
 ## Disbursement
 
