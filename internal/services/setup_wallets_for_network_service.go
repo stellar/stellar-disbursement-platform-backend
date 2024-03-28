@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/wallets"
-
 	"github.com/lib/pq"
 	"github.com/stellar/go/support/log"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/wallets"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
