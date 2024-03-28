@@ -5,6 +5,7 @@
   - [Prerequisites](#prerequisites)
   - [Setup](#setup)
     - [Build Docker Containers](#build-docker-containers)
+    - [New Tenant Provisioning Process](#new-tenant-provisioning-process)
     - [Create an Owner SDP User](#create-an-owner-sdp-user)
   - [Disbursement](#disbursement)
     - [Create First Disbursement](#create-first-disbursement)
@@ -62,6 +63,26 @@ This will spin up the following services:
 - `sdp-api`: SDP service running on port `8000`.
 - `sdp-tss`: Transaction Submission service.
 - `sdp-frontend`: SDP frontend service running on port `3000`.
+- `kafka`: Kafka service running on port `9092`.
+- `kafka-init`:  Initial workflow to exec into the Kafka container and create topics.
+- `db-conduktor`: Database instance for the Conduktor service.
+- `conduktor-monitoring`: Conduktor Monitoring service integrated into the Conduktor Platform.
+- `conduktor-platform`: Provides solutions for Kafka management, testing, monitoring, data quality, security, and data governance.
+
+
+### New Tenant Provisioning Process
+
+When you ran `main.sh` file, you've already created new tenants: `tenants=("redcorp" "bluecorp")`. 
+To add more tenants, simply append them separated by spaces to that variable like so: `tenants=("redcorp" "bluecorp" "greencorp")` and run `main.sh` again.
+
+Be sure that the added tenant hosts are included in the host configuration file.
+To check it, you can run the command `cat /etc/hosts`.
+To include them, you can run command `sudo nano /etc/hosts` and insert the lines below:
+
+```
+127.0.0.1       bluecorp.sdp.local
+127.0.0.1       redcorp.sdp.local
+```
 
 ### Create an Owner SDP User
 
@@ -69,7 +90,12 @@ Open a terminal for the `sdp-api` container and run the following command to cre
 
 ```sh
 docker exec -it sdp-api bash # Or use Docker Desktop to open terminal
-./stellar-disbursement-platform auth add-user owner@stellar.org joe yabuki --password --owner --roles owner
+./stellar-disbursement-platform auth add-user owner@stellar.org joe yabuki --password --owner --roles owner --tenant-id TENANT_ID
+```
+
+You will need to get the tenant ID from the database:
+```sql
+SELECT id, name FROM public.tenants
 ```
 
 You will be prompted to enter a password for the user. Be sure to remember it as it will be required for future authentications.
