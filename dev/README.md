@@ -53,7 +53,7 @@ cp .env.example .env
 5. In order to start the sdp containers with monitoring services, run the following command:
 ```sh
 docker-compose -f docker-compose.yml -f docker-compose-monitoring.yml up
-````
+```
 
 This will spin up the following services:
 
@@ -78,7 +78,6 @@ To add more tenants, simply append them separated by spaces to that variable lik
 Be sure that the added tenant hosts are included in the host configuration file.
 To check it, you can run the command `cat /etc/hosts`.
 To include them, you can run command `sudo nano /etc/hosts` and insert the lines below:
-
 ```
 127.0.0.1       bluecorp.sdp.local
 127.0.0.1       redcorp.sdp.local
@@ -86,14 +85,15 @@ To include them, you can run command `sudo nano /etc/hosts` and insert the lines
 
 ### Create an Owner SDP User
 
-Open a terminal for the `sdp-api` container and run the following command to create an owner user:
+The `main.sh` file creates an owner user for each one of the tenants. If you want to create a new user, open a terminal for the `sdp-api` container and run the following command to create a new user:
 
 ```sh
 docker exec -it sdp-api bash # Or use Docker Desktop to open terminal
-./stellar-disbursement-platform auth add-user owner@stellar.org joe yabuki --password --owner --roles owner --tenant-id TENANT_ID
+./stellar-disbursement-platform auth add-user <email>@<tenant>.org <name> <las_name> --password --roles <role> --tenant-id <tenant_id>
 ```
+If new user is an owner, you must include `--owner` flag to this command.
 
-You will need to get the tenant ID from the database:
+You will also need to get the tenant ID from the database:
 ```sql
 SELECT id, name FROM public.tenants
 ```
