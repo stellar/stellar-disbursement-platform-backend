@@ -94,7 +94,7 @@ docker exec -it sdp-api bash # Or use Docker Desktop to open terminal
 ```
 
 You will need to get the tenant ID from the database:
-```
+```sql
 SELECT id, name FROM public.tenants
 ```
 
