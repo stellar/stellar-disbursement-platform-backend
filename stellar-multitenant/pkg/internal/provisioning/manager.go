@@ -141,24 +141,24 @@ func (m *Manager) handleProvisioningError(ctx context.Context, err error, t *ten
 func (m *Manager) provisionTenant(ctx context.Context, pt *ProvisionTenant) (*tenant.Tenant, error) {
 	t, addTntErr := m.tenantManager.AddTenant(ctx, pt.name)
 	if addTntErr != nil {
-		return nil, fmt.Errorf("%w: adding tenant %s: %w", ErrTenantCreationFailed, pt.name, addTntErr)
+		return t, fmt.Errorf("%w: adding tenant %s: %w", ErrTenantCreationFailed, pt.name, addTntErr)
 	}
 
 	u, tenantSchemaFailedErr := m.createSchemaAndRunMigrations(ctx, pt.name)
 	if tenantSchemaFailedErr != nil {
-		return nil, fmt.Errorf("%w: %w", ErrTenantSchemaFailed, tenantSchemaFailedErr)
+		return t, fmt.Errorf("%w: %w", ErrTenantSchemaFailed, tenantSchemaFailedErr)
 	}
 
 	tenantDataSetupErr := m.setupTenantData(ctx, u, pt)
 	if tenantDataSetupErr != nil {
-		return nil, fmt.Errorf("%w: %w", ErrTenantDataSetupFailed, tenantDataSetupErr)
+		return t, fmt.Errorf("%w: %w", ErrTenantDataSetupFailed, tenantDataSetupErr)
 	}
 
 	// Provision distribution account for tenant if necessary
 	err := m.provisionDistributionAccount(ctx, t)
 	if err != nil {
 		// error already wrapped
-		return nil, err
+		return t, err
 	}
 
 	tenantStatus := tenant.ProvisionedTenantStatus

@@ -389,7 +389,7 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 			mockTntManagerFn: func(tntManagerMock *tenant.TenantManagerMock) {
 				tntManagerMock.On("AddTenant", ctx, tenantName).
 					Return(&tenant.Tenant{Name: tenantName, ID: "abc"}, nil).Once()
-				tntManagerMock.On("GetDSNForTenant", ctx, tenantName).Return("", nil).Once()
+				tntManagerMock.On("GetDSNForTenant", ctx, tenantName).Return(tenantDSN, nil).Once()
 				tntManagerMock.On("CreateTenantSchema", ctx, tenantName).Return(errors.New("foobar")).Once()
 
 				// expected rollback operations
@@ -404,7 +404,7 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 				_, err = dbConnectionPool.ExecContext(ctx, fmt.Sprintf("CREATE SCHEMA %s", fmt.Sprintf("sdp_%s", tenantName)))
 				require.NoError(t, err)
 
-				t := tenant.Tenant{Name: tenantName, ID: "abc"}
+				tnt := tenant.Tenant{Name: tenantName, ID: "abc"}
 				tntManagerMock.On("AddTenant", ctx, tenantName).
 					Return(&t, nil).Once()
 				tntManagerMock.On("GetDSNForTenant", ctx, tenantName).Return(tenantDSN, nil).Once()
@@ -413,9 +413,9 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 				distAccSigClient.On("BatchInsert", ctx, 1).Return([]string{distAcc}, nil)
 
 				tStatus := tenant.ProvisionedTenantStatus
-				t.DistributionAccount = &distAcc
+				tnt.DistributionAccount = &distAcc
 				tntManagerMock.On("UpdateTenantConfig", ctx, &tenant.TenantUpdate{
-					ID:                  t.ID,
+					ID:                  tnt.ID,
 					DistributionAccount: &distAcc,
 					SDPUIBaseURL:        &uiBaseURL,
 					Status:              &tStatus,
