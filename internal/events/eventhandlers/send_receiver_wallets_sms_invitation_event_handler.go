@@ -47,7 +47,6 @@ func NewSendReceiverWalletsSMSInvitationEventHandler(options SendReceiverWallets
 	s, err := services.NewSendReceiverWalletInviteService(
 		models,
 		options.MessengerClient,
-		options.AnchorPlatformBaseSepURL,
 		options.Sep10SigningPrivateKey,
 		options.MaxInvitationSMSResendAttempts,
 		options.CrashTrackerClient,

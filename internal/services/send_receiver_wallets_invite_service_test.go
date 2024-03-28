@@ -7,6 +7,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
+
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
@@ -21,29 +24,29 @@ import (
 
 func Test_GetSignedRegistrationLink_SchemelessDeepLink(t *testing.T) {
 	wdl := WalletDeepLink{
-		DeepLink:                 "api-dev.vibrantapp.com/sdp-dev",
-		AnchorPlatformBaseSepURL: "https://ap.localhost.com",
-		OrganizationName:         "FOO Org",
-		AssetCode:                "USDC",
-		AssetIssuer:              "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+		DeepLink:         "api-dev.vibrantapp.com/sdp-dev",
+		OrganizationName: "FOO Org",
+		AssetCode:        "USDC",
+		AssetIssuer:      "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+		TenantBaseURL:    "https://tenant.localhost.com",
 	}
 
 	registrationLink, err := wdl.GetSignedRegistrationLink("SCTOVDWM3A7KLTXXIV6YXL6QRVUIIG4HHHIDDKPR4JUB3DGDIKI5VGA2")
 	require.NoError(t, err)
-	wantRegistrationLink := "https://api-dev.vibrantapp.com/sdp-dev?asset=USDC-GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5&domain=ap.localhost.com&name=FOO+Org&signature=b40479041eea534a029c6aadf36f3bf6696aba9ff64684b558b9a412150b31fa8480ac7babcdef17cb445c1d105a761dbaa3599361c2d9e1d526fd4a5bac370a"
+	wantRegistrationLink := "https://api-dev.vibrantapp.com/sdp-dev?asset=USDC-GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5&domain=tenant.localhost.com&name=FOO+Org&signature=c6695a52ba8cc0ae2174023b116d4f726bc3d2c6d8d75a34336902ecbfa7eca07a059f44be503e3c4a71627aca66b05280b187e6614a0b130cf371328319ce0a"
 	require.Equal(t, wantRegistrationLink, registrationLink)
 
 	wdl = WalletDeepLink{
-		DeepLink:                 "https://www.beansapp.com/disbursements/registration?redirect=true",
-		AnchorPlatformBaseSepURL: "https://ap.localhost.com",
-		OrganizationName:         "FOO Org",
-		AssetCode:                "USDC",
-		AssetIssuer:              "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+		DeepLink:         "https://www.beansapp.com/disbursements/registration?redirect=true",
+		TenantBaseURL:    "https://tenant.localhost.com",
+		OrganizationName: "FOO Org",
+		AssetCode:        "USDC",
+		AssetIssuer:      "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
 	}
 
 	registrationLink, err = wdl.GetSignedRegistrationLink("SCTOVDWM3A7KLTXXIV6YXL6QRVUIIG4HHHIDDKPR4JUB3DGDIKI5VGA2")
 	require.NoError(t, err)
-	wantRegistrationLink = "https://www.beansapp.com/disbursements/registration?asset=USDC-GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5&domain=ap.localhost.com&name=FOO+Org&redirect=true&signature=8dd0a570bf5590a8e1a4983d413b5429ed504659543cf180fbf1b3ffbf0ea90083789a7c0c615d9cbddbe0c59f7555e6fd33fb5ca8f4685c821fc23ad7cd2f0d"
+	wantRegistrationLink = "https://www.beansapp.com/disbursements/registration?asset=USDC-GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5&domain=tenant.localhost.com&name=FOO+Org&redirect=true&signature=ab27744802e712716cc2c282cb08cb327f1ed75c334152879dd2b2d880eb0c5cf250deb8ae11510e1d4db00ee1f8c15bf940760464ae27a4140ecdc32304780d"
 	require.Equal(t, wantRegistrationLink, registrationLink)
 }
 
@@ -55,7 +58,10 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
 
-	anchorPlatformBaseSepURL := "http://localhost:8000"
+	tenantBaseURL := "http://localhost:8000"
+	tenantInfo := &tenant.Tenant{ID: uuid.NewString(), Name: "TestTenant", BaseURL: &tenantBaseURL}
+	ctx := tenant.SaveTenantInContext(context.Background(), tenantInfo)
+
 	stellarSecretKey := "SBUSPEKAZKLZSWHRSJ2HWDZUK6I3IVDUWA7JJZSGBLZ2WZIUJI7FPNB5"
 	messengerClientMock := &message.MessengerClientMock{}
 	messengerClientMock.
@@ -64,8 +70,6 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 		Maybe()
 
 	mockCrashTrackerClient := &crashtracker.MockCrashTrackerClient{}
-
-	ctx := context.Background()
 
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
@@ -96,15 +100,12 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 	})
 
 	t.Run("returns error when service has wrong setup", func(t *testing.T) {
-		_, err := NewSendReceiverWalletInviteService(models, nil, anchorPlatformBaseSepURL, stellarSecretKey, 3, mockCrashTrackerClient)
+		_, err := NewSendReceiverWalletInviteService(models, nil, stellarSecretKey, 3, mockCrashTrackerClient)
 		assert.EqualError(t, err, "invalid service setup: messenger client can't be nil")
-
-		_, err = NewSendReceiverWalletInviteService(models, messengerClientMock, "", stellarSecretKey, 3, mockCrashTrackerClient)
-		assert.EqualError(t, err, "invalid service setup: anchorPlatformBaseSepURL can't be empty")
 	})
 
 	t.Run("inserts the failed sent message", func(t *testing.T) {
-		s, err := NewSendReceiverWalletInviteService(models, messengerClientMock, anchorPlatformBaseSepURL, stellarSecretKey, 3, mockCrashTrackerClient)
+		s, err := NewSendReceiverWalletInviteService(models, messengerClientMock, stellarSecretKey, 3, mockCrashTrackerClient)
 		require.NoError(t, err)
 
 		data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
@@ -133,22 +134,22 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 		})
 
 		walletDeepLink1 := WalletDeepLink{
-			DeepLink:                 wallet1.DeepLinkSchema,
-			AnchorPlatformBaseSepURL: anchorPlatformBaseSepURL,
-			OrganizationName:         "MyCustomAid",
-			AssetCode:                asset1.Code,
-			AssetIssuer:              asset1.Issuer,
+			DeepLink:         wallet1.DeepLinkSchema,
+			TenantBaseURL:    tenantBaseURL,
+			OrganizationName: "MyCustomAid",
+			AssetCode:        asset1.Code,
+			AssetIssuer:      asset1.Issuer,
 		}
 		deepLink1, err := walletDeepLink1.GetSignedRegistrationLink(stellarSecretKey)
 		require.NoError(t, err)
 		contentWallet1 := fmt.Sprintf("You have a payment waiting for you from the MyCustomAid. Click %s to register.", deepLink1)
 
 		walletDeepLink2 := WalletDeepLink{
-			DeepLink:                 wallet2.DeepLinkSchema,
-			AnchorPlatformBaseSepURL: anchorPlatformBaseSepURL,
-			OrganizationName:         "MyCustomAid",
-			AssetCode:                asset2.Code,
-			AssetIssuer:              asset2.Issuer,
+			DeepLink:         wallet2.DeepLinkSchema,
+			TenantBaseURL:    tenantBaseURL,
+			OrganizationName: "MyCustomAid",
+			AssetCode:        asset2.Code,
+			AssetIssuer:      asset2.Issuer,
 		}
 		deepLink2, err := walletDeepLink2.GetSignedRegistrationLink(stellarSecretKey)
 		require.NoError(t, err)
@@ -244,7 +245,7 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 	})
 
 	t.Run("send invite successfully", func(t *testing.T) {
-		s, err := NewSendReceiverWalletInviteService(models, messengerClientMock, anchorPlatformBaseSepURL, stellarSecretKey, 3, mockCrashTrackerClient)
+		s, err := NewSendReceiverWalletInviteService(models, messengerClientMock, stellarSecretKey, 3, mockCrashTrackerClient)
 		require.NoError(t, err)
 
 		data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
@@ -273,22 +274,22 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 		})
 
 		walletDeepLink1 := WalletDeepLink{
-			DeepLink:                 wallet1.DeepLinkSchema,
-			AnchorPlatformBaseSepURL: anchorPlatformBaseSepURL,
-			OrganizationName:         "MyCustomAid",
-			AssetCode:                asset1.Code,
-			AssetIssuer:              asset1.Issuer,
+			DeepLink:         wallet1.DeepLinkSchema,
+			TenantBaseURL:    tenantBaseURL,
+			OrganizationName: "MyCustomAid",
+			AssetCode:        asset1.Code,
+			AssetIssuer:      asset1.Issuer,
 		}
 		deepLink1, err := walletDeepLink1.GetSignedRegistrationLink(stellarSecretKey)
 		require.NoError(t, err)
 		contentWallet1 := fmt.Sprintf("You have a payment waiting for you from the MyCustomAid. Click %s to register.", deepLink1)
 
 		walletDeepLink2 := WalletDeepLink{
-			DeepLink:                 wallet2.DeepLinkSchema,
-			AnchorPlatformBaseSepURL: anchorPlatformBaseSepURL,
-			OrganizationName:         "MyCustomAid",
-			AssetCode:                asset2.Code,
-			AssetIssuer:              asset2.Issuer,
+			DeepLink:         wallet2.DeepLinkSchema,
+			TenantBaseURL:    tenantBaseURL,
+			OrganizationName: "MyCustomAid",
+			AssetCode:        asset2.Code,
+			AssetIssuer:      asset2.Issuer,
 		}
 		deepLink2, err := walletDeepLink2.GetSignedRegistrationLink(stellarSecretKey)
 		require.NoError(t, err)
@@ -375,7 +376,7 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 	})
 
 	t.Run("send invite successfully with custom invite message", func(t *testing.T) {
-		s, err := NewSendReceiverWalletInviteService(models, messengerClientMock, anchorPlatformBaseSepURL, stellarSecretKey, 3, mockCrashTrackerClient)
+		s, err := NewSendReceiverWalletInviteService(models, messengerClientMock, stellarSecretKey, 3, mockCrashTrackerClient)
 		require.NoError(t, err)
 
 		data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
@@ -408,22 +409,22 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 		})
 
 		walletDeepLink1 := WalletDeepLink{
-			DeepLink:                 wallet1.DeepLinkSchema,
-			AnchorPlatformBaseSepURL: anchorPlatformBaseSepURL,
-			OrganizationName:         "MyCustomAid",
-			AssetCode:                asset1.Code,
-			AssetIssuer:              asset1.Issuer,
+			DeepLink:         wallet1.DeepLinkSchema,
+			TenantBaseURL:    tenantBaseURL,
+			OrganizationName: "MyCustomAid",
+			AssetCode:        asset1.Code,
+			AssetIssuer:      asset1.Issuer,
 		}
 		deepLink1, err := walletDeepLink1.GetSignedRegistrationLink(stellarSecretKey)
 		require.NoError(t, err)
 		contentWallet1 := fmt.Sprintf("%s %s", customInvitationMessage, deepLink1)
 
 		walletDeepLink2 := WalletDeepLink{
-			DeepLink:                 wallet2.DeepLinkSchema,
-			AnchorPlatformBaseSepURL: anchorPlatformBaseSepURL,
-			OrganizationName:         "MyCustomAid",
-			AssetCode:                asset2.Code,
-			AssetIssuer:              asset2.Issuer,
+			DeepLink:         wallet2.DeepLinkSchema,
+			TenantBaseURL:    tenantBaseURL,
+			OrganizationName: "MyCustomAid",
+			AssetCode:        asset2.Code,
+			AssetIssuer:      asset2.Issuer,
 		}
 		deepLink2, err := walletDeepLink2.GetSignedRegistrationLink(stellarSecretKey)
 		require.NoError(t, err)
@@ -510,7 +511,7 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 	})
 
 	t.Run("doesn't resend the invitation SMS when organization's SMS Resend Interval is nil and the invitation was already sent", func(t *testing.T) {
-		s, err := NewSendReceiverWalletInviteService(models, messengerClientMock, anchorPlatformBaseSepURL, stellarSecretKey, 3, mockCrashTrackerClient)
+		s, err := NewSendReceiverWalletInviteService(models, messengerClientMock, stellarSecretKey, 3, mockCrashTrackerClient)
 		require.NoError(t, err)
 
 		data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
@@ -555,7 +556,7 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 	})
 
 	t.Run("doesn't resend the invitation SMS when receiver reached the maximum number of resend attempts", func(t *testing.T) {
-		s, err := NewSendReceiverWalletInviteService(models, messengerClientMock, anchorPlatformBaseSepURL, stellarSecretKey, 3, mockCrashTrackerClient)
+		s, err := NewSendReceiverWalletInviteService(models, messengerClientMock, stellarSecretKey, 3, mockCrashTrackerClient)
 		require.NoError(t, err)
 
 		data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
@@ -635,7 +636,7 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 	})
 
 	t.Run("doesn't resend invitation SMS when receiver is not in the resend period", func(t *testing.T) {
-		s, err := NewSendReceiverWalletInviteService(models, messengerClientMock, anchorPlatformBaseSepURL, stellarSecretKey, 3, mockCrashTrackerClient)
+		s, err := NewSendReceiverWalletInviteService(models, messengerClientMock, stellarSecretKey, 3, mockCrashTrackerClient)
 		require.NoError(t, err)
 
 		data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
@@ -682,7 +683,7 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 	})
 
 	t.Run("successfully resend the invitation SMS", func(t *testing.T) {
-		s, err := NewSendReceiverWalletInviteService(models, messengerClientMock, anchorPlatformBaseSepURL, stellarSecretKey, 3, mockCrashTrackerClient)
+		s, err := NewSendReceiverWalletInviteService(models, messengerClientMock, stellarSecretKey, 3, mockCrashTrackerClient)
 		require.NoError(t, err)
 
 		data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
@@ -712,11 +713,11 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 		require.NoError(t, err)
 
 		walletDeepLink1 := WalletDeepLink{
-			DeepLink:                 wallet1.DeepLinkSchema,
-			AnchorPlatformBaseSepURL: anchorPlatformBaseSepURL,
-			OrganizationName:         "MyCustomAid",
-			AssetCode:                asset1.Code,
-			AssetIssuer:              asset1.Issuer,
+			DeepLink:         wallet1.DeepLinkSchema,
+			TenantBaseURL:    tenantBaseURL,
+			OrganizationName: "MyCustomAid",
+			AssetCode:        asset1.Code,
+			AssetIssuer:      asset1.Issuer,
 		}
 		deepLink1, err := walletDeepLink1.GetSignedRegistrationLink(stellarSecretKey)
 		require.NoError(t, err)
@@ -790,7 +791,7 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 			SMSRegistrationMessageTemplate: "SMS Registration Message template test disbursement 4:",
 		})
 
-		s, err := NewSendReceiverWalletInviteService(models, messengerClientMock, anchorPlatformBaseSepURL, stellarSecretKey, 3, mockCrashTrackerClient)
+		s, err := NewSendReceiverWalletInviteService(models, messengerClientMock, stellarSecretKey, 3, mockCrashTrackerClient)
 		require.NoError(t, err)
 
 		data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
@@ -819,22 +820,22 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 		})
 
 		walletDeepLink1 := WalletDeepLink{
-			DeepLink:                 wallet1.DeepLinkSchema,
-			AnchorPlatformBaseSepURL: anchorPlatformBaseSepURL,
-			OrganizationName:         "MyCustomAid",
-			AssetCode:                asset1.Code,
-			AssetIssuer:              asset1.Issuer,
+			DeepLink:         wallet1.DeepLinkSchema,
+			TenantBaseURL:    tenantBaseURL,
+			OrganizationName: "MyCustomAid",
+			AssetCode:        asset1.Code,
+			AssetIssuer:      asset1.Issuer,
 		}
 		deepLink1, err := walletDeepLink1.GetSignedRegistrationLink(stellarSecretKey)
 		require.NoError(t, err)
 		contentDisbursement3 := fmt.Sprintf("%s %s", disbursement3.SMSRegistrationMessageTemplate, deepLink1)
 
 		walletDeepLink2 := WalletDeepLink{
-			DeepLink:                 wallet2.DeepLinkSchema,
-			AnchorPlatformBaseSepURL: anchorPlatformBaseSepURL,
-			OrganizationName:         "MyCustomAid",
-			AssetCode:                asset2.Code,
-			AssetIssuer:              asset2.Issuer,
+			DeepLink:         wallet2.DeepLinkSchema,
+			TenantBaseURL:    tenantBaseURL,
+			OrganizationName: "MyCustomAid",
+			AssetCode:        asset2.Code,
+			AssetIssuer:      asset2.Issuer,
 		}
 		deepLink2, err := walletDeepLink2.GetSignedRegistrationLink(stellarSecretKey)
 		require.NoError(t, err)
@@ -929,7 +930,7 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 			SMSRegistrationMessageTemplate: "SMS Registration Message template test disbursement:",
 		})
 
-		s, err := NewSendReceiverWalletInviteService(models, messengerClientMock, anchorPlatformBaseSepURL, stellarSecretKey, 3, mockCrashTrackerClient)
+		s, err := NewSendReceiverWalletInviteService(models, messengerClientMock, stellarSecretKey, 3, mockCrashTrackerClient)
 		require.NoError(t, err)
 
 		data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
@@ -959,11 +960,11 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 		require.NoError(t, err)
 
 		walletDeepLink1 := WalletDeepLink{
-			DeepLink:                 wallet1.DeepLinkSchema,
-			AnchorPlatformBaseSepURL: anchorPlatformBaseSepURL,
-			OrganizationName:         "MyCustomAid",
-			AssetCode:                asset1.Code,
-			AssetIssuer:              asset1.Issuer,
+			DeepLink:         wallet1.DeepLinkSchema,
+			TenantBaseURL:    tenantBaseURL,
+			OrganizationName: "MyCustomAid",
+			AssetCode:        asset1.Code,
+			AssetIssuer:      asset1.Issuer,
 		}
 		deepLink1, err := walletDeepLink1.GetSignedRegistrationLink(stellarSecretKey)
 		require.NoError(t, err)
@@ -1412,7 +1413,7 @@ func Test_WalletDeepLink_TomlFileDomain(t *testing.T) {
 		{
 			link:       "",
 			wantResult: "",
-			wantErr:    fmt.Errorf("AnchorPlatformBaseSepURL can't be empty"),
+			wantErr:    fmt.Errorf("base URL for tenant can't be empty"),
 		},
 		{
 			link:       "test.com",
@@ -1429,7 +1430,7 @@ func Test_WalletDeepLink_TomlFileDomain(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.link, func(t *testing.T) {
 			wdl := WalletDeepLink{
-				AnchorPlatformBaseSepURL: tc.link,
+				TenantBaseURL: tc.link,
 			}
 
 			result, err := wdl.TomlFileDomain()
@@ -1453,16 +1454,16 @@ func Test_WalletDeepLink_validate(t *testing.T) {
 	// toml file domain can't be empty
 	wdl.DeepLink = "wallet://sdp"
 	err = wdl.validate()
-	require.EqualError(t, err, "toml file domain can't be empty")
+	require.EqualError(t, err, "tenant base URL can't be empty")
 
 	// toml file domain can't be empty (different setup)
 	wdl.DeepLink = "wallet://"
 	wdl.Route = "sdp"
 	err = wdl.validate()
-	require.EqualError(t, err, "toml file domain can't be empty")
+	require.EqualError(t, err, "tenant base URL can't be empty")
 
 	// organization name can't be empty
-	wdl.AnchorPlatformBaseSepURL = "foo.bar"
+	wdl.TenantBaseURL = "foo.bar"
 	err = wdl.validate()
 	require.EqualError(t, err, "organization name can't be empty")
 
@@ -1507,33 +1508,33 @@ func Test_WalletDeepLink_GetUnsignedRegistrationLink(t *testing.T) {
 		{
 			name: "🎉 successful for non-native assets",
 			walletDeepLink: WalletDeepLink{
-				DeepLink:                 "wallet://",
-				Route:                    "sdp", // route added separated from the deep link
-				AnchorPlatformBaseSepURL: "foo.bar",
-				OrganizationName:         "Foo Bar Org",
-				AssetCode:                "FOO",
-				AssetIssuer:              "GCKGCKZ2PFSCRQXREJMTHAHDMOZQLS2R4V5LZ6VLU53HONH5FI6ACBSX",
+				DeepLink:         "wallet://",
+				Route:            "sdp", // route added separated from the deep link
+				TenantBaseURL:    "foo.bar",
+				OrganizationName: "Foo Bar Org",
+				AssetCode:        "FOO",
+				AssetIssuer:      "GCKGCKZ2PFSCRQXREJMTHAHDMOZQLS2R4V5LZ6VLU53HONH5FI6ACBSX",
 			},
 			wantResult: "wallet://sdp?asset=FOO-GCKGCKZ2PFSCRQXREJMTHAHDMOZQLS2R4V5LZ6VLU53HONH5FI6ACBSX&domain=foo.bar&name=Foo+Bar+Org",
 		},
 		{
 			name: "🎉 successful for native (XLM) assets",
 			walletDeepLink: WalletDeepLink{
-				DeepLink:                 "wallet://sdp", // route added directly to the deep link
-				AnchorPlatformBaseSepURL: "foo.bar",
-				OrganizationName:         "Foo Bar Org",
-				AssetCode:                "XLM",
+				DeepLink:         "wallet://sdp", // route added directly to the deep link
+				TenantBaseURL:    "foo.bar",
+				OrganizationName: "Foo Bar Org",
+				AssetCode:        "XLM",
 			},
 			wantResult: "wallet://sdp?asset=native&domain=foo.bar&name=Foo+Bar+Org",
 		},
 		{
 			name: "🎉 successful for deeplink with query params",
 			walletDeepLink: WalletDeepLink{
-				DeepLink:                 "wallet://sdp?custom=true",
-				AnchorPlatformBaseSepURL: "foo.bar",
-				OrganizationName:         "Foo Bar Org",
-				AssetCode:                "FOO",
-				AssetIssuer:              "GCKGCKZ2PFSCRQXREJMTHAHDMOZQLS2R4V5LZ6VLU53HONH5FI6ACBSX",
+				DeepLink:         "wallet://sdp?custom=true",
+				TenantBaseURL:    "foo.bar",
+				OrganizationName: "Foo Bar Org",
+				AssetCode:        "FOO",
+				AssetIssuer:      "GCKGCKZ2PFSCRQXREJMTHAHDMOZQLS2R4V5LZ6VLU53HONH5FI6ACBSX",
 			},
 			wantResult: "wallet://sdp?asset=FOO-GCKGCKZ2PFSCRQXREJMTHAHDMOZQLS2R4V5LZ6VLU53HONH5FI6ACBSX&custom=true&domain=foo.bar&name=Foo+Bar+Org",
 		},
@@ -1566,12 +1567,12 @@ func Test_WalletDeepLink_GetSignedRegistrationLink(t *testing.T) {
 
 	t.Run("fails if the private key is invalid", func(t *testing.T) {
 		wdl := WalletDeepLink{
-			DeepLink:                 "wallet://",
-			Route:                    "sdp",
-			AnchorPlatformBaseSepURL: "foo.bar",
-			OrganizationName:         "Foo Bar Org",
-			AssetCode:                "FOO",
-			AssetIssuer:              "GCKGCKZ2PFSCRQXREJMTHAHDMOZQLS2R4V5LZ6VLU53HONH5FI6ACBSX",
+			DeepLink:         "wallet://",
+			Route:            "sdp",
+			TenantBaseURL:    "foo.bar",
+			OrganizationName: "Foo Bar Org",
+			AssetCode:        "FOO",
+			AssetIssuer:      "GCKGCKZ2PFSCRQXREJMTHAHDMOZQLS2R4V5LZ6VLU53HONH5FI6ACBSX",
 		}
 
 		actual, err := wdl.GetSignedRegistrationLink("invalid-secret-key")
@@ -1581,11 +1582,11 @@ func Test_WalletDeepLink_GetSignedRegistrationLink(t *testing.T) {
 
 	t.Run("Successful for non-native assets 🎉", func(t *testing.T) {
 		wdl := WalletDeepLink{
-			DeepLink:                 "wallet://sdp",
-			AnchorPlatformBaseSepURL: "foo.bar",
-			OrganizationName:         "Foo Bar Org",
-			AssetCode:                "FOO",
-			AssetIssuer:              "GCKGCKZ2PFSCRQXREJMTHAHDMOZQLS2R4V5LZ6VLU53HONH5FI6ACBSX",
+			DeepLink:         "wallet://sdp",
+			TenantBaseURL:    "foo.bar",
+			OrganizationName: "Foo Bar Org",
+			AssetCode:        "FOO",
+			AssetIssuer:      "GCKGCKZ2PFSCRQXREJMTHAHDMOZQLS2R4V5LZ6VLU53HONH5FI6ACBSX",
 		}
 
 		expected := "wallet://sdp?asset=FOO-GCKGCKZ2PFSCRQXREJMTHAHDMOZQLS2R4V5LZ6VLU53HONH5FI6ACBSX&domain=foo.bar&name=Foo+Bar+Org&signature=361b0c0e6094dc35e0baa8ccae99bac1bdddc099e8bf6f68f4045e15b99c96d1a39c5343bb010a0b34f29a3490d233d43e3e2f5e537cf52d85f62deb75b2150d"
@@ -1600,11 +1601,11 @@ func Test_WalletDeepLink_GetSignedRegistrationLink(t *testing.T) {
 
 	t.Run("Successful for native (XLM) assets 🎉", func(t *testing.T) {
 		wdl := WalletDeepLink{
-			DeepLink:                 "wallet://",
-			Route:                    "sdp",
-			AnchorPlatformBaseSepURL: "foo.bar",
-			OrganizationName:         "Foo Bar Org",
-			AssetCode:                "XLM",
+			DeepLink:         "wallet://",
+			Route:            "sdp",
+			TenantBaseURL:    "foo.bar",
+			OrganizationName: "Foo Bar Org",
+			AssetCode:        "XLM",
 		}
 
 		expected := "wallet://sdp?asset=native&domain=foo.bar&name=Foo+Bar+Org&signature=972a3012e18f107e0bf951f5acc757df953c3bbbe668a2d2652bf2445a759132f6af303df063f69d1a862b7ab419813554b201837795648f6175c9d9d72cf60f"
@@ -1617,12 +1618,12 @@ func Test_WalletDeepLink_GetSignedRegistrationLink(t *testing.T) {
 		require.True(t, isValid)
 	})
 
-	t.Run("Successful for native (XLM) assets and AnchorPlatformBaseSepURL with https:// schema 🎉", func(t *testing.T) {
+	t.Run("Successful for native (XLM) assets and TenantBaseURL with https:// schema 🎉", func(t *testing.T) {
 		wdl := WalletDeepLink{
-			DeepLink:                 "wallet://sdp",
-			AnchorPlatformBaseSepURL: "https://foo.bar",
-			OrganizationName:         "Foo Bar Org",
-			AssetCode:                "XLM",
+			DeepLink:         "wallet://sdp",
+			TenantBaseURL:    "https://foo.bar",
+			OrganizationName: "Foo Bar Org",
+			AssetCode:        "XLM",
 		}
 
 		expected := "wallet://sdp?asset=native&domain=foo.bar&name=Foo+Bar+Org&signature=972a3012e18f107e0bf951f5acc757df953c3bbbe668a2d2652bf2445a759132f6af303df063f69d1a862b7ab419813554b201837795648f6175c9d9d72cf60f"

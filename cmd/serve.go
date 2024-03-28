@@ -98,7 +98,6 @@ func (s *ServerService) GetSchedulerJobRegistrars(
 			scheduler.WithPaymentFromSubmitterJobOption(schedulerOptions.PaymentJobIntervalSeconds, models, tssDBConnectionPool),
 			scheduler.WithPatchAnchorPlatformTransactionsCompletionJobOption(schedulerOptions.PaymentJobIntervalSeconds, apAPIService, models),
 			scheduler.WithSendReceiverWalletsSMSInvitationJobOption(jobs.SendReceiverWalletsSMSInvitationJobOptions{
-				AnchorPlatformBaseSepURL:       serveOpts.AnchorPlatformBaseSepURL,
 				Models:                         models,
 				MessengerClient:                serveOpts.SMSMessengerClient,
 				MaxInvitationSMSResendAttempts: int64(serveOpts.MaxInvitationSMSResendAttempts),
