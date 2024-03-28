@@ -32,6 +32,10 @@ make go-install
 stellar-disbursement-platform --help
 ```
 
+> [!WARNING]  
+> We're in the process of releasing a new multi-tenant version of the SDP. Develop branch currently contains the release candidate of multi-tenant SDP. 
+> For the stable single-tenant version, please use the latest `v1.x.x` tag.
+
 ## Quick Start
 
 To quickly test the SDP using preconfigured values, see the [Quick Start Guide](./dev/README.md).
@@ -80,7 +84,7 @@ To enhance security, disbursement responsibilities should be distributed among m
 
 ## Architecture
 
-![high_level_architecture](./docs/images/high_level_architecture.png)
+![high_level_architecture](./docs/images/multi-tenant-architecture.png)
 
 The [SDP Dashboard][sdp-dashboard] and [Anchor Platform] components are separate projects that must be installed and configured alongside the services included in this project.
 
@@ -93,6 +97,10 @@ The SDP Core service include several components started using a single command.
 ```sh
 stellar-disbursement-platform serve --help
 ```
+
+#### Admin API 
+
+The Admin API is the component responsible for managing tenants of the SDP. It runs by default on port 8003 and is used to provision new tenants and manage existing tenants. 
 
 #### Dashboard API
 
@@ -141,34 +149,119 @@ In future iterations of the project, the Transaction Submission Service will pro
 
 To manage the migrations of the database, use the `db` subcommand.
 
+#### 
+
 ```sh
 stellar-disbursement-platform db --help
 ```
 
-Note that there is an `auth` subcommand that has its own `migrate` sub-subcommand. Operators of the SDP will need to ensure migrations for both the core and auth components are run.
+#### Admin Tables
+`` ``
+
+**Migration CMD**
 
 ```sh
-stellar-disbursement-platform db migrate up
-stellar-disbursement-platform db auth migrate up
+stellar-disbursement-platform db admin migrate up
 ```
+
+The tables below are used to manage tenants and their configurations. 
+
+![admin schema](./docs/images/admin_db_schema.png)
 
 #### Core Tables
 
+**Migration CMD**
+
+The following command will migrate the tables used by the Core service for all tenants.
+
+```sh
+stellar-disbursement-platform db auth migrate up --all
+stellar-disbursement-platform db sdp migrate up --all
+```
+
+It is also possible to migrate the tables for a specific tenant by using the `--tenant-id` flag.
+
+```sh
+stellar-disbursement-platform db auth migrate up --tenant-id=tenant_id
+stellar-disbursement-platform db sdp migrate up --tenant-id=tenant_id
+```
+
 The tables below are used to facilitate disbursements.
 
-![core schema](./docs/images/core_schema.png)
+![core schema](./docs/images/core_db_schema.png)
 
 The tables below are used to manage user roles and organizational information.
 
-![admin schema](./docs/images/admin_schema.png)
+![admin schema](./docs/images/auth_db_schema.png)
 
 #### TSS Tables
 
+**Migration CMD**
+
+```sh
+stellar-disbursement-platform db tss migrate up
+```
+
 The tables below are shared by the transaction submission service and core service.
 
-![tss schema](./docs/images/tss_schema.png)
+![tss schema](./docs/images/tss_db_schema.png)
 
 Note that the `submitter_transactions` table is used by the TSS and will be managed by the service when moved to its own project.
+
+### Event Brokers & Background jobs
+
+The SDP can use either an Event Broker or Background jobs to handle asynchronous tasks. The choice depends on the requirements of the organization using the SDP.
+Currently, the SDP only supports Kafka as an Event Broker even though it has been designed to support other brokers through the use of interfaces.
+
+> [!NOTE]  
+> In order to avoid concurrency issues, the SDP only supports one Event Broker or Background Jobs at a time.
+
+#### Kafka
+We recommend Kafka for organizations that require high throughput and low latency. Organizations that plan on hosting multiple tenants on the SDP should consider using Kafka.
+
+**1. Topics**
+
+* `events.receiver-wallets.new_invitation`: This topic is used to send disbursement invites to recipients. *[Producer: Core, Consumer: Core]*
+* `events.payment.ready_to_pay`: This topic is used to submit payments from the Core to the TSS. *[Producer: Core, Consumer: TSS]*
+* `events.payment.payment_completed`: This topic is used to notify the Core that a payment has been completed. *[Producer: TSS, Consumer: Core]*
+
+**2. Configuration**
+
+In order to use Kafka, you need to set the following environment variables for SDP and TSS. 
+
+```sh
+  EVENT_BROKER_TYPE: "KAFKA"
+  BROKER_URLS: # comma separated list of broker urls
+  CONSUMER_GROUP_ID: # consumer group id
+  KAFKA_SECURITY_PROTOCOL: # possible values "PLAINTEXT", "SASL_SSL", "SASL_PLAINTEXT" or "SSL"
+  KAFKA_SASL_USERNAME: # username for SASL authentication. Required if KAFKA_SECURITY_PROTOCOL is "SASL_SSL" or "SASL_PLAINTEXT"
+  KAFKA_SASL_PASSWORD: # password for SASL authentication. Required if KAFKA_SECURITY_PROTOCOL is "SASL_SSL" or "SASL_PLAINTEXT"
+  KAFKA_SSL_ACCESS_KEY: # access key (keystore) in PEM format. Required if KAFKA_SECURITY_PROTOCOL is "SSL" or "SASL_SSL"
+  KAFKA_SSL_ACCESS_CERTIFICATE: # certificate in PEM format that matches the access key. Required if KAFKA_SECURITY_PROTOCOL is "SSL" or "SASL_SSL"
+```
+
+#### Background Jobs
+We recommend Background Jobs for organizations that require a simpler setup and do not need high throughput or low latency. Organizations that plan on hosting a single tenant on the SDP should consider using Background Jobs.
+
+**1. Jobs**
+
+> [!NOTE]  
+> Certain jobs are not listed here because they cannot be configured and are necessary to the functioning of the SDP. 
+
+* `send_receiver_wallets_sms_invitation_job`: This job is used to send disbursement invites to recipients. Its interval is configured through the `SCHEDULER_RECEIVER_INVITATION_JOB_SECONDS` environment variable.
+* `payment_to_submitter_job`: This job is used to submit payments from Core to the TSS. Its interval is configured through the `SCHEDULER_PAYMENT_JOB_SECONDS` environment variable.
+* `payment_from_submitter_job`: This job is used to notify Core that a payment has been completed. Its interval is configured through the `SCHEDULER_PAYMENT_JOB_SECONDS` environment variable.
+* `patch_anchor_platform_transactions_completion`: This job is used to patch transactions in Anchor Platform once payments reach a final state. Its interval is configured through the `SCHEDULER_PAYMENT_JOB_SECONDS` environment variable.
+
+**2. Configuration**
+
+In order to use Background Jobs, we need to set the following environment variable for Core. 
+
+```sh
+  ENABLE_SCHEDULER: "true"
+  SCHEDULER_RECEIVER_INVITATION_JOB_SECONDS: # interval in seconds
+  SCHEDULER_PAYMENT_JOB_SECONDS: # interval in seconds
+```
 
 ## Wallets
 
