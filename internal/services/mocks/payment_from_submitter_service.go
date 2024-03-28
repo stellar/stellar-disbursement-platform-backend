@@ -19,7 +19,7 @@ func (s *MockPaymentFromSubmitterService) SyncTransaction(ctx context.Context, t
 	return args.Error(0)
 }
 
-func (s *MockPaymentFromSubmitterService) SyncBatchTransactions(ctx context.Context, batchSize int) error {
-	args := s.Called(ctx, batchSize)
+func (s *MockPaymentFromSubmitterService) SyncBatchTransactions(ctx context.Context, batchSize int, tenantID string) error {
+	args := s.Called(ctx, batchSize, tenantID)
 	return args.Error(0)
 }

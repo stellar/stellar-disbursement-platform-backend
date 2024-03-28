@@ -12,7 +12,6 @@ import (
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
-	"github.com/stretchr/testify/mock"
 )
 
 var (
@@ -123,43 +122,16 @@ func Consume(ctx context.Context, consumer Consumer, crashTracker crashtracker.C
 	}
 }
 
-type MockConsumer struct {
-	mock.Mock
+// NoopProducer is a producer used to log messages instead of sending them to a real producer.
+type NoopProducer struct{}
+
+func (p NoopProducer) WriteMessages(ctx context.Context, messages ...Message) error {
+	log.Ctx(ctx).Debugf("NoopProducer: These messages will be discarded and handled by the scheduler: %+v", messages)
+	return nil
 }
 
-var _ Consumer = new(MockConsumer)
-
-func (c *MockConsumer) ReadMessage(ctx context.Context) error {
-	args := c.Called(ctx)
-	return args.Error(0)
+func (p NoopProducer) Close() error {
+	return nil
 }
 
-func (c *MockConsumer) RegisterEventHandler(ctx context.Context, eventHandlers ...EventHandler) error {
-	args := c.Called(ctx, eventHandlers)
-	return args.Error(0)
-}
-
-func (c *MockConsumer) Topic() string {
-	return c.Called().String(0)
-}
-
-func (c *MockConsumer) Close() error {
-	args := c.Called()
-	return args.Error(0)
-}
-
-type MockProducer struct {
-	mock.Mock
-}
-
-var _ Producer = new(MockProducer)
-
-func (c *MockProducer) WriteMessages(ctx context.Context, messages ...Message) error {
-	args := c.Called(ctx, messages)
-	return args.Error(0)
-}
-
-func (c *MockProducer) Close() error {
-	args := c.Called()
-	return args.Error(0)
-}
+var _ Producer = NoopProducer{}

@@ -149,7 +149,7 @@ func Test_PaymentFromSubmitterService_SyncBatchTransactions(t *testing.T) {
 
 	t.Run("sync tss transactions successfully", func(t *testing.T) {
 		// We call sync batch transactions for all txs
-		err := monitorService.SyncBatchTransactions(ctx, len(transactions))
+		err := monitorService.SyncBatchTransactions(ctx, len(transactions), testCtx.tenantID)
 		require.NoError(t, err)
 
 		// check that successful payments are updated
@@ -202,7 +202,7 @@ func Test_PaymentFromSubmitterService_SyncBatchTransactions(t *testing.T) {
 		_, err := dbConnectionPool.ExecContext(ctx, q, transactions[0].ID)
 		require.NoError(t, err)
 
-		err = monitorService.SyncBatchTransactions(ctx, len(transactions))
+		err = monitorService.SyncBatchTransactions(ctx, len(transactions), testCtx.tenantID)
 		require.Error(t, err)
 		require.ErrorContainsf(t, err, "stellar transaction id is required", "error: %s", err.Error())
 	})
@@ -211,7 +211,7 @@ func Test_PaymentFromSubmitterService_SyncBatchTransactions(t *testing.T) {
 		prepareTxsForSync(t, testCtx, transactions)
 		updatePaymentStatus(t, testCtx, payment1.ID, data.SuccessPaymentStatus)
 
-		err := monitorService.SyncBatchTransactions(ctx, len(transactions))
+		err := monitorService.SyncBatchTransactions(ctx, len(transactions), testCtx.tenantID)
 		require.Error(t, err)
 		contains := fmt.Sprintf("updating payment ID %s for transaction ID %s: cannot transition from SUCCESS to SUCCESS for payment %s: cannot transition from SUCCESS to SUCCESS", payment1.ID, transactions[0].ID, payment1.ID)
 		require.ErrorContainsf(t, err, contains, "error: %s", err.Error())
@@ -222,13 +222,14 @@ func Test_PaymentFromSubmitterService_SyncBatchTransactions(t *testing.T) {
 		// insert a transaction that is not associated with a payment
 		paymentID := "dummy_payment_id"
 
+		tenantID := uuid.NewString()
 		tx, err := testCtx.tssModel.Insert(ctx, txSubStore.Transaction{
 			ExternalID:  paymentID,
 			AssetCode:   asset.Code,
 			AssetIssuer: asset.Issuer,
 			Amount:      100,
 			Destination: rw1.StellarAddress,
-			TenantID:    uuid.NewString(),
+			TenantID:    tenantID,
 		})
 		require.NoError(t, err)
 
@@ -242,7 +243,7 @@ func Test_PaymentFromSubmitterService_SyncBatchTransactions(t *testing.T) {
 		assert.Equal(t, txSubStore.TransactionStatusSuccess, tx.Status)
 		assert.NotEmpty(t, tx.CompletedAt)
 
-		err = monitorService.SyncBatchTransactions(ctx, len(transactions)+1)
+		err = monitorService.SyncBatchTransactions(ctx, len(transactions)+1, tenantID)
 		assert.ErrorContains(t, err, fmt.Sprintf("expected exactly 1 payment for the transaction ID %s but found 0", tx.ID))
 	})
 }

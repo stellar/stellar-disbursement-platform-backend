@@ -95,24 +95,24 @@ func (_m *MockTransactionStore) GetAllByPaymentIDs(ctx context.Context, paymentI
 }
 
 // GetTransactionBatchForUpdate provides a mock function with given fields: ctx, dbTx, batchSize
-func (_m *MockTransactionStore) GetTransactionBatchForUpdate(ctx context.Context, dbTx db.DBTransaction, batchSize int) ([]*store.Transaction, error) {
-	ret := _m.Called(ctx, dbTx, batchSize)
+func (_m *MockTransactionStore) GetTransactionBatchForUpdate(ctx context.Context, dbTx db.DBTransaction, batchSize int, tenantID string) ([]*store.Transaction, error) {
+	ret := _m.Called(ctx, dbTx, batchSize, tenantID)
 
 	var r0 []*store.Transaction
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, db.DBTransaction, int) ([]*store.Transaction, error)); ok {
-		return rf(ctx, dbTx, batchSize)
+	if rf, ok := ret.Get(0).(func(context.Context, db.DBTransaction, int, string) ([]*store.Transaction, error)); ok {
+		return rf(ctx, dbTx, batchSize, tenantID)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, db.DBTransaction, int) []*store.Transaction); ok {
-		r0 = rf(ctx, dbTx, batchSize)
+	if rf, ok := ret.Get(0).(func(context.Context, db.DBTransaction, int, string) []*store.Transaction); ok {
+		r0 = rf(ctx, dbTx, batchSize, tenantID)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).([]*store.Transaction)
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func(context.Context, db.DBTransaction, int) error); ok {
-		r1 = rf(ctx, dbTx, batchSize)
+	if rf, ok := ret.Get(1).(func(context.Context, db.DBTransaction, int, string) error); ok {
+		r1 = rf(ctx, dbTx, batchSize, tenantID)
 	} else {
 		r1 = ret.Error(1)
 	}
