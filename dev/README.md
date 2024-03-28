@@ -67,37 +67,19 @@ This will spin up the following services:
 
 ### New Tenant Provisioning Process
 
-To provision a new tenant, you must make an HTTP request to the Admin API. 
-To facilitate tenant provisioning, initiate the SDP Server using the command:
+To provision new tenants, you must run `main.sh`, which will create `tenants=("redcorp" "bluecorp")`. 
 
 ```
-./stellar-disbursement-platform serve
+./main.sh
 ```
 
-Shell script example of creating a tenant through the Admin API:
+Be sure that both hosts are included in the host configuration file.
+To check it, you can run the command `cat /etc/hosts`.
+To include them, you can run command `sudo nano /etc/hosts` and insert the lines below:
 
 ```
-adminAccount="SDP-admin"
-adminApiKey="api_key_1234567890"
-encodedCredentials=$(echo -n "$adminAccount:$adminApiKey" | base64)
-AuthHeader="Authorization: Basic $encodedCredentials"
-
-curl -X POST https://bluecorp.backend.com:8003/tenants \
-        -H "Content-Type: application/json" \
-        -H "$AuthHeader" \
-        -d '{
-                "name": "bluecorp",
-                "organization_name": "Blue Corp",
-                "email_sender_type": "DRY_RUN",
-                "sms_sender_type": "DRY_RUN",
-                "base_url": "https://bluecorp.backend.com",
-                "sdp_ui_base_url": "https://bluecorp.com",
-                "cors_allowed_origins": ["https://bluecorp.com"],
-                "owner_email": "owner@bluecorp.com",
-                "owner_first_name": "john",
-                "owner_last_name": "doe"
-        }'
-
+127.0.0.1       bluecorp.sdp.local
+127.0.0.1       redcorp.sdp.local
 ```
 
 ### Create an Owner SDP User
@@ -107,6 +89,11 @@ Open a terminal for the `sdp-api` container and run the following command to cre
 ```sh
 docker exec -it sdp-api bash # Or use Docker Desktop to open terminal
 ./stellar-disbursement-platform auth add-user owner@stellar.org joe yabuki --password --owner --roles owner --tenant-id TENANT_ID
+```
+
+You will need to get the tenant ID from the database:
+```
+SELECT id, name FROM public.tenants
 ```
 
 You will be prompted to enter a password for the user. Be sure to remember it as it will be required for future authentications.
