@@ -313,9 +313,12 @@ func (t *TransactionModel) UpdateStellarTransactionXDRReceived(ctx context.Conte
 }
 
 // GetTransactionBatchForUpdate returns a batch of transactions that are ready to be synced. Locks the rows for update.
-func (t *TransactionModel) GetTransactionBatchForUpdate(ctx context.Context, dbTx db.DBTransaction, batchSize int) ([]*Transaction, error) {
+func (t *TransactionModel) GetTransactionBatchForUpdate(ctx context.Context, dbTx db.DBTransaction, batchSize int, tenantID string) ([]*Transaction, error) {
 	if batchSize <= 0 {
 		return nil, fmt.Errorf("batch size must be greater than 0")
+	}
+	if tenantID == "" {
+		return nil, fmt.Errorf("tenant ID is required")
 	}
 
 	transactions := []*Transaction{}
@@ -328,14 +331,15 @@ func (t *TransactionModel) GetTransactionBatchForUpdate(ctx context.Context, dbT
 		WHERE 
 		    status IN ('SUCCESS', 'ERROR')
 		    AND synced_at IS NULL
+		    AND tenant_id = $1
 		ORDER BY 
 		    completed_at ASC
 		LIMIT 
-		    $1
+		    $2
 		FOR UPDATE SKIP LOCKED
 		`
 
-	err := dbTx.SelectContext(ctx, &transactions, query, batchSize)
+	err := dbTx.SelectContext(ctx, &transactions, query, tenantID, batchSize)
 	if err != nil {
 		return nil, fmt.Errorf("getting transactions: %w", err)
 	}

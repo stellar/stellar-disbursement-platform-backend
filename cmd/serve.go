@@ -587,7 +587,8 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 					log.Fatalf("error setting up consumers: %v", kafkaErr)
 				}
 			} else {
-				log.Ctx(ctx).Warn("Event Broker Type is NONE.")
+				log.Ctx(ctx).Warn("Event Broker Type is NONE. Using Noop producer for logging events")
+				serveOpts.EventProducer = events.NoopProducer{}
 			}
 
 			// Starting Scheduler Service (background job) if enabled

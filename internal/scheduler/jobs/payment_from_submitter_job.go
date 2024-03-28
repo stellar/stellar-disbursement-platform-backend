@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
+
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
@@ -47,7 +49,11 @@ func (d paymentFromSubmitterJob) IsJobMultiTenant() bool {
 }
 
 func (d paymentFromSubmitterJob) Execute(ctx context.Context) error {
-	err := d.service.SyncBatchTransactions(ctx, paymentFromSubmitterBatchSize)
+	t, err := tenant.GetTenantFromContext(ctx)
+	if err != nil {
+		return fmt.Errorf("error getting tenant from context for %s: %w", paymentFromSubmitterJobName, err)
+	}
+	err = d.service.SyncBatchTransactions(ctx, paymentFromSubmitterBatchSize, t.ID)
 	if err != nil {
 		return fmt.Errorf("error executing paymentFromSubmitterJob: %w", err)
 	}

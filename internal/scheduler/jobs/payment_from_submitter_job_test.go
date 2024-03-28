@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/mocks"
 	"github.com/stretchr/testify/mock"
@@ -52,15 +54,19 @@ func Test_PaymentFromSubmitterJob_Execute(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			tenantInfo := &tenant.Tenant{ID: "95e788b6-c80e-4975-9d12-141001fe6e44", Name: "aid-org-1"}
+			ctx = tenant.SaveTenantInContext(ctx, tenantInfo)
+
 			mockPaymentFromSubmitterService := &mocks.MockPaymentFromSubmitterService{}
-			mockPaymentFromSubmitterService.On("SyncBatchTransactions", mock.Anything, paymentFromSubmitterBatchSize).
+			mockPaymentFromSubmitterService.On("SyncBatchTransactions", mock.Anything, paymentFromSubmitterBatchSize, tenantInfo.ID).
 				Return(tt.syncTransactions(nil, paymentFromSubmitterBatchSize))
 
 			p := paymentFromSubmitterJob{
 				service: mockPaymentFromSubmitterService,
 			}
 
-			err := p.Execute(context.Background())
+			err := p.Execute(ctx)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("paymentFromSubmitterJob.Execute() error = %v, wantErr %v", err, tt.wantErr)
 			}

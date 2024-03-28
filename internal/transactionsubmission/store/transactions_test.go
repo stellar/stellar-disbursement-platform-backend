@@ -729,6 +729,7 @@ func Test_TransactionModel_GetTransactionBatchForUpdate(t *testing.T) {
 				require.NoError(t, err)
 			}()
 
+			tenantID := uuid.NewString()
 			var transactions []*Transaction
 			if tc.transactionStatus != "" {
 				transactions = CreateTransactionFixturesNew(t, ctx, dbTx, txCount, TransactionFixture{
@@ -737,7 +738,7 @@ func Test_TransactionModel_GetTransactionBatchForUpdate(t *testing.T) {
 					DestinationAddress: "GBHNIYGWZUAVZX7KTLVSMILBXJMUACVO6XBEKIN6RW7AABDFH6S7GK2Y",
 					Status:             tc.transactionStatus,
 					Amount:             1.2,
-					TenantID:           uuid.NewString(),
+					TenantID:           tenantID,
 				})
 			}
 			var txIDs []string
@@ -745,7 +746,7 @@ func Test_TransactionModel_GetTransactionBatchForUpdate(t *testing.T) {
 				txIDs = append(txIDs, tx.ID)
 			}
 
-			foundTransactions, err := txModel.GetTransactionBatchForUpdate(ctx, dbTx, tc.batchSize)
+			foundTransactions, err := txModel.GetTransactionBatchForUpdate(ctx, dbTx, tc.batchSize, tenantID)
 			if tc.wantErrContains == "" {
 				require.NoError(t, err)
 			} else {

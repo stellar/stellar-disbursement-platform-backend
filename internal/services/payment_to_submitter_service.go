@@ -65,7 +65,7 @@ func (s PaymentToSubmitterService) SendPaymentsReadyToPay(ctx context.Context, p
 
 // SendBatchPayments sends SDP's ready-to-pay payments (in batches) to the transaction submission service.
 func (s PaymentToSubmitterService) SendBatchPayments(ctx context.Context, batchSize int) error {
-	tenant, tenantErr := tenant.GetTenantFromContext(ctx)
+	t, tenantErr := tenant.GetTenantFromContext(ctx)
 	if tenantErr != nil {
 		return fmt.Errorf("getting tenant from context: %w", tenantErr)
 	}
@@ -75,7 +75,7 @@ func (s PaymentToSubmitterService) SendBatchPayments(ctx context.Context, batchS
 		if err != nil {
 			return fmt.Errorf("getting payments ready to be sent: %w", err)
 		}
-		return s.sendPaymentsReadyToPay(ctx, dbTx, tenant.ID, payments)
+		return s.sendPaymentsReadyToPay(ctx, dbTx, t.ID, payments)
 	})
 	if err != nil {
 		return fmt.Errorf("sending payments: %w", err)
@@ -128,7 +128,11 @@ func (s PaymentToSubmitterService) sendPaymentsReadyToPay(ctx context.Context, d
 		return fmt.Errorf("inserting transactions: %w", err)
 	}
 	if len(insertedTransactions) > 0 {
-		log.Ctx(ctx).Infof("Submitted %d transaction(s) to TSS", len(insertedTransactions))
+		insertedTxIDs := make([]string, 0, len(insertedTransactions))
+		for _, insertedTransaction := range insertedTransactions {
+			insertedTxIDs = append(insertedTxIDs, insertedTransaction.ID)
+		}
+		log.Ctx(ctx).Infof("Submitted %d transaction(s) to TSS: %v", len(insertedTransactions), insertedTxIDs)
 	}
 
 	// 4. Update payment statuses to `Pending`
@@ -137,7 +141,11 @@ func (s PaymentToSubmitterService) sendPaymentsReadyToPay(ctx context.Context, d
 		if innerErr != nil {
 			return fmt.Errorf("updating payment statuses to Pending: %w", innerErr)
 		}
-		log.Ctx(ctx).Infof("Updated %d payments to Pending", numUpdated)
+		updatedPaymentIDs := make([]string, 0, len(pendingPayments))
+		for _, pendingPayment := range pendingPayments {
+			updatedPaymentIDs = append(updatedPaymentIDs, pendingPayment.ID)
+		}
+		log.Ctx(ctx).Infof("Updated %d payments to Pending: %v", numUpdated, updatedPaymentIDs)
 	}
 
 	// 5. Update failed payments statuses to `Failed`
@@ -146,7 +154,11 @@ func (s PaymentToSubmitterService) sendPaymentsReadyToPay(ctx context.Context, d
 		if innerErr != nil {
 			return fmt.Errorf("updating payment statuses to Failed: %w", innerErr)
 		}
-		log.Ctx(ctx).Warnf("Updated %d payments to Failed", numUpdated)
+		failedPaymentIDs := make([]string, 0, len(failedPayments))
+		for _, failedPayment := range failedPayments {
+			failedPaymentIDs = append(failedPaymentIDs, failedPayment.ID)
+		}
+		log.Ctx(ctx).Warnf("Updated %d payments to Failed: %v", numUpdated, failedPaymentIDs)
 	}
 	return nil
 }

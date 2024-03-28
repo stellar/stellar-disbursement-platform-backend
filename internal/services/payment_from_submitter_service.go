@@ -15,7 +15,7 @@ import (
 
 type PaymentFromSubmitterServiceInterface interface {
 	SyncTransaction(ctx context.Context, tx *schemas.EventPaymentCompletedData) error
-	SyncBatchTransactions(ctx context.Context, batchSize int) error
+	SyncBatchTransactions(ctx context.Context, batchSize int, tenantID string) error
 }
 
 // PaymentFromSubmitterService is a service that monitors TSS transactions that were complete and sync their completion
@@ -36,10 +36,10 @@ func NewPaymentFromSubmitterService(models *data.Models, tssDBConnectionPool db.
 }
 
 // SyncBatchTransactions monitors TSS transactions that were complete and sync their completion state with the SDP payments.
-func (s PaymentFromSubmitterService) SyncBatchTransactions(ctx context.Context, batchSize int) error {
+func (s PaymentFromSubmitterService) SyncBatchTransactions(ctx context.Context, batchSize int, tenantID string) error {
 	err := db.RunInTransaction(ctx, s.sdpModels.DBConnectionPool, nil, func(sdpDBTx db.DBTransaction) error {
 		return db.RunInTransaction(ctx, s.tssModel.DBConnectionPool, nil, func(tssDBTx db.DBTransaction) error {
-			transactions, err := s.tssModel.GetTransactionBatchForUpdate(ctx, tssDBTx, batchSize)
+			transactions, err := s.tssModel.GetTransactionBatchForUpdate(ctx, tssDBTx, batchSize, tenantID)
 			if err != nil {
 				return fmt.Errorf("getting transactions for update: %w", err)
 			}
