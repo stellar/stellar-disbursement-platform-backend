@@ -406,7 +406,7 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 
 				tnt := tenant.Tenant{Name: tenantName, ID: "abc"}
 				tntManagerMock.On("AddTenant", ctx, tenantName).
-					Return(&t, nil).Once()
+					Return(&tnt, nil).Once()
 				tntManagerMock.On("GetDSNForTenant", ctx, tenantName).Return(tenantDSN, nil).Once()
 				tntManagerMock.On("CreateTenantSchema", ctx, tenantName).Return(nil).Once()
 				distAcc := keypair.MustRandom().Address()
@@ -419,7 +419,7 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 					DistributionAccount: &distAcc,
 					SDPUIBaseURL:        &uiBaseURL,
 					Status:              &tStatus,
-				}).Return(&t, errors.New("foobar")).Once()
+				}).Return(&tnt, errors.New("foobar")).Once()
 
 				// expected rollback operations
 				tntManagerMock.On("DropTenantSchema", ctx, tenantName).Return(nil).Once()
