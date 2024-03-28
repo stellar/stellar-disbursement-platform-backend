@@ -86,7 +86,7 @@ To include them, you can run command `sudo nano /etc/hosts` and insert the lines
 
 ### Create an Owner SDP User
 
-The `main.sh` file creates an owner user for each one of the tenants. If you want to create a new user, open a terminal for the `sdp-api` container and run the following command to create a new user:
+The `main.sh` file creates an owner user for each one of the tenants. If you want to create a new user, open a terminal for the `sdp-api` container and run the following command:
 
 ```sh
 docker exec -it sdp-api bash # Or use Docker Desktop to open terminal
