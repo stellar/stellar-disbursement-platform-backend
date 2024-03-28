@@ -63,7 +63,7 @@ This will spin up the following services:
 - `sdp-api`: SDP service running on port `8000`.
 - `sdp-tss`: Transaction Submission service.
 - `sdp-frontend`: SDP frontend service running on port `3000`.
-- `kafka`: Kafka service running on port `9092`.
+- `kafka`: Kafka service running on ports `9092`, `9094`(external).
 - `kafka-init`:  Initial workflow to exec into the Kafka container and create topics.
 
 The following are optional monitoring services that can be started through `docker-compose-monitoring.yml` and are primarily used for monitoring Kafka: 
