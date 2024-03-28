@@ -5,6 +5,7 @@
   - [Prerequisites](#prerequisites)
   - [Setup](#setup)
     - [Build Docker Containers](#build-docker-containers)
+    - [New Tenant Provisioning Process](#new-tenant-provisioning-process)
     - [Create an Owner SDP User](#create-an-owner-sdp-user)
   - [Disbursement](#disbursement)
     - [Create First Disbursement](#create-first-disbursement)
@@ -57,6 +58,47 @@ This will spin up the following services:
 - `sdp-api`: SDP service running on port `8000`.
 - `sdp-tss`: Transaction Submission service.
 - `sdp-frontend`: SDP frontend service running on port `3000`.
+- `kafka`: Kafka service running on port `9092`.
+- `kafka-init`:  Initial workflow to exec into the Kafka container and create topics.
+- `db-conduktor`: Conduktor service.
+- `conduktor-monitoring`: Conduktor Monitoring service integrated into the Conduktor Platform.
+- `conduktor-platform`: Provides solutions for Kafka management, testing, monitoring, data quality, security, and data governance.
+
+
+### New Tenant Provisioning Process
+
+To provision a new tenant, you must make an HTTP request to the Admin API. 
+To facilitate tenant provisioning, initiate the SDP Server using the command:
+
+```
+./stellar-disbursement-platform serve
+```
+
+Shell script example of creating a tenant through the Admin API:
+
+```
+adminAccount="SDP-admin"
+adminApiKey="api_key_1234567890"
+encodedCredentials=$(echo -n "$adminAccount:$adminApiKey" | base64)
+AuthHeader="Authorization: Basic $encodedCredentials"
+
+curl -X POST https://bluecorp.backend.com:8003/tenants \
+        -H "Content-Type: application/json" \
+        -H "$AuthHeader" \
+        -d '{
+                "name": "bluecorp",
+                "organization_name": "Blue Corp",
+                "email_sender_type": "DRY_RUN",
+                "sms_sender_type": "DRY_RUN",
+                "base_url": "https://bluecorp.backend.com",
+                "sdp_ui_base_url": "https://bluecorp.com",
+                "cors_allowed_origins": ["https://bluecorp.com"],
+                "owner_email": "owner@bluecorp.com",
+                "owner_first_name": "john",
+                "owner_last_name": "doe"
+        }'
+
+```
 
 ### Create an Owner SDP User
 
@@ -64,7 +106,7 @@ Open a terminal for the `sdp-api` container and run the following command to cre
 
 ```sh
 docker exec -it sdp-api bash # Or use Docker Desktop to open terminal
-./stellar-disbursement-platform auth add-user owner@stellar.org joe yabuki --password --owner --roles owner
+./stellar-disbursement-platform auth add-user owner@stellar.org joe yabuki --password --owner --roles owner --tenant-id TENANT_ID
 ```
 
 You will be prompted to enter a password for the user. Be sure to remember it as it will be required for future authentications.
