@@ -17,7 +17,6 @@ const (
 )
 
 type SendReceiverWalletsSMSInvitationJobOptions struct {
-	AnchorPlatformBaseSepURL       string
 	Models                         *data.Models
 	MessengerClient                message.MessengerClient
 	MaxInvitationSMSResendAttempts int64
@@ -60,7 +59,6 @@ func NewSendReceiverWalletsSMSInvitationJob(options SendReceiverWalletsSMSInvita
 	s, err := services.NewSendReceiverWalletInviteService(
 		options.Models,
 		options.MessengerClient,
-		options.AnchorPlatformBaseSepURL,
 		options.Sep10SigningPrivateKey,
 		options.MaxInvitationSMSResendAttempts,
 		options.CrashTrackerClient,

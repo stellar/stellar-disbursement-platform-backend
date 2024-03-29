@@ -18,6 +18,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 type SendReceiverWalletInviteServiceInterface interface {
@@ -27,7 +28,6 @@ type SendReceiverWalletInviteServiceInterface interface {
 type SendReceiverWalletInviteService struct {
 	messengerClient                message.MessengerClient
 	Models                         *data.Models
-	anchorPlatformBaseSepURL       string
 	maxInvitationSMSResendAttempts int64
 	sep10SigningPrivateKey         string
 	crashTrackerClient             crashtracker.CrashTrackerClient
@@ -38,10 +38,6 @@ var _ SendReceiverWalletInviteServiceInterface = new(SendReceiverWalletInviteSer
 func (s SendReceiverWalletInviteService) validate() error {
 	if s.messengerClient == nil {
 		return fmt.Errorf("messenger client can't be nil")
-	}
-
-	if s.anchorPlatformBaseSepURL == "" {
-		return fmt.Errorf("anchorPlatformBaseSepURL can't be empty")
 	}
 
 	return nil
@@ -55,6 +51,14 @@ func (s SendReceiverWalletInviteService) validate() error {
 func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context, receiverWalletInvitationData ...schemas.EventReceiverWalletSMSInvitationData) error {
 	if s.Models == nil {
 		return fmt.Errorf("SendReceiverWalletInviteService.Models cannot be nil")
+	}
+
+	currentTenant, err := tenant.GetTenantFromContext(ctx)
+	if err != nil {
+		return fmt.Errorf("error getting tenant from context: %w", err)
+	}
+	if currentTenant.BaseURL == nil {
+		return fmt.Errorf("tenant base URL cannot be nil for tenant %s", currentTenant.ID)
 	}
 
 	// Get the organization entry to get the Org name and SMSRegistrationMessageTemplate
@@ -110,11 +114,11 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context, receive
 		wallet := walletsMap[rwa.WalletID]
 
 		wdl := WalletDeepLink{
-			DeepLink:                 wallet.DeepLinkSchema,
-			AnchorPlatformBaseSepURL: s.anchorPlatformBaseSepURL,
-			OrganizationName:         organization.Name,
-			AssetCode:                rwa.Asset.Code,
-			AssetIssuer:              rwa.Asset.Issuer,
+			DeepLink:         wallet.DeepLinkSchema,
+			OrganizationName: organization.Name,
+			AssetCode:        rwa.Asset.Code,
+			AssetIssuer:      rwa.Asset.Issuer,
+			TenantBaseURL:    *currentTenant.BaseURL,
 		}
 
 		registrationLink, err := wdl.GetSignedRegistrationLink(s.sep10SigningPrivateKey)
@@ -279,11 +283,10 @@ func (s SendReceiverWalletInviteService) shouldSendInvitationSMS(ctx context.Con
 	return true
 }
 
-func NewSendReceiverWalletInviteService(models *data.Models, messengerClient message.MessengerClient, anchorPlatformBaseSepURL, sep10SigningPrivateKey string, maxInvitationSMSResendAttempts int64, crashTrackerClient crashtracker.CrashTrackerClient) (*SendReceiverWalletInviteService, error) {
+func NewSendReceiverWalletInviteService(models *data.Models, messengerClient message.MessengerClient, sep10SigningPrivateKey string, maxInvitationSMSResendAttempts int64, crashTrackerClient crashtracker.CrashTrackerClient) (*SendReceiverWalletInviteService, error) {
 	s := &SendReceiverWalletInviteService{
 		messengerClient:                messengerClient,
 		Models:                         models,
-		anchorPlatformBaseSepURL:       anchorPlatformBaseSepURL,
 		maxInvitationSMSResendAttempts: maxInvitationSMSResendAttempts,
 		sep10SigningPrivateKey:         sep10SigningPrivateKey,
 		crashTrackerClient:             crashTrackerClient,
@@ -301,14 +304,14 @@ type WalletDeepLink struct {
 	DeepLink string
 	// Route is an optional parameter that can be used to specify the route to open in the wallet, in case it's not already present in the DeepLink.
 	Route string // (optional)
-	// AnchorPlatformBaseSepURL is the base URL of the /.well-known/stellar.toml file.
-	AnchorPlatformBaseSepURL string
 	// OrganizationName is the name of the organization that is sending the invitation.
 	OrganizationName string
 	// AssetCode is the code of the Stellar asset that the receiver will be able to receive.
 	AssetCode string
 	// AssetIssuer is the issuer of the Stellar asset that the receiver will be able to receive.
 	AssetIssuer string
+	// TenantBaseURL is the base URL for the tenant that the receiver wallet belongs to.
+	TenantBaseURL string
 }
 
 func (wdl WalletDeepLink) isNativeAsset() bool {
@@ -355,21 +358,21 @@ func (wdl WalletDeepLink) BaseURLWithRoute() (string, error) {
 }
 
 func (wdl WalletDeepLink) TomlFileDomain() (string, error) {
-	if wdl.AnchorPlatformBaseSepURL == "" {
-		return "", fmt.Errorf("AnchorPlatformBaseSepURL can't be empty")
+	if wdl.TenantBaseURL == "" {
+		return "", fmt.Errorf("base URL for tenant can't be empty")
 	}
 
-	anchorPlatformBaseSepURL, err := utils.GetURLWithScheme(wdl.AnchorPlatformBaseSepURL)
+	tenantBaseURL, err := utils.GetURLWithScheme(wdl.TenantBaseURL)
 	if err != nil {
 		return "", fmt.Errorf("setting the protocol scheme: %w", err)
 	}
 
-	anchorURL, err := url.Parse(anchorPlatformBaseSepURL)
+	tenantURL, err := url.Parse(tenantBaseURL)
 	if err != nil {
-		return "", fmt.Errorf("error parsing AnchorPlatformBaseSepURL '%s': %w", anchorPlatformBaseSepURL, err)
+		return "", fmt.Errorf("error parsing TenantBaseURL %s: %w", tenantBaseURL, err)
 	}
 
-	return anchorURL.Hostname(), nil
+	return tenantURL.Hostname(), nil
 }
 
 // validate will make sure all the parameters are set correctly.
@@ -383,8 +386,8 @@ func (wdl WalletDeepLink) validate() error {
 		return fmt.Errorf("can't generate a valid base URL for the deep link: %w", err)
 	}
 
-	if wdl.AnchorPlatformBaseSepURL == "" {
-		return fmt.Errorf("toml file domain can't be empty")
+	if wdl.TenantBaseURL == "" {
+		return fmt.Errorf("tenant base URL can't be empty")
 	}
 
 	if wdl.OrganizationName == "" {

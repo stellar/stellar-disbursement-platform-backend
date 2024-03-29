@@ -9,6 +9,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 
@@ -31,8 +34,6 @@ func Test_NewSendReceiverWalletsSMSInvitationJob(t *testing.T) {
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
-	anchorPlatformBaseSepURL := "http://localhost:8000"
-
 	messageDryRunClient, err := message.NewDryRunClient()
 	require.NoError(t, err)
 
@@ -40,7 +41,6 @@ func Test_NewSendReceiverWalletsSMSInvitationJob(t *testing.T) {
 		if os.Getenv("TEST_FATAL") == "1" {
 			o := SendReceiverWalletsSMSInvitationJobOptions{
 				Models:                         models,
-				AnchorPlatformBaseSepURL:       anchorPlatformBaseSepURL,
 				MaxInvitationSMSResendAttempts: 3,
 			}
 
@@ -67,7 +67,6 @@ func Test_NewSendReceiverWalletsSMSInvitationJob(t *testing.T) {
 			o := SendReceiverWalletsSMSInvitationJobOptions{
 				Models:                         models,
 				MessengerClient:                messageDryRunClient,
-				AnchorPlatformBaseSepURL:       "",
 				MaxInvitationSMSResendAttempts: 3,
 			}
 
@@ -93,7 +92,6 @@ func Test_NewSendReceiverWalletsSMSInvitationJob(t *testing.T) {
 		o := SendReceiverWalletsSMSInvitationJobOptions{
 			Models:                         models,
 			MessengerClient:                messageDryRunClient,
-			AnchorPlatformBaseSepURL:       anchorPlatformBaseSepURL,
 			MaxInvitationSMSResendAttempts: 3,
 			JobIntervalSeconds:             DefaultMinimumJobIntervalSeconds,
 		}
@@ -124,11 +122,16 @@ func Test_SendReceiverWalletsSMSInvitationJob_Execute(t *testing.T) {
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
-	anchorPlatformBaseSepURL := "http://localhost:8000"
+	tenantBaseURL := "http://localhost:8000"
+	tenantInfo := &tenant.Tenant{
+		ID:      uuid.NewString(),
+		Name:    "TestTenant",
+		BaseURL: &tenantBaseURL,
+	}
+	ctx := tenant.SaveTenantInContext(context.Background(), tenantInfo)
+
 	stellarSecretKey := "SBUSPEKAZKLZSWHRSJ2HWDZUK6I3IVDUWA7JJZSGBLZ2WZIUJI7FPNB5"
 	var maxInvitationSMSResendAttempts int64 = 3
-
-	ctx := context.Background()
 
 	t.Run("executes the service successfully", func(t *testing.T) {
 		messengerClientMock := &message.MessengerClientMock{}
@@ -137,7 +140,6 @@ func Test_SendReceiverWalletsSMSInvitationJob_Execute(t *testing.T) {
 		s, err := services.NewSendReceiverWalletInviteService(
 			models,
 			messengerClientMock,
-			anchorPlatformBaseSepURL,
 			stellarSecretKey,
 			maxInvitationSMSResendAttempts,
 			crashTrackerClientMock,
@@ -199,22 +201,22 @@ func Test_SendReceiverWalletsSMSInvitationJob_Execute(t *testing.T) {
 		})
 
 		walletDeepLink1 := services.WalletDeepLink{
-			DeepLink:                 wallet1.DeepLinkSchema,
-			AnchorPlatformBaseSepURL: anchorPlatformBaseSepURL,
-			OrganizationName:         "MyCustomAid",
-			AssetCode:                asset1.Code,
-			AssetIssuer:              asset1.Issuer,
+			DeepLink:         wallet1.DeepLinkSchema,
+			TenantBaseURL:    tenantBaseURL,
+			OrganizationName: "MyCustomAid",
+			AssetCode:        asset1.Code,
+			AssetIssuer:      asset1.Issuer,
 		}
 		deepLink1, err := walletDeepLink1.GetSignedRegistrationLink(stellarSecretKey)
 		require.NoError(t, err)
 		contentWallet1 := fmt.Sprintf("You have a payment waiting for you from the MyCustomAid. Click %s to register.", deepLink1)
 
 		walletDeepLink2 := services.WalletDeepLink{
-			DeepLink:                 wallet2.DeepLinkSchema,
-			AnchorPlatformBaseSepURL: anchorPlatformBaseSepURL,
-			OrganizationName:         "MyCustomAid",
-			AssetCode:                asset2.Code,
-			AssetIssuer:              asset2.Issuer,
+			DeepLink:         wallet2.DeepLinkSchema,
+			TenantBaseURL:    tenantBaseURL,
+			OrganizationName: "MyCustomAid",
+			AssetCode:        asset2.Code,
+			AssetIssuer:      asset2.Issuer,
 		}
 		deepLink2, err := walletDeepLink2.GetSignedRegistrationLink(stellarSecretKey)
 		require.NoError(t, err)
