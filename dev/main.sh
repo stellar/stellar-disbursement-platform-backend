@@ -30,6 +30,10 @@ echo "====> 👀Step 3: initialize tenants... (😴 10s sleep)"
 sleep 10
 AdminTenantURL="http://localhost:8003/tenants"
 
+# Initialize tenants
+tenants=("redcorp" "bluecorp" "pinkcorp")
+
+# Create missing tenants
 adminAccount="SDP-admin"
 adminApiKey="api_key_1234567890"
 encodedCredentials=$(echo -n "$adminAccount:$adminApiKey" | base64)
@@ -37,19 +41,17 @@ AuthHeader="Authorization: Basic $encodedCredentials"
 
 existingTenants=$(curl -s -H "$AuthHeader" $AdminTenantURL)
 echo "Response from tenant check: $existingTenants"
+existingTenantNames=($(echo $existingTenants | jq -r '.[].name'))
 
-if [ "$existingTenants" == "[]" ]; then
-    echo "No existing tenants found. Initializing new tenants..."
-
-    # Initialize tenants
-    tenants=("redcorp" "bluecorp")
-
-    for tenant in "${tenants[@]}"
-    do
-        echo "🐈Provisioning tenant: $tenant"
+for tenant in "${tenants[@]}"; do
+    # Check if the tenant already exists
+    if printf '%s\n' "${existingTenantNames[@]}" | grep -q "^$tenant$"; then
+        echo "🔵Tenant $tenant already exists. Skipping."
+    else
+        echo "🐈Provisioning missing tenant: $tenant"
         baseURL="http://$tenant.stellar.local:8000"
         sdpUIBaseURL="http://$tenant.stellar.local:3000"
-        ownerEmail="john.doe@$tenant.org"
+        ownerEmail="owner@$tenant.org"
 
         curl -X POST $AdminTenantURL \
         -H "Content-Type: application/json" \
@@ -61,18 +63,15 @@ if [ "$existingTenants" == "[]" ]; then
                 "sms_sender_type": "DRY_RUN",
                 "base_url": "'"$baseURL"'",
                 "sdp_ui_base_url": "'"$sdpUIBaseURL"'",
-                "cors_allowed_origins": ["*"],
                 "owner_email": "'"$ownerEmail"'",
-                "owner_first_name": "john",
+                "owner_first_name": "jane",
                 "owner_last_name": "doe"
         }'
 
         echo "✅Tenant $tenant created successfully."
         echo "🔗You can now reset the password for the owner $ownerEmail on $sdpUIBaseURL/forgot-password"
-    done
-else
-    echo "🛑Existing tenants found. Skipping initialization."
-fi
+    fi
+done
 
 echo "====> ✅Step 3: finished initialization of tenants"
 echo $DIVIDER
