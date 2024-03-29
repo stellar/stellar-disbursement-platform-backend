@@ -9,7 +9,6 @@ on:
   push:
     branches:
       - develop
-      - sdp-multitenant
 jobs:
   tests:
     uses: ./.github/workflows/ci.yml # execute the callable ci.yml
@@ -43,6 +42,15 @@ jobs:
             exit 1
           fi
 
+      - name: Determine Docker Tags
+        id: docker_tags
+        run: |
+          if [ "${{ github.event.release.prerelease }}" = "false" ]; then
+            echo "TAGS=stellar/stellar-disbursement-platform-backend:${{ github.event.release.tag_name }},stellar/stellar-disbursement-platform-backend:latest" >> $GITHUB_OUTPUT
+          else
+            echo "TAGS=stellar/stellar-disbursement-platform-backend:${{ github.event.release.tag_name }}" >> $GITHUB_OUTPUT
+          fi
+
       - uses: actions/checkout@v4
 
       - name: Login to DockerHub
@@ -57,7 +65,7 @@ jobs:
           push: true
           build-args: |
             GIT_COMMIT=${{ github.event.release.tag_name }}
-          tags: stellar/stellar-disbursement-platform-backend:${{ github.event.release.tag_name }},stellar/stellar-disbursement-platform-backend:latest
+          tags: ${{ steps.docker_tags.outputs.TAGS }}
           file: Dockerfile
 
   build_and_push_docker_image_on_dev_push:
@@ -95,35 +103,11 @@ jobs:
           tags: stellar/stellar-disbursement-platform-backend:edge,stellar/stellar-disbursement-platform-backend:edge-${{ steps.get_date.outputs.DATE }}-${{ steps.get_sha.outputs.SHA }}
           file: Dockerfile
 
-  build_and_push_docker_image_on_multitenant:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/sdp-multitenant'
-    name: Push SDP Multi-Tenant to DockerHub
-    runs-on: ubuntu-latest
-    needs:
-      - tests
-      - anchor_platform_integration_check
-    steps:
-      - uses: actions/checkout@v3
-
-      - name: Login to DockerHub
-        uses: docker/login-action@v2.2.0
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Build and push multi-tenant to DockerHub
-        uses: docker/build-push-action@v4.1.1
-        with:
-          push: true
-          tags: stellar/stellar-disbursement-platform-backend:multitenant-alpha
-          file: Dockerfile
-
   complete:
     if: always()
     needs:
       - build_and_push_docker_image_on_release
       - build_and_push_docker_image_on_dev_push
-      - build_and_push_docker_image_on_multitenant
     runs-on: ubuntu-latest
     steps:
       - if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
