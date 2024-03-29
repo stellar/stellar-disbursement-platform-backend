@@ -15,6 +15,10 @@
 - [Contributors](#contributors)
   - [State Transitions](#state-transitions)
 
+> [!WARNING]  
+> We're in the process of releasing a new multi-tenant version of the SDP. Develop branch currently contains the release candidate of multi-tenant SDP.
+> For the stable single-tenant version, [please use the latest `v1.x.x` tag](https://github.com/stellar/stellar-disbursement-platform-backend/releases).
+
 ## Introduction
 
 The Stellar Disbursement Platform (SDP) enables organizations to disburse bulk payments to recipients using Stellar.
@@ -31,10 +35,6 @@ cd stellar-disbursement-platform-backend
 make go-install
 stellar-disbursement-platform --help
 ```
-
-> [!WARNING]  
-> We're in the process of releasing a new multi-tenant version of the SDP. Develop branch currently contains the release candidate of multi-tenant SDP. 
-> For the stable single-tenant version, [please use the latest `v1.x.x` tag](https://github.com/stellar/stellar-disbursement-platform-backend/releases).
 
 ## Quick Start
 
@@ -156,7 +156,6 @@ stellar-disbursement-platform db --help
 ```
 
 #### Admin Tables
-`` ``
 
 **Migration CMD**
 
