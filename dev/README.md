@@ -88,7 +88,7 @@ To include them, you can run command `sudo nano /etc/hosts` and insert the lines
 
 Go through the forgot password flow to be able to login as an owner user.
 
-Go to Forgot Password page on `http://${tenant}.stellar.local:3000/forgot-password` and enter the tenant and owner email `john.doe@${tenant}.org`.
+Go to Forgot Password page on `http://${tenant}.stellar.local:3000/forgot-password` and enter the tenant and owner email `owner@${tenant}.org`.
 
 A token will be generated, and it's possible to check it on `sdp-api` logs. This token will be needed to Reset Password on `http://${tenant}.stellar.local:3000/reset-password`.
 
@@ -96,7 +96,10 @@ A token will be generated, and it's possible to check it on `sdp-api` logs. This
 
 ### Create First Disbursement
 
-Navigate to the frontend service by opening a browser and going to [localhost:3000](http://localhost:3000).
+> [!NOTE]  
+> In the following section, we will assume you're using the `bluecorp` tenant that was provisioned by default when you ran `main.sh`.
+
+Navigate to the frontend service by opening a browser and going to [http://bluecorp.stellar.local:3000](http://bluecorp.stellar.local:3000).
 
 - Click `New Disbursement+` on the Dashboard screen.
 - Use `Demo Wallet` as your wallet.
@@ -107,11 +110,11 @@ Navigate to the frontend service by opening a browser and going to [localhost:30
 
 To deposit money into your account:
 
-- Access [https://demo-wallet.stellar.org/](https://demo-wallet.stellar.org/) in your browser.
+- Access [demo-wallet](http://localhost:4000) in your browser.
 - Click on `Generate Keypair for new account` to create a new testnet receiver account. Make sure to save your public key & secret.
 - Add an Asset with the following information:
   - Asset Code: `USDC`
-  - Anchor Home Domain: `localhost:8080`
+  - Anchor Home Domain: `http://bluecorp.stellar.local:8000`
   - Issuer Public Key: `GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5`
 - Click `Create Account` (in front of public key) and add Trustline for USDC.
 - For USDC, select `SEP-24 Deposit`.

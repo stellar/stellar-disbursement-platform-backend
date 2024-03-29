@@ -59,6 +59,10 @@ services:
     depends_on:
       kafka:
         condition: service_healthy
+  demo-wallet:
+    extends:
+      file: docker-compose-sdp-anchor.yml
+      service: demo-wallet
 
 volumes:
   postgres-db:
