@@ -41,25 +41,6 @@ func (m *mockHubSentry) Recover(err interface{}) *sentry.EventID {
 // Ensuring that mockSentry is implementing sentryInterface interface
 var _ hubSentryInterface = (*mockHubSentry)(nil)
 
-type mockSentry struct {
-	mock.Mock
-}
-
-func (m *mockSentry) Init(options sentry.ClientOptions) error {
-	return m.Called(options).Error(0)
-}
-
-func (m *mockSentry) GetHubFromContext(ctx context.Context) hubSentryInterface {
-	return m.Called(ctx).Get(0).(*mockHubSentry)
-}
-
-func (m *mockSentry) CurrentHub() hubSentryInterface {
-	return m.Called().Get(0).(*mockHubSentry)
-}
-
-// Ensuring that *mockSentry is implementing sentryInterface interface.
-var _ sentryInterface = (*mockSentry)(nil)
-
 func Test_SentryClient_LogAndReportErrors(t *testing.T) {
 	mHubSentry := &mockHubSentry{}
 

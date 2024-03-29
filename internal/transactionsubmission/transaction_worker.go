@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/protocols/horizon"
@@ -14,8 +15,11 @@ import (
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/txnbuild"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	sdpMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	tssMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/monitor"
@@ -30,7 +34,7 @@ import (
 type TxJob store.ChannelTransactionBundle
 
 func (job TxJob) String() string {
-	return fmt.Sprintf("TxJob{ChannelAccount: %q, Transaction: %q, LockedUntilLedgerNumber: \"%d\"}", job.ChannelAccount.PublicKey, job.Transaction.ID, job.LockedUntilLedgerNumber)
+	return fmt.Sprintf("TxJob{ChannelAccount: %q, Transaction: %q, Tenant: %q, LockedUntilLedgerNumber: \"%d\"}", job.ChannelAccount.PublicKey, job.Transaction.ID, job.Transaction.TenantID, job.LockedUntilLedgerNumber)
 }
 
 type TransactionWorker struct {
@@ -38,11 +42,10 @@ type TransactionWorker struct {
 	txModel             store.TransactionStore
 	chAccModel          store.ChannelAccountStore
 	engine              *engine.SubmitterEngine
-	sigService          engine.SignatureService
-	maxBaseFee          int
 	crashTrackerClient  crashtracker.CrashTrackerClient
 	txProcessingLimiter *engine.TransactionProcessingLimiter
 	monitorSvc          tssMonitor.TSSMonitorService
+	eventProducer       events.Producer
 }
 
 func NewTransactionWorker(
@@ -50,11 +53,10 @@ func NewTransactionWorker(
 	txModel *store.TransactionModel,
 	chAccModel *store.ChannelAccountModel,
 	engine *engine.SubmitterEngine,
-	sigService engine.SignatureService,
-	maxBaseFee int,
 	crashTrackerClient crashtracker.CrashTrackerClient,
 	txProcessingLimiter *engine.TransactionProcessingLimiter,
 	monitorSvc tssMonitor.TSSMonitorService,
+	eventProducer events.Producer,
 ) (TransactionWorker, error) {
 	if dbConnectionPool == nil {
 		return TransactionWorker{}, fmt.Errorf("dbConnectionPool cannot be nil")
@@ -68,16 +70,11 @@ func NewTransactionWorker(
 		return TransactionWorker{}, fmt.Errorf("chAccModel cannot be nil")
 	}
 
-	if tssUtils.IsEmpty(engine) {
+	if engine == nil {
 		return TransactionWorker{}, fmt.Errorf("engine cannot be nil")
 	}
-
-	if tssUtils.IsEmpty(sigService) {
-		return TransactionWorker{}, fmt.Errorf("sigService cannot be nil")
-	}
-
-	if maxBaseFee < txnbuild.MinBaseFee {
-		return TransactionWorker{}, fmt.Errorf("maxBaseFee must be greater than or equal to %d", txnbuild.MinBaseFee)
+	if err := engine.Validate(); err != nil {
+		return TransactionWorker{}, fmt.Errorf("validating engine: %w", err)
 	}
 
 	if crashTrackerClient == nil {
@@ -97,11 +94,10 @@ func NewTransactionWorker(
 		txModel:             txModel,
 		chAccModel:          chAccModel,
 		engine:              engine,
-		sigService:          sigService,
-		maxBaseFee:          maxBaseFee,
 		crashTrackerClient:  crashTrackerClient,
 		txProcessingLimiter: txProcessingLimiter,
 		monitorSvc:          monitorSvc,
+		eventProducer:       eventProducer,
 	}, nil
 }
 
@@ -130,7 +126,7 @@ func (tw *TransactionWorker) runJob(ctx context.Context, txJob *TxJob) error {
 
 // TODO: add tests
 // handleFailedTransaction will wrap up the job when the transaction was submitted to the network but failed.
-// This method will only return an error if something goes wromg when handling the result and marking the transaction as ERROR.
+// This method will only return an error if something goes wrong when handling the result and marking the transaction as ERROR.
 func (tw *TransactionWorker) handleFailedTransaction(ctx context.Context, txJob *TxJob, hTxResp horizon.Transaction, hErr error) error {
 	log.Ctx(ctx).Errorf("🔴 Error processing job: %v", hErr)
 
@@ -149,7 +145,7 @@ func (tw *TransactionWorker) handleFailedTransaction(ctx context.Context, txJob 
 			eventType = sdpMonitor.PaymentMarkedForReprocessingLabel
 		}
 
-		tw.monitorSvc.MonitorPayment(
+		tw.monitorSvc.LogAndMonitorTransaction(
 			ctx,
 			txJob.Transaction,
 			metricTag,
@@ -164,17 +160,29 @@ func (tw *TransactionWorker) handleFailedTransaction(ctx context.Context, txJob 
 	if errors.As(hErr, &hErrWrapper) {
 		tw.txProcessingLimiter.AdjustLimitIfNeeded(hErrWrapper)
 
-		if hErrWrapper.ResultCodes != nil {
+		if hErrWrapper.IsHorizonError() {
 			isHorizonErr = true
 
+			// Errors that are not marked as definitive errors:
+			//   - 504: Timeout
+			//   - 429: Too Many Requests
+			//   - 400: with any of the codes: [tx_insufficient_fee, tx_too_late, tx_bad_seq]
+			//   - 5xx
+			//   - random network errors
 			if hErrWrapper.ShouldMarkAsError() {
 				var updatedTx *store.Transaction
 				updatedTx, err = tw.txModel.UpdateStatusToError(ctx, txJob.Transaction, hErrWrapper.Error())
 				if err != nil {
 					return fmt.Errorf("updating transaction status to error: %w", err)
 				}
-
 				txJob.Transaction = *updatedTx
+
+				// Publishing a new event on the event producer
+				err = tw.producePaymentCompletedEvent(ctx, events.PaymentCompletedErrorType, &txJob.Transaction, data.FailedPaymentStatus)
+				if err != nil {
+					return fmt.Errorf("producing payment completed event Status %s - Job %v: %w", txJob.Transaction.Status, txJob, err)
+				}
+
 				// report any terminal errors, excluding those caused by the external account not being valid
 				if !hErrWrapper.IsDestinationAccountNotReady() {
 					tw.crashTrackerClient.LogAndReportErrors(ctx, hErrWrapper, "transaction error - cannot be retried")
@@ -264,6 +272,12 @@ func (tw *TransactionWorker) handleSuccessfulTransaction(ctx context.Context, tx
 	}
 	txJob.Transaction = *updatedTx
 
+	// Publishing a new event on the event producer
+	err = tw.producePaymentCompletedEvent(ctx, events.PaymentCompletedSuccessType, &txJob.Transaction, data.SuccessPaymentStatus)
+	if err != nil {
+		return fmt.Errorf("producing payment completed event Status %s - Job %v: %w", txJob.Transaction.Status, txJob, err)
+	}
+
 	err = tw.unlockJob(ctx, txJob)
 	if err != nil {
 		return fmt.Errorf("unlocking job: %w", err)
@@ -291,7 +305,7 @@ func (tw *TransactionWorker) reconcileSubmittedTransaction(ctx context.Context, 
 	if err == nil && txDetail.Successful {
 		err = tw.handleSuccessfulTransaction(ctx, txJob, txDetail)
 		if err != nil {
-			tw.monitorSvc.MonitorPayment(ctx, txJob.Transaction, sdpMonitor.PaymentReconciliationFailureTag, tssMonitor.TxMetadata{
+			tw.monitorSvc.LogAndMonitorTransaction(ctx, txJob.Transaction, sdpMonitor.PaymentReconciliationFailureTag, tssMonitor.TxMetadata{
 				SrcChannelAcc:    txJob.ChannelAccount.PublicKey,
 				IsHorizonErr:     false,
 				ErrStack:         err.Error(),
@@ -300,7 +314,7 @@ func (tw *TransactionWorker) reconcileSubmittedTransaction(ctx context.Context, 
 			return fmt.Errorf("handling successful transaction: %w", err)
 		}
 
-		tw.monitorSvc.MonitorPayment(ctx, txJob.Transaction, sdpMonitor.PaymentReconciliationSuccessfulTag, tssMonitor.TxMetadata{
+		tw.monitorSvc.LogAndMonitorTransaction(ctx, txJob.Transaction, sdpMonitor.PaymentReconciliationSuccessfulTag, tssMonitor.TxMetadata{
 			SrcChannelAcc:    txJob.ChannelAccount.PublicKey,
 			PaymentEventType: sdpMonitor.PaymentReconciliationTransactionSuccessfulLabel,
 		})
@@ -308,12 +322,13 @@ func (tw *TransactionWorker) reconcileSubmittedTransaction(ctx context.Context, 
 	} else if (err != nil || txDetail.Successful) && !hWrapperErr.IsNotFound() {
 		log.Ctx(ctx).Warnf("received unexpected horizon error: %v", hWrapperErr)
 
-		tw.monitorSvc.MonitorPayment(ctx, txJob.Transaction, sdpMonitor.PaymentReconciliationFailureTag, tssMonitor.TxMetadata{
+		tw.monitorSvc.LogAndMonitorTransaction(ctx, txJob.Transaction, sdpMonitor.PaymentReconciliationFailureTag, tssMonitor.TxMetadata{
 			SrcChannelAcc:    txJob.ChannelAccount.PublicKey,
 			IsHorizonErr:     true,
 			ErrStack:         hWrapperErr.Error(),
 			PaymentEventType: sdpMonitor.PaymentReconciliationUnexpectedErrorLabel,
 		})
+
 		return fmt.Errorf("unexpected error: %w", hWrapperErr)
 	}
 
@@ -329,7 +344,7 @@ func (tw *TransactionWorker) reconcileSubmittedTransaction(ctx context.Context, 
 		return fmt.Errorf("unlocking job: %w", err)
 	}
 
-	tw.monitorSvc.MonitorPayment(ctx, txJob.Transaction, sdpMonitor.PaymentReconciliationSuccessfulTag, tssMonitor.TxMetadata{
+	tw.monitorSvc.LogAndMonitorTransaction(ctx, txJob.Transaction, sdpMonitor.PaymentReconciliationSuccessfulTag, tssMonitor.TxMetadata{
 		SrcChannelAcc:    txJob.ChannelAccount.PublicKey,
 		PaymentEventType: sdpMonitor.PaymentReconciliationMarkedForReprocessingLabel,
 	})
@@ -337,10 +352,42 @@ func (tw *TransactionWorker) reconcileSubmittedTransaction(ctx context.Context, 
 	return nil
 }
 
+func (tw *TransactionWorker) producePaymentCompletedEvent(ctx context.Context, eventType string, tx *store.Transaction, paymentStatus data.PaymentStatus) error {
+	if paymentStatus != data.SuccessPaymentStatus && paymentStatus != data.FailedPaymentStatus {
+		return fmt.Errorf("invalid payment status to produce payment completed event")
+	}
+
+	msg := events.Message{
+		Topic:    events.PaymentCompletedTopic,
+		Key:      tx.ExternalID,
+		TenantID: tx.TenantID,
+		Type:     eventType,
+		Data: schemas.EventPaymentCompletedData{
+			TransactionID:        tx.ID,
+			PaymentID:            tx.ExternalID,
+			PaymentStatus:        string(paymentStatus),
+			PaymentStatusMessage: tx.StatusMessage.String,
+			PaymentCompletedAt:   time.Now(),
+			StellarTransactionID: tx.StellarTransactionHash.String,
+		},
+	}
+
+	if tw.eventProducer != nil {
+		err := tw.eventProducer.WriteMessages(ctx, msg)
+		if err != nil {
+			return fmt.Errorf("writing message %s on event producer: %w", msg, err)
+		}
+	} else {
+		log.Ctx(ctx).Errorf("event producer is nil, could not publish message %+v", msg)
+	}
+
+	return nil
+}
+
 func (tw *TransactionWorker) processTransactionSubmission(ctx context.Context, txJob *TxJob) error {
 	log.Ctx(ctx).Infof("🚧 Processing transaction submission for job %v...", txJob)
 
-	tw.monitorSvc.MonitorPayment(ctx, txJob.Transaction, sdpMonitor.PaymentProcessingStartedTag, tssMonitor.TxMetadata{
+	tw.monitorSvc.LogAndMonitorTransaction(ctx, txJob.Transaction, sdpMonitor.PaymentProcessingStartedTag, tssMonitor.TxMetadata{
 		SrcChannelAcc:    txJob.ChannelAccount.PublicKey,
 		PaymentEventType: sdpMonitor.PaymentProcessingStartedLabel,
 	})
@@ -399,7 +446,7 @@ func (tw *TransactionWorker) prepareForSubmission(ctx context.Context, txJob *Tx
 	// Important: We need to save tx hash before submitting a transaction.
 	// If the script/server crashes after transaction is submitted but before the response
 	// is processed, we can easily determine whether tx was sent or not later using tx hash.
-	feeBumpTxHash, err := feeBumpTx.HashHex(tw.sigService.NetworkPassphrase())
+	feeBumpTxHash, err := feeBumpTx.HashHex(tw.engine.SignatureService.NetworkPassphrase())
 	if err != nil {
 		return nil, fmt.Errorf("hashing transaction for job %v: %w", txJob, err)
 	}
@@ -435,6 +482,11 @@ func (tw *TransactionWorker) buildAndSignTransaction(ctx context.Context, txJob 
 		}
 	}
 
+	distributionAccount, err := tw.engine.DistributionAccountResolver.DistributionAccount(ctx, txJob.Transaction.TenantID)
+	if err != nil {
+		return nil, fmt.Errorf("resolving distribution account for tenantID=%s: %w", txJob.Transaction.TenantID, err)
+	}
+
 	horizonAccount, err := tw.engine.HorizonClient.AccountDetail(horizonclient.AccountRequest{AccountID: txJob.ChannelAccount.PublicKey})
 	if err != nil {
 		return nil, utils.NewHorizonErrorWrapper(err)
@@ -449,13 +501,13 @@ func (tw *TransactionWorker) buildAndSignTransaction(ctx context.Context, txJob 
 			},
 			Operations: []txnbuild.Operation{
 				&txnbuild.Payment{
-					SourceAccount: tw.sigService.DistributionAccount(),
+					SourceAccount: distributionAccount,
 					Amount:        strconv.FormatFloat(txJob.Transaction.Amount, 'f', 6, 32), // TODO find a better way to do this
 					Destination:   txJob.Transaction.Destination,
 					Asset:         asset,
 				},
 			},
-			BaseFee: int64(tw.maxBaseFee),
+			BaseFee: int64(tw.engine.MaxBaseFee),
 			Preconditions: txnbuild.Preconditions{
 				TimeBounds:   txnbuild.NewTimeout(300),                                                 // maximum 5 minutes
 				LedgerBounds: &txnbuild.LedgerBounds{MaxLedger: uint32(txJob.LockedUntilLedgerNumber)}, // currently, 8-10 ledgers in the future
@@ -467,25 +519,31 @@ func (tw *TransactionWorker) buildAndSignTransaction(ctx context.Context, txJob 
 		return nil, fmt.Errorf("building transaction for job %v: %w", txJob, err)
 	}
 
-	paymentTx, err = tw.sigService.SignStellarTransaction(ctx, paymentTx, tw.sigService.DistributionAccount(), txJob.ChannelAccount.PublicKey)
+	// Sign tx for the channel account:
+	paymentTx, err = tw.engine.ChAccountSigner.SignStellarTransaction(ctx, paymentTx, txJob.ChannelAccount.PublicKey)
 	if err != nil {
-		return nil, fmt.Errorf("signing transaction: for job %v: %w", txJob, err)
+		return nil, fmt.Errorf("signing transaction for channel account: for job %v: %w", txJob, err)
+	}
+	// Sign tx for the distribution account:
+	paymentTx, err = tw.engine.DistAccountSigner.SignStellarTransaction(ctx, paymentTx, distributionAccount)
+	if err != nil {
+		return nil, fmt.Errorf("signing transaction for distribution account: for job %v: %w", txJob, err)
 	}
 
 	// build the outer fee-bump transaction
 	feeBumpTx, err = txnbuild.NewFeeBumpTransaction(
 		txnbuild.FeeBumpTransactionParams{
 			Inner:      paymentTx,
-			FeeAccount: tw.sigService.DistributionAccount(),
-			BaseFee:    int64(tw.maxBaseFee),
+			FeeAccount: distributionAccount,
+			BaseFee:    int64(tw.engine.MaxBaseFee),
 		},
 	)
 	if err != nil {
 		return nil, fmt.Errorf("building fee-bump transaction for job %v: %w", txJob, err)
 	}
 
-	// generate a random number to use as the fee-bump transaction's sequence number
-	feeBumpTx, err = tw.sigService.SignFeeBumpStellarTransaction(ctx, feeBumpTx, tw.sigService.DistributionAccount())
+	// Sign fee-bump tx for the distribution account:
+	feeBumpTx, err = tw.engine.DistAccountSigner.SignFeeBumpStellarTransaction(ctx, feeBumpTx, distributionAccount)
 	if err != nil {
 		return nil, fmt.Errorf("signing fee-bump transaction for job %v: %w", txJob, err)
 	}
@@ -511,7 +569,7 @@ func (tw *TransactionWorker) submit(ctx context.Context, txJob *TxJob, feeBumpTx
 			eventType = sdpMonitor.PaymentReprocessingSuccessfulLabel
 		}
 
-		tw.monitorSvc.MonitorPayment(ctx, txJob.Transaction, sdpMonitor.PaymentTransactionSuccessfulTag, tssMonitor.TxMetadata{
+		tw.monitorSvc.LogAndMonitorTransaction(ctx, txJob.Transaction, sdpMonitor.PaymentTransactionSuccessfulTag, tssMonitor.TxMetadata{
 			SrcChannelAcc:    txJob.ChannelAccount.PublicKey,
 			IsHorizonErr:     false,
 			PaymentEventType: eventType,

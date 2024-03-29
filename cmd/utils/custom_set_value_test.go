@@ -10,8 +10,10 @@ import (
 	"github.com/stellar/go/support/config"
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -28,6 +30,7 @@ type customSetterTestCase[T any] struct {
 
 // customSetterTester tests a custom_set_value function, according with the customSetterTestCase provided.
 func customSetterTester[T any](t *testing.T, tc customSetterTestCase[T], co config.ConfigOption) {
+	t.Helper()
 	ClearTestEnvironment(t)
 	if tc.envValue != "" {
 		envName := strings.ToUpper(co.Name)
@@ -84,12 +87,12 @@ func Test_SetConfigOptionMessengerType(t *testing.T) {
 		{
 			name:            "returns an error if the messenger type is empty",
 			args:            []string{},
-			wantErrContains: `couldn't parse messenger type: invalid message sender type ""`,
+			wantErrContains: `couldn't parse messenger type in message-sender-type: invalid message sender type ""`,
 		},
 		{
 			name:            "returns an error if the messenger type is invalid",
 			args:            []string{"--message-sender-type", "test"},
-			wantErrContains: `couldn't parse messenger type: invalid message sender type "TEST"`,
+			wantErrContains: `couldn't parse messenger type in message-sender-type: invalid message sender type "TEST"`,
 		},
 		{
 			name:       "🎉 handles messenger type TWILIO_SMS (through CLI args)",
@@ -145,12 +148,12 @@ func Test_SetConfigOptionLogLevel(t *testing.T) {
 		{
 			name:            "returns an error if the log level is empty",
 			args:            []string{},
-			wantErrContains: `couldn't parse log level: not a valid logrus Level: ""`,
+			wantErrContains: `couldn't parse log level in log-level: not a valid logrus Level: ""`,
 		},
 		{
 			name:            "returns an error if the log level is invalid",
 			args:            []string{"--log-level", "test"},
-			wantErrContains: `couldn't parse log level: not a valid logrus Level: "test"`,
+			wantErrContains: `couldn't parse log level in log-level: not a valid logrus Level: "test"`,
 		},
 		{
 			name:       "🎉 handles messenger type TRACE (through CLI args)",
@@ -196,12 +199,12 @@ func Test_SetConfigOptionMetricType(t *testing.T) {
 		{
 			name:            "returns an error if the value is empty",
 			args:            []string{},
-			wantErrContains: `couldn't parse metric type: invalid metric type ""`,
+			wantErrContains: `couldn't parse metric type in metrics-type: invalid metric type ""`,
 		},
 		{
 			name:            "returns an error if the value is not supported",
 			args:            []string{"--metrics-type", "test"},
-			wantErrContains: `couldn't parse metric type: invalid metric type "TEST"`,
+			wantErrContains: `couldn't parse metric type in metrics-type: invalid metric type "TEST"`,
 		},
 		{
 			name:       "🎉 handles crash tracker type (through CLI args): PROMETHEUS",
@@ -237,12 +240,12 @@ func Test_SetConfigOptionCrashTrackerType(t *testing.T) {
 		{
 			name:            "returns an error if the value is empty",
 			args:            []string{},
-			wantErrContains: `couldn't parse crash tracker type: invalid crash tracker type ""`,
+			wantErrContains: `couldn't parse crash tracker type in crash-tracker-type: invalid crash tracker type ""`,
 		},
 		{
 			name:            "returns an error if the value is not supported",
 			args:            []string{"--crash-tracker-type", "test"},
-			wantErrContains: `couldn't parse crash tracker type: invalid crash tracker type "TEST"`,
+			wantErrContains: `couldn't parse crash tracker type in crash-tracker-type: invalid crash tracker type "TEST"`,
 		},
 		{
 			name:       "🎉 handles crash tracker type (through CLI args): SENTRY",
@@ -274,6 +277,57 @@ func Test_SetConfigOptionCrashTrackerType(t *testing.T) {
 	}
 }
 
+func Test_SetConfigOptionDistributionSignerType(t *testing.T) {
+	opts := struct{ sigServiceType signing.SignatureClientType }{}
+
+	co := config.ConfigOption{
+		Name:           "distribution-signer-type",
+		OptType:        types.String,
+		CustomSetValue: SetConfigOptionDistributionSignerType,
+		ConfigKey:      &opts.sigServiceType,
+	}
+
+	testCases := []customSetterTestCase[signing.SignatureClientType]{
+		{
+			name:            "returns an error if the value is empty",
+			args:            []string{},
+			wantErrContains: `couldn't parse signature client distribution type in distribution-signer-type: invalid signature client distribution type ""`,
+		},
+		{
+			name:            "returns an error if the value is not supported",
+			args:            []string{"--distribution-signer-type", "test"},
+			wantErrContains: `couldn't parse signature client distribution type in distribution-signer-type: invalid signature client distribution type "TEST"`,
+		},
+		{
+			name:       "🎉 handles signature service type (through CLI args): DISTRIBUTION_ACCOUNT_ENV",
+			args:       []string{"--distribution-signer-type", string(signing.DistributionAccountEnvSignatureClientType)},
+			wantResult: signing.DistributionAccountEnvSignatureClientType,
+		},
+		{
+			name:       "🎉 handles signature service type (through ENV vars): DISTRIBUTION_ACCOUNT_ENV",
+			envValue:   string(signing.DistributionAccountEnvSignatureClientType),
+			wantResult: signing.DistributionAccountEnvSignatureClientType,
+		},
+		{
+			name:       "🎉 handles signature service type (through CLI args): DISTRIBUTION_ACCOUNT_DB",
+			args:       []string{"--distribution-signer-type", string(signing.DistributionAccountDBSignatureClientType)},
+			wantResult: signing.DistributionAccountDBSignatureClientType,
+		},
+		{
+			name:       "🎉 handles signature service type (through ENV vars): DISTRIBUTION_ACCOUNT_DB",
+			envValue:   string(signing.DistributionAccountDBSignatureClientType),
+			wantResult: signing.DistributionAccountDBSignatureClientType,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			opts.sigServiceType = ""
+			customSetterTester[signing.SignatureClientType](t, tc, co)
+		})
+	}
+}
+
 func Test_SetConfigOptionEC256PublicKey(t *testing.T) {
 	opts := struct{ ec256PublicKey string }{}
 
@@ -293,17 +347,17 @@ cvGyimApUE/12gFhNTRf37SE19CSCllKxstnVFOpLLWB7Qu5OJ0Wvcz3hg==
 		{
 			name:            "returns an error if the value is not a PEM string",
 			args:            []string{"--ec256-public-key", "not-a-pem-string"},
-			wantErrContains: "parsing EC256PublicKey: failed to decode PEM block containing public key",
+			wantErrContains: "parsing EC256PublicKey in ec256-public-key: failed to decode PEM block containing public key",
 		},
 		{
 			name:            "returns an error if the value is not a x509 string",
 			args:            []string{"--ec256-public-key", "-----BEGIN MY STRING-----\nYWJjZA==\n-----END MY STRING-----"},
-			wantErrContains: "parsing EC256PublicKey: failed to parse EC public key",
+			wantErrContains: "parsing EC256PublicKey in ec256-public-key: failed to parse EC public key",
 		},
 		{
 			name:            "returns an error if the value is not a ECDSA public key",
 			args:            []string{"--ec256-public-key", "-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAyNPqmozv8a2PnXHIkV+F\nmWMFy2YhOFzX12yzjjWkJ3rI9QSEomz4Unkwc6oYrnKEDYlnAgCiCqL2zPr5qNkX\nk5MPU87/wLgEqp7uAk0GkJZfrhJIYZ5AuG9+o69BNeQDEi7F3YdMJj9bvs2Ou1FN\n1zG/8HV969rJ/63fzWsqlNon1j4H5mJ0YbmVh/QLcYPmv7feFZGEj4OSZ4u+eJsw\nat5NPyhMgo6uB/goNS3fEY29UNvXoSIN3hnK3WSxQ79Rjn4V4so7ehxzCVPjnm/G\nFFTgY0hGBobmnxbjI08hEZmYKosjan4YqydGETjKR3UlhBx9y/eqqgL+opNJ8vJs\n2QIDAQAB\n-----END PUBLIC KEY-----"},
-			wantErrContains: "parsing EC256PublicKey: not a valid elliptic curve public key",
+			wantErrContains: "parsing EC256PublicKey in ec256-public-key: not a valid elliptic curve public key",
 		},
 		{
 			name:       "🎉 handles EC256 public key through the CLI flag",
@@ -350,17 +404,17 @@ Jn0+FcNT/hNjwtn2TW43710JKZqhRANCAARHzyHsCJDJUPKxFPEq8EHoJqI7+RJy
 		{
 			name:            "returns an error if the value is not a PEM string",
 			args:            []string{"--ec256-private-key", "not-a-pem-string"},
-			wantErrContains: "parsing EC256PrivateKey: failed to decode PEM block containing private key",
+			wantErrContains: "parsing EC256PrivateKey in ec256-private-key: failed to decode PEM block containing private key",
 		},
 		{
 			name:            "returns an error if the value is not a x509 string",
 			args:            []string{"--ec256-private-key", "-----BEGIN MY STRING-----\nYWJjZA==\n-----END MY STRING-----"},
-			wantErrContains: "parsing EC256PrivateKey: failed to parse EC private key",
+			wantErrContains: "parsing EC256PrivateKey in ec256-private-key: failed to parse EC private key",
 		},
 		{
 			name:            "returns an error if the value is not a ECDSA private key",
 			args:            []string{"--ec256-private-key", "-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAyNPqmozv8a2PnXHIkV+F\nmWMFy2YhOFzX12yzjjWkJ3rI9QSEomz4Unkwc6oYrnKEDYlnAgCiCqL2zPr5qNkX\nk5MPU87/wLgEqp7uAk0GkJZfrhJIYZ5AuG9+o69BNeQDEi7F3YdMJj9bvs2Ou1FN\n1zG/8HV969rJ/63fzWsqlNon1j4H5mJ0YbmVh/QLcYPmv7feFZGEj4OSZ4u+eJsw\nat5NPyhMgo6uB/goNS3fEY29UNvXoSIN3hnK3WSxQ79Rjn4V4so7ehxzCVPjnm/G\nFFTgY0hGBobmnxbjI08hEZmYKosjan4YqydGETjKR3UlhBx9y/eqqgL+opNJ8vJs\n2QIDAQAB\n-----END PUBLIC KEY-----"},
-			wantErrContains: "parsing EC256PrivateKey: failed to parse EC private key",
+			wantErrContains: "parsing EC256PrivateKey in ec256-private-key: failed to parse EC private key",
 		},
 		{
 			name:       "🎉 handles EC256 private key through the CLI flag",
@@ -401,17 +455,17 @@ func Test_SetConfigOptionStellarPublicKey(t *testing.T) {
 	testCases := []customSetterTestCase[string]{
 		{
 			name:            "returns an error if the public key is empty",
-			wantErrContains: "error validating public key: strkey is 0 bytes long; minimum valid length is 5",
+			wantErrContains: "error validating public key in sep10-signing-public-key: strkey is 0 bytes long; minimum valid length is 5",
 		},
 		{
 			name:            "returns an error if the public key is invalid",
 			args:            []string{"--sep10-signing-public-key", "invalid_public_key"},
-			wantErrContains: "error validating public key: base32 decode failed: illegal base32 data at input byte 18",
+			wantErrContains: "error validating public key in sep10-signing-public-key: base32 decode failed: illegal base32 data at input byte 18",
 		},
 		{
 			name:            "returns an error if the public key is invalid (private key instead)",
 			args:            []string{"--sep10-signing-public-key", "SDISQRUPIHAO5WIIGY4QRDCINZSA44TX3OIIUK3C63NUKN5DABKEQ276"},
-			wantErrContains: "error validating public key: invalid version byte",
+			wantErrContains: "error validating public key in sep10-signing-public-key: invalid version byte",
 		},
 		{
 			name:       "🎉 handles Stellar public key through the CLI flag",
@@ -446,18 +500,17 @@ func Test_SetConfigOptionStellarPrivateKey(t *testing.T) {
 
 	testCases := []customSetterTestCase[string]{
 		{
-			name:            "returns an error if the private key is empty",
-			wantErrContains: `error validating private key: ""`,
+			name: "doesn't return an error if the private key is empty",
 		},
 		{
 			name:            "returns an error if the private key is invalid",
 			args:            []string{"--sep10-signing-private-key", "invalid_private_key"},
-			wantErrContains: `error validating private key: "in...ey"`,
+			wantErrContains: `error validating private key in sep10-signing-private-key: "in...ey"`,
 		},
 		{
 			name:            "returns an error if the private key is invalid (public key instead)",
 			args:            []string{"--sep10-signing-private-key", "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"},
-			wantErrContains: `error validating private key: "GA...7S"`,
+			wantErrContains: `error validating private key in sep10-signing-private-key: "GA...7S"`,
 		},
 		{
 			name:       "🎉 handles Stellar private key through the CLI flag",
@@ -494,12 +547,12 @@ func Test_SetCorsAllowedOriginsFunc(t *testing.T) {
 		{
 			name:            "returns an error if the cors flag is empty",
 			args:            []string{"--cors-allowed-origins", ""},
-			wantErrContains: "cors allowed addresses cannot be empty",
+			wantErrContains: "cors allowed addresses cannot be empty in cors-allowed-origins",
 		},
 		{
 			name:            "returns an error if the cors flag results in an empty array",
 			args:            []string{"--cors-allowed-origins", ","},
-			wantErrContains: `error parsing cors addresses: parse ""`,
+			wantErrContains: `error parsing cors addresses in cors-allowed-origins: parse ""`,
 		},
 		{
 			name:       "🎉 handles one url successfully (from CLI args)",
@@ -557,7 +610,7 @@ func Test_SetConfigOptionURLString(t *testing.T) {
 		{
 			name:            "returns an error if the ui base url flag is empty",
 			args:            []string{"--sdp-ui-base-url", ""},
-			wantErrContains: "ui base url cannot be empty",
+			wantErrContains: "URL cannot be empty in sdp-ui-base-url",
 		},
 		{
 			name:       "🎉 handles ui base url successfully (from CLI args)",
@@ -579,6 +632,137 @@ func Test_SetConfigOptionURLString(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			opts.uiBaseURL = ""
 			customSetterTester[string](t, tc, co)
+		})
+	}
+}
+
+func Test_SetConfigOptionURLList(t *testing.T) {
+	opts := struct{ brokers []string }{}
+
+	co := config.ConfigOption{
+		Name:           "brokers",
+		OptType:        types.String,
+		CustomSetValue: SetConfigOptionURLList,
+		ConfigKey:      &opts.brokers,
+		Required:       false,
+	}
+
+	testCases := []customSetterTestCase[[]string]{
+		{
+			name:       "🎉 handles string list successfully (from CLI args)",
+			args:       []string{"--brokers", "kafka:9092,localhost:9093,kafka://broker:9092"},
+			wantResult: []string{"kafka:9092", "localhost:9093", "kafka://broker:9092"},
+		},
+		{
+			name:       "🎉 string list successfully (from ENV vars)",
+			envValue:   "kafka:9092,localhost:9093",
+			wantResult: []string{"kafka:9092", "localhost:9093"},
+		},
+		{
+			name:       "🎉 handles when event broker type is empty but it's not required",
+			args:       []string{"--brokers", ""},
+			wantResult: []string{},
+		},
+		{
+			name:       "🎉 handles when event broker type are spaces but it's not required",
+			args:       []string{"--brokers", "    "},
+			wantResult: []string{},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			opts.brokers = []string{}
+			customSetterTester[[]string](t, tc, co)
+		})
+	}
+
+	tc := customSetterTestCase[[]string]{
+		name:            "returns an error if the list is empty and it's required",
+		args:            []string{"--brokers", "   "}, // Workaround to test empty values
+		wantErrContains: "cannot be empty",
+	}
+	t.Run(tc.name, func(t *testing.T) {
+		opts.brokers = []string{}
+		co.Required = true
+		customSetterTester[[]string](t, tc, co)
+	})
+}
+
+func Test_SetConfigOptionStringList(t *testing.T) {
+	opts := struct{ topics []string }{}
+
+	co := config.ConfigOption{
+		Name:           "topics",
+		OptType:        types.String,
+		CustomSetValue: SetConfigOptionStringList,
+		ConfigKey:      &opts.topics,
+		Required:       false,
+	}
+
+	testCases := []customSetterTestCase[[]string]{
+		{
+			name:            "returns an error if the list is empty",
+			args:            []string{"--topics", ""},
+			wantErrContains: "cannot be empty",
+		},
+		{
+			name:       "🎉 handles string list successfully (from CLI args)",
+			args:       []string{"--topics", "topic1, topic2,topic3"},
+			wantResult: []string{"topic1", "topic2", "topic3"},
+		},
+		{
+			name:       "🎉 string list successfully (from ENV vars)",
+			envValue:   "topic1, topic2",
+			wantResult: []string{"topic1", "topic2"},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			opts.topics = []string{}
+			customSetterTester[[]string](t, tc, co)
+		})
+	}
+}
+
+func Test_SetConfigOptionEventBrokerType(t *testing.T) {
+	opts := struct{ eventBrokerType events.EventBrokerType }{}
+
+	co := config.ConfigOption{
+		Name:           "event-broker-type",
+		OptType:        types.String,
+		CustomSetValue: SetConfigOptionEventBrokerType,
+		ConfigKey:      &opts.eventBrokerType,
+	}
+
+	testCases := []customSetterTestCase[events.EventBrokerType]{
+		{
+			name:            "returns an error if event broker type is empty",
+			args:            []string{"--event-broker-type", ""},
+			wantErrContains: "couldn't parse event broker type in event-broker-type: invalid event broker type",
+		},
+		{
+			name:       "🎉 handles event broker type (through CLI args): KAFKA",
+			args:       []string{"--event-broker-type", "kafka"},
+			wantResult: events.KafkaEventBrokerType,
+		},
+		{
+			name:       "🎉 handles event broker type (through CLI args): NONE",
+			args:       []string{"--event-broker-type", "NONE"},
+			wantResult: events.NoneEventBrokerType,
+		},
+		{
+			name:            "returns an error if a invalid event broker type",
+			args:            []string{"--event-broker-type", "invalid"},
+			wantErrContains: "couldn't parse event broker type in event-broker-type: invalid event broker type",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			opts.eventBrokerType = ""
+			customSetterTester[events.EventBrokerType](t, tc, co)
 		})
 	}
 }

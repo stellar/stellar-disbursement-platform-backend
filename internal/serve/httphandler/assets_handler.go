@@ -18,25 +18,21 @@ import (
 	"github.com/stellar/go/support/render/httpjson"
 	"github.com/stellar/go/txnbuild"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	tssUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
 )
 
-const (
-	feeMultiplierInStroops = 10_000
-	stellarNativeAssetCode = "XLM"
-)
+const stellarNativeAssetCode = "XLM"
 
 var errCouldNotRemoveTrustline = errors.New("could not remove trustline")
 
 type AssetsHandler struct {
-	Models             *data.Models
-	HorizonClient      horizonclient.ClientInterface
-	SignatureService   engine.SignatureService
+	Models *data.Models
+	engine.SubmitterEngine
 	GetPreconditionsFn func() txnbuild.Preconditions
 }
 
@@ -179,8 +175,13 @@ func (c AssetsHandler) handleUpdateAssetTrustlineForDistributionAccount(ctx cont
 		return fmt.Errorf("should provide different assets")
 	}
 
+	distributionAccountPubKey, err := c.DistributionAccountResolver.DistributionAccountFromContext(ctx)
+	if err != nil {
+		return fmt.Errorf("resolving distribution account from context: %w", err)
+	}
+
 	acc, err := c.HorizonClient.AccountDetail(horizonclient.AccountRequest{
-		AccountID: c.SignatureService.DistributionAccount(),
+		AccountID: distributionAccountPubKey,
 	})
 	if err != nil {
 		return fmt.Errorf("getting distribution account details: %w", err)
@@ -210,7 +211,7 @@ func (c AssetsHandler) handleUpdateAssetTrustlineForDistributionAccount(ctx cont
 						Asset: *assetToRemoveTrustline,
 					},
 					Limit:         "0", // 0 means remove trustline
-					SourceAccount: c.SignatureService.DistributionAccount(),
+					SourceAccount: distributionAccountPubKey,
 				})
 
 				break
@@ -243,7 +244,7 @@ func (c AssetsHandler) handleUpdateAssetTrustlineForDistributionAccount(ctx cont
 					Asset: *assetToAddTrustline,
 				},
 				Limit:         "", // empty means no limit
-				SourceAccount: c.SignatureService.DistributionAccount(),
+				SourceAccount: distributionAccountPubKey,
 			})
 		}
 	}
@@ -266,6 +267,11 @@ func (c AssetsHandler) submitChangeTrustTransaction(ctx context.Context, acc *ho
 		return fmt.Errorf("should have at least one change trust operation")
 	}
 
+	distributionAccountPubKey, err := c.DistributionAccountResolver.DistributionAccountFromContext(ctx)
+	if err != nil {
+		return fmt.Errorf("resolving distribution account from context: %w", err)
+	}
+
 	operations := make([]txnbuild.Operation, 0, len(changeTrustOperations))
 	for _, ctOp := range changeTrustOperations {
 		operations = append(operations, ctOp)
@@ -278,12 +284,12 @@ func (c AssetsHandler) submitChangeTrustTransaction(ctx context.Context, acc *ho
 	tx, err := txnbuild.NewTransaction(
 		txnbuild.TransactionParams{
 			SourceAccount: &txnbuild.SimpleAccount{
-				AccountID: c.SignatureService.DistributionAccount(),
+				AccountID: distributionAccountPubKey,
 				Sequence:  acc.Sequence,
 			},
 			IncrementSequenceNum: true,
 			Operations:           operations,
-			BaseFee:              txnbuild.MinBaseFee * feeMultiplierInStroops,
+			BaseFee:              int64(c.MaxBaseFee),
 			Preconditions:        preconditions,
 		},
 	)
@@ -291,7 +297,7 @@ func (c AssetsHandler) submitChangeTrustTransaction(ctx context.Context, acc *ho
 		return fmt.Errorf("creating change trust transaction: %w", err)
 	}
 
-	tx, err = c.SignatureService.SignStellarTransaction(ctx, tx, c.SignatureService.DistributionAccount())
+	tx, err = c.DistAccountSigner.SignStellarTransaction(ctx, tx, distributionAccountPubKey)
 	if err != nil {
 		return fmt.Errorf("signing change trust transaction: %w", err)
 	}

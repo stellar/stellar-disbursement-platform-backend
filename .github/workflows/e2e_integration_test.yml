@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - develop
+      - sdp-multitenant
       - "release/**"
       - "releases/**"
       - "hotfix/**"
@@ -22,6 +23,7 @@ jobs:
     env:
       DISTRIBUTION_PUBLIC_KEY: ${{ vars.DISTRIBUTION_PUBLIC_KEY }}
       DISTRIBUTION_SEED: ${{ vars.DISTRIBUTION_SEED }}
+      CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE: ${{ vars.DISTRIBUTION_SEED }}
       SEP10_SIGNING_PUBLIC_KEY: ${{ vars.SEP10_SIGNING_PUBLIC_KEY }}
       SEP10_SIGNING_PRIVATE_KEY: ${{ vars.SEP10_SIGNING_PRIVATE_KEY }}
     steps:
@@ -38,10 +40,6 @@ jobs:
 
       - name: Install curl
         run: sudo apt-get update && sudo apt-get install -y curl
-
-      - name: Create authenticated user
-        run: |
-          docker exec e2e-sdp-api bash -c "echo '$USER_PASSWORD' | ./stellar-disbursement-platform auth add-user '$USER_EMAIL' joe yabuki --password --owner --roles owner"
 
       - name: Create integration test data
         run: |

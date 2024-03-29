@@ -12,6 +12,7 @@ func Test_SEP24JWTClaims_getters(t *testing.T) {
 	expiresAt := jwt.NewNumericDate(time.Now().Add(time.Minute * 5))
 	claims := SEP24JWTClaims{
 		ClientDomainClaim: "test.com",
+		HomeDomainClaim:   "tenant.test.com:8080",
 		RegisteredClaims: jwt.RegisteredClaims{
 			ID:        "test-transaction-id",
 			Subject:   "GB54GWWWOSHATX5ALKHBBL2IQBZ2E7TBFO7F7VXKPIW6XANYDK4Y3RRC:123456",
@@ -23,6 +24,7 @@ func Test_SEP24JWTClaims_getters(t *testing.T) {
 	require.Equal(t, "GB54GWWWOSHATX5ALKHBBL2IQBZ2E7TBFO7F7VXKPIW6XANYDK4Y3RRC", claims.SEP10StellarAccount())
 	require.Equal(t, "123456", claims.SEP10StellarMemo())
 	require.Equal(t, "test.com", claims.ClientDomain())
+	require.Equal(t, "tenant.test.com:8080", claims.HomeDomain())
 	require.Equal(t, expiresAt.Time, *claims.ExpiresAt())
 }
 

@@ -281,6 +281,10 @@ func (e *HorizonErrorWrapper) IsDestinationAccountNotReady() bool {
 // transaction error code or failed op code so that TSS can determine whether it needs
 // to be retried.
 func (e *HorizonErrorWrapper) ShouldMarkAsError() bool {
+	if e.ResultCodes == nil {
+		return false
+	}
+
 	failedTxErrCodes := []string{
 		"tx_bad_auth",
 		"tx_bad_auth_extra",

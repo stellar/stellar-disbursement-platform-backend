@@ -82,5 +82,5 @@ func Test_SetupCLI(t *testing.T) {
 	err := cmd.Execute()
 	require.NoError(t, err)
 
-	assert.Contains(t, buf.String(), "migrate     Apply Stellar Auth database migrations")
+	assert.Contains(t, buf.String(), "add-user    Add user to the system")
 }

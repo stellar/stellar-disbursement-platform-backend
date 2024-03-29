@@ -35,6 +35,7 @@ type ServerApiIntegrationTestsInterface interface {
 type ServerApiIntegrationTests struct {
 	HttpClient              httpclient.HttpClientInterface
 	ServerApiBaseURL        string
+	TenantName              string
 	UserEmail               string
 	UserPassword            string
 	DisbursementCSVFilePath string
@@ -66,6 +67,7 @@ func (sa *ServerApiIntegrationTests) Login(ctx context.Context) (*ServerApiAuthT
 	}
 
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("SDP-Tenant-Name", sa.TenantName)
 
 	resp, err := sa.HttpClient.Do(req)
 	if err != nil {
@@ -105,6 +107,7 @@ func (sa *ServerApiIntegrationTests) CreateDisbursement(ctx context.Context, aut
 
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+authToken.Token)
+	req.Header.Set("SDP-Tenant-Name", sa.TenantName)
 
 	resp, err := sa.HttpClient.Do(req)
 	if err != nil {
@@ -126,7 +129,7 @@ func (sa *ServerApiIntegrationTests) CreateDisbursement(ctx context.Context, aut
 }
 
 // createInstructionsRequest creates the request with multipart formdata to process disbursement on SDP server API.
-func createInstructionsRequest(ctx context.Context, reqURL, disbursementCSVFilePath, disbursementCSVFileName string) (*http.Request, error) {
+func createInstructionsRequest(ctx context.Context, tenantName, reqURL, disbursementCSVFilePath, disbursementCSVFileName string) (*http.Request, error) {
 	filePath := path.Join(disbursementCSVFilePath, disbursementCSVFileName)
 
 	csvBytes, err := fs.ReadFile(DisbursementCSVFiles, filePath)
@@ -156,6 +159,7 @@ func createInstructionsRequest(ctx context.Context, reqURL, disbursementCSVFileP
 	}
 
 	req.Header.Set("Content-Type", w.FormDataContentType())
+	req.Header.Set("SDP-Tenant-Name", tenantName)
 
 	return req, nil
 }
@@ -167,12 +171,13 @@ func (sa *ServerApiIntegrationTests) ProcessDisbursement(ctx context.Context, au
 		return fmt.Errorf("error creating url: %w", err)
 	}
 
-	req, err := createInstructionsRequest(ctx, reqURL, sa.DisbursementCSVFilePath, sa.DisbursementCSVFileName)
+	req, err := createInstructionsRequest(ctx, sa.TenantName, reqURL, sa.DisbursementCSVFilePath, sa.DisbursementCSVFileName)
 	if err != nil {
 		return fmt.Errorf("error creating instructions request with multipart form-data: %w", err)
 	}
 
 	req.Header.Set("Authorization", "Bearer "+authToken.Token)
+	req.Header.Set("SDP-Tenant-Name", sa.TenantName)
 
 	resp, err := sa.HttpClient.Do(req)
 	if err != nil {
@@ -206,6 +211,7 @@ func (sa *ServerApiIntegrationTests) StartDisbursement(ctx context.Context, auth
 
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+authToken.Token)
+	req.Header.Set("SDP-Tenant-Name", sa.TenantName)
 
 	resp, err := sa.HttpClient.Do(req)
 	if err != nil {
@@ -239,6 +245,7 @@ func (sa *ServerApiIntegrationTests) ReceiverRegistration(ctx context.Context, a
 
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+authSEP24Token.Token)
+	req.Header.Set("SDP-Tenant-Name", sa.TenantName)
 
 	resp, err := sa.HttpClient.Do(req)
 	if err != nil {

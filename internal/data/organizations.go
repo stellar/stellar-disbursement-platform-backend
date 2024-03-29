@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"image"
 	"regexp"
+	"strings"
+	"time"
 
 	// Don't remove the `image/jpeg` and `image/png` packages import unless
 	// the `image` package is no longer necessary.
@@ -15,10 +17,8 @@ import (
 	// See https://pkg.go.dev/image#pkg-overview
 	_ "image/jpeg"
 	_ "image/png"
-	"strings"
-	"time"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
 )
 
 const (

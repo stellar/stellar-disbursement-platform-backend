@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/db/dbtest"
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -28,7 +28,7 @@ func Test_CountryModelGet(t *testing.T) {
 	})
 
 	t.Run("returns asset successfully", func(t *testing.T) {
-		expected := CreateCountryFixture(t, ctx, dbConnectionPool.SqlxDB(), "FRA", "France")
+		expected := CreateCountryFixture(t, ctx, dbConnectionPool, "FRA", "France")
 		actual, err := countryModel.Get(ctx, "FRA")
 		require.NoError(t, err)
 
@@ -48,7 +48,7 @@ func Test_CountryModelGetAll(t *testing.T) {
 	countryModel := &CountryModel{dbConnectionPool: dbConnectionPool}
 
 	t.Run("returns all countries successfully", func(t *testing.T) {
-		expected := ClearAndCreateCountryFixtures(t, ctx, dbConnectionPool.SqlxDB())
+		expected := ClearAndCreateCountryFixtures(t, ctx, dbConnectionPool)
 		actual, err := countryModel.GetAll(ctx)
 		require.NoError(t, err)
 
@@ -56,7 +56,7 @@ func Test_CountryModelGetAll(t *testing.T) {
 	})
 
 	t.Run("returns empty array when no countries", func(t *testing.T) {
-		DeleteAllCountryFixtures(t, ctx, dbConnectionPool.SqlxDB())
+		DeleteAllCountryFixtures(t, ctx, dbConnectionPool)
 		actual, err := countryModel.GetAll(ctx)
 		require.NoError(t, err)
 

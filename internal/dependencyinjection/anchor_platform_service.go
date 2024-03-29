@@ -18,8 +18,10 @@ func NewAnchorPlatformAPIService(anchorPlatformBasePlatformURL, anchorPlatformOu
 		return nil, fmt.Errorf("anchor platform outgoing JWT secret cannot be empty")
 	}
 
+	instanceName := anchorPlatformAPIServiceInstanceName
+
 	// If there is already an instance of the service, we return the same instance
-	if instance, ok := dependenciesStoreMap[anchorPlatformAPIServiceInstanceName]; ok {
+	if instance, ok := GetInstance(instanceName); ok {
 		if anchorPlatformAPIService, ok := instance.(anchorplatform.AnchorPlatformAPIServiceInterface); ok {
 			return anchorPlatformAPIService, nil
 		}
@@ -27,12 +29,12 @@ func NewAnchorPlatformAPIService(anchorPlatformBasePlatformURL, anchorPlatformOu
 	}
 
 	// Setup Anchor Platform API Service
-	log.Infof("⚙️ Setting default anchor platform API Service")
+	log.Infof("⚙️ Setting up Anchor Platform API Service")
 	anchorPlatformAPIService, err := anchorplatform.NewAnchorPlatformAPIService(httpclient.DefaultClient(), anchorPlatformBasePlatformURL, anchorPlatformOutgoingJWTSecret)
 	if err != nil {
 		return nil, fmt.Errorf("creating Anchor Platform API service: %w", err)
 	}
-	setInstance(anchorPlatformAPIServiceInstanceName, anchorPlatformAPIService)
+	SetInstance(anchorPlatformAPIServiceInstanceName, anchorPlatformAPIService)
 
 	return anchorPlatformAPIService, nil
 }

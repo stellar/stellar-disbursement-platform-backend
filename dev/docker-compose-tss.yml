@@ -1,7 +1,7 @@
 version: '3.8'
 services:
   sdp-tss:
-    container_name: sdp-tss
+    container_name: sdp-tss-mtn
     image: stellar/sdp-v2:latest
     build:
       context: ../
@@ -9,14 +9,24 @@ services:
     ports:
       - "9000:9000"
     environment:
-      DATABASE_URL: postgres://postgres@db:5432/postgres?sslmode=disable
+      DATABASE_URL: postgres://postgres@db:5432/sdp_mtn?sslmode=disable
       NETWORK_PASSPHRASE: "Test SDF Network ; September 2015"
       HORIZON_URL: "https://horizon-testnet.stellar.org"
       NUM_CHANNEL_ACCOUNTS: "3"
       MAX_BASE_FEE: "100"
       TSS_METRICS_PORT: "9002"
       TSS_METRICS_TYPE: "TSS_PROMETHEUS"
+      DISTRIBUTION_PUBLIC_KEY: ${DISTRIBUTION_PUBLIC_KEY}
       DISTRIBUTION_SEED: ${DISTRIBUTION_SEED}
+      DISTRIBUTION_SIGNER_TYPE: ${DISTRIBUTION_SIGNER_TYPE:-DISTRIBUTION_ACCOUNT_ENV}
+      DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE: ${DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE}
+      CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE: ${CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE}
+
+      # multi-tenant
+      EVENT_BROKER_TYPE: "KAFKA"
+      BROKER_URLS: "kafka:9092"
+      CONSUMER_GROUP_ID: "group-id"
+      KAFKA_SECURITY_PROTOCOL: "PLAINTEXT"
     entrypoint: ""
     command:
       - sh
@@ -24,6 +34,6 @@ services:
       - |
         sleep 10
         ./stellar-disbursement-platform channel-accounts delete --delete-all-accounts
-        ./stellar-disbursement-platform channel-accounts ensure --num-channel-accounts-ensure 1
+        ./stellar-disbursement-platform channel-accounts ensure 1
         ./stellar-disbursement-platform tss
 

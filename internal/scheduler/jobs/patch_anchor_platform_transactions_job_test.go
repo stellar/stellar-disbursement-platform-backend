@@ -8,12 +8,15 @@ import (
 	"testing"
 	"time"
 
+	servicesMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/services/mocks"
+	"github.com/stretchr/testify/mock"
+
 	"github.com/lib/pq"
 	"github.com/stellar/go/support/log"
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/db/dbtest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -28,7 +31,7 @@ func Test_NewPatchAnchorPlatformTransactionCompletionJob(t *testing.T) {
 
 	t.Run("exits with status 1 when AP API Client is missing", func(t *testing.T) {
 		if os.Getenv("TEST_FATAL") == "1" {
-			NewPatchAnchorPlatformTransactionsCompletionJob(nil, nil)
+			NewPatchAnchorPlatformTransactionsCompletionJob(DefaultMinimumJobIntervalSeconds, nil, nil)
 			return
 		}
 
@@ -48,7 +51,27 @@ func Test_NewPatchAnchorPlatformTransactionCompletionJob(t *testing.T) {
 
 	t.Run("exits with status 1 when SDP Models are missing", func(t *testing.T) {
 		if os.Getenv("TEST_FATAL") == "1" {
-			NewPatchAnchorPlatformTransactionsCompletionJob(&anchorplatform.AnchorPlatformAPIService{}, nil)
+			NewPatchAnchorPlatformTransactionsCompletionJob(DefaultMinimumJobIntervalSeconds, &anchorplatform.AnchorPlatformAPIService{}, nil)
+			return
+		}
+
+		// We're using a strategy to setup a cmd inside the test that calls the test itself and verifies if it exited with exit status '1'.
+		// Ref: https://go.dev/talks/2014/testing.slide#23
+		cmd := exec.Command(os.Args[0], fmt.Sprintf("-test.run=%s", t.Name()))
+		cmd.Env = append(os.Environ(), "TEST_FATAL=1")
+
+		err := cmd.Run()
+		if exitError, ok := err.(*exec.ExitError); ok {
+			assert.False(t, exitError.Success())
+			return
+		}
+
+		t.Fatalf("process ran with err %v, want exit status 1", err)
+	})
+
+	t.Run("exits with status 1 when interval is not set correctly", func(t *testing.T) {
+		if os.Getenv("TEST_FATAL") == "1" {
+			NewPatchAnchorPlatformTransactionsCompletionJob(DefaultMinimumJobIntervalSeconds-1, &anchorplatform.AnchorPlatformAPIService{}, nil)
 			return
 		}
 
@@ -69,33 +92,45 @@ func Test_NewPatchAnchorPlatformTransactionCompletionJob(t *testing.T) {
 	t.Run("returns a job instance successfully", func(t *testing.T) {
 		models, err := data.NewModels(dbConnectionPool)
 		require.NoError(t, err)
-		svc := NewPatchAnchorPlatformTransactionsCompletionJob(&anchorplatform.AnchorPlatformAPIService{}, models)
-		assert.NotNil(t, svc)
+		j := NewPatchAnchorPlatformTransactionsCompletionJob(DefaultMinimumJobIntervalSeconds, &anchorplatform.AnchorPlatformAPIService{}, models)
+		assert.NotNil(t, j)
+		assert.Equal(t, patchAnchorPlatformTransactionsCompletionJobName, j.GetName())
+		assert.Equal(t, DefaultMinimumJobIntervalSeconds*time.Second, j.GetInterval())
+		assert.True(t, j.IsJobMultiTenant())
 	})
-}
-
-func Test_PatchAnchorPlatformTransactionsCompletionJob(t *testing.T) {
-	j := PatchAnchorPlatformTransactionsCompletionJob{}
-
-	assert.Equal(t, patchAnchorPlatformTransactionsCompletionJobName, j.GetName())
-	assert.Equal(t, patchAnchorPlatformTransactionsCompletionJobIntervalSeconds*time.Second, j.GetInterval())
 }
 
 func Test_PatchAnchorPlatformTransactionsCompletionJob_Execute(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
+	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, outerErr)
 	defer dbConnectionPool.Close()
 
 	ctx := context.Background()
 	apAPISvcMock := anchorplatform.AnchorPlatformAPIServiceMock{}
-	models, err := data.NewModels(dbConnectionPool)
-	require.NoError(t, err)
+	patchAnchorSvcMock := servicesMocks.MockPatchAnchorPlatformTransactionCompletionService{}
+
+	models, outerErr := data.NewModels(dbConnectionPool)
+	require.NoError(t, outerErr)
+
+	t.Run("error patching anchor platform transactions completion", func(t *testing.T) {
+		patchAnchorSvcMock.
+			On("PatchAPTransactionsForPayments", mock.Anything).
+			Return(fmt.Errorf("patching anchor platform transactions completion error")).
+			Once()
+
+		j := NewPatchAnchorPlatformTransactionsCompletionJob(DefaultMinimumJobIntervalSeconds, &apAPISvcMock, models)
+		j.(*patchAnchorPlatformTransactionsCompletionJob).service = &patchAnchorSvcMock
+
+		err := j.Execute(ctx)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "patching anchor platform transactions completion")
+	})
 
 	t.Run("executes the job successfully", func(t *testing.T) {
-		j := NewPatchAnchorPlatformTransactionsCompletionJob(&apAPISvcMock, models)
+		j := NewPatchAnchorPlatformTransactionsCompletionJob(DefaultMinimumJobIntervalSeconds, &apAPISvcMock, models)
 
 		data.DeleteAllFixtures(t, ctx, dbConnectionPool)
 
@@ -161,4 +196,6 @@ func Test_PatchAnchorPlatformTransactionsCompletionJob_Execute(t *testing.T) {
 		assert.Equal(t, "PatchAnchorPlatformTransactionService: got 1 payments to process", entries[0].Message)
 		assert.Equal(t, "PatchAnchorPlatformTransactionService: updating anchor platform transaction synced at for 1 receiver wallet(s)", entries[1].Message)
 	})
+
+	apAPISvcMock.AssertExpectations(t)
 }
