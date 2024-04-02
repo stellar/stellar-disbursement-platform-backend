@@ -388,7 +388,7 @@ func (h ProfileHandler) GetOrganizationInfo(rw http.ResponseWriter, req *http.Re
 	}
 
 	if org.PrivacyPolicyLink != nil {
-		resp["privacy_policy_link"] = org.PrivacyPolicyLink
+		resp["privacy_policy_link"] = *org.PrivacyPolicyLink
 	}
 
 	httpjson.RenderStatus(rw, http.StatusOK, resp, httpjson.JSON)
