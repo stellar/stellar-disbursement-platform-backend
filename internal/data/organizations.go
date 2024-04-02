@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"image"
+	"net/url"
 	"regexp"
 	"strings"
 	"time"
@@ -89,7 +90,7 @@ func (lt LogoType) ToHTTPContentType() string {
 
 func (ou *OrganizationUpdate) validate() error {
 	if ou.areAllFieldsEmpty() {
-		return fmt.Errorf("name, timezone UTC offset, approval workflow flag, SMS Resend Interval, SMS invite template, OTP message template or logo is required")
+		return fmt.Errorf("name, timezone UTC offset, approval workflow flag, SMS Resend Interval, SMS invite template, OTP message template, privacy policy link or logo is required")
 	}
 
 	if len(ou.Logo) > 0 {
@@ -105,6 +106,13 @@ func (ou *OrganizationUpdate) validate() error {
 
 	if ou.TimezoneUTCOffset != "" && !tzRegex.MatchString(ou.TimezoneUTCOffset) {
 		return fmt.Errorf("invalid timezone UTC offset format. Example: +02:00 or -03:00")
+	}
+
+	if ou.PrivacyPolicyLink != nil && *ou.PrivacyPolicyLink != "" {
+		_, err := url.ParseRequestURI(*ou.PrivacyPolicyLink)
+		if err != nil {
+			return fmt.Errorf("invalid privacy policy link: %w", err)
+		}
 	}
 
 	return nil
@@ -208,8 +216,9 @@ func (om *OrganizationModel) Update(ctx context.Context, ou *OrganizationUpdate)
 
 	if ou.PrivacyPolicyLink != nil {
 		if *ou.PrivacyPolicyLink != "" {
+			link, _ := url.ParseRequestURI(*ou.PrivacyPolicyLink)
 			fields = append(fields, "privacy_policy_link = ?")
-			args = append(args, *ou.PrivacyPolicyLink)
+			args = append(args, link.String())
 		} else {
 			// When empty value is passed by parameter we set the DEFAULT value for the column.
 			fields = append(fields, "privacy_policy_link = DEFAULT")

@@ -80,7 +80,7 @@ func Test_Organizations_Get(t *testing.T) {
 func Test_OrganizationUpdate_validate(t *testing.T) {
 	ou := &OrganizationUpdate{}
 	err := ou.validate()
-	assert.EqualError(t, err, "name, timezone UTC offset, approval workflow flag, SMS Resend Interval, SMS invite template, OTP message template or logo is required")
+	assert.EqualError(t, err, "name, timezone UTC offset, approval workflow flag, SMS Resend Interval, SMS invite template, OTP message template, privacy policy link or logo is required")
 
 	ou.Name = "My Org Name"
 	err = ou.validate()
@@ -171,6 +171,16 @@ func Test_OrganizationUpdate_validate(t *testing.T) {
 	ou.TimezoneUTCOffset = "-02:00"
 	err = ou.validate()
 	assert.Nil(t, err)
+
+	var link string = "test-link"
+	ou.PrivacyPolicyLink = &link
+	err = ou.validate()
+	assert.EqualError(t, err, "invalid privacy policy link: parse \"test-link\": invalid URI for request")
+
+	link = "https://example.com/privacy-policy"
+	ou.PrivacyPolicyLink = &link
+	err = ou.validate()
+	assert.Nil(t, err)
 }
 
 func Test_Organizations_Update(t *testing.T) {
@@ -199,7 +209,7 @@ func Test_Organizations_Update(t *testing.T) {
 	t.Run("returns error with invalid OrganizationUpdate", func(t *testing.T) {
 		ou := &OrganizationUpdate{}
 		err := organizationModel.Update(ctx, ou)
-		assert.EqualError(t, err, "invalid organization update: name, timezone UTC offset, approval workflow flag, SMS Resend Interval, SMS invite template, OTP message template or logo is required")
+		assert.EqualError(t, err, "invalid organization update: name, timezone UTC offset, approval workflow flag, SMS Resend Interval, SMS invite template, OTP message template, privacy policy link or logo is required")
 	})
 
 	t.Run("updates only organization's name successfully", func(t *testing.T) {
@@ -451,7 +461,7 @@ func Test_Organizations_Update(t *testing.T) {
 		require.NoError(t, err)
 		assert.Nil(t, o.PrivacyPolicyLink)
 
-		var link string = "test-link"
+		var link string = "https://example.com/privacy-policy"
 		err = organizationModel.Update(ctx, &OrganizationUpdate{PrivacyPolicyLink: &link})
 		require.NoError(t, err)
 

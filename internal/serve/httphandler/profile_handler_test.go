@@ -347,7 +347,7 @@ func Test_ProfileHandler_PatchOrganizationProfile_Successful(t *testing.T) {
 					"sms_registration_message_template": "My custom receiver wallet registration invite. MyOrg 👋",
 					"sms_resend_interval": 2,
 					"timezone_utc_offset": "-03:00",
-					"privacy_policy_link": "test-privacy-policy-link"
+					"privacy_policy_link": "https://example.com/privacy-policy"
 				}`
 				return createOrganizationProfileMultipartRequest(t, ctx, url, "logo", "logo.png", reqBody, newPNGImgBuf())
 			},
@@ -360,9 +360,9 @@ func Test_ProfileHandler_PatchOrganizationProfile_Successful(t *testing.T) {
 				"SMSRegistrationMessageTemplate": "My custom receiver wallet registration invite. MyOrg 👋",
 				"SMSResendInterval":              int64(2),
 				"TimezoneUTCOffset":              "-03:00",
-				"PrivacyPolicyLink":              "test-privacy-policy-link",
+				"PrivacyPolicyLink":              "https://example.com/privacy-policy",
 			},
-			wantLogEntries: []string{"[PatchOrganizationProfile] - userID user-id will update the organization fields [IsApprovalRequired='true', Logo='...', Name='My Org Name', OTPMessageTemplate='Here's your OTP Code to complete your registration. MyOrg 👋', PaymentCancellationPeriodDays='2', PrivacyPolicyLink='test-privacy-policy-link', SMSRegistrationMessageTemplate='My custom receiver wallet registration invite. MyOrg 👋', SMSResendInterval='2', TimezoneUTCOffset='-03:00']"},
+			wantLogEntries: []string{"[PatchOrganizationProfile] - userID user-id will update the organization fields [IsApprovalRequired='true', Logo='...', Name='My Org Name', OTPMessageTemplate='Here's your OTP Code to complete your registration. MyOrg 👋', PaymentCancellationPeriodDays='2', PrivacyPolicyLink='https://example.com/privacy-policy', SMSRegistrationMessageTemplate='My custom receiver wallet registration invite. MyOrg 👋', SMSResendInterval='2', TimezoneUTCOffset='-03:00']"},
 		},
 		{
 			name:  "🎉 successfully updates organization back to its default values",
@@ -378,7 +378,7 @@ func Test_ProfileHandler_PatchOrganizationProfile_Successful(t *testing.T) {
 				smsRegistrationMessageTemplate := "custom SMSRegistrationMessageTemplate"
 				smsResendInterval := int64(123)
 				paymentCancellationPeriodDays := int64(456)
-				privacyPolicyLink := "custom PrivacyPolicyLink"
+				privacyPolicyLink := "https://example.com/privacy-policy"
 				err := models.Organizations.Update(ctx, &data.OrganizationUpdate{
 					SMSRegistrationMessageTemplate: &smsRegistrationMessageTemplate,
 					OTPMessageTemplate:             &otpMessageTemplate,
@@ -1285,7 +1285,7 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 
 		ctx = context.WithValue(ctx, middleware.TokenContextKey, "mytoken")
 
-		var privacyPolicyLink string = "test-pricavy-policy-link"
+		var privacyPolicyLink string = "https://example.com/privacy-policy"
 		err := models.Organizations.Update(ctx, &data.OrganizationUpdate{
 			PrivacyPolicyLink: &privacyPolicyLink,
 		})
@@ -1310,7 +1310,7 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 				"is_approval_required":false,
 				"sms_resend_interval": 0,
 				"payment_cancellation_period_days": 0,
-				"privacy_policy_link": "test-pricavy-policy-link"
+				"privacy_policy_link": "https://example.com/privacy-policy"
 			}
 		`, defaultTenantDistAcc)
 
