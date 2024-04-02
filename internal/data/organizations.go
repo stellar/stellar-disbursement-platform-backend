@@ -42,6 +42,7 @@ type Organization struct {
 	// Example:
 	//	{{.OTP}} OTPMessageTemplate
 	OTPMessageTemplate string    `json:"otp_message_template" db:"otp_message_template"`
+	PrivacyPolicyLink  *string   `json:"privacy_policy_link" db:"privacy_policy_link"`
 	Logo               []byte    `db:"logo"`
 	IsApprovalRequired bool      `json:"is_approval_required" db:"is_approval_required"`
 	CreatedAt          time.Time `json:"created_at" db:"created_at"`
@@ -59,6 +60,7 @@ type OrganizationUpdate struct {
 	// Using pointers to accept empty strings
 	SMSRegistrationMessageTemplate *string `json:",omitempty"`
 	OTPMessageTemplate             *string `json:",omitempty"`
+	PrivacyPolicyLink              *string `json:",omitempty"`
 }
 
 type LogoType string
@@ -116,7 +118,8 @@ func (ou *OrganizationUpdate) areAllFieldsEmpty() bool {
 		ou.SMSRegistrationMessageTemplate == nil &&
 		ou.OTPMessageTemplate == nil &&
 		ou.SMSResendInterval == nil &&
-		ou.PaymentCancellationPeriodDays == nil)
+		ou.PaymentCancellationPeriodDays == nil &&
+		ou.PrivacyPolicyLink == nil)
 }
 
 type OrganizationModel struct {
@@ -200,6 +203,16 @@ func (om *OrganizationModel) Update(ctx context.Context, ou *OrganizationUpdate)
 		} else {
 			// When empty value is passed by parameter we set the DEFAULT value for the column.
 			fields = append(fields, "otp_message_template = DEFAULT")
+		}
+	}
+
+	if ou.PrivacyPolicyLink != nil {
+		if *ou.PrivacyPolicyLink != "" {
+			fields = append(fields, "privacy_policy_link = ?")
+			args = append(args, *ou.PrivacyPolicyLink)
+		} else {
+			// When empty value is passed by parameter we set the DEFAULT value for the column.
+			fields = append(fields, "privacy_policy_link = DEFAULT")
 		}
 	}
 

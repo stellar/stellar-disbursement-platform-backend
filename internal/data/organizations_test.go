@@ -73,6 +73,7 @@ func Test_Organizations_Get(t *testing.T) {
 		assert.NotEmpty(t, gotOrganization.CreatedAt)
 		assert.NotEmpty(t, gotOrganization.UpdatedAt)
 		assert.False(t, gotOrganization.IsApprovalRequired)
+		assert.Nil(t, gotOrganization.PrivacyPolicyLink)
 	})
 }
 
@@ -441,5 +442,30 @@ func Test_Organizations_Update(t *testing.T) {
 		o, err = organizationModel.Get(ctx)
 		require.NoError(t, err)
 		assert.Nil(t, o.PaymentCancellationPeriodDays)
+	})
+
+	t.Run("updates the organization's PrivacyPolicyLink", func(t *testing.T) {
+		resetOrganizationInfo(t, ctx)
+
+		o, err := organizationModel.Get(ctx)
+		require.NoError(t, err)
+		assert.Nil(t, o.PrivacyPolicyLink)
+
+		var link string = "test-link"
+		err = organizationModel.Update(ctx, &OrganizationUpdate{PrivacyPolicyLink: &link})
+		require.NoError(t, err)
+
+		o, err = organizationModel.Get(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, link, *o.PrivacyPolicyLink)
+
+		// Set it as null
+		var emptyValue string = ""
+		err = organizationModel.Update(ctx, &OrganizationUpdate{PrivacyPolicyLink: &emptyValue})
+		require.NoError(t, err)
+
+		o, err = organizationModel.Get(ctx)
+		require.NoError(t, err)
+		assert.Nil(t, o.PrivacyPolicyLink)
 	})
 }
