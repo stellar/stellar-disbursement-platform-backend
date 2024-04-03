@@ -220,8 +220,7 @@ func (om *OrganizationModel) Update(ctx context.Context, ou *OrganizationUpdate)
 			fields = append(fields, "privacy_policy_link = ?")
 			args = append(args, link.String())
 		} else {
-			// When empty value is passed by parameter we set the DEFAULT value for the column.
-			fields = append(fields, "privacy_policy_link = DEFAULT")
+			fields = append(fields, "privacy_policy_link = NULL")
 		}
 	}
 
