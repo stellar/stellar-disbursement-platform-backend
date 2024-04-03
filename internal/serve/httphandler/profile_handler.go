@@ -57,6 +57,7 @@ type PatchOrganizationProfileRequest struct {
 	PaymentCancellationPeriodDays  *int64  `json:"payment_cancellation_period_days"`
 	SMSRegistrationMessageTemplate *string `json:"sms_registration_message_template"`
 	OTPMessageTemplate             *string `json:"otp_message_template"`
+	PrivacyPolicyLink              *string `json:"privacy_policy_link"`
 }
 
 func (r *PatchOrganizationProfileRequest) AreAllFieldsEmpty() bool {
@@ -66,7 +67,8 @@ func (r *PatchOrganizationProfileRequest) AreAllFieldsEmpty() bool {
 		r.SMSRegistrationMessageTemplate == nil &&
 		r.OTPMessageTemplate == nil &&
 		r.SMSResendInterval == nil &&
-		r.PaymentCancellationPeriodDays == nil)
+		r.PaymentCancellationPeriodDays == nil &&
+		r.PrivacyPolicyLink == nil)
 }
 
 type PatchUserProfileRequest struct {
@@ -166,6 +168,7 @@ func (h ProfileHandler) PatchOrganizationProfile(rw http.ResponseWriter, req *ht
 		OTPMessageTemplate:             reqBody.OTPMessageTemplate,
 		SMSResendInterval:              reqBody.SMSResendInterval,
 		PaymentCancellationPeriodDays:  reqBody.PaymentCancellationPeriodDays,
+		PrivacyPolicyLink:              reqBody.PrivacyPolicyLink,
 	}
 	requestDict, err := utils.ConvertType[data.OrganizationUpdate, map[string]interface{}](organizationUpdate)
 	if err != nil {
@@ -365,6 +368,7 @@ func (h ProfileHandler) GetOrganizationInfo(rw http.ResponseWriter, req *http.Re
 		"is_approval_required":             org.IsApprovalRequired,
 		"sms_resend_interval":              0,
 		"payment_cancellation_period_days": 0,
+		"privacy_policy_link":              org.PrivacyPolicyLink,
 	}
 
 	if org.SMSRegistrationMessageTemplate != data.DefaultSMSRegistrationMessageTemplate {
@@ -381,6 +385,10 @@ func (h ProfileHandler) GetOrganizationInfo(rw http.ResponseWriter, req *http.Re
 
 	if org.PaymentCancellationPeriodDays != nil {
 		resp["payment_cancellation_period_days"] = *org.PaymentCancellationPeriodDays
+	}
+
+	if org.PrivacyPolicyLink != nil {
+		resp["privacy_policy_link"] = *org.PrivacyPolicyLink
 	}
 
 	httpjson.RenderStatus(rw, http.StatusOK, resp, httpjson.JSON)
