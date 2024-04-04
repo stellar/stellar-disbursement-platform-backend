@@ -383,8 +383,8 @@ func Test_SEP24QueryTokenAuthenticateMiddleware(t *testing.T) {
 		r.With(SEP24QueryTokenAuthenticateMiddleware(jwtManager, network.TestNetworkPassphrase, tenantManager, true)).Get("/authenticated_default_tenant", func(w http.ResponseWriter, r *http.Request) {
 			contextClaims = r.Context().Value(SEP24ClaimsContextKey).(*SEP24JWTClaims)
 			w.WriteHeader(http.StatusOK)
-			_, err := w.Write(json.RawMessage(`{"status":"ok"}`))
-			require.NoError(t, err)
+			_, wErr := w.Write(json.RawMessage(`{"status":"ok"}`))
+			require.NoError(t, wErr)
 		})
 
 		validTransactionID := "valid-transaction-id"
@@ -747,8 +747,8 @@ func Test_SEP24HeaderTokenAuthenticateMiddleware(t *testing.T) {
 		r.With(SEP24HeaderTokenAuthenticateMiddleware(jwtManager, network.TestNetworkPassphrase, tenantManager, true)).Get("/authenticated_default_tenant", func(w http.ResponseWriter, r *http.Request) {
 			contextClaims = r.Context().Value(SEP24ClaimsContextKey).(*SEP24JWTClaims)
 			w.WriteHeader(http.StatusOK)
-			_, err := w.Write(json.RawMessage(`{"status":"ok"}`))
-			require.NoError(t, err)
+			_, wErr := w.Write(json.RawMessage(`{"status":"ok"}`))
+			require.NoError(t, wErr)
 		})
 
 		validTransactionID := "valid-transaction-id"
