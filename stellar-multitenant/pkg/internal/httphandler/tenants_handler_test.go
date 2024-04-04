@@ -144,6 +144,7 @@ func Test_TenantHandler_Get(t *testing.T) {
 					"sdp_ui_base_url": null,
 					"status": "TENANT_CREATED",
 					"distribution_account": %q,
+					"is_default": false,
 					"created_at": %q,
 					"updated_at": %q
 				},
@@ -156,6 +157,7 @@ func Test_TenantHandler_Get(t *testing.T) {
 					"sdp_ui_base_url": null,
 					"status": "TENANT_CREATED",
 					"distribution_account": %q,
+					"is_default": false,
 					"created_at": %q,
 					"updated_at": %q
 				}
@@ -191,6 +193,7 @@ func Test_TenantHandler_Get(t *testing.T) {
 				"sdp_ui_base_url": null,
 				"status": "TENANT_CREATED",
 				"distribution_account": %q,
+				"is_default": false,
 				"created_at": %q,
 				"updated_at": %q
 			}
@@ -223,6 +226,7 @@ func Test_TenantHandler_Get(t *testing.T) {
 				"sdp_ui_base_url": null,
 				"status": "TENANT_CREATED",
 				"distribution_account": %q,
+				"is_default": false,
 				"created_at": %q,
 				"updated_at": %q
 			}
@@ -268,7 +272,6 @@ func Test_TenantHandler_Post(t *testing.T) {
 	sigService, _, distAccSigClient, _, distAccResolver := signing.NewMockSignatureService(t)
 
 	distAcc := keypair.MustRandom().Address()
-	distAccResolver.On("HostDistributionAccount").Return(distAcc, nil).Twice()
 
 	submitterEngine := engine.SubmitterEngine{
 		HorizonClient:       mHorizonClient,
@@ -342,6 +345,11 @@ func Test_TenantHandler_Post(t *testing.T) {
 			Return([]string{distAcc}, nil).
 			Once()
 
+		distAccResolver.
+			On("HostDistributionAccount").
+			Return(distAcc, nil).
+			Once()
+
 		reqBody := `
 			{
 				"name": "aid-org",
@@ -352,7 +360,8 @@ func Test_TenantHandler_Post(t *testing.T) {
 				"email_sender_type": "DRY_RUN",
 				"sms_sender_type": "DRY_RUN",
 				"base_url": "https://backend.sdp.org",
-				"sdp_ui_base_url": "https://aid-org.sdp.org"
+				"sdp_ui_base_url": "https://aid-org.sdp.org",
+				"is_default": true
 			}
 		`
 
@@ -381,6 +390,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 				"sdp_ui_base_url": "https://aid-org.sdp.org",
 				"status": "TENANT_PROVISIONED",
 				"distribution_account": %q,
+				"is_default": true,
 				"created_at": %q,
 				"updated_at": %q
 			}
@@ -441,6 +451,11 @@ func Test_TenantHandler_Post(t *testing.T) {
 			Return([]string{distAcc}, nil).
 			Once()
 
+		distAccResolver.
+			On("HostDistributionAccount").
+			Return(distAcc, nil).
+			Once()
+
 		reqBody := `
 			{
 				"name": "my-aid-org",
@@ -484,6 +499,8 @@ func Test_TenantHandler_Post(t *testing.T) {
 	})
 
 	messengerClientMock.AssertExpectations(t)
+	distAccSigClient.AssertExpectations(t)
+	distAccResolver.AssertExpectations(t)
 }
 
 func Test_TenantHandler_Patch(t *testing.T) {
@@ -570,6 +587,7 @@ func Test_TenantHandler_Patch(t *testing.T) {
 			"sdp_ui_base_url": null,
 			"status": "TENANT_CREATED",
 			"distribution_account": "GCTNUNQVX7BNIP5AUWW2R4YC7G6R3JGUDNMGT7H62BGBUY4A4V6ROAAH",
+			"is_default": false,
 		`
 
 		runSuccessfulRequestPatchTest(t, r, ctx, dbConnectionPool, handler, reqBody, expectedRespBody)
@@ -584,6 +602,7 @@ func Test_TenantHandler_Patch(t *testing.T) {
 			"sdp_ui_base_url": null,
 			"status": "TENANT_CREATED",
 			"distribution_account": "GCTNUNQVX7BNIP5AUWW2R4YC7G6R3JGUDNMGT7H62BGBUY4A4V6ROAAH",
+			"is_default": false,
 		`
 
 		runSuccessfulRequestPatchTest(t, r, ctx, dbConnectionPool, handler, reqBody, expectedRespBody)
@@ -598,6 +617,7 @@ func Test_TenantHandler_Patch(t *testing.T) {
 			"sdp_ui_base_url": null,
 			"status": "TENANT_CREATED",
 			"distribution_account": "GCTNUNQVX7BNIP5AUWW2R4YC7G6R3JGUDNMGT7H62BGBUY4A4V6ROAAH",
+			"is_default": false,
 		`
 
 		runSuccessfulRequestPatchTest(t, r, ctx, dbConnectionPool, handler, reqBody, expectedRespBody)
@@ -612,6 +632,7 @@ func Test_TenantHandler_Patch(t *testing.T) {
 			"sdp_ui_base_url": "http://valid.com",
 			"status": "TENANT_CREATED",
 			"distribution_account": "GCTNUNQVX7BNIP5AUWW2R4YC7G6R3JGUDNMGT7H62BGBUY4A4V6ROAAH",
+			"is_default": false,
 		`
 
 		runSuccessfulRequestPatchTest(t, r, ctx, dbConnectionPool, handler, reqBody, expectedRespBody)
@@ -626,6 +647,22 @@ func Test_TenantHandler_Patch(t *testing.T) {
 			"sdp_ui_base_url": null,
 			"status": "TENANT_ACTIVATED",
 			"distribution_account": "GCTNUNQVX7BNIP5AUWW2R4YC7G6R3JGUDNMGT7H62BGBUY4A4V6ROAAH",
+			"is_default": false,
+		`
+
+		runSuccessfulRequestPatchTest(t, r, ctx, dbConnectionPool, handler, reqBody, expectedRespBody)
+	})
+
+	t.Run("successfully updates IsDefault of a tenant", func(t *testing.T) {
+		reqBody := `{"is_default": true}`
+		expectedRespBody := `
+			"email_sender_type": "DRY_RUN",
+			"sms_sender_type": "DRY_RUN",
+			"base_url": null,
+			"sdp_ui_base_url": null,
+			"status": "TENANT_CREATED",
+			"distribution_account": "GCTNUNQVX7BNIP5AUWW2R4YC7G6R3JGUDNMGT7H62BGBUY4A4V6ROAAH",
+			"is_default": true,
 		`
 
 		runSuccessfulRequestPatchTest(t, r, ctx, dbConnectionPool, handler, reqBody, expectedRespBody)
@@ -637,7 +674,8 @@ func Test_TenantHandler_Patch(t *testing.T) {
 			"sms_sender_type": "AWS_SMS",
 			"base_url": "http://valid.com",
 			"sdp_ui_base_url": "http://valid.com",
-			"status": "TENANT_ACTIVATED"
+			"status": "TENANT_ACTIVATED",
+			"is_default": false
 		}`
 
 		expectedRespBody := `
@@ -647,6 +685,7 @@ func Test_TenantHandler_Patch(t *testing.T) {
 			"sdp_ui_base_url": "http://valid.com",
 			"status": "TENANT_ACTIVATED",
 			"distribution_account": "GCTNUNQVX7BNIP5AUWW2R4YC7G6R3JGUDNMGT7H62BGBUY4A4V6ROAAH",
+			"is_default": false,
 		`
 
 		runSuccessfulRequestPatchTest(t, r, ctx, dbConnectionPool, handler, reqBody, expectedRespBody)

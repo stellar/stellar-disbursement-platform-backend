@@ -88,6 +88,7 @@ func (h TenantsHandler) Post(rw http.ResponseWriter, req *http.Request) {
 		EmailSenderType: &reqBody.EmailSenderType,
 		SMSSenderType:   &reqBody.SMSSenderType,
 		BaseURL:         &reqBody.BaseURL,
+		IsDefault:       reqBody.IsDefault,
 	})
 	if err != nil {
 		httperror.InternalError(ctx, "Could not update tenant config", err, nil).Render(rw)
@@ -124,6 +125,7 @@ func (t TenantsHandler) Patch(w http.ResponseWriter, r *http.Request) {
 		BaseURL:         reqBody.BaseURL,
 		SDPUIBaseURL:    reqBody.SDPUIBaseURL,
 		Status:          reqBody.Status,
+		IsDefault:       reqBody.IsDefault,
 	})
 	if err != nil {
 		if errors.Is(tenant.ErrEmptyUpdateTenant, err) {

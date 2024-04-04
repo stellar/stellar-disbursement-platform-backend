@@ -20,6 +20,7 @@ var (
 	ErrEmptyTenantName         = errors.New("tenant name cannot be empty")
 	ErrEmptyUpdateTenant       = errors.New("provide at least one field to be updated")
 	ErrTenantNotFoundInContext = errors.New("tenant not found in context")
+	ErrTooManyDefaultTenants   = errors.New("too many default tenants. Expected at most one default tenant")
 )
 
 type tenantContextKey struct{}
@@ -30,6 +31,7 @@ type ManagerInterface interface {
 	GetTenantByID(ctx context.Context, id string) (*Tenant, error)
 	GetTenantByName(ctx context.Context, name string) (*Tenant, error)
 	GetTenantByIDOrName(ctx context.Context, arg string) (*Tenant, error)
+	GetDefault(ctx context.Context) (*Tenant, error)
 	AddTenant(ctx context.Context, name string) (*Tenant, error)
 	DeleteTenantByName(ctx context.Context, name string) error
 	CreateTenantSchema(ctx context.Context, tenantName string) error
@@ -110,6 +112,26 @@ func (m *Manager) GetTenantByIDOrName(ctx context.Context, arg string) (*Tenant,
 	}
 
 	return &tnt, nil
+}
+
+// GetDefault returns the tenant where is_default is true. Returns an error if more than one tenant is set as default.
+func (m *Manager) GetDefault(ctx context.Context) (*Tenant, error) {
+	var tnts []Tenant
+	query := fmt.Sprintf(selectQuery, "WHERE is_default = true")
+
+	err := m.db.SelectContext(ctx, &tnts, query)
+	if err != nil {
+		return nil, fmt.Errorf("getting default tenant: %w", err)
+	}
+
+	switch {
+	case len(tnts) == 0:
+		return nil, ErrTenantDoesNotExist
+	case len(tnts) > 1:
+		return nil, ErrTooManyDefaultTenants
+	}
+
+	return &tnts[0], nil
 }
 
 func (m *Manager) AddTenant(ctx context.Context, name string) (*Tenant, error) {
@@ -211,6 +233,11 @@ func (m *Manager) UpdateTenantConfig(ctx context.Context, tu *TenantUpdate) (*Te
 		args = append(args, *tu.DistributionAccount)
 
 		log.Ctx(ctx).Warnf("distribution account for tenant id %s updated to %s", tu.ID, *tu.DistributionAccount)
+	}
+
+	if tu.IsDefault != nil {
+		fields = append(fields, "is_default = ?")
+		args = append(args, *tu.IsDefault)
 	}
 
 	args = append(args, tu.ID)

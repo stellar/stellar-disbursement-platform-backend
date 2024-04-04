@@ -324,6 +324,13 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			FlagDefault: 3,
 			Required:    true,
 		},
+		{
+			Name:        "enable-default-tenant",
+			Usage:       "This option enables the Default Tenant feature. In case the multi-tenant management is not required, this options bypass the tenant resolution by always resolving to the default tenant configured in the database.",
+			OptType:     types.Bool,
+			ConfigKey:   &serveOpts.EnableDefaultTenant,
+			FlagDefault: false,
+		},
 	}
 
 	// crash tracker options

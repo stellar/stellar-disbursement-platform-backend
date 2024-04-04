@@ -21,6 +21,7 @@ type TenantRequest struct {
 	SMSSenderType    tenant.SMSSenderType   `json:"sms_sender_type"`
 	BaseURL          string                 `json:"base_url"`
 	SDPUIBaseURL     string                 `json:"sdp_ui_base_url"`
+	IsDefault        *bool                  `json:"is_default"`
 }
 
 type UpdateTenantRequest struct {
@@ -29,6 +30,7 @@ type UpdateTenantRequest struct {
 	BaseURL         *string                 `json:"base_url"`
 	SDPUIBaseURL    *string                 `json:"sdp_ui_base_url"`
 	Status          *tenant.TenantStatus    `json:"status"`
+	IsDefault       *bool                   `json:"is_default"`
 }
 
 type TenantValidator struct {

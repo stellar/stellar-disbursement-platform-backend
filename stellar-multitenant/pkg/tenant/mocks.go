@@ -47,6 +47,14 @@ func (m *TenantManagerMock) GetTenantByIDOrName(ctx context.Context, arg string)
 	return args.Get(0).(*Tenant), args.Error(1)
 }
 
+func (m *TenantManagerMock) GetDefault(ctx context.Context) (*Tenant, error) {
+	args := m.Called(ctx)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*Tenant), args.Error(1)
+}
+
 func (m *TenantManagerMock) AddTenant(ctx context.Context, name string) (*Tenant, error) {
 	args := m.Called(ctx, name)
 	if args.Get(0) == nil {
