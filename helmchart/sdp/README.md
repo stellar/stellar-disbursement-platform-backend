@@ -3,7 +3,7 @@
 ## Introduction
 This chart bootstraps a Stellar Disbursement Platform (SDP) deployment on a [Kubernetes](http://kubernetes.io) cluster using the [Helm](https://helm.sh) package manager.
 
-The SDP is a set of services that enable organizations to disburse funds to recipients using the Stellar network. The SDP is comprised of the following services:
+The SDP is a set of services that enable organizations to disburse funds to recipients using the Stellar network. The SDP consists of the following services:
 - Stellar Disbursement Platform (SDP) Core Service: the core backend service that performs several functions.
 - Anchor Platform: the API server that the wallet uses to authenticate and initiate the recipient’s registration process through the SEP-24 deposit flow.
 - Transaction Submission Service (TSS): the service that submits all payment transactions to the Stellar network.
@@ -13,6 +13,7 @@ The SDP is a set of services that enable organizations to disburse funds to reci
 - Kubernetes 1.19+
 - Helm 3.2.0+
 - Postgres 14.0+ database deployed in the same Kubernetes cluster
+- Kafka (optional) needed for inter-service communication when `eventBroker.type` is set to "KAFKA"
 
 ## Installing the Chart
 
@@ -61,29 +62,29 @@ helm delete sdp
 
 These parameters are shared by all charts.
 
-| Name                                                   | Description                                                                                                                         | Value        |
-| ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- | ------------ |
-| `global.isPubnet`                                      | Determines if the network is public. Set this to true for public networks.                                                          | `false`      |
-| `global.replicaCount`                                  | Number of replicas for the application.                                                                                             | `1`          |
-| `global.resources`                                     | Resource limits and requests for the application pods.                                                                              | `{}`         |
-| `global.service.type`                                  | Kubernetes Service type for the application.                                                                                        | `ClusterIP`  |
-| `global.autoscaling`                                   | Configuration related to the horizontal pod autoscaling of the application.                                                         |              |
-| `global.autoscaling.enabled`                           | Determines if autoscaling is enabled for the application.                                                                           | `false`      |
-| `global.autoscaling.minReplicas`                       | Minimum number of replicas when autoscaling is enabled.                                                                             | `1`          |
-| `global.autoscaling.maxReplicas`                       | Maximum number of replicas when autoscaling is enabled.                                                                             | `4`          |
-| `global.autoscaling.targetCPUUtilizationPercentage`    | Target CPU utilization percentage for autoscaling.                                                                                  | `80`         |
-| `global.autoscaling.targetMemoryUtilizationPercentage` | Target memory utilization percentage for autoscaling.                                                                               | `80`         |
-| `global.serviceAccount`                                | Configuration related to the Kubernetes Service Account used by the application.                                                    |              |
-| `global.serviceAccount.create`                         | Determines if a new service account should be created.                                                                              | `false`      |
-| `global.serviceAccount.annotations`                    | Annotations to be added to the service account.                                                                                     | `nil`        |
-| `global.serviceAccount.name`                           | Name of the service account to be used. If not set and create is set to true, a name will be generated using the fullname template. | `""`         |
-| `global.ephemeralDatabase`                             | Enables or disables the creation of an ephemeral database for testing purposes.                                                     | `true`       |
-| `global.eventBroker`                                   | Configuration related to the event broker used by the application.                                                                  |              |
-| `global.eventBroker.type`                              | The type of event broker to be used. Options: "NONE", "KAFKA". Default: "KAFKA".                                                    | `KAFKA`      |
-| `global.eventBroker.urls`                              | A comma-separated list of broker URLs for the event broker.                                                                         | `kafka:9092` |
-| `global.eventBroker.consumerGroupId`                   | The consumer group ID for the event broker.                                                                                         | `group-id`   |
-| `global.eventBroker.kafka`                             | Configuration related to the Kafka event broker.                                                                                    |              |
-| `global.eventBroker.kafka.securityProtocol`            | The security protocol to be used for the Kafka broker. Options: "PLAINTEXT", "SASL_SSL", "SASL_PLAINTEXT", "SSL".                   | `PLAINTEXT`  |
+| Name                                                   | Description                                                                                                                         | Value       |
+| ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- | ----------- |
+| `global.isPubnet`                                      | Determines if the network is public. Set this to true for public networks.                                                          | `false`     |
+| `global.replicaCount`                                  | Number of replicas for the application.                                                                                             | `1`         |
+| `global.resources`                                     | Resource limits and requests for the application pods.                                                                              | `{}`        |
+| `global.service.type`                                  | Kubernetes Service type for the application.                                                                                        | `ClusterIP` |
+| `global.autoscaling`                                   | Configuration related to the horizontal pod autoscaling of the application.                                                         |             |
+| `global.autoscaling.enabled`                           | Determines if autoscaling is enabled for the application.                                                                           | `false`     |
+| `global.autoscaling.minReplicas`                       | Minimum number of replicas when autoscaling is enabled.                                                                             | `1`         |
+| `global.autoscaling.maxReplicas`                       | Maximum number of replicas when autoscaling is enabled.                                                                             | `4`         |
+| `global.autoscaling.targetCPUUtilizationPercentage`    | Target CPU utilization percentage for autoscaling.                                                                                  | `80`        |
+| `global.autoscaling.targetMemoryUtilizationPercentage` | Target memory utilization percentage for autoscaling.                                                                               | `80`        |
+| `global.serviceAccount`                                | Configuration related to the Kubernetes Service Account used by the application.                                                    |             |
+| `global.serviceAccount.create`                         | Determines if a new service account should be created.                                                                              | `false`     |
+| `global.serviceAccount.annotations`                    | Annotations to be added to the service account.                                                                                     | `nil`       |
+| `global.serviceAccount.name`                           | Name of the service account to be used. If not set and create is set to true, a name will be generated using the fullname template. | `""`        |
+| `global.ephemeralDatabase`                             | Enables or disables the creation of an ephemeral database for testing purposes.                                                     | `true`      |
+| `global.eventBroker`                                   | Configuration related to the event broker used by the application.                                                                  |             |
+| `global.eventBroker.type`                              | The type of event broker to be used. Options: "NONE", "KAFKA". Default: "KAFKA".                                                    | `KAFKA`     |
+| `global.eventBroker.urls`                              | A comma-separated list of broker URLs for the event broker.                                                                         | `nil`       |
+| `global.eventBroker.consumerGroupId`                   | The consumer group ID for the event broker.                                                                                         | `nil`       |
+| `global.eventBroker.kafka`                             | Configuration related to the Kafka event broker.                                                                                    |             |
+| `global.eventBroker.kafka.securityProtocol`            | The security protocol to be used for the Kafka broker. Options: "PLAINTEXT", "SASL_SSL", "SASL_PLAINTEXT", "SSL".                   | `nil`       |
 
 ### Stellar Disbursement Platform (SDP) parameters
 
@@ -96,8 +97,8 @@ Configuration parameters for the SDP Core Service which is the core backend serv
 | ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
 | `sdp.route`                                                       | Configuration related to the routing of the SDP service.                                                                                                       |                                                 |
 | `sdp.route.schema`                                                | Protocol scheme used for the service. Can be "http" or "https".                                                                                                | `https`                                         |
-| `sdp.route.domain`                                                | Public domain/address of the SDP service. If using localhost, consider including the port as part of the domain.                                               | `sdp.localhost.com`                             |
-| `sdp.route.mtnDomain`                                             | Public domain/address of the multi-tenant SDP service. This is a wild-card domain used for multi-tenant setups e.g. "*.sdp.localhost.com".                     | `*.sdp.localhost.com`                           |
+| `sdp.route.domain`                                                | Public domain/address of the SDP service. If using localhost, consider including the port as part of the domain.                                               | `nil`                                           |
+| `sdp.route.mtnDomain`                                             | Public domain/address of the multi-tenant SDP service. This is a wild-card domain used for multi-tenant setups e.g. "*.sdp.localhost.com".                     | `nil`                                           |
 | `sdp.route.port`                                                  | Primary port on which the SDP service listens.                                                                                                                 | `8000`                                          |
 | `sdp.route.metricsPort`                                           | Port dedicated to metrics collection for the SDP service.                                                                                                      | `8002`                                          |
 | `sdp.route.adminPort`                                             | Port dedicated to serve the SDP admin endpoints, used to manage new or existing tenants.                                                                       | `8003`                                          |
@@ -120,7 +121,7 @@ Configuration parameters for the SDP Core Service which is the core backend serv
 | `sdp.configMap.data.BASE_URL`                                     | The base URL of the SDP backend.                                                                                                                               | `http://localhost:8000`                         |
 | `sdp.configMap.data.CRASH_TRACKER_TYPE`                           | Determines the type of crash tracker in use. Options: "DRY_RUN", "SENTRY".                                                                                     | `DRY_RUN`                                       |
 | `sdp.configMap.data.EC256_PUBLIC_KEY`                             | The EC256 public key used for authentication purposes. This EC key needs to be at least as strong as prime256v1 (P-256).                                       | `""`                                            |
-| `sdp.configMap.data.ENVIRONMENT`                                  | Specifies the environment SDP is running in (e.g. "localhost").                                                                                                | `localhost`                                     |
+| `sdp.configMap.data.ENVIRONMENT`                                  | Specifies the environment SDP is running in (e.g. "localhost").                                                                                                | `dev`                                           |
 | `sdp.configMap.data.LOG_LEVEL`                                    | Determines the verbosity level of logs. Options: "TRACE", "DEBUG", "INFO", "WARN", "ERROR", "FATAL", "PANIC"                                                   | `INFO`                                          |
 | `sdp.configMap.data.SEP10_SIGNING_PUBLIC_KEY`                     | Anchor platform SEP10 signing public key.                                                                                                                      | `nil`                                           |
 | `sdp.configMap.data.DISTRIBUTION_PUBLIC_KEY`                      | The public key of the HOST's Stellar distribution account, used to create channel accounts.                                                                    | `nil`                                           |
@@ -132,8 +133,8 @@ Configuration parameters for the SDP Core Service which is the core backend serv
 | `sdp.configMap.data.DISABLE_RECAPTCHA`                            | Determines if ReCaptcha should be disabled for login ("true" or "false").                                                                                      | `false`                                         |
 | `sdp.configMap.data.DISABLE_MFA`                                  | Determines if email-based MFA should be disabled during login ("true" or "false").                                                                             | `false`                                         |
 | `sdp.configMap.data.SDP_UI_BASE_URL`                              | The base URL of the SDP UI/dashboard.                                                                                                                          | `nil`                                           |
-| `sdp.configMap.data.INSTANCE_NAME`                                | The name of the SDP instance. Example: "SDP Testnet".                                                                                                          | `SDP Testnet Preview`                           |
-| `sdp.configMap.data.ENABLE_SCHEDULER`                             | Wether or not the scheduled jobs be enabled in this instance ("true" or "false").                                                                              | `false`                                         |
+| `sdp.configMap.data.INSTANCE_NAME`                                | The name of the SDP instance. Example: "SDP Testnet".                                                                                                          | `nil`                                           |
+| `sdp.configMap.data.ENABLE_SCHEDULER`                             | Whether the scheduled jobs are enabled in this instance ("true" or "false"). Default "false".                                                                  | `false`                                         |
 | `sdp.configMap.data.SCHEDULER_PAYMENT_JOB_SECONDS`                | The interval in seconds for the payment job that syncs payments between the SDP and the TSS.                                                                   | `3600`                                          |
 | `sdp.configMap.data.SCHEDULER_RECEIVER_INVITATION_JOB_SECONDS`    | The interval in seconds for the receiver invitation job that sends invitations to new receivers. 0 or negative values disable the job.                         | `3600`                                          |
 | `sdp.configMap.data.MAX_INVITATION_SMS_RESEND_ATTEMPTS`           | The maximum number of times an invitation SMS can be resent. 0 or negative values disable the job.                                                             | `3`                                             |
@@ -282,8 +283,8 @@ Configuration parameters for the Dashboard. This is the user interface administr
 | `dashboard.enabled`                           | If true, the dashboard will be deployed.                                                                                                           | `false`                                                       |
 | `dashboard.route`                             | Configuration related to the routing of the Dashboard.                                                                                             |                                                               |
 | `dashboard.route.schema`                      | Protocol scheme used for the service. Can be "http" or "https".                                                                                    | `https`                                                       |
-| `dashboard.route.domain`                      | Public domain/address of the Dashboard.                                                                                                            | `sdp-dashboard.localhost.com`                                 |
-| `dashboard.route.mtnDomain`                   | Public domain/address of the multi-tenant Dashboard. This is a wild-card domain used for multi-tenant setups e.g. "*.sdp-dashboard.localhost.com". | `*.sdp-dashboard.localhost.com`                               |
+| `dashboard.route.domain`                      | Public domain/address of the Dashboard.                                                                                                            | `nil`                                                         |
+| `dashboard.route.mtnDomain`                   | Public domain/address of the multi-tenant Dashboard. This is a wild-card domain used for multi-tenant setups e.g. "*.sdp-dashboard.localhost.com". | `nil`                                                         |
 | `dashboard.route.port`                        | Primary port on which the Dashboard listens.                                                                                                       | `80`                                                          |
 | `dashboard.image`                             | Configuration related to the Docker image used by the Dashboard.                                                                                   |                                                               |
 | `dashboard.image.fullName`                    | Full name of the Docker image.                                                                                                                     | `stellar/stellar-disbursement-platform-frontend:latest`       |

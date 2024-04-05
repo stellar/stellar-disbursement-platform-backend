@@ -69,13 +69,13 @@ global:
   ## @param global.eventBroker.consumerGroupId The consumer group ID for the event broker.
   eventBroker:
     type: "KAFKA"
-    urls: "kafka:9092"
-    consumerGroupId: "group-id"
+    urls: #required
+    consumerGroupId: #required
 
     ## @extra global.eventBroker.kafka Configuration related to the Kafka event broker.
     ## @param global.eventBroker.kafka.securityProtocol The security protocol to be used for the Kafka broker. Options: "PLAINTEXT", "SASL_SSL", "SASL_PLAINTEXT", "SSL".
     kafka:
-      securityProtocol: "PLAINTEXT"
+      securityProtocol: #required
 
 # =========================== START sdp ===========================
 ## @section Stellar Disbursement Platform (SDP) parameters
@@ -95,8 +95,8 @@ sdp:
   ## @param sdp.route.adminPort Port dedicated to serve the SDP admin endpoints, used to manage new or existing tenants.
   route:
     schema: "https"
-    domain: sdp.localhost.com
-    mtnDomain: "*.sdp.localhost.com"
+    domain: #required
+    mtnDomain: #required
     port: "8000"
     metricsPort: "8002"
     adminPort: "8003"
@@ -148,7 +148,7 @@ sdp:
   ## @param sdp.configMap.data.DISABLE_MFA Determines if email-based MFA should be disabled during login ("true" or "false").
   ## @param sdp.configMap.data.SDP_UI_BASE_URL The base URL of the SDP UI/dashboard.
   ## @param sdp.configMap.data.INSTANCE_NAME The name of the SDP instance. Example: "SDP Testnet".
-  ## @param sdp.configMap.data.ENABLE_SCHEDULER Wether or not the scheduled jobs be enabled in this instance ("true" or "false").
+  ## @param sdp.configMap.data.ENABLE_SCHEDULER Whether the scheduled jobs are enabled in this instance ("true" or "false"). Default "false".
   ## @param sdp.configMap.data.SCHEDULER_PAYMENT_JOB_SECONDS The interval in seconds for the payment job that syncs payments between the SDP and the TSS.
   ## @param sdp.configMap.data.SCHEDULER_RECEIVER_INVITATION_JOB_SECONDS The interval in seconds for the receiver invitation job that sends invitations to new receivers. 0 or negative values disable the job.
   ## @param sdp.configMap.data.MAX_INVITATION_SMS_RESEND_ATTEMPTS The maximum number of times an invitation SMS can be resent. 0 or negative values disable the job.
@@ -159,7 +159,7 @@ sdp:
       BASE_URL: "http://localhost:8000"
       CRASH_TRACKER_TYPE: "DRY_RUN"
       EC256_PUBLIC_KEY: #required
-      ENVIRONMENT: "localhost"
+      ENVIRONMENT: "dev"
       LOG_LEVEL: "INFO"
       SEP10_SIGNING_PUBLIC_KEY: #required
       DISTRIBUTION_PUBLIC_KEY: #required
@@ -171,10 +171,7 @@ sdp:
       SDP_UI_BASE_URL: #required
       DISABLE_RECAPTCHA: "false"
       DISABLE_MFA: "false"
-
-      # ATTENTION: the following variables will need to be updated as we rollout the multitenant feature. They were set
-      # like the following to allow the deployment to work:
-      INSTANCE_NAME: "SDP Testnet Preview"
+      INSTANCE_NAME: #required
       ENABLE_SCHEDULER: "false"
       SCHEDULER_PAYMENT_JOB_SECONDS: "3600"
       SCHEDULER_RECEIVER_INVITATION_JOB_SECONDS: "3600"
@@ -522,8 +519,8 @@ dashboard:
   ## @param dashboard.route.port Primary port on which the Dashboard listens.
   route:
     schema: "https"
-    domain: "sdp-dashboard.localhost.com"
-    mtnDomain: "*.sdp-dashboard.localhost.com"
+    domain: #required
+    mtnDomain: #required
     port: "80"
 
   ## @extra dashboard.image Configuration related to the Docker image used by the Dashboard.
