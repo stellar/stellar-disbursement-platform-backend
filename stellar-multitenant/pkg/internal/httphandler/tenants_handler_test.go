@@ -361,7 +361,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 				"sms_sender_type": "DRY_RUN",
 				"base_url": "https://backend.sdp.org",
 				"sdp_ui_base_url": "https://aid-org.sdp.org",
-				"is_default": true
+				"is_default": false
 			}
 		`
 
@@ -390,7 +390,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 				"sdp_ui_base_url": "https://aid-org.sdp.org",
 				"status": "TENANT_PROVISIONED",
 				"distribution_account": %q,
-				"is_default": true,
+				"is_default": false,
 				"created_at": %q,
 				"updated_at": %q
 			}
@@ -653,29 +653,13 @@ func Test_TenantHandler_Patch(t *testing.T) {
 		runSuccessfulRequestPatchTest(t, r, ctx, dbConnectionPool, handler, reqBody, expectedRespBody)
 	})
 
-	t.Run("successfully updates IsDefault of a tenant", func(t *testing.T) {
-		reqBody := `{"is_default": true}`
-		expectedRespBody := `
-			"email_sender_type": "DRY_RUN",
-			"sms_sender_type": "DRY_RUN",
-			"base_url": null,
-			"sdp_ui_base_url": null,
-			"status": "TENANT_CREATED",
-			"distribution_account": "GCTNUNQVX7BNIP5AUWW2R4YC7G6R3JGUDNMGT7H62BGBUY4A4V6ROAAH",
-			"is_default": true,
-		`
-
-		runSuccessfulRequestPatchTest(t, r, ctx, dbConnectionPool, handler, reqBody, expectedRespBody)
-	})
-
 	t.Run("successfully updates all fields of a tenant", func(t *testing.T) {
 		reqBody := `{
 			"email_sender_type": "AWS_EMAIL",
 			"sms_sender_type": "AWS_SMS",
 			"base_url": "http://valid.com",
 			"sdp_ui_base_url": "http://valid.com",
-			"status": "TENANT_ACTIVATED",
-			"is_default": false
+			"status": "TENANT_ACTIVATED"
 		}`
 
 		expectedRespBody := `
