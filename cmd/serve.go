@@ -326,7 +326,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 		},
 		{
 			Name:        "enable-default-tenant",
-			Usage:       "This option enables the Default Tenant feature. In case the multi-tenant management is not required, this options bypass the tenant resolution by always resolving to the default tenant configured in the database.",
+			Usage:       "This option enables the Default Tenant feature. In the case where multi-tenancy is not required, this options bypasses the tenant resolution by always resolving to the default tenant configured in the database.",
 			OptType:     types.Bool,
 			ConfigKey:   &serveOpts.EnableDefaultTenant,
 			FlagDefault: false,
