@@ -45,6 +45,7 @@ type ServeOptions struct {
 	Version                                 string
 	AdminAccount                            string
 	AdminApiKey                             string
+	EnableDefaultTenant                     bool
 }
 
 // SetupDependencies uses the serve options to setup the dependencies for the server.
@@ -119,14 +120,17 @@ func handleHTTP(opts *ServeOptions) *chi.Mux {
 
 		r.Route("/tenants", func(r chi.Router) {
 			tenantsHandler := httphandler.TenantsHandler{
-				Manager:             opts.tenantManager,
-				ProvisioningManager: opts.tenantProvisioningManager,
-				NetworkType:         opts.networkType,
+				Manager:               opts.tenantManager,
+				ProvisioningManager:   opts.tenantProvisioningManager,
+				NetworkType:           opts.networkType,
+				AdminDBConnectionPool: opts.AdminDBConnectionPool,
+				EnableDefaultTenant:   opts.EnableDefaultTenant,
 			}
 			r.Get("/", tenantsHandler.GetAll)
 			r.Post("/", tenantsHandler.Post)
 			r.Get("/{arg}", tenantsHandler.GetByIDOrName)
 			r.Patch("/{id}", tenantsHandler.Patch)
+			r.Post("/default-tenant", tenantsHandler.SetDefault)
 		})
 	})
 

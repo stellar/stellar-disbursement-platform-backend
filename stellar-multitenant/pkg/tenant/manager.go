@@ -32,6 +32,7 @@ type ManagerInterface interface {
 	GetTenantByName(ctx context.Context, name string) (*Tenant, error)
 	GetTenantByIDOrName(ctx context.Context, arg string) (*Tenant, error)
 	GetDefault(ctx context.Context) (*Tenant, error)
+	SetDefault(ctx context.Context, sqlExec db.SQLExecuter, id string) (*Tenant, error)
 	AddTenant(ctx context.Context, name string) (*Tenant, error)
 	DeleteTenantByName(ctx context.Context, name string) error
 	CreateTenantSchema(ctx context.Context, tenantName string) error
@@ -132,6 +133,27 @@ func (m *Manager) GetDefault(ctx context.Context) (*Tenant, error) {
 	}
 
 	return &tnts[0], nil
+}
+
+// SetDefault sets the is_default = true for the given tenant id.
+func (m *Manager) SetDefault(ctx context.Context, sqlExec db.SQLExecuter, id string) (*Tenant, error) {
+	const q = `
+		WITH remove_old_default_tenant AS (
+			UPDATE tenants SET is_default = false WHERE is_default = true
+		)
+		UPDATE tenants SET is_default = true WHERE id = $1 RETURNING *
+	`
+
+	var tnt Tenant
+	err := sqlExec.GetContext(ctx, &tnt, q, id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrTenantDoesNotExist
+		}
+		return nil, fmt.Errorf("setting tenant id %s as default: %w", id, err)
+	}
+
+	return &tnt, nil
 }
 
 func (m *Manager) AddTenant(ctx context.Context, name string) (*Tenant, error) {

@@ -610,6 +610,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			go serverService.StartMetricsServe(metricsServeOpts, &serve.HTTPServer{})
 
 			log.Ctx(ctx).Info("Starting Tenant Server...")
+			adminServeOpts.EnableDefaultTenant = serveOpts.EnableDefaultTenant
 			go serverService.StartAdminServe(adminServeOpts, &serveadmin.HTTPServer{})
 
 			// Starting Application Server

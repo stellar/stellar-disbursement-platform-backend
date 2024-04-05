@@ -9,6 +9,7 @@ import (
 	"github.com/stellar/go/support/http/httpdecode"
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/support/render/httpjson"
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/internal/provisioning"
@@ -17,9 +18,11 @@ import (
 )
 
 type TenantsHandler struct {
-	Manager             *tenant.Manager
-	ProvisioningManager *provisioning.Manager
-	NetworkType         utils.NetworkType
+	Manager               *tenant.Manager
+	ProvisioningManager   *provisioning.Manager
+	NetworkType           utils.NetworkType
+	AdminDBConnectionPool db.DBConnectionPool
+	EnableDefaultTenant   bool
 }
 
 func (t TenantsHandler) GetAll(w http.ResponseWriter, r *http.Request) {
@@ -88,7 +91,6 @@ func (h TenantsHandler) Post(rw http.ResponseWriter, req *http.Request) {
 		EmailSenderType: &reqBody.EmailSenderType,
 		SMSSenderType:   &reqBody.SMSSenderType,
 		BaseURL:         &reqBody.BaseURL,
-		IsDefault:       reqBody.IsDefault,
 	})
 	if err != nil {
 		httperror.InternalError(ctx, "Could not update tenant config", err, nil).Render(rw)
@@ -125,7 +127,6 @@ func (t TenantsHandler) Patch(w http.ResponseWriter, r *http.Request) {
 		BaseURL:         reqBody.BaseURL,
 		SDPUIBaseURL:    reqBody.SDPUIBaseURL,
 		Status:          reqBody.Status,
-		IsDefault:       reqBody.IsDefault,
 	})
 	if err != nil {
 		if errors.Is(tenant.ErrEmptyUpdateTenant, err) {
@@ -144,4 +145,46 @@ func (t TenantsHandler) Patch(w http.ResponseWriter, r *http.Request) {
 	}
 
 	httpjson.RenderStatus(w, http.StatusOK, tnt, httpjson.JSON)
+}
+
+func (t TenantsHandler) SetDefault(rw http.ResponseWriter, req *http.Request) {
+	ctx := req.Context()
+
+	if !t.EnableDefaultTenant {
+		log.Ctx(ctx).Warnf("An attempt of set a default tenant was made but ENABLE_DEFAULT_TENANT is set to `false`")
+		httperror.Forbidden("Default Tenant feature is disabled. Please, enable it before setting a tenant as default.", nil, nil).Render(rw)
+		return
+	}
+
+	var reqBody validators.DefaultTenantRequest
+	if err := httpdecode.DecodeJSON(req, &reqBody); err != nil {
+		err = fmt.Errorf("decoding request body: %w", err)
+		log.Ctx(ctx).Error(err)
+		httperror.BadRequest("", err, nil).Render(rw)
+		return
+	}
+
+	if err := reqBody.Validate(); err != nil {
+		httperror.BadRequest("Invalid request body", nil, map[string]interface{}{"id": err.Error()}).Render(rw)
+		return
+	}
+
+	defaultTnt, err := db.RunInTransactionWithResult(ctx, t.AdminDBConnectionPool, nil, func(dbTx db.DBTransaction) (*tenant.Tenant, error) {
+		tnt, err := t.Manager.SetDefault(ctx, dbTx, reqBody.ID)
+		if err != nil {
+			return nil, fmt.Errorf("setting tenant id %s as default: %w", reqBody.ID, err)
+		}
+
+		return tnt, nil
+	})
+	if err != nil {
+		if errors.Is(err, tenant.ErrTenantDoesNotExist) {
+			httperror.NotFound(fmt.Sprintf("tenant id %s does not exist", reqBody.ID), err, nil).Render(rw)
+		} else {
+			httperror.InternalError(ctx, "", err, nil).Render(rw)
+		}
+		return
+	}
+
+	httpjson.Render(rw, defaultTnt, httpjson.JSON)
 }

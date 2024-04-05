@@ -691,3 +691,116 @@ func Test_TenantHandler_Patch(t *testing.T) {
 		runSuccessfulRequestPatchTest(t, r, ctx, dbConnectionPool, handler, reqBody, expectedRespBody)
 	})
 }
+
+func Test_TenantHandler_SetDefault(t *testing.T) {
+	dbt := dbtest.OpenWithAdminMigrationsOnly(t)
+	defer dbt.Close()
+
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+
+	tenantManager := tenant.NewManager(tenant.WithDatabase(dbConnectionPool))
+	handler := TenantsHandler{
+		Manager:               tenantManager,
+		AdminDBConnectionPool: dbConnectionPool,
+		EnableDefaultTenant:   false,
+	}
+
+	updateTenantIsDefault := func(t *testing.T, ctx context.Context, dbConnectionPool db.DBConnectionPool, tenantID string, isDefault bool) {
+		const q = "UPDATE public.tenants SET is_default = $1 WHERE id = $2"
+		_, err := dbConnectionPool.ExecContext(ctx, q, isDefault, tenantID)
+		require.NoError(t, err)
+	}
+
+	t.Run("returns Forbidden when default tenant feature is disabled", func(t *testing.T) {
+		body := `{"id": "some-id"}`
+		req := httptest.NewRequest(http.MethodPost, "/default-tenant", strings.NewReader(body))
+		r := httptest.NewRecorder()
+
+		http.HandlerFunc(handler.SetDefault).ServeHTTP(r, req)
+
+		resp := r.Result()
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		assert.Equal(t, http.StatusForbidden, resp.StatusCode)
+		assert.JSONEq(t, `{"error": "Default Tenant feature is disabled. Please, enable it before setting a tenant as default."}`, string(respBody))
+	})
+
+	handler.EnableDefaultTenant = true
+	t.Run("returns BadRequest when body is invalid", func(t *testing.T) {
+		body := `invalid`
+		req := httptest.NewRequest(http.MethodPost, "/default-tenant", strings.NewReader(body))
+		r := httptest.NewRecorder()
+
+		http.HandlerFunc(handler.SetDefault).ServeHTTP(r, req)
+
+		resp := r.Result()
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+		assert.JSONEq(t, `{"error": "The request was invalid in some way."}`, string(respBody))
+
+		body = `{"id": "    "}`
+		req = httptest.NewRequest(http.MethodPost, "/default-tenant", strings.NewReader(body))
+		r = httptest.NewRecorder()
+
+		http.HandlerFunc(handler.SetDefault).ServeHTTP(r, req)
+
+		resp = r.Result()
+		respBody, err = io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+		assert.JSONEq(t, `{"error": "Invalid request body", "extras": {"id": "id is required"}}`, string(respBody))
+	})
+
+	// creating tenants. tnt2 is the default.
+	tnt1 := tenant.CreateTenantFixture(t, ctx, dbConnectionPool, "redcorp", keypair.MustRandom().Address())
+	tnt2 := tenant.CreateTenantFixture(t, ctx, dbConnectionPool, "bluecorp", keypair.MustRandom().Address())
+	updateTenantIsDefault(t, ctx, dbConnectionPool, tnt2.ID, true)
+
+	t.Run("returns NotFound when tenant does not exist", func(t *testing.T) {
+		body := `{"id": "some-id"}`
+		req := httptest.NewRequest(http.MethodPost, "/default-tenant", strings.NewReader(body))
+		r := httptest.NewRecorder()
+
+		http.HandlerFunc(handler.SetDefault).ServeHTTP(r, req)
+
+		resp := r.Result()
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+		assert.JSONEq(t, `{"error": "tenant id some-id does not exist"}`, string(respBody))
+
+		// Ensure the tnt2 still the default one
+		tnt2DB, err := tenantManager.GetTenantByID(ctx, tnt2.ID)
+		require.NoError(t, err)
+		assert.True(t, tnt2DB.IsDefault)
+	})
+
+	t.Run("successfully updates the default tenant", func(t *testing.T) {
+		body := fmt.Sprintf(`{"id": %q}`, tnt1.ID)
+		req := httptest.NewRequest(http.MethodPost, "/default-tenant", strings.NewReader(body))
+		r := httptest.NewRecorder()
+
+		http.HandlerFunc(handler.SetDefault).ServeHTTP(r, req)
+
+		resp := r.Result()
+		require.NoError(t, err)
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+		tnt1DB, err := tenantManager.GetTenantByID(ctx, tnt1.ID)
+		require.NoError(t, err)
+		assert.True(t, tnt1DB.IsDefault)
+
+		tnt2DB, err := tenantManager.GetTenantByID(ctx, tnt2.ID)
+		require.NoError(t, err)
+		assert.False(t, tnt2DB.IsDefault)
+	})
+}
