@@ -370,41 +370,6 @@ func Test_SEP24QueryTokenAuthenticateMiddleware(t *testing.T) {
 		// validate logs
 		require.Contains(t, buf.String(), "missing home domain in the token claims")
 	})
-
-	t.Run("returns error when the home domain is different from tenant name", func(t *testing.T) {
-		defaultTenant := tenant.CreateTenantFixture(t, ctx, dbConnectionPool, "default-tenant", "GCTNUNQVX7BNIP5AUWW2R4YC7G6R3JGUDNMGT7H62BGBUY4A4V6ROAAH")
-
-		const q = "UPDATE public.tenants SET is_default = true WHERE id = $1 RETURNING *"
-		err := dbConnectionPool.GetContext(ctx, defaultTenant, q, defaultTenant.ID)
-		require.NoError(t, err)
-
-		var contextClaims *SEP24JWTClaims
-		require.Nil(t, contextClaims)
-		r.With(SEP24QueryTokenAuthenticateMiddleware(jwtManager, network.TestNetworkPassphrase, tenantManager, true)).Get("/authenticated_default_tenant", func(w http.ResponseWriter, r *http.Request) {
-			contextClaims = r.Context().Value(SEP24ClaimsContextKey).(*SEP24JWTClaims)
-			w.WriteHeader(http.StatusOK)
-			_, wErr := w.Write(json.RawMessage(`{"status":"ok"}`))
-			require.NoError(t, wErr)
-		})
-
-		validTransactionID := "valid-transaction-id"
-		validToken, err := jwtManager.GenerateSEP24Token("GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444", "", "test.com", "some-tenant.test.com:8080", validTransactionID)
-		require.NoError(t, err)
-
-		urlStr := fmt.Sprintf("/authenticated_default_tenant?transaction_id=%s&token=%s", validTransactionID, validToken)
-		req, err := http.NewRequest(http.MethodGet, urlStr, nil)
-		require.NoError(t, err)
-		w := httptest.NewRecorder()
-		r.ServeHTTP(w, req)
-
-		resp := w.Result()
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-		require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
-		require.JSONEq(t, `{"error":"Invalid tenant name"}`, string(respBody))
-
-		require.Nil(t, contextClaims)
-	})
 }
 
 func Test_SEP24HeaderTokenAuthenticateMiddleware(t *testing.T) {
@@ -734,44 +699,6 @@ func Test_SEP24HeaderTokenAuthenticateMiddleware(t *testing.T) {
 		// validate logs
 		require.Contains(t, buf.String(), "missing home domain in the token claims")
 	})
-
-	t.Run("returns error when the home domain is different from tenant name", func(t *testing.T) {
-		defaultTenant := tenant.CreateTenantFixture(t, ctx, dbConnectionPool, "default-tenant", "GCTNUNQVX7BNIP5AUWW2R4YC7G6R3JGUDNMGT7H62BGBUY4A4V6ROAAH")
-
-		const q = "UPDATE public.tenants SET is_default = true WHERE id = $1 RETURNING *"
-		err := dbConnectionPool.GetContext(ctx, defaultTenant, q, defaultTenant.ID)
-		require.NoError(t, err)
-
-		var contextClaims *SEP24JWTClaims
-		require.Nil(t, contextClaims)
-		r.With(SEP24HeaderTokenAuthenticateMiddleware(jwtManager, network.TestNetworkPassphrase, tenantManager, true)).Get("/authenticated_default_tenant", func(w http.ResponseWriter, r *http.Request) {
-			contextClaims = r.Context().Value(SEP24ClaimsContextKey).(*SEP24JWTClaims)
-			w.WriteHeader(http.StatusOK)
-			_, wErr := w.Write(json.RawMessage(`{"status":"ok"}`))
-			require.NoError(t, wErr)
-		})
-
-		validTransactionID := "valid-transaction-id"
-		validToken, err := jwtManager.GenerateSEP24Token("GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444", "", "test.com", "some-tenant.test.com:8080", validTransactionID)
-		require.NoError(t, err)
-
-		req, err := http.NewRequest(http.MethodGet, "/authenticated_default_tenant", nil)
-		require.NoError(t, err)
-		authHeader := "Bearer " + validToken
-		req.Header.Set("Authorization", authHeader)
-
-		w := httptest.NewRecorder()
-		r.ServeHTTP(w, req)
-
-		resp := w.Result()
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-		require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
-		require.JSONEq(t, `{"error":"Invalid tenant name"}`, string(respBody))
-
-		// validate the context claims
-		require.Nil(t, contextClaims)
-	})
 }
 
 func Test_getCurrentTenant(t *testing.T) {
@@ -789,20 +716,6 @@ func Test_getCurrentTenant(t *testing.T) {
 		currentTnt, httpErr := getCurrentTenant(ctx, tenantManagerMock, true, "tenant_name")
 		assert.Equal(t,
 			httperror.InternalError(ctx, "Failed to load default tenant", fmt.Errorf("failed to load default tenant: %w", tenant.ErrTenantDoesNotExist), nil),
-			httpErr)
-		assert.Nil(t, currentTnt)
-	})
-
-	t.Run("returns Unauthorized when the tenant name coming in the request is different from the default tenant name", func(t *testing.T) {
-		tenantManagerMock.
-			On("GetDefault", ctx).
-			Return(&tenant.Tenant{ID: "tenant_id", Name: "default_tenant"}, nil).
-			Once()
-		defer tenantManagerMock.AssertExpectations(t)
-
-		currentTnt, httpErr := getCurrentTenant(ctx, tenantManagerMock, true, "tenant_name")
-		assert.Equal(t,
-			httperror.Unauthorized("Invalid tenant name", nil, nil),
 			httpErr)
 		assert.Nil(t, currentTnt)
 	})

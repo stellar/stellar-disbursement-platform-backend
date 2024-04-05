@@ -189,11 +189,6 @@ func getCurrentTenant(ctx context.Context, tenantManager tenant.ManagerInterface
 			err = fmt.Errorf("failed to load default tenant: %w", err)
 			return nil, httperror.InternalError(ctx, "Failed to load default tenant", err, nil)
 		}
-
-		// If the tenant name that is coming in the request is different of the default tenant, an Unauthorized error is returned.
-		if currentTenant.Name != tenantName {
-			return nil, httperror.Unauthorized("Invalid tenant name", nil, nil)
-		}
 	} else {
 		currentTenant, err = tenantManager.GetTenantByName(ctx, tenantName)
 		if err != nil {
