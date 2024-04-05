@@ -293,8 +293,8 @@ func Test_Manager_SetDefault(t *testing.T) {
 	m := NewManager(WithDatabase(dbConnectionPool))
 
 	t.Run("returns error when tenant does not exist", func(t *testing.T) {
-		tnt, err := m.SetDefault(ctx, dbConnectionPool, "some-id")
-		assert.EqualError(t, err, ErrTenantDoesNotExist.Error())
+		tnt, dErr := m.SetDefault(ctx, dbConnectionPool, "some-id")
+		assert.EqualError(t, dErr, ErrTenantDoesNotExist.Error())
 		assert.Nil(t, tnt)
 	})
 

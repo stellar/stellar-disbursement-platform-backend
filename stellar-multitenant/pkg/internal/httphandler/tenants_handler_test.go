@@ -711,7 +711,7 @@ func Test_TenantHandler_SetDefault(t *testing.T) {
 
 	updateTenantIsDefault := func(t *testing.T, ctx context.Context, dbConnectionPool db.DBConnectionPool, tenantID string, isDefault bool) {
 		const q = "UPDATE public.tenants SET is_default = $1 WHERE id = $2"
-		_, err := dbConnectionPool.ExecContext(ctx, q, isDefault, tenantID)
+		_, err = dbConnectionPool.ExecContext(ctx, q, isDefault, tenantID)
 		require.NoError(t, err)
 	}
 
@@ -723,8 +723,8 @@ func Test_TenantHandler_SetDefault(t *testing.T) {
 		http.HandlerFunc(handler.SetDefault).ServeHTTP(r, req)
 
 		resp := r.Result()
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
+		respBody, rErr := io.ReadAll(resp.Body)
+		require.NoError(t, rErr)
 
 		assert.Equal(t, http.StatusForbidden, resp.StatusCode)
 		assert.JSONEq(t, `{"error": "Default Tenant feature is disabled. Please, enable it before setting a tenant as default."}`, string(respBody))
@@ -739,8 +739,8 @@ func Test_TenantHandler_SetDefault(t *testing.T) {
 		http.HandlerFunc(handler.SetDefault).ServeHTTP(r, req)
 
 		resp := r.Result()
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
+		respBody, rErr := io.ReadAll(resp.Body)
+		require.NoError(t, rErr)
 
 		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 		assert.JSONEq(t, `{"error": "The request was invalid in some way."}`, string(respBody))
@@ -772,15 +772,15 @@ func Test_TenantHandler_SetDefault(t *testing.T) {
 		http.HandlerFunc(handler.SetDefault).ServeHTTP(r, req)
 
 		resp := r.Result()
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
+		respBody, rErr := io.ReadAll(resp.Body)
+		require.NoError(t, rErr)
 
 		assert.Equal(t, http.StatusNotFound, resp.StatusCode)
 		assert.JSONEq(t, `{"error": "tenant id some-id does not exist"}`, string(respBody))
 
 		// Ensure the tnt2 still the default one
-		tnt2DB, err := tenantManager.GetTenantByID(ctx, tnt2.ID)
-		require.NoError(t, err)
+		tnt2DB, dErr := tenantManager.GetTenantByID(ctx, tnt2.ID)
+		require.NoError(t, dErr)
 		assert.True(t, tnt2DB.IsDefault)
 	})
 
