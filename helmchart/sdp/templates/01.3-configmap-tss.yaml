@@ -6,7 +6,7 @@ metadata:
   name: {{ include "sdp.fullname" . }}-tss
   namespace: {{ .Release.Namespace }}
   labels:
-    {{- include "sdp.labels" . | nindent 4 }}
+    {{- include "sdp.labelsWithSuffix" (list . "-tss") | nindent 4 }}
 
   {{- if .Values.tss.configMap.annotations }}
   annotations:
