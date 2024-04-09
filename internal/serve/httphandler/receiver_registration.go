@@ -13,16 +13,19 @@ import (
 )
 
 type ReceiverRegistrationHandler struct {
+	Models              *data.Models
 	ReceiverWalletModel *data.ReceiverWalletModel
 	ReCAPTCHASiteKey    string
 }
 
 type ReceiverRegistrationData struct {
-	StellarAccount   string
-	JWTToken         string
-	Title            string
-	Message          string
-	ReCAPTCHASiteKey string
+	StellarAccount    string
+	JWTToken          string
+	Title             string
+	Message           string
+	ReCAPTCHASiteKey  string
+	PrivacyPolicyLink string
+	OrganizationName  string
 }
 
 // ServeHTTP will serve the SEP-24 deposit page needed to register users.
@@ -58,10 +61,18 @@ func (h ReceiverRegistrationHandler) ServeHTTP(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	organization, err := h.Models.Organizations.Get(ctx)
+	if err != nil {
+		httperror.InternalError(ctx, "Cannot get organization", err, nil).Render(w)
+		return
+	}
+
 	tmplData := ReceiverRegistrationData{
-		StellarAccount:   sep24Claims.SEP10StellarAccount(),
-		JWTToken:         token,
-		ReCAPTCHASiteKey: h.ReCAPTCHASiteKey,
+		StellarAccount:    sep24Claims.SEP10StellarAccount(),
+		JWTToken:          token,
+		ReCAPTCHASiteKey:  h.ReCAPTCHASiteKey,
+		PrivacyPolicyLink: *organization.PrivacyPolicyLink,
+		OrganizationName:  organization.Name,
 	}
 
 	htmlTemplateName := "receiver_register.tmpl"

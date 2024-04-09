@@ -31,7 +31,7 @@ func Test_ReceiverRegistrationHandler_ServeHTTP(t *testing.T) {
 	reCAPTCHASiteKey := "reCAPTCHASiteKey"
 
 	r := chi.NewRouter()
-	r.Get("/receiver-registration/start", ReceiverRegistrationHandler{ReceiverWalletModel: receiverWalletModel, ReCAPTCHASiteKey: reCAPTCHASiteKey}.ServeHTTP)
+	r.Get("/receiver-registration/start", ReceiverRegistrationHandler{Models: models, ReceiverWalletModel: receiverWalletModel, ReCAPTCHASiteKey: reCAPTCHASiteKey}.ServeHTTP)
 
 	t.Run("returns 401 - Unauthorized if the token is not in the request context", func(t *testing.T) {
 		req, reqErr := http.NewRequest("GET", "/receiver-registration/start", nil)
