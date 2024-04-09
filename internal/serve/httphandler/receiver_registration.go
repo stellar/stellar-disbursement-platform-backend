@@ -67,11 +67,15 @@ func (h ReceiverRegistrationHandler) ServeHTTP(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	privacyPolicyLink := ""
+	if organization.PrivacyPolicyLink != nil {
+		privacyPolicyLink = *organization.PrivacyPolicyLink
+	}
 	tmplData := ReceiverRegistrationData{
 		StellarAccount:    sep24Claims.SEP10StellarAccount(),
 		JWTToken:          token,
 		ReCAPTCHASiteKey:  h.ReCAPTCHASiteKey,
-		PrivacyPolicyLink: *organization.PrivacyPolicyLink,
+		PrivacyPolicyLink: privacyPolicyLink,
 		OrganizationName:  organization.Name,
 	}
 

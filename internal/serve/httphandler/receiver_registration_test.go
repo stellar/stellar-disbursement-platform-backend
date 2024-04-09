@@ -64,6 +64,16 @@ func Test_ReceiverRegistrationHandler_ServeHTTP(t *testing.T) {
 		assert.JSONEq(t, `{"error":"Not authorized."}`, string(respBody))
 	})
 
+	ctx := context.Background()
+	link := "http://www.test.com/privacy-policy"
+	err = models.Organizations.Update(ctx, &data.OrganizationUpdate{
+		PrivacyPolicyLink: &link,
+	})
+	require.NoError(t, err)
+
+	_, err = models.Organizations.Get(ctx)
+	require.NoError(t, err)
+
 	t.Run("returns 200 - Ok (And show the Wallet Registration page) if the token is in the request context and it's valid 🎉", func(t *testing.T) {
 		req, reqErr := http.NewRequest("GET", "/receiver-registration/start?token=test-token", nil)
 		require.NoError(t, reqErr)
@@ -90,9 +100,10 @@ func Test_ReceiverRegistrationHandler_ServeHTTP(t *testing.T) {
 		assert.Contains(t, string(respBody), "<title>Wallet Registration</title>")
 		assert.Contains(t, string(respBody), `<div class="g-recaptcha" data-sitekey="reCAPTCHASiteKey">`)
 		assert.Contains(t, string(respBody), `<link rel="preload" href="https://www.google.com/recaptcha/api.js" as="script" />`)
+		assert.Contains(t, string(respBody), `<p>Your data is processed by MyCustomAid in accordance with their <a href="http://www.test.com/privacy-policy"><b>Privacy Policy</b></a></p>`)
 	})
 
-	ctx := context.Background()
+	
 
 	// Create a receiver wallet
 	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool,
@@ -131,6 +142,7 @@ func Test_ReceiverRegistrationHandler_ServeHTTP(t *testing.T) {
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.Equal(t, "text/html; charset=utf-8", resp.Header.Get("Content-Type"))
 		assert.Contains(t, string(respBody), "<title>Wallet Registration Confirmation</title>")
+		assert.Contains(t, string(respBody), `<p>Your data is processed by MyCustomAid in accordance with their <a href="http://www.test.com/privacy-policy"><b>Privacy Policy</b></a></p>`)
 	})
 
 	t.Run("returns 200 - Ok (And show the Wallet Registration page) if the token is in the request context and wants to register second wallet in the same address", func(t *testing.T) {
@@ -159,5 +171,6 @@ func Test_ReceiverRegistrationHandler_ServeHTTP(t *testing.T) {
 		assert.Contains(t, string(respBody), "<title>Wallet Registration</title>")
 		assert.Contains(t, string(respBody), `<div class="g-recaptcha" data-sitekey="reCAPTCHASiteKey">`)
 		assert.Contains(t, string(respBody), `<link rel="preload" href="https://www.google.com/recaptcha/api.js" as="script" />`)
+		assert.Contains(t, string(respBody), `<p>Your data is processed by MyCustomAid in accordance with their <a href="http://www.test.com/privacy-policy"><b>Privacy Policy</b></a></p>`)
 	})
 }
