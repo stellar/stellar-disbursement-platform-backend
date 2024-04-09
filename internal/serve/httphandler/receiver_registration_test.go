@@ -103,8 +103,6 @@ func Test_ReceiverRegistrationHandler_ServeHTTP(t *testing.T) {
 		assert.Contains(t, string(respBody), `<p>Your data is processed by MyCustomAid in accordance with their <a href="http://www.test.com/privacy-policy"><b>Privacy Policy</b></a></p>`)
 	})
 
-	
-
 	// Create a receiver wallet
 	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool,
 		"My Wallet",
