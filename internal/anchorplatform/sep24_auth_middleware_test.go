@@ -720,6 +720,19 @@ func Test_getCurrentTenant(t *testing.T) {
 		assert.Nil(t, currentTnt)
 	})
 
+	t.Run("returns the default tenant as current tenant", func(t *testing.T) {
+		expectedTenant := tenant.Tenant{ID: "tenant-id"}
+		tenantManagerMock.
+			On("GetDefault", ctx).
+			Return(&expectedTenant, nil).
+			Once()
+		defer tenantManagerMock.AssertExpectations(t)
+
+		currentTnt, httpErr := getCurrentTenant(ctx, tenantManagerMock, true, "tenant_name")
+		require.Nil(t, httpErr)
+		assert.Equal(t, &expectedTenant, currentTnt)
+	})
+
 	t.Run("returns InternalServerError when fails getting tenant by name", func(t *testing.T) {
 		tenantManagerMock.
 			On("GetTenantByName", ctx, "tenant_name").
@@ -732,5 +745,18 @@ func Test_getCurrentTenant(t *testing.T) {
 			httperror.InternalError(ctx, "Failed to load tenant by name", fmt.Errorf("failed to load tenant by name for tenant name tenant_name: %w", tenant.ErrTenantDoesNotExist), nil),
 			httpErr)
 		assert.Nil(t, currentTnt)
+	})
+
+	t.Run("returns the current tenant", func(t *testing.T) {
+		expectedTenant := tenant.Tenant{ID: "tenant-id"}
+		tenantManagerMock.
+			On("GetTenantByName", ctx, "tenant_name").
+			Return(&expectedTenant, nil).
+			Once()
+		defer tenantManagerMock.AssertExpectations(t)
+
+		currentTnt, httpErr := getCurrentTenant(ctx, tenantManagerMock, false, "tenant_name")
+		require.Nil(t, httpErr)
+		assert.Equal(t, &expectedTenant, currentTnt)
 	})
 }

@@ -151,8 +151,8 @@ func (t TenantsHandler) SetDefault(rw http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 
 	if !t.SingleTenantMode {
-		log.Ctx(ctx).Warnf("An attempt of set a default tenant was made but ENABLE_DEFAULT_TENANT is set to `false`")
-		httperror.Forbidden("Default Tenant feature is disabled. Please, enable it before setting a tenant as default.", nil, nil).Render(rw)
+		log.Ctx(ctx).Warnf("An attempt of set a default tenant was made but SINGLE_TENANT_MODE is set to `false`")
+		httperror.Forbidden("Single Tenant Mode feature is disabled. Please, enable it before setting a tenant as default.", nil, nil).Render(rw)
 		return
 	}
 

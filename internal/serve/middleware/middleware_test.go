@@ -880,8 +880,23 @@ func Test_ResolveTenantFromRequestMiddleware(t *testing.T) {
 					Return(nil, tenant.ErrTenantDoesNotExist).
 					Once()
 			},
-			expectedStatus:   http.StatusUnauthorized,
+			expectedStatus:   http.StatusInternalServerError,
 			expectedRespBody: `{"error":"No default Tenant configured"}`,
+			expectedTenant:   nil,
+		},
+		{
+			name:              "🔴 too many default tenants",
+			tenantHeaderValue: "",
+			hostnamePrefix:    "",
+			singleTenantMode:  true,
+			prepareMocksFn: func(mTenantManager *tenant.TenantManagerMock) {
+				mTenantManager.
+					On("GetDefault", mock.Anything).
+					Return(nil, tenant.ErrTooManyDefaultTenants).
+					Once()
+			},
+			expectedStatus:   http.StatusInternalServerError,
+			expectedRespBody: `{"error":"Too many default tenants configured"}`,
 			expectedTenant:   nil,
 		},
 		{

@@ -49,7 +49,7 @@ services:
       INSTANCE_NAME: "SDP Testnet on Docker"
       TENANT_XLM_BOOTSTRAP_AMOUNT: 5
       DISTRIBUTION_SIGNER_TYPE: ${DISTRIBUTION_SIGNER_TYPE:-DISTRIBUTION_ACCOUNT_ENV}
-      ENABLE_DEFAULT_TENANT: "false"
+      SINGLE_TENANT_MODE: "false"
 
       # scheduler options
       ENABLE_SCHEDULER: "false" # disabled - we're using kafka for this.
