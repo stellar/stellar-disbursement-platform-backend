@@ -144,6 +144,7 @@ func (t TenantsHandler) Patch(w http.ResponseWriter, r *http.Request) {
 		if reqStatus == tenant.DeactivatedTenantStatus {
 			if tnt.Status == tenant.DeactivatedTenantStatus {
 				httpjson.RenderStatus(w, http.StatusNotModified, tnt, httpjson.JSON)
+				return
 			}
 
 			indeterminatePaymentsCount, err := t.Models.Payment.Count(ctx, &data.QueryParams{
@@ -158,10 +159,12 @@ func (t TenantsHandler) Patch(w http.ResponseWriter, r *http.Request) {
 			}, t.Models.DBConnectionPool)
 			if err != nil {
 				httperror.InternalError(ctx, "cannot retrieve payments for tenant", err, nil).Render(w)
+				return
 			}
 
 			if indeterminatePaymentsCount != 0 {
 				httperror.BadRequest("cannot deactivate tenant", errors.New(""), nil).Render(w)
+				return
 			}
 		} else if reqStatus == tenant.ActivatedTenantStatus {
 			if tnt.Status == tenant.ActivatedTenantStatus {
@@ -170,9 +173,11 @@ func (t TenantsHandler) Patch(w http.ResponseWriter, r *http.Request) {
 
 			if tnt.Status != tenant.DeactivatedTenantStatus {
 				httperror.BadRequest("cannot activate tenant that is not deactivated", nil, nil).Render(w)
+				return
 			}
 		} else {
 			httperror.BadRequest("cannot perform update on tenant to status in request", nil, nil).Render(w)
+			return
 		}
 	}
 

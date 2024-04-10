@@ -30,7 +30,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
-func runBadRequestPatchTest(t *testing.T, r *chi.Mux, url, fieldName, errorMsg string) {
+func runBadRequestPatchTest(t *testing.T, r *chi.Mux, url, fieldName, fieldValue, errorMsg string) {
 	rr := httptest.NewRecorder()
 	req, err := http.NewRequest(http.MethodPatch, url, strings.NewReader(fmt.Sprintf(`{"%s": "invalid"}`, fieldName)))
 	require.NoError(t, err)
@@ -50,6 +50,43 @@ func runBadRequestPatchTest(t *testing.T, r *chi.Mux, url, fieldName, errorMsg s
 		}
 	}`, fieldName, errorMsg)
 	assert.JSONEq(t, expectedRespBody, string(respBody))
+}
+
+func runRequestStatusUpdatePatchTest(t *testing.T, r *chi.Mux, ctx context.Context, dbConnectionPool db.DBConnectionPool, handler TenantsHandler, sameStatus bool, statusValue, errorMsg string) {
+	tenant.DeleteAllTenantsFixture(t, ctx, dbConnectionPool)
+	tnt := tenant.CreateTenantFixture(t, ctx, dbConnectionPool, "aid-org", "GCTNUNQVX7BNIP5AUWW2R4YC7G6R3JGUDNMGT7H62BGBUY4A4V6ROAAH")
+	if sameStatus {
+		tntStatus := tenant.TenantStatus(statusValue)
+		_, err := handler.Manager.UpdateTenantConfig(ctx, &tenant.TenantUpdate{ID: tnt.ID, Status: &tntStatus})
+		require.NoError(t, err)
+	}
+	url := fmt.Sprintf("/tenants/%s", tnt.ID)
+
+	rr := httptest.NewRecorder()
+	req, err := http.NewRequest(http.MethodPatch, url, strings.NewReader(fmt.Sprintf(`{"status": "%s", "id": "%s"}`, statusValue, tnt.ID)))
+	require.NoError(t, err)
+	r.ServeHTTP(rr, req)
+
+	resp := rr.Result()
+	defer resp.Body.Close()
+	respBody, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+
+	if sameStatus {
+		assert.Equal(t, http.StatusNotModified, resp.StatusCode)
+
+	} else {
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	}
+
+	if sameStatus {
+		assert.Contains(t, string(respBody), statusValue)
+	} else {
+		expectedRespBody := fmt.Sprintf(`{
+			"error": "%s"
+		}`, errorMsg)
+		assert.JSONEq(t, expectedRespBody, string(respBody))
+	}
 }
 
 func runSuccessfulRequestPatchTest(t *testing.T, r *chi.Mux, ctx context.Context, dbConnectionPool db.DBConnectionPool, handler TenantsHandler, reqBody, expectedRespBody string, tntStatus *tenant.TenantStatus) {
@@ -559,16 +596,24 @@ func Test_TenantHandler_Patch(t *testing.T) {
 		assert.JSONEq(t, expectedRespBody, string(respBody))
 	})
 
+	t.Run("returns BadRequest when EmailSenderType is not valid", func(t *testing.T) {
+		runBadRequestPatchTest(t, r, url, "email_sender_type", "", "invalid email sender type. Expected one of these values: [AWS_EMAIL DRY_RUN]")
+	})
+
+	t.Run("returns BadRequest when SMSSenderType is not valid", func(t *testing.T) {
+		runBadRequestPatchTest(t, r, url, "sms_sender_type", "", "invalid sms sender type. Expected one of these values: [TWILIO_SMS AWS_SMS DRY_RUN]")
+	})
+
 	t.Run("returns BadRequest when BaseURL is not valid", func(t *testing.T) {
-		runBadRequestPatchTest(t, r, url, "base_url", "invalid base URL value")
+		runBadRequestPatchTest(t, r, url, "base_url", "", "invalid base URL value")
 	})
 
 	t.Run("returns BadRequest when SDPUIBaseURL is not valid", func(t *testing.T) {
-		runBadRequestPatchTest(t, r, url, "sdp_ui_base_url", "invalid SDP UI base URL value")
+		runBadRequestPatchTest(t, r, url, "sdp_ui_base_url", "", "invalid SDP UI base URL value")
 	})
 
 	t.Run("returns BadRequest when Status is not valid", func(t *testing.T) {
-		runBadRequestPatchTest(t, r, url, "status", "invalid status value")
+		runBadRequestPatchTest(t, r, url, "status", "", "invalid status value")
 	})
 
 	t.Run("successfully updates status of a tenant to be deactivated", func(t *testing.T) {
@@ -641,7 +686,7 @@ func Test_TenantHandler_Patch(t *testing.T) {
 		runSuccessfulRequestPatchTest(t, r, ctx, dbConnectionPool, handler, reqBody, expectedRespBody, nil)
 	})
 
-	t.Run("successfully updates Status of a tenant", func(t *testing.T) {
+	t.Run("successfully updates status of a tenant", func(t *testing.T) {
 		reqBody := `{"status": "TENANT_DEACTIVATED"}`
 		expectedRespBody := `
 			"base_url": null,
@@ -653,6 +698,14 @@ func Test_TenantHandler_Patch(t *testing.T) {
 
 		tntStatus := tenant.ActivatedTenantStatus
 		runSuccessfulRequestPatchTest(t, r, ctx, dbConnectionPool, handler, reqBody, expectedRespBody, &tntStatus)
+	})
+
+	t.Run("unsuccessfully updates status of a tenant - invalid status", func(t *testing.T) {
+		runRequestStatusUpdatePatchTest(t, r, ctx, dbConnectionPool, handler, false, "TENANT_CREATED", "cannot perform update on tenant to status in request")
+	})
+
+	t.Run("unsuccessfully updates status of a tenant - same status", func(t *testing.T) {
+		runRequestStatusUpdatePatchTest(t, r, ctx, dbConnectionPool, handler, true, "TENANT_DEACTIVATED", "cannot perform update on tenant to status in request")
 	})
 
 	t.Run("successfully updates all fields of a tenant", func(t *testing.T) {
@@ -762,7 +815,7 @@ func Test_TenantHandler_SetDefault(t *testing.T) {
 		assert.JSONEq(t, `{"error": "tenant id some-id does not exist"}`, string(respBody))
 
 		// Ensure the tnt2 still the default one
-		tnt2DB, dErr := tenantManager.GetTenantByID(ctx, tnt2.ID)
+		tnt2DB, dErr := tenantManager.GetTenantByID(ctx, tnt2.ID, nil)
 		require.NoError(t, dErr)
 		assert.True(t, tnt2DB.IsDefault)
 	})
@@ -778,11 +831,11 @@ func Test_TenantHandler_SetDefault(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 
-		tnt1DB, err := tenantManager.GetTenantByID(ctx, tnt1.ID)
+		tnt1DB, err := tenantManager.GetTenantByID(ctx, tnt1.ID, nil)
 		require.NoError(t, err)
 		assert.True(t, tnt1DB.IsDefault)
 
-		tnt2DB, err := tenantManager.GetTenantByID(ctx, tnt2.ID)
+		tnt2DB, err := tenantManager.GetTenantByID(ctx, tnt2.ID, nil)
 		require.NoError(t, err)
 		assert.False(t, tnt2DB.IsDefault)
 	})
