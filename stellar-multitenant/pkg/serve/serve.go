@@ -11,6 +11,7 @@ import (
 	"github.com/stellar/go/support/log"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
@@ -35,6 +36,8 @@ type ServeOptions struct {
 	EmailMessengerClient                    message.MessengerClient
 	Environment                             string
 	GitCommit                               string
+	Models                                  *data.Models
+	MtnDBConnectionPool                     db.DBConnectionPool
 	NetworkPassphrase                       string
 	networkType                             utils.NetworkType
 	Port                                    int
@@ -63,6 +66,11 @@ func (opts *ServeOptions) SetupDependencies() error {
 	opts.networkType, err = utils.GetNetworkTypeFromNetworkPassphrase(opts.NetworkPassphrase)
 	if err != nil {
 		return fmt.Errorf("parsing network type: %w", err)
+	}
+
+	opts.Models, err = data.NewModels(opts.MtnDBConnectionPool)
+	if err != nil {
+		return fmt.Errorf("creating models: %w", err)
 	}
 
 	return nil
@@ -125,6 +133,7 @@ func handleHTTP(opts *ServeOptions) *chi.Mux {
 				NetworkType:           opts.networkType,
 				AdminDBConnectionPool: opts.AdminDBConnectionPool,
 				SingleTenantMode:      opts.SingleTenantMode,
+				Models:                opts.Models,
 			}
 			r.Get("/", tenantsHandler.GetAll)
 			r.Post("/", tenantsHandler.Post)

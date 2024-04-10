@@ -26,7 +26,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httphandler"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
-	publicfiles "github.com/stellar/stellar-disbursement-platform-backend/internal/serve/publicfiles"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/publicfiles"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"

@@ -20,6 +20,7 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	preconditionsMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions/mocks"
@@ -51,10 +52,15 @@ func runBadRequestPatchTest(t *testing.T, r *chi.Mux, url, fieldName, errorMsg s
 	assert.JSONEq(t, expectedRespBody, string(respBody))
 }
 
-func runSuccessfulRequestPatchTest(t *testing.T, r *chi.Mux, ctx context.Context, dbConnectionPool db.DBConnectionPool, handler TenantsHandler, reqBody, expectedRespBody string) {
+func runSuccessfulRequestPatchTest(t *testing.T, r *chi.Mux, ctx context.Context, dbConnectionPool db.DBConnectionPool, handler TenantsHandler, reqBody, expectedRespBody string, tntStatus *tenant.TenantStatus) {
 	tenant.DeleteAllTenantsFixture(t, ctx, dbConnectionPool)
 	tnt := tenant.CreateTenantFixture(t, ctx, dbConnectionPool, "aid-org", "GCTNUNQVX7BNIP5AUWW2R4YC7G6R3JGUDNMGT7H62BGBUY4A4V6ROAAH")
 	url := fmt.Sprintf("/tenants/%s", tnt.ID)
+
+	if tntStatus != nil {
+		_, err := handler.Manager.UpdateTenantConfig(ctx, &tenant.TenantUpdate{ID: tnt.ID, Status: tntStatus})
+		require.NoError(t, err)
+	}
 
 	rr := httptest.NewRecorder()
 	req, err := http.NewRequest(http.MethodPatch, url, strings.NewReader(reqBody))
@@ -66,7 +72,7 @@ func runSuccessfulRequestPatchTest(t *testing.T, r *chi.Mux, ctx context.Context
 	respBody, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 
-	tntDB, err := handler.Manager.GetTenantByName(ctx, "aid-org")
+	tntDB, err := handler.Manager.GetTenantByName(ctx, tnt.Name, nil)
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	expectedRespBody = fmt.Sprintf(`
@@ -118,6 +124,13 @@ func Test_TenantHandler_Get(t *testing.T) {
 	tenant.DeleteAllTenantsFixture(t, ctx, dbConnectionPool)
 	tnt1 := tenant.CreateTenantFixture(t, ctx, dbConnectionPool, "myorg1", "GCTNUNQVX7BNIP5AUWW2R4YC7G6R3JGUDNMGT7H62BGBUY4A4V6ROAAH")
 	tnt2 := tenant.CreateTenantFixture(t, ctx, dbConnectionPool, "myorg2", "GB37V3J5C3RAJY6BI52MAAWF6AVKJH7J4L2DVBMOP7WQJHQPNIBR3FKH")
+	dTnt := tenant.CreateTenantFixture(t, ctx, dbConnectionPool, "dorg", "GBKXOCCQ5HXYOJ7NH5LXDKOBKU22TE6XOKHKYADZPRQFLR2F5KPFVILF")
+	dStatus := tenant.DeactivatedTenantStatus
+	dTnt, err = handler.Manager.UpdateTenantConfig(ctx, &tenant.TenantUpdate{
+		ID:     dTnt.ID,
+		Status: &dStatus,
+	})
+	require.NoError(t, err)
 
 	t.Run("GetAll successfully returns a list of all tenants", func(t *testing.T) {
 		rr := httptest.NewRecorder()
@@ -365,7 +378,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 
 		assert.Equal(t, http.StatusCreated, resp.StatusCode)
 
-		tnt, err := m.GetTenantByName(ctx, "aid-org")
+		tnt, err := m.GetTenantByName(ctx, "aid-org", nil)
 		require.NoError(t, err)
 
 		expectedRespBody := fmt.Sprintf(`
@@ -488,7 +501,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 }
 
 func Test_TenantHandler_Patch(t *testing.T) {
-	dbt := dbtest.OpenWithAdminMigrationsOnly(t)
+	dbt := dbtest.Open(t)
 	defer dbt.Close()
 
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
@@ -497,8 +510,12 @@ func Test_TenantHandler_Patch(t *testing.T) {
 
 	ctx := context.Background()
 
+	models, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+
 	handler := TenantsHandler{
 		Manager: tenant.NewManager(tenant.WithDatabase(dbConnectionPool)),
+		Models:  models,
 	}
 
 	r := chi.NewRouter()
@@ -554,6 +571,50 @@ func Test_TenantHandler_Patch(t *testing.T) {
 		runBadRequestPatchTest(t, r, url, "status", "invalid status value")
 	})
 
+	t.Run("successfully updates status of a tenant to be deactivated", func(t *testing.T) {
+		reqBody := `{"status": "TENANT_DEACTIVATED"}`
+		expectedRespBody := `
+			"email_sender_type": "DRY_RUN",
+			"sms_sender_type": "DRY_RUN",
+			"base_url": null,
+			"sdp_ui_base_url": null,
+			"status": "TENANT_DEACTIVATED",
+			"distribution_account": "GCTNUNQVX7BNIP5AUWW2R4YC7G6R3JGUDNMGT7H62BGBUY4A4V6ROAAH",
+		`
+
+		runSuccessfulRequestPatchTest(t, r, ctx, dbConnectionPool, handler, reqBody, expectedRespBody, nil)
+	})
+
+	t.Run("successfully updates EmailSenderType of a tenant", func(t *testing.T) {
+		reqBody := `{"email_sender_type": "AWS_EMAIL"}`
+		expectedRespBody := `
+			"email_sender_type": "AWS_EMAIL",
+			"sms_sender_type": "DRY_RUN",
+			"base_url": null,
+			"sdp_ui_base_url": null,
+			"status": "TENANT_CREATED",
+			"distribution_account": "GCTNUNQVX7BNIP5AUWW2R4YC7G6R3JGUDNMGT7H62BGBUY4A4V6ROAAH",
+			"is_default": false,
+		`
+
+		runSuccessfulRequestPatchTest(t, r, ctx, dbConnectionPool, handler, reqBody, expectedRespBody, nil)
+	})
+
+	t.Run("successfully updates SMSSenderType of a tenant", func(t *testing.T) {
+		reqBody := `{"SMS_sender_type": "TWILIO_SMS"}`
+		expectedRespBody := `
+			"email_sender_type": "DRY_RUN",
+			"sms_sender_type": "TWILIO_SMS",
+			"base_url": null,
+			"sdp_ui_base_url": null,
+			"status": "TENANT_CREATED",
+			"distribution_account": "GCTNUNQVX7BNIP5AUWW2R4YC7G6R3JGUDNMGT7H62BGBUY4A4V6ROAAH",
+			"is_default": false,
+		`
+
+		runSuccessfulRequestPatchTest(t, r, ctx, dbConnectionPool, handler, reqBody, expectedRespBody, nil)
+	})
+
 	t.Run("successfully updates BaseURL of a tenant", func(t *testing.T) {
 		reqBody := `{"base_url": "http://valid.com"}`
 		expectedRespBody := `
@@ -564,7 +625,7 @@ func Test_TenantHandler_Patch(t *testing.T) {
 			"is_default": false,
 		`
 
-		runSuccessfulRequestPatchTest(t, r, ctx, dbConnectionPool, handler, reqBody, expectedRespBody)
+		runSuccessfulRequestPatchTest(t, r, ctx, dbConnectionPool, handler, reqBody, expectedRespBody, nil)
 	})
 
 	t.Run("successfully updates SDPUIBaseURL of a tenant", func(t *testing.T) {
@@ -577,20 +638,21 @@ func Test_TenantHandler_Patch(t *testing.T) {
 			"is_default": false,
 		`
 
-		runSuccessfulRequestPatchTest(t, r, ctx, dbConnectionPool, handler, reqBody, expectedRespBody)
+		runSuccessfulRequestPatchTest(t, r, ctx, dbConnectionPool, handler, reqBody, expectedRespBody, nil)
 	})
 
 	t.Run("successfully updates Status of a tenant", func(t *testing.T) {
-		reqBody := `{"status": "TENANT_ACTIVATED"}`
+		reqBody := `{"status": "TENANT_DEACTIVATED"}`
 		expectedRespBody := `
 			"base_url": null,
 			"sdp_ui_base_url": null,
-			"status": "TENANT_ACTIVATED",
+			"status": "TENANT_DEACTIVATED",
 			"distribution_account": "GCTNUNQVX7BNIP5AUWW2R4YC7G6R3JGUDNMGT7H62BGBUY4A4V6ROAAH",
 			"is_default": false,
 		`
 
-		runSuccessfulRequestPatchTest(t, r, ctx, dbConnectionPool, handler, reqBody, expectedRespBody)
+		tntStatus := tenant.ActivatedTenantStatus
+		runSuccessfulRequestPatchTest(t, r, ctx, dbConnectionPool, handler, reqBody, expectedRespBody, &tntStatus)
 	})
 
 	t.Run("successfully updates all fields of a tenant", func(t *testing.T) {
@@ -608,7 +670,8 @@ func Test_TenantHandler_Patch(t *testing.T) {
 			"is_default": false,
 		`
 
-		runSuccessfulRequestPatchTest(t, r, ctx, dbConnectionPool, handler, reqBody, expectedRespBody)
+		tntStatus := tenant.DeactivatedTenantStatus
+		runSuccessfulRequestPatchTest(t, r, ctx, dbConnectionPool, handler, reqBody, expectedRespBody, &tntStatus)
 	})
 }
 

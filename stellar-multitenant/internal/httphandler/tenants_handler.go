@@ -11,6 +11,7 @@ import (
 	"github.com/stellar/go/support/render/httpjson"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/internal/provisioning"
@@ -20,6 +21,7 @@ import (
 
 type TenantsHandler struct {
 	Manager               *tenant.Manager
+	Models                *data.Models
 	ProvisioningManager   *provisioning.Manager
 	NetworkType           utils.NetworkType
 	AdminDBConnectionPool db.DBConnectionPool
@@ -29,7 +31,13 @@ type TenantsHandler struct {
 func (t TenantsHandler) GetAll(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	tnts, err := t.Manager.GetAllTenants(ctx)
+	tnts, err := t.Manager.GetAllTenants(ctx, &tenant.QueryParams{
+		Filters: map[tenant.FilterKey]interface{}{
+			tenant.FilterKeyStatus: []tenant.TenantStatus{tenant.DeactivatedTenantStatus},
+		},
+		SortBy:    data.SortFieldName,
+		SortOrder: data.SortOrderASC,
+	})
 	if err != nil {
 		httperror.InternalError(ctx, "Cannot get tenants", err, nil).Render(w)
 		return
@@ -42,7 +50,11 @@ func (t TenantsHandler) GetByIDOrName(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	arg := chi.URLParam(r, "arg")
 
-	tnt, err := t.Manager.GetTenantByIDOrName(ctx, arg)
+	tnt, err := t.Manager.GetTenantByIDOrName(ctx, arg, &tenant.QueryParams{
+		Filters: map[tenant.FilterKey]interface{}{
+			tenant.FilterKeyStatus: []tenant.TenantStatus{tenant.DeactivatedTenantStatus},
+		},
+	})
 	if err != nil {
 		if errors.Is(tenant.ErrTenantDoesNotExist, err) {
 			errorMsg := fmt.Sprintf("tenant %s does not exist", arg)
@@ -118,6 +130,51 @@ func (t TenantsHandler) Patch(w http.ResponseWriter, r *http.Request) {
 	}
 
 	tenantID := chi.URLParam(r, "id")
+
+	if reqBody.Status != nil {
+		tnt, err := t.Manager.GetTenantByID(ctx, tenantID, nil)
+		if err != nil {
+			httperror.InternalError(ctx, "cannot retrieve tenant by id", err, nil).Render(w)
+		}
+
+		reqStatus := *reqBody.Status
+		// if attempting to deactivate tenant, need to check for a few conditions such as
+		// 1. whether tenant is already deactivated
+		// 2. whether there are any payments not in a terminal state
+		if reqStatus == tenant.DeactivatedTenantStatus {
+			if tnt.Status == tenant.DeactivatedTenantStatus {
+				httpjson.RenderStatus(w, http.StatusNotModified, tnt, httpjson.JSON)
+			}
+
+			indeterminatePaymentsCount, err := t.Models.Payment.Count(ctx, &data.QueryParams{
+				Filters: map[data.FilterKey]interface{}{
+					data.FilterKeyStatus: []data.PaymentStatus{
+						data.DraftPaymentStatus,
+						data.ReadyPaymentStatus,
+						data.PendingPaymentStatus,
+						data.PausedPaymentStatus,
+					},
+				},
+			}, t.Models.DBConnectionPool)
+			if err != nil {
+				httperror.InternalError(ctx, "cannot retrieve payments for tenant", err, nil).Render(w)
+			}
+
+			if indeterminatePaymentsCount != 0 {
+				httperror.BadRequest("cannot deactivate tenant", errors.New(""), nil).Render(w)
+			}
+		} else if reqStatus == tenant.ActivatedTenantStatus {
+			if tnt.Status == tenant.ActivatedTenantStatus {
+				httpjson.RenderStatus(w, http.StatusNotModified, tnt, httpjson.JSON)
+			}
+
+			if tnt.Status != tenant.DeactivatedTenantStatus {
+				httperror.BadRequest("cannot activate tenant that is not deactivated", nil, nil).Render(w)
+			}
+		} else {
+			httperror.BadRequest("cannot perform update on tenant to status in request", nil, nil).Render(w)
+		}
+	}
 
 	tnt, err := t.Manager.UpdateTenantConfig(ctx, &tenant.TenantUpdate{
 		ID:           tenantID,

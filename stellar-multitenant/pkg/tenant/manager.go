@@ -12,6 +12,7 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/router"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 )
 
 var (
@@ -27,10 +28,11 @@ type tenantContextKey struct{}
 
 type ManagerInterface interface {
 	GetDSNForTenant(ctx context.Context, tenantName string) (string, error)
-	GetAllTenants(ctx context.Context) ([]Tenant, error)
-	GetTenantByID(ctx context.Context, id string) (*Tenant, error)
-	GetTenantByName(ctx context.Context, name string) (*Tenant, error)
-	GetTenantByIDOrName(ctx context.Context, arg string) (*Tenant, error)
+	GetDSNForTenantByID(ctx context.Context, id string) (string, error)
+	GetAllTenants(ctx context.Context, queryParams *QueryParams) ([]Tenant, error)
+	GetTenantByID(ctx context.Context, id string, queryParams *QueryParams) (*Tenant, error)
+	GetTenantByName(ctx context.Context, name string, queryParams *QueryParams) (*Tenant, error)
+	GetTenantByIDOrName(ctx context.Context, arg string, queryParams *QueryParams) (*Tenant, error)
 	GetDefault(ctx context.Context) (*Tenant, error)
 	SetDefault(ctx context.Context, sqlExec db.SQLExecuter, id string) (*Tenant, error)
 	AddTenant(ctx context.Context, name string) (*Tenant, error)
@@ -53,21 +55,27 @@ func (m *Manager) GetDSNForTenant(ctx context.Context, tenantName string) (strin
 	return router.GetDSNForTenant(dataSourceName, tenantName)
 }
 
+func (m *Manager) GetDSNForTenantByID(ctx context.Context, id string) (string, error) {
+	t, err := m.GetTenantByID(ctx, id, nil)
+	if err != nil {
+		return "", err
+	}
+
+	return m.GetDSNForTenant(ctx, t.Name)
+}
+
 var selectQuery string = `
 	SELECT 
 		*
 	FROM
 		tenants t
-	%s
 `
 
 // GetAllTenants returns all tenants in the database.
-func (m *Manager) GetAllTenants(ctx context.Context) ([]Tenant, error) {
+func (m *Manager) GetAllTenants(ctx context.Context, queryParams *QueryParams) ([]Tenant, error) {
 	tnts := []Tenant{}
-
-	query := fmt.Sprintf(selectQuery, "ORDER BY t.name ASC")
-
-	err := m.db.SelectContext(ctx, &tnts, query)
+	query, params := m.newManagerQuery(selectQuery, queryParams)
+	err := m.db.SelectContext(ctx, &tnts, query, params...)
 	if err != nil {
 		return nil, fmt.Errorf("getting all tenants: %w", err)
 	}
@@ -75,10 +83,21 @@ func (m *Manager) GetAllTenants(ctx context.Context) ([]Tenant, error) {
 	return tnts, nil
 }
 
-func (m *Manager) GetTenantByID(ctx context.Context, id string) (*Tenant, error) {
-	q := fmt.Sprintf(selectQuery, "WHERE t.id = $1")
+func (m *Manager) GetTenantByID(ctx context.Context, id string, queryParams *QueryParams) (*Tenant, error) {
+	if queryParams == nil {
+		queryParams = &QueryParams{
+			Filters: map[FilterKey]interface{}{
+				FilterKeyID: id,
+			},
+		}
+	} else {
+		queryParams.Filters[FilterKeyID] = id
+	}
+
 	var t Tenant
-	if err := m.db.GetContext(ctx, &t, q, id); err != nil {
+
+	q, params := m.newManagerQuery(selectQuery, queryParams)
+	if err := m.db.GetContext(ctx, &t, q, params...); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrTenantDoesNotExist
 		}
@@ -87,10 +106,20 @@ func (m *Manager) GetTenantByID(ctx context.Context, id string) (*Tenant, error)
 	return &t, nil
 }
 
-func (m *Manager) GetTenantByName(ctx context.Context, name string) (*Tenant, error) {
-	q := fmt.Sprintf(selectQuery, "WHERE t.name = $1")
+func (m *Manager) GetTenantByName(ctx context.Context, name string, queryParams *QueryParams) (*Tenant, error) {
+	if queryParams == nil {
+		queryParams = &QueryParams{
+			Filters: map[FilterKey]interface{}{
+				FilterKeyName: name,
+			},
+		}
+	} else {
+		queryParams.Filters[FilterKeyName] = name
+	}
+
 	var t Tenant
-	if err := m.db.GetContext(ctx, &t, q, name); err != nil {
+	q, params := m.newManagerQuery(selectQuery, queryParams)
+	if err := m.db.GetContext(ctx, &t, q, params...); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrTenantDoesNotExist
 		}
@@ -100,11 +129,20 @@ func (m *Manager) GetTenantByName(ctx context.Context, name string) (*Tenant, er
 }
 
 // GetTenantByIDOrName returns the tenant with a given id or name.
-func (m *Manager) GetTenantByIDOrName(ctx context.Context, arg string) (*Tenant, error) {
-	var tnt Tenant
-	query := fmt.Sprintf(selectQuery, "WHERE t.id = $1 OR t.name = $1")
+func (m *Manager) GetTenantByIDOrName(ctx context.Context, arg string, queryParams *QueryParams) (*Tenant, error) {
+	if queryParams == nil {
+		queryParams = &QueryParams{
+			Filters: map[FilterKey]interface{}{
+				FilterKeyNameOrID: arg,
+			},
+		}
+	} else {
+		queryParams.Filters[FilterKeyNameOrID] = arg
+	}
 
-	err := m.db.GetContext(ctx, &tnt, query, arg)
+	var tnt Tenant
+	q, params := m.newManagerQuery(selectQuery, queryParams)
+	err := m.db.GetContext(ctx, &tnt, q, params...)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrTenantDoesNotExist
@@ -275,6 +313,35 @@ func GetTenantFromContext(ctx context.Context) (*Tenant, error) {
 // SaveTenantInContext stores the tenant information in the context.
 func SaveTenantInContext(ctx context.Context, t *Tenant) context.Context {
 	return context.WithValue(ctx, tenantContextKey{}, t)
+}
+
+func (m *Manager) newManagerQuery(baseQuery string, queryParams *QueryParams) (string, []interface{}) {
+	qb := data.NewQueryBuilder(baseQuery)
+	if queryParams.Filters[FilterKeyNameOrID] != nil {
+		param := queryParams.Filters[FilterKeyNameOrID]
+		qb.AddCondition("t.name = ? OR t.id = ?", param, param)
+	}
+	if queryParams.Filters[FilterKeyName] != nil {
+		qb.AddCondition("t.name = ?", queryParams.Filters[FilterKeyName])
+	}
+	if queryParams.Filters[FilterKeyID] != nil {
+		qb.AddCondition("t.id = ?", queryParams.Filters[FilterKeyID])
+	}
+
+	if queryParams.Filters[FilterKeyStatus] != nil {
+		if statusSlice, ok := queryParams.Filters[FilterKeyStatus].([]TenantStatus); ok && len(statusSlice) > 0 {
+			qb.AddCondition("NOT (t.status = ANY(?))", pq.Array(statusSlice))
+		} else {
+			qb.AddCondition("t.status != ?", queryParams.Filters[FilterKeyStatus])
+		}
+	}
+
+	if queryParams.SortBy != "" && queryParams.SortOrder != "" {
+		qb.AddSorting(queryParams.SortBy, queryParams.SortOrder, "t")
+	}
+
+	query, params := qb.Build()
+	return m.db.Rebind(query), params
 }
 
 type Option func(m *Manager)
