@@ -67,7 +67,7 @@ func (h *PatchAnchorPlatformTransactionCompletionEventHandler) Handle(ctx contex
 		return
 	}
 
-	tnt, err := h.tenantManager.GetTenantByID(ctx, message.TenantID)
+	tnt, err := h.tenantManager.GetTenantByID(ctx, message.TenantID, nil)
 	if err != nil {
 		h.crashTrackerClient.LogAndReportErrors(ctx, err, fmt.Sprintf("[%s] error getting tenant by id", h.Name()))
 		return

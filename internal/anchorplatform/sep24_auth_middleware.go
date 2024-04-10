@@ -103,10 +103,9 @@ func SEP24QueryTokenAuthenticateMiddleware(jwtManager *JWTManager, networkPassph
 				return
 			}
 
-			currentTenant, err := tenantManager.GetTenantByName(ctx, tenantName, nil)
-			if err != nil {
-				httpErr := fmt.Errorf("failed to load tenant by name for tenant name %s: %w", tenantName, err)
-				httperror.InternalError(ctx, "Failed to load tenant by name", httpErr, nil).Render(rw)
+			currentTenant, httpErr := getCurrentTenant(ctx, tenantManager, singleTenantMode, tenantName)
+			if httpErr != nil {
+				httpErr.Render(rw)
 				return
 			}
 
@@ -166,10 +165,9 @@ func SEP24HeaderTokenAuthenticateMiddleware(jwtManager *JWTManager, networkPassp
 				return
 			}
 
-			currentTenant, err := tenantManager.GetTenantByName(ctx, tenantName, nil)
-			if err != nil {
-				httpErr := fmt.Errorf("failed to load tenant by name for tenant name %s: %w", tenantName, err)
-				httperror.InternalError(ctx, "Failed to load tenant by name", httpErr, nil).Render(rw)
+			currentTenant, httpErr := getCurrentTenant(ctx, tenantManager, singleTenantMode, tenantName)
+			if httpErr != nil {
+				httpErr.Render(rw)
 				return
 			}
 

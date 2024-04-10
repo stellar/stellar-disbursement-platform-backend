@@ -144,7 +144,7 @@ func (it *IntegrationTestsService) StartIntegrationTests(ctx context.Context, op
 	it.initServices(context.Background(), opts)
 
 	log.Ctx(ctx).Infof("Resolving tenant %s from database and adding it to context", opts.TenantName)
-	t, err := it.tenantManager.GetTenantByName(ctx, opts.TenantName)
+	t, err := it.tenantManager.GetTenantByName(ctx, opts.TenantName, nil)
 	if err != nil {
 		return fmt.Errorf("getting tenant %s from database: %w", opts.TenantName, err)
 	}

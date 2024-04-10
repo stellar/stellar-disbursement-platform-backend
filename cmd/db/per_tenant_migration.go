@@ -55,7 +55,7 @@ func executeMigrationsPerTenant(
 // getTenantIDToDSNMapping returns a map of tenant IDs to their Database's DSN.
 func getTenantIDToDSNMapping(ctx context.Context, adminDBConnectionPool db.DBConnectionPool) (map[string]string, error) {
 	m := tenant.NewManager(tenant.WithDatabase(adminDBConnectionPool))
-	tenants, err := m.GetAllTenants(ctx)
+	tenants, err := m.GetAllTenants(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("getting all tenants: %w", err)
 	}

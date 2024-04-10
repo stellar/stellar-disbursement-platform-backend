@@ -62,7 +62,7 @@ func (h *PaymentFromSubmitterEventHandler) Handle(ctx context.Context, message *
 		return
 	}
 
-	t, err := h.tenantManager.GetTenantByID(ctx, message.TenantID)
+	t, err := h.tenantManager.GetTenantByID(ctx, message.TenantID, nil)
 	if err != nil {
 		h.crashTrackerClient.LogAndReportErrors(ctx, err, fmt.Sprintf("[%s] error getting tenant by id", h.Name()))
 		return
