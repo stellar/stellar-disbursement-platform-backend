@@ -20,6 +20,7 @@ var (
 	ErrEmptyTenantName         = errors.New("tenant name cannot be empty")
 	ErrEmptyUpdateTenant       = errors.New("provide at least one field to be updated")
 	ErrTenantNotFoundInContext = errors.New("tenant not found in context")
+	ErrTooManyDefaultTenants   = errors.New("too many default tenants. Expected at most one default tenant")
 )
 
 type tenantContextKey struct{}
@@ -30,6 +31,8 @@ type ManagerInterface interface {
 	GetTenantByID(ctx context.Context, id string) (*Tenant, error)
 	GetTenantByName(ctx context.Context, name string) (*Tenant, error)
 	GetTenantByIDOrName(ctx context.Context, arg string) (*Tenant, error)
+	GetDefault(ctx context.Context) (*Tenant, error)
+	SetDefault(ctx context.Context, sqlExec db.SQLExecuter, id string) (*Tenant, error)
 	AddTenant(ctx context.Context, name string) (*Tenant, error)
 	DeleteTenantByName(ctx context.Context, name string) error
 	CreateTenantSchema(ctx context.Context, tenantName string) error
@@ -107,6 +110,47 @@ func (m *Manager) GetTenantByIDOrName(ctx context.Context, arg string) (*Tenant,
 			return nil, ErrTenantDoesNotExist
 		}
 		return nil, fmt.Errorf("getting tenant %s: %w", arg, err)
+	}
+
+	return &tnt, nil
+}
+
+// GetDefault returns the tenant where is_default is true. Returns an error if more than one tenant is set as default.
+func (m *Manager) GetDefault(ctx context.Context) (*Tenant, error) {
+	var tnts []Tenant
+	query := fmt.Sprintf(selectQuery, "WHERE is_default = true")
+
+	err := m.db.SelectContext(ctx, &tnts, query)
+	if err != nil {
+		return nil, fmt.Errorf("getting default tenant: %w", err)
+	}
+
+	switch {
+	case len(tnts) == 0:
+		return nil, ErrTenantDoesNotExist
+	case len(tnts) > 1:
+		return nil, ErrTooManyDefaultTenants
+	}
+
+	return &tnts[0], nil
+}
+
+// SetDefault sets the is_default = true for the given tenant id.
+func (m *Manager) SetDefault(ctx context.Context, sqlExec db.SQLExecuter, id string) (*Tenant, error) {
+	const q = `
+		WITH remove_old_default_tenant AS (
+			UPDATE tenants SET is_default = false WHERE is_default = true
+		)
+		UPDATE tenants SET is_default = true WHERE id = $1 RETURNING *
+	`
+
+	var tnt Tenant
+	err := sqlExec.GetContext(ctx, &tnt, q, id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrTenantDoesNotExist
+		}
+		return nil, fmt.Errorf("setting tenant id %s as default: %w", id, err)
 	}
 
 	return &tnt, nil

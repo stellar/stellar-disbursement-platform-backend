@@ -54,7 +54,7 @@ func checkSEP24ClientAndHomeDomains(ctx context.Context, sep24Claims *SEP24JWTCl
 
 // SEP24QueryTokenAuthenticateMiddleware is a middleware that validates if the token passed in as a query
 // parameter with ?token={token} is valid for the authenticated endpoints.
-func SEP24QueryTokenAuthenticateMiddleware(jwtManager *JWTManager, networkPassphrase string, tenantManager tenant.ManagerInterface) func(http.Handler) http.Handler {
+func SEP24QueryTokenAuthenticateMiddleware(jwtManager *JWTManager, networkPassphrase string, tenantManager tenant.ManagerInterface, singleTenantMode bool) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 			ctx := req.Context()
@@ -103,10 +103,9 @@ func SEP24QueryTokenAuthenticateMiddleware(jwtManager *JWTManager, networkPassph
 				return
 			}
 
-			currentTenant, err := tenantManager.GetTenantByName(ctx, tenantName)
-			if err != nil {
-				httpErr := fmt.Errorf("failed to load tenant by name for tenant name %s: %w", tenantName, err)
-				httperror.InternalError(ctx, "Failed to load tenant by name", httpErr, nil).Render(rw)
+			currentTenant, httpErr := getCurrentTenant(ctx, tenantManager, singleTenantMode, tenantName)
+			if httpErr != nil {
+				httpErr.Render(rw)
 				return
 			}
 
@@ -122,7 +121,7 @@ func SEP24QueryTokenAuthenticateMiddleware(jwtManager *JWTManager, networkPassph
 
 // SEP24HeaderTokenAuthenticateMiddleware is a middleware that validates if the token passed in
 // the 'Authorization' header is valid for the authenticated endpoints.
-func SEP24HeaderTokenAuthenticateMiddleware(jwtManager *JWTManager, networkPassphrase string, tenantManager tenant.ManagerInterface) func(http.Handler) http.Handler {
+func SEP24HeaderTokenAuthenticateMiddleware(jwtManager *JWTManager, networkPassphrase string, tenantManager tenant.ManagerInterface, singleTenantMode bool) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 			ctx := req.Context()
@@ -166,10 +165,9 @@ func SEP24HeaderTokenAuthenticateMiddleware(jwtManager *JWTManager, networkPassp
 				return
 			}
 
-			currentTenant, err := tenantManager.GetTenantByName(ctx, tenantName)
-			if err != nil {
-				httpErr := fmt.Errorf("failed to load tenant by name for tenant name %s: %w", tenantName, err)
-				httperror.InternalError(ctx, "Failed to load tenant by name", httpErr, nil).Render(rw)
+			currentTenant, httpErr := getCurrentTenant(ctx, tenantManager, singleTenantMode, tenantName)
+			if httpErr != nil {
+				httpErr.Render(rw)
 				return
 			}
 
@@ -181,4 +179,23 @@ func SEP24HeaderTokenAuthenticateMiddleware(jwtManager *JWTManager, networkPassp
 			next.ServeHTTP(rw, req)
 		})
 	}
+}
+
+func getCurrentTenant(ctx context.Context, tenantManager tenant.ManagerInterface, singleTenantMode bool, tenantName string) (currentTenant *tenant.Tenant, httpError *httperror.HTTPError) {
+	var err error
+	if singleTenantMode {
+		currentTenant, err = tenantManager.GetDefault(ctx)
+		if err != nil {
+			err = fmt.Errorf("failed to load default tenant: %w", err)
+			return nil, httperror.InternalError(ctx, "Failed to load default tenant", err, nil)
+		}
+	} else {
+		currentTenant, err = tenantManager.GetTenantByName(ctx, tenantName)
+		if err != nil {
+			err = fmt.Errorf("failed to load tenant by name for tenant name %s: %w", tenantName, err)
+			return nil, httperror.InternalError(ctx, "Failed to load tenant by name", err, nil)
+		}
+	}
+
+	return
 }

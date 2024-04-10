@@ -144,6 +144,7 @@ func Test_TenantHandler_Get(t *testing.T) {
 					"sdp_ui_base_url": null,
 					"status": "TENANT_CREATED",
 					"distribution_account": %q,
+					"is_default": false,
 					"created_at": %q,
 					"updated_at": %q
 				},
@@ -156,6 +157,7 @@ func Test_TenantHandler_Get(t *testing.T) {
 					"sdp_ui_base_url": null,
 					"status": "TENANT_CREATED",
 					"distribution_account": %q,
+					"is_default": false,
 					"created_at": %q,
 					"updated_at": %q
 				}
@@ -191,6 +193,7 @@ func Test_TenantHandler_Get(t *testing.T) {
 				"sdp_ui_base_url": null,
 				"status": "TENANT_CREATED",
 				"distribution_account": %q,
+				"is_default": false,
 				"created_at": %q,
 				"updated_at": %q
 			}
@@ -223,6 +226,7 @@ func Test_TenantHandler_Get(t *testing.T) {
 				"sdp_ui_base_url": null,
 				"status": "TENANT_CREATED",
 				"distribution_account": %q,
+				"is_default": false,
 				"created_at": %q,
 				"updated_at": %q
 			}
@@ -268,7 +272,6 @@ func Test_TenantHandler_Post(t *testing.T) {
 	sigService, _, distAccSigClient, _, distAccResolver := signing.NewMockSignatureService(t)
 
 	distAcc := keypair.MustRandom().Address()
-	distAccResolver.On("HostDistributionAccount").Return(distAcc, nil).Twice()
 
 	submitterEngine := engine.SubmitterEngine{
 		HorizonClient:       mHorizonClient,
@@ -342,6 +345,11 @@ func Test_TenantHandler_Post(t *testing.T) {
 			Return([]string{distAcc}, nil).
 			Once()
 
+		distAccResolver.
+			On("HostDistributionAccount").
+			Return(distAcc, nil).
+			Once()
+
 		reqBody := `
 			{
 				"name": "aid-org",
@@ -352,7 +360,8 @@ func Test_TenantHandler_Post(t *testing.T) {
 				"email_sender_type": "DRY_RUN",
 				"sms_sender_type": "DRY_RUN",
 				"base_url": "https://backend.sdp.org",
-				"sdp_ui_base_url": "https://aid-org.sdp.org"
+				"sdp_ui_base_url": "https://aid-org.sdp.org",
+				"is_default": false
 			}
 		`
 
@@ -381,6 +390,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 				"sdp_ui_base_url": "https://aid-org.sdp.org",
 				"status": "TENANT_PROVISIONED",
 				"distribution_account": %q,
+				"is_default": false,
 				"created_at": %q,
 				"updated_at": %q
 			}
@@ -441,6 +451,11 @@ func Test_TenantHandler_Post(t *testing.T) {
 			Return([]string{distAcc}, nil).
 			Once()
 
+		distAccResolver.
+			On("HostDistributionAccount").
+			Return(distAcc, nil).
+			Once()
+
 		reqBody := `
 			{
 				"name": "my-aid-org",
@@ -484,6 +499,8 @@ func Test_TenantHandler_Post(t *testing.T) {
 	})
 
 	messengerClientMock.AssertExpectations(t)
+	distAccSigClient.AssertExpectations(t)
+	distAccResolver.AssertExpectations(t)
 }
 
 func Test_TenantHandler_Patch(t *testing.T) {
@@ -570,6 +587,7 @@ func Test_TenantHandler_Patch(t *testing.T) {
 			"sdp_ui_base_url": null,
 			"status": "TENANT_CREATED",
 			"distribution_account": "GCTNUNQVX7BNIP5AUWW2R4YC7G6R3JGUDNMGT7H62BGBUY4A4V6ROAAH",
+			"is_default": false,
 		`
 
 		runSuccessfulRequestPatchTest(t, r, ctx, dbConnectionPool, handler, reqBody, expectedRespBody)
@@ -584,6 +602,7 @@ func Test_TenantHandler_Patch(t *testing.T) {
 			"sdp_ui_base_url": null,
 			"status": "TENANT_CREATED",
 			"distribution_account": "GCTNUNQVX7BNIP5AUWW2R4YC7G6R3JGUDNMGT7H62BGBUY4A4V6ROAAH",
+			"is_default": false,
 		`
 
 		runSuccessfulRequestPatchTest(t, r, ctx, dbConnectionPool, handler, reqBody, expectedRespBody)
@@ -598,6 +617,7 @@ func Test_TenantHandler_Patch(t *testing.T) {
 			"sdp_ui_base_url": null,
 			"status": "TENANT_CREATED",
 			"distribution_account": "GCTNUNQVX7BNIP5AUWW2R4YC7G6R3JGUDNMGT7H62BGBUY4A4V6ROAAH",
+			"is_default": false,
 		`
 
 		runSuccessfulRequestPatchTest(t, r, ctx, dbConnectionPool, handler, reqBody, expectedRespBody)
@@ -612,6 +632,7 @@ func Test_TenantHandler_Patch(t *testing.T) {
 			"sdp_ui_base_url": "http://valid.com",
 			"status": "TENANT_CREATED",
 			"distribution_account": "GCTNUNQVX7BNIP5AUWW2R4YC7G6R3JGUDNMGT7H62BGBUY4A4V6ROAAH",
+			"is_default": false,
 		`
 
 		runSuccessfulRequestPatchTest(t, r, ctx, dbConnectionPool, handler, reqBody, expectedRespBody)
@@ -626,6 +647,7 @@ func Test_TenantHandler_Patch(t *testing.T) {
 			"sdp_ui_base_url": null,
 			"status": "TENANT_ACTIVATED",
 			"distribution_account": "GCTNUNQVX7BNIP5AUWW2R4YC7G6R3JGUDNMGT7H62BGBUY4A4V6ROAAH",
+			"is_default": false,
 		`
 
 		runSuccessfulRequestPatchTest(t, r, ctx, dbConnectionPool, handler, reqBody, expectedRespBody)
@@ -647,8 +669,122 @@ func Test_TenantHandler_Patch(t *testing.T) {
 			"sdp_ui_base_url": "http://valid.com",
 			"status": "TENANT_ACTIVATED",
 			"distribution_account": "GCTNUNQVX7BNIP5AUWW2R4YC7G6R3JGUDNMGT7H62BGBUY4A4V6ROAAH",
+			"is_default": false,
 		`
 
 		runSuccessfulRequestPatchTest(t, r, ctx, dbConnectionPool, handler, reqBody, expectedRespBody)
+	})
+}
+
+func Test_TenantHandler_SetDefault(t *testing.T) {
+	dbt := dbtest.OpenWithAdminMigrationsOnly(t)
+	defer dbt.Close()
+
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+
+	tenantManager := tenant.NewManager(tenant.WithDatabase(dbConnectionPool))
+	handler := TenantsHandler{
+		Manager:               tenantManager,
+		AdminDBConnectionPool: dbConnectionPool,
+		SingleTenantMode:      false,
+	}
+
+	updateTenantIsDefault := func(t *testing.T, ctx context.Context, dbConnectionPool db.DBConnectionPool, tenantID string, isDefault bool) {
+		const q = "UPDATE public.tenants SET is_default = $1 WHERE id = $2"
+		_, err = dbConnectionPool.ExecContext(ctx, q, isDefault, tenantID)
+		require.NoError(t, err)
+	}
+
+	t.Run("returns Forbidden when default tenant feature is disabled", func(t *testing.T) {
+		body := `{"id": "some-id"}`
+		req := httptest.NewRequest(http.MethodPost, "/default-tenant", strings.NewReader(body))
+		r := httptest.NewRecorder()
+
+		http.HandlerFunc(handler.SetDefault).ServeHTTP(r, req)
+
+		resp := r.Result()
+		respBody, rErr := io.ReadAll(resp.Body)
+		require.NoError(t, rErr)
+
+		assert.Equal(t, http.StatusForbidden, resp.StatusCode)
+		assert.JSONEq(t, `{"error": "Single Tenant Mode feature is disabled. Please, enable it before setting a tenant as default."}`, string(respBody))
+	})
+
+	handler.SingleTenantMode = true
+	t.Run("returns BadRequest when body is invalid", func(t *testing.T) {
+		body := `invalid`
+		req := httptest.NewRequest(http.MethodPost, "/default-tenant", strings.NewReader(body))
+		r := httptest.NewRecorder()
+
+		http.HandlerFunc(handler.SetDefault).ServeHTTP(r, req)
+
+		resp := r.Result()
+		respBody, rErr := io.ReadAll(resp.Body)
+		require.NoError(t, rErr)
+
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+		assert.JSONEq(t, `{"error": "The request was invalid in some way."}`, string(respBody))
+
+		body = `{"id": "    "}`
+		req = httptest.NewRequest(http.MethodPost, "/default-tenant", strings.NewReader(body))
+		r = httptest.NewRecorder()
+
+		http.HandlerFunc(handler.SetDefault).ServeHTTP(r, req)
+
+		resp = r.Result()
+		respBody, err = io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+		assert.JSONEq(t, `{"error": "Invalid request body", "extras": {"id": "id is required"}}`, string(respBody))
+	})
+
+	// creating tenants. tnt2 is the default.
+	tnt1 := tenant.CreateTenantFixture(t, ctx, dbConnectionPool, "redcorp", keypair.MustRandom().Address())
+	tnt2 := tenant.CreateTenantFixture(t, ctx, dbConnectionPool, "bluecorp", keypair.MustRandom().Address())
+	updateTenantIsDefault(t, ctx, dbConnectionPool, tnt2.ID, true)
+
+	t.Run("returns NotFound when tenant does not exist", func(t *testing.T) {
+		body := `{"id": "some-id"}`
+		req := httptest.NewRequest(http.MethodPost, "/default-tenant", strings.NewReader(body))
+		r := httptest.NewRecorder()
+
+		http.HandlerFunc(handler.SetDefault).ServeHTTP(r, req)
+
+		resp := r.Result()
+		respBody, rErr := io.ReadAll(resp.Body)
+		require.NoError(t, rErr)
+
+		assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+		assert.JSONEq(t, `{"error": "tenant id some-id does not exist"}`, string(respBody))
+
+		// Ensure the tnt2 still the default one
+		tnt2DB, dErr := tenantManager.GetTenantByID(ctx, tnt2.ID)
+		require.NoError(t, dErr)
+		assert.True(t, tnt2DB.IsDefault)
+	})
+
+	t.Run("successfully updates the default tenant", func(t *testing.T) {
+		body := fmt.Sprintf(`{"id": %q}`, tnt1.ID)
+		req := httptest.NewRequest(http.MethodPost, "/default-tenant", strings.NewReader(body))
+		r := httptest.NewRecorder()
+
+		http.HandlerFunc(handler.SetDefault).ServeHTTP(r, req)
+
+		resp := r.Result()
+		require.NoError(t, err)
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+		tnt1DB, err := tenantManager.GetTenantByID(ctx, tnt1.ID)
+		require.NoError(t, err)
+		assert.True(t, tnt1DB.IsDefault)
+
+		tnt2DB, err := tenantManager.GetTenantByID(ctx, tnt2.ID)
+		require.NoError(t, err)
+		assert.False(t, tnt2DB.IsDefault)
 	})
 }

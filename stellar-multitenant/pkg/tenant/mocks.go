@@ -3,6 +3,7 @@ package tenant
 import (
 	"context"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stretchr/testify/mock"
 )
 
@@ -41,6 +42,22 @@ func (m *TenantManagerMock) GetTenantByID(ctx context.Context, id string) (*Tena
 
 func (m *TenantManagerMock) GetTenantByIDOrName(ctx context.Context, arg string) (*Tenant, error) {
 	args := m.Called(ctx, arg)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*Tenant), args.Error(1)
+}
+
+func (m *TenantManagerMock) GetDefault(ctx context.Context) (*Tenant, error) {
+	args := m.Called(ctx)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*Tenant), args.Error(1)
+}
+
+func (m *TenantManagerMock) SetDefault(ctx context.Context, sqlExec db.SQLExecuter, id string) (*Tenant, error) {
+	args := m.Called(ctx, sqlExec, id)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}

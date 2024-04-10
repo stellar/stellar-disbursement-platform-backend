@@ -285,16 +285,31 @@ func CSPMiddleware() func(http.Handler) http.Handler {
 
 // ResolveTenantFromRequestMiddleware is a middleware that injects the tenant into the request context, if it can be found in
 // the request HEADER, or the hostname prefix.
-func ResolveTenantFromRequestMiddleware(tenantManager tenant.ManagerInterface) func(http.Handler) http.Handler {
+func ResolveTenantFromRequestMiddleware(tenantManager tenant.ManagerInterface, singleTenantMode bool) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 			ctx := req.Context()
 
 			var currentTenant *tenant.Tenant
-
-			// Attempt fetching tenant name from request
-			if tenantName, err := extractTenantNameFromRequest(req); err == nil && tenantName != "" {
-				currentTenant, _ = tenantManager.GetTenantByName(ctx, tenantName)
+			if singleTenantMode {
+				var err error
+				currentTenant, err = tenantManager.GetDefault(ctx)
+				if err != nil {
+					switch {
+					case errors.Is(err, tenant.ErrTenantDoesNotExist):
+						httperror.InternalError(ctx, "No default Tenant configured", err, nil).Render(rw)
+					case errors.Is(err, tenant.ErrTooManyDefaultTenants):
+						httperror.InternalError(ctx, "Too many default tenants configured", err, nil).Render(rw)
+					default:
+						httperror.InternalError(ctx, "", fmt.Errorf("error getting default tenant: %w", err), nil).Render(rw)
+					}
+					return
+				}
+			} else {
+				// Attempt fetching tenant name from request
+				if tenantName, err := extractTenantNameFromRequest(req); err == nil && tenantName != "" {
+					currentTenant, _ = tenantManager.GetTenantByName(ctx, tenantName)
+				}
 			}
 
 			if currentTenant != nil {
