@@ -711,7 +711,7 @@ func Test_TenantHandler_SetDefault(t *testing.T) {
 		require.NoError(t, rErr)
 
 		assert.Equal(t, http.StatusForbidden, resp.StatusCode)
-		assert.JSONEq(t, `{"error": "Default Tenant feature is disabled. Please, enable it before setting a tenant as default."}`, string(respBody))
+		assert.JSONEq(t, `{"error": "Single Tenant Mode feature is disabled. Please, enable it before setting a tenant as default."}`, string(respBody))
 	})
 
 	handler.SingleTenantMode = true
