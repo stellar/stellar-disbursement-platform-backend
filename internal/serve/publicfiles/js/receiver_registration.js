@@ -2,6 +2,7 @@ const WalletRegistration = {
   jwtToken: "",
   intlTelInput: null,
   phoneNumberErrorEl: null,
+  privacyPolicyLink: "",
 };
 
 function getJwtToken() {
@@ -11,6 +12,22 @@ function getJwtToken() {
     return tokenEl.innerHTML;
   }
 }
+
+function getPrivacyPolicyLink() {
+  const linkEl = document.querySelector("[data-privacy-policy-link]");
+
+  if (linkEl) {
+    return linkEl.innerHTML;
+  }
+}
+
+document.addEventListener("DOMContentLoaded", function () {
+  const footer = document.getElementById("WalletRegistration__PrivacyPolicy");
+
+  if (WalletRegistration.privacyPolicyLink == "") {
+    footer.style = "display: none"
+  }
+});
 
 function toggleNotification(type, { parentEl, title, message, isVisible }) {
   const titleEl = parentEl.querySelector(`[data-section-${type}-title]`);
@@ -385,4 +402,5 @@ window.onload = async () => {
   WalletRegistration.phoneNumberErrorEl = document.querySelector(
     "[data-section-error='phoneNumber']"
   );
+  WalletRegistration.privacyPolicyLink = getPrivacyPolicyLink();
 };
