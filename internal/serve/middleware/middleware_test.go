@@ -669,7 +669,7 @@ func Test_LoggingMiddleware(t *testing.T) {
 		tenantID := "tenant_id"
 		token := "valid_token"
 		mTenantManager.
-			On("GetTenantByName", mock.Anything, tenantName).
+			On("GetTenantByName", mock.Anything, tenantName, mock.Anything).
 			Return(&tenant.Tenant{ID: tenantID, Name: tenantName}, nil).
 			Once()
 		r.Use(ResolveTenantFromRequestMiddleware(mTenantManager, false))
@@ -818,7 +818,7 @@ func Test_ResolveTenantFromRequestMiddleware(t *testing.T) {
 			prepareMocksFn: func(mTenantManager *tenant.TenantManagerMock) {
 				expectedErr := errors.New("error fetching tenant from its name")
 				mTenantManager.
-					On("GetTenantByName", mock.Anything, "tenant_name").
+					On("GetTenantByName", mock.Anything, "tenant_name", mock.Anything).
 					Return(nil, expectedErr).
 					Once()
 			},
@@ -833,7 +833,7 @@ func Test_ResolveTenantFromRequestMiddleware(t *testing.T) {
 			prepareMocksFn: func(mTenantManager *tenant.TenantManagerMock) {
 				expectedErr := errors.New("error fetching tenant from its name")
 				mTenantManager.
-					On("GetTenantByName", mock.Anything, "tenant_hostname").
+					On("GetTenantByName", mock.Anything, "tenant_hostname", mock.Anything).
 					Return(nil, expectedErr).
 					Once()
 			},
@@ -847,7 +847,7 @@ func Test_ResolveTenantFromRequestMiddleware(t *testing.T) {
 			hostnamePrefix:    "",
 			prepareMocksFn: func(mTenantManager *tenant.TenantManagerMock) {
 				mTenantManager.
-					On("GetTenantByName", mock.Anything, "tenant_name").
+					On("GetTenantByName", mock.Anything, "tenant_name", mock.Anything).
 					Return(validTnt, nil).
 					Once()
 			},
@@ -861,7 +861,7 @@ func Test_ResolveTenantFromRequestMiddleware(t *testing.T) {
 			hostnamePrefix:    "tenant_hostname",
 			prepareMocksFn: func(mTenantManager *tenant.TenantManagerMock) {
 				mTenantManager.
-					On("GetTenantByName", mock.Anything, "tenant_hostname").
+					On("GetTenantByName", mock.Anything, "tenant_hostname", mock.Anything).
 					Return(validTnt, nil).
 					Once()
 			},

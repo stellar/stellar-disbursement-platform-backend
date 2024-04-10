@@ -169,6 +169,7 @@ func (t TenantsHandler) Patch(w http.ResponseWriter, r *http.Request) {
 		} else if reqStatus == tenant.ActivatedTenantStatus {
 			if tnt.Status == tenant.ActivatedTenantStatus {
 				httpjson.RenderStatus(w, http.StatusNotModified, tnt, httpjson.JSON)
+				return
 			}
 
 			if tnt.Status != tenant.DeactivatedTenantStatus {
