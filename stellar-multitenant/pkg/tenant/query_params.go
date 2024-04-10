@@ -14,8 +14,8 @@ type QueryParams struct {
 type FilterKey string
 
 const (
-	FilterKeyStatus   FilterKey = "status"
-	FilterKeyName     FilterKey = "name"
-	FilterKeyID       FilterKey = "id"
-	FilterKeyNameOrID FilterKey = "name_or_id"
+	FilterKeyOutStatus FilterKey = "status"
+	FilterKeyName      FilterKey = "name"
+	FilterKeyID        FilterKey = "id"
+	FilterKeyNameOrID  FilterKey = "name_or_id"
 )

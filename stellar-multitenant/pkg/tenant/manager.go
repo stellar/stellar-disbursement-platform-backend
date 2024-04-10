@@ -328,11 +328,11 @@ func (m *Manager) newManagerQuery(baseQuery string, queryParams *QueryParams) (s
 		qb.AddCondition("t.id = ?", queryParams.Filters[FilterKeyID])
 	}
 
-	if queryParams.Filters[FilterKeyStatus] != nil {
-		if statusSlice, ok := queryParams.Filters[FilterKeyStatus].([]TenantStatus); ok && len(statusSlice) > 0 {
+	if queryParams.Filters[FilterKeyOutStatus] != nil {
+		if statusSlice, ok := queryParams.Filters[FilterKeyOutStatus].([]TenantStatus); ok && len(statusSlice) > 0 {
 			qb.AddCondition("NOT (t.status = ANY(?))", pq.Array(statusSlice))
 		} else {
-			qb.AddCondition("t.status != ?", queryParams.Filters[FilterKeyStatus])
+			qb.AddCondition("t.status != ?", queryParams.Filters[FilterKeyOutStatus])
 		}
 	}
 
