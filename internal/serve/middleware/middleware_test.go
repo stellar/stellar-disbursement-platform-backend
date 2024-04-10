@@ -802,14 +802,14 @@ func Test_ResolveTenantFromRequestMiddleware(t *testing.T) {
 	validTnt := &tenant.Tenant{ID: "tenant_id", Name: "tenant_name"}
 
 	testCases := []struct {
-		name                string
-		tenantHeaderValue   string
-		hostnamePrefix      string
-		enableDefaultTenant bool
-		prepareMocksFn      func(mTenantManager *tenant.TenantManagerMock)
-		expectedStatus      int
-		expectedRespBody    string
-		expectedTenant      *tenant.Tenant
+		name              string
+		tenantHeaderValue string
+		hostnamePrefix    string
+		singleTenantMode  bool
+		prepareMocksFn    func(mTenantManager *tenant.TenantManagerMock)
+		expectedStatus    int
+		expectedRespBody  string
+		expectedTenant    *tenant.Tenant
 	}{
 		{
 			name:              "🔴 tenant name from the header cannot be found in GetTenantByName",
@@ -870,10 +870,10 @@ func Test_ResolveTenantFromRequestMiddleware(t *testing.T) {
 			expectedTenant:   validTnt,
 		},
 		{
-			name:                "🔴 no default tenant is found",
-			tenantHeaderValue:   "",
-			hostnamePrefix:      "",
-			enableDefaultTenant: true,
+			name:              "🔴 no default tenant is found",
+			tenantHeaderValue: "",
+			hostnamePrefix:    "",
+			singleTenantMode:  true,
 			prepareMocksFn: func(mTenantManager *tenant.TenantManagerMock) {
 				mTenantManager.
 					On("GetDefault", mock.Anything).
@@ -885,10 +885,10 @@ func Test_ResolveTenantFromRequestMiddleware(t *testing.T) {
 			expectedTenant:   nil,
 		},
 		{
-			name:                "🟢 successfully gets the default tenant",
-			tenantHeaderValue:   "",
-			hostnamePrefix:      "",
-			enableDefaultTenant: true,
+			name:              "🟢 successfully gets the default tenant",
+			tenantHeaderValue: "",
+			hostnamePrefix:    "",
+			singleTenantMode:  true,
 			prepareMocksFn: func(mTenantManager *tenant.TenantManagerMock) {
 				mTenantManager.
 					On("GetDefault", mock.Anything).
@@ -900,10 +900,10 @@ func Test_ResolveTenantFromRequestMiddleware(t *testing.T) {
 			expectedTenant:   validTnt,
 		},
 		{
-			name:                "🟢 successfully gets the default tenant regardless the header value",
-			tenantHeaderValue:   "some_tenant_name",
-			hostnamePrefix:      "",
-			enableDefaultTenant: true,
+			name:              "🟢 successfully gets the default tenant regardless the header value",
+			tenantHeaderValue: "some_tenant_name",
+			hostnamePrefix:    "",
+			singleTenantMode:  true,
 			prepareMocksFn: func(mTenantManager *tenant.TenantManagerMock) {
 				mTenantManager.
 					On("GetDefault", mock.Anything).
@@ -915,10 +915,10 @@ func Test_ResolveTenantFromRequestMiddleware(t *testing.T) {
 			expectedTenant:   validTnt,
 		},
 		{
-			name:                "🟢 successfully gets the default tenant regardless the host name prefix",
-			tenantHeaderValue:   "",
-			hostnamePrefix:      "some_tenant_hostname",
-			enableDefaultTenant: true,
+			name:              "🟢 successfully gets the default tenant regardless the host name prefix",
+			tenantHeaderValue: "",
+			hostnamePrefix:    "some_tenant_hostname",
+			singleTenantMode:  true,
 			prepareMocksFn: func(mTenantManager *tenant.TenantManagerMock) {
 				mTenantManager.
 					On("GetDefault", mock.Anything).
@@ -945,7 +945,7 @@ func Test_ResolveTenantFromRequestMiddleware(t *testing.T) {
 			// prepare router
 			r := chi.NewRouter()
 			r.
-				With(ResolveTenantFromRequestMiddleware(mTenantManager, tc.enableDefaultTenant)).
+				With(ResolveTenantFromRequestMiddleware(mTenantManager, tc.singleTenantMode)).
 				Get("/test", func(w http.ResponseWriter, r *http.Request) {
 					updatedCtx = r.Context()
 					w.WriteHeader(http.StatusOK)

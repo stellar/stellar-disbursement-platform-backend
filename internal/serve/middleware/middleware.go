@@ -285,13 +285,13 @@ func CSPMiddleware() func(http.Handler) http.Handler {
 
 // ResolveTenantFromRequestMiddleware is a middleware that injects the tenant into the request context, if it can be found in
 // the request HEADER, or the hostname prefix.
-func ResolveTenantFromRequestMiddleware(tenantManager tenant.ManagerInterface, enableDefaultTenant bool) func(http.Handler) http.Handler {
+func ResolveTenantFromRequestMiddleware(tenantManager tenant.ManagerInterface, singleTenantMode bool) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 			ctx := req.Context()
 
 			var currentTenant *tenant.Tenant
-			if enableDefaultTenant {
+			if singleTenantMode {
 				var err error
 				currentTenant, err = tenantManager.GetDefault(ctx)
 				if err != nil {

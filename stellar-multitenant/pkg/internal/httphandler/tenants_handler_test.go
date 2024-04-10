@@ -690,7 +690,7 @@ func Test_TenantHandler_SetDefault(t *testing.T) {
 	handler := TenantsHandler{
 		Manager:               tenantManager,
 		AdminDBConnectionPool: dbConnectionPool,
-		EnableDefaultTenant:   false,
+		SingleTenantMode:      false,
 	}
 
 	updateTenantIsDefault := func(t *testing.T, ctx context.Context, dbConnectionPool db.DBConnectionPool, tenantID string, isDefault bool) {
@@ -714,7 +714,7 @@ func Test_TenantHandler_SetDefault(t *testing.T) {
 		assert.JSONEq(t, `{"error": "Default Tenant feature is disabled. Please, enable it before setting a tenant as default."}`, string(respBody))
 	})
 
-	handler.EnableDefaultTenant = true
+	handler.SingleTenantMode = true
 	t.Run("returns BadRequest when body is invalid", func(t *testing.T) {
 		body := `invalid`
 		req := httptest.NewRequest(http.MethodPost, "/default-tenant", strings.NewReader(body))

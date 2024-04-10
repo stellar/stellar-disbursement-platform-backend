@@ -22,7 +22,7 @@ type TenantsHandler struct {
 	ProvisioningManager   *provisioning.Manager
 	NetworkType           utils.NetworkType
 	AdminDBConnectionPool db.DBConnectionPool
-	EnableDefaultTenant   bool
+	SingleTenantMode      bool
 }
 
 func (t TenantsHandler) GetAll(w http.ResponseWriter, r *http.Request) {
@@ -150,7 +150,7 @@ func (t TenantsHandler) Patch(w http.ResponseWriter, r *http.Request) {
 func (t TenantsHandler) SetDefault(rw http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 
-	if !t.EnableDefaultTenant {
+	if !t.SingleTenantMode {
 		log.Ctx(ctx).Warnf("An attempt of set a default tenant was made but ENABLE_DEFAULT_TENANT is set to `false`")
 		httperror.Forbidden("Default Tenant feature is disabled. Please, enable it before setting a tenant as default.", nil, nil).Render(rw)
 		return

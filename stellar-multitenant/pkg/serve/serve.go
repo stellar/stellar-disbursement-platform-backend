@@ -45,7 +45,7 @@ type ServeOptions struct {
 	Version                                 string
 	AdminAccount                            string
 	AdminApiKey                             string
-	EnableDefaultTenant                     bool
+	SingleTenantMode                        bool
 }
 
 // SetupDependencies uses the serve options to setup the dependencies for the server.
@@ -124,7 +124,7 @@ func handleHTTP(opts *ServeOptions) *chi.Mux {
 				ProvisioningManager:   opts.tenantProvisioningManager,
 				NetworkType:           opts.networkType,
 				AdminDBConnectionPool: opts.AdminDBConnectionPool,
-				EnableDefaultTenant:   opts.EnableDefaultTenant,
+				SingleTenantMode:      opts.SingleTenantMode,
 			}
 			r.Get("/", tenantsHandler.GetAll)
 			r.Post("/", tenantsHandler.Post)
