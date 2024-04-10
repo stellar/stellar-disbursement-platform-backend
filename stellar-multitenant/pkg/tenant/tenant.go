@@ -64,7 +64,6 @@ type TenantUpdate struct {
 	SDPUIBaseURL        *string          `db:"sdp_ui_base_url"`
 	Status              *TenantStatus    `db:"status"`
 	DistributionAccount *string          `db:"distribution_account"`
-	IsDefault           *bool            `db:"is_default"`
 }
 
 type TenantStatus string
@@ -127,8 +126,7 @@ func (tu *TenantUpdate) areAllFieldsEmpty() bool {
 		tu.BaseURL == nil &&
 		tu.SDPUIBaseURL == nil &&
 		tu.Status == nil &&
-		tu.DistributionAccount == nil &&
-		tu.IsDefault == nil)
+		tu.DistributionAccount == nil)
 }
 
 func isValidURL(u string) bool {

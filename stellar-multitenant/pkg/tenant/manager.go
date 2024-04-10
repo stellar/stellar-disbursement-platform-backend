@@ -257,11 +257,6 @@ func (m *Manager) UpdateTenantConfig(ctx context.Context, tu *TenantUpdate) (*Te
 		log.Ctx(ctx).Warnf("distribution account for tenant id %s updated to %s", tu.ID, *tu.DistributionAccount)
 	}
 
-	if tu.IsDefault != nil {
-		fields = append(fields, "is_default = ?")
-		args = append(args, *tu.IsDefault)
-	}
-
 	args = append(args, tu.ID)
 	q = fmt.Sprintf(q, strings.Join(fields, ",\n"))
 	q = m.db.Rebind(q)
