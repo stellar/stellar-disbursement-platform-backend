@@ -289,6 +289,71 @@ func Test_PatchAnchorPlatformTransactionCompletionService_PatchAPTransactionForP
 		assert.False(t, syncedAt.IsZero())
 	})
 
+	t.Run("marks as synced when patch anchor platform transaction successfully and payment is success (XLM)", func(t *testing.T) {
+		data.DeleteAllFixtures(t, ctx, dbConnectionPool)
+
+		country := data.CreateCountryFixture(t, ctx, dbConnectionPool, "BRA", "Brazil")
+		wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "Wallet", "https://www.wallet.com", "www.wallet.com", "wallet://")
+		asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "XLM", "")
+
+		receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
+		receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
+
+		disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
+			Country:           country,
+			Wallet:            wallet,
+			Asset:             asset,
+			Status:            data.StartedDisbursementStatus,
+			VerificationField: data.VerificationFieldDateOfBirth,
+		})
+
+		payment := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+			Amount:               "1",
+			StellarTransactionID: "stellar-transaction-id-1",
+			StellarOperationID:   "operation-id-1",
+			Status:               data.SuccessPaymentStatus,
+			Disbursement:         disbursement,
+			ReceiverWallet:       receiverWallet,
+			Asset:                *asset,
+		})
+
+		completedAtUTC := payment.UpdatedAt.UTC()
+		tx := schemas.EventPaymentCompletedData{
+			PaymentID:            payment.ID,
+			PaymentStatus:        string(data.SuccessPaymentStatus),
+			PaymentStatusMessage: "",
+			PaymentCompletedAt:   completedAtUTC,
+			StellarTransactionID: "stellar-transaction-id-1",
+		}
+
+		apAPISvcMock.
+			On("PatchAnchorTransactionsPostSuccessCompletion", ctx, anchorplatform.APSep24TransactionPatchPostSuccess{
+				ID:     receiverWallet.AnchorPlatformTransactionID,
+				SEP:    "24",
+				Status: anchorplatform.APTransactionStatusCompleted,
+				StellarTransactions: []anchorplatform.APStellarTransaction{
+					{
+						ID:       tx.StellarTransactionID,
+						Memo:     receiverWallet.StellarMemo,
+						MemoType: receiverWallet.StellarMemoType,
+					},
+				},
+				CompletedAt: &completedAtUTC,
+				AmountOut: anchorplatform.APAmount{
+					Amount: payment.Amount,
+					Asset:  "stellar:native",
+				},
+			}).
+			Return(nil).
+			Once()
+
+		sErr := svc.PatchAPTransactionForPaymentEvent(ctx, tx)
+		require.NoError(t, sErr)
+
+		syncedAt := getAPTransactionSyncedAt(t, ctx, dbConnectionPool, receiverWallet.ID)
+		assert.False(t, syncedAt.IsZero())
+	})
+
 	t.Run("doesn't patch the transaction when it's already patch as completed", func(t *testing.T) {
 		data.DeleteAllFixtures(t, ctx, dbConnectionPool)
 

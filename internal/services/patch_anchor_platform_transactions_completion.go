@@ -6,6 +6,7 @@ import (
 	"sort"
 
 	"github.com/stellar/go/support/log"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
@@ -77,10 +78,6 @@ func (s *PatchAnchorPlatformTransactionCompletionService) PatchAPTransactionsFor
 		payments, err := s.sdpModels.Payment.GetAllReadyToPatchCompletionAnchorTransactions(ctx, dbTx)
 		if err != nil {
 			return fmt.Errorf("getting payments: %w", err)
-		}
-
-		if err != nil {
-			return fmt.Errorf("getting payments from database transaction: %w", err)
 		}
 
 		log.Ctx(ctx).Debugf("PatchAnchorPlatformTransactionService: got %d payments to process", len(payments))
