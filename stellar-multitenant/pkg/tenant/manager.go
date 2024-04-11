@@ -73,6 +73,10 @@ var selectQuery string = `
 
 // GetAllTenants returns all tenants in the database.
 func (m *Manager) GetAllTenants(ctx context.Context, queryParams *QueryParams) ([]Tenant, error) {
+	if queryParams == nil {
+		queryParams = &QueryParams{}
+	}
+
 	tnts := []Tenant{}
 	query, params := m.newManagerQuery(selectQuery, queryParams)
 	err := m.db.SelectContext(ctx, &tnts, query, params...)
@@ -319,7 +323,7 @@ func (m *Manager) newManagerQuery(baseQuery string, queryParams *QueryParams) (s
 	qb := data.NewQueryBuilder(baseQuery)
 	if queryParams.Filters[FilterKeyNameOrID] != nil {
 		param := queryParams.Filters[FilterKeyNameOrID]
-		qb.AddCondition("t.name = ? OR t.id = ?", param, param)
+		qb.AddCondition("(t.name = ? OR t.id = ?)", param, param)
 	}
 	if queryParams.Filters[FilterKeyName] != nil {
 		qb.AddCondition("t.name = ?", queryParams.Filters[FilterKeyName])
