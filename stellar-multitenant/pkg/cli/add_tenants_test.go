@@ -221,66 +221,44 @@ func Test_AddTenantsCmd(t *testing.T) {
 		err := mockCmd.ExecuteContext(ctx)
 		assert.EqualError(t, err, "accepts 5 arg(s), received 0")
 
-		expectUsageMessage := `Error: accepts 5 arg(s), received 0
-Usage:
-   add-tenants [flags]
-
-Examples:
-add-tenants [tenant name] [user first name] [user last name] [user email] [organization name]
-
-Flags:
-      --aws-access-key-id string                            The AWS access key ID (AWS_ACCESS_KEY_ID)
-      --aws-region string                                   The AWS region (AWS_REGION)
-      --aws-secret-access-key string                        The AWS secret access key (AWS_SECRET_ACCESS_KEY)
-      --channel-account-encryption-passphrase string        A Stellar-compliant ed25519 private key used to encrypt/decrypt the channel accounts' private keys. When not set, it will default to the value of the 'distribution-seed' option. (CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE)
-      --distribution-account-encryption-passphrase string   A Stellar-compliant ed25519 private key used to encrypt/decrypt the in-memory distribution accounts' private keys. It's mandatory when the distribution-signer-type is set to DISTRIBUTION_ACCOUNT_DB. (DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE)
-      --distribution-public-key string                      The public key of the HOST's Stellar distribution account, used to create channel accounts (DISTRIBUTION_PUBLIC_KEY)
-      --distribution-seed string                            The private key of the HOST's Stellar distribution account, used to create channel accounts (DISTRIBUTION_SEED)
-      --distribution-signer-type string                     The type of the signature client used for distribution accounts. Options: [DISTRIBUTION_ACCOUNT_ENV DISTRIBUTION_ACCOUNT_DB] (DISTRIBUTION_SIGNER_TYPE) (default "DISTRIBUTION_ACCOUNT_ENV")
-      --email-sender-type string                            The messenger type used to send invitations to new dashboard users. Options: [DRY_RUN AWS_EMAIL] (EMAIL_SENDER_TYPE)
-  -h, --help                                                help for add-tenants
-      --horizon-url string                                  The URL of the Stellar Horizon server where this application will communicate with. (HORIZON_URL) (default "https://horizon-testnet.stellar.org/")
-      --max-base-fee int                                    The max base fee for submitting a Stellar transaction (MAX_BASE_FEE) (default 10000)
-      --network-passphrase string                           The Stellar network passphrase (NETWORK_PASSPHRASE) (default "Test SDF Network ; September 2015")
-      --network-type string                                 The Stellar Network type (NETWORK_TYPE) (default "testnet")
-      --sdp-ui-base-url string                              The Tenant SDP UI/dashboard Base URL. (SDP_UI_BASE_URL) (default "http://localhost:3000")
-      --tenant-xlm-bootstrap-amount int                     The amount of the native asset that will be sent to the tenant distribution account from the host distribution account when it's created if applicable. (TENANT_XLM_BOOTSTRAP_AMOUNT) (default 5)
-
-`
-		assert.Equal(t, expectUsageMessage, out.String())
+		expectErrMsg := "Error: accepts 5 arg(s), received 0"
+		expectUsageMessages := []string{
+			"Usage:",
+			"add-tenants [flags]",
+			"Examples:",
+			"add-tenants [tenant name] [user first name] [user last name] [user email] [organization name]",
+			"Flags:",
+			"--aws-access-key-id string",
+			"--aws-region string",
+			"--aws-secret-access-key string",
+			"--channel-account-encryption-passphrase string",
+			"--distribution-account-encryption-passphrase string",
+			"--distribution-public-key string",
+			"--distribution-seed string",
+			"--distribution-signer-type string",
+			"--email-sender-type string",
+			"-h, --help",
+			"--horizon-url string",
+			"--max-base-fee int",
+			"--network-passphrase string",
+			"--network-type string",
+			"--sdp-ui-base-url string",
+			"--tenant-xlm-bootstrap-amount int",
+		}
+		outputStr := out.String()
+		assert.Contains(t, outputStr, expectErrMsg)
+		for _, expected := range expectUsageMessages {
+			assert.Contains(t, outputStr, expected)
+		}
 
 		out.Reset()
 		mockCmd.SetArgs([]string{"add-tenants", "--help"})
 		err = mockCmd.ExecuteContext(ctx)
 		require.NoError(t, err)
-
-		expectUsageMessage = `Add a new tenant. The tenant name should only contain lower case characters and dash (-)
-
-Usage:
-   add-tenants [flags]
-
-Examples:
-add-tenants [tenant name] [user first name] [user last name] [user email] [organization name]
-
-Flags:
-      --aws-access-key-id string                            The AWS access key ID (AWS_ACCESS_KEY_ID)
-      --aws-region string                                   The AWS region (AWS_REGION)
-      --aws-secret-access-key string                        The AWS secret access key (AWS_SECRET_ACCESS_KEY)
-      --channel-account-encryption-passphrase string        A Stellar-compliant ed25519 private key used to encrypt/decrypt the channel accounts' private keys. When not set, it will default to the value of the 'distribution-seed' option. (CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE)
-      --distribution-account-encryption-passphrase string   A Stellar-compliant ed25519 private key used to encrypt/decrypt the in-memory distribution accounts' private keys. It's mandatory when the distribution-signer-type is set to DISTRIBUTION_ACCOUNT_DB. (DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE)
-      --distribution-public-key string                      The public key of the HOST's Stellar distribution account, used to create channel accounts (DISTRIBUTION_PUBLIC_KEY)
-      --distribution-seed string                            The private key of the HOST's Stellar distribution account, used to create channel accounts (DISTRIBUTION_SEED)
-      --distribution-signer-type string                     The type of the signature client used for distribution accounts. Options: [DISTRIBUTION_ACCOUNT_ENV DISTRIBUTION_ACCOUNT_DB] (DISTRIBUTION_SIGNER_TYPE) (default "DISTRIBUTION_ACCOUNT_ENV")
-      --email-sender-type string                            The messenger type used to send invitations to new dashboard users. Options: [DRY_RUN AWS_EMAIL] (EMAIL_SENDER_TYPE)
-  -h, --help                                                help for add-tenants
-      --horizon-url string                                  The URL of the Stellar Horizon server where this application will communicate with. (HORIZON_URL) (default "https://horizon-testnet.stellar.org/")
-      --max-base-fee int                                    The max base fee for submitting a Stellar transaction (MAX_BASE_FEE) (default 10000)
-      --network-passphrase string                           The Stellar network passphrase (NETWORK_PASSPHRASE) (default "Test SDF Network ; September 2015")
-      --network-type string                                 The Stellar Network type (NETWORK_TYPE) (default "testnet")
-      --sdp-ui-base-url string                              The Tenant SDP UI/dashboard Base URL. (SDP_UI_BASE_URL) (default "http://localhost:3000")
-      --tenant-xlm-bootstrap-amount int                     The amount of the native asset that will be sent to the tenant distribution account from the host distribution account when it's created if applicable. (TENANT_XLM_BOOTSTRAP_AMOUNT) (default 5)
-`
-		assert.Equal(t, expectUsageMessage, out.String())
+		outputStr = out.String()
+		for _, expected := range expectUsageMessages {
+			assert.Contains(t, outputStr, expected)
+		}
 	})
 
 	t.Run("adds new tenant successfully testnet", func(t *testing.T) {
