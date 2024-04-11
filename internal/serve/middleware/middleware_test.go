@@ -305,7 +305,7 @@ func Test_AuthenticateMiddleware(t *testing.T) {
 			Return("test_tenant_id", nil).
 			Once()
 		mTenantManager.
-			On("GetTenantByID", mock.Anything, "test_tenant_id").
+			On("GetTenantByID", mock.Anything, "test_tenant_id", mock.Anything).
 			Return(&tenant.Tenant{
 				ID:   "test_tenant_id",
 				Name: "test_tenant",

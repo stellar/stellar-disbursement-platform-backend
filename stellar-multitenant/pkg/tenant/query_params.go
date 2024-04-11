@@ -18,4 +18,5 @@ const (
 	FilterKeyName      FilterKey = "name"
 	FilterKeyID        FilterKey = "id"
 	FilterKeyNameOrID  FilterKey = "name_or_id"
+	FilterKeyDefault   FilterKey = "default"
 )

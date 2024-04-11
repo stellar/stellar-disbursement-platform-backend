@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/sirupsen/logrus"
 	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/keypair"
 	"github.com/stellar/go/support/log"
@@ -53,7 +54,7 @@ func runBadRequestPatchTest(t *testing.T, r *chi.Mux, url, fieldName, errorMsg s
 	assert.JSONEq(t, expectedRespBody, string(respBody))
 }
 
-func runRequestStatusUpdatePatchTest(t *testing.T, r *chi.Mux, ctx context.Context, dbConnectionPool db.DBConnectionPool, handler TenantsHandler, originalStatus, statusValue tenant.TenantStatus, errorMsg string) {
+func runRequestStatusUpdatePatchTest(t *testing.T, r *chi.Mux, ctx context.Context, dbConnectionPool db.DBConnectionPool, handler TenantsHandler, getEntries func() []logrus.Entry, originalStatus, statusValue tenant.TenantStatus, errorMsg string) {
 	tenant.DeleteAllTenantsFixture(t, ctx, dbConnectionPool)
 	tnt := tenant.CreateTenantFixture(t, ctx, dbConnectionPool, "aid-org", "GCTNUNQVX7BNIP5AUWW2R4YC7G6R3JGUDNMGT7H62BGBUY4A4V6ROAAH")
 
@@ -61,7 +62,6 @@ func runRequestStatusUpdatePatchTest(t *testing.T, r *chi.Mux, ctx context.Conte
 	require.NoError(t, err)
 
 	url := fmt.Sprintf("/tenants/%s", tnt.ID)
-	getEntries := log.DefaultLogger.StartTest(log.InfoLevel)
 
 	rr := httptest.NewRecorder()
 	req, err := http.NewRequest(http.MethodPatch, url, strings.NewReader(fmt.Sprintf(`{"status": "%s", "id": "%s"}`, statusValue, tnt.ID)))
@@ -75,11 +75,13 @@ func runRequestStatusUpdatePatchTest(t *testing.T, r *chi.Mux, ctx context.Conte
 
 	if originalStatus == statusValue {
 		assert.Contains(t, string(respBody), string(statusValue))
-		entries := getEntries()
-		if statusValue == tenant.DeactivatedTenantStatus {
-			assert.Contains(t, fmt.Sprintf("tenant %s is already deactivated", tnt.ID), entries[0].Message)
-		} else if statusValue == tenant.ActivatedTenantStatus {
-			assert.Contains(t, fmt.Sprintf("tenant %s is already activated", tnt.ID), entries[0].Message)
+		if getEntries != nil {
+			entries := getEntries()
+			if statusValue == tenant.DeactivatedTenantStatus {
+				assert.Contains(t, fmt.Sprintf("tenant %s is already deactivated", tnt.ID), entries[0].Message)
+			} else if statusValue == tenant.ActivatedTenantStatus {
+				assert.Contains(t, fmt.Sprintf("tenant %s is already activated", tnt.ID), entries[0].Message)
+			}
 		}
 	} else {
 		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
@@ -627,6 +629,7 @@ func Test_TenantHandler_Patch(t *testing.T) {
 			"sdp_ui_base_url": null,
 			"status": "TENANT_DEACTIVATED",
 			"distribution_account": "GCTNUNQVX7BNIP5AUWW2R4YC7G6R3JGUDNMGT7H62BGBUY4A4V6ROAAH",
+			"is_default": false,
 		`
 
 		runSuccessfulRequestPatchTest(t, r, ctx, dbConnectionPool, handler, reqBody, expectedRespBody, nil)
@@ -703,19 +706,24 @@ func Test_TenantHandler_Patch(t *testing.T) {
 	})
 
 	t.Run("unsuccessfully updates status of a tenant - invalid status", func(t *testing.T) {
-		runRequestStatusUpdatePatchTest(t, r, ctx, dbConnectionPool, handler, tenant.DeactivatedTenantStatus, tenant.CreatedTenantStatus, "cannot perform update on tenant to status in request")
+		runRequestStatusUpdatePatchTest(t, r, ctx, dbConnectionPool, handler, nil, tenant.DeactivatedTenantStatus, tenant.CreatedTenantStatus, "cannot perform update on tenant to requested status")
 	})
 
-	t.Run("does not update status of a tenant - same status", func(t *testing.T) {
-		runRequestStatusUpdatePatchTest(t, r, ctx, dbConnectionPool, handler, tenant.DeactivatedTenantStatus, tenant.DeactivatedTenantStatus, "")
-		runRequestStatusUpdatePatchTest(t, r, ctx, dbConnectionPool, handler, tenant.ActivatedTenantStatus, tenant.ActivatedTenantStatus, "")
+	t.Run("does not update status of a tenant - same status (deactivated)", func(t *testing.T) {
+		getEntries := log.DefaultLogger.StartTest(log.WarnLevel)
+		runRequestStatusUpdatePatchTest(t, r, ctx, dbConnectionPool, handler, getEntries, tenant.DeactivatedTenantStatus, tenant.DeactivatedTenantStatus, "")
+	})
+
+	t.Run("does not update status of a tenant - same status (activated)", func(t *testing.T) {
+		getEntries := log.DefaultLogger.StartTest(log.WarnLevel)
+		runRequestStatusUpdatePatchTest(t, r, ctx, dbConnectionPool, handler, getEntries, tenant.ActivatedTenantStatus, tenant.ActivatedTenantStatus, "")
 	})
 
 	t.Run("unsuccessfully updates status of a tenant from activated to another status other than deactivated", func(t *testing.T) {
-		runRequestStatusUpdatePatchTest(t, r, ctx, dbConnectionPool, handler, tenant.ActivatedTenantStatus, tenant.CreatedTenantStatus, "cannot perform update on tenant to requested status")
+		runRequestStatusUpdatePatchTest(t, r, ctx, dbConnectionPool, handler, nil, tenant.ActivatedTenantStatus, tenant.CreatedTenantStatus, "cannot perform update on tenant to requested status")
 	})
 
-	t.Run("cannot update status of tenant from activated to deactivated if payments are", func(t *testing.T) {
+	t.Run("cannot update status of tenant from activated to deactivated if payments are not in terminal state", func(t *testing.T) {
 		country := data.CreateCountryFixture(t, ctx, dbConnectionPool, "FRA", "France")
 		wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "wallet", "https://www.wallet.com", "www.wallet.com", "wallet://")
 		asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
@@ -735,7 +743,7 @@ func Test_TenantHandler_Patch(t *testing.T) {
 			ReceiverWallet: rw,
 		})
 
-		runRequestStatusUpdatePatchTest(t, r, ctx, dbConnectionPool, handler, tenant.ActivatedTenantStatus, tenant.DeactivatedTenantStatus, "cannot deactivate tenant")
+		runRequestStatusUpdatePatchTest(t, r, ctx, dbConnectionPool, handler, nil, tenant.ActivatedTenantStatus, tenant.DeactivatedTenantStatus, "cannot deactivate tenant")
 	})
 
 	t.Run("successfully updates all fields of a tenant", func(t *testing.T) {

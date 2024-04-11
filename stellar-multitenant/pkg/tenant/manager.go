@@ -159,10 +159,15 @@ func (m *Manager) GetTenantByIDOrName(ctx context.Context, arg string, queryPara
 
 // GetDefault returns the tenant where is_default is true. Returns an error if more than one tenant is set as default.
 func (m *Manager) GetDefault(ctx context.Context) (*Tenant, error) {
-	var tnts []Tenant
-	query := fmt.Sprintf(selectQuery, "WHERE is_default = true")
+	queryParams := &QueryParams{
+		Filters: map[FilterKey]interface{}{
+			FilterKeyDefault: true,
+		},
+	}
 
-	err := m.db.SelectContext(ctx, &tnts, query)
+	tnts := []Tenant{}
+	q, params := m.newManagerQuery(selectQuery, queryParams)
+	err := m.db.SelectContext(ctx, &tnts, q, params...)
 	if err != nil {
 		return nil, fmt.Errorf("getting default tenant: %w", err)
 	}
@@ -330,6 +335,9 @@ func (m *Manager) newManagerQuery(baseQuery string, queryParams *QueryParams) (s
 	}
 	if queryParams.Filters[FilterKeyID] != nil {
 		qb.AddCondition("t.id = ?", queryParams.Filters[FilterKeyID])
+	}
+	if queryParams.Filters[FilterKeyDefault] != nil {
+		qb.AddCondition("t.is_default = ?", queryParams.Filters[FilterKeyDefault])
 	}
 
 	if queryParams.Filters[FilterKeyOutStatus] != nil {

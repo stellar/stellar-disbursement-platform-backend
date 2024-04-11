@@ -15,12 +15,14 @@ import (
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/stellar/go/network"
 	"github.com/stellar/go/support/log"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func Test_GetSEP24Claims(t *testing.T) {
@@ -735,7 +737,7 @@ func Test_getCurrentTenant(t *testing.T) {
 
 	t.Run("returns InternalServerError when fails getting tenant by name", func(t *testing.T) {
 		tenantManagerMock.
-			On("GetTenantByName", ctx, "tenant_name").
+			On("GetTenantByName", ctx, "tenant_name", mock.Anything).
 			Return(nil, tenant.ErrTenantDoesNotExist).
 			Once()
 		defer tenantManagerMock.AssertExpectations(t)
@@ -750,7 +752,7 @@ func Test_getCurrentTenant(t *testing.T) {
 	t.Run("returns the current tenant", func(t *testing.T) {
 		expectedTenant := tenant.Tenant{ID: "tenant-id"}
 		tenantManagerMock.
-			On("GetTenantByName", ctx, "tenant_name").
+			On("GetTenantByName", ctx, "tenant_name", mock.Anything).
 			Return(&expectedTenant, nil).
 			Once()
 		defer tenantManagerMock.AssertExpectations(t)
