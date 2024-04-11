@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/stellar/go/txnbuild"
+	"golang.org/x/exp/maps"
 	"golang.org/x/exp/slices"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
@@ -50,7 +51,21 @@ func ParseSignatureClientType(sigClientType string) (SignatureClientType, error)
 }
 
 func DistributionSignatureClientTypes() []SignatureClientType {
-	return []SignatureClientType{DistributionAccountEnvSignatureClientType, DistributionAccountDBSignatureClientType}
+	return maps.Keys(DistSigClientsDescription)
+}
+
+var DistSigClientsDescription = map[SignatureClientType]string{
+	DistributionAccountEnvSignatureClientType: "uses the the same distribution account for all tenants, as well as for the HOST, through the secret configured in DISTRIBUTION_SEED.",
+	DistributionAccountDBSignatureClientType:  "uses the one different distribution account private key per tenant, and stores them in the database, encrypted with the DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE.",
+}
+
+func DistSigClientsDescriptionStr() string {
+	var descriptions []string
+	for sigClientType, description := range DistSigClientsDescription {
+		descriptions = append(descriptions, fmt.Sprintf("%s: %s", sigClientType, description))
+	}
+
+	return strings.Join(descriptions, " ")
 }
 
 func ParseSignatureClientDistributionType(sigClientType string) (SignatureClientType, error) {

@@ -262,11 +262,11 @@ func BaseDistributionAccountSignatureClientConfigOptions(opts *signing.Signature
 		},
 		{
 			Name:           "distribution-signer-type",
-			Usage:          fmt.Sprintf("The type of the signature client used for distribution accounts. Options: %+v", signing.DistributionSignatureClientTypes()),
+			Usage:          fmt.Sprintf("The type of signer used to sign Stellar transactions for the tenants' distribution accounts. Options: %s", signing.DistSigClientsDescriptionStr()),
 			OptType:        types.String,
 			CustomSetValue: SetConfigOptionDistributionSignerType,
 			ConfigKey:      &opts.DistributionSignerType,
-			FlagDefault:    string(signing.DistributionAccountEnvSignatureClientType),
+			FlagDefault:    string(signing.DistributionAccountDBSignatureClientType),
 			Required:       true,
 		},
 	}
