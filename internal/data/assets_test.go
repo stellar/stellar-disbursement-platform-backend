@@ -246,7 +246,7 @@ func Test_AssetModelGetByWalletID(t *testing.T) {
 	})
 }
 
-func Test_AssetModel_Ensure(t *testing.T) {
+func Test_AssetModel_Insert(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 
