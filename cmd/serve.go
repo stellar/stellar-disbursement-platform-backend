@@ -324,6 +324,13 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			FlagDefault: 3,
 			Required:    true,
 		},
+		{
+			Name:        "single-tenant-mode",
+			Usage:       "This option enables the Single Tenant Mode feature. In the case where multi-tenancy is not required, this options bypasses the tenant resolution by always resolving to the default tenant configured in the database.",
+			OptType:     types.Bool,
+			ConfigKey:   &serveOpts.SingleTenantMode,
+			FlagDefault: false,
+		},
 	}
 
 	// crash tracker options
@@ -603,6 +610,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			go serverService.StartMetricsServe(metricsServeOpts, &serve.HTTPServer{})
 
 			log.Ctx(ctx).Info("Starting Tenant Server...")
+			adminServeOpts.SingleTenantMode = serveOpts.SingleTenantMode
 			go serverService.StartAdminServe(adminServeOpts, &serveadmin.HTTPServer{})
 
 			// Starting Application Server

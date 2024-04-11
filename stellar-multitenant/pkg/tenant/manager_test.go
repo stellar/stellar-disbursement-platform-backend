@@ -232,6 +232,105 @@ func Test_Manager_GetTenantByIDOrName(t *testing.T) {
 	})
 }
 
+func updateTenantIsDefault(t *testing.T, ctx context.Context, dbConnectionPool db.DBConnectionPool, tenantID string, isDefault bool) {
+	const q = "UPDATE public.tenants SET is_default = $1 WHERE id = $2"
+	_, err := dbConnectionPool.ExecContext(ctx, q, isDefault, tenantID)
+	require.NoError(t, err)
+}
+
+func Test_Manager_GetDefault(t *testing.T) {
+	dbt := dbtest.OpenWithAdminMigrationsOnly(t)
+	defer dbt.Close()
+
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+
+	m := NewManager(WithDatabase(dbConnectionPool))
+	tnt1, err := m.AddTenant(ctx, "myorg1")
+	require.NoError(t, err)
+	tnt2, err := m.AddTenant(ctx, "myorg2")
+	require.NoError(t, err)
+
+	t.Run("returns error when there's no default tenant", func(t *testing.T) {
+		defaultTnt, err := m.GetDefault(ctx)
+		assert.EqualError(t, err, ErrTenantDoesNotExist.Error())
+		assert.Nil(t, defaultTnt)
+	})
+
+	updateTenantIsDefault(t, ctx, dbConnectionPool, tnt1.ID, true)
+	updateTenantIsDefault(t, ctx, dbConnectionPool, tnt2.ID, true)
+
+	t.Run("returns error when there's multiple default tenants", func(t *testing.T) {
+		defaultTnt, err := m.GetDefault(ctx)
+		assert.EqualError(t, err, ErrTooManyDefaultTenants.Error())
+		assert.Nil(t, defaultTnt)
+	})
+
+	updateTenantIsDefault(t, ctx, dbConnectionPool, tnt1.ID, false)
+
+	t.Run("gets the default tenant successfully", func(t *testing.T) {
+		tntDB, err := m.GetDefault(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, tnt2.ID, tntDB.ID)
+		assert.Equal(t, tnt2.Name, tntDB.Name)
+		assert.True(t, tntDB.IsDefault)
+	})
+}
+
+func Test_Manager_SetDefault(t *testing.T) {
+	dbt := dbtest.OpenWithAdminMigrationsOnly(t)
+	defer dbt.Close()
+
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+
+	m := NewManager(WithDatabase(dbConnectionPool))
+
+	t.Run("returns error when tenant does not exist", func(t *testing.T) {
+		tnt, dErr := m.SetDefault(ctx, dbConnectionPool, "some-id")
+		assert.EqualError(t, dErr, ErrTenantDoesNotExist.Error())
+		assert.Nil(t, tnt)
+	})
+
+	tnt1, err := m.AddTenant(ctx, "myorg1")
+	require.NoError(t, err)
+	tnt2, err := m.AddTenant(ctx, "myorg2")
+	require.NoError(t, err)
+	updateTenantIsDefault(t, ctx, dbConnectionPool, tnt1.ID, true)
+
+	t.Run("ensures the default tenant is not changed when an error occurs", func(t *testing.T) {
+		tnt, err := db.RunInTransactionWithResult(ctx, dbConnectionPool, nil, func(dbTx db.DBTransaction) (*Tenant, error) {
+			dTnt, innerErr := m.SetDefault(ctx, dbTx, "some-id")
+			return dTnt, innerErr
+		})
+		assert.ErrorIs(t, err, ErrTenantDoesNotExist)
+		assert.Nil(t, tnt)
+
+		tnt1DB, err := m.GetTenantByID(ctx, tnt1.ID)
+		require.NoError(t, err)
+		assert.True(t, tnt1DB.IsDefault)
+	})
+
+	t.Run("updates default tenant", func(t *testing.T) {
+		tnt2DB, err := m.SetDefault(ctx, dbConnectionPool, tnt2.ID)
+		require.NoError(t, err)
+
+		assert.Equal(t, tnt2.ID, tnt2DB.ID)
+		assert.True(t, tnt2DB.IsDefault)
+
+		tnt1DB, err := m.GetTenantByID(ctx, tnt1.ID)
+		require.NoError(t, err)
+		assert.Equal(t, tnt1.ID, tnt1DB.ID)
+		assert.False(t, tnt1DB.IsDefault)
+	})
+}
+
 func Test_Manager_DeleteTenantByName(t *testing.T) {
 	dbt := dbtest.OpenWithAdminMigrationsOnly(t)
 	defer dbt.Close()

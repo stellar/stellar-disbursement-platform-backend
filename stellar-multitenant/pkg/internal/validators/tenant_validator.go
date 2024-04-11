@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/url"
 	"regexp"
+	"strings"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
@@ -29,6 +30,18 @@ type UpdateTenantRequest struct {
 	BaseURL         *string                 `json:"base_url"`
 	SDPUIBaseURL    *string                 `json:"sdp_ui_base_url"`
 	Status          *tenant.TenantStatus    `json:"status"`
+}
+
+type DefaultTenantRequest struct {
+	ID string `json:"id"`
+}
+
+func (r *DefaultTenantRequest) Validate() error {
+	r.ID = strings.TrimSpace(r.ID)
+	if r.ID == "" {
+		return fmt.Errorf("id is required")
+	}
+	return nil
 }
 
 type TenantValidator struct {

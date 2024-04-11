@@ -51,6 +51,7 @@ type Tenant struct {
 	SDPUIBaseURL        *string         `json:"sdp_ui_base_url" db:"sdp_ui_base_url"`
 	Status              TenantStatus    `json:"status" db:"status"`
 	DistributionAccount *string         `json:"distribution_account" db:"distribution_account"`
+	IsDefault           bool            `json:"is_default" db:"is_default"`
 	CreatedAt           time.Time       `json:"created_at" db:"created_at"`
 	UpdatedAt           time.Time       `json:"updated_at" db:"updated_at"`
 }

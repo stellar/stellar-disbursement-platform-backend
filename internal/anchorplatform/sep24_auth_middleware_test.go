@@ -17,7 +17,9 @@ import (
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -80,7 +82,7 @@ func Test_SEP24QueryTokenAuthenticateMiddleware(t *testing.T) {
 
 	tenantManager := tenant.NewManager(tenant.WithDatabase(dbConnectionPool))
 	r.Group(func(r chi.Router) {
-		r.Use(SEP24QueryTokenAuthenticateMiddleware(jwtManager, network.TestNetworkPassphrase, tenantManager))
+		r.Use(SEP24QueryTokenAuthenticateMiddleware(jwtManager, network.TestNetworkPassphrase, tenantManager, false))
 
 		r.Get("/authenticated", func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
@@ -234,7 +236,7 @@ func Test_SEP24QueryTokenAuthenticateMiddleware(t *testing.T) {
 	t.Run("both the token and the transaction_id are valid 🎉", func(t *testing.T) {
 		var contextClaims *SEP24JWTClaims
 		require.Nil(t, contextClaims)
-		r.With(SEP24QueryTokenAuthenticateMiddleware(jwtManager, network.TestNetworkPassphrase, tenantManager)).Get("/authenticated_success", func(w http.ResponseWriter, r *http.Request) {
+		r.With(SEP24QueryTokenAuthenticateMiddleware(jwtManager, network.TestNetworkPassphrase, tenantManager, false)).Get("/authenticated_success", func(w http.ResponseWriter, r *http.Request) {
 			contextClaims = r.Context().Value(SEP24ClaimsContextKey).(*SEP24JWTClaims)
 			w.WriteHeader(http.StatusOK)
 			_, err := w.Write(json.RawMessage(`{"status":"ok"}`))
@@ -277,7 +279,7 @@ func Test_SEP24QueryTokenAuthenticateMiddleware(t *testing.T) {
 
 		var contextClaims *SEP24JWTClaims
 		require.Nil(t, contextClaims)
-		r.With(SEP24QueryTokenAuthenticateMiddleware(jwtManager, network.TestNetworkPassphrase, tenantManager)).Get("/authenticated_testnet", func(w http.ResponseWriter, r *http.Request) {
+		r.With(SEP24QueryTokenAuthenticateMiddleware(jwtManager, network.TestNetworkPassphrase, tenantManager, false)).Get("/authenticated_testnet", func(w http.ResponseWriter, r *http.Request) {
 			contextClaims = r.Context().Value(SEP24ClaimsContextKey).(*SEP24JWTClaims)
 			w.WriteHeader(http.StatusOK)
 			_, err := w.Write(json.RawMessage(`{"status":"ok"}`))
@@ -312,7 +314,7 @@ func Test_SEP24QueryTokenAuthenticateMiddleware(t *testing.T) {
 		buf := new(strings.Builder)
 		log.DefaultLogger.SetOutput(buf)
 
-		r.With(SEP24QueryTokenAuthenticateMiddleware(jwtManager, network.PublicNetworkPassphrase, tenantManager)).Get("/authenticated_pubnet", func(w http.ResponseWriter, r *http.Request) {
+		r.With(SEP24QueryTokenAuthenticateMiddleware(jwtManager, network.PublicNetworkPassphrase, tenantManager, false)).Get("/authenticated_pubnet", func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 			_, err := w.Write(json.RawMessage(`{"status":"ok"}`))
 			require.NoError(t, err)
@@ -343,7 +345,7 @@ func Test_SEP24QueryTokenAuthenticateMiddleware(t *testing.T) {
 		buf := new(strings.Builder)
 		log.DefaultLogger.SetOutput(buf)
 
-		r.With(SEP24QueryTokenAuthenticateMiddleware(jwtManager, network.PublicNetworkPassphrase, tenantManager)).Get("/authenticated_pubnet", func(w http.ResponseWriter, r *http.Request) {
+		r.With(SEP24QueryTokenAuthenticateMiddleware(jwtManager, network.PublicNetworkPassphrase, tenantManager, false)).Get("/authenticated_pubnet", func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 			_, err := w.Write(json.RawMessage(`{"status":"ok"}`))
 			require.NoError(t, err)
@@ -378,6 +380,7 @@ func Test_SEP24HeaderTokenAuthenticateMiddleware(t *testing.T) {
 
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
+
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
@@ -386,7 +389,7 @@ func Test_SEP24HeaderTokenAuthenticateMiddleware(t *testing.T) {
 
 	tenantManager := tenant.NewManager(tenant.WithDatabase(dbConnectionPool))
 	r.Group(func(r chi.Router) {
-		r.Use(SEP24HeaderTokenAuthenticateMiddleware(jwtManager, network.TestNetworkPassphrase, tenantManager))
+		r.Use(SEP24HeaderTokenAuthenticateMiddleware(jwtManager, network.TestNetworkPassphrase, tenantManager, false))
 
 		r.Get("/authenticated", func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
@@ -554,7 +557,7 @@ func Test_SEP24HeaderTokenAuthenticateMiddleware(t *testing.T) {
 	t.Run("token is valid 🎉", func(t *testing.T) {
 		var contextClaims *SEP24JWTClaims
 		require.Nil(t, contextClaims)
-		r.With(SEP24HeaderTokenAuthenticateMiddleware(jwtManager, network.TestNetworkPassphrase, tenantManager)).Get("/authenticated_success", func(w http.ResponseWriter, r *http.Request) {
+		r.With(SEP24HeaderTokenAuthenticateMiddleware(jwtManager, network.TestNetworkPassphrase, tenantManager, false)).Get("/authenticated_success", func(w http.ResponseWriter, r *http.Request) {
 			contextClaims = r.Context().Value(SEP24ClaimsContextKey).(*SEP24JWTClaims)
 			w.WriteHeader(http.StatusOK)
 			_, err := w.Write(json.RawMessage(`{"status":"ok"}`))
@@ -599,7 +602,7 @@ func Test_SEP24HeaderTokenAuthenticateMiddleware(t *testing.T) {
 
 		var contextClaims *SEP24JWTClaims
 		require.Nil(t, contextClaims)
-		r.With(SEP24HeaderTokenAuthenticateMiddleware(jwtManager, network.TestNetworkPassphrase, tenantManager)).Get("/authenticated_testnet", func(w http.ResponseWriter, r *http.Request) {
+		r.With(SEP24HeaderTokenAuthenticateMiddleware(jwtManager, network.TestNetworkPassphrase, tenantManager, false)).Get("/authenticated_testnet", func(w http.ResponseWriter, r *http.Request) {
 			contextClaims = r.Context().Value(SEP24ClaimsContextKey).(*SEP24JWTClaims)
 			w.WriteHeader(http.StatusOK)
 			_, err := w.Write(json.RawMessage(`{"status":"ok"}`))
@@ -636,7 +639,7 @@ func Test_SEP24HeaderTokenAuthenticateMiddleware(t *testing.T) {
 		buf := new(strings.Builder)
 		log.DefaultLogger.SetOutput(buf)
 
-		r.With(SEP24HeaderTokenAuthenticateMiddleware(jwtManager, network.PublicNetworkPassphrase, tenantManager)).Get("/authenticated_testnet", func(w http.ResponseWriter, r *http.Request) {
+		r.With(SEP24HeaderTokenAuthenticateMiddleware(jwtManager, network.PublicNetworkPassphrase, tenantManager, false)).Get("/authenticated_testnet", func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 			_, err := w.Write(json.RawMessage(`{"status":"ok"}`))
 			require.NoError(t, err)
@@ -669,7 +672,7 @@ func Test_SEP24HeaderTokenAuthenticateMiddleware(t *testing.T) {
 		buf := new(strings.Builder)
 		log.DefaultLogger.SetOutput(buf)
 
-		r.With(SEP24HeaderTokenAuthenticateMiddleware(jwtManager, network.PublicNetworkPassphrase, tenantManager)).Get("/authenticated_testnet", func(w http.ResponseWriter, r *http.Request) {
+		r.With(SEP24HeaderTokenAuthenticateMiddleware(jwtManager, network.PublicNetworkPassphrase, tenantManager, false)).Get("/authenticated_testnet", func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 			_, err := w.Write(json.RawMessage(`{"status":"ok"}`))
 			require.NoError(t, err)
@@ -695,5 +698,65 @@ func Test_SEP24HeaderTokenAuthenticateMiddleware(t *testing.T) {
 
 		// validate logs
 		require.Contains(t, buf.String(), "missing home domain in the token claims")
+	})
+}
+
+func Test_getCurrentTenant(t *testing.T) {
+	tenantManagerMock := &tenant.TenantManagerMock{}
+
+	ctx := context.Background()
+
+	t.Run("returns InternalServerError when fails getting default tenant", func(t *testing.T) {
+		tenantManagerMock.
+			On("GetDefault", ctx).
+			Return(nil, tenant.ErrTenantDoesNotExist).
+			Once()
+		defer tenantManagerMock.AssertExpectations(t)
+
+		currentTnt, httpErr := getCurrentTenant(ctx, tenantManagerMock, true, "tenant_name")
+		assert.Equal(t,
+			httperror.InternalError(ctx, "Failed to load default tenant", fmt.Errorf("failed to load default tenant: %w", tenant.ErrTenantDoesNotExist), nil),
+			httpErr)
+		assert.Nil(t, currentTnt)
+	})
+
+	t.Run("returns the default tenant as current tenant", func(t *testing.T) {
+		expectedTenant := tenant.Tenant{ID: "tenant-id"}
+		tenantManagerMock.
+			On("GetDefault", ctx).
+			Return(&expectedTenant, nil).
+			Once()
+		defer tenantManagerMock.AssertExpectations(t)
+
+		currentTnt, httpErr := getCurrentTenant(ctx, tenantManagerMock, true, "tenant_name")
+		require.Nil(t, httpErr)
+		assert.Equal(t, &expectedTenant, currentTnt)
+	})
+
+	t.Run("returns InternalServerError when fails getting tenant by name", func(t *testing.T) {
+		tenantManagerMock.
+			On("GetTenantByName", ctx, "tenant_name").
+			Return(nil, tenant.ErrTenantDoesNotExist).
+			Once()
+		defer tenantManagerMock.AssertExpectations(t)
+
+		currentTnt, httpErr := getCurrentTenant(ctx, tenantManagerMock, false, "tenant_name")
+		assert.Equal(t,
+			httperror.InternalError(ctx, "Failed to load tenant by name", fmt.Errorf("failed to load tenant by name for tenant name tenant_name: %w", tenant.ErrTenantDoesNotExist), nil),
+			httpErr)
+		assert.Nil(t, currentTnt)
+	})
+
+	t.Run("returns the current tenant", func(t *testing.T) {
+		expectedTenant := tenant.Tenant{ID: "tenant-id"}
+		tenantManagerMock.
+			On("GetTenantByName", ctx, "tenant_name").
+			Return(&expectedTenant, nil).
+			Once()
+		defer tenantManagerMock.AssertExpectations(t)
+
+		currentTnt, httpErr := getCurrentTenant(ctx, tenantManagerMock, false, "tenant_name")
+		require.Nil(t, httpErr)
+		assert.Equal(t, &expectedTenant, currentTnt)
 	})
 }
