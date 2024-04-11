@@ -162,6 +162,8 @@ func NewStellarAssetInAIF(assetCode, assetIssuer string) string {
 	assetIssuer = strings.TrimSpace(assetIssuer)
 	if assetIssuer != "" {
 		assetIssuer = ":" + assetIssuer
+	} else if assetCode == "XLM" {
+		return "stellar:native"
 	}
 	return fmt.Sprintf("stellar:%s%s", strings.TrimSpace(assetCode), assetIssuer)
 }
