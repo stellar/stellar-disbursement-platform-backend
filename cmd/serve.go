@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"go/types"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/scheduler/jobs"
-
 	"github.com/spf13/cobra"
 	"github.com/stellar/go/support/config"
 	"github.com/stellar/go/support/log"
@@ -22,6 +20,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/scheduler"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/scheduler/jobs"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	serveadmin "github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/serve"
