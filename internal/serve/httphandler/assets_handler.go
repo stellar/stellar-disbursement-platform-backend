@@ -106,11 +106,6 @@ func (c AssetsHandler) CreateAsset(w http.ResponseWriter, r *http.Request) {
 		return insertedAsset, nil
 	})
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			httperror.Conflict("asset already exists", err, nil).Render(w)
-			return
-		}
-
 		httperror.InternalError(ctx, "Cannot create new asset", err, nil).Render(w)
 		return
 	}
