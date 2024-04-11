@@ -37,7 +37,6 @@ func Test_ValidateStatus(t *testing.T) {
 		mockTntManagerFn func(tntManagerMock *tenant.TenantManagerMock)
 		createFixtures   func()
 		deleteFixtures   func()
-		checkLogs        func()
 		reqStatus        tenant.TenantStatus
 		expectedErr      error
 	}{

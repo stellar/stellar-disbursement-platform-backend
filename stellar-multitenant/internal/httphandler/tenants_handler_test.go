@@ -100,7 +100,6 @@ func runSuccessfulRequestPatchTest(t *testing.T, r *chi.Mux, ctx context.Context
 	if tntStatus != nil {
 		_, err := handler.Manager.UpdateTenantConfig(ctx, &tenant.TenantUpdate{ID: tnt.ID, Status: tntStatus})
 		require.NoError(t, err)
-
 	}
 
 	rr := httptest.NewRecorder()

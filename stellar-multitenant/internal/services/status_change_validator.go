@@ -29,7 +29,9 @@ func ValidateStatus(ctx context.Context, manager tenant.ManagerInterface, models
 	// 1. whether tenant is already deactivated
 	// 2. whether there are any payments not in a terminal state
 	if reqStatus == tenant.DeactivatedTenantStatus {
-		if tnt.Status != tenant.DeactivatedTenantStatus {
+		if tnt.Status == tenant.ActivatedTenantStatus {
+			log.Ctx(ctx).Warnf("tenant %s is already deactivated", tenantID)
+		} else {
 			indeterminatePaymentsCount, getPaymentCountErr := models.Payment.Count(ctx, &data.QueryParams{
 				Filters: map[data.FilterKey]interface{}{
 					data.FilterKeyStatus: data.PaymentNonTerminalStatuses(),
@@ -42,8 +44,6 @@ func ValidateStatus(ctx context.Context, manager tenant.ManagerInterface, models
 			if indeterminatePaymentsCount != 0 {
 				return ErrCannotDeactivateTenant
 			}
-		} else {
-			log.Ctx(ctx).Warnf("tenant %s is already deactivated", tenantID)
 		}
 	} else if reqStatus == tenant.ActivatedTenantStatus {
 		if tnt.Status == tenant.ActivatedTenantStatus {

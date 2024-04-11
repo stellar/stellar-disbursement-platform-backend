@@ -165,7 +165,7 @@ func Test_Manager_GetTenantByID(t *testing.T) {
 	t.Run("returns error when tenant is deactivated", func(t *testing.T) {
 		deactivateTenant(t, ctx, m, tnt2)
 		tntDB, err := m.GetTenantByID(ctx, tnt2.ID, &QueryParams{
-			Filters: map[FilterKey]interface{}{FilterKeyOutStatus: []TenantStatus{DeactivatedTenantStatus}},
+			Filters: map[FilterKey]interface{}{FilterKeyOutStatus: DeactivatedTenantStatus},
 		})
 		assert.ErrorIs(t, err, ErrTenantDoesNotExist)
 		assert.Nil(t, tntDB)
