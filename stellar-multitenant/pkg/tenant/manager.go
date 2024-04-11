@@ -90,16 +90,12 @@ func (m *Manager) GetAllTenants(ctx context.Context, queryParams *QueryParams) (
 func (m *Manager) GetTenantByID(ctx context.Context, id string, queryParams *QueryParams) (*Tenant, error) {
 	if queryParams == nil {
 		queryParams = &QueryParams{
-			Filters: map[FilterKey]interface{}{
-				FilterKeyID: id,
-			},
+			Filters: map[FilterKey]interface{}{},
 		}
-	} else {
-		queryParams.Filters[FilterKeyID] = id
 	}
+	queryParams.Filters[FilterKeyID] = id
 
 	var t Tenant
-
 	query, params := m.newManagerQuery(selectQuery, queryParams)
 	if err := m.db.GetContext(ctx, &t, query, params...); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -113,13 +109,10 @@ func (m *Manager) GetTenantByID(ctx context.Context, id string, queryParams *Que
 func (m *Manager) GetTenantByName(ctx context.Context, name string, queryParams *QueryParams) (*Tenant, error) {
 	if queryParams == nil {
 		queryParams = &QueryParams{
-			Filters: map[FilterKey]interface{}{
-				FilterKeyName: name,
-			},
+			Filters: map[FilterKey]interface{}{},
 		}
-	} else {
-		queryParams.Filters[FilterKeyName] = name
 	}
+	queryParams.Filters[FilterKeyName] = name
 
 	var t Tenant
 	query, params := m.newManagerQuery(selectQuery, queryParams)
@@ -136,13 +129,10 @@ func (m *Manager) GetTenantByName(ctx context.Context, name string, queryParams 
 func (m *Manager) GetTenantByIDOrName(ctx context.Context, arg string, queryParams *QueryParams) (*Tenant, error) {
 	if queryParams == nil {
 		queryParams = &QueryParams{
-			Filters: map[FilterKey]interface{}{
-				FilterKeyNameOrID: arg,
-			},
+			Filters: map[FilterKey]interface{}{},
 		}
-	} else {
-		queryParams.Filters[FilterKeyNameOrID] = arg
 	}
+	queryParams.Filters[FilterKeyNameOrID] = arg
 
 	var tnt Tenant
 	query, params := m.newManagerQuery(selectQuery, queryParams)
@@ -161,7 +151,7 @@ func (m *Manager) GetTenantByIDOrName(ctx context.Context, arg string, queryPara
 func (m *Manager) GetDefault(ctx context.Context) (*Tenant, error) {
 	queryParams := &QueryParams{
 		Filters: map[FilterKey]interface{}{
-			FilterKeyDefault: true,
+			FilterKeyIsDefault: true,
 		},
 	}
 
@@ -337,8 +327,8 @@ func (m *Manager) newManagerQuery(baseQuery string, queryParams *QueryParams) (s
 		qb.AddCondition("t.id = ?", queryParams.Filters[FilterKeyID])
 	}
 
-	if queryParams.Filters[FilterKeyDefault] != nil {
-		qb.AddCondition("t.is_default = ?", queryParams.Filters[FilterKeyDefault])
+	if queryParams.Filters[FilterKeyIsDefault] != nil {
+		qb.AddCondition("t.is_default = ?", queryParams.Filters[FilterKeyIsDefault])
 	}
 
 	if queryParams.Filters[FilterKeyOutStatus] != nil {

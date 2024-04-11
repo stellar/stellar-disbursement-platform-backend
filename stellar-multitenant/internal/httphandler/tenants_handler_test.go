@@ -155,8 +155,8 @@ func Test_TenantHandler_Get(t *testing.T) {
 		resp := rr.Result()
 		defer resp.Body.Close()
 
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
+		respBody, readRespBodyErr := io.ReadAll(resp.Body)
+		require.NoError(t, readRespBodyErr)
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.JSONEq(t, `[]`, string(respBody))
