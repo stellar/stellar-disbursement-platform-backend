@@ -1,7 +1,6 @@
 package httphandler
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -16,6 +15,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/internal/provisioning"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/internal/validators"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
@@ -134,7 +134,17 @@ func (t TenantsHandler) Patch(w http.ResponseWriter, r *http.Request) {
 
 	// factor out to own method
 	if reqBody.Status != nil {
-		t.validateStatus(ctx, w, tenantID, *reqBody.Status)
+		err := services.ValidateStatus(ctx, t.Manager, t.Models, tenantID, *reqBody.Status)
+		if err != nil {
+			if errors.Is(err, services.ErrCannotRetrieveTenantByID) {
+				httperror.InternalError(ctx, services.ErrCannotRetrieveTenantByID.Error(), err, nil).Render(w)
+			} else if errors.Is(err, services.ErrCannotRetrievePayments) {
+				httperror.InternalError(ctx, services.ErrCannotRetrievePayments.Error(), err, nil).Render(w)
+			} else {
+				httperror.BadRequest(err.Error(), nil, nil).Render(w)
+			}
+			return
+		}
 	}
 
 	tnt, err := t.Manager.UpdateTenantConfig(ctx, &tenant.TenantUpdate{
@@ -160,48 +170,6 @@ func (t TenantsHandler) Patch(w http.ResponseWriter, r *http.Request) {
 	}
 
 	httpjson.RenderStatus(w, http.StatusOK, tnt, httpjson.JSON)
-}
-
-func (t TenantsHandler) validateStatus(ctx context.Context, w http.ResponseWriter, tenantID string, reqStatus tenant.TenantStatus) {
-	tnt, err := t.Manager.GetTenantByID(ctx, tenantID, nil)
-	if err != nil {
-		httperror.InternalError(ctx, "cannot retrieve tenant by id", err, nil).Render(w)
-		return
-	}
-
-	// if attempting to deactivate tenant, need to check for a few conditions such as
-	// 1. whether tenant is already deactivated
-	// 2. whether there are any payments not in a terminal state
-	if reqStatus == tenant.DeactivatedTenantStatus {
-		if tnt.Status != tenant.DeactivatedTenantStatus {
-			indeterminatePaymentsCount, err := t.Models.Payment.Count(ctx, &data.QueryParams{
-				Filters: map[data.FilterKey]interface{}{
-					data.FilterKeyStatus: data.PaymentNonTerminalStatuses(),
-				},
-			}, t.Models.DBConnectionPool)
-			if err != nil {
-				httperror.InternalError(ctx, "cannot retrieve payments for tenant", err, nil).Render(w)
-				return
-			}
-
-			if indeterminatePaymentsCount != 0 {
-				httperror.BadRequest("cannot deactivate tenant", nil, nil).Render(w)
-				return
-			}
-		} else {
-			log.Ctx(ctx).Warnf("tenant %s is already deactivated", tenantID)
-		}
-	} else if reqStatus == tenant.ActivatedTenantStatus {
-		if tnt.Status == tenant.ActivatedTenantStatus {
-			log.Ctx(ctx).Warnf("tenant %s is already activated", tenantID)
-		} else if tnt.Status != tenant.DeactivatedTenantStatus {
-			httperror.BadRequest("cannot activate tenant that is not deactivated", nil, nil).Render(w)
-			return
-		}
-	} else {
-		httperror.BadRequest("cannot perform update on tenant to requested status", nil, nil).Render(w)
-		return
-	}
 }
 
 func (t TenantsHandler) SetDefault(rw http.ResponseWriter, req *http.Request) {
