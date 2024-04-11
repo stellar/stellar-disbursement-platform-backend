@@ -503,13 +503,15 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			adminServeOpts.AdminDBConnectionPool = adminDBConnectionPool
 
 			// Setup the Multi-tenant DB connection pool
-			serveOpts.MtnDBConnectionPool, err = di.NewMtnDBConnectionPool(ctx, dbcpOptions)
+			mtnDBConnectionPool, err := di.NewMtnDBConnectionPool(ctx, dbcpOptions)
 			if err != nil {
 				log.Ctx(ctx).Fatalf("error getting Multi-tenant DB connection pool: %v", err)
 			}
 			defer func() {
 				di.CleanupInstanceByValue(ctx, serveOpts.MtnDBConnectionPool)
 			}()
+			serveOpts.MtnDBConnectionPool = mtnDBConnectionPool
+			adminServeOpts.MtnDBConnectionPool = mtnDBConnectionPool
 
 			// Setup the TSSDBConnectionPool
 			tssDBConnectionPool, err := di.NewTSSDBConnectionPool(ctx, dbcpOptions)

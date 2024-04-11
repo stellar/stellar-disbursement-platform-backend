@@ -34,7 +34,7 @@ func (t TenantsHandler) GetAll(w http.ResponseWriter, r *http.Request) {
 
 	tnts, err := t.Manager.GetAllTenants(ctx, &tenant.QueryParams{
 		Filters: map[tenant.FilterKey]interface{}{
-			tenant.FilterKeyOutStatus: []tenant.TenantStatus{tenant.DeactivatedTenantStatus},
+			tenant.FilterKeyOutStatus: tenant.DeactivatedTenantStatus,
 		},
 		SortBy:    data.SortFieldName,
 		SortOrder: data.SortOrderASC,
@@ -53,7 +53,7 @@ func (t TenantsHandler) GetByIDOrName(w http.ResponseWriter, r *http.Request) {
 
 	tnt, err := t.Manager.GetTenantByIDOrName(ctx, arg, &tenant.QueryParams{
 		Filters: map[tenant.FilterKey]interface{}{
-			tenant.FilterKeyOutStatus: []tenant.TenantStatus{tenant.DeactivatedTenantStatus},
+			tenant.FilterKeyOutStatus: tenant.DeactivatedTenantStatus,
 		},
 	})
 	if err != nil {

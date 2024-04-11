@@ -54,7 +54,7 @@ func runBadRequestPatchTest(t *testing.T, r *chi.Mux, url, fieldName, errorMsg s
 	assert.JSONEq(t, expectedRespBody, string(respBody))
 }
 
-func runRequestStatusUpdatePatchTest(t *testing.T, r *chi.Mux, ctx context.Context, dbConnectionPool db.DBConnectionPool, handler TenantsHandler, getEntries func() []logrus.Entry, originalStatus, statusValue tenant.TenantStatus, errorMsg string) {
+func runRequestStatusUpdatePatchTest(t *testing.T, r *chi.Mux, ctx context.Context, dbConnectionPool db.DBConnectionPool, handler TenantsHandler, getEntries func() []logrus.Entry, originalStatus, reqStatus tenant.TenantStatus, errorMsg string) {
 	tenant.DeleteAllTenantsFixture(t, ctx, dbConnectionPool)
 	tnt := tenant.CreateTenantFixture(t, ctx, dbConnectionPool, "aid-org", "GCTNUNQVX7BNIP5AUWW2R4YC7G6R3JGUDNMGT7H62BGBUY4A4V6ROAAH")
 
@@ -64,7 +64,7 @@ func runRequestStatusUpdatePatchTest(t *testing.T, r *chi.Mux, ctx context.Conte
 	url := fmt.Sprintf("/tenants/%s", tnt.ID)
 
 	rr := httptest.NewRecorder()
-	req, err := http.NewRequest(http.MethodPatch, url, strings.NewReader(fmt.Sprintf(`{"status": "%s", "id": "%s"}`, statusValue, tnt.ID)))
+	req, err := http.NewRequest(http.MethodPatch, url, strings.NewReader(fmt.Sprintf(`{"status": "%s", "id": "%s"}`, reqStatus, tnt.ID)))
 	require.NoError(t, err)
 	r.ServeHTTP(rr, req)
 
@@ -73,13 +73,13 @@ func runRequestStatusUpdatePatchTest(t *testing.T, r *chi.Mux, ctx context.Conte
 	respBody, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 
-	if originalStatus == statusValue {
-		assert.Contains(t, string(respBody), string(statusValue))
+	if originalStatus == reqStatus {
+		assert.Contains(t, string(respBody), string(reqStatus))
 		if getEntries != nil {
 			entries := getEntries()
-			if statusValue == tenant.DeactivatedTenantStatus {
+			if reqStatus == tenant.DeactivatedTenantStatus {
 				assert.Contains(t, fmt.Sprintf("tenant %s is already deactivated", tnt.ID), entries[0].Message)
-			} else if statusValue == tenant.ActivatedTenantStatus {
+			} else if reqStatus == tenant.ActivatedTenantStatus {
 				assert.Contains(t, fmt.Sprintf("tenant %s is already activated", tnt.ID), entries[0].Message)
 			}
 		}
@@ -148,8 +148,8 @@ func Test_TenantHandler_Get(t *testing.T) {
 
 	t.Run("GetAll successfully returns an empty list of tenants", func(t *testing.T) {
 		rr := httptest.NewRecorder()
-		req, err := http.NewRequest(http.MethodGet, "/tenants", nil)
-		require.NoError(t, err)
+		req, getTntErr := http.NewRequest(http.MethodGet, "/tenants", nil)
+		require.NoError(t, getTntErr)
 		http.HandlerFunc(handler.GetAll).ServeHTTP(rr, req)
 
 		resp := rr.Result()
@@ -167,7 +167,7 @@ func Test_TenantHandler_Get(t *testing.T) {
 	tnt2 := tenant.CreateTenantFixture(t, ctx, dbConnectionPool, "myorg2", "GB37V3J5C3RAJY6BI52MAAWF6AVKJH7J4L2DVBMOP7WQJHQPNIBR3FKH")
 	dTnt := tenant.CreateTenantFixture(t, ctx, dbConnectionPool, "dorg", "GBKXOCCQ5HXYOJ7NH5LXDKOBKU22TE6XOKHKYADZPRQFLR2F5KPFVILF")
 	dStatus := tenant.DeactivatedTenantStatus
-	dTnt, err = handler.Manager.UpdateTenantConfig(ctx, &tenant.TenantUpdate{
+	_, err = handler.Manager.UpdateTenantConfig(ctx, &tenant.TenantUpdate{
 		ID:     dTnt.ID,
 		Status: &dStatus,
 	})

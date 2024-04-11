@@ -100,8 +100,8 @@ func (m *Manager) GetTenantByID(ctx context.Context, id string, queryParams *Que
 
 	var t Tenant
 
-	q, params := m.newManagerQuery(selectQuery, queryParams)
-	if err := m.db.GetContext(ctx, &t, q, params...); err != nil {
+	query, params := m.newManagerQuery(selectQuery, queryParams)
+	if err := m.db.GetContext(ctx, &t, query, params...); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrTenantDoesNotExist
 		}
@@ -122,8 +122,8 @@ func (m *Manager) GetTenantByName(ctx context.Context, name string, queryParams 
 	}
 
 	var t Tenant
-	q, params := m.newManagerQuery(selectQuery, queryParams)
-	if err := m.db.GetContext(ctx, &t, q, params...); err != nil {
+	query, params := m.newManagerQuery(selectQuery, queryParams)
+	if err := m.db.GetContext(ctx, &t, query, params...); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrTenantDoesNotExist
 		}
@@ -145,8 +145,8 @@ func (m *Manager) GetTenantByIDOrName(ctx context.Context, arg string, queryPara
 	}
 
 	var tnt Tenant
-	q, params := m.newManagerQuery(selectQuery, queryParams)
-	err := m.db.GetContext(ctx, &tnt, q, params...)
+	query, params := m.newManagerQuery(selectQuery, queryParams)
+	err := m.db.GetContext(ctx, &tnt, query, params...)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrTenantDoesNotExist
@@ -166,8 +166,8 @@ func (m *Manager) GetDefault(ctx context.Context) (*Tenant, error) {
 	}
 
 	tnts := []Tenant{}
-	q, params := m.newManagerQuery(selectQuery, queryParams)
-	err := m.db.SelectContext(ctx, &tnts, q, params...)
+	query, params := m.newManagerQuery(selectQuery, queryParams)
+	err := m.db.SelectContext(ctx, &tnts, query, params...)
 	if err != nil {
 		return nil, fmt.Errorf("getting default tenant: %w", err)
 	}
@@ -336,6 +336,7 @@ func (m *Manager) newManagerQuery(baseQuery string, queryParams *QueryParams) (s
 	if queryParams.Filters[FilterKeyID] != nil {
 		qb.AddCondition("t.id = ?", queryParams.Filters[FilterKeyID])
 	}
+
 	if queryParams.Filters[FilterKeyDefault] != nil {
 		qb.AddCondition("t.is_default = ?", queryParams.Filters[FilterKeyDefault])
 	}
