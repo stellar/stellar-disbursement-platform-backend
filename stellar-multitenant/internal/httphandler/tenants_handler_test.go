@@ -13,6 +13,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/keypair"
+	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/txnbuild"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -30,7 +31,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
-func runBadRequestPatchTest(t *testing.T, r *chi.Mux, url, fieldName, fieldValue, errorMsg string) {
+func runBadRequestPatchTest(t *testing.T, r *chi.Mux, url, fieldName, errorMsg string) {
 	rr := httptest.NewRecorder()
 	req, err := http.NewRequest(http.MethodPatch, url, strings.NewReader(fmt.Sprintf(`{"%s": "invalid"}`, fieldName)))
 	require.NoError(t, err)
@@ -52,15 +53,15 @@ func runBadRequestPatchTest(t *testing.T, r *chi.Mux, url, fieldName, fieldValue
 	assert.JSONEq(t, expectedRespBody, string(respBody))
 }
 
-func runRequestStatusUpdatePatchTest(t *testing.T, r *chi.Mux, ctx context.Context, dbConnectionPool db.DBConnectionPool, handler TenantsHandler, sameStatus bool, statusValue, errorMsg string) {
+func runRequestStatusUpdatePatchTest(t *testing.T, r *chi.Mux, ctx context.Context, dbConnectionPool db.DBConnectionPool, handler TenantsHandler, originalStatus, statusValue tenant.TenantStatus, errorMsg string) {
 	tenant.DeleteAllTenantsFixture(t, ctx, dbConnectionPool)
 	tnt := tenant.CreateTenantFixture(t, ctx, dbConnectionPool, "aid-org", "GCTNUNQVX7BNIP5AUWW2R4YC7G6R3JGUDNMGT7H62BGBUY4A4V6ROAAH")
-	if sameStatus {
-		tntStatus := tenant.TenantStatus(statusValue)
-		_, err := handler.Manager.UpdateTenantConfig(ctx, &tenant.TenantUpdate{ID: tnt.ID, Status: &tntStatus})
-		require.NoError(t, err)
-	}
+
+	_, err := handler.Manager.UpdateTenantConfig(ctx, &tenant.TenantUpdate{ID: tnt.ID, Status: &originalStatus})
+	require.NoError(t, err)
+
 	url := fmt.Sprintf("/tenants/%s", tnt.ID)
+	getEntries := log.DefaultLogger.StartTest(log.InfoLevel)
 
 	rr := httptest.NewRecorder()
 	req, err := http.NewRequest(http.MethodPatch, url, strings.NewReader(fmt.Sprintf(`{"status": "%s", "id": "%s"}`, statusValue, tnt.ID)))
@@ -72,16 +73,16 @@ func runRequestStatusUpdatePatchTest(t *testing.T, r *chi.Mux, ctx context.Conte
 	respBody, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 
-	if sameStatus {
-		assert.Equal(t, http.StatusNotModified, resp.StatusCode)
-
+	if originalStatus == statusValue {
+		assert.Contains(t, string(respBody), string(statusValue))
+		entries := getEntries()
+		if statusValue == tenant.DeactivatedTenantStatus {
+			assert.Contains(t, fmt.Sprintf("tenant %s is already deactivated", tnt.ID), entries[0].Message)
+		} else if statusValue == tenant.ActivatedTenantStatus {
+			assert.Contains(t, fmt.Sprintf("tenant %s is already activated", tnt.ID), entries[0].Message)
+		}
 	} else {
 		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
-	}
-
-	if sameStatus {
-		assert.Contains(t, string(respBody), statusValue)
-	} else {
 		expectedRespBody := fmt.Sprintf(`{
 			"error": "%s"
 		}`, errorMsg)
@@ -97,6 +98,7 @@ func runSuccessfulRequestPatchTest(t *testing.T, r *chi.Mux, ctx context.Context
 	if tntStatus != nil {
 		_, err := handler.Manager.UpdateTenantConfig(ctx, &tenant.TenantUpdate{ID: tnt.ID, Status: tntStatus})
 		require.NoError(t, err)
+
 	}
 
 	rr := httptest.NewRecorder()
@@ -597,23 +599,23 @@ func Test_TenantHandler_Patch(t *testing.T) {
 	})
 
 	t.Run("returns BadRequest when EmailSenderType is not valid", func(t *testing.T) {
-		runBadRequestPatchTest(t, r, url, "email_sender_type", "", "invalid email sender type. Expected one of these values: [AWS_EMAIL DRY_RUN]")
+		runBadRequestPatchTest(t, r, url, "email_sender_type", "invalid email sender type. Expected one of these values: [AWS_EMAIL DRY_RUN]")
 	})
 
 	t.Run("returns BadRequest when SMSSenderType is not valid", func(t *testing.T) {
-		runBadRequestPatchTest(t, r, url, "sms_sender_type", "", "invalid sms sender type. Expected one of these values: [TWILIO_SMS AWS_SMS DRY_RUN]")
+		runBadRequestPatchTest(t, r, url, "sms_sender_type", "invalid sms sender type. Expected one of these values: [TWILIO_SMS AWS_SMS DRY_RUN]")
 	})
 
 	t.Run("returns BadRequest when BaseURL is not valid", func(t *testing.T) {
-		runBadRequestPatchTest(t, r, url, "base_url", "", "invalid base URL value")
+		runBadRequestPatchTest(t, r, url, "base_url", "invalid base URL value")
 	})
 
 	t.Run("returns BadRequest when SDPUIBaseURL is not valid", func(t *testing.T) {
-		runBadRequestPatchTest(t, r, url, "sdp_ui_base_url", "", "invalid SDP UI base URL value")
+		runBadRequestPatchTest(t, r, url, "sdp_ui_base_url", "invalid SDP UI base URL value")
 	})
 
 	t.Run("returns BadRequest when Status is not valid", func(t *testing.T) {
-		runBadRequestPatchTest(t, r, url, "status", "", "invalid status value")
+		runBadRequestPatchTest(t, r, url, "status", "invalid status value")
 	})
 
 	t.Run("successfully updates status of a tenant to be deactivated", func(t *testing.T) {
@@ -701,11 +703,39 @@ func Test_TenantHandler_Patch(t *testing.T) {
 	})
 
 	t.Run("unsuccessfully updates status of a tenant - invalid status", func(t *testing.T) {
-		runRequestStatusUpdatePatchTest(t, r, ctx, dbConnectionPool, handler, false, "TENANT_CREATED", "cannot perform update on tenant to status in request")
+		runRequestStatusUpdatePatchTest(t, r, ctx, dbConnectionPool, handler, tenant.DeactivatedTenantStatus, tenant.CreatedTenantStatus, "cannot perform update on tenant to status in request")
 	})
 
-	t.Run("unsuccessfully updates status of a tenant - same status", func(t *testing.T) {
-		runRequestStatusUpdatePatchTest(t, r, ctx, dbConnectionPool, handler, true, "TENANT_DEACTIVATED", "cannot perform update on tenant to status in request")
+	t.Run("does not update status of a tenant - same status", func(t *testing.T) {
+		runRequestStatusUpdatePatchTest(t, r, ctx, dbConnectionPool, handler, tenant.DeactivatedTenantStatus, tenant.DeactivatedTenantStatus, "")
+		runRequestStatusUpdatePatchTest(t, r, ctx, dbConnectionPool, handler, tenant.ActivatedTenantStatus, tenant.ActivatedTenantStatus, "")
+	})
+
+	t.Run("unsuccessfully updates status of a tenant from activated to another status other than deactivated", func(t *testing.T) {
+		runRequestStatusUpdatePatchTest(t, r, ctx, dbConnectionPool, handler, tenant.ActivatedTenantStatus, tenant.CreatedTenantStatus, "cannot perform update on tenant to requested status")
+	})
+
+	t.Run("cannot update status of tenant from activated to deactivated if payments are", func(t *testing.T) {
+		country := data.CreateCountryFixture(t, ctx, dbConnectionPool, "FRA", "France")
+		wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "wallet", "https://www.wallet.com", "www.wallet.com", "wallet://")
+		asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
+		disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
+			Country: country,
+			Wallet:  wallet,
+			Status:  data.ReadyDisbursementStatus,
+			Asset:   asset,
+		})
+		receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
+		rw := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.DraftReceiversWalletStatus)
+		_ = data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+			Amount:         "50",
+			Status:         data.DraftPaymentStatus,
+			Disbursement:   disbursement,
+			Asset:          *asset,
+			ReceiverWallet: rw,
+		})
+
+		runRequestStatusUpdatePatchTest(t, r, ctx, dbConnectionPool, handler, tenant.ActivatedTenantStatus, tenant.DeactivatedTenantStatus, "cannot deactivate tenant")
 	})
 
 	t.Run("successfully updates all fields of a tenant", func(t *testing.T) {

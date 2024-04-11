@@ -131,10 +131,12 @@ func (t TenantsHandler) Patch(w http.ResponseWriter, r *http.Request) {
 
 	tenantID := chi.URLParam(r, "id")
 
+	// factor out to own method
 	if reqBody.Status != nil {
 		tnt, err := t.Manager.GetTenantByID(ctx, tenantID, nil)
 		if err != nil {
 			httperror.InternalError(ctx, "cannot retrieve tenant by id", err, nil).Render(w)
+			return
 		}
 
 		reqStatus := *reqBody.Status
@@ -142,42 +144,33 @@ func (t TenantsHandler) Patch(w http.ResponseWriter, r *http.Request) {
 		// 1. whether tenant is already deactivated
 		// 2. whether there are any payments not in a terminal state
 		if reqStatus == tenant.DeactivatedTenantStatus {
-			if tnt.Status == tenant.DeactivatedTenantStatus {
-				httpjson.RenderStatus(w, http.StatusNotModified, tnt, httpjson.JSON)
-				return
-			}
-
-			indeterminatePaymentsCount, err := t.Models.Payment.Count(ctx, &data.QueryParams{
-				Filters: map[data.FilterKey]interface{}{
-					data.FilterKeyStatus: []data.PaymentStatus{
-						data.DraftPaymentStatus,
-						data.ReadyPaymentStatus,
-						data.PendingPaymentStatus,
-						data.PausedPaymentStatus,
+			if tnt.Status != tenant.DeactivatedTenantStatus {
+				indeterminatePaymentsCount, err := t.Models.Payment.Count(ctx, &data.QueryParams{
+					Filters: map[data.FilterKey]interface{}{
+						data.FilterKeyStatus: data.PaymentNonTerminalStatuses(),
 					},
-				},
-			}, t.Models.DBConnectionPool)
-			if err != nil {
-				httperror.InternalError(ctx, "cannot retrieve payments for tenant", err, nil).Render(w)
-				return
-			}
+				}, t.Models.DBConnectionPool)
+				if err != nil {
+					httperror.InternalError(ctx, "cannot retrieve payments for tenant", err, nil).Render(w)
+					return
+				}
 
-			if indeterminatePaymentsCount != 0 {
-				httperror.BadRequest("cannot deactivate tenant", errors.New(""), nil).Render(w)
-				return
+				if indeterminatePaymentsCount != 0 {
+					httperror.BadRequest("cannot deactivate tenant", nil, nil).Render(w)
+					return
+				}
+			} else {
+				log.Ctx(ctx).Warnf("tenant %s is already deactivated", tenantID)
 			}
 		} else if reqStatus == tenant.ActivatedTenantStatus {
 			if tnt.Status == tenant.ActivatedTenantStatus {
-				httpjson.RenderStatus(w, http.StatusNotModified, tnt, httpjson.JSON)
-				return
-			}
-
-			if tnt.Status != tenant.DeactivatedTenantStatus {
+				log.Ctx(ctx).Warnf("tenant %s is already activated", tenantID)
+			} else if tnt.Status != tenant.DeactivatedTenantStatus {
 				httperror.BadRequest("cannot activate tenant that is not deactivated", nil, nil).Render(w)
 				return
 			}
 		} else {
-			httperror.BadRequest("cannot perform update on tenant to status in request", nil, nil).Render(w)
+			httperror.BadRequest("cannot perform update on tenant to requested status", nil, nil).Render(w)
 			return
 		}
 	}
