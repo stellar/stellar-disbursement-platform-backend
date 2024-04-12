@@ -193,8 +193,8 @@ func Test_PatchAnchorPlatformTransactionsCompletionJob_Execute(t *testing.T) {
 
 		entries := getEntries()
 		require.Len(t, entries, 2)
-		assert.Equal(t, "[PatchAnchorPlatformTransactionService] got 1 payments to process", entries[0].Message)
-		assert.Equal(t, "[PatchAnchorPlatformTransactionService] updating anchor platform transaction synced at for 1 receiver wallet(s)", entries[1].Message)
+		assert.Equal(t, "[PatchAnchorPlatformTransactionCompletionService] got 1 payments to process", entries[0].Message)
+		assert.Equal(t, "[PatchAnchorPlatformTransactionCompletionService] updating anchor platform transaction synced at for 1 receiver wallet(s)", entries[1].Message)
 	})
 
 	apAPISvcMock.AssertExpectations(t)
