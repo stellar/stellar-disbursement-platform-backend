@@ -425,6 +425,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 		r.Route("/wallet-registration", func(r chi.Router) {
 			sep24QueryTokenAuthenticationMiddleware := anchorplatform.SEP24QueryTokenAuthenticateMiddleware(o.sep24JWTManager, o.NetworkPassphrase, o.tenantManager, o.SingleTenantMode)
 			r.With(sep24QueryTokenAuthenticationMiddleware).Get("/start", httphandler.ReceiverRegistrationHandler{
+				Models:              o.Models,
 				ReceiverWalletModel: o.Models.ReceiverWallet,
 				ReCAPTCHASiteKey:    o.ReCAPTCHASiteKey,
 			}.ServeHTTP) // This loads the SEP-24 PII registration webpage.
