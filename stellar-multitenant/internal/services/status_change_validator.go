@@ -29,7 +29,7 @@ func ValidateStatus(ctx context.Context, manager tenant.ManagerInterface, models
 	// 1. whether tenant is already deactivated
 	// 2. whether there are any payments not in a terminal state
 	if reqStatus == tenant.DeactivatedTenantStatus {
-		if tnt.Status == tenant.ActivatedTenantStatus {
+		if tnt.Status == tenant.DeactivatedTenantStatus {
 			log.Ctx(ctx).Warnf("tenant %s is already deactivated", tenantID)
 		} else {
 			indeterminatePaymentsCount, getPaymentCountErr := models.Payment.Count(ctx, &data.QueryParams{

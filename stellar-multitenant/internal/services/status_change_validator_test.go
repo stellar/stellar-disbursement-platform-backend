@@ -125,7 +125,7 @@ func Test_ValidateStatus(t *testing.T) {
 				require.Error(t, validateStatusErr)
 				assert.ErrorContains(t, validateStatusErr, tc.expectedErr.Error())
 			} else {
-				require.NoError(t, err)
+				require.NoError(t, validateStatusErr)
 			}
 			if tc.deleteFixtures != nil {
 				tc.deleteFixtures()
