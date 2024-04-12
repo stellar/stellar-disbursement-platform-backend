@@ -9,13 +9,14 @@ import (
 
 	"github.com/lib/pq"
 	"github.com/stellar/go/support/log"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func Test_NewPatchAnchorPlatformTransactionCompletionService(t *testing.T) {
@@ -96,7 +97,7 @@ func Test_PatchAnchorPlatformTransactionCompletionService_PatchAPTransactionForP
 			PaymentStatusMessage: "",
 			StellarTransactionID: "tx-hash",
 		})
-		assert.ErrorContains(t, sErr, fmt.Sprintf("PatchAnchorPlatformTransactionService: invalid payment status to patch to anchor platform. Payment ID: %s - Status: PENDING", payment.ID))
+		assert.ErrorContains(t, sErr, fmt.Sprintf("[PatchAnchorPlatformTransactionService] invalid payment status to patch to anchor platform (paymentID=%s, status=PENDING)", payment.ID))
 	})
 
 	t.Run("doesn't mark as synced when fails patching anchor platform transaction when payment is success", func(t *testing.T) {
@@ -160,14 +161,14 @@ func Test_PatchAnchorPlatformTransactionCompletionService_PatchAPTransactionForP
 			Once()
 
 		sErr := svc.PatchAPTransactionForPaymentEvent(ctx, tx)
-		assert.ErrorContains(t, sErr, fmt.Sprintf(`PatchAnchorPlatformTransactionService: error patching anchor transaction ID %q with status %q: invalid token`, receiverWallet.AnchorPlatformTransactionID, anchorplatform.APTransactionStatusCompleted))
+		assert.ErrorContains(t, sErr, fmt.Sprintf(`[PatchAnchorPlatformTransactionService] patching anchor transaction ID %q with status %q: invalid token`, receiverWallet.AnchorPlatformTransactionID, anchorplatform.APTransactionStatusCompleted))
 
 		syncedAt := getAPTransactionSyncedAt(t, ctx, dbConnectionPool, receiverWallet.ID)
 		assert.True(t, syncedAt.IsZero())
 
 		entries := getEntries()
 		require.Len(t, entries, 2)
-		assert.Equal(t, fmt.Sprintf(`PatchAnchorPlatformTransactionService: error patching anchor transaction ID %q with status %q: invalid token`, receiverWallet.AnchorPlatformTransactionID, anchorplatform.APTransactionStatusCompleted), entries[0].Message)
+		assert.Equal(t, fmt.Sprintf(`[PatchAnchorPlatformTransactionService] patching anchor transaction ID %q with status %q: invalid token`, receiverWallet.AnchorPlatformTransactionID, anchorplatform.APTransactionStatusCompleted), entries[0].Message)
 	})
 
 	t.Run("mark as synced when patch anchor platform transaction successfully and payment is failed", func(t *testing.T) {
@@ -434,8 +435,8 @@ func Test_PatchAnchorPlatformTransactionCompletionService_PatchAPTransactionsFor
 
 		entries := getEntries()
 		require.Len(t, entries, 2)
-		assert.Equal(t, "PatchAnchorPlatformTransactionService: got 0 payments to process", entries[0].Message)
-		assert.Equal(t, "PatchAnchorPlatformTransactionService: updating anchor platform transaction synced at for 0 receiver wallet(s)", entries[1].Message)
+		assert.Equal(t, "[PatchAnchorPlatformTransactionService] got 0 payments to process", entries[0].Message)
+		assert.Equal(t, "[PatchAnchorPlatformTransactionService] updating anchor platform transaction synced at for 0 receiver wallet(s)", entries[1].Message)
 	})
 
 	t.Run("doesn't mark as synced when fails patching anchor platform transaction when payment is success", func(t *testing.T) {
@@ -497,9 +498,9 @@ func Test_PatchAnchorPlatformTransactionCompletionService_PatchAPTransactionsFor
 
 		entries := getEntries()
 		require.Len(t, entries, 4)
-		assert.Equal(t, "PatchAnchorPlatformTransactionService: got 1 payments to process", entries[0].Message)
-		assert.Equal(t, fmt.Sprintf(`PatchAnchorPlatformTransactionService: error patching anchor transaction ID %q with status %q: invalid token`, receiverWallet.AnchorPlatformTransactionID, anchorplatform.APTransactionStatusCompleted), entries[1].Message)
-		assert.Equal(t, "PatchAnchorPlatformTransactionService: updating anchor platform transaction synced at for 0 receiver wallet(s)", entries[3].Message)
+		assert.Equal(t, "[PatchAnchorPlatformTransactionService] got 1 payments to process", entries[0].Message)
+		assert.Equal(t, fmt.Sprintf(`[PatchAnchorPlatformTransactionService] patching anchor transaction ID %q with status %q: invalid token`, receiverWallet.AnchorPlatformTransactionID, anchorplatform.APTransactionStatusCompleted), entries[1].Message)
+		assert.Equal(t, "[PatchAnchorPlatformTransactionService] updating anchor platform transaction synced at for 0 receiver wallet(s)", entries[3].Message)
 	})
 
 	t.Run("mark as synced when patch anchor platform transaction successfully and payment is failed", func(t *testing.T) {
@@ -558,8 +559,8 @@ func Test_PatchAnchorPlatformTransactionCompletionService_PatchAPTransactionsFor
 
 		entries := getEntries()
 		require.Len(t, entries, 2)
-		assert.Equal(t, "PatchAnchorPlatformTransactionService: got 1 payments to process", entries[0].Message)
-		assert.Equal(t, "PatchAnchorPlatformTransactionService: updating anchor platform transaction synced at for 1 receiver wallet(s)", entries[1].Message)
+		assert.Equal(t, "[PatchAnchorPlatformTransactionService] got 1 payments to process", entries[0].Message)
+		assert.Equal(t, "[PatchAnchorPlatformTransactionService] updating anchor platform transaction synced at for 1 receiver wallet(s)", entries[1].Message)
 	})
 
 	t.Run("marks as synced when patch anchor platform transaction successfully and payment is success", func(t *testing.T) {
@@ -621,8 +622,8 @@ func Test_PatchAnchorPlatformTransactionCompletionService_PatchAPTransactionsFor
 
 		entries := getEntries()
 		require.Len(t, entries, 2)
-		assert.Equal(t, "PatchAnchorPlatformTransactionService: got 1 payments to process", entries[0].Message)
-		assert.Equal(t, "PatchAnchorPlatformTransactionService: updating anchor platform transaction synced at for 1 receiver wallet(s)", entries[1].Message)
+		assert.Equal(t, "[PatchAnchorPlatformTransactionService] got 1 payments to process", entries[0].Message)
+		assert.Equal(t, "[PatchAnchorPlatformTransactionService] updating anchor platform transaction synced at for 1 receiver wallet(s)", entries[1].Message)
 	})
 
 	t.Run("doesn't patch the transaction when it's already patch as completed", func(t *testing.T) {
@@ -702,11 +703,11 @@ func Test_PatchAnchorPlatformTransactionCompletionService_PatchAPTransactionsFor
 
 		entries := getEntries()
 		require.Len(t, entries, 3)
-		assert.Equal(t, "PatchAnchorPlatformTransactionService: got 2 payments to process", entries[0].Message)
+		assert.Equal(t, "[PatchAnchorPlatformTransactionService] got 2 payments to process", entries[0].Message)
 		assert.Equal(t,
-			fmt.Sprintf(`PatchAnchorPlatformTransactionService: anchor platform transaction ID %q already patched as completed. No action needed`, receiverWallet.AnchorPlatformTransactionID),
+			fmt.Sprintf(`[PatchAnchorPlatformTransactionService] anchor platform transaction ID %q already patched as completed. No action needed`, receiverWallet.AnchorPlatformTransactionID),
 			entries[1].Message)
-		assert.Equal(t, "PatchAnchorPlatformTransactionService: updating anchor platform transaction synced at for 1 receiver wallet(s)", entries[2].Message)
+		assert.Equal(t, "[PatchAnchorPlatformTransactionService] updating anchor platform transaction synced at for 1 receiver wallet(s)", entries[2].Message)
 	})
 
 	t.Run("patches the transactions successfully if the other payments were failed", func(t *testing.T) {
@@ -836,8 +837,8 @@ func Test_PatchAnchorPlatformTransactionCompletionService_PatchAPTransactionsFor
 
 		entries := getEntries()
 		require.Len(t, entries, 2)
-		assert.Equal(t, "PatchAnchorPlatformTransactionService: got 3 payments to process", entries[0].Message)
-		assert.Equal(t, "PatchAnchorPlatformTransactionService: updating anchor platform transaction synced at for 3 receiver wallet(s)", entries[1].Message)
+		assert.Equal(t, "[PatchAnchorPlatformTransactionService] got 3 payments to process", entries[0].Message)
+		assert.Equal(t, "[PatchAnchorPlatformTransactionService] updating anchor platform transaction synced at for 3 receiver wallet(s)", entries[1].Message)
 	})
 
 	apAPISvcMock.AssertExpectations(t)

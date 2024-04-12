@@ -80,7 +80,7 @@ func (s *PatchAnchorPlatformTransactionCompletionService) PatchAPTransactionsFor
 			return fmt.Errorf("getting payments: %w", err)
 		}
 
-		log.Ctx(ctx).Debugf("PatchAnchorPlatformTransactionService: got %d payments to process", len(payments))
+		log.Ctx(ctx).Debugf("[PatchAnchorPlatformTransactionService] got %d payments to process", len(payments))
 
 		// successfulPaymentsForAPTransactionID has its keys as the AP Transaction ID. Here we store the transaction IDs
 		// from the transactions patched to the AP with the "Completed" anchor status. So we avoid concurrency errors like, a receiver having
@@ -94,7 +94,7 @@ func (s *PatchAnchorPlatformTransactionCompletionService) PatchAPTransactionsFor
 			// Step 3: Check if the AP transaction was already patched as completed. If it's true we don't need to report it anymore.
 			if _, ok := successfulPaymentsForAPTransactionID[payment.ReceiverWallet.AnchorPlatformTransactionID]; ok {
 				log.Ctx(ctx).Debugf(
-					"PatchAnchorPlatformTransactionService: anchor platform transaction ID %q already patched as completed. No action needed",
+					"[PatchAnchorPlatformTransactionService] anchor platform transaction ID %q already patched as completed. No action needed",
 					payment.ReceiverWallet.AnchorPlatformTransactionID,
 				)
 				continue
@@ -107,7 +107,7 @@ func (s *PatchAnchorPlatformTransactionCompletionService) PatchAPTransactionsFor
 			}
 			patchErr := s.patchAnchorPaymentTransaction(ctx, payment, statusMessage)
 			if patchErr != nil {
-				log.Ctx(ctx).Errorf("PatchAnchorPlatformTransactionService: error patching anchor transaction: %v", patchErr)
+				log.Ctx(ctx).Errorf("[PatchAnchorPlatformTransactionService] patching anchor transaction: %v", patchErr)
 				continue
 			}
 			if payment.Status == data.SuccessPaymentStatus {
@@ -118,7 +118,7 @@ func (s *PatchAnchorPlatformTransactionCompletionService) PatchAPTransactionsFor
 			receiverWalletIDs = append(receiverWalletIDs, payment.ReceiverWallet.ID)
 		}
 
-		log.Ctx(ctx).Debugf("PatchAnchorPlatformTransactionService: updating anchor platform transaction synced at for %d receiver wallet(s)", len(receiverWalletIDs))
+		log.Ctx(ctx).Debugf("[PatchAnchorPlatformTransactionService] updating anchor platform transaction synced at for %d receiver wallet(s)", len(receiverWalletIDs))
 
 		// Step 6: we update the receiver_wallets table saying that the AP transaction associated with the user registration
 		// was successfully patched/synced.
@@ -168,7 +168,7 @@ func (s *PatchAnchorPlatformTransactionCompletionService) patchAnchorPaymentTran
 			},
 		})
 		if err != nil {
-			err = fmt.Errorf("PatchAnchorPlatformTransactionService: error patching anchor transaction ID %q with status %q: %w", payment.ReceiverWallet.AnchorPlatformTransactionID, anchorplatform.APTransactionStatusCompleted, err)
+			err = fmt.Errorf("[PatchAnchorPlatformTransactionService] patching anchor transaction ID %q with status %q: %w", payment.ReceiverWallet.AnchorPlatformTransactionID, anchorplatform.APTransactionStatusCompleted, err)
 			log.Ctx(ctx).Error(err)
 			return err
 		}
@@ -185,12 +185,12 @@ func (s *PatchAnchorPlatformTransactionCompletionService) patchAnchorPaymentTran
 			Status:  anchorplatform.APTransactionStatusError,
 		})
 		if err != nil {
-			err = fmt.Errorf("PatchAnchorPlatformTransactionService: error patching anchor transaction ID %q with status %q: %w", payment.ReceiverWallet.AnchorPlatformTransactionID, anchorplatform.APTransactionStatusError, err)
+			err = fmt.Errorf("[PatchAnchorPlatformTransactionService] patching anchor transaction ID %q with status %q: %w", payment.ReceiverWallet.AnchorPlatformTransactionID, anchorplatform.APTransactionStatusError, err)
 			log.Ctx(ctx).Error(err)
 			return err
 		}
 	} else {
-		err := fmt.Errorf("PatchAnchorPlatformTransactionService: invalid payment status to patch to anchor platform. Payment ID: %s - Status: %s", payment.ID, payment.Status)
+		err := fmt.Errorf("[PatchAnchorPlatformTransactionService] invalid payment status to patch to anchor platform (paymentID=%s, status=%s)", payment.ID, payment.Status)
 		log.Ctx(ctx).Error(err)
 		return err
 	}
