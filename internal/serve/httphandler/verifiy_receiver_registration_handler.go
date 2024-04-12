@@ -108,6 +108,12 @@ func (v VerifyReceiverRegistrationHandler) processReceiverVerificationPII(
 	now := time.Now()
 	truncatedPhoneNumber := utils.TruncateString(receiver.PhoneNumber, 3)
 
+	// Use the external_id associated with the receiver if it exists
+	if receiver.ExternalID != "" {
+		// Logic to handle the verification associated with the external_id
+		// This may include comparing the hashed phone number with the one associated with external_id
+	}
+	
 	// STEP 1: find the receiverVerification entry that matches the pair [receiverID, verificationType]
 	receiverVerifications, err := v.Models.ReceiverVerification.GetByReceiverIDsAndVerificationField(ctx, dbTx, []string{receiver.ID}, receiverRegistrationRequest.VerificationType)
 	if err != nil {

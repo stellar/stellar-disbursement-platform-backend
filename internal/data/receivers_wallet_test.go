@@ -839,6 +839,7 @@ func Test_ReceiverWallet_GetAllPendingRegistration(t *testing.T) {
 					ID:          receiver.ID,
 					PhoneNumber: receiver.PhoneNumber,
 					Email:       receiver.Email,
+					ExternalID: receiver.ExternalID,
 				},
 				Wallet: Wallet{
 					ID:   wallet3.ID,
@@ -851,6 +852,7 @@ func Test_ReceiverWallet_GetAllPendingRegistration(t *testing.T) {
 					ID:          receiver.ID,
 					PhoneNumber: receiver.PhoneNumber,
 					Email:       receiver.Email,
+					ExternalID: receiver.ExternalID,
 				},
 				Wallet: Wallet{
 					ID:   wallet4.ID,

@@ -268,6 +268,14 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			FlagDefault: horizonclient.DefaultTestNetClient.HorizonURL,
 			Required:    true,
 		},
+		{
+			Name:        "use-external-id",
+			Usage:       "Enable or disable the use of external ID in wallet deep links",
+			OptType:     types.Bool, 
+			ConfigKey:   &serveOpts.UseExternalID, // Ensure ServeOptions has a UseExternalID field of type bool
+			FlagDefault: false, // Default value set to false. Do Not embed external_id in wallet deep links
+			Required:    false, 
+		},
 	}
 
 	messengerOptions := message.MessengerOptions{}

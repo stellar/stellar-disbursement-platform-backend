@@ -31,6 +31,7 @@ type ReceiverRegistrationRequest struct {
 	VerificationValue string            `json:"verification"`
 	VerificationType  VerificationField `json:"verification_type"`
 	ReCAPTCHAToken    string            `json:"recaptcha_token"`
+	ExternalID        string            `json:"external_id"`
 }
 
 type ReceiverStats struct {

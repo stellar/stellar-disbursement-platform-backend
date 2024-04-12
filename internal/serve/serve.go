@@ -85,6 +85,7 @@ type ServeOptions struct {
 	DisableMFA                      bool
 	DisableReCAPTCHA                bool
 	PasswordValidator               *authUtils.PasswordValidator
+	UseExternalID					bool
 }
 
 // SetupDependencies uses the serve options to setup the dependencies for the server.

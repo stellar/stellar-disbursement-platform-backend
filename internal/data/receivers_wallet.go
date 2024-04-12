@@ -232,6 +232,7 @@ func (rw *ReceiverWalletModel) GetAllPendingRegistration(ctx context.Context) ([
 			r.id AS "receiver.id",
 			r.phone_number AS "receiver.phone_number",
 			r.email AS "receiver.email",
+			r.external_id AS "receiver.external_id",
 			w.id AS "wallet.id",
 			w.name AS "wallet.name"
 		FROM

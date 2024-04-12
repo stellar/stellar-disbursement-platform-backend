@@ -120,6 +120,28 @@ func Test_VerifyReceiverRegistrationHandler_validate(t *testing.T) {
 				ReCAPTCHAToken:    "token",
 			},
 		},
+		{
+			name: "🎉 successfully parses the body with external_id if the SEP24 token, recaptcha token and request body are all valid",
+			contextSep24Claims: sep24JWTClaims,
+			requestBody: `{
+				"phone_number": "+380445555555",
+				"otp": "123456",
+				"verification": "1990-01-01",
+				"verification_type": "date_of_birth",
+				"external_id": "user-external-id",
+				"reCAPTCHA_token": "token"
+			}`,
+			isRecaptchaValidFnResponse: []interface{}{true, nil},
+			wantSep24Claims:            sep24JWTClaims,
+			wantResult: data.ReceiverRegistrationRequest{
+				PhoneNumber:       "+380445555555",
+				OTP:               "123456",
+				VerificationValue: "1990-01-01",
+				VerificationType:  data.VerificationFieldDateOfBirth,
+				ExternalID:        "user-external-id",
+				ReCAPTCHAToken:    "token",
+			},
+		},
 	}
 
 	models, err := data.NewModels(dbConnectionPool)

@@ -26,6 +26,7 @@ type SendReceiverWalletInviteService struct {
 	maxInvitationSMSResendAttempts int64
 	sep10SigningPrivateKey         string
 	crashTrackerClient             crashtracker.CrashTrackerClient
+	UseExternalID				   bool
 }
 
 func (s SendReceiverWalletInviteService) validate() error {
@@ -104,6 +105,11 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context) error {
 			OrganizationName:         organization.Name,
 			AssetCode:                rwa.Asset.Code,
 			AssetIssuer:              rwa.Asset.Issuer,
+		}
+
+		// Only set ExternalID if UseExternalID config is true
+		if s.UseExternalID {
+			wdl.ExternalID = rwa.ReceiverWallet.Receiver.ExternalID
 		}
 
 		registrationLink, err := wdl.GetSignedRegistrationLink(s.sep10SigningPrivateKey)
@@ -245,7 +251,7 @@ func (s SendReceiverWalletInviteService) shouldSendInvitationSMS(ctx context.Con
 	return true
 }
 
-func NewSendReceiverWalletInviteService(models *data.Models, messengerClient message.MessengerClient, anchorPlatformBaseSepURL, sep10SigningPrivateKey string, maxInvitationSMSResendAttempts int64, crashTrackerClient crashtracker.CrashTrackerClient) (*SendReceiverWalletInviteService, error) {
+func NewSendReceiverWalletInviteService(models *data.Models, messengerClient message.MessengerClient, anchorPlatformBaseSepURL, sep10SigningPrivateKey string, maxInvitationSMSResendAttempts int64, crashTrackerClient crashtracker.CrashTrackerClient, UseExternalID bool) (*SendReceiverWalletInviteService, error) {
 	s := &SendReceiverWalletInviteService{
 		messengerClient:                messengerClient,
 		models:                         models,
@@ -253,6 +259,7 @@ func NewSendReceiverWalletInviteService(models *data.Models, messengerClient mes
 		maxInvitationSMSResendAttempts: maxInvitationSMSResendAttempts,
 		sep10SigningPrivateKey:         sep10SigningPrivateKey,
 		crashTrackerClient:             crashTrackerClient,
+		UseExternalID:				   UseExternalID,
 	}
 
 	if err := s.validate(); err != nil {
@@ -275,6 +282,8 @@ type WalletDeepLink struct {
 	AssetCode string
 	// AssetIssuer is the issuer of the Stellar asset that the receiver will be able to receive.
 	AssetIssuer string
+	// ExternalID is an optional parameter that can be used to include an external ID in the registration link.
+	ExternalID string // The external ID you want to include in the registration link
 }
 
 func (wdl WalletDeepLink) isNativeAsset() bool {
@@ -380,6 +389,7 @@ func (wdl WalletDeepLink) validate() error {
 // GetUnsignedRegistrationLink creates a deep link for the wallet registration using the format below:
 // <deep_link></route>?<domain>&<name>&<asset>.
 func (wdl WalletDeepLink) GetUnsignedRegistrationLink() (string, error) {
+
 	if err := wdl.validate(); err != nil {
 		return "", fmt.Errorf("validating WalletDeepLink: %w", err)
 	}
@@ -403,6 +413,9 @@ func (wdl WalletDeepLink) GetUnsignedRegistrationLink() (string, error) {
 	q.Add("domain", tomlFileDomain)
 	q.Add("name", wdl.OrganizationName)
 	q.Add("asset", wdl.assetName())
+	if wdl.ExternalID != "" {
+		q.Add("external_id", wdl.ExternalID)
+	}
 
 	u.RawQuery = q.Encode()
 
