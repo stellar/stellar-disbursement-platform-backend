@@ -75,7 +75,6 @@ func (c AssetsHandler) CreateAsset(w http.ResponseWriter, r *http.Request) {
 	v.Check(assetCode != "", "code", "code is required")
 	if assetCode != stellarNativeAssetCode {
 		v.Check(strkey.IsValidEd25519PublicKey(assetIssuer), "issuer", "issuer is invalid")
-		v.Check(assetIssuer != "", "issuer", "issuer is required")
 	}
 
 	if v.HasErrors() {
