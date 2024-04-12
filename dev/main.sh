@@ -41,7 +41,14 @@ AuthHeader="Authorization: Basic $encodedCredentials"
 
 existingTenants=$(curl -s -H "$AuthHeader" $AdminTenantURL)
 echo "Response from tenant check: $existingTenants"
-existingTenantNames=($(echo $existingTenants | jq -r '.[].name'))
+
+existingTenantNames=[]
+if names=$(echo $existingTenants | jq -r '.[].name'); then
+    if [ -n "$names" ]; then  # Only assign if names is non-empty
+        existingTenantNames=($names)
+    fi
+fi
+echo "existingTenantNames: $existingTenantNames"
 
 for tenant in "${tenants[@]}"; do
     # Check if the tenant already exists
