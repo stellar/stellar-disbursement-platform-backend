@@ -113,28 +113,28 @@ func (a *AnchorPlatformAPIService) updateAnchorTransactions(ctx context.Context,
 
 	recordsJSON, err := json.Marshal(records)
 	if err != nil {
-		return fmt.Errorf("error marshaling records: %w", err)
+		return fmt.Errorf("marshaling records: %w", err)
 	}
 
 	u, err := url.JoinPath(a.AnchorPlatformBasePlatformURL, "transactions")
 	if err != nil {
-		return fmt.Errorf("error creating url: %w", err)
+		return fmt.Errorf("creating url: %w", err)
 	}
 	request, err := http.NewRequestWithContext(ctx, http.MethodPatch, u, strings.NewReader(string(recordsJSON)))
 	if err != nil {
-		return fmt.Errorf("error creating new request: %w", err)
+		return fmt.Errorf("creating new request: %w", err)
 	}
 	request.Header.Set("Content-Type", "application/json")
 
 	token, err := a.GetJWTToken(apTxPatch...)
 	if err != nil {
-		return fmt.Errorf("getting jwt token in updateAnchorTransactions: %w", err)
+		return fmt.Errorf("getting a jwt token: %w", err)
 	}
 	request.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
 
 	response, err := a.HttpClient.Do(request)
 	if err != nil {
-		return fmt.Errorf("error making request to anchor platform: %w", err)
+		return fmt.Errorf("making request to anchor platform: %w", err)
 	}
 
 	body, err := io.ReadAll(response.Body)
@@ -144,7 +144,7 @@ func (a *AnchorPlatformAPIService) updateAnchorTransactions(ctx context.Context,
 	defer response.Body.Close()
 
 	if response.StatusCode/100 != 2 {
-		return fmt.Errorf("error updating transaction on anchor platform, response.StatusCode=%d, response.body=%v", response.StatusCode, string(body))
+		return fmt.Errorf("updating transaction on anchor platform, response.StatusCode=%d, response.body=%v", response.StatusCode, string(body))
 	}
 
 	return nil

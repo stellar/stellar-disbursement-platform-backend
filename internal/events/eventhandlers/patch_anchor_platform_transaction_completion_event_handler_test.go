@@ -83,7 +83,7 @@ func Test_PatchAnchorPlatformTransactionCompletionEventHandler(t *testing.T) {
 			Once()
 
 		crashTrackerClient.
-			On("LogAndReportErrors", mock.Anything, errors.New("unexpected error"), "[PatchAnchorPlatformTransactionCompletionEventHandler] patching anchor platform transaction").
+			On("LogAndReportErrors", mock.Anything, errors.New("unexpected error"), "[PatchAnchorPlatformTransactionCompletionEventHandler] patching anchor platform transaction for payment event").
 			Return().
 			Once()
 

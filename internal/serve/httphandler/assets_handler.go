@@ -2,7 +2,6 @@ package httphandler
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -69,12 +68,13 @@ func (c AssetsHandler) CreateAsset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	assetCode := strings.TrimSpace(strings.ToUpper(assetRequest.Code))
+	assetIssuer := strings.TrimSpace(assetRequest.Issuer)
+
 	v := validators.NewValidator()
-	v.Check(assetRequest.Code != "", "code", "code is required")
-	if strings.ToUpper(assetRequest.Code) != stellarNativeAssetCode {
-		v.Check(assetRequest.Issuer != "", "issuer", "issuer is required")
-		assetRequest.Issuer = strings.TrimSpace(assetRequest.Issuer)
-		v.Check(strkey.IsValidEd25519PublicKey(assetRequest.Issuer), "issuer", "issuer is invalid")
+	v.Check(assetCode != "", "code", "code is required")
+	if assetCode != stellarNativeAssetCode {
+		v.Check(strkey.IsValidEd25519PublicKey(assetIssuer), "issuer", "issuer is invalid")
 	}
 
 	if v.HasErrors() {
@@ -85,32 +85,21 @@ func (c AssetsHandler) CreateAsset(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	asset, err := db.RunInTransactionWithResult(ctx, c.Models.DBConnectionPool, nil, func(dbTx db.DBTransaction) (*data.Asset, error) {
-		insertedAsset, insertErr := c.Models.Assets.Insert(
-			ctx,
-			dbTx,
-			assetRequest.Code,
-			assetRequest.Issuer,
-		)
+		insertedAsset, insertErr := c.Models.Assets.Insert(ctx, dbTx, assetCode, assetIssuer)
 		if insertErr != nil {
-			return nil, fmt.Errorf("error inserting new asset: %w", insertErr)
+			return nil, fmt.Errorf("inserting new asset: %w", insertErr)
 		}
 
-		trustlineErr := c.handleUpdateAssetTrustlineForDistributionAccount(ctx, &txnbuild.CreditAsset{
-			Code:   assetRequest.Code,
-			Issuer: assetRequest.Issuer,
-		}, nil)
+		assetToAdd := &txnbuild.CreditAsset{Code: assetCode, Issuer: assetIssuer}
+		trustlineErr := c.handleUpdateAssetTrustlineForDistributionAccount(ctx, assetToAdd, nil)
 		if trustlineErr != nil {
-			return nil, fmt.Errorf("error adding trustline for the distribution account: %w", trustlineErr)
+			return nil, fmt.Errorf("adding trustline for the distribution account: %w", trustlineErr)
 		}
 
 		return insertedAsset, nil
 	})
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			httperror.Conflict("asset already exists", err, nil).Render(w)
-			return
-		}
-
+		err = fmt.Errorf("creating asset in AssetHandler: %w", err)
 		httperror.InternalError(ctx, "Cannot create new asset", err, nil).Render(w)
 		return
 	}
