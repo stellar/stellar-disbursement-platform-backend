@@ -112,15 +112,15 @@ func Test_updateAnchorTransactions(t *testing.T) {
 	}
 
 	t.Run("error calling httpClient.Do", func(t *testing.T) {
-		httpClientMock.On("Do", mock.MatchedBy(mockMatchedByFn)).Return(nil, fmt.Errorf("error calling the request")).Once()
+		httpClientMock.On("Do", mock.MatchedBy(mockMatchedByFn)).Return(nil, fmt.Errorf("calling the request")).Once()
 		err := anchorPlatformAPIService.updateAnchorTransactions(ctx, apTxPatch)
-		require.EqualError(t, err, "error making request to anchor platform: error calling the request")
+		require.EqualError(t, err, "making request to anchor platform: calling the request")
 
 		httpClientMock.AssertExpectations(t)
 	})
 
 	t.Run("error trying to update transactions on anchor platform", func(t *testing.T) {
-		transactionResponse := `{The 'id' of the transaction first determined to be invalid.}`
+		transactionResponse := `{error: "The 'id' of the transaction first determined to be invalid."}`
 		response := &http.Response{
 			Body:       io.NopCloser(strings.NewReader(transactionResponse)),
 			StatusCode: http.StatusBadRequest,
@@ -128,7 +128,8 @@ func Test_updateAnchorTransactions(t *testing.T) {
 		httpClientMock.On("Do", mock.MatchedBy(mockMatchedByFn)).Return(response, nil).Once()
 
 		err := anchorPlatformAPIService.updateAnchorTransactions(ctx, apTxPatch)
-		require.EqualError(t, err, "error updating transaction on anchor platform, response.StatusCode: 400")
+		wantErr := fmt.Errorf("updating transaction on anchor platform, response.StatusCode=%d, response.body=%v", http.StatusBadRequest, transactionResponse)
+		require.Equal(t, wantErr, err)
 
 		httpClientMock.AssertExpectations(t)
 	})

@@ -32,7 +32,9 @@ data:
   SEP1_TOML_TYPE: url
   SEP1_TOML_VALUE: 'http://{{ include "sdp.fullname" . }}.{{ .Release.Namespace }}:{{ include "sdp.port" . }}/.well-known/stellar.toml'
   SEP10_ENABLED: "true"
-  SEP10_HOME_DOMAIN: {{ include "sdp.ap.domain" . }}
+  SEP10_WEB_AUTH_DOMAIN: {{ include "sdp.ap.domain" . | quote }}
+  SEP10_HOME_DOMAIN: ""
+  SEP10_HOME_DOMAINS: {{ include "sdp.mtnDomain" . | quote }}
   SEP24_ENABLED: "true"
   SEP24_INTERACTIVE_URL_JWT_EXPIRATION: "1800"  # 1800 seconds is 30 minutes
   ASSETS_TYPE: json

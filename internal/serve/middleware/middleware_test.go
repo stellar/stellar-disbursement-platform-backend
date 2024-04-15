@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -12,13 +13,17 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/sirupsen/logrus"
+
 	"github.com/stellar/go/support/log"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 func Test_RecoverHandler(t *testing.T) {
@@ -154,16 +159,29 @@ func Test_MetricsRequestHandler(t *testing.T) {
 func Test_AuthenticateMiddleware(t *testing.T) {
 	r := chi.NewRouter()
 
-	jwtManagerMock := &auth.JWTManagerMock{}
-	authManager := auth.NewAuthManager(auth.WithCustomJWTManagerOption(jwtManagerMock))
+	mAuthManager := &auth.AuthManagerMock{}
+	mTenantManager := &tenant.TenantManagerMock{}
 
 	r.Group(func(r chi.Router) {
-		r.Use(AuthenticateMiddleware(authManager))
+		r.Use(AuthenticateMiddleware(mAuthManager, mTenantManager))
+
+		r.Use(func(next http.Handler) http.Handler {
+			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				// Assert that the tenant is properly saved to the context
+				ctx := r.Context()
+				savedTenant, err := tenant.GetTenantFromContext(ctx)
+				require.NoError(t, err)
+				assert.Equal(t, "test_tenant_id", savedTenant.ID)
+				assert.Equal(t, "test_tenant", savedTenant.Name)
+				next.ServeHTTP(w, r)
+			})
+		})
 
 		r.Get("/authenticated", func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 			_, err := w.Write(json.RawMessage(`{"status":"ok"}`))
 			require.NoError(t, err)
+			log.Ctx(r.Context()).Info("authenticated route")
 		})
 	})
 
@@ -228,9 +246,9 @@ func Test_AuthenticateMiddleware(t *testing.T) {
 
 		req.Header.Set("Authorization", "Bearer token")
 
-		jwtManagerMock.
-			On("ValidateToken", mock.Anything, "token").
-			Return(false, errors.New("unexpected error")).
+		mAuthManager.
+			On("GetUserID", mock.Anything, "token").
+			Return("", errors.New("unexpected error")).
 			Once()
 
 		getEntries := log.DefaultLogger.StartTest(log.ErrorLevel)
@@ -247,7 +265,7 @@ func Test_AuthenticateMiddleware(t *testing.T) {
 
 		entries := getEntries()
 		assert.NotEmpty(t, entries)
-		assert.Equal(t, `error validating auth token: validating token: unexpected error`, entries[0].Message)
+		assert.Equal(t, `error validating auth token: unexpected error`, entries[0].Message)
 	})
 
 	t.Run("returns Unauthorized when the token is invalid", func(t *testing.T) {
@@ -256,9 +274,9 @@ func Test_AuthenticateMiddleware(t *testing.T) {
 
 		req.Header.Set("Authorization", "Bearer token")
 
-		jwtManagerMock.
-			On("ValidateToken", mock.Anything, "token").
-			Return(false, nil).
+		mAuthManager.
+			On("GetUserID", mock.Anything, "token").
+			Return("", auth.ErrInvalidToken).
 			Once()
 
 		w := httptest.NewRecorder()
@@ -278,10 +296,23 @@ func Test_AuthenticateMiddleware(t *testing.T) {
 
 		req.Header.Set("Authorization", "Bearer token")
 
-		jwtManagerMock.
-			On("ValidateToken", mock.Anything, "token").
-			Return(true, nil).
+		mAuthManager.
+			On("GetUserID", mock.Anything, "token").
+			Return("test_user_id", nil).
 			Once()
+		mAuthManager.
+			On("GetTenantID", mock.Anything, "token").
+			Return("test_tenant_id", nil).
+			Once()
+		mTenantManager.
+			On("GetTenantByID", mock.Anything, "test_tenant_id").
+			Return(&tenant.Tenant{
+				ID:   "test_tenant_id",
+				Name: "test_tenant",
+			}, nil).
+			Once()
+
+		getEntries := log.DefaultLogger.StartTest(log.InfoLevel)
 
 		w := httptest.NewRecorder()
 		r.ServeHTTP(w, req)
@@ -292,6 +323,12 @@ func Test_AuthenticateMiddleware(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.JSONEq(t, `{"status":"ok"}`, string(respBody))
+
+		// assert if user_id is in the logs:
+		entries := getEntries()
+		assert.NotEmpty(t, entries)
+		assert.Contains(t, entries[0].Message, "authenticated route")
+		assert.Equal(t, entries[0].Data["user_id"], "test_user_id")
 	})
 
 	t.Run("doesn't return Unauthorized for unauthenticated routes", func(t *testing.T) {
@@ -619,6 +656,119 @@ func Test_CorsMiddleware(t *testing.T) {
 	})
 }
 
+func Test_LoggingMiddleware(t *testing.T) {
+	mTenantManager := &tenant.TenantManagerMock{}
+
+	t.Run("emits request started and finished logs with tenant info if tenant derived from context", func(t *testing.T) {
+		r := chi.NewRouter()
+		expectedRespBody := "ok"
+
+		debugEntries := log.DefaultLogger.StartTest(log.DebugLevel)
+
+		tenantName := "tenant123"
+		tenantID := "tenant_id"
+		token := "valid_token"
+		mTenantManager.
+			On("GetTenantByName", mock.Anything, tenantName).
+			Return(&tenant.Tenant{ID: tenantID, Name: tenantName}, nil).
+			Once()
+		r.Use(ResolveTenantFromRequestMiddleware(mTenantManager, false))
+		r.Use(EnsureTenantMiddleware)
+		r.Use(LoggingMiddleware)
+		r.Get("/", func(w http.ResponseWriter, r *http.Request) {
+			_, err := w.Write([]byte(expectedRespBody))
+			require.NoError(t, err)
+		})
+
+		req, err := http.NewRequest(http.MethodGet, "/", nil)
+		require.NoError(t, err)
+		req.Header.Set(TenantHeaderKey, tenantName)
+
+		ctx := context.WithValue(req.Context(), TokenContextKey, token)
+		req = req.WithContext(ctx)
+
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+
+		resp := rr.Result()
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.Equal(t, expectedRespBody, string(respBody))
+
+		logEntries := debugEntries()
+		assert.Len(t, logEntries, 2)
+		for i, e := range logEntries {
+			entry, err := e.String()
+			require.NoError(t, err)
+
+			assert.Contains(t, entry, fmt.Sprintf("tenant_name=%s", tenantName))
+			assert.Contains(t, entry, fmt.Sprintf("tenant_id=%s", tenantID))
+
+			if i == 0 {
+				assert.Contains(t, e.Message, "starting request")
+			} else if i == 1 {
+				assert.Contains(t, e.Message, "finished request")
+			}
+			assert.Equal(t, log.InfoLevel, e.Level)
+		}
+	})
+
+	t.Run("emits warning if tenant cannot be derived from the context", func(t *testing.T) {
+		r := chi.NewRouter()
+		expectedRespBody := "ok"
+
+		debugEntries := log.DefaultLogger.StartTest(log.DebugLevel)
+
+		r.Use(LoggingMiddleware)
+		r.Get("/", func(w http.ResponseWriter, r *http.Request) {
+			_, err := w.Write([]byte(expectedRespBody))
+			require.NoError(t, err)
+		})
+
+		req, err := http.NewRequest(http.MethodGet, "/", nil)
+		require.NoError(t, err)
+
+		ctx := context.Background()
+		req = req.WithContext(ctx)
+
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+
+		resp := rr.Result()
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.Equal(t, expectedRespBody, string(respBody))
+
+		logEntries := debugEntries()
+
+		assert.Len(t, logEntries, 3)
+		for i, e := range logEntries {
+			entry, err := e.String()
+			require.NoError(t, err)
+
+			assert.NotContains(t, entry, "tenant_name")
+			assert.NotContains(t, entry, "tenant_id")
+
+			if i == 0 {
+				assert.Contains(t, e.Message, "tenant cannot be derived from context")
+				assert.Equal(t, log.DebugLevel, e.Level)
+			} else if i == 1 {
+				assert.Contains(t, e.Message, "starting request")
+				assert.Equal(t, log.InfoLevel, e.Level)
+			} else if i == 2 {
+				assert.Contains(t, e.Message, "finished request")
+				assert.Equal(t, log.InfoLevel, e.Level)
+			}
+		}
+	})
+
+	mTenantManager.AssertExpectations(t)
+}
+
 func Test_CSPMiddleware(t *testing.T) {
 	t.Run("Should populate the Content-Security-Policy header correctly", func(t *testing.T) {
 		r := chi.NewRouter()
@@ -645,5 +795,394 @@ func Test_CSPMiddleware(t *testing.T) {
 		gotCSP := resp.Header.Get("Content-Security-Policy")
 		assert.Equal(t, wantCSP, gotCSP)
 		assert.Equal(t, expectedRespBody, string(respBody))
+	})
+}
+
+func Test_ResolveTenantFromRequestMiddleware(t *testing.T) {
+	validTnt := &tenant.Tenant{ID: "tenant_id", Name: "tenant_name"}
+
+	testCases := []struct {
+		name              string
+		tenantHeaderValue string
+		hostnamePrefix    string
+		singleTenantMode  bool
+		prepareMocksFn    func(mTenantManager *tenant.TenantManagerMock)
+		expectedStatus    int
+		expectedRespBody  string
+		expectedTenant    *tenant.Tenant
+	}{
+		{
+			name:              "🔴 tenant name from the header cannot be found in GetTenantByName",
+			tenantHeaderValue: "tenant_name",
+			hostnamePrefix:    "",
+			prepareMocksFn: func(mTenantManager *tenant.TenantManagerMock) {
+				expectedErr := errors.New("error fetching tenant from its name")
+				mTenantManager.
+					On("GetTenantByName", mock.Anything, "tenant_name").
+					Return(nil, expectedErr).
+					Once()
+			},
+			expectedStatus:   http.StatusOK,
+			expectedRespBody: `{"status":"ok"}`,
+			expectedTenant:   nil,
+		},
+		{
+			name:              "🔴 tenant name from the host prefix cannot be found in GetTenantByName",
+			tenantHeaderValue: "",
+			hostnamePrefix:    "tenant_hostname",
+			prepareMocksFn: func(mTenantManager *tenant.TenantManagerMock) {
+				expectedErr := errors.New("error fetching tenant from its name")
+				mTenantManager.
+					On("GetTenantByName", mock.Anything, "tenant_hostname").
+					Return(nil, expectedErr).
+					Once()
+			},
+			expectedStatus:   http.StatusOK,
+			expectedRespBody: `{"status":"ok"}`,
+			expectedTenant:   nil,
+		},
+		{
+			name:              "🟢 successfully grabs the tenant from the request HEADER",
+			tenantHeaderValue: "tenant_name",
+			hostnamePrefix:    "",
+			prepareMocksFn: func(mTenantManager *tenant.TenantManagerMock) {
+				mTenantManager.
+					On("GetTenantByName", mock.Anything, "tenant_name").
+					Return(validTnt, nil).
+					Once()
+			},
+			expectedStatus:   http.StatusOK,
+			expectedRespBody: `{"status":"ok"}`,
+			expectedTenant:   validTnt,
+		},
+		{
+			name:              "🟢 successfully grabs the tenant from the request host prefix",
+			tenantHeaderValue: "",
+			hostnamePrefix:    "tenant_hostname",
+			prepareMocksFn: func(mTenantManager *tenant.TenantManagerMock) {
+				mTenantManager.
+					On("GetTenantByName", mock.Anything, "tenant_hostname").
+					Return(validTnt, nil).
+					Once()
+			},
+			expectedStatus:   http.StatusOK,
+			expectedRespBody: `{"status":"ok"}`,
+			expectedTenant:   validTnt,
+		},
+		{
+			name:              "🔴 no default tenant is found",
+			tenantHeaderValue: "",
+			hostnamePrefix:    "",
+			singleTenantMode:  true,
+			prepareMocksFn: func(mTenantManager *tenant.TenantManagerMock) {
+				mTenantManager.
+					On("GetDefault", mock.Anything).
+					Return(nil, tenant.ErrTenantDoesNotExist).
+					Once()
+			},
+			expectedStatus:   http.StatusInternalServerError,
+			expectedRespBody: `{"error":"No default Tenant configured"}`,
+			expectedTenant:   nil,
+		},
+		{
+			name:              "🔴 too many default tenants",
+			tenantHeaderValue: "",
+			hostnamePrefix:    "",
+			singleTenantMode:  true,
+			prepareMocksFn: func(mTenantManager *tenant.TenantManagerMock) {
+				mTenantManager.
+					On("GetDefault", mock.Anything).
+					Return(nil, tenant.ErrTooManyDefaultTenants).
+					Once()
+			},
+			expectedStatus:   http.StatusInternalServerError,
+			expectedRespBody: `{"error":"Too many default tenants configured"}`,
+			expectedTenant:   nil,
+		},
+		{
+			name:              "🟢 successfully gets the default tenant",
+			tenantHeaderValue: "",
+			hostnamePrefix:    "",
+			singleTenantMode:  true,
+			prepareMocksFn: func(mTenantManager *tenant.TenantManagerMock) {
+				mTenantManager.
+					On("GetDefault", mock.Anything).
+					Return(validTnt, nil).
+					Once()
+			},
+			expectedStatus:   http.StatusOK,
+			expectedRespBody: `{"status":"ok"}`,
+			expectedTenant:   validTnt,
+		},
+		{
+			name:              "🟢 successfully gets the default tenant regardless the header value",
+			tenantHeaderValue: "some_tenant_name",
+			hostnamePrefix:    "",
+			singleTenantMode:  true,
+			prepareMocksFn: func(mTenantManager *tenant.TenantManagerMock) {
+				mTenantManager.
+					On("GetDefault", mock.Anything).
+					Return(validTnt, nil).
+					Once()
+			},
+			expectedStatus:   http.StatusOK,
+			expectedRespBody: `{"status":"ok"}`,
+			expectedTenant:   validTnt,
+		},
+		{
+			name:              "🟢 successfully gets the default tenant regardless the host name prefix",
+			tenantHeaderValue: "",
+			hostnamePrefix:    "some_tenant_hostname",
+			singleTenantMode:  true,
+			prepareMocksFn: func(mTenantManager *tenant.TenantManagerMock) {
+				mTenantManager.
+					On("GetDefault", mock.Anything).
+					Return(validTnt, nil).
+					Once()
+			},
+			expectedStatus:   http.StatusOK,
+			expectedRespBody: `{"status":"ok"}`,
+			expectedTenant:   validTnt,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			mTenantManager := &tenant.TenantManagerMock{}
+			defer mTenantManager.AssertExpectations(t)
+
+			// prepare mocks
+			if tc.prepareMocksFn != nil {
+				tc.prepareMocksFn(mTenantManager)
+			}
+
+			updatedCtx := context.Background()
+			// prepare router
+			r := chi.NewRouter()
+			r.
+				With(ResolveTenantFromRequestMiddleware(mTenantManager, tc.singleTenantMode)).
+				Get("/test", func(w http.ResponseWriter, r *http.Request) {
+					updatedCtx = r.Context()
+					w.WriteHeader(http.StatusOK)
+					_, err := w.Write([]byte(`{"status":"ok"}`))
+					require.NoError(t, err)
+				})
+
+			// prepare request
+			req, err := http.NewRequest(http.MethodGet, "/test", nil)
+			require.NoError(t, err)
+			if tc.tenantHeaderValue != "" {
+				req.Header.Set(TenantHeaderKey, tc.tenantHeaderValue)
+			}
+			if tc.hostnamePrefix != "" {
+				req.Host = fmt.Sprintf("%s.example.com", tc.hostnamePrefix)
+			}
+
+			// execute the request
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, req)
+			resp := w.Result()
+
+			// assert the response
+			defer resp.Body.Close()
+			respBody, err := io.ReadAll(resp.Body)
+			assert.NoError(t, err)
+			assert.Equal(t, tc.expectedStatus, resp.StatusCode)
+			assert.JSONEq(t, tc.expectedRespBody, string(respBody))
+
+			// assert tenant in context
+			tnt, err := tenant.GetTenantFromContext(updatedCtx)
+			if tc.expectedTenant != nil {
+				assert.NoError(t, err)
+				assert.Equal(t, tc.expectedTenant, tnt)
+			} else {
+				assert.Error(t, err)
+				assert.Nil(t, tnt)
+			}
+		})
+	}
+}
+
+func Test_EnsureTenantMiddleware(t *testing.T) {
+	validTnt := &tenant.Tenant{ID: "tenant_id", Name: "tenant_name"}
+
+	testCases := []struct {
+		name                 string
+		hasTenantInCtx       bool
+		expectedStatus       int
+		expectedBodyContains string
+		expectedTenant       *tenant.Tenant
+	}{
+		{
+			name:                 "🔴 fails if there's no tenant in the context",
+			hasTenantInCtx:       false,
+			expectedStatus:       http.StatusBadRequest,
+			expectedBodyContains: `{"error":"Tenant not found in context"}`,
+			expectedTenant:       nil,
+		},
+		{
+			name:                 "🟢 when there's a tenant in the context",
+			hasTenantInCtx:       true,
+			expectedStatus:       http.StatusOK,
+			expectedBodyContains: `{"status":"ok"}`,
+			expectedTenant:       nil,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// prepare router
+			r := chi.NewRouter()
+			r.
+				With(EnsureTenantMiddleware).
+				Get("/test", func(w http.ResponseWriter, r *http.Request) {
+					w.WriteHeader(http.StatusOK)
+					_, err := w.Write([]byte(`{"status":"ok"}`))
+					require.NoError(t, err)
+				})
+
+			// prepare request
+			req, err := http.NewRequest(http.MethodGet, "/test", nil)
+			require.NoError(t, err)
+			if tc.hasTenantInCtx {
+				ctx := tenant.SaveTenantInContext(req.Context(), validTnt)
+				req = req.WithContext(ctx)
+			}
+
+			// execute the request
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, req)
+			resp := w.Result()
+
+			// assert the response
+			defer resp.Body.Close()
+			respBody, err := io.ReadAll(resp.Body)
+			assert.NoError(t, err)
+			assert.Equal(t, tc.expectedStatus, resp.StatusCode)
+			assert.JSONEq(t, tc.expectedBodyContains, string(respBody))
+		})
+	}
+}
+
+func Test_BasicAuthMiddleware(t *testing.T) {
+	r := chi.NewRouter()
+
+	adminAccount := "admin"
+	adminApiKey := "secret"
+
+	r.Group(func(r chi.Router) {
+		r.Use(BasicAuthMiddleware(adminAccount, adminApiKey))
+
+		r.Get("/authenticated", func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, err := w.Write(json.RawMessage(`{"message":"🔐 secured content"}`))
+			require.NoError(t, err)
+		})
+	})
+
+	r.Get("/open", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, err := w.Write(json.RawMessage(`{"message":"🔓 open content"}`))
+		require.NoError(t, err)
+	})
+
+	t.Run("returns 401 error when no auth header is sent", func(t *testing.T) {
+		req, err := http.NewRequest(http.MethodGet, "/authenticated", nil)
+		assert.NoError(t, err)
+
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		resp := w.Result()
+		respBody, err := io.ReadAll(resp.Body)
+		assert.NoError(t, err)
+
+		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+		assert.JSONEq(t, `{"error":"Not authorized."}`, string(respBody))
+	})
+
+	t.Run("returns 401 error for incorrect credentials", func(t *testing.T) {
+		req, err := http.NewRequest(http.MethodGet, "/authenticated", nil)
+		assert.NoError(t, err)
+		req.SetBasicAuth("wrongUser", "wrongPass")
+
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		resp := w.Result()
+		respBody, err := io.ReadAll(resp.Body)
+		assert.NoError(t, err)
+
+		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+		assert.JSONEq(t, `{"error":"Not authorized."}`, string(respBody))
+	})
+
+	t.Run("🎉 200 response for correct credentials", func(t *testing.T) {
+		req, err := http.NewRequest(http.MethodGet, "/authenticated", nil)
+		assert.NoError(t, err)
+		req.SetBasicAuth(adminAccount, adminApiKey)
+
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		resp := w.Result()
+		respBody, err := io.ReadAll(resp.Body)
+		assert.NoError(t, err)
+
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.JSONEq(t, `{"message":"🔐 secured content"}`, string(respBody))
+	})
+
+	t.Run("🎉 200 response for open routes with no auth", func(t *testing.T) {
+		req, err := http.NewRequest(http.MethodGet, "/open", nil)
+		assert.NoError(t, err)
+
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		resp := w.Result()
+		respBody, err := io.ReadAll(resp.Body)
+		assert.NoError(t, err)
+
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.JSONEq(t, `{"message":"🔓 open content"}`, string(respBody))
+	})
+}
+
+func Test_ExtractTenantNameFromRequest(t *testing.T) {
+	t.Run("extract tenant name from header", func(t *testing.T) {
+		expectedTenant := "tenant123"
+		r, _ := http.NewRequest("GET", "http://example.com", nil)
+		r.Header.Add(TenantHeaderKey, expectedTenant)
+
+		tenantName, err := extractTenantNameFromRequest(r)
+		require.NoError(t, err)
+		require.Equal(t, expectedTenant, tenantName)
+	})
+
+	t.Run("extract tenant name from hostname", func(t *testing.T) {
+		expectedTenant := "tenantfromhost"
+		r, _ := http.NewRequest("GET", "http://tenantfromhost.example.com", nil)
+
+		tenantName, err := extractTenantNameFromRequest(r)
+		require.NoError(t, err)
+		require.Equal(t, expectedTenant, tenantName)
+	})
+
+	t.Run("error extracting tenant from hostname", func(t *testing.T) {
+		r, _ := http.NewRequest("GET", "http://example.com", nil)
+
+		name, err := extractTenantNameFromRequest(r)
+		require.ErrorIs(t, err, utils.ErrTenantNameNotFound)
+		require.Empty(t, name)
+	})
+
+	t.Run("extract tenant name with port", func(t *testing.T) {
+		expectedTenant := "tenantwithport"
+		r, _ := http.NewRequest("GET", "http://tenantwithport.example.com:8080", nil)
+
+		tenantName, err := extractTenantNameFromRequest(r)
+		require.NoError(t, err)
+		require.Equal(t, expectedTenant, tenantName)
 	})
 }

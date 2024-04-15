@@ -13,7 +13,7 @@ import (
 	"github.com/lib/pq"
 	"github.com/stellar/go/strkey"
 	"github.com/stellar/go/xdr"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
 )
 
 var ErrRecordNotFound = errors.New("record not found")
@@ -30,6 +30,9 @@ type Transaction struct {
 	AssetIssuer   string                   `db:"asset_issuer"`
 	Amount        float64                  `db:"amount"`
 	Destination   string                   `db:"destination"`
+
+	TenantID            string         `db:"tenant_id"`
+	DistributionAccount sql.NullString `db:"distribution_account"`
 
 	CreatedAt *time.Time `db:"created_at"`
 	UpdatedAt *time.Time `db:"updated_at"`
@@ -82,6 +85,9 @@ func (tx *Transaction) validate() error {
 	if !strkey.IsValidEd25519PublicKey(tx.Destination) {
 		return fmt.Errorf("destination %q is not a valid ed25519 public key", tx.Destination)
 	}
+	if tx.TenantID == "" {
+		return fmt.Errorf("tenant ID is required")
+	}
 	return nil
 }
 
@@ -110,7 +116,7 @@ func (t *TransactionModel) BulkInsert(ctx context.Context, sqlExec db.SQLExecute
 	}
 
 	var queryBuilder strings.Builder
-	queryBuilder.WriteString("INSERT INTO submitter_transactions (external_id, asset_code, asset_issuer, amount, destination) VALUES ")
+	queryBuilder.WriteString("INSERT INTO submitter_transactions (external_id, asset_code, asset_issuer, amount, destination, tenant_id) VALUES ")
 	valueStrings := make([]string, 0, len(transactions))
 	valueArgs := make([]interface{}, 0, len(transactions)*6)
 
@@ -118,13 +124,14 @@ func (t *TransactionModel) BulkInsert(ctx context.Context, sqlExec db.SQLExecute
 		if err := transaction.validate(); err != nil {
 			return nil, fmt.Errorf("validating transaction for insertion: %w", err)
 		}
-		valueStrings = append(valueStrings, "(?, ?, ?, ?, ?)")
+		valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?)")
 		valueArgs = append(valueArgs,
 			transaction.ExternalID,
 			transaction.AssetCode,
 			transaction.AssetIssuer,
 			transaction.Amount,
 			transaction.Destination,
+			transaction.TenantID,
 		)
 	}
 
@@ -306,9 +313,12 @@ func (t *TransactionModel) UpdateStellarTransactionXDRReceived(ctx context.Conte
 }
 
 // GetTransactionBatchForUpdate returns a batch of transactions that are ready to be synced. Locks the rows for update.
-func (t *TransactionModel) GetTransactionBatchForUpdate(ctx context.Context, dbTx db.DBTransaction, batchSize int) ([]*Transaction, error) {
+func (t *TransactionModel) GetTransactionBatchForUpdate(ctx context.Context, dbTx db.DBTransaction, batchSize int, tenantID string) ([]*Transaction, error) {
 	if batchSize <= 0 {
 		return nil, fmt.Errorf("batch size must be greater than 0")
+	}
+	if tenantID == "" {
+		return nil, fmt.Errorf("tenant ID is required")
 	}
 
 	transactions := []*Transaction{}
@@ -321,14 +331,15 @@ func (t *TransactionModel) GetTransactionBatchForUpdate(ctx context.Context, dbT
 		WHERE 
 		    status IN ('SUCCESS', 'ERROR')
 		    AND synced_at IS NULL
+		    AND tenant_id = $1
 		ORDER BY 
 		    completed_at ASC
 		LIMIT 
-		    $1
+		    $2
 		FOR UPDATE SKIP LOCKED
 		`
 
-	err := dbTx.SelectContext(ctx, &transactions, query, batchSize)
+	err := dbTx.SelectContext(ctx, &transactions, query, tenantID, batchSize)
 	if err != nil {
 		return nil, fmt.Errorf("getting transactions: %w", err)
 	}
@@ -336,9 +347,34 @@ func (t *TransactionModel) GetTransactionBatchForUpdate(ctx context.Context, dbT
 	return transactions, nil
 }
 
+func (t *TransactionModel) GetTransactionPendingUpdateByID(ctx context.Context, dbTx db.SQLExecuter, txID string) (*Transaction, error) {
+	query := `
+		SELECT 
+			*
+		FROM 
+			submitter_transactions
+		WHERE
+			id = $1
+			AND status IN ('SUCCESS', 'ERROR')
+			AND synced_at IS NULL
+		FOR UPDATE SKIP LOCKED
+	`
+
+	var tx Transaction
+	err := dbTx.GetContext(ctx, &tx, query, txID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrRecordNotFound
+		}
+		return nil, fmt.Errorf("getting transaction ID %s: %w", txID, err)
+	}
+
+	return &tx, nil
+}
+
 // UpdateSyncedTransactions updates the synced_at field for the given transaction IDs. Returns an error if the number of
 // updated rows is not equal to the number of provided transaction IDs.
-func (t *TransactionModel) UpdateSyncedTransactions(ctx context.Context, dbTx db.DBTransaction, txIDs []string) error {
+func (t *TransactionModel) UpdateSyncedTransactions(ctx context.Context, dbTx db.SQLExecuter, txIDs []string) error {
 	if len(txIDs) == 0 {
 		return fmt.Errorf("no transaction IDs provided")
 	}

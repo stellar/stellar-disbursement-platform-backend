@@ -16,16 +16,16 @@ const (
 	apAuthMonitoringJobIntervalSeconds = 300
 )
 
-// AnchorPlatformAuthMonitoringJob is a job that periodically monitors the Anchor Platform's to make sure it has the
+// anchorPlatformAuthMonitoringJob is a job that periodically monitors the Anchor Platform's to make sure it has the
 // authentication enforcement enabled.
-type AnchorPlatformAuthMonitoringJob struct {
+type anchorPlatformAuthMonitoringJob struct {
 	apService          anchorplatform.AnchorPlatformAPIServiceInterface
 	monitorService     monitor.MonitorServiceInterface
 	crashTrackerClient crashtracker.CrashTrackerClient
 }
 
-// NewPaymentService creates a new PaymentService
-func NewAnchorPlatformAuthMonitoringJob(apService anchorplatform.AnchorPlatformAPIServiceInterface, monitorService monitor.MonitorServiceInterface, crashTrackerClient crashtracker.CrashTrackerClient) (*AnchorPlatformAuthMonitoringJob, error) {
+// NewAnchorPlatformAuthMonitoringJob is a factory method that creates a new instance of anchorPlatformAuthMonitoringJob.
+func NewAnchorPlatformAuthMonitoringJob(apService anchorplatform.AnchorPlatformAPIServiceInterface, monitorService monitor.MonitorServiceInterface, crashTrackerClient crashtracker.CrashTrackerClient) (Job, error) {
 	if apService == nil {
 		return nil, fmt.Errorf("apService cannot be nil")
 	}
@@ -36,26 +36,26 @@ func NewAnchorPlatformAuthMonitoringJob(apService anchorplatform.AnchorPlatformA
 		return nil, fmt.Errorf("crashTrackerClient cannot be nil")
 	}
 
-	return &AnchorPlatformAuthMonitoringJob{
+	return &anchorPlatformAuthMonitoringJob{
 		apService:          apService,
 		monitorService:     monitorService,
 		crashTrackerClient: crashTrackerClient,
 	}, nil
 }
 
-func (job AnchorPlatformAuthMonitoringJob) GetInterval() time.Duration {
+func (job anchorPlatformAuthMonitoringJob) GetInterval() time.Duration {
 	return apAuthMonitoringJobIntervalSeconds * time.Second
 }
 
-func (job AnchorPlatformAuthMonitoringJob) GetName() string {
+func (job anchorPlatformAuthMonitoringJob) GetName() string {
 	return apAuthMonitoringJobName
 }
 
-func (job AnchorPlatformAuthMonitoringJob) Execute(ctx context.Context) error {
-	log.Ctx(ctx).Debugf("executing AnchorPlatformAuthMonitoringJob ...")
+func (job anchorPlatformAuthMonitoringJob) Execute(ctx context.Context) error {
+	log.Ctx(ctx).Debugf("executing anchorPlatformAuthMonitoringJob ...")
 	isProtected, err := job.apService.IsAnchorProtectedByAuth(ctx)
 	if err != nil {
-		return fmt.Errorf("executing AnchorPlatformAuthMonitoringJob: %w", err)
+		return fmt.Errorf("executing anchorPlatformAuthMonitoringJob: %w", err)
 	}
 
 	if !isProtected {
@@ -75,4 +75,8 @@ func (job AnchorPlatformAuthMonitoringJob) Execute(ctx context.Context) error {
 	return nil
 }
 
-var _ Job = new(AnchorPlatformAuthMonitoringJob)
+func (job anchorPlatformAuthMonitoringJob) IsJobMultiTenant() bool {
+	return false
+}
+
+var _ Job = new(anchorPlatformAuthMonitoringJob)

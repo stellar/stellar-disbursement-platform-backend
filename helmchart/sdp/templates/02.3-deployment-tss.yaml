@@ -1,10 +1,12 @@
+{{- if .Values.tss.enabled -}}
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{ include "sdp.fullname" . }}-tss
   namespace: {{ .Release.Namespace }}
   labels:
-    {{- include "sdp.labels" . | nindent 4 }}
+    {{- include "sdp.labelsWithSuffix" (list . "-tss") | nindent 4 }}
   {{- if .Values.tss.deployment.annotations }}
   annotations:
     {{- tpl (toYaml .Values.tss.deployment.annotations) . | nindent 4 }}
@@ -15,7 +17,7 @@ spec:
   {{- end }}
   selector:
     matchLabels:
-      {{- include "sdp.selectorLabels" . | nindent 6 }}
+      {{- include "sdp.selectorLabelsWithSuffix" (list . "-tss") | nindent 6 }}
 
   {{- if .Values.tss.deployment.strategy }}
   strategy:
@@ -29,7 +31,7 @@ spec:
         {{- tpl (toYaml .Values.tss.deployment.podAnnotations) . | nindent 8 }}
       {{- end }}
       labels:
-        {{- include "sdp.selectorLabels" . | nindent 8 }}
+        {{- include "sdp.selectorLabelsWithSuffix" (list . "-tss") | nindent 8 }}
     spec:
       {{- if .Values.global.serviceAccount.name }}
       serviceAccountName: {{ tpl .Values.global.serviceAccount.name $ }}
@@ -84,3 +86,4 @@ spec:
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+{{- end }}

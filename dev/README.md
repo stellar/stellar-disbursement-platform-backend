@@ -5,7 +5,8 @@
   - [Prerequisites](#prerequisites)
   - [Setup](#setup)
     - [Build Docker Containers](#build-docker-containers)
-    - [Create an Owner SDP User](#create-an-owner-sdp-user)
+    - [New Tenant Provisioning Process](#new-tenant-provisioning-process)
+    - [Setup Owner User Password for each tenant](#setup-owner-user-password-for-each-tenant)
   - [Disbursement](#disbursement)
     - [Create First Disbursement](#create-first-disbursement)
     - [Deposit Money](#deposit-money)
@@ -44,10 +45,16 @@ cp .env.example .env
 
 3. Update the `.env` file with the public and private keys of the two accounts created in the previous step.
 
-4. Execute the following command to create all the necessary Docker containers needed to run SDP:
+4. Execute the following command to create all the necessary Docker containers needed to run SDP as well as provision sample tenants:
 ```sh
-docker-compose up
+./main.sh
 ```
+
+> [!TIP]  
+> If you wish to start the sdp containers with monitoring services, you can use the docker-compose-monitoring.yml file 
+> 
+> `docker-compose -f docker-compose.yml -f docker-compose-monitoring.yml up`
+
 
 This will spin up the following services:
 
@@ -57,26 +64,47 @@ This will spin up the following services:
 - `sdp-api`: SDP service running on port `8000`.
 - `sdp-tss`: Transaction Submission service.
 - `sdp-frontend`: SDP frontend service running on port `3000`.
+- `kafka`: Kafka service running on ports `9092`, `9094`(external).
+- `kafka-init`:  Initial workflow to exec into the Kafka container and create topics.
+- `demo-wallet`: The demo wallet client that will be used as a receiver wallet, running on port `4000`.
 
-### Create an Owner SDP User
+The following are optional monitoring services that can be started through `docker-compose-monitoring.yml` and are primarily used for monitoring Kafka: 
+- `db-conduktor`: Database instance for the Conduktor service. 
+- `conduktor-monitoring`: Conduktor Monitoring service integrated into the Conduktor Platform. 
+- `conduktor-platform`: Provides solutions for Kafka management, testing, monitoring, data quality, security, and data governance.
 
-Open a terminal for the `sdp-api` container and run the following command to create an owner user:
+### New Tenant Provisioning Process
 
-```sh
-docker exec -it sdp-api bash # Or use Docker Desktop to open terminal
-./stellar-disbursement-platform auth add-user owner@stellar.org joe yabuki --password --owner --roles owner
+When you ran `main.sh` file, you've already created new tenants: `tenants=("redcorp" "bluecorp")`. 
+To add more tenants, simply append them separated by spaces to that variable like so: `tenants=("redcorp" "bluecorp" "greencorp")` and run `main.sh` again.
+
+Be sure that the added tenant hosts are included in the host configuration file.
+To check it, you can run the command `cat /etc/hosts`.
+To include them, you can run command `sudo nano /etc/hosts` and insert the lines below:
+```
+127.0.0.1       bluecorp.sdp.local
+127.0.0.1       redcorp.sdp.local
 ```
 
-You will be prompted to enter a password for the user. Be sure to remember it as it will be required for future authentications.
+### Setup Owner User Password for each tenant
+
+Go through the forgot password flow to be able to login as an owner user.
+
+Go to Forgot Password page on `http://${tenant}.stellar.local:3000/forgot-password` and enter the tenant and owner email `owner@${tenant}.org`.
+
+A token will be generated, and it's possible to check it on `sdp-api` logs. This token will be needed to Reset Password on `http://${tenant}.stellar.local:3000/reset-password`.
 
 ## Disbursement
 
 ### Create First Disbursement
 
-Navigate to the frontend service by opening a browser and going to [localhost:3000](http://localhost:3000).
+> [!NOTE]  
+> In the following section, we will assume you're using the `bluecorp` tenant that was provisioned by default when you ran `main.sh`.
+
+Navigate to the frontend service by opening a browser and going to [http://bluecorp.stellar.local:3000](http://bluecorp.stellar.local:3000).
 
 - Click `New Disbursement+` on the Dashboard screen.
-- Use `Demo Wallet` as your wallet.
+- Use `Demo Wallet` as your wallet and choose a verification method.
 - Upload a disbursement file. A sample file is available `./dev/sample/sample-disbursement.csv`. Make sure to update the invalid phone number before using it.
 - Finally, confirm the disbursement.
 
@@ -84,14 +112,12 @@ Navigate to the frontend service by opening a browser and going to [localhost:30
 
 To deposit money into your account:
 
-- Access [https://demo-wallet.stellar.org/](https://demo-wallet.stellar.org/) in your browser.
-- Click on `Generate Keypair for new account` to create a new testnet receiver account. Make sure to save your public key & secret.
-- Add an Asset with the following information:
-  - Asset Code: `USDC`
-  - Anchor Home Domain: `localhost:8080`
-  - Issuer Public Key: `GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5`
-- Click `Create Account` (in front of public key) and add Trustline for USDC.
-- For USDC, select `SEP-24 Deposit`.
+- Access [demo-wallet](http://localhost:4000) in your browser.
+- Click on `Generate Keypair for new account` to generate a new keypair. Make sure to save your public key & secret if you want to use this account later.
+- Click `Create account` (in front of public key) to actually create the account on the Stellar testnet.
+- Your newly created account will have 10,000 XLM.
+- Add your home domain to the account by clicking on `Add Home Domain` and entering `http://bluecorp.stellar.local:8000`.
+- In the `Select action` dropdown, select `SEP-24 Deposit`.
 - In the new window, enter the phone number from the disbursement CSV.
 - Enter the passcode. You can use `000000` passcode or find the actual passcode in the `sdp-api` container logs.
 - Enter the birthday that matches the phone number in the CSV.
@@ -110,6 +136,6 @@ available to add more funds to the distribution account by following these steps
   - Access [https://demo-wallet.stellar.org/](https://demo-wallet.stellar.org/) in your browser.
   - Click on `Generate Keypair for new account` to create a new testnet account. Your account comes with 10,000 XLM.
   - Click on `Send` and enter the distribution account public key and the amount you want to send.
-  - Using Freighter or Stellar Laboratory, swap the XLM for USDC.
+  - Using Freighter or Stellar Laboratory, swap the XLM for USDC if you wish to test with USDC.
 
 You can also just use the newly created account as the distribution account by updating the `DISTRIBUTION_PUBLIC_KEY` variable in `dev/docker-compose.yml` and restarting the `sdp-api` container.

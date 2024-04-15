@@ -3,7 +3,7 @@ package store
 import (
 	"context"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
 )
 
 //go:generate mockery --name=ChannelAccountStore --case=underscore --structname=MockChannelAccountStore
@@ -40,6 +40,13 @@ type TransactionStore interface {
 	Unlock(ctx context.Context, sqlExec db.SQLExecuter, publicKey string) (*Transaction, error)
 	// Queue management:
 	PrepareTransactionForReprocessing(ctx context.Context, sqlExec db.SQLExecuter, transactionID string) (*Transaction, error)
-	GetTransactionBatchForUpdate(ctx context.Context, dbTx db.DBTransaction, batchSize int) (transactions []*Transaction, err error)
-	UpdateSyncedTransactions(ctx context.Context, dbTx db.DBTransaction, txIDs []string) error
+	GetTransactionBatchForUpdate(ctx context.Context, dbTx db.DBTransaction, batchSize int, tenantID string) (transactions []*Transaction, err error)
+	GetTransactionPendingUpdateByID(ctx context.Context, sqlExec db.SQLExecuter, txID string) (transaction *Transaction, err error)
+	UpdateSyncedTransactions(ctx context.Context, sqlExec db.SQLExecuter, txIDs []string) error
+}
+
+type DBVault interface {
+	BatchInsert(ctx context.Context, dbVaultEntries []*DBVaultEntry) error
+	Get(ctx context.Context, publicKey string) (*DBVaultEntry, error)
+	Delete(ctx context.Context, publicKey string) error
 }

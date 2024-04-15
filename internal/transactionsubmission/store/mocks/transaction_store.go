@@ -5,7 +5,7 @@ package mocks
 import (
 	context "context"
 
-	db "github.com/stellar/stellar-disbursement-platform-backend/internal/db"
+	db "github.com/stellar/stellar-disbursement-platform-backend/db"
 	mock "github.com/stretchr/testify/mock"
 
 	store "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
@@ -95,24 +95,50 @@ func (_m *MockTransactionStore) GetAllByPaymentIDs(ctx context.Context, paymentI
 }
 
 // GetTransactionBatchForUpdate provides a mock function with given fields: ctx, dbTx, batchSize
-func (_m *MockTransactionStore) GetTransactionBatchForUpdate(ctx context.Context, dbTx db.DBTransaction, batchSize int) ([]*store.Transaction, error) {
-	ret := _m.Called(ctx, dbTx, batchSize)
+func (_m *MockTransactionStore) GetTransactionBatchForUpdate(ctx context.Context, dbTx db.DBTransaction, batchSize int, tenantID string) ([]*store.Transaction, error) {
+	ret := _m.Called(ctx, dbTx, batchSize, tenantID)
 
 	var r0 []*store.Transaction
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, db.DBTransaction, int) ([]*store.Transaction, error)); ok {
-		return rf(ctx, dbTx, batchSize)
+	if rf, ok := ret.Get(0).(func(context.Context, db.DBTransaction, int, string) ([]*store.Transaction, error)); ok {
+		return rf(ctx, dbTx, batchSize, tenantID)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, db.DBTransaction, int) []*store.Transaction); ok {
-		r0 = rf(ctx, dbTx, batchSize)
+	if rf, ok := ret.Get(0).(func(context.Context, db.DBTransaction, int, string) []*store.Transaction); ok {
+		r0 = rf(ctx, dbTx, batchSize, tenantID)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).([]*store.Transaction)
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func(context.Context, db.DBTransaction, int) error); ok {
-		r1 = rf(ctx, dbTx, batchSize)
+	if rf, ok := ret.Get(1).(func(context.Context, db.DBTransaction, int, string) error); ok {
+		r1 = rf(ctx, dbTx, batchSize, tenantID)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// GetTransactionPendingUpdateByID provides a mock function with given fields: ctx, sqlExec, txID
+func (_m *MockTransactionStore) GetTransactionPendingUpdateByID(ctx context.Context, sqlExec db.SQLExecuter, txID string) (*store.Transaction, error) {
+	ret := _m.Called(ctx, sqlExec, txID)
+
+	var r0 *store.Transaction
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, db.SQLExecuter, string) (*store.Transaction, error)); ok {
+		return rf(ctx, sqlExec, txID)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, db.SQLExecuter, string) *store.Transaction); ok {
+		r0 = rf(ctx, sqlExec, txID)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*store.Transaction)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, db.SQLExecuter, string) error); ok {
+		r1 = rf(ctx, sqlExec, txID)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -328,13 +354,13 @@ func (_m *MockTransactionStore) UpdateStellarTransactionXDRReceived(ctx context.
 	return r0, r1
 }
 
-// UpdateSyncedTransactions provides a mock function with given fields: ctx, dbTx, txIDs
-func (_m *MockTransactionStore) UpdateSyncedTransactions(ctx context.Context, dbTx db.DBTransaction, txIDs []string) error {
-	ret := _m.Called(ctx, dbTx, txIDs)
+// UpdateSyncedTransactions provides a mock function with given fields: ctx, sqlExec, txIDs
+func (_m *MockTransactionStore) UpdateSyncedTransactions(ctx context.Context, sqlExec db.SQLExecuter, txIDs []string) error {
+	ret := _m.Called(ctx, sqlExec, txIDs)
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, db.DBTransaction, []string) error); ok {
-		r0 = rf(ctx, dbTx, txIDs)
+	if rf, ok := ret.Get(0).(func(context.Context, db.SQLExecuter, []string) error); ok {
+		r0 = rf(ctx, sqlExec, txIDs)
 	} else {
 		r0 = ret.Error(0)
 	}

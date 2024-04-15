@@ -9,7 +9,6 @@ on:
   push:
     branches:
       - develop
-
 jobs:
   tests:
     uses: ./.github/workflows/ci.yml # execute the callable ci.yml
@@ -43,6 +42,15 @@ jobs:
             exit 1
           fi
 
+      - name: Determine Docker Tags
+        id: docker_tags
+        run: |
+          if [ "${{ github.event.release.prerelease }}" = "false" ]; then
+            echo "TAGS=stellar/stellar-disbursement-platform-backend:${{ github.event.release.tag_name }},stellar/stellar-disbursement-platform-backend:latest" >> $GITHUB_OUTPUT
+          else
+            echo "TAGS=stellar/stellar-disbursement-platform-backend:${{ github.event.release.tag_name }}" >> $GITHUB_OUTPUT
+          fi
+
       - uses: actions/checkout@v4
 
       - name: Login to DockerHub
@@ -57,7 +65,7 @@ jobs:
           push: true
           build-args: |
             GIT_COMMIT=${{ github.event.release.tag_name }}
-          tags: stellar/stellar-disbursement-platform-backend:${{ github.event.release.tag_name }},stellar/stellar-disbursement-platform-backend:latest
+          tags: ${{ steps.docker_tags.outputs.TAGS }}
           file: Dockerfile
 
   build_and_push_docker_image_on_dev_push:

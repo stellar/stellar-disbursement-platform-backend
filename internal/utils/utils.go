@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"reflect"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -66,4 +67,19 @@ func ConvertType[S any, D any](src S) (D, error) {
 	}
 
 	return dst, nil
+}
+
+// GetTypeName receives any value and returns the name of its type without the package prefix.
+func GetTypeName(v interface{}) string {
+	if v == nil {
+		return "<nil>"
+	}
+
+	fullTypeName := fmt.Sprintf("%T", v)
+
+	if dotIndex := strings.LastIndex(fullTypeName, "."); dotIndex != -1 {
+		return fullTypeName[dotIndex+1:]
+	}
+
+	return fullTypeName
 }

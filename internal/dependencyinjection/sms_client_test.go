@@ -76,7 +76,7 @@ func Test_NewSMSClient(t *testing.T) {
 		}
 
 		preExistingSMSClientWithInvalidType := struct{}{}
-		setInstance(buildSMSClientInstanceName(message.MessengerTypeTwilioSMS), preExistingSMSClientWithInvalidType)
+		SetInstance(buildSMSClientInstanceName(message.MessengerTypeTwilioSMS), preExistingSMSClientWithInvalidType)
 
 		gotClient, err := NewSMSClient(mockTestSMSClientOptions)
 		assert.Nil(t, gotClient)

@@ -3,7 +3,7 @@ package data
 import (
 	"errors"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
 )
 
 var (

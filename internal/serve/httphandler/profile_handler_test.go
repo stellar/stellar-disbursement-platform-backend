@@ -20,15 +20,18 @@ import (
 
 	"github.com/stellar/go/keypair"
 	"github.com/stellar/go/support/log"
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/publicfiles"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
+	sigMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/utils"
 )
@@ -72,7 +75,7 @@ func resetOrganizationInfo(t *testing.T, ctx context.Context, dbConnectionPool d
 		SET
 			name = 'MyCustomAid', logo = NULL, timezone_utc_offset = '+00:00',
 			sms_registration_message_template = DEFAULT, otp_message_template = DEFAULT,
-			sms_resend_interval = NULL`
+			sms_resend_interval = NULL, payment_cancellation_period_days = NULL, privacy_policy_link = NULL`
 	_, err := dbConnectionPool.ExecContext(ctx, q)
 	require.NoError(t, err)
 }
@@ -273,6 +276,7 @@ func Test_ProfileHandler_PatchOrganizationProfile_Successful(t *testing.T) {
 	}
 
 	var nilInt64 *int64
+	var nilString *string
 
 	// JPEG file
 	jpegImg := data.CreateMockImage(t, 300, 300, data.ImageSizeSmall)
@@ -342,7 +346,8 @@ func Test_ProfileHandler_PatchOrganizationProfile_Successful(t *testing.T) {
 					"payment_cancellation_period_days": 2,
 					"sms_registration_message_template": "My custom receiver wallet registration invite. MyOrg 👋",
 					"sms_resend_interval": 2,
-					"timezone_utc_offset": "-03:00"
+					"timezone_utc_offset": "-03:00",
+					"privacy_policy_link": "https://example.com/privacy-policy"
 				}`
 				return createOrganizationProfileMultipartRequest(t, ctx, url, "logo", "logo.png", reqBody, newPNGImgBuf())
 			},
@@ -355,8 +360,9 @@ func Test_ProfileHandler_PatchOrganizationProfile_Successful(t *testing.T) {
 				"SMSRegistrationMessageTemplate": "My custom receiver wallet registration invite. MyOrg 👋",
 				"SMSResendInterval":              int64(2),
 				"TimezoneUTCOffset":              "-03:00",
+				"PrivacyPolicyLink":              "https://example.com/privacy-policy",
 			},
-			wantLogEntries: []string{"[PatchOrganizationProfile] - userID user-id will update the organization fields [IsApprovalRequired='true', Logo='...', Name='My Org Name', OTPMessageTemplate='Here's your OTP Code to complete your registration. MyOrg 👋', PaymentCancellationPeriodDays='2', SMSRegistrationMessageTemplate='My custom receiver wallet registration invite. MyOrg 👋', SMSResendInterval='2', TimezoneUTCOffset='-03:00']"},
+			wantLogEntries: []string{"[PatchOrganizationProfile] - userID user-id will update the organization fields [IsApprovalRequired='true', Logo='...', Name='My Org Name', OTPMessageTemplate='Here's your OTP Code to complete your registration. MyOrg 👋', PaymentCancellationPeriodDays='2', PrivacyPolicyLink='https://example.com/privacy-policy', SMSRegistrationMessageTemplate='My custom receiver wallet registration invite. MyOrg 👋', SMSResendInterval='2', TimezoneUTCOffset='-03:00']"},
 		},
 		{
 			name:  "🎉 successfully updates organization back to its default values",
@@ -372,11 +378,13 @@ func Test_ProfileHandler_PatchOrganizationProfile_Successful(t *testing.T) {
 				smsRegistrationMessageTemplate := "custom SMSRegistrationMessageTemplate"
 				smsResendInterval := int64(123)
 				paymentCancellationPeriodDays := int64(456)
+				privacyPolicyLink := "https://example.com/privacy-policy"
 				err := models.Organizations.Update(ctx, &data.OrganizationUpdate{
 					SMSRegistrationMessageTemplate: &smsRegistrationMessageTemplate,
 					OTPMessageTemplate:             &otpMessageTemplate,
 					SMSResendInterval:              &smsResendInterval,
 					PaymentCancellationPeriodDays:  &paymentCancellationPeriodDays,
+					PrivacyPolicyLink:              &privacyPolicyLink,
 				})
 				require.NoError(t, err)
 			},
@@ -385,7 +393,8 @@ func Test_ProfileHandler_PatchOrganizationProfile_Successful(t *testing.T) {
 					"sms_registration_message_template": "",
 					"otp_message_template": "",
 					"sms_resend_interval": 0,
-					"payment_cancellation_period_days": 0
+					"payment_cancellation_period_days": 0,
+					"privacy_policy_link": ""
 				}`
 				return createOrganizationProfileMultipartRequest(t, ctx, url, "", "", reqBody, new(bytes.Buffer))
 			},
@@ -394,8 +403,9 @@ func Test_ProfileHandler_PatchOrganizationProfile_Successful(t *testing.T) {
 				"OTPMessageTemplate":             "{{.OTP}} is your {{.OrganizationName}} phone verification code.",
 				"SMSResendInterval":              nilInt64,
 				"PaymentCancellationPeriodDays":  nilInt64,
+				"PrivacyPolicyLink":              nilString,
 			},
-			wantLogEntries: []string{"[PatchOrganizationProfile] - userID user-id will update the organization fields [OTPMessageTemplate='', PaymentCancellationPeriodDays='0', SMSRegistrationMessageTemplate='', SMSResendInterval='0']"},
+			wantLogEntries: []string{"[PatchOrganizationProfile] - userID user-id will update the organization fields [OTPMessageTemplate='', PaymentCancellationPeriodDays='0', PrivacyPolicyLink='', SMSRegistrationMessageTemplate='', SMSResendInterval='0']"},
 		},
 	}
 
@@ -1004,7 +1014,6 @@ func Test_ProfileHandler_GetProfile(t *testing.T) {
 func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
-
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
@@ -1012,11 +1021,17 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
-	distributionAccountPK := keypair.MustRandom().Address()
-	handler := &ProfileHandler{Models: models, BaseURL: "http://localhost:8000", DistributionPublicKey: distributionAccountPK}
+	hostDistAccPublicKey := keypair.MustRandom().Address()
+	defaultTenantDistAcc := "GDIVVKL6QYF6C6K3C5PZZBQ2NQDLN2OSLMVIEQRHS6DZE7WRL33ZDNXL"
+	distAccResolver, err := signing.NewDistributionAccountResolver(signing.DistributionAccountResolverOptions{
+		AdminDBConnectionPool:            dbConnectionPool,
+		HostDistributionAccountPublicKey: hostDistAccPublicKey,
+	})
+	require.NoError(t, err)
+	handler := &ProfileHandler{Models: models, BaseURL: "http://localhost:8000", DistributionAccountResolver: distAccResolver}
 	url := "/profile/info"
 
-	ctx := context.Background()
+	ctx := tenant.LoadDefaultTenantInContext(t, dbConnectionPool)
 
 	t.Run("returns Unauthorized error when no token is found", func(t *testing.T) {
 		w := httptest.NewRecorder()
@@ -1058,6 +1073,35 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 		assert.Equal(t, `Cannot get logo URL: parse "%invalid%": invalid URL escape "%in"`, entries[0].Message)
 	})
 
+	t.Run("returns InternalServerError if getting the distribution account public key fails", func(t *testing.T) {
+		ctx = context.WithValue(ctx, middleware.TokenContextKey, "mytoken")
+
+		w := httptest.NewRecorder()
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+		require.NoError(t, err)
+
+		getEntries := log.DefaultLogger.StartTest(log.ErrorLevel)
+
+		mDistAccResolver := sigMocks.NewMockDistributionAccountResolver(t)
+		mDistAccResolver.
+			On("DistributionAccountFromContext", ctx).
+			Return("", errors.New("unexpected error")).
+			Once()
+		h := &ProfileHandler{Models: models, BaseURL: "http://localhost:8000", DistributionAccountResolver: mDistAccResolver}
+		http.HandlerFunc(h.GetOrganizationInfo).ServeHTTP(w, req)
+
+		resp := w.Result()
+
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+		assert.JSONEq(t, `{"error": "Cannot get distribution account public key"}`, string(respBody))
+
+		entries := getEntries()
+		assert.Equal(t, "Cannot get distribution account public key: unexpected error", entries[0].Message)
+	})
+
 	t.Run("returns the organization info successfully", func(t *testing.T) {
 		ctx = context.WithValue(ctx, middleware.TokenContextKey, "mytoken")
 
@@ -1079,10 +1123,11 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 				"distribution_account_public_key": %q,
 				"timezone_utc_offset": "+00:00",
 				"is_approval_required": false,
+				"privacy_policy_link": null,
 				"sms_resend_interval": 0,
 				"payment_cancellation_period_days": 0
 			}
-		`, distributionAccountPK)
+		`, defaultTenantDistAcc)
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.JSONEq(t, wantsBody, string(respBody))
@@ -1116,9 +1161,10 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 				"is_approval_required":false,
 				"sms_registration_message_template": "My custom receiver wallet registration invite. MyOrg 👋",
 				"sms_resend_interval": 0,
-				"payment_cancellation_period_days": 0
+				"payment_cancellation_period_days": 0,
+				"privacy_policy_link": null
 			}
-		`, distributionAccountPK)
+		`, defaultTenantDistAcc)
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.JSONEq(t, wantsBody, string(respBody))
@@ -1149,9 +1195,10 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 				"sms_registration_message_template": "My custom receiver wallet registration invite. MyOrg 👋",
 				"otp_message_template": "Here's your OTP Code to complete your registration. MyOrg 👋",
 				"sms_resend_interval": 0,
-				"payment_cancellation_period_days": 0
+				"payment_cancellation_period_days": 0,
+				"privacy_policy_link": null
 			}
-		`, distributionAccountPK)
+		`, defaultTenantDistAcc)
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.JSONEq(t, wantsBody, string(respBody))
@@ -1186,9 +1233,10 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 				"timezone_utc_offset": "+00:00",
 				"is_approval_required":false,
 				"sms_resend_interval": 2,
-				"payment_cancellation_period_days": 0
+				"payment_cancellation_period_days": 0,
+				"privacy_policy_link": null
 			}
-		`, distributionAccountPK)
+		`, defaultTenantDistAcc)
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.JSONEq(t, wantsBody, string(respBody))
@@ -1223,9 +1271,48 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 				"timezone_utc_offset": "+00:00",
 				"is_approval_required":false,
 				"sms_resend_interval": 0,
-				"payment_cancellation_period_days": 5
+				"payment_cancellation_period_days": 5,
+				"privacy_policy_link": null
 			}
-		`, distributionAccountPK)
+		`, defaultTenantDistAcc)
+
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.JSONEq(t, wantsBody, string(respBody))
+	})
+
+	t.Run("returns the custom privacy_policy_link", func(t *testing.T) {
+		resetOrganizationInfo(t, ctx, dbConnectionPool)
+
+		ctx = context.WithValue(ctx, middleware.TokenContextKey, "mytoken")
+
+		var privacyPolicyLink string = "https://example.com/privacy-policy"
+		err := models.Organizations.Update(ctx, &data.OrganizationUpdate{
+			PrivacyPolicyLink: &privacyPolicyLink,
+		})
+		require.NoError(t, err)
+
+		w := httptest.NewRecorder()
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+		require.NoError(t, err)
+		http.HandlerFunc(handler.GetOrganizationInfo).ServeHTTP(w, req)
+
+		resp := w.Result()
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		wantsBody := fmt.Sprintf(`
+			{
+				"logo_url": "http://localhost:8000/organization/logo?token=mytoken",
+				"name": "MyCustomAid",
+				"distribution_account_public_key": %q,
+				"timezone_utc_offset": "+00:00",
+				"is_approval_required":false,
+				"sms_resend_interval": 0,
+				"payment_cancellation_period_days": 0,
+				"privacy_policy_link": "https://example.com/privacy-policy"
+			}
+		`, defaultTenantDistAcc)
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.JSONEq(t, wantsBody, string(respBody))

@@ -12,9 +12,9 @@ import (
 
 	"github.com/stellar/go/support/log"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 	"github.com/stretchr/testify/mock"
@@ -50,7 +50,7 @@ func Test_MFAHandler_ServeHTTP(t *testing.T) {
 		AuthManager:        authManager,
 		ReCAPTCHAValidator: reCAPTCHAValidatorMock,
 		Models:             models,
-		ReCAPTCHAEnabled:   true,
+		ReCAPTCHADisabled:  false,
 	}
 
 	deviceID := "safari-xyz"

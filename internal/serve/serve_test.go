@@ -10,22 +10,28 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/stellar/go/keypair"
+	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/network"
 	supporthttp "github.com/stellar/go/support/http"
 	"github.com/stellar/go/support/log"
+	"github.com/stellar/go/txnbuild"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
 	publicfiles "github.com/stellar/stellar-disbursement-platform-backend/internal/serve/publicfiles"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
+	preconditionsMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions/mocks"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 type mockHTTPServer struct {
@@ -46,6 +52,7 @@ MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgIqI1MzMZIw2pQDLx
 Jn0+FcNT/hNjwtn2TW43710JKZqhRANCAARHzyHsCJDJUPKxFPEq8EHoJqI7+RJy
 8bKKYClQT/XaAWE1NF/ftITX0JIKWUrGy2dUU6kstYHtC7k4nRa9zPeG
 -----END PRIVATE KEY-----`
+	distAccPublicKey = "GBQQ7ATXREG5PXUTZ6UXR6LQRWVKVRTXLJKMN6UJCN6TGTFY7FKFUCBC"
 )
 
 func Test_Serve(t *testing.T) {
@@ -62,7 +69,8 @@ func Test_Serve(t *testing.T) {
 
 	opts := ServeOptions{
 		CrashTrackerClient:              mockCrashTrackerClient,
-		DatabaseDSN:                     dbt.DSN,
+		MtnDBConnectionPool:             dbConnectionPool,
+		AdminDBConnectionPool:           dbConnectionPool,
 		EC256PrivateKey:                 privateKeyStr,
 		EC256PublicKey:                  publicKeyStr,
 		Environment:                     "test",
@@ -75,7 +83,6 @@ func Test_Serve(t *testing.T) {
 		AnchorPlatformOutgoingJWTSecret: "jwt_secret_1234567890",
 		Version:                         "x.y.z",
 		NetworkPassphrase:               network.TestNetworkPassphrase,
-		DistributionSeed:                keypair.MustRandom().Seed(),
 	}
 
 	// Mock supportHTTPRun
@@ -106,16 +113,18 @@ func Test_Serve(t *testing.T) {
 func Test_Serve_callsValidateSecurity(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
 
-	serveOptions := getServeOptionsForTests(t, dbt.DSN)
-	defer serveOptions.dbConnectionPool.Close()
+	serveOptions := getServeOptionsForTests(t, dbConnectionPool)
 
 	mHTTPServer := mockHTTPServer{}
 	serveOptions.NetworkPassphrase = network.PublicNetworkPassphrase
 
 	// Make sure MFA is enforced in pubnet
 	serveOptions.DisableMFA = true
-	err := Serve(serveOptions, &mHTTPServer)
+	err = Serve(serveOptions, &mHTTPServer)
 	require.EqualError(t, err, "validating security options: MFA cannot be disabled in pubnet")
 
 	// Make sure reCAPTCHA is enforced in pubnet
@@ -205,9 +214,11 @@ func Test_handleHTTP_Health(t *testing.T) {
 		MonitorService:  mMonitorService,
 		SEP24JWTSecret:  "jwt_secret_1234567890",
 		Version:         "x.y.z",
+		tenantManager:   tenant.NewManager(tenant.WithDatabase(dbConnectionPool)),
 	})
 
 	req := httptest.NewRequest("GET", "/health", nil)
+	req.Header.Set(middleware.TenantHeaderKey, "aid-org")
 	w := httptest.NewRecorder()
 	handlerMux.ServeHTTP(w, req)
 
@@ -263,7 +274,7 @@ func Test_staticFileServer(t *testing.T) {
 
 // getServeOptionsForTests returns an instance of ServeOptions for testing purposes.
 // 🚨 Don't forget to call `defer serveOptions.dbConnectionPool.Close()` in your test 🚨.
-func getServeOptionsForTests(t *testing.T, databaseDSN string) ServeOptions {
+func getServeOptionsForTests(t *testing.T, dbConnectionPool db.DBConnectionPool) ServeOptions {
 	t.Helper()
 
 	mMonitorService := &monitor.MockMonitorService{}
@@ -275,9 +286,29 @@ func getServeOptionsForTests(t *testing.T, databaseDSN string) ServeOptions {
 	crashTrackerClient, err := crashtracker.NewDryRunClient()
 	require.NoError(t, err)
 
+	mTenantManager := &tenant.TenantManagerMock{}
+	mTenantManager.
+		On("GetTenantByName", mock.Anything, "aid-org").
+		Return(&tenant.Tenant{ID: "tenant1"}, nil)
+
+	mHorizonClient := &horizonclient.MockClient{}
+	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
+	sigService, _, _, _, distAccResolver := signing.NewMockSignatureService(t)
+	submitterEngine := engine.SubmitterEngine{
+		HorizonClient:       mHorizonClient,
+		SignatureService:    sigService,
+		LedgerNumberTracker: mLedgerNumberTracker,
+		MaxBaseFee:          100 * txnbuild.MinBaseFee,
+	}
+	distAccResolver.
+		On("DistributionAccountFromContext", mock.Anything).
+		Return(distAccPublicKey, nil).
+		Maybe()
+
 	serveOptions := ServeOptions{
 		CrashTrackerClient:              crashTrackerClient,
-		DatabaseDSN:                     databaseDSN,
+		MtnDBConnectionPool:             dbConnectionPool,
+		AdminDBConnectionPool:           dbConnectionPool,
 		EC256PrivateKey:                 privateKeyStr,
 		EC256PublicKey:                  publicKeyStr,
 		EmailMessengerClient:            &messengerClientMock,
@@ -291,10 +322,12 @@ func getServeOptionsForTests(t *testing.T, databaseDSN string) ServeOptions {
 		SMSMessengerClient:              &messengerClientMock,
 		Version:                         "x.y.z",
 		NetworkPassphrase:               network.TestNetworkPassphrase,
-		DistributionSeed:                keypair.MustRandom().Seed(),
+		SubmitterEngine:                 submitterEngine,
 	}
 	err = serveOptions.SetupDependencies()
 	require.NoError(t, err)
+
+	serveOptions.tenantManager = mTenantManager
 
 	return serveOptions
 }
@@ -302,9 +335,11 @@ func getServeOptionsForTests(t *testing.T, databaseDSN string) ServeOptions {
 func Test_handleHTTP_unauthenticatedEndpoints(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
 
-	serveOptions := getServeOptionsForTests(t, dbt.DSN)
-	defer serveOptions.dbConnectionPool.Close()
+	serveOptions := getServeOptionsForTests(t, dbConnectionPool)
 
 	handlerMux := handleHTTP(serveOptions)
 
@@ -314,13 +349,17 @@ func Test_handleHTTP_unauthenticatedEndpoints(t *testing.T) {
 		path   string
 	}{
 		{http.MethodGet, "/health"},
+		{http.MethodGet, "/.well-known/stellar.toml"},
 		{http.MethodPost, "/login"},
+		{http.MethodPost, "/mfa"},
 		{http.MethodPost, "/forgot-password"},
 		{http.MethodPost, "/reset-password"},
 	}
 	for _, endpoint := range unauthenticatedEndpoints {
 		t.Run(fmt.Sprintf("%s %s", endpoint.method, endpoint.path), func(t *testing.T) {
 			req := httptest.NewRequest(endpoint.method, endpoint.path, nil)
+			req.Header.Set("SDP-Tenant-Name", "aid-org")
+
 			w := httptest.NewRecorder()
 			handlerMux.ServeHTTP(w, req)
 
@@ -333,13 +372,15 @@ func Test_handleHTTP_unauthenticatedEndpoints(t *testing.T) {
 func Test_handleHTTP_authenticatedEndpoints(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
 
-	serveOptions := getServeOptionsForTests(t, dbt.DSN)
-	defer serveOptions.dbConnectionPool.Close()
+	serveOptions := getServeOptionsForTests(t, dbConnectionPool)
 
 	handlerMux := handleHTTP(serveOptions)
 
-	// Unauthenticated endpoints
+	// Authenticated endpoints
 	authenticatedEndpoints := []struct { // TODO: body to requests
 		method string
 		path   string
@@ -393,12 +434,15 @@ func Test_handleHTTP_authenticatedEndpoints(t *testing.T) {
 		// Organization
 		{http.MethodGet, "/organization"},
 		{http.MethodPatch, "/organization"},
+		{http.MethodGet, "/organization/logo"},
 	}
 
 	// Expect 401 as a response:
 	for _, endpoint := range authenticatedEndpoints {
 		t.Run(fmt.Sprintf("expect 401 for %s %s", endpoint.method, endpoint.path), func(t *testing.T) {
 			req := httptest.NewRequest(endpoint.method, endpoint.path, nil)
+			req.Header.Set(middleware.TenantHeaderKey, "aid-org")
+
 			w := httptest.NewRecorder()
 			handlerMux.ServeHTTP(w, req)
 
@@ -411,8 +455,11 @@ func Test_handleHTTP_authenticatedEndpoints(t *testing.T) {
 func Test_handleHTTP_rateLimit(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
-	serveOptions := getServeOptionsForTests(t, dbt.DSN)
-	defer serveOptions.dbConnectionPool.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	serveOptions := getServeOptionsForTests(t, dbConnectionPool)
 
 	handlerMux := handleHTTP(serveOptions)
 
@@ -451,12 +498,11 @@ func Test_createAuthManager(t *testing.T) {
 
 	// creates the expected auth manager
 	passwordEncrypter := auth.NewDefaultPasswordEncrypter()
-	authDBConnectionPool := auth.DBConnectionPoolFromSqlDB(dbConnectionPool.SqlDB(), dbConnectionPool.DriverName())
 	wantAuthManager := auth.NewAuthManager(
-		auth.WithDefaultAuthenticatorOption(authDBConnectionPool, passwordEncrypter, time.Hour*time.Duration(1)),
+		auth.WithDefaultAuthenticatorOption(dbConnectionPool, passwordEncrypter, time.Hour*time.Duration(1)),
 		auth.WithDefaultJWTManagerOption(publicKeyStr, privateKeyStr),
-		auth.WithDefaultRoleManagerOption(authDBConnectionPool, data.OwnerUserRole.String()),
-		auth.WithDefaultMFAManagerOption(authDBConnectionPool),
+		auth.WithDefaultRoleManagerOption(dbConnectionPool, data.OwnerUserRole.String()),
+		auth.WithDefaultMFAManagerOption(dbConnectionPool),
 	)
 
 	testCases := []struct {

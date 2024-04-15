@@ -11,23 +11,23 @@ import (
 )
 
 const (
-	ReadyPaymentsCancellationJobName     = "ready_payments_cancellation"
-	ReadyPaymentsCancellationJobInterval = 5
+	readyPaymentsCancellationJobName     = "ready_payments_cancellation"
+	readyPaymentsCancellationJobInterval = 5
 )
 
-type ReadyPaymentsCancellationJob struct {
+type readyPaymentsCancellationJob struct {
 	service services.ReadyPaymentsCancellationServiceInterface
 }
 
-func (j ReadyPaymentsCancellationJob) GetName() string {
-	return ReadyPaymentsCancellationJobName
+func (j readyPaymentsCancellationJob) GetName() string {
+	return readyPaymentsCancellationJobName
 }
 
-func (j ReadyPaymentsCancellationJob) GetInterval() time.Duration {
-	return time.Minute * ReadyPaymentsCancellationJobInterval
+func (j readyPaymentsCancellationJob) GetInterval() time.Duration {
+	return time.Minute * readyPaymentsCancellationJobInterval
 }
 
-func (j ReadyPaymentsCancellationJob) Execute(ctx context.Context) error {
+func (j readyPaymentsCancellationJob) Execute(ctx context.Context) error {
 	if err := j.service.CancelReadyPayments(ctx); err != nil {
 		err = fmt.Errorf("error cancelling ready payments: %w", err)
 		log.Ctx(ctx).Error(err)
@@ -36,9 +36,15 @@ func (j ReadyPaymentsCancellationJob) Execute(ctx context.Context) error {
 	return nil
 }
 
-func NewReadyPaymentsCancellationJob(models *data.Models) *ReadyPaymentsCancellationJob {
+func (j readyPaymentsCancellationJob) IsJobMultiTenant() bool {
+	return true
+}
+
+func NewReadyPaymentsCancellationJob(models *data.Models) Job {
 	s := services.NewReadyPaymentsCancellationService(models)
-	return &ReadyPaymentsCancellationJob{
+	return &readyPaymentsCancellationJob{
 		service: s,
 	}
 }
+
+var _ Job = new(readyPaymentsCancellationJob)

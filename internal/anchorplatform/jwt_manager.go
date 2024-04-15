@@ -31,7 +31,7 @@ func NewJWTManager(secret string, expirationMiliseconds int64) (*JWTManager, err
 
 // GenerateSEP24Token will generate a JWT token string using the token manager and the provided parameters.
 // The parameters are validated before generating the token.
-func (manager *JWTManager) GenerateSEP24Token(stellarAccount, stellarMemo, clientDomain, transactionID string) (string, error) {
+func (manager *JWTManager) GenerateSEP24Token(stellarAccount, stellarMemo, clientDomain, homeDomain, transactionID string) (string, error) {
 	subject := stellarAccount
 	if stellarMemo != "" {
 		subject = fmt.Sprintf("%s:%s", stellarAccount, stellarMemo)
@@ -39,6 +39,7 @@ func (manager *JWTManager) GenerateSEP24Token(stellarAccount, stellarMemo, clien
 
 	claims := SEP24JWTClaims{
 		ClientDomainClaim: clientDomain,
+		HomeDomainClaim:   homeDomain,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ID:        transactionID,
 			Subject:   subject,
