@@ -2,11 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
+The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## Unreleased
 
 None
+
+## [1.1.6](https://github.com/stellar/stellar-disbursement-platform-backend/compare/1.1.5...1.1.6)
+
+Attention, this version is compatible with the frontend version [1.1.2](https://github.com/stellar/stellar-disbursement-platform-frontend/releases/tag/1.1.2).
+
+### Changed
+
+- Update the `PATCH /receivers/{id}` request, so a receiver's verification info is not just inserted but upserted. The update part of the upsert only takes place if the verification info has not been confirmed yet. [#205](https://github.com/stellar/stellar-disbursement-platform-backend/pull/205)
+- Update the order of the verification field that is shown to the receiver during the [SEP-24] flow. The order was `(updated_at DESC)` and was updated to the composed sorting `(updated_at DESC, rv.verification_field ASC)` to ensure consistency when multiple verification fields share the same `updated_at` value.
+- Improve information in the error message returned when the disbursement instruction contains a verification info that is different from an already existing verification info that was already confirmed by the receiver. [#178](https://github.com/stellar/stellar-disbursement-platform-backend/pull/178)
+- When adding an asset, make sure to trim the spaces fom the issuer field. [#185](https://github.com/stellar/stellar-disbursement-platform-backend/pull/185)
+
+### Security
+
+- Bump Go version from 1.19 to 1.22, and upgraded the version of some CI tools. [#196](https://github.com/stellar/stellar-disbursement-platform-backend/pull/196)
+- Add rate-limiter in both in the application and the kubernetes deployment. [#195](https://github.com/stellar/stellar-disbursement-platform-backend/pull/195)
 
 ## [1.1.5](https://github.com/stellar/stellar-disbursement-platform-backend/compare/1.1.4...1.1.5)
 
@@ -32,7 +48,7 @@ None
 
 ### Fixed
 
-- SEP24 registration flow not working properly when the phone number was not found in the DB [#187](https://github.com/stellar/stellar-disbursement-platform-backend/pull/187)
+- [SEP-24] registration flow not working properly when the phone number was not found in the DB [#187](https://github.com/stellar/stellar-disbursement-platform-backend/pull/187)
 - Fix distribution account balance validation that fails when the intended asset is XLM [#186](https://github.com/stellar/stellar-disbursement-platform-backend/pull/186)
 
 ## [1.1.2](https://github.com/stellar/stellar-disbursement-platform-backend/compare/1.1.1...1.1.2)
@@ -52,7 +68,7 @@ None
 ### Changed
 
 - Change `POST /disbursements` to accept different verification types [#103](https://github.com/stellar/stellar-disbursement-platform-backend/pull/103)
-- Change `SEP-24` Flow to display different verifications based on disbursement verification type [#116](https://github.com/stellar/stellar-disbursement-platform-backend/pull/116)
+- Change [SEP-24] Flow to display different verifications based on disbursement verification type [#116](https://github.com/stellar/stellar-disbursement-platform-backend/pull/116)
 - Add sorting to `GET /users` endpoint [#104](https://github.com/stellar/stellar-disbursement-platform-backend/pull/104)
 - Change read permission for receiver details to include business roles [#144](https://github.com/stellar/stellar-disbursement-platform-backend/pull/144)
 - Add support for unique payment ID to disbursement instructions file as an optional field in `GET /payments/{id}` [#131](https://github.com/stellar/stellar-disbursement-platform-backend/pull/131)
@@ -144,7 +160,7 @@ None
 
 - Stellar.Expert URL in env-config.js for dev environment setup. [#34](https://github.com/stellar/stellar-disbursement-platform-backend/pull/34)
 - Patch the correct transaction data fields in AnchorPlatform. [#40](https://github.com/stellar/stellar-disbursement-platform-backend/pull/40)
-- Sep10 domain configuration for Vibrant wallet on Testnet. [#42](https://github.com/stellar/stellar-disbursement-platform-backend/pull/42)
+- [SEP-10] domain configuration for Vibrant wallet on Testnet. [#42](https://github.com/stellar/stellar-disbursement-platform-backend/pull/42)
 - The SMS invitation link for XLM asset. [#46](https://github.com/stellar/stellar-disbursement-platform-backend/pull/46)
 
 ### Security
@@ -199,7 +215,7 @@ number, transfer amount, and essential customer validation data such as the date
 
 The platform subsequently sends an SMS to the recipient, which includes a deep link to the wallet. This link permits
 recipients with compatible wallets to register their wallet on the SDP. During this step, they are required to verify
-their phone number and additional customer data through the SEP-24 interactive deposit flow, where this data is shared
+their phone number and additional customer data through the [SEP-24] interactive deposit flow, where this data is shared
 directly with the backend through a webpage inside the wallet, but the wallet itself does not have access to this data.
 
 Upon successful verification, the SDP will transfer the funds directly to the recipient's wallet. When the recipient's
@@ -207,3 +223,5 @@ wallet has been successfully associated with their phone number in the SDP, all 
 automatically.
 
 [stellar/stellar-disbursement-platform-frontend]: https://github.com/stellar/stellar-disbursement-platform-frontend
+[SEP-10]: https://stellar.org/protocol/sep-10
+[SEP-24]: https://stellar.org/protocol/sep-24

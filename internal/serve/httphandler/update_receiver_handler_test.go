@@ -429,6 +429,82 @@ func Test_UpdateReceiverHandler(t *testing.T) {
 		}
 	})
 
+	t.Run("updates and inserts receiver verifications values", func(t *testing.T) {
+		data.DeleteAllReceiverVerificationFixtures(t, ctx, dbConnectionPool)
+
+		data.CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, data.ReceiverVerificationInsert{
+			ReceiverID:        receiver.ID,
+			VerificationField: data.VerificationFieldPin,
+			VerificationValue: "890",
+		})
+
+		request := validators.UpdateReceiverRequest{
+			DateOfBirth: "1999-01-01",
+			Pin:         "123",
+			NationalID:  "NEWID123",
+		}
+
+		route := fmt.Sprintf("/receivers/%s", receiver.ID)
+		reqBody, err := json.Marshal(request)
+		require.NoError(t, err)
+		req, err := http.NewRequest(http.MethodPatch, route, strings.NewReader(string(reqBody)))
+		require.NoError(t, err)
+
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+
+		resp := rr.Result()
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+		query := `
+			SELECT
+				hashed_value
+			FROM
+				receiver_verifications
+			WHERE
+				receiver_id = $1 AND
+				verification_field = $2
+		`
+
+		receiverVerifications := []struct {
+			verificationField    data.VerificationField
+			newVerificationValue string
+			oldVerificationValue string
+		}{
+			{
+				verificationField:    data.VerificationFieldDateOfBirth,
+				newVerificationValue: "1999-01-01",
+				oldVerificationValue: "2000-01-01",
+			},
+			{
+				verificationField:    data.VerificationFieldPin,
+				newVerificationValue: "123",
+				oldVerificationValue: "",
+			},
+			{
+				verificationField:    data.VerificationFieldNationalID,
+				newVerificationValue: "NEWID123",
+				oldVerificationValue: "",
+			},
+		}
+		for _, v := range receiverVerifications {
+			newReceiverVerification := data.ReceiverVerification{}
+			err = dbConnectionPool.GetContext(ctx, &newReceiverVerification, query, receiver.ID, v.verificationField)
+			require.NoError(t, err)
+
+			assert.True(t, data.CompareVerificationValue(newReceiverVerification.HashedValue, v.newVerificationValue))
+
+			if v.oldVerificationValue != "" {
+				assert.False(t, data.CompareVerificationValue(newReceiverVerification.HashedValue, v.oldVerificationValue))
+			}
+
+			receiverDB, err := models.Receiver.Get(ctx, dbConnectionPool, receiver.ID)
+			require.NoError(t, err)
+			assert.Equal(t, "receiver@email.com", *receiverDB.Email)
+			assert.Equal(t, "externalID", receiverDB.ExternalID)
+		}
+	})
+
 	t.Run("updates receiver's email", func(t *testing.T) {
 		request := validators.UpdateReceiverRequest{
 			Email: "update_receiver@email.com",

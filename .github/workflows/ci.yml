@@ -16,10 +16,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up Go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v4
         with:
           go-version: 1.22.1
 
@@ -32,17 +32,30 @@ jobs:
       - name: Run ./gomod.sh
         run: ./gomod.sh
 
-      - name: Install github.com/nishanths/exhaustive
-        run: go install github.com/nishanths/exhaustive/cmd/exhaustive@latest
+      - name: Install github.com/nishanths/exhaustive@v0.12.0 and golang.org/x/tools/cmd/deadcode@v0.18.0
+        run: |
+          go install github.com/nishanths/exhaustive/cmd/exhaustive@v0.12.0
+          go install golang.org/x/tools/cmd/deadcode@v0.18.0
 
-      - name: Run exhaustive
+      - name: Run `exhaustive`
         run: exhaustive -default-signifies-exhaustive ./...
+
+      - name: Run `deadcode`
+        run: |
+          output=$(deadcode -test ./...)
+          if [[ -n "$output" ]]; then
+            echo "🚨 Deadcode found:"
+            echo "$output"
+            exit 1
+          else
+            echo "✅ No deadcode found"
+          fi
 
   check-helm-readme:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install NodeJs
         uses: actions/setup-node@v2
@@ -70,10 +83,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up Go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v4
         with:
           go-version: 1.22.1
 
@@ -107,15 +120,15 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Setup Go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v4
         with:
           go-version: 1.22.1
 
       - name: Run tests
-        run: go test -race -coverpkg=./... -coverprofile=c.out ./...
+        run: go test -race -timeout 3m -coverpkg=./... -coverprofile=c.out ./...
 
       - name: Validate Test Coverage Threshold
         env:

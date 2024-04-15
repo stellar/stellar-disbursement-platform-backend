@@ -235,11 +235,34 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 	})
 
 	t.Run("failure - Confirmed Verification Value not matching", func(t *testing.T) {
+		instruction4 := DisbursementInstruction{
+			Phone:             "+380-12-345-674",
+			Amount:            "100.04",
+			ID:                "123456784",
+			VerificationValue: "1990-01-04",
+			ExternalPaymentId: &externalPaymentID,
+		}
+
+		instruction5 := DisbursementInstruction{
+			Phone:             "+380-12-345-675",
+			Amount:            "100.05",
+			ID:                "123456785",
+			VerificationValue: "1990-01-05",
+			ExternalPaymentId: &externalPaymentID,
+		}
+
+		instruction6 := DisbursementInstruction{
+			Phone:             "+380-12-345-676",
+			Amount:            "100.06",
+			ID:                "123456786",
+			VerificationValue: "1990-01-06",
+			ExternalPaymentId: &externalPaymentID,
+		}
 		// process instructions for the first time
 		err := di.ProcessAll(ctx, "user-id", instructions, disbursement, disbursementUpdate, MaxInstructionsPerDisbursement)
 		require.NoError(t, err)
 
-		receivers, err := di.receiverModel.GetByPhoneNumbers(ctx, dbConnectionPool, []string{instruction1.Phone, instruction2.Phone, instruction3.Phone})
+		receivers, err := di.receiverModel.GetByPhoneNumbers(ctx, dbConnectionPool, []string{instruction1.Phone, instruction2.Phone, instruction3.Phone, instruction4.Phone, instruction5.Phone, instruction6.Phone})
 		require.NoError(t, err)
 		receiversMap := make(map[string]*Receiver)
 		for _, receiver := range receivers {
@@ -247,13 +270,13 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 		}
 
 		// confirm a verification
-		ConfirmVerificationForRecipient(t, ctx, dbConnectionPool, receiversMap[instruction1.Phone].ID)
+		ConfirmVerificationForRecipient(t, ctx, dbConnectionPool, receiversMap[instruction3.Phone].ID)
 
 		// process instructions with mismatched verification values
-		instruction1.VerificationValue = "1990-01-07"
+		instruction3.VerificationValue = "1990-01-07"
 		err = di.ProcessAll(ctx, "user-id", instructions, disbursement, disbursementUpdate, MaxInstructionsPerDisbursement)
 		require.Error(t, err)
-		assert.EqualError(t, err, "running atomic function in RunInTransactionWithResult: receiver verification mismatch: receiver verification for +380-12-345-671 doesn't match")
+		assert.EqualError(t, err, "running atomic function in RunInTransactionWithResult: receiver verification mismatch: receiver verification for +380-12-345-673 doesn't match. Check line 3 on CSV file - Internal ID 123456783")
 	})
 }
 
