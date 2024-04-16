@@ -3,19 +3,18 @@ package cmd
 import (
 	"bytes"
 	"context"
-	"os"
-	"strings"
 	"sync"
 	"testing"
 
 	"github.com/spf13/cobra"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve"
-	txSub "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+
+	cmdUtils "github.com/stellar/stellar-disbursement-platform-backend/cmd/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve"
+	txSub "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission"
 )
 
 type mockSubmitter struct {
@@ -61,10 +60,7 @@ func Test_tss_help(t *testing.T) {
 }
 
 func Test_tss(t *testing.T) {
-	for _, env := range os.Environ() {
-		key := env[:strings.Index(env, "=")]
-		t.Setenv(key, "")
-	}
+	cmdUtils.ClearTestEnvironment(t)
 
 	dryRunClient, err := crashtracker.NewDryRunClient()
 	require.NoError(t, err)
@@ -94,9 +90,13 @@ func Test_tss(t *testing.T) {
 		"tss",
 		"--environment", "test",
 		"--database-url", "postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable",
+		"--distribution-public-key", "GAXCC3VMCWRFZAFWK7JXI6M7XQ3WPVUUEL2SEFODWJY6N2QIFFGXSL6M",
 		"--distribution-seed", "SBQ3ZNC2SE3FV43HZ2KW3FCXQMMIQ33LZB745KTMCHDS6PNQOVXMV5NC",
+		"--channel-account-encryption-passphrase", "SDA3C7OW5HU4MMEEYTPXX43F4OU2MJBGF5WMJALL7CTILTI2GOVK2YFA",
 		"--horizon-url", "https://horizon-testnet.stellar.org",
 		"--network-passphrase", "Test SDF Network ; September 2015",
+		"--broker-urls", "kafka:9092",
+		"--kafka-security-protocol", "PLAINTEXT",
 	})
 
 	t.Setenv("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable")

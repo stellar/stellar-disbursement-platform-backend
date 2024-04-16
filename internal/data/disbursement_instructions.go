@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
 )
 
 type DisbursementInstruction struct {
@@ -30,7 +30,7 @@ type InstructionLine struct {
 	disbursementInstruction *DisbursementInstruction
 }
 
-const MaxInstructionsPerDisbursement = 10000 // TODO: update this number with load testing results [SDP-524]
+const MaxInstructionsPerDisbursement = 10000
 
 // NewDisbursementInstructionModel creates a new DisbursementInstructionModel.
 func NewDisbursementInstructionModel(dbConnectionPool db.DBConnectionPool) *DisbursementInstructionModel {
@@ -165,23 +165,23 @@ func (di DisbursementInstructionModel) ProcessAll(ctx context.Context, userID st
 		if err != nil {
 			return fmt.Errorf("error fetching receiver wallets: %w", err)
 		}
-		receiverWalletsMap := make(map[string]string)
+		receiverIDToReceiverWalletIDMap := make(map[string]string)
 		for _, receiverWallet := range receiverWallets {
-			receiverWalletsMap[receiverWallet.Receiver.ID] = receiverWallet.ID
+			receiverIDToReceiverWalletIDMap[receiverWallet.Receiver.ID] = receiverWallet.ID
 		}
 
 		for _, receiverId := range receiverIDs {
-			receiverWalletId, exists := receiverWalletsMap[receiverId]
+			receiverWalletId, exists := receiverIDToReceiverWalletIDMap[receiverId]
 			if !exists {
 				receiverWalletInsert := ReceiverWalletInsert{
 					ReceiverID: receiverId,
 					WalletID:   disbursement.Wallet.ID,
 				}
-				walletID, insertErr := di.receiverWalletModel.Insert(ctx, dbTx, receiverWalletInsert)
+				rwID, insertErr := di.receiverWalletModel.Insert(ctx, dbTx, receiverWalletInsert)
 				if insertErr != nil {
 					return fmt.Errorf("error inserting receiver wallet for receiver id %s: %w", receiverId, insertErr)
 				}
-				receiverWalletsMap[receiverId] = walletID
+				receiverIDToReceiverWalletIDMap[receiverId] = rwID
 			} else {
 				_, retryErr := di.receiverWalletModel.RetryInvitationSMS(ctx, dbTx, receiverWalletId)
 				if retryErr != nil {
@@ -206,7 +206,7 @@ func (di DisbursementInstructionModel) ProcessAll(ctx context.Context, userID st
 				DisbursementID:    disbursement.ID,
 				Amount:            instruction.Amount,
 				AssetID:           disbursement.Asset.ID,
-				ReceiverWalletID:  receiverWalletsMap[receiver.ID],
+				ReceiverWalletID:  receiverIDToReceiverWalletIDMap[receiver.ID],
 				ExternalPaymentID: instruction.ExternalPaymentId,
 			}
 			payments = append(payments, payment)

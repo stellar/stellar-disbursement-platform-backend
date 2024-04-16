@@ -12,7 +12,7 @@ import (
 	"github.com/lib/pq"
 
 	"github.com/stellar/go/protocols/horizon/base"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
 )
 
 type Asset struct {

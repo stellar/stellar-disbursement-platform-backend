@@ -5,8 +5,8 @@ import (
 	"database/sql"
 	"testing"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/db/dbtest"
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -86,6 +86,7 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 		receiverWallets, err := di.receiverWalletModel.GetByReceiverIDsAndWalletID(ctx, dbConnectionPool, []string{receivers[0].ID, receivers[1].ID, receivers[2].ID}, wallet.ID)
 		require.NoError(t, err)
 		assert.Len(t, receiverWallets, len(receivers))
+
 		for _, receiverWallet := range receiverWallets {
 			assert.Equal(t, wallet.ID, receiverWallet.Wallet.ID)
 			assert.Equal(t, DraftReceiversWalletStatus, receiverWallet.Status)
@@ -107,6 +108,11 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 	})
 
 	t.Run("success - Not confirmed Verification Value updated", func(t *testing.T) {
+		DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
+		DeleteAllReceiverVerificationFixtures(t, ctx, dbConnectionPool)
+		DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
+		DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
+
 		// process instructions for the first time
 		err := di.ProcessAll(ctx, "user-id", instructions, disbursement, disbursementUpdate, MaxInstructionsPerDisbursement)
 		require.NoError(t, err)
@@ -235,6 +241,11 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 	})
 
 	t.Run("failure - Confirmed Verification Value not matching", func(t *testing.T) {
+		DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
+		DeleteAllReceiverVerificationFixtures(t, ctx, dbConnectionPool)
+		DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
+		DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
+
 		instruction4 := DisbursementInstruction{
 			Phone:             "+380-12-345-674",
 			Amount:            "100.04",
@@ -258,6 +269,7 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 			VerificationValue: "1990-01-06",
 			ExternalPaymentId: &externalPaymentID,
 		}
+
 		// process instructions for the first time
 		err := di.ProcessAll(ctx, "user-id", instructions, disbursement, disbursementUpdate, MaxInstructionsPerDisbursement)
 		require.NoError(t, err)
@@ -325,7 +337,7 @@ func GetPaymentsByDisbursementID(t *testing.T, ctx context.Context, dbConnection
 	query := `
 		SELECT
 			ROUND(p.amount, 2)
-		FROM	
+		FROM
 			payments p
 			WHERE p.disbursement_id = $1
 		`

@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/stellar/go/network"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/db/dbtest"
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stretchr/testify/assert"
@@ -801,9 +801,12 @@ func Test_ReceiverWallet_GetAllPendingRegistration(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
+	dbConnectionPool, setupErr := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, setupErr)
 	defer dbConnectionPool.Close()
+
+	models, setupErr := NewModels(dbConnectionPool)
+	require.NoError(t, setupErr)
 
 	ctx := context.Background()
 
@@ -812,24 +815,74 @@ func Test_ReceiverWallet_GetAllPendingRegistration(t *testing.T) {
 	wallet2 := CreateWalletFixture(t, ctx, dbConnectionPool, "Wallet2", "https://wallet2.com", "www.wallet2.com", "wallet2://")
 	wallet3 := CreateWalletFixture(t, ctx, dbConnectionPool, "Wallet3", "https://wallet3.com", "www.wallet3.com", "wallet3://")
 	wallet4 := CreateWalletFixture(t, ctx, dbConnectionPool, "Wallet4", "https://wallet4.com", "www.wallet4.com", "wallet4://")
-
-	rwm := ReceiverWalletModel{dbConnectionPool: dbConnectionPool}
+	asset := CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
+	disbursement1 := CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &Disbursement{
+		Wallet: wallet1,
+		Asset:  asset,
+		Status: StartedDisbursementStatus,
+	})
+	disbursement2 := CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &Disbursement{
+		Wallet: wallet2,
+		Asset:  asset,
+		Status: StartedDisbursementStatus,
+	})
+	disbursement3 := CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &Disbursement{
+		Wallet: wallet3,
+		Asset:  asset,
+		Status: StartedDisbursementStatus,
+	})
+	disbursement4 := CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &Disbursement{
+		Wallet: wallet4,
+		Asset:  asset,
+		Status: StartedDisbursementStatus,
+	})
 
 	t.Run("gets all receiver wallets pending registration", func(t *testing.T) {
-		DeleteAllMessagesFixtures(t, ctx, dbConnectionPool)
+		DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
 		DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
 
-		_ = CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet1.ID, DraftReceiversWalletStatus)
-		_ = CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet2.ID, RegisteredReceiversWalletStatus)
+		rw1 := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet1.ID, DraftReceiversWalletStatus)
+		rw2 := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet2.ID, RegisteredReceiversWalletStatus)
 		rw3 := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet3.ID, ReadyReceiversWalletStatus)
 		rw4 := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet4.ID, ReadyReceiversWalletStatus)
+
+		_ = CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
+			Amount:         "100",
+			Status:         ReadyPaymentStatus,
+			Disbursement:   disbursement1,
+			Asset:          *asset,
+			ReceiverWallet: rw1,
+		})
+		_ = CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
+			Amount:         "100",
+			Status:         ReadyPaymentStatus,
+			Disbursement:   disbursement2,
+			Asset:          *asset,
+			ReceiverWallet: rw2,
+		})
+		_ = CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
+			Amount:         "100",
+			Status:         ReadyPaymentStatus,
+			Disbursement:   disbursement3,
+			Asset:          *asset,
+			ReceiverWallet: rw3,
+		})
+		_ = CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
+			Amount:         "100",
+			Status:         ReadyPaymentStatus,
+			Disbursement:   disbursement4,
+			Asset:          *asset,
+			ReceiverWallet: rw4,
+		})
 
 		var invitationSentAt time.Time
 		const q = `UPDATE receiver_wallets SET invitation_sent_at = NOW() WHERE id = $1 RETURNING invitation_sent_at`
 		err := dbConnectionPool.GetContext(ctx, &invitationSentAt, q, rw4.ID)
 		require.NoError(t, err)
 
-		rws, err := rwm.GetAllPendingRegistration(ctx)
+		// If you pass only rw1 and rw3 IDs as parameters this function will only return these receiver wallets. That's why
+		// we need to pass all IDs.
+		rws, err := models.ReceiverWallet.GetAllPendingRegistrations(ctx, dbConnectionPool)
 		require.NoError(t, err)
 
 		expectedRWs := []*ReceiverWallet{
@@ -857,6 +910,312 @@ func Test_ReceiverWallet_GetAllPendingRegistration(t *testing.T) {
 				Wallet: Wallet{
 					ID:   wallet4.ID,
 					Name: wallet4.Name,
+				},
+				InvitationSentAt: &invitationSentAt,
+			},
+		}
+
+		assert.Len(t, rws, 2)
+		assert.ElementsMatch(t, rws, expectedRWs)
+	})
+}
+
+func Test_ReceiverWallet_GetAllPendingRegistrationByReceiverWalletIDs(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	models, err := NewModels(dbConnectionPool)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+
+	receiver := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
+	wallet1 := CreateWalletFixture(t, ctx, dbConnectionPool, "Wallet1", "https://wallet1.com", "www.wallet.com", "wallet1://")
+	wallet2 := CreateWalletFixture(t, ctx, dbConnectionPool, "Wallet2", "https://wallet2.com", "www.wallet2.com", "wallet2://")
+	wallet3 := CreateWalletFixture(t, ctx, dbConnectionPool, "Wallet3", "https://wallet3.com", "www.wallet3.com", "wallet3://")
+	wallet4 := CreateWalletFixture(t, ctx, dbConnectionPool, "Wallet4", "https://wallet4.com", "www.wallet4.com", "wallet4://")
+	asset := CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
+	disbursement1 := CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &Disbursement{
+		Wallet: wallet1,
+		Asset:  asset,
+		Status: StartedDisbursementStatus,
+	})
+	disbursement2 := CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &Disbursement{
+		Wallet: wallet2,
+		Asset:  asset,
+		Status: StartedDisbursementStatus,
+	})
+	disbursement3 := CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &Disbursement{
+		Wallet: wallet3,
+		Asset:  asset,
+		Status: StartedDisbursementStatus,
+	})
+	disbursement4 := CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &Disbursement{
+		Wallet: wallet4,
+		Asset:  asset,
+		Status: StartedDisbursementStatus,
+	})
+
+	t.Run("gets all receiver wallets pending registration", func(t *testing.T) {
+		DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
+		DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
+
+		rw1 := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet1.ID, DraftReceiversWalletStatus)
+		rw2 := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet2.ID, RegisteredReceiversWalletStatus)
+		rw3 := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet3.ID, ReadyReceiversWalletStatus)
+		rw4 := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet4.ID, ReadyReceiversWalletStatus)
+
+		_ = CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
+			Amount:         "100",
+			Status:         ReadyPaymentStatus,
+			Disbursement:   disbursement1,
+			Asset:          *asset,
+			ReceiverWallet: rw1,
+		})
+		_ = CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
+			Amount:         "100",
+			Status:         ReadyPaymentStatus,
+			Disbursement:   disbursement2,
+			Asset:          *asset,
+			ReceiverWallet: rw2,
+		})
+		_ = CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
+			Amount:         "100",
+			Status:         ReadyPaymentStatus,
+			Disbursement:   disbursement3,
+			Asset:          *asset,
+			ReceiverWallet: rw3,
+		})
+		_ = CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
+			Amount:         "100",
+			Status:         ReadyPaymentStatus,
+			Disbursement:   disbursement4,
+			Asset:          *asset,
+			ReceiverWallet: rw4,
+		})
+
+		var invitationSentAt time.Time
+		const q = `UPDATE receiver_wallets SET invitation_sent_at = NOW() WHERE id = $1 RETURNING invitation_sent_at`
+		err := dbConnectionPool.GetContext(ctx, &invitationSentAt, q, rw4.ID)
+		require.NoError(t, err)
+
+		// If you pass only rw1 and rw3 IDs as parameters this function will only return these receiver wallets. That's why
+		// we need to pass all IDs.
+		rws, err := models.ReceiverWallet.GetAllPendingRegistrationByReceiverWalletIDs(ctx, dbConnectionPool, []string{rw1.ID, rw2.ID, rw3.ID, rw4.ID})
+		require.NoError(t, err)
+
+		expectedRWs := []*ReceiverWallet{
+			{
+				ID: rw3.ID,
+				Receiver: Receiver{
+					ID:          receiver.ID,
+					PhoneNumber: receiver.PhoneNumber,
+					Email:       receiver.Email,
+				},
+				Wallet: Wallet{
+					ID:   wallet3.ID,
+					Name: wallet3.Name,
+				},
+			},
+			{
+				ID: rw4.ID,
+				Receiver: Receiver{
+					ID:          receiver.ID,
+					PhoneNumber: receiver.PhoneNumber,
+					Email:       receiver.Email,
+				},
+				Wallet: Wallet{
+					ID:   wallet4.ID,
+					Name: wallet4.Name,
+				},
+				InvitationSentAt: &invitationSentAt,
+			},
+		}
+
+		assert.Len(t, rws, 2)
+		assert.ElementsMatch(t, rws, expectedRWs)
+	})
+
+	t.Run("ensures no receivers duplication for the same wallet", func(t *testing.T) {
+		DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
+		DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
+
+		rw1 := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet1.ID, ReadyReceiversWalletStatus)
+		rw2 := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet2.ID, ReadyReceiversWalletStatus)
+
+		// Wallet 1 Disbursements
+		disbursement1 := CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &Disbursement{
+			Wallet: wallet1,
+			Asset:  asset,
+			Status: StartedDisbursementStatus,
+		})
+		disbursement2 := CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &Disbursement{
+			Wallet: wallet1,
+			Asset:  asset,
+			Status: StartedDisbursementStatus,
+		})
+
+		// Wallet 2 Disbursement
+		disbursement3 := CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &Disbursement{
+			Wallet: wallet2,
+			Asset:  asset,
+			Status: StartedDisbursementStatus,
+		})
+
+		_ = CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
+			Amount:         "100",
+			Status:         ReadyPaymentStatus,
+			Disbursement:   disbursement1,
+			Asset:          *asset,
+			ReceiverWallet: rw1,
+		})
+		_ = CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
+			Amount:         "100",
+			Status:         ReadyPaymentStatus,
+			Disbursement:   disbursement2,
+			Asset:          *asset,
+			ReceiverWallet: rw1,
+		})
+		_ = CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
+			Amount:         "100",
+			Status:         ReadyPaymentStatus,
+			Disbursement:   disbursement3,
+			Asset:          *asset,
+			ReceiverWallet: rw2,
+		})
+
+		rws, err := models.ReceiverWallet.GetAllPendingRegistrationByReceiverWalletIDs(ctx, dbConnectionPool, []string{rw1.ID, rw2.ID})
+		require.NoError(t, err)
+
+		expectedRWs := []*ReceiverWallet{
+			{
+				ID: rw1.ID,
+				Receiver: Receiver{
+					ID:          receiver.ID,
+					PhoneNumber: receiver.PhoneNumber,
+					Email:       receiver.Email,
+				},
+				Wallet: Wallet{
+					ID:   wallet1.ID,
+					Name: wallet1.Name,
+				},
+			},
+			{
+				ID: rw2.ID,
+				Receiver: Receiver{
+					ID:          receiver.ID,
+					PhoneNumber: receiver.PhoneNumber,
+					Email:       receiver.Email,
+				},
+				Wallet: Wallet{
+					ID:   wallet2.ID,
+					Name: wallet2.Name,
+				},
+			},
+		}
+		assert.Len(t, rws, 2)
+		assert.ElementsMatch(t, rws, expectedRWs)
+	})
+}
+
+func Test_ReceiverWallet_GetAllPendingRegistrationByDisbursementID(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	models, err := NewModels(dbConnectionPool)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+
+	receiver1 := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
+	receiver2 := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
+	receiver3 := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
+	receiver4 := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
+	wallet := CreateWalletFixture(t, ctx, dbConnectionPool, "Wallet1", "https://wallet1.com", "www.wallet.com", "wallet1://")
+	asset := CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
+	disbursement := CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &Disbursement{
+		Wallet: wallet,
+		Asset:  asset,
+		Status: StartedDisbursementStatus,
+	})
+
+	t.Run("gets all receiver wallets pending registration by disbursement ID", func(t *testing.T) {
+		DeleteAllMessagesFixtures(t, ctx, dbConnectionPool)
+		DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
+
+		rw1 := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver1.ID, wallet.ID, RegisteredReceiversWalletStatus)
+		rw2 := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver2.ID, wallet.ID, RegisteredReceiversWalletStatus)
+		rw3 := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver3.ID, wallet.ID, ReadyReceiversWalletStatus)
+		rw4 := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver4.ID, wallet.ID, ReadyReceiversWalletStatus)
+
+		_ = CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
+			Amount:         "100",
+			Status:         ReadyPaymentStatus,
+			Disbursement:   disbursement,
+			Asset:          *asset,
+			ReceiverWallet: rw1,
+		})
+		_ = CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
+			Amount:         "100",
+			Status:         ReadyPaymentStatus,
+			Disbursement:   disbursement,
+			Asset:          *asset,
+			ReceiverWallet: rw2,
+		})
+		_ = CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
+			Amount:         "100",
+			Status:         ReadyPaymentStatus,
+			Disbursement:   disbursement,
+			Asset:          *asset,
+			ReceiverWallet: rw3,
+		})
+		_ = CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
+			Amount:         "100",
+			Status:         ReadyPaymentStatus,
+			Disbursement:   disbursement,
+			Asset:          *asset,
+			ReceiverWallet: rw4,
+		})
+
+		var invitationSentAt time.Time
+		const q = `UPDATE receiver_wallets SET invitation_sent_at = NOW() WHERE id = $1 RETURNING invitation_sent_at`
+		err := dbConnectionPool.GetContext(ctx, &invitationSentAt, q, rw4.ID)
+		require.NoError(t, err)
+
+		rws, err := models.ReceiverWallet.GetAllPendingRegistrationByDisbursementID(ctx, dbConnectionPool, disbursement.ID)
+		require.NoError(t, err)
+
+		expectedRWs := []*ReceiverWallet{
+			{
+				ID: rw3.ID,
+				Receiver: Receiver{
+					ID:          receiver3.ID,
+					PhoneNumber: receiver3.PhoneNumber,
+					Email:       receiver3.Email,
+				},
+				Wallet: Wallet{
+					ID:   wallet.ID,
+					Name: wallet.Name,
+				},
+			},
+			{
+				ID: rw4.ID,
+				Receiver: Receiver{
+					ID:          receiver4.ID,
+					PhoneNumber: receiver4.PhoneNumber,
+					Email:       receiver4.Email,
+				},
+				Wallet: Wallet{
+					ID:   wallet.ID,
+					Name: wallet.Name,
 				},
 				InvitationSentAt: &invitationSentAt,
 			},
@@ -976,7 +1335,7 @@ func Test_ReceiverWalletModelUpdateAnchorPlatformTransactionSyncedAt(t *testing.
 	receiverWalletModel := ReceiverWalletModel{dbConnectionPool: dbConnectionPool}
 
 	t.Run("doesn't update when there's no receiver wallet IDs", func(t *testing.T) {
-		receiverWallets, err := receiverWalletModel.UpdateAnchorPlatformTransactionSyncedAt(ctx)
+		receiverWallets, err := receiverWalletModel.UpdateAnchorPlatformTransactionSyncedAt(ctx, dbConnectionPool)
 		require.NoError(t, err)
 		assert.Empty(t, receiverWallets)
 	})
@@ -990,7 +1349,7 @@ func Test_ReceiverWalletModelUpdateAnchorPlatformTransactionSyncedAt(t *testing.
 		receiver := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
 		receiverWallet := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, ReadyReceiversWalletStatus)
 
-		receiverWallets, err := receiverWalletModel.UpdateAnchorPlatformTransactionSyncedAt(ctx, receiverWallet.ID)
+		receiverWallets, err := receiverWalletModel.UpdateAnchorPlatformTransactionSyncedAt(ctx, dbConnectionPool, receiverWallet.ID)
 		require.NoError(t, err)
 		assert.Empty(t, receiverWallets)
 	})
@@ -1004,7 +1363,7 @@ func Test_ReceiverWalletModelUpdateAnchorPlatformTransactionSyncedAt(t *testing.
 		receiver := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
 		receiverWallet := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, RegisteredReceiversWalletStatus)
 
-		receiverWallets, err := receiverWalletModel.UpdateAnchorPlatformTransactionSyncedAt(ctx, receiverWallet.ID)
+		receiverWallets, err := receiverWalletModel.UpdateAnchorPlatformTransactionSyncedAt(ctx, dbConnectionPool, receiverWallet.ID)
 		require.NoError(t, err)
 		require.Len(t, receiverWallets, 1)
 		assert.Equal(t, receiverWallet.ID, receiverWallets[0].ID)
@@ -1023,7 +1382,7 @@ func Test_ReceiverWalletModelUpdateAnchorPlatformTransactionSyncedAt(t *testing.
 		_, err := dbConnectionPool.ExecContext(ctx, q, receiverWallet.ID)
 		require.NoError(t, err)
 
-		receiverWallets, err := receiverWalletModel.UpdateAnchorPlatformTransactionSyncedAt(ctx, receiverWallet.ID)
+		receiverWallets, err := receiverWalletModel.UpdateAnchorPlatformTransactionSyncedAt(ctx, dbConnectionPool, receiverWallet.ID)
 		require.NoError(t, err)
 		assert.Empty(t, receiverWallets)
 	})

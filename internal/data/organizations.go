@@ -7,7 +7,10 @@ import (
 	"errors"
 	"fmt"
 	"image"
+	"net/url"
 	"regexp"
+	"strings"
+	"time"
 
 	// Don't remove the `image/jpeg` and `image/png` packages import unless
 	// the `image` package is no longer necessary.
@@ -15,10 +18,8 @@ import (
 	// See https://pkg.go.dev/image#pkg-overview
 	_ "image/jpeg"
 	_ "image/png"
-	"strings"
-	"time"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
 )
 
 const (
@@ -42,6 +43,7 @@ type Organization struct {
 	// Example:
 	//	{{.OTP}} OTPMessageTemplate
 	OTPMessageTemplate string    `json:"otp_message_template" db:"otp_message_template"`
+	PrivacyPolicyLink  *string   `json:"privacy_policy_link" db:"privacy_policy_link"`
 	Logo               []byte    `db:"logo"`
 	IsApprovalRequired bool      `json:"is_approval_required" db:"is_approval_required"`
 	CreatedAt          time.Time `json:"created_at" db:"created_at"`
@@ -59,6 +61,7 @@ type OrganizationUpdate struct {
 	// Using pointers to accept empty strings
 	SMSRegistrationMessageTemplate *string `json:",omitempty"`
 	OTPMessageTemplate             *string `json:",omitempty"`
+	PrivacyPolicyLink              *string `json:",omitempty"`
 }
 
 type LogoType string
@@ -87,7 +90,7 @@ func (lt LogoType) ToHTTPContentType() string {
 
 func (ou *OrganizationUpdate) validate() error {
 	if ou.areAllFieldsEmpty() {
-		return fmt.Errorf("name, timezone UTC offset, approval workflow flag, SMS Resend Interval, SMS invite template, OTP message template or logo is required")
+		return fmt.Errorf("name, timezone UTC offset, approval workflow flag, SMS Resend Interval, SMS invite template, OTP message template, privacy policy link or logo is required")
 	}
 
 	if len(ou.Logo) > 0 {
@@ -105,6 +108,13 @@ func (ou *OrganizationUpdate) validate() error {
 		return fmt.Errorf("invalid timezone UTC offset format. Example: +02:00 or -03:00")
 	}
 
+	if ou.PrivacyPolicyLink != nil && *ou.PrivacyPolicyLink != "" {
+		_, err := url.ParseRequestURI(*ou.PrivacyPolicyLink)
+		if err != nil {
+			return fmt.Errorf("invalid privacy policy link: %w", err)
+		}
+	}
+
 	return nil
 }
 
@@ -116,7 +126,8 @@ func (ou *OrganizationUpdate) areAllFieldsEmpty() bool {
 		ou.SMSRegistrationMessageTemplate == nil &&
 		ou.OTPMessageTemplate == nil &&
 		ou.SMSResendInterval == nil &&
-		ou.PaymentCancellationPeriodDays == nil)
+		ou.PaymentCancellationPeriodDays == nil &&
+		ou.PrivacyPolicyLink == nil)
 }
 
 type OrganizationModel struct {
@@ -200,6 +211,16 @@ func (om *OrganizationModel) Update(ctx context.Context, ou *OrganizationUpdate)
 		} else {
 			// When empty value is passed by parameter we set the DEFAULT value for the column.
 			fields = append(fields, "otp_message_template = DEFAULT")
+		}
+	}
+
+	if ou.PrivacyPolicyLink != nil {
+		if *ou.PrivacyPolicyLink != "" {
+			link, _ := url.ParseRequestURI(*ou.PrivacyPolicyLink)
+			fields = append(fields, "privacy_policy_link = ?")
+			args = append(args, link.String())
+		} else {
+			fields = append(fields, "privacy_policy_link = NULL")
 		}
 	}
 

@@ -1,6 +1,7 @@
 package validators
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stellar/go/support/log"
@@ -9,9 +10,11 @@ import (
 )
 
 func TestWalletValidator_ValidateCreateWalletRequest(t *testing.T) {
+	ctx := context.Background()
+
 	t.Run("returns error when request body is empty", func(t *testing.T) {
 		wv := NewWalletValidator()
-		wv.ValidateCreateWalletRequest(nil)
+		wv.ValidateCreateWalletRequest(ctx, nil)
 		assert.True(t, wv.HasErrors())
 		assert.Equal(t, map[string]interface{}{"body": "request body is empty"}, wv.Errors)
 	})
@@ -20,7 +23,7 @@ func TestWalletValidator_ValidateCreateWalletRequest(t *testing.T) {
 		wv := NewWalletValidator()
 		reqBody := &WalletRequest{}
 
-		wv.ValidateCreateWalletRequest(reqBody)
+		wv.ValidateCreateWalletRequest(ctx, reqBody)
 		assert.True(t, wv.HasErrors())
 		assert.Equal(t, map[string]interface{}{
 			"deep_link_schema":     "deep_link_schema is required",
@@ -32,7 +35,7 @@ func TestWalletValidator_ValidateCreateWalletRequest(t *testing.T) {
 
 		reqBody.Name = "Wallet Provider"
 		wv.Errors = map[string]interface{}{}
-		wv.ValidateCreateWalletRequest(reqBody)
+		wv.ValidateCreateWalletRequest(ctx, reqBody)
 		assert.True(t, wv.HasErrors())
 		assert.Equal(t, map[string]interface{}{
 			"deep_link_schema":     "deep_link_schema is required",
@@ -54,7 +57,7 @@ func TestWalletValidator_ValidateCreateWalletRequest(t *testing.T) {
 			AssetsIDs:         []string{"asset-id"},
 		}
 
-		wv.ValidateCreateWalletRequest(reqBody)
+		wv.ValidateCreateWalletRequest(ctx, reqBody)
 
 		assert.True(t, wv.HasErrors())
 
@@ -80,11 +83,11 @@ func TestWalletValidator_ValidateCreateWalletRequest(t *testing.T) {
 			AssetsIDs:         []string{"asset-id"},
 		}
 
-		wv.ValidateCreateWalletRequest(reqBody)
+		wv.ValidateCreateWalletRequest(ctx, reqBody)
 		assert.False(t, wv.HasErrors())
 
 		reqBody.Homepage = "http://homepage.com/sdp?redirect=true"
-		wv.ValidateCreateWalletRequest(reqBody)
+		wv.ValidateCreateWalletRequest(ctx, reqBody)
 		assert.False(t, wv.HasErrors())
 		assert.Equal(t, map[string]interface{}{}, wv.Errors)
 	})
@@ -99,11 +102,11 @@ func TestWalletValidator_ValidateCreateWalletRequest(t *testing.T) {
 			AssetsIDs:         []string{"asset-id"},
 		}
 
-		wv.ValidateCreateWalletRequest(reqBody)
+		wv.ValidateCreateWalletRequest(ctx, reqBody)
 		assert.False(t, wv.HasErrors())
 
 		reqBody.DeepLinkSchema = "https://deeplinkschema.com/sdp?redirect=true"
-		wv.ValidateCreateWalletRequest(reqBody)
+		wv.ValidateCreateWalletRequest(ctx, reqBody)
 		assert.False(t, wv.HasErrors())
 	})
 
@@ -117,26 +120,28 @@ func TestWalletValidator_ValidateCreateWalletRequest(t *testing.T) {
 			AssetsIDs:         []string{"asset-id"},
 		}
 
-		reqBody = wv.ValidateCreateWalletRequest(reqBody)
+		reqBody = wv.ValidateCreateWalletRequest(ctx, reqBody)
 		assert.False(t, wv.HasErrors())
 		assert.Equal(t, "sep-10-client-domain.com", reqBody.SEP10ClientDomain)
 
 		reqBody.SEP10ClientDomain = "https://sep-10-client-domain.com/sdp?redirect=true"
-		reqBody = wv.ValidateCreateWalletRequest(reqBody)
+		reqBody = wv.ValidateCreateWalletRequest(ctx, reqBody)
 		assert.False(t, wv.HasErrors())
 		assert.Equal(t, "sep-10-client-domain.com", reqBody.SEP10ClientDomain)
 
 		reqBody.SEP10ClientDomain = "http://localhost:8000"
-		reqBody = wv.ValidateCreateWalletRequest(reqBody)
+		reqBody = wv.ValidateCreateWalletRequest(ctx, reqBody)
 		assert.False(t, wv.HasErrors())
 		assert.Equal(t, "localhost:8000", reqBody.SEP10ClientDomain)
 	})
 }
 
 func TestWalletValidator_ValidatePatchWalletRequest(t *testing.T) {
+	ctx := context.Background()
+
 	t.Run("returns error when request body is empty", func(t *testing.T) {
 		wv := NewWalletValidator()
-		wv.ValidateCreateWalletRequest(nil)
+		wv.ValidateCreateWalletRequest(ctx, nil)
 		assert.True(t, wv.HasErrors())
 		assert.Equal(t, map[string]interface{}{"body": "request body is empty"}, wv.Errors)
 	})

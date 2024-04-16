@@ -9,8 +9,8 @@ import (
 	"image/png"
 	"testing"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/db/dbtest"
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -35,13 +35,13 @@ func Test_Organizations_DatabaseTriggers(t *testing.T) {
 			)
 		`
 		_, err := dbConnectionPool.ExecContext(ctx, q)
-		require.EqualError(t, err, "pq: public.organizations can must contain exactly one row")
+		require.EqualError(t, err, "pq: organizations can must contain exactly one row")
 	})
 
 	t.Run("SQL query will trigger an error if you try to delete the one organization you must have", func(t *testing.T) {
 		q := "DELETE FROM organizations"
 		_, err := dbConnectionPool.ExecContext(ctx, q)
-		require.EqualError(t, err, "pq: public.organizations can must contain exactly one row")
+		require.EqualError(t, err, "pq: organizations can must contain exactly one row")
 	})
 
 	t.Run("updating sms_registration_message_template with the tags {{.OrganizationName}} and {{.RegistrationLink}} will succeed 🎉", func(t *testing.T) {
@@ -73,13 +73,14 @@ func Test_Organizations_Get(t *testing.T) {
 		assert.NotEmpty(t, gotOrganization.CreatedAt)
 		assert.NotEmpty(t, gotOrganization.UpdatedAt)
 		assert.False(t, gotOrganization.IsApprovalRequired)
+		assert.Nil(t, gotOrganization.PrivacyPolicyLink)
 	})
 }
 
 func Test_OrganizationUpdate_validate(t *testing.T) {
 	ou := &OrganizationUpdate{}
 	err := ou.validate()
-	assert.EqualError(t, err, "name, timezone UTC offset, approval workflow flag, SMS Resend Interval, SMS invite template, OTP message template or logo is required")
+	assert.EqualError(t, err, "name, timezone UTC offset, approval workflow flag, SMS Resend Interval, SMS invite template, OTP message template, privacy policy link or logo is required")
 
 	ou.Name = "My Org Name"
 	err = ou.validate()
@@ -170,6 +171,16 @@ func Test_OrganizationUpdate_validate(t *testing.T) {
 	ou.TimezoneUTCOffset = "-02:00"
 	err = ou.validate()
 	assert.Nil(t, err)
+
+	var link string = "test-link"
+	ou.PrivacyPolicyLink = &link
+	err = ou.validate()
+	assert.EqualError(t, err, "invalid privacy policy link: parse \"test-link\": invalid URI for request")
+
+	link = "https://example.com/privacy-policy"
+	ou.PrivacyPolicyLink = &link
+	err = ou.validate()
+	assert.Nil(t, err)
 }
 
 func Test_Organizations_Update(t *testing.T) {
@@ -198,7 +209,7 @@ func Test_Organizations_Update(t *testing.T) {
 	t.Run("returns error with invalid OrganizationUpdate", func(t *testing.T) {
 		ou := &OrganizationUpdate{}
 		err := organizationModel.Update(ctx, ou)
-		assert.EqualError(t, err, "invalid organization update: name, timezone UTC offset, approval workflow flag, SMS Resend Interval, SMS invite template, OTP message template or logo is required")
+		assert.EqualError(t, err, "invalid organization update: name, timezone UTC offset, approval workflow flag, SMS Resend Interval, SMS invite template, OTP message template, privacy policy link or logo is required")
 	})
 
 	t.Run("updates only organization's name successfully", func(t *testing.T) {
@@ -441,5 +452,30 @@ func Test_Organizations_Update(t *testing.T) {
 		o, err = organizationModel.Get(ctx)
 		require.NoError(t, err)
 		assert.Nil(t, o.PaymentCancellationPeriodDays)
+	})
+
+	t.Run("updates the organization's PrivacyPolicyLink", func(t *testing.T) {
+		resetOrganizationInfo(t, ctx)
+
+		o, err := organizationModel.Get(ctx)
+		require.NoError(t, err)
+		assert.Nil(t, o.PrivacyPolicyLink)
+
+		var link string = "https://example.com/privacy-policy"
+		err = organizationModel.Update(ctx, &OrganizationUpdate{PrivacyPolicyLink: &link})
+		require.NoError(t, err)
+
+		o, err = organizationModel.Get(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, link, *o.PrivacyPolicyLink)
+
+		// Set it as null
+		var emptyValue string = ""
+		err = organizationModel.Update(ctx, &OrganizationUpdate{PrivacyPolicyLink: &emptyValue})
+		require.NoError(t, err)
+
+		o, err = organizationModel.Get(ctx)
+		require.NoError(t, err)
+		assert.Nil(t, o.PrivacyPolicyLink)
 	})
 }

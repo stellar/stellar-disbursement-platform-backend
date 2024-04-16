@@ -72,7 +72,7 @@ func Test_NewEmailClient(t *testing.T) {
 		}
 
 		preExistingEmailClientWithInvalidType := struct{}{}
-		setInstance(buildEmailClientInstanceName(message.MessengerTypeAWSEmail), preExistingEmailClientWithInvalidType)
+		SetInstance(buildEmailClientInstanceName(message.MessengerTypeAWSEmail), preExistingEmailClientWithInvalidType)
 
 		gotClient, err := NewEmailClient(mockTestEmailClientOptions)
 		assert.Nil(t, gotClient)

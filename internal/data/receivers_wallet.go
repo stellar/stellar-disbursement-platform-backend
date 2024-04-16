@@ -13,7 +13,7 @@ import (
 
 	"github.com/stellar/go/network"
 	"github.com/stellar/go/support/log"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
 )
 
 const OTPExpirationTimeMinutes = 30
@@ -224,29 +224,66 @@ func (rw *ReceiverWalletModel) GetByReceiverIDsAndWalletID(ctx context.Context, 
 	return receiverWallets, nil
 }
 
-func (rw *ReceiverWalletModel) GetAllPendingRegistration(ctx context.Context) ([]*ReceiverWallet, error) {
-	const query = `
-		SELECT
-			rw.id,
-			rw.invitation_sent_at,
-			r.id AS "receiver.id",
-			r.phone_number AS "receiver.phone_number",
-			r.email AS "receiver.email",
-			r.external_id AS "receiver.external_id",
-			w.id AS "wallet.id",
-			w.name AS "wallet.name"
-		FROM
-			receiver_wallets rw
-			INNER JOIN receivers r ON r.id = rw.receiver_id
-			INNER JOIN wallets w ON w.id = rw.wallet_id
-		WHERE
-			rw.status = 'READY'
-	`
+const getPendingRegistrationReceiverWalletsBaseQuery = `
+	SELECT
+		rw.id,
+		rw.invitation_sent_at,
+		r.id AS "receiver.id",
+		r.phone_number AS "receiver.phone_number",
+		r.email AS "receiver.email",
+		r.external_id AS "receiver.external_id",
+		w.id AS "wallet.id",
+		w.name AS "wallet.name"
+	FROM
+		receiver_wallets rw
+		INNER JOIN receivers r ON r.id = rw.receiver_id
+		INNER JOIN wallets w ON w.id = rw.wallet_id
+		INNER JOIN disbursements d ON w.id = d.wallet_id
+		INNER JOIN payments p ON d.id = p.disbursement_id AND p.receiver_id = r.id
+	WHERE
+		rw.status = $1 -- 'READY'::receiver_wallet_status
+		%s
+	GROUP BY
+		rw.id,
+		r.id,
+		w.id
+`
+
+var getPendingRegistrationReceiverWalletsBaseArgs = []any{ReadyReceiversWalletStatus}
+
+func (rw *ReceiverWalletModel) GetAllPendingRegistrations(ctx context.Context, sqlExec db.SQLExecuter) ([]*ReceiverWallet, error) {
+	query := fmt.Sprintf(getPendingRegistrationReceiverWalletsBaseQuery, "")
 
 	receiverWallets := make([]*ReceiverWallet, 0)
-	err := rw.dbConnectionPool.SelectContext(ctx, &receiverWallets, query)
+	err := sqlExec.SelectContext(ctx, &receiverWallets, query, getPendingRegistrationReceiverWalletsBaseArgs...)
 	if err != nil {
 		return nil, fmt.Errorf("error querying pending registration receiver wallets: %w", err)
+	}
+
+	return receiverWallets, nil
+}
+
+func (rw *ReceiverWalletModel) GetAllPendingRegistrationByReceiverWalletIDs(ctx context.Context, sqlExec db.SQLExecuter, receiverWalletIDs []string) ([]*ReceiverWallet, error) {
+	query := fmt.Sprintf(getPendingRegistrationReceiverWalletsBaseQuery, "AND rw.id = ANY($2)")
+
+	receiverWallets := make([]*ReceiverWallet, 0)
+	args := append(getPendingRegistrationReceiverWalletsBaseArgs, pq.Array(receiverWalletIDs))
+	err := sqlExec.SelectContext(ctx, &receiverWallets, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("error querying pending registration receiver wallets: %w", err)
+	}
+
+	return receiverWallets, nil
+}
+
+func (rw *ReceiverWalletModel) GetAllPendingRegistrationByDisbursementID(ctx context.Context, sqlExec db.SQLExecuter, disbursementID string) ([]*ReceiverWallet, error) {
+	query := fmt.Sprintf(getPendingRegistrationReceiverWalletsBaseQuery, "AND d.id = $2")
+
+	receiverWallets := make([]*ReceiverWallet, 0)
+	args := append(getPendingRegistrationReceiverWalletsBaseArgs, disbursementID)
+	err := sqlExec.SelectContext(ctx, &receiverWallets, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("error querying pending registration receiver wallets for disbursement ID %s: %w", disbursementID, err)
 	}
 
 	return receiverWallets, nil
@@ -492,7 +529,7 @@ func (rw *ReceiverWalletModel) GetByStellarAccountAndMemo(ctx context.Context, s
 	return &receiverWallets, nil
 }
 
-func (rw *ReceiverWalletModel) UpdateAnchorPlatformTransactionSyncedAt(ctx context.Context, receiverWalletID ...string) ([]ReceiverWallet, error) {
+func (rw *ReceiverWalletModel) UpdateAnchorPlatformTransactionSyncedAt(ctx context.Context, sqlExec db.SQLExecuter, receiverWalletID ...string) ([]ReceiverWallet, error) {
 	const query = `
 		UPDATE
 			receiver_wallets
@@ -510,7 +547,7 @@ func (rw *ReceiverWalletModel) UpdateAnchorPlatformTransactionSyncedAt(ctx conte
 	`
 
 	var receiverWallets []ReceiverWallet
-	err := rw.dbConnectionPool.SelectContext(ctx, &receiverWallets, query, pq.Array(receiverWalletID), RegisteredReceiversWalletStatus)
+	err := sqlExec.SelectContext(ctx, &receiverWallets, query, pq.Array(receiverWalletID), RegisteredReceiversWalletStatus)
 	if err != nil {
 		return nil, fmt.Errorf("updating anchor platform transaction synced at: %w", err)
 	}

@@ -27,5 +27,17 @@ spec:
                 name: {{ include "sdp.fullname" . }}-dashboard
                 port:
                   number: {{ include "dashboard.port" . }}
+  {{- if .Values.sdp.route.mtnDomain }}
+    - host: {{ include "dashboard.mtnDomain" . | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "sdp.fullname" . }}-dashboard
+                port:
+                  number: {{ include "dashboard.port" . }}
+  {{- end }}
 
 {{- end }}

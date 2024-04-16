@@ -16,8 +16,9 @@ import (
 )
 
 const (
-	authURL         = "auth"
-	sep24DepositURL = "sep24/transactions/deposit/interactive"
+	authURL             = "auth"
+	sep24DepositURL     = "sep24/transactions/deposit/interactive"
+	mtnHomeDomainFormat = "%s.stellar.local:8000"
 )
 
 type AnchorPlatformIntegrationTestsInterface interface {
@@ -29,6 +30,7 @@ type AnchorPlatformIntegrationTestsInterface interface {
 
 type AnchorPlatformIntegrationTests struct {
 	HttpClient                httpclient.HttpClientInterface
+	TenantName                string
 	AnchorPlatformBaseSepURL  string
 	ReceiverAccountPublicKey  string
 	ReceiverAccountPrivateKey string
@@ -74,13 +76,13 @@ func (ap AnchorPlatformIntegrationTests) StartChallengeTransaction() (*Challenge
 	}
 
 	// hosts domain to be used in txnbuild.ReadChallengeTx
-	homeDomain := "localhost:8080"
+	mtnHomeDomain := fmt.Sprintf(mtnHomeDomainFormat, ap.TenantName)
 	webAuthDomain := "localhost:8080"
 
 	// create query params 'account' and 'home_domain'
 	q := req.URL.Query()
 	q.Add("account", ap.ReceiverAccountPublicKey)
-	q.Add("home_domain", homeDomain)
+	q.Add("home_domain", mtnHomeDomain)
 	req.URL.RawQuery = q.Encode()
 
 	resp, err := ap.HttpClient.Do(req)
@@ -105,7 +107,7 @@ func (ap AnchorPlatformIntegrationTests) StartChallengeTransaction() (*Challenge
 		ap.Sep10SigningPublicKey,
 		ct.NetworkPassphrase,
 		webAuthDomain,
-		[]string{homeDomain},
+		[]string{mtnHomeDomain},
 	)
 	if err != nil {
 		return nil, fmt.Errorf("error reading challenge transaction: %w", err)

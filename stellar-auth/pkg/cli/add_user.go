@@ -11,9 +11,12 @@ import (
 	"github.com/spf13/viper"
 	"github.com/stellar/go/support/config"
 	"github.com/stellar/go/support/log"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/internal/db"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/db/router"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 type PasswordPromptInterface interface {
@@ -22,14 +25,25 @@ type PasswordPromptInterface interface {
 
 var _ PasswordPromptInterface = (*promptui.Prompt)(nil)
 
-var (
-	isOwner      = false
-	passwordFlag = false
+const (
+	addUserCmdIsOwnerDefault      = false
+	addUserCmdPasswordFlagDefault = false
 )
 
 func AddUserCmd(databaseURLFlagName string, passwordPrompt PasswordPromptInterface, availableRoles []string) *cobra.Command {
 	var rolesConfigKey []string
+	var tenantID string
+	isOwner := addUserCmdIsOwnerDefault
+	passwordFlag := addUserCmdPasswordFlagDefault
 	addUserCmdConfigOpts := config.ConfigOptions{
+		{
+			Name:        "tenant-id",
+			Usage:       "The tenant ID to which the user will be added to. ",
+			OptType:     types.String,
+			ConfigKey:   &tenantID,
+			FlagDefault: "",
+			Required:    true,
+		},
 		{
 			Name:        "owner",
 			Usage:       `Set the user as Owner (superuser). Defaults to "false".`,
@@ -62,7 +76,7 @@ func AddUserCmd(databaseURLFlagName string, passwordPrompt PasswordPromptInterfa
 	}
 
 	addUser := &cobra.Command{
-		Use:   "add-user <email> <first name> <last name> [--owner] [--roles] [--password]",
+		Use:   "add-user <email> <first name> <last name> [--owner] [--roles] [--password] --tenant-id",
 		Short: "Add user to the system",
 		Long:  fmt.Sprintf("Add a user to the system. Email should be unique and password must be at least %d characters long.", auth.MinPasswordLength),
 		Args:  cobra.ExactArgs(3),
@@ -102,30 +116,30 @@ func AddUserCmd(databaseURLFlagName string, passwordPrompt PasswordPromptInterfa
 			if passwordFlag {
 				result, err := passwordPrompt.Run()
 				if err != nil {
-					log.Fatalf("add-user error prompting password: %s", err)
+					log.Ctx(ctx).Fatalf("add-user error prompting password: %s", err)
 				}
 
 				pwValidator, err := utils.GetPasswordValidatorInstance()
 				if err != nil {
-					log.Fatalf("cannot initialize password validator: %s", err)
+					log.Ctx(ctx).Fatalf("cannot initialize password validator: %s", err)
 				}
 				err = pwValidator.ValidatePassword(result)
 				if err != nil {
-					log.Fatalf("password is not valid: %v", err)
+					log.Ctx(ctx).Fatalf("password is not valid: %v", err)
 				}
 				password = result
 			}
 
-			err := execAddUser(ctx, dbUrl, email, firstName, lastName, password, isOwner, rolesConfigKey)
+			err := execAddUser(ctx, dbUrl, email, firstName, lastName, password, isOwner, rolesConfigKey, tenantID)
 			if err != nil {
-				log.Fatalf("add-user command error: %s", err)
+				log.Ctx(ctx).Fatalf("add-user command error: %s", err)
 			}
-			log.Infof("user inserted: %s", args[0])
+			log.Ctx(ctx).Infof("user inserted: %s", args[0])
 		},
 	}
 	err := addUserCmdConfigOpts.Init(addUser)
 	if err != nil {
-		log.Fatalf("error initializing addUserCmd config option: %s", err.Error())
+		log.Ctx(addUser.Context()).Fatalf("error initializing addUserCmd config option: %s", err.Error())
 	}
 
 	return addUser
@@ -143,10 +157,29 @@ func NewDefaultPasswordPrompt() *promptui.Prompt {
 
 // execAddUser creates a new user and inserts it into the database, the user will have
 // it's password encrypted for security reasons.
-func execAddUser(ctx context.Context, dbUrl string, email, firstName, lastName, password string, isOwner bool, roles []string) error {
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbUrl)
+func execAddUser(ctx context.Context, dbUrl string, email, firstName, lastName, password string, isOwner bool, roles []string, tenantID string) error {
+	// 1. Get Tenant and save it in context
+	adminDNS, err := router.GetDNSForAdmin(dbUrl)
 	if err != nil {
-		return fmt.Errorf("error getting dbConnectionPool in execAddUser: %w", err)
+		return fmt.Errorf("getting Admin database DNS: %w", err)
+	}
+	adminDBConnectionPool, err := db.OpenDBConnectionPool(adminDNS)
+	if err != nil {
+		return fmt.Errorf("opening Admin DB connection pool: %w", err)
+	}
+	defer adminDBConnectionPool.Close()
+	tm := tenant.NewManager(tenant.WithDatabase(adminDBConnectionPool))
+	t, err := tm.GetTenantByID(ctx, tenantID)
+	if err != nil {
+		return fmt.Errorf("error getting tenant by id %s: %w", tenantID, err)
+	}
+	ctx = tenant.SaveTenantInContext(ctx, t)
+
+	// 2. Create user using multi-tenant connection pool
+	tr := tenant.NewMultiTenantDataSourceRouter(tm)
+	dbConnectionPool, err := db.NewConnectionPoolWithRouter(tr)
+	if err != nil {
+		return fmt.Errorf("getting dbConnectionPool in execAddUser: %w", err)
 	}
 	defer dbConnectionPool.Close()
 

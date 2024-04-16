@@ -9,10 +9,13 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/stellar/go/support/http/httpdecode"
+	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/support/render/httpjson"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpresponse"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
@@ -26,6 +29,7 @@ type PaymentsHandler struct {
 	Models           *data.Models
 	DBConnectionPool db.DBConnectionPool
 	AuthManager      auth.AuthManager
+	EventProducer    events.Producer
 }
 
 type RetryPaymentsRequest struct {
@@ -45,7 +49,7 @@ func (r *RetryPaymentsRequest) validate() *httperror.HTTPError {
 func (p PaymentsHandler) GetPayment(w http.ResponseWriter, r *http.Request) {
 	payment_id := chi.URLParam(r, "id")
 
-	payment, err := p.Models.Payment.Get(r.Context(), payment_id, p.DBConnectionPool.SqlxDB())
+	payment, err := p.Models.Payment.Get(r.Context(), payment_id, p.DBConnectionPool)
 	if err != nil {
 		if errors.Is(data.ErrRecordNotFound, err) {
 			errorResponse := fmt.Sprintf("Cannot retrieve payment with ID: %s", payment_id)
@@ -123,7 +127,31 @@ func (p PaymentsHandler) RetryPayments(rw http.ResponseWriter, req *http.Request
 		return
 	}
 
-	err = p.Models.Payment.RetryFailedPayments(ctx, user.Email, reqBody.PaymentIDs...)
+	opts := db.TransactionOptions{
+		DBConnectionPool: p.DBConnectionPool,
+		AtomicFunctionWithPostCommit: func(dbTx db.DBTransaction) (postCommitFn db.PostCommitFunction, err error) {
+			err = p.Models.Payment.RetryFailedPayments(ctx, dbTx, user.Email, reqBody.PaymentIDs...)
+			if err != nil {
+				return nil, fmt.Errorf("retrying failed payments: %w", err)
+			}
+
+			// Producing event to send ready payments to TSS
+			var payments []*data.Payment
+			payments, err = p.Models.Payment.GetReadyByID(ctx, dbTx, reqBody.PaymentIDs...)
+			if err != nil {
+				return nil, fmt.Errorf("getting ready payments by IDs: %w", err)
+			}
+
+			if len(payments) > 0 {
+				postCommitFn = func() error {
+					return p.producePaymentsReadyEvents(ctx, payments)
+				}
+			}
+
+			return postCommitFn, nil
+		},
+	}
+	err = db.RunInTransactionWithPostCommit(ctx, &opts)
 	if err != nil {
 		if errors.Is(err, data.ErrMismatchNumRowsAffected) {
 			httperror.BadRequest("Invalid payment ID(s) provided. All payment IDs must exist and be in the 'FAILED' state.", err, nil).Render(rw)
@@ -135,6 +163,29 @@ func (p PaymentsHandler) RetryPayments(rw http.ResponseWriter, req *http.Request
 	}
 
 	httpjson.RenderStatus(rw, http.StatusOK, map[string]string{"message": "Payments retried successfully"}, httpjson.JSON)
+}
+
+func (p PaymentsHandler) producePaymentsReadyEvents(ctx context.Context, payments []*data.Payment) error {
+	msg, msgErr := events.NewMessage(ctx, events.PaymentReadyToPayTopic, "", events.PaymentReadyToPayRetryFailedPayment, nil)
+	if msgErr != nil {
+		return fmt.Errorf("creating a new message: %w", msgErr)
+	}
+
+	paymentsReadyToPay := schemas.EventPaymentsReadyToPayData{TenantID: msg.TenantID}
+	for _, payment := range payments {
+		paymentsReadyToPay.Payments = append(paymentsReadyToPay.Payments, schemas.PaymentReadyToPay{ID: payment.ID})
+	}
+	msg.Data = paymentsReadyToPay
+
+	if p.EventProducer != nil {
+		err := p.EventProducer.WriteMessages(ctx, *msg)
+		if err != nil {
+			return fmt.Errorf("writing message %s on event producer: %w", msg, err)
+		}
+	} else {
+		log.Ctx(ctx).Errorf("event producer is nil, could not publish message %+v", msg)
+	}
+	return nil
 }
 
 func (p PaymentsHandler) getPaymentsWithCount(ctx context.Context, queryParams *data.QueryParams) (*utils.ResultWithTotal, error) {

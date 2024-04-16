@@ -5,14 +5,14 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/db/dbtest"
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func Test_Fixtures_CreateTransactionFixture(t *testing.T) {
-	dbt := dbtest.Open(t)
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 
 	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)
@@ -28,14 +28,15 @@ func Test_Fixtures_CreateTransactionFixture(t *testing.T) {
 
 	t.Run("create transaction with pending status", func(t *testing.T) {
 		tx.ExternalID = uuid.NewString()
-		createdTx := CreateTransactionFixture(
-			t,
-			ctx,
-			dbConnectionPool,
-			tx.ExternalID, tx.AssetCode,
-			tx.AssetIssuer, tx.Destination,
-			TransactionStatusPending, tx.Amount,
-		)
+		createdTx := CreateTransactionFixtureNew(t, ctx, dbConnectionPool, TransactionFixture{
+			ExternalID:         tx.ExternalID,
+			AssetCode:          tx.AssetCode,
+			AssetIssuer:        tx.AssetIssuer,
+			DestinationAddress: tx.Destination,
+			Status:             TransactionStatusPending,
+			Amount:             tx.Amount,
+			TenantID:           uuid.NewString(),
+		})
 		assert.Equal(t, tx.AssetCode, createdTx.AssetCode)
 		assert.Equal(t, tx.AssetIssuer, createdTx.AssetIssuer)
 		assert.Equal(t, tx.ExternalID, createdTx.ExternalID)
@@ -45,14 +46,14 @@ func Test_Fixtures_CreateTransactionFixture(t *testing.T) {
 
 	t.Run("create transaction with successful status", func(t *testing.T) {
 		tx.ExternalID = uuid.NewString()
-		createdTx := CreateTransactionFixture(
-			t,
-			ctx,
-			dbConnectionPool,
-			tx.ExternalID, tx.AssetCode,
-			tx.AssetIssuer, tx.Destination,
-			TransactionStatusSuccess, tx.Amount,
-		)
+		createdTx := CreateTransactionFixtureNew(t, ctx, dbConnectionPool, TransactionFixture{
+			ExternalID:         tx.ExternalID,
+			AssetCode:          tx.AssetCode,
+			AssetIssuer:        tx.AssetIssuer,
+			DestinationAddress: tx.Destination,
+			Status:             TransactionStatusSuccess,
+			Amount:             tx.Amount,
+		})
 		assert.Equal(t, tx.AssetCode, createdTx.AssetCode)
 		assert.Equal(t, tx.AssetIssuer, createdTx.AssetIssuer)
 		assert.Equal(t, tx.ExternalID, createdTx.ExternalID)
@@ -62,7 +63,7 @@ func Test_Fixtures_CreateTransactionFixture(t *testing.T) {
 }
 
 func Test_Fixtures_CreateAndDeleteAllTransactionFixtures(t *testing.T) {
-	dbt := dbtest.Open(t)
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 
 	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)
@@ -79,14 +80,14 @@ func Test_Fixtures_CreateAndDeleteAllTransactionFixtures(t *testing.T) {
 
 	t.Run("create and delete transactions", func(t *testing.T) {
 		txCount := 5
-		createdTxs := CreateTransactionFixtures(
-			t,
-			ctx,
-			dbConnectionPool,
-			txCount, tx.AssetCode,
-			tx.AssetIssuer, tx.Destination,
-			TransactionStatusPending, tx.Amount,
-		)
+		createdTxs := CreateTransactionFixturesNew(t, ctx, dbConnectionPool, txCount, TransactionFixture{
+			AssetCode:          tx.AssetCode,
+			AssetIssuer:        tx.AssetIssuer,
+			DestinationAddress: tx.Destination,
+			Status:             TransactionStatusPending,
+			Amount:             tx.Amount,
+			TenantID:           uuid.NewString(),
+		})
 
 		assert.Len(t, createdTxs, txCount)
 		var createdTxIDs []string
@@ -106,7 +107,7 @@ func Test_Fixtures_CreateAndDeleteAllTransactionFixtures(t *testing.T) {
 }
 
 func Test_Fixtures_CreateChannelAccountsOnChainFixtures(t *testing.T) {
-	dbt := dbtest.Open(t)
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 
 	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)

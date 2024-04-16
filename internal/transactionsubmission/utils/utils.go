@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	sdpUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
@@ -27,11 +27,11 @@ type PrivateKeyEncrypter interface {
 
 type DefaultPrivateKeyEncrypter struct{}
 
-func (e DefaultPrivateKeyEncrypter) Encrypt(message, passphrase string) (string, error) {
+func (e *DefaultPrivateKeyEncrypter) Encrypt(message, passphrase string) (string, error) {
 	return sdpUtils.Encrypt(message, passphrase)
 }
 
-func (e DefaultPrivateKeyEncrypter) Decrypt(message, passphrase string) (string, error) {
+func (e *DefaultPrivateKeyEncrypter) Decrypt(message, passphrase string) (string, error) {
 	return sdpUtils.Decrypt(message, passphrase)
 }
 

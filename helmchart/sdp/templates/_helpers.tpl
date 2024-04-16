@@ -75,6 +75,13 @@ SDP domain
 {{- end }}
 
 {{/*
+SDP MTN domain
+*/}}
+{{- define "sdp.mtnDomain" -}}
+{{- .Values.sdp.route.mtnDomain | default "localhost" }}
+{{- end }}
+
+{{/*
 SDP domain schema
 */}}
 {{- define "sdp.schema" -}}
@@ -93,6 +100,13 @@ SDP Metrics port
 */}}
 {{- define "sdp.metricsPort" -}}
 {{- .Values.sdp.route.metricsPort | default "8002" }}
+{{- end }}
+
+{{/*
+SDP Admin port
+*/}}
+{{- define "sdp.adminPort" -}}
+{{- .Values.sdp.route.adminPort | default "8003" }}
 {{- end }}
 
 {{/*
@@ -173,6 +187,13 @@ Dashboard domain
 */}}
 {{- define "dashboard.domain" -}}
 {{- .Values.dashboard.route.domain | default "localhost" }}
+{{- end }}
+
+{{/*
+Dashboard MTN domain
+*/}}
+{{- define "dashboard.mtnDomain" -}}
+{{- .Values.dashboard.route.mtnDomain | default "localhost" }}
 {{- end }}
 
 {{/*

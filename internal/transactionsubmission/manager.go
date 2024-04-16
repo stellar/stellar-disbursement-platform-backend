@@ -9,68 +9,47 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/stellar/go/clients/horizonclient"
-	"github.com/stellar/go/network"
-	"github.com/stellar/go/strkey"
 	"github.com/stellar/go/support/log"
-	"github.com/stellar/go/txnbuild"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions"
 	tssMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/monitor"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
 	sdpUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
 const serviceName = "Transaction Submission Service"
 
 type SubmitterOptions struct {
-	DatabaseDSN          string
-	HorizonURL           string
-	NetworkPassphrase    string
-	DistributionSeed     string
 	NumChannelAccounts   int
 	QueuePollingInterval int
-	MaxBaseFee           int
 	MonitorService       tssMonitor.TSSMonitorService
-	PrivateKeyEncrypter  utils.PrivateKeyEncrypter
 	CrashTrackerClient   crashtracker.CrashTrackerClient
+	EventProducer        events.Producer
+
+	SubmitterEngine  engine.SubmitterEngine
+	DBConnectionPool db.DBConnectionPool
 }
 
 func (so *SubmitterOptions) validate() error {
-	if so.DatabaseDSN == "" {
-		return fmt.Errorf("database DSN cannot be empty")
+	if so.DBConnectionPool == nil {
+		return fmt.Errorf("database connection pool cannot be nil")
 	}
 
-	if so.HorizonURL == "" {
-		return fmt.Errorf("horizon url cannot be empty")
+	if err := so.SubmitterEngine.Validate(); err != nil {
+		return fmt.Errorf("validating submitter engine: %w", err)
 	}
 
-	if (so.NetworkPassphrase != network.TestNetworkPassphrase) && (so.NetworkPassphrase != network.PublicNetworkPassphrase) {
-		return fmt.Errorf("network passphrase %q is invalid", so.NetworkPassphrase)
-	}
-
-	if so.PrivateKeyEncrypter == nil {
-		return fmt.Errorf("private key encrypter cannot be nil")
-	}
-
-	if !strkey.IsValidEd25519SecretSeed(so.DistributionSeed) {
-		return fmt.Errorf("distribution seed is invalid")
-	}
-
-	if so.NumChannelAccounts < MinNumberOfChannelAccounts || so.NumChannelAccounts > MaxNumberOfChannelAccounts {
-		return fmt.Errorf("num channel accounts must stay in the range from %d to %d", MinNumberOfChannelAccounts, MaxNumberOfChannelAccounts)
+	if so.NumChannelAccounts < services.MinNumberOfChannelAccounts || so.NumChannelAccounts > services.MaxNumberOfChannelAccounts {
+		return fmt.Errorf("num channel accounts must stay in the range from %d to %d", services.MinNumberOfChannelAccounts, services.MaxNumberOfChannelAccounts)
 	}
 
 	if so.QueuePollingInterval < 6 {
 		return fmt.Errorf("queue polling interval must be greater than 6 seconds")
-	}
-
-	if so.MaxBaseFee < txnbuild.MinBaseFee {
-		return fmt.Errorf("max base fee must be greater than or equal to %d", txnbuild.MinBaseFee)
 	}
 
 	if sdpUtils.IsEmpty(so.MonitorService) {
@@ -90,12 +69,12 @@ type Manager struct {
 	queueService        defaultQueueService
 	txProcessingLimiter *engine.TransactionProcessingLimiter
 	// transaction submission:
-	engine     *engine.SubmitterEngine
-	sigService engine.SignatureService
-	maxBaseFee int
+	engine *engine.SubmitterEngine
 	// crash & metrics monitoring:
 	monitorService     tssMonitor.TSSMonitorService
 	crashTrackerClient crashtracker.CrashTrackerClient
+	// event producer:
+	eventProducer events.Producer
 }
 
 func NewManager(ctx context.Context, opts SubmitterOptions) (m *Manager, err error) {
@@ -117,41 +96,11 @@ func NewManager(ctx context.Context, opts SubmitterOptions) (m *Manager, err err
 		return nil, fmt.Errorf("validating options: %w", err)
 	}
 
-	// initialize database connection pool and the data models
-	dbConnectionPool, err := db.OpenDBConnectionPool(opts.DatabaseDSN)
-	if err != nil {
-		return nil, fmt.Errorf("opening db connection pool: %w", err)
-	}
-	defer func() {
-		// We only close the connection pool if the constructor finishes with an error.
-		// If we close the connection pool on successful cases, the manager will not be able to use it.
-		if err != nil {
-			dbConnectionPool.Close()
-		}
-	}()
-	txModel := store.NewTransactionModel(dbConnectionPool)
-	chAccModel := &store.ChannelAccountModel{DBConnectionPool: dbConnectionPool}
-	chTxBundleModel, err := store.NewChannelTransactionBundleModel(dbConnectionPool)
+	txModel := store.NewTransactionModel(opts.DBConnectionPool)
+	chAccModel := &store.ChannelAccountModel{DBConnectionPool: opts.DBConnectionPool}
+	chTxBundleModel, err := store.NewChannelTransactionBundleModel(opts.DBConnectionPool)
 	if err != nil {
 		return nil, fmt.Errorf("initializing channel transaction bundle model: %w", err)
-	}
-
-	// initialize horizon client
-	horizonClient := &horizonclient.Client{
-		HorizonURL: opts.HorizonURL,
-		HTTP:       httpclient.DefaultClient(),
-	}
-
-	// initialize default signature service
-	sigService, err := engine.NewDefaultSignatureService(opts.NetworkPassphrase, dbConnectionPool, opts.DistributionSeed, chAccModel, opts.PrivateKeyEncrypter, opts.DistributionSeed)
-	if err != nil {
-		return nil, fmt.Errorf("initializing default signature service: %w", err)
-	}
-
-	// initialize SubmitterEngine
-	submitterEngine, err := engine.NewSubmitterEngine(horizonClient)
-	if err != nil {
-		return nil, fmt.Errorf("initializing submitter engine: %w", err)
 	}
 
 	// validate if we have any channel accounts in the DB.
@@ -176,7 +125,7 @@ func NewManager(ctx context.Context, opts SubmitterOptions) (m *Manager, err err
 	txProcessingLimiter := engine.NewTransactionProcessingLimiter(opts.NumChannelAccounts)
 
 	return &Manager{
-		dbConnectionPool: dbConnectionPool,
+		dbConnectionPool: opts.DBConnectionPool,
 		chAccModel:       chAccModel,
 		txModel:          txModel,
 		chTxBundleModel:  chTxBundleModel,
@@ -184,12 +133,12 @@ func NewManager(ctx context.Context, opts SubmitterOptions) (m *Manager, err err
 		queueService:        queueService,
 		txProcessingLimiter: txProcessingLimiter,
 
-		engine:     submitterEngine,
-		sigService: sigService,
-		maxBaseFee: opts.MaxBaseFee,
+		engine: &opts.SubmitterEngine,
 
 		crashTrackerClient: crashTrackerClient,
 		monitorService:     opts.MonitorService,
+
+		eventProducer: opts.EventProducer,
 	}, nil
 }
 
@@ -243,11 +192,10 @@ func (m *Manager) ProcessTransactions(ctx context.Context) {
 					m.txModel,
 					m.chAccModel,
 					m.engine,
-					m.sigService,
-					m.maxBaseFee,
 					m.crashTrackerClient,
 					m.txProcessingLimiter,
 					m.monitorService,
+					m.eventProducer,
 				)
 				if err != nil {
 					m.crashTrackerClient.LogAndReportErrors(ctx, err, "")
@@ -269,7 +217,7 @@ func (m *Manager) loadReadyForProcessingBundles(ctx context.Context) ([]*store.C
 	if err != nil {
 		return nil, fmt.Errorf("getting current ledger number: %w", err)
 	}
-	lockToLedgerNumber := currentLedgerNumber + engine.IncrementForMaxLedgerBounds
+	lockToLedgerNumber := currentLedgerNumber + preconditions.IncrementForMaxLedgerBounds
 
 	chTxBundles, err := m.chTxBundleModel.LoadAndLockTuples(ctx, currentLedgerNumber, lockToLedgerNumber, m.txProcessingLimiter.LimitValue())
 	if err != nil {

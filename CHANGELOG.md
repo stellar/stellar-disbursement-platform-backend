@@ -2,11 +2,91 @@
 
 All notable changes to this project will be documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
+The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## Unreleased
 
 None
+
+## [2.0.0.rc1](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/2.0.0-rc1)
+
+First Release Candidate of the Stellar Disbursement Platform v2.0.0. This
+release introduces multi-tenancy support, allowing multiple tenants
+(organizations) to use the platform simultaneously.
+
+Each organization has its own set of users, receivers, disbursements, etc.
+
+This version is only compatible with the [stellar/stellar-disbursement-platform-frontend] version 2.x.x.
+
+### Changed
+- Support multi-tenant CLI
+  - Make `add-user` CLI support multi-tenancy [#228](https://github.com/stellar/stellar-disbursement-platform-backend/pull/228)
+  - Change migrations CLI to run for all tenants [#89](https://github.com/stellar/stellar-disbursement-platform-backend/pull/89)
+- Use DB connection pool as dependency injection [#207](https://github.com/stellar/stellar-disbursement-platform-backend/pull/207)
+- Make receiver registration handler tenant-aware [#117](https://github.com/stellar/stellar-disbursement-platform-backend/pull/117)
+- Tag log entries with tenant metadata [#192](https://github.com/stellar/stellar-disbursement-platform-backend/pull/192)
+- Use `DistributionAccountResolver` instead of passing around distribution public key [#212](https://github.com/stellar/stellar-disbursement-platform-backend/pull/212)
+- Make provision new tenant an atomic operation [#233](https://github.com/stellar/stellar-disbursement-platform-backend/pull/233)
+- Make `ready_payments_cancellation` job multi-tenant [#223] (https://github.com/stellar/stellar-disbursement-platform-backend/pull/223)
+
+
+### Added
+- Tenant Provisioning & Onboarding [#84](https://github.com/stellar/stellar-disbursement-platform-backend/pull/84)
+- Tenant Authentication Middleware [#92](https://github.com/stellar/stellar-disbursement-platform-backend/pull/92)
+- Multi-tenancy connection pool & data source manager [#86](https://github.com/stellar/stellar-disbursement-platform-backend/pull/86)
+- Generate multitenant SEP-1 TOML file [#111](https://github.com/stellar/stellar-disbursement-platform-backend/pull/111)
+- Prepare Signature Service & TSS to support Multi-tenancy
+  - Add signature service with configurable distribution accounts [#174](https://github.com/stellar/stellar-disbursement-platform-backend/pull/174)
+  - Aggregate all tx submission dependencies under `SubmitterEngine` [#165](https://github.com/stellar/stellar-disbursement-platform-backend/pull/165)
+  - Add configurable signature service type [#160](https://github.com/stellar/stellar-disbursement-platform-backend/pull/160)
+  - Allow signature service to be dependency-injected [#158](https://github.com/stellar/stellar-disbursement-platform-backend/pull/158)
+  - Use dependency-injected signature service in `channel-account` CLI commands [#156](https://github.com/stellar/stellar-disbursement-platform-backend/pull/156)
+- '/tenant' endpoint
+  - Setup tenant server [#90](https://github.com/stellar/stellar-disbursement-platform-backend/pull/90)
+  - `POST` Provision tenant endpoint [#97](https://github.com/stellar/stellar-disbursement-platform-backend/pull/97)
+  - `GET` Tenant(s) API [#93](https://github.com/stellar/stellar-disbursement-platform-backend/pull/93)
+  - `PATCH` Tenant API [#100](https://github.com/stellar/stellar-disbursement-platform-backend/pull/100)
+- `add-tenant` CLI [#76](https://github.com/stellar/stellar-disbursement-platform-backend/pull/76)
+- Patch incoming TSS events to Anchor platform [#134](https://github.com/stellar/stellar-disbursement-platform-backend/pull/134)
+- Update DB structure so that TSS resources can be shared by multiple SDP tenants
+  - Move all TSS related tables to TSS schema [#141](https://github.com/stellar/stellar-disbursement-platform-backend/pull/141)
+  - Create TSS schema and migrations CLI command [#136](https://github.com/
+    stellar/stellar-disbursement-platform-backend/pull/136)
+  - Refactor migrations commands to support TSS migrations [#123](https://github.com/stellar/stellar-disbursement-platform-backend/pull/123)
+- Add host distribution account awareness [#172](https://github.com/stellar/stellar-disbursement-platform-backend/pull/172)
+- Wire distribution account to tenant admin table during user provisioning [#198](https://github.com/stellar/stellar-disbursement-platform-backend/pull/198)
+- Prepare transaction submission table to reference tenant [#142](https://github.com/stellar/stellar-disbursement-platform-backend/pull/142)
+- Kafka message broker support
+  - Migrate SMS invitation to use message broker from scheduled jobs [#133](https://github.com/stellar/stellar-disbursement-platform-backend/pull/133)
+  - Publish receiver wallet invitation events at disbursement start [#182](https://github.com/stellar/stellar-disbursement-platform-backend/pull/182)
+  - Produce payment events to sync back to SDP [#149] (https://github.com/stellar/stellar-disbursement-platform-backend/pull/149)
+  - Produce payment events from SDP to TSS [#159](https://github.com/stellar/stellar-disbursement-platform-backend/pull/159)
+- Implement `DistributionAccountDBSignatureClient` [#197](https://github.com/stellar/stellar-disbursement-platform-backend/pull/197)
+- Create tenant distribution account during provisioning [#224](https://github.com/stellar/stellar-disbursement-platform-backend/pull/224)
+- Enable payments scheduler job as an alternative to using Kafka [#230](https://github.com/stellar/stellar-disbursement-platform-backend/pull/230)
+
+
+### Security
+- Admin API authentication/authorization [#201](https://github.com/stellar/stellar-disbursement-platform-backend/pull/201)
+- Enable security protocols for Kafka
+  - SASL auth [#162](https://github.com/stellar/stellar-disbursement-platform-backend/pull/162)
+  - SSL auth [#226](https://github.com/stellar/stellar-disbursement-platform-backend/pull/226)
+
+## [1.1.6](https://github.com/stellar/stellar-disbursement-platform-backend/compare/1.1.5...1.1.6)
+
+Attention, this version is compatible with the frontend version [1.1.2](https://github.com/stellar/stellar-disbursement-platform-frontend/releases/tag/1.1.2).
+
+### Changed
+
+- Update the `PATCH /receivers/{id}` request, so a receiver's verification info is not just inserted but upserted. The update part of the upsert only takes place if the verification info has not been confirmed yet. [#205](https://github.com/stellar/stellar-disbursement-platform-backend/pull/205)
+- Update the order of the verification field that is shown to the receiver during the [SEP-24] flow. The order was `(updated_at DESC)` and was updated to the composed sorting `(updated_at DESC, rv.verification_field ASC)` to ensure consistency when multiple verification fields share the same `updated_at` value.
+- Improve information in the error message returned when the disbursement instruction contains a verification info that is different from an already existing verification info that was already confirmed by the receiver. [#178](https://github.com/stellar/stellar-disbursement-platform-backend/pull/178)
+- When adding an asset, make sure to trim the spaces fom the issuer field. [#185](https://github.com/stellar/stellar-disbursement-platform-backend/pull/185)
+
+### Security
+
+- Bump Go version from 1.19 to 1.22, and upgraded the version of some CI tools. [#196](https://github.com/stellar/stellar-disbursement-platform-backend/pull/196)
+- Add rate-limiter in both in the application and the kubernetes deployment. [#195](https://github.com/stellar/stellar-disbursement-platform-backend/pull/195)
 
 ## [1.1.5](https://github.com/stellar/stellar-disbursement-platform-backend/compare/1.1.4...1.1.5)
 
@@ -32,7 +112,7 @@ None
 
 ### Fixed
 
-- SEP24 registration flow not working properly when the phone number was not found in the DB [#187](https://github.com/stellar/stellar-disbursement-platform-backend/pull/187)
+- [SEP-24] registration flow not working properly when the phone number was not found in the DB [#187](https://github.com/stellar/stellar-disbursement-platform-backend/pull/187)
 - Fix distribution account balance validation that fails when the intended asset is XLM [#186](https://github.com/stellar/stellar-disbursement-platform-backend/pull/186)
 
 ## [1.1.2](https://github.com/stellar/stellar-disbursement-platform-backend/compare/1.1.1...1.1.2)
@@ -52,7 +132,7 @@ None
 ### Changed
 
 - Change `POST /disbursements` to accept different verification types [#103](https://github.com/stellar/stellar-disbursement-platform-backend/pull/103)
-- Change `SEP-24` Flow to display different verifications based on disbursement verification type [#116](https://github.com/stellar/stellar-disbursement-platform-backend/pull/116)
+- Change [SEP-24] Flow to display different verifications based on disbursement verification type [#116](https://github.com/stellar/stellar-disbursement-platform-backend/pull/116)
 - Add sorting to `GET /users` endpoint [#104](https://github.com/stellar/stellar-disbursement-platform-backend/pull/104)
 - Change read permission for receiver details to include business roles [#144](https://github.com/stellar/stellar-disbursement-platform-backend/pull/144)
 - Add support for unique payment ID to disbursement instructions file as an optional field in `GET /payments/{id}` [#131](https://github.com/stellar/stellar-disbursement-platform-backend/pull/131)
@@ -85,16 +165,6 @@ None
   - Coinspect SDP-006 Weak password policy [#143](https://github.com/stellar/stellar-disbursement-platform-backend/pull/143)
   - Coinspect SDP-007: Log user activity when updating user info [#139](https://github.com/stellar/stellar-disbursement-platform-backend/pull/139)
   - Coinspect SDP-012 Enhance User Awareness for SMS One-Time Password (OTP) Usage [#138](https://github.com/stellar/stellar-disbursement-platform-backend/pull/138)
-
-## [1.0.1](https://github.com/stellar/stellar-disbursement-platform-backend/compare/1.0.0...1.0.1)
-
-### Changed
-
-- Update log message for better debugging. [#125](https://github.com/stellar/stellar-disbursement-platform-backend/pull/125)
-
-### Fixed
-
-- Fix client_domain from the Viobrant Assist wallet. [#126](https://github.com/stellar/stellar-disbursement-platform-backend/pull/126)
 
 ## [1.0.1](https://github.com/stellar/stellar-disbursement-platform-backend/compare/1.0.0...1.0.1)
 
@@ -144,7 +214,7 @@ None
 
 - Stellar.Expert URL in env-config.js for dev environment setup. [#34](https://github.com/stellar/stellar-disbursement-platform-backend/pull/34)
 - Patch the correct transaction data fields in AnchorPlatform. [#40](https://github.com/stellar/stellar-disbursement-platform-backend/pull/40)
-- Sep10 domain configuration for Vibrant wallet on Testnet. [#42](https://github.com/stellar/stellar-disbursement-platform-backend/pull/42)
+- [SEP-10] domain configuration for Vibrant wallet on Testnet. [#42](https://github.com/stellar/stellar-disbursement-platform-backend/pull/42)
 - The SMS invitation link for XLM asset. [#46](https://github.com/stellar/stellar-disbursement-platform-backend/pull/46)
 
 ### Security
@@ -199,7 +269,7 @@ number, transfer amount, and essential customer validation data such as the date
 
 The platform subsequently sends an SMS to the recipient, which includes a deep link to the wallet. This link permits
 recipients with compatible wallets to register their wallet on the SDP. During this step, they are required to verify
-their phone number and additional customer data through the SEP-24 interactive deposit flow, where this data is shared
+their phone number and additional customer data through the [SEP-24] interactive deposit flow, where this data is shared
 directly with the backend through a webpage inside the wallet, but the wallet itself does not have access to this data.
 
 Upon successful verification, the SDP will transfer the funds directly to the recipient's wallet. When the recipient's
@@ -207,3 +277,5 @@ wallet has been successfully associated with their phone number in the SDP, all 
 automatically.
 
 [stellar/stellar-disbursement-platform-frontend]: https://github.com/stellar/stellar-disbursement-platform-frontend
+[SEP-10]: https://stellar.org/protocol/sep-10
+[SEP-24]: https://stellar.org/protocol/sep-24

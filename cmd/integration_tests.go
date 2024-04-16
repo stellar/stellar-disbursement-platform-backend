@@ -48,43 +48,34 @@ func (c *IntegrationTestsCommand) Command() *cobra.Command {
 			FlagDefault: "Integration test wallet",
 			Required:    true,
 		},
-	}
-	integrationTestsCmd := &cobra.Command{
-		Use:   "integration-tests",
-		Short: "Integration tests related commands",
-		PersistentPreRun: func(cmd *cobra.Command, args []string) {
-			cmd.Parent().PersistentPreRun(cmd.Parent(), args)
-
-			// Validate & ingest input parameters
-			configOpts.Require()
-			err := configOpts.SetValues()
-			if err != nil {
-				log.Fatalf("Error setting values of config options: %s", err.Error())
-			}
-
-			// inject database url to integration tests opts
-			integrationTestsOpts.DatabaseDSN = globalOptions.databaseURL
-
-			c.Service, err = integrationtests.NewIntegrationTestsService(*integrationTestsOpts)
-			if err != nil {
-				log.Fatalf("error creating integration tests service: %s", err.Error())
-			}
+		{
+			Name:      "admin-server-base-url",
+			Usage:     "The Base URL of the admin API of the SDP used for managing tenants",
+			OptType:   types.String,
+			ConfigKey: &integrationTestsOpts.AdminServerBaseURL,
+			Required:  true,
 		},
-	}
-	err := configOpts.Init(integrationTestsCmd)
-	if err != nil {
-		log.Fatalf("Error initializing a config option: %s", err.Error())
-	}
-
-	startIntegrationTestsCmd := c.StartIntegrationTestsCommand(integrationTestsOpts)
-	createIntegrationTestsDataCmd := c.CreateIntegrationTestsDataCommand(integrationTestsOpts)
-	integrationTestsCmd.AddCommand(startIntegrationTestsCmd, createIntegrationTestsDataCmd)
-
-	return integrationTestsCmd
-}
-
-func (c *IntegrationTestsCommand) StartIntegrationTestsCommand(integrationTestsOpts *integrationtests.IntegrationTestsOpts) *cobra.Command {
-	configOpts := config.ConfigOptions{
+		{
+			Name:      "admin-server-account-id",
+			Usage:     "The account id of the admin server api",
+			OptType:   types.String,
+			ConfigKey: &integrationTestsOpts.AdminServerAccountId,
+			Required:  true,
+		},
+		{
+			Name:      "admin-server-api-key",
+			Usage:     "The api key of the admin server api",
+			OptType:   types.String,
+			ConfigKey: &integrationTestsOpts.AdminServerApiKey,
+			Required:  true,
+		},
+		{
+			Name:      "tenant-name",
+			Usage:     "Tenant name to be used in integration tests",
+			OptType:   types.String,
+			ConfigKey: &integrationTestsOpts.TenantName,
+			Required:  true,
+		},
 		{
 			Name:      "user-email",
 			Usage:     "Email from SDP authenticated user with all roles",
@@ -99,6 +90,44 @@ func (c *IntegrationTestsCommand) StartIntegrationTestsCommand(integrationTestsO
 			ConfigKey: &integrationTestsOpts.UserPassword,
 			Required:  true,
 		},
+	}
+	integrationTestsCmd := &cobra.Command{
+		Use:   "integration-tests",
+		Short: "Integration tests related commands",
+		PersistentPreRun: func(cmd *cobra.Command, args []string) {
+			cmdUtils.PropagatePersistentPreRun(cmd, args)
+			ctx := cmd.Context()
+
+			// Validate & ingest input parameters
+			configOpts.Require()
+			err := configOpts.SetValues()
+			if err != nil {
+				log.Ctx(ctx).Fatalf("Error setting values of config options: %s", err.Error())
+			}
+
+			// inject database url to integration tests opts
+			integrationTestsOpts.DatabaseDSN = globalOptions.DatabaseURL
+
+			c.Service, err = integrationtests.NewIntegrationTestsService(*integrationTestsOpts)
+			if err != nil {
+				log.Ctx(ctx).Fatalf("error creating integration tests service: %s", err.Error())
+			}
+		},
+	}
+	err := configOpts.Init(integrationTestsCmd)
+	if err != nil {
+		log.Ctx(integrationTestsCmd.Context()).Fatalf("Error initializing a config option: %s", err.Error())
+	}
+
+	startIntegrationTestsCmd := c.StartIntegrationTestsCommand(integrationTestsOpts)
+	createIntegrationTestsDataCmd := c.CreateIntegrationTestsDataCommand(integrationTestsOpts)
+	integrationTestsCmd.AddCommand(startIntegrationTestsCmd, createIntegrationTestsDataCmd)
+
+	return integrationTestsCmd
+}
+
+func (c *IntegrationTestsCommand) StartIntegrationTestsCommand(integrationTestsOpts *integrationtests.IntegrationTestsOpts) *cobra.Command {
+	configOpts := config.ConfigOptions{
 		{
 			Name:           "receiver-account-public-key",
 			Usage:          "Integration test receiver public stellar account key",
@@ -188,14 +217,14 @@ func (c *IntegrationTestsCommand) StartIntegrationTestsCommand(integrationTestsO
 
 			err := c.Service.StartIntegrationTests(ctx, *integrationTestsOpts)
 			if err != nil {
-				log.Fatalf("Error starting integration tests: %s", err.Error())
+				log.Ctx(ctx).Fatalf("Error starting integration tests: %s", err.Error())
 			}
 		},
 	}
 
 	err := configOpts.Init(startIntegrationTestsCmd)
 	if err != nil {
-		log.Fatalf("Error initializing startIntegrationTestsCmd: %s", err.Error())
+		log.Ctx(startIntegrationTestsCmd.Context()).Fatalf("Error initializing startIntegrationTestsCmd: %s", err.Error())
 	}
 
 	return startIntegrationTestsCmd
@@ -240,14 +269,14 @@ func (c *IntegrationTestsCommand) CreateIntegrationTestsDataCommand(integrationT
 
 			err := c.Service.CreateTestData(ctx, *integrationTestsOpts)
 			if err != nil {
-				log.Fatalf("Error creating integration tests data: %s", err.Error())
+				log.Ctx(ctx).Fatalf("Error creating integration tests data: %s", err.Error())
 			}
 		},
 	}
 
 	err := configOpts.Init(createIntegrationTestsDataCmd)
 	if err != nil {
-		log.Fatalf("Error initializing createIntegrationTestsDataCmd: %s", err.Error())
+		log.Ctx(createIntegrationTestsDataCmd.Context()).Fatalf("Error initializing createIntegrationTestsDataCmd: %s", err.Error())
 	}
 
 	return createIntegrationTestsDataCmd

@@ -8,6 +8,9 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
+
 	"github.com/stellar/go/support/log"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
@@ -24,10 +27,12 @@ type Scheduler struct {
 	cancel             context.CancelFunc
 	jobQueue           chan jobs.Job
 	crashTrackerClient crashtracker.CrashTrackerClient
+	tenantManager      tenant.ManagerInterface
 }
 
 type SchedulerOptions struct {
-	MaxInvitationSMSResendAttempts int
+	PaymentJobIntervalSeconds            int
+	ReceiverInvitationJobIntervalSeconds int
 }
 
 type SchedulerJobRegisterOption func(*Scheduler)
@@ -36,7 +41,7 @@ type SchedulerJobRegisterOption func(*Scheduler)
 const SchedulerWorkerCount = 5
 
 // StartScheduler initializes and starts the scheduler. This method blocks until the scheduler is stopped.
-func StartScheduler(crashTrackerClient crashtracker.CrashTrackerClient, schedulerJobRegisters ...SchedulerJobRegisterOption) {
+func StartScheduler(adminDBConnectionPool db.DBConnectionPool, crashTrackerClient crashtracker.CrashTrackerClient, schedulerJobRegisters ...SchedulerJobRegisterOption) {
 	// Call crash tracker FlushEvents to flush buffered events before the scheduler terminates
 	defer crashTrackerClient.FlushEvents(2 * time.Second)
 	// Call crash tracker Recover for recover from unhandled panics
@@ -48,11 +53,12 @@ func StartScheduler(crashTrackerClient crashtracker.CrashTrackerClient, schedule
 	signalChan := make(chan os.Signal, 1)
 
 	// register signal listeners for graceful shutdown
-	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
+	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 
 	scheduler := newScheduler(cancel)
 	// add crashTrackerClient to scheduler object
 	scheduler.crashTrackerClient = crashTrackerClient
+	scheduler.tenantManager = tenant.NewManager(tenant.WithDatabase(adminDBConnectionPool))
 
 	// Registering jobs
 	for _, schedulerJobRegister := range schedulerJobRegisters {
@@ -78,6 +84,8 @@ func newScheduler(cancel context.CancelFunc) *Scheduler {
 
 // addJob adds a job to the scheduler. This method does not start the job. To start the job, call start().
 func (s *Scheduler) addJob(job jobs.Job) {
+	log.Infof("registering job to scheduler [name: %s], [interval: %s], [isMultiTenant: %t]",
+		job.GetName(), job.GetInterval(), job.IsJobMultiTenant())
 	s.jobs[job.GetName()] = job
 }
 
@@ -93,7 +101,7 @@ func (s *Scheduler) start(ctx context.Context) {
 	// 1. We start all the workers that will process jobs from the job queue.
 	for i := 1; i <= SchedulerWorkerCount; i++ {
 		// start a new worker passing a CrashTrackerClient clone to report errors when the job is executed
-		go worker(ctx, i, s.crashTrackerClient.Clone(), s.jobQueue)
+		go worker(ctx, i, s.crashTrackerClient.Clone(), s.tenantManager, s.jobQueue)
 	}
 
 	// 2. Enqueue jobs to jobQueue.
@@ -104,7 +112,7 @@ func (s *Scheduler) start(ctx context.Context) {
 			for {
 				select {
 				case <-ticker.C:
-					log.Debugf("Enqueuing job: %s", job.GetName())
+					log.Ctx(ctx).Debugf("Enqueuing job: %s", job.GetName())
 					s.jobQueue <- job
 				case <-ctx.Done():
 					ticker.Stop()
@@ -122,33 +130,47 @@ func (s *Scheduler) stop() {
 }
 
 // worker is a goroutine that processes jobs from the job queue.
-func worker(ctx context.Context, workerID int, crashTrackerClient crashtracker.CrashTrackerClient, jobQueue <-chan jobs.Job) {
+func worker(ctx context.Context, workerID int, crashTrackerClient crashtracker.CrashTrackerClient, tenantManager tenant.ManagerInterface, jobQueue <-chan jobs.Job) {
 	defer func() {
 		if r := recover(); r != nil {
-			log.Errorf("Worker %d encountered a panic while processing a job: %v", workerID, r)
+			log.Ctx(ctx).Errorf("Worker %d encountered a panic while processing a job: %v", workerID, r)
 		}
 	}()
 	for {
 		select {
 		case job := <-jobQueue:
-			log.Debugf("Worker %d processing job: %s", workerID, job.GetName())
-			if err := job.Execute(ctx); err != nil {
-				msg := fmt.Sprintf("error processing job %s on worker %d", job.GetName(), workerID)
-				// call crash tracker client to log and report error
-				crashTrackerClient.LogAndReportErrors(ctx, err, msg)
-			}
+			executeJob(ctx, job, workerID, crashTrackerClient, tenantManager)
 		case <-ctx.Done():
-			log.Infof("Worker %d stopping...", workerID)
+			log.Ctx(ctx).Infof("Worker %d stopping...", workerID)
 			return
 		}
 	}
 }
 
-func WithPaymentToSubmitterJobOption(models *data.Models) SchedulerJobRegisterOption {
-	return func(s *Scheduler) {
-		j := jobs.NewPaymentToSubmitterJob(models)
-		log.Infof("registering %s job to scheduler", j.GetName())
-		s.addJob(j)
+// executeJob executes a job and reports any errors to the crash tracker.
+func executeJob(ctx context.Context, job jobs.Job, workerID int, crashTrackerClient crashtracker.CrashTrackerClient, tenantManager tenant.ManagerInterface) {
+	// Handle multi-tenant jobs.
+	if job.IsJobMultiTenant() {
+		tenants, err := tenantManager.GetAllTenants(ctx)
+		if err != nil {
+			msg := fmt.Sprintf("error getting all tenants for job %s on worker %d", job.GetName(), workerID)
+			crashTrackerClient.LogAndReportErrors(ctx, err, msg)
+			return
+		}
+		for _, t := range tenants {
+			log.Ctx(ctx).Debugf("Processing job %s for tenant %s on worker %d", job.GetName(), t.ID, workerID)
+			tenantCtx := tenant.SaveTenantInContext(context.Background(), &t)
+			if jobErr := job.Execute(tenantCtx); jobErr != nil {
+				msg := fmt.Sprintf("error processing job %s for tenant %s on worker %d", job.GetName(), t.ID, workerID)
+				crashTrackerClient.LogAndReportErrors(tenantCtx, err, msg)
+			}
+		}
+	} else {
+		log.Ctx(ctx).Debugf("Processing job %s on worker %d", job.GetName(), workerID)
+		if err := job.Execute(ctx); err != nil {
+			msg := fmt.Sprintf("error processing job %s on worker %d", job.GetName(), workerID)
+			crashTrackerClient.LogAndReportErrors(ctx, err, msg)
+		}
 	}
 }
 
@@ -158,31 +180,6 @@ func WithAPAuthEnforcementJob(apService anchorplatform.AnchorPlatformAPIServiceI
 		if err != nil {
 			log.Errorf("error creating %s job: %s", j.GetName(), err)
 		}
-		log.Infof("registering %s job to scheduler", j.GetName())
-		s.addJob(j)
-	}
-}
-
-func WithPaymentFromSubmitterJobOption(models *data.Models) SchedulerJobRegisterOption {
-	return func(s *Scheduler) {
-		j := jobs.NewPaymentFromSubmitterJob(models)
-		log.Infof("registering %s job to scheduler", j.GetName())
-		s.addJob(j)
-	}
-}
-
-func WithSendReceiverWalletsSMSInvitationJobOption(o jobs.SendReceiverWalletsSMSInvitationJobOptions) SchedulerJobRegisterOption {
-	return func(s *Scheduler) {
-		j := jobs.NewSendReceiverWalletsSMSInvitationJob(o)
-		log.Infof("registering %s job to scheduler", j.GetName())
-		s.addJob(j)
-	}
-}
-
-func WithPatchAnchorPlatformTransactionsCompletionJobOption(apAPISvc anchorplatform.AnchorPlatformAPIServiceInterface, models *data.Models) SchedulerJobRegisterOption {
-	return func(s *Scheduler) {
-		j := jobs.NewPatchAnchorPlatformTransactionsCompletionJob(apAPISvc, models)
-		log.Infof("registering %s job to scheduler", j.GetName())
 		s.addJob(j)
 	}
 }
@@ -190,7 +187,37 @@ func WithPatchAnchorPlatformTransactionsCompletionJobOption(apAPISvc anchorplatf
 func WithReadyPaymentsCancellationJobOption(models *data.Models) SchedulerJobRegisterOption {
 	return func(s *Scheduler) {
 		j := jobs.NewReadyPaymentsCancellationJob(models)
-		log.Infof("registering %s job to scheduler", j.GetName())
+		s.addJob(j)
+	}
+}
+
+func WithPaymentToSubmitterJobOption(jobIntervalSeconds int,
+	models *data.Models,
+	tssDBConnectionPool db.DBConnectionPool,
+) SchedulerJobRegisterOption {
+	return func(s *Scheduler) {
+		j := jobs.NewPaymentToSubmitterJob(jobIntervalSeconds, models, tssDBConnectionPool)
+		s.addJob(j)
+	}
+}
+
+func WithPaymentFromSubmitterJobOption(paymentJobInterval int, models *data.Models, tssDBConnectionPool db.DBConnectionPool) SchedulerJobRegisterOption {
+	return func(s *Scheduler) {
+		j := jobs.NewPaymentFromSubmitterJob(paymentJobInterval, models, tssDBConnectionPool)
+		s.addJob(j)
+	}
+}
+
+func WithSendReceiverWalletsSMSInvitationJobOption(o jobs.SendReceiverWalletsSMSInvitationJobOptions) SchedulerJobRegisterOption {
+	return func(s *Scheduler) {
+		j := jobs.NewSendReceiverWalletsSMSInvitationJob(o)
+		s.addJob(j)
+	}
+}
+
+func WithPatchAnchorPlatformTransactionsCompletionJobOption(paymentJobInterval int, apAPISvc anchorplatform.AnchorPlatformAPIServiceInterface, models *data.Models) SchedulerJobRegisterOption {
+	return func(s *Scheduler) {
+		j := jobs.NewPatchAnchorPlatformTransactionsCompletionJob(paymentJobInterval, apAPISvc, models)
 		s.addJob(j)
 	}
 }
