@@ -34,7 +34,7 @@ func Test_GetSignedRegistrationLink_SchemelessDeepLink(t *testing.T) {
 
 	registrationLink, err := wdl.GetSignedRegistrationLink("SCTOVDWM3A7KLTXXIV6YXL6QRVUIIG4HHHIDDKPR4JUB3DGDIKI5VGA2")
 	require.NoError(t, err)
-	wantRegistrationLink := "https://api-dev.vibrantapp.com/sdp-dev?asset=USDC-GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5&domain=ap.localhost.com&external_id=ExternalID&name=FOO+Org&signature=7cf83326f120985446e056e3e2253c591a5a5e9d116c3d09d46d5f26135ffe4d20947c297c241c499ba92b40b339371d7c5d032533f3048c2e4b4912615f380c"
+	wantRegistrationLink := "https://api-dev.vibrantapp.com/sdp-dev?asset=USDC-GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5&domain=tenant.localhost.com&external_id=ExternalID&name=FOO+Org&signature=e5bb177449321e418e1d3d74f4ef5d3c0dad27f9242d148b38bde497bc93abfb312c0f3c5fc87e89aa30f373d765af13cde84ac7a2fa5c86f36382a2de2f600f"
 	require.Equal(t, wantRegistrationLink, registrationLink)
 
 	wdl = WalletDeepLink{
@@ -48,7 +48,7 @@ func Test_GetSignedRegistrationLink_SchemelessDeepLink(t *testing.T) {
 
 	registrationLink, err = wdl.GetSignedRegistrationLink("SCTOVDWM3A7KLTXXIV6YXL6QRVUIIG4HHHIDDKPR4JUB3DGDIKI5VGA2")
 	require.NoError(t, err)
-	wantRegistrationLink = "https://www.beansapp.com/disbursements/registration?asset=USDC-GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5&domain=ap.localhost.com&external_id=ExternalID&name=FOO+Org&redirect=true&signature=e64ba9047fad3ccf3e03b93bc86d966577c919989f7acbf4367b9302a33e10df28c9845f5c213e1e22fc20b5d7ea8266032195d55dc547e61ea52866f67d6306"
+	wantRegistrationLink = "https://www.beansapp.com/disbursements/registration?asset=USDC-GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5&domain=tenant.localhost.com&external_id=ExternalID&name=FOO+Org&redirect=true&signature=4ef7096f37829e95eefd52c63ff4163570a3167e75fd7e253767b34700d50327c9fc4aaff03b7510a0201c08d67754b91b85fee5e443751c5d45bc30d418600c"
 	require.Equal(t, wantRegistrationLink, registrationLink)
 }
 
@@ -383,7 +383,7 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 
 	t.Run("send invite successfully with external_id", func(t *testing.T) {
 		useExternalID := true // simulate default config value for useExternalID
-		s, err := NewSendReceiverWalletInviteService(models, messengerClientMock, anchorPlatformBaseSepURL, stellarSecretKey, 3, mockCrashTrackerClient, useExternalID)
+		s, err := NewSendReceiverWalletInviteService(models, messengerClientMock, stellarSecretKey, 3, mockCrashTrackerClient, useExternalID)
 		require.NoError(t, err)
 
 		data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
@@ -413,7 +413,6 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 
 		walletDeepLink1 := WalletDeepLink{
 			DeepLink:                 wallet1.DeepLinkSchema,
-			AnchorPlatformBaseSepURL: anchorPlatformBaseSepURL,
 			OrganizationName:         "MyCustomAid",
 			AssetCode:                asset1.Code,
 			AssetIssuer:              asset1.Issuer,
@@ -425,7 +424,6 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 
 		walletDeepLink2 := WalletDeepLink{
 			DeepLink:                 wallet2.DeepLinkSchema,
-			AnchorPlatformBaseSepURL: anchorPlatformBaseSepURL,
 			OrganizationName:         "MyCustomAid",
 			AssetCode:                asset2.Code,
 			AssetIssuer:              asset2.Issuer,
@@ -645,7 +643,6 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 	t.Run("doesn't resend the invitation SMS when organization's SMS Resend Interval is nil and the invitation was already sent", func(t *testing.T) {
 		useExternalID := false // simulate default config value for useExternalID
 		s, err := NewSendReceiverWalletInviteService(models, messengerClientMock, stellarSecretKey, 3, mockCrashTrackerClient, useExternalID)
-		s, err := NewSendReceiverWalletInviteService(models, messengerClientMock, stellarSecretKey, 3, mockCrashTrackerClient)
 		require.NoError(t, err)
 
 		data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
@@ -1681,7 +1678,6 @@ func Test_WalletDeepLink_GetUnsignedRegistrationLink(t *testing.T) {
 			name: "🎉 successful for deeplink with external-id",
 			walletDeepLink: WalletDeepLink{
 				DeepLink:                 "wallet://sdp?custom=true",
-				AnchorPlatformBaseSepURL: "foo.bar",
 				OrganizationName:         "Foo Bar Org",
 				AssetCode:                "FOO",
 				AssetIssuer:              "GCKGCKZ2PFSCRQXREJMTHAHDMOZQLS2R4V5LZ6VLU53HONH5FI6ACBSX",

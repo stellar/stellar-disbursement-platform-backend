@@ -25,6 +25,7 @@ type SendReceiverWalletsSMSInvitationEventHandlerOptions struct {
 	MaxInvitationSMSResendAttempts int64
 	Sep10SigningPrivateKey         string
 	CrashTrackerClient             crashtracker.CrashTrackerClient
+	UseExternalID                  bool 
 }
 
 type SendReceiverWalletsSMSInvitationEventHandler struct {
@@ -50,6 +51,7 @@ func NewSendReceiverWalletsSMSInvitationEventHandler(options SendReceiverWallets
 		options.Sep10SigningPrivateKey,
 		options.MaxInvitationSMSResendAttempts,
 		options.CrashTrackerClient,
+		options.UseExternalID,
 	)
 	if err != nil {
 		log.Fatalf("error instantiating service: %s", err.Error())

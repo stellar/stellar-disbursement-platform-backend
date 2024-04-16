@@ -131,6 +131,7 @@ func (s *ServerService) SetupConsumers(ctx context.Context, o SetupConsumersOpti
 			MaxInvitationSMSResendAttempts: int64(o.ServeOpts.MaxInvitationSMSResendAttempts),
 			Sep10SigningPrivateKey:         o.ServeOpts.Sep10SigningPrivateKey,
 			CrashTrackerClient:             o.ServeOpts.CrashTrackerClient.Clone(),
+			UseExternalID:				    o.ServeOpts.UseExternalID,                  	
 		}),
 	)
 	if err != nil {
@@ -330,7 +331,8 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			ConfigKey:   &serveOpts.UseExternalID, // Ensure ServeOptions has a UseExternalID field of type bool
 			FlagDefault: false, // Default value set to false. Do Not embed external_id in wallet deep links
 			Required:    false, 
-                },
+		},
+		{
 			Name:        "single-tenant-mode",
 			Usage:       "This option enables the Single Tenant Mode feature. In the case where multi-tenancy is not required, this options bypasses the tenant resolution by always resolving to the default tenant configured in the database.",
 			OptType:     types.Bool,
