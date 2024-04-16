@@ -289,11 +289,8 @@ func (s SendReceiverWalletInviteService) shouldSendInvitationSMS(ctx context.Con
 	return true
 }
 
-<<<<<<< HEAD
-func NewSendReceiverWalletInviteService(models *data.Models, messengerClient message.MessengerClient, anchorPlatformBaseSepURL, sep10SigningPrivateKey string, maxInvitationSMSResendAttempts int64, crashTrackerClient crashtracker.CrashTrackerClient, UseExternalID bool) (*SendReceiverWalletInviteService, error) {
-=======
-func NewSendReceiverWalletInviteService(models *data.Models, messengerClient message.MessengerClient, sep10SigningPrivateKey string, maxInvitationSMSResendAttempts int64, crashTrackerClient crashtracker.CrashTrackerClient) (*SendReceiverWalletInviteService, error) {
->>>>>>> develop
+
+func NewSendReceiverWalletInviteService(models *data.Models, messengerClient message.MessengerClient, sep10SigningPrivateKey string, maxInvitationSMSResendAttempts int64, crashTrackerClient crashtracker.CrashTrackerClient, UseExternalID bool) (*SendReceiverWalletInviteService, error) {
 	s := &SendReceiverWalletInviteService{
 		messengerClient:                messengerClient,
 		Models:                         models,
@@ -321,13 +318,10 @@ type WalletDeepLink struct {
 	AssetCode string
 	// AssetIssuer is the issuer of the Stellar asset that the receiver will be able to receive.
 	AssetIssuer string
-<<<<<<< HEAD
 	// ExternalID is an optional parameter that can be used to include an external ID in the registration link.
 	ExternalID string // The external ID you want to include in the registration link
-=======
 	// TenantBaseURL is the base URL for the tenant that the receiver wallet belongs to.
 	TenantBaseURL string
->>>>>>> develop
 }
 
 func (wdl WalletDeepLink) isNativeAsset() bool {
