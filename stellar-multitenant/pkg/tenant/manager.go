@@ -29,10 +29,11 @@ type tenantContextKey struct{}
 type ManagerInterface interface {
 	GetDSNForTenant(ctx context.Context, tenantName string) (string, error)
 	GetDSNForTenantByID(ctx context.Context, id string) (string, error)
-	GetAllTenants(ctx context.Context, queryParams *QueryParams) ([]Tenant, error)
-	GetTenantByID(ctx context.Context, id string, queryParams *QueryParams) (*Tenant, error)
-	GetTenantByName(ctx context.Context, name string, queryParams *QueryParams) (*Tenant, error)
-	GetTenantByIDOrName(ctx context.Context, arg string, queryParams *QueryParams) (*Tenant, error)
+	GetAllTenants(ctx context.Context) ([]Tenant, error)
+	GetTenant(ctx context.Context, queryParams *QueryParams) (*Tenant, error)
+	GetTenantByID(ctx context.Context, id string) (*Tenant, error)
+	GetTenantByName(ctx context.Context, name string) (*Tenant, error)
+	GetTenantByIDOrName(ctx context.Context, arg string) (*Tenant, error)
 	GetDefault(ctx context.Context) (*Tenant, error)
 	SetDefault(ctx context.Context, sqlExec db.SQLExecuter, id string) (*Tenant, error)
 	AddTenant(ctx context.Context, name string) (*Tenant, error)
@@ -56,7 +57,7 @@ func (m *Manager) GetDSNForTenant(ctx context.Context, tenantName string) (strin
 }
 
 func (m *Manager) GetDSNForTenantByID(ctx context.Context, id string) (string, error) {
-	t, err := m.GetTenantByID(ctx, id, nil)
+	t, err := m.GetTenantByID(ctx, id)
 	if err != nil {
 		return "", err
 	}
@@ -72,9 +73,13 @@ var selectQuery string = `
 `
 
 // GetAllTenants returns all tenants in the database.
-func (m *Manager) GetAllTenants(ctx context.Context, queryParams *QueryParams) ([]Tenant, error) {
-	if queryParams == nil {
-		queryParams = &QueryParams{}
+func (m *Manager) GetAllTenants(ctx context.Context) ([]Tenant, error) {
+	queryParams := &QueryParams{
+		Filters: map[FilterKey]interface{}{
+			FilterKeyOutStatus: DeactivatedTenantStatus,
+		},
+		SortBy:    data.SortFieldName,
+		SortOrder: data.SortOrderASC,
 	}
 
 	tnts := []Tenant{}
@@ -87,13 +92,27 @@ func (m *Manager) GetAllTenants(ctx context.Context, queryParams *QueryParams) (
 	return tnts, nil
 }
 
-func (m *Manager) GetTenantByID(ctx context.Context, id string, queryParams *QueryParams) (*Tenant, error) {
-	if queryParams == nil {
-		queryParams = &QueryParams{
-			Filters: map[FilterKey]interface{}{},
+// GetTenant is a generic method that fetches a tenant based on queryParams
+func (m *Manager) GetTenant(ctx context.Context, queryParams *QueryParams) (*Tenant, error) {
+	var t Tenant
+	q, params := m.newManagerQuery(selectQuery, queryParams)
+	fmt.Println(q, params)
+	if err := m.db.GetContext(ctx, &t, q, params...); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrTenantDoesNotExist
 		}
+		return nil, fmt.Errorf("getting tenant: %w", err)
 	}
-	queryParams.Filters[FilterKeyID] = id
+	return &t, nil
+}
+
+func (m *Manager) GetTenantByID(ctx context.Context, id string) (*Tenant, error) {
+	queryParams := &QueryParams{
+		Filters: map[FilterKey]interface{}{
+			FilterKeyID:        id,
+			FilterKeyOutStatus: DeactivatedTenantStatus,
+		},
+	}
 
 	var t Tenant
 	query, params := m.newManagerQuery(selectQuery, queryParams)
@@ -106,13 +125,13 @@ func (m *Manager) GetTenantByID(ctx context.Context, id string, queryParams *Que
 	return &t, nil
 }
 
-func (m *Manager) GetTenantByName(ctx context.Context, name string, queryParams *QueryParams) (*Tenant, error) {
-	if queryParams == nil {
-		queryParams = &QueryParams{
-			Filters: map[FilterKey]interface{}{},
-		}
+func (m *Manager) GetTenantByName(ctx context.Context, name string) (*Tenant, error) {
+	queryParams := &QueryParams{
+		Filters: map[FilterKey]interface{}{
+			FilterKeyName:      name,
+			FilterKeyOutStatus: DeactivatedTenantStatus,
+		},
 	}
-	queryParams.Filters[FilterKeyName] = name
 
 	var t Tenant
 	query, params := m.newManagerQuery(selectQuery, queryParams)
@@ -126,13 +145,13 @@ func (m *Manager) GetTenantByName(ctx context.Context, name string, queryParams 
 }
 
 // GetTenantByIDOrName returns the tenant with a given id or name.
-func (m *Manager) GetTenantByIDOrName(ctx context.Context, arg string, queryParams *QueryParams) (*Tenant, error) {
-	if queryParams == nil {
-		queryParams = &QueryParams{
-			Filters: map[FilterKey]interface{}{},
-		}
+func (m *Manager) GetTenantByIDOrName(ctx context.Context, arg string) (*Tenant, error) {
+	queryParams := &QueryParams{
+		Filters: map[FilterKey]interface{}{
+			FilterKeyNameOrID:  arg,
+			FilterKeyOutStatus: DeactivatedTenantStatus,
+		},
 	}
-	queryParams.Filters[FilterKeyNameOrID] = arg
 
 	var tnt Tenant
 	query, params := m.newManagerQuery(selectQuery, queryParams)

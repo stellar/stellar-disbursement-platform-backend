@@ -32,13 +32,7 @@ type TenantsHandler struct {
 func (t TenantsHandler) GetAll(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	tnts, err := t.Manager.GetAllTenants(ctx, &tenant.QueryParams{
-		Filters: map[tenant.FilterKey]interface{}{
-			tenant.FilterKeyOutStatus: tenant.DeactivatedTenantStatus,
-		},
-		SortBy:    data.SortFieldName,
-		SortOrder: data.SortOrderASC,
-	})
+	tnts, err := t.Manager.GetAllTenants(ctx)
 	if err != nil {
 		httperror.InternalError(ctx, "Cannot get tenants", err, nil).Render(w)
 		return
@@ -51,11 +45,7 @@ func (t TenantsHandler) GetByIDOrName(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	arg := chi.URLParam(r, "arg")
 
-	tnt, err := t.Manager.GetTenantByIDOrName(ctx, arg, &tenant.QueryParams{
-		Filters: map[tenant.FilterKey]interface{}{
-			tenant.FilterKeyOutStatus: tenant.DeactivatedTenantStatus,
-		},
-	})
+	tnt, err := t.Manager.GetTenantByIDOrName(ctx, arg)
 	if err != nil {
 		if errors.Is(tenant.ErrTenantDoesNotExist, err) {
 			errorMsg := fmt.Sprintf("tenant %s does not exist", arg)

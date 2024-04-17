@@ -190,7 +190,7 @@ func getCurrentTenant(ctx context.Context, tenantManager tenant.ManagerInterface
 			return nil, httperror.InternalError(ctx, "Failed to load default tenant", err, nil)
 		}
 	} else {
-		currentTenant, err = tenantManager.GetTenantByName(ctx, tenantName, nil)
+		currentTenant, err = tenantManager.GetTenantByName(ctx, tenantName)
 		if err != nil {
 			err = fmt.Errorf("failed to load tenant by name for tenant name %s: %w", tenantName, err)
 			return nil, httperror.InternalError(ctx, "Failed to load tenant by name", err, nil)

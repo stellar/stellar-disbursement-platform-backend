@@ -21,32 +21,40 @@ func (m *TenantManagerMock) GetDSNForTenantByID(ctx context.Context, id string) 
 	return args.String(0), args.Error(1)
 }
 
-func (m *TenantManagerMock) GetAllTenants(ctx context.Context, queryParams *QueryParams) ([]Tenant, error) {
-	args := m.Called(ctx, queryParams)
+func (m *TenantManagerMock) GetAllTenants(ctx context.Context) ([]Tenant, error) {
+	args := m.Called(ctx)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).([]Tenant), args.Error(1)
 }
 
-func (m *TenantManagerMock) GetTenantByName(ctx context.Context, name string, queryParams *QueryParams) (*Tenant, error) {
-	args := m.Called(ctx, name, queryParams)
+func (m *TenantManagerMock) GetTenant(ctx context.Context, queryParams *QueryParams) (*Tenant, error) {
+	args := m.Called(ctx, queryParams)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(*Tenant), args.Error(1)
 }
 
-func (m *TenantManagerMock) GetTenantByID(ctx context.Context, id string, queryParams *QueryParams) (*Tenant, error) {
-	args := m.Called(ctx, id, queryParams)
+func (m *TenantManagerMock) GetTenantByName(ctx context.Context, name string) (*Tenant, error) {
+	args := m.Called(ctx, name)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(*Tenant), args.Error(1)
 }
 
-func (m *TenantManagerMock) GetTenantByIDOrName(ctx context.Context, arg string, queryParams *QueryParams) (*Tenant, error) {
-	args := m.Called(ctx, arg, queryParams)
+func (m *TenantManagerMock) GetTenantByID(ctx context.Context, id string) (*Tenant, error) {
+	args := m.Called(ctx, id)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*Tenant), args.Error(1)
+}
+
+func (m *TenantManagerMock) GetTenantByIDOrName(ctx context.Context, arg string) (*Tenant, error) {
+	args := m.Called(ctx, arg)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}

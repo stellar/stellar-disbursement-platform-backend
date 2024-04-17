@@ -20,7 +20,11 @@ var (
 )
 
 func ValidateStatus(ctx context.Context, manager tenant.ManagerInterface, models *data.Models, tenantID string, reqStatus tenant.TenantStatus) error {
-	tnt, err := manager.GetTenantByID(ctx, tenantID, nil)
+	tnt, err := manager.GetTenant(ctx,
+		&tenant.QueryParams{Filters: map[tenant.FilterKey]interface{}{
+			tenant.FilterKeyID: tenantID,
+		},
+		})
 	if err != nil {
 		return fmt.Errorf("%w: %w", ErrCannotRetrieveTenantByID, err)
 	}

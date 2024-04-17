@@ -117,7 +117,7 @@ func AuthenticateMiddleware(authManager auth.AuthManager, tenantManager tenant.M
 			// Attempt fetching tenant ID from token
 			tenantID, err := authManager.GetTenantID(ctx, token)
 			if err == nil && tenantID != "" {
-				currentTenant, tenantErr := tenantManager.GetTenantByID(ctx, tenantID, nil)
+				currentTenant, tenantErr := tenantManager.GetTenantByID(ctx, tenantID)
 				if tenantErr == nil && currentTenant != nil {
 					ctx = tenant.SaveTenantInContext(ctx, currentTenant)
 				}
@@ -308,7 +308,7 @@ func ResolveTenantFromRequestMiddleware(tenantManager tenant.ManagerInterface, s
 			} else {
 				// Attempt fetching tenant name from request
 				if tenantName, err := extractTenantNameFromRequest(req); err == nil && tenantName != "" {
-					currentTenant, _ = tenantManager.GetTenantByName(ctx, tenantName, nil)
+					currentTenant, _ = tenantManager.GetTenantByName(ctx, tenantName)
 				}
 			}
 

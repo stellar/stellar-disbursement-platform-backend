@@ -78,7 +78,7 @@ func (h *SendReceiverWalletsSMSInvitationEventHandler) Handle(ctx context.Contex
 		return
 	}
 
-	t, err := h.tenantManager.GetTenantByID(ctx, message.TenantID, nil)
+	t, err := h.tenantManager.GetTenantByID(ctx, message.TenantID)
 	if err != nil {
 		h.crashTrackerClient.LogAndReportErrors(ctx, err, fmt.Sprintf("[%s] error getting tenant by id", h.Name()))
 		return

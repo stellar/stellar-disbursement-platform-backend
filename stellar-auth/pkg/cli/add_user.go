@@ -169,7 +169,7 @@ func execAddUser(ctx context.Context, dbUrl string, email, firstName, lastName, 
 	}
 	defer adminDBConnectionPool.Close()
 	tm := tenant.NewManager(tenant.WithDatabase(adminDBConnectionPool))
-	t, err := tm.GetTenantByID(ctx, tenantID, nil)
+	t, err := tm.GetTenantByID(ctx, tenantID)
 	if err != nil {
 		return fmt.Errorf("error getting tenant by id %s: %w", tenantID, err)
 	}

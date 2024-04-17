@@ -61,7 +61,7 @@ type DistributionAccountResolverImpl struct {
 
 // DistributionAccount returns the tenant's distribution account stored in the database.
 func (r *DistributionAccountResolverImpl) DistributionAccount(ctx context.Context, tenantID string) (string, error) {
-	tnt, err := r.tenantManager.GetTenantByID(ctx, tenantID, nil)
+	tnt, err := r.tenantManager.GetTenantByID(ctx, tenantID)
 	if err != nil {
 		return "", fmt.Errorf("getting tenant by ID: %w", err)
 	}

@@ -112,7 +112,9 @@ func runSuccessfulRequestPatchTest(t *testing.T, r *chi.Mux, ctx context.Context
 	respBody, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 
-	tntDB, err := handler.Manager.GetTenantByName(ctx, tnt.Name, nil)
+	tntDB, err := handler.Manager.GetTenant(ctx, &tenant.QueryParams{Filters: map[tenant.FilterKey]interface{}{
+		tenant.FilterKeyName: tnt.Name,
+	}})
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	expectedRespBody = fmt.Sprintf(`
@@ -418,7 +420,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 
 		assert.Equal(t, http.StatusCreated, resp.StatusCode)
 
-		tnt, err := m.GetTenantByName(ctx, "aid-org", nil)
+		tnt, err := m.GetTenantByName(ctx, "aid-org")
 		require.NoError(t, err)
 
 		expectedRespBody := fmt.Sprintf(`
@@ -852,7 +854,7 @@ func Test_TenantHandler_SetDefault(t *testing.T) {
 		assert.JSONEq(t, `{"error": "tenant id some-id does not exist"}`, string(respBody))
 
 		// Ensure the tnt2 still the default one
-		tnt2DB, dErr := tenantManager.GetTenantByID(ctx, tnt2.ID, nil)
+		tnt2DB, dErr := tenantManager.GetTenantByID(ctx, tnt2.ID)
 		require.NoError(t, dErr)
 		assert.True(t, tnt2DB.IsDefault)
 	})
@@ -868,11 +870,11 @@ func Test_TenantHandler_SetDefault(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 
-		tnt1DB, err := tenantManager.GetTenantByID(ctx, tnt1.ID, nil)
+		tnt1DB, err := tenantManager.GetTenantByID(ctx, tnt1.ID)
 		require.NoError(t, err)
 		assert.True(t, tnt1DB.IsDefault)
 
-		tnt2DB, err := tenantManager.GetTenantByID(ctx, tnt2.ID, nil)
+		tnt2DB, err := tenantManager.GetTenantByID(ctx, tnt2.ID)
 		require.NoError(t, err)
 		assert.False(t, tnt2DB.IsDefault)
 	})

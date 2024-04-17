@@ -118,7 +118,7 @@ func (a *AuthCommand) Command() *cobra.Command {
 				}
 				defer adminDBConnectionPool.Close()
 				tm := tenant.NewManager(tenant.WithDatabase(adminDBConnectionPool))
-				t, err := tm.GetTenantByID(ctx, tenantID, nil)
+				t, err := tm.GetTenantByID(ctx, tenantID)
 				if err != nil {
 					log.Ctx(ctx).Fatalf("error getting tenant by id %s: %s", tenantID, err.Error())
 				}

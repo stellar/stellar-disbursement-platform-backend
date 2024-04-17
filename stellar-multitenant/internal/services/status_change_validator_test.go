@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
@@ -43,7 +42,11 @@ func Test_ValidateStatus(t *testing.T) {
 		{
 			name: "cannot retrieve tenant by id",
 			mockTntManagerFn: func(tntManagerMock *tenant.TenantManagerMock) {
-				tntManagerMock.On("GetTenantByID", ctx, tntID, mock.Anything).Return(nil, errors.New("foobar")).Once()
+				tntManagerMock.On("GetTenant", ctx, &tenant.QueryParams{
+					Filters: map[tenant.FilterKey]interface{}{
+						tenant.FilterKeyID: tntID,
+					},
+				}).Return(nil, errors.New("foobar")).Once()
 			},
 			reqStatus:   tenant.DeactivatedTenantStatus,
 			expectedErr: fmt.Errorf("%w: %w", ErrCannotRetrieveTenantByID, errors.New("foobar")),
@@ -51,7 +54,11 @@ func Test_ValidateStatus(t *testing.T) {
 		{
 			name: "number of indeterminate payments is not 0",
 			mockTntManagerFn: func(tntManagerMock *tenant.TenantManagerMock) {
-				tntManagerMock.On("GetTenantByID", ctx, tntID, mock.Anything).Return(&tenant.Tenant{ID: tntID, Status: tenant.ActivatedTenantStatus}, nil).Once()
+				tntManagerMock.On("GetTenant", ctx, &tenant.QueryParams{
+					Filters: map[tenant.FilterKey]interface{}{
+						tenant.FilterKeyID: tntID,
+					},
+				}).Return(&tenant.Tenant{ID: tntID, Status: tenant.ActivatedTenantStatus}, nil).Once()
 			},
 			createFixtures: func() {
 				country := data.CreateCountryFixture(t, ctx, dbConnectionPool, "FRA", "France")
@@ -82,7 +89,11 @@ func Test_ValidateStatus(t *testing.T) {
 		{
 			name: "tenant is already deactivated",
 			mockTntManagerFn: func(tntManagerMock *tenant.TenantManagerMock) {
-				tntManagerMock.On("GetTenantByID", ctx, tntID, mock.Anything).Return(&tenant.Tenant{ID: tntID, Status: tenant.DeactivatedTenantStatus}, nil).Once()
+				tntManagerMock.On("GetTenant", ctx, &tenant.QueryParams{
+					Filters: map[tenant.FilterKey]interface{}{
+						tenant.FilterKeyID: tntID,
+					},
+				}).Return(&tenant.Tenant{ID: tntID, Status: tenant.DeactivatedTenantStatus}, nil).Once()
 			},
 			reqStatus:   tenant.DeactivatedTenantStatus,
 			expectedErr: nil,
@@ -90,7 +101,11 @@ func Test_ValidateStatus(t *testing.T) {
 		{
 			name: "tenant is already activated",
 			mockTntManagerFn: func(tntManagerMock *tenant.TenantManagerMock) {
-				tntManagerMock.On("GetTenantByID", ctx, tntID, mock.Anything).Return(&tenant.Tenant{ID: tntID, Status: tenant.ActivatedTenantStatus}, nil).Once()
+				tntManagerMock.On("GetTenant", ctx, &tenant.QueryParams{
+					Filters: map[tenant.FilterKey]interface{}{
+						tenant.FilterKeyID: tntID,
+					},
+				}).Return(&tenant.Tenant{ID: tntID, Status: tenant.ActivatedTenantStatus}, nil).Once()
 			},
 			reqStatus:   tenant.ActivatedTenantStatus,
 			expectedErr: nil,
@@ -98,7 +113,11 @@ func Test_ValidateStatus(t *testing.T) {
 		{
 			name: "cannot activate tenant that isn't deactivated",
 			mockTntManagerFn: func(tntManagerMock *tenant.TenantManagerMock) {
-				tntManagerMock.On("GetTenantByID", ctx, tntID, mock.Anything).Return(&tenant.Tenant{ID: tntID, Status: tenant.CreatedTenantStatus}, nil).Once()
+				tntManagerMock.On("GetTenant", ctx, &tenant.QueryParams{
+					Filters: map[tenant.FilterKey]interface{}{
+						tenant.FilterKeyID: tntID,
+					},
+				}).Return(&tenant.Tenant{ID: tntID, Status: tenant.CreatedTenantStatus}, nil).Once()
 			},
 			reqStatus:   tenant.ActivatedTenantStatus,
 			expectedErr: ErrCannotActivateTenant,
@@ -106,7 +125,11 @@ func Test_ValidateStatus(t *testing.T) {
 		{
 			name: "cannot perform update on tenant to requested status",
 			mockTntManagerFn: func(tntManagerMock *tenant.TenantManagerMock) {
-				tntManagerMock.On("GetTenantByID", ctx, tntID, mock.Anything).Return(&tenant.Tenant{ID: tntID, Status: tenant.DeactivatedTenantStatus}, nil).Once()
+				tntManagerMock.On("GetTenant", ctx, &tenant.QueryParams{
+					Filters: map[tenant.FilterKey]interface{}{
+						tenant.FilterKeyID: tntID,
+					},
+				}).Return(&tenant.Tenant{ID: tntID, Status: tenant.DeactivatedTenantStatus}, nil).Once()
 			},
 			reqStatus:   tenant.CreatedTenantStatus,
 			expectedErr: ErrCannotPerformStatusUpdate,
