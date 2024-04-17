@@ -66,8 +66,6 @@ for tenant in "${tenants[@]}"; do
         -d '{
                 "name": "'"$tenant"'",
                 "organization_name": "'"$tenant"'",
-                "email_sender_type": "DRY_RUN",
-                "sms_sender_type": "DRY_RUN",
                 "base_url": "'"$baseURL"'",
                 "sdp_ui_base_url": "'"$sdpUIBaseURL"'",
                 "owner_email": "'"$ownerEmail"'",

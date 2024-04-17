@@ -138,8 +138,6 @@ func Test_TenantHandler_Get(t *testing.T) {
 				{
 					"id": %q,
 					"name": %q,
-					"email_sender_type": "DRY_RUN",
-					"sms_sender_type": "DRY_RUN",
 					"base_url": null,
 					"sdp_ui_base_url": null,
 					"status": "TENANT_CREATED",
@@ -151,8 +149,6 @@ func Test_TenantHandler_Get(t *testing.T) {
 				{
 					"id": %q,
 					"name": %q,
-					"email_sender_type": "DRY_RUN",
-					"sms_sender_type": "DRY_RUN",
 					"base_url": null,
 					"sdp_ui_base_url": null,
 					"status": "TENANT_CREATED",
@@ -187,8 +183,6 @@ func Test_TenantHandler_Get(t *testing.T) {
 			{
 				"id": %q,
 				"name": %q,
-				"email_sender_type": "DRY_RUN",
-				"sms_sender_type": "DRY_RUN",
 				"base_url": null,
 				"sdp_ui_base_url": null,
 				"status": "TENANT_CREATED",
@@ -220,8 +214,6 @@ func Test_TenantHandler_Get(t *testing.T) {
 			{
 				"id": %q,
 				"name": %q,
-				"email_sender_type": "DRY_RUN",
-				"sms_sender_type": "DRY_RUN",
 				"base_url": null,
 				"sdp_ui_base_url": null,
 				"status": "TENANT_CREATED",
@@ -317,8 +309,6 @@ func Test_TenantHandler_Post(t *testing.T) {
 					"owner_last_name": "owner_last_name is required",
 					"organization_name": "organization_name is required",
 					"base_url": "invalid base URL value",
-					"email_sender_type": "invalid email sender type. Expected one of these values: [AWS_EMAIL DRY_RUN]",
-					"sms_sender_type": "invalid sms sender type. Expected one of these values: [TWILIO_SMS AWS_SMS DRY_RUN]",
 					"sdp_ui_base_url": "invalid SDP UI base URL value"
 				}
 			}
@@ -357,8 +347,6 @@ func Test_TenantHandler_Post(t *testing.T) {
 				"owner_first_name": "Owner",
 				"owner_last_name": "Owner",
 				"organization_name": "My Aid Org",
-				"email_sender_type": "DRY_RUN",
-				"sms_sender_type": "DRY_RUN",
 				"base_url": "https://backend.sdp.org",
 				"sdp_ui_base_url": "https://aid-org.sdp.org",
 				"is_default": false
@@ -384,8 +372,6 @@ func Test_TenantHandler_Post(t *testing.T) {
 			{
 				"id": %q,
 				"name": "aid-org",
-				"email_sender_type": "DRY_RUN",
-				"sms_sender_type": "DRY_RUN",
 				"base_url": "https://backend.sdp.org",
 				"sdp_ui_base_url": "https://aid-org.sdp.org",
 				"status": "TENANT_PROVISIONED",
@@ -463,8 +449,6 @@ func Test_TenantHandler_Post(t *testing.T) {
 				"owner_first_name": "Owner",
 				"owner_last_name": "Owner",
 				"organization_name": "My Aid Org",
-				"email_sender_type": "DRY_RUN",
-				"sms_sender_type": "DRY_RUN",
 				"base_url": "https://backend.sdp.org",
 				"sdp_ui_base_url": "https://aid-org.sdp.org"
 			}
@@ -543,7 +527,7 @@ func Test_TenantHandler_Patch(t *testing.T) {
 
 	t.Run("returns NotFound when tenant does not exist", func(t *testing.T) {
 		rr := httptest.NewRecorder()
-		req, err := http.NewRequest(http.MethodPatch, "/tenants/unknown", strings.NewReader(`{"email_sender_type": "AWS_EMAIL"}`))
+		req, err := http.NewRequest(http.MethodPatch, "/tenants/unknown", strings.NewReader(`{"base_url": "http://localhost"}`))
 		require.NoError(t, err)
 		r.ServeHTTP(rr, req)
 
@@ -558,14 +542,6 @@ func Test_TenantHandler_Patch(t *testing.T) {
 		assert.JSONEq(t, expectedRespBody, string(respBody))
 	})
 
-	t.Run("returns BadRequest when EmailSenderType is not valid", func(t *testing.T) {
-		runBadRequestPatchTest(t, r, url, "email_sender_type", "invalid email sender type. Expected one of these values: [AWS_EMAIL DRY_RUN]")
-	})
-
-	t.Run("returns BadRequest when SMSSenderType is not valid", func(t *testing.T) {
-		runBadRequestPatchTest(t, r, url, "sms_sender_type", "invalid sms sender type. Expected one of these values: [TWILIO_SMS AWS_SMS DRY_RUN]")
-	})
-
 	t.Run("returns BadRequest when BaseURL is not valid", func(t *testing.T) {
 		runBadRequestPatchTest(t, r, url, "base_url", "invalid base URL value")
 	})
@@ -578,41 +554,9 @@ func Test_TenantHandler_Patch(t *testing.T) {
 		runBadRequestPatchTest(t, r, url, "status", "invalid status value")
 	})
 
-	t.Run("successfully updates EmailSenderType of a tenant", func(t *testing.T) {
-		reqBody := `{"email_sender_type": "AWS_EMAIL"}`
-		expectedRespBody := `
-			"email_sender_type": "AWS_EMAIL",
-			"sms_sender_type": "DRY_RUN",
-			"base_url": null,
-			"sdp_ui_base_url": null,
-			"status": "TENANT_CREATED",
-			"distribution_account": "GCTNUNQVX7BNIP5AUWW2R4YC7G6R3JGUDNMGT7H62BGBUY4A4V6ROAAH",
-			"is_default": false,
-		`
-
-		runSuccessfulRequestPatchTest(t, r, ctx, dbConnectionPool, handler, reqBody, expectedRespBody)
-	})
-
-	t.Run("successfully updates SMSSenderType of a tenant", func(t *testing.T) {
-		reqBody := `{"SMS_sender_type": "TWILIO_SMS"}`
-		expectedRespBody := `
-			"email_sender_type": "DRY_RUN",
-			"sms_sender_type": "TWILIO_SMS",
-			"base_url": null,
-			"sdp_ui_base_url": null,
-			"status": "TENANT_CREATED",
-			"distribution_account": "GCTNUNQVX7BNIP5AUWW2R4YC7G6R3JGUDNMGT7H62BGBUY4A4V6ROAAH",
-			"is_default": false,
-		`
-
-		runSuccessfulRequestPatchTest(t, r, ctx, dbConnectionPool, handler, reqBody, expectedRespBody)
-	})
-
 	t.Run("successfully updates BaseURL of a tenant", func(t *testing.T) {
 		reqBody := `{"base_url": "http://valid.com"}`
 		expectedRespBody := `
-			"email_sender_type": "DRY_RUN",
-			"sms_sender_type": "DRY_RUN",
 			"base_url": "http://valid.com",
 			"sdp_ui_base_url": null,
 			"status": "TENANT_CREATED",
@@ -626,8 +570,6 @@ func Test_TenantHandler_Patch(t *testing.T) {
 	t.Run("successfully updates SDPUIBaseURL of a tenant", func(t *testing.T) {
 		reqBody := `{"sdp_ui_base_url": "http://valid.com"}`
 		expectedRespBody := `
-			"email_sender_type": "DRY_RUN",
-			"sms_sender_type": "DRY_RUN",
 			"base_url": null,
 			"sdp_ui_base_url": "http://valid.com",
 			"status": "TENANT_CREATED",
@@ -641,8 +583,6 @@ func Test_TenantHandler_Patch(t *testing.T) {
 	t.Run("successfully updates Status of a tenant", func(t *testing.T) {
 		reqBody := `{"status": "TENANT_ACTIVATED"}`
 		expectedRespBody := `
-			"email_sender_type": "DRY_RUN",
-			"sms_sender_type": "DRY_RUN",
 			"base_url": null,
 			"sdp_ui_base_url": null,
 			"status": "TENANT_ACTIVATED",
@@ -655,16 +595,12 @@ func Test_TenantHandler_Patch(t *testing.T) {
 
 	t.Run("successfully updates all fields of a tenant", func(t *testing.T) {
 		reqBody := `{
-			"email_sender_type": "AWS_EMAIL",
-			"sms_sender_type": "AWS_SMS",
 			"base_url": "http://valid.com",
 			"sdp_ui_base_url": "http://valid.com",
 			"status": "TENANT_ACTIVATED"
 		}`
 
 		expectedRespBody := `
-			"email_sender_type": "AWS_EMAIL",
-			"sms_sender_type": "AWS_SMS",
 			"base_url": "http://valid.com",
 			"sdp_ui_base_url": "http://valid.com",
 			"status": "TENANT_ACTIVATED",

@@ -78,40 +78,33 @@ func Test_Manager_UpdateTenantConfig(t *testing.T) {
 	})
 
 	t.Run("returns error when the tenant ID does not exist", func(t *testing.T) {
-		tnt, err := m.UpdateTenantConfig(ctx, &TenantUpdate{ID: "abc", EmailSenderType: &AWSEmailSenderType})
+		baseURL := "https://myorg.backend.io"
+		tnt, err := m.UpdateTenantConfig(ctx, &TenantUpdate{ID: "abc", BaseURL: &baseURL})
 		assert.Equal(t, ErrTenantDoesNotExist, err)
 		assert.Nil(t, tnt)
 	})
 
 	t.Run("updates tenant config successfully", func(t *testing.T) {
 		tntDB = ResetTenantConfigFixture(t, ctx, dbConnectionPool, tntDB.ID)
-		assert.Equal(t, tntDB.EmailSenderType, DryRunEmailSenderType)
-		assert.Equal(t, tntDB.SMSSenderType, DryRunSMSSenderType)
 		assert.Nil(t, tntDB.BaseURL)
 		assert.Nil(t, tntDB.SDPUIBaseURL)
 
 		// Partial Update
 		tnt, err := m.UpdateTenantConfig(ctx, &TenantUpdate{
-			ID:              tntDB.ID,
-			EmailSenderType: &AWSEmailSenderType,
-			SDPUIBaseURL:    &[]string{"https://myorg.frontend.io"}[0],
+			ID:           tntDB.ID,
+			SDPUIBaseURL: &[]string{"https://myorg.frontend.io"}[0],
 		})
 		require.NoError(t, err)
 
-		assert.Equal(t, tnt.EmailSenderType, AWSEmailSenderType)
-		assert.Equal(t, tnt.SMSSenderType, DryRunSMSSenderType)
 		assert.Nil(t, tnt.BaseURL)
 		assert.Equal(t, "https://myorg.frontend.io", *tnt.SDPUIBaseURL)
 
 		tnt, err = m.UpdateTenantConfig(ctx, &TenantUpdate{
-			ID:            tntDB.ID,
-			SMSSenderType: &TwilioSMSSenderType,
-			BaseURL:       &[]string{"https://myorg.backend.io"}[0],
+			ID:      tntDB.ID,
+			BaseURL: &[]string{"https://myorg.backend.io"}[0],
 		})
 		require.NoError(t, err)
 
-		assert.Equal(t, tnt.EmailSenderType, AWSEmailSenderType)
-		assert.Equal(t, tnt.SMSSenderType, TwilioSMSSenderType)
 		assert.Equal(t, "https://myorg.backend.io", *tnt.BaseURL)
 		assert.Equal(t, "https://myorg.frontend.io", *tnt.SDPUIBaseURL)
 	})

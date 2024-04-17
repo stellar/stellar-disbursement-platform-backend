@@ -31,8 +31,6 @@ type CreateTenantRequest struct {
 	OwnerFirstName      string `json:"owner_first_name"`
 	OwnerLastName       string `json:"owner_last_name"`
 	OrganizationName    string `json:"organization_name"`
-	EmailSenderType     string `json:"email_sender_type"`
-	SMSSenderType       string `json:"sms_sender_type"`
 	BaseURL             string `json:"base_url"`
 	SDPUIBaseURL        string `json:"sdp_ui_base_url"`
 	DistributionAccount string `json:"distribution_account"`

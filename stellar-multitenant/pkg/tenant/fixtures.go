@@ -43,7 +43,6 @@ func ResetTenantConfigFixture(t *testing.T, ctx context.Context, dbConnectionPoo
 	const q = `
 		UPDATE tenants
 		SET
-			email_sender_type = DEFAULT, sms_sender_type = DEFAULT,
 			base_url = NULL, sdp_ui_base_url = NULL
 		WHERE
 			id = $1

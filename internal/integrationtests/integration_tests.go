@@ -313,8 +313,6 @@ func (it *IntegrationTestsService) CreateTestData(ctx context.Context, opts Inte
 		OwnerFirstName:   "John",
 		OwnerLastName:    "Doe",
 		OrganizationName: "Integration Tests Organization",
-		EmailSenderType:  "DRY_RUN",
-		SMSSenderType:    "DRY_RUN",
 		BaseURL:          "http://localhost:8000",
 		SDPUIBaseURL:     "http://localhost:3000",
 	})
