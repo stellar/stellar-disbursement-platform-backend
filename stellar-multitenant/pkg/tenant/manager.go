@@ -225,15 +225,6 @@ func (m *Manager) UpdateTenantConfig(ctx context.Context, tu *TenantUpdate) (*Te
 
 	fields := make([]string, 0)
 	args := make([]interface{}, 0)
-	if tu.EmailSenderType != nil {
-		fields = append(fields, "email_sender_type = ?")
-		args = append(args, *tu.EmailSenderType)
-	}
-
-	if tu.SMSSenderType != nil {
-		fields = append(fields, "sms_sender_type = ?")
-		args = append(args, *tu.SMSSenderType)
-	}
 
 	if tu.BaseURL != nil {
 		fields = append(fields, "base_url = ?")

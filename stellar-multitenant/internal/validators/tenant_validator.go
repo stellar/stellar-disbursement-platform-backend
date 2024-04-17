@@ -13,23 +13,19 @@ import (
 var validTenantName *regexp.Regexp = regexp.MustCompile(`^[a-z-]+$`)
 
 type TenantRequest struct {
-	Name             string                 `json:"name"`
-	OwnerEmail       string                 `json:"owner_email"`
-	OwnerFirstName   string                 `json:"owner_first_name"`
-	OwnerLastName    string                 `json:"owner_last_name"`
-	OrganizationName string                 `json:"organization_name"`
-	EmailSenderType  tenant.EmailSenderType `json:"email_sender_type"`
-	SMSSenderType    tenant.SMSSenderType   `json:"sms_sender_type"`
-	BaseURL          string                 `json:"base_url"`
-	SDPUIBaseURL     string                 `json:"sdp_ui_base_url"`
+	Name             string `json:"name"`
+	OwnerEmail       string `json:"owner_email"`
+	OwnerFirstName   string `json:"owner_first_name"`
+	OwnerLastName    string `json:"owner_last_name"`
+	OrganizationName string `json:"organization_name"`
+	BaseURL          string `json:"base_url"`
+	SDPUIBaseURL     string `json:"sdp_ui_base_url"`
 }
 
 type UpdateTenantRequest struct {
-	EmailSenderType *tenant.EmailSenderType `json:"email_sender_type"`
-	SMSSenderType   *tenant.SMSSenderType   `json:"sms_sender_type"`
-	BaseURL         *string                 `json:"base_url"`
-	SDPUIBaseURL    *string                 `json:"sdp_ui_base_url"`
-	Status          *tenant.TenantStatus    `json:"status"`
+	BaseURL      *string              `json:"base_url"`
+	SDPUIBaseURL *string              `json:"sdp_ui_base_url"`
+	Status       *tenant.TenantStatus `json:"status"`
 }
 
 type DefaultTenantRequest struct {
@@ -65,12 +61,6 @@ func (tv *TenantValidator) ValidateCreateTenantRequest(reqBody *TenantRequest) *
 	tv.Check(reqBody.OrganizationName != "", "organization_name", "organization_name is required")
 
 	var err error
-	reqBody.EmailSenderType, err = tenant.ParseEmailSenderType(string(reqBody.EmailSenderType))
-	tv.CheckError(err, "email_sender_type", fmt.Sprintf("invalid email sender type. Expected one of these values: %s", []tenant.EmailSenderType{tenant.AWSEmailSenderType, tenant.DryRunEmailSenderType}))
-
-	reqBody.SMSSenderType, err = tenant.ParseSMSSenderType(string(reqBody.SMSSenderType))
-	tv.CheckError(err, "sms_sender_type", fmt.Sprintf("invalid sms sender type. Expected one of these values: %s", []tenant.SMSSenderType{tenant.TwilioSMSSenderType, tenant.AWSSMSSenderType, tenant.DryRunSMSSenderType}))
-
 	if _, err = url.ParseRequestURI(reqBody.BaseURL); err != nil {
 		tv.Check(false, "base_url", "invalid base URL value")
 	}
@@ -93,18 +83,6 @@ func (tv *TenantValidator) ValidateUpdateTenantRequest(reqBody *UpdateTenantRequ
 	}
 
 	var err error
-	if reqBody.EmailSenderType != nil {
-		emailSenderType, emailErr := tenant.ParseEmailSenderType(string(*reqBody.EmailSenderType))
-		tv.CheckError(emailErr, "email_sender_type", fmt.Sprintf("invalid email sender type. Expected one of these values: %s", []tenant.EmailSenderType{tenant.AWSEmailSenderType, tenant.DryRunEmailSenderType}))
-		reqBody.EmailSenderType = &emailSenderType
-	}
-
-	if reqBody.SMSSenderType != nil {
-		SMSSenderType, smsErr := tenant.ParseSMSSenderType(string(*reqBody.SMSSenderType))
-		tv.CheckError(smsErr, "sms_sender_type", fmt.Sprintf("invalid sms sender type. Expected one of these values: %s", []tenant.SMSSenderType{tenant.TwilioSMSSenderType, tenant.AWSSMSSenderType, tenant.DryRunSMSSenderType}))
-		reqBody.SMSSenderType = &SMSSenderType
-	}
-
 	if reqBody.BaseURL != nil {
 		if _, err = url.ParseRequestURI(*reqBody.BaseURL); err != nil {
 			tv.Check(false, "base_url", "invalid base URL value")

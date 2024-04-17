@@ -3,7 +3,6 @@ package validators
 import (
 	"testing"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -28,8 +27,6 @@ func TestTenantValidator_ValidateCreateTenantRequest(t *testing.T) {
 			"owner_last_name":   "owner_last_name is required",
 			"organization_name": "organization_name is required",
 			"base_url":          "invalid base URL value",
-			"email_sender_type": "invalid email sender type. Expected one of these values: [AWS_EMAIL DRY_RUN]",
-			"sms_sender_type":   "invalid sms sender type. Expected one of these values: [TWILIO_SMS AWS_SMS DRY_RUN]",
 			"sdp_ui_base_url":   "invalid SDP UI base URL value",
 		}, tv.Errors)
 
@@ -43,8 +40,6 @@ func TestTenantValidator_ValidateCreateTenantRequest(t *testing.T) {
 			"owner_last_name":   "owner_last_name is required",
 			"organization_name": "organization_name is required",
 			"base_url":          "invalid base URL value",
-			"email_sender_type": "invalid email sender type. Expected one of these values: [AWS_EMAIL DRY_RUN]",
-			"sms_sender_type":   "invalid sms sender type. Expected one of these values: [TWILIO_SMS AWS_SMS DRY_RUN]",
 			"sdp_ui_base_url":   "invalid SDP UI base URL value",
 		}, tv.Errors)
 	})
@@ -57,8 +52,6 @@ func TestTenantValidator_ValidateCreateTenantRequest(t *testing.T) {
 			OwnerFirstName:   "Owner",
 			OwnerLastName:    "Owner",
 			OrganizationName: "Aid Org",
-			EmailSenderType:  tenant.AWSEmailSenderType,
-			SMSSenderType:    tenant.TwilioSMSSenderType,
 			SDPUIBaseURL:     "http://localhost:3000",
 			BaseURL:          "http://localhost:8000",
 		}
@@ -78,8 +71,6 @@ func TestTenantValidator_ValidateCreateTenantRequest(t *testing.T) {
 			OwnerFirstName:   "",
 			OwnerLastName:    "",
 			OrganizationName: "",
-			EmailSenderType:  tenant.AWSEmailSenderType,
-			SMSSenderType:    tenant.TwilioSMSSenderType,
 			BaseURL:          "http://localhost:8000",
 			SDPUIBaseURL:     "http://localhost:3000",
 		}
@@ -103,58 +94,6 @@ func TestTenantValidator_ValidateCreateTenantRequest(t *testing.T) {
 		assert.Equal(t, map[string]interface{}{}, tv.Errors)
 	})
 
-	t.Run("validates the email sender type successfully", func(t *testing.T) {
-		tv := NewTenantValidator()
-		reqBody := &TenantRequest{
-			Name:             "aid-org",
-			OwnerEmail:       "owner@email.org",
-			OwnerFirstName:   "Owner",
-			OwnerLastName:    "Owner",
-			OrganizationName: "Aid Org",
-			EmailSenderType:  "invalid",
-			SMSSenderType:    tenant.TwilioSMSSenderType,
-			SDPUIBaseURL:     "http://localhost:3000",
-			BaseURL:          "http://localhost:8000",
-		}
-
-		tv.ValidateCreateTenantRequest(reqBody)
-		assert.True(t, tv.HasErrors())
-		assert.Equal(t, map[string]interface{}{
-			"email_sender_type": "invalid email sender type. Expected one of these values: [AWS_EMAIL DRY_RUN]",
-		}, tv.Errors)
-
-		reqBody.EmailSenderType = tenant.DryRunEmailSenderType
-		tv.Errors = map[string]interface{}{}
-		tv.ValidateCreateTenantRequest(reqBody)
-		assert.False(t, tv.HasErrors())
-	})
-
-	t.Run("validates the sms sender type successfully", func(t *testing.T) {
-		tv := NewTenantValidator()
-		reqBody := &TenantRequest{
-			Name:             "aid-org",
-			OwnerEmail:       "owner@email.org",
-			OwnerFirstName:   "Owner",
-			OwnerLastName:    "Owner",
-			OrganizationName: "Aid Org",
-			EmailSenderType:  tenant.AWSEmailSenderType,
-			SMSSenderType:    "invalid",
-			SDPUIBaseURL:     "http://localhost:3000",
-			BaseURL:          "http://localhost:8000",
-		}
-
-		tv.ValidateCreateTenantRequest(reqBody)
-		assert.True(t, tv.HasErrors())
-		assert.Equal(t, map[string]interface{}{
-			"sms_sender_type": "invalid sms sender type. Expected one of these values: [TWILIO_SMS AWS_SMS DRY_RUN]",
-		}, tv.Errors)
-
-		reqBody.SMSSenderType = tenant.DryRunSMSSenderType
-		tv.Errors = map[string]interface{}{}
-		tv.ValidateCreateTenantRequest(reqBody)
-		assert.False(t, tv.HasErrors())
-	})
-
 	t.Run("validates the URLs successfully", func(t *testing.T) {
 		tv := NewTenantValidator()
 		reqBody := &TenantRequest{
@@ -163,8 +102,6 @@ func TestTenantValidator_ValidateCreateTenantRequest(t *testing.T) {
 			OwnerFirstName:   "Owner",
 			OwnerLastName:    "Owner",
 			OrganizationName: "Aid Org",
-			EmailSenderType:  tenant.AWSEmailSenderType,
-			SMSSenderType:    tenant.TwilioSMSSenderType,
 			SDPUIBaseURL:     "%invalid%",
 			BaseURL:          "%invalid%",
 		}
@@ -210,10 +147,8 @@ func TestTenantValidator_ValidateUpdateTenantRequest(t *testing.T) {
 		tv := NewTenantValidator()
 		url := "valid.com:3000"
 		reqBody := &UpdateTenantRequest{
-			EmailSenderType: &tenant.AWSEmailSenderType,
-			SMSSenderType:   &tenant.AWSSMSSenderType,
-			BaseURL:         &url,
-			SDPUIBaseURL:    &url,
+			BaseURL:      &url,
+			SDPUIBaseURL: &url,
 		}
 		tv.ValidateUpdateTenantRequest(reqBody)
 		assert.False(t, tv.HasErrors())

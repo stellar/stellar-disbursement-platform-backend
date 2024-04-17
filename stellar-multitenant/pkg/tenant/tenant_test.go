@@ -18,29 +18,6 @@ func Test_TenantUpdate_Validate(t *testing.T) {
 		err = tu.Validate()
 		assert.EqualError(t, err, "provide at least one field to be updated")
 
-		esType := EmailSenderType("invalid")
-		tu.EmailSenderType = &esType
-		err = tu.Validate()
-		assert.EqualError(t, err, `invalid email sender type: invalid email sender type "invalid"`)
-
-		tu.EmailSenderType = nil
-		smsSenderType := SMSSenderType("invalid")
-		tu.SMSSenderType = &smsSenderType
-		err = tu.Validate()
-		assert.EqualError(t, err, `invalid SMS sender type: invalid sms sender type "invalid"`)
-
-		tu.SMSSenderType = nil
-		u := "inv@lid$"
-		tu.BaseURL = &u
-		err = tu.Validate()
-		assert.EqualError(t, err, "invalid base URL")
-
-		tu.SMSSenderType = nil
-		tu.BaseURL = nil
-		tu.SDPUIBaseURL = &u
-		err = tu.Validate()
-		assert.EqualError(t, err, "invalid SDP UI base URL")
-
 		tu.SDPUIBaseURL = nil
 		tenantStatus := TenantStatus("invalid")
 		tu.Status = &tenantStatus
@@ -50,12 +27,10 @@ func Test_TenantUpdate_Validate(t *testing.T) {
 
 	t.Run("valid values", func(t *testing.T) {
 		tu := TenantUpdate{
-			ID:              "abc",
-			EmailSenderType: &AWSEmailSenderType,
-			SMSSenderType:   &TwilioSMSSenderType,
-			BaseURL:         &[]string{"https://myorg.backend.io"}[0],
-			SDPUIBaseURL:    &[]string{"https://myorg.frontend.io"}[0],
-			Status:          &[]TenantStatus{ProvisionedTenantStatus}[0],
+			ID:           "abc",
+			BaseURL:      &[]string{"https://myorg.backend.io"}[0],
+			SDPUIBaseURL: &[]string{"https://myorg.frontend.io"}[0],
+			Status:       &[]TenantStatus{ProvisionedTenantStatus}[0],
 		}
 		err := tu.Validate()
 		assert.NoError(t, err)
@@ -67,34 +42,6 @@ func Test_TenantUpdate_areAllFieldsEmpty(t *testing.T) {
 	assert.True(t, tu.areAllFieldsEmpty())
 	tu.SDPUIBaseURL = &[]string{"https://myorg.backend.io"}[0]
 	assert.False(t, tu.areAllFieldsEmpty())
-}
-
-func Test_ParseEmailSenderType(t *testing.T) {
-	est, err := ParseEmailSenderType("invalid")
-	assert.EqualError(t, err, `invalid email sender type "invalid"`)
-	assert.Empty(t, est)
-
-	est, err = ParseEmailSenderType("aws_email")
-	assert.EqualError(t, err, `invalid email sender type "aws_email"`)
-	assert.Empty(t, est)
-
-	est, err = ParseEmailSenderType("AWS_EMAIL")
-	assert.NoError(t, err)
-	assert.Equal(t, AWSEmailSenderType, est)
-}
-
-func Test_ParseSMSSenderType(t *testing.T) {
-	sst, err := ParseSMSSenderType("invalid")
-	assert.EqualError(t, err, `invalid sms sender type "invalid"`)
-	assert.Empty(t, sst)
-
-	sst, err = ParseSMSSenderType("twilio_sms")
-	assert.EqualError(t, err, `invalid sms sender type "twilio_sms"`)
-	assert.Empty(t, sst)
-
-	sst, err = ParseSMSSenderType("TWILIO_SMS")
-	assert.NoError(t, err)
-	assert.Equal(t, TwilioSMSSenderType, sst)
 }
 
 func Test_TenantStatus_IsValid(t *testing.T) {
