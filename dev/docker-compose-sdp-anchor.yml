@@ -119,6 +119,7 @@ services:
       HOST_URL: http://localhost:8080
       SEP_SERVER_PORT: 8080
       CALLBACK_API_BASE_URL: http://sdp-api:8000
+      # CALLBACK_API_BASE_URL: http://host.docker.internal:8000   # This URL allows docker containers to communicate with the host machine
       CALLBACK_API_AUTH_TYPE: none  # TODO: update to jwt later
       PLATFORM_SERVER_AUTH_TYPE: JWT
       APP_LOGGING_LEVEL: INFO
@@ -142,6 +143,7 @@ services:
       SEP1_ENABLED: "true"
       SEP1_TOML_TYPE: url
       SEP1_TOML_VALUE: http://sdp-api:8000/.well-known/stellar.toml
+      # SEP1_TOML_VALUE: http://host.docker.internal:8000/.well-known/stellar.toml    # This URL allows docker containers to communicate with the host machine
       ASSETS_TYPE: json
       ASSETS_VALUE: |   # TODO: keep this up to date with the latest assets supported by the SDP
         {
