@@ -8,7 +8,7 @@ import (
 	"github.com/stellar/go/support/log"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
-	tssmigrations "github.com/stellar/stellar-disbursement-platform-backend/db/migrations/tss-migrations"
+	"github.com/stellar/stellar-disbursement-platform-backend/db/migrations"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/router"
 )
 
@@ -71,7 +71,7 @@ func (m *TSSDatabaseMigrationManager) deleteTSSSchemaIfNeeded(ctx context.Contex
 }
 
 func RunTSSMigrations(ctx context.Context, dbURL string, dir migrate.MigrationDirection, count int) error {
-	err := ExecuteMigrations(ctx, dbURL, dir, count, tssmigrations.FS, db.StellarTSSMigrationsTableName)
+	err := ExecuteMigrations(ctx, dbURL, dir, count, migrations.TSSMigrationRouter)
 	if err != nil {
 		return fmt.Errorf("executing TSS migrations: %w", err)
 	}

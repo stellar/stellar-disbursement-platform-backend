@@ -5,17 +5,16 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/stellar/go/support/db/dbtest"
-	"github.com/stellar/stellar-disbursement-platform-backend/db/router"
-
 	"github.com/lib/pq"
 	migrate "github.com/rubenv/sql-migrate"
-	"github.com/stellar/stellar-disbursement-platform-backend/db"
-	authmigrations "github.com/stellar/stellar-disbursement-platform-backend/db/migrations/auth-migrations"
-	sdpmigrations "github.com/stellar/stellar-disbursement-platform-backend/db/migrations/sdp-migrations"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+	"github.com/stellar/go/support/db/dbtest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/db/migrations"
+	"github.com/stellar/stellar-disbursement-platform-backend/db/router"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
 func DeleteAllTenantsFixture(t *testing.T, ctx context.Context, dbConnectionPool db.DBConnectionPool) {
@@ -180,9 +179,9 @@ func ApplyMigrationsForTenantFixture(t *testing.T, ctx context.Context, dbConnec
 	dsn, err := m.GetDSNForTenant(ctx, tenantName)
 	require.NoError(t, err)
 
-	_, err = db.Migrate(dsn, migrate.Up, 0, sdpmigrations.FS, db.StellarPerTenantSDPMigrationsTableName)
+	_, err = db.Migrate(dsn, migrate.Up, 0, migrations.SDPMigrationRouter)
 	require.NoError(t, err)
-	_, err = db.Migrate(dsn, migrate.Up, 0, authmigrations.FS, db.StellarPerTenantAuthMigrationsTableName)
+	_, err = db.Migrate(dsn, migrate.Up, 0, migrations.AuthMigrationRouter)
 	require.NoError(t, err)
 }
 
@@ -200,10 +199,10 @@ func PrepareDBForTenant(t *testing.T, dbt *dbtest.DB, tenantName string) string 
 	tDSN, err := router.GetDSNForTenant(dbt.DSN, tenantName)
 	require.NoError(t, err)
 
-	_, err = db.Migrate(tDSN, migrate.Up, 0, sdpmigrations.FS, db.StellarPerTenantSDPMigrationsTableName)
+	_, err = db.Migrate(tDSN, migrate.Up, 0, migrations.SDPMigrationRouter)
 	require.NoError(t, err)
 
-	_, err = db.Migrate(tDSN, migrate.Up, 0, authmigrations.FS, db.StellarPerTenantAuthMigrationsTableName)
+	_, err = db.Migrate(tDSN, migrate.Up, 0, migrations.AuthMigrationRouter)
 	require.NoError(t, err)
 
 	return tDSN

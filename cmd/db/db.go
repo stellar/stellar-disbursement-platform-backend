@@ -11,9 +11,7 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/cmd/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
-	adminmigrations "github.com/stellar/stellar-disbursement-platform-backend/db/migrations/admin-migrations"
-	authmigrations "github.com/stellar/stellar-disbursement-platform-backend/db/migrations/auth-migrations"
-	sdpmigrations "github.com/stellar/stellar-disbursement-platform-backend/db/migrations/sdp-migrations"
+	"github.com/stellar/stellar-disbursement-platform-backend/db/migrations"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/router"
 	di "github.com/stellar/stellar-disbursement-platform-backend/internal/dependencyinjection"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
@@ -146,7 +144,7 @@ func (c *DatabaseCommand) sdpPerTenantMigrationsCmd(ctx context.Context) *cobra.
 	}
 
 	executeMigrationsFn := func(ctx context.Context, dir migrate.MigrationDirection, count int) error {
-		if err := executeMigrationsPerTenant(ctx, c.adminDBConnectionPool, opts, dir, count, sdpmigrations.FS, db.StellarPerTenantSDPMigrationsTableName); err != nil {
+		if err := executeMigrationsPerTenant(ctx, c.adminDBConnectionPool, opts, dir, count, migrations.SDPMigrationRouter); err != nil {
 			return fmt.Errorf("executing migrations for %s: %w", sdpCmd.Name(), err)
 		}
 		return nil
@@ -180,7 +178,7 @@ func (c *DatabaseCommand) authPerTenantMigrationsCmd(ctx context.Context) *cobra
 	}
 
 	executeMigrationsFn := func(ctx context.Context, dir migrate.MigrationDirection, count int) error {
-		if err := executeMigrationsPerTenant(ctx, c.adminDBConnectionPool, opts, dir, count, authmigrations.FS, db.StellarPerTenantAuthMigrationsTableName); err != nil {
+		if err := executeMigrationsPerTenant(ctx, c.adminDBConnectionPool, opts, dir, count, migrations.AuthMigrationRouter); err != nil {
 			return fmt.Errorf("executing migrations for %s: %w", authCmd.Name(), err)
 		}
 		return nil
@@ -205,7 +203,7 @@ func (c *DatabaseCommand) adminMigrationsCmd(ctx context.Context, globalOptions 
 	}
 
 	executeMigrationsFn := func(ctx context.Context, dir migrate.MigrationDirection, count int) error {
-		if err := ExecuteMigrations(ctx, globalOptions.DatabaseURL, dir, count, adminmigrations.FS, db.StellarAdminMigrationsTableName); err != nil {
+		if err := ExecuteMigrations(ctx, globalOptions.DatabaseURL, dir, count, migrations.AdminMigrationRouter); err != nil {
 			return fmt.Errorf("executing migrations for %s: %w", adminCmd.Name(), err)
 		}
 		return nil

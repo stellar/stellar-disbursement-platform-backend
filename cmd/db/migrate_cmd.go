@@ -2,7 +2,6 @@ package db
 
 import (
 	"context"
-	"embed"
 	"fmt"
 	"strconv"
 
@@ -12,6 +11,7 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/cmd/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/db/migrations"
 )
 
 // MigrateCmd returns a cobra.Command responsible for running the database migrations.
@@ -68,8 +68,8 @@ func MigrateCmd(ctx context.Context, executeMigrationsFn func(ctx context.Contex
 
 // ExecuteMigrations executes the migrations on the database, according with the direction, count and folder containing
 // the migration files.
-func ExecuteMigrations(ctx context.Context, dbURL string, dir migrate.MigrationDirection, count int, migrationFiles embed.FS, tableName db.MigrationTableName) error {
-	numMigrationsRun, err := db.Migrate(dbURL, dir, count, migrationFiles, tableName)
+func ExecuteMigrations(ctx context.Context, dbURL string, dir migrate.MigrationDirection, count int, migrationRouter migrations.MigrationRouter) error {
+	numMigrationsRun, err := db.Migrate(dbURL, dir, count, migrationRouter)
 	if err != nil {
 		return fmt.Errorf("migrating database: %w", err)
 	}
