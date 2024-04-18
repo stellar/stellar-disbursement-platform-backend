@@ -26,7 +26,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
-	publicfiles "github.com/stellar/stellar-disbursement-platform-backend/internal/serve/publicfiles"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/publicfiles"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	preconditionsMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
@@ -288,7 +288,7 @@ func getServeOptionsForTests(t *testing.T, dbConnectionPool db.DBConnectionPool)
 
 	mTenantManager := &tenant.TenantManagerMock{}
 	mTenantManager.
-		On("GetTenantByName", mock.Anything, "aid-org", mock.Anything).
+		On("GetTenantByName", mock.Anything, "aid-org").
 		Return(&tenant.Tenant{ID: "tenant1"}, nil)
 
 	mHorizonClient := &horizonclient.MockClient{}
