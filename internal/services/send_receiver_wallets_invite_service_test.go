@@ -413,6 +413,7 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 
 		walletDeepLink1 := WalletDeepLink{
 			DeepLink:                 wallet1.DeepLinkSchema,
+			TenantBaseURL:            "http://localhost:8000",
 			OrganizationName:         "MyCustomAid",
 			AssetCode:                asset1.Code,
 			AssetIssuer:              asset1.Issuer,
@@ -424,6 +425,7 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 
 		walletDeepLink2 := WalletDeepLink{
 			DeepLink:                 wallet2.DeepLinkSchema,
+			TenantBaseURL:            "http://localhost:8000",
 			OrganizationName:         "MyCustomAid",
 			AssetCode:                asset2.Code,
 			AssetIssuer:              asset2.Issuer,
@@ -1678,6 +1680,7 @@ func Test_WalletDeepLink_GetUnsignedRegistrationLink(t *testing.T) {
 			name: "🎉 successful for deeplink with external-id",
 			walletDeepLink: WalletDeepLink{
 				DeepLink:                 "wallet://sdp?custom=true",
+				TenantBaseURL:            "foo.bar",
 				OrganizationName:         "Foo Bar Org",
 				AssetCode:                "FOO",
 				AssetIssuer:              "GCKGCKZ2PFSCRQXREJMTHAHDMOZQLS2R4V5LZ6VLU53HONH5FI6ACBSX",
