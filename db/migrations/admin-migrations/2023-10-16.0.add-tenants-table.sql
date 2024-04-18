@@ -1,7 +1,7 @@
 -- +migrate Up
 
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp" SCHEMA public;
+CREATE EXTENSION IF NOT EXISTS pgcrypto SCHEMA public;
 
 -- +migrate StatementBegin
 CREATE OR REPLACE FUNCTION update_at_refresh()
@@ -19,7 +19,7 @@ CREATE TYPE tenant_status AS ENUM ('TENANT_CREATED', 'TENANT_PROVISIONED', 'TENA
 
 CREATE TABLE tenants
 (
-    id VARCHAR(36) PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id VARCHAR(36) PRIMARY KEY DEFAULT public.uuid_generate_v4(),
     name text NOT NULL,
     email_sender_type email_sender_type DEFAULT 'DRY_RUN'::email_sender_type,
     sms_sender_type sms_sender_type DEFAULT 'DRY_RUN'::sms_sender_type,

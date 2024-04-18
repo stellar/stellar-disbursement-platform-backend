@@ -88,10 +88,26 @@ func (m *SchemaMigrationManager) deleteSchemaIfNeeded(ctx context.Context) error
 	return nil
 }
 
-func (m *SchemaMigrationManager) runMigrations(ctx context.Context, dbURL string, dir migrate.MigrationDirection, count int) error {
+func (m *SchemaMigrationManager) executeMigrations(ctx context.Context, dbURL string, dir migrate.MigrationDirection, count int) error {
 	err := ExecuteMigrations(ctx, dbURL, dir, count, m.MigrationRouter)
 	if err != nil {
 		return fmt.Errorf("executing migrations for router %s: %w", m.MigrationRouter.TableName, err)
+	}
+
+	return nil
+}
+
+func (m *SchemaMigrationManager) OrchestrateSchemaMigrations(ctx context.Context, dbURL string, dir migrate.MigrationDirection, count int) error {
+	if err := m.createSchemaIfNeeded(ctx); err != nil {
+		return fmt.Errorf("creating the '%s' database schema if needed: %w", m.SchemaName, err)
+	}
+
+	if err := m.executeMigrations(ctx, dbURL, dir, count); err != nil {
+		return fmt.Errorf("running migrations for the '%s' database schema: %w", m.SchemaName, err)
+	}
+
+	if err := m.deleteSchemaIfNeeded(ctx); err != nil {
+		return fmt.Errorf("deleting the '%s' database schema if needed: %w", m.SchemaName, err)
 	}
 
 	return nil

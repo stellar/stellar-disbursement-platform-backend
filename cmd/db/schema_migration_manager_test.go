@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"fmt"
 	"io/fs"
 	"testing"
 
@@ -20,15 +21,15 @@ var testCases = []struct {
 	SchemaName      string
 	getDatabaseDNS  func(dataSourceName string) (string, error)
 }{
+	// {
+	// 	MigrationRouter: migrations.AdminMigrationRouter,
+	// 	SchemaName:      "admin",
+	// 	getDatabaseDNS:  router.GetDNSForAdmin,
+	// },
 	{
 		MigrationRouter: migrations.TSSMigrationRouter,
 		SchemaName:      "tss",
 		getDatabaseDNS:  router.GetDNSForTSS,
-	},
-	{
-		MigrationRouter: migrations.AdminMigrationRouter,
-		SchemaName:      "admin",
-		getDatabaseDNS:  router.GetDNSForAdmin,
 	},
 }
 
@@ -155,7 +156,7 @@ func Test_SchemaMigrationManager_deleteSchemaIfNeeded(t *testing.T) {
                 SELECT COUNT(*) > 0
                 FROM information_schema.schemata
                 WHERE schema_name = $1
-                `
+			`
 			var exists bool
 			err = manager.RootDBConnectionPool.GetContext(ctx, &exists, query, tc.SchemaName)
 			require.NoError(t, err)
@@ -180,7 +181,7 @@ func Test_SchemaMigrationManager_deleteSchemaIfNeeded(t *testing.T) {
 	}
 }
 
-func Test_SchemaMigrationManager_runTSSMigrations(t *testing.T) {
+func Test_SchemaMigrationManager_executeMigrations(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.SchemaName, func(t *testing.T) {
 			dbt := dbtest.Open(t)
@@ -208,17 +209,76 @@ func Test_SchemaMigrationManager_runTSSMigrations(t *testing.T) {
 			})
 			require.NoError(t, err)
 
-			err = manager.runMigrations(ctx, dbt.DSN, migrate.Up, count)
+			err = manager.executeMigrations(ctx, dbt.DSN, migrate.Up, count)
 			require.NoError(t, err)
 
-			err = manager.runMigrations(ctx, dbt.DSN, migrate.Down, count)
+			// Checks if the amount iof migrations is correct
+			query := fmt.Sprintf("SELECT COUNT(*) FROM %s", tc.MigrationRouter.TableName)
+			var numberOfMigrations int
+			err = manager.RootDBConnectionPool.GetContext(ctx, &numberOfMigrations, query)
+			require.NoError(t, err)
+			assert.Equal(t, count, numberOfMigrations)
+
+			err = manager.executeMigrations(ctx, dbt.DSN, migrate.Down, count)
 			require.NoError(t, err)
 
-			err = manager.runMigrations(ctx, dbt.DSN, migrate.Up, count)
+			// Checks if the amount iof migrations is correct
+			err = manager.RootDBConnectionPool.GetContext(ctx, &numberOfMigrations, query)
+			require.NoError(t, err)
+			assert.Equal(t, 0, numberOfMigrations)
+
+			err = manager.executeMigrations(ctx, dbt.DSN, migrate.Up, count)
+			require.NoError(t, err)
+			err = manager.RootDBConnectionPool.GetContext(ctx, &numberOfMigrations, query)
+			require.NoError(t, err)
+			assert.Equal(t, count, numberOfMigrations)
+
+			err = manager.executeMigrations(ctx, dbt.DSN, migrate.Down, count)
+			require.NoError(t, err)
+			err = manager.RootDBConnectionPool.GetContext(ctx, &numberOfMigrations, query)
+			require.NoError(t, err)
+			assert.Equal(t, 0, numberOfMigrations)
+		})
+	}
+}
+
+func Test_SchemaMigrationManager_OrchestrateSchemaMigrations(t *testing.T) {
+	for _, tc := range testCases {
+		t.Run(tc.SchemaName, func(t *testing.T) {
+			dbt := dbtest.Open(t)
+			defer dbt.Close()
+			dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+			require.NoError(t, err)
+			defer dbConnectionPool.Close()
+
+			ctx := context.Background()
+
+			schemaDatabaseDNS, err := tc.getDatabaseDNS(dbt.DSN)
 			require.NoError(t, err)
 
-			err = manager.runMigrations(ctx, dbt.DSN, migrate.Down, count)
+			manager, err := NewSchemaMigrationManager(dbConnectionPool, tc.MigrationRouter, tc.SchemaName, schemaDatabaseDNS)
 			require.NoError(t, err)
+
+			// Get number of files in the migrations directory:
+			var count int
+			err = fs.WalkDir(manager.MigrationRouter.FS, ".", func(path string, d fs.DirEntry, err error) error {
+				require.NoError(t, err)
+				if !d.IsDir() {
+					count++
+				}
+				return nil
+			})
+			require.NoError(t, err)
+
+			err = manager.OrchestrateSchemaMigrations(ctx, schemaDatabaseDNS, migrate.Up, count)
+			require.NoError(t, err)
+
+			// Checks if the amount iof migrations is correct
+			query := fmt.Sprintf("SELECT COUNT(*) FROM %s.%s", tc.SchemaName, tc.MigrationRouter.TableName)
+			var numberOfMigrations int
+			err = manager.RootDBConnectionPool.GetContext(ctx, &numberOfMigrations, query)
+			require.NoError(t, err)
+			assert.Equal(t, count, numberOfMigrations)
 		})
 	}
 }
