@@ -29,6 +29,7 @@ func ValidateStatus(ctx context.Context, manager tenant.ManagerInterface, models
 	if err != nil {
 		return fmt.Errorf("%w: %w", ErrCannotRetrieveTenantByID, err)
 	}
+	ctx = tenant.SaveTenantInContext(ctx, tnt)
 
 	// if attempting to deactivate tenant, need to check for a few conditions such as
 	// 1. whether tenant is already deactivated
