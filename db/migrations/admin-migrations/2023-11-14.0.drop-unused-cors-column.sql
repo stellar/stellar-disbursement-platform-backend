@@ -2,11 +2,11 @@
 
 -- +migrate Up
 
-ALTER TABLE public.tenants
+ALTER TABLE tenants
     DROP COLUMN IF EXISTS cors_allowed_origins;
 
 
 -- +migrate Down
 
-ALTER TABLE public.tenants
+ALTER TABLE tenants
     ADD COLUMN cors_allowed_origins text[] NULL;
