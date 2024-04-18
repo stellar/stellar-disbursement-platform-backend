@@ -250,3 +250,83 @@ func TestMigrate_upAndDownAllTheWayTwice_Auth_migrations(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, count, n)
 }
+
+func TestMigrate_upApplyOne_TSS_migrations(t *testing.T) {
+	db := dbtest.OpenWithoutMigrations(t)
+	defer db.Close()
+	dbConnectionPool, err := OpenDBConnectionPool(db.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+
+	n, err := Migrate(db.DSN, migrate.Up, 1, migrations.TSSMigrationRouter)
+	require.NoError(t, err)
+	assert.Equal(t, 1, n)
+
+	ids := []string{}
+	err = dbConnectionPool.SelectContext(ctx, &ids, fmt.Sprintf("SELECT id FROM %s", migrations.TSSMigrationRouter.TableName))
+	require.NoError(t, err)
+	wantIDs := []string{"2024-01-03.0-add-submitter-transactions-table.sql"}
+	assert.Equal(t, wantIDs, ids)
+}
+
+func TestMigrate_downApplyTwo_TSS_migrations(t *testing.T) {
+	db := dbtest.OpenWithoutMigrations(t)
+	defer db.Close()
+	dbConnectionPool, err := OpenDBConnectionPool(db.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+
+	n, err := Migrate(db.DSN, migrate.Up, 2, migrations.TSSMigrationRouter)
+	require.NoError(t, err)
+	require.Equal(t, 2, n)
+
+	n, err = Migrate(db.DSN, migrate.Down, 2, migrations.TSSMigrationRouter)
+	require.NoError(t, err)
+	require.Equal(t, 2, n)
+
+	ids := []string{}
+	err = dbConnectionPool.SelectContext(ctx, &ids, fmt.Sprintf("SELECT id FROM %s", migrations.TSSMigrationRouter.TableName))
+	require.NoError(t, err)
+	wantIDs := []string{}
+	assert.Equal(t, wantIDs, ids)
+}
+
+func TestMigrate_upAndDownAllTheWayTwice_TSS_migrations(t *testing.T) {
+	db := dbtest.OpenWithoutMigrations(t)
+	defer db.Close()
+	dbConnectionPool, err := OpenDBConnectionPool(db.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	// Get number of files in the migrations directory:
+	var count int
+
+	err = fs.WalkDir(migrations.TSSMigrationRouter.FS, ".", func(path string, d fs.DirEntry, err error) error {
+		require.NoError(t, err)
+		if !d.IsDir() {
+			count++
+		}
+		return nil
+	})
+	require.NoError(t, err)
+
+	n, err := Migrate(db.DSN, migrate.Up, count, migrations.TSSMigrationRouter)
+	require.NoError(t, err)
+	require.Equal(t, count, n)
+
+	n, err = Migrate(db.DSN, migrate.Down, count, migrations.TSSMigrationRouter)
+	require.NoError(t, err)
+	require.Equal(t, count, n)
+
+	n, err = Migrate(db.DSN, migrate.Up, count, migrations.TSSMigrationRouter)
+	require.NoError(t, err)
+	require.Equal(t, count, n)
+
+	n, err = Migrate(db.DSN, migrate.Down, count, migrations.TSSMigrationRouter)
+	require.NoError(t, err)
+	require.Equal(t, count, n)
+}
