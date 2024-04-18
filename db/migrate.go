@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"fmt"
+	"net/http"
 
 	migrate "github.com/rubenv/sql-migrate"
 
@@ -23,7 +24,7 @@ func Migrate(dbURL string, dir migrate.MigrationDirection, count int, migrationR
 		TableName: string(migrationRouter.TableName),
 	}
 
-	m := migrate.HttpFileSystemMigrationSource{FileSystem: migrationRouter.FS}
+	m := migrate.HttpFileSystemMigrationSource{FileSystem: http.FS(migrationRouter.FS)}
 	ctx := context.Background()
 	db, err := dbConnectionPool.SqlDB(ctx)
 	if err != nil {

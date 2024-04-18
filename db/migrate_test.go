@@ -7,13 +7,11 @@ import (
 	"testing"
 
 	migrate "github.com/rubenv/sql-migrate"
-	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
-	"github.com/stellar/stellar-disbursement-platform-backend/db/migrations"
-	adminmigrations "github.com/stellar/stellar-disbursement-platform-backend/db/migrations/admin-migrations"
-	authmigrations "github.com/stellar/stellar-disbursement-platform-backend/db/migrations/auth-migrations"
-	sdpmigrations "github.com/stellar/stellar-disbursement-platform-backend/db/migrations/sdp-migrations"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
+	"github.com/stellar/stellar-disbursement-platform-backend/db/migrations"
 )
 
 func TestMigrate_upApplyOne_SDP_migrations(t *testing.T) {
@@ -69,7 +67,7 @@ func TestMigrate_upAndDownAllTheWayTwice_SDP_migrations(t *testing.T) {
 
 	// Get number of files in the migrations directory:
 	var count int
-	err = fs.WalkDir(sdpmigrations.FS, ".", func(path string, d fs.DirEntry, err error) error {
+	err = fs.WalkDir(migrations.SDPMigrationRouter.FS, ".", func(path string, d fs.DirEntry, err error) error {
 		require.NoError(t, err)
 		if !d.IsDir() {
 			count++
@@ -148,7 +146,7 @@ func TestMigrate_upAndDownAllTheWayTwice_Tenant_migrations(t *testing.T) {
 
 	// Get number of files in the migrations directory:
 	var count int
-	err = fs.WalkDir(adminmigrations.FS, ".", func(path string, d fs.DirEntry, err error) error {
+	err = fs.WalkDir(migrations.AdminMigrationRouter.FS, ".", func(path string, d fs.DirEntry, err error) error {
 		require.NoError(t, err)
 		if !d.IsDir() {
 			count++
@@ -227,7 +225,7 @@ func TestMigrate_upAndDownAllTheWayTwice_Auth_migrations(t *testing.T) {
 
 	// Get number of files in the migrations directory:
 	var count int
-	err = fs.WalkDir(authmigrations.FS, ".", func(path string, d fs.DirEntry, err error) error {
+	err = fs.WalkDir(migrations.AuthMigrationRouter.FS, ".", func(path string, d fs.DirEntry, err error) error {
 		require.NoError(t, err)
 		if !d.IsDir() {
 			count++
