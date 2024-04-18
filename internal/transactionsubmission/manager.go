@@ -66,7 +66,7 @@ type Manager struct {
 	chAccModel       *store.ChannelAccountModel
 	chTxBundleModel  *store.ChannelTransactionBundleModel
 	// job-related:
-	queueService        defaultQueueService
+	pollingInterval     time.Duration
 	txProcessingLimiter *engine.TransactionProcessingLimiter
 	// transaction submission:
 	engine *engine.SubmitterEngine
@@ -117,11 +117,6 @@ func NewManager(ctx context.Context, opts SubmitterOptions) (m *Manager, err err
 		log.Ctx(ctx).Warnf("The number of channel accounts in the database is smaller than expected, (%d < %d)", chAccCount, opts.NumChannelAccounts)
 	}
 
-	queueService := defaultQueueService{
-		pollingInterval:    time.Second * time.Duration(opts.QueuePollingInterval),
-		numChannelAccounts: opts.NumChannelAccounts,
-	}
-
 	txProcessingLimiter := engine.NewTransactionProcessingLimiter(opts.NumChannelAccounts)
 
 	return &Manager{
@@ -130,7 +125,7 @@ func NewManager(ctx context.Context, opts SubmitterOptions) (m *Manager, err err
 		txModel:          txModel,
 		chTxBundleModel:  chTxBundleModel,
 
-		queueService:        queueService,
+		pollingInterval:     time.Second * time.Duration(opts.QueuePollingInterval),
 		txProcessingLimiter: txProcessingLimiter,
 
 		engine: &opts.SubmitterEngine,
@@ -142,12 +137,6 @@ func NewManager(ctx context.Context, opts SubmitterOptions) (m *Manager, err err
 	}, nil
 }
 
-// TODO: generalize the queue service in [SDP-748] to make it agnostic to databases.
-type defaultQueueService struct {
-	pollingInterval    time.Duration
-	numChannelAccounts int
-}
-
 func (m *Manager) ProcessTransactions(ctx context.Context) {
 	defer m.crashTrackerClient.FlushEvents(2 * time.Second)
 	defer m.crashTrackerClient.Recover()
@@ -157,7 +146,7 @@ func (m *Manager) ProcessTransactions(ctx context.Context) {
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, syscall.SIGTERM, syscall.SIGINT, syscall.SIGQUIT)
 
-	ticker := time.NewTicker(m.queueService.pollingInterval)
+	ticker := time.NewTicker(m.pollingInterval)
 	defer ticker.Stop()
 
 	for {

@@ -341,17 +341,13 @@ func Test_NewManager(t *testing.T) {
 					txModel:          wantTxModel,
 					chTxBundleModel:  wantChTxBundleModel,
 
-					queueService: defaultQueueService{
-						pollingInterval:    time.Duration(submitterOptions.QueuePollingInterval) * time.Second,
-						numChannelAccounts: submitterOptions.NumChannelAccounts,
-					},
+					pollingInterval:     time.Duration(submitterOptions.QueuePollingInterval) * time.Second,
+					txProcessingLimiter: txProcessingLimiter,
 
 					engine: wantSubmitterEngine,
 
 					crashTrackerClient: wantCrashTrackerClient,
 					monitorService:     submitterOptions.MonitorService,
-
-					txProcessingLimiter: txProcessingLimiter,
 
 					eventProducer: wantEventProducer,
 				}
@@ -478,11 +474,6 @@ func Test_Manager_ProcessTransactions(t *testing.T) {
 			dryRunCrashTracker, err := crashtracker.NewDryRunClient()
 			require.NoError(t, err)
 
-			queueService := defaultQueueService{
-				pollingInterval:    500 * time.Millisecond,
-				numChannelAccounts: 2,
-			}
-
 			chTxBundleModel, err := store.NewChannelTransactionBundleModel(dbConnectionPool)
 			require.NoError(t, err)
 
@@ -494,19 +485,23 @@ func Test_Manager_ProcessTransactions(t *testing.T) {
 			defer mockEventProducer.AssertExpectations(t)
 
 			manager := &Manager{
-				dbConnectionPool:    dbConnectionPool,
-				chTxBundleModel:     chTxBundleModel,
-				chAccModel:          store.NewChannelAccountModel(dbConnectionPool),
-				txModel:             store.NewTransactionModel(dbConnectionPool),
-				engine:              submitterEngine,
-				crashTrackerClient:  dryRunCrashTracker,
-				queueService:        queueService,
-				txProcessingLimiter: engine.NewTransactionProcessingLimiter(queueService.numChannelAccounts),
+				dbConnectionPool: dbConnectionPool,
+				chAccModel:       store.NewChannelAccountModel(dbConnectionPool),
+				txModel:          store.NewTransactionModel(dbConnectionPool),
+				chTxBundleModel:  chTxBundleModel,
+
+				pollingInterval:     500 * time.Millisecond,
+				txProcessingLimiter: engine.NewTransactionProcessingLimiter(2),
+
+				engine: submitterEngine,
+
+				crashTrackerClient: dryRunCrashTracker,
 				monitorService: tssMonitor.TSSMonitorService{
 					Client:        mMonitorClient,
 					GitCommitHash: "gitCommitHash0x",
 					Version:       "version123",
 				},
+
 				eventProducer: mockEventProducer,
 			}
 
