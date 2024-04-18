@@ -601,14 +601,6 @@ func Test_TenantHandler_Patch(t *testing.T) {
 		assert.JSONEq(t, expectedRespBody, string(respBody))
 	})
 
-	t.Run("returns BadRequest when EmailSenderType is not valid", func(t *testing.T) {
-		runBadRequestPatchTest(t, r, url, "email_sender_type", "invalid email sender type. Expected one of these values: [AWS_EMAIL DRY_RUN]")
-	})
-
-	t.Run("returns BadRequest when SMSSenderType is not valid", func(t *testing.T) {
-		runBadRequestPatchTest(t, r, url, "sms_sender_type", "invalid sms sender type. Expected one of these values: [TWILIO_SMS AWS_SMS DRY_RUN]")
-	})
-
 	t.Run("returns BadRequest when BaseURL is not valid", func(t *testing.T) {
 		runBadRequestPatchTest(t, r, url, "base_url", "invalid base URL value")
 	})
@@ -624,41 +616,9 @@ func Test_TenantHandler_Patch(t *testing.T) {
 	t.Run("successfully updates status of a tenant to be deactivated", func(t *testing.T) {
 		reqBody := `{"status": "TENANT_DEACTIVATED"}`
 		expectedRespBody := `
-			"email_sender_type": "DRY_RUN",
-			"sms_sender_type": "DRY_RUN",
 			"base_url": null,
 			"sdp_ui_base_url": null,
 			"status": "TENANT_DEACTIVATED",
-			"distribution_account": "GCTNUNQVX7BNIP5AUWW2R4YC7G6R3JGUDNMGT7H62BGBUY4A4V6ROAAH",
-			"is_default": false,
-		`
-
-		runSuccessfulRequestPatchTest(t, r, ctx, dbConnectionPool, handler, reqBody, expectedRespBody, nil)
-	})
-
-	t.Run("successfully updates EmailSenderType of a tenant", func(t *testing.T) {
-		reqBody := `{"email_sender_type": "AWS_EMAIL"}`
-		expectedRespBody := `
-			"email_sender_type": "AWS_EMAIL",
-			"sms_sender_type": "DRY_RUN",
-			"base_url": null,
-			"sdp_ui_base_url": null,
-			"status": "TENANT_CREATED",
-			"distribution_account": "GCTNUNQVX7BNIP5AUWW2R4YC7G6R3JGUDNMGT7H62BGBUY4A4V6ROAAH",
-			"is_default": false,
-		`
-
-		runSuccessfulRequestPatchTest(t, r, ctx, dbConnectionPool, handler, reqBody, expectedRespBody, nil)
-	})
-
-	t.Run("successfully updates SMSSenderType of a tenant", func(t *testing.T) {
-		reqBody := `{"SMS_sender_type": "TWILIO_SMS"}`
-		expectedRespBody := `
-			"email_sender_type": "DRY_RUN",
-			"sms_sender_type": "TWILIO_SMS",
-			"base_url": null,
-			"sdp_ui_base_url": null,
-			"status": "TENANT_CREATED",
 			"distribution_account": "GCTNUNQVX7BNIP5AUWW2R4YC7G6R3JGUDNMGT7H62BGBUY4A4V6ROAAH",
 			"is_default": false,
 		`

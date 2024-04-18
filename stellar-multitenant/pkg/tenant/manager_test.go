@@ -126,13 +126,13 @@ func Test_Manager_GetAllTenants(t *testing.T) {
 	tnt2, err := m.AddTenant(ctx, "myorg2")
 	require.NoError(t, err)
 
-	tenants, err := m.GetAllTenants(ctx)
+	tenants, err := m.GetAllTenants(ctx, nil)
 	require.NoError(t, err)
 
 	assert.ElementsMatch(t, tenants, []Tenant{*tnt1, *tnt2})
 
 	deactivateTenant(t, ctx, m, tnt1)
-	tenants, err = m.GetAllTenants(ctx)
+	tenants, err = m.GetAllTenants(ctx, nil)
 	require.NoError(t, err)
 
 	assert.ElementsMatch(t, tenants, []Tenant{*tnt2})

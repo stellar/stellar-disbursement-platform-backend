@@ -29,7 +29,7 @@ type tenantContextKey struct{}
 type ManagerInterface interface {
 	GetDSNForTenant(ctx context.Context, tenantName string) (string, error)
 	GetDSNForTenantByID(ctx context.Context, id string) (string, error)
-	GetAllTenants(ctx context.Context) ([]Tenant, error)
+	GetAllTenants(ctx context.Context, queryParams *QueryParams) ([]Tenant, error)
 	GetTenant(ctx context.Context, queryParams *QueryParams) (*Tenant, error)
 	GetTenantByID(ctx context.Context, id string) (*Tenant, error)
 	GetTenantByName(ctx context.Context, name string) (*Tenant, error)
@@ -59,7 +59,7 @@ func (m *Manager) GetDSNForTenant(ctx context.Context, tenantName string) (strin
 func (m *Manager) GetDSNForTenantByID(ctx context.Context, id string) (string, error) {
 	t, err := m.GetTenantByID(ctx, id)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("getting tenant for ID %s: %w", id, err)
 	}
 
 	return m.GetDSNForTenant(ctx, t.Name)
@@ -73,13 +73,15 @@ var selectQuery string = `
 `
 
 // GetAllTenants returns all tenants in the database.
-func (m *Manager) GetAllTenants(ctx context.Context) ([]Tenant, error) {
-	queryParams := &QueryParams{
-		Filters: map[FilterKey]interface{}{
-			FilterKeyOutStatus: DeactivatedTenantStatus,
-		},
-		SortBy:    data.SortFieldName,
-		SortOrder: data.SortOrderASC,
+func (m *Manager) GetAllTenants(ctx context.Context, queryParams *QueryParams) ([]Tenant, error) {
+	if queryParams == nil {
+		queryParams = &QueryParams{
+			Filters: map[FilterKey]interface{}{
+				FilterKeyOutStatus: DeactivatedTenantStatus,
+			},
+			SortBy:    data.SortFieldName,
+			SortOrder: data.SortOrderASC,
+		}
 	}
 
 	tnts := []Tenant{}
@@ -92,7 +94,7 @@ func (m *Manager) GetAllTenants(ctx context.Context) ([]Tenant, error) {
 	return tnts, nil
 }
 
-// GetTenant is a generic method that fetches a tenant based on queryParams
+// GetTenant is a generic method that fetches a tenant based on queryParams.
 func (m *Manager) GetTenant(ctx context.Context, queryParams *QueryParams) (*Tenant, error) {
 	var t Tenant
 	q, params := m.newManagerQuery(selectQuery, queryParams)

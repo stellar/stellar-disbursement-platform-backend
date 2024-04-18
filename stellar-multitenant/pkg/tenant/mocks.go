@@ -21,8 +21,8 @@ func (m *TenantManagerMock) GetDSNForTenantByID(ctx context.Context, id string) 
 	return args.String(0), args.Error(1)
 }
 
-func (m *TenantManagerMock) GetAllTenants(ctx context.Context) ([]Tenant, error) {
-	args := m.Called(ctx)
+func (m *TenantManagerMock) GetAllTenants(ctx context.Context, queryParams *QueryParams) ([]Tenant, error) {
+	args := m.Called(ctx, queryParams)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}

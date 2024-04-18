@@ -32,7 +32,7 @@ type TenantsHandler struct {
 func (t TenantsHandler) GetAll(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	tnts, err := t.Manager.GetAllTenants(ctx)
+	tnts, err := t.Manager.GetAllTenants(ctx, nil)
 	if err != nil {
 		httperror.InternalError(ctx, "Cannot get tenants", err, nil).Render(w)
 		return
