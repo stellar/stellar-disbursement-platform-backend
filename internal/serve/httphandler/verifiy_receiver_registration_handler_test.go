@@ -301,6 +301,7 @@ func Test_VerifyReceiverRegistrationHandler_processReceiverVerificationPII(t *te
 	}
 
 	for _, tc := range testCases {
+		println(tc.name)
 		t.Run(tc.name, func(t *testing.T) {
 			dbTx, err := dbConnectionPool.BeginTxx(ctx, nil)
 			require.NoError(t, err)
@@ -339,6 +340,44 @@ func Test_VerifyReceiverRegistrationHandler_processReceiverVerificationPII(t *te
 			}
 		})
 	}
+}
+
+//reece
+func Test_VerifyReceiverRegistrationHandler_processReceiverCustomerID_and_HashedMobileNumber(t *testing.T) {
+	ctx := context.Background()
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	dbTx, err := dbConnectionPool.BeginTxx(ctx, nil)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+	models, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+
+	mockAnchorPlatformService := anchorplatform.AnchorPlatformAPIServiceMock{}
+	reCAPTCHAValidator := &validators.ReCAPTCHAValidatorMock{}
+	handler := &VerifyReceiverRegistrationHandler{
+		Models:                   models,
+		AnchorPlatformAPIService: &mockAnchorPlatformService,
+		ReCAPTCHAValidator:       reCAPTCHAValidator,
+	}
+
+	receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{PhoneNumber: "+380443333333"})
+	hashedReceiverPhoneNumber, err := data.HashVerificationValue(receiver.PhoneNumber)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
+
+	registrationRequest := data.ReceiverRegistrationRequest{
+				MobileNumberHash:   hashedReceiverPhoneNumber,
+				CustomerID:         receiver.ExternalID,
+	}
+	
+	err = handler.processReceiverVerificationPII(ctx, dbTx, *receiver, registrationRequest)
+
+			
 }
 
 func Test_VerifyReceiverRegistrationHandler_processReceiverWalletOTP(t *testing.T) {
@@ -492,7 +531,7 @@ func Test_VerifyReceiverRegistrationHandler_processAnchorPlatformID(t *testing.T
 	require.NoError(t, err)
 	handler := &VerifyReceiverRegistrationHandler{Models: models}
 
-	// creeate fixtures
+	// create fixtures
 	const phoneNumber = "+380445555555"
 	defer data.DeleteAllFixtures(t, ctx, dbConnectionPool)
 	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "testWallet", "https://home.page", "home.page", "wallet123://")

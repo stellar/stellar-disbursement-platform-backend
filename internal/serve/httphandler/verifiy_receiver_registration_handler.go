@@ -19,6 +19,9 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+	
+	
+	
 )
 
 // ErrorInformationNotFound implements the error interface.
@@ -112,10 +115,24 @@ func (v VerifyReceiverRegistrationHandler) processReceiverVerificationPII(
 	now := time.Now()
 	truncatedPhoneNumber := utils.TruncateString(receiver.PhoneNumber, 3)
 
-	// Use the external_id associated with the receiver if it exists
-	if receiver.ExternalID != "" {
-		// Logic to handle the verification associated with the external_id
-		// This may include comparing the hashed phone number with the one associated with external_id
+	// STEP 0: if customer-id exists in sep24 claims, use it to look up reciever, hash Phone Number  in db, compare against hashed mobile_number in sep24 claims 
+	if receiverRegistrationRequest.CustomerID != "" {
+		
+		receiverByExternalID, err := v.Models.Receiver.GetByExternalID(ctx, dbTx, receiver.ExternalID)
+		if err != nil {
+			log.Ctx(ctx).Errorf("Error retrieving receiver by external ID: %v", err)
+			return &ErrorInformationNotFound{cause: err}
+		}
+		print(receiverByExternalID.PhoneNumber)
+		
+		if data.CompareVerificationValue(receiverRegistrationRequest.MobileNumberHash, receiverByExternalID.PhoneNumber) {
+			// Compare the hashed phone number with the hashed mobile number from the SEP-24 claims
+			//if hashedPhoneNumber != receiverRegistrationRequest.MobileNumberHash {
+			//err := fmt.Errorf("hashed phone number does not match the hashed mobile number from SEP-24 claims")
+			//	return &ErrorInformationNotFound{cause: err}
+			//}
+			return nil
+		}
 	}
 	
 	// STEP 1: find the receiverVerification entry that matches the pair [receiverID, verificationType]
@@ -147,7 +164,7 @@ func (v VerifyReceiverRegistrationHandler) processReceiverVerificationPII(
 		receiverVerification.FailedAt = &now
 		receiverVerification.ConfirmedAt = nil
 
-		// this update is done using the DBConnectionPool and not dbTx because we don't want to roolback these changes after returning the error
+		// this update is done using the DBConnectionPool and not dbTx because we don't want to rollback these changes after returning the error
 		updateErr := v.Models.ReceiverVerification.UpdateReceiverVerification(ctx, *receiverVerification, v.Models.DBConnectionPool)
 		if updateErr != nil {
 			err = fmt.Errorf("%s: %w", baseErrMsg, updateErr)
