@@ -225,30 +225,26 @@ func (c *DatabaseCommand) tssMigrationsCmd(ctx context.Context, globalOptions *u
 	}
 
 	executeMigrationsFn := func(ctx context.Context, dir migrate.MigrationDirection, count int) error {
-		tssMigrationsManager, err := NewSchemaMigrationManager(c.adminDBConnectionPool, migrations.TSSMigrationRouter, router.TSSSchemaName)
-		if err != nil {
-			return fmt.Errorf("creating TSS database migration manager: %w", err)
-		}
-
-		err = tssMigrationsManager.CreateSchemaIfNeeded(ctx)
-		if err != nil {
-			return fmt.Errorf("creating the 'tss' database schema if needed: %w", err)
-		}
-
 		dbURL, err := router.GetDNSForTSS(globalOptions.DatabaseURL)
 		if err != nil {
 			return fmt.Errorf("getting the TSS database DSN: %w", err)
 		}
 
-		if err = tssMigrationsManager.RunMigrations(ctx, dbURL, dir, count); err != nil {
+		tssMigrationsManager, err := NewSchemaMigrationManager(c.adminDBConnectionPool, migrations.TSSMigrationRouter, router.TSSSchemaName, dbURL)
+		if err != nil {
+			return fmt.Errorf("creating TSS database migration manager: %w", err)
+		}
+
+		if err = tssMigrationsManager.createSchemaIfNeeded(ctx); err != nil {
+			return fmt.Errorf("creating the 'tss' database schema if needed: %w", err)
+		}
+
+		if err = tssMigrationsManager.runMigrations(ctx, dbURL, dir, count); err != nil {
 			return fmt.Errorf("running TSS migrations: %w", err)
 		}
 
-		if dir == migrate.Down {
-			err = tssMigrationsManager.deleteSchemaIfNeeded(ctx)
-			if err != nil {
-				return fmt.Errorf("deleting the 'tss' database schema if needed: %w", err)
-			}
+		if err = tssMigrationsManager.deleteSchemaIfNeeded(ctx); err != nil {
+			return fmt.Errorf("deleting the 'tss' database schema if needed: %w", err)
 		}
 
 		return nil

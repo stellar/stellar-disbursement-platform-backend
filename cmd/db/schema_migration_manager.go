@@ -17,9 +17,15 @@ type SchemaMigrationManager struct {
 	RootDBConnectionPool db.DBConnectionPool
 	MigrationRouter      migrations.MigrationRouter
 	SchemaName           string
+	SchemaDatabaseDNS    string
 }
 
-func NewSchemaMigrationManager(rootDBConnectionPool db.DBConnectionPool, migrationRouter migrations.MigrationRouter, schemaName string) (*SchemaMigrationManager, error) {
+func NewSchemaMigrationManager(
+	rootDBConnectionPool db.DBConnectionPool,
+	migrationRouter migrations.MigrationRouter,
+	schemaName string,
+	schemaDatabaseDNS string,
+) (*SchemaMigrationManager, error) {
 	if rootDBConnectionPool == nil {
 		return nil, fmt.Errorf("rootDBConnectionPool cannot be nil")
 	}
@@ -32,6 +38,10 @@ func NewSchemaMigrationManager(rootDBConnectionPool db.DBConnectionPool, migrati
 		return nil, fmt.Errorf("schemaName cannot be empty")
 	}
 
+	if strings.TrimSpace(schemaDatabaseDNS) == "" {
+		return nil, fmt.Errorf("schemaDatabaseDNS cannot be empty")
+	}
+
 	return &SchemaMigrationManager{
 		RootDBConnectionPool: rootDBConnectionPool,
 		MigrationRouter:      migrationRouter,
@@ -39,7 +49,7 @@ func NewSchemaMigrationManager(rootDBConnectionPool db.DBConnectionPool, migrati
 	}, nil
 }
 
-func (m *SchemaMigrationManager) CreateSchemaIfNeeded(ctx context.Context) error {
+func (m *SchemaMigrationManager) createSchemaIfNeeded(ctx context.Context) error {
 	query := fmt.Sprintf("CREATE SCHEMA IF NOT EXISTS %s", m.SchemaName)
 	_, err := m.RootDBConnectionPool.ExecContext(ctx, query)
 	if err != nil {
@@ -78,7 +88,7 @@ func (m *SchemaMigrationManager) deleteSchemaIfNeeded(ctx context.Context) error
 	return nil
 }
 
-func (m *SchemaMigrationManager) RunMigrations(ctx context.Context, dbURL string, dir migrate.MigrationDirection, count int) error {
+func (m *SchemaMigrationManager) runMigrations(ctx context.Context, dbURL string, dir migrate.MigrationDirection, count int) error {
 	err := ExecuteMigrations(ctx, dbURL, dir, count, m.MigrationRouter)
 	if err != nil {
 		return fmt.Errorf("executing migrations for router %s: %w", m.MigrationRouter.TableName, err)

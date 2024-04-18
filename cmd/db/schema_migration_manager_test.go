@@ -6,24 +6,29 @@ import (
 	"testing"
 
 	migrate "github.com/rubenv/sql-migrate"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/migrations"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	"github.com/stellar/stellar-disbursement-platform-backend/db/router"
 )
 
 var testCases = []struct {
 	MigrationRouter migrations.MigrationRouter
 	SchemaName      string
+	getDatabaseDNS  func(dataSourceName string) (string, error)
 }{
 	{
 		MigrationRouter: migrations.TSSMigrationRouter,
 		SchemaName:      "tss",
+		getDatabaseDNS:  router.GetDNSForTSS,
 	},
 	{
 		MigrationRouter: migrations.AdminMigrationRouter,
 		SchemaName:      "admin",
+		getDatabaseDNS:  router.GetDNSForAdmin,
 	},
 }
 
@@ -37,25 +42,34 @@ func Test_NewSchemaMigrationManager(t *testing.T) {
 			defer dbConnectionPool.Close()
 
 			t.Run("rootDBConnectionPool cannot be nil", func(t *testing.T) {
-				manager, err := NewSchemaMigrationManager(nil, migrations.MigrationRouter{}, "")
+				manager, err := NewSchemaMigrationManager(nil, migrations.MigrationRouter{}, "", "")
 				assert.Nil(t, manager)
 				assert.EqualError(t, err, "rootDBConnectionPool cannot be nil")
 			})
 
 			t.Run("migrationRouter cannot be empty", func(t *testing.T) {
-				manager, err := NewSchemaMigrationManager(dbConnectionPool, migrations.MigrationRouter{}, "")
+				manager, err := NewSchemaMigrationManager(dbConnectionPool, migrations.MigrationRouter{}, "", "")
 				assert.Nil(t, manager)
 				assert.EqualError(t, err, "migrationRouter cannot be empty")
 			})
 
 			t.Run("schemaName cannot be empty", func(t *testing.T) {
-				manager, err := NewSchemaMigrationManager(dbConnectionPool, migrations.SDPMigrationRouter, "")
+				manager, err := NewSchemaMigrationManager(dbConnectionPool, migrations.SDPMigrationRouter, "", "")
 				assert.Nil(t, manager)
 				assert.EqualError(t, err, "schemaName cannot be empty")
 			})
 
+			t.Run("schemaDatabaseDNS cannot be empty", func(t *testing.T) {
+				manager, err := NewSchemaMigrationManager(dbConnectionPool, migrations.SDPMigrationRouter, tc.SchemaName, "")
+				assert.Nil(t, manager)
+				assert.EqualError(t, err, "schemaDatabaseDNS cannot be empty")
+			})
+
 			t.Run("🎉 successfully constructs the instance", func(t *testing.T) {
-				manager, err := NewSchemaMigrationManager(dbConnectionPool, tc.MigrationRouter, tc.SchemaName)
+				schemaDatabaseDNS, err := tc.getDatabaseDNS(dbt.DSN)
+				require.NoError(t, err)
+
+				manager, err := NewSchemaMigrationManager(dbConnectionPool, tc.MigrationRouter, tc.SchemaName, schemaDatabaseDNS)
 				require.NoError(t, err)
 				wantManager := &SchemaMigrationManager{
 					RootDBConnectionPool: dbConnectionPool,
@@ -68,7 +82,7 @@ func Test_NewSchemaMigrationManager(t *testing.T) {
 	}
 }
 
-func Test_SchemaMigrationManager_CreateSchemaIfNeeded(t *testing.T) {
+func Test_SchemaMigrationManager_createSchemaIfNeeded(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.SchemaName, func(t *testing.T) {
 			dbt := dbtest.Open(t)
@@ -79,22 +93,25 @@ func Test_SchemaMigrationManager_CreateSchemaIfNeeded(t *testing.T) {
 
 			ctx := context.Background()
 
-			manager, err := NewSchemaMigrationManager(dbConnectionPool, tc.MigrationRouter, tc.SchemaName)
+			schemaDatabaseDNS, err := tc.getDatabaseDNS(dbt.DSN)
+			require.NoError(t, err)
+
+			manager, err := NewSchemaMigrationManager(dbConnectionPool, tc.MigrationRouter, tc.SchemaName, schemaDatabaseDNS)
 			require.NoError(t, err)
 
 			// Checks that the schema does not exist.
 			query := `
-				SELECT COUNT(*) > 0
-				FROM information_schema.schemata
-				WHERE schema_name = $1
-			`
+                SELECT COUNT(*) > 0
+                FROM information_schema.schemata
+                WHERE schema_name = $1
+                `
 			var exists bool
 			err = manager.RootDBConnectionPool.GetContext(ctx, &exists, query, tc.SchemaName)
 			require.NoError(t, err)
 			assert.False(t, exists)
 
 			// Creates the schema.
-			err = manager.CreateSchemaIfNeeded(ctx)
+			err = manager.createSchemaIfNeeded(ctx)
 			require.NoError(t, err)
 
 			// Checks that the schema exists.
@@ -103,7 +120,7 @@ func Test_SchemaMigrationManager_CreateSchemaIfNeeded(t *testing.T) {
 			assert.True(t, exists)
 
 			// Runs the CreateSchemaIfNeeded function again, it should be a no-op.
-			err = manager.CreateSchemaIfNeeded(ctx)
+			err = manager.createSchemaIfNeeded(ctx)
 			require.NoError(t, err)
 			err = manager.RootDBConnectionPool.GetContext(ctx, &exists, query, tc.SchemaName)
 			require.NoError(t, err)
@@ -123,19 +140,22 @@ func Test_SchemaMigrationManager_deleteSchemaIfNeeded(t *testing.T) {
 
 			ctx := context.Background()
 
-			manager, err := NewSchemaMigrationManager(dbConnectionPool, tc.MigrationRouter, tc.SchemaName)
+			schemaDatabaseDNS, err := tc.getDatabaseDNS(dbt.DSN)
+			require.NoError(t, err)
+
+			manager, err := NewSchemaMigrationManager(dbConnectionPool, tc.MigrationRouter, tc.SchemaName, schemaDatabaseDNS)
 			require.NoError(t, err)
 
 			// Creates the schema.
-			err = manager.CreateSchemaIfNeeded(ctx)
+			err = manager.createSchemaIfNeeded(ctx)
 			require.NoError(t, err)
 
 			// Checks that the schema exists.
 			query := `
-				SELECT COUNT(*) > 0
-				FROM information_schema.schemata
-				WHERE schema_name = $1
-			`
+                SELECT COUNT(*) > 0
+                FROM information_schema.schemata
+                WHERE schema_name = $1
+                `
 			var exists bool
 			err = manager.RootDBConnectionPool.GetContext(ctx, &exists, query, tc.SchemaName)
 			require.NoError(t, err)
@@ -160,7 +180,7 @@ func Test_SchemaMigrationManager_deleteSchemaIfNeeded(t *testing.T) {
 	}
 }
 
-func Test_SchemaMigrationManager_RunTSSMigrations(t *testing.T) {
+func Test_SchemaMigrationManager_runTSSMigrations(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.SchemaName, func(t *testing.T) {
 			dbt := dbtest.Open(t)
@@ -171,7 +191,10 @@ func Test_SchemaMigrationManager_RunTSSMigrations(t *testing.T) {
 
 			ctx := context.Background()
 
-			manager, err := NewSchemaMigrationManager(dbConnectionPool, tc.MigrationRouter, tc.SchemaName)
+			schemaDatabaseDNS, err := tc.getDatabaseDNS(dbt.DSN)
+			require.NoError(t, err)
+
+			manager, err := NewSchemaMigrationManager(dbConnectionPool, tc.MigrationRouter, tc.SchemaName, schemaDatabaseDNS)
 			require.NoError(t, err)
 
 			// Get number of files in the migrations directory:
@@ -185,16 +208,16 @@ func Test_SchemaMigrationManager_RunTSSMigrations(t *testing.T) {
 			})
 			require.NoError(t, err)
 
-			err = manager.RunMigrations(ctx, dbt.DSN, migrate.Up, count)
+			err = manager.runMigrations(ctx, dbt.DSN, migrate.Up, count)
 			require.NoError(t, err)
 
-			err = manager.RunMigrations(ctx, dbt.DSN, migrate.Down, count)
+			err = manager.runMigrations(ctx, dbt.DSN, migrate.Down, count)
 			require.NoError(t, err)
 
-			err = manager.RunMigrations(ctx, dbt.DSN, migrate.Up, count)
+			err = manager.runMigrations(ctx, dbt.DSN, migrate.Up, count)
 			require.NoError(t, err)
 
-			err = manager.RunMigrations(ctx, dbt.DSN, migrate.Down, count)
+			err = manager.runMigrations(ctx, dbt.DSN, migrate.Down, count)
 			require.NoError(t, err)
 		})
 	}

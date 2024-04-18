@@ -6,7 +6,7 @@ import (
 )
 
 const (
-	// AdminSchemaName     string = "admin"
+	AdminSchemaName     string = "admin"
 	TSSSchemaName       string = "tss"
 	SDPSchemaNamePrefix string = "sdp_"
 )
