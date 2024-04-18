@@ -98,7 +98,6 @@ func (m *Manager) GetAllTenants(ctx context.Context, queryParams *QueryParams) (
 func (m *Manager) GetTenant(ctx context.Context, queryParams *QueryParams) (*Tenant, error) {
 	var t Tenant
 	q, params := m.newManagerQuery(selectQuery, queryParams)
-	fmt.Println(q, params)
 	if err := m.db.GetContext(ctx, &t, q, params...); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrTenantDoesNotExist
