@@ -48,5 +48,3 @@ DROP TYPE email_sender_type;
 DROP TYPE sms_sender_type;
 
 DROP TYPE tenant_status;
-
-DROP FUNCTION update_at_refresh;

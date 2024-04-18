@@ -1,0 +1,88 @@
+package db
+
+import (
+	"context"
+	"fmt"
+	"strings"
+
+	migrate "github.com/rubenv/sql-migrate"
+	"github.com/stellar/go/support/log"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/db/migrations"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+)
+
+type SchemaMigrationManager struct {
+	RootDBConnectionPool db.DBConnectionPool
+	MigrationRouter      migrations.MigrationRouter
+	SchemaName           string
+}
+
+func NewSchemaMigrationManager(rootDBConnectionPool db.DBConnectionPool, migrationRouter migrations.MigrationRouter, schemaName string) (*SchemaMigrationManager, error) {
+	if rootDBConnectionPool == nil {
+		return nil, fmt.Errorf("rootDBConnectionPool cannot be nil")
+	}
+
+	if utils.IsEmpty(migrationRouter) {
+		return nil, fmt.Errorf("migrationRouter cannot be empty")
+	}
+
+	if strings.TrimSpace(schemaName) == "" {
+		return nil, fmt.Errorf("schemaName cannot be empty")
+	}
+
+	return &SchemaMigrationManager{
+		RootDBConnectionPool: rootDBConnectionPool,
+		MigrationRouter:      migrationRouter,
+		SchemaName:           schemaName,
+	}, nil
+}
+
+func (m *SchemaMigrationManager) CreateSchemaIfNeeded(ctx context.Context) error {
+	query := fmt.Sprintf("CREATE SCHEMA IF NOT EXISTS %s", m.SchemaName)
+	_, err := m.RootDBConnectionPool.ExecContext(ctx, query)
+	if err != nil {
+		return fmt.Errorf("creating the '%s' database schema: %w", m.SchemaName, err)
+	}
+
+	return nil
+}
+
+func (m *SchemaMigrationManager) deleteSchemaIfNeeded(ctx context.Context) error {
+	var numberOfRemainingTablesInSchema int
+	query := fmt.Sprintf(`
+		SELECT COUNT(*)
+		FROM information_schema.tables
+		WHERE table_schema = '%s'
+		AND table_name NOT LIKE '%%migrations%%'
+	`, m.SchemaName)
+
+	err := m.RootDBConnectionPool.GetContext(ctx, &numberOfRemainingTablesInSchema, query)
+	if err != nil {
+		return fmt.Errorf("counting number of tables remaining in the '%s' database schema: %w", m.SchemaName, err)
+	}
+
+	if numberOfRemainingTablesInSchema == 0 {
+		log.Ctx(ctx).Infof("dropping the '%s' database schema ⏳...", m.SchemaName)
+		query := fmt.Sprintf("DROP SCHEMA IF EXISTS %s CASCADE", m.SchemaName)
+		_, err = m.RootDBConnectionPool.ExecContext(ctx, query)
+		if err != nil {
+			return fmt.Errorf("dropping the '%s' database schema: %w", m.SchemaName, err)
+		}
+		log.Ctx(ctx).Infof("dropped the '%s' database schema ✅", m.SchemaName)
+	} else {
+		log.Ctx(ctx).Debugf("the '%s' database schema was not dropped because there are %d tables remaining", m.SchemaName, numberOfRemainingTablesInSchema)
+	}
+
+	return nil
+}
+
+func (m *SchemaMigrationManager) RunMigrations(ctx context.Context, dbURL string, dir migrate.MigrationDirection, count int) error {
+	err := ExecuteMigrations(ctx, dbURL, dir, count, m.MigrationRouter)
+	if err != nil {
+		return fmt.Errorf("executing migrations for router %s: %w", m.MigrationRouter.TableName, err)
+	}
+
+	return nil
+}
