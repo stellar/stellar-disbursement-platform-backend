@@ -67,8 +67,8 @@ func PaymentInProgressStatuses() []PaymentStatus {
 	return []PaymentStatus{ReadyPaymentStatus, PendingPaymentStatus, PausedPaymentStatus}
 }
 
-func PaymentNonTerminalStatuses() []PaymentStatus {
-	return []PaymentStatus{DraftPaymentStatus, ReadyPaymentStatus, PendingPaymentStatus, PausedPaymentStatus}
+func PaymentActiveStatuses() []PaymentStatus {
+	return []PaymentStatus{ReadyPaymentStatus, PendingPaymentStatus}
 }
 
 // SourceStatuses returns a list of states that the payment status can transition from given the target state

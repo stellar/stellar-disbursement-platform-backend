@@ -38,16 +38,16 @@ func ValidateStatus(ctx context.Context, manager tenant.ManagerInterface, models
 		if tnt.Status == tenant.DeactivatedTenantStatus {
 			log.Ctx(ctx).Warnf("tenant %s is already deactivated", tenantID)
 		} else {
-			indeterminatePaymentsCount, getPaymentCountErr := models.Payment.Count(ctx, &data.QueryParams{
+			activePaymentsCount, getPaymentCountErr := models.Payment.Count(ctx, &data.QueryParams{
 				Filters: map[data.FilterKey]interface{}{
-					data.FilterKeyStatus: data.PaymentNonTerminalStatuses(),
+					data.FilterKeyStatus: data.PaymentActiveStatuses(),
 				},
 			}, models.DBConnectionPool)
 			if getPaymentCountErr != nil {
 				return fmt.Errorf("%w: %w", ErrCannotRetrievePayments, getPaymentCountErr)
 			}
 
-			if indeterminatePaymentsCount != 0 {
+			if activePaymentsCount != 0 {
 				return ErrCannotDeactivateTenant
 			}
 		}

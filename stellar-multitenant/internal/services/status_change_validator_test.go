@@ -52,7 +52,7 @@ func Test_ValidateStatus(t *testing.T) {
 			expectedErr: fmt.Errorf("%w: %w", ErrCannotRetrieveTenantByID, errors.New("foobar")),
 		},
 		{
-			name: "number of indeterminate payments is not 0",
+			name: "number of active payments is not 0",
 			mockTntManagerFn: func(tntManagerMock *tenant.TenantManagerMock) {
 				tntManagerMock.On("GetTenant", ctx, &tenant.QueryParams{
 					Filters: map[tenant.FilterKey]interface{}{
@@ -74,7 +74,7 @@ func Test_ValidateStatus(t *testing.T) {
 				rw := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.DraftReceiversWalletStatus)
 				_ = data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
 					Amount:         "50",
-					Status:         data.DraftPaymentStatus,
+					Status:         data.ReadyPaymentStatus,
 					Disbursement:   disbursement,
 					Asset:          *asset,
 					ReceiverWallet: rw,
