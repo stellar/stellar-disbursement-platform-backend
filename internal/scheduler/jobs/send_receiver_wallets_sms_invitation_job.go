@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/stellar/go/support/log"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
@@ -22,7 +23,7 @@ type SendReceiverWalletsSMSInvitationJobOptions struct {
 	MaxInvitationSMSResendAttempts int64
 	Sep10SigningPrivateKey         string
 	CrashTrackerClient             crashtracker.CrashTrackerClient
-	UseExternalID				   bool
+	UseExternalID                  bool
 	JobIntervalSeconds             int
 }
 

@@ -87,7 +87,7 @@ type ServeOptions struct {
 	EventProducer                   events.Producer
 	MaxInvitationSMSResendAttempts  int
 	SingleTenantMode                bool
-	UseExternalID					bool
+	UseExternalID                   bool
 }
 
 // SetupDependencies uses the serve options to setup the dependencies for the server.

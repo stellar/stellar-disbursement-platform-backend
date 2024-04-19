@@ -124,7 +124,7 @@ func Test_VerifyReceiverRegistrationHandler_validate(t *testing.T) {
 			},
 		},
 		{
-			name: "🎉 successfully parses the body with external_id if the SEP24 token, recaptcha token and request body are all valid",
+			name:               "🎉 successfully parses the body with external_id if the SEP24 token, recaptcha token and request body are all valid",
 			contextSep24Claims: sep24JWTClaims,
 			requestBody: `{
 				"phone_number": "+380445555555",
@@ -301,7 +301,6 @@ func Test_VerifyReceiverRegistrationHandler_processReceiverVerificationPII(t *te
 	}
 
 	for _, tc := range testCases {
-		println(tc.name)
 		t.Run(tc.name, func(t *testing.T) {
 			dbTx, err := dbConnectionPool.BeginTxx(ctx, nil)
 			require.NoError(t, err)
@@ -342,16 +341,22 @@ func Test_VerifyReceiverRegistrationHandler_processReceiverVerificationPII(t *te
 	}
 }
 
-//reece
+// reece
 func Test_VerifyReceiverRegistrationHandler_processReceiverCustomerID_and_HashedMobileNumber(t *testing.T) {
-	ctx := context.Background()
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
 	dbTx, err := dbConnectionPool.BeginTxx(ctx, nil)
 	require.NoError(t, err)
-	defer dbConnectionPool.Close()
+	defer func() {
+		err = dbTx.Rollback()
+		require.NoError(t, err)
+	}()
+
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
@@ -371,13 +376,12 @@ func Test_VerifyReceiverRegistrationHandler_processReceiverCustomerID_and_Hashed
 	defer data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
 
 	registrationRequest := data.ReceiverRegistrationRequest{
-				MobileNumberHash:   hashedReceiverPhoneNumber,
-				CustomerID:         receiver.ExternalID,
+		MobileNumberHash: hashedReceiverPhoneNumber,
+		CustomerID:       receiver.ExternalID,
 	}
-	
-	err = handler.processReceiverVerificationPII(ctx, dbTx, *receiver, registrationRequest)
 
-			
+	err = handler.processReceiverVerificationPII(ctx, dbTx, *receiver, registrationRequest)
+	t.Logf("processReceiverVerificationPII() returned error = %v", err)
 }
 
 func Test_VerifyReceiverRegistrationHandler_processReceiverWalletOTP(t *testing.T) {

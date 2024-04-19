@@ -32,7 +32,7 @@ type ReceiverRegistrationRequest struct {
 	VerificationType  VerificationField `json:"verification_type"`
 	ReCAPTCHAToken    string            `json:"recaptcha_token"`
 	ExternalID        string            `json:"external_id"`
-	CustomerID		  string            `json:"customer_id"`   //customer identifier
+	CustomerID        string            `json:"customer_id"`   //customer identifier
 	MobileNumberHash  string            `json:"mobile_number"` //hashed mobile number
 }
 
@@ -447,25 +447,24 @@ func (r *ReceiverModel) DeleteByPhoneNumber(ctx context.Context, dbConnectionPoo
 }
 
 // GetByExternalID retrieves a receiver's phone number based on the external_id.
-func (r *ReceiverModel) GetByExternalID(ctx context.Context,  sqlExec db.SQLExecuter, externalID string) (*Receiver, error) {
-	
+func (r *ReceiverModel) GetByExternalID(ctx context.Context, sqlExec db.SQLExecuter, externalID string) (*Receiver, error) {
+
 	receiver := Receiver{}
 
 	query := `
-	SELECT id, phone_number
-	FROM receivers
-	WHERE external_id = $1
-	LIMIT 1
+		SELECT id, phone_number
+		FROM receivers
+		WHERE external_id = $1
+		LIMIT 1
 	`
 
 	err := sqlExec.GetContext(ctx, &receiver, query, externalID)
 	if err != nil {
-        if err == sql.ErrNoRows {
-            return nil, fmt.Errorf("no receiver found with external_id %s: %w", externalID, err)
-        }
-        // Handle other potential errors
-        return nil, fmt.Errorf("error fetching receiver by external ID: %w", err)
-    }
-	return &receiver, nil	
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("no receiver found with external_id %s: %w", externalID, err)
+		}
+		// Handle other potential errors
+		return nil, fmt.Errorf("error fetching receiver by external ID: %w", err)
+	}
+	return &receiver, nil
 }
-

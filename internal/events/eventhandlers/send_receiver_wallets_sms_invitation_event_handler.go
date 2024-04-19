@@ -25,7 +25,7 @@ type SendReceiverWalletsSMSInvitationEventHandlerOptions struct {
 	MaxInvitationSMSResendAttempts int64
 	Sep10SigningPrivateKey         string
 	CrashTrackerClient             crashtracker.CrashTrackerClient
-	UseExternalID                  bool 
+	UseExternalID                  bool
 }
 
 type SendReceiverWalletsSMSInvitationEventHandler struct {

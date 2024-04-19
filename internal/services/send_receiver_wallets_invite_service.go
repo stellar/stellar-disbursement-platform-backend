@@ -12,6 +12,7 @@ import (
 
 	"github.com/stellar/go/strkey"
 	"github.com/stellar/go/support/log"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
@@ -31,7 +32,7 @@ type SendReceiverWalletInviteService struct {
 	maxInvitationSMSResendAttempts int64
 	sep10SigningPrivateKey         string
 	crashTrackerClient             crashtracker.CrashTrackerClient
-	UseExternalID				   bool
+	UseExternalID                  bool
 }
 
 var _ SendReceiverWalletInviteServiceInterface = new(SendReceiverWalletInviteService)
@@ -289,7 +290,6 @@ func (s SendReceiverWalletInviteService) shouldSendInvitationSMS(ctx context.Con
 	return true
 }
 
-
 func NewSendReceiverWalletInviteService(models *data.Models, messengerClient message.MessengerClient, sep10SigningPrivateKey string, maxInvitationSMSResendAttempts int64, crashTrackerClient crashtracker.CrashTrackerClient, UseExternalID bool) (*SendReceiverWalletInviteService, error) {
 	s := &SendReceiverWalletInviteService{
 		messengerClient:                messengerClient,
@@ -297,7 +297,7 @@ func NewSendReceiverWalletInviteService(models *data.Models, messengerClient mes
 		maxInvitationSMSResendAttempts: maxInvitationSMSResendAttempts,
 		sep10SigningPrivateKey:         sep10SigningPrivateKey,
 		crashTrackerClient:             crashTrackerClient,
-		UseExternalID:				   UseExternalID,
+		UseExternalID:                  UseExternalID,
 	}
 
 	if err := s.validate(); err != nil {
