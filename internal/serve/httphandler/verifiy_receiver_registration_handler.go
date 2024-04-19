@@ -115,7 +115,8 @@ func (v VerifyReceiverRegistrationHandler) processReceiverVerificationPII(
 	now := time.Now()
 	truncatedPhoneNumber := utils.TruncateString(receiver.PhoneNumber, 3)
 
-	// STEP 0: if customer-id exists in sep24 claims, use it to look up reciever, hash Phone Number  in db, compare against hashed mobile_number in sep24 claims 
+	// STEP 1: if customer-id exists in sep24 claims, use it to look up receiver by externalID
+	// receiver's phone number will be compared to hashed mobile_number 
 	if receiverRegistrationRequest.CustomerID != "" {
 		
 		receiverByExternalID, err := v.Models.Receiver.GetByExternalID(ctx, dbTx, receiver.ExternalID)
@@ -126,12 +127,10 @@ func (v VerifyReceiverRegistrationHandler) processReceiverVerificationPII(
 		print(receiverByExternalID.PhoneNumber)
 		
 		if data.CompareVerificationValue(receiverRegistrationRequest.MobileNumberHash, receiverByExternalID.PhoneNumber) {
-			// Compare the hashed phone number with the hashed mobile number from the SEP-24 claims
-			//if hashedPhoneNumber != receiverRegistrationRequest.MobileNumberHash {
-			//err := fmt.Errorf("hashed phone number does not match the hashed mobile number from SEP-24 claims")
-			//	return &ErrorInformationNotFound{cause: err}
-			//}
 			return nil
+		} else {
+			return fmt.Errorf("phone number validation failed for customer-id %s", receiverRegistrationRequest.CustomerID)
+			return &ErrorInformationNotFound{cause: err}
 		}
 	}
 	

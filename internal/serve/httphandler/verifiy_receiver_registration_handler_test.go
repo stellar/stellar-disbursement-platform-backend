@@ -342,8 +342,7 @@ func Test_VerifyReceiverRegistrationHandler_processReceiverVerificationPII(t *te
 	}
 }
 
-//reece
-func Test_VerifyReceiverRegistrationHandler_processReceiverCustomerID_and_HashedMobileNumber(t *testing.T) {
+func Test_VerifyReceiverRegistrationHandler_processReceiverCustomerID_and_MobileNumber(t *testing.T) {
 	ctx := context.Background()
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
@@ -363,6 +362,7 @@ func Test_VerifyReceiverRegistrationHandler_processReceiverCustomerID_and_Hashed
 		ReCAPTCHAValidator:       reCAPTCHAValidator,
 	}
 
+	//create receiver with Phone number and External ID
 	receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{PhoneNumber: "+380443333333"})
 	hashedReceiverPhoneNumber, err := data.HashVerificationValue(receiver.PhoneNumber)
 	if err != nil {
@@ -370,13 +370,53 @@ func Test_VerifyReceiverRegistrationHandler_processReceiverCustomerID_and_Hashed
 	}
 	defer data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
 
+	//Registration request with customer_id, hashed mobile_number
 	registrationRequest := data.ReceiverRegistrationRequest{
 				MobileNumberHash:   hashedReceiverPhoneNumber,
 				CustomerID:         receiver.ExternalID,
 	}
 	
 	err = handler.processReceiverVerificationPII(ctx, dbTx, *receiver, registrationRequest)
+	require.NoError(t, err)
 
+}
+
+func Test_VerifyReceiverRegistrationHandler_processReceiverCustomerID_fails_MobileNumber_validation(t *testing.T) {
+	ctx := context.Background()
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	dbTx, err := dbConnectionPool.BeginTxx(ctx, nil)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+	models, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+
+	mockAnchorPlatformService := anchorplatform.AnchorPlatformAPIServiceMock{}
+	reCAPTCHAValidator := &validators.ReCAPTCHAValidatorMock{}
+	handler := &VerifyReceiverRegistrationHandler{
+		Models:                   models,
+		AnchorPlatformAPIService: &mockAnchorPlatformService,
+		ReCAPTCHAValidator:       reCAPTCHAValidator,
+	}
+
+	//create receiver with Phone number and External ID
+	receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{PhoneNumber: "+380443333333"})
+	hashedReceiverPhoneNumber, err := data.HashVerificationValue("badmobilenumber")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
+
+	//Registration request with customer_id, hashed mobile_number
+	registrationRequest := data.ReceiverRegistrationRequest{
+				MobileNumberHash:   hashedReceiverPhoneNumber, //bad number
+				CustomerID:         receiver.ExternalID,
+	}
+	
+	err = handler.processReceiverVerificationPII(ctx, dbTx, *receiver, registrationRequest)
+	require.Error(t, err)
 			
 }
 
