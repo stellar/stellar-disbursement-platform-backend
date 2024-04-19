@@ -448,7 +448,6 @@ func (r *ReceiverModel) DeleteByPhoneNumber(ctx context.Context, dbConnectionPoo
 
 // GetByExternalID retrieves a receiver's phone number based on the external_id.
 func (r *ReceiverModel) GetByExternalID(ctx context.Context, sqlExec db.SQLExecuter, externalID string) (*Receiver, error) {
-
 	receiver := Receiver{}
 
 	query := `

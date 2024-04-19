@@ -427,7 +427,6 @@ func (wdl WalletDeepLink) validate() error {
 // GetUnsignedRegistrationLink creates a deep link for the wallet registration using the format below:
 // <deep_link></route>?<domain>&<name>&<asset>.
 func (wdl WalletDeepLink) GetUnsignedRegistrationLink() (string, error) {
-
 	if err := wdl.validate(); err != nil {
 		return "", fmt.Errorf("validating WalletDeepLink: %w", err)
 	}
