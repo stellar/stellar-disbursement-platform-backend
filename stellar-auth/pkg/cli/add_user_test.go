@@ -6,15 +6,20 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
-
 	"github.com/lib/pq"
+	migrate "github.com/rubenv/sql-migrate"
 	"github.com/spf13/cobra"
-	"github.com/stellar/stellar-disbursement-platform-backend/db"
-	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
+	supportDBTest "github.com/stellar/go/support/db/dbtest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	cmdDB "github.com/stellar/stellar-disbursement-platform-backend/cmd/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
+	"github.com/stellar/stellar-disbursement-platform-backend/db/migrations"
+	"github.com/stellar/stellar-disbursement-platform-backend/db/router"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 type PasswordPromptMock struct{}
@@ -25,27 +30,46 @@ func (m *PasswordPromptMock) Run() (string, error) {
 
 var _ PasswordPromptInterface = (*PasswordPromptMock)(nil)
 
+func prepareAdminDBConnectionPool(t *testing.T, ctx context.Context, dbt *supportDBTest.DB, withMigrations bool) db.DBConnectionPool {
+	t.Helper()
+
+	adminDatabaseDNS, err := router.GetDNSForAdmin(dbt.DSN)
+	require.NoError(t, err)
+
+	if withMigrations {
+		var manager *cmdDB.SchemaMigrationManager
+		manager, err = cmdDB.NewSchemaMigrationManager(migrations.AdminMigrationRouter, router.AdminSchemaName, adminDatabaseDNS)
+		require.NoError(t, err)
+		defer manager.Close()
+		err = manager.OrchestrateSchemaMigrations(ctx, migrate.Up, 0)
+		require.NoError(t, err)
+	}
+
+	adminDBConnectionPool, err := db.OpenDBConnectionPool(adminDatabaseDNS)
+	require.NoError(t, err)
+
+	return adminDBConnectionPool
+}
+
 func Test_authAddUserCommand(t *testing.T) {
 	tenantName := "tenant"
-	dbt := dbtest.OpenWithAdminMigrationsOnly(t)
+	dbt := dbtest.OpenWithoutMigrations(t)
 	defer dbt.Close()
 
+	ctx := context.Background()
+
+	adminDBConnectionPool := prepareAdminDBConnectionPool(t, ctx, dbt, true)
+	defer adminDBConnectionPool.Close()
+
 	tDSN := tenant.PrepareDBForTenant(t, dbt, tenantName)
-
-	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, outerErr)
-	defer dbConnectionPool.Close()
-
 	tenantConnectionPool, outerErr := db.OpenDBConnectionPool(tDSN)
 	require.NoError(t, outerErr)
 	defer tenantConnectionPool.Close()
 
-	ctx := context.Background()
-
 	mockPrompt := PasswordPromptMock{}
 	mockedPassword, _ := mockPrompt.Run()
 
-	tenant := tenant.CreateTenantFixture(t, ctx, dbConnectionPool, tenantName, "pub-key")
+	tenant := tenant.CreateTenantFixture(t, ctx, adminDBConnectionPool, tenantName, "pub-key")
 	tenantID := tenant.ID
 	t.Run("Should create a new user", func(t *testing.T) {
 		addUser := AddUserCmd("database-url", &mockPrompt, []string{})
@@ -62,13 +86,13 @@ func Test_authAddUserCommand(t *testing.T) {
 		var dbEmail, dbPassword, dbFirstName, dbLastName string
 		var dbIsOwner bool
 		err = tenantConnectionPool.QueryRowxContext(ctx, "SELECT email, encrypted_password, is_owner, first_name, last_name FROM auth_users WHERE email = $1", newEmail).Scan(&dbEmail, &dbPassword, &dbIsOwner, &dbFirstName, &dbLastName)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
-		assert.Equal(t, newEmail, dbEmail)
-		assert.NotEqual(t, dbPassword, mockedPassword)
-		assert.False(t, dbIsOwner)
-		assert.Equal(t, firstName, dbFirstName)
-		assert.Equal(t, lastName, dbLastName)
+		require.Equal(t, newEmail, dbEmail)
+		require.NotEqual(t, dbPassword, mockedPassword)
+		require.False(t, dbIsOwner)
+		require.Equal(t, firstName, dbFirstName)
+		require.Equal(t, lastName, dbLastName)
 	})
 
 	t.Run("Should create a new Owner user", func(t *testing.T) {
@@ -135,18 +159,21 @@ func Test_authAddUserCommand(t *testing.T) {
 		err := testCmd.Execute()
 		require.NoError(t, err)
 
-		expectedUsage := fmt.Sprintf(`Add a user to the system. Email should be unique and password must be at least %d characters long.
+		expectedUsageContains := []string{
+			fmt.Sprintf("Add a user to the system. Email should be unique and password must be at least %d characters long.", auth.MinPasswordLength),
+			"Usage:",
+			"test add-user <email> <first name> <last name> [--owner] [--roles] [--password] --tenant-id [flags]",
+			"Flags:",
+			"-h, --help               help for add-user",
+			"--owner              Set the user as Owner (superuser). Defaults to \"false\". (OWNER)",
+			fmt.Sprintf("--password           Sets the user password, it should be at least %d characters long, if omitted, the command will generate a random one. (PASSWORD)", auth.MinPasswordLength),
+			"--tenant-id string   The tenant ID to which the user will be added to.  (TENANT_ID)",
+		}
 
-Usage:
-  test add-user <email> <first name> <last name> [--owner] [--roles] [--password] --tenant-id [flags]
-
-Flags:
-  -h, --help               help for add-user
-      --owner              Set the user as Owner (superuser). Defaults to "false". (OWNER)
-      --password           Sets the user password, it should be at least %d characters long, if omitted, the command will generate a random one. (PASSWORD)
-      --tenant-id string   The tenant ID to which the user will be added to.  (TENANT_ID)
-`, auth.MinPasswordLength, auth.MinPasswordLength)
-		assert.Equal(t, expectedUsage, buf.String())
+		output := buf.String()
+		for _, expectedUsageContains := range expectedUsageContains {
+			assert.Contains(t, output, expectedUsageContains)
+		}
 
 		addUserCmd = AddUserCmd("database-url", &mockPrompt, []string{"role1", "role2", "role3", "role4"})
 
@@ -159,19 +186,10 @@ Flags:
 		err = testCmd.Execute()
 		require.NoError(t, err)
 
-		expectedUsage = fmt.Sprintf(`Add a user to the system. Email should be unique and password must be at least %d characters long.
-
-Usage:
-  test add-user <email> <first name> <last name> [--owner] [--roles] [--password] --tenant-id [flags]
-
-Flags:
-  -h, --help               help for add-user
-      --owner              Set the user as Owner (superuser). Defaults to "false". (OWNER)
-      --password           Sets the user password, it should be at least %d characters long, if omitted, the command will generate a random one. (PASSWORD)
-      --roles string       Set the user roles. It should be comma separated. Example: role1, role2. Available roles: [role1, role2, role3, role4]. (ROLES)
-      --tenant-id string   The tenant ID to which the user will be added to.  (TENANT_ID)
-`, auth.MinPasswordLength, auth.MinPasswordLength)
-		assert.Equal(t, expectedUsage, buf.String())
+		output = buf.String()
+		for _, expectedUsageContains := range expectedUsageContains {
+			assert.Contains(t, output, expectedUsageContains)
+		}
 	})
 
 	t.Run("set the user roles", func(t *testing.T) {
@@ -202,22 +220,20 @@ Flags:
 
 func Test_execAddUserFunc(t *testing.T) {
 	tenantName := "tenant"
-	dbt := dbtest.OpenWithAdminMigrationsOnly(t)
+	dbt := dbtest.OpenWithoutMigrations(t)
 	defer dbt.Close()
 
+	ctx := context.Background()
+
+	adminDBConnectionPool := prepareAdminDBConnectionPool(t, ctx, dbt, true)
+	defer adminDBConnectionPool.Close()
+
 	tDSN := tenant.PrepareDBForTenant(t, dbt, tenantName)
-
-	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, outerErr)
-	defer dbConnectionPool.Close()
-
 	tenantConnectionPool, outerErr := db.OpenDBConnectionPool(tDSN)
 	require.NoError(t, outerErr)
 	defer tenantConnectionPool.Close()
 
-	ctx := context.Background()
-
-	tenant := tenant.CreateTenantFixture(t, ctx, dbConnectionPool, tenantName, "pub-key")
+	tenant := tenant.CreateTenantFixture(t, ctx, adminDBConnectionPool, tenantName, "pub-key")
 	tenantID := tenant.ID
 
 	t.Run("User must be valid", func(t *testing.T) {

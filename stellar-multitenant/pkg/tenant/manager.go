@@ -352,6 +352,7 @@ func NewManager(opts ...Option) *Manager {
 	return &m
 }
 
+// TODO: ensure the admin schema is beng passed here!!!
 func WithDatabase(dbConnectionPool db.DBConnectionPool) Option {
 	return func(m *Manager) {
 		m.db = dbConnectionPool

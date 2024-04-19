@@ -7,30 +7,27 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/db"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
-
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 func Test_persistentPostRun(t *testing.T) {
 	tenantName := "tenant"
-	dbt := dbtest.OpenWithAdminMigrationsOnly(t)
+	dbt := dbtest.OpenWithoutMigrations(t)
 	defer dbt.Close()
 
-	tenant.PrepareDBForTenant(t, dbt, tenantName)
-
 	ctx := context.Background()
-	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, outerErr)
-	defer dbConnectionPool.Close()
 
-	tenant := tenant.CreateTenantFixture(t, ctx, dbConnectionPool, tenantName, "pub-key")
+	adminDBConnectionPool := prepareAdminDBConnectionPool(t, ctx, dbt, true)
+	defer adminDBConnectionPool.Close()
+
+	tenant.PrepareDBForTenant(t, dbt, tenantName)
+	tnt := tenant.CreateTenantFixture(t, ctx, adminDBConnectionPool, tenantName, "pub-key")
 
 	t.Setenv("DATABASE_URL", dbt.DSN)
 	t.Setenv("EMAIL_SENDER_TYPE", "DRY_RUN")
@@ -52,7 +49,7 @@ func Test_persistentPostRun(t *testing.T) {
 	require.NoError(t, err)
 
 	rootCmd := SetupCLI("x.y.z", "1234567890abcdef")
-	rootCmd.SetArgs([]string{"auth", "add-user", "email@email.com", "First", "Last", "--roles", "developer", "--tenant-id", tenant.ID})
+	rootCmd.SetArgs([]string{"auth", "add-user", "email@email.com", "First", "Last", "--roles", "developer", "--tenant-id", tnt.ID})
 
 	for _, cmd := range rootCmd.Commands() {
 		if cmd.Name() == "auth" {
@@ -135,7 +132,7 @@ Content: <!DOCTYPE html>
 	assert.Contains(t, buf.String(), expectContains)
 
 	// Set another SDP UI base URL
-	rootCmd.SetArgs([]string{"auth", "add-user", "email@email.com", "First", "Last", "--roles", "developer", "--sdp-ui-base-url", "https://sdp-ui.org", "--tenant-id", tenant.ID})
+	rootCmd.SetArgs([]string{"auth", "add-user", "email@email.com", "First", "Last", "--roles", "developer", "--sdp-ui-base-url", "https://sdp-ui.org", "--tenant-id", tnt.ID})
 
 	stdOut = os.Stdout
 

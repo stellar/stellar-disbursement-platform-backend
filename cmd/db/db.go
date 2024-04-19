@@ -208,12 +208,13 @@ func (c *DatabaseCommand) adminMigrationsCmd(ctx context.Context, globalOptions 
 			return fmt.Errorf("getting the admin database DSN: %w", err)
 		}
 
-		tssMigrationsManager, err := NewSchemaMigrationManager(c.adminDBConnectionPool, migrations.AdminMigrationRouter, router.AdminSchemaName, dbURL)
+		tssMigrationsManager, err := NewSchemaMigrationManager(migrations.AdminMigrationRouter, router.AdminSchemaName, dbURL)
 		if err != nil {
 			return fmt.Errorf("creating admin database migration manager: %w", err)
 		}
+		defer tssMigrationsManager.Close()
 
-		if err = tssMigrationsManager.OrchestrateSchemaMigrations(ctx, dbURL, dir, count); err != nil {
+		if err = tssMigrationsManager.OrchestrateSchemaMigrations(ctx, dir, count); err != nil {
 			return fmt.Errorf("running admin migrations: %w", err)
 		}
 		return nil
@@ -244,6 +245,7 @@ func (c *DatabaseCommand) tssMigrationsCmd(ctx context.Context, globalOptions *u
 		if err != nil {
 			return fmt.Errorf("creating TSS database migration manager: %w", err)
 		}
+		defer tssMigrationsManager.Close()
 
 		if err = tssMigrationsManager.OrchestrateSchemaMigrations(ctx, dir, count); err != nil {
 			return fmt.Errorf("running TSS migrations: %w", err)

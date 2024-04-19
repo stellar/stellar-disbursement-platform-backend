@@ -9,6 +9,7 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
+	"github.com/stellar/stellar-disbursement-platform-backend/db/router"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 )
 
@@ -35,7 +36,7 @@ func Test_dependencyinjection_NewAdminDBConnectionPool(t *testing.T) {
 
 		adminDatabaseDSN, err := gotDependency.DSN(context.Background())
 		require.NoError(t, err)
-		assert.NotContains(t, adminDatabaseDSN, "search_path")
+		assert.Contains(t, adminDatabaseDSN, "search_path="+router.AdminSchemaName)
 	})
 
 	t.Run("should create and return the same instance on the second call (with Metrics)", func(t *testing.T) {
@@ -56,7 +57,7 @@ func Test_dependencyinjection_NewAdminDBConnectionPool(t *testing.T) {
 
 		adminDatabaseDSN, err := gotDependency.DSN(context.Background())
 		require.NoError(t, err)
-		assert.NotContains(t, adminDatabaseDSN, "search_path")
+		assert.Contains(t, adminDatabaseDSN, "search_path="+router.AdminSchemaName)
 	})
 
 	t.Run("should return an error on a invalid option", func(t *testing.T) {

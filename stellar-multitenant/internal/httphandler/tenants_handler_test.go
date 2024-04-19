@@ -742,7 +742,6 @@ func Test_TenantHandler_Patch(t *testing.T) {
 func Test_TenantHandler_SetDefault(t *testing.T) {
 	dbt := dbtest.OpenWithAdminMigrationsOnly(t)
 	defer dbt.Close()
-
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
@@ -757,7 +756,7 @@ func Test_TenantHandler_SetDefault(t *testing.T) {
 	}
 
 	updateTenantIsDefault := func(t *testing.T, ctx context.Context, dbConnectionPool db.DBConnectionPool, tenantID string, isDefault bool) {
-		const q = "UPDATE public.tenants SET is_default = $1 WHERE id = $2"
+		const q = "UPDATE tenants SET is_default = $1 WHERE id = $2"
 		_, err = dbConnectionPool.ExecContext(ctx, q, isDefault, tenantID)
 		require.NoError(t, err)
 	}

@@ -17,21 +17,21 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
-func DeleteAllTenantsFixture(t *testing.T, ctx context.Context, dbConnectionPool db.DBConnectionPool) {
+func DeleteAllTenantsFixture(t *testing.T, ctx context.Context, adminDBConnectionPool db.DBConnectionPool) {
 	t.Helper()
 
 	q := "DELETE FROM tenants"
-	_, err := dbConnectionPool.ExecContext(ctx, q)
+	_, err := adminDBConnectionPool.ExecContext(ctx, q)
 	require.NoError(t, err)
 
 	var schemasToDrop []string
 	q = "SELECT schema_name FROM information_schema.schemata WHERE schema_name ILIKE 'sdp_%'"
-	err = dbConnectionPool.SelectContext(ctx, &schemasToDrop, q)
+	err = adminDBConnectionPool.SelectContext(ctx, &schemasToDrop, q)
 	require.NoError(t, err)
 
 	for _, schema := range schemasToDrop {
 		q = fmt.Sprintf("DROP SCHEMA %s CASCADE", pq.QuoteIdentifier(schema))
-		_, err = dbConnectionPool.ExecContext(ctx, q)
+		_, err = adminDBConnectionPool.ExecContext(ctx, q)
 		require.NoError(t, err)
 	}
 }
