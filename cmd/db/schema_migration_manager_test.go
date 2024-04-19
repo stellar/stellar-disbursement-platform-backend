@@ -21,11 +21,11 @@ var testCases = []struct {
 	SchemaName      string
 	getDatabaseDNS  func(dataSourceName string) (string, error)
 }{
-	// {
-	// 	MigrationRouter: migrations.AdminMigrationRouter,
-	// 	SchemaName:      "admin",
-	// 	getDatabaseDNS:  router.GetDNSForAdmin,
-	// },
+	{
+		MigrationRouter: migrations.AdminMigrationRouter,
+		SchemaName:      "admin",
+		getDatabaseDNS:  router.GetDNSForAdmin,
+	},
 	{
 		MigrationRouter: migrations.TSSMigrationRouter,
 		SchemaName:      "tss",

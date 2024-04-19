@@ -203,8 +203,18 @@ func (c *DatabaseCommand) adminMigrationsCmd(ctx context.Context, globalOptions 
 	}
 
 	executeMigrationsFn := func(ctx context.Context, dir migrate.MigrationDirection, count int) error {
-		if err := ExecuteMigrations(ctx, globalOptions.DatabaseURL, dir, count, migrations.AdminMigrationRouter); err != nil {
-			return fmt.Errorf("executing migrations for %s: %w", adminCmd.Name(), err)
+		dbURL, err := router.GetDNSForAdmin(globalOptions.DatabaseURL)
+		if err != nil {
+			return fmt.Errorf("getting the admin database DSN: %w", err)
+		}
+
+		tssMigrationsManager, err := NewSchemaMigrationManager(c.adminDBConnectionPool, migrations.AdminMigrationRouter, router.AdminSchemaName, dbURL)
+		if err != nil {
+			return fmt.Errorf("creating admin database migration manager: %w", err)
+		}
+
+		if err = tssMigrationsManager.OrchestrateSchemaMigrations(ctx, dbURL, dir, count); err != nil {
+			return fmt.Errorf("running admin migrations: %w", err)
 		}
 		return nil
 	}

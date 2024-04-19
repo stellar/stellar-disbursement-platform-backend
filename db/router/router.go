@@ -6,8 +6,9 @@ import (
 )
 
 const (
-	TSSSchemaName       string = "tss"
+	AdminSchemaName     string = "admin"
 	SDPSchemaNamePrefix string = "sdp_"
+	TSSSchemaName       string = "tss"
 )
 
 // GetDNSForAdmin returns the database DSN for the Admin schema. It is the same as the root database DSN, clearing the
@@ -19,7 +20,7 @@ func GetDNSForAdmin(dataSourceName string) (string, error) {
 	}
 
 	q := u.Query()
-	q.Del("search_path")
+	q.Set("search_path", AdminSchemaName)
 	u.RawQuery = q.Encode()
 
 	return u.String(), nil
