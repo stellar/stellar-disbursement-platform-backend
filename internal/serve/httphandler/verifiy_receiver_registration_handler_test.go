@@ -354,7 +354,6 @@ func Test_VerifyReceiverRegistrationHandler_processReceiverCustomerID_and_Mobile
 	// Begin transaction and ensure it is either rolled back or committed.
 	dbTx, err := dbConnectionPool.BeginTxx(ctx, nil)
 	require.NoError(t, err)
-	defer dbTx.Rollback() // Use rollback to revert changes post-test.
 
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
