@@ -19,9 +19,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
-	
-	
-	
 )
 
 // ErrorInformationNotFound implements the error interface.
@@ -118,14 +115,13 @@ func (v VerifyReceiverRegistrationHandler) processReceiverVerificationPII(
 	// STEP 1: if customer-id exists in sep24 claims, use it to look up receiver by externalID
 	// receiver's phone number will be compared to hashed mobile_number 
 	if receiverRegistrationRequest.CustomerID != "" {
-		
 		receiverByExternalID, err := v.Models.Receiver.GetByExternalID(ctx, dbTx, receiver.ExternalID)
 		if err != nil {
 			log.Ctx(ctx).Errorf("Error retrieving receiver by external ID: %v", err)
 			return &ErrorInformationNotFound{cause: err}
 		}
-		print(receiverByExternalID.PhoneNumber)
-		
+		fmt.Println(receiverByExternalID.PhoneNumber)
+
 		if data.CompareVerificationValue(receiverRegistrationRequest.MobileNumberHash, receiverByExternalID.PhoneNumber) {
 			return nil
 		} else {
@@ -133,7 +129,7 @@ func (v VerifyReceiverRegistrationHandler) processReceiverVerificationPII(
 			return &ErrorInformationNotFound{cause: err}
 		}
 	}
-	
+
 	// STEP 1: find the receiverVerification entry that matches the pair [receiverID, verificationType]
 	receiverVerifications, err := v.Models.ReceiverVerification.GetByReceiverIDsAndVerificationField(ctx, dbTx, []string{receiver.ID}, receiverRegistrationRequest.VerificationType)
 	if err != nil {

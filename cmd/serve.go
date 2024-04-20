@@ -131,7 +131,7 @@ func (s *ServerService) SetupConsumers(ctx context.Context, o SetupConsumersOpti
 			MaxInvitationSMSResendAttempts: int64(o.ServeOpts.MaxInvitationSMSResendAttempts),
 			Sep10SigningPrivateKey:         o.ServeOpts.Sep10SigningPrivateKey,
 			CrashTrackerClient:             o.ServeOpts.CrashTrackerClient.Clone(),
-			UseExternalID:				    o.ServeOpts.UseExternalID,                  	
+			UseExternalID:                  o.ServeOpts.UseExternalID,
 		}),
 	)
 	if err != nil {
@@ -327,10 +327,10 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 		{
 			Name:        "use-external-id",
 			Usage:       "Enable or disable the use of external ID in wallet deep links",
-			OptType:     types.Bool, 
+			OptType:     types.Bool,
 			ConfigKey:   &serveOpts.UseExternalID, // Ensure ServeOptions has a UseExternalID field of type bool
-			FlagDefault: false, // Default value set to false. Do Not embed external_id in wallet deep links
-			Required:    false, 
+			FlagDefault: false,                    // Default value set to false. Do Not embed external_id in wallet deep links
+			Required:    false,
 		},
 		{
 			Name:        "single-tenant-mode",

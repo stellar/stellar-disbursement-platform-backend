@@ -8,9 +8,10 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
-
 	"github.com/stellar/go/support/log"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
@@ -18,8 +19,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 func Test_GetSignedRegistrationLink_SchemelessDeepLink(t *testing.T) {
@@ -29,7 +29,7 @@ func Test_GetSignedRegistrationLink_SchemelessDeepLink(t *testing.T) {
 		AssetCode:        "USDC",
 		AssetIssuer:      "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
 		TenantBaseURL:    "https://tenant.localhost.com",
-		ExternalID:			      "ExternalID",
+		ExternalID:       "ExternalID",
 	}
 
 	registrationLink, err := wdl.GetSignedRegistrationLink("SCTOVDWM3A7KLTXXIV6YXL6QRVUIIG4HHHIDDKPR4JUB3DGDIKI5VGA2")
@@ -43,7 +43,7 @@ func Test_GetSignedRegistrationLink_SchemelessDeepLink(t *testing.T) {
 		OrganizationName: "FOO Org",
 		AssetCode:        "USDC",
 		AssetIssuer:      "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
-		ExternalID:			      "ExternalID",
+		ExternalID:       "ExternalID",
 	}
 
 	registrationLink, err = wdl.GetSignedRegistrationLink("SCTOVDWM3A7KLTXXIV6YXL6QRVUIIG4HHHIDDKPR4JUB3DGDIKI5VGA2")
@@ -101,7 +101,6 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 		Asset:   asset2,
 	})
 
-	
 	t.Run("returns error when service has wrong setup", func(t *testing.T) {
 		useExternalID := false // simulate default config value for useExternalID
 		_, err := NewSendReceiverWalletInviteService(models, nil, stellarSecretKey, 3, mockCrashTrackerClient, useExternalID)
@@ -412,24 +411,24 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 		})
 
 		walletDeepLink1 := WalletDeepLink{
-			DeepLink:                 wallet1.DeepLinkSchema,
-			TenantBaseURL:            "http://localhost:8000",
-			OrganizationName:         "MyCustomAid",
-			AssetCode:                asset1.Code,
-			AssetIssuer:              asset1.Issuer,
-			ExternalID: 			  rec1RW.Receiver.ExternalID,
+			DeepLink:         wallet1.DeepLinkSchema,
+			TenantBaseURL:    "http://localhost:8000",
+			OrganizationName: "MyCustomAid",
+			AssetCode:        asset1.Code,
+			AssetIssuer:      asset1.Issuer,
+			ExternalID:       rec1RW.Receiver.ExternalID,
 		}
 		deepLink1, err := walletDeepLink1.GetSignedRegistrationLink(stellarSecretKey)
 		require.NoError(t, err)
 		contentWallet1 := fmt.Sprintf("You have a payment waiting for you from the MyCustomAid. Click %s to register.", deepLink1)
 
 		walletDeepLink2 := WalletDeepLink{
-			DeepLink:                 wallet2.DeepLinkSchema,
-			TenantBaseURL:            "http://localhost:8000",
-			OrganizationName:         "MyCustomAid",
-			AssetCode:                asset2.Code,
-			AssetIssuer:              asset2.Issuer,
-			ExternalID: 			  rec2RW.Receiver.ExternalID,
+			DeepLink:         wallet2.DeepLinkSchema,
+			TenantBaseURL:    "http://localhost:8000",
+			OrganizationName: "MyCustomAid",
+			AssetCode:        asset2.Code,
+			AssetIssuer:      asset2.Issuer,
+			ExternalID:       rec2RW.Receiver.ExternalID,
 		}
 		deepLink2, err := walletDeepLink2.GetSignedRegistrationLink(stellarSecretKey)
 		require.NoError(t, err)
@@ -1679,15 +1678,15 @@ func Test_WalletDeepLink_GetUnsignedRegistrationLink(t *testing.T) {
 		{
 			name: "🎉 successful for deeplink with external-id",
 			walletDeepLink: WalletDeepLink{
-				DeepLink:                 "wallet://sdp?custom=true",
-				TenantBaseURL:            "foo.bar",
-				OrganizationName:         "Foo Bar Org",
-				AssetCode:                "FOO",
-				AssetIssuer:              "GCKGCKZ2PFSCRQXREJMTHAHDMOZQLS2R4V5LZ6VLU53HONH5FI6ACBSX",
-				ExternalID:               "123",
+				DeepLink:         "wallet://sdp?custom=true",
+				TenantBaseURL:    "foo.bar",
+				OrganizationName: "Foo Bar Org",
+				AssetCode:        "FOO",
+				AssetIssuer:      "GCKGCKZ2PFSCRQXREJMTHAHDMOZQLS2R4V5LZ6VLU53HONH5FI6ACBSX",
+				ExternalID:       "123",
 			},
 			wantResult: "wallet://sdp?asset=FOO-GCKGCKZ2PFSCRQXREJMTHAHDMOZQLS2R4V5LZ6VLU53HONH5FI6ACBSX&custom=true&domain=foo.bar&external_id=123&name=Foo+Bar+Org",
-			},
+		},
 	}
 
 	for _, tc := range testCases {
@@ -1703,7 +1702,6 @@ func Test_WalletDeepLink_GetUnsignedRegistrationLink(t *testing.T) {
 		})
 	}
 }
-
 
 func Test_WalletDeepLink_GetSignedRegistrationLink(t *testing.T) {
 	stellarPublicKey := "GBFDUUZ5ZYC6RAPOQLM7IYXLFHYTMCYXBGM7NIC4EE2MWOSGIYCOSN5F"
