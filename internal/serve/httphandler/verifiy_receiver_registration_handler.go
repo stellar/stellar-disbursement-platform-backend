@@ -113,7 +113,7 @@ func (v VerifyReceiverRegistrationHandler) processReceiverVerificationPII(
 	truncatedPhoneNumber := utils.TruncateString(receiver.PhoneNumber, 3)
 
 	// STEP 1: if customer-id exists in sep24 claims, use it to look up receiver by externalID
-	// receiver's phone number will be compared to hashed mobile_number 
+	// receiver's phone number will be compared to hashed mobile_number
 	if receiverRegistrationRequest.CustomerID != "" {
 		receiverByExternalID, err := v.Models.Receiver.GetByExternalID(ctx, dbTx, receiver.ExternalID)
 		if err != nil {
