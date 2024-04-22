@@ -6,7 +6,6 @@ import (
 )
 
 const (
-	AdminSchemaName     string = "admin"
 	TSSSchemaName       string = "tss"
 	SDPSchemaNamePrefix string = "sdp_"
 )
@@ -20,7 +19,7 @@ func GetDNSForAdmin(dataSourceName string) (string, error) {
 	}
 
 	q := u.Query()
-	// q.Set("search_path", AdminSchemaName)
+	q.Del("search_path")
 	u.RawQuery = q.Encode()
 
 	return u.String(), nil
