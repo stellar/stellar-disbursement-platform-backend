@@ -115,15 +115,7 @@ func (m *Manager) GetTenantByID(ctx context.Context, id string) (*Tenant, error)
 		},
 	}
 
-	var t Tenant
-	query, params := m.newManagerQuery(selectQuery, queryParams)
-	if err := m.db.GetContext(ctx, &t, query, params...); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, ErrTenantDoesNotExist
-		}
-		return nil, fmt.Errorf("getting tenant %s: %w", id, err)
-	}
-	return &t, nil
+	return m.GetTenant(ctx, queryParams)
 }
 
 func (m *Manager) GetTenantByName(ctx context.Context, name string) (*Tenant, error) {
@@ -134,15 +126,7 @@ func (m *Manager) GetTenantByName(ctx context.Context, name string) (*Tenant, er
 		},
 	}
 
-	var t Tenant
-	query, params := m.newManagerQuery(selectQuery, queryParams)
-	if err := m.db.GetContext(ctx, &t, query, params...); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, ErrTenantDoesNotExist
-		}
-		return nil, fmt.Errorf("getting tenant %s: %w", name, err)
-	}
-	return &t, nil
+	return m.GetTenant(ctx, queryParams)
 }
 
 // GetTenantByIDOrName returns the tenant with a given id or name.
@@ -154,17 +138,7 @@ func (m *Manager) GetTenantByIDOrName(ctx context.Context, arg string) (*Tenant,
 		},
 	}
 
-	var tnt Tenant
-	query, params := m.newManagerQuery(selectQuery, queryParams)
-	err := m.db.GetContext(ctx, &tnt, query, params...)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, ErrTenantDoesNotExist
-		}
-		return nil, fmt.Errorf("getting tenant %s: %w", arg, err)
-	}
-
-	return &tnt, nil
+	return m.GetTenant(ctx, queryParams)
 }
 
 // GetDefault returns the tenant where is_default is true. Returns an error if more than one tenant is set as default.

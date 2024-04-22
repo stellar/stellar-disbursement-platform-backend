@@ -3,6 +3,7 @@ package httphandler
 import (
 	"context"
 	"fmt"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/internal/services"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -658,7 +659,7 @@ func Test_TenantHandler_Patch(t *testing.T) {
 			"base_url": null,
 			"sdp_ui_base_url": null,
 			"status": "TENANT_DEACTIVATED",
-			"distribution_account": "GCTNUNQfVX7BNIP5AUWW2R4YC7G6R3JGUDNMGT7H62BGBUY4A4V6ROAAH",
+			"distribution_account": "GCTNUNQVX7BNIP5AUWW2R4YC7G6R3JGUDNMGT7H62BGBUY4A4V6ROAAH",
 			"is_default": false,
 		`
 
@@ -667,21 +668,21 @@ func Test_TenantHandler_Patch(t *testing.T) {
 	})
 
 	t.Run("cannot update status of a tenant - invalid status", func(t *testing.T) {
-		runRequestStatusUpdatePatchTest(t, r, ctx, dbConnectionPool, handler, nil, tenant.DeactivatedTenantStatus, tenant.CreatedTenantStatus, "cannot perform update on tenant to requested status")
+		runRequestStatusUpdatePatchTest(t, r, ctx, dbConnectionPool, handler, nil, tenant.DeactivatedTenantStatus, tenant.CreatedTenantStatus, services.ErrCannotPerformStatusUpdate.Error())
 	})
 
-	t.Run("does not update status of a tenant - same status (deactivated)", func(t *testing.T) {
+	t.Run("cannot update status of a tenant - same status (deactivated)", func(t *testing.T) {
 		getEntries := log.DefaultLogger.StartTest(log.WarnLevel)
 		runRequestStatusUpdatePatchTest(t, r, ctx, dbConnectionPool, handler, getEntries, tenant.DeactivatedTenantStatus, tenant.DeactivatedTenantStatus, "")
 	})
 
-	t.Run("does not update status of a tenant - same status (activated)", func(t *testing.T) {
+	t.Run("cannot update status of a tenant - same status (activated)", func(t *testing.T) {
 		getEntries := log.DefaultLogger.StartTest(log.WarnLevel)
 		runRequestStatusUpdatePatchTest(t, r, ctx, dbConnectionPool, handler, getEntries, tenant.ActivatedTenantStatus, tenant.ActivatedTenantStatus, "")
 	})
 
-	t.Run("unsuccessfully updates status of a tenant from activated to another status other than deactivated", func(t *testing.T) {
-		runRequestStatusUpdatePatchTest(t, r, ctx, dbConnectionPool, handler, nil, tenant.ActivatedTenantStatus, tenant.CreatedTenantStatus, "cannot perform update on tenant to requested status")
+	t.Run("cannot update status of a tenant from activated to another status other than deactivated", func(t *testing.T) {
+		runRequestStatusUpdatePatchTest(t, r, ctx, dbConnectionPool, handler, nil, tenant.ActivatedTenantStatus, tenant.CreatedTenantStatus, services.ErrCannotPerformStatusUpdate.Error())
 	})
 
 	t.Run("cannot update status of tenant from activated to deactivated if payments are not in terminal state", func(t *testing.T) {
@@ -704,7 +705,7 @@ func Test_TenantHandler_Patch(t *testing.T) {
 			ReceiverWallet: rw,
 		})
 
-		runRequestStatusUpdatePatchTest(t, r, ctx, dbConnectionPool, handler, nil, tenant.ActivatedTenantStatus, tenant.DeactivatedTenantStatus, "cannot deactivate tenant")
+		runRequestStatusUpdatePatchTest(t, r, ctx, dbConnectionPool, handler, nil, tenant.ActivatedTenantStatus, tenant.DeactivatedTenantStatus, services.ErrCannotDeactivateTenantWithActivePayments.Error())
 	})
 
 	t.Run("successfully updates all fields of a tenant", func(t *testing.T) {
