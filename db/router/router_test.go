@@ -65,8 +65,8 @@ func Test_getDSNWithFixedSchema(t *testing.T) {
 }
 
 func Test_preExistingSchemasGetOverwritten(t *testing.T) {
-	dsnWithoutSearchPath := "postgres://user:password@localhost:5432/test"
-	dsnWithSearchPath := "postgres://user:password@localhost:5432/test?search_path=old"
+	dsnWithoutSearchPath := "postgres://user:password@somehost:5432/test"
+	dsnWithSearchPath := "postgres://user:password@somehost:5432/test?search_path=old"
 
 	testCases := []struct {
 		name           string

@@ -23,7 +23,7 @@ func Test_persistentPostRun(t *testing.T) {
 
 	ctx := context.Background()
 
-	adminDBConnectionPool := prepareAdminDBConnectionPool(t, ctx, dbt, true)
+	adminDBConnectionPool := prepareAdminDBConnectionPool(t, ctx, dbt.DSN)
 	defer adminDBConnectionPool.Close()
 
 	tenant.PrepareDBForTenant(t, dbt, tenantName)

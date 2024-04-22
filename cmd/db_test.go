@@ -9,7 +9,6 @@ import (
 	migrate "github.com/rubenv/sql-migrate"
 	"github.com/stellar/go/keypair"
 	"github.com/stellar/go/network"
-	supportDBTest "github.com/stellar/go/support/db/dbtest"
 	"github.com/stellar/go/support/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -24,20 +23,18 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
-func prepareAdminDBConnectionPool(t *testing.T, ctx context.Context, dbt *supportDBTest.DB, withMigrations bool) db.DBConnectionPool {
+func prepareAdminDBConnectionPool(t *testing.T, ctx context.Context, dbDSN string) db.DBConnectionPool {
 	t.Helper()
 
-	adminDatabaseDNS, err := router.GetDNSForAdmin(dbt.DSN)
+	adminDatabaseDNS, err := router.GetDNSForAdmin(dbDSN)
 	require.NoError(t, err)
 
-	if withMigrations {
-		var manager *cmdDB.SchemaMigrationManager
-		manager, err = cmdDB.NewSchemaMigrationManager(migrations.AdminMigrationRouter, router.AdminSchemaName, adminDatabaseDNS)
-		require.NoError(t, err)
-		defer manager.Close()
-		err = manager.OrchestrateSchemaMigrations(ctx, migrate.Up, 0)
-		require.NoError(t, err)
-	}
+	var manager *cmdDB.SchemaMigrationManager
+	manager, err = cmdDB.NewSchemaMigrationManager(migrations.AdminMigrationRouter, router.AdminSchemaName, adminDatabaseDNS)
+	require.NoError(t, err)
+	defer manager.Close()
+	err = manager.OrchestrateSchemaMigrations(ctx, migrate.Up, 0)
+	require.NoError(t, err)
 
 	adminDBConnectionPool, err := db.OpenDBConnectionPool(adminDatabaseDNS)
 	require.NoError(t, err)
@@ -143,7 +140,7 @@ func Test_DatabaseCommand_db_sdp_migrate(t *testing.T) {
 
 	ctx := context.Background()
 
-	adminDBConnectionPool := prepareAdminDBConnectionPool(t, ctx, dbt, true)
+	adminDBConnectionPool := prepareAdminDBConnectionPool(t, ctx, dbt.DSN)
 	defer adminDBConnectionPool.Close()
 
 	m := tenant.NewManager(tenant.WithDatabase(adminDBConnectionPool))
@@ -454,7 +451,7 @@ func Test_DatabaseCommand_db_setup_for_network(t *testing.T) {
 
 	ctx := context.Background()
 
-	adminDBConnectionPool := prepareAdminDBConnectionPool(t, ctx, dbt, true)
+	adminDBConnectionPool := prepareAdminDBConnectionPool(t, ctx, dbt.DSN)
 	defer adminDBConnectionPool.Close()
 
 	m := tenant.NewManager(tenant.WithDatabase(adminDBConnectionPool))

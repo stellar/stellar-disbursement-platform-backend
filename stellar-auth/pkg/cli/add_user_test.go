@@ -9,7 +9,6 @@ import (
 	"github.com/lib/pq"
 	migrate "github.com/rubenv/sql-migrate"
 	"github.com/spf13/cobra"
-	supportDBTest "github.com/stellar/go/support/db/dbtest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -30,20 +29,17 @@ func (m *PasswordPromptMock) Run() (string, error) {
 
 var _ PasswordPromptInterface = (*PasswordPromptMock)(nil)
 
-func prepareAdminDBConnectionPool(t *testing.T, ctx context.Context, dbt *supportDBTest.DB, withMigrations bool) db.DBConnectionPool {
+func prepareAdminDBConnectionPool(t *testing.T, ctx context.Context, dbDSN string) db.DBConnectionPool {
 	t.Helper()
 
-	adminDatabaseDNS, err := router.GetDNSForAdmin(dbt.DSN)
+	adminDatabaseDNS, err := router.GetDNSForAdmin(dbDSN)
 	require.NoError(t, err)
 
-	if withMigrations {
-		var manager *cmdDB.SchemaMigrationManager
-		manager, err = cmdDB.NewSchemaMigrationManager(migrations.AdminMigrationRouter, router.AdminSchemaName, adminDatabaseDNS)
-		require.NoError(t, err)
-		defer manager.Close()
-		err = manager.OrchestrateSchemaMigrations(ctx, migrate.Up, 0)
-		require.NoError(t, err)
-	}
+	manager, err := cmdDB.NewSchemaMigrationManager(migrations.AdminMigrationRouter, router.AdminSchemaName, adminDatabaseDNS)
+	require.NoError(t, err)
+	defer manager.Close()
+	err = manager.OrchestrateSchemaMigrations(ctx, migrate.Up, 0)
+	require.NoError(t, err)
 
 	adminDBConnectionPool, err := db.OpenDBConnectionPool(adminDatabaseDNS)
 	require.NoError(t, err)
@@ -58,7 +54,7 @@ func Test_authAddUserCommand(t *testing.T) {
 
 	ctx := context.Background()
 
-	adminDBConnectionPool := prepareAdminDBConnectionPool(t, ctx, dbt, true)
+	adminDBConnectionPool := prepareAdminDBConnectionPool(t, ctx, dbt.DSN)
 	defer adminDBConnectionPool.Close()
 
 	tDSN := tenant.PrepareDBForTenant(t, dbt, tenantName)
@@ -225,7 +221,7 @@ func Test_execAddUserFunc(t *testing.T) {
 
 	ctx := context.Background()
 
-	adminDBConnectionPool := prepareAdminDBConnectionPool(t, ctx, dbt, true)
+	adminDBConnectionPool := prepareAdminDBConnectionPool(t, ctx, dbt.DSN)
 	defer adminDBConnectionPool.Close()
 
 	tDSN := tenant.PrepareDBForTenant(t, dbt, tenantName)
