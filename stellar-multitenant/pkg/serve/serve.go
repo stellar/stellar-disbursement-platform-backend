@@ -37,7 +37,7 @@ type ServeOptions struct {
 	Environment                             string
 	GitCommit                               string
 	Models                                  *data.Models
-	MtnDBConnectionPool                     db.DBConnectionPool
+	MTNDBConnectionPool                     db.DBConnectionPool
 	NetworkPassphrase                       string
 	networkType                             utils.NetworkType
 	Port                                    int
@@ -68,7 +68,7 @@ func (opts *ServeOptions) SetupDependencies() error {
 		return fmt.Errorf("parsing network type: %w", err)
 	}
 
-	opts.Models, err = data.NewModels(opts.MtnDBConnectionPool)
+	opts.Models, err = data.NewModels(opts.MTNDBConnectionPool)
 	if err != nil {
 		return fmt.Errorf("creating models: %w", err)
 	}

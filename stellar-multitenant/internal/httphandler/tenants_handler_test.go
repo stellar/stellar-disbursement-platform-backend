@@ -166,10 +166,10 @@ func Test_TenantHandler_Get(t *testing.T) {
 	tenant.DeleteAllTenantsFixture(t, ctx, dbConnectionPool)
 	tnt1 := tenant.CreateTenantFixture(t, ctx, dbConnectionPool, "myorg1", "GCTNUNQVX7BNIP5AUWW2R4YC7G6R3JGUDNMGT7H62BGBUY4A4V6ROAAH")
 	tnt2 := tenant.CreateTenantFixture(t, ctx, dbConnectionPool, "myorg2", "GB37V3J5C3RAJY6BI52MAAWF6AVKJH7J4L2DVBMOP7WQJHQPNIBR3FKH")
-	dTnt := tenant.CreateTenantFixture(t, ctx, dbConnectionPool, "dorg", "GBKXOCCQ5HXYOJ7NH5LXDKOBKU22TE6XOKHKYADZPRQFLR2F5KPFVILF")
+	deactivatedTnt := tenant.CreateTenantFixture(t, ctx, dbConnectionPool, "dorg", "GBKXOCCQ5HXYOJ7NH5LXDKOBKU22TE6XOKHKYADZPRQFLR2F5KPFVILF")
 	dStatus := tenant.DeactivatedTenantStatus
 	_, err = handler.Manager.UpdateTenantConfig(ctx, &tenant.TenantUpdate{
-		ID:     dTnt.ID,
+		ID:     deactivatedTnt.ID,
 		Status: &dStatus,
 	})
 	require.NoError(t, err)
@@ -658,7 +658,7 @@ func Test_TenantHandler_Patch(t *testing.T) {
 			"base_url": null,
 			"sdp_ui_base_url": null,
 			"status": "TENANT_DEACTIVATED",
-			"distribution_account": "GCTNUNQVX7BNIP5AUWW2R4YC7G6R3JGUDNMGT7H62BGBUY4A4V6ROAAH",
+			"distribution_account": "GCTNUNQfVX7BNIP5AUWW2R4YC7G6R3JGUDNMGT7H62BGBUY4A4V6ROAAH",
 			"is_default": false,
 		`
 
@@ -666,7 +666,7 @@ func Test_TenantHandler_Patch(t *testing.T) {
 		runSuccessfulRequestPatchTest(t, r, ctx, dbConnectionPool, handler, reqBody, expectedRespBody, &tntStatus)
 	})
 
-	t.Run("unsuccessfully updates status of a tenant - invalid status", func(t *testing.T) {
+	t.Run("cannot update status of a tenant - invalid status", func(t *testing.T) {
 		runRequestStatusUpdatePatchTest(t, r, ctx, dbConnectionPool, handler, nil, tenant.DeactivatedTenantStatus, tenant.CreatedTenantStatus, "cannot perform update on tenant to requested status")
 	})
 

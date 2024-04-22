@@ -172,6 +172,7 @@ func (m *Manager) GetDefault(ctx context.Context) (*Tenant, error) {
 	queryParams := &QueryParams{
 		Filters: map[FilterKey]interface{}{
 			FilterKeyIsDefault: true,
+			FilterKeyOutStatus: DeactivatedTenantStatus,
 		},
 	}
 

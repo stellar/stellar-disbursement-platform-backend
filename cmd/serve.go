@@ -511,7 +511,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 				di.CleanupInstanceByValue(ctx, serveOpts.MtnDBConnectionPool)
 			}()
 			serveOpts.MtnDBConnectionPool = mtnDBConnectionPool
-			adminServeOpts.MtnDBConnectionPool = mtnDBConnectionPool
+			adminServeOpts.MTNDBConnectionPool = mtnDBConnectionPool
 
 			// Setup the TSSDBConnectionPool
 			tssDBConnectionPool, err := di.NewTSSDBConnectionPool(ctx, dbcpOptions)

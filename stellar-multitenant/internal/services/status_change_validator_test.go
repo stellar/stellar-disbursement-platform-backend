@@ -84,7 +84,7 @@ func Test_ValidateStatus(t *testing.T) {
 				data.DeleteAllFixtures(t, ctx, dbConnectionPool)
 			},
 			reqStatus:   tenant.DeactivatedTenantStatus,
-			expectedErr: ErrCannotDeactivateTenant,
+			expectedErr: ErrCannotDeactivateTenantWithActivePayments,
 		},
 		{
 			name: "tenant is already deactivated",
@@ -153,8 +153,8 @@ func Test_ValidateStatus(t *testing.T) {
 			if tc.deleteFixtures != nil {
 				tc.deleteFixtures()
 			}
-		})
 
-		tenantManagerMock.AssertExpectations(t)
+			tenantManagerMock.AssertExpectations(t)
+		})
 	}
 }

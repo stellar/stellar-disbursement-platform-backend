@@ -54,7 +54,7 @@ func Test_Serve(t *testing.T) {
 
 	opts := ServeOptions{
 		AdminDBConnectionPool: dbConnectionPool,
-		MtnDBConnectionPool:   dbConnectionPool,
+		MTNDBConnectionPool:   dbConnectionPool,
 		Environment:           "test",
 		GitCommit:             "1234567890abcdef",
 		NetworkPassphrase:     network.TestNetworkPassphrase,

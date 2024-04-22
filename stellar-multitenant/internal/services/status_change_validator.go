@@ -12,11 +12,12 @@ import (
 )
 
 var (
-	ErrCannotRetrieveTenantByID  = errors.New("cannot retrieve tenant by id")
-	ErrCannotRetrievePayments    = errors.New("cannot retrieve payments for tenant")
-	ErrCannotDeactivateTenant    = errors.New("cannot deactivate tenant")
-	ErrCannotActivateTenant      = errors.New("cannot activate tenant for tenant that is not deactivated")
-	ErrCannotPerformStatusUpdate = errors.New("cannot perform update on tenant to requested status")
+	ErrCannotRetrieveTenantByID                 = errors.New("cannot retrieve tenant by id")
+	ErrCannotRetrievePayments                   = errors.New("cannot retrieve payments for tenant")
+	ErrCannotDeactivateDefaultTenant            = errors.New("cannot deactivate default tenant")
+	ErrCannotDeactivateTenantWithActivePayments = errors.New("cannot deactivate tenant with active payments")
+	ErrCannotActivateTenant                     = errors.New("cannot activate tenant for tenant that is not deactivated")
+	ErrCannotPerformStatusUpdate                = errors.New("cannot perform update on tenant to requested status")
 )
 
 func ValidateStatus(ctx context.Context, manager tenant.ManagerInterface, models *data.Models, tenantID string, reqStatus tenant.TenantStatus) error {
@@ -33,11 +34,15 @@ func ValidateStatus(ctx context.Context, manager tenant.ManagerInterface, models
 
 	// if attempting to deactivate tenant, need to check for a few conditions such as
 	// 1. whether tenant is already deactivated
-	// 2. whether there are any payments not in a terminal state
+	// 2. whether there are any payments are active
 	if reqStatus == tenant.DeactivatedTenantStatus {
 		if tnt.Status == tenant.DeactivatedTenantStatus {
 			log.Ctx(ctx).Warnf("tenant %s is already deactivated", tenantID)
 		} else {
+			if tnt.IsDefault {
+				return ErrCannotDeactivateDefaultTenant
+			}
+
 			activePaymentsCount, getPaymentCountErr := models.Payment.Count(ctx, &data.QueryParams{
 				Filters: map[data.FilterKey]interface{}{
 					data.FilterKeyStatus: data.PaymentActiveStatuses(),
@@ -48,7 +53,7 @@ func ValidateStatus(ctx context.Context, manager tenant.ManagerInterface, models
 			}
 
 			if activePaymentsCount != 0 {
-				return ErrCannotDeactivateTenant
+				return ErrCannotDeactivateTenantWithActivePayments
 			}
 		}
 	} else if reqStatus == tenant.ActivatedTenantStatus {

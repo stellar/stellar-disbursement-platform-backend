@@ -289,9 +289,15 @@ func Test_Manager_GetTenantByIDOrName(t *testing.T) {
 	})
 }
 
+func activateTenant(t *testing.T, ctx context.Context, m *Manager, tnt *Tenant) {
+	activatedStatus := ActivatedTenantStatus
+	_, err := m.UpdateTenantConfig(ctx, &TenantUpdate{ID: tnt.ID, Status: &activatedStatus})
+	require.NoError(t, err)
+}
+
 func deactivateTenant(t *testing.T, ctx context.Context, m *Manager, tnt *Tenant) {
-	dStatus := DeactivatedTenantStatus
-	_, err := m.UpdateTenantConfig(ctx, &TenantUpdate{ID: tnt.ID, Status: &dStatus})
+	deactivatedStatus := DeactivatedTenantStatus
+	_, err := m.UpdateTenantConfig(ctx, &TenantUpdate{ID: tnt.ID, Status: &deactivatedStatus})
 	require.NoError(t, err)
 }
 
@@ -333,6 +339,16 @@ func Test_Manager_GetDefault(t *testing.T) {
 	})
 
 	updateTenantIsDefault(t, ctx, dbConnectionPool, tnt1.ID, false)
+
+	t.Run("returns error when default tenant is inactive", func(t *testing.T) {
+		deactivateTenant(t, ctx, m, tnt2)
+		defaultTnt, err := m.GetDefault(ctx)
+		assert.EqualError(t, err, ErrTenantDoesNotExist.Error())
+		assert.Nil(t, defaultTnt)
+	})
+
+	updateTenantIsDefault(t, ctx, dbConnectionPool, tnt2.ID, true)
+	activateTenant(t, ctx, m, tnt2)
 
 	t.Run("gets the default tenant successfully", func(t *testing.T) {
 		tntDB, err := m.GetDefault(ctx)
