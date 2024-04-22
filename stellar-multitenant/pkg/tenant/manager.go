@@ -173,7 +173,7 @@ func (m *Manager) SetDefault(ctx context.Context, sqlExec db.SQLExecuter, id str
 		WITH remove_old_default_tenant AS (
 			UPDATE tenants SET is_default = false WHERE is_default = true
 		)
-		UPDATE tenants SET is_default = true WHERE id = $1 RETURNING *
+		UPDATE tenants SET is_default = true WHERE id = $1 AND status != 'TENANT_DEACTIVATED' RETURNING *
 	`
 
 	var tnt Tenant

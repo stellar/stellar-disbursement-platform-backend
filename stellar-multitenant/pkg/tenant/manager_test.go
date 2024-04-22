@@ -396,6 +396,22 @@ func Test_Manager_SetDefault(t *testing.T) {
 		assert.True(t, tnt1DB.IsDefault)
 	})
 
+	t.Run("returns error when attempting to set deactivated tenant to default", func(t *testing.T) {
+		tnt3, err := m.AddTenant(ctx, "myorg3")
+		require.NoError(t, err)
+		deactivateTenant(t, ctx, m, tnt3)
+
+		tnt, err := m.SetDefault(ctx, dbConnectionPool, tnt3.Name)
+		assert.ErrorIs(t, err, ErrTenantDoesNotExist)
+		assert.Nil(t, tnt)
+
+		tnt3DB, err := m.GetTenant(ctx, &QueryParams{
+			Filters: map[FilterKey]interface{}{FilterKeyID: tnt3.ID},
+		})
+		require.NoError(t, err)
+		assert.False(t, tnt3DB.IsDefault)
+	})
+
 	t.Run("updates default tenant", func(t *testing.T) {
 		tnt2DB, err := m.SetDefault(ctx, dbConnectionPool, tnt2.ID)
 		require.NoError(t, err)

@@ -169,12 +169,11 @@ func Test_TenantHandler_Get(t *testing.T) {
 	tnt2 := tenant.CreateTenantFixture(t, ctx, dbConnectionPool, "myorg2", "GB37V3J5C3RAJY6BI52MAAWF6AVKJH7J4L2DVBMOP7WQJHQPNIBR3FKH")
 	deactivatedTnt := tenant.CreateTenantFixture(t, ctx, dbConnectionPool, "dorg", "GBKXOCCQ5HXYOJ7NH5LXDKOBKU22TE6XOKHKYADZPRQFLR2F5KPFVILF")
 	dStatus := tenant.DeactivatedTenantStatus
-	_, err = handler.Manager.UpdateTenantConfig(ctx, &tenant.TenantUpdate{
+	deactivatedTnt, err = handler.Manager.UpdateTenantConfig(ctx, &tenant.TenantUpdate{
 		ID:     deactivatedTnt.ID,
 		Status: &dStatus,
 	})
 	require.NoError(t, err)
-
 	t.Run("GetAll successfully returns a list of all tenants", func(t *testing.T) {
 		rr := httptest.NewRecorder()
 		req, err := http.NewRequest(http.MethodGet, "/tenants", nil)
@@ -212,11 +211,23 @@ func Test_TenantHandler_Get(t *testing.T) {
 					"is_default": false,
 					"created_at": %q,
 					"updated_at": %q
+				},
+				{
+					"id": %q,
+					"name": %q,
+					"base_url": null,
+					"sdp_ui_base_url": null,
+					"status": "TENANT_DEACTIVATED",
+					"distribution_account": %q,
+					"is_default": false,
+					"created_at": %q,
+					"updated_at": %q
 				}
 			]
 		`,
 			tnt1.ID, tnt1.Name, *tnt1.DistributionAccount, tnt1.CreatedAt.Format(time.RFC3339Nano), tnt1.UpdatedAt.Format(time.RFC3339Nano),
-			tnt2.ID, tnt2.Name, *tnt2.DistributionAccount, tnt2.CreatedAt.Format(time.RFC3339Nano), tnt2.UpdatedAt.Format(time.RFC3339Nano))
+			tnt2.ID, tnt2.Name, *tnt2.DistributionAccount, tnt2.CreatedAt.Format(time.RFC3339Nano), tnt2.UpdatedAt.Format(time.RFC3339Nano),
+			deactivatedTnt.ID, deactivatedTnt.Name, *deactivatedTnt.DistributionAccount, deactivatedTnt.CreatedAt.Format(time.RFC3339Nano), deactivatedTnt.UpdatedAt.Format(time.RFC3339Nano))
 		assert.JSONEq(t, expectedRespBody, string(respBody))
 	})
 
