@@ -208,13 +208,13 @@ func (c *DatabaseCommand) adminMigrationsCmd(ctx context.Context, globalOptions 
 			return fmt.Errorf("getting the admin database DSN: %w", err)
 		}
 
-		tssMigrationsManager, err := NewSchemaMigrationManager(migrations.AdminMigrationRouter, router.AdminSchemaName, dbURL)
+		schemaMigrationManager, err := NewSchemaMigrationManager(migrations.AdminMigrationRouter, router.AdminSchemaName, dbURL)
 		if err != nil {
 			return fmt.Errorf("creating admin database migration manager: %w", err)
 		}
-		defer tssMigrationsManager.Close()
+		defer schemaMigrationManager.Close()
 
-		if err = tssMigrationsManager.OrchestrateSchemaMigrations(ctx, dir, count); err != nil {
+		if err = schemaMigrationManager.OrchestrateSchemaMigrations(ctx, dir, count); err != nil {
 			return fmt.Errorf("running admin migrations: %w", err)
 		}
 		return nil
@@ -241,13 +241,13 @@ func (c *DatabaseCommand) tssMigrationsCmd(ctx context.Context, globalOptions *u
 			return fmt.Errorf("getting the TSS database DSN: %w", err)
 		}
 
-		tssMigrationsManager, err := NewSchemaMigrationManager(migrations.TSSMigrationRouter, router.TSSSchemaName, dbURL)
+		schemaMigrationManager, err := NewSchemaMigrationManager(migrations.TSSMigrationRouter, router.TSSSchemaName, dbURL)
 		if err != nil {
 			return fmt.Errorf("creating TSS database migration manager: %w", err)
 		}
-		defer tssMigrationsManager.Close()
+		defer schemaMigrationManager.Close()
 
-		if err = tssMigrationsManager.OrchestrateSchemaMigrations(ctx, dir, count); err != nil {
+		if err = schemaMigrationManager.OrchestrateSchemaMigrations(ctx, dir, count); err != nil {
 			return fmt.Errorf("running TSS migrations: %w", err)
 		}
 
