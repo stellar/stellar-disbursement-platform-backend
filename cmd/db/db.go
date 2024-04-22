@@ -230,12 +230,12 @@ func (c *DatabaseCommand) tssMigrationsCmd(ctx context.Context, globalOptions *u
 			return fmt.Errorf("getting the TSS database DSN: %w", err)
 		}
 
-		tssMigrationsManager, err := NewSchemaMigrationManager(c.adminDBConnectionPool, migrations.TSSMigrationRouter, router.TSSSchemaName, dbURL)
+		tssMigrationsManager, err := NewSchemaMigrationManager(migrations.TSSMigrationRouter, router.TSSSchemaName, dbURL)
 		if err != nil {
 			return fmt.Errorf("creating TSS database migration manager: %w", err)
 		}
 
-		if err = tssMigrationsManager.OrchestrateSchemaMigrations(ctx, dbURL, dir, count); err != nil {
+		if err = tssMigrationsManager.OrchestrateSchemaMigrations(ctx, dir, count); err != nil {
 			return fmt.Errorf("running TSS migrations: %w", err)
 		}
 

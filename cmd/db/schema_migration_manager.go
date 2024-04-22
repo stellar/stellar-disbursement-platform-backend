@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"fmt"
+	"io"
 	"strings"
 
 	migrate "github.com/rubenv/sql-migrate"
@@ -14,22 +15,23 @@ import (
 )
 
 type SchemaMigrationManager struct {
-	RootDBConnectionPool db.DBConnectionPool
-	MigrationRouter      migrations.MigrationRouter
-	SchemaName           string
-	SchemaDatabaseDNS    string
+	MigrationRouter        migrations.MigrationRouter
+	SchemaName             string
+	SchemaDatabaseDNS      string
+	schemaDBConnectionPool db.DBConnectionPool
+}
+
+var _ io.Closer = (*SchemaMigrationManager)(nil)
+
+func (m *SchemaMigrationManager) Close() error {
+	return m.schemaDBConnectionPool.Close()
 }
 
 func NewSchemaMigrationManager(
-	rootDBConnectionPool db.DBConnectionPool,
 	migrationRouter migrations.MigrationRouter,
 	schemaName string,
 	schemaDatabaseDNS string,
 ) (*SchemaMigrationManager, error) {
-	if rootDBConnectionPool == nil {
-		return nil, fmt.Errorf("rootDBConnectionPool cannot be nil")
-	}
-
 	if utils.IsEmpty(migrationRouter) {
 		return nil, fmt.Errorf("migrationRouter cannot be empty")
 	}
@@ -42,16 +44,22 @@ func NewSchemaMigrationManager(
 		return nil, fmt.Errorf("schemaDatabaseDNS cannot be empty")
 	}
 
+	schemaDBConnectionPool, err := db.OpenDBConnectionPool(schemaDatabaseDNS)
+	if err != nil {
+		return nil, fmt.Errorf("opening the database connection pool for the '%s' schema: %w", schemaName, err)
+	}
+
 	return &SchemaMigrationManager{
-		RootDBConnectionPool: rootDBConnectionPool,
-		MigrationRouter:      migrationRouter,
-		SchemaName:           schemaName,
+		MigrationRouter:        migrationRouter,
+		SchemaName:             schemaName,
+		SchemaDatabaseDNS:      schemaDatabaseDNS,
+		schemaDBConnectionPool: schemaDBConnectionPool,
 	}, nil
 }
 
 func (m *SchemaMigrationManager) createSchemaIfNeeded(ctx context.Context) error {
 	query := fmt.Sprintf("CREATE SCHEMA IF NOT EXISTS %s", m.SchemaName)
-	_, err := m.RootDBConnectionPool.ExecContext(ctx, query)
+	_, err := m.schemaDBConnectionPool.ExecContext(ctx, query)
 	if err != nil {
 		return fmt.Errorf("creating the '%s' database schema: %w", m.SchemaName, err)
 	}
@@ -68,7 +76,7 @@ func (m *SchemaMigrationManager) deleteSchemaIfNeeded(ctx context.Context) error
 		AND table_name NOT LIKE '%%migrations%%'
 	`, m.SchemaName)
 
-	err := m.RootDBConnectionPool.GetContext(ctx, &numberOfRemainingTablesInSchema, query)
+	err := m.schemaDBConnectionPool.GetContext(ctx, &numberOfRemainingTablesInSchema, query)
 	if err != nil {
 		return fmt.Errorf("counting number of tables remaining in the '%s' database schema: %w", m.SchemaName, err)
 	}
@@ -76,7 +84,7 @@ func (m *SchemaMigrationManager) deleteSchemaIfNeeded(ctx context.Context) error
 	if numberOfRemainingTablesInSchema == 0 {
 		log.Ctx(ctx).Infof("dropping the '%s' database schema ⏳...", m.SchemaName)
 		query := fmt.Sprintf("DROP SCHEMA IF EXISTS %s CASCADE", m.SchemaName)
-		_, err = m.RootDBConnectionPool.ExecContext(ctx, query)
+		_, err = m.schemaDBConnectionPool.ExecContext(ctx, query)
 		if err != nil {
 			return fmt.Errorf("dropping the '%s' database schema: %w", m.SchemaName, err)
 		}
@@ -88,8 +96,8 @@ func (m *SchemaMigrationManager) deleteSchemaIfNeeded(ctx context.Context) error
 	return nil
 }
 
-func (m *SchemaMigrationManager) executeMigrations(ctx context.Context, dbURL string, dir migrate.MigrationDirection, count int) error {
-	err := ExecuteMigrations(ctx, dbURL, dir, count, m.MigrationRouter)
+func (m *SchemaMigrationManager) executeMigrations(ctx context.Context, dir migrate.MigrationDirection, count int) error {
+	err := ExecuteMigrations(ctx, m.SchemaDatabaseDNS, dir, count, m.MigrationRouter)
 	if err != nil {
 		return fmt.Errorf("executing migrations for router %s: %w", m.MigrationRouter.TableName, err)
 	}
@@ -97,12 +105,12 @@ func (m *SchemaMigrationManager) executeMigrations(ctx context.Context, dbURL st
 	return nil
 }
 
-func (m *SchemaMigrationManager) OrchestrateSchemaMigrations(ctx context.Context, dbURL string, dir migrate.MigrationDirection, count int) error {
+func (m *SchemaMigrationManager) OrchestrateSchemaMigrations(ctx context.Context, dir migrate.MigrationDirection, count int) error {
 	if err := m.createSchemaIfNeeded(ctx); err != nil {
 		return fmt.Errorf("creating the '%s' database schema if needed: %w", m.SchemaName, err)
 	}
 
-	if err := m.executeMigrations(ctx, dbURL, dir, count); err != nil {
+	if err := m.executeMigrations(ctx, dir, count); err != nil {
 		return fmt.Errorf("running migrations for the '%s' database schema: %w", m.SchemaName, err)
 	}
 
