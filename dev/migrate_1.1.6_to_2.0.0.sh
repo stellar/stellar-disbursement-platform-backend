@@ -184,4 +184,5 @@ EOF
 
 perform_step $((stepCounter++)) "copying data from the single-tenant to the multi-tenant structure" "echo '$sql_script' | psql -d '$multiTenantDBURL'"
 
-echo "🎉🎉🎉🎉 Successfully migrated the data!"
+echo
+echo "🎉🎉🎉🎉 Successfully copied the data! 🎉🎉🎉🎉"
