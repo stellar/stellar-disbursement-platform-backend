@@ -3,7 +3,6 @@ package httphandler
 import (
 	"context"
 	"fmt"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/internal/services"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -30,6 +29,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/internal/provisioning"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
