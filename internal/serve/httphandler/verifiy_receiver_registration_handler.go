@@ -125,7 +125,7 @@ func (v VerifyReceiverRegistrationHandler) processReceiverVerificationPII(
 		if data.CompareVerificationValue(receiverRegistrationRequest.MobileNumberHash, receiverByExternalID.PhoneNumber) {
 			return nil
 		} else {
-			return fmt.Errorf("phone number validation failed for customer-id %s", receiverRegistrationRequest.CustomerID)
+			err = fmt.Errorf("phone number validation failed for customer-id %s", receiverRegistrationRequest.CustomerID)
 			return &ErrorInformationNotFound{cause: err}
 		}
 	}

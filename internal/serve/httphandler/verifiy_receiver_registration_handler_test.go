@@ -354,7 +354,9 @@ func Test_VerifyReceiverRegistrationHandler_processReceiverCustomerID_and_Mobile
 	// Begin transaction and ensure it is either rolled back or committed.
 	dbTx, err := dbConnectionPool.BeginTxx(ctx, nil)
 	require.NoError(t, err)
-	defer dbTx.Rollback() // Use rollback to revert changes post-test.
+	defer func() {
+		require.NoError(t, dbTx.Rollback())
+	}()
 
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
@@ -398,7 +400,9 @@ func Test_VerifyReceiverRegistrationHandler_FailsWithInvalidMobileNumberHash(t *
 	defer dbConnectionPool.Close()
 	dbTx, err := dbConnectionPool.BeginTxx(ctx, nil)
 	require.NoError(t, err)
-	defer dbTx.Rollback()
+	defer func() {
+		require.NoError(t, dbTx.Rollback())
+	}()
 
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
