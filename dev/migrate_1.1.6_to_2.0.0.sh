@@ -17,7 +17,7 @@ multiTenantDBName="sdp-116-mtn"
 psqlDumpOutput="sdp-mainBranch-v1_16.sql"
 
 perform_step() {
-    export DIVIDER="----------------------------------------"
+    export DIVIDER="--------------------------------------------------------------------------------"
 
     step=$1
     step_name="$2"

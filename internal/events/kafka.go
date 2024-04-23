@@ -7,13 +7,11 @@ import (
 	"fmt"
 	"strings"
 
-	"golang.org/x/exp/slices"
-
-	"github.com/segmentio/kafka-go/sasl/plain"
-
 	"github.com/segmentio/kafka-go"
+	"github.com/segmentio/kafka-go/sasl/plain"
 	"github.com/stellar/go/support/log"
 	"golang.org/x/exp/maps"
+	"golang.org/x/exp/slices"
 )
 
 type KafkaSecurityProtocol string
