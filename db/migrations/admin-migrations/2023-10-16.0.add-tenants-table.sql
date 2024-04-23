@@ -19,8 +19,6 @@ CREATE TABLE tenants
 (
     id VARCHAR(36) PRIMARY KEY DEFAULT public.uuid_generate_v4(),
     name text NOT NULL,
-    enable_mfa boolean DEFAULT true,
-    enable_recaptcha boolean DEFAULT true,
     cors_allowed_origins text[] NULL,
     base_url text NULL,
     sdp_ui_base_url text NULL,
