@@ -6,18 +6,41 @@ import (
 	"strings"
 	"testing"
 
+	migrate "github.com/rubenv/sql-migrate"
 	"github.com/stellar/go/keypair"
 	"github.com/stellar/go/network"
 	"github.com/stellar/go/support/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	cmdDB "github.com/stellar/stellar-disbursement-platform-backend/cmd/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
+	"github.com/stellar/stellar-disbursement-platform-backend/db/migrations"
+	"github.com/stellar/stellar-disbursement-platform-backend/db/router"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/assets"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
+
+func prepareAdminDBConnectionPool(t *testing.T, ctx context.Context, dbDSN string) db.DBConnectionPool {
+	t.Helper()
+
+	adminDatabaseDSN, err := router.GetDSNForAdmin(dbDSN)
+	require.NoError(t, err)
+
+	var manager *cmdDB.SchemaMigrationManager
+	manager, err = cmdDB.NewSchemaMigrationManager(migrations.AdminMigrationRouter, router.AdminSchemaName, adminDatabaseDSN)
+	require.NoError(t, err)
+	defer manager.Close()
+	err = manager.OrchestrateSchemaMigrations(ctx, migrate.Up, 0)
+	require.NoError(t, err)
+
+	adminDBConnectionPool, err := db.OpenDBConnectionPool(adminDatabaseDSN)
+	require.NoError(t, err)
+
+	return adminDBConnectionPool
+}
 
 func getSDPMigrationsApplied(t *testing.T, ctx context.Context, db db.DBConnectionPool) []string {
 	t.Helper()
@@ -112,15 +135,15 @@ func Test_DatabaseCommand_db_help(t *testing.T) {
 }
 
 func Test_DatabaseCommand_db_sdp_migrate(t *testing.T) {
-	dbt := dbtest.OpenWithAdminMigrationsOnly(t)
+	dbt := dbtest.OpenWithoutMigrations(t)
 	defer dbt.Close()
 
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
-
 	ctx := context.Background()
-	m := tenant.NewManager(tenant.WithDatabase(dbConnectionPool))
+
+	adminDBConnectionPool := prepareAdminDBConnectionPool(t, ctx, dbt.DSN)
+	defer adminDBConnectionPool.Close()
+
+	m := tenant.NewManager(tenant.WithDatabase(adminDBConnectionPool))
 	buf := new(strings.Builder)
 
 	t.Run("migrate usage", func(t *testing.T) {
@@ -131,7 +154,7 @@ func Test_DatabaseCommand_db_sdp_migrate(t *testing.T) {
 			dbt.DSN,
 		})
 		rootCmd.SetOut(buf)
-		err = rootCmd.Execute()
+		err := rootCmd.Execute()
 		require.NoError(t, err)
 
 		expectedContains := []string{
@@ -158,7 +181,7 @@ func Test_DatabaseCommand_db_sdp_migrate(t *testing.T) {
 	})
 
 	t.Run("db sdp migrate up and down --all", func(t *testing.T) {
-		tenant.DeleteAllTenantsFixture(t, ctx, dbConnectionPool)
+		tenant.DeleteAllTenantsFixture(t, ctx, adminDBConnectionPool)
 
 		// Creating Tenants
 		tnt1, err := m.AddTenant(ctx, "myorg1")
@@ -167,9 +190,9 @@ func Test_DatabaseCommand_db_sdp_migrate(t *testing.T) {
 		tnt2, err := m.AddTenant(ctx, "myorg2")
 		require.NoError(t, err)
 
-		_, err = dbConnectionPool.ExecContext(ctx, "CREATE SCHEMA sdp_myorg1")
+		_, err = adminDBConnectionPool.ExecContext(ctx, "CREATE SCHEMA sdp_myorg1")
 		require.NoError(t, err)
-		_, err = dbConnectionPool.ExecContext(ctx, "CREATE SCHEMA sdp_myorg2")
+		_, err = adminDBConnectionPool.ExecContext(ctx, "CREATE SCHEMA sdp_myorg2")
 		require.NoError(t, err)
 
 		buf.Reset()
@@ -198,14 +221,14 @@ func Test_DatabaseCommand_db_sdp_migrate(t *testing.T) {
 		assert.Equal(t, []string{"2023-01-20.0-initial.sql"}, ids)
 		assert.Contains(t, buf.String(), fmt.Sprintf("Applying migrations on tenant ID %s", tnt1.ID))
 		assert.Contains(t, buf.String(), "Successfully applied 1 migrations up.")
-		tenant.TenantSchemaMatchTablesFixture(t, ctx, dbConnectionPool, "sdp_myorg1", []string{"sdp_migrations"})
+		tenant.TenantSchemaMatchTablesFixture(t, ctx, adminDBConnectionPool, "sdp_myorg1", []string{"sdp_migrations"})
 
 		// Checking if the migrations were applied on the Tenant 2
 		ids = getSDPMigrationsApplied(t, ctx, tenant2SchemaConnectionPool)
 		assert.Equal(t, []string{"2023-01-20.0-initial.sql"}, ids)
 		assert.Contains(t, buf.String(), fmt.Sprintf("Applying migrations on tenant ID %s", tnt1.ID))
 		assert.Contains(t, buf.String(), "Successfully applied 1 migrations up.")
-		tenant.TenantSchemaMatchTablesFixture(t, ctx, dbConnectionPool, "sdp_myorg2", []string{"sdp_migrations"})
+		tenant.TenantSchemaMatchTablesFixture(t, ctx, adminDBConnectionPool, "sdp_myorg2", []string{"sdp_migrations"})
 
 		buf.Reset()
 		rootCmd.SetArgs([]string{"db", "sdp", "migrate", "down", "1", "--database-url", dbt.DSN, "--log-level", "TRACE", "--all"})
@@ -216,17 +239,17 @@ func Test_DatabaseCommand_db_sdp_migrate(t *testing.T) {
 		ids = getSDPMigrationsApplied(t, context.Background(), tenant1SchemaConnectionPool)
 		assert.Equal(t, []string{}, ids)
 		assert.Contains(t, buf.String(), "Successfully applied 1 migrations down.")
-		tenant.TenantSchemaMatchTablesFixture(t, ctx, dbConnectionPool, "sdp_myorg1", []string{"sdp_migrations"})
+		tenant.TenantSchemaMatchTablesFixture(t, ctx, adminDBConnectionPool, "sdp_myorg1", []string{"sdp_migrations"})
 
 		// Checking if the migrations were applied on the Tenant 2
 		ids = getSDPMigrationsApplied(t, context.Background(), tenant2SchemaConnectionPool)
 		assert.Equal(t, []string{}, ids)
 		assert.Contains(t, buf.String(), "Successfully applied 1 migrations down.")
-		tenant.TenantSchemaMatchTablesFixture(t, ctx, dbConnectionPool, "sdp_myorg2", []string{"sdp_migrations"})
+		tenant.TenantSchemaMatchTablesFixture(t, ctx, adminDBConnectionPool, "sdp_myorg2", []string{"sdp_migrations"})
 	})
 
 	t.Run("db sdp migrate up and down --tenant-id", func(t *testing.T) {
-		tenant.DeleteAllTenantsFixture(t, ctx, dbConnectionPool)
+		tenant.DeleteAllTenantsFixture(t, ctx, adminDBConnectionPool)
 
 		// Creating Tenants
 		tnt1, err := m.AddTenant(ctx, "myorg1")
@@ -235,9 +258,9 @@ func Test_DatabaseCommand_db_sdp_migrate(t *testing.T) {
 		tnt2, err := m.AddTenant(ctx, "myorg2")
 		require.NoError(t, err)
 
-		_, err = dbConnectionPool.ExecContext(ctx, "CREATE SCHEMA sdp_myorg1")
+		_, err = adminDBConnectionPool.ExecContext(ctx, "CREATE SCHEMA sdp_myorg1")
 		require.NoError(t, err)
-		_, err = dbConnectionPool.ExecContext(ctx, "CREATE SCHEMA sdp_myorg2")
+		_, err = adminDBConnectionPool.ExecContext(ctx, "CREATE SCHEMA sdp_myorg2")
 		require.NoError(t, err)
 
 		buf.Reset()
@@ -266,10 +289,10 @@ func Test_DatabaseCommand_db_sdp_migrate(t *testing.T) {
 		assert.Equal(t, []string{"2023-01-20.0-initial.sql"}, ids)
 		assert.Contains(t, buf.String(), fmt.Sprintf("Applying migrations on tenant ID %s", tnt1.ID))
 		assert.Contains(t, buf.String(), "Successfully applied 1 migrations up.")
-		tenant.TenantSchemaMatchTablesFixture(t, ctx, dbConnectionPool, "sdp_myorg1", []string{"sdp_migrations"})
+		tenant.TenantSchemaMatchTablesFixture(t, ctx, adminDBConnectionPool, "sdp_myorg1", []string{"sdp_migrations"})
 
 		// Checking if the migrations were not applied on the Tenant 2 schema
-		tenant.TenantSchemaMatchTablesFixture(t, ctx, dbConnectionPool, "sdp_myorg2", []string{})
+		tenant.TenantSchemaMatchTablesFixture(t, ctx, adminDBConnectionPool, "sdp_myorg2", []string{})
 		assert.NotContains(t, buf.String(), fmt.Sprintf("Applying migrations on tenant ID %s", tnt2.ID))
 
 		buf.Reset()
@@ -282,15 +305,15 @@ func Test_DatabaseCommand_db_sdp_migrate(t *testing.T) {
 		assert.Equal(t, []string{}, ids)
 		assert.Contains(t, buf.String(), fmt.Sprintf("Applying migrations on tenant ID %s", tnt1.ID))
 		assert.Contains(t, buf.String(), "Successfully applied 1 migrations down.")
-		tenant.TenantSchemaMatchTablesFixture(t, ctx, dbConnectionPool, "sdp_myorg1", []string{"sdp_migrations"})
+		tenant.TenantSchemaMatchTablesFixture(t, ctx, adminDBConnectionPool, "sdp_myorg1", []string{"sdp_migrations"})
 
 		// Checking if the migrations were not applied on the Tenant 2 schema
-		tenant.TenantSchemaMatchTablesFixture(t, ctx, dbConnectionPool, "sdp_myorg2", []string{})
+		tenant.TenantSchemaMatchTablesFixture(t, ctx, adminDBConnectionPool, "sdp_myorg2", []string{})
 		assert.NotContains(t, buf.String(), fmt.Sprintf("Applying migrations on tenant ID %s", tnt2.ID))
 	})
 
 	t.Run("db sdp migrate up and down auth migrations --all", func(t *testing.T) {
-		tenant.DeleteAllTenantsFixture(t, ctx, dbConnectionPool)
+		tenant.DeleteAllTenantsFixture(t, ctx, adminDBConnectionPool)
 
 		// Creating Tenants
 		tnt1, err := m.AddTenant(ctx, "myorg1")
@@ -299,9 +322,9 @@ func Test_DatabaseCommand_db_sdp_migrate(t *testing.T) {
 		tnt2, err := m.AddTenant(ctx, "myorg2")
 		require.NoError(t, err)
 
-		_, err = dbConnectionPool.ExecContext(ctx, "CREATE SCHEMA sdp_myorg1")
+		_, err = adminDBConnectionPool.ExecContext(ctx, "CREATE SCHEMA sdp_myorg1")
 		require.NoError(t, err)
-		_, err = dbConnectionPool.ExecContext(ctx, "CREATE SCHEMA sdp_myorg2")
+		_, err = adminDBConnectionPool.ExecContext(ctx, "CREATE SCHEMA sdp_myorg2")
 		require.NoError(t, err)
 
 		buf.Reset()
@@ -330,14 +353,14 @@ func Test_DatabaseCommand_db_sdp_migrate(t *testing.T) {
 		assert.Equal(t, []string{"2023-02-09.0.add-users-table.sql"}, ids)
 		assert.Contains(t, buf.String(), fmt.Sprintf("Applying migrations on tenant ID %s", tnt1.ID))
 		assert.Contains(t, buf.String(), "Successfully applied 1 migrations up.")
-		tenant.TenantSchemaMatchTablesFixture(t, ctx, dbConnectionPool, "sdp_myorg1", []string{"auth_migrations", "auth_users"})
+		tenant.TenantSchemaMatchTablesFixture(t, ctx, adminDBConnectionPool, "sdp_myorg1", []string{"auth_migrations", "auth_users"})
 
 		// Checking if the migrations were applied on the Tenant 2
 		ids = getAuthMigrationsApplied(t, ctx, tenant2SchemaConnectionPool)
 		assert.Equal(t, []string{"2023-02-09.0.add-users-table.sql"}, ids)
 		assert.Contains(t, buf.String(), fmt.Sprintf("Applying migrations on tenant ID %s", tnt1.ID))
 		assert.Contains(t, buf.String(), "Successfully applied 1 migrations up.")
-		tenant.TenantSchemaMatchTablesFixture(t, ctx, dbConnectionPool, "sdp_myorg2", []string{"auth_migrations", "auth_users"})
+		tenant.TenantSchemaMatchTablesFixture(t, ctx, adminDBConnectionPool, "sdp_myorg2", []string{"auth_migrations", "auth_users"})
 
 		buf.Reset()
 		rootCmd.SetArgs([]string{"db", "auth", "migrate", "down", "1", "--database-url", dbt.DSN, "--log-level", "TRACE", "--all"})
@@ -348,17 +371,17 @@ func Test_DatabaseCommand_db_sdp_migrate(t *testing.T) {
 		ids = getAuthMigrationsApplied(t, context.Background(), tenant1SchemaConnectionPool)
 		assert.Equal(t, []string{}, ids)
 		assert.Contains(t, buf.String(), "Successfully applied 1 migrations down.")
-		tenant.TenantSchemaMatchTablesFixture(t, ctx, dbConnectionPool, "sdp_myorg1", []string{"auth_migrations"})
+		tenant.TenantSchemaMatchTablesFixture(t, ctx, adminDBConnectionPool, "sdp_myorg1", []string{"auth_migrations"})
 
 		// Checking if the migrations were applied on the Tenant 2
 		ids = getAuthMigrationsApplied(t, context.Background(), tenant2SchemaConnectionPool)
 		assert.Equal(t, []string{}, ids)
 		assert.Contains(t, buf.String(), "Successfully applied 1 migrations down.")
-		tenant.TenantSchemaMatchTablesFixture(t, ctx, dbConnectionPool, "sdp_myorg2", []string{"auth_migrations"})
+		tenant.TenantSchemaMatchTablesFixture(t, ctx, adminDBConnectionPool, "sdp_myorg2", []string{"auth_migrations"})
 	})
 
 	t.Run("db sdp migrate up and down auth migrations --tenant-id", func(t *testing.T) {
-		tenant.DeleteAllTenantsFixture(t, ctx, dbConnectionPool)
+		tenant.DeleteAllTenantsFixture(t, ctx, adminDBConnectionPool)
 
 		// Creating Tenants
 		tnt1, err := m.AddTenant(ctx, "myorg1")
@@ -367,9 +390,9 @@ func Test_DatabaseCommand_db_sdp_migrate(t *testing.T) {
 		tnt2, err := m.AddTenant(ctx, "myorg2")
 		require.NoError(t, err)
 
-		_, err = dbConnectionPool.ExecContext(ctx, "CREATE SCHEMA sdp_myorg1")
+		_, err = adminDBConnectionPool.ExecContext(ctx, "CREATE SCHEMA sdp_myorg1")
 		require.NoError(t, err)
-		_, err = dbConnectionPool.ExecContext(ctx, "CREATE SCHEMA sdp_myorg2")
+		_, err = adminDBConnectionPool.ExecContext(ctx, "CREATE SCHEMA sdp_myorg2")
 		require.NoError(t, err)
 
 		buf.Reset()
@@ -398,10 +421,10 @@ func Test_DatabaseCommand_db_sdp_migrate(t *testing.T) {
 		assert.Equal(t, []string{"2023-02-09.0.add-users-table.sql"}, ids)
 		assert.Contains(t, buf.String(), fmt.Sprintf("Applying migrations on tenant ID %s", tnt1.ID))
 		assert.Contains(t, buf.String(), "Successfully applied 1 migrations up.")
-		tenant.TenantSchemaMatchTablesFixture(t, ctx, dbConnectionPool, "sdp_myorg1", []string{"auth_migrations", "auth_users"})
+		tenant.TenantSchemaMatchTablesFixture(t, ctx, adminDBConnectionPool, "sdp_myorg1", []string{"auth_migrations", "auth_users"})
 
 		// Checking if the migrations were not applied on the Tenant 2 schema
-		tenant.TenantSchemaMatchTablesFixture(t, ctx, dbConnectionPool, "sdp_myorg2", []string{})
+		tenant.TenantSchemaMatchTablesFixture(t, ctx, adminDBConnectionPool, "sdp_myorg2", []string{})
 		assert.NotContains(t, buf.String(), fmt.Sprintf("Applying migrations on tenant ID %s", tnt2.ID))
 
 		buf.Reset()
@@ -414,10 +437,10 @@ func Test_DatabaseCommand_db_sdp_migrate(t *testing.T) {
 		assert.Equal(t, []string{}, ids)
 		assert.Contains(t, buf.String(), fmt.Sprintf("Applying migrations on tenant ID %s", tnt1.ID))
 		assert.Contains(t, buf.String(), "Successfully applied 1 migrations down.")
-		tenant.TenantSchemaMatchTablesFixture(t, ctx, dbConnectionPool, "sdp_myorg1", []string{"auth_migrations"})
+		tenant.TenantSchemaMatchTablesFixture(t, ctx, adminDBConnectionPool, "sdp_myorg1", []string{"auth_migrations"})
 
 		// Checking if the migrations were not applied on the Tenant 2 schema
-		tenant.TenantSchemaMatchTablesFixture(t, ctx, dbConnectionPool, "sdp_myorg2", []string{})
+		tenant.TenantSchemaMatchTablesFixture(t, ctx, adminDBConnectionPool, "sdp_myorg2", []string{})
 		assert.NotContains(t, buf.String(), fmt.Sprintf("Applying migrations on tenant ID %s", tnt2.ID))
 	})
 }
@@ -426,12 +449,12 @@ func Test_DatabaseCommand_db_setup_for_network(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 
-	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, outerErr)
-	defer dbConnectionPool.Close()
-
 	ctx := context.Background()
-	m := tenant.NewManager(tenant.WithDatabase(dbConnectionPool))
+
+	adminDBConnectionPool := prepareAdminDBConnectionPool(t, ctx, dbt.DSN)
+	defer adminDBConnectionPool.Close()
+
+	m := tenant.NewManager(tenant.WithDatabase(adminDBConnectionPool))
 
 	// Creating Tenants
 	tnt1, outerErr := m.AddTenant(ctx, "myorg1")
@@ -440,13 +463,13 @@ func Test_DatabaseCommand_db_setup_for_network(t *testing.T) {
 	tnt2, outerErr := m.AddTenant(ctx, "myorg2")
 	require.NoError(t, outerErr)
 
-	_, outerErr = dbConnectionPool.ExecContext(ctx, "CREATE SCHEMA sdp_myorg1")
+	_, outerErr = adminDBConnectionPool.ExecContext(ctx, "CREATE SCHEMA sdp_myorg1")
 	require.NoError(t, outerErr)
-	_, outerErr = dbConnectionPool.ExecContext(ctx, "CREATE SCHEMA sdp_myorg2")
+	_, outerErr = adminDBConnectionPool.ExecContext(ctx, "CREATE SCHEMA sdp_myorg2")
 	require.NoError(t, outerErr)
 
-	tenant.ApplyMigrationsForTenantFixture(t, ctx, dbConnectionPool, tnt1.Name)
-	tenant.ApplyMigrationsForTenantFixture(t, ctx, dbConnectionPool, tnt2.Name)
+	tenant.ApplyMigrationsForTenantFixture(t, ctx, adminDBConnectionPool, tnt1.Name)
+	tenant.ApplyMigrationsForTenantFixture(t, ctx, adminDBConnectionPool, tnt2.Name)
 
 	tnt1DSN, outerErr := m.GetDSNForTenant(ctx, tnt1.Name)
 	require.NoError(t, outerErr)

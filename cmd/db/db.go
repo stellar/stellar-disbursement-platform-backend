@@ -80,20 +80,20 @@ func (c *DatabaseCommand) setupForNetworkCmd(globalOptions *utils.GlobalOptionsT
 				log.Ctx(ctx).Fatal(err.Error())
 			}
 
-			tenantIDToDNSMap, err := getTenantIDToDSNMapping(ctx, c.adminDBConnectionPool)
+			tenantIDToDSNMap, err := getTenantIDToDSNMapping(ctx, c.adminDBConnectionPool)
 			if err != nil {
 				log.Ctx(ctx).Fatalf("getting tenants schemas: %s", err.Error())
 			}
 
 			if opts.TenantID != "" {
-				if dsn, ok := tenantIDToDNSMap[opts.TenantID]; ok {
-					tenantIDToDNSMap = map[string]string{opts.TenantID: dsn}
+				if dsn, ok := tenantIDToDSNMap[opts.TenantID]; ok {
+					tenantIDToDSNMap = map[string]string{opts.TenantID: dsn}
 				} else {
 					log.Ctx(ctx).Fatalf("tenant ID %s does not exist", opts.TenantID)
 				}
 			}
 
-			for tenantID, dsn := range tenantIDToDNSMap {
+			for tenantID, dsn := range tenantIDToDSNMap {
 				log.Ctx(ctx).Infof("running for tenant ID %s", tenantID)
 				tenantDBConnectionPool, err := db.OpenDBConnectionPool(dsn)
 				if err != nil {
@@ -203,8 +203,19 @@ func (c *DatabaseCommand) adminMigrationsCmd(ctx context.Context, globalOptions 
 	}
 
 	executeMigrationsFn := func(ctx context.Context, dir migrate.MigrationDirection, count int) error {
-		if err := ExecuteMigrations(ctx, globalOptions.DatabaseURL, dir, count, migrations.AdminMigrationRouter); err != nil {
-			return fmt.Errorf("executing migrations for %s: %w", adminCmd.Name(), err)
+		dbURL, err := router.GetDSNForAdmin(globalOptions.DatabaseURL)
+		if err != nil {
+			return fmt.Errorf("getting the admin database DSN: %w", err)
+		}
+
+		schemaMigrationManager, err := NewSchemaMigrationManager(migrations.AdminMigrationRouter, router.AdminSchemaName, dbURL)
+		if err != nil {
+			return fmt.Errorf("creating admin database migration manager: %w", err)
+		}
+		defer schemaMigrationManager.Close()
+
+		if err = schemaMigrationManager.OrchestrateSchemaMigrations(ctx, dir, count); err != nil {
+			return fmt.Errorf("running admin migrations: %w", err)
 		}
 		return nil
 	}
@@ -225,17 +236,18 @@ func (c *DatabaseCommand) tssMigrationsCmd(ctx context.Context, globalOptions *u
 	}
 
 	executeMigrationsFn := func(ctx context.Context, dir migrate.MigrationDirection, count int) error {
-		dbURL, err := router.GetDNSForTSS(globalOptions.DatabaseURL)
+		dbURL, err := router.GetDSNForTSS(globalOptions.DatabaseURL)
 		if err != nil {
 			return fmt.Errorf("getting the TSS database DSN: %w", err)
 		}
 
-		tssMigrationsManager, err := NewSchemaMigrationManager(migrations.TSSMigrationRouter, router.TSSSchemaName, dbURL)
+		schemaMigrationManager, err := NewSchemaMigrationManager(migrations.TSSMigrationRouter, router.TSSSchemaName, dbURL)
 		if err != nil {
 			return fmt.Errorf("creating TSS database migration manager: %w", err)
 		}
+		defer schemaMigrationManager.Close()
 
-		if err = tssMigrationsManager.OrchestrateSchemaMigrations(ctx, dir, count); err != nil {
+		if err = schemaMigrationManager.OrchestrateSchemaMigrations(ctx, dir, count); err != nil {
 			return fmt.Errorf("running TSS migrations: %w", err)
 		}
 

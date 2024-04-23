@@ -302,7 +302,7 @@ func deactivateTenant(t *testing.T, ctx context.Context, m *Manager, tnt *Tenant
 }
 
 func updateTenantIsDefault(t *testing.T, ctx context.Context, dbConnectionPool db.DBConnectionPool, tenantID string, isDefault bool) {
-	const q = "UPDATE public.tenants SET is_default = $1 WHERE id = $2"
+	const q = "UPDATE tenants SET is_default = $1 WHERE id = $2"
 	_, err := dbConnectionPool.ExecContext(ctx, q, isDefault, tenantID)
 	require.NoError(t, err)
 }

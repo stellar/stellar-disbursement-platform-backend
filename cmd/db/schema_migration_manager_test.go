@@ -19,17 +19,17 @@ import (
 var testCases = []struct {
 	MigrationRouter migrations.MigrationRouter
 	SchemaName      string
-	getDatabaseDNS  func(dataSourceName string) (string, error)
+	getDatabaseDSN  func(dataSourceName string) (string, error)
 }{
-	// {
-	// 	MigrationRouter: migrations.AdminMigrationRouter,
-	// 	SchemaName:      "admin",
-	// 	getDatabaseDNS:  router.GetDNSForAdmin,
-	// },
+	{
+		MigrationRouter: migrations.AdminMigrationRouter,
+		SchemaName:      "admin",
+		getDatabaseDSN:  router.GetDSNForAdmin,
+	},
 	{
 		MigrationRouter: migrations.TSSMigrationRouter,
 		SchemaName:      "tss",
-		getDatabaseDNS:  router.GetDNSForTSS,
+		getDatabaseDSN:  router.GetDSNForTSS,
 	},
 }
 
@@ -58,7 +58,7 @@ func Test_NewSchemaMigrationManager(t *testing.T) {
 			})
 
 			t.Run("🎉 successfully constructs the instance", func(t *testing.T) {
-				schemaDatabaseDSN, err := tc.getDatabaseDNS(dbt.DSN)
+				schemaDatabaseDSN, err := tc.getDatabaseDSN(dbt.DSN)
 				require.NoError(t, err)
 
 				manager, err := NewSchemaMigrationManager(tc.MigrationRouter, tc.SchemaName, schemaDatabaseDSN)
@@ -85,7 +85,7 @@ func Test_SchemaMigrationManager_createSchemaIfNeeded(t *testing.T) {
 
 			ctx := context.Background()
 
-			schemaDatabaseDSN, err := tc.getDatabaseDNS(dbt.DSN)
+			schemaDatabaseDSN, err := tc.getDatabaseDSN(dbt.DSN)
 			require.NoError(t, err)
 
 			manager, err := NewSchemaMigrationManager(tc.MigrationRouter, tc.SchemaName, schemaDatabaseDSN)
@@ -130,7 +130,7 @@ func Test_SchemaMigrationManager_deleteSchemaIfNeeded(t *testing.T) {
 
 			ctx := context.Background()
 
-			schemaDatabaseDSN, err := tc.getDatabaseDNS(dbt.DSN)
+			schemaDatabaseDSN, err := tc.getDatabaseDSN(dbt.DSN)
 			require.NoError(t, err)
 
 			manager, err := NewSchemaMigrationManager(tc.MigrationRouter, tc.SchemaName, schemaDatabaseDSN)
@@ -182,7 +182,7 @@ func Test_SchemaMigrationManager_executeMigrations(t *testing.T) {
 
 			ctx := context.Background()
 
-			schemaDatabaseDSN, err := tc.getDatabaseDNS(dbt.DSN)
+			schemaDatabaseDSN, err := tc.getDatabaseDSN(dbt.DSN)
 			require.NoError(t, err)
 
 			manager, err := NewSchemaMigrationManager(tc.MigrationRouter, tc.SchemaName, schemaDatabaseDSN)
@@ -250,7 +250,7 @@ func Test_SchemaMigrationManager_OrchestrateSchemaMigrations(t *testing.T) {
 
 			ctx := context.Background()
 
-			schemaDatabaseDSN, err := tc.getDatabaseDNS(dbt.DSN)
+			schemaDatabaseDSN, err := tc.getDatabaseDSN(dbt.DSN)
 			require.NoError(t, err)
 
 			manager, err := NewSchemaMigrationManager(tc.MigrationRouter, tc.SchemaName, schemaDatabaseDSN)
