@@ -290,7 +290,7 @@ func (s SendReceiverWalletInviteService) shouldSendInvitationSMS(ctx context.Con
 	return true
 }
 
-func NewSendReceiverWalletInviteService(models *data.Models, messengerClient message.MessengerClient, sep10SigningPrivateKey string, maxInvitationSMSResendAttempts int64, crashTrackerClient crashtracker.CrashTrackerClient, UseExternalID bool) (*SendReceiverWalletInviteService, error) {
+func NewSendReceiverWalletInviteService(models *data.Models, messengerClient message.MessengerClient, sep10SigningPrivateKey string, maxInvitationSMSResendAttempts int64, crashTrackerClient crashtracker.CrashTrackerClient, useExternalID bool) (*SendReceiverWalletInviteService, error) {
 	s := &SendReceiverWalletInviteService{
 		messengerClient:                messengerClient,
 		Models:                         models,
