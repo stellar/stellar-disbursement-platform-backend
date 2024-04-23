@@ -30,7 +30,8 @@ func GetDSNForTenant(dataSourceName, tenantName string) (string, error) {
 	return getDSNWithFixedSchema(dataSourceName, schemaName)
 }
 
-// Helper function to set the search_path for the schema.
+// getDSNWithFixedSchema is a helper function that returns the database DSN with the `search_path` query parameter (AKA
+// schema) set to the given schemaName.
 func getDSNWithFixedSchema(dataSourceName, schemaName string) (string, error) {
 	u, err := url.Parse(dataSourceName)
 	if err != nil {
