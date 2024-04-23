@@ -51,24 +51,24 @@ func Test_NewSchemaMigrationManager(t *testing.T) {
 				assert.EqualError(t, err, "schemaName cannot be empty")
 			})
 
-			t.Run("schemaDatabaseDNS cannot be empty", func(t *testing.T) {
+			t.Run("schemaDatabaseDSN cannot be empty", func(t *testing.T) {
 				manager, err := NewSchemaMigrationManager(migrations.SDPMigrationRouter, tc.SchemaName, "")
 				assert.Nil(t, manager)
-				assert.EqualError(t, err, "schemaDatabaseDNS cannot be empty")
+				assert.EqualError(t, err, "schemaDatabaseDSN cannot be empty")
 			})
 
 			t.Run("🎉 successfully constructs the instance", func(t *testing.T) {
-				schemaDatabaseDNS, err := tc.getDatabaseDNS(dbt.DSN)
+				schemaDatabaseDSN, err := tc.getDatabaseDNS(dbt.DSN)
 				require.NoError(t, err)
 
-				manager, err := NewSchemaMigrationManager(tc.MigrationRouter, tc.SchemaName, schemaDatabaseDNS)
+				manager, err := NewSchemaMigrationManager(tc.MigrationRouter, tc.SchemaName, schemaDatabaseDSN)
 				require.NoError(t, err)
 				defer manager.Close()
 				assert.NotNil(t, manager.schemaDBConnectionPool)
 				wantManager := &SchemaMigrationManager{
 					MigrationRouter:        tc.MigrationRouter,
 					SchemaName:             tc.SchemaName,
-					SchemaDatabaseDNS:      schemaDatabaseDNS,
+					SchemaDatabaseDSN:      schemaDatabaseDSN,
 					schemaDBConnectionPool: manager.schemaDBConnectionPool,
 				}
 				assert.Equal(t, wantManager, manager)
@@ -85,10 +85,10 @@ func Test_SchemaMigrationManager_createSchemaIfNeeded(t *testing.T) {
 
 			ctx := context.Background()
 
-			schemaDatabaseDNS, err := tc.getDatabaseDNS(dbt.DSN)
+			schemaDatabaseDSN, err := tc.getDatabaseDNS(dbt.DSN)
 			require.NoError(t, err)
 
-			manager, err := NewSchemaMigrationManager(tc.MigrationRouter, tc.SchemaName, schemaDatabaseDNS)
+			manager, err := NewSchemaMigrationManager(tc.MigrationRouter, tc.SchemaName, schemaDatabaseDSN)
 			require.NoError(t, err)
 			defer manager.Close()
 
@@ -130,10 +130,10 @@ func Test_SchemaMigrationManager_deleteSchemaIfNeeded(t *testing.T) {
 
 			ctx := context.Background()
 
-			schemaDatabaseDNS, err := tc.getDatabaseDNS(dbt.DSN)
+			schemaDatabaseDSN, err := tc.getDatabaseDNS(dbt.DSN)
 			require.NoError(t, err)
 
-			manager, err := NewSchemaMigrationManager(tc.MigrationRouter, tc.SchemaName, schemaDatabaseDNS)
+			manager, err := NewSchemaMigrationManager(tc.MigrationRouter, tc.SchemaName, schemaDatabaseDSN)
 			require.NoError(t, err)
 			defer manager.Close()
 
@@ -182,10 +182,10 @@ func Test_SchemaMigrationManager_executeMigrations(t *testing.T) {
 
 			ctx := context.Background()
 
-			schemaDatabaseDNS, err := tc.getDatabaseDNS(dbt.DSN)
+			schemaDatabaseDSN, err := tc.getDatabaseDNS(dbt.DSN)
 			require.NoError(t, err)
 
-			manager, err := NewSchemaMigrationManager(tc.MigrationRouter, tc.SchemaName, schemaDatabaseDNS)
+			manager, err := NewSchemaMigrationManager(tc.MigrationRouter, tc.SchemaName, schemaDatabaseDSN)
 			require.NoError(t, err)
 			defer manager.Close()
 
@@ -250,10 +250,10 @@ func Test_SchemaMigrationManager_OrchestrateSchemaMigrations(t *testing.T) {
 
 			ctx := context.Background()
 
-			schemaDatabaseDNS, err := tc.getDatabaseDNS(dbt.DSN)
+			schemaDatabaseDSN, err := tc.getDatabaseDNS(dbt.DSN)
 			require.NoError(t, err)
 
-			manager, err := NewSchemaMigrationManager(tc.MigrationRouter, tc.SchemaName, schemaDatabaseDNS)
+			manager, err := NewSchemaMigrationManager(tc.MigrationRouter, tc.SchemaName, schemaDatabaseDSN)
 			require.NoError(t, err)
 			defer manager.Close()
 

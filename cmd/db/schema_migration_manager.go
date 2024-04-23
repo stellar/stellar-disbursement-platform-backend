@@ -17,7 +17,7 @@ import (
 type SchemaMigrationManager struct {
 	MigrationRouter        migrations.MigrationRouter
 	SchemaName             string
-	SchemaDatabaseDNS      string
+	SchemaDatabaseDSN      string
 	schemaDBConnectionPool db.DBConnectionPool
 }
 
@@ -30,7 +30,7 @@ func (m *SchemaMigrationManager) Close() error {
 func NewSchemaMigrationManager(
 	migrationRouter migrations.MigrationRouter,
 	schemaName string,
-	schemaDatabaseDNS string,
+	schemaDatabaseDSN string,
 ) (*SchemaMigrationManager, error) {
 	if utils.IsEmpty(migrationRouter) {
 		return nil, fmt.Errorf("migrationRouter cannot be empty")
@@ -40,11 +40,11 @@ func NewSchemaMigrationManager(
 		return nil, fmt.Errorf("schemaName cannot be empty")
 	}
 
-	if strings.TrimSpace(schemaDatabaseDNS) == "" {
-		return nil, fmt.Errorf("schemaDatabaseDNS cannot be empty")
+	if strings.TrimSpace(schemaDatabaseDSN) == "" {
+		return nil, fmt.Errorf("schemaDatabaseDSN cannot be empty")
 	}
 
-	schemaDBConnectionPool, err := db.OpenDBConnectionPool(schemaDatabaseDNS)
+	schemaDBConnectionPool, err := db.OpenDBConnectionPool(schemaDatabaseDSN)
 	if err != nil {
 		return nil, fmt.Errorf("opening the database connection pool for the '%s' schema: %w", schemaName, err)
 	}
@@ -52,7 +52,7 @@ func NewSchemaMigrationManager(
 	return &SchemaMigrationManager{
 		MigrationRouter:        migrationRouter,
 		SchemaName:             schemaName,
-		SchemaDatabaseDNS:      schemaDatabaseDNS,
+		SchemaDatabaseDSN:      schemaDatabaseDSN,
 		schemaDBConnectionPool: schemaDBConnectionPool,
 	}, nil
 }
@@ -97,7 +97,7 @@ func (m *SchemaMigrationManager) deleteSchemaIfNeeded(ctx context.Context) error
 }
 
 func (m *SchemaMigrationManager) executeMigrations(ctx context.Context, dir migrate.MigrationDirection, count int) error {
-	err := ExecuteMigrations(ctx, m.SchemaDatabaseDNS, dir, count, m.MigrationRouter)
+	err := ExecuteMigrations(ctx, m.SchemaDatabaseDSN, dir, count, m.MigrationRouter)
 	if err != nil {
 		return fmt.Errorf("executing migrations for router %s: %w", m.MigrationRouter.TableName, err)
 	}
