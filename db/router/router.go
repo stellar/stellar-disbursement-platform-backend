@@ -11,15 +11,15 @@ const (
 	TSSSchemaName       string = "tss"
 )
 
-// GetDNSForAdmin returns the database DSN for the Admin schema. It is the same as the root database DSN, clearing the
+// GetDSNForAdmin returns the database DSN for the Admin schema. It is the same as the root database DSN, clearing the
 // `search_path` if it exists.
-func GetDNSForAdmin(dataSourceName string) (string, error) {
+func GetDSNForAdmin(dataSourceName string) (string, error) {
 	return getDSNWithFixedSchema(dataSourceName, AdminSchemaName)
 }
 
 // GetDSNForTSS returns the database DSN for the TSS schema. It is basically the same as the root database DSN, but
 // with the `search_path` query parameter (AKA schema) set to `tss`.
-func GetDNSForTSS(dataSourceName string) (string, error) {
+func GetDSNForTSS(dataSourceName string) (string, error) {
 	return getDSNWithFixedSchema(dataSourceName, TSSSchemaName)
 }
 

@@ -27,20 +27,20 @@ func executeMigrationsPerTenant(
 		log.Ctx(ctx).Fatal(err.Error())
 	}
 
-	tenantIDToDNSMap, err := getTenantIDToDSNMapping(ctx, adminDBConnectionPool)
+	tenantIDToDSNMap, err := getTenantIDToDSNMapping(ctx, adminDBConnectionPool)
 	if err != nil {
 		return fmt.Errorf("getting tenants schemas: %w", err)
 	}
 
 	if opts.TenantID != "" {
-		if dsn, ok := tenantIDToDNSMap[opts.TenantID]; ok {
-			tenantIDToDNSMap = map[string]string{opts.TenantID: dsn}
+		if dsn, ok := tenantIDToDSNMap[opts.TenantID]; ok {
+			tenantIDToDSNMap = map[string]string{opts.TenantID: dsn}
 		} else {
 			return fmt.Errorf("tenant ID %s does not exist", opts.TenantID)
 		}
 	}
 
-	for tenantID, dsn := range tenantIDToDNSMap {
+	for tenantID, dsn := range tenantIDToDSNMap {
 		log.Ctx(ctx).Infof("Applying migrations on tenant ID %s", tenantID)
 		err = ExecuteMigrations(ctx, dsn, dir, count, migrationRouter)
 		if err != nil {

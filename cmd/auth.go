@@ -108,11 +108,11 @@ func (a *AuthCommand) Command() *cobra.Command {
 				}
 
 				// 1. Get Tenant and save it in context.
-				adminDNS, err := router.GetDNSForAdmin(globalOptions.DatabaseURL)
+				adminDSN, err := router.GetDSNForAdmin(globalOptions.DatabaseURL)
 				if err != nil {
-					log.Ctx(ctx).Fatalf("error getting Admin DB DNS: %s", err.Error())
+					log.Ctx(ctx).Fatalf("error getting Admin DB DSN: %s", err.Error())
 				}
-				adminDBConnectionPool, err := db.OpenDBConnectionPool(adminDNS)
+				adminDBConnectionPool, err := db.OpenDBConnectionPool(adminDSN)
 				if err != nil {
 					log.Ctx(ctx).Fatalf("error opening Admin DB connection pool: %s", err.Error())
 				}

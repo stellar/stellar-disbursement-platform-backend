@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func Test_GetDNSForAdmin(t *testing.T) {
+func Test_GetDSNForAdmin(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 
@@ -16,13 +16,13 @@ func Test_GetDNSForAdmin(t *testing.T) {
 	require.NotContains(t, dbt.DSN, "search_path="+AdminSchemaName)
 
 	// Sets the search_path to admin.
-	updatedDSN, err := GetDNSForAdmin(dbt.DSN)
+	updatedDSN, err := GetDSNForAdmin(dbt.DSN)
 	require.NoError(t, err)
 	t.Log(updatedDSN)
 	require.Contains(t, updatedDSN, "search_path="+AdminSchemaName)
 }
 
-func Test_GetDNSForTSS(t *testing.T) {
+func Test_GetDSNForTSS(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 
@@ -30,7 +30,7 @@ func Test_GetDNSForTSS(t *testing.T) {
 	require.NotContains(t, dbt.DSN, "search_path="+TSSSchemaName)
 
 	// Sets the search_path to tss.
-	updatedDSN, err := GetDNSForTSS(dbt.DSN)
+	updatedDSN, err := GetDSNForTSS(dbt.DSN)
 	require.NoError(t, err)
 	t.Log(updatedDSN)
 	require.Contains(t, updatedDSN, "search_path="+TSSSchemaName)
@@ -84,12 +84,12 @@ func Test_preExistingSchemasGetOverwritten(t *testing.T) {
 			expectedSchema: "new",
 		},
 		{
-			name:           "GetDNSForAdmin",
+			name:           "GetDSNForAdmin",
 			initialDSN:     dsnWithSearchPath,
 			expectedSchema: AdminSchemaName,
 		},
 		{
-			name:           "GetDNSForTSS",
+			name:           "GetDSNForTSS",
 			initialDSN:     dsnWithSearchPath,
 			expectedSchema: TSSSchemaName,
 		},

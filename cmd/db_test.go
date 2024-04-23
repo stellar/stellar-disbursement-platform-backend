@@ -26,17 +26,17 @@ import (
 func prepareAdminDBConnectionPool(t *testing.T, ctx context.Context, dbDSN string) db.DBConnectionPool {
 	t.Helper()
 
-	adminDatabaseDNS, err := router.GetDNSForAdmin(dbDSN)
+	adminDatabaseDSN, err := router.GetDSNForAdmin(dbDSN)
 	require.NoError(t, err)
 
 	var manager *cmdDB.SchemaMigrationManager
-	manager, err = cmdDB.NewSchemaMigrationManager(migrations.AdminMigrationRouter, router.AdminSchemaName, adminDatabaseDNS)
+	manager, err = cmdDB.NewSchemaMigrationManager(migrations.AdminMigrationRouter, router.AdminSchemaName, adminDatabaseDSN)
 	require.NoError(t, err)
 	defer manager.Close()
 	err = manager.OrchestrateSchemaMigrations(ctx, migrate.Up, 0)
 	require.NoError(t, err)
 
-	adminDBConnectionPool, err := db.OpenDBConnectionPool(adminDatabaseDNS)
+	adminDBConnectionPool, err := db.OpenDBConnectionPool(adminDatabaseDSN)
 	require.NoError(t, err)
 
 	return adminDBConnectionPool
