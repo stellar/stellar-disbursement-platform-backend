@@ -16,12 +16,25 @@ func (m *TenantManagerMock) GetDSNForTenant(ctx context.Context, tenantName stri
 	return args.String(0), args.Error(1)
 }
 
-func (m *TenantManagerMock) GetAllTenants(ctx context.Context) ([]Tenant, error) {
-	args := m.Called(ctx)
+func (m *TenantManagerMock) GetDSNForTenantByID(ctx context.Context, id string) (string, error) {
+	args := m.Called(ctx, id)
+	return args.String(0), args.Error(1)
+}
+
+func (m *TenantManagerMock) GetAllTenants(ctx context.Context, queryParams *QueryParams) ([]Tenant, error) {
+	args := m.Called(ctx, queryParams)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).([]Tenant), args.Error(1)
+}
+
+func (m *TenantManagerMock) GetTenant(ctx context.Context, queryParams *QueryParams) (*Tenant, error) {
+	args := m.Called(ctx, queryParams)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*Tenant), args.Error(1)
 }
 
 func (m *TenantManagerMock) GetTenantByName(ctx context.Context, name string) (*Tenant, error) {

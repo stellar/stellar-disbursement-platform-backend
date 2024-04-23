@@ -126,10 +126,49 @@ func Test_Manager_GetAllTenants(t *testing.T) {
 	tnt2, err := m.AddTenant(ctx, "myorg2")
 	require.NoError(t, err)
 
-	tenants, err := m.GetAllTenants(ctx)
+	tenants, err := m.GetAllTenants(ctx, nil)
 	require.NoError(t, err)
 
 	assert.ElementsMatch(t, tenants, []Tenant{*tnt1, *tnt2})
+
+	deactivateTenant(t, ctx, m, tnt1)
+	tenants, err = m.GetAllTenants(ctx, nil)
+	require.NoError(t, err)
+
+	assert.ElementsMatch(t, tenants, []Tenant{*tnt2})
+}
+
+func Test_Manager_GetTenant(t *testing.T) {
+	dbt := dbtest.OpenWithAdminMigrationsOnly(t)
+	defer dbt.Close()
+
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+
+	m := NewManager(WithDatabase(dbConnectionPool))
+	tnt1, err := m.AddTenant(ctx, "myorg1")
+	require.NoError(t, err)
+	tnt2, err := m.AddTenant(ctx, "myorg2")
+	require.NoError(t, err)
+
+	dbTnt1, err := m.GetTenant(ctx, &QueryParams{Filters: map[FilterKey]interface{}{FilterKeyID: tnt1.ID}})
+	require.NoError(t, err)
+	assert.Equal(t, *tnt1, *dbTnt1)
+
+	dbTnt1, err = m.GetTenant(ctx, &QueryParams{Filters: map[FilterKey]interface{}{FilterKeyName: tnt1.Name}})
+	require.NoError(t, err)
+	assert.Equal(t, *tnt1, *dbTnt1)
+
+	dbTnt2, err := m.GetTenant(ctx, &QueryParams{Filters: map[FilterKey]interface{}{FilterKeyID: tnt2.ID}})
+	require.NoError(t, err)
+	assert.Equal(t, *tnt2, *dbTnt2)
+
+	dbTnt2, err = m.GetTenant(ctx, &QueryParams{Filters: map[FilterKey]interface{}{FilterKeyName: tnt2.Name}})
+	require.NoError(t, err)
+	assert.Equal(t, *tnt2, *dbTnt2)
 }
 
 func Test_Manager_GetTenantByID(t *testing.T) {
@@ -152,6 +191,13 @@ func Test_Manager_GetTenantByID(t *testing.T) {
 		tntDB, err := m.GetTenantByID(ctx, tnt2.ID)
 		require.NoError(t, err)
 		assert.Equal(t, tnt2, tntDB)
+	})
+
+	t.Run("returns error when tenant is deactivated", func(t *testing.T) {
+		deactivateTenant(t, ctx, m, tnt2)
+		tntDB, err := m.GetTenantByID(ctx, tnt2.ID)
+		assert.ErrorIs(t, err, ErrTenantDoesNotExist)
+		assert.Nil(t, tntDB)
 	})
 
 	t.Run("returns error when tenant is not found", func(t *testing.T) {
@@ -181,6 +227,13 @@ func Test_Manager_GetTenantByName(t *testing.T) {
 		tntDB, err := m.GetTenantByName(ctx, "myorg2")
 		require.NoError(t, err)
 		assert.Equal(t, tnt2, tntDB)
+	})
+
+	t.Run("returns error when tenant is deactivated", func(t *testing.T) {
+		deactivateTenant(t, ctx, m, tnt2)
+		tntDB, err := m.GetTenantByName(ctx, tnt2.ID)
+		assert.ErrorIs(t, err, ErrTenantDoesNotExist)
+		assert.Nil(t, tntDB)
 	})
 
 	t.Run("returns error when tenant is not found", func(t *testing.T) {
@@ -218,11 +271,34 @@ func Test_Manager_GetTenantByIDOrName(t *testing.T) {
 		assert.Equal(t, tnt2, tntDB)
 	})
 
+	t.Run("returns error when tenant is deactivated", func(t *testing.T) {
+		deactivateTenant(t, ctx, m, tnt2)
+		tntDB, err := m.GetTenantByIDOrName(ctx, tnt2.ID)
+		assert.ErrorIs(t, err, ErrTenantDoesNotExist)
+		assert.Nil(t, tntDB)
+
+		tntDB, err = m.GetTenantByIDOrName(ctx, tnt2.Name)
+		assert.ErrorIs(t, err, ErrTenantDoesNotExist)
+		assert.Nil(t, tntDB)
+	})
+
 	t.Run("returns error when tenant is not found", func(t *testing.T) {
 		tntDB, err := m.GetTenantByIDOrName(ctx, "unknown")
 		assert.ErrorIs(t, err, ErrTenantDoesNotExist)
 		assert.Nil(t, tntDB)
 	})
+}
+
+func activateTenant(t *testing.T, ctx context.Context, m *Manager, tnt *Tenant) {
+	activatedStatus := ActivatedTenantStatus
+	_, err := m.UpdateTenantConfig(ctx, &TenantUpdate{ID: tnt.ID, Status: &activatedStatus})
+	require.NoError(t, err)
+}
+
+func deactivateTenant(t *testing.T, ctx context.Context, m *Manager, tnt *Tenant) {
+	deactivatedStatus := DeactivatedTenantStatus
+	_, err := m.UpdateTenantConfig(ctx, &TenantUpdate{ID: tnt.ID, Status: &deactivatedStatus})
+	require.NoError(t, err)
 }
 
 func updateTenantIsDefault(t *testing.T, ctx context.Context, dbConnectionPool db.DBConnectionPool, tenantID string, isDefault bool) {
@@ -263,6 +339,16 @@ func Test_Manager_GetDefault(t *testing.T) {
 	})
 
 	updateTenantIsDefault(t, ctx, dbConnectionPool, tnt1.ID, false)
+
+	t.Run("returns error when default tenant is inactive", func(t *testing.T) {
+		deactivateTenant(t, ctx, m, tnt2)
+		defaultTnt, err := m.GetDefault(ctx)
+		assert.EqualError(t, err, ErrTenantDoesNotExist.Error())
+		assert.Nil(t, defaultTnt)
+	})
+
+	updateTenantIsDefault(t, ctx, dbConnectionPool, tnt2.ID, true)
+	activateTenant(t, ctx, m, tnt2)
 
 	t.Run("gets the default tenant successfully", func(t *testing.T) {
 		tntDB, err := m.GetDefault(ctx)
@@ -308,6 +394,22 @@ func Test_Manager_SetDefault(t *testing.T) {
 		tnt1DB, err := m.GetTenantByID(ctx, tnt1.ID)
 		require.NoError(t, err)
 		assert.True(t, tnt1DB.IsDefault)
+	})
+
+	t.Run("returns error when attempting to set deactivated tenant to default", func(t *testing.T) {
+		tnt3, err := m.AddTenant(ctx, "myorg3")
+		require.NoError(t, err)
+		deactivateTenant(t, ctx, m, tnt3)
+
+		tnt, err := m.SetDefault(ctx, dbConnectionPool, tnt3.Name)
+		assert.ErrorIs(t, err, ErrTenantDoesNotExist)
+		assert.Nil(t, tnt)
+
+		tnt3DB, err := m.GetTenant(ctx, &QueryParams{
+			Filters: map[FilterKey]interface{}{FilterKeyID: tnt3.ID},
+		})
+		require.NoError(t, err)
+		assert.False(t, tnt3DB.IsDefault)
 	})
 
 	t.Run("updates default tenant", func(t *testing.T) {

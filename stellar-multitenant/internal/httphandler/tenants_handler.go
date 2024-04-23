@@ -11,15 +11,18 @@ import (
 	"github.com/stellar/go/support/render/httpjson"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/internal/provisioning"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/internal/validators"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 type TenantsHandler struct {
 	Manager               *tenant.Manager
+	Models                *data.Models
 	ProvisioningManager   *provisioning.Manager
 	NetworkType           utils.NetworkType
 	AdminDBConnectionPool db.DBConnectionPool
@@ -29,7 +32,7 @@ type TenantsHandler struct {
 func (t TenantsHandler) GetAll(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	tnts, err := t.Manager.GetAllTenants(ctx)
+	tnts, err := t.Manager.GetAllTenants(ctx, &tenant.QueryParams{})
 	if err != nil {
 		httperror.InternalError(ctx, "Cannot get tenants", err, nil).Render(w)
 		return
@@ -118,6 +121,21 @@ func (t TenantsHandler) Patch(w http.ResponseWriter, r *http.Request) {
 	}
 
 	tenantID := chi.URLParam(r, "id")
+
+	// factor out to own method
+	if reqBody.Status != nil {
+		err := services.ValidateStatus(ctx, t.Manager, t.Models, tenantID, *reqBody.Status)
+		if err != nil {
+			if errors.Is(err, services.ErrCannotRetrieveTenantByID) {
+				httperror.InternalError(ctx, services.ErrCannotRetrieveTenantByID.Error(), err, nil).Render(w)
+			} else if errors.Is(err, services.ErrCannotRetrievePayments) {
+				httperror.InternalError(ctx, services.ErrCannotRetrievePayments.Error(), err, nil).Render(w)
+			} else {
+				httperror.BadRequest(err.Error(), nil, nil).Render(w)
+			}
+			return
+		}
+	}
 
 	tnt, err := t.Manager.UpdateTenantConfig(ctx, &tenant.TenantUpdate{
 		ID:           tenantID,

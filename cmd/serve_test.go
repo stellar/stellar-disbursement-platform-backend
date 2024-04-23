@@ -206,6 +206,7 @@ func Test_serve(t *testing.T) {
 		Environment:                             "test",
 		EmailMessengerClient:                    messengerClient,
 		AdminDBConnectionPool:                   dbConnectionPool,
+		MTNDBConnectionPool:                     dbConnectionPool,
 		GitCommit:                               "1234567890abcdef",
 		NetworkPassphrase:                       network.TestNetworkPassphrase,
 		Port:                                    8003,

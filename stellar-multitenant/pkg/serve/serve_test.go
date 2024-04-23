@@ -33,7 +33,7 @@ func (m *mockHTTPServer) Run(conf supporthttp.Config) {
 var _ HTTPServerInterface = new(mockHTTPServer)
 
 func Test_Serve(t *testing.T) {
-	dbt := dbtest.OpenWithoutMigrations(t)
+	dbt := dbtest.Open(t)
 	defer dbt.Close()
 
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
@@ -54,6 +54,7 @@ func Test_Serve(t *testing.T) {
 
 	opts := ServeOptions{
 		AdminDBConnectionPool: dbConnectionPool,
+		MTNDBConnectionPool:   dbConnectionPool,
 		Environment:           "test",
 		GitCommit:             "1234567890abcdef",
 		NetworkPassphrase:     network.TestNetworkPassphrase,
