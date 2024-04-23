@@ -277,6 +277,14 @@ anchorPlatform:
     sepPort: "8080"
     platformPort: "8085"
 
+  ## @extra anchorPlatform.image Configuration related to the Docker image used by the Anchor Platform service.
+  ## @param anchorPlatform.image.repository Docker image repository for the Anchor Platform service.
+  ## @param anchorPlatform.image.pullPolicy Image pull policy for the Anchor Platform service.
+  ## @param anchorPlatform.image.tag Docker image tag for the Anchor Platform service.
+  image:
+    repository: stellar/anchor-platform
+    pullPolicy: IfNotPresent
+    tag: "2.6.2"
 
   ## @extra anchorPlatform.deployment Configuration related to the deployment of the Anchor Platform.
   ## @param anchorPlatform.deployment.annotations Annotations to be added to the deployment.
