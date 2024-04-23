@@ -1,5 +1,6 @@
 #!/bin/bash
-# This script is used to locally start the integration between SDP and AnchorPlatform for the SEP-24 deposit flow, needed for registering users.
+# This script is used to migrate the database from the single-tenant structure to the multi-tenant structure.
+# ATTENTION: make sure to update the variables below before running this script. Refer to the sections marked with 👋.
 set -eu
 
 # Check if curl is installed
@@ -9,6 +10,7 @@ then
     exit 1
 fi
 
+# 👋 Remember to update the variables below before running this script.
 singleTenantDBURL="postgres://localhost:5432/sdp-116?sslmode=disable"
 multiTenantDBURL="postgres://localhost:5432/sdp-116-mtn?sslmode=disable"
 multiTenantDBName="sdp-116-mtn"
@@ -49,6 +51,8 @@ perform_step $((stepCounter++)) "running tss and admin migrations" "go run main.
 
 read -p "🚨 ATTENTION: for the next step, you'll need the admin server to be up and running under http://localhost:8003. Make sure to run 'go run main.go serve', and then hit Enter to continue"
 
+
+# 👋 Remember to update the variables below before running this script.
 tenant="bluecorp"
 create_tenant() {
     ADMIN_ACCOUNT="SDP-admin"
