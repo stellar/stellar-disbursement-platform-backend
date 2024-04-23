@@ -2,7 +2,6 @@ package provisioning
 
 import (
 	"context"
-	"embed"
 	"errors"
 	"fmt"
 
@@ -10,8 +9,7 @@ import (
 	"github.com/stellar/go/support/log"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
-	authmigrations "github.com/stellar/stellar-disbursement-platform-backend/db/migrations/auth-migrations"
-	sdpmigrations "github.com/stellar/stellar-disbursement-platform-backend/db/migrations/sdp-migrations"
+	"github.com/stellar/stellar-disbursement-platform-backend/db/migrations"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
@@ -279,13 +277,13 @@ func (m *Manager) createSchemaAndRunMigrations(ctx context.Context, name string)
 
 	// Applying migrations
 	log.Ctx(ctx).Infof("applying SDP migrations on the tenant %s schema", name)
-	runTntMigrationsErr := m.runMigrationsForTenant(ctx, u, migrate.Up, 0, sdpmigrations.FS, db.StellarPerTenantSDPMigrationsTableName)
+	runTntMigrationsErr := m.runMigrationsForTenant(ctx, u, migrate.Up, 0, migrations.SDPMigrationRouter)
 	if runTntMigrationsErr != nil {
 		return "", fmt.Errorf("applying SDP migrations: %w", runTntMigrationsErr)
 	}
 
 	log.Ctx(ctx).Infof("applying stellar-auth migrations on the tenant %s schema", name)
-	runTntAuthMigrationsErr := m.runMigrationsForTenant(ctx, u, migrate.Up, 0, authmigrations.FS, db.StellarPerTenantAuthMigrationsTableName)
+	runTntAuthMigrationsErr := m.runMigrationsForTenant(ctx, u, migrate.Up, 0, migrations.AuthMigrationRouter)
 	if runTntAuthMigrationsErr != nil {
 		return "", fmt.Errorf("applying stellar-auth migrations: %w", runTntAuthMigrationsErr)
 	}
@@ -310,9 +308,9 @@ func (m *Manager) deleteDistributionAccountKey(ctx context.Context, t *tenant.Te
 func (m *Manager) runMigrationsForTenant(
 	ctx context.Context, dbURL string,
 	dir migrate.MigrationDirection, count int,
-	migrationFiles embed.FS, migrationTableName db.MigrationTableName,
+	migrationRouter migrations.MigrationRouter,
 ) error {
-	n, err := db.Migrate(dbURL, dir, count, migrationFiles, migrationTableName)
+	n, err := db.Migrate(dbURL, dir, count, migrationRouter)
 	if err != nil {
 		return fmt.Errorf("applying SDP migrations: %w", err)
 	}

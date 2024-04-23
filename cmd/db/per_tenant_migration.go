@@ -2,7 +2,6 @@ package db
 
 import (
 	"context"
-	"embed"
 	"fmt"
 
 	migrate "github.com/rubenv/sql-migrate"
@@ -10,6 +9,7 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/cmd/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/db/migrations"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
@@ -21,8 +21,7 @@ func executeMigrationsPerTenant(
 	opts utils.TenantRoutingOptions,
 	dir migrate.MigrationDirection,
 	count int,
-	migrationFiles embed.FS,
-	tableName db.MigrationTableName,
+	migrationRouter migrations.MigrationRouter,
 ) error {
 	if err := opts.ValidateFlags(); err != nil {
 		log.Ctx(ctx).Fatal(err.Error())
@@ -43,7 +42,7 @@ func executeMigrationsPerTenant(
 
 	for tenantID, dsn := range tenantIDToDNSMap {
 		log.Ctx(ctx).Infof("Applying migrations on tenant ID %s", tenantID)
-		err = ExecuteMigrations(ctx, dsn, dir, count, migrationFiles, tableName)
+		err = ExecuteMigrations(ctx, dsn, dir, count, migrationRouter)
 		if err != nil {
 			return fmt.Errorf("migrating database %s: %w", migrationDirectionStr(dir), err)
 		}
