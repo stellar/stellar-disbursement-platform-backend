@@ -32,8 +32,8 @@ type ReceiverRegistrationRequest struct {
 	VerificationType  VerificationField `json:"verification_type"`
 	ReCAPTCHAToken    string            `json:"recaptcha_token"`
 	ExternalID        string            `json:"external_id"`
-	CustomerID        string            `json:"customer_id"`   //customer identifier
-	MobileNumberHash  string            `json:"mobile_number"` //hashed mobile number
+	CustomerID        string            `json:"customer_id"`   // customer identifier
+	MobileNumberHash  string            `json:"mobile_number"` // hashed mobile number
 }
 
 type ReceiverStats struct {

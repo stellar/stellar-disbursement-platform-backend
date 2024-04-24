@@ -32,7 +32,7 @@ type SendReceiverWalletInviteService struct {
 	maxInvitationSMSResendAttempts int64
 	sep10SigningPrivateKey         string
 	crashTrackerClient             crashtracker.CrashTrackerClient
-	UseExternalID                  bool
+	useExternalID                  bool
 }
 
 var _ SendReceiverWalletInviteServiceInterface = new(SendReceiverWalletInviteService)
@@ -123,8 +123,8 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context, receive
 			TenantBaseURL:    *currentTenant.BaseURL,
 		}
 
-		// Only set ExternalID if UseExternalID config is true
-		if s.UseExternalID {
+		// Only set ExternalID if useExternalID config is true
+		if s.useExternalID {
 			wdl.ExternalID = rwa.ReceiverWallet.Receiver.ExternalID
 		}
 
@@ -297,7 +297,7 @@ func NewSendReceiverWalletInviteService(models *data.Models, messengerClient mes
 		maxInvitationSMSResendAttempts: maxInvitationSMSResendAttempts,
 		sep10SigningPrivateKey:         sep10SigningPrivateKey,
 		crashTrackerClient:             crashTrackerClient,
-		UseExternalID:                  UseExternalID,
+		useExternalID:                  useExternalID,
 	}
 
 	if err := s.validate(); err != nil {
