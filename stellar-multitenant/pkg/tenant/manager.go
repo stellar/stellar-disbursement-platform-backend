@@ -209,7 +209,7 @@ func (m *Manager) DeleteTenantByName(ctx context.Context, name string) error {
 }
 
 func (m *Manager) SoftDeleteTenantByID(ctx context.Context, tenantID string) error {
-	var updateQuery = `
+	updateQuery := `
 		UPDATE tenants t
 		SET
 			%s
@@ -226,8 +226,6 @@ func (m *Manager) SoftDeleteTenantByID(ctx context.Context, tenantID string) err
 	var t Tenant
 	query, params := m.newManagerQuery(q, queryParams)
 	query += " RETURNING *"
-	fmt.Println(query)
-	fmt.Println(params)
 	err := m.db.GetContext(ctx, &t, query, params...)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -260,15 +258,6 @@ func (m *Manager) DropTenantSchema(ctx context.Context, tenantName string) error
 }
 
 func (m *Manager) UpdateTenantConfig(ctx context.Context, tu *TenantUpdate) (*Tenant, error) {
-	var updateQuery = `
-		UPDATE tenants
-		SET
-			%s
-		WHERE
-			id = ?
-		RETURNING *
-	`
-
 	if tu == nil {
 		return nil, fmt.Errorf("tenant update cannot be nil")
 	}
@@ -276,6 +265,15 @@ func (m *Manager) UpdateTenantConfig(ctx context.Context, tu *TenantUpdate) (*Te
 	if err := tu.Validate(); err != nil {
 		return nil, err
 	}
+
+	q := `
+		UPDATE tenants
+		SET
+			%s
+		WHERE
+			id = ?
+		RETURNING *
+	`
 
 	fields := make([]string, 0)
 	args := make([]interface{}, 0)
@@ -303,7 +301,7 @@ func (m *Manager) UpdateTenantConfig(ctx context.Context, tu *TenantUpdate) (*Te
 	}
 
 	args = append(args, tu.ID)
-	q := fmt.Sprintf(updateQuery, strings.Join(fields, ",\n"))
+	q = fmt.Sprintf(q, strings.Join(fields, ",\n"))
 	q = m.db.Rebind(q)
 
 	var t Tenant

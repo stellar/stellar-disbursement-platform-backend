@@ -25,11 +25,11 @@ func NewQueryBuilder(query string) *QueryBuilder {
 // If the value is nil or empty, the condition is not added
 // The condition should be a string with a placeholder for the value e.g. "name = ?", "id > ?"
 func (qb *QueryBuilder) AddCondition(condition string, value ...interface{}) *QueryBuilder {
-	if len(value) > 0 {
+	if len(value) >= 0 {
 		qb.whereClause = fmt.Sprintf("%s %s", qb.whereClause, "AND "+condition)
-		qb.whereParams = append(qb.whereParams, value...)
-	} else if len(value) == 0 {
-		qb.whereClause = fmt.Sprintf("%s %s", qb.whereClause, "AND "+condition)
+		if len(value) > 0 {
+			qb.whereParams = append(qb.whereParams, value...)
+		}
 	}
 	return qb
 }

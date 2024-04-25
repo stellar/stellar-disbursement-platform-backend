@@ -31,6 +31,18 @@ func Test_QueryBuilder(t *testing.T) {
 		assert.Equal(t, []interface{}{"id", "mock@email.com", "+9999999"}, params)
 	})
 
+	t.Run("Test AddCondition empty value", func(t *testing.T) {
+		qb := NewQueryBuilder("SELECT * FROM receivers")
+
+		qb.AddCondition("email is NULL")
+		actual, params := qb.Build()
+
+		expectedQuery := "SELECT * FROM receivers WHERE 1=1 AND email is NULL"
+
+		assert.Equal(t, expectedQuery, actual)
+		assert.Equal(t, []interface{}{}, params)
+	})
+
 	t.Run("Test AddSorting", func(t *testing.T) {
 		qb := NewQueryBuilder("SELECT * FROM disbursements d")
 
