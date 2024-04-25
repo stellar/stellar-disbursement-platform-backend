@@ -125,7 +125,8 @@ func runSuccessfulRequestPatchTest(t *testing.T, r *chi.Mux, ctx context.Context
 			"name": "aid-org",
 			%s
 			"created_at": %q,
-			"updated_at": %q
+			"updated_at": %q,
+			"deleted_at": null
 		}
 	`, tnt.ID, expectedRespBody, tnt.CreatedAt.Format(time.RFC3339Nano), tntDB.UpdatedAt.Format(time.RFC3339Nano))
 
@@ -200,7 +201,8 @@ func Test_TenantHandler_Get(t *testing.T) {
 					"distribution_account": %q,
 					"is_default": false,
 					"created_at": %q,
-					"updated_at": %q
+					"updated_at": %q,
+					"deleted_at": null
 				},
 				{
 					"id": %q,
@@ -211,7 +213,8 @@ func Test_TenantHandler_Get(t *testing.T) {
 					"distribution_account": %q,
 					"is_default": false,
 					"created_at": %q,
-					"updated_at": %q
+					"updated_at": %q,
+					"deleted_at": null
 				},
 				{
 					"id": %q,
@@ -222,7 +225,8 @@ func Test_TenantHandler_Get(t *testing.T) {
 					"distribution_account": %q,
 					"is_default": false,
 					"created_at": %q,
-					"updated_at": %q
+					"updated_at": %q,
+					"deleted_at": null
 				}
 			]
 		`,
@@ -257,7 +261,8 @@ func Test_TenantHandler_Get(t *testing.T) {
 				"distribution_account": %q,
 				"is_default": false,
 				"created_at": %q,
-				"updated_at": %q
+				"updated_at": %q,
+				"deleted_at": null
 			}
 		`, tnt1.ID, tnt1.Name, *tnt1.DistributionAccount, tnt1.CreatedAt.Format(time.RFC3339Nano), tnt1.UpdatedAt.Format(time.RFC3339Nano))
 		assert.JSONEq(t, expectedRespBody, string(respBody))
@@ -288,7 +293,8 @@ func Test_TenantHandler_Get(t *testing.T) {
 				"distribution_account": %q,
 				"is_default": false,
 				"created_at": %q,
-				"updated_at": %q
+				"updated_at": %q,
+				"deleted_at": null
 			}
 		`, tnt2.ID, tnt2.Name, *tnt2.DistributionAccount, tnt2.CreatedAt.Format(time.RFC3339Nano), tnt2.UpdatedAt.Format(time.RFC3339Nano))
 		assert.JSONEq(t, expectedRespBody, string(respBody))
@@ -446,7 +452,8 @@ func Test_TenantHandler_Post(t *testing.T) {
 				"distribution_account": %q,
 				"is_default": false,
 				"created_at": %q,
-				"updated_at": %q
+				"updated_at": %q,
+				"deleted_at": null
 			}
 		`, tnt.ID, distAcc, tnt.CreatedAt.Format(time.RFC3339Nano), tnt.UpdatedAt.Format(time.RFC3339Nano))
 		assert.JSONEq(t, expectedRespBody, string(respBody))

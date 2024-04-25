@@ -21,12 +21,23 @@ func NewQueryBuilder(query string) *QueryBuilder {
 	}
 }
 
-// AddCondition adds a condition to the query
-// If the value is nil or empty, the condition is not added
+// AddCondition adds a AND condition to the query
 // The condition should be a string with a placeholder for the value e.g. "name = ?", "id > ?"
 func (qb *QueryBuilder) AddCondition(condition string, value ...interface{}) *QueryBuilder {
 	if len(value) >= 0 {
 		qb.whereClause = fmt.Sprintf("%s %s", qb.whereClause, "AND "+condition)
+		if len(value) > 0 {
+			qb.whereParams = append(qb.whereParams, value...)
+		}
+	}
+	return qb
+}
+
+// TODO: combine AddCondition and AddOrCondition into one function with a parameter for the condition type
+// AddOrCondition adds an OR condition to the query
+func (qb *QueryBuilder) AddOrCondition(condition string, value ...interface{}) *QueryBuilder {
+	if len(value) >= 0 {
+		qb.whereClause = fmt.Sprintf("%s %s", qb.whereClause, "OR "+condition)
 		if len(value) > 0 {
 			qb.whereParams = append(qb.whereParams, value...)
 		}

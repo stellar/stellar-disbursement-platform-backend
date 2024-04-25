@@ -175,7 +175,7 @@ func (t TenantsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		httperror.InternalError(ctx, "Cannot get tenant by ID or name", err, nil).Render(w)
+		httperror.InternalError(ctx, "Cannot get tenant by ID", err, nil).Render(w)
 		return
 	}
 
@@ -186,7 +186,8 @@ func (t TenantsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 	err = t.Manager.SoftDeleteTenantByID(ctx, tenantID)
 	if err != nil {
-		httperror.InternalError(ctx, fmt.Sprintf("Cannot delete tenant %s", tenantID), err, nil).Render(w)
+		errMsg := fmt.Sprintf("Cannot delete tenant %s", tenantID)
+		httperror.InternalError(ctx, errMsg, err, nil).Render(w)
 		return
 	}
 }
