@@ -454,6 +454,43 @@ func Test_Manager_DeleteTenantByName(t *testing.T) {
 	})
 }
 
+func Test_Manager_SoftDeleteTenantByID(t *testing.T) {
+	dbt := dbtest.OpenWithAdminMigrationsOnly(t)
+	defer dbt.Close()
+
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+
+	m := NewManager(WithDatabase(dbConnectionPool))
+	tnt, err := m.AddTenant(ctx, "myorg1")
+	require.NoError(t, err)
+
+	t.Run("returns error when tenant does not exist", func(t *testing.T) {
+		err := m.SoftDeleteTenantByID(ctx, "invalid-tnt")
+		require.Error(t, err)
+		assert.ErrorIs(t, err, ErrTenantDoesNotExist)
+	})
+
+	t.Run("returns error when tenant is not deactivated", func(t *testing.T) {
+		err := m.SoftDeleteTenantByID(ctx, tnt.ID)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, ErrTenantDoesNotExist)
+	})
+
+	t.Run("successfully soft deletes tenant", func(t *testing.T) {
+		deactivateTenant(t, ctx, m, tnt)
+		err := m.SoftDeleteTenantByID(ctx, tnt.ID)
+		require.NoError(t, err)
+
+		dbTnt, err := m.GetTenant(ctx, &QueryParams{Filters: map[FilterKey]interface{}{FilterKeyID: tnt.ID}})
+		require.NoError(t, err)
+		assert.NotNil(t, dbTnt.DeletedAt)
+	})
+}
+
 func Test_Manager_DropTenantSchema(t *testing.T) {
 	dbt := dbtest.OpenWithAdminMigrationsOnly(t)
 	defer dbt.Close()

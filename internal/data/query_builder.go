@@ -28,6 +28,8 @@ func (qb *QueryBuilder) AddCondition(condition string, value ...interface{}) *Qu
 	if len(value) > 0 {
 		qb.whereClause = fmt.Sprintf("%s %s", qb.whereClause, "AND "+condition)
 		qb.whereParams = append(qb.whereParams, value...)
+	} else if len(value) == 0 {
+		qb.whereClause = fmt.Sprintf("%s %s", qb.whereClause, "AND "+condition)
 	}
 	return qb
 }

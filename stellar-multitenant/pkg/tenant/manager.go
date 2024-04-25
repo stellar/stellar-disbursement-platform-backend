@@ -41,6 +41,7 @@ type ManagerInterface interface {
 	CreateTenantSchema(ctx context.Context, tenantName string) error
 	DropTenantSchema(ctx context.Context, tenantName string) error
 	UpdateTenantConfig(ctx context.Context, tu *TenantUpdate) (*Tenant, error)
+	SoftDeleteTenantByID(ctx context.Context, tenantID string) error
 }
 
 type Manager struct {
@@ -65,7 +66,7 @@ func (m *Manager) GetDSNForTenantByID(ctx context.Context, id string) (string, e
 	return m.GetDSNForTenant(ctx, t.Name)
 }
 
-var selectQuery string = `
+var selectQuery = `
 	SELECT 
 		*
 	FROM
@@ -76,9 +77,7 @@ var selectQuery string = `
 func (m *Manager) GetAllTenants(ctx context.Context, queryParams *QueryParams) ([]Tenant, error) {
 	if queryParams == nil {
 		queryParams = &QueryParams{
-			Filters: map[FilterKey]interface{}{
-				FilterKeyOutStatus: DeactivatedTenantStatus,
-			},
+			Filters:   ExcludeInactiveTenantFilters(),
 			SortBy:    data.SortFieldName,
 			SortOrder: data.SortOrderASC,
 		}
@@ -109,22 +108,18 @@ func (m *Manager) GetTenant(ctx context.Context, queryParams *QueryParams) (*Ten
 
 func (m *Manager) GetTenantByID(ctx context.Context, id string) (*Tenant, error) {
 	queryParams := &QueryParams{
-		Filters: map[FilterKey]interface{}{
-			FilterKeyID:        id,
-			FilterKeyOutStatus: DeactivatedTenantStatus,
-		},
+		Filters: ExcludeInactiveTenantFilters(),
 	}
+	queryParams.Filters[FilterKeyID] = id
 
 	return m.GetTenant(ctx, queryParams)
 }
 
 func (m *Manager) GetTenantByName(ctx context.Context, name string) (*Tenant, error) {
 	queryParams := &QueryParams{
-		Filters: map[FilterKey]interface{}{
-			FilterKeyName:      name,
-			FilterKeyOutStatus: DeactivatedTenantStatus,
-		},
+		Filters: ExcludeInactiveTenantFilters(),
 	}
+	queryParams.Filters[FilterKeyName] = name
 
 	return m.GetTenant(ctx, queryParams)
 }
@@ -132,11 +127,9 @@ func (m *Manager) GetTenantByName(ctx context.Context, name string) (*Tenant, er
 // GetTenantByIDOrName returns the tenant with a given id or name.
 func (m *Manager) GetTenantByIDOrName(ctx context.Context, arg string) (*Tenant, error) {
 	queryParams := &QueryParams{
-		Filters: map[FilterKey]interface{}{
-			FilterKeyNameOrID:  arg,
-			FilterKeyOutStatus: DeactivatedTenantStatus,
-		},
+		Filters: ExcludeInactiveTenantFilters(),
 	}
+	queryParams.Filters[FilterKeyNameOrID] = arg
 
 	return m.GetTenant(ctx, queryParams)
 }
@@ -144,11 +137,9 @@ func (m *Manager) GetTenantByIDOrName(ctx context.Context, arg string) (*Tenant,
 // GetDefault returns the tenant where is_default is true. Returns an error if more than one tenant is set as default.
 func (m *Manager) GetDefault(ctx context.Context) (*Tenant, error) {
 	queryParams := &QueryParams{
-		Filters: map[FilterKey]interface{}{
-			FilterKeyIsDefault: true,
-			FilterKeyOutStatus: DeactivatedTenantStatus,
-		},
+		Filters: ExcludeInactiveTenantFilters(),
 	}
+	queryParams.Filters[FilterKeyIsDefault] = true
 
 	tnts := []Tenant{}
 	query, params := m.newManagerQuery(selectQuery, queryParams)
@@ -217,6 +208,37 @@ func (m *Manager) DeleteTenantByName(ctx context.Context, name string) error {
 	return nil
 }
 
+func (m *Manager) SoftDeleteTenantByID(ctx context.Context, tenantID string) error {
+	var updateQuery = `
+		UPDATE tenants t
+		SET
+			%s
+	`
+
+	q := fmt.Sprintf(updateQuery, "deleted_at = NOW()")
+	queryParams := &QueryParams{
+		Filters: map[FilterKey]interface{}{
+			FilterKeyStatus: DeactivatedTenantStatus,
+		},
+	}
+	queryParams.Filters[FilterKeyID] = tenantID
+
+	var t Tenant
+	query, params := m.newManagerQuery(q, queryParams)
+	query += " RETURNING *"
+	fmt.Println(query)
+	fmt.Println(params)
+	err := m.db.GetContext(ctx, &t, query, params...)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrTenantDoesNotExist
+		}
+		return fmt.Errorf("soft deleting tenant %s: %w", tenantID, err)
+	}
+
+	return nil
+}
+
 func (m *Manager) CreateTenantSchema(ctx context.Context, tenantName string) error {
 	schemaName := fmt.Sprintf("sdp_%s", tenantName)
 	_, err := m.db.ExecContext(ctx, fmt.Sprintf("CREATE SCHEMA %s", pq.QuoteIdentifier(schemaName)))
@@ -238,15 +260,7 @@ func (m *Manager) DropTenantSchema(ctx context.Context, tenantName string) error
 }
 
 func (m *Manager) UpdateTenantConfig(ctx context.Context, tu *TenantUpdate) (*Tenant, error) {
-	if tu == nil {
-		return nil, fmt.Errorf("tenant update cannot be nil")
-	}
-
-	if err := tu.Validate(); err != nil {
-		return nil, err
-	}
-
-	q := `
+	var updateQuery = `
 		UPDATE tenants
 		SET
 			%s
@@ -254,6 +268,14 @@ func (m *Manager) UpdateTenantConfig(ctx context.Context, tu *TenantUpdate) (*Te
 			id = ?
 		RETURNING *
 	`
+
+	if tu == nil {
+		return nil, fmt.Errorf("tenant update cannot be nil")
+	}
+
+	if err := tu.Validate(); err != nil {
+		return nil, err
+	}
 
 	fields := make([]string, 0)
 	args := make([]interface{}, 0)
@@ -281,7 +303,7 @@ func (m *Manager) UpdateTenantConfig(ctx context.Context, tu *TenantUpdate) (*Te
 	}
 
 	args = append(args, tu.ID)
-	q = fmt.Sprintf(q, strings.Join(fields, ",\n"))
+	q := fmt.Sprintf(updateQuery, strings.Join(fields, ",\n"))
 	q = m.db.Rebind(q)
 
 	var t Tenant
@@ -326,12 +348,22 @@ func (m *Manager) newManagerQuery(baseQuery string, queryParams *QueryParams) (s
 		qb.AddCondition("t.is_default = ?", queryParams.Filters[FilterKeyIsDefault])
 	}
 
-	if queryParams.Filters[FilterKeyOutStatus] != nil {
+	if queryParams.Filters[FilterKeyStatus] != nil {
+		if statusSlice, ok := queryParams.Filters[FilterKeyStatus].([]TenantStatus); ok && len(statusSlice) > 0 {
+			qb.AddCondition("t.status = ANY(?)", pq.Array(statusSlice))
+		} else {
+			qb.AddCondition("t.status = ?", queryParams.Filters[FilterKeyStatus])
+		}
+	} else if queryParams.Filters[FilterKeyOutStatus] != nil {
 		if statusSlice, ok := queryParams.Filters[FilterKeyOutStatus].([]TenantStatus); ok && len(statusSlice) > 0 {
 			qb.AddCondition("NOT (t.status = ANY(?))", pq.Array(statusSlice))
 		} else {
 			qb.AddCondition("t.status != ?", queryParams.Filters[FilterKeyOutStatus])
 		}
+	}
+
+	if queryParams.Filters[FilterKeyOutDeleted] != nil && queryParams.Filters[FilterKeyOutDeleted] == true {
+		qb.AddCondition("t.deleted_at IS NULL")
 	}
 
 	if queryParams.SortBy != "" && queryParams.SortOrder != "" {

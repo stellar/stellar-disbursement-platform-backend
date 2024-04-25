@@ -138,6 +138,7 @@ func handleHTTP(opts *ServeOptions) *chi.Mux {
 			r.Get("/", tenantsHandler.GetAll)
 			r.Post("/", tenantsHandler.Post)
 			r.Get("/{arg}", tenantsHandler.GetByIDOrName)
+			r.Delete("/{id}", tenantsHandler.Delete)
 			r.Patch("/{id}", tenantsHandler.Patch)
 			r.Post("/default-tenant", tenantsHandler.SetDefault)
 		})

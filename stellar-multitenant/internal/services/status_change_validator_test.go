@@ -52,6 +52,18 @@ func Test_ValidateStatus(t *testing.T) {
 			expectedErr: fmt.Errorf("%w: %w", ErrCannotRetrieveTenantByID, errors.New("foobar")),
 		},
 		{
+			name: "cannot deactivate a default tenant",
+			mockTntManagerFn: func(tntManagerMock *tenant.TenantManagerMock) {
+				tntManagerMock.On("GetTenant", ctx, &tenant.QueryParams{
+					Filters: map[tenant.FilterKey]interface{}{
+						tenant.FilterKeyID: tntID,
+					},
+				}).Return(&tenant.Tenant{ID: tntID, Status: tenant.ActivatedTenantStatus, IsDefault: true}, nil).Once()
+			},
+			reqStatus:   tenant.DeactivatedTenantStatus,
+			expectedErr: ErrCannotDeactivateDefaultTenant,
+		},
+		{
 			name: "number of active payments is not 0",
 			mockTntManagerFn: func(tntManagerMock *tenant.TenantManagerMock) {
 				tntManagerMock.On("GetTenant", ctx, &tenant.QueryParams{

@@ -21,7 +21,7 @@ import (
 )
 
 type TenantsHandler struct {
-	Manager               *tenant.Manager
+	Manager               tenant.ManagerInterface
 	Models                *data.Models
 	ProvisioningManager   *provisioning.Manager
 	NetworkType           utils.NetworkType
@@ -160,6 +160,35 @@ func (t TenantsHandler) Patch(w http.ResponseWriter, r *http.Request) {
 	}
 
 	httpjson.RenderStatus(w, http.StatusOK, tnt, httpjson.JSON)
+}
+
+func (t TenantsHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	tenantID := chi.URLParam(r, "id")
+
+	tnt, err := t.Manager.GetTenantByID(ctx, tenantID)
+	if err != nil {
+		if errors.Is(tenant.ErrTenantDoesNotExist, err) {
+			errorMsg := fmt.Sprintf("tenant %s does not exist", tenantID)
+			httperror.NotFound(errorMsg, err, nil).Render(w)
+			return
+		}
+
+		httperror.InternalError(ctx, "Cannot get tenant by ID or name", err, nil).Render(w)
+		return
+	}
+
+	if tnt.Status != tenant.DeactivatedTenantStatus {
+		httperror.BadRequest("Tenant must be deactivated to be eligible for deletion", nil, nil).Render(w)
+		return
+	}
+
+	err = t.Manager.SoftDeleteTenantByID(ctx, tenantID)
+	if err != nil {
+		httperror.InternalError(ctx, fmt.Sprintf("Cannot delete tenant %s", tenantID), err, nil).Render(w)
+		return
+	}
 }
 
 func (t TenantsHandler) SetDefault(rw http.ResponseWriter, req *http.Request) {

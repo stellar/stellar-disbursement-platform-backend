@@ -2,6 +2,7 @@ package httphandler
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -838,7 +839,6 @@ func Test_TenantHandler_SetDefault(t *testing.T) {
 		http.HandlerFunc(handler.SetDefault).ServeHTTP(r, req)
 
 		resp := r.Result()
-		require.NoError(t, err)
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 
 		tnt1DB, err := tenantManager.GetTenantByID(ctx, tnt1.ID)
@@ -848,5 +848,93 @@ func Test_TenantHandler_SetDefault(t *testing.T) {
 		tnt2DB, err := tenantManager.GetTenantByID(ctx, tnt2.ID)
 		require.NoError(t, err)
 		assert.False(t, tnt2DB.IsDefault)
+	})
+}
+
+func Test_TenantHandler_Delete(t *testing.T) {
+	dbt := dbtest.OpenWithAdminMigrationsOnly(t)
+	defer dbt.Close()
+
+	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, outerErr)
+	defer dbConnectionPool.Close()
+
+	//ctx := context.Background()
+	tenantManagerMock := tenant.TenantManagerMock{}
+
+	handler := TenantsHandler{
+		Manager:     &tenantManagerMock,
+		NetworkType: utils.TestnetNetworkType,
+	}
+
+	r := chi.NewRouter()
+	r.Delete("/tenants/{id}", handler.Delete)
+	tntID := "tntID"
+
+	t.Run("tenant does not exist", func(t *testing.T) {
+		tenantManagerMock.On("GetTenantByID", mock.Anything, tntID).Return(nil, tenant.ErrTenantDoesNotExist).Once()
+
+		rr := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodDelete, fmt.Sprintf("/tenants/%s", tntID), strings.NewReader(`{}`))
+		r.ServeHTTP(rr, req)
+
+		resp := rr.Result()
+		assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+
+		tenantManagerMock.AssertExpectations(t)
+	})
+
+	t.Run("failed to retrieve tenant", func(t *testing.T) {
+		tenantManagerMock.On("GetTenantByID", mock.Anything, tntID).Return(nil, errors.New("foobar")).Once()
+
+		rr := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodDelete, fmt.Sprintf("/tenants/%s", tntID), strings.NewReader(`{}`))
+		r.ServeHTTP(rr, req)
+
+		resp := rr.Result()
+		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+
+		tenantManagerMock.AssertExpectations(t)
+	})
+
+	t.Run("tenant is not deactivated", func(t *testing.T) {
+		tenantManagerMock.On("GetTenantByID", mock.Anything, tntID).Return(&tenant.Tenant{ID: tntID, Status: tenant.CreatedTenantStatus}, nil).Once()
+
+		rr := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodDelete, fmt.Sprintf("/tenants/%s", tntID), strings.NewReader(`{}`))
+		r.ServeHTTP(rr, req)
+
+		resp := rr.Result()
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+
+		tenantManagerMock.AssertExpectations(t)
+	})
+
+	t.Run("failed to soft delete tenant", func(t *testing.T) {
+		tenantManagerMock.On("GetTenantByID", mock.Anything, tntID).Return(&tenant.Tenant{ID: tntID, Status: tenant.DeactivatedTenantStatus}, nil).Once()
+		tenantManagerMock.On("SoftDeleteTenantByID", mock.Anything, tntID).Return(errors.New("foobar")).Once()
+
+		rr := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodDelete, fmt.Sprintf("/tenants/%s", tntID), strings.NewReader(`{}`))
+		r.ServeHTTP(rr, req)
+
+		resp := rr.Result()
+		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+
+		tenantManagerMock.AssertExpectations(t)
+	})
+
+	t.Run("soft deletes tenant", func(t *testing.T) {
+		tenantManagerMock.On("GetTenantByID", mock.Anything, tntID).Return(&tenant.Tenant{ID: tntID, Status: tenant.DeactivatedTenantStatus}, nil).Once()
+		tenantManagerMock.On("SoftDeleteTenantByID", mock.Anything, tntID).Return(nil).Once()
+
+		rr := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodDelete, fmt.Sprintf("/tenants/%s", tntID), strings.NewReader(`{}`))
+		r.ServeHTTP(rr, req)
+
+		resp := rr.Result()
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+		tenantManagerMock.AssertExpectations(t)
 	})
 }
