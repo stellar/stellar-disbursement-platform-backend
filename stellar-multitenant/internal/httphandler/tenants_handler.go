@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/stellar/go/clients/horizonclient"
@@ -194,9 +195,18 @@ func (t TenantsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if distAcc.Balances != nil && len(distAcc.Balances) > 0 {
-			httperror.BadRequest("Tenant distribution account must have a zero balance to be eligible for deletion", nil, nil).Render(w)
-			return
+		if distAcc.Balances != nil {
+			for _, b := range distAcc.Balances {
+				assetBalance, getAssetBalErr := strconv.ParseFloat(b.Balance, 64)
+				if getAssetBalErr != nil {
+					httperror.InternalError(ctx, fmt.Sprintf("Cannot convert Horizon distribution account balance %s into float", b.Balance), getAssetBalErr, nil).Render(w)
+				}
+
+				if assetBalance != 0 {
+					httperror.BadRequest("Tenant distribution account must have a zero balance to be eligible for deletion", nil, nil).Render(w)
+					return
+				}
+			}
 		}
 	}
 

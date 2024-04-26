@@ -11,12 +11,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stellar/go/protocols/horizon"
-
 	"github.com/go-chi/chi/v5"
 	"github.com/sirupsen/logrus"
 	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/keypair"
+	"github.com/stellar/go/protocols/horizon"
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/txnbuild"
 	"github.com/stretchr/testify/assert"
@@ -933,6 +932,23 @@ func Test_TenantHandler_Delete(t *testing.T) {
 					Once()
 			},
 			expectedStatus: http.StatusInternalServerError,
+		},
+		{
+			name: "tenant distribution account still has valid balance",
+			id:   tntID,
+			mockTntManagerFn: func(tntManagerMock *tenant.TenantManagerMock, _ *horizonclient.MockClient) {
+				tntManagerMock.On("GetTenantByID", mock.Anything, tntID).
+					Return(&tenant.Tenant{ID: tntID, Status: tenant.DeactivatedTenantStatus, DistributionAccount: &tntDistributionAcc}, nil).
+					Once()
+				distAccResolver.On("HostDistributionAccount").Return("host-dist-account").Once()
+				horizonClientMock.On("AccountDetail", horizonclient.AccountRequest{AccountID: tntDistributionAcc}).
+					Return(horizon.Account{
+						Balances: []horizon.Balance{
+							{Balance: "100.0000000"},
+						},
+					}, nil).Once()
+			},
+			expectedStatus: http.StatusBadRequest,
 		},
 		{
 			name: "failed to soft delete tenant",
