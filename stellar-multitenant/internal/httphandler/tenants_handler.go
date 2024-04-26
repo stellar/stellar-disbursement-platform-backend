@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/support/http/httpdecode"
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/support/render/httpjson"
@@ -13,6 +14,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/internal/provisioning"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/internal/services"
@@ -21,12 +23,14 @@ import (
 )
 
 type TenantsHandler struct {
-	Manager               tenant.ManagerInterface
-	Models                *data.Models
-	ProvisioningManager   *provisioning.Manager
-	NetworkType           utils.NetworkType
-	AdminDBConnectionPool db.DBConnectionPool
-	SingleTenantMode      bool
+	Manager                     tenant.ManagerInterface
+	Models                      *data.Models
+	HorizonClient               horizonclient.ClientInterface
+	DistributionAccountResolver signing.DistributionAccountResolver
+	ProvisioningManager         *provisioning.Manager
+	NetworkType                 utils.NetworkType
+	AdminDBConnectionPool       db.DBConnectionPool
+	SingleTenantMode            bool
 }
 
 func (t TenantsHandler) GetAll(w http.ResponseWriter, r *http.Request) {
@@ -164,7 +168,6 @@ func (t TenantsHandler) Patch(w http.ResponseWriter, r *http.Request) {
 
 func (t TenantsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-
 	tenantID := chi.URLParam(r, "id")
 
 	tnt, err := t.Manager.GetTenantByID(ctx, tenantID)
@@ -182,6 +185,19 @@ func (t TenantsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	if tnt.Status != tenant.DeactivatedTenantStatus {
 		httperror.BadRequest("Tenant must be deactivated to be eligible for deletion", nil, nil).Render(w)
 		return
+	}
+
+	if tnt.DistributionAccount != nil && t.DistributionAccountResolver.HostDistributionAccount() != *tnt.DistributionAccount {
+		distAcc, accDetailsErr := t.HorizonClient.AccountDetail(horizonclient.AccountRequest{AccountID: *tnt.DistributionAccount})
+		if accDetailsErr != nil {
+			httperror.InternalError(ctx, "Cannot get distribution account details for tenant", err, nil).Render(w)
+			return
+		}
+
+		if distAcc.Balances != nil && len(distAcc.Balances) > 0 {
+			httperror.BadRequest("Tenant distribution account must have a zero balance to be eligible for deletion", nil, nil).Render(w)
+			return
+		}
 	}
 
 	err = t.Manager.SoftDeleteTenantByID(ctx, tenantID)

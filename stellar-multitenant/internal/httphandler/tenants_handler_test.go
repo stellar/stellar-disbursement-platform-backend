@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stellar/go/protocols/horizon"
+
 	"github.com/go-chi/chi/v5"
 	"github.com/sirupsen/logrus"
 	"github.com/stellar/go/clients/horizonclient"
@@ -867,26 +869,31 @@ func Test_TenantHandler_Delete(t *testing.T) {
 	defer dbConnectionPool.Close()
 
 	tenantManagerMock := tenant.TenantManagerMock{}
+	horizonClientMock := horizonclient.MockClient{}
+	_, _, _, _, distAccResolver := signing.NewMockSignatureService(t)
 
 	handler := TenantsHandler{
-		Manager:     &tenantManagerMock,
-		NetworkType: utils.TestnetNetworkType,
+		Manager:                     &tenantManagerMock,
+		NetworkType:                 utils.TestnetNetworkType,
+		HorizonClient:               &horizonClientMock,
+		DistributionAccountResolver: distAccResolver,
 	}
 
 	r := chi.NewRouter()
 	r.Delete("/tenants/{id}", handler.Delete)
 	tntID := "tntID"
+	tntDistributionAcc := keypair.MustRandom().Address()
 
 	testCases := []struct {
 		name             string
 		id               string
-		mockTntManagerFn func(tntManagerMock *tenant.TenantManagerMock)
+		mockTntManagerFn func(tntManagerMock *tenant.TenantManagerMock, horizonClientMock *horizonclient.MockClient)
 		expectedStatus   int
 	}{
 		{
 			name: "tenant does not exist",
-			id:   "tntID",
-			mockTntManagerFn: func(tntManagerMock *tenant.TenantManagerMock) {
+			id:   tntID,
+			mockTntManagerFn: func(tntManagerMock *tenant.TenantManagerMock, _ *horizonclient.MockClient) {
 				tntManagerMock.On("GetTenantByID", mock.Anything, tntID).
 					Return(nil, tenant.ErrTenantDoesNotExist).
 					Once()
@@ -895,8 +902,8 @@ func Test_TenantHandler_Delete(t *testing.T) {
 		},
 		{
 			name: "failed to retrieve tenant",
-			id:   "tntID",
-			mockTntManagerFn: func(tntManagerMock *tenant.TenantManagerMock) {
+			id:   tntID,
+			mockTntManagerFn: func(tntManagerMock *tenant.TenantManagerMock, _ *horizonclient.MockClient) {
 				tntManagerMock.On("GetTenantByID", mock.Anything, tntID).
 					Return(nil, errors.New("foobar")).
 					Once()
@@ -905,8 +912,8 @@ func Test_TenantHandler_Delete(t *testing.T) {
 		},
 		{
 			name: "tenant is not deactivated",
-			id:   "tntID",
-			mockTntManagerFn: func(tntManagerMock *tenant.TenantManagerMock) {
+			id:   tntID,
+			mockTntManagerFn: func(tntManagerMock *tenant.TenantManagerMock, _ *horizonclient.MockClient) {
 				tntManagerMock.On("GetTenantByID", mock.Anything, tntID).
 					Return(&tenant.Tenant{ID: tntID, Status: tenant.CreatedTenantStatus}, nil).
 					Once()
@@ -914,11 +921,29 @@ func Test_TenantHandler_Delete(t *testing.T) {
 			expectedStatus: http.StatusBadRequest,
 		},
 		{
-			name: "failed to soft delete tenant",
-			id:   "tntID",
-			mockTntManagerFn: func(tntManagerMock *tenant.TenantManagerMock) {
+			name: "failed to get Horizon account details for tenant distribution account",
+			id:   tntID,
+			mockTntManagerFn: func(tntManagerMock *tenant.TenantManagerMock, _ *horizonclient.MockClient) {
 				tntManagerMock.On("GetTenantByID", mock.Anything, tntID).
-					Return(&tenant.Tenant{ID: tntID, Status: tenant.DeactivatedTenantStatus}, nil).
+					Return(&tenant.Tenant{ID: tntID, Status: tenant.DeactivatedTenantStatus, DistributionAccount: &tntDistributionAcc}, nil).
+					Once()
+				distAccResolver.On("HostDistributionAccount").Return("host-dist-account").Once()
+				horizonClientMock.On("AccountDetail", horizonclient.AccountRequest{AccountID: tntDistributionAcc}).
+					Return(horizon.Account{}, errors.New("foobar")).
+					Once()
+			},
+			expectedStatus: http.StatusInternalServerError,
+		},
+		{
+			name: "failed to soft delete tenant",
+			id:   tntID,
+			mockTntManagerFn: func(tntManagerMock *tenant.TenantManagerMock, horizonClientMock *horizonclient.MockClient) {
+				tntManagerMock.On("GetTenantByID", mock.Anything, tntID).
+					Return(&tenant.Tenant{ID: tntID, Status: tenant.DeactivatedTenantStatus, DistributionAccount: &tntDistributionAcc}, nil).
+					Once()
+				distAccResolver.On("HostDistributionAccount").Return("host-dist-account").Once()
+				horizonClientMock.On("AccountDetail", horizonclient.AccountRequest{AccountID: tntDistributionAcc}).
+					Return(horizon.Account{Balances: make([]horizon.Balance, 0)}, nil).
 					Once()
 				tntManagerMock.On("SoftDeleteTenantByID", mock.Anything, tntID).
 					Return(errors.New("foobar")).
@@ -927,11 +952,29 @@ func Test_TenantHandler_Delete(t *testing.T) {
 			expectedStatus: http.StatusInternalServerError,
 		},
 		{
-			name: "soft deletes tenant",
-			id:   "tntID",
-			mockTntManagerFn: func(tntManagerMock *tenant.TenantManagerMock) {
+			name: "soft deletes tenant: host and tenant distribution accounts are the same",
+			id:   tntID,
+			mockTntManagerFn: func(tntManagerMock *tenant.TenantManagerMock, horizonClientMock *horizonclient.MockClient) {
 				tntManagerMock.On("GetTenantByID", mock.Anything, tntID).
-					Return(&tenant.Tenant{ID: tntID, Status: tenant.DeactivatedTenantStatus}, nil).
+					Return(&tenant.Tenant{ID: tntID, Status: tenant.DeactivatedTenantStatus, DistributionAccount: &tntDistributionAcc}, nil).
+					Once()
+				distAccResolver.On("HostDistributionAccount").Return(tntDistributionAcc).Once()
+				tntManagerMock.On("SoftDeleteTenantByID", mock.Anything, tntID).
+					Return(nil).
+					Once()
+			},
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name: "soft deletes tenant: host and tenant distribution accounts are different",
+			id:   tntID,
+			mockTntManagerFn: func(tntManagerMock *tenant.TenantManagerMock, horizonClientMock *horizonclient.MockClient) {
+				tntManagerMock.On("GetTenantByID", mock.Anything, tntID).
+					Return(&tenant.Tenant{ID: tntID, Status: tenant.DeactivatedTenantStatus, DistributionAccount: &tntDistributionAcc}, nil).
+					Once()
+				distAccResolver.On("HostDistributionAccount").Return("host-dist-account").Once()
+				horizonClientMock.On("AccountDetail", horizonclient.AccountRequest{AccountID: tntDistributionAcc}).
+					Return(horizon.Account{Balances: make([]horizon.Balance, 0)}, nil).
 					Once()
 				tntManagerMock.On("SoftDeleteTenantByID", mock.Anything, tntID).
 					Return(nil).
@@ -943,7 +986,7 @@ func Test_TenantHandler_Delete(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			tc.mockTntManagerFn(&tenantManagerMock)
+			tc.mockTntManagerFn(&tenantManagerMock, &horizonClientMock)
 
 			rr := httptest.NewRecorder()
 			req := httptest.NewRequest(http.MethodDelete, fmt.Sprintf("/tenants/%s", tc.id), strings.NewReader(`{}`))
@@ -953,6 +996,7 @@ func Test_TenantHandler_Delete(t *testing.T) {
 			assert.Equal(t, tc.expectedStatus, resp.StatusCode)
 
 			tenantManagerMock.AssertExpectations(t)
+			horizonClientMock.AssertExpectations(t)
 		})
 	}
 }

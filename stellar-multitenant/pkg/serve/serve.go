@@ -134,6 +134,7 @@ func handleHTTP(opts *ServeOptions) *chi.Mux {
 				AdminDBConnectionPool: opts.AdminDBConnectionPool,
 				SingleTenantMode:      opts.SingleTenantMode,
 				Models:                opts.Models,
+				HorizonClient:         opts.SubmitterEngine.HorizonClient,
 			}
 			r.Get("/", tenantsHandler.GetAll)
 			r.Post("/", tenantsHandler.Post)
