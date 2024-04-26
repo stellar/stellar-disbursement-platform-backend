@@ -12,7 +12,7 @@ import (
 
 	"github.com/lib/pq"
 	"github.com/stellar/go/support/log"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
 )
 
 type Disbursement struct {
@@ -415,6 +415,7 @@ func (d *DisbursementModel) UpdateStatus(ctx context.Context, sqlExec db.SQLExec
 // newDisbursementQuery generates the full query and parameters for a disbursement search query
 func (d *DisbursementModel) newDisbursementQuery(baseQuery string, queryParams *QueryParams, paginated bool) (string, []interface{}) {
 	qb := NewQueryBuilder(baseQuery)
+
 	if queryParams.Query != "" {
 		qb.AddCondition("d.name ILIKE ?", "%"+queryParams.Query+"%")
 	}

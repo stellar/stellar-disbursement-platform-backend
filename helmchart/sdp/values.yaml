@@ -63,6 +63,20 @@ global:
   ##   - postgres://postgres:postgres@{{ include "sdp.fullname" . }}-psql:5433/postgres-ap?sslmode=disable
   ephemeralDatabase: true
 
+  ## @extra global.eventBroker Configuration related to the event broker used by the application.
+  ## @param global.eventBroker.type The type of event broker to be used. Options: "NONE", "KAFKA". Default: "KAFKA".
+  ## @param global.eventBroker.urls A comma-separated list of broker URLs for the event broker.
+  ## @param global.eventBroker.consumerGroupId The consumer group ID for the event broker.
+  eventBroker:
+    type: "KAFKA"
+    urls: #required
+    consumerGroupId: #required
+
+    ## @extra global.eventBroker.kafka Configuration related to the Kafka event broker.
+    ## @param global.eventBroker.kafka.securityProtocol The security protocol to be used for the Kafka broker. Options: "PLAINTEXT", "SASL_SSL", "SASL_PLAINTEXT", "SSL".
+    kafka:
+      securityProtocol: #required
+
 # =========================== START sdp ===========================
 ## @section Stellar Disbursement Platform (SDP) parameters
 ## @descriptionStart
@@ -75,13 +89,17 @@ sdp:
   ## @extra sdp.route Configuration related to the routing of the SDP service.
   ## @param sdp.route.schema Protocol scheme used for the service. Can be "http" or "https".
   ## @param sdp.route.domain Public domain/address of the SDP service. If using localhost, consider including the port as part of the domain.
+  ## @param sdp.route.mtnDomain Public domain/address of the multi-tenant SDP service. This is a wild-card domain used for multi-tenant setups e.g. "*.sdp.localhost.com".
   ## @param sdp.route.port Primary port on which the SDP service listens.
   ## @param sdp.route.metricsPort Port dedicated to metrics collection for the SDP service.
+  ## @param sdp.route.adminPort Port dedicated to serve the SDP admin endpoints, used to manage new or existing tenants.
   route:
     schema: "https"
-    domain: sdp.localhost.com
+    domain: #required
+    mtnDomain: #required
     port: "8000"
     metricsPort: "8002"
+    adminPort: "8003"
 
   ## @extra sdp.image Configuration related to the Docker image used by the SDP service.
   ## @param sdp.image.repository Docker image repository for the SDP backend service.
@@ -120,7 +138,7 @@ sdp:
   ## @param sdp.configMap.data.ENVIRONMENT Specifies the environment SDP is running in (e.g. "localhost").
   ## @param sdp.configMap.data.LOG_LEVEL Determines the verbosity level of logs. Options: "TRACE", "DEBUG", "INFO", "WARN", "ERROR", "FATAL", "PANIC"
   ## @param sdp.configMap.data.SEP10_SIGNING_PUBLIC_KEY Anchor platform SEP10 signing public key.
-  ## @param sdp.configMap.data.DISTRIBUTION_PUBLIC_KEY The public key of the Stellar distribution account that sends the Stellar payments.
+  ## @param sdp.configMap.data.DISTRIBUTION_PUBLIC_KEY The public key of the HOST's Stellar distribution account, used to create channel accounts.
   ## @param sdp.configMap.data.METRICS_TYPE Defines the type of metrics system in use. Options: "PROMETHEUS".
   ## @param sdp.configMap.data.EMAIL_SENDER_TYPE The messenger type used to send invitations to new dashboard users. Options: "DRY_RUN", "AWS_EMAIL".
   ## @param sdp.configMap.data.SMS_SENDER_TYPE The messenger type used to send text messages to recipients. Options: "DRY_RUN", "TWILIO_SMS".
@@ -129,13 +147,19 @@ sdp:
   ## @param sdp.configMap.data.DISABLE_RECAPTCHA Determines if ReCaptcha should be disabled for login ("true" or "false").
   ## @param sdp.configMap.data.DISABLE_MFA Determines if email-based MFA should be disabled during login ("true" or "false").
   ## @param sdp.configMap.data.SDP_UI_BASE_URL The base URL of the SDP UI/dashboard.
+  ## @param sdp.configMap.data.INSTANCE_NAME The name of the SDP instance. Example: "SDP Testnet".
+  ## @param sdp.configMap.data.ENABLE_SCHEDULER Whether the scheduled jobs are enabled in this instance ("true" or "false"). Default "false".
+  ## @param sdp.configMap.data.SCHEDULER_PAYMENT_JOB_SECONDS The interval in seconds for the payment job that syncs payments between the SDP and the TSS.
+  ## @param sdp.configMap.data.SCHEDULER_RECEIVER_INVITATION_JOB_SECONDS The interval in seconds for the receiver invitation job that sends invitations to new receivers. 0 or negative values disable the job.
+  ## @param sdp.configMap.data.MAX_INVITATION_SMS_RESEND_ATTEMPTS The maximum number of times an invitation SMS can be resent. 0 or negative values disable the job.
+  ## @param sdp.configMap.data.TENANT_XLM_BOOTSTRAP_AMOUNT The amount of XLM to be sent to a newly created tenant distribution account.
   configMap:
     annotations:
     data:
       BASE_URL: "http://localhost:8000"
       CRASH_TRACKER_TYPE: "DRY_RUN"
       EC256_PUBLIC_KEY: #required
-      ENVIRONMENT: "localhost"
+      ENVIRONMENT: "dev"
       LOG_LEVEL: "INFO"
       SEP10_SIGNING_PUBLIC_KEY: #required
       DISTRIBUTION_PUBLIC_KEY: #required
@@ -144,9 +168,15 @@ sdp:
       SMS_SENDER_TYPE: DRY_RUN
       RECAPTCHA_SITE_KEY: #required
       CORS_ALLOWED_ORIGINS: "*"
+      SDP_UI_BASE_URL: #required
       DISABLE_RECAPTCHA: "false"
       DISABLE_MFA: "false"
-      SDP_UI_BASE_URL: #required
+      INSTANCE_NAME: #required
+      ENABLE_SCHEDULER: "false"
+      SCHEDULER_PAYMENT_JOB_SECONDS: "3600"
+      SCHEDULER_RECEIVER_INVITATION_JOB_SECONDS: "3600"
+      MAX_INVITATION_SMS_RESEND_ATTEMPTS: "3"
+      TENANT_XLM_BOOTSTRAP_AMOUNT: "5"
 
   ## @extra sdp.kubeSecrets Kubernetes secrets are used to manage sensitive information, such as API keys and private keys. It's crucial that these details are kept private.
   ## @param sdp.kubeSecrets.secretName The name of the Kubernetes secret object. Only use this if create is false.
@@ -166,8 +196,17 @@ sdp:
   ## @param sdp.kubeSecrets.data.RECAPTCHA_SITE_SECRET_KEY Secret key for Google reCAPTCHA service to verify user's non-robotic behavior.
   ## @param sdp.kubeSecrets.data.ANCHOR_PLATFORM_OUTGOING_JWT_SECRET The JWT secret used to create a JWT token used to send requests to the anchor platform.
   ## @param sdp.kubeSecrets.data.DATABASE_URL URL of the database used by the SDP.
-  ## @param sdp.kubeSecrets.data.DISTRIBUTION_SEED The private key of the Stellar account used to disburse funds. This is needed for the init container
+  ## @param sdp.kubeSecrets.data.DISTRIBUTION_SEED The private key of the Stellar account used to disburse funds. This is needed for the init container.
+  ## @param sdp.kubeSecrets.data.CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE The private key used to encrypt the channel accounts secrets in the database.
+  ## @param sdp.kubeSecrets.data.DISTRIBUTION_SIGNER_TYPE The type of the signature client used for distribution accounts.
+  ## @param sdp.kubeSecrets.data.DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE The private key used to encrypt the distribution accounts secrets in the database, mandatory when DISTRIBUTION_SIGNER_TYPE is set to DISTRIBUTION_ACCOUNT_DB.
   ## @param sdp.kubeSecrets.data.SENTRY_DSN The DSN for the Sentry service. it must be set if CRASH_TRACKER_TYPE is set to "SENTRY".
+  ## @param sdp.kubeSecrets.data.KAFKA_SASL_USERNAME The username for SASL authentication to the Kafka broker. Required if KAFKA_SECURITY_PROTOCOL is set to "SASL_SSL" or "SASL_PLAINTEXT".
+  ## @param sdp.kubeSecrets.data.KAFKA_SASL_PASSWORD The password for SASL authentication to the Kafka broker. Required if KAFKA_SECURITY_PROTOCOL is set to "SASL_SSL" or "SASL_PLAINTEXT".
+  ## @param sdp.kubeSecrets.data.KAFKA_SSL_ACCESS_KEY Access key (keystore) in PEM format. Required if KAFKA_SECURITY_PROTOCOL is set to "SSL".
+  ## @param sdp.kubeSecrets.data.KAFKA_SSL_ACCESS_CERTIFICATE Certificate in PEM format that matches with the Kafka Access Key. Required if KAFKA_SECURITY_PROTOCOL is set to "SSL".
+  ## @param sdp.kubeSecrets.data.ADMIN_ACCOUNT The ID of the admin account. To use, add to the request header as 'Authorization', formatted as Base64-encoded 'ADMIN_ACCOUNT:ADMIN_API_KEY'.",
+  ## @param sdp.kubeSecrets.data.ADMIN_API_KEY The API key for the admin account. To use, add to the request header as 'Authorization', formatted as Base64-encoded 'ADMIN_ACCOUNT:ADMIN_API_KEY'.",
   kubeSecrets:
     secretName: "sdp-backend-secret-name"
     create: false
@@ -189,6 +228,15 @@ sdp:
       ANCHOR_PLATFORM_OUTGOING_JWT_SECRET: #required for mySdpToAnchorPlatformSecret
       DATABASE_URL: #required
       DISTRIBUTION_SEED: #required
+      DISTRIBUTION_SIGNER_TYPE: #optional
+      DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE: #required when DISTRIBUTION_SIGNER_TYPE=DISTRIBUTION_ACCOUNT_DB
+      CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE: #required
+      KAFKA_SASL_USERNAME: #optional, depends on value of KAFKA_SECURITY_PROTOCOL
+      KAFKA_SASL_PASSWORD: #optional, depends on value of KAFKA_SECURITY_PROTOCOL
+      KAFKA_SSL_ACCESS_KEY: #optional, depends on value of KAFKA_SECURITY_PROTOCOL
+      KAFKA_SSL_ACCESS_CERTIFICATE: #optional, depends on value of KAFKA_SECURITY_PROTOCOL
+      ADMIN_ACCOUNT: #required
+      ADMIN_API_KEY: #required
 
 
   ## @extra sdp.ingress Configuration for the ingress controller for the SDP service.
@@ -229,6 +277,14 @@ anchorPlatform:
     sepPort: "8080"
     platformPort: "8085"
 
+  ## @extra anchorPlatform.image Configuration related to the Docker image used by the Anchor Platform service.
+  ## @param anchorPlatform.image.repository Docker image repository for the Anchor Platform service.
+  ## @param anchorPlatform.image.pullPolicy Image pull policy for the Anchor Platform service.
+  ## @param anchorPlatform.image.tag Docker image tag for the Anchor Platform service.
+  image:
+    repository: stellar/anchor-platform
+    pullPolicy: IfNotPresent
+    tag: "2.6.2"
 
   ## @extra anchorPlatform.deployment Configuration related to the deployment of the Anchor Platform.
   ## @param anchorPlatform.deployment.annotations Annotations to be added to the deployment.
@@ -363,6 +419,10 @@ anchorPlatform:
 ##  This service is designed to maximize payment throughput, handle queuing, and graceful resubmission/error handling
 ## @descriptionEnd
 tss:
+
+  ## @param tss.enabled If true, the tss will be deployed.
+  enabled: true
+
   ## @extra tss.route Configuration related to the routing of the TSS.
   ## @param tss.route.schema Protocol scheme used for the service. Can be "http" or "https".
   ## @param tss.route.port Primary port on which the TSS listens.
@@ -398,6 +458,7 @@ tss:
   ## @param tss.configMap.annotations Annotations to be added to the ConfigMap.
   ## @extra tss.configMap.data Used to inject non-sensitive environment variables into the TSS deployment; for the latest variables, consult the application's CLI `-h` command.
   ## @param tss.configMap.data.CRASH_TRACKER_TYPE Determines the type of crash tracker in use. Options: "DRY_RUN", "SENTRY".
+  ## @param tss.configMap.data.DISTRIBUTION_PUBLIC_KEY The public key of the HOST's Stellar distribution account, used to create channel accounts.
   ## @param tss.configMap.data.NUM_CHANNEL_ACCOUNTS The number of channel accounts the TSS will create/use. Channel accounts provide a method for submitting transactions to the network at a high rate.
   ## @param tss.configMap.data.MAX_BASE_FEE Specifies the maximum base fee (in stroops) the TSS is willing to pay per transaction. This helps to control costs and ensures transactions are economically feasible.
   ## @param tss.configMap.data.TSS_METRICS_TYPE Defines the type of metrics system that the TSS should use. Options: "TSS_PROMETHEUS".
@@ -408,6 +469,7 @@ tss:
     annotations:
     data:
       CRASH_TRACKER_TYPE: "DRY_RUN"
+      DISTRIBUTION_PUBLIC_KEY: #required
       NUM_CHANNEL_ACCOUNTS: "1"
       MAX_BASE_FEE: "100000"
       TSS_METRICS_TYPE: "TSS_PROMETHEUS"
@@ -421,7 +483,14 @@ tss:
   ## @param tss.kubeSecrets.annotations Annotations to be added to the secret.
   ## @param tss.kubeSecrets.data.DATABASE_URL URL of the database used by the TSS.
   ## @param tss.kubeSecrets.data.DISTRIBUTION_SEED The private key of the Stellar account used to disburse funds.
+  ## @param tss.kubeSecrets.data.CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE The private key used to encrypt the channel accounts secrets in the database.
+  ## @param tss.kubeSecrets.data.DISTRIBUTION_SIGNER_TYPE The type of the signature client used for distribution accounts.
+  ## @param tss.kubeSecrets.data.DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE The private key used to encrypt the distribution accounts secrets in the database, mandatory when DISTRIBUTION_SIGNER_TYPE is set to DISTRIBUTION_ACCOUNT_DB.
   ## @param tss.kubeSecrets.data.SENTRY_DSN The DSN for the Sentry service. it must be set if CRASH_TRACKER_TYPE is set to "SENTRY".
+  ## @param tss.kubeSecrets.data.KAFKA_SASL_USERNAME The username for SASL authentication to the Kafka broker. Required if KAFKA_SECURITY_PROTOCOL is set to "SASL_SSL" or "SASL_PLAINTEXT".
+  ## @param tss.kubeSecrets.data.KAFKA_SASL_PASSWORD The password for SASL authentication to the Kafka broker. Required if KAFKA_SECURITY_PROTOCOL is set to "SASL_SSL" or "SASL_PLAINTEXT".
+  ## @param tss.kubeSecrets.data.KAFKA_SSL_ACCESS_KEY Access key (keystore) in PEM format. Required if KAFKA_SECURITY_PROTOCOL is set to "SSL".
+  ## @param tss.kubeSecrets.data.KAFKA_SSL_ACCESS_CERTIFICATE Certificate in PEM format that matches with the Kafka Access Key. Required if KAFKA_SECURITY_PROTOCOL is set to "SSL".
   kubeSecrets:
     secretName: "tss-secret-name"
     create: false
@@ -429,7 +498,15 @@ tss:
     data:
       DATABASE_URL: #required
       DISTRIBUTION_SEED: #required
+      CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE: #required
+      DISTRIBUTION_SIGNER_TYPE: #optional
+      DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE: #required when DISTRIBUTION_SIGNER_TYPE=DISTRIBUTION_ACCOUNT_DB
       SENTRY_DSN: #optional
+      KAFKA_SASL_USERNAME: #optional, depends on value of KAFKA_SECURITY_PROTOCOL
+      KAFKA_SASL_PASSWORD: #optional, depends on value of KAFKA_SECURITY_PROTOCOL
+      KAFKA_SSL_ACCESS_KEY: #optional, depends on value of KAFKA_SECURITY_PROTOCOL
+      KAFKA_SSL_ACCESS_CERTIFICATE: #optional, depends on value of KAFKA_SECURITY_PROTOCOL
+
 
 
 
@@ -446,10 +523,12 @@ dashboard:
   ## @extra dashboard.route Configuration related to the routing of the Dashboard.
   ## @param dashboard.route.schema Protocol scheme used for the service. Can be "http" or "https".
   ## @param dashboard.route.domain Public domain/address of the Dashboard.
+  ## @param dashboard.route.mtnDomain Public domain/address of the multi-tenant Dashboard. This is a wild-card domain used for multi-tenant setups e.g. "*.sdp-dashboard.localhost.com".
   ## @param dashboard.route.port Primary port on which the Dashboard listens.
   route:
     schema: "https"
-    domain: "sdp-dashboard.localhost.com"
+    domain: #required
+    mtnDomain: #required
     port: "80"
 
   ## @extra dashboard.image Configuration related to the Docker image used by the Dashboard.
@@ -499,6 +578,5 @@ dashboard:
       - hosts:
           - '{{ include "dashboard.domain" . }}'
         secretName: dashboard-tls-cert-name    # You need to create this secret manually. For more instructions, please refer to helmchart/docs/README.md
-
 
 

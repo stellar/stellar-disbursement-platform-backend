@@ -25,6 +25,7 @@ func Test_StartChallengeTransaction(t *testing.T) {
 
 	ap := AnchorPlatformIntegrationTests{
 		HttpClient:               &httpClientMock,
+		TenantName:               "mock_tenant",
 		AnchorPlatformBaseSepURL: "http://mock_anchor.com/",
 		ReceiverAccountPublicKey: receiverAccountID,
 		Sep10SigningPublicKey:    serverPublicKey,
@@ -103,12 +104,12 @@ func Test_StartChallengeTransaction(t *testing.T) {
 		httpClientMock.AssertExpectations(t)
 	})
 
-	t.Run("succesfully creating challenge transaction on anchor platform", func(t *testing.T) {
+	t.Run("successfully creating challenge transaction on anchor platform", func(t *testing.T) {
 		mockCT, err := txnbuild.BuildChallengeTx(
 			serverPrivateKey,
 			receiverAccountID,
 			"localhost:8080",
-			"localhost:8080",
+			fmt.Sprintf(mtnHomeDomainFormat, ap.TenantName),
 			"Test SDF Network ; September 2015",
 			time.Second*300,
 			nil,

@@ -10,72 +10,52 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/stellar/go/keypair"
-	"github.com/stellar/go/txnbuild"
+	"github.com/stellar/go/network"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/cmd/mocks"
+	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/db/dbtest"
-	txSubSvc "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/services"
+	di "github.com/stellar/stellar-disbursement-platform-backend/internal/dependencyinjection"
 )
 
-func Test_ChannelAccountsCommand_Command(t *testing.T) {
-	dbt := dbtest.Open(t)
-
-	caCommand := &ChannelAccountsCommand{}
-
-	root := rootCmd()
-	cmd := caCommand.Command()
-	root.AddCommand(cmd)
-
-	root.SetArgs([]string{
-		"channel-accounts",
-		"verify",
-		"--database-url",
-		dbt.DSN,
-	})
-	err := cmd.Execute()
-	require.NoError(t, err)
-}
-
 func Test_ChannelAccountsCommand_CreateCommand(t *testing.T) {
-	caServiceMock := &txSubSvc.ChannelAccountsServiceMock{}
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+
+	distributionKP := keypair.MustRandom()
+	globalOptions.NetworkPassphrase = network.TestNetworkPassphrase
+
+	rootCmmd := rootCmd()
+	caServiceMock := mocks.NewMockChAccCmdServiceInterface(t)
 	crashTrackerMock := &crashtracker.MockCrashTrackerClient{}
-	caCommand := &ChannelAccountsCommand{
-		Service:            caServiceMock,
-		CrashTrackerClient: crashTrackerMock,
-	}
-
-	parentCmdMock := &cobra.Command{
-		PersistentPreRun: func(cmd *cobra.Command, args []string) {},
-	}
-
-	cmd := caCommand.CreateCommand(&txSubSvc.ChannelAccountServiceOptions{})
-	parentCmdMock.AddCommand(cmd)
-
-	distributionSeed := keypair.MustRandom().Seed()
-
-	parentCmdMock.SetArgs([]string{
-		"create",
-		"--distribution-seed",
-		distributionSeed,
-		"--num-channel-accounts-create",
-		"2",
+	caCommand := (&ChannelAccountsCommand{CrashTrackerClient: crashTrackerMock}).Command(caServiceMock)
+	rootCmmd.AddCommand(caCommand)
+	rootCmmd.SetArgs([]string{
+		"channel-accounts",
+		"create", "2",
+		"--distribution-seed", distributionKP.Seed(),
+		"--distribution-public-key", distributionKP.Address(),
+		"--distribution-signer-type", "DISTRIBUTION_ACCOUNT_ENV",
+		"--channel-account-encryption-passphrase", keypair.MustRandom().Seed(),
+		"--database-url", dbt.DSN,
 	})
 
 	t.Run("exit with status 1 when ChannelAccountsService fails", func(t *testing.T) {
 		if os.Getenv("TEST_FATAL") == "1" {
 			customErr := errors.New("unexpected error")
-			caServiceMock.
-				On("CreateChannelAccountsOnChain", context.Background(), txSubSvc.ChannelAccountServiceOptions{
-					NumChannelAccounts: 2,
-					MaxBaseFee:         txnbuild.MinBaseFee,
-					RootSeed:           distributionSeed,
-				}).
-				Return(customErr)
-			crashTrackerMock.On("LogAndReportErrors", context.Background(), customErr, "Cmd channel-accounts create crash")
+			crashTrackerMock.
+				On("LogAndReportErrors", context.Background(), customErr, "Cmd channel-accounts create crash").
+				Once()
+			defer crashTrackerMock.AssertExpectations(t)
 
-			err := parentCmdMock.Execute()
+			caServiceMock.
+				On("CreateChannelAccounts", context.Background(), mock.Anything, 2).
+				Return(customErr)
+
+			err := rootCmmd.Execute()
 			require.NoError(t, err)
 
 			return
@@ -96,46 +76,52 @@ func Test_ChannelAccountsCommand_CreateCommand(t *testing.T) {
 
 	t.Run("executes the create command successfully", func(t *testing.T) {
 		caServiceMock.
-			On("CreateChannelAccountsOnChain", context.Background(), txSubSvc.ChannelAccountServiceOptions{
-				NumChannelAccounts: 2,
-				MaxBaseFee:         100 * txnbuild.MinBaseFee,
-				RootSeed:           distributionSeed,
-			}).
+			On("CreateChannelAccounts", context.Background(), mock.Anything, 2).
 			Return(nil)
 
-		err := parentCmdMock.Execute()
+		err := rootCmmd.Execute()
 		require.NoError(t, err)
 	})
 
 	caServiceMock.AssertExpectations(t)
-	crashTrackerMock.AssertExpectations(t)
 }
 
 func Test_ChannelAccountsCommand_VerifyCommand(t *testing.T) {
-	caServiceMock := &txSubSvc.ChannelAccountsServiceMock{}
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+
+	distributionKP := keypair.MustRandom()
+	globalOptions.NetworkPassphrase = network.TestNetworkPassphrase
+
+	rootCmmd := rootCmd()
+	caServiceMock := mocks.NewMockChAccCmdServiceInterface(t)
 	crashTrackerMock := &crashtracker.MockCrashTrackerClient{}
-	caCommand := &ChannelAccountsCommand{Service: caServiceMock}
-
-	parentCmdMock := &cobra.Command{
-		PersistentPreRun: func(cmd *cobra.Command, args []string) {},
-	}
-
-	cmd := caCommand.VerifyCommand(&txSubSvc.ChannelAccountServiceOptions{})
-	parentCmdMock.AddCommand(cmd)
-
-	parentCmdMock.SetArgs([]string{
+	caCommand := (&ChannelAccountsCommand{CrashTrackerClient: crashTrackerMock}).Command(caServiceMock)
+	rootCmmd.AddCommand(caCommand)
+	rootCmmd.SetArgs([]string{
+		"channel-accounts",
 		"verify",
+		"--distribution-seed", distributionKP.Seed(),
+		"--distribution-public-key", distributionKP.Address(),
+		"--distribution-signer-type", "DISTRIBUTION_ACCOUNT_ENV",
+		"--channel-account-encryption-passphrase", keypair.MustRandom().Seed(),
+		"--database-url", dbt.DSN,
 	})
 
 	t.Run("exit with status 1 when ChannelAccountsService fails", func(t *testing.T) {
 		if os.Getenv("TEST_FATAL") == "1" {
 			customErr := errors.New("unexpected error")
-			caServiceMock.
-				On("VerifyChannelAccounts", context.Background()).
-				Return(customErr)
-			crashTrackerMock.On("LogAndReportErrors", context.Background(), customErr, "Cmd channel-accounts verify crash")
+			crashTrackerMock.
+				On("LogAndReportErrors", context.Background(), customErr, "Cmd channel-accounts verify crash").
+				Once()
+			defer crashTrackerMock.AssertExpectations(t)
 
-			err := parentCmdMock.Execute()
+			caServiceMock.
+				On("VerifyChannelAccounts", context.Background(), mock.Anything, false).
+				Return(customErr).
+				Once()
+
+			err := rootCmmd.Execute()
 			require.NoError(t, err)
 
 			return
@@ -157,52 +143,52 @@ func Test_ChannelAccountsCommand_VerifyCommand(t *testing.T) {
 
 	t.Run("executes the verify command successfully", func(t *testing.T) {
 		caServiceMock.
-			On("VerifyChannelAccounts", context.Background()).
-			Return(nil)
+			On("VerifyChannelAccounts", context.Background(), mock.Anything, false).
+			Return(nil).
+			Once()
 
-		err := parentCmdMock.Execute()
+		err := rootCmmd.Execute()
 		require.NoError(t, err)
 	})
 
 	caServiceMock.AssertExpectations(t)
-	crashTrackerMock.AssertExpectations(t)
 }
 
 func Test_ChannelAccountsCommand_EnsureCommand(t *testing.T) {
-	caServiceMock := &txSubSvc.ChannelAccountsServiceMock{}
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+
+	distributionKP := keypair.MustRandom()
+	globalOptions.NetworkPassphrase = network.TestNetworkPassphrase
+
+	rootCmmd := rootCmd()
+	caServiceMock := mocks.NewMockChAccCmdServiceInterface(t)
 	crashTrackerMock := &crashtracker.MockCrashTrackerClient{}
-	caCommand := &ChannelAccountsCommand{Service: caServiceMock}
-
-	parentCmdMock := &cobra.Command{
-		PersistentPreRun: func(cmd *cobra.Command, args []string) {},
-	}
-
-	cmd := caCommand.EnsureCommand(&txSubSvc.ChannelAccountServiceOptions{})
-	parentCmdMock.AddCommand(cmd)
-
-	distributionSeed := keypair.MustRandom().Seed()
-
-	parentCmdMock.SetArgs([]string{
-		"ensure",
-		"--distribution-seed",
-		distributionSeed,
-		"--num-channel-accounts-ensure",
-		"2",
+	caCommand := (&ChannelAccountsCommand{CrashTrackerClient: crashTrackerMock}).Command(caServiceMock)
+	rootCmmd.AddCommand(caCommand)
+	rootCmmd.SetArgs([]string{
+		"channel-accounts",
+		"ensure", "2",
+		"--distribution-seed", distributionKP.Seed(),
+		"--distribution-public-key", distributionKP.Address(),
+		"--distribution-signer-type", "DISTRIBUTION_ACCOUNT_ENV",
+		"--channel-account-encryption-passphrase", keypair.MustRandom().Seed(),
+		"--database-url", dbt.DSN,
 	})
 
 	t.Run("exit with status 1 when ChannelAccountsService fails", func(t *testing.T) {
 		if os.Getenv("TEST_FATAL") == "1" {
 			customErr := errors.New("unexpected error")
-			caServiceMock.
-				On("EnsureChannelAccountsCount", context.Background(), txSubSvc.ChannelAccountServiceOptions{
-					MaxBaseFee:         txnbuild.MinBaseFee,
-					NumChannelAccounts: 2,
-					RootSeed:           distributionSeed,
-				}).
-				Return(customErr)
-			crashTrackerMock.On("LogAndReportErrors", context.Background(), customErr, "Cmd channel-accounts ensure crash")
+			crashTrackerMock.
+				On("LogAndReportErrors", context.Background(), customErr, "Cmd channel-accounts create crash").
+				Once()
+			defer crashTrackerMock.AssertExpectations(t)
 
-			err := parentCmdMock.Execute()
+			caServiceMock.
+				On("EnsureChannelAccountsCount", context.Background(), mock.Anything, 2).
+				Return(customErr)
+
+			err := rootCmmd.Execute()
 			require.NoError(t, err)
 
 			return
@@ -212,7 +198,6 @@ func Test_ChannelAccountsCommand_EnsureCommand(t *testing.T) {
 		// Ref: https://go.dev/talks/2014/testing.slide#23
 		cmd := exec.Command(os.Args[0], fmt.Sprintf("-test.run=%s", t.Name()))
 		cmd.Env = append(os.Environ(), "TEST_FATAL=1")
-
 		err := cmd.Run()
 		if exitError, ok := err.(*exec.ExitError); ok {
 			assert.False(t, exitError.Success())
@@ -222,59 +207,57 @@ func Test_ChannelAccountsCommand_EnsureCommand(t *testing.T) {
 		t.Fatalf("process ran with err %v, want exit status 1", err)
 	})
 
-	t.Run("executs the ensure command successfully", func(t *testing.T) {
+	t.Run("executes the create command successfully", func(t *testing.T) {
 		caServiceMock.
-			On("EnsureChannelAccountsCount", context.Background(), txSubSvc.ChannelAccountServiceOptions{
-				MaxBaseFee:         100 * txnbuild.MinBaseFee,
-				NumChannelAccounts: 2,
-				RootSeed:           distributionSeed,
-			}).
+			On("EnsureChannelAccountsCount", context.Background(), mock.Anything, 2).
 			Return(nil)
 
-		err := parentCmdMock.Execute()
+		err := rootCmmd.Execute()
 		require.NoError(t, err)
 	})
 
 	caServiceMock.AssertExpectations(t)
-	crashTrackerMock.AssertExpectations(t)
 }
 
 func Test_ChannelAccountsCommand_DeleteCommand(t *testing.T) {
-	caServiceMock := &txSubSvc.ChannelAccountsServiceMock{}
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+
+	distributionKP := keypair.MustRandom()
+	globalOptions.NetworkPassphrase = network.TestNetworkPassphrase
+
+	rootCmmd := rootCmd()
+	caServiceMock := mocks.NewMockChAccCmdServiceInterface(t)
 	crashTrackerMock := &crashtracker.MockCrashTrackerClient{}
-	caCommand := &ChannelAccountsCommand{Service: caServiceMock}
-
-	parentCmdMock := &cobra.Command{
-		PersistentPreRun: func(cmd *cobra.Command, args []string) {},
-	}
-
-	cmd := caCommand.DeleteCommand(&txSubSvc.ChannelAccountServiceOptions{})
-	parentCmdMock.AddCommand(cmd)
-
-	distributionSeed := keypair.MustRandom().Seed()
+	caCommand := (&ChannelAccountsCommand{CrashTrackerClient: crashTrackerMock}).Command(caServiceMock)
+	rootCmmd.AddCommand(caCommand)
 
 	args := []string{
+		"channel-accounts",
 		"delete",
-		"--distribution-seed",
-		distributionSeed,
-		"--channel-account-id",
-		"acc-id",
+		"--distribution-seed", distributionKP.Seed(),
+		"--distribution-public-key", distributionKP.Address(),
+		"--distribution-signer-type", "DISTRIBUTION_ACCOUNT_ENV",
+		"--channel-account-encryption-passphrase", keypair.MustRandom().Seed(),
+		"--channel-account-id", "acc-id",
+		"--database-url", dbt.DSN,
 	}
 
 	t.Run("exit with status 1 when ChannelAccountsService fails", func(t *testing.T) {
-		parentCmdMock.SetArgs(args)
-		customErr := errors.New("unexpected error")
+		rootCmmd.SetArgs(args)
 		if os.Getenv("TEST_FATAL") == "1" {
-			caServiceMock.
-				On("DeleteChannelAccount", context.Background(), txSubSvc.ChannelAccountServiceOptions{
-					MaxBaseFee:       txnbuild.MinBaseFee,
-					ChannelAccountID: "acc-id",
-					RootSeed:         distributionSeed,
-				}).
-				Return(customErr)
-			crashTrackerMock.On("LogAndReportErrors", context.Background(), customErr, "Cmd channel-accounts delete crash")
+			customErr := errors.New("unexpected error")
+			crashTrackerMock.
+				On("LogAndReportErrors", context.Background(), customErr, "Cmd channel-accounts delete crash").
+				Once()
+			defer crashTrackerMock.AssertExpectations(t)
 
-			err := parentCmdMock.Execute()
+			caServiceMock.
+				On("DeleteChannelAccount", context.Background(), mock.Anything, mock.Anything).
+				Return(customErr).
+				Once()
+
+			err := rootCmmd.Execute()
 			require.NoError(t, err)
 
 			return
@@ -295,23 +278,21 @@ func Test_ChannelAccountsCommand_DeleteCommand(t *testing.T) {
 	})
 
 	t.Run("executes the delete command successfully", func(t *testing.T) {
-		parentCmdMock.SetArgs(args)
+		rootCmmd.SetArgs(args)
 		caServiceMock.
-			On("DeleteChannelAccount", context.Background(), txSubSvc.ChannelAccountServiceOptions{
-				MaxBaseFee:       100 * txnbuild.MinBaseFee,
-				ChannelAccountID: "acc-id",
-				RootSeed:         distributionSeed,
-			}).
-			Return(nil)
+			On("DeleteChannelAccount", context.Background(), mock.Anything, mock.Anything).
+			Return(nil).
+			Once()
 
-		err := parentCmdMock.Execute()
+		err := rootCmmd.Execute()
 		require.NoError(t, err)
 	})
 
 	t.Run("delete command fails when both channel-account-id and delete-all-accounts are set", func(t *testing.T) {
-		parentCmdMock.SetArgs(append(args, "--delete-all-accounts"))
+		rootCmmd.SetArgs(append(args, "--delete-all-accounts"))
+		defer di.ClearInstancesTestHelper(t)
 
-		err := parentCmdMock.Execute()
+		err := rootCmmd.Execute()
 		require.EqualError(
 			t,
 			err,
@@ -320,32 +301,33 @@ func Test_ChannelAccountsCommand_DeleteCommand(t *testing.T) {
 	})
 
 	caServiceMock.AssertExpectations(t)
-	crashTrackerMock.AssertExpectations(t)
 }
 
 func Test_ChannelAccountsCommand_ViewCommand(t *testing.T) {
-	caServiceMock := &txSubSvc.ChannelAccountsServiceMock{}
-	crashTrackerMock := &crashtracker.MockCrashTrackerClient{}
-	caCommand := &ChannelAccountsCommand{Service: caServiceMock}
+	parentCmdMock := &cobra.Command{PersistentPreRun: func(cmd *cobra.Command, args []string) {}}
+	parentCmdMock.SetArgs([]string{"view"})
 
-	parentCmdMock := &cobra.Command{
-		PersistentPreRun: func(cmd *cobra.Command, args []string) {},
-	}
-
-	cmd := caCommand.ViewCommand()
+	caServiceMock := mocks.NewMockChAccCmdServiceInterface(t)
+	caCommand := &ChannelAccountsCommand{}
+	cmd := caCommand.ViewCommand(caServiceMock)
 	parentCmdMock.AddCommand(cmd)
-
-	parentCmdMock.SetArgs([]string{
-		"view",
-	})
 
 	t.Run("exit with status 1 when ChannelAccountsService fails", func(t *testing.T) {
 		if os.Getenv("TEST_FATAL") == "1" {
 			customErr := errors.New("unexpected error")
+
+			crashTrackerMock := &crashtracker.MockCrashTrackerClient{}
+			caCommand.CrashTrackerClient = crashTrackerMock
+			crashTrackerMock.
+				On("LogAndReportErrors", context.Background(), customErr, "Cmd channel-accounts view crash").
+				Once()
+			defer crashTrackerMock.AssertExpectations(t)
+
 			caServiceMock.
 				On("ViewChannelAccounts", context.Background()).
-				Return(errors.New("unexpected error"))
-			crashTrackerMock.On("LogAndReportErrors", context.Background(), customErr, "Cmd channel-accounts view crash")
+				Return(customErr).
+				Once()
+			defer caServiceMock.AssertExpectations(t)
 
 			err := parentCmdMock.Execute()
 			require.NoError(t, err)
@@ -353,12 +335,12 @@ func Test_ChannelAccountsCommand_ViewCommand(t *testing.T) {
 			return
 		}
 
-		// We're using a strategy to setup a cmd inside the test that calls the test itself and verifies if it exited with exit status '1'.
+		// We're using a strategy to setup a innerCmd inside the test that calls the test itself and verifies if it exited with exit status '1'.
 		// Ref: https://go.dev/talks/2014/testing.slide#23
-		cmd := exec.Command(os.Args[0], fmt.Sprintf("-test.run=%s", t.Name()))
-		cmd.Env = append(os.Environ(), "TEST_FATAL=1")
+		innerCmd := exec.Command(os.Args[0], fmt.Sprintf("-test.run=%s", t.Name()))
+		innerCmd.Env = append(os.Environ(), "TEST_FATAL=1")
 
-		err := cmd.Run()
+		err := innerCmd.Run()
 		if exitError, ok := err.(*exec.ExitError); ok {
 			assert.False(t, exitError.Success())
 			return
@@ -367,15 +349,16 @@ func Test_ChannelAccountsCommand_ViewCommand(t *testing.T) {
 		t.Fatalf("process ran with err %v, want exit status 1", err)
 	})
 
-	t.Run("executes the view command successfully", func(t *testing.T) {
+	t.Run("executes the list command successfully", func(t *testing.T) {
+		caCommand.CrashTrackerClient = nil
 		caServiceMock.
-			On("ViewChannelAccounts", context.Background()).
-			Return(nil)
+			On("ViewChannelAccounts", context.Background(), mock.Anything).
+			Return(nil).
+			Once()
 
 		err := parentCmdMock.Execute()
 		require.NoError(t, err)
 	})
 
 	caServiceMock.AssertExpectations(t)
-	crashTrackerMock.AssertExpectations(t)
 }

@@ -6,6 +6,10 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/stellar/go/support/log"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
+
 	jwtgo "github.com/golang-jwt/jwt/v4"
 )
 
@@ -16,10 +20,12 @@ type JWTManager interface {
 	RefreshToken(ctx context.Context, token string, expiresAt time.Time) (string, error)
 	ValidateToken(ctx context.Context, token string) (bool, error)
 	GetUserFromToken(ctx context.Context, token string) (*User, error)
+	GetTenantIDFromToken(ctx context.Context, token string) (string, error)
 }
 
 type claims struct {
-	User *User `json:"user"`
+	User     *User  `json:"user"`
+	TenantID string `json:"tenant_id"`
 	jwtgo.RegisteredClaims
 }
 
@@ -66,6 +72,14 @@ func (m *defaultJWTManager) GenerateToken(ctx context.Context, user *User, expir
 		RegisteredClaims: jwtgo.RegisteredClaims{
 			ExpiresAt: jwtgo.NewNumericDate(expiresAt),
 		},
+	}
+
+	// TODO: Always throw this error after migrations are merged [SDP-953]
+	currentTenant, err := tenant.GetTenantFromContext(ctx)
+	if err != nil {
+		log.Ctx(ctx).Error(err)
+	} else {
+		c.TenantID = currentTenant.ID
 	}
 
 	token := jwtgo.NewWithClaims(jwtgo.SigningMethodES256, c)
@@ -117,6 +131,15 @@ func (m *defaultJWTManager) GetUserFromToken(ctx context.Context, tokenString st
 	}
 
 	return c.User, nil
+}
+
+func (m *defaultJWTManager) GetTenantIDFromToken(ctx context.Context, tokenString string) (string, error) {
+	_, c, err := m.parseToken(tokenString)
+	if err != nil {
+		return "", fmt.Errorf("parsing token to be validated: %w", err)
+	}
+
+	return c.TenantID, nil
 }
 
 type defaultJWTManagerOption func(m *defaultJWTManager)

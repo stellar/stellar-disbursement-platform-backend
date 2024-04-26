@@ -7,9 +7,9 @@ import (
 	"time"
 
 	"github.com/stellar/go/support/log"
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/db/dbtest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -25,10 +25,11 @@ func (s *mockReadyPaymentsCancellation) CancelReadyPayments(ctx context.Context)
 }
 
 func Test_ReadyPaymentsCancellationJob(t *testing.T) {
-	j := ReadyPaymentsCancellationJob{}
+	j := readyPaymentsCancellationJob{}
 
-	assert.Equal(t, ReadyPaymentsCancellationJobName, j.GetName())
-	assert.Equal(t, ReadyPaymentsCancellationJobInterval*time.Minute, j.GetInterval())
+	assert.Equal(t, readyPaymentsCancellationJobName, j.GetName())
+	assert.Equal(t, readyPaymentsCancellationJobInterval*time.Minute, j.GetInterval())
+	assert.True(t, j.IsJobMultiTenant())
 }
 
 func Test_ReadyPaymentsCancellationJob_Execute(t *testing.T) {
@@ -42,7 +43,7 @@ func Test_ReadyPaymentsCancellationJob_Execute(t *testing.T) {
 	ctx := context.Background()
 
 	mockService := mockReadyPaymentsCancellation{}
-	j := &ReadyPaymentsCancellationJob{
+	j := &readyPaymentsCancellationJob{
 		service: &mockService,
 	}
 

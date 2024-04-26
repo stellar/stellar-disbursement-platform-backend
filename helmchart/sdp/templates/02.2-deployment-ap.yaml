@@ -42,8 +42,8 @@ spec:
         - name: {{ .Chart.Name }}-ap
           securityContext:
             {{- tpl (toYaml .Values.anchorPlatform.deployment.securityContext) . | nindent 12 }}
-          image: "stellar/anchor-platform:2.1.3"
-          imagePullPolicy: "IfNotPresent"
+          image: "{{ .Values.anchorPlatform.image.repository }}:{{ .Values.anchorPlatform.image.tag }}"
+          imagePullPolicy: {{ .Values.anchorPlatform.image.pullPolicy }}
           {{- if .Values.global.ephemeralDatabase }}
           env:
             - name: DATA_TYPE

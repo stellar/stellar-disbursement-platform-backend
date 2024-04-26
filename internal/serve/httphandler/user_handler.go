@@ -4,27 +4,24 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"net/url"
 	"sort"
 
 	"github.com/stellar/go/support/http/httpdecode"
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/support/render/httpjson"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/htmltemplate"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
-
-const invitationMessageTitle = "Welcome to Stellar Disbursement Platform"
 
 type UserHandler struct {
 	AuthManager     auth.AuthManager
 	MessengerClient message.MessengerClient
-	UIBaseURL       string
 	Models          *data.Models
 }
 
@@ -173,6 +170,13 @@ func (h UserHandler) UserActivation(rw http.ResponseWriter, req *http.Request) {
 func (h UserHandler) CreateUser(rw http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 
+	tnt, err := tenant.GetTenantFromContext(ctx)
+	if err != nil {
+		err = fmt.Errorf("getting tenant from context: %w", err)
+		httperror.Unauthorized("", err, nil).Render(rw)
+		return
+	}
+
 	token, ok := ctx.Value(middleware.TokenContextKey).(string)
 	if !ok {
 		log.Ctx(ctx).Warn("token not found when updating user activation")
@@ -181,7 +185,7 @@ func (h UserHandler) CreateUser(rw http.ResponseWriter, req *http.Request) {
 	}
 
 	var reqBody CreateUserRequest
-	if err := httpdecode.DecodeJSON(req, &reqBody); err != nil {
+	if err = httpdecode.DecodeJSON(req, &reqBody); err != nil {
 		err = fmt.Errorf("decoding the request body: %w", err)
 		log.Ctx(ctx).Error(err)
 		httperror.BadRequest("", err, nil).Render(rw)
@@ -201,15 +205,15 @@ func (h UserHandler) CreateUser(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	newUser := &auth.User{
+	newUser := auth.User{
 		FirstName: reqBody.FirstName,
 		LastName:  reqBody.LastName,
 		Email:     reqBody.Email,
 		Roles:     data.FromUserRoleArrayToStringArray(reqBody.Roles),
 	}
 
-	// The password is empty so the AuthManager will generate one automatically.
-	u, err := h.AuthManager.CreateUser(ctx, newUser, "")
+	s := services.NewCreateUserService(h.Models, h.Models.DBConnectionPool, h.AuthManager, h.MessengerClient)
+	u, err := s.CreateUser(ctx, newUser, *tnt.SDPUIBaseURL)
 	if err != nil {
 		if errors.Is(err, auth.ErrUserEmailAlreadyExists) {
 			httperror.BadRequest(auth.ErrUserEmailAlreadyExists.Error(), err, nil).Render(rw)
@@ -217,42 +221,6 @@ func (h UserHandler) CreateUser(rw http.ResponseWriter, req *http.Request) {
 		}
 
 		httperror.InternalError(ctx, "Cannot create user", err, nil).Render(rw)
-		return
-	}
-
-	organization, err := h.Models.Organizations.Get(ctx)
-	if err != nil {
-		httperror.InternalError(ctx, "Cannot get organization data", err, nil).Render(rw)
-		return
-	}
-
-	forgotPasswordLink, err := url.JoinPath(h.UIBaseURL, "forgot-password")
-	if err != nil {
-		httperror.InternalError(ctx, "Cannot get forgot password link", err, nil).Render(rw)
-		return
-	}
-
-	invitationMsgData := htmltemplate.InvitationMessageTemplate{
-		FirstName:          u.FirstName,
-		Role:               u.Roles[0],
-		ForgotPasswordLink: forgotPasswordLink,
-		OrganizationName:   organization.Name,
-	}
-	messageContent, err := htmltemplate.ExecuteHTMLTemplateForInvitationMessage(invitationMsgData)
-	if err != nil {
-		httperror.InternalError(ctx, "Cannot execute invitation message template", err, nil).Render(rw)
-		return
-	}
-
-	msg := message.Message{
-		ToEmail: u.Email,
-		Message: messageContent,
-		Title:   invitationMessageTitle,
-	}
-	err = h.MessengerClient.SendMessage(msg)
-	if err != nil {
-		msg := fmt.Sprintf("Cannot send invitation email for user %s", u.ID)
-		httperror.InternalError(ctx, msg, err, nil).Render(rw)
 		return
 	}
 

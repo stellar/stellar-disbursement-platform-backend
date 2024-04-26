@@ -2,45 +2,24 @@ package scheduler
 
 import (
 	"context"
-	"sync"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/mock"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
+	"github.com/stretchr/testify/assert"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/scheduler/jobs"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stretchr/testify/require"
 )
 
-// MockJob is a mock job created for testing purposes
-type MockJob struct {
-	name       string
-	interval   time.Duration
-	executions int
-	mu         sync.Mutex
-}
-
-func (m *MockJob) GetName() string {
-	return m.name
-}
-
-func (m *MockJob) GetInterval() time.Duration {
-	return m.interval
-}
-
-func (m *MockJob) Execute(ctx context.Context) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.executions++
-	return nil
-}
-
-func (m *MockJob) GetExecutions() int {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return m.executions
-}
-
 func TestScheduler(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	t.Parallel()
+
+	_, cancel := context.WithCancel(context.Background())
 	scheduler := newScheduler(cancel)
 
 	mockCrashTrackerClient := &crashtracker.MockCrashTrackerClient{}
@@ -49,23 +28,23 @@ func TestScheduler(t *testing.T) {
 	clone := crashtracker.MockCrashTrackerClient{}
 	mockCrashTrackerClient.On("Clone").Return(&clone).Times(5)
 
-	mockJob1 := &MockJob{
-		name:       "mock_job_1",
-		interval:   1 * time.Second,
-		executions: 0,
+	mockJob1 := &jobs.MockJob{
+		Name:       "mock_job_1",
+		Interval:   1 * time.Second,
+		Executions: 0,
 	}
 
-	mockJob2 := &MockJob{
-		name:       "mock_job_2",
-		interval:   20 * time.Second,
-		executions: 0,
+	mockJob2 := &jobs.MockJob{
+		Name:       "mock_job_2",
+		Interval:   20 * time.Second,
+		Executions: 0,
 	}
 
 	scheduler.addJob(mockJob1)
 	scheduler.addJob(mockJob2)
 
 	// Start the scheduler and wait for a short period to let the job run
-	scheduler.start(ctx)
+	scheduler.start(context.Background())
 	time.Sleep(2 * time.Second)
 
 	job1Executions := mockJob1.GetExecutions()
@@ -79,4 +58,51 @@ func TestScheduler(t *testing.T) {
 	time.Sleep(1 * time.Second)
 
 	mockCrashTrackerClient.AssertExpectations(t)
+}
+
+func TestMultiTenantScheduler(t *testing.T) {
+	t.Parallel()
+
+	_, cancel := context.WithCancel(context.Background())
+	scheduler := newScheduler(cancel)
+
+	mockCrashTrackerClient := &crashtracker.MockCrashTrackerClient{}
+	scheduler.crashTrackerClient = mockCrashTrackerClient
+
+	clone := crashtracker.MockCrashTrackerClient{}
+	mockCrashTrackerClient.On("Clone").Return(&clone).Times(5)
+
+	mockTenantManager := &tenant.TenantManagerMock{}
+	scheduler.tenantManager = mockTenantManager
+
+	tenant1 := tenant.Tenant{ID: "tenant1", Name: "Tenant 1"}
+	tenant2 := tenant.Tenant{ID: "tenant2", Name: "Tenant 2"}
+
+	mockTenantManager.On("GetAllTenants", mock.Anything, mock.Anything).
+		Return([]tenant.Tenant{tenant1, tenant2}, nil).
+		Once()
+
+	mockJob := &jobs.MockMultiTenantJob{
+		Name:     "mock_job_1",
+		Interval: 1 * time.Second,
+	}
+
+	scheduler.addJob(mockJob)
+
+	// Start the scheduler and wait for a short period to let the job run
+	scheduler.start(context.Background())
+	time.Sleep(2 * time.Second)
+
+	tenant1Executions := mockJob.GetExecutions(tenant1.ID)
+	assert.True(t, tenant1Executions > 0, "Expected job to be executed at least once, but it was executed %d times", tenant1Executions)
+
+	tenant2Executions := mockJob.GetExecutions(tenant2.ID)
+	assert.Equal(t, tenant1Executions, tenant2Executions, "Expected both tenants to have the same number of executions, but tenant1 had %d and tenant2 had %d", tenant1Executions, tenant2Executions)
+
+	// Test stopping the scheduler
+	cancel()
+	time.Sleep(1 * time.Second)
+
+	mockCrashTrackerClient.AssertExpectations(t)
+	mockTenantManager.AssertExpectations(t)
 }

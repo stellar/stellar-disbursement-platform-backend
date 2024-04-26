@@ -9,9 +9,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/stellar/go/support/log"
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/db/dbtest"
 )
 
 func Test_ReadyPaymentsCancellationService_CancelReadyPaymentsService(t *testing.T) {
@@ -78,7 +78,7 @@ func Test_ReadyPaymentsCancellationService_CancelReadyPaymentsService(t *testing
 		require.Len(t, entries, 1)
 		assert.Equal(
 			t,
-			"automatic ready payment cancellation is deactivated. Set a valid value to the organization's payment_cancellation_period_days to activate it.",
+			"automatic ready payment cancellation is deactivated for MyCustomAid. Set a valid value to the organization's payment_cancellation_period_days to activate it.",
 			entries[0].Message,
 		)
 	})

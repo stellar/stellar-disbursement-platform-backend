@@ -67,7 +67,7 @@ func Test_Login(t *testing.T) {
 		httpClientMock.AssertExpectations(t)
 	})
 
-	t.Run("succesfully logging on server api", func(t *testing.T) {
+	t.Run("successfully logging on server api", func(t *testing.T) {
 		loginResponse := `{
 			"token": "valid_token"
 		}`

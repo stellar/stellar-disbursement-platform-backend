@@ -1,10 +1,22 @@
 package utils
 
 import (
+	"fmt"
 	"go/types"
 
+	"github.com/stellar/go/clients/horizonclient"
+	"github.com/stellar/go/network"
 	"github.com/stellar/go/support/config"
+	"github.com/stellar/go/txnbuild"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
+	di "github.com/stellar/stellar-disbursement-platform-backend/internal/dependencyinjection"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/scheduler"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/scheduler/jobs"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 // TwilioConfigOptions returns the config options for Twilio. Relevant for loading configs needed for the messenger type(s): `TWILIO_*`.
@@ -75,5 +87,261 @@ func AWSConfigOptions(opts *message.MessengerOptions) []*config.ConfigOption {
 			ConfigKey: &opts.AWSSESSenderID,
 			Required:  false,
 		},
+	}
+}
+
+type TenantRoutingOptions struct {
+	All      bool
+	TenantID string
+}
+
+func (o *TenantRoutingOptions) ValidateFlags() error {
+	if !o.All && o.TenantID == "" {
+		return fmt.Errorf(
+			"invalid config. Please specify --all to run the migrations for all tenants " +
+				"or specify --tenant-id to run the migrations to a specific tenant",
+		)
+	}
+	return nil
+}
+
+// TenantRoutingConfigOptions returns the config options for routing commands that apply to all tenants or a specific tenant.
+func TenantRoutingConfigOptions(opts *TenantRoutingOptions) []*config.ConfigOption {
+	return []*config.ConfigOption{
+		{
+			Name:        "all",
+			Usage:       "Apply the command to all tenants. Either --tenant-id or --all must be set, but the --all option will be ignored if --tenant-id is set.",
+			OptType:     types.Bool,
+			FlagDefault: false,
+			ConfigKey:   &opts.All,
+			Required:    false,
+		},
+		{
+			Name:      "tenant-id",
+			Usage:     "The tenant ID where the command will be applied. Either --tenant-id or --all must be set, but the --all option will be ignored if --tenant-id is set.",
+			OptType:   types.String,
+			ConfigKey: &opts.TenantID,
+			Required:  false,
+		},
+	}
+}
+
+type EventBrokerOptions struct {
+	EventBrokerType events.EventBrokerType
+	BrokerURLs      []string
+	ConsumerGroupID string
+
+	// KAFKA specific options
+	KafkaSecurityProtocol  events.KafkaSecurityProtocol
+	KafkaSASLUsername      string
+	KafkaSASLPassword      string
+	KafkaAccessKey         string
+	KafkaAccessCertificate string
+}
+
+func EventBrokerConfigOptions(opts *EventBrokerOptions) []*config.ConfigOption {
+	return []*config.ConfigOption{
+		{
+			Name:           "event-broker-type",
+			Usage:          `Specifies the type of event broker to be used. Options: "KAFKA", "NONE".`,
+			OptType:        types.String,
+			ConfigKey:      &opts.EventBrokerType,
+			CustomSetValue: SetConfigOptionEventBrokerType,
+			FlagDefault:    string(events.KafkaEventBrokerType),
+			Required:       true,
+		},
+		{
+			Name:           "broker-urls",
+			Usage:          "A comma-separated list of the message broker URLs.",
+			OptType:        types.String,
+			ConfigKey:      &opts.BrokerURLs,
+			CustomSetValue: SetConfigOptionURLList,
+			Required:       false,
+		},
+		{
+			Name:      "consumer-group-id",
+			Usage:     "Specifies a group ID for the broker consumers.",
+			OptType:   types.String,
+			ConfigKey: &opts.ConsumerGroupID,
+			Required:  false,
+		},
+
+		{
+			Name:           "kafka-security-protocol",
+			Usage:          "Kafka Security Protocol. Options: PLAINTEXT, SASL_PLAINTEXT, SASL_SSL, SSL",
+			OptType:        types.String,
+			CustomSetValue: SetConfigOptionKafkaSecurityProtocol,
+			ConfigKey:      &opts.KafkaSecurityProtocol,
+			Required:       true,
+		},
+		{
+			Name:      "kafka-sasl-username",
+			Usage:     "Specifies the Kafka SASL Username, required when the kafka security protocol is set to either `SASL_PLAINTEXT` or `SASL_SSL`.",
+			OptType:   types.String,
+			ConfigKey: &opts.KafkaSASLUsername,
+			Required:  false,
+		},
+		{
+			Name:      "kafka-sasl-password",
+			Usage:     "Specifies the Kafka SASL Password, required when the kafka security protocol is set to either `SASL_PLAINTEXT` or `SASL_SSL`.",
+			OptType:   types.String,
+			ConfigKey: &opts.KafkaSASLPassword,
+			Required:  false,
+		},
+		{
+			Name:      "kafka-ssl-access-key",
+			Usage:     "The Kafka Access Key (keystore) in PEM format, required when the kafka security protocol is set to `SSL`.",
+			OptType:   types.String,
+			ConfigKey: &opts.KafkaAccessKey,
+			Required:  false,
+		},
+		{
+			Name:      "kafka-ssl-access-certificate",
+			Usage:     "The Kafka SSL Access Certificate in PEM format that matches with the Kafka Access Key, required when the kafka security protocol is set to `SSL`.",
+			OptType:   types.String,
+			ConfigKey: &opts.KafkaAccessCertificate,
+			Required:  false,
+		},
+	}
+}
+
+func TransactionSubmitterEngineConfigOptions(opts *di.TxSubmitterEngineOptions) config.ConfigOptions {
+	return append(
+		BaseSignatureServiceConfigOptions(&opts.SignatureServiceOptions),
+		&config.ConfigOption{
+			Name:        "max-base-fee",
+			Usage:       "The max base fee for submitting a Stellar transaction",
+			OptType:     types.Int,
+			ConfigKey:   &opts.MaxBaseFee,
+			FlagDefault: 100 * txnbuild.MinBaseFee,
+			Required:    true,
+		},
+		&config.ConfigOption{
+			Name:        "horizon-url",
+			Usage:       "The URL of the Stellar Horizon server where this application will communicate with.",
+			OptType:     types.String,
+			ConfigKey:   &opts.HorizonURL,
+			FlagDefault: horizonclient.DefaultTestNetClient.HorizonURL,
+			Required:    true,
+		},
+	)
+}
+
+func BaseSignatureServiceConfigOptions(opts *signing.SignatureServiceOptions) []*config.ConfigOption {
+	return append([]*config.ConfigOption{
+		{
+			Name:           "channel-account-encryption-passphrase",
+			Usage:          "A Stellar-compliant ed25519 private key used to encrypt/decrypt the channel accounts' private keys. When not set, it will default to the value of the 'distribution-seed' option.",
+			OptType:        types.String,
+			CustomSetValue: SetConfigOptionStellarPrivateKey,
+			ConfigKey:      &opts.ChAccEncryptionPassphrase,
+			Required:       false,
+		},
+	}, BaseDistributionAccountSignatureClientConfigOptions(opts)...)
+}
+
+func BaseDistributionAccountSignatureClientConfigOptions(opts *signing.SignatureServiceOptions) []*config.ConfigOption {
+	return []*config.ConfigOption{
+		{
+			Name:           "distribution-account-encryption-passphrase",
+			Usage:          "A Stellar-compliant ed25519 private key used to encrypt/decrypt the in-memory distribution accounts' private keys. It's mandatory when the distribution-signer-type is set to DISTRIBUTION_ACCOUNT_DB.",
+			OptType:        types.String,
+			CustomSetValue: SetConfigOptionStellarPrivateKey,
+			ConfigKey:      &opts.DistAccEncryptionPassphrase,
+			Required:       false,
+		},
+		{
+			Name:           "distribution-seed",
+			Usage:          "The private key of the HOST's Stellar distribution account, used to create channel accounts", // TODO: this will eventually be used for sponsoring tenant accounts.
+			OptType:        types.String,
+			CustomSetValue: SetConfigOptionStellarPrivateKey,
+			ConfigKey:      &opts.DistributionPrivateKey,
+			Required:       true,
+		},
+		{
+			Name:           "distribution-signer-type",
+			Usage:          fmt.Sprintf("The type of signer used to sign Stellar transactions for the tenants' distribution accounts. Options: %s", signing.DistSigClientsDescriptionStr()),
+			OptType:        types.String,
+			CustomSetValue: SetConfigOptionDistributionSignerType,
+			ConfigKey:      &opts.DistributionSignerType,
+			FlagDefault:    string(signing.DistributionAccountDBSignatureClientType),
+			Required:       true,
+		},
+	}
+}
+
+func TenantXLMBootstrapAmount(targetPointer interface{}) *config.ConfigOption {
+	return &config.ConfigOption{
+		Name:        "tenant-xlm-bootstrap-amount",
+		Usage:       "The amount of the native asset that will be sent to the tenant distribution account from the host distribution account when it's created if applicable.",
+		OptType:     types.Int,
+		ConfigKey:   targetPointer,
+		FlagDefault: tenant.MinTenantDistributionAccountAmount,
+	}
+}
+
+func CrashTrackerTypeConfigOption(targetPointer interface{}) *config.ConfigOption {
+	return &config.ConfigOption{
+		Name:           "crash-tracker-type",
+		Usage:          `Crash tracker type. Options: "SENTRY", "DRY_RUN"`,
+		OptType:        types.String,
+		CustomSetValue: SetConfigOptionCrashTrackerType,
+		ConfigKey:      targetPointer,
+		FlagDefault:    string(crashtracker.CrashTrackerTypeDryRun),
+		Required:       true,
+	}
+}
+
+func SchedulerConfigOptions(opts *scheduler.SchedulerOptions) []*config.ConfigOption {
+	return []*config.ConfigOption{
+		{
+			Name:        "scheduler-payment-job-seconds",
+			Usage:       fmt.Sprintf("The interval in seconds for the payment jobs that synchronize transactions between SDP and TSS. Must be greater than %d seconds.", jobs.DefaultMinimumJobIntervalSeconds),
+			OptType:     types.Int,
+			ConfigKey:   &opts.PaymentJobIntervalSeconds,
+			FlagDefault: 30,
+			Required:    false,
+		},
+		{
+			Name:        "scheduler-receiver-invitation-job-seconds",
+			Usage:       fmt.Sprintf("The interval in seconds for the receiver invitation job that sends invitations to new receivers. Must be greater than %d seconds.", jobs.DefaultMinimumJobIntervalSeconds),
+			OptType:     types.Int,
+			ConfigKey:   &opts.ReceiverInvitationJobIntervalSeconds,
+			FlagDefault: 30,
+			Required:    false,
+		},
+	}
+}
+
+func DistributionPublicKey(targetPointer interface{}) *config.ConfigOption {
+	return &config.ConfigOption{
+		Name:           "distribution-public-key",
+		Usage:          "The public key of the HOST's Stellar distribution account, used to create channel accounts",
+		OptType:        types.String,
+		CustomSetValue: SetConfigOptionStellarPublicKey,
+		ConfigKey:      targetPointer,
+		Required:       true,
+	}
+}
+
+func NetworkPassphrase(targetPointer interface{}) *config.ConfigOption {
+	return &config.ConfigOption{
+		Name:        "network-passphrase",
+		Usage:       "The Stellar network passphrase",
+		OptType:     types.String,
+		FlagDefault: network.TestNetworkPassphrase,
+		ConfigKey:   targetPointer,
+		Required:    true,
+	}
+}
+
+func KafkaConfig(opts EventBrokerOptions) events.KafkaConfig {
+	return events.KafkaConfig{
+		Brokers:              opts.BrokerURLs,
+		SecurityProtocol:     opts.KafkaSecurityProtocol,
+		SASLUsername:         opts.KafkaSASLUsername,
+		SASLPassword:         opts.KafkaSASLPassword,
+		SSLAccessKey:         opts.KafkaAccessKey,
+		SSLAccessCertificate: opts.KafkaAccessCertificate,
 	}
 }

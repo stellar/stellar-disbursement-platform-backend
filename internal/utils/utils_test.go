@@ -174,3 +174,71 @@ func Test_ConvertType(t *testing.T) {
 		assert.Equal(t, wantDst, dst)
 	})
 }
+
+func Test_GetTypeName(t *testing.T) {
+	type MyType struct{}
+
+	testCases := []struct {
+		name           string
+		instance       interface{}
+		expectedResult string
+	}{
+		{
+			name:           "nil",
+			instance:       nil,
+			expectedResult: "<nil>",
+		},
+		{
+			name:           "Integer",
+			instance:       42,
+			expectedResult: "int",
+		},
+		{
+			name:           "Pointer to int",
+			instance:       new(int),
+			expectedResult: "*int",
+		},
+		{
+			name:           "String",
+			instance:       "test",
+			expectedResult: "string",
+		},
+		{
+			name:           "Pointer to string",
+			instance:       new(string),
+			expectedResult: "*string",
+		},
+		{
+			name:           "Empty struct",
+			instance:       struct{}{},
+			expectedResult: "struct {}",
+		},
+		{
+			name:           "Slice of strings",
+			instance:       []string{},
+			expectedResult: "[]string",
+		},
+		{
+			name:           "Map",
+			instance:       map[string]int{},
+			expectedResult: "map[string]int",
+		},
+		{
+			name:           "Custom type",
+			instance:       MyType{},
+			expectedResult: "MyType",
+		},
+		{
+			name:           "Pointer to custom type",
+			instance:       new(MyType),
+			expectedResult: "MyType",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actualResult := GetTypeName(tc.instance)
+			assert.Equal(t, tc.expectedResult, actualResult)
+		})
+	}
+}
