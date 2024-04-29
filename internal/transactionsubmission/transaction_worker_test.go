@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/sirupsen/logrus"
 	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/keypair"
 	"github.com/stellar/go/network"
@@ -325,6 +326,54 @@ func Test_NewTransactionWorker(t *testing.T) {
 			}
 		})
 	}
+}
+
+func Test_TransactionWorker_updateContextLogger(t *testing.T) {
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+
+	transactionWorker := getTransactionWorkerInstance(t, dbConnectionPool)
+	transactionWorker.monitorSvc = tssMonitor.TSSMonitorService{
+		GitCommitHash: "gitCommitHash0x",
+		Version:       "version123",
+	}
+	txJob := createTxJobFixture(t, ctx, dbConnectionPool, true, 1, 2, uuid.NewString())
+	require.NotEmpty(t, txJob)
+
+	updatedCtx := transactionWorker.updateContextLogger(ctx, &txJob)
+
+	getEntries := log.Ctx(updatedCtx).StartTest(log.DebugLevel)
+	log.Ctx(updatedCtx).Debug("FOO BAR")
+	entries := getEntries()
+
+	// Assert length of entries:
+	require.Len(t, entries, 1)
+	logText := entries[0].Message
+
+	// Assert log text:
+	assert.Contains(t, logText, "FOO BAR", "Main message text is missing")
+
+	// Assert log data:
+	wantLogData := logrus.Fields{
+		"app_version":         "version123",
+		"asset":               txJob.Transaction.AssetCode,
+		"channel_account":     txJob.ChannelAccount.PublicKey,
+		"created_at":          txJob.Transaction.CreatedAt.String(),
+		"destination_account": txJob.Transaction.Destination,
+		"event_id":            transactionWorker.jobUUID,
+		"git_commit_hash":     "gitCommitHash0x",
+		"tenant_id":           txJob.Transaction.TenantID,
+		"tx_id":               txJob.Transaction.ID,
+		"updated_at":          txJob.Transaction.UpdatedAt.String(),
+	}
+	logData := entries[0].Data
+	wantLogData["pid"] = logData["pid"]
+	assert.Equal(t, wantLogData, logData, "Missing key-value pair")
 }
 
 func Test_TransactionWorker_handleSuccessfulTransaction(t *testing.T) {
