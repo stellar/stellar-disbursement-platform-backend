@@ -329,51 +329,109 @@ func Test_NewTransactionWorker(t *testing.T) {
 }
 
 func Test_TransactionWorker_updateContextLogger(t *testing.T) {
-	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
-	defer dbt.Close()
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
-
-	ctx := context.Background()
-
-	transactionWorker := getTransactionWorkerInstance(t, dbConnectionPool)
-	transactionWorker.monitorSvc = tssMonitor.TSSMonitorService{
-		GitCommitHash: "gitCommitHash0x",
-		Version:       "version123",
+	testCases := []struct {
+		name                   string
+		preexistingTxHash      string
+		preexistingXDRReceived string
+		preexistingXDRSent     string
+		additionalLogrusFields logrus.Fields
+	}{
+		{
+			name: "without preexisting tx_hash nor XDR data",
+		},
+		{
+			name:              "with preexisting tx_hash but no XDR data",
+			preexistingTxHash: "tx_hash_123",
+			additionalLogrusFields: logrus.Fields{
+				"tx_hash": "tx_hash_123",
+			},
+		},
+		{
+			name:               "with preexisting tx_hash and XDRSent",
+			preexistingTxHash:  "tx_hash_123",
+			preexistingXDRSent: "xdr_sent_123",
+			additionalLogrusFields: logrus.Fields{
+				"tx_hash":  "tx_hash_123",
+				"xdr_sent": "xdr_sent_123",
+			},
+		},
+		{
+			name:                   "with preexisting tx_hash and XDR data (sent and received)",
+			preexistingTxHash:      "tx_hash_123",
+			preexistingXDRSent:     "xdr_sent_123",
+			preexistingXDRReceived: "xdr_received_123",
+			additionalLogrusFields: logrus.Fields{
+				"tx_hash":      "tx_hash_123",
+				"xdr_sent":     "xdr_sent_123",
+				"xdr_received": "xdr_received_123",
+			},
+		},
 	}
-	txJob := createTxJobFixture(t, ctx, dbConnectionPool, true, 1, 2, uuid.NewString())
-	require.NotEmpty(t, txJob)
 
-	updatedCtx := transactionWorker.updateContextLogger(ctx, &txJob)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
 
-	getEntries := log.Ctx(updatedCtx).StartTest(log.DebugLevel)
-	log.Ctx(updatedCtx).Debug("FOO BAR")
-	entries := getEntries()
+			dbt := dbtest.OpenWithTSSMigrationsOnly(t)
+			defer dbt.Close()
+			dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+			require.NoError(t, err)
+			defer dbConnectionPool.Close()
 
-	// Assert length of entries:
-	require.Len(t, entries, 1)
-	logText := entries[0].Message
+			transactionWorker := getTransactionWorkerInstance(t, dbConnectionPool)
+			transactionWorker.monitorSvc = tssMonitor.TSSMonitorService{
+				GitCommitHash: "gitCommitHash0x",
+				Version:       "version123",
+			}
 
-	// Assert log text:
-	assert.Contains(t, logText, "FOO BAR", "Main message text is missing")
+			// Prepare the context
+			ctx := context.Background()
+			txJob := createTxJobFixture(t, ctx, dbConnectionPool, true, 1, 2, uuid.NewString())
+			require.NotEmpty(t, txJob)
+			if tc.preexistingTxHash != "" {
+				txJob.Transaction.StellarTransactionHash = sql.NullString{Valid: true, String: tc.preexistingTxHash}
+			}
+			if tc.preexistingXDRSent != "" {
+				txJob.Transaction.XDRSent = sql.NullString{Valid: true, String: tc.preexistingXDRSent}
+			}
+			if tc.preexistingXDRReceived != "" {
+				txJob.Transaction.XDRReceived = sql.NullString{Valid: true, String: tc.preexistingXDRReceived}
+			}
 
-	// Assert log data:
-	wantLogData := logrus.Fields{
-		"app_version":         "version123",
-		"asset":               txJob.Transaction.AssetCode,
-		"channel_account":     txJob.ChannelAccount.PublicKey,
-		"created_at":          txJob.Transaction.CreatedAt.String(),
-		"destination_account": txJob.Transaction.Destination,
-		"event_id":            transactionWorker.jobUUID,
-		"git_commit_hash":     "gitCommitHash0x",
-		"tenant_id":           txJob.Transaction.TenantID,
-		"tx_id":               txJob.Transaction.ID,
-		"updated_at":          txJob.Transaction.UpdatedAt.String(),
+			updatedCtx := transactionWorker.updateContextLogger(ctx, &txJob)
+
+			// Call the logger
+			getEntries := log.Ctx(updatedCtx).StartTest(log.DebugLevel)
+			log.Ctx(updatedCtx).Debug("FOO BAR")
+			entries := getEntries()
+
+			// Assert length of entries:
+			require.Len(t, entries, 1)
+			logText := entries[0].Message
+
+			// Assert log text:
+			assert.Contains(t, logText, "FOO BAR", "Main message text is missing")
+
+			// Assert log data:
+			wantLogData := logrus.Fields{
+				"app_version":         "version123",
+				"asset":               txJob.Transaction.AssetCode,
+				"channel_account":     txJob.ChannelAccount.PublicKey,
+				"created_at":          txJob.Transaction.CreatedAt.String(),
+				"destination_account": txJob.Transaction.Destination,
+				"event_id":            transactionWorker.jobUUID,
+				"git_commit_hash":     "gitCommitHash0x",
+				"tenant_id":           txJob.Transaction.TenantID,
+				"tx_id":               txJob.Transaction.ID,
+				"updated_at":          txJob.Transaction.UpdatedAt.String(),
+			}
+			for k, v := range tc.additionalLogrusFields {
+				wantLogData[k] = v
+			}
+			logData := entries[0].Data
+			wantLogData["pid"] = logData["pid"]
+			assert.Equal(t, wantLogData, logData, "Missing key-value pair")
+		})
 	}
-	logData := entries[0].Data
-	wantLogData["pid"] = logData["pid"]
-	assert.Equal(t, wantLogData, logData, "Missing key-value pair")
 }
 
 func Test_TransactionWorker_handleSuccessfulTransaction(t *testing.T) {
