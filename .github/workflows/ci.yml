@@ -139,7 +139,7 @@ jobs:
         run: go install gotest.tools/gotestsum@v1.11.0
 
       - name: Run tests
-        run: gotestsum --format-hide-empty-pkg --format pkgname-and-test-fails -- -coverprofile=c.out ./... -timeout 3m
+        run: gotestsum --format-hide-empty-pkg --format pkgname-and-test-fails -- -coverprofile=c.out ./... -timeout 3m -coverpkg ./...
 
       - name: Validate Test Coverage Threshold
         env:
