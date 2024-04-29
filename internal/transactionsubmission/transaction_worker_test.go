@@ -370,7 +370,6 @@ func Test_TransactionWorker_updateContextLogger(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-
 			dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 			defer dbt.Close()
 			dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
