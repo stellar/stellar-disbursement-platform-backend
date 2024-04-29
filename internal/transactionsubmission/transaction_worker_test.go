@@ -319,6 +319,8 @@ func Test_NewTransactionWorker(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 				require.NotEmpty(t, gotWorker)
+				require.NotEmpty(t, gotWorker.jobUUID)
+				wantWorker.jobUUID = gotWorker.jobUUID
 				require.Equal(t, wantWorker, gotWorker)
 			}
 		})
