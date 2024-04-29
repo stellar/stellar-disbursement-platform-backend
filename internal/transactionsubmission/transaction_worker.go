@@ -163,7 +163,22 @@ func (tw *TransactionWorker) runJob(ctx context.Context, txJob *TxJob) error {
 
 // TODO: add tests
 // handleFailedTransaction will wrap up the job when the transaction was submitted to the network but failed.
-// This method will only return an error if something goes wrong when handling the result and marking the transaction as ERROR.
+// This method will only return an error if something goes wrong when handling the result and marking the transaction as
+// ERROR.
+//
+// Errors marked as definitive error, that won't be resolved with retries:
+//   - 400: with any of the transaction error codes [tx_bad_auth, tx_bad_auth_extra, tx_insufficient_balance]
+//   - 400: with any of the operation error codes [op_bad_auth, op_underfunded, op_src_not_authorized, op_no_destination, op_no_trust, op_line_full, op_not_authorized, op_no_issuer]
+//
+// Errors that triger the pause/jitter mechanism at TransactionProcessingLimiter:
+//   - 504: Timeout
+//   - 429: Too Many Requests
+//   - 400 - tx_insufficient_fee: Bad Request
+//
+// Errors that are marked for retry without pause/jitter:
+//   - 400 - tx_bad_seq: Bad Request
+//   - 400 - tx_too_late: Bad Request
+//   - xxx - Any unexpected error.
 func (tw *TransactionWorker) handleFailedTransaction(ctx context.Context, txJob *TxJob, hTxResp horizon.Transaction, hErr error) error {
 	log.Ctx(ctx).Errorf("🔴 Error processing job: %v", hErr)
 
@@ -231,41 +246,6 @@ func (tw *TransactionWorker) handleFailedTransaction(ctx context.Context, txJob 
 
 	// TODO: op_bad_auth, tx_bad_auth, tx_bad_auth_extra are big problems that need to be reported accordingly
 	// TODO: tx_bad_seq is a big problem that needs to be reported accordingly
-
-	// {Old TSS approach} -> {new approach}:
-	// - `504`: {retry in memory} -> {marked for retry} (pause/jitter could come later)
-	// - `429`: {paused and marked for retry} -> {marked for retry} (pause/jitter could come later)
-	// - `400 - tx_insufficient_fee` {marked for retry with exponential jitter until max_retry is reached} -> {marked for retry forever} (pause/jitter could come later)
-	// - `400 - tx_bad_seq` {marked as failed} -> {marked for retry and reported to crash tracker and observer}
-	// - `400 - tx_too_late` (bounds expired) {marked as failed} -> {marked for retry and reported to crash tracker and observer}
-	// - `400 - ???`: {marked as failed} -> {marked for retry and reported to crash tracker and observer}
-	// - unsupported error: {marked as failed} -> {marked for retry and reported to crash tracker and observer}
-
-	// Some ideas for error handling (ref: https://developers.stellar.org/api/horizon/errors/result-codes/):
-	// BadAuthentication():
-	// op_bad_auth (in result_codes.operations)
-	// tx_bad_auth (in result_codes.(inner_)transaction)
-	// tx_bad_auth_extra (in result_codes.(inner_)transaction)
-	//
-	// NotEnoughLumens():
-	// op_underfunded (in result_codes.operations)
-	// tx_insufficient_balance  (in result_codes.(inner_)transaction)
-	//
-	// SendingAccountIsBlocked()
-	//  op_src_not_authorized (in result_codes.operations)
-	//
-	// DestinationAccountNotFound():
-	// op_no_destination (in result_codes.operations)
-	//
-	// DesinationIsMissingTrustlineOrLimit():
-	// op_no_trust (in result_codes.operations)
-	// op_line_full (in result_codes.operations)
-	//
-	// DestinationAccountIsBlocked():
-	// op_not_authorized (in result_codes.operations)
-	//
-	// NonExistentAsset():
-	// op_no_issuer (in result_codes.operations)
 
 	err = tw.unlockJob(ctx, txJob)
 	if err != nil {
