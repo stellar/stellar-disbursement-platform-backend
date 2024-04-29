@@ -171,7 +171,9 @@ func (t TenantsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	tenantID := chi.URLParam(r, "id")
 
-	tnt, err := t.Manager.GetTenantByID(ctx, tenantID)
+	tnt, err := t.Manager.GetTenant(ctx, &tenant.QueryParams{
+		Filters: map[tenant.FilterKey]interface{}{tenant.FilterKeyID: tenantID},
+	})
 	if err != nil {
 		if errors.Is(tenant.ErrTenantDoesNotExist, err) {
 			errorMsg := fmt.Sprintf("tenant %s does not exist", tenantID)
@@ -187,6 +189,8 @@ func (t TenantsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		httperror.BadRequest("Tenant must be deactivated to be eligible for deletion", nil, nil).Render(w)
 		return
 	}
+
+	log.Ctx(ctx).Infof("Deleting tenant %s", tenantID)
 
 	if tnt.DistributionAccount != nil && t.DistributionAccountResolver.HostDistributionAccount() != *tnt.DistributionAccount {
 		// TODO: Encapsulate this logic under a distribution account abstraction similar to [SDP-1177] once we add Circle custody support

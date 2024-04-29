@@ -128,13 +128,14 @@ func handleHTTP(opts *ServeOptions) *chi.Mux {
 
 		r.Route("/tenants", func(r chi.Router) {
 			tenantsHandler := httphandler.TenantsHandler{
-				Manager:               opts.tenantManager,
-				ProvisioningManager:   opts.tenantProvisioningManager,
-				NetworkType:           opts.networkType,
-				AdminDBConnectionPool: opts.AdminDBConnectionPool,
-				SingleTenantMode:      opts.SingleTenantMode,
-				Models:                opts.Models,
-				HorizonClient:         opts.SubmitterEngine.HorizonClient,
+				Manager:                     opts.tenantManager,
+				ProvisioningManager:         opts.tenantProvisioningManager,
+				NetworkType:                 opts.networkType,
+				AdminDBConnectionPool:       opts.AdminDBConnectionPool,
+				SingleTenantMode:            opts.SingleTenantMode,
+				Models:                      opts.Models,
+				HorizonClient:               opts.SubmitterEngine.HorizonClient,
+				DistributionAccountResolver: opts.SubmitterEngine.DistributionAccountResolver,
 			}
 			r.Get("/", tenantsHandler.GetAll)
 			r.Post("/", tenantsHandler.Post)
