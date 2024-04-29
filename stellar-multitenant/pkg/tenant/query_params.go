@@ -23,14 +23,14 @@ const (
 	FilterKeyIsDefault FilterKey = "is_default"
 )
 
-func ExcludeInactiveTenantsFilters() map[FilterKey]interface{} {
+func excludeInactiveTenantsFilters() map[FilterKey]interface{} {
 	return map[FilterKey]interface{}{
 		FilterKeyOutStatus: DeactivatedTenantStatus,
 		FilterKeyDeleted:   true,
 	}
 }
 
-func DeactivatedTenantsFilters() map[FilterKey]interface{} {
+func deactivatedTenantsFilters() map[FilterKey]interface{} {
 	return map[FilterKey]interface{}{
 		FilterKeyStatus:  DeactivatedTenantStatus,
 		FilterKeyDeleted: false,

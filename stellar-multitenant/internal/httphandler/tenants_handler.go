@@ -189,6 +189,7 @@ func (t TenantsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if tnt.DistributionAccount != nil && t.DistributionAccountResolver.HostDistributionAccount() != *tnt.DistributionAccount {
+		// TODO: Encapsulate this logic under a distribution account abstraction similar to [SDP-1177] once we add Circle custody support
 		distAcc, accDetailsErr := t.HorizonClient.AccountDetail(horizonclient.AccountRequest{AccountID: *tnt.DistributionAccount})
 		if accDetailsErr != nil {
 			httperror.InternalError(ctx, "Cannot get distribution account details for tenant", err, nil).Render(w)
@@ -200,6 +201,7 @@ func (t TenantsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 				assetBalance, getAssetBalErr := strconv.ParseFloat(b.Balance, 64)
 				if getAssetBalErr != nil {
 					httperror.InternalError(ctx, fmt.Sprintf("Cannot convert Horizon distribution account balance %s into float", b.Balance), getAssetBalErr, nil).Render(w)
+					return
 				}
 
 				if assetBalance != 0 {

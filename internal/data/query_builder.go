@@ -33,7 +33,7 @@ func (qb *QueryBuilder) AddCondition(condition string, value ...interface{}) *Qu
 	return qb
 }
 
-// TODO: combine AddCondition and AddOrCondition into one function with a parameter for the condition type
+// TODO [SDP-1190]: combine AddCondition and AddOrCondition into one function with a parameter for the condition type
 // AddOrCondition adds an OR condition to the query
 func (qb *QueryBuilder) AddOrCondition(condition string, value ...interface{}) *QueryBuilder {
 	if len(value) >= 0 {

@@ -77,7 +77,7 @@ var selectQuery = `
 func (m *Manager) GetAllTenants(ctx context.Context, queryParams *QueryParams) ([]Tenant, error) {
 	if queryParams == nil {
 		queryParams = &QueryParams{
-			Filters:   ExcludeInactiveTenantsFilters(),
+			Filters:   excludeInactiveTenantsFilters(),
 			SortBy:    data.SortFieldName,
 			SortOrder: data.SortOrderASC,
 		}
@@ -108,7 +108,7 @@ func (m *Manager) GetTenant(ctx context.Context, queryParams *QueryParams) (*Ten
 
 func (m *Manager) GetTenantByID(ctx context.Context, id string) (*Tenant, error) {
 	queryParams := &QueryParams{
-		Filters: ExcludeInactiveTenantsFilters(),
+		Filters: excludeInactiveTenantsFilters(),
 	}
 	queryParams.Filters[FilterKeyID] = id
 
@@ -117,7 +117,7 @@ func (m *Manager) GetTenantByID(ctx context.Context, id string) (*Tenant, error)
 
 func (m *Manager) GetTenantByName(ctx context.Context, name string) (*Tenant, error) {
 	queryParams := &QueryParams{
-		Filters: ExcludeInactiveTenantsFilters(),
+		Filters: excludeInactiveTenantsFilters(),
 	}
 	queryParams.Filters[FilterKeyName] = name
 
@@ -127,7 +127,7 @@ func (m *Manager) GetTenantByName(ctx context.Context, name string) (*Tenant, er
 // GetTenantByIDOrName returns the tenant with a given id or name.
 func (m *Manager) GetTenantByIDOrName(ctx context.Context, arg string) (*Tenant, error) {
 	queryParams := &QueryParams{
-		Filters: ExcludeInactiveTenantsFilters(),
+		Filters: excludeInactiveTenantsFilters(),
 	}
 	queryParams.Filters[FilterKeyNameOrID] = arg
 
@@ -137,7 +137,7 @@ func (m *Manager) GetTenantByIDOrName(ctx context.Context, arg string) (*Tenant,
 // GetDefault returns the tenant where is_default is true. Returns an error if more than one tenant is set as default.
 func (m *Manager) GetDefault(ctx context.Context) (*Tenant, error) {
 	queryParams := &QueryParams{
-		Filters: ExcludeInactiveTenantsFilters(),
+		Filters: excludeInactiveTenantsFilters(),
 	}
 	queryParams.Filters[FilterKeyIsDefault] = true
 
@@ -217,7 +217,7 @@ func (m *Manager) SoftDeleteTenantByID(ctx context.Context, tenantID string) err
 
 	q := fmt.Sprintf(updateQuery, "deleted_at = NOW()")
 	queryParams := &QueryParams{
-		Filters: DeactivatedTenantsFilters(),
+		Filters: deactivatedTenantsFilters(),
 	}
 	queryParams.Filters[FilterKeyID] = tenantID
 
