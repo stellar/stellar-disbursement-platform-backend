@@ -12,12 +12,12 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
+	httpclientMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient/mocks"
 )
 
 func Test_GoogleReCAPTCHAValidator(t *testing.T) {
 	siteSecretKey := "secretKey"
-	httpClientMock := &httpclient.HttpClientMock{}
+	httpClientMock := &httpclientMocks.HttpClientMock{}
 
 	grv := NewGoogleReCAPTCHAValidator(siteSecretKey, httpClientMock)
 	ctx := context.Background()
