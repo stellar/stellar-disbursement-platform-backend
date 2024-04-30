@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/stellar/go/protocols/horizon/base"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -17,6 +16,7 @@ import (
 	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/keypair"
 	"github.com/stellar/go/protocols/horizon"
+	"github.com/stellar/go/protocols/horizon/base"
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/txnbuild"
 	"github.com/stretchr/testify/assert"
@@ -916,6 +916,18 @@ func Test_TenantHandler_Delete(t *testing.T) {
 			expectedStatus: http.StatusInternalServerError,
 		},
 		{
+			name: "tenant is already deleted",
+			id:   tntID,
+			mockTntManagerFn: func(tntManagerMock *tenant.TenantManagerMock, _ *horizonclient.MockClient) {
+				tntManagerMock.On("GetTenant", mock.Anything, &tenant.QueryParams{
+					Filters: map[tenant.FilterKey]interface{}{tenant.FilterKeyID: tntID},
+				}).
+					Return(&tenant.Tenant{ID: tntID, Status: tenant.CreatedTenantStatus, DeletedAt: &deletedAt}, nil).
+					Once()
+			},
+			expectedStatus: http.StatusNotModified,
+		},
+		{
 			name: "tenant is not deactivated",
 			id:   tntID,
 			mockTntManagerFn: func(tntManagerMock *tenant.TenantManagerMock, _ *horizonclient.MockClient) {
@@ -1010,7 +1022,8 @@ func Test_TenantHandler_Delete(t *testing.T) {
 				distAccResolver.On("HostDistributionAccount").Return(tntDistributionAcc).Once()
 				tntManagerMock.On("SoftDeleteTenantByID", mock.Anything, tntID).
 					Return(&tenant.Tenant{
-						ID: tntID, Status: tenant.DeactivatedTenantStatus, DistributionAccount: &tntDistributionAcc, DeletedAt: &deletedAt},
+						ID: tntID, Status: tenant.DeactivatedTenantStatus, DistributionAccount: &tntDistributionAcc, DeletedAt: &deletedAt,
+					},
 						nil,
 					).Once()
 			},
@@ -1031,7 +1044,8 @@ func Test_TenantHandler_Delete(t *testing.T) {
 					Once()
 				tntManagerMock.On("SoftDeleteTenantByID", mock.Anything, tntID).
 					Return(&tenant.Tenant{
-						ID: tntID, Status: tenant.DeactivatedTenantStatus, DistributionAccount: &tntDistributionAcc, DeletedAt: &deletedAt},
+						ID: tntID, Status: tenant.DeactivatedTenantStatus, DistributionAccount: &tntDistributionAcc, DeletedAt: &deletedAt,
+					},
 						nil,
 					).Once()
 			},

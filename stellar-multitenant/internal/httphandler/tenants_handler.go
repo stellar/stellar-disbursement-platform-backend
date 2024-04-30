@@ -187,6 +187,12 @@ func (t TenantsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if tnt.DeletedAt != nil {
+		log.Ctx(ctx).Warnf("Tenant %s is already deleted", tenantID)
+		httpjson.RenderStatus(w, http.StatusNotModified, tnt, httpjson.JSON)
+		return
+	}
+
 	if tnt.Status != tenant.DeactivatedTenantStatus {
 		httperror.BadRequest("Tenant must be deactivated to be eligible for deletion", nil, nil).Render(w)
 		return
