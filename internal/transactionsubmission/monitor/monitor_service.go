@@ -7,7 +7,6 @@ import (
 	"slices"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/stellar/go/support/log"
 
 	sdpMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
@@ -26,10 +25,12 @@ type TSSMonitorService struct {
 var _ sdpMonitor.MonitorServiceInterface = &TSSMonitorService{}
 
 type TxMetadata struct {
+	EventID          string
 	SrcChannelAcc    string
 	PaymentEventType string
-	IsHorizonErr     bool
-	ErrStack         string
+	IsHorizonErr     bool   // TODO: remove
+	ErrStack         string // TODO: remove
+	// Error            string 	//TODO: add
 }
 
 func (ms *TSSMonitorService) Start(opts sdpMonitor.MetricOptions) error {
@@ -51,7 +52,7 @@ func (ms *TSSMonitorService) Start(opts sdpMonitor.MetricOptions) error {
 // LogAndMonitorTransaction sends a metric about a payment tx to the observer, and logs the event and some additional data.
 // The event and the log can be correlated through the event_id field.
 func (ms *TSSMonitorService) LogAndMonitorTransaction(ctx context.Context, tx store.Transaction, metricTag sdpMonitor.MetricTag, txMetadata TxMetadata) {
-	eventID := uuid.New().String()
+	eventID := txMetadata.EventID
 	paymentLogMessage := paymentLogMessage(eventID, metricTag)
 
 	labels := map[string]string{
@@ -67,12 +68,7 @@ func (ms *TSSMonitorService) LogAndMonitorTransaction(ctx context.Context, tx st
 		"tenant_id":       tx.TenantID,
 		"channel_account": txMetadata.SrcChannelAcc,
 	}
-	paymentLog := log.Ctx(ctx).WithFields(log.F{
-		"asset":               tx.AssetCode,
-		"destination_account": tx.Destination,
-		"created_at":          tx.CreatedAt.String(),
-		"updated_at":          tx.UpdatedAt.String(),
-	})
+	paymentLog := log.Ctx(ctx)
 	for key, value := range labels {
 		paymentLog = paymentLog.WithField(key, value)
 	}

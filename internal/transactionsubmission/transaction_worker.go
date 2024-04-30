@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/protocols/horizon"
 	"github.com/stellar/go/strkey"
@@ -46,6 +47,7 @@ type TransactionWorker struct {
 	txProcessingLimiter *engine.TransactionProcessingLimiter
 	monitorSvc          tssMonitor.TSSMonitorService
 	eventProducer       events.Producer
+	jobUUID             string
 }
 
 func NewTransactionWorker(
@@ -90,6 +92,7 @@ func NewTransactionWorker(
 	}
 
 	return TransactionWorker{
+		jobUUID:             uuid.NewString(),
 		dbConnectionPool:    dbConnectionPool,
 		txModel:             txModel,
 		chAccModel:          chAccModel,
@@ -101,7 +104,41 @@ func NewTransactionWorker(
 	}, nil
 }
 
+// updateContextLogger will update the context logger with the transaction job details.
+func (tw *TransactionWorker) updateContextLogger(ctx context.Context, job *TxJob) context.Context {
+	tx := job.Transaction
+
+	labels := map[string]interface{}{
+		// Instance info
+		"app_version":     tw.monitorSvc.Version,
+		"git_commit_hash": tw.monitorSvc.GitCommitHash,
+		// Job info
+		"event_id": tw.jobUUID,
+		// Transaction info
+		"channel_account":     job.ChannelAccount.PublicKey,
+		"tx_id":               tx.ID,
+		"tenant_id":           tx.TenantID,
+		"asset":               tx.AssetCode,
+		"destination_account": tx.Destination,
+		"created_at":          tx.CreatedAt.String(),
+		"updated_at":          tx.UpdatedAt.String(),
+	}
+
+	if tx.XDRSent.Valid {
+		labels["xdr_sent"] = tx.XDRSent.String
+	}
+	if tx.XDRReceived.Valid {
+		labels["xdr_received"] = tx.XDRReceived.String
+	}
+	if tx.StellarTransactionHash.Valid {
+		labels["tx_hash"] = tx.StellarTransactionHash.String
+	}
+
+	return log.Set(ctx, log.Ctx(ctx).WithFields(labels))
+}
+
 func (tw *TransactionWorker) Run(ctx context.Context, txJob *TxJob) {
+	ctx = tw.updateContextLogger(ctx, txJob)
 	err := tw.runJob(ctx, txJob)
 	if err != nil {
 		log.Ctx(ctx).Errorf("Handle unexpected error: %v", err)
@@ -150,6 +187,7 @@ func (tw *TransactionWorker) handleFailedTransaction(ctx context.Context, txJob 
 			txJob.Transaction,
 			metricTag,
 			tssMonitor.TxMetadata{
+				EventID:          tw.jobUUID,
 				SrcChannelAcc:    txJob.ChannelAccount.PublicKey,
 				IsHorizonErr:     isHorizonErr,
 				PaymentEventType: eventType,
@@ -306,6 +344,7 @@ func (tw *TransactionWorker) reconcileSubmittedTransaction(ctx context.Context, 
 		err = tw.handleSuccessfulTransaction(ctx, txJob, txDetail)
 		if err != nil {
 			tw.monitorSvc.LogAndMonitorTransaction(ctx, txJob.Transaction, sdpMonitor.PaymentReconciliationFailureTag, tssMonitor.TxMetadata{
+				EventID:          tw.jobUUID,
 				SrcChannelAcc:    txJob.ChannelAccount.PublicKey,
 				IsHorizonErr:     false,
 				ErrStack:         err.Error(),
@@ -315,6 +354,7 @@ func (tw *TransactionWorker) reconcileSubmittedTransaction(ctx context.Context, 
 		}
 
 		tw.monitorSvc.LogAndMonitorTransaction(ctx, txJob.Transaction, sdpMonitor.PaymentReconciliationSuccessfulTag, tssMonitor.TxMetadata{
+			EventID:          tw.jobUUID,
 			SrcChannelAcc:    txJob.ChannelAccount.PublicKey,
 			PaymentEventType: sdpMonitor.PaymentReconciliationTransactionSuccessfulLabel,
 		})
@@ -323,6 +363,7 @@ func (tw *TransactionWorker) reconcileSubmittedTransaction(ctx context.Context, 
 		log.Ctx(ctx).Warnf("received unexpected horizon error: %v", hWrapperErr)
 
 		tw.monitorSvc.LogAndMonitorTransaction(ctx, txJob.Transaction, sdpMonitor.PaymentReconciliationFailureTag, tssMonitor.TxMetadata{
+			EventID:          tw.jobUUID,
 			SrcChannelAcc:    txJob.ChannelAccount.PublicKey,
 			IsHorizonErr:     true,
 			ErrStack:         hWrapperErr.Error(),
@@ -345,6 +386,7 @@ func (tw *TransactionWorker) reconcileSubmittedTransaction(ctx context.Context, 
 	}
 
 	tw.monitorSvc.LogAndMonitorTransaction(ctx, txJob.Transaction, sdpMonitor.PaymentReconciliationSuccessfulTag, tssMonitor.TxMetadata{
+		EventID:          tw.jobUUID,
 		SrcChannelAcc:    txJob.ChannelAccount.PublicKey,
 		PaymentEventType: sdpMonitor.PaymentReconciliationMarkedForReprocessingLabel,
 	})
@@ -388,6 +430,7 @@ func (tw *TransactionWorker) processTransactionSubmission(ctx context.Context, t
 	log.Ctx(ctx).Infof("🚧 Processing transaction submission for job %v...", txJob)
 
 	tw.monitorSvc.LogAndMonitorTransaction(ctx, txJob.Transaction, sdpMonitor.PaymentProcessingStartedTag, tssMonitor.TxMetadata{
+		EventID:          tw.jobUUID,
 		SrcChannelAcc:    txJob.ChannelAccount.PublicKey,
 		PaymentEventType: sdpMonitor.PaymentProcessingStartedLabel,
 	})
@@ -570,6 +613,7 @@ func (tw *TransactionWorker) submit(ctx context.Context, txJob *TxJob, feeBumpTx
 		}
 
 		tw.monitorSvc.LogAndMonitorTransaction(ctx, txJob.Transaction, sdpMonitor.PaymentTransactionSuccessfulTag, tssMonitor.TxMetadata{
+			EventID:          tw.jobUUID,
 			SrcChannelAcc:    txJob.ChannelAccount.PublicKey,
 			IsHorizonErr:     false,
 			PaymentEventType: eventType,

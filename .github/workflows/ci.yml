@@ -135,8 +135,11 @@ jobs:
           cache: true
           cache-dependency-path: go.sum
 
+      - name: Install gotestsum@v1.11.0
+        run: go install gotest.tools/gotestsum@v1.11.0
+
       - name: Run tests
-        run: go test -race -timeout 3m -coverpkg=./... -coverprofile=c.out ./... -v
+        run: gotestsum --format-hide-empty-pkg --format pkgname-and-test-fails -- -coverprofile=c.out ./... -timeout 3m -coverpkg ./...
 
       - name: Validate Test Coverage Threshold
         env:
