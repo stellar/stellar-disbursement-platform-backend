@@ -48,6 +48,7 @@ func Test_TSSMonitorService_LogAndMonitorTransaction(t *testing.T) {
 			name:      "monitor payment_processing_started",
 			metricTag: sdpMonitor.PaymentProcessingStartedTag,
 			txMetadata: TxMetadata{
+				EventID:          "test_event_id_1",
 				PaymentEventType: sdpMonitor.PaymentProcessingStartedLabel,
 				SrcChannelAcc:    srcChannelAcc,
 			},
@@ -63,6 +64,7 @@ func Test_TSSMonitorService_LogAndMonitorTransaction(t *testing.T) {
 			fieldsMap: map[string]interface{}{
 				"app_version":     tssMonitorSvc.Version,
 				"channel_account": srcChannelAcc,
+				"event_id":        "test_event_id_1",
 				"event_type":      sdpMonitor.PaymentProcessingStartedLabel,
 				"git_commit_hash": tssMonitorSvc.GitCommitHash,
 				"tenant_id":       tenantID,
@@ -73,6 +75,7 @@ func Test_TSSMonitorService_LogAndMonitorTransaction(t *testing.T) {
 			name:      "monitor payment_reconciliatoin_successful",
 			metricTag: sdpMonitor.PaymentReconciliationSuccessfulTag,
 			txMetadata: TxMetadata{
+				EventID:          "test_event_id_2",
 				PaymentEventType: sdpMonitor.PaymentReconciliationTransactionSuccessfulLabel,
 				SrcChannelAcc:    srcChannelAcc,
 			},
@@ -93,6 +96,7 @@ func Test_TSSMonitorService_LogAndMonitorTransaction(t *testing.T) {
 				"app_version":     tssMonitorSvc.Version,
 				"channel_account": srcChannelAcc,
 				"completed_at":    time.String(),
+				"event_id":        "test_event_id_2",
 				"event_type":      sdpMonitor.PaymentReconciliationTransactionSuccessfulLabel,
 				"git_commit_hash": tssMonitorSvc.GitCommitHash,
 				"tenant_id":       tenantID,
@@ -106,6 +110,7 @@ func Test_TSSMonitorService_LogAndMonitorTransaction(t *testing.T) {
 			name:      "monitor payment_reconciliatoin_successful",
 			metricTag: sdpMonitor.PaymentErrorTag,
 			txMetadata: TxMetadata{
+				EventID:          "test_event_id_3",
 				PaymentEventType: sdpMonitor.PaymentFailedLabel,
 				SrcChannelAcc:    srcChannelAcc,
 				IsHorizonErr:     true,
@@ -126,6 +131,7 @@ func Test_TSSMonitorService_LogAndMonitorTransaction(t *testing.T) {
 				"app_version":     tssMonitorSvc.Version,
 				"channel_account": srcChannelAcc,
 				"error":           errStr,
+				"event_id":        "test_event_id_3",
 				"event_type":      sdpMonitor.PaymentFailedLabel,
 				"git_commit_hash": tssMonitorSvc.GitCommitHash,
 				"horizon_error?":  true,
@@ -149,7 +155,7 @@ func Test_TSSMonitorService_LogAndMonitorTransaction(t *testing.T) {
 			logEntries := getLogEntries()
 			assert.NotEmpty(t, logEntries[0])
 
-			logFieldsThatCannotBeAsserted := []string{"event_id", "event_time", "pid"}
+			logFieldsThatCannotBeAsserted := []string{"event_time", "pid"}
 			assert.Len(t, logEntries[0].Data, len(tc.fieldsMap)+len(logFieldsThatCannotBeAsserted))
 
 			for k, v := range logEntries[0].Data {
