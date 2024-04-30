@@ -6,6 +6,7 @@ import (
 	"time"
 )
 
+//go:generate mockery --name=MonitorServiceInterface --case=underscore --structname=MockMonitorService
 type MonitorServiceInterface interface {
 	Start(opts MetricOptions) error
 	GetMetricType() (MetricType, error)

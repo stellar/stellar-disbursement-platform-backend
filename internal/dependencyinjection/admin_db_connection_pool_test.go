@@ -10,7 +10,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/router"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
+	monitorMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor/mocks"
 )
 
 func Test_dependencyinjection_NewAdminDBConnectionPool(t *testing.T) {
@@ -42,7 +42,7 @@ func Test_dependencyinjection_NewAdminDBConnectionPool(t *testing.T) {
 	t.Run("should create and return the same instance on the second call (with Metrics)", func(t *testing.T) {
 		ClearInstancesTestHelper(t)
 
-		mMonitorService := &monitor.MockMonitorService{}
+		mMonitorService := monitorMocks.NewMockMonitorService(t)
 		opts := DBConnectionPoolOptions{DatabaseURL: dbt.DSN, MonitorService: mMonitorService}
 
 		gotDependency, err := NewAdminDBConnectionPool(ctx, opts)
