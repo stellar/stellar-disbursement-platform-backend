@@ -28,8 +28,9 @@ type TxMetadata struct {
 	EventID          string
 	SrcChannelAcc    string
 	PaymentEventType string
-	IsHorizonErr     bool
-	ErrStack         string
+	IsHorizonErr     bool   // TODO: remove
+	ErrStack         string // TODO: remove
+	// Error            string 	//TODO: add
 }
 
 func (ms *TSSMonitorService) Start(opts sdpMonitor.MetricOptions) error {
