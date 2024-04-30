@@ -30,6 +30,8 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
+	sdpMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
+	monitorMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions"
@@ -430,6 +432,109 @@ func Test_TransactionWorker_updateContextLogger(t *testing.T) {
 			assert.Equal(t, wantLogData, logData, "Missing key-value pair")
 		})
 	}
+}
+
+func Test_TransactionWorker_handleFailedTransaction(t *testing.T) {
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	// horizonError := horizonclient.Error{
+	// 	Problem: problem.P{
+	// 		Status: http.StatusBadRequest,
+	// 		Extras: map[string]interface{}{
+	// 			"result_codes": map[string]interface{}{
+	// 				"transaction": "tx_failed",
+	// 				"operations":  []string{"op_underfunded"}, // <--- this should make the transaction be marked as ERROR
+	// 			},
+	// 		},
+	// 	},
+	// }
+	nonHorizonError := errors.New("non-horizon error")
+
+	testCases := []struct {
+		name         string
+		hTxRespFn    func(txJob *TxJob) horizon.Transaction
+		hErr         *utils.HorizonErrorWrapper
+		setupMocksFn func(t *testing.T, tw *TransactionWorker)
+		errContains  []string
+	}{
+		{
+			name: "saveResponseXDRIfPresent fails",
+			hTxRespFn: func(txJob *TxJob) horizon.Transaction {
+				return horizon.Transaction{
+					ID:         "tx_id_123",
+					Successful: false,
+					Account:    txJob.ChannelAccount.PublicKey,
+				}
+			},
+			hErr: utils.NewHorizonErrorWrapper(nonHorizonError),
+			setupMocksFn: func(t *testing.T, tw *TransactionWorker) {
+				mockTxStore := storeMocks.NewMockTransactionStore(t)
+				mockTxStore.
+					On("UpdateStellarTransactionXDRReceived", mock.Anything, mock.AnythingOfType("string"), mock.AnythingOfType("string")).
+					Return(nil, errors.New("txModel error in UpdateStellarTransactionXDRReceived")).
+					Once()
+				tw.txModel = mockTxStore
+
+				mMonitorClient := monitorMocks.NewMockMonitorClient(t)
+				mMonitorClient.
+					On("MonitorCounters", sdpMonitor.PaymentErrorTag, mock.Anything).
+					Return(nil).
+					Once()
+				tssMonitorService := tssMonitor.TSSMonitorService{
+					Version:       "0.01",
+					GitCommitHash: "0xABC",
+					Client:        mMonitorClient,
+				}
+				tw.monitorSvc = tssMonitorService
+			},
+			errContains: []string{"saving response XDR", "updating XDRReceived", "txModel error in UpdateStellarTransactionXDRReceived"},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			transactionWorker := getTransactionWorkerInstance(t, dbConnectionPool)
+			transactionWorker.jobUUID = uuid.NewString()
+			txJob := createTxJobFixture(t, context.Background(), dbConnectionPool, true, 1, 2, uuid.NewString())
+			require.NotEmpty(t, txJob)
+
+			// Setup mocks:
+			tc.setupMocksFn(t, &transactionWorker)
+
+			// Run test:
+			err := transactionWorker.handleFailedTransaction(context.Background(), &txJob, tc.hTxRespFn(&txJob), tc.hErr)
+
+			// Assert:
+			if tc.errContains != nil {
+				require.Error(t, err)
+				for i, wantErr := range tc.errContains {
+					assert.Containsf(t, err.Error(), wantErr, "error with index %d and text %q was not found in %q", i, wantErr, err.Error())
+				}
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+
+	// TODO: setup monitorSvc.LogAndMonitorTransaction mock
+	// TODO: setup txModel.UpdateStellarTransactionXDRReceived mock (saveResponseXDRIfPresent)
+	// TODO: setup txProcessingLimiter.AdjustLimitIfNeeded mock
+	// TODO: setup txModel.UpdateStatusToError mock
+	// TODO: setup eventProducer.WriteMessages mock (producePaymentCompletedEvent)
+	// TODO: setup crashTrackerClient.LogAndReportErrors mock
+
+	// txModel := store.NewTransactionModel(dbConnectionPool)
+	// chAccModel := store.NewChannelAccountModel(dbConnectionPool)
+	// defer store.DeleteAllFromChannelAccounts(t, ctx, dbConnectionPool)
+	// defer store.DeleteAllTransactionFixtures(t, ctx, dbConnectionPool)
+
+	// transactionWorker := getTransactionWorkerInstance(t, dbConnectionPool)
+	// txJob := createTxJobFixture(t, ctx, dbConnectionPool, true, currentLedger, lockedToLedger, uuid.NewString())
+	// require.NotEmpty(t, txJob)
 }
 
 func Test_TransactionWorker_handleSuccessfulTransaction(t *testing.T) {

@@ -161,7 +161,6 @@ func (tw *TransactionWorker) runJob(ctx context.Context, txJob *TxJob) error {
 	}
 }
 
-// TODO: add tests
 // handleFailedTransaction will wrap up the job when the transaction was submitted to the network but failed.
 // This method will only return an error if something goes wrong when handling the result and marking the transaction as
 // ERROR.
@@ -179,50 +178,38 @@ func (tw *TransactionWorker) runJob(ctx context.Context, txJob *TxJob) error {
 //   - 400 - tx_bad_seq: Bad Request
 //   - 400 - tx_too_late: Bad Request
 //   - xxx - Any unexpected error.
-func (tw *TransactionWorker) handleFailedTransaction(ctx context.Context, txJob *TxJob, hTxResp horizon.Transaction, hErr error) error {
+func (tw *TransactionWorker) handleFailedTransaction(ctx context.Context, txJob *TxJob, hTxResp horizon.Transaction, hErr *utils.HorizonErrorWrapper) error {
+	// TODO: add tests
 	log.Ctx(ctx).Errorf("🔴 Error processing job: %v", hErr)
+
+	metricsMetadata := tssMonitor.TxMetadata{
+		EventID:          tw.jobUUID,
+		SrcChannelAcc:    txJob.ChannelAccount.PublicKey,
+		PaymentEventType: sdpMonitor.PaymentMarkedForReprocessingLabel,
+	}
+	defer func() {
+		tw.monitorSvc.LogAndMonitorTransaction(
+			ctx,
+			txJob.Transaction,
+			sdpMonitor.PaymentErrorTag,
+			metricsMetadata,
+		)
+	}()
 
 	err := tw.saveResponseXDRIfPresent(ctx, txJob, hTxResp)
 	if err != nil {
 		return fmt.Errorf("saving response XDR: %w", err)
 	}
 
-	var shouldMarkAsError bool
-	var isHorizonErr bool
 	var hErrWrapper *utils.HorizonErrorWrapper
-	defer func() {
-		metricTag := sdpMonitor.PaymentErrorTag
-		eventType := sdpMonitor.PaymentFailedLabel
-		if !shouldMarkAsError {
-			eventType = sdpMonitor.PaymentMarkedForReprocessingLabel
-		}
-
-		tw.monitorSvc.LogAndMonitorTransaction(
-			ctx,
-			txJob.Transaction,
-			metricTag,
-			tssMonitor.TxMetadata{
-				EventID:          tw.jobUUID,
-				SrcChannelAcc:    txJob.ChannelAccount.PublicKey,
-				IsHorizonErr:     isHorizonErr,
-				PaymentEventType: eventType,
-			},
-		)
-	}()
-
 	if errors.As(hErr, &hErrWrapper) {
 		tw.txProcessingLimiter.AdjustLimitIfNeeded(hErrWrapper)
 
 		if hErrWrapper.IsHorizonError() {
-			isHorizonErr = true
+			metricsMetadata.IsHorizonErr = true
 
-			// Errors that are not marked as definitive errors:
-			//   - 504: Timeout
-			//   - 429: Too Many Requests
-			//   - 400: with any of the codes: [tx_insufficient_fee, tx_too_late, tx_bad_seq]
-			//   - 5xx
-			//   - random network errors
 			if hErrWrapper.ShouldMarkAsError() {
+				metricsMetadata.PaymentEventType = sdpMonitor.PaymentFailedLabel
 				var updatedTx *store.Transaction
 				updatedTx, err = tw.txModel.UpdateStatusToError(ctx, txJob.Transaction, hErrWrapper.Error())
 				if err != nil {
