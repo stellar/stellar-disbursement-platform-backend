@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"slices"
@@ -56,6 +57,11 @@ type HorizonErrorWrapper struct {
 func NewHorizonErrorWrapper(err error) *HorizonErrorWrapper {
 	if err == nil {
 		return nil
+	}
+
+	var existingHorizonErr *HorizonErrorWrapper
+	if errors.As(err, &existingHorizonErr) {
+		return existingHorizonErr
 	}
 
 	hError := horizonclient.GetError(err)
