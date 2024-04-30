@@ -203,10 +203,9 @@ func (tw *TransactionWorker) handleFailedTransaction(ctx context.Context, txJob 
 
 	var hErrWrapper *utils.HorizonErrorWrapper
 	if errors.As(hErr, &hErrWrapper) {
-		tw.txProcessingLimiter.AdjustLimitIfNeeded(hErrWrapper)
-
 		if hErrWrapper.IsHorizonError() {
 			metricsMetadata.IsHorizonErr = true
+			tw.txProcessingLimiter.AdjustLimitIfNeeded(hErrWrapper)
 
 			if hErrWrapper.ShouldMarkAsError() {
 				metricsMetadata.PaymentEventType = sdpMonitor.PaymentFailedLabel

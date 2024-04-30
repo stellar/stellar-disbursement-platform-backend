@@ -434,7 +434,7 @@ func Test_TransactionWorker_updateContextLogger(t *testing.T) {
 	}
 }
 
-func Test_TransactionWorker_handleFailedTransaction(t *testing.T) {
+func Test_TransactionWorker_handleFailedTransaction_nonHorizonErrors(t *testing.T) {
 	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
@@ -458,7 +458,7 @@ func Test_TransactionWorker_handleFailedTransaction(t *testing.T) {
 		name         string
 		hTxRespFn    func(txJob *TxJob) horizon.Transaction
 		hErr         *utils.HorizonErrorWrapper
-		setupMocksFn func(t *testing.T, tw *TransactionWorker)
+		setupMocksFn func(t *testing.T, tw *TransactionWorker, txJob *TxJob)
 		errContains  []string
 	}{
 		{
@@ -466,12 +466,14 @@ func Test_TransactionWorker_handleFailedTransaction(t *testing.T) {
 			hTxRespFn: func(txJob *TxJob) horizon.Transaction {
 				return horizon.Transaction{
 					ID:         "tx_id_123",
+					ResultXdr:  "result_xdr",
 					Successful: false,
 					Account:    txJob.ChannelAccount.PublicKey,
 				}
 			},
 			hErr: utils.NewHorizonErrorWrapper(nonHorizonError),
-			setupMocksFn: func(t *testing.T, tw *TransactionWorker) {
+			setupMocksFn: func(t *testing.T, tw *TransactionWorker, txJob *TxJob) {
+				// saveResponseXDRIfPresent
 				mockTxStore := storeMocks.NewMockTransactionStore(t)
 				mockTxStore.
 					On("UpdateStellarTransactionXDRReceived", mock.Anything, mock.AnythingOfType("string"), mock.AnythingOfType("string")).
@@ -479,6 +481,7 @@ func Test_TransactionWorker_handleFailedTransaction(t *testing.T) {
 					Once()
 				tw.txModel = mockTxStore
 
+				// defer LogAndMonitorTransaction
 				mMonitorClient := monitorMocks.NewMockMonitorClient(t)
 				mMonitorClient.
 					On("MonitorCounters", sdpMonitor.PaymentErrorTag, mock.Anything).
@@ -493,17 +496,65 @@ func Test_TransactionWorker_handleFailedTransaction(t *testing.T) {
 			},
 			errContains: []string{"saving response XDR", "updating XDRReceived", "txModel error in UpdateStellarTransactionXDRReceived"},
 		},
+		{
+			name: "it's not a horizon error, and unlockJob fails",
+			hTxRespFn: func(txJob *TxJob) horizon.Transaction {
+				return horizon.Transaction{
+					ID:         "tx_id_123",
+					ResultXdr:  "result_xdr",
+					Successful: false,
+					Account:    txJob.ChannelAccount.PublicKey,
+				}
+			},
+			hErr: utils.NewHorizonErrorWrapper(nonHorizonError),
+			setupMocksFn: func(t *testing.T, tw *TransactionWorker, txJob *TxJob) {
+				// saveResponseXDRIfPresent
+				mockTxStore := storeMocks.NewMockTransactionStore(t)
+				txJob.Transaction.XDRReceived = sql.NullString{Valid: true, String: "xdr_received_123"}
+				mockTxStore.
+					On("UpdateStellarTransactionXDRReceived", mock.Anything, mock.AnythingOfType("string"), mock.AnythingOfType("string")).
+					Return(&txJob.Transaction, nil).
+					Once()
+				tw.txModel = mockTxStore
+
+				// unlockJob
+				mockChAccStore := storeMocks.NewMockChannelAccountStore(t)
+				mockChAccStore.
+					On("Unlock", mock.Anything, mock.Anything, txJob.ChannelAccount.PublicKey).
+					Return(nil, errors.New("chAccModel error in Unlock")).
+					Once()
+				tw.chAccModel = mockChAccStore
+
+				// defer LogAndMonitorTransaction
+				mMonitorClient := monitorMocks.NewMockMonitorClient(t)
+				mMonitorClient.
+					On("MonitorCounters", sdpMonitor.PaymentErrorTag, mock.Anything).
+					Return(nil).
+					Once()
+				tssMonitorService := tssMonitor.TSSMonitorService{
+					Version:       "0.01",
+					GitCommitHash: "0xABC",
+					Client:        mMonitorClient,
+				}
+				tw.monitorSvc = tssMonitorService
+			},
+			errContains: []string{"unlocking job", "unlocking channel account", "chAccModel error in Unlock"},
+		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			defer store.DeleteAllFromChannelAccounts(t, ctx, dbConnectionPool)
+			defer store.DeleteAllTransactionFixtures(t, ctx, dbConnectionPool)
+
 			transactionWorker := getTransactionWorkerInstance(t, dbConnectionPool)
 			transactionWorker.jobUUID = uuid.NewString()
 			txJob := createTxJobFixture(t, context.Background(), dbConnectionPool, true, 1, 2, uuid.NewString())
 			require.NotEmpty(t, txJob)
 
 			// Setup mocks:
-			tc.setupMocksFn(t, &transactionWorker)
+			tc.setupMocksFn(t, &transactionWorker, &txJob)
 
 			// Run test:
 			err := transactionWorker.handleFailedTransaction(context.Background(), &txJob, tc.hTxRespFn(&txJob), tc.hErr)
