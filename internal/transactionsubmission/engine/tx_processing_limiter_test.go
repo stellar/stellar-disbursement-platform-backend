@@ -12,13 +12,13 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
 )
 
-func Test_TxProcessingLimiter_AdjustLimitIfNeeded(t *testing.T) {
+func Test_TxProcessingLimiterImpl_AdjustLimitIfNeeded(t *testing.T) {
 	currNumChannelAccounts := 50
 
 	testCases := []struct {
 		name       string
 		hErr       *utils.HorizonErrorWrapper
-		wantResult *TransactionProcessingLimiter
+		wantResult *TransactionProcessingLimiterImpl
 	}{
 		{
 			name: "adjusts limit if the horizon client error is too_many_requests",
@@ -27,7 +27,7 @@ func Test_TxProcessingLimiter_AdjustLimitIfNeeded(t *testing.T) {
 					Problem: problem.P{Status: http.StatusTooManyRequests},
 				},
 			),
-			wantResult: &TransactionProcessingLimiter{
+			wantResult: &TransactionProcessingLimiterImpl{
 				limitValue:                    defaultBundlesSelectionLimit,
 				IndeterminateResponsesCounter: indeterminateResponsesToleranceLimit,
 			},
@@ -39,7 +39,7 @@ func Test_TxProcessingLimiter_AdjustLimitIfNeeded(t *testing.T) {
 					Problem: problem.P{Status: http.StatusGatewayTimeout},
 				},
 			),
-			wantResult: &TransactionProcessingLimiter{
+			wantResult: &TransactionProcessingLimiterImpl{
 				limitValue:                    defaultBundlesSelectionLimit,
 				IndeterminateResponsesCounter: indeterminateResponsesToleranceLimit,
 			},
@@ -58,7 +58,7 @@ func Test_TxProcessingLimiter_AdjustLimitIfNeeded(t *testing.T) {
 					},
 				},
 			),
-			wantResult: &TransactionProcessingLimiter{
+			wantResult: &TransactionProcessingLimiterImpl{
 				limitValue:                    defaultBundlesSelectionLimit,
 				IndeterminateResponsesCounter: indeterminateResponsesToleranceLimit,
 			},
@@ -77,7 +77,7 @@ func Test_TxProcessingLimiter_AdjustLimitIfNeeded(t *testing.T) {
 					},
 				},
 			),
-			wantResult: &TransactionProcessingLimiter{
+			wantResult: &TransactionProcessingLimiterImpl{
 				limitValue:                    currNumChannelAccounts,
 				IndeterminateResponsesCounter: indeterminateResponsesToleranceLimit - 1,
 			},
@@ -86,7 +86,7 @@ func Test_TxProcessingLimiter_AdjustLimitIfNeeded(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			txProcessingLimiter := &TransactionProcessingLimiter{
+			txProcessingLimiter := &TransactionProcessingLimiterImpl{
 				CurrNumChannelAccounts:        currNumChannelAccounts,
 				limitValue:                    currNumChannelAccounts,
 				IndeterminateResponsesCounter: indeterminateResponsesToleranceLimit - 1,
@@ -100,29 +100,29 @@ func Test_TxProcessingLimiter_AdjustLimitIfNeeded(t *testing.T) {
 	}
 }
 
-func Test_TxProcessingLimiter_LimitValue(t *testing.T) {
+func Test_TxProcessingLimiterImpl_LimitValue(t *testing.T) {
 	initialLimitValue := 100
 	currNumChannelAccounts := 50
 
 	testCases := []struct {
 		name       string
-		wait       func(tpl *TransactionProcessingLimiter)
-		wantResult *TransactionProcessingLimiter
+		wait       func(tpl *TransactionProcessingLimiterImpl)
+		wantResult *TransactionProcessingLimiterImpl
 	}{
 		{
 			name: "no change when the time is before current window is complete",
-			wait: func(tpl *TransactionProcessingLimiter) {},
-			wantResult: &TransactionProcessingLimiter{
+			wait: func(tpl *TransactionProcessingLimiterImpl) {},
+			wantResult: &TransactionProcessingLimiterImpl{
 				limitValue:                    initialLimitValue,
 				IndeterminateResponsesCounter: indeterminateResponsesToleranceLimit - 1,
 			},
 		},
 		{
 			name: "change when the time is after current window is complete",
-			wait: func(tpl *TransactionProcessingLimiter) {
+			wait: func(tpl *TransactionProcessingLimiterImpl) {
 				tpl.CounterLastUpdated = tpl.CounterLastUpdated.Add(-10 * time.Minute)
 			},
-			wantResult: &TransactionProcessingLimiter{
+			wantResult: &TransactionProcessingLimiterImpl{
 				limitValue:                    currNumChannelAccounts,
 				IndeterminateResponsesCounter: 0,
 			},
@@ -130,7 +130,7 @@ func Test_TxProcessingLimiter_LimitValue(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		txProcessingLimiter := &TransactionProcessingLimiter{
+		txProcessingLimiter := &TransactionProcessingLimiterImpl{
 			CurrNumChannelAccounts:        currNumChannelAccounts,
 			limitValue:                    initialLimitValue,
 			IndeterminateResponsesCounter: indeterminateResponsesToleranceLimit - 1,

@@ -333,8 +333,6 @@ func Test_NewManager(t *testing.T) {
 
 				wantEventProducer := &events.MockProducer{}
 
-				txProcessingLimiter := engine.NewTransactionProcessingLimiter(submitterOptions.NumChannelAccounts)
-				txProcessingLimiter.CounterLastUpdated = gotManager.txProcessingLimiter.CounterLastUpdated
 				wantManager := &Manager{
 					dbConnectionPool: wantConnectionPool,
 					chAccModel:       wantChAccModel,
@@ -342,7 +340,7 @@ func Test_NewManager(t *testing.T) {
 					chTxBundleModel:  wantChTxBundleModel,
 
 					pollingInterval:     time.Duration(submitterOptions.QueuePollingInterval) * time.Second,
-					txProcessingLimiter: txProcessingLimiter,
+					txProcessingLimiter: gotManager.txProcessingLimiter,
 
 					engine: wantSubmitterEngine,
 

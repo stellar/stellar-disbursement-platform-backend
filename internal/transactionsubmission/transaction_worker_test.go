@@ -201,7 +201,7 @@ func Test_NewTransactionWorker(t *testing.T) {
 		sigService          signing.SignatureService
 		maxBaseFee          int
 		crashTrackerClient  crashtracker.CrashTrackerClient
-		txProcessingLimiter *engine.TransactionProcessingLimiter
+		txProcessingLimiter engine.TransactionProcessingLimiter
 		monitorSvc          tssMonitor.TSSMonitorService
 		eventProducer       events.Producer
 		wantError           error

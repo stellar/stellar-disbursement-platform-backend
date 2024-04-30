@@ -13,9 +13,30 @@ const (
 	minutesInWindow                      = 3
 )
 
-// TransactionProcessingLimiter is utilized by the manager and transaction worker to share metadata about and adjust
-// the rate at which tss processes transactions based on responses from Horizon.
-type TransactionProcessingLimiter struct {
+// TransactionProcessingLimiter is an interface that defines the methods that the manager and transaction worker use to
+// share metadata about and adjust the rate at which transactions are processed based on responses from Horizon.
+//
+//go:generate mockery --name=TransactionProcessingLimiter --case=underscore --structname=MockTransactionProcessingLimiter
+type TransactionProcessingLimiter interface {
+	// AdjustLimitIfNeeded is used to temporarily adjust the limitValue variable, returned by the LimitValue() getter,
+	// if it starts seeing a high number of indeterminate responses from Horizon, which are indicative of network
+	// congestion. The following error codes are considered indeterminate responses:
+	//   - 504: Timeout
+	//   - 429: Too Many Requests
+	//   - 400 - tx_insufficient_fee: Bad Request
+	AdjustLimitIfNeeded(hErr *utils.HorizonErrorWrapper)
+	// LimitValue returns the current value of the limitValue variable, which is used to determine the number of channel
+	// accounts to process transactions for in a single iteration. If the value being returned was downsized due to
+	// indeterminate responses, the method will restore it to the original value after a fixed window of time has
+	// passed.
+	LimitValue() int
+}
+
+var _ TransactionProcessingLimiter = (*TransactionProcessingLimiterImpl)(nil)
+
+// TransactionProcessingLimiter is an interface that defines the methods that the manager and transaction worker use to
+// share metadata about and adjust the rate at which transactions are processed based on responses from Horizon.
+type TransactionProcessingLimiterImpl struct {
 	CurrNumChannelAccounts        int
 	IndeterminateResponsesCounter int
 	CounterLastUpdated            time.Time
@@ -23,12 +44,12 @@ type TransactionProcessingLimiter struct {
 	mutex                         sync.Mutex
 }
 
-func NewTransactionProcessingLimiter(limit int) *TransactionProcessingLimiter {
+func NewTransactionProcessingLimiter(limit int) *TransactionProcessingLimiterImpl {
 	if limit < 0 {
 		limit = defaultBundlesSelectionLimit
 	}
 
-	return &TransactionProcessingLimiter{
+	return &TransactionProcessingLimiterImpl{
 		CurrNumChannelAccounts:        limit,
 		IndeterminateResponsesCounter: 0,
 		CounterLastUpdated:            time.Now(),
@@ -36,10 +57,7 @@ func NewTransactionProcessingLimiter(limit int) *TransactionProcessingLimiter {
 	}
 }
 
-// AdjustLimitIfNeeded re-establishes the transaction processing limit based on how many transactions result in
-// - `504`, 429`, `400` - tx_insufficient_fee` which are indicators for network congestion causing a cascade of further
-// transaction failures and need for retries.
-func (tpl *TransactionProcessingLimiter) AdjustLimitIfNeeded(hErr *utils.HorizonErrorWrapper) {
+func (tpl *TransactionProcessingLimiterImpl) AdjustLimitIfNeeded(hErr *utils.HorizonErrorWrapper) {
 	tpl.mutex.Lock()
 	defer tpl.mutex.Unlock()
 
@@ -56,9 +74,7 @@ func (tpl *TransactionProcessingLimiter) AdjustLimitIfNeeded(hErr *utils.Horizon
 	}
 }
 
-// LimitValue resets the necessary counter-related values when the current time is well outside the fixed
-// window of the last refresh, and serves as a getter for the `limitValue` field.
-func (tpl *TransactionProcessingLimiter) LimitValue() int {
+func (tpl *TransactionProcessingLimiterImpl) LimitValue() int {
 	tpl.mutex.Lock()
 	defer tpl.mutex.Unlock()
 	// refresh counter on a fixed window basis

@@ -44,7 +44,7 @@ type TransactionWorker struct {
 	chAccModel          store.ChannelAccountStore
 	engine              *engine.SubmitterEngine
 	crashTrackerClient  crashtracker.CrashTrackerClient
-	txProcessingLimiter *engine.TransactionProcessingLimiter
+	txProcessingLimiter engine.TransactionProcessingLimiter
 	monitorSvc          tssMonitor.TSSMonitorService
 	eventProducer       events.Producer
 	jobUUID             string
@@ -56,7 +56,7 @@ func NewTransactionWorker(
 	chAccModel *store.ChannelAccountModel,
 	engine *engine.SubmitterEngine,
 	crashTrackerClient crashtracker.CrashTrackerClient,
-	txProcessingLimiter *engine.TransactionProcessingLimiter,
+	txProcessingLimiter engine.TransactionProcessingLimiter,
 	monitorSvc tssMonitor.TSSMonitorService,
 	eventProducer events.Producer,
 ) (TransactionWorker, error) {
