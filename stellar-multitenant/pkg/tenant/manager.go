@@ -41,7 +41,7 @@ type ManagerInterface interface {
 	CreateTenantSchema(ctx context.Context, tenantName string) error
 	DropTenantSchema(ctx context.Context, tenantName string) error
 	UpdateTenantConfig(ctx context.Context, tu *TenantUpdate) (*Tenant, error)
-	SoftDeleteTenantByID(ctx context.Context, tenantID string) error
+	SoftDeleteTenantByID(ctx context.Context, tenantID string) (*Tenant, error)
 }
 
 type Manager struct {
@@ -208,7 +208,7 @@ func (m *Manager) DeleteTenantByName(ctx context.Context, name string) error {
 	return nil
 }
 
-func (m *Manager) SoftDeleteTenantByID(ctx context.Context, tenantID string) error {
+func (m *Manager) SoftDeleteTenantByID(ctx context.Context, tenantID string) (*Tenant, error) {
 	updateQuery := `
 		UPDATE tenants t
 		SET
@@ -217,7 +217,7 @@ func (m *Manager) SoftDeleteTenantByID(ctx context.Context, tenantID string) err
 
 	q := fmt.Sprintf(updateQuery, "deleted_at = NOW()")
 	queryParams := &QueryParams{
-		Filters: deactivatedTenantsFilters(),
+		Filters: getDeactivatedTenantsFilters(),
 	}
 	queryParams.Filters[FilterKeyID] = tenantID
 
@@ -228,12 +228,12 @@ func (m *Manager) SoftDeleteTenantByID(ctx context.Context, tenantID string) err
 	err := m.db.GetContext(ctx, &t, query, params...)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return ErrTenantDoesNotExist
+			return nil, ErrTenantDoesNotExist
 		}
-		return fmt.Errorf("soft deleting tenant %s: %w", tenantID, err)
+		return nil, fmt.Errorf("soft deleting tenant %s: %w", tenantID, err)
 	}
 
-	return nil
+	return &t, nil
 }
 
 func (m *Manager) CreateTenantSchema(ctx context.Context, tenantName string) error {

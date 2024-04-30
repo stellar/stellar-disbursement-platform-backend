@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/stellar/go/protocols/horizon/base"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -882,6 +883,7 @@ func Test_TenantHandler_Delete(t *testing.T) {
 	r.Delete("/tenants/{id}", handler.Delete)
 	tntID := "tntID"
 	tntDistributionAcc := keypair.MustRandom().Address()
+	deletedAt := time.Now()
 
 	testCases := []struct {
 		name             string
@@ -942,7 +944,7 @@ func Test_TenantHandler_Delete(t *testing.T) {
 			expectedStatus: http.StatusInternalServerError,
 		},
 		{
-			name: "tenant distribution account still has valid balance",
+			name: "tenant distribution account still has non-zero non-native balance",
 			id:   tntID,
 			mockTntManagerFn: func(tntManagerMock *tenant.TenantManagerMock, _ *horizonclient.MockClient) {
 				tntManagerMock.On("GetTenant", mock.Anything, &tenant.QueryParams{
@@ -953,7 +955,25 @@ func Test_TenantHandler_Delete(t *testing.T) {
 				horizonClientMock.On("AccountDetail", horizonclient.AccountRequest{AccountID: tntDistributionAcc}).
 					Return(horizon.Account{
 						Balances: []horizon.Balance{
-							{Balance: "100.0000000"},
+							{Asset: base.Asset{Type: "credit_alphanum4"}, Balance: "100.0000000"},
+						},
+					}, nil).Once()
+			},
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name: "tenant distribution account still has native balance above the minimum threshold",
+			id:   tntID,
+			mockTntManagerFn: func(tntManagerMock *tenant.TenantManagerMock, _ *horizonclient.MockClient) {
+				tntManagerMock.On("GetTenant", mock.Anything, &tenant.QueryParams{
+					Filters: map[tenant.FilterKey]interface{}{tenant.FilterKeyID: tntID},
+				}).Return(&tenant.Tenant{ID: tntID, Status: tenant.DeactivatedTenantStatus, DistributionAccount: &tntDistributionAcc}, nil).
+					Once()
+				distAccResolver.On("HostDistributionAccount").Return("host-dist-account").Once()
+				horizonClientMock.On("AccountDetail", horizonclient.AccountRequest{AccountID: tntDistributionAcc}).
+					Return(horizon.Account{
+						Balances: []horizon.Balance{
+							{Asset: base.Asset{Type: "native"}, Balance: "120.0000000"},
 						},
 					}, nil).Once()
 			},
@@ -973,7 +993,7 @@ func Test_TenantHandler_Delete(t *testing.T) {
 					Return(horizon.Account{Balances: make([]horizon.Balance, 0)}, nil).
 					Once()
 				tntManagerMock.On("SoftDeleteTenantByID", mock.Anything, tntID).
-					Return(errors.New("foobar")).
+					Return(nil, errors.New("foobar")).
 					Once()
 			},
 			expectedStatus: http.StatusInternalServerError,
@@ -989,8 +1009,10 @@ func Test_TenantHandler_Delete(t *testing.T) {
 					Once()
 				distAccResolver.On("HostDistributionAccount").Return(tntDistributionAcc).Once()
 				tntManagerMock.On("SoftDeleteTenantByID", mock.Anything, tntID).
-					Return(nil).
-					Once()
+					Return(&tenant.Tenant{
+						ID: tntID, Status: tenant.DeactivatedTenantStatus, DistributionAccount: &tntDistributionAcc, DeletedAt: &deletedAt},
+						nil,
+					).Once()
 			},
 			expectedStatus: http.StatusOK,
 		},
@@ -1008,8 +1030,10 @@ func Test_TenantHandler_Delete(t *testing.T) {
 					Return(horizon.Account{Balances: make([]horizon.Balance, 0)}, nil).
 					Once()
 				tntManagerMock.On("SoftDeleteTenantByID", mock.Anything, tntID).
-					Return(nil).
-					Once()
+					Return(&tenant.Tenant{
+						ID: tntID, Status: tenant.DeactivatedTenantStatus, DistributionAccount: &tntDistributionAcc, DeletedAt: &deletedAt},
+						nil,
+					).Once()
 			},
 			expectedStatus: http.StatusOK,
 		},
@@ -1025,6 +1049,12 @@ func Test_TenantHandler_Delete(t *testing.T) {
 
 			resp := rr.Result()
 			assert.Equal(t, tc.expectedStatus, resp.StatusCode)
+			if tc.expectedStatus == http.StatusOK {
+				respBody, rErr := io.ReadAll(resp.Body)
+				require.NoError(t, rErr)
+
+				assert.Contains(t, string(respBody), "\"deleted_at\": "+"\""+deletedAt.Format(time.RFC3339Nano)+"\"\n")
+			}
 
 			tenantManagerMock.AssertExpectations(t)
 			horizonClientMock.AssertExpectations(t)

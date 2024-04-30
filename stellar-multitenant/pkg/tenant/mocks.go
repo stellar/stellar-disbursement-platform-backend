@@ -93,12 +93,12 @@ func (m *TenantManagerMock) DeleteTenantByName(ctx context.Context, name string)
 	return args.Error(0)
 }
 
-func (m *TenantManagerMock) SoftDeleteTenantByID(ctx context.Context, id string) error {
+func (m *TenantManagerMock) SoftDeleteTenantByID(ctx context.Context, id string) (*Tenant, error) {
 	args := m.Called(ctx, id)
 	if args.Get(0) == nil {
-		return args.Error(0)
+		return nil, args.Error(1)
 	}
-	return args.Error(0)
+	return args.Get(0).(*Tenant), args.Error(1)
 }
 
 func (m *TenantManagerMock) CreateTenantSchema(ctx context.Context, name string) error {

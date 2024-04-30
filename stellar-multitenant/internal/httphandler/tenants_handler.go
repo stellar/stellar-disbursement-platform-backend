@@ -34,6 +34,8 @@ type TenantsHandler struct {
 	SingleTenantMode            bool
 }
 
+const MaxNativeAssetBalanceForDeletion = 100
+
 func (t TenantsHandler) GetAll(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -202,24 +204,36 @@ func (t TenantsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 			for _, b := range distAcc.Balances {
 				assetBalance, getAssetBalErr := strconv.ParseFloat(b.Balance, 64)
 				if getAssetBalErr != nil {
-					httperror.InternalError(ctx, fmt.Sprintf("Cannot convert Horizon distribution account balance %s into float", b.Balance), getAssetBalErr, nil).Render(w)
+					errMsg := fmt.Sprintf("Cannot convert Horizon distribution account balance %s into float", b.Balance)
+					httperror.InternalError(ctx, errMsg, getAssetBalErr, nil).Render(w)
 					return
 				}
 
-				if assetBalance != 0 {
-					httperror.BadRequest("Tenant distribution account must have a zero balance to be eligible for deletion", nil, nil).Render(w)
-					return
+				if b.Asset.Type == "native" {
+					if assetBalance > MaxNativeAssetBalanceForDeletion {
+						errMsg := fmt.Sprintf("Tenant distribution account must have a balance of less than %d XLM to be eligible for deletion", MaxNativeAssetBalanceForDeletion)
+						httperror.BadRequest(errMsg, nil, nil).Render(w)
+						return
+					}
+				} else {
+					if assetBalance != 0 {
+						errMsg := fmt.Sprintf("Tenant distribution account must have a zero balance to be eligible for deletion. Current balance for %s: %s", b.Balance, b.Asset.Code)
+						httperror.BadRequest(errMsg, nil, nil).Render(w)
+						return
+					}
 				}
 			}
 		}
 	}
 
-	err = t.Manager.SoftDeleteTenantByID(ctx, tenantID)
+	tnt, err = t.Manager.SoftDeleteTenantByID(ctx, tenantID)
 	if err != nil {
 		errMsg := fmt.Sprintf("Cannot delete tenant %s", tenantID)
 		httperror.InternalError(ctx, errMsg, err, nil).Render(w)
 		return
 	}
+
+	httpjson.RenderStatus(w, http.StatusOK, tnt, httpjson.JSON)
 }
 
 func (t TenantsHandler) SetDefault(rw http.ResponseWriter, req *http.Request) {

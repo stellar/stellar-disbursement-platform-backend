@@ -30,7 +30,7 @@ func excludeInactiveTenantsFilters() map[FilterKey]interface{} {
 	}
 }
 
-func deactivatedTenantsFilters() map[FilterKey]interface{} {
+func getDeactivatedTenantsFilters() map[FilterKey]interface{} {
 	return map[FilterKey]interface{}{
 		FilterKeyStatus:  DeactivatedTenantStatus,
 		FilterKeyDeleted: false,

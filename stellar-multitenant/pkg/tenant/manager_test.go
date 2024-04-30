@@ -469,23 +469,24 @@ func Test_Manager_SoftDeleteTenantByID(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("returns error when tenant does not exist", func(t *testing.T) {
-		err := m.SoftDeleteTenantByID(ctx, "invalid-tnt")
+		_, err := m.SoftDeleteTenantByID(ctx, "invalid-tnt")
 		require.Error(t, err)
 		assert.ErrorIs(t, err, ErrTenantDoesNotExist)
 	})
 
 	t.Run("returns error when tenant is not deactivated", func(t *testing.T) {
-		err := m.SoftDeleteTenantByID(ctx, tnt.ID)
+		_, err := m.SoftDeleteTenantByID(ctx, tnt.ID)
 		require.Error(t, err)
 		assert.ErrorIs(t, err, ErrTenantDoesNotExist)
 	})
 
 	t.Run("successfully soft deletes tenant", func(t *testing.T) {
 		deactivateTenant(t, ctx, m, tnt)
-		err := m.SoftDeleteTenantByID(ctx, tnt.ID)
+		dbTnt, err := m.SoftDeleteTenantByID(ctx, tnt.ID)
 		require.NoError(t, err)
+		require.NotNil(t, dbTnt.DeletedAt)
 
-		dbTnt, err := m.GetTenant(ctx, &QueryParams{Filters: map[FilterKey]interface{}{FilterKeyID: tnt.ID}})
+		dbTnt, err = m.GetTenant(ctx, &QueryParams{Filters: map[FilterKey]interface{}{FilterKeyID: tnt.ID}})
 		require.NoError(t, err)
 		assert.NotNil(t, dbTnt.DeletedAt)
 	})
