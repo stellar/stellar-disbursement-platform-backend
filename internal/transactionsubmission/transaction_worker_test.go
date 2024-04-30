@@ -34,6 +34,7 @@ import (
 	monitorMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
+	engineMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions"
 	preconditionsMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
@@ -570,22 +571,108 @@ func Test_TransactionWorker_handleFailedTransaction_nonHorizonErrors(t *testing.
 			}
 		})
 	}
+}
 
-	// TODO: setup monitorSvc.LogAndMonitorTransaction mock
-	// TODO: setup txModel.UpdateStellarTransactionXDRReceived mock (saveResponseXDRIfPresent)
-	// TODO: setup txProcessingLimiter.AdjustLimitIfNeeded mock
-	// TODO: setup txModel.UpdateStatusToError mock
-	// TODO: setup eventProducer.WriteMessages mock (producePaymentCompletedEvent)
-	// TODO: setup crashTrackerClient.LogAndReportErrors mock
+func Test_TransactionWorker_handleFailedTransaction_errorsThatTriggerJitter(t *testing.T) {
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
 
-	// txModel := store.NewTransactionModel(dbConnectionPool)
-	// chAccModel := store.NewChannelAccountModel(dbConnectionPool)
-	// defer store.DeleteAllFromChannelAccounts(t, ctx, dbConnectionPool)
-	// defer store.DeleteAllTransactionFixtures(t, ctx, dbConnectionPool)
+	testCases := []struct {
+		name        string
+		statusCode  int
+		resultCodes map[string]interface{}
+	}{
+		{
+			name:       "504 - timeout",
+			statusCode: http.StatusGatewayTimeout,
+		},
+		{
+			name:       "429 - Too Many Requests",
+			statusCode: http.StatusTooManyRequests,
+		},
+		{
+			name:       "400 (tx_insufficient_fee) - Bad Request",
+			statusCode: http.StatusBadRequest,
+			resultCodes: map[string]interface{}{
+				"transaction": "tx_insufficient_fee",
+			},
+		},
+	}
 
-	// transactionWorker := getTransactionWorkerInstance(t, dbConnectionPool)
-	// txJob := createTxJobFixture(t, ctx, dbConnectionPool, true, currentLedger, lockedToLedger, uuid.NewString())
-	// require.NotEmpty(t, txJob)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			defer store.DeleteAllFromChannelAccounts(t, ctx, dbConnectionPool)
+			defer store.DeleteAllTransactionFixtures(t, ctx, dbConnectionPool)
+
+			tw := getTransactionWorkerInstance(t, dbConnectionPool)
+			tw.jobUUID = uuid.NewString()
+			txJob := createTxJobFixture(t, context.Background(), dbConnectionPool, true, 1, 2, uuid.NewString())
+			require.NotEmpty(t, txJob)
+
+			// declare horizon error
+			horizonError := horizonclient.Error{
+				Problem: problem.P{
+					Status: tc.statusCode,
+					Extras: map[string]interface{}{
+						"result_codes": tc.resultCodes,
+					},
+				},
+			}
+			hErr := utils.NewHorizonErrorWrapper(horizonError)
+
+			// Setup mocks PART 1: saveResponseXDRIfPresent
+			mockTxStore := storeMocks.NewMockTransactionStore(t)
+			txJob.Transaction.XDRReceived = sql.NullString{Valid: true, String: "xdr_received_123"}
+			mockTxStore.
+				On("UpdateStellarTransactionXDRReceived", mock.Anything, mock.AnythingOfType("string"), mock.AnythingOfType("string")).
+				Return(&txJob.Transaction, nil).
+				Once()
+			tw.txModel = mockTxStore
+			// Setup mocks PART 2: unlockJob
+			mockChAccStore := storeMocks.NewMockChannelAccountStore(t)
+			mockChAccStore.
+				On("Unlock", mock.Anything, mock.Anything, txJob.ChannelAccount.PublicKey).
+				Return(nil, nil).
+				Once()
+			tw.chAccModel = mockChAccStore
+			mockTxStore.
+				On("Unlock", mock.Anything, mock.Anything, txJob.Transaction.ID).
+				Return(nil, nil).
+				Once()
+			// Setup mocks PART 3: AdjustLimitIfNeeded
+			mockTxProcessingLimiter := engineMocks.NewMockTransactionProcessingLimiter(t)
+			mockTxProcessingLimiter.
+				On("AdjustLimitIfNeeded", hErr).
+				Once()
+			tw.txProcessingLimiter = mockTxProcessingLimiter
+			// Setup mocks PART 4: defer LogAndMonitorTransaction
+			mMonitorClient := monitorMocks.NewMockMonitorClient(t)
+			mMonitorClient.
+				On("MonitorCounters", sdpMonitor.PaymentErrorTag, mock.Anything).
+				Return(nil).
+				Once()
+			tssMonitorService := tssMonitor.TSSMonitorService{
+				Version:       "0.01",
+				GitCommitHash: "0xABC",
+				Client:        mMonitorClient,
+			}
+			tw.monitorSvc = tssMonitorService
+
+			// Run test:
+			hTransaction := horizon.Transaction{
+				ID:         "tx_id_123",
+				ResultXdr:  "result_xdr",
+				Successful: false,
+				Account:    txJob.ChannelAccount.PublicKey,
+			}
+			err := tw.handleFailedTransaction(context.Background(), &txJob, hTransaction, hErr)
+			require.NoError(t, err)
+		})
+	}
 }
 
 func Test_TransactionWorker_handleSuccessfulTransaction(t *testing.T) {
