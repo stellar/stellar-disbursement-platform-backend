@@ -181,7 +181,6 @@ func (tw *TransactionWorker) runJob(ctx context.Context, txJob *TxJob) error {
 //   - 400 - tx_too_late: Bad Request
 //   - xxx - Any unexpected error.
 func (tw *TransactionWorker) handleFailedTransaction(ctx context.Context, txJob *TxJob, hTxResp horizon.Transaction, hErr *utils.HorizonErrorWrapper) error {
-	// TODO: add tests
 	log.Ctx(ctx).Errorf("🔴 Error processing job: %v", hErr)
 
 	metricsMetadata := tssMonitor.TxMetadata{

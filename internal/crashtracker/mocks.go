@@ -39,7 +39,8 @@ type testInterface interface {
 	Cleanup(func())
 }
 
-// MockCrashTrackerClient creates a new instance of MockCrashTrackerClient. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
+// NewMockCrashTrackerClient creates a new instance of MockCrashTrackerClient. It also registers a testing interface on
+// the mock and a cleanup function to assert the mocks expectations.
 func NewMockCrashTrackerClient(t testInterface) *MockCrashTrackerClient {
 	mock := &MockCrashTrackerClient{}
 	mock.Mock.Test(t)
