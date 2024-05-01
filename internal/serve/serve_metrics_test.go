@@ -6,14 +6,15 @@ import (
 	"time"
 
 	supporthttp "github.com/stellar/go/support/http"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+
+	monitorMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor/mocks"
 )
 
 func Test_ServeMetrics(t *testing.T) {
-	mMonitorService := &monitor.MockMonitorService{}
+	mMonitorService := monitorMocks.NewMockMonitorService(t)
 
 	mMonitorService.On("GetMetricHttpHandler").
 		Return(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
@@ -43,5 +44,4 @@ func Test_ServeMetrics(t *testing.T) {
 	err := MetricsServe(opts, &mHTTPServer)
 	require.NoError(t, err)
 	mHTTPServer.AssertExpectations(t)
-	mMonitorService.AssertExpectations(t)
 }

@@ -24,6 +24,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
+	monitorMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/scheduler"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
@@ -132,7 +133,7 @@ func Test_serve(t *testing.T) {
 	ctx := context.Background()
 
 	// mock metric service
-	mMonitorService := monitor.MockMonitorService{}
+	mMonitorService := monitorMocks.NewMockMonitorService(t)
 
 	serveOpts := serve.ServeOptions{
 		Environment:                     "test",
@@ -140,7 +141,7 @@ func Test_serve(t *testing.T) {
 		Port:                            8000,
 		Version:                         "x.y.z",
 		InstanceName:                    "SDP Testnet",
-		MonitorService:                  &mMonitorService,
+		MonitorService:                  mMonitorService,
 		AdminDBConnectionPool:           dbConnectionPool,
 		MtnDBConnectionPool:             dbConnectionPool,
 		EC256PublicKey:                  "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAER88h7AiQyVDysRTxKvBB6CaiO/kS\ncvGyimApUE/12gFhNTRf37SE19CSCllKxstnVFOpLLWB7Qu5OJ0Wvcz3hg==\n-----END PUBLIC KEY-----",
@@ -192,14 +193,13 @@ func Test_serve(t *testing.T) {
 		Environment: "test",
 	}
 	mMonitorService.On("Start", metricOptions).Return(nil).Once()
-	defer mMonitorService.AssertExpectations(t)
 
 	chAccEncryptionPassphrase := keypair.MustRandom().Seed()
 	serveMetricOpts := serve.MetricsServeOptions{
 		Port:           8002,
 		Environment:    "test",
 		MetricType:     monitor.MetricTypePrometheus,
-		MonitorService: &mMonitorService,
+		MonitorService: mMonitorService,
 	}
 
 	serveTenantOpts := serveadmin.ServeOptions{
@@ -256,7 +256,7 @@ func Test_serve(t *testing.T) {
 	for _, cmd := range originalCommands {
 		if cmd.Use == "serve" {
 			serveCmdFound = true
-			rootCmd.AddCommand((&ServeCommand{}).Command(&mServer, &mMonitorService))
+			rootCmd.AddCommand((&ServeCommand{}).Command(&mServer, mMonitorService))
 		} else {
 			rootCmd.AddCommand(cmd)
 		}

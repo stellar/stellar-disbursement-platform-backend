@@ -21,6 +21,7 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
+	monitorMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
@@ -79,7 +80,7 @@ func Test_RecoverHandler_doesNotRecoverFromErrAbortHandler(t *testing.T) {
 }
 
 func Test_MetricsRequestHandler(t *testing.T) {
-	mMonitorService := &monitor.MockMonitorService{}
+	mMonitorService := monitorMocks.NewMockMonitorService(t)
 
 	// setup
 	r := chi.NewRouter()
@@ -109,8 +110,6 @@ func Test_MetricsRequestHandler(t *testing.T) {
 		assert.Equal(t, http.StatusOK, rr.Code)
 		wantBody := `{"status": "OK"}`
 		assert.JSONEq(t, wantBody, rr.Body.String())
-
-		mMonitorService.AssertExpectations(t)
 	})
 
 	t.Run("monitor request with invalid route", func(t *testing.T) {
@@ -130,8 +129,6 @@ func Test_MetricsRequestHandler(t *testing.T) {
 
 		// assert response
 		assert.Equal(t, http.StatusNotFound, rr.Code)
-
-		mMonitorService.AssertExpectations(t)
 	})
 
 	t.Run("monitor request with method not allowed", func(t *testing.T) {
@@ -151,8 +148,6 @@ func Test_MetricsRequestHandler(t *testing.T) {
 
 		// assert response
 		assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
-
-		mMonitorService.AssertExpectations(t)
 	})
 }
 

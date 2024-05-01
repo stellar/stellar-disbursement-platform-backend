@@ -4,9 +4,10 @@ import (
 	"context"
 	"testing"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	"github.com/stretchr/testify/require"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
+	monitorMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor/mocks"
 )
 
 func TestDBTransactionWithMetrics_Commit(t *testing.T) {
@@ -16,7 +17,7 @@ func TestDBTransactionWithMetrics_Commit(t *testing.T) {
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
 
-	mMonitorService := &monitor.MockMonitorService{}
+	mMonitorService := monitorMocks.NewMockMonitorService(t)
 
 	ctx := context.Background()
 	dbTx, err := dbConnectionPool.BeginTxx(ctx, nil)
@@ -41,7 +42,7 @@ func TestDBTransactionWithMetrics_Rollback(t *testing.T) {
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
 
-	mMonitorService := &monitor.MockMonitorService{}
+	mMonitorService := monitorMocks.NewMockMonitorService(t)
 
 	ctx := context.Background()
 	dbTx, err := dbConnectionPool.BeginTxx(ctx, nil)

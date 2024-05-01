@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
+	monitorMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor/mocks"
 )
 
 func TestOpen_OpenDBConnectionPool(t *testing.T) {
@@ -31,7 +31,7 @@ func TestOpen_OpenDBConnectionPoolWithMetrics(t *testing.T) {
 	db := dbtest.Postgres(t)
 	defer db.Close()
 
-	mMonitorService := &monitor.MockMonitorService{}
+	mMonitorService := monitorMocks.NewMockMonitorService(t)
 	dbConnectionPool, err := OpenDBConnectionPoolWithMetrics(db.DSN, mMonitorService)
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()

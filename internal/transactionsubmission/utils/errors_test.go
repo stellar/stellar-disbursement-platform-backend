@@ -152,6 +152,29 @@ func Test_NewHorizonErrorWrapper(t *testing.T) {
 	}
 }
 
+func Test_HorizonErrorWrapper_HandleDoubleEncapsulation(t *testing.T) {
+	originalErr := horizonclient.Error{
+		Problem: problem.P{
+			Title:  "Transaction Failed",
+			Type:   "transaction_failed",
+			Status: http.StatusBadRequest,
+			Detail: "some-detail",
+			Extras: map[string]interface{}{
+				"result_codes": map[string]interface{}{
+					"transaction": "tx_failed",
+					"operations":  []string{"op_underfunded"},
+				},
+			},
+		},
+	}
+
+	hErr := NewHorizonErrorWrapper(originalErr)
+	require.True(t, hErr.IsHorizonError())
+	hErr2 := NewHorizonErrorWrapper(hErr)
+	require.True(t, hErr2.IsHorizonError())
+	require.Equal(t, hErr, hErr2)
+}
+
 func Test_HorizonErrorWrapper_Error(t *testing.T) {
 	testCases := []struct {
 		name             string

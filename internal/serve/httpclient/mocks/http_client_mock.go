@@ -1,4 +1,4 @@
-package httpclient
+package mocks
 
 import (
 	"net/http"
@@ -6,6 +6,8 @@ import (
 
 	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stretchr/testify/mock"
+
+	httpclient "github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
 )
 
 type HttpClientMock struct {
@@ -37,6 +39,6 @@ func (h *HttpClientMock) PostForm(url string, data url.Values) (*http.Response, 
 }
 
 var (
-	_ HttpClientInterface = (*HttpClientMock)(nil)
-	_ horizonclient.HTTP  = (*HttpClientMock)(nil)
+	_ httpclient.HttpClientInterface = (*HttpClientMock)(nil)
+	_ horizonclient.HTTP             = (*HttpClientMock)(nil)
 )
