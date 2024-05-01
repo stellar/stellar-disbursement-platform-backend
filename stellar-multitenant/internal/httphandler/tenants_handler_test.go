@@ -2,6 +2,7 @@ package httphandler
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -14,6 +15,8 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/keypair"
+	"github.com/stellar/go/protocols/horizon"
+	"github.com/stellar/go/protocols/horizon/base"
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/txnbuild"
 	"github.com/stretchr/testify/assert"
@@ -124,7 +127,8 @@ func runSuccessfulRequestPatchTest(t *testing.T, r *chi.Mux, ctx context.Context
 			"name": "aid-org",
 			%s
 			"created_at": %q,
-			"updated_at": %q
+			"updated_at": %q,
+			"deleted_at": null
 		}
 	`, tnt.ID, expectedRespBody, tnt.CreatedAt.Format(time.RFC3339Nano), tntDB.UpdatedAt.Format(time.RFC3339Nano))
 
@@ -199,7 +203,8 @@ func Test_TenantHandler_Get(t *testing.T) {
 					"distribution_account": %q,
 					"is_default": false,
 					"created_at": %q,
-					"updated_at": %q
+					"updated_at": %q,
+					"deleted_at": null
 				},
 				{
 					"id": %q,
@@ -210,7 +215,8 @@ func Test_TenantHandler_Get(t *testing.T) {
 					"distribution_account": %q,
 					"is_default": false,
 					"created_at": %q,
-					"updated_at": %q
+					"updated_at": %q,
+					"deleted_at": null
 				},
 				{
 					"id": %q,
@@ -221,7 +227,8 @@ func Test_TenantHandler_Get(t *testing.T) {
 					"distribution_account": %q,
 					"is_default": false,
 					"created_at": %q,
-					"updated_at": %q
+					"updated_at": %q,
+					"deleted_at": null
 				}
 			]
 		`,
@@ -256,7 +263,8 @@ func Test_TenantHandler_Get(t *testing.T) {
 				"distribution_account": %q,
 				"is_default": false,
 				"created_at": %q,
-				"updated_at": %q
+				"updated_at": %q,
+				"deleted_at": null
 			}
 		`, tnt1.ID, tnt1.Name, *tnt1.DistributionAccount, tnt1.CreatedAt.Format(time.RFC3339Nano), tnt1.UpdatedAt.Format(time.RFC3339Nano))
 		assert.JSONEq(t, expectedRespBody, string(respBody))
@@ -287,7 +295,8 @@ func Test_TenantHandler_Get(t *testing.T) {
 				"distribution_account": %q,
 				"is_default": false,
 				"created_at": %q,
-				"updated_at": %q
+				"updated_at": %q,
+				"deleted_at": null
 			}
 		`, tnt2.ID, tnt2.Name, *tnt2.DistributionAccount, tnt2.CreatedAt.Format(time.RFC3339Nano), tnt2.UpdatedAt.Format(time.RFC3339Nano))
 		assert.JSONEq(t, expectedRespBody, string(respBody))
@@ -445,7 +454,8 @@ func Test_TenantHandler_Post(t *testing.T) {
 				"distribution_account": %q,
 				"is_default": false,
 				"created_at": %q,
-				"updated_at": %q
+				"updated_at": %q,
+				"deleted_at": null
 			}
 		`, tnt.ID, distAcc, tnt.CreatedAt.Format(time.RFC3339Nano), tnt.UpdatedAt.Format(time.RFC3339Nano))
 		assert.JSONEq(t, expectedRespBody, string(respBody))
@@ -838,7 +848,6 @@ func Test_TenantHandler_SetDefault(t *testing.T) {
 		http.HandlerFunc(handler.SetDefault).ServeHTTP(r, req)
 
 		resp := r.Result()
-		require.NoError(t, err)
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 
 		tnt1DB, err := tenantManager.GetTenantByID(ctx, tnt1.ID)
@@ -849,4 +858,220 @@ func Test_TenantHandler_SetDefault(t *testing.T) {
 		require.NoError(t, err)
 		assert.False(t, tnt2DB.IsDefault)
 	})
+}
+
+func Test_TenantHandler_Delete(t *testing.T) {
+	dbt := dbtest.OpenWithAdminMigrationsOnly(t)
+	defer dbt.Close()
+
+	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, outerErr)
+	defer dbConnectionPool.Close()
+
+	tenantManagerMock := tenant.TenantManagerMock{}
+	horizonClientMock := horizonclient.MockClient{}
+	_, _, _, _, distAccResolver := signing.NewMockSignatureService(t)
+
+	handler := TenantsHandler{
+		Manager:                     &tenantManagerMock,
+		NetworkType:                 utils.TestnetNetworkType,
+		HorizonClient:               &horizonClientMock,
+		DistributionAccountResolver: distAccResolver,
+	}
+
+	r := chi.NewRouter()
+	r.Delete("/tenants/{id}", handler.Delete)
+	tntID := "tntID"
+	tntDistributionAcc := keypair.MustRandom().Address()
+	deletedAt := time.Now()
+
+	testCases := []struct {
+		name             string
+		id               string
+		mockTntManagerFn func(tntManagerMock *tenant.TenantManagerMock, horizonClientMock *horizonclient.MockClient)
+		expectedStatus   int
+	}{
+		{
+			name: "tenant does not exist",
+			id:   tntID,
+			mockTntManagerFn: func(tntManagerMock *tenant.TenantManagerMock, _ *horizonclient.MockClient) {
+				tntManagerMock.On("GetTenant", mock.Anything, &tenant.QueryParams{
+					Filters: map[tenant.FilterKey]interface{}{tenant.FilterKeyID: tntID},
+				}).
+					Return(nil, tenant.ErrTenantDoesNotExist).
+					Once()
+			},
+			expectedStatus: http.StatusNotFound,
+		},
+		{
+			name: "failed to retrieve tenant",
+			id:   tntID,
+			mockTntManagerFn: func(tntManagerMock *tenant.TenantManagerMock, _ *horizonclient.MockClient) {
+				tntManagerMock.On("GetTenant", mock.Anything, &tenant.QueryParams{
+					Filters: map[tenant.FilterKey]interface{}{tenant.FilterKeyID: tntID},
+				}).
+					Return(nil, errors.New("foobar")).
+					Once()
+			},
+			expectedStatus: http.StatusInternalServerError,
+		},
+		{
+			name: "tenant is already deleted",
+			id:   tntID,
+			mockTntManagerFn: func(tntManagerMock *tenant.TenantManagerMock, _ *horizonclient.MockClient) {
+				tntManagerMock.On("GetTenant", mock.Anything, &tenant.QueryParams{
+					Filters: map[tenant.FilterKey]interface{}{tenant.FilterKeyID: tntID},
+				}).
+					Return(&tenant.Tenant{ID: tntID, Status: tenant.CreatedTenantStatus, DeletedAt: &deletedAt}, nil).
+					Once()
+			},
+			expectedStatus: http.StatusNotModified,
+		},
+		{
+			name: "tenant is not deactivated",
+			id:   tntID,
+			mockTntManagerFn: func(tntManagerMock *tenant.TenantManagerMock, _ *horizonclient.MockClient) {
+				tntManagerMock.On("GetTenant", mock.Anything, &tenant.QueryParams{
+					Filters: map[tenant.FilterKey]interface{}{tenant.FilterKeyID: tntID},
+				}).
+					Return(&tenant.Tenant{ID: tntID, Status: tenant.CreatedTenantStatus}, nil).
+					Once()
+			},
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name: "failed to get Horizon account details for tenant distribution account",
+			id:   tntID,
+			mockTntManagerFn: func(tntManagerMock *tenant.TenantManagerMock, _ *horizonclient.MockClient) {
+				tntManagerMock.On("GetTenant", mock.Anything, &tenant.QueryParams{
+					Filters: map[tenant.FilterKey]interface{}{tenant.FilterKeyID: tntID},
+				}).
+					Return(&tenant.Tenant{ID: tntID, Status: tenant.DeactivatedTenantStatus, DistributionAccount: &tntDistributionAcc}, nil).
+					Once()
+				distAccResolver.On("HostDistributionAccount").Return("host-dist-account").Once()
+				horizonClientMock.On("AccountDetail", horizonclient.AccountRequest{AccountID: tntDistributionAcc}).
+					Return(horizon.Account{}, errors.New("foobar")).
+					Once()
+			},
+			expectedStatus: http.StatusInternalServerError,
+		},
+		{
+			name: "tenant distribution account still has non-zero non-native balance",
+			id:   tntID,
+			mockTntManagerFn: func(tntManagerMock *tenant.TenantManagerMock, _ *horizonclient.MockClient) {
+				tntManagerMock.On("GetTenant", mock.Anything, &tenant.QueryParams{
+					Filters: map[tenant.FilterKey]interface{}{tenant.FilterKeyID: tntID},
+				}).Return(&tenant.Tenant{ID: tntID, Status: tenant.DeactivatedTenantStatus, DistributionAccount: &tntDistributionAcc}, nil).
+					Once()
+				distAccResolver.On("HostDistributionAccount").Return("host-dist-account").Once()
+				horizonClientMock.On("AccountDetail", horizonclient.AccountRequest{AccountID: tntDistributionAcc}).
+					Return(horizon.Account{
+						Balances: []horizon.Balance{
+							{Asset: base.Asset{Type: "credit_alphanum4"}, Balance: "100.0000000"},
+						},
+					}, nil).Once()
+			},
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name: "tenant distribution account still has native balance above the minimum threshold",
+			id:   tntID,
+			mockTntManagerFn: func(tntManagerMock *tenant.TenantManagerMock, _ *horizonclient.MockClient) {
+				tntManagerMock.On("GetTenant", mock.Anything, &tenant.QueryParams{
+					Filters: map[tenant.FilterKey]interface{}{tenant.FilterKeyID: tntID},
+				}).Return(&tenant.Tenant{ID: tntID, Status: tenant.DeactivatedTenantStatus, DistributionAccount: &tntDistributionAcc}, nil).
+					Once()
+				distAccResolver.On("HostDistributionAccount").Return("host-dist-account").Once()
+				horizonClientMock.On("AccountDetail", horizonclient.AccountRequest{AccountID: tntDistributionAcc}).
+					Return(horizon.Account{
+						Balances: []horizon.Balance{
+							{Asset: base.Asset{Type: "native"}, Balance: "120.0000000"},
+						},
+					}, nil).Once()
+			},
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name: "failed to soft delete tenant",
+			id:   tntID,
+			mockTntManagerFn: func(tntManagerMock *tenant.TenantManagerMock, horizonClientMock *horizonclient.MockClient) {
+				tntManagerMock.On("GetTenant", mock.Anything, &tenant.QueryParams{
+					Filters: map[tenant.FilterKey]interface{}{tenant.FilterKeyID: tntID},
+				}).
+					Return(&tenant.Tenant{ID: tntID, Status: tenant.DeactivatedTenantStatus, DistributionAccount: &tntDistributionAcc}, nil).
+					Once()
+				distAccResolver.On("HostDistributionAccount").Return("host-dist-account").Once()
+				horizonClientMock.On("AccountDetail", horizonclient.AccountRequest{AccountID: tntDistributionAcc}).
+					Return(horizon.Account{Balances: make([]horizon.Balance, 0)}, nil).
+					Once()
+				tntManagerMock.On("SoftDeleteTenantByID", mock.Anything, tntID).
+					Return(nil, errors.New("foobar")).
+					Once()
+			},
+			expectedStatus: http.StatusInternalServerError,
+		},
+		{
+			name: "soft deletes tenant: host and tenant distribution accounts are the same",
+			id:   tntID,
+			mockTntManagerFn: func(tntManagerMock *tenant.TenantManagerMock, horizonClientMock *horizonclient.MockClient) {
+				tntManagerMock.On("GetTenant", mock.Anything, &tenant.QueryParams{
+					Filters: map[tenant.FilterKey]interface{}{tenant.FilterKeyID: tntID},
+				}).
+					Return(&tenant.Tenant{ID: tntID, Status: tenant.DeactivatedTenantStatus, DistributionAccount: &tntDistributionAcc}, nil).
+					Once()
+				distAccResolver.On("HostDistributionAccount").Return(tntDistributionAcc).Once()
+				tntManagerMock.On("SoftDeleteTenantByID", mock.Anything, tntID).
+					Return(&tenant.Tenant{
+						ID: tntID, Status: tenant.DeactivatedTenantStatus, DistributionAccount: &tntDistributionAcc, DeletedAt: &deletedAt,
+					},
+						nil,
+					).Once()
+			},
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name: "soft deletes tenant: host and tenant distribution accounts are different",
+			id:   tntID,
+			mockTntManagerFn: func(tntManagerMock *tenant.TenantManagerMock, horizonClientMock *horizonclient.MockClient) {
+				tntManagerMock.On("GetTenant", mock.Anything, &tenant.QueryParams{
+					Filters: map[tenant.FilterKey]interface{}{tenant.FilterKeyID: tntID},
+				}).
+					Return(&tenant.Tenant{ID: tntID, Status: tenant.DeactivatedTenantStatus, DistributionAccount: &tntDistributionAcc}, nil).
+					Once()
+				distAccResolver.On("HostDistributionAccount").Return("host-dist-account").Once()
+				horizonClientMock.On("AccountDetail", horizonclient.AccountRequest{AccountID: tntDistributionAcc}).
+					Return(horizon.Account{Balances: make([]horizon.Balance, 0)}, nil).
+					Once()
+				tntManagerMock.On("SoftDeleteTenantByID", mock.Anything, tntID).
+					Return(&tenant.Tenant{
+						ID: tntID, Status: tenant.DeactivatedTenantStatus, DistributionAccount: &tntDistributionAcc, DeletedAt: &deletedAt,
+					},
+						nil,
+					).Once()
+			},
+			expectedStatus: http.StatusOK,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.mockTntManagerFn(&tenantManagerMock, &horizonClientMock)
+
+			rr := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodDelete, fmt.Sprintf("/tenants/%s", tc.id), strings.NewReader(`{}`))
+			r.ServeHTTP(rr, req)
+
+			resp := rr.Result()
+			assert.Equal(t, tc.expectedStatus, resp.StatusCode)
+			if tc.expectedStatus == http.StatusOK {
+				respBody, rErr := io.ReadAll(resp.Body)
+				require.NoError(t, rErr)
+
+				assert.Contains(t, string(respBody), "\"deleted_at\": "+"\""+deletedAt.Format(time.RFC3339Nano)+"\"\n")
+			}
+
+			tenantManagerMock.AssertExpectations(t)
+			horizonClientMock.AssertExpectations(t)
+		})
+	}
 }
