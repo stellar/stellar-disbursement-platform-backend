@@ -34,6 +34,7 @@ import (
 	monitorMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
+	engineMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions"
 	preconditionsMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
@@ -676,6 +677,174 @@ func Test_TransactionWorker_handleFailedTransaction_errorsThatTriggerJitter(t *t
 			txProcessingLimiter, ok = tw.txProcessingLimiter.(*engine.TransactionProcessingLimiterImpl)
 			require.True(t, ok)
 			assert.Equal(t, engine.DefaultBundlesSelectionLimit, txProcessingLimiter.LimitValue())
+		})
+	}
+}
+
+func Test_TransactionWorker_handleFailedTransaction_markedAsDefinitiveError(t *testing.T) {
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	crashTrackerMessage := "transaction error - cannot be retried"
+
+	testCases := []struct {
+		name            string
+		resultCodes     map[string]interface{}
+		crashTrackerMsg string
+	}{
+		// - 400: with any of the transaction error codes [tx_bad_auth, tx_bad_auth_extra, tx_insufficient_balance]
+		{
+			name:            "400 (tx_bad_auth) - Bad Request",
+			resultCodes:     map[string]interface{}{"transaction": "tx_bad_auth"},
+			crashTrackerMsg: crashTrackerMessage,
+		},
+		{
+			name:            "400 (tx_bad_auth_extra) - Bad Request",
+			resultCodes:     map[string]interface{}{"transaction": "tx_bad_auth_extra"},
+			crashTrackerMsg: crashTrackerMessage,
+		},
+		{
+			name:            "400 (tx_insufficient_balance) - Bad Request",
+			resultCodes:     map[string]interface{}{"transaction": "tx_insufficient_balance"},
+			crashTrackerMsg: crashTrackerMessage,
+		},
+		// - 400: with any of the operation error codes [op_bad_auth, op_underfunded, op_src_not_authorized, op_no_destination, op_no_trust, op_line_full, op_not_authorized, op_no_issuer]
+		{
+			name:            "400 (op_bad_auth) - Bad Request",
+			resultCodes:     map[string]interface{}{"operations": []string{"op_bad_auth"}},
+			crashTrackerMsg: crashTrackerMessage,
+		},
+		{
+			name:            "400 (op_underfunded) - Bad Request",
+			resultCodes:     map[string]interface{}{"operations": []string{"op_underfunded"}},
+			crashTrackerMsg: crashTrackerMessage,
+		},
+		{
+			name:            "400 (op_src_not_authorized) - Bad Request",
+			resultCodes:     map[string]interface{}{"operations": []string{"op_src_not_authorized"}},
+			crashTrackerMsg: crashTrackerMessage,
+		},
+		{
+			name:        "400 (op_no_destination) - Bad Request",
+			resultCodes: map[string]interface{}{"operations": []string{"op_no_destination"}},
+		},
+		{
+			name:        "400 (op_no_trust) - Bad Request",
+			resultCodes: map[string]interface{}{"operations": []string{"op_no_trust"}},
+		},
+		{
+			name:        "400 (op_line_full) - Bad Request",
+			resultCodes: map[string]interface{}{"operations": []string{"op_line_full"}},
+		},
+		{
+			name:        "400 (op_not_authorized) - Bad Request",
+			resultCodes: map[string]interface{}{"operations": []string{"op_not_authorized"}},
+		},
+		{
+			name:            "400 (op_no_issuer) - Bad Request",
+			resultCodes:     map[string]interface{}{"operations": []string{"op_no_issuer"}},
+			crashTrackerMsg: crashTrackerMessage,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			defer store.DeleteAllFromChannelAccounts(t, ctx, dbConnectionPool)
+			defer store.DeleteAllTransactionFixtures(t, ctx, dbConnectionPool)
+
+			tw := getTransactionWorkerInstance(t, dbConnectionPool)
+			tw.jobUUID = uuid.NewString()
+
+			txJob := createTxJobFixture(t, context.Background(), dbConnectionPool, true, 1, 2, uuid.NewString())
+			const (
+				resultXDR   = "AAAAAAAAAGQAAAAAAAAAAQAAAAAAAAAOAAAAAAAAAABw2JZZYIt4n/WXKcnDow3mbTBMPrOnldetgvGUlpTSEQAAAAA="
+				txHash      = "3389e9f0f1a65f19736cacf544c2e825313e8447f569233bb8db39aa607c8889"
+				envelopeXDR = "AAAAAGL8HQvQkbK2HA3WVjRrKmjX00fG8sLI7m0ERwJW/AX3AAAACgAAAAAAAAABAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAArqN6LeOagjxMaUP96Bzfs9e0corNZXzBWJkFoK7kvkwAAAAAO5rKAAAAAAAAAAABVvwF9wAAAEAKZ7IPj/46PuWU6ZOtyMosctNAkXRNX9WCAI5RnfRk+AyxDLoDZP/9l3NvsxQtWj9juQOuoBlFLnWu8intgxQA"
+			)
+			tx, err := tw.txModel.UpdateStellarTransactionHashAndXDRSent(ctx, txJob.Transaction.ID, txHash, envelopeXDR)
+			require.NoError(t, err)
+			txJob.Transaction = *tx
+
+			// declare horizon error
+			horizonError := horizonclient.Error{
+				Problem: problem.P{
+					Status: http.StatusBadRequest,
+					Extras: map[string]interface{}{"result_codes": tc.resultCodes},
+				},
+			}
+			hErr := utils.NewHorizonErrorWrapper(horizonError)
+
+			// Setup PART 1: prepare jitter to add delays in the time a jittable error is found
+			mockTxProcessingLimiter := engineMocks.NewMockTransactionProcessingLimiter(t)
+			mockTxProcessingLimiter.On("AdjustLimitIfNeeded", hErr).Return().Once()
+			tw.txProcessingLimiter = mockTxProcessingLimiter
+
+			// Setup mocks PART 2: producePaymentCompletedEvent -> WriteMessages
+			mockEventProducer := events.NewMockProducer(t)
+			mockEventProducer.
+				On("WriteMessages", ctx, mock.AnythingOfType("[]events.Message")).
+				Run(func(args mock.Arguments) {
+					messages, ok := args.Get(1).([]events.Message)
+					require.True(t, ok)
+					require.Len(t, messages, 1)
+
+					msg := messages[0]
+
+					assert.Equal(t, events.PaymentCompletedTopic, msg.Topic)
+					assert.Equal(t, txJob.Transaction.ExternalID, msg.Key)
+					assert.Equal(t, txJob.Transaction.TenantID, msg.TenantID)
+					assert.Equal(t, events.PaymentCompletedErrorType, msg.Type)
+
+					msgData, ok := msg.Data.(schemas.EventPaymentCompletedData)
+					require.True(t, ok)
+					assert.Equal(t, txJob.Transaction.ID, msgData.TransactionID)
+					assert.Equal(t, txJob.Transaction.ExternalID, msgData.PaymentID)
+					assert.Equal(t, string(data.FailedPaymentStatus), msgData.PaymentStatus)
+					assert.Equal(t, hErr.Error(), msgData.PaymentStatusMessage)
+					assert.WithinDuration(t, time.Now(), msgData.PaymentCompletedAt, time.Millisecond*200)
+					assert.Equal(t, txHash, msgData.StellarTransactionID)
+				}).
+				Return(nil).
+				Once()
+			tw.eventProducer = mockEventProducer
+
+			// Setup mocks PART 3: defer LogAndMonitorTransaction
+			if tc.crashTrackerMsg != "" {
+				mockCrashTrackerClient := crashtracker.NewMockCrashTrackerClient(t)
+				mockCrashTrackerClient.
+					On("LogAndReportErrors", mock.Anything, hErr, tc.crashTrackerMsg).
+					Return().
+					Once()
+				tw.crashTrackerClient = mockCrashTrackerClient
+			}
+
+			// Setup mocks PART 4: defer LogAndMonitorTransaction
+			mMonitorClient := monitorMocks.NewMockMonitorClient(t)
+			mMonitorClient.
+				On("MonitorCounters", sdpMonitor.PaymentErrorTag, mock.Anything).
+				Return(nil).
+				Once()
+			tssMonitorService := tssMonitor.TSSMonitorService{
+				Version:       "0.01",
+				GitCommitHash: "0xABC",
+				Client:        mMonitorClient,
+			}
+			tw.monitorSvc = tssMonitorService
+
+			// Run test:
+			hTransaction := horizon.Transaction{
+				ID:          txHash,
+				ResultXdr:   resultXDR,
+				EnvelopeXdr: envelopeXDR,
+				Successful:  false,
+				Account:     txJob.ChannelAccount.PublicKey,
+			}
+			err = tw.handleFailedTransaction(context.Background(), &txJob, hTransaction, hErr)
+			require.NoError(t, err)
 		})
 	}
 }

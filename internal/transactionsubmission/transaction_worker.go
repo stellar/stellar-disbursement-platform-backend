@@ -230,7 +230,6 @@ func (tw *TransactionWorker) handleFailedTransaction(ctx context.Context, txJob 
 		}
 	}
 
-	// TODO: op_bad_auth, tx_bad_auth, tx_bad_auth_extra are big problems that need to be reported accordingly
 	// TODO: tx_bad_seq is a big problem that needs to be reported accordingly
 
 	err = tw.unlockJob(ctx, txJob)
