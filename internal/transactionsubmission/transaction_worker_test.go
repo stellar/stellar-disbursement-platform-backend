@@ -442,17 +442,6 @@ func Test_TransactionWorker_handleFailedTransaction_nonHorizonErrors(t *testing.
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
 
-	// horizonError := horizonclient.Error{
-	// 	Problem: problem.P{
-	// 		Status: http.StatusBadRequest,
-	// 		Extras: map[string]interface{}{
-	// 			"result_codes": map[string]interface{}{
-	// 				"transaction": "tx_failed",
-	// 				"operations":  []string{"op_underfunded"}, // <--- this should make the transaction be marked as ERROR
-	// 			},
-	// 		},
-	// 	},
-	// }
 	nonHorizonError := errors.New("non-horizon error")
 
 	testCases := []struct {
@@ -474,7 +463,7 @@ func Test_TransactionWorker_handleFailedTransaction_nonHorizonErrors(t *testing.
 			},
 			hErr: utils.NewHorizonErrorWrapper(nonHorizonError),
 			setupMocksFn: func(t *testing.T, tw *TransactionWorker, txJob *TxJob) {
-				// saveResponseXDRIfPresent
+				// PART 1: mock UpdateStellarTransactionXDRReceived that'll be called in saveResponseXDRIfPresent
 				mockTxStore := storeMocks.NewMockTransactionStore(t)
 				mockTxStore.
 					On("UpdateStellarTransactionXDRReceived", mock.Anything, mock.AnythingOfType("string"), mock.AnythingOfType("string")).
@@ -482,7 +471,7 @@ func Test_TransactionWorker_handleFailedTransaction_nonHorizonErrors(t *testing.
 					Once()
 				tw.txModel = mockTxStore
 
-				// defer LogAndMonitorTransaction
+				// PART 2: mock deferred LogAndMonitorTransaction
 				mMonitorClient := monitorMocks.NewMockMonitorClient(t)
 				mMonitorClient.
 					On("MonitorCounters", sdpMonitor.PaymentErrorTag, mock.Anything).
@@ -509,7 +498,7 @@ func Test_TransactionWorker_handleFailedTransaction_nonHorizonErrors(t *testing.
 			},
 			hErr: utils.NewHorizonErrorWrapper(nonHorizonError),
 			setupMocksFn: func(t *testing.T, tw *TransactionWorker, txJob *TxJob) {
-				// saveResponseXDRIfPresent
+				// PART 1: mock UpdateStellarTransactionXDRReceived that'll be called in saveResponseXDRIfPresent
 				mockTxStore := storeMocks.NewMockTransactionStore(t)
 				txJob.Transaction.XDRReceived = sql.NullString{Valid: true, String: "xdr_received_123"}
 				mockTxStore.
@@ -518,7 +507,7 @@ func Test_TransactionWorker_handleFailedTransaction_nonHorizonErrors(t *testing.
 					Once()
 				tw.txModel = mockTxStore
 
-				// unlockJob
+				// PART 2: mock Unlock that'll be called in unlockJob
 				mockChAccStore := storeMocks.NewMockChannelAccountStore(t)
 				mockChAccStore.
 					On("Unlock", mock.Anything, mock.Anything, txJob.ChannelAccount.PublicKey).
@@ -526,7 +515,7 @@ func Test_TransactionWorker_handleFailedTransaction_nonHorizonErrors(t *testing.
 					Once()
 				tw.chAccModel = mockChAccStore
 
-				// defer LogAndMonitorTransaction
+				// PART 3: mock deferred LogAndMonitorTransaction
 				mMonitorClient := monitorMocks.NewMockMonitorClient(t)
 				mMonitorClient.
 					On("MonitorCounters", sdpMonitor.PaymentErrorTag, mock.Anything).
@@ -624,7 +613,7 @@ func Test_TransactionWorker_handleFailedTransaction_errorsThatTriggerJitter(t *t
 			}
 			hErr := utils.NewHorizonErrorWrapper(horizonError)
 
-			// Setup mocks PART 1: saveResponseXDRIfPresent
+			// PART 1: mock UpdateStellarTransactionXDRReceived that will be called from saveResponseXDRIfPresent
 			mockTxStore := storeMocks.NewMockTransactionStore(t)
 			txJob.Transaction.XDRReceived = sql.NullString{Valid: true, String: "xdr_received_123"}
 			mockTxStore.
@@ -632,7 +621,7 @@ func Test_TransactionWorker_handleFailedTransaction_errorsThatTriggerJitter(t *t
 				Return(&txJob.Transaction, nil).
 				Once()
 			tw.txModel = mockTxStore
-			// Setup mocks PART 2: unlockJob
+			// PART 2: mock Unlock(s), that will be called from unlockJob
 			mockChAccStore := storeMocks.NewMockChannelAccountStore(t)
 			mockChAccStore.
 				On("Unlock", mock.Anything, mock.Anything, txJob.ChannelAccount.PublicKey).
@@ -643,13 +632,12 @@ func Test_TransactionWorker_handleFailedTransaction_errorsThatTriggerJitter(t *t
 				On("Unlock", mock.Anything, mock.Anything, txJob.Transaction.ID).
 				Return(nil, nil).
 				Once()
-			// Setup PART 3: prepare jitter to add delays in the time a jittable error is found
+			// PART 3: setup the jitter to be one error away from taking action
 			txProcessingLimiter := engine.NewTransactionProcessingLimiter(100)
 			txProcessingLimiter.IndeterminateResponsesCounter = engine.IndeterminateResponsesToleranceLimit - 1
 			assert.Equal(t, 100, txProcessingLimiter.LimitValue())
 			tw.txProcessingLimiter = txProcessingLimiter
-
-			// Setup mocks PART 4: defer LogAndMonitorTransaction
+			// PART 4: mock deferred LogAndMonitorTransaction
 			mMonitorClient := monitorMocks.NewMockMonitorClient(t)
 			mMonitorClient.
 				On("MonitorCounters", sdpMonitor.PaymentErrorTag, mock.Anything).
@@ -778,12 +766,12 @@ func Test_TransactionWorker_handleFailedTransaction_markedAsDefinitiveError(t *t
 			}
 			hErr := utils.NewHorizonErrorWrapper(horizonError)
 
-			// Setup PART 1: mock call to jitter (TransactionProcessingLimiter)
+			// PART 1: mock call to jitter (TransactionProcessingLimiter)
 			mockTxProcessingLimiter := engineMocks.NewMockTransactionProcessingLimiter(t)
 			mockTxProcessingLimiter.On("AdjustLimitIfNeeded", hErr).Return().Once()
 			tw.txProcessingLimiter = mockTxProcessingLimiter
 
-			// Setup mocks PART 2: producePaymentCompletedEvent -> WriteMessages
+			// PART 2: mock producer that'll be called in producePaymentCompletedEvent -> WriteMessages
 			mockEventProducer := events.NewMockProducer(t)
 			mockEventProducer.
 				On("WriteMessages", ctx, mock.AnythingOfType("[]events.Message")).
@@ -812,7 +800,7 @@ func Test_TransactionWorker_handleFailedTransaction_markedAsDefinitiveError(t *t
 				Once()
 			tw.eventProducer = mockEventProducer
 
-			// Setup mocks PART 3: LogAndReportErrors
+			// PART 3: mock LogAndReportErrors
 			if tc.crashTrackerMsg != "" {
 				mockCrashTrackerClient := crashtracker.NewMockCrashTrackerClient(t)
 				mockCrashTrackerClient.
@@ -822,7 +810,7 @@ func Test_TransactionWorker_handleFailedTransaction_markedAsDefinitiveError(t *t
 				tw.crashTrackerClient = mockCrashTrackerClient
 			}
 
-			// Setup mocks PART 4: defer LogAndMonitorTransaction
+			// PART 4: mock deferred LogAndMonitorTransaction
 			mMonitorClient := monitorMocks.NewMockMonitorClient(t)
 			mMonitorClient.
 				On("MonitorCounters", sdpMonitor.PaymentErrorTag, mock.Anything).
@@ -883,12 +871,12 @@ func Test_TransactionWorker_handleFailedTransaction_notDefinitiveErrorButTrigger
 	}
 	hErr := utils.NewHorizonErrorWrapper(horizonError)
 
-	// Setup PART 1: mock call to jitter (TransactionProcessingLimiter)
+	// PART 1: mock call to jitter (TransactionProcessingLimiter)
 	mockTxProcessingLimiter := engineMocks.NewMockTransactionProcessingLimiter(t)
 	mockTxProcessingLimiter.On("AdjustLimitIfNeeded", hErr).Return().Once()
 	tw.txProcessingLimiter = mockTxProcessingLimiter
 
-	// Setup PART 2: LogAndReportErrors
+	// PART 2: mock LogAndReportErrors
 	mockCrashTrackerClient := crashtracker.NewMockCrashTrackerClient(t)
 	mockCrashTrackerClient.
 		On("LogAndReportErrors", mock.Anything, hErr, "tx_bad_seq detected!").
@@ -896,7 +884,7 @@ func Test_TransactionWorker_handleFailedTransaction_notDefinitiveErrorButTrigger
 		Once()
 	tw.crashTrackerClient = mockCrashTrackerClient
 
-	// Setup mocks PART 3: defer LogAndMonitorTransaction
+	// PART 3: mock deferred LogAndMonitorTransaction
 	mMonitorClient := monitorMocks.NewMockMonitorClient(t)
 	mMonitorClient.
 		On("MonitorCounters", sdpMonitor.PaymentErrorTag, mock.Anything).
