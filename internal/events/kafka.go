@@ -236,7 +236,10 @@ func (k *KafkaConsumer) ReadMessage(ctx context.Context) error {
 	log.Ctx(ctx).Infof("new message being processed: %s", msg.String())
 	for _, handler := range k.handlers {
 		if handler.CanHandleMessage(ctx, &msg) {
-			handler.Handle(ctx, &msg)
+			handleErr := handler.Handle(ctx, &msg)
+			if handleErr != nil {
+				return fmt.Errorf("handling message: %w", handleErr)
+			}
 		}
 	}
 
