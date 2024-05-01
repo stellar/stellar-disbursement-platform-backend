@@ -171,7 +171,9 @@ func Serve(opts ServeOptions, httpServer HTTPServerInterface) error {
 		ReadTimeout:         time.Second * 5,
 		WriteTimeout:        time.Second * 35,
 		IdleTimeout:         time.Minute * 2,
+		
 		OnStarting: func() {
+			log.Info("value of use-external-id is %w", opts.UseExternalID)
 			log.Info("Starting SDP (Stellar Disbursement Platform) Server")
 			log.Infof("Listening on %s", listenAddr)
 		},
