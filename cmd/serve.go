@@ -623,6 +623,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 
 			// Starting Application Server
 			log.Ctx(ctx).Info("Starting Application Server...")
+			fmt.Printf("Use External ID: %t\n", serveOpts.UseExternalID)
 			serverService.StartServe(serveOpts, &serve.HTTPServer{})
 		},
 	}
