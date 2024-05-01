@@ -174,8 +174,10 @@ func (tw *TransactionWorker) runJob(ctx context.Context, txJob *TxJob) error {
 //   - 400: with any of the transaction error codes [tx_bad_auth, tx_bad_auth_extra, tx_insufficient_balance]
 //   - 400: with any of the operation error codes [op_bad_auth, op_underfunded, op_src_not_authorized, op_no_destination, op_no_trust, op_line_full, op_not_authorized, op_no_issuer]
 //
-// Errors that are marked for retry without pause/jitter:
+// Errors that are marked for retry without pause/jitter but are reported to CrashTracker:
 //   - 400 - tx_bad_seq: Bad Request
+//
+// Errors that are marked for retry without pause/jitter and are not reported to CrashTracker:
 //   - 400 - tx_too_late: Bad Request
 //   - xxx - Any unexpected error.
 func (tw *TransactionWorker) handleFailedTransaction(ctx context.Context, txJob *TxJob, hTxResp horizon.Transaction, hErr *utils.HorizonErrorWrapper) error {
@@ -226,11 +228,11 @@ func (tw *TransactionWorker) handleFailedTransaction(ctx context.Context, txJob 
 				if !hErrWrapper.IsDestinationAccountNotReady() {
 					tw.crashTrackerClient.LogAndReportErrors(ctx, hErrWrapper, "transaction error - cannot be retried")
 				}
+			} else if hErrWrapper.IsBadSequence() {
+				tw.crashTrackerClient.LogAndReportErrors(ctx, hErrWrapper, "tx_bad_seq detected!")
 			}
 		}
 	}
-
-	// TODO: tx_bad_seq is a big problem that needs to be reported accordingly
 
 	err = tw.unlockJob(ctx, txJob)
 	if err != nil {
