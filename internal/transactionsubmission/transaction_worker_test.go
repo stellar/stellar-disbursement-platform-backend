@@ -34,7 +34,6 @@ import (
 	monitorMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
-	engineMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions"
 	preconditionsMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
@@ -643,12 +642,12 @@ func Test_TransactionWorker_handleFailedTransaction_errorsThatTriggerJitter(t *t
 				On("Unlock", mock.Anything, mock.Anything, txJob.Transaction.ID).
 				Return(nil, nil).
 				Once()
-			// Setup mocks PART 3: AdjustLimitIfNeeded
-			mockTxProcessingLimiter := engineMocks.NewMockTransactionProcessingLimiter(t)
-			mockTxProcessingLimiter.
-				On("AdjustLimitIfNeeded", hErr).
-				Once()
-			tw.txProcessingLimiter = mockTxProcessingLimiter
+			// Setup PART 3: prepare jitter to add delays in the time a jittable error is found
+			txProcessingLimiter := engine.NewTransactionProcessingLimiter(100)
+			txProcessingLimiter.IndeterminateResponsesCounter = engine.IndeterminateResponsesToleranceLimit - 1
+			assert.Equal(t, 100, txProcessingLimiter.LimitValue())
+			tw.txProcessingLimiter = txProcessingLimiter
+
 			// Setup mocks PART 4: defer LogAndMonitorTransaction
 			mMonitorClient := monitorMocks.NewMockMonitorClient(t)
 			mMonitorClient.
@@ -671,6 +670,12 @@ func Test_TransactionWorker_handleFailedTransaction_errorsThatTriggerJitter(t *t
 			}
 			err := tw.handleFailedTransaction(context.Background(), &txJob, hTransaction, hErr)
 			require.NoError(t, err)
+
+			// Assert that the jitter took action
+			var ok bool
+			txProcessingLimiter, ok = tw.txProcessingLimiter.(*engine.TransactionProcessingLimiterImpl)
+			require.True(t, ok)
+			assert.Equal(t, engine.DefaultBundlesSelectionLimit, txProcessingLimiter.LimitValue())
 		})
 	}
 }

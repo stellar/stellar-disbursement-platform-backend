@@ -28,8 +28,8 @@ func Test_TxProcessingLimiterImpl_AdjustLimitIfNeeded(t *testing.T) {
 				},
 			),
 			wantResult: &TransactionProcessingLimiterImpl{
-				limitValue:                    defaultBundlesSelectionLimit,
-				IndeterminateResponsesCounter: indeterminateResponsesToleranceLimit,
+				limitValue:                    DefaultBundlesSelectionLimit,
+				IndeterminateResponsesCounter: IndeterminateResponsesToleranceLimit,
 			},
 		},
 		{
@@ -40,8 +40,8 @@ func Test_TxProcessingLimiterImpl_AdjustLimitIfNeeded(t *testing.T) {
 				},
 			),
 			wantResult: &TransactionProcessingLimiterImpl{
-				limitValue:                    defaultBundlesSelectionLimit,
-				IndeterminateResponsesCounter: indeterminateResponsesToleranceLimit,
+				limitValue:                    DefaultBundlesSelectionLimit,
+				IndeterminateResponsesCounter: IndeterminateResponsesToleranceLimit,
 			},
 		},
 		{
@@ -59,8 +59,8 @@ func Test_TxProcessingLimiterImpl_AdjustLimitIfNeeded(t *testing.T) {
 				},
 			),
 			wantResult: &TransactionProcessingLimiterImpl{
-				limitValue:                    defaultBundlesSelectionLimit,
-				IndeterminateResponsesCounter: indeterminateResponsesToleranceLimit,
+				limitValue:                    DefaultBundlesSelectionLimit,
+				IndeterminateResponsesCounter: IndeterminateResponsesToleranceLimit,
 			},
 		},
 		{
@@ -79,7 +79,7 @@ func Test_TxProcessingLimiterImpl_AdjustLimitIfNeeded(t *testing.T) {
 			),
 			wantResult: &TransactionProcessingLimiterImpl{
 				limitValue:                    currNumChannelAccounts,
-				IndeterminateResponsesCounter: indeterminateResponsesToleranceLimit - 1,
+				IndeterminateResponsesCounter: IndeterminateResponsesToleranceLimit - 1,
 			},
 		},
 	}
@@ -89,7 +89,7 @@ func Test_TxProcessingLimiterImpl_AdjustLimitIfNeeded(t *testing.T) {
 			txProcessingLimiter := &TransactionProcessingLimiterImpl{
 				CurrNumChannelAccounts:        currNumChannelAccounts,
 				limitValue:                    currNumChannelAccounts,
-				IndeterminateResponsesCounter: indeterminateResponsesToleranceLimit - 1,
+				IndeterminateResponsesCounter: IndeterminateResponsesToleranceLimit - 1,
 				CounterLastUpdated:            time.Now(),
 			}
 			txProcessingLimiter.AdjustLimitIfNeeded(tc.hErr)
@@ -114,7 +114,7 @@ func Test_TxProcessingLimiterImpl_LimitValue(t *testing.T) {
 			wait: func(tpl *TransactionProcessingLimiterImpl) {},
 			wantResult: &TransactionProcessingLimiterImpl{
 				limitValue:                    initialLimitValue,
-				IndeterminateResponsesCounter: indeterminateResponsesToleranceLimit - 1,
+				IndeterminateResponsesCounter: IndeterminateResponsesToleranceLimit - 1,
 			},
 		},
 		{
@@ -133,7 +133,7 @@ func Test_TxProcessingLimiterImpl_LimitValue(t *testing.T) {
 		txProcessingLimiter := &TransactionProcessingLimiterImpl{
 			CurrNumChannelAccounts:        currNumChannelAccounts,
 			limitValue:                    initialLimitValue,
-			IndeterminateResponsesCounter: indeterminateResponsesToleranceLimit - 1,
+			IndeterminateResponsesCounter: IndeterminateResponsesToleranceLimit - 1,
 			CounterLastUpdated:            time.Now(),
 		}
 		tc.wait(txProcessingLimiter)

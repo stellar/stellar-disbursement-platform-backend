@@ -8,9 +8,9 @@ import (
 )
 
 const (
-	defaultBundlesSelectionLimit         = 8
-	indeterminateResponsesToleranceLimit = 10
-	minutesInWindow                      = 3
+	DefaultBundlesSelectionLimit         = 8
+	IndeterminateResponsesToleranceLimit = 10
+	MinutesInWindow                      = 3
 )
 
 // TransactionProcessingLimiter is an interface that defines the methods that the manager and transaction worker use to
@@ -46,7 +46,7 @@ type TransactionProcessingLimiterImpl struct {
 
 func NewTransactionProcessingLimiter(limit int) *TransactionProcessingLimiterImpl {
 	if limit < 0 {
-		limit = defaultBundlesSelectionLimit
+		limit = DefaultBundlesSelectionLimit
 	}
 
 	return &TransactionProcessingLimiterImpl{
@@ -68,8 +68,8 @@ func (tpl *TransactionProcessingLimiterImpl) AdjustLimitIfNeeded(hErr *utils.Hor
 	tpl.IndeterminateResponsesCounter++
 	// We can tweek the following values as needed, and maybe add additional functionality to
 	// dynamically determine values for the default selection limit rather than using the default harcoded values
-	if tpl.IndeterminateResponsesCounter >= indeterminateResponsesToleranceLimit {
-		tpl.limitValue = defaultBundlesSelectionLimit
+	if tpl.IndeterminateResponsesCounter >= IndeterminateResponsesToleranceLimit {
+		tpl.limitValue = DefaultBundlesSelectionLimit
 		tpl.CounterLastUpdated = time.Now()
 	}
 }
@@ -79,7 +79,7 @@ func (tpl *TransactionProcessingLimiterImpl) LimitValue() int {
 	defer tpl.mutex.Unlock()
 	// refresh counter on a fixed window basis
 	now := time.Now()
-	if now.After(tpl.CounterLastUpdated.Add(minutesInWindow * time.Minute)) {
+	if now.After(tpl.CounterLastUpdated.Add(MinutesInWindow * time.Minute)) {
 		tpl.IndeterminateResponsesCounter = 0
 		tpl.CounterLastUpdated = now
 		tpl.limitValue = tpl.CurrNumChannelAccounts
