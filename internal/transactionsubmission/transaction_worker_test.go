@@ -833,6 +833,11 @@ func Test_TransactionWorker_handleFailedTransaction_markedAsDefinitiveError(t *t
 			}
 			err = tw.handleFailedTransaction(context.Background(), &txJob, hTransaction, hErr)
 			require.NoError(t, err)
+
+			// Assert transaction status
+			updatedTx, err := tw.txModel.Get(ctx, txJob.Transaction.ID)
+			require.NoError(t, err)
+			assert.Equal(t, store.TransactionStatusError, updatedTx.Status)
 		})
 	}
 }
@@ -907,6 +912,110 @@ func Test_TransactionWorker_handleFailedTransaction_notDefinitiveErrorButTrigger
 	}
 	err = tw.handleFailedTransaction(context.Background(), &txJob, hTransaction, hErr)
 	require.NoError(t, err)
+
+	// Assert transaction status
+	updatedTx, err := tw.txModel.Get(ctx, txJob.Transaction.ID)
+	require.NoError(t, err)
+	assert.Equal(t, store.TransactionStatusProcessing, updatedTx.Status)
+}
+
+func Test_TransactionWorker_handleFailedTransaction_retryableErrorThatDoesntTriggerJitter(t *testing.T) {
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	testCases := []struct {
+		name string
+		hErr *utils.HorizonErrorWrapper
+	}{
+		// - 400 - tx_too_late
+		{
+			name: "400 (tx_too_late) - Bad Request",
+			hErr: utils.NewHorizonErrorWrapper(horizonclient.Error{
+				Problem: problem.P{
+					Status: http.StatusBadRequest,
+					Extras: map[string]interface{}{
+						"result_codes": map[string]interface{}{
+							"transaction": "tx_too_late",
+						},
+					},
+				},
+			}),
+		},
+		// - 502 - unable to connect to horizon
+		{
+			name: "502 - Bad Gateway",
+			hErr: utils.NewHorizonErrorWrapper(horizonclient.Error{
+				Problem: problem.P{
+					Status: http.StatusBadGateway,
+				},
+			}),
+		},
+		// unexpected error
+		{
+			name: "502 - Bad Gateway",
+			hErr: utils.NewHorizonErrorWrapper(errors.New("foo bar error")),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			defer store.DeleteAllFromChannelAccounts(t, ctx, dbConnectionPool)
+			defer store.DeleteAllTransactionFixtures(t, ctx, dbConnectionPool)
+
+			tw := getTransactionWorkerInstance(t, dbConnectionPool)
+			tw.jobUUID = uuid.NewString()
+
+			txJob := createTxJobFixture(t, context.Background(), dbConnectionPool, true, 1, 2, uuid.NewString())
+			const (
+				resultXDR   = "AAAAAAAAAGQAAAAAAAAAAQAAAAAAAAAOAAAAAAAAAABw2JZZYIt4n/WXKcnDow3mbTBMPrOnldetgvGUlpTSEQAAAAA="
+				txHash      = "3389e9f0f1a65f19736cacf544c2e825313e8447f569233bb8db39aa607c8889"
+				envelopeXDR = "AAAAAGL8HQvQkbK2HA3WVjRrKmjX00fG8sLI7m0ERwJW/AX3AAAACgAAAAAAAAABAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAArqN6LeOagjxMaUP96Bzfs9e0corNZXzBWJkFoK7kvkwAAAAAO5rKAAAAAAAAAAABVvwF9wAAAEAKZ7IPj/46PuWU6ZOtyMosctNAkXRNX9WCAI5RnfRk+AyxDLoDZP/9l3NvsxQtWj9juQOuoBlFLnWu8intgxQA"
+			)
+			tx, err := tw.txModel.UpdateStellarTransactionHashAndXDRSent(ctx, txJob.Transaction.ID, txHash, envelopeXDR)
+			require.NoError(t, err)
+			txJob.Transaction = *tx
+
+			// PART 1: mock call to jitter (TransactionProcessingLimiter)
+			if tc.hErr.IsHorizonError() {
+				mockTxProcessingLimiter := engineMocks.NewMockTransactionProcessingLimiter(t)
+				mockTxProcessingLimiter.On("AdjustLimitIfNeeded", tc.hErr).Return().Once()
+				tw.txProcessingLimiter = mockTxProcessingLimiter
+			}
+
+			// PART 2: mock deferred LogAndMonitorTransaction
+			mMonitorClient := monitorMocks.NewMockMonitorClient(t)
+			mMonitorClient.
+				On("MonitorCounters", sdpMonitor.PaymentErrorTag, mock.Anything).
+				Return(nil).
+				Once()
+			tssMonitorService := tssMonitor.TSSMonitorService{
+				Version:       "0.01",
+				GitCommitHash: "0xABC",
+				Client:        mMonitorClient,
+			}
+			tw.monitorSvc = tssMonitorService
+
+			// Run test:
+			hTransaction := horizon.Transaction{
+				ID:          txHash,
+				ResultXdr:   resultXDR,
+				EnvelopeXdr: envelopeXDR,
+				Successful:  false,
+				Account:     txJob.ChannelAccount.PublicKey,
+			}
+			err = tw.handleFailedTransaction(context.Background(), &txJob, hTransaction, tc.hErr)
+			require.NoError(t, err)
+
+			// Assert transaction status
+			updatedTx, err := tw.txModel.Get(ctx, txJob.Transaction.ID)
+			require.NoError(t, err)
+			assert.Equal(t, store.TransactionStatusProcessing, updatedTx.Status)
+		})
+	}
 }
 
 func Test_TransactionWorker_handleSuccessfulTransaction(t *testing.T) {
