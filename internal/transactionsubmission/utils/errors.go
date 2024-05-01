@@ -260,7 +260,18 @@ func (e *HorizonErrorWrapper) IsTxInsufficientFee() bool {
 	}
 
 	txCode := "tx_insufficient_fee"
-	return e.ResultCodes.TransactionCode == txCode
+	return e.ResultCodes.TransactionCode == txCode || e.ResultCodes.InnerTransactionCode == txCode
+}
+
+// IsBadSequence verifies if the Horizon Error is related to the
+// transaction sequence number being invalid.
+func (e *HorizonErrorWrapper) IsBadSequence() bool {
+	if !e.HasResultCodes() {
+		return false
+	}
+
+	txCode := "tx_bad_seq"
+	return e.ResultCodes.TransactionCode == txCode || e.ResultCodes.InnerTransactionCode == txCode
 }
 
 // IsSourceAccountNotReady verifies if the Horizon Error is related to the
