@@ -29,6 +29,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
+	monitorMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpresponse"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
@@ -64,7 +65,7 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 		On("GetUser", mock.Anything, token).
 		Return(user, nil)
 
-	mMonitorService := &monitor.MockMonitorService{}
+	mMonitorService := monitorMocks.NewMockMonitorService(t)
 
 	handler := &DisbursementHandler{
 		Models:         models,
@@ -254,7 +255,6 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 
 		// create disbursement
 		assertPOSTResponse(t, ctx, handler, method, url, string(requestBody), "", http.StatusCreated)
-		mMonitorService.AssertExpectations(t)
 		// try creating again
 		assertPOSTResponse(t, ctx, handler, method, url, string(requestBody), want, http.StatusConflict)
 	})
@@ -294,7 +294,6 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 		assert.Equal(t, data.DraftDisbursementStatus, actualDisbursement.StatusHistory[0].Status)
 		assert.Equal(t, user.ID, actualDisbursement.StatusHistory[0].UserID)
 		assert.Equal(t, smsTemplate, actualDisbursement.SMSRegistrationMessageTemplate)
-		mMonitorService.AssertExpectations(t)
 	})
 
 	authManagerMock.AssertExpectations(t)
@@ -787,7 +786,7 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
-	mMonitorService := &monitor.MockMonitorService{}
+	mMonitorService := monitorMocks.NewMockMonitorService(t)
 
 	token := "token"
 	ctx := context.WithValue(context.Background(), middleware.TokenContextKey, token)

@@ -3,17 +3,16 @@ package dependencyinjection
 import (
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
-	"github.com/stretchr/testify/require"
+	monitorMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor/mocks"
 )
 
 func Test_openDBConnectionPool(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
-
-	mMonitorService := &monitor.MockMonitorService{}
 
 	t.Run("handle options without metrics", func(t *testing.T) {
 		dbConnectionPool, err := openDBConnectionPool(dbt.DSN, nil)
@@ -24,6 +23,7 @@ func Test_openDBConnectionPool(t *testing.T) {
 	})
 
 	t.Run("handle options with metrics", func(t *testing.T) {
+		mMonitorService := monitorMocks.NewMockMonitorService(t)
 		dbConnectionPool, err := openDBConnectionPool(dbt.DSN, mMonitorService)
 		require.NoError(t, err)
 		defer dbConnectionPool.Close()

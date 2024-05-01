@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
+	httpclientMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httphandler"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -17,7 +17,7 @@ import (
 )
 
 func Test_Login(t *testing.T) {
-	httpClientMock := httpclient.HttpClientMock{}
+	httpClientMock := httpclientMocks.HttpClientMock{}
 
 	sa := ServerApiIntegrationTests{
 		HttpClient:       &httpClientMock,
@@ -88,7 +88,7 @@ func Test_Login(t *testing.T) {
 }
 
 func Test_CreateDisbursement(t *testing.T) {
-	httpClientMock := httpclient.HttpClientMock{}
+	httpClientMock := httpclientMocks.HttpClientMock{}
 
 	sa := ServerApiIntegrationTests{
 		HttpClient:       &httpClientMock,
@@ -172,7 +172,7 @@ func Test_CreateDisbursement(t *testing.T) {
 }
 
 func Test_ProcessDisbursement(t *testing.T) {
-	httpClientMock := httpclient.HttpClientMock{}
+	httpClientMock := httpclientMocks.HttpClientMock{}
 
 	sa := ServerApiIntegrationTests{
 		HttpClient:              &httpClientMock,
@@ -230,7 +230,7 @@ func Test_ProcessDisbursement(t *testing.T) {
 }
 
 func Test_StartDisbursement(t *testing.T) {
-	httpClientMock := httpclient.HttpClientMock{}
+	httpClientMock := httpclientMocks.HttpClientMock{}
 
 	sa := ServerApiIntegrationTests{
 		HttpClient:       &httpClientMock,
@@ -289,7 +289,7 @@ func Test_StartDisbursement(t *testing.T) {
 }
 
 func Test_ReceiverRegistration(t *testing.T) {
-	httpClientMock := httpclient.HttpClientMock{}
+	httpClientMock := httpclientMocks.HttpClientMock{}
 
 	sa := ServerApiIntegrationTests{
 		HttpClient:       &httpClientMock,
