@@ -184,12 +184,12 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 			WithNativeAssetBootstrapAmount(tenant.MinTenantDistributionAccountAmount),
 		)
 
-		uiBaseURL := "http://localhost:3000"
-		tnt, err := p.ProvisionNewTenant(ctx, tenantName, user.FirstName, user.LastName, user.Email, user.OrgName, uiBaseURL, string(networkType))
+		//uiBaseURL := "http://localhost:3000"
+		tnt, err := p.ProvisionNewTenant(ctx, tenantName, user.FirstName, user.LastName, user.Email, user.OrgName, string(networkType))
 		require.NoError(t, err)
 
 		assert.Equal(t, tenantName, tnt.Name)
-		assert.Equal(t, uiBaseURL, *tnt.SDPUIBaseURL)
+		//assert.Equal(t, uiBaseURL, *tnt.SDPUIBaseURL)
 		if sigClientType == signing.DistributionAccountEnvSignatureClientType {
 			assert.Equal(t, distAcc.Address(), *tnt.DistributionAccount)
 		} else {
@@ -433,7 +433,7 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			tc.mockTntManagerFn(&tenantManagerMock)
 
-			_, err := tenantManager.ProvisionNewTenant(ctx, tenantName, firstName, lastName, email, orgName, uiBaseURL, string(networkType))
+			_, err := tenantManager.ProvisionNewTenant(ctx, tenantName, firstName, lastName, email, orgName, string(networkType))
 			if tc.expectedErr != nil {
 				require.Error(t, err)
 				assert.ErrorContains(t, err, tc.expectedErr.Error())

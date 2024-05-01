@@ -360,6 +360,43 @@ func Test_TenantHandler_Post(t *testing.T) {
 		Manager:             m,
 		ProvisioningManager: p,
 		NetworkType:         utils.TestnetNetworkType,
+		BaseURL:             "backend.sdp.org",
+	}
+
+	assertMigrations := func() {
+		// Validating infrastructure
+		expectedSchema := "sdp_aid-org"
+		expectedTablesAfterMigrationsApplied := []string{
+			"assets",
+			"auth_migrations",
+			"auth_user_mfa_codes",
+			"auth_user_password_reset",
+			"auth_users",
+			"countries",
+			"disbursements",
+			"sdp_migrations",
+			"messages",
+			"organizations",
+			"payments",
+			"receiver_verifications",
+			"receiver_wallets",
+			"receivers",
+			"wallets",
+			"wallets_assets",
+		}
+		tenant.CheckSchemaExistsFixture(t, ctx, dbConnectionPool, expectedSchema)
+		tenant.TenantSchemaMatchTablesFixture(t, ctx, dbConnectionPool, expectedSchema, expectedTablesAfterMigrationsApplied)
+
+		dsn, err := m.GetDSNForTenant(ctx, "aid-org")
+		require.NoError(t, err)
+
+		tenantSchemaConnectionPool, err := db.OpenDBConnectionPool(dsn)
+		require.NoError(t, err)
+		defer tenantSchemaConnectionPool.Close()
+
+		tenant.AssertRegisteredAssetsFixture(t, ctx, tenantSchemaConnectionPool, []string{"USDC:GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5", "XLM:"})
+		tenant.AssertRegisteredWalletsFixture(t, ctx, tenantSchemaConnectionPool, []string{"Demo Wallet", "Vibrant Assist"})
+		tenant.AssertRegisteredUserFixture(t, ctx, tenantSchemaConnectionPool, "Owner", "Owner", "owner@email.org")
 	}
 
 	t.Run("returns BadRequest with invalid request body", func(t *testing.T) {
@@ -383,9 +420,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 					"owner_email": "invalid email",
 					"owner_first_name": "owner_first_name is required",
 					"owner_last_name": "owner_last_name is required",
-					"organization_name": "organization_name is required",
-					"base_url": "invalid base URL value",
-					"sdp_ui_base_url": "invalid SDP UI base URL value"
+					"organization_name": "organization_name is required"
 				}
 			}
 		`
@@ -460,39 +495,76 @@ func Test_TenantHandler_Post(t *testing.T) {
 		`, tnt.ID, distAcc, tnt.CreatedAt.Format(time.RFC3339Nano), tnt.UpdatedAt.Format(time.RFC3339Nano))
 		assert.JSONEq(t, expectedRespBody, string(respBody))
 
-		// Validating infrastructure
-		expectedSchema := "sdp_aid-org"
-		expectedTablesAfterMigrationsApplied := []string{
-			"assets",
-			"auth_migrations",
-			"auth_user_mfa_codes",
-			"auth_user_password_reset",
-			"auth_users",
-			"countries",
-			"disbursements",
-			"sdp_migrations",
-			"messages",
-			"organizations",
-			"payments",
-			"receiver_verifications",
-			"receiver_wallets",
-			"receivers",
-			"wallets",
-			"wallets_assets",
-		}
-		tenant.CheckSchemaExistsFixture(t, ctx, dbConnectionPool, expectedSchema)
-		tenant.TenantSchemaMatchTablesFixture(t, ctx, dbConnectionPool, expectedSchema, expectedTablesAfterMigrationsApplied)
+		assertMigrations()
+	})
 
-		dsn, err := m.GetDSNForTenant(ctx, "aid-org")
+	t.Run("provisions a new tenant successfully - dynamically generates base URL for tenant", func(t *testing.T) {
+		messengerClientMock.
+			On("SendMessage", mock.AnythingOfType("message.Message")).
+			Run(func(args mock.Arguments) {
+				msg, ok := args.Get(0).(message.Message)
+				require.True(t, ok)
+
+				assert.Equal(t, "Welcome to Stellar Disbursement Platform", msg.Title)
+				assert.Equal(t, "owner@email.org", msg.ToEmail)
+				assert.Empty(t, msg.ToPhoneNumber)
+			}).
+			Return(nil).
+			Once()
+
+		distAccSigClient.
+			On("BatchInsert", ctx, 1).
+			Return([]string{distAcc}, nil).
+			Once()
+
+		distAccResolver.
+			On("HostDistributionAccount").
+			Return(distAcc, nil).
+			Once()
+
+		reqBody := `
+			{
+				"name": "aid-org",
+				"owner_email": "owner@email.org",
+				"owner_first_name": "Owner",
+				"owner_last_name": "Owner",
+				"organization_name": "My Aid Org",
+				"is_default": false
+			}
+		`
+
+		rr := httptest.NewRecorder()
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/tenants", strings.NewReader(reqBody))
+		require.NoError(t, err)
+		http.HandlerFunc(handler.Post).ServeHTTP(rr, req)
+
+		resp := rr.Result()
+		defer resp.Body.Close()
+		respBody, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
-		tenantSchemaConnectionPool, err := db.OpenDBConnectionPool(dsn)
-		require.NoError(t, err)
-		defer tenantSchemaConnectionPool.Close()
+		assert.Equal(t, http.StatusCreated, resp.StatusCode)
 
-		tenant.AssertRegisteredAssetsFixture(t, ctx, tenantSchemaConnectionPool, []string{"USDC:GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5", "XLM:"})
-		tenant.AssertRegisteredWalletsFixture(t, ctx, tenantSchemaConnectionPool, []string{"Demo Wallet", "Vibrant Assist"})
-		tenant.AssertRegisteredUserFixture(t, ctx, tenantSchemaConnectionPool, "Owner", "Owner", "owner@email.org")
+		tnt, err := m.GetTenantByName(ctx, "aid-org")
+		require.NoError(t, err)
+
+		baseURL := fmt.Sprintf("https://%s.%s", tnt.Name, handler.BaseURL)
+		expectedRespBody := fmt.Sprintf(`
+			{
+				"id": %q,
+				"name": "aid-org",
+				"base_url": %q,
+				"sdp_ui_base_url": %q,
+				"status": "TENANT_PROVISIONED",
+				"distribution_account": %q,
+				"is_default": false,
+				"created_at": %q,
+				"updated_at": %q
+			}
+		`, tnt.ID, baseURL, baseURL, distAcc, tnt.CreatedAt.Format(time.RFC3339Nano), tnt.UpdatedAt.Format(time.RFC3339Nano))
+		assert.JSONEq(t, expectedRespBody, string(respBody))
+
+		assertMigrations()
 	})
 
 	t.Run("returns badRequest for duplicate tenant name", func(t *testing.T) {

@@ -49,6 +49,7 @@ type ServeOptions struct {
 	AdminAccount                            string
 	AdminApiKey                             string
 	SingleTenantMode                        bool
+	BaseURL                                 string
 }
 
 // SetupDependencies uses the serve options to setup the dependencies for the server.
@@ -136,6 +137,7 @@ func handleHTTP(opts *ServeOptions) *chi.Mux {
 				Models:                      opts.Models,
 				HorizonClient:               opts.SubmitterEngine.HorizonClient,
 				DistributionAccountResolver: opts.SubmitterEngine.DistributionAccountResolver,
+				BaseURL:                     opts.BaseURL,
 			}
 			r.Get("/", tenantsHandler.GetAll)
 			r.Post("/", tenantsHandler.Post)

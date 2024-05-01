@@ -68,7 +68,6 @@ func (tu *TenantUpdate) Validate() error {
 	if tu.DistributionAccount != nil && !strkey.IsValidEd25519PublicKey(*tu.DistributionAccount) {
 		return fmt.Errorf("invalid distribution account: %q", *tu.DistributionAccount)
 	}
-
 	return nil
 }
 

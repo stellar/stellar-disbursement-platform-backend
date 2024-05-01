@@ -24,7 +24,7 @@ import (
 )
 
 type TenantsHandler struct {
-	Manager                     tenant.ManagerInterface
+	Manager                     *tenant.Manager
 	Models                      *data.Models
 	HorizonClient               horizonclient.ClientInterface
 	DistributionAccountResolver signing.DistributionAccountResolver
@@ -32,6 +32,7 @@ type TenantsHandler struct {
 	NetworkType                 utils.NetworkType
 	AdminDBConnectionPool       db.DBConnectionPool
 	SingleTenantMode            bool
+	BaseURL                     string
 }
 
 const MaxNativeAssetBalanceForDeletion = 100
@@ -86,7 +87,7 @@ func (h TenantsHandler) Post(rw http.ResponseWriter, req *http.Request) {
 	tnt, err := h.ProvisioningManager.ProvisionNewTenant(
 		ctx, reqBody.Name, reqBody.OwnerFirstName,
 		reqBody.OwnerLastName, reqBody.OwnerEmail, reqBody.OrganizationName,
-		reqBody.SDPUIBaseURL, string(h.NetworkType),
+		string(h.NetworkType),
 	)
 	if err != nil {
 		if errors.Is(err, tenant.ErrDuplicatedTenantName) {
@@ -97,9 +98,21 @@ func (h TenantsHandler) Post(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	tntBaseURL := "https://" + tnt.Name + "." + h.BaseURL
+	tntSDPUIBaseURL := tntBaseURL
+	if reqBody.BaseURL != nil {
+		tntBaseURL = *reqBody.BaseURL
+	}
+	if reqBody.SDPUIBaseURL != nil {
+		tntSDPUIBaseURL = *reqBody.SDPUIBaseURL
+	}
+	fmt.Println("tntBaseURL", tntBaseURL)
+	fmt.Println("tntSDPUIBaseURL", tntSDPUIBaseURL)
+
 	tnt, err = h.Manager.UpdateTenantConfig(ctx, &tenant.TenantUpdate{
-		ID:      tnt.ID,
-		BaseURL: &reqBody.BaseURL,
+		ID:           tnt.ID,
+		BaseURL:      &tntBaseURL,
+		SDPUIBaseURL: &tntSDPUIBaseURL,
 	})
 	if err != nil {
 		httperror.InternalError(ctx, "Could not update tenant config", err, nil).Render(rw)

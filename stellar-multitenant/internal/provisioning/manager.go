@@ -62,14 +62,13 @@ func rollbackTenantCreationAndSchemaErrors() []error {
 
 func (m *Manager) ProvisionNewTenant(
 	ctx context.Context, name, userFirstName, userLastName, userEmail,
-	organizationName, uiBaseURL, networkType string,
+	organizationName, networkType string,
 ) (*tenant.Tenant, error) {
 	pt := &ProvisionTenant{
 		name:          name,
 		userFirstName: userFirstName,
 		userLastName:  userLastName,
 		userEmail:     userEmail,
-		uiBaseURL:     uiBaseURL,
 		orgName:       organizationName,
 		networkType:   networkType,
 	}
@@ -103,6 +102,10 @@ func (m *Manager) handleProvisioningError(ctx context.Context, err error, t *ten
 	}
 
 	if isErrorInArray(err, deleteDistributionKeyErrors()) {
+		fmt.Println("--------------------")
+		fmt.Println(err)
+		fmt.Println("--------------------")
+
 		deleteDistributionAccFromVaultErr := m.deleteDistributionAccountKey(ctx, t)
 		// We should not let any failures from key deletion block us from completing the tenant cleanup process
 		if deleteDistributionAccFromVaultErr != nil {
@@ -165,7 +168,6 @@ func (m *Manager) provisionTenant(ctx context.Context, pt *ProvisionTenant) (*te
 		&tenant.TenantUpdate{
 			ID:                  t.ID,
 			Status:              &tenantStatus,
-			SDPUIBaseURL:        &pt.uiBaseURL,
 			DistributionAccount: t.DistributionAccount,
 		})
 	if err != nil {
