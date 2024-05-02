@@ -169,9 +169,14 @@ func (s *ServerService) SetupConsumers(ctx context.Context, o SetupConsumersOpti
 		return fmt.Errorf("creating Payment Ready to Pay Kafka Consumer: %w", err)
 	}
 
-	go events.Consume(ctx, smsInvitationConsumer, o.ServeOpts.CrashTrackerClient.Clone())
-	go events.Consume(ctx, paymentCompletedConsumer, o.ServeOpts.CrashTrackerClient.Clone())
-	go events.Consume(ctx, paymentReadyToPayConsumer, o.ServeOpts.CrashTrackerClient.Clone())
+	dlqProducer, err := events.NewKafkaProducer(kafkaConfig)
+	if err != nil {
+		return fmt.Errorf("creating Kafka DLQ producer: %w", err)
+	}
+
+	go events.Consume(ctx, smsInvitationConsumer, dlqProducer, o.ServeOpts.CrashTrackerClient.Clone())
+	go events.Consume(ctx, paymentCompletedConsumer, dlqProducer, o.ServeOpts.CrashTrackerClient.Clone())
+	go events.Consume(ctx, paymentReadyToPayConsumer, dlqProducer, o.ServeOpts.CrashTrackerClient.Clone())
 
 	return nil
 }

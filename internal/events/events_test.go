@@ -20,30 +20,35 @@ func TestConsume(t *testing.T) {
 	consumer := &MockConsumer{}
 	crashTracker := &crashtracker.MockCrashTrackerClient{}
 
+	msg := &Message{}
 	unexpectedErr := errors.New("unexpected error")
 	consumer.
 		On("Topic").
 		Return("test.test_topic").
 		On("ReadMessage", ctx).
-		Return(unexpectedErr).
+		Return(nil, unexpectedErr).
 		Twice().
 		On("ReadMessage", ctx).
-		Return(nil).
+		Return(msg, nil).
 		Once().
 		On("ReadMessage", ctx).
-		Return(unexpectedErr).
+		Return(nil, unexpectedErr).
 		Once().
 		On("ReadMessage", ctx).
-		Return(nil)
+		Return(msg, nil).
+		On("Handlers").
+		Return([]EventHandler{})
 
 	crashTracker.
 		On("LogAndReportErrors", ctx, unexpectedErr, "consuming messages for topic test.test_topic").
 		Return().
 		Times(3)
 
+	dlqProducer := &MockProducer{}
+
 	t.Log("calling Consume function...")
 	getEntries := log.DefaultLogger.StartTest(log.WarnLevel)
-	Consume(ctx, consumer, crashTracker)
+	Consume(ctx, consumer, dlqProducer, crashTracker)
 
 	entries := getEntries()
 	require.Len(t, entries, 3)

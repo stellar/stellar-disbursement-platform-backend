@@ -2,7 +2,6 @@ package events
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"os/signal"
@@ -11,83 +10,24 @@ import (
 
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
-var (
-	ErrTopicRequired    = errors.New("message topic is required")
-	ErrKeyRequired      = errors.New("message key is required")
-	ErrTenantIDRequired = errors.New("message tenant ID is required")
-	ErrTypeRequired     = errors.New("message type is required")
-	ErrDataRequired     = errors.New("message data is required")
-)
-
-type Message struct {
-	Topic    string `json:"topic"`
-	Key      string `json:"key"`
-	TenantID string `json:"tenant_id"`
-	Type     string `json:"type"`
-	Data     any    `json:"data"`
-}
-
-func (m Message) String() string {
-	return fmt.Sprintf("Message{Topic: %s, Key: %s, Type: %s, TenantID: %s, Data: %v}", m.Topic, m.Key, m.Type, m.TenantID, m.Data)
-}
-
-func (m Message) Validate() error {
-	if m.Topic == "" {
-		return ErrTopicRequired
-	}
-
-	if m.Key == "" {
-		return ErrKeyRequired
-	}
-
-	if m.TenantID == "" {
-		return ErrTenantIDRequired
-	}
-
-	if m.Type == "" {
-		return ErrTypeRequired
-	}
-
-	if m.Data == nil {
-		return ErrDataRequired
-	}
-
-	return nil
-}
-
-// NewMessage returns a new message with values passed by parameters. It also parses the `TenantID` from the context and inject it into the message.
-// Returns error if the tenant is not found in the context.
-func NewMessage(ctx context.Context, topic, key, messageType string, data any) (*Message, error) {
-	tnt, err := tenant.GetTenantFromContext(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("getting tenant from context: %w", err)
-	}
-
-	return &Message{
-		Topic:    topic,
-		Key:      key,
-		TenantID: tnt.ID,
-		Type:     messageType,
-		Data:     data,
-	}, nil
-}
-
+// Producer is an interface that defines the methods that a producer should implement.
 type Producer interface {
 	WriteMessages(ctx context.Context, messages ...Message) error
 	Close() error
 }
 
+// Consumer is an interface that defines the methods that a consumer should implement.
 type Consumer interface {
-	ReadMessage(ctx context.Context) error
+	ReadMessage(ctx context.Context) (*Message, error)
 	Topic() string
+	Handlers() []EventHandler
 	Close() error
 }
 
-func Consume(ctx context.Context, consumer Consumer, crashTracker crashtracker.CrashTrackerClient) {
-	log.Ctx(ctx).Info("starting consuming messages...")
+func Consume(ctx context.Context, consumer Consumer, dlqProducer Producer, crashTracker crashtracker.CrashTrackerClient) {
+	log.Ctx(ctx).Infof("starting consuming messages for topic %s...", consumer.Topic())
 
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, syscall.SIGTERM, syscall.SIGINT, syscall.SIGQUIT)
@@ -112,14 +52,69 @@ func Consume(ctx context.Context, consumer Consumer, crashTracker crashtracker.C
 			time.Sleep(backoff)
 
 		default:
-			if err := consumer.ReadMessage(ctx); err != nil {
-				crashTracker.LogAndReportErrors(ctx, err, fmt.Sprintf("consuming messages for topic %s", consumer.Topic()))
-				backoffManager.TriggerBackoff()
+
+			// 1. Attempt fetching msg from backoff manager in case it was already Read from Consumer.
+			msg := backoffManager.GetMessage()
+
+			// 2. If Backoff max reached, send message to DLQ and reset backoff.
+			if backoffManager.IsMaxBackoffReached() {
+				log.Ctx(ctx).Warnf("Max backoff reached for topic %s.", consumer.Topic())
+				if msg != nil {
+					err := sendMessageToDLQ(ctx, dlqProducer, *msg)
+					if err != nil {
+						crashTracker.LogAndReportErrors(ctx, err, fmt.Sprintf("sending message to DLQ for topic %s", consumer.Topic()))
+					}
+				}
+				backoffManager.ResetBackoff()
 				continue
 			}
+
+			// 3. If no message in backoff manager, read message from Kafka.
+			if msg == nil {
+				var consumeErr error
+				msg, consumeErr = consumer.ReadMessage(ctx)
+				if consumeErr != nil {
+					crashTracker.LogAndReportErrors(ctx, consumeErr, fmt.Sprintf("consuming messages for topic %s", consumer.Topic()))
+					backoffManager.TriggerBackoff()
+					continue
+				}
+			}
+
+			// 4. Run the message through the handler chain.
+			if handleErr := handleMessage(ctx, consumer, msg); handleErr != nil {
+				backoffManager.TriggerBackoffWithMessage(msg, handleErr)
+				crashTracker.LogAndReportErrors(ctx, handleErr, fmt.Sprintf("handling message for topic %s", consumer.Topic()))
+				continue
+			}
+
+			// 5. Message handled successfully, reset backoff.
 			backoffManager.ResetBackoff()
 		}
 	}
+}
+
+func sendMessageToDLQ(ctx context.Context, dlqProducer Producer, msg Message) error {
+	log.Ctx(ctx).Warnf("Sending message with key %s to DLQ for topic %s", msg.Key, msg.Topic)
+
+	msg.Topic = msg.Topic + ".dlq"
+	err := dlqProducer.WriteMessages(ctx, msg)
+	if err != nil {
+		return fmt.Errorf("sending message %s to DLQ for topic %s: %w", msg.String(), msg.Topic, err)
+	}
+	return nil
+}
+
+// handleMessage handles the message by the handler chain of the consumer.
+func handleMessage(ctx context.Context, consumer Consumer, msg *Message) error {
+	for _, handler := range consumer.Handlers() {
+		if handler.CanHandleMessage(ctx, msg) {
+			handleErr := handler.Handle(ctx, msg)
+			if handleErr != nil {
+				return fmt.Errorf("handling message: %w", handleErr)
+			}
+		}
+	}
+	return nil
 }
 
 // NoopProducer is a producer used to log messages instead of sending them to a real producer.

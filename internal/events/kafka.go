@@ -220,42 +220,40 @@ func NewKafkaConsumer(config KafkaConfig, topic string, consumerGroupID string, 
 	return &k, nil
 }
 
-func (k *KafkaConsumer) ReadMessage(ctx context.Context) error {
+// ReadMessage reads a message from the Kafka topic of the consumer and commits the offset
+func (k *KafkaConsumer) ReadMessage(ctx context.Context) (*Message, error) {
 	log.Ctx(ctx).Infof("fetching messages from kafka for topic %s", k.reader.Config().Topic)
 	kafkaMessage, err := k.reader.FetchMessage(ctx)
 	if err != nil {
-		return fmt.Errorf("fetching message from kafka: %w", err)
+		return nil, fmt.Errorf("fetching message from kafka: %w", err)
 	}
 
-	log.Ctx(ctx).Info("unmarshalling new message")
+	log.Ctx(ctx).Infof("unmarshalling message for topic %s", k.reader.Config().Topic)
 	var msg Message
 	if err = json.Unmarshal(kafkaMessage.Value, &msg); err != nil {
-		return fmt.Errorf("unmarshaling message: %w", err)
-	}
-
-	log.Ctx(ctx).Infof("new message being processed: %s", msg.String())
-	for _, handler := range k.handlers {
-		if handler.CanHandleMessage(ctx, &msg) {
-			handleErr := handler.Handle(ctx, &msg)
-			if handleErr != nil {
-				return fmt.Errorf("handling message: %w", handleErr)
-			}
-		}
+		return nil, fmt.Errorf("unmarshaling message: %w", err)
 	}
 
 	// Acknowledgement
 	if err = k.reader.CommitMessages(ctx, kafkaMessage); err != nil {
-		return fmt.Errorf("committing message: %w", err)
+		return nil, fmt.Errorf("committing message: %w", err)
 	}
 
-	return nil
+	return &msg, nil
 }
 
+// Topic returns the topic of the Kafka consumer
 func (k *KafkaConsumer) Topic() string {
 	return k.reader.Config().Topic
 }
 
+// Close closes the Kafka consumer
 func (k *KafkaConsumer) Close() error {
 	log.Info("closing kafka consumer")
 	return k.reader.Close()
+}
+
+// Handlers returns the event handlers of the Kafka consumer
+func (k *KafkaConsumer) Handlers() []EventHandler {
+	return k.handlers
 }
