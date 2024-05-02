@@ -40,20 +40,14 @@ func (s *StellarTomlHandler) horizonURL() string {
 
 // buildGeneralInformation will create the general informations based on the env vars injected into the handler.
 func (s *StellarTomlHandler) buildGeneralInformation(ctx context.Context, req *http.Request) string {
-	rawAccountAddresses := []string{}
+	accounts := "["
 	if perTenantDistributionAccount, err := s.DistributionAccountResolver.DistributionAccountFromContext(ctx); err != nil {
 		log.Ctx(ctx).Warnf("Couldn't get distribution account from context in %s%s", req.Host, req.URL.Path)
-		rawAccountAddresses = append(rawAccountAddresses, s.DistributionAccountResolver.HostDistributionAccount())
+		accounts += "\"" + s.DistributionAccountResolver.HostDistributionAccount() + "\"" // fallback to host distribution account
 	} else if perTenantDistributionAccount.IsStellar() {
-		rawAccountAddresses = append(rawAccountAddresses, perTenantDistributionAccount.ID)
+		accounts += "\"" + perTenantDistributionAccount.ID + "\""
 	}
-	rawAccountAddresses = append(rawAccountAddresses, s.Sep10SigningPublicKey)
-	// quoted addresses:
-	quotedAccountAddresses := make([]string, len(rawAccountAddresses))
-	for i, address := range rawAccountAddresses {
-		quotedAccountAddresses[i] = fmt.Sprintf("%q", address)
-	}
-	accountsStr := fmt.Sprintf("[%s]", strings.Join(quotedAccountAddresses, ", "))
+	accounts += ", \"" + s.Sep10SigningPublicKey + "\"]"
 
 	webAuthEndpoint := s.AnchorPlatformBaseSepURL + "/auth"
 	transferServerSep0024 := s.AnchorPlatformBaseSepURL + "/sep24"
@@ -65,7 +59,7 @@ func (s *StellarTomlHandler) buildGeneralInformation(ctx context.Context, req *h
 		HORIZON_URL=%q
 		WEB_AUTH_ENDPOINT=%q
 		TRANSFER_SERVER_SEP0024=%q
-	`, accountsStr, s.Sep10SigningPublicKey, s.NetworkPassphrase, s.horizonURL(), webAuthEndpoint, transferServerSep0024)
+	`, accounts, s.Sep10SigningPublicKey, s.NetworkPassphrase, s.horizonURL(), webAuthEndpoint, transferServerSep0024)
 }
 
 func (s *StellarTomlHandler) buildOrganizationDocumentation(instanceName string) string {
