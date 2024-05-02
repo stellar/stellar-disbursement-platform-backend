@@ -40,15 +40,23 @@ func (s *StellarTomlHandler) horizonURL() string {
 
 // buildGeneralInformation will create the general informations based on the env vars injected into the handler.
 func (s *StellarTomlHandler) buildGeneralInformation(ctx context.Context, req *http.Request) string {
-	distributionPublicKey, err := s.DistributionAccountResolver.DistributionAccountFromContext(ctx)
-	if err != nil {
+	rawAccountAddresses := []string{}
+	if perTenantDistributionAccount, err := s.DistributionAccountResolver.DistributionAccountFromContext(ctx); err != nil {
 		log.Ctx(ctx).Warnf("Couldn't get distribution account from context in %s%s", req.Host, req.URL.Path)
-		distributionPublicKey = s.DistributionAccountResolver.HostDistributionAccount()
+		rawAccountAddresses = append(rawAccountAddresses, s.DistributionAccountResolver.HostDistributionAccount())
+	} else if perTenantDistributionAccount.IsStellar() {
+		rawAccountAddresses = append(rawAccountAddresses, perTenantDistributionAccount.ID)
 	}
+	rawAccountAddresses = append(rawAccountAddresses, s.Sep10SigningPublicKey)
+	// quoted addresses:
+	quotedAccountAddresses := make([]string, len(rawAccountAddresses))
+	for i, address := range rawAccountAddresses {
+		quotedAccountAddresses[i] = fmt.Sprintf("%q", address)
+	}
+	accountsStr := fmt.Sprintf("[%s]", strings.Join(quotedAccountAddresses, ", "))
 
 	webAuthEndpoint := s.AnchorPlatformBaseSepURL + "/auth"
 	transferServerSep0024 := s.AnchorPlatformBaseSepURL + "/sep24"
-	accounts := fmt.Sprintf("[%q, %q]", distributionPublicKey, s.Sep10SigningPublicKey)
 
 	return fmt.Sprintf(`
 		ACCOUNTS=%s
@@ -57,7 +65,7 @@ func (s *StellarTomlHandler) buildGeneralInformation(ctx context.Context, req *h
 		HORIZON_URL=%q
 		WEB_AUTH_ENDPOINT=%q
 		TRANSFER_SERVER_SEP0024=%q
-	`, accounts, s.Sep10SigningPublicKey, s.NetworkPassphrase, s.horizonURL(), webAuthEndpoint, transferServerSep0024)
+	`, accountsStr, s.Sep10SigningPublicKey, s.NetworkPassphrase, s.horizonURL(), webAuthEndpoint, transferServerSep0024)
 }
 
 func (s *StellarTomlHandler) buildOrganizationDocumentation(instanceName string) string {

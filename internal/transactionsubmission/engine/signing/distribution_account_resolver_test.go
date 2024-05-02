@@ -7,6 +7,7 @@ import (
 	"github.com/stellar/go/keypair"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -169,7 +170,7 @@ func Test_DistributionAccountResolverImpl_DistributionAccount(t *testing.T) {
 
 		distAccount, err := distAccResolver.DistributionAccount(ctx, tnt.ID)
 		assert.NoError(t, err)
-		assert.Equal(t, distribututionPublicKey, distAccount)
+		assert.Equal(t, schema.NewStellarDistributionAccount(distribututionPublicKey), distAccount)
 	})
 }
 
@@ -210,7 +211,7 @@ func Test_DistributionAccountResolverImpl_DistributionAccountFromContext(t *test
 
 		distAccount, err := distAccResolver.DistributionAccountFromContext(ctxWithTenant)
 		assert.NoError(t, err)
-		assert.Equal(t, distribututionPublicKey, distAccount)
+		assert.Equal(t, schema.NewStellarDistributionAccount(distribututionPublicKey), distAccount)
 	})
 }
 
