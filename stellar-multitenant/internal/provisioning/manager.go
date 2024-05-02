@@ -102,10 +102,6 @@ func (m *Manager) handleProvisioningError(ctx context.Context, err error, t *ten
 	}
 
 	if isErrorInArray(err, deleteDistributionKeyErrors()) {
-		fmt.Println("--------------------")
-		fmt.Println(err)
-		fmt.Println("--------------------")
-
 		deleteDistributionAccFromVaultErr := m.deleteDistributionAccountKey(ctx, t)
 		// We should not let any failures from key deletion block us from completing the tenant cleanup process
 		if deleteDistributionAccFromVaultErr != nil {
