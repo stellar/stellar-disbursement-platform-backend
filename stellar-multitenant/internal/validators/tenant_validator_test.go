@@ -7,6 +7,10 @@ import (
 )
 
 func TestTenantValidator_ValidateCreateTenantRequest(t *testing.T) {
+	sdpUIBaseURL := "http://localhost:3000"
+	baseURL := "http://localhost:8000"
+	invalidURL := "%invalid%"
+
 	t.Run("returns error when request body is empty", func(t *testing.T) {
 		tv := NewTenantValidator()
 		tv.ValidateCreateTenantRequest(nil)
@@ -52,8 +56,8 @@ func TestTenantValidator_ValidateCreateTenantRequest(t *testing.T) {
 			OwnerFirstName:   "Owner",
 			OwnerLastName:    "Owner",
 			OrganizationName: "Aid Org",
-			SDPUIBaseURL:     "http://localhost:3000",
-			BaseURL:          "http://localhost:8000",
+			SDPUIBaseURL:     &sdpUIBaseURL,
+			BaseURL:          &baseURL,
 		}
 
 		tv.ValidateCreateTenantRequest(reqBody)
@@ -71,8 +75,8 @@ func TestTenantValidator_ValidateCreateTenantRequest(t *testing.T) {
 			OwnerFirstName:   "",
 			OwnerLastName:    "",
 			OrganizationName: "",
-			BaseURL:          "http://localhost:8000",
-			SDPUIBaseURL:     "http://localhost:3000",
+			BaseURL:          &sdpUIBaseURL,
+			SDPUIBaseURL:     &baseURL,
 		}
 
 		tv.ValidateCreateTenantRequest(reqBody)
@@ -102,8 +106,8 @@ func TestTenantValidator_ValidateCreateTenantRequest(t *testing.T) {
 			OwnerFirstName:   "Owner",
 			OwnerLastName:    "Owner",
 			OrganizationName: "Aid Org",
-			SDPUIBaseURL:     "%invalid%",
-			BaseURL:          "%invalid%",
+			SDPUIBaseURL:     &invalidURL,
+			BaseURL:          &invalidURL,
 		}
 
 		tv.ValidateCreateTenantRequest(reqBody)
@@ -112,6 +116,21 @@ func TestTenantValidator_ValidateCreateTenantRequest(t *testing.T) {
 			"base_url":        "invalid base URL value",
 			"sdp_ui_base_url": "invalid SDP UI base URL value",
 		}, tv.Errors)
+	})
+
+	t.Run("validates request successfully without URLs", func(t *testing.T) {
+		tv := NewTenantValidator()
+		reqBody := &TenantRequest{
+			Name:             "aid-org",
+			OwnerEmail:       "owner@email.org",
+			OwnerFirstName:   "Owner",
+			OwnerLastName:    "Owner",
+			OrganizationName: "Aid Org",
+		}
+
+		tv.ValidateCreateTenantRequest(reqBody)
+		assert.False(t, tv.HasErrors())
+		assert.Equal(t, map[string]interface{}{}, tv.Errors)
 	})
 }
 
