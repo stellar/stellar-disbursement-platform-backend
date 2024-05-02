@@ -24,7 +24,7 @@ import (
 )
 
 type TenantsHandler struct {
-	Manager                     *tenant.Manager
+	Manager                     tenant.ManagerInterface
 	Models                      *data.Models
 	HorizonClient               horizonclient.ClientInterface
 	DistributionAccountResolver signing.DistributionAccountResolver
