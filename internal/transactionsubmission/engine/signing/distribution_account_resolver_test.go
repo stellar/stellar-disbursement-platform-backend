@@ -137,7 +137,7 @@ func Test_DistributionAccountResolverImpl_DistributionAccount(t *testing.T) {
 
 	t.Run("return an error if the tenant_id cannot be found in the DB", func(t *testing.T) {
 		distAccount, err := distAccResolver.DistributionAccount(ctx, "tenant-id-not-found")
-		assert.ErrorContains(t, err, "getting tenant by ID")
+		assert.ErrorContains(t, err, "getting tenant")
 		assert.ErrorIs(t, err, tenant.ErrTenantDoesNotExist)
 		assert.Empty(t, distAccount)
 	})
@@ -189,7 +189,7 @@ func Test_DistributionAccountResolverImpl_DistributionAccountFromContext(t *test
 
 	t.Run("return an error if there's no tenant in the context", func(t *testing.T) {
 		distAccount, err := distAccResolver.DistributionAccountFromContext(context.Background())
-		assert.ErrorContains(t, err, "getting tenant from context")
+		assert.ErrorContains(t, err, "getting tenant")
 		assert.ErrorIs(t, err, tenant.ErrTenantNotFoundInContext)
 		assert.Empty(t, distAccount)
 	})

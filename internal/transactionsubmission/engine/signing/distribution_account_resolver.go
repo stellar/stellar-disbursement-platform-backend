@@ -61,24 +61,24 @@ type DistributionAccountResolverImpl struct {
 
 // DistributionAccount returns the tenant's distribution account stored in the database.
 func (r *DistributionAccountResolverImpl) DistributionAccount(ctx context.Context, tenantID string) (string, error) {
-	tnt, err := r.tenantManager.GetTenantByID(ctx, tenantID)
-	if err != nil {
-		return "", fmt.Errorf("getting tenant by ID: %w", err)
-	}
-
-	if tnt.DistributionAccount == nil {
-		return "", ErrDistributionAccountIsEmpty
-	}
-
-	return *tnt.DistributionAccount, nil
+	return r.getDistributionAccount(func() (*tenant.Tenant, error) {
+		return r.tenantManager.GetTenantByID(ctx, tenantID)
+	})
 }
 
 // DistributionAccountFromContext returns the tenant's distribution account from the tenant object stored in the context
 // provided.
 func (r *DistributionAccountResolverImpl) DistributionAccountFromContext(ctx context.Context) (string, error) {
-	tnt, err := tenant.GetTenantFromContext(ctx)
+	return r.getDistributionAccount(func() (*tenant.Tenant, error) {
+		return tenant.GetTenantFromContext(ctx)
+	})
+}
+
+// getDistributionAccount extracts the distribution account from the tenant if it exists.
+func (r *DistributionAccountResolverImpl) getDistributionAccount(getterFn func() (*tenant.Tenant, error)) (string, error) {
+	tnt, err := getterFn()
 	if err != nil {
-		return "", fmt.Errorf("getting tenant from context: %w", err)
+		return "", fmt.Errorf("getting tenant: %w", err)
 	}
 
 	if tnt.DistributionAccount == nil {
