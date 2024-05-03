@@ -363,6 +363,31 @@ func Test_TenantHandler_Post(t *testing.T) {
 		BaseURL:             "backend.sdp.org",
 	}
 
+	createMocks := func() {
+		messengerClientMock.
+			On("SendMessage", mock.AnythingOfType("message.Message")).
+			Run(func(args mock.Arguments) {
+				msg, ok := args.Get(0).(message.Message)
+				require.True(t, ok)
+
+				assert.Equal(t, "Welcome to Stellar Disbursement Platform", msg.Title)
+				assert.Equal(t, "owner@email.org", msg.ToEmail)
+				assert.Empty(t, msg.ToPhoneNumber)
+			}).
+			Return(nil).
+			Once()
+
+		distAccSigClient.
+			On("BatchInsert", ctx, 1).
+			Return([]string{distAcc}, nil).
+			Once()
+
+		distAccResolver.
+			On("HostDistributionAccount").
+			Return(distAcc, nil).
+			Once()
+	}
+
 	assertMigrations := func(orgName string) {
 		// Validating infrastructure
 		expectedSchema := fmt.Sprintf("sdp_%s", orgName)
@@ -428,28 +453,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 	})
 
 	t.Run("provisions a new tenant successfully", func(t *testing.T) {
-		messengerClientMock.
-			On("SendMessage", mock.AnythingOfType("message.Message")).
-			Run(func(args mock.Arguments) {
-				msg, ok := args.Get(0).(message.Message)
-				require.True(t, ok)
-
-				assert.Equal(t, "Welcome to Stellar Disbursement Platform", msg.Title)
-				assert.Equal(t, "owner@email.org", msg.ToEmail)
-				assert.Empty(t, msg.ToPhoneNumber)
-			}).
-			Return(nil).
-			Once()
-
-		distAccSigClient.
-			On("BatchInsert", ctx, 1).
-			Return([]string{distAcc}, nil).
-			Once()
-
-		distAccResolver.
-			On("HostDistributionAccount").
-			Return(distAcc, nil).
-			Once()
+		createMocks()
 
 		orgName := "aid-org-one"
 		reqBody := fmt.Sprintf(`
@@ -500,28 +504,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 	})
 
 	t.Run("provisions a new tenant successfully - dynamically generates base URL for tenant", func(t *testing.T) {
-		messengerClientMock.
-			On("SendMessage", mock.AnythingOfType("message.Message")).
-			Run(func(args mock.Arguments) {
-				msg, ok := args.Get(0).(message.Message)
-				require.True(t, ok)
-
-				assert.Equal(t, "Welcome to Stellar Disbursement Platform", msg.Title)
-				assert.Equal(t, "owner@email.org", msg.ToEmail)
-				assert.Empty(t, msg.ToPhoneNumber)
-			}).
-			Return(nil).
-			Once()
-
-		distAccSigClient.
-			On("BatchInsert", ctx, 1).
-			Return([]string{distAcc}, nil).
-			Once()
-
-		distAccResolver.
-			On("HostDistributionAccount").
-			Return(distAcc, nil).
-			Once()
+		createMocks()
 
 		orgName := "aid-org-two"
 		reqBody := fmt.Sprintf(`
@@ -571,28 +554,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 	})
 
 	t.Run("returns badRequest for duplicate tenant name", func(t *testing.T) {
-		messengerClientMock.
-			On("SendMessage", mock.AnythingOfType("message.Message")).
-			Run(func(args mock.Arguments) {
-				msg, ok := args.Get(0).(message.Message)
-				require.True(t, ok)
-
-				assert.Equal(t, "Welcome to Stellar Disbursement Platform", msg.Title)
-				assert.Equal(t, "owner@email.org", msg.ToEmail)
-				assert.Empty(t, msg.ToPhoneNumber)
-			}).
-			Return(nil).
-			Once()
-
-		distAccSigClient.
-			On("BatchInsert", ctx, 1).
-			Return([]string{distAcc}, nil).
-			Once()
-
-		distAccResolver.
-			On("HostDistributionAccount").
-			Return(distAcc, nil).
-			Once()
+		createMocks()
 
 		reqBody := `
 			{

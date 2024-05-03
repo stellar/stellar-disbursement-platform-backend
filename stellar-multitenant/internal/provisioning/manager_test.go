@@ -184,12 +184,10 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 			WithNativeAssetBootstrapAmount(tenant.MinTenantDistributionAccountAmount),
 		)
 
-		//uiBaseURL := "http://localhost:3000"
 		tnt, err := p.ProvisionNewTenant(ctx, tenantName, user.FirstName, user.LastName, user.Email, user.OrgName, string(networkType))
 		require.NoError(t, err)
 
 		assert.Equal(t, tenantName, tnt.Name)
-		//assert.Equal(t, uiBaseURL, *tnt.SDPUIBaseURL)
 		if sigClientType == signing.DistributionAccountEnvSignatureClientType {
 			assert.Equal(t, distAcc.Address(), *tnt.DistributionAccount)
 		} else {
