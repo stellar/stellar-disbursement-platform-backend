@@ -360,7 +360,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 		Manager:             m,
 		ProvisioningManager: p,
 		NetworkType:         utils.TestnetNetworkType,
-		BaseURL:             "backend.sdp.org",
+		BaseURL:             "https://backend.sdp.org",
 	}
 
 	createMocks := func() {
@@ -533,7 +533,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 		tnt, err := m.GetTenantByName(ctx, orgName)
 		require.NoError(t, err)
 
-		baseURL := fmt.Sprintf("https://%s.%s", tnt.Name, handler.BaseURL)
+		baseURL := fmt.Sprintf("https://%s.backend.sdp.org", orgName)
 		expectedRespBody := fmt.Sprintf(`
 			{
 				"id": %q,

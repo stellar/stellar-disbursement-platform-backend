@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/stellar/go/clients/horizonclient"
@@ -98,7 +99,9 @@ func (h TenantsHandler) Post(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	tntBaseURL := "https://" + tnt.Name + "." + h.BaseURL
+	const urlSeparator = "://"
+	protocol, urlName, _ := strings.Cut(h.BaseURL, urlSeparator)
+	tntBaseURL := protocol + urlSeparator + tnt.Name + "." + urlName
 	tntSDPUIBaseURL := tntBaseURL
 	if reqBody.BaseURL != nil {
 		tntBaseURL = *reqBody.BaseURL
