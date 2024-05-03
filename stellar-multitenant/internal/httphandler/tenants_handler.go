@@ -3,15 +3,13 @@ package httphandler
 import (
 	"errors"
 	"fmt"
-	"net/http"
-	"strconv"
-	"strings"
-
 	"github.com/go-chi/chi/v5"
 	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/support/http/httpdecode"
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/support/render/httpjson"
+	"net/http"
+	"strconv"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
@@ -99,15 +97,22 @@ func (h TenantsHandler) Post(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	const urlSeparator = "://"
-	protocol, urlName, _ := strings.Cut(h.BaseURL, urlSeparator)
-	tntBaseURL := protocol + urlSeparator + tnt.Name + "." + urlName
-	tntSDPUIBaseURL := tntBaseURL
+	var tntBaseURL string
 	if reqBody.BaseURL != nil {
 		tntBaseURL = *reqBody.BaseURL
+	} else {
+		tntBaseURL, err = utils.GenerateTenantURL(h.BaseURL, tnt.Name)
+		if err != nil {
+			httperror.InternalError(ctx, "Could not generate tenant URL", err, nil).Render(rw)
+			return
+		}
 	}
+
+	var tntSDPUIBaseURL string
 	if reqBody.SDPUIBaseURL != nil {
 		tntSDPUIBaseURL = *reqBody.SDPUIBaseURL
+	} else {
+		tntSDPUIBaseURL = tntBaseURL
 	}
 
 	tnt, err = h.Manager.UpdateTenantConfig(ctx, &tenant.TenantUpdate{
