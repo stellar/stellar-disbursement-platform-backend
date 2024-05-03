@@ -89,6 +89,7 @@ func (h TenantsHandler) Post(rw http.ResponseWriter, req *http.Request) {
 		reqBody.OwnerLastName, reqBody.OwnerEmail, reqBody.OrganizationName,
 		string(h.NetworkType),
 	)
+
 	if err != nil {
 		if errors.Is(err, tenant.ErrDuplicatedTenantName) {
 			httperror.BadRequest("Tenant name already exists", err, nil).Render(rw)
@@ -106,8 +107,6 @@ func (h TenantsHandler) Post(rw http.ResponseWriter, req *http.Request) {
 	if reqBody.SDPUIBaseURL != nil {
 		tntSDPUIBaseURL = *reqBody.SDPUIBaseURL
 	}
-	fmt.Println("tntBaseURL", tntBaseURL)
-	fmt.Println("tntSDPUIBaseURL", tntSDPUIBaseURL)
 
 	tnt, err = h.Manager.UpdateTenantConfig(ctx, &tenant.TenantUpdate{
 		ID:           tnt.ID,

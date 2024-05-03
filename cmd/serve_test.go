@@ -215,6 +215,7 @@ func Test_serve(t *testing.T) {
 		TenantAccountNativeAssetBootstrapAmount: tenant.MinTenantDistributionAccountAmount,
 		AdminAccount:                            "admin-account",
 		AdminApiKey:                             "admin-api-key",
+		BaseURL:                                 "https://sdp.com",
 	}
 
 	eventBrokerOptions := cmdUtils.EventBrokerOptions{

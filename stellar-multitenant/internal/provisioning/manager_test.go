@@ -364,7 +364,6 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 	firstName := "First"
 	lastName := "Last"
 	email := "first.last@email.com"
-	uiBaseURL := "http://localhost:3000"
 	networkType := utils.TestnetNetworkType
 
 	tenantDSN, err := router.GetDSNForTenant(dbt.DSN, tenantName)
@@ -416,7 +415,6 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 				tntManagerMock.On("UpdateTenantConfig", ctx, &tenant.TenantUpdate{
 					ID:                  tnt.ID,
 					DistributionAccount: &distAcc,
-					SDPUIBaseURL:        &uiBaseURL,
 					Status:              &tStatus,
 				}).Return(&tnt, errors.New("foobar")).Once()
 

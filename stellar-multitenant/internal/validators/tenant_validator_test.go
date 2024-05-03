@@ -30,8 +30,6 @@ func TestTenantValidator_ValidateCreateTenantRequest(t *testing.T) {
 			"owner_first_name":  "owner_first_name is required",
 			"owner_last_name":   "owner_last_name is required",
 			"organization_name": "organization_name is required",
-			"base_url":          "invalid base URL value",
-			"sdp_ui_base_url":   "invalid SDP UI base URL value",
 		}, tv.Errors)
 
 		reqBody.Name = "aid-org"
@@ -43,8 +41,6 @@ func TestTenantValidator_ValidateCreateTenantRequest(t *testing.T) {
 			"owner_first_name":  "owner_first_name is required",
 			"owner_last_name":   "owner_last_name is required",
 			"organization_name": "organization_name is required",
-			"base_url":          "invalid base URL value",
-			"sdp_ui_base_url":   "invalid SDP UI base URL value",
 		}, tv.Errors)
 	})
 

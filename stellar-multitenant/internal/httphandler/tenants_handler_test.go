@@ -363,9 +363,9 @@ func Test_TenantHandler_Post(t *testing.T) {
 		BaseURL:             "backend.sdp.org",
 	}
 
-	assertMigrations := func() {
+	assertMigrations := func(orgName string) {
 		// Validating infrastructure
-		expectedSchema := "sdp_aid-org"
+		expectedSchema := fmt.Sprintf("sdp_%s", orgName)
 		expectedTablesAfterMigrationsApplied := []string{
 			"assets",
 			"auth_migrations",
@@ -387,7 +387,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 		tenant.CheckSchemaExistsFixture(t, ctx, dbConnectionPool, expectedSchema)
 		tenant.TenantSchemaMatchTablesFixture(t, ctx, dbConnectionPool, expectedSchema, expectedTablesAfterMigrationsApplied)
 
-		dsn, err := m.GetDSNForTenant(ctx, "aid-org")
+		dsn, err := m.GetDSNForTenant(ctx, orgName)
 		require.NoError(t, err)
 
 		tenantSchemaConnectionPool, err := db.OpenDBConnectionPool(dsn)
@@ -451,18 +451,19 @@ func Test_TenantHandler_Post(t *testing.T) {
 			Return(distAcc, nil).
 			Once()
 
-		reqBody := `
+		orgName := "aid-org-one"
+		reqBody := fmt.Sprintf(`
 			{
-				"name": "aid-org",
+				"name": %q,
 				"owner_email": "owner@email.org",
 				"owner_first_name": "Owner",
 				"owner_last_name": "Owner",
-				"organization_name": "My Aid Org",
+				"organization_name": "My Aid Org 1",
 				"base_url": "https://backend.sdp.org",
 				"sdp_ui_base_url": "https://aid-org.sdp.org",
 				"is_default": false
 			}
-		`
+		`, orgName)
 
 		rr := httptest.NewRecorder()
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/tenants", strings.NewReader(reqBody))
@@ -476,13 +477,13 @@ func Test_TenantHandler_Post(t *testing.T) {
 
 		assert.Equal(t, http.StatusCreated, resp.StatusCode)
 
-		tnt, err := m.GetTenantByName(ctx, "aid-org")
+		tnt, err := m.GetTenantByName(ctx, orgName)
 		require.NoError(t, err)
 
 		expectedRespBody := fmt.Sprintf(`
 			{
 				"id": %q,
-				"name": "aid-org",
+				"name": %q,
 				"base_url": "https://backend.sdp.org",
 				"sdp_ui_base_url": "https://aid-org.sdp.org",
 				"status": "TENANT_PROVISIONED",
@@ -492,10 +493,10 @@ func Test_TenantHandler_Post(t *testing.T) {
 				"updated_at": %q,
 				"deleted_at": null
 			}
-		`, tnt.ID, distAcc, tnt.CreatedAt.Format(time.RFC3339Nano), tnt.UpdatedAt.Format(time.RFC3339Nano))
+		`, tnt.ID, orgName, distAcc, tnt.CreatedAt.Format(time.RFC3339Nano), tnt.UpdatedAt.Format(time.RFC3339Nano))
 		assert.JSONEq(t, expectedRespBody, string(respBody))
 
-		assertMigrations()
+		assertMigrations(orgName)
 	})
 
 	t.Run("provisions a new tenant successfully - dynamically generates base URL for tenant", func(t *testing.T) {
@@ -522,16 +523,17 @@ func Test_TenantHandler_Post(t *testing.T) {
 			Return(distAcc, nil).
 			Once()
 
-		reqBody := `
+		orgName := "aid-org-two"
+		reqBody := fmt.Sprintf(`
 			{
-				"name": "aid-org",
+				"name": %q,
 				"owner_email": "owner@email.org",
 				"owner_first_name": "Owner",
 				"owner_last_name": "Owner",
-				"organization_name": "My Aid Org",
+				"organization_name": "My Aid Org 2",
 				"is_default": false
 			}
-		`
+		`, orgName)
 
 		rr := httptest.NewRecorder()
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/tenants", strings.NewReader(reqBody))
@@ -545,26 +547,27 @@ func Test_TenantHandler_Post(t *testing.T) {
 
 		assert.Equal(t, http.StatusCreated, resp.StatusCode)
 
-		tnt, err := m.GetTenantByName(ctx, "aid-org")
+		tnt, err := m.GetTenantByName(ctx, orgName)
 		require.NoError(t, err)
 
 		baseURL := fmt.Sprintf("https://%s.%s", tnt.Name, handler.BaseURL)
 		expectedRespBody := fmt.Sprintf(`
 			{
 				"id": %q,
-				"name": "aid-org",
+				"name": %q,
 				"base_url": %q,
 				"sdp_ui_base_url": %q,
 				"status": "TENANT_PROVISIONED",
 				"distribution_account": %q,
 				"is_default": false,
 				"created_at": %q,
-				"updated_at": %q
+				"updated_at": %q,
+				"deleted_at": null	
 			}
-		`, tnt.ID, baseURL, baseURL, distAcc, tnt.CreatedAt.Format(time.RFC3339Nano), tnt.UpdatedAt.Format(time.RFC3339Nano))
+		`, tnt.ID, orgName, baseURL, baseURL, distAcc, tnt.CreatedAt.Format(time.RFC3339Nano), tnt.UpdatedAt.Format(time.RFC3339Nano))
 		assert.JSONEq(t, expectedRespBody, string(respBody))
 
-		assertMigrations()
+		assertMigrations(orgName)
 	})
 
 	t.Run("returns badRequest for duplicate tenant name", func(t *testing.T) {
