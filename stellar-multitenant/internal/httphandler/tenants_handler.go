@@ -89,7 +89,6 @@ func (h TenantsHandler) Post(rw http.ResponseWriter, req *http.Request) {
 		reqBody.OwnerLastName, reqBody.OwnerEmail, reqBody.OrganizationName,
 		string(h.NetworkType),
 	)
-
 	if err != nil {
 		if errors.Is(err, tenant.ErrDuplicatedTenantName) {
 			httperror.BadRequest("Tenant name already exists", err, nil).Render(rw)
