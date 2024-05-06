@@ -163,8 +163,8 @@ func Test_DistributionAccountResolverImpl_DistributionAccount(t *testing.T) {
 
 		distribututionPublicKey := keypair.MustRandom().Address()
 		tnt, err = m.UpdateTenantConfig(ctx, &tenant.TenantUpdate{
-			ID:                  tnt.ID,
-			DistributionAccount: &distribututionPublicKey,
+			ID:                         tnt.ID,
+			DistributionAccountAddress: &distribututionPublicKey,
 		})
 		require.NoError(t, err)
 

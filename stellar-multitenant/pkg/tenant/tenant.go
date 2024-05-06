@@ -6,8 +6,9 @@ import (
 	"time"
 
 	"github.com/stellar/go/strkey"
-	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"golang.org/x/exp/slices"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
 type Tenant struct {
@@ -22,16 +23,16 @@ type Tenant struct {
 	DeletedAt    *time.Time   `json:"deleted_at" db:"deleted_at"`
 	// Distribution Account fields:
 	DistributionAccountAddress *string                           `json:"distribution_account_address" db:"distribution_account_address"`
-	DistributionAccountType    *schema.DistributionAccountStatus `json:"-,omitempty" db:"distribution_account_type"`
-	DistributionAccountStatus  *schema.DistributionAccountStatus `json:"-,omitempty" db:"distribution_account_status"`
+	DistributionAccountType    *schema.DistributionAccountStatus `json:"-" db:"distribution_account_type"`
+	DistributionAccountStatus  *schema.DistributionAccountStatus `json:"-" db:"distribution_account_status"`
 }
 
 type TenantUpdate struct {
-	ID                  string        `db:"id"`
-	BaseURL             *string       `db:"base_url"`
-	SDPUIBaseURL        *string       `db:"sdp_ui_base_url"`
-	Status              *TenantStatus `db:"status"`
-	DistributionAccount *string       `db:"distribution_account"`
+	ID                         string
+	BaseURL                    *string
+	SDPUIBaseURL               *string
+	Status                     *TenantStatus
+	DistributionAccountAddress *string
 }
 
 type TenantStatus string
@@ -69,8 +70,8 @@ func (tu *TenantUpdate) Validate() error {
 		return fmt.Errorf("invalid tenant status: %q", *tu.Status)
 	}
 
-	if tu.DistributionAccount != nil && !strkey.IsValidEd25519PublicKey(*tu.DistributionAccount) {
-		return fmt.Errorf("invalid distribution account: %q", *tu.DistributionAccount)
+	if tu.DistributionAccountAddress != nil && !strkey.IsValidEd25519PublicKey(*tu.DistributionAccountAddress) {
+		return fmt.Errorf("invalid distribution account: %q", *tu.DistributionAccountAddress)
 	}
 
 	return nil
@@ -80,7 +81,7 @@ func (tu *TenantUpdate) areAllFieldsEmpty() bool {
 	return tu.BaseURL == nil &&
 		tu.SDPUIBaseURL == nil &&
 		tu.Status == nil &&
-		tu.DistributionAccount == nil
+		tu.DistributionAccountAddress == nil
 }
 
 func isValidURL(u string) bool {

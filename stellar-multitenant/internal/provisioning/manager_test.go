@@ -414,10 +414,10 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 				tStatus := tenant.ProvisionedTenantStatus
 				tnt.DistributionAccountAddress = &distAcc
 				tntManagerMock.On("UpdateTenantConfig", ctx, &tenant.TenantUpdate{
-					ID:                  tnt.ID,
-					DistributionAccount: &distAcc,
-					SDPUIBaseURL:        &uiBaseURL,
-					Status:              &tStatus,
+					ID:                         tnt.ID,
+					DistributionAccountAddress: &distAcc,
+					SDPUIBaseURL:               &uiBaseURL,
+					Status:                     &tStatus,
 				}).Return(&tnt, errors.New("foobar")).Once()
 
 				// expected rollback operations

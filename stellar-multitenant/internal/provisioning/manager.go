@@ -163,10 +163,10 @@ func (m *Manager) provisionTenant(ctx context.Context, pt *ProvisionTenant) (*te
 	t, err = m.tenantManager.UpdateTenantConfig(
 		ctx,
 		&tenant.TenantUpdate{
-			ID:                  t.ID,
-			Status:              &tenantStatus,
-			SDPUIBaseURL:        &pt.uiBaseURL,
-			DistributionAccount: t.DistributionAccountAddress,
+			ID:                         t.ID,
+			Status:                     &tenantStatus,
+			SDPUIBaseURL:               &pt.uiBaseURL,
+			DistributionAccountAddress: t.DistributionAccountAddress,
 		})
 	if err != nil {
 		return t, fmt.Errorf("%w: updating tenant %s status to %s: %w", ErrUpdateTenantFailed, pt.name, tenant.ProvisionedTenantStatus, err)
