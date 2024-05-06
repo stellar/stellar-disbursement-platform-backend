@@ -183,7 +183,7 @@ func (p PaymentsHandler) producePaymentsReadyEvents(ctx context.Context, payment
 			return fmt.Errorf("writing message %s on event producer: %w", msg, err)
 		}
 	} else {
-		log.Ctx(ctx).Errorf("event producer is nil, could not publish message %s", msg)
+		log.Ctx(ctx).Errorf("event producer is nil, could not publish message %+v", msg)
 	}
 	return nil
 }

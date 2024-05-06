@@ -6,18 +6,20 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
-const MaxBackoffExponent = 8
+const DefaultMaxBackoffExponent = 8
 
 type ConsumerBackoffManager struct {
+	maxBackoff     int
 	backoffCounter int
 	backoff        time.Duration
 	backoffChan    chan<- struct{}
 	message        *Message
 }
 
-func NewBackoffManager(backoffChan chan<- struct{}) *ConsumerBackoffManager {
+func NewBackoffManager(backoffChan chan<- struct{}, maxBackoff int) *ConsumerBackoffManager {
 	return &ConsumerBackoffManager{
 		backoffChan: backoffChan,
+		maxBackoff:  maxBackoff,
 	}
 }
 
@@ -31,8 +33,8 @@ func (bm *ConsumerBackoffManager) TriggerBackoffWithMessage(msg *Message, backof
 
 func (bm *ConsumerBackoffManager) TriggerBackoff() {
 	bm.backoffCounter++
-	if bm.backoffCounter > MaxBackoffExponent {
-		bm.backoffCounter = MaxBackoffExponent
+	if bm.backoffCounter > bm.maxBackoff {
+		bm.backoffCounter = bm.maxBackoff
 	}
 
 	// No need to handle this error since it only returns error when retry > 32, < 0
@@ -42,7 +44,7 @@ func (bm *ConsumerBackoffManager) TriggerBackoff() {
 }
 
 func (bm *ConsumerBackoffManager) IsMaxBackoffReached() bool {
-	return bm.backoffCounter >= MaxBackoffExponent
+	return bm.backoffCounter >= bm.maxBackoff
 }
 
 func (bm *ConsumerBackoffManager) GetBackoffDuration() time.Duration {
