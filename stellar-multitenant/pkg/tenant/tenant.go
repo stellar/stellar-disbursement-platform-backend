@@ -22,9 +22,9 @@ type Tenant struct {
 	UpdatedAt    time.Time    `json:"updated_at" db:"updated_at"`
 	DeletedAt    *time.Time   `json:"deleted_at" db:"deleted_at"`
 	// Distribution Account fields:
-	DistributionAccountAddress *string                           `json:"distribution_account_address" db:"distribution_account_address"`
-	DistributionAccountType    *schema.DistributionAccountStatus `json:"distribution_account_type" db:"distribution_account_type"`
-	DistributionAccountStatus  *schema.DistributionAccountStatus `json:"distribution_account_status" db:"distribution_account_status"`
+	DistributionAccountAddress *string                          `json:"distribution_account_address" db:"distribution_account_address"`
+	DistributionAccountType    schema.DistributionAccountType   `json:"distribution_account_type" db:"distribution_account_type"`
+	DistributionAccountStatus  schema.DistributionAccountStatus `json:"distribution_account_status" db:"distribution_account_status"`
 }
 
 type TenantUpdate struct {

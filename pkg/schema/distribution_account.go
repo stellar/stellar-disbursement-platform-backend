@@ -2,7 +2,6 @@ package schema
 
 import (
 	"slices"
-	"time"
 )
 
 type DistributionAccountType string
@@ -29,12 +28,9 @@ const (
 )
 
 type DistributionAccount struct {
-	Address   string                    `json:"address" db:"address"`
-	TenantID  string                    `json:"-" db:"tenant_id"`
-	Type      DistributionAccountType   `json:"type" db:"type"`
-	Status    DistributionAccountStatus `json:"status" db:"status"`
-	CreatedAt time.Time                 `json:"-" db:"created_at"`
-	UpdatedAt time.Time                 `json:"-" db:"updated_at"`
+	Address string                    `json:"address" db:"address"`
+	Type    DistributionAccountType   `json:"type" db:"type"`
+	Status  DistributionAccountStatus `json:"status" db:"status"`
 }
 
 func (da DistributionAccount) IsStellar() bool {

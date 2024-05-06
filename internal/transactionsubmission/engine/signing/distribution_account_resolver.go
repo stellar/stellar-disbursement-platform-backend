@@ -84,8 +84,8 @@ func (r *DistributionAccountResolverImpl) getDistributionAccount(tnt *tenant.Ten
 
 	return &schema.DistributionAccount{
 		Address: *tnt.DistributionAccountAddress,
-		Type:    schema.DistributionAccountTypeDBVaultStellar,
-		Status:  schema.DistributionAccountStatusActive,
+		Type:    tnt.DistributionAccountType,
+		Status:  tnt.DistributionAccountStatus,
 	}, nil
 }
 
