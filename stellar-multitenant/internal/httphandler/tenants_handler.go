@@ -98,22 +98,31 @@ func (h TenantsHandler) Post(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	var generatedURL string
 	var tntBaseURL string
 	if reqBody.BaseURL != nil {
 		tntBaseURL = *reqBody.BaseURL
 	} else {
-		tntBaseURL, err = utils.GenerateTenantURL(h.BaseURL, tnt.Name)
+		generatedURL, err = utils.GenerateTenantURL(h.BaseURL, tnt.Name)
 		if err != nil {
-			httperror.InternalError(ctx, "Could not generate tenant URL", err, nil).Render(rw)
+			httperror.InternalError(ctx, "Could not generate URL", err, nil).Render(rw)
 			return
 		}
+		tntBaseURL = generatedURL
 	}
 
 	var tntSDPUIBaseURL string
 	if reqBody.SDPUIBaseURL != nil {
 		tntSDPUIBaseURL = *reqBody.SDPUIBaseURL
 	} else {
-		tntSDPUIBaseURL = tntBaseURL
+		tntSDPUIBaseURL = generatedURL
+		if generatedURL == "" {
+			tntSDPUIBaseURL, err = utils.GenerateTenantURL(h.BaseURL, tnt.Name)
+			if err != nil {
+				httperror.InternalError(ctx, "Could not generate URL", err, nil).Render(rw)
+				return
+			}
+		}
 	}
 
 	tnt, err = h.Manager.UpdateTenantConfig(ctx, &tenant.TenantUpdate{

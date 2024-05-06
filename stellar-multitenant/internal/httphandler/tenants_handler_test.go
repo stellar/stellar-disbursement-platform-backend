@@ -503,7 +503,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 		assertMigrations(orgName)
 	})
 
-	t.Run("provisions a new tenant successfully - dynamically generates base URL for tenant", func(t *testing.T) {
+	t.Run("provisions a new tenant successfully - dynamically generates base URL and SDP UI base URL for tenant", func(t *testing.T) {
 		createMocks()
 
 		orgName := "aid-org-two"
@@ -533,7 +533,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 		tnt, err := m.GetTenantByName(ctx, orgName)
 		require.NoError(t, err)
 
-		baseURL := fmt.Sprintf("https://%s.backend.sdp.org", orgName)
+		generatedURL := fmt.Sprintf("https://%s.backend.sdp.org", orgName)
 		expectedRespBody := fmt.Sprintf(`
 			{
 				"id": %q,
@@ -547,7 +547,58 @@ func Test_TenantHandler_Post(t *testing.T) {
 				"updated_at": %q,
 				"deleted_at": null	
 			}
-		`, tnt.ID, orgName, baseURL, baseURL, distAcc, tnt.CreatedAt.Format(time.RFC3339Nano), tnt.UpdatedAt.Format(time.RFC3339Nano))
+		`, tnt.ID, orgName, generatedURL, generatedURL, distAcc, tnt.CreatedAt.Format(time.RFC3339Nano), tnt.UpdatedAt.Format(time.RFC3339Nano))
+		assert.JSONEq(t, expectedRespBody, string(respBody))
+
+		assertMigrations(orgName)
+	})
+
+	t.Run("provisions a new tenant successfully - dynamically generates only SDP UI base URL", func(t *testing.T) {
+		createMocks()
+
+		orgName := "aid-org-three"
+		reqBody := fmt.Sprintf(`
+			{
+				"name": %q,
+				"owner_email": "owner@email.org",
+				"owner_first_name": "Owner",
+				"owner_last_name": "Owner",
+				"organization_name": "My Aid Org 3",
+				"base_url": %q,
+				"is_default": false
+			}
+		`, orgName, handler.BaseURL)
+
+		rr := httptest.NewRecorder()
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/tenants", strings.NewReader(reqBody))
+		require.NoError(t, err)
+		http.HandlerFunc(handler.Post).ServeHTTP(rr, req)
+
+		resp := rr.Result()
+		defer resp.Body.Close()
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		assert.Equal(t, http.StatusCreated, resp.StatusCode)
+
+		tnt, err := m.GetTenantByName(ctx, orgName)
+		require.NoError(t, err)
+
+		generatedURL := fmt.Sprintf("https://%s.backend.sdp.org", orgName)
+		expectedRespBody := fmt.Sprintf(`
+			{
+				"id": %q,
+				"name": %q,
+				"base_url": %q,
+				"sdp_ui_base_url": %q,
+				"status": "TENANT_PROVISIONED",
+				"distribution_account": %q,
+				"is_default": false,
+				"created_at": %q,
+				"updated_at": %q,
+				"deleted_at": null	
+			}
+		`, tnt.ID, orgName, handler.BaseURL, generatedURL, distAcc, tnt.CreatedAt.Format(time.RFC3339Nano), tnt.UpdatedAt.Format(time.RFC3339Nano))
 		assert.JSONEq(t, expectedRespBody, string(respBody))
 
 		assertMigrations(orgName)
