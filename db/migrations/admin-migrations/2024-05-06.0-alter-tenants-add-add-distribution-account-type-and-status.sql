@@ -7,7 +7,7 @@ CREATE TYPE distribution_account_type AS ENUM (
 );
 CREATE TYPE distribution_account_status AS ENUM (
     'ACTIVE',
-    'PENDING_API_KEY'
+    'PENDING_USER_ACTIVATION'
 );
 
 ALTER TABLE tenants

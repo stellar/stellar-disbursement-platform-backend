@@ -190,6 +190,7 @@ func Test_Manager_UpdateTenantConfig(t *testing.T) {
 				assert.Nil(t, updatedTnt)
 			} else {
 				require.NoError(t, err)
+
 				// assert that the updated value is the same as the DB one:
 				require.NotNil(t, tc.expectedFieldsToAssert)
 				queryParams := &QueryParams{Filters: map[FilterKey]interface{}{
