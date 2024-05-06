@@ -379,7 +379,7 @@ func (d DisbursementHandler) PatchDisbursementStatus(w http.ResponseWriter, r *h
 			httperror.BadRequest(msg, err, nil).Render(w)
 			return
 		} else {
-			distributionPublicKey = distributionAccount.ID
+			distributionPublicKey = distributionAccount.Address
 		}
 		err = d.DisbursementManagementService.StartDisbursement(ctx, disbursementID, user, distributionPublicKey)
 		response.Message = "Disbursement started"

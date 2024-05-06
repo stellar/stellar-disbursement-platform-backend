@@ -141,7 +141,7 @@ func Test_StellarTomlHandler_buildGeneralInformation(t *testing.T) {
 			if tc.isTenantInContext {
 				mDistAccResolver.
 					On("DistributionAccountFromContext", ctx).
-					Return(schema.NewStellarDistributionAccount(tenantDistAccPublicKey), nil).
+					Return(schema.NewDefaultStellarDistributionAccount(tenantDistAccPublicKey), nil).
 					Once()
 			} else {
 				mDistAccResolver.

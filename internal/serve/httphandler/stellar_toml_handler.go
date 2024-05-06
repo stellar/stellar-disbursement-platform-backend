@@ -44,7 +44,7 @@ func (s *StellarTomlHandler) buildGeneralInformation(ctx context.Context, req *h
 	if perTenantDistributionAccount, err := s.DistributionAccountResolver.DistributionAccountFromContext(ctx); err != nil {
 		log.Ctx(ctx).Warnf("Couldn't get distribution account from context in %s%s", req.Host, req.URL.Path)
 	} else if perTenantDistributionAccount.IsStellar() {
-		accounts = fmt.Sprintf("[%q, %q]", perTenantDistributionAccount.ID, s.Sep10SigningPublicKey)
+		accounts = fmt.Sprintf("[%q, %q]", perTenantDistributionAccount.Address, s.Sep10SigningPublicKey)
 	}
 
 	webAuthEndpoint := s.AnchorPlatformBaseSepURL + "/auth"

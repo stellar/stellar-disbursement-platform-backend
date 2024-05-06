@@ -533,7 +533,7 @@ func (tw *TransactionWorker) buildAndSignTransaction(ctx context.Context, txJob 
 	} else if !distributionAccount.IsStellar() {
 		return nil, fmt.Errorf("expected distribution account to be a STELLAR account but got %q", distributionAccount.Type)
 	} else {
-		distributionAccountPubKey = distributionAccount.ID
+		distributionAccountPubKey = distributionAccount.Address
 	}
 
 	horizonAccount, err := tw.engine.HorizonClient.AccountDetail(horizonclient.AccountRequest{AccountID: txJob.ChannelAccount.PublicKey})
