@@ -36,25 +36,6 @@ func DeleteAllTenantsFixture(t *testing.T, ctx context.Context, adminDBConnectio
 	}
 }
 
-func ResetTenantConfigFixture(t *testing.T, ctx context.Context, dbConnectionPool db.DBConnectionPool, tenantID string) *Tenant {
-	t.Helper()
-
-	const q = `
-		UPDATE tenants
-		SET
-			base_url = NULL, sdp_ui_base_url = NULL
-		WHERE
-			id = $1
-		RETURNING *
-	`
-
-	var tnt Tenant
-	err := dbConnectionPool.GetContext(ctx, &tnt, q, tenantID)
-	require.NoError(t, err)
-
-	return &tnt
-}
-
 func AssertRegisteredAssetsFixture(t *testing.T, ctx context.Context, dbConnectionPool db.DBConnectionPool, expectedAssets []string) {
 	t.Helper()
 
