@@ -30,6 +30,7 @@ import (
 	preconditionsMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/internal/provisioning"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
@@ -100,11 +101,13 @@ func Test_TenantHandler_Get(t *testing.T) {
 					"base_url": null,
 					"sdp_ui_base_url": null,
 					"status": "TENANT_CREATED",
-					"distribution_account_address": %q,
 					"is_default": false,
 					"created_at": %q,
 					"updated_at": %q,
-					"deleted_at": null
+					"deleted_at": null,
+					"distribution_account_address": %q,
+					"distribution_account_type": %q,
+					"distribution_account_status": %q
 				},
 				{
 					"id": %q,
@@ -112,11 +115,13 @@ func Test_TenantHandler_Get(t *testing.T) {
 					"base_url": null,
 					"sdp_ui_base_url": null,
 					"status": "TENANT_CREATED",
-					"distribution_account_address": %q,
 					"is_default": false,
 					"created_at": %q,
 					"updated_at": %q,
-					"deleted_at": null
+					"deleted_at": null,
+					"distribution_account_address": %q,
+					"distribution_account_type": %q,
+					"distribution_account_status": %q
 				},
 				{
 					"id": %q,
@@ -124,17 +129,23 @@ func Test_TenantHandler_Get(t *testing.T) {
 					"base_url": null,
 					"sdp_ui_base_url": null,
 					"status": "TENANT_DEACTIVATED",
-					"distribution_account_address": %q,
 					"is_default": false,
 					"created_at": %q,
 					"updated_at": %q,
-					"deleted_at": null
+					"deleted_at": null,
+					"distribution_account_address": %q,
+					"distribution_account_type": %q,
+					"distribution_account_status": %q
 				}
 			]
 		`,
-			tnt1.ID, tnt1.Name, *tnt1.DistributionAccountAddress, tnt1.CreatedAt.Format(time.RFC3339Nano), tnt1.UpdatedAt.Format(time.RFC3339Nano),
-			tnt2.ID, tnt2.Name, *tnt2.DistributionAccountAddress, tnt2.CreatedAt.Format(time.RFC3339Nano), tnt2.UpdatedAt.Format(time.RFC3339Nano),
-			deactivatedTnt.ID, deactivatedTnt.Name, *deactivatedTnt.DistributionAccountAddress, deactivatedTnt.CreatedAt.Format(time.RFC3339Nano), deactivatedTnt.UpdatedAt.Format(time.RFC3339Nano))
+			tnt1.ID, tnt1.Name, tnt1.CreatedAt.Format(time.RFC3339Nano), tnt1.UpdatedAt.Format(time.RFC3339Nano),
+			*tnt1.DistributionAccountAddress, schema.DistributionAccountTypeDBVaultStellar, schema.DistributionAccountStatusActive,
+			tnt2.ID, tnt2.Name, tnt2.CreatedAt.Format(time.RFC3339Nano), tnt2.UpdatedAt.Format(time.RFC3339Nano),
+			*tnt2.DistributionAccountAddress, schema.DistributionAccountTypeDBVaultStellar, schema.DistributionAccountStatusActive,
+			deactivatedTnt.ID, deactivatedTnt.Name, deactivatedTnt.CreatedAt.Format(time.RFC3339Nano), deactivatedTnt.UpdatedAt.Format(time.RFC3339Nano),
+			*deactivatedTnt.DistributionAccountAddress, schema.DistributionAccountTypeDBVaultStellar, schema.DistributionAccountStatusActive,
+		)
 		assert.JSONEq(t, expectedRespBody, string(respBody))
 	})
 
@@ -160,13 +171,17 @@ func Test_TenantHandler_Get(t *testing.T) {
 				"base_url": null,
 				"sdp_ui_base_url": null,
 				"status": "TENANT_CREATED",
-				"distribution_account_address": %q,
 				"is_default": false,
 				"created_at": %q,
 				"updated_at": %q,
-				"deleted_at": null
+				"deleted_at": null,
+				"distribution_account_address": %q,
+				"distribution_account_type": %q,
+				"distribution_account_status": %q
 			}
-		`, tnt1.ID, tnt1.Name, *tnt1.DistributionAccountAddress, tnt1.CreatedAt.Format(time.RFC3339Nano), tnt1.UpdatedAt.Format(time.RFC3339Nano))
+		`, tnt1.ID, tnt1.Name, tnt1.CreatedAt.Format(time.RFC3339Nano), tnt1.UpdatedAt.Format(time.RFC3339Nano),
+			*tnt1.DistributionAccountAddress, schema.DistributionAccountTypeDBVaultStellar, schema.DistributionAccountStatusActive,
+		)
 		assert.JSONEq(t, expectedRespBody, string(respBody))
 	})
 
@@ -192,13 +207,17 @@ func Test_TenantHandler_Get(t *testing.T) {
 				"base_url": null,
 				"sdp_ui_base_url": null,
 				"status": "TENANT_CREATED",
-				"distribution_account_address": %q,
 				"is_default": false,
 				"created_at": %q,
 				"updated_at": %q,
-				"deleted_at": null
+				"deleted_at": null,
+				"distribution_account_address": %q,
+				"distribution_account_type": %q,
+				"distribution_account_status": %q
 			}
-		`, tnt2.ID, tnt2.Name, *tnt2.DistributionAccountAddress, tnt2.CreatedAt.Format(time.RFC3339Nano), tnt2.UpdatedAt.Format(time.RFC3339Nano))
+		`, tnt2.ID, tnt2.Name, tnt2.CreatedAt.Format(time.RFC3339Nano), tnt2.UpdatedAt.Format(time.RFC3339Nano),
+			*tnt2.DistributionAccountAddress, schema.DistributionAccountTypeDBVaultStellar, schema.DistributionAccountStatusActive,
+		)
 		assert.JSONEq(t, expectedRespBody, string(respBody))
 	})
 
@@ -351,13 +370,16 @@ func Test_TenantHandler_Post(t *testing.T) {
 				"base_url": "https://backend.sdp.org",
 				"sdp_ui_base_url": "https://aid-org.sdp.org",
 				"status": "TENANT_PROVISIONED",
-				"distribution_account_address": %q,
 				"is_default": false,
 				"created_at": %q,
 				"updated_at": %q,
-				"deleted_at": null
+				"deleted_at": null,
+				"distribution_account_address": %q,
+				"distribution_account_type": %q,
+				"distribution_account_status": %q
 			}
-		`, tnt.ID, distAcc, tnt.CreatedAt.Format(time.RFC3339Nano), tnt.UpdatedAt.Format(time.RFC3339Nano))
+		`, tnt.ID, tnt.CreatedAt.Format(time.RFC3339Nano), tnt.UpdatedAt.Format(time.RFC3339Nano),
+			distAcc, schema.DistributionAccountTypeDBVaultStellar, schema.DistributionAccountStatusActive)
 		assert.JSONEq(t, expectedRespBody, string(respBody))
 
 		// Validating infrastructure
