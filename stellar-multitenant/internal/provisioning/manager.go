@@ -17,6 +17,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	tssSvc "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
@@ -153,10 +154,15 @@ func (m *Manager) provisionTenant(ctx context.Context, pt *ProvisionTenant) (*te
 	}
 
 	// Provision distribution account for tenant if necessary
-	err := m.provisionDistributionAccount(ctx, t)
+	if err := m.provisionDistributionAccount(ctx, t); err != nil {
+		return t, fmt.Errorf("provisioning distribution account: %w", err)
+	}
+
+	distSignerTypeStr := m.SubmitterEngine.DistAccountSigner.Type()
+	distSignerType := signing.SignatureClientType(distSignerTypeStr)
+	distAccType, err := distSignerType.DistributionAccountType()
 	if err != nil {
-		// error already wrapped
-		return t, err
+		return nil, fmt.Errorf("parsing getting distribution account type: %w", err)
 	}
 
 	tenantStatus := tenant.ProvisionedTenantStatus
@@ -166,7 +172,9 @@ func (m *Manager) provisionTenant(ctx context.Context, pt *ProvisionTenant) (*te
 			ID:                         t.ID,
 			Status:                     &tenantStatus,
 			SDPUIBaseURL:               &pt.uiBaseURL,
-			DistributionAccountAddress: t.DistributionAccountAddress,
+			DistributionAccountAddress: *t.DistributionAccountAddress,
+			DistributionAccountType:    distAccType,
+			DistributionAccountStatus:  schema.DistributionAccountStatusActive,
 		})
 	if err != nil {
 		return t, fmt.Errorf("%w: updating tenant %s status to %s: %w", ErrUpdateTenantFailed, pt.name, tenant.ProvisionedTenantStatus, err)

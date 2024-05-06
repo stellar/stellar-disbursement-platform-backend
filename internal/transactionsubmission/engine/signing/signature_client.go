@@ -12,6 +12,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
 var ErrUnsupportedCommand = fmt.Errorf("unsupported command for signature client")
@@ -27,6 +28,17 @@ type SignatureClient interface {
 }
 
 type SignatureClientType string
+
+func (s SignatureClientType) DistributionAccountType() (schema.DistributionAccountType, error) {
+	switch strings.TrimSpace(strings.ToUpper(string(s))) {
+	case string(DistributionAccountEnvSignatureClientType):
+		return schema.DistributionAccountTypeEnvStellar, nil
+	case string(DistributionAccountDBSignatureClientType):
+		return schema.DistributionAccountTypeDBVaultStellar, nil
+	default:
+		return "", fmt.Errorf("invalid distribution account type %q", s)
+	}
+}
 
 const (
 	ChannelAccountDBSignatureClientType       SignatureClientType = "CHANNEL_ACCOUNT_DB"

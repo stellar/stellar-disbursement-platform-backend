@@ -292,12 +292,7 @@ func (m *Manager) UpdateTenantConfig(ctx context.Context, tu *TenantUpdate) (*Te
 		args = append(args, *tu.Status)
 	}
 
-	if tu.DistributionAccountAddress != nil {
-		fields = append(fields, "distribution_account_address = ?")
-		args = append(args, *tu.DistributionAccountAddress)
-
-		log.Ctx(ctx).Warnf("distribution account for tenant id %s updated to %s", tu.ID, *tu.DistributionAccountAddress)
-	}
+	fields, args = m.updateDistributionAccountFields(ctx, tu, fields, args)
 
 	args = append(args, tu.ID)
 	q = fmt.Sprintf(q, strings.Join(fields, ",\n"))
@@ -312,6 +307,31 @@ func (m *Manager) UpdateTenantConfig(ctx context.Context, tu *TenantUpdate) (*Te
 	}
 
 	return &t, nil
+}
+
+func (*Manager) updateDistributionAccountFields(ctx context.Context, tu *TenantUpdate, fields []string, args []interface{}) (outFields []string, outArgs []interface{}) {
+	if tu.DistributionAccountAddress != "" {
+		fields = append(fields, "distribution_account_address = ?")
+		args = append(args, tu.DistributionAccountAddress)
+
+		log.Ctx(ctx).Warnf("distribution account address for tenant id %s updated to %s", tu.ID, tu.DistributionAccountAddress)
+	}
+
+	if tu.DistributionAccountType != "" {
+		fields = append(fields, "distribution_account_type = ?")
+		args = append(args, tu.DistributionAccountType)
+
+		log.Ctx(ctx).Warnf("distribution account type for tenant id %s updated to %s", tu.ID, tu.DistributionAccountType)
+	}
+
+	if tu.DistributionAccountStatus != "" {
+		fields = append(fields, "distribution_account_status = ?")
+		args = append(args, tu.DistributionAccountStatus)
+
+		log.Ctx(ctx).Warnf("distribution account status for tenant id %s updated to %s", tu.ID, tu.DistributionAccountStatus)
+	}
+
+	return fields, args
 }
 
 // GetTenantFromContext retrieves the tenant information from the context.

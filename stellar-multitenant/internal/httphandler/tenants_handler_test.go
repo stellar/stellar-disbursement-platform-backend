@@ -328,6 +328,9 @@ func Test_TenantHandler_Post(t *testing.T) {
 		distAccSigClient.
 			On("BatchInsert", ctx, 1).
 			Return([]string{distAcc}, nil).
+			Once().
+			On("Type").
+			Return(string(signing.DistributionAccountEnvSignatureClientType)).
 			Once()
 
 		distAccResolver.
@@ -379,7 +382,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 				"distribution_account_status": %q
 			}
 		`, tnt.ID, tnt.CreatedAt.Format(time.RFC3339Nano), tnt.UpdatedAt.Format(time.RFC3339Nano),
-			distAcc, schema.DistributionAccountTypeDBVaultStellar, schema.DistributionAccountStatusActive)
+			distAcc, schema.DistributionAccountTypeEnvStellar, schema.DistributionAccountStatusActive)
 		assert.JSONEq(t, expectedRespBody, string(respBody))
 
 		// Validating infrastructure
@@ -434,6 +437,9 @@ func Test_TenantHandler_Post(t *testing.T) {
 		distAccSigClient.
 			On("BatchInsert", ctx, 1).
 			Return([]string{distAcc}, nil).
+			Once().
+			On("Type").
+			Return(string(signing.DistributionAccountEnvSignatureClientType)).
 			Once()
 
 		distAccResolver.

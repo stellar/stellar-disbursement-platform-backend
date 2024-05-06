@@ -32,7 +32,9 @@ type TenantUpdate struct {
 	BaseURL                    *string
 	SDPUIBaseURL               *string
 	Status                     *TenantStatus
-	DistributionAccountAddress *string
+	DistributionAccountAddress string
+	DistributionAccountType    schema.DistributionAccountType
+	DistributionAccountStatus  schema.DistributionAccountStatus
 }
 
 type TenantStatus string
@@ -70,8 +72,8 @@ func (tu *TenantUpdate) Validate() error {
 		return fmt.Errorf("invalid tenant status: %q", *tu.Status)
 	}
 
-	if tu.DistributionAccountAddress != nil && !strkey.IsValidEd25519PublicKey(*tu.DistributionAccountAddress) {
-		return fmt.Errorf("invalid distribution account: %q", *tu.DistributionAccountAddress)
+	if tu.DistributionAccountAddress != "" && !strkey.IsValidEd25519PublicKey(tu.DistributionAccountAddress) {
+		return fmt.Errorf("invalid distribution account: %q", tu.DistributionAccountAddress)
 	}
 
 	return nil
@@ -81,7 +83,9 @@ func (tu *TenantUpdate) areAllFieldsEmpty() bool {
 	return tu.BaseURL == nil &&
 		tu.SDPUIBaseURL == nil &&
 		tu.Status == nil &&
-		tu.DistributionAccountAddress == nil
+		tu.DistributionAccountAddress == "" &&
+		tu.DistributionAccountType == "" &&
+		tu.DistributionAccountStatus == ""
 }
 
 func isValidURL(u string) bool {
