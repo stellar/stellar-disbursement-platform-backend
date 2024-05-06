@@ -6,20 +6,24 @@ import (
 	"time"
 
 	"github.com/stellar/go/strkey"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"golang.org/x/exp/slices"
 )
 
 type Tenant struct {
-	ID                  string       `json:"id" db:"id"`
-	Name                string       `json:"name" db:"name"`
-	BaseURL             *string      `json:"base_url" db:"base_url"`
-	SDPUIBaseURL        *string      `json:"sdp_ui_base_url" db:"sdp_ui_base_url"`
-	Status              TenantStatus `json:"status" db:"status"`
-	DistributionAccount *string      `json:"distribution_account" db:"distribution_account"`
-	IsDefault           bool         `json:"is_default" db:"is_default"`
-	CreatedAt           time.Time    `json:"created_at" db:"created_at"`
-	UpdatedAt           time.Time    `json:"updated_at" db:"updated_at"`
-	DeletedAt           *time.Time   `json:"deleted_at" db:"deleted_at"`
+	ID           string       `json:"id" db:"id"`
+	Name         string       `json:"name" db:"name"`
+	BaseURL      *string      `json:"base_url" db:"base_url"`
+	SDPUIBaseURL *string      `json:"sdp_ui_base_url" db:"sdp_ui_base_url"`
+	Status       TenantStatus `json:"status" db:"status"`
+	IsDefault    bool         `json:"is_default" db:"is_default"`
+	CreatedAt    time.Time    `json:"created_at" db:"created_at"`
+	UpdatedAt    time.Time    `json:"updated_at" db:"updated_at"`
+	DeletedAt    *time.Time   `json:"deleted_at" db:"deleted_at"`
+	// Distribution Account fields:
+	DistributionAccountAddress *string                           `json:"distribution_account_address" db:"distribution_account_address"`
+	DistributionAccountType    *schema.DistributionAccountStatus `json:"-,omitempty" db:"distribution_account_type"`
+	DistributionAccountStatus  *schema.DistributionAccountStatus `json:"-,omitempty" db:"distribution_account_status"`
 }
 
 type TenantUpdate struct {

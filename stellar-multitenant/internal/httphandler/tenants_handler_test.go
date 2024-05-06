@@ -2,6 +2,7 @@ package httphandler
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -200,7 +201,7 @@ func Test_TenantHandler_Get(t *testing.T) {
 					"base_url": null,
 					"sdp_ui_base_url": null,
 					"status": "TENANT_CREATED",
-					"distribution_account": %q,
+					"distribution_account_address": %q,
 					"is_default": false,
 					"created_at": %q,
 					"updated_at": %q,
@@ -212,7 +213,7 @@ func Test_TenantHandler_Get(t *testing.T) {
 					"base_url": null,
 					"sdp_ui_base_url": null,
 					"status": "TENANT_CREATED",
-					"distribution_account": %q,
+					"distribution_account_address": %q,
 					"is_default": false,
 					"created_at": %q,
 					"updated_at": %q,
@@ -224,7 +225,7 @@ func Test_TenantHandler_Get(t *testing.T) {
 					"base_url": null,
 					"sdp_ui_base_url": null,
 					"status": "TENANT_DEACTIVATED",
-					"distribution_account": %q,
+					"distribution_account_address": %q,
 					"is_default": false,
 					"created_at": %q,
 					"updated_at": %q,
@@ -232,9 +233,9 @@ func Test_TenantHandler_Get(t *testing.T) {
 				}
 			]
 		`,
-			tnt1.ID, tnt1.Name, *tnt1.DistributionAccount, tnt1.CreatedAt.Format(time.RFC3339Nano), tnt1.UpdatedAt.Format(time.RFC3339Nano),
-			tnt2.ID, tnt2.Name, *tnt2.DistributionAccount, tnt2.CreatedAt.Format(time.RFC3339Nano), tnt2.UpdatedAt.Format(time.RFC3339Nano),
-			deactivatedTnt.ID, deactivatedTnt.Name, *deactivatedTnt.DistributionAccount, deactivatedTnt.CreatedAt.Format(time.RFC3339Nano), deactivatedTnt.UpdatedAt.Format(time.RFC3339Nano))
+			tnt1.ID, tnt1.Name, *tnt1.DistributionAccountAddress, tnt1.CreatedAt.Format(time.RFC3339Nano), tnt1.UpdatedAt.Format(time.RFC3339Nano),
+			tnt2.ID, tnt2.Name, *tnt2.DistributionAccountAddress, tnt2.CreatedAt.Format(time.RFC3339Nano), tnt2.UpdatedAt.Format(time.RFC3339Nano),
+			deactivatedTnt.ID, deactivatedTnt.Name, *deactivatedTnt.DistributionAccountAddress, deactivatedTnt.CreatedAt.Format(time.RFC3339Nano), deactivatedTnt.UpdatedAt.Format(time.RFC3339Nano))
 		assert.JSONEq(t, expectedRespBody, string(respBody))
 	})
 
@@ -260,13 +261,13 @@ func Test_TenantHandler_Get(t *testing.T) {
 				"base_url": null,
 				"sdp_ui_base_url": null,
 				"status": "TENANT_CREATED",
-				"distribution_account": %q,
+				"distribution_account_address": %q,
 				"is_default": false,
 				"created_at": %q,
 				"updated_at": %q,
 				"deleted_at": null
 			}
-		`, tnt1.ID, tnt1.Name, *tnt1.DistributionAccount, tnt1.CreatedAt.Format(time.RFC3339Nano), tnt1.UpdatedAt.Format(time.RFC3339Nano))
+		`, tnt1.ID, tnt1.Name, *tnt1.DistributionAccountAddress, tnt1.CreatedAt.Format(time.RFC3339Nano), tnt1.UpdatedAt.Format(time.RFC3339Nano))
 		assert.JSONEq(t, expectedRespBody, string(respBody))
 	})
 
@@ -292,13 +293,13 @@ func Test_TenantHandler_Get(t *testing.T) {
 				"base_url": null,
 				"sdp_ui_base_url": null,
 				"status": "TENANT_CREATED",
-				"distribution_account": %q,
+				"distribution_account_address": %q,
 				"is_default": false,
 				"created_at": %q,
 				"updated_at": %q,
 				"deleted_at": null
 			}
-		`, tnt2.ID, tnt2.Name, *tnt2.DistributionAccount, tnt2.CreatedAt.Format(time.RFC3339Nano), tnt2.UpdatedAt.Format(time.RFC3339Nano))
+		`, tnt2.ID, tnt2.Name, *tnt2.DistributionAccountAddress, tnt2.CreatedAt.Format(time.RFC3339Nano), tnt2.UpdatedAt.Format(time.RFC3339Nano))
 		assert.JSONEq(t, expectedRespBody, string(respBody))
 	})
 
@@ -451,7 +452,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 				"base_url": "https://backend.sdp.org",
 				"sdp_ui_base_url": "https://aid-org.sdp.org",
 				"status": "TENANT_PROVISIONED",
-				"distribution_account": %q,
+				"distribution_account_address": %q,
 				"is_default": false,
 				"created_at": %q,
 				"updated_at": %q,
@@ -641,7 +642,7 @@ func Test_TenantHandler_Patch(t *testing.T) {
 			"base_url": null,
 			"sdp_ui_base_url": null,
 			"status": "TENANT_DEACTIVATED",
-			"distribution_account": "GCTNUNQVX7BNIP5AUWW2R4YC7G6R3JGUDNMGT7H62BGBUY4A4V6ROAAH",
+			"distribution_account_address": "GCTNUNQVX7BNIP5AUWW2R4YC7G6R3JGUDNMGT7H62BGBUY4A4V6ROAAH",
 			"is_default": false,
 		`
 
@@ -654,7 +655,7 @@ func Test_TenantHandler_Patch(t *testing.T) {
 			"base_url": "http://valid.com",
 			"sdp_ui_base_url": null,
 			"status": "TENANT_CREATED",
-			"distribution_account": "GCTNUNQVX7BNIP5AUWW2R4YC7G6R3JGUDNMGT7H62BGBUY4A4V6ROAAH",
+			"distribution_account_address": "GCTNUNQVX7BNIP5AUWW2R4YC7G6R3JGUDNMGT7H62BGBUY4A4V6ROAAH",
 			"is_default": false,
 		`
 
@@ -667,7 +668,7 @@ func Test_TenantHandler_Patch(t *testing.T) {
 			"base_url": null,
 			"sdp_ui_base_url": "http://valid.com",
 			"status": "TENANT_CREATED",
-			"distribution_account": "GCTNUNQVX7BNIP5AUWW2R4YC7G6R3JGUDNMGT7H62BGBUY4A4V6ROAAH",
+			"distribution_account_address": "GCTNUNQVX7BNIP5AUWW2R4YC7G6R3JGUDNMGT7H62BGBUY4A4V6ROAAH",
 			"is_default": false,
 		`
 
@@ -680,7 +681,7 @@ func Test_TenantHandler_Patch(t *testing.T) {
 			"base_url": null,
 			"sdp_ui_base_url": null,
 			"status": "TENANT_DEACTIVATED",
-			"distribution_account": "GCTNUNQVX7BNIP5AUWW2R4YC7G6R3JGUDNMGT7H62BGBUY4A4V6ROAAH",
+			"distribution_account_address": "GCTNUNQVX7BNIP5AUWW2R4YC7G6R3JGUDNMGT7H62BGBUY4A4V6ROAAH",
 			"is_default": false,
 		`
 
@@ -740,7 +741,7 @@ func Test_TenantHandler_Patch(t *testing.T) {
 			"base_url": "http://valid.com",
 			"sdp_ui_base_url": "http://valid.com",
 			"status": "TENANT_ACTIVATED",
-			"distribution_account": "GCTNUNQVX7BNIP5AUWW2R4YC7G6R3JGUDNMGT7H62BGBUY4A4V6ROAAH",
+			"distribution_account_address": "GCTNUNQVX7BNIP5AUWW2R4YC7G6R3JGUDNMGT7H62BGBUY4A4V6ROAAH",
 			"is_default": false,
 		`
 
@@ -946,7 +947,7 @@ func Test_TenantHandler_Delete(t *testing.T) {
 				tntManagerMock.On("GetTenant", mock.Anything, &tenant.QueryParams{
 					Filters: map[tenant.FilterKey]interface{}{tenant.FilterKeyID: tntID},
 				}).
-					Return(&tenant.Tenant{ID: tntID, Status: tenant.DeactivatedTenantStatus, DistributionAccount: &tntDistributionAcc}, nil).
+					Return(&tenant.Tenant{ID: tntID, Status: tenant.DeactivatedTenantStatus, DistributionAccountAddress: &tntDistributionAcc}, nil).
 					Once()
 				distAccResolver.On("HostDistributionAccount").Return("host-dist-account").Once()
 				horizonClientMock.On("AccountDetail", horizonclient.AccountRequest{AccountID: tntDistributionAcc}).
@@ -961,7 +962,7 @@ func Test_TenantHandler_Delete(t *testing.T) {
 			mockTntManagerFn: func(tntManagerMock *tenant.TenantManagerMock, _ *horizonclient.MockClient) {
 				tntManagerMock.On("GetTenant", mock.Anything, &tenant.QueryParams{
 					Filters: map[tenant.FilterKey]interface{}{tenant.FilterKeyID: tntID},
-				}).Return(&tenant.Tenant{ID: tntID, Status: tenant.DeactivatedTenantStatus, DistributionAccount: &tntDistributionAcc}, nil).
+				}).Return(&tenant.Tenant{ID: tntID, Status: tenant.DeactivatedTenantStatus, DistributionAccountAddress: &tntDistributionAcc}, nil).
 					Once()
 				distAccResolver.On("HostDistributionAccount").Return("host-dist-account").Once()
 				horizonClientMock.On("AccountDetail", horizonclient.AccountRequest{AccountID: tntDistributionAcc}).
@@ -979,7 +980,7 @@ func Test_TenantHandler_Delete(t *testing.T) {
 			mockTntManagerFn: func(tntManagerMock *tenant.TenantManagerMock, _ *horizonclient.MockClient) {
 				tntManagerMock.On("GetTenant", mock.Anything, &tenant.QueryParams{
 					Filters: map[tenant.FilterKey]interface{}{tenant.FilterKeyID: tntID},
-				}).Return(&tenant.Tenant{ID: tntID, Status: tenant.DeactivatedTenantStatus, DistributionAccount: &tntDistributionAcc}, nil).
+				}).Return(&tenant.Tenant{ID: tntID, Status: tenant.DeactivatedTenantStatus, DistributionAccountAddress: &tntDistributionAcc}, nil).
 					Once()
 				distAccResolver.On("HostDistributionAccount").Return("host-dist-account").Once()
 				horizonClientMock.On("AccountDetail", horizonclient.AccountRequest{AccountID: tntDistributionAcc}).
@@ -998,7 +999,7 @@ func Test_TenantHandler_Delete(t *testing.T) {
 				tntManagerMock.On("GetTenant", mock.Anything, &tenant.QueryParams{
 					Filters: map[tenant.FilterKey]interface{}{tenant.FilterKeyID: tntID},
 				}).
-					Return(&tenant.Tenant{ID: tntID, Status: tenant.DeactivatedTenantStatus, DistributionAccount: &tntDistributionAcc}, nil).
+					Return(&tenant.Tenant{ID: tntID, Status: tenant.DeactivatedTenantStatus, DistributionAccountAddress: &tntDistributionAcc}, nil).
 					Once()
 				distAccResolver.On("HostDistributionAccount").Return("host-dist-account").Once()
 				horizonClientMock.On("AccountDetail", horizonclient.AccountRequest{AccountID: tntDistributionAcc}).
@@ -1017,15 +1018,17 @@ func Test_TenantHandler_Delete(t *testing.T) {
 				tntManagerMock.On("GetTenant", mock.Anything, &tenant.QueryParams{
 					Filters: map[tenant.FilterKey]interface{}{tenant.FilterKeyID: tntID},
 				}).
-					Return(&tenant.Tenant{ID: tntID, Status: tenant.DeactivatedTenantStatus, DistributionAccount: &tntDistributionAcc}, nil).
+					Return(&tenant.Tenant{ID: tntID, Status: tenant.DeactivatedTenantStatus, DistributionAccountAddress: &tntDistributionAcc}, nil).
 					Once()
 				distAccResolver.On("HostDistributionAccount").Return(tntDistributionAcc).Once()
 				tntManagerMock.On("SoftDeleteTenantByID", mock.Anything, tntID).
 					Return(&tenant.Tenant{
-						ID: tntID, Status: tenant.DeactivatedTenantStatus, DistributionAccount: &tntDistributionAcc, DeletedAt: &deletedAt,
-					},
-						nil,
-					).Once()
+						ID:                         tntID,
+						Status:                     tenant.DeactivatedTenantStatus,
+						DistributionAccountAddress: &tntDistributionAcc,
+						DeletedAt:                  &deletedAt,
+					}, nil).
+					Once()
 			},
 			expectedStatus: http.StatusOK,
 		},
@@ -1036,7 +1039,7 @@ func Test_TenantHandler_Delete(t *testing.T) {
 				tntManagerMock.On("GetTenant", mock.Anything, &tenant.QueryParams{
 					Filters: map[tenant.FilterKey]interface{}{tenant.FilterKeyID: tntID},
 				}).
-					Return(&tenant.Tenant{ID: tntID, Status: tenant.DeactivatedTenantStatus, DistributionAccount: &tntDistributionAcc}, nil).
+					Return(&tenant.Tenant{ID: tntID, Status: tenant.DeactivatedTenantStatus, DistributionAccountAddress: &tntDistributionAcc}, nil).
 					Once()
 				distAccResolver.On("HostDistributionAccount").Return("host-dist-account").Once()
 				horizonClientMock.On("AccountDetail", horizonclient.AccountRequest{AccountID: tntDistributionAcc}).
@@ -1044,10 +1047,12 @@ func Test_TenantHandler_Delete(t *testing.T) {
 					Once()
 				tntManagerMock.On("SoftDeleteTenantByID", mock.Anything, tntID).
 					Return(&tenant.Tenant{
-						ID: tntID, Status: tenant.DeactivatedTenantStatus, DistributionAccount: &tntDistributionAcc, DeletedAt: &deletedAt,
-					},
-						nil,
-					).Once()
+						ID:                         tntID,
+						Status:                     tenant.DeactivatedTenantStatus,
+						DistributionAccountAddress: &tntDistributionAcc,
+						DeletedAt:                  &deletedAt,
+					}, nil).
+					Once()
 			},
 			expectedStatus: http.StatusOK,
 		},
@@ -1067,7 +1072,11 @@ func Test_TenantHandler_Delete(t *testing.T) {
 				respBody, rErr := io.ReadAll(resp.Body)
 				require.NoError(t, rErr)
 
-				assert.Contains(t, string(respBody), "\"deleted_at\": "+"\""+deletedAt.Format(time.RFC3339Nano)+"\"\n")
+				respMap := map[string]interface{}{}
+				err := json.Unmarshal(respBody, &respMap)
+				require.NoError(t, err)
+
+				assert.Subset(t, respMap, map[string]interface{}{"deleted_at": deletedAt.Format(time.RFC3339Nano)})
 			}
 
 			tenantManagerMock.AssertExpectations(t)

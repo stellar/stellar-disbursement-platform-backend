@@ -114,7 +114,7 @@ func CreateTenantFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecut
 	const query = `
 		WITH create_tenant AS (
 			INSERT INTO tenants
-				(name, distribution_account)
+				(name, distribution_account_address)
 			VALUES
 				($1, $2)
 			ON CONFLICT DO NOTHING
@@ -124,11 +124,11 @@ func CreateTenantFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecut
 	`
 
 	tnt := &Tenant{
-		Name:                tenantName,
-		DistributionAccount: &distributionPubKey,
+		Name:                       tenantName,
+		DistributionAccountAddress: &distributionPubKey,
 	}
 
-	err := sqlExec.GetContext(ctx, tnt, query, tnt.Name, tnt.DistributionAccount)
+	err := sqlExec.GetContext(ctx, tnt, query, tnt.Name, tnt.DistributionAccountAddress)
 	require.Nil(t, err)
 
 	return tnt

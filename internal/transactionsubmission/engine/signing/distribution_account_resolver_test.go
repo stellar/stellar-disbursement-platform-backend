@@ -206,7 +206,7 @@ func Test_DistributionAccountResolverImpl_DistributionAccountFromContext(t *test
 
 	t.Run("successfully return the distribution account from the tenant stored in the context", func(t *testing.T) {
 		distribututionPublicKey := keypair.MustRandom().Address()
-		ctxTenant := &tenant.Tenant{ID: "95e788b6-c80e-4975-9d12-141001fe6e44", Name: "aid-org-1", DistributionAccount: &distribututionPublicKey}
+		ctxTenant := &tenant.Tenant{ID: "95e788b6-c80e-4975-9d12-141001fe6e44", Name: "aid-org-1", DistributionAccountAddress: &distribututionPublicKey}
 		ctxWithTenant := tenant.SaveTenantInContext(context.Background(), ctxTenant)
 
 		distAccount, err := distAccResolver.DistributionAccountFromContext(ctxWithTenant)

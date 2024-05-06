@@ -81,7 +81,7 @@ func (m *Manager) ProvisionNewTenant(
 	}
 
 	// Last step when no errors - fund tenant distribution account
-	fundErr := m.fundTenantDistributionAccount(ctx, *t.DistributionAccount)
+	fundErr := m.fundTenantDistributionAccount(ctx, *t.DistributionAccountAddress)
 	if fundErr != nil {
 		// error already wrapped
 		return nil, fundErr
@@ -106,7 +106,7 @@ func (m *Manager) handleProvisioningError(ctx context.Context, err error, t *ten
 		deleteDistributionAccFromVaultErr := m.deleteDistributionAccountKey(ctx, t)
 		// We should not let any failures from key deletion block us from completing the tenant cleanup process
 		if deleteDistributionAccFromVaultErr != nil {
-			deleteDistributionKeyErrPrefixMsg := fmt.Sprintf("deleting distribution account private key %s", *t.DistributionAccount)
+			deleteDistributionKeyErrPrefixMsg := fmt.Sprintf("deleting distribution account private key %s", *t.DistributionAccountAddress)
 			provisioningErr = fmt.Errorf("%w. [additional errors]: %s: %w", provisioningErr, deleteDistributionKeyErrPrefixMsg, deleteDistributionAccFromVaultErr)
 			log.Ctx(ctx).Errorf("%s: %v", deleteDistributionKeyErrPrefixMsg, deleteDistributionAccFromVaultErr)
 		}
@@ -166,7 +166,7 @@ func (m *Manager) provisionTenant(ctx context.Context, pt *ProvisionTenant) (*te
 			ID:                  t.ID,
 			Status:              &tenantStatus,
 			SDPUIBaseURL:        &pt.uiBaseURL,
-			DistributionAccount: t.DistributionAccount,
+			DistributionAccount: t.DistributionAccountAddress,
 		})
 	if err != nil {
 		return t, fmt.Errorf("%w: updating tenant %s status to %s: %w", ErrUpdateTenantFailed, pt.name, tenant.ProvisionedTenantStatus, err)
@@ -207,11 +207,11 @@ func (m *Manager) provisionDistributionAccount(ctx context.Context, t *tenant.Te
 	}
 
 	// Assigning the account key to the tenant so that it can be referenced if it needs to be deleted in the vault if any subsequent errors are encountered
-	t.DistributionAccount = &distributionAccPubKeys[0]
+	t.DistributionAccountAddress = &distributionAccPubKeys[0]
 	if len(distributionAccPubKeys) != 1 {
 		return fmt.Errorf("%w: expected single distribution account public key, got %d", ErrUpdateTenantFailed, len(distributionAccPubKeys))
 	}
-	log.Ctx(ctx).Infof("distribution account %s created for tenant %s", *t.DistributionAccount, t.Name)
+	log.Ctx(ctx).Infof("distribution account %s created for tenant %s", *t.DistributionAccountAddress, t.Name)
 	return nil
 }
 
@@ -292,7 +292,7 @@ func (m *Manager) createSchemaAndRunMigrations(ctx context.Context, name string)
 }
 
 func (m *Manager) deleteDistributionAccountKey(ctx context.Context, t *tenant.Tenant) error {
-	sigClientDeleteKeyErr := m.SubmitterEngine.DistAccountSigner.Delete(ctx, *t.DistributionAccount)
+	sigClientDeleteKeyErr := m.SubmitterEngine.DistAccountSigner.Delete(ctx, *t.DistributionAccountAddress)
 	if sigClientDeleteKeyErr != nil {
 		if errors.Is(sigClientDeleteKeyErr, signing.ErrUnsupportedCommand) {
 			log.Ctx(ctx).Warnf(

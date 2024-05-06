@@ -293,7 +293,7 @@ func (m *Manager) UpdateTenantConfig(ctx context.Context, tu *TenantUpdate) (*Te
 	}
 
 	if tu.DistributionAccount != nil {
-		fields = append(fields, "distribution_account = ?")
+		fields = append(fields, "distribution_account_address = ?")
 		args = append(args, *tu.DistributionAccount)
 
 		log.Ctx(ctx).Warnf("distribution account for tenant id %s updated to %s", tu.ID, *tu.DistributionAccount)

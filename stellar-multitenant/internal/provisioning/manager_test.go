@@ -191,9 +191,9 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 		assert.Equal(t, tenantName, tnt.Name)
 		assert.Equal(t, uiBaseURL, *tnt.SDPUIBaseURL)
 		if sigClientType == signing.DistributionAccountEnvSignatureClientType {
-			assert.Equal(t, distAcc.Address(), *tnt.DistributionAccount)
+			assert.Equal(t, distAcc.Address(), *tnt.DistributionAccountAddress)
 		} else {
-			assert.True(t, strkey.IsValidEd25519PublicKey(*tnt.DistributionAccount))
+			assert.True(t, strkey.IsValidEd25519PublicKey(*tnt.DistributionAccountAddress))
 		}
 		assert.Equal(t, tenant.ProvisionedTenantStatus, tnt.Status)
 
@@ -412,7 +412,7 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 				distAccSigClient.On("BatchInsert", ctx, 1).Return([]string{distAcc}, nil)
 
 				tStatus := tenant.ProvisionedTenantStatus
-				tnt.DistributionAccount = &distAcc
+				tnt.DistributionAccountAddress = &distAcc
 				tntManagerMock.On("UpdateTenantConfig", ctx, &tenant.TenantUpdate{
 					ID:                  tnt.ID,
 					DistributionAccount: &distAcc,
