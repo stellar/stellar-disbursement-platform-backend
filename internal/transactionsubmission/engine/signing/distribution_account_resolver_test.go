@@ -161,10 +161,10 @@ func Test_DistributionAccountResolverImpl_DistributionAccount(t *testing.T) {
 		tnt, err := m.AddTenant(ctx, "myorg1")
 		require.NoError(t, err)
 
-		distribututionPublicKey := keypair.MustRandom().Address()
+		distributionPublicKey := keypair.MustRandom().Address()
 		tnt, err = m.UpdateTenantConfig(ctx, &tenant.TenantUpdate{
 			ID:                         tnt.ID,
-			DistributionAccountAddress: distribututionPublicKey,
+			DistributionAccountAddress: distributionPublicKey,
 			DistributionAccountType:    schema.DistributionAccountTypeDBVaultStellar,
 			DistributionAccountStatus:  schema.DistributionAccountStatusActive,
 		})
@@ -173,7 +173,7 @@ func Test_DistributionAccountResolverImpl_DistributionAccount(t *testing.T) {
 		distAccount, err := distAccResolver.DistributionAccount(ctx, tnt.ID)
 		assert.NoError(t, err)
 		assert.Equal(t, &schema.DistributionAccount{
-			Address: distribututionPublicKey,
+			Address: distributionPublicKey,
 			Type:    schema.DistributionAccountTypeDBVaultStellar,
 			Status:  schema.DistributionAccountStatusActive,
 		}, distAccount)
@@ -211,11 +211,11 @@ func Test_DistributionAccountResolverImpl_DistributionAccountFromContext(t *test
 	})
 
 	t.Run("successfully return the distribution account from the tenant stored in the context", func(t *testing.T) {
-		distribututionPublicKey := keypair.MustRandom().Address()
+		distributionPublicKey := keypair.MustRandom().Address()
 		ctxTenant := &tenant.Tenant{
 			ID:                         "95e788b6-c80e-4975-9d12-141001fe6e44",
 			Name:                       "aid-org-1",
-			DistributionAccountAddress: &distribututionPublicKey,
+			DistributionAccountAddress: &distributionPublicKey,
 			DistributionAccountType:    schema.DistributionAccountTypeEnvStellar,
 			DistributionAccountStatus:  schema.DistributionAccountStatusActive,
 		}
@@ -224,7 +224,7 @@ func Test_DistributionAccountResolverImpl_DistributionAccountFromContext(t *test
 		distAccount, err := distAccResolver.DistributionAccountFromContext(ctxWithTenant)
 		assert.NoError(t, err)
 		assert.Equal(t, &schema.DistributionAccount{
-			Address: distribututionPublicKey,
+			Address: distributionPublicKey,
 			Type:    schema.DistributionAccountTypeEnvStellar,
 			Status:  schema.DistributionAccountStatusActive,
 		}, distAccount)
