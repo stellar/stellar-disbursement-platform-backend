@@ -7,6 +7,7 @@ import (
 	"github.com/stellar/go/keypair"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -137,7 +138,7 @@ func Test_DistributionAccountResolverImpl_DistributionAccount(t *testing.T) {
 
 	t.Run("return an error if the tenant_id cannot be found in the DB", func(t *testing.T) {
 		distAccount, err := distAccResolver.DistributionAccount(ctx, "tenant-id-not-found")
-		assert.ErrorContains(t, err, "getting tenant by ID")
+		assert.ErrorContains(t, err, "getting tenant")
 		assert.ErrorIs(t, err, tenant.ErrTenantDoesNotExist)
 		assert.Empty(t, distAccount)
 	})
@@ -169,7 +170,7 @@ func Test_DistributionAccountResolverImpl_DistributionAccount(t *testing.T) {
 
 		distAccount, err := distAccResolver.DistributionAccount(ctx, tnt.ID)
 		assert.NoError(t, err)
-		assert.Equal(t, distribututionPublicKey, distAccount)
+		assert.Equal(t, schema.NewStellarDistributionAccount(distribututionPublicKey), distAccount)
 	})
 }
 
@@ -189,7 +190,7 @@ func Test_DistributionAccountResolverImpl_DistributionAccountFromContext(t *test
 
 	t.Run("return an error if there's no tenant in the context", func(t *testing.T) {
 		distAccount, err := distAccResolver.DistributionAccountFromContext(context.Background())
-		assert.ErrorContains(t, err, "getting tenant from context")
+		assert.ErrorContains(t, err, "getting tenant")
 		assert.ErrorIs(t, err, tenant.ErrTenantNotFoundInContext)
 		assert.Empty(t, distAccount)
 	})
@@ -210,7 +211,7 @@ func Test_DistributionAccountResolverImpl_DistributionAccountFromContext(t *test
 
 		distAccount, err := distAccResolver.DistributionAccountFromContext(ctxWithTenant)
 		assert.NoError(t, err)
-		assert.Equal(t, distribututionPublicKey, distAccount)
+		assert.Equal(t, schema.NewStellarDistributionAccount(distribututionPublicKey), distAccount)
 	})
 }
 

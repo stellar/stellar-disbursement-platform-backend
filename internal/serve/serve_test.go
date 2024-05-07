@@ -31,6 +31,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	preconditionsMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
@@ -302,7 +303,7 @@ func getServeOptionsForTests(t *testing.T, dbConnectionPool db.DBConnectionPool)
 	}
 	distAccResolver.
 		On("DistributionAccountFromContext", mock.Anything).
-		Return(distAccPublicKey, nil).
+		Return(schema.NewStellarDistributionAccount(distAccPublicKey), nil).
 		Maybe()
 
 	serveOptions := ServeOptions{

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/csv"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"image/jpeg"
@@ -20,20 +21,21 @@ import (
 
 	"github.com/stellar/go/keypair"
 	"github.com/stellar/go/support/log"
-	"github.com/stellar/stellar-disbursement-platform-backend/db"
-	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/publicfiles"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	sigMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing/mocks"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 func createOrganizationProfileMultipartRequest(t *testing.T, ctx context.Context, url, fieldName, filename, body string, fileContent io.Reader) *http.Request {
@@ -1031,6 +1033,13 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 	handler := &ProfileHandler{Models: models, BaseURL: "http://localhost:8000", DistributionAccountResolver: distAccResolver}
 	url := "/profile/info"
 
+	newDistAccountJSON := func(t *testing.T, distAcc string) string {
+		distributionAccount := schema.NewStellarDistributionAccount(distAcc)
+		bytes, err := json.Marshal(distributionAccount)
+		require.NoError(t, err)
+		return string(bytes)
+	}
+
 	ctx := tenant.LoadDefaultTenantInContext(t, dbConnectionPool)
 
 	t.Run("returns Unauthorized error when no token is found", func(t *testing.T) {
@@ -1085,7 +1094,7 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 		mDistAccResolver := sigMocks.NewMockDistributionAccountResolver(t)
 		mDistAccResolver.
 			On("DistributionAccountFromContext", ctx).
-			Return("", errors.New("unexpected error")).
+			Return(nil, errors.New("unexpected error")).
 			Once()
 		h := &ProfileHandler{Models: models, BaseURL: "http://localhost:8000", DistributionAccountResolver: mDistAccResolver}
 		http.HandlerFunc(h.GetOrganizationInfo).ServeHTTP(w, req)
@@ -1096,10 +1105,10 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
-		assert.JSONEq(t, `{"error": "Cannot get distribution account public key"}`, string(respBody))
+		assert.JSONEq(t, `{"error": "Cannot get distribution account"}`, string(respBody))
 
 		entries := getEntries()
-		assert.Equal(t, "Cannot get distribution account public key: unexpected error", entries[0].Message)
+		assert.Equal(t, "Cannot get distribution account: unexpected error", entries[0].Message)
 	})
 
 	t.Run("returns the organization info successfully", func(t *testing.T) {
@@ -1120,6 +1129,7 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 			{
 				"logo_url": "http://localhost:8000/organization/logo?token=mytoken",
 				"name": "MyCustomAid",
+				"distribution_account": %s,
 				"distribution_account_public_key": %q,
 				"timezone_utc_offset": "+00:00",
 				"is_approval_required": false,
@@ -1127,7 +1137,7 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 				"sms_resend_interval": 0,
 				"payment_cancellation_period_days": 0
 			}
-		`, defaultTenantDistAcc)
+		`, newDistAccountJSON(t, defaultTenantDistAcc), defaultTenantDistAcc)
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.JSONEq(t, wantsBody, string(respBody))
@@ -1156,6 +1166,7 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 			{
 				"logo_url": "http://localhost:8000/organization/logo?token=mytoken",
 				"name": "MyCustomAid",
+				"distribution_account": %s,
 				"distribution_account_public_key": %q,
 				"timezone_utc_offset": "+00:00",
 				"is_approval_required":false,
@@ -1164,7 +1175,7 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 				"payment_cancellation_period_days": 0,
 				"privacy_policy_link": null
 			}
-		`, defaultTenantDistAcc)
+		`, newDistAccountJSON(t, defaultTenantDistAcc), defaultTenantDistAcc)
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.JSONEq(t, wantsBody, string(respBody))
@@ -1189,6 +1200,7 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 			{
 				"logo_url": "http://localhost:8000/organization/logo?token=mytoken",
 				"name": "MyCustomAid",
+				"distribution_account": %s,
 				"distribution_account_public_key": %q,
 				"timezone_utc_offset": "+00:00",
 				"is_approval_required":false,
@@ -1198,7 +1210,7 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 				"payment_cancellation_period_days": 0,
 				"privacy_policy_link": null
 			}
-		`, defaultTenantDistAcc)
+		`, newDistAccountJSON(t, defaultTenantDistAcc), defaultTenantDistAcc)
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.JSONEq(t, wantsBody, string(respBody))
@@ -1229,6 +1241,7 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 			{
 				"logo_url": "http://localhost:8000/organization/logo?token=mytoken",
 				"name": "MyCustomAid",
+				"distribution_account": %s,
 				"distribution_account_public_key": %q,
 				"timezone_utc_offset": "+00:00",
 				"is_approval_required":false,
@@ -1236,7 +1249,7 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 				"payment_cancellation_period_days": 0,
 				"privacy_policy_link": null
 			}
-		`, defaultTenantDistAcc)
+		`, newDistAccountJSON(t, defaultTenantDistAcc), defaultTenantDistAcc)
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.JSONEq(t, wantsBody, string(respBody))
@@ -1267,6 +1280,7 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 			{
 				"logo_url": "http://localhost:8000/organization/logo?token=mytoken",
 				"name": "MyCustomAid",
+				"distribution_account": %s,
 				"distribution_account_public_key": %q,
 				"timezone_utc_offset": "+00:00",
 				"is_approval_required":false,
@@ -1274,7 +1288,7 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 				"payment_cancellation_period_days": 5,
 				"privacy_policy_link": null
 			}
-		`, defaultTenantDistAcc)
+		`, newDistAccountJSON(t, defaultTenantDistAcc), defaultTenantDistAcc)
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.JSONEq(t, wantsBody, string(respBody))
@@ -1305,6 +1319,7 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 			{
 				"logo_url": "http://localhost:8000/organization/logo?token=mytoken",
 				"name": "MyCustomAid",
+				"distribution_account": %s,
 				"distribution_account_public_key": %q,
 				"timezone_utc_offset": "+00:00",
 				"is_approval_required":false,
@@ -1312,7 +1327,7 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 				"payment_cancellation_period_days": 0,
 				"privacy_policy_link": "https://example.com/privacy-policy"
 			}
-		`, defaultTenantDistAcc)
+		`, newDistAccountJSON(t, defaultTenantDistAcc), defaultTenantDistAcc)
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.JSONEq(t, wantsBody, string(respBody))
