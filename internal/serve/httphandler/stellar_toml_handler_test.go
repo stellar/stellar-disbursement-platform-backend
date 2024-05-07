@@ -51,7 +51,6 @@ func Test_StellarTomlHandler_horizonURL(t *testing.T) {
 func Test_StellarTomlHandler_buildGeneralInformation(t *testing.T) {
 	req := httptest.NewRequest("GET", "https://test.com/.well-known/stellar.toml", nil)
 	req.Host = "test.com"
-	hostDistAccPublicKey := "GC5HD2HELPBY7G43C6AXEGVWYTFZJ5RGZDFFX5KRSS56FCUPGREUKWXQ"
 	tenantDistAccPublicKey := "GDEWLTJMGKABNF3GBA3VTVBYPES3FXQHHJVJVI6X3CRKKFH5EMLRT5JZ"
 
 	testCases := []struct {
@@ -70,7 +69,7 @@ func Test_StellarTomlHandler_buildGeneralInformation(t *testing.T) {
 				AnchorPlatformBaseSepURL: "https://anchor-platform-domain",
 			},
 			wantLines: []string{
-				fmt.Sprintf(`ACCOUNTS=[%q, "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"]`, hostDistAccPublicKey),
+				`ACCOUNTS=["GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"]`,
 				`SIGNING_KEY="GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"`,
 				fmt.Sprintf("NETWORK_PASSPHRASE=%q", network.PublicNetworkPassphrase),
 				fmt.Sprintf("HORIZON_URL=%q", horizonPubnetURL),
@@ -106,7 +105,7 @@ func Test_StellarTomlHandler_buildGeneralInformation(t *testing.T) {
 				AnchorPlatformBaseSepURL: "https://anchor-platform-domain",
 			},
 			wantLines: []string{
-				fmt.Sprintf(`ACCOUNTS=[%q, "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"]`, hostDistAccPublicKey),
+				`ACCOUNTS=["GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"]`,
 				`SIGNING_KEY="GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"`,
 				fmt.Sprintf("NETWORK_PASSPHRASE=%q", network.TestNetworkPassphrase),
 				fmt.Sprintf("HORIZON_URL=%q", horizonTestnetURL),
@@ -148,10 +147,6 @@ func Test_StellarTomlHandler_buildGeneralInformation(t *testing.T) {
 				mDistAccResolver.
 					On("DistributionAccountFromContext", ctx).
 					Return(nil, tenant.ErrTenantNotFoundInContext).
-					Once()
-				mDistAccResolver.
-					On("HostDistributionAccount").
-					Return(hostDistAccPublicKey).
 					Once()
 			}
 			tc.s.DistributionAccountResolver = mDistAccResolver
@@ -420,7 +415,7 @@ func Test_StellarTomlHandler_ServeHTTP(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 		wantToml := fmt.Sprintf(`
-			ACCOUNTS=["GCWFIKOB7FO6KTXUKZIPPPZ42UT2V7HVZD5STVROKVJVQU24FSP7OLZK", "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"]
+			ACCOUNTS=["GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"]
 			SIGNING_KEY="GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"
 			NETWORK_PASSPHRASE=%q
 			HORIZON_URL=%q

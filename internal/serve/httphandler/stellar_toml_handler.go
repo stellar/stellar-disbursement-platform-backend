@@ -40,14 +40,12 @@ func (s *StellarTomlHandler) horizonURL() string {
 
 // buildGeneralInformation will create the general informations based on the env vars injected into the handler.
 func (s *StellarTomlHandler) buildGeneralInformation(ctx context.Context, req *http.Request) string {
-	accounts := "["
+	accounts := fmt.Sprintf("[%q]", s.Sep10SigningPublicKey)
 	if perTenantDistributionAccount, err := s.DistributionAccountResolver.DistributionAccountFromContext(ctx); err != nil {
 		log.Ctx(ctx).Warnf("Couldn't get distribution account from context in %s%s", req.Host, req.URL.Path)
-		accounts += "\"" + s.DistributionAccountResolver.HostDistributionAccount() + "\"" // fallback to host distribution account
 	} else if perTenantDistributionAccount.IsStellar() {
-		accounts += "\"" + perTenantDistributionAccount.ID + "\""
+		accounts = fmt.Sprintf("[%q, %q]", perTenantDistributionAccount.ID, s.Sep10SigningPublicKey)
 	}
-	accounts += ", \"" + s.Sep10SigningPublicKey + "\"]"
 
 	webAuthEndpoint := s.AnchorPlatformBaseSepURL + "/auth"
 	transferServerSep0024 := s.AnchorPlatformBaseSepURL + "/sep24"
