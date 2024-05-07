@@ -270,7 +270,7 @@ func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, d
 				)
 			}
 
-			var totalPendingAmount float64 = 0.0
+			totalPendingAmount := 0.0
 			incompletePayments, err := s.models.Payment.GetAll(ctx, &data.QueryParams{
 				Filters: map[data.FilterKey]interface{}{
 					data.FilterKeyStatus: data.PaymentInProgressStatuses(),
