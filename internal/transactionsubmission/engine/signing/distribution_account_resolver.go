@@ -63,22 +63,17 @@ type DistributionAccountResolverImpl struct {
 
 // DistributionAccount returns the tenant's distribution account stored in the database.
 func (r *DistributionAccountResolverImpl) DistributionAccount(ctx context.Context, tenantID string) (*schema.DistributionAccount, error) {
-	return r.getDistributionAccount(func() (*tenant.Tenant, error) {
-		return r.tenantManager.GetTenantByID(ctx, tenantID)
-	})
+	return r.getDistributionAccount(r.tenantManager.GetTenantByID(ctx, tenantID))
 }
 
 // DistributionAccountFromContext returns the tenant's distribution account from the tenant object stored in the context
 // provided.
 func (r *DistributionAccountResolverImpl) DistributionAccountFromContext(ctx context.Context) (*schema.DistributionAccount, error) {
-	return r.getDistributionAccount(func() (*tenant.Tenant, error) {
-		return tenant.GetTenantFromContext(ctx)
-	})
+	return r.getDistributionAccount(tenant.GetTenantFromContext(ctx))
 }
 
 // getDistributionAccount extracts the distribution account from the tenant if it exists.
-func (r *DistributionAccountResolverImpl) getDistributionAccount(getterFn func() (*tenant.Tenant, error)) (*schema.DistributionAccount, error) {
-	tnt, err := getterFn()
+func (r *DistributionAccountResolverImpl) getDistributionAccount(tnt *tenant.Tenant, err error) (*schema.DistributionAccount, error) {
 	if err != nil {
 		return nil, fmt.Errorf("getting tenant: %w", err)
 	}
