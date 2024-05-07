@@ -129,7 +129,7 @@ func Test_AssetHandler_CreateAsset(t *testing.T) {
 
 	distAccResolver.
 		On("DistributionAccountFromContext", ctx).
-		Return(schema.NewStellarDistributionAccount(distributionKP.Address()), nil)
+		Return(schema.NewDefaultStellarDistributionAccount(distributionKP.Address()), nil)
 
 	t.Run("successfully create an asset", func(t *testing.T) {
 		getEntries := log.DefaultLogger.StartTest(log.InfoLevel)
@@ -550,7 +550,7 @@ func Test_AssetHandler_DeleteAsset(t *testing.T) {
 
 	distAccResolver.
 		On("DistributionAccountFromContext", mock.AnythingOfType("*context.valueCtx")).
-		Return(schema.NewStellarDistributionAccount(distributionKP.Address()), nil)
+		Return(schema.NewDefaultStellarDistributionAccount(distributionKP.Address()), nil)
 
 	t.Run("successfully delete an asset and remove the trustline", func(t *testing.T) {
 		data.DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
@@ -785,7 +785,7 @@ func Test_AssetHandler_handleUpdateAssetTrustlineForDistributionAccount(t *testi
 
 	distAccResolver.
 		On("DistributionAccountFromContext", ctx).
-		Return(schema.NewStellarDistributionAccount(distributionKP.Address()), nil)
+		Return(schema.NewDefaultStellarDistributionAccount(distributionKP.Address()), nil)
 
 	t.Run("returns error if fails getting distribution account details", func(t *testing.T) {
 		horizonClientMock.
@@ -1192,7 +1192,7 @@ func Test_AssetHandler_submitChangeTrustTransaction(t *testing.T) {
 
 	distAccResolver.
 		On("DistributionAccountFromContext", ctx).
-		Return(schema.NewStellarDistributionAccount(distributionKP.Address()), nil)
+		Return(schema.NewDefaultStellarDistributionAccount(distributionKP.Address()), nil)
 
 	t.Run("returns error when fails signing transaction", func(t *testing.T) {
 		tx, err := txnbuild.NewTransaction(
@@ -1378,7 +1378,7 @@ func newAssetTestMock(t *testing.T, distributionAccountAddress string) *assetTes
 	signatureService, _, distAccSigClient, _, distAccResolver := signing.NewMockSignatureService(t)
 	distAccResolver.
 		On("DistributionAccountFromContext", mock.Anything).
-		Return(schema.NewStellarDistributionAccount(distributionAccountAddress), nil)
+		Return(schema.NewDefaultStellarDistributionAccount(distributionAccountAddress), nil)
 
 	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
 

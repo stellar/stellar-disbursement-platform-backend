@@ -171,7 +171,7 @@ func (c AssetsHandler) handleUpdateAssetTrustlineForDistributionAccount(ctx cont
 	} else if !distributionAccount.IsStellar() {
 		return fmt.Errorf("expected distribution account to be a STELLAR account but got %q", distributionAccount.Type)
 	} else {
-		distributionAccountPubKey = distributionAccount.ID
+		distributionAccountPubKey = distributionAccount.Address
 	}
 
 	acc, err := c.HorizonClient.AccountDetail(horizonclient.AccountRequest{
@@ -268,7 +268,7 @@ func (c AssetsHandler) submitChangeTrustTransaction(ctx context.Context, acc *ho
 	} else if !distributionAccount.IsStellar() {
 		return fmt.Errorf("expected distribution account to be a STELLAR account but got %q", distributionAccount.Type)
 	} else {
-		distributionAccountPubKey = distributionAccount.ID
+		distributionAccountPubKey = distributionAccount.Address
 	}
 
 	operations := make([]txnbuild.Operation, 0, len(changeTrustOperations))

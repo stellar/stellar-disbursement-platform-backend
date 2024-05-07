@@ -364,7 +364,7 @@ func (h ProfileHandler) GetOrganizationInfo(rw http.ResponseWriter, req *http.Re
 		"name":                             org.Name,
 		"logo_url":                         lu.String(),
 		"distribution_account":             distributionAccount,
-		"distribution_account_public_key":  distributionAccount.ID, // TODO: deprecate `distribution_account_public_key`
+		"distribution_account_public_key":  distributionAccount.Address, // TODO: deprecate `distribution_account_public_key`
 		"timezone_utc_offset":              org.TimezoneUTCOffset,
 		"is_approval_required":             org.IsApprovalRequired,
 		"sms_resend_interval":              0,

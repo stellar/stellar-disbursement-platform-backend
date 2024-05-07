@@ -78,14 +78,14 @@ func (r *DistributionAccountResolverImpl) getDistributionAccount(tnt *tenant.Ten
 		return nil, fmt.Errorf("getting tenant: %w", err)
 	}
 
-	if tnt.DistributionAccount == nil {
+	if tnt.DistributionAccountAddress == nil {
 		return nil, ErrDistributionAccountIsEmpty
 	}
 
 	return &schema.DistributionAccount{
-		ID:     *tnt.DistributionAccount,
-		Type:   schema.DistributionAccountTypeStellar,
-		Status: schema.DistributionAccountStatusActive,
+		Address: *tnt.DistributionAccountAddress,
+		Type:    tnt.DistributionAccountType,
+		Status:  tnt.DistributionAccountStatus,
 	}, nil
 }
 

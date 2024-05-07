@@ -14,7 +14,46 @@ import (
 	preconditionsMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
+
+func Test_SignatureClientType_DistributionAccountType(t *testing.T) {
+	testCases := []struct {
+		signatureClientType         SignatureClientType
+		wantErrContains             string
+		wantDistributionAccountType schema.DistributionAccountType
+	}{
+		{
+			signatureClientType: ChannelAccountDBSignatureClientType,
+			wantErrContains:     fmt.Sprintf("invalid distribution account type %q", ChannelAccountDBSignatureClientType),
+		},
+		{
+			signatureClientType:         DistributionAccountEnvSignatureClientType,
+			wantDistributionAccountType: schema.DistributionAccountTypeEnvStellar,
+		},
+		{
+			signatureClientType:         DistributionAccountDBSignatureClientType,
+			wantDistributionAccountType: schema.DistributionAccountTypeDBVaultStellar,
+		},
+		{
+			signatureClientType: HostAccountEnvSignatureClientType,
+			wantErrContains:     fmt.Sprintf("invalid distribution account type %q", HostAccountEnvSignatureClientType),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(string(tc.signatureClientType), func(t *testing.T) {
+			distAccType, err := tc.signatureClientType.DistributionAccountType()
+			if tc.wantErrContains != "" {
+				require.ErrorContains(t, err, tc.wantErrContains)
+				assert.Empty(t, distAccType)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tc.wantDistributionAccountType, distAccType)
+			}
+		})
+	}
+}
 
 func Test_ParseSignatureClientType(t *testing.T) {
 	testCases := []struct {

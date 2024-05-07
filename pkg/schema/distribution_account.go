@@ -1,11 +1,24 @@
 package schema
 
+import (
+	"slices"
+)
+
 type DistributionAccountType string
 
 const (
-	DistributionAccountTypeStellar DistributionAccountType = "STELLAR"
-	DistributionAccountTypeCircle  DistributionAccountType = "CIRCLE"
+	DistributionAccountTypeEnvStellar     DistributionAccountType = "ENV_STELLAR"
+	DistributionAccountTypeDBVaultStellar DistributionAccountType = "DB_VAULT_STELLAR"
+	DistributionAccountTypeDBVaultCircle  DistributionAccountType = "DB_VAULT_CIRCLE"
 )
+
+func (t DistributionAccountType) IsStellar() bool {
+	return slices.Contains([]DistributionAccountType{DistributionAccountTypeEnvStellar, DistributionAccountTypeDBVaultStellar}, t)
+}
+
+func (t DistributionAccountType) IsCircle() bool {
+	return slices.Contains([]DistributionAccountType{DistributionAccountTypeDBVaultCircle}, t)
+}
 
 type DistributionAccountStatus string
 
@@ -15,17 +28,17 @@ const (
 )
 
 type DistributionAccount struct {
-	ID     string                    `json:"id"`
-	Type   DistributionAccountType   `json:"type"`
-	Status DistributionAccountStatus `json:"status"`
+	Address string                    `json:"address" db:"address"`
+	Type    DistributionAccountType   `json:"type" db:"type"`
+	Status  DistributionAccountStatus `json:"status" db:"status"`
 }
 
 func (da DistributionAccount) IsStellar() bool {
-	return da.Type == DistributionAccountTypeStellar
+	return da.Type.IsStellar()
 }
 
 func (da DistributionAccount) IsCircle() bool {
-	return da.Type == DistributionAccountTypeCircle
+	return da.Type.IsCircle()
 }
 
 func (da DistributionAccount) IsActive() bool {
@@ -36,10 +49,10 @@ func (da DistributionAccount) IsPendingUserActivation() bool {
 	return da.Status == DistributionAccountStatusPendingUserActivation
 }
 
-func NewStellarDistributionAccount(stellarID string) *DistributionAccount {
+func NewDefaultStellarDistributionAccount(stellarID string) *DistributionAccount {
 	return &DistributionAccount{
-		ID:     stellarID,
-		Type:   DistributionAccountTypeStellar,
-		Status: DistributionAccountStatusActive,
+		Address: stellarID,
+		Type:    DistributionAccountTypeDBVaultStellar,
+		Status:  DistributionAccountStatusActive,
 	}
 }
