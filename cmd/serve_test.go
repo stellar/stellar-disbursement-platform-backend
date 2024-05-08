@@ -216,6 +216,7 @@ func Test_serve(t *testing.T) {
 		AdminAccount:                            "admin-account",
 		AdminApiKey:                             "admin-api-key",
 		BaseURL:                                 "https://sdp.com",
+		SDPUIBaseURL:                            "http://sdp-ui.com",
 	}
 
 	eventBrokerOptions := cmdUtils.EventBrokerOptions{
@@ -278,6 +279,7 @@ func Test_serve(t *testing.T) {
 	t.Setenv("DISABLE_RECAPTCHA", fmt.Sprintf("%t", serveOpts.DisableMFA))
 	t.Setenv("DISTRIBUTION_SEED", distributionSeed)
 	t.Setenv("BASE_URL", serveOpts.BaseURL)
+	t.Setenv("SDP_UI_BASE_URL", serveTenantOpts.SDPUIBaseURL)
 	t.Setenv("RECAPTCHA_SITE_KEY", serveOpts.ReCAPTCHASiteKey)
 	t.Setenv("RECAPTCHA_SITE_SECRET_KEY", serveOpts.ReCAPTCHASiteSecretKey)
 	t.Setenv("CORS_ALLOWED_ORIGINS", "*")

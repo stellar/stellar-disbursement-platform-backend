@@ -33,6 +33,7 @@ type TenantsHandler struct {
 	AdminDBConnectionPool       db.DBConnectionPool
 	SingleTenantMode            bool
 	BaseURL                     string
+	SDPUIBaseURL                string
 }
 
 const MaxNativeAssetBalanceForDeletion = 100
@@ -98,27 +99,26 @@ func (h TenantsHandler) Post(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	var generatedURL string
-	if reqBody.BaseURL == nil || reqBody.SDPUIBaseURL == nil {
-		generatedURL, err = utils.GenerateTenantURL(h.BaseURL, tnt.Name)
+	var tntBaseURL string
+	if reqBody.BaseURL != nil {
+		tntBaseURL = *reqBody.BaseURL
+	} else {
+		tntBaseURL, err = utils.GenerateTenantURL(h.BaseURL, tnt.Name)
 		if err != nil {
 			httperror.InternalError(ctx, "Could not generate URL", err, nil).Render(rw)
 			return
 		}
 	}
 
-	var tntBaseURL string
-	if reqBody.BaseURL != nil {
-		tntBaseURL = *reqBody.BaseURL
-	} else {
-		tntBaseURL = generatedURL
-	}
-
 	var tntSDPUIBaseURL string
 	if reqBody.SDPUIBaseURL != nil {
 		tntSDPUIBaseURL = *reqBody.SDPUIBaseURL
 	} else {
-		tntSDPUIBaseURL = generatedURL
+		tntSDPUIBaseURL, err = utils.GenerateTenantURL(h.SDPUIBaseURL, tnt.Name)
+		if err != nil {
+			httperror.InternalError(ctx, "Could not generate SDP UI URL", err, nil).Render(rw)
+			return
+		}
 	}
 
 	tnt, err = h.Manager.UpdateTenantConfig(ctx, &tenant.TenantUpdate{

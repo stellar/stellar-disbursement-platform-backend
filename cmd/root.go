@@ -57,12 +57,19 @@ func rootCmd() *cobra.Command {
 			FlagDefault: "http://localhost:8000",
 			Required:    true,
 		},
+		{
+			Name:        "sdp-ui-base-url",
+			Usage:       "The SDP UI server's base URL.",
+			OptType:     types.String,
+			ConfigKey:   &globalOptions.SDPUIBaseURL,
+			FlagDefault: "http://localhost:3000",
+			Required:    true,
+		},
 		cmdUtils.NetworkPassphrase(&globalOptions.NetworkPassphrase),
 	}
 
 	rootCmd := &cobra.Command{
 		Use:     "stellar-disbursement-platform",
-		Short:   "Stellar Disbursement Platform",
 		Long:    "The Stellar Disbursement Platform (SDP) enables organizations to disburse bulk payments to recipients using Stellar.",
 		Version: globalOptions.Version,
 		PersistentPreRun: func(cmd *cobra.Command, _ []string) {
