@@ -215,8 +215,8 @@ func Test_serve(t *testing.T) {
 		TenantAccountNativeAssetBootstrapAmount: tenant.MinTenantDistributionAccountAmount,
 		AdminAccount:                            "admin-account",
 		AdminApiKey:                             "admin-api-key",
-		BaseURL:                                 "https://sdp.com",
-		SDPUIBaseURL:                            "http://sdp-ui.com",
+		BaseURL:                                 "https://sdp-backend.stellar.org",
+		SDPUIBaseURL:                            "https://sdp-ui.stellar.org",
 	}
 
 	eventBrokerOptions := cmdUtils.EventBrokerOptions{

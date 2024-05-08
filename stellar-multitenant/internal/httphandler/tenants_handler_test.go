@@ -279,8 +279,8 @@ func Test_TenantHandler_Post(t *testing.T) {
 		Manager:             m,
 		ProvisioningManager: p,
 		NetworkType:         utils.TestnetNetworkType,
-		BaseURL:             "https://backend.sdp.org",
-		SDPUIBaseURL:        "https://frontend.sdp.org",
+		BaseURL:             "https://sdp-backend.stellar.org",
+		SDPUIBaseURL:        "https://sdp-ui.stellar.org",
 	}
 
 	createMocks := func() {
@@ -391,8 +391,8 @@ func Test_TenantHandler_Post(t *testing.T) {
 				"owner_first_name": "Owner",
 				"owner_last_name": "Owner",
 				"organization_name": "My Aid Org",
-				"base_url": "https://backend.sdp.org",
-				"sdp_ui_base_url": "https://aid-org.sdp.org",
+				"base_url": "https://sdp-backend.stellar.org",
+				"sdp_ui_base_url": "https://sdp-ui.stellar.org",
 				"is_default": false
 			}
 		`, orgName)
@@ -406,8 +406,8 @@ func Test_TenantHandler_Post(t *testing.T) {
 			{
 				"id": %q,
 				"name": %q,
-				"base_url": "https://backend.sdp.org",
-				"sdp_ui_base_url": "https://aid-org.sdp.org",
+				"base_url": "https://sdp-backend.stellar.org",
+				"sdp_ui_base_url": "https://sdp-ui.stellar.org",
 				"status": "TENANT_PROVISIONED",
 				"is_default": false,
 				"created_at": %q,
@@ -444,8 +444,8 @@ func Test_TenantHandler_Post(t *testing.T) {
 		tnt, err := m.GetTenantByName(ctx, orgName)
 		require.NoError(t, err)
 
-		generatedURL := fmt.Sprintf("https://%s.backend.sdp.org", orgName)
-		generatedUIURL := fmt.Sprintf("https://%s.frontend.sdp.org", orgName)
+		generatedURL := fmt.Sprintf("https://%s.sdp-backend.stellar.org", orgName)
+		generatedUIURL := fmt.Sprintf("https://%s.sdp-ui.stellar.org", orgName)
 		expectedRespBody := fmt.Sprintf(`
 			{
 				"id": %q,
@@ -489,7 +489,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 		tnt, err := m.GetTenantByName(ctx, orgName)
 		require.NoError(t, err)
 
-		generatedUIURL := fmt.Sprintf("https://%s.frontend.sdp.org", orgName)
+		generatedUIURL := fmt.Sprintf("https://%s.sdp-ui.stellar.org", orgName)
 		expectedRespBody := fmt.Sprintf(`
 			{
 				"id": %q,
@@ -533,7 +533,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 		tnt, err := m.GetTenantByName(ctx, orgName)
 		require.NoError(t, err)
 
-		generatedURL := fmt.Sprintf("https://%s.backend.sdp.org", orgName)
+		generatedURL := fmt.Sprintf("https://%s.sdp-backend.stellar.org", orgName)
 		expectedRespBody := fmt.Sprintf(`
 			{
 				"id": %q,
