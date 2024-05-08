@@ -36,25 +36,6 @@ func DeleteAllTenantsFixture(t *testing.T, ctx context.Context, adminDBConnectio
 	}
 }
 
-func ResetTenantConfigFixture(t *testing.T, ctx context.Context, dbConnectionPool db.DBConnectionPool, tenantID string) *Tenant {
-	t.Helper()
-
-	const q = `
-		UPDATE tenants
-		SET
-			base_url = NULL, sdp_ui_base_url = NULL
-		WHERE
-			id = $1
-		RETURNING *
-	`
-
-	var tnt Tenant
-	err := dbConnectionPool.GetContext(ctx, &tnt, q, tenantID)
-	require.NoError(t, err)
-
-	return &tnt
-}
-
 func AssertRegisteredAssetsFixture(t *testing.T, ctx context.Context, dbConnectionPool db.DBConnectionPool, expectedAssets []string) {
 	t.Helper()
 
@@ -114,7 +95,7 @@ func CreateTenantFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecut
 	const query = `
 		WITH create_tenant AS (
 			INSERT INTO tenants
-				(name, distribution_account)
+				(name, distribution_account_address)
 			VALUES
 				($1, $2)
 			ON CONFLICT DO NOTHING
@@ -124,11 +105,11 @@ func CreateTenantFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecut
 	`
 
 	tnt := &Tenant{
-		Name:                tenantName,
-		DistributionAccount: &distributionPubKey,
+		Name:                       tenantName,
+		DistributionAccountAddress: &distributionPubKey,
 	}
 
-	err := sqlExec.GetContext(ctx, tnt, query, tnt.Name, tnt.DistributionAccount)
+	err := sqlExec.GetContext(ctx, tnt, query, tnt.Name, tnt.DistributionAccountAddress)
 	require.Nil(t, err)
 
 	return tnt

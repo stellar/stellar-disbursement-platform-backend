@@ -5,7 +5,9 @@ import (
 	"fmt"
 
 	"github.com/stellar/go/strkey"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
@@ -15,8 +17,8 @@ var ErrDistributionAccountIsEmpty = fmt.Errorf("distribution account is empty")
 //
 //go:generate mockery --name=DistributionAccountResolver --case=underscore --structname=MockDistributionAccountResolver
 type DistributionAccountResolver interface {
-	DistributionAccount(ctx context.Context, tenantID string) (string, error)
-	DistributionAccountFromContext(ctx context.Context) (string, error)
+	DistributionAccount(ctx context.Context, tenantID string) (*schema.DistributionAccount, error)
+	DistributionAccountFromContext(ctx context.Context) (*schema.DistributionAccount, error)
 	HostDistributionAccount() string
 }
 
@@ -60,32 +62,31 @@ type DistributionAccountResolverImpl struct {
 }
 
 // DistributionAccount returns the tenant's distribution account stored in the database.
-func (r *DistributionAccountResolverImpl) DistributionAccount(ctx context.Context, tenantID string) (string, error) {
-	tnt, err := r.tenantManager.GetTenantByID(ctx, tenantID)
-	if err != nil {
-		return "", fmt.Errorf("getting tenant by ID: %w", err)
-	}
-
-	if tnt.DistributionAccount == nil {
-		return "", ErrDistributionAccountIsEmpty
-	}
-
-	return *tnt.DistributionAccount, nil
+func (r *DistributionAccountResolverImpl) DistributionAccount(ctx context.Context, tenantID string) (*schema.DistributionAccount, error) {
+	return r.getDistributionAccount(r.tenantManager.GetTenantByID(ctx, tenantID))
 }
 
 // DistributionAccountFromContext returns the tenant's distribution account from the tenant object stored in the context
 // provided.
-func (r *DistributionAccountResolverImpl) DistributionAccountFromContext(ctx context.Context) (string, error) {
-	tnt, err := tenant.GetTenantFromContext(ctx)
+func (r *DistributionAccountResolverImpl) DistributionAccountFromContext(ctx context.Context) (*schema.DistributionAccount, error) {
+	return r.getDistributionAccount(tenant.GetTenantFromContext(ctx))
+}
+
+// getDistributionAccount extracts the distribution account from the tenant if it exists.
+func (r *DistributionAccountResolverImpl) getDistributionAccount(tnt *tenant.Tenant, err error) (*schema.DistributionAccount, error) {
 	if err != nil {
-		return "", fmt.Errorf("getting tenant from context: %w", err)
+		return nil, fmt.Errorf("getting tenant: %w", err)
 	}
 
-	if tnt.DistributionAccount == nil {
-		return "", ErrDistributionAccountIsEmpty
+	if tnt.DistributionAccountAddress == nil {
+		return nil, ErrDistributionAccountIsEmpty
 	}
 
-	return *tnt.DistributionAccount, nil
+	return &schema.DistributionAccount{
+		Address: *tnt.DistributionAccountAddress,
+		Type:    tnt.DistributionAccountType,
+		Status:  tnt.DistributionAccountStatus,
+	}, nil
 }
 
 // HostDistributionAccount returns the host distribution account from the database.
