@@ -70,6 +70,7 @@ func rootCmd() *cobra.Command {
 
 	rootCmd := &cobra.Command{
 		Use:     "stellar-disbursement-platform",
+		Short:   "Stellar Disbursement Platform",
 		Long:    "The Stellar Disbursement Platform (SDP) enables organizations to disburse bulk payments to recipients using Stellar.",
 		Version: globalOptions.Version,
 		PersistentPreRun: func(cmd *cobra.Command, _ []string) {
