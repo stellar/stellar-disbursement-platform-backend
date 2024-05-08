@@ -28,6 +28,7 @@ import (
 	preconditionsMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
@@ -189,9 +190,9 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 
 		assert.Equal(t, tenantName, tnt.Name)
 		if sigClientType == signing.DistributionAccountEnvSignatureClientType {
-			assert.Equal(t, distAcc.Address(), *tnt.DistributionAccount)
+			assert.Equal(t, distAcc.Address(), *tnt.DistributionAccountAddress)
 		} else {
-			assert.True(t, strkey.IsValidEd25519PublicKey(*tnt.DistributionAccount))
+			assert.True(t, strkey.IsValidEd25519PublicKey(*tnt.DistributionAccountAddress))
 		}
 		assert.Equal(t, tenant.ProvisionedTenantStatus, tnt.Status)
 
@@ -206,7 +207,7 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 			getEntries := log.DefaultLogger.StartTest(log.WarnLevel)
 			provisionAndValidateNewTenant(tenantName1, true, signing.DistributionAccountEnvSignatureClientType)
 			entries := getEntries()
-			require.Len(t, entries, 2)
+			require.Len(t, entries, 4)
 			assert.Contains(t, entries[0].Message, "Account provisioning not needed for distribution account signature client type")
 
 			assertFixtures(tenantName1, true)
@@ -226,7 +227,7 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 			getEntries := log.DefaultLogger.StartTest(log.WarnLevel)
 			provisionAndValidateNewTenant(tenantName1, false, signing.DistributionAccountEnvSignatureClientType)
 			entries := getEntries()
-			require.Len(t, entries, 2)
+			require.Len(t, entries, 4)
 			assert.Contains(t, entries[0].Message, "Account provisioning not needed for distribution account signature client type")
 
 			assertFixtures(tenantName1, false)
@@ -406,14 +407,18 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 				tntManagerMock.On("GetDSNForTenant", ctx, tenantName).Return(tenantDSN, nil).Once()
 				tntManagerMock.On("CreateTenantSchema", ctx, tenantName).Return(nil).Once()
 				distAcc := keypair.MustRandom().Address()
-				distAccSigClient.On("BatchInsert", ctx, 1).Return([]string{distAcc}, nil)
+				distAccSigClient.
+					On("BatchInsert", ctx, 1).Return([]string{distAcc}, nil).
+					On("Type").Return(string(signing.DistributionAccountEnvSignatureClientType))
 
 				tStatus := tenant.ProvisionedTenantStatus
-				tnt.DistributionAccount = &distAcc
+				tnt.DistributionAccountAddress = &distAcc
 				tntManagerMock.On("UpdateTenantConfig", ctx, &tenant.TenantUpdate{
-					ID:                  tnt.ID,
-					DistributionAccount: &distAcc,
-					Status:              &tStatus,
+					ID:                         tnt.ID,
+					DistributionAccountAddress: distAcc,
+					DistributionAccountType:    schema.DistributionAccountTypeEnvStellar,
+					DistributionAccountStatus:  schema.DistributionAccountStatusActive,
+					Status:                     &tStatus,
 				}).Return(&tnt, errors.New("foobar")).Once()
 
 				// expected rollback operations

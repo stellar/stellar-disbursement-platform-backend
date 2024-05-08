@@ -164,9 +164,14 @@ func (c AssetsHandler) handleUpdateAssetTrustlineForDistributionAccount(ctx cont
 		return fmt.Errorf("should provide different assets")
 	}
 
-	distributionAccountPubKey, err := c.DistributionAccountResolver.DistributionAccountFromContext(ctx)
-	if err != nil {
+	// TODO: move it to the beginning of the callers in SDP-1183
+	var distributionAccountPubKey string
+	if distributionAccount, err := c.DistributionAccountResolver.DistributionAccountFromContext(ctx); err != nil {
 		return fmt.Errorf("resolving distribution account from context: %w", err)
+	} else if !distributionAccount.IsStellar() {
+		return fmt.Errorf("expected distribution account to be a STELLAR account but got %q", distributionAccount.Type)
+	} else {
+		distributionAccountPubKey = distributionAccount.Address
 	}
 
 	acc, err := c.HorizonClient.AccountDetail(horizonclient.AccountRequest{
@@ -256,9 +261,14 @@ func (c AssetsHandler) submitChangeTrustTransaction(ctx context.Context, acc *ho
 		return fmt.Errorf("should have at least one change trust operation")
 	}
 
-	distributionAccountPubKey, err := c.DistributionAccountResolver.DistributionAccountFromContext(ctx)
-	if err != nil {
+	// TODO: move it to the beginning of the callers in SDP-1183
+	var distributionAccountPubKey string
+	if distributionAccount, err := c.DistributionAccountResolver.DistributionAccountFromContext(ctx); err != nil {
 		return fmt.Errorf("resolving distribution account from context: %w", err)
+	} else if !distributionAccount.IsStellar() {
+		return fmt.Errorf("expected distribution account to be a STELLAR account but got %q", distributionAccount.Type)
+	} else {
+		distributionAccountPubKey = distributionAccount.Address
 	}
 
 	operations := make([]txnbuild.Operation, 0, len(changeTrustOperations))
