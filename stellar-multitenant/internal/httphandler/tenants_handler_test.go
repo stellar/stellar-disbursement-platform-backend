@@ -513,7 +513,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 	t.Run("returns badRequest for duplicate tenant name", func(t *testing.T) {
 		createMocks()
 
-		reqBody := `git gi
+		reqBody := `
 			{
 				"name": "my-aid-org",
 				"owner_email": "owner@email.org",
