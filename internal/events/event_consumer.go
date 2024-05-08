@@ -113,7 +113,7 @@ func (ec *EventConsumer) finalizeConsumer(ctx context.Context, msg *Message) {
 
 // sendMessageToDLQ sends the message to the DLQ.
 func (ec *EventConsumer) sendMessageToDLQ(ctx context.Context, msg Message) error {
-	log.Ctx(ctx).Warnf("Sending message with key %s to DLQ for topic %s", msg.Key, msg.Topic)
+	log.Ctx(ctx).Errorf("Sending message with key %s to DLQ for topic %s", msg.Key, msg.Topic)
 
 	msg.Topic = msg.Topic + ".dlq"
 	err := ec.producer.WriteMessages(ctx, msg)
