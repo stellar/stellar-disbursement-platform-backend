@@ -9,20 +9,21 @@ import (
 	"time"
 
 	"github.com/stellar/go/support/log"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 )
 
 type EventConsumer struct {
 	consumer     Consumer
-	dlqProducer  Producer
+	producer     Producer
 	crashTracker crashtracker.CrashTrackerClient
 	maxBackoff   int
 }
 
-func NewEventConsumer(consumer Consumer, dlqProducer Producer, crashTracker crashtracker.CrashTrackerClient) *EventConsumer {
+func NewEventConsumer(consumer Consumer, producer Producer, crashTracker crashtracker.CrashTrackerClient) *EventConsumer {
 	return &EventConsumer{
 		consumer:     consumer,
-		dlqProducer:  dlqProducer,
+		producer:     producer,
 		crashTracker: crashTracker,
 		maxBackoff:   DefaultMaxBackoffExponent,
 	}
@@ -42,10 +43,12 @@ func (ec *EventConsumer) Consume(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			log.Ctx(ctx).Infof("Stopping consuming messages for topic %s due to context cancellation...", ec.consumer.Topic())
+			ec.finalizeConsumer(ctx, backoffManager.GetMessage())
 			return
 
 		case sig := <-signalChan:
 			log.Ctx(ctx).Infof("Stopping consuming messages for topic %s due to OS signal '%+v'", ec.consumer.Topic(), sig)
+			ec.finalizeConsumer(ctx, backoffManager.GetMessage())
 			return
 
 		case <-backoffChan:
@@ -54,7 +57,6 @@ func (ec *EventConsumer) Consume(ctx context.Context) {
 			time.Sleep(backoff)
 
 		default:
-
 			// 1. Attempt fetching msg from backoff manager in case it was already Read from Consumer.
 			msg := backoffManager.GetMessage()
 
@@ -95,14 +97,28 @@ func (ec *EventConsumer) Consume(ctx context.Context) {
 	}
 }
 
+// finalizeConsumer replays the message back to the original topic in case of a failure.
+func (ec *EventConsumer) finalizeConsumer(ctx context.Context, msg *Message) {
+	if msg == nil {
+		log.Ctx(ctx).Infof("No message to finalize for topic %s", ec.consumer.Topic())
+		return
+	}
+	log.Ctx(ctx).Warnf("Replaying message with key %s to topic %s", msg.Key, msg.Topic)
+	err := ec.producer.WriteMessages(ctx, *msg)
+	if err != nil {
+		ec.crashTracker.LogAndReportErrors(ctx, err, fmt.Sprintf("replaying message to topic %s", msg.Topic))
+		return
+	}
+}
+
 // sendMessageToDLQ sends the message to the DLQ.
 func (ec *EventConsumer) sendMessageToDLQ(ctx context.Context, msg Message) error {
 	log.Ctx(ctx).Warnf("Sending message with key %s to DLQ for topic %s", msg.Key, msg.Topic)
 
 	msg.Topic = msg.Topic + ".dlq"
-	err := ec.dlqProducer.WriteMessages(ctx, msg)
+	err := ec.producer.WriteMessages(ctx, msg)
 	if err != nil {
-		return fmt.Errorf("sending message %s to DLQ for topic %s: %w", msg.String(), msg.Topic, err)
+		return fmt.Errorf("sending message %s to DLQ for topic %s: %w", msg, msg.Topic, err)
 	}
 	return nil
 }

@@ -17,12 +17,12 @@ func Test_EventConsumer_Consume(t *testing.T) {
 	// setup mocks
 	consumerMock := &MockConsumer{}
 	crashTrackerMock := &crashtracker.MockCrashTrackerClient{}
-	dlqProducerMock := &MockProducer{}
+	producerMock := &MockProducer{}
 
 	msg := &Message{Key: "key-1", Topic: "test.test_topic"}
 	unexpectedErr := errors.New("unexpected error")
 
-	ec := NewEventConsumer(consumerMock, dlqProducerMock, crashTrackerMock)
+	ec := NewEventConsumer(consumerMock, producerMock, crashTrackerMock)
 
 	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(time.Second*8))
 	defer cancel()
@@ -66,12 +66,12 @@ func Test_EventConsumer_Consume_SendDLQ(t *testing.T) {
 	// setup mocks
 	consumerMock := &MockConsumer{}
 	crashTrackerMock := &crashtracker.MockCrashTrackerClient{}
-	dlqProducerMock := &MockProducer{}
+	producerMock := &MockProducer{}
 
 	handlingErr := errors.New("handling message for topic test.test_topic")
 	msg := &Message{Key: "key-1", Topic: "test.test_topic"}
 
-	ec := NewEventConsumer(consumerMock, dlqProducerMock, crashTrackerMock)
+	ec := NewEventConsumer(consumerMock, producerMock, crashTrackerMock)
 	ec.maxBackoff = 1
 
 	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(time.Second*3))
@@ -89,7 +89,7 @@ func Test_EventConsumer_Consume_SendDLQ(t *testing.T) {
 		On("Handlers").
 		Return([]EventHandler{&FailEventHandler{}})
 
-	dlqProducerMock.
+	producerMock.
 		On("WriteMessages", ctx, mock.Anything).
 		Return(nil)
 
@@ -104,7 +104,60 @@ func Test_EventConsumer_Consume_SendDLQ(t *testing.T) {
 
 	consumerMock.AssertExpectations(t)
 	crashTrackerMock.AssertExpectations(t)
-	dlqProducerMock.AssertExpectations(t)
+	producerMock.AssertExpectations(t)
+}
+
+func Test_EventConsumer_Consume_FinalizeConsumer(t *testing.T) {
+	// setup mocks
+	consumerMock := &MockConsumer{}
+	crashTrackerMock := &crashtracker.MockCrashTrackerClient{}
+	producerMock := &MockProducer{}
+
+	handlingErr := errors.New("handling message for topic test.test_topic")
+	msg := &Message{Key: "key-1", Topic: "test.test_topic"}
+
+	ec := NewEventConsumer(consumerMock, producerMock, crashTrackerMock)
+
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(time.Second*1))
+	defer cancel()
+
+	crashTrackerMock.
+		On("LogAndReportErrors", mock.Anything, mock.Anything, handlingErr.Error()).
+		Return()
+
+	consumerMock.
+		On("Topic").
+		Return("test.test_topic").
+		On("ReadMessage", ctx).
+		Return(msg, nil).
+		On("Handlers").
+		Return([]EventHandler{&FailEventHandler{}})
+
+	producerMock.
+		On("WriteMessages", mock.Anything, mock.MatchedBy(func(m []Message) bool {
+			if len(m) != 1 {
+				return false
+			}
+			message := m[0]
+			// Verify that the message being re-broadcasted is the same as the one that failed
+			if len(message.Errors) != 1 && message.Errors[0].ErrorMessage != handlingErr.Error() {
+				return false
+			}
+			return message.Key == msg.Key && message.Topic == msg.Topic
+		})).
+		Return(nil)
+
+	getEntries := log.DefaultLogger.StartTest(log.WarnLevel)
+
+	ec.Consume(ctx)
+
+	entries := getEntries()
+	assert.Equal(t, "Waiting 2s before retrying reading new messages", entries[0].Message)
+	assert.Equal(t, "Replaying message with key key-1 to topic test.test_topic", entries[1].Message)
+
+	consumerMock.AssertExpectations(t)
+	crashTrackerMock.AssertExpectations(t)
+	producerMock.AssertExpectations(t)
 }
 
 // Always fail event handler

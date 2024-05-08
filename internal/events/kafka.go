@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/segmentio/kafka-go"
@@ -252,6 +253,8 @@ func (k *KafkaConsumer) Close() error {
 	log.Info("closing kafka consumer")
 	return k.reader.Close()
 }
+
+var _ io.Closer = (*KafkaConsumer)(nil)
 
 // Handlers returns the event handlers of the Kafka consumer
 func (k *KafkaConsumer) Handlers() []EventHandler {

@@ -9,14 +9,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
-var (
-	ErrTopicRequired    = errors.New("message topic is required")
-	ErrKeyRequired      = errors.New("message key is required")
-	ErrTenantIDRequired = errors.New("message tenant ID is required")
-	ErrTypeRequired     = errors.New("message type is required")
-	ErrDataRequired     = errors.New("message data is required")
-)
-
 type Message struct {
 	Topic    string  `json:"topic"`
 	Key      string  `json:"key"`
@@ -48,29 +40,29 @@ func NewMessage(ctx context.Context, topic, key, messageType string, data any) (
 	}, nil
 }
 
-func (m *Message) String() string {
+func (m Message) String() string {
 	return fmt.Sprintf("Message{Topic: %s, Key: %s, Type: %s, TenantID: %s, Data: %v}", m.Topic, m.Key, m.Type, m.TenantID, m.Data)
 }
 
-func (m *Message) Validate() error {
+func (m Message) Validate() error {
 	if m.Topic == "" {
-		return ErrTopicRequired
+		return errors.New("message topic is required")
 	}
 
 	if m.Key == "" {
-		return ErrKeyRequired
+		return errors.New("message key is required")
 	}
 
 	if m.TenantID == "" {
-		return ErrTenantIDRequired
+		return errors.New("message tenant ID is required")
 	}
 
 	if m.Type == "" {
-		return ErrTypeRequired
+		return errors.New("message type is required")
 	}
 
 	if m.Data == nil {
-		return ErrDataRequired
+		return errors.New("message data is required")
 	}
 
 	return nil
