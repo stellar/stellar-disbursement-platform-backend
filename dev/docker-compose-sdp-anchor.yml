@@ -14,14 +14,16 @@ services:
 
   sdp-api:
     container_name: sdp-api-mtn
-    image: stellar/sdp-v2:latest
+    #image: stellar/sdp-v2:latest
     build:
       context: ../
       dockerfile: Dockerfile
+      #target: development
     ports:
       - "8000:8000"
       - "8002:8002"
       - "8003:8003"
+      - "2345:2345"
     environment:
       BASE_URL: http://localhost:8000
       DATABASE_URL: postgres://postgres@db:5432/sdp_mtn?sslmode=disable
@@ -49,15 +51,15 @@ services:
       INSTANCE_NAME: "SDP Testnet on Docker"
       TENANT_XLM_BOOTSTRAP_AMOUNT: 5
       DISTRIBUTION_SIGNER_TYPE: ${DISTRIBUTION_SIGNER_TYPE:-DISTRIBUTION_ACCOUNT_ENV}
-      SINGLE_TENANT_MODE: "false"
+      SINGLE_TENANT_MODE: "true"
 
       # scheduler options
-      ENABLE_SCHEDULER: "false" # disabled - we're using kafka for this.
-      # SCHEDULER_RECEIVER_INVITATION_JOB_SECONDS: "10"
-      # SCHEDULER_PAYMENT_JOB_SECONDS: "10"
+      ENABLE_SCHEDULER: "true" # disabled - we're using kafka for this.
+      SCHEDULER_RECEIVER_INVITATION_JOB_SECONDS: "10"
+      SCHEDULER_PAYMENT_JOB_SECONDS: "10"
 
       # Broker options
-      EVENT_BROKER_TYPE: "KAFKA"
+      EVENT_BROKER_TYPE: "NONE"
       BROKER_URLS: "kafka:9092"
       CONSUMER_GROUP_ID: "group-id"
       KAFKA_SECURITY_PROTOCOL: "PLAINTEXT"
@@ -92,8 +94,7 @@ services:
         ./stellar-disbursement-platform db auth migrate up --all
         ./stellar-disbursement-platform db sdp migrate up --all
         ./stellar-disbursement-platform db setup-for-network --all
-        ./stellar-disbursement-platform serve
-
+        dlv exec ./stellar-disbursement-platform serve --continue --accept-multiclient --headless --api-version=2 --listen=:2345 --log 
   db-anchor-platform:
     container_name: anchor-platform-postgres-db-mtn
     image: postgres:14-alpine
