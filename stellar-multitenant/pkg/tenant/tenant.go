@@ -75,7 +75,6 @@ func (tu *TenantUpdate) Validate() error {
 	if tu.DistributionAccountAddress != "" && !strkey.IsValidEd25519PublicKey(tu.DistributionAccountAddress) {
 		return fmt.Errorf("invalid distribution account: %q", tu.DistributionAccountAddress)
 	}
-
 	return nil
 }
 
@@ -112,6 +111,5 @@ func ValidateNativeAssetBootstrapAmount(amount int) error {
 
 		return fmt.Errorf("amount of native asset to send must be between %d and %d", MinTenantDistributionAccountAmount, MaxTenantDistributionAccountAmount)
 	}
-
 	return nil
 }

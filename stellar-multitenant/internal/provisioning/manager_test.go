@@ -185,12 +185,10 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 			WithNativeAssetBootstrapAmount(tenant.MinTenantDistributionAccountAmount),
 		)
 
-		uiBaseURL := "http://localhost:3000"
-		tnt, err := p.ProvisionNewTenant(ctx, tenantName, user.FirstName, user.LastName, user.Email, user.OrgName, uiBaseURL, string(networkType))
+		tnt, err := p.ProvisionNewTenant(ctx, tenantName, user.FirstName, user.LastName, user.Email, user.OrgName, string(networkType))
 		require.NoError(t, err)
 
 		assert.Equal(t, tenantName, tnt.Name)
-		assert.Equal(t, uiBaseURL, *tnt.SDPUIBaseURL)
 		if sigClientType == signing.DistributionAccountEnvSignatureClientType {
 			assert.Equal(t, distAcc.Address(), *tnt.DistributionAccountAddress)
 		} else {
@@ -365,7 +363,6 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 	firstName := "First"
 	lastName := "Last"
 	email := "first.last@email.com"
-	uiBaseURL := "http://localhost:3000"
 	networkType := utils.TestnetNetworkType
 
 	tenantDSN, err := router.GetDSNForTenant(dbt.DSN, tenantName)
@@ -421,7 +418,6 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 					DistributionAccountAddress: distAcc,
 					DistributionAccountType:    schema.DistributionAccountTypeEnvStellar,
 					DistributionAccountStatus:  schema.DistributionAccountStatusActive,
-					SDPUIBaseURL:               &uiBaseURL,
 					Status:                     &tStatus,
 				}).Return(&tnt, errors.New("foobar")).Once()
 
@@ -438,7 +434,7 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			tc.mockTntManagerFn(&tenantManagerMock)
 
-			_, err := tenantManager.ProvisionNewTenant(ctx, tenantName, firstName, lastName, email, orgName, uiBaseURL, string(networkType))
+			_, err := tenantManager.ProvisionNewTenant(ctx, tenantName, firstName, lastName, email, orgName, string(networkType))
 			if tc.expectedErr != nil {
 				require.Error(t, err)
 				assert.ErrorContains(t, err, tc.expectedErr.Error())

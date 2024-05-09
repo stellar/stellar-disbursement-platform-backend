@@ -486,6 +486,8 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			adminServeOpts.GitCommit = globalOptions.GitCommit
 			adminServeOpts.Version = globalOptions.Version
 			adminServeOpts.NetworkPassphrase = globalOptions.NetworkPassphrase
+			adminServeOpts.BaseURL = globalOptions.BaseURL
+			adminServeOpts.SDPUIBaseURL = globalOptions.SDPUIBaseURL
 		},
 		Run: func(cmd *cobra.Command, _ []string) {
 			ctx := cmd.Context()
