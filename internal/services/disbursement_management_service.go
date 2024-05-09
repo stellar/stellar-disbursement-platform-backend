@@ -5,9 +5,9 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"strconv"
 
-	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/support/log"
 	"golang.org/x/exp/maps"
 
@@ -15,18 +15,17 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
-	tssUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 )
 
 // DisbursementManagementService is a service for managing disbursements.
 type DisbursementManagementService struct {
-	models           *data.Models
-	dbConnectionPool db.DBConnectionPool
-	eventProducer    events.Producer
-	authManager      auth.AuthManager
-	horizonClient    horizonclient.ClientInterface
+	models                     *data.Models
+	dbConnectionPool           db.DBConnectionPool
+	eventProducer              events.Producer
+	authManager                auth.AuthManager
+	distributionAccountService DistributionAccountServiceInterface
 }
 
 type UserReference struct {
@@ -76,15 +75,15 @@ func NewDisbursementManagementService(
 	models *data.Models,
 	dbConnectionPool db.DBConnectionPool,
 	authManager auth.AuthManager,
-	horizonClient horizonclient.ClientInterface,
+	distributionAccountService DistributionAccountServiceInterface,
 	eventProducer events.Producer,
 ) *DisbursementManagementService {
 	return &DisbursementManagementService{
-		models:           models,
-		dbConnectionPool: dbConnectionPool,
-		authManager:      authManager,
-		eventProducer:    eventProducer,
-		horizonClient:    horizonClient,
+		models:                     models,
+		dbConnectionPool:           dbConnectionPool,
+		authManager:                authManager,
+		eventProducer:              eventProducer,
+		distributionAccountService: distributionAccountService,
 	}
 }
 
@@ -202,7 +201,7 @@ func (s *DisbursementManagementService) GetDisbursementReceiversWithCount(ctx co
 }
 
 // StartDisbursement starts a disbursement and all its payments and receivers wallets.
-func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, disbursementID string, user *auth.User, distributionPubKey string) error {
+func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, disbursementID string, user *auth.User, distributionAccount *schema.DistributionAccount) error {
 	opts := db.TransactionOptions{
 		DBConnectionPool: s.dbConnectionPool,
 		AtomicFunctionWithPostCommit: func(dbTx db.DBTransaction) (postCommitFn db.PostCommitFunction, err error) {
@@ -241,20 +240,12 @@ func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, d
 			}
 
 			// 4. Check if there is enough balance from the distribution wallet for this disbursement along with any pending disbursements
-			rootAccount, err := s.horizonClient.AccountDetail(
-				horizonclient.AccountRequest{AccountID: distributionPubKey})
-			if err != nil {
-				err = tssUtils.NewHorizonErrorWrapper(err)
-				return nil, fmt.Errorf("cannot get details for root account from horizon client: %w", err)
-			}
-
 			var availableBalance float64
-			for _, b := range rootAccount.Balances {
-				if disbursement.Asset.EqualsHorizonAsset(b.Asset) {
-					availableBalance, err = strconv.ParseFloat(b.Balance, 64)
-					if err != nil {
-						return nil, fmt.Errorf("cannot convert Horizon distribution account balance %s into float: %w", b.Balance, err)
-					}
+			balances, err := s.distributionAccountService.GetBalances(ctx, distributionAccount)
+			for asset, b := range balances {
+				if disbursement.Asset.EqualsDistributionAccountMapID(asset) {
+					availableBalance = b
+					break
 				}
 			}
 
