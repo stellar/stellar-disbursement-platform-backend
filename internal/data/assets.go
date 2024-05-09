@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/assets"
 	"slices"
 	"strings"
 	"time"
@@ -44,6 +45,14 @@ func (a Asset) EqualsHorizonAsset(horizonAsset base.Asset) bool {
 	}
 
 	return strings.EqualFold(a.Code, horizonAsset.Code) && strings.EqualFold(a.Issuer, horizonAsset.Issuer)
+}
+
+func (a Asset) EqualsDistributionAccountMapID(mapID string) bool {
+	assetPair := strings.Split(mapID, ":")
+	if a.IsNative() {
+		return assetPair[0] == assets.XLMAssetCode && assetPair[1] == "native"
+	}
+	return a.Code == assetPair[0] && a.Issuer == assetPair[1]
 }
 
 type AssetModel struct {
