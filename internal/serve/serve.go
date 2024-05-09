@@ -199,12 +199,6 @@ const (
 func handleHTTP(o ServeOptions) *chi.Mux {
 	mux := chi.NewMux()
 
-	mux.Get("/health", httphandler.HealthHandler{
-		ReleaseID: o.GitCommit,
-		ServiceID: ServiceID,
-		Version:   o.Version,
-	}.ServeHTTP)
-
 	// Middleware
 	mux.Use(middleware.CorsMiddleware(o.CorsAllowedOrigins))
 	// Rate limits requests made with the pair <IP, endpoint>.
@@ -415,6 +409,12 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 
 	// SEP-24 and miscellaneous endpoints that are tenant-unaware
 	mux.Group(func(r chi.Router) {
+		r.Get("/health", httphandler.HealthHandler{
+			ReleaseID: o.GitCommit,
+			ServiceID: ServiceID,
+			Version:   o.Version,
+		}.ServeHTTP)
+
 		// START SEP-24 endpoints
 		r.Get("/.well-known/stellar.toml", httphandler.StellarTomlHandler{
 			AnchorPlatformBaseSepURL:    o.AnchorPlatformBaseSepURL,
