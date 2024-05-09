@@ -195,6 +195,13 @@ func Test_GenerateTenantURL(t *testing.T) {
 			expectedErr: nil,
 		},
 		{
+			name:        "returns the correct tenant URL - varying protocol",
+			baseURL:     "https://bluecorp.org.local",
+			tenantID:    tenantID,
+			expectedURL: fmt.Sprintf("https://%s.bluecorp.org.local", tenantID),
+			expectedErr: nil,
+		},
+		{
 			name:        "returns the correct tenant URL when it has port",
 			baseURL:     "http://bluecorp.org.local:3000",
 			tenantID:    tenantID,
@@ -209,18 +216,24 @@ func Test_GenerateTenantURL(t *testing.T) {
 			expectedErr: nil,
 		},
 		{
+			name:        "returns error when tenant ID is empty",
+			baseURL:     "http://bluecorp.org.local/sdp",
+			expectedURL: "",
+			expectedErr: fmt.Errorf("tenantID is empty"),
+		},
+		{
 			name:        "returns error when invalid base URL - no protocol and URL separator",
 			baseURL:     "bluecorp.org.local:3000",
 			tenantID:    tenantID,
 			expectedURL: "",
-			expectedErr: fmt.Errorf("invalid base URL: bluecorp.org.local:3000"),
+			expectedErr: fmt.Errorf("base URL must have at least two domain parts bluecorp.org.local:3000"),
 		},
 		{
 			name:        "returns error when invalid base URL - no protocol",
 			baseURL:     "://bluecorp.org.local:3000",
 			tenantID:    tenantID,
 			expectedURL: "",
-			expectedErr: fmt.Errorf("invalid base URL: ://bluecorp.org.local:3000"),
+			expectedErr: fmt.Errorf("invalid base URL ://bluecorp.org.local:3000: parse \"://bluecorp.org.local:3000\": missing protocol scheme"),
 		},
 	}
 

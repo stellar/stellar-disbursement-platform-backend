@@ -9,8 +9,6 @@ import (
 	"github.com/stellar/go/keypair"
 )
 
-const urlSeparator = "://"
-
 func SignURL(stellarSecretKey string, rawURL string) (string, error) {
 	// Validate stellar private key
 	kp, err := keypair.ParseFull(stellarSecretKey)
@@ -93,11 +91,26 @@ func GetURLWithScheme(rawURL string) (string, error) {
 }
 
 func GenerateTenantURL(baseURL string, tenantID string) (string, error) {
-	protocol, urlName, validURL := strings.Cut(baseURL, urlSeparator)
-	if !validURL || protocol == "" || urlName == "" {
-		return "", fmt.Errorf("invalid base URL: %s", baseURL)
+	if tenantID == "" {
+		return "", fmt.Errorf("tenantID is empty")
 	}
 
-	tntURL := protocol + urlSeparator + tenantID + "." + urlName
-	return tntURL, nil
+	parsedURL, err := url.Parse(baseURL)
+	if err != nil {
+		return "", fmt.Errorf("invalid base URL %s: %w", baseURL, err)
+	}
+
+	hostParts := strings.SplitN(parsedURL.Hostname(), ".", 2)
+	if len(hostParts) != 2 {
+		return "", fmt.Errorf("base URL must have at least two domain parts %s", baseURL)
+	}
+
+	newHostname := fmt.Sprintf("%s.%s", tenantID, parsedURL.Hostname())
+	if parsedURL.Port() != "" {
+		parsedURL.Host = newHostname + ":" + parsedURL.Port()
+	} else {
+		parsedURL.Host = newHostname
+	}
+
+	return parsedURL.String(), nil
 }
