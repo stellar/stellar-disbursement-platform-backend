@@ -12,14 +12,16 @@ import (
 
 type DistributionSignatureClientType string
 
+// AccountType returns the schema.AccountType for the distribution signature client type.
 func (s DistributionSignatureClientType) AccountType() (schema.AccountType, error) {
-	switch strings.TrimSpace(strings.ToUpper(string(s))) {
-	case string(DistributionAccountEnvSignatureClientType):
-		return schema.DistributionAccountStellarEnv, nil
-	case string(DistributionAccountDBSignatureClientType):
-		return schema.DistributionAccountStellarDBVault, nil
-	default:
+	distSignerToAccountTypeMap := map[DistributionSignatureClientType]schema.AccountType{
+		DistributionAccountEnvSignatureClientType: schema.DistributionAccountStellarEnv,
+		DistributionAccountDBSignatureClientType:  schema.DistributionAccountStellarDBVault,
+	}
+	if accountType, ok := distSignerToAccountTypeMap[s]; !ok {
 		return "", fmt.Errorf("invalid distribution account type %q", s)
+	} else {
+		return accountType, nil
 	}
 }
 
@@ -28,13 +30,13 @@ const (
 	DistributionAccountDBSignatureClientType  DistributionSignatureClientType = "DISTRIBUTION_ACCOUNT_DB"
 )
 
-func DistributionSignatureClientTypes() []DistributionSignatureClientType {
-	return maps.Keys(DistSigClientsDescription)
-}
-
 var DistSigClientsDescription = map[DistributionSignatureClientType]string{
 	DistributionAccountEnvSignatureClientType: "uses the the same distribution account for all tenants, as well as for the HOST, through the secret configured in DISTRIBUTION_SEED.",
 	DistributionAccountDBSignatureClientType:  "uses the one different distribution account private key per tenant, and stores them in the database, encrypted with the DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE.",
+}
+
+func DistributionSignatureClientTypes() []DistributionSignatureClientType {
+	return maps.Keys(DistSigClientsDescription)
 }
 
 func DistSigClientsDescriptionStr() string {
