@@ -110,15 +110,15 @@ type SignatureClientOptions struct {
 	Encrypter           utils.PrivateKeyEncrypter // (optional)
 }
 
-func NewSignatureClient(sigType SignatureClientType, opts SignatureClientOptions) (SignatureClient, error) {
-	switch sigType {
-	case DistributionAccountEnvSignatureClientType, HostAccountEnvSignatureClientType:
+func NewSignatureClient(accType schema.AccountType, opts SignatureClientOptions) (SignatureClient, error) {
+	switch accType {
+	case schema.HostStellarEnv, schema.DistributionAccountStellarEnv:
 		return NewDistributionAccountEnvSignatureClient(DistributionAccountEnvOptions{
 			NetworkPassphrase:      opts.NetworkPassphrase,
 			DistributionPrivateKey: opts.DistributionPrivateKey,
 		})
 
-	case ChannelAccountDBSignatureClientType:
+	case schema.ChannelAccountStellarDB:
 		return NewChannelAccountDBSignatureClient(ChannelAccountDBSignatureClientOptions{
 			NetworkPassphrase:    opts.NetworkPassphrase,
 			DBConnectionPool:     opts.DBConnectionPool,
@@ -127,7 +127,7 @@ func NewSignatureClient(sigType SignatureClientType, opts SignatureClientOptions
 			Encrypter:            opts.Encrypter,
 		})
 
-	case DistributionAccountDBSignatureClientType:
+	case schema.DistributionAccountStellarDBVault:
 		return NewDistributionAccountDBSignatureClient(DistributionAccountDBSignatureClientOptions{
 			NetworkPassphrase:    opts.NetworkPassphrase,
 			DBConnectionPool:     opts.DBConnectionPool,
@@ -136,6 +136,6 @@ func NewSignatureClient(sigType SignatureClientType, opts SignatureClientOptions
 		})
 
 	default:
-		return nil, fmt.Errorf("invalid signature client type: %v", sigType)
+		return nil, fmt.Errorf("cannot find a Stellar signature client for accountType=%v", accType)
 	}
 }

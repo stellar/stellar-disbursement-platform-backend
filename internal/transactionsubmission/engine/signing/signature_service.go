@@ -8,6 +8,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
 type SignatureService struct {
@@ -90,17 +91,21 @@ func NewSignatureService(opts SignatureServiceOptions) (SignatureService, error)
 		LedgerNumberTracker:         opts.LedgerNumberTracker,
 	}
 
-	chAccountSigner, err := NewSignatureClient(ChannelAccountDBSignatureClientType, sigClientOpts)
+	chAccountSigner, err := NewSignatureClient(schema.ChannelAccountStellarDB, sigClientOpts)
 	if err != nil {
 		return SignatureService{}, fmt.Errorf("creating a new channel account signature client: %w", err)
 	}
 
-	distAccSigner, err := NewSignatureClient(distSignerType, sigClientOpts)
+	accType, err := distSignerType.AccountType()
+	if err != nil {
+		return SignatureService{}, fmt.Errorf("getting account type for distribution signer type %v: %w", distSignerType, err)
+	}
+	distAccSigner, err := NewSignatureClient(accType, sigClientOpts)
 	if err != nil {
 		return SignatureService{}, fmt.Errorf("creating a new distribution account signature client with type %v: %w", distSignerType, err)
 	}
 
-	hostAccSigner, err := NewSignatureClient(HostAccountEnvSignatureClientType, sigClientOpts)
+	hostAccSigner, err := NewSignatureClient(schema.HostStellarEnv, sigClientOpts)
 	if err != nil {
 		return SignatureService{}, fmt.Errorf("creating a new host account signature client: %w", err)
 	}

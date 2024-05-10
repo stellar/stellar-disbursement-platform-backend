@@ -112,20 +112,20 @@ func Test_NewSignatureClient(t *testing.T) {
 
 	testCases := []struct {
 		name         string
-		sigType      SignatureClientType
+		accType      schema.AccountType
 		opts         SignatureClientOptions
 		wantResult   SignatureClient
 		wantErrorMsg string
 	}{
 		{
 			name:         "invalid signature client type",
-			sigType:      SignatureClientType("INVALID"),
+			accType:      schema.AccountType("INVALID"),
 			opts:         SignatureClientOptions{},
-			wantErrorMsg: "invalid signature client type: INVALID",
+			wantErrorMsg: "cannot find a Stellar signature client for accountType=INVALID",
 		},
 		{
 			name:    "🎉 successfully instantiate a ChannelAccountDB instance",
-			sigType: ChannelAccountDBSignatureClientType,
+			accType: schema.ChannelAccountStellarDB,
 			opts: SignatureClientOptions{
 				NetworkPassphrase:         network.TestNetworkPassphrase,
 				DBConnectionPool:          dbConnectionPool,
@@ -143,7 +143,7 @@ func Test_NewSignatureClient(t *testing.T) {
 		},
 		{
 			name:    "🎉 successfully instantiate a DistributionAccountDB",
-			sigType: DistributionAccountDBSignatureClientType,
+			accType: schema.DistributionAccountStellarDBVault,
 			opts: SignatureClientOptions{
 				NetworkPassphrase:           network.TestNetworkPassphrase,
 				DBConnectionPool:            dbConnectionPool,
@@ -159,7 +159,20 @@ func Test_NewSignatureClient(t *testing.T) {
 		},
 		{
 			name:    "🎉 successfully instantiate a Distribution Account ENV instance",
-			sigType: DistributionAccountEnvSignatureClientType,
+			accType: schema.DistributionAccountStellarEnv,
+			opts: SignatureClientOptions{
+				NetworkPassphrase:      network.TestNetworkPassphrase,
+				DistributionPrivateKey: distributionKP.Seed(),
+			},
+			wantResult: &DistributionAccountEnvSignatureClient{
+				networkPassphrase:   network.TestNetworkPassphrase,
+				distributionAccount: distributionKP.Address(),
+				distributionKP:      distributionKP,
+			},
+		},
+		{
+			name:    "🎉 successfully instantiate a Distribution Account ENV instance (HOST)",
+			accType: schema.HostStellarEnv,
 			opts: SignatureClientOptions{
 				NetworkPassphrase:      network.TestNetworkPassphrase,
 				DistributionPrivateKey: distributionKP.Seed(),
@@ -174,7 +187,7 @@ func Test_NewSignatureClient(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			sigService, err := NewSignatureClient(tc.sigType, tc.opts)
+			sigService, err := NewSignatureClient(tc.accType, tc.opts)
 			if tc.wantErrorMsg != "" {
 				assert.EqualError(t, err, tc.wantErrorMsg)
 			} else {
