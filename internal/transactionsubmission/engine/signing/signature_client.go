@@ -29,12 +29,12 @@ type SignatureClient interface {
 
 type SignatureClientType string
 
-func (s SignatureClientType) DistributionAccountType() (schema.DistributionAccountType, error) {
+func (s SignatureClientType) AccountType() (schema.AccountType, error) {
 	switch strings.TrimSpace(strings.ToUpper(string(s))) {
 	case string(DistributionAccountEnvSignatureClientType):
-		return schema.DistributionAccountTypeEnvStellar, nil
+		return schema.DistributionAccountStellarEnv, nil
 	case string(DistributionAccountDBSignatureClientType):
-		return schema.DistributionAccountTypeDBVaultStellar, nil
+		return schema.DistributionAccountStellarDBVault, nil
 	default:
 		return "", fmt.Errorf("invalid distribution account type %q", s)
 	}

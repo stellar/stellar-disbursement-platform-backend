@@ -21,7 +21,7 @@ func Test_SignatureClientType_DistributionAccountType(t *testing.T) {
 	testCases := []struct {
 		signatureClientType         SignatureClientType
 		wantErrContains             string
-		wantDistributionAccountType schema.DistributionAccountType
+		wantDistributionAccountType schema.AccountType
 	}{
 		{
 			signatureClientType: ChannelAccountDBSignatureClientType,
@@ -29,11 +29,11 @@ func Test_SignatureClientType_DistributionAccountType(t *testing.T) {
 		},
 		{
 			signatureClientType:         DistributionAccountEnvSignatureClientType,
-			wantDistributionAccountType: schema.DistributionAccountTypeEnvStellar,
+			wantDistributionAccountType: schema.DistributionAccountStellarEnv,
 		},
 		{
 			signatureClientType:         DistributionAccountDBSignatureClientType,
-			wantDistributionAccountType: schema.DistributionAccountTypeDBVaultStellar,
+			wantDistributionAccountType: schema.DistributionAccountStellarDBVault,
 		},
 		{
 			signatureClientType: HostAccountEnvSignatureClientType,
@@ -43,7 +43,7 @@ func Test_SignatureClientType_DistributionAccountType(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(string(tc.signatureClientType), func(t *testing.T) {
-			distAccType, err := tc.signatureClientType.DistributionAccountType()
+			distAccType, err := tc.signatureClientType.AccountType()
 			if tc.wantErrContains != "" {
 				require.ErrorContains(t, err, tc.wantErrContains)
 				assert.Empty(t, distAccType)

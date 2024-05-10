@@ -516,7 +516,7 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 					On("UpdateTenantConfig", ctx, &tenant.TenantUpdate{
 						ID:                         updatedTnt.ID,
 						DistributionAccountAddress: distAcc,
-						DistributionAccountType:    schema.DistributionAccountTypeEnvStellar,
+						DistributionAccountType:    schema.DistributionAccountStellarEnv,
 						DistributionAccountStatus:  schema.DistributionAccountStatusActive,
 						Status:                     &tStatus,
 						SDPUIBaseURL:               &sdpUIBaseURL,
@@ -556,14 +556,14 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 				tStatus := tenant.ProvisionedTenantStatus
 				updatedTnt := tnt
 				updatedTnt.DistributionAccountAddress = &distAcc
-				updatedTnt.DistributionAccountType = schema.DistributionAccountTypeEnvStellar
+				updatedTnt.DistributionAccountType = schema.DistributionAccountStellarEnv
 				updatedTnt.DistributionAccountStatus = schema.DistributionAccountStatusActive
 				updatedTnt.Status = tStatus
 				tntManagerMock.
 					On("UpdateTenantConfig", ctx, &tenant.TenantUpdate{
 						ID:                         updatedTnt.ID,
 						DistributionAccountAddress: distAcc,
-						DistributionAccountType:    schema.DistributionAccountTypeEnvStellar,
+						DistributionAccountType:    schema.DistributionAccountStellarEnv,
 						DistributionAccountStatus:  schema.DistributionAccountStatusActive,
 						Status:                     &tStatus,
 						SDPUIBaseURL:               &sdpUIBaseURL,
@@ -610,14 +610,14 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 				tStatus := tenant.ProvisionedTenantStatus
 				updatedTnt := tnt
 				updatedTnt.DistributionAccountAddress = &distAcc
-				updatedTnt.DistributionAccountType = schema.DistributionAccountTypeEnvStellar
+				updatedTnt.DistributionAccountType = schema.DistributionAccountStellarEnv
 				updatedTnt.DistributionAccountStatus = schema.DistributionAccountStatusActive
 				updatedTnt.Status = tStatus
 				tntManagerMock.
 					On("UpdateTenantConfig", ctx, &tenant.TenantUpdate{
 						ID:                         updatedTnt.ID,
 						DistributionAccountAddress: distAcc,
-						DistributionAccountType:    schema.DistributionAccountTypeEnvStellar,
+						DistributionAccountType:    schema.DistributionAccountStellarEnv,
 						DistributionAccountStatus:  schema.DistributionAccountStatusActive,
 						Status:                     &tStatus,
 						SDPUIBaseURL:               &sdpUIBaseURL,

@@ -140,7 +140,7 @@ func (m *Manager) provisionTenant(ctx context.Context, pt *ProvisionTenant) (*te
 	}
 
 	distSignerType := signing.SignatureClientType(m.SubmitterEngine.DistAccountSigner.Type())
-	distAccType, err := distSignerType.DistributionAccountType()
+	distAccType, err := distSignerType.AccountType()
 	if err != nil {
 		return t, fmt.Errorf("%w: parsing getting distribution account type: %w", ErrUpdateTenantFailed, err)
 	}

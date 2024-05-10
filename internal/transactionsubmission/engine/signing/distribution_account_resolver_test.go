@@ -165,7 +165,7 @@ func Test_DistributionAccountResolverImpl_DistributionAccount(t *testing.T) {
 		tnt, err = m.UpdateTenantConfig(ctx, &tenant.TenantUpdate{
 			ID:                         tnt.ID,
 			DistributionAccountAddress: distributionPublicKey,
-			DistributionAccountType:    schema.DistributionAccountTypeDBVaultStellar,
+			DistributionAccountType:    schema.DistributionAccountStellarDBVault,
 			DistributionAccountStatus:  schema.DistributionAccountStatusActive,
 		})
 		require.NoError(t, err)
@@ -174,7 +174,7 @@ func Test_DistributionAccountResolverImpl_DistributionAccount(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, &schema.DistributionAccount{
 			Address: distributionPublicKey,
-			Type:    schema.DistributionAccountTypeDBVaultStellar,
+			Type:    schema.DistributionAccountStellarDBVault,
 			Status:  schema.DistributionAccountStatusActive,
 		}, distAccount)
 	})
@@ -216,7 +216,7 @@ func Test_DistributionAccountResolverImpl_DistributionAccountFromContext(t *test
 			ID:                         "95e788b6-c80e-4975-9d12-141001fe6e44",
 			Name:                       "aid-org-1",
 			DistributionAccountAddress: &distributionPublicKey,
-			DistributionAccountType:    schema.DistributionAccountTypeEnvStellar,
+			DistributionAccountType:    schema.DistributionAccountStellarEnv,
 			DistributionAccountStatus:  schema.DistributionAccountStatusActive,
 		}
 		ctxWithTenant := tenant.SaveTenantInContext(context.Background(), ctxTenant)
@@ -225,7 +225,7 @@ func Test_DistributionAccountResolverImpl_DistributionAccountFromContext(t *test
 		assert.NoError(t, err)
 		assert.Equal(t, &schema.DistributionAccount{
 			Address: distributionPublicKey,
-			Type:    schema.DistributionAccountTypeEnvStellar,
+			Type:    schema.DistributionAccountStellarEnv,
 			Status:  schema.DistributionAccountStatusActive,
 		}, distAccount)
 	})

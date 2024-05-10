@@ -133,10 +133,10 @@ func Test_Manager_UpdateTenantConfig(t *testing.T) {
 		{
 			name: "🎉 successfully updates the tenant [DistributionAccountType]",
 			tenantUpdateFn: func(tnt Tenant) *TenantUpdate {
-				return &TenantUpdate{ID: tnt.ID, DistributionAccountType: schema.DistributionAccountTypeEnvStellar}
+				return &TenantUpdate{ID: tnt.ID, DistributionAccountType: schema.DistributionAccountStellarEnv}
 			},
 			expectedFieldsToAssert: map[string]interface{}{
-				"distribution_account_type": string(schema.DistributionAccountTypeEnvStellar),
+				"distribution_account_type": string(schema.DistributionAccountStellarEnv),
 			},
 		},
 		{
@@ -157,7 +157,7 @@ func Test_Manager_UpdateTenantConfig(t *testing.T) {
 					SDPUIBaseURL:               pointerTo("https://ui.myorg.test.com"),
 					Status:                     pointerTo(DeactivatedTenantStatus),
 					DistributionAccountAddress: "GCK6GPKFTIGJJM7OHSQH7O7ORSKTUK37ZUDEUXZRFMIQNBUBZDEPU5KS",
-					DistributionAccountType:    schema.DistributionAccountTypeEnvStellar,
+					DistributionAccountType:    schema.DistributionAccountStellarEnv,
 					DistributionAccountStatus:  schema.DistributionAccountStatusPendingUserActivation,
 				}
 			},
@@ -166,7 +166,7 @@ func Test_Manager_UpdateTenantConfig(t *testing.T) {
 				"sdp_ui_base_url":              "https://ui.myorg.test.com",
 				"status":                       string(DeactivatedTenantStatus),
 				"distribution_account_address": "GCK6GPKFTIGJJM7OHSQH7O7ORSKTUK37ZUDEUXZRFMIQNBUBZDEPU5KS",
-				"distribution_account_type":    string(schema.DistributionAccountTypeEnvStellar),
+				"distribution_account_type":    string(schema.DistributionAccountStellarEnv),
 				"distribution_account_status":  string(schema.DistributionAccountStatusPendingUserActivation),
 			},
 		},
