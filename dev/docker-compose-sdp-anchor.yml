@@ -15,6 +15,7 @@ services:
   sdp-api:
     container_name: sdp-api-mtn
     image: stellar/sdp-v2:latest
+    target: development
     build:
       context: ../
       dockerfile: Dockerfile
@@ -49,15 +50,15 @@ services:
       INSTANCE_NAME: "SDP Testnet on Docker"
       TENANT_XLM_BOOTSTRAP_AMOUNT: 5
       DISTRIBUTION_SIGNER_TYPE: ${DISTRIBUTION_SIGNER_TYPE:-DISTRIBUTION_ACCOUNT_ENV}
-      SINGLE_TENANT_MODE: "false"
+      SINGLE_TENANT_MODE: "true"
 
       # scheduler options
-      ENABLE_SCHEDULER: "false" # disabled - we're using kafka for this.
+      ENABLE_SCHEDULER: "true" # disabled - we're using kafka for this.
       # SCHEDULER_RECEIVER_INVITATION_JOB_SECONDS: "10"
       # SCHEDULER_PAYMENT_JOB_SECONDS: "10"
 
       # Broker options
-      EVENT_BROKER_TYPE: "KAFKA"
+      EVENT_BROKER_TYPE: "NONE"
       BROKER_URLS: "kafka:9092"
       CONSUMER_GROUP_ID: "group-id"
       KAFKA_SECURITY_PROTOCOL: "PLAINTEXT"
