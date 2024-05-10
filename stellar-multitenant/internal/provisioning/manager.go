@@ -153,7 +153,7 @@ func (m *Manager) provisionTenant(ctx context.Context, pt *ProvisionTenant) (*te
 			Status:                     &tenantStatus,
 			DistributionAccountAddress: *t.DistributionAccountAddress,
 			DistributionAccountType:    distAccType,
-			DistributionAccountStatus:  schema.DistributionAccountStatusActive,
+			DistributionAccountStatus:  schema.AccountStatusActive,
 			SDPUIBaseURL:               &pt.UiBaseURL,
 			BaseURL:                    &pt.BaseURL,
 		})

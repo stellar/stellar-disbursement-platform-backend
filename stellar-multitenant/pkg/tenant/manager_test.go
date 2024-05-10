@@ -142,10 +142,10 @@ func Test_Manager_UpdateTenantConfig(t *testing.T) {
 		{
 			name: "🎉 successfully updates the tenant [DistributionAccountStatus]",
 			tenantUpdateFn: func(tnt Tenant) *TenantUpdate {
-				return &TenantUpdate{ID: tnt.ID, DistributionAccountStatus: schema.DistributionAccountStatusPendingUserActivation}
+				return &TenantUpdate{ID: tnt.ID, DistributionAccountStatus: schema.AccountStatusPendingUserActivation}
 			},
 			expectedFieldsToAssert: map[string]interface{}{
-				"distribution_account_status": string(schema.DistributionAccountStatusPendingUserActivation),
+				"distribution_account_status": string(schema.AccountStatusPendingUserActivation),
 			},
 		},
 		{
@@ -158,7 +158,7 @@ func Test_Manager_UpdateTenantConfig(t *testing.T) {
 					Status:                     pointerTo(DeactivatedTenantStatus),
 					DistributionAccountAddress: "GCK6GPKFTIGJJM7OHSQH7O7ORSKTUK37ZUDEUXZRFMIQNBUBZDEPU5KS",
 					DistributionAccountType:    schema.DistributionAccountStellarEnv,
-					DistributionAccountStatus:  schema.DistributionAccountStatusPendingUserActivation,
+					DistributionAccountStatus:  schema.AccountStatusPendingUserActivation,
 				}
 			},
 			expectedFieldsToAssert: map[string]interface{}{
@@ -167,7 +167,7 @@ func Test_Manager_UpdateTenantConfig(t *testing.T) {
 				"status":                       string(DeactivatedTenantStatus),
 				"distribution_account_address": "GCK6GPKFTIGJJM7OHSQH7O7ORSKTUK37ZUDEUXZRFMIQNBUBZDEPU5KS",
 				"distribution_account_type":    string(schema.DistributionAccountStellarEnv),
-				"distribution_account_status":  string(schema.DistributionAccountStatusPendingUserActivation),
+				"distribution_account_status":  string(schema.AccountStatusPendingUserActivation),
 			},
 		},
 	}

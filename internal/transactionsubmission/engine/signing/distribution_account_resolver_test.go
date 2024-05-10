@@ -166,7 +166,7 @@ func Test_DistributionAccountResolverImpl_DistributionAccount(t *testing.T) {
 			ID:                         tnt.ID,
 			DistributionAccountAddress: distributionPublicKey,
 			DistributionAccountType:    schema.DistributionAccountStellarDBVault,
-			DistributionAccountStatus:  schema.DistributionAccountStatusActive,
+			DistributionAccountStatus:  schema.AccountStatusActive,
 		})
 		require.NoError(t, err)
 
@@ -175,7 +175,7 @@ func Test_DistributionAccountResolverImpl_DistributionAccount(t *testing.T) {
 		assert.Equal(t, &schema.DistributionAccount{
 			Address: distributionPublicKey,
 			Type:    schema.DistributionAccountStellarDBVault,
-			Status:  schema.DistributionAccountStatusActive,
+			Status:  schema.AccountStatusActive,
 		}, distAccount)
 	})
 }
@@ -217,7 +217,7 @@ func Test_DistributionAccountResolverImpl_DistributionAccountFromContext(t *test
 			Name:                       "aid-org-1",
 			DistributionAccountAddress: &distributionPublicKey,
 			DistributionAccountType:    schema.DistributionAccountStellarEnv,
-			DistributionAccountStatus:  schema.DistributionAccountStatusActive,
+			DistributionAccountStatus:  schema.AccountStatusActive,
 		}
 		ctxWithTenant := tenant.SaveTenantInContext(context.Background(), ctxTenant)
 
@@ -226,7 +226,7 @@ func Test_DistributionAccountResolverImpl_DistributionAccountFromContext(t *test
 		assert.Equal(t, &schema.DistributionAccount{
 			Address: distributionPublicKey,
 			Type:    schema.DistributionAccountStellarEnv,
-			Status:  schema.DistributionAccountStatusActive,
+			Status:  schema.AccountStatusActive,
 		}, distAccount)
 	})
 }

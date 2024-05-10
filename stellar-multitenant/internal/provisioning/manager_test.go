@@ -517,7 +517,7 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 						ID:                         updatedTnt.ID,
 						DistributionAccountAddress: distAcc,
 						DistributionAccountType:    schema.DistributionAccountStellarEnv,
-						DistributionAccountStatus:  schema.DistributionAccountStatusActive,
+						DistributionAccountStatus:  schema.AccountStatusActive,
 						Status:                     &tStatus,
 						SDPUIBaseURL:               &sdpUIBaseURL,
 						BaseURL:                    &baseURL,
@@ -557,14 +557,14 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 				updatedTnt := tnt
 				updatedTnt.DistributionAccountAddress = &distAcc
 				updatedTnt.DistributionAccountType = schema.DistributionAccountStellarEnv
-				updatedTnt.DistributionAccountStatus = schema.DistributionAccountStatusActive
+				updatedTnt.DistributionAccountStatus = schema.AccountStatusActive
 				updatedTnt.Status = tStatus
 				tntManagerMock.
 					On("UpdateTenantConfig", ctx, &tenant.TenantUpdate{
 						ID:                         updatedTnt.ID,
 						DistributionAccountAddress: distAcc,
 						DistributionAccountType:    schema.DistributionAccountStellarEnv,
-						DistributionAccountStatus:  schema.DistributionAccountStatusActive,
+						DistributionAccountStatus:  schema.AccountStatusActive,
 						Status:                     &tStatus,
 						SDPUIBaseURL:               &sdpUIBaseURL,
 						BaseURL:                    &baseURL,
@@ -611,14 +611,14 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 				updatedTnt := tnt
 				updatedTnt.DistributionAccountAddress = &distAcc
 				updatedTnt.DistributionAccountType = schema.DistributionAccountStellarEnv
-				updatedTnt.DistributionAccountStatus = schema.DistributionAccountStatusActive
+				updatedTnt.DistributionAccountStatus = schema.AccountStatusActive
 				updatedTnt.Status = tStatus
 				tntManagerMock.
 					On("UpdateTenantConfig", ctx, &tenant.TenantUpdate{
 						ID:                         updatedTnt.ID,
 						DistributionAccountAddress: distAcc,
 						DistributionAccountType:    schema.DistributionAccountStellarEnv,
-						DistributionAccountStatus:  schema.DistributionAccountStatusActive,
+						DistributionAccountStatus:  schema.AccountStatusActive,
 						Status:                     &tStatus,
 						SDPUIBaseURL:               &sdpUIBaseURL,
 						BaseURL:                    &baseURL,

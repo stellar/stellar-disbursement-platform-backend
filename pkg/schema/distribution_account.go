@@ -20,17 +20,17 @@ func (t AccountType) IsCircle() bool {
 	return slices.Contains([]AccountType{DistributionAccountCircleDBVault}, t)
 }
 
-type DistributionAccountStatus string
+type AccountStatus string
 
 const (
-	DistributionAccountStatusActive                DistributionAccountStatus = "ACTIVE"
-	DistributionAccountStatusPendingUserActivation DistributionAccountStatus = "PENDING_USER_ACTIVATION"
+	AccountStatusActive                AccountStatus = "ACTIVE"
+	AccountStatusPendingUserActivation AccountStatus = "PENDING_USER_ACTIVATION"
 )
 
 type DistributionAccount struct {
-	Address string                    `json:"address" db:"address"`
-	Type    AccountType               `json:"type" db:"type"`
-	Status  DistributionAccountStatus `json:"status" db:"status"`
+	Address string        `json:"address" db:"address"`
+	Type    AccountType   `json:"type" db:"type"`
+	Status  AccountStatus `json:"status" db:"status"`
 }
 
 func (da DistributionAccount) IsStellar() bool {
@@ -42,17 +42,17 @@ func (da DistributionAccount) IsCircle() bool {
 }
 
 func (da DistributionAccount) IsActive() bool {
-	return da.Status == DistributionAccountStatusActive
+	return da.Status == AccountStatusActive
 }
 
 func (da DistributionAccount) IsPendingUserActivation() bool {
-	return da.Status == DistributionAccountStatusPendingUserActivation
+	return da.Status == AccountStatusPendingUserActivation
 }
 
 func NewDefaultStellarDistributionAccount(stellarID string) *DistributionAccount {
 	return &DistributionAccount{
 		Address: stellarID,
 		Type:    DistributionAccountStellarDBVault,
-		Status:  DistributionAccountStatusActive,
+		Status:  AccountStatusActive,
 	}
 }
