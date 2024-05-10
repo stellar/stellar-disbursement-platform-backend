@@ -7,9 +7,9 @@ import (
 type DistributionAccountType string
 
 const (
-	DistributionAccountTypeEnvStellar     DistributionAccountType = "ENV_STELLAR"
-	DistributionAccountTypeDBVaultStellar DistributionAccountType = "DB_VAULT_STELLAR"
-	DistributionAccountTypeDBVaultCircle  DistributionAccountType = "DB_VAULT_CIRCLE"
+	DistributionAccountTypeEnvStellar     DistributionAccountType = "DISTRIBUTION_ACCOUNT.STELLAR.ENV"      // was "ENV_STELLAR"
+	DistributionAccountTypeDBVaultStellar DistributionAccountType = "DISTRIBUTION_ACCOUNT.STELLAR.DB_VAULT" // was "DB_VAULT_STELLAR"
+	DistributionAccountTypeDBVaultCircle  DistributionAccountType = "DISTRIBUTION_ACCOUNT.CIRCLE.DB_VAULT"  // was "DB_VAULT_CIRCLE"
 )
 
 func (t DistributionAccountType) IsStellar() bool {
