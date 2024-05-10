@@ -1034,7 +1034,7 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 	url := "/profile/info"
 
 	newDistAccountJSON := func(t *testing.T, distAcc string) string {
-		distributionAccount := schema.NewDefaultStellarDistributionAccount(distAcc)
+		distributionAccount := schema.NewDefaultStellarTransactionAccount(distAcc)
 		bytes, err := json.Marshal(distributionAccount)
 		require.NoError(t, err)
 		return string(bytes)

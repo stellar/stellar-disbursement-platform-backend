@@ -381,7 +381,7 @@ func Test_Manager_ProcessTransactions(t *testing.T) {
 	mDistAccResolver := sigMocks.NewMockDistributionAccountResolver(t)
 	mDistAccResolver.
 		On("DistributionAccount", mock.Anything, mock.AnythingOfType("string")).
-		Return(schema.NewDefaultStellarDistributionAccount(distributionKP.Address()), nil)
+		Return(schema.NewDefaultStellarTransactionAccount(distributionKP.Address()), nil)
 
 	sigService, err := signing.NewSignatureService(signing.SignatureServiceOptions{
 		DistributionSignerType:    signing.DistributionAccountEnvSignatureClientType,

@@ -15,19 +15,19 @@ type MockDistributionAccountResolver struct {
 }
 
 // DistributionAccount provides a mock function with given fields: ctx, tenantID
-func (_m *MockDistributionAccountResolver) DistributionAccount(ctx context.Context, tenantID string) (*schema.DistributionAccount, error) {
+func (_m *MockDistributionAccountResolver) DistributionAccount(ctx context.Context, tenantID string) (*schema.TransactionAccount, error) {
 	ret := _m.Called(ctx, tenantID)
 
-	var r0 *schema.DistributionAccount
+	var r0 *schema.TransactionAccount
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, string) (*schema.DistributionAccount, error)); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, string) (*schema.TransactionAccount, error)); ok {
 		return rf(ctx, tenantID)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, string) *schema.DistributionAccount); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, string) *schema.TransactionAccount); ok {
 		r0 = rf(ctx, tenantID)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(*schema.DistributionAccount)
+			r0 = ret.Get(0).(*schema.TransactionAccount)
 		}
 	}
 
@@ -41,19 +41,19 @@ func (_m *MockDistributionAccountResolver) DistributionAccount(ctx context.Conte
 }
 
 // DistributionAccountFromContext provides a mock function with given fields: ctx
-func (_m *MockDistributionAccountResolver) DistributionAccountFromContext(ctx context.Context) (*schema.DistributionAccount, error) {
+func (_m *MockDistributionAccountResolver) DistributionAccountFromContext(ctx context.Context) (*schema.TransactionAccount, error) {
 	ret := _m.Called(ctx)
 
-	var r0 *schema.DistributionAccount
+	var r0 *schema.TransactionAccount
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context) (*schema.DistributionAccount, error)); ok {
+	if rf, ok := ret.Get(0).(func(context.Context) (*schema.TransactionAccount, error)); ok {
 		return rf(ctx)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context) *schema.DistributionAccount); ok {
+	if rf, ok := ret.Get(0).(func(context.Context) *schema.TransactionAccount); ok {
 		r0 = rf(ctx)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(*schema.DistributionAccount)
+			r0 = ret.Get(0).(*schema.TransactionAccount)
 		}
 	}
 
