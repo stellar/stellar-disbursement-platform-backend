@@ -27,9 +27,9 @@ type SignatureClient interface {
 	Type() string
 }
 
-type SignatureClientType string
+type DistributionSignatureClientType string
 
-func (s SignatureClientType) AccountType() (schema.AccountType, error) {
+func (s DistributionSignatureClientType) AccountType() (schema.AccountType, error) {
 	switch strings.TrimSpace(strings.ToUpper(string(s))) {
 	case string(DistributionAccountEnvSignatureClientType):
 		return schema.DistributionAccountStellarEnv, nil
@@ -41,32 +41,15 @@ func (s SignatureClientType) AccountType() (schema.AccountType, error) {
 }
 
 const (
-	ChannelAccountDBSignatureClientType       SignatureClientType = "CHANNEL_ACCOUNT_DB"
-	DistributionAccountEnvSignatureClientType SignatureClientType = "DISTRIBUTION_ACCOUNT_ENV"
-	DistributionAccountDBSignatureClientType  SignatureClientType = "DISTRIBUTION_ACCOUNT_DB"
-	HostAccountEnvSignatureClientType         SignatureClientType = "HOST_ACCOUNT_ENV"
+	DistributionAccountEnvSignatureClientType DistributionSignatureClientType = "DISTRIBUTION_ACCOUNT_ENV"
+	DistributionAccountDBSignatureClientType  DistributionSignatureClientType = "DISTRIBUTION_ACCOUNT_DB"
 )
 
-func AllSignatureClientTypes() []SignatureClientType {
-	return []SignatureClientType{ChannelAccountDBSignatureClientType, DistributionAccountEnvSignatureClientType, DistributionAccountDBSignatureClientType, HostAccountEnvSignatureClientType}
-}
-
-func ParseSignatureClientType(sigClientType string) (SignatureClientType, error) {
-	sigClientTypeStrUpper := strings.ToUpper(sigClientType)
-	scType := SignatureClientType(sigClientTypeStrUpper)
-
-	if slices.Contains(AllSignatureClientTypes(), scType) {
-		return scType, nil
-	}
-
-	return "", fmt.Errorf("invalid signature client type %q", sigClientTypeStrUpper)
-}
-
-func DistributionSignatureClientTypes() []SignatureClientType {
+func DistributionSignatureClientTypes() []DistributionSignatureClientType {
 	return maps.Keys(DistSigClientsDescription)
 }
 
-var DistSigClientsDescription = map[SignatureClientType]string{
+var DistSigClientsDescription = map[DistributionSignatureClientType]string{
 	DistributionAccountEnvSignatureClientType: "uses the the same distribution account for all tenants, as well as for the HOST, through the secret configured in DISTRIBUTION_SEED.",
 	DistributionAccountDBSignatureClientType:  "uses the one different distribution account private key per tenant, and stores them in the database, encrypted with the DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE.",
 }
@@ -80,15 +63,15 @@ func DistSigClientsDescriptionStr() string {
 	return strings.Join(descriptions, " ")
 }
 
-func ParseSignatureClientDistributionType(sigClientType string) (SignatureClientType, error) {
+func ParseDistributionSignatureClientType(sigClientType string) (DistributionSignatureClientType, error) {
 	sigClientTypeStrUpper := strings.ToUpper(sigClientType)
-	scType := SignatureClientType(sigClientTypeStrUpper)
+	scType := DistributionSignatureClientType(sigClientTypeStrUpper)
 
 	if slices.Contains(DistributionSignatureClientTypes(), scType) {
 		return scType, nil
 	}
 
-	return "", fmt.Errorf("invalid signature client distribution type %q", sigClientTypeStrUpper)
+	return "", fmt.Errorf("invalid distribution signature client type %q", sigClientTypeStrUpper)
 }
 
 type SignatureClientOptions struct {

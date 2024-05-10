@@ -150,25 +150,25 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 		accountType       schema.AccountType
 	}{
 		{
-			name:              "Testnet with sigClientType=DISTRIBUTION_ACCOUNT_ENV",
+			name:              "Testnet with accountType=DISTRIBUTION_ACCOUNT.STELLAR.ENV",
 			networkPassphrase: network.TestNetworkPassphrase,
 			tenantName:        "tenant-testnet-env",
 			accountType:       schema.DistributionAccountStellarEnv,
 		},
 		{
-			name:              "Testnet with sigClientType=DISTRIBUTION_ACCOUNT_DB",
+			name:              "Testnet with accountType=DISTRIBUTION_ACCOUNT.STELLAR.DB_VAULT",
 			networkPassphrase: network.TestNetworkPassphrase,
 			tenantName:        "tenant-testnet-dbvault",
 			accountType:       schema.DistributionAccountStellarDBVault,
 		},
 		{
-			name:              "Pubnet with sigClientType=DISTRIBUTION_ACCOUNT_ENV",
+			name:              "Pubnet with accountType=DISTRIBUTION_ACCOUNT.STELLAR.ENV",
 			networkPassphrase: network.PublicNetworkPassphrase,
 			tenantName:        "tenant-pubnet-env",
 			accountType:       schema.DistributionAccountStellarEnv,
 		},
 		{
-			name:              "Pubnet with sigClientType=DISTRIBUTION_ACCOUNT_DB",
+			name:              "Pubnet with accountType=DISTRIBUTION_ACCOUNT.STELLAR.DB_VAULT",
 			networkPassphrase: network.PublicNetworkPassphrase,
 			tenantName:        "tenant-pubnet-dbvault",
 			accountType:       schema.DistributionAccountStellarDBVault,

@@ -204,7 +204,7 @@ func (c *ChannelAccountDBSignatureClient) Delete(ctx context.Context, publicKey 
 }
 
 func (c *ChannelAccountDBSignatureClient) Type() string {
-	return string(ChannelAccountDBSignatureClientType)
+	return string("ChannelAccountDBSignatureClientType")
 }
 
 func (c *ChannelAccountDBSignatureClient) NetworkPassphrase() string {

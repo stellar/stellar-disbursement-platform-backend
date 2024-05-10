@@ -133,7 +133,7 @@ func Test_NewSignatureService(t *testing.T) {
 	}{
 		{
 			name:            "returns an error if the distribution signer type is invalid",
-			opts:            SignatureServiceOptions{DistributionSignerType: SignatureClientType("invalid")},
+			opts:            SignatureServiceOptions{DistributionSignerType: DistributionSignatureClientType("invalid")},
 			wantErrContains: `invalid distribution signer type "invalid"`,
 		},
 		{

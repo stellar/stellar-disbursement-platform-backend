@@ -17,33 +17,29 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
-func Test_SignatureClientType_DistributionAccountType(t *testing.T) {
+func Test_SignatureClientType_AccountType(t *testing.T) {
 	testCases := []struct {
-		signatureClientType         SignatureClientType
+		distSigClientType           DistributionSignatureClientType
 		wantErrContains             string
 		wantDistributionAccountType schema.AccountType
 	}{
 		{
-			signatureClientType: ChannelAccountDBSignatureClientType,
-			wantErrContains:     fmt.Sprintf("invalid distribution account type %q", ChannelAccountDBSignatureClientType),
+			distSigClientType: DistributionSignatureClientType("INVALID"),
+			wantErrContains:   `invalid distribution account type "INVALID"`,
 		},
 		{
-			signatureClientType:         DistributionAccountEnvSignatureClientType,
+			distSigClientType:           DistributionAccountEnvSignatureClientType,
 			wantDistributionAccountType: schema.DistributionAccountStellarEnv,
 		},
 		{
-			signatureClientType:         DistributionAccountDBSignatureClientType,
+			distSigClientType:           DistributionAccountDBSignatureClientType,
 			wantDistributionAccountType: schema.DistributionAccountStellarDBVault,
-		},
-		{
-			signatureClientType: HostAccountEnvSignatureClientType,
-			wantErrContains:     fmt.Sprintf("invalid distribution account type %q", HostAccountEnvSignatureClientType),
 		},
 	}
 
 	for _, tc := range testCases {
-		t.Run(string(tc.signatureClientType), func(t *testing.T) {
-			distAccType, err := tc.signatureClientType.AccountType()
+		t.Run(string(tc.distSigClientType), func(t *testing.T) {
+			distAccType, err := tc.distSigClientType.AccountType()
 			if tc.wantErrContains != "" {
 				require.ErrorContains(t, err, tc.wantErrContains)
 				assert.Empty(t, distAccType)
@@ -55,45 +51,22 @@ func Test_SignatureClientType_DistributionAccountType(t *testing.T) {
 	}
 }
 
-func Test_ParseSignatureClientType(t *testing.T) {
+func Test_ParseDistributionSignatureClientType(t *testing.T) {
 	testCases := []struct {
-		sigServiceTypeStr     string
-		expectedSigClientType SignatureClientType
-		wantErr               error
+		sigServiceTypeStr         string
+		expectedDistSigClientType DistributionSignatureClientType
+		wantErr                   error
 	}{
-		{wantErr: fmt.Errorf(`invalid signature client type ""`)},
-		{sigServiceTypeStr: "INVALID", wantErr: fmt.Errorf(`invalid signature client type "INVALID"`)},
-		{sigServiceTypeStr: "CHANNEL_ACCOUNT_DB", expectedSigClientType: ChannelAccountDBSignatureClientType},
-		{sigServiceTypeStr: "DISTRIBUTION_ACCOUNT_ENV", expectedSigClientType: DistributionAccountEnvSignatureClientType},
-		{sigServiceTypeStr: "HOST_ACCOUNT_ENV", expectedSigClientType: HostAccountEnvSignatureClientType},
+		{wantErr: fmt.Errorf(`invalid distribution signature client type ""`)},
+		{sigServiceTypeStr: "INVALID", wantErr: fmt.Errorf(`invalid distribution signature client type "INVALID"`)},
+		{sigServiceTypeStr: "DISTRIBUTION_ACCOUNT_DB", expectedDistSigClientType: DistributionAccountDBSignatureClientType},
+		{sigServiceTypeStr: "DISTRIBUTION_ACCOUNT_ENV", expectedDistSigClientType: DistributionAccountEnvSignatureClientType},
 	}
 
 	for _, tc := range testCases {
 		t.Run("signatureServiceTypeType: "+tc.sigServiceTypeStr, func(t *testing.T) {
-			sigServiceType, err := ParseSignatureClientType(tc.sigServiceTypeStr)
-			assert.Equal(t, tc.expectedSigClientType, sigServiceType)
-			assert.Equal(t, tc.wantErr, err)
-		})
-	}
-}
-
-func Test_ParseSignatureClientDistributionType(t *testing.T) {
-	testCases := []struct {
-		sigServiceTypeStr     string
-		expectedSigClientType SignatureClientType
-		wantErr               error
-	}{
-		{wantErr: fmt.Errorf(`invalid signature client distribution type ""`)},
-		{sigServiceTypeStr: "INVALID", wantErr: fmt.Errorf(`invalid signature client distribution type "INVALID"`)},
-		{sigServiceTypeStr: "CHANNEL_ACCOUNT_DB", wantErr: fmt.Errorf(`invalid signature client distribution type "CHANNEL_ACCOUNT_DB"`)},
-		{sigServiceTypeStr: "HOST_ACCOUNT_ENV", wantErr: fmt.Errorf(`invalid signature client distribution type "HOST_ACCOUNT_ENV"`)},
-		{sigServiceTypeStr: "DISTRIBUTION_ACCOUNT_ENV", expectedSigClientType: DistributionAccountEnvSignatureClientType},
-	}
-
-	for _, tc := range testCases {
-		t.Run("signatureServiceTypeType: "+tc.sigServiceTypeStr, func(t *testing.T) {
-			sigServiceType, err := ParseSignatureClientDistributionType(tc.sigServiceTypeStr)
-			assert.Equal(t, tc.expectedSigClientType, sigServiceType)
+			distSigClientType, err := ParseDistributionSignatureClientType(tc.sigServiceTypeStr)
+			assert.Equal(t, tc.expectedDistSigClientType, distSigClientType)
 			assert.Equal(t, tc.wantErr, err)
 		})
 	}

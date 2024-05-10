@@ -50,7 +50,7 @@ type SignatureServiceOptions struct {
 	NetworkPassphrase string
 
 	// DistributionAccount:
-	DistributionSignerType SignatureClientType
+	DistributionSignerType DistributionSignatureClientType
 
 	// DistributionAccountEnv:
 	DistributionPrivateKey string
