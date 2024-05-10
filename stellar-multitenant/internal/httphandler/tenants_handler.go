@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"strconv"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/stellar/go/clients/horizonclient"
@@ -15,6 +15,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
+	coreSvc "github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/internal/provisioning"
@@ -26,6 +27,7 @@ import (
 type TenantsHandler struct {
 	Manager                     tenant.ManagerInterface
 	Models                      *data.Models
+	DistributionAccountService  coreSvc.DistributionAccountServiceInterface
 	HorizonClient               horizonclient.ClientInterface
 	DistributionAccountResolver signing.DistributionAccountResolver
 	ProvisioningManager         *provisioning.Manager
@@ -224,34 +226,31 @@ func (t TenantsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if tnt.DistributionAccountAddress != nil && t.DistributionAccountResolver.HostDistributionAccount() != *tnt.DistributionAccountAddress {
-		// TODO: Encapsulate this logic under a distribution account abstraction similar to [SDP-1177] once we add Circle custody support
-		distAcc, accDetailsErr := t.HorizonClient.AccountDetail(horizonclient.AccountRequest{AccountID: *tnt.DistributionAccountAddress})
-		if accDetailsErr != nil {
-			httperror.InternalError(ctx, "Cannot get distribution account details for tenant", err, nil).Render(w)
+		tntDistributionAcc, err := t.DistributionAccountResolver.DistributionAccount(ctx, *tnt.DistributionAccountAddress)
+		if err != nil {
+			httperror.InternalError(ctx, "Cannot get tenant distribution account", err, nil).Render(w)
 			return
 		}
 
-		if distAcc.Balances != nil {
-			for _, b := range distAcc.Balances {
-				assetBalance, getAssetBalErr := strconv.ParseFloat(b.Balance, 64)
-				if getAssetBalErr != nil {
-					errMsg := fmt.Sprintf("Cannot convert Horizon distribution account balance %s into float", b.Balance)
-					httperror.InternalError(ctx, errMsg, getAssetBalErr, nil).Render(w)
+		distAccBalances, err := t.DistributionAccountService.GetBalances(ctx, tntDistributionAcc)
+		if err != nil {
+			httperror.InternalError(ctx, "Cannot get tenant distribution account balances", err, nil).Render(w)
+			return
+		}
+
+		for assetID, assetBalance := range distAccBalances {
+			issuer := strings.Split(assetID, ":")[1]
+			if issuer == "native" {
+				if assetBalance > MaxNativeAssetBalanceForDeletion {
+					errMsg := fmt.Sprintf("Tenant distribution account must have a balance of less than %d XLM to be eligible for deletion", MaxNativeAssetBalanceForDeletion)
+					httperror.BadRequest(errMsg, nil, nil).Render(w)
 					return
 				}
-
-				if b.Asset.Type == "native" {
-					if assetBalance > MaxNativeAssetBalanceForDeletion {
-						errMsg := fmt.Sprintf("Tenant distribution account must have a balance of less than %d XLM to be eligible for deletion", MaxNativeAssetBalanceForDeletion)
-						httperror.BadRequest(errMsg, nil, nil).Render(w)
-						return
-					}
-				} else {
-					if assetBalance != 0 {
-						errMsg := fmt.Sprintf("Tenant distribution account must have a zero balance to be eligible for deletion. Current balance for %s: %s", b.Balance, b.Asset.Code)
-						httperror.BadRequest(errMsg, nil, nil).Render(w)
-						return
-					}
+			} else {
+				if assetBalance != 0 {
+					errMsg := fmt.Sprintf("Tenant distribution account must have a zero balance to be eligible for deletion. Current balance for %f: %s", assetBalance, assetID)
+					httperror.BadRequest(errMsg, nil, nil).Render(w)
+					return
 				}
 			}
 		}

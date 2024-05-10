@@ -12,6 +12,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
+//go:generate mockery --name=DistributionAccountServiceInterface --case=underscore --structname=MockDistributionAccountService --filename=distribution_account_service.go
 type DistributionAccountServiceInterface interface {
 	GetBalances(ctx context.Context, account *schema.DistributionAccount) (map[string]float64, error)
 	GetBalance(ctx context.Context, account *schema.DistributionAccount, asset data.Asset) (float64, error)
