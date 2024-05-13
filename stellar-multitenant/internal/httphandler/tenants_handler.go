@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/support/http/httpdecode"
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/support/render/httpjson"
@@ -28,7 +27,6 @@ type TenantsHandler struct {
 	Manager                     tenant.ManagerInterface
 	Models                      *data.Models
 	DistributionAccountService  coreSvc.DistributionAccountServiceInterface
-	HorizonClient               horizonclient.ClientInterface
 	DistributionAccountResolver signing.DistributionAccountResolver
 	ProvisioningManager         *provisioning.Manager
 	NetworkType                 utils.NetworkType

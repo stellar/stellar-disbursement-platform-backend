@@ -84,6 +84,7 @@ type ServeOptions struct {
 	PasswordValidator               *authUtils.PasswordValidator
 	EnableScheduler                 bool
 	tenantManager                   tenant.ManagerInterface
+	DistributionAccountService      services.DistributionAccountServiceInterface
 	EventProducer                   events.Producer
 	MaxInvitationSMSResendAttempts  int
 	SingleTenantMode                bool
@@ -254,7 +255,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 					o.Models,
 					o.MtnDBConnectionPool,
 					authManager,
-					o.SubmitterEngine.HorizonClient,
+					o.DistributionAccountService,
 					o.EventProducer),
 			}
 			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole)).
