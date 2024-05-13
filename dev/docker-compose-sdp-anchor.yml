@@ -11,18 +11,18 @@ services:
       - "5432:5432"
     volumes:
       - postgres-db:/data/postgres
-
   sdp-api:
     container_name: sdp-api-mtn
-    image: stellar/sdp-v2:latest
-    target: development
+    image: stellar/sdp-v2:debug
     build:
       context: ../
       dockerfile: Dockerfile
+      target: development
     ports:
       - "8000:8000"
       - "8002:8002"
       - "8003:8003"
+      - "2345:2345"
     environment:
       BASE_URL: http://localhost:8000
       DATABASE_URL: postgres://postgres@db:5432/sdp_mtn?sslmode=disable
@@ -82,18 +82,7 @@ services:
       SEP24_JWT_SECRET: jwt_secret_1234567890
       RECAPTCHA_SITE_SECRET_KEY: 6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ4WifJWe
       ANCHOR_PLATFORM_OUTGOING_JWT_SECRET: mySdpToAnchorPlatformSecret
-    entrypoint: ""
-    command:
-      - sh
-      - -c
-      - |
-        sleep 5
-        ./stellar-disbursement-platform db admin migrate up
-        ./stellar-disbursement-platform db tss migrate up
-        ./stellar-disbursement-platform db auth migrate up --all
-        ./stellar-disbursement-platform db sdp migrate up --all
-        ./stellar-disbursement-platform db setup-for-network --all
-        ./stellar-disbursement-platform serve
+    entrypoint: "./dev/scripts/debug_entrypoint.sh"
 
   db-anchor-platform:
     container_name: anchor-platform-postgres-db-mtn
