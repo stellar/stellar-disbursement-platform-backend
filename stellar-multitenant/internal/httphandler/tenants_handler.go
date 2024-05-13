@@ -255,7 +255,7 @@ func (t TenantsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if tnt.DistributionAccountAddress != nil && t.DistributionAccountResolver.HostDistributionAccount() != *tnt.DistributionAccountAddress {
+	if tnt.DistributionAccountAddress != nil && t.DistributionAccountResolver.HostDistributionAccount().Address != *tnt.DistributionAccountAddress {
 		// TODO: Encapsulate this logic under a distribution account abstraction similar to [SDP-1177] once we add Circle custody support
 		distAcc, accDetailsErr := t.HorizonClient.AccountDetail(horizonclient.AccountRequest{AccountID: *tnt.DistributionAccountAddress})
 		if accDetailsErr != nil {

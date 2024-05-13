@@ -19,7 +19,7 @@ var ErrDistributionAccountIsEmpty = fmt.Errorf("distribution account is empty")
 type DistributionAccountResolver interface {
 	DistributionAccount(ctx context.Context, tenantID string) (schema.TransactionAccount, error)
 	DistributionAccountFromContext(ctx context.Context) (schema.TransactionAccount, error)
-	HostDistributionAccount() string
+	HostDistributionAccount() *schema.TransactionAccount
 }
 
 type DistributionAccountResolverOptions struct {
@@ -90,6 +90,10 @@ func (r *DistributionAccountResolverImpl) getDistributionAccount(tnt *tenant.Ten
 }
 
 // HostDistributionAccount returns the host distribution account from the database.
-func (r *DistributionAccountResolverImpl) HostDistributionAccount() string {
-	return r.hostDistributionAccountPubKey
+func (r *DistributionAccountResolverImpl) HostDistributionAccount() *schema.TransactionAccount {
+	return &schema.TransactionAccount{
+		Address: r.hostDistributionAccountPubKey,
+		Type:    schema.HostStellarEnv,
+		Status:  schema.AccountStatusActive,
+	}
 }
