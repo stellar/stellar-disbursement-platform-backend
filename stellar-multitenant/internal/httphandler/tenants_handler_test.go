@@ -1013,7 +1013,6 @@ func Test_TenantHandler_Delete(t *testing.T) {
 	handler := TenantsHandler{
 		Manager:                     &tenantManagerMock,
 		NetworkType:                 utils.TestnetNetworkType,
-		HorizonClient:               &horizonClientMock,
 		DistributionAccountResolver: distAccResolver,
 		DistributionAccountService:  distAccSvc,
 	}

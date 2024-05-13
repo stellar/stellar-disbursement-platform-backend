@@ -224,14 +224,14 @@ func (t TenantsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if tnt.DistributionAccountAddress != nil && t.DistributionAccountResolver.HostDistributionAccount() != *tnt.DistributionAccountAddress {
-		tntDistributionAcc, err := t.DistributionAccountResolver.DistributionAccount(ctx, *tnt.DistributionAccountAddress)
-		if err != nil {
+		tntDistributionAcc, getDistAccErr := t.DistributionAccountResolver.DistributionAccount(ctx, *tnt.DistributionAccountAddress)
+		if getDistAccErr != nil {
 			httperror.InternalError(ctx, "Cannot get tenant distribution account", err, nil).Render(w)
 			return
 		}
 
-		distAccBalances, err := t.DistributionAccountService.GetBalances(ctx, tntDistributionAcc)
-		if err != nil {
+		distAccBalances, getDistAccBalErr := t.DistributionAccountService.GetBalances(ctx, tntDistributionAcc)
+		if getDistAccBalErr != nil {
 			httperror.InternalError(ctx, "Cannot get tenant distribution account balances", err, nil).Render(w)
 			return
 		}
@@ -246,7 +246,7 @@ func (t TenantsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 				}
 			} else {
 				if assetBalance != 0 {
-					errMsg := fmt.Sprintf("Tenant distribution account must have a zero balance to be eligible for deletion. Current balance for %f: %s", assetBalance, assetID)
+					errMsg := fmt.Sprintf("Tenant distribution account must have a zero balance to be eligible for deletion. Current balance for %s: %f", assetID, assetBalance)
 					httperror.BadRequest(errMsg, nil, nil).Render(w)
 					return
 				}

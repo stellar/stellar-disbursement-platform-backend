@@ -7,7 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/support/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -19,7 +18,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
-	servicesMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/services/mocks"
+	svcMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/services/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
@@ -210,7 +209,7 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 	ctx = context.WithValue(ctx, middleware.TokenContextKey, token)
 
 	asset := data.GetAssetFixture(t, ctx, dbConnectionPool, data.FixtureAssetUSDC)
-	mockDistAccSvc := servicesMocks.MockDistributionAccountService{}
+	mockDistAccSvc := svcMocks.MockDistributionAccountService{}
 	distributionAccount := schema.NewDefaultStellarDistributionAccount("ABC")
 
 	service := NewDisbursementManagementService(models, models.DBConnectionPool, nil, &mockDistAccSvc, &mockEventProducer)
@@ -871,8 +870,7 @@ func Test_DisbursementManagementService_PauseDisbursement(t *testing.T) {
 
 	asset := data.GetAssetFixture(t, ctx, dbConnectionPool, data.FixtureAssetUSDC)
 
-	hMock := &horizonclient.MockClient{}
-	mockDistAccSvc := servicesMocks.MockDistributionAccountService{}
+	mockDistAccSvc := svcMocks.MockDistributionAccountService{}
 
 	distributionAccount := schema.NewDefaultStellarDistributionAccount("ABC")
 
@@ -1110,6 +1108,4 @@ func Test_DisbursementManagementService_PauseDisbursement(t *testing.T) {
 			require.Equal(t, data.PausedPaymentStatus, payment.Status)
 		}
 	})
-
-	hMock.AssertExpectations(t)
 }
