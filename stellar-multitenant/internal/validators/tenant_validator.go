@@ -13,13 +13,13 @@ import (
 var validTenantName *regexp.Regexp = regexp.MustCompile(`^[a-z-]+$`)
 
 type TenantRequest struct {
-	Name             string `json:"name"`
-	OwnerEmail       string `json:"owner_email"`
-	OwnerFirstName   string `json:"owner_first_name"`
-	OwnerLastName    string `json:"owner_last_name"`
-	OrganizationName string `json:"organization_name"`
-	BaseURL          string `json:"base_url"`
-	SDPUIBaseURL     string `json:"sdp_ui_base_url"`
+	Name             string  `json:"name"`
+	OwnerEmail       string  `json:"owner_email"`
+	OwnerFirstName   string  `json:"owner_first_name"`
+	OwnerLastName    string  `json:"owner_last_name"`
+	OrganizationName string  `json:"organization_name"`
+	BaseURL          *string `json:"base_url"`
+	SDPUIBaseURL     *string `json:"sdp_ui_base_url"`
 }
 
 type UpdateTenantRequest struct {
@@ -61,12 +61,16 @@ func (tv *TenantValidator) ValidateCreateTenantRequest(reqBody *TenantRequest) *
 	tv.Check(reqBody.OrganizationName != "", "organization_name", "organization_name is required")
 
 	var err error
-	if _, err = url.ParseRequestURI(reqBody.BaseURL); err != nil {
-		tv.Check(false, "base_url", "invalid base URL value")
+	if reqBody.BaseURL != nil {
+		if _, err = url.ParseRequestURI(*reqBody.BaseURL); err != nil {
+			tv.Check(false, "base_url", "invalid base URL value")
+		}
 	}
 
-	if _, err = url.ParseRequestURI(reqBody.SDPUIBaseURL); err != nil {
-		tv.Check(false, "sdp_ui_base_url", "invalid SDP UI base URL value")
+	if reqBody.SDPUIBaseURL != nil {
+		if _, err = url.ParseRequestURI(*reqBody.SDPUIBaseURL); err != nil {
+			tv.Check(false, "sdp_ui_base_url", "invalid SDP UI base URL value")
+		}
 	}
 
 	if tv.HasErrors() {

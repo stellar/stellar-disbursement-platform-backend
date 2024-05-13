@@ -279,39 +279,11 @@ func Test_TenantHandler_Post(t *testing.T) {
 		Manager:             m,
 		ProvisioningManager: p,
 		NetworkType:         utils.TestnetNetworkType,
+		BaseURL:             "https://sdp-backend.stellar.org",
+		SDPUIBaseURL:        "https://sdp-ui.stellar.org",
 	}
 
-	t.Run("returns BadRequest with invalid request body", func(t *testing.T) {
-		rr := httptest.NewRecorder()
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/tenants", strings.NewReader(`{}`))
-		require.NoError(t, err)
-		http.HandlerFunc(handler.Post).ServeHTTP(rr, req)
-
-		resp := rr.Result()
-		defer resp.Body.Close()
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-
-		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
-
-		expectedBody := `
-			{
-				"error": "invalid request body",
-				"extras": {
-					"name": "invalid tenant name. It should only contains lower case letters and dash (-)",
-					"owner_email": "invalid email",
-					"owner_first_name": "owner_first_name is required",
-					"owner_last_name": "owner_last_name is required",
-					"organization_name": "organization_name is required",
-					"base_url": "invalid base URL value",
-					"sdp_ui_base_url": "invalid SDP UI base URL value"
-				}
-			}
-		`
-		assert.JSONEq(t, expectedBody, string(respBody))
-	})
-
-	t.Run("provisions a new tenant successfully", func(t *testing.T) {
+	createMocks := func() {
 		messengerClientMock.
 			On("SendMessage", mock.AnythingOfType("message.Message")).
 			Run(func(args mock.Arguments) {
@@ -337,20 +309,9 @@ func Test_TenantHandler_Post(t *testing.T) {
 			On("HostDistributionAccount").
 			Return(distAcc, nil).
 			Once()
+	}
 
-		reqBody := `
-			{
-				"name": "aid-org",
-				"owner_email": "owner@email.org",
-				"owner_first_name": "Owner",
-				"owner_last_name": "Owner",
-				"organization_name": "My Aid Org",
-				"base_url": "https://backend.sdp.org",
-				"sdp_ui_base_url": "https://aid-org.sdp.org",
-				"is_default": false
-			}
-		`
-
+	makeRequest := func(reqBody string, expectedStatus int) []byte {
 		rr := httptest.NewRecorder()
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/tenants", strings.NewReader(reqBody))
 		require.NoError(t, err)
@@ -361,32 +322,13 @@ func Test_TenantHandler_Post(t *testing.T) {
 		respBody, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
-		assert.Equal(t, http.StatusCreated, resp.StatusCode)
+		assert.Equal(t, expectedStatus, resp.StatusCode)
+		return respBody
+	}
 
-		tnt, err := m.GetTenantByName(ctx, "aid-org")
-		require.NoError(t, err)
-
-		expectedRespBody := fmt.Sprintf(`
-			{
-				"id": %q,
-				"name": "aid-org",
-				"base_url": "https://backend.sdp.org",
-				"sdp_ui_base_url": "https://aid-org.sdp.org",
-				"status": "TENANT_PROVISIONED",
-				"is_default": false,
-				"created_at": %q,
-				"updated_at": %q,
-				"deleted_at": null,
-				"distribution_account_address": %q,
-				"distribution_account_type": %q,
-				"distribution_account_status": %q
-			}
-		`, tnt.ID, tnt.CreatedAt.Format(time.RFC3339Nano), tnt.UpdatedAt.Format(time.RFC3339Nano),
-			distAcc, schema.DistributionAccountTypeEnvStellar, schema.DistributionAccountStatusActive)
-		assert.JSONEq(t, expectedRespBody, string(respBody))
-
+	assertMigrations := func(orgName string) {
 		// Validating infrastructure
-		expectedSchema := "sdp_aid-org"
+		expectedSchema := fmt.Sprintf("sdp_%s", orgName)
 		expectedTablesAfterMigrationsApplied := []string{
 			"assets",
 			"auth_migrations",
@@ -408,7 +350,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 		tenant.CheckSchemaExistsFixture(t, ctx, dbConnectionPool, expectedSchema)
 		tenant.TenantSchemaMatchTablesFixture(t, ctx, dbConnectionPool, expectedSchema, expectedTablesAfterMigrationsApplied)
 
-		dsn, err := m.GetDSNForTenant(ctx, "aid-org")
+		dsn, err := m.GetDSNForTenant(ctx, orgName)
 		require.NoError(t, err)
 
 		tenantSchemaConnectionPool, err := db.OpenDBConnectionPool(dsn)
@@ -418,34 +360,204 @@ func Test_TenantHandler_Post(t *testing.T) {
 		tenant.AssertRegisteredAssetsFixture(t, ctx, tenantSchemaConnectionPool, []string{"USDC:GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5", "XLM:"})
 		tenant.AssertRegisteredWalletsFixture(t, ctx, tenantSchemaConnectionPool, []string{"Demo Wallet", "Vibrant Assist"})
 		tenant.AssertRegisteredUserFixture(t, ctx, tenantSchemaConnectionPool, "Owner", "Owner", "owner@email.org")
+	}
+
+	t.Run("returns BadRequest with invalid request body", func(t *testing.T) {
+		respBody := makeRequest(`{}`, http.StatusBadRequest)
+
+		expectedBody := `
+			{
+				"error": "invalid request body",
+				"extras": {
+					"name": "invalid tenant name. It should only contains lower case letters and dash (-)",
+					"owner_email": "invalid email",
+					"owner_first_name": "owner_first_name is required",
+					"owner_last_name": "owner_last_name is required",
+					"organization_name": "organization_name is required"
+				}
+			}
+		`
+		assert.JSONEq(t, expectedBody, string(respBody))
+	})
+
+	t.Run("provisions a new tenant successfully", func(t *testing.T) {
+		createMocks()
+
+		orgName := "aid-org"
+		reqBody := fmt.Sprintf(`
+			{
+				"name": %q,
+				"owner_email": "owner@email.org",
+				"owner_first_name": "Owner",
+				"owner_last_name": "Owner",
+				"organization_name": "My Aid Org",
+				"base_url": "https://sdp-backend.stellar.org",
+				"sdp_ui_base_url": "https://sdp-ui.stellar.org",
+				"is_default": false
+			}
+		`, orgName)
+
+		respBody := makeRequest(reqBody, http.StatusCreated)
+
+		tnt, err := m.GetTenantByName(ctx, orgName)
+		require.NoError(t, err)
+
+		expectedRespBody := fmt.Sprintf(`
+			{
+				"id": %q,
+				"name": %q,
+				"base_url": "https://sdp-backend.stellar.org",
+				"sdp_ui_base_url": "https://sdp-ui.stellar.org",
+				"status": "TENANT_PROVISIONED",
+				"is_default": false,
+				"created_at": %q,
+				"updated_at": %q,
+				"deleted_at": null,
+				"distribution_account_address": %q,
+				"distribution_account_type": %q,
+				"distribution_account_status": %q
+			}
+		`, tnt.ID, orgName, tnt.CreatedAt.Format(time.RFC3339Nano), tnt.UpdatedAt.Format(time.RFC3339Nano),
+			distAcc, schema.DistributionAccountTypeEnvStellar, schema.DistributionAccountStatusActive)
+		assert.JSONEq(t, expectedRespBody, string(respBody))
+
+		assertMigrations(orgName)
+	})
+
+	t.Run("provisions a new tenant successfully - dynamically generates base URL and SDP UI base URL for tenant", func(t *testing.T) {
+		createMocks()
+
+		orgName := "aid-org-two"
+		reqBody := fmt.Sprintf(`
+			{
+				"name": %q,
+				"owner_email": "owner@email.org",
+				"owner_first_name": "Owner",
+				"owner_last_name": "Owner",
+				"organization_name": "My Aid Org 2",
+				"is_default": false
+			}
+		`, orgName)
+
+		respBody := makeRequest(reqBody, http.StatusCreated)
+
+		tnt, err := m.GetTenantByName(ctx, orgName)
+		require.NoError(t, err)
+
+		generatedURL := fmt.Sprintf("https://%s.sdp-backend.stellar.org", orgName)
+		generatedUIURL := fmt.Sprintf("https://%s.sdp-ui.stellar.org", orgName)
+		expectedRespBody := fmt.Sprintf(`
+			{
+				"id": %q,
+				"name": %q,
+				"base_url": %q,
+				"sdp_ui_base_url": %q,
+				"status": "TENANT_PROVISIONED",
+				"is_default": false,
+				"created_at": %q,
+				"updated_at": %q,
+				"deleted_at": null,
+				"distribution_account_address": %q,
+				"distribution_account_type": %q,
+				"distribution_account_status": %q
+			}
+		`, tnt.ID, orgName, generatedURL, generatedUIURL, tnt.CreatedAt.Format(time.RFC3339Nano), tnt.UpdatedAt.Format(time.RFC3339Nano),
+			distAcc, schema.DistributionAccountTypeEnvStellar, schema.DistributionAccountStatusActive)
+		assert.JSONEq(t, expectedRespBody, string(respBody))
+
+		assertMigrations(orgName)
+	})
+
+	t.Run("provisions a new tenant successfully - dynamically generates only SDP UI base URL", func(t *testing.T) {
+		createMocks()
+
+		orgName := "aid-org-three"
+		reqBody := fmt.Sprintf(`
+			{
+				"name": %q,
+				"owner_email": "owner@email.org",
+				"owner_first_name": "Owner",
+				"owner_last_name": "Owner",
+				"organization_name": "My Aid Org 3",
+				"base_url": %q,
+				"is_default": false
+			}
+		`, orgName, handler.BaseURL)
+
+		respBody := makeRequest(reqBody, http.StatusCreated)
+
+		tnt, err := m.GetTenantByName(ctx, orgName)
+		require.NoError(t, err)
+
+		generatedUIURL := fmt.Sprintf("https://%s.sdp-ui.stellar.org", orgName)
+		expectedRespBody := fmt.Sprintf(`
+			{
+				"id": %q,
+				"name": %q,
+				"base_url": %q,
+				"sdp_ui_base_url": %q,
+				"status": "TENANT_PROVISIONED",
+				"is_default": false,
+				"created_at": %q,
+				"updated_at": %q,
+				"deleted_at": null,
+				"distribution_account_address": %q,
+				"distribution_account_type": %q,
+				"distribution_account_status": %q
+			}
+		`, tnt.ID, orgName, handler.BaseURL, generatedUIURL, tnt.CreatedAt.Format(time.RFC3339Nano), tnt.UpdatedAt.Format(time.RFC3339Nano),
+			distAcc, schema.DistributionAccountTypeEnvStellar, schema.DistributionAccountStatusActive)
+		assert.JSONEq(t, expectedRespBody, string(respBody))
+
+		assertMigrations(orgName)
+	})
+
+	t.Run("provisions a new tenant successfully - dynamically generates only backend base URL", func(t *testing.T) {
+		createMocks()
+
+		orgName := "aid-org-four"
+		reqBody := fmt.Sprintf(`
+			{
+				"name": %q,
+				"owner_email": "owner@email.org",
+				"owner_first_name": "Owner",
+				"owner_last_name": "Owner",
+				"organization_name": "My Aid Org 4",
+				"sdp_ui_base_url": %q,
+				"is_default": false
+			}
+		`, orgName, handler.SDPUIBaseURL)
+
+		respBody := makeRequest(reqBody, http.StatusCreated)
+
+		tnt, err := m.GetTenantByName(ctx, orgName)
+		require.NoError(t, err)
+
+		generatedURL := fmt.Sprintf("https://%s.sdp-backend.stellar.org", orgName)
+		expectedRespBody := fmt.Sprintf(`
+			{
+				"id": %q,
+				"name": %q,
+				"base_url": %q,
+				"sdp_ui_base_url": %q,
+				"status": "TENANT_PROVISIONED",
+				"is_default": false,
+				"created_at": %q,
+				"updated_at": %q,
+				"deleted_at": null,
+				"distribution_account_address": %q,
+				"distribution_account_type": %q,
+				"distribution_account_status": %q
+			}
+		`, tnt.ID, orgName, generatedURL, handler.SDPUIBaseURL, tnt.CreatedAt.Format(time.RFC3339Nano), tnt.UpdatedAt.Format(time.RFC3339Nano),
+			distAcc, schema.DistributionAccountTypeEnvStellar, schema.DistributionAccountStatusActive)
+		assert.JSONEq(t, expectedRespBody, string(respBody))
+
+		assertMigrations(orgName)
 	})
 
 	t.Run("returns badRequest for duplicate tenant name", func(t *testing.T) {
-		messengerClientMock.
-			On("SendMessage", mock.AnythingOfType("message.Message")).
-			Run(func(args mock.Arguments) {
-				msg, ok := args.Get(0).(message.Message)
-				require.True(t, ok)
-
-				assert.Equal(t, "Welcome to Stellar Disbursement Platform", msg.Title)
-				assert.Equal(t, "owner@email.org", msg.ToEmail)
-				assert.Empty(t, msg.ToPhoneNumber)
-			}).
-			Return(nil).
-			Once()
-
-		distAccSigClient.
-			On("BatchInsert", ctx, 1).
-			Return([]string{distAcc}, nil).
-			Once().
-			On("Type").
-			Return(string(signing.DistributionAccountEnvSignatureClientType)).
-			Once()
-
-		distAccResolver.
-			On("HostDistributionAccount").
-			Return(distAcc, nil).
-			Once()
+		createMocks()
 
 		reqBody := `
 			{
@@ -459,31 +571,10 @@ func Test_TenantHandler_Post(t *testing.T) {
 			}
 		`
 
-		createTenantReq := func() *http.Request {
-			req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/tenants", strings.NewReader(reqBody))
-			require.NoError(t, err)
-			return req
-		}
-
-		// create tenant
-		rr := httptest.NewRecorder()
-		http.HandlerFunc(handler.Post).ServeHTTP(rr, createTenantReq())
-
-		resp := rr.Result()
-		defer resp.Body.Close()
-
-		assert.Equal(t, http.StatusCreated, resp.StatusCode)
-
+		// make first request to create tenant
+		_ = makeRequest(reqBody, http.StatusCreated)
 		// attempt creating another tenant with the same name
-		rr = httptest.NewRecorder()
-		http.HandlerFunc(handler.Post).ServeHTTP(rr, createTenantReq())
-
-		resp = rr.Result()
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-		require.NotNil(t, respBody)
-
-		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+		respBody := makeRequest(reqBody, http.StatusBadRequest)
 		assert.JSONEq(t, `{"error": "Tenant name already exists"}`, string(respBody))
 	})
 
