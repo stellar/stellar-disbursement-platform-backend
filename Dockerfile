@@ -13,6 +13,7 @@ FROM golang:1.22.1-bullseye AS development
 
 # set workdir according to repo structure so remote debug source code is in sync
 WORKDIR /app/github.com/stellar/stellar-disbursement-platform
+RUN apt-get update && apt-get install -y jq && rm -rf /var/lib/apt/lists/*
 # Copy the built executable and all source files for debugging
 COPY --from=build /src/stellar-disbursement-platform /app/github.com/stellar/stellar-disbursement-platform
 # Build a debug version of the binary
