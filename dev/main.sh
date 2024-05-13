@@ -10,28 +10,29 @@ then
     exit 1
 fi
 
-
-
 # prepare
-
 echo $DIVIDER
-echo "====> 👀 Step 2: start calling docker-compose up"
-docker-compose -p sdp-multi-tenant down
-echo "====> ✅ Step 2: finish calling docker-compose up"
+echo "====> 👀 start calling docker-compose -p sdp-multi-tenant down"
+#docker-compose -p sdp-multi-tenant down
+docker-compose down
+echo "====> ✅ finish calling docker-compose down"
 
 # Check if "--delete_pv" is passed as a parameter
 if [[ " $@ " =~ " --delete_pv " ]]; then
-    echo "You have opted to delete persistent volumes sdp-multi-tenant_kafka-data sdp-multi-tenant_postgres-ap-db sdp-multi-tenant_postgres-db. Are you sure? (yes/no)"
-    read -r confirmation
-    if [ "$confirmation" == "yes" ]; then
-        echo "Deleting persistent volumes..."
-        docker volume rm sdp-multi-tenant_kafka-data sdp-multi-tenant_postgres-ap-db sdp-multi-tenant_postgres-db
-    else
-        echo "Persistent volumes will not be deleted."
-    fi
+    echo "====> 👀 deleting persistent volumes sdp-multi-tenant_kafka-data sdp-multi-tenant_postgres-ap-db sdp-multi-tenant_postgres-db"
+    #echo "You have opted to delete persistent volumes sdp-multi-tenant_kafka-data sdp-multi-tenant_postgres-ap-db sdp-multi-tenant_postgres-db. Are you sure? (yes/no)"
+    #read -r confirmation
+    #if [ "$confirmation" == "yes" ]; then
+    #    echo "Deleting persistent volumes..."
+    docker volume rm sdp-multi-tenant_kafka-data sdp-multi-tenant_postgres-ap-db sdp-multi-tenant_postgres-db
+    #else
+    #    echo "Persistent volumes will not be deleted."
+    #fi
+    echo "====> ✅ finish deleting persistent volumes"
 fi
 
 # Check if .env already exists
+echo "====> 👀 creating accounts and .env environment file if it does not exist"
 if [ ! -f ".env" ]; then
     GO_EXECUTABLE="go run ./scripts/create_and_fund.go"
     echo ".env file does not exist. creating."
@@ -79,15 +80,16 @@ EOF
 
     echo ".env file created successfully."
 fi
+echo "====> ✅ finished .env setup"
 
-
+echo $DIVIDER
+echo "====> 👀calling docker compose up"
+export GIT_COMMIT="debug"
 docker-compose -p sdp-multi-tenant up -d --build
 
 # Run docker compose
 echo $DIVIDER
-echo "====> 👀Step 2: start calling docker compose up"
-docker-compose down && docker-compose -p sdp-multi-tenant up -d --build
-echo "====> ✅Step 2: finish calling docker-compose up"
+echo "====> ✅finish calling docker-compose up"
 
 
 # Initialize tenants
@@ -141,7 +143,6 @@ for tenant in "${tenants[@]}"; do
                 "owner_email": "'"$ownerEmail"'",
                 "owner_first_name": "jane",
                 "owner_last_name": "doe",
-                "password": "Password123!"
         }'
         echo "✅Tenant $tenant created successfully."
         echo "🔗Note: You can reset the password for the owner $ownerEmail on $sdpUIBaseURL/forgot-password"
