@@ -13,9 +13,13 @@ fi
 # prepare
 echo $DIVIDER
 echo "====> 👀 start calling docker-compose -p sdp-multi-tenant down"
+docker ps -aq | xargs docker stop | xargs docker rm
 #docker-compose -p sdp-multi-tenant down
 docker-compose down
 echo "====> ✅ finish calling docker-compose down"
+
+# Run docker compose
+echo $DIVIDER
 
 # Check if "--delete_pv" is passed as a parameter
 if [[ " $@ " =~ " --delete_pv " ]]; then
@@ -130,7 +134,7 @@ for tenant in "${tenants[@]}"; do
         sdpUIBaseURL="http://$tenant.stellar.local:3000"
         ownerEmail="init_owner@$tenant.org"
 
-        curl -X POST $AdminTenantURL \
+        curl --verbose -X POST $AdminTenantURL \
         -H "Content-Type: application/json" \
         -H "$AuthHeader" \
         -d '{
@@ -143,11 +147,27 @@ for tenant in "${tenants[@]}"; do
                 "owner_email": "'"$ownerEmail"'",
                 "owner_first_name": "jane",
                 "owner_last_name": "doe",
+                "is_default": true
         }'
         echo "✅Tenant $tenant created successfully."
         echo "🔗Note: You can reset the password for the owner $ownerEmail on $sdpUIBaseURL/forgot-password"
     fi
 done
+# Get RedCorp Tenant ID
+echo $existingTenants
+redCorpID=$(echo $existingTenants | jq -r '.[] | select(.name | ascii_downcase == "redcorp") | .id')
+echo "RedCorp Tenant ID: $redCorpID"
+
+# Set RedCorp as the default tenant
+if [ -n "$redCorpID" ]; then
+    setDefaultResponse=$(curl -s -X POST "http://localhost:8003/tenants/default-tenant" \
+                         -H "Content-Type: application/json" \
+                         -H "$AuthHeader" \
+                         -d '{"id":"'"$redCorpID"'"}')
+    echo "Set RedCorp as default tenant response: $setDefaultResponse"
+else
+    echo "RedCorp tenant ID not found, cannot set as default tenant."
+fi
 
 echo "====> ✅Step 3: finished initialization of tenants"
 echo $DIVIDER
