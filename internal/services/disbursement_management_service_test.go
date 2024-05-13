@@ -672,7 +672,7 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 		assert.EqualError(
 			t,
 			err,
-			fmt.Sprintf("executing postCommit function: publishing messages %s on event producer: unexpected error", expectedMessages),
+			fmt.Sprintf("executing postCommit function: publishing messages %+v on event producer: unexpected error", expectedMessages),
 		)
 	})
 
@@ -857,7 +857,7 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 
 		entries := getEntries()
 		require.Len(t, entries, 1)
-		assert.Contains(t, fmt.Sprintf("event producer is nil, could not publish messages %s", msgs), entries[0].Message)
+		assert.Contains(t, fmt.Sprintf("event producer is nil, could not publish messages %+v", msgs), entries[0].Message)
 	})
 	hMock.AssertExpectations(t)
 }

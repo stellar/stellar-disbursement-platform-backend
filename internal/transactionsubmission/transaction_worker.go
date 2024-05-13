@@ -421,7 +421,7 @@ func (tw *TransactionWorker) producePaymentCompletedEvent(ctx context.Context, e
 			return fmt.Errorf("writing message %s on event producer: %w", msg, err)
 		}
 	} else {
-		log.Ctx(ctx).Errorf("event producer is nil, could not publish message %+v", msg)
+		log.Ctx(ctx).Errorf("event producer is nil, could not publish message %s", msg)
 	}
 
 	return nil

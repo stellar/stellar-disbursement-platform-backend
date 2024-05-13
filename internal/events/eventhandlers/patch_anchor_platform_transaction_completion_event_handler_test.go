@@ -6,12 +6,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	servicesMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/services/mocks"
@@ -22,37 +23,27 @@ func Test_PatchAnchorPlatformTransactionCompletionEventHandler(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
+	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, outerErr)
 	defer dbConnectionPool.Close()
 
 	tenantManager := tenant.NewManager(tenant.WithDatabase(dbConnectionPool))
-	crashTrackerClient := crashtracker.MockCrashTrackerClient{}
+
 	service := servicesMocks.MockPatchAnchorPlatformTransactionCompletionService{}
 
 	handler := PatchAnchorPlatformTransactionCompletionEventHandler{
-		tenantManager:      tenantManager,
-		crashTrackerClient: &crashTrackerClient,
-		service:            &service,
+		tenantManager: tenantManager,
+		service:       &service,
 	}
 
 	ctx := context.Background()
 	t.Run("logs and report error when message Data is invalid", func(t *testing.T) {
-		crashTrackerClient.
-			On("LogAndReportErrors", ctx, mock.Anything, "[PatchAnchorPlatformTransactionCompletionEventHandler] could not convert data to schemas.EventPaymentCompletedData: invalid").
-			Return().
-			Once()
-
-		handler.Handle(ctx, &events.Message{Data: "invalid"})
+		handleErr := handler.Handle(ctx, &events.Message{Data: "invalid"})
+		assert.ErrorContains(t, handleErr, "could not convert data to schemas.EventPaymentCompletedData")
 	})
 
 	t.Run("logs and report error when fails getting tenant by ID", func(t *testing.T) {
-		crashTrackerClient.
-			On("LogAndReportErrors", mock.Anything, tenant.ErrTenantDoesNotExist, "[PatchAnchorPlatformTransactionCompletionEventHandler] error getting tenant by id").
-			Return().
-			Once()
-
-		handler.Handle(ctx, &events.Message{
+		handleErr := handler.Handle(ctx, &events.Message{
 			TenantID: "tenant-id",
 			Data: schemas.EventPaymentCompletedData{
 				PaymentID:            "payment-ID",
@@ -61,6 +52,7 @@ func Test_PatchAnchorPlatformTransactionCompletionEventHandler(t *testing.T) {
 				StellarTransactionID: "tx-hash",
 			},
 		})
+		assert.ErrorIs(t, handleErr, tenant.ErrTenantDoesNotExist)
 	})
 
 	t.Run("logs and report error when service returns error", func(t *testing.T) {
@@ -82,15 +74,11 @@ func Test_PatchAnchorPlatformTransactionCompletionEventHandler(t *testing.T) {
 			Return(errors.New("unexpected error")).
 			Once()
 
-		crashTrackerClient.
-			On("LogAndReportErrors", mock.Anything, errors.New("unexpected error"), "[PatchAnchorPlatformTransactionCompletionEventHandler] patching anchor platform transaction for payment event").
-			Return().
-			Once()
-
-		handler.Handle(ctx, &events.Message{
+		handleErr := handler.Handle(ctx, &events.Message{
 			TenantID: tnt.ID,
 			Data:     tx,
 		})
+		assert.EqualError(t, handleErr, "patching anchor platform transaction for payment event: unexpected error")
 	})
 
 	t.Run("successfully patch anchor platform transaction completion", func(t *testing.T) {
@@ -112,12 +100,12 @@ func Test_PatchAnchorPlatformTransactionCompletionEventHandler(t *testing.T) {
 			Return(nil).
 			Once()
 
-		handler.Handle(ctx, &events.Message{
+		handleErr := handler.Handle(ctx, &events.Message{
 			TenantID: tnt.ID,
 			Data:     tx,
 		})
+		require.NoError(t, handleErr)
 	})
 
-	crashTrackerClient.AssertExpectations(t)
 	service.AssertExpectations(t)
 }

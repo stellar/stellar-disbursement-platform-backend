@@ -6,7 +6,6 @@ import (
 
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
@@ -19,13 +18,11 @@ type PaymentFromSubmitterEventHandlerOptions struct {
 	AdminDBConnectionPool db.DBConnectionPool
 	MtnDBConnectionPool   db.DBConnectionPool
 	TSSDBConnectionPool   db.DBConnectionPool
-	CrashTrackerClient    crashtracker.CrashTrackerClient
 }
 
 type PaymentFromSubmitterEventHandler struct {
-	tenantManager      tenant.ManagerInterface
-	crashTrackerClient crashtracker.CrashTrackerClient
-	service            services.PaymentFromSubmitterServiceInterface
+	tenantManager tenant.ManagerInterface
+	service       services.PaymentFromSubmitterServiceInterface
 }
 
 var _ events.EventHandler = new(PaymentFromSubmitterEventHandler)
@@ -41,9 +38,8 @@ func NewPaymentFromSubmitterEventHandler(options PaymentFromSubmitterEventHandle
 	s := services.NewPaymentFromSubmitterService(models, options.TSSDBConnectionPool)
 
 	return &PaymentFromSubmitterEventHandler{
-		tenantManager:      tm,
-		service:            s,
-		crashTrackerClient: options.CrashTrackerClient,
+		tenantManager: tm,
+		service:       s,
 	}
 }
 
@@ -55,23 +51,22 @@ func (h *PaymentFromSubmitterEventHandler) CanHandleMessage(ctx context.Context,
 	return message.Topic == events.PaymentCompletedTopic
 }
 
-func (h *PaymentFromSubmitterEventHandler) Handle(ctx context.Context, message *events.Message) {
+func (h *PaymentFromSubmitterEventHandler) Handle(ctx context.Context, message *events.Message) error {
 	tx, err := utils.ConvertType[any, schemas.EventPaymentCompletedData](message.Data)
 	if err != nil {
-		h.crashTrackerClient.LogAndReportErrors(ctx, err, fmt.Sprintf("[%s] could not convert data to %T: %v", h.Name(), schemas.EventPaymentCompletedData{}, message.Data))
-		return
+		return fmt.Errorf("could not convert message data to %T: %w", schemas.EventPaymentCompletedData{}, err)
 	}
 
 	t, err := h.tenantManager.GetTenantByID(ctx, message.TenantID)
 	if err != nil {
-		h.crashTrackerClient.LogAndReportErrors(ctx, err, fmt.Sprintf("[%s] error getting tenant by id", h.Name()))
-		return
+		return fmt.Errorf("getting tenant by id %s: %w", message.TenantID, err)
 	}
 
 	ctx = tenant.SaveTenantInContext(ctx, t)
 
-	if err := h.service.SyncTransaction(ctx, &tx); err != nil {
-		h.crashTrackerClient.LogAndReportErrors(ctx, err, fmt.Sprintf("[%s] synching transaction completion for transaction ID %q", h.Name(), tx.TransactionID))
-		return
+	if syncErr := h.service.SyncTransaction(ctx, &tx); syncErr != nil {
+		return fmt.Errorf("syncing transaction completion for transaction ID %q: %w", tx.TransactionID, syncErr)
 	}
+
+	return nil
 }
