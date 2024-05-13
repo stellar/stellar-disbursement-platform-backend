@@ -11,4 +11,4 @@ echo "Running DB migrations and setup..."
 
 # Starting the main process using original entrypoint
 echo "starting dlv stellar-disbursement-platform"
-/go/bin/dlv exec ./stellar-disbursement-platform -- serve --continue --accept-multiclient --headless --listen=:2345 --api-version=2 --log
+/go/bin/dlv exec ./stellar-disbursement-platform serve --continue --accept-multiclient --headless --listen=:2345 --api-version=2 --log
