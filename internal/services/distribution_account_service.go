@@ -64,7 +64,7 @@ func (s *StellarNativeDistributionAccountService) GetBalances(_ context.Context,
 		return nil, fmt.Errorf("cannot get details for account from Horizon: %w", err)
 	}
 
-	var balances = make(map[string]float64)
+	balances := make(map[string]float64)
 	for _, b := range accountDetails.Balances {
 		var asset string
 		if b.Asset.Type == "native" {

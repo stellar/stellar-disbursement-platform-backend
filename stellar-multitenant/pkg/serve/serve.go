@@ -43,7 +43,7 @@ type ServeOptions struct {
 	networkType                             utils.NetworkType
 	Port                                    int
 	SubmitterEngine                         engine.SubmitterEngine
-	DistributionAccountSvc                  coreSvc.DistributionAccountServiceInterface
+	DistributionAccountService              coreSvc.DistributionAccountServiceInterface
 	TenantAccountNativeAssetBootstrapAmount int
 	tenantManager                           *tenant.Manager
 	tenantProvisioningManager               *provisioning.Manager
@@ -139,7 +139,7 @@ func handleHTTP(opts *ServeOptions) *chi.Mux {
 				SingleTenantMode:            opts.SingleTenantMode,
 				Models:                      opts.Models,
 				DistributionAccountResolver: opts.SubmitterEngine.DistributionAccountResolver,
-				DistributionAccountService:  opts.DistributionAccountSvc,
+				DistributionAccountService:  opts.DistributionAccountService,
 				BaseURL:                     opts.BaseURL,
 				SDPUIBaseURL:                opts.SDPUIBaseURL,
 			}

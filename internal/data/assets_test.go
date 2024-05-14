@@ -126,6 +126,59 @@ func Test_Asset_EqualsHorizonAsset(t *testing.T) {
 	}
 }
 
+func Test_Asset_EqualsDistributionAccMapID(t *testing.T) {
+	testCases := []struct {
+		name           string
+		localAsset     Asset
+		distAccMapID   string
+		expectedResult bool
+	}{
+		{
+			name:           "🟢 native assets are equal",
+			localAsset:     Asset{Code: "XLM"},
+			distAccMapID:   "XLM:native",
+			expectedResult: true,
+		},
+		{
+			name:           "🟢 issued assets are equal",
+			localAsset:     Asset{Code: "USDC", Issuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"},
+			distAccMapID:   "USDC:GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+			expectedResult: true,
+		},
+		{
+			name:           "🟢 issued assets are equal2",
+			localAsset:     Asset{Code: "EURC", Issuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"},
+			distAccMapID:   "EURC:GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+			expectedResult: true,
+		},
+		{
+			name:           "🔴 native asset != issued asset",
+			localAsset:     Asset{Code: "XLM"},
+			distAccMapID:   "USDC:GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+			expectedResult: false,
+		},
+		{
+			name:           "🔴 issued asset != native asset",
+			localAsset:     Asset{Code: "USDC", Issuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"},
+			distAccMapID:   "XLM:native",
+			expectedResult: false,
+		},
+		{
+			name:           "🔴 issued asset != issued asset",
+			localAsset:     Asset{Code: "USDC", Issuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"},
+			distAccMapID:   "EURC:GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+			expectedResult: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := tc.localAsset.EqualsDistributionAccountMapID(tc.distAccMapID)
+			assert.Equal(t, tc.expectedResult, got)
+		})
+	}
+}
+
 func Test_AssetModelGet(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
