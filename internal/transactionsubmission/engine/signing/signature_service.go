@@ -3,8 +3,6 @@ package signing
 import (
 	"fmt"
 
-	"golang.org/x/exp/slices"
-
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
@@ -17,6 +15,7 @@ type SignatureService struct {
 }
 
 var _ DistributionAccountResolver = (*SignatureService)(nil)
+
 var _ SignerRouter = (*SignatureService)(nil)
 
 func (s *SignatureService) Validate() error {
@@ -62,11 +61,6 @@ type SignatureServiceOptions struct {
 
 // NewSignatureService creates a new signature service instance, given the distribution signer type and the options.
 func NewSignatureService(opts SignatureServiceOptions) (SignatureService, error) {
-	distSignerType := opts.DistributionSignerType
-	if !slices.Contains(DistributionSignatureClientTypes(), distSignerType) {
-		return SignatureService{}, fmt.Errorf("invalid distribution signer type %q", distSignerType)
-	}
-
 	if opts.DistributionAccountResolver == nil {
 		return SignatureService{}, fmt.Errorf("distribution account resolver cannot be nil")
 	}

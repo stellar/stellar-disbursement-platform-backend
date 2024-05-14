@@ -41,7 +41,7 @@ func Test_NewManager(t *testing.T) {
 
 	mHorizonClient := &horizonclient.MockClient{}
 	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
-	sigService, _, _, _, _ := signing.NewMockSignatureService(t)
+	sigService, _, _ := signing.NewMockSignatureService(t)
 	submitterEngine := engine.SubmitterEngine{
 		HorizonClient:       mHorizonClient,
 		SignatureService:    sigService,
@@ -180,6 +180,7 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 			defer tenant.DeleteAllTenantsFixture(t, ctx, dbConnectionPool)
 
 			hostAccountKP := keypair.MustRandom()
+			hostAccount := schema.NewDefaultHostAccount(hostAccountKP.Address())
 			var distAccSigClient signing.SignatureClient
 			var err error
 			var wantDistAccAddress string
@@ -194,7 +195,12 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 			hostAccSigClient.On("NetworkPassphrase").Return(tc.networkPassphrase).Maybe()
 
 			distAccResolver := mocks.NewMockDistributionAccountResolver(t)
-			distAccResolver.On("HostDistributionAccount").Return(hostAccountKP.Address()).Once()
+			distAccResolver.On("HostDistributionAccount").Return(&hostAccount).Maybe()
+
+			sigRouter := signing.SignerRouterImpl{
+				schema.HostStellarEnv:          hostAccSigClient,
+				schema.ChannelAccountStellarDB: chAccSigClient,
+			}
 
 			// STEP 2: create DistSigner
 			switch tc.accountType {
@@ -203,8 +209,8 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 					DistributionPrivateKey: hostAccountKP.Seed(),
 					NetworkPassphrase:      tc.networkPassphrase,
 				})
-				wantDistAccAddress = hostAccountKP.Address()
 				require.NoError(t, err)
+				wantDistAccAddress = hostAccountKP.Address()
 
 			case schema.DistributionAccountStellarDBVault:
 				distAccSigClient, err = signing.NewSignatureClient(schema.DistributionAccountStellarDBVault, signing.SignatureClientOptions{
@@ -249,14 +255,14 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 				require.Failf(t, "invalid sigClientType=%s", string(tc.accountType))
 			}
 
+			sigRouter[tc.accountType] = distAccSigClient
+
 			// STEP 3: create Submitter Engine
 			mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
 			submitterEngine := engine.SubmitterEngine{
 				HorizonClient: mHorizonClient,
 				SignatureService: signing.SignatureService{
-					ChAccountSigner:             chAccSigClient,
-					DistAccountSigner:           distAccSigClient,
-					HostAccountSigner:           hostAccSigClient,
+					SignerRouter:                &sigRouter,
 					DistributionAccountResolver: distAccResolver,
 				},
 				LedgerNumberTracker: mLedgerNumberTracker,
@@ -384,7 +390,7 @@ func Test_Manager_RunMigrationsForTenant(t *testing.T) {
 
 	mHorizonClient := &horizonclient.MockClient{}
 	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
-	sigService, _, _, _, _ := signing.NewMockSignatureService(t)
+	sigService, _, _ := signing.NewMockSignatureService(t)
 	submitterEngine := engine.SubmitterEngine{
 		HorizonClient:       mHorizonClient,
 		SignatureService:    sigService,
@@ -461,12 +467,12 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 
 	testCases := []struct {
 		name             string
-		mockTntManagerFn func(tntManagerMock *tenant.TenantManagerMock, hostAccSigClient, distAccSigClient *mocks.MockSignatureClient, mDistAccResolver *mocks.MockDistributionAccountResolver, mHorizonClient *horizonclient.MockClient)
+		mockTntManagerFn func(tntManagerMock *tenant.TenantManagerMock, sigRouter *mocks.MockSignerRouter, mDistAccResolver *mocks.MockDistributionAccountResolver, mHorizonClient *horizonclient.MockClient)
 		expectedErr      error
 	}{
 		{
 			name: "when AddTenant fails return an error",
-			mockTntManagerFn: func(tntManagerMock *tenant.TenantManagerMock, _ *mocks.MockSignatureClient, _ *mocks.MockSignatureClient, _ *mocks.MockDistributionAccountResolver, _ *horizonclient.MockClient) {
+			mockTntManagerFn: func(tntManagerMock *tenant.TenantManagerMock, _ *mocks.MockSignerRouter, _ *mocks.MockDistributionAccountResolver, _ *horizonclient.MockClient) {
 				// needed for AddTenant:
 				tntManagerMock.On("AddTenant", ctx, tenantName).Return(nil, errors.New("foobar")).Once()
 			},
@@ -474,7 +480,7 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 		},
 		{
 			name: "when createSchemaAndRunMigrations fails, rollback and return an error",
-			mockTntManagerFn: func(tntManagerMock *tenant.TenantManagerMock, _ *mocks.MockSignatureClient, _ *mocks.MockSignatureClient, _ *mocks.MockDistributionAccountResolver, _ *horizonclient.MockClient) {
+			mockTntManagerFn: func(tntManagerMock *tenant.TenantManagerMock, _ *mocks.MockSignerRouter, _ *mocks.MockDistributionAccountResolver, _ *horizonclient.MockClient) {
 				// Needed for AddTenant:
 				tntManagerMock.On("AddTenant", ctx, tenantName).Return(&tnt, nil).Once()
 
@@ -490,7 +496,7 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 		},
 		{
 			name: "when UpdateTenantConfig fails, rollback and return an error",
-			mockTntManagerFn: func(tntManagerMock *tenant.TenantManagerMock, hostAccSigClient, distAccSigClient *mocks.MockSignatureClient, _ *mocks.MockDistributionAccountResolver, _ *horizonclient.MockClient) {
+			mockTntManagerFn: func(tntManagerMock *tenant.TenantManagerMock, sigRouter *mocks.MockSignerRouter, _ *mocks.MockDistributionAccountResolver, _ *horizonclient.MockClient) {
 				// Needed for AddTenant:
 				tntManagerMock.On("AddTenant", ctx, tenantName).Return(&tnt, nil).Once()
 
@@ -503,20 +509,27 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 				require.NoError(t, err)
 
 				// Needed for provisionDistributionAccount:
-				distAcc := keypair.MustRandom().Address()
-				distAccSigClient.
-					On("BatchInsert", ctx, 1).Return([]string{distAcc}, nil).Once().
-					On("Type").Return(string(signing.DistributionAccountEnvSignatureClientType))
+				// TODO: in SDP-1167, send the accountType in the request body
+				accountType := schema.DistributionAccountStellarDBVault
+				distAccAddress := keypair.MustRandom().Address()
+				distAccount := schema.TransactionAccount{
+					Address: distAccAddress,
+					Type:    accountType,
+					Status:  schema.AccountStatusActive,
+				}
+				sigRouter.
+					On("BatchInsert", ctx, accountType, 1).
+					Return([]schema.TransactionAccount{distAccount}, nil)
 
 				// Needed for UpdateTenantConfig:
 				tStatus := tenant.ProvisionedTenantStatus
 				updatedTnt := tnt
-				updatedTnt.DistributionAccountAddress = &distAcc
+				updatedTnt.DistributionAccountAddress = &distAccAddress
 				tntManagerMock.
 					On("UpdateTenantConfig", ctx, &tenant.TenantUpdate{
 						ID:                         updatedTnt.ID,
-						DistributionAccountAddress: distAcc,
-						DistributionAccountType:    schema.DistributionAccountStellarEnv,
+						DistributionAccountAddress: distAccAddress,
+						DistributionAccountType:    accountType,
 						DistributionAccountStatus:  schema.AccountStatusActive,
 						Status:                     &tStatus,
 						SDPUIBaseURL:               &sdpUIBaseURL,
@@ -528,13 +541,13 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 				// ROLLBACK: [tenant_creation, schema_creation, distribution_account_creation]
 				tntManagerMock.On("DropTenantSchema", ctx, tenantName).Return(nil).Once()
 				tntManagerMock.On("DeleteTenantByName", ctx, tenantName).Return(nil).Once()
-				distAccSigClient.On("Delete", ctx, distAcc).Return(nil).Once()
+				sigRouter.On("Delete", ctx, distAccount).Return(nil).Once()
 			},
 			expectedErr: ErrUpdateTenantFailed,
 		},
 		{
 			name: "when fundTenantDistributionAccount fails, rollback and return an error",
-			mockTntManagerFn: func(tntManagerMock *tenant.TenantManagerMock, hostAccSigClient, distAccSigClient *mocks.MockSignatureClient, mDistAccResolver *mocks.MockDistributionAccountResolver, mHorizonClient *horizonclient.MockClient) {
+			mockTntManagerFn: func(tntManagerMock *tenant.TenantManagerMock, sigRouter *mocks.MockSignerRouter, mDistAccResolver *mocks.MockDistributionAccountResolver, mHorizonClient *horizonclient.MockClient) {
 				// Needed for AddTenant:
 				tntManagerMock.On("AddTenant", ctx, tenantName).Return(&tnt, nil).Once()
 
@@ -547,23 +560,30 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 				require.NoError(t, err)
 
 				// Needed for provisionDistributionAccount:
-				distAcc := keypair.MustRandom().Address()
-				distAccSigClient.
-					On("BatchInsert", ctx, 1).Return([]string{distAcc}, nil).Once().
-					On("Type").Return(string(signing.DistributionAccountEnvSignatureClientType))
+				// TODO: in SDP-1167, send the accountType in the request body
+				accountType := schema.DistributionAccountStellarDBVault
+				distAccAddress := keypair.MustRandom().Address()
+				distAccount := schema.TransactionAccount{
+					Address: distAccAddress,
+					Type:    accountType,
+					Status:  schema.AccountStatusActive,
+				}
+				sigRouter.
+					On("BatchInsert", ctx, accountType, 1).
+					Return([]schema.TransactionAccount{distAccount}, nil)
 
 				// Needed for UpdateTenantConfig:
 				tStatus := tenant.ProvisionedTenantStatus
 				updatedTnt := tnt
-				updatedTnt.DistributionAccountAddress = &distAcc
+				updatedTnt.DistributionAccountAddress = &distAccAddress
 				updatedTnt.DistributionAccountType = schema.DistributionAccountStellarEnv
 				updatedTnt.DistributionAccountStatus = schema.AccountStatusActive
 				updatedTnt.Status = tStatus
 				tntManagerMock.
 					On("UpdateTenantConfig", ctx, &tenant.TenantUpdate{
 						ID:                         updatedTnt.ID,
-						DistributionAccountAddress: distAcc,
-						DistributionAccountType:    schema.DistributionAccountStellarEnv,
+						DistributionAccountAddress: distAccAddress,
+						DistributionAccountType:    accountType,
 						DistributionAccountStatus:  schema.AccountStatusActive,
 						Status:                     &tStatus,
 						SDPUIBaseURL:               &sdpUIBaseURL,
@@ -574,7 +594,10 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 
 				// Needed for fundTenantDistributionAccount:
 				hostAccountKP := keypair.MustRandom()
-				mDistAccResolver.On("HostDistributionAccount").Return(hostAccountKP.Address()).Once()
+				hostAccount := schema.NewDefaultHostAccount(hostAccountKP.Address())
+				mDistAccResolver.
+					On("HostDistributionAccount").
+					Return(&hostAccount)
 				mHorizonClient.
 					On("AccountDetail", horizonclient.AccountRequest{AccountID: hostAccountKP.Address()}).
 					Return(horizon.Account{}, errors.New("some horizon error"))
@@ -582,13 +605,13 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 				// ROLLBACK: [tenant_creation, schema_creation, distribution_account_creation]
 				tntManagerMock.On("DropTenantSchema", ctx, tenantName).Return(nil).Once()
 				tntManagerMock.On("DeleteTenantByName", ctx, tenantName).Return(nil).Once()
-				distAccSigClient.On("Delete", ctx, distAcc).Return(nil).Once()
+				sigRouter.On("Delete", ctx, distAccount).Return(nil).Once()
 			},
 			expectedErr: ErrUpdateTenantFailed,
 		},
 		{
 			name: "when provisioning succeeds, no rollback occurs",
-			mockTntManagerFn: func(tntManagerMock *tenant.TenantManagerMock, hostAccSigClient, distAccSigClient *mocks.MockSignatureClient, mDistAccResolver *mocks.MockDistributionAccountResolver, mHorizonClient *horizonclient.MockClient) {
+			mockTntManagerFn: func(tntManagerMock *tenant.TenantManagerMock, sigRouter *mocks.MockSignerRouter, mDistAccResolver *mocks.MockDistributionAccountResolver, mHorizonClient *horizonclient.MockClient) {
 				// Needed for AddTenant:
 				tntManagerMock.On("AddTenant", ctx, tenantName).Return(&tnt, nil).Once()
 
@@ -601,23 +624,30 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 				require.NoError(t, err)
 
 				// Needed for provisionDistributionAccount:
-				distAcc := keypair.MustRandom().Address()
-				distAccSigClient.
-					On("BatchInsert", ctx, 1).Return([]string{distAcc}, nil).Once().
-					On("Type").Return(string(signing.DistributionAccountEnvSignatureClientType))
+				// TODO: in SDP-1167, send the accountType in the request body
+				accountType := schema.DistributionAccountStellarDBVault
+				distAccAddress := keypair.MustRandom().Address()
+				distAccount := schema.TransactionAccount{
+					Address: distAccAddress,
+					Type:    accountType,
+					Status:  schema.AccountStatusActive,
+				}
+				sigRouter.
+					On("BatchInsert", ctx, accountType, 1).
+					Return([]schema.TransactionAccount{distAccount}, nil)
 
 				// Needed for UpdateTenantConfig:
 				tStatus := tenant.ProvisionedTenantStatus
 				updatedTnt := tnt
-				updatedTnt.DistributionAccountAddress = &distAcc
+				updatedTnt.DistributionAccountAddress = &distAccAddress
 				updatedTnt.DistributionAccountType = schema.DistributionAccountStellarEnv
 				updatedTnt.DistributionAccountStatus = schema.AccountStatusActive
 				updatedTnt.Status = tStatus
 				tntManagerMock.
 					On("UpdateTenantConfig", ctx, &tenant.TenantUpdate{
 						ID:                         updatedTnt.ID,
-						DistributionAccountAddress: distAcc,
-						DistributionAccountType:    schema.DistributionAccountStellarEnv,
+						DistributionAccountAddress: distAccAddress,
+						DistributionAccountType:    accountType,
 						DistributionAccountStatus:  schema.AccountStatusActive,
 						Status:                     &tStatus,
 						SDPUIBaseURL:               &sdpUIBaseURL,
@@ -628,8 +658,10 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 
 				// Needed for fundTenantDistributionAccount:
 				hostAccountKP := keypair.MustRandom()
-				tenantAccountKP := keypair.MustRandom()
-				mDistAccResolver.On("HostDistributionAccount").Return(hostAccountKP.Address()).Once()
+				hostAccount := schema.NewDefaultHostAccount(hostAccountKP.Address())
+				mDistAccResolver.
+					On("HostDistributionAccount").
+					Return(&hostAccount)
 				mHorizonClient.
 					On("AccountDetail", horizonclient.AccountRequest{AccountID: hostAccountKP.Address()}).
 					Return(horizon.Account{
@@ -637,8 +669,9 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 						Sequence:  1,
 					}, nil).
 					Once()
-				hostAccSigClient.
-					On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), hostAccountKP.Address()).
+
+				sigRouter.
+					On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), hostAccount).
 					Return(&txnbuild.Transaction{}, nil).
 					Once()
 				mHorizonClient.
@@ -648,7 +681,7 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 				mHorizonClient.
 					On("AccountDetail", mock.AnythingOfType("horizonclient.AccountRequest")).
 					Return(horizon.Account{
-						AccountID: tenantAccountKP.Address(),
+						AccountID: distAccAddress,
 						Sequence:  1,
 					}, nil).
 					Once()
@@ -663,10 +696,10 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 			// Create Mocks:
 			mHorizonClient := &horizonclient.MockClient{}
 			mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
-			sigService, _, distAccSigClient, hostAccSigClient, distAccResolver := signing.NewMockSignatureService(t)
+			sigService, sigRouter, distAccResolver := signing.NewMockSignatureService(t)
 
 			tenantManagerMock := &tenant.TenantManagerMock{}
-			tc.mockTntManagerFn(tenantManagerMock, hostAccSigClient, distAccSigClient, distAccResolver, mHorizonClient)
+			tc.mockTntManagerFn(tenantManagerMock, sigRouter, distAccResolver, mHorizonClient)
 
 			// Create tenant manager
 			provisioningManager, err := NewManager(ManagerOptions{

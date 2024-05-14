@@ -5,6 +5,7 @@ import (
 	"github.com/stretchr/testify/mock"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing/mocks"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
 type mockConstructorTestingTNewMockSignatureService interface {
@@ -23,6 +24,15 @@ func NewMockSignatureService(t mockConstructorTestingTNewMockSignatureService) (
 
 	signerRouter = mocks.NewMockSignerRouter(t)
 	signerRouter.On("NetworkPassphrase").Return(network.TestNetworkPassphrase).Maybe()
+
+	signerRouter.On("SupportedAccountTypes").
+		Return([]schema.AccountType{
+			schema.HostStellarEnv,
+			schema.ChannelAccountStellarDB,
+			schema.DistributionAccountStellarDBVault,
+			schema.DistributionAccountStellarEnv,
+		}).
+		Maybe()
 
 	distAccResolver = mocks.NewMockDistributionAccountResolver(t)
 	sigService = SignatureService{

@@ -205,10 +205,7 @@ func (s *ChannelAccountsService) deleteChannelAccount(ctx context.Context, publi
 		}
 
 		log.Ctx(ctx).Warnf("Account %s does not exist on the network", publicKey)
-		chAccToDelete := schema.TransactionAccount{
-			Address: publicKey,
-			Type:    schema.ChannelAccountStellarDB,
-		}
+		chAccToDelete := schema.NewDefaultChannelAccount(publicKey)
 		err = s.SignatureService.SignerRouter.Delete(ctx, chAccToDelete)
 		if err != nil {
 			return fmt.Errorf("deleting %s from signature service: %w", publicKey, err)

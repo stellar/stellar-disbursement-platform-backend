@@ -52,10 +52,7 @@ func CreateChannelAccountsOnChain(ctx context.Context, submiterEngine engine.Sub
 				if accountAddress == hostAccount.Address {
 					continue
 				}
-				chAccToDelete := schema.TransactionAccount{
-					Address: accountAddress,
-					Type:    schema.ChannelAccountStellarDB,
-				}
+				chAccToDelete := schema.NewDefaultChannelAccount(accountAddress)
 				deleteErr := submiterEngine.SignerRouter.Delete(ctx, chAccToDelete)
 				if deleteErr != nil {
 					log.Ctx(ctx).Errorf("failed to delete channel account %s: %v", accountAddress, deleteErr)
@@ -204,10 +201,7 @@ func DeleteChannelAccountOnChain(ctx context.Context, submiterEngine engine.Subm
 	// the root account authorizes the sponsorship revocation, while the channel account authorizes
 	// merging into the distribution account.
 	// Channel account signing:
-	chAccToDelete := schema.TransactionAccount{
-		Address: chAccAddress,
-		Type:    schema.ChannelAccountStellarDB,
-	}
+	chAccToDelete := schema.NewDefaultChannelAccount(chAccAddress)
 	tx, err = submiterEngine.SignerRouter.SignStellarTransaction(ctx, tx, chAccToDelete, *hostAccount)
 	if err != nil {
 		return fmt.Errorf("signing remove account transaction for account %s: %w", chAccAddress, err)

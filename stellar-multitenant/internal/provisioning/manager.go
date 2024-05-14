@@ -138,7 +138,8 @@ func (m *Manager) provisionTenant(ctx context.Context, pt *ProvisionTenant) (*te
 	distAccType := schema.DistributionAccountStellarDBVault
 
 	// Provision distribution account for tenant if necessary
-	if err := m.provisionDistributionAccount(ctx, t, distAccType); err != nil {
+	err := m.provisionDistributionAccount(ctx, t, distAccType)
+	if err != nil {
 		return t, fmt.Errorf("provisioning distribution account: %w", err)
 	}
 
@@ -276,6 +277,7 @@ func (m *Manager) deleteDistributionAccountKey(ctx context.Context, t *tenant.Te
 	distAccToDelete := schema.TransactionAccount{
 		Address: *t.DistributionAccountAddress,
 		Type:    t.DistributionAccountType,
+		Status:  schema.AccountStatusActive,
 	}
 	sigClientDeleteKeyErr := m.SubmitterEngine.SignerRouter.Delete(ctx, distAccToDelete)
 	if sigClientDeleteKeyErr != nil {

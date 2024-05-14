@@ -3,6 +3,7 @@ package signing
 import (
 	"context"
 	"fmt"
+	"sort"
 
 	"github.com/stellar/go/txnbuild"
 	"golang.org/x/exp/maps"
@@ -123,8 +124,17 @@ func (r *SignerRouterImpl) SignStellarTransaction(
 		sigTypes[account.Type] = append(sigTypes[account.Type], account.Address)
 	}
 
+	sortedTypes := []schema.AccountType{}
+	for sigType := range sigTypes {
+		sortedTypes = append(sortedTypes, sigType)
+	}
+	sort.Slice(sortedTypes, func(i, j int) bool {
+		return sortedTypes[i] < sortedTypes[j]
+	})
+
 	signedStellarTx = stellarTx
-	for sigType, publicKeys := range sigTypes {
+	for _, sigType := range sortedTypes {
+		publicKeys := sigTypes[sigType]
 		sigClient, err := r.RouteSigner(sigType)
 		if err != nil {
 			return nil, fmt.Errorf("routing signer: %w", err)
@@ -150,8 +160,17 @@ func (r *SignerRouterImpl) SignFeeBumpStellarTransaction(
 		sigTypes[account.Type] = append(sigTypes[account.Type], account.Address)
 	}
 
+	sortedTypes := []schema.AccountType{}
+	for sigType := range sigTypes {
+		sortedTypes = append(sortedTypes, sigType)
+	}
+	sort.Slice(sortedTypes, func(i, j int) bool {
+		return sortedTypes[i] < sortedTypes[j]
+	})
+
 	signedFeeBumpStellarTx = feeBumpStellarTx
-	for sigType, publicKeys := range sigTypes {
+	for _, sigType := range sortedTypes {
+		publicKeys := sigTypes[sigType]
 		sigClient, err := r.RouteSigner(sigType)
 		if err != nil {
 			return nil, fmt.Errorf("routing signer: %w", err)
@@ -185,6 +204,7 @@ func (r *SignerRouterImpl) BatchInsert(
 		stellarAccounts = append(stellarAccounts, schema.TransactionAccount{
 			Type:    accountType,
 			Address: publicKey,
+			Status:  schema.AccountStatusActive,
 		})
 	}
 

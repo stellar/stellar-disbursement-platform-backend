@@ -64,13 +64,15 @@ func getTransactionWorkerInstance(t *testing.T, dbConnectionPool db.DBConnection
 	require.NoError(t, err)
 
 	distributionKP := keypair.MustRandom()
+	distAccount := schema.NewStellarEnvTransactionAccount(distributionKP.Address())
 
 	mDistAccResolver := sigMocks.NewMockDistributionAccountResolver(t)
 	mDistAccResolver.
 		On("DistributionAccount", mock.Anything, mock.AnythingOfType("string")).
-		Return(schema.NewDefaultStellarTransactionAccount(distributionKP.Address()), nil).
+		Return(distAccount, nil).
 		Maybe()
 
+	distAccEncryptionPassphrase := keypair.MustRandom().Seed()
 	sigService, err := signing.NewSignatureService(signing.SignatureServiceOptions{
 		DistributionSignerType:      signing.DistributionAccountEnvSignatureClientType,
 		NetworkPassphrase:           network.TestNetworkPassphrase,
@@ -78,6 +80,7 @@ func getTransactionWorkerInstance(t *testing.T, dbConnectionPool db.DBConnection
 		DistributionPrivateKey:      distributionKP.Seed(),
 		ChAccEncryptionPassphrase:   chAccEncryptionPassphrase,
 		LedgerNumberTracker:         preconditionsMocks.NewMockLedgerNumberTracker(t),
+		DistAccEncryptionPassphrase: distAccEncryptionPassphrase,
 		DistributionAccountResolver: mDistAccResolver,
 	})
 	require.NoError(t, err)
@@ -150,6 +153,7 @@ func Test_NewTransactionWorker(t *testing.T) {
 
 	distributionKP := keypair.MustRandom()
 
+	distAccEncryptionPassphrase := keypair.MustRandom().Seed()
 	wantSigService, err := signing.NewSignatureService(signing.SignatureServiceOptions{
 		DistributionSignerType:    signing.DistributionAccountEnvSignatureClientType,
 		NetworkPassphrase:         network.TestNetworkPassphrase,
@@ -158,6 +162,7 @@ func Test_NewTransactionWorker(t *testing.T) {
 		ChAccEncryptionPassphrase: chAccEncryptionPassphrase,
 		LedgerNumberTracker:       preconditionsMocks.NewMockLedgerNumberTracker(t),
 
+		DistAccEncryptionPassphrase: distAccEncryptionPassphrase,
 		DistributionAccountResolver: sigMocks.NewMockDistributionAccountResolver(t),
 	})
 	require.NoError(t, err)
@@ -1640,12 +1645,14 @@ func Test_TransactionWorker_buildAndSignTransaction(t *testing.T) {
 	const accountSequence = 123
 
 	distributionKP := keypair.MustRandom()
+	distAccount := schema.NewStellarEnvTransactionAccount(distributionKP.Address())
 
 	mDistAccResolver := sigMocks.NewMockDistributionAccountResolver(t)
 	mDistAccResolver.
 		On("DistributionAccount", ctx, mock.AnythingOfType("string")).
-		Return(schema.NewDefaultStellarTransactionAccount(distributionKP.Address()), nil)
+		Return(distAccount, nil)
 
+	distAccEncryptionPassphrase := keypair.MustRandom().Seed()
 	sigService, err := signing.NewSignatureService(signing.SignatureServiceOptions{
 		DistributionSignerType:    signing.DistributionAccountEnvSignatureClientType,
 		NetworkPassphrase:         network.TestNetworkPassphrase,
@@ -1655,6 +1662,7 @@ func Test_TransactionWorker_buildAndSignTransaction(t *testing.T) {
 		LedgerNumberTracker:       preconditionsMocks.NewMockLedgerNumberTracker(t),
 
 		DistributionAccountResolver: mDistAccResolver,
+		DistAccEncryptionPassphrase: distAccEncryptionPassphrase,
 	})
 	require.NoError(t, err)
 
@@ -1776,9 +1784,8 @@ func Test_TransactionWorker_buildAndSignTransaction(t *testing.T) {
 					},
 				)
 				require.NoError(t, err)
-				wantInnerTx, err = sigService.ChAccountSigner.SignStellarTransaction(ctx, wantInnerTx, txJob.ChannelAccount.PublicKey)
-				require.NoError(t, err)
-				wantInnerTx, err = sigService.DistAccountSigner.SignStellarTransaction(ctx, wantInnerTx, distributionKP.Address())
+				chAccount := schema.NewDefaultChannelAccount(txJob.ChannelAccount.PublicKey)
+				wantInnerTx, err = sigService.SignerRouter.SignStellarTransaction(ctx, wantInnerTx, chAccount, distAccount)
 				require.NoError(t, err)
 
 				wantFeeBumpTx, err := txnbuild.NewFeeBumpTransaction(
@@ -1789,7 +1796,7 @@ func Test_TransactionWorker_buildAndSignTransaction(t *testing.T) {
 					},
 				)
 				require.NoError(t, err)
-				wantFeeBumpTx, err = sigService.DistAccountSigner.SignFeeBumpStellarTransaction(ctx, wantFeeBumpTx, distributionKP.Address())
+				wantFeeBumpTx, err = sigService.SignerRouter.SignFeeBumpStellarTransaction(ctx, wantFeeBumpTx, distAccount)
 				require.NoError(t, err)
 				assert.Equal(t, wantFeeBumpTx, gotFeeBumpTx)
 			}

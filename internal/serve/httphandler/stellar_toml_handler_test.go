@@ -52,6 +52,7 @@ func Test_StellarTomlHandler_buildGeneralInformation(t *testing.T) {
 	req := httptest.NewRequest("GET", "https://test.com/.well-known/stellar.toml", nil)
 	req.Host = "test.com"
 	tenantDistAccPublicKey := "GDEWLTJMGKABNF3GBA3VTVBYPES3FXQHHJVJVI6X3CRKKFH5EMLRT5JZ"
+	distAccount := schema.NewDefaultStellarTransactionAccount(tenantDistAccPublicKey)
 
 	testCases := []struct {
 		name              string
@@ -141,7 +142,7 @@ func Test_StellarTomlHandler_buildGeneralInformation(t *testing.T) {
 			if tc.isTenantInContext {
 				mDistAccResolver.
 					On("DistributionAccountFromContext", ctx).
-					Return(schema.NewDefaultStellarTransactionAccount(tenantDistAccPublicKey), nil).
+					Return(distAccount, nil).
 					Once()
 			} else {
 				mDistAccResolver.

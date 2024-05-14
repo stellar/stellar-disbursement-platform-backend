@@ -70,20 +70,6 @@ func (_m *MockSignerRouter) NetworkPassphrase() string {
 	return r0
 }
 
-// NetworkPassphrase provides a mock function with given fields:
-func (_m *MockSignerRouter) SupportedAccountTypes() []schema.AccountType {
-	ret := _m.Called()
-
-	var r0 []schema.AccountType
-	if rf, ok := ret.Get(0).(func() []schema.AccountType); ok {
-		r0 = rf()
-	} else {
-		r0 = ret.Get(0).([]schema.AccountType)
-	}
-
-	return r0
-}
-
 // SignFeeBumpStellarTransaction provides a mock function with given fields: ctx, feeBumpStellarTx, stellarAccounts
 func (_m *MockSignerRouter) SignFeeBumpStellarTransaction(ctx context.Context, feeBumpStellarTx *txnbuild.FeeBumpTransaction, stellarAccounts ...schema.TransactionAccount) (*txnbuild.FeeBumpTransaction, error) {
 	_va := make([]interface{}, len(stellarAccounts))
@@ -148,6 +134,22 @@ func (_m *MockSignerRouter) SignStellarTransaction(ctx context.Context, stellarT
 	}
 
 	return r0, r1
+}
+
+// SupportedAccountTypes provides a mock function with given fields:
+func (_m *MockSignerRouter) SupportedAccountTypes() []schema.AccountType {
+	ret := _m.Called()
+
+	var r0 []schema.AccountType
+	if rf, ok := ret.Get(0).(func() []schema.AccountType); ok {
+		r0 = rf()
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]schema.AccountType)
+		}
+	}
+
+	return r0
 }
 
 type mockConstructorTestingTNewMockSignerRouter interface {
