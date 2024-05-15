@@ -297,7 +297,14 @@ func ResolveTenantFromRequestMiddleware(tenantManager tenant.ManagerInterface, s
 				if err != nil {
 					switch {
 					case errors.Is(err, tenant.ErrTenantDoesNotExist):
-						httperror.InternalError(ctx, "No default Tenant configured", err, nil).Render(rw)
+						// Log warning and allow the request to continue without a tenant.
+						log.Ctx(ctx).Warnf(
+							"No default tenant configured: %v. "+
+								"use POST /default-tenant to set the default tenant.",
+							err,
+						)
+						next.ServeHTTP(rw, req)
+						return
 					case errors.Is(err, tenant.ErrTooManyDefaultTenants):
 						httperror.InternalError(ctx, "Too many default tenants configured", err, nil).Render(rw)
 					default:
