@@ -1009,9 +1009,9 @@ func Test_EnsureTenantMiddleware(t *testing.T) {
 		expectedTenant       *tenant.Tenant
 	}{
 		{
-			name:                 "🟢 when there's a tenant in the context",
+			name:                 "🔴 fails if there's no tenant in the context",
 			hasTenantInCtx:       false,
-			expectedStatus:       http.StatusOK,
+			expectedStatus:       http.StatusBadRequest,
 			expectedBodyContains: `{"error":"Tenant not found in context"}`,
 			expectedTenant:       nil,
 		},
