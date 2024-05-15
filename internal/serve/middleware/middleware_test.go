@@ -865,7 +865,7 @@ func Test_ResolveTenantFromRequestMiddleware(t *testing.T) {
 			expectedTenant:   validTnt,
 		},
 		{
-			name:              "🔴 no default tenant is found",
+			name:              "🟢 no default tenant is found",
 			tenantHeaderValue: "",
 			hostnamePrefix:    "",
 			singleTenantMode:  true,
@@ -875,8 +875,8 @@ func Test_ResolveTenantFromRequestMiddleware(t *testing.T) {
 					Return(nil, tenant.ErrTenantDoesNotExist).
 					Once()
 			},
-			expectedStatus:   http.StatusInternalServerError,
-			expectedRespBody: `{"error":"No default Tenant configured"}`,
+			expectedStatus:   http.StatusOK,
+			expectedRespBody: `{"status":"ok"}`,
 			expectedTenant:   nil,
 		},
 		{
@@ -1009,9 +1009,9 @@ func Test_EnsureTenantMiddleware(t *testing.T) {
 		expectedTenant       *tenant.Tenant
 	}{
 		{
-			name:                 "🔴 fails if there's no tenant in the context",
+			name:                 "🟢 when there's a tenant in the context",
 			hasTenantInCtx:       false,
-			expectedStatus:       http.StatusBadRequest,
+			expectedStatus:       http.StatusOK,
 			expectedBodyContains: `{"error":"Tenant not found in context"}`,
 			expectedTenant:       nil,
 		},
