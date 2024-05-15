@@ -294,14 +294,14 @@ func ResolveTenantFromRequestMiddleware(tenantManager tenant.ManagerInterface, s
 			if singleTenantMode {
 				var err error
 				currentTenant, err = tenantManager.GetDefault(ctx)
-				
+
 				if err != nil {
 					switch {
 					case errors.Is(err, tenant.ErrTenantDoesNotExist):
 						// Log warning and allow the request to continue without a tenant.
 						log.Ctx(ctx).Warnf(
-							"No default tenant configured: %v. " +
-							"use POST /default-tenant to set the default tenant.",
+							"No default tenant configured: %v. "+
+								"use POST /default-tenant to set the default tenant.",
 							err,
 						)
 						next.ServeHTTP(rw, req)
