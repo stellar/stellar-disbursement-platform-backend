@@ -294,7 +294,6 @@ func ResolveTenantFromRequestMiddleware(tenantManager tenant.ManagerInterface, s
 			if singleTenantMode {
 				var err error
 				currentTenant, err = tenantManager.GetDefault(ctx)
-
 				if err != nil {
 					switch {
 					case errors.Is(err, tenant.ErrTenantDoesNotExist):
