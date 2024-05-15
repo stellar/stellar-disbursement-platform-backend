@@ -121,7 +121,7 @@ func Test_NewSignatureService(t *testing.T) {
 		dbVault:              store.NewDBVaultModel(dbConnectionPool),
 		encrypter:            &utils.DefaultPrivateKeyEncrypter{},
 	}
-	var wantSigRouter SignerRouter = &SignerRouterImpl{
+	wantSigRouterStrategies := map[schema.AccountType]SignatureClient{
 		schema.HostStellarEnv:                    wantHostAccountEnvSigner,
 		schema.ChannelAccountStellarDB:           wantChAccountSigner,
 		schema.DistributionAccountStellarEnv:     wantDistAccountEnvSigner,
@@ -168,7 +168,10 @@ func Test_NewSignatureService(t *testing.T) {
 			},
 
 			wantSigService: SignatureService{
-				SignerRouter:                wantSigRouter,
+				SignerRouter: &SignerRouterImpl{
+					strategies:        wantSigRouterStrategies,
+					networkPassphrase: network.TestNetworkPassphrase,
+				},
 				DistributionAccountResolver: wantDistAccountResolver,
 				networkPassphrase:           network.TestNetworkPassphrase,
 			},

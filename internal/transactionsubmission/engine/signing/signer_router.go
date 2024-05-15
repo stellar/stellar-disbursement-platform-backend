@@ -2,6 +2,7 @@ package signing
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 
@@ -24,9 +25,19 @@ type SignerRouter interface {
 	Delete(ctx context.Context, stellarAccount schema.TransactionAccount) error
 }
 
-type SignerRouterImpl map[schema.AccountType]SignatureClient
+var _ SignerRouter = (*SignerRouterImpl)(nil)
 
-// var _ SignatureClient = (*SignerRouterInterface)(nil)
+type SignerRouterImpl struct {
+	strategies        map[schema.AccountType]SignatureClient
+	networkPassphrase string
+}
+
+func NewSignerRouterImpl(network string, strategies map[schema.AccountType]SignatureClient) SignerRouterImpl {
+	return SignerRouterImpl{
+		networkPassphrase: network,
+		strategies:        strategies,
+	}
+}
 
 type SignatureRouterOptions struct {
 	// Shared for ALL signers:
@@ -60,13 +71,13 @@ func NewSignerRouter(opts SignatureRouterOptions, accountTypes ...schema.Account
 		}
 	}
 
-	router := SignerRouterImpl{}
+	router := map[schema.AccountType]SignatureClient{}
 	for _, accType := range accountTypes {
 		var newSigClient SignatureClient
 		var err error
 
 		switch accType {
-		case schema.HostStellarEnv, schema.DistributionAccountStellarEnv:
+		case schema.HostStellarEnv:
 			newSigClient, err = NewDistributionAccountEnvSignatureClient(DistributionAccountEnvOptions{
 				NetworkPassphrase:      opts.NetworkPassphrase,
 				DistributionPrivateKey: opts.HostPrivateKey,
@@ -80,6 +91,13 @@ func NewSignerRouter(opts SignatureRouterOptions, accountTypes ...schema.Account
 				EncryptionPassphrase: opts.ChAccEncryptionPassphrase,
 				LedgerNumberTracker:  opts.LedgerNumberTracker,
 				Encrypter:            opts.Encrypter,
+			})
+
+		case schema.DistributionAccountStellarEnv:
+			newSigClient, err = NewDistributionAccountEnvSignatureClient(DistributionAccountEnvOptions{
+				NetworkPassphrase:      opts.NetworkPassphrase,
+				DistributionPrivateKey: opts.DistributionPrivateKey,
+				// AccountType:            accType, // TODO
 			})
 
 		case schema.DistributionAccountStellarDBVault:
@@ -101,11 +119,14 @@ func NewSignerRouter(opts SignatureRouterOptions, accountTypes ...schema.Account
 		router[accType] = newSigClient
 	}
 
-	return &router, nil
+	return &SignerRouterImpl{
+		strategies:        router,
+		networkPassphrase: opts.NetworkPassphrase,
+	}, nil
 }
 
 func (r *SignerRouterImpl) RouteSigner(distAcctountType schema.AccountType) (SignatureClient, error) {
-	sigClient, ok := (*r)[distAcctountType]
+	sigClient, ok := r.strategies[distAcctountType]
 	if !ok {
 		return nil, fmt.Errorf("type %q is not supported by SignerRouter", distAcctountType)
 	}
@@ -118,12 +139,17 @@ func (r *SignerRouterImpl) SignStellarTransaction(
 	stellarTx *txnbuild.Transaction,
 	accounts ...schema.TransactionAccount,
 ) (signedStellarTx *txnbuild.Transaction, err error) {
+	if len(accounts) == 0 {
+		return nil, errors.New("no accounts provided to sign the transaction")
+	}
+
 	// Get all signer types:
 	sigTypes := map[schema.AccountType][]string{}
 	for _, account := range accounts {
 		sigTypes[account.Type] = append(sigTypes[account.Type], account.Address)
 	}
 
+	// Sort the types to ensure deterministic signing order:
 	sortedTypes := []schema.AccountType{}
 	for sigType := range sigTypes {
 		sortedTypes = append(sortedTypes, sigType)
@@ -142,7 +168,7 @@ func (r *SignerRouterImpl) SignStellarTransaction(
 
 		signedStellarTx, err = sigClient.SignStellarTransaction(ctx, signedStellarTx, publicKeys...)
 		if err != nil {
-			return nil, fmt.Errorf("signing stellar transaction: %w", err)
+			return nil, fmt.Errorf("signing stellar transaction for strategy=%s: %w", sigType, err)
 		}
 	}
 
@@ -154,12 +180,17 @@ func (r *SignerRouterImpl) SignFeeBumpStellarTransaction(
 	feeBumpStellarTx *txnbuild.FeeBumpTransaction,
 	accounts ...schema.TransactionAccount,
 ) (signedFeeBumpStellarTx *txnbuild.FeeBumpTransaction, err error) {
+	if len(accounts) == 0 {
+		return nil, errors.New("no accounts provided to sign the transaction")
+	}
+
 	// Get all signer types:
 	sigTypes := map[schema.AccountType][]string{}
 	for _, account := range accounts {
 		sigTypes[account.Type] = append(sigTypes[account.Type], account.Address)
 	}
 
+	// Sort the types to ensure deterministic signing order:
 	sortedTypes := []schema.AccountType{}
 	for sigType := range sigTypes {
 		sortedTypes = append(sortedTypes, sigType)
@@ -178,7 +209,7 @@ func (r *SignerRouterImpl) SignFeeBumpStellarTransaction(
 
 		signedFeeBumpStellarTx, err = sigClient.SignFeeBumpStellarTransaction(ctx, signedFeeBumpStellarTx, publicKeys...)
 		if err != nil {
-			return nil, fmt.Errorf("signing stellar transaction: %w", err)
+			return nil, fmt.Errorf("signing stellar fee bump transaction for strategy=%s: %w", sigType, err)
 		}
 	}
 
@@ -190,14 +221,18 @@ func (r *SignerRouterImpl) BatchInsert(
 	accountType schema.AccountType,
 	number int,
 ) (stellarAccounts []schema.TransactionAccount, err error) {
+	if number < 1 {
+		return nil, errors.New("number of accounts to insert must be greater than 0")
+	}
+
 	sigClient, err := r.RouteSigner(accountType)
 	if err != nil {
 		return nil, fmt.Errorf("routing signer: %w", err)
 	}
 
 	publicKeys, err := sigClient.BatchInsert(ctx, number)
-	if err != nil {
-		return nil, fmt.Errorf("batch inserting accounts for accountType=%s: %w", accountType, err)
+	if err != nil && !(errors.Is(err, ErrUnsupportedCommand) && len(publicKeys) > 0) {
+		return nil, fmt.Errorf("batch inserting accounts for strategy=%s: %w", accountType, err)
 	}
 
 	for _, publicKey := range publicKeys {
@@ -208,7 +243,7 @@ func (r *SignerRouterImpl) BatchInsert(
 		})
 	}
 
-	return stellarAccounts, nil
+	return stellarAccounts, err
 }
 
 func (r *SignerRouterImpl) Delete(
@@ -222,21 +257,16 @@ func (r *SignerRouterImpl) Delete(
 
 	err = sigClient.Delete(ctx, account.Address)
 	if err != nil {
-		return fmt.Errorf("deleting account %v: %w", account, err)
+		return fmt.Errorf("deleting account=%v for strategy=%s: %w", account, account.Type, err)
 	}
 
 	return nil
 }
 
 func (r *SignerRouterImpl) NetworkPassphrase() string {
-	for _, sigClient := range *r {
-		return sigClient.NetworkPassphrase()
-	}
-
-	// TODO: 🤔
-	return "INVALID_NETWORK_PASSPHRASE"
+	return r.networkPassphrase
 }
 
 func (r *SignerRouterImpl) SupportedAccountTypes() []schema.AccountType {
-	return maps.Keys(*r)
+	return maps.Keys(r.strategies)
 }

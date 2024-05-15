@@ -82,7 +82,7 @@ func (m *Manager) handleProvisioningError(ctx context.Context, err error, t *ten
 	provisioningErr := fmt.Errorf("provisioning error: %w", err)
 
 	if errors.Is(err, ErrUpdateTenantFailed) {
-		log.Ctx(ctx).Errorf("tenant record not updated")
+		log.Ctx(ctx).Errorf("tenant record not updated: %v", err)
 	}
 
 	if isErrorInArray(err, deleteDistributionKeyErrors()) {

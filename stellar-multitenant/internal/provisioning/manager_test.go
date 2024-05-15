@@ -197,7 +197,7 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 			distAccResolver := mocks.NewMockDistributionAccountResolver(t)
 			distAccResolver.On("HostDistributionAccount").Return(&hostAccount).Maybe()
 
-			sigRouter := signing.SignerRouterImpl{
+			signatureStrategies := map[schema.AccountType]signing.SignatureClient{
 				schema.HostStellarEnv:          hostAccSigClient,
 				schema.ChannelAccountStellarDB: chAccSigClient,
 			}
@@ -256,7 +256,8 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 				require.Failf(t, "invalid sigClientType=%s", string(tc.accountType))
 			}
 
-			sigRouter[tc.accountType] = distAccSigClient
+			signatureStrategies[tc.accountType] = distAccSigClient
+			sigRouter := signing.NewSignerRouterImpl(network.TestNetworkPassphrase, signatureStrategies)
 
 			// STEP 3: create Submitter Engine
 			mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
