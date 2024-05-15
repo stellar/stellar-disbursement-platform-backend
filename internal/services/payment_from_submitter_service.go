@@ -47,7 +47,7 @@ func (s PaymentFromSubmitterService) SyncBatchTransactions(ctx context.Context, 
 		})
 	})
 	if err != nil {
-		return fmt.Errorf("synching payments from submitter: %w", err)
+		return fmt.Errorf("synchronizing payments from submitter: %w", err)
 	}
 
 	return nil
@@ -65,7 +65,7 @@ func (s PaymentFromSubmitterService) SyncTransaction(ctx context.Context, tx *sc
 		})
 	})
 	if err != nil {
-		return fmt.Errorf("synching payment from submitter: %w", err)
+		return fmt.Errorf("synchronizing payment from submitter: %w", err)
 	}
 
 	return nil

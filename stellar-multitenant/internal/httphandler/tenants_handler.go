@@ -32,6 +32,8 @@ type TenantsHandler struct {
 	NetworkType                 utils.NetworkType
 	AdminDBConnectionPool       db.DBConnectionPool
 	SingleTenantMode            bool
+	BaseURL                     string
+	SDPUIBaseURL                string
 }
 
 const MaxNativeAssetBalanceForDeletion = 100
@@ -86,7 +88,7 @@ func (h TenantsHandler) Post(rw http.ResponseWriter, req *http.Request) {
 	tnt, err := h.ProvisioningManager.ProvisionNewTenant(
 		ctx, reqBody.Name, reqBody.OwnerFirstName,
 		reqBody.OwnerLastName, reqBody.OwnerEmail, reqBody.OrganizationName,
-		reqBody.SDPUIBaseURL, string(h.NetworkType),
+		string(h.NetworkType),
 	)
 	if err != nil {
 		if errors.Is(err, tenant.ErrDuplicatedTenantName) {
@@ -97,9 +99,32 @@ func (h TenantsHandler) Post(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	var tntBaseURL string
+	if reqBody.BaseURL != nil {
+		tntBaseURL = *reqBody.BaseURL
+	} else {
+		tntBaseURL, err = utils.GenerateTenantURL(h.BaseURL, tnt.Name)
+		if err != nil {
+			httperror.InternalError(ctx, "Could not generate URL", err, nil).Render(rw)
+			return
+		}
+	}
+
+	var tntSDPUIBaseURL string
+	if reqBody.SDPUIBaseURL != nil {
+		tntSDPUIBaseURL = *reqBody.SDPUIBaseURL
+	} else {
+		tntSDPUIBaseURL, err = utils.GenerateTenantURL(h.SDPUIBaseURL, tnt.Name)
+		if err != nil {
+			httperror.InternalError(ctx, "Could not generate SDP UI URL", err, nil).Render(rw)
+			return
+		}
+	}
+
 	tnt, err = h.Manager.UpdateTenantConfig(ctx, &tenant.TenantUpdate{
-		ID:      tnt.ID,
-		BaseURL: &reqBody.BaseURL,
+		ID:           tnt.ID,
+		BaseURL:      &tntBaseURL,
+		SDPUIBaseURL: &tntSDPUIBaseURL,
 	})
 	if err != nil {
 		httperror.InternalError(ctx, "Could not update tenant config", err, nil).Render(rw)

@@ -29,5 +29,5 @@ const (
 type EventHandler interface {
 	Name() string
 	CanHandleMessage(ctx context.Context, message *Message) bool
-	Handle(ctx context.Context, message *Message)
+	Handle(ctx context.Context, message *Message) error
 }

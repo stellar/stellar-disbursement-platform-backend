@@ -89,3 +89,28 @@ func GetURLWithScheme(rawURL string) (string, error) {
 
 	return rawURL, nil
 }
+
+func GenerateTenantURL(baseURL string, tenantID string) (string, error) {
+	if tenantID == "" {
+		return "", fmt.Errorf("tenantID is empty")
+	}
+
+	parsedURL, err := url.Parse(baseURL)
+	if err != nil {
+		return "", fmt.Errorf("invalid base URL %s: %w", baseURL, err)
+	}
+
+	hostParts := strings.SplitN(parsedURL.Hostname(), ".", 2)
+	if len(hostParts) != 2 {
+		return "", fmt.Errorf("base URL must have at least two domain parts %s", baseURL)
+	}
+
+	newHostname := fmt.Sprintf("%s.%s", tenantID, parsedURL.Hostname())
+	if parsedURL.Port() != "" {
+		parsedURL.Host = newHostname + ":" + parsedURL.Port()
+	} else {
+		parsedURL.Host = newHostname
+	}
+
+	return parsedURL.String(), nil
+}

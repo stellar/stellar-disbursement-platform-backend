@@ -57,6 +57,14 @@ func rootCmd() *cobra.Command {
 			FlagDefault: "http://localhost:8000",
 			Required:    true,
 		},
+		{
+			Name:        "sdp-ui-base-url",
+			Usage:       "The SDP UI server's base URL.",
+			OptType:     types.String,
+			ConfigKey:   &globalOptions.SDPUIBaseURL,
+			FlagDefault: "http://localhost:3000",
+			Required:    true,
+		},
 		cmdUtils.NetworkPassphrase(&globalOptions.NetworkPassphrase),
 	}
 
