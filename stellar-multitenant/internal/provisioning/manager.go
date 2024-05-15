@@ -63,14 +63,13 @@ func rollbackTenantCreationAndSchemaErrors() []error {
 
 func (m *Manager) ProvisionNewTenant(
 	ctx context.Context, name, userFirstName, userLastName, userEmail,
-	organizationName, uiBaseURL, networkType string,
+	organizationName, networkType string,
 ) (*tenant.Tenant, error) {
 	pt := &ProvisionTenant{
 		name:          name,
 		userFirstName: userFirstName,
 		userLastName:  userLastName,
 		userEmail:     userEmail,
-		uiBaseURL:     uiBaseURL,
 		orgName:       organizationName,
 		networkType:   networkType,
 	}
@@ -171,7 +170,6 @@ func (m *Manager) provisionTenant(ctx context.Context, pt *ProvisionTenant) (*te
 		&tenant.TenantUpdate{
 			ID:                         t.ID,
 			Status:                     &tenantStatus,
-			SDPUIBaseURL:               &pt.uiBaseURL,
 			DistributionAccountAddress: *t.DistributionAccountAddress,
 			DistributionAccountType:    distAccType,
 			DistributionAccountStatus:  schema.DistributionAccountStatusActive,

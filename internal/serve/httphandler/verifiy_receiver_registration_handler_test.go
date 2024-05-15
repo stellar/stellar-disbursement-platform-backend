@@ -664,7 +664,7 @@ func Test_VerifyReceiverRegistrationHandler_producePaymentsReadyToPayEvent(t *te
 
 		entries := getEntries()
 		require.Len(t, entries, 1)
-		assert.Equal(t, fmt.Sprintf("event producer is nil, could not publish message %s", expectedMessage.String()), entries[0].Message)
+		assert.Equal(t, fmt.Sprintf("event producer is nil, could not publish message %s", expectedMessage), entries[0].Message)
 	})
 
 	t.Run("returns error when EventProducer fails writing a message", func(t *testing.T) {
@@ -707,7 +707,7 @@ func Test_VerifyReceiverRegistrationHandler_producePaymentsReadyToPayEvent(t *te
 			Once()
 
 		err := handler.producePaymentsReadyToPayEvent(ctx, dbConnectionPool, rw)
-		assert.EqualError(t, err, fmt.Sprintf("writing message %s on event producer: unexpected error", expectedMessage.String()))
+		assert.EqualError(t, err, fmt.Sprintf("writing message %s on event producer: unexpected error", expectedMessage))
 	})
 
 	t.Run("produce event successfully", func(t *testing.T) {

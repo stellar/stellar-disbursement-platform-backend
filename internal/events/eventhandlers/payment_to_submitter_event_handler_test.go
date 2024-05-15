@@ -5,12 +5,12 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/assert"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	servicesMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/services/mocks"
@@ -27,37 +27,27 @@ func Test_PaymentToSubmitterEventHandler_Handle(t *testing.T) {
 
 	tenantManager := tenant.NewManager(tenant.WithDatabase(dbConnectionPool))
 
-	crashTrackerClient := crashtracker.MockCrashTrackerClient{}
 	service := servicesMocks.MockPaymentToSubmitterService{}
 
 	handler := PaymentToSubmitterEventHandler{
-		tenantManager:      tenantManager,
-		crashTrackerClient: &crashTrackerClient,
-		service:            &service,
+		tenantManager: tenantManager,
+		service:       &service,
 	}
 
 	ctx := context.Background()
 	t.Run("logs and report error when message Data is invalid", func(t *testing.T) {
-		crashTrackerClient.
-			On("LogAndReportErrors", ctx, mock.Anything, "[PaymentToSubmitterEventHandler] could not convert data to schemas.EventPaymentsReadyToPayData: invalid").
-			Return().
-			Once()
-
-		handler.Handle(ctx, &events.Message{Data: "invalid"})
+		handleErr := handler.Handle(ctx, &events.Message{Data: "invalid"})
+		assert.ErrorContains(t, handleErr, "could not convert message data to schemas.EventPaymentsReadyToPayData")
 	})
 
 	t.Run("logs and report error when fails getting tenant by ID", func(t *testing.T) {
-		crashTrackerClient.
-			On("LogAndReportErrors", ctx, tenant.ErrTenantDoesNotExist, "[PaymentToSubmitterEventHandler] error getting tenant by id").
-			Return().
-			Once()
-
-		handler.Handle(ctx, &events.Message{
+		handleErr := handler.Handle(ctx, &events.Message{
 			TenantID: "tenant-id",
 			Data: schemas.EventPaymentCompletedData{
 				TransactionID: "tx-id",
 			},
 		})
+		assert.ErrorIs(t, handleErr, tenant.ErrTenantDoesNotExist)
 	})
 
 	t.Run("logs and report error when service returns error", func(t *testing.T) {
@@ -82,15 +72,11 @@ func Test_PaymentToSubmitterEventHandler_Handle(t *testing.T) {
 			Return(errors.New("unexpected error")).
 			Once()
 
-		crashTrackerClient.
-			On("LogAndReportErrors", ctxWithTenant, errors.New("unexpected error"), `[PaymentToSubmitterEventHandler] send payments ready to pay: [{payment-id}]`).
-			Return().
-			Once()
-
-		handler.Handle(ctx, &events.Message{
+		handleErr := handler.Handle(ctx, &events.Message{
 			TenantID: tnt.ID,
 			Data:     paymentsReadyToPay,
 		})
+		assert.ErrorContains(t, handleErr, "sending payments ready to pay")
 	})
 
 	t.Run("successfully sends payments ready to pay to TSS", func(t *testing.T) {
@@ -115,12 +101,12 @@ func Test_PaymentToSubmitterEventHandler_Handle(t *testing.T) {
 			Return(nil).
 			Once()
 
-		handler.Handle(ctx, &events.Message{
+		handleErr := handler.Handle(ctx, &events.Message{
 			TenantID: tnt.ID,
 			Data:     paymentsReadyToPay,
 		})
+		assert.NoError(t, handleErr)
 	})
 
-	crashTrackerClient.AssertExpectations(t)
 	service.AssertExpectations(t)
 }

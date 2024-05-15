@@ -180,3 +180,72 @@ func Test_GetURLWithScheme(t *testing.T) {
 		})
 	}
 }
+
+func Test_GenerateTenantURL(t *testing.T) {
+	tenantID := "abc"
+	testCases := []struct {
+		name, baseURL, tenantID, expectedURL string
+		expectedErr                          error
+	}{
+		{
+			name:        "returns the correct tenant URL",
+			baseURL:     "http://bluecorp.org.local",
+			tenantID:    tenantID,
+			expectedURL: fmt.Sprintf("http://%s.bluecorp.org.local", tenantID),
+			expectedErr: nil,
+		},
+		{
+			name:        "returns the correct tenant URL - varying protocol",
+			baseURL:     "https://bluecorp.org.local",
+			tenantID:    tenantID,
+			expectedURL: fmt.Sprintf("https://%s.bluecorp.org.local", tenantID),
+			expectedErr: nil,
+		},
+		{
+			name:        "returns the correct tenant URL when it has port",
+			baseURL:     "http://bluecorp.org.local:3000",
+			tenantID:    tenantID,
+			expectedURL: fmt.Sprintf("http://%s.bluecorp.org.local:3000", tenantID),
+			expectedErr: nil,
+		},
+		{
+			name:        "returns the correct tenant URL when it has a path",
+			baseURL:     "http://bluecorp.org.local/sdp",
+			tenantID:    tenantID,
+			expectedURL: fmt.Sprintf("http://%s.bluecorp.org.local/sdp", tenantID),
+			expectedErr: nil,
+		},
+		{
+			name:        "returns error when tenant ID is empty",
+			baseURL:     "http://bluecorp.org.local/sdp",
+			expectedURL: "",
+			expectedErr: fmt.Errorf("tenantID is empty"),
+		},
+		{
+			name:        "returns error when invalid base URL - no protocol and URL separator",
+			baseURL:     "bluecorp.org.local:3000",
+			tenantID:    tenantID,
+			expectedURL: "",
+			expectedErr: fmt.Errorf("base URL must have at least two domain parts bluecorp.org.local:3000"),
+		},
+		{
+			name:        "returns error when invalid base URL - no protocol",
+			baseURL:     "://bluecorp.org.local:3000",
+			tenantID:    tenantID,
+			expectedURL: "",
+			expectedErr: fmt.Errorf("invalid base URL ://bluecorp.org.local:3000: parse \"://bluecorp.org.local:3000\": missing protocol scheme"),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			gotURL, err := GenerateTenantURL(tc.baseURL, tc.tenantID)
+			if tc.expectedErr != nil {
+				assert.EqualError(t, err, tc.expectedErr.Error())
+			} else {
+				require.NoError(t, err)
+			}
+			assert.Equal(t, tc.expectedURL, gotURL)
+		})
+	}
+}

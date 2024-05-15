@@ -130,7 +130,6 @@ func (s *ServerService) SetupConsumers(ctx context.Context, o SetupConsumersOpti
 			MessengerClient:                o.ServeOpts.SMSMessengerClient,
 			MaxInvitationSMSResendAttempts: int64(o.ServeOpts.MaxInvitationSMSResendAttempts),
 			Sep10SigningPrivateKey:         o.ServeOpts.Sep10SigningPrivateKey,
-			CrashTrackerClient:             o.ServeOpts.CrashTrackerClient.Clone(),
 		}),
 	)
 	if err != nil {
@@ -145,13 +144,11 @@ func (s *ServerService) SetupConsumers(ctx context.Context, o SetupConsumersOpti
 			AdminDBConnectionPool: o.ServeOpts.AdminDBConnectionPool,
 			MtnDBConnectionPool:   o.ServeOpts.MtnDBConnectionPool,
 			TSSDBConnectionPool:   o.TSSDBConnectionPool,
-			CrashTrackerClient:    o.ServeOpts.CrashTrackerClient.Clone(),
 		}),
 		eventhandlers.NewPatchAnchorPlatformTransactionCompletionEventHandler(eventhandlers.PatchAnchorPlatformTransactionCompletionEventHandlerOptions{
 			AdminDBConnectionPool: o.ServeOpts.AdminDBConnectionPool,
 			MtnDBConnectionPool:   o.ServeOpts.MtnDBConnectionPool,
 			APapiSvc:              o.ServeOpts.AnchorPlatformAPIService,
-			CrashTrackerClient:    o.ServeOpts.CrashTrackerClient.Clone(),
 		}),
 	)
 	if err != nil {
@@ -166,16 +163,20 @@ func (s *ServerService) SetupConsumers(ctx context.Context, o SetupConsumersOpti
 			AdminDBConnectionPool: o.ServeOpts.AdminDBConnectionPool,
 			MtnDBConnectionPool:   o.ServeOpts.MtnDBConnectionPool,
 			TSSDBConnectionPool:   o.TSSDBConnectionPool,
-			CrashTrackerClient:    o.ServeOpts.CrashTrackerClient.Clone(),
 		}),
 	)
 	if err != nil {
 		return fmt.Errorf("creating Payment Ready to Pay Kafka Consumer: %w", err)
 	}
 
-	go events.Consume(ctx, smsInvitationConsumer, o.ServeOpts.CrashTrackerClient.Clone())
-	go events.Consume(ctx, paymentCompletedConsumer, o.ServeOpts.CrashTrackerClient.Clone())
-	go events.Consume(ctx, paymentReadyToPayConsumer, o.ServeOpts.CrashTrackerClient.Clone())
+	producer, err := events.NewKafkaProducer(kafkaConfig)
+	if err != nil {
+		return fmt.Errorf("creating Kafka producer: %w", err)
+	}
+
+	go events.NewEventConsumer(smsInvitationConsumer, producer, o.ServeOpts.CrashTrackerClient.Clone()).Consume(ctx)
+	go events.NewEventConsumer(paymentCompletedConsumer, producer, o.ServeOpts.CrashTrackerClient.Clone()).Consume(ctx)
+	go events.NewEventConsumer(paymentReadyToPayConsumer, producer, o.ServeOpts.CrashTrackerClient.Clone()).Consume(ctx)
 
 	return nil
 }
@@ -486,6 +487,8 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			adminServeOpts.GitCommit = globalOptions.GitCommit
 			adminServeOpts.Version = globalOptions.Version
 			adminServeOpts.NetworkPassphrase = globalOptions.NetworkPassphrase
+			adminServeOpts.BaseURL = globalOptions.BaseURL
+			adminServeOpts.SDPUIBaseURL = globalOptions.SDPUIBaseURL
 		},
 		Run: func(cmd *cobra.Command, _ []string) {
 			ctx := cmd.Context()
