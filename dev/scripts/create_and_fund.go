@@ -32,8 +32,10 @@ func main() {
         fmt.Fprintf(flag.CommandLine.Output(), "  It can generate a new keypair or use an existing secret key to manage account operations.\n\n")
         flag.PrintDefaults()
         fmt.Fprintf(flag.CommandLine.Output(), "\nExamples:\n")
-        fmt.Fprintf(flag.CommandLine.Output(), "  %s -secret=SXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX -fundxlm=true\n", os.Args[0])
-        fmt.Fprintf(flag.CommandLine.Output(), "  %s -secret=SXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX -fundusdc=true\n", os.Args[0])
+        fmt.Fprintf(flag.CommandLine.Output(), "\nCreate new stellar account with any funding \n")
+        fmt.Fprintf(flag.CommandLine.Output(), "go run scripts/create_and_fund.go -secret=SXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX -fundusdc=true\n", os.Args[0])
+        fmt.Fprintf(flag.CommandLine.Output(), "\nFund USDC into an existing account:\n")
+        fmt.Fprintf(flag.CommandLine.Output(), "go run scripts/create_and_fund.go  -secret=SXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX -fundxlm=true\n", os.Args[0])
     }
 
     flag.Parse()
@@ -56,28 +58,45 @@ func main() {
         if pair != nil {
             fmt.Printf("Public Key: %s\n", pair.Address())
             fmt.Printf("Secret Key: %s\n", pair.Seed())
+            fmt.Printf("Demo Wallet URL: https://demo-wallet.stellar.org/account?secretKey=%s\n", pair.Seed())
         } else {
             log.Fatal("Key pair was not initialized.")
         }
 
     client := horizonclient.DefaultTestNetClient
 
-    // Fund with XLM using Friendbot if --fundxlm is specified
-    if fundXLM {
-        _, err := client.Fund(pair.Address())
-        if err != nil {
-            log.Fatalf("Failed to fund with Friendbot: %v", err)
-        }
-        fmt.Println("Funded with XLM using Friendbot.")
+// Fund with XLM using Friendbot if --fundxlm is specified
+if fundXLM {
+    _, err := client.Fund(pair.Address())
+    if err != nil {
+        printHorizonError(err)
+        log.Fatalf("Failed to fund with Friendbot: %v", err)
     }
+    fmt.Println("Funded with XLM using Friendbot.")
+}
 
-    if fundUSDC {
-        err := establishTrustlineAndBuyUSDC(client, pair, xlmAmount)
-        if err != nil {
-            log.Fatal(err)
-        }
+if fundUSDC {
+    err := establishTrustlineAndBuyUSDC(client, pair, xlmAmount)
+    if err != nil {
+        printHorizonError(err)
+        log.Fatal(err)
     }
 }
+
+fmt.Printf("Account URL: https://demo-wallet.stellar.org/account?secretKey=%s\n", pair.Seed())
+}
+
+func printHorizonError(err error) {
+if herr, ok := err.(*horizonclient.Error); ok {
+    fmt.Printf("Horizon Error: %s\n", herr.Problem.Title)
+    fmt.Printf("Detail: %s\n", herr.Problem.Detail)
+    fmt.Printf("Status: %d\n", herr.Problem.Status)
+    fmt.Printf("Type: %s\n", herr.Problem.Type)
+} else {
+    fmt.Printf("Error: %v\n", err)
+}
+}
+
 
 func establishTrustlineAndBuyUSDC(client *horizonclient.Client, pair *keypair.Full, xlmAmount string) error {
     sourceAccount, err := client.AccountDetail(horizonclient.AccountRequest{AccountID: pair.Address()})

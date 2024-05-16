@@ -124,22 +124,6 @@ for tenant in "${tenants[@]}"; do
         echo "🔗Note: You can reset the password for the owner $ownerEmail on $sdpUIBaseURL/forgot-password"
     fi
 done
-# Get BlueCorp Tenant ID
-existingTenants=$(curl -s -H "$AuthHeader" $AdminTenantURL)
-echo $existingTenants
-blueCorpID=$(echo $existingTenants | jq -r '.[] | select(.name | ascii_downcase == "bluecorp") | .id')
-echo "BlueCorp Tenant ID: $blueCorpID"
-
-# Set BlueCorp as the default tenant
-if [ -n "$blueCorpID" ]; then
-    setDefaultResponse=$(curl -s -X POST "http://localhost:8003/tenants/default-tenant" \
-                         -H "Content-Type: application/json" \
-                         -H "$AuthHeader" \
-                         -d '{"id":"'"$blueCorpID"'"}')
-    echo "Set BlueCorp as default tenant response: $setDefaultResponse"
-else
-    echo "BlueCorp tenant ID not found, cannot set as default tenant."
-fi
 
 echo "====> ✅Step 3: finished initialization of tenants"
 echo $DIVIDER

@@ -1,0 +1,285 @@
+{
+	"info": {
+		"_postman_id": "e32adb9c-7e41-4138-b3b7-7f25d6f11995",
+		"name": "SDP",
+		"schema": "https://schema.getpostman.com/json/collection/v2.0.0/collection.json",
+		"_exporter_id": "20979969"
+	},
+	"item": [
+		{
+			"name": "/tenants",
+			"request": {
+				"method": "GET",
+				"header": []
+			},
+			"response": []
+		},
+		{
+			"name": "/tenants/default-tenant",
+			"request": {
+				"auth": {
+					"type": "basic",
+					"basic": {
+						"username": "SDP-admin",
+						"password": "api_key_1234567890"
+					}
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"id\": \"a2e9ba7c-ec70-4d06-b36a-0f2ec805f0b4\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": "http://localhost:8003/tenants/default-tenant"
+			},
+			"response": []
+		},
+		{
+			"name": "forgot-password",
+			"request": {
+				"auth": {
+					"type": "basic",
+					"basic": {
+						"username": "SDP-admin",
+						"password": "api_key_1234567890"
+					}
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"id\": \"a2e9ba7c-ec70-4d06-b36a-0f2ec805f0b4\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": "http://localhost:8003/tenants/default-tenant"
+			},
+			"response": []
+		},
+		{
+			"name": "/tenants",
+			"request": {
+				"auth": {
+					"type": "basic",
+					"basic": {
+						"username": "SDP-admin",
+						"password": "api_key_1234567890"
+					}
+				},
+				"method": "PATCH",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": " {\n    \"sdp_ui_base_url\": \"https://sdp-backend-dashboard-pr256.previews.kube001.services.stellar-ops.com\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": "http://localhost:8003/tenants/a2e9ba7c-ec70-4d06-b36a-0f2ec805f0b4"
+			},
+			"response": []
+		},
+		{
+			"name": "/tenants",
+			"request": {
+				"auth": {
+					"type": "basic",
+					"basic": {
+						"username": "SDP-admin",
+						"password": "api_key_1234567890"
+					}
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"name\": \"bluecorp\",\n    \"organization_name\": \"bluecorp\",\n    \"email_sender_type\": \"AWS_EMAIL\",\n    \"sms_sender_type\": \"TWILIO_SMS\",\n    \"base_url\": \"https://sdp-backend-pr256.previews.kube001.services.stellar-ops.com\",\n    \"sdp_ui_base_url\": \"https://sdp-backend-dashboard-pr256.previews.kube001.services.stellar-ops.com\",\n    \"owner_email\": \"reece@stellar.org\",\n    \"owner_first_name\": \"jane\",\n    \"owner_last_name\": \"doe\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": "http://localhost:8003/tenants"
+			},
+			"response": [
+				{
+					"name": "/tenants",
+					"originalRequest": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"bluecorp\",\n    \"organization_name\": \"bluecorp\",\n    \"email_sender_type\": \"AWS_EMAIL\",\n    \"sms_sender_type\": \"TWILIO_SMS\",\n    \"base_url\": \"https://sdp-backend-pr256.previews.kube001.services.stellar-ops.com\",\n    \"sdp_ui_base_url\": \"https://sdp-backend-dashboard-pr256.previews.kube001.services.stellar-ops.com\",\n    \"owner_email\": \"reece@stellar.org\",\n    \"owner_first_name\": \"jane\",\n    \"owner_last_name\": \"doe\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": "http://localhost:8003/tenants"
+					},
+					"status": "Created",
+					"code": 201,
+					"_postman_previewlanguage": "json",
+					"header": [
+						{
+							"key": "Content-Disposition",
+							"value": "inline"
+						},
+						{
+							"key": "Content-Type",
+							"value": "application/json; charset=utf-8"
+						},
+						{
+							"key": "Date",
+							"value": "Sat, 27 Apr 2024 15:36:07 GMT"
+						},
+						{
+							"key": "Content-Length",
+							"value": "567"
+						}
+					],
+					"cookie": [],
+					"body": "{\n    \"id\": \"944e5748-693f-483a-be6d-e1bebb875899\",\n    \"name\": \"bluecorp\",\n    \"email_sender_type\": \"AWS_EMAIL\",\n    \"sms_sender_type\": \"TWILIO_SMS\",\n    \"base_url\": \"https://sdp-backend-pr256.previews.kube001.services.stellar-ops.com\",\n    \"sdp_ui_base_url\": \"https://sdp-backend-dashboard-pr256.previews.kube001.services.stellar-ops.com\",\n    \"status\": \"TENANT_PROVISIONED\",\n    \"distribution_account\": \"GBC2HVWFIFN7WJHFORVBCDKJORG6LWTW3O2QBHOURL3KHZPM4KMWTUSA\",\n    \"is_default\": false,\n    \"created_at\": \"2024-04-27T15:36:06.839203Z\",\n    \"updated_at\": \"2024-04-27T15:36:07.992456Z\"\n}"
+				}
+			]
+		},
+		{
+			"name": "/auth",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:8080/auth?account=GAIBGVLI3YX6OIERQJBCBY3T7ARLSPZPT36FQXHXPE67WLVDPXQGU2RK",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"auth"
+					],
+					"query": [
+						{
+							"key": "account",
+							"value": "GAIBGVLI3YX6OIERQJBCBY3T7ARLSPZPT36FQXHXPE67WLVDPXQGU2RK"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "/auth",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\"transaction\": \"AAAAAgAAAAAP/jlben/lph0Z+wZai90T0ekiauH13PSB7rIG5I6HbAAAAMgAAAAAAAAAAAAAAAEAAAAAZjo/UgAAAABmOkLWAAAAAAAAAAIAAAABAAAAABATVWjeL+cgkYJCIONz+CK5Py+e/Fhc93k9+y6jfeBqAAAACgAAABNsb2NhbGhvc3Q6ODAwMCBhdXRoAAAAAAEAAABAUHJHNXUvT3hncVIxakpyQWJ6OFQrQzBZcm9IbnFBa0swRGVrVmZ6U3c3MHdSM0VSMHVlaytoVjZIUDBuc1JsYgAAAAEAAAAAD/45W3p/5aYdGfsGWovdE9HpImrh9dz0ge6yBuSOh2wAAAAKAAAAD3dlYl9hdXRoX2RvbWFpbgAAAAABAAAADmxvY2FsaG9zdDo4MDgwAAAAAAAAAAAAAuSOh2wAAABAMXQF537j/NYaqKZpK4GCZeJHbBZexj4PfcSvDGRRBY90AuGE/wmfYOyoptyUD14piolyj8YXKiHgRNR2xi9rBqOp6LoAAABAiSHaXHtDVchGw/IIzw3mxoiPpMWuZ5c57r6ebZm/rIDFccSURl+y3srF9dhQkw0eWogGZruW3lMLp9GffsRtAA==\"}\n",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": "http://localhost:8080/auth"
+			},
+			"response": []
+		},
+		{
+			"name": "New Request",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": {
+						"token": "Basic eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiJhYzk0OTEwZTBiMjkxNWEzN2RjZmUyM2UxNjVmZDQyYTY3MjE2MmI0ZjQyZDczNGZlNzBhZTI1ZDE0MjA0YThjIiwiaXNzIjoiaHR0cHM6Ly9sb2NhbGhvc3Q6ODA4MC9hdXRoIiwic3ViIjoiR0FJQkdWTEkzWVg2T0lFUlFKQkNCWTNUN0FSTFNQWlBUMzZGUVhIWFBFNjdXTFZEUFhRR1UyUksiLCJpYXQiOjE3MTUxMjk0MDAsImV4cCI6MTcxNTIxNTgwMCwiaG9tZV9kb21haW4iOiJsb2NhbGhvc3Q6ODAwMCJ9.2wPU9-tGCyE0pSjn4gjoxHboVO3ocAYALmrkUNJlA-s"
+					}
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "urlencoded",
+					"urlencoded": []
+				},
+				"url": {
+					"raw": "http://localhost:8080/sep24/transactions/deposit/interactive?account=GAIBGVLI3YX6OIERQJBCBY3T7ARLSPZPT36FQXHXPE67WLVDPXQGU2RK&asset_code=USDC&lang=en&claimable_balance_supported=false",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"sep24",
+						"transactions",
+						"deposit",
+						"interactive"
+					],
+					"query": [
+						{
+							"key": "account",
+							"value": "GAIBGVLI3YX6OIERQJBCBY3T7ARLSPZPT36FQXHXPE67WLVDPXQGU2RK"
+						},
+						{
+							"key": "asset_code",
+							"value": "USDC"
+						},
+						{
+							"key": "lang",
+							"value": "en"
+						},
+						{
+							"key": "claimable_balance_supported",
+							"value": "false"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "/health",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": "http://localhost:8003/health"
+			},
+			"response": []
+		}
+	],
+	"auth": {
+		"type": "bearer",
+		"bearer": {}
+	},
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		}
+	]
+}
