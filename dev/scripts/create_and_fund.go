@@ -23,37 +23,34 @@ func main() {
 	flag.StringVar(&secretKey, "secret", "", "The secret key of an existing Stellar account")
 	flag.BoolVar(&fundXLM, "fundxlm", false, "Set to true to fund the account with XLM using Friendbot")
 	flag.BoolVar(&fundUSDC, "fundusdc", false, "Set to true to fund the account with USDC and establish a trustline")
-	flag.StringVar(&xlmAmount, "xlm_amount", "10", "The amount of USDC to fund the account with (default is 10).")
+	flag.StringVar(&xlmAmount, "xlm_amount", "10", "The amount of XLM to fund the account with (default is 10).")
 
 	flag.Usage = func() {
-        fmt.Fprintf(flag.CommandLine.Output(), "Usage of %s:\n", os.Args[0])
-        fmt.Fprintln(flag.CommandLine.Output(), "  This program creates and manages funding for Stellar accounts.")
-        fmt.Fprintln(flag.CommandLine.Output(), "  It can generate a new keypair or use an existing secret key to manage account operations.\n")
-        flag.PrintDefaults()
-        fmt.Fprintln(flag.CommandLine.Output(), "\nExamples:")
-        fmt.Fprintln(flag.CommandLine.Output(), "\nCreate new stellar account with any funding:")
-        fmt.Fprintln(flag.CommandLine.Output(), "  go run scripts/create_and_fund.go -secret=SXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX -fundusdc=true")
-        fmt.Fprintln(flag.CommandLine.Output(), "\nFund USDC into an existing account:")
-        fmt.Fprintln(flag.CommandLine.Output(), "  go run scripts/create_and_fund.go -secret=SXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX -fundxlm=true")
-    }
+		fmt.Fprintf(flag.CommandLine.Output(), "Usage of %s:\n", os.Args[0])
+		fmt.Fprintln(flag.CommandLine.Output(), "  This program creates and manages funding for Stellar accounts.")
+		fmt.Fprintln(flag.CommandLine.Output(), "  It can generate a new keypair or use an existing secret key to manage account operations.\n")
+		flag.PrintDefaults()
+		fmt.Fprintln(flag.CommandLine.Output(), "\nExamples:")
+		fmt.Fprintln(flag.CommandLine.Output(), "\nCreate new stellar account with any funding:")
+		fmt.Fprintln(flag.CommandLine.Output(), "  go run scripts/create_and_fund.go -secret=SXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX -fundusdc=true")
+		fmt.Fprintln(flag.CommandLine.Output(), "\nFund USDC into an existing account:")
+		fmt.Fprintln(flag.CommandLine.Output(), "  go run scripts/create_and_fund.go -secret=SXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX -fundxlm=true")
+	}
 
 	flag.Parse()
 
 	if secretKey == "" {
-		// Do not redeclare pair, just assign
 		pair, err = keypair.Random()
 		if err != nil {
 			log.Fatalf("Failed to generate a new keypair: %v", err)
 		}
 	} else {
-		// Do not redeclare pair, just assign
 		pair, err = keypair.ParseFull(secretKey)
 		if err != nil {
 			log.Fatalf("Failed to parse secret key: %v", err)
 		}
 	}
 
-	// Ensure that pair is not nil before using it
 	if pair != nil {
 		fmt.Printf("Public Key: %s\n", pair.Address())
 		fmt.Printf("Secret Key: %s\n", pair.Seed())
@@ -64,7 +61,6 @@ func main() {
 
 	client := horizonclient.DefaultTestNetClient
 
-	// Fund with XLM using Friendbot if --fundxlm is specified
 	if fundXLM {
 		_, err := client.Fund(pair.Address())
 		if err != nil {
@@ -112,16 +108,14 @@ func establishTrustlineAndBuyUSDC(client *horizonclient.Client, pair *keypair.Fu
 		Line: changeTrustAsset,
 	}
 
-	// Create a path payment strict send operation
 	pathPaymentOp := txnbuild.PathPaymentStrictSend{
 		SendAsset:   txnbuild.NativeAsset{},
 		SendAmount:  xlmAmount,
 		Destination: pair.Address(),
 		DestAsset:   usdcAsset,
-		DestMin:     "0.1", // Very low minimum to ensure the trade goes through
+		DestMin:     "0.1",
 	}
 
-	// Build the transaction with both operations
 	tx, err := txnbuild.NewTransaction(
 		txnbuild.TransactionParams{
 			SourceAccount:        &sourceAccount,
@@ -135,13 +129,11 @@ func establishTrustlineAndBuyUSDC(client *horizonclient.Client, pair *keypair.Fu
 		return fmt.Errorf("failed to build the transaction: %v", err)
 	}
 
-	// Sign the transaction with the network passphrase and the secret key
 	tx, err = tx.Sign(network.TestNetworkPassphrase, pair)
 	if err != nil {
 		return fmt.Errorf("failed to sign the transaction: %v", err)
 	}
 
-	// Submit the transaction to the Stellar network
 	resp, err := client.SubmitTransaction(tx)
 	if err != nil {
 		return fmt.Errorf("failed to submit the transaction: %v", err)
