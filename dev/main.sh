@@ -3,6 +3,21 @@
 set -eu
 
 export DIVIDER="----------------------------------------"
+# Function to display help
+display_help() {
+    echo "Usage: $0 [options]"
+    echo
+    echo "Options:"
+    echo "  --help            Show this help message and exit."
+    echo "  --delete_pv       Delete persistent volumes for SDP databases."
+}
+
+# Check if --help is passed as an argument
+if [[ " $@ " =~ " --help " ]]; then
+    display_help
+    exit 0
+fi
+
 # Check if curl is installed
 if ! command -v curl &> /dev/null
 then
@@ -24,67 +39,23 @@ echo $DIVIDER
 # Check if "--delete_pv" is passed as a parameter
 if [[ " $@ " =~ " --delete_pv " ]]; then
     echo "====> 👀 deleting persistent volumes sdp-multi-tenant_kafka-data sdp-multi-tenant_postgres-ap-db sdp-multi-tenant_postgres-db"
-    #echo "You have opted to delete persistent volumes sdp-multi-tenant_kafka-data sdp-multi-tenant_postgres-ap-db sdp-multi-tenant_postgres-db. Are you sure? (yes/no)"
-    #read -r confirmation
-    #if [ "$confirmation" == "yes" ]; then
-    #    echo "Deleting persistent volumes..."
-    docker volume rm sdp-multi-tenant_kafka-data sdp-multi-tenant_postgres-ap-db sdp-multi-tenant_postgres-db
-    #else
-    #    echo "Persistent volumes will not be deleted."
-    #fi
-    echo "====> ✅ finish deleting persistent volumes"
-fi
-
-# Check if .env already exists
-echo "====> 👀 creating accounts and .env environment file if it does not exist"
-if [ ! -f ".env" ]; then
-    GO_EXECUTABLE="go run ./scripts/create_and_fund.go"
-    echo ".env file does not exist. creating."
-
-    # Function to run Go script and extract keys
-    function generate_keys() {
-        # Run the Go script with the necessary arguments
-        if [ "$1" == "nop" ]; then
-            output=$($GO_EXECUTABLE -fundxlm=true)
+    
+    # Function to delete volume if it exists
+    delete_volume() {
+        local volume_name=$1
+        if docker volume inspect "$volume_name" &> /dev/null; then
+            docker volume rm "$volume_name"
+            echo "====> ✅ volume $volume_name deleted"
         else
-            output=$($GO_EXECUTABLE -fundxlm=true -fundusdc=true -xlm_amount="20")
+            echo "====> ⚠️ volume $volume_name does not exist"
         fi
-        echo "$output"
     }
 
-    # Generate keys for SEP-10 without funding
-    echo "Generating SEP-10 signing keys..."
-    sep10_output=$(generate_keys "nop")
-    sep10_public=$(echo "$sep10_output" | grep 'Public Key:' | awk '{print $3}')
-    sep10_private=$(echo "$sep10_output" | grep 'Secret Key:' | awk '{print $3}')
-
-    # Generate keys for distribution with funding
-    echo "Generating distribution keys with funding..."
-    distribution_output=$(generate_keys "with_funding")
-    distribution_public=$(echo "$distribution_output" | grep 'Public Key:' | awk '{print $3}')
-    distribution_private=$(echo "$distribution_output" | grep 'Secret Key:' | awk '{print $3}')
-
-    # Create .env file with the extracted values
-    cat << EOF > .env
-    # Generate a new keypair for SEP-10 signing
-    SEP10_SIGNING_PUBLIC_KEY=$sep10_public
-    SEP10_SIGNING_PRIVATE_KEY=$sep10_private
-
-    # Generate a new keypair for the distribution account
-    DISTRIBUTION_PUBLIC_KEY=$distribution_public
-    DISTRIBUTION_SEED=$distribution_private
-
-    # CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE
-    CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE=$distribution_private
-
-    # Distribution signer
-    DISTRIBUTION_SIGNER_TYPE=DISTRIBUTION_ACCOUNT_ENV
-    DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE=$distribution_private
-EOF
-
-    echo ".env file created successfully."
+    # Delete volumes
+    delete_volume "sdp-multi-tenant_kafka-data"
+    delete_volume "sdp-multi-tenant_postgres-ap-db"
+    delete_volume "sdp-multi-tenant_postgres-db"
 fi
-echo "====> ✅ finished .env setup"
 
 echo $DIVIDER
 echo "====> 👀calling docker compose up"
@@ -134,7 +105,7 @@ for tenant in "${tenants[@]}"; do
         sdpUIBaseURL="http://$tenant.stellar.local:3000"
         ownerEmail="init_owner@$tenant.org"
 
-        curl --verbose -X POST $AdminTenantURL \
+        curl -X POST $AdminTenantURL \
         -H "Content-Type: application/json" \
         -H "$AuthHeader" \
         -d '{
@@ -153,20 +124,21 @@ for tenant in "${tenants[@]}"; do
         echo "🔗Note: You can reset the password for the owner $ownerEmail on $sdpUIBaseURL/forgot-password"
     fi
 done
-# Get RedCorp Tenant ID
+# Get BlueCorp Tenant ID
+existingTenants=$(curl -s -H "$AuthHeader" $AdminTenantURL)
 echo $existingTenants
-redCorpID=$(echo $existingTenants | jq -r '.[] | select(.name | ascii_downcase == "redcorp") | .id')
-echo "RedCorp Tenant ID: $redCorpID"
+blueCorpID=$(echo $existingTenants | jq -r '.[] | select(.name | ascii_downcase == "bluecorp") | .id')
+echo "BlueCorp Tenant ID: $blueCorpID"
 
-# Set RedCorp as the default tenant
-if [ -n "$redCorpID" ]; then
+# Set BlueCorp as the default tenant
+if [ -n "$blueCorpID" ]; then
     setDefaultResponse=$(curl -s -X POST "http://localhost:8003/tenants/default-tenant" \
                          -H "Content-Type: application/json" \
                          -H "$AuthHeader" \
-                         -d '{"id":"'"$redCorpID"'"}')
-    echo "Set RedCorp as default tenant response: $setDefaultResponse"
+                         -d '{"id":"'"$blueCorpID"'"}')
+    echo "Set BlueCorp as default tenant response: $setDefaultResponse"
 else
-    echo "RedCorp tenant ID not found, cannot set as default tenant."
+    echo "BlueCorp tenant ID not found, cannot set as default tenant."
 fi
 
 echo "====> ✅Step 3: finished initialization of tenants"

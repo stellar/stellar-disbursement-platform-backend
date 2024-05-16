@@ -1,16 +1,22 @@
 # Quick Start Guide - First Disbursement
 
 ## Table of Contents
+- [Quick Start Guide - First Disbursement](#quick-start-guide---first-disbursement)
+  - [Table of Contents](#table-of-contents)
   - [Introduction](#introduction)
   - [Prerequisites](#prerequisites)
+    - [Docker](#docker)
+    - [Stellar Accounts and .env File](#stellar-accounts-and-env-file)
+    - [Stellar Accounts and .env File](#stellar-accounts-and-env-file-1)
   - [Setup](#setup)
     - [Build Docker Containers](#build-docker-containers)
     - [New Tenant Provisioning Process](#new-tenant-provisioning-process)
-    - [Setup Owner User Password for each tenant](#setup-owner-user-password-for-each-tenant)
+    - [Login Information](#login-information)
   - [Disbursement](#disbursement)
     - [Create First Disbursement](#create-first-disbursement)
     - [Deposit Money](#deposit-money)
   - [Troubleshooting](#troubleshooting)
+    - [Distribution account out of funds](#distribution-account-out-of-funds)
 
 ## Introduction
 
@@ -22,12 +28,44 @@ Follow these instructions to get started with the Stellar Disbursement Platform 
 
 Make sure you have Docker installed on your system. If not, you can download it from [here](https://www.docker.com/products/docker-desktop).
 
-### Stellar accounts 
-We will need to create and configure two Stellar accounts to be able to use the SDP. 
-* A Distribution account that will be used for sending funds to receivers. [Create and Fund a Distribution Account](https://developers.stellar.org/docs/stellar-disbursement-platform/getting-started#create-and-fund-a-distribution-account)
-* A SEP-10 account that will be used for authentication. It can be created the same way as the distribution account but it doesn't need to be funded.
+### Stellar Accounts and .env File
+### Stellar Accounts and .env File
 
-The public and private key of these two accounts will be used to configure the SDP in the next step.
+You need to create and configure two Stellar accounts to use the SDP. You can either create the accounts manually or use the provided script to automate the process.
+
+**Option 1: Manually Create and Configure Accounts**
+
+1. Create and fund a Distribution account that will be used for sending funds to receivers. Follow the instructions [here](https://developers.stellar.org/docs/stellar-disbursement-platform/getting-started#create-and-fund-a-distribution-account).
+2. Create a SEP-10 account for authentication. It can be created the same way as the distribution account but it doesn't need to be funded.
+3. Create a `.env` file in the `dev` directory by copying the `.env.example` file:
+    ```sh
+    cp .env.example .env
+    ```
+4. Update the `.env` file with the public and private keys of the two accounts created in the previous steps.
+
+**Option 2: Use create_env.sh script to create accounts and .env file**
+
+You can use the make_env.sh script to automatically create a SEP-10 account funded with XLM using Friendbot, create a distribution account, and fund it with USDC by establishing a trustline and executing a path payment.  to run the make_env.sh script
+
+1. Use `make_env.sh` script to create stellar accounts and .env file automatically:
+    1. Navigate to the `dev` directory from the terminal:
+    ```sh
+    cd dev
+    ```
+    2. Run the `make_env.sh` in the `scripts` folder.
+    ```sh
+    scripts/make_env.sh
+    ```
+    You should see output as follows:
+    ```
+    ❯ scripts/make_env.sh
+    ====> 👀 Checking if .env environment file exists in /Users/reecemarkowsky/dev/testingdebug/stellar-disbursement-platform-backend/dev
+    .env file does not exist. Creating
+    Generating SEP-10 signing keys...
+    Generating distribution keys with funding...
+    .env file created successfully 
+    ====> ✅ Finished .env setup
+    ```
 
 ## Setup
 
@@ -86,13 +124,23 @@ To include them, you can run command `sudo nano /etc/hosts` and insert the lines
 127.0.0.1       redcorp.sdp.local
 ```
 
-### Setup Owner User Password for each tenant
+### Login Information
 
-Go through the forgot password flow to be able to login as an owner user.
+Owner accounts and emails have been set up as follows, with `bluecorp` currently set as the default tenant. You will need to log in as `owner@bluecorp.org`.
 
-Go to Forgot Password page on `http://${tenant}.stellar.local:3000/forgot-password` and enter the tenant and owner email `owner@${tenant}.org`.
-
-A token will be generated, and it's possible to check it on `sdp-api` logs. This token will be needed to Reset Password on `http://${tenant}.stellar.local:3000/reset-password`.
+```
+🎉🎉🎉🎉 SUCCESS! 🎉🎉🎉🎉  
+Login URLs for each tenant:
+🔗Tenant `redcorp`: [http://redcorp.stellar.local:3000](http://redcorp.stellar.local:3000)
+  username: `owner@redcorp.org`
+  password: `Password123!`
+🔗Tenant `bluecorp`: [http://bluecorp.stellar.local:3000](http://bluecorp.stellar.local:3000)
+  username: `owner@bluecorp.org`
+  password: `Password123!`
+🔗Tenant `pinkcorp`: [http://pinkcorp.stellar.local:3000](http://pinkcorp.stellar.local:3000)
+  username: `owner@pinkcorp.org`
+  password: `Password123!`
+```
 
 ## Disbursement
 
