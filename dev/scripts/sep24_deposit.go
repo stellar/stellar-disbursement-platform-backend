@@ -35,13 +35,13 @@ func main() {
 
 	// Fetch and parse the stellar.toml file
 	config, err := fetchStellarTOML(domain)
-	
+
 	if err != nil {
 		fmt.Println("Failed to fetch or parse stellar.toml:", err)
 		return
 	}
 	fmt.Println("Fetched stellar.toml successfully:", config)
-	print (config.WEB_AUTH_ENDPOINT)
+	print(config.WEB_AUTH_ENDPOINT)
 
 	kp, err := keypair.ParseFull(secretKey)
 	if err != nil {
@@ -69,7 +69,7 @@ func main() {
 func fetchStellarTOML(domain string) (StellarTOML, error) {
 	var config StellarTOML
 	tomlURL := "http://" + domain + tomlPath
-	print (tomlURL)
+	print(tomlURL)
 
 	// Create a client to skip certificate verification (for testing)
 	client := &http.Client{
@@ -95,7 +95,7 @@ func fetchStellarTOML(domain string) (StellarTOML, error) {
 func performSEP10Auth(authURL string, kp *keypair.Full) (string, error) {
 	fmt.Println("Fetching challenge transaction from:", authURL)
 
-        // request a transaction to sign
+	// request a transaction to sign
 	resp, err := http.Get(authURL + "?account=" + kp.Address())
 	if err != nil {
 		return "", err
@@ -175,9 +175,9 @@ func performSEP10Auth(authURL string, kp *keypair.Full) (string, error) {
 
 func performSEP24Deposit(depositURL, token, account string) error {
 	params := map[string]string{
-		"account":                    account,
-		"asset_code":                 "USDC",
-		"lang":                       "en",
+		"account":                     account,
+		"asset_code":                  "USDC",
+		"lang":                        "en",
 		"claimable_balance_supported": "false",
 	}
 	jsonData, err := json.Marshal(params)
@@ -185,7 +185,7 @@ func performSEP24Deposit(depositURL, token, account string) error {
 		return err
 	}
 
-	req, err := http.NewRequest("POST", depositURL + "/transactions/deposit/interactive", bytes.NewBuffer(jsonData))
+	req, err := http.NewRequest("POST", depositURL+"/transactions/deposit/interactive", bytes.NewBuffer(jsonData))
 	if err != nil {
 		return err
 	}

@@ -8,23 +8,6 @@ RUN go mod download
 COPY . ./
 RUN go build -o /bin/stellar-disbursement-platform -ldflags "-X main.GitCommit=$GIT_COMMIT" .
 
-# Stage 2: Setup the development environment with Delve for debugging
-FROM golang:1.22.1-bullseye AS development
-
-# set workdir according to repo structure so remote debug source code is in sync
-WORKDIR /app/github.com/stellar/stellar-disbursement-platform
-RUN apt-get update && apt-get install -y jq && rm -rf /var/lib/apt/lists/*
-# Copy the built executable and all source files for debugging
-COPY --from=build /src/stellar-disbursement-platform /app/github.com/stellar/stellar-disbursement-platform
-# Build a debug version of the binary
-RUN go build -gcflags="all=-N -l" -o stellar-disbursement-platform .
-# Install Delve
-RUN go install github.com/go-delve/delve/cmd/dlv@latest
-# Ensure the binary has executable permissions
-RUN chmod +x /app/github.com/stellar/stellar-disbursement-platform/stellar-disbursement-platform
-EXPOSE 8001 2345
-ENTRYPOINT ["/go/bin/dlv", "exec", "--continue", "--accept-multiclient", "--headless", "--listen=:2345", "--api-version=2", "--log", "./stellar-disbursement-platform", "serve"]
-
 # Stage 3: Create a production image using Ubuntu
 FROM ubuntu:22.04 AS production
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates

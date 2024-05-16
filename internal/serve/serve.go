@@ -214,12 +214,12 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 	mux.Use(chimiddleware.CleanPath)
 	mux.Use(chimiddleware.Compress(5))
 
-    // Health check endpoint
-    mux.Get("/health", httphandler.HealthHandler{
-        ReleaseID: o.GitCommit,
-        ServiceID: ServiceID,
-        Version:   o.Version,
-    }.ServeHTTP)
+	// Health check endpoint
+	mux.Get("/health", httphandler.HealthHandler{
+		ReleaseID: o.GitCommit,
+		ServiceID: ServiceID,
+		Version:   o.Version,
+	}.ServeHTTP)
 
 	// Create a route along /static that will serve contents from the ./public_files folder.
 	staticFileServer(mux, publicfiles.PublicFiles)

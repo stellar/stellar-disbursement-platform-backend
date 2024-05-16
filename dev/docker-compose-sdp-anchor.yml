@@ -16,7 +16,7 @@ services:
     image: stellar/sdp-v2:development
     build:
       context: ../
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.development
       target: development
     ports:
       - "8000:8000"
