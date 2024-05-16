@@ -35,7 +35,6 @@ func main() {
 
 	// Fetch and parse the stellar.toml file
 	config, err := fetchStellarTOML(domain)
-
 	if err != nil {
 		fmt.Println("Failed to fetch or parse stellar.toml:", err)
 		return

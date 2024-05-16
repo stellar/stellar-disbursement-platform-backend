@@ -413,7 +413,6 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 
 	// SEP-24 and miscellaneous endpoints that are tenant-unaware
 	mux.Group(func(r chi.Router) {
-
 		// START SEP-24 endpoints
 		r.Get("/.well-known/stellar.toml", httphandler.StellarTomlHandler{
 			AnchorPlatformBaseSepURL:    o.AnchorPlatformBaseSepURL,
