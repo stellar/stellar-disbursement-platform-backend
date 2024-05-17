@@ -80,13 +80,6 @@ func (m *Manager) ProvisionNewTenant(
 		return nil, m.handleProvisioningError(ctx, provisionErr, t)
 	}
 
-	// Last step when no errors - fund tenant distribution account
-	fundErr := m.fundTenantDistributionAccount(ctx, *t.DistributionAccountAddress)
-	if fundErr != nil {
-		// error already wrapped
-		return nil, fundErr
-	}
-
 	return t, nil
 }
 
@@ -153,7 +146,8 @@ func (m *Manager) provisionTenant(ctx context.Context, pt *ProvisionTenant) (t *
 	}
 
 	// Provision distribution account for tenant if necessary
-	if err := m.provisionDistributionAccount(ctx, t); err != nil {
+	err = m.provisionDistributionAccount(ctx, t)
+	if err != nil {
 		return t, fmt.Errorf("provisioning distribution account: %w", err)
 	}
 
@@ -176,6 +170,11 @@ func (m *Manager) provisionTenant(ctx context.Context, pt *ProvisionTenant) (t *
 		})
 	if err != nil {
 		return t, fmt.Errorf("%w: updating tenant %s status to %s: %w", ErrUpdateTenantFailed, pt.name, tenant.ProvisionedTenantStatus, err)
+	}
+
+	err = m.fundTenantDistributionAccount(ctx, *updatedTenant.DistributionAccountAddress)
+	if err != nil {
+		return t, fmt.Errorf("%w. funding tenant distribution account: %w", ErrUpdateTenantFailed, err)
 	}
 
 	return updatedTenant, nil
