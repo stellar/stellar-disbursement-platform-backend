@@ -34,6 +34,86 @@ func (m *mockHTTPServer) Run(conf supporthttp.Config) {
 
 var _ HTTPServerInterface = new(mockHTTPServer)
 
+func Test_SetupDependencies(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	mTenantManager := &tenant.TenantManagerMock{}
+	mMessengerClient := &message.MessengerClientMock{}
+	mHorizonClient := &horizonclient.MockClient{}
+	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
+	sigService, _, _, _, _ := signing.NewMockSignatureService(t)
+	submitterEngine := engine.SubmitterEngine{
+		HorizonClient:       mHorizonClient,
+		SignatureService:    sigService,
+		LedgerNumberTracker: mLedgerNumberTracker,
+		MaxBaseFee:          100 * txnbuild.MinBaseFee,
+	}
+
+	testCases := []struct {
+		name            string
+		opts            ServeOptions
+		wantErrContains string
+	}{
+		{
+			name: "handle errors when creating a provisioning manager",
+			opts: ServeOptions{
+				AdminDBConnectionPool: dbConnectionPool,
+			},
+			wantErrContains: "creating provisioning manager",
+		},
+		{
+			name: "handle errors when parsing the network type",
+			opts: ServeOptions{
+				AdminDBConnectionPool:                   dbConnectionPool,
+				tenantManager:                           mTenantManager,
+				EmailMessengerClient:                    mMessengerClient,
+				SubmitterEngine:                         submitterEngine,
+				TenantAccountNativeAssetBootstrapAmount: tenant.MinTenantDistributionAccountAmount,
+			},
+			wantErrContains: "parsing network type",
+		},
+		{
+			name: "handle errors when creating a data.Models instance",
+			opts: ServeOptions{
+				AdminDBConnectionPool:                   dbConnectionPool,
+				tenantManager:                           mTenantManager,
+				EmailMessengerClient:                    mMessengerClient,
+				SubmitterEngine:                         submitterEngine,
+				TenantAccountNativeAssetBootstrapAmount: tenant.MinTenantDistributionAccountAmount,
+				NetworkPassphrase:                       network.TestNetworkPassphrase,
+			},
+			wantErrContains: "creating models",
+		},
+		{
+			name: "🎉 successfully setup the dependencies",
+			opts: ServeOptions{
+				AdminDBConnectionPool:                   dbConnectionPool,
+				tenantManager:                           mTenantManager,
+				EmailMessengerClient:                    mMessengerClient,
+				SubmitterEngine:                         submitterEngine,
+				TenantAccountNativeAssetBootstrapAmount: tenant.MinTenantDistributionAccountAmount,
+				NetworkPassphrase:                       network.TestNetworkPassphrase,
+				MTNDBConnectionPool:                     dbConnectionPool,
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.opts.SetupDependencies()
+			if tc.wantErrContains != "" {
+				assert.ErrorContains(t, err, tc.wantErrContains)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
 func Test_Serve(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()

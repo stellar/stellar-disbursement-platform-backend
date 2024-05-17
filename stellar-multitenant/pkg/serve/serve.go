@@ -43,7 +43,7 @@ type ServeOptions struct {
 	Port                                    int
 	SubmitterEngine                         engine.SubmitterEngine
 	TenantAccountNativeAssetBootstrapAmount int
-	tenantManager                           *tenant.Manager
+	tenantManager                           tenant.ManagerInterface
 	tenantProvisioningManager               *provisioning.Manager
 	Version                                 string
 	AdminAccount                            string
