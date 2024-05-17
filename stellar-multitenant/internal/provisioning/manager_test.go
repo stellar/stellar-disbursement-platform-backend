@@ -526,7 +526,7 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 						DistributionAccountStatus:  schema.DistributionAccountStatusActive,
 						Status:                     &tStatus,
 					}).
-					Return(&updatedTnt, errors.New("foobar")).
+					Return(nil, errors.New("foobar")).
 					Once()
 
 				// ROLLBACK: [tenant_creation, schema_creation, distribution_account_creation]

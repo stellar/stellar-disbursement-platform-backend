@@ -165,7 +165,7 @@ func (m *Manager) provisionTenant(ctx context.Context, pt *ProvisionTenant) (*te
 	}
 
 	tenantStatus := tenant.ProvisionedTenantStatus
-	t, err = m.tenantManager.UpdateTenantConfig(
+	updatedTenant, err := m.tenantManager.UpdateTenantConfig(
 		ctx,
 		&tenant.TenantUpdate{
 			ID:                         t.ID,
@@ -178,7 +178,7 @@ func (m *Manager) provisionTenant(ctx context.Context, pt *ProvisionTenant) (*te
 		return t, fmt.Errorf("%w: updating tenant %s status to %s: %w", ErrUpdateTenantFailed, pt.name, tenant.ProvisionedTenantStatus, err)
 	}
 
-	return t, nil
+	return updatedTenant, nil
 }
 
 func (m *Manager) fundTenantDistributionAccount(ctx context.Context, distributionAccount string) error {
