@@ -56,7 +56,7 @@ services:
       SINGLE_TENANT_MODE: "false"
 
       # scheduler options- must be set to true if using single tenant mode.
-      ENABLE_SCHEDULER: "false" # set to disabled to use kafka for this.
+      #ENABLE_SCHEDULER: "false" # set to disabled to use kafka for this.
       #SCHEDULER_RECEIVER_INVITATION_JOB_SECONDS: "10"
       #SCHEDULER_PAYMENT_JOB_SECONDS: "10"
 
