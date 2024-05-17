@@ -57,13 +57,13 @@ type ServeOptions struct {
 func (opts *ServeOptions) SetupDependencies() error {
 	var err error
 	opts.tenantManager = tenant.NewManager(tenant.WithDatabase(opts.AdminDBConnectionPool))
-	opts.tenantProvisioningManager, err = provisioning.NewManager(
-		provisioning.WithDatabase(opts.AdminDBConnectionPool),
-		provisioning.WithTenantManager(opts.tenantManager),
-		provisioning.WithMessengerClient(opts.EmailMessengerClient),
-		provisioning.WithSubmitterEngine(opts.SubmitterEngine),
-		provisioning.WithNativeAssetBootstrapAmount(opts.TenantAccountNativeAssetBootstrapAmount),
-	)
+	opts.tenantProvisioningManager, err = provisioning.NewManager(provisioning.ManagerOptions{
+		DBConnectionPool:           opts.AdminDBConnectionPool,
+		TenantManager:              opts.tenantManager,
+		MessengerClient:            opts.EmailMessengerClient,
+		SubmitterEngine:            opts.SubmitterEngine,
+		NativeAssetBootstrapAmount: opts.TenantAccountNativeAssetBootstrapAmount,
+	})
 	if err != nil {
 		return fmt.Errorf("creating provisioning manager: %w", err)
 	}

@@ -177,13 +177,13 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 			MaxBaseFee:          100 * txnbuild.MinBaseFee,
 		}
 
-		p, err := NewManager(
-			WithDatabase(dbConnectionPool),
-			WithMessengerClient(&messengerClientMock),
-			WithTenantManager(tenantManager),
-			WithSubmitterEngine(submitterEngine),
-			WithNativeAssetBootstrapAmount(tenant.MinTenantDistributionAccountAmount),
-		)
+		p, err := NewManager(ManagerOptions{
+			DBConnectionPool:           dbConnectionPool,
+			TenantManager:              tenantManager,
+			MessengerClient:            &messengerClientMock,
+			SubmitterEngine:            submitterEngine,
+			NativeAssetBootstrapAmount: tenant.MinTenantDistributionAccountAmount,
+		})
 		require.NoError(t, err)
 
 		tnt, err := p.ProvisionNewTenant(ctx, tenantName, user.FirstName, user.LastName, user.Email, user.OrgName, string(networkType))
@@ -284,7 +284,22 @@ func Test_Manager_RunMigrationsForTenant(t *testing.T) {
 	require.NoError(t, err)
 	defer tenant2DB.Close()
 
-	p, err := NewManager(WithDatabase(tenant1DB))
+	mHorizonClient := &horizonclient.MockClient{}
+	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
+	sigService, _, _, _, _ := signing.NewMockSignatureService(t)
+	submitterEngine := engine.SubmitterEngine{
+		HorizonClient:       mHorizonClient,
+		SignatureService:    sigService,
+		LedgerNumberTracker: mLedgerNumberTracker,
+		MaxBaseFee:          100 * txnbuild.MinBaseFee,
+	}
+	p, err := NewManager(ManagerOptions{
+		DBConnectionPool:           dbConnectionPool,
+		TenantManager:              &tenant.TenantManagerMock{},
+		MessengerClient:            &message.MessengerClientMock{},
+		SubmitterEngine:            submitterEngine,
+		NativeAssetBootstrapAmount: tenant.MinTenantDistributionAccountAmount,
+	})
 	require.NoError(t, err)
 	err = p.runMigrationsForTenant(ctx, tenant1DSN, migrate.Up, 0, migrations.SDPMigrationRouter)
 	require.NoError(t, err)
@@ -352,13 +367,13 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 	}
 
 	tenantManagerMock := tenant.TenantManagerMock{}
-	tenantManager, err := NewManager(
-		WithDatabase(dbConnectionPool),
-		WithMessengerClient(&messengerClientMock),
-		WithTenantManager(&tenantManagerMock),
-		WithSubmitterEngine(submitterEngine),
-		WithNativeAssetBootstrapAmount(tenant.MinTenantDistributionAccountAmount),
-	)
+	tenantManager, err := NewManager(ManagerOptions{
+		DBConnectionPool:           dbConnectionPool,
+		TenantManager:              &tenantManagerMock,
+		MessengerClient:            &messengerClientMock,
+		SubmitterEngine:            submitterEngine,
+		NativeAssetBootstrapAmount: tenant.MinTenantDistributionAccountAmount,
+	})
 	require.NoError(t, err)
 
 	tenantName := "myorg1"
