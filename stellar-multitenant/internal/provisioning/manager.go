@@ -136,7 +136,7 @@ func (m *Manager) handleProvisioningError(ctx context.Context, err error, t *ten
 	return provisioningErr
 }
 
-func (m *Manager) provisionTenant(ctx context.Context, pt *ProvisionTenant) (*tenant.Tenant, error) {
+func (m *Manager) provisionTenant(ctx context.Context, pt *ProvisionTenant) (t *tenant.Tenant, err error) {
 	t, addTntErr := m.tenantManager.AddTenant(ctx, pt.name)
 	if addTntErr != nil {
 		return t, fmt.Errorf("%w: adding tenant %s: %w", ErrTenantCreationFailed, pt.name, addTntErr)
@@ -161,7 +161,7 @@ func (m *Manager) provisionTenant(ctx context.Context, pt *ProvisionTenant) (*te
 	distSignerType := signing.SignatureClientType(distSignerTypeStr)
 	distAccType, err := distSignerType.DistributionAccountType()
 	if err != nil {
-		return nil, fmt.Errorf("parsing getting distribution account type: %w", err)
+		return t, fmt.Errorf("parsing getting distribution account type: %w", err)
 	}
 
 	tenantStatus := tenant.ProvisionedTenantStatus
