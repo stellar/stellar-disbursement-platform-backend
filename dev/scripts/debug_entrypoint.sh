@@ -3,6 +3,7 @@ set -e
 
 # Running migrations
 echo "Running DB migrations and setup..."
+sleep 5
 ./stellar-disbursement-platform db admin migrate up
 ./stellar-disbursement-platform db tss migrate up
 ./stellar-disbursement-platform db auth migrate up --all
