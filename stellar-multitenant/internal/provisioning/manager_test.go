@@ -27,6 +27,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	preconditionsMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
@@ -144,7 +145,6 @@ func Test_NewManager(t *testing.T) {
 func Test_Manager_ProvisionNewTenant(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
-
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
@@ -176,7 +176,7 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 		OrgName:   "My Org",
 	}
 
-	assertFixtures := func(tenantName string, isTestnet bool) {
+	assertFixtures := func(t *testing.T, tenantName string, isTestnet bool) {
 		tenantDSN, err := router.GetDSNForTenant(dbt.DSN, tenantName)
 		require.NoError(t, err)
 
@@ -205,6 +205,7 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 	}
 
 	provisionAndValidateNewTenant := func(
+		t *testing.T,
 		tenantName string,
 		isTestnet bool,
 		sigClientType signing.SignatureClientType,
@@ -218,39 +219,48 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 			networkPassphrase = network.TestNetworkPassphrase
 		}
 
-		mHorizonClient := &horizonclient.MockClient{}
-		mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
-
-		sigService, _, _, hostAccSigClient, distAccResolver := signing.NewMockSignatureService(t)
-
 		distAcc := keypair.MustRandom()
-		distAccPrivKey := distAcc.Seed()
 		distAccPubKey := distAcc.Address()
-		distAccSigClient, err := signing.NewSignatureClient(signing.DistributionAccountEnvSignatureClientType, signing.SignatureClientOptions{
-			NetworkPassphrase:      networkPassphrase,
-			DistributionPrivateKey: distAccPrivKey,
-		})
-		require.NoError(t, err)
-
-		if sigClientType == signing.DistributionAccountDBSignatureClientType {
+		var distAccSigClient signing.SignatureClient
+		if sigClientType == signing.DistributionAccountEnvSignatureClientType {
+			distAccPrivKey := distAcc.Seed()
+			distAccSigClient, err = signing.NewSignatureClient(signing.DistributionAccountEnvSignatureClientType, signing.SignatureClientOptions{
+				NetworkPassphrase:      networkPassphrase,
+				DistributionPrivateKey: distAccPrivKey,
+			})
+			require.NoError(t, err)
+			assert.IsType(t, &signing.DistributionAccountEnvSignatureClient{}, distAccSigClient)
+		} else if sigClientType == signing.DistributionAccountDBSignatureClientType {
 			distAccSigClient, err = signing.NewSignatureClient(signing.DistributionAccountDBSignatureClientType, signing.SignatureClientOptions{
 				NetworkPassphrase:           networkPassphrase,
 				DistAccEncryptionPassphrase: keypair.MustRandom().Seed(),
 				DBConnectionPool:            dbConnectionPool,
 			})
 			require.NoError(t, err)
-		}
-
-		if sigClientType == signing.DistributionAccountEnvSignatureClientType {
-			assert.IsType(t, &signing.DistributionAccountEnvSignatureClient{}, distAccSigClient)
-		} else {
 			assert.IsType(t, &signing.DistributionAccountDBSignatureClient{}, distAccSigClient)
 		}
-		sigService.DistAccountSigner = distAccSigClient
+
+		chAccSigClient := mocks.NewMockSignatureClient(t)
+		chAccSigClient.On("NetworkPassphrase").Return(networkPassphrase).Maybe()
+
+		hostAccSigClient := mocks.NewMockSignatureClient(t)
+		hostAccSigClient.On("NetworkPassphrase").Return(networkPassphrase).Maybe()
+
+		distAccResolver := mocks.NewMockDistributionAccountResolver(t)
+		distAccResolver.On("HostDistributionAccount").Return(distAccPubKey, nil).Once()
+
+		sigService := signing.SignatureService{
+			ChAccountSigner:             chAccSigClient,
+			DistAccountSigner:           distAccSigClient,
+			HostAccountSigner:           hostAccSigClient,
+			DistributionAccountResolver: distAccResolver,
+		}
+
+		mHorizonClient := &horizonclient.MockClient{}
+		mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
 
 		tenantAcc := keypair.MustRandom()
 		tenantAccPubKey := tenantAcc.Address()
-		distAccResolver.On("HostDistributionAccount").Return(distAccPubKey, nil).Once()
 
 		if sigClientType == signing.DistributionAccountDBSignatureClientType {
 			mHorizonClient.
@@ -315,17 +325,17 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 
 		t.Run("provision key using type DISTRIBUTION_ACCOUNT_ENV", func(t *testing.T) {
 			getEntries := log.DefaultLogger.StartTest(log.WarnLevel)
-			provisionAndValidateNewTenant(tenantName1, true, signing.DistributionAccountEnvSignatureClientType)
+			provisionAndValidateNewTenant(t, tenantName1, true, signing.DistributionAccountEnvSignatureClientType)
 			entries := getEntries()
 			require.Len(t, entries, 4)
 			assert.Contains(t, entries[0].Message, "Account provisioning not needed for distribution account signature client type")
 
-			assertFixtures(tenantName1, true)
+			assertFixtures(t, tenantName1, true)
 		})
 
 		t.Run("provision key using type DISTRIBUTION_ACCOUNT_DB", func(t *testing.T) {
-			provisionAndValidateNewTenant(tenantName2, true, signing.DistributionAccountDBSignatureClientType)
-			assertFixtures(tenantName2, true)
+			provisionAndValidateNewTenant(t, tenantName2, true, signing.DistributionAccountDBSignatureClientType)
+			assertFixtures(t, tenantName2, true)
 		})
 	})
 
@@ -335,17 +345,17 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 
 		t.Run("provision key using type DISTRIBUTION_ACCOUNT_ENV", func(t *testing.T) {
 			getEntries := log.DefaultLogger.StartTest(log.WarnLevel)
-			provisionAndValidateNewTenant(tenantName1, false, signing.DistributionAccountEnvSignatureClientType)
+			provisionAndValidateNewTenant(t, tenantName1, false, signing.DistributionAccountEnvSignatureClientType)
 			entries := getEntries()
 			require.Len(t, entries, 4)
 			assert.Contains(t, entries[0].Message, "Account provisioning not needed for distribution account signature client type")
 
-			assertFixtures(tenantName1, false)
+			assertFixtures(t, tenantName1, false)
 		})
 
 		t.Run("provision key using type DISTRIBUTION_ACCOUNT_DB", func(t *testing.T) {
-			provisionAndValidateNewTenant(tenantName2, false, signing.DistributionAccountDBSignatureClientType)
-			assertFixtures(tenantName2, false)
+			provisionAndValidateNewTenant(t, tenantName2, false, signing.DistributionAccountDBSignatureClientType)
+			assertFixtures(t, tenantName2, false)
 		})
 	})
 

@@ -266,7 +266,7 @@ func (m *Manager) setupTenantData(ctx context.Context, tenantSchemaDSN string, p
 }
 
 func (m *Manager) createSchemaAndRunMigrations(ctx context.Context, name string) (string, error) {
-	u, getDSNForTntErr := m.tenantManager.GetDSNForTenant(ctx, name)
+	dsn, getDSNForTntErr := m.tenantManager.GetDSNForTenant(ctx, name)
 	if getDSNForTntErr != nil {
 		return "", fmt.Errorf("getting database DSN for tenant %s: %w", name, getDSNForTntErr)
 	}
@@ -279,18 +279,18 @@ func (m *Manager) createSchemaAndRunMigrations(ctx context.Context, name string)
 
 	// Applying migrations
 	log.Ctx(ctx).Infof("applying SDP migrations on the tenant %s schema", name)
-	runTntMigrationsErr := m.runMigrationsForTenant(ctx, u, migrate.Up, 0, migrations.SDPMigrationRouter)
+	runTntMigrationsErr := m.runMigrationsForTenant(ctx, dsn, migrate.Up, 0, migrations.SDPMigrationRouter)
 	if runTntMigrationsErr != nil {
 		return "", fmt.Errorf("applying SDP migrations: %w", runTntMigrationsErr)
 	}
 
 	log.Ctx(ctx).Infof("applying stellar-auth migrations on the tenant %s schema", name)
-	runTntAuthMigrationsErr := m.runMigrationsForTenant(ctx, u, migrate.Up, 0, migrations.AuthMigrationRouter)
+	runTntAuthMigrationsErr := m.runMigrationsForTenant(ctx, dsn, migrate.Up, 0, migrations.AuthMigrationRouter)
 	if runTntAuthMigrationsErr != nil {
 		return "", fmt.Errorf("applying stellar-auth migrations: %w", runTntAuthMigrationsErr)
 	}
 
-	return u, nil
+	return dsn, nil
 }
 
 func (m *Manager) deleteDistributionAccountKey(ctx context.Context, t *tenant.Tenant) error {
