@@ -32,6 +32,115 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
+func Test_NewManager(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	mMessengerClient := &message.MessengerClientMock{}
+	mTenantMenager := &tenant.TenantManagerMock{}
+
+	mHorizonClient := &horizonclient.MockClient{}
+	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
+	sigService, _, _, _, _ := signing.NewMockSignatureService(t)
+	submitterEngine := engine.SubmitterEngine{
+		HorizonClient:       mHorizonClient,
+		SignatureService:    sigService,
+		LedgerNumberTracker: mLedgerNumberTracker,
+		MaxBaseFee:          100 * txnbuild.MinBaseFee,
+	}
+
+	testCases := []struct {
+		name            string
+		opts            ManagerOptions
+		wantErrContains string
+		wantResult      *Manager
+	}{
+		{
+			name:            "DBConnectionPool cannot be nil",
+			wantErrContains: "database connection pool cannot be nil",
+		},
+		{
+			name: "MessengerClient cannot be nil",
+			opts: ManagerOptions{
+				DBConnectionPool: dbConnectionPool,
+			},
+			wantErrContains: "messenger client cannot be nil",
+		},
+		{
+			name: "TenantManager cannot be nil",
+			opts: ManagerOptions{
+				DBConnectionPool: dbConnectionPool,
+				MessengerClient:  mMessengerClient,
+			},
+			wantErrContains: "tenant manager cannot be nil",
+		},
+		{
+			name: "validating SubmitterEngine",
+			opts: ManagerOptions{
+				DBConnectionPool: dbConnectionPool,
+				MessengerClient:  mMessengerClient,
+				TenantManager:    mTenantMenager,
+				SubmitterEngine:  engine.SubmitterEngine{},
+			},
+			wantErrContains: "validating submitter engine",
+		},
+		{
+			name: "fails if XLM < MINIMUM",
+			opts: ManagerOptions{
+				DBConnectionPool:           dbConnectionPool,
+				MessengerClient:            mMessengerClient,
+				TenantManager:              mTenantMenager,
+				SubmitterEngine:            submitterEngine,
+				NativeAssetBootstrapAmount: tenant.MinTenantDistributionAccountAmount - 1,
+			},
+			wantErrContains: "the amount of XLM configured (4 XLM) is outside the permitted range",
+		},
+		{
+			name: "fails if XLM > MAXIMUM",
+			opts: ManagerOptions{
+				DBConnectionPool:           dbConnectionPool,
+				MessengerClient:            mMessengerClient,
+				TenantManager:              mTenantMenager,
+				SubmitterEngine:            submitterEngine,
+				NativeAssetBootstrapAmount: tenant.MaxTenantDistributionAccountAmount + 1,
+			},
+			wantErrContains: "the amount of XLM configured (51 XLM) is outside the permitted range",
+		},
+		{
+			name: "🎉 successfully creates a new manager",
+			opts: ManagerOptions{
+				DBConnectionPool:           dbConnectionPool,
+				MessengerClient:            mMessengerClient,
+				TenantManager:              mTenantMenager,
+				SubmitterEngine:            submitterEngine,
+				NativeAssetBootstrapAmount: tenant.MinTenantDistributionAccountAmount,
+			},
+			wantResult: &Manager{
+				db:                         dbConnectionPool,
+				messengerClient:            mMessengerClient,
+				tenantManager:              mTenantMenager,
+				SubmitterEngine:            submitterEngine,
+				nativeAssetBootstrapAmount: tenant.MinTenantDistributionAccountAmount,
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			gotResult, err := NewManager(tc.opts)
+			if tc.wantErrContains != "" {
+				assert.ErrorContains(t, err, tc.wantErrContains)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tc.wantResult, gotResult)
+			}
+		})
+	}
+}
+
 func Test_Manager_ProvisionNewTenant(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()

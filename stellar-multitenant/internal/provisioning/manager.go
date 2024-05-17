@@ -343,8 +343,9 @@ func NewManager(opts ManagerOptions) (*Manager, error) {
 		return nil, fmt.Errorf("tenant manager cannot be nil")
 	}
 
-	if utils.IsEmpty(opts.SubmitterEngine) {
-		return nil, fmt.Errorf("submitter engine cannot be empty")
+	err := opts.SubmitterEngine.Validate()
+	if err != nil {
+		return nil, fmt.Errorf("validating submitter engine: %w", err)
 	}
 
 	isTooSmall := opts.NativeAssetBootstrapAmount < tenant.MinTenantDistributionAccountAmount
