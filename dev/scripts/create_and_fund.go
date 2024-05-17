@@ -28,7 +28,7 @@ func main() {
 	flag.Usage = func() {
 		fmt.Fprintf(flag.CommandLine.Output(), "Usage of %s:\n", os.Args[0])
 		fmt.Fprintln(flag.CommandLine.Output(), "  This program creates and manages funding for Stellar accounts.")
-		fmt.Fprintln(flag.CommandLine.Output(), "  It can generate a new keypair or use an existing secret key to manage account operations.\n")
+		fmt.Fprintln(flag.CommandLine.Output(), "  It can generate a new keypair or use an existing secret key to manage account operations.")
 		flag.PrintDefaults()
 		fmt.Fprintln(flag.CommandLine.Output(), "\nExamples:")
 		fmt.Fprintln(flag.CommandLine.Output(), "\nCreate new stellar account with any funding:")
