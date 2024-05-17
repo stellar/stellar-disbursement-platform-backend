@@ -55,16 +55,19 @@ type ServeOptions struct {
 
 // SetupDependencies uses the serve options to setup the dependencies for the server.
 func (opts *ServeOptions) SetupDependencies() error {
+	var err error
 	opts.tenantManager = tenant.NewManager(tenant.WithDatabase(opts.AdminDBConnectionPool))
-	opts.tenantProvisioningManager = provisioning.NewManager(
+	opts.tenantProvisioningManager, err = provisioning.NewManager(
 		provisioning.WithDatabase(opts.AdminDBConnectionPool),
 		provisioning.WithTenantManager(opts.tenantManager),
 		provisioning.WithMessengerClient(opts.EmailMessengerClient),
 		provisioning.WithSubmitterEngine(opts.SubmitterEngine),
 		provisioning.WithNativeAssetBootstrapAmount(opts.TenantAccountNativeAssetBootstrapAmount),
 	)
+	if err != nil {
+		return fmt.Errorf("creating provisioning manager: %w", err)
+	}
 
-	var err error
 	opts.networkType, err = utils.GetNetworkTypeFromNetworkPassphrase(opts.NetworkPassphrase)
 	if err != nil {
 		return fmt.Errorf("parsing network type: %w", err)

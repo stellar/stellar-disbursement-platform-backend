@@ -102,14 +102,3 @@ const (
 	// send to the tenant distribution account at a time.
 	MaxTenantDistributionAccountAmount = 50
 )
-
-func ValidateNativeAssetBootstrapAmount(amount int) error {
-	if amount < MinTenantDistributionAccountAmount || amount > MaxTenantDistributionAccountAmount {
-		if amount <= 0 {
-			return fmt.Errorf("invalid amount of native asset to send: %d", amount)
-		}
-
-		return fmt.Errorf("amount of native asset to send must be between %d and %d", MinTenantDistributionAccountAmount, MaxTenantDistributionAccountAmount)
-	}
-	return nil
-}

@@ -177,13 +177,14 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 			MaxBaseFee:          100 * txnbuild.MinBaseFee,
 		}
 
-		p := NewManager(
+		p, err := NewManager(
 			WithDatabase(dbConnectionPool),
 			WithMessengerClient(&messengerClientMock),
 			WithTenantManager(tenantManager),
 			WithSubmitterEngine(submitterEngine),
 			WithNativeAssetBootstrapAmount(tenant.MinTenantDistributionAccountAmount),
 		)
+		require.NoError(t, err)
 
 		tnt, err := p.ProvisionNewTenant(ctx, tenantName, user.FirstName, user.LastName, user.Email, user.OrgName, string(networkType))
 		require.NoError(t, err)
@@ -283,7 +284,8 @@ func Test_Manager_RunMigrationsForTenant(t *testing.T) {
 	require.NoError(t, err)
 	defer tenant2DB.Close()
 
-	p := NewManager(WithDatabase(tenant1DB))
+	p, err := NewManager(WithDatabase(tenant1DB))
+	require.NoError(t, err)
 	err = p.runMigrationsForTenant(ctx, tenant1DSN, migrate.Up, 0, migrations.SDPMigrationRouter)
 	require.NoError(t, err)
 	err = p.runMigrationsForTenant(ctx, tenant1DSN, migrate.Up, 0, migrations.AuthMigrationRouter)
@@ -350,13 +352,14 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 	}
 
 	tenantManagerMock := tenant.TenantManagerMock{}
-	tenantManager := NewManager(
+	tenantManager, err := NewManager(
 		WithDatabase(dbConnectionPool),
 		WithMessengerClient(&messengerClientMock),
 		WithTenantManager(&tenantManagerMock),
 		WithSubmitterEngine(submitterEngine),
 		WithNativeAssetBootstrapAmount(tenant.MinTenantDistributionAccountAmount),
 	)
+	require.NoError(t, err)
 
 	tenantName := "myorg1"
 	orgName := "My Org"

@@ -184,14 +184,9 @@ func (m *Manager) provisionTenant(ctx context.Context, pt *ProvisionTenant) (*te
 func (m *Manager) fundTenantDistributionAccount(ctx context.Context, distributionAccount string) error {
 	hostDistributionAccPubKey := m.SubmitterEngine.HostDistributionAccount()
 	if distributionAccount != hostDistributionAccPubKey {
-		err := tenant.ValidateNativeAssetBootstrapAmount(m.nativeAssetBootstrapAmount)
-		if err != nil {
-			return fmt.Errorf("invalid native asset bootstrap amount: %w", err)
-		}
-
 		// Bootstrap tenant distribution account with native asset
 		log.Ctx(ctx).Infof("Creating and funding tenant distribution account %s with native asset", distributionAccount)
-		err = tssSvc.CreateAndFundAccount(ctx, m.SubmitterEngine, m.nativeAssetBootstrapAmount, hostDistributionAccPubKey, distributionAccount)
+		err := tssSvc.CreateAndFundAccount(ctx, m.SubmitterEngine, m.nativeAssetBootstrapAmount, hostDistributionAccPubKey, distributionAccount)
 		if err != nil {
 			return fmt.Errorf("bootstrapping tenant distribution account with native asset: %w", err)
 		}
@@ -325,43 +320,74 @@ func (m *Manager) runMigrationsForTenant(
 	return nil
 }
 
-type Option func(m *Manager)
+type Option func(m *Manager) error
 
-func NewManager(opts ...Option) *Manager {
+func NewManager(opts ...Option) (*Manager, error) {
 	m := Manager{}
 	for _, opt := range opts {
-		opt(&m)
+		err := opt(&m)
+		if err != nil {
+			return nil, fmt.Errorf("applying option: %w", err)
+		}
 	}
-	return &m
+
+	return &m, nil
 }
 
 func WithDatabase(dbConnectionPool db.DBConnectionPool) Option {
-	return func(m *Manager) {
+	return func(m *Manager) error {
+		if dbConnectionPool == nil {
+			return fmt.Errorf("database connection pool cannot be nil")
+		}
+
 		m.db = dbConnectionPool
+		return nil
 	}
 }
 
 func WithMessengerClient(messengerClient message.MessengerClient) Option {
-	return func(m *Manager) {
+	return func(m *Manager) error {
+		if messengerClient == nil {
+			return fmt.Errorf("messenger client cannot be nil")
+		}
+
 		m.messengerClient = messengerClient
+		return nil
 	}
 }
 
 func WithTenantManager(tenantManager tenant.ManagerInterface) Option {
-	return func(m *Manager) {
+	return func(m *Manager) error {
+		if tenantManager == nil {
+			return fmt.Errorf("tenant manager cannot be nil")
+		}
+
 		m.tenantManager = tenantManager
+		return nil
 	}
 }
 
 func WithSubmitterEngine(submitterEngine engine.SubmitterEngine) Option {
-	return func(m *Manager) {
+	return func(m *Manager) error {
+		if utils.IsEmpty(submitterEngine) {
+			return fmt.Errorf("submitter engine cannot be empty")
+		}
+
 		m.SubmitterEngine = submitterEngine
+		return nil
 	}
 }
 
 func WithNativeAssetBootstrapAmount(nativeAssetBootstrapAmount int) Option {
-	return func(m *Manager) {
+	return func(m *Manager) error {
+		isTooSmall := nativeAssetBootstrapAmount < tenant.MinTenantDistributionAccountAmount
+		isTooBig := nativeAssetBootstrapAmount > tenant.MaxTenantDistributionAccountAmount
+		if isTooSmall || isTooBig {
+			return fmt.Errorf("the amount of XLM configured (%d XLM) is outside the permitted range of [%d XLM, %d XLM]", nativeAssetBootstrapAmount, tenant.MinTenantDistributionAccountAmount, tenant.MaxTenantDistributionAccountAmount)
+		}
+
 		m.nativeAssetBootstrapAmount = nativeAssetBootstrapAmount
+		return nil
 	}
 }
 

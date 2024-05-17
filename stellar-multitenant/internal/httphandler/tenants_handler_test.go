@@ -267,13 +267,14 @@ func Test_TenantHandler_Post(t *testing.T) {
 		MaxBaseFee:          100 * txnbuild.MinBaseFee,
 	}
 
-	p := provisioning.NewManager(
+	p, err := provisioning.NewManager(
 		provisioning.WithDatabase(dbConnectionPool),
 		provisioning.WithTenantManager(m),
 		provisioning.WithMessengerClient(&messengerClientMock),
 		provisioning.WithSubmitterEngine(submitterEngine),
 		provisioning.WithNativeAssetBootstrapAmount(tenant.MinTenantDistributionAccountAmount),
 	)
+	require.NoError(t, err)
 
 	handler := TenantsHandler{
 		Manager:             m,

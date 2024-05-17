@@ -1,11 +1,9 @@
 package tenant
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func Test_TenantUpdate_Validate(t *testing.T) {
@@ -76,40 +74,40 @@ func Test_TenantStatus_IsValid(t *testing.T) {
 	}
 }
 
-func Test_ValidateNativeAssetBootstrapAmount(t *testing.T) {
-	testCases := []struct {
-		amount int
-		errStr string
-	}{
-		{
-			amount: 0,
-			errStr: "invalid amount of native asset to send",
-		},
-		{
-			amount: -1,
-			errStr: "invalid amount of native asset to send",
-		},
-		{
-			amount: 4,
-			errStr: fmt.Sprintf("amount of native asset to send must be between %d and %d", MinTenantDistributionAccountAmount, MaxTenantDistributionAccountAmount),
-		},
-		{
-			amount: 51,
-			errStr: fmt.Sprintf("amount of native asset to send must be between %d and %d", MinTenantDistributionAccountAmount, MaxTenantDistributionAccountAmount),
-		},
-		{
-			amount: 20,
-		},
-	}
+// func Test_ValidateNativeAssetBootstrapAmount(t *testing.T) {
+// 	testCases := []struct {
+// 		amount int
+// 		errStr string
+// 	}{
+// 		{
+// 			amount: 0,
+// 			errStr: "invalid amount of native asset to send",
+// 		},
+// 		{
+// 			amount: -1,
+// 			errStr: "invalid amount of native asset to send",
+// 		},
+// 		{
+// 			amount: 4,
+// 			errStr: fmt.Sprintf("amount of native asset to send must be between %d and %d", MinTenantDistributionAccountAmount, MaxTenantDistributionAccountAmount),
+// 		},
+// 		{
+// 			amount: 51,
+// 			errStr: fmt.Sprintf("amount of native asset to send must be between %d and %d", MinTenantDistributionAccountAmount, MaxTenantDistributionAccountAmount),
+// 		},
+// 		{
+// 			amount: 20,
+// 		},
+// 	}
 
-	for _, tc := range testCases {
-		err := ValidateNativeAssetBootstrapAmount(tc.amount)
+// 	for _, tc := range testCases {
+// 		err := ValidateNativeAssetBootstrapAmount(tc.amount)
 
-		if tc.errStr != "" {
-			require.Error(t, err)
-			assert.Contains(t, err.Error(), tc.errStr)
-		} else {
-			require.NoError(t, err)
-		}
-	}
-}
+// 		if tc.errStr != "" {
+// 			require.Error(t, err)
+// 			assert.Contains(t, err.Error(), tc.errStr)
+// 		} else {
+// 			require.NoError(t, err)
+// 		}
+// 	}
+// }

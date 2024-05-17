@@ -17,9 +17,11 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	preconditionsMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 type mockHTTPServer struct {
@@ -40,6 +42,7 @@ func Test_Serve(t *testing.T) {
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
 
+	mMessengerClient := &message.MessengerClientMock{}
 	mHorizonClient := &horizonclient.MockClient{}
 	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
 
@@ -53,14 +56,16 @@ func Test_Serve(t *testing.T) {
 	}
 
 	opts := ServeOptions{
-		AdminDBConnectionPool: dbConnectionPool,
-		MTNDBConnectionPool:   dbConnectionPool,
-		Environment:           "test",
-		GitCommit:             "1234567890abcdef",
-		NetworkPassphrase:     network.TestNetworkPassphrase,
-		Port:                  8003,
-		Version:               "x.y.z",
-		SubmitterEngine:       submitterEngine,
+		AdminDBConnectionPool:                   dbConnectionPool,
+		MTNDBConnectionPool:                     dbConnectionPool,
+		Environment:                             "test",
+		GitCommit:                               "1234567890abcdef",
+		NetworkPassphrase:                       network.TestNetworkPassphrase,
+		Port:                                    8003,
+		Version:                                 "x.y.z",
+		SubmitterEngine:                         submitterEngine,
+		TenantAccountNativeAssetBootstrapAmount: tenant.MinTenantDistributionAccountAmount,
+		EmailMessengerClient:                    mMessengerClient,
 	}
 
 	// Mock supportHTTPRun
