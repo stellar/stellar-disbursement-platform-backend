@@ -448,38 +448,11 @@ func getExpectedTablesAfterMigrationsApplied() []string {
 func Test_Manager_RollbackOnErrors(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
-
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
 
 	ctx := context.Background()
-
-	messengerClientMock := message.MessengerClientMock{}
-	messengerClientMock.
-		On("SendMessage", mock.AnythingOfType("message.Message")).
-		Return(nil)
-
-	mHorizonClient := &horizonclient.MockClient{}
-	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
-	sigService, _, distAccSigClient, _, _ := signing.NewMockSignatureService(t)
-
-	submitterEngine := engine.SubmitterEngine{
-		HorizonClient:       mHorizonClient,
-		SignatureService:    sigService,
-		LedgerNumberTracker: mLedgerNumberTracker,
-		MaxBaseFee:          100 * txnbuild.MinBaseFee,
-	}
-
-	tenantManagerMock := tenant.TenantManagerMock{}
-	tenantManager, err := NewManager(ManagerOptions{
-		DBConnectionPool:           dbConnectionPool,
-		TenantManager:              &tenantManagerMock,
-		MessengerClient:            &messengerClientMock,
-		SubmitterEngine:            submitterEngine,
-		NativeAssetBootstrapAmount: tenant.MinTenantDistributionAccountAmount,
-	})
-	require.NoError(t, err)
 
 	tenantName := "myorg1"
 	orgName := "My Org"
@@ -487,64 +460,76 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 	lastName := "Last"
 	email := "first.last@email.com"
 	networkType := sdpUtils.TestnetNetworkType
+	tnt := tenant.Tenant{Name: tenantName, ID: "abc"}
 
 	tenantDSN, err := router.GetDSNForTenant(dbt.DSN, tenantName)
-
 	require.NoError(t, err)
 
 	testCases := []struct {
 		name             string
-		mockTntManagerFn func(tntManagerMock *tenant.TenantManagerMock)
+		mockTntManagerFn func(tntManagerMock *tenant.TenantManagerMock, distAccSigClient *mocks.MockSignatureClient)
 		expectedErr      error
 	}{
 		{
-			name: "return error when failing to add tenant",
-			mockTntManagerFn: func(tntManagerMock *tenant.TenantManagerMock) {
+			name: "when AddTenant fails return an error",
+			mockTntManagerFn: func(tntManagerMock *tenant.TenantManagerMock, _ *mocks.MockSignatureClient) {
+				// needed for AddTenant:
 				tntManagerMock.On("AddTenant", ctx, tenantName).Return(nil, errors.New("foobar")).Once()
 			},
 			expectedErr: ErrTenantCreationFailed,
 		},
 		{
-			name: "rollback and return error when failing to create tenant schema",
-			mockTntManagerFn: func(tntManagerMock *tenant.TenantManagerMock) {
-				tntManagerMock.On("AddTenant", ctx, tenantName).
-					Return(&tenant.Tenant{Name: tenantName, ID: "abc"}, nil).Once()
+			name: "when createSchemaAndRunMigrations fails, rollback and return an error",
+			mockTntManagerFn: func(tntManagerMock *tenant.TenantManagerMock, _ *mocks.MockSignatureClient) {
+				// Needed for AddTenant:
+				tntManagerMock.On("AddTenant", ctx, tenantName).Return(&tnt, nil).Once()
+
+				// Needed for createSchemaAndRunMigrations:
 				tntManagerMock.On("GetDSNForTenant", ctx, tenantName).Return(tenantDSN, nil).Once()
 				tntManagerMock.On("CreateTenantSchema", ctx, tenantName).Return(errors.New("foobar")).Once()
 
-				// expected rollback operations
+				// ROLLBACK: [tenant_creation, schema_creation]
 				tntManagerMock.On("DropTenantSchema", ctx, tenantName).Return(nil).Once()
 				tntManagerMock.On("DeleteTenantByName", ctx, tenantName).Return(nil).Once()
 			},
 			expectedErr: ErrTenantSchemaFailed,
 		},
 		{
-			name: "rollback and return error when failing to update tenant record",
-			mockTntManagerFn: func(tntManagerMock *tenant.TenantManagerMock) {
+			name: "when UpdateTenantConfig fails, rollback and return an error",
+			mockTntManagerFn: func(tntManagerMock *tenant.TenantManagerMock, distAccSigClient *mocks.MockSignatureClient) {
+				// Needed for AddTenant:
+				tntManagerMock.On("AddTenant", ctx, tenantName).Return(&tnt, nil).Once()
+
+				// Needed for createSchemaAndRunMigrations:
+				tntManagerMock.On("GetDSNForTenant", ctx, tenantName).Return(tenantDSN, nil).Once()
+				tntManagerMock.On("CreateTenantSchema", ctx, tenantName).Return(nil).Once()
+
+				// Needed for setupTenantData (this one cannot be mocked):
 				_, err = dbConnectionPool.ExecContext(ctx, fmt.Sprintf("CREATE SCHEMA %s", fmt.Sprintf("sdp_%s", tenantName)))
 				require.NoError(t, err)
 
-				tnt := tenant.Tenant{Name: tenantName, ID: "abc"}
-				tntManagerMock.On("AddTenant", ctx, tenantName).
-					Return(&tnt, nil).Once()
-				tntManagerMock.On("GetDSNForTenant", ctx, tenantName).Return(tenantDSN, nil).Once()
-				tntManagerMock.On("CreateTenantSchema", ctx, tenantName).Return(nil).Once()
+				// Needed for provisionDistributionAccount:
 				distAcc := keypair.MustRandom().Address()
 				distAccSigClient.
 					On("BatchInsert", ctx, 1).Return([]string{distAcc}, nil).
 					On("Type").Return(string(signing.DistributionAccountEnvSignatureClientType))
 
+				// Needed for UpdateTenantConfig:
 				tStatus := tenant.ProvisionedTenantStatus
-				tnt.DistributionAccountAddress = &distAcc
-				tntManagerMock.On("UpdateTenantConfig", ctx, &tenant.TenantUpdate{
-					ID:                         tnt.ID,
-					DistributionAccountAddress: distAcc,
-					DistributionAccountType:    schema.DistributionAccountTypeEnvStellar,
-					DistributionAccountStatus:  schema.DistributionAccountStatusActive,
-					Status:                     &tStatus,
-				}).Return(&tnt, errors.New("foobar")).Once()
+				updatedTnt := tnt
+				updatedTnt.DistributionAccountAddress = &distAcc
+				tntManagerMock.
+					On("UpdateTenantConfig", ctx, &tenant.TenantUpdate{
+						ID:                         updatedTnt.ID,
+						DistributionAccountAddress: distAcc,
+						DistributionAccountType:    schema.DistributionAccountTypeEnvStellar,
+						DistributionAccountStatus:  schema.DistributionAccountStatusActive,
+						Status:                     &tStatus,
+					}).
+					Return(&updatedTnt, errors.New("foobar")).
+					Once()
 
-				// expected rollback operations
+				// ROLLBACK: [tenant_creation, schema_creation, distribution_account_creation]
 				tntManagerMock.On("DropTenantSchema", ctx, tenantName).Return(nil).Once()
 				tntManagerMock.On("DeleteTenantByName", ctx, tenantName).Return(nil).Once()
 				distAccSigClient.On("Delete", ctx, distAcc).Return(nil).Once()
@@ -555,17 +540,50 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			tc.mockTntManagerFn(&tenantManagerMock)
+			defer tenant.DeleteAllTenantsFixture(t, ctx, dbConnectionPool)
 
-			_, err := tenantManager.ProvisionNewTenant(ctx, tenantName, firstName, lastName, email, orgName, string(networkType))
+			// Create Mocks:
+			messengerClientMock := message.MessengerClientMock{}
+			messengerClientMock.
+				On("SendMessage", mock.AnythingOfType("message.Message")).
+				Return(nil).
+				Maybe()
+
+			mHorizonClient := &horizonclient.MockClient{}
+			mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
+			sigService, _, distAccSigClient, _, _ := signing.NewMockSignatureService(t)
+
+			tenantManagerMock := &tenant.TenantManagerMock{}
+			tc.mockTntManagerFn(tenantManagerMock, distAccSigClient)
+
+			// Create tenant manager
+			provisioningManager, err := NewManager(ManagerOptions{
+				DBConnectionPool: dbConnectionPool,
+				TenantManager:    tenantManagerMock,
+				MessengerClient:  &messengerClientMock,
+				SubmitterEngine: engine.SubmitterEngine{
+					HorizonClient:       mHorizonClient,
+					SignatureService:    sigService,
+					LedgerNumberTracker: mLedgerNumberTracker,
+					MaxBaseFee:          100 * txnbuild.MinBaseFee,
+				},
+				NativeAssetBootstrapAmount: tenant.MinTenantDistributionAccountAmount,
+			})
+			require.NoError(t, err)
+
+			// Provision the tenant
+			_, err = provisioningManager.ProvisionNewTenant(ctx, tenantName, firstName, lastName, email, orgName, string(networkType))
+
+			// Assertions
 			if tc.expectedErr != nil {
-				require.Error(t, err)
 				assert.ErrorContains(t, err, tc.expectedErr.Error())
 			} else {
 				require.NoError(t, err)
 			}
+
+			tenantManagerMock.AssertExpectations(t)
+			messengerClientMock.AssertExpectations(t)
 		})
 
-		tenantManagerMock.AssertExpectations(t)
 	}
 }

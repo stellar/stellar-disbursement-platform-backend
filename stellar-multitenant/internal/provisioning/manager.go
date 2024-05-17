@@ -209,10 +209,10 @@ func (m *Manager) provisionDistributionAccount(ctx context.Context, t *tenant.Te
 	}
 
 	// Assigning the account key to the tenant so that it can be referenced if it needs to be deleted in the vault if any subsequent errors are encountered
-	t.DistributionAccountAddress = &distributionAccPubKeys[0]
 	if len(distributionAccPubKeys) != 1 {
 		return fmt.Errorf("%w: expected single distribution account public key, got %d", ErrUpdateTenantFailed, len(distributionAccPubKeys))
 	}
+	t.DistributionAccountAddress = &distributionAccPubKeys[0]
 	log.Ctx(ctx).Infof("distribution account %s created for tenant %s", *t.DistributionAccountAddress, t.Name)
 	return nil
 }
