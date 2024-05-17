@@ -23,10 +23,10 @@ import (
 )
 
 type Manager struct {
-	tenantManager   tenant.ManagerInterface
-	db              db.DBConnectionPool
-	messengerClient message.MessengerClient
-	engine.SubmitterEngine
+	tenantManager              tenant.ManagerInterface
+	db                         db.DBConnectionPool
+	messengerClient            message.MessengerClient
+	SubmitterEngine            engine.SubmitterEngine
 	nativeAssetBootstrapAmount int
 }
 
