@@ -14,6 +14,8 @@ services:
   sdp-api:
     container_name: sdp-api-mtn
     image: stellar/sdp-v2:development
+    depends_on:
+      - db
     build:
       context: ../
       dockerfile: Dockerfile.development
@@ -101,6 +103,8 @@ services:
   anchor-platform:
     container_name: anchor-platform
     image: stellar/anchor-platform:2.6.0
+    depends_on:
+      - db
     command: --sep-server --platform-server --platform linux/amd64
     ports:
       - "8080:8080" # sep-server
