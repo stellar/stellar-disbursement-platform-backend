@@ -91,7 +91,7 @@ func StartServe(opts ServeOptions, httpServer HTTPServerInterface) error {
 		TCPKeepAlive:        time.Minute * 3,
 		ShutdownGracePeriod: time.Second * 50,
 		ReadTimeout:         time.Second * 5,
-		WriteTimeout:        time.Second * 35,
+		WriteTimeout:        time.Second * 50,
 		IdleTimeout:         time.Minute * 2,
 		OnStarting: func() {
 			log.Info("Starting Tenant Server")

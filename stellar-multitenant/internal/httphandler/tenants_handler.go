@@ -131,6 +131,7 @@ func (h TenantsHandler) Post(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	log.Ctx(ctx).Infof("Tenant %s created successfully.", tnt.Name)
 	httpjson.RenderStatus(rw, http.StatusCreated, tnt, httpjson.JSON)
 }
 

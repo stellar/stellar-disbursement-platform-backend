@@ -40,7 +40,7 @@ encodedCredentials=$(echo -n "$adminAccount:$adminApiKey" | base64)
 AuthHeader="Authorization: Basic $encodedCredentials"
 
 existingTenants=$(curl -s -H "$AuthHeader" $AdminTenantURL)
-echo "Response from tenant check: $existingTenants"
+echo "Response from GET /tenants: $existingTenants"
 
 existingTenantNames=[]
 if names=$(echo $existingTenants | jq -r '.[].name'); then
@@ -60,21 +60,30 @@ for tenant in "${tenants[@]}"; do
         sdpUIBaseURL="http://$tenant.stellar.local:3000"
         ownerEmail="owner@$tenant.org"
 
-        curl -X POST $AdminTenantURL \
-        -H "Content-Type: application/json" \
-        -H "$AuthHeader" \
-        -d '{
-                "name": "'"$tenant"'",
-                "organization_name": "'"$tenant"'",
-                "base_url": "'"$baseURL"'",
-                "sdp_ui_base_url": "'"$sdpUIBaseURL"'",
-                "owner_email": "'"$ownerEmail"'",
-                "owner_first_name": "jane",
-                "owner_last_name": "doe"
-        }'
+        response=$(curl -s -w "\n%{http_code}" -X POST $AdminTenantURL \
+                -H "Content-Type: application/json" \
+                -H "$AuthHeader" \
+                -d '{
+                        "name": "'"$tenant"'",
+                        "organization_name": "'"$tenant"'",
+                        "base_url": "'"$baseURL"'",
+                        "sdp_ui_base_url": "'"$sdpUIBaseURL"'",
+                        "owner_email": "'"$ownerEmail"'",
+                        "owner_first_name": "jane",
+                        "owner_last_name": "doe"
+                }')
 
-        echo "✅Tenant $tenant created successfully."
-        echo "🔗You can now reset the password for the owner $ownerEmail on $sdpUIBaseURL/forgot-password"
+        http_code=$(echo "$response" | tail -n1)
+        response_body=$(echo "$response" | sed '$d')
+
+        if [[ "$http_code" -ge 200 && "$http_code" -lt 300 ]]; then
+            echo "✅Tenant $tenant created successfully."
+            echo "🔗You can now reset the password for the owner $ownerEmail on $sdpUIBaseURL/forgot-password"
+            echo "Response body: $response_body"
+        else
+            echo "❌Failed to create tenant $tenant. HTTP status code: $http_code"
+            echo "Server response: $response_body"
+        fi
     fi
 done
 
