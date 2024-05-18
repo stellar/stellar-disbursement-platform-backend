@@ -72,7 +72,7 @@ func Test_Serve(t *testing.T) {
 		assert.Equal(t, time.Minute*3, conf.TCPKeepAlive)
 		assert.Equal(t, time.Second*50, conf.ShutdownGracePeriod)
 		assert.Equal(t, time.Second*5, conf.ReadTimeout)
-		assert.Equal(t, time.Second*35, conf.WriteTimeout)
+		assert.Equal(t, time.Second*50, conf.WriteTimeout)
 		assert.Equal(t, time.Minute*2, conf.IdleTimeout)
 		assert.Nil(t, conf.TLS)
 		assert.ObjectsAreEqualValues(handleHTTP(&opts), conf.Handler)

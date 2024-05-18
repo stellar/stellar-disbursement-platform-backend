@@ -190,6 +190,7 @@ func (m *Manager) fundTenantDistributionAccount(ctx context.Context, distributio
 		}
 
 		// Bootstrap tenant distribution account with native asset
+		log.Ctx(ctx).Infof("Creating and funding tenant distribution account %s with native asset", distributionAccount)
 		err = tssSvc.CreateAndFundAccount(ctx, m.SubmitterEngine, m.nativeAssetBootstrapAmount, hostDistributionAccPubKey, distributionAccount)
 		if err != nil {
 			return fmt.Errorf("bootstrapping tenant distribution account with native asset: %w", err)
