@@ -18,33 +18,31 @@ type CreateAuthUserService struct {
 	models           *data.Models
 	dbConnectionPool db.DBConnectionPool
 	authManager      auth.AuthManager
-	messengerClient  message.MessengerClient
 }
 
-func NewCreateUserService(models *data.Models, dbConnectionPool db.DBConnectionPool, authManager auth.AuthManager, messengerClient message.MessengerClient) *CreateAuthUserService {
+func NewCreateUserService(models *data.Models, dbConnectionPool db.DBConnectionPool, authManager auth.AuthManager) *CreateAuthUserService {
 	return &CreateAuthUserService{
 		models:           models,
 		dbConnectionPool: dbConnectionPool,
 		authManager:      authManager,
-		messengerClient:  messengerClient,
 	}
 }
 
-func (s *CreateAuthUserService) CreateUser(ctx context.Context, newUser auth.User, uiBaseURL string) (*auth.User, error) {
+func (s *CreateAuthUserService) CreateUser(ctx context.Context, newUser auth.User, uiBaseURL string) (*auth.User, *message.Message, error) {
 	// The password is empty so the AuthManager will generate one automatically.
 	u, err := s.authManager.CreateUser(ctx, &newUser, "")
 	if err != nil {
-		return nil, fmt.Errorf("creating new user: %w", err)
+		return nil, nil, fmt.Errorf("creating new user: %w", err)
 	}
 
 	organization, err := s.models.Organizations.Get(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("getting organization: %w", err)
+		return nil, nil, fmt.Errorf("getting organization: %w", err)
 	}
 
 	forgotPasswordLink, err := url.JoinPath(uiBaseURL, "forgot-password")
 	if err != nil {
-		return nil, fmt.Errorf("getting forgot password link: %w", err)
+		return nil, nil, fmt.Errorf("getting forgot password link: %w", err)
 	}
 
 	invitationMsgData := htmltemplate.InvitationMessageTemplate{
@@ -55,18 +53,14 @@ func (s *CreateAuthUserService) CreateUser(ctx context.Context, newUser auth.Use
 	}
 	messageContent, err := htmltemplate.ExecuteHTMLTemplateForInvitationMessage(invitationMsgData)
 	if err != nil {
-		return nil, fmt.Errorf("executing invitation message HTML template: %w", err)
+		return nil, nil, fmt.Errorf("executing invitation message HTML template: %w", err)
 	}
 
-	msg := message.Message{
+	msg := &message.Message{
 		ToEmail: u.Email,
 		Message: messageContent,
 		Title:   invitationMessageTitle,
 	}
-	err = s.messengerClient.SendMessage(msg)
-	if err != nil {
-		return nil, fmt.Errorf("sending invitation email for user %s: %w", u.ID, err)
-	}
 
-	return u, nil
+	return u, msg, nil
 }

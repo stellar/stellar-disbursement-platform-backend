@@ -207,7 +207,7 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 			hostAccSigClient.On("NetworkPassphrase").Return(tc.networkPassphrase).Maybe()
 
 			distAccResolver := mocks.NewMockDistributionAccountResolver(t)
-			distAccResolver.On("HostDistributionAccount").Return(hostAccountKP.Address(), nil).Once()
+			distAccResolver.On("HostDistributionAccount").Return(hostAccountKP.Address()).Once()
 
 			// STEP 2: create DistSigner
 			switch tc.sigClientType {

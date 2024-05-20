@@ -722,7 +722,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 
 		wantsBody := `
 			{
-				"error": "Cannot create user"
+				"error": "Cannot send invitation message"
 			}
 		`
 
