@@ -11,235 +11,341 @@ import (
 	"github.com/stellar/go/keypair"
 	"github.com/stellar/go/network"
 	"github.com/stellar/go/protocols/horizon"
-	"github.com/stellar/go/strkey"
-	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/txnbuild"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/exp/slices"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/migrations"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/router"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	preconditionsMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing/mocks"
+	sdpUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
+func Test_NewManager(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	mMessengerClient := &message.MessengerClientMock{}
+	mTenantMenager := &tenant.TenantManagerMock{}
+
+	mHorizonClient := &horizonclient.MockClient{}
+	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
+	sigService, _, _, _, _ := signing.NewMockSignatureService(t)
+	submitterEngine := engine.SubmitterEngine{
+		HorizonClient:       mHorizonClient,
+		SignatureService:    sigService,
+		LedgerNumberTracker: mLedgerNumberTracker,
+		MaxBaseFee:          100 * txnbuild.MinBaseFee,
+	}
+
+	testCases := []struct {
+		name            string
+		opts            ManagerOptions
+		wantErrContains string
+		wantResult      *Manager
+	}{
+		{
+			name:            "DBConnectionPool cannot be nil",
+			wantErrContains: "database connection pool cannot be nil",
+		},
+		{
+			name: "MessengerClient cannot be nil",
+			opts: ManagerOptions{
+				DBConnectionPool: dbConnectionPool,
+			},
+			wantErrContains: "messenger client cannot be nil",
+		},
+		{
+			name: "TenantManager cannot be nil",
+			opts: ManagerOptions{
+				DBConnectionPool: dbConnectionPool,
+				MessengerClient:  mMessengerClient,
+			},
+			wantErrContains: "tenant manager cannot be nil",
+		},
+		{
+			name: "validating SubmitterEngine",
+			opts: ManagerOptions{
+				DBConnectionPool: dbConnectionPool,
+				MessengerClient:  mMessengerClient,
+				TenantManager:    mTenantMenager,
+				SubmitterEngine:  engine.SubmitterEngine{},
+			},
+			wantErrContains: "validating submitter engine",
+		},
+		{
+			name: "fails if XLM < MINIMUM",
+			opts: ManagerOptions{
+				DBConnectionPool:           dbConnectionPool,
+				MessengerClient:            mMessengerClient,
+				TenantManager:              mTenantMenager,
+				SubmitterEngine:            submitterEngine,
+				NativeAssetBootstrapAmount: tenant.MinTenantDistributionAccountAmount - 1,
+			},
+			wantErrContains: "the amount of XLM configured (4 XLM) is outside the permitted range",
+		},
+		{
+			name: "fails if XLM > MAXIMUM",
+			opts: ManagerOptions{
+				DBConnectionPool:           dbConnectionPool,
+				MessengerClient:            mMessengerClient,
+				TenantManager:              mTenantMenager,
+				SubmitterEngine:            submitterEngine,
+				NativeAssetBootstrapAmount: tenant.MaxTenantDistributionAccountAmount + 1,
+			},
+			wantErrContains: "the amount of XLM configured (51 XLM) is outside the permitted range",
+		},
+		{
+			name: "🎉 successfully creates a new manager",
+			opts: ManagerOptions{
+				DBConnectionPool:           dbConnectionPool,
+				MessengerClient:            mMessengerClient,
+				TenantManager:              mTenantMenager,
+				SubmitterEngine:            submitterEngine,
+				NativeAssetBootstrapAmount: tenant.MinTenantDistributionAccountAmount,
+			},
+			wantResult: &Manager{
+				db:                         dbConnectionPool,
+				messengerClient:            mMessengerClient,
+				tenantManager:              mTenantMenager,
+				SubmitterEngine:            submitterEngine,
+				nativeAssetBootstrapAmount: tenant.MinTenantDistributionAccountAmount,
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			gotResult, err := NewManager(tc.opts)
+			if tc.wantErrContains != "" {
+				assert.ErrorContains(t, err, tc.wantErrContains)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tc.wantResult, gotResult)
+			}
+		})
+	}
+}
+
 func Test_Manager_ProvisionNewTenant(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
-
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
 
 	ctx := context.Background()
 
-	messengerClientMock := message.MessengerClientMock{}
-	messengerClientMock.
-		On("SendMessage", mock.AnythingOfType("message.Message")).
-		Return(nil)
+	userFirstName := "First"
+	userLastName := "Last"
+	userEmail := "email@email.com"
+	userOrgName := "My Org"
 
 	tenantManager := tenant.NewManager(tenant.WithDatabase(dbConnectionPool))
 
-	pubnetAssets := []string{"USDC:GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN", "XLM:"}
-	testnetAssets := []string{"USDC:GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5", "XLM:"}
-
-	pubnetWallets := []string{"Freedom Wallet", "Vibrant Assist RC", "Vibrant Assist"}
-	testnetWallets := []string{"Demo Wallet", "Vibrant Assist"}
-
-	user := struct {
-		FirstName string
-		LastName  string
-		Email     string
-		OrgName   string
+	testCases := []struct {
+		name              string
+		networkPassphrase string
+		tenantName        string
+		sigClientType     signing.SignatureClientType
 	}{
-		FirstName: "First",
-		LastName:  "Last",
-		Email:     "email@email.com",
-		OrgName:   "My Org",
+		{
+			name:              "Testnet with sigClientType=DISTRIBUTION_ACCOUNT_ENV",
+			networkPassphrase: network.TestNetworkPassphrase,
+			tenantName:        "tenant-testnet-env",
+			sigClientType:     signing.DistributionAccountEnvSignatureClientType,
+		},
+		{
+			name:              "Testnet with sigClientType=DISTRIBUTION_ACCOUNT_DB",
+			networkPassphrase: network.TestNetworkPassphrase,
+			tenantName:        "tenant-testnet-dbvault",
+			sigClientType:     signing.DistributionAccountDBSignatureClientType,
+		},
+		{
+			name:              "Pubnet with sigClientType=DISTRIBUTION_ACCOUNT_ENV",
+			networkPassphrase: network.PublicNetworkPassphrase,
+			tenantName:        "tenant-pubnet-env",
+			sigClientType:     signing.DistributionAccountEnvSignatureClientType,
+		},
+		{
+			name:              "Pubnet with sigClientType=DISTRIBUTION_ACCOUNT_DB",
+			networkPassphrase: network.PublicNetworkPassphrase,
+			tenantName:        "tenant-pubnet-dbvault",
+			sigClientType:     signing.DistributionAccountDBSignatureClientType,
+		},
 	}
 
-	assertFixtures := func(tenantName string, isTestnet bool) {
-		tenantDSN, err := router.GetDSNForTenant(dbt.DSN, tenantName)
-		require.NoError(t, err)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			defer tenant.DeleteAllTenantsFixture(t, ctx, dbConnectionPool)
 
-		tenantDBConnectionPool, err := db.OpenDBConnectionPool(tenantDSN)
-		require.NoError(t, err)
-		defer tenantDBConnectionPool.Close()
+			hostAccountKP := keypair.MustRandom()
+			var distAccSigClient signing.SignatureClient
+			var err error
+			var wantDistAccAddress string
 
-		schemaName := fmt.Sprintf("%s%s", router.SDPSchemaNamePrefix, tenantName)
-		assert.True(t, tenant.CheckSchemaExistsFixture(t, ctx, tenantDBConnectionPool, schemaName))
+			// STEP 1: create mocks:
+			mHorizonClient := &horizonclient.MockClient{}
 
-		tenant.TenantSchemaMatchTablesFixture(t, ctx, tenantDBConnectionPool, schemaName, getExpectedTablesAfterMigrationsApplied())
+			chAccSigClient := mocks.NewMockSignatureClient(t)
+			chAccSigClient.On("NetworkPassphrase").Return(tc.networkPassphrase).Maybe()
 
-		assets := pubnetAssets
-		wallets := pubnetWallets
-		if isTestnet {
-			assets = testnetAssets
-			wallets = testnetWallets
-		}
+			hostAccSigClient := mocks.NewMockSignatureClient(t)
+			hostAccSigClient.On("NetworkPassphrase").Return(tc.networkPassphrase).Maybe()
 
-		tenant.AssertRegisteredAssetsFixture(t, ctx, tenantDBConnectionPool, assets)
-		tenant.AssertRegisteredWalletsFixture(t, ctx, tenantDBConnectionPool, wallets)
+			distAccResolver := mocks.NewMockDistributionAccountResolver(t)
+			distAccResolver.On("HostDistributionAccount").Return(hostAccountKP.Address(), nil).Once()
 
-		tenant.AssertRegisteredUserFixture(t, ctx, tenantDBConnectionPool, user.FirstName, user.LastName, user.Email)
+			// STEP 2: create DistSigner
+			switch tc.sigClientType {
+			case signing.DistributionAccountEnvSignatureClientType:
+				distAccSigClient, err = signing.NewSignatureClient(signing.DistributionAccountEnvSignatureClientType, signing.SignatureClientOptions{
+					DistributionPrivateKey: hostAccountKP.Seed(),
+					NetworkPassphrase:      tc.networkPassphrase,
+				})
+				wantDistAccAddress = hostAccountKP.Address()
+				require.NoError(t, err)
 
-		tenant.TenantSchemaMatchTablesFixture(t, context.Background(), tenantDBConnectionPool, schemaName, getExpectedTablesAfterMigrationsApplied())
-	}
+			case signing.DistributionAccountDBSignatureClientType:
+				distAccSigClient, err = signing.NewSignatureClient(signing.DistributionAccountDBSignatureClientType, signing.SignatureClientOptions{
+					DBConnectionPool:            dbConnectionPool,
+					DistAccEncryptionPassphrase: keypair.MustRandom().Seed(),
+					NetworkPassphrase:           tc.networkPassphrase,
+				})
+				require.NoError(t, err)
 
-	provisionAndValidateNewTenant := func(
-		tenantName string,
-		isTestnet bool,
-		sigClientType signing.SignatureClientType,
-	) {
-		require.True(t, slices.Contains(signing.DistributionSignatureClientTypes(), sigClientType))
+				tenantAccountKP := keypair.MustRandom()
 
-		networkType := utils.PubnetNetworkType
-		networkPassphrase := network.PublicNetworkPassphrase
-		if isTestnet {
-			networkType = utils.TestnetNetworkType
-			networkPassphrase = network.TestNetworkPassphrase
-		}
+				// STEP 2.1 - Mock calls that are exclusively for DistributionAccountDBSignatureClientType
+				mHorizonClient.
+					On("AccountDetail", horizonclient.AccountRequest{AccountID: hostAccountKP.Address()}).
+					Return(horizon.Account{
+						AccountID: hostAccountKP.Address(),
+						Sequence:  1,
+					}, nil).
+					Once()
+				hostAccSigClient.
+					On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), hostAccountKP.Address()).
+					Return(&txnbuild.Transaction{}, nil).
+					Once()
+				mHorizonClient.
+					On("SubmitTransactionWithOptions", mock.AnythingOfType("*txnbuild.Transaction"), horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true}).
+					Return(horizon.Transaction{}, nil).
+					Once()
+				mHorizonClient.
+					On("AccountDetail", mock.AnythingOfType("horizonclient.AccountRequest")).
+					Run(func(args mock.Arguments) {
+						gotAccountRequest, ok := args.Get(0).(horizonclient.AccountRequest)
+						require.True(t, ok)
+						wantDistAccAddress = gotAccountRequest.AccountID // <--- this is the distribution account address
+					}).
+					Return(horizon.Account{
+						AccountID: tenantAccountKP.Address(),
+						Sequence:  1,
+					}, nil).
+					Once()
 
-		mHorizonClient := &horizonclient.MockClient{}
-		mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
+			default:
+				require.Failf(t, "invalid sigClientType=%s", string(tc.sigClientType))
+			}
 
-		sigService, _, _, hostAccSigClient, distAccResolver := signing.NewMockSignatureService(t)
+			// STEP 3: create Submitter Engine
+			mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
+			submitterEngine := engine.SubmitterEngine{
+				HorizonClient: mHorizonClient,
+				SignatureService: signing.SignatureService{
+					ChAccountSigner:             chAccSigClient,
+					DistAccountSigner:           distAccSigClient,
+					HostAccountSigner:           hostAccSigClient,
+					DistributionAccountResolver: distAccResolver,
+				},
+				LedgerNumberTracker: mLedgerNumberTracker,
+				MaxBaseFee:          100 * txnbuild.MinBaseFee,
+			}
 
-		distAcc := keypair.MustRandom()
-		distAccPrivKey := distAcc.Seed()
-		distAccPubKey := distAcc.Address()
-		distAccSigClient, err := signing.NewSignatureClient(signing.DistributionAccountEnvSignatureClientType, signing.SignatureClientOptions{
-			NetworkPassphrase:      networkPassphrase,
-			DistributionPrivateKey: distAccPrivKey,
-		})
-		require.NoError(t, err)
-
-		if sigClientType == signing.DistributionAccountDBSignatureClientType {
-			distAccSigClient, err = signing.NewSignatureClient(signing.DistributionAccountDBSignatureClientType, signing.SignatureClientOptions{
-				NetworkPassphrase:           networkPassphrase,
-				DistAccEncryptionPassphrase: keypair.MustRandom().Seed(),
-				DBConnectionPool:            dbConnectionPool,
+			// STEP 4: create provisioning Manager
+			messengerClientMock := message.MessengerClientMock{}
+			messengerClientMock.
+				On("SendMessage", mock.AnythingOfType("message.Message")).
+				Return(nil)
+			p, err := NewManager(ManagerOptions{
+				DBConnectionPool:           dbConnectionPool,
+				TenantManager:              tenantManager,
+				MessengerClient:            &messengerClientMock,
+				SubmitterEngine:            submitterEngine,
+				NativeAssetBootstrapAmount: tenant.MinTenantDistributionAccountAmount,
 			})
 			require.NoError(t, err)
-		}
 
-		if sigClientType == signing.DistributionAccountEnvSignatureClientType {
-			assert.IsType(t, &signing.DistributionAccountEnvSignatureClient{}, distAccSigClient)
-		} else {
-			assert.IsType(t, &signing.DistributionAccountDBSignatureClient{}, distAccSigClient)
-		}
-		sigService.DistAccountSigner = distAccSigClient
+			// STEP 5: provision the tenant
+			networkType, err := sdpUtils.GetNetworkTypeFromNetworkPassphrase(tc.networkPassphrase)
+			require.NoError(t, err)
+			tnt, err := p.ProvisionNewTenant(ctx, tc.tenantName, userFirstName, userLastName, userEmail, userOrgName, string(networkType))
+			require.NoError(t, err)
 
-		tenantAcc := keypair.MustRandom()
-		tenantAccPubKey := tenantAcc.Address()
-		distAccResolver.On("HostDistributionAccount").Return(distAccPubKey, nil).Once()
+			// STEP 6: assert the result
+			assert.Equal(t, tc.tenantName, tnt.Name)
+			assert.Equal(t, tenant.ProvisionedTenantStatus, tnt.Status)
+			assert.Equal(t, wantDistAccAddress, *tnt.DistributionAccountAddress)
+			if tc.sigClientType == signing.DistributionAccountEnvSignatureClientType {
+				assert.Equal(t, hostAccountKP.Address(), *tnt.DistributionAccountAddress)
+			} else {
+				assert.NotEqual(t, hostAccountKP.Address(), *tnt.DistributionAccountAddress)
+			}
 
-		if sigClientType == signing.DistributionAccountDBSignatureClientType {
-			mHorizonClient.
-				On("AccountDetail", horizonclient.AccountRequest{AccountID: distAccPubKey}).
-				Return(horizon.Account{
-					AccountID: distAccPubKey,
-					Sequence:  1,
-				}, nil).
-				Once()
-			hostAccSigClient.On(
-				"SignStellarTransaction",
-				ctx,
-				mock.AnythingOfType("*txnbuild.Transaction"),
-				distAccPubKey).Return(&txnbuild.Transaction{}, nil).Once()
-			mHorizonClient.On(
-				"SubmitTransactionWithOptions",
-				mock.AnythingOfType("*txnbuild.Transaction"),
-				horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true},
-			).Return(horizon.Transaction{}, nil).Once()
-			mHorizonClient.
-				On("AccountDetail", mock.AnythingOfType("horizonclient.AccountRequest")).
-				Return(horizon.Account{
-					AccountID: tenantAccPubKey,
-					Sequence:  1,
-				}, nil).
-				Once()
-		}
+			// STEP 7: assert the mocks
+			messengerClientMock.AssertExpectations(t)
+			mHorizonClient.AssertExpectations(t)
 
-		submitterEngine := engine.SubmitterEngine{
-			HorizonClient:       mHorizonClient,
-			SignatureService:    sigService,
-			LedgerNumberTracker: mLedgerNumberTracker,
-			MaxBaseFee:          100 * txnbuild.MinBaseFee,
-		}
+			// STEP 8: assert the fixtures
+			tenantDSN, err := router.GetDSNForTenant(dbt.DSN, tc.tenantName)
+			require.NoError(t, err)
+			tenantDBConnectionPool, err := db.OpenDBConnectionPool(tenantDSN)
+			require.NoError(t, err)
+			defer tenantDBConnectionPool.Close()
 
-		p := NewManager(
-			WithDatabase(dbConnectionPool),
-			WithMessengerClient(&messengerClientMock),
-			WithTenantManager(tenantManager),
-			WithSubmitterEngine(submitterEngine),
-			WithNativeAssetBootstrapAmount(tenant.MinTenantDistributionAccountAmount),
-		)
+			// STEP 8.1: assert the schema
+			schemaName := fmt.Sprintf("%s%s", router.SDPSchemaNamePrefix, tc.tenantName)
+			assert.True(t, tenant.CheckSchemaExistsFixture(t, ctx, tenantDBConnectionPool, schemaName))
 
-		tnt, err := p.ProvisionNewTenant(ctx, tenantName, user.FirstName, user.LastName, user.Email, user.OrgName, string(networkType))
-		require.NoError(t, err)
+			// STEP 8.2: assert the tables exist in the schema
+			tenant.TenantSchemaMatchTablesFixture(t, ctx, tenantDBConnectionPool, schemaName, getExpectedTablesAfterMigrationsApplied())
 
-		assert.Equal(t, tenantName, tnt.Name)
-		if sigClientType == signing.DistributionAccountEnvSignatureClientType {
-			assert.Equal(t, distAcc.Address(), *tnt.DistributionAccountAddress)
-		} else {
-			assert.True(t, strkey.IsValidEd25519PublicKey(*tnt.DistributionAccountAddress))
-		}
-		assert.Equal(t, tenant.ProvisionedTenantStatus, tnt.Status)
+			// STEP 8.3: assert the user has been registered
+			tenant.AssertRegisteredUserFixture(t, ctx, tenantDBConnectionPool, userFirstName, userLastName, userEmail)
 
-		mHorizonClient.AssertExpectations(t)
+			// STEP 8.4: assert the assets have been registered
+			assetsSlice, ok := services.DefaultAssetsNetworkMap[networkType]
+			require.True(t, ok)
+			var assetsStrSlice []string
+			for _, asset := range assetsSlice {
+				assetsStrSlice = append(assetsStrSlice, fmt.Sprintf("%s:%s", asset.Code, asset.Issuer))
+			}
+			tenant.AssertRegisteredAssetsFixture(t, ctx, tenantDBConnectionPool, assetsStrSlice)
+
+			// STEP 8.5: assert the wallets have been registered
+			walletsSlice, ok := services.DefaultWalletsNetworkMap[networkType]
+			require.True(t, ok)
+			var walletsNames []string
+			for _, wallet := range walletsSlice {
+				walletsNames = append(walletsNames, wallet.Name)
+			}
+			tenant.AssertRegisteredWalletsFixture(t, ctx, tenantDBConnectionPool, walletsNames)
+		})
 	}
-
-	t.Run("provision a new tenant for the testnet", func(t *testing.T) {
-		tenantName1 := "myorg-ukraine"
-		tenantName2 := "myorg-poland"
-
-		t.Run("provision key using type DISTRIBUTION_ACCOUNT_ENV", func(t *testing.T) {
-			getEntries := log.DefaultLogger.StartTest(log.WarnLevel)
-			provisionAndValidateNewTenant(tenantName1, true, signing.DistributionAccountEnvSignatureClientType)
-			entries := getEntries()
-			require.Len(t, entries, 4)
-			assert.Contains(t, entries[0].Message, "Account provisioning not needed for distribution account signature client type")
-
-			assertFixtures(tenantName1, true)
-		})
-
-		t.Run("provision key using type DISTRIBUTION_ACCOUNT_DB", func(t *testing.T) {
-			provisionAndValidateNewTenant(tenantName2, true, signing.DistributionAccountDBSignatureClientType)
-			assertFixtures(tenantName2, true)
-		})
-	})
-
-	t.Run("provision a new tenant for the pubnet", func(t *testing.T) {
-		tenantName1 := "myorg-us"
-		tenantName2 := "myorg-canada"
-
-		t.Run("provision key using type DISTRIBUTION_ACCOUNT_ENV", func(t *testing.T) {
-			getEntries := log.DefaultLogger.StartTest(log.WarnLevel)
-			provisionAndValidateNewTenant(tenantName1, false, signing.DistributionAccountEnvSignatureClientType)
-			entries := getEntries()
-			require.Len(t, entries, 4)
-			assert.Contains(t, entries[0].Message, "Account provisioning not needed for distribution account signature client type")
-
-			assertFixtures(tenantName1, false)
-		})
-
-		t.Run("provision key using type DISTRIBUTION_ACCOUNT_DB", func(t *testing.T) {
-			provisionAndValidateNewTenant(tenantName2, false, signing.DistributionAccountDBSignatureClientType)
-			assertFixtures(tenantName2, false)
-		})
-	})
-
-	messengerClientMock.AssertExpectations(t)
 }
 
 func Test_Manager_RunMigrationsForTenant(t *testing.T) {
@@ -283,7 +389,23 @@ func Test_Manager_RunMigrationsForTenant(t *testing.T) {
 	require.NoError(t, err)
 	defer tenant2DB.Close()
 
-	p := NewManager(WithDatabase(tenant1DB))
+	mHorizonClient := &horizonclient.MockClient{}
+	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
+	sigService, _, _, _, _ := signing.NewMockSignatureService(t)
+	submitterEngine := engine.SubmitterEngine{
+		HorizonClient:       mHorizonClient,
+		SignatureService:    sigService,
+		LedgerNumberTracker: mLedgerNumberTracker,
+		MaxBaseFee:          100 * txnbuild.MinBaseFee,
+	}
+	p, err := NewManager(ManagerOptions{
+		DBConnectionPool:           dbConnectionPool,
+		TenantManager:              &tenant.TenantManagerMock{},
+		MessengerClient:            &message.MessengerClientMock{},
+		SubmitterEngine:            submitterEngine,
+		NativeAssetBootstrapAmount: tenant.MinTenantDistributionAccountAmount,
+	})
+	require.NoError(t, err)
 	err = p.runMigrationsForTenant(ctx, tenant1DSN, migrate.Up, 0, migrations.SDPMigrationRouter)
 	require.NoError(t, err)
 	err = p.runMigrationsForTenant(ctx, tenant1DSN, migrate.Up, 0, migrations.AuthMigrationRouter)
@@ -350,20 +472,21 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 	}
 
 	tenantManagerMock := tenant.TenantManagerMock{}
-	tenantManager := NewManager(
-		WithDatabase(dbConnectionPool),
-		WithMessengerClient(&messengerClientMock),
-		WithTenantManager(&tenantManagerMock),
-		WithSubmitterEngine(submitterEngine),
-		WithNativeAssetBootstrapAmount(tenant.MinTenantDistributionAccountAmount),
-	)
+	tenantManager, err := NewManager(ManagerOptions{
+		DBConnectionPool:           dbConnectionPool,
+		TenantManager:              &tenantManagerMock,
+		MessengerClient:            &messengerClientMock,
+		SubmitterEngine:            submitterEngine,
+		NativeAssetBootstrapAmount: tenant.MinTenantDistributionAccountAmount,
+	})
+	require.NoError(t, err)
 
 	tenantName := "myorg1"
 	orgName := "My Org"
 	firstName := "First"
 	lastName := "Last"
 	email := "first.last@email.com"
-	networkType := utils.TestnetNetworkType
+	networkType := sdpUtils.TestnetNetworkType
 
 	tenantDSN, err := router.GetDSNForTenant(dbt.DSN, tenantName)
 

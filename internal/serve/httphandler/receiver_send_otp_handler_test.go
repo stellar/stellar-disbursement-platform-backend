@@ -25,19 +25,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-type mockMessengerClient struct {
-	mock.Mock
-}
-
-func (m *mockMessengerClient) SendMessage(message message.Message) error {
-	return m.Called(message).Error(0)
-}
-
-func (mc *mockMessengerClient) MessengerType() message.MessengerType {
-	args := mc.Called()
-	return args.Get(0).(message.MessengerType)
-}
-
 func Test_ReceiverSendOTPHandler_ServeHTTP(t *testing.T) {
 	r := chi.NewRouter()
 
@@ -65,7 +52,7 @@ func Test_ReceiverSendOTPHandler_ServeHTTP(t *testing.T) {
 	_ = data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver1.ID, wallet1.ID, data.RegisteredReceiversWalletStatus)
 	_ = data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver2.ID, wallet1.ID, data.RegisteredReceiversWalletStatus)
 
-	mockMessenger := mockMessengerClient{}
+	mockMessenger := message.MessengerClientMock{}
 	reCAPTCHAValidator := &validators.ReCAPTCHAValidatorMock{}
 
 	r.Post("/wallet-registration/otp", ReceiverSendOTPHandler{

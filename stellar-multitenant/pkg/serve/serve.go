@@ -43,7 +43,7 @@ type ServeOptions struct {
 	Port                                    int
 	SubmitterEngine                         engine.SubmitterEngine
 	TenantAccountNativeAssetBootstrapAmount int
-	tenantManager                           *tenant.Manager
+	tenantManager                           tenant.ManagerInterface
 	tenantProvisioningManager               *provisioning.Manager
 	Version                                 string
 	AdminAccount                            string
@@ -55,16 +55,19 @@ type ServeOptions struct {
 
 // SetupDependencies uses the serve options to setup the dependencies for the server.
 func (opts *ServeOptions) SetupDependencies() error {
-	opts.tenantManager = tenant.NewManager(tenant.WithDatabase(opts.AdminDBConnectionPool))
-	opts.tenantProvisioningManager = provisioning.NewManager(
-		provisioning.WithDatabase(opts.AdminDBConnectionPool),
-		provisioning.WithTenantManager(opts.tenantManager),
-		provisioning.WithMessengerClient(opts.EmailMessengerClient),
-		provisioning.WithSubmitterEngine(opts.SubmitterEngine),
-		provisioning.WithNativeAssetBootstrapAmount(opts.TenantAccountNativeAssetBootstrapAmount),
-	)
-
 	var err error
+	opts.tenantManager = tenant.NewManager(tenant.WithDatabase(opts.AdminDBConnectionPool))
+	opts.tenantProvisioningManager, err = provisioning.NewManager(provisioning.ManagerOptions{
+		DBConnectionPool:           opts.AdminDBConnectionPool,
+		TenantManager:              opts.tenantManager,
+		MessengerClient:            opts.EmailMessengerClient,
+		SubmitterEngine:            opts.SubmitterEngine,
+		NativeAssetBootstrapAmount: opts.TenantAccountNativeAssetBootstrapAmount,
+	})
+	if err != nil {
+		return fmt.Errorf("creating provisioning manager: %w", err)
+	}
+
 	opts.networkType, err = utils.GetNetworkTypeFromNetworkPassphrase(opts.NetworkPassphrase)
 	if err != nil {
 		return fmt.Errorf("parsing network type: %w", err)
