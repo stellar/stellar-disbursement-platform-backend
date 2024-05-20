@@ -485,7 +485,7 @@ func Test_AnyRoleMiddleware(t *testing.T) {
 		assert.JSONEq(t, `{"error":"An internal error occurred while processing this request."}`, string(respBody))
 	})
 
-	t.Run("returns Unauthorized error when the user does not have the required roles", func(t *testing.T) {
+	t.Run("returns Forbidden error when the user does not have the required roles", func(t *testing.T) {
 		token := "mytoken"
 		ctx := context.WithValue(context.Background(), TokenContextKey, token)
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
@@ -523,8 +523,8 @@ func Test_AnyRoleMiddleware(t *testing.T) {
 		respBody, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
-		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
-		assert.JSONEq(t, `{"error":"Not authorized."}`, string(respBody))
+		assert.Equal(t, http.StatusForbidden, resp.StatusCode)
+		assert.JSONEq(t, `{"error":"You don't have permission to perform this action."}`, string(respBody))
 	})
 
 	t.Run("returns Status Ok when user has the required roles", func(t *testing.T) {
