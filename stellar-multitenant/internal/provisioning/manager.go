@@ -80,13 +80,6 @@ func (m *Manager) ProvisionNewTenant(
 		return nil, m.handleProvisioningError(ctx, provisionErr, t)
 	}
 
-	// Last step when no errors - fund tenant distribution account
-	fundErr := m.fundTenantDistributionAccount(ctx, *t.DistributionAccountAddress)
-	if fundErr != nil {
-		// error already wrapped
-		return nil, fundErr
-	}
-
 	return t, nil
 }
 
@@ -136,7 +129,7 @@ func (m *Manager) handleProvisioningError(ctx context.Context, err error, t *ten
 	return provisioningErr
 }
 
-func (m *Manager) provisionTenant(ctx context.Context, pt *ProvisionTenant) (*tenant.Tenant, error) {
+func (m *Manager) provisionTenant(ctx context.Context, pt *ProvisionTenant) (t *tenant.Tenant, err error) {
 	t, addTntErr := m.tenantManager.AddTenant(ctx, pt.name)
 	if addTntErr != nil {
 		return t, fmt.Errorf("%w: adding tenant %s: %w", ErrTenantCreationFailed, pt.name, addTntErr)
@@ -153,7 +146,8 @@ func (m *Manager) provisionTenant(ctx context.Context, pt *ProvisionTenant) (*te
 	}
 
 	// Provision distribution account for tenant if necessary
-	if err := m.provisionDistributionAccount(ctx, t); err != nil {
+	err = m.provisionDistributionAccount(ctx, t)
+	if err != nil {
 		return t, fmt.Errorf("provisioning distribution account: %w", err)
 	}
 
@@ -161,11 +155,11 @@ func (m *Manager) provisionTenant(ctx context.Context, pt *ProvisionTenant) (*te
 	distSignerType := signing.SignatureClientType(distSignerTypeStr)
 	distAccType, err := distSignerType.DistributionAccountType()
 	if err != nil {
-		return nil, fmt.Errorf("parsing getting distribution account type: %w", err)
+		return t, fmt.Errorf("parsing getting distribution account type: %w", err)
 	}
 
 	tenantStatus := tenant.ProvisionedTenantStatus
-	t, err = m.tenantManager.UpdateTenantConfig(
+	updatedTenant, err := m.tenantManager.UpdateTenantConfig(
 		ctx,
 		&tenant.TenantUpdate{
 			ID:                         t.ID,
@@ -178,7 +172,12 @@ func (m *Manager) provisionTenant(ctx context.Context, pt *ProvisionTenant) (*te
 		return t, fmt.Errorf("%w: updating tenant %s status to %s: %w", ErrUpdateTenantFailed, pt.name, tenant.ProvisionedTenantStatus, err)
 	}
 
-	return t, nil
+	err = m.fundTenantDistributionAccount(ctx, *updatedTenant.DistributionAccountAddress)
+	if err != nil {
+		return t, fmt.Errorf("%w. funding tenant distribution account: %w", ErrUpdateTenantFailed, err)
+	}
+
+	return updatedTenant, nil
 }
 
 func (m *Manager) fundTenantDistributionAccount(ctx context.Context, distributionAccount string) error {
@@ -209,10 +208,10 @@ func (m *Manager) provisionDistributionAccount(ctx context.Context, t *tenant.Te
 	}
 
 	// Assigning the account key to the tenant so that it can be referenced if it needs to be deleted in the vault if any subsequent errors are encountered
-	t.DistributionAccountAddress = &distributionAccPubKeys[0]
 	if len(distributionAccPubKeys) != 1 {
 		return fmt.Errorf("%w: expected single distribution account public key, got %d", ErrUpdateTenantFailed, len(distributionAccPubKeys))
 	}
+	t.DistributionAccountAddress = &distributionAccPubKeys[0]
 	log.Ctx(ctx).Infof("distribution account %s created for tenant %s", *t.DistributionAccountAddress, t.Name)
 	return nil
 }
