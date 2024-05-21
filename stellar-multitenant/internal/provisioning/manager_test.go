@@ -126,7 +126,6 @@ func Test_NewManager(t *testing.T) {
 }
 
 func Test_Manager_ProvisionNewTenant(t *testing.T) {
-	t.Skip("Re-enable this test in SDP-1167")
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
@@ -224,6 +223,7 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 				tenantAccountKP := keypair.MustRandom()
 
 				// STEP 2.1 - Mock calls that are exclusively for DistributionAccountDBSignatureClientType
+				distAccResolver.On("HostDistributionAccount").Return(&hostAccount, nil).Once()
 				mHorizonClient.
 					On("AccountDetail", horizonclient.AccountRequest{AccountID: hostAccountKP.Address()}).
 					Return(horizon.Account{
@@ -282,16 +282,16 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 			// STEP 5: provision the tenant
 			networkType, err := sdpUtils.GetNetworkTypeFromNetworkPassphrase(tc.networkPassphrase)
 			require.NoError(t, err)
-
 			tnt, err := p.ProvisionNewTenant(ctx, ProvisionTenant{
-				Name:          tc.tenantName,
-				UserFirstName: userFirstName,
-				UserLastName:  userLastName,
-				UserEmail:     userEmail,
-				OrgName:       userOrgName,
-				NetworkType:   string(networkType),
-				UiBaseURL:     sdpUIBaseURL,
-				BaseURL:       baseURL,
+				Name:                    tc.tenantName,
+				UserFirstName:           userFirstName,
+				UserLastName:            userLastName,
+				UserEmail:               userEmail,
+				OrgName:                 userOrgName,
+				NetworkType:             string(networkType),
+				UiBaseURL:               sdpUIBaseURL,
+				BaseURL:                 baseURL,
+				DistributionAccountType: tc.accountType,
 			})
 			require.NoError(t, err)
 
@@ -452,6 +452,7 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 	defer dbConnectionPool.Close()
 
 	ctx := context.Background()
+	accountType := schema.DistributionAccountStellarDBVault
 
 	tenantName := "myorg1"
 	orgName := "My Org"
@@ -510,8 +511,6 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 				require.NoError(t, err)
 
 				// Needed for provisionDistributionAccount:
-				// TODO: in SDP-1167, send the accountType in the request body
-				accountType := schema.DistributionAccountStellarDBVault
 				distAccAddress := keypair.MustRandom().Address()
 				distAccount := schema.TransactionAccount{
 					Address: distAccAddress,
@@ -561,8 +560,6 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 				require.NoError(t, err)
 
 				// Needed for provisionDistributionAccount:
-				// TODO: in SDP-1167, send the accountType in the request body
-				accountType := schema.DistributionAccountStellarDBVault
 				distAccAddress := keypair.MustRandom().Address()
 				distAccount := schema.TransactionAccount{
 					Address: distAccAddress,
@@ -718,14 +715,15 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 
 			// Provision the tenant
 			_, err = provisioningManager.ProvisionNewTenant(ctx, ProvisionTenant{
-				Name:          tenantName,
-				UserFirstName: firstName,
-				UserLastName:  lastName,
-				UserEmail:     email,
-				OrgName:       orgName,
-				NetworkType:   string(networkType),
-				UiBaseURL:     sdpUIBaseURL,
-				BaseURL:       baseURL,
+				Name:                    tenantName,
+				UserFirstName:           firstName,
+				UserLastName:            lastName,
+				UserEmail:               email,
+				OrgName:                 orgName,
+				NetworkType:             string(networkType),
+				UiBaseURL:               sdpUIBaseURL,
+				BaseURL:                 baseURL,
+				DistributionAccountType: accountType,
 			})
 
 			// Assertions

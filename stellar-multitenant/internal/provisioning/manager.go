@@ -30,14 +30,15 @@ type Manager struct {
 
 // ProvisionTenant contains all the metadata about a tenant to provision one
 type ProvisionTenant struct {
-	Name          string
-	UserFirstName string
-	UserLastName  string
-	UserEmail     string
-	OrgName       string
-	UiBaseURL     string
-	BaseURL       string
-	NetworkType   string
+	Name                    string
+	UserFirstName           string
+	UserLastName            string
+	UserEmail               string
+	OrgName                 string
+	UiBaseURL               string
+	BaseURL                 string
+	NetworkType             string
+	DistributionAccountType schema.AccountType
 }
 
 var (
@@ -134,11 +135,8 @@ func (m *Manager) provisionTenant(ctx context.Context, pt *ProvisionTenant) (*te
 		return t, fmt.Errorf("%w: %w", ErrTenantDataSetupFailed, tenantDataSetupErr)
 	}
 
-	// TODO: replace this hardcoded value with the one from the json payload in SDP-1167
-	distAccType := schema.DistributionAccountStellarDBVault
-
 	// Provision distribution account for tenant if necessary
-	err := m.provisionDistributionAccount(ctx, t, distAccType)
+	err := m.provisionDistributionAccount(ctx, t, pt.DistributionAccountType)
 	if err != nil {
 		return t, fmt.Errorf("provisioning distribution account: %w", err)
 	}
@@ -186,9 +184,7 @@ func (m *Manager) provisionDistributionAccount(ctx context.Context, t *tenant.Te
 	distributionAccounts, err := m.SubmitterEngine.SignerRouter.BatchInsert(ctx, accountType, 1)
 	if err != nil {
 		if errors.Is(err, signing.ErrUnsupportedCommand) {
-			log.Ctx(ctx).Warnf(
-				"Account provisioning not needed for distribution account of type=%s: %v",
-				accountType, err)
+			log.Ctx(ctx).Warnf("Account provisioning not needed for distribution account of type=%s: %v", accountType, err)
 		} else {
 			return fmt.Errorf("%w: provisioning distribution account: %w", ErrProvisionTenantDistributionAccountFailed, err)
 		}
