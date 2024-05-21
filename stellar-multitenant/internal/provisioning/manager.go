@@ -80,10 +80,6 @@ func (m *Manager) ProvisionNewTenant(
 		return nil, m.handleProvisioningError(ctx, provisionErr, t)
 	}
 
-	if invitationMsg == nil {
-		return nil, fmt.Errorf("invitation message is empty")
-	}
-
 	sendMsgErr := m.messengerClient.SendMessage(*invitationMsg)
 	if sendMsgErr != nil {
 		return nil, fmt.Errorf("sending invitation message: %w", sendMsgErr)
@@ -266,7 +262,7 @@ func (m *Manager) setupTenantData(ctx context.Context, tenantSchemaDSN string, p
 		Roles:     []string{"owner"},
 	}, pt.uiBaseURL)
 	if err != nil {
-		return invitationMsg, fmt.Errorf("creating user: %w", err)
+		return nil, fmt.Errorf("creating user: %w", err)
 	}
 
 	return invitationMsg, nil
