@@ -89,7 +89,7 @@ func Test_CreateAuthUserService_CreateUser(t *testing.T) {
 
 		uiBaseURL := "http://localhost:3000"
 
-		u, _, err := s.CreateUser(ctx, newUser, uiBaseURL)
+		u, msg, err := s.CreateUser(ctx, newUser, uiBaseURL)
 		require.NoError(t, err)
 
 		assert.Equal(t, "user-id", u.ID)
@@ -98,5 +98,8 @@ func Test_CreateAuthUserService_CreateUser(t *testing.T) {
 		assert.Equal(t, newUser.Email, u.Email)
 		assert.Equal(t, newUser.Roles, u.Roles)
 		assert.Equal(t, newUser.IsOwner, u.IsOwner)
+		assert.NotNil(t, msg)
+		assert.Equal(t, newUser.Email, msg.ToEmail)
+		assert.Equal(t, invitationMessageTitle, msg.Title)
 	})
 }

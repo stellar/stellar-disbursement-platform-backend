@@ -75,12 +75,16 @@ func (m *Manager) ProvisionNewTenant(
 	}
 
 	log.Ctx(ctx).Infof("adding tenant %s", name)
-	t, msg, provisionErr := m.provisionTenant(ctx, pt)
+	t, invitationMsg, provisionErr := m.provisionTenant(ctx, pt)
 	if provisionErr != nil {
 		return nil, m.handleProvisioningError(ctx, provisionErr, t)
 	}
 
-	sendMsgErr := m.messengerClient.SendMessage(*msg)
+	if invitationMsg == nil {
+		return nil, fmt.Errorf("invitation message is empty")
+	}
+
+	sendMsgErr := m.messengerClient.SendMessage(*invitationMsg)
 	if sendMsgErr != nil {
 		return nil, fmt.Errorf("sending invitation message: %w", sendMsgErr)
 	}
@@ -145,7 +149,7 @@ func (m *Manager) provisionTenant(ctx context.Context, pt *ProvisionTenant) (*te
 		return t, nil, fmt.Errorf("%w: %w", ErrTenantSchemaFailed, tenantSchemaFailedErr)
 	}
 
-	msg, tenantDataSetupErr := m.setupTenantData(ctx, u, pt)
+	invitationMsg, tenantDataSetupErr := m.setupTenantData(ctx, u, pt)
 	if tenantDataSetupErr != nil {
 		return t, nil, fmt.Errorf("%w: %w", ErrTenantDataSetupFailed, tenantDataSetupErr)
 	}
@@ -181,7 +185,7 @@ func (m *Manager) provisionTenant(ctx context.Context, pt *ProvisionTenant) (*te
 		return t, nil, fmt.Errorf("%w. funding tenant distribution account: %w", ErrUpdateTenantFailed, err)
 	}
 
-	return updatedTenant, msg, nil
+	return updatedTenant, invitationMsg, nil
 }
 
 func (m *Manager) fundTenantDistributionAccount(ctx context.Context, distributionAccount string) error {
@@ -254,7 +258,7 @@ func (m *Manager) setupTenantData(ctx context.Context, tenantSchemaDSN string, p
 		auth.WithDefaultAuthenticatorOption(tenantSchemaConnectionPool, auth.NewDefaultPasswordEncrypter(), 0),
 	)
 	s := services.NewCreateUserService(models, tenantSchemaConnectionPool, authManager)
-	_, msg, err := s.CreateUser(ctx, auth.User{
+	_, invitationMsg, err := s.CreateUser(ctx, auth.User{
 		FirstName: pt.userFirstName,
 		LastName:  pt.userLastName,
 		Email:     pt.userEmail,
@@ -262,10 +266,10 @@ func (m *Manager) setupTenantData(ctx context.Context, tenantSchemaDSN string, p
 		Roles:     []string{"owner"},
 	}, pt.uiBaseURL)
 	if err != nil {
-		return msg, fmt.Errorf("creating user: %w", err)
+		return invitationMsg, fmt.Errorf("creating user: %w", err)
 	}
 
-	return msg, nil
+	return invitationMsg, nil
 }
 
 func (m *Manager) createSchemaAndRunMigrations(ctx context.Context, name string) (string, error) {
