@@ -82,11 +82,11 @@ func (s PaymentToSubmitterService) SendBatchPayments(ctx context.Context, batchS
 // sendPaymentsReadyToPay sends SDP's ready-to-pay payments to the transaction submission service, using two DB
 // transactions (for SDP and TSS), in order to guarantee that the data is consistent in both data stores.
 //
-// Payment Ready to be sent means:
+// Payments ready-to-pay meet all the following conditions:
 //
-//	a. Payment is in `READY` status
-//	b. Receiver Wallet is in `REGISTERED` status
-//	c. Disbursement is in `STARTED` status.
+//   - Payment is in `READY` status
+//   - Receiver Wallet is in `REGISTERED` status
+//   - Disbursement is in `STARTED` status.
 func (s PaymentToSubmitterService) sendPaymentsReadyToPay(
 	ctx context.Context,
 	tenantID string,
@@ -109,7 +109,7 @@ func (s PaymentToSubmitterService) sendPaymentsReadyToPay(
 				if err != nil {
 					// if payment is not ready for sending, we will mark it as failed later.
 					failedPayments = append(failedPayments, payment)
-					log.Ctx(ctx).Errorf("Payment %s is not ready for sending. Error:%s", payment.ID, err.Error())
+					log.Ctx(ctx).Errorf("Payment %s is not ready for sending. Error=%v", payment.ID, err)
 					continue
 				}
 
@@ -141,7 +141,7 @@ func (s PaymentToSubmitterService) sendPaymentsReadyToPay(
 				for _, insertedTransaction := range insertedTransactions {
 					insertedTxIDs = append(insertedTxIDs, insertedTransaction.ID)
 				}
-				log.Ctx(ctx).Infof("Submitted %d transaction(s) to TSS: %v", len(insertedTransactions), insertedTxIDs)
+				log.Ctx(ctx).Infof("Submitted %d transaction(s) to TSS=%+v", len(insertedTransactions), insertedTxIDs)
 			}
 
 			// 4. Update payment statuses to `Pending`
@@ -154,7 +154,7 @@ func (s PaymentToSubmitterService) sendPaymentsReadyToPay(
 				for _, pendingPayment := range pendingPayments {
 					updatedPaymentIDs = append(updatedPaymentIDs, pendingPayment.ID)
 				}
-				log.Ctx(ctx).Infof("Updated %d payments to Pending: %v", numUpdated, updatedPaymentIDs)
+				log.Ctx(ctx).Infof("Updated %d payments to Pending=%+v", numUpdated, updatedPaymentIDs)
 			}
 
 			// 5. Update failed payments statuses to `Failed`
@@ -167,14 +167,14 @@ func (s PaymentToSubmitterService) sendPaymentsReadyToPay(
 				for _, failedPayment := range failedPayments {
 					failedPaymentIDs = append(failedPaymentIDs, failedPayment.ID)
 				}
-				log.Ctx(ctx).Warnf("Updated %d payments to Failed: %v", numUpdated, failedPaymentIDs)
+				log.Ctx(ctx).Warnf("Updated %d payments to Failed=%+v", numUpdated, failedPaymentIDs)
 			}
 
 			return nil
 		})
 	})
 	if outerErr != nil {
-		return fmt.Errorf("sending payments inside syncronized database transactions: %w", outerErr)
+		return fmt.Errorf("sending payments ready-to-pay inside syncronized database transactions: %w", outerErr)
 	}
 
 	return nil
