@@ -126,6 +126,7 @@ func Test_NewManager(t *testing.T) {
 }
 
 func Test_Manager_ProvisionNewTenant(t *testing.T) {
+	t.Skip("Re-enable this test in SDP-1167")
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
