@@ -58,7 +58,7 @@ for tenant in "${tenants[@]}"; do
         echo "🐈Provisioning missing tenant: $tenant"
         baseURL="http://$tenant.stellar.local:8000"
         sdpUIBaseURL="http://$tenant.stellar.local:3000"
-        ownerEmail="owner@$tenant.org"
+        ownerEmail="owner@$tenant.local"
 
         response=$(curl -s -w "\n%{http_code}" -X POST $AdminTenantURL \
                 -H "Content-Type: application/json" \
