@@ -223,7 +223,6 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 				tenantAccountKP := keypair.MustRandom()
 
 				// STEP 2.1 - Mock calls that are exclusively for DistributionAccountDBSignatureClientType
-				distAccResolver.On("HostDistributionAccount").Return(&hostAccount, nil).Once()
 				mHorizonClient.
 					On("AccountDetail", horizonclient.AccountRequest{AccountID: hostAccountKP.Address()}).
 					Return(horizon.Account{
@@ -623,8 +622,6 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 				require.NoError(t, err)
 
 				// Needed for provisionDistributionAccount:
-				// TODO: in SDP-1167, send the accountType in the request body
-				accountType := schema.DistributionAccountStellarDBVault
 				distAccAddress := keypair.MustRandom().Address()
 				distAccount := schema.TransactionAccount{
 					Address: distAccAddress,

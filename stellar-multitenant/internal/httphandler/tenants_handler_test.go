@@ -40,7 +40,6 @@ import (
 func Test_TenantHandler_Get(t *testing.T) {
 	dbt := dbtest.OpenWithAdminMigrationsOnly(t)
 	defer dbt.Close()
-
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
@@ -394,7 +393,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 
 	t.Run("provisions a new tenant successfully", func(t *testing.T) {
 		// TODO: in SDP-1167, send the accountType in the request body
-		accountType := schema.DistributionAccountStellarDBVault
+		accountType := schema.DistributionAccountStellarEnv
 		createMocks(t, accountType, nil)
 
 		orgName := "aid-org"
@@ -440,7 +439,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 
 	t.Run("provisions a new tenant successfully - dynamically generates base URL and SDP UI base URL for tenant", func(t *testing.T) {
 		// TODO: in SDP-1167, send the accountType in the request body
-		accountType := schema.DistributionAccountStellarDBVault
+		accountType := schema.DistributionAccountStellarEnv
 		createMocks(t, accountType, nil)
 
 		orgName := "aid-org-two"
@@ -486,7 +485,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 
 	t.Run("provisions a new tenant successfully - dynamically generates only SDP UI base URL", func(t *testing.T) {
 		// TODO: in SDP-1167, send the accountType in the request body
-		accountType := schema.DistributionAccountStellarDBVault
+		accountType := schema.DistributionAccountStellarEnv
 		createMocks(t, accountType, nil)
 
 		orgName := "aid-org-three"
@@ -532,7 +531,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 
 	t.Run("provisions a new tenant successfully - dynamically generates only backend base URL", func(t *testing.T) {
 		// TODO: in SDP-1167, send the accountType in the request body
-		accountType := schema.DistributionAccountStellarDBVault
+		accountType := schema.DistributionAccountStellarEnv
 		createMocks(t, accountType, nil)
 
 		orgName := "aid-org-four"
@@ -578,7 +577,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 
 	t.Run("returns badRequest for duplicate tenant name", func(t *testing.T) {
 		// TODO: in SDP-1167, send the accountType in the request body
-		accountType := schema.DistributionAccountStellarDBVault
+		accountType := schema.DistributionAccountStellarEnv
 		createMocks(t, accountType, nil)
 
 		reqBody := `
@@ -601,7 +600,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 	})
 
 	t.Run("logs and reports error when failing to send invitation message", func(t *testing.T) {
-		accountType := schema.DistributionAccountStellarDBVault
+		accountType := schema.DistributionAccountStellarEnv
 		createMocks(t, accountType, errors.New("foobar"))
 
 		orgName := "aid-org-five"
@@ -639,7 +638,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 				"distribution_account_status": %q
 			}
 		`, tnt.ID, orgName, tnt.CreatedAt.Format(time.RFC3339Nano), tnt.UpdatedAt.Format(time.RFC3339Nano),
-			distAccAddress, schema.DistributionAccountStellarDBVault, schema.AccountStatusActive)
+			distAccAddress, schema.DistributionAccountStellarEnv, schema.AccountStatusActive)
 		assert.JSONEq(t, expectedRespBody, string(respBody))
 
 		assertMigrations(orgName)
