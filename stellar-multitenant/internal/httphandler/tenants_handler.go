@@ -85,10 +85,24 @@ func (h TenantsHandler) Post(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	// generate SDP UI URL first if necessary since we need to pass it to the provisioning manager when
+	// sending the invitation message
+	var err error
+	var tntSDPUIBaseURL string
+	if reqBody.SDPUIBaseURL != nil {
+		tntSDPUIBaseURL = *reqBody.SDPUIBaseURL
+	} else {
+		tntSDPUIBaseURL, err = utils.GenerateTenantURL(h.SDPUIBaseURL, reqBody.Name)
+		if err != nil {
+			httperror.InternalError(ctx, "Could not generate SDP UI URL", err, nil).Render(rw)
+			return
+		}
+	}
+
 	tnt, err := h.ProvisioningManager.ProvisionNewTenant(
 		ctx, reqBody.Name, reqBody.OwnerFirstName,
 		reqBody.OwnerLastName, reqBody.OwnerEmail, reqBody.OrganizationName,
-		string(h.NetworkType),
+		string(h.NetworkType), tntSDPUIBaseURL,
 	)
 	if err != nil {
 		if errors.Is(err, tenant.ErrDuplicatedTenantName) {
@@ -103,28 +117,16 @@ func (h TenantsHandler) Post(rw http.ResponseWriter, req *http.Request) {
 	if reqBody.BaseURL != nil {
 		tntBaseURL = *reqBody.BaseURL
 	} else {
-		tntBaseURL, err = utils.GenerateTenantURL(h.BaseURL, tnt.Name)
+		tntBaseURL, err = utils.GenerateTenantURL(h.BaseURL, reqBody.Name)
 		if err != nil {
 			httperror.InternalError(ctx, "Could not generate URL", err, nil).Render(rw)
 			return
 		}
 	}
 
-	var tntSDPUIBaseURL string
-	if reqBody.SDPUIBaseURL != nil {
-		tntSDPUIBaseURL = *reqBody.SDPUIBaseURL
-	} else {
-		tntSDPUIBaseURL, err = utils.GenerateTenantURL(h.SDPUIBaseURL, tnt.Name)
-		if err != nil {
-			httperror.InternalError(ctx, "Could not generate SDP UI URL", err, nil).Render(rw)
-			return
-		}
-	}
-
 	tnt, err = h.Manager.UpdateTenantConfig(ctx, &tenant.TenantUpdate{
-		ID:           tnt.ID,
-		BaseURL:      &tntBaseURL,
-		SDPUIBaseURL: &tntSDPUIBaseURL,
+		ID:      tnt.ID,
+		BaseURL: &tntBaseURL,
 	})
 	if err != nil {
 		httperror.InternalError(ctx, "Could not update tenant config", err, nil).Render(rw)

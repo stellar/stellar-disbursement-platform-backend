@@ -63,7 +63,7 @@ func rollbackTenantCreationAndSchemaErrors() []error {
 
 func (m *Manager) ProvisionNewTenant(
 	ctx context.Context, name, userFirstName, userLastName, userEmail,
-	organizationName, networkType string,
+	organizationName, networkType, uiBaseUrl string,
 ) (*tenant.Tenant, error) {
 	pt := &ProvisionTenant{
 		name:          name,
@@ -72,6 +72,7 @@ func (m *Manager) ProvisionNewTenant(
 		userEmail:     userEmail,
 		orgName:       organizationName,
 		networkType:   networkType,
+		uiBaseURL:     uiBaseUrl,
 	}
 
 	log.Ctx(ctx).Infof("adding tenant %s", name)
@@ -171,6 +172,7 @@ func (m *Manager) provisionTenant(ctx context.Context, pt *ProvisionTenant) (*te
 			DistributionAccountAddress: *t.DistributionAccountAddress,
 			DistributionAccountType:    distAccType,
 			DistributionAccountStatus:  schema.DistributionAccountStatusActive,
+			SDPUIBaseURL:               &pt.uiBaseURL,
 		})
 	if err != nil {
 		return t, nil, fmt.Errorf("%w: updating tenant %s status to %s: %w", ErrUpdateTenantFailed, pt.name, tenant.ProvisionedTenantStatus, err)
