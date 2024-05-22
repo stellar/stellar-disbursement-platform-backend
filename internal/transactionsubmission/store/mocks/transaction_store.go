@@ -94,7 +94,7 @@ func (_m *MockTransactionStore) GetAllByPaymentIDs(ctx context.Context, paymentI
 	return r0, r1
 }
 
-// GetTransactionBatchForUpdate provides a mock function with given fields: ctx, dbTx, batchSize
+// GetTransactionBatchForUpdate provides a mock function with given fields: ctx, dbTx, batchSize, tenantID
 func (_m *MockTransactionStore) GetTransactionBatchForUpdate(ctx context.Context, dbTx db.DBTransaction, batchSize int, tenantID string) ([]*store.Transaction, error) {
 	ret := _m.Called(ctx, dbTx, batchSize, tenantID)
 
