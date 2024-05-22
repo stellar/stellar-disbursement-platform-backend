@@ -23,8 +23,8 @@ type Error struct {
 	ErrorMessage string    `json:"error_message"`
 }
 
-// NewMessage returns a new message with values passed by parameters. It also parses the `TenantID` from the context and inject it into the message.
-// Returns error if the tenant is not found in the context.
+// NewMessage returns a new message with values passed by parameters. It also parses the `TenantID` from the context and
+// inject it into the message. Returns error if the tenant is not found in the context.
 func NewMessage(ctx context.Context, topic, key, messageType string, data any) (*Message, error) {
 	tnt, err := tenant.GetTenantFromContext(ctx)
 	if err != nil {
