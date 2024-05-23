@@ -143,8 +143,15 @@ func (p PaymentsHandler) RetryPayments(rw http.ResponseWriter, req *http.Request
 			}
 
 			if len(payments) > 0 {
-				postCommitFn = func() error {
-					return p.producePaymentsReadyEvents(ctx, payments)
+				msg, err := p.buildPaymentsReadyEventMessage(ctx, payments)
+				if err != nil {
+					return nil, fmt.Errorf("building payments ready event message: %w", err)
+				}
+
+				if msg != nil {
+					postCommitFn = func() error {
+						return p.producePaymentsReadyEvent(ctx, msg)
+					}
 				}
 			}
 
@@ -165,14 +172,15 @@ func (p PaymentsHandler) RetryPayments(rw http.ResponseWriter, req *http.Request
 	httpjson.RenderStatus(rw, http.StatusOK, map[string]string{"message": "Payments retried successfully"}, httpjson.JSON)
 }
 
-func (p PaymentsHandler) producePaymentsReadyEvents(ctx context.Context, payments []*data.Payment) error {
+func (p PaymentsHandler) buildPaymentsReadyEventMessage(ctx context.Context, payments []*data.Payment) (*events.Message, error) {
 	if len(payments) == 0 {
-		log.Ctx(ctx).Info("No payments to produce ready to pay event")
-		return nil
+		log.Ctx(ctx).Warnf("no payments to retry")
+		return nil, nil
 	}
-	msg, msgErr := events.NewMessage(ctx, events.PaymentReadyToPayTopic, "", events.PaymentReadyToPayRetryFailedPayment, nil)
-	if msgErr != nil {
-		return fmt.Errorf("creating a new message: %w", msgErr)
+
+	msg, err := events.NewMessage(ctx, events.PaymentReadyToPayTopic, "", events.PaymentReadyToPayRetryFailedPayment, nil)
+	if err != nil {
+		return nil, fmt.Errorf("creating a new message: %w", err)
 	}
 
 	paymentsReadyToPay := schemas.EventPaymentsReadyToPayData{TenantID: msg.TenantID}
@@ -182,6 +190,20 @@ func (p PaymentsHandler) producePaymentsReadyEvents(ctx context.Context, payment
 	msg.Data = paymentsReadyToPay
 	msg.Key = paymentsReadyToPay.TenantID
 
+	err = msg.Validate()
+	if err != nil {
+		return nil, fmt.Errorf("validating message: %w", err)
+	}
+
+	return msg, nil
+}
+
+func (p PaymentsHandler) producePaymentsReadyEvent(ctx context.Context, msg *events.Message) error {
+	if msg == nil {
+		log.Ctx(ctx).Warn("message is nil, not producing event")
+		return nil
+	}
+
 	if p.EventProducer != nil {
 		err := p.EventProducer.WriteMessages(ctx, *msg)
 		if err != nil {
@@ -190,6 +212,7 @@ func (p PaymentsHandler) producePaymentsReadyEvents(ctx context.Context, payment
 	} else {
 		log.Ctx(ctx).Errorf("event producer is nil, could not publish message %+v", msg)
 	}
+
 	return nil
 }
 
