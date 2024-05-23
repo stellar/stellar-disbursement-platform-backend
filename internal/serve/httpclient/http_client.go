@@ -14,7 +14,7 @@ type HttpClientInterface interface {
 	PostForm(url string, data url.Values) (resp *http.Response, err error)
 }
 
-const TimeoutClientInSeconds = 30
+const TimeoutClientInSeconds = 40
 
 // DefaultClient returns a default HTTP client with a timeout.
 func DefaultClient() HttpClientInterface {

@@ -252,7 +252,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 
 	ctx := context.Background()
 	messengerClientMock := message.MessengerClientMock{}
-	m := tenant.NewManager(tenant.WithDatabase(dbConnectionPool))
+	tenantManager := tenant.NewManager(tenant.WithDatabase(dbConnectionPool))
 
 	mHorizonClient := &horizonclient.MockClient{}
 	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
@@ -267,16 +267,17 @@ func Test_TenantHandler_Post(t *testing.T) {
 		MaxBaseFee:          100 * txnbuild.MinBaseFee,
 	}
 
-	p := provisioning.NewManager(
-		provisioning.WithDatabase(dbConnectionPool),
-		provisioning.WithTenantManager(m),
-		provisioning.WithMessengerClient(&messengerClientMock),
-		provisioning.WithSubmitterEngine(submitterEngine),
-		provisioning.WithNativeAssetBootstrapAmount(tenant.MinTenantDistributionAccountAmount),
-	)
+	p, err := provisioning.NewManager(provisioning.ManagerOptions{
+		DBConnectionPool:           dbConnectionPool,
+		TenantManager:              tenantManager,
+		MessengerClient:            &messengerClientMock,
+		SubmitterEngine:            submitterEngine,
+		NativeAssetBootstrapAmount: tenant.MinTenantDistributionAccountAmount,
+	})
+	require.NoError(t, err)
 
 	handler := TenantsHandler{
-		Manager:             m,
+		Manager:             tenantManager,
 		ProvisioningManager: p,
 		NetworkType:         utils.TestnetNetworkType,
 		BaseURL:             "https://sdp-backend.stellar.org",
@@ -350,7 +351,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 		tenant.CheckSchemaExistsFixture(t, ctx, dbConnectionPool, expectedSchema)
 		tenant.TenantSchemaMatchTablesFixture(t, ctx, dbConnectionPool, expectedSchema, expectedTablesAfterMigrationsApplied)
 
-		dsn, err := m.GetDSNForTenant(ctx, orgName)
+		dsn, err := tenantManager.GetDSNForTenant(ctx, orgName)
 		require.NoError(t, err)
 
 		tenantSchemaConnectionPool, err := db.OpenDBConnectionPool(dsn)
@@ -399,7 +400,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 
 		respBody := makeRequest(reqBody, http.StatusCreated)
 
-		tnt, err := m.GetTenantByName(ctx, orgName)
+		tnt, err := tenantManager.GetTenantByName(ctx, orgName)
 		require.NoError(t, err)
 
 		expectedRespBody := fmt.Sprintf(`
@@ -441,7 +442,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 
 		respBody := makeRequest(reqBody, http.StatusCreated)
 
-		tnt, err := m.GetTenantByName(ctx, orgName)
+		tnt, err := tenantManager.GetTenantByName(ctx, orgName)
 		require.NoError(t, err)
 
 		generatedURL := fmt.Sprintf("https://%s.sdp-backend.stellar.org", orgName)
@@ -486,7 +487,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 
 		respBody := makeRequest(reqBody, http.StatusCreated)
 
-		tnt, err := m.GetTenantByName(ctx, orgName)
+		tnt, err := tenantManager.GetTenantByName(ctx, orgName)
 		require.NoError(t, err)
 
 		generatedUIURL := fmt.Sprintf("https://%s.sdp-ui.stellar.org", orgName)
@@ -530,7 +531,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 
 		respBody := makeRequest(reqBody, http.StatusCreated)
 
-		tnt, err := m.GetTenantByName(ctx, orgName)
+		tnt, err := tenantManager.GetTenantByName(ctx, orgName)
 		require.NoError(t, err)
 
 		generatedURL := fmt.Sprintf("https://%s.sdp-backend.stellar.org", orgName)

@@ -29,7 +29,7 @@ services:
       BASE_URL: http://localhost:8000
       DATABASE_URL: postgres://postgres@db:5432/sdp_mtn?sslmode=disable
       ENVIRONMENT: localhost
-      LOG_LEVEL: TRACE
+      LOG_LEVEL: INFO
       PORT: "8000"
       METRICS_PORT: "8002"
       METRICS_TYPE: PROMETHEUS

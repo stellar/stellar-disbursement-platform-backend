@@ -4,5 +4,5 @@ window._env_ = {
     HORIZON_PASSPHRASE: "",
     HORIZON_URL: "",
     CLIENT_DOMAIN: "demo-wallet-server.stellar.org",
-    WALLET_BACKEND_ENDPOINT: "http://demo-wallet-server.stellar.org",
+    WALLET_BACKEND_ENDPOINT: "https://demo-wallet-server.stellar.org",
 };

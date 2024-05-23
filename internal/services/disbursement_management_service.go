@@ -52,20 +52,22 @@ var (
 )
 
 type InsufficientBalanceError struct {
-	DisbursementID     string
-	DisbursementAsset  data.Asset
-	AvailableBalance   float64
-	DisbursementAmount float64
-	TotalPendingAmount float64
+	DistributionAddress string
+	DisbursementID      string
+	DisbursementAsset   data.Asset
+	AvailableBalance    float64
+	DisbursementAmount  float64
+	TotalPendingAmount  float64
 }
 
 func (e InsufficientBalanceError) Error() string {
 	return fmt.Sprintf(
-		"the disbursement %s failed due to an account balance (%.2f) that was insufficient to fulfill new amount (%.2f) along with the pending amount (%.2f). To complete this action, your distribution account needs to be recharged with at least %.2f %s",
+		"the disbursement %s failed due to an account balance (%.2f) that was insufficient to fulfill new amount (%.2f) along with the pending amount (%.2f). To complete this action, your distribution account (%s) needs to be recharged with at least %.2f %s",
 		e.DisbursementID,
 		e.AvailableBalance,
 		e.DisbursementAmount,
 		e.TotalPendingAmount,
+		e.DistributionAddress,
 		(e.DisbursementAmount+e.TotalPendingAmount)-e.AvailableBalance,
 		e.DisbursementAsset.Code,
 	)
@@ -297,11 +299,12 @@ func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, d
 
 			if (availableBalance - (disbursementAmount + totalPendingAmount)) < 0 {
 				err = InsufficientBalanceError{
-					DisbursementAsset:  *disbursement.Asset,
-					DisbursementID:     disbursementID,
-					AvailableBalance:   availableBalance,
-					DisbursementAmount: disbursementAmount,
-					TotalPendingAmount: totalPendingAmount,
+					DisbursementAsset:   *disbursement.Asset,
+					DistributionAddress: distributionPubKey,
+					DisbursementID:      disbursementID,
+					AvailableBalance:    availableBalance,
+					DisbursementAmount:  disbursementAmount,
+					TotalPendingAmount:  totalPendingAmount,
 				}
 				log.Ctx(ctx).Error(err)
 				return nil, err

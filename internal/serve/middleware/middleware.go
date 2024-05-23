@@ -152,14 +152,18 @@ func AnyRoleMiddleware(authManager auth.AuthManager, requiredRoles ...data.UserR
 				return
 			}
 
-			isValid, err := authManager.AnyRolesInTokenUser(ctx, token, data.FromUserRoleArrayToStringArray(requiredRoles))
-			if err != nil && !errors.Is(err, auth.ErrInvalidToken) && !errors.Is(err, auth.ErrUserNotFound) {
-				httperror.InternalError(ctx, "", err, nil).Render(rw)
+			hasAnyRoles, err := authManager.AnyRolesInTokenUser(ctx, token, data.FromUserRoleArrayToStringArray(requiredRoles))
+			if err != nil {
+				if errors.Is(err, auth.ErrInvalidToken) || errors.Is(err, auth.ErrUserNotFound) {
+					httperror.Unauthorized("", nil, nil).Render(rw)
+				} else {
+					httperror.InternalError(ctx, "", err, nil).Render(rw)
+				}
 				return
 			}
 
-			if !isValid {
-				httperror.Unauthorized("", nil, nil).Render(rw)
+			if !hasAnyRoles {
+				httperror.Forbidden("", nil, nil).Render(rw)
 				return
 			}
 
