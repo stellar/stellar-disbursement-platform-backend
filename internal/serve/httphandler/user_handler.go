@@ -212,8 +212,7 @@ func (h UserHandler) CreateUser(rw http.ResponseWriter, req *http.Request) {
 		Roles:     data.FromUserRoleArrayToStringArray(reqBody.Roles),
 	}
 
-	s := services.NewCreateUserService(h.Models, h.Models.DBConnectionPool, h.AuthManager)
-	u, msg, err := s.CreateUser(ctx, newUser, *tnt.SDPUIBaseURL)
+	u, err := h.AuthManager.CreateUser(ctx, &newUser, "")
 	if err != nil {
 		if errors.Is(err, auth.ErrUserEmailAlreadyExists) {
 			httperror.BadRequest(auth.ErrUserEmailAlreadyExists.Error(), err, nil).Render(rw)
@@ -224,7 +223,8 @@ func (h UserHandler) CreateUser(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	err = h.MessengerClient.SendMessage(*msg)
+	err = services.SendInvitationMessage(ctx, h.MessengerClient, h.Models,
+		newUser.FirstName, newUser.Roles[0], newUser.Email, *tnt.SDPUIBaseURL)
 	if err != nil {
 		httperror.InternalError(ctx, "Cannot send invitation message", err, nil).Render(rw)
 		return

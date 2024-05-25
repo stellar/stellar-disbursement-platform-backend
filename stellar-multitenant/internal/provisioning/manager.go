@@ -47,6 +47,8 @@ var (
 	ErrTenantDataSetupFailed                    = errors.New("tenant data setup failed")
 	ErrProvisionTenantDistributionAccountFailed = errors.New("tenant distribution account provisioning failed")
 	ErrUpdateTenantFailed                       = errors.New("tenant update failed")
+
+	userRoles = []string{"owner"}
 )
 
 func deleteDistributionKeyErrors() []error {
@@ -76,12 +78,23 @@ func (m *Manager) ProvisionNewTenant(
 	}
 
 	log.Ctx(ctx).Infof("adding tenant %s", name)
-	t, invitationMsg, provisionErr := m.provisionTenant(ctx, pt)
+	t, tenantSchemaDSN, provisionErr := m.provisionTenant(ctx, pt)
 	if provisionErr != nil {
 		return nil, m.handleProvisioningError(ctx, provisionErr, t)
 	}
 
-	sendMsgErr := m.messengerClient.SendMessage(*invitationMsg)
+	tenantSchemaConnectionPool, err := db.OpenDBConnectionPool(tenantSchemaDSN)
+	if err != nil {
+		return nil, fmt.Errorf("opening database connection on tenant schema: %w", err)
+	}
+	defer tenantSchemaConnectionPool.Close()
+
+	models, getTntModelsErr := data.NewModels(tenantSchemaConnectionPool)
+	if getTntModelsErr != nil {
+		return nil, fmt.Errorf("getting models: %w", err)
+	}
+
+	sendMsgErr := services.SendInvitationMessage(ctx, m.messengerClient, models, userFirstName, userRoles[0], userEmail, uiBaseUrl)
 	if sendMsgErr != nil {
 		return nil, fmt.Errorf("sending invitation message: %w", sendMsgErr)
 	}
@@ -135,32 +148,32 @@ func (m *Manager) handleProvisioningError(ctx context.Context, err error, t *ten
 	return provisioningErr
 }
 
-func (m *Manager) provisionTenant(ctx context.Context, pt *ProvisionTenant) (*tenant.Tenant, *message.Message, error) {
+func (m *Manager) provisionTenant(ctx context.Context, pt *ProvisionTenant) (*tenant.Tenant, string, error) {
 	t, addTntErr := m.tenantManager.AddTenant(ctx, pt.name)
 	if addTntErr != nil {
-		return t, nil, fmt.Errorf("%w: adding tenant %s: %w", ErrTenantCreationFailed, pt.name, addTntErr)
+		return t, "", fmt.Errorf("%w: adding tenant %s: %w", ErrTenantCreationFailed, pt.name, addTntErr)
 	}
 
 	u, tenantSchemaFailedErr := m.createSchemaAndRunMigrations(ctx, pt.name)
 	if tenantSchemaFailedErr != nil {
-		return t, nil, fmt.Errorf("%w: %w", ErrTenantSchemaFailed, tenantSchemaFailedErr)
+		return t, "", fmt.Errorf("%w: %w", ErrTenantSchemaFailed, tenantSchemaFailedErr)
 	}
 
-	invitationMsg, tenantDataSetupErr := m.setupTenantData(ctx, u, pt)
+	tenantDataSetupErr := m.setupTenantData(ctx, u, pt)
 	if tenantDataSetupErr != nil {
-		return t, nil, fmt.Errorf("%w: %w", ErrTenantDataSetupFailed, tenantDataSetupErr)
+		return t, "", fmt.Errorf("%w: %w", ErrTenantDataSetupFailed, tenantDataSetupErr)
 	}
 
 	// Provision distribution account for tenant if necessary
 	if err := m.provisionDistributionAccount(ctx, t); err != nil {
-		return t, nil, fmt.Errorf("provisioning distribution account: %w", err)
+		return t, "", fmt.Errorf("provisioning distribution account: %w", err)
 	}
 
 	distSignerTypeStr := m.SubmitterEngine.DistAccountSigner.Type()
 	distSignerType := signing.SignatureClientType(distSignerTypeStr)
 	distAccType, err := distSignerType.DistributionAccountType()
 	if err != nil {
-		return t, nil, fmt.Errorf("parsing getting distribution account type: %w", err)
+		return t, "", fmt.Errorf("parsing getting distribution account type: %w", err)
 	}
 
 	tenantStatus := tenant.ProvisionedTenantStatus
@@ -175,15 +188,15 @@ func (m *Manager) provisionTenant(ctx context.Context, pt *ProvisionTenant) (*te
 			SDPUIBaseURL:               &pt.uiBaseURL,
 		})
 	if err != nil {
-		return t, nil, fmt.Errorf("%w: updating tenant %s status to %s: %w", ErrUpdateTenantFailed, pt.name, tenant.ProvisionedTenantStatus, err)
+		return t, "", fmt.Errorf("%w: updating tenant %s status to %s: %w", ErrUpdateTenantFailed, pt.name, tenant.ProvisionedTenantStatus, err)
 	}
 
 	err = m.fundTenantDistributionAccount(ctx, *updatedTenant.DistributionAccountAddress)
 	if err != nil {
-		return t, nil, fmt.Errorf("%w. funding tenant distribution account: %w", ErrUpdateTenantFailed, err)
+		return t, "", fmt.Errorf("%w. funding tenant distribution account: %w", ErrUpdateTenantFailed, err)
 	}
 
-	return updatedTenant, invitationMsg, nil
+	return updatedTenant, u, nil
 }
 
 func (m *Manager) fundTenantDistributionAccount(ctx context.Context, distributionAccount string) error {
@@ -222,52 +235,52 @@ func (m *Manager) provisionDistributionAccount(ctx context.Context, t *tenant.Te
 	return nil
 }
 
-func (m *Manager) setupTenantData(ctx context.Context, tenantSchemaDSN string, pt *ProvisionTenant) (*message.Message, error) {
+func (m *Manager) setupTenantData(ctx context.Context, tenantSchemaDSN string, pt *ProvisionTenant) error {
 	// Connecting to the tenant database schema
 	tenantSchemaConnectionPool, err := db.OpenDBConnectionPool(tenantSchemaDSN)
 	if err != nil {
-		return nil, fmt.Errorf("opening database connection on tenant schema: %w", err)
+		return fmt.Errorf("opening database connection on tenant schema: %w", err)
 	}
 	defer tenantSchemaConnectionPool.Close()
 
 	err = services.SetupAssetsForProperNetwork(ctx, tenantSchemaConnectionPool, utils.NetworkType(pt.networkType), services.DefaultAssetsNetworkMap)
 	if err != nil {
-		return nil, fmt.Errorf("running setup assets for proper network: %w", err)
+		return fmt.Errorf("running setup assets for proper network: %w", err)
 	}
 
 	err = services.SetupWalletsForProperNetwork(ctx, tenantSchemaConnectionPool, utils.NetworkType(pt.networkType), services.DefaultWalletsNetworkMap)
 	if err != nil {
-		return nil, fmt.Errorf("running setup wallets for proper network: %w", err)
+		return fmt.Errorf("running setup wallets for proper network: %w", err)
 	}
 
 	// Updating organization's name
 	models, getTntModelsErr := data.NewModels(tenantSchemaConnectionPool)
 	if getTntModelsErr != nil {
-		return nil, fmt.Errorf("getting models: %w", err)
+		return fmt.Errorf("getting models: %w", err)
 	}
 
 	err = models.Organizations.Update(ctx, &data.OrganizationUpdate{Name: pt.orgName})
 	if err != nil {
-		return nil, fmt.Errorf("updating organization's name: %w", err)
+		return fmt.Errorf("updating organization's name: %w", err)
 	}
 
 	// Creating new user and sending invitation email
 	authManager := auth.NewAuthManager(
 		auth.WithDefaultAuthenticatorOption(tenantSchemaConnectionPool, auth.NewDefaultPasswordEncrypter(), 0),
 	)
-	s := services.NewCreateUserService(models, tenantSchemaConnectionPool, authManager)
-	_, invitationMsg, err := s.CreateUser(ctx, auth.User{
+
+	_, err = authManager.CreateUser(ctx, &auth.User{
 		FirstName: pt.userFirstName,
 		LastName:  pt.userLastName,
 		Email:     pt.userEmail,
 		IsOwner:   true,
-		Roles:     []string{"owner"},
-	}, pt.uiBaseURL)
+		Roles:     userRoles,
+	}, "")
 	if err != nil {
-		return nil, fmt.Errorf("creating user: %w", err)
+		return fmt.Errorf("creating user: %w", err)
 	}
 
-	return invitationMsg, nil
+	return nil
 }
 
 func (m *Manager) createSchemaAndRunMigrations(ctx context.Context, name string) (string, error) {
