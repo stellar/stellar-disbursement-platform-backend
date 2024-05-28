@@ -1116,7 +1116,7 @@ func Test_TransactionWorker_handleSuccessfulTransaction(t *testing.T) {
 
 		// Run test:
 		expectedError := fmt.Sprintf(
-			"producing payment completed event Status %s - Job %v: writing message Message{Topic: %s, Key: %s, Type: %s, TenantID: %s",
+			"producing payment completed event Status %s - Job %v: writing messages [Message{Topic: %s, Key: %s, Type: %s, TenantID: %s",
 			store.TransactionStatusSuccess,
 			txJob,
 			events.PaymentCompletedTopic,
@@ -1811,53 +1811,33 @@ func Test_TransactionWorker_submit(t *testing.T) {
 	chAccModel := store.NewChannelAccountModel(dbConnectionPool)
 	const resultXDR = "AAAAAAAAAGQAAAAAAAAAAQAAAAAAAAAOAAAAAAAAAABw2JZZYIt4n/WXKcnDow3mbTBMPrOnldetgvGUlpTSEQAAAAA="
 
+	horizonError := horizonclient.Error{
+		Problem: problem.P{
+			Status: http.StatusBadRequest,
+			Extras: map[string]interface{}{
+				"result_codes": map[string]interface{}{
+					"transaction": "tx_failed",
+					"operations":  []string{"op_underfunded"}, // <--- this should make the transaction be marked as ERROR
+				},
+			},
+		},
+	}
+
 	testCases := []struct {
 		name                       string
 		horizonResponse            horizon.Transaction
 		horizonError               error
 		wantFinalTransactionStatus store.TransactionStatus
 		wantFinalResultXDR         string
-		txMarkAsError              bool
+		prepareMocks               func(*testing.T, TxJob, *crashtracker.MockCrashTrackerClient, *events.MockProducer)
 	}{
 		{
-			name:            "unrecoverable horizon error is handled and tx status is marked as ERROR",
-			horizonResponse: horizon.Transaction{},
-			horizonError: horizonclient.Error{
-				Problem: problem.P{
-					Status: http.StatusBadRequest,
-					Extras: map[string]interface{}{
-						"result_codes": map[string]interface{}{
-							"transaction": "tx_failed",
-							"operations":  []string{"op_underfunded"}, // <--- this should make the transaction be marked as ERROR
-						},
-					},
-				},
-			},
+			name:                       "unrecoverable horizon error is handled and tx status is marked as ERROR",
+			horizonResponse:            horizon.Transaction{},
+			horizonError:               horizonError,
 			wantFinalTransactionStatus: store.TransactionStatusError,
-			txMarkAsError:              true,
-		},
-		{
-			name:                       "successful horizon error is handled and tx status is marked as SUCCESS",
-			horizonResponse:            horizon.Transaction{Successful: true, ResultXdr: resultXDR},
-			horizonError:               nil,
-			wantFinalTransactionStatus: store.TransactionStatusSuccess,
-			wantFinalResultXDR:         resultXDR,
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			defer store.DeleteAllFromChannelAccounts(t, ctx, dbConnectionPool)
-			defer store.DeleteAllTransactionFixtures(t, ctx, dbConnectionPool)
-
-			txJob := createTxJobFixture(t, ctx, dbConnectionPool, true, 1, 2, uuid.NewString())
-			feeBumpTx := &txnbuild.FeeBumpTransaction{}
-
-			mockHorizonClient := &horizonclient.MockClient{}
-			mockCrashTrackerClient := &crashtracker.MockCrashTrackerClient{}
-			mockEventProducer := &events.MockProducer{}
-			if tc.txMarkAsError {
-				mockCrashTrackerClient.On("LogAndReportErrors", ctx, utils.NewHorizonErrorWrapper(tc.horizonError), "transaction error - cannot be retried").Once()
+			prepareMocks: func(t *testing.T, txJob TxJob, mockCrashTrackerClient *crashtracker.MockCrashTrackerClient, mockEventProducer *events.MockProducer) {
+				mockCrashTrackerClient.On("LogAndReportErrors", ctx, utils.NewHorizonErrorWrapper(horizonError), "transaction error - cannot be retried").Once()
 				mockEventProducer.
 					On("WriteMessages", ctx, mock.AnythingOfType("[]events.Message")).
 					Run(func(args mock.Arguments) {
@@ -1883,7 +1863,15 @@ func Test_TransactionWorker_submit(t *testing.T) {
 					}).
 					Return(nil).
 					Once()
-			} else {
+			},
+		},
+		{
+			name:                       "successful horizon error is handled and tx status is marked as SUCCESS",
+			horizonResponse:            horizon.Transaction{Successful: true, ResultXdr: resultXDR},
+			horizonError:               nil,
+			wantFinalTransactionStatus: store.TransactionStatusSuccess,
+			wantFinalResultXDR:         resultXDR,
+			prepareMocks: func(t *testing.T, txJob TxJob, _ *crashtracker.MockCrashTrackerClient, mockEventProducer *events.MockProducer) {
 				mockEventProducer.
 					On("WriteMessages", ctx, mock.AnythingOfType("[]events.Message")).
 					Run(func(args mock.Arguments) {
@@ -1908,6 +1896,24 @@ func Test_TransactionWorker_submit(t *testing.T) {
 					}).
 					Return(nil).
 					Once()
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			defer store.DeleteAllFromChannelAccounts(t, ctx, dbConnectionPool)
+			defer store.DeleteAllTransactionFixtures(t, ctx, dbConnectionPool)
+
+			txJob := createTxJobFixture(t, ctx, dbConnectionPool, true, 1, 2, uuid.NewString())
+			feeBumpTx := &txnbuild.FeeBumpTransaction{}
+
+			mockHorizonClient := &horizonclient.MockClient{}
+			mockCrashTrackerClient := &crashtracker.MockCrashTrackerClient{}
+			mockEventProducer := &events.MockProducer{}
+
+			if tc.prepareMocks != nil {
+				tc.prepareMocks(t, txJob, mockCrashTrackerClient, mockEventProducer)
 			}
 
 			txProcessingLimiter := engine.NewTransactionProcessingLimiter(15)
@@ -1954,110 +1960,71 @@ func Test_TransactionWorker_submit(t *testing.T) {
 	}
 }
 
-func Test_TransactionWorker_producePaymentCompletedEvent(t *testing.T) {
-	ctx := context.Background()
-
-	mockEventProducer := &events.MockProducer{}
-	transactionWorker := TransactionWorker{
-		eventProducer: mockEventProducer,
-	}
+func Test_TransactionWorker_buildPaymentCompletedEvent(t *testing.T) {
+	transactionWorker := TransactionWorker{}
 
 	t.Run("returns error when an unexpected payment status is passed", func(t *testing.T) {
-		err := transactionWorker.producePaymentCompletedEvent(ctx, events.PaymentCompletedSuccessType, &store.Transaction{}, data.PendingPaymentStatus)
+		msg, err := transactionWorker.buildPaymentCompletedEvent(events.PaymentCompletedSuccessType, &store.Transaction{}, data.PendingPaymentStatus, "")
 		assert.EqualError(t, err, "invalid payment status to produce payment completed event")
+		assert.Nil(t, msg)
 	})
 
-	t.Run("returns error when eventProducer fails writing a new message", func(t *testing.T) {
-		tx := store.Transaction{
-			ID:                     "tx-id",
-			ExternalID:             "payment-id",
-			TenantID:               "tenant-id",
-			StellarTransactionHash: sql.NullString{String: "tx-hash", Valid: true},
-			StatusMessage:          sql.NullString{},
-		}
-
-		mockEventProducer.
-			On("WriteMessages", ctx, mock.AnythingOfType("[]events.Message")).
-			Run(func(args mock.Arguments) {
-				messages, ok := args.Get(1).([]events.Message)
-				require.True(t, ok)
-				require.Len(t, messages, 1)
-
-				msg := messages[0]
-
-				assert.Equal(t, events.PaymentCompletedTopic, msg.Topic)
-				assert.Equal(t, tx.ExternalID, msg.Key)
-				assert.Equal(t, tx.TenantID, msg.TenantID)
-				assert.Equal(t, events.PaymentCompletedSuccessType, msg.Type)
-
-				msgData, ok := msg.Data.(schemas.EventPaymentCompletedData)
-				require.True(t, ok)
-				assert.Equal(t, tx.ExternalID, msgData.PaymentID)
-				assert.Equal(t, string(data.SuccessPaymentStatus), msgData.PaymentStatus)
-				assert.Empty(t, msgData.PaymentStatusMessage)
-				assert.WithinDuration(t, time.Now(), msgData.PaymentCompletedAt, time.Millisecond*100)
-			}).
-			Return(errors.New("unexpected error")).
-			Once()
-
-		err := transactionWorker.producePaymentCompletedEvent(ctx, events.PaymentCompletedSuccessType, &tx, data.SuccessPaymentStatus)
-		assert.ErrorContains(t, err, "writing message Message{Topic: events.payment.payment_completed, Key: payment-id, Type: payment-completed-success, TenantID: tenant-id")
-	})
-
-	t.Run("successfully produce sync payment event", func(t *testing.T) {
+	t.Run("🎉 successfully builds sync payment event of type=ERROR", func(t *testing.T) {
 		tx := store.Transaction{
 			ID:                     "tx-id",
 			ExternalID:             "payment-id",
 			TenantID:               "tenant-id",
 			StellarTransactionHash: sql.NullString{},
-			StatusMessage:          sql.NullString{String: "error status message", Valid: true},
 		}
 
-		mockEventProducer.
-			On("WriteMessages", ctx, mock.AnythingOfType("[]events.Message")).
-			Run(func(args mock.Arguments) {
-				messages, ok := args.Get(1).([]events.Message)
-				require.True(t, ok)
-				require.Len(t, messages, 1)
-
-				msg := messages[0]
-
-				assert.Equal(t, events.PaymentCompletedTopic, msg.Topic)
-				assert.Equal(t, tx.ExternalID, msg.Key)
-				assert.Equal(t, tx.TenantID, msg.TenantID)
-				assert.Equal(t, events.PaymentCompletedErrorType, msg.Type)
-
-				msgData, ok := msg.Data.(schemas.EventPaymentCompletedData)
-				require.True(t, ok)
-				assert.Equal(t, tx.ExternalID, msgData.PaymentID)
-				assert.Equal(t, string(data.FailedPaymentStatus), msgData.PaymentStatus)
-				assert.Equal(t, "error status message", msgData.PaymentStatusMessage)
-				assert.WithinDuration(t, time.Now(), msgData.PaymentCompletedAt, time.Millisecond*100)
-			}).
-			Return(nil).
-			Once()
-
-		err := transactionWorker.producePaymentCompletedEvent(ctx, events.PaymentCompletedErrorType, &tx, data.FailedPaymentStatus)
+		msg, err := transactionWorker.buildPaymentCompletedEvent(events.PaymentCompletedErrorType, &tx, data.FailedPaymentStatus, "error status message")
 		assert.NoError(t, err)
+
+		gotPaymentCompletedAt := msg.Data.(schemas.EventPaymentCompletedData).PaymentCompletedAt
+		assert.WithinDuration(t, time.Now(), gotPaymentCompletedAt, time.Millisecond*100)
+		wantMsg := &events.Message{
+			Topic:    events.PaymentCompletedTopic,
+			Key:      tx.ExternalID,
+			TenantID: tx.TenantID,
+			Type:     events.PaymentCompletedErrorType,
+			Data: schemas.EventPaymentCompletedData{
+				TransactionID:        tx.ID,
+				PaymentID:            tx.ExternalID,
+				PaymentStatus:        string(data.FailedPaymentStatus),
+				PaymentStatusMessage: "error status message",
+				PaymentCompletedAt:   gotPaymentCompletedAt,
+				StellarTransactionID: tx.StellarTransactionHash.String,
+			},
+		}
+		assert.Equal(t, wantMsg, msg)
 	})
 
-	t.Run("logs when couldn't produce message when eventProducer is nil", func(t *testing.T) {
+	t.Run("🎉 successfully builds sync payment event of type=SUCCESS", func(t *testing.T) {
 		tx := store.Transaction{
-			ID:         "tx-id",
-			ExternalID: "payment-id",
-			TenantID:   "tenant-id",
+			ID:                     "tx-id",
+			ExternalID:             "payment-id",
+			TenantID:               "tenant-id",
+			StellarTransactionHash: sql.NullString{},
 		}
 
-		getEntries := log.DefaultLogger.StartTest(log.DebugLevel)
-
-		txWorker := TransactionWorker{}
-		err := txWorker.producePaymentCompletedEvent(ctx, events.PaymentCompletedSuccessType, &tx, data.SuccessPaymentStatus)
+		msg, err := transactionWorker.buildPaymentCompletedEvent(events.PaymentCompletedSuccessType, &tx, data.SuccessPaymentStatus, "")
 		assert.NoError(t, err)
 
-		entries := getEntries()
-		require.Len(t, entries, 1)
-		assert.Contains(t, entries[0].Message, "message Message{Topic: events.payment.payment_completed, Key: payment-id, Type: payment-completed-success, TenantID: tenant-id")
+		gotPaymentCompletedAt := msg.Data.(schemas.EventPaymentCompletedData).PaymentCompletedAt
+		assert.WithinDuration(t, time.Now(), gotPaymentCompletedAt, time.Millisecond*100)
+		wantMsg := &events.Message{
+			Topic:    events.PaymentCompletedTopic,
+			Key:      tx.ExternalID,
+			TenantID: tx.TenantID,
+			Type:     events.PaymentCompletedSuccessType,
+			Data: schemas.EventPaymentCompletedData{
+				TransactionID:        tx.ID,
+				PaymentID:            tx.ExternalID,
+				PaymentStatus:        string(data.SuccessPaymentStatus),
+				PaymentCompletedAt:   gotPaymentCompletedAt,
+				StellarTransactionID: tx.StellarTransactionHash.String,
+			},
+		}
+		assert.Equal(t, wantMsg, msg)
 	})
-
-	mockEventProducer.AssertExpectations(t)
 }
