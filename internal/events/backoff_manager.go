@@ -23,9 +23,11 @@ func NewBackoffManager(backoffChan chan<- struct{}, maxBackoff int) *ConsumerBac
 	}
 }
 
-func (bm *ConsumerBackoffManager) TriggerBackoffWithMessage(msg *Message, backoffErr error) {
+func (bm *ConsumerBackoffManager) TriggerBackoffWithMessage(msg *Message, hErr *HandlerError) {
 	if msg != nil {
-		msg.RecordError(backoffErr.Error())
+		if hErr != nil {
+			msg.RecordError(hErr)
+		}
 		bm.message = msg
 	}
 	bm.TriggerBackoff()

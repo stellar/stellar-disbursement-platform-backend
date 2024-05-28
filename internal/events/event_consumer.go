@@ -87,7 +87,7 @@ func (ec *EventConsumer) Consume(ctx context.Context) {
 			// 4. Run the message through the handler chain.
 			if handleErr := ec.handleMessage(ctx, msg); handleErr != nil {
 				backoffManager.TriggerBackoffWithMessage(msg, handleErr)
-				ec.crashTracker.LogAndReportErrors(ctx, handleErr, fmt.Sprintf("handling message for topic %s", ec.consumer.Topic()))
+				ec.crashTracker.LogAndReportErrors(ctx, handleErr.Err, fmt.Sprintf("handling message for topic %s", ec.consumer.Topic()))
 				continue
 			}
 
@@ -124,12 +124,13 @@ func (ec *EventConsumer) sendMessageToDLQ(ctx context.Context, msg Message) erro
 }
 
 // handleMessage handles the message by the handler chain of the consumer.
-func (ec *EventConsumer) handleMessage(ctx context.Context, msg *Message) error {
+func (ec *EventConsumer) handleMessage(ctx context.Context, msg *Message) *HandlerError {
 	for _, handler := range ec.consumer.Handlers() {
 		if handler.CanHandleMessage(ctx, msg) {
 			handleErr := handler.Handle(ctx, msg)
 			if handleErr != nil {
-				return fmt.Errorf("handling message: %w", handleErr)
+				hError := NewHandlerErrorWrapper(handleErr, handler.Name())
+				return &hError
 			}
 		}
 	}
