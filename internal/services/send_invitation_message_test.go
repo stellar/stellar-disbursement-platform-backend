@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"errors"
 	"net/url"
 	"testing"
 
@@ -14,6 +15,51 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/htmltemplate"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 )
+
+func TestSendInvitationMessageOptions_Validate(t *testing.T) {
+	testCases := []struct {
+		name    string
+		options SendInvitationMessageOptions
+		errStr  string
+	}{
+		{
+			name:    "missing first name",
+			options: SendInvitationMessageOptions{},
+			errStr:  "first name is required",
+		},
+		{
+			name:    "missing email",
+			options: SendInvitationMessageOptions{FirstName: "foobar"},
+			errStr:  "email is required",
+		},
+		{
+			name:    "missing role",
+			options: SendInvitationMessageOptions{FirstName: "foobar", Email: "foo@bar.com"},
+			errStr:  "role is required",
+		},
+		{
+			name:    "missing ui base URL",
+			options: SendInvitationMessageOptions{FirstName: "foobar", Email: "foo@bar.com", Role: "owner"},
+			errStr:  "UI base URL is required",
+		},
+		{
+			name:    "invalid ui base URL",
+			options: SendInvitationMessageOptions{FirstName: "foobar", Email: "foo@bar.com", Role: "owner", UIBaseURL: "%invalid$%"},
+			errStr:  `UI base URL is not a valid URL: parse "%invalid$%": invalid URL escape "%in"`,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.options.Validate()
+			if tc.errStr != "" {
+				assert.EqualError(t, err, tc.errStr)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
 
 func Test_SendInvitationMessage(t *testing.T) {
 	dbt := dbtest.Open(t)
@@ -31,14 +77,8 @@ func Test_SendInvitationMessage(t *testing.T) {
 	firstName := "First"
 	email := "email@email.com"
 	roles := []string{"owner"}
-
-	t.Run("returns error when can't get the forgot password link", func(t *testing.T) {
-		err := SendInvitationMessage(ctx, &messengerClientMock, models, firstName, roles[0], email, "%invalid$%")
-		assert.EqualError(t, err, `getting forgot password link: parse "%invalid$%": invalid URL escape "%in"`)
-	})
-
-	t.Run("sends invitation message successfully", func(t *testing.T) {
-		uiBaseURL := "http://localhost:3000"
+	uiBaseURL := "http://localhost:3000"
+	defaultMockMessengerClientFn := func(sendMsgErr error) {
 		forgotPasswordLink, err := url.JoinPath(uiBaseURL, "forgot-password")
 		require.NoError(t, err)
 
@@ -56,10 +96,65 @@ func Test_SendInvitationMessage(t *testing.T) {
 				Title:   invitationMessageTitle,
 				Message: content,
 			}).
-			Return(nil).
+			Return(sendMsgErr).
 			Once()
+	}
 
-		err = SendInvitationMessage(ctx, &messengerClientMock, models, firstName, roles[0], email, uiBaseURL)
-		require.NoError(t, err)
-	})
+	testCases := []struct {
+		name                  string
+		options               SendInvitationMessageOptions
+		mockMessengerClientFn func(messengerClientMock *message.MessengerClientMock)
+		errStr                string
+	}{
+		{
+			name: "returns error when options are not valid",
+			options: SendInvitationMessageOptions{
+				FirstName: firstName,
+				Email:     email,
+				Role:      roles[0],
+				UIBaseURL: "%invalid$%",
+			},
+			errStr: "invalid options: UI base URL is not a valid URL: parse \"%invalid$%\": invalid URL escape \"%in\"",
+		},
+		{
+			name: "returns error when failing to send invitation message",
+			options: SendInvitationMessageOptions{
+				FirstName: firstName,
+				Email:     email,
+				Role:      roles[0],
+				UIBaseURL: uiBaseURL,
+			},
+			mockMessengerClientFn: func(messengerClientMock *message.MessengerClientMock) {
+				defaultMockMessengerClientFn(errors.New("foobar"))
+			},
+			errStr: "sending invitation message via messenger client: foobar",
+		},
+		{
+			name: "sends invitation message successfully",
+			options: SendInvitationMessageOptions{
+				FirstName: firstName,
+				Email:     email,
+				Role:      roles[0],
+				UIBaseURL: uiBaseURL,
+			},
+			mockMessengerClientFn: func(messengerClientMock *message.MessengerClientMock) {
+				defaultMockMessengerClientFn(nil)
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.mockMessengerClientFn != nil {
+				tc.mockMessengerClientFn(&messengerClientMock)
+			}
+
+			err := SendInvitationMessage(ctx, &messengerClientMock, models, tc.options)
+			if tc.errStr != "" {
+				assert.EqualError(t, err, tc.errStr)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
 }

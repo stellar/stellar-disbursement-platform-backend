@@ -224,7 +224,12 @@ func (h UserHandler) CreateUser(rw http.ResponseWriter, req *http.Request) {
 	}
 
 	err = services.SendInvitationMessage(ctx, h.MessengerClient, h.Models,
-		newUser.FirstName, newUser.Roles[0], newUser.Email, *tnt.SDPUIBaseURL)
+		services.SendInvitationMessageOptions{
+			FirstName: newUser.FirstName,
+			Email:     newUser.Email,
+			Role:      newUser.Roles[0],
+			UIBaseURL: *tnt.SDPUIBaseURL,
+		})
 	if err != nil {
 		httperror.InternalError(ctx, "Cannot send invitation message", err, nil).Render(rw)
 		return

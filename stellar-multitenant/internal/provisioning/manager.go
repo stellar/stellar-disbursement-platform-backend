@@ -83,20 +83,13 @@ func (m *Manager) ProvisionNewTenant(
 		return nil, m.handleProvisioningError(ctx, provisionErr, t)
 	}
 
-	tenantSchemaConnectionPool, err := db.OpenDBConnectionPool(tenantSchemaDSN)
-	if err != nil {
-		return nil, fmt.Errorf("opening database connection on tenant schema: %w", err)
-	}
-	defer tenantSchemaConnectionPool.Close()
-
-	models, getTntModelsErr := data.NewModels(tenantSchemaConnectionPool)
-	if getTntModelsErr != nil {
-		return nil, fmt.Errorf("getting models: %w", err)
-	}
-
-	sendMsgErr := services.SendInvitationMessage(ctx, m.messengerClient, models, userFirstName, userRoles[0], userEmail, uiBaseUrl)
-	if sendMsgErr != nil {
-		return nil, fmt.Errorf("sending invitation message: %w", sendMsgErr)
+	if sendMsgErr := m.sendInvitationMessage(ctx, tenantSchemaDSN, services.SendInvitationMessageOptions{
+		FirstName: userFirstName,
+		Email:     userEmail,
+		Role:      userRoles[0],
+		UIBaseURL: uiBaseUrl,
+	}); sendMsgErr != nil {
+		return nil, fmt.Errorf("completing invitation message delivery: %w", sendMsgErr)
 	}
 
 	return t, nil
@@ -148,29 +141,28 @@ func (m *Manager) handleProvisioningError(ctx context.Context, err error, t *ten
 	return provisioningErr
 }
 
-func (m *Manager) provisionTenant(ctx context.Context, pt *ProvisionTenant) (*tenant.Tenant, string, error) {
-	t, addTntErr := m.tenantManager.AddTenant(ctx, pt.name)
-	if addTntErr != nil {
-		return t, "", fmt.Errorf("%w: adding tenant %s: %w", ErrTenantCreationFailed, pt.name, addTntErr)
+func (m *Manager) provisionTenant(ctx context.Context, pt *ProvisionTenant) (t *tenant.Tenant, tenantSchemaDSN string, err error) {
+	t, err = m.tenantManager.AddTenant(ctx, pt.name)
+	if err != nil {
+		return t, "", fmt.Errorf("%w: adding tenant %s: %w", ErrTenantCreationFailed, pt.name, err)
 	}
 
-	u, tenantSchemaFailedErr := m.createSchemaAndRunMigrations(ctx, pt.name)
-	if tenantSchemaFailedErr != nil {
-		return t, "", fmt.Errorf("%w: %w", ErrTenantSchemaFailed, tenantSchemaFailedErr)
+	tenantSchemaDSN, err = m.createSchemaAndRunMigrations(ctx, pt.name)
+	if err != nil {
+		return t, "", fmt.Errorf("%w: %w", ErrTenantSchemaFailed, err)
 	}
 
-	tenantDataSetupErr := m.setupTenantData(ctx, u, pt)
-	if tenantDataSetupErr != nil {
-		return t, "", fmt.Errorf("%w: %w", ErrTenantDataSetupFailed, tenantDataSetupErr)
+	err = m.setupTenantData(ctx, tenantSchemaDSN, pt)
+	if err != nil {
+		return t, "", fmt.Errorf("%w: %w", ErrTenantDataSetupFailed, err)
 	}
 
 	// Provision distribution account for tenant if necessary
-	if err := m.provisionDistributionAccount(ctx, t); err != nil {
+	if err = m.provisionDistributionAccount(ctx, t); err != nil {
 		return t, "", fmt.Errorf("provisioning distribution account: %w", err)
 	}
 
-	distSignerTypeStr := m.SubmitterEngine.DistAccountSigner.Type()
-	distSignerType := signing.SignatureClientType(distSignerTypeStr)
+	distSignerType := signing.SignatureClientType(m.SubmitterEngine.DistAccountSigner.Type())
 	distAccType, err := distSignerType.DistributionAccountType()
 	if err != nil {
 		return t, "", fmt.Errorf("parsing getting distribution account type: %w", err)
@@ -196,7 +188,7 @@ func (m *Manager) provisionTenant(ctx context.Context, pt *ProvisionTenant) (*te
 		return t, "", fmt.Errorf("%w. funding tenant distribution account: %w", ErrUpdateTenantFailed, err)
 	}
 
-	return updatedTenant, u, nil
+	return updatedTenant, tenantSchemaDSN, nil
 }
 
 func (m *Manager) fundTenantDistributionAccount(ctx context.Context, distributionAccount string) error {
@@ -236,10 +228,9 @@ func (m *Manager) provisionDistributionAccount(ctx context.Context, t *tenant.Te
 }
 
 func (m *Manager) setupTenantData(ctx context.Context, tenantSchemaDSN string, pt *ProvisionTenant) error {
-	// Connecting to the tenant database schema
-	tenantSchemaConnectionPool, err := db.OpenDBConnectionPool(tenantSchemaDSN)
+	tenantSchemaConnectionPool, models, err := getTenantSchemaDBConnectionAndModels(tenantSchemaDSN)
 	if err != nil {
-		return fmt.Errorf("opening database connection on tenant schema: %w", err)
+		return fmt.Errorf("opening database connection on tenant schema and getting models: %w", err)
 	}
 	defer tenantSchemaConnectionPool.Close()
 
@@ -336,6 +327,38 @@ func (m *Manager) runMigrationsForTenant(
 	}
 	log.Ctx(ctx).Infof("successful applied %d migrations", n)
 	return nil
+}
+
+func (m *Manager) sendInvitationMessage(
+	ctx context.Context, tenantSchemaDSN string, opts services.SendInvitationMessageOptions,
+) error {
+	tenantSchemaConnectionPool, models, err := getTenantSchemaDBConnectionAndModels(tenantSchemaDSN)
+	if err != nil {
+		return fmt.Errorf("opening database connection on tenant schema and getting model: %w", err)
+	}
+	defer tenantSchemaConnectionPool.Close()
+
+	if err = services.SendInvitationMessage(ctx, m.messengerClient, models, opts); err != nil {
+		return fmt.Errorf("creating and sending invitation message: %w", err)
+	}
+
+	return nil
+}
+
+// getTenantSchemaDBConnectionAndModels returns an opened database connection on the tenant schema and returns the models associated with the schema.
+// The opened connection will be up to the caller to close.
+func getTenantSchemaDBConnectionAndModels(tenantSchemaDSN string) (tenantSchemaDBConnectionPool db.DBConnectionPool, models *data.Models, err error) {
+	tenantSchemaDBConnectionPool, err = db.OpenDBConnectionPool(tenantSchemaDSN)
+	if err != nil {
+		return nil, nil, fmt.Errorf("opening database connection on tenant schema: %w", err)
+	}
+
+	models, err = data.NewModels(tenantSchemaDBConnectionPool)
+	if err != nil {
+		return nil, nil, fmt.Errorf("getting models: %w", err)
+	}
+
+	return tenantSchemaDBConnectionPool, models, nil
 }
 
 type Option func(m *Manager) error
