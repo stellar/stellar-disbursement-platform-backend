@@ -244,12 +244,6 @@ func (m *Manager) setupTenantData(ctx context.Context, tenantSchemaDSN string, p
 		return fmt.Errorf("running setup wallets for proper network: %w", err)
 	}
 
-	// Updating organization's name
-	models, getTntModelsErr := data.NewModels(tenantSchemaConnectionPool)
-	if getTntModelsErr != nil {
-		return fmt.Errorf("getting models: %w", err)
-	}
-
 	err = models.Organizations.Update(ctx, &data.OrganizationUpdate{Name: pt.orgName})
 	if err != nil {
 		return fmt.Errorf("updating organization's name: %w", err)
@@ -355,7 +349,7 @@ func getTenantSchemaDBConnectionAndModels(tenantSchemaDSN string) (tenantSchemaD
 
 	models, err = data.NewModels(tenantSchemaDBConnectionPool)
 	if err != nil {
-		return nil, nil, fmt.Errorf("getting models: %w", err)
+		return nil, nil, fmt.Errorf("getting models for tenant schema: %w", err)
 	}
 
 	return tenantSchemaDBConnectionPool, models, nil
