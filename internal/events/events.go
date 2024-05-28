@@ -35,20 +35,30 @@ func (p NoopProducer) Close() error {
 
 var _ Producer = NoopProducer{}
 
-func ProduceEvent(ctx context.Context, producer Producer, msg *Message) error {
-	if msg == nil {
-		log.Ctx(ctx).Warn("message is nil, not producing event")
-		return nil
-	}
-
+func ProduceEvents(ctx context.Context, producer Producer, messages ...*Message) error {
 	if producer == nil {
-		log.Ctx(ctx).Errorf("event producer is nil, could not publish message %+v", msg)
+		log.Ctx(ctx).Errorf("event producer is nil, could not publish messages %+v", messages)
 		return nil
 	}
 
-	err := producer.WriteMessages(ctx, *msg)
+	var messagesToProduce []Message
+	for i, msg := range messages {
+		if msg == nil {
+			log.Ctx(ctx).Warnf("message at index %d is nil, not producing event", i)
+			continue
+		} else {
+			messagesToProduce = append(messagesToProduce, *msg)
+		}
+	}
+	if len(messagesToProduce) == 0 {
+		log.Ctx(ctx).Warn("not producing events, since there are zero not-nil messages to produce")
+		return nil
+	}
+
+	log.Ctx(ctx).Debugf("writing %d messages on the event producer", len(messagesToProduce))
+	err := producer.WriteMessages(ctx, messagesToProduce...)
 	if err != nil {
-		return fmt.Errorf("writing message %+v on event producer: %w", msg, err)
+		return fmt.Errorf("writing messages %+v on event producer: %w", messagesToProduce, err)
 	}
 
 	return nil

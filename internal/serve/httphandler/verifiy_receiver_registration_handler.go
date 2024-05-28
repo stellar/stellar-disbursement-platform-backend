@@ -292,7 +292,7 @@ func (v VerifyReceiverRegistrationHandler) VerifyReceiverRegistration(w http.Res
 				return nil, fmt.Errorf("preparing payments ready-to-pay event message: %w", err)
 			}
 			postCommitFn = func() error {
-				return events.ProduceEvent(ctx, v.EventProducer, msg)
+				return events.ProduceEvents(ctx, v.EventProducer, msg)
 			}
 
 			// STEP 6: PATCH transaction on the AnchorPlatform and update the receiver wallet with the anchor platform tx ID

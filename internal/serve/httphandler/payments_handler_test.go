@@ -1154,7 +1154,7 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 
 		entries := getEntries()
 		require.Len(t, entries, 1)
-		assert.Contains(t, fmt.Sprintf("event producer is nil, could not publish message %s", msg), entries[0].Message)
+		assert.Contains(t, fmt.Sprintf("event producer is nil, could not publish messages %+v", []events.Message{msg}), entries[0].Message)
 	})
 
 	authManagerMock.AssertExpectations(t)

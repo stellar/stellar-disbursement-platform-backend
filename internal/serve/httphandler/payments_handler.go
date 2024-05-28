@@ -149,7 +149,7 @@ func (p PaymentsHandler) RetryPayments(rw http.ResponseWriter, req *http.Request
 				}
 
 				postCommitFn = func() error {
-					return events.ProduceEvent(ctx, p.EventProducer, msg)
+					return events.ProduceEvents(ctx, p.EventProducer, msg)
 				}
 			}
 

@@ -49,7 +49,7 @@ func (h ReceiverWalletsHandler) RetryInvitation(rw http.ResponseWriter, req *htt
 			return nil, fmt.Errorf("creating event producer message: %w", err)
 		}
 
-		err = events.ProduceEvent(ctx, h.EventProducer, msg)
+		err = events.ProduceEvents(ctx, h.EventProducer, msg)
 		if err != nil {
 			return nil, fmt.Errorf("publishing message %+v on event producer: %w", msg, err)
 		}
