@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/support/render/httpjson"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
@@ -50,13 +49,9 @@ func (h ReceiverWalletsHandler) RetryInvitation(rw http.ResponseWriter, req *htt
 			return nil, fmt.Errorf("creating event producer message: %w", err)
 		}
 
-		if h.EventProducer != nil {
-			err = h.EventProducer.WriteMessages(ctx, *msg)
-			if err != nil {
-				return nil, fmt.Errorf("publishing message %s on event producer: %w", msg, err)
-			}
-		} else {
-			log.Ctx(ctx).Errorf("event producer is nil, could not publish message %+v", msg)
+		err = events.ProduceEvent(ctx, h.EventProducer, msg)
+		if err != nil {
+			return nil, fmt.Errorf("publishing message %+v on event producer: %w", msg, err)
 		}
 
 		return receiverWallet, nil
