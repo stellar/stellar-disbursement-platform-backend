@@ -1119,7 +1119,7 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 			}, nil).
 			Once()
 
-		getEntries := log.DefaultLogger.StartTest(log.ErrorLevel)
+		getEntries := log.DefaultLogger.StartTest(log.DebugLevel)
 
 		handler.EventProducer = nil
 		rw := httptest.NewRecorder()

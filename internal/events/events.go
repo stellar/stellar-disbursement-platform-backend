@@ -2,6 +2,7 @@ package events
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/stellar/go/support/log"
 )
@@ -24,7 +25,7 @@ type Consumer interface {
 type NoopProducer struct{}
 
 func (p NoopProducer) WriteMessages(ctx context.Context, messages ...Message) error {
-	log.Ctx(ctx).Debugf("NoopProducer: These messages will be discarded and handled by the scheduler: %+v", messages)
+	log.Ctx(ctx).Debugf("[NoopProducer] the following messages are not being published, please make sure to rely on the scheduler for them: %+v", messages)
 	return nil
 }
 
@@ -33,3 +34,22 @@ func (p NoopProducer) Close() error {
 }
 
 var _ Producer = NoopProducer{}
+
+func ProduceEvent(ctx context.Context, producer Producer, msg *Message) error {
+	if msg == nil {
+		log.Ctx(ctx).Warn("message is nil, not producing event")
+		return nil
+	}
+
+	if producer == nil {
+		log.Ctx(ctx).Errorf("event producer is nil, could not publish message %+v", msg)
+		return nil
+	}
+
+	err := producer.WriteMessages(ctx, *msg)
+	if err != nil {
+		return fmt.Errorf("writing message %+v on event producer: %w", msg, err)
+	}
+
+	return nil
+}

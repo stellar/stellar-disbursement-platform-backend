@@ -148,10 +148,8 @@ func (p PaymentsHandler) RetryPayments(rw http.ResponseWriter, req *http.Request
 					return nil, fmt.Errorf("building payments ready event message: %w", err)
 				}
 
-				if msg != nil {
-					postCommitFn = func() error {
-						return p.producePaymentsReadyEvent(ctx, msg)
-					}
+				postCommitFn = func() error {
+					return events.ProduceEvent(ctx, p.EventProducer, msg)
 				}
 			}
 
@@ -196,24 +194,6 @@ func (p PaymentsHandler) buildPaymentsReadyEventMessage(ctx context.Context, pay
 	}
 
 	return msg, nil
-}
-
-func (p PaymentsHandler) producePaymentsReadyEvent(ctx context.Context, msg *events.Message) error {
-	if msg == nil {
-		log.Ctx(ctx).Warn("message is nil, not producing event")
-		return nil
-	}
-
-	if p.EventProducer != nil {
-		err := p.EventProducer.WriteMessages(ctx, *msg)
-		if err != nil {
-			return fmt.Errorf("writing message %s on event producer: %w", msg, err)
-		}
-	} else {
-		log.Ctx(ctx).Errorf("event producer is nil, could not publish message %+v", msg)
-	}
-
-	return nil
 }
 
 func (p PaymentsHandler) getPaymentsWithCount(ctx context.Context, queryParams *data.QueryParams) (*utils.ResultWithTotal, error) {

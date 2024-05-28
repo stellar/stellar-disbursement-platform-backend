@@ -287,13 +287,12 @@ func (v VerifyReceiverRegistrationHandler) VerifyReceiverRegistration(w http.Res
 			}
 
 			// STEP 5: produce event to send receiver's ready payments to TSS
-			// TODO: we should prepare the messages inside the dbTx
 			msg, err := v.buildPaymentsReadyToPayEventMessage(ctx, dbTx, &receiverWallet)
 			if err != nil {
 				return nil, fmt.Errorf("preparing payments ready-to-pay event message: %w", err)
 			}
 			postCommitFn = func() error {
-				return v.producePaymentsReadyToPayEvent(ctx, msg)
+				return events.ProduceEvent(ctx, v.EventProducer, msg)
 			}
 
 			// STEP 6: PATCH transaction on the AnchorPlatform and update the receiver wallet with the anchor platform tx ID
@@ -359,22 +358,4 @@ func (v VerifyReceiverRegistrationHandler) buildPaymentsReadyToPayEventMessage(c
 	}
 
 	return msg, nil
-}
-
-func (v VerifyReceiverRegistrationHandler) producePaymentsReadyToPayEvent(ctx context.Context, msg *events.Message) error {
-	if msg == nil {
-		log.Ctx(ctx).Warn("message is nil, not producing event")
-		return nil
-	}
-
-	if v.EventProducer != nil {
-		err := v.EventProducer.WriteMessages(ctx, *msg)
-		if err != nil {
-			return fmt.Errorf("writing message %+v on event producer: %w", msg, err)
-		}
-	} else {
-		log.Ctx(ctx).Errorf("event producer is nil, could not publish message %+v", msg)
-	}
-
-	return nil
 }
