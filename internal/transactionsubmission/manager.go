@@ -67,7 +67,7 @@ type Manager struct {
 	chTxBundleModel  *store.ChannelTransactionBundleModel
 	// job-related:
 	pollingInterval     time.Duration
-	txProcessingLimiter *engine.TransactionProcessingLimiter
+	txProcessingLimiter engine.TransactionProcessingLimiter
 	// transaction submission:
 	engine *engine.SubmitterEngine
 	// crash & metrics monitoring:
