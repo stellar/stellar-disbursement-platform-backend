@@ -901,7 +901,7 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 			On("WriteMessages", ctx, []events.Message{
 				{
 					Topic:    events.PaymentReadyToPayTopic,
-					Key:      "",
+					Key:      tnt.ID,
 					TenantID: tnt.ID,
 					Type:     events.PaymentReadyToPayRetryFailedPayment,
 					Data: schemas.EventPaymentsReadyToPayData{
@@ -1047,7 +1047,7 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 			On("WriteMessages", ctx, []events.Message{
 				{
 					Topic:    events.PaymentReadyToPayTopic,
-					Key:      "",
+					Key:      tnt.ID,
 					TenantID: tnt.ID,
 					Type:     events.PaymentReadyToPayRetryFailedPayment,
 					Data: schemas.EventPaymentsReadyToPayData{
@@ -1136,7 +1136,7 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 
 		msg := events.Message{
 			Topic:    events.PaymentReadyToPayTopic,
-			Key:      "",
+			Key:      tnt.ID,
 			TenantID: tnt.ID,
 			Type:     events.PaymentReadyToPayRetryFailedPayment,
 			Data: schemas.EventPaymentsReadyToPayData{
