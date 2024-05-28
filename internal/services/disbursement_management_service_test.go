@@ -670,8 +670,11 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 		}
 
 		err = service.StartDisbursement(ctx, disbursement.ID, user, distributionPubKey)
-		wantErrMessage := fmt.Sprintf("executing postCommit function: writing messages %+v on event producer: unexpected error", expectedMessages)
-		assert.EqualError(t, err, wantErrMessage)
+		assert.EqualError(
+			t,
+			err,
+			fmt.Sprintf("executing postCommit function: writing messages %+v on event producer: unexpected error", expectedMessages),
+		)
 	})
 
 	t.Run("doesn't produce message when there's no payment ready to pay", func(t *testing.T) {

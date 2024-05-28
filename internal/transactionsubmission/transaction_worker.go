@@ -142,7 +142,7 @@ func (tw *TransactionWorker) Run(ctx context.Context, txJob *TxJob) {
 	ctx = tw.updateContextLogger(ctx, txJob)
 	err := tw.runJob(ctx, txJob)
 	if err != nil {
-		log.Ctx(ctx).Errorf("Handle unexpected error: %v", err)
+		tw.crashTrackerClient.LogAndReportErrors(ctx, err, "unexpected error")
 	}
 }
 
@@ -212,9 +212,9 @@ func (tw *TransactionWorker) handleFailedTransaction(ctx context.Context, txJob 
 			if hErrWrapper.ShouldMarkAsError() {
 				metricsMetadata.PaymentEventType = sdpMonitor.PaymentFailedLabel
 
-				// Building the payment completed event before updating the transaction status. This way, if something else fails
-				// down the line, the transaction will be marked for reprocessing -> reconciliation and the event will be produced
-				// again.
+				// Building the payment completed event before updating the transaction status. This way, if the message
+				// fails to be built, the transaction will be marked for reprocessing -> reconciliation and the event
+				// will be re-tried.
 				var msg *events.Message
 				msg, err = tw.buildPaymentCompletedEvent(events.PaymentCompletedErrorType, &txJob.Transaction, data.FailedPaymentStatus, hErrWrapper.Error())
 				if err != nil {
@@ -281,9 +281,8 @@ func (tw *TransactionWorker) handleSuccessfulTransaction(ctx context.Context, tx
 		return fmt.Errorf("transaction was not successful for some reason")
 	}
 
-	// Building the payment completed event before updating the transaction status. This way, if something else fails
-	// down the line, the transaction will be marked for reprocessing -> reconciliation and the event will be produced
-	// again.
+	// Building the payment completed event before updating the transaction status. This way, if the message fails to be
+	// built, the transaction will be marked for reprocessing -> reconciliation and the event will be re-tried.
 	msg, err := tw.buildPaymentCompletedEvent(events.PaymentCompletedSuccessType, &txJob.Transaction, data.SuccessPaymentStatus, "")
 	if err != nil {
 		return fmt.Errorf("building payment completed event Status %s - Job %v: %w", txJob.Transaction.Status, txJob, err)
