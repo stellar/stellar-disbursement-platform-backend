@@ -329,7 +329,7 @@ func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, d
 			}
 
 			// 8. Produce events to send invitation message to the receivers
-			msgs := make([]events.Message, 0)
+			msgs := make([]*events.Message, 0)
 
 			receiverWallets, err := s.models.ReceiverWallet.GetAllPendingRegistrationByDisbursementID(ctx, dbTx, disbursementID)
 			if err != nil {
@@ -347,7 +347,7 @@ func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, d
 					return nil, fmt.Errorf("creating new message: %w", msgErr)
 				}
 
-				msgs = append(msgs, *sendInviteMsg)
+				msgs = append(msgs, sendInviteMsg)
 			} else {
 				log.Ctx(ctx).Infof("no receiver wallets to send invitation for disbursement ID %s", disbursementID)
 			}
@@ -370,7 +370,7 @@ func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, d
 				}
 				paymentsReadyToPayMsg.Data = paymentsReadyToPay
 
-				msgs = append(msgs, *paymentsReadyToPayMsg)
+				msgs = append(msgs, paymentsReadyToPayMsg)
 			} else {
 				log.Ctx(ctx).Infof("no payments ready to pay for disbursement ID %s", disbursementID)
 			}
@@ -380,7 +380,7 @@ func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, d
 				log.Ctx(ctx).Infof("no messages to be published for disbursement ID %s", disbursementID)
 			} else {
 				postCommitFn = func() error {
-					return s.produceEvents(ctx, msgs...)
+					return events.ProduceEvents(ctx, s.eventProducer, msgs...)
 				}
 			}
 
@@ -388,19 +388,6 @@ func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, d
 		},
 	}
 	return db.RunInTransactionWithPostCommit(ctx, &opts)
-}
-
-func (s *DisbursementManagementService) produceEvents(ctx context.Context, msgs ...events.Message) error {
-	if s.eventProducer == nil {
-		log.Ctx(ctx).Errorf("event producer is nil, could not publish messages %+v", msgs)
-		return nil
-	}
-
-	if err := s.eventProducer.WriteMessages(ctx, msgs...); err != nil {
-		return fmt.Errorf("publishing messages %+v on event producer: %w", msgs, err)
-	}
-
-	return nil
 }
 
 // PauseDisbursement pauses a disbursement and all its payments.
