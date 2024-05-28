@@ -17,15 +17,16 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	tssSvc "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 type Manager struct {
-	tenantManager   tenant.ManagerInterface
-	db              db.DBConnectionPool
-	messengerClient message.MessengerClient
-	engine.SubmitterEngine
+	tenantManager              tenant.ManagerInterface
+	db                         db.DBConnectionPool
+	messengerClient            message.MessengerClient
+	SubmitterEngine            engine.SubmitterEngine
 	nativeAssetBootstrapAmount int
 }
 
@@ -62,14 +63,13 @@ func rollbackTenantCreationAndSchemaErrors() []error {
 
 func (m *Manager) ProvisionNewTenant(
 	ctx context.Context, name, userFirstName, userLastName, userEmail,
-	organizationName, uiBaseURL, networkType string,
+	organizationName, networkType string,
 ) (*tenant.Tenant, error) {
 	pt := &ProvisionTenant{
 		name:          name,
 		userFirstName: userFirstName,
 		userLastName:  userLastName,
 		userEmail:     userEmail,
-		uiBaseURL:     uiBaseURL,
 		orgName:       organizationName,
 		networkType:   networkType,
 	}
@@ -78,13 +78,6 @@ func (m *Manager) ProvisionNewTenant(
 	t, provisionErr := m.provisionTenant(ctx, pt)
 	if provisionErr != nil {
 		return nil, m.handleProvisioningError(ctx, provisionErr, t)
-	}
-
-	// Last step when no errors - fund tenant distribution account
-	fundErr := m.fundTenantDistributionAccount(ctx, *t.DistributionAccount)
-	if fundErr != nil {
-		// error already wrapped
-		return nil, fundErr
 	}
 
 	return t, nil
@@ -106,7 +99,7 @@ func (m *Manager) handleProvisioningError(ctx context.Context, err error, t *ten
 		deleteDistributionAccFromVaultErr := m.deleteDistributionAccountKey(ctx, t)
 		// We should not let any failures from key deletion block us from completing the tenant cleanup process
 		if deleteDistributionAccFromVaultErr != nil {
-			deleteDistributionKeyErrPrefixMsg := fmt.Sprintf("deleting distribution account private key %s", *t.DistributionAccount)
+			deleteDistributionKeyErrPrefixMsg := fmt.Sprintf("deleting distribution account private key %s", *t.DistributionAccountAddress)
 			provisioningErr = fmt.Errorf("%w. [additional errors]: %s: %w", provisioningErr, deleteDistributionKeyErrPrefixMsg, deleteDistributionAccFromVaultErr)
 			log.Ctx(ctx).Errorf("%s: %v", deleteDistributionKeyErrPrefixMsg, deleteDistributionAccFromVaultErr)
 		}
@@ -136,7 +129,7 @@ func (m *Manager) handleProvisioningError(ctx context.Context, err error, t *ten
 	return provisioningErr
 }
 
-func (m *Manager) provisionTenant(ctx context.Context, pt *ProvisionTenant) (*tenant.Tenant, error) {
+func (m *Manager) provisionTenant(ctx context.Context, pt *ProvisionTenant) (t *tenant.Tenant, err error) {
 	t, addTntErr := m.tenantManager.AddTenant(ctx, pt.name)
 	if addTntErr != nil {
 		return t, fmt.Errorf("%w: adding tenant %s: %w", ErrTenantCreationFailed, pt.name, addTntErr)
@@ -153,38 +146,46 @@ func (m *Manager) provisionTenant(ctx context.Context, pt *ProvisionTenant) (*te
 	}
 
 	// Provision distribution account for tenant if necessary
-	err := m.provisionDistributionAccount(ctx, t)
+	err = m.provisionDistributionAccount(ctx, t)
 	if err != nil {
-		// error already wrapped
-		return t, err
+		return t, fmt.Errorf("provisioning distribution account: %w", err)
+	}
+
+	distSignerTypeStr := m.SubmitterEngine.DistAccountSigner.Type()
+	distSignerType := signing.SignatureClientType(distSignerTypeStr)
+	distAccType, err := distSignerType.DistributionAccountType()
+	if err != nil {
+		return t, fmt.Errorf("parsing getting distribution account type: %w", err)
 	}
 
 	tenantStatus := tenant.ProvisionedTenantStatus
-	t, err = m.tenantManager.UpdateTenantConfig(
+	updatedTenant, err := m.tenantManager.UpdateTenantConfig(
 		ctx,
 		&tenant.TenantUpdate{
-			ID:                  t.ID,
-			Status:              &tenantStatus,
-			SDPUIBaseURL:        &pt.uiBaseURL,
-			DistributionAccount: t.DistributionAccount,
+			ID:                         t.ID,
+			Status:                     &tenantStatus,
+			DistributionAccountAddress: *t.DistributionAccountAddress,
+			DistributionAccountType:    distAccType,
+			DistributionAccountStatus:  schema.DistributionAccountStatusActive,
 		})
 	if err != nil {
 		return t, fmt.Errorf("%w: updating tenant %s status to %s: %w", ErrUpdateTenantFailed, pt.name, tenant.ProvisionedTenantStatus, err)
 	}
 
-	return t, nil
+	err = m.fundTenantDistributionAccount(ctx, *updatedTenant.DistributionAccountAddress)
+	if err != nil {
+		return t, fmt.Errorf("%w. funding tenant distribution account: %w", ErrUpdateTenantFailed, err)
+	}
+
+	return updatedTenant, nil
 }
 
 func (m *Manager) fundTenantDistributionAccount(ctx context.Context, distributionAccount string) error {
 	hostDistributionAccPubKey := m.SubmitterEngine.HostDistributionAccount()
 	if distributionAccount != hostDistributionAccPubKey {
-		err := tenant.ValidateNativeAssetBootstrapAmount(m.nativeAssetBootstrapAmount)
-		if err != nil {
-			return fmt.Errorf("invalid native asset bootstrap amount: %w", err)
-		}
-
 		// Bootstrap tenant distribution account with native asset
-		err = tssSvc.CreateAndFundAccount(ctx, m.SubmitterEngine, m.nativeAssetBootstrapAmount, hostDistributionAccPubKey, distributionAccount)
+		log.Ctx(ctx).Infof("Creating and funding tenant distribution account %s with native asset", distributionAccount)
+		err := tssSvc.CreateAndFundAccount(ctx, m.SubmitterEngine, m.nativeAssetBootstrapAmount, hostDistributionAccPubKey, distributionAccount)
 		if err != nil {
 			return fmt.Errorf("bootstrapping tenant distribution account with native asset: %w", err)
 		}
@@ -207,11 +208,11 @@ func (m *Manager) provisionDistributionAccount(ctx context.Context, t *tenant.Te
 	}
 
 	// Assigning the account key to the tenant so that it can be referenced if it needs to be deleted in the vault if any subsequent errors are encountered
-	t.DistributionAccount = &distributionAccPubKeys[0]
 	if len(distributionAccPubKeys) != 1 {
 		return fmt.Errorf("%w: expected single distribution account public key, got %d", ErrUpdateTenantFailed, len(distributionAccPubKeys))
 	}
-	log.Ctx(ctx).Infof("distribution account %s created for tenant %s", *t.DistributionAccount, t.Name)
+	t.DistributionAccountAddress = &distributionAccPubKeys[0]
+	log.Ctx(ctx).Infof("distribution account %s created for tenant %s", *t.DistributionAccountAddress, t.Name)
 	return nil
 }
 
@@ -264,7 +265,7 @@ func (m *Manager) setupTenantData(ctx context.Context, tenantSchemaDSN string, p
 }
 
 func (m *Manager) createSchemaAndRunMigrations(ctx context.Context, name string) (string, error) {
-	u, getDSNForTntErr := m.tenantManager.GetDSNForTenant(ctx, name)
+	dsn, getDSNForTntErr := m.tenantManager.GetDSNForTenant(ctx, name)
 	if getDSNForTntErr != nil {
 		return "", fmt.Errorf("getting database DSN for tenant %s: %w", name, getDSNForTntErr)
 	}
@@ -277,22 +278,22 @@ func (m *Manager) createSchemaAndRunMigrations(ctx context.Context, name string)
 
 	// Applying migrations
 	log.Ctx(ctx).Infof("applying SDP migrations on the tenant %s schema", name)
-	runTntMigrationsErr := m.runMigrationsForTenant(ctx, u, migrate.Up, 0, migrations.SDPMigrationRouter)
+	runTntMigrationsErr := m.runMigrationsForTenant(ctx, dsn, migrate.Up, 0, migrations.SDPMigrationRouter)
 	if runTntMigrationsErr != nil {
 		return "", fmt.Errorf("applying SDP migrations: %w", runTntMigrationsErr)
 	}
 
 	log.Ctx(ctx).Infof("applying stellar-auth migrations on the tenant %s schema", name)
-	runTntAuthMigrationsErr := m.runMigrationsForTenant(ctx, u, migrate.Up, 0, migrations.AuthMigrationRouter)
+	runTntAuthMigrationsErr := m.runMigrationsForTenant(ctx, dsn, migrate.Up, 0, migrations.AuthMigrationRouter)
 	if runTntAuthMigrationsErr != nil {
 		return "", fmt.Errorf("applying stellar-auth migrations: %w", runTntAuthMigrationsErr)
 	}
 
-	return u, nil
+	return dsn, nil
 }
 
 func (m *Manager) deleteDistributionAccountKey(ctx context.Context, t *tenant.Tenant) error {
-	sigClientDeleteKeyErr := m.SubmitterEngine.DistAccountSigner.Delete(ctx, *t.DistributionAccount)
+	sigClientDeleteKeyErr := m.SubmitterEngine.DistAccountSigner.Delete(ctx, *t.DistributionAccountAddress)
 	if sigClientDeleteKeyErr != nil {
 		if errors.Is(sigClientDeleteKeyErr, signing.ErrUnsupportedCommand) {
 			log.Ctx(ctx).Warnf(
@@ -318,44 +319,52 @@ func (m *Manager) runMigrationsForTenant(
 	return nil
 }
 
-type Option func(m *Manager)
+type Option func(m *Manager) error
 
-func NewManager(opts ...Option) *Manager {
-	m := Manager{}
-	for _, opt := range opts {
-		opt(&m)
-	}
-	return &m
+type ManagerOptions struct {
+	DBConnectionPool           db.DBConnectionPool
+	MessengerClient            message.MessengerClient
+	TenantManager              tenant.ManagerInterface
+	SubmitterEngine            engine.SubmitterEngine
+	NativeAssetBootstrapAmount int
 }
 
-func WithDatabase(dbConnectionPool db.DBConnectionPool) Option {
-	return func(m *Manager) {
-		m.db = dbConnectionPool
+func NewManager(opts ManagerOptions) (*Manager, error) {
+	if opts.DBConnectionPool == nil {
+		return nil, fmt.Errorf("database connection pool cannot be nil")
 	}
-}
 
-func WithMessengerClient(messengerClient message.MessengerClient) Option {
-	return func(m *Manager) {
-		m.messengerClient = messengerClient
+	if opts.MessengerClient == nil {
+		return nil, fmt.Errorf("messenger client cannot be nil")
 	}
-}
 
-func WithTenantManager(tenantManager tenant.ManagerInterface) Option {
-	return func(m *Manager) {
-		m.tenantManager = tenantManager
+	if opts.TenantManager == nil {
+		return nil, fmt.Errorf("tenant manager cannot be nil")
 	}
-}
 
-func WithSubmitterEngine(submitterEngine engine.SubmitterEngine) Option {
-	return func(m *Manager) {
-		m.SubmitterEngine = submitterEngine
+	err := opts.SubmitterEngine.Validate()
+	if err != nil {
+		return nil, fmt.Errorf("validating submitter engine: %w", err)
 	}
-}
 
-func WithNativeAssetBootstrapAmount(nativeAssetBootstrapAmount int) Option {
-	return func(m *Manager) {
-		m.nativeAssetBootstrapAmount = nativeAssetBootstrapAmount
+	isTooSmall := opts.NativeAssetBootstrapAmount < tenant.MinTenantDistributionAccountAmount
+	isTooBig := opts.NativeAssetBootstrapAmount > tenant.MaxTenantDistributionAccountAmount
+	if isTooSmall || isTooBig {
+		return nil, fmt.Errorf(
+			"the amount of XLM configured (%d XLM) is outside the permitted range of [%d XLM, %d XLM]",
+			opts.NativeAssetBootstrapAmount,
+			tenant.MinTenantDistributionAccountAmount,
+			tenant.MaxTenantDistributionAccountAmount,
+		)
 	}
+
+	return &Manager{
+		db:                         opts.DBConnectionPool,
+		messengerClient:            opts.MessengerClient,
+		tenantManager:              opts.TenantManager,
+		SubmitterEngine:            opts.SubmitterEngine,
+		nativeAssetBootstrapAmount: opts.NativeAssetBootstrapAmount,
+	}, nil
 }
 
 func isErrorInArray(target error, errArray []error) bool {

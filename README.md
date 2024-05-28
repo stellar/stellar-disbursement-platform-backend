@@ -224,6 +224,12 @@ We recommend Kafka for organizations that require high throughput and low latenc
 * `events.payment.ready_to_pay`: This topic is used to submit payments from the Core to the TSS. *[Producer: Core, Consumer: TSS]*
 * `events.payment.payment_completed`: This topic is used to notify the Core that a payment has been completed. *[Producer: TSS, Consumer: Core]*
 
+For each of the topics above, there is a dead letter topic that is used to store messages that could not be processed. The dead letter topics are named as follows:
+* `events.receiver-wallets.new_invitation.dlq`
+* `events.payment.ready_to_pay.dlq`
+* `events.payment.payment_completed.dlq`
+
+
 **2. Configuration**
 
 In order to use Kafka, you need to set the following environment variables for SDP and TSS. 

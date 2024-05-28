@@ -27,6 +27,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
 	tssUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
 // Review these TODOs originally created by Stephen:
@@ -386,7 +387,7 @@ func (tw *TransactionWorker) producePaymentCompletedEvent(ctx context.Context, e
 			return fmt.Errorf("writing message %s on event producer: %w", msg, err)
 		}
 	} else {
-		log.Ctx(ctx).Errorf("event producer is nil, could not publish message %+v", msg)
+		log.Ctx(ctx).Errorf("event producer is nil, could not publish message %s", msg)
 	}
 
 	return nil
@@ -491,9 +492,14 @@ func (tw *TransactionWorker) buildAndSignTransaction(ctx context.Context, txJob 
 		}
 	}
 
-	distributionAccount, err := tw.engine.DistributionAccountResolver.DistributionAccount(ctx, txJob.Transaction.TenantID)
-	if err != nil {
+	var distributionAccountPubKey string
+	var distributionAccount *schema.DistributionAccount
+	if distributionAccount, err = tw.engine.DistributionAccountResolver.DistributionAccount(ctx, txJob.Transaction.TenantID); err != nil {
 		return nil, fmt.Errorf("resolving distribution account for tenantID=%s: %w", txJob.Transaction.TenantID, err)
+	} else if !distributionAccount.IsStellar() {
+		return nil, fmt.Errorf("expected distribution account to be a STELLAR account but got %q", distributionAccount.Type)
+	} else {
+		distributionAccountPubKey = distributionAccount.Address
 	}
 
 	horizonAccount, err := tw.engine.HorizonClient.AccountDetail(horizonclient.AccountRequest{AccountID: txJob.ChannelAccount.PublicKey})
@@ -510,7 +516,7 @@ func (tw *TransactionWorker) buildAndSignTransaction(ctx context.Context, txJob 
 			},
 			Operations: []txnbuild.Operation{
 				&txnbuild.Payment{
-					SourceAccount: distributionAccount,
+					SourceAccount: distributionAccountPubKey,
 					Amount:        strconv.FormatFloat(txJob.Transaction.Amount, 'f', 6, 32), // TODO find a better way to do this
 					Destination:   txJob.Transaction.Destination,
 					Asset:         asset,
@@ -534,7 +540,7 @@ func (tw *TransactionWorker) buildAndSignTransaction(ctx context.Context, txJob 
 		return nil, fmt.Errorf("signing transaction for channel account: for job %v: %w", txJob, err)
 	}
 	// Sign tx for the distribution account:
-	paymentTx, err = tw.engine.DistAccountSigner.SignStellarTransaction(ctx, paymentTx, distributionAccount)
+	paymentTx, err = tw.engine.DistAccountSigner.SignStellarTransaction(ctx, paymentTx, distributionAccountPubKey)
 	if err != nil {
 		return nil, fmt.Errorf("signing transaction for distribution account: for job %v: %w", txJob, err)
 	}
@@ -543,7 +549,7 @@ func (tw *TransactionWorker) buildAndSignTransaction(ctx context.Context, txJob 
 	feeBumpTx, err = txnbuild.NewFeeBumpTransaction(
 		txnbuild.FeeBumpTransactionParams{
 			Inner:      paymentTx,
-			FeeAccount: distributionAccount,
+			FeeAccount: distributionAccountPubKey,
 			BaseFee:    int64(tw.engine.MaxBaseFee),
 		},
 	)
@@ -552,7 +558,7 @@ func (tw *TransactionWorker) buildAndSignTransaction(ctx context.Context, txJob 
 	}
 
 	// Sign fee-bump tx for the distribution account:
-	feeBumpTx, err = tw.engine.DistAccountSigner.SignFeeBumpStellarTransaction(ctx, feeBumpTx, distributionAccount)
+	feeBumpTx, err = tw.engine.DistAccountSigner.SignFeeBumpStellarTransaction(ctx, feeBumpTx, distributionAccountPubKey)
 	if err != nil {
 		return nil, fmt.Errorf("signing fee-bump transaction for job %v: %w", txJob, err)
 	}
@@ -603,49 +609,3 @@ func (tw *TransactionWorker) saveResponseXDRIfPresent(ctx context.Context, txJob
 
 	return nil
 }
-
-// TODO: possibly use this code as a reference when addressing [SDP-772].
-// updateTransactionsMetric calculates and observes metrics for a given Transaction
-// func (s *Submitter) updateTransactionsMetric(ctx context.Context, result, error_type string, tx *store.Transaction) {
-// 	retried := "false"
-// 	if tx.RetryCount > 0 {
-// 		retried = "true"
-// 	}
-// 	labels := map[string]string{
-// 		"result":     result,
-// 		"error_type": error_type,
-// 		"retried":    retried,
-// 	}
-// 	// observe latency taken for transaction to complete
-// 	err := s.MonitorService.MonitorHistogram(time.Since(*tx.CreatedAt).Seconds(), monitor.TransactionQueuedToCompletedLatencyTag, labels)
-// 	if err != nil {
-// 		log.Ctx(ctx).Errorf("error updating transaction metric counter: %s", err.Error())
-// 	}
-
-// 	err = s.MonitorService.MonitorHistogram(time.Since(*tx.StartedAt).Seconds(), monitor.TransactionStartedToCompletedLatencyTag, labels)
-// 	if err != nil {
-// 		log.Ctx(ctx).Errorf("error updating transaction metric counter: %s", err.Error())
-// 	}
-
-// 	err = s.MonitorService.MonitorHistogram(float64(tx.RetryCount), monitor.TransactionRetryCountTag, labels)
-// 	if err != nil {
-// 		log.Ctx(ctx).Errorf("error updating transaction metric counter: %s", err.Error())
-// 	}
-
-// 	err = s.MonitorService.MonitorCounters(monitor.TransactionProcessedCounterTag, labels)
-// 	if err != nil {
-// 		log.Ctx(ctx).Errorf("error updating transaction metric counter: %s", err.Error())
-// 	}
-// }
-
-// // observeHorizonErrorMetric observes error metrics from horizon
-// func (s *Submitter) observeHorizonErrorMetric(ctx context.Context, statusCode int, resultCode string) {
-// 	labels := map[string]string{
-// 		"status_code": strconv.Itoa(statusCode),
-// 		"result_code": resultCode,
-// 	}
-// 	err := s.MonitorService.MonitorCounters(monitor.HorizonErrorCounterTag, labels)
-// 	if err != nil {
-// 		log.Ctx(ctx).Errorf("error updating horizon error counter metric: %s", err.Error())
-// 	}
-// }

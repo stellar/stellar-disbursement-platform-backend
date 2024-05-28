@@ -44,6 +44,7 @@ import (
 	storeMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
 	sdpUtlis "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
@@ -67,7 +68,7 @@ func getTransactionWorkerInstance(t *testing.T, dbConnectionPool db.DBConnection
 	mDistAccResolver := sigMocks.NewMockDistributionAccountResolver(t)
 	mDistAccResolver.
 		On("DistributionAccount", mock.Anything, mock.AnythingOfType("string")).
-		Return(distributionKP.Address(), nil).
+		Return(schema.NewDefaultStellarDistributionAccount(distributionKP.Address()), nil).
 		Maybe()
 
 	sigService, err := signing.NewSignatureService(signing.SignatureServiceOptions{
@@ -1643,7 +1644,7 @@ func Test_TransactionWorker_buildAndSignTransaction(t *testing.T) {
 	mDistAccResolver := sigMocks.NewMockDistributionAccountResolver(t)
 	mDistAccResolver.
 		On("DistributionAccount", ctx, mock.AnythingOfType("string")).
-		Return(distributionKP.Address(), nil)
+		Return(schema.NewDefaultStellarDistributionAccount(distributionKP.Address()), nil)
 
 	sigService, err := signing.NewSignatureService(signing.SignatureServiceOptions{
 		DistributionSignerType:    signing.DistributionAccountEnvSignatureClientType,

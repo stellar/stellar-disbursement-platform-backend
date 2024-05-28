@@ -2,6 +2,7 @@ package utils
 
 import (
 	"github.com/sirupsen/logrus"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 )
 
@@ -13,6 +14,7 @@ type GlobalOptionsType struct {
 	GitCommit         string
 	DatabaseURL       string
 	BaseURL           string
+	SDPUIBaseURL      string
 	NetworkPassphrase string
 }
 

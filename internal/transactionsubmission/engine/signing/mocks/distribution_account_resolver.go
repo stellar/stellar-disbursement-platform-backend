@@ -5,6 +5,7 @@ package mocks
 import (
 	context "context"
 
+	schema "github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	mock "github.com/stretchr/testify/mock"
 )
 
@@ -14,18 +15,20 @@ type MockDistributionAccountResolver struct {
 }
 
 // DistributionAccount provides a mock function with given fields: ctx, tenantID
-func (_m *MockDistributionAccountResolver) DistributionAccount(ctx context.Context, tenantID string) (string, error) {
+func (_m *MockDistributionAccountResolver) DistributionAccount(ctx context.Context, tenantID string) (*schema.DistributionAccount, error) {
 	ret := _m.Called(ctx, tenantID)
 
-	var r0 string
+	var r0 *schema.DistributionAccount
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, string) (string, error)); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, string) (*schema.DistributionAccount, error)); ok {
 		return rf(ctx, tenantID)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, string) string); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, string) *schema.DistributionAccount); ok {
 		r0 = rf(ctx, tenantID)
 	} else {
-		r0 = ret.Get(0).(string)
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*schema.DistributionAccount)
+		}
 	}
 
 	if rf, ok := ret.Get(1).(func(context.Context, string) error); ok {
@@ -38,18 +41,20 @@ func (_m *MockDistributionAccountResolver) DistributionAccount(ctx context.Conte
 }
 
 // DistributionAccountFromContext provides a mock function with given fields: ctx
-func (_m *MockDistributionAccountResolver) DistributionAccountFromContext(ctx context.Context) (string, error) {
+func (_m *MockDistributionAccountResolver) DistributionAccountFromContext(ctx context.Context) (*schema.DistributionAccount, error) {
 	ret := _m.Called(ctx)
 
-	var r0 string
+	var r0 *schema.DistributionAccount
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context) (string, error)); ok {
+	if rf, ok := ret.Get(0).(func(context.Context) (*schema.DistributionAccount, error)); ok {
 		return rf(ctx)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context) string); ok {
+	if rf, ok := ret.Get(0).(func(context.Context) *schema.DistributionAccount); ok {
 		r0 = rf(ctx)
 	} else {
-		r0 = ret.Get(0).(string)
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*schema.DistributionAccount)
+		}
 	}
 
 	if rf, ok := ret.Get(1).(func(context.Context) error); ok {

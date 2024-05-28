@@ -148,7 +148,7 @@ func Test_serve(t *testing.T) {
 		EC256PrivateKey:                 "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgIqI1MzMZIw2pQDLx\nJn0+FcNT/hNjwtn2TW43710JKZqhRANCAARHzyHsCJDJUPKxFPEq8EHoJqI7+RJy\n8bKKYClQT/XaAWE1NF/ftITX0JIKWUrGy2dUU6kstYHtC7k4nRa9zPeG\n-----END PRIVATE KEY-----",
 		CorsAllowedOrigins:              []string{"*"},
 		SEP24JWTSecret:                  "jwt_secret_1234567890",
-		BaseURL:                         "https://sdp.com",
+		BaseURL:                         "https://sdp-backend.stellar.org",
 		ResetTokenExpirationHours:       24,
 		NetworkPassphrase:               network.TestNetworkPassphrase,
 		Sep10SigningPublicKey:           "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
@@ -215,6 +215,8 @@ func Test_serve(t *testing.T) {
 		TenantAccountNativeAssetBootstrapAmount: tenant.MinTenantDistributionAccountAmount,
 		AdminAccount:                            "admin-account",
 		AdminApiKey:                             "admin-api-key",
+		BaseURL:                                 "https://sdp-backend.stellar.org",
+		SDPUIBaseURL:                            "https://sdp-ui.stellar.org",
 	}
 
 	eventBrokerOptions := cmdUtils.EventBrokerOptions{
@@ -277,6 +279,7 @@ func Test_serve(t *testing.T) {
 	t.Setenv("DISABLE_RECAPTCHA", fmt.Sprintf("%t", serveOpts.DisableMFA))
 	t.Setenv("DISTRIBUTION_SEED", distributionSeed)
 	t.Setenv("BASE_URL", serveOpts.BaseURL)
+	t.Setenv("SDP_UI_BASE_URL", serveTenantOpts.SDPUIBaseURL)
 	t.Setenv("RECAPTCHA_SITE_KEY", serveOpts.ReCAPTCHASiteKey)
 	t.Setenv("RECAPTCHA_SITE_SECRET_KEY", serveOpts.ReCAPTCHASiteSecretKey)
 	t.Setenv("CORS_ALLOWED_ORIGINS", "*")

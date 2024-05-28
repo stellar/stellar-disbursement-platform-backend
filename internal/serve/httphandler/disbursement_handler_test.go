@@ -1301,32 +1301,6 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 
 	reqBody := bytes.NewBuffer(nil)
 
-	t.Run("cannot get distribution account public key", func(t *testing.T) {
-		mDistAccResolver := sigMocks.NewMockDistributionAccountResolver(t)
-		mDistAccResolver.
-			On("DistributionAccountFromContext", mock.Anything).
-			Return("", errors.New("unexpected error")).
-			Once()
-
-		h := &DisbursementHandler{
-			Models:                        handler.Models,
-			AuthManager:                   handler.AuthManager,
-			DistributionAccountResolver:   mDistAccResolver,
-			DisbursementManagementService: handler.DisbursementManagementService,
-		}
-		httpRouter := chi.NewRouter()
-		httpRouter.Patch("/disbursements/{id}/status", h.PatchDisbursementStatus)
-
-		id := draftDisbursement.ID
-		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, fmt.Sprintf("/disbursements/%s/status", id), reqBody)
-		require.NoError(t, err)
-		rr := httptest.NewRecorder()
-		httpRouter.ServeHTTP(rr, req)
-
-		require.Equal(t, http.StatusInternalServerError, rr.Code)
-		require.Contains(t, rr.Body.String(), "Cannot get distribution account public key")
-	})
-
 	t.Run("invalid body", func(t *testing.T) {
 		id := draftDisbursement.ID
 		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, fmt.Sprintf("/disbursements/%s/status", id), reqBody)
@@ -1350,6 +1324,39 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 
 		require.Equal(t, http.StatusBadRequest, rr.Code)
 		require.Contains(t, rr.Body.String(), "invalid status")
+	})
+
+	t.Run("cannot get distribution account", func(t *testing.T) {
+		authManagerMock.
+			On("GetUser", mock.Anything, token).
+			Return(user, nil).
+			Once()
+
+		mDistAccResolver := sigMocks.NewMockDistributionAccountResolver(t)
+		mDistAccResolver.
+			On("DistributionAccountFromContext", mock.Anything).
+			Return(nil, errors.New("unexpected error")).
+			Once()
+
+		h := &DisbursementHandler{
+			Models:                        handler.Models,
+			AuthManager:                   handler.AuthManager,
+			DistributionAccountResolver:   mDistAccResolver,
+			DisbursementManagementService: handler.DisbursementManagementService,
+		}
+		httpRouter := chi.NewRouter()
+		httpRouter.Patch("/disbursements/{id}/status", h.PatchDisbursementStatus)
+
+		err := json.NewEncoder(reqBody).Encode(PatchDisbursementStatusRequest{Status: "STARTED"})
+		require.NoError(t, err)
+
+		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, fmt.Sprintf("/disbursements/%s/status", draftDisbursement.ID), reqBody)
+		require.NoError(t, err)
+		rr := httptest.NewRecorder()
+		httpRouter.ServeHTTP(rr, req)
+
+		require.Equal(t, http.StatusInternalServerError, rr.Code)
+		require.Contains(t, rr.Body.String(), "Cannot get distribution account")
 	})
 
 	t.Run("disbursement not ready to start", func(t *testing.T) {

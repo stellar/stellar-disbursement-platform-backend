@@ -144,20 +144,20 @@ INSERT INTO sdp_${tenant}.messages SELECT * FROM public.messages;
 ------ 2.3.1: add new columns to the transaction_submitter table and populate them
 ALTER TABLE public.submitter_transactions
     ADD COLUMN tenant_id VARCHAR(36),
-    ADD COLUMN distribution_account VARCHAR(56);
+    ADD COLUMN distribution_account_address VARCHAR(56);
 WITH SelectedTenant AS (
-    SELECT id AS tenant_id, distribution_account
+    SELECT id AS tenant_id, distribution_account_address
     FROM admin.tenants
     LIMIT 1
 )
-UPDATE public.submitter_transactions SET tenant_id = (SELECT tenant_id FROM SelectedTenant), distribution_account = (SELECT distribution_account FROM SelectedTenant);
+UPDATE public.submitter_transactions SET tenant_id = (SELECT tenant_id FROM SelectedTenant), distribution_account_address = (SELECT distribution_account_address FROM SelectedTenant);
 
 ------ 2.3.2: copy values to the new table
 INSERT INTO tss.submitter_transactions 
 SELECT
     id, external_id,
     status::text::tss.transaction_status AS status,
-    status_history, status_message, asset_code, asset_issuer, amount, destination, created_at, updated_at, locked_at, started_at, sent_at, completed_at, synced_at, locked_until_ledger_number, stellar_transaction_hash, attempts_count, xdr_sent, xdr_received, tenant_id, distribution_account
+    status_history, status_message, asset_code, asset_issuer, amount, destination, created_at, updated_at, locked_at, started_at, sent_at, completed_at, synced_at, locked_until_ledger_number, stellar_transaction_hash, attempts_count, xdr_sent, xdr_received, tenant_id, distribution_account_address
 FROM public.submitter_transactions;
 
 

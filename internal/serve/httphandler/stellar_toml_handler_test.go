@@ -18,6 +18,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	sigMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing/mocks"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
@@ -50,7 +51,6 @@ func Test_StellarTomlHandler_horizonURL(t *testing.T) {
 func Test_StellarTomlHandler_buildGeneralInformation(t *testing.T) {
 	req := httptest.NewRequest("GET", "https://test.com/.well-known/stellar.toml", nil)
 	req.Host = "test.com"
-	hostDistAccPublicKey := "GC5HD2HELPBY7G43C6AXEGVWYTFZJ5RGZDFFX5KRSS56FCUPGREUKWXQ"
 	tenantDistAccPublicKey := "GDEWLTJMGKABNF3GBA3VTVBYPES3FXQHHJVJVI6X3CRKKFH5EMLRT5JZ"
 
 	testCases := []struct {
@@ -69,7 +69,7 @@ func Test_StellarTomlHandler_buildGeneralInformation(t *testing.T) {
 				AnchorPlatformBaseSepURL: "https://anchor-platform-domain",
 			},
 			wantLines: []string{
-				fmt.Sprintf(`ACCOUNTS=[%q, "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"]`, hostDistAccPublicKey),
+				`ACCOUNTS=["GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"]`,
 				`SIGNING_KEY="GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"`,
 				fmt.Sprintf("NETWORK_PASSPHRASE=%q", network.PublicNetworkPassphrase),
 				fmt.Sprintf("HORIZON_URL=%q", horizonPubnetURL),
@@ -105,7 +105,7 @@ func Test_StellarTomlHandler_buildGeneralInformation(t *testing.T) {
 				AnchorPlatformBaseSepURL: "https://anchor-platform-domain",
 			},
 			wantLines: []string{
-				fmt.Sprintf(`ACCOUNTS=[%q, "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"]`, hostDistAccPublicKey),
+				`ACCOUNTS=["GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"]`,
 				`SIGNING_KEY="GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"`,
 				fmt.Sprintf("NETWORK_PASSPHRASE=%q", network.TestNetworkPassphrase),
 				fmt.Sprintf("HORIZON_URL=%q", horizonTestnetURL),
@@ -141,16 +141,12 @@ func Test_StellarTomlHandler_buildGeneralInformation(t *testing.T) {
 			if tc.isTenantInContext {
 				mDistAccResolver.
 					On("DistributionAccountFromContext", ctx).
-					Return(tenantDistAccPublicKey, nil).
+					Return(schema.NewDefaultStellarDistributionAccount(tenantDistAccPublicKey), nil).
 					Once()
 			} else {
 				mDistAccResolver.
 					On("DistributionAccountFromContext", ctx).
-					Return("", tenant.ErrTenantNotFoundInContext).
-					Once()
-				mDistAccResolver.
-					On("HostDistributionAccount").
-					Return(hostDistAccPublicKey).
+					Return(nil, tenant.ErrTenantNotFoundInContext).
 					Once()
 			}
 			tc.s.DistributionAccountResolver = mDistAccResolver
@@ -419,7 +415,7 @@ func Test_StellarTomlHandler_ServeHTTP(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 		wantToml := fmt.Sprintf(`
-			ACCOUNTS=["GCWFIKOB7FO6KTXUKZIPPPZ42UT2V7HVZD5STVROKVJVQU24FSP7OLZK", "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"]
+			ACCOUNTS=["GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"]
 			SIGNING_KEY="GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"
 			NETWORK_PASSPHRASE=%q
 			HORIZON_URL=%q

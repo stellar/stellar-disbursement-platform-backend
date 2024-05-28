@@ -14,9 +14,25 @@ type QueryParams struct {
 type FilterKey string
 
 const (
-	FilterKeyOutStatus FilterKey = "status"
+	FilterKeyOutStatus FilterKey = "out_status"
+	FilterKeyDeleted   FilterKey = "deleted"
+	FilterKeyStatus    FilterKey = "status"
 	FilterKeyName      FilterKey = "name"
 	FilterKeyID        FilterKey = "id"
 	FilterKeyNameOrID  FilterKey = "name_or_id"
 	FilterKeyIsDefault FilterKey = "is_default"
 )
+
+func excludeInactiveTenantsFilters() map[FilterKey]interface{} {
+	return map[FilterKey]interface{}{
+		FilterKeyOutStatus: DeactivatedTenantStatus,
+		FilterKeyDeleted:   true,
+	}
+}
+
+func getDeactivatedTenantsFilters() map[FilterKey]interface{} {
+	return map[FilterKey]interface{}{
+		FilterKeyStatus:  DeactivatedTenantStatus,
+		FilterKeyDeleted: false,
+	}
+}

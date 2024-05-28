@@ -152,14 +152,18 @@ func AnyRoleMiddleware(authManager auth.AuthManager, requiredRoles ...data.UserR
 				return
 			}
 
-			isValid, err := authManager.AnyRolesInTokenUser(ctx, token, data.FromUserRoleArrayToStringArray(requiredRoles))
-			if err != nil && !errors.Is(err, auth.ErrInvalidToken) && !errors.Is(err, auth.ErrUserNotFound) {
-				httperror.InternalError(ctx, "", err, nil).Render(rw)
+			hasAnyRoles, err := authManager.AnyRolesInTokenUser(ctx, token, data.FromUserRoleArrayToStringArray(requiredRoles))
+			if err != nil {
+				if errors.Is(err, auth.ErrInvalidToken) || errors.Is(err, auth.ErrUserNotFound) {
+					httperror.Unauthorized("", nil, nil).Render(rw)
+				} else {
+					httperror.InternalError(ctx, "", err, nil).Render(rw)
+				}
 				return
 			}
 
-			if !isValid {
-				httperror.Unauthorized("", nil, nil).Render(rw)
+			if !hasAnyRoles {
+				httperror.Forbidden("", nil, nil).Render(rw)
 				return
 			}
 
@@ -297,7 +301,14 @@ func ResolveTenantFromRequestMiddleware(tenantManager tenant.ManagerInterface, s
 				if err != nil {
 					switch {
 					case errors.Is(err, tenant.ErrTenantDoesNotExist):
-						httperror.InternalError(ctx, "No default Tenant configured", err, nil).Render(rw)
+						// Log warning and allow the request to continue without a tenant.
+						log.Ctx(ctx).Warnf(
+							"No default tenant configured: %v. "+
+								"use POST /default-tenant to set the default tenant.",
+							err,
+						)
+						next.ServeHTTP(rw, req)
+						return
 					case errors.Is(err, tenant.ErrTooManyDefaultTenants):
 						httperror.InternalError(ctx, "Too many default tenants configured", err, nil).Render(rw)
 					default:

@@ -7,26 +7,34 @@ import (
 
 	"github.com/stellar/go/strkey"
 	"golang.org/x/exp/slices"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
 type Tenant struct {
-	ID                  string       `json:"id" db:"id"`
-	Name                string       `json:"name" db:"name"`
-	BaseURL             *string      `json:"base_url" db:"base_url"`
-	SDPUIBaseURL        *string      `json:"sdp_ui_base_url" db:"sdp_ui_base_url"`
-	Status              TenantStatus `json:"status" db:"status"`
-	DistributionAccount *string      `json:"distribution_account" db:"distribution_account"`
-	IsDefault           bool         `json:"is_default" db:"is_default"`
-	CreatedAt           time.Time    `json:"created_at" db:"created_at"`
-	UpdatedAt           time.Time    `json:"updated_at" db:"updated_at"`
+	ID           string       `json:"id" db:"id"`
+	Name         string       `json:"name" db:"name"`
+	BaseURL      *string      `json:"base_url" db:"base_url"`
+	SDPUIBaseURL *string      `json:"sdp_ui_base_url" db:"sdp_ui_base_url"`
+	Status       TenantStatus `json:"status" db:"status"`
+	IsDefault    bool         `json:"is_default" db:"is_default"`
+	CreatedAt    time.Time    `json:"created_at" db:"created_at"`
+	UpdatedAt    time.Time    `json:"updated_at" db:"updated_at"`
+	DeletedAt    *time.Time   `json:"deleted_at" db:"deleted_at"`
+	// Distribution Account fields:
+	DistributionAccountAddress *string                          `json:"distribution_account_address" db:"distribution_account_address"`
+	DistributionAccountType    schema.DistributionAccountType   `json:"distribution_account_type" db:"distribution_account_type"`
+	DistributionAccountStatus  schema.DistributionAccountStatus `json:"distribution_account_status" db:"distribution_account_status"`
 }
 
 type TenantUpdate struct {
-	ID                  string        `db:"id"`
-	BaseURL             *string       `db:"base_url"`
-	SDPUIBaseURL        *string       `db:"sdp_ui_base_url"`
-	Status              *TenantStatus `db:"status"`
-	DistributionAccount *string       `db:"distribution_account"`
+	ID                         string
+	BaseURL                    *string
+	SDPUIBaseURL               *string
+	Status                     *TenantStatus
+	DistributionAccountAddress string
+	DistributionAccountType    schema.DistributionAccountType
+	DistributionAccountStatus  schema.DistributionAccountStatus
 }
 
 type TenantStatus string
@@ -64,10 +72,9 @@ func (tu *TenantUpdate) Validate() error {
 		return fmt.Errorf("invalid tenant status: %q", *tu.Status)
 	}
 
-	if tu.DistributionAccount != nil && !strkey.IsValidEd25519PublicKey(*tu.DistributionAccount) {
-		return fmt.Errorf("invalid distribution account: %q", *tu.DistributionAccount)
+	if tu.DistributionAccountAddress != "" && !strkey.IsValidEd25519PublicKey(tu.DistributionAccountAddress) {
+		return fmt.Errorf("invalid distribution account: %q", tu.DistributionAccountAddress)
 	}
-
 	return nil
 }
 
@@ -75,7 +82,9 @@ func (tu *TenantUpdate) areAllFieldsEmpty() bool {
 	return tu.BaseURL == nil &&
 		tu.SDPUIBaseURL == nil &&
 		tu.Status == nil &&
-		tu.DistributionAccount == nil
+		tu.DistributionAccountAddress == "" &&
+		tu.DistributionAccountType == "" &&
+		tu.DistributionAccountStatus == ""
 }
 
 func isValidURL(u string) bool {
@@ -93,15 +102,3 @@ const (
 	// send to the tenant distribution account at a time.
 	MaxTenantDistributionAccountAmount = 50
 )
-
-func ValidateNativeAssetBootstrapAmount(amount int) error {
-	if amount < MinTenantDistributionAccountAmount || amount > MaxTenantDistributionAccountAmount {
-		if amount <= 0 {
-			return fmt.Errorf("invalid amount of native asset to send: %d", amount)
-		}
-
-		return fmt.Errorf("amount of native asset to send must be between %d and %d", MinTenantDistributionAccountAmount, MaxTenantDistributionAccountAmount)
-	}
-
-	return nil
-}

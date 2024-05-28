@@ -4,8 +4,10 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/support/http/httpdecode"
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/support/render/httpjson"
@@ -13,6 +15,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/internal/provisioning"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/internal/services"
@@ -21,13 +24,19 @@ import (
 )
 
 type TenantsHandler struct {
-	Manager               *tenant.Manager
-	Models                *data.Models
-	ProvisioningManager   *provisioning.Manager
-	NetworkType           utils.NetworkType
-	AdminDBConnectionPool db.DBConnectionPool
-	SingleTenantMode      bool
+	Manager                     tenant.ManagerInterface
+	Models                      *data.Models
+	HorizonClient               horizonclient.ClientInterface
+	DistributionAccountResolver signing.DistributionAccountResolver
+	ProvisioningManager         *provisioning.Manager
+	NetworkType                 utils.NetworkType
+	AdminDBConnectionPool       db.DBConnectionPool
+	SingleTenantMode            bool
+	BaseURL                     string
+	SDPUIBaseURL                string
 }
+
+const MaxNativeAssetBalanceForDeletion = 100
 
 func (t TenantsHandler) GetAll(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
@@ -79,7 +88,7 @@ func (h TenantsHandler) Post(rw http.ResponseWriter, req *http.Request) {
 	tnt, err := h.ProvisioningManager.ProvisionNewTenant(
 		ctx, reqBody.Name, reqBody.OwnerFirstName,
 		reqBody.OwnerLastName, reqBody.OwnerEmail, reqBody.OrganizationName,
-		reqBody.SDPUIBaseURL, string(h.NetworkType),
+		string(h.NetworkType),
 	)
 	if err != nil {
 		if errors.Is(err, tenant.ErrDuplicatedTenantName) {
@@ -90,15 +99,39 @@ func (h TenantsHandler) Post(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	var tntBaseURL string
+	if reqBody.BaseURL != nil {
+		tntBaseURL = *reqBody.BaseURL
+	} else {
+		tntBaseURL, err = utils.GenerateTenantURL(h.BaseURL, tnt.Name)
+		if err != nil {
+			httperror.InternalError(ctx, "Could not generate URL", err, nil).Render(rw)
+			return
+		}
+	}
+
+	var tntSDPUIBaseURL string
+	if reqBody.SDPUIBaseURL != nil {
+		tntSDPUIBaseURL = *reqBody.SDPUIBaseURL
+	} else {
+		tntSDPUIBaseURL, err = utils.GenerateTenantURL(h.SDPUIBaseURL, tnt.Name)
+		if err != nil {
+			httperror.InternalError(ctx, "Could not generate SDP UI URL", err, nil).Render(rw)
+			return
+		}
+	}
+
 	tnt, err = h.Manager.UpdateTenantConfig(ctx, &tenant.TenantUpdate{
-		ID:      tnt.ID,
-		BaseURL: &reqBody.BaseURL,
+		ID:           tnt.ID,
+		BaseURL:      &tntBaseURL,
+		SDPUIBaseURL: &tntSDPUIBaseURL,
 	})
 	if err != nil {
 		httperror.InternalError(ctx, "Could not update tenant config", err, nil).Render(rw)
 		return
 	}
 
+	log.Ctx(ctx).Infof("Tenant %s created successfully.", tnt.Name)
 	httpjson.RenderStatus(rw, http.StatusCreated, tnt, httpjson.JSON)
 }
 
@@ -156,6 +189,79 @@ func (t TenantsHandler) Patch(w http.ResponseWriter, r *http.Request) {
 		}
 		err = fmt.Errorf("updating tenant: %w", err)
 		httperror.InternalError(ctx, "", err, nil).Render(w)
+		return
+	}
+
+	httpjson.RenderStatus(w, http.StatusOK, tnt, httpjson.JSON)
+}
+
+func (t TenantsHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	tenantID := chi.URLParam(r, "id")
+
+	tnt, err := t.Manager.GetTenant(ctx, &tenant.QueryParams{
+		Filters: map[tenant.FilterKey]interface{}{tenant.FilterKeyID: tenantID},
+	})
+	if err != nil {
+		if errors.Is(tenant.ErrTenantDoesNotExist, err) {
+			errorMsg := fmt.Sprintf("tenant %s does not exist", tenantID)
+			httperror.NotFound(errorMsg, err, nil).Render(w)
+			return
+		}
+
+		httperror.InternalError(ctx, "Cannot get tenant by ID", err, nil).Render(w)
+		return
+	}
+
+	if tnt.DeletedAt != nil {
+		log.Ctx(ctx).Warnf("Tenant %s is already deleted", tenantID)
+		httpjson.RenderStatus(w, http.StatusNotModified, tnt, httpjson.JSON)
+		return
+	}
+
+	if tnt.Status != tenant.DeactivatedTenantStatus {
+		httperror.BadRequest("Tenant must be deactivated to be eligible for deletion", nil, nil).Render(w)
+		return
+	}
+
+	if tnt.DistributionAccountAddress != nil && t.DistributionAccountResolver.HostDistributionAccount() != *tnt.DistributionAccountAddress {
+		// TODO: Encapsulate this logic under a distribution account abstraction similar to [SDP-1177] once we add Circle custody support
+		distAcc, accDetailsErr := t.HorizonClient.AccountDetail(horizonclient.AccountRequest{AccountID: *tnt.DistributionAccountAddress})
+		if accDetailsErr != nil {
+			httperror.InternalError(ctx, "Cannot get distribution account details for tenant", err, nil).Render(w)
+			return
+		}
+
+		if distAcc.Balances != nil {
+			for _, b := range distAcc.Balances {
+				assetBalance, getAssetBalErr := strconv.ParseFloat(b.Balance, 64)
+				if getAssetBalErr != nil {
+					errMsg := fmt.Sprintf("Cannot convert Horizon distribution account balance %s into float", b.Balance)
+					httperror.InternalError(ctx, errMsg, getAssetBalErr, nil).Render(w)
+					return
+				}
+
+				if b.Asset.Type == "native" {
+					if assetBalance > MaxNativeAssetBalanceForDeletion {
+						errMsg := fmt.Sprintf("Tenant distribution account must have a balance of less than %d XLM to be eligible for deletion", MaxNativeAssetBalanceForDeletion)
+						httperror.BadRequest(errMsg, nil, nil).Render(w)
+						return
+					}
+				} else {
+					if assetBalance != 0 {
+						errMsg := fmt.Sprintf("Tenant distribution account must have a zero balance to be eligible for deletion. Current balance for %s: %s", b.Balance, b.Asset.Code)
+						httperror.BadRequest(errMsg, nil, nil).Render(w)
+						return
+					}
+				}
+			}
+		}
+	}
+
+	tnt, err = t.Manager.SoftDeleteTenantByID(ctx, tenantID)
+	if err != nil {
+		errMsg := fmt.Sprintf("Cannot delete tenant %s", tenantID)
+		httperror.InternalError(ctx, errMsg, err, nil).Render(w)
 		return
 	}
 

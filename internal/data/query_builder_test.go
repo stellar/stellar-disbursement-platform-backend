@@ -1,35 +1,59 @@
 package data
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
 
 func Test_QueryBuilder(t *testing.T) {
-	t.Run("Test AddCondition", func(t *testing.T) {
-		qb := NewQueryBuilder("SELECT * FROM disbursements")
+	baseQuery := "SELECT * FROM receivers"
+	testCases := []struct {
+		name          string
+		condition     string
+		values        []interface{}
+		expectedQuery string
+	}{
+		{
+			name:          "single parameter",
+			condition:     "id = ?",
+			values:        []interface{}{"123"},
+			expectedQuery: "SELECT * FROM receivers WHERE 1=1 %s id = ?",
+		},
+		{
+			name:          "multiple parameters",
+			condition:     "(id ILIKE ? OR email ILIKE ? OR phone_number ILIKE ?)",
+			values:        []interface{}{"id", "mock@email.com", "+9999999"},
+			expectedQuery: "SELECT * FROM receivers WHERE 1=1 %s (id ILIKE ? OR email ILIKE ? OR phone_number ILIKE ?)",
+		},
+		{
+			name:          "empty value",
+			condition:     "email is NULL",
+			values:        []interface{}{},
+			expectedQuery: "SELECT * FROM receivers WHERE 1=1 %s email is NULL",
+		},
+	}
 
-		qb.AddCondition("name = ?", "Disbursement 1")
-		actual, params := qb.Build()
+	for _, tc := range testCases {
+		for _, condition := range []string{"AND", "OR"} {
+			t.Run("Test `"+condition+"`: "+tc.name, func(t *testing.T) {
+				qb := NewQueryBuilder(baseQuery)
 
-		expectedQuery := "SELECT * FROM disbursements WHERE 1=1 AND name = ?"
+				if condition == "AND" {
+					qb.AddCondition(tc.condition, tc.values...)
+				} else {
+					qb.AddOrCondition(tc.condition, tc.values...)
+				}
+				actualQuery, params := qb.Build()
 
-		assert.Equal(t, expectedQuery, actual)
-		assert.Equal(t, []interface{}{"Disbursement 1"}, params)
-	})
+				expectedQuery := fmt.Sprintf(tc.expectedQuery, condition)
 
-	t.Run("Test AddCondition multiple params", func(t *testing.T) {
-		qb := NewQueryBuilder("SELECT * FROM receivers")
-
-		qb.AddCondition("(id ILIKE ? OR email ILIKE ? OR phone_number ILIKE ?)", "id", "mock@email.com", "+9999999")
-		actual, params := qb.Build()
-
-		expectedQuery := "SELECT * FROM receivers WHERE 1=1 AND (id ILIKE ? OR email ILIKE ? OR phone_number ILIKE ?)"
-
-		assert.Equal(t, expectedQuery, actual)
-		assert.Equal(t, []interface{}{"id", "mock@email.com", "+9999999"}, params)
-	})
+				assert.Equal(t, expectedQuery, actualQuery)
+				assert.Equal(t, tc.values, params)
+			})
+		}
+	}
 
 	t.Run("Test AddSorting", func(t *testing.T) {
 		qb := NewQueryBuilder("SELECT * FROM disbursements d")
