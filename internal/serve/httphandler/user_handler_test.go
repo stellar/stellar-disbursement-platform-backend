@@ -399,10 +399,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 	authManagerMock := &auth.AuthManagerMock{}
 
 	messengerClientMock := &message.MessengerClientMock{}
-	defer messengerClientMock.AssertExpectations(t)
 	crashTrackerMock := &crashtracker.MockCrashTrackerClient{}
-	defer crashTrackerMock.AssertExpectations(t)
-
 	handler := &UserHandler{
 		AuthManager:        authManagerMock,
 		CrashTrackerClient: crashTrackerMock,
@@ -658,7 +655,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 		assert.JSONEq(t, `{"error": "a user with this email already exists"}`, string(respBody))
 	})
 
-	t.Run("returns error when sending email fails", func(t *testing.T) {
+	t.Run("logs and reports error when sending email fails", func(t *testing.T) {
 		token := "mytoken"
 		ctx = context.WithValue(ctx, middleware.TokenContextKey, token)
 
@@ -940,6 +937,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 
 	authManagerMock.AssertExpectations(t)
 	messengerClientMock.AssertExpectations(t)
+	crashTrackerMock.AssertExpectations(t)
 }
 
 func Test_UpdateRolesRequest_validate(t *testing.T) {

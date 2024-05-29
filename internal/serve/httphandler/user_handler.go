@@ -233,8 +233,7 @@ func (h UserHandler) CreateUser(rw http.ResponseWriter, req *http.Request) {
 			UIBaseURL: *tnt.SDPUIBaseURL,
 		})
 	if err != nil {
-		errMsg := "Cannot send invitation message"
-		h.CrashTrackerClient.LogAndReportErrors(ctx, err, errMsg)
+		h.CrashTrackerClient.LogAndReportErrors(ctx, err, "Cannot send invitation message")
 	}
 
 	log.Ctx(ctx).Infof("[CreateUserAccount] - User ID %s created user with account ID %s", authenticatedUserID, u.ID)

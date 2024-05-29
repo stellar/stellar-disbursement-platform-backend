@@ -147,8 +147,7 @@ func (h TenantsHandler) Post(rw http.ResponseWriter, req *http.Request) {
 		Role:      data.OwnerUserRole.String(),
 		UIBaseURL: tntSDPUIBaseURL,
 	}); err != nil {
-		errMsg := "Cannot send invitation message"
-		h.CrashTrackerClient.LogAndReportErrors(ctx, err, errMsg)
+		h.CrashTrackerClient.LogAndReportErrors(ctx, err, "Cannot send invitation message")
 	}
 
 	httpjson.RenderStatus(rw, http.StatusCreated, tnt, httpjson.JSON)

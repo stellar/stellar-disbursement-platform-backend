@@ -208,7 +208,7 @@ func Test_serve(t *testing.T) {
 		EmailMessengerClient:                    messengerClient,
 		AdminDBConnectionPool:                   dbConnectionPool,
 		MTNDBConnectionPool:                     dbConnectionPool,
-		CrashTrackerClient:                      serveOpts.CrashTrackerClient,
+		CrashTrackerClient:                      crashTrackerClient,
 		GitCommit:                               "1234567890abcdef",
 		NetworkPassphrase:                       network.TestNetworkPassphrase,
 		Port:                                    8003,
