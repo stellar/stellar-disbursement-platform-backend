@@ -227,17 +227,14 @@ func (h UserHandler) CreateUser(rw http.ResponseWriter, req *http.Request) {
 
 	err = services.SendInvitationMessage(ctx, h.MessengerClient, h.Models,
 		services.SendInvitationMessageOptions{
-			FirstName: newUser.FirstName,
-			Email:     newUser.Email,
-			Role:      newUser.Roles[0],
+			FirstName: u.FirstName,
+			Email:     u.Email,
+			Role:      u.Roles[0],
 			UIBaseURL: *tnt.SDPUIBaseURL,
 		})
 	if err != nil {
 		errMsg := "Cannot send invitation message"
 		h.CrashTrackerClient.LogAndReportErrors(ctx, err, errMsg)
-
-		httperror.NewHTTPError(http.StatusCreated, errMsg, err, nil).Render(rw)
-		return
 	}
 
 	log.Ctx(ctx).Infof("[CreateUserAccount] - User ID %s created user with account ID %s", authenticatedUserID, u.ID)

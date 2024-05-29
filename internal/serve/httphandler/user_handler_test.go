@@ -10,12 +10,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
-
 	"github.com/go-chi/chi/v5"
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/htmltemplate"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
@@ -733,7 +732,12 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 
 		wantsBody := `
 			{
-				"error": "Cannot send invitation message"
+				"id": "user-id",
+				"first_name": "First",
+				"last_name": "Last",
+				"email": "email@email.com",
+				"is_active": false,
+				"roles": ["developer"]
 			}
 		`
 
@@ -741,7 +745,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 		assert.JSONEq(t, wantsBody, string(respBody))
 	})
 
-	t.Run("returns error when joining the forgot password link", func(t *testing.T) {
+	t.Run("logs and reports error when joining the forgot password link", func(t *testing.T) {
 		tntInvalidUIBaseURL := tenant.Tenant{
 			SDPUIBaseURL: &[]string{"%invalid%"}[0],
 		}
@@ -803,7 +807,12 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 
 		wantsBody := `
 			{
-				"error": "Cannot send invitation message"
+				"id": "user-id",
+				"first_name": "First",
+				"last_name": "Last",
+				"email": "email@email.com",
+				"is_active": false,
+				"roles": ["developer"]
 			}
 		`
 
