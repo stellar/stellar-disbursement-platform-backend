@@ -9,6 +9,7 @@ import (
 	"github.com/stellar/go/support/http/httpdecode"
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/support/render/httpjson"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
@@ -20,9 +21,10 @@ import (
 )
 
 type UserHandler struct {
-	AuthManager     auth.AuthManager
-	MessengerClient message.MessengerClient
-	Models          *data.Models
+	AuthManager        auth.AuthManager
+	CrashTrackerClient crashtracker.CrashTrackerClient
+	MessengerClient    message.MessengerClient
+	Models             *data.Models
 }
 
 type UserActivationRequest struct {
@@ -231,7 +233,10 @@ func (h UserHandler) CreateUser(rw http.ResponseWriter, req *http.Request) {
 			UIBaseURL: *tnt.SDPUIBaseURL,
 		})
 	if err != nil {
-		httperror.InternalError(ctx, "Cannot send invitation message", err, nil).Render(rw)
+		errMsg := "Cannot send invitation message"
+		h.CrashTrackerClient.LogAndReportErrors(ctx, err, errMsg)
+
+		httperror.NewHTTPError(http.StatusCreated, errMsg, err, nil).Render(rw)
 		return
 	}
 

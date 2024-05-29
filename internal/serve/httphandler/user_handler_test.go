@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
+
 	"github.com/go-chi/chi/v5"
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
@@ -398,10 +400,15 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 	authManagerMock := &auth.AuthManagerMock{}
 
 	messengerClientMock := &message.MessengerClientMock{}
+	defer messengerClientMock.AssertExpectations(t)
+	crashTrackerMock := &crashtracker.MockCrashTrackerClient{}
+	defer crashTrackerMock.AssertExpectations(t)
+
 	handler := &UserHandler{
-		AuthManager:     authManagerMock,
-		MessengerClient: messengerClientMock,
-		Models:          models,
+		AuthManager:        authManagerMock,
+		CrashTrackerClient: crashTrackerMock,
+		MessengerClient:    messengerClientMock,
+		Models:             models,
 	}
 
 	uiBaseURL := "https://sdp.org"
@@ -700,6 +707,10 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 			Return(errors.New("unexpected error")).
 			Once()
 
+		crashTrackerMock.
+			On("LogAndReportErrors", mock.Anything, mock.Anything, "Cannot send invitation message").
+			Once()
+
 		body := `
 			{
 				"first_name": "First",
@@ -726,7 +737,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 			}
 		`
 
-		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+		assert.Equal(t, http.StatusCreated, resp.StatusCode)
 		assert.JSONEq(t, wantsBody, string(respBody))
 	})
 
@@ -761,6 +772,10 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 			Return(expectedUser, nil).
 			Once()
 
+		crashTrackerMock.
+			On("LogAndReportErrors", mock.Anything, mock.Anything, "Cannot send invitation message").
+			Once()
+
 		body := `
 			{
 				"first_name": "First",
@@ -775,9 +790,10 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 		w := httptest.NewRecorder()
 
 		http.HandlerFunc(UserHandler{
-			AuthManager:     authManagerMock,
-			MessengerClient: messengerClientMock,
-			Models:          models,
+			AuthManager:        authManagerMock,
+			CrashTrackerClient: crashTrackerMock,
+			MessengerClient:    messengerClientMock,
+			Models:             models,
 		}.CreateUser).ServeHTTP(w, req)
 
 		resp := w.Result()
@@ -791,7 +807,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 			}
 		`
 
-		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+		assert.Equal(t, http.StatusCreated, resp.StatusCode)
 		assert.JSONEq(t, wantsBody, string(respBody))
 	})
 

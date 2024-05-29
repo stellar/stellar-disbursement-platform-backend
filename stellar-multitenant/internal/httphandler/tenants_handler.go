@@ -1,6 +1,7 @@
 package httphandler
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -13,8 +14,11 @@ import (
 	"github.com/stellar/go/support/render/httpjson"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
+	coreSvc "github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/internal/provisioning"
@@ -27,10 +31,12 @@ type TenantsHandler struct {
 	Manager                     tenant.ManagerInterface
 	Models                      *data.Models
 	HorizonClient               horizonclient.ClientInterface
+	MessengerClient             message.MessengerClient
 	DistributionAccountResolver signing.DistributionAccountResolver
 	ProvisioningManager         *provisioning.Manager
 	NetworkType                 utils.NetworkType
 	AdminDBConnectionPool       db.DBConnectionPool
+	CrashTrackerClient          crashtracker.CrashTrackerClient
 	SingleTenantMode            bool
 	BaseURL                     string
 	SDPUIBaseURL                string
@@ -134,7 +140,39 @@ func (h TenantsHandler) Post(rw http.ResponseWriter, req *http.Request) {
 	}
 
 	log.Ctx(ctx).Infof("Tenant %s created successfully.", tnt.Name)
+
+	if err = h.sendInvitationMessage(ctx, tnt, h.MessengerClient, coreSvc.SendInvitationMessageOptions{
+		FirstName: reqBody.OwnerFirstName,
+		Email:     reqBody.OwnerEmail,
+		Role:      data.OwnerUserRole.String(),
+		UIBaseURL: tntSDPUIBaseURL,
+	}); err != nil {
+		errMsg := "Cannot send invitation message"
+		h.CrashTrackerClient.LogAndReportErrors(ctx, err, errMsg)
+	}
+
 	httpjson.RenderStatus(rw, http.StatusCreated, tnt, httpjson.JSON)
+}
+
+func (h TenantsHandler) sendInvitationMessage(
+	ctx context.Context, tnt *tenant.Tenant, messengerClient message.MessengerClient, opts coreSvc.SendInvitationMessageOptions,
+) error {
+	tenantSchemaDSN, err := h.Manager.GetDSNForTenant(ctx, tnt.Name)
+	if err != nil {
+		return fmt.Errorf("getting database DSN for tenant %s", tnt.Name)
+	}
+
+	tenantSchemaConnectionPool, models, err := provisioning.GetTenantSchemaDBConnectionAndModels(tenantSchemaDSN)
+	if err != nil {
+		return fmt.Errorf("opening database connection on tenant schema and getting model: %w", err)
+	}
+	defer tenantSchemaConnectionPool.Close()
+
+	if err = coreSvc.SendInvitationMessage(ctx, messengerClient, models, opts); err != nil {
+		return fmt.Errorf("creating and sending invitation message: %w", err)
+	}
+
+	return nil
 }
 
 func (t TenantsHandler) Patch(w http.ResponseWriter, r *http.Request) {

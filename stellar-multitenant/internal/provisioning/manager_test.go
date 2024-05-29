@@ -20,7 +20,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/migrations"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/router"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	preconditionsMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions/mocks"
@@ -38,7 +37,6 @@ func Test_NewManager(t *testing.T) {
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
 
-	mMessengerClient := &message.MessengerClientMock{}
 	mTenantMenager := &tenant.TenantManagerMock{}
 
 	mHorizonClient := &horizonclient.MockClient{}
@@ -62,17 +60,9 @@ func Test_NewManager(t *testing.T) {
 			wantErrContains: "database connection pool cannot be nil",
 		},
 		{
-			name: "MessengerClient cannot be nil",
-			opts: ManagerOptions{
-				DBConnectionPool: dbConnectionPool,
-			},
-			wantErrContains: "messenger client cannot be nil",
-		},
-		{
 			name: "TenantManager cannot be nil",
 			opts: ManagerOptions{
 				DBConnectionPool: dbConnectionPool,
-				MessengerClient:  mMessengerClient,
 			},
 			wantErrContains: "tenant manager cannot be nil",
 		},
@@ -80,7 +70,6 @@ func Test_NewManager(t *testing.T) {
 			name: "validating SubmitterEngine",
 			opts: ManagerOptions{
 				DBConnectionPool: dbConnectionPool,
-				MessengerClient:  mMessengerClient,
 				TenantManager:    mTenantMenager,
 				SubmitterEngine:  engine.SubmitterEngine{},
 			},
@@ -90,7 +79,6 @@ func Test_NewManager(t *testing.T) {
 			name: "fails if XLM < MINIMUM",
 			opts: ManagerOptions{
 				DBConnectionPool:           dbConnectionPool,
-				MessengerClient:            mMessengerClient,
 				TenantManager:              mTenantMenager,
 				SubmitterEngine:            submitterEngine,
 				NativeAssetBootstrapAmount: tenant.MinTenantDistributionAccountAmount - 1,
@@ -101,7 +89,6 @@ func Test_NewManager(t *testing.T) {
 			name: "fails if XLM > MAXIMUM",
 			opts: ManagerOptions{
 				DBConnectionPool:           dbConnectionPool,
-				MessengerClient:            mMessengerClient,
 				TenantManager:              mTenantMenager,
 				SubmitterEngine:            submitterEngine,
 				NativeAssetBootstrapAmount: tenant.MaxTenantDistributionAccountAmount + 1,
@@ -112,14 +99,12 @@ func Test_NewManager(t *testing.T) {
 			name: "🎉 successfully creates a new manager",
 			opts: ManagerOptions{
 				DBConnectionPool:           dbConnectionPool,
-				MessengerClient:            mMessengerClient,
 				TenantManager:              mTenantMenager,
 				SubmitterEngine:            submitterEngine,
 				NativeAssetBootstrapAmount: tenant.MinTenantDistributionAccountAmount,
 			},
 			wantResult: &Manager{
 				db:                         dbConnectionPool,
-				messengerClient:            mMessengerClient,
 				tenantManager:              mTenantMenager,
 				SubmitterEngine:            submitterEngine,
 				nativeAssetBootstrapAmount: tenant.MinTenantDistributionAccountAmount,
@@ -278,14 +263,9 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 			}
 
 			// STEP 4: create provisioning Manager
-			messengerClientMock := message.MessengerClientMock{}
-			messengerClientMock.
-				On("SendMessage", mock.AnythingOfType("message.Message")).
-				Return(nil)
 			p, err := NewManager(ManagerOptions{
 				DBConnectionPool:           dbConnectionPool,
 				TenantManager:              tenantManager,
-				MessengerClient:            &messengerClientMock,
 				SubmitterEngine:            submitterEngine,
 				NativeAssetBootstrapAmount: tenant.MinTenantDistributionAccountAmount,
 			})
@@ -308,7 +288,6 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 			}
 
 			// STEP 7: assert the mocks
-			messengerClientMock.AssertExpectations(t)
 			mHorizonClient.AssertExpectations(t)
 
 			// STEP 8: assert the fixtures
@@ -402,7 +381,6 @@ func Test_Manager_RunMigrationsForTenant(t *testing.T) {
 	p, err := NewManager(ManagerOptions{
 		DBConnectionPool:           dbConnectionPool,
 		TenantManager:              &tenant.TenantManagerMock{},
-		MessengerClient:            &message.MessengerClientMock{},
 		SubmitterEngine:            submitterEngine,
 		NativeAssetBootstrapAmount: tenant.MinTenantDistributionAccountAmount,
 	})
@@ -666,14 +644,6 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 			defer tenant.DeleteAllTenantsFixture(t, ctx, dbConnectionPool)
 
 			// Create Mocks:
-			messengerClientMock := message.MessengerClientMock{}
-			if tc.expectedErr == nil {
-				messengerClientMock.
-					On("SendMessage", mock.AnythingOfType("message.Message")).
-					Return(nil).
-					Once()
-			}
-
 			mHorizonClient := &horizonclient.MockClient{}
 			mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
 			sigService, _, distAccSigClient, hostAccSigClient, distAccResolver := signing.NewMockSignatureService(t)
@@ -685,7 +655,6 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 			provisioningManager, err := NewManager(ManagerOptions{
 				DBConnectionPool: dbConnectionPool,
 				TenantManager:    tenantManagerMock,
-				MessengerClient:  &messengerClientMock,
 				SubmitterEngine: engine.SubmitterEngine{
 					HorizonClient:       mHorizonClient,
 					SignatureService:    sigService,
@@ -708,7 +677,6 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 
 			mHorizonClient.AssertExpectations(t)
 			tenantManagerMock.AssertExpectations(t)
-			messengerClientMock.AssertExpectations(t)
 		})
 	}
 }

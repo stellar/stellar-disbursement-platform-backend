@@ -69,7 +69,6 @@ func Test_SendInvitationMessage(t *testing.T) {
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
 
-	messengerClientMock := message.MessengerClientMock{}
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
@@ -78,7 +77,8 @@ func Test_SendInvitationMessage(t *testing.T) {
 	email := "email@email.com"
 	roles := []string{"owner"}
 	uiBaseURL := "http://localhost:3000"
-	defaultMockMessengerClientFn := func(sendMsgErr error) {
+
+	defaultMockMessengerClientFn := func(t *testing.T, msgClientMock *message.MessengerClientMock, sendMsgErr error) {
 		forgotPasswordLink, err := url.JoinPath(uiBaseURL, "forgot-password")
 		require.NoError(t, err)
 
@@ -90,7 +90,7 @@ func Test_SendInvitationMessage(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		messengerClientMock.
+		msgClientMock.
 			On("SendMessage", message.Message{
 				ToEmail: email,
 				Title:   invitationMessageTitle,
@@ -101,10 +101,11 @@ func Test_SendInvitationMessage(t *testing.T) {
 	}
 
 	testCases := []struct {
-		name                  string
-		options               SendInvitationMessageOptions
-		mockMessengerClientFn func(messengerClientMock *message.MessengerClientMock)
-		errStr                string
+		name                      string
+		options                   SendInvitationMessageOptions
+		callMockMessengerClientFn bool
+		mockMessengerClientErr    error
+		errStr                    string
 	}{
 		{
 			name: "returns error when options are not valid",
@@ -124,10 +125,9 @@ func Test_SendInvitationMessage(t *testing.T) {
 				Role:      roles[0],
 				UIBaseURL: uiBaseURL,
 			},
-			mockMessengerClientFn: func(messengerClientMock *message.MessengerClientMock) {
-				defaultMockMessengerClientFn(errors.New("foobar"))
-			},
-			errStr: "sending invitation message via messenger client: foobar",
+			callMockMessengerClientFn: true,
+			mockMessengerClientErr:    errors.New("foobar"),
+			errStr:                    "sending invitation message via messenger client: foobar",
 		},
 		{
 			name: "sends invitation message successfully",
@@ -137,16 +137,16 @@ func Test_SendInvitationMessage(t *testing.T) {
 				Role:      roles[0],
 				UIBaseURL: uiBaseURL,
 			},
-			mockMessengerClientFn: func(messengerClientMock *message.MessengerClientMock) {
-				defaultMockMessengerClientFn(nil)
-			},
+			callMockMessengerClientFn: true,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			if tc.mockMessengerClientFn != nil {
-				tc.mockMessengerClientFn(&messengerClientMock)
+			messengerClientMock := message.MessengerClientMock{}
+
+			if tc.callMockMessengerClientFn {
+				defaultMockMessengerClientFn(t, &messengerClientMock, tc.mockMessengerClientErr)
 			}
 
 			err := SendInvitationMessage(ctx, &messengerClientMock, models, tc.options)
@@ -155,6 +155,8 @@ func Test_SendInvitationMessage(t *testing.T) {
 			} else {
 				assert.NoError(t, err)
 			}
+
+			messengerClientMock.AssertExpectations(t)
 		})
 	}
 }
