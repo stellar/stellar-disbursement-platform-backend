@@ -166,6 +166,10 @@ func (p PaymentsHandler) RetryPayments(rw http.ResponseWriter, req *http.Request
 }
 
 func (p PaymentsHandler) producePaymentsReadyEvents(ctx context.Context, payments []*data.Payment) error {
+	if len(payments) == 0 {
+		log.Ctx(ctx).Info("No payments to produce ready to pay event")
+		return nil
+	}
 	msg, msgErr := events.NewMessage(ctx, events.PaymentReadyToPayTopic, "", events.PaymentReadyToPayRetryFailedPayment, nil)
 	if msgErr != nil {
 		return fmt.Errorf("creating a new message: %w", msgErr)
@@ -176,6 +180,7 @@ func (p PaymentsHandler) producePaymentsReadyEvents(ctx context.Context, payment
 		paymentsReadyToPay.Payments = append(paymentsReadyToPay.Payments, schemas.PaymentReadyToPay{ID: payment.ID})
 	}
 	msg.Data = paymentsReadyToPay
+	msg.Key = paymentsReadyToPay.TenantID
 
 	if p.EventProducer != nil {
 		err := p.EventProducer.WriteMessages(ctx, *msg)

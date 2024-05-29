@@ -54,3 +54,19 @@ func (c *MockProducer) Close() error {
 	args := c.Called()
 	return args.Error(0)
 }
+
+type testInterface interface {
+	mock.TestingT
+	Cleanup(func())
+}
+
+// NewMockProducer creates a new instance of MockProducer. It also registers a testing interface on the mock and a
+// cleanup function to assert the mocks expectations.
+func NewMockProducer(t testInterface) *MockProducer {
+	mock := &MockProducer{}
+	mock.Mock.Test(t)
+
+	t.Cleanup(func() { mock.AssertExpectations(t) })
+
+	return mock
+}

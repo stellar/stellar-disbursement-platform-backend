@@ -45,7 +45,7 @@ type TransactionWorker struct {
 	chAccModel          store.ChannelAccountStore
 	engine              *engine.SubmitterEngine
 	crashTrackerClient  crashtracker.CrashTrackerClient
-	txProcessingLimiter *engine.TransactionProcessingLimiter
+	txProcessingLimiter engine.TransactionProcessingLimiter
 	monitorSvc          tssMonitor.TSSMonitorService
 	eventProducer       events.Producer
 	jobUUID             string
@@ -57,7 +57,7 @@ func NewTransactionWorker(
 	chAccModel *store.ChannelAccountModel,
 	engine *engine.SubmitterEngine,
 	crashTrackerClient crashtracker.CrashTrackerClient,
-	txProcessingLimiter *engine.TransactionProcessingLimiter,
+	txProcessingLimiter engine.TransactionProcessingLimiter,
 	monitorSvc tssMonitor.TSSMonitorService,
 	eventProducer events.Producer,
 ) (TransactionWorker, error) {
@@ -162,53 +162,55 @@ func (tw *TransactionWorker) runJob(ctx context.Context, txJob *TxJob) error {
 	}
 }
 
-// TODO: add tests
 // handleFailedTransaction will wrap up the job when the transaction was submitted to the network but failed.
-// This method will only return an error if something goes wrong when handling the result and marking the transaction as ERROR.
-func (tw *TransactionWorker) handleFailedTransaction(ctx context.Context, txJob *TxJob, hTxResp horizon.Transaction, hErr error) error {
+// This method will only return an error if something goes wrong when handling the result and marking the transaction as
+// ERROR.
+//
+// Errors that triger the pause/jitter mechanism at TransactionProcessingLimiter:
+//   - 504: Timeout
+//   - 429: Too Many Requests
+//   - 400 - tx_insufficient_fee: Bad Request
+//
+// Errors marked as definitive error, that won't be resolved with retries:
+//   - 400: with any of the transaction error codes [tx_bad_auth, tx_bad_auth_extra, tx_insufficient_balance]
+//   - 400: with any of the operation error codes [op_bad_auth, op_underfunded, op_src_not_authorized, op_no_destination, op_no_trust, op_line_full, op_not_authorized, op_no_issuer]
+//
+// Errors that are marked for retry without pause/jitter but are reported to CrashTracker:
+//   - 400 - tx_bad_seq: Bad Request
+//
+// Errors that are marked for retry without pause/jitter and are not reported to CrashTracker:
+//   - 400 - tx_too_late: Bad Request
+//   - xxx - Any unexpected error.
+func (tw *TransactionWorker) handleFailedTransaction(ctx context.Context, txJob *TxJob, hTxResp horizon.Transaction, hErr *utils.HorizonErrorWrapper) error {
 	log.Ctx(ctx).Errorf("🔴 Error processing job: %v", hErr)
+
+	metricsMetadata := tssMonitor.TxMetadata{
+		EventID:          tw.jobUUID,
+		SrcChannelAcc:    txJob.ChannelAccount.PublicKey,
+		PaymentEventType: sdpMonitor.PaymentMarkedForReprocessingLabel,
+	}
+	defer func() {
+		tw.monitorSvc.LogAndMonitorTransaction(
+			ctx,
+			txJob.Transaction,
+			sdpMonitor.PaymentErrorTag,
+			metricsMetadata,
+		)
+	}()
 
 	err := tw.saveResponseXDRIfPresent(ctx, txJob, hTxResp)
 	if err != nil {
 		return fmt.Errorf("saving response XDR: %w", err)
 	}
 
-	var shouldMarkAsError bool
-	var isHorizonErr bool
 	var hErrWrapper *utils.HorizonErrorWrapper
-	defer func() {
-		metricTag := sdpMonitor.PaymentErrorTag
-		eventType := sdpMonitor.PaymentFailedLabel
-		if !shouldMarkAsError {
-			eventType = sdpMonitor.PaymentMarkedForReprocessingLabel
-		}
-
-		tw.monitorSvc.LogAndMonitorTransaction(
-			ctx,
-			txJob.Transaction,
-			metricTag,
-			tssMonitor.TxMetadata{
-				EventID:          tw.jobUUID,
-				SrcChannelAcc:    txJob.ChannelAccount.PublicKey,
-				IsHorizonErr:     isHorizonErr,
-				PaymentEventType: eventType,
-			},
-		)
-	}()
-
 	if errors.As(hErr, &hErrWrapper) {
-		tw.txProcessingLimiter.AdjustLimitIfNeeded(hErrWrapper)
-
 		if hErrWrapper.IsHorizonError() {
-			isHorizonErr = true
+			metricsMetadata.IsHorizonErr = true
+			tw.txProcessingLimiter.AdjustLimitIfNeeded(hErrWrapper)
 
-			// Errors that are not marked as definitive errors:
-			//   - 504: Timeout
-			//   - 429: Too Many Requests
-			//   - 400: with any of the codes: [tx_insufficient_fee, tx_too_late, tx_bad_seq]
-			//   - 5xx
-			//   - random network errors
 			if hErrWrapper.ShouldMarkAsError() {
+				metricsMetadata.PaymentEventType = sdpMonitor.PaymentFailedLabel
 				var updatedTx *store.Transaction
 				updatedTx, err = tw.txModel.UpdateStatusToError(ctx, txJob.Transaction, hErrWrapper.Error())
 				if err != nil {
@@ -226,47 +228,11 @@ func (tw *TransactionWorker) handleFailedTransaction(ctx context.Context, txJob 
 				if !hErrWrapper.IsDestinationAccountNotReady() {
 					tw.crashTrackerClient.LogAndReportErrors(ctx, hErrWrapper, "transaction error - cannot be retried")
 				}
+			} else if hErrWrapper.IsBadSequence() {
+				tw.crashTrackerClient.LogAndReportErrors(ctx, hErrWrapper, "tx_bad_seq detected!")
 			}
 		}
 	}
-
-	// TODO: op_bad_auth, tx_bad_auth, tx_bad_auth_extra are big problems that need to be reported accordingly
-	// TODO: tx_bad_seq is a big problem that needs to be reported accordingly
-
-	// {Old TSS approach} -> {new approach}:
-	// - `504`: {retry in memory} -> {marked for retry} (pause/jitter could come later)
-	// - `429`: {paused and marked for retry} -> {marked for retry} (pause/jitter could come later)
-	// - `400 - tx_insufficient_fee` {marked for retry with exponential jitter until max_retry is reached} -> {marked for retry forever} (pause/jitter could come later)
-	// - `400 - tx_bad_seq` {marked as failed} -> {marked for retry and reported to crash tracker and observer}
-	// - `400 - tx_too_late` (bounds expired) {marked as failed} -> {marked for retry and reported to crash tracker and observer}
-	// - `400 - ???`: {marked as failed} -> {marked for retry and reported to crash tracker and observer}
-	// - unsupported error: {marked as failed} -> {marked for retry and reported to crash tracker and observer}
-
-	// Some ideas for error handling (ref: https://developers.stellar.org/api/horizon/errors/result-codes/):
-	// BadAuthentication():
-	// op_bad_auth (in result_codes.operations)
-	// tx_bad_auth (in result_codes.(inner_)transaction)
-	// tx_bad_auth_extra (in result_codes.(inner_)transaction)
-	//
-	// NotEnoughLumens():
-	// op_underfunded (in result_codes.operations)
-	// tx_insufficient_balance  (in result_codes.(inner_)transaction)
-	//
-	// SendingAccountIsBlocked()
-	//  op_src_not_authorized (in result_codes.operations)
-	//
-	// DestinationAccountNotFound():
-	// op_no_destination (in result_codes.operations)
-	//
-	// DesinationIsMissingTrustlineOrLimit():
-	// op_no_trust (in result_codes.operations)
-	// op_line_full (in result_codes.operations)
-	//
-	// DestinationAccountIsBlocked():
-	// op_not_authorized (in result_codes.operations)
-	//
-	// NonExistentAsset():
-	// op_no_issuer (in result_codes.operations)
 
 	err = tw.unlockJob(ctx, txJob)
 	if err != nil {
