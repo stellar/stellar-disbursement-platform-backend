@@ -128,24 +128,24 @@ func (m *Manager) handleProvisioningError(ctx context.Context, err error, t *ten
 	return provisioningErr
 }
 
-func (m *Manager) provisionTenant(ctx context.Context, pt *ProvisionTenant) (t *tenant.Tenant, err error) {
-	t, err = m.tenantManager.AddTenant(ctx, pt.name)
-	if err != nil {
-		return t, fmt.Errorf("%w: adding tenant %s: %w", ErrTenantCreationFailed, pt.name, err)
+func (m *Manager) provisionTenant(ctx context.Context, pt *ProvisionTenant) (*tenant.Tenant, error) {
+	t, addTntErr := m.tenantManager.AddTenant(ctx, pt.name)
+	if addTntErr != nil {
+		return t, fmt.Errorf("%w: adding tenant %s: %w", ErrTenantCreationFailed, pt.name, addTntErr)
 	}
 
-	tenantSchemaDSN, err := m.createSchemaAndRunMigrations(ctx, pt.name)
-	if err != nil {
-		return t, fmt.Errorf("%w: %w", ErrTenantSchemaFailed, err)
+	tenantSchemaDSN, tenantSchemaFailedErr := m.createSchemaAndRunMigrations(ctx, pt.name)
+	if tenantSchemaFailedErr != nil {
+		return t, fmt.Errorf("%w: %w", ErrTenantSchemaFailed, tenantSchemaFailedErr)
 	}
 
-	err = m.setupTenantData(ctx, tenantSchemaDSN, pt)
-	if err != nil {
-		return t, fmt.Errorf("%w: %w", ErrTenantDataSetupFailed, err)
+	tenantDataSetupErr := m.setupTenantData(ctx, tenantSchemaDSN, pt)
+	if tenantDataSetupErr != nil {
+		return t, fmt.Errorf("%w: %w", ErrTenantDataSetupFailed, tenantDataSetupErr)
 	}
 
 	// Provision distribution account for tenant if necessary
-	if err = m.provisionDistributionAccount(ctx, t); err != nil {
+	if err := m.provisionDistributionAccount(ctx, t); err != nil {
 		return t, fmt.Errorf("provisioning distribution account: %w", err)
 	}
 

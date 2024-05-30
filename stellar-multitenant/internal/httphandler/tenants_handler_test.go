@@ -287,7 +287,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 		SDPUIBaseURL:        "https://sdp-ui.stellar.org",
 	}
 
-	createDistAccMocks := func() {
+	createMocks := func(t *testing.T, msgClientErr error) {
 		distAccSigClient.
 			On("BatchInsert", ctx, 1).
 			Return([]string{distAcc}, nil).
@@ -300,9 +300,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 			On("HostDistributionAccount").
 			Return(distAcc, nil).
 			Once()
-	}
 
-	createSendMsgMocks := func(t *testing.T, msgClientErr error) {
 		messengerClientMock.
 			On("SendMessage", mock.AnythingOfType("message.Message")).
 			Run(func(args mock.Arguments) {
@@ -393,8 +391,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 	})
 
 	t.Run("provisions a new tenant successfully", func(t *testing.T) {
-		createDistAccMocks()
-		createSendMsgMocks(t, nil)
+		createMocks(t, nil)
 
 		orgName := "aid-org"
 		reqBody := fmt.Sprintf(`
@@ -438,8 +435,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 	})
 
 	t.Run("provisions a new tenant successfully - dynamically generates base URL and SDP UI base URL for tenant", func(t *testing.T) {
-		createDistAccMocks()
-		createSendMsgMocks(t, nil)
+		createMocks(t, nil)
 
 		orgName := "aid-org-two"
 		reqBody := fmt.Sprintf(`
@@ -483,8 +479,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 	})
 
 	t.Run("provisions a new tenant successfully - dynamically generates only SDP UI base URL", func(t *testing.T) {
-		createDistAccMocks()
-		createSendMsgMocks(t, nil)
+		createMocks(t, nil)
 
 		orgName := "aid-org-three"
 		reqBody := fmt.Sprintf(`
@@ -528,8 +523,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 	})
 
 	t.Run("provisions a new tenant successfully - dynamically generates only backend base URL", func(t *testing.T) {
-		createDistAccMocks()
-		createSendMsgMocks(t, nil)
+		createMocks(t, nil)
 
 		orgName := "aid-org-four"
 		reqBody := fmt.Sprintf(`
@@ -573,8 +567,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 	})
 
 	t.Run("returns badRequest for duplicate tenant name", func(t *testing.T) {
-		createDistAccMocks()
-		createSendMsgMocks(t, nil)
+		createMocks(t, nil)
 
 		reqBody := `
 			{
@@ -596,8 +589,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 	})
 
 	t.Run("logs and reports error when failing to send invitation message", func(t *testing.T) {
-		createDistAccMocks()
-		createSendMsgMocks(t, errors.New("foobar"))
+		createMocks(t, errors.New("foobar"))
 
 		orgName := "aid-org-five"
 		reqBody := fmt.Sprintf(`

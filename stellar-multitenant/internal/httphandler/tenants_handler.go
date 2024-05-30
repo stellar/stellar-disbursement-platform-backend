@@ -123,7 +123,7 @@ func (h TenantsHandler) Post(rw http.ResponseWriter, req *http.Request) {
 	if reqBody.BaseURL != nil {
 		tntBaseURL = *reqBody.BaseURL
 	} else {
-		tntBaseURL, err = utils.GenerateTenantURL(h.BaseURL, reqBody.Name)
+		tntBaseURL, err = utils.GenerateTenantURL(h.BaseURL, tnt.Name)
 		if err != nil {
 			httperror.InternalError(ctx, "Could not generate URL", err, nil).Render(rw)
 			return
@@ -141,7 +141,7 @@ func (h TenantsHandler) Post(rw http.ResponseWriter, req *http.Request) {
 
 	log.Ctx(ctx).Infof("Tenant %s created successfully.", tnt.Name)
 
-	if err = h.sendInvitationMessage(ctx, tnt, h.MessengerClient, coreSvc.SendInvitationMessageOptions{
+	if err = h.sendInvitationMessage(ctx, tnt.Name, coreSvc.SendInvitationMessageOptions{
 		FirstName: reqBody.OwnerFirstName,
 		Email:     reqBody.OwnerEmail,
 		Role:      data.OwnerUserRole.String(),
@@ -154,11 +154,11 @@ func (h TenantsHandler) Post(rw http.ResponseWriter, req *http.Request) {
 }
 
 func (h TenantsHandler) sendInvitationMessage(
-	ctx context.Context, tnt *tenant.Tenant, messengerClient message.MessengerClient, opts coreSvc.SendInvitationMessageOptions,
+	ctx context.Context, tntName string, opts coreSvc.SendInvitationMessageOptions,
 ) error {
-	tenantSchemaDSN, err := h.Manager.GetDSNForTenant(ctx, tnt.Name)
+	tenantSchemaDSN, err := h.Manager.GetDSNForTenant(ctx, tntName)
 	if err != nil {
-		return fmt.Errorf("getting database DSN for tenant %s", tnt.Name)
+		return fmt.Errorf("getting database DSN for tenant %s", tntName)
 	}
 
 	tenantSchemaConnectionPool, models, err := provisioning.GetTenantSchemaDBConnectionAndModels(tenantSchemaDSN)
@@ -167,7 +167,7 @@ func (h TenantsHandler) sendInvitationMessage(
 	}
 	defer tenantSchemaConnectionPool.Close()
 
-	if err = coreSvc.SendInvitationMessage(ctx, messengerClient, models, opts); err != nil {
+	if err = coreSvc.SendInvitationMessage(ctx, h.MessengerClient, models, opts); err != nil {
 		return fmt.Errorf("creating and sending invitation message: %w", err)
 	}
 
