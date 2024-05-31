@@ -532,6 +532,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 				log.Ctx(ctx).Fatalf("error creating crash tracker client: %s", err.Error())
 			}
 			serveOpts.CrashTrackerClient = crashTrackerClient
+			adminServeOpts.CrashTrackerClient = crashTrackerClient
 
 			// Setup the Email client
 			emailMessengerClient, err := di.NewEmailClient(emailOpts)

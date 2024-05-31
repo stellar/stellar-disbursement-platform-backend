@@ -11,6 +11,7 @@ import (
 	"github.com/stellar/go/support/log"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
@@ -33,6 +34,7 @@ func (h *HTTPServer) Run(conf supporthttp.Config) {
 
 type ServeOptions struct {
 	AdminDBConnectionPool                   db.DBConnectionPool
+	CrashTrackerClient                      crashtracker.CrashTrackerClient
 	EmailMessengerClient                    message.MessengerClient
 	Environment                             string
 	GitCommit                               string
@@ -60,7 +62,6 @@ func (opts *ServeOptions) SetupDependencies() error {
 	opts.tenantProvisioningManager, err = provisioning.NewManager(provisioning.ManagerOptions{
 		DBConnectionPool:           opts.AdminDBConnectionPool,
 		TenantManager:              opts.tenantManager,
-		MessengerClient:            opts.EmailMessengerClient,
 		SubmitterEngine:            opts.SubmitterEngine,
 		NativeAssetBootstrapAmount: opts.TenantAccountNativeAssetBootstrapAmount,
 	})
@@ -141,6 +142,8 @@ func handleHTTP(opts *ServeOptions) *chi.Mux {
 				Models:                      opts.Models,
 				HorizonClient:               opts.SubmitterEngine.HorizonClient,
 				DistributionAccountResolver: opts.SubmitterEngine.DistributionAccountResolver,
+				MessengerClient:             opts.EmailMessengerClient,
+				CrashTrackerClient:          opts.CrashTrackerClient,
 				BaseURL:                     opts.BaseURL,
 				SDPUIBaseURL:                opts.SDPUIBaseURL,
 			}
