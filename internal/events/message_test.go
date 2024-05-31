@@ -1,6 +1,7 @@
 package events
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -51,14 +52,16 @@ func Test_Message_RecordError(t *testing.T) {
 
 	t.Run("record error", func(t *testing.T) {
 		m := Message{}
-		m.RecordError("test-error")
+		m.RecordError("test-handler", errors.New("test-error"))
 		assert.Len(t, m.Errors, 1)
 		assert.Equal(t, "test-error", m.Errors[0].ErrorMessage)
+		assert.Equal(t, "test-handler", m.Errors[0].HandlerName)
 		assert.NotZero(t, m.Errors[0].FailedAt)
 
-		m.RecordError("test-error-2")
+		m.RecordError("test-handler-2", errors.New("test-error-2"))
 		assert.Len(t, m.Errors, 2)
 		assert.Equal(t, "test-error-2", m.Errors[1].ErrorMessage)
 		assert.NotZero(t, m.Errors[1].FailedAt)
+		assert.Equal(t, "test-handler-2", m.Errors[1].HandlerName)
 	})
 }

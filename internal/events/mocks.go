@@ -3,9 +3,12 @@ package events
 import (
 	"context"
 
+	"github.com/stellar/go/support/log"
+
 	"github.com/stretchr/testify/mock"
 )
 
+// MockConsumer is a mock implementation of Consumer
 type MockConsumer struct {
 	mock.Mock
 }
@@ -39,6 +42,7 @@ func (c *MockConsumer) Handlers() []EventHandler {
 	return args.Get(0).([]EventHandler)
 }
 
+// MockProducer is a mock implementation of Producer
 type MockProducer struct {
 	mock.Mock
 }
@@ -69,4 +73,25 @@ func NewMockProducer(t testInterface) *MockProducer {
 	t.Cleanup(func() { mock.AssertExpectations(t) })
 
 	return mock
+}
+
+// MockEventHandler is a mock implementation of EventHandler
+type MockEventHandler struct {
+	mock.Mock
+}
+
+func (h *MockEventHandler) Handle(ctx context.Context, msg *Message) error {
+	log.Ctx(ctx).Infof("Handling message with key %s by handler %s", msg.Key, h.Name())
+	args := h.Called(ctx, msg)
+	return args.Error(0)
+}
+
+func (h *MockEventHandler) CanHandleMessage(ctx context.Context, msg *Message) bool {
+	args := h.Called(ctx, msg)
+	return args.Bool(0)
+}
+
+func (h *MockEventHandler) Name() string {
+	args := h.Called()
+	return args.String(0)
 }

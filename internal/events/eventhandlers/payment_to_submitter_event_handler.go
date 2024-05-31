@@ -45,7 +45,7 @@ func NewPaymentToSubmitterEventHandler(options PaymentToSubmitterEventHandlerOpt
 }
 
 func (h *PaymentToSubmitterEventHandler) Name() string {
-	return "PaymentToSubmitterEventHandler"
+	return utils.GetTypeName(h)
 }
 
 func (h *PaymentToSubmitterEventHandler) CanHandleMessage(ctx context.Context, message *events.Message) bool {

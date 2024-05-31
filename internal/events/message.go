@@ -10,13 +10,13 @@ import (
 )
 
 type Message struct {
-	Topic                string            `json:"topic"`
-	Key                  string            `json:"key"`
-	TenantID             string            `json:"tenant_id"`
-	Type                 string            `json:"type"`
-	Data                 any               `json:"data"`
-	Errors               []*HandlerError   `json:"errors,omitempty"`
-	SuccessfulExecutions []*HandlerSuccess `json:"successful_executions,omitempty"`
+	Topic                string           `json:"topic"`
+	Key                  string           `json:"key"`
+	TenantID             string           `json:"tenant_id"`
+	Type                 string           `json:"type"`
+	Data                 any              `json:"data"`
+	Errors               []HandlerError   `json:"errors,omitempty"`
+	SuccessfulExecutions []HandlerSuccess `json:"successful_executions,omitempty"`
 }
 
 type HandlerError struct {
@@ -55,7 +55,7 @@ func NewMessage(ctx context.Context, topic, key, messageType string, data any) (
 	}, nil
 }
 
-func NewHandlerErrorWrapper(hError error, handlerName string) HandlerError {
+func NewHandlerError(hError error, handlerName string) HandlerError {
 	return HandlerError{
 		FailedAt:     time.Now(),
 		ErrorMessage: hError.Error(),
@@ -92,6 +92,14 @@ func (m Message) Validate() error {
 	return nil
 }
 
-func (m *Message) RecordError(hError *HandlerError) {
+func (m *Message) RecordError(handlerName string, handleErr error) {
+	hError := NewHandlerError(handleErr, handlerName)
 	m.Errors = append(m.Errors, hError)
+}
+
+func (m *Message) RecordSuccess(handlerName string) {
+	m.SuccessfulExecutions = append(m.SuccessfulExecutions, HandlerSuccess{
+		ExecutedAt:  time.Now(),
+		HandlerName: handlerName,
+	})
 }
