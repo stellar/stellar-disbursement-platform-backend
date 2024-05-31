@@ -19,7 +19,7 @@ echo "====> ✅Step 1: finish preparation"
 # Run docker compose
 echo $DIVIDER
 echo "====> 👀Step 2: start calling docker compose up"
-docker-compose down && docker-compose -p sdp-multi-tenant up -d
+docker-compose down && docker-compose -p sdp-multi-tenant up -d --build
 echo "====> ✅Step 2: finish calling docker-compose up"
 
 # Initialize tenants

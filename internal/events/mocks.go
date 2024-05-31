@@ -80,6 +80,15 @@ type MockEventHandler struct {
 	mock.Mock
 }
 
+func NewMockEventHandler(t testInterface) *MockEventHandler {
+	mock := MockEventHandler{}
+	mock.Mock.Test(t)
+
+	t.Cleanup(func() { mock.AssertExpectations(t) })
+
+	return &mock
+}
+
 func (h *MockEventHandler) Handle(ctx context.Context, msg *Message) error {
 	log.Ctx(ctx).Infof("Handling message with key %s by handler %s", msg.Key, h.Name())
 	args := h.Called(ctx, msg)

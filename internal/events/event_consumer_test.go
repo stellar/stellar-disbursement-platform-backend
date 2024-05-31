@@ -17,7 +17,7 @@ func Test_EventConsumer_Consume(t *testing.T) {
 	// setup mocks
 	consumerMock := &MockConsumer{}
 	crashTrackerMock := &crashtracker.MockCrashTrackerClient{}
-	producerMock := &MockProducer{}
+	producerMock := NewMockProducer(t)
 
 	msg := &Message{Key: "key-1", Topic: "test.test_topic"}
 	unexpectedErr := errors.New("unexpected error")
@@ -56,8 +56,8 @@ func Test_EventConsumer_Consume_SendDLQ(t *testing.T) {
 	// setup mocks
 	consumerMock := &MockConsumer{}
 	crashTrackerMock := &crashtracker.MockCrashTrackerClient{}
-	producerMock := &MockProducer{}
-	failedEventHandlerMock := &MockEventHandler{}
+	producerMock := NewMockProducer(t)
+	failedEventHandlerMock := NewMockEventHandler(t)
 
 	handlingErr := errors.New("handling message for topic test.test_topic")
 	msg := &Message{Key: "key-1", Topic: "test.test_topic"}
@@ -95,17 +95,15 @@ func Test_EventConsumer_Consume_SendDLQ(t *testing.T) {
 
 	consumerMock.AssertExpectations(t)
 	crashTrackerMock.AssertExpectations(t)
-	producerMock.AssertExpectations(t)
-	failedEventHandlerMock.AssertExpectations(t)
 }
 
 func Test_EventConsumer_Consume_HandleFailedOnly(t *testing.T) {
 	// setup mocks
 	consumerMock := &MockConsumer{}
 	crashTrackerMock := &crashtracker.MockCrashTrackerClient{}
-	producerMock := &MockProducer{}
-	failedEventHandlerMock := &MockEventHandler{}
-	successfulEventHandlerMock := &MockEventHandler{}
+	producerMock := NewMockProducer(t)
+	failedEventHandlerMock := NewMockEventHandler(t)
+	successfulEventHandlerMock := NewMockEventHandler(t)
 
 	handlingErr := errors.New("handling message for topic test.test_topic")
 	msg := &Message{Key: "key-1", Topic: "test.test_topic"}
@@ -205,17 +203,14 @@ func Test_EventConsumer_Consume_HandleFailedOnly(t *testing.T) {
 
 	consumerMock.AssertExpectations(t)
 	crashTrackerMock.AssertExpectations(t)
-	producerMock.AssertExpectations(t)
-	successfulEventHandlerMock.AssertExpectations(t)
-	failedEventHandlerMock.AssertExpectations(t)
 }
 
 func Test_EventConsumer_Consume_FinalizeConsumer(t *testing.T) {
 	// setup mocks
 	consumerMock := &MockConsumer{}
 	crashTrackerMock := &crashtracker.MockCrashTrackerClient{}
-	producerMock := &MockProducer{}
-	failedEventHandlerMock := &MockEventHandler{}
+	producerMock := NewMockProducer(t)
+	failedEventHandlerMock := NewMockEventHandler(t)
 
 	handlingErr := errors.New("handling message for topic test.test_topic")
 	msg := &Message{Key: "key-1", Topic: "test.test_topic"}
@@ -263,6 +258,4 @@ func Test_EventConsumer_Consume_FinalizeConsumer(t *testing.T) {
 
 	consumerMock.AssertExpectations(t)
 	crashTrackerMock.AssertExpectations(t)
-	producerMock.AssertExpectations(t)
-	failedEventHandlerMock.AssertExpectations(t)
 }
