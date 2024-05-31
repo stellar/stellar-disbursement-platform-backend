@@ -136,7 +136,9 @@ func (ec *EventConsumer) handleMessage(ctx context.Context, msg *Message) bool {
 		if ShouldHandleMessage(ctx, handler, msg) {
 			handleErr := handler.Handle(ctx, msg)
 			if handleErr != nil {
-				ec.crashTracker.LogAndReportErrors(ctx, handleErr, fmt.Sprintf("handling message for topic %s", ec.consumer.Topic()))
+				ec.crashTracker.LogAndReportErrors(ctx, handleErr, fmt.Sprintf("handling message for topic %s with handler %s",
+					ec.consumer.Topic(),
+					handler.Name()))
 				msg.RecordError(handler.Name(), handleErr)
 				allHandlersSuccessful = false
 			} else {

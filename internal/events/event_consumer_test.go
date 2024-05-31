@@ -59,7 +59,7 @@ func Test_EventConsumer_Consume_SendDLQ(t *testing.T) {
 	producerMock := NewMockProducer(t)
 	failedEventHandlerMock := NewMockEventHandler(t)
 
-	handlingErr := errors.New("handling message for topic test.test_topic")
+	handlingErr := errors.New("handling message for topic test.test_topic with handler FailedEventHandler")
 	msg := &Message{Key: "key-1", Topic: "test.test_topic"}
 
 	ec := NewEventConsumer(consumerMock, producerMock, crashTrackerMock)
@@ -105,7 +105,7 @@ func Test_EventConsumer_Consume_HandleFailedOnly(t *testing.T) {
 	failedEventHandlerMock := NewMockEventHandler(t)
 	successfulEventHandlerMock := NewMockEventHandler(t)
 
-	handlingErr := errors.New("handling message for topic test.test_topic")
+	handlingErr := errors.New("handling message for topic test.test_topic with handler FailedEventHandler")
 	msg := &Message{Key: "key-1", Topic: "test.test_topic"}
 
 	ec := NewEventConsumer(consumerMock, producerMock, crashTrackerMock)
@@ -132,7 +132,7 @@ func Test_EventConsumer_Consume_HandleFailedOnly(t *testing.T) {
 		On("Name").Return("FailedEventHandler")
 
 	// In the 3 seconds runtime, we're expecting to call `Handle` once for `SuccessfulEventHandler`.
-	//  This is triggered by the original message. The backoff shouldn't trigger this handler.
+	// This is triggered by the original message. The backoff shouldn't trigger this handler.
 	successfulEventHandlerMock.
 		On("Handle", ctx, msg).Return(nil).Once().
 		On("CanHandleMessage", ctx, msg).Return(true).
@@ -140,25 +140,22 @@ func Test_EventConsumer_Consume_HandleFailedOnly(t *testing.T) {
 
 	// We expect the message to be re-broadcasted to the same topic when consumer gets interrupted by context deadline.
 	producerMock.
-		On("WriteMessages", ctx, mock.MatchedBy(func(m []Message) bool {
-			if len(m) != 1 {
-				return false
-			}
-			message := m[0]
-			// Verify that there is only 1 successful message
-			if len(message.SuccessfulExecutions) != 1 {
-				return false
-			}
+		On("WriteMessages", ctx, mock.AnythingOfType("[]events.Message")).
+		Return(nil).
+		Run(func(args mock.Arguments) {
+			messages, ok := args.Get(1).([]Message)
+			require.True(t, ok)
+			assert.Len(t, messages, 1)
 
-			// Verify that one error is recorded correctly. in 3 seconds there should be one backoff.
-			if len(message.Errors) != 1 && message.Errors[0].ErrorMessage != handlingErr.Error() {
-				return false
-			}
+			message := messages[0]
+			assert.Len(t, message.SuccessfulExecutions, 1)
+			assert.Len(t, message.Errors, 2)
+			assert.Equal(t, handlingErr.Error(), message.Errors[0].ErrorMessage)
+			assert.Equal(t, handlingErr.Error(), message.Errors[1].ErrorMessage)
 
-			// Verify that re-broadcasted message is the same as the one that failed
-			return message.Key == msg.Key && message.Topic == msg.Topic
-		})).
-		Return(nil)
+			assert.Equal(t, msg.Key, message.Key)
+			assert.Equal(t, msg.Topic, message.Topic)
+		})
 
 	getEntries := log.DefaultLogger.StartTest(log.InfoLevel)
 
@@ -212,7 +209,7 @@ func Test_EventConsumer_Consume_FinalizeConsumer(t *testing.T) {
 	producerMock := NewMockProducer(t)
 	failedEventHandlerMock := NewMockEventHandler(t)
 
-	handlingErr := errors.New("handling message for topic test.test_topic")
+	handlingErr := errors.New("handling message for topic test.test_topic with handler FailedEventHandler")
 	msg := &Message{Key: "key-1", Topic: "test.test_topic"}
 
 	ec := NewEventConsumer(consumerMock, producerMock, crashTrackerMock)
@@ -235,18 +232,20 @@ func Test_EventConsumer_Consume_FinalizeConsumer(t *testing.T) {
 		On("Name").Return("FailedEventHandler")
 
 	producerMock.
-		On("WriteMessages", mock.Anything, mock.MatchedBy(func(m []Message) bool {
-			if len(m) != 1 {
-				return false
-			}
-			message := m[0]
-			// Verify that the message being re-broadcasted is the same as the one that failed
-			if len(message.Errors) != 1 && message.Errors[0].ErrorMessage != handlingErr.Error() {
-				return false
-			}
-			return message.Key == msg.Key && message.Topic == msg.Topic
-		})).
-		Return(nil)
+		On("WriteMessages", ctx, mock.AnythingOfType("[]events.Message")).
+		Return(nil).
+		Run(func(args mock.Arguments) {
+			messages, ok := args.Get(1).([]Message)
+			require.True(t, ok)
+			assert.Len(t, messages, 1)
+
+			message := messages[0]
+			assert.Len(t, message.Errors, 1)
+			assert.Equal(t, handlingErr.Error(), message.Errors[0].ErrorMessage)
+
+			assert.Equal(t, msg.Key, message.Key)
+			assert.Equal(t, msg.Topic, message.Topic)
+		})
 
 	getEntries := log.DefaultLogger.StartTest(log.WarnLevel)
 
