@@ -288,6 +288,9 @@ func SetConfigOptionEventBrokerType(co *config.ConfigOption) error {
 
 func SetConfigOptionKafkaSecurityProtocol(co *config.ConfigOption) error {
 	protocol := viper.GetString(co.Name)
+	if protocol == "" {
+		return nil
+	}
 
 	protocolParsed, err := events.ParseKafkaSecurityProtocol(protocol)
 	if err != nil {
