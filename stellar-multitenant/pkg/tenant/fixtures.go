@@ -5,56 +5,35 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/stellar/go/support/db/dbtest"
-	"github.com/stellar/stellar-disbursement-platform-backend/db/router"
-
 	"github.com/lib/pq"
 	migrate "github.com/rubenv/sql-migrate"
-	"github.com/stellar/stellar-disbursement-platform-backend/db"
-	authmigrations "github.com/stellar/stellar-disbursement-platform-backend/db/migrations/auth-migrations"
-	sdpmigrations "github.com/stellar/stellar-disbursement-platform-backend/db/migrations/sdp-migrations"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+	"github.com/stellar/go/support/db/dbtest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/db/migrations"
+	"github.com/stellar/stellar-disbursement-platform-backend/db/router"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
-func DeleteAllTenantsFixture(t *testing.T, ctx context.Context, dbConnectionPool db.DBConnectionPool) {
+func DeleteAllTenantsFixture(t *testing.T, ctx context.Context, adminDBConnectionPool db.DBConnectionPool) {
 	t.Helper()
 
 	q := "DELETE FROM tenants"
-	_, err := dbConnectionPool.ExecContext(ctx, q)
+	_, err := adminDBConnectionPool.ExecContext(ctx, q)
 	require.NoError(t, err)
 
 	var schemasToDrop []string
 	q = "SELECT schema_name FROM information_schema.schemata WHERE schema_name ILIKE 'sdp_%'"
-	err = dbConnectionPool.SelectContext(ctx, &schemasToDrop, q)
+	err = adminDBConnectionPool.SelectContext(ctx, &schemasToDrop, q)
 	require.NoError(t, err)
 
 	for _, schema := range schemasToDrop {
 		q = fmt.Sprintf("DROP SCHEMA %s CASCADE", pq.QuoteIdentifier(schema))
-		_, err = dbConnectionPool.ExecContext(ctx, q)
+		_, err = adminDBConnectionPool.ExecContext(ctx, q)
 		require.NoError(t, err)
 	}
-}
-
-func ResetTenantConfigFixture(t *testing.T, ctx context.Context, dbConnectionPool db.DBConnectionPool, tenantID string) *Tenant {
-	t.Helper()
-
-	const q = `
-		UPDATE tenants
-		SET
-			email_sender_type = DEFAULT, sms_sender_type = DEFAULT,
-			base_url = NULL, sdp_ui_base_url = NULL
-		WHERE
-			id = $1
-		RETURNING *
-	`
-
-	var tnt Tenant
-	err := dbConnectionPool.GetContext(ctx, &tnt, q, tenantID)
-	require.NoError(t, err)
-
-	return &tnt
 }
 
 func AssertRegisteredAssetsFixture(t *testing.T, ctx context.Context, dbConnectionPool db.DBConnectionPool, expectedAssets []string) {
@@ -116,7 +95,7 @@ func CreateTenantFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecut
 	const query = `
 		WITH create_tenant AS (
 			INSERT INTO tenants
-				(name, distribution_account)
+				(name, distribution_account_address)
 			VALUES
 				($1, $2)
 			ON CONFLICT DO NOTHING
@@ -126,11 +105,11 @@ func CreateTenantFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecut
 	`
 
 	tnt := &Tenant{
-		Name:                tenantName,
-		DistributionAccount: &distributionPubKey,
+		Name:                       tenantName,
+		DistributionAccountAddress: &distributionPubKey,
 	}
 
-	err := sqlExec.GetContext(ctx, tnt, query, tnt.Name, tnt.DistributionAccount)
+	err := sqlExec.GetContext(ctx, tnt, query, tnt.Name, tnt.DistributionAccountAddress)
 	require.Nil(t, err)
 
 	return tnt
@@ -181,9 +160,9 @@ func ApplyMigrationsForTenantFixture(t *testing.T, ctx context.Context, dbConnec
 	dsn, err := m.GetDSNForTenant(ctx, tenantName)
 	require.NoError(t, err)
 
-	_, err = db.Migrate(dsn, migrate.Up, 0, sdpmigrations.FS, db.StellarPerTenantSDPMigrationsTableName)
+	_, err = db.Migrate(dsn, migrate.Up, 0, migrations.SDPMigrationRouter)
 	require.NoError(t, err)
-	_, err = db.Migrate(dsn, migrate.Up, 0, authmigrations.FS, db.StellarPerTenantAuthMigrationsTableName)
+	_, err = db.Migrate(dsn, migrate.Up, 0, migrations.AuthMigrationRouter)
 	require.NoError(t, err)
 }
 
@@ -201,10 +180,10 @@ func PrepareDBForTenant(t *testing.T, dbt *dbtest.DB, tenantName string) string 
 	tDSN, err := router.GetDSNForTenant(dbt.DSN, tenantName)
 	require.NoError(t, err)
 
-	_, err = db.Migrate(tDSN, migrate.Up, 0, sdpmigrations.FS, db.StellarPerTenantSDPMigrationsTableName)
+	_, err = db.Migrate(tDSN, migrate.Up, 0, migrations.SDPMigrationRouter)
 	require.NoError(t, err)
 
-	_, err = db.Migrate(tDSN, migrate.Up, 0, authmigrations.FS, db.StellarPerTenantAuthMigrationsTableName)
+	_, err = db.Migrate(tDSN, migrate.Up, 0, migrations.AuthMigrationRouter)
 	require.NoError(t, err)
 
 	return tDSN

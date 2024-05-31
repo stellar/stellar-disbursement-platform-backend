@@ -159,11 +159,11 @@ func NewDefaultPasswordPrompt() *promptui.Prompt {
 // it's password encrypted for security reasons.
 func execAddUser(ctx context.Context, dbUrl string, email, firstName, lastName, password string, isOwner bool, roles []string, tenantID string) error {
 	// 1. Get Tenant and save it in context
-	adminDNS, err := router.GetDNSForAdmin(dbUrl)
+	adminDSN, err := router.GetDSNForAdmin(dbUrl)
 	if err != nil {
-		return fmt.Errorf("getting Admin database DNS: %w", err)
+		return fmt.Errorf("getting Admin database DSN: %w", err)
 	}
-	adminDBConnectionPool, err := db.OpenDBConnectionPool(adminDNS)
+	adminDBConnectionPool, err := db.OpenDBConnectionPool(adminDSN)
 	if err != nil {
 		return fmt.Errorf("opening Admin DB connection pool: %w", err)
 	}

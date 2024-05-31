@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"slices"
@@ -56,6 +57,11 @@ type HorizonErrorWrapper struct {
 func NewHorizonErrorWrapper(err error) *HorizonErrorWrapper {
 	if err == nil {
 		return nil
+	}
+
+	var existingHorizonErr *HorizonErrorWrapper
+	if errors.As(err, &existingHorizonErr) {
+		return existingHorizonErr
 	}
 
 	hError := horizonclient.GetError(err)
@@ -254,7 +260,18 @@ func (e *HorizonErrorWrapper) IsTxInsufficientFee() bool {
 	}
 
 	txCode := "tx_insufficient_fee"
-	return e.ResultCodes.TransactionCode == txCode
+	return e.ResultCodes.TransactionCode == txCode || e.ResultCodes.InnerTransactionCode == txCode
+}
+
+// IsBadSequence verifies if the Horizon Error is related to the
+// transaction sequence number being invalid.
+func (e *HorizonErrorWrapper) IsBadSequence() bool {
+	if !e.HasResultCodes() {
+		return false
+	}
+
+	txCode := "tx_bad_seq"
+	return e.ResultCodes.TransactionCode == txCode || e.ResultCodes.InnerTransactionCode == txCode
 }
 
 // IsSourceAccountNotReady verifies if the Horizon Error is related to the

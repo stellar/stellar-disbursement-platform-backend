@@ -207,7 +207,8 @@ func (c *TxSubmitterCommand) Command(submitterService TxSubmitterServiceInterfac
 				defer kafkaProducer.Close()
 				tssOpts.EventProducer = kafkaProducer
 			} else {
-				log.Ctx(ctx).Warn("Event Broker Type is NONE.")
+				log.Ctx(ctx).Warn("Event Broker Type is NONE. Using Noop producer for logging events")
+				tssOpts.EventProducer = events.NoopProducer{}
 			}
 
 			// Starting Metrics Server (background job)

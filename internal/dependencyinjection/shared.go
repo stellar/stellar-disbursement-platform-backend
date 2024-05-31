@@ -11,9 +11,9 @@ type DBConnectionPoolOptions struct {
 }
 
 // OpenDBConnectionPool opens a connection pool in different ways based on the options
-func openDBConnectionPool(dns string, metricsService monitor.MonitorServiceInterface) (db.DBConnectionPool, error) {
+func openDBConnectionPool(dsn string, metricsService monitor.MonitorServiceInterface) (db.DBConnectionPool, error) {
 	if metricsService == nil {
-		return db.OpenDBConnectionPool(dns)
+		return db.OpenDBConnectionPool(dsn)
 	}
-	return db.OpenDBConnectionPoolWithMetrics(dns, metricsService)
+	return db.OpenDBConnectionPoolWithMetrics(dsn, metricsService)
 }

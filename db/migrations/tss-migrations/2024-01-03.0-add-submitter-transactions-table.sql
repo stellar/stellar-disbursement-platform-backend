@@ -75,5 +75,3 @@ DROP TABLE submitter_transactions;
 DROP FUNCTION create_submitter_transactions_status_history;
 
 DROP TYPE transaction_status;
-
-DROP FUNCTION update_at_refresh;

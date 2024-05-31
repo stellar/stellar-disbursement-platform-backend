@@ -72,6 +72,13 @@ This version is only compatible with the [stellar/stellar-disbursement-platform-
   - SASL auth [#162](https://github.com/stellar/stellar-disbursement-platform-backend/pull/162)
   - SSL auth [#226](https://github.com/stellar/stellar-disbursement-platform-backend/pull/226)
 
+## [1.1.7](https://github.com/stellar/stellar-disbursement-platform-backend/compare/1.1.6...1.1.7)
+
+### Security
+
+- Bump google.golang.org/protobuf from 1.31.0 to 1.33.0. [#270](https://github.com/stellar/stellar-disbursement-platform-backend/pull/270)
+- Bump golang.org/x/crypto from v0.17.0 to v0.21.0. [#269](https://github.com/stellar/stellar-disbursement-platform-backend/pull/269)
+
 ## [1.1.6](https://github.com/stellar/stellar-disbursement-platform-backend/compare/1.1.5...1.1.6)
 
 Attention, this version is compatible with the frontend version [1.1.2](https://github.com/stellar/stellar-disbursement-platform-frontend/releases/tag/1.1.2).

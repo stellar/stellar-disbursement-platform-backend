@@ -152,6 +152,29 @@ func Test_NewHorizonErrorWrapper(t *testing.T) {
 	}
 }
 
+func Test_HorizonErrorWrapper_HandleDoubleEncapsulation(t *testing.T) {
+	originalErr := horizonclient.Error{
+		Problem: problem.P{
+			Title:  "Transaction Failed",
+			Type:   "transaction_failed",
+			Status: http.StatusBadRequest,
+			Detail: "some-detail",
+			Extras: map[string]interface{}{
+				"result_codes": map[string]interface{}{
+					"transaction": "tx_failed",
+					"operations":  []string{"op_underfunded"},
+				},
+			},
+		},
+	}
+
+	hErr := NewHorizonErrorWrapper(originalErr)
+	require.True(t, hErr.IsHorizonError())
+	hErr2 := NewHorizonErrorWrapper(hErr)
+	require.True(t, hErr2.IsHorizonError())
+	require.Equal(t, hErr, hErr2)
+}
+
 func Test_HorizonErrorWrapper_Error(t *testing.T) {
 	testCases := []struct {
 		name             string
@@ -1272,6 +1295,71 @@ func Test_HorizonErrorWrapper_IsTxInsufficientFee(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			wrapper := NewHorizonErrorWrapper(tc.hErr)
 			assert.Equal(t, tc.wantResult, wrapper.IsTxInsufficientFee())
+		})
+	}
+}
+
+func Test_HorizonErrorWrapper_IsBadSequence(t *testing.T) {
+	testCases := []struct {
+		name       string
+		hErr       error
+		wantResult bool
+	}{
+		{
+			name: "returns false when there's no result_codes",
+			hErr: horizonclient.Error{
+				Problem: problem.P{
+					Status: http.StatusBadRequest,
+					Extras: map[string]interface{}{},
+				},
+			},
+		},
+		{
+			name: "returns false when result_codes has no keys",
+			hErr: horizonclient.Error{
+				Problem: problem.P{
+					Status: http.StatusBadRequest,
+					Extras: map[string]interface{}{
+						"result_codes": map[string]interface{}{},
+					},
+				},
+			},
+		},
+		{
+			name: "returns false when the result_codes is not related to tx_bad_seq",
+			hErr: horizonclient.Error{
+				Problem: problem.P{
+					Status: http.StatusBadRequest,
+					Extras: map[string]interface{}{
+						"result_codes": map[string]interface{}{
+							"transaction":       "tx_fee_bump_inner_failed",
+							"inner_transaction": "inner_tx_failed",
+							"operations":        []string{"op_failed"},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "returns true when the transaction key is tx_bad_seq",
+			hErr: horizonclient.Error{
+				Problem: problem.P{
+					Status: http.StatusBadRequest,
+					Extras: map[string]interface{}{
+						"result_codes": map[string]interface{}{
+							"transaction": "tx_bad_seq",
+						},
+					},
+				},
+			},
+			wantResult: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			wrapper := NewHorizonErrorWrapper(tc.hErr)
+			assert.Equal(t, tc.wantResult, wrapper.IsBadSequence())
 		})
 	}
 }

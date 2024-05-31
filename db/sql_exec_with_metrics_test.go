@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
+	monitorMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor/mocks"
 )
 
 func Test_NewSQLExecuterWithMetrics(t *testing.T) {
@@ -19,7 +21,7 @@ func Test_NewSQLExecuterWithMetrics(t *testing.T) {
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
 
-	mMonitorService := &monitor.MockMonitorService{}
+	mMonitorService := monitorMocks.NewMockMonitorService(t)
 
 	t.Run("return error when sqlExec is nil", func(t *testing.T) {
 		sqlExecWithMetrics, err := NewSQLExecuterWithMetrics(nil, mMonitorService)
@@ -52,11 +54,6 @@ func TestSQLExecWithMetrics_GetContext(t *testing.T) {
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
 
-	mMonitorService := &monitor.MockMonitorService{}
-
-	sqlExecWithMetrics, err := NewSQLExecuterWithMetrics(dbConnectionPool, mMonitorService)
-	require.NoError(t, err)
-
 	ctx := context.Background()
 	var mDest string
 
@@ -70,6 +67,10 @@ func TestSQLExecWithMetrics_GetContext(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("query successful in GetContext", func(t *testing.T) {
+		mMonitorService := monitorMocks.NewMockMonitorService(t)
+		sqlExecWithMetrics, err := NewSQLExecuterWithMetrics(dbConnectionPool, mMonitorService)
+		require.NoError(t, err)
+
 		mLabels := monitor.DBQueryLabels{
 			QueryType: "SELECT",
 		}
@@ -82,16 +83,18 @@ func TestSQLExecWithMetrics_GetContext(t *testing.T) {
 			mLabels,
 		).Return(nil).Once()
 
-		err := sqlExecWithMetrics.GetContext(ctx, &mDest, mQuery)
+		err = sqlExecWithMetrics.GetContext(ctx, &mDest, mQuery)
 		require.NoError(t, err)
 
 		expected := "USDC"
 		assert.Equal(t, expected, mDest)
-
-		mMonitorService.AssertExpectations(t)
 	})
 
 	t.Run("query failure in GetContext", func(t *testing.T) {
+		mMonitorService := monitorMocks.NewMockMonitorService(t)
+		sqlExecWithMetrics, err := NewSQLExecuterWithMetrics(dbConnectionPool, mMonitorService)
+		require.NoError(t, err)
+
 		mLabels := monitor.DBQueryLabels{
 			QueryType: "SELECT",
 		}
@@ -99,10 +102,8 @@ func TestSQLExecWithMetrics_GetContext(t *testing.T) {
 
 		mMonitorService.On("MonitorDBQueryDuration", mock.AnythingOfType("time.Duration"), monitor.FailureQueryDurationTag, mLabels).Return(nil).Once()
 
-		err := sqlExecWithMetrics.GetContext(ctx, &mDest, mQuery)
+		err = sqlExecWithMetrics.GetContext(ctx, &mDest, mQuery)
 		require.EqualError(t, err, "sql: no rows in result set")
-
-		mMonitorService.AssertExpectations(t)
 	})
 }
 
@@ -112,11 +113,6 @@ func TestSQLExecWithMetrics_SelectContext(t *testing.T) {
 	dbConnectionPool, err := OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
-
-	mMonitorService := &monitor.MockMonitorService{}
-
-	sqlExecWithMetrics, err := NewSQLExecuterWithMetrics(dbConnectionPool, mMonitorService)
-	require.NoError(t, err)
 
 	ctx := context.Background()
 	var mDest []string
@@ -134,6 +130,10 @@ func TestSQLExecWithMetrics_SelectContext(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("query successful in SelectContext", func(t *testing.T) {
+		mMonitorService := monitorMocks.NewMockMonitorService(t)
+		sqlExecWithMetrics, err := NewSQLExecuterWithMetrics(dbConnectionPool, mMonitorService)
+		require.NoError(t, err)
+
 		mLabels := monitor.DBQueryLabels{
 			QueryType: "SELECT",
 		}
@@ -146,16 +146,18 @@ func TestSQLExecWithMetrics_SelectContext(t *testing.T) {
 			mLabels,
 		).Return(nil).Once()
 
-		err := sqlExecWithMetrics.SelectContext(ctx, &mDest, mQuery)
+		err = sqlExecWithMetrics.SelectContext(ctx, &mDest, mQuery)
 		require.NoError(t, err)
 
 		expected := []string{"USDC", "EURT"}
 		assert.Equal(t, expected, mDest)
-
-		mMonitorService.AssertExpectations(t)
 	})
 
 	t.Run("query failure in SelectContext", func(t *testing.T) {
+		mMonitorService := monitorMocks.NewMockMonitorService(t)
+		sqlExecWithMetrics, err := NewSQLExecuterWithMetrics(dbConnectionPool, mMonitorService)
+		require.NoError(t, err)
+
 		mLabels := monitor.DBQueryLabels{
 			QueryType: "UNDEFINED",
 		}
@@ -163,10 +165,8 @@ func TestSQLExecWithMetrics_SelectContext(t *testing.T) {
 
 		mMonitorService.On("MonitorDBQueryDuration", mock.AnythingOfType("time.Duration"), monitor.FailureQueryDurationTag, mLabels).Return(nil).Once()
 
-		err := sqlExecWithMetrics.SelectContext(ctx, &mDest, mQuery)
+		err = sqlExecWithMetrics.SelectContext(ctx, &mDest, mQuery)
 		require.EqualError(t, err, `pq: syntax error at or near "invalid"`)
-
-		mMonitorService.AssertExpectations(t)
 	})
 }
 
@@ -176,11 +176,6 @@ func TestSQLExecWithMetrics_QueryContext(t *testing.T) {
 	dbConnectionPool, err := OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
-
-	mMonitorService := &monitor.MockMonitorService{}
-
-	sqlExecWithMetrics, err := NewSQLExecuterWithMetrics(dbConnectionPool, mMonitorService)
-	require.NoError(t, err)
 
 	ctx := context.Background()
 
@@ -197,6 +192,10 @@ func TestSQLExecWithMetrics_QueryContext(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("query successful in QueryContext", func(t *testing.T) {
+		mMonitorService := monitorMocks.NewMockMonitorService(t)
+		sqlExecWithMetrics, err := NewSQLExecuterWithMetrics(dbConnectionPool, mMonitorService)
+		require.NoError(t, err)
+
 		mLabels := monitor.DBQueryLabels{
 			QueryType: "SELECT",
 		}
@@ -221,11 +220,13 @@ func TestSQLExecWithMetrics_QueryContext(t *testing.T) {
 
 			assert.Contains(t, expected, code)
 		}
-
-		mMonitorService.AssertExpectations(t)
 	})
 
 	t.Run("query failure in QueryContext", func(t *testing.T) {
+		mMonitorService := monitorMocks.NewMockMonitorService(t)
+		sqlExecWithMetrics, err := NewSQLExecuterWithMetrics(dbConnectionPool, mMonitorService)
+		require.NoError(t, err)
+
 		mLabels := monitor.DBQueryLabels{
 			QueryType: "UNDEFINED",
 		}
@@ -237,8 +238,6 @@ func TestSQLExecWithMetrics_QueryContext(t *testing.T) {
 		require.EqualError(t, err, `pq: syntax error at or near "invalid"`)
 
 		assert.Nil(t, rows)
-
-		mMonitorService.AssertExpectations(t)
 	})
 }
 
@@ -248,11 +247,6 @@ func TestSQLExecWithMetrics_QueryxContext(t *testing.T) {
 	dbConnectionPool, err := OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
-
-	mMonitorService := &monitor.MockMonitorService{}
-
-	sqlExecWithMetrics, err := NewSQLExecuterWithMetrics(dbConnectionPool, mMonitorService)
-	require.NoError(t, err)
 
 	ctx := context.Background()
 
@@ -269,6 +263,10 @@ func TestSQLExecWithMetrics_QueryxContext(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("query successful in QueryxContext", func(t *testing.T) {
+		mMonitorService := monitorMocks.NewMockMonitorService(t)
+		sqlExecWithMetrics, err := NewSQLExecuterWithMetrics(dbConnectionPool, mMonitorService)
+		require.NoError(t, err)
+
 		mLabels := monitor.DBQueryLabels{
 			QueryType: "SELECT",
 		}
@@ -293,11 +291,13 @@ func TestSQLExecWithMetrics_QueryxContext(t *testing.T) {
 
 			assert.Contains(t, expected, code)
 		}
-
-		mMonitorService.AssertExpectations(t)
 	})
 
 	t.Run("query failure in QueryxContext", func(t *testing.T) {
+		mMonitorService := monitorMocks.NewMockMonitorService(t)
+		sqlExecWithMetrics, err := NewSQLExecuterWithMetrics(dbConnectionPool, mMonitorService)
+		require.NoError(t, err)
+
 		mLabels := monitor.DBQueryLabels{
 			QueryType: "UNDEFINED",
 		}
@@ -309,8 +309,6 @@ func TestSQLExecWithMetrics_QueryxContext(t *testing.T) {
 		require.EqualError(t, err, `pq: syntax error at or near "invalid"`)
 
 		assert.Nil(t, rows)
-
-		mMonitorService.AssertExpectations(t)
 	})
 }
 
@@ -320,11 +318,6 @@ func TestSQLExecWithMetrics_QueryRowxContext(t *testing.T) {
 	dbConnectionPool, err := OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
-
-	mMonitorService := &monitor.MockMonitorService{}
-
-	sqlExecWithMetrics, err := NewSQLExecuterWithMetrics(dbConnectionPool, mMonitorService)
-	require.NoError(t, err)
 
 	ctx := context.Background()
 
@@ -338,6 +331,10 @@ func TestSQLExecWithMetrics_QueryRowxContext(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("query successful in QueryRowxContext", func(t *testing.T) {
+		mMonitorService := monitorMocks.NewMockMonitorService(t)
+		sqlExecWithMetrics, err := NewSQLExecuterWithMetrics(dbConnectionPool, mMonitorService)
+		require.NoError(t, err)
+
 		mLabels := monitor.DBQueryLabels{
 			QueryType: "SELECT",
 		}
@@ -351,16 +348,18 @@ func TestSQLExecWithMetrics_QueryRowxContext(t *testing.T) {
 		).Return(nil).Once()
 
 		var code string
-		err := sqlExecWithMetrics.QueryRowxContext(ctx, mQuery).Scan(&code)
+		err = sqlExecWithMetrics.QueryRowxContext(ctx, mQuery).Scan(&code)
 		require.NoError(t, err)
 
 		expected := "USDC"
 		assert.Contains(t, expected, code)
-
-		mMonitorService.AssertExpectations(t)
 	})
 
 	t.Run("query failure in QueryRowxContext", func(t *testing.T) {
+		mMonitorService := monitorMocks.NewMockMonitorService(t)
+		sqlExecWithMetrics, err := NewSQLExecuterWithMetrics(dbConnectionPool, mMonitorService)
+		require.NoError(t, err)
+
 		mLabels := monitor.DBQueryLabels{
 			QueryType: "UNDEFINED",
 		}
@@ -369,10 +368,8 @@ func TestSQLExecWithMetrics_QueryRowxContext(t *testing.T) {
 		mMonitorService.On("MonitorDBQueryDuration", mock.AnythingOfType("time.Duration"), monitor.FailureQueryDurationTag, mLabels).Return(nil).Once()
 
 		var code string
-		err := sqlExecWithMetrics.QueryRowxContext(ctx, mQuery).Scan(&code)
+		err = sqlExecWithMetrics.QueryRowxContext(ctx, mQuery).Scan(&code)
 		require.EqualError(t, err, `pq: syntax error at or near "invalid"`)
-
-		mMonitorService.AssertExpectations(t)
 	})
 }
 
@@ -382,11 +379,6 @@ func TestSQLExecWithMetrics_ExecContext(t *testing.T) {
 	dbConnectionPool, err := OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
-
-	mMonitorService := &monitor.MockMonitorService{}
-
-	sqlExecWithMetrics, err := NewSQLExecuterWithMetrics(dbConnectionPool, mMonitorService)
-	require.NoError(t, err)
 
 	ctx := context.Background()
 	const query = `
@@ -399,6 +391,10 @@ func TestSQLExecWithMetrics_ExecContext(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("query successful in ExecContext", func(t *testing.T) {
+		mMonitorService := monitorMocks.NewMockMonitorService(t)
+		sqlExecWithMetrics, err := NewSQLExecuterWithMetrics(dbConnectionPool, mMonitorService)
+		require.NoError(t, err)
+
 		mLabels := monitor.DBQueryLabels{
 			QueryType: "UPDATE",
 		}
@@ -417,11 +413,13 @@ func TestSQLExecWithMetrics_ExecContext(t *testing.T) {
 		rowsAffected, err := result.RowsAffected()
 		require.NoError(t, err)
 		assert.Equal(t, rowsAffected, int64(1))
-
-		mMonitorService.AssertExpectations(t)
 	})
 
 	t.Run("query failure in ExecContext", func(t *testing.T) {
+		mMonitorService := monitorMocks.NewMockMonitorService(t)
+		sqlExecWithMetrics, err := NewSQLExecuterWithMetrics(dbConnectionPool, mMonitorService)
+		require.NoError(t, err)
+
 		mLabels := monitor.DBQueryLabels{
 			QueryType: "UPDATE",
 		}
@@ -429,10 +427,8 @@ func TestSQLExecWithMetrics_ExecContext(t *testing.T) {
 
 		mMonitorService.On("MonitorDBQueryDuration", mock.AnythingOfType("time.Duration"), monitor.FailureQueryDurationTag, mLabels).Return(nil).Once()
 
-		_, err := sqlExecWithMetrics.ExecContext(ctx, mQuery, "EURT")
+		_, err = sqlExecWithMetrics.ExecContext(ctx, mQuery, "EURT")
 		require.EqualError(t, err, `pq: relation "invalid_table" does not exist`)
-
-		mMonitorService.AssertExpectations(t)
 	})
 }
 

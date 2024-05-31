@@ -30,6 +30,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 	storeMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
@@ -333,25 +334,19 @@ func Test_NewManager(t *testing.T) {
 
 				wantEventProducer := &events.MockProducer{}
 
-				txProcessingLimiter := engine.NewTransactionProcessingLimiter(submitterOptions.NumChannelAccounts)
-				txProcessingLimiter.CounterLastUpdated = gotManager.txProcessingLimiter.CounterLastUpdated
 				wantManager := &Manager{
 					dbConnectionPool: wantConnectionPool,
 					chAccModel:       wantChAccModel,
 					txModel:          wantTxModel,
 					chTxBundleModel:  wantChTxBundleModel,
 
-					queueService: defaultQueueService{
-						pollingInterval:    time.Duration(submitterOptions.QueuePollingInterval) * time.Second,
-						numChannelAccounts: submitterOptions.NumChannelAccounts,
-					},
+					pollingInterval:     time.Duration(submitterOptions.QueuePollingInterval) * time.Second,
+					txProcessingLimiter: gotManager.txProcessingLimiter,
 
 					engine: wantSubmitterEngine,
 
 					crashTrackerClient: wantCrashTrackerClient,
 					monitorService:     submitterOptions.MonitorService,
-
-					txProcessingLimiter: txProcessingLimiter,
 
 					eventProducer: wantEventProducer,
 				}
@@ -386,7 +381,7 @@ func Test_Manager_ProcessTransactions(t *testing.T) {
 	mDistAccResolver := sigMocks.NewMockDistributionAccountResolver(t)
 	mDistAccResolver.
 		On("DistributionAccount", mock.Anything, mock.AnythingOfType("string")).
-		Return(distributionKP.Address(), nil)
+		Return(schema.NewDefaultStellarDistributionAccount(distributionKP.Address()), nil)
 
 	sigService, err := signing.NewSignatureService(signing.SignatureServiceOptions{
 		DistributionSignerType:    signing.DistributionAccountEnvSignatureClientType,
@@ -478,11 +473,6 @@ func Test_Manager_ProcessTransactions(t *testing.T) {
 			dryRunCrashTracker, err := crashtracker.NewDryRunClient()
 			require.NoError(t, err)
 
-			queueService := defaultQueueService{
-				pollingInterval:    500 * time.Millisecond,
-				numChannelAccounts: 2,
-			}
-
 			chTxBundleModel, err := store.NewChannelTransactionBundleModel(dbConnectionPool)
 			require.NoError(t, err)
 
@@ -494,19 +484,23 @@ func Test_Manager_ProcessTransactions(t *testing.T) {
 			defer mockEventProducer.AssertExpectations(t)
 
 			manager := &Manager{
-				dbConnectionPool:    dbConnectionPool,
-				chTxBundleModel:     chTxBundleModel,
-				chAccModel:          store.NewChannelAccountModel(dbConnectionPool),
-				txModel:             store.NewTransactionModel(dbConnectionPool),
-				engine:              submitterEngine,
-				crashTrackerClient:  dryRunCrashTracker,
-				queueService:        queueService,
-				txProcessingLimiter: engine.NewTransactionProcessingLimiter(queueService.numChannelAccounts),
+				dbConnectionPool: dbConnectionPool,
+				chAccModel:       store.NewChannelAccountModel(dbConnectionPool),
+				txModel:          store.NewTransactionModel(dbConnectionPool),
+				chTxBundleModel:  chTxBundleModel,
+
+				pollingInterval:     500 * time.Millisecond,
+				txProcessingLimiter: engine.NewTransactionProcessingLimiter(2),
+
+				engine: submitterEngine,
+
+				crashTrackerClient: dryRunCrashTracker,
 				monitorService: tssMonitor.TSSMonitorService{
 					Client:        mMonitorClient,
 					GitCommitHash: "gitCommitHash0x",
 					Version:       "version123",
 				},
+
 				eventProducer: mockEventProducer,
 			}
 

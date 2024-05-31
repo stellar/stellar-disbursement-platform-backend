@@ -12,9 +12,12 @@ type MockConsumer struct {
 
 var _ Consumer = new(MockConsumer)
 
-func (c *MockConsumer) ReadMessage(ctx context.Context) error {
+func (c *MockConsumer) ReadMessage(ctx context.Context) (*Message, error) {
 	args := c.Called(ctx)
-	return args.Error(0)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*Message), args.Error(1)
 }
 
 func (c *MockConsumer) RegisterEventHandler(ctx context.Context, eventHandlers ...EventHandler) error {
@@ -31,6 +34,11 @@ func (c *MockConsumer) Close() error {
 	return args.Error(0)
 }
 
+func (c *MockConsumer) Handlers() []EventHandler {
+	args := c.Called()
+	return args.Get(0).([]EventHandler)
+}
+
 type MockProducer struct {
 	mock.Mock
 }
@@ -45,4 +53,20 @@ func (c *MockProducer) WriteMessages(ctx context.Context, messages ...Message) e
 func (c *MockProducer) Close() error {
 	args := c.Called()
 	return args.Error(0)
+}
+
+type testInterface interface {
+	mock.TestingT
+	Cleanup(func())
+}
+
+// NewMockProducer creates a new instance of MockProducer. It also registers a testing interface on the mock and a
+// cleanup function to assert the mocks expectations.
+func NewMockProducer(t testInterface) *MockProducer {
+	mock := &MockProducer{}
+	mock.Mock.Test(t)
+
+	t.Cleanup(func() { mock.AssertExpectations(t) })
+
+	return mock
 }

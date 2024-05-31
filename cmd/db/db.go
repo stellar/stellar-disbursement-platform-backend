@@ -11,9 +11,7 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/cmd/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
-	adminmigrations "github.com/stellar/stellar-disbursement-platform-backend/db/migrations/admin-migrations"
-	authmigrations "github.com/stellar/stellar-disbursement-platform-backend/db/migrations/auth-migrations"
-	sdpmigrations "github.com/stellar/stellar-disbursement-platform-backend/db/migrations/sdp-migrations"
+	"github.com/stellar/stellar-disbursement-platform-backend/db/migrations"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/router"
 	di "github.com/stellar/stellar-disbursement-platform-backend/internal/dependencyinjection"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
@@ -82,20 +80,20 @@ func (c *DatabaseCommand) setupForNetworkCmd(globalOptions *utils.GlobalOptionsT
 				log.Ctx(ctx).Fatal(err.Error())
 			}
 
-			tenantIDToDNSMap, err := getTenantIDToDSNMapping(ctx, c.adminDBConnectionPool)
+			tenantIDToDSNMap, err := getTenantIDToDSNMapping(ctx, c.adminDBConnectionPool)
 			if err != nil {
 				log.Ctx(ctx).Fatalf("getting tenants schemas: %s", err.Error())
 			}
 
 			if opts.TenantID != "" {
-				if dsn, ok := tenantIDToDNSMap[opts.TenantID]; ok {
-					tenantIDToDNSMap = map[string]string{opts.TenantID: dsn}
+				if dsn, ok := tenantIDToDSNMap[opts.TenantID]; ok {
+					tenantIDToDSNMap = map[string]string{opts.TenantID: dsn}
 				} else {
 					log.Ctx(ctx).Fatalf("tenant ID %s does not exist", opts.TenantID)
 				}
 			}
 
-			for tenantID, dsn := range tenantIDToDNSMap {
+			for tenantID, dsn := range tenantIDToDSNMap {
 				log.Ctx(ctx).Infof("running for tenant ID %s", tenantID)
 				tenantDBConnectionPool, err := db.OpenDBConnectionPool(dsn)
 				if err != nil {
@@ -146,7 +144,7 @@ func (c *DatabaseCommand) sdpPerTenantMigrationsCmd(ctx context.Context) *cobra.
 	}
 
 	executeMigrationsFn := func(ctx context.Context, dir migrate.MigrationDirection, count int) error {
-		if err := executeMigrationsPerTenant(ctx, c.adminDBConnectionPool, opts, dir, count, sdpmigrations.FS, db.StellarPerTenantSDPMigrationsTableName); err != nil {
+		if err := executeMigrationsPerTenant(ctx, c.adminDBConnectionPool, opts, dir, count, migrations.SDPMigrationRouter); err != nil {
 			return fmt.Errorf("executing migrations for %s: %w", sdpCmd.Name(), err)
 		}
 		return nil
@@ -180,7 +178,7 @@ func (c *DatabaseCommand) authPerTenantMigrationsCmd(ctx context.Context) *cobra
 	}
 
 	executeMigrationsFn := func(ctx context.Context, dir migrate.MigrationDirection, count int) error {
-		if err := executeMigrationsPerTenant(ctx, c.adminDBConnectionPool, opts, dir, count, authmigrations.FS, db.StellarPerTenantAuthMigrationsTableName); err != nil {
+		if err := executeMigrationsPerTenant(ctx, c.adminDBConnectionPool, opts, dir, count, migrations.AuthMigrationRouter); err != nil {
 			return fmt.Errorf("executing migrations for %s: %w", authCmd.Name(), err)
 		}
 		return nil
@@ -205,8 +203,19 @@ func (c *DatabaseCommand) adminMigrationsCmd(ctx context.Context, globalOptions 
 	}
 
 	executeMigrationsFn := func(ctx context.Context, dir migrate.MigrationDirection, count int) error {
-		if err := ExecuteMigrations(ctx, globalOptions.DatabaseURL, dir, count, adminmigrations.FS, db.StellarAdminMigrationsTableName); err != nil {
-			return fmt.Errorf("executing migrations for %s: %w", adminCmd.Name(), err)
+		dbURL, err := router.GetDSNForAdmin(globalOptions.DatabaseURL)
+		if err != nil {
+			return fmt.Errorf("getting the admin database DSN: %w", err)
+		}
+
+		schemaMigrationManager, err := NewSchemaMigrationManager(migrations.AdminMigrationRouter, router.AdminSchemaName, dbURL)
+		if err != nil {
+			return fmt.Errorf("creating admin database migration manager: %w", err)
+		}
+		defer schemaMigrationManager.Close()
+
+		if err = schemaMigrationManager.OrchestrateSchemaMigrations(ctx, dir, count); err != nil {
+			return fmt.Errorf("running admin migrations: %w", err)
 		}
 		return nil
 	}
@@ -227,30 +236,19 @@ func (c *DatabaseCommand) tssMigrationsCmd(ctx context.Context, globalOptions *u
 	}
 
 	executeMigrationsFn := func(ctx context.Context, dir migrate.MigrationDirection, count int) error {
-		tssMigrationsManager, err := NewTSSDatabaseMigrationManager(c.adminDBConnectionPool)
-		if err != nil {
-			return fmt.Errorf("creating TSS database migration manager: %w", err)
-		}
-
-		err = tssMigrationsManager.CreateTSSSchemaIfNeeded(ctx)
-		if err != nil {
-			return fmt.Errorf("creating the 'tss' database schema if needed: %w", err)
-		}
-
-		dbURL, err := router.GetDNSForTSS(globalOptions.DatabaseURL)
+		dbURL, err := router.GetDSNForTSS(globalOptions.DatabaseURL)
 		if err != nil {
 			return fmt.Errorf("getting the TSS database DSN: %w", err)
 		}
 
-		if err = RunTSSMigrations(ctx, dbURL, dir, count); err != nil {
-			return fmt.Errorf("running TSS migrations: %w", err)
+		schemaMigrationManager, err := NewSchemaMigrationManager(migrations.TSSMigrationRouter, router.TSSSchemaName, dbURL)
+		if err != nil {
+			return fmt.Errorf("creating TSS database migration manager: %w", err)
 		}
+		defer schemaMigrationManager.Close()
 
-		if dir == migrate.Down {
-			err = tssMigrationsManager.deleteTSSSchemaIfNeeded(ctx)
-			if err != nil {
-				return fmt.Errorf("deleting the 'tss' database schema if needed: %w", err)
-			}
+		if err = schemaMigrationManager.OrchestrateSchemaMigrations(ctx, dir, count); err != nil {
+			return fmt.Errorf("running TSS migrations: %w", err)
 		}
 
 		return nil

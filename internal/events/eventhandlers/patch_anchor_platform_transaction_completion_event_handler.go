@@ -8,7 +8,6 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
@@ -21,13 +20,11 @@ type PatchAnchorPlatformTransactionCompletionEventHandlerOptions struct {
 	AdminDBConnectionPool db.DBConnectionPool
 	MtnDBConnectionPool   db.DBConnectionPool
 	APapiSvc              anchorplatform.AnchorPlatformAPIServiceInterface
-	CrashTrackerClient    crashtracker.CrashTrackerClient
 }
 
 type PatchAnchorPlatformTransactionCompletionEventHandler struct {
-	tenantManager      tenant.ManagerInterface
-	service            services.PatchAnchorPlatformTransactionCompletionServiceInterface
-	crashTrackerClient crashtracker.CrashTrackerClient
+	tenantManager tenant.ManagerInterface
+	service       services.PatchAnchorPlatformTransactionCompletionServiceInterface
 }
 
 var _ events.EventHandler = new(PatchAnchorPlatformTransactionCompletionEventHandler)
@@ -46,9 +43,8 @@ func NewPatchAnchorPlatformTransactionCompletionEventHandler(options PatchAnchor
 	}
 
 	return &PatchAnchorPlatformTransactionCompletionEventHandler{
-		tenantManager:      tm,
-		service:            s,
-		crashTrackerClient: options.CrashTrackerClient,
+		tenantManager: tm,
+		service:       s,
 	}
 }
 
@@ -60,23 +56,22 @@ func (h *PatchAnchorPlatformTransactionCompletionEventHandler) CanHandleMessage(
 	return message.Topic == events.PaymentCompletedTopic
 }
 
-func (h *PatchAnchorPlatformTransactionCompletionEventHandler) Handle(ctx context.Context, message *events.Message) {
+func (h *PatchAnchorPlatformTransactionCompletionEventHandler) Handle(ctx context.Context, message *events.Message) error {
 	payment, err := utils.ConvertType[any, schemas.EventPaymentCompletedData](message.Data)
 	if err != nil {
-		h.crashTrackerClient.LogAndReportErrors(ctx, err, fmt.Sprintf("[%s] could not convert data to %T: %v", h.Name(), schemas.EventPaymentCompletedData{}, message.Data))
-		return
+		return fmt.Errorf("could not convert data to %T: %w", schemas.EventPaymentCompletedData{}, err)
 	}
 
 	tnt, err := h.tenantManager.GetTenantByID(ctx, message.TenantID)
 	if err != nil {
-		h.crashTrackerClient.LogAndReportErrors(ctx, err, fmt.Sprintf("[%s] error getting tenant by id", h.Name()))
-		return
+		return fmt.Errorf("getting tenant by id: %w", err)
 	}
 
 	ctx = tenant.SaveTenantInContext(ctx, tnt)
 
-	if err := h.service.PatchAPTransactionForPaymentEvent(ctx, payment); err != nil {
-		h.crashTrackerClient.LogAndReportErrors(ctx, err, fmt.Sprintf("[%s] patching anchor platform transaction for payment event", h.Name()))
-		return
+	err = h.service.PatchAPTransactionForPaymentEvent(ctx, payment)
+	if err != nil {
+		return fmt.Errorf("patching anchor platform transaction for payment event: %w", err)
 	}
+	return nil
 }

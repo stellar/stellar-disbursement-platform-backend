@@ -14,6 +14,7 @@ import (
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/htmltemplate"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
@@ -398,10 +399,12 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 	authManagerMock := &auth.AuthManagerMock{}
 
 	messengerClientMock := &message.MessengerClientMock{}
+	crashTrackerMock := &crashtracker.MockCrashTrackerClient{}
 	handler := &UserHandler{
-		AuthManager:     authManagerMock,
-		MessengerClient: messengerClientMock,
-		Models:          models,
+		AuthManager:        authManagerMock,
+		CrashTrackerClient: crashTrackerMock,
+		MessengerClient:    messengerClientMock,
+		Models:             models,
 	}
 
 	uiBaseURL := "https://sdp.org"
@@ -652,7 +655,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 		assert.JSONEq(t, `{"error": "a user with this email already exists"}`, string(respBody))
 	})
 
-	t.Run("returns error when sending email fails", func(t *testing.T) {
+	t.Run("logs and reports error when sending email fails", func(t *testing.T) {
 		token := "mytoken"
 		ctx = context.WithValue(ctx, middleware.TokenContextKey, token)
 
@@ -700,6 +703,10 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 			Return(errors.New("unexpected error")).
 			Once()
 
+		crashTrackerMock.
+			On("LogAndReportErrors", mock.Anything, mock.Anything, "Cannot send invitation message").
+			Once()
+
 		body := `
 			{
 				"first_name": "First",
@@ -722,15 +729,20 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 
 		wantsBody := `
 			{
-				"error": "Cannot create user"
+				"id": "user-id",
+				"first_name": "First",
+				"last_name": "Last",
+				"email": "email@email.com",
+				"is_active": false,
+				"roles": ["developer"]
 			}
 		`
 
-		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+		assert.Equal(t, http.StatusCreated, resp.StatusCode)
 		assert.JSONEq(t, wantsBody, string(respBody))
 	})
 
-	t.Run("returns error when joining the forgot password link", func(t *testing.T) {
+	t.Run("logs and reports error when joining the forgot password link", func(t *testing.T) {
 		tntInvalidUIBaseURL := tenant.Tenant{
 			SDPUIBaseURL: &[]string{"%invalid%"}[0],
 		}
@@ -761,6 +773,10 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 			Return(expectedUser, nil).
 			Once()
 
+		crashTrackerMock.
+			On("LogAndReportErrors", mock.Anything, mock.Anything, "Cannot send invitation message").
+			Once()
+
 		body := `
 			{
 				"first_name": "First",
@@ -775,9 +791,10 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 		w := httptest.NewRecorder()
 
 		http.HandlerFunc(UserHandler{
-			AuthManager:     authManagerMock,
-			MessengerClient: messengerClientMock,
-			Models:          models,
+			AuthManager:        authManagerMock,
+			CrashTrackerClient: crashTrackerMock,
+			MessengerClient:    messengerClientMock,
+			Models:             models,
 		}.CreateUser).ServeHTTP(w, req)
 
 		resp := w.Result()
@@ -787,11 +804,16 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 
 		wantsBody := `
 			{
-				"error": "Cannot create user"
+				"id": "user-id",
+				"first_name": "First",
+				"last_name": "Last",
+				"email": "email@email.com",
+				"is_active": false,
+				"roles": ["developer"]
 			}
 		`
 
-		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+		assert.Equal(t, http.StatusCreated, resp.StatusCode)
 		assert.JSONEq(t, wantsBody, string(respBody))
 	})
 
@@ -915,6 +937,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 
 	authManagerMock.AssertExpectations(t)
 	messengerClientMock.AssertExpectations(t)
+	crashTrackerMock.AssertExpectations(t)
 }
 
 func Test_UpdateRolesRequest_validate(t *testing.T) {

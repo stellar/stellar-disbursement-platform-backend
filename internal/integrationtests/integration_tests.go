@@ -67,11 +67,11 @@ type IntegrationTestsService struct {
 
 // NewIntegrationTestsService is a function that create a new IntegrationTestsService instance.
 func NewIntegrationTestsService(opts IntegrationTestsOpts) (*IntegrationTestsService, error) {
-	adminDNS, err := router.GetDNSForAdmin(opts.DatabaseDSN)
+	adminDSN, err := router.GetDSNForAdmin(opts.DatabaseDSN)
 	if err != nil {
-		return nil, fmt.Errorf("getting admin database DNS: %w", err)
+		return nil, fmt.Errorf("getting admin database DSN: %w", err)
 	}
-	adminDbConnectionPool, err := db.OpenDBConnectionPool(adminDNS)
+	adminDbConnectionPool, err := db.OpenDBConnectionPool(adminDSN)
 	if err != nil {
 		return nil, fmt.Errorf("error connecting to the database: %w", err)
 	}
@@ -85,11 +85,11 @@ func NewIntegrationTestsService(opts IntegrationTestsOpts) (*IntegrationTestsSer
 	if err != nil {
 		return nil, fmt.Errorf("creating models for integration tests: %w", err)
 	}
-	tssDNS, err := router.GetDNSForTSS(opts.DatabaseDSN)
+	tssDSN, err := router.GetDSNForTSS(opts.DatabaseDSN)
 	if err != nil {
-		return nil, fmt.Errorf("getting TSS database DNS: %w", err)
+		return nil, fmt.Errorf("getting TSS database DSN: %w", err)
 	}
-	tssDbConnectionPool, err := db.OpenDBConnectionPool(tssDNS)
+	tssDbConnectionPool, err := db.OpenDBConnectionPool(tssDSN)
 	if err != nil {
 		return nil, fmt.Errorf("error connecting to the tss database: %w", err)
 	}
@@ -313,8 +313,6 @@ func (it *IntegrationTestsService) CreateTestData(ctx context.Context, opts Inte
 		OwnerFirstName:   "John",
 		OwnerLastName:    "Doe",
 		OrganizationName: "Integration Tests Organization",
-		EmailSenderType:  "DRY_RUN",
-		SMSSenderType:    "DRY_RUN",
 		BaseURL:          "http://localhost:8000",
 		SDPUIBaseURL:     "http://localhost:3000",
 	})

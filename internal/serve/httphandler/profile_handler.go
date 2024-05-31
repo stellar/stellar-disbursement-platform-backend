@@ -354,16 +354,17 @@ func (h ProfileHandler) GetOrganizationInfo(rw http.ResponseWriter, req *http.Re
 		return
 	}
 
-	distributionPublicKey, err := h.DistributionAccountResolver.DistributionAccountFromContext(ctx)
+	distributionAccount, err := h.DistributionAccountResolver.DistributionAccountFromContext(ctx)
 	if err != nil {
-		httperror.InternalError(ctx, "Cannot get distribution account public key", err, nil).Render(rw)
+		httperror.InternalError(ctx, "Cannot get distribution account", err, nil).Render(rw)
 		return
 	}
 
 	resp := map[string]interface{}{
 		"name":                             org.Name,
 		"logo_url":                         lu.String(),
-		"distribution_account_public_key":  distributionPublicKey,
+		"distribution_account":             distributionAccount,
+		"distribution_account_public_key":  distributionAccount.Address, // TODO: deprecate `distribution_account_public_key`
 		"timezone_utc_offset":              org.TimezoneUTCOffset,
 		"is_approval_required":             org.IsApprovalRequired,
 		"sms_resend_interval":              0,

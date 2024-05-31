@@ -2,26 +2,18 @@ package db
 
 import (
 	"context"
-	"embed"
 	"fmt"
 	"net/http"
 
 	migrate "github.com/rubenv/sql-migrate"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/db/migrations"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/utils"
 )
 
 type MigrationTableName string
 
-const (
-	// NOTE: these names are hardcoded in the `db.dbtest.Open` method and need to be kept in sync if updated.
-	StellarAdminMigrationsTableName         MigrationTableName = "admin_migrations"
-	StellarTSSMigrationsTableName           MigrationTableName = "tss_migrations"
-	StellarPerTenantSDPMigrationsTableName  MigrationTableName = "sdp_migrations"
-	StellarPerTenantAuthMigrationsTableName MigrationTableName = "auth_migrations"
-)
-
-func Migrate(dbURL string, dir migrate.MigrationDirection, count int, migrationFiles embed.FS, tableName MigrationTableName) (int, error) {
+func Migrate(dbURL string, dir migrate.MigrationDirection, count int, migrationRouter migrations.MigrationRouter) (int, error) {
 	dbConnectionPool, err := OpenDBConnectionPool(dbURL)
 	if err != nil {
 		return 0, fmt.Errorf("database URL '%s': %w", utils.TruncateString(dbURL, len(dbURL)/4), err)
@@ -29,10 +21,10 @@ func Migrate(dbURL string, dir migrate.MigrationDirection, count int, migrationF
 	defer dbConnectionPool.Close()
 
 	ms := migrate.MigrationSet{
-		TableName: string(tableName),
+		TableName: string(migrationRouter.TableName),
 	}
 
-	m := migrate.HttpFileSystemMigrationSource{FileSystem: http.FS(migrationFiles)}
+	m := migrate.HttpFileSystemMigrationSource{FileSystem: http.FS(migrationRouter.FS)}
 	ctx := context.Background()
 	db, err := dbConnectionPool.SqlDB(ctx)
 	if err != nil {

@@ -31,7 +31,6 @@ type SendReceiverWalletsSMSInvitationEventHandlerOptions struct {
 type SendReceiverWalletsSMSInvitationEventHandler struct {
 	tenantManager       tenant.ManagerInterface
 	mtnDBConnectionPool db.DBConnectionPool
-	crashTrackerClient  crashtracker.CrashTrackerClient
 	service             services.SendReceiverWalletInviteServiceInterface
 }
 
@@ -61,7 +60,6 @@ func NewSendReceiverWalletsSMSInvitationEventHandler(options SendReceiverWallets
 		tenantManager:       tm,
 		mtnDBConnectionPool: options.MtnDBConnectionPool,
 		service:             s,
-		crashTrackerClient:  options.CrashTrackerClient,
 	}
 }
 
@@ -73,23 +71,22 @@ func (h *SendReceiverWalletsSMSInvitationEventHandler) CanHandleMessage(ctx cont
 	return message.Topic == events.ReceiverWalletNewInvitationTopic
 }
 
-func (h *SendReceiverWalletsSMSInvitationEventHandler) Handle(ctx context.Context, message *events.Message) {
+func (h *SendReceiverWalletsSMSInvitationEventHandler) Handle(ctx context.Context, message *events.Message) error {
 	receiverWalletInvitationData, err := utils.ConvertType[any, []schemas.EventReceiverWalletSMSInvitationData](message.Data)
 	if err != nil {
-		h.crashTrackerClient.LogAndReportErrors(ctx, err, fmt.Sprintf("[%s] could not convert data to %T: %v", h.Name(), []schemas.EventReceiverWalletSMSInvitationData{}, message.Data))
-		return
+		return fmt.Errorf("could not convert message data to %T: %w", []schemas.EventReceiverWalletSMSInvitationData{}, err)
 	}
 
 	t, err := h.tenantManager.GetTenantByID(ctx, message.TenantID)
 	if err != nil {
-		h.crashTrackerClient.LogAndReportErrors(ctx, err, fmt.Sprintf("[%s] error getting tenant by id", h.Name()))
-		return
+		return fmt.Errorf("getting tenant by id %s: %w", message.TenantID, err)
 	}
 
 	ctx = tenant.SaveTenantInContext(ctx, t)
 
-	if err := h.service.SendInvite(ctx, receiverWalletInvitationData...); err != nil {
-		h.crashTrackerClient.LogAndReportErrors(ctx, err, fmt.Sprintf("[%s] sending receiver wallets invitation", h.Name()))
-		return
+	if sendErr := h.service.SendInvite(ctx, receiverWalletInvitationData...); sendErr != nil {
+		return fmt.Errorf("sending receiver wallets invitation: %w", sendErr)
 	}
+
+	return nil
 }

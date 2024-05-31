@@ -4,10 +4,6 @@ import (
 	"fmt"
 	"go/types"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/scheduler/jobs"
-
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/scheduler"
-
 	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/network"
 	"github.com/stellar/go/support/config"
@@ -17,6 +13,8 @@ import (
 	di "github.com/stellar/stellar-disbursement-platform-backend/internal/dependencyinjection"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/scheduler"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/scheduler/jobs"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
@@ -145,7 +143,7 @@ func EventBrokerConfigOptions(opts *EventBrokerOptions) []*config.ConfigOption {
 	return []*config.ConfigOption{
 		{
 			Name:           "event-broker-type",
-			Usage:          `Event Broker type. Options: "KAFKA", "NONE"`,
+			Usage:          `Specifies the type of event broker to be used. Options: "KAFKA", "NONE".`,
 			OptType:        types.String,
 			ConfigKey:      &opts.EventBrokerType,
 			CustomSetValue: SetConfigOptionEventBrokerType,
@@ -154,7 +152,7 @@ func EventBrokerConfigOptions(opts *EventBrokerOptions) []*config.ConfigOption {
 		},
 		{
 			Name:           "broker-urls",
-			Usage:          "List of Message Broker URLs comma separated.",
+			Usage:          "A comma-separated list of the message broker URLs.",
 			OptType:        types.String,
 			ConfigKey:      &opts.BrokerURLs,
 			CustomSetValue: SetConfigOptionURLList,
@@ -162,7 +160,7 @@ func EventBrokerConfigOptions(opts *EventBrokerOptions) []*config.ConfigOption {
 		},
 		{
 			Name:      "consumer-group-id",
-			Usage:     "Message Broker Consumer Group ID.",
+			Usage:     "Specifies a group ID for the broker consumers.",
 			OptType:   types.String,
 			ConfigKey: &opts.ConsumerGroupID,
 			Required:  false,
@@ -178,28 +176,28 @@ func EventBrokerConfigOptions(opts *EventBrokerOptions) []*config.ConfigOption {
 		},
 		{
 			Name:      "kafka-sasl-username",
-			Usage:     "Kafka SASL Username",
+			Usage:     "Specifies the Kafka SASL Username, required when the kafka security protocol is set to either `SASL_PLAINTEXT` or `SASL_SSL`.",
 			OptType:   types.String,
 			ConfigKey: &opts.KafkaSASLUsername,
 			Required:  false,
 		},
 		{
 			Name:      "kafka-sasl-password",
-			Usage:     "Kafka SASL Password",
+			Usage:     "Specifies the Kafka SASL Password, required when the kafka security protocol is set to either `SASL_PLAINTEXT` or `SASL_SSL`.",
 			OptType:   types.String,
 			ConfigKey: &opts.KafkaSASLPassword,
 			Required:  false,
 		},
 		{
 			Name:      "kafka-ssl-access-key",
-			Usage:     "The Kafka Access Key (keystore) in PEM format",
+			Usage:     "The Kafka Access Key (keystore) in PEM format, required when the kafka security protocol is set to `SSL`.",
 			OptType:   types.String,
 			ConfigKey: &opts.KafkaAccessKey,
 			Required:  false,
 		},
 		{
 			Name:      "kafka-ssl-access-certificate",
-			Usage:     "Kafka SSL Access Certificate in PEM format that matches with the Kafka Access Key",
+			Usage:     "The Kafka SSL Access Certificate in PEM format that matches with the Kafka Access Key, required when the kafka security protocol is set to `SSL`.",
 			OptType:   types.String,
 			ConfigKey: &opts.KafkaAccessCertificate,
 			Required:  false,

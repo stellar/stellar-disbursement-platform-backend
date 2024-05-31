@@ -25,11 +25,13 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
+	monitorMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
-	publicfiles "github.com/stellar/stellar-disbursement-platform-backend/internal/serve/publicfiles"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/publicfiles"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	preconditionsMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
@@ -197,7 +199,7 @@ func Test_handleHTTP_Health(t *testing.T) {
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
-	mMonitorService := &monitor.MockMonitorService{}
+	mMonitorService := monitorMocks.NewMockMonitorService(t)
 	mLabels := monitor.HttpRequestLabels{
 		Status: "200",
 		Route:  "/health",
@@ -233,7 +235,6 @@ func Test_handleHTTP_Health(t *testing.T) {
 		"release_id": "1234567890abcdef"
 	}`
 	assert.JSONEq(t, wantBody, string(body))
-	mMonitorService.AssertExpectations(t)
 }
 
 func Test_staticFileServer(t *testing.T) {
@@ -277,8 +278,8 @@ func Test_staticFileServer(t *testing.T) {
 func getServeOptionsForTests(t *testing.T, dbConnectionPool db.DBConnectionPool) ServeOptions {
 	t.Helper()
 
-	mMonitorService := &monitor.MockMonitorService{}
-	mMonitorService.On("MonitorHttpRequestDuration", mock.AnythingOfType("time.Duration"), mock.Anything).Return(nil)
+	mMonitorService := monitorMocks.NewMockMonitorService(t)
+	mMonitorService.On("MonitorHttpRequestDuration", mock.AnythingOfType("time.Duration"), mock.Anything).Return(nil).Maybe()
 
 	messengerClientMock := message.MessengerClientMock{}
 	messengerClientMock.On("SendMessage", mock.Anything).Return(nil)
@@ -302,7 +303,7 @@ func getServeOptionsForTests(t *testing.T, dbConnectionPool db.DBConnectionPool)
 	}
 	distAccResolver.
 		On("DistributionAccountFromContext", mock.Anything).
-		Return(distAccPublicKey, nil).
+		Return(schema.NewDefaultStellarDistributionAccount(distAccPublicKey), nil).
 		Maybe()
 
 	serveOptions := ServeOptions{

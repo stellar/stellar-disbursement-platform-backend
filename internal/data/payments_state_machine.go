@@ -2,30 +2,37 @@ package data
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 )
 
 type PaymentStatus string
 
 const (
-	DraftPaymentStatus    PaymentStatus = "DRAFT"
-	ReadyPaymentStatus    PaymentStatus = "READY"
-	PendingPaymentStatus  PaymentStatus = "PENDING"
-	PausedPaymentStatus   PaymentStatus = "PAUSED"
-	SuccessPaymentStatus  PaymentStatus = "SUCCESS"
-	FailedPaymentStatus   PaymentStatus = "FAILED"
+	// DraftPaymentStatus is a non-terminal state for payments that were registered in the database but their disbursement has not started yet. Payments in this state can be deleted or transitioned to READY.
+	DraftPaymentStatus PaymentStatus = "DRAFT"
+	// ReadyPaymentStatus is a non-terminal state for payments that are waiting for the receiver to register. As soon as the receiver registers, the state is transitioned to PENDING.
+	ReadyPaymentStatus PaymentStatus = "READY"
+	// PendingPaymentStatus is a non-terminal state for payments that were marked for submission to the Stellar network. They can or can not have been submitted yet.
+	PendingPaymentStatus PaymentStatus = "PENDING"
+	// PausedPaymentStatus is a non-terminal state for payments that were manually paused. Payments in this state can be resumed.
+	PausedPaymentStatus PaymentStatus = "PAUSED"
+	// SuccessPaymentStatus is a terminal state for payments that were successfully submitted to the Stellar network.
+	SuccessPaymentStatus PaymentStatus = "SUCCESS"
+	// FailedPaymentStatus is a terminal state for payments that failed when submitted to the Stellar network. Payments in this state can be retried.
+	FailedPaymentStatus PaymentStatus = "FAILED"
+	// CanceledPaymentStatus is a terminal state for payments that were either manually or automatically canceled.
 	CanceledPaymentStatus PaymentStatus = "CANCELED"
 )
 
 // Validate validates the payment status
 func (status PaymentStatus) Validate() error {
-	switch PaymentStatus(strings.ToUpper(string(status))) {
-	case DraftPaymentStatus, ReadyPaymentStatus, PendingPaymentStatus, PausedPaymentStatus,
-		SuccessPaymentStatus, FailedPaymentStatus, CanceledPaymentStatus:
+	uppercaseStatus := PaymentStatus(strings.TrimSpace(strings.ToUpper(string(status))))
+	if slices.Contains(PaymentStatuses(), uppercaseStatus) {
 		return nil
-	default:
-		return fmt.Errorf("invalid payment status: %s", status)
 	}
+
+	return fmt.Errorf("invalid payment status: %s", status)
 }
 
 // TransitionTo transitions the payment status to the target state
@@ -58,6 +65,10 @@ func PaymentStatuses() []PaymentStatus {
 // from being initiated if the distribution balance is low.
 func PaymentInProgressStatuses() []PaymentStatus {
 	return []PaymentStatus{ReadyPaymentStatus, PendingPaymentStatus, PausedPaymentStatus}
+}
+
+func PaymentActiveStatuses() []PaymentStatus {
+	return []PaymentStatus{ReadyPaymentStatus, PendingPaymentStatus}
 }
 
 // SourceStatuses returns a list of states that the payment status can transition from given the target state

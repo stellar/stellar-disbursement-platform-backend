@@ -24,6 +24,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
+	monitorMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/scheduler"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
@@ -132,7 +133,7 @@ func Test_serve(t *testing.T) {
 	ctx := context.Background()
 
 	// mock metric service
-	mMonitorService := monitor.MockMonitorService{}
+	mMonitorService := monitorMocks.NewMockMonitorService(t)
 
 	serveOpts := serve.ServeOptions{
 		Environment:                     "test",
@@ -140,14 +141,14 @@ func Test_serve(t *testing.T) {
 		Port:                            8000,
 		Version:                         "x.y.z",
 		InstanceName:                    "SDP Testnet",
-		MonitorService:                  &mMonitorService,
+		MonitorService:                  mMonitorService,
 		AdminDBConnectionPool:           dbConnectionPool,
 		MtnDBConnectionPool:             dbConnectionPool,
 		EC256PublicKey:                  "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAER88h7AiQyVDysRTxKvBB6CaiO/kS\ncvGyimApUE/12gFhNTRf37SE19CSCllKxstnVFOpLLWB7Qu5OJ0Wvcz3hg==\n-----END PUBLIC KEY-----",
 		EC256PrivateKey:                 "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgIqI1MzMZIw2pQDLx\nJn0+FcNT/hNjwtn2TW43710JKZqhRANCAARHzyHsCJDJUPKxFPEq8EHoJqI7+RJy\n8bKKYClQT/XaAWE1NF/ftITX0JIKWUrGy2dUU6kstYHtC7k4nRa9zPeG\n-----END PRIVATE KEY-----",
 		CorsAllowedOrigins:              []string{"*"},
 		SEP24JWTSecret:                  "jwt_secret_1234567890",
-		BaseURL:                         "https://sdp.com",
+		BaseURL:                         "https://sdp-backend.stellar.org",
 		ResetTokenExpirationHours:       24,
 		NetworkPassphrase:               network.TestNetworkPassphrase,
 		Sep10SigningPublicKey:           "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
@@ -166,12 +167,13 @@ func Test_serve(t *testing.T) {
 	serveOpts.AnchorPlatformAPIService, err = anchorplatform.NewAnchorPlatformAPIService(httpclient.DefaultClient(), serveOpts.AnchorPlatformBasePlatformURL, serveOpts.AnchorPlatformOutgoingJWTSecret)
 	require.NoError(t, err)
 
-	serveOpts.CrashTrackerClient, err = di.NewCrashTracker(ctx, crashtracker.CrashTrackerOptions{
+	crashTrackerClient, err := di.NewCrashTracker(ctx, crashtracker.CrashTrackerOptions{
 		Environment:      serveOpts.Environment,
 		GitCommit:        serveOpts.GitCommit,
 		CrashTrackerType: "DRY_RUN",
 	})
 	require.NoError(t, err)
+	serveOpts.CrashTrackerClient = crashTrackerClient
 
 	messengerClient, err := di.NewEmailClient(di.EmailClientOptions{EmailType: message.MessengerTypeDryRun})
 	require.NoError(t, err)
@@ -192,20 +194,21 @@ func Test_serve(t *testing.T) {
 		Environment: "test",
 	}
 	mMonitorService.On("Start", metricOptions).Return(nil).Once()
-	defer mMonitorService.AssertExpectations(t)
 
 	chAccEncryptionPassphrase := keypair.MustRandom().Seed()
 	serveMetricOpts := serve.MetricsServeOptions{
 		Port:           8002,
 		Environment:    "test",
 		MetricType:     monitor.MetricTypePrometheus,
-		MonitorService: &mMonitorService,
+		MonitorService: mMonitorService,
 	}
 
 	serveTenantOpts := serveadmin.ServeOptions{
 		Environment:                             "test",
 		EmailMessengerClient:                    messengerClient,
 		AdminDBConnectionPool:                   dbConnectionPool,
+		MTNDBConnectionPool:                     dbConnectionPool,
+		CrashTrackerClient:                      crashTrackerClient,
 		GitCommit:                               "1234567890abcdef",
 		NetworkPassphrase:                       network.TestNetworkPassphrase,
 		Port:                                    8003,
@@ -214,6 +217,8 @@ func Test_serve(t *testing.T) {
 		TenantAccountNativeAssetBootstrapAmount: tenant.MinTenantDistributionAccountAmount,
 		AdminAccount:                            "admin-account",
 		AdminApiKey:                             "admin-api-key",
+		BaseURL:                                 "https://sdp-backend.stellar.org",
+		SDPUIBaseURL:                            "https://sdp-ui.stellar.org",
 	}
 
 	eventBrokerOptions := cmdUtils.EventBrokerOptions{
@@ -255,7 +260,7 @@ func Test_serve(t *testing.T) {
 	for _, cmd := range originalCommands {
 		if cmd.Use == "serve" {
 			serveCmdFound = true
-			rootCmd.AddCommand((&ServeCommand{}).Command(&mServer, &mMonitorService))
+			rootCmd.AddCommand((&ServeCommand{}).Command(&mServer, mMonitorService))
 		} else {
 			rootCmd.AddCommand(cmd)
 		}
@@ -276,6 +281,7 @@ func Test_serve(t *testing.T) {
 	t.Setenv("DISABLE_RECAPTCHA", fmt.Sprintf("%t", serveOpts.DisableMFA))
 	t.Setenv("DISTRIBUTION_SEED", distributionSeed)
 	t.Setenv("BASE_URL", serveOpts.BaseURL)
+	t.Setenv("SDP_UI_BASE_URL", serveTenantOpts.SDPUIBaseURL)
 	t.Setenv("RECAPTCHA_SITE_KEY", serveOpts.ReCAPTCHASiteKey)
 	t.Setenv("RECAPTCHA_SITE_SECRET_KEY", serveOpts.ReCAPTCHASiteSecretKey)
 	t.Setenv("CORS_ALLOWED_ORIGINS", "*")

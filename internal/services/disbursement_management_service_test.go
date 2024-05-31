@@ -578,17 +578,18 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 		log.DefaultLogger.SetOutput(buf)
 
 		expectedErr := InsufficientBalanceError{
-			DisbursementAsset:  *usdt,
-			DisbursementID:     disbursementInsufficientBalance.ID,
-			AvailableBalance:   11111.0,
-			DisbursementAmount: 22222.0,
-			TotalPendingAmount: 1100.0,
+			DisbursementAsset:   *usdt,
+			DistributionAddress: distributionPubKey,
+			DisbursementID:      disbursementInsufficientBalance.ID,
+			AvailableBalance:    11111.0,
+			DisbursementAmount:  22222.0,
+			TotalPendingAmount:  1100.0,
 		}
 		err = service.StartDisbursement(ctx, disbursementInsufficientBalance.ID, nil, distributionPubKey)
 		require.EqualError(t, err, fmt.Sprintf("running atomic function in RunInTransactionWithPostCommit: %v", expectedErr))
 
 		// PendingTotal includes payments associated with 'readyDisbursement' that were moved from the draft to ready status
-		expectedErrStr := fmt.Sprintf("the disbursement %s failed due to an account balance (11111.00) that was insufficient to fulfill new amount (22222.00) along with the pending amount (1100.00). To complete this action, your distribution account needs to be recharged with at least 12211.00 USDT", disbursementInsufficientBalance.ID)
+		expectedErrStr := fmt.Sprintf("the disbursement %s failed due to an account balance (11111.00) that was insufficient to fulfill new amount (22222.00) along with the pending amount (1100.00). To complete this action, your distribution account (ABC) needs to be recharged with at least 12211.00 USDT", disbursementInsufficientBalance.ID)
 		assert.Contains(t, buf.String(), expectedErrStr)
 	})
 
@@ -672,7 +673,7 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 		assert.EqualError(
 			t,
 			err,
-			fmt.Sprintf("executing postCommit function: publishing messages %s on event producer: unexpected error", expectedMessages),
+			fmt.Sprintf("executing postCommit function: publishing messages %+v on event producer: unexpected error", expectedMessages),
 		)
 	})
 
@@ -857,7 +858,7 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 
 		entries := getEntries()
 		require.Len(t, entries, 1)
-		assert.Contains(t, fmt.Sprintf("event producer is nil, could not publish messages %s", msgs), entries[0].Message)
+		assert.Contains(t, fmt.Sprintf("event producer is nil, could not publish messages %+v", msgs), entries[0].Message)
 	})
 	hMock.AssertExpectations(t)
 }

@@ -7,22 +7,7 @@ import (
 	migrate "github.com/rubenv/sql-migrate"
 	"github.com/stellar/go/support/db/dbtest"
 
-	adminmigrations "github.com/stellar/stellar-disbursement-platform-backend/db/migrations/admin-migrations"
-	authmigrations "github.com/stellar/stellar-disbursement-platform-backend/db/migrations/auth-migrations"
-	sdpmigrations "github.com/stellar/stellar-disbursement-platform-backend/db/migrations/sdp-migrations"
-	tssmigrations "github.com/stellar/stellar-disbursement-platform-backend/db/migrations/tss-migrations"
-)
-
-type migrationsConfig struct {
-	tableName string
-	fs        http.FileSystem
-}
-
-var (
-	adminMigrationsConfig = migrationsConfig{tableName: "admin_migrations", fs: http.FS(adminmigrations.FS)}
-	sdpMigrationsConfig   = migrationsConfig{tableName: "sdp_migrations", fs: http.FS(sdpmigrations.FS)}
-	authMigrationsConfig  = migrationsConfig{tableName: "auth_migrations", fs: http.FS(authmigrations.FS)}
-	tssMigrationsConfig   = migrationsConfig{tableName: "tss_migrations", fs: http.FS(tssmigrations.FS)}
+	"github.com/stellar/stellar-disbursement-platform-backend/db/migrations"
 )
 
 func OpenWithoutMigrations(t *testing.T) *dbtest.DB {
@@ -30,15 +15,15 @@ func OpenWithoutMigrations(t *testing.T) *dbtest.DB {
 	return db
 }
 
-func openWithMigrations(t *testing.T, configs ...migrationsConfig) *dbtest.DB {
+func openWithMigrations(t *testing.T, configs ...migrations.MigrationRouter) *dbtest.DB {
 	db := OpenWithoutMigrations(t)
 
 	conn := db.Open()
 	defer conn.Close()
 
 	for _, config := range configs {
-		ms := migrate.MigrationSet{TableName: config.tableName}
-		m := migrate.HttpFileSystemMigrationSource{FileSystem: config.fs}
+		ms := migrate.MigrationSet{TableName: config.TableName}
+		m := migrate.HttpFileSystemMigrationSource{FileSystem: http.FS(config.FS)}
 		_, err := ms.ExecMax(conn.DB, "postgres", m, migrate.Up, 0)
 		if err != nil {
 			t.Fatal(err)
@@ -50,17 +35,17 @@ func openWithMigrations(t *testing.T, configs ...migrationsConfig) *dbtest.DB {
 
 func Open(t *testing.T) *dbtest.DB {
 	return openWithMigrations(t,
-		adminMigrationsConfig,
-		sdpMigrationsConfig,
-		authMigrationsConfig,
-		tssMigrationsConfig,
+		migrations.AdminMigrationRouter,
+		migrations.SDPMigrationRouter,
+		migrations.AuthMigrationRouter,
+		migrations.TSSMigrationRouter,
 	)
 }
 
 func OpenWithAdminMigrationsOnly(t *testing.T) *dbtest.DB {
-	return openWithMigrations(t, adminMigrationsConfig)
+	return openWithMigrations(t, migrations.AdminMigrationRouter)
 }
 
 func OpenWithTSSMigrationsOnly(t *testing.T) *dbtest.DB {
-	return openWithMigrations(t, tssMigrationsConfig)
+	return openWithMigrations(t, migrations.TSSMigrationRouter)
 }

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/sirupsen/logrus"
 	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/keypair"
 	"github.com/stellar/go/network"
@@ -29,9 +30,11 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
+	sdpMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
+	monitorMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
+	engineMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions"
 	preconditionsMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
@@ -41,6 +44,7 @@ import (
 	storeMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
 	sdpUtlis "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
@@ -64,7 +68,7 @@ func getTransactionWorkerInstance(t *testing.T, dbConnectionPool db.DBConnection
 	mDistAccResolver := sigMocks.NewMockDistributionAccountResolver(t)
 	mDistAccResolver.
 		On("DistributionAccount", mock.Anything, mock.AnythingOfType("string")).
-		Return(distributionKP.Address(), nil).
+		Return(schema.NewDefaultStellarDistributionAccount(distributionKP.Address()), nil).
 		Maybe()
 
 	sigService, err := signing.NewSignatureService(signing.SignatureServiceOptions{
@@ -199,7 +203,7 @@ func Test_NewTransactionWorker(t *testing.T) {
 		sigService          signing.SignatureService
 		maxBaseFee          int
 		crashTrackerClient  crashtracker.CrashTrackerClient
-		txProcessingLimiter *engine.TransactionProcessingLimiter
+		txProcessingLimiter engine.TransactionProcessingLimiter
 		monitorSvc          tssMonitor.TSSMonitorService
 		eventProducer       events.Producer
 		wantError           error
@@ -319,8 +323,698 @@ func Test_NewTransactionWorker(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 				require.NotEmpty(t, gotWorker)
+				require.NotEmpty(t, gotWorker.jobUUID)
+				wantWorker.jobUUID = gotWorker.jobUUID
 				require.Equal(t, wantWorker, gotWorker)
 			}
+		})
+	}
+}
+
+func Test_TransactionWorker_updateContextLogger(t *testing.T) {
+	testCases := []struct {
+		name                   string
+		preexistingTxHash      string
+		preexistingXDRReceived string
+		preexistingXDRSent     string
+		additionalLogrusFields logrus.Fields
+	}{
+		{
+			name: "without preexisting tx_hash nor XDR data",
+		},
+		{
+			name:              "with preexisting tx_hash but no XDR data",
+			preexistingTxHash: "tx_hash_123",
+			additionalLogrusFields: logrus.Fields{
+				"tx_hash": "tx_hash_123",
+			},
+		},
+		{
+			name:               "with preexisting tx_hash and XDRSent",
+			preexistingTxHash:  "tx_hash_123",
+			preexistingXDRSent: "xdr_sent_123",
+			additionalLogrusFields: logrus.Fields{
+				"tx_hash":  "tx_hash_123",
+				"xdr_sent": "xdr_sent_123",
+			},
+		},
+		{
+			name:                   "with preexisting tx_hash and XDR data (sent and received)",
+			preexistingTxHash:      "tx_hash_123",
+			preexistingXDRSent:     "xdr_sent_123",
+			preexistingXDRReceived: "xdr_received_123",
+			additionalLogrusFields: logrus.Fields{
+				"tx_hash":      "tx_hash_123",
+				"xdr_sent":     "xdr_sent_123",
+				"xdr_received": "xdr_received_123",
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			dbt := dbtest.OpenWithTSSMigrationsOnly(t)
+			defer dbt.Close()
+			dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+			require.NoError(t, err)
+			defer dbConnectionPool.Close()
+
+			transactionWorker := getTransactionWorkerInstance(t, dbConnectionPool)
+			transactionWorker.monitorSvc = tssMonitor.TSSMonitorService{
+				GitCommitHash: "gitCommitHash0x",
+				Version:       "version123",
+			}
+
+			// Prepare the context
+			ctx := context.Background()
+			txJob := createTxJobFixture(t, ctx, dbConnectionPool, true, 1, 2, uuid.NewString())
+			require.NotEmpty(t, txJob)
+			if tc.preexistingTxHash != "" {
+				txJob.Transaction.StellarTransactionHash = sql.NullString{Valid: true, String: tc.preexistingTxHash}
+			}
+			if tc.preexistingXDRSent != "" {
+				txJob.Transaction.XDRSent = sql.NullString{Valid: true, String: tc.preexistingXDRSent}
+			}
+			if tc.preexistingXDRReceived != "" {
+				txJob.Transaction.XDRReceived = sql.NullString{Valid: true, String: tc.preexistingXDRReceived}
+			}
+
+			updatedCtx := transactionWorker.updateContextLogger(ctx, &txJob)
+
+			// Call the logger
+			getEntries := log.Ctx(updatedCtx).StartTest(log.DebugLevel)
+			log.Ctx(updatedCtx).Debug("FOO BAR")
+			entries := getEntries()
+
+			// Assert length of entries:
+			require.Len(t, entries, 1)
+			logText := entries[0].Message
+
+			// Assert log text:
+			assert.Contains(t, logText, "FOO BAR", "Main message text is missing")
+
+			// Assert log data:
+			wantLogData := logrus.Fields{
+				"app_version":         "version123",
+				"asset":               txJob.Transaction.AssetCode,
+				"channel_account":     txJob.ChannelAccount.PublicKey,
+				"created_at":          txJob.Transaction.CreatedAt.String(),
+				"destination_account": txJob.Transaction.Destination,
+				"event_id":            transactionWorker.jobUUID,
+				"git_commit_hash":     "gitCommitHash0x",
+				"tenant_id":           txJob.Transaction.TenantID,
+				"tx_id":               txJob.Transaction.ID,
+				"updated_at":          txJob.Transaction.UpdatedAt.String(),
+			}
+			for k, v := range tc.additionalLogrusFields {
+				wantLogData[k] = v
+			}
+			logData := entries[0].Data
+			wantLogData["pid"] = logData["pid"]
+			assert.Equal(t, wantLogData, logData, "Missing key-value pair")
+		})
+	}
+}
+
+func Test_TransactionWorker_handleFailedTransaction_nonHorizonErrors(t *testing.T) {
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	nonHorizonError := errors.New("non-horizon error")
+
+	testCases := []struct {
+		name         string
+		hTxRespFn    func(txJob *TxJob) horizon.Transaction
+		hErr         *utils.HorizonErrorWrapper
+		setupMocksFn func(t *testing.T, tw *TransactionWorker, txJob *TxJob)
+		errContains  []string
+	}{
+		{
+			name: "saveResponseXDRIfPresent fails",
+			hTxRespFn: func(txJob *TxJob) horizon.Transaction {
+				return horizon.Transaction{
+					ID:         "tx_id_123",
+					ResultXdr:  "result_xdr",
+					Successful: false,
+					Account:    txJob.ChannelAccount.PublicKey,
+				}
+			},
+			hErr: utils.NewHorizonErrorWrapper(nonHorizonError),
+			setupMocksFn: func(t *testing.T, tw *TransactionWorker, txJob *TxJob) {
+				// PART 1: mock UpdateStellarTransactionXDRReceived that'll be called in saveResponseXDRIfPresent
+				mockTxStore := storeMocks.NewMockTransactionStore(t)
+				mockTxStore.
+					On("UpdateStellarTransactionXDRReceived", mock.Anything, mock.AnythingOfType("string"), mock.AnythingOfType("string")).
+					Return(nil, errors.New("txModel error in UpdateStellarTransactionXDRReceived")).
+					Once()
+				tw.txModel = mockTxStore
+
+				// PART 2: mock deferred LogAndMonitorTransaction
+				mMonitorClient := monitorMocks.NewMockMonitorClient(t)
+				mMonitorClient.
+					On("MonitorCounters", sdpMonitor.PaymentErrorTag, mock.Anything).
+					Return(nil).
+					Once()
+				tssMonitorService := tssMonitor.TSSMonitorService{
+					Version:       "0.01",
+					GitCommitHash: "0xABC",
+					Client:        mMonitorClient,
+				}
+				tw.monitorSvc = tssMonitorService
+			},
+			errContains: []string{"saving response XDR", "updating XDRReceived", "txModel error in UpdateStellarTransactionXDRReceived"},
+		},
+		{
+			name: "it's not a horizon error, and unlockJob fails",
+			hTxRespFn: func(txJob *TxJob) horizon.Transaction {
+				return horizon.Transaction{
+					ID:         "tx_id_123",
+					ResultXdr:  "result_xdr",
+					Successful: false,
+					Account:    txJob.ChannelAccount.PublicKey,
+				}
+			},
+			hErr: utils.NewHorizonErrorWrapper(nonHorizonError),
+			setupMocksFn: func(t *testing.T, tw *TransactionWorker, txJob *TxJob) {
+				// PART 1: mock UpdateStellarTransactionXDRReceived that'll be called in saveResponseXDRIfPresent
+				mockTxStore := storeMocks.NewMockTransactionStore(t)
+				txJob.Transaction.XDRReceived = sql.NullString{Valid: true, String: "xdr_received_123"}
+				mockTxStore.
+					On("UpdateStellarTransactionXDRReceived", mock.Anything, mock.AnythingOfType("string"), mock.AnythingOfType("string")).
+					Return(&txJob.Transaction, nil).
+					Once()
+				tw.txModel = mockTxStore
+
+				// PART 2: mock Unlock that'll be called in unlockJob
+				mockChAccStore := storeMocks.NewMockChannelAccountStore(t)
+				mockChAccStore.
+					On("Unlock", mock.Anything, mock.Anything, txJob.ChannelAccount.PublicKey).
+					Return(nil, errors.New("chAccModel error in Unlock")).
+					Once()
+				tw.chAccModel = mockChAccStore
+
+				// PART 3: mock deferred LogAndMonitorTransaction
+				mMonitorClient := monitorMocks.NewMockMonitorClient(t)
+				mMonitorClient.
+					On("MonitorCounters", sdpMonitor.PaymentErrorTag, mock.Anything).
+					Return(nil).
+					Once()
+				tssMonitorService := tssMonitor.TSSMonitorService{
+					Version:       "0.01",
+					GitCommitHash: "0xABC",
+					Client:        mMonitorClient,
+				}
+				tw.monitorSvc = tssMonitorService
+			},
+			errContains: []string{"unlocking job", "unlocking channel account", "chAccModel error in Unlock"},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			defer store.DeleteAllFromChannelAccounts(t, ctx, dbConnectionPool)
+			defer store.DeleteAllTransactionFixtures(t, ctx, dbConnectionPool)
+
+			transactionWorker := getTransactionWorkerInstance(t, dbConnectionPool)
+			transactionWorker.jobUUID = uuid.NewString()
+			txJob := createTxJobFixture(t, context.Background(), dbConnectionPool, true, 1, 2, uuid.NewString())
+			require.NotEmpty(t, txJob)
+
+			// Setup mocks:
+			tc.setupMocksFn(t, &transactionWorker, &txJob)
+
+			// Run test:
+			err := transactionWorker.handleFailedTransaction(context.Background(), &txJob, tc.hTxRespFn(&txJob), tc.hErr)
+
+			// Assert:
+			if tc.errContains != nil {
+				require.Error(t, err)
+				for i, wantErr := range tc.errContains {
+					assert.Containsf(t, err.Error(), wantErr, "error with index %d and text %q was not found in %q", i, wantErr, err.Error())
+				}
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func Test_TransactionWorker_handleFailedTransaction_errorsThatTriggerJitter(t *testing.T) {
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	testCases := []struct {
+		name        string
+		statusCode  int
+		resultCodes map[string]interface{}
+	}{
+		{
+			name:       "504 - timeout",
+			statusCode: http.StatusGatewayTimeout,
+		},
+		{
+			name:       "429 - Too Many Requests",
+			statusCode: http.StatusTooManyRequests,
+		},
+		{
+			name:       "400 (tx_insufficient_fee) - Bad Request",
+			statusCode: http.StatusBadRequest,
+			resultCodes: map[string]interface{}{
+				"transaction": "tx_insufficient_fee",
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			defer store.DeleteAllFromChannelAccounts(t, ctx, dbConnectionPool)
+			defer store.DeleteAllTransactionFixtures(t, ctx, dbConnectionPool)
+
+			tw := getTransactionWorkerInstance(t, dbConnectionPool)
+			tw.jobUUID = uuid.NewString()
+			txJob := createTxJobFixture(t, context.Background(), dbConnectionPool, true, 1, 2, uuid.NewString())
+			require.NotEmpty(t, txJob)
+
+			// declare horizon error
+			horizonError := horizonclient.Error{
+				Problem: problem.P{
+					Status: tc.statusCode,
+					Extras: map[string]interface{}{
+						"result_codes": tc.resultCodes,
+					},
+				},
+			}
+			hErr := utils.NewHorizonErrorWrapper(horizonError)
+
+			// PART 1: mock UpdateStellarTransactionXDRReceived that will be called from saveResponseXDRIfPresent
+			mockTxStore := storeMocks.NewMockTransactionStore(t)
+			txJob.Transaction.XDRReceived = sql.NullString{Valid: true, String: "xdr_received_123"}
+			mockTxStore.
+				On("UpdateStellarTransactionXDRReceived", mock.Anything, mock.AnythingOfType("string"), mock.AnythingOfType("string")).
+				Return(&txJob.Transaction, nil).
+				Once()
+			tw.txModel = mockTxStore
+			// PART 2: mock Unlock(s), that will be called from unlockJob
+			mockChAccStore := storeMocks.NewMockChannelAccountStore(t)
+			mockChAccStore.
+				On("Unlock", mock.Anything, mock.Anything, txJob.ChannelAccount.PublicKey).
+				Return(nil, nil).
+				Once()
+			tw.chAccModel = mockChAccStore
+			mockTxStore.
+				On("Unlock", mock.Anything, mock.Anything, txJob.Transaction.ID).
+				Return(nil, nil).
+				Once()
+			// PART 3: setup the jitter to be one error away from taking action
+			txProcessingLimiter := engine.NewTransactionProcessingLimiter(100)
+			txProcessingLimiter.IndeterminateResponsesCounter = engine.IndeterminateResponsesToleranceLimit - 1
+			assert.Equal(t, 100, txProcessingLimiter.LimitValue())
+			tw.txProcessingLimiter = txProcessingLimiter
+			// PART 4: mock deferred LogAndMonitorTransaction
+			mMonitorClient := monitorMocks.NewMockMonitorClient(t)
+			mMonitorClient.
+				On("MonitorCounters", sdpMonitor.PaymentErrorTag, mock.Anything).
+				Return(nil).
+				Once()
+			tssMonitorService := tssMonitor.TSSMonitorService{
+				Version:       "0.01",
+				GitCommitHash: "0xABC",
+				Client:        mMonitorClient,
+			}
+			tw.monitorSvc = tssMonitorService
+
+			// Run test:
+			hTransaction := horizon.Transaction{
+				ID:         "tx_id_123",
+				ResultXdr:  "result_xdr",
+				Successful: false,
+				Account:    txJob.ChannelAccount.PublicKey,
+			}
+			err := tw.handleFailedTransaction(context.Background(), &txJob, hTransaction, hErr)
+			require.NoError(t, err)
+
+			// Assert that the jitter took action
+			var ok bool
+			txProcessingLimiter, ok = tw.txProcessingLimiter.(*engine.TransactionProcessingLimiterImpl)
+			require.True(t, ok)
+			assert.Equal(t, engine.DefaultBundlesSelectionLimit, txProcessingLimiter.LimitValue())
+		})
+	}
+}
+
+func Test_TransactionWorker_handleFailedTransaction_markedAsDefinitiveError(t *testing.T) {
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	crashTrackerMessage := "transaction error - cannot be retried"
+
+	testCases := []struct {
+		name            string
+		resultCodes     map[string]interface{}
+		crashTrackerMsg string
+	}{
+		// - 400: with any of the transaction error codes [tx_bad_auth, tx_bad_auth_extra, tx_insufficient_balance]
+		{
+			name:            "400 (tx_bad_auth) - Bad Request",
+			resultCodes:     map[string]interface{}{"transaction": "tx_bad_auth"},
+			crashTrackerMsg: crashTrackerMessage,
+		},
+		{
+			name:            "400 (tx_bad_auth_extra) - Bad Request",
+			resultCodes:     map[string]interface{}{"transaction": "tx_bad_auth_extra"},
+			crashTrackerMsg: crashTrackerMessage,
+		},
+		{
+			name:            "400 (tx_insufficient_balance) - Bad Request",
+			resultCodes:     map[string]interface{}{"transaction": "tx_insufficient_balance"},
+			crashTrackerMsg: crashTrackerMessage,
+		},
+		// - 400: with any of the operation error codes [op_bad_auth, op_underfunded, op_src_not_authorized, op_no_destination, op_no_trust, op_line_full, op_not_authorized, op_no_issuer]
+		{
+			name:            "400 (op_bad_auth) - Bad Request",
+			resultCodes:     map[string]interface{}{"operations": []string{"op_bad_auth"}},
+			crashTrackerMsg: crashTrackerMessage,
+		},
+		{
+			name:            "400 (op_underfunded) - Bad Request",
+			resultCodes:     map[string]interface{}{"operations": []string{"op_underfunded"}},
+			crashTrackerMsg: crashTrackerMessage,
+		},
+		{
+			name:            "400 (op_src_not_authorized) - Bad Request",
+			resultCodes:     map[string]interface{}{"operations": []string{"op_src_not_authorized"}},
+			crashTrackerMsg: crashTrackerMessage,
+		},
+		{
+			name:        "400 (op_no_destination) - Bad Request",
+			resultCodes: map[string]interface{}{"operations": []string{"op_no_destination"}},
+		},
+		{
+			name:        "400 (op_no_trust) - Bad Request",
+			resultCodes: map[string]interface{}{"operations": []string{"op_no_trust"}},
+		},
+		{
+			name:        "400 (op_line_full) - Bad Request",
+			resultCodes: map[string]interface{}{"operations": []string{"op_line_full"}},
+		},
+		{
+			name:        "400 (op_not_authorized) - Bad Request",
+			resultCodes: map[string]interface{}{"operations": []string{"op_not_authorized"}},
+		},
+		{
+			name:            "400 (op_no_issuer) - Bad Request",
+			resultCodes:     map[string]interface{}{"operations": []string{"op_no_issuer"}},
+			crashTrackerMsg: crashTrackerMessage,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			defer store.DeleteAllFromChannelAccounts(t, ctx, dbConnectionPool)
+			defer store.DeleteAllTransactionFixtures(t, ctx, dbConnectionPool)
+
+			tw := getTransactionWorkerInstance(t, dbConnectionPool)
+			tw.jobUUID = uuid.NewString()
+
+			txJob := createTxJobFixture(t, context.Background(), dbConnectionPool, true, 1, 2, uuid.NewString())
+			const (
+				resultXDR   = "AAAAAAAAAGQAAAAAAAAAAQAAAAAAAAAOAAAAAAAAAABw2JZZYIt4n/WXKcnDow3mbTBMPrOnldetgvGUlpTSEQAAAAA="
+				txHash      = "3389e9f0f1a65f19736cacf544c2e825313e8447f569233bb8db39aa607c8889"
+				envelopeXDR = "AAAAAGL8HQvQkbK2HA3WVjRrKmjX00fG8sLI7m0ERwJW/AX3AAAACgAAAAAAAAABAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAArqN6LeOagjxMaUP96Bzfs9e0corNZXzBWJkFoK7kvkwAAAAAO5rKAAAAAAAAAAABVvwF9wAAAEAKZ7IPj/46PuWU6ZOtyMosctNAkXRNX9WCAI5RnfRk+AyxDLoDZP/9l3NvsxQtWj9juQOuoBlFLnWu8intgxQA"
+			)
+			tx, err := tw.txModel.UpdateStellarTransactionHashAndXDRSent(ctx, txJob.Transaction.ID, txHash, envelopeXDR)
+			require.NoError(t, err)
+			txJob.Transaction = *tx
+
+			// declare horizon error
+			horizonError := horizonclient.Error{
+				Problem: problem.P{
+					Status: http.StatusBadRequest,
+					Extras: map[string]interface{}{"result_codes": tc.resultCodes},
+				},
+			}
+			hErr := utils.NewHorizonErrorWrapper(horizonError)
+
+			// PART 1: mock call to jitter (TransactionProcessingLimiter)
+			mockTxProcessingLimiter := engineMocks.NewMockTransactionProcessingLimiter(t)
+			mockTxProcessingLimiter.On("AdjustLimitIfNeeded", hErr).Return().Once()
+			tw.txProcessingLimiter = mockTxProcessingLimiter
+
+			// PART 2: mock producer that'll be called in producePaymentCompletedEvent -> WriteMessages
+			mockEventProducer := events.NewMockProducer(t)
+			mockEventProducer.
+				On("WriteMessages", ctx, mock.AnythingOfType("[]events.Message")).
+				Run(func(args mock.Arguments) {
+					messages, ok := args.Get(1).([]events.Message)
+					require.True(t, ok)
+					require.Len(t, messages, 1)
+
+					msg := messages[0]
+
+					assert.Equal(t, events.PaymentCompletedTopic, msg.Topic)
+					assert.Equal(t, txJob.Transaction.ExternalID, msg.Key)
+					assert.Equal(t, txJob.Transaction.TenantID, msg.TenantID)
+					assert.Equal(t, events.PaymentCompletedErrorType, msg.Type)
+
+					msgData, ok := msg.Data.(schemas.EventPaymentCompletedData)
+					require.True(t, ok)
+					assert.Equal(t, txJob.Transaction.ID, msgData.TransactionID)
+					assert.Equal(t, txJob.Transaction.ExternalID, msgData.PaymentID)
+					assert.Equal(t, string(data.FailedPaymentStatus), msgData.PaymentStatus)
+					assert.Equal(t, hErr.Error(), msgData.PaymentStatusMessage)
+					assert.WithinDuration(t, time.Now(), msgData.PaymentCompletedAt, time.Millisecond*200)
+					assert.Equal(t, txHash, msgData.StellarTransactionID)
+				}).
+				Return(nil).
+				Once()
+			tw.eventProducer = mockEventProducer
+
+			// PART 3: mock LogAndReportErrors
+			if tc.crashTrackerMsg != "" {
+				mockCrashTrackerClient := crashtracker.NewMockCrashTrackerClient(t)
+				mockCrashTrackerClient.
+					On("LogAndReportErrors", mock.Anything, hErr, tc.crashTrackerMsg).
+					Return().
+					Once()
+				tw.crashTrackerClient = mockCrashTrackerClient
+			}
+
+			// PART 4: mock deferred LogAndMonitorTransaction
+			mMonitorClient := monitorMocks.NewMockMonitorClient(t)
+			mMonitorClient.
+				On("MonitorCounters", sdpMonitor.PaymentErrorTag, mock.Anything).
+				Return(nil).
+				Once()
+			tssMonitorService := tssMonitor.TSSMonitorService{
+				Version:       "0.01",
+				GitCommitHash: "0xABC",
+				Client:        mMonitorClient,
+			}
+			tw.monitorSvc = tssMonitorService
+
+			// Run test:
+			hTransaction := horizon.Transaction{
+				ID:          txHash,
+				ResultXdr:   resultXDR,
+				EnvelopeXdr: envelopeXDR,
+				Successful:  false,
+				Account:     txJob.ChannelAccount.PublicKey,
+			}
+			err = tw.handleFailedTransaction(context.Background(), &txJob, hTransaction, hErr)
+			require.NoError(t, err)
+
+			// Assert transaction status
+			updatedTx, err := tw.txModel.Get(ctx, txJob.Transaction.ID)
+			require.NoError(t, err)
+			assert.Equal(t, store.TransactionStatusError, updatedTx.Status)
+		})
+	}
+}
+
+func Test_TransactionWorker_handleFailedTransaction_notDefinitiveErrorButTriggersCrashTracker(t *testing.T) {
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+	defer store.DeleteAllFromChannelAccounts(t, ctx, dbConnectionPool)
+	defer store.DeleteAllTransactionFixtures(t, ctx, dbConnectionPool)
+
+	tw := getTransactionWorkerInstance(t, dbConnectionPool)
+	tw.jobUUID = uuid.NewString()
+
+	txJob := createTxJobFixture(t, context.Background(), dbConnectionPool, true, 1, 2, uuid.NewString())
+	const (
+		resultXDR   = "AAAAAAAAAGQAAAAAAAAAAQAAAAAAAAAOAAAAAAAAAABw2JZZYIt4n/WXKcnDow3mbTBMPrOnldetgvGUlpTSEQAAAAA="
+		txHash      = "3389e9f0f1a65f19736cacf544c2e825313e8447f569233bb8db39aa607c8889"
+		envelopeXDR = "AAAAAGL8HQvQkbK2HA3WVjRrKmjX00fG8sLI7m0ERwJW/AX3AAAACgAAAAAAAAABAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAArqN6LeOagjxMaUP96Bzfs9e0corNZXzBWJkFoK7kvkwAAAAAO5rKAAAAAAAAAAABVvwF9wAAAEAKZ7IPj/46PuWU6ZOtyMosctNAkXRNX9WCAI5RnfRk+AyxDLoDZP/9l3NvsxQtWj9juQOuoBlFLnWu8intgxQA"
+	)
+	tx, err := tw.txModel.UpdateStellarTransactionHashAndXDRSent(ctx, txJob.Transaction.ID, txHash, envelopeXDR)
+	require.NoError(t, err)
+	txJob.Transaction = *tx
+	// declare horizon error
+	horizonError := horizonclient.Error{
+		Problem: problem.P{
+			Status: http.StatusBadRequest,
+			Extras: map[string]interface{}{"result_codes": map[string]interface{}{
+				"transaction": "tx_bad_seq",
+			}},
+		},
+	}
+	hErr := utils.NewHorizonErrorWrapper(horizonError)
+
+	// PART 1: mock call to jitter (TransactionProcessingLimiter)
+	mockTxProcessingLimiter := engineMocks.NewMockTransactionProcessingLimiter(t)
+	mockTxProcessingLimiter.On("AdjustLimitIfNeeded", hErr).Return().Once()
+	tw.txProcessingLimiter = mockTxProcessingLimiter
+
+	// PART 2: mock LogAndReportErrors
+	mockCrashTrackerClient := crashtracker.NewMockCrashTrackerClient(t)
+	mockCrashTrackerClient.
+		On("LogAndReportErrors", mock.Anything, hErr, "tx_bad_seq detected!").
+		Return().
+		Once()
+	tw.crashTrackerClient = mockCrashTrackerClient
+
+	// PART 3: mock deferred LogAndMonitorTransaction
+	mMonitorClient := monitorMocks.NewMockMonitorClient(t)
+	mMonitorClient.
+		On("MonitorCounters", sdpMonitor.PaymentErrorTag, mock.Anything).
+		Return(nil).
+		Once()
+	tssMonitorService := tssMonitor.TSSMonitorService{
+		Version:       "0.01",
+		GitCommitHash: "0xABC",
+		Client:        mMonitorClient,
+	}
+	tw.monitorSvc = tssMonitorService
+
+	// Run test:
+	hTransaction := horizon.Transaction{
+		ID:          txHash,
+		ResultXdr:   resultXDR,
+		EnvelopeXdr: envelopeXDR,
+		Successful:  false,
+		Account:     txJob.ChannelAccount.PublicKey,
+	}
+	err = tw.handleFailedTransaction(context.Background(), &txJob, hTransaction, hErr)
+	require.NoError(t, err)
+
+	// Assert transaction status
+	updatedTx, err := tw.txModel.Get(ctx, txJob.Transaction.ID)
+	require.NoError(t, err)
+	assert.Equal(t, store.TransactionStatusProcessing, updatedTx.Status)
+}
+
+func Test_TransactionWorker_handleFailedTransaction_retryableErrorThatDoesntTriggerJitter(t *testing.T) {
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	testCases := []struct {
+		name string
+		hErr *utils.HorizonErrorWrapper
+	}{
+		// - 400 - tx_too_late
+		{
+			name: "400 (tx_too_late) - Bad Request",
+			hErr: utils.NewHorizonErrorWrapper(horizonclient.Error{
+				Problem: problem.P{
+					Status: http.StatusBadRequest,
+					Extras: map[string]interface{}{
+						"result_codes": map[string]interface{}{
+							"transaction": "tx_too_late",
+						},
+					},
+				},
+			}),
+		},
+		// - 502 - unable to connect to horizon
+		{
+			name: "502 - Bad Gateway",
+			hErr: utils.NewHorizonErrorWrapper(horizonclient.Error{
+				Problem: problem.P{
+					Status: http.StatusBadGateway,
+				},
+			}),
+		},
+		// unexpected error
+		{
+			name: "502 - Bad Gateway",
+			hErr: utils.NewHorizonErrorWrapper(errors.New("foo bar error")),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			defer store.DeleteAllFromChannelAccounts(t, ctx, dbConnectionPool)
+			defer store.DeleteAllTransactionFixtures(t, ctx, dbConnectionPool)
+
+			tw := getTransactionWorkerInstance(t, dbConnectionPool)
+			tw.jobUUID = uuid.NewString()
+
+			txJob := createTxJobFixture(t, context.Background(), dbConnectionPool, true, 1, 2, uuid.NewString())
+			const (
+				resultXDR   = "AAAAAAAAAGQAAAAAAAAAAQAAAAAAAAAOAAAAAAAAAABw2JZZYIt4n/WXKcnDow3mbTBMPrOnldetgvGUlpTSEQAAAAA="
+				txHash      = "3389e9f0f1a65f19736cacf544c2e825313e8447f569233bb8db39aa607c8889"
+				envelopeXDR = "AAAAAGL8HQvQkbK2HA3WVjRrKmjX00fG8sLI7m0ERwJW/AX3AAAACgAAAAAAAAABAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAArqN6LeOagjxMaUP96Bzfs9e0corNZXzBWJkFoK7kvkwAAAAAO5rKAAAAAAAAAAABVvwF9wAAAEAKZ7IPj/46PuWU6ZOtyMosctNAkXRNX9WCAI5RnfRk+AyxDLoDZP/9l3NvsxQtWj9juQOuoBlFLnWu8intgxQA"
+			)
+			tx, err := tw.txModel.UpdateStellarTransactionHashAndXDRSent(ctx, txJob.Transaction.ID, txHash, envelopeXDR)
+			require.NoError(t, err)
+			txJob.Transaction = *tx
+
+			// PART 1: mock call to jitter (TransactionProcessingLimiter)
+			if tc.hErr.IsHorizonError() {
+				mockTxProcessingLimiter := engineMocks.NewMockTransactionProcessingLimiter(t)
+				mockTxProcessingLimiter.On("AdjustLimitIfNeeded", tc.hErr).Return().Once()
+				tw.txProcessingLimiter = mockTxProcessingLimiter
+			}
+
+			// PART 2: mock deferred LogAndMonitorTransaction
+			mMonitorClient := monitorMocks.NewMockMonitorClient(t)
+			mMonitorClient.
+				On("MonitorCounters", sdpMonitor.PaymentErrorTag, mock.Anything).
+				Return(nil).
+				Once()
+			tssMonitorService := tssMonitor.TSSMonitorService{
+				Version:       "0.01",
+				GitCommitHash: "0xABC",
+				Client:        mMonitorClient,
+			}
+			tw.monitorSvc = tssMonitorService
+
+			// Run test:
+			hTransaction := horizon.Transaction{
+				ID:          txHash,
+				ResultXdr:   resultXDR,
+				EnvelopeXdr: envelopeXDR,
+				Successful:  false,
+				Account:     txJob.ChannelAccount.PublicKey,
+			}
+			err = tw.handleFailedTransaction(context.Background(), &txJob, hTransaction, tc.hErr)
+			require.NoError(t, err)
+
+			// Assert transaction status
+			updatedTx, err := tw.txModel.Get(ctx, txJob.Transaction.ID)
+			require.NoError(t, err)
+			assert.Equal(t, store.TransactionStatusProcessing, updatedTx.Status)
 		})
 	}
 }
@@ -359,15 +1053,6 @@ func Test_TransactionWorker_handleSuccessfulTransaction(t *testing.T) {
 			Return(&txJob.Transaction, nil).
 			Once()
 		transactionWorker.txModel = mockTxStore
-
-		mMonitorService := monitor.MockMonitorService{}
-		tssMonitorService := tssMonitor.TSSMonitorService{
-			Version:       "0.01",
-			GitCommitHash: "0xABC",
-		}
-		mMonitorService.On("MonitorCounters", mock.Anything, mock.Anything).Return(nil)
-
-		transactionWorker.monitorSvc = tssMonitorService
 
 		// Run test:
 		err := transactionWorker.handleSuccessfulTransaction(ctx, &txJob, horizon.Transaction{Successful: true})
@@ -595,15 +1280,6 @@ func Test_TransactionWorker_handleSuccessfulTransaction(t *testing.T) {
 		transactionWorker := getTransactionWorkerInstance(t, dbConnectionPool)
 		require.NotEmpty(t, transactionWorker)
 
-		mMonitorService := monitor.MockMonitorService{}
-		tssMonitorService := tssMonitor.TSSMonitorService{
-			Version:       "0.01",
-			GitCommitHash: "0xABC",
-		}
-		mMonitorService.On("MonitorCounters", mock.Anything, mock.Anything).Return(nil)
-
-		transactionWorker.monitorSvc = tssMonitorService
-
 		txJob := createTxJobFixture(t, ctx, dbConnectionPool, true, currentLedger, lockedToLedger, uuid.NewString())
 		require.NotEmpty(t, txJob)
 
@@ -752,15 +1428,6 @@ func Test_TransactionWorker_reconcileSubmittedTransaction(t *testing.T) {
 			hMock := &horizonclient.MockClient{}
 			hMock.On("TransactionDetail", txHash).Return(tc.horizonTxResponse, tc.horizonTxError).Once()
 			transactionWorker.engine.HorizonClient = hMock
-
-			mMonitorService := monitor.MockMonitorService{}
-			tssMonitorService := tssMonitor.TSSMonitorService{
-				Version:       "0.01",
-				GitCommitHash: "0xABC",
-			}
-			mMonitorService.On("MonitorCounters", mock.Anything, mock.Anything).Return(nil)
-
-			transactionWorker.monitorSvc = tssMonitorService
 
 			mockEventProducer := &events.MockProducer{}
 			if tc.horizonTxResponse.Successful {
@@ -977,7 +1644,7 @@ func Test_TransactionWorker_buildAndSignTransaction(t *testing.T) {
 	mDistAccResolver := sigMocks.NewMockDistributionAccountResolver(t)
 	mDistAccResolver.
 		On("DistributionAccount", ctx, mock.AnythingOfType("string")).
-		Return(distributionKP.Address(), nil)
+		Return(schema.NewDefaultStellarDistributionAccount(distributionKP.Address()), nil)
 
 	sigService, err := signing.NewSignatureService(signing.SignatureServiceOptions{
 		DistributionSignerType:    signing.DistributionAccountEnvSignatureClientType,
@@ -1259,15 +1926,6 @@ func Test_TransactionWorker_submit(t *testing.T) {
 				txProcessingLimiter: txProcessingLimiter,
 				eventProducer:       mockEventProducer,
 			}
-
-			mMonitorService := monitor.MockMonitorService{}
-			tssMonitorService := tssMonitor.TSSMonitorService{
-				Version:       "0.01",
-				GitCommitHash: "0xABC",
-			}
-			mMonitorService.On("MonitorCounters", mock.Anything, mock.Anything).Return(nil)
-
-			transactionWorker.monitorSvc = tssMonitorService
 
 			// make sure the tx's initial status is PROCESSING:
 			refreshedTx, err := txModel.Get(ctx, txJob.Transaction.ID)

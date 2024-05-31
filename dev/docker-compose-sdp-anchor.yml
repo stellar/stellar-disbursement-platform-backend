@@ -28,7 +28,7 @@ services:
       BASE_URL: http://localhost:8000
       DATABASE_URL: postgres://postgres@db:5432/sdp_mtn?sslmode=disable
       ENVIRONMENT: localhost
-      LOG_LEVEL: TRACE
+      LOG_LEVEL: INFO
       PORT: "8000"
       METRICS_PORT: "8002"
       METRICS_TYPE: PROMETHEUS
@@ -120,6 +120,7 @@ services:
       HOST_URL: http://localhost:8080
       SEP_SERVER_PORT: 8080
       CALLBACK_API_BASE_URL: http://sdp-api:8000
+      # CALLBACK_API_BASE_URL: http://host.docker.internal:8000   # This URL allows docker containers to communicate with the host machine
       CALLBACK_API_AUTH_TYPE: none  # TODO: update to jwt later
       PLATFORM_SERVER_AUTH_TYPE: JWT
       APP_LOGGING_LEVEL: INFO
@@ -143,6 +144,7 @@ services:
       SEP1_ENABLED: "true"
       SEP1_TOML_TYPE: url
       SEP1_TOML_VALUE: http://sdp-api:8000/.well-known/stellar.toml
+      # SEP1_TOML_VALUE: http://host.docker.internal:8000/.well-known/stellar.toml    # This URL allows docker containers to communicate with the host machine
       ASSETS_TYPE: json
       ASSETS_VALUE: |   # TODO: keep this up to date with the latest assets supported by the SDP
         {
@@ -223,6 +225,10 @@ services:
         kafka-topics.sh --create --if-not-exists --topic events.receiver-wallets.new_invitation --bootstrap-server kafka:9092
         kafka-topics.sh --create --if-not-exists --topic events.payment.payment_completed --bootstrap-server kafka:9092
         kafka-topics.sh --create --if-not-exists --topic events.payment.ready_to_pay --bootstrap-server kafka:9092
+      
+        kafka-topics.sh --create --if-not-exists --topic events.receiver-wallets.new_invitation.dlq --bootstrap-server kafka:9092
+        kafka-topics.sh --create --if-not-exists --topic events.payment.payment_completed.dlq --bootstrap-server kafka:9092
+        kafka-topics.sh --create --if-not-exists --topic events.payment.ready_to_pay.dlq --bootstrap-server kafka:9092
       "
   demo-wallet:
     build:

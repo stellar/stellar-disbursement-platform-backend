@@ -26,7 +26,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httphandler"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
-	publicfiles "github.com/stellar/stellar-disbursement-platform-backend/internal/serve/publicfiles"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/publicfiles"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
@@ -192,7 +192,7 @@ func Serve(opts ServeOptions, httpServer HTTPServerInterface) error {
 }
 
 const (
-	rateLimitPer20Seconds = 20
+	rateLimitPer20Seconds = 40
 	rateLimitWindow       = 20 * time.Second
 )
 
@@ -234,9 +234,10 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 
 		r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole)).Route("/users", func(r chi.Router) {
 			userHandler := httphandler.UserHandler{
-				AuthManager:     authManager,
-				MessengerClient: o.EmailMessengerClient,
-				Models:          o.Models,
+				AuthManager:        authManager,
+				CrashTrackerClient: o.CrashTrackerClient,
+				MessengerClient:    o.EmailMessengerClient,
+				Models:             o.Models,
 			}
 
 			r.Get("/", userHandler.GetAllUsers)

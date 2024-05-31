@@ -21,6 +21,7 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
+	monitorMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
@@ -79,7 +80,7 @@ func Test_RecoverHandler_doesNotRecoverFromErrAbortHandler(t *testing.T) {
 }
 
 func Test_MetricsRequestHandler(t *testing.T) {
-	mMonitorService := &monitor.MockMonitorService{}
+	mMonitorService := monitorMocks.NewMockMonitorService(t)
 
 	// setup
 	r := chi.NewRouter()
@@ -109,8 +110,6 @@ func Test_MetricsRequestHandler(t *testing.T) {
 		assert.Equal(t, http.StatusOK, rr.Code)
 		wantBody := `{"status": "OK"}`
 		assert.JSONEq(t, wantBody, rr.Body.String())
-
-		mMonitorService.AssertExpectations(t)
 	})
 
 	t.Run("monitor request with invalid route", func(t *testing.T) {
@@ -130,8 +129,6 @@ func Test_MetricsRequestHandler(t *testing.T) {
 
 		// assert response
 		assert.Equal(t, http.StatusNotFound, rr.Code)
-
-		mMonitorService.AssertExpectations(t)
 	})
 
 	t.Run("monitor request with method not allowed", func(t *testing.T) {
@@ -151,8 +148,6 @@ func Test_MetricsRequestHandler(t *testing.T) {
 
 		// assert response
 		assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
-
-		mMonitorService.AssertExpectations(t)
 	})
 }
 
@@ -490,7 +485,7 @@ func Test_AnyRoleMiddleware(t *testing.T) {
 		assert.JSONEq(t, `{"error":"An internal error occurred while processing this request."}`, string(respBody))
 	})
 
-	t.Run("returns Unauthorized error when the user does not have the required roles", func(t *testing.T) {
+	t.Run("returns Forbidden error when the user does not have the required roles", func(t *testing.T) {
 		token := "mytoken"
 		ctx := context.WithValue(context.Background(), TokenContextKey, token)
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
@@ -528,8 +523,8 @@ func Test_AnyRoleMiddleware(t *testing.T) {
 		respBody, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
-		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
-		assert.JSONEq(t, `{"error":"Not authorized."}`, string(respBody))
+		assert.Equal(t, http.StatusForbidden, resp.StatusCode)
+		assert.JSONEq(t, `{"error":"You don't have permission to perform this action."}`, string(respBody))
 	})
 
 	t.Run("returns Status Ok when user has the required roles", func(t *testing.T) {
@@ -870,7 +865,7 @@ func Test_ResolveTenantFromRequestMiddleware(t *testing.T) {
 			expectedTenant:   validTnt,
 		},
 		{
-			name:              "🔴 no default tenant is found",
+			name:              "🟢 no default tenant is found",
 			tenantHeaderValue: "",
 			hostnamePrefix:    "",
 			singleTenantMode:  true,
@@ -880,8 +875,8 @@ func Test_ResolveTenantFromRequestMiddleware(t *testing.T) {
 					Return(nil, tenant.ErrTenantDoesNotExist).
 					Once()
 			},
-			expectedStatus:   http.StatusInternalServerError,
-			expectedRespBody: `{"error":"No default Tenant configured"}`,
+			expectedStatus:   http.StatusOK,
+			expectedRespBody: `{"status":"ok"}`,
 			expectedTenant:   nil,
 		},
 		{

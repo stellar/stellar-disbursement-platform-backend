@@ -5,11 +5,6 @@ import (
 	"go/types"
 	"net/url"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/db"
-	"github.com/stellar/stellar-disbursement-platform-backend/db/router"
-
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
-
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"github.com/stellar/go/support/config"
@@ -17,29 +12,22 @@ import (
 
 	cmdDB "github.com/stellar/stellar-disbursement-platform-backend/cmd/db"
 	cmdUtils "github.com/stellar/stellar-disbursement-platform-backend/cmd/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/db/router"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	di "github.com/stellar/stellar-disbursement-platform-backend/internal/dependencyinjection"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/htmltemplate"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/cli"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 type AuthCommand struct{}
 
 func (a *AuthCommand) Command() *cobra.Command {
-	var uiBaseURL string
 	messengerOptions := message.MessengerOptions{}
 
 	authCmdConfigOpts := config.ConfigOptions{
-		{
-			Name:           "sdp-ui-base-url",
-			Usage:          "The SDP UI/dashboard Base URL used to send the invitation link when a new user is created.",
-			OptType:        types.String,
-			ConfigKey:      &uiBaseURL,
-			FlagDefault:    "http://localhost:3000",
-			CustomSetValue: cmdUtils.SetConfigOptionURLString,
-			Required:       true,
-		},
 		{
 			Name:           "email-sender-type",
 			Usage:          fmt.Sprintf("The messenger type used to send invitations to new dashboard users. Options: %+v", message.MessengerType("").ValidEmailTypes()),
@@ -102,17 +90,17 @@ func (a *AuthCommand) Command() *cobra.Command {
 					log.Ctx(ctx).Fatalf("tenant-id is required")
 				}
 
-				forgotPasswordLink, err := url.JoinPath(uiBaseURL, "forgot-password")
+				forgotPasswordLink, err := url.JoinPath(globalOptions.SDPUIBaseURL, "forgot-password")
 				if err != nil {
 					log.Ctx(ctx).Fatalf("error getting forgot password link: %s", err.Error())
 				}
 
 				// 1. Get Tenant and save it in context.
-				adminDNS, err := router.GetDNSForAdmin(globalOptions.DatabaseURL)
+				adminDSN, err := router.GetDSNForAdmin(globalOptions.DatabaseURL)
 				if err != nil {
-					log.Ctx(ctx).Fatalf("error getting Admin DB DNS: %s", err.Error())
+					log.Ctx(ctx).Fatalf("error getting Admin DB DSN: %s", err.Error())
 				}
-				adminDBConnectionPool, err := db.OpenDBConnectionPool(adminDNS)
+				adminDBConnectionPool, err := db.OpenDBConnectionPool(adminDSN)
 				if err != nil {
 					log.Ctx(ctx).Fatalf("error opening Admin DB connection pool: %s", err.Error())
 				}

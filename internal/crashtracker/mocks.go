@@ -33,3 +33,19 @@ func (m *MockCrashTrackerClient) Clone() CrashTrackerClient {
 
 // Ensuring that MockCrashTrackerClient is implementing CrashTrackerClient interface
 var _ CrashTrackerClient = (*MockCrashTrackerClient)(nil)
+
+type testInterface interface {
+	mock.TestingT
+	Cleanup(func())
+}
+
+// NewMockCrashTrackerClient creates a new instance of MockCrashTrackerClient. It also registers a testing interface on
+// the mock and a cleanup function to assert the mocks expectations.
+func NewMockCrashTrackerClient(t testInterface) *MockCrashTrackerClient {
+	mock := &MockCrashTrackerClient{}
+	mock.Mock.Test(t)
+
+	t.Cleanup(func() { mock.AssertExpectations(t) })
+
+	return mock
+}

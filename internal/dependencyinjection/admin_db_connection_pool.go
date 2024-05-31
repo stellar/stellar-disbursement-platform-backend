@@ -25,12 +25,12 @@ func NewAdminDBConnectionPool(ctx context.Context, opts DBConnectionPoolOptions)
 	}
 
 	log.Ctx(ctx).Infof("⚙️ Setting up Admin DBConnectionPool (withMetrics=%t)", opts.MonitorService != nil)
-	adminDNS, err := router.GetDNSForAdmin(opts.DatabaseURL)
+	adminDSN, err := router.GetDSNForAdmin(opts.DatabaseURL)
 	if err != nil {
-		return nil, fmt.Errorf("getting Admin database DNS: %w", err)
+		return nil, fmt.Errorf("getting Admin database DSN: %w", err)
 	}
 
-	dbConnectionPool, err := openDBConnectionPool(adminDNS, opts.MonitorService)
+	dbConnectionPool, err := openDBConnectionPool(adminDSN, opts.MonitorService)
 	if err != nil {
 		return nil, fmt.Errorf("opening Admin DB connection pool: %w", err)
 	}
