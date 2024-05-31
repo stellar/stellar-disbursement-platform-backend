@@ -172,7 +172,7 @@ func EventBrokerConfigOptions(opts *EventBrokerOptions) []*config.ConfigOption {
 			OptType:        types.String,
 			CustomSetValue: SetConfigOptionKafkaSecurityProtocol,
 			ConfigKey:      &opts.KafkaSecurityProtocol,
-			Required:       true,
+			Required:       false,
 		},
 		{
 			Name:      "kafka-sasl-username",
