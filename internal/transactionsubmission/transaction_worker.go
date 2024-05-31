@@ -142,7 +142,7 @@ func (tw *TransactionWorker) Run(ctx context.Context, txJob *TxJob) {
 	ctx = tw.updateContextLogger(ctx, txJob)
 	err := tw.runJob(ctx, txJob)
 	if err != nil {
-		log.Ctx(ctx).Errorf("Handle unexpected error: %v", err)
+		tw.crashTrackerClient.LogAndReportErrors(ctx, err, "unexpected TSS error")
 	}
 }
 
@@ -153,9 +153,7 @@ func (tw *TransactionWorker) runJob(ctx context.Context, txJob *TxJob) error {
 		return fmt.Errorf("validating job: %w", err)
 	}
 
-	if txJob == nil {
-		return fmt.Errorf("received nil transaction job")
-	} else if txJob.Transaction.StellarTransactionHash.Valid {
+	if txJob.Transaction.StellarTransactionHash.Valid {
 		return tw.reconcileSubmittedTransaction(ctx, txJob)
 	} else {
 		return tw.processTransactionSubmission(ctx, txJob)
@@ -211,6 +209,16 @@ func (tw *TransactionWorker) handleFailedTransaction(ctx context.Context, txJob 
 
 			if hErrWrapper.ShouldMarkAsError() {
 				metricsMetadata.PaymentEventType = sdpMonitor.PaymentFailedLabel
+
+				// Building the payment completed event before updating the transaction status. This way, if the message
+				// fails to be built, the transaction will be marked for reprocessing -> reconciliation and the event
+				// will be re-tried.
+				var msg *events.Message
+				msg, err = tw.buildPaymentCompletedEvent(events.PaymentCompletedErrorType, &txJob.Transaction, data.FailedPaymentStatus, hErrWrapper.Error())
+				if err != nil {
+					return fmt.Errorf("producing payment completed event Status %s - Job %v: %w", txJob.Transaction.Status, txJob, err)
+				}
+
 				var updatedTx *store.Transaction
 				updatedTx, err = tw.txModel.UpdateStatusToError(ctx, txJob.Transaction, hErrWrapper.Error())
 				if err != nil {
@@ -219,7 +227,7 @@ func (tw *TransactionWorker) handleFailedTransaction(ctx context.Context, txJob 
 				txJob.Transaction = *updatedTx
 
 				// Publishing a new event on the event producer
-				err = tw.producePaymentCompletedEvent(ctx, events.PaymentCompletedErrorType, &txJob.Transaction, data.FailedPaymentStatus)
+				err = events.ProduceEvents(ctx, tw.eventProducer, msg)
 				if err != nil {
 					return fmt.Errorf("producing payment completed event Status %s - Job %v: %w", txJob.Transaction.Status, txJob, err)
 				}
@@ -271,6 +279,13 @@ func (tw *TransactionWorker) handleSuccessfulTransaction(ctx context.Context, tx
 		return fmt.Errorf("transaction was not successful for some reason")
 	}
 
+	// Building the payment completed event before updating the transaction status. This way, if the message fails to be
+	// built, the transaction will be marked for reprocessing -> reconciliation and the event will be re-tried.
+	msg, err := tw.buildPaymentCompletedEvent(events.PaymentCompletedSuccessType, &txJob.Transaction, data.SuccessPaymentStatus, "")
+	if err != nil {
+		return fmt.Errorf("building payment completed event Status %s - Job %v: %w", txJob.Transaction.Status, txJob, err)
+	}
+
 	updatedTx, err := tw.txModel.UpdateStatusToSuccess(ctx, txJob.Transaction)
 	if err != nil {
 		return utils.NewTransactionStatusUpdateError("SUCCESS", txJob.Transaction.ID, false, err)
@@ -278,7 +293,7 @@ func (tw *TransactionWorker) handleSuccessfulTransaction(ctx context.Context, tx
 	txJob.Transaction = *updatedTx
 
 	// Publishing a new event on the event producer
-	err = tw.producePaymentCompletedEvent(ctx, events.PaymentCompletedSuccessType, &txJob.Transaction, data.SuccessPaymentStatus)
+	err = events.ProduceEvents(ctx, tw.eventProducer, msg)
 	if err != nil {
 		return fmt.Errorf("producing payment completed event Status %s - Job %v: %w", txJob.Transaction.Status, txJob, err)
 	}
@@ -361,12 +376,12 @@ func (tw *TransactionWorker) reconcileSubmittedTransaction(ctx context.Context, 
 	return nil
 }
 
-func (tw *TransactionWorker) producePaymentCompletedEvent(ctx context.Context, eventType string, tx *store.Transaction, paymentStatus data.PaymentStatus) error {
+func (tw *TransactionWorker) buildPaymentCompletedEvent(eventType string, tx *store.Transaction, paymentStatus data.PaymentStatus, statusMsg string) (*events.Message, error) {
 	if paymentStatus != data.SuccessPaymentStatus && paymentStatus != data.FailedPaymentStatus {
-		return fmt.Errorf("invalid payment status to produce payment completed event")
+		return nil, fmt.Errorf("invalid payment status to produce payment completed event")
 	}
 
-	msg := events.Message{
+	msg := &events.Message{
 		Topic:    events.PaymentCompletedTopic,
 		Key:      tx.ExternalID,
 		TenantID: tx.TenantID,
@@ -375,22 +390,18 @@ func (tw *TransactionWorker) producePaymentCompletedEvent(ctx context.Context, e
 			TransactionID:        tx.ID,
 			PaymentID:            tx.ExternalID,
 			PaymentStatus:        string(paymentStatus),
-			PaymentStatusMessage: tx.StatusMessage.String,
+			PaymentStatusMessage: statusMsg,
 			PaymentCompletedAt:   time.Now(),
 			StellarTransactionID: tx.StellarTransactionHash.String,
 		},
 	}
 
-	if tw.eventProducer != nil {
-		err := tw.eventProducer.WriteMessages(ctx, msg)
-		if err != nil {
-			return fmt.Errorf("writing message %s on event producer: %w", msg, err)
-		}
-	} else {
-		log.Ctx(ctx).Errorf("event producer is nil, could not publish message %s", msg)
+	err := msg.Validate()
+	if err != nil {
+		return nil, fmt.Errorf("validating message: %w", err)
 	}
 
-	return nil
+	return msg, nil
 }
 
 func (tw *TransactionWorker) processTransactionSubmission(ctx context.Context, txJob *TxJob) error {
@@ -425,6 +436,10 @@ func (tw *TransactionWorker) processTransactionSubmission(ctx context.Context, t
 
 // validateJob will check if the job is valid for processing or reconciliation.
 func (tw *TransactionWorker) validateJob(txJob *TxJob) error {
+	if txJob == nil {
+		return fmt.Errorf("transaction job cannot be nil")
+	}
+
 	allowedStatuses := []store.TransactionStatus{store.TransactionStatusPending, store.TransactionStatusProcessing}
 	if !slices.Contains(allowedStatuses, txJob.Transaction.Status) {
 		return fmt.Errorf("invalid transaction status: %v", txJob.Transaction.Status)
