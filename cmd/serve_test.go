@@ -167,12 +167,13 @@ func Test_serve(t *testing.T) {
 	serveOpts.AnchorPlatformAPIService, err = anchorplatform.NewAnchorPlatformAPIService(httpclient.DefaultClient(), serveOpts.AnchorPlatformBasePlatformURL, serveOpts.AnchorPlatformOutgoingJWTSecret)
 	require.NoError(t, err)
 
-	serveOpts.CrashTrackerClient, err = di.NewCrashTracker(ctx, crashtracker.CrashTrackerOptions{
+	crashTrackerClient, err := di.NewCrashTracker(ctx, crashtracker.CrashTrackerOptions{
 		Environment:      serveOpts.Environment,
 		GitCommit:        serveOpts.GitCommit,
 		CrashTrackerType: "DRY_RUN",
 	})
 	require.NoError(t, err)
+	serveOpts.CrashTrackerClient = crashTrackerClient
 
 	messengerClient, err := di.NewEmailClient(di.EmailClientOptions{EmailType: message.MessengerTypeDryRun})
 	require.NoError(t, err)
@@ -207,6 +208,7 @@ func Test_serve(t *testing.T) {
 		EmailMessengerClient:                    messengerClient,
 		AdminDBConnectionPool:                   dbConnectionPool,
 		MTNDBConnectionPool:                     dbConnectionPool,
+		CrashTrackerClient:                      crashTrackerClient,
 		GitCommit:                               "1234567890abcdef",
 		NetworkPassphrase:                       network.TestNetworkPassphrase,
 		Port:                                    8003,

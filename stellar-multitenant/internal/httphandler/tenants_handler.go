@@ -1,6 +1,7 @@
 package httphandler
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -13,8 +14,11 @@ import (
 	"github.com/stellar/go/support/render/httpjson"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
+	coreSvc "github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/internal/provisioning"
@@ -27,10 +31,12 @@ type TenantsHandler struct {
 	Manager                     tenant.ManagerInterface
 	Models                      *data.Models
 	HorizonClient               horizonclient.ClientInterface
+	MessengerClient             message.MessengerClient
 	DistributionAccountResolver signing.DistributionAccountResolver
 	ProvisioningManager         *provisioning.Manager
 	NetworkType                 utils.NetworkType
 	AdminDBConnectionPool       db.DBConnectionPool
+	CrashTrackerClient          crashtracker.CrashTrackerClient
 	SingleTenantMode            bool
 	BaseURL                     string
 	SDPUIBaseURL                string
@@ -85,10 +91,24 @@ func (h TenantsHandler) Post(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	// generate SDP UI URL first if necessary since we need to pass it to the provisioning manager when
+	// sending the invitation message
+	var err error
+	var tntSDPUIBaseURL string
+	if reqBody.SDPUIBaseURL != nil {
+		tntSDPUIBaseURL = *reqBody.SDPUIBaseURL
+	} else {
+		tntSDPUIBaseURL, err = utils.GenerateTenantURL(h.SDPUIBaseURL, reqBody.Name)
+		if err != nil {
+			httperror.InternalError(ctx, "Could not generate SDP UI URL", err, nil).Render(rw)
+			return
+		}
+	}
+
 	tnt, err := h.ProvisioningManager.ProvisionNewTenant(
 		ctx, reqBody.Name, reqBody.OwnerFirstName,
 		reqBody.OwnerLastName, reqBody.OwnerEmail, reqBody.OrganizationName,
-		string(h.NetworkType),
+		string(h.NetworkType), tntSDPUIBaseURL,
 	)
 	if err != nil {
 		if errors.Is(err, tenant.ErrDuplicatedTenantName) {
@@ -110,21 +130,9 @@ func (h TenantsHandler) Post(rw http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	var tntSDPUIBaseURL string
-	if reqBody.SDPUIBaseURL != nil {
-		tntSDPUIBaseURL = *reqBody.SDPUIBaseURL
-	} else {
-		tntSDPUIBaseURL, err = utils.GenerateTenantURL(h.SDPUIBaseURL, tnt.Name)
-		if err != nil {
-			httperror.InternalError(ctx, "Could not generate SDP UI URL", err, nil).Render(rw)
-			return
-		}
-	}
-
 	tnt, err = h.Manager.UpdateTenantConfig(ctx, &tenant.TenantUpdate{
-		ID:           tnt.ID,
-		BaseURL:      &tntBaseURL,
-		SDPUIBaseURL: &tntSDPUIBaseURL,
+		ID:      tnt.ID,
+		BaseURL: &tntBaseURL,
 	})
 	if err != nil {
 		httperror.InternalError(ctx, "Could not update tenant config", err, nil).Render(rw)
@@ -132,7 +140,38 @@ func (h TenantsHandler) Post(rw http.ResponseWriter, req *http.Request) {
 	}
 
 	log.Ctx(ctx).Infof("Tenant %s created successfully.", tnt.Name)
+
+	if err = h.sendInvitationMessage(ctx, tnt.Name, coreSvc.SendInvitationMessageOptions{
+		FirstName: reqBody.OwnerFirstName,
+		Email:     reqBody.OwnerEmail,
+		Role:      data.OwnerUserRole.String(),
+		UIBaseURL: tntSDPUIBaseURL,
+	}); err != nil {
+		h.CrashTrackerClient.LogAndReportErrors(ctx, err, "Cannot send invitation message")
+	}
+
 	httpjson.RenderStatus(rw, http.StatusCreated, tnt, httpjson.JSON)
+}
+
+func (h TenantsHandler) sendInvitationMessage(
+	ctx context.Context, tntName string, opts coreSvc.SendInvitationMessageOptions,
+) error {
+	tenantSchemaDSN, err := h.Manager.GetDSNForTenant(ctx, tntName)
+	if err != nil {
+		return fmt.Errorf("getting database DSN for tenant %s", tntName)
+	}
+
+	tenantSchemaConnectionPool, models, err := provisioning.GetTenantSchemaDBConnectionAndModels(tenantSchemaDSN)
+	if err != nil {
+		return fmt.Errorf("opening database connection on tenant schema and getting model: %w", err)
+	}
+	defer tenantSchemaConnectionPool.Close()
+
+	if err = coreSvc.SendInvitationMessage(ctx, h.MessengerClient, models, opts); err != nil {
+		return fmt.Errorf("creating and sending invitation message: %w", err)
+	}
+
+	return nil
 }
 
 func (t TenantsHandler) Patch(w http.ResponseWriter, r *http.Request) {

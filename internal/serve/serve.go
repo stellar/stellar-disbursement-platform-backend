@@ -231,9 +231,10 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 
 		r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole)).Route("/users", func(r chi.Router) {
 			userHandler := httphandler.UserHandler{
-				AuthManager:     authManager,
-				MessengerClient: o.EmailMessengerClient,
-				Models:          o.Models,
+				AuthManager:        authManager,
+				CrashTrackerClient: o.CrashTrackerClient,
+				MessengerClient:    o.EmailMessengerClient,
+				Models:             o.Models,
 			}
 
 			r.Get("/", userHandler.GetAllUsers)

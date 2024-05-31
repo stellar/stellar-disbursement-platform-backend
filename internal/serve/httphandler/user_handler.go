@@ -9,6 +9,7 @@ import (
 	"github.com/stellar/go/support/http/httpdecode"
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/support/render/httpjson"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
@@ -20,9 +21,10 @@ import (
 )
 
 type UserHandler struct {
-	AuthManager     auth.AuthManager
-	MessengerClient message.MessengerClient
-	Models          *data.Models
+	AuthManager        auth.AuthManager
+	CrashTrackerClient crashtracker.CrashTrackerClient
+	MessengerClient    message.MessengerClient
+	Models             *data.Models
 }
 
 type UserActivationRequest struct {
@@ -212,8 +214,7 @@ func (h UserHandler) CreateUser(rw http.ResponseWriter, req *http.Request) {
 		Roles:     data.FromUserRoleArrayToStringArray(reqBody.Roles),
 	}
 
-	s := services.NewCreateUserService(h.Models, h.Models.DBConnectionPool, h.AuthManager, h.MessengerClient)
-	u, err := s.CreateUser(ctx, newUser, *tnt.SDPUIBaseURL)
+	u, err := h.AuthManager.CreateUser(ctx, &newUser, "")
 	if err != nil {
 		if errors.Is(err, auth.ErrUserEmailAlreadyExists) {
 			httperror.BadRequest(auth.ErrUserEmailAlreadyExists.Error(), err, nil).Render(rw)
@@ -222,6 +223,17 @@ func (h UserHandler) CreateUser(rw http.ResponseWriter, req *http.Request) {
 
 		httperror.InternalError(ctx, "Cannot create user", err, nil).Render(rw)
 		return
+	}
+
+	err = services.SendInvitationMessage(ctx, h.MessengerClient, h.Models,
+		services.SendInvitationMessageOptions{
+			FirstName: u.FirstName,
+			Email:     u.Email,
+			Role:      u.Roles[0],
+			UIBaseURL: *tnt.SDPUIBaseURL,
+		})
+	if err != nil {
+		h.CrashTrackerClient.LogAndReportErrors(ctx, err, "Cannot send invitation message")
 	}
 
 	log.Ctx(ctx).Infof("[CreateUserAccount] - User ID %s created user with account ID %s", authenticatedUserID, u.ID)
