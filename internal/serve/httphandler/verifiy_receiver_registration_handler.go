@@ -13,6 +13,7 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
@@ -48,6 +49,7 @@ type VerifyReceiverRegistrationHandler struct {
 	ReCAPTCHAValidator       validators.ReCAPTCHAValidator
 	NetworkPassphrase        string
 	EventProducer            events.Producer
+	CrashTrackerClient       crashtracker.CrashTrackerClient
 }
 
 // validate validates the request [header, body, body.reCAPTCHA_token], and returns the decoded payload, or an http error.
@@ -287,8 +289,18 @@ func (v VerifyReceiverRegistrationHandler) VerifyReceiverRegistration(w http.Res
 			}
 
 			// STEP 5: produce event to send receiver's ready payments to TSS
+			msg, err := v.buildPaymentsReadyToPayEventMessage(ctx, dbTx, &receiverWallet)
+			if err != nil {
+				return nil, fmt.Errorf("preparing payments ready-to-pay event message: %w", err)
+			}
 			postCommitFn = func() error {
-				return v.producePaymentsReadyToPayEvent(ctx, v.Models.DBConnectionPool, &receiverWallet)
+				postErr := events.ProduceEvents(ctx, v.EventProducer, msg)
+				if postErr != nil {
+					v.CrashTrackerClient.LogAndReportErrors(ctx, postErr, "writing ready-to-pay message (post SEP-24) on the event producer")
+				}
+
+				return nil
+				// return events.ProduceEvents(ctx, v.EventProducer, msg)
 			}
 
 			// STEP 6: PATCH transaction on the AnchorPlatform and update the receiver wallet with the anchor platform tx ID
@@ -326,20 +338,20 @@ func (v VerifyReceiverRegistrationHandler) VerifyReceiverRegistration(w http.Res
 	httpjson.Render(w, map[string]string{"message": "ok"}, httpjson.JSON)
 }
 
-func (v VerifyReceiverRegistrationHandler) producePaymentsReadyToPayEvent(ctx context.Context, sqlExec db.SQLExecuter, rw *data.ReceiverWallet) error {
+func (v VerifyReceiverRegistrationHandler) buildPaymentsReadyToPayEventMessage(ctx context.Context, sqlExec db.SQLExecuter, rw *data.ReceiverWallet) (*events.Message, error) {
 	payments, err := v.Models.Payment.GetReadyByReceiverWalletID(ctx, sqlExec, rw.ID)
 	if err != nil {
-		return fmt.Errorf("getting payments for receiver wallet ID %s", rw.ID)
+		return nil, fmt.Errorf("getting payments for receiver wallet ID %s", rw.ID)
 	}
 
 	if len(payments) == 0 {
-		log.Ctx(ctx).Infof("no payments ready to pay for receiver wallet ID %s", rw.ID)
-		return nil
+		log.Ctx(ctx).Warnf("no payments ready to pay for receiver wallet ID %s", rw.ID)
+		return nil, nil
 	}
 
 	msg, err := events.NewMessage(ctx, events.PaymentReadyToPayTopic, rw.ID, events.PaymentReadyToPayReceiverVerificationCompleted, nil)
 	if err != nil {
-		return fmt.Errorf("creating new message: %w", err)
+		return nil, fmt.Errorf("creating new message: %w", err)
 	}
 
 	paymentsReadyToPay := schemas.EventPaymentsReadyToPayData{TenantID: msg.TenantID}
@@ -348,14 +360,10 @@ func (v VerifyReceiverRegistrationHandler) producePaymentsReadyToPayEvent(ctx co
 	}
 	msg.Data = paymentsReadyToPay
 
-	if v.EventProducer != nil {
-		err = v.EventProducer.WriteMessages(ctx, *msg)
-		if err != nil {
-			return fmt.Errorf("writing message %s on event producer: %w", msg, err)
-		}
-	} else {
-		log.Ctx(ctx).Errorf("event producer is nil, could not publish message %+v", msg)
+	err = msg.Validate()
+	if err != nil {
+		return nil, fmt.Errorf("validating message: %w", err)
 	}
 
-	return nil
+	return msg, nil
 }
