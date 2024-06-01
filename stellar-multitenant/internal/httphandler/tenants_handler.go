@@ -93,49 +93,34 @@ func (h TenantsHandler) Post(rw http.ResponseWriter, req *http.Request) {
 
 	// generate SDP UI URL first if necessary since we need to pass it to the provisioning manager when
 	// sending the invitation message
-	var err error
-	var tntSDPUIBaseURL string
-	if reqBody.SDPUIBaseURL != nil {
-		tntSDPUIBaseURL = *reqBody.SDPUIBaseURL
-	} else {
-		tntSDPUIBaseURL, err = utils.GenerateTenantURL(h.SDPUIBaseURL, reqBody.Name)
-		if err != nil {
-			httperror.InternalError(ctx, "Could not generate SDP UI URL", err, nil).Render(rw)
-			return
-		}
+	tntSDPUIBaseURL, err := h.generateTenantURL(reqBody.SDPUIBaseURL, h.SDPUIBaseURL, reqBody.Name)
+	if err != nil {
+		httperror.InternalError(ctx, "Could not generate SDP UI URL", err, nil).Render(rw)
+		return
 	}
 
-	tnt, err := h.ProvisioningManager.ProvisionNewTenant(
-		ctx, reqBody.Name, reqBody.OwnerFirstName,
-		reqBody.OwnerLastName, reqBody.OwnerEmail, reqBody.OrganizationName,
-		string(h.NetworkType), tntSDPUIBaseURL,
-	)
+	tntBaseURL, err := h.generateTenantURL(reqBody.BaseURL, h.BaseURL, reqBody.Name)
+	if err != nil {
+		httperror.InternalError(ctx, "Could not generate URL", err, nil).Render(rw)
+		return
+	}
+
+	tnt, err := h.ProvisioningManager.ProvisionNewTenant(ctx, provisioning.ProvisionTenant{
+		Name:          reqBody.Name,
+		UserFirstName: reqBody.OwnerFirstName,
+		UserLastName:  reqBody.OwnerLastName,
+		UserEmail:     reqBody.OwnerEmail,
+		OrgName:       reqBody.OrganizationName,
+		NetworkType:   string(h.NetworkType),
+		UiBaseURL:     tntSDPUIBaseURL,
+		BaseURL:       tntBaseURL,
+	})
 	if err != nil {
 		if errors.Is(err, tenant.ErrDuplicatedTenantName) {
 			httperror.BadRequest("Tenant name already exists", err, nil).Render(rw)
 			return
 		}
 		httperror.InternalError(ctx, "Could not provision a new tenant", err, nil).Render(rw)
-		return
-	}
-
-	var tntBaseURL string
-	if reqBody.BaseURL != nil {
-		tntBaseURL = *reqBody.BaseURL
-	} else {
-		tntBaseURL, err = utils.GenerateTenantURL(h.BaseURL, tnt.Name)
-		if err != nil {
-			httperror.InternalError(ctx, "Could not generate URL", err, nil).Render(rw)
-			return
-		}
-	}
-
-	tnt, err = h.Manager.UpdateTenantConfig(ctx, &tenant.TenantUpdate{
-		ID:      tnt.ID,
-		BaseURL: &tntBaseURL,
-	})
-	if err != nil {
-		httperror.InternalError(ctx, "Could not update tenant config", err, nil).Render(rw)
 		return
 	}
 
@@ -151,6 +136,13 @@ func (h TenantsHandler) Post(rw http.ResponseWriter, req *http.Request) {
 	}
 
 	httpjson.RenderStatus(rw, http.StatusCreated, tnt, httpjson.JSON)
+}
+
+func (h TenantsHandler) generateTenantURL(providedURL *string, defaultURL string, tenantName string) (string, error) {
+	if providedURL != nil {
+		return *providedURL, nil
+	}
+	return utils.GenerateTenantURL(defaultURL, tenantName)
 }
 
 func (h TenantsHandler) sendInvitationMessage(

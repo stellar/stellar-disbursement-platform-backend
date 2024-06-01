@@ -139,6 +139,7 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 	userEmail := "email@email.com"
 	userOrgName := "My Org"
 	sdpUIBaseURL := "https://sdp-ui.stellar.org"
+	baseURL := "https://sdp-api.stellar.org"
 
 	tenantManager := tenant.NewManager(tenant.WithDatabase(dbConnectionPool))
 
@@ -274,13 +275,25 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 			// STEP 5: provision the tenant
 			networkType, err := sdpUtils.GetNetworkTypeFromNetworkPassphrase(tc.networkPassphrase)
 			require.NoError(t, err)
-			tnt, err := p.ProvisionNewTenant(ctx, tc.tenantName, userFirstName, userLastName, userEmail, userOrgName, string(networkType), sdpUIBaseURL)
+
+			tnt, err := p.ProvisionNewTenant(ctx, ProvisionTenant{
+				Name:          tc.tenantName,
+				UserFirstName: userFirstName,
+				UserLastName:  userLastName,
+				UserEmail:     userEmail,
+				OrgName:       userOrgName,
+				NetworkType:   string(networkType),
+				UiBaseURL:     sdpUIBaseURL,
+				BaseURL:       baseURL,
+			})
 			require.NoError(t, err)
 
 			// STEP 6: assert the result
 			assert.Equal(t, tc.tenantName, tnt.Name)
 			assert.Equal(t, tenant.ProvisionedTenantStatus, tnt.Status)
 			assert.Equal(t, wantDistAccAddress, *tnt.DistributionAccountAddress)
+			assert.Equal(t, sdpUIBaseURL, *tnt.SDPUIBaseURL)
+			assert.Equal(t, baseURL, *tnt.BaseURL)
 			if tc.sigClientType == signing.DistributionAccountEnvSignatureClientType {
 				assert.Equal(t, hostAccountKP.Address(), *tnt.DistributionAccountAddress)
 			} else {
@@ -441,6 +454,7 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 	networkType := sdpUtils.TestnetNetworkType
 	tnt := tenant.Tenant{Name: tenantName, ID: "abc"}
 	sdpUIBaseURL := "https://sdp-ui.stellar.org"
+	baseURL := "https://sdp-api.stellar.org"
 
 	tenantDSN, err := router.GetDSNForTenant(dbt.DSN, tenantName)
 	require.NoError(t, err)
@@ -506,6 +520,7 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 						DistributionAccountStatus:  schema.DistributionAccountStatusActive,
 						Status:                     &tStatus,
 						SDPUIBaseURL:               &sdpUIBaseURL,
+						BaseURL:                    &baseURL,
 					}).
 					Return(nil, errors.New("foobar")).
 					Once()
@@ -552,6 +567,7 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 						DistributionAccountStatus:  schema.DistributionAccountStatusActive,
 						Status:                     &tStatus,
 						SDPUIBaseURL:               &sdpUIBaseURL,
+						BaseURL:                    &baseURL,
 					}).
 					Return(&updatedTnt, nil).
 					Once()
@@ -605,6 +621,7 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 						DistributionAccountStatus:  schema.DistributionAccountStatusActive,
 						Status:                     &tStatus,
 						SDPUIBaseURL:               &sdpUIBaseURL,
+						BaseURL:                    &baseURL,
 					}).
 					Return(&updatedTnt, nil).
 					Once()
@@ -666,7 +683,16 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 			require.NoError(t, err)
 
 			// Provision the tenant
-			_, err = provisioningManager.ProvisionNewTenant(ctx, tenantName, firstName, lastName, email, orgName, string(networkType), sdpUIBaseURL)
+			_, err = provisioningManager.ProvisionNewTenant(ctx, ProvisionTenant{
+				Name:          tenantName,
+				UserFirstName: firstName,
+				UserLastName:  lastName,
+				UserEmail:     email,
+				OrgName:       orgName,
+				NetworkType:   string(networkType),
+				UiBaseURL:     sdpUIBaseURL,
+				BaseURL:       baseURL,
+			})
 
 			// Assertions
 			if tc.expectedErr != nil {
