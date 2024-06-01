@@ -281,7 +281,13 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 		})
 
 		r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole, data.BusinessUserRole)).Route("/payments", func(r chi.Router) {
-			paymentsHandler := httphandler.PaymentsHandler{Models: o.Models, DBConnectionPool: o.MtnDBConnectionPool, AuthManager: o.authManager, EventProducer: o.EventProducer}
+			paymentsHandler := httphandler.PaymentsHandler{
+				Models:             o.Models,
+				DBConnectionPool:   o.MtnDBConnectionPool,
+				AuthManager:        o.authManager,
+				EventProducer:      o.EventProducer,
+				CrashTrackerClient: o.CrashTrackerClient,
+			}
 			r.Get("/", paymentsHandler.GetPayments)
 			r.Get("/{id}", paymentsHandler.GetPayment)
 			r.Patch("/retry", paymentsHandler.RetryPayments)
@@ -443,6 +449,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 				ReCAPTCHAValidator:       reCAPTCHAValidator,
 				NetworkPassphrase:        o.NetworkPassphrase,
 				EventProducer:            o.EventProducer,
+				CrashTrackerClient:       o.CrashTrackerClient,
 			}.VerifyReceiverRegistration)
 		})
 
