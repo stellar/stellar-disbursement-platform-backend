@@ -24,6 +24,7 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
@@ -251,7 +252,8 @@ func Test_TenantHandler_Post(t *testing.T) {
 	defer dbConnectionPool.Close()
 
 	ctx := context.Background()
-	messengerClientMock := message.MessengerClientMock{}
+	messengerClientMock := &message.MessengerClientMock{}
+	crashTrackerMock := &crashtracker.MockCrashTrackerClient{}
 	tenantManager := tenant.NewManager(tenant.WithDatabase(dbConnectionPool))
 
 	mHorizonClient := &horizonclient.MockClient{}
@@ -270,34 +272,22 @@ func Test_TenantHandler_Post(t *testing.T) {
 	p, err := provisioning.NewManager(provisioning.ManagerOptions{
 		DBConnectionPool:           dbConnectionPool,
 		TenantManager:              tenantManager,
-		MessengerClient:            &messengerClientMock,
 		SubmitterEngine:            submitterEngine,
 		NativeAssetBootstrapAmount: tenant.MinTenantDistributionAccountAmount,
 	})
 	require.NoError(t, err)
 
 	handler := TenantsHandler{
+		CrashTrackerClient:  crashTrackerMock,
 		Manager:             tenantManager,
+		MessengerClient:     messengerClientMock,
 		ProvisioningManager: p,
 		NetworkType:         utils.TestnetNetworkType,
 		BaseURL:             "https://sdp-backend.stellar.org",
 		SDPUIBaseURL:        "https://sdp-ui.stellar.org",
 	}
 
-	createMocks := func() {
-		messengerClientMock.
-			On("SendMessage", mock.AnythingOfType("message.Message")).
-			Run(func(args mock.Arguments) {
-				msg, ok := args.Get(0).(message.Message)
-				require.True(t, ok)
-
-				assert.Equal(t, "Welcome to Stellar Disbursement Platform", msg.Title)
-				assert.Equal(t, "owner@email.org", msg.ToEmail)
-				assert.Empty(t, msg.ToPhoneNumber)
-			}).
-			Return(nil).
-			Once()
-
+	createMocks := func(t *testing.T, msgClientErr error) {
 		distAccSigClient.
 			On("BatchInsert", ctx, 1).
 			Return([]string{distAcc}, nil).
@@ -310,9 +300,28 @@ func Test_TenantHandler_Post(t *testing.T) {
 			On("HostDistributionAccount").
 			Return(distAcc, nil).
 			Once()
+
+		messengerClientMock.
+			On("SendMessage", mock.AnythingOfType("message.Message")).
+			Run(func(args mock.Arguments) {
+				msg, ok := args.Get(0).(message.Message)
+				require.True(t, ok)
+
+				assert.Equal(t, "Welcome to Stellar Disbursement Platform", msg.Title)
+				assert.Equal(t, "owner@email.org", msg.ToEmail)
+				assert.Empty(t, msg.ToPhoneNumber)
+			}).
+			Return(msgClientErr).
+			Once()
+
+		if msgClientErr != nil {
+			crashTrackerMock.
+				On("LogAndReportErrors", ctx, mock.Anything, "Cannot send invitation message").
+				Once()
+		}
 	}
 
-	makeRequest := func(reqBody string, expectedStatus int) []byte {
+	makeRequest := func(t *testing.T, reqBody string, expectedStatus int) []byte {
 		rr := httptest.NewRecorder()
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/tenants", strings.NewReader(reqBody))
 		require.NoError(t, err)
@@ -364,7 +373,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 	}
 
 	t.Run("returns BadRequest with invalid request body", func(t *testing.T) {
-		respBody := makeRequest(`{}`, http.StatusBadRequest)
+		respBody := makeRequest(t, `{}`, http.StatusBadRequest)
 
 		expectedBody := `
 			{
@@ -382,7 +391,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 	})
 
 	t.Run("provisions a new tenant successfully", func(t *testing.T) {
-		createMocks()
+		createMocks(t, nil)
 
 		orgName := "aid-org"
 		reqBody := fmt.Sprintf(`
@@ -398,7 +407,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 			}
 		`, orgName)
 
-		respBody := makeRequest(reqBody, http.StatusCreated)
+		respBody := makeRequest(t, reqBody, http.StatusCreated)
 
 		tnt, err := tenantManager.GetTenantByName(ctx, orgName)
 		require.NoError(t, err)
@@ -426,7 +435,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 	})
 
 	t.Run("provisions a new tenant successfully - dynamically generates base URL and SDP UI base URL for tenant", func(t *testing.T) {
-		createMocks()
+		createMocks(t, nil)
 
 		orgName := "aid-org-two"
 		reqBody := fmt.Sprintf(`
@@ -440,7 +449,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 			}
 		`, orgName)
 
-		respBody := makeRequest(reqBody, http.StatusCreated)
+		respBody := makeRequest(t, reqBody, http.StatusCreated)
 
 		tnt, err := tenantManager.GetTenantByName(ctx, orgName)
 		require.NoError(t, err)
@@ -470,7 +479,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 	})
 
 	t.Run("provisions a new tenant successfully - dynamically generates only SDP UI base URL", func(t *testing.T) {
-		createMocks()
+		createMocks(t, nil)
 
 		orgName := "aid-org-three"
 		reqBody := fmt.Sprintf(`
@@ -485,7 +494,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 			}
 		`, orgName, handler.BaseURL)
 
-		respBody := makeRequest(reqBody, http.StatusCreated)
+		respBody := makeRequest(t, reqBody, http.StatusCreated)
 
 		tnt, err := tenantManager.GetTenantByName(ctx, orgName)
 		require.NoError(t, err)
@@ -514,7 +523,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 	})
 
 	t.Run("provisions a new tenant successfully - dynamically generates only backend base URL", func(t *testing.T) {
-		createMocks()
+		createMocks(t, nil)
 
 		orgName := "aid-org-four"
 		reqBody := fmt.Sprintf(`
@@ -529,7 +538,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 			}
 		`, orgName, handler.SDPUIBaseURL)
 
-		respBody := makeRequest(reqBody, http.StatusCreated)
+		respBody := makeRequest(t, reqBody, http.StatusCreated)
 
 		tnt, err := tenantManager.GetTenantByName(ctx, orgName)
 		require.NoError(t, err)
@@ -558,7 +567,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 	})
 
 	t.Run("returns badRequest for duplicate tenant name", func(t *testing.T) {
-		createMocks()
+		createMocks(t, nil)
 
 		reqBody := `
 			{
@@ -573,15 +582,61 @@ func Test_TenantHandler_Post(t *testing.T) {
 		`
 
 		// make first request to create tenant
-		_ = makeRequest(reqBody, http.StatusCreated)
+		_ = makeRequest(t, reqBody, http.StatusCreated)
 		// attempt creating another tenant with the same name
-		respBody := makeRequest(reqBody, http.StatusBadRequest)
+		respBody := makeRequest(t, reqBody, http.StatusBadRequest)
 		assert.JSONEq(t, `{"error": "Tenant name already exists"}`, string(respBody))
+	})
+
+	t.Run("logs and reports error when failing to send invitation message", func(t *testing.T) {
+		createMocks(t, errors.New("foobar"))
+
+		orgName := "aid-org-five"
+		reqBody := fmt.Sprintf(`
+			{
+				"name": %q,
+				"owner_email": "owner@email.org",
+				"owner_first_name": "Owner",
+				"owner_last_name": "Owner",
+				"organization_name": "My Aid Org",
+				"base_url": "https://sdp-backend.stellar.org",
+				"sdp_ui_base_url": "https://sdp-ui.stellar.org",
+				"is_default": false
+			}
+		`, orgName)
+
+		respBody := makeRequest(t, reqBody, http.StatusCreated)
+
+		tnt, err := tenantManager.GetTenantByName(ctx, orgName)
+		require.NoError(t, err)
+
+		expectedRespBody := fmt.Sprintf(`
+			{
+				"id": %q,
+				"name": %q,
+				"base_url": "https://sdp-backend.stellar.org",
+				"sdp_ui_base_url": "https://sdp-ui.stellar.org",
+				"status": "TENANT_PROVISIONED",
+				"is_default": false,
+				"created_at": %q,
+				"updated_at": %q,
+				"deleted_at": null,
+				"distribution_account_address": %q,
+				"distribution_account_type": %q,
+				"distribution_account_status": %q
+			}
+		`, tnt.ID, orgName, tnt.CreatedAt.Format(time.RFC3339Nano), tnt.UpdatedAt.Format(time.RFC3339Nano),
+			distAcc, schema.DistributionAccountTypeEnvStellar, schema.DistributionAccountStatusActive)
+		assert.JSONEq(t, expectedRespBody, string(respBody))
+
+		assertMigrations(orgName)
 	})
 
 	messengerClientMock.AssertExpectations(t)
 	distAccSigClient.AssertExpectations(t)
 	distAccResolver.AssertExpectations(t)
+	messengerClientMock.AssertExpectations(t)
+	crashTrackerMock.AssertExpectations(t)
 }
 
 func Test_TenantHandler_Patch_error(t *testing.T) {
