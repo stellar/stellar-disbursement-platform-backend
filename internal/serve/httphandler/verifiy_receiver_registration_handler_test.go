@@ -543,10 +543,9 @@ func Test_VerifyReceiverRegistrationHandler_processAnchorPlatformID(t *testing.T
 	}
 }
 
-func Test_VerifyReceiverRegistrationHandler_producePaymentsReadyToPayEvent(t *testing.T) {
+func Test_VerifyReceiverRegistrationHandler_buildPaymentsReadyToPayEventMessage(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
-
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
@@ -557,8 +556,7 @@ func Test_VerifyReceiverRegistrationHandler_producePaymentsReadyToPayEvent(t *te
 
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
-	mockEventProducer := events.MockProducer{}
-	handler := VerifyReceiverRegistrationHandler{Models: models, EventProducer: &mockEventProducer}
+	handler := VerifyReceiverRegistrationHandler{Models: models}
 
 	data.DeleteAllFixtures(t, ctx, dbConnectionPool)
 
@@ -569,8 +567,8 @@ func Test_VerifyReceiverRegistrationHandler_producePaymentsReadyToPayEvent(t *te
 	rw := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
 
 	t.Run("doesn't return error when there's no payment", func(t *testing.T) {
-		data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
-		data.DeleteAllDisbursementFixtures(t, ctx, dbConnectionPool)
+		defer data.DeleteAllDisbursementFixtures(t, ctx, dbConnectionPool)
+		defer data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
 
 		pausedDisbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
 			Wallet:  wallet,
@@ -589,19 +587,19 @@ func Test_VerifyReceiverRegistrationHandler_producePaymentsReadyToPayEvent(t *te
 
 		getEntries := log.DefaultLogger.StartTest(log.InfoLevel)
 
-		err := handler.producePaymentsReadyToPayEvent(ctx, dbConnectionPool, rw)
-		require.NoError(t, err)
+		msg, err := handler.buildPaymentsReadyToPayEventMessage(ctx, dbConnectionPool, rw)
+		assert.NoError(t, err)
+		assert.Nil(t, msg)
 
 		entries := getEntries()
-		require.Len(t, entries, 1)
+		assert.Len(t, entries, 1)
 		assert.Equal(t, fmt.Sprintf("no payments ready to pay for receiver wallet ID %s", rw.ID), entries[0].Message)
 	})
 
 	t.Run("returns error when tenant isn't in the context", func(t *testing.T) {
+		defer data.DeleteAllDisbursementFixtures(t, ctx, dbConnectionPool)
+		defer data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
 		ctxWithoutTenant := context.Background()
-
-		data.DeleteAllPaymentsFixtures(t, ctxWithoutTenant, dbConnectionPool)
-		data.DeleteAllDisbursementFixtures(t, ctxWithoutTenant, dbConnectionPool)
 
 		disbursement := data.CreateDisbursementFixture(t, ctxWithoutTenant, dbConnectionPool, models.Disbursements, &data.Disbursement{
 			Wallet:  wallet,
@@ -610,7 +608,7 @@ func Test_VerifyReceiverRegistrationHandler_producePaymentsReadyToPayEvent(t *te
 			Status:  data.StartedDisbursementStatus,
 		})
 
-		_ = data.CreatePaymentFixture(t, ctxWithoutTenant, dbConnectionPool, models.Payment, &data.Payment{
+		_ = data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
 			Amount:         "100",
 			Status:         data.ReadyPaymentStatus,
 			Disbursement:   disbursement,
@@ -618,58 +616,14 @@ func Test_VerifyReceiverRegistrationHandler_producePaymentsReadyToPayEvent(t *te
 			ReceiverWallet: rw,
 		})
 
-		err := handler.producePaymentsReadyToPayEvent(ctxWithoutTenant, dbConnectionPool, rw)
+		msg, err := handler.buildPaymentsReadyToPayEventMessage(ctxWithoutTenant, dbConnectionPool, rw)
 		assert.EqualError(t, err, "creating new message: getting tenant from context: tenant not found in context")
+		assert.Nil(t, msg)
 	})
 
-	t.Run("logs when couldn't write message because EventProducer is nil", func(t *testing.T) {
-		data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
-		data.DeleteAllDisbursementFixtures(t, ctx, dbConnectionPool)
-
-		disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-			Wallet:  wallet,
-			Asset:   asset,
-			Country: country,
-			Status:  data.StartedDisbursementStatus,
-		})
-
-		payment := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
-			Amount:         "100",
-			Status:         data.ReadyPaymentStatus,
-			Disbursement:   disbursement,
-			Asset:          *asset,
-			ReceiverWallet: rw,
-		})
-
-		getEntries := log.DefaultLogger.StartTest(log.ErrorLevel)
-
-		h := VerifyReceiverRegistrationHandler{Models: models, EventProducer: nil}
-		err := h.producePaymentsReadyToPayEvent(ctx, dbConnectionPool, rw)
-		require.NoError(t, err)
-
-		expectedMessage := events.Message{
-			Topic:    events.PaymentReadyToPayTopic,
-			Key:      rw.ID,
-			TenantID: tnt.ID,
-			Type:     events.PaymentReadyToPayReceiverVerificationCompleted,
-			Data: schemas.EventPaymentsReadyToPayData{
-				TenantID: tnt.ID,
-				Payments: []schemas.PaymentReadyToPay{
-					{
-						ID: payment.ID,
-					},
-				},
-			},
-		}
-
-		entries := getEntries()
-		require.Len(t, entries, 1)
-		assert.Equal(t, fmt.Sprintf("event producer is nil, could not publish message %s", expectedMessage), entries[0].Message)
-	})
-
-	t.Run("returns error when EventProducer fails writing a message", func(t *testing.T) {
-		data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
-		data.DeleteAllDisbursementFixtures(t, ctx, dbConnectionPool)
+	t.Run("🎉 successfully builds the message", func(t *testing.T) {
+		defer data.DeleteAllDisbursementFixtures(t, ctx, dbConnectionPool)
+		defer data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
 
 		disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
 			Wallet:  wallet,
@@ -701,59 +655,10 @@ func Test_VerifyReceiverRegistrationHandler_producePaymentsReadyToPayEvent(t *te
 			},
 		}
 
-		mockEventProducer.
-			On("WriteMessages", ctx, []events.Message{expectedMessage}).
-			Return(errors.New("unexpected error")).
-			Once()
-
-		err := handler.producePaymentsReadyToPayEvent(ctx, dbConnectionPool, rw)
-		assert.EqualError(t, err, fmt.Sprintf("writing message %s on event producer: unexpected error", expectedMessage))
+		msg, err := handler.buildPaymentsReadyToPayEventMessage(ctx, dbConnectionPool, rw)
+		assert.NoError(t, err)
+		assert.Equal(t, expectedMessage, *msg)
 	})
-
-	t.Run("produce event successfully", func(t *testing.T) {
-		data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
-		data.DeleteAllDisbursementFixtures(t, ctx, dbConnectionPool)
-
-		disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-			Wallet:  wallet,
-			Asset:   asset,
-			Country: country,
-			Status:  data.StartedDisbursementStatus,
-		})
-
-		payment := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
-			Amount:         "100",
-			Status:         data.ReadyPaymentStatus,
-			Disbursement:   disbursement,
-			Asset:          *asset,
-			ReceiverWallet: rw,
-		})
-
-		expectedMessage := events.Message{
-			Topic:    events.PaymentReadyToPayTopic,
-			Key:      rw.ID,
-			TenantID: tnt.ID,
-			Type:     events.PaymentReadyToPayReceiverVerificationCompleted,
-			Data: schemas.EventPaymentsReadyToPayData{
-				TenantID: tnt.ID,
-				Payments: []schemas.PaymentReadyToPay{
-					{
-						ID: payment.ID,
-					},
-				},
-			},
-		}
-
-		mockEventProducer.
-			On("WriteMessages", ctx, []events.Message{expectedMessage}).
-			Return(nil).
-			Once()
-
-		err := handler.producePaymentsReadyToPayEvent(ctx, dbConnectionPool, rw)
-		require.NoError(t, err)
-	})
-
-	mockEventProducer.AssertExpectations(t)
 }
 
 func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testing.T) {
