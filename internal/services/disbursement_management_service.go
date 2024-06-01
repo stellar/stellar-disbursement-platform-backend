@@ -22,11 +22,11 @@ import (
 
 // DisbursementManagementService is a service for managing disbursements.
 type DisbursementManagementService struct {
-	models           *data.Models
-	dbConnectionPool db.DBConnectionPool
-	eventProducer    events.Producer
-	authManager      auth.AuthManager
-	horizonClient    horizonclient.ClientInterface
+	Models           *data.Models
+	DBConnectionPool db.DBConnectionPool
+	EventProducer    events.Producer
+	AuthManager      auth.AuthManager
+	HorizonClient    horizonclient.ClientInterface
 }
 
 type UserReference struct {
@@ -73,23 +73,6 @@ func (e InsufficientBalanceError) Error() string {
 	)
 }
 
-// NewDisbursementManagementService is a factory function for creating a new DisbursementManagementService.
-func NewDisbursementManagementService(
-	models *data.Models,
-	dbConnectionPool db.DBConnectionPool,
-	authManager auth.AuthManager,
-	horizonClient horizonclient.ClientInterface,
-	eventProducer events.Producer,
-) *DisbursementManagementService {
-	return &DisbursementManagementService{
-		models:           models,
-		dbConnectionPool: dbConnectionPool,
-		authManager:      authManager,
-		eventProducer:    eventProducer,
-		horizonClient:    horizonClient,
-	}
-}
-
 func (s *DisbursementManagementService) AppendUserMetadata(ctx context.Context, disbursements []*data.Disbursement) ([]*DisbursementWithUserMetadata, error) {
 	users := map[string]*auth.User{}
 	for _, d := range disbursements {
@@ -107,7 +90,7 @@ func (s *DisbursementManagementService) AppendUserMetadata(ctx context.Context, 
 		}
 	}
 
-	usersList, err := s.authManager.GetUsersByID(ctx, maps.Keys(users))
+	usersList, err := s.AuthManager.GetUsersByID(ctx, maps.Keys(users))
 	if err != nil {
 		return nil, fmt.Errorf("error getting user for IDs: %w", err)
 	}
@@ -145,17 +128,17 @@ func (s *DisbursementManagementService) AppendUserMetadata(ctx context.Context, 
 
 func (s *DisbursementManagementService) GetDisbursementsWithCount(ctx context.Context, queryParams *data.QueryParams) (*utils.ResultWithTotal, error) {
 	return db.RunInTransactionWithResult(ctx,
-		s.dbConnectionPool,
+		s.DBConnectionPool,
 		&sql.TxOptions{Isolation: sql.LevelReadCommitted, ReadOnly: true},
 		func(dbTx db.DBTransaction) (*utils.ResultWithTotal, error) {
-			totalDisbursements, err := s.models.Disbursements.Count(ctx, dbTx, queryParams)
+			totalDisbursements, err := s.Models.Disbursements.Count(ctx, dbTx, queryParams)
 			if err != nil {
 				return nil, fmt.Errorf("error counting disbursements: %w", err)
 			}
 
 			var disbursements []*data.Disbursement
 			if totalDisbursements != 0 {
-				disbursements, err = s.models.Disbursements.GetAll(ctx, dbTx, queryParams)
+				disbursements, err = s.Models.Disbursements.GetAll(ctx, dbTx, queryParams)
 				if err != nil {
 					return nil, fmt.Errorf("error retrieving disbursements: %w", err)
 				}
@@ -174,10 +157,10 @@ func (s *DisbursementManagementService) GetDisbursementsWithCount(ctx context.Co
 
 func (s *DisbursementManagementService) GetDisbursementReceiversWithCount(ctx context.Context, disbursementID string, queryParams *data.QueryParams) (*utils.ResultWithTotal, error) {
 	return db.RunInTransactionWithResult(ctx,
-		s.dbConnectionPool,
+		s.DBConnectionPool,
 		&sql.TxOptions{Isolation: sql.LevelReadCommitted, ReadOnly: true},
 		func(dbTx db.DBTransaction) (*utils.ResultWithTotal, error) {
-			_, err := s.models.Disbursements.Get(ctx, dbTx, disbursementID)
+			_, err := s.Models.Disbursements.Get(ctx, dbTx, disbursementID)
 			if err != nil {
 				if errors.Is(err, data.ErrRecordNotFound) {
 					return nil, ErrDisbursementNotFound
@@ -186,14 +169,14 @@ func (s *DisbursementManagementService) GetDisbursementReceiversWithCount(ctx co
 				}
 			}
 
-			totalReceivers, err := s.models.DisbursementReceivers.Count(ctx, dbTx, disbursementID)
+			totalReceivers, err := s.Models.DisbursementReceivers.Count(ctx, dbTx, disbursementID)
 			if err != nil {
 				return nil, fmt.Errorf("error counting disbursement receivers for disbursement with id %s: %w", disbursementID, err)
 			}
 
 			receivers := []*data.DisbursementReceiver{}
 			if totalReceivers != 0 {
-				receivers, err = s.models.DisbursementReceivers.GetAll(ctx, dbTx, queryParams, disbursementID)
+				receivers, err = s.Models.DisbursementReceivers.GetAll(ctx, dbTx, queryParams, disbursementID)
 				if err != nil {
 					return nil, fmt.Errorf("error retrieving disbursement receivers for disbursement with id %s: %w", disbursementID, err)
 				}
@@ -206,9 +189,9 @@ func (s *DisbursementManagementService) GetDisbursementReceiversWithCount(ctx co
 // StartDisbursement starts a disbursement and all its payments and receivers wallets.
 func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, disbursementID string, user *auth.User, distributionPubKey string) error {
 	opts := db.TransactionOptions{
-		DBConnectionPool: s.dbConnectionPool,
+		DBConnectionPool: s.DBConnectionPool,
 		AtomicFunctionWithPostCommit: func(dbTx db.DBTransaction) (postCommitFn db.PostCommitFunction, err error) {
-			disbursement, err := s.models.Disbursements.GetWithStatistics(ctx, disbursementID)
+			disbursement, err := s.Models.Disbursements.GetWithStatistics(ctx, disbursementID)
 			if err != nil {
 				if errors.Is(err, data.ErrRecordNotFound) {
 					return nil, ErrDisbursementNotFound
@@ -228,7 +211,7 @@ func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, d
 			}
 
 			// 3. Check if approval Workflow is enabled for this organization
-			organization, err := s.models.Organizations.Get(ctx)
+			organization, err := s.Models.Organizations.Get(ctx)
 			if err != nil {
 				return nil, fmt.Errorf("error getting organization: %w", err)
 			}
@@ -243,7 +226,7 @@ func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, d
 			}
 
 			// 4. Check if there is enough balance from the distribution wallet for this disbursement along with any pending disbursements
-			rootAccount, err := s.horizonClient.AccountDetail(
+			rootAccount, err := s.HorizonClient.AccountDetail(
 				horizonclient.AccountRequest{AccountID: distributionPubKey})
 			if err != nil {
 				err = tssUtils.NewHorizonErrorWrapper(err)
@@ -271,7 +254,7 @@ func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, d
 			}
 
 			var totalPendingAmount float64 = 0.0
-			incompletePayments, err := s.models.Payment.GetAll(ctx, &data.QueryParams{
+			incompletePayments, err := s.Models.Payment.GetAll(ctx, &data.QueryParams{
 				Filters: map[data.FilterKey]interface{}{
 					data.FilterKeyStatus: data.PaymentInProgressStatuses(),
 				},
@@ -311,19 +294,19 @@ func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, d
 			}
 
 			// 5. Update all correct payment status to `ready`
-			err = s.models.Payment.UpdateStatusByDisbursementID(ctx, dbTx, disbursementID, data.ReadyPaymentStatus)
+			err = s.Models.Payment.UpdateStatusByDisbursementID(ctx, dbTx, disbursementID, data.ReadyPaymentStatus)
 			if err != nil {
 				return nil, fmt.Errorf("error updating payment status to ready for disbursement with id %s: %w", disbursementID, err)
 			}
 
 			// 6. Update all receiver_wallets from `draft` to `ready`
-			err = s.models.ReceiverWallet.UpdateStatusByDisbursementID(ctx, dbTx, disbursementID, data.DraftReceiversWalletStatus, data.ReadyReceiversWalletStatus)
+			err = s.Models.ReceiverWallet.UpdateStatusByDisbursementID(ctx, dbTx, disbursementID, data.DraftReceiversWalletStatus, data.ReadyReceiversWalletStatus)
 			if err != nil {
 				return nil, fmt.Errorf("error updating receiver wallet status to ready for disbursement with id %s: %w", disbursementID, err)
 			}
 
 			// 7. Update disbursement status to `started`
-			err = s.models.Disbursements.UpdateStatus(ctx, dbTx, user.ID, disbursementID, data.StartedDisbursementStatus)
+			err = s.Models.Disbursements.UpdateStatus(ctx, dbTx, user.ID, disbursementID, data.StartedDisbursementStatus)
 			if err != nil {
 				return nil, fmt.Errorf("error updating disbursement status to started for disbursement with id %s: %w", disbursementID, err)
 			}
@@ -331,7 +314,7 @@ func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, d
 			// 8. Produce events to send invitation message to the receivers
 			msgs := make([]events.Message, 0)
 
-			receiverWallets, err := s.models.ReceiverWallet.GetAllPendingRegistrationByDisbursementID(ctx, dbTx, disbursementID)
+			receiverWallets, err := s.Models.ReceiverWallet.GetAllPendingRegistrationByDisbursementID(ctx, dbTx, disbursementID)
 			if err != nil {
 				return nil, fmt.Errorf("getting pending registration receiver wallets: %w", err)
 			}
@@ -353,7 +336,7 @@ func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, d
 			}
 
 			// 9. Produce events to send payments to the TSS
-			payments, err := s.models.Payment.GetReadyByDisbursementID(ctx, dbTx, disbursementID)
+			payments, err := s.Models.Payment.GetReadyByDisbursementID(ctx, dbTx, disbursementID)
 			if err != nil {
 				return nil, fmt.Errorf("getting ready payments for disbursement with id %s: %w", disbursementID, err)
 			}
@@ -391,12 +374,12 @@ func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, d
 }
 
 func (s *DisbursementManagementService) produceEvents(ctx context.Context, msgs ...events.Message) error {
-	if s.eventProducer == nil {
+	if s.EventProducer == nil {
 		log.Ctx(ctx).Errorf("event producer is nil, could not publish messages %+v", msgs)
 		return nil
 	}
 
-	if err := s.eventProducer.WriteMessages(ctx, msgs...); err != nil {
+	if err := s.EventProducer.WriteMessages(ctx, msgs...); err != nil {
 		return fmt.Errorf("publishing messages %+v on event producer: %w", msgs, err)
 	}
 
@@ -405,8 +388,8 @@ func (s *DisbursementManagementService) produceEvents(ctx context.Context, msgs 
 
 // PauseDisbursement pauses a disbursement and all its payments.
 func (s *DisbursementManagementService) PauseDisbursement(ctx context.Context, disbursementID string, user *auth.User) error {
-	return db.RunInTransaction(ctx, s.dbConnectionPool, nil, func(dbTx db.DBTransaction) error {
-		disbursement, err := s.models.Disbursements.Get(ctx, dbTx, disbursementID)
+	return db.RunInTransaction(ctx, s.DBConnectionPool, nil, func(dbTx db.DBTransaction) error {
+		disbursement, err := s.Models.Disbursements.Get(ctx, dbTx, disbursementID)
 		if err != nil {
 			if errors.Is(err, data.ErrRecordNotFound) {
 				return ErrDisbursementNotFound
@@ -422,13 +405,13 @@ func (s *DisbursementManagementService) PauseDisbursement(ctx context.Context, d
 		}
 
 		// 2. Update all correct payment status to `paused`
-		err = s.models.Payment.UpdateStatusByDisbursementID(ctx, dbTx, disbursementID, data.PausedPaymentStatus)
+		err = s.Models.Payment.UpdateStatusByDisbursementID(ctx, dbTx, disbursementID, data.PausedPaymentStatus)
 		if err != nil {
 			return fmt.Errorf("error updating payment status to paused for disbursement with id %s: %w", disbursementID, err)
 		}
 
 		// 3. Update disbursement status to `paused`
-		err = s.models.Disbursements.UpdateStatus(ctx, dbTx, user.ID, disbursementID, data.PausedDisbursementStatus)
+		err = s.Models.Disbursements.UpdateStatus(ctx, dbTx, user.ID, disbursementID, data.PausedDisbursementStatus)
 		if err != nil {
 			return fmt.Errorf("error updating disbursement status to started for disbursement with id %s: %w", disbursementID, err)
 		}

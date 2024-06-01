@@ -311,8 +311,11 @@ func Test_DisbursementHandler_GetDisbursements_Errors(t *testing.T) {
 	require.NoError(t, err)
 
 	handler := &DisbursementHandler{
-		Models:                        models,
-		DisbursementManagementService: services.NewDisbursementManagementService(models, dbConnectionPool, nil, nil, nil),
+		Models: models,
+		DisbursementManagementService: &services.DisbursementManagementService{
+			Models:           models,
+			DBConnectionPool: dbConnectionPool,
+		},
 	}
 
 	ts := httptest.NewServer(http.HandlerFunc(handler.GetDisbursements))
@@ -418,9 +421,13 @@ func Test_DisbursementHandler_GetDisbursements_Success(t *testing.T) {
 
 	authManagerMock := &auth.AuthManagerMock{}
 	handler := &DisbursementHandler{
-		Models:                        models,
-		AuthManager:                   authManagerMock,
-		DisbursementManagementService: services.NewDisbursementManagementService(models, dbConnectionPool, authManagerMock, nil, nil),
+		Models:      models,
+		AuthManager: authManagerMock,
+		DisbursementManagementService: &services.DisbursementManagementService{
+			Models:           models,
+			DBConnectionPool: dbConnectionPool,
+			AuthManager:      authManagerMock,
+		},
 	}
 
 	ts := httptest.NewServer(http.HandlerFunc(handler.GetDisbursements))
@@ -988,9 +995,13 @@ func Test_DisbursementHandler_GetDisbursement(t *testing.T) {
 		Return(allUsers, nil)
 
 	handler := &DisbursementHandler{
-		Models:                        models,
-		AuthManager:                   authManagerMock,
-		DisbursementManagementService: services.NewDisbursementManagementService(models, dbConnectionPool, authManagerMock, nil, nil),
+		Models:      models,
+		AuthManager: authManagerMock,
+		DisbursementManagementService: &services.DisbursementManagementService{
+			Models:           models,
+			DBConnectionPool: dbConnectionPool,
+			AuthManager:      authManagerMock,
+		},
 	}
 
 	r := chi.NewRouter()
@@ -1080,8 +1091,11 @@ func Test_DisbursementHandler_GetDisbursementReceivers(t *testing.T) {
 	require.NoError(t, err)
 
 	handler := &DisbursementHandler{
-		Models:                        models,
-		DisbursementManagementService: services.NewDisbursementManagementService(models, dbConnectionPool, nil, nil, nil),
+		Models: models,
+		DisbursementManagementService: &services.DisbursementManagementService{
+			Models:           models,
+			DBConnectionPool: dbConnectionPool,
+		},
 	}
 
 	r := chi.NewRouter()
@@ -1271,10 +1285,16 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 	require.NoError(t, err)
 
 	handler := &DisbursementHandler{
-		Models:                        models,
-		AuthManager:                   authManagerMock,
-		DistributionAccountResolver:   distAccResolver,
-		DisbursementManagementService: services.NewDisbursementManagementService(models, dbConnectionPool, authManagerMock, hMock, &mockEventProducer),
+		Models:                      models,
+		AuthManager:                 authManagerMock,
+		DistributionAccountResolver: distAccResolver,
+		DisbursementManagementService: &services.DisbursementManagementService{
+			Models:           models,
+			DBConnectionPool: dbConnectionPool,
+			AuthManager:      authManagerMock,
+			HorizonClient:    hMock,
+			EventProducer:    &mockEventProducer,
+		},
 	}
 
 	r := chi.NewRouter()
