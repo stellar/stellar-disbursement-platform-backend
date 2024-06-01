@@ -7,13 +7,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
-
 	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/protocols/horizon"
 	"github.com/stellar/go/protocols/horizon/base"
 	"github.com/stellar/go/support/log"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -23,7 +20,9 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 func Test_DisbursementManagementService_GetDisbursementsWithCount(t *testing.T) {
@@ -73,7 +72,11 @@ func Test_DisbursementManagementService_GetDisbursementsWithCount(t *testing.T) 
 		On("GetUsersByID", mock.Anything, []string{users[1].ID, users[0].ID}).
 		Return(users, nil)
 
-	service := NewDisbursementManagementService(models, models.DBConnectionPool, authManagerMock, nil, nil)
+	service := &DisbursementManagementService{
+		Models:           models,
+		DBConnectionPool: models.DBConnectionPool,
+		AuthManager:      authManagerMock,
+	}
 
 	ctx := context.Background()
 	t.Run("disbursements list empty", func(t *testing.T) {
@@ -140,7 +143,10 @@ func Test_DisbursementManagementService_GetDisbursementReceiversWithCount(t *tes
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
-	service := NewDisbursementManagementService(models, models.DBConnectionPool, nil, nil, nil)
+	service := DisbursementManagementService{
+		Models:           models,
+		DBConnectionPool: dbConnectionPool,
+	}
 	disbursement := data.CreateDisbursementFixture(t, context.Background(), dbConnectionPool, models.Disbursements, &data.Disbursement{})
 
 	ctx := context.Background()
@@ -214,7 +220,12 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 	hMock := &horizonclient.MockClient{}
 	distributionPubKey := "ABC"
 
-	service := NewDisbursementManagementService(models, models.DBConnectionPool, nil, hMock, &mockEventProducer)
+	service := &DisbursementManagementService{
+		Models:           models,
+		DBConnectionPool: models.DBConnectionPool,
+		HorizonClient:    hMock,
+		EventProducer:    &mockEventProducer,
+	}
 
 	// create fixtures
 	wallet := data.CreateDefaultWalletFixture(t, ctx, dbConnectionPool)
@@ -823,7 +834,7 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 			ID:    "user-id",
 			Email: "email@email.com",
 		}
-		service.eventProducer = nil
+		service.EventProducer = nil
 		mockDisbursementBalance.Once()
 		err = service.StartDisbursement(ctx, disbursement.ID, user, distributionPubKey)
 		require.NoError(t, err)
@@ -895,7 +906,12 @@ func Test_DisbursementManagementService_PauseDisbursement(t *testing.T) {
 	hMock := &horizonclient.MockClient{}
 	distributionPubKey := "ABC"
 
-	service := NewDisbursementManagementService(models, models.DBConnectionPool, nil, hMock, &mockEventProducer)
+	service := &DisbursementManagementService{
+		Models:           models,
+		DBConnectionPool: models.DBConnectionPool,
+		HorizonClient:    hMock,
+		EventProducer:    &mockEventProducer,
+	}
 
 	// create fixtures
 	wallet := data.CreateDefaultWalletFixture(t, ctx, dbConnectionPool)
