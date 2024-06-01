@@ -18,12 +18,8 @@ add_user_for_tenant() {
   echo
   local tenant_id=$1
   local tenant_name=$2
-  local email="owner_${tenant_name}@example.com"
-  local username="Owner${tenant_name}"
-  local password="SecureOwner${tenant_name}123"
-
   echo "Adding owner user to tenant: $tenant_name (ID: $tenant_id)"
-  echo "Password123!" |  ./stellar-disbursement-platform auth add-user "owner@${tenant_name}.org" "john" "doe" --password  --owner --roles "owner" --tenant-id "${tenant_id}"
+  echo "Password123!" |  ./stellar-disbursement-platform auth add-user "owner@${tenant_name}.local" "john" "doe" --password  --owner --roles "owner" --tenant-id "${tenant_id}"
 
 } 
 

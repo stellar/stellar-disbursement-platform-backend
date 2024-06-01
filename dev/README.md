@@ -7,7 +7,6 @@
   - [Prerequisites](#prerequisites)
     - [Docker](#docker)
     - [Stellar Accounts and .env File](#stellar-accounts-and-env-file)
-    - [Stellar Accounts and .env File](#stellar-accounts-and-env-file-1)
   - [Setup](#setup)
     - [Build Docker Containers](#build-docker-containers)
     - [New Tenant Provisioning Process](#new-tenant-provisioning-process)
@@ -31,7 +30,6 @@ Follow these instructions to get started with the Stellar Disbursement Platform 
 Make sure you have Docker installed on your system. If not, you can download it from [here](https://www.docker.com/products/docker-desktop).
 
 ### Stellar Accounts and .env File
-### Stellar Accounts and .env File
 
 You need to create and configure two Stellar accounts to use the SDP. You can either create the accounts manually or use the provided script to automate the process.
 
@@ -45,9 +43,9 @@ You need to create and configure two Stellar accounts to use the SDP. You can ei
     ```
 4. Update the `.env` file with the public and private keys of the two accounts created in the previous steps.
 
-**Option 2: Use create_env.sh script to create accounts and .env file**
+**Option 2: Use make_env.sh script to create accounts and .env file**
 
-You can use the make_env.sh script to automatically create a SEP-10 account funded with XLM using Friendbot, create a distribution account, and fund it with USDC by establishing a trustline and executing a path payment.  to run the make_env.sh script
+You can use the make_env.sh script to automatically create a SEP-10 account, a funded distribution account (XLM and USDC) and a trustline.  to run the make_env.sh script
 
 1. Use [make_env.sh](./scripts/make_env.sh) script to create stellar accounts and .env file automatically:
     1. Navigate to the `dev` directory from the terminal:
@@ -112,9 +110,9 @@ Be sure that the added tenant hosts are included in the host configuration file.
 To check it, you can run the command `cat /etc/hosts`.
 To include them, you can run command `sudo nano /etc/hosts` and insert the lines below:
 ```
-127.0.0.1       bluecorp.sdp.local
-127.0.0.1       redcorp.sdp.local
-127.0.0.1       pinkcorp.sdp.local
+127.0.0.1       bluecorp.stellar.local
+127.0.0.1       redcorp.stellar.local
+127.0.0.1       pinkcorp.stellar.local
 ```
 
 ### Login Information

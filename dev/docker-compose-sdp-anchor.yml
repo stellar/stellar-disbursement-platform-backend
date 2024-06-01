@@ -14,12 +14,9 @@ services:
   sdp-api:
     container_name: sdp-api-mtn
     image: stellar/sdp-v2:development
-    depends_on:
-      - db
     build:
       context: ../
       dockerfile: Dockerfile.development
-      target: development
     ports:
       - "8000:8000"
       - "8002:8002"
@@ -52,7 +49,6 @@ services:
       INSTANCE_NAME: "SDP Testnet on Docker"
       TENANT_XLM_BOOTSTRAP_AMOUNT: 5
       DISTRIBUTION_SIGNER_TYPE: ${DISTRIBUTION_SIGNER_TYPE:-DISTRIBUTION_ACCOUNT_ENV}
-      # if you enable SINGLE_TENANT_MODE then you must enable the scheduler
       SINGLE_TENANT_MODE: "false"
 
       # scheduler options- must be set to true if using single tenant mode.
