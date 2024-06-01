@@ -13,6 +13,7 @@ import (
 	"github.com/stellar/go/support/render/httpjson"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
@@ -26,10 +27,11 @@ import (
 )
 
 type PaymentsHandler struct {
-	Models           *data.Models
-	DBConnectionPool db.DBConnectionPool
-	AuthManager      auth.AuthManager
-	EventProducer    events.Producer
+	Models             *data.Models
+	DBConnectionPool   db.DBConnectionPool
+	AuthManager        auth.AuthManager
+	EventProducer      events.Producer
+	CrashTrackerClient crashtracker.CrashTrackerClient
 }
 
 type RetryPaymentsRequest struct {
@@ -143,8 +145,18 @@ func (p PaymentsHandler) RetryPayments(rw http.ResponseWriter, req *http.Request
 			}
 
 			if len(payments) > 0 {
+				msg, err := p.buildPaymentsReadyEventMessage(ctx, payments)
+				if err != nil {
+					return nil, fmt.Errorf("building payments ready event message: %w", err)
+				}
+
 				postCommitFn = func() error {
-					return p.producePaymentsReadyEvents(ctx, payments)
+					postErr := events.ProduceEvents(ctx, p.EventProducer, msg)
+					if postErr != nil {
+						p.CrashTrackerClient.LogAndReportErrors(ctx, postErr, "writing retry payment message on the event producer")
+					}
+
+					return nil
 				}
 			}
 
@@ -165,14 +177,15 @@ func (p PaymentsHandler) RetryPayments(rw http.ResponseWriter, req *http.Request
 	httpjson.RenderStatus(rw, http.StatusOK, map[string]string{"message": "Payments retried successfully"}, httpjson.JSON)
 }
 
-func (p PaymentsHandler) producePaymentsReadyEvents(ctx context.Context, payments []*data.Payment) error {
+func (p PaymentsHandler) buildPaymentsReadyEventMessage(ctx context.Context, payments []*data.Payment) (*events.Message, error) {
 	if len(payments) == 0 {
-		log.Ctx(ctx).Info("No payments to produce ready to pay event")
-		return nil
+		log.Ctx(ctx).Warnf("no payments to retry")
+		return nil, nil
 	}
-	msg, msgErr := events.NewMessage(ctx, events.PaymentReadyToPayTopic, "", events.PaymentReadyToPayRetryFailedPayment, nil)
-	if msgErr != nil {
-		return fmt.Errorf("creating a new message: %w", msgErr)
+
+	msg, err := events.NewMessage(ctx, events.PaymentReadyToPayTopic, "", events.PaymentReadyToPayRetryFailedPayment, nil)
+	if err != nil {
+		return nil, fmt.Errorf("creating a new message: %w", err)
 	}
 
 	paymentsReadyToPay := schemas.EventPaymentsReadyToPayData{TenantID: msg.TenantID}
@@ -182,15 +195,12 @@ func (p PaymentsHandler) producePaymentsReadyEvents(ctx context.Context, payment
 	msg.Data = paymentsReadyToPay
 	msg.Key = paymentsReadyToPay.TenantID
 
-	if p.EventProducer != nil {
-		err := p.EventProducer.WriteMessages(ctx, *msg)
-		if err != nil {
-			return fmt.Errorf("writing message %s on event producer: %w", msg, err)
-		}
-	} else {
-		log.Ctx(ctx).Errorf("event producer is nil, could not publish message %+v", msg)
+	err = msg.Validate()
+	if err != nil {
+		return nil, fmt.Errorf("validating message: %w", err)
 	}
-	return nil
+
+	return msg, nil
 }
 
 func (p PaymentsHandler) getPaymentsWithCount(ctx context.Context, queryParams *data.QueryParams) (*utils.ResultWithTotal, error) {
