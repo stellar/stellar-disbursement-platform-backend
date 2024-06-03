@@ -1075,7 +1075,9 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 			Return(errors.New("unexpected error")).
 			Once()
 		crashTrackerMock := &crashtracker.MockCrashTrackerClient{}
-		crashTrackerMock.On("LogAndReportErrors", mock.Anything, mock.Anything, mock.Anything).Once()
+		crashTrackerMock.
+			On("LogAndReportErrors", mock.Anything, mock.Anything, "writing retry payment message on the event producer").
+			Once()
 		handler := PaymentsHandler{
 			Models:             models,
 			DBConnectionPool:   dbConnectionPool,
