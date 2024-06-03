@@ -4,26 +4,15 @@ if [ ! -f ".env" ]; then
     GO_EXECUTABLE="go run ./scripts/create_and_fund.go"
     echo ".env file does not exist. Creating in $(pwd)."
 
-    # Function to run Go script and extract keys
-    function generate_keys() {
-        # Run the Go script with the necessary arguments
-        if [ "$1" == "nop" ]; then
-            output=$($GO_EXECUTABLE -fundxlm=true)
-        else
-            output=$($GO_EXECUTABLE -fundxlm=true -fundusdc=true -xlm_amount="20")
-        fi
-        echo "$output"
-    }
-
-    # Generate keys for SEP-10 without funding
+    # Run the Go script to generate keys for SEP-10 without funding
     echo "Generating SEP-10 signing keys..."
-    sep10_output=$(generate_keys "nop")
+    sep10_output=$($GO_EXECUTABLE -fundxlm=true)
     sep10_public=$(echo "$sep10_output" | grep 'Public Key:' | awk '{print $3}')
     sep10_private=$(echo "$sep10_output" | grep 'Secret Key:' | awk '{print $3}')
 
-    # Generate keys for distribution with funding
+    # Run the Go script to generate keys for distribution with funding
     echo "Generating distribution keys with funding..."
-    distribution_output=$(generate_keys "with_funding")
+    distribution_output=$($GO_EXECUTABLE -fundxlm=true -fundusdc=true -xlm_amount="20")
     distribution_public=$(echo "$distribution_output" | grep 'Public Key:' | awk '{print $3}')
     distribution_private=$(echo "$distribution_output" | grep 'Secret Key:' | awk '{print $3}')
 
@@ -50,4 +39,3 @@ else
     echo ".env file already exists in $(pwd). Skipping creation."
 fi
 echo "====> ✅ Finished .env setup"
-

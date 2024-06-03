@@ -142,6 +142,7 @@ echo $DIVIDER
 echo "🎉🎉🎉🎉 SUCCESS! 🎉🎉🎉🎉"
 echo "Login URLs for each tenant:"
 for tenant in "${tenants[@]}"; do
-    echo "🔗Tenant $tenant: http://$tenant.stellar.local:3000"
+    url="http://$tenant.stellar.local:3000"
+    echo -e "🔗Tenant $tenant: \033]8;;$url\033\\$url\033]8;;\033\\"
     echo "username: owner@$tenant.org  password: Password123!"
 done
