@@ -311,11 +311,8 @@ func Test_DisbursementHandler_GetDisbursements_Errors(t *testing.T) {
 	require.NoError(t, err)
 
 	handler := &DisbursementHandler{
-		Models: models,
-		DisbursementManagementService: &services.DisbursementManagementService{
-			Models:           models,
-			DBConnectionPool: dbConnectionPool,
-		},
+		Models:                        models,
+		DisbursementManagementService: &services.DisbursementManagementService{Models: models},
 	}
 
 	ts := httptest.NewServer(http.HandlerFunc(handler.GetDisbursements))
@@ -424,9 +421,8 @@ func Test_DisbursementHandler_GetDisbursements_Success(t *testing.T) {
 		Models:      models,
 		AuthManager: authManagerMock,
 		DisbursementManagementService: &services.DisbursementManagementService{
-			Models:           models,
-			DBConnectionPool: dbConnectionPool,
-			AuthManager:      authManagerMock,
+			Models:      models,
+			AuthManager: authManagerMock,
 		},
 	}
 
@@ -998,9 +994,8 @@ func Test_DisbursementHandler_GetDisbursement(t *testing.T) {
 		Models:      models,
 		AuthManager: authManagerMock,
 		DisbursementManagementService: &services.DisbursementManagementService{
-			Models:           models,
-			DBConnectionPool: dbConnectionPool,
-			AuthManager:      authManagerMock,
+			Models:      models,
+			AuthManager: authManagerMock,
 		},
 	}
 
@@ -1091,11 +1086,8 @@ func Test_DisbursementHandler_GetDisbursementReceivers(t *testing.T) {
 	require.NoError(t, err)
 
 	handler := &DisbursementHandler{
-		Models: models,
-		DisbursementManagementService: &services.DisbursementManagementService{
-			Models:           models,
-			DBConnectionPool: dbConnectionPool,
-		},
+		Models:                        models,
+		DisbursementManagementService: &services.DisbursementManagementService{Models: models},
 	}
 
 	r := chi.NewRouter()
@@ -1289,11 +1281,10 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 		AuthManager:                 authManagerMock,
 		DistributionAccountResolver: distAccResolver,
 		DisbursementManagementService: &services.DisbursementManagementService{
-			Models:           models,
-			DBConnectionPool: dbConnectionPool,
-			AuthManager:      authManagerMock,
-			HorizonClient:    hMock,
-			EventProducer:    &mockEventProducer,
+			Models:        models,
+			AuthManager:   authManagerMock,
+			HorizonClient: hMock,
+			EventProducer: &mockEventProducer,
 		},
 	}
 

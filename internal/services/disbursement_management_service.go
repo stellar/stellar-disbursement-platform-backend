@@ -22,11 +22,10 @@ import (
 
 // DisbursementManagementService is a service for managing disbursements.
 type DisbursementManagementService struct {
-	Models           *data.Models
-	DBConnectionPool db.DBConnectionPool
-	EventProducer    events.Producer
-	AuthManager      auth.AuthManager
-	HorizonClient    horizonclient.ClientInterface
+	Models        *data.Models
+	EventProducer events.Producer
+	AuthManager   auth.AuthManager
+	HorizonClient horizonclient.ClientInterface
 }
 
 type UserReference struct {
@@ -106,6 +105,9 @@ func (s *DisbursementManagementService) AppendUserMetadata(ctx context.Context, 
 		}
 
 		for _, entry := range d.StatusHistory {
+			if entry.Status != data.DraftDisbursementStatus && entry.Status != data.StartedDisbursementStatus {
+				continue
+			}
 			userInfo := users[entry.UserID]
 			userRef := UserReference{
 				ID:        entry.UserID,
@@ -128,7 +130,7 @@ func (s *DisbursementManagementService) AppendUserMetadata(ctx context.Context, 
 
 func (s *DisbursementManagementService) GetDisbursementsWithCount(ctx context.Context, queryParams *data.QueryParams) (*utils.ResultWithTotal, error) {
 	return db.RunInTransactionWithResult(ctx,
-		s.DBConnectionPool,
+		s.Models.DBConnectionPool,
 		&sql.TxOptions{Isolation: sql.LevelReadCommitted, ReadOnly: true},
 		func(dbTx db.DBTransaction) (*utils.ResultWithTotal, error) {
 			totalDisbursements, err := s.Models.Disbursements.Count(ctx, dbTx, queryParams)
@@ -157,7 +159,7 @@ func (s *DisbursementManagementService) GetDisbursementsWithCount(ctx context.Co
 
 func (s *DisbursementManagementService) GetDisbursementReceiversWithCount(ctx context.Context, disbursementID string, queryParams *data.QueryParams) (*utils.ResultWithTotal, error) {
 	return db.RunInTransactionWithResult(ctx,
-		s.DBConnectionPool,
+		s.Models.DBConnectionPool,
 		&sql.TxOptions{Isolation: sql.LevelReadCommitted, ReadOnly: true},
 		func(dbTx db.DBTransaction) (*utils.ResultWithTotal, error) {
 			_, err := s.Models.Disbursements.Get(ctx, dbTx, disbursementID)
@@ -189,7 +191,7 @@ func (s *DisbursementManagementService) GetDisbursementReceiversWithCount(ctx co
 // StartDisbursement starts a disbursement and all its payments and receivers wallets.
 func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, disbursementID string, user *auth.User, distributionPubKey string) error {
 	opts := db.TransactionOptions{
-		DBConnectionPool: s.DBConnectionPool,
+		DBConnectionPool: s.Models.DBConnectionPool,
 		AtomicFunctionWithPostCommit: func(dbTx db.DBTransaction) (postCommitFn db.PostCommitFunction, err error) {
 			disbursement, err := s.Models.Disbursements.GetWithStatistics(ctx, disbursementID)
 			if err != nil {
@@ -388,7 +390,7 @@ func (s *DisbursementManagementService) produceEvents(ctx context.Context, msgs 
 
 // PauseDisbursement pauses a disbursement and all its payments.
 func (s *DisbursementManagementService) PauseDisbursement(ctx context.Context, disbursementID string, user *auth.User) error {
-	return db.RunInTransaction(ctx, s.DBConnectionPool, nil, func(dbTx db.DBTransaction) error {
+	return db.RunInTransaction(ctx, s.Models.DBConnectionPool, nil, func(dbTx db.DBTransaction) error {
 		disbursement, err := s.Models.Disbursements.Get(ctx, dbTx, disbursementID)
 		if err != nil {
 			if errors.Is(err, data.ErrRecordNotFound) {
