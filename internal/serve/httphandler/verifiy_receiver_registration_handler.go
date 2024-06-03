@@ -300,7 +300,6 @@ func (v VerifyReceiverRegistrationHandler) VerifyReceiverRegistration(w http.Res
 				}
 
 				return nil
-				// return events.ProduceEvents(ctx, v.EventProducer, msg)
 			}
 
 			// STEP 6: PATCH transaction on the AnchorPlatform and update the receiver wallet with the anchor platform tx ID
