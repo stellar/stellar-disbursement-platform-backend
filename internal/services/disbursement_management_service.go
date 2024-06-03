@@ -313,7 +313,7 @@ func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, d
 				return nil, fmt.Errorf("error updating disbursement status to started for disbursement with id %s: %w", disbursementID, err)
 			}
 
-			// 8. Produce events to send invitation message to the receivers
+			// 8. Build events to send invitation messages to the receivers
 			msgs := make([]events.Message, 0)
 
 			receiverWallets, err := s.Models.ReceiverWallet.GetAllPendingRegistrationByDisbursementID(ctx, dbTx, disbursementID)
@@ -337,7 +337,7 @@ func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, d
 				log.Ctx(ctx).Infof("no receiver wallets to send invitation for disbursement ID %s", disbursementID)
 			}
 
-			// 9. Produce events to send payments to the TSS
+			// 9. Build events to send payments to the TSS
 			payments, err := s.Models.Payment.GetReadyByDisbursementID(ctx, dbTx, disbursementID)
 			if err != nil {
 				return nil, fmt.Errorf("getting ready payments for disbursement with id %s: %w", disbursementID, err)
@@ -360,10 +360,8 @@ func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, d
 				log.Ctx(ctx).Infof("no payments ready to pay for disbursement ID %s", disbursementID)
 			}
 
-			// If there's no message to publish we only log it.
-			if len(msgs) == 0 {
-				log.Ctx(ctx).Infof("no messages to be published for disbursement ID %s", disbursementID)
-			} else {
+			log.Ctx(ctx).Infof("Producing %d messages to be published for disbursement ID %s", len(msgs), disbursementID)
+			if len(msgs) > 0 {
 				postCommitFn = func() error {
 					return s.produceEvents(ctx, msgs...)
 				}
@@ -372,6 +370,7 @@ func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, d
 			return postCommitFn, nil
 		},
 	}
+
 	return db.RunInTransactionWithPostCommit(ctx, &opts)
 }
 
