@@ -671,8 +671,6 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 	ctx := context.Background()
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
-	mockEventProducer := events.MockProducer{}
-	handler := &VerifyReceiverRegistrationHandler{Models: models, EventProducer: &mockEventProducer}
 
 	// create valid sep24 token
 	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "testWallet", "https://home.page", "home.page", "wallet123://")
@@ -698,6 +696,8 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 	r := chi.NewRouter()
 
 	t.Run("returns an error when validate() fails - testing case where a SEP24 claims are missing from the context", func(t *testing.T) {
+		handler := &VerifyReceiverRegistrationHandler{Models: models}
+
 		// set the logger to a buffer so we can check the error message
 		buf := new(strings.Builder)
 		log.DefaultLogger.SetOutput(buf)
@@ -724,8 +724,13 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 		// mocks
 		reCAPTCHAValidator := &validators.ReCAPTCHAValidatorMock{}
 		defer reCAPTCHAValidator.AssertExpectations(t)
-		handler.ReCAPTCHAValidator = reCAPTCHAValidator
 		reCAPTCHAValidator.On("IsTokenValid", mock.Anything, "token").Return(true, nil).Once()
+
+		// create handler
+		handler := &VerifyReceiverRegistrationHandler{
+			Models:             models,
+			ReCAPTCHAValidator: reCAPTCHAValidator,
+		}
 
 		// set the logger to a buffer so we can check the error message
 		buf := new(strings.Builder)
@@ -755,8 +760,13 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 		// mocks
 		reCAPTCHAValidator := &validators.ReCAPTCHAValidatorMock{}
 		defer reCAPTCHAValidator.AssertExpectations(t)
-		handler.ReCAPTCHAValidator = reCAPTCHAValidator
 		reCAPTCHAValidator.On("IsTokenValid", mock.Anything, "token").Return(true, nil).Once()
+
+		// create handler
+		handler := &VerifyReceiverRegistrationHandler{
+			Models:             models,
+			ReCAPTCHAValidator: reCAPTCHAValidator,
+		}
 
 		// update database with the entries needed
 		defer data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
@@ -790,8 +800,13 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 		// mocks
 		reCAPTCHAValidator := &validators.ReCAPTCHAValidatorMock{}
 		defer reCAPTCHAValidator.AssertExpectations(t)
-		handler.ReCAPTCHAValidator = reCAPTCHAValidator
 		reCAPTCHAValidator.On("IsTokenValid", mock.Anything, "token").Return(true, nil).Once()
+
+		// create handler
+		handler := &VerifyReceiverRegistrationHandler{
+			Models:             models,
+			ReCAPTCHAValidator: reCAPTCHAValidator,
+		}
 
 		defer data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
 
@@ -835,8 +850,13 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 		// mocks
 		reCAPTCHAValidator := &validators.ReCAPTCHAValidatorMock{}
 		defer reCAPTCHAValidator.AssertExpectations(t)
-		handler.ReCAPTCHAValidator = reCAPTCHAValidator
 		reCAPTCHAValidator.On("IsTokenValid", mock.Anything, "token").Return(true, nil).Once()
+
+		// create handler
+		handler := &VerifyReceiverRegistrationHandler{
+			Models:             models,
+			ReCAPTCHAValidator: reCAPTCHAValidator,
+		}
 
 		// update database with the entries needed
 		defer data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
@@ -877,7 +897,6 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 		// mocks
 		reCAPTCHAValidator := &validators.ReCAPTCHAValidatorMock{}
 		defer reCAPTCHAValidator.AssertExpectations(t)
-		handler.ReCAPTCHAValidator = reCAPTCHAValidator
 		reCAPTCHAValidator.On("IsTokenValid", mock.Anything, "token").Return(true, nil).Once()
 
 		apTxPatch := anchorplatform.APSep24TransactionPatchPostRegistration{
@@ -885,12 +904,18 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 			Status: "pending_anchor",
 			SEP:    "24",
 		}
-		mockAnchorPlatformService := anchorplatform.AnchorPlatformAPIServiceMock{}
+		mockAnchorPlatformService := &anchorplatform.AnchorPlatformAPIServiceMock{}
 		defer mockAnchorPlatformService.AssertExpectations(t)
-		handler.AnchorPlatformAPIService = &mockAnchorPlatformService
 		mockAnchorPlatformService.
 			On("PatchAnchorTransactionsPostRegistration", mock.Anything, apTxPatch).
 			Return(fmt.Errorf("error updating transaction on anchor platform")).Once()
+
+		// create handler
+		handler := &VerifyReceiverRegistrationHandler{
+			Models:                   models,
+			ReCAPTCHAValidator:       reCAPTCHAValidator,
+			AnchorPlatformAPIService: mockAnchorPlatformService,
+		}
 
 		// update database with the entries needed
 		defer data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
@@ -954,7 +979,6 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 				// mocks
 				reCAPTCHAValidator := &validators.ReCAPTCHAValidatorMock{}
 				defer reCAPTCHAValidator.AssertExpectations(t)
-				handler.ReCAPTCHAValidator = reCAPTCHAValidator
 				reCAPTCHAValidator.On("IsTokenValid", mock.Anything, "token").Return(true, nil).Once()
 
 				apTxPatch := anchorplatform.APSep24TransactionPatchPostRegistration{
@@ -962,10 +986,16 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 					Status: "pending_anchor",
 					SEP:    "24",
 				}
-				mockAnchorPlatformService := anchorplatform.AnchorPlatformAPIServiceMock{}
+				mockAnchorPlatformService := &anchorplatform.AnchorPlatformAPIServiceMock{}
 				defer mockAnchorPlatformService.AssertExpectations(t)
-				handler.AnchorPlatformAPIService = &mockAnchorPlatformService
 				mockAnchorPlatformService.On("PatchAnchorTransactionsPostRegistration", mock.Anything, apTxPatch).Return(nil).Once()
+
+				// create handler
+				handler := &VerifyReceiverRegistrationHandler{
+					Models:                   models,
+					ReCAPTCHAValidator:       reCAPTCHAValidator,
+					AnchorPlatformAPIService: mockAnchorPlatformService,
+				}
 
 				// update database with the entries needed
 				defer data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
@@ -1028,7 +1058,7 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 		}
 	})
 
-	t.Run("successfully registers a second wallet in the same address", func(t *testing.T) {
+	t.Run("🎉 successfully registers a second wallet in the same address", func(t *testing.T) {
 		testCases := []struct {
 			name      string
 			inputMemo string
@@ -1054,7 +1084,6 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 				// mocks
 				reCAPTCHAValidator := &validators.ReCAPTCHAValidatorMock{}
 				defer reCAPTCHAValidator.AssertExpectations(t)
-				handler.ReCAPTCHAValidator = reCAPTCHAValidator
 				reCAPTCHAValidator.On("IsTokenValid", mock.Anything, "token").Return(true, nil)
 
 				apTxPatch := anchorplatform.APSep24TransactionPatchPostRegistration{
@@ -1062,10 +1091,16 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 					Status: "pending_anchor",
 					SEP:    "24",
 				}
-				mockAnchorPlatformService := anchorplatform.AnchorPlatformAPIServiceMock{}
+				mockAnchorPlatformService := &anchorplatform.AnchorPlatformAPIServiceMock{}
 				defer mockAnchorPlatformService.AssertExpectations(t)
-				handler.AnchorPlatformAPIService = &mockAnchorPlatformService
 				mockAnchorPlatformService.On("PatchAnchorTransactionsPostRegistration", mock.Anything, apTxPatch).Return(nil)
+
+				// create handler
+				handler := &VerifyReceiverRegistrationHandler{
+					Models:                   models,
+					ReCAPTCHAValidator:       reCAPTCHAValidator,
+					AnchorPlatformAPIService: mockAnchorPlatformService,
+				}
 
 				// update database with the entries needed
 				defer data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
@@ -1160,27 +1195,9 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 		}
 	})
 
-	t.Run("successfully register receiver's stellar address and produce event", func(t *testing.T) {
+	t.Run("🎉 successfully register receiver's stellar address and produce event", func(t *testing.T) {
 		tnt := tenant.Tenant{ID: "tenant-id"}
 		ctx = tenant.SaveTenantInContext(ctx, &tnt)
-
-		sep24Claims := *validClaims
-
-		// mocks
-		reCAPTCHAValidator := &validators.ReCAPTCHAValidatorMock{}
-		defer reCAPTCHAValidator.AssertExpectations(t)
-		handler.ReCAPTCHAValidator = reCAPTCHAValidator
-		reCAPTCHAValidator.On("IsTokenValid", mock.Anything, "token").Return(true, nil).Once()
-
-		apTxPatch := anchorplatform.APSep24TransactionPatchPostRegistration{
-			ID:     "test-transaction-id",
-			Status: "pending_anchor",
-			SEP:    "24",
-		}
-		mockAnchorPlatformService := anchorplatform.AnchorPlatformAPIServiceMock{}
-		defer mockAnchorPlatformService.AssertExpectations(t)
-		handler.AnchorPlatformAPIService = &mockAnchorPlatformService
-		mockAnchorPlatformService.On("PatchAnchorTransactionsPostRegistration", mock.Anything, apTxPatch).Return(nil).Once()
 
 		// update database with the entries needed
 		defer data.DeleteAllCountryFixtures(t, ctx, dbConnectionPool)
@@ -1218,7 +1235,23 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 			ReceiverWallet: receiverWallet,
 		})
 
-		// mock event producer
+		sep24Claims := *validClaims
+
+		// mocks
+		reCAPTCHAValidator := &validators.ReCAPTCHAValidatorMock{}
+		defer reCAPTCHAValidator.AssertExpectations(t)
+		reCAPTCHAValidator.On("IsTokenValid", mock.Anything, "token").Return(true, nil).Once()
+
+		apTxPatch := anchorplatform.APSep24TransactionPatchPostRegistration{
+			ID:     "test-transaction-id",
+			Status: "pending_anchor",
+			SEP:    "24",
+		}
+		mockAnchorPlatformService := &anchorplatform.AnchorPlatformAPIServiceMock{}
+		defer mockAnchorPlatformService.AssertExpectations(t)
+		mockAnchorPlatformService.On("PatchAnchorTransactionsPostRegistration", mock.Anything, apTxPatch).Return(nil).Once()
+
+		mockEventProducer := events.NewMockProducer(t)
 		mockEventProducer.
 			On("WriteMessages", mock.Anything, []events.Message{
 				{
@@ -1228,16 +1261,20 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 					Type:     events.PaymentReadyToPayReceiverVerificationCompleted,
 					Data: schemas.EventPaymentsReadyToPayData{
 						TenantID: tnt.ID,
-						Payments: []schemas.PaymentReadyToPay{
-							{
-								ID: payment.ID,
-							},
-						},
+						Payments: []schemas.PaymentReadyToPay{{ID: payment.ID}},
 					},
 				},
 			}).
 			Return(nil).
 			Once()
+
+		// create handler
+		handler := &VerifyReceiverRegistrationHandler{
+			Models:                   models,
+			ReCAPTCHAValidator:       reCAPTCHAValidator,
+			AnchorPlatformAPIService: mockAnchorPlatformService,
+			EventProducer:            mockEventProducer,
+		}
 
 		// setup router and execute request
 		r.Post("/wallet-registration/verification", handler.VerifyReceiverRegistration)
