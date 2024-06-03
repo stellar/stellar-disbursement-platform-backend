@@ -73,9 +73,8 @@ func Test_DisbursementManagementService_GetDisbursementsWithCount(t *testing.T) 
 		Return(users, nil)
 
 	service := &DisbursementManagementService{
-		Models:           models,
-		DBConnectionPool: models.DBConnectionPool,
-		AuthManager:      authManagerMock,
+		Models:      models,
+		AuthManager: authManagerMock,
 	}
 
 	ctx := context.Background()
@@ -143,10 +142,7 @@ func Test_DisbursementManagementService_GetDisbursementReceiversWithCount(t *tes
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
-	service := DisbursementManagementService{
-		Models:           models,
-		DBConnectionPool: dbConnectionPool,
-	}
+	service := DisbursementManagementService{Models: models}
 	disbursement := data.CreateDisbursementFixture(t, context.Background(), dbConnectionPool, models.Disbursements, &data.Disbursement{})
 
 	ctx := context.Background()
@@ -197,16 +193,12 @@ func Test_DisbursementManagementService_GetDisbursementReceiversWithCount(t *tes
 func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
-
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
 
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
-
-	mockEventProducer := events.MockProducer{}
-	defer mockEventProducer.AssertExpectations(t)
 
 	ctx := context.Background()
 
@@ -217,14 +209,14 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 	ctx = context.WithValue(ctx, middleware.TokenContextKey, token)
 
 	asset := data.GetAssetFixture(t, ctx, dbConnectionPool, data.FixtureAssetUSDC)
-	hMock := &horizonclient.MockClient{}
 	distributionPubKey := "ABC"
 
+	mockEventProducer := events.NewMockProducer(t)
+	hMock := &horizonclient.MockClient{}
 	service := &DisbursementManagementService{
-		Models:           models,
-		DBConnectionPool: models.DBConnectionPool,
-		HorizonClient:    hMock,
-		EventProducer:    &mockEventProducer,
+		Models:        models,
+		HorizonClient: hMock,
+		EventProducer: mockEventProducer,
 	}
 
 	// create fixtures
@@ -648,9 +640,7 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 				TenantID: tnt.ID,
 				Type:     events.BatchReceiverWalletSMSInvitationType,
 				Data: []schemas.EventReceiverWalletSMSInvitationData{
-					{
-						ReceiverWalletID: rwReady.ID, // Receiver that can receive SMS
-					},
+					{ReceiverWalletID: rwReady.ID}, // Receiver that can receive SMS
 				},
 			},
 			{
@@ -661,9 +651,7 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 				Data: schemas.EventPaymentsReadyToPayData{
 					TenantID: tnt.ID,
 					Payments: []schemas.PaymentReadyToPay{
-						{
-							ID: payment.ID,
-						},
+						{ID: payment.ID},
 					},
 				},
 			},
@@ -907,10 +895,9 @@ func Test_DisbursementManagementService_PauseDisbursement(t *testing.T) {
 	distributionPubKey := "ABC"
 
 	service := &DisbursementManagementService{
-		Models:           models,
-		DBConnectionPool: models.DBConnectionPool,
-		HorizonClient:    hMock,
-		EventProducer:    &mockEventProducer,
+		Models:        models,
+		HorizonClient: hMock,
+		EventProducer: &mockEventProducer,
 	}
 
 	// create fixtures
