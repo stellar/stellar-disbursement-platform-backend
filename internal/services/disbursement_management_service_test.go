@@ -17,6 +17,7 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
@@ -608,7 +609,7 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 		assert.Contains(t, buf.String(), expectedErrStr)
 	})
 
-	t.Run("returns error when eventProducer fails", func(t *testing.T) {
+	t.Run("logs and reports to the crashTracker when the eventProducer fails", func(t *testing.T) {
 		userID := "9ae68f09-cad9-4311-9758-4ff59d2e9e6d"
 		statusHistory := []data.DisbursementStatusHistoryEntry{
 			{
@@ -673,17 +674,27 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 		hMock := &horizonclient.MockClient{}
 		defer hMock.AssertExpectations(t)
 		hMock.On("AccountDetail", hAccRequest).Return(hAccResponse, nil).Once()
+		producerErr := errors.New("unexpected WriteMessages error")
 		mockEventProducer := events.NewMockProducer(t)
 		mockEventProducer.
 			On("WriteMessages", ctx, expectedMessages).
-			Return(errors.New("unexpected error")).
+			Return(producerErr).
+			Once()
+		mCrashTracker := &crashtracker.MockCrashTrackerClient{}
+		mCrashTracker.
+			On("LogAndReportErrors", mock.Anything, mock.Anything, "writing messages after disbursement start on event producer").
+			Run(func(args mock.Arguments) {
+				err := args.Get(1).(error)
+				assert.ErrorIs(t, err, producerErr)
+			}).
 			Once()
 
 		// Create service
 		service := &DisbursementManagementService{
-			Models:        models,
-			HorizonClient: hMock,
-			EventProducer: mockEventProducer,
+			Models:             models,
+			HorizonClient:      hMock,
+			EventProducer:      mockEventProducer,
+			CrashTrackerClient: mCrashTracker,
 		}
 
 		user := &auth.User{
@@ -692,9 +703,7 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 		}
 
 		err = service.StartDisbursement(ctx, disbursement.ID, user, distributionPubKey)
-		assert.EqualError(t, err,
-			fmt.Sprintf("executing postCommit function: publishing messages %+v on event producer: unexpected error", expectedMessages),
-		)
+		assert.NoError(t, err)
 	})
 
 	t.Run("doesn't produce message when there are no payments ready to pay", func(t *testing.T) {

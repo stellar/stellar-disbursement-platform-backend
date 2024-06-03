@@ -12,6 +12,7 @@ import (
 	"golang.org/x/exp/maps"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
@@ -22,10 +23,11 @@ import (
 
 // DisbursementManagementService is a service for managing disbursements.
 type DisbursementManagementService struct {
-	Models        *data.Models
-	EventProducer events.Producer
-	AuthManager   auth.AuthManager
-	HorizonClient horizonclient.ClientInterface
+	Models             *data.Models
+	EventProducer      events.Producer
+	AuthManager        auth.AuthManager
+	HorizonClient      horizonclient.ClientInterface
+	CrashTrackerClient crashtracker.CrashTrackerClient
 }
 
 type UserReference struct {
@@ -314,7 +316,7 @@ func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, d
 			}
 
 			// 8. Build events to send invitation messages to the receivers
-			msgs := make([]events.Message, 0)
+			msgs := make([]*events.Message, 0)
 
 			receiverWallets, err := s.Models.ReceiverWallet.GetAllPendingRegistrationByDisbursementID(ctx, dbTx, disbursementID)
 			if err != nil {
@@ -332,7 +334,7 @@ func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, d
 					return nil, fmt.Errorf("creating new message: %w", msgErr)
 				}
 
-				msgs = append(msgs, *sendInviteMsg)
+				msgs = append(msgs, sendInviteMsg)
 			} else {
 				log.Ctx(ctx).Infof("no receiver wallets to send invitation for disbursement ID %s", disbursementID)
 			}
@@ -355,7 +357,7 @@ func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, d
 				}
 				paymentsReadyToPayMsg.Data = paymentsReadyToPay
 
-				msgs = append(msgs, *paymentsReadyToPayMsg)
+				msgs = append(msgs, paymentsReadyToPayMsg)
 			} else {
 				log.Ctx(ctx).Infof("no payments ready to pay for disbursement ID %s", disbursementID)
 			}
@@ -363,7 +365,12 @@ func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, d
 			log.Ctx(ctx).Infof("Producing %d messages to be published for disbursement ID %s", len(msgs), disbursementID)
 			if len(msgs) > 0 {
 				postCommitFn = func() error {
-					return s.produceEvents(ctx, msgs...)
+					postErr := events.ProduceEvents(ctx, s.EventProducer, msgs...)
+					if postErr != nil {
+						s.CrashTrackerClient.LogAndReportErrors(ctx, postErr, "writing messages after disbursement start on event producer")
+					}
+
+					return nil
 				}
 			}
 
@@ -372,19 +379,6 @@ func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, d
 	}
 
 	return db.RunInTransactionWithPostCommit(ctx, &opts)
-}
-
-func (s *DisbursementManagementService) produceEvents(ctx context.Context, msgs ...events.Message) error {
-	if s.EventProducer == nil {
-		log.Ctx(ctx).Errorf("event producer is nil, could not publish messages %+v", msgs)
-		return nil
-	}
-
-	if err := s.EventProducer.WriteMessages(ctx, msgs...); err != nil {
-		return fmt.Errorf("publishing messages %+v on event producer: %w", msgs, err)
-	}
-
-	return nil
 }
 
 // PauseDisbursement pauses a disbursement and all its payments.
