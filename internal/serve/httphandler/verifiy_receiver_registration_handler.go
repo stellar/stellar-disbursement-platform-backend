@@ -288,7 +288,7 @@ func (v VerifyReceiverRegistrationHandler) VerifyReceiverRegistration(w http.Res
 				return nil, fmt.Errorf("processing OTP for receiver with phone number %s: %w", truncatedPhoneNumber, err)
 			}
 
-			// STEP 5: produce event to send receiver's ready payments to TSS
+			// STEP 5: build event message to trigger a transaction in the TSS
 			msg, err := v.buildPaymentsReadyToPayEventMessage(ctx, dbTx, &receiverWallet)
 			if err != nil {
 				return nil, fmt.Errorf("preparing payments ready-to-pay event message: %w", err)

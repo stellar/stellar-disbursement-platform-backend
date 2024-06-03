@@ -147,7 +147,7 @@ func (p PaymentsHandler) RetryPayments(rw http.ResponseWriter, req *http.Request
 			if len(payments) > 0 {
 				msg, err := p.buildPaymentsReadyEventMessage(ctx, payments)
 				if err != nil {
-					return nil, fmt.Errorf("building payments ready event message: %w", err)
+					return nil, fmt.Errorf("building event message for payment retry: %w", err)
 				}
 
 				postCommitFn = func() error {
