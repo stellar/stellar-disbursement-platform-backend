@@ -15,6 +15,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
+	coreSvc "github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/internal/httphandler"
@@ -44,6 +45,7 @@ type ServeOptions struct {
 	networkType                             utils.NetworkType
 	Port                                    int
 	SubmitterEngine                         engine.SubmitterEngine
+	DistributionAccountSvc                  coreSvc.DistributionAccountServiceInterface
 	TenantAccountNativeAssetBootstrapAmount int
 	tenantManager                           tenant.ManagerInterface
 	tenantProvisioningManager               *provisioning.Manager
@@ -140,10 +142,13 @@ func handleHTTP(opts *ServeOptions) *chi.Mux {
 				AdminDBConnectionPool:       opts.AdminDBConnectionPool,
 				SingleTenantMode:            opts.SingleTenantMode,
 				Models:                      opts.Models,
-				HorizonClient:               opts.SubmitterEngine.HorizonClient,
 				DistributionAccountResolver: opts.SubmitterEngine.DistributionAccountResolver,
+<<<<<<< HEAD
 				MessengerClient:             opts.EmailMessengerClient,
 				CrashTrackerClient:          opts.CrashTrackerClient,
+=======
+				DistributionAccountService:  opts.DistributionAccountSvc,
+>>>>>>> 7a05dfd (add dep injection:)
 				BaseURL:                     opts.BaseURL,
 				SDPUIBaseURL:                opts.SDPUIBaseURL,
 			}

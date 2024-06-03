@@ -368,20 +368,17 @@ func (d DisbursementHandler) PatchDisbursementStatus(w http.ResponseWriter, r *h
 
 	switch toStatus {
 	case data.StartedDisbursementStatus:
-		var distributionPublicKey string
 		var distributionAccount *schema.DistributionAccount
 		if distributionAccount, err = d.DistributionAccountResolver.DistributionAccountFromContext(ctx); err != nil {
 			httperror.InternalError(ctx, "Cannot get distribution account", err, nil).Render(w)
 			return
 		} else if !distributionAccount.IsStellar() {
-			// TODO: during SDP-1177, refactor StartDisbursement to receive the whole distribution account object, rather than just the public key
 			msg := fmt.Sprintf("expected distribution account to be a STELLAR account but got %q", distributionAccount.Type)
 			httperror.BadRequest(msg, err, nil).Render(w)
 			return
-		} else {
-			distributionPublicKey = distributionAccount.Address
 		}
-		err = d.DisbursementManagementService.StartDisbursement(ctx, disbursementID, user, distributionPublicKey)
+
+		err = d.DisbursementManagementService.StartDisbursement(ctx, disbursementID, user, distributionAccount)
 		response.Message = "Disbursement started"
 	case data.PausedDisbursementStatus:
 		err = d.DisbursementManagementService.PauseDisbursement(ctx, disbursementID, user)

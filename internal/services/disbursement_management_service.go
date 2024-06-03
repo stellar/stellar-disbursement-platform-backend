@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"strconv"
 
 	"github.com/stellar/go/support/log"
@@ -16,6 +15,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 )
 
@@ -242,14 +242,7 @@ func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, d
 			}
 
 			// 4. Check if there is enough balance from the distribution wallet for this disbursement along with any pending disbursements
-			var availableBalance float64
-			balances, err := s.distributionAccountService.GetBalances(ctx, distributionAccount)
-			for asset, b := range balances {
-				if disbursement.Asset.EqualsDistributionAccountMapID(asset) {
-					availableBalance = b
-					break
-				}
-			}
+			availableBalance, err := s.distributionAccountService.GetBalance(ctx, distributionAccount, *disbursement.Asset)
 
 			disbursementAmount, err := strconv.ParseFloat(disbursement.TotalAmount, 64)
 			if err != nil {
@@ -291,7 +284,7 @@ func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, d
 			if (availableBalance - (disbursementAmount + totalPendingAmount)) < 0 {
 				err = InsufficientBalanceError{
 					DisbursementAsset:   *disbursement.Asset,
-					DistributionAddress: distributionPubKey,
+					DistributionAddress: distributionAccount.Address,
 					DisbursementID:      disbursementID,
 					AvailableBalance:    availableBalance,
 					DisbursementAmount:  disbursementAmount,

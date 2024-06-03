@@ -573,6 +573,13 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			serveOpts.SubmitterEngine = submitterEngine
 			adminServeOpts.SubmitterEngine = submitterEngine
 
+			distributionAccountService, err := di.NewDistributionAccountService(ctx, submitterEngine.HorizonClient)
+			if err != nil {
+				log.Ctx(ctx).Fatalf("error creating distribution account service: %v", err)
+			}
+			serveOpts.DistributionAccountService = distributionAccountService
+			adminServeOpts.DistributionAccountSvc = distributionAccountService
+
 			// Validate the Event Broker Type and Scheduler Jobs
 			if eventBrokerOptions.EventBrokerType == events.NoneEventBrokerType && !serveOpts.EnableScheduler {
 				log.Ctx(ctx).Fatalf("Both Event Brokers and Scheduler are disabled. Please enable one.")
