@@ -23,6 +23,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
@@ -1196,121 +1197,153 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 	})
 
 	t.Run("🎉 successfully register receiver's stellar address and produce event", func(t *testing.T) {
-		tnt := tenant.Tenant{ID: "tenant-id"}
-		ctx = tenant.SaveTenantInContext(ctx, &tnt)
-
-		// update database with the entries needed
-		defer data.DeleteAllCountryFixtures(t, ctx, dbConnectionPool)
-		defer data.DeleteAllWalletFixtures(t, ctx, dbConnectionPool)
-		defer data.DeleteAllDisbursementFixtures(t, ctx, dbConnectionPool)
-		defer data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
-		defer data.DeleteAllReceiverVerificationFixtures(t, ctx, dbConnectionPool)
-		defer data.DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
-		defer data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
-
-		receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{PhoneNumber: phoneNumber})
-		_ = data.CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, data.ReceiverVerificationInsert{
-			ReceiverID:        receiver.ID,
-			VerificationField: data.VerificationFieldDateOfBirth,
-			VerificationValue: "1990-01-01",
-		})
-		receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.ReadyReceiversWalletStatus)
-		_, err := models.ReceiverWallet.UpdateOTPByReceiverPhoneNumberAndWalletDomain(ctx, "+380445555555", wallet.SEP10ClientDomain, "123456")
-		require.NoError(t, err)
-
-		// Creating a payment ready to pay
-		asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
-		country := data.CreateCountryFixture(t, ctx, dbConnectionPool, "UKR", "Ukraine")
-		disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-			Wallet:  wallet,
-			Asset:   asset,
-			Country: country,
-			Status:  data.StartedDisbursementStatus,
-		})
-		payment := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
-			Amount:         "100",
-			Status:         data.ReadyPaymentStatus,
-			Disbursement:   disbursement,
-			Asset:          *asset,
-			ReceiverWallet: receiverWallet,
-		})
-
-		sep24Claims := *validClaims
-
-		// mocks
-		reCAPTCHAValidator := &validators.ReCAPTCHAValidatorMock{}
-		defer reCAPTCHAValidator.AssertExpectations(t)
-		reCAPTCHAValidator.On("IsTokenValid", mock.Anything, "token").Return(true, nil).Once()
-
-		apTxPatch := anchorplatform.APSep24TransactionPatchPostRegistration{
-			ID:     "test-transaction-id",
-			Status: "pending_anchor",
-			SEP:    "24",
-		}
-		mockAnchorPlatformService := &anchorplatform.AnchorPlatformAPIServiceMock{}
-		defer mockAnchorPlatformService.AssertExpectations(t)
-		mockAnchorPlatformService.On("PatchAnchorTransactionsPostRegistration", mock.Anything, apTxPatch).Return(nil).Once()
-
-		mockEventProducer := events.NewMockProducer(t)
-		mockEventProducer.
-			On("WriteMessages", mock.Anything, []events.Message{
-				{
-					Topic:    events.PaymentReadyToPayTopic,
-					Key:      receiverWallet.ID,
-					TenantID: tnt.ID,
-					Type:     events.PaymentReadyToPayReceiverVerificationCompleted,
-					Data: schemas.EventPaymentsReadyToPayData{
-						TenantID: tnt.ID,
-						Payments: []schemas.PaymentReadyToPay{{ID: payment.ID}},
-					},
-				},
-			}).
-			Return(nil).
-			Once()
-
-		// create handler
-		handler := &VerifyReceiverRegistrationHandler{
-			Models:                   models,
-			ReCAPTCHAValidator:       reCAPTCHAValidator,
-			AnchorPlatformAPIService: mockAnchorPlatformService,
-			EventProducer:            mockEventProducer,
+		testCases := []struct {
+			name                       string
+			produccesEventSuccessfully bool
+		}{
+			{
+				name:                       "produces event successfully",
+				produccesEventSuccessfully: true,
+			},
+			{
+				name:                       "fails to produce event",
+				produccesEventSuccessfully: false,
+			},
 		}
 
-		// setup router and execute request
-		r.Post("/wallet-registration/verification", handler.VerifyReceiverRegistration)
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/wallet-registration/verification", strings.NewReader(string(reqBody)))
-		require.NoError(t, err)
-		req = req.WithContext(context.WithValue(req.Context(), anchorplatform.SEP24ClaimsContextKey, &sep24Claims))
-		rr := httptest.NewRecorder()
-		r.ServeHTTP(rr, req)
+		for _, tc := range testCases {
+			t.Run(tc.name, func(t *testing.T) {
+				tnt := tenant.Tenant{ID: "tenant-id"}
+				ctx = tenant.SaveTenantInContext(ctx, &tnt)
 
-		// execute and validate response
-		resp := rr.Result()
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
-		wantBody := `{"message": "ok"}`
-		assert.JSONEq(t, wantBody, string(respBody))
+				// update database with the entries needed
+				defer data.DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
+				defer data.DeleteAllCountryFixtures(t, ctx, dbConnectionPool)
+				defer data.DeleteAllDisbursementFixtures(t, ctx, dbConnectionPool)
+				defer data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
+				defer data.DeleteAllReceiverVerificationFixtures(t, ctx, dbConnectionPool)
+				defer data.DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
+				defer data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
 
-		// validate if the receiver wallet has been updated
-		query := `
-			SELECT
-				rw.status,
-				rw.stellar_address,
-				COALESCE(rw.stellar_memo, '') as "stellar_memo",
-				COALESCE(rw.stellar_memo_type, '') as "stellar_memo_type",
-				otp_confirmed_at
-			FROM
-				receiver_wallets rw
-			WHERE
-				rw.id = $1
-		`
-		receiverWalletUpdated := data.ReceiverWallet{}
-		err = dbConnectionPool.GetContext(ctx, &receiverWalletUpdated, query, receiverWallet.ID)
-		require.NoError(t, err)
+				receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{PhoneNumber: phoneNumber})
+				_ = data.CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, data.ReceiverVerificationInsert{
+					ReceiverID:        receiver.ID,
+					VerificationField: data.VerificationFieldDateOfBirth,
+					VerificationValue: "1990-01-01",
+				})
+				receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.ReadyReceiversWalletStatus)
+				_, err := models.ReceiverWallet.UpdateOTPByReceiverPhoneNumberAndWalletDomain(ctx, "+380445555555", wallet.SEP10ClientDomain, "123456")
+				require.NoError(t, err)
 
-		assert.Equal(t, data.RegisteredReceiversWalletStatus, receiverWalletUpdated.Status)
-		assert.Equal(t, "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444", receiverWalletUpdated.StellarAddress)
-		require.NotEmpty(t, receiverWalletUpdated.OTPConfirmedAt)
+				// Creating a payment ready to pay
+				asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
+				country := data.CreateCountryFixture(t, ctx, dbConnectionPool, "UKR", "Ukraine")
+				disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
+					Wallet:  wallet,
+					Asset:   asset,
+					Country: country,
+					Status:  data.StartedDisbursementStatus,
+				})
+				payment := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+					Amount:         "100",
+					Status:         data.ReadyPaymentStatus,
+					Disbursement:   disbursement,
+					Asset:          *asset,
+					ReceiverWallet: receiverWallet,
+				})
+
+				sep24Claims := *validClaims
+
+				// mocks
+				reCAPTCHAValidator := &validators.ReCAPTCHAValidatorMock{}
+				defer reCAPTCHAValidator.AssertExpectations(t)
+				reCAPTCHAValidator.On("IsTokenValid", mock.Anything, "token").Return(true, nil).Once()
+
+				apTxPatch := anchorplatform.APSep24TransactionPatchPostRegistration{
+					ID:     "test-transaction-id",
+					Status: "pending_anchor",
+					SEP:    "24",
+				}
+				mockAnchorPlatformService := &anchorplatform.AnchorPlatformAPIServiceMock{}
+				defer mockAnchorPlatformService.AssertExpectations(t)
+				mockAnchorPlatformService.On("PatchAnchorTransactionsPostRegistration", mock.Anything, apTxPatch).Return(nil).Once()
+
+				mockCrashTracker := &crashtracker.MockCrashTrackerClient{}
+				defer mockCrashTracker.AssertExpectations(t)
+				mockEventProducer := events.NewMockProducer(t)
+				if tc.produccesEventSuccessfully {
+					mockEventProducer.
+						On("WriteMessages", mock.Anything, []events.Message{
+							{
+								Topic:    events.PaymentReadyToPayTopic,
+								Key:      receiverWallet.ID,
+								TenantID: tnt.ID,
+								Type:     events.PaymentReadyToPayReceiverVerificationCompleted,
+								Data: schemas.EventPaymentsReadyToPayData{
+									TenantID: tnt.ID,
+									Payments: []schemas.PaymentReadyToPay{{ID: payment.ID}},
+								},
+							},
+						}).
+						Return(nil).
+						Once()
+				} else {
+					mockEventProducer.
+						On("WriteMessages", mock.Anything, mock.AnythingOfType("[]events.Message")).
+						Return(errors.New("FOO BAR")).
+						Once()
+					mockCrashTracker.
+						On("LogAndReportErrors", mock.Anything, mock.Anything, "writing ready-to-pay message (post SEP-24) on the event producer").
+						Return(nil).
+						Once()
+				}
+
+				// create handler
+				handler := &VerifyReceiverRegistrationHandler{
+					Models:                   models,
+					ReCAPTCHAValidator:       reCAPTCHAValidator,
+					AnchorPlatformAPIService: mockAnchorPlatformService,
+					EventProducer:            mockEventProducer,
+					CrashTrackerClient:       mockCrashTracker,
+				}
+
+				// setup router and execute request
+				r.Post("/wallet-registration/verification", handler.VerifyReceiverRegistration)
+				req, err := http.NewRequestWithContext(ctx, http.MethodPost, "/wallet-registration/verification", strings.NewReader(string(reqBody)))
+				require.NoError(t, err)
+				req = req.WithContext(context.WithValue(req.Context(), anchorplatform.SEP24ClaimsContextKey, &sep24Claims))
+				rr := httptest.NewRecorder()
+				r.ServeHTTP(rr, req)
+
+				// execute and validate response
+				resp := rr.Result()
+				respBody, err := io.ReadAll(resp.Body)
+				require.NoError(t, err)
+				assert.Equal(t, http.StatusOK, resp.StatusCode)
+				wantBody := `{"message": "ok"}`
+				assert.JSONEq(t, wantBody, string(respBody))
+
+				// validate if the receiver wallet has been updated
+				query := `
+				SELECT
+					rw.status,
+					rw.stellar_address,
+					COALESCE(rw.stellar_memo, '') as "stellar_memo",
+					COALESCE(rw.stellar_memo_type, '') as "stellar_memo_type",
+					otp_confirmed_at
+				FROM
+					receiver_wallets rw
+				WHERE
+					rw.id = $1
+			`
+				receiverWalletUpdated := data.ReceiverWallet{}
+				err = dbConnectionPool.GetContext(ctx, &receiverWalletUpdated, query, receiverWallet.ID)
+				require.NoError(t, err)
+
+				assert.Equal(t, data.RegisteredReceiversWalletStatus, receiverWalletUpdated.Status)
+				assert.Equal(t, "GBLTXF46JTCGMWFJASQLVXMMA36IPYTDCN4EN73HRXCGDCGYBZM3A444", receiverWalletUpdated.StellarAddress)
+				require.NotEmpty(t, receiverWalletUpdated.OTPConfirmedAt)
+			})
+		}
 	})
 }
