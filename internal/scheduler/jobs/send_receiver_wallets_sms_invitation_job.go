@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/stellar/go/support/log"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
@@ -22,6 +23,7 @@ type SendReceiverWalletsSMSInvitationJobOptions struct {
 	MaxInvitationSMSResendAttempts int64
 	Sep10SigningPrivateKey         string
 	CrashTrackerClient             crashtracker.CrashTrackerClient
+	UseExternalID                  bool
 	JobIntervalSeconds             int
 }
 
@@ -62,6 +64,7 @@ func NewSendReceiverWalletsSMSInvitationJob(options SendReceiverWalletsSMSInvita
 		options.Sep10SigningPrivateKey,
 		options.MaxInvitationSMSResendAttempts,
 		options.CrashTrackerClient,
+		options.UseExternalID,
 	)
 	if err != nil {
 		log.Fatalf("error instantiating service: %s", err.Error())

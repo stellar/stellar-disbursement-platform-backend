@@ -87,6 +87,7 @@ type ServeOptions struct {
 	EventProducer                   events.Producer
 	MaxInvitationSMSResendAttempts  int
 	SingleTenantMode                bool
+	UseExternalID                   bool
 }
 
 // SetupDependencies uses the serve options to setup the dependencies for the server.
@@ -170,7 +171,9 @@ func Serve(opts ServeOptions, httpServer HTTPServerInterface) error {
 		ReadTimeout:         time.Second * 5,
 		WriteTimeout:        time.Second * 35,
 		IdleTimeout:         time.Minute * 2,
+		
 		OnStarting: func() {
+			log.Info("value of use-external-id is %t", opts.UseExternalID)
 			log.Info("Starting SDP (Stellar Disbursement Platform) Server")
 			log.Infof("Listening on %s", listenAddr)
 		},
@@ -429,6 +432,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 				Models:              o.Models,
 				ReceiverWalletModel: o.Models.ReceiverWallet,
 				ReCAPTCHASiteKey:    o.ReCAPTCHASiteKey,
+				UseExternalID:       o.UseExternalID,  
 			}.ServeHTTP) // This loads the SEP-24 PII registration webpage.
 
 			sep24HeaderTokenAuthenticationMiddleware := anchorplatform.SEP24HeaderTokenAuthenticateMiddleware(o.sep24JWTManager, o.NetworkPassphrase, o.tenantManager, o.SingleTenantMode)

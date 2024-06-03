@@ -1,0 +1,108 @@
+# create stellar wallet wallet, fund xlm, add/fund usdc with trustline @reecemarkowsky
+package main
+
+import (
+    "flag"
+    "fmt"
+    "log"
+
+    "github.com/stellar/go/keypair"
+    "github.com/stellar/go/clients/horizonclient"
+    "github.com/stellar/go/network"
+    "github.com/stellar/go/txnbuild"
+    "github.com/stellar/go/xdr"
+)
+
+var pair *keypair.Full
+var err error
+
+if secretKey == "" {
+        // Do not redeclare pair, just assign
+        pair, err = keypair.Random()
+        if err != nil {
+            log.Fatalf("Failed to generate a new keypair: %v", err)
+        }
+    } else {
+        // Do not redeclare pair, just assign
+        pair, err = keypair.ParseFull(secretKey)
+        if err != nil {
+            log.Fatalf("Failed to parse secret key: %v", err)
+        }
+    }
+
+    // Ensure that pair is not nil before using it
+    if pair != nil {
+        fmt.Printf("Public Key: %s\n", pair.Address())
+        fmt.Printf("Secret Key: %s\n", pair.Seed())
+    } else {
+        log.Fatal("Key pair was not initialized.")
+    }
+
+    client := horizonclient.DefaultTestNetClient
+
+    // Fund with XLM using Friendbot if --fundxlm is specified
+    if fundXLM {
+        _, err = client.Fund(pair.Address())
+        if err != nil {
+            log.Fatalf("Failed to fund with Friendbot: %v", err)
+        }
+    }
+
+    accRequest := horizonclient.AccountRequest{AccountID: pair.Address()}
+    sourceAccount, err := client.AccountDetail(accRequest)
+    if err != nil {
+        log.Fatalf("Failed to get account details: %v", err)
+    }
+
+    // Fund with USDC using a DEX buy offer if --fundusdc is specified
+    if fundUSDC {
+        // Define the USDC asset and convert it to a ChangeTrustAsset
+        usdcAsset := txnbuild.CreditAsset{Code: "USDC", Issuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"}
+        changeTrustAsset, err := usdcAsset.ToChangeTrustAsset()
+        if err != nil {
+            log.Fatalf("Failed to convert to ChangeTrustAsset: %v", err)
+        }
+
+        trustLine := txnbuild.ChangeTrust{
+            Line: changeTrustAsset,
+        }
+
+        price := xdr.Price{N: 1, D: 2} // This creates a price of 0.5 (1/2)
+
+        buyOffer := txnbuild.ManageBuyOffer{
+            Selling: &txnbuild.NativeAsset{}, // Selling XLM
+            Buying:  &usdcAsset,             // Buying USDC
+            Amount:  "10",                   // Amount of USDC you want to buy
+            Price:   price,                  // Price of 1 USDC in terms of XLM
+            OfferID: 0,                      // Set to 0 to create a new offer
+        }
+
+        // Add this buy offer to your transaction
+        tx, err := txnbuild.NewTransaction(
+            txnbuild.TransactionParams{
+                SourceAccount:        &sourceAccount,
+                IncrementSequenceNum: true,
+                Operations:           []txnbuild.Operation{&trustLine, &buyOffer},
+                BaseFee:              txnbuild.MinBaseFee,
+                Preconditions:        txnbuild.Preconditions{TimeBounds: txnbuild.NewTimeout(300)},
+            },
+        )
+
+        if err != nil {
+            log.Fatalf("Failed to build the transaction: %v", err)
+        }
+
+        tx, err = tx.Sign(network.TestNetworkPassphrase, pair)
+        if err != nil {
+            log.Fatalf("Failed to sign the transaction: %v", err)
+        }
+
+        resp, err := client.SubmitTransaction(tx)
+        if err != nil {
+            log.Fatalf("Failed to submit the buy offer transaction: %v", err)
+        }
+        fmt.Printf("Buy offer transaction successful: %s\n", resp.Hash)
+    }
+
+    // Additional transaction logic can be added below as needed
+}
