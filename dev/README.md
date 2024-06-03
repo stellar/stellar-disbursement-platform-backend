@@ -45,7 +45,7 @@ You need to create and configure two Stellar accounts to use the SDP. You can ei
 
 **Option 2: Use make_env.sh script to create accounts and .env file**
 
-You can use the make_env.sh script to automatically create a SEP-10 account, a funded distribution account (XLM and USDC) and a trustline.  to run the make_env.sh script
+You can use the make_env.sh script to automatically create a stellar accounts for SEP-10 authentication and a funded (XLM and USDC) Stellar distribution account.  To run the make_env.sh script:
 
 1. Use [make_env.sh](./scripts/make_env.sh) script to create stellar accounts and .env file automatically:
     1. Navigate to the `dev` directory from the terminal:
