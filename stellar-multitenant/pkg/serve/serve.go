@@ -143,12 +143,9 @@ func handleHTTP(opts *ServeOptions) *chi.Mux {
 				SingleTenantMode:            opts.SingleTenantMode,
 				Models:                      opts.Models,
 				DistributionAccountResolver: opts.SubmitterEngine.DistributionAccountResolver,
-<<<<<<< HEAD
 				MessengerClient:             opts.EmailMessengerClient,
 				CrashTrackerClient:          opts.CrashTrackerClient,
-=======
 				DistributionAccountService:  opts.DistributionAccountSvc,
->>>>>>> 7a05dfd (add dep injection:)
 				BaseURL:                     opts.BaseURL,
 				SDPUIBaseURL:                opts.SDPUIBaseURL,
 			}

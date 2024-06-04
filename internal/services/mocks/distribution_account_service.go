@@ -41,19 +41,19 @@ func (_m *MockDistributionAccountService) GetBalance(ctx context.Context, accoun
 }
 
 // GetBalances provides a mock function with given fields: ctx, account
-func (_m *MockDistributionAccountService) GetBalances(ctx context.Context, account *schema.DistributionAccount) (map[string]float64, error) {
+func (_m *MockDistributionAccountService) GetBalances(ctx context.Context, account *schema.DistributionAccount) (map[data.Asset]float64, error) {
 	ret := _m.Called(ctx, account)
 
-	var r0 map[string]float64
+	var r0 map[data.Asset]float64
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, *schema.DistributionAccount) (map[string]float64, error)); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, *schema.DistributionAccount) (map[data.Asset]float64, error)); ok {
 		return rf(ctx, account)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, *schema.DistributionAccount) map[string]float64); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, *schema.DistributionAccount) map[data.Asset]float64); ok {
 		r0 = rf(ctx, account)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(map[string]float64)
+			r0 = ret.Get(0).(map[data.Asset]float64)
 		}
 	}
 

@@ -14,7 +14,7 @@ import (
 
 //go:generate mockery --name=DistributionAccountServiceInterface --case=underscore --structname=MockDistributionAccountService --filename=distribution_account_service.go
 type DistributionAccountServiceInterface interface {
-	GetBalances(ctx context.Context, account *schema.DistributionAccount) (map[string]float64, error)
+	GetBalances(ctx context.Context, account *schema.DistributionAccount) (map[data.Asset]float64, error)
 	GetBalance(ctx context.Context, account *schema.DistributionAccount, asset data.Asset) (float64, error)
 }
 
@@ -40,7 +40,7 @@ func (s *DistributionAccountService) GetBalance(ctx context.Context, account *sc
 	return s.strategies[account.Type].GetBalance(ctx, account, asset)
 }
 
-func (s *DistributionAccountService) GetBalances(ctx context.Context, account *schema.DistributionAccount) (map[string]float64, error) {
+func (s *DistributionAccountService) GetBalances(ctx context.Context, account *schema.DistributionAccount) (map[data.Asset]float64, error) {
 	return s.strategies[account.Type].GetBalances(ctx, account)
 }
 
@@ -58,19 +58,21 @@ func NewStellarNativeDistributionAccountService(horizonClient horizonclient.Clie
 	}
 }
 
-func (s *StellarNativeDistributionAccountService) GetBalances(_ context.Context, account *schema.DistributionAccount) (map[string]float64, error) {
+func (s *StellarNativeDistributionAccountService) GetBalances(_ context.Context, account *schema.DistributionAccount) (map[data.Asset]float64, error) {
 	accountDetails, err := s.horizonClient.AccountDetail(horizonclient.AccountRequest{AccountID: account.Address})
 	if err != nil {
-		return nil, fmt.Errorf("cannot get details for account from Horizon: %w", err)
+		return nil, fmt.Errorf("getting details for account from Horizon: %w", err)
 	}
 
-	var balances = make(map[string]float64)
+	var balances = make(map[data.Asset]float64)
 	for _, b := range accountDetails.Balances {
-		var asset string
+		var asset data.Asset
 		if b.Asset.Type == "native" {
-			asset = "XLM:native"
+			asset = data.Asset{Code: "XLM", Issuer: ""}
 		} else {
-			asset = strings.ToUpper(b.Asset.Code) + ":" + strings.ToUpper(b.Asset.Issuer)
+			code := strings.ToUpper(b.Asset.Code)
+			issuer := strings.ToUpper(b.Asset.Issuer)
+			asset = data.Asset{Code: code, Issuer: issuer}
 		}
 
 		assetBal, parseAssetBalErr := strconv.ParseFloat(b.Balance, 64)
@@ -78,9 +80,6 @@ func (s *StellarNativeDistributionAccountService) GetBalances(_ context.Context,
 			return nil, parseAssetBalErr
 		}
 
-		if _, ok := balances[asset]; ok {
-			return nil, fmt.Errorf("duplicate balance for asset %s found for distribution account", asset)
-		}
 		balances[asset] = assetBal
 	}
 
@@ -93,15 +92,9 @@ func (s *StellarNativeDistributionAccountService) GetBalance(ctx context.Context
 		return 0, fmt.Errorf("getting balances for distribution account: %w", err)
 	}
 
-	assetIssuer := strings.ToUpper(asset.Issuer)
-	if assetIssuer == "" {
-		assetIssuer = "native"
-	}
-
-	assetMapID := strings.ToUpper(asset.Code) + ":" + assetIssuer
-	if assetBalance, ok := accBalances[assetMapID]; ok {
+	if assetBalance, ok := accBalances[asset]; ok {
 		return assetBalance, nil
 	}
 
-	return 0, fmt.Errorf("balance for asset %s not found for distribution account", assetMapID)
+	return 0, fmt.Errorf("balance for asset %s not found for distribution account", asset)
 }

@@ -1162,8 +1162,8 @@ func Test_TenantHandler_Delete(t *testing.T) {
 				distAccResolver.On("HostDistributionAccount").Return("host-dist-account").Once()
 				distAccResolver.On("DistributionAccount", mock.Anything, tntDistributionAccAddress).Return(tntDistributionAcc, nil).Once()
 				distAccSvc.On("GetBalances", mock.Anything, tntDistributionAcc).
-					Return(map[string]float64{
-						assets.USDCAssetCode + ":" + assets.USDCAssetIssuerTestnet: 100.0,
+					Return(map[data.Asset]float64{
+						{Code: assets.USDCAssetCode, Issuer: assets.USDCAssetIssuerTestnet}: 100.0,
 					}, nil).Once()
 			},
 			expectedStatus: http.StatusBadRequest,
@@ -1179,8 +1179,8 @@ func Test_TenantHandler_Delete(t *testing.T) {
 				distAccResolver.On("HostDistributionAccount").Return("host-dist-account").Once()
 				distAccResolver.On("DistributionAccount", mock.Anything, tntDistributionAccAddress).Return(tntDistributionAcc, nil).Once()
 				distAccSvc.On("GetBalances", mock.Anything, tntDistributionAcc).
-					Return(map[string]float64{
-						assets.XLMAssetCode + ":native": 120.0,
+					Return(map[data.Asset]float64{
+						{Code: "XLM", Issuer: ""}: 120.0,
 					}, nil).Once()
 			},
 			expectedStatus: http.StatusBadRequest,
@@ -1197,7 +1197,7 @@ func Test_TenantHandler_Delete(t *testing.T) {
 				distAccResolver.On("HostDistributionAccount").Return("host-dist-account").Once()
 				distAccResolver.On("DistributionAccount", mock.Anything, tntDistributionAccAddress).Return(tntDistributionAcc, nil).Once()
 				distAccSvc.On("GetBalances", mock.Anything, tntDistributionAcc).
-					Return(map[string]float64{}, nil).Once()
+					Return(map[data.Asset]float64{}, nil).Once()
 				tntManagerMock.On("SoftDeleteTenantByID", mock.Anything, tntID).
 					Return(nil, errors.New("foobar")).
 					Once()

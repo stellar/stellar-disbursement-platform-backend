@@ -26,9 +26,12 @@ func Test_StellarNativeDistributionAccount_GetBalances(t *testing.T) {
 	accAddress := keypair.MustRandom().Address()
 	distAcc := schema.NewDefaultStellarDistributionAccount(accAddress)
 
+	nativeAsset := data.Asset{Code: "XLM", Issuer: ""}
+	usdcAsset := data.Asset{Code: assets.USDCAssetCode, Issuer: assets.USDCAssetIssuerTestnet}
+
 	testCases := []struct {
 		name                string
-		expectedBalances    map[string]float64
+		expectedBalances    map[data.Asset]float64
 		expectedError       error
 		mockHorizonClientFn func(mHorizonClient *horizonclient.MockClient)
 	}{
@@ -40,7 +43,7 @@ func Test_StellarNativeDistributionAccount_GetBalances(t *testing.T) {
 				}).Return(horizon.Account{
 					Balances: []horizon.Balance{
 						{
-							Asset:   base.Asset{Code: assets.USDCAssetCode, Issuer: assets.USDCAssetIssuerPubnet},
+							Asset:   base.Asset{Code: assets.USDCAssetCode, Issuer: assets.USDCAssetIssuerTestnet},
 							Balance: "100.0000000",
 						},
 						{
@@ -50,9 +53,9 @@ func Test_StellarNativeDistributionAccount_GetBalances(t *testing.T) {
 					},
 				}, nil).Once()
 			},
-			expectedBalances: map[string]float64{
-				fmt.Sprintf("%s:%s", assets.USDCAssetCode, assets.USDCAssetIssuerPubnet): 100.0,
-				"XLM:native": 100000.0,
+			expectedBalances: map[data.Asset]float64{
+				usdcAsset:   100.0,
+				nativeAsset: 100000.0,
 			},
 		},
 		{
@@ -63,11 +66,11 @@ func Test_StellarNativeDistributionAccount_GetBalances(t *testing.T) {
 				}).Return(horizon.Account{
 					Balances: []horizon.Balance{
 						{
-							Asset:   base.Asset{Code: assets.USDCAssetCode, Issuer: assets.USDCAssetIssuerPubnet},
+							Asset:   base.Asset{Code: assets.USDCAssetCode, Issuer: assets.USDCAssetIssuerTestnet},
 							Balance: "100.0000000",
 						},
 						{
-							Asset:   base.Asset{Code: assets.USDCAssetCode, Issuer: assets.USDCAssetIssuerPubnet},
+							Asset:   base.Asset{Code: assets.USDCAssetCode, Issuer: assets.USDCAssetIssuerTestnet},
 							Balance: "101.0000000",
 						},
 					},
@@ -76,7 +79,7 @@ func Test_StellarNativeDistributionAccount_GetBalances(t *testing.T) {
 			expectedError: fmt.Errorf(
 				"duplicate balance for asset %s:%s found for distribution account",
 				assets.USDCAssetCode,
-				assets.USDCAssetIssuerPubnet),
+				assets.USDCAssetIssuerTestnet),
 		},
 		{
 			name: "🔴returns error when horizon client request results in error",
@@ -118,7 +121,7 @@ func Test_StellarNativeDistributionAccount_GetBalance(t *testing.T) {
 	}).Return(horizon.Account{
 		Balances: []horizon.Balance{
 			{
-				Asset:   base.Asset{Code: assets.USDCAssetCode, Issuer: assets.USDCAssetIssuerPubnet},
+				Asset:   base.Asset{Code: assets.USDCAssetCode, Issuer: assets.USDCAssetIssuerTestnet},
 				Balance: "100.0000000",
 			},
 			{
@@ -128,8 +131,10 @@ func Test_StellarNativeDistributionAccount_GetBalance(t *testing.T) {
 		},
 	}, nil)
 
-	EURCIssuer := keypair.MustRandom().Address()
-	EURC := data.Asset{Code: "EURC", Issuer: EURCIssuer}
+	nativeAsset := data.Asset{Code: "XLM", Issuer: ""}
+	usdcAsset := data.Asset{Code: assets.USDCAssetCode, Issuer: assets.USDCAssetIssuerTestnet}
+	eurcIssuer := keypair.MustRandom().Address()
+	eurcAsset := data.Asset{Code: "EURC", Issuer: eurcIssuer}
 
 	testCases := []struct {
 		name            string
@@ -139,18 +144,18 @@ func Test_StellarNativeDistributionAccount_GetBalance(t *testing.T) {
 	}{
 		{
 			name:            "🟢successfully gets balance for asset with issuer",
-			asset:           data.Asset{Code: assets.USDCAssetCode, Issuer: assets.USDCAssetIssuerPubnet},
+			asset:           usdcAsset,
 			expectedBalance: 100.0,
 		},
 		{
 			name:            "🟢successfully gets balance for native asset",
-			asset:           data.Asset{Code: assets.XLMAssetCode, Issuer: ""},
+			asset:           nativeAsset,
 			expectedBalance: 120.0,
 		},
 		{
 			name:          "🔴returns error if asset is not found on account",
-			asset:         EURC,
-			expectedError: fmt.Errorf("balance for asset %s:%s not found for distribution account", EURC.Code, EURC.Issuer),
+			asset:         eurcAsset,
+			expectedError: fmt.Errorf("balance for asset %s:%s not found for distribution account", eurcAsset.Code, eurcAsset.Issuer),
 		},
 	}
 

@@ -4,14 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/http"
-	"strings"
-
 	"github.com/go-chi/chi/v5"
 	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/support/http/httpdecode"
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/support/render/httpjson"
+	"net/http"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
@@ -269,9 +267,8 @@ func (t TenantsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		for assetID, assetBalance := range distAccBalances {
-			issuer := strings.Split(assetID, ":")[1]
-			if issuer == "native" {
+		for asset, assetBalance := range distAccBalances {
+			if asset.Code == "XLM" {
 				if assetBalance > MaxNativeAssetBalanceForDeletion {
 					errMsg := fmt.Sprintf("Tenant distribution account must have a balance of less than %d XLM to be eligible for deletion", MaxNativeAssetBalanceForDeletion)
 					httperror.BadRequest(errMsg, nil, nil).Render(w)
@@ -279,7 +276,7 @@ func (t TenantsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 				}
 			} else {
 				if assetBalance != 0 {
-					errMsg := fmt.Sprintf("Tenant distribution account must have a zero balance to be eligible for deletion. Current balance for %f: %s", assetBalance, assetID)
+					errMsg := fmt.Sprintf("Tenant distribution account must have a zero balance to be eligible for deletion. Current balance for %f: %s:%s", assetBalance, asset.Code, asset.Issuer)
 					httperror.BadRequest(errMsg, nil, nil).Render(w)
 					return
 				}
