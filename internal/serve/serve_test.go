@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
+
 	"github.com/go-chi/chi/v5"
 	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/network"
@@ -205,18 +207,33 @@ func Test_handleHTTP_Health(t *testing.T) {
 		Route:  "/health",
 		Method: "GET",
 	}
-	mMonitorService.On("MonitorHttpRequestDuration", mock.AnythingOfType("time.Duration"), mLabels).Return(nil).Once()
+	mMonitorService.
+		On("MonitorHttpRequestDuration", mock.AnythingOfType("time.Duration"), mLabels).
+		Return(nil).
+		Once()
+
+	producerMock := events.NewMockProducer(t)
+	producerMock.
+		On("Ping", mock.Anything).
+		Return(nil).
+		Once()
+	producerMock.
+		On("BrokerType").
+		Return(events.KafkaEventBrokerType).
+		Once()
 
 	handlerMux := handleHTTP(ServeOptions{
-		EC256PrivateKey: privateKeyStr,
-		EC256PublicKey:  publicKeyStr,
-		Environment:     "test",
-		GitCommit:       "1234567890abcdef",
-		Models:          models,
-		MonitorService:  mMonitorService,
-		SEP24JWTSecret:  "jwt_secret_1234567890",
-		Version:         "x.y.z",
-		tenantManager:   tenant.NewManager(tenant.WithDatabase(dbConnectionPool)),
+		EC256PrivateKey:       privateKeyStr,
+		EC256PublicKey:        publicKeyStr,
+		Environment:           "test",
+		GitCommit:             "1234567890abcdef",
+		Models:                models,
+		MonitorService:        mMonitorService,
+		SEP24JWTSecret:        "jwt_secret_1234567890",
+		Version:               "x.y.z",
+		tenantManager:         tenant.NewManager(tenant.WithDatabase(dbConnectionPool)),
+		EventProducer:         producerMock,
+		AdminDBConnectionPool: dbConnectionPool,
 	})
 
 	req := httptest.NewRequest("GET", "/health", nil)
@@ -232,7 +249,11 @@ func Test_handleHTTP_Health(t *testing.T) {
 		"status": "pass",
 		"version": "x.y.z",
 		"service_id": "serve",
-		"release_id": "1234567890abcdef"
+		"release_id": "1234567890abcdef",
+		"services": {
+			"database": "pass",
+			"kafka": "pass"
+		}
 	}`
 	assert.JSONEq(t, wantBody, string(body))
 }
@@ -306,6 +327,16 @@ func getServeOptionsForTests(t *testing.T, dbConnectionPool db.DBConnectionPool)
 		Return(schema.NewDefaultStellarDistributionAccount(distAccPublicKey), nil).
 		Maybe()
 
+	producerMock := events.NewMockProducer(t)
+	producerMock.
+		On("Ping", mock.Anything).
+		Return(nil).
+		Maybe()
+	producerMock.
+		On("BrokerType").
+		Return(events.KafkaEventBrokerType).
+		Maybe()
+
 	serveOptions := ServeOptions{
 		CrashTrackerClient:              crashTrackerClient,
 		MtnDBConnectionPool:             dbConnectionPool,
@@ -324,6 +355,7 @@ func getServeOptionsForTests(t *testing.T, dbConnectionPool db.DBConnectionPool)
 		Version:                         "x.y.z",
 		NetworkPassphrase:               network.TestNetworkPassphrase,
 		SubmitterEngine:                 submitterEngine,
+		EventProducer:                   producerMock,
 	}
 	err = serveOptions.SetupDependencies()
 	require.NoError(t, err)

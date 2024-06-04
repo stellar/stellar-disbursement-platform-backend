@@ -419,9 +419,11 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 	// SEP-24 and miscellaneous endpoints that are tenant-unaware
 	mux.Group(func(r chi.Router) {
 		r.Get("/health", httphandler.HealthHandler{
-			ReleaseID: o.GitCommit,
-			ServiceID: ServiceID,
-			Version:   o.Version,
+			ReleaseID:        o.GitCommit,
+			ServiceID:        ServiceID,
+			Version:          o.Version,
+			DBConnectionPool: o.AdminDBConnectionPool,
+			Producer:         o.EventProducer,
 		}.ServeHTTP)
 
 		// START SEP-24 endpoints
