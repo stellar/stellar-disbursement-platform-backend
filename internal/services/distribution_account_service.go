@@ -65,7 +65,6 @@ func (s *StellarNativeDistributionAccountService) GetBalances(account *schema.Di
 	}
 
 	balances := make(map[data.Asset]float64)
-	fmt.Println(accountDetails)
 	for _, b := range accountDetails.Balances {
 		var code, issuer string
 		if b.Asset.Type == "native" {
