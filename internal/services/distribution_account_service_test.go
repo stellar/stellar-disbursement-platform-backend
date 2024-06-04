@@ -170,7 +170,10 @@ func Test_StellarNativeDistributionAccount_GetBalance(t *testing.T) {
 
 func Test_NewDistributionAccountService(t *testing.T) {
 	mHorizonClient := horizonclient.MockClient{}
-	svc := NewDistributionAccountService(&mHorizonClient)
+	svcOpts := DistributionAccountServiceOptions{
+		HorizonClient: &mHorizonClient,
+	}
+	svc := NewDistributionAccountService(svcOpts)
 
 	t.Run("maps the correct distribution account type to the correct service implementation", func(t *testing.T) {
 		targetSvc, ok := svc.strategies[schema.DistributionAccountTypeDBVaultStellar]

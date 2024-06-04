@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"go/types"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
+
 	"github.com/spf13/cobra"
 	"github.com/stellar/go/support/config"
 	"github.com/stellar/go/support/log"
@@ -573,7 +575,8 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			serveOpts.SubmitterEngine = submitterEngine
 			adminServeOpts.SubmitterEngine = submitterEngine
 
-			distributionAccountService, err := di.NewDistributionAccountService(ctx, submitterEngine.HorizonClient)
+			distributionAccountServiceOptions := services.DistributionAccountServiceOptions{HorizonClient: submitterEngine.HorizonClient}
+			distributionAccountService, err := di.NewDistributionAccountService(ctx, distributionAccountServiceOptions)
 			if err != nil {
 				log.Ctx(ctx).Fatalf("error creating distribution account service: %v", err)
 			}

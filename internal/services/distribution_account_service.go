@@ -3,7 +3,6 @@ package services
 import (
 	"fmt"
 	"strconv"
-	"strings"
 
 	"github.com/stellar/go/clients/horizonclient"
 
@@ -18,17 +17,21 @@ type DistributionAccountServiceInterface interface {
 	GetBalance(account *schema.DistributionAccount, asset data.Asset) (float64, error)
 }
 
+type DistributionAccountServiceOptions struct {
+	HorizonClient horizonclient.ClientInterface
+}
+
 type DistributionAccountService struct {
 	strategies map[schema.DistributionAccountType]DistributionAccountServiceInterface
 }
 
-func NewDistributionAccountService(horizonClient horizonclient.ClientInterface) *DistributionAccountService {
-	stellarNativeDistributionAccSvc := NewStellarNativeDistributionAccountService(horizonClient)
+func NewDistributionAccountService(opts DistributionAccountServiceOptions) *DistributionAccountService {
+	stellarNativeDistributionAccSvc := NewStellarNativeDistributionAccountService(opts.HorizonClient)
 
 	strategies := map[schema.DistributionAccountType]DistributionAccountServiceInterface{
 		schema.DistributionAccountTypeEnvStellar:     stellarNativeDistributionAccSvc,
 		schema.DistributionAccountTypeDBVaultStellar: stellarNativeDistributionAccSvc,
-		// schema.DistributionAccountTypeDBVaultCircle: Add Circle distribution account service
+		// TODO [SDP-1232]: schema.DistributionAccountTypeDBVaultCircle: Add Circle distribution account service
 	}
 
 	return &DistributionAccountService{
@@ -44,13 +47,13 @@ func (s *DistributionAccountService) GetBalances(account *schema.DistributionAcc
 	return s.strategies[account.Type].GetBalances(account)
 }
 
-var _ DistributionAccountServiceInterface = new(DistributionAccountService)
+var _ DistributionAccountServiceInterface = (*DistributionAccountService)(nil)
 
 type StellarNativeDistributionAccountService struct {
 	horizonClient horizonclient.ClientInterface
 }
 
-var _ DistributionAccountServiceInterface = new(StellarNativeDistributionAccountService)
+var _ DistributionAccountServiceInterface = (*StellarNativeDistributionAccountService)(nil)
 
 func NewStellarNativeDistributionAccountService(horizonClient horizonclient.ClientInterface) *StellarNativeDistributionAccountService {
 	return &StellarNativeDistributionAccountService{
@@ -70,8 +73,8 @@ func (s *StellarNativeDistributionAccountService) GetBalances(account *schema.Di
 		if b.Asset.Type == "native" {
 			code = assets.XLMAssetCode
 		} else {
-			code = strings.ToUpper(b.Asset.Code)
-			issuer = strings.ToUpper(b.Asset.Issuer)
+			code = b.Asset.Code
+			issuer = b.Asset.Issuer
 		}
 
 		assetBal, parseAssetBalErr := strconv.ParseFloat(b.Balance, 64)

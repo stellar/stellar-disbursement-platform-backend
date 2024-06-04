@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/assets"
+
 	"github.com/go-chi/chi/v5"
 	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/support/http/httpdecode"
@@ -269,7 +271,7 @@ func (t TenantsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		}
 
 		for asset, assetBalance := range distAccBalances {
-			if asset.Code == "XLM" {
+			if asset.Code == assets.XLMAssetCode {
 				if assetBalance > MaxNativeAssetBalanceForDeletion {
 					errMsg := fmt.Sprintf("Tenant distribution account must have a balance of less than %d XLM to be eligible for deletion", MaxNativeAssetBalanceForDeletion)
 					httperror.BadRequest(errMsg, nil, nil).Render(w)

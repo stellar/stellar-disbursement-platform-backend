@@ -212,7 +212,10 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 
 	asset := data.GetAssetFixture(t, ctx, dbConnectionPool, data.FixtureAssetUSDC)
 	hMock := &horizonclient.MockClient{}
-	distAccSvc := NewDistributionAccountService(hMock)
+	distAccSvcOpts := DistributionAccountServiceOptions{
+		HorizonClient: hMock,
+	}
+	distAccSvc := NewDistributionAccountService(distAccSvcOpts)
 	distributionAccPubKey := "ABC"
 	distributionAcc := schema.NewDefaultStellarDistributionAccount(distributionAccPubKey)
 
@@ -900,7 +903,10 @@ func Test_DisbursementManagementService_PauseDisbursement(t *testing.T) {
 	hMock := &horizonclient.MockClient{}
 	distributionAccPubKey := "ABC"
 	distributionAcc := schema.NewDefaultStellarDistributionAccount(distributionAccPubKey)
-	distAccSvc := NewDistributionAccountService(hMock)
+	distAccSvcOpts := DistributionAccountServiceOptions{
+		HorizonClient: hMock,
+	}
+	distAccSvc := NewDistributionAccountService(distAccSvcOpts)
 
 	service := NewDisbursementManagementService(models, models.DBConnectionPool, nil, distAccSvc, &mockEventProducer)
 
