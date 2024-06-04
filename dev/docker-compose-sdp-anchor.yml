@@ -11,17 +11,17 @@ services:
       - "5432:5432"
     volumes:
       - postgres-db:/data/postgres
-
   sdp-api:
     container_name: sdp-api-mtn
-    image: stellar/sdp-v2:latest
+    image: stellar/sdp-v2:development
     build:
       context: ../
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.development
     ports:
       - "8000:8000"
       - "8002:8002"
       - "8003:8003"
+      - "2345:2345"
     environment:
       BASE_URL: http://localhost:8000
       DATABASE_URL: postgres://postgres@db:5432/sdp_mtn?sslmode=disable
@@ -52,11 +52,11 @@ services:
       SINGLE_TENANT_MODE: "false"
 
       # scheduler options
-      ENABLE_SCHEDULER: "false" # disabled - we're using kafka for this.
-      # SCHEDULER_RECEIVER_INVITATION_JOB_SECONDS: "10"
-      # SCHEDULER_PAYMENT_JOB_SECONDS: "10"
+      #ENABLE_SCHEDULER: "false" # set to disabled to use kafka for this.
+      #SCHEDULER_RECEIVER_INVITATION_JOB_SECONDS: "10"
+      #SCHEDULER_PAYMENT_JOB_SECONDS: "10"
 
-      # Broker options
+      # Kafka Configuration - only used if ENABLE_SCHEDULER is set to "false"
       EVENT_BROKER_TYPE: "KAFKA"
       BROKER_URLS: "kafka:9092"
       CONSUMER_GROUP_ID: "group-id"
@@ -81,18 +81,7 @@ services:
       SEP24_JWT_SECRET: jwt_secret_1234567890
       RECAPTCHA_SITE_SECRET_KEY: 6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ4WifJWe
       ANCHOR_PLATFORM_OUTGOING_JWT_SECRET: mySdpToAnchorPlatformSecret
-    entrypoint: ""
-    command:
-      - sh
-      - -c
-      - |
-        sleep 5
-        ./stellar-disbursement-platform db admin migrate up
-        ./stellar-disbursement-platform db tss migrate up
-        ./stellar-disbursement-platform db auth migrate up --all
-        ./stellar-disbursement-platform db sdp migrate up --all
-        ./stellar-disbursement-platform db setup-for-network --all
-        ./stellar-disbursement-platform serve
+    entrypoint: "./dev/scripts/debug_entrypoint.sh"
 
   db-anchor-platform:
     container_name: anchor-platform-postgres-db-mtn
@@ -110,6 +99,8 @@ services:
   anchor-platform:
     container_name: anchor-platform
     image: stellar/anchor-platform:2.6.0
+    depends_on:
+      - db
     command: --sep-server --platform-server --platform linux/amd64
     ports:
       - "8080:8080" # sep-server

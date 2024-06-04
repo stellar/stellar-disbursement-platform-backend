@@ -2,6 +2,22 @@
 # This script is used to locally start the integration between SDP and AnchorPlatform for the SEP-24 deposit flow, needed for registering users.
 set -eu
 
+export DIVIDER="----------------------------------------"
+# Function to display help
+display_help() {
+    echo "Usage: $0 [options]"
+    echo
+    echo "Options:"
+    echo "  --help            Show this help message and exit."
+    echo "  --delete_pv       Delete persistent volumes for SDP databases."
+}
+
+# Check if --help is passed as an argument
+if [[ " $@ " =~ " --help " ]]; then
+    display_help
+    exit 0
+fi
+
 # Check if curl is installed
 if ! command -v curl &> /dev/null
 then
@@ -9,18 +25,47 @@ then
     exit 1
 fi
 
-export DIVIDER="----------------------------------------"
-
 # prepare
-echo "====> 👀Step 1: start preparation"
+echo $DIVIDER
+echo "====> 👀 start calling docker-compose -p sdp-multi-tenant down"
 docker ps -aq | xargs docker stop | xargs docker rm
-echo "====> ✅Step 1: finish preparation"
+#docker-compose -p sdp-multi-tenant down
+docker-compose down
+echo "====> ✅ finish calling docker-compose down"
 
 # Run docker compose
 echo $DIVIDER
-echo "====> 👀Step 2: start calling docker compose up"
-docker-compose down && docker-compose -p sdp-multi-tenant up -d --build
-echo "====> ✅Step 2: finish calling docker-compose up"
+
+# Check if "--delete_pv" is passed as a parameter
+if [[ " $@ " =~ " --delete_pv " ]]; then
+    echo "====> 👀 deleting persistent volumes sdp-multi-tenant_kafka-data sdp-multi-tenant_postgres-ap-db sdp-multi-tenant_postgres-db"
+    
+    # Function to delete volume if it exists
+    delete_volume() {
+        local volume_name=$1
+        if docker volume inspect "$volume_name" &> /dev/null; then
+            docker volume rm "$volume_name"
+            echo "====> ✅ volume $volume_name deleted"
+        else
+            echo "====> ⚠️ volume $volume_name does not exist"
+        fi
+    }
+
+    # Delete volumes
+    delete_volume "sdp-multi-tenant_kafka-data"
+    delete_volume "sdp-multi-tenant_postgres-ap-db"
+    delete_volume "sdp-multi-tenant_postgres-db"
+fi
+
+echo $DIVIDER
+echo "====> 👀calling docker compose up"
+export GIT_COMMIT="debug"
+docker-compose -p sdp-multi-tenant up -d --build
+
+# Run docker compose
+echo $DIVIDER
+echo "====> ✅finish calling docker-compose up"
+
 
 # Initialize tenants
 echo $DIVIDER
@@ -58,7 +103,7 @@ for tenant in "${tenants[@]}"; do
         echo "🐈Provisioning missing tenant: $tenant"
         baseURL="http://$tenant.stellar.local:8000"
         sdpUIBaseURL="http://$tenant.stellar.local:3000"
-        ownerEmail="owner@$tenant.local"
+        ownerEmail="init_owner@$tenant.local"
 
         response=$(curl -s -w "\n%{http_code}" -X POST $AdminTenantURL \
                 -H "Content-Type: application/json" \
@@ -89,4 +134,15 @@ done
 
 echo "====> ✅Step 3: finished initialization of tenants"
 echo $DIVIDER
+# Initialize test_users
+echo "====> Step 4: initialize test users..."
+docker-compose -p sdp-multi-tenant exec sdp-api ./dev/scripts/add_test_users.sh
+echo $DIVIDER
+
 echo "🎉🎉🎉🎉 SUCCESS! 🎉🎉🎉🎉"
+echo "Login URLs for each tenant:"
+for tenant in "${tenants[@]}"; do
+    url="http://$tenant.stellar.local:3000"
+    echo -e "🔗Tenant $tenant: \033]8;;$url\033\\$url\033]8;;\033\\"
+    echo "username: owner@$tenant.local  password: Password123!"
+done
