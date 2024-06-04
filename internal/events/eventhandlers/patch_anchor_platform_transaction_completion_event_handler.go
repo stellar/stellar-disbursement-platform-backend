@@ -49,7 +49,7 @@ func NewPatchAnchorPlatformTransactionCompletionEventHandler(options PatchAnchor
 }
 
 func (h *PatchAnchorPlatformTransactionCompletionEventHandler) Name() string {
-	return "PatchAnchorPlatformTransactionCompletionEventHandler"
+	return utils.GetTypeName(h)
 }
 
 func (h *PatchAnchorPlatformTransactionCompletionEventHandler) CanHandleMessage(ctx context.Context, message *events.Message) bool {

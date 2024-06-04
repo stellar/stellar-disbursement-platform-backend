@@ -48,7 +48,8 @@ func Test_BackoffManager_TriggerBackoffWithMessage(t *testing.T) {
 	backoffError := errors.New("temporary network failure")
 
 	// Trigger backoff with the message.
-	backoffManager.TriggerBackoffWithMessage(msg, backoffError)
+	msg.RecordError("test-handler", backoffError)
+	backoffManager.TriggerBackoffWithMessage(msg)
 	<-backoffChan
 
 	// checking backoff behaviour.
@@ -56,6 +57,8 @@ func Test_BackoffManager_TriggerBackoffWithMessage(t *testing.T) {
 	assert.Equal(t, time.Second*2, backoffManager.GetBackoffDuration())
 	assert.Equal(t, 1, len(backoffManager.GetMessage().Errors))
 	assert.Equal(t, backoffError.Error(), backoffManager.GetMessage().Errors[0].ErrorMessage)
+	assert.Equal(t, "test-handler", backoffManager.GetMessage().Errors[0].HandlerName)
+	assert.Equal(t, backoffError, backoffManager.GetMessage().Errors[0].Err)
 
 	// checking reset backoff.
 	backoffManager.ResetBackoff()
@@ -66,7 +69,8 @@ func Test_BackoffManager_TriggerBackoffWithMessage(t *testing.T) {
 
 	// checking backoff calculations and errors
 	for i := 1; i <= maxBackoff+1; i++ {
-		backoffManager.TriggerBackoffWithMessage(msg, backoffError)
+		msg.RecordError("test-handler", backoffError)
+		backoffManager.TriggerBackoffWithMessage(msg)
 		<-backoffChan
 		if i >= maxBackoff {
 			assert.Equal(t, time.Second*(1<<maxBackoff), backoffManager.GetBackoffDuration())

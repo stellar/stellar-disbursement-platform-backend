@@ -10,17 +10,32 @@ import (
 )
 
 type Message struct {
-	Topic    string  `json:"topic"`
-	Key      string  `json:"key"`
-	TenantID string  `json:"tenant_id"`
-	Type     string  `json:"type"`
-	Data     any     `json:"data"`
-	Errors   []Error `json:"errors,omitempty"`
+	Topic                string           `json:"topic"`
+	Key                  string           `json:"key"`
+	TenantID             string           `json:"tenant_id"`
+	Type                 string           `json:"type"`
+	Data                 any              `json:"data"`
+	Errors               []HandlerError   `json:"errors,omitempty"`
+	SuccessfulExecutions []HandlerSuccess `json:"successful_executions,omitempty"`
 }
 
-type Error struct {
-	FailedAt     time.Time `json:"failed_at"`
-	ErrorMessage string    `json:"error_message"`
+type HandlerError struct {
+	// FailedAt timestamp for the time of failure.
+	FailedAt time.Time `json:"failed_at"`
+	// ErrorMessage detailed error message. Used for displaying.
+	ErrorMessage string `json:"error_message"`
+	// HandlerName name of the handler where the error occurred.
+	HandlerName string `json:"handler_name"`
+	// Err full handler error.
+	Err error `json:"-"`
+}
+
+// HandlerSuccess represents a successful handling of a message
+type HandlerSuccess struct {
+	// ExecutedAt timestamp for the time of successful handling
+	ExecutedAt time.Time `json:"executed_at"`
+	// HandlerName name of the handler that succeeded
+	HandlerName string `json:"handler_name"`
 }
 
 // NewMessage returns a new message with values passed by parameters. It also parses the `TenantID` from the context and inject it into the message.
@@ -38,6 +53,15 @@ func NewMessage(ctx context.Context, topic, key, messageType string, data any) (
 		Type:     messageType,
 		Data:     data,
 	}, nil
+}
+
+func NewHandlerError(hError error, handlerName string) HandlerError {
+	return HandlerError{
+		FailedAt:     time.Now(),
+		ErrorMessage: hError.Error(),
+		HandlerName:  handlerName,
+		Err:          hError,
+	}
 }
 
 func (m Message) String() string {
@@ -68,10 +92,14 @@ func (m Message) Validate() error {
 	return nil
 }
 
-func (m *Message) RecordError(errMsg string) {
-	newError := Error{
-		FailedAt:     time.Now(),
-		ErrorMessage: errMsg,
-	}
-	m.Errors = append(m.Errors, newError)
+func (m *Message) RecordError(handlerName string, handleErr error) {
+	hError := NewHandlerError(handleErr, handlerName)
+	m.Errors = append(m.Errors, hError)
+}
+
+func (m *Message) RecordSuccess(handlerName string) {
+	m.SuccessfulExecutions = append(m.SuccessfulExecutions, HandlerSuccess{
+		ExecutedAt:  time.Now(),
+		HandlerName: handlerName,
+	})
 }

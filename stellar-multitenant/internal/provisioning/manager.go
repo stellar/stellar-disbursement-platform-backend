@@ -53,11 +53,11 @@ func deleteDistributionKeyErrors() []error {
 }
 
 func rollbackTenantDataSetupErrors() []error {
-	return []error{ErrUpdateTenantFailed, ErrProvisionTenantDistributionAccountFailed, ErrTenantDataSetupFailed}
+	return append(deleteDistributionKeyErrors(), ErrProvisionTenantDistributionAccountFailed, ErrTenantDataSetupFailed)
 }
 
 func rollbackTenantCreationAndSchemaErrors() []error {
-	return []error{ErrUpdateTenantFailed, ErrProvisionTenantDistributionAccountFailed, ErrTenantDataSetupFailed, ErrTenantSchemaFailed}
+	return append(rollbackTenantDataSetupErrors(), ErrTenantSchemaFailed)
 }
 
 func (m *Manager) ProvisionNewTenant(
@@ -142,7 +142,7 @@ func (m *Manager) provisionTenant(ctx context.Context, pt *ProvisionTenant) (*te
 	distSignerType := signing.SignatureClientType(m.SubmitterEngine.DistAccountSigner.Type())
 	distAccType, err := distSignerType.DistributionAccountType()
 	if err != nil {
-		return t, fmt.Errorf("parsing getting distribution account type: %w", err)
+		return t, fmt.Errorf("%w: parsing getting distribution account type: %w", ErrUpdateTenantFailed, err)
 	}
 
 	tenantStatus := tenant.ProvisionedTenantStatus

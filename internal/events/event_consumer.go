@@ -30,7 +30,7 @@ func NewEventConsumer(consumer Consumer, producer Producer, crashTracker crashtr
 }
 
 func (ec *EventConsumer) Consume(ctx context.Context) {
-	log.Ctx(ctx).Infof("starting consuming messages for topic %s...", ec.consumer.Topic())
+	log.Ctx(ctx).Infof("Starting consuming messages for topic %s...", ec.consumer.Topic())
 
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, syscall.SIGTERM, syscall.SIGINT, syscall.SIGQUIT)
@@ -53,7 +53,11 @@ func (ec *EventConsumer) Consume(ctx context.Context) {
 
 		case <-backoffChan:
 			backoff := backoffManager.GetBackoffDuration()
-			log.Ctx(ctx).Warnf("Waiting %s before retrying reading new messages", backoff)
+			if backoffManager.GetMessage() != nil {
+				log.Ctx(ctx).Warnf("Waiting %s before retrying handling message with key %s", backoff, backoffManager.GetMessage().Key)
+			} else {
+				log.Ctx(ctx).Warnf("Waiting %s before retrying reading new messages", backoff)
+			}
 			time.Sleep(backoff)
 
 		default:
@@ -76,18 +80,20 @@ func (ec *EventConsumer) Consume(ctx context.Context) {
 			// 3. If no message in backoff manager, read message from Kafka.
 			if msg == nil {
 				var readErr error
+				log.Ctx(ctx).Infof("Reading message from topic %s...", ec.consumer.Topic())
 				msg, readErr = ec.consumer.ReadMessage(ctx)
 				if readErr != nil {
 					ec.crashTracker.LogAndReportErrors(ctx, readErr, fmt.Sprintf("consuming messages for topic %s", ec.consumer.Topic()))
 					backoffManager.TriggerBackoff()
 					continue
 				}
+			} else {
+				log.Ctx(ctx).Warnf("Retrying handling message with key %s", msg.Key)
 			}
 
 			// 4. Run the message through the handler chain.
-			if handleErr := ec.handleMessage(ctx, msg); handleErr != nil {
-				backoffManager.TriggerBackoffWithMessage(msg, handleErr)
-				ec.crashTracker.LogAndReportErrors(ctx, handleErr, fmt.Sprintf("handling message for topic %s", ec.consumer.Topic()))
+			if handledOk := ec.handleMessage(ctx, msg); !handledOk {
+				backoffManager.TriggerBackoffWithMessage(msg)
 				continue
 			}
 
@@ -124,14 +130,36 @@ func (ec *EventConsumer) sendMessageToDLQ(ctx context.Context, msg Message) erro
 }
 
 // handleMessage handles the message by the handler chain of the consumer.
-func (ec *EventConsumer) handleMessage(ctx context.Context, msg *Message) error {
+func (ec *EventConsumer) handleMessage(ctx context.Context, msg *Message) bool {
+	allHandlersSuccessful := true
 	for _, handler := range ec.consumer.Handlers() {
-		if handler.CanHandleMessage(ctx, msg) {
+		if ShouldHandleMessage(ctx, handler, msg) {
 			handleErr := handler.Handle(ctx, msg)
 			if handleErr != nil {
-				return fmt.Errorf("handling message: %w", handleErr)
+				ec.crashTracker.LogAndReportErrors(ctx, handleErr, fmt.Sprintf("handling message for topic %s with handler %s",
+					ec.consumer.Topic(),
+					handler.Name()))
+				msg.RecordError(handler.Name(), handleErr)
+				allHandlersSuccessful = false
+			} else {
+				msg.RecordSuccess(handler.Name())
 			}
 		}
 	}
-	return nil
+	return allHandlersSuccessful
+}
+
+// ShouldHandleMessage returns true if the message should be handled by the handler passed by parameter.
+// A message should be handled by a handler if the handler can handle the message and the handler has not been executed before.
+func ShouldHandleMessage(ctx context.Context, handler EventHandler, msg *Message) bool {
+	if handler.CanHandleMessage(ctx, msg) {
+		for _, execution := range msg.SuccessfulExecutions {
+			if execution.HandlerName == handler.Name() {
+				log.Ctx(ctx).Infof("Handler %s has already been executed for message with key %s. Skipping...", handler.Name(), msg.Key)
+				return false
+			}
+		}
+		return true
+	}
+	return false
 }
