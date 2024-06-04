@@ -55,7 +55,7 @@ func (h HealthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		"database": dbStatus,
 	}
 
-	if h.Producer.BrokerType() == events.KafkaEventBrokerType {
+	if h.Producer != nil && h.Producer.BrokerType() == events.KafkaEventBrokerType {
 		eventBrokerStatus := StatusPass
 		if err := h.Producer.Ping(context); err != nil {
 			eventBrokerStatus = StatusFail
