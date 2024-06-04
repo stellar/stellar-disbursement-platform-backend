@@ -74,7 +74,9 @@ func (kc *KafkaConfig) Validate() error {
 }
 
 type KafkaProducer struct {
-	writer *kafka.Writer
+	writer  *kafka.Writer
+	dialer  *kafka.Dialer
+	brokers []string
 }
 
 // Implements Producer interface
@@ -88,38 +90,23 @@ func NewKafkaProducer(config KafkaConfig) (*KafkaProducer, error) {
 		return nil, fmt.Errorf("invalid kafka config: %w", err)
 	}
 
-	var tlsConfig *tls.Config
-	transport := kafka.DefaultTransport
-	if slices.Contains(SSLProtocols, config.SecurityProtocol) {
-		tlsConfig = &tls.Config{}
-		if config.SecurityProtocol == KafkaProtocolSSL {
-			cert, err := tls.X509KeyPair([]byte(config.SSLAccessCertificate), []byte(config.SSLAccessKey))
-			if err != nil {
-				return nil, fmt.Errorf("parsing SSL access key and certificate: %w", err)
-			}
-			tlsConfig.Certificates = []tls.Certificate{cert}
-		}
+	k.brokers = config.Brokers
 
-		transport = &kafka.Transport{
-			TLS: tlsConfig,
-		}
-	}
-
-	if config.SecurityProtocol == KafkaProtocolSASLPlaintext || config.SecurityProtocol == KafkaProtocolSASLSSL {
-		transport = &kafka.Transport{
-			SASL: plain.Mechanism{
-				Username: config.SASLUsername,
-				Password: config.SASLPassword,
-			},
-			TLS: tlsConfig,
-		}
+	transport, err := newTransportFromConfig(config)
+	if err != nil {
+		return nil, fmt.Errorf("creating kafka transport: %w", err)
 	}
 
 	k.writer = &kafka.Writer{
-		Addr:         kafka.TCP(config.Brokers...),
+		Addr:         kafka.TCP(k.brokers...),
 		Balancer:     &kafka.RoundRobin{},
 		RequiredAcks: -1,
 		Transport:    transport,
+	}
+
+	k.dialer, err = newDialerFromConfig(config)
+	if err != nil {
+		return nil, fmt.Errorf("creating kafka dialer: %w", err)
 	}
 
 	return &k, nil
@@ -152,9 +139,29 @@ func (k *KafkaProducer) WriteMessages(ctx context.Context, messages ...Message) 
 	return nil
 }
 
-func (k *KafkaProducer) Close() error {
-	log.Info("closing kafka producer")
-	return k.writer.Close()
+func (k *KafkaProducer) Close(ctx context.Context) {
+	log.Ctx(ctx).Info("closing kafka producer")
+	if err := k.writer.Close(); err != nil {
+		log.Ctx(ctx).Errorf("closing kafka producer: %v", err)
+	}
+}
+
+// Ping pings the Kafka Broker
+func (k *KafkaProducer) Ping(ctx context.Context) error {
+	if k.dialer == nil {
+		return fmt.Errorf("kafka dialer is nil")
+	}
+
+	if len(k.brokers) == 0 {
+		return fmt.Errorf("kafka brokers cannot be empty")
+	}
+
+	conn, err := k.dialer.DialContext(ctx, "tcp", k.brokers[0])
+	if err != nil {
+		return fmt.Errorf("dialing to kafka: %w", err)
+	}
+	defer closeOrLog(conn)
+	return nil
 }
 
 type KafkaConsumer struct {
@@ -173,6 +180,34 @@ func NewKafkaConsumer(config KafkaConfig, topic string, consumerGroupID string, 
 		return nil, fmt.Errorf("invalid kafka config: %w", err)
 	}
 
+	dialer, err := newDialerFromConfig(config)
+	if err != nil {
+		return nil, fmt.Errorf("creating kafka dialer: %w", err)
+	}
+
+	k.reader = kafka.NewReader(kafka.ReaderConfig{
+		Brokers: config.Brokers,
+		Topic:   topic,
+		GroupID: consumerGroupID,
+		Dialer:  dialer,
+	})
+
+	if len(handlers) == 0 {
+		return nil, fmt.Errorf("handlers cannot be empty")
+	}
+
+	ehMap := make(map[string]EventHandler)
+	for _, handler := range handlers {
+		log.Infof("registering event handler %s for topic %s", handler.Name(), topic)
+		ehMap[handler.Name()] = handler
+	}
+	k.handlers = maps.Values(ehMap)
+
+	return &k, nil
+}
+
+// newDialerFromConfig creates a new Kafka dialer from the given Kafka config
+func newDialerFromConfig(config KafkaConfig) (*kafka.Dialer, error) {
 	var tlsConfig *tls.Config
 	dialer := kafka.DefaultDialer
 	if slices.Contains(SSLProtocols, config.SecurityProtocol) {
@@ -199,26 +234,7 @@ func NewKafkaConsumer(config KafkaConfig, topic string, consumerGroupID string, 
 			TLS: tlsConfig,
 		}
 	}
-
-	k.reader = kafka.NewReader(kafka.ReaderConfig{
-		Brokers: config.Brokers,
-		Topic:   topic,
-		GroupID: consumerGroupID,
-		Dialer:  dialer,
-	})
-
-	if len(handlers) == 0 {
-		return nil, fmt.Errorf("handlers cannot be empty")
-	}
-
-	ehMap := make(map[string]EventHandler)
-	for _, handler := range handlers {
-		log.Infof("registering event handler %s for topic %s", handler.Name(), topic)
-		ehMap[handler.Name()] = handler
-	}
-	k.handlers = maps.Values(ehMap)
-
-	return &k, nil
+	return dialer, nil
 }
 
 // ReadMessage reads a message from the Kafka topic of the consumer and commits the offset
@@ -259,4 +275,45 @@ var _ io.Closer = (*KafkaConsumer)(nil)
 // Handlers returns the event handlers of the Kafka consumer
 func (k *KafkaConsumer) Handlers() []EventHandler {
 	return k.handlers
+}
+
+// newTransportFromConfig creates new Kafka Transport from the given Kafka config
+func newTransportFromConfig(config KafkaConfig) (kafka.RoundTripper, error) {
+	var tlsConfig *tls.Config
+	transport := kafka.DefaultTransport
+	if slices.Contains(SSLProtocols, config.SecurityProtocol) {
+		tlsConfig = &tls.Config{}
+		if config.SecurityProtocol == KafkaProtocolSSL {
+			cert, err := tls.X509KeyPair([]byte(config.SSLAccessCertificate), []byte(config.SSLAccessKey))
+			if err != nil {
+				return nil, fmt.Errorf("parsing SSL access key and certificate: %w", err)
+			}
+			tlsConfig.Certificates = []tls.Certificate{cert}
+		}
+
+		transport = &kafka.Transport{
+			TLS: tlsConfig,
+		}
+	}
+
+	if config.SecurityProtocol == KafkaProtocolSASLPlaintext || config.SecurityProtocol == KafkaProtocolSASLSSL {
+		transport = &kafka.Transport{
+			SASL: plain.Mechanism{
+				Username: config.SASLUsername,
+				Password: config.SASLPassword,
+			},
+			TLS: tlsConfig,
+		}
+	}
+
+	return transport, nil
+}
+
+// closeOrLog closes the Kafka connection and logs the error if any
+func closeOrLog(conn *kafka.Conn) {
+	func(conn *kafka.Conn) {
+		if closeErr := conn.Close(); closeErr != nil {
+			log.Errorf("closing kafka connection: %v", closeErr)
+		}
+	}(conn)
 }

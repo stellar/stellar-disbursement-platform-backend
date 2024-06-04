@@ -85,6 +85,7 @@ type ServeOptions struct {
 	EnableScheduler                 bool
 	tenantManager                   tenant.ManagerInterface
 	EventProducer                   events.Producer
+	EventBrokerType                 events.EventBrokerType
 	MaxInvitationSMSResendAttempts  int
 	SingleTenantMode                bool
 }
@@ -419,9 +420,12 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 	// SEP-24 and miscellaneous endpoints that are tenant-unaware
 	mux.Group(func(r chi.Router) {
 		r.Get("/health", httphandler.HealthHandler{
-			ReleaseID: o.GitCommit,
-			ServiceID: ServiceID,
-			Version:   o.Version,
+			ReleaseID:        o.GitCommit,
+			ServiceID:        ServiceID,
+			Version:          o.Version,
+			DBConnectionPool: o.AdminDBConnectionPool,
+			Producer:         o.EventProducer,
+			EventBrokerType:  o.EventBrokerType,
 		}.ServeHTTP)
 
 		// START SEP-24 endpoints

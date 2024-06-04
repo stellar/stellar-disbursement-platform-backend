@@ -10,7 +10,8 @@ import (
 // Producer is an interface that defines the methods that a producer should implement.
 type Producer interface {
 	WriteMessages(ctx context.Context, messages ...Message) error
-	Close() error
+	Ping(ctx context.Context) error
+	Close(ctx context.Context)
 }
 
 // Consumer is an interface that defines the methods that a consumer should implement.
@@ -29,7 +30,11 @@ func (p NoopProducer) WriteMessages(ctx context.Context, messages ...Message) er
 	return nil
 }
 
-func (p NoopProducer) Close() error {
+func (p NoopProducer) Close(ctx context.Context) {
+	log.Ctx(ctx).Info("NoopProducer: Closing NoopProducer")
+}
+
+func (p NoopProducer) Ping(ctx context.Context) error {
 	return nil
 }
 

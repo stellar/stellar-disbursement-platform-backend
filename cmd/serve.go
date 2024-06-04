@@ -582,12 +582,13 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			}
 
 			// Kafka (background)
-			if eventBrokerOptions.EventBrokerType == events.KafkaEventBrokerType {
+			serveOpts.EventBrokerType = eventBrokerOptions.EventBrokerType
+			if serveOpts.EventBrokerType == events.KafkaEventBrokerType {
 				kafkaProducer, kafkaErr := events.NewKafkaProducer(cmdUtils.KafkaConfig(eventBrokerOptions))
 				if kafkaErr != nil {
 					log.Ctx(ctx).Fatalf("error creating Kafka Producer: %v", kafkaErr)
 				}
-				defer kafkaProducer.Close()
+				defer kafkaProducer.Close(ctx)
 				serveOpts.EventProducer = kafkaProducer
 
 				kafkaErr = serverService.SetupConsumers(ctx, SetupConsumersOptions{
