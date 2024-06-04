@@ -160,8 +160,13 @@ func (k *KafkaProducer) Ping(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("dialing to kafka: %w", err)
 	}
-	defer closeOrLog(conn)
+	defer closeOrLog(ctx, conn)
 	return nil
+}
+
+// BrokerType returns the type of the Kafka broker
+func (k *KafkaProducer) BrokerType() EventBrokerType {
+	return KafkaEventBrokerType
 }
 
 type KafkaConsumer struct {
@@ -270,6 +275,11 @@ func (k *KafkaConsumer) Close() error {
 	return k.reader.Close()
 }
 
+// BrokerType returns the type of the Kafka broker
+func (k *KafkaConsumer) BrokerType() EventBrokerType {
+	return KafkaEventBrokerType
+}
+
 var _ io.Closer = (*KafkaConsumer)(nil)
 
 // Handlers returns the event handlers of the Kafka consumer
@@ -310,10 +320,8 @@ func newTransportFromConfig(config KafkaConfig) (kafka.RoundTripper, error) {
 }
 
 // closeOrLog closes the Kafka connection and logs the error if any
-func closeOrLog(conn *kafka.Conn) {
-	func(conn *kafka.Conn) {
-		if closeErr := conn.Close(); closeErr != nil {
-			log.Errorf("closing kafka connection: %v", closeErr)
-		}
-	}(conn)
+func closeOrLog(ctx context.Context, conn *kafka.Conn) {
+	if closeErr := conn.Close(); closeErr != nil {
+		log.Ctx(ctx).Errorf("closing kafka connection: %v", closeErr)
+	}
 }

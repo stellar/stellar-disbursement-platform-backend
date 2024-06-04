@@ -29,19 +29,23 @@ func TestHealthHandler(t *testing.T) {
 	producerMock := events.NewMockProducer(t)
 
 	r := chi.NewRouter()
-	r.Get("/health", HealthHandler{
+	handler := HealthHandler{
 		Version:          "x.y.z",
 		ServiceID:        "my-api",
 		ReleaseID:        "1234567890abcdef",
 		DBConnectionPool: dbConnectionPool,
 		Producer:         producerMock,
-		EventBrokerType:  events.KafkaEventBrokerType,
-	}.ServeHTTP)
+	}
+	r.Get("/health", handler.ServeHTTP)
 
 	t.Run("✅SDP healthy", func(t *testing.T) {
 		producerMock.
 			On("Ping", mock.Anything).
 			Return(nil).
+			Once()
+		producerMock.
+			On("BrokerType").
+			Return(events.KafkaEventBrokerType).
 			Once()
 
 		req := httptest.NewRequest(http.MethodGet, "/health", nil)
@@ -61,10 +65,14 @@ func TestHealthHandler(t *testing.T) {
 		}`, w.Body.String())
 	})
 
-	t.Run("❌SDP unhealthy", func(t *testing.T) {
+	t.Run("❌SDP unhealthy because Kafka is down", func(t *testing.T) {
 		producerMock.
 			On("Ping", mock.Anything).
 			Return(errors.New("error")).
+			Once()
+		producerMock.
+			On("BrokerType").
+			Return(events.KafkaEventBrokerType).
 			Once()
 
 		req := httptest.NewRequest(http.MethodGet, "/health", nil)
@@ -84,14 +92,90 @@ func TestHealthHandler(t *testing.T) {
 		}`, w.Body.String())
 	})
 
+	t.Run("❌SDP unhealthy because DB is down", func(t *testing.T) {
+		producerMock.
+			On("Ping", mock.Anything).
+			Return(nil).
+			Once()
+		producerMock.
+			On("BrokerType").
+			Return(events.KafkaEventBrokerType).
+			Once()
+
+		// Close the ConnectionPool to simulate a DB failure
+		closedConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+		require.NoError(t, err)
+		err = closedConnectionPool.Close()
+		require.NoError(t, err)
+
+		handler.DBConnectionPool = closedConnectionPool
+		r.Get("/health", handler.ServeHTTP)
+
+		req := httptest.NewRequest(http.MethodGet, "/health", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusServiceUnavailable, w.Code)
+		assert.JSONEq(t, `{
+			"status": "fail",
+			"version": "x.y.z",
+			"service_id": "my-api",
+			"release_id": "1234567890abcdef",
+			"services": {
+				"database": "fail",	
+				"kafka": "pass"
+			}
+		}`, w.Body.String())
+	})
+
+	t.Run("❌SDP unhealthy because DB and Kafka are down", func(t *testing.T) {
+		producerMock.
+			On("Ping", mock.Anything).
+			Return(errors.New("error")).
+			Once()
+		producerMock.
+			On("BrokerType").
+			Return(events.KafkaEventBrokerType).
+			Once()
+
+		// Close the ConnectionPool to simulate a DB failure
+		closedConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+		require.NoError(t, err)
+		err = closedConnectionPool.Close()
+		require.NoError(t, err)
+
+		handler.DBConnectionPool = closedConnectionPool
+		r.Get("/health", handler.ServeHTTP)
+
+		req := httptest.NewRequest(http.MethodGet, "/health", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusServiceUnavailable, w.Code)
+		assert.JSONEq(t, `{
+			"status": "fail",
+			"version": "x.y.z",
+			"service_id": "my-api",
+			"release_id": "1234567890abcdef",
+			"services": {
+				"database": "fail",	
+				"kafka": "fail"
+			}
+		}`, w.Body.String())
+	})
+
 	t.Run("No healthcheck for Kafka event broker", func(t *testing.T) {
+		producerMock.
+			On("BrokerType").
+			Return(events.NoneEventBrokerType).
+			Once()
+
 		r.Get("/health", HealthHandler{
 			Version:          "x.y.z",
 			ServiceID:        "my-api",
 			ReleaseID:        "1234567890abcdef",
 			DBConnectionPool: dbConnectionPool,
 			Producer:         producerMock,
-			EventBrokerType:  events.NoneEventBrokerType,
 		}.ServeHTTP)
 
 		req := httptest.NewRequest(http.MethodGet, "/health", nil)

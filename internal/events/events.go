@@ -12,6 +12,7 @@ type Producer interface {
 	WriteMessages(ctx context.Context, messages ...Message) error
 	Ping(ctx context.Context) error
 	Close(ctx context.Context)
+	BrokerType() EventBrokerType
 }
 
 // Consumer is an interface that defines the methods that a consumer should implement.
@@ -20,6 +21,7 @@ type Consumer interface {
 	Topic() string
 	Handlers() []EventHandler
 	Close() error
+	BrokerType() EventBrokerType
 }
 
 // NoopProducer is a producer used to log messages instead of sending them to a real producer.
@@ -36,6 +38,10 @@ func (p NoopProducer) Close(ctx context.Context) {
 
 func (p NoopProducer) Ping(ctx context.Context) error {
 	return nil
+}
+
+func (p NoopProducer) BrokerType() EventBrokerType {
+	return NoneEventBrokerType
 }
 
 var _ Producer = NoopProducer{}

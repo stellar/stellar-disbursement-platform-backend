@@ -85,7 +85,6 @@ type ServeOptions struct {
 	EnableScheduler                 bool
 	tenantManager                   tenant.ManagerInterface
 	EventProducer                   events.Producer
-	EventBrokerType                 events.EventBrokerType
 	MaxInvitationSMSResendAttempts  int
 	SingleTenantMode                bool
 }
@@ -425,7 +424,6 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			Version:          o.Version,
 			DBConnectionPool: o.AdminDBConnectionPool,
 			Producer:         o.EventProducer,
-			EventBrokerType:  o.EventBrokerType,
 		}.ServeHTTP)
 
 		// START SEP-24 endpoints

@@ -217,6 +217,10 @@ func Test_handleHTTP_Health(t *testing.T) {
 		On("Ping", mock.Anything).
 		Return(nil).
 		Once()
+	producerMock.
+		On("BrokerType").
+		Return(events.KafkaEventBrokerType).
+		Once()
 
 	handlerMux := handleHTTP(ServeOptions{
 		EC256PrivateKey:       privateKeyStr,
@@ -229,7 +233,6 @@ func Test_handleHTTP_Health(t *testing.T) {
 		Version:               "x.y.z",
 		tenantManager:         tenant.NewManager(tenant.WithDatabase(dbConnectionPool)),
 		EventProducer:         producerMock,
-		EventBrokerType:       events.KafkaEventBrokerType,
 		AdminDBConnectionPool: dbConnectionPool,
 	})
 
@@ -329,6 +332,10 @@ func getServeOptionsForTests(t *testing.T, dbConnectionPool db.DBConnectionPool)
 		On("Ping", mock.Anything).
 		Return(nil).
 		Maybe()
+	producerMock.
+		On("BrokerType").
+		Return(events.KafkaEventBrokerType).
+		Maybe()
 
 	serveOptions := ServeOptions{
 		CrashTrackerClient:              crashTrackerClient,
@@ -349,7 +356,6 @@ func getServeOptionsForTests(t *testing.T, dbConnectionPool db.DBConnectionPool)
 		NetworkPassphrase:               network.TestNetworkPassphrase,
 		SubmitterEngine:                 submitterEngine,
 		EventProducer:                   producerMock,
-		EventBrokerType:                 events.KafkaEventBrokerType,
 	}
 	err = serveOptions.SetupDependencies()
 	require.NoError(t, err)

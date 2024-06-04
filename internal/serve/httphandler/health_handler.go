@@ -39,7 +39,6 @@ type HealthHandler struct {
 	ReleaseID        string
 	DBConnectionPool db.DBConnectionPool
 	Producer         events.Producer
-	EventBrokerType  events.EventBrokerType
 }
 
 // ServeHTTP implements the http.Handler interface.
@@ -56,7 +55,7 @@ func (h HealthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		"database": dbStatus,
 	}
 
-	if h.EventBrokerType == events.KafkaEventBrokerType {
+	if h.Producer.BrokerType() == events.KafkaEventBrokerType {
 		eventBrokerStatus := StatusPass
 		if err := h.Producer.Ping(context); err != nil {
 			eventBrokerStatus = StatusFail

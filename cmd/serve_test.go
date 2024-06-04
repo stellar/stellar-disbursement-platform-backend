@@ -163,7 +163,6 @@ func Test_serve(t *testing.T) {
 		EnableScheduler:                 false,
 		SubmitterEngine:                 submitterEngine,
 		MaxInvitationSMSResendAttempts:  3,
-		EventBrokerType:                 events.KafkaEventBrokerType,
 	}
 	serveOpts.AnchorPlatformAPIService, err = anchorplatform.NewAnchorPlatformAPIService(httpclient.DefaultClient(), serveOpts.AnchorPlatformBasePlatformURL, serveOpts.AnchorPlatformOutgoingJWTSecret)
 	require.NoError(t, err)
