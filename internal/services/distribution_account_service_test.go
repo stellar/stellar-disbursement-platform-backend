@@ -1,7 +1,6 @@
 package services
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"testing"
@@ -19,14 +18,10 @@ import (
 )
 
 func Test_StellarNativeDistributionAccount_GetBalances(t *testing.T) {
-	mHorizonClient := horizonclient.MockClient{}
-	svc := NewStellarNativeDistributionAccountService(&mHorizonClient)
-
-	ctx := context.Background()
 	accAddress := keypair.MustRandom().Address()
 	distAcc := schema.NewDefaultStellarDistributionAccount(accAddress)
 
-	nativeAsset := data.Asset{Code: "XLM", Issuer: ""}
+	nativeAsset := data.Asset{Code: assets.XLMAssetCode, Issuer: ""}
 	usdcAsset := data.Asset{Code: assets.USDCAssetCode, Issuer: assets.USDCAssetIssuerTestnet}
 
 	testCases := []struct {
@@ -43,11 +38,11 @@ func Test_StellarNativeDistributionAccount_GetBalances(t *testing.T) {
 				}).Return(horizon.Account{
 					Balances: []horizon.Balance{
 						{
-							Asset:   base.Asset{Code: assets.USDCAssetCode, Issuer: assets.USDCAssetIssuerTestnet},
+							Asset:   base.Asset{Code: usdcAsset.Code, Issuer: usdcAsset.Issuer},
 							Balance: "100.0000000",
 						},
 						{
-							Asset:   base.Asset{Code: "XLM", Type: "native"},
+							Asset:   base.Asset{Code: nativeAsset.Code, Type: "native"},
 							Balance: "100000.0000000",
 						},
 					},
@@ -59,43 +54,39 @@ func Test_StellarNativeDistributionAccount_GetBalances(t *testing.T) {
 			},
 		},
 		{
-			name: "🔴returns error when horizon client response contains duplicate balance entries for the same asset",
-			mockHorizonClientFn: func(mHorizonClient *horizonclient.MockClient) {
-				mHorizonClient.On("AccountDetail", horizonclient.AccountRequest{
-					AccountID: distAcc.Address,
-				}).Return(horizon.Account{
-					Balances: []horizon.Balance{
-						{
-							Asset:   base.Asset{Code: assets.USDCAssetCode, Issuer: assets.USDCAssetIssuerTestnet},
-							Balance: "100.0000000",
-						},
-						{
-							Asset:   base.Asset{Code: assets.USDCAssetCode, Issuer: assets.USDCAssetIssuerTestnet},
-							Balance: "101.0000000",
-						},
-					},
-				}, nil).Once()
-			},
-			expectedError: fmt.Errorf(
-				"duplicate balance for asset %s:%s found for distribution account",
-				assets.USDCAssetCode,
-				assets.USDCAssetIssuerTestnet),
-		},
-		{
 			name: "🔴returns error when horizon client request results in error",
 			mockHorizonClientFn: func(mHorizonClient *horizonclient.MockClient) {
 				mHorizonClient.On("AccountDetail", horizonclient.AccountRequest{
 					AccountID: distAcc.Address,
 				}).Return(horizon.Account{}, fmt.Errorf("foobar")).Once()
 			},
-			expectedError: errors.New("cannot get details for account from Horizon: foobar"),
+			expectedError: errors.New("getting details for account from Horizon: foobar"),
+		},
+		{
+			name: "🔴returns error when attempting to parse invalid balance into float",
+			mockHorizonClientFn: func(mHorizonClient *horizonclient.MockClient) {
+				mHorizonClient.On("AccountDetail", horizonclient.AccountRequest{
+					AccountID: distAcc.Address,
+				}).Return(horizon.Account{
+					Balances: []horizon.Balance{
+						{
+							Asset:   base.Asset{Code: nativeAsset.Code, Type: "native"},
+							Balance: "invalid_balance",
+						},
+					},
+				}, nil).Once()
+			},
+			expectedError: errors.New("parsing balance to float"),
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			mHorizonClient := horizonclient.MockClient{}
+			svc := NewStellarNativeDistributionAccountService(&mHorizonClient)
+
 			tc.mockHorizonClientFn(&mHorizonClient)
-			balances, err := svc.GetBalances(ctx, distAcc)
+			balances, err := svc.GetBalances(distAcc)
 			if tc.expectedError != nil {
 				require.ErrorContains(t, err, tc.expectedError.Error())
 			} else {
@@ -109,30 +100,29 @@ func Test_StellarNativeDistributionAccount_GetBalances(t *testing.T) {
 }
 
 func Test_StellarNativeDistributionAccount_GetBalance(t *testing.T) {
-	mHorizonClient := horizonclient.MockClient{}
-	svc := NewStellarNativeDistributionAccountService(&mHorizonClient)
-
-	ctx := context.Background()
 	accAddress := keypair.MustRandom().Address()
 	distAcc := schema.NewDefaultStellarDistributionAccount(accAddress)
 
-	mHorizonClient.On("AccountDetail", horizonclient.AccountRequest{
-		AccountID: distAcc.Address,
-	}).Return(horizon.Account{
-		Balances: []horizon.Balance{
-			{
-				Asset:   base.Asset{Code: assets.USDCAssetCode, Issuer: assets.USDCAssetIssuerTestnet},
-				Balance: "100.0000000",
-			},
-			{
-				Asset:   base.Asset{Code: assets.XLMAssetCode, Type: "native"},
-				Balance: "120.0000000",
-			},
-		},
-	}, nil)
-
-	nativeAsset := data.Asset{Code: "XLM", Issuer: ""}
+	nativeAsset := data.Asset{Code: assets.XLMAssetCode}
 	usdcAsset := data.Asset{Code: assets.USDCAssetCode, Issuer: assets.USDCAssetIssuerTestnet}
+
+	mockSetup := func(mHorizonClient *horizonclient.MockClient) {
+		mHorizonClient.On("AccountDetail", horizonclient.AccountRequest{
+			AccountID: distAcc.Address,
+		}).Return(horizon.Account{
+			Balances: []horizon.Balance{
+				{
+					Asset:   base.Asset{Code: usdcAsset.Code, Issuer: usdcAsset.Issuer},
+					Balance: "100.0000000",
+				},
+				{
+					Asset:   base.Asset{Code: nativeAsset.Code, Type: "native"},
+					Balance: "120.0000000",
+				},
+			},
+		}, nil).Once()
+	}
+
 	eurcIssuer := keypair.MustRandom().Address()
 	eurcAsset := data.Asset{Code: "EURC", Issuer: eurcIssuer}
 
@@ -155,19 +145,25 @@ func Test_StellarNativeDistributionAccount_GetBalance(t *testing.T) {
 		{
 			name:          "🔴returns error if asset is not found on account",
 			asset:         eurcAsset,
-			expectedError: fmt.Errorf("balance for asset %s:%s not found for distribution account", eurcAsset.Code, eurcAsset.Issuer),
+			expectedError: fmt.Errorf("balance for asset %s not found for distribution account", eurcAsset),
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			balance, err := svc.GetBalance(ctx, distAcc, tc.asset)
+			mHorizonClient := horizonclient.MockClient{}
+			svc := NewStellarNativeDistributionAccountService(&mHorizonClient)
+
+			mockSetup(&mHorizonClient)
+			balance, err := svc.GetBalance(distAcc, tc.asset)
 			if tc.expectedError != nil {
 				require.ErrorContains(t, err, tc.expectedError.Error())
 			} else {
 				require.NoError(t, err)
 				assert.Equal(t, tc.expectedBalance, balance)
 			}
+
+			mHorizonClient.AssertExpectations(t)
 		})
 	}
 }
@@ -177,7 +173,16 @@ func Test_NewDistributionAccountService(t *testing.T) {
 	svc := NewDistributionAccountService(&mHorizonClient)
 
 	t.Run("maps the correct distribution account type to the correct service implementation", func(t *testing.T) {
-		stellarNativeSvc := svc.strategies[schema.DistributionAccountTypeDBVaultStellar]
-		assert.Equal(t, stellarNativeSvc, svc.strategies[schema.DistributionAccountTypeEnvStellar])
+		targetSvc, ok := svc.strategies[schema.DistributionAccountTypeDBVaultStellar]
+		assert.True(t, ok)
+		assert.Equal(t, targetSvc, svc.strategies[schema.DistributionAccountTypeEnvStellar])
+
+		targetSvc, ok = svc.strategies[schema.DistributionAccountTypeEnvStellar]
+		assert.True(t, ok)
+		assert.Equal(t, targetSvc, svc.strategies[schema.DistributionAccountTypeEnvStellar])
+
+		// TODO: Change this when Circle distribution account service is added
+		_, ok = svc.strategies[schema.DistributionAccountTypeDBVaultCircle]
+		assert.False(t, ok)
 	})
 }

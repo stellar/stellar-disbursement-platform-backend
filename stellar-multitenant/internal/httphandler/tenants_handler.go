@@ -4,12 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
+
 	"github.com/go-chi/chi/v5"
 	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/support/http/httpdecode"
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/support/render/httpjson"
-	"net/http"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
@@ -261,7 +262,7 @@ func (t TenantsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		distAccBalances, err := t.DistributionAccountService.GetBalances(ctx, tntDistributionAcc)
+		distAccBalances, err := t.DistributionAccountService.GetBalances(tntDistributionAcc)
 		if err != nil {
 			httperror.InternalError(ctx, "Cannot get tenant distribution account balances", err, nil).Render(w)
 			return

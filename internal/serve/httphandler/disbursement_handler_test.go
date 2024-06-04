@@ -1436,10 +1436,8 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 			Return(distAcc, nil).
 			Once()
 
-		mockDistAccSvc.On("GetBalances", mock.Anything, distAcc).
-			Return(map[string]float64{
-				asset.Code + ":" + asset.Issuer: 10000.0,
-			}, nil).Once()
+		mockDistAccSvc.On("GetBalance", distAcc, mock.AnythingOfType("data.Asset")).
+			Return(10000.0, nil).Once()
 
 		mockEventProducer.
 			On("WriteMessages", mock.Anything, mock.AnythingOfType("[]events.Message")).
@@ -1470,10 +1468,8 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 			Return(distAcc, nil).
 			Once()
 
-		mockDistAccSvc.On("GetBalances", mock.Anything, distAcc).
-			Return(map[string]float64{
-				asset.Code + ":" + asset.Issuer: 10000.0,
-			}, nil).Once()
+		mockDistAccSvc.On("GetBalance", distAcc, mock.AnythingOfType("data.Asset")).
+			Return(10000.0, nil).Once()
 
 		mockEventProducer.
 			On("WriteMessages", mock.Anything, mock.AnythingOfType("[]events.Message")).

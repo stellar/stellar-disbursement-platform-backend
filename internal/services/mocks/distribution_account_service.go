@@ -3,8 +3,6 @@
 package mocks
 
 import (
-	context "context"
-
 	data "github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	mock "github.com/stretchr/testify/mock"
 
@@ -16,23 +14,23 @@ type MockDistributionAccountService struct {
 	mock.Mock
 }
 
-// GetBalance provides a mock function with given fields: ctx, account, asset
-func (_m *MockDistributionAccountService) GetBalance(ctx context.Context, account *schema.DistributionAccount, asset data.Asset) (float64, error) {
-	ret := _m.Called(ctx, account, asset)
+// GetBalance provides a mock function with given fields: account, asset
+func (_m *MockDistributionAccountService) GetBalance(account *schema.DistributionAccount, asset data.Asset) (float64, error) {
+	ret := _m.Called(account, asset)
 
 	var r0 float64
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, *schema.DistributionAccount, data.Asset) (float64, error)); ok {
-		return rf(ctx, account, asset)
+	if rf, ok := ret.Get(0).(func(*schema.DistributionAccount, data.Asset) (float64, error)); ok {
+		return rf(account, asset)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, *schema.DistributionAccount, data.Asset) float64); ok {
-		r0 = rf(ctx, account, asset)
+	if rf, ok := ret.Get(0).(func(*schema.DistributionAccount, data.Asset) float64); ok {
+		r0 = rf(account, asset)
 	} else {
 		r0 = ret.Get(0).(float64)
 	}
 
-	if rf, ok := ret.Get(1).(func(context.Context, *schema.DistributionAccount, data.Asset) error); ok {
-		r1 = rf(ctx, account, asset)
+	if rf, ok := ret.Get(1).(func(*schema.DistributionAccount, data.Asset) error); ok {
+		r1 = rf(account, asset)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -40,25 +38,25 @@ func (_m *MockDistributionAccountService) GetBalance(ctx context.Context, accoun
 	return r0, r1
 }
 
-// GetBalances provides a mock function with given fields: ctx, account
-func (_m *MockDistributionAccountService) GetBalances(ctx context.Context, account *schema.DistributionAccount) (map[data.Asset]float64, error) {
-	ret := _m.Called(ctx, account)
+// GetBalances provides a mock function with given fields: account
+func (_m *MockDistributionAccountService) GetBalances(account *schema.DistributionAccount) (map[data.Asset]float64, error) {
+	ret := _m.Called(account)
 
 	var r0 map[data.Asset]float64
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, *schema.DistributionAccount) (map[data.Asset]float64, error)); ok {
-		return rf(ctx, account)
+	if rf, ok := ret.Get(0).(func(*schema.DistributionAccount) (map[data.Asset]float64, error)); ok {
+		return rf(account)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, *schema.DistributionAccount) map[data.Asset]float64); ok {
-		r0 = rf(ctx, account)
+	if rf, ok := ret.Get(0).(func(*schema.DistributionAccount) map[data.Asset]float64); ok {
+		r0 = rf(account)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(map[data.Asset]float64)
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func(context.Context, *schema.DistributionAccount) error); ok {
-		r1 = rf(ctx, account)
+	if rf, ok := ret.Get(1).(func(*schema.DistributionAccount) error); ok {
+		r1 = rf(account)
 	} else {
 		r1 = ret.Error(1)
 	}

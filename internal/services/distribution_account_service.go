@@ -1,7 +1,6 @@
 package services
 
 import (
-	"context"
 	"fmt"
 	"strconv"
 	"strings"
@@ -9,13 +8,14 @@ import (
 	"github.com/stellar/go/clients/horizonclient"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/assets"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
 //go:generate mockery --name=DistributionAccountServiceInterface --case=underscore --structname=MockDistributionAccountService --filename=distribution_account_service.go
 type DistributionAccountServiceInterface interface {
-	GetBalances(ctx context.Context, account *schema.DistributionAccount) (map[data.Asset]float64, error)
-	GetBalance(ctx context.Context, account *schema.DistributionAccount, asset data.Asset) (float64, error)
+	GetBalances(account *schema.DistributionAccount) (map[data.Asset]float64, error)
+	GetBalance(account *schema.DistributionAccount, asset data.Asset) (float64, error)
 }
 
 type DistributionAccountService struct {
@@ -36,12 +36,12 @@ func NewDistributionAccountService(horizonClient horizonclient.ClientInterface) 
 	}
 }
 
-func (s *DistributionAccountService) GetBalance(ctx context.Context, account *schema.DistributionAccount, asset data.Asset) (float64, error) {
-	return s.strategies[account.Type].GetBalance(ctx, account, asset)
+func (s *DistributionAccountService) GetBalance(account *schema.DistributionAccount, asset data.Asset) (float64, error) {
+	return s.strategies[account.Type].GetBalance(account, asset)
 }
 
-func (s *DistributionAccountService) GetBalances(ctx context.Context, account *schema.DistributionAccount) (map[data.Asset]float64, error) {
-	return s.strategies[account.Type].GetBalances(ctx, account)
+func (s *DistributionAccountService) GetBalances(account *schema.DistributionAccount) (map[data.Asset]float64, error) {
+	return s.strategies[account.Type].GetBalances(account)
 }
 
 var _ DistributionAccountServiceInterface = new(DistributionAccountService)
@@ -58,41 +58,53 @@ func NewStellarNativeDistributionAccountService(horizonClient horizonclient.Clie
 	}
 }
 
-func (s *StellarNativeDistributionAccountService) GetBalances(_ context.Context, account *schema.DistributionAccount) (map[data.Asset]float64, error) {
+func (s *StellarNativeDistributionAccountService) GetBalances(account *schema.DistributionAccount) (map[data.Asset]float64, error) {
 	accountDetails, err := s.horizonClient.AccountDetail(horizonclient.AccountRequest{AccountID: account.Address})
 	if err != nil {
 		return nil, fmt.Errorf("getting details for account from Horizon: %w", err)
 	}
 
-	var balances = make(map[data.Asset]float64)
+	balances := make(map[data.Asset]float64)
+	fmt.Println(accountDetails)
 	for _, b := range accountDetails.Balances {
-		var asset data.Asset
+		var code, issuer string
 		if b.Asset.Type == "native" {
-			asset = data.Asset{Code: "XLM", Issuer: ""}
+			code = assets.XLMAssetCode
 		} else {
-			code := strings.ToUpper(b.Asset.Code)
-			issuer := strings.ToUpper(b.Asset.Issuer)
-			asset = data.Asset{Code: code, Issuer: issuer}
+			code = strings.ToUpper(b.Asset.Code)
+			issuer = strings.ToUpper(b.Asset.Issuer)
 		}
 
 		assetBal, parseAssetBalErr := strconv.ParseFloat(b.Balance, 64)
 		if parseAssetBalErr != nil {
-			return nil, parseAssetBalErr
+			return nil, fmt.Errorf("parsing balance to float: %w", parseAssetBalErr)
 		}
 
-		balances[asset] = assetBal
+		balances[data.Asset{
+			Code:   code,
+			Issuer: issuer,
+		}] = assetBal
 	}
 
 	return balances, nil
 }
 
-func (s *StellarNativeDistributionAccountService) GetBalance(ctx context.Context, account *schema.DistributionAccount, asset data.Asset) (float64, error) {
-	accBalances, err := s.GetBalances(ctx, account)
+func (s *StellarNativeDistributionAccountService) GetBalance(account *schema.DistributionAccount, asset data.Asset) (float64, error) {
+	accBalances, err := s.GetBalances(account)
 	if err != nil {
 		return 0, fmt.Errorf("getting balances for distribution account: %w", err)
 	}
 
-	if assetBalance, ok := accBalances[asset]; ok {
+	code := asset.Code
+	var issuer string
+	if !asset.IsNative() {
+		issuer = asset.Issuer
+	}
+
+	if assetBalance, ok := accBalances[data.Asset{
+		Code:   code,
+		Issuer: issuer,
+	}]; ok {
 		return assetBalance, nil
 	}
 

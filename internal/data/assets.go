@@ -46,14 +46,6 @@ func (a Asset) EqualsHorizonAsset(horizonAsset base.Asset) bool {
 	return strings.EqualFold(a.Code, horizonAsset.Code) && strings.EqualFold(a.Issuer, horizonAsset.Issuer)
 }
 
-func (a Asset) EqualsDistributionAccountMapID(mapID string) bool {
-	assetPair := strings.Split(mapID, ":")
-	if a.IsNative() {
-		return assetPair[0] == "XLM" && assetPair[1] == "native"
-	}
-	return a.Code == assetPair[0] && a.Issuer == assetPair[1]
-}
-
 type AssetModel struct {
 	dbConnectionPool db.DBConnectionPool
 }

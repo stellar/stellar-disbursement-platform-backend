@@ -578,7 +578,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 				log.Ctx(ctx).Fatalf("error creating distribution account service: %v", err)
 			}
 			serveOpts.DistributionAccountService = distributionAccountService
-			adminServeOpts.DistributionAccountSvc = distributionAccountService
+			adminServeOpts.DistributionAccountService = distributionAccountService
 
 			// Validate the Event Broker Type and Scheduler Jobs
 			if eventBrokerOptions.EventBrokerType == events.NoneEventBrokerType && !serveOpts.EnableScheduler {

@@ -242,7 +242,14 @@ func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, d
 			}
 
 			// 4. Check if there is enough balance from the distribution wallet for this disbursement along with any pending disbursements
-			availableBalance, err := s.distributionAccountService.GetBalance(ctx, distributionAccount, *disbursement.Asset)
+			availableBalance, err := s.distributionAccountService.GetBalance(distributionAccount, *disbursement.Asset)
+			if err != nil {
+				return nil, fmt.Errorf(
+					"getting balance for asset %s on distribution account %s: %w",
+					*disbursement.Asset,
+					distributionAccount.Address,
+					err)
+			}
 
 			disbursementAmount, err := strconv.ParseFloat(disbursement.TotalAmount, 64)
 			if err != nil {
