@@ -6,7 +6,7 @@ if [ ! -f ".env" ]; then
 
     # Run the Go script to generate keys for SEP-10 without funding
     echo "Generating SEP-10 signing keys..."
-    sep10_output=$($GO_EXECUTABLE -fundxlm=true)
+    sep10_output=$($GO_EXECUTABLE -fundxlm=false -fundusdc=false)
     sep10_public=$(echo "$sep10_output" | grep 'Public Key:' | awk '{print $3}')
     sep10_private=$(echo "$sep10_output" | grep 'Secret Key:' | awk '{print $3}')
 
