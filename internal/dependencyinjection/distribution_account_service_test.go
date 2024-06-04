@@ -26,7 +26,6 @@ func Test_dependencyinjection_NewDistributionAccountService(t *testing.T) {
 
 		gotDependencyDuplicate, err := NewDistributionAccountService(ctx, svcOpts)
 		require.NoError(t, err)
-
 		assert.Equal(t, &gotDependency, &gotDependencyDuplicate)
 	})
 
