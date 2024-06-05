@@ -206,7 +206,6 @@ func Test_CreateChannelAccountsOnChain(t *testing.T) {
 			}
 
 			sigService, err := signing.NewSignatureService(signing.SignatureServiceOptions{
-				DistributionSignerType:      signing.DistributionAccountEnvSignatureClientType,
 				NetworkPassphrase:           network.TestNetworkPassphrase,
 				DBConnectionPool:            dbConnectionPool,
 				DistributionPrivateKey:      hostAccountKP.Seed(),

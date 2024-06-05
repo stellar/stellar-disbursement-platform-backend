@@ -38,9 +38,6 @@ type SignatureServiceOptions struct {
 	// Shared:
 	NetworkPassphrase string
 
-	// DistributionAccount:
-	DistributionSignerType DistributionSignatureClientType
-
 	// DistributionAccountEnv:
 	DistributionPrivateKey string
 
