@@ -18,6 +18,13 @@ if [[ " $@ " =~ " --help " ]]; then
     exit 0
 fi
 
+if [ ! -f ./.env ]; then
+    echo ".env file is required but not found in the current directory."
+    echo "You can create one using scripts/make_env.sh"
+    echo "Refer to the README.md for more details."
+    exit 1
+fi
+
 # Check if curl is installed
 if ! command -v curl &> /dev/null
 then
