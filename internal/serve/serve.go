@@ -252,12 +252,13 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 				AuthManager:                 authManager,
 				MonitorService:              o.MonitorService,
 				DistributionAccountResolver: o.SubmitterEngine.DistributionAccountResolver,
-				DisbursementManagementService: services.NewDisbursementManagementService(
-					o.Models,
-					o.MtnDBConnectionPool,
-					authManager,
-					o.DistributionAccountService,
-					o.EventProducer),
+				DisbursementManagementService: &services.DisbursementManagementService{
+					Models:             o.Models,
+					AuthManager:        authManager,
+					HorizonClient:      o.SubmitterEngine.HorizonClient,
+					EventProducer:      o.EventProducer,
+					CrashTrackerClient: o.CrashTrackerClient,
+				},
 			}
 			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole)).
 				Post("/", handler.PostDisbursement)
@@ -282,7 +283,13 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 		})
 
 		r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole, data.BusinessUserRole)).Route("/payments", func(r chi.Router) {
-			paymentsHandler := httphandler.PaymentsHandler{Models: o.Models, DBConnectionPool: o.MtnDBConnectionPool, AuthManager: o.authManager, EventProducer: o.EventProducer}
+			paymentsHandler := httphandler.PaymentsHandler{
+				Models:             o.Models,
+				DBConnectionPool:   o.MtnDBConnectionPool,
+				AuthManager:        o.authManager,
+				EventProducer:      o.EventProducer,
+				CrashTrackerClient: o.CrashTrackerClient,
+			}
 			r.Get("/", paymentsHandler.GetPayments)
 			r.Get("/{id}", paymentsHandler.GetPayment)
 			r.Patch("/retry", paymentsHandler.RetryPayments)
@@ -304,7 +311,11 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole)).
 				Patch("/{id}", updateReceiverHandler.UpdateReceiver)
 
-			receiverWalletHandler := httphandler.ReceiverWalletsHandler{Models: o.Models, EventProducer: o.EventProducer}
+			receiverWalletHandler := httphandler.ReceiverWalletsHandler{
+				Models:             o.Models,
+				CrashTrackerClient: o.CrashTrackerClient,
+				EventProducer:      o.EventProducer,
+			}
 			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole)).
 				Patch("/wallets/{receiver_wallet_id}", receiverWalletHandler.RetryInvitation)
 		})
@@ -409,9 +420,11 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 	// SEP-24 and miscellaneous endpoints that are tenant-unaware
 	mux.Group(func(r chi.Router) {
 		r.Get("/health", httphandler.HealthHandler{
-			ReleaseID: o.GitCommit,
-			ServiceID: ServiceID,
-			Version:   o.Version,
+			ReleaseID:        o.GitCommit,
+			ServiceID:        ServiceID,
+			Version:          o.Version,
+			DBConnectionPool: o.AdminDBConnectionPool,
+			Producer:         o.EventProducer,
 		}.ServeHTTP)
 
 		// START SEP-24 endpoints
@@ -440,6 +453,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 				ReCAPTCHAValidator:       reCAPTCHAValidator,
 				NetworkPassphrase:        o.NetworkPassphrase,
 				EventProducer:            o.EventProducer,
+				CrashTrackerClient:       o.CrashTrackerClient,
 			}.VerifyReceiverRegistration)
 		})
 

@@ -309,7 +309,7 @@ func Test_DisbursementHandler_GetDisbursements_Errors(t *testing.T) {
 
 	handler := &DisbursementHandler{
 		Models:                        models,
-		DisbursementManagementService: services.NewDisbursementManagementService(models, dbConnectionPool, nil, nil, nil),
+		DisbursementManagementService: &services.DisbursementManagementService{Models: models},
 	}
 
 	ts := httptest.NewServer(http.HandlerFunc(handler.GetDisbursements))
@@ -415,9 +415,12 @@ func Test_DisbursementHandler_GetDisbursements_Success(t *testing.T) {
 
 	authManagerMock := &auth.AuthManagerMock{}
 	handler := &DisbursementHandler{
-		Models:                        models,
-		AuthManager:                   authManagerMock,
-		DisbursementManagementService: services.NewDisbursementManagementService(models, dbConnectionPool, authManagerMock, nil, nil),
+		Models:      models,
+		AuthManager: authManagerMock,
+		DisbursementManagementService: &services.DisbursementManagementService{
+			Models:      models,
+			AuthManager: authManagerMock,
+		},
 	}
 
 	ts := httptest.NewServer(http.HandlerFunc(handler.GetDisbursements))
@@ -985,9 +988,12 @@ func Test_DisbursementHandler_GetDisbursement(t *testing.T) {
 		Return(allUsers, nil)
 
 	handler := &DisbursementHandler{
-		Models:                        models,
-		AuthManager:                   authManagerMock,
-		DisbursementManagementService: services.NewDisbursementManagementService(models, dbConnectionPool, authManagerMock, nil, nil),
+		Models:      models,
+		AuthManager: authManagerMock,
+		DisbursementManagementService: &services.DisbursementManagementService{
+			Models:      models,
+			AuthManager: authManagerMock,
+		},
 	}
 
 	r := chi.NewRouter()
@@ -1078,7 +1084,7 @@ func Test_DisbursementHandler_GetDisbursementReceivers(t *testing.T) {
 
 	handler := &DisbursementHandler{
 		Models:                        models,
-		DisbursementManagementService: services.NewDisbursementManagementService(models, dbConnectionPool, nil, nil, nil),
+		DisbursementManagementService: &services.DisbursementManagementService{Models: models},
 	}
 
 	r := chi.NewRouter()
@@ -1264,10 +1270,15 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 	mockDistAccResolver := sigMocks.NewMockDistributionAccountResolver(t)
 
 	handler := &DisbursementHandler{
-		Models:                        models,
-		AuthManager:                   authManagerMock,
-		DistributionAccountResolver:   mockDistAccResolver,
-		DisbursementManagementService: services.NewDisbursementManagementService(models, dbConnectionPool, authManagerMock, mockDistAccSvc, &mockEventProducer),
+		Models:                      models,
+		AuthManager:                 authManagerMock,
+		DistributionAccountResolver: distAccResolver,
+		DisbursementManagementService: &services.DisbursementManagementService{
+			Models:        models,
+			AuthManager:   authManagerMock,
+			HorizonClient: hMock,
+			EventProducer: &mockEventProducer,
+		},
 	}
 
 	r := chi.NewRouter()

@@ -1,16 +1,23 @@
 # Quick Start Guide - First Disbursement
 
 ## Table of Contents
+- [Quick Start Guide - First Disbursement](#quick-start-guide---first-disbursement)
+  - [Table of Contents](#table-of-contents)
   - [Introduction](#introduction)
   - [Prerequisites](#prerequisites)
+    - [Docker](#docker)
+    - [Stellar Accounts and .env File](#stellar-accounts-and-env-file)
   - [Setup](#setup)
     - [Build Docker Containers](#build-docker-containers)
     - [New Tenant Provisioning Process](#new-tenant-provisioning-process)
-    - [Setup Owner User Password for each tenant](#setup-owner-user-password-for-each-tenant)
+    - [Login Information](#login-information)
   - [Disbursement](#disbursement)
     - [Create First Disbursement](#create-first-disbursement)
     - [Deposit Money](#deposit-money)
   - [Troubleshooting](#troubleshooting)
+      - [Sample Tenant Management Postman collection](#sample-tenant-management-postman-collection)
+      - [Distribution account out of funds](#distribution-account-out-of-funds)
+      - [Remote Debugging](#remote-debugging)
 
 ## Introduction
 
@@ -22,40 +29,54 @@ Follow these instructions to get started with the Stellar Disbursement Platform 
 
 Make sure you have Docker installed on your system. If not, you can download it from [here](https://www.docker.com/products/docker-desktop).
 
-### Stellar accounts 
-We will need to create and configure two Stellar accounts to be able to use the SDP. 
-* A Distribution account that will be used for sending funds to receivers. [Create and Fund a Distribution Account](https://developers.stellar.org/docs/stellar-disbursement-platform/getting-started#create-and-fund-a-distribution-account)
-* A SEP-10 account that will be used for authentication. It can be created the same way as the distribution account but it doesn't need to be funded.
+### Stellar Accounts and .env File
 
-The public and private key of these two accounts will be used to configure the SDP in the next step.
+You need to create and configure two Stellar accounts to use the SDP. You can either create the accounts manually or use the provided script to automate the process.
+
+**Option 1: Manually Create and Configure Accounts**
+
+1. Create and fund a Distribution account that will be used for sending funds to receivers. Follow the instructions [here](https://developers.stellar.org/docs/stellar-disbursement-platform/getting-started#create-and-fund-a-distribution-account).
+2. Create a SEP-10 account for authentication. It can be created the same way as the distribution account but it doesn't need to be funded.
+3. Create a `.env` file in the `dev` directory by copying the [env.example](./.env.example) file:
+    ```sh
+    cp .env.example .env
+    ```
+4. Update the `.env` file with the public and private keys of the two accounts created in the previous steps.
+
+**Option 2: Use make_env.sh script to create accounts and .env file**
+
+You can use the make_env.sh script to automatically create a stellar accounts for SEP-10 authentication and a funded (XLM and USDC) Stellar distribution account.  To run the make_env.sh script:
+
+1. Use [make_env.sh](./scripts/make_env.sh) script to create stellar accounts and .env file automatically:
+    1. Navigate to the `dev` directory from the terminal:
+    ```sh
+    cd dev
+    ```
+    2. Run the `make_env.sh` in the `scripts` folder.
+    ```sh
+    scripts/make_env.sh
+    ```
+    You should see output as follows:
+    ```
+    ❯ scripts/make_env.sh
+    ====> 👀 Checking if .env environment file exists in <REPO_ROOT>/stellar-disbursement-platform-backend/dev
+    .env file does not exist. Creating
+    Generating SEP-10 signing keys...
+    Generating distribution keys with funding...
+    .env file created successfully 
+    ====> ✅ Finished .env setup
+    ```
 
 ## Setup
 
 ### Build Docker Containers
 
-1. Navigate to the `dev` directory from the terminal:
-```sh
-cd dev
-```
+A main.sh wrapper script has been included to help you bring up a local environment. The script stops and removes existing Docker containers, optionally deletes persistent volumes, and then uses Docker Compose to bring up new containers for the Stellar Disbursement Platform (SDP). This includes the SDP, Anchor Platform (for user registration), PostgreSQL database, Kafka for event handling, and a local demo wallet instance. It then initializes tenants if they don't exist and adds test users, setting up the local environment for the SEP-24 deposit flow.
 
-2. Create a `.env` file in the `dev` directory by copying the `.env.example` file:
-```sh
-cp .env.example .env
-```
-
-3. Update the `.env` file with the public and private keys of the two accounts created in the previous step.
-
-4. Execute the following command to create all the necessary Docker containers needed to run SDP as well as provision sample tenants:
+1. Execute the following command to create all the necessary Docker containers needed to run SDP as well as provision sample tenants:
 ```sh
 ./main.sh
 ```
-
-> [!TIP]  
-> If you wish to start the sdp containers with monitoring services, you can use the docker-compose-monitoring.yml file 
-> 
-> `docker-compose -f docker-compose.yml -f docker-compose-monitoring.yml up`
-
-
 This will spin up the following services:
 
 - `sdp_v2_database`: The main SDP and TSS database.
@@ -73,10 +94,17 @@ The following are optional monitoring services that can be started through `dock
 - `conduktor-monitoring`: Conduktor Monitoring service integrated into the Conduktor Platform. 
 - `conduktor-platform`: Provides solutions for Kafka management, testing, monitoring, data quality, security, and data governance.
 
+
+> [!TIP]  
+> If you wish to start the sdp containers with monitoring services, you can use the docker-compose-monitoring.yml file 
+> 
+> `docker-compose -f docker-compose.yml -f docker-compose-monitoring.yml up`
+
+
 ### New Tenant Provisioning Process
 
 When you ran `main.sh` file, you've already created new tenants: `tenants=("redcorp" "bluecorp")`. 
-To add more tenants, simply append them separated by spaces to that variable like so: `tenants=("redcorp" "bluecorp" "greencorp")` and run `main.sh` again.
+To add more tenants, simply append them separated by spaces to that variable like so: `tenants=("redcorp" "bluecorp")` and run `main.sh` again.
 
 Be sure that the added tenant hosts are included in the host configuration file.
 To check it, you can run the command `cat /etc/hosts`.
@@ -84,15 +112,26 @@ To include them, you can run command `sudo nano /etc/hosts` and insert the lines
 ```
 127.0.0.1       bluecorp.stellar.local
 127.0.0.1       redcorp.stellar.local
+127.0.0.1       pinkcorp.stellar.local
 ```
 
-### Setup Owner User Password for each tenant
+### Login Information
 
-Go through the forgot password flow to be able to login as an owner user.
+Owner accounts and emails have been set up as follows:
 
-Go to Forgot Password page on `http://${tenant}.stellar.local:3000/forgot-password` and enter the tenant and owner email `owner@${tenant}.org`.
-
-A token will be generated, and it's possible to check it on `sdp-api` logs. This token will be needed to Reset Password on `http://${tenant}.stellar.local:3000/reset-password`.
+```
+🎉🎉🎉🎉 SUCCESS! 🎉🎉🎉🎉  
+Login URLs for each tenant:
+🔗Tenant `redcorp`: [http://redcorp.stellar.local:3000](http://redcorp.stellar.local:3000)
+  username: `owner@redcorp.org`
+  password: `Password123!`
+🔗Tenant `bluecorp`: [http://bluecorp.stellar.local:3000](http://bluecorp.stellar.local:3000)
+  username: `owner@bluecorp.org`
+  password: `Password123!`
+🔗Tenant `pinkcorp`: [http://pinkcorp.stellar.local:3000](http://pinkcorp.stellar.local:3000)
+  username: `owner@pinkcorp.org`
+  password: `Password123!`
+```
 
 ## Disbursement
 
@@ -105,7 +144,7 @@ Navigate to the frontend service by opening a browser and going to [http://bluec
 
 - Click `New Disbursement+` on the Dashboard screen.
 - Use `Demo Wallet` as your wallet and choose a verification method.
-- Upload a disbursement file. A sample file is available `./dev/sample/sample-disbursement.csv`. Make sure to update the invalid phone number before using it.
+- Upload a disbursement file. A sample file is available [sample-disbursement.csv](./sample/sample-disbursement.csv). Make sure to update the invalid phone number before using it.
 - Finally, confirm the disbursement.
 
 ### Deposit Money
@@ -125,17 +164,29 @@ To deposit money into your account:
 
 ## Troubleshooting
 
-### Distribution account out of funds
+#### Sample Tenant Management Postman collection
 
-Payments will start failing if the distribution account runs out of funds. To fix this, you can either write a script that funds the distribution account or use the tools
-available to add more funds to the distribution account by following these steps:
+A sample [Postman collection](./sample/SDP.postman_collection.json) is available in the `sample` directory. It contains endpoints for managing tenants, authentication, and other operations. You can import `SDP.postman_collection.json` into Postman to easily interact with the API.
 
+#### Distribution account out of funds
+
+Making payments requires transaction fees that are paid in XLM from the distribution account.  Payments will start failing if the distribution account does not have enough XLM to pay for these fees. To check this:
 - Find the distribution account public key in `dev/docker-compose.yml` under the variable `DISTRIBUTION_PUBLIC_KEY`
-- Access [https://horizon-testnet.stellar.org/accounts/:accountId](https://horizon-testnet.stellar.org/accounts/GARGKDIDH7WMKV5WWPK4BH4CKEQIZGWUCA4EUXCY5VICHTHLEBXVNVMW) in your browser and check the balance.
-- If the balance is indeed low, you can add more funds by creating a new account and sending funds to the distribution account.
+- Access [https://horizon-testnet.stellar.org/accounts/:accountId](https://horizon-testnet.stellar.org/accounts/GARGKDIDH7WMKV5WWPK4BH4CKEQIZGWUCA4EUXCY5VICHTHLEBXVNVMW) in your browser and check the balance.  
+- You could also check the balance using [demo wallet](https://demo-wallet.stellar.org/account?secretKey=YOUR_SECRET_KEY)
+- If the balance is indeed low, here are some of the options to add additional XLM to the distribution account:
+
+-- from the `dev` directory run the [create_and_fund.go](./scripts/create_and_fund.go) script and specify an existing account using the `--secret` option to specify the account secret key and the --fundxlm` option to add additional xlm via friendbot. Note: you will need to install golang.  example:
+   ```sh
+   ./go run scripts/create_and_fund.go --secret SECRET_KEY --fundxlm
+   ```
+-- Create a new funded account via Demo Wallet website and send funds to the Distribution account.
   - Access [https://demo-wallet.stellar.org/](https://demo-wallet.stellar.org/) in your browser.
   - Click on `Generate Keypair for new account` to create a new testnet account. Your account comes with 10,000 XLM.
   - Click on `Send` and enter the distribution account public key and the amount you want to send.
   - Using Freighter or Stellar Laboratory, swap the XLM for USDC if you wish to test with USDC.
+  - Just use the newly created account (with 10,000 XLM) as the distribution account by updating the `DISTRIBUTION_PUBLIC_KEY` variable in `dev/docker-compose.yml` and restarting the `sdp-api` container.
+  
+#### Remote Debugging
 
-You can also just use the newly created account as the distribution account by updating the `DISTRIBUTION_PUBLIC_KEY` variable in `dev/docker-compose.yml` and restarting the `sdp-api` container.
+A sample [launch.json](./sample//launch.json) is provided for remote debugging with vscode. 
