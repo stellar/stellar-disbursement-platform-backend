@@ -587,7 +587,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 				if kafkaErr != nil {
 					log.Ctx(ctx).Fatalf("error creating Kafka Producer: %v", kafkaErr)
 				}
-				defer kafkaProducer.Close()
+				defer kafkaProducer.Close(ctx)
 				serveOpts.EventProducer = kafkaProducer
 
 				kafkaErr = serverService.SetupConsumers(ctx, SetupConsumersOptions{

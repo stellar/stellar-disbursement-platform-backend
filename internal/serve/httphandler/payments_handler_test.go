@@ -17,6 +17,7 @@ import (
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
@@ -27,6 +28,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
 
@@ -611,16 +613,6 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
-	authManagerMock := &auth.AuthManagerMock{}
-	eventProducerMock := events.MockProducer{}
-
-	handler := PaymentsHandler{
-		Models:           models,
-		DBConnectionPool: dbConnectionPool,
-		AuthManager:      authManagerMock,
-		EventProducer:    &eventProducerMock,
-	}
-
 	tnt := tenant.Tenant{ID: "tenant-id"}
 
 	ctx := context.Background()
@@ -650,6 +642,12 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 	})
 
 	t.Run("returns Unauthorized when no token in the context", func(t *testing.T) {
+		// Prepare the handler
+		handler := PaymentsHandler{
+			Models:           models,
+			DBConnectionPool: dbConnectionPool,
+		}
+
 		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, "/retry", strings.NewReader("{}"))
 		require.NoError(t, err)
 
@@ -672,10 +670,17 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, "/retry", strings.NewReader("{}"))
 		require.NoError(t, err)
 
+		// Prepare the handler and its mocks
+		authManagerMock := auth.NewAuthManagerMock(t)
 		authManagerMock.
 			On("GetUser", ctx, "mytoken").
 			Return(nil, errors.New("unexpected error")).
 			Once()
+		handler := PaymentsHandler{
+			Models:           models,
+			DBConnectionPool: dbConnectionPool,
+			AuthManager:      authManagerMock,
+		}
 
 		rw := httptest.NewRecorder()
 		http.HandlerFunc(handler.RetryPayments).ServeHTTP(rw, req)
@@ -697,12 +702,17 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, "/retry", payload)
 		require.NoError(t, err)
 
+		// Prepare the handler and its mocks
+		authManagerMock := auth.NewAuthManagerMock(t)
 		authManagerMock.
 			On("GetUser", ctx, "mytoken").
-			Return(&auth.User{
-				Email: "email@test.com",
-			}, nil).
+			Return(&auth.User{Email: "email@test.com"}, nil).
 			Once()
+		handler := PaymentsHandler{
+			Models:           models,
+			DBConnectionPool: dbConnectionPool,
+			AuthManager:      authManagerMock,
+		}
 
 		rw := httptest.NewRecorder()
 		http.HandlerFunc(handler.RetryPayments).ServeHTTP(rw, req)
@@ -724,12 +734,17 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, "/retry", payload)
 		require.NoError(t, err)
 
+		// Prepare the handler and its mocks
+		authManagerMock := auth.NewAuthManagerMock(t)
 		authManagerMock.
 			On("GetUser", ctx, "mytoken").
-			Return(&auth.User{
-				Email: "email@test.com",
-			}, nil).
+			Return(&auth.User{Email: "email@test.com"}, nil).
 			Once()
+		handler := PaymentsHandler{
+			Models:           models,
+			DBConnectionPool: dbConnectionPool,
+			AuthManager:      authManagerMock,
+		}
 
 		rw := httptest.NewRecorder()
 		http.HandlerFunc(handler.RetryPayments).ServeHTTP(rw, req)
@@ -791,23 +806,23 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 
 		payload := strings.NewReader(fmt.Sprintf(`
 			{
-				"payment_ids": [
-					%q,
-					%q,
-					%q,
-					%q
-				]
+				"payment_ids": [%q, %q, %q, %q]
 			}
 		`, payment1.ID, payment2.ID, payment3.ID, payment4.ID))
 		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, "/retry", payload)
 		require.NoError(t, err)
 
+		// Prepare the handler and its mocks
+		authManagerMock := auth.NewAuthManagerMock(t)
 		authManagerMock.
 			On("GetUser", ctx, "mytoken").
-			Return(&auth.User{
-				Email: "email@test.com",
-			}, nil).
+			Return(&auth.User{Email: "email@test.com"}, nil).
 			Once()
+		handler := PaymentsHandler{
+			Models:           models,
+			DBConnectionPool: dbConnectionPool,
+			AuthManager:      authManagerMock,
+		}
 
 		rw := httptest.NewRecorder()
 		http.HandlerFunc(handler.RetryPayments).ServeHTTP(rw, req)
@@ -881,22 +896,19 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 
 		payload := strings.NewReader(fmt.Sprintf(`
 			{
-				"payment_ids": [
-					%q,
-					%q
-				]
+				"payment_ids": [%q, %q]
 			}
 		`, payment1.ID, payment2.ID))
 		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, "/retry", payload)
 		require.NoError(t, err)
 
+		// Prepare the handler and its mocks
+		authManagerMock := auth.NewAuthManagerMock(t)
 		authManagerMock.
 			On("GetUser", ctx, "mytoken").
-			Return(&auth.User{
-				Email: "email@test.com",
-			}, nil).
+			Return(&auth.User{Email: "email@test.com"}, nil).
 			Once()
-
+		eventProducerMock := events.NewMockProducer(t)
 		eventProducerMock.
 			On("WriteMessages", ctx, []events.Message{
 				{
@@ -907,18 +919,20 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 					Data: schemas.EventPaymentsReadyToPayData{
 						TenantID: tnt.ID,
 						Payments: []schemas.PaymentReadyToPay{
-							{
-								ID: payment1.ID,
-							},
-							{
-								ID: payment2.ID,
-							},
+							{ID: payment1.ID},
+							{ID: payment2.ID},
 						},
 					},
 				},
 			}).
 			Return(nil).
 			Once()
+		handler := PaymentsHandler{
+			Models:           models,
+			DBConnectionPool: dbConnectionPool,
+			AuthManager:      authManagerMock,
+			EventProducer:    eventProducerMock,
+		}
 
 		rw := httptest.NewRecorder()
 		http.HandlerFunc(handler.RetryPayments).ServeHTTP(rw, req)
@@ -982,21 +996,23 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 
 		payload := strings.NewReader(fmt.Sprintf(`
 			{
-				"payment_ids": [
-					%q,
-					%q
-				]
+				"payment_ids": [%q, %q]
 			}
 		`, payment1.ID, payment2.ID))
 		req, err := http.NewRequestWithContext(ctxWithoutTenant, http.MethodPatch, "/retry", payload)
 		require.NoError(t, err)
 
+		// Prepare the handler and its mocks
+		authManagerMock := auth.NewAuthManagerMock(t)
 		authManagerMock.
 			On("GetUser", ctxWithoutTenant, "mytoken").
-			Return(&auth.User{
-				Email: "email@test.com",
-			}, nil).
+			Return(&auth.User{Email: "email@test.com"}, nil).
 			Once()
+		handler := PaymentsHandler{
+			Models:           models,
+			DBConnectionPool: dbConnectionPool,
+			AuthManager:      authManagerMock,
+		}
 
 		rw := httptest.NewRecorder()
 		http.HandlerFunc(handler.RetryPayments).ServeHTTP(rw, req)
@@ -1011,7 +1027,7 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 		assert.JSONEq(t, `{"error": "An internal error occurred while processing this request."}`, string(respBody))
 	})
 
-	t.Run("returns error when EventProducer fails writing a message", func(t *testing.T) {
+	t.Run("logs to crashTracker when EventProducer fails to write a message", func(t *testing.T) {
 		data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
 
 		payment1 := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
@@ -1028,21 +1044,19 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 
 		payload := strings.NewReader(fmt.Sprintf(`
 			{
-				"payment_ids": [
-					%q
-				]
+				"payment_ids": [%q]
 			}
 		`, payment1.ID))
 		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, "/retry", payload)
 		require.NoError(t, err)
 
+		// Prepare the handler and its mocks
+		authManagerMock := auth.NewAuthManagerMock(t)
 		authManagerMock.
 			On("GetUser", ctx, "mytoken").
-			Return(&auth.User{
-				Email: "email@test.com",
-			}, nil).
+			Return(&auth.User{Email: "email@test.com"}, nil).
 			Once()
-
+		eventProducerMock := events.NewMockProducer(t)
 		eventProducerMock.
 			On("WriteMessages", ctx, []events.Message{
 				{
@@ -1053,15 +1067,24 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 					Data: schemas.EventPaymentsReadyToPayData{
 						TenantID: tnt.ID,
 						Payments: []schemas.PaymentReadyToPay{
-							{
-								ID: payment1.ID,
-							},
+							{ID: payment1.ID},
 						},
 					},
 				},
 			}).
 			Return(errors.New("unexpected error")).
 			Once()
+		crashTrackerMock := &crashtracker.MockCrashTrackerClient{}
+		crashTrackerMock.
+			On("LogAndReportErrors", mock.Anything, mock.Anything, "writing retry payment message on the event producer").
+			Once()
+		handler := PaymentsHandler{
+			Models:             models,
+			DBConnectionPool:   dbConnectionPool,
+			AuthManager:        authManagerMock,
+			EventProducer:      eventProducerMock,
+			CrashTrackerClient: crashTrackerMock,
+		}
 
 		rw := httptest.NewRecorder()
 		http.HandlerFunc(handler.RetryPayments).ServeHTTP(rw, req)
@@ -1072,8 +1095,8 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 		respBody, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
-		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
-		assert.JSONEq(t, `{"error":"An internal error occurred while processing this request."}`, string(respBody))
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.JSONEq(t, `{"message":"Payments retried successfully"}`, string(respBody))
 	})
 
 	t.Run("logs when couldn't write message because EventProducer is nil", func(t *testing.T) {
@@ -1103,23 +1126,25 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 
 		payload := strings.NewReader(fmt.Sprintf(`
 			{
-				"payment_ids": [
-					%q,
-					%q
-				]
+				"payment_ids": [%q, %q]
 			}
 		`, payment1.ID, payment2.ID))
 		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, "/retry", payload)
 		require.NoError(t, err)
 
+		// Prepare the handler and its mocks
+		authManagerMock := auth.NewAuthManagerMock(t)
 		authManagerMock.
 			On("GetUser", ctx, "mytoken").
-			Return(&auth.User{
-				Email: "email@test.com",
-			}, nil).
+			Return(&auth.User{Email: "email@test.com"}, nil).
 			Once()
+		handler := PaymentsHandler{
+			Models:           models,
+			DBConnectionPool: dbConnectionPool,
+			AuthManager:      authManagerMock,
+		}
 
-		getEntries := log.DefaultLogger.StartTest(log.ErrorLevel)
+		getEntries := log.DefaultLogger.StartTest(log.DebugLevel)
 
 		handler.EventProducer = nil
 		rw := httptest.NewRecorder()
@@ -1142,23 +1167,16 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 			Data: schemas.EventPaymentsReadyToPayData{
 				TenantID: tnt.ID,
 				Payments: []schemas.PaymentReadyToPay{
-					{
-						ID: payment1.ID,
-					},
-					{
-						ID: payment2.ID,
-					},
+					{ID: payment1.ID},
+					{ID: payment2.ID},
 				},
 			},
 		}
 
 		entries := getEntries()
 		require.Len(t, entries, 1)
-		assert.Contains(t, fmt.Sprintf("event producer is nil, could not publish message %s", msg), entries[0].Message)
+		assert.Contains(t, fmt.Sprintf("event producer is nil, could not publish messages %+v", []events.Message{msg}), entries[0].Message)
 	})
-
-	authManagerMock.AssertExpectations(t)
-	eventProducerMock.AssertExpectations(t)
 }
 
 func Test_PaymentsHandler_getPaymentsWithCount(t *testing.T) {

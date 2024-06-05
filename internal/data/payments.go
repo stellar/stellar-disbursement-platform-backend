@@ -491,7 +491,7 @@ func (p *PaymentModel) GetReadyByDisbursementID(ctx context.Context, sqlExec db.
 }
 
 func (p *PaymentModel) GetReadyByID(ctx context.Context, sqlExec db.SQLExecuter, paymentIDs ...string) ([]*Payment, error) {
-	query := fmt.Sprintf(getReadyPaymentsBaseQuery, "AND p.id = ANY($4)")
+	query := fmt.Sprintf(getReadyPaymentsBaseQuery, "AND p.id = ANY($4) ORDER BY p.updated_at ASC")
 
 	var payments []*Payment
 	args := append(getReadyPaymentsBaseArgs, pq.Array(paymentIDs))
