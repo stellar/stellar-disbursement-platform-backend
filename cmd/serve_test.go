@@ -287,6 +287,7 @@ func Test_serve(t *testing.T) {
 	t.Setenv("DISABLE_MFA", fmt.Sprintf("%t", serveOpts.DisableMFA))
 	t.Setenv("DISABLE_RECAPTCHA", fmt.Sprintf("%t", serveOpts.DisableMFA))
 	t.Setenv("DISTRIBUTION_SEED", distributionAccPrivKey)
+	t.Setenv("DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE", distributionAccPrivKey)
 	t.Setenv("BASE_URL", serveOpts.BaseURL)
 	t.Setenv("SDP_UI_BASE_URL", serveTenantOpts.SDPUIBaseURL)
 	t.Setenv("RECAPTCHA_SITE_KEY", serveOpts.ReCAPTCHASiteKey)
