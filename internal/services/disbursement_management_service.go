@@ -232,8 +232,9 @@ func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, d
 			availableBalance, err := s.DistributionAccountService.GetBalance(distributionAccount, *disbursement.Asset)
 			if err != nil {
 				return nil, fmt.Errorf(
-					"getting balance for asset %s on distribution account %s: %w",
-					*disbursement.Asset,
+					"getting balance for asset (%s,%s) on distribution account %s: %w",
+					disbursement.Asset.Code,
+					disbursement.Asset.Issuer,
 					distributionAccount.Address,
 					err)
 			}

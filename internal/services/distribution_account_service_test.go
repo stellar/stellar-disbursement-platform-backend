@@ -184,7 +184,7 @@ func Test_NewDistributionAccountService(t *testing.T) {
 		assert.True(t, ok)
 		assert.Equal(t, targetSvc, svc.strategies[schema.DistributionAccountTypeEnvStellar])
 
-		// TODO: Change this when Circle distribution account service is added
+		// TODO [SDP-1232]: Change this when Circle distribution account service is added
 		_, ok = svc.strategies[schema.DistributionAccountTypeDBVaultCircle]
 		assert.False(t, ok)
 	})

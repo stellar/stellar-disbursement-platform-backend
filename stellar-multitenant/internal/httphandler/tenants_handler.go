@@ -18,7 +18,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	coreSvc "github.com/stellar/stellar-disbursement-platform-backend/internal/services"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/assets"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/internal/provisioning"
@@ -270,7 +269,7 @@ func (t TenantsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		}
 
 		for asset, assetBalance := range distAccBalances {
-			if asset.Code == assets.XLMAssetCode {
+			if asset.IsNative() {
 				if assetBalance > MaxNativeAssetBalanceForDeletion {
 					errMsg := fmt.Sprintf("Tenant distribution account must have a balance of less than %d XLM to be eligible for deletion", MaxNativeAssetBalanceForDeletion)
 					httperror.BadRequest(errMsg, nil, nil).Render(w)
@@ -278,7 +277,7 @@ func (t TenantsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 				}
 			} else {
 				if assetBalance != 0 {
-					errMsg := fmt.Sprintf("Tenant distribution account must have a zero balance to be eligible for deletion. Current balance for %f: %s:%s", assetBalance, asset.Code, asset.Issuer)
+					errMsg := fmt.Sprintf("Tenant distribution account must have a zero balance to be eligible for deletion. Current balance for (%s, %s)=%f", asset.Code, asset.Issuer, assetBalance)
 					httperror.BadRequest(errMsg, nil, nil).Render(w)
 					return
 				}
