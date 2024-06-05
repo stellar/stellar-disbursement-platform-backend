@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"go/types"
-	
+
 	"github.com/spf13/cobra"
 	"github.com/stellar/go/support/config"
 	"github.com/stellar/go/support/log"

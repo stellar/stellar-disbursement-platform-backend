@@ -22,11 +22,11 @@ import (
 
 // DisbursementManagementService is a service for managing disbursements.
 type DisbursementManagementService struct {
-	Models             *data.Models
-	EventProducer      events.Producer
-	AuthManager        auth.AuthManager
-	CrashTrackerClient crashtracker.CrashTrackerClient
-  DistributionAccountService DistributionAccountServiceInterface
+	Models                     *data.Models
+	EventProducer              events.Producer
+	AuthManager                auth.AuthManager
+	CrashTrackerClient         crashtracker.CrashTrackerClient
+	DistributionAccountService DistributionAccountServiceInterface
 }
 
 type UserReference struct {

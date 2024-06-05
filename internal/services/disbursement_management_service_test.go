@@ -209,15 +209,8 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 
 	// Create fixtures: asset, wallet, country
 	asset := data.GetAssetFixture(t, ctx, dbConnectionPool, data.FixtureAssetUSDC)
-	hMock := &horizonclient.MockClient{}
-	distAccSvcOpts := DistributionAccountServiceOptions{
-		HorizonClient: hMock,
-	}
-	distAccSvc := NewDistributionAccountService(distAccSvcOpts)
-	distributionAccPubKey := "ABC"
+	distributionAccPubKey := "GAAHIL6ZW4QFNLCKALZ3YOIWPP4TXQ7B7J5IU7RLNVGQAV6GFDZHLDTA"
 	distributionAcc := schema.NewDefaultStellarDistributionAccount(distributionAccPubKey)
-
-	service := NewDisbursementManagementService(models, models.DBConnectionPool, nil, distAccSvc, &mockEventProducer)
 
 	// create fixtures
 	wallet := data.CreateDefaultWalletFixture(t, ctx, dbConnectionPool)
@@ -283,22 +276,7 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 
 	payments := []*data.Payment{payment1, payment2, payment3, payment4}
 
-	mockDisbursementBalance := func() *mock.Call {
-		return hMock.On(
-			"AccountDetail", horizonclient.AccountRequest{AccountID: distributionAccPubKey},
-		).Return(horizon.Account{
-			Balances: []horizon.Balance{
-				{
-					Balance: "10000000",
-					Asset: base.Asset{
-						Code:   asset.Code,
-						Issuer: asset.Issuer,
-					},
-				},
-			},
-		}, nil)
-	distributionPubKey := "GAAHIL6ZW4QFNLCKALZ3YOIWPP4TXQ7B7J5IU7RLNVGQAV6GFDZHLDTA"
-	hAccRequest := horizonclient.AccountRequest{AccountID: distributionPubKey}
+	hAccRequest := horizonclient.AccountRequest{AccountID: distributionAccPubKey}
 	hAccResponse := horizon.Account{
 		Balances: []horizon.Balance{
 			{
@@ -314,7 +292,7 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 	t.Run("returns an error if the disbursement doesn't exist", func(t *testing.T) {
 		service := DisbursementManagementService{Models: models}
 
-		err = service.StartDisbursement(context.Background(), "not-found-id", nil, distributionPubKey)
+		err = service.StartDisbursement(context.Background(), "not-found-id", nil, distributionAcc)
 		require.ErrorIs(t, err, ErrDisbursementNotFound)
 	})
 
@@ -327,11 +305,10 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 		require.ErrorIs(t, err, ErrDisbursementWalletDisabled)
 	})
 
-
 	t.Run("returns an error if the disbursement status is not READY", func(t *testing.T) {
 		service := DisbursementManagementService{Models: models}
 
-		err = service.StartDisbursement(context.Background(), draftDisbursement.ID, nil, distributionPubKey)
+		err = service.StartDisbursement(context.Background(), draftDisbursement.ID, nil, distributionAcc)
 		require.ErrorIs(t, err, ErrDisbursementNotReadyToStart)
 	})
 
@@ -389,8 +366,6 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 			},
 		}
 
-		mockDisbursementBalance().Once()
-
 		disbursement := data.CreateDisbursementFixture(t, context.Background(), dbConnectionPool, models.Disbursements, &data.Disbursement{
 			Name:          "disbursement #2",
 			Status:        data.ReadyDisbursementStatus,
@@ -444,14 +419,20 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 			Return(nil).
 			Once()
 
+		// Setup dependent services
+		distAccSvcOpts := DistributionAccountServiceOptions{
+			HorizonClient: hMock,
+		}
+		distAccSvc := NewDistributionAccountService(distAccSvcOpts)
+
 		// Create service
 		service := &DisbursementManagementService{
-			Models:        models,
-			HorizonClient: hMock,
-			EventProducer: mockEventProducer,
+			Models:                     models,
+			EventProducer:              mockEventProducer,
+			DistributionAccountService: distAccSvc,
 		}
 
-		err = service.StartDisbursement(ctx, disbursement.ID, user, distributionPubKey)
+		err = service.StartDisbursement(ctx, disbursement.ID, user, distributionAcc)
 		require.NoError(t, err)
 
 		// check disbursement status
@@ -507,17 +488,21 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 			Return(nil).
 			Once()
 
+		// Setup dependent services
+		distAccSvcOpts := DistributionAccountServiceOptions{
+			HorizonClient: hMock,
+		}
+		distAccSvc := NewDistributionAccountService(distAccSvcOpts)
+
 		// Create service
 		service := &DisbursementManagementService{
-			Models:        models,
-			HorizonClient: hMock,
-			EventProducer: mockEventProducer,
+			Models:                     models,
+			EventProducer:              mockEventProducer,
+			DistributionAccountService: distAccSvc,
 		}
 
-		mockDisbursementBalance().Once()
-
 		user := &auth.User{ID: "user-id", Email: "email@email.com"}
-		err = service.StartDisbursement(ctx, readyDisbursement.ID, user, distributionPubKey)
+		err = service.StartDisbursement(ctx, readyDisbursement.ID, user, distributionAcc)
 		require.NoError(t, err)
 
 		// check disbursement status
@@ -552,20 +537,6 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 
 	t.Run("returns an error if the distribution account has insuficcient balance", func(t *testing.T) {
 		usdt := data.CreateAssetFixture(t, ctx, dbConnectionPool, "USDT", "GBVHJTRLQRMIHRYTXZQOPVYCVVH7IRJN3DOFT7VC6U75CBWWBVDTWURG")
-
-		hMock.On(
-			"AccountDetail", horizonclient.AccountRequest{AccountID: distributionAcc.Address},
-		).Return(horizon.Account{
-			Balances: []horizon.Balance{
-				{
-					Balance: "11111",
-					Asset: base.Asset{
-						Code:   usdt.Code,
-						Issuer: usdt.Issuer,
-					},
-				},
-			},
-		}, nil).Once()
 
 		disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
 			Name:    "disbursement - balance insufficient",
@@ -632,13 +603,19 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 			},
 		}, nil).Once()
 
-		// Create service
-		service := &DisbursementManagementService{
-			Models:        models,
+		// Setup dependent services
+		distAccSvcOpts := DistributionAccountServiceOptions{
 			HorizonClient: hMock,
 		}
+		distAccSvc := NewDistributionAccountService(distAccSvcOpts)
 
-		err = service.StartDisbursement(ctx, disbursementInsufficientBalance.ID, nil, distributionPubKey)
+		// Create service
+		service := &DisbursementManagementService{
+			Models:                     models,
+			DistributionAccountService: distAccSvc,
+		}
+
+		err = service.StartDisbursement(ctx, disbursementInsufficientBalance.ID, nil, distributionAcc)
 		expectedErr := InsufficientBalanceError{
 			DisbursementAsset:   *usdt,
 			DistributionAddress: distributionAccPubKey,
@@ -715,7 +692,6 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 				},
 			},
 		}
-		mockDisbursementBalance().Once()
 
 		// Create Mocks
 		hMock := &horizonclient.MockClient{}
@@ -736,12 +712,18 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 			}).
 			Once()
 
+		// Setup dependent services
+		distAccSvcOpts := DistributionAccountServiceOptions{
+			HorizonClient: hMock,
+		}
+		distAccSvc := NewDistributionAccountService(distAccSvcOpts)
+
 		// Create service
 		service := &DisbursementManagementService{
-			Models:             models,
-			HorizonClient:      hMock,
-			EventProducer:      mockEventProducer,
-			CrashTrackerClient: mCrashTracker,
+			Models:                     models,
+			EventProducer:              mockEventProducer,
+			CrashTrackerClient:         mCrashTracker,
+			DistributionAccountService: distAccSvc,
 		}
 
 		user := &auth.User{
@@ -749,7 +731,7 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 			Email: "email@email.com",
 		}
 
-		err = service.StartDisbursement(ctx, disbursement.ID, user, distributionPubKey)
+		err = service.StartDisbursement(ctx, disbursement.ID, user, distributionAcc)
 		assert.NoError(t, err)
 	})
 
@@ -802,18 +784,23 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 			Return(nil).
 			Once()
 
+		// Setup dependent services
+		distAccSvcOpts := DistributionAccountServiceOptions{
+			HorizonClient: hMock,
+		}
+		distAccSvc := NewDistributionAccountService(distAccSvcOpts)
+
 		// Create service
 		service := &DisbursementManagementService{
-			Models:        models,
-			HorizonClient: hMock,
-			EventProducer: mockEventProducer,
+			Models:                     models,
+			EventProducer:              mockEventProducer,
+			DistributionAccountService: distAccSvc,
 		}
 
 		getEntries := log.DefaultLogger.StartTest(log.InfoLevel)
 
 		user := &auth.User{ID: "user-id", Email: "email@email.com"}
 
-		mockDisbursementBalance().Once()
 		err = service.StartDisbursement(ctx, disbursement.ID, user, distributionAcc)
 		require.NoError(t, err)
 
@@ -860,13 +847,18 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 		defer hMock.AssertExpectations(t)
 		hMock.On("AccountDetail", hAccRequest).Return(hAccResponse, nil).Once()
 
-		// Create service
-		service := &DisbursementManagementService{
-			Models:        models,
+		// Setup dependent services
+		distAccSvcOpts := DistributionAccountServiceOptions{
 			HorizonClient: hMock,
 		}
+		distAccSvc := NewDistributionAccountService(distAccSvcOpts)
 
-		mockDisbursementBalance().Once()
+		// Create service
+		service := &DisbursementManagementService{
+			Models:                     models,
+			DistributionAccountService: distAccSvc,
+		}
+
 		err = service.StartDisbursement(ctxWithoutTenant, disbursement.ID, user, distributionAcc)
 		assert.EqualError(t, err, "running atomic function in RunInTransactionWithPostCommit: creating new message: getting tenant from context: tenant not found in context")
 	})
@@ -917,15 +909,20 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 		defer hMock.AssertExpectations(t)
 		hMock.On("AccountDetail", hAccRequest).Return(hAccResponse, nil).Once()
 
+		// Setup dependent services
+		distAccSvcOpts := DistributionAccountServiceOptions{
+			HorizonClient: hMock,
+		}
+		distAccSvc := NewDistributionAccountService(distAccSvcOpts)
+
 		// Create service
 		service := &DisbursementManagementService{
-			Models:        models,
-			HorizonClient: hMock,
-			EventProducer: nil, // <----- EventProducer is nil
+			Models:                     models,
+			EventProducer:              nil, // <----- EventProducer is nil
+			DistributionAccountService: distAccSvc,
 		}
 
-		mockDisbursementBalance().Once()
-		err = service.StartDisbursement(ctx, disbursement.ID, user, distributionPubKey)
+		err = service.StartDisbursement(ctx, disbursement.ID, user, distributionAcc)
 		require.NoError(t, err)
 
 		msgs := []events.Message{
@@ -960,8 +957,6 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 		require.Len(t, entries, 1)
 		assert.Contains(t, fmt.Sprintf("event producer is nil, could not publish messages %+v", msgs), entries[0].Message)
 	})
-    
-  hMock.AssertExpectations(t)
 }
 
 func Test_DisbursementManagementService_PauseDisbursement(t *testing.T) {
@@ -1002,9 +997,9 @@ func Test_DisbursementManagementService_PauseDisbursement(t *testing.T) {
 	distAccSvc := NewDistributionAccountService(distAccSvcOpts)
 
 	service := &DisbursementManagementService{
-		Models:        models,
-		HorizonClient: hMock,
-		EventProducer: &mockEventProducer,
+		Models:                     models,
+		EventProducer:              &mockEventProducer,
+		DistributionAccountService: distAccSvc,
 	}
 
 	// create fixtures

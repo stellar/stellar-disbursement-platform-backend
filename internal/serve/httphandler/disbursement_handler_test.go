@@ -1272,12 +1272,12 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 	handler := &DisbursementHandler{
 		Models:                      models,
 		AuthManager:                 authManagerMock,
-		DistributionAccountResolver: distAccResolver,
+		DistributionAccountResolver: mockDistAccResolver,
 		DisbursementManagementService: &services.DisbursementManagementService{
-			Models:        models,
-			AuthManager:   authManagerMock,
-			HorizonClient: hMock,
-			EventProducer: &mockEventProducer,
+			Models:                     models,
+			AuthManager:                authManagerMock,
+			EventProducer:              &mockEventProducer,
+			DistributionAccountService: mockDistAccSvc,
 		},
 	}
 

@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	
+
 	"github.com/go-chi/chi/v5"
 	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/support/http/httpdecode"
