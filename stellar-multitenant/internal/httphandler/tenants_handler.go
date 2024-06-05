@@ -257,15 +257,15 @@ func (t TenantsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if tnt.DistributionAccountAddress != nil && t.DistributionAccountResolver.HostDistributionAccount() != *tnt.DistributionAccountAddress {
-		tntDistributionAcc, err := t.DistributionAccountResolver.DistributionAccount(ctx, *tnt.DistributionAccountAddress)
-		if err != nil {
-			httperror.InternalError(ctx, "Cannot get tenant distribution account", err, nil).Render(w)
+		tntDistributionAcc, getTntDistAccErr := t.DistributionAccountResolver.DistributionAccount(ctx, *tnt.DistributionAccountAddress)
+		if getTntDistAccErr != nil {
+			httperror.InternalError(ctx, "Cannot get tenant distribution account", getTntDistAccErr, nil).Render(w)
 			return
 		}
 
-		distAccBalances, err := t.DistributionAccountService.GetBalances(tntDistributionAcc)
-		if err != nil {
-			httperror.InternalError(ctx, "Cannot get tenant distribution account balances", err, nil).Render(w)
+		distAccBalances, getBalErr := t.DistributionAccountService.GetBalances(tntDistributionAcc)
+		if getBalErr != nil {
+			httperror.InternalError(ctx, "Cannot get tenant distribution account balances", getBalErr, nil).Render(w)
 			return
 		}
 
