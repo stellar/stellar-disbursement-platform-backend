@@ -10,17 +10,17 @@ import (
 func Test_AccountType_IsStellar(t *testing.T) {
 	testCases := []struct {
 		accountType AccountType
-		want        bool
+		isStellar   bool
 	}{
-		{accountType: HostStellarEnv, want: true},
-		{accountType: ChannelAccountStellarDB, want: true},
-		{accountType: DistributionAccountStellarEnv, want: true},
-		{accountType: DistributionAccountStellarDBVault, want: true},
-		{accountType: DistributionAccountCircleDBVault, want: false},
+		{accountType: HostStellarEnv, isStellar: true},
+		{accountType: ChannelAccountStellarDB, isStellar: true},
+		{accountType: DistributionAccountStellarEnv, isStellar: true},
+		{accountType: DistributionAccountStellarDBVault, isStellar: true},
+		{accountType: DistributionAccountCircleDBVault, isStellar: false},
 	}
 	for _, tc := range testCases {
 		t.Run(string(tc.accountType), func(t *testing.T) {
-			if tc.want {
+			if tc.isStellar {
 				assert.True(t, tc.accountType.IsStellar())
 			} else {
 				assert.False(t, tc.accountType.IsStellar())
@@ -32,17 +32,17 @@ func Test_AccountType_IsStellar(t *testing.T) {
 func Test_AccountType_IsCircle(t *testing.T) {
 	testCases := []struct {
 		accountType AccountType
-		want        bool
+		isCircle    bool
 	}{
-		{accountType: HostStellarEnv, want: false},
-		{accountType: ChannelAccountStellarDB, want: false},
-		{accountType: DistributionAccountStellarEnv, want: false},
-		{accountType: DistributionAccountStellarDBVault, want: false},
-		{accountType: DistributionAccountCircleDBVault, want: true},
+		{accountType: HostStellarEnv, isCircle: false},
+		{accountType: ChannelAccountStellarDB, isCircle: false},
+		{accountType: DistributionAccountStellarEnv, isCircle: false},
+		{accountType: DistributionAccountStellarDBVault, isCircle: false},
+		{accountType: DistributionAccountCircleDBVault, isCircle: true},
 	}
 	for _, tc := range testCases {
 		t.Run(string(tc.accountType), func(t *testing.T) {
-			if tc.want {
+			if tc.isCircle {
 				assert.True(t, tc.accountType.IsCircle())
 			} else {
 				assert.False(t, tc.accountType.IsCircle())
