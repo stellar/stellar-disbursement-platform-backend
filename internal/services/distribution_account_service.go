@@ -26,7 +26,9 @@ type DistributionAccountService struct {
 }
 
 func NewDistributionAccountService(opts DistributionAccountServiceOptions) *DistributionAccountService {
-	stellarNativeDistributionAccSvc := NewStellarNativeDistributionAccountService(opts.HorizonClient)
+	stellarNativeDistributionAccSvc := &StellarNativeDistributionAccountService{
+		horizonClient: opts.HorizonClient,
+	}
 
 	strategies := map[schema.DistributionAccountType]DistributionAccountServiceInterface{
 		schema.DistributionAccountTypeEnvStellar:     stellarNativeDistributionAccSvc,
@@ -54,12 +56,6 @@ type StellarNativeDistributionAccountService struct {
 }
 
 var _ DistributionAccountServiceInterface = (*StellarNativeDistributionAccountService)(nil)
-
-func NewStellarNativeDistributionAccountService(horizonClient horizonclient.ClientInterface) *StellarNativeDistributionAccountService {
-	return &StellarNativeDistributionAccountService{
-		horizonClient: horizonClient,
-	}
-}
 
 func (s *StellarNativeDistributionAccountService) GetBalances(account *schema.DistributionAccount) (map[data.Asset]float64, error) {
 	accountDetails, err := s.horizonClient.AccountDetail(horizonclient.AccountRequest{AccountID: account.Address})

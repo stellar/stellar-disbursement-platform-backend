@@ -83,7 +83,9 @@ func Test_StellarNativeDistributionAccount_GetBalances(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			mHorizonClient := horizonclient.MockClient{}
-			svc := NewStellarNativeDistributionAccountService(&mHorizonClient)
+			svc := StellarNativeDistributionAccountService{
+				horizonClient: &mHorizonClient,
+			}
 
 			tc.mockHorizonClientFn(&mHorizonClient)
 			balances, err := svc.GetBalances(distAcc)
@@ -152,7 +154,9 @@ func Test_StellarNativeDistributionAccount_GetBalance(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			mHorizonClient := horizonclient.MockClient{}
-			svc := NewStellarNativeDistributionAccountService(&mHorizonClient)
+			svc := StellarNativeDistributionAccountService{
+				horizonClient: &mHorizonClient,
+			}
 
 			mockSetup(&mHorizonClient)
 			balance, err := svc.GetBalance(distAcc, tc.asset)
