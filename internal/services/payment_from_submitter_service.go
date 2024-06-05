@@ -9,7 +9,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 	txSubStore "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 )
 
@@ -61,7 +60,7 @@ func (s PaymentFromSubmitterService) SyncTransaction(ctx context.Context, tx *sc
 			if err != nil {
 				return fmt.Errorf("getting transaction ID %s for update: %w", tx.TransactionID, err)
 			}
-			return s.syncTransactions(ctx, sdpDBTx, tssDBTx, []*store.Transaction{transaction})
+			return s.syncTransactions(ctx, sdpDBTx, tssDBTx, []*txSubStore.Transaction{transaction})
 		})
 	})
 	if err != nil {
@@ -73,7 +72,7 @@ func (s PaymentFromSubmitterService) SyncTransaction(ctx context.Context, tx *sc
 
 // syncTransactions synchronizes TSS transactions that were completed with the SDP payments. It
 // should be called within a DB transaction.
-func (s PaymentFromSubmitterService) syncTransactions(ctx context.Context, sdpDBTx, tssDBTx db.DBTransaction, transactions []*store.Transaction) error {
+func (s PaymentFromSubmitterService) syncTransactions(ctx context.Context, sdpDBTx, tssDBTx db.DBTransaction, transactions []*txSubStore.Transaction) error {
 	if s.sdpModels == nil || s.tssModel == nil {
 		return fmt.Errorf("PaymentFromSubmitterService sdpModels and tssModel cannot be nil")
 	}
@@ -123,12 +122,12 @@ func (s PaymentFromSubmitterService) syncPaymentWithTransaction(ctx context.Cont
 	payment := payments[0]
 
 	var toStatus data.PaymentStatus
-	if transaction.Status == store.TransactionStatusSuccess {
+	if transaction.Status == txSubStore.TransactionStatusSuccess {
 		toStatus = data.SuccessPaymentStatus
-	} else if transaction.Status == store.TransactionStatusError {
+	} else if transaction.Status == txSubStore.TransactionStatusError {
 		toStatus = data.FailedPaymentStatus
 	} else {
-		return fmt.Errorf("invalid transaction status %s. Expected only %s or %s", transaction.Status, store.TransactionStatusSuccess, store.TransactionStatusError)
+		return fmt.Errorf("invalid transaction status %s. Expected only %s or %s", transaction.Status, txSubStore.TransactionStatusSuccess, txSubStore.TransactionStatusError)
 	}
 
 	// Update payment status for the transaction to SUCCESS or FAILURE

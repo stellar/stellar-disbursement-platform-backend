@@ -327,3 +327,19 @@ func (am *AuthManagerMock) AuthenticateMFA(ctx context.Context, deviceID, code s
 }
 
 var _ AuthManager = (*AuthManagerMock)(nil)
+
+type testInterface interface {
+	mock.TestingT
+	Cleanup(func())
+}
+
+// AuthManagerMock creates a new instance of AuthManagerMock. It also registers a testing interface on the mock and a
+// cleanup function to assert the mocks expectations.
+func NewAuthManagerMock(t testInterface) *AuthManagerMock {
+	mock := &AuthManagerMock{}
+	mock.Mock.Test(t)
+
+	t.Cleanup(func() { mock.AssertExpectations(t) })
+
+	return mock
+}

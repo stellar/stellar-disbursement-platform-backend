@@ -42,6 +42,10 @@ func (c *MockConsumer) Handlers() []EventHandler {
 	return args.Get(0).([]EventHandler)
 }
 
+func (c *MockConsumer) BrokerType() EventBrokerType {
+	return c.Called().Get(0).(EventBrokerType)
+}
+
 // MockProducer is a mock implementation of Producer
 type MockProducer struct {
 	mock.Mock
@@ -54,9 +58,17 @@ func (c *MockProducer) WriteMessages(ctx context.Context, messages ...Message) e
 	return args.Error(0)
 }
 
-func (c *MockProducer) Close() error {
-	args := c.Called()
+func (c *MockProducer) Close(ctx context.Context) {
+	c.Called(ctx)
+}
+
+func (c *MockProducer) Ping(ctx context.Context) error {
+	args := c.Called(ctx)
 	return args.Error(0)
+}
+
+func (c *MockProducer) BrokerType() EventBrokerType {
+	return c.Called().Get(0).(EventBrokerType)
 }
 
 type testInterface interface {
