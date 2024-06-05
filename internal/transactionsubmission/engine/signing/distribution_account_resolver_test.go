@@ -240,6 +240,6 @@ func Test_DistributionAccountResolverImpl_HostDistributionAccount(t *testing.T) 
 
 	for i, hostAccount := range hostAccounts {
 		distAccResolver := &DistributionAccountResolverImpl{hostDistributionAccountPubKey: hostAccount.Address}
-		assert.Equalf(t, &hostAccount, distAccResolver.HostDistributionAccount(), "assertion failed at index %d", i)
+		assert.Equalf(t, hostAccount, distAccResolver.HostDistributionAccount(), "assertion failed at index %d", i)
 	}
 }

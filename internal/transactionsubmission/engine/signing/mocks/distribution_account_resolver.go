@@ -63,15 +63,15 @@ func (_m *MockDistributionAccountResolver) DistributionAccountFromContext(ctx co
 }
 
 // HostDistributionAccount provides a mock function with given fields:
-func (_m *MockDistributionAccountResolver) HostDistributionAccount() *schema.TransactionAccount {
+func (_m *MockDistributionAccountResolver) HostDistributionAccount() schema.TransactionAccount {
 	ret := _m.Called()
 
-	var r0 *schema.TransactionAccount
-	if rf, ok := ret.Get(0).(func() *schema.TransactionAccount); ok {
+	var r0 schema.TransactionAccount
+	if rf, ok := ret.Get(0).(func() schema.TransactionAccount); ok {
 		r0 = rf()
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(*schema.TransactionAccount)
+			r0 = ret.Get(0).(schema.TransactionAccount)
 		}
 	}
 

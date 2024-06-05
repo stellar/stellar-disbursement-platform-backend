@@ -195,7 +195,7 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 			hostAccSigClient.On("NetworkPassphrase").Return(tc.networkPassphrase).Maybe()
 
 			distAccResolver := mocks.NewMockDistributionAccountResolver(t)
-			distAccResolver.On("HostDistributionAccount").Return(&hostAccount).Maybe()
+			distAccResolver.On("HostDistributionAccount").Return(hostAccount).Maybe()
 
 			signatureStrategies := map[schema.AccountType]signing.SignatureClient{
 				schema.HostStellarEnv:          hostAccSigClient,
@@ -595,7 +595,7 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 				hostAccount := schema.NewDefaultHostAccount(hostAccountKP.Address())
 				mDistAccResolver.
 					On("HostDistributionAccount").
-					Return(&hostAccount)
+					Return(hostAccount)
 				mHorizonClient.
 					On("AccountDetail", horizonclient.AccountRequest{AccountID: hostAccountKP.Address()}).
 					Return(horizon.Account{}, errors.New("some horizon error"))
@@ -657,7 +657,7 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 				hostAccount := schema.NewDefaultHostAccount(hostAccountKP.Address())
 				mDistAccResolver.
 					On("HostDistributionAccount").
-					Return(&hostAccount)
+					Return(hostAccount)
 				mHorizonClient.
 					On("AccountDetail", horizonclient.AccountRequest{AccountID: hostAccountKP.Address()}).
 					Return(horizon.Account{

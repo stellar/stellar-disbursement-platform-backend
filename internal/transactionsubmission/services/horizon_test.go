@@ -47,8 +47,8 @@ func Test_CreateChannelAccountsOnChain(t *testing.T) {
 		MaxLedger: uint32(currLedgerNumber + preconditions.IncrementForMaxLedgerBounds),
 	}
 
-	rootAccountKP := keypair.MustRandom()
-	rootAccount := schema.NewDefaultHostAccount(rootAccountKP.Address())
+	hostAccountKP := keypair.MustRandom()
+	hostAccount := schema.NewDefaultHostAccount(hostAccountKP.Address())
 	chAccEncrypterPass := keypair.MustRandom().Seed()
 	dbVaultEncrypterPass := keypair.MustRandom().Seed()
 
@@ -78,7 +78,7 @@ func Test_CreateChannelAccountsOnChain(t *testing.T) {
 			numOfChanAccToCreate: 2,
 			prepareMocksFn: func(horizonClientMock *horizonclient.MockClient, _ *preconditionsMocks.MockLedgerNumberTracker, _ *utils.PrivateKeyEncrypterMock) {
 				horizonClientMock.
-					On("AccountDetail", horizonclient.AccountRequest{AccountID: rootAccount.Address}).
+					On("AccountDetail", horizonclient.AccountRequest{AccountID: hostAccount.Address}).
 					Return(horizon.Account{}, horizonclient.Error{
 						Problem: problem.NotFound,
 					}).
@@ -91,9 +91,9 @@ func Test_CreateChannelAccountsOnChain(t *testing.T) {
 			numOfChanAccToCreate: 2,
 			prepareMocksFn: func(horizonClientMock *horizonclient.MockClient, mLedgerNumberTracker *preconditionsMocks.MockLedgerNumberTracker, _ *utils.PrivateKeyEncrypterMock) {
 				horizonClientMock.
-					On("AccountDetail", horizonclient.AccountRequest{AccountID: rootAccount.Address}).
+					On("AccountDetail", horizonclient.AccountRequest{AccountID: hostAccount.Address}).
 					Return(horizon.Account{
-						AccountID: rootAccount.Address,
+						AccountID: hostAccount.Address,
 						Sequence:  1,
 					}, nil).
 					Once()
@@ -109,9 +109,9 @@ func Test_CreateChannelAccountsOnChain(t *testing.T) {
 			numOfChanAccToCreate: 2,
 			prepareMocksFn: func(horizonClientMock *horizonclient.MockClient, mLedgerNumberTracker *preconditionsMocks.MockLedgerNumberTracker, privateKeyEncrypterMock *utils.PrivateKeyEncrypterMock) {
 				horizonClientMock.
-					On("AccountDetail", horizonclient.AccountRequest{AccountID: rootAccount.Address}).
+					On("AccountDetail", horizonclient.AccountRequest{AccountID: hostAccount.Address}).
 					Return(horizon.Account{
-						AccountID: rootAccount.Address,
+						AccountID: hostAccount.Address,
 						Sequence:  1,
 					}, nil).
 					Once()
@@ -130,9 +130,9 @@ func Test_CreateChannelAccountsOnChain(t *testing.T) {
 			numOfChanAccToCreate: 2,
 			prepareMocksFn: func(horizonClientMock *horizonclient.MockClient, mLedgerNumberTracker *preconditionsMocks.MockLedgerNumberTracker, privateKeyEncrypterMock *utils.PrivateKeyEncrypterMock) {
 				horizonClientMock.
-					On("AccountDetail", horizonclient.AccountRequest{AccountID: rootAccount.Address}).
+					On("AccountDetail", horizonclient.AccountRequest{AccountID: hostAccount.Address}).
 					Return(horizon.Account{
-						AccountID: rootAccount.Address,
+						AccountID: hostAccount.Address,
 						Sequence:  1,
 					}, nil).
 					Once().
@@ -163,9 +163,9 @@ func Test_CreateChannelAccountsOnChain(t *testing.T) {
 			numOfChanAccToCreate: 3,
 			prepareMocksFn: func(horizonClientMock *horizonclient.MockClient, mLedgerNumberTracker *preconditionsMocks.MockLedgerNumberTracker, privateKeyEncrypterMock *utils.PrivateKeyEncrypterMock) {
 				horizonClientMock.
-					On("AccountDetail", horizonclient.AccountRequest{AccountID: rootAccount.Address}).
+					On("AccountDetail", horizonclient.AccountRequest{AccountID: hostAccount.Address}).
 					Return(horizon.Account{
-						AccountID: rootAccount.Address,
+						AccountID: hostAccount.Address,
 						Sequence:  1,
 					}, nil).
 					Once().
@@ -199,7 +199,7 @@ func Test_CreateChannelAccountsOnChain(t *testing.T) {
 			mDistAccResolver := sigMocks.NewMockDistributionAccountResolver(t)
 			mDistAccResolver.
 				On("HostDistributionAccount").
-				Return(&rootAccount).
+				Return(hostAccount).
 				Maybe()
 			if tc.prepareMocksFn != nil {
 				tc.prepareMocksFn(horizonClientMock, mLedgerNumberTracker, privateKeyEncrypterMock)
@@ -209,7 +209,7 @@ func Test_CreateChannelAccountsOnChain(t *testing.T) {
 				DistributionSignerType:      signing.DistributionAccountEnvSignatureClientType,
 				NetworkPassphrase:           network.TestNetworkPassphrase,
 				DBConnectionPool:            dbConnectionPool,
-				DistributionPrivateKey:      rootAccountKP.Seed(),
+				DistributionPrivateKey:      hostAccountKP.Seed(),
 				ChAccEncryptionPassphrase:   chAccEncrypterPass,
 				Encrypter:                   privateKeyEncrypterMock,
 				LedgerNumberTracker:         mLedgerNumberTracker,
@@ -401,7 +401,7 @@ func Test_DeleteChannelAccountOnChain(t *testing.T) {
 			sigService, sigRouter, mDistAccResolver := signing.NewMockSignatureService(t)
 			mDistAccResolver.
 				On("HostDistributionAccount").
-				Return(&hostAccount)
+				Return(hostAccount)
 			if tc.prepareMocksFn != nil {
 				tc.prepareMocksFn(horizonClientMock, mLedgerNumberTracker, sigRouter)
 			}
@@ -582,7 +582,7 @@ func Test_FundDistributionAccount(t *testing.T) {
 			sigService, sigRouter, mDistAccResolver := signing.NewMockSignatureService(t)
 			mDistAccResolver.
 				On("HostDistributionAccount").
-				Return(&hostAccount)
+				Return(hostAccount)
 			horizonClientMock := &horizonclient.MockClient{}
 
 			if tc.prepareMocksFn != nil {

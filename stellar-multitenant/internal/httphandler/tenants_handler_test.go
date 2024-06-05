@@ -299,7 +299,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 		hostAccount := schema.NewDefaultHostAccount(distAccAddress)
 		distAccResolver.
 			On("HostDistributionAccount").
-			Return(&hostAccount, nil).
+			Return(hostAccount, nil).
 			Once()
 
 		messengerClientMock.
@@ -1150,7 +1150,7 @@ func Test_TenantHandler_Delete(t *testing.T) {
 				}).
 					Return(&tenant.Tenant{ID: tntID, Status: tenant.DeactivatedTenantStatus, DistributionAccountAddress: &tntDistributionAcc}, nil).
 					Once()
-				distAccResolver.On("HostDistributionAccount").Return(&hostAccount).Once()
+				distAccResolver.On("HostDistributionAccount").Return(hostAccount).Once()
 				horizonClientMock.On("AccountDetail", horizonclient.AccountRequest{AccountID: tntDistributionAcc}).
 					Return(horizon.Account{}, errors.New("foobar")).
 					Once()
@@ -1165,7 +1165,7 @@ func Test_TenantHandler_Delete(t *testing.T) {
 					Filters: map[tenant.FilterKey]interface{}{tenant.FilterKeyID: tntID},
 				}).Return(&tenant.Tenant{ID: tntID, Status: tenant.DeactivatedTenantStatus, DistributionAccountAddress: &tntDistributionAcc}, nil).
 					Once()
-				distAccResolver.On("HostDistributionAccount").Return(&hostAccount).Once()
+				distAccResolver.On("HostDistributionAccount").Return(hostAccount).Once()
 				horizonClientMock.On("AccountDetail", horizonclient.AccountRequest{AccountID: tntDistributionAcc}).
 					Return(horizon.Account{
 						Balances: []horizon.Balance{
@@ -1183,7 +1183,7 @@ func Test_TenantHandler_Delete(t *testing.T) {
 					Filters: map[tenant.FilterKey]interface{}{tenant.FilterKeyID: tntID},
 				}).Return(&tenant.Tenant{ID: tntID, Status: tenant.DeactivatedTenantStatus, DistributionAccountAddress: &tntDistributionAcc}, nil).
 					Once()
-				distAccResolver.On("HostDistributionAccount").Return(&hostAccount).Once()
+				distAccResolver.On("HostDistributionAccount").Return(hostAccount).Once()
 				horizonClientMock.On("AccountDetail", horizonclient.AccountRequest{AccountID: tntDistributionAcc}).
 					Return(horizon.Account{
 						Balances: []horizon.Balance{
@@ -1202,7 +1202,7 @@ func Test_TenantHandler_Delete(t *testing.T) {
 				}).
 					Return(&tenant.Tenant{ID: tntID, Status: tenant.DeactivatedTenantStatus, DistributionAccountAddress: &tntDistributionAcc}, nil).
 					Once()
-				distAccResolver.On("HostDistributionAccount").Return(&hostAccount).Once()
+				distAccResolver.On("HostDistributionAccount").Return(hostAccount).Once()
 				horizonClientMock.On("AccountDetail", horizonclient.AccountRequest{AccountID: tntDistributionAcc}).
 					Return(horizon.Account{Balances: make([]horizon.Balance, 0)}, nil).
 					Once()
@@ -1222,7 +1222,7 @@ func Test_TenantHandler_Delete(t *testing.T) {
 					Return(&tenant.Tenant{ID: tntID, Status: tenant.DeactivatedTenantStatus, DistributionAccountAddress: &tntDistributionAcc}, nil).
 					Once()
 				hAcc := schema.NewDefaultHostAccount(tntDistributionAcc)
-				distAccResolver.On("HostDistributionAccount").Return(&hAcc).Once()
+				distAccResolver.On("HostDistributionAccount").Return(hAcc).Once()
 				tntManagerMock.On("SoftDeleteTenantByID", mock.Anything, tntID).
 					Return(&tenant.Tenant{
 						ID:                         tntID,
@@ -1243,7 +1243,7 @@ func Test_TenantHandler_Delete(t *testing.T) {
 				}).
 					Return(&tenant.Tenant{ID: tntID, Status: tenant.DeactivatedTenantStatus, DistributionAccountAddress: &tntDistributionAcc}, nil).
 					Once()
-				distAccResolver.On("HostDistributionAccount").Return(&hostAccount).Once()
+				distAccResolver.On("HostDistributionAccount").Return(hostAccount).Once()
 				horizonClientMock.On("AccountDetail", horizonclient.AccountRequest{AccountID: tntDistributionAcc}).
 					Return(horizon.Account{Balances: make([]horizon.Balance, 0)}, nil).
 					Once()

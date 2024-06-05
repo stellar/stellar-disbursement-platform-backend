@@ -227,7 +227,7 @@ func Test_ChannelAccounts_CreateAccount_Success(t *testing.T) {
 		Twice()
 	mDistAccResolver.
 		On("HostDistributionAccount").
-		Return(&hostAccount).
+		Return(hostAccount).
 		Once()
 	sigRouter.
 		On("BatchInsert", ctx, schema.ChannelAccountStellarDB, 2).
@@ -276,7 +276,7 @@ func Test_ChannelAccounts_CreateAccount_CannotFindHostAccount_Failure(t *testing
 		Return(horizon.Account{}, errors.New("some random error"))
 	mDistAccResolver.
 		On("HostDistributionAccount").
-		Return(&hostAccount).
+		Return(hostAccount).
 		Once()
 
 	err = cas.CreateChannelAccounts(ctx, currLedgerNumber)
@@ -327,7 +327,7 @@ func Test_ChannelAccounts_CreateAccount_Insert_Failure(t *testing.T) {
 		Return(horizon.Account{AccountID: hostAccountKP.Address()}, nil)
 	mDistAccResolver.
 		On("HostDistributionAccount").
-		Return(&hostAccount).
+		Return(hostAccount).
 		Once()
 	sigRouter.
 		On("BatchInsert", ctx, schema.ChannelAccountStellarDB, 2).
@@ -539,7 +539,7 @@ func Test_ChannelAccounts_DeleteAccount_Success(t *testing.T) {
 		Once()
 	mDistAccResolver.
 		On("HostDistributionAccount").
-		Return(&hostAccount).
+		Return(hostAccount).
 		Once()
 	chTxAccount := schema.NewDefaultChannelAccount(channelAccount.PublicKey)
 	sigRouter.
@@ -626,7 +626,7 @@ func Test_ChannelAccounts_DeleteAccount_All_Success(t *testing.T) {
 			Once()
 		mDistAccResolver.
 			On("HostDistributionAccount").
-			Return(&hostAccount).
+			Return(hostAccount).
 			Once()
 		chTxAcc := schema.NewDefaultChannelAccount(acc.PublicKey)
 		sigRouter.
@@ -779,7 +779,7 @@ func Test_ChannelAccounts_DeleteAccount_SubmitTransaction_Failure(t *testing.T) 
 	}
 
 	hostAccountKP := keypair.MustParseFull("SBMW2WDSVTGT2N2PCBF3PV7WBOIKVTGGIEBUUYMDX3CKTDD5HY3UIHV4")
-	hostAcc := schema.NewDefaultHostAccount(hostAccountKP.Address())
+	hostAccount := schema.NewDefaultHostAccount(hostAccountKP.Address())
 
 	currLedgerNum := 1000
 	ledgerBounds := &txnbuild.LedgerBounds{
@@ -805,11 +805,11 @@ func Test_ChannelAccounts_DeleteAccount_SubmitTransaction_Failure(t *testing.T) 
 		Once()
 	mDistAccResolver.
 		On("HostDistributionAccount").
-		Return(&hostAcc).
+		Return(hostAccount).
 		Once()
 	chTxAcc := schema.NewDefaultChannelAccount(channelAccount.PublicKey)
 	sigRouter.
-		On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), chTxAcc, hostAcc).
+		On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), chTxAcc, hostAccount).
 		Return(&txnbuild.Transaction{}, nil).
 		Once()
 
@@ -923,7 +923,7 @@ func Test_ChannelAccounts_EnsureChannelAccounts_Add_Success(t *testing.T) {
 		Once()
 	mDistAccResolver.
 		On("HostDistributionAccount").
-		Return(&hostAccount).
+		Return(hostAccount).
 		Once()
 	sigRouter.
 		On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), mock.AnythingOfType("schema.TransactionAccount"), mock.AnythingOfType("schema.TransactionAccount"), mock.AnythingOfType("schema.TransactionAccount"), hostAccount).
@@ -1012,7 +1012,7 @@ func Test_ChannelAccounts_EnsureChannelAccounts_Delete_Success(t *testing.T) {
 			Once()
 		mDistAccResolver.
 			On("HostDistributionAccount").
-			Return(&hostAccount).
+			Return(hostAccount).
 			Once()
 		chTxAcc := schema.NewDefaultChannelAccount(acc.PublicKey)
 		sigRouter.

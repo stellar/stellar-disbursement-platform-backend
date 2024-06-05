@@ -132,7 +132,7 @@ func CreateChannelAccountsOnChain(ctx context.Context, submiterEngine engine.Sub
 	}
 
 	// sign the transaction
-	tx, err = submiterEngine.SignerRouter.SignStellarTransaction(ctx, tx, append(stellarAccounts, *hostAccount)...)
+	tx, err = submiterEngine.SignerRouter.SignStellarTransaction(ctx, tx, append(stellarAccounts, hostAccount)...)
 	if err != nil {
 		return newAccountAddresses, fmt.Errorf("signing account creation transaction with accounts %v: %w", newAccountAddresses, err)
 	}
@@ -202,7 +202,7 @@ func DeleteChannelAccountOnChain(ctx context.Context, submiterEngine engine.Subm
 	// merging into the distribution account.
 	// Channel account signing:
 	chAccToDelete := schema.NewDefaultChannelAccount(chAccAddress)
-	tx, err = submiterEngine.SignerRouter.SignStellarTransaction(ctx, tx, chAccToDelete, *hostAccount)
+	tx, err = submiterEngine.SignerRouter.SignStellarTransaction(ctx, tx, chAccToDelete, hostAccount)
 	if err != nil {
 		return fmt.Errorf("signing remove account transaction for account %s: %w", chAccAddress, err)
 	}
@@ -258,7 +258,7 @@ func CreateAndFundAccount(ctx context.Context, submitterEngine engine.SubmitterE
 			)
 		}
 		// Host distribution account signing:
-		tx, err = submitterEngine.SignStellarTransaction(ctx, tx, *hostAccount)
+		tx, err = submitterEngine.SignStellarTransaction(ctx, tx, hostAccount)
 		if err != nil {
 			return fmt.Errorf(
 				"signing create account tx for account %s: %w",
