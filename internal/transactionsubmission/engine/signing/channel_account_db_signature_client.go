@@ -12,6 +12,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
+	sdpUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
 type ChannelAccountDBSignatureClientOptions struct {
@@ -114,17 +115,17 @@ func (c *ChannelAccountDBSignatureClient) getKPsForPublicKeys(ctx context.Contex
 
 func (c *ChannelAccountDBSignatureClient) SignStellarTransaction(ctx context.Context, stellarTx *txnbuild.Transaction, stellarAccounts ...string) (signedStellarTx *txnbuild.Transaction, err error) {
 	if stellarTx == nil {
-		return nil, fmt.Errorf("stellarTx cannot be nil in %s", c.Type())
+		return nil, fmt.Errorf("stellarTx cannot be nil in %s", c.name())
 	}
 
 	kps, err := c.getKPsForPublicKeys(ctx, stellarAccounts...)
 	if err != nil {
-		return nil, fmt.Errorf("getting keypairs for accounts %v in %s: %w", stellarAccounts, c.Type(), err)
+		return nil, fmt.Errorf("getting keypairs for accounts %v in %s: %w", stellarAccounts, c.name(), err)
 	}
 
 	signedStellarTx, err = stellarTx.Sign(c.NetworkPassphrase(), kps...)
 	if err != nil {
-		return nil, fmt.Errorf("signing transaction in %s: %w", c.Type(), err)
+		return nil, fmt.Errorf("signing transaction in %s: %w", c.name(), err)
 	}
 
 	return signedStellarTx, nil
@@ -132,17 +133,17 @@ func (c *ChannelAccountDBSignatureClient) SignStellarTransaction(ctx context.Con
 
 func (c *ChannelAccountDBSignatureClient) SignFeeBumpStellarTransaction(ctx context.Context, feeBumpStellarTx *txnbuild.FeeBumpTransaction, stellarAccounts ...string) (signedFeeBumpStellarTx *txnbuild.FeeBumpTransaction, err error) {
 	if feeBumpStellarTx == nil {
-		return nil, fmt.Errorf("stellarTx cannot be nil in %s", c.Type())
+		return nil, fmt.Errorf("stellarTx cannot be nil in %s", c.name())
 	}
 
 	kps, err := c.getKPsForPublicKeys(ctx, stellarAccounts...)
 	if err != nil {
-		return nil, fmt.Errorf("getting keypairs for accounts %v in %s: %w", stellarAccounts, c.Type(), err)
+		return nil, fmt.Errorf("getting keypairs for accounts %v in %s: %w", stellarAccounts, c.name(), err)
 	}
 
 	signedFeeBumpStellarTx, err = feeBumpStellarTx.Sign(c.NetworkPassphrase(), kps...)
 	if err != nil {
-		return nil, fmt.Errorf("signing transaction in %s: %w", c.Type(), err)
+		return nil, fmt.Errorf("signing transaction in %s: %w", c.name(), err)
 	}
 
 	return signedFeeBumpStellarTx, nil
@@ -203,8 +204,8 @@ func (c *ChannelAccountDBSignatureClient) Delete(ctx context.Context, publicKey 
 	return nil
 }
 
-func (c *ChannelAccountDBSignatureClient) Type() string {
-	return string("ChannelAccountDBSignatureClientType")
+func (c *ChannelAccountDBSignatureClient) name() string {
+	return sdpUtils.GetTypeName(c)
 }
 
 func (c *ChannelAccountDBSignatureClient) NetworkPassphrase() string {

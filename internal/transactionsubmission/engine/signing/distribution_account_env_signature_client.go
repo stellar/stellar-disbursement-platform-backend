@@ -7,6 +7,7 @@ import (
 	"github.com/stellar/go/keypair"
 	"github.com/stellar/go/strkey"
 	"github.com/stellar/go/txnbuild"
+	sdpUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
 type DistributionAccountEnvOptions struct {
@@ -63,13 +64,13 @@ var _ SignatureClient = (*DistributionAccountEnvSignatureClient)(nil)
 // validateStellarAccounts ensures that the distribution account is the only account signing the transaction
 func (c *DistributionAccountEnvSignatureClient) validateStellarAccounts(stellarAccounts ...string) error {
 	if len(stellarAccounts) == 0 {
-		return fmt.Errorf("stellar accounts cannot be empty in %s", c.Type())
+		return fmt.Errorf("stellar accounts cannot be empty in %s", c.name())
 	}
 
 	// Ensure that the distribution account is the only account signing the transaction
 	for _, stellarAccount := range stellarAccounts {
 		if stellarAccount != c.distributionAccount {
-			return fmt.Errorf("stellar account %s is not allowed to sign in %s", stellarAccount, c.Type())
+			return fmt.Errorf("stellar account %s is not allowed to sign in %s", stellarAccount, c.name())
 		}
 	}
 
@@ -78,7 +79,7 @@ func (c *DistributionAccountEnvSignatureClient) validateStellarAccounts(stellarA
 
 func (c *DistributionAccountEnvSignatureClient) SignStellarTransaction(ctx context.Context, stellarTx *txnbuild.Transaction, stellarAccounts ...string) (signedStellarTx *txnbuild.Transaction, err error) {
 	if stellarTx == nil {
-		return nil, fmt.Errorf("stellarTx cannot be nil in %s", c.Type())
+		return nil, fmt.Errorf("stellarTx cannot be nil in %s", c.name())
 	}
 
 	err = c.validateStellarAccounts(stellarAccounts...)
@@ -88,7 +89,7 @@ func (c *DistributionAccountEnvSignatureClient) SignStellarTransaction(ctx conte
 
 	signedStellarTx, err = stellarTx.Sign(c.NetworkPassphrase(), c.distributionKP)
 	if err != nil {
-		return nil, fmt.Errorf("signing transaction in %s: %w", c.Type(), err)
+		return nil, fmt.Errorf("signing transaction in %s: %w", c.name(), err)
 	}
 
 	return signedStellarTx, nil
@@ -96,7 +97,7 @@ func (c *DistributionAccountEnvSignatureClient) SignStellarTransaction(ctx conte
 
 func (c *DistributionAccountEnvSignatureClient) SignFeeBumpStellarTransaction(ctx context.Context, feeBumpStellarTx *txnbuild.FeeBumpTransaction, stellarAccounts ...string) (signedFeeBumpStellarTx *txnbuild.FeeBumpTransaction, err error) {
 	if feeBumpStellarTx == nil {
-		return nil, fmt.Errorf("stellarTx cannot be nil in %s", c.Type())
+		return nil, fmt.Errorf("stellarTx cannot be nil in %s", c.name())
 	}
 
 	err = c.validateStellarAccounts(stellarAccounts...)
@@ -106,7 +107,7 @@ func (c *DistributionAccountEnvSignatureClient) SignFeeBumpStellarTransaction(ct
 
 	signedFeeBumpStellarTx, err = feeBumpStellarTx.Sign(c.NetworkPassphrase(), c.distributionKP)
 	if err != nil {
-		return nil, fmt.Errorf("signing transaction in %s: %w", c.Type(), err)
+		return nil, fmt.Errorf("signing transaction in %s: %w", c.name(), err)
 	}
 
 	return signedFeeBumpStellarTx, nil
@@ -121,7 +122,7 @@ func (c *DistributionAccountEnvSignatureClient) BatchInsert(ctx context.Context,
 	for i := 0; i < number; i++ {
 		publicKeys[i] = c.distributionAccount
 	}
-	err = fmt.Errorf("BatchInsert called for signature client type %s: %w", c.Type(), ErrUnsupportedCommand)
+	err = fmt.Errorf("BatchInsert called for signature client type %s: %w", c.name(), ErrUnsupportedCommand)
 	return publicKeys, err
 }
 
@@ -130,11 +131,11 @@ func (c *DistributionAccountEnvSignatureClient) Delete(ctx context.Context, publ
 	if err != nil {
 		return fmt.Errorf("validating stellar account to delete: %w", err)
 	}
-	return fmt.Errorf("Delete called for signature client type %s: %w", c.Type(), ErrUnsupportedCommand)
+	return fmt.Errorf("Delete called for signature client type %s: %w", c.name(), ErrUnsupportedCommand)
 }
 
-func (c *DistributionAccountEnvSignatureClient) Type() string {
-	return string(DistributionAccountEnvSignatureClientType)
+func (c *DistributionAccountEnvSignatureClient) name() string {
+	return sdpUtils.GetTypeName(c)
 }
 
 func (c *DistributionAccountEnvSignatureClient) NetworkPassphrase() string {

@@ -11,6 +11,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
+	sdpUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
 type DistributionAccountDBSignatureClientOptions struct {
@@ -104,17 +105,17 @@ func (c *DistributionAccountDBSignatureClient) getKPsForPublicKeys(ctx context.C
 
 func (c *DistributionAccountDBSignatureClient) SignStellarTransaction(ctx context.Context, stellarTx *txnbuild.Transaction, publicKeys ...string) (signedStellarTx *txnbuild.Transaction, err error) {
 	if stellarTx == nil {
-		return nil, fmt.Errorf("stellarTx cannot be nil in %s", c.Type())
+		return nil, fmt.Errorf("stellarTx cannot be nil in %s", c.name())
 	}
 
 	kps, err := c.getKPsForPublicKeys(ctx, publicKeys...)
 	if err != nil {
-		return nil, fmt.Errorf("getting keypairs for publicKeys %v in %s: %w", publicKeys, c.Type(), err)
+		return nil, fmt.Errorf("getting keypairs for publicKeys %v in %s: %w", publicKeys, c.name(), err)
 	}
 
 	signedStellarTx, err = stellarTx.Sign(c.NetworkPassphrase(), kps...)
 	if err != nil {
-		return nil, fmt.Errorf("signing transaction in %s: %w", c.Type(), err)
+		return nil, fmt.Errorf("signing transaction in %s: %w", c.name(), err)
 	}
 
 	return signedStellarTx, nil
@@ -122,17 +123,17 @@ func (c *DistributionAccountDBSignatureClient) SignStellarTransaction(ctx contex
 
 func (c *DistributionAccountDBSignatureClient) SignFeeBumpStellarTransaction(ctx context.Context, feeBumpStellarTx *txnbuild.FeeBumpTransaction, publicKeys ...string) (signedFeeBumpStellarTx *txnbuild.FeeBumpTransaction, err error) {
 	if feeBumpStellarTx == nil {
-		return nil, fmt.Errorf("stellarTx cannot be nil in %s", c.Type())
+		return nil, fmt.Errorf("stellarTx cannot be nil in %s", c.name())
 	}
 
 	kps, err := c.getKPsForPublicKeys(ctx, publicKeys...)
 	if err != nil {
-		return nil, fmt.Errorf("getting keypairs for publicKeys %v in %s: %w", publicKeys, c.Type(), err)
+		return nil, fmt.Errorf("getting keypairs for publicKeys %v in %s: %w", publicKeys, c.name(), err)
 	}
 
 	signedFeeBumpStellarTx, err = feeBumpStellarTx.Sign(c.NetworkPassphrase(), kps...)
 	if err != nil {
-		return nil, fmt.Errorf("signing transaction in %s: %w", c.Type(), err)
+		return nil, fmt.Errorf("signing transaction in %s: %w", c.name(), err)
 	}
 
 	return signedFeeBumpStellarTx, nil
@@ -181,8 +182,8 @@ func (c *DistributionAccountDBSignatureClient) Delete(ctx context.Context, publi
 	return nil
 }
 
-func (c *DistributionAccountDBSignatureClient) Type() string {
-	return string(DistributionAccountDBSignatureClientType)
+func (c *DistributionAccountDBSignatureClient) name() string {
+	return sdpUtils.GetTypeName(c)
 }
 
 func (c *DistributionAccountDBSignatureClient) NetworkPassphrase() string {

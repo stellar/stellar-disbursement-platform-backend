@@ -147,12 +147,12 @@ func Test_DistributionAccountEnvSignatureClient_validateStellarAccounts(t *testi
 		{
 			name:              "returns an error if the stellar accounts are empty",
 			stellarAccounts:   []string{},
-			wantErrorContains: "stellar accounts cannot be empty in " + distEnvClient.Type(),
+			wantErrorContains: "stellar accounts cannot be empty in " + distEnvClient.name(),
 		},
 		{
 			name:              "returns an error if an account other than the distribution one is provided",
 			stellarAccounts:   []string{unsupportedAccountKP.Address(), distributionKP.Address()},
-			wantErrorContains: fmt.Sprintf("stellar account %s is not allowed to sign in %s", unsupportedAccountKP.Address(), distEnvClient.Type()),
+			wantErrorContains: fmt.Sprintf("stellar account %s is not allowed to sign in %s", unsupportedAccountKP.Address(), distEnvClient.name()),
 		},
 		{
 			name:            "🎉 successfully signs with distribution account",
@@ -224,7 +224,7 @@ func Test_DistributionAccountEnvSignatureClient_SignStellarTransaction(t *testin
 			name:            "return stellar account validation fails",
 			stellarTx:       stellarTx,
 			accounts:        []string{unsupportedAccountKP.Address()},
-			wantErrContains: fmt.Sprintf("validating stellar accounts: stellar account %s is not allowed to sign in %s", unsupportedAccountKP.Address(), distEnvClient.Type()),
+			wantErrContains: fmt.Sprintf("validating stellar accounts: stellar account %s is not allowed to sign in %s", unsupportedAccountKP.Address(), distEnvClient.name()),
 		},
 		{
 			name:                "🎉 Successfully sign transaction when all incoming addresse is correct",
@@ -314,7 +314,7 @@ func Test_DistributionAccountEnvSignatureClient_SignFeeBumpStellarTransaction(t 
 			name:             "return stellar account validation fails",
 			feeBumpStellarTx: feeBumpStellarTx,
 			accounts:         []string{unsupportedAccountKP.Address()},
-			wantErrContains:  fmt.Sprintf("validating stellar accounts: stellar account %s is not allowed to sign in %s", unsupportedAccountKP.Address(), distEnvClient.Type()),
+			wantErrContains:  fmt.Sprintf("validating stellar accounts: stellar account %s is not allowed to sign in %s", unsupportedAccountKP.Address(), distEnvClient.name()),
 		},
 		{
 			name:                       "🎉 Successfully sign transaction when all incoming addresse is correct",

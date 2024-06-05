@@ -21,7 +21,6 @@ type SignatureClient interface {
 	SignFeeBumpStellarTransaction(ctx context.Context, feeBumpStellarTx *txnbuild.FeeBumpTransaction, stellarAccounts ...string) (signedFeeBumpStellarTx *txnbuild.FeeBumpTransaction, err error)
 	BatchInsert(ctx context.Context, number int) (publicKeys []string, err error)
 	Delete(ctx context.Context, publicKey string) error
-	Type() string
 }
 
 type SignatureClientOptions struct {
