@@ -101,7 +101,7 @@ func Test_CreateChannelAccountsOnChain(t *testing.T) {
 					}).
 					Once()
 			},
-			wantErrContains: "failed to retrieve root account: horizon response error: StatusCode=404, Type=not_found, Title=Resource Missing, Detail=The resource at the url requested was not found.  This usually occurs for one of two reasons:  The url requested is not valid, or no data in our database could be found with the parameters provided.",
+			wantErrContains: "failed to retrieve host account: horizon response error: StatusCode=404, Type=not_found, Title=Resource Missing, Detail=The resource at the url requested was not found.  This usually occurs for one of two reasons:  The url requested is not valid, or no data in our database could be found with the parameters provided.",
 		},
 		{
 			name:                 "returns error when fails to retrieve ledger bounds",
@@ -293,7 +293,7 @@ func Test_DeleteChannelAccountOnChain(t *testing.T) {
 					Return(horizon.Account{}, horizonclient.Error{Problem: problem.NotFound}).
 					Once()
 			},
-			wantErrContains: `retrieving root account from distribution seed: horizon error: "Resource Missing" - check horizon.Error.Problem for more information`,
+			wantErrContains: `retrieving host account from distribution seed: horizon error: "Resource Missing" - check horizon.Error.Problem for more information`,
 		},
 		{
 			name: "returns error when GetLedgerBounds fails",
