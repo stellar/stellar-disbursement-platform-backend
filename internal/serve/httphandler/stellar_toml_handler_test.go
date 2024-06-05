@@ -146,7 +146,7 @@ func Test_StellarTomlHandler_buildGeneralInformation(t *testing.T) {
 			} else {
 				mDistAccResolver.
 					On("DistributionAccountFromContext", ctx).
-					Return(nil, tenant.ErrTenantNotFoundInContext).
+					Return(schema.TransactionAccount{}, tenant.ErrTenantNotFoundInContext).
 					Once()
 			}
 			tc.s.DistributionAccountResolver = mDistAccResolver

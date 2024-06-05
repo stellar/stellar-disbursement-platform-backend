@@ -36,6 +36,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	sigMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing/mocks"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
@@ -1346,7 +1347,7 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 		mDistAccResolver := sigMocks.NewMockDistributionAccountResolver(t)
 		mDistAccResolver.
 			On("DistributionAccountFromContext", mock.Anything).
-			Return(nil, errors.New("unexpected error")).
+			Return(schema.TransactionAccount{}, errors.New("unexpected error")).
 			Once()
 
 		h := &DisbursementHandler{

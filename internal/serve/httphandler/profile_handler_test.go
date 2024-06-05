@@ -1094,7 +1094,7 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 		mDistAccResolver := sigMocks.NewMockDistributionAccountResolver(t)
 		mDistAccResolver.
 			On("DistributionAccountFromContext", ctx).
-			Return(nil, errors.New("unexpected error")).
+			Return(schema.TransactionAccount{}, errors.New("unexpected error")).
 			Once()
 		h := &ProfileHandler{Models: models, BaseURL: "http://localhost:8000", DistributionAccountResolver: mDistAccResolver}
 		http.HandlerFunc(h.GetOrganizationInfo).ServeHTTP(w, req)

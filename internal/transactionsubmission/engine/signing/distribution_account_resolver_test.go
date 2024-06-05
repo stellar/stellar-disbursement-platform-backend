@@ -172,7 +172,7 @@ func Test_DistributionAccountResolverImpl_DistributionAccount(t *testing.T) {
 
 		distAccount, err := distAccResolver.DistributionAccount(ctx, tnt.ID)
 		assert.NoError(t, err)
-		assert.Equal(t, &schema.TransactionAccount{
+		assert.Equal(t, schema.TransactionAccount{
 			Address: distributionPublicKey,
 			Type:    schema.DistributionAccountStellarDBVault,
 			Status:  schema.AccountStatusActive,
@@ -223,7 +223,7 @@ func Test_DistributionAccountResolverImpl_DistributionAccountFromContext(t *test
 
 		distAccount, err := distAccResolver.DistributionAccountFromContext(ctxWithTenant)
 		assert.NoError(t, err)
-		assert.Equal(t, &schema.TransactionAccount{
+		assert.Equal(t, schema.TransactionAccount{
 			Address: distributionPublicKey,
 			Type:    schema.DistributionAccountStellarEnv,
 			Status:  schema.AccountStatusActive,

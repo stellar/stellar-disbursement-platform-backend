@@ -30,8 +30,8 @@ func (da TransactionAccount) IsPendingUserActivation() bool {
 	return da.Status == AccountStatusPendingUserActivation
 }
 
-func NewDefaultStellarTransactionAccount(stellarID string) *TransactionAccount {
-	return &TransactionAccount{
+func NewDefaultStellarTransactionAccount(stellarID string) TransactionAccount {
+	return TransactionAccount{
 		Address: stellarID,
 		Type:    DistributionAccountStellarDBVault,
 		Status:  AccountStatusActive,

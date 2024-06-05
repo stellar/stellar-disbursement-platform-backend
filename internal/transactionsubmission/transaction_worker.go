@@ -508,7 +508,7 @@ func (tw *TransactionWorker) buildAndSignTransaction(ctx context.Context, txJob 
 	}
 
 	var distributionAccountPubKey string
-	var distributionAccount *schema.TransactionAccount
+	var distributionAccount schema.TransactionAccount
 	if distributionAccount, err = tw.engine.DistributionAccountResolver.DistributionAccount(ctx, txJob.Transaction.TenantID); err != nil {
 		return nil, fmt.Errorf("resolving distribution account for tenantID=%s: %w", txJob.Transaction.TenantID, err)
 	} else if !distributionAccount.IsStellar() {

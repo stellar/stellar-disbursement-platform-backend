@@ -777,7 +777,7 @@ func Test_AssetHandler_handleUpdateAssetTrustlineForDistributionAccount(t *testi
 	t.Run("returns error if fails getting distribution account from the resolver", func(t *testing.T) {
 		distAccResolver.
 			On("DistributionAccountFromContext", ctx).
-			Return(nil, errors.New("resolver error")).
+			Return(schema.TransactionAccount{}, errors.New("resolver error")).
 			Once()
 		err := handler.handleUpdateAssetTrustlineForDistributionAccount(ctx, assetToAddTrustline, assetToRemoveTrustline)
 		require.EqualError(t, err, "resolving distribution account from context: resolver error")
@@ -1184,7 +1184,7 @@ func Test_AssetHandler_submitChangeTrustTransaction(t *testing.T) {
 	t.Run("returns error if fails getting distribution account from the resolver", func(t *testing.T) {
 		distAccResolver.
 			On("DistributionAccountFromContext", ctx).
-			Return(nil, errors.New("resolver error")).
+			Return(schema.TransactionAccount{}, errors.New("resolver error")).
 			Once()
 		err := handler.submitChangeTrustTransaction(ctx, acc, []*txnbuild.ChangeTrust{{}})
 		require.EqualError(t, err, "resolving distribution account from context: resolver error")
