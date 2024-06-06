@@ -250,16 +250,6 @@ This will spin up the following services:
 - `kafka-init`:  Initial workflow to exec into the Kafka container and create topics.
 - `demo-wallet`: The demo wallet client that will be used as a receiver wallet, running on port `4000`.
 
-The following are optional monitoring services that can be started through `docker-compose-monitoring.yml` and are primarily used for monitoring Kafka: 
-- `db-conduktor`: Database instance for the Conduktor service. 
-- `conduktor-monitoring`: Conduktor Monitoring service integrated into the Conduktor Platform. 
-- `conduktor-platform`: Provides solutions for Kafka management, testing, monitoring, data quality, security, and data governance.
-
-> [!TIP]  
-> If you wish to start the sdp containers with monitoring services, you can use the docker-compose-monitoring.yml file 
-> 
-> `docker-compose -f docker-compose.yml -f docker-compose-monitoring.yml up`
-
 ### Remote Debugging
 
 ### Remote Debugging
