@@ -1,30 +1,32 @@
 version: '3.8'
 services:
   db:
-    container_name: sdp_v2_database
+    container_name: sdp_v2_database-mtn
     image: postgres:14-alpine
     environment:
       POSTGRES_HOST_AUTH_METHOD: trust
-      POSTGRES_DB: sdp
+      POSTGRES_DB: sdp_mtn
       PGDATA: /data/postgres
     ports:
       - "5432:5432"
     volumes:
       - postgres-db:/data/postgres
-
   sdp-api:
-    container_name: sdp-api
-    image: stellar/sdp-v2:latest
+    container_name: sdp-api-mtn
+    image: stellar/sdp-v2:development
     build:
       context: ../
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.development
     ports:
       - "8000:8000"
+      - "8002:8002"
+      - "8003:8003"
+      - "2345:2345"
     environment:
       BASE_URL: http://localhost:8000
-      DATABASE_URL: postgres://postgres@db:5432/postgres?sslmode=disable
+      DATABASE_URL: postgres://postgres@db:5432/sdp_mtn?sslmode=disable
       ENVIRONMENT: localhost
-      LOG_LEVEL: TRACE
+      LOG_LEVEL: INFO
       PORT: "8000"
       METRICS_PORT: "8002"
       METRICS_TYPE: PROMETHEUS
@@ -38,9 +40,33 @@ services:
       DISTRIBUTION_PUBLIC_KEY: ${DISTRIBUTION_PUBLIC_KEY}
       DISTRIBUTION_SEED: ${DISTRIBUTION_SEED}
       RECAPTCHA_SITE_KEY: 6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI
-      CORS_ALLOWED_ORIGINS: http://localhost:3000
       DISABLE_MFA: "true"
       DISABLE_RECAPTCHA: "true"
+      CORS_ALLOWED_ORIGINS: "*"
+
+      # multi-tenant
+      ADMIN_PORT: "8003"
+      INSTANCE_NAME: "SDP Testnet on Docker"
+      TENANT_XLM_BOOTSTRAP_AMOUNT: 5
+      DISTRIBUTION_SIGNER_TYPE: ${DISTRIBUTION_SIGNER_TYPE:-DISTRIBUTION_ACCOUNT_ENV}
+      SINGLE_TENANT_MODE: "false"
+
+      # scheduler options
+      #ENABLE_SCHEDULER: "false" # set to disabled to use kafka for this.
+      #SCHEDULER_RECEIVER_INVITATION_JOB_SECONDS: "10"
+      #SCHEDULER_PAYMENT_JOB_SECONDS: "10"
+
+      # Kafka Configuration - only used if ENABLE_SCHEDULER is set to "false"
+      EVENT_BROKER_TYPE: "KAFKA"
+      BROKER_URLS: "kafka:9092"
+      CONSUMER_GROUP_ID: "group-id"
+      KAFKA_SECURITY_PROTOCOL: "PLAINTEXT"
+
+      # multi-tenant secrets:
+      ADMIN_ACCOUNT: SDP-admin
+      ADMIN_API_KEY: api_key_1234567890
+      DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE: ${DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE}
+      CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE: ${CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE}
 
       # secrets:
       AWS_ACCESS_KEY_ID: MY_AWS_ACCESS_KEY_ID
@@ -55,19 +81,10 @@ services:
       SEP24_JWT_SECRET: jwt_secret_1234567890
       RECAPTCHA_SITE_SECRET_KEY: 6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ4WifJWe
       ANCHOR_PLATFORM_OUTGOING_JWT_SECRET: mySdpToAnchorPlatformSecret
-    entrypoint: ""
-    command:
-      - sh
-      - -c
-      - |
-        sleep 5
-        ./stellar-disbursement-platform db migrate up
-        ./stellar-disbursement-platform db auth migrate up
-        ./stellar-disbursement-platform db setup-for-network
-        ./stellar-disbursement-platform serve
+    entrypoint: "./dev/scripts/debug_entrypoint.sh"
 
   db-anchor-platform:
-    container_name: anchor-platform-postgres-db
+    container_name: anchor-platform-postgres-db-mtn
     image: postgres:14-alpine
     environment:
       POSTGRES_USER: postgres
@@ -81,7 +98,9 @@ services:
 
   anchor-platform:
     container_name: anchor-platform
-    image: stellar/anchor-platform:2.1.3
+    image: stellar/anchor-platform:2.6.0
+    depends_on:
+      - db
     command: --sep-server --platform-server --platform linux/amd64
     ports:
       - "8080:8080" # sep-server
@@ -91,6 +110,7 @@ services:
       HOST_URL: http://localhost:8080
       SEP_SERVER_PORT: 8080
       CALLBACK_API_BASE_URL: http://sdp-api:8000
+      # CALLBACK_API_BASE_URL: http://host.docker.internal:8000   # This URL allows docker containers to communicate with the host machine
       CALLBACK_API_AUTH_TYPE: none  # TODO: update to jwt later
       PLATFORM_SERVER_AUTH_TYPE: JWT
       APP_LOGGING_LEVEL: INFO
@@ -102,7 +122,9 @@ services:
       METRICS_ENABLED: "false"  # Metrics would be available at port 8082
       METRICS_EXTRAS_ENABLED: "false"
       SEP10_ENABLED: "true"
-      SEP10_HOME_DOMAIN: localhost:8080
+      SEP10_HOME_DOMAINS: "localhost:8000, *.stellar.local:8000" # Comma separated list of home domains
+      SEP10_HOME_DOMAIN: ""
+      SEP10_WEB_AUTH_DOMAIN: "localhost:8080"
       # SEP10_CLIENT_ATTRIBUTION_REQUIRED: true  # RECOMMENDED
       # SEP10_CLIENT_ATTRIBUTION_ALLOW_LIST: "demo-wallet-server.stellar.org,https://example.com"  # RECOMMENDED
       SEP24_ENABLED: "true"
@@ -112,6 +134,7 @@ services:
       SEP1_ENABLED: "true"
       SEP1_TOML_TYPE: url
       SEP1_TOML_VALUE: http://sdp-api:8000/.well-known/stellar.toml
+      # SEP1_TOML_VALUE: http://host.docker.internal:8000/.well-known/stellar.toml    # This URL allows docker containers to communicate with the host machine
       ASSETS_TYPE: json
       ASSETS_VALUE: |   # TODO: keep this up to date with the latest assets supported by the SDP
         {
@@ -159,8 +182,57 @@ services:
       SECRET_SEP10_SIGNING_SEED: ${SEP10_SIGNING_PRIVATE_KEY}
       SECRET_SEP24_INTERACTIVE_URL_JWT_SECRET: jwt_secret_1234567890
       SECRET_SEP24_MORE_INFO_URL_JWT_SECRET: jwt_secret_1234567890
+
+  kafka:
+    image: docker.io/bitnami/kafka:3.6
+    ports:
+      - "9094:9094"
+      - "9092:9092"
+    volumes:
+      - "kafka-data:/bitnami"
+    environment:
+      # KRaft settings
+      - KAFKA_CFG_NODE_ID=0
+      - KAFKA_CFG_PROCESS_ROLES=controller,broker
+      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=0@kafka:9093
+      # Listeners
+      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:9094
+      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092,EXTERNAL://localhost:9094
+      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
+    healthcheck:
+      test: kafka-topics.sh --bootstrap-server kafka:9092 --list || exit -1
+      start_period: 10s
+      interval: 10s
+      timeout: 10s
+      retries: 5
+
+  kafka-init:
+    image: docker.io/bitnami/kafka:3.6
+    entrypoint: [ "/bin/bash", "-c" ]
+    command: |
+      "
+        kafka-topics.sh --create --if-not-exists --topic events.receiver-wallets.new_invitation --bootstrap-server kafka:9092
+        kafka-topics.sh --create --if-not-exists --topic events.payment.payment_completed --bootstrap-server kafka:9092
+        kafka-topics.sh --create --if-not-exists --topic events.payment.ready_to_pay --bootstrap-server kafka:9092
+      
+        kafka-topics.sh --create --if-not-exists --topic events.receiver-wallets.new_invitation.dlq --bootstrap-server kafka:9092
+        kafka-topics.sh --create --if-not-exists --topic events.payment.payment_completed.dlq --bootstrap-server kafka:9092
+        kafka-topics.sh --create --if-not-exists --topic events.payment.ready_to_pay.dlq --bootstrap-server kafka:9092
+      "
+  demo-wallet:
+    build:
+      context: .
+      dockerfile: Dockerfile-demo-wallet
+    ports:
+      - "4000:80"
+    volumes:
+      - ./env-config-demo-wallet.js:/usr/share/nginx/html/settings/env-config.js
+
 volumes:
   postgres-db:
     driver: local
   postgres-ap-db:
+    driver: local
+  kafka-data:
     driver: local

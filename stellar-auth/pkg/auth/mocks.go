@@ -52,6 +52,11 @@ func (m *JWTManagerMock) GetUserFromToken(ctx context.Context, tokenString strin
 	return args.Get(0).(*User), args.Error(1)
 }
 
+func (m *JWTManagerMock) GetTenantIDFromToken(ctx context.Context, token string) (string, error) {
+	args := m.Called(ctx, token)
+	return args.Get(0).(string), args.Error(1)
+}
+
 var _ JWTManager = (*JWTManagerMock)(nil)
 
 // Authenticator
@@ -268,6 +273,11 @@ func (am *AuthManagerMock) GetUserID(ctx context.Context, userID string) (string
 	return args.Get(0).(string), args.Error(1)
 }
 
+func (am *AuthManagerMock) GetTenantID(ctx context.Context, tokenString string) (string, error) {
+	args := am.Called(ctx, tokenString)
+	return args.Get(0).(string), args.Error(1)
+}
+
 func (am *AuthManagerMock) GetAllUsers(ctx context.Context, tokenString string) ([]User, error) {
 	args := am.Called(ctx, tokenString)
 	if args.Get(0) == nil {
@@ -317,3 +327,19 @@ func (am *AuthManagerMock) AuthenticateMFA(ctx context.Context, deviceID, code s
 }
 
 var _ AuthManager = (*AuthManagerMock)(nil)
+
+type testInterface interface {
+	mock.TestingT
+	Cleanup(func())
+}
+
+// AuthManagerMock creates a new instance of AuthManagerMock. It also registers a testing interface on the mock and a
+// cleanup function to assert the mocks expectations.
+func NewAuthManagerMock(t testInterface) *AuthManagerMock {
+	mock := &AuthManagerMock{}
+	mock.Mock.Test(t)
+
+	t.Cleanup(func() { mock.AssertExpectations(t) })
+
+	return mock
+}

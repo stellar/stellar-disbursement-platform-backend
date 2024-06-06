@@ -5,7 +5,7 @@ package mocks
 import (
 	context "context"
 
-	db "github.com/stellar/stellar-disbursement-platform-backend/internal/db"
+	db "github.com/stellar/stellar-disbursement-platform-backend/db"
 	mock "github.com/stretchr/testify/mock"
 
 	store "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"

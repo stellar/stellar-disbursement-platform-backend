@@ -1,21 +1,29 @@
 package httphandler
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strings"
 
 	"github.com/stellar/go/network"
+	"github.com/stellar/go/support/log"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 type StellarTomlHandler struct {
-	AnchorPlatformBaseSepURL string
-	DistributionPublicKey    string
-	NetworkPassphrase        string
-	Models                   *data.Models
-	Sep10SigningPublicKey    string
+	AnchorPlatformBaseSepURL    string
+	DistributionAccountResolver signing.DistributionAccountResolver
+	NetworkPassphrase           string
+	Models                      *data.Models
+	Sep10SigningPublicKey       string
+	InstanceName                string
 }
 
 const (
@@ -31,10 +39,16 @@ func (s *StellarTomlHandler) horizonURL() string {
 }
 
 // buildGeneralInformation will create the general informations based on the env vars injected into the handler.
-func (s *StellarTomlHandler) buildGeneralInformation() string {
+func (s *StellarTomlHandler) buildGeneralInformation(ctx context.Context, req *http.Request) string {
+	accounts := fmt.Sprintf("[%q]", s.Sep10SigningPublicKey)
+	if perTenantDistributionAccount, err := s.DistributionAccountResolver.DistributionAccountFromContext(ctx); err != nil {
+		log.Ctx(ctx).Warnf("Couldn't get distribution account from context in %s%s", req.Host, req.URL.Path)
+	} else if perTenantDistributionAccount.IsStellar() {
+		accounts = fmt.Sprintf("[%q, %q]", perTenantDistributionAccount.Address, s.Sep10SigningPublicKey)
+	}
+
 	webAuthEndpoint := s.AnchorPlatformBaseSepURL + "/auth"
 	transferServerSep0024 := s.AnchorPlatformBaseSepURL + "/sep24"
-	accounts := fmt.Sprintf("[%q, %q]", s.DistributionPublicKey, s.Sep10SigningPublicKey)
 
 	return fmt.Sprintf(`
 		ACCOUNTS=%s
@@ -46,11 +60,11 @@ func (s *StellarTomlHandler) buildGeneralInformation() string {
 	`, accounts, s.Sep10SigningPublicKey, s.NetworkPassphrase, s.horizonURL(), webAuthEndpoint, transferServerSep0024)
 }
 
-func (s *StellarTomlHandler) buildOrganizationDocumentation(organization data.Organization) string {
+func (s *StellarTomlHandler) buildOrganizationDocumentation(instanceName string) string {
 	return fmt.Sprintf(`
 		[DOCUMENTATION]
 		ORG_NAME=%q
-	`, organization.Name)
+	`, instanceName)
 }
 
 // buildCurrencyInformation will create the currency information for all assets register in the application.
@@ -84,20 +98,35 @@ func (s *StellarTomlHandler) buildCurrencyInformation(assets []data.Asset) strin
 
 // ServeHTTP will serve the stellar.toml file needed to register users through SEP-24.
 func (s StellarTomlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	assets, err := s.Models.Assets.GetAll(r.Context())
 	ctx := r.Context()
+	var stellarToml string
+	_, err := tenant.GetTenantFromContext(ctx)
 	if err != nil {
-		httperror.InternalError(ctx, "Cannot retrieve assets", err, nil).Render(w)
-		return
+		// return a general stellar.toml file for this instance because no tenant is present.
+		networkType, innerErr := utils.GetNetworkTypeFromNetworkPassphrase(s.NetworkPassphrase)
+		if innerErr != nil {
+			httperror.InternalError(ctx, "Couldn't generate stellar.toml file for this instance", innerErr, nil).Render(w)
+			return
+		}
+		instanceAssets := services.DefaultAssetsNetworkMap[networkType]
+		stellarToml = s.buildGeneralInformation(ctx, r) + s.buildOrganizationDocumentation(s.InstanceName) + s.buildCurrencyInformation(instanceAssets)
+	} else {
+		// return a stellar.toml file for this tenant.
+		organization, innerErr := s.Models.Organizations.Get(ctx)
+		if innerErr != nil {
+			httperror.InternalError(ctx, "Cannot retrieve organization", err, nil).Render(w)
+			return
+		}
+
+		assets, innerErr := s.Models.Assets.GetAll(ctx)
+		if innerErr != nil {
+			httperror.InternalError(ctx, "Cannot retrieve assets", innerErr, nil).Render(w)
+			return
+		}
+
+		stellarToml = s.buildGeneralInformation(ctx, r) + s.buildOrganizationDocumentation(organization.Name) + s.buildCurrencyInformation(assets)
 	}
 
-	organization, err := s.Models.Organizations.Get(r.Context())
-	if err != nil {
-		httperror.InternalError(ctx, "Cannot retrieve organization", err, nil).Render(w)
-		return
-	}
-
-	stellarToml := s.buildGeneralInformation() + s.buildOrganizationDocumentation(*organization) + s.buildCurrencyInformation(assets)
 	stellarToml = strings.TrimSpace(stellarToml)
 	stellarToml = strings.ReplaceAll(stellarToml, "\t", "")
 

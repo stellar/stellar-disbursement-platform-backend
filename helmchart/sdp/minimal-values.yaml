@@ -4,16 +4,34 @@
 ##  These are the minimal values required to deploy the SDP helm chart.
 ## @descriptionEnd
 
+global:
+  ## @extra global.eventBroker Configuration related to the event broker used by the application.
+  ## @param global.eventBroker.type The type of event broker to be used. Options: "NONE", "KAFKA". Default: "KAFKA".
+  ## @param global.eventBroker.urls A comma-separated list of broker URLs for the event broker.
+  ## @param global.eventBroker.consumerGroupId The consumer group ID for the event broker.
+  eventBroker:
+    type: "KAFKA"
+    urls: #required
+    consumerGroupId: #required
+
+    ## @extra global.eventBroker.kafka Configuration related to the Kafka event broker.
+    ## @param global.eventBroker.kafka.securityProtocol The security protocol to be used for the Kafka broker. Options: "PLAINTEXT", "SASL_SSL", "SASL_PLAINTEXT", "SSL".
+    kafka:
+      securityProtocol: #required
+
 sdp:
 
   ## @param sdp.route.domain Public domain/address of the SDP service.
+  ## @param sdp.route.mtnDomain Public domain/address of the multi-tenant SDP service. This is a wild-card domain used for multi-tenant setups e.g. "*.sdp.localhost.com".
   route:
     domain: #required
+    mtnDomain: #required
 
   ## @param sdp.configMap.data.EC256_PUBLIC_KEY [string] The EC256 public key used for authentication purposes.
   ## @param sdp.configMap.data.SEP10_SIGNING_PUBLIC_KEY Anchor platform SEP10 signing public key.
   ## @param sdp.configMap.data.DISTRIBUTION_PUBLIC_KEY The public key of the Stellar distribution account that sends the Stellar payments.
   ## @param sdp.configMap.data.RECAPTCHA_SITE_KEY Site key for ReCaptcha. Required if using ReCaptcha.
+  ## @param sdp.configMap.data.INSTANCE_NAME The name of the SDP instance. Example: "SDP Testnet".
   configMap:
     annotations:
     data:
@@ -21,6 +39,7 @@ sdp:
       SEP10_SIGNING_PUBLIC_KEY: #required
       DISTRIBUTION_PUBLIC_KEY: #required
       RECAPTCHA_SITE_KEY: #required
+      INSTANCE_NAME: #required
 
   ## @param sdp.kubeSecrets.data.EC256_PRIVATE_KEY [string] The EC256 Private Key. This key is used to sign the authentication token.
   ## @param sdp.kubeSecrets.data.SEP10_SIGNING_PRIVATE_KEY The public key of the Stellar account that signs the SEP-10 transactions. It's also used to sign URLs.
@@ -29,6 +48,9 @@ sdp:
   ## @param sdp.kubeSecrets.data.ANCHOR_PLATFORM_OUTGOING_JWT_SECRET The JWT secret used to create a JWT token used to send requests to the anchor platform.
   ## @param sdp.kubeSecrets.data.DATABASE_URL URL of the database used by the SDP.
   ## @param sdp.kubeSecrets.data.DISTRIBUTION_SEED The private key of the Stellar account used to disburse funds. This is needed for the init container
+  ## @param sdp.kubeSecrets.data.CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE The private key used to encrypt the channel account secrets in the database.
+  ## @param sdp.kubeSecrets.data.ADMIN_ACCOUNT The ID of the admin account. To use, add to the request header as 'Authorization', formatted as Base64-encoded 'ADMIN_ACCOUNT:ADMIN_API_KEY'.",
+  ## @param sdp.kubeSecrets.data.ADMIN_API_KEY The API key for the admin account. To use, add to the request header as 'Authorization', formatted as Base64-encoded 'ADMIN_ACCOUNT:ADMIN_API_KEY'.",
   kubeSecrets:
     create: true
     data:
@@ -39,6 +61,9 @@ sdp:
       ANCHOR_PLATFORM_OUTGOING_JWT_SECRET: #required for mySdpToAnchorPlatformSecret
       DATABASE_URL: #required
       DISTRIBUTION_SEED: #required
+      CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE: #required
+      ADMIN_ACCOUNT: #required
+      ADMIN_API_KEY: #required
 
   ## @extra sdp.ingress Configuration for the ingress controller for the SDP service.
   ingress: #required
@@ -78,22 +103,33 @@ anchorPlatform:
 
 tss:
 
+  ## @extra tss.configMap Configuration settings for the Transaction Submission Service (TSS) ConfigMap.
+  ## @param tss.configMap.data.DISTRIBUTION_PUBLIC_KEY The public key of the HOST's Stellar distribution account, used to create channel accounts.
+  configMap:
+    data:
+      DISTRIBUTION_PUBLIC_KEY: #required
+
   ## @param tss.kubeSecrets.data.DATABASE_URL URL of the database used by the TSS.
   ## @param tss.kubeSecrets.data.DISTRIBUTION_SEED The private key of the Stellar account used to disburse funds.
+  ## @param tss.kubeSecrets.data.CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE The private key used to encrypt the channel account secrets in the database.
   kubeSecrets:
     create: true
     data:
       DATABASE_URL: #required
       DISTRIBUTION_SEED: #required
+      CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE: #required
 
 dashboard:
 
   ## @param dashboard.enabled If true, the dashboard will be deployed.
   enabled: true
 
+  ## @extra dashboard.route Configuration related to the routing of the Dashboard.
   ## @param dashboard.route.domain Public domain/address of the Dashboard.
+  ## @param dashboard.route.mtnDomain Public domain/address of the multi-tenant Dashboard. This is a wild-card domain used for multi-tenant setups e.g. "*.sdp-dashboard.localhost.com".
   route:
     domain: #required
+    mtnDomain: #required
 
   ## @param dashboard.configMap.data.RECAPTCHA_SITE_KEY The site key for Google reCAPTCHA service.
   configMap:
@@ -102,5 +138,3 @@ dashboard:
 
   ## @extra dashboard.ingress Configuration for the ingress controller for the dashboard.
   ingress: #required
-
-

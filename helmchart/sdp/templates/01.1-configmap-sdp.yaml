@@ -24,7 +24,14 @@ data:
   BASE_URL: {{ include "sdp.schema" . }}://{{ include "sdp.domain" . }}
   PORT: {{ include "sdp.port" . | quote }}
   METRICS_PORT: {{ include "sdp.metricsPort" . | quote }}
+  ADMIN_PORT: {{ include "sdp.adminPort" . | quote }}
   ANCHOR_PLATFORM_BASE_SEP_URL: {{ include "sdp.ap.schema" . }}://{{ include "sdp.ap.domain" . }}
   ANCHOR_PLATFORM_BASE_PLATFORM_URL: {{ include "sdp.ap.platformServiceAddress" . }}
+  EVENT_BROKER_TYPE: {{ .Values.global.eventBroker.type | quote }}
+  BROKER_URLS: {{ .Values.global.eventBroker.urls | quote }}
+  CONSUMER_GROUP_ID: {{ .Values.global.eventBroker.consumerGroupId | quote }}
+  {{- if eq .Values.global.eventBroker.type "KAFKA" }}
+  KAFKA_SECURITY_PROTOCOL: {{ .Values.global.eventBroker.kafka.securityProtocol | quote }}
+  {{- end }}
   {{- tpl (toYaml .Values.sdp.configMap.data | nindent 2) . }}
 {{- end }}

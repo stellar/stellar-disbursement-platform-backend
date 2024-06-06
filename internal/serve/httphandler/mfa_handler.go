@@ -27,7 +27,7 @@ type MFAHandler struct {
 	AuthManager        auth.AuthManager
 	ReCAPTCHAValidator validators.ReCAPTCHAValidator
 	Models             *data.Models
-	ReCAPTCHAEnabled   bool
+	ReCAPTCHADisabled  bool
 }
 
 const DeviceIDHeader = "Device-ID"
@@ -43,7 +43,7 @@ func (h MFAHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	}
 
 	// validating reCAPTCHA Token
-	if h.ReCAPTCHAEnabled {
+	if !h.ReCAPTCHADisabled {
 		isValid, recaptchaErr := h.ReCAPTCHAValidator.IsTokenValid(ctx, reqBody.ReCAPTCHAToken)
 		if recaptchaErr != nil {
 			httperror.InternalError(ctx, "Cannot validate reCAPTCHA token", recaptchaErr, nil).Render(rw)

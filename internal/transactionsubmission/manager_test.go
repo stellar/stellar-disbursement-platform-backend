@@ -13,25 +13,48 @@ import (
 	"github.com/stellar/go/protocols/horizon"
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/txnbuild"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/db/dbtest"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	monitorMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor/mocks"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/mocks"
+	preconditionsMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions/mocks"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
+	sigMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing/mocks"
 	tssMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 	storeMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
-	"github.com/stretchr/testify/require"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 func Test_SubmitterOptions_validate(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	mHorizonClient := &horizonclient.MockClient{}
+	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
+	signatureService, _, _, _, distAccResolver := signing.NewMockSignatureService(t)
+	mSubmitterEngine := engine.SubmitterEngine{
+		HorizonClient:       mHorizonClient,
+		LedgerNumberTracker: mLedgerNumberTracker,
+		SignatureService:    signatureService,
+		MaxBaseFee:          txnbuild.MinBaseFee,
+	}
+	tssMonitorService := tssMonitor.TSSMonitorService{
+		Client:        monitorMocks.NewMockMonitorClient(t),
+		GitCommitHash: "gitCommitHash0x",
+		Version:       "version123",
+	}
 
 	testCases := []struct {
 		name             string
@@ -39,142 +62,122 @@ func Test_SubmitterOptions_validate(t *testing.T) {
 		submitterOptions SubmitterOptions
 	}{
 		{
-			name:             "validate DatabaseDSN",
+			name:             "validate DBConnectionPool",
 			submitterOptions: SubmitterOptions{},
-			wantErrContains:  "database DSN cannot be empty",
+			wantErrContains:  "database connection pool cannot be nil",
 		},
 		{
-			name: "validate horizonURL",
+			name: "validate submitter engine's Horizon Client",
 			submitterOptions: SubmitterOptions{
-				DatabaseDSN: dbt.DSN,
+				DBConnectionPool: dbConnectionPool,
+				SubmitterEngine:  engine.SubmitterEngine{},
 			},
-			wantErrContains: "horizon url cannot be empty",
+			wantErrContains: "validating submitter engine: horizon client cannot be nil",
 		},
 		{
-			name: "validate networkPassphrase",
+			name: "validate submitter engine's Ledger Number Tracker",
 			submitterOptions: SubmitterOptions{
-				DatabaseDSN: dbt.DSN,
-				HorizonURL:  "https://horizon-testnet.stellar.org",
+				DBConnectionPool: dbConnectionPool,
+				SubmitterEngine: engine.SubmitterEngine{
+					HorizonClient: mHorizonClient,
+				},
 			},
-			wantErrContains: "network passphrase \"\" is invalid",
+			wantErrContains: "validating submitter engine: ledger number tracker cannot be nil",
 		},
 		{
-			name: "validate PrivateKeyEncrypter",
+			name: "validate submitter engine's Signature Service",
 			submitterOptions: SubmitterOptions{
-				DatabaseDSN:       dbt.DSN,
-				HorizonURL:        "https://horizon-testnet.stellar.org",
-				NetworkPassphrase: network.TestNetworkPassphrase,
+				DBConnectionPool: dbConnectionPool,
+				SubmitterEngine: engine.SubmitterEngine{
+					HorizonClient:       mHorizonClient,
+					LedgerNumberTracker: mLedgerNumberTracker,
+				},
 			},
-			wantErrContains: "private key encrypter cannot be nil",
+			wantErrContains: "validating submitter engine: signature service cannot be empty",
 		},
 		{
-			name: "validate DistributionSeed",
+			name: "validate submitter engine's Signature Service",
 			submitterOptions: SubmitterOptions{
-				DatabaseDSN:         dbt.DSN,
-				HorizonURL:          "https://horizon-testnet.stellar.org",
-				NetworkPassphrase:   network.TestNetworkPassphrase,
-				PrivateKeyEncrypter: &utils.PrivateKeyEncrypterMock{},
+				DBConnectionPool: dbConnectionPool,
+				SubmitterEngine: engine.SubmitterEngine{
+					HorizonClient:       mHorizonClient,
+					LedgerNumberTracker: mLedgerNumberTracker,
+					SignatureService: signing.SignatureService{
+						DistributionAccountResolver: distAccResolver,
+					},
+				},
 			},
-			wantErrContains: "distribution seed is invalid",
+			wantErrContains: "validating submitter engine: validating signature service: channel account signer cannot be nil",
+		},
+		{
+			name: "validate submitter engine's Max Base Fee",
+			submitterOptions: SubmitterOptions{
+				DBConnectionPool: dbConnectionPool,
+				SubmitterEngine: engine.SubmitterEngine{
+					HorizonClient:       mHorizonClient,
+					LedgerNumberTracker: mLedgerNumberTracker,
+					SignatureService:    signatureService,
+				},
+			},
+			wantErrContains: "validating submitter engine: maxBaseFee must be greater than or equal to",
 		},
 		{
 			name: "validate NumChannelAccounts (min)",
 			submitterOptions: SubmitterOptions{
-				DatabaseDSN:         dbt.DSN,
-				HorizonURL:          "https://horizon-testnet.stellar.org",
-				NetworkPassphrase:   network.TestNetworkPassphrase,
-				PrivateKeyEncrypter: &utils.PrivateKeyEncrypterMock{},
-				DistributionSeed:    "SBDBQFZIIZ53A7JC2X23LSQLI5RTKV5YWDRT33YXW5LRMPKRSJYXS2EW",
-				NumChannelAccounts:  0,
+				DBConnectionPool:   dbConnectionPool,
+				SubmitterEngine:    mSubmitterEngine,
+				NumChannelAccounts: 0,
 			},
 			wantErrContains: "num channel accounts must stay in the range from 1 to 1000",
 		},
 		{
-			name: "validate NumChannelAccounts (min)",
+			name: "validate NumChannelAccounts (max)",
 			submitterOptions: SubmitterOptions{
-				DatabaseDSN:         dbt.DSN,
-				HorizonURL:          "https://horizon-testnet.stellar.org",
-				NetworkPassphrase:   network.TestNetworkPassphrase,
-				PrivateKeyEncrypter: &utils.PrivateKeyEncrypterMock{},
-				DistributionSeed:    "SBDBQFZIIZ53A7JC2X23LSQLI5RTKV5YWDRT33YXW5LRMPKRSJYXS2EW",
-				NumChannelAccounts:  1001,
+				DBConnectionPool:   dbConnectionPool,
+				SubmitterEngine:    mSubmitterEngine,
+				NumChannelAccounts: 1001,
 			},
 			wantErrContains: "num channel accounts must stay in the range from 1 to 1000",
 		},
 		{
 			name: "validate QueuePollingInterval",
 			submitterOptions: SubmitterOptions{
-				DatabaseDSN:         dbt.DSN,
-				HorizonURL:          "https://horizon-testnet.stellar.org",
-				NetworkPassphrase:   network.TestNetworkPassphrase,
-				PrivateKeyEncrypter: &utils.PrivateKeyEncrypterMock{},
-				DistributionSeed:    "SBDBQFZIIZ53A7JC2X23LSQLI5RTKV5YWDRT33YXW5LRMPKRSJYXS2EW",
-				NumChannelAccounts:  1,
+				DBConnectionPool:   dbConnectionPool,
+				SubmitterEngine:    mSubmitterEngine,
+				NumChannelAccounts: 1,
 			},
 			wantErrContains: "queue polling interval must be greater than 6 seconds",
 		},
 		{
-			name: "validate MaxBaseFee",
-			submitterOptions: SubmitterOptions{
-				DatabaseDSN:          dbt.DSN,
-				HorizonURL:           "https://horizon-testnet.stellar.org",
-				NetworkPassphrase:    network.TestNetworkPassphrase,
-				PrivateKeyEncrypter:  &utils.PrivateKeyEncrypterMock{},
-				DistributionSeed:     "SBDBQFZIIZ53A7JC2X23LSQLI5RTKV5YWDRT33YXW5LRMPKRSJYXS2EW",
-				NumChannelAccounts:   1,
-				QueuePollingInterval: 10,
-			},
-			wantErrContains: "max base fee must be greater than or equal to 100",
-		},
-		{
 			name: "validate monitorService",
 			submitterOptions: SubmitterOptions{
-				DatabaseDSN:          dbt.DSN,
-				MonitorService:       tssMonitor.TSSMonitorService{},
-				HorizonURL:           "https://horizon-testnet.stellar.org",
-				NetworkPassphrase:    network.TestNetworkPassphrase,
-				PrivateKeyEncrypter:  &utils.PrivateKeyEncrypterMock{},
-				DistributionSeed:     "SBDBQFZIIZ53A7JC2X23LSQLI5RTKV5YWDRT33YXW5LRMPKRSJYXS2EW",
+				DBConnectionPool:     dbConnectionPool,
+				SubmitterEngine:      mSubmitterEngine,
 				NumChannelAccounts:   1,
 				QueuePollingInterval: 10,
-				MaxBaseFee:           txnbuild.MinBaseFee,
 			},
 			wantErrContains: "monitor service cannot be nil",
 		},
 		{
 			name: "🎉 successfully finishes validation with nil crash tracker client",
 			submitterOptions: SubmitterOptions{
-				DatabaseDSN: dbt.DSN,
-				MonitorService: tssMonitor.TSSMonitorService{
-					Client:        &monitorMocks.MockMonitorClient{},
-					GitCommitHash: "0xABC",
-					Version:       "0.01",
-				},
-				HorizonURL:           "https://horizon-testnet.stellar.org",
-				NetworkPassphrase:    network.TestNetworkPassphrase,
-				PrivateKeyEncrypter:  &utils.PrivateKeyEncrypterMock{},
-				DistributionSeed:     "SBDBQFZIIZ53A7JC2X23LSQLI5RTKV5YWDRT33YXW5LRMPKRSJYXS2EW",
+				DBConnectionPool:     dbConnectionPool,
+				SubmitterEngine:      mSubmitterEngine,
 				NumChannelAccounts:   1,
 				QueuePollingInterval: 10,
-				MaxBaseFee:           txnbuild.MinBaseFee,
+				MonitorService:       tssMonitorService,
+				EventProducer:        &events.MockProducer{},
 			},
 		},
 		{
 			name: "🎉 successfully finishes validation with existing crash tracker client",
 			submitterOptions: SubmitterOptions{
-				DatabaseDSN: dbt.DSN,
-				MonitorService: tssMonitor.TSSMonitorService{
-					Client:        &monitorMocks.MockMonitorClient{},
-					GitCommitHash: "0xABC",
-					Version:       "0.01",
-				},
-				HorizonURL:           "https://horizon-testnet.stellar.org",
-				NetworkPassphrase:    network.TestNetworkPassphrase,
-				PrivateKeyEncrypter:  &utils.PrivateKeyEncrypterMock{},
-				DistributionSeed:     "SBDBQFZIIZ53A7JC2X23LSQLI5RTKV5YWDRT33YXW5LRMPKRSJYXS2EW",
+				DBConnectionPool:     dbConnectionPool,
+				SubmitterEngine:      mSubmitterEngine,
 				NumChannelAccounts:   1,
 				QueuePollingInterval: 10,
-				MaxBaseFee:           txnbuild.MinBaseFee,
+				MonitorService:       tssMonitorService,
+				EventProducer:        &events.MockProducer{},
 				CrashTrackerClient:   &crashtracker.MockCrashTrackerClient{},
 			},
 		},
@@ -194,27 +197,34 @@ func Test_SubmitterOptions_validate(t *testing.T) {
 }
 
 func Test_NewManager(t *testing.T) {
-	dbt := dbtest.Open(t)
+	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
 
+	mHorizonClient := &horizonclient.MockClient{}
+	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
+	sigService, _, _, _, _ := signing.NewMockSignatureService(t)
+	mSubmitterEngine := engine.SubmitterEngine{
+		HorizonClient:       mHorizonClient,
+		LedgerNumberTracker: mLedgerNumberTracker,
+		SignatureService:    sigService,
+		MaxBaseFee:          txnbuild.MinBaseFee,
+	}
+
 	ctx := context.Background()
 	validSubmitterOptions := SubmitterOptions{
-		DatabaseDSN: dbt.DSN,
+		DBConnectionPool: dbConnectionPool,
 		MonitorService: tssMonitor.TSSMonitorService{
 			Client:        &monitorMocks.MockMonitorClient{},
 			GitCommitHash: "0xABC",
 			Version:       "0.01",
 		},
-		HorizonURL:           "https://horizon-testnet.stellar.org",
-		NetworkPassphrase:    network.TestNetworkPassphrase,
-		PrivateKeyEncrypter:  &utils.PrivateKeyEncrypterMock{},
-		DistributionSeed:     "SBDBQFZIIZ53A7JC2X23LSQLI5RTKV5YWDRT33YXW5LRMPKRSJYXS2EW",
+		SubmitterEngine:      mSubmitterEngine,
 		NumChannelAccounts:   5,
 		QueuePollingInterval: 10,
-		MaxBaseFee:           txnbuild.MinBaseFee,
+		EventProducer:        &events.MockProducer{},
 	}
 
 	testCases := []struct {
@@ -232,10 +242,10 @@ func Test_NewManager(t *testing.T) {
 			name: "returns an error if the database connection cannot be opened",
 			getSubmitterOptionsFn: func() SubmitterOptions {
 				opts := validSubmitterOptions
-				opts.DatabaseDSN = "invalid-dsn"
+				opts.DBConnectionPool = nil
 				return opts
 			},
-			wantErrContains: "opening db connection pool: error pinging app DB connection pool: ",
+			wantErrContains: "validating options: database connection pool cannot be nil",
 		},
 		{
 			name:                  "returns an error if there are zero channel accounts in the database",
@@ -302,7 +312,6 @@ func Test_NewManager(t *testing.T) {
 				require.NoError(t, err)
 				require.NotNil(t, gotManager)
 				assert.NotEmpty(t, gotManager.dbConnectionPool)
-				defer gotManager.dbConnectionPool.Close()
 
 				// Assert the resulting manager state:
 				wantConnectionPool := gotManager.dbConnectionPool
@@ -311,47 +320,35 @@ func Test_NewManager(t *testing.T) {
 				wantChTxBundleModel, err := store.NewChannelTransactionBundleModel(wantConnectionPool)
 				require.NoError(t, err)
 
-				wantSubmitterEngine, err := engine.NewSubmitterEngine(&horizonclient.Client{
-					HorizonURL: submitterOptions.HorizonURL,
-					HTTP:       httpclient.DefaultClient(),
-				})
-				require.NoError(t, err)
-
-				wantSigService, err := engine.NewDefaultSignatureService(
-					submitterOptions.NetworkPassphrase,
-					wantConnectionPool,
-					submitterOptions.DistributionSeed, wantChAccModel,
-					submitterOptions.PrivateKeyEncrypter,
-					submitterOptions.DistributionSeed,
-				)
-				require.NoError(t, err)
+				wantSubmitterEngine := &engine.SubmitterEngine{
+					HorizonClient:       mHorizonClient,
+					LedgerNumberTracker: mLedgerNumberTracker,
+					SignatureService:    sigService,
+					MaxBaseFee:          txnbuild.MinBaseFee,
+				}
 
 				wantCrashTrackerClient := submitterOptions.CrashTrackerClient
 				if tc.wantCrashTrackerClientFn != nil {
 					wantCrashTrackerClient = tc.wantCrashTrackerClientFn()
 				}
 
-				txProcessingLimiter := engine.NewTransactionProcessingLimiter(submitterOptions.NumChannelAccounts)
-				txProcessingLimiter.CounterLastUpdated = gotManager.txProcessingLimiter.CounterLastUpdated
+				wantEventProducer := &events.MockProducer{}
+
 				wantManager := &Manager{
 					dbConnectionPool: wantConnectionPool,
 					chAccModel:       wantChAccModel,
 					txModel:          wantTxModel,
 					chTxBundleModel:  wantChTxBundleModel,
 
-					queueService: defaultQueueService{
-						pollingInterval:    time.Duration(submitterOptions.QueuePollingInterval) * time.Second,
-						numChannelAccounts: submitterOptions.NumChannelAccounts,
-					},
+					pollingInterval:     time.Duration(submitterOptions.QueuePollingInterval) * time.Second,
+					txProcessingLimiter: gotManager.txProcessingLimiter,
 
-					engine:     wantSubmitterEngine,
-					sigService: wantSigService,
-					maxBaseFee: submitterOptions.MaxBaseFee,
+					engine: wantSubmitterEngine,
 
 					crashTrackerClient: wantCrashTrackerClient,
 					monitorService:     submitterOptions.MonitorService,
 
-					txProcessingLimiter: txProcessingLimiter,
+					eventProducer: wantEventProducer,
 				}
 				assert.Equal(t, wantManager, gotManager)
 
@@ -364,7 +361,6 @@ func Test_NewManager(t *testing.T) {
 					}
 					assert.True(t, didFindExpectedLogEntry)
 				}
-
 			}
 		})
 	}
@@ -377,6 +373,30 @@ func Test_Manager_ProcessTransactions(t *testing.T) {
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
 
+	// Signature service
+	encrypter := &utils.DefaultPrivateKeyEncrypter{}
+	chAccEncryptionPassphrase := keypair.MustRandom().Seed()
+	distributionKP := keypair.MustRandom()
+
+	mDistAccResolver := sigMocks.NewMockDistributionAccountResolver(t)
+	mDistAccResolver.
+		On("DistributionAccount", mock.Anything, mock.AnythingOfType("string")).
+		Return(schema.NewDefaultStellarDistributionAccount(distributionKP.Address()), nil)
+
+	sigService, err := signing.NewSignatureService(signing.SignatureServiceOptions{
+		DistributionSignerType:    signing.DistributionAccountEnvSignatureClientType,
+		NetworkPassphrase:         network.TestNetworkPassphrase,
+		DistributionPrivateKey:    distributionKP.Seed(),
+		DBConnectionPool:          dbConnectionPool,
+		ChAccEncryptionPassphrase: chAccEncryptionPassphrase,
+		LedgerNumberTracker:       preconditionsMocks.NewMockLedgerNumberTracker(t),
+		Encrypter:                 encrypter,
+
+		DistributionAccountResolver: mDistAccResolver,
+	})
+	require.NoError(t, err)
+
+	// Signal types
 	type signalType string
 	const (
 		signalTypeCancel    signalType = "CANCEL"
@@ -396,13 +416,15 @@ func Test_Manager_ProcessTransactions(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(string(tc.signalType), func(t *testing.T) {
-			ctx, cancel := context.WithCancel(context.Background())
+			rawCtx := context.Background()
+			ctx, cancel := context.WithCancel(rawCtx)
 
-			defer store.DeleteAllFromChannelAccounts(t, context.Background(), dbConnectionPool)
-			defer store.DeleteAllTransactionFixtures(t, context.Background(), dbConnectionPool)
+			defer store.DeleteAllFromChannelAccounts(t, rawCtx, dbConnectionPool)
+			defer store.DeleteAllTransactionFixtures(t, rawCtx, dbConnectionPool)
+			defer tenant.DeleteAllTenantsFixture(t, rawCtx, dbConnectionPool)
 
 			// Create channel accounts to be used by the tx submitter
-			channelAccounts := store.CreateChannelAccountFixtures(t, ctx, dbConnectionPool, 2)
+			channelAccounts := store.CreateChannelAccountFixturesEncrypted(t, ctx, dbConnectionPool, encrypter, chAccEncryptionPassphrase, 2)
 			assert.Len(t, channelAccounts, 2)
 			channelAccountsMap := map[string]*store.ChannelAccount{}
 			for _, ca := range channelAccounts {
@@ -410,26 +432,22 @@ func Test_Manager_ProcessTransactions(t *testing.T) {
 			}
 
 			// Create transactions to be used by the tx submitter
-			transactions := store.CreateTransactionFixtures(t, ctx, dbConnectionPool, 10, "USDC", "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5", keypair.MustRandom().Address(), store.TransactionStatusPending, 1)
-			assert.Len(t, transactions, 10)
+			tnt := tenant.CreateTenantFixture(t, ctx, dbConnectionPool, "test-tenant", distributionKP.Address())
+			transactions := store.CreateTransactionFixturesNew(t, ctx, dbConnectionPool, 10, store.TransactionFixture{
+				AssetCode:          "USDC",
+				AssetIssuer:        "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+				DestinationAddress: keypair.MustRandom().Address(),
+				Status:             store.TransactionStatusPending,
+				Amount:             1,
+				TenantID:           tnt.ID,
+			})
 
-			// Signature service
-			distributionKP := keypair.MustRandom()
-			sigService, err := engine.NewDefaultSignatureService(
-				network.TestNetworkPassphrase,
-				dbConnectionPool,
-				distributionKP.Seed(),
-				store.NewChannelAccountModel(dbConnectionPool),
-				&utils.PrivateKeyEncrypterMock{},
-				distributionKP.Seed(),
-			)
-			require.NoError(t, err)
+			assert.Len(t, transactions, 10)
 
 			// mock ledger number tracker
 			const currentLedgerNumber = 123
-			mockLedgerNumberTracker := &mocks.MockLedgerNumberTracker{}
+			mockLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
 			mockLedgerNumberTracker.On("GetLedgerNumber").Return(currentLedgerNumber, nil)
-			defer mockLedgerNumberTracker.AssertExpectations(t)
 
 			// mock horizon client
 			const sequenceNumber = 456
@@ -448,39 +466,42 @@ func Test_Manager_ProcessTransactions(t *testing.T) {
 			submitterEngine := &engine.SubmitterEngine{
 				LedgerNumberTracker: mockLedgerNumberTracker,
 				HorizonClient:       mockHorizonClient,
+				SignatureService:    sigService,
+				MaxBaseFee:          txnbuild.MinBaseFee,
 			}
 
 			dryRunCrashTracker, err := crashtracker.NewDryRunClient()
 			require.NoError(t, err)
 
-			queueService := defaultQueueService{
-				pollingInterval:    500 * time.Millisecond,
-				numChannelAccounts: 2,
-			}
-
 			chTxBundleModel, err := store.NewChannelTransactionBundleModel(dbConnectionPool)
 			require.NoError(t, err)
 
-			mMonitorClient := monitorMocks.MockMonitorClient{}
+			mMonitorClient := monitorMocks.NewMockMonitorClient(t)
 			mMonitorClient.On("MonitorCounters", mock.Anything, mock.Anything).Return(nil).Times(3)
-			defer mMonitorClient.AssertExpectations(t)
+
+			mockEventProducer := &events.MockProducer{}
+			mockEventProducer.On("WriteMessages", mock.Anything, mock.AnythingOfType("[]events.Message")).Return(nil).Once()
+			defer mockEventProducer.AssertExpectations(t)
 
 			manager := &Manager{
-				dbConnectionPool:    dbConnectionPool,
-				chTxBundleModel:     chTxBundleModel,
-				chAccModel:          store.NewChannelAccountModel(dbConnectionPool),
-				txModel:             store.NewTransactionModel(dbConnectionPool),
-				engine:              submitterEngine,
-				crashTrackerClient:  dryRunCrashTracker,
-				queueService:        queueService,
-				sigService:          sigService,
-				maxBaseFee:          txnbuild.MinBaseFee,
-				txProcessingLimiter: engine.NewTransactionProcessingLimiter(queueService.numChannelAccounts),
+				dbConnectionPool: dbConnectionPool,
+				chAccModel:       store.NewChannelAccountModel(dbConnectionPool),
+				txModel:          store.NewTransactionModel(dbConnectionPool),
+				chTxBundleModel:  chTxBundleModel,
+
+				pollingInterval:     500 * time.Millisecond,
+				txProcessingLimiter: engine.NewTransactionProcessingLimiter(2),
+
+				engine: submitterEngine,
+
+				crashTrackerClient: dryRunCrashTracker,
 				monitorService: tssMonitor.TSSMonitorService{
-					Client:        &mMonitorClient,
+					Client:        mMonitorClient,
 					GitCommitHash: "gitCommitHash0x",
 					Version:       "version123",
 				},
+
+				eventProducer: mockEventProducer,
 			}
 
 			go manager.ProcessTransactions(ctx)

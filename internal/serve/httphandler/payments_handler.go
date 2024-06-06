@@ -9,10 +9,14 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/stellar/go/support/http/httpdecode"
+	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/support/render/httpjson"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpresponse"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
@@ -23,9 +27,11 @@ import (
 )
 
 type PaymentsHandler struct {
-	Models           *data.Models
-	DBConnectionPool db.DBConnectionPool
-	AuthManager      auth.AuthManager
+	Models             *data.Models
+	DBConnectionPool   db.DBConnectionPool
+	AuthManager        auth.AuthManager
+	EventProducer      events.Producer
+	CrashTrackerClient crashtracker.CrashTrackerClient
 }
 
 type RetryPaymentsRequest struct {
@@ -45,7 +51,7 @@ func (r *RetryPaymentsRequest) validate() *httperror.HTTPError {
 func (p PaymentsHandler) GetPayment(w http.ResponseWriter, r *http.Request) {
 	payment_id := chi.URLParam(r, "id")
 
-	payment, err := p.Models.Payment.Get(r.Context(), payment_id, p.DBConnectionPool.SqlxDB())
+	payment, err := p.Models.Payment.Get(r.Context(), payment_id, p.DBConnectionPool)
 	if err != nil {
 		if errors.Is(data.ErrRecordNotFound, err) {
 			errorResponse := fmt.Sprintf("Cannot retrieve payment with ID: %s", payment_id)
@@ -123,7 +129,41 @@ func (p PaymentsHandler) RetryPayments(rw http.ResponseWriter, req *http.Request
 		return
 	}
 
-	err = p.Models.Payment.RetryFailedPayments(ctx, user.Email, reqBody.PaymentIDs...)
+	opts := db.TransactionOptions{
+		DBConnectionPool: p.DBConnectionPool,
+		AtomicFunctionWithPostCommit: func(dbTx db.DBTransaction) (postCommitFn db.PostCommitFunction, err error) {
+			err = p.Models.Payment.RetryFailedPayments(ctx, dbTx, user.Email, reqBody.PaymentIDs...)
+			if err != nil {
+				return nil, fmt.Errorf("retrying failed payments: %w", err)
+			}
+
+			// Producing event to send ready payments to TSS
+			var payments []*data.Payment
+			payments, err = p.Models.Payment.GetReadyByID(ctx, dbTx, reqBody.PaymentIDs...)
+			if err != nil {
+				return nil, fmt.Errorf("getting ready payments by IDs: %w", err)
+			}
+
+			if len(payments) > 0 {
+				msg, err := p.buildPaymentsReadyEventMessage(ctx, payments)
+				if err != nil {
+					return nil, fmt.Errorf("building event message for payment retry: %w", err)
+				}
+
+				postCommitFn = func() error {
+					postErr := events.ProduceEvents(ctx, p.EventProducer, msg)
+					if postErr != nil {
+						p.CrashTrackerClient.LogAndReportErrors(ctx, postErr, "writing retry payment message on the event producer")
+					}
+
+					return nil
+				}
+			}
+
+			return postCommitFn, nil
+		},
+	}
+	err = db.RunInTransactionWithPostCommit(ctx, &opts)
 	if err != nil {
 		if errors.Is(err, data.ErrMismatchNumRowsAffected) {
 			httperror.BadRequest("Invalid payment ID(s) provided. All payment IDs must exist and be in the 'FAILED' state.", err, nil).Render(rw)
@@ -135,6 +175,32 @@ func (p PaymentsHandler) RetryPayments(rw http.ResponseWriter, req *http.Request
 	}
 
 	httpjson.RenderStatus(rw, http.StatusOK, map[string]string{"message": "Payments retried successfully"}, httpjson.JSON)
+}
+
+func (p PaymentsHandler) buildPaymentsReadyEventMessage(ctx context.Context, payments []*data.Payment) (*events.Message, error) {
+	if len(payments) == 0 {
+		log.Ctx(ctx).Warnf("no payments to retry")
+		return nil, nil
+	}
+
+	msg, err := events.NewMessage(ctx, events.PaymentReadyToPayTopic, "", events.PaymentReadyToPayRetryFailedPayment, nil)
+	if err != nil {
+		return nil, fmt.Errorf("creating a new message: %w", err)
+	}
+
+	paymentsReadyToPay := schemas.EventPaymentsReadyToPayData{TenantID: msg.TenantID}
+	for _, payment := range payments {
+		paymentsReadyToPay.Payments = append(paymentsReadyToPay.Payments, schemas.PaymentReadyToPay{ID: payment.ID})
+	}
+	msg.Data = paymentsReadyToPay
+	msg.Key = paymentsReadyToPay.TenantID
+
+	err = msg.Validate()
+	if err != nil {
+		return nil, fmt.Errorf("validating message: %w", err)
+	}
+
+	return msg, nil
 }
 
 func (p PaymentsHandler) getPaymentsWithCount(ctx context.Context, queryParams *data.QueryParams) (*utils.ResultWithTotal, error) {

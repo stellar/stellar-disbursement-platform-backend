@@ -14,9 +14,8 @@ type EmailClientOptions struct {
 	MessengerOptions *message.MessengerOptions
 }
 
-// buildEmailClientInstanceName sets up a instance name for the email messenger type
-// to either be created and stored, also retrived later, so we can have a instance
-// for each type at the same time.
+// buildEmailClientInstanceName creates a new email client instance, or retrives a instance that was already created
+// before.
 func buildEmailClientInstanceName(emailClientType message.MessengerType) string {
 	return fmt.Sprintf("%s-%s", EmailClientInstanceName, string(emailClientType))
 }
@@ -35,19 +34,19 @@ func NewEmailClient(opts EmailClientOptions) (message.MessengerClient, error) {
 
 	// If there is already an instance of the service, we return the same instance
 	instanceName := buildEmailClientInstanceName(opts.MessengerOptions.MessengerType)
-	if instance, ok := dependenciesStoreMap[instanceName]; ok {
+	if instance, ok := GetInstance(instanceName); ok {
 		if emailClientInstance, ok := instance.(message.MessengerClient); ok {
 			return emailClientInstance, nil
 		}
 		return nil, fmt.Errorf("trying to cast pre-existing Email client for depencency injection")
 	}
 
-	log.Infof("⚙️ Setting Email client to: %v", opts.MessengerOptions.MessengerType)
+	log.Infof("⚙️ Setting up Email client to: %v", opts.MessengerOptions.MessengerType)
 	messengerClient, err := message.GetClient(*opts.MessengerOptions)
 	if err != nil {
 		return nil, fmt.Errorf("creating Email client: %w", err)
 	}
 
-	setInstance(instanceName, messengerClient)
+	SetInstance(instanceName, messengerClient)
 	return messengerClient, nil
 }

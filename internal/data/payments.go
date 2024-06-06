@@ -13,7 +13,7 @@ import (
 	"github.com/stellar/go/support/log"
 
 	"github.com/lib/pq"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
@@ -139,6 +139,47 @@ func (p *PaymentUpdate) Validate() error {
 	return nil
 }
 
+func (p *PaymentModel) GetAllReadyToPatchCompletionAnchorTransactions(ctx context.Context, sqlExec db.SQLExecuter) ([]Payment, error) {
+	const query = `
+		SELECT
+			p.id,
+			p.amount,
+			p.stellar_transaction_id,
+			p.status,
+			p.status_history,
+			p.updated_at,
+			a.id AS "asset.id",
+			a.code AS "asset.code",
+			a.issuer AS "asset.issuer",
+			rw.id AS "receiver_wallet.id",
+			COALESCE(rw.stellar_memo, '') AS "receiver_wallet.stellar_memo",
+			COALESCE(rw.stellar_memo_type, '') AS "receiver_wallet.stellar_memo_type",
+			rw.anchor_platform_transaction_id AS "receiver_wallet.anchor_platform_transaction_id",
+			rw.anchor_platform_transaction_synced_at AS "receiver_wallet.anchor_platform_transaction_synced_at"
+		FROM
+			payments p
+			INNER JOIN disbursements d ON p.disbursement_id = d.id
+			INNER JOIN assets a ON a.id = d.asset_id
+			INNER JOIN wallets w ON d.wallet_id = w.id
+			INNER JOIN receiver_wallets rw ON rw.receiver_id = p.receiver_id AND rw.wallet_id = w.id
+		WHERE
+			p.status = ANY($1) -- ARRAY['SUCCESS', 'FAILURE']::payment_status[]
+			AND rw.status = $2 -- 'REGISTERED'::receiver_wallet_status
+			AND rw.anchor_platform_transaction_synced_at IS NULL
+		ORDER BY
+			p.created_at
+		FOR UPDATE SKIP LOCKED
+	`
+
+	payments := make([]Payment, 0)
+	err := sqlExec.SelectContext(ctx, &payments, query, pq.Array([]PaymentStatus{SuccessPaymentStatus, FailedPaymentStatus}), RegisteredReceiversWalletStatus)
+	if err != nil {
+		return nil, fmt.Errorf("getting payments: %w", err)
+	}
+
+	return payments, nil
+}
+
 func (p *PaymentModel) Get(ctx context.Context, id string, sqlExec db.SQLExecuter) (*Payment, error) {
 	payment := Payment{}
 
@@ -169,6 +210,8 @@ func (p *PaymentModel) Get(ctx context.Context, id string, sqlExec db.SQLExecute
 			rw.created_at as "receiver_wallet.created_at",
 			rw.updated_at as "receiver_wallet.updated_at",
 			rw.receiver_id as "receiver_wallet.receiver.id",
+			COALESCE(rw.anchor_platform_transaction_id, '') as "receiver_wallet.anchor_platform_transaction_id",
+			rw.anchor_platform_transaction_synced_at as "receiver_wallet.anchor_platform_transaction_synced_at",
 			w.id as "receiver_wallet.wallet.id",
 			w.name as "receiver_wallet.wallet.name",
 			w.enabled as "receiver_wallet.wallet.enabled"
@@ -191,6 +234,52 @@ func (p *PaymentModel) Get(ctx context.Context, id string, sqlExec db.SQLExecute
 	}
 
 	return &payment, nil
+}
+
+func (p *PaymentModel) GetBatchForUpdate(ctx context.Context, sqlExec db.SQLExecuter, batchSize int) ([]*Payment, error) {
+	if batchSize <= 0 {
+		return nil, fmt.Errorf("batch size must be greater than 0")
+	}
+
+	query := `
+		SELECT
+			p.id,
+			p.amount,
+			COALESCE(p.stellar_transaction_id, '') as "stellar_transaction_id",
+			COALESCE(p.stellar_operation_id, '') as "stellar_operation_id",
+			p.status,
+			p.created_at,
+			p.updated_at,
+			d.id as "disbursement.id",
+			d.status as "disbursement.status",
+			a.id as "asset.id",
+			a.code as "asset.code",
+			a.issuer as "asset.issuer",
+			rw.id as "receiver_wallet.id",
+			rw.receiver_id as "receiver_wallet.receiver.id",
+			COALESCE(rw.stellar_address, '') as "receiver_wallet.stellar_address",
+			COALESCE(rw.stellar_memo, '') as "receiver_wallet.stellar_memo",
+			COALESCE(rw.stellar_memo_type, '') as "receiver_wallet.stellar_memo_type",
+			rw.status as "receiver_wallet.status"
+		FROM
+			payments p
+				JOIN assets a on p.asset_id = a.id
+				JOIN receiver_wallets rw on p.receiver_wallet_id = rw.id
+				JOIN disbursements d on p.disbursement_id = d.id
+		WHERE p.status = $1 -- 'READY'::payment_status
+		AND rw.status = $2 -- 'REGISTERED'::receiver_wallet_status
+		AND d.status = $3 -- 'STARTED'::disbursement_status
+		ORDER BY p.disbursement_id ASC, p.updated_at ASC
+		LIMIT $4
+		FOR UPDATE SKIP LOCKED
+		`
+
+	var payments []*Payment
+	err := sqlExec.SelectContext(ctx, &payments, query, ReadyPaymentStatus, RegisteredReceiversWalletStatus, StartedDisbursementStatus, batchSize)
+	if err != nil {
+		return nil, fmt.Errorf("error getting ready payments: %w", err)
+	}
+	return payments, nil
 }
 
 // Count returns the number of payments matching the given query parameters.
@@ -247,6 +336,8 @@ func (p *PaymentModel) GetAll(ctx context.Context, queryParams *QueryParams, sql
 			rw.created_at as "receiver_wallet.created_at",
 			rw.updated_at as "receiver_wallet.updated_at",
 			rw.receiver_id as "receiver_wallet.receiver.id",
+			COALESCE(rw.anchor_platform_transaction_id, '') as "receiver_wallet.anchor_platform_transaction_id",
+			rw.anchor_platform_transaction_synced_at as "receiver_wallet.anchor_platform_transaction_synced_at",
 			w.id as "receiver_wallet.wallet.id",
 			w.name as "receiver_wallet.wallet.name",
 			w.enabled as "receiver_wallet.wallet.enabled"
@@ -263,47 +354,6 @@ func (p *PaymentModel) GetAll(ctx context.Context, queryParams *QueryParams, sql
 	err := sqlExec.SelectContext(ctx, &payments, query, params...)
 	if err != nil {
 		return nil, fmt.Errorf("error querying payments: %w", err)
-	}
-
-	return payments, nil
-}
-
-func (p *PaymentModel) GetAllReadyToPatchCompletionAnchorTransactions(ctx context.Context, sqlExec db.SQLExecuter) ([]Payment, error) {
-	const query = `
-		SELECT
-			p.id,
-			p.amount,
-			p.stellar_transaction_id,
-			p.status,
-			p.status_history,
-			p.updated_at,
-			a.id AS "asset.id",
-			a.code AS "asset.code",
-			a.issuer AS "asset.issuer",
-			rw.id AS "receiver_wallet.id",
-			COALESCE(rw.stellar_memo, '') AS "receiver_wallet.stellar_memo",
-			COALESCE(rw.stellar_memo_type, '') AS "receiver_wallet.stellar_memo_type",
-			rw.anchor_platform_transaction_id AS "receiver_wallet.anchor_platform_transaction_id",
-			rw.anchor_platform_transaction_synced_at AS "receiver_wallet.anchor_platform_transaction_synced_at"
-		FROM
-			payments p
-			INNER JOIN disbursements d ON p.disbursement_id = d.id
-			INNER JOIN assets a ON a.id = d.asset_id
-			INNER JOIN wallets w ON d.wallet_id = w.id
-			INNER JOIN receiver_wallets rw ON rw.receiver_id = p.receiver_id AND rw.wallet_id = w.id
-		WHERE
-			p.status = ANY($1) -- ARRAY['SUCCESS', 'FAILURE']::payment_status[]
-			AND rw.status = $2 -- 'REGISTERED'::receiver_wallet_status
-			AND rw.anchor_platform_transaction_synced_at IS NULL
-		ORDER BY
-			p.created_at
-		FOR UPDATE SKIP LOCKED
-	`
-
-	payments := make([]Payment, 0)
-	err := sqlExec.SelectContext(ctx, &payments, query, pq.Array([]PaymentStatus{SuccessPaymentStatus, FailedPaymentStatus}), RegisteredReceiversWalletStatus)
-	if err != nil {
-		return nil, fmt.Errorf("getting payments: %w", err)
 	}
 
 	return payments, nil
@@ -393,49 +443,76 @@ func (p *PaymentModel) UpdateStatusByDisbursementID(ctx context.Context, sqlExec
 	return nil
 }
 
-func (p *PaymentModel) GetBatchForUpdate(ctx context.Context, dbTx db.DBTransaction, batchSize int) ([]*Payment, error) {
-	if batchSize <= 0 {
-		return nil, fmt.Errorf("batch size must be greater than 0")
-	}
-
-	query := `
-		SELECT
-			p.id,
-			p.amount,
-			COALESCE(p.stellar_transaction_id, '') as "stellar_transaction_id",
-			COALESCE(p.stellar_operation_id, '') as "stellar_operation_id",
-			p.status,
-			p.created_at,
-			p.updated_at,
-			d.id as "disbursement.id",
-			d.status as "disbursement.status",
-			a.id as "asset.id",
-			a.code as "asset.code",
-			a.issuer as "asset.issuer",
-			rw.id as "receiver_wallet.id",
-			rw.receiver_id as "receiver_wallet.receiver.id",
-			COALESCE(rw.stellar_address, '') as "receiver_wallet.stellar_address",
-			COALESCE(rw.stellar_memo, '') as "receiver_wallet.stellar_memo",
-			COALESCE(rw.stellar_memo_type, '') as "receiver_wallet.stellar_memo_type",
-			rw.status as "receiver_wallet.status"
-		FROM
-			payments p
-				JOIN assets a on p.asset_id = a.id
-				JOIN receiver_wallets rw on p.receiver_wallet_id = rw.id
-				JOIN disbursements d on p.disbursement_id = d.id
-		WHERE p.status = $1 -- 'READY'::payment_status
+const getReadyPaymentsBaseQuery = `
+	SELECT
+		p.id,
+		p.amount,
+		COALESCE(p.stellar_transaction_id, '') as "stellar_transaction_id",
+		COALESCE(p.stellar_operation_id, '') as "stellar_operation_id",
+		p.status,
+		p.created_at,
+		p.updated_at,
+		d.id as "disbursement.id",
+		d.status as "disbursement.status",
+		a.id as "asset.id",
+		a.code as "asset.code",
+		a.issuer as "asset.issuer",
+		rw.id as "receiver_wallet.id",
+		rw.receiver_id as "receiver_wallet.receiver.id",
+		COALESCE(rw.stellar_address, '') as "receiver_wallet.stellar_address",
+		COALESCE(rw.stellar_memo, '') as "receiver_wallet.stellar_memo",
+		COALESCE(rw.stellar_memo_type, '') as "receiver_wallet.stellar_memo_type",
+		rw.status as "receiver_wallet.status"
+	FROM
+		payments p
+		JOIN assets a on p.asset_id = a.id
+		JOIN receiver_wallets rw on p.receiver_wallet_id = rw.id
+		JOIN disbursements d on p.disbursement_id = d.id
+	WHERE
+		p.status = $1 -- 'READY'::payment_status
 		AND rw.status = $2 -- 'REGISTERED'::receiver_wallet_status
 		AND d.status = $3 -- 'STARTED'::disbursement_status
-		ORDER BY p.disbursement_id ASC, p.updated_at ASC
-		LIMIT $4
-		FOR UPDATE SKIP LOCKED
-		`
+	%s
+`
+
+var getReadyPaymentsBaseArgs = []any{ReadyPaymentStatus, RegisteredReceiversWalletStatus, StartedDisbursementStatus}
+
+func (p *PaymentModel) GetReadyByDisbursementID(ctx context.Context, sqlExec db.SQLExecuter, disbursementID string) ([]*Payment, error) {
+	query := fmt.Sprintf(getReadyPaymentsBaseQuery, "AND p.disbursement_id = $4")
 
 	var payments []*Payment
-	err := dbTx.SelectContext(ctx, &payments, query, ReadyPaymentStatus, RegisteredReceiversWalletStatus, StartedDisbursementStatus, batchSize)
+	args := append(getReadyPaymentsBaseArgs, disbursementID)
+	err := sqlExec.SelectContext(ctx, &payments, query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("error getting ready payments: %w", err)
+		return nil, fmt.Errorf("getting ready payments for disbursement ID %s: %w", disbursementID, err)
 	}
+
+	return payments, nil
+}
+
+func (p *PaymentModel) GetReadyByID(ctx context.Context, sqlExec db.SQLExecuter, paymentIDs ...string) ([]*Payment, error) {
+	query := fmt.Sprintf(getReadyPaymentsBaseQuery, "AND p.id = ANY($4) ORDER BY p.updated_at ASC")
+
+	var payments []*Payment
+	args := append(getReadyPaymentsBaseArgs, pq.Array(paymentIDs))
+	err := sqlExec.SelectContext(ctx, &payments, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("getting ready payments by IDs: %w", err)
+	}
+
+	return payments, nil
+}
+
+func (p *PaymentModel) GetReadyByReceiverWalletID(ctx context.Context, sqlExec db.SQLExecuter, receiverWalletID string) ([]*Payment, error) {
+	query := fmt.Sprintf(getReadyPaymentsBaseQuery, "AND rw.id = $4")
+
+	var payments []*Payment
+	args := append(getReadyPaymentsBaseArgs, receiverWalletID)
+	err := sqlExec.SelectContext(ctx, &payments, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("getting ready payments by receiver wallet ID %s: %w", receiverWalletID, err)
+	}
+
 	return payments, nil
 }
 
@@ -511,74 +588,72 @@ func (p *PaymentModel) Update(ctx context.Context, sqlExec db.SQLExecuter, payme
 	return nil
 }
 
-func (p *PaymentModel) RetryFailedPayments(ctx context.Context, email string, paymentIDs ...string) error {
-	return db.RunInTransaction(ctx, p.dbConnectionPool, nil, func(dbTx db.DBTransaction) error {
-		if len(paymentIDs) == 0 {
-			return fmt.Errorf("payment ids is required: %w", ErrMissingInput)
-		}
+func (p *PaymentModel) RetryFailedPayments(ctx context.Context, sqlExec db.SQLExecuter, email string, paymentIDs ...string) error {
+	if len(paymentIDs) == 0 {
+		return fmt.Errorf("payment ids is required: %w", ErrMissingInput)
+	}
 
-		if email == "" {
-			return fmt.Errorf("user email is required: %w", ErrMissingInput)
-		}
+	if email == "" {
+		return fmt.Errorf("user email is required: %w", ErrMissingInput)
+	}
 
-		const query = `
-			WITH previous_payments_stellar_transaction_ids AS (
-				SELECT
-					id,
-					stellar_transaction_id,
-					$2 AS status_message
-				FROM
-					payments
-				WHERE
-					id = ANY($1)
-					AND status = 'FAILED'::payment_status
-			)
-			UPDATE
-				payments
-			SET
-				status = 'READY'::payment_status,
-				stellar_transaction_id = '',
-				status_history = array_append(status_history, create_payment_status_history(NOW(), 'READY', CONCAT(pp.status_message, pp.stellar_transaction_id)))
+	const query = `
+		WITH previous_payments_stellar_transaction_ids AS (
+			SELECT
+				id,
+				stellar_transaction_id,
+				$2 AS status_message
 			FROM
-				previous_payments_stellar_transaction_ids pp
+				payments
 			WHERE
-				payments.id = pp.id
+				id = ANY($1)
+				AND status = 'FAILED'::payment_status
+		)
+		UPDATE
+			payments
+		SET
+			status = 'READY'::payment_status,
+			stellar_transaction_id = '',
+			status_history = array_append(status_history, create_payment_status_history(NOW(), 'READY', CONCAT(pp.status_message, pp.stellar_transaction_id)))
+		FROM
+			previous_payments_stellar_transaction_ids pp
+		WHERE
+			payments.id = pp.id
 		`
 
-		statusMessage := fmt.Sprintf("User %s has requested to retry the payment - Previous Stellar Transaction ID: ", email)
+	statusMessage := fmt.Sprintf("User %s has requested to retry the payment - Previous Stellar Transaction ID: ", email)
 
-		res, err := dbTx.ExecContext(ctx, query, pq.Array(paymentIDs), statusMessage)
-		if err != nil {
-			return fmt.Errorf("error retrying failed payments: %w", err)
-		}
+	res, err := sqlExec.ExecContext(ctx, query, pq.Array(paymentIDs), statusMessage)
+	if err != nil {
+		return fmt.Errorf("error retrying failed payments: %w", err)
+	}
 
-		numRowsAffected, err := res.RowsAffected()
-		if err != nil {
-			return fmt.Errorf("error getting number of rows affected: %w", err)
-		}
+	numRowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("error getting number of rows affected: %w", err)
+	}
 
-		if numRowsAffected != int64(len(paymentIDs)) {
-			return ErrMismatchNumRowsAffected
-		}
+	if numRowsAffected != int64(len(paymentIDs)) {
+		return ErrMismatchNumRowsAffected
+	}
 
-		// This ensures that we are going to sync the payment transaction on the Anchor Platform again.
-		const updateReceiverWallets = `
-			UPDATE
-				receiver_wallets
-			SET
-				anchor_platform_transaction_synced_at = NULL
-			WHERE
-				id IN (
-					SELECT receiver_wallet_id FROM payments WHERE id = ANY($1)
-				)
+	// This ensures that we are going to sync the payment transaction on the Anchor Platform again.
+	const updateReceiverWallets = `
+		UPDATE
+			receiver_wallets
+		SET
+			anchor_platform_transaction_synced_at = NULL
+		WHERE
+			id IN (
+				SELECT receiver_wallet_id FROM payments WHERE id = ANY($1)
+			)
 		`
-		_, err = dbTx.ExecContext(ctx, updateReceiverWallets, pq.Array(paymentIDs))
-		if err != nil {
-			return fmt.Errorf("resetting the receiver wallets' anchor platform transaction synced at: %w", err)
-		}
+	_, err = sqlExec.ExecContext(ctx, updateReceiverWallets, pq.Array(paymentIDs))
+	if err != nil {
+		return fmt.Errorf("resetting the receiver wallets' anchor platform transaction synced at: %w", err)
+	}
 
-		return nil
-	})
+	return nil
 }
 
 // GetByIDs returns a list of payments for the given IDs.
@@ -681,7 +756,7 @@ func (p *PaymentModel) CancelPaymentsWithinPeriodDays(ctx context.Context, sqlEx
 		return fmt.Errorf("error getting number of rows affected: %w", err)
 	}
 	if numRowsAffected == 0 {
-		log.Debug("No payments were canceled")
+		log.Ctx(ctx).Debug("No payments were canceled")
 	}
 
 	return nil

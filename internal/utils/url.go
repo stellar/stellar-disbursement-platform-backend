@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net/url"
+	"strings"
 
 	"github.com/stellar/go/keypair"
 )
@@ -71,4 +72,45 @@ func VerifySignedURL(signedURL string, expectedPublicKey string) (bool, error) {
 	}
 
 	return true, nil
+}
+
+func GetURLWithScheme(rawURL string) (string, error) {
+	parsedURL, err := url.Parse(rawURL)
+	if err != nil {
+		return "", fmt.Errorf("parsing url: %w", err)
+	}
+
+	if parsedURL.Scheme == "" || !strings.Contains("http https", parsedURL.Scheme) {
+		rawURL, err = url.JoinPath("http://", rawURL)
+		if err != nil {
+			return "", fmt.Errorf("joining scheme to raw URL: %w", err)
+		}
+	}
+
+	return rawURL, nil
+}
+
+func GenerateTenantURL(baseURL string, tenantID string) (string, error) {
+	if tenantID == "" {
+		return "", fmt.Errorf("tenantID is empty")
+	}
+
+	parsedURL, err := url.Parse(baseURL)
+	if err != nil {
+		return "", fmt.Errorf("invalid base URL %s: %w", baseURL, err)
+	}
+
+	hostParts := strings.SplitN(parsedURL.Hostname(), ".", 2)
+	if len(hostParts) != 2 {
+		return "", fmt.Errorf("base URL must have at least two domain parts %s", baseURL)
+	}
+
+	newHostname := fmt.Sprintf("%s.%s", tenantID, parsedURL.Hostname())
+	if parsedURL.Port() != "" {
+		parsedURL.Host = newHostname + ":" + parsedURL.Port()
+	} else {
+		parsedURL.Host = newHostname
+	}
+
+	return parsedURL.String(), nil
 }

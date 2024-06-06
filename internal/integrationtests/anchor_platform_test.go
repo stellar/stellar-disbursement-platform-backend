@@ -10,14 +10,14 @@ import (
 
 	"github.com/stellar/go/keypair"
 	"github.com/stellar/go/txnbuild"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
+	httpclientMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient/mocks"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
 
 func Test_StartChallengeTransaction(t *testing.T) {
-	httpClientMock := httpclient.HttpClientMock{}
+	httpClientMock := httpclientMocks.HttpClientMock{}
 	receiverAccountID := "GDJNLIFC2JTGKTD4LA4D77TSEGMQLZKBIEXMMJT64AEWWVYC5JKJHH2X"
 
 	serverPublicKey := "GD57H5NAK3NFZVR66OGPBAV4FUFUQXQTPOQTSKFLW63SVQVQ4FSQAXMA"
@@ -25,6 +25,7 @@ func Test_StartChallengeTransaction(t *testing.T) {
 
 	ap := AnchorPlatformIntegrationTests{
 		HttpClient:               &httpClientMock,
+		TenantName:               "mock_tenant",
 		AnchorPlatformBaseSepURL: "http://mock_anchor.com/",
 		ReceiverAccountPublicKey: receiverAccountID,
 		Sep10SigningPublicKey:    serverPublicKey,
@@ -103,12 +104,12 @@ func Test_StartChallengeTransaction(t *testing.T) {
 		httpClientMock.AssertExpectations(t)
 	})
 
-	t.Run("succesfully creating challenge transaction on anchor platform", func(t *testing.T) {
+	t.Run("successfully creating challenge transaction on anchor platform", func(t *testing.T) {
 		mockCT, err := txnbuild.BuildChallengeTx(
 			serverPrivateKey,
 			receiverAccountID,
 			"localhost:8080",
-			"localhost:8080",
+			fmt.Sprintf(mtnHomeDomainFormat, ap.TenantName),
 			"Test SDF Network ; September 2015",
 			time.Second*300,
 			nil,
@@ -196,7 +197,7 @@ func Test_SignChallengeTransaction(t *testing.T) {
 }
 
 func Test_SendSignedChallengeTransaction(t *testing.T) {
-	httpClientMock := httpclient.HttpClientMock{}
+	httpClientMock := httpclientMocks.HttpClientMock{}
 
 	ap := AnchorPlatformIntegrationTests{
 		HttpClient:               &httpClientMock,
@@ -300,7 +301,7 @@ func Test_SendSignedChallengeTransaction(t *testing.T) {
 }
 
 func Test_CreateSep24DepositTransaction(t *testing.T) {
-	httpClientMock := httpclient.HttpClientMock{}
+	httpClientMock := httpclientMocks.HttpClientMock{}
 
 	receiverAccountID := "GDJNLIFC2JTGKTD4LA4D77TSEGMQLZKBIEXMMJT64AEWWVYC5JKJHH2X"
 

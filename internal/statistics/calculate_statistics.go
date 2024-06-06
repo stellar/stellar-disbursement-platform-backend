@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 

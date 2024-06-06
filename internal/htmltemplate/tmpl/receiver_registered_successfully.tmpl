@@ -37,6 +37,15 @@
             </button>
           </div>
         </div>
+
+        <!--  PrivacyPolicyLink footer -->
+        <div 
+          id="WalletRegistration__PrivacyPolicy"
+          class="WalletRegistration__Footer"
+        >
+          <p>Your data is processed by {{.OrganizationName}} in accordance with their <a href="{{.PrivacyPolicyLink}}"><b>Privacy Policy</b></a></p>
+          <p data-privacy-policy-link style="display: none">{{.PrivacyPolicyLink}}</p>
+        </div>
       </section>
 
       <!-- 👋 Injecting info for the JS here: -->

@@ -12,29 +12,32 @@ import (
 
 	"github.com/stellar/go/strkey"
 	"github.com/stellar/go/support/log"
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
+
+type SendReceiverWalletInviteServiceInterface interface {
+	SendInvite(ctx context.Context, receiverWalletInvitationData ...schemas.EventReceiverWalletSMSInvitationData) error
+}
 
 type SendReceiverWalletInviteService struct {
 	messengerClient                message.MessengerClient
-	models                         *data.Models
-	anchorPlatformBaseSepURL       string
+	Models                         *data.Models
 	maxInvitationSMSResendAttempts int64
 	sep10SigningPrivateKey         string
 	crashTrackerClient             crashtracker.CrashTrackerClient
 }
 
+var _ SendReceiverWalletInviteServiceInterface = new(SendReceiverWalletInviteService)
+
 func (s SendReceiverWalletInviteService) validate() error {
 	if s.messengerClient == nil {
 		return fmt.Errorf("messenger client can't be nil")
-	}
-
-	if s.anchorPlatformBaseSepURL == "" {
-		return fmt.Errorf("anchorPlatformBaseSepURL can't be empty")
 	}
 
 	return nil
@@ -45,9 +48,21 @@ func (s SendReceiverWalletInviteService) validate() error {
 // For instance, the Wallet Foo is in two Ready Payments, one with USDC and the other with EUROC.
 // So the receiver who has a Stellar Address pending registration (status:READY) in this wallet will receive both invites for USDC and EUROC.
 // This would not impact the user receiving both token amounts. It's only for the registration process.
-func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context) error {
+func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context, receiverWalletInvitationData ...schemas.EventReceiverWalletSMSInvitationData) error {
+	if s.Models == nil {
+		return fmt.Errorf("SendReceiverWalletInviteService.Models cannot be nil")
+	}
+
+	currentTenant, err := tenant.GetTenantFromContext(ctx)
+	if err != nil {
+		return fmt.Errorf("error getting tenant from context: %w", err)
+	}
+	if currentTenant.BaseURL == nil {
+		return fmt.Errorf("tenant base URL cannot be nil for tenant %s", currentTenant.ID)
+	}
+
 	// Get the organization entry to get the Org name and SMSRegistrationMessageTemplate
-	organization, err := s.models.Organizations.Get(ctx)
+	organization, err := s.Models.Organizations.Get(ctx)
 	if err != nil {
 		return fmt.Errorf("error getting organization: %w", err)
 	}
@@ -68,7 +83,7 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context) error {
 		return fmt.Errorf("error parsing organization SMS registration message template: %w", err)
 	}
 
-	wallets, err := s.models.Wallets.GetAll(ctx)
+	wallets, err := s.Models.Wallets.GetAll(ctx)
 	if err != nil {
 		return fmt.Errorf("error getting all wallets: %w", err)
 	}
@@ -78,12 +93,12 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context) error {
 		walletsMap[wallet.ID] = wallet
 	}
 
-	receiverWallets, err := s.models.ReceiverWallet.GetAllPendingRegistration(ctx)
+	receiverWallets, err := s.resolveReceiverWalletsPendingRegistration(ctx, receiverWalletInvitationData)
 	if err != nil {
-		return fmt.Errorf("error getting receiver wallets pending registration: %w", err)
+		return fmt.Errorf("error resolving receiver wallets pending registration: %w", err)
 	}
 
-	receiverWalletsAsset, err := s.models.Assets.GetAssetsPerReceiverWallet(ctx, receiverWallets...)
+	receiverWalletsAsset, err := s.Models.Assets.GetAssetsPerReceiverWallet(ctx, receiverWallets...)
 	if err != nil {
 		return fmt.Errorf("error getting all assets: %w", err)
 	}
@@ -99,11 +114,11 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context) error {
 		wallet := walletsMap[rwa.WalletID]
 
 		wdl := WalletDeepLink{
-			DeepLink:                 wallet.DeepLinkSchema,
-			AnchorPlatformBaseSepURL: s.anchorPlatformBaseSepURL,
-			OrganizationName:         organization.Name,
-			AssetCode:                rwa.Asset.Code,
-			AssetIssuer:              rwa.Asset.Issuer,
+			DeepLink:         wallet.DeepLinkSchema,
+			OrganizationName: organization.Name,
+			AssetCode:        rwa.Asset.Code,
+			AssetIssuer:      rwa.Asset.Issuer,
+			TenantBaseURL:    *currentTenant.BaseURL,
 		}
 
 		registrationLink, err := wdl.GetSignedRegistrationLink(s.sep10SigningPrivateKey)
@@ -178,17 +193,40 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context) error {
 		}
 	}
 
-	return db.RunInTransaction(ctx, s.models.DBConnectionPool, nil, func(dbTx db.DBTransaction) error {
-		if _, err := s.models.ReceiverWallet.UpdateInvitationSentAt(ctx, dbTx, receiverWalletIDs...); err != nil {
+	return db.RunInTransaction(ctx, s.Models.DBConnectionPool, nil, func(dbTx db.DBTransaction) error {
+		if _, err := s.Models.ReceiverWallet.UpdateInvitationSentAt(ctx, dbTx, receiverWalletIDs...); err != nil {
 			return fmt.Errorf("updating receiver wallets' invitation sent at: %w", err)
 		}
 
-		if err := s.models.Message.BulkInsert(ctx, dbTx, msgsToInsert); err != nil {
+		if err := s.Models.Message.BulkInsert(ctx, dbTx, msgsToInsert); err != nil {
 			return fmt.Errorf("error inserting messages in the database: %w", err)
 		}
 
 		return nil
 	})
+}
+
+// resolveReceiverWalletsPendingRegistration returns the receiver wallets pending registration based on the receiverWalletInvitationData.
+// If the receiverWalletInvitationData is empty, it will return all receiver wallets pending registration.
+func (s SendReceiverWalletInviteService) resolveReceiverWalletsPendingRegistration(ctx context.Context, receiverWalletInvitationData []schemas.EventReceiverWalletSMSInvitationData) ([]*data.ReceiverWallet, error) {
+	var err error
+	var receiverWallets []*data.ReceiverWallet
+	if len(receiverWalletInvitationData) == 0 {
+		receiverWallets, err = s.Models.ReceiverWallet.GetAllPendingRegistrations(ctx, s.Models.DBConnectionPool)
+		if err != nil {
+			return nil, fmt.Errorf("getting all receiver wallets pending registration: %w", err)
+		}
+	} else {
+		receiverWalletIDsPendingRegistration := make([]string, 0, len(receiverWalletInvitationData))
+		for _, receiverWallet := range receiverWalletInvitationData {
+			receiverWalletIDsPendingRegistration = append(receiverWalletIDsPendingRegistration, receiverWallet.ReceiverWalletID)
+		}
+		receiverWallets, err = s.Models.ReceiverWallet.GetAllPendingRegistrationByReceiverWalletIDs(ctx, s.Models.DBConnectionPool, receiverWalletIDsPendingRegistration)
+		if err != nil {
+			return nil, fmt.Errorf("getting receiver wallets pending registration by rw ids %v: %w", receiverWalletIDsPendingRegistration, err)
+		}
+	}
+	return receiverWallets, err
 }
 
 // shouldSendInvitationSMS returns true if we should send the invitation SMS to the receiver. It will be used to either
@@ -245,11 +283,10 @@ func (s SendReceiverWalletInviteService) shouldSendInvitationSMS(ctx context.Con
 	return true
 }
 
-func NewSendReceiverWalletInviteService(models *data.Models, messengerClient message.MessengerClient, anchorPlatformBaseSepURL, sep10SigningPrivateKey string, maxInvitationSMSResendAttempts int64, crashTrackerClient crashtracker.CrashTrackerClient) (*SendReceiverWalletInviteService, error) {
+func NewSendReceiverWalletInviteService(models *data.Models, messengerClient message.MessengerClient, sep10SigningPrivateKey string, maxInvitationSMSResendAttempts int64, crashTrackerClient crashtracker.CrashTrackerClient) (*SendReceiverWalletInviteService, error) {
 	s := &SendReceiverWalletInviteService{
 		messengerClient:                messengerClient,
-		models:                         models,
-		anchorPlatformBaseSepURL:       anchorPlatformBaseSepURL,
+		Models:                         models,
 		maxInvitationSMSResendAttempts: maxInvitationSMSResendAttempts,
 		sep10SigningPrivateKey:         sep10SigningPrivateKey,
 		crashTrackerClient:             crashTrackerClient,
@@ -267,14 +304,14 @@ type WalletDeepLink struct {
 	DeepLink string
 	// Route is an optional parameter that can be used to specify the route to open in the wallet, in case it's not already present in the DeepLink.
 	Route string // (optional)
-	// AnchorPlatformBaseSepURL is the base URL of the /.well-known/stellar.toml file.
-	AnchorPlatformBaseSepURL string
 	// OrganizationName is the name of the organization that is sending the invitation.
 	OrganizationName string
 	// AssetCode is the code of the Stellar asset that the receiver will be able to receive.
 	AssetCode string
 	// AssetIssuer is the issuer of the Stellar asset that the receiver will be able to receive.
 	AssetIssuer string
+	// TenantBaseURL is the base URL for the tenant that the receiver wallet belongs to.
+	TenantBaseURL string
 }
 
 func (wdl WalletDeepLink) isNativeAsset() bool {
@@ -321,21 +358,21 @@ func (wdl WalletDeepLink) BaseURLWithRoute() (string, error) {
 }
 
 func (wdl WalletDeepLink) TomlFileDomain() (string, error) {
-	if wdl.AnchorPlatformBaseSepURL == "" {
-		return "", fmt.Errorf("AnchorPlatformBaseSepURL can't be empty")
+	if wdl.TenantBaseURL == "" {
+		return "", fmt.Errorf("base URL for tenant can't be empty")
 	}
 
-	anchorPlatformBaseSepURL := wdl.AnchorPlatformBaseSepURL
-	if !strings.Contains(anchorPlatformBaseSepURL, "://") {
-		anchorPlatformBaseSepURL = "http://" + anchorPlatformBaseSepURL
-	}
-
-	anchorURL, err := url.Parse(anchorPlatformBaseSepURL)
+	tenantBaseURL, err := utils.GetURLWithScheme(wdl.TenantBaseURL)
 	if err != nil {
-		return "", fmt.Errorf("error parsing AnchorPlatformBaseSepURL '%s': %w", anchorPlatformBaseSepURL, err)
+		return "", fmt.Errorf("setting the protocol scheme: %w", err)
 	}
 
-	return anchorURL.Hostname(), nil
+	tenantURL, err := url.Parse(tenantBaseURL)
+	if err != nil {
+		return "", fmt.Errorf("error parsing TenantBaseURL %s: %w", tenantBaseURL, err)
+	}
+
+	return tenantURL.Hostname(), nil
 }
 
 // validate will make sure all the parameters are set correctly.
@@ -349,8 +386,8 @@ func (wdl WalletDeepLink) validate() error {
 		return fmt.Errorf("can't generate a valid base URL for the deep link: %w", err)
 	}
 
-	if wdl.AnchorPlatformBaseSepURL == "" {
-		return fmt.Errorf("toml file domain can't be empty")
+	if wdl.TenantBaseURL == "" {
+		return fmt.Errorf("tenant base URL can't be empty")
 	}
 
 	if wdl.OrganizationName == "" {

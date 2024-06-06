@@ -10,9 +10,13 @@ import (
 
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/support/render/httpjson"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
@@ -44,6 +48,8 @@ type VerifyReceiverRegistrationHandler struct {
 	Models                   *data.Models
 	ReCAPTCHAValidator       validators.ReCAPTCHAValidator
 	NetworkPassphrase        string
+	EventProducer            events.Producer
+	CrashTrackerClient       crashtracker.CrashTrackerClient
 }
 
 // validate validates the request [header, body, body.reCAPTCHA_token], and returns the decoded payload, or an http error.
@@ -255,42 +261,59 @@ func (v VerifyReceiverRegistrationHandler) VerifyReceiverRegistration(w http.Res
 
 	truncatedPhoneNumber := utils.TruncateString(receiverRegistrationRequest.PhoneNumber, 3)
 
-	atomicFnErr := db.RunInTransaction(ctx, v.Models.DBConnectionPool, nil, func(dbTx db.DBTransaction) error {
-		// STEP 2: find the receivers with the given phone number
-		receivers, err := v.Models.Receiver.GetByPhoneNumbers(ctx, dbTx, []string{receiverRegistrationRequest.PhoneNumber})
-		if err != nil {
-			err = fmt.Errorf("error retrieving receiver with phone number %s: %w", truncatedPhoneNumber, err)
-			return err
-		}
-		if len(receivers) == 0 {
-			err = fmt.Errorf("receiver with phone number %s not found in our server", truncatedPhoneNumber)
-			return &ErrorInformationNotFound{cause: err}
-		}
+	opts := db.TransactionOptions{
+		DBConnectionPool: v.Models.DBConnectionPool,
+		AtomicFunctionWithPostCommit: func(dbTx db.DBTransaction) (postCommitFn db.PostCommitFunction, err error) {
+			// STEP 2: find the receivers with the given phone number
+			receivers, err := v.Models.Receiver.GetByPhoneNumbers(ctx, dbTx, []string{receiverRegistrationRequest.PhoneNumber})
+			if err != nil {
+				err = fmt.Errorf("error retrieving receiver with phone number %s: %w", truncatedPhoneNumber, err)
+				return nil, err
+			}
+			if len(receivers) == 0 {
+				err = fmt.Errorf("receiver with phone number %s not found in our server", truncatedPhoneNumber)
+				return nil, &ErrorInformationNotFound{cause: err}
+			}
 
-		// STEP 3: process receiverVerification PII info that matches the pair [receiverID, verificationType]
-		receiver := receivers[0]
-		err = v.processReceiverVerificationPII(ctx, dbTx, *receiver, receiverRegistrationRequest)
-		if err != nil {
-			return fmt.Errorf("processing receiver verification entry for receiver with phone number %s: %w", truncatedPhoneNumber, err)
-		}
+			// STEP 3: process receiverVerification PII info that matches the pair [receiverID, verificationType]
+			receiver := receivers[0]
+			err = v.processReceiverVerificationPII(ctx, dbTx, *receiver, receiverRegistrationRequest)
+			if err != nil {
+				return nil, fmt.Errorf("processing receiver verification entry for receiver with phone number %s: %w", truncatedPhoneNumber, err)
+			}
 
-		// STEP 4: process OTP
-		receiverWallet, wasAlreadyRegistered, err := v.processReceiverWalletOTP(ctx, dbTx, *sep24Claims, *receiver, receiverRegistrationRequest.OTP)
-		if err != nil {
-			return fmt.Errorf("processing OTP for receiver with phone number %s: %w", truncatedPhoneNumber, err)
-		}
-		if wasAlreadyRegistered {
-			return nil
-		}
+			// STEP 4: process OTP
+			receiverWallet, wasAlreadyRegistered, err := v.processReceiverWalletOTP(ctx, dbTx, *sep24Claims, *receiver, receiverRegistrationRequest.OTP)
+			if err != nil {
+				return nil, fmt.Errorf("processing OTP for receiver with phone number %s: %w", truncatedPhoneNumber, err)
+			}
 
-		// STEP 5: PATCH transaction on the AnchorPlatform and update the receiver wallet with the anchor platform tx ID
-		err = v.processAnchorPlatformID(ctx, dbTx, *sep24Claims, receiverWallet)
-		if err != nil {
-			return fmt.Errorf("processing anchor platform transaction ID: %w", err)
-		}
+			// STEP 5: build event message to trigger a transaction in the TSS
+			msg, err := v.buildPaymentsReadyToPayEventMessage(ctx, dbTx, &receiverWallet)
+			if err != nil {
+				return nil, fmt.Errorf("preparing payments ready-to-pay event message: %w", err)
+			}
+			postCommitFn = func() error {
+				postErr := events.ProduceEvents(ctx, v.EventProducer, msg)
+				if postErr != nil {
+					v.CrashTrackerClient.LogAndReportErrors(ctx, postErr, "writing ready-to-pay message (post SEP-24) on the event producer")
+				}
 
-		return nil
-	})
+				return nil
+			}
+
+			// STEP 6: PATCH transaction on the AnchorPlatform and update the receiver wallet with the anchor platform tx ID
+			if !wasAlreadyRegistered {
+				err = v.processAnchorPlatformID(ctx, dbTx, *sep24Claims, receiverWallet)
+				if err != nil {
+					return nil, fmt.Errorf("processing anchor platform transaction ID: %w", err)
+				}
+			}
+
+			return postCommitFn, nil
+		},
+	}
+	atomicFnErr := db.RunInTransactionWithPostCommit(ctx, &opts)
 	if atomicFnErr != nil {
 		var errorInformationNotFound *ErrorInformationNotFound
 		if errors.As(atomicFnErr, &errorInformationNotFound) {
@@ -312,4 +335,34 @@ func (v VerifyReceiverRegistrationHandler) VerifyReceiverRegistration(w http.Res
 	}
 
 	httpjson.Render(w, map[string]string{"message": "ok"}, httpjson.JSON)
+}
+
+func (v VerifyReceiverRegistrationHandler) buildPaymentsReadyToPayEventMessage(ctx context.Context, sqlExec db.SQLExecuter, rw *data.ReceiverWallet) (*events.Message, error) {
+	payments, err := v.Models.Payment.GetReadyByReceiverWalletID(ctx, sqlExec, rw.ID)
+	if err != nil {
+		return nil, fmt.Errorf("getting payments for receiver wallet ID %s", rw.ID)
+	}
+
+	if len(payments) == 0 {
+		log.Ctx(ctx).Warnf("no payments ready to pay for receiver wallet ID %s", rw.ID)
+		return nil, nil
+	}
+
+	msg, err := events.NewMessage(ctx, events.PaymentReadyToPayTopic, rw.ID, events.PaymentReadyToPayReceiverVerificationCompleted, nil)
+	if err != nil {
+		return nil, fmt.Errorf("creating new message: %w", err)
+	}
+
+	paymentsReadyToPay := schemas.EventPaymentsReadyToPayData{TenantID: msg.TenantID}
+	for _, payment := range payments {
+		paymentsReadyToPay.Payments = append(paymentsReadyToPay.Payments, schemas.PaymentReadyToPay{ID: payment.ID})
+	}
+	msg.Data = paymentsReadyToPay
+
+	err = msg.Validate()
+	if err != nil {
+		return nil, fmt.Errorf("validating message: %w", err)
+	}
+
+	return msg, nil
 }

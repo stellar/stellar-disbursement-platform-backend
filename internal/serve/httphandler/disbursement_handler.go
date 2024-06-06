@@ -2,6 +2,7 @@ package httphandler
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,28 +12,27 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/gocarina/gocsv"
-	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/support/render/httpjson"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpresponse"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 )
 
 type DisbursementHandler struct {
-	Models             *data.Models
-	MonitorService     monitor.MonitorServiceInterface
-	DBConnectionPool   db.DBConnectionPool
-	AuthManager        auth.AuthManager
-	HorizonClient      horizonclient.ClientInterface
-	DistributionPubKey string
+	Models                        *data.Models
+	MonitorService                monitor.MonitorServiceInterface
+	AuthManager                   auth.AuthManager
+	DisbursementManagementService *services.DisbursementManagementService
+	DistributionAccountResolver   signing.DistributionAccountResolver
 }
 
 type PostDisbursementRequest struct {
@@ -134,7 +134,7 @@ func (d DisbursementHandler) PostDisbursement(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	newDisbursement, err := d.Models.Disbursements.Get(ctx, d.DBConnectionPool, newId)
+	newDisbursement, err := d.Models.Disbursements.Get(ctx, d.Models.DBConnectionPool, newId)
 	if err != nil {
 		msg := fmt.Sprintf("Cannot retrieve disbursement for ID: %s", newId)
 		httperror.InternalError(ctx, msg, err, nil).Render(w)
@@ -172,8 +172,7 @@ func (d DisbursementHandler) GetDisbursements(w http.ResponseWriter, r *http.Req
 	}
 
 	ctx := r.Context()
-	disbursementManagementService := services.NewDisbursementManagementService(d.Models, d.DBConnectionPool, d.AuthManager, d.HorizonClient)
-	resultWithTotal, err := disbursementManagementService.GetDisbursementsWithCount(ctx, queryParams)
+	resultWithTotal, err := d.DisbursementManagementService.GetDisbursementsWithCount(ctx, queryParams)
 	if err != nil {
 		httperror.InternalError(ctx, "Cannot retrieve disbursements", err, nil).Render(w)
 		return
@@ -197,7 +196,7 @@ func (d DisbursementHandler) PostDisbursementInstructions(w http.ResponseWriter,
 
 	// check if disbursement exists
 	ctx := r.Context()
-	disbursement, err := d.Models.Disbursements.Get(ctx, d.DBConnectionPool, disbursementID)
+	disbursement, err := d.Models.Disbursements.Get(ctx, d.Models.DBConnectionPool, disbursementID)
 	if err != nil {
 		httperror.BadRequest("disbursement ID is invalid", err, nil).Render(w)
 		return
@@ -222,7 +221,7 @@ func (d DisbursementHandler) PostDisbursementInstructions(w http.ResponseWriter,
 	var buf bytes.Buffer
 	reader := io.TeeReader(file, &buf)
 
-	instructions, v := parseInstructionsFromCSV(reader, disbursement.VerificationField)
+	instructions, v := parseInstructionsFromCSV(ctx, reader, disbursement.VerificationField)
 	if v != nil && v.HasErrors() {
 		httperror.BadRequest("could not parse csv file", err, v.Errors).Render(w)
 		return
@@ -281,8 +280,7 @@ func (d DisbursementHandler) GetDisbursement(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	disbursementManagementService := services.NewDisbursementManagementService(d.Models, d.DBConnectionPool, d.AuthManager, d.HorizonClient)
-	response, err := disbursementManagementService.AppendUserMetadata(ctx, []*data.Disbursement{disbursement})
+	response, err := d.DisbursementManagementService.AppendUserMetadata(ctx, []*data.Disbursement{disbursement})
 	if err != nil {
 		httperror.NotFound("disbursement user metadata not found", err, nil).Render(w)
 	}
@@ -307,8 +305,7 @@ func (d DisbursementHandler) GetDisbursementReceivers(w http.ResponseWriter, r *
 		return
 	}
 
-	disbursementManagementService := services.NewDisbursementManagementService(d.Models, d.DBConnectionPool, d.AuthManager, d.HorizonClient)
-	resultWithTotal, err := disbursementManagementService.GetDisbursementReceiversWithCount(ctx, disbursementID, queryParams)
+	resultWithTotal, err := d.DisbursementManagementService.GetDisbursementReceiversWithCount(ctx, disbursementID, queryParams)
 	if err != nil {
 		if errors.Is(err, services.ErrDisbursementNotFound) {
 			httperror.NotFound("disbursement not found", err, nil).Render(w)
@@ -340,6 +337,8 @@ type UpdateDisbursementStatusResponseBody struct {
 
 // PatchDisbursementStatus updates the status of a disbursement
 func (d DisbursementHandler) PatchDisbursementStatus(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
 	var patchRequest PatchDisbursementStatusRequest
 	err := json.NewDecoder(r.Body).Decode(&patchRequest)
 	if err != nil {
@@ -354,17 +353,38 @@ func (d DisbursementHandler) PatchDisbursementStatus(w http.ResponseWriter, r *h
 		return
 	}
 
-	disbursementManagementService := services.NewDisbursementManagementService(d.Models, d.DBConnectionPool, d.AuthManager, d.HorizonClient)
 	response := UpdateDisbursementStatusResponseBody{}
 
-	ctx := r.Context()
 	disbursementID := chi.URLParam(r, "id")
+
+	token, ok := ctx.Value(middleware.TokenContextKey).(string)
+	if !ok {
+		httperror.InternalError(ctx, "Cannot get token from context", err, nil).Render(w)
+	}
+	user, err := d.AuthManager.GetUser(ctx, token)
+	if err != nil {
+		httperror.InternalError(ctx, "Cannot get user from token", err, nil).Render(w)
+	}
+
 	switch toStatus {
 	case data.StartedDisbursementStatus:
-		err = disbursementManagementService.StartDisbursement(ctx, disbursementID, d.DistributionPubKey)
+		var distributionPublicKey string
+		var distributionAccount *schema.DistributionAccount
+		if distributionAccount, err = d.DistributionAccountResolver.DistributionAccountFromContext(ctx); err != nil {
+			httperror.InternalError(ctx, "Cannot get distribution account", err, nil).Render(w)
+			return
+		} else if !distributionAccount.IsStellar() {
+			// TODO: during SDP-1177, refactor StartDisbursement to receive the whole distribution account object, rather than just the public key
+			msg := fmt.Sprintf("expected distribution account to be a STELLAR account but got %q", distributionAccount.Type)
+			httperror.BadRequest(msg, err, nil).Render(w)
+			return
+		} else {
+			distributionPublicKey = distributionAccount.Address
+		}
+		err = d.DisbursementManagementService.StartDisbursement(ctx, disbursementID, user, distributionPublicKey)
 		response.Message = "Disbursement started"
 	case data.PausedDisbursementStatus:
-		err = disbursementManagementService.PauseDisbursement(ctx, disbursementID)
+		err = d.DisbursementManagementService.PauseDisbursement(ctx, disbursementID, user)
 		response.Message = "Disbursement paused"
 	default:
 		err = services.ErrDisbursementStatusCantBeChanged
@@ -389,7 +409,7 @@ func (d DisbursementHandler) PatchDisbursementStatus(w http.ResponseWriter, r *h
 			log.Ctx(ctx).Error(insufficientBalanceErr)
 			httperror.Conflict(insufficientBalanceErr.Error(), err, nil).Render(w)
 		default:
-			msg := fmt.Sprintf("Cannot update disbursement ID %s with status: %s", disbursementID, toStatus)
+			msg := fmt.Sprintf("Cannot update disbursementID=%s with status=%s: %v", disbursementID, toStatus, err)
 			httperror.InternalError(ctx, msg, err, nil).Render(w)
 		}
 		return
@@ -402,7 +422,7 @@ func (d DisbursementHandler) GetDisbursementInstructions(w http.ResponseWriter, 
 	ctx := r.Context()
 	disbursementID := chi.URLParam(r, "id")
 
-	disbursement, err := d.Models.Disbursements.Get(ctx, d.DBConnectionPool, disbursementID)
+	disbursement, err := d.Models.Disbursements.Get(ctx, d.Models.DBConnectionPool, disbursementID)
 	if err != nil {
 		httperror.NotFound("disbursement not found", err, nil).Render(w)
 		return
@@ -424,12 +444,12 @@ func (d DisbursementHandler) GetDisbursementInstructions(w http.ResponseWriter, 
 	}
 }
 
-func parseInstructionsFromCSV(file io.Reader, verificationField data.VerificationField) ([]*data.DisbursementInstruction, *validators.DisbursementInstructionsValidator) {
+func parseInstructionsFromCSV(ctx context.Context, file io.Reader, verificationField data.VerificationField) ([]*data.DisbursementInstruction, *validators.DisbursementInstructionsValidator) {
 	validator := validators.NewDisbursementInstructionsValidator(verificationField)
 
 	instructions := []*data.DisbursementInstruction{}
 	if err := gocsv.Unmarshal(file, &instructions); err != nil {
-		log.Errorf("error parsing csv file: %s", err.Error())
+		log.Ctx(ctx).Errorf("error parsing csv file: %s", err.Error())
 		validator.Errors["file"] = "could not parse file"
 		return nil, validator
 	}

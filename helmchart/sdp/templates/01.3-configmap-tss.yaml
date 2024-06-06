@@ -1,3 +1,4 @@
+{{- if .Values.tss.enabled -}}
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -5,7 +6,7 @@ metadata:
   name: {{ include "sdp.fullname" . }}-tss
   namespace: {{ .Release.Namespace }}
   labels:
-    {{- include "sdp.labels" . | nindent 4 }}
+    {{- include "sdp.labelsWithSuffix" (list . "-tss") | nindent 4 }}
 
   {{- if .Values.tss.configMap.annotations }}
   annotations:
@@ -21,4 +22,11 @@ data:
   HORIZON_URL: "https://horizon-testnet.stellar.org"
   {{- end }}
   TSS_METRICS_PORT: {{ include "tss.metricsPort" . | quote }}
+  EVENT_BROKER_TYPE: {{ .Values.global.eventBroker.type | quote }}
+  BROKER_URLS: {{ .Values.global.eventBroker.urls | quote }}
+  CONSUMER_GROUP_ID: {{ .Values.global.eventBroker.consumerGroupId | quote }}
+  {{- if eq .Values.global.eventBroker.type "KAFKA" }}
+  KAFKA_SECURITY_PROTOCOL: {{ .Values.global.eventBroker.kafka.securityProtocol | quote }}
+  {{- end }}
   {{- tpl (toYaml .Values.tss.configMap.data | nindent 2) . }}
+{{- end }}

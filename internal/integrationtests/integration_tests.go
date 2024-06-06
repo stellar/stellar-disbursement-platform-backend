@@ -5,16 +5,22 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/db/router"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
+	"golang.org/x/crypto/bcrypt"
+
 	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/support/log"
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httphandler"
 	tss "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 )
 
-const paymentProcessTimeMinutes = 3
+const (
+	paymentProcessTimeSeconds = 30
+)
 
 type IntegrationTestsInterface interface {
 	StartIntegrationTests(ctx context.Context, opts IntegrationTestsOpts) error
@@ -23,6 +29,7 @@ type IntegrationTestsInterface interface {
 
 type IntegrationTestsOpts struct {
 	DatabaseDSN                string
+	TenantName                 string
 	UserEmail                  string
 	UserPassword               string
 	DisbursedAssetCode         string
@@ -41,33 +48,68 @@ type IntegrationTestsOpts struct {
 	RecaptchaSiteKey           string
 	AnchorPlatformBaseSepURL   string
 	ServerApiBaseURL           string
+	AdminServerBaseURL         string
+	AdminServerAccountId       string
+	AdminServerApiKey          string
 }
 
 type IntegrationTestsService struct {
-	models           *data.Models
-	dbConnectionPool db.DBConnectionPool
-	serverAPI        ServerApiIntegrationTestsInterface
-	anchorPlatform   AnchorPlatformIntegrationTestsInterface
-	horizonClient    horizonclient.ClientInterface
+	models                *data.Models
+	adminDbConnectionPool db.DBConnectionPool
+	mtnDbConnectionPool   db.DBConnectionPool
+	tssDbConnectionPool   db.DBConnectionPool
+	tenantManager         *tenant.Manager
+	serverAPI             ServerApiIntegrationTestsInterface
+	adminAPI              AdminApiIntegrationTestsInterface
+	anchorPlatform        AnchorPlatformIntegrationTestsInterface
+	horizonClient         horizonclient.ClientInterface
 }
 
 // NewIntegrationTestsService is a function that create a new IntegrationTestsService instance.
 func NewIntegrationTestsService(opts IntegrationTestsOpts) (*IntegrationTestsService, error) {
-	// initialize dbConnection and data.Models
-	dbConnectionPool, err := db.OpenDBConnectionPool(opts.DatabaseDSN)
+	adminDSN, err := router.GetDSNForAdmin(opts.DatabaseDSN)
+	if err != nil {
+		return nil, fmt.Errorf("getting admin database DSN: %w", err)
+	}
+	adminDbConnectionPool, err := db.OpenDBConnectionPool(adminDSN)
 	if err != nil {
 		return nil, fmt.Errorf("error connecting to the database: %w", err)
 	}
-
-	models, err := data.NewModels(dbConnectionPool)
+	tm := tenant.NewManager(tenant.WithDatabase(adminDbConnectionPool))
+	tr := tenant.NewMultiTenantDataSourceRouter(tm)
+	mtnDbConnectionPool, err := db.NewConnectionPoolWithRouter(tr)
 	if err != nil {
-		return nil, fmt.Errorf("error creating models for integration tests: %w", err)
+		return nil, fmt.Errorf("getting multi-tenant database connection pool: %w", err)
+	}
+	models, err := data.NewModels(mtnDbConnectionPool)
+	if err != nil {
+		return nil, fmt.Errorf("creating models for integration tests: %w", err)
+	}
+	tssDSN, err := router.GetDSNForTSS(opts.DatabaseDSN)
+	if err != nil {
+		return nil, fmt.Errorf("getting TSS database DSN: %w", err)
+	}
+	tssDbConnectionPool, err := db.OpenDBConnectionPool(tssDSN)
+	if err != nil {
+		return nil, fmt.Errorf("error connecting to the tss database: %w", err)
+	}
+	it := &IntegrationTestsService{
+		models:                models,
+		adminDbConnectionPool: adminDbConnectionPool,
+		mtnDbConnectionPool:   mtnDbConnectionPool,
+		tssDbConnectionPool:   tssDbConnectionPool,
+		tenantManager:         tm,
 	}
 
-	return &IntegrationTestsService{
-		models:           models,
-		dbConnectionPool: dbConnectionPool,
-	}, nil
+	// initialize admin api integration tests service
+	it.adminAPI = &AdminApiIntegrationTests{
+		HttpClient:      httpclient.DefaultClient(),
+		AdminApiBaseURL: opts.AdminServerBaseURL,
+		AccountId:       opts.AdminServerAccountId,
+		ApiKey:          opts.AdminServerApiKey,
+	}
+
+	return it, nil
 }
 
 func (it *IntegrationTestsService) initServices(ctx context.Context, opts IntegrationTestsOpts) {
@@ -77,6 +119,7 @@ func (it *IntegrationTestsService) initServices(ctx context.Context, opts Integr
 	// initialize anchor platform integration tests service
 	it.anchorPlatform = &AnchorPlatformIntegrationTests{
 		HttpClient:                httpclient.DefaultClient(),
+		TenantName:                opts.TenantName,
 		AnchorPlatformBaseSepURL:  opts.AnchorPlatformBaseSepURL,
 		ReceiverAccountPublicKey:  opts.ReceiverAccountPublicKey,
 		ReceiverAccountPrivateKey: opts.ReceiverAccountPrivateKey,
@@ -87,6 +130,7 @@ func (it *IntegrationTestsService) initServices(ctx context.Context, opts Integr
 	// initialize server api integration tests service
 	it.serverAPI = &ServerApiIntegrationTests{
 		HttpClient:              httpclient.DefaultClient(),
+		TenantName:              opts.TenantName,
 		ServerApiBaseURL:        opts.ServerApiBaseURL,
 		UserEmail:               opts.UserEmail,
 		UserPassword:            opts.UserPassword,
@@ -97,8 +141,15 @@ func (it *IntegrationTestsService) initServices(ctx context.Context, opts Integr
 
 func (it *IntegrationTestsService) StartIntegrationTests(ctx context.Context, opts IntegrationTestsOpts) error {
 	log.Ctx(ctx).Info("Starting integration tests ......")
+	it.initServices(context.Background(), opts)
 
-	it.initServices(ctx, opts)
+	log.Ctx(ctx).Infof("Resolving tenant %s from database and adding it to context", opts.TenantName)
+	t, err := it.tenantManager.GetTenantByName(ctx, opts.TenantName)
+	if err != nil {
+		return fmt.Errorf("getting tenant %s from database: %w", opts.TenantName, err)
+	}
+	ctx = tenant.SaveTenantInContext(ctx, t)
+
 	log.Ctx(ctx).Info("Login user to get server API auth token")
 	authToken, err := it.serverAPI.Login(ctx)
 	if err != nil {
@@ -140,7 +191,7 @@ func (it *IntegrationTestsService) StartIntegrationTests(ctx context.Context, op
 	log.Ctx(ctx).Info("CSV disbursement file processed")
 
 	log.Ctx(ctx).Info("Validating disbursement data after processing the disbursement file")
-	err = validateExpectationsAfterProcessDisbursement(ctx, disbursement.ID, it.models, it.dbConnectionPool)
+	err = validateExpectationsAfterProcessDisbursement(ctx, disbursement.ID, it.models, it.mtnDbConnectionPool)
 	if err != nil {
 		return fmt.Errorf("error validating data after process disbursement: %w", err)
 	}
@@ -154,7 +205,7 @@ func (it *IntegrationTestsService) StartIntegrationTests(ctx context.Context, op
 	log.Ctx(ctx).Info("Disbursement started")
 
 	log.Ctx(ctx).Info("Validating disbursement data after starting disbursement using server API")
-	err = validateExpectationsAfterStartDisbursement(ctx, disbursement.ID, it.models, it.dbConnectionPool)
+	err = validateExpectationsAfterStartDisbursement(ctx, disbursement.ID, it.models, it.mtnDbConnectionPool)
 	if err != nil {
 		return fmt.Errorf("error validating data after process disbursement: %w", err)
 	}
@@ -215,10 +266,10 @@ func (it *IntegrationTestsService) StartIntegrationTests(ctx context.Context, op
 	log.Ctx(ctx).Info("Receiver data validated")
 
 	log.Ctx(ctx).Info("Waiting for payment to be processed by TSS")
-	time.Sleep(paymentProcessTimeMinutes * time.Minute)
+	time.Sleep(paymentProcessTimeSeconds * time.Second)
 
 	log.Ctx(ctx).Info("Querying database to get disbursement receiver with payment data")
-	receivers, err := it.models.DisbursementReceivers.GetAll(ctx, it.dbConnectionPool, &data.QueryParams{}, disbursement.ID)
+	receivers, err := it.models.DisbursementReceivers.GetAll(ctx, it.mtnDbConnectionPool, &data.QueryParams{}, disbursement.ID)
 	if err != nil {
 		return fmt.Errorf("error getting receivers: %w", err)
 	}
@@ -226,7 +277,7 @@ func (it *IntegrationTestsService) StartIntegrationTests(ctx context.Context, op
 	payment := receivers[0].Payment
 	q := `SELECT * FROM submitter_transactions WHERE external_id = $1`
 	var tx tss.Transaction
-	err = it.dbConnectionPool.GetContext(ctx, &tx, q, payment.ID)
+	err = it.tssDbConnectionPool.GetContext(ctx, &tx, q, payment.ID)
 	if err != nil {
 		return fmt.Errorf("getting TSS transaction from database: %w", err)
 	}
@@ -255,7 +306,35 @@ func (it *IntegrationTestsService) StartIntegrationTests(ctx context.Context, op
 }
 
 func (it *IntegrationTestsService) CreateTestData(ctx context.Context, opts IntegrationTestsOpts) error {
-	_, err := it.models.Assets.GetOrCreate(ctx, opts.DisbursedAssetCode, opts.DisbursetAssetIssuer)
+	// 1. Create new tenant and add owner user
+	t, err := it.adminAPI.CreateTenant(ctx, CreateTenantRequest{
+		Name:             opts.TenantName,
+		OwnerEmail:       opts.UserEmail,
+		OwnerFirstName:   "John",
+		OwnerLastName:    "Doe",
+		OrganizationName: "Integration Tests Organization",
+		BaseURL:          "http://localhost:8000",
+		SDPUIBaseURL:     "http://localhost:3000",
+	})
+	if err != nil {
+		return fmt.Errorf("creating tenant: %w", err)
+	}
+
+	ctx = tenant.SaveTenantInContext(ctx, t)
+
+	// 2. Reset password for the user
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(opts.UserPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return fmt.Errorf("error hashing owner user password: %w", err)
+	}
+	query := `UPDATE auth_users SET encrypted_password = $1 WHERE email = $2`
+	_, err = it.mtnDbConnectionPool.ExecContext(ctx, query, hashedPassword, opts.UserEmail)
+	if err != nil {
+		return fmt.Errorf("error updating owner user password: %w", err)
+	}
+
+	// 3. Create test asset and wallet
+	_, err = it.models.Assets.GetOrCreate(ctx, opts.DisbursedAssetCode, opts.DisbursetAssetIssuer)
 	if err != nil {
 		return fmt.Errorf("error getting or creating test asset: %w", err)
 	}

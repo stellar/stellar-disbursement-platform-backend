@@ -14,9 +14,7 @@ type SMSClientOptions struct {
 	MessengerOptions *message.MessengerOptions
 }
 
-// buildSMSClientInstanceName sets up a instance name for the SMS messenger type
-// to either be created and stored, also retrived later, so we can have a instance
-// for each type at the same time.
+// buildSMSClientInstanceName creates a new SMS client instance, or retrives a instance that was already created before.
 func buildSMSClientInstanceName(smsClientType message.MessengerType) string {
 	return fmt.Sprintf("%s-%s", SMSClientInstanceName, string(smsClientType))
 }
@@ -35,19 +33,19 @@ func NewSMSClient(opts SMSClientOptions) (message.MessengerClient, error) {
 
 	// If there is already an instance of the service, we return the same instance
 	instanceName := buildSMSClientInstanceName(opts.MessengerOptions.MessengerType)
-	if instance, ok := dependenciesStoreMap[instanceName]; ok {
+	if instance, ok := GetInstance(instanceName); ok {
 		if smsClientInstance, ok := instance.(message.MessengerClient); ok {
 			return smsClientInstance, nil
 		}
 		return nil, fmt.Errorf("trying to cast pre-existing SMS client for depencency injection")
 	}
 
-	log.Infof("⚙️ Setting SMS client to: %v", opts.MessengerOptions.MessengerType)
+	log.Infof("⚙️ Setting up SMS client to: %v", opts.MessengerOptions.MessengerType)
 	messengerClient, err := message.GetClient(*opts.MessengerOptions)
 	if err != nil {
 		return nil, fmt.Errorf("creating SMS client: %w", err)
 	}
 
-	setInstance(instanceName, messengerClient)
+	SetInstance(instanceName, messengerClient)
 	return messengerClient, nil
 }

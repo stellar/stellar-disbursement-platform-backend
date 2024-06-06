@@ -9,8 +9,8 @@ import (
 
 	"github.com/lib/pq"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
 )
 
 type ChannelAccount struct {

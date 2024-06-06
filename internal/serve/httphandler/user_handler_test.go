@@ -12,14 +12,16 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/stellar/go/support/log"
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/db"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/htmltemplate"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -397,35 +399,27 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 	authManagerMock := &auth.AuthManagerMock{}
 
 	messengerClientMock := &message.MessengerClientMock{}
-	uiBaseURL := "https://sdp.com"
+	crashTrackerMock := &crashtracker.MockCrashTrackerClient{}
 	handler := &UserHandler{
-		AuthManager:     authManagerMock,
-		MessengerClient: messengerClientMock,
-		UIBaseURL:       uiBaseURL,
-		Models:          models,
+		AuthManager:        authManagerMock,
+		CrashTrackerClient: crashTrackerMock,
+		MessengerClient:    messengerClientMock,
+		Models:             models,
 	}
+
+	uiBaseURL := "https://sdp.org"
+	tnt := tenant.Tenant{
+		SDPUIBaseURL: &uiBaseURL,
+	}
+	ctx := tenant.SaveTenantInContext(context.Background(), &tnt)
 
 	const url = "/users"
 
 	r.Post(url, handler.CreateUser)
 
-	t.Run("returns Unauthorized when token is invalid", func(t *testing.T) {
-		req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(`{}`))
-		require.NoError(t, err)
-		w := httptest.NewRecorder()
-		r.ServeHTTP(w, req)
-
-		resp := w.Result()
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-
-		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
-		assert.JSONEq(t, `{"error":"Not authorized."}`, string(respBody))
-	})
-
 	t.Run("returns error when request body is invalid", func(t *testing.T) {
 		token := "mytoken"
-		ctx := context.WithValue(context.Background(), middleware.TokenContextKey, token)
+		ctx = context.WithValue(ctx, middleware.TokenContextKey, token)
 
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(`{}`))
 		require.NoError(t, err)
@@ -545,7 +539,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 
 	t.Run("returns error when Auth Manager fails", func(t *testing.T) {
 		token := "mytoken"
-		ctx := context.WithValue(context.Background(), middleware.TokenContextKey, token)
+		ctx = context.WithValue(ctx, middleware.TokenContextKey, token)
 
 		authManagerMock.
 			On("GetUserID", mock.Anything, token).
@@ -560,7 +554,6 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 				"roles": ["developer"]
 			}
 		`
-
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(body))
 		require.NoError(t, err)
 
@@ -621,7 +614,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 
 	t.Run("returns Bad Request when user is duplicated", func(t *testing.T) {
 		token := "mytoken"
-		ctx := context.WithValue(context.Background(), middleware.TokenContextKey, token)
+		ctx = context.WithValue(ctx, middleware.TokenContextKey, token)
 
 		u := &auth.User{
 			FirstName: "First",
@@ -662,9 +655,9 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 		assert.JSONEq(t, `{"error": "a user with this email already exists"}`, string(respBody))
 	})
 
-	t.Run("returns error when sending email fails", func(t *testing.T) {
+	t.Run("logs and reports error when sending email fails", func(t *testing.T) {
 		token := "mytoken"
-		ctx := context.WithValue(context.Background(), middleware.TokenContextKey, token)
+		ctx = context.WithValue(ctx, middleware.TokenContextKey, token)
 
 		u := &auth.User{
 			FirstName: "First",
@@ -702,12 +695,16 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 
 		msg := message.Message{
 			ToEmail: u.Email,
-			Title:   invitationMessageTitle,
+			Title:   "Welcome to Stellar Disbursement Platform",
 			Message: content,
 		}
 		messengerClientMock.
 			On("SendMessage", msg).
 			Return(errors.New("unexpected error")).
+			Once()
+
+		crashTrackerMock.
+			On("LogAndReportErrors", mock.Anything, mock.Anything, "Cannot send invitation message").
 			Once()
 
 		body := `
@@ -732,17 +729,26 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 
 		wantsBody := `
 			{
-				"error": "Cannot send invitation email for user user-id"
+				"id": "user-id",
+				"first_name": "First",
+				"last_name": "Last",
+				"email": "email@email.com",
+				"is_active": false,
+				"roles": ["developer"]
 			}
 		`
 
-		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+		assert.Equal(t, http.StatusCreated, resp.StatusCode)
 		assert.JSONEq(t, wantsBody, string(respBody))
 	})
 
-	t.Run("returns error when joining the forgot password link", func(t *testing.T) {
+	t.Run("logs and reports error when joining the forgot password link", func(t *testing.T) {
+		tntInvalidUIBaseURL := tenant.Tenant{
+			SDPUIBaseURL: &[]string{"%invalid%"}[0],
+		}
 		token := "mytoken"
-		ctx := context.WithValue(context.Background(), middleware.TokenContextKey, token)
+		ctxTenantWithInvalidUIBaseURL := tenant.SaveTenantInContext(context.Background(), &tntInvalidUIBaseURL)
+		ctxTenantWithInvalidUIBaseURL = context.WithValue(ctxTenantWithInvalidUIBaseURL, middleware.TokenContextKey, token)
 
 		u := &auth.User{
 			FirstName: "First",
@@ -767,6 +773,10 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 			Return(expectedUser, nil).
 			Once()
 
+		crashTrackerMock.
+			On("LogAndReportErrors", mock.Anything, mock.Anything, "Cannot send invitation message").
+			Once()
+
 		body := `
 			{
 				"first_name": "First",
@@ -775,16 +785,16 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 				"roles": ["developer"]
 			}
 		`
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(body))
+		req, err := http.NewRequestWithContext(ctxTenantWithInvalidUIBaseURL, http.MethodPost, url, strings.NewReader(body))
 		require.NoError(t, err)
 
 		w := httptest.NewRecorder()
 
 		http.HandlerFunc(UserHandler{
-			AuthManager:     authManagerMock,
-			MessengerClient: messengerClientMock,
-			UIBaseURL:       "%invalid%",
-			Models:          models,
+			AuthManager:        authManagerMock,
+			CrashTrackerClient: crashTrackerMock,
+			MessengerClient:    messengerClientMock,
+			Models:             models,
 		}.CreateUser).ServeHTTP(w, req)
 
 		resp := w.Result()
@@ -794,17 +804,22 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 
 		wantsBody := `
 			{
-				"error": "Cannot get forgot password link"
+				"id": "user-id",
+				"first_name": "First",
+				"last_name": "Last",
+				"email": "email@email.com",
+				"is_active": false,
+				"roles": ["developer"]
 			}
 		`
 
-		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+		assert.Equal(t, http.StatusCreated, resp.StatusCode)
 		assert.JSONEq(t, wantsBody, string(respBody))
 	})
 
 	t.Run("creates user successfully", func(t *testing.T) {
 		token := "mytoken"
-		ctx := context.WithValue(context.Background(), middleware.TokenContextKey, token)
+		ctx = context.WithValue(ctx, middleware.TokenContextKey, token)
 
 		buf := new(strings.Builder)
 		log.DefaultLogger.SetOutput(buf)
@@ -847,7 +862,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 
 		msg := message.Message{
 			ToEmail: u.Email,
-			Title:   invitationMessageTitle,
+			Title:   "Welcome to Stellar Disbursement Platform",
 			Message: content,
 		}
 		messengerClientMock.
@@ -893,8 +908,36 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 		require.Contains(t, buf.String(), "[CreateUserAccount] - User ID authenticated-user-id created user with account ID user-id")
 	})
 
+	t.Run("returns Unauthorized when tenant is not in the context", func(t *testing.T) {
+		ctxWithoutTenant := context.Background()
+
+		body := `
+			{
+				"first_name": "First",
+				"last_name": "Last",
+				"email": "email@email.com",
+				"roles": ["developer"]
+			}
+		`
+		req, err := http.NewRequestWithContext(ctxWithoutTenant, http.MethodPost, url, strings.NewReader(body))
+		require.NoError(t, err)
+
+		w := httptest.NewRecorder()
+
+		r.ServeHTTP(w, req)
+
+		resp := w.Result()
+
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+		assert.JSONEq(t, `{"error": "Not authorized."}`, string(respBody))
+	})
+
 	authManagerMock.AssertExpectations(t)
 	messengerClientMock.AssertExpectations(t)
+	crashTrackerMock.AssertExpectations(t)
 }
 
 func Test_UpdateRolesRequest_validate(t *testing.T) {

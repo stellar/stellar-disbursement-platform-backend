@@ -10,10 +10,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
+	httpclientMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient/mocks"
 )
 
 func Test_NewAnchorPlatformAPIService(t *testing.T) {
@@ -73,7 +75,7 @@ func Test_NewAnchorPlatformAPIService(t *testing.T) {
 }
 
 func Test_updateAnchorTransactions(t *testing.T) {
-	httpClientMock := httpclient.HttpClientMock{}
+	httpClientMock := httpclientMocks.HttpClientMock{}
 	anchorPlatformAPIService, err := NewAnchorPlatformAPIService(&httpClientMock, "http://mock_anchor.com/", "jwt_secret_1234567890")
 	require.NoError(t, err)
 	ctx := context.Background()
@@ -112,15 +114,15 @@ func Test_updateAnchorTransactions(t *testing.T) {
 	}
 
 	t.Run("error calling httpClient.Do", func(t *testing.T) {
-		httpClientMock.On("Do", mock.MatchedBy(mockMatchedByFn)).Return(nil, fmt.Errorf("error calling the request")).Once()
+		httpClientMock.On("Do", mock.MatchedBy(mockMatchedByFn)).Return(nil, fmt.Errorf("calling the request")).Once()
 		err := anchorPlatformAPIService.updateAnchorTransactions(ctx, apTxPatch)
-		require.EqualError(t, err, "error making request to anchor platform: error calling the request")
+		require.EqualError(t, err, "making request to anchor platform: calling the request")
 
 		httpClientMock.AssertExpectations(t)
 	})
 
 	t.Run("error trying to update transactions on anchor platform", func(t *testing.T) {
-		transactionResponse := `{The 'id' of the transaction first determined to be invalid.}`
+		transactionResponse := `{error: "The 'id' of the transaction first determined to be invalid."}`
 		response := &http.Response{
 			Body:       io.NopCloser(strings.NewReader(transactionResponse)),
 			StatusCode: http.StatusBadRequest,
@@ -128,7 +130,8 @@ func Test_updateAnchorTransactions(t *testing.T) {
 		httpClientMock.On("Do", mock.MatchedBy(mockMatchedByFn)).Return(response, nil).Once()
 
 		err := anchorPlatformAPIService.updateAnchorTransactions(ctx, apTxPatch)
-		require.EqualError(t, err, "error updating transaction on anchor platform, response.StatusCode: 400")
+		wantErr := fmt.Errorf("updating transaction on anchor platform, response.StatusCode=%d, response.body=%v", http.StatusBadRequest, transactionResponse)
+		require.Equal(t, wantErr, err)
 
 		httpClientMock.AssertExpectations(t)
 	})
@@ -158,7 +161,7 @@ func Test_updateAnchorTransactions(t *testing.T) {
 }
 
 func Test_PatchAnchorTransactionsPostRegistration(t *testing.T) {
-	httpClientMock := httpclient.HttpClientMock{}
+	httpClientMock := httpclientMocks.HttpClientMock{}
 	anchorPlatformAPIService, err := NewAnchorPlatformAPIService(&httpClientMock, "http://mock_anchor.com/", "jwt_secret_1234567890")
 	require.NoError(t, err)
 	ctx := context.Background()
@@ -226,7 +229,7 @@ func Test_PatchAnchorTransactionsPostRegistration(t *testing.T) {
 }
 
 func Test_PatchAnchorTransactionsPostSuccessCompletion(t *testing.T) {
-	httpClientMock := httpclient.HttpClientMock{}
+	httpClientMock := httpclientMocks.HttpClientMock{}
 	anchorPlatformAPIService, err := NewAnchorPlatformAPIService(&httpClientMock, "http://mock_anchor.com/", "jwt_secret_1234567890")
 	require.NoError(t, err)
 	ctx := context.Background()
@@ -331,7 +334,7 @@ func Test_PatchAnchorTransactionsPostSuccessCompletion(t *testing.T) {
 }
 
 func Test_PatchAnchorTransactionsPostErrorCompletion(t *testing.T) {
-	httpClientMock := httpclient.HttpClientMock{}
+	httpClientMock := httpclientMocks.HttpClientMock{}
 	anchorPlatformAPIService, err := NewAnchorPlatformAPIService(&httpClientMock, "http://mock_anchor.com/", "jwt_secret_1234567890")
 	require.NoError(t, err)
 	ctx := context.Background()
@@ -402,7 +405,7 @@ func Test_PatchAnchorTransactionsPostErrorCompletion(t *testing.T) {
 }
 
 func Test_getAnchorTransactions(t *testing.T) {
-	httpClientMock := httpclient.HttpClientMock{}
+	httpClientMock := httpclientMocks.HttpClientMock{}
 	apService, err := NewAnchorPlatformAPIService(&httpClientMock, "https://test.com/", "jwt_secret_1234567890")
 	require.NoError(t, err)
 	ctx := context.Background()
@@ -504,7 +507,7 @@ func Test_getAnchorTransactions(t *testing.T) {
 }
 
 func Test_IsAnchorProtectedByAuth(t *testing.T) {
-	httpClientMock := httpclient.HttpClientMock{}
+	httpClientMock := httpclientMocks.HttpClientMock{}
 	anchorPlatformAPIService, err := NewAnchorPlatformAPIService(&httpClientMock, "https://test.com/", "jwt_secret_1234567890")
 	require.NoError(t, err)
 	ctx := context.Background()

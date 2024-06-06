@@ -9,6 +9,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/stellar/go/support/http/httpdecode"
 	"github.com/stellar/go/support/render/httpjson"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
@@ -51,7 +52,7 @@ func (h WalletsHandler) PostWallets(rw http.ResponseWriter, req *http.Request) {
 	}
 
 	validator := validators.NewWalletValidator()
-	reqBody = validator.ValidateCreateWalletRequest(reqBody)
+	reqBody = validator.ValidateCreateWalletRequest(ctx, reqBody)
 	if validator.HasErrors() {
 		httperror.BadRequest("invalid request body", nil, validator.Errors).Render(rw)
 		return

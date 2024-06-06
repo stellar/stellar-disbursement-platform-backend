@@ -1,6 +1,7 @@
 package validators
 
 import (
+	"context"
 	"net/url"
 	"strings"
 
@@ -27,7 +28,7 @@ func NewWalletValidator() *WalletValidator {
 	return &WalletValidator{Validator: NewValidator()}
 }
 
-func (wv *WalletValidator) ValidateCreateWalletRequest(reqBody *WalletRequest) *WalletRequest {
+func (wv *WalletValidator) ValidateCreateWalletRequest(ctx context.Context, reqBody *WalletRequest) *WalletRequest {
 	wv.Check(reqBody != nil, "body", "request body is empty")
 
 	if wv.HasErrors() {
@@ -51,19 +52,19 @@ func (wv *WalletValidator) ValidateCreateWalletRequest(reqBody *WalletRequest) *
 
 	homepageURL, err := url.ParseRequestURI(homepage)
 	if err != nil {
-		log.Errorf("parsing homepage URL: %v", err)
+		log.Ctx(ctx).Errorf("parsing homepage URL: %v", err)
 		wv.Check(false, "homepage", "invalid homepage URL provided")
 	}
 
 	deepLinkSchemaURL, err := url.ParseRequestURI(deepLinkSchema)
 	if err != nil {
-		log.Errorf("parsing deep link schema: %v", err)
+		log.Ctx(ctx).Errorf("parsing deep link schema: %v", err)
 		wv.Check(false, "deep_link_schema", "invalid deep link schema provided")
 	}
 
 	sep10URL, err := url.Parse(sep10ClientDomain)
 	if err != nil {
-		log.Errorf("parsing SEP-10 client domain URL: %v", err)
+		log.Ctx(ctx).Errorf("parsing SEP-10 client domain URL: %v", err)
 		wv.Check(false, "sep_10_client_domain", "invalid SEP-10 client domain URL provided")
 	}
 
