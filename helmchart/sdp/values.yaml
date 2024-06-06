@@ -196,9 +196,9 @@ sdp:
   ## @param sdp.kubeSecrets.data.RECAPTCHA_SITE_SECRET_KEY Secret key for Google reCAPTCHA service to verify user's non-robotic behavior.
   ## @param sdp.kubeSecrets.data.ANCHOR_PLATFORM_OUTGOING_JWT_SECRET The JWT secret used to create a JWT token used to send requests to the anchor platform.
   ## @param sdp.kubeSecrets.data.DATABASE_URL URL of the database used by the SDP.
-  ## @param sdp.kubeSecrets.data.DISTRIBUTION_SEED The private key of the Stellar account used to disburse funds. This is needed for the init container.
+  ## @param sdp.kubeSecrets.data.DISTRIBUTION_SEED The HOST's Stellar distribution account, used to create channel accounts. This is needed for the init container.
   ## @param sdp.kubeSecrets.data.CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE The private key used to encrypt the channel accounts secrets in the database.
-  ## @param sdp.kubeSecrets.data.DISTRIBUTION_SIGNER_TYPE The type of the signature client used for distribution accounts.
+  ## @param sdp.kubeSecrets.data.DISTRIBUTION_SIGNER_TYPE The type of signer used to sign Stellar transactions for the tenants' distribution accounts. Options: DISTRIBUTION_ACCOUNT_ENV: uses the same distribution account for all tenants, as well as for the HOST, through the secret configured in DISTRIBUTION_SEED. DISTRIBUTION_ACCOUNT_DB: uses the one different distribution account private key per tenant, and stores them in the database, encrypted with the DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE.
   ## @param sdp.kubeSecrets.data.DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE The private key used to encrypt the distribution accounts secrets in the database, mandatory when DISTRIBUTION_SIGNER_TYPE is set to DISTRIBUTION_ACCOUNT_DB.
   ## @param sdp.kubeSecrets.data.SENTRY_DSN The DSN for the Sentry service. it must be set if CRASH_TRACKER_TYPE is set to "SENTRY".
   ## @param sdp.kubeSecrets.data.KAFKA_SASL_USERNAME The username for SASL authentication to the Kafka broker. Required if KAFKA_SECURITY_PROTOCOL is set to "SASL_SSL" or "SASL_PLAINTEXT".
@@ -482,9 +482,9 @@ tss:
   ## @param tss.kubeSecrets.create If true, the secret will be created. If false, it is assumed the secret already exists.
   ## @param tss.kubeSecrets.annotations Annotations to be added to the secret.
   ## @param tss.kubeSecrets.data.DATABASE_URL URL of the database used by the TSS.
-  ## @param tss.kubeSecrets.data.DISTRIBUTION_SEED The private key of the Stellar account used to disburse funds.
+  ## @param tss.kubeSecrets.data.DISTRIBUTION_SEED The HOST's Stellar distribution account, used to create channel accounts.
   ## @param tss.kubeSecrets.data.CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE The private key used to encrypt the channel accounts secrets in the database.
-  ## @param tss.kubeSecrets.data.DISTRIBUTION_SIGNER_TYPE The type of the signature client used for distribution accounts.
+  ## @param tss.kubeSecrets.data.DISTRIBUTION_SIGNER_TYPE The type of signer used to sign Stellar transactions for the tenants' distribution accounts. Options: DISTRIBUTION_ACCOUNT_ENV: uses the the same distribution account for all tenants, as well as for the HOST, through the secret configured in DISTRIBUTION_SEED. DISTRIBUTION_ACCOUNT_DB: uses the one different distribution account private key per tenant, and stores them in the database, encrypted with the DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE.
   ## @param tss.kubeSecrets.data.DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE The private key used to encrypt the distribution accounts secrets in the database, mandatory when DISTRIBUTION_SIGNER_TYPE is set to DISTRIBUTION_ACCOUNT_DB.
   ## @param tss.kubeSecrets.data.SENTRY_DSN The DSN for the Sentry service. it must be set if CRASH_TRACKER_TYPE is set to "SENTRY".
   ## @param tss.kubeSecrets.data.KAFKA_SASL_USERNAME The username for SASL authentication to the Kafka broker. Required if KAFKA_SECURITY_PROTOCOL is set to "SASL_SSL" or "SASL_PLAINTEXT".
