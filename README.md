@@ -15,9 +15,9 @@
 - [Contributors](#contributors)
   - [State Transitions](#state-transitions)
 
-> [!WARNING]  
-> We're in the process of releasing a new multi-tenant version of the SDP. Develop branch currently contains the release candidate of multi-tenant SDP.
-> For the stable single-tenant version, [please use the latest `v1.x.x` tag](https://github.com/stellar/stellar-disbursement-platform-backend/releases).
+> [!NOTE]
+> If you are using version 1.x.x, we highly recommend upgrading to version 2.x.x to benefit from the latest features, routine fixes, and security patches. 
+> For detailed instructions on how to upgrade, please refer to [the upgrade guide](https://developers.stellar.org/network/stellar-disbursement-platform/admin-guide/single-tenant-to-multi-tenant-migration).
 
 ## Introduction
 
