@@ -40,7 +40,8 @@ Make sure you have Docker installed on your system. If not, you can download it 
 git clone https://github.com/stellar/stellar-disbursement-platform.git
 ```
 
-### Update local dns
+### Update local DNS
+This update is needed to simulate the multi-tenant capabilities of the SDP. The SDP uses the subdomain of the request URL to resolve the tenant.
 Be sure that the added tenant hosts are included in the host configuration file.
 To check it, you can run the command `cat /etc/hosts`.
 To include them, you can run command `sudo nano /etc/hosts` and insert the lines below:
@@ -136,7 +137,7 @@ Login URLs for each tenant:
 
    - In this example, when registering, the payment receiver will be asked to verify their phone number and date of birth which will need to match the payment file instructions.
 
-   - Upload the CSV and then click the Review button.  When you are ready to start the disbursement click the `Confirm disbursement` button.
+   - Upload the CSV and then click the Review button.  When you are ready to start the disbursement, click the `Confirm disbursement` button.
    
    <img src="images/disbursement2.png" alt="alt text" width="40%">
 
@@ -173,7 +174,7 @@ Now deposit the disbursement payment into the digital wallet using the SEP-24 de
    
    <img src="images/sep24_deposit1.png" alt="SEP-24 Deposit" width="40%">
 
-9.  In the new window, enter the phone number `+12065551234` from the disbursement CSV payment.
+9.  In the new window, enter the phone number `+13163955627` from the disbursement CSV payment.
     
     <img src="images/sep24_deposit2.png" alt="Enter Phone Number" width="40%">
 
