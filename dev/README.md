@@ -112,7 +112,7 @@ Login URLs for each tenant:
 
 1. Navigate to the SDP frontend service by opening a browser and going to [http://bluecorp.stellar.local:3000](http://bluecorp.stellar.local:3000).
 
-   <img src="images/sdp_login.png" alt="SDP Login" width="65%">
+   <img src="images/sdp_login.png" alt="SDP Login" width="40%">
 
 2. **Create First Disbursement**
 
@@ -121,31 +121,30 @@ Login URLs for each tenant:
    - Select `United States` as the Country.
    - Select `Date of Birth` as the verification method.
 
-   <img src="images/disbursement1.png" alt="Disbursement" width="65%">
+   <img src="images/disbursement1.png" alt="Disbursement" width="40%">
 
 3. **Create and Upload a Disbursement File**
 
    - A sample file template is available [sample-disbursement.csv](./sample/sample-disbursement.csv).
    - Make sure to update the invalid phone numbers before using it.
-   - Here is an example of a disbursement file containing one payment for `0.1 USDC` using a fake phone number `+1 (206) 555-1234`:
+   - Here is an example of a disbursement file with a single payment:
    
    ```csv
    phone,id,amount,verification
-   +15550111111,4ba1,0.1,1987-12-01
+   +13163955627,4ba1,.1,1987-12-01
    ```
 
    - In this example, when registering, the payment receiver will be asked to verify their phone number and date of birth which will need to match the payment file instructions.
 
    - Upload the CSV and then click the Review button.  When you are ready to start the disbursement click the `Confirm disbursement` button.
    
-   <img src="images/disbursement2.png" alt="alt text" width="65%">
-   ![alt text](image.png)
+   <img src="images/disbursement2.png" alt="alt text" width="40%">
 
 4. **View the Disbursement Details Dashboard**
 
    Navigate to Disbursement Details and see the payment in the disbursement is currently in a `Ready` state. This means the receiver has yet to accept the invitation and deposit the funds.
 
-   <img src="images/disbursement_detail.png" alt="Disbursement Details" width="65%">
+   <img src="images/disbursement_detail.png" alt="Disbursement Details" width="40%">
 
 ### Receive Payment to Digital Wallet (Deposit Flow)
 
@@ -156,40 +155,39 @@ Now deposit the disbursement payment into the digital wallet using the SEP-24 de
 3. Click `Create account` (in front of public key) to actually create the account on the Stellar testnet.
 4. Your newly created account will have 10,000 XLM.
    
-   <img src="images/demo_wallet.png" alt="Demo Wallet" width="65%">
+   <img src="images/demo_wallet.png" alt="Demo Wallet" width="40%">
 
 5. Add `USDC` by clicking `Add from preset assets` link, selecting the `USDC` Checkbox and clicking `Confirm`.
 
-   <img src="images/demo_wallet1.png" alt="Demo Wallet" width="65%">
+   <img src="images/demo_wallet1.png" alt="Demo Wallet" width="40%">
 
 6. Click the `Add trustline` link next to the `Select Action` dropdown.
 
-   <img src="images/demo_wallet2.png" alt="Add Trustline" width="65%">
+   <img src="images/demo_wallet2.png" alt="Add Trustline" width="40%">
 
 7. Click the `pencil` icon beside `USDC` balance to edit the home domain. Enter `http://bluecorp.stellar.local:8000` and click the `Override` button.
 
-   <img src="images/demo_wallet3.png" alt="Edit Home Domain" width="65%">
+   <img src="images/demo_wallet3.png" alt="Edit Home Domain" width="40%">
 
 8. In the `USDC` `Select action` dropdown, select `SEP-24 Deposit` and then click the `Start` button.
-
-   <img src="images/sep24_deposit1.png" alt="SEP-24 Deposit" width="65%">
+   
+   <img src="images/sep24_deposit1.png" alt="SEP-24 Deposit" width="40%">
 
 9.  In the new window, enter the phone number `+12065551234` from the disbursement CSV payment.
-
-   <img src="images/sep24_deposit2.png" alt="Enter Phone Number" width="65%">
+    
+    <img src="images/sep24_deposit2.png" alt="Enter Phone Number" width="40%">
 
 10. To verify the payment, enter the passcode and date of birth. You can use `000000` passcode or find the actual passcode in the `sdp-api` container logs.
-![alt text](image-1.png)
-    <img src="images/sep24_deposit3.png" alt="Verify Payment" width="65%">
 
-1.  The SEP-24 interactive pop-up will confirm the registration was successful. At this point, the SDP can associate the wallet address with the receiver phone number. It should then start processing the transaction to send the payment. If you check the dashboard, the payment should be in a `PENDING` state.
+    <img src="images/sep24_deposit3.png" alt="Verify Payment" width="40%">
 
-    <img src="images/payment1.png" alt="Pending Payment" width="65%">
+11. The SEP-24 interactive pop-up will confirm the registration was successful. At this point, the SDP can associate the wallet address with the receiver phone number. It should then start processing the transaction to send the payment. If you check the dashboard, the payment should be in a `PENDING` state.
 
-2.  Keep an eye on the dashboard until the payment status reaches `Success`. If everything was set up correctly, your money should be disbursed successfully.
+    <img src="images/payment1.png" alt="Pending Payment" width="55%">
 
-    <img src="images/payment2.png" alt="Successful Payment" width="65%">
+12. Once complete, the payment status will be `Success` and your wallet will have the USDC.
 
+    <img src="images/payment2.png" alt="Successful Payment" width="55%">
 
 ## Additional Development Environment Details
 
