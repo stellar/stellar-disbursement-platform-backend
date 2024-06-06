@@ -158,7 +158,8 @@ Now deposit the disbursement payment into the digital wallet using the SEP-24 de
    
    <img src="images/demo_wallet.png" alt="Demo Wallet" width="40%">
 
-5. Add `USDC` by clicking `Add from preset assets` link, selecting the `USDC` Checkbox and clicking `Confirm`.
+5. Add `USDC` by clicking `Add from preset assets` link, selecting the `USDC` Checkbox and clicking `Override Home Domain`  to edit the home domain.
+Enter `http://bluecorp.stellar.local:8000` and click the `Confirm` button.
 
    <img src="images/demo_wallet1.png" alt="Demo Wallet" width="40%">
 
@@ -166,27 +167,23 @@ Now deposit the disbursement payment into the digital wallet using the SEP-24 de
 
    <img src="images/demo_wallet2.png" alt="Add Trustline" width="40%">
 
-7. Click the `pencil` icon beside `USDC` balance to edit the home domain. Enter `http://bluecorp.stellar.local:8000` and click the `Override` button.
-
-   <img src="images/demo_wallet3.png" alt="Edit Home Domain" width="40%">
-
-8. In the `USDC` `Select action` dropdown, select `SEP-24 Deposit` and then click the `Start` button.
+7. In the `USDC` `Select action` dropdown, select `SEP-24 Deposit` and then click the `Start` button.
    
    <img src="images/sep24_deposit1.png" alt="SEP-24 Deposit" width="40%">
 
-9.  In the new window, enter the phone number `+13163955627` from the disbursement CSV payment.
+8.  In the new window, enter the phone number `+13163955627` from the disbursement CSV payment.
     
     <img src="images/sep24_deposit2.png" alt="Enter Phone Number" width="40%">
 
-10. To verify the payment, enter the passcode and date of birth. You can use `000000` passcode or find the actual passcode in the `sdp-api` container logs.
+9. To verify the payment, enter the passcode and date of birth. You can use `000000` passcode or find the actual passcode in the `sdp-api` container logs.
 
     <img src="images/sep24_deposit3.png" alt="Verify Payment" width="40%">
 
-11. The SEP-24 interactive pop-up will confirm the registration was successful. At this point, the SDP can associate the wallet address with the receiver phone number. It should then start processing the transaction to send the payment. If you check the dashboard, the payment should be in a `PENDING` state.
+10. The SEP-24 interactive pop-up will confirm the registration was successful. At this point, the SDP can associate the wallet address with the receiver phone number. It should then start processing the transaction to send the payment. If you check the dashboard, the payment should be in a `PENDING` state.
 
     <img src="images/payment1.png" alt="Pending Payment" width="55%">
 
-12. Once complete, the payment status will be `Success` and your wallet will have the USDC.
+11. Once complete, the payment status will be `Success` and your wallet will have the USDC.
 
     <img src="images/payment2.png" alt="Successful Payment" width="55%">
 
