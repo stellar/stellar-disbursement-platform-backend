@@ -262,13 +262,11 @@ func (c AssetsHandler) submitChangeTrustTransaction(ctx context.Context, acc *ho
 	}
 
 	// TODO: move it to the beginning of the callers in SDP-1183
-	var distributionAccountPubKey string
-	if distributionAccount, err := c.DistributionAccountResolver.DistributionAccountFromContext(ctx); err != nil {
+	distributionAccount, err := c.DistributionAccountResolver.DistributionAccountFromContext(ctx)
+	if err != nil {
 		return fmt.Errorf("resolving distribution account from context: %w", err)
 	} else if !distributionAccount.IsStellar() {
 		return fmt.Errorf("expected distribution account to be a STELLAR account but got %q", distributionAccount.Type)
-	} else {
-		distributionAccountPubKey = distributionAccount.Address
 	}
 
 	operations := make([]txnbuild.Operation, 0, len(changeTrustOperations))
@@ -283,7 +281,7 @@ func (c AssetsHandler) submitChangeTrustTransaction(ctx context.Context, acc *ho
 	tx, err := txnbuild.NewTransaction(
 		txnbuild.TransactionParams{
 			SourceAccount: &txnbuild.SimpleAccount{
-				AccountID: distributionAccountPubKey,
+				AccountID: distributionAccount.Address,
 				Sequence:  acc.Sequence,
 			},
 			IncrementSequenceNum: true,
@@ -296,7 +294,7 @@ func (c AssetsHandler) submitChangeTrustTransaction(ctx context.Context, acc *ho
 		return fmt.Errorf("creating change trust transaction: %w", err)
 	}
 
-	tx, err = c.DistAccountSigner.SignStellarTransaction(ctx, tx, distributionAccountPubKey)
+	tx, err = c.SignerRouter.SignStellarTransaction(ctx, tx, distributionAccount)
 	if err != nil {
 		return fmt.Errorf("signing change trust transaction: %w", err)
 	}

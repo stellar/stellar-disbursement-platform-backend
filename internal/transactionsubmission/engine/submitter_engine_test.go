@@ -9,12 +9,17 @@ import (
 
 	preconditionsMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
 func Test_SubmitterEngine_Validate(t *testing.T) {
 	hMock := &horizonclient.MockClient{}
 	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
-	sigService, _, mDistAccSigClient, _, _ := signing.NewMockSignatureService(t)
+	sigService, sigRouter, _ := signing.NewMockSignatureService(t)
+	sigRouter.
+		On("SupportedAccountTypes").
+		Return([]schema.AccountType{schema.ChannelAccountStellarDB}).
+		Maybe()
 
 	testCases := []struct {
 		name            string
@@ -39,18 +44,6 @@ func Test_SubmitterEngine_Validate(t *testing.T) {
 				LedgerNumberTracker: mLedgerNumberTracker,
 			},
 			wantErrContains: "signature service cannot be empty",
-		},
-		{
-			name: "returns an error if the max base fee is less than the minimum",
-			engine: SubmitterEngine{
-				HorizonClient:       hMock,
-				LedgerNumberTracker: mLedgerNumberTracker,
-				SignatureService: signing.SignatureService{
-					DistAccountSigner: mDistAccSigClient,
-				},
-				MaxBaseFee: 99,
-			},
-			wantErrContains: "validating signature service: channel account signer cannot be nil",
 		},
 		{
 			name: "returns an error if the max base fee is less than the minimum",

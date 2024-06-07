@@ -232,14 +232,14 @@ func Test_DistributionAccountResolverImpl_DistributionAccountFromContext(t *test
 }
 
 func Test_DistributionAccountResolverImpl_HostDistributionAccount(t *testing.T) {
-	publicKeys := []string{
-		keypair.MustRandom().Address(),
-		keypair.MustRandom().Address(),
-		keypair.MustRandom().Address(),
+	hostAccounts := []schema.TransactionAccount{
+		schema.NewDefaultHostAccount(keypair.MustRandom().Address()),
+		schema.NewDefaultHostAccount(keypair.MustRandom().Address()),
+		schema.NewDefaultHostAccount(keypair.MustRandom().Address()),
 	}
 
-	for i, publicKey := range publicKeys {
-		distAccResolver := &DistributionAccountResolverImpl{hostDistributionAccountPubKey: publicKey}
-		assert.Equalf(t, publicKey, distAccResolver.HostDistributionAccount(), "assertion failed at index %d", i)
+	for i, hostAccount := range hostAccounts {
+		distAccResolver := &DistributionAccountResolverImpl{hostDistributionAccountPubKey: hostAccount.Address}
+		assert.Equalf(t, hostAccount, distAccResolver.HostDistributionAccount(), "assertion failed at index %d", i)
 	}
 }

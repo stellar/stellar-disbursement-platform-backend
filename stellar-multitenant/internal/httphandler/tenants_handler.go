@@ -21,6 +21,7 @@ import (
 	coreSvc "github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/internal/provisioning"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/internal/validators"
@@ -105,15 +106,18 @@ func (h TenantsHandler) Post(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	// TODO: in SDP-1167, send the accountType will be sent in the request body
+	accountType := schema.DistributionAccountStellarEnv
 	tnt, err := h.ProvisioningManager.ProvisionNewTenant(ctx, provisioning.ProvisionTenant{
-		Name:          reqBody.Name,
-		UserFirstName: reqBody.OwnerFirstName,
-		UserLastName:  reqBody.OwnerLastName,
-		UserEmail:     reqBody.OwnerEmail,
-		OrgName:       reqBody.OrganizationName,
-		NetworkType:   string(h.NetworkType),
-		UiBaseURL:     tntSDPUIBaseURL,
-		BaseURL:       tntBaseURL,
+		Name:                    reqBody.Name,
+		UserFirstName:           reqBody.OwnerFirstName,
+		UserLastName:            reqBody.OwnerLastName,
+		UserEmail:               reqBody.OwnerEmail,
+		OrgName:                 reqBody.OrganizationName,
+		NetworkType:             string(h.NetworkType),
+		UiBaseURL:               tntSDPUIBaseURL,
+		BaseURL:                 tntBaseURL,
+		DistributionAccountType: accountType,
 	})
 	if err != nil {
 		if errors.Is(err, tenant.ErrDuplicatedTenantName) {
@@ -255,7 +259,7 @@ func (t TenantsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if tnt.DistributionAccountAddress != nil && t.DistributionAccountResolver.HostDistributionAccount() != *tnt.DistributionAccountAddress {
+	if tnt.DistributionAccountAddress != nil && t.DistributionAccountResolver.HostDistributionAccount().Address != *tnt.DistributionAccountAddress {
 		// TODO: Encapsulate this logic under a distribution account abstraction similar to [SDP-1177] once we add Circle custody support
 		distAcc, accDetailsErr := t.HorizonClient.AccountDetail(horizonclient.AccountRequest{AccountID: *tnt.DistributionAccountAddress})
 		if accDetailsErr != nil {

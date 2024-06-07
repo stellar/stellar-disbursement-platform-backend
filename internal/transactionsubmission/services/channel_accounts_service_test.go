@@ -24,6 +24,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 	storeMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store/mocks"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
 func Test_ChannelAccountsService_validate(t *testing.T) {
@@ -35,7 +36,7 @@ func Test_ChannelAccountsService_validate(t *testing.T) {
 
 	mHorizonClient := &horizonclient.MockClient{}
 	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
-	sigService, _, _, _, _ := signing.NewMockSignatureService(t)
+	sigService, _, _ := signing.NewMockSignatureService(t)
 
 	testCases := []struct {
 		name                      string
@@ -185,7 +186,7 @@ func Test_ChannelAccounts_CreateAccount_Success(t *testing.T) {
 	defer mHorizonClient.AssertExpectations(t)
 	mChannelAccountStore := storeMocks.NewMockChannelAccountStore(t)
 	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
-	sigService, mChAccSigClient, _, mHostAccSigClient, mDistAccResolver := signing.NewMockSignatureService(t)
+	sigService, sigRouter, mDistAccResolver := signing.NewMockSignatureService(t)
 
 	chAccService := ChannelAccountsService{
 		chAccStore:          mChannelAccountStore,
@@ -198,20 +199,21 @@ func Test_ChannelAccounts_CreateAccount_Success(t *testing.T) {
 		},
 	}
 
-	hostAccount := keypair.MustParseFull("SBMW2WDSVTGT2N2PCBF3PV7WBOIKVTGGIEBUUYMDX3CKTDD5HY3UIHV4")
+	hostAccountKP := keypair.MustParseFull("SBMW2WDSVTGT2N2PCBF3PV7WBOIKVTGGIEBUUYMDX3CKTDD5HY3UIHV4")
+	hostAccount := schema.NewDefaultHostAccount(hostAccountKP.Address())
 	currLedgerNumber := 100
 	ledgerBounds := &txnbuild.LedgerBounds{
 		MaxLedger: uint32(currLedgerNumber + preconditions.IncrementForMaxLedgerBounds),
 	}
 
-	publicKeys := []string{
-		keypair.MustRandom().Address(),
-		keypair.MustRandom().Address(),
+	channelAccounts := []schema.TransactionAccount{
+		schema.NewDefaultChannelAccount(keypair.MustRandom().Address()),
+		schema.NewDefaultChannelAccount(keypair.MustRandom().Address()),
 	}
 
 	mHorizonClient.
-		On("AccountDetail", horizonclient.AccountRequest{AccountID: hostAccount.Address()}).
-		Return(horizon.Account{AccountID: hostAccount.Address()}, nil).
+		On("AccountDetail", horizonclient.AccountRequest{AccountID: hostAccountKP.Address()}).
+		Return(horizon.Account{AccountID: hostAccountKP.Address()}, nil).
 		On("SubmitTransactionWithOptions", mock.Anything, horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true}).
 		Return(horizon.Transaction{}, nil).
 		Once()
@@ -225,17 +227,13 @@ func Test_ChannelAccounts_CreateAccount_Success(t *testing.T) {
 		Twice()
 	mDistAccResolver.
 		On("HostDistributionAccount").
-		Return(hostAccount.Address()).
-		Twice()
-	mHostAccSigClient.
-		On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), mock.AnythingOfType("string")).
-		Return(&txnbuild.Transaction{}, nil).
+		Return(hostAccount).
 		Once()
-	mChAccSigClient.
-		On("BatchInsert", ctx, 2).
-		Return(publicKeys, nil).
+	sigRouter.
+		On("BatchInsert", ctx, schema.ChannelAccountStellarDB, 2).
+		Return(channelAccounts, nil).
 		Once().
-		On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), mock.AnythingOfType("string"), mock.AnythingOfType("string")).
+		On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), mock.AnythingOfType("schema.TransactionAccount"), mock.AnythingOfType("schema.TransactionAccount"), hostAccount).
 		Return(&txnbuild.Transaction{}, nil).
 		Once()
 
@@ -256,7 +254,7 @@ func Test_ChannelAccounts_CreateAccount_CannotFindHostAccount_Failure(t *testing
 	defer mHorizonClient.AssertExpectations(t)
 	mChannelAccountStore := storeMocks.NewMockChannelAccountStore(t)
 	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
-	sigService, _, _, _, mDistAccResolver := signing.NewMockSignatureService(t)
+	sigService, _, mDistAccResolver := signing.NewMockSignatureService(t)
 
 	cas := ChannelAccountsService{
 		chAccStore:          mChannelAccountStore,
@@ -269,15 +267,16 @@ func Test_ChannelAccounts_CreateAccount_CannotFindHostAccount_Failure(t *testing
 		},
 	}
 
-	hostAccount := keypair.MustParseFull("SDL4E4RF6BHX77DBKE63QC4H4LQG7S7D2PB4TSF64LTHDIHP7UUJHH2V")
+	hostAccountKP := keypair.MustParseFull("SDL4E4RF6BHX77DBKE63QC4H4LQG7S7D2PB4TSF64LTHDIHP7UUJHH2V")
+	hostAccount := schema.NewDefaultHostAccount(hostAccountKP.Address())
 	currLedgerNumber := 100
 
 	mHorizonClient.
-		On("AccountDetail", horizonclient.AccountRequest{AccountID: hostAccount.Address()}).
+		On("AccountDetail", horizonclient.AccountRequest{AccountID: hostAccountKP.Address()}).
 		Return(horizon.Account{}, errors.New("some random error"))
 	mDistAccResolver.
 		On("HostDistributionAccount").
-		Return(hostAccount.Address()).
+		Return(hostAccount).
 		Once()
 
 	err = cas.CreateChannelAccounts(ctx, currLedgerNumber)
@@ -297,7 +296,7 @@ func Test_ChannelAccounts_CreateAccount_Insert_Failure(t *testing.T) {
 	defer mHorizonClient.AssertExpectations(t)
 	mChannelAccountStore := storeMocks.NewMockChannelAccountStore(t)
 	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
-	sigService, mChAccSigClient, _, _, mDistAccResolver := signing.NewMockSignatureService(t)
+	sigService, sigRouter, mDistAccResolver := signing.NewMockSignatureService(t)
 
 	cas := ChannelAccountsService{
 		chAccStore:          mChannelAccountStore,
@@ -310,7 +309,8 @@ func Test_ChannelAccounts_CreateAccount_Insert_Failure(t *testing.T) {
 		},
 	}
 
-	hostAccount := keypair.MustParseFull("SBMW2WDSVTGT2N2PCBF3PV7WBOIKVTGGIEBUUYMDX3CKTDD5HY3UIHV4")
+	hostAccountKP := keypair.MustParseFull("SBMW2WDSVTGT2N2PCBF3PV7WBOIKVTGGIEBUUYMDX3CKTDD5HY3UIHV4")
+	hostAccount := schema.NewDefaultHostAccount(hostAccountKP.Address())
 
 	// current ledger number
 	currLedgerNumber := 100
@@ -323,14 +323,14 @@ func Test_ChannelAccounts_CreateAccount_Insert_Failure(t *testing.T) {
 	mLedgerNumberTracker.
 		On("GetLedgerBounds").Return(ledgerBounds, nil).Once()
 	mHorizonClient.
-		On("AccountDetail", horizonclient.AccountRequest{AccountID: hostAccount.Address()}).
-		Return(horizon.Account{AccountID: hostAccount.Address()}, nil)
+		On("AccountDetail", horizonclient.AccountRequest{AccountID: hostAccountKP.Address()}).
+		Return(horizon.Account{AccountID: hostAccountKP.Address()}, nil)
 	mDistAccResolver.
 		On("HostDistributionAccount").
-		Return(hostAccount.Address()).
+		Return(hostAccount).
 		Once()
-	mChAccSigClient.
-		On("BatchInsert", ctx, 2).
+	sigRouter.
+		On("BatchInsert", ctx, schema.ChannelAccountStellarDB, 2).
 		Return(nil, errors.New("failure inserting account"))
 
 	err = cas.CreateChannelAccounts(ctx, 2)
@@ -348,7 +348,7 @@ func Test_ChannelAccounts_VerifyAccounts_Success(t *testing.T) {
 	defer mHorizonClient.AssertExpectations(t)
 	mChannelAccountStore := storeMocks.NewMockChannelAccountStore(t)
 	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
-	sigService, _, _, _, _ := signing.NewMockSignatureService(t)
+	sigService, _, _ := signing.NewMockSignatureService(t)
 
 	cas := ChannelAccountsService{
 		chAccStore:          mChannelAccountStore,
@@ -394,7 +394,7 @@ func Test_ChannelAccounts_VerifyAccounts_LoadChannelAccountsError_Failure(t *tes
 	defer mHorizonClient.AssertExpectations(t)
 	mChannelAccountStore := storeMocks.NewMockChannelAccountStore(t)
 	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
-	sigService, _, _, _, _ := signing.NewMockSignatureService(t)
+	sigService, _, _ := signing.NewMockSignatureService(t)
 
 	cas := ChannelAccountsService{
 		chAccStore:          mChannelAccountStore,
@@ -433,7 +433,7 @@ func Test_ChannelAccounts_VerifyAccounts_NotFound(t *testing.T) {
 	defer mHorizonClient.AssertExpectations(t)
 	mChannelAccountStore := storeMocks.NewMockChannelAccountStore(t)
 	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
-	sigService, _, _, _, _ := signing.NewMockSignatureService(t)
+	sigService, _, _ := signing.NewMockSignatureService(t)
 
 	cas := ChannelAccountsService{
 		chAccStore:          mChannelAccountStore,
@@ -494,7 +494,7 @@ func Test_ChannelAccounts_DeleteAccount_Success(t *testing.T) {
 	defer mHorizonClient.AssertExpectations(t)
 	mChannelAccountStore := storeMocks.NewMockChannelAccountStore(t)
 	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
-	sigService, mChAccSigClient, _, mHostAccSigClient, mDistAccResolver := signing.NewMockSignatureService(t)
+	sigService, sigRouter, mDistAccResolver := signing.NewMockSignatureService(t)
 
 	cas := ChannelAccountsService{
 		chAccStore:          mChannelAccountStore,
@@ -512,7 +512,8 @@ func Test_ChannelAccounts_DeleteAccount_Success(t *testing.T) {
 		PrivateKey: "YVeMG89DMl2Ku7IeGCumrvneDydfuW+2q4EKQoYhPRpKS/A1bKhNzAa7IjyLiA6UwTESsM6Hh8nactmuOfqUT38YVTx68CIgG6OuwCHPrmws57Tf",
 	}
 
-	hostAccount := keypair.MustParseFull("SBMW2WDSVTGT2N2PCBF3PV7WBOIKVTGGIEBUUYMDX3CKTDD5HY3UIHV4")
+	hostAccountKP := keypair.MustParseFull("SBMW2WDSVTGT2N2PCBF3PV7WBOIKVTGGIEBUUYMDX3CKTDD5HY3UIHV4")
+	hostAccount := schema.NewDefaultHostAccount(hostAccountKP.Address())
 
 	currLedgerNum := 100
 	ledgerBounds := &txnbuild.LedgerBounds{
@@ -530,25 +531,22 @@ func Test_ChannelAccounts_DeleteAccount_Success(t *testing.T) {
 		On("AccountDetail", horizonclient.AccountRequest{AccountID: channelAccount.PublicKey}).
 		Return(horizon.Account{}, nil).
 		Once().
-		On("AccountDetail", horizonclient.AccountRequest{AccountID: hostAccount.Address()}).
-		Return(horizon.Account{AccountID: hostAccount.Address()}, nil).
+		On("AccountDetail", horizonclient.AccountRequest{AccountID: hostAccountKP.Address()}).
+		Return(horizon.Account{AccountID: hostAccountKP.Address()}, nil).
 		Once().
 		On("SubmitTransactionWithOptions", mock.Anything, horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true}).
 		Return(horizon.Transaction{}, nil).
 		Once()
 	mDistAccResolver.
 		On("HostDistributionAccount").
-		Return(hostAccount.Address()).
-		Twice()
-	mHostAccSigClient.
-		On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), mock.AnythingOfType("string")).
-		Return(&txnbuild.Transaction{}, nil).
+		Return(hostAccount).
 		Once()
-	mChAccSigClient.
-		On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), mock.AnythingOfType("string"), mock.AnythingOfType("string")).
+	chTxAccount := schema.NewDefaultChannelAccount(channelAccount.PublicKey)
+	sigRouter.
+		On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), chTxAccount, hostAccount).
 		Return(&txnbuild.Transaction{}, nil).
 		Once().
-		On("Delete", ctx, channelAccount.PublicKey).
+		On("Delete", ctx, chTxAccount).
 		Return(nil).
 		Once()
 
@@ -572,7 +570,7 @@ func Test_ChannelAccounts_DeleteAccount_All_Success(t *testing.T) {
 	defer mHorizonClient.AssertExpectations(t)
 	mChannelAccountStore := storeMocks.NewMockChannelAccountStore(t)
 	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
-	sigService, mChAccSigClient, _, mHostAccSigClient, mDistAccResolver := signing.NewMockSignatureService(t)
+	sigService, sigRouter, mDistAccResolver := signing.NewMockSignatureService(t)
 
 	cas := ChannelAccountsService{
 		chAccStore:          mChannelAccountStore,
@@ -596,7 +594,8 @@ func Test_ChannelAccounts_DeleteAccount_All_Success(t *testing.T) {
 		},
 	}
 
-	hostAccount := keypair.MustParseFull("SBMW2WDSVTGT2N2PCBF3PV7WBOIKVTGGIEBUUYMDX3CKTDD5HY3UIHV4")
+	hostAccountKP := keypair.MustParseFull("SBMW2WDSVTGT2N2PCBF3PV7WBOIKVTGGIEBUUYMDX3CKTDD5HY3UIHV4")
+	hostAccount := schema.NewDefaultHostAccount(hostAccountKP.Address())
 
 	currLedgerNum := 1000
 	ledgerBounds := &txnbuild.LedgerBounds{
@@ -619,25 +618,22 @@ func Test_ChannelAccounts_DeleteAccount_All_Success(t *testing.T) {
 			On("AccountDetail", horizonclient.AccountRequest{AccountID: acc.PublicKey}).
 			Return(horizon.Account{}, nil).
 			Once().
-			On("AccountDetail", horizonclient.AccountRequest{AccountID: hostAccount.Address()}).
-			Return(horizon.Account{AccountID: hostAccount.Address()}, nil).
+			On("AccountDetail", horizonclient.AccountRequest{AccountID: hostAccountKP.Address()}).
+			Return(horizon.Account{AccountID: hostAccountKP.Address()}, nil).
 			Once().
 			On("SubmitTransactionWithOptions", mock.Anything, horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true}).
 			Return(horizon.Transaction{}, nil).
 			Once()
 		mDistAccResolver.
 			On("HostDistributionAccount").
-			Return(hostAccount.Address()).
-			Twice()
-		mHostAccSigClient.
-			On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), mock.AnythingOfType("string")).
-			Return(&txnbuild.Transaction{}, nil).
+			Return(hostAccount).
 			Once()
-		mChAccSigClient.
-			On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), mock.AnythingOfType("string"), mock.AnythingOfType("string")).
+		chTxAcc := schema.NewDefaultChannelAccount(acc.PublicKey)
+		sigRouter.
+			On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), chTxAcc, hostAccount).
 			Return(&txnbuild.Transaction{}, nil).
 			Once().
-			On("Delete", ctx, acc.PublicKey).
+			On("Delete", ctx, chTxAcc).
 			Return(nil).
 			Once()
 	}
@@ -659,7 +655,7 @@ func Test_ChannelAccounts_DeleteAccount_FindByPublicKey_Failure(t *testing.T) {
 	defer mHorizonClient.AssertExpectations(t)
 	mChannelAccountStore := storeMocks.NewMockChannelAccountStore(t)
 	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
-	sigService, _, _, _, _ := signing.NewMockSignatureService(t)
+	sigService, _, _ := signing.NewMockSignatureService(t)
 
 	cas := ChannelAccountsService{
 		chAccStore:          mChannelAccountStore,
@@ -704,7 +700,7 @@ func Test_ChannelAccounts_DeleteAccount_DeleteFromSigServiceError(t *testing.T) 
 	defer mHorizonClient.AssertExpectations(t)
 	mChannelAccountStore := storeMocks.NewMockChannelAccountStore(t)
 	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
-	sigService, mChAccSigClient, _, _, _ := signing.NewMockSignatureService(t)
+	sigService, mChAccSigClient, _ := signing.NewMockSignatureService(t)
 
 	cas := ChannelAccountsService{
 		chAccStore:          mChannelAccountStore,
@@ -740,8 +736,9 @@ func Test_ChannelAccounts_DeleteAccount_DeleteFromSigServiceError(t *testing.T) 
 			},
 		}).
 		Once()
+	chTxAcc := schema.NewDefaultChannelAccount(channelAccount.PublicKey)
 	mChAccSigClient.
-		On("Delete", ctx, channelAccount.PublicKey).
+		On("Delete", ctx, chTxAcc).
 		Return(errors.New("sig service error")).
 		Once()
 
@@ -763,7 +760,7 @@ func Test_ChannelAccounts_DeleteAccount_SubmitTransaction_Failure(t *testing.T) 
 	defer mHorizonClient.AssertExpectations(t)
 	mChannelAccountStore := storeMocks.NewMockChannelAccountStore(t)
 	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
-	sigService, mChAccSigClient, _, mHostAccSigClient, mDistAccResolver := signing.NewMockSignatureService(t)
+	sigService, sigRouter, mDistAccResolver := signing.NewMockSignatureService(t)
 
 	cas := ChannelAccountsService{
 		chAccStore:          mChannelAccountStore,
@@ -781,7 +778,8 @@ func Test_ChannelAccounts_DeleteAccount_SubmitTransaction_Failure(t *testing.T) 
 		PrivateKey: "SDHGNWPVZJML64GMSQFVX7RAZBJXO3SWOMEGV77IPXUMKHHEOFD2LC75",
 	}
 
-	hostAccount := keypair.MustParseFull("SBMW2WDSVTGT2N2PCBF3PV7WBOIKVTGGIEBUUYMDX3CKTDD5HY3UIHV4")
+	hostAccountKP := keypair.MustParseFull("SBMW2WDSVTGT2N2PCBF3PV7WBOIKVTGGIEBUUYMDX3CKTDD5HY3UIHV4")
+	hostAccount := schema.NewDefaultHostAccount(hostAccountKP.Address())
 
 	currLedgerNum := 1000
 	ledgerBounds := &txnbuild.LedgerBounds{
@@ -799,22 +797,19 @@ func Test_ChannelAccounts_DeleteAccount_SubmitTransaction_Failure(t *testing.T) 
 		On("AccountDetail", horizonclient.AccountRequest{AccountID: channelAccount.PublicKey}).
 		Return(horizon.Account{}, nil).
 		Once().
-		On("AccountDetail", horizonclient.AccountRequest{AccountID: hostAccount.Address()}).
-		Return(horizon.Account{AccountID: hostAccount.Address()}, nil).
+		On("AccountDetail", horizonclient.AccountRequest{AccountID: hostAccountKP.Address()}).
+		Return(horizon.Account{AccountID: hostAccountKP.Address()}, nil).
 		Once().
 		On("SubmitTransactionWithOptions", mock.Anything, horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true}).
 		Return(horizon.Transaction{}, errors.New("foo bar")).
 		Once()
 	mDistAccResolver.
 		On("HostDistributionAccount").
-		Return(hostAccount.Address()).
-		Twice()
-	mHostAccSigClient.
-		On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), mock.AnythingOfType("string")).
-		Return(&txnbuild.Transaction{}, nil).
+		Return(hostAccount).
 		Once()
-	mChAccSigClient.
-		On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), mock.AnythingOfType("string")).
+	chTxAcc := schema.NewDefaultChannelAccount(channelAccount.PublicKey)
+	sigRouter.
+		On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), chTxAcc, hostAccount).
 		Return(&txnbuild.Transaction{}, nil).
 		Once()
 
@@ -838,7 +833,7 @@ func Test_ChannelAccounts_EnsureChannelAccounts_Exact_Success(t *testing.T) {
 	defer mHorizonClient.AssertExpectations(t)
 	mChannelAccountStore := storeMocks.NewMockChannelAccountStore(t)
 	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
-	sigService, _, _, _, _ := signing.NewMockSignatureService(t)
+	sigService, _, _ := signing.NewMockSignatureService(t)
 
 	cas := ChannelAccountsService{
 		chAccStore:          mChannelAccountStore,
@@ -881,7 +876,7 @@ func Test_ChannelAccounts_EnsureChannelAccounts_Add_Success(t *testing.T) {
 	defer mHorizonClient.AssertExpectations(t)
 	mChannelAccountStore := storeMocks.NewMockChannelAccountStore(t)
 	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
-	sigService, mChAccSigClient, _, mHostAccSigClient, mDistAccResolver := signing.NewMockSignatureService(t)
+	sigService, sigRouter, mDistAccResolver := signing.NewMockSignatureService(t)
 
 	cas := ChannelAccountsService{
 		chAccStore:          mChannelAccountStore,
@@ -895,7 +890,8 @@ func Test_ChannelAccounts_EnsureChannelAccounts_Add_Success(t *testing.T) {
 	}
 
 	desiredCount := 5
-	hostAccount := keypair.MustParseFull("SBMW2WDSVTGT2N2PCBF3PV7WBOIKVTGGIEBUUYMDX3CKTDD5HY3UIHV4")
+	hostAccountKP := keypair.MustParseFull("SBMW2WDSVTGT2N2PCBF3PV7WBOIKVTGGIEBUUYMDX3CKTDD5HY3UIHV4")
+	hostAccount := schema.NewDefaultHostAccount(hostAccountKP.Address())
 	currChannelAccountsCount := 2
 
 	currLedgerNum := 100
@@ -903,10 +899,10 @@ func Test_ChannelAccounts_EnsureChannelAccounts_Add_Success(t *testing.T) {
 		MaxLedger: uint32(currLedgerNum + preconditions.IncrementForMaxLedgerBounds),
 	}
 
-	publicKeys := []string{
-		keypair.MustRandom().Address(),
-		keypair.MustRandom().Address(),
-		keypair.MustRandom().Address(),
+	chTxAccounts := []schema.TransactionAccount{
+		schema.NewDefaultChannelAccount(keypair.MustRandom().Address()),
+		schema.NewDefaultChannelAccount(keypair.MustRandom().Address()),
+		schema.NewDefaultChannelAccount(keypair.MustRandom().Address()),
 	}
 
 	mChannelAccountStore.
@@ -919,26 +915,23 @@ func Test_ChannelAccounts_EnsureChannelAccounts_Add_Success(t *testing.T) {
 	mLedgerNumberTracker.
 		On("GetLedgerBounds").Return(ledgerBounds, nil).Once()
 	mHorizonClient.
-		On("AccountDetail", horizonclient.AccountRequest{AccountID: hostAccount.Address()}).
-		Return(horizon.Account{AccountID: hostAccount.Address()}, nil).
+		On("AccountDetail", horizonclient.AccountRequest{AccountID: hostAccountKP.Address()}).
+		Return(horizon.Account{AccountID: hostAccountKP.Address()}, nil).
 		Once().
 		On("SubmitTransactionWithOptions", mock.Anything, horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true}).
 		Return(horizon.Transaction{}, nil).
 		Once()
 	mDistAccResolver.
 		On("HostDistributionAccount").
-		Return(hostAccount.Address()).
-		Twice()
-	mHostAccSigClient.
-		On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), mock.AnythingOfType("string")).
+		Return(hostAccount).
+		Once()
+	sigRouter.
+		On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), mock.AnythingOfType("schema.TransactionAccount"), mock.AnythingOfType("schema.TransactionAccount"), mock.AnythingOfType("schema.TransactionAccount"), hostAccount).
 		Return(&txnbuild.Transaction{}, nil).
 		Once()
-	mChAccSigClient.
-		On("BatchInsert", ctx, desiredCount-currChannelAccountsCount).
-		Return(publicKeys, nil).
-		Once().
-		On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), mock.AnythingOfType("string"), mock.AnythingOfType("string"), mock.AnythingOfType("string")).
-		Return(&txnbuild.Transaction{}, nil).
+	sigRouter.
+		On("BatchInsert", ctx, schema.ChannelAccountStellarDB, desiredCount-currChannelAccountsCount).
+		Return(chTxAccounts, nil).
 		Once()
 
 	err = cas.EnsureChannelAccountsCount(ctx, desiredCount)
@@ -958,7 +951,7 @@ func Test_ChannelAccounts_EnsureChannelAccounts_Delete_Success(t *testing.T) {
 	defer mHorizonClient.AssertExpectations(t)
 	mChannelAccountStore := storeMocks.NewMockChannelAccountStore(t)
 	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
-	sigService, mChAccSigClient, _, mHostAccSigClient, mDistAccResolver := signing.NewMockSignatureService(t)
+	sigService, sigRouter, mDistAccResolver := signing.NewMockSignatureService(t)
 
 	cas := ChannelAccountsService{
 		chAccStore:          mChannelAccountStore,
@@ -971,7 +964,8 @@ func Test_ChannelAccounts_EnsureChannelAccounts_Delete_Success(t *testing.T) {
 		},
 	}
 
-	hostAccount := keypair.MustParseFull("SBMW2WDSVTGT2N2PCBF3PV7WBOIKVTGGIEBUUYMDX3CKTDD5HY3UIHV4")
+	hostAccountKP := keypair.MustParseFull("SBMW2WDSVTGT2N2PCBF3PV7WBOIKVTGGIEBUUYMDX3CKTDD5HY3UIHV4")
+	hostAccount := schema.NewDefaultHostAccount(hostAccountKP.Address())
 	currChannelAccountsCount := 4
 
 	channelAccounts := []*store.ChannelAccount{
@@ -1003,8 +997,8 @@ func Test_ChannelAccounts_EnsureChannelAccounts_Delete_Success(t *testing.T) {
 		Return(ledgerBounds, nil).
 		Times(currChannelAccountsCount - wantEnsureCount)
 	mHorizonClient.
-		On("AccountDetail", horizonclient.AccountRequest{AccountID: hostAccount.Address()}).
-		Return(horizon.Account{AccountID: hostAccount.Address()}, nil).
+		On("AccountDetail", horizonclient.AccountRequest{AccountID: hostAccountKP.Address()}).
+		Return(horizon.Account{AccountID: hostAccountKP.Address()}, nil).
 		Times(currChannelAccountsCount - wantEnsureCount)
 
 	for _, acc := range channelAccounts {
@@ -1018,17 +1012,14 @@ func Test_ChannelAccounts_EnsureChannelAccounts_Delete_Success(t *testing.T) {
 			Once()
 		mDistAccResolver.
 			On("HostDistributionAccount").
-			Return(hostAccount.Address()).
-			Twice()
-		mHostAccSigClient.
-			On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), mock.AnythingOfType("string")).
-			Return(&txnbuild.Transaction{}, nil).
+			Return(hostAccount).
 			Once()
-		mChAccSigClient.
-			On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), mock.AnythingOfType("string")).
+		chTxAcc := schema.NewDefaultChannelAccount(acc.PublicKey)
+		sigRouter.
+			On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), chTxAcc, hostAccount).
 			Return(&txnbuild.Transaction{}, nil).
 			Once().
-			On("Delete", ctx, acc.PublicKey).
+			On("Delete", ctx, chTxAcc).
 			Return(nil).
 			Once()
 	}

@@ -315,16 +315,17 @@ func getServeOptionsForTests(t *testing.T, dbConnectionPool db.DBConnectionPool)
 
 	mHorizonClient := &horizonclient.MockClient{}
 	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
-	sigService, _, _, _, distAccResolver := signing.NewMockSignatureService(t)
+	sigService, _, distAccResolver := signing.NewMockSignatureService(t)
 	submitterEngine := engine.SubmitterEngine{
 		HorizonClient:       mHorizonClient,
 		SignatureService:    sigService,
 		LedgerNumberTracker: mLedgerNumberTracker,
 		MaxBaseFee:          100 * txnbuild.MinBaseFee,
 	}
+	distAccount := schema.NewDefaultStellarTransactionAccount(distAccPublicKey)
 	distAccResolver.
 		On("DistributionAccountFromContext", mock.Anything).
-		Return(schema.NewDefaultStellarTransactionAccount(distAccPublicKey), nil).
+		Return(distAccount, nil).
 		Maybe()
 
 	producerMock := events.NewMockProducer(t)

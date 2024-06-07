@@ -16,6 +16,7 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
 var ErrInvalidNumOfChannelAccountsToCreate = errors.New("invalid number of channel accounts to create")
@@ -42,15 +43,17 @@ const DefaultRevokeSponsorshipReserveAmount = "1.5"
 // is also a good opportunity to periodically write the generated accounts to persistent storage if generating large
 // amounts of channel accounts.
 func CreateChannelAccountsOnChain(ctx context.Context, submiterEngine engine.SubmitterEngine, numOfChanAccToCreate int) (newAccountAddresses []string, err error) {
+	hostAccount := submiterEngine.HostDistributionAccount()
 	defer func() {
 		// If we failed to create the accounts, we should delete the accounts that were added to the signature service.
 		if err != nil {
 			cloneOfNewAccountAddresses := slices.Clone(newAccountAddresses)
 			for _, accountAddress := range cloneOfNewAccountAddresses {
-				if accountAddress == submiterEngine.HostDistributionAccount() {
+				if accountAddress == hostAccount.Address {
 					continue
 				}
-				deleteErr := submiterEngine.ChAccountSigner.Delete(ctx, accountAddress)
+				chAccToDelete := schema.NewDefaultChannelAccount(accountAddress)
+				deleteErr := submiterEngine.SignerRouter.Delete(ctx, chAccToDelete)
 				if deleteErr != nil {
 					log.Ctx(ctx).Errorf("failed to delete channel account %s: %v", accountAddress, deleteErr)
 				}
@@ -68,7 +71,7 @@ func CreateChannelAccountsOnChain(ctx context.Context, submiterEngine engine.Sub
 	}
 
 	rootAccount, err := submiterEngine.HorizonClient.AccountDetail(horizonclient.AccountRequest{
-		AccountID: submiterEngine.HostDistributionAccount(),
+		AccountID: hostAccount.Address,
 	})
 	if err != nil {
 		err = utils.NewHorizonErrorWrapper(err)
@@ -82,13 +85,14 @@ func CreateChannelAccountsOnChain(ctx context.Context, submiterEngine engine.Sub
 		return nil, fmt.Errorf("failed to get ledger bounds: %w", err)
 	}
 
-	publicKeys, err := submiterEngine.ChAccountSigner.BatchInsert(ctx, numOfChanAccToCreate)
+	stellarAccounts, err := submiterEngine.BatchInsert(ctx, schema.ChannelAccountStellarDB, numOfChanAccToCreate)
 	if err != nil {
 		return nil, fmt.Errorf("failed to insert channel accounts into signature service: %w", err)
 	}
 
 	// Prepare Stellar operations to create the sponsored channel accounts
-	for _, publicKey := range publicKeys {
+	for _, stellarAccount := range stellarAccounts {
+		publicKey := stellarAccount.Address
 		// generate random keypair for this channel account
 		log.Ctx(ctx).Infof("⏳ Creating sponsored Stellar account with address: %s", publicKey)
 
@@ -128,15 +132,9 @@ func CreateChannelAccountsOnChain(ctx context.Context, submiterEngine engine.Sub
 	}
 
 	// sign the transaction
-	// Channel account signing:
-	tx, err = submiterEngine.ChAccountSigner.SignStellarTransaction(ctx, tx, newAccountAddresses...)
+	tx, err = submiterEngine.SignerRouter.SignStellarTransaction(ctx, tx, append(stellarAccounts, hostAccount)...)
 	if err != nil {
-		return newAccountAddresses, fmt.Errorf("signing account creation transaction for channel accounts %v: %w", newAccountAddresses, err)
-	}
-	// Host distribution account signing:
-	tx, err = submiterEngine.HostAccountSigner.SignStellarTransaction(ctx, tx, submiterEngine.HostDistributionAccount())
-	if err != nil {
-		return newAccountAddresses, fmt.Errorf("signing account creation transaction for host distribution account %s: %w", submiterEngine.HostDistributionAccount(), err)
+		return newAccountAddresses, fmt.Errorf("signing account creation transaction with accounts %v: %w", newAccountAddresses, err)
 	}
 
 	_, err = submiterEngine.HorizonClient.SubmitTransactionWithOptions(tx, horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true})
@@ -151,9 +149,9 @@ func CreateChannelAccountsOnChain(ctx context.Context, submiterEngine engine.Sub
 
 // DeleteChannelAccountOnChain creates, signs, and broadcasts a transaction to delete a channel account onchain.
 func DeleteChannelAccountOnChain(ctx context.Context, submiterEngine engine.SubmitterEngine, chAccAddress string) error {
-	distributionAccount := submiterEngine.HostDistributionAccount()
+	hostAccount := submiterEngine.HostDistributionAccount()
 	rootAccount, err := submiterEngine.HorizonClient.AccountDetail(horizonclient.AccountRequest{
-		AccountID: distributionAccount,
+		AccountID: hostAccount.Address,
 	})
 	if err != nil {
 		return fmt.Errorf("retrieving host account from distribution seed: %w", err)
@@ -182,7 +180,7 @@ func DeleteChannelAccountOnChain(ctx context.Context, submiterEngine engine.Subm
 				Account:         &chAccAddress,
 			},
 			&txnbuild.AccountMerge{
-				Destination:   distributionAccount,
+				Destination:   hostAccount.Address,
 				SourceAccount: chAccAddress,
 			},
 		},
@@ -203,14 +201,10 @@ func DeleteChannelAccountOnChain(ctx context.Context, submiterEngine engine.Subm
 	// the root account authorizes the sponsorship revocation, while the channel account authorizes
 	// merging into the distribution account.
 	// Channel account signing:
-	tx, err = submiterEngine.ChAccountSigner.SignStellarTransaction(ctx, tx, chAccAddress)
+	chAccToDelete := schema.NewDefaultChannelAccount(chAccAddress)
+	tx, err = submiterEngine.SignerRouter.SignStellarTransaction(ctx, tx, chAccToDelete, hostAccount)
 	if err != nil {
 		return fmt.Errorf("signing remove account transaction for account %s: %w", chAccAddress, err)
-	}
-	// Host distribution account signing:
-	tx, err = submiterEngine.HostAccountSigner.SignStellarTransaction(ctx, tx, submiterEngine.HostDistributionAccount())
-	if err != nil {
-		return fmt.Errorf("signing remove account transaction for host distribution account %s: %w", submiterEngine.HostDistributionAccount(), err)
 	}
 
 	_, err = submiterEngine.HorizonClient.SubmitTransactionWithOptions(tx, horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true})
@@ -219,7 +213,7 @@ func DeleteChannelAccountOnChain(ctx context.Context, submiterEngine engine.Subm
 		return fmt.Errorf("submitting remove account transaction to the network for account %s: %w", chAccAddress, hError)
 	}
 
-	err = submiterEngine.ChAccountSigner.Delete(ctx, chAccAddress)
+	err = submiterEngine.Delete(ctx, chAccToDelete)
 	if err != nil {
 		return fmt.Errorf("deleting channel account %s from the store: %w", chAccAddress, err)
 	}
@@ -229,6 +223,7 @@ func DeleteChannelAccountOnChain(ctx context.Context, submiterEngine engine.Subm
 
 // CreateAndFundAccount creates and funds a new destination account on the Stellar network with the given amount of native asset from the source account.
 func CreateAndFundAccount(ctx context.Context, submitterEngine engine.SubmitterEngine, amountNativeAssetToSend int, sourceAcc, destinationAcc string) error {
+	hostAccount := submitterEngine.HostDistributionAccount()
 	if sourceAcc == destinationAcc {
 		return fmt.Errorf("funding source account and destination account cannot be the same: %s", sourceAcc)
 	}
@@ -263,7 +258,7 @@ func CreateAndFundAccount(ctx context.Context, submitterEngine engine.SubmitterE
 			)
 		}
 		// Host distribution account signing:
-		tx, err = submitterEngine.HostAccountSigner.SignStellarTransaction(ctx, tx, sourceAcc)
+		tx, err = submitterEngine.SignStellarTransaction(ctx, tx, hostAccount)
 		if err != nil {
 			return fmt.Errorf(
 				"signing create account tx for account %s: %w",
