@@ -198,7 +198,7 @@ func Test_ChannelAccounts_CreateAccount_Success(t *testing.T) {
 		},
 	}
 
-	rootAccount := keypair.MustParseFull("SBMW2WDSVTGT2N2PCBF3PV7WBOIKVTGGIEBUUYMDX3CKTDD5HY3UIHV4")
+	hostAccount := keypair.MustParseFull("SBMW2WDSVTGT2N2PCBF3PV7WBOIKVTGGIEBUUYMDX3CKTDD5HY3UIHV4")
 	currLedgerNumber := 100
 	ledgerBounds := &txnbuild.LedgerBounds{
 		MaxLedger: uint32(currLedgerNumber + preconditions.IncrementForMaxLedgerBounds),
@@ -210,8 +210,8 @@ func Test_ChannelAccounts_CreateAccount_Success(t *testing.T) {
 	}
 
 	mHorizonClient.
-		On("AccountDetail", horizonclient.AccountRequest{AccountID: rootAccount.Address()}).
-		Return(horizon.Account{AccountID: rootAccount.Address()}, nil).
+		On("AccountDetail", horizonclient.AccountRequest{AccountID: hostAccount.Address()}).
+		Return(horizon.Account{AccountID: hostAccount.Address()}, nil).
 		On("SubmitTransactionWithOptions", mock.Anything, horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true}).
 		Return(horizon.Transaction{}, nil).
 		Once()
@@ -225,7 +225,7 @@ func Test_ChannelAccounts_CreateAccount_Success(t *testing.T) {
 		Twice()
 	mDistAccResolver.
 		On("HostDistributionAccount").
-		Return(rootAccount.Address()).
+		Return(hostAccount.Address()).
 		Twice()
 	mHostAccSigClient.
 		On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), mock.AnythingOfType("string")).
@@ -243,7 +243,7 @@ func Test_ChannelAccounts_CreateAccount_Success(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func Test_ChannelAccounts_CreateAccount_CannotFindRootAccount_Failure(t *testing.T) {
+func Test_ChannelAccounts_CreateAccount_CannotFindHostAccount_Failure(t *testing.T) {
 	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
@@ -269,19 +269,19 @@ func Test_ChannelAccounts_CreateAccount_CannotFindRootAccount_Failure(t *testing
 		},
 	}
 
-	rootAccount := keypair.MustParseFull("SDL4E4RF6BHX77DBKE63QC4H4LQG7S7D2PB4TSF64LTHDIHP7UUJHH2V")
+	hostAccount := keypair.MustParseFull("SDL4E4RF6BHX77DBKE63QC4H4LQG7S7D2PB4TSF64LTHDIHP7UUJHH2V")
 	currLedgerNumber := 100
 
 	mHorizonClient.
-		On("AccountDetail", horizonclient.AccountRequest{AccountID: rootAccount.Address()}).
+		On("AccountDetail", horizonclient.AccountRequest{AccountID: hostAccount.Address()}).
 		Return(horizon.Account{}, errors.New("some random error"))
 	mDistAccResolver.
 		On("HostDistributionAccount").
-		Return(rootAccount.Address()).
+		Return(hostAccount.Address()).
 		Once()
 
 	err = cas.CreateChannelAccounts(ctx, currLedgerNumber)
-	require.ErrorContains(t, err, "creating channel accounts onchain: failed to retrieve root account: horizon response error: some random error")
+	require.ErrorContains(t, err, "creating channel accounts onchain: failed to retrieve host account: horizon response error: some random error")
 }
 
 func Test_ChannelAccounts_CreateAccount_Insert_Failure(t *testing.T) {
@@ -310,7 +310,7 @@ func Test_ChannelAccounts_CreateAccount_Insert_Failure(t *testing.T) {
 		},
 	}
 
-	rootAccount := keypair.MustParseFull("SBMW2WDSVTGT2N2PCBF3PV7WBOIKVTGGIEBUUYMDX3CKTDD5HY3UIHV4")
+	hostAccount := keypair.MustParseFull("SBMW2WDSVTGT2N2PCBF3PV7WBOIKVTGGIEBUUYMDX3CKTDD5HY3UIHV4")
 
 	// current ledger number
 	currLedgerNumber := 100
@@ -323,11 +323,11 @@ func Test_ChannelAccounts_CreateAccount_Insert_Failure(t *testing.T) {
 	mLedgerNumberTracker.
 		On("GetLedgerBounds").Return(ledgerBounds, nil).Once()
 	mHorizonClient.
-		On("AccountDetail", horizonclient.AccountRequest{AccountID: rootAccount.Address()}).
-		Return(horizon.Account{AccountID: rootAccount.Address()}, nil)
+		On("AccountDetail", horizonclient.AccountRequest{AccountID: hostAccount.Address()}).
+		Return(horizon.Account{AccountID: hostAccount.Address()}, nil)
 	mDistAccResolver.
 		On("HostDistributionAccount").
-		Return(rootAccount.Address()).
+		Return(hostAccount.Address()).
 		Once()
 	mChAccSigClient.
 		On("BatchInsert", ctx, 2).
@@ -512,7 +512,7 @@ func Test_ChannelAccounts_DeleteAccount_Success(t *testing.T) {
 		PrivateKey: "YVeMG89DMl2Ku7IeGCumrvneDydfuW+2q4EKQoYhPRpKS/A1bKhNzAa7IjyLiA6UwTESsM6Hh8nactmuOfqUT38YVTx68CIgG6OuwCHPrmws57Tf",
 	}
 
-	rootAccount := keypair.MustParseFull("SBMW2WDSVTGT2N2PCBF3PV7WBOIKVTGGIEBUUYMDX3CKTDD5HY3UIHV4")
+	hostAccount := keypair.MustParseFull("SBMW2WDSVTGT2N2PCBF3PV7WBOIKVTGGIEBUUYMDX3CKTDD5HY3UIHV4")
 
 	currLedgerNum := 100
 	ledgerBounds := &txnbuild.LedgerBounds{
@@ -530,15 +530,15 @@ func Test_ChannelAccounts_DeleteAccount_Success(t *testing.T) {
 		On("AccountDetail", horizonclient.AccountRequest{AccountID: channelAccount.PublicKey}).
 		Return(horizon.Account{}, nil).
 		Once().
-		On("AccountDetail", horizonclient.AccountRequest{AccountID: rootAccount.Address()}).
-		Return(horizon.Account{AccountID: rootAccount.Address()}, nil).
+		On("AccountDetail", horizonclient.AccountRequest{AccountID: hostAccount.Address()}).
+		Return(horizon.Account{AccountID: hostAccount.Address()}, nil).
 		Once().
 		On("SubmitTransactionWithOptions", mock.Anything, horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true}).
 		Return(horizon.Transaction{}, nil).
 		Once()
 	mDistAccResolver.
 		On("HostDistributionAccount").
-		Return(rootAccount.Address()).
+		Return(hostAccount.Address()).
 		Twice()
 	mHostAccSigClient.
 		On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), mock.AnythingOfType("string")).
@@ -596,7 +596,7 @@ func Test_ChannelAccounts_DeleteAccount_All_Success(t *testing.T) {
 		},
 	}
 
-	rootAccount := keypair.MustParseFull("SBMW2WDSVTGT2N2PCBF3PV7WBOIKVTGGIEBUUYMDX3CKTDD5HY3UIHV4")
+	hostAccount := keypair.MustParseFull("SBMW2WDSVTGT2N2PCBF3PV7WBOIKVTGGIEBUUYMDX3CKTDD5HY3UIHV4")
 
 	currLedgerNum := 1000
 	ledgerBounds := &txnbuild.LedgerBounds{
@@ -619,15 +619,15 @@ func Test_ChannelAccounts_DeleteAccount_All_Success(t *testing.T) {
 			On("AccountDetail", horizonclient.AccountRequest{AccountID: acc.PublicKey}).
 			Return(horizon.Account{}, nil).
 			Once().
-			On("AccountDetail", horizonclient.AccountRequest{AccountID: rootAccount.Address()}).
-			Return(horizon.Account{AccountID: rootAccount.Address()}, nil).
+			On("AccountDetail", horizonclient.AccountRequest{AccountID: hostAccount.Address()}).
+			Return(horizon.Account{AccountID: hostAccount.Address()}, nil).
 			Once().
 			On("SubmitTransactionWithOptions", mock.Anything, horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true}).
 			Return(horizon.Transaction{}, nil).
 			Once()
 		mDistAccResolver.
 			On("HostDistributionAccount").
-			Return(rootAccount.Address()).
+			Return(hostAccount.Address()).
 			Twice()
 		mHostAccSigClient.
 			On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), mock.AnythingOfType("string")).
@@ -781,7 +781,7 @@ func Test_ChannelAccounts_DeleteAccount_SubmitTransaction_Failure(t *testing.T) 
 		PrivateKey: "SDHGNWPVZJML64GMSQFVX7RAZBJXO3SWOMEGV77IPXUMKHHEOFD2LC75",
 	}
 
-	rootAccount := keypair.MustParseFull("SBMW2WDSVTGT2N2PCBF3PV7WBOIKVTGGIEBUUYMDX3CKTDD5HY3UIHV4")
+	hostAccount := keypair.MustParseFull("SBMW2WDSVTGT2N2PCBF3PV7WBOIKVTGGIEBUUYMDX3CKTDD5HY3UIHV4")
 
 	currLedgerNum := 1000
 	ledgerBounds := &txnbuild.LedgerBounds{
@@ -799,15 +799,15 @@ func Test_ChannelAccounts_DeleteAccount_SubmitTransaction_Failure(t *testing.T) 
 		On("AccountDetail", horizonclient.AccountRequest{AccountID: channelAccount.PublicKey}).
 		Return(horizon.Account{}, nil).
 		Once().
-		On("AccountDetail", horizonclient.AccountRequest{AccountID: rootAccount.Address()}).
-		Return(horizon.Account{AccountID: rootAccount.Address()}, nil).
+		On("AccountDetail", horizonclient.AccountRequest{AccountID: hostAccount.Address()}).
+		Return(horizon.Account{AccountID: hostAccount.Address()}, nil).
 		Once().
 		On("SubmitTransactionWithOptions", mock.Anything, horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true}).
 		Return(horizon.Transaction{}, errors.New("foo bar")).
 		Once()
 	mDistAccResolver.
 		On("HostDistributionAccount").
-		Return(rootAccount.Address()).
+		Return(hostAccount.Address()).
 		Twice()
 	mHostAccSigClient.
 		On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), mock.AnythingOfType("string")).
@@ -895,7 +895,7 @@ func Test_ChannelAccounts_EnsureChannelAccounts_Add_Success(t *testing.T) {
 	}
 
 	desiredCount := 5
-	rootAccount := keypair.MustParseFull("SBMW2WDSVTGT2N2PCBF3PV7WBOIKVTGGIEBUUYMDX3CKTDD5HY3UIHV4")
+	hostAccount := keypair.MustParseFull("SBMW2WDSVTGT2N2PCBF3PV7WBOIKVTGGIEBUUYMDX3CKTDD5HY3UIHV4")
 	currChannelAccountsCount := 2
 
 	currLedgerNum := 100
@@ -919,15 +919,15 @@ func Test_ChannelAccounts_EnsureChannelAccounts_Add_Success(t *testing.T) {
 	mLedgerNumberTracker.
 		On("GetLedgerBounds").Return(ledgerBounds, nil).Once()
 	mHorizonClient.
-		On("AccountDetail", horizonclient.AccountRequest{AccountID: rootAccount.Address()}).
-		Return(horizon.Account{AccountID: rootAccount.Address()}, nil).
+		On("AccountDetail", horizonclient.AccountRequest{AccountID: hostAccount.Address()}).
+		Return(horizon.Account{AccountID: hostAccount.Address()}, nil).
 		Once().
 		On("SubmitTransactionWithOptions", mock.Anything, horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true}).
 		Return(horizon.Transaction{}, nil).
 		Once()
 	mDistAccResolver.
 		On("HostDistributionAccount").
-		Return(rootAccount.Address()).
+		Return(hostAccount.Address()).
 		Twice()
 	mHostAccSigClient.
 		On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), mock.AnythingOfType("string")).
@@ -971,7 +971,7 @@ func Test_ChannelAccounts_EnsureChannelAccounts_Delete_Success(t *testing.T) {
 		},
 	}
 
-	rootAccount := keypair.MustParseFull("SBMW2WDSVTGT2N2PCBF3PV7WBOIKVTGGIEBUUYMDX3CKTDD5HY3UIHV4")
+	hostAccount := keypair.MustParseFull("SBMW2WDSVTGT2N2PCBF3PV7WBOIKVTGGIEBUUYMDX3CKTDD5HY3UIHV4")
 	currChannelAccountsCount := 4
 
 	channelAccounts := []*store.ChannelAccount{
@@ -1003,8 +1003,8 @@ func Test_ChannelAccounts_EnsureChannelAccounts_Delete_Success(t *testing.T) {
 		Return(ledgerBounds, nil).
 		Times(currChannelAccountsCount - wantEnsureCount)
 	mHorizonClient.
-		On("AccountDetail", horizonclient.AccountRequest{AccountID: rootAccount.Address()}).
-		Return(horizon.Account{AccountID: rootAccount.Address()}, nil).
+		On("AccountDetail", horizonclient.AccountRequest{AccountID: hostAccount.Address()}).
+		Return(horizon.Account{AccountID: hostAccount.Address()}, nil).
 		Times(currChannelAccountsCount - wantEnsureCount)
 
 	for _, acc := range channelAccounts {
@@ -1018,7 +1018,7 @@ func Test_ChannelAccounts_EnsureChannelAccounts_Delete_Success(t *testing.T) {
 			Once()
 		mDistAccResolver.
 			On("HostDistributionAccount").
-			Return(rootAccount.Address()).
+			Return(hostAccount.Address()).
 			Twice()
 		mHostAccSigClient.
 			On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), mock.AnythingOfType("string")).

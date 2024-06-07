@@ -1034,7 +1034,7 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 	url := "/profile/info"
 
 	newDistAccountJSON := func(t *testing.T, distAcc string) string {
-		distributionAccount := schema.NewDefaultStellarDistributionAccount(distAcc)
+		distributionAccount := schema.NewDefaultStellarTransactionAccount(distAcc)
 		bytes, err := json.Marshal(distributionAccount)
 		require.NoError(t, err)
 		return string(bytes)
@@ -1094,7 +1094,7 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 		mDistAccResolver := sigMocks.NewMockDistributionAccountResolver(t)
 		mDistAccResolver.
 			On("DistributionAccountFromContext", ctx).
-			Return(nil, errors.New("unexpected error")).
+			Return(schema.TransactionAccount{}, errors.New("unexpected error")).
 			Once()
 		h := &ProfileHandler{Models: models, BaseURL: "http://localhost:8000", DistributionAccountResolver: mDistAccResolver}
 		http.HandlerFunc(h.GetOrganizationInfo).ServeHTTP(w, req)

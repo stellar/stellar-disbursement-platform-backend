@@ -129,7 +129,7 @@ func Test_AssetHandler_CreateAsset(t *testing.T) {
 
 	distAccResolver.
 		On("DistributionAccountFromContext", ctx).
-		Return(schema.NewDefaultStellarDistributionAccount(distributionKP.Address()), nil)
+		Return(schema.NewDefaultStellarTransactionAccount(distributionKP.Address()), nil)
 
 	t.Run("successfully create an asset", func(t *testing.T) {
 		getEntries := log.DefaultLogger.StartTest(log.InfoLevel)
@@ -550,7 +550,7 @@ func Test_AssetHandler_DeleteAsset(t *testing.T) {
 
 	distAccResolver.
 		On("DistributionAccountFromContext", mock.AnythingOfType("*context.valueCtx")).
-		Return(schema.NewDefaultStellarDistributionAccount(distributionKP.Address()), nil)
+		Return(schema.NewDefaultStellarTransactionAccount(distributionKP.Address()), nil)
 
 	t.Run("successfully delete an asset and remove the trustline", func(t *testing.T) {
 		data.DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
@@ -777,7 +777,7 @@ func Test_AssetHandler_handleUpdateAssetTrustlineForDistributionAccount(t *testi
 	t.Run("returns error if fails getting distribution account from the resolver", func(t *testing.T) {
 		distAccResolver.
 			On("DistributionAccountFromContext", ctx).
-			Return(nil, errors.New("resolver error")).
+			Return(schema.TransactionAccount{}, errors.New("resolver error")).
 			Once()
 		err := handler.handleUpdateAssetTrustlineForDistributionAccount(ctx, assetToAddTrustline, assetToRemoveTrustline)
 		require.EqualError(t, err, "resolving distribution account from context: resolver error")
@@ -785,7 +785,7 @@ func Test_AssetHandler_handleUpdateAssetTrustlineForDistributionAccount(t *testi
 
 	distAccResolver.
 		On("DistributionAccountFromContext", ctx).
-		Return(schema.NewDefaultStellarDistributionAccount(distributionKP.Address()), nil)
+		Return(schema.NewDefaultStellarTransactionAccount(distributionKP.Address()), nil)
 
 	t.Run("returns error if fails getting distribution account details", func(t *testing.T) {
 		horizonClientMock.
@@ -1184,7 +1184,7 @@ func Test_AssetHandler_submitChangeTrustTransaction(t *testing.T) {
 	t.Run("returns error if fails getting distribution account from the resolver", func(t *testing.T) {
 		distAccResolver.
 			On("DistributionAccountFromContext", ctx).
-			Return(nil, errors.New("resolver error")).
+			Return(schema.TransactionAccount{}, errors.New("resolver error")).
 			Once()
 		err := handler.submitChangeTrustTransaction(ctx, acc, []*txnbuild.ChangeTrust{{}})
 		require.EqualError(t, err, "resolving distribution account from context: resolver error")
@@ -1192,7 +1192,7 @@ func Test_AssetHandler_submitChangeTrustTransaction(t *testing.T) {
 
 	distAccResolver.
 		On("DistributionAccountFromContext", ctx).
-		Return(schema.NewDefaultStellarDistributionAccount(distributionKP.Address()), nil)
+		Return(schema.NewDefaultStellarTransactionAccount(distributionKP.Address()), nil)
 
 	t.Run("returns error when fails signing transaction", func(t *testing.T) {
 		tx, err := txnbuild.NewTransaction(
@@ -1378,7 +1378,7 @@ func newAssetTestMock(t *testing.T, distributionAccountAddress string) *assetTes
 	signatureService, _, distAccSigClient, _, distAccResolver := signing.NewMockSignatureService(t)
 	distAccResolver.
 		On("DistributionAccountFromContext", mock.Anything).
-		Return(schema.NewDefaultStellarDistributionAccount(distributionAccountAddress), nil)
+		Return(schema.NewDefaultStellarTransactionAccount(distributionAccountAddress), nil)
 
 	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
 

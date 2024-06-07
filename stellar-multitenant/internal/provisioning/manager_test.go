@@ -147,31 +147,31 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 		name              string
 		networkPassphrase string
 		tenantName        string
-		sigClientType     signing.SignatureClientType
+		accountType       schema.AccountType
 	}{
 		{
-			name:              "Testnet with sigClientType=DISTRIBUTION_ACCOUNT_ENV",
+			name:              "Testnet with accountType=DISTRIBUTION_ACCOUNT.STELLAR.ENV",
 			networkPassphrase: network.TestNetworkPassphrase,
 			tenantName:        "tenant-testnet-env",
-			sigClientType:     signing.DistributionAccountEnvSignatureClientType,
+			accountType:       schema.DistributionAccountStellarEnv,
 		},
 		{
-			name:              "Testnet with sigClientType=DISTRIBUTION_ACCOUNT_DB",
+			name:              "Testnet with accountType=DISTRIBUTION_ACCOUNT.STELLAR.DB_VAULT",
 			networkPassphrase: network.TestNetworkPassphrase,
 			tenantName:        "tenant-testnet-dbvault",
-			sigClientType:     signing.DistributionAccountDBSignatureClientType,
+			accountType:       schema.DistributionAccountStellarDBVault,
 		},
 		{
-			name:              "Pubnet with sigClientType=DISTRIBUTION_ACCOUNT_ENV",
+			name:              "Pubnet with accountType=DISTRIBUTION_ACCOUNT.STELLAR.ENV",
 			networkPassphrase: network.PublicNetworkPassphrase,
 			tenantName:        "tenant-pubnet-env",
-			sigClientType:     signing.DistributionAccountEnvSignatureClientType,
+			accountType:       schema.DistributionAccountStellarEnv,
 		},
 		{
-			name:              "Pubnet with sigClientType=DISTRIBUTION_ACCOUNT_DB",
+			name:              "Pubnet with accountType=DISTRIBUTION_ACCOUNT.STELLAR.DB_VAULT",
 			networkPassphrase: network.PublicNetworkPassphrase,
 			tenantName:        "tenant-pubnet-dbvault",
-			sigClientType:     signing.DistributionAccountDBSignatureClientType,
+			accountType:       schema.DistributionAccountStellarDBVault,
 		},
 	}
 
@@ -197,17 +197,17 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 			distAccResolver.On("HostDistributionAccount").Return(hostAccountKP.Address()).Once()
 
 			// STEP 2: create DistSigner
-			switch tc.sigClientType {
-			case signing.DistributionAccountEnvSignatureClientType:
-				distAccSigClient, err = signing.NewSignatureClient(signing.DistributionAccountEnvSignatureClientType, signing.SignatureClientOptions{
+			switch tc.accountType {
+			case schema.DistributionAccountStellarEnv:
+				distAccSigClient, err = signing.NewSignatureClient(schema.DistributionAccountStellarEnv, signing.SignatureClientOptions{
 					DistributionPrivateKey: hostAccountKP.Seed(),
 					NetworkPassphrase:      tc.networkPassphrase,
 				})
 				wantDistAccAddress = hostAccountKP.Address()
 				require.NoError(t, err)
 
-			case signing.DistributionAccountDBSignatureClientType:
-				distAccSigClient, err = signing.NewSignatureClient(signing.DistributionAccountDBSignatureClientType, signing.SignatureClientOptions{
+			case schema.DistributionAccountStellarDBVault:
+				distAccSigClient, err = signing.NewSignatureClient(schema.DistributionAccountStellarDBVault, signing.SignatureClientOptions{
 					DBConnectionPool:            dbConnectionPool,
 					DistAccEncryptionPassphrase: keypair.MustRandom().Seed(),
 					NetworkPassphrase:           tc.networkPassphrase,
@@ -246,7 +246,7 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 					Once()
 
 			default:
-				require.Failf(t, "invalid sigClientType=%s", string(tc.sigClientType))
+				require.Failf(t, "invalid sigClientType=%s", string(tc.accountType))
 			}
 
 			// STEP 3: create Submitter Engine
@@ -294,7 +294,7 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 			assert.Equal(t, wantDistAccAddress, *tnt.DistributionAccountAddress)
 			assert.Equal(t, sdpUIBaseURL, *tnt.SDPUIBaseURL)
 			assert.Equal(t, baseURL, *tnt.BaseURL)
-			if tc.sigClientType == signing.DistributionAccountEnvSignatureClientType {
+			if tc.accountType == schema.DistributionAccountStellarEnv {
 				assert.Equal(t, hostAccountKP.Address(), *tnt.DistributionAccountAddress)
 			} else {
 				assert.NotEqual(t, hostAccountKP.Address(), *tnt.DistributionAccountAddress)
@@ -516,8 +516,8 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 					On("UpdateTenantConfig", ctx, &tenant.TenantUpdate{
 						ID:                         updatedTnt.ID,
 						DistributionAccountAddress: distAcc,
-						DistributionAccountType:    schema.DistributionAccountTypeEnvStellar,
-						DistributionAccountStatus:  schema.DistributionAccountStatusActive,
+						DistributionAccountType:    schema.DistributionAccountStellarEnv,
+						DistributionAccountStatus:  schema.AccountStatusActive,
 						Status:                     &tStatus,
 						SDPUIBaseURL:               &sdpUIBaseURL,
 						BaseURL:                    &baseURL,
@@ -556,15 +556,15 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 				tStatus := tenant.ProvisionedTenantStatus
 				updatedTnt := tnt
 				updatedTnt.DistributionAccountAddress = &distAcc
-				updatedTnt.DistributionAccountType = schema.DistributionAccountTypeEnvStellar
-				updatedTnt.DistributionAccountStatus = schema.DistributionAccountStatusActive
+				updatedTnt.DistributionAccountType = schema.DistributionAccountStellarEnv
+				updatedTnt.DistributionAccountStatus = schema.AccountStatusActive
 				updatedTnt.Status = tStatus
 				tntManagerMock.
 					On("UpdateTenantConfig", ctx, &tenant.TenantUpdate{
 						ID:                         updatedTnt.ID,
 						DistributionAccountAddress: distAcc,
-						DistributionAccountType:    schema.DistributionAccountTypeEnvStellar,
-						DistributionAccountStatus:  schema.DistributionAccountStatusActive,
+						DistributionAccountType:    schema.DistributionAccountStellarEnv,
+						DistributionAccountStatus:  schema.AccountStatusActive,
 						Status:                     &tStatus,
 						SDPUIBaseURL:               &sdpUIBaseURL,
 						BaseURL:                    &baseURL,
@@ -610,15 +610,15 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 				tStatus := tenant.ProvisionedTenantStatus
 				updatedTnt := tnt
 				updatedTnt.DistributionAccountAddress = &distAcc
-				updatedTnt.DistributionAccountType = schema.DistributionAccountTypeEnvStellar
-				updatedTnt.DistributionAccountStatus = schema.DistributionAccountStatusActive
+				updatedTnt.DistributionAccountType = schema.DistributionAccountStellarEnv
+				updatedTnt.DistributionAccountStatus = schema.AccountStatusActive
 				updatedTnt.Status = tStatus
 				tntManagerMock.
 					On("UpdateTenantConfig", ctx, &tenant.TenantUpdate{
 						ID:                         updatedTnt.ID,
 						DistributionAccountAddress: distAcc,
-						DistributionAccountType:    schema.DistributionAccountTypeEnvStellar,
-						DistributionAccountStatus:  schema.DistributionAccountStatusActive,
+						DistributionAccountType:    schema.DistributionAccountStellarEnv,
+						DistributionAccountStatus:  schema.AccountStatusActive,
 						Status:                     &tStatus,
 						SDPUIBaseURL:               &sdpUIBaseURL,
 						BaseURL:                    &baseURL,

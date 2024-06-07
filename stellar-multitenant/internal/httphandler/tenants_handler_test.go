@@ -141,11 +141,11 @@ func Test_TenantHandler_Get(t *testing.T) {
 			]
 		`,
 			tnt1.ID, tnt1.Name, tnt1.CreatedAt.Format(time.RFC3339Nano), tnt1.UpdatedAt.Format(time.RFC3339Nano),
-			*tnt1.DistributionAccountAddress, schema.DistributionAccountTypeDBVaultStellar, schema.DistributionAccountStatusActive,
+			*tnt1.DistributionAccountAddress, schema.DistributionAccountStellarDBVault, schema.AccountStatusActive,
 			tnt2.ID, tnt2.Name, tnt2.CreatedAt.Format(time.RFC3339Nano), tnt2.UpdatedAt.Format(time.RFC3339Nano),
-			*tnt2.DistributionAccountAddress, schema.DistributionAccountTypeDBVaultStellar, schema.DistributionAccountStatusActive,
+			*tnt2.DistributionAccountAddress, schema.DistributionAccountStellarDBVault, schema.AccountStatusActive,
 			deactivatedTnt.ID, deactivatedTnt.Name, deactivatedTnt.CreatedAt.Format(time.RFC3339Nano), deactivatedTnt.UpdatedAt.Format(time.RFC3339Nano),
-			*deactivatedTnt.DistributionAccountAddress, schema.DistributionAccountTypeDBVaultStellar, schema.DistributionAccountStatusActive,
+			*deactivatedTnt.DistributionAccountAddress, schema.DistributionAccountStellarDBVault, schema.AccountStatusActive,
 		)
 		assert.JSONEq(t, expectedRespBody, string(respBody))
 	})
@@ -181,7 +181,7 @@ func Test_TenantHandler_Get(t *testing.T) {
 				"distribution_account_status": %q
 			}
 		`, tnt1.ID, tnt1.Name, tnt1.CreatedAt.Format(time.RFC3339Nano), tnt1.UpdatedAt.Format(time.RFC3339Nano),
-			*tnt1.DistributionAccountAddress, schema.DistributionAccountTypeDBVaultStellar, schema.DistributionAccountStatusActive,
+			*tnt1.DistributionAccountAddress, schema.DistributionAccountStellarDBVault, schema.AccountStatusActive,
 		)
 		assert.JSONEq(t, expectedRespBody, string(respBody))
 	})
@@ -217,7 +217,7 @@ func Test_TenantHandler_Get(t *testing.T) {
 				"distribution_account_status": %q
 			}
 		`, tnt2.ID, tnt2.Name, tnt2.CreatedAt.Format(time.RFC3339Nano), tnt2.UpdatedAt.Format(time.RFC3339Nano),
-			*tnt2.DistributionAccountAddress, schema.DistributionAccountTypeDBVaultStellar, schema.DistributionAccountStatusActive,
+			*tnt2.DistributionAccountAddress, schema.DistributionAccountStellarDBVault, schema.AccountStatusActive,
 		)
 		assert.JSONEq(t, expectedRespBody, string(respBody))
 	})
@@ -428,7 +428,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 				"distribution_account_status": %q
 			}
 		`, tnt.ID, orgName, tnt.CreatedAt.Format(time.RFC3339Nano), tnt.UpdatedAt.Format(time.RFC3339Nano),
-			distAcc, schema.DistributionAccountTypeEnvStellar, schema.DistributionAccountStatusActive)
+			distAcc, schema.DistributionAccountStellarEnv, schema.AccountStatusActive)
 		assert.JSONEq(t, expectedRespBody, string(respBody))
 
 		assertMigrations(orgName)
@@ -472,7 +472,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 				"distribution_account_status": %q
 			}
 		`, tnt.ID, orgName, generatedURL, generatedUIURL, tnt.CreatedAt.Format(time.RFC3339Nano), tnt.UpdatedAt.Format(time.RFC3339Nano),
-			distAcc, schema.DistributionAccountTypeEnvStellar, schema.DistributionAccountStatusActive)
+			distAcc, schema.DistributionAccountStellarEnv, schema.AccountStatusActive)
 		assert.JSONEq(t, expectedRespBody, string(respBody))
 
 		assertMigrations(orgName)
@@ -516,7 +516,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 				"distribution_account_status": %q
 			}
 		`, tnt.ID, orgName, handler.BaseURL, generatedUIURL, tnt.CreatedAt.Format(time.RFC3339Nano), tnt.UpdatedAt.Format(time.RFC3339Nano),
-			distAcc, schema.DistributionAccountTypeEnvStellar, schema.DistributionAccountStatusActive)
+			distAcc, schema.DistributionAccountStellarEnv, schema.AccountStatusActive)
 		assert.JSONEq(t, expectedRespBody, string(respBody))
 
 		assertMigrations(orgName)
@@ -560,7 +560,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 				"distribution_account_status": %q
 			}
 		`, tnt.ID, orgName, generatedURL, handler.SDPUIBaseURL, tnt.CreatedAt.Format(time.RFC3339Nano), tnt.UpdatedAt.Format(time.RFC3339Nano),
-			distAcc, schema.DistributionAccountTypeEnvStellar, schema.DistributionAccountStatusActive)
+			distAcc, schema.DistributionAccountStellarEnv, schema.AccountStatusActive)
 		assert.JSONEq(t, expectedRespBody, string(respBody))
 
 		assertMigrations(orgName)
@@ -626,7 +626,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 				"distribution_account_status": %q
 			}
 		`, tnt.ID, orgName, tnt.CreatedAt.Format(time.RFC3339Nano), tnt.UpdatedAt.Format(time.RFC3339Nano),
-			distAcc, schema.DistributionAccountTypeEnvStellar, schema.DistributionAccountStatusActive)
+			distAcc, schema.DistributionAccountStellarEnv, schema.AccountStatusActive)
 		assert.JSONEq(t, expectedRespBody, string(respBody))
 
 		assertMigrations(orgName)

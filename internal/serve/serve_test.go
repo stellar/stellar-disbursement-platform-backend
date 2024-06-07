@@ -324,7 +324,7 @@ func getServeOptionsForTests(t *testing.T, dbConnectionPool db.DBConnectionPool)
 	}
 	distAccResolver.
 		On("DistributionAccountFromContext", mock.Anything).
-		Return(schema.NewDefaultStellarDistributionAccount(distAccPublicKey), nil).
+		Return(schema.NewDefaultStellarTransactionAccount(distAccPublicKey), nil).
 		Maybe()
 
 	producerMock := events.NewMockProducer(t)

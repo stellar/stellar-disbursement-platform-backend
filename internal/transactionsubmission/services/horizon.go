@@ -72,7 +72,7 @@ func CreateChannelAccountsOnChain(ctx context.Context, submiterEngine engine.Sub
 	})
 	if err != nil {
 		err = utils.NewHorizonErrorWrapper(err)
-		return nil, fmt.Errorf("failed to retrieve root account: %w", err)
+		return nil, fmt.Errorf("failed to retrieve host account: %w", err)
 	}
 
 	var sponsoredCreateAccountOps []txnbuild.Operation
@@ -156,7 +156,7 @@ func DeleteChannelAccountOnChain(ctx context.Context, submiterEngine engine.Subm
 		AccountID: distributionAccount,
 	})
 	if err != nil {
-		return fmt.Errorf("retrieving root account from distribution seed: %w", err)
+		return fmt.Errorf("retrieving host account from distribution seed: %w", err)
 	}
 
 	ledgerBounds, err := submiterEngine.LedgerNumberTracker.GetLedgerBounds()

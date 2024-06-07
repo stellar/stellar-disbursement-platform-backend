@@ -57,14 +57,14 @@ func SetConfigOptionCrashTrackerType(co *config.ConfigOption) error {
 }
 
 func SetConfigOptionDistributionSignerType(co *config.ConfigOption) error {
-	ssType := viper.GetString(co.Name)
+	dsType := viper.GetString(co.Name)
 
-	ssTypeParsed, err := signing.ParseSignatureClientDistributionType(ssType)
+	dsTypeParsed, err := signing.ParseDistributionSignatureClientType(dsType)
 	if err != nil {
 		return fmt.Errorf("couldn't parse signature client distribution type in %s: %w", co.Name, err)
 	}
 
-	*(co.ConfigKey.(*signing.SignatureClientType)) = ssTypeParsed
+	*(co.ConfigKey.(*signing.DistributionSignatureClientType)) = dsTypeParsed
 	return nil
 }
 

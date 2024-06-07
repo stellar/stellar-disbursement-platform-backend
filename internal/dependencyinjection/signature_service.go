@@ -12,8 +12,8 @@ const SignatureServiceInstanceName = "signature_service_instance"
 
 // buildSignatureServiceInstanceName returns the name of the signature service instance, based on the signature type
 // provided.
-func buildSignatureServiceInstanceName(sigType signing.SignatureClientType) string {
-	return fmt.Sprintf("%s-%s", SignatureServiceInstanceName, string(sigType))
+func buildSignatureServiceInstanceName(distSigType signing.DistributionSignatureClientType) string {
+	return fmt.Sprintf("%s-%s", SignatureServiceInstanceName, string(distSigType))
 }
 
 // NewSignatureService creates a new signature service instance, or retrieves an instance that was already
