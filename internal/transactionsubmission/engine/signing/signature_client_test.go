@@ -67,7 +67,7 @@ func Test_NewSignatureClient(t *testing.T) {
 				DistAccEncryptionPassphrase: encryptionPassphrase,
 				Encrypter:                   &utils.PrivateKeyEncrypterMock{},
 			},
-			wantResult: &DistributionAccountDBSignatureClient{
+			wantResult: &DistributionAccountDBVaultSignatureClient{
 				dbVault:              store.NewDBVaultModel(dbConnectionPool),
 				encrypter:            &utils.PrivateKeyEncrypterMock{},
 				encryptionPassphrase: encryptionPassphrase,
@@ -81,7 +81,7 @@ func Test_NewSignatureClient(t *testing.T) {
 				NetworkPassphrase:      network.TestNetworkPassphrase,
 				DistributionPrivateKey: distributionKP.Seed(),
 			},
-			wantResult: &DistributionAccountEnvSignatureClient{
+			wantResult: &AccountEnvSignatureClient{
 				networkPassphrase:   network.TestNetworkPassphrase,
 				distributionAccount: distributionKP.Address(),
 				distributionKP:      distributionKP,
@@ -94,7 +94,7 @@ func Test_NewSignatureClient(t *testing.T) {
 				NetworkPassphrase:      network.TestNetworkPassphrase,
 				DistributionPrivateKey: distributionKP.Seed(),
 			},
-			wantResult: &DistributionAccountEnvSignatureClient{
+			wantResult: &AccountEnvSignatureClient{
 				networkPassphrase:   network.TestNetworkPassphrase,
 				distributionAccount: distributionKP.Address(),
 				distributionKP:      distributionKP,

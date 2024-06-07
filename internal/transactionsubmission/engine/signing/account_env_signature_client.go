@@ -10,16 +10,16 @@ import (
 	sdpUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
-type DistributionAccountEnvOptions struct {
+type AccountEnvOptions struct {
 	DistributionPrivateKey string
 	NetworkPassphrase      string
 }
 
-func (opts DistributionAccountEnvOptions) String() string {
+func (opts AccountEnvOptions) String() string {
 	return fmt.Sprintf("%T{NetworkPassphrase: %s}", opts, opts.NetworkPassphrase)
 }
 
-func (opts *DistributionAccountEnvOptions) Validate() error {
+func (opts *AccountEnvOptions) Validate() error {
 	if opts.NetworkPassphrase == "" {
 		return fmt.Errorf("network passphrase cannot be empty")
 	}
@@ -31,18 +31,18 @@ func (opts *DistributionAccountEnvOptions) Validate() error {
 	return nil
 }
 
-type DistributionAccountEnvSignatureClient struct {
+type AccountEnvSignatureClient struct {
 	networkPassphrase   string
 	distributionAccount string
 	distributionKP      *keypair.Full
 }
 
-func (c *DistributionAccountEnvSignatureClient) String() string {
-	return fmt.Sprintf("DistributionAccountEnvSignatureClient{distributionAccount: %s, networkPassphrase: %s}", c.distributionAccount, c.networkPassphrase)
+func (c *AccountEnvSignatureClient) String() string {
+	return fmt.Sprintf("AccountEnvSignatureClient{distributionAccount: %s, networkPassphrase: %s}", c.distributionAccount, c.networkPassphrase)
 }
 
-// NewDistributionAccountEnvSignatureClient returns a new DistributionAccountEnvSignatureClient instance
-func NewDistributionAccountEnvSignatureClient(opts DistributionAccountEnvOptions) (*DistributionAccountEnvSignatureClient, error) {
+// NewAccountEnvSignatureClient returns a new AccountEnvSignatureClient instance
+func NewAccountEnvSignatureClient(opts AccountEnvOptions) (*AccountEnvSignatureClient, error) {
 	if err := opts.Validate(); err != nil {
 		return nil, fmt.Errorf("validating options: %w", err)
 	}
@@ -52,17 +52,17 @@ func NewDistributionAccountEnvSignatureClient(opts DistributionAccountEnvOptions
 		return nil, fmt.Errorf("parsing distribution seed: %w", err)
 	}
 
-	return &DistributionAccountEnvSignatureClient{
+	return &AccountEnvSignatureClient{
 		networkPassphrase:   opts.NetworkPassphrase,
 		distributionAccount: distributionKP.Address(),
 		distributionKP:      distributionKP,
 	}, nil
 }
 
-var _ SignatureClient = (*DistributionAccountEnvSignatureClient)(nil)
+var _ SignatureClient = (*AccountEnvSignatureClient)(nil)
 
 // validateStellarAccounts ensures that the distribution account is the only account signing the transaction
-func (c *DistributionAccountEnvSignatureClient) validateStellarAccounts(stellarAccounts ...string) error {
+func (c *AccountEnvSignatureClient) validateStellarAccounts(stellarAccounts ...string) error {
 	if len(stellarAccounts) == 0 {
 		return fmt.Errorf("stellar accounts cannot be empty in %s", c.name())
 	}
@@ -77,7 +77,7 @@ func (c *DistributionAccountEnvSignatureClient) validateStellarAccounts(stellarA
 	return nil
 }
 
-func (c *DistributionAccountEnvSignatureClient) SignStellarTransaction(ctx context.Context, stellarTx *txnbuild.Transaction, stellarAccounts ...string) (signedStellarTx *txnbuild.Transaction, err error) {
+func (c *AccountEnvSignatureClient) SignStellarTransaction(ctx context.Context, stellarTx *txnbuild.Transaction, stellarAccounts ...string) (signedStellarTx *txnbuild.Transaction, err error) {
 	if stellarTx == nil {
 		return nil, fmt.Errorf("stellarTx cannot be nil in %s", c.name())
 	}
@@ -95,7 +95,7 @@ func (c *DistributionAccountEnvSignatureClient) SignStellarTransaction(ctx conte
 	return signedStellarTx, nil
 }
 
-func (c *DistributionAccountEnvSignatureClient) SignFeeBumpStellarTransaction(ctx context.Context, feeBumpStellarTx *txnbuild.FeeBumpTransaction, stellarAccounts ...string) (signedFeeBumpStellarTx *txnbuild.FeeBumpTransaction, err error) {
+func (c *AccountEnvSignatureClient) SignFeeBumpStellarTransaction(ctx context.Context, feeBumpStellarTx *txnbuild.FeeBumpTransaction, stellarAccounts ...string) (signedFeeBumpStellarTx *txnbuild.FeeBumpTransaction, err error) {
 	if feeBumpStellarTx == nil {
 		return nil, fmt.Errorf("stellarTx cannot be nil in %s", c.name())
 	}
@@ -113,7 +113,7 @@ func (c *DistributionAccountEnvSignatureClient) SignFeeBumpStellarTransaction(ct
 	return signedFeeBumpStellarTx, nil
 }
 
-func (c *DistributionAccountEnvSignatureClient) BatchInsert(ctx context.Context, number int) (publicKeys []string, err error) {
+func (c *AccountEnvSignatureClient) BatchInsert(ctx context.Context, number int) (publicKeys []string, err error) {
 	if number <= 0 {
 		return nil, fmt.Errorf("number must be greater than 0")
 	}
@@ -126,7 +126,7 @@ func (c *DistributionAccountEnvSignatureClient) BatchInsert(ctx context.Context,
 	return publicKeys, err
 }
 
-func (c *DistributionAccountEnvSignatureClient) Delete(ctx context.Context, publicKey string) error {
+func (c *AccountEnvSignatureClient) Delete(ctx context.Context, publicKey string) error {
 	err := c.validateStellarAccounts(publicKey)
 	if err != nil {
 		return fmt.Errorf("validating stellar account to delete: %w", err)
@@ -134,10 +134,10 @@ func (c *DistributionAccountEnvSignatureClient) Delete(ctx context.Context, publ
 	return fmt.Errorf("Delete called for signature client type %s: %w", c.name(), ErrUnsupportedCommand)
 }
 
-func (c *DistributionAccountEnvSignatureClient) name() string {
+func (c *AccountEnvSignatureClient) name() string {
 	return sdpUtils.GetTypeName(c)
 }
 
-func (c *DistributionAccountEnvSignatureClient) NetworkPassphrase() string {
+func (c *AccountEnvSignatureClient) NetworkPassphrase() string {
 	return c.networkPassphrase
 }

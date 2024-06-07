@@ -109,13 +109,13 @@ func Test_NewSignatureService(t *testing.T) {
 		chAccModel:           store.NewChannelAccountModel(dbConnectionPool),
 		encrypter:            &utils.DefaultPrivateKeyEncrypter{},
 	}
-	wantDistAccountEnvSigner := &DistributionAccountEnvSignatureClient{
+	wantDistAccountEnvSigner := &AccountEnvSignatureClient{
 		networkPassphrase:   network.TestNetworkPassphrase,
 		distributionAccount: distributionKP.Address(),
 		distributionKP:      distributionKP,
 	}
 	wantHostAccountEnvSigner := wantDistAccountEnvSigner
-	wantDistAccountDBSigner := &DistributionAccountDBSignatureClient{
+	wantDistAccountDBSigner := &DistributionAccountDBVaultSignatureClient{
 		networkPassphrase:    network.TestNetworkPassphrase,
 		encryptionPassphrase: distAccEncryptionPassphrase,
 		dbVault:              store.NewDBVaultModel(dbConnectionPool),

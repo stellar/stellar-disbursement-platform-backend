@@ -78,7 +78,7 @@ func NewSignerRouter(opts SignatureRouterOptions, accountTypes ...schema.Account
 
 		switch accType {
 		case schema.HostStellarEnv:
-			newSigClient, err = NewDistributionAccountEnvSignatureClient(DistributionAccountEnvOptions{
+			newSigClient, err = NewAccountEnvSignatureClient(AccountEnvOptions{
 				NetworkPassphrase:      opts.NetworkPassphrase,
 				DistributionPrivateKey: opts.HostPrivateKey,
 				// AccountType:            accType, // TODO
@@ -94,14 +94,14 @@ func NewSignerRouter(opts SignatureRouterOptions, accountTypes ...schema.Account
 			})
 
 		case schema.DistributionAccountStellarEnv:
-			newSigClient, err = NewDistributionAccountEnvSignatureClient(DistributionAccountEnvOptions{
+			newSigClient, err = NewAccountEnvSignatureClient(AccountEnvOptions{
 				NetworkPassphrase:      opts.NetworkPassphrase,
 				DistributionPrivateKey: opts.DistributionPrivateKey,
 				// AccountType:            accType, // TODO
 			})
 
 		case schema.DistributionAccountStellarDBVault:
-			newSigClient, err = NewDistributionAccountDBSignatureClient(DistributionAccountDBSignatureClientOptions{
+			newSigClient, err = NewDistributionAccountDBVaultSignatureClient(DistributionAccountDBVaultSignatureClientOptions{
 				NetworkPassphrase:    opts.NetworkPassphrase,
 				DBConnectionPool:     opts.DBConnectionPool,
 				EncryptionPassphrase: opts.DistAccEncryptionPassphrase,

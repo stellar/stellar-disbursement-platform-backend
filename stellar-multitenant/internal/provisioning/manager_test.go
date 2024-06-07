@@ -222,7 +222,7 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 
 				tenantAccountKP := keypair.MustRandom()
 
-				// STEP 2.1 - Mock calls that are exclusively for DistributionAccountDBSignatureClientType
+				// STEP 2.1 - Mock calls that are exclusively for DistributionAccountDBVaultSignatureClientType
 				mHorizonClient.
 					On("AccountDetail", horizonclient.AccountRequest{AccountID: hostAccountKP.Address()}).
 					Return(horizon.Account{

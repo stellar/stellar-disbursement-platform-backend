@@ -12,8 +12,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func Test_DistributionAccountEnvOptions_String_doesntLeakPrivateKey(t *testing.T) {
-	opts := DistributionAccountEnvOptions{
+func Test_AccountEnvOptions_String_doesntLeakPrivateKey(t *testing.T) {
+	opts := AccountEnvOptions{
 		DistributionPrivateKey: "SOME_PRIVATE_KEY",
 		NetworkPassphrase:      "SOME_PASSPHRASE",
 	}
@@ -39,27 +39,27 @@ func Test_DistributionAccountEnvOptions_String_doesntLeakPrivateKey(t *testing.T
 	}
 }
 
-func Test_DistributionAccountEnvOptions_Validate(t *testing.T) {
+func Test_AccountEnvOptions_Validate(t *testing.T) {
 	testCases := []struct {
 		name              string
-		opts              DistributionAccountEnvOptions
+		opts              AccountEnvOptions
 		wantErrorContains string
 	}{
 		{
 			name:              "returns an error if the network passphrase is empty",
-			opts:              DistributionAccountEnvOptions{},
+			opts:              AccountEnvOptions{},
 			wantErrorContains: "network passphrase cannot be empty",
 		},
 		{
 			name: "returns an error if the distribution private key is empty",
-			opts: DistributionAccountEnvOptions{
+			opts: AccountEnvOptions{
 				NetworkPassphrase: network.TestNetworkPassphrase,
 			},
 			wantErrorContains: "distribution private key is not a valid Ed25519 secret",
 		},
 		{
 			name: "returns an error if the distribution private key is invalid",
-			opts: DistributionAccountEnvOptions{
+			opts: AccountEnvOptions{
 				NetworkPassphrase:      network.TestNetworkPassphrase,
 				DistributionPrivateKey: "invalid",
 			},
@@ -67,7 +67,7 @@ func Test_DistributionAccountEnvOptions_Validate(t *testing.T) {
 		},
 		{
 			name: "🎉 successfully validate options",
-			opts: DistributionAccountEnvOptions{
+			opts: AccountEnvOptions{
 				NetworkPassphrase:      network.TestNetworkPassphrase,
 				DistributionPrivateKey: keypair.MustRandom().Seed(),
 			},
@@ -87,27 +87,27 @@ func Test_DistributionAccountEnvOptions_Validate(t *testing.T) {
 	}
 }
 
-func Test_NewDistributionAccountEnvSignatureClient(t *testing.T) {
+func Test_NewAccountEnvSignatureClient(t *testing.T) {
 	distributionKP := keypair.MustRandom()
 
 	testCases := []struct {
 		name              string
-		opts              DistributionAccountEnvOptions
+		opts              AccountEnvOptions
 		wantErrorContains string
-		wantClient        *DistributionAccountEnvSignatureClient
+		wantClient        *AccountEnvSignatureClient
 	}{
 		{
 			name:              "returns an error if the options are invalid",
-			opts:              DistributionAccountEnvOptions{},
+			opts:              AccountEnvOptions{},
 			wantErrorContains: "validating options: network passphrase cannot be empty",
 		},
 		{
-			name: "🎉 successfully create a new DistributionAccountEnvSignatureClient",
-			opts: DistributionAccountEnvOptions{
+			name: "🎉 successfully create a new AccountEnvSignatureClient",
+			opts: AccountEnvOptions{
 				NetworkPassphrase:      network.TestNetworkPassphrase,
 				DistributionPrivateKey: distributionKP.Seed(),
 			},
-			wantClient: &DistributionAccountEnvSignatureClient{
+			wantClient: &AccountEnvSignatureClient{
 				networkPassphrase:   network.TestNetworkPassphrase,
 				distributionAccount: distributionKP.Address(),
 				distributionKP:      distributionKP,
@@ -117,7 +117,7 @@ func Test_NewDistributionAccountEnvSignatureClient(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			gotClient, err := NewDistributionAccountEnvSignatureClient(tc.opts)
+			gotClient, err := NewAccountEnvSignatureClient(tc.opts)
 
 			if tc.wantErrorContains == "" {
 				require.NoError(t, err)
@@ -130,10 +130,10 @@ func Test_NewDistributionAccountEnvSignatureClient(t *testing.T) {
 	}
 }
 
-func Test_DistributionAccountEnvSignatureClient_validateStellarAccounts(t *testing.T) {
+func Test_AccountEnvSignatureClient_validateStellarAccounts(t *testing.T) {
 	distributionKP := keypair.MustRandom()
 	unsupportedAccountKP := keypair.MustRandom()
-	distEnvClient, err := NewDistributionAccountEnvSignatureClient(DistributionAccountEnvOptions{
+	distEnvClient, err := NewAccountEnvSignatureClient(AccountEnvOptions{
 		NetworkPassphrase:      network.TestNetworkPassphrase,
 		DistributionPrivateKey: distributionKP.Seed(),
 	})
@@ -176,12 +176,12 @@ func Test_DistributionAccountEnvSignatureClient_validateStellarAccounts(t *testi
 	}
 }
 
-func Test_DistributionAccountEnvSignatureClient_SignStellarTransaction(t *testing.T) {
+func Test_AccountEnvSignatureClient_SignStellarTransaction(t *testing.T) {
 	ctx := context.Background()
 
 	distributionKP := keypair.MustRandom()
 	unsupportedAccountKP := keypair.MustRandom()
-	distEnvClient, err := NewDistributionAccountEnvSignatureClient(DistributionAccountEnvOptions{
+	distEnvClient, err := NewAccountEnvSignatureClient(AccountEnvOptions{
 		NetworkPassphrase:      network.TestNetworkPassphrase,
 		DistributionPrivateKey: distributionKP.Seed(),
 	})
@@ -254,12 +254,12 @@ func Test_DistributionAccountEnvSignatureClient_SignStellarTransaction(t *testin
 	}
 }
 
-func Test_DistributionAccountEnvSignatureClient_SignFeeBumpStellarTransaction(t *testing.T) {
+func Test_AccountEnvSignatureClient_SignFeeBumpStellarTransaction(t *testing.T) {
 	ctx := context.Background()
 
 	distributionKP := keypair.MustRandom()
 	unsupportedAccountKP := keypair.MustRandom()
-	distEnvClient, err := NewDistributionAccountEnvSignatureClient(DistributionAccountEnvOptions{
+	distEnvClient, err := NewAccountEnvSignatureClient(AccountEnvOptions{
 		NetworkPassphrase:      network.TestNetworkPassphrase,
 		DistributionPrivateKey: distributionKP.Seed(),
 	})
@@ -344,10 +344,10 @@ func Test_DistributionAccountEnvSignatureClient_SignFeeBumpStellarTransaction(t 
 	}
 }
 
-func Test_DistributionAccountEnvSignatureClient_BatchInsert(t *testing.T) {
+func Test_AccountEnvSignatureClient_BatchInsert(t *testing.T) {
 	ctx := context.Background()
 	distributionKP := keypair.MustRandom()
-	distEnvClient, err := NewDistributionAccountEnvSignatureClient(DistributionAccountEnvOptions{
+	distEnvClient, err := NewAccountEnvSignatureClient(AccountEnvOptions{
 		NetworkPassphrase:      network.TestNetworkPassphrase,
 		DistributionPrivateKey: distributionKP.Seed(),
 	})
@@ -373,11 +373,11 @@ func Test_DistributionAccountEnvSignatureClient_BatchInsert(t *testing.T) {
 	})
 }
 
-func Test_DistributionAccountEnvSignatureClient_Delete(t *testing.T) {
+func Test_AccountEnvSignatureClient_Delete(t *testing.T) {
 	ctx := context.Background()
 	distributionKP := keypair.MustRandom()
 	unsupportedAccountKP := keypair.MustRandom()
-	distEnvClient, err := NewDistributionAccountEnvSignatureClient(DistributionAccountEnvOptions{
+	distEnvClient, err := NewAccountEnvSignatureClient(AccountEnvOptions{
 		NetworkPassphrase:      network.TestNetworkPassphrase,
 		DistributionPrivateKey: distributionKP.Seed(),
 	})
