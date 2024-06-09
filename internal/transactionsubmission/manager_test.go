@@ -43,7 +43,7 @@ func Test_SubmitterOptions_validate(t *testing.T) {
 
 	mHorizonClient := &horizonclient.MockClient{}
 	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
-	signatureService, _, _, _, distAccResolver := signing.NewMockSignatureService(t)
+	signatureService, _, distAccResolver := signing.NewMockSignatureService(t)
 	mSubmitterEngine := engine.SubmitterEngine{
 		HorizonClient:       mHorizonClient,
 		LedgerNumberTracker: mLedgerNumberTracker,
@@ -107,7 +107,7 @@ func Test_SubmitterOptions_validate(t *testing.T) {
 					},
 				},
 			},
-			wantErrContains: "validating submitter engine: validating signature service: channel account signer cannot be nil",
+			wantErrContains: "validating submitter engine: validating signature service: signer router cannot be nil",
 		},
 		{
 			name: "validate submitter engine's Max Base Fee",
@@ -205,7 +205,7 @@ func Test_NewManager(t *testing.T) {
 
 	mHorizonClient := &horizonclient.MockClient{}
 	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
-	sigService, _, _, _, _ := signing.NewMockSignatureService(t)
+	sigService, _, _ := signing.NewMockSignatureService(t)
 	mSubmitterEngine := engine.SubmitterEngine{
 		HorizonClient:       mHorizonClient,
 		LedgerNumberTracker: mLedgerNumberTracker,
@@ -376,12 +376,14 @@ func Test_Manager_ProcessTransactions(t *testing.T) {
 	// Signature service
 	encrypter := &utils.DefaultPrivateKeyEncrypter{}
 	chAccEncryptionPassphrase := keypair.MustRandom().Seed()
+	distAccEncryptionPassphrase := keypair.MustRandom().Seed()
 	distributionKP := keypair.MustRandom()
+	distAccount := schema.NewStellarEnvTransactionAccount(distributionKP.Address())
 
 	mDistAccResolver := sigMocks.NewMockDistributionAccountResolver(t)
 	mDistAccResolver.
 		On("DistributionAccount", mock.Anything, mock.AnythingOfType("string")).
-		Return(schema.NewDefaultStellarDistributionAccount(distributionKP.Address()), nil)
+		Return(distAccount, nil)
 
 	sigService, err := signing.NewSignatureService(signing.SignatureServiceOptions{
 		DistributionSignerType:    signing.DistributionAccountEnvSignatureClientType,
@@ -393,6 +395,7 @@ func Test_Manager_ProcessTransactions(t *testing.T) {
 		Encrypter:                 encrypter,
 
 		DistributionAccountResolver: mDistAccResolver,
+		DistAccEncryptionPassphrase: distAccEncryptionPassphrase,
 	})
 	require.NoError(t, err)
 

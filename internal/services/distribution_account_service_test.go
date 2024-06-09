@@ -19,7 +19,7 @@ import (
 
 func Test_StellarNativeDistributionAccount_GetBalances(t *testing.T) {
 	accAddress := keypair.MustRandom().Address()
-	distAcc := schema.NewDefaultStellarDistributionAccount(accAddress)
+	distAcc := schema.NewStellarEnvTransactionAccount(accAddress)
 
 	nativeAsset := data.Asset{Code: assets.XLMAssetCode, Issuer: ""}
 	usdcAsset := data.Asset{Code: assets.USDCAssetCode, Issuer: assets.USDCAssetIssuerTestnet}
@@ -88,7 +88,7 @@ func Test_StellarNativeDistributionAccount_GetBalances(t *testing.T) {
 			}
 
 			tc.mockHorizonClientFn(&mHorizonClient)
-			balances, err := svc.GetBalances(distAcc)
+			balances, err := svc.GetBalances(&distAcc)
 			if tc.expectedError != nil {
 				require.ErrorContains(t, err, tc.expectedError.Error())
 			} else {
@@ -103,7 +103,7 @@ func Test_StellarNativeDistributionAccount_GetBalances(t *testing.T) {
 
 func Test_StellarNativeDistributionAccount_GetBalance(t *testing.T) {
 	accAddress := keypair.MustRandom().Address()
-	distAcc := schema.NewDefaultStellarDistributionAccount(accAddress)
+	distAcc := schema.NewStellarEnvTransactionAccount(accAddress)
 
 	nativeAsset := data.Asset{Code: assets.XLMAssetCode}
 	usdcAsset := data.Asset{Code: assets.USDCAssetCode, Issuer: assets.USDCAssetIssuerTestnet}
@@ -159,7 +159,7 @@ func Test_StellarNativeDistributionAccount_GetBalance(t *testing.T) {
 			}
 
 			mockSetup(&mHorizonClient)
-			balance, err := svc.GetBalance(distAcc, tc.asset)
+			balance, err := svc.GetBalance(&distAcc, tc.asset)
 			if tc.expectedError != nil {
 				require.ErrorContains(t, err, tc.expectedError.Error())
 			} else {
@@ -180,16 +180,16 @@ func Test_NewDistributionAccountService(t *testing.T) {
 	svc := NewDistributionAccountService(svcOpts)
 
 	t.Run("maps the correct distribution account type to the correct service implementation", func(t *testing.T) {
-		targetSvc, ok := svc.strategies[schema.DistributionAccountTypeDBVaultStellar]
+		targetSvc, ok := svc.strategies[schema.DistributionAccountStellarDBVault]
 		assert.True(t, ok)
-		assert.Equal(t, targetSvc, svc.strategies[schema.DistributionAccountTypeEnvStellar])
+		assert.Equal(t, targetSvc, svc.strategies[schema.DistributionAccountStellarDBVault])
 
-		targetSvc, ok = svc.strategies[schema.DistributionAccountTypeEnvStellar]
+		targetSvc, ok = svc.strategies[schema.DistributionAccountStellarEnv]
 		assert.True(t, ok)
-		assert.Equal(t, targetSvc, svc.strategies[schema.DistributionAccountTypeEnvStellar])
+		assert.Equal(t, targetSvc, svc.strategies[schema.DistributionAccountStellarEnv])
 
 		// TODO [SDP-1232]: Change this when Circle distribution account service is added
-		_, ok = svc.strategies[schema.DistributionAccountTypeDBVaultCircle]
+		_, ok = svc.strategies[schema.DistributionAccountCircleDBVault]
 		assert.False(t, ok)
 	})
 }

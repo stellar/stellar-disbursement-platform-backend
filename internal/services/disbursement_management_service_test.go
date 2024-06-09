@@ -210,7 +210,7 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 	// Create fixtures: asset, wallet, country
 	asset := data.GetAssetFixture(t, ctx, dbConnectionPool, data.FixtureAssetUSDC)
 	distributionAccPubKey := "GAAHIL6ZW4QFNLCKALZ3YOIWPP4TXQ7B7J5IU7RLNVGQAV6GFDZHLDTA"
-	distributionAcc := schema.NewDefaultStellarDistributionAccount(distributionAccPubKey)
+	distributionAcc := schema.NewDefaultStellarTransactionAccount(distributionAccPubKey)
 
 	// create fixtures
 	wallet := data.CreateDefaultWalletFixture(t, ctx, dbConnectionPool)
@@ -292,7 +292,7 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 	t.Run("returns an error if the disbursement doesn't exist", func(t *testing.T) {
 		service := DisbursementManagementService{Models: models}
 
-		err = service.StartDisbursement(context.Background(), "not-found-id", nil, distributionAcc)
+		err = service.StartDisbursement(context.Background(), "not-found-id", nil, &distributionAcc)
 		require.ErrorIs(t, err, ErrDisbursementNotFound)
 	})
 
@@ -301,14 +301,14 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 
 		data.EnableOrDisableWalletFixtures(t, ctx, dbConnectionPool, false, wallet.ID)
 		defer data.EnableOrDisableWalletFixtures(t, ctx, dbConnectionPool, true, wallet.ID)
-		err = service.StartDisbursement(context.Background(), draftDisbursement.ID, nil, distributionAcc)
+		err = service.StartDisbursement(context.Background(), draftDisbursement.ID, nil, &distributionAcc)
 		require.ErrorIs(t, err, ErrDisbursementWalletDisabled)
 	})
 
 	t.Run("returns an error if the disbursement status is not READY", func(t *testing.T) {
 		service := DisbursementManagementService{Models: models}
 
-		err = service.StartDisbursement(context.Background(), draftDisbursement.ID, nil, distributionAcc)
+		err = service.StartDisbursement(context.Background(), draftDisbursement.ID, nil, &distributionAcc)
 		require.ErrorIs(t, err, ErrDisbursementNotReadyToStart)
 	})
 
@@ -344,7 +344,7 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 		err = models.Organizations.Update(ctx, &data.OrganizationUpdate{IsApprovalRequired: &isApprovalRequired})
 		require.NoError(t, err)
 
-		err = service.StartDisbursement(ctx, disbursement.ID, user, distributionAcc)
+		err = service.StartDisbursement(ctx, disbursement.ID, user, &distributionAcc)
 		require.ErrorIs(t, err, ErrDisbursementStartedByCreator)
 
 		// rollback changes
@@ -432,7 +432,7 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 			DistributionAccountService: distAccSvc,
 		}
 
-		err = service.StartDisbursement(ctx, disbursement.ID, user, distributionAcc)
+		err = service.StartDisbursement(ctx, disbursement.ID, user, &distributionAcc)
 		require.NoError(t, err)
 
 		// check disbursement status
@@ -502,7 +502,7 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 		}
 
 		user := &auth.User{ID: "user-id", Email: "email@email.com"}
-		err = service.StartDisbursement(ctx, readyDisbursement.ID, user, distributionAcc)
+		err = service.StartDisbursement(ctx, readyDisbursement.ID, user, &distributionAcc)
 		require.NoError(t, err)
 
 		// check disbursement status
@@ -615,7 +615,7 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 			DistributionAccountService: distAccSvc,
 		}
 
-		err = service.StartDisbursement(ctx, disbursementInsufficientBalance.ID, nil, distributionAcc)
+		err = service.StartDisbursement(ctx, disbursementInsufficientBalance.ID, nil, &distributionAcc)
 		expectedErr := InsufficientBalanceError{
 			DisbursementAsset:   *usdt,
 			DistributionAddress: distributionAccPubKey,
@@ -731,7 +731,7 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 			Email: "email@email.com",
 		}
 
-		err = service.StartDisbursement(ctx, disbursement.ID, user, distributionAcc)
+		err = service.StartDisbursement(ctx, disbursement.ID, user, &distributionAcc)
 		assert.NoError(t, err)
 	})
 
@@ -801,7 +801,7 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 
 		user := &auth.User{ID: "user-id", Email: "email@email.com"}
 
-		err = service.StartDisbursement(ctx, disbursement.ID, user, distributionAcc)
+		err = service.StartDisbursement(ctx, disbursement.ID, user, &distributionAcc)
 		require.NoError(t, err)
 
 		entries := getEntries()
@@ -859,7 +859,7 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 			DistributionAccountService: distAccSvc,
 		}
 
-		err = service.StartDisbursement(ctxWithoutTenant, disbursement.ID, user, distributionAcc)
+		err = service.StartDisbursement(ctxWithoutTenant, disbursement.ID, user, &distributionAcc)
 		assert.EqualError(t, err, "running atomic function in RunInTransactionWithPostCommit: creating new message: getting tenant from context: tenant not found in context")
 	})
 
@@ -922,7 +922,7 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 			DistributionAccountService: distAccSvc,
 		}
 
-		err = service.StartDisbursement(ctx, disbursement.ID, user, distributionAcc)
+		err = service.StartDisbursement(ctx, disbursement.ID, user, &distributionAcc)
 		require.NoError(t, err)
 
 		msgs := []events.Message{
@@ -990,7 +990,7 @@ func Test_DisbursementManagementService_PauseDisbursement(t *testing.T) {
 
 	hMock := &horizonclient.MockClient{}
 	distributionAccPubKey := "ABC"
-	distributionAcc := schema.NewDefaultStellarDistributionAccount(distributionAccPubKey)
+	distributionAcc := schema.NewDefaultStellarTransactionAccount(distributionAccPubKey)
 	distAccSvcOpts := DistributionAccountServiceOptions{
 		HorizonClient: hMock,
 	}
@@ -1136,7 +1136,7 @@ func Test_DisbursementManagementService_PauseDisbursement(t *testing.T) {
 			Once()
 
 		// change the disbursement back to started
-		err = service.StartDisbursement(ctx, startedDisbursement.ID, user, distributionAcc)
+		err = service.StartDisbursement(ctx, startedDisbursement.ID, user, &distributionAcc)
 		require.NoError(t, err)
 
 		// check disbursement is started again
@@ -1207,7 +1207,7 @@ func Test_DisbursementManagementService_PauseDisbursement(t *testing.T) {
 			Once()
 
 		// 2. Start disbursement again
-		err = service.StartDisbursement(ctx, startedDisbursement.ID, user, distributionAcc)
+		err = service.StartDisbursement(ctx, startedDisbursement.ID, user, &distributionAcc)
 		require.NoError(t, err)
 
 		// check disbursement is started again

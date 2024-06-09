@@ -30,14 +30,15 @@ type Manager struct {
 
 // ProvisionTenant contains all the metadata about a tenant to provision one
 type ProvisionTenant struct {
-	Name          string
-	UserFirstName string
-	UserLastName  string
-	UserEmail     string
-	OrgName       string
-	UiBaseURL     string
-	BaseURL       string
-	NetworkType   string
+	Name                    string
+	UserFirstName           string
+	UserLastName            string
+	UserEmail               string
+	OrgName                 string
+	UiBaseURL               string
+	BaseURL                 string
+	NetworkType             string
+	DistributionAccountType schema.AccountType
 }
 
 var (
@@ -81,7 +82,7 @@ func (m *Manager) handleProvisioningError(ctx context.Context, err error, t *ten
 	provisioningErr := fmt.Errorf("provisioning error: %w", err)
 
 	if errors.Is(err, ErrUpdateTenantFailed) {
-		log.Ctx(ctx).Errorf("tenant record not updated")
+		log.Ctx(ctx).Errorf("tenant record not updated: %v", err)
 	}
 
 	if isErrorInArray(err, deleteDistributionKeyErrors()) {
@@ -135,14 +136,9 @@ func (m *Manager) provisionTenant(ctx context.Context, pt *ProvisionTenant) (*te
 	}
 
 	// Provision distribution account for tenant if necessary
-	if err := m.provisionDistributionAccount(ctx, t); err != nil {
-		return t, fmt.Errorf("provisioning distribution account: %w", err)
-	}
-
-	distSignerType := signing.SignatureClientType(m.SubmitterEngine.DistAccountSigner.Type())
-	distAccType, err := distSignerType.DistributionAccountType()
+	err := m.provisionDistributionAccount(ctx, t, pt.DistributionAccountType)
 	if err != nil {
-		return t, fmt.Errorf("%w: parsing getting distribution account type: %w", ErrUpdateTenantFailed, err)
+		return t, fmt.Errorf("provisioning distribution account: %w", err)
 	}
 
 	tenantStatus := tenant.ProvisionedTenantStatus
@@ -152,8 +148,8 @@ func (m *Manager) provisionTenant(ctx context.Context, pt *ProvisionTenant) (*te
 			ID:                         t.ID,
 			Status:                     &tenantStatus,
 			DistributionAccountAddress: *t.DistributionAccountAddress,
-			DistributionAccountType:    distAccType,
-			DistributionAccountStatus:  schema.DistributionAccountStatusActive,
+			DistributionAccountType:    t.DistributionAccountType,
+			DistributionAccountStatus:  schema.AccountStatusActive,
 			SDPUIBaseURL:               &pt.UiBaseURL,
 			BaseURL:                    &pt.BaseURL,
 		})
@@ -171,10 +167,10 @@ func (m *Manager) provisionTenant(ctx context.Context, pt *ProvisionTenant) (*te
 
 func (m *Manager) fundTenantDistributionAccount(ctx context.Context, distributionAccount string) error {
 	hostDistributionAccPubKey := m.SubmitterEngine.HostDistributionAccount()
-	if distributionAccount != hostDistributionAccPubKey {
+	if distributionAccount != hostDistributionAccPubKey.Address {
 		// Bootstrap tenant distribution account with native asset
 		log.Ctx(ctx).Infof("Creating and funding tenant distribution account %s with native asset", distributionAccount)
-		err := tssSvc.CreateAndFundAccount(ctx, m.SubmitterEngine, m.nativeAssetBootstrapAmount, hostDistributionAccPubKey, distributionAccount)
+		err := tssSvc.CreateAndFundAccount(ctx, m.SubmitterEngine, m.nativeAssetBootstrapAmount, hostDistributionAccPubKey.Address, distributionAccount)
 		if err != nil {
 			return fmt.Errorf("bootstrapping tenant distribution account with native asset: %w", err)
 		}
@@ -184,23 +180,22 @@ func (m *Manager) fundTenantDistributionAccount(ctx context.Context, distributio
 	return nil
 }
 
-func (m *Manager) provisionDistributionAccount(ctx context.Context, t *tenant.Tenant) error {
-	distributionAccPubKeys, err := m.SubmitterEngine.DistAccountSigner.BatchInsert(ctx, 1)
+func (m *Manager) provisionDistributionAccount(ctx context.Context, t *tenant.Tenant, accountType schema.AccountType) error {
+	distributionAccounts, err := m.SubmitterEngine.SignerRouter.BatchInsert(ctx, accountType, 1)
 	if err != nil {
 		if errors.Is(err, signing.ErrUnsupportedCommand) {
-			log.Ctx(ctx).Warnf(
-				"Account provisioning not needed for distribution account signature client type %s: %v",
-				m.SubmitterEngine.DistAccountSigner.Type(), err)
+			log.Ctx(ctx).Warnf("Account provisioning not needed for distribution account of type=%s: %v", accountType, err)
 		} else {
 			return fmt.Errorf("%w: provisioning distribution account: %w", ErrProvisionTenantDistributionAccountFailed, err)
 		}
 	}
 
 	// Assigning the account key to the tenant so that it can be referenced if it needs to be deleted in the vault if any subsequent errors are encountered
-	if len(distributionAccPubKeys) != 1 {
-		return fmt.Errorf("%w: expected single distribution account public key, got %d", ErrUpdateTenantFailed, len(distributionAccPubKeys))
+	if len(distributionAccounts) != 1 {
+		return fmt.Errorf("%w: expected single distribution account public key, got %d", ErrUpdateTenantFailed, len(distributionAccounts))
 	}
-	t.DistributionAccountAddress = &distributionAccPubKeys[0]
+	t.DistributionAccountAddress = &distributionAccounts[0].Address
+	t.DistributionAccountType = distributionAccounts[0].Type
 	log.Ctx(ctx).Infof("distribution account %s created for tenant %s", *t.DistributionAccountAddress, t.Name)
 	return nil
 }
@@ -275,12 +270,17 @@ func (m *Manager) createSchemaAndRunMigrations(ctx context.Context, name string)
 }
 
 func (m *Manager) deleteDistributionAccountKey(ctx context.Context, t *tenant.Tenant) error {
-	sigClientDeleteKeyErr := m.SubmitterEngine.DistAccountSigner.Delete(ctx, *t.DistributionAccountAddress)
+	distAccToDelete := schema.TransactionAccount{
+		Address: *t.DistributionAccountAddress,
+		Type:    t.DistributionAccountType,
+		Status:  schema.AccountStatusActive,
+	}
+	sigClientDeleteKeyErr := m.SubmitterEngine.SignerRouter.Delete(ctx, distAccToDelete)
 	if sigClientDeleteKeyErr != nil {
 		if errors.Is(sigClientDeleteKeyErr, signing.ErrUnsupportedCommand) {
 			log.Ctx(ctx).Warnf(
-				"Private key deletion not needed for distribution account signature client type %s: %v",
-				m.SubmitterEngine.DistAccountSigner.Type(), sigClientDeleteKeyErr)
+				"Private key deletion not needed for distribution account of type=%s: %v",
+				t.DistributionAccountType, sigClientDeleteKeyErr)
 		} else {
 			return fmt.Errorf("unable to delete distribution account private key: %w", sigClientDeleteKeyErr)
 		}

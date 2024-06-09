@@ -15,21 +15,21 @@ type MockDistributionAccountService struct {
 }
 
 // GetBalance provides a mock function with given fields: account, asset
-func (_m *MockDistributionAccountService) GetBalance(account *schema.DistributionAccount, asset data.Asset) (float64, error) {
+func (_m *MockDistributionAccountService) GetBalance(account *schema.TransactionAccount, asset data.Asset) (float64, error) {
 	ret := _m.Called(account, asset)
 
 	var r0 float64
 	var r1 error
-	if rf, ok := ret.Get(0).(func(*schema.DistributionAccount, data.Asset) (float64, error)); ok {
+	if rf, ok := ret.Get(0).(func(*schema.TransactionAccount, data.Asset) (float64, error)); ok {
 		return rf(account, asset)
 	}
-	if rf, ok := ret.Get(0).(func(*schema.DistributionAccount, data.Asset) float64); ok {
+	if rf, ok := ret.Get(0).(func(*schema.TransactionAccount, data.Asset) float64); ok {
 		r0 = rf(account, asset)
 	} else {
 		r0 = ret.Get(0).(float64)
 	}
 
-	if rf, ok := ret.Get(1).(func(*schema.DistributionAccount, data.Asset) error); ok {
+	if rf, ok := ret.Get(1).(func(*schema.TransactionAccount, data.Asset) error); ok {
 		r1 = rf(account, asset)
 	} else {
 		r1 = ret.Error(1)
@@ -39,15 +39,15 @@ func (_m *MockDistributionAccountService) GetBalance(account *schema.Distributio
 }
 
 // GetBalances provides a mock function with given fields: account
-func (_m *MockDistributionAccountService) GetBalances(account *schema.DistributionAccount) (map[data.Asset]float64, error) {
+func (_m *MockDistributionAccountService) GetBalances(account *schema.TransactionAccount) (map[data.Asset]float64, error) {
 	ret := _m.Called(account)
 
 	var r0 map[data.Asset]float64
 	var r1 error
-	if rf, ok := ret.Get(0).(func(*schema.DistributionAccount) (map[data.Asset]float64, error)); ok {
+	if rf, ok := ret.Get(0).(func(*schema.TransactionAccount) (map[data.Asset]float64, error)); ok {
 		return rf(account)
 	}
-	if rf, ok := ret.Get(0).(func(*schema.DistributionAccount) map[data.Asset]float64); ok {
+	if rf, ok := ret.Get(0).(func(*schema.TransactionAccount) map[data.Asset]float64); ok {
 		r0 = rf(account)
 	} else {
 		if ret.Get(0) != nil {
@@ -55,7 +55,7 @@ func (_m *MockDistributionAccountService) GetBalances(account *schema.Distributi
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func(*schema.DistributionAccount) error); ok {
+	if rf, ok := ret.Get(1).(func(*schema.TransactionAccount) error); ok {
 		r1 = rf(account)
 	} else {
 		r1 = ret.Error(1)

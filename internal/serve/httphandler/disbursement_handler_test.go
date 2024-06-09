@@ -1266,7 +1266,7 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 	asset := data.GetAssetFixture(t, ctx, dbConnectionPool, data.FixtureAssetUSDC)
 
 	defaultTenantDistAcc := "GDIVVKL6QYF6C6K3C5PZZBQ2NQDLN2OSLMVIEQRHS6DZE7WRL33ZDNXL"
-	distAcc := schema.NewDefaultStellarDistributionAccount(defaultTenantDistAcc)
+	distAcc := schema.NewStellarEnvTransactionAccount(defaultTenantDistAcc)
 	mockDistAccResolver := sigMocks.NewMockDistributionAccountResolver(t)
 
 	handler := &DisbursementHandler{
@@ -1338,7 +1338,7 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 
 		mockDistAccResolver.
 			On("DistributionAccountFromContext", mock.Anything).
-			Return(nil, errors.New("unexpected error")).
+			Return(schema.TransactionAccount{}, errors.New("unexpected error")).
 			Once()
 
 		httpRouter := chi.NewRouter()

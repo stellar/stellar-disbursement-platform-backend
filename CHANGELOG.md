@@ -8,9 +8,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 None
 
-## [2.0.0.rc1](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/2.0.0-rc1)
+## [2.0.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/2.0.0)
 
-First Release Candidate of the Stellar Disbursement Platform v2.0.0. This
+Release of the Stellar Disbursement Platform v2.0.0. This
 release introduces multi-tenancy support, allowing multiple tenants
 (organizations) to use the platform simultaneously.
 
@@ -46,7 +46,7 @@ This version is only compatible with the [stellar/stellar-disbursement-platform-
   - `POST` Provision tenant endpoint [#97](https://github.com/stellar/stellar-disbursement-platform-backend/pull/97)
   - `GET` Tenant(s) API [#93](https://github.com/stellar/stellar-disbursement-platform-backend/pull/93)
   - `PATCH` Tenant API [#100](https://github.com/stellar/stellar-disbursement-platform-backend/pull/100)
-- `add-tenant` CLI [#76](https://github.com/stellar/stellar-disbursement-platform-backend/pull/76)
+  - `DELETE` Tenant API [#272](https://github.com/stellar/stellar-disbursement-platform-backend/pull/272)
 - Patch incoming TSS events to Anchor platform [#134](https://github.com/stellar/stellar-disbursement-platform-backend/pull/134)
 - Update DB structure so that TSS resources can be shared by multiple SDP tenants
   - Move all TSS related tables to TSS schema [#141](https://github.com/stellar/stellar-disbursement-platform-backend/pull/141)
@@ -64,7 +64,8 @@ This version is only compatible with the [stellar/stellar-disbursement-platform-
 - Implement `DistributionAccountDBSignatureClient` [#197](https://github.com/stellar/stellar-disbursement-platform-backend/pull/197)
 - Create tenant distribution account during provisioning [#224](https://github.com/stellar/stellar-disbursement-platform-backend/pull/224)
 - Enable payments scheduler job as an alternative to using Kafka [#230](https://github.com/stellar/stellar-disbursement-platform-backend/pull/230)
-
+- Add default tenant capability to start the SDP in a single tenant mode [#249](https://github.com/stellar/stellar-disbursement-platform-backend/pull/249)
+- Add script to migrate SDP v1.1.6 to V2.x.x [#267](https://github.com/stellar/stellar-disbursement-platform-backend/pull/267)
 
 ### Security
 - Admin API authentication/authorization [#201](https://github.com/stellar/stellar-disbursement-platform-backend/pull/201)

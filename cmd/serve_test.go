@@ -122,7 +122,7 @@ func Test_serve(t *testing.T) {
 	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
 	di.SetInstance(di.LedgerNumberTrackerInstanceName, mLedgerNumberTracker)
 
-	sigService, _, _, _, _ := signing.NewMockSignatureService(t)
+	sigService, _, _ := signing.NewMockSignatureService(t)
 
 	submitterEngine := engine.SubmitterEngine{
 		HorizonClient:       mHorizonClient,

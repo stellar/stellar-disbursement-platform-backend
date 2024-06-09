@@ -368,7 +368,7 @@ func (d DisbursementHandler) PatchDisbursementStatus(w http.ResponseWriter, r *h
 
 	switch toStatus {
 	case data.StartedDisbursementStatus:
-		var distributionAccount *schema.DistributionAccount
+		var distributionAccount schema.TransactionAccount
 		if distributionAccount, err = d.DistributionAccountResolver.DistributionAccountFromContext(ctx); err != nil {
 			httperror.InternalError(ctx, "Cannot get distribution account", err, nil).Render(w)
 			return
@@ -378,7 +378,7 @@ func (d DisbursementHandler) PatchDisbursementStatus(w http.ResponseWriter, r *h
 			return
 		}
 
-		err = d.DisbursementManagementService.StartDisbursement(ctx, disbursementID, user, distributionAccount)
+		err = d.DisbursementManagementService.StartDisbursement(ctx, disbursementID, user, &distributionAccount)
 		response.Message = "Disbursement started"
 	case data.PausedDisbursementStatus:
 		err = d.DisbursementManagementService.PauseDisbursement(ctx, disbursementID, user)

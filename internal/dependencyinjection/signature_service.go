@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/stellar/go/support/log"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 )
 
@@ -12,8 +13,8 @@ const SignatureServiceInstanceName = "signature_service_instance"
 
 // buildSignatureServiceInstanceName returns the name of the signature service instance, based on the signature type
 // provided.
-func buildSignatureServiceInstanceName(sigType signing.SignatureClientType) string {
-	return fmt.Sprintf("%s-%s", SignatureServiceInstanceName, string(sigType))
+func buildSignatureServiceInstanceName(distSigType signing.DistributionSignatureClientType) string {
+	return fmt.Sprintf("%s-%s", SignatureServiceInstanceName, string(distSigType))
 }
 
 // NewSignatureService creates a new signature service instance, or retrieves an instance that was already

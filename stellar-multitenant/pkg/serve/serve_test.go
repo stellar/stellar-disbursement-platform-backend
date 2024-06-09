@@ -45,7 +45,7 @@ func Test_SetupDependencies(t *testing.T) {
 	mMessengerClient := &message.MessengerClientMock{}
 	mHorizonClient := &horizonclient.MockClient{}
 	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
-	sigService, _, _, _, _ := signing.NewMockSignatureService(t)
+	sigService, _, _ := signing.NewMockSignatureService(t)
 	submitterEngine := engine.SubmitterEngine{
 		HorizonClient:       mHorizonClient,
 		SignatureService:    sigService,
@@ -126,7 +126,7 @@ func Test_Serve(t *testing.T) {
 	mHorizonClient := &horizonclient.MockClient{}
 	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
 
-	sigService, _, _, _, _ := signing.NewMockSignatureService(t)
+	sigService, _, _ := signing.NewMockSignatureService(t)
 
 	submitterEngine := engine.SubmitterEngine{
 		HorizonClient:       mHorizonClient,

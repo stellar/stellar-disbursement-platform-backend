@@ -13,8 +13,8 @@ import (
 
 //go:generate mockery --name=DistributionAccountServiceInterface --case=underscore --structname=MockDistributionAccountService --filename=distribution_account_service.go
 type DistributionAccountServiceInterface interface {
-	GetBalances(account *schema.DistributionAccount) (map[data.Asset]float64, error)
-	GetBalance(account *schema.DistributionAccount, asset data.Asset) (float64, error)
+	GetBalances(account *schema.TransactionAccount) (map[data.Asset]float64, error)
+	GetBalance(account *schema.TransactionAccount, asset data.Asset) (float64, error)
 }
 
 type DistributionAccountServiceOptions struct {
@@ -22,7 +22,7 @@ type DistributionAccountServiceOptions struct {
 }
 
 type DistributionAccountService struct {
-	strategies map[schema.DistributionAccountType]DistributionAccountServiceInterface
+	strategies map[schema.AccountType]DistributionAccountServiceInterface
 }
 
 func NewDistributionAccountService(opts DistributionAccountServiceOptions) *DistributionAccountService {
@@ -30,10 +30,10 @@ func NewDistributionAccountService(opts DistributionAccountServiceOptions) *Dist
 		horizonClient: opts.HorizonClient,
 	}
 
-	strategies := map[schema.DistributionAccountType]DistributionAccountServiceInterface{
-		schema.DistributionAccountTypeEnvStellar:     stellarNativeDistributionAccSvc,
-		schema.DistributionAccountTypeDBVaultStellar: stellarNativeDistributionAccSvc,
-		// TODO [SDP-1232]: schema.DistributionAccountTypeDBVaultCircle: Add Circle distribution account service
+	strategies := map[schema.AccountType]DistributionAccountServiceInterface{
+		schema.DistributionAccountStellarEnv:     stellarNativeDistributionAccSvc,
+		schema.DistributionAccountStellarDBVault: stellarNativeDistributionAccSvc,
+		// TODO [SDP-1232]: schema.DistributionAccountCircleDBVault: Add Circle distribution account service
 	}
 
 	return &DistributionAccountService{
@@ -41,11 +41,11 @@ func NewDistributionAccountService(opts DistributionAccountServiceOptions) *Dist
 	}
 }
 
-func (s *DistributionAccountService) GetBalance(account *schema.DistributionAccount, asset data.Asset) (float64, error) {
+func (s *DistributionAccountService) GetBalance(account *schema.TransactionAccount, asset data.Asset) (float64, error) {
 	return s.strategies[account.Type].GetBalance(account, asset)
 }
 
-func (s *DistributionAccountService) GetBalances(account *schema.DistributionAccount) (map[data.Asset]float64, error) {
+func (s *DistributionAccountService) GetBalances(account *schema.TransactionAccount) (map[data.Asset]float64, error) {
 	return s.strategies[account.Type].GetBalances(account)
 }
 
@@ -57,7 +57,7 @@ type StellarNativeDistributionAccountService struct {
 
 var _ DistributionAccountServiceInterface = (*StellarNativeDistributionAccountService)(nil)
 
-func (s *StellarNativeDistributionAccountService) GetBalances(account *schema.DistributionAccount) (map[data.Asset]float64, error) {
+func (s *StellarNativeDistributionAccountService) GetBalances(account *schema.TransactionAccount) (map[data.Asset]float64, error) {
 	accountDetails, err := s.horizonClient.AccountDetail(horizonclient.AccountRequest{AccountID: account.Address})
 	if err != nil {
 		return nil, fmt.Errorf("getting details for account from Horizon: %w", err)
@@ -87,7 +87,7 @@ func (s *StellarNativeDistributionAccountService) GetBalances(account *schema.Di
 	return balances, nil
 }
 
-func (s *StellarNativeDistributionAccountService) GetBalance(account *schema.DistributionAccount, asset data.Asset) (float64, error) {
+func (s *StellarNativeDistributionAccountService) GetBalance(account *schema.TransactionAccount, asset data.Asset) (float64, error) {
 	accBalances, err := s.GetBalances(account)
 	if err != nil {
 		return 0, fmt.Errorf("getting balances for distribution account: %w", err)

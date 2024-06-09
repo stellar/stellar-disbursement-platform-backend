@@ -278,25 +278,27 @@ func Test_SetConfigOptionCrashTrackerType(t *testing.T) {
 }
 
 func Test_SetConfigOptionDistributionSignerType(t *testing.T) {
-	opts := struct{ sigServiceType signing.SignatureClientType }{}
+	opts := struct {
+		distSigServiceType signing.DistributionSignatureClientType
+	}{}
 
 	co := config.ConfigOption{
 		Name:           "distribution-signer-type",
 		OptType:        types.String,
 		CustomSetValue: SetConfigOptionDistributionSignerType,
-		ConfigKey:      &opts.sigServiceType,
+		ConfigKey:      &opts.distSigServiceType,
 	}
 
-	testCases := []customSetterTestCase[signing.SignatureClientType]{
+	testCases := []customSetterTestCase[signing.DistributionSignatureClientType]{
 		{
 			name:            "returns an error if the value is empty",
 			args:            []string{},
-			wantErrContains: `couldn't parse signature client distribution type in distribution-signer-type: invalid signature client distribution type ""`,
+			wantErrContains: `couldn't parse signature client distribution type in distribution-signer-type: invalid distribution signature client type ""`,
 		},
 		{
 			name:            "returns an error if the value is not supported",
 			args:            []string{"--distribution-signer-type", "test"},
-			wantErrContains: `couldn't parse signature client distribution type in distribution-signer-type: invalid signature client distribution type "TEST"`,
+			wantErrContains: `couldn't parse signature client distribution type in distribution-signer-type: invalid distribution signature client type "TEST"`,
 		},
 		{
 			name:       "🎉 handles signature service type (through CLI args): DISTRIBUTION_ACCOUNT_ENV",
@@ -322,8 +324,8 @@ func Test_SetConfigOptionDistributionSignerType(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			opts.sigServiceType = ""
-			customSetterTester[signing.SignatureClientType](t, tc, co)
+			opts.distSigServiceType = ""
+			customSetterTester[signing.DistributionSignatureClientType](t, tc, co)
 		})
 	}
 }

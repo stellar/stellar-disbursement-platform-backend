@@ -190,7 +190,7 @@ func (s *DisbursementManagementService) GetDisbursementReceiversWithCount(ctx co
 }
 
 // StartDisbursement starts a disbursement and all its payments and receivers wallets.
-func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, disbursementID string, user *auth.User, distributionAccount *schema.DistributionAccount) error {
+func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, disbursementID string, user *auth.User, distributionAccount *schema.TransactionAccount) error {
 	opts := db.TransactionOptions{
 		DBConnectionPool: s.Models.DBConnectionPool,
 		AtomicFunctionWithPostCommit: func(dbTx db.DBTransaction) (postCommitFn db.PostCommitFunction, err error) {
