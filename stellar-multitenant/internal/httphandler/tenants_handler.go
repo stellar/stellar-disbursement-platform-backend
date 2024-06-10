@@ -260,7 +260,7 @@ func (t TenantsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if tnt.DistributionAccountAddress != nil && t.DistributionAccountResolver.HostDistributionAccount().Address != *tnt.DistributionAccountAddress {
-		tntDistributionAcc, getTntDistAccErr := t.DistributionAccountResolver.DistributionAccount(ctx, *tnt.DistributionAccountAddress)
+		tntDistributionAcc, getTntDistAccErr := t.DistributionAccountResolver.DistributionAccount(ctx, tnt.ID)
 		if getTntDistAccErr != nil {
 			httperror.InternalError(ctx, "Cannot get tenant distribution account", getTntDistAccErr, nil).Render(w)
 			return

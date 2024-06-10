@@ -1156,7 +1156,7 @@ func Test_TenantHandler_Delete(t *testing.T) {
 					Return(&tenant.Tenant{ID: tntID, Status: tenant.DeactivatedTenantStatus, DistributionAccountAddress: &tntDistributionAccAddress}, nil).
 					Once()
 				distAccResolver.On("HostDistributionAccount").Return(hostAccount).Once()
-				distAccResolver.On("DistributionAccount", mock.Anything, tntDistributionAccAddress).Return(tntDistributionAcc, nil).Once()
+				distAccResolver.On("DistributionAccount", mock.Anything, tntID).Return(tntDistributionAcc, nil).Once()
 				distAccSvc.On("GetBalances", &tntDistributionAcc).Return(nil, errors.New("foobar")).Once()
 			},
 			expectedStatus: http.StatusInternalServerError,
@@ -1170,7 +1170,7 @@ func Test_TenantHandler_Delete(t *testing.T) {
 				}).Return(&tenant.Tenant{ID: tntID, Status: tenant.DeactivatedTenantStatus, DistributionAccountAddress: &tntDistributionAccAddress}, nil).
 					Once()
 				distAccResolver.On("HostDistributionAccount").Return(hostAccount).Once()
-				distAccResolver.On("DistributionAccount", mock.Anything, tntDistributionAccAddress).Return(tntDistributionAcc, nil).Once()
+				distAccResolver.On("DistributionAccount", mock.Anything, tntID).Return(tntDistributionAcc, nil).Once()
 				distAccSvc.On("GetBalances", &tntDistributionAcc).
 					Return(map[data.Asset]float64{
 						{Code: assets.USDCAssetCode, Issuer: assets.USDCAssetIssuerTestnet}: 100.0,
@@ -1187,7 +1187,7 @@ func Test_TenantHandler_Delete(t *testing.T) {
 				}).Return(&tenant.Tenant{ID: tntID, Status: tenant.DeactivatedTenantStatus, DistributionAccountAddress: &tntDistributionAccAddress}, nil).
 					Once()
 				distAccResolver.On("HostDistributionAccount").Return(hostAccount).Once()
-				distAccResolver.On("DistributionAccount", mock.Anything, tntDistributionAccAddress).Return(tntDistributionAcc, nil).Once()
+				distAccResolver.On("DistributionAccount", mock.Anything, tntID).Return(tntDistributionAcc, nil).Once()
 				distAccSvc.On("GetBalances", &tntDistributionAcc).
 					Return(map[data.Asset]float64{
 						{Code: "XLM", Issuer: ""}: 120.0,
@@ -1205,7 +1205,7 @@ func Test_TenantHandler_Delete(t *testing.T) {
 					Return(&tenant.Tenant{ID: tntID, Status: tenant.DeactivatedTenantStatus, DistributionAccountAddress: &tntDistributionAccAddress}, nil).
 					Once()
 				distAccResolver.On("HostDistributionAccount").Return(hostAccount).Once()
-				distAccResolver.On("DistributionAccount", mock.Anything, tntDistributionAccAddress).Return(tntDistributionAcc, nil).Once()
+				distAccResolver.On("DistributionAccount", mock.Anything, tntID).Return(tntDistributionAcc, nil).Once()
 				distAccSvc.On("GetBalances", &tntDistributionAcc).
 					Return(map[data.Asset]float64{}, nil).Once()
 				tntManagerMock.On("SoftDeleteTenantByID", mock.Anything, tntID).
@@ -1246,7 +1246,7 @@ func Test_TenantHandler_Delete(t *testing.T) {
 					Return(&tenant.Tenant{ID: tntID, Status: tenant.DeactivatedTenantStatus, DistributionAccountAddress: &tntDistributionAccAddress}, nil).
 					Once()
 				distAccResolver.On("HostDistributionAccount").Return(hostAccount).Once()
-				distAccResolver.On("DistributionAccount", mock.Anything, tntDistributionAccAddress).Return(tntDistributionAcc, nil).Once()
+				distAccResolver.On("DistributionAccount", mock.Anything, tntID).Return(tntDistributionAcc, nil).Once()
 				distAccSvc.On("GetBalances", &tntDistributionAcc).
 					Return(map[data.Asset]float64{}, nil).Once()
 				tntManagerMock.On("SoftDeleteTenantByID", mock.Anything, tntID).
