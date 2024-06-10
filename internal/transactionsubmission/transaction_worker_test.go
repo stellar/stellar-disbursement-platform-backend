@@ -74,7 +74,6 @@ func getTransactionWorkerInstance(t *testing.T, dbConnectionPool db.DBConnection
 
 	distAccEncryptionPassphrase := keypair.MustRandom().Seed()
 	sigService, err := signing.NewSignatureService(signing.SignatureServiceOptions{
-		DistributionSignerType:      signing.DistributionAccountEnvSignatureClientType,
 		NetworkPassphrase:           network.TestNetworkPassphrase,
 		DBConnectionPool:            dbConnectionPool,
 		DistributionPrivateKey:      distributionKP.Seed(),
@@ -155,7 +154,6 @@ func Test_NewTransactionWorker(t *testing.T) {
 
 	distAccEncryptionPassphrase := keypair.MustRandom().Seed()
 	wantSigService, err := signing.NewSignatureService(signing.SignatureServiceOptions{
-		DistributionSignerType:    signing.DistributionAccountEnvSignatureClientType,
 		NetworkPassphrase:         network.TestNetworkPassphrase,
 		DBConnectionPool:          dbConnectionPool,
 		DistributionPrivateKey:    distributionKP.Seed(),
@@ -1654,7 +1652,6 @@ func Test_TransactionWorker_buildAndSignTransaction(t *testing.T) {
 
 	distAccEncryptionPassphrase := keypair.MustRandom().Seed()
 	sigService, err := signing.NewSignatureService(signing.SignatureServiceOptions{
-		DistributionSignerType:    signing.DistributionAccountEnvSignatureClientType,
 		NetworkPassphrase:         network.TestNetworkPassphrase,
 		DBConnectionPool:          dbConnectionPool,
 		DistributionPrivateKey:    distributionKP.Seed(),

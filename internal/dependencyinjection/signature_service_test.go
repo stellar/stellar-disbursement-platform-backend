@@ -33,7 +33,6 @@ func Test_dependencyinjection_NewSignatureService(t *testing.T) {
 		ClearInstancesTestHelper(t)
 
 		opts := signing.SignatureServiceOptions{
-			DistributionSignerType:      signing.DistributionAccountEnvSignatureClientType,
 			NetworkPassphrase:           network.TestNetworkPassphrase,
 			DBConnectionPool:            dbConnectionPool,
 			DistributionPrivateKey:      distributionPrivateKey,
@@ -65,7 +64,6 @@ func Test_dependencyinjection_NewSignatureService(t *testing.T) {
 		ClearInstancesTestHelper(t)
 
 		opts := signing.SignatureServiceOptions{
-			DistributionSignerType:      signing.DistributionAccountEnvSignatureClientType,
 			DistributionAccountResolver: mDistAccResolver,
 		}
 		gotDependency, err := NewSignatureService(ctx, opts)
@@ -77,12 +75,10 @@ func Test_dependencyinjection_NewSignatureService(t *testing.T) {
 	t.Run("should return an error if there's an invalid instance pre-stored", func(t *testing.T) {
 		ClearInstancesTestHelper(t)
 
-		distributionSignerType := signing.DistributionAccountEnvSignatureClientType
-		instanceName := buildSignatureServiceInstanceName(distributionSignerType)
+		instanceName := SignatureServiceInstanceName
 		SetInstance(instanceName, false)
 
 		opts := signing.SignatureServiceOptions{
-			DistributionSignerType:      distributionSignerType,
 			NetworkPassphrase:           network.TestNetworkPassphrase,
 			DBConnectionPool:            dbConnectionPool,
 			DistributionPrivateKey:      distributionPrivateKey,

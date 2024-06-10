@@ -47,10 +47,11 @@ func Test_NewSignerRouter(t *testing.T) {
 	}
 
 	// Create valid SignerClients:
-	wantHostAccStellarEnvSigner := &DistributionAccountEnvSignatureClient{
+	wantHostAccStellarEnvSigner := &AccountEnvSignatureClient{
 		networkPassphrase:   networkPassphrase,
 		distributionAccount: hostKP.Address(),
 		distributionKP:      hostKP,
+		accountType:         schema.HostStellarEnv,
 	}
 	wantChAccStellarDBSigner := &ChannelAccountDBSignatureClient{
 		networkPassphrase:    networkPassphrase,
@@ -60,12 +61,13 @@ func Test_NewSignerRouter(t *testing.T) {
 		chAccModel:           store.NewChannelAccountModel(dbConnectionPool),
 		encrypter:            &utils.DefaultPrivateKeyEncrypter{},
 	}
-	wantDistAccStelarEnvSigner := &DistributionAccountEnvSignatureClient{
+	wantDistAccStelarEnvSigner := &AccountEnvSignatureClient{
 		networkPassphrase:   networkPassphrase,
 		distributionAccount: distributionKP.Address(),
 		distributionKP:      distributionKP,
+		accountType:         schema.DistributionAccountStellarEnv,
 	}
-	wantDistAccStellarDBVaultSigner := &DistributionAccountDBSignatureClient{
+	wantDistAccStellarDBVaultSigner := &DistributionAccountDBVaultSignatureClient{
 		networkPassphrase:    networkPassphrase,
 		encryptionPassphrase: distAccEncryptionPassphrase,
 		dbVault:              store.NewDBVaultModel(dbConnectionPool),
@@ -253,7 +255,7 @@ func Test_SignerRouterImpl_RouteSigner(t *testing.T) {
 		{
 			name:           fmt.Sprintf("🎉 successfully routes to %s", schema.HostStellarEnv),
 			accountType:    schema.HostStellarEnv,
-			wantSignerType: &DistributionAccountEnvSignatureClient{},
+			wantSignerType: &AccountEnvSignatureClient{},
 		},
 		{
 			name:           fmt.Sprintf("🎉 successfully routes to %s", schema.ChannelAccountStellarDB),
@@ -263,12 +265,12 @@ func Test_SignerRouterImpl_RouteSigner(t *testing.T) {
 		{
 			name:           fmt.Sprintf("🎉 successfully routes to %s", schema.DistributionAccountStellarEnv),
 			accountType:    schema.DistributionAccountStellarEnv,
-			wantSignerType: &DistributionAccountEnvSignatureClient{},
+			wantSignerType: &AccountEnvSignatureClient{},
 		},
 		{
 			name:           fmt.Sprintf("🎉 successfully routes to %s", schema.DistributionAccountStellarDBVault),
 			accountType:    schema.DistributionAccountStellarDBVault,
-			wantSignerType: &DistributionAccountDBSignatureClient{},
+			wantSignerType: &DistributionAccountDBVaultSignatureClient{},
 		},
 	}
 

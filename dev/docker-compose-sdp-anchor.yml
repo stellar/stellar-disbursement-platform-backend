@@ -48,7 +48,6 @@ services:
       ADMIN_PORT: "8003"
       INSTANCE_NAME: "SDP Testnet on Docker"
       TENANT_XLM_BOOTSTRAP_AMOUNT: 5
-      DISTRIBUTION_SIGNER_TYPE: ${DISTRIBUTION_SIGNER_TYPE:-DISTRIBUTION_ACCOUNT_ENV}
       SINGLE_TENANT_MODE: "false"
 
       # scheduler options

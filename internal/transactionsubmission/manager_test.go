@@ -386,7 +386,6 @@ func Test_Manager_ProcessTransactions(t *testing.T) {
 		Return(distAccount, nil)
 
 	sigService, err := signing.NewSignatureService(signing.SignatureServiceOptions{
-		DistributionSignerType:    signing.DistributionAccountEnvSignatureClientType,
 		NetworkPassphrase:         network.TestNetworkPassphrase,
 		DistributionPrivateKey:    distributionKP.Seed(),
 		DBConnectionPool:          dbConnectionPool,

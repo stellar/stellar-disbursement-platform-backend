@@ -109,13 +109,19 @@ func Test_NewSignatureService(t *testing.T) {
 		chAccModel:           store.NewChannelAccountModel(dbConnectionPool),
 		encrypter:            &utils.DefaultPrivateKeyEncrypter{},
 	}
-	wantDistAccountEnvSigner := &DistributionAccountEnvSignatureClient{
+	wantDistAccountEnvSigner := &AccountEnvSignatureClient{
 		networkPassphrase:   network.TestNetworkPassphrase,
 		distributionAccount: distributionKP.Address(),
 		distributionKP:      distributionKP,
+		accountType:         schema.DistributionAccountStellarEnv,
 	}
-	wantHostAccountEnvSigner := wantDistAccountEnvSigner
-	wantDistAccountDBSigner := &DistributionAccountDBSignatureClient{
+	wantHostAccountEnvSigner := &AccountEnvSignatureClient{
+		networkPassphrase:   network.TestNetworkPassphrase,
+		distributionAccount: distributionKP.Address(),
+		distributionKP:      distributionKP,
+		accountType:         schema.HostStellarEnv,
+	}
+	wantDistAccountDBSigner := &DistributionAccountDBVaultSignatureClient{
 		networkPassphrase:    network.TestNetworkPassphrase,
 		encryptionPassphrase: distAccEncryptionPassphrase,
 		dbVault:              store.NewDBVaultModel(dbConnectionPool),
@@ -140,16 +146,13 @@ func Test_NewSignatureService(t *testing.T) {
 		wantSigService  SignatureService
 	}{
 		{
-			name: "returns an error if the distribution account resolver is nil",
-			opts: SignatureServiceOptions{
-				DistributionSignerType: DistributionAccountEnvSignatureClientType,
-			},
+			name:            "returns an error if the distribution account resolver is nil",
+			opts:            SignatureServiceOptions{},
 			wantErrContains: "distribution account resolver cannot be nil",
 		},
 		{
 			name: "returns an error if the options are invalid for the NewSignerRouter method",
 			opts: SignatureServiceOptions{
-				DistributionSignerType:      DistributionAccountEnvSignatureClientType,
 				DistributionAccountResolver: wantDistAccountResolver,
 			},
 			wantErrContains: "creating a new signer router",
@@ -157,7 +160,6 @@ func Test_NewSignatureService(t *testing.T) {
 		{
 			name: "🎉 successfully instantiate new signature service",
 			opts: SignatureServiceOptions{
-				DistributionSignerType:      DistributionAccountDBSignatureClientType,
 				NetworkPassphrase:           network.TestNetworkPassphrase,
 				DBConnectionPool:            dbConnectionPool,
 				ChAccEncryptionPassphrase:   chAccEncryptionPassphrase,

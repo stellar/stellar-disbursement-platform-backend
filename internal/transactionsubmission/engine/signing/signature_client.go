@@ -21,7 +21,6 @@ type SignatureClient interface {
 	SignFeeBumpStellarTransaction(ctx context.Context, feeBumpStellarTx *txnbuild.FeeBumpTransaction, stellarAccounts ...string) (signedFeeBumpStellarTx *txnbuild.FeeBumpTransaction, err error)
 	BatchInsert(ctx context.Context, number int) (publicKeys []string, err error)
 	Delete(ctx context.Context, publicKey string) error
-	Type() string
 }
 
 type SignatureClientOptions struct {
@@ -46,9 +45,10 @@ type SignatureClientOptions struct {
 func NewSignatureClient(accType schema.AccountType, opts SignatureClientOptions) (SignatureClient, error) {
 	switch accType {
 	case schema.HostStellarEnv, schema.DistributionAccountStellarEnv:
-		return NewDistributionAccountEnvSignatureClient(DistributionAccountEnvOptions{
+		return NewAccountEnvSignatureClient(AccountEnvOptions{
 			NetworkPassphrase:      opts.NetworkPassphrase,
 			DistributionPrivateKey: opts.DistributionPrivateKey,
+			AccountType:            accType,
 		})
 
 	case schema.ChannelAccountStellarDB:
@@ -61,7 +61,7 @@ func NewSignatureClient(accType schema.AccountType, opts SignatureClientOptions)
 		})
 
 	case schema.DistributionAccountStellarDBVault:
-		return NewDistributionAccountDBSignatureClient(DistributionAccountDBSignatureClientOptions{
+		return NewDistributionAccountDBVaultSignatureClient(DistributionAccountDBVaultSignatureClientOptions{
 			NetworkPassphrase:    opts.NetworkPassphrase,
 			DBConnectionPool:     opts.DBConnectionPool,
 			EncryptionPassphrase: opts.DistAccEncryptionPassphrase,
