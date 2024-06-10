@@ -3,16 +3,20 @@ package signing
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	"github.com/stellar/go/keypair"
 	"github.com/stellar/go/strkey"
 	"github.com/stellar/go/txnbuild"
+
 	sdpUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
 type AccountEnvOptions struct {
 	DistributionPrivateKey string
 	NetworkPassphrase      string
+	AccountType            schema.AccountType
 }
 
 func (opts AccountEnvOptions) String() string {
@@ -28,6 +32,11 @@ func (opts *AccountEnvOptions) Validate() error {
 		return fmt.Errorf("distribution private key is not a valid Ed25519 secret")
 	}
 
+	suuportedAccTypes := []schema.AccountType{schema.HostStellarEnv, schema.DistributionAccountStellarEnv}
+	if !slices.Contains(suuportedAccTypes, opts.AccountType) {
+		return fmt.Errorf("the provided account type %s does not match any of the supported account types: %v", opts.AccountType, suuportedAccTypes)
+	}
+
 	return nil
 }
 
@@ -35,6 +44,7 @@ type AccountEnvSignatureClient struct {
 	networkPassphrase   string
 	distributionAccount string
 	distributionKP      *keypair.Full
+	accountType         schema.AccountType
 }
 
 func (c *AccountEnvSignatureClient) String() string {
@@ -56,6 +66,7 @@ func NewAccountEnvSignatureClient(opts AccountEnvOptions) (*AccountEnvSignatureC
 		networkPassphrase:   opts.NetworkPassphrase,
 		distributionAccount: distributionKP.Address(),
 		distributionKP:      distributionKP,
+		accountType:         opts.AccountType,
 	}, nil
 }
 
@@ -135,7 +146,7 @@ func (c *AccountEnvSignatureClient) Delete(ctx context.Context, publicKey string
 }
 
 func (c *AccountEnvSignatureClient) name() string {
-	return sdpUtils.GetTypeName(c)
+	return fmt.Sprintf("%s.%s", sdpUtils.GetTypeName(c), c.accountType)
 }
 
 func (c *AccountEnvSignatureClient) NetworkPassphrase() string {

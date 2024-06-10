@@ -48,6 +48,7 @@ func NewSignatureClient(accType schema.AccountType, opts SignatureClientOptions)
 		return NewAccountEnvSignatureClient(AccountEnvOptions{
 			NetworkPassphrase:      opts.NetworkPassphrase,
 			DistributionPrivateKey: opts.DistributionPrivateKey,
+			AccountType:            accType,
 		})
 
 	case schema.ChannelAccountStellarDB:

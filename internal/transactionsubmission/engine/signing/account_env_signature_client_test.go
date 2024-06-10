@@ -8,6 +8,7 @@ import (
 	"github.com/stellar/go/keypair"
 	"github.com/stellar/go/network"
 	"github.com/stellar/go/txnbuild"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -40,6 +41,7 @@ func Test_AccountEnvOptions_String_doesntLeakPrivateKey(t *testing.T) {
 }
 
 func Test_AccountEnvOptions_Validate(t *testing.T) {
+	distributionPrivateKey := keypair.MustRandom().Seed()
 	testCases := []struct {
 		name              string
 		opts              AccountEnvOptions
@@ -66,10 +68,20 @@ func Test_AccountEnvOptions_Validate(t *testing.T) {
 			wantErrorContains: "distribution private key is not a valid Ed25519 secret",
 		},
 		{
+			name: "returns an error if the account type is invalid",
+			opts: AccountEnvOptions{
+				NetworkPassphrase:      network.TestNetworkPassphrase,
+				DistributionPrivateKey: distributionPrivateKey,
+				AccountType:            "FOOBAR",
+			},
+			wantErrorContains: "the provided account type FOOBAR does not match any of the supported account types: [HOST.STELLAR.ENV DISTRIBUTION_ACCOUNT.STELLAR.ENV]",
+		},
+		{
 			name: "🎉 successfully validate options",
 			opts: AccountEnvOptions{
 				NetworkPassphrase:      network.TestNetworkPassphrase,
-				DistributionPrivateKey: keypair.MustRandom().Seed(),
+				DistributionPrivateKey: distributionPrivateKey,
+				AccountType:            schema.DistributionAccountStellarEnv,
 			},
 		},
 	}
@@ -102,15 +114,31 @@ func Test_NewAccountEnvSignatureClient(t *testing.T) {
 			wantErrorContains: "validating options: network passphrase cannot be empty",
 		},
 		{
-			name: "🎉 successfully create a new AccountEnvSignatureClient",
+			name: "🎉 successfully create a new AccountEnvSignatureClient (DistributionAccountStellarEnv)",
 			opts: AccountEnvOptions{
 				NetworkPassphrase:      network.TestNetworkPassphrase,
 				DistributionPrivateKey: distributionKP.Seed(),
+				AccountType:            schema.DistributionAccountStellarEnv,
 			},
 			wantClient: &AccountEnvSignatureClient{
 				networkPassphrase:   network.TestNetworkPassphrase,
 				distributionAccount: distributionKP.Address(),
 				distributionKP:      distributionKP,
+				accountType:         schema.DistributionAccountStellarEnv,
+			},
+		},
+		{
+			name: "🎉 successfully create a new AccountEnvSignatureClient (HostStellarEnv)",
+			opts: AccountEnvOptions{
+				NetworkPassphrase:      network.TestNetworkPassphrase,
+				DistributionPrivateKey: distributionKP.Seed(),
+				AccountType:            schema.HostStellarEnv,
+			},
+			wantClient: &AccountEnvSignatureClient{
+				networkPassphrase:   network.TestNetworkPassphrase,
+				distributionAccount: distributionKP.Address(),
+				distributionKP:      distributionKP,
+				accountType:         schema.HostStellarEnv,
 			},
 		},
 	}
@@ -136,6 +164,7 @@ func Test_AccountEnvSignatureClient_validateStellarAccounts(t *testing.T) {
 	distEnvClient, err := NewAccountEnvSignatureClient(AccountEnvOptions{
 		NetworkPassphrase:      network.TestNetworkPassphrase,
 		DistributionPrivateKey: distributionKP.Seed(),
+		AccountType:            schema.DistributionAccountStellarEnv,
 	})
 	require.NoError(t, err)
 
@@ -184,6 +213,7 @@ func Test_AccountEnvSignatureClient_SignStellarTransaction(t *testing.T) {
 	distEnvClient, err := NewAccountEnvSignatureClient(AccountEnvOptions{
 		NetworkPassphrase:      network.TestNetworkPassphrase,
 		DistributionPrivateKey: distributionKP.Seed(),
+		AccountType:            schema.DistributionAccountStellarEnv,
 	})
 	require.NoError(t, err)
 
@@ -262,6 +292,7 @@ func Test_AccountEnvSignatureClient_SignFeeBumpStellarTransaction(t *testing.T) 
 	distEnvClient, err := NewAccountEnvSignatureClient(AccountEnvOptions{
 		NetworkPassphrase:      network.TestNetworkPassphrase,
 		DistributionPrivateKey: distributionKP.Seed(),
+		AccountType:            schema.DistributionAccountStellarEnv,
 	})
 	require.NoError(t, err)
 
@@ -350,6 +381,7 @@ func Test_AccountEnvSignatureClient_BatchInsert(t *testing.T) {
 	distEnvClient, err := NewAccountEnvSignatureClient(AccountEnvOptions{
 		NetworkPassphrase:      network.TestNetworkPassphrase,
 		DistributionPrivateKey: distributionKP.Seed(),
+		AccountType:            schema.DistributionAccountStellarEnv,
 	})
 	require.NoError(t, err)
 
@@ -380,6 +412,7 @@ func Test_AccountEnvSignatureClient_Delete(t *testing.T) {
 	distEnvClient, err := NewAccountEnvSignatureClient(AccountEnvOptions{
 		NetworkPassphrase:      network.TestNetworkPassphrase,
 		DistributionPrivateKey: distributionKP.Seed(),
+		AccountType:            schema.DistributionAccountStellarEnv,
 	})
 	require.NoError(t, err)
 

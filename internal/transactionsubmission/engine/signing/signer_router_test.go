@@ -51,6 +51,7 @@ func Test_NewSignerRouter(t *testing.T) {
 		networkPassphrase:   networkPassphrase,
 		distributionAccount: hostKP.Address(),
 		distributionKP:      hostKP,
+		accountType:         schema.HostStellarEnv,
 	}
 	wantChAccStellarDBSigner := &ChannelAccountDBSignatureClient{
 		networkPassphrase:    networkPassphrase,
@@ -64,6 +65,7 @@ func Test_NewSignerRouter(t *testing.T) {
 		networkPassphrase:   networkPassphrase,
 		distributionAccount: distributionKP.Address(),
 		distributionKP:      distributionKP,
+		accountType:         schema.DistributionAccountStellarEnv,
 	}
 	wantDistAccStellarDBVaultSigner := &DistributionAccountDBVaultSignatureClient{
 		networkPassphrase:    networkPassphrase,

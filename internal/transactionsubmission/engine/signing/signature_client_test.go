@@ -85,6 +85,7 @@ func Test_NewSignatureClient(t *testing.T) {
 				networkPassphrase:   network.TestNetworkPassphrase,
 				distributionAccount: distributionKP.Address(),
 				distributionKP:      distributionKP,
+				accountType:         schema.DistributionAccountStellarEnv,
 			},
 		},
 		{
@@ -98,6 +99,7 @@ func Test_NewSignatureClient(t *testing.T) {
 				networkPassphrase:   network.TestNetworkPassphrase,
 				distributionAccount: distributionKP.Address(),
 				distributionKP:      distributionKP,
+				accountType:         schema.HostStellarEnv,
 			},
 		},
 	}
