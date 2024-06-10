@@ -28,6 +28,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/scheduler"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
+	svcMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/services/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	preconditionsMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
@@ -107,7 +108,8 @@ func Test_serve(t *testing.T) {
 	dbt.Close()
 
 	cmdUtils.ClearTestEnvironment(t)
-	distributionSeed := "SBHQEYSACD5DOK5I656NKLAMOHC6VT64ATOWWM2VJ3URGDGMVGNPG4ON"
+	distributionAccKP := keypair.MustRandom()
+	distributionAccPrivKey := distributionAccKP.Seed()
 
 	// Populate dependency injection:
 	di.SetInstance(di.TSSDBConnectionPoolInstanceName, dbConnectionPool)
@@ -129,6 +131,9 @@ func Test_serve(t *testing.T) {
 		MaxBaseFee:          100 * txnbuild.MinBaseFee,
 	}
 	di.SetInstance(di.TxSubmitterEngineInstanceName, submitterEngine)
+
+	mDistAccService := svcMocks.NewMockDistributionAccountService(t)
+	di.SetInstance(di.DistributionAccountServiceInstanceName, mDistAccService)
 
 	ctx := context.Background()
 
@@ -162,6 +167,7 @@ func Test_serve(t *testing.T) {
 		DisableReCAPTCHA:                false,
 		EnableScheduler:                 false,
 		SubmitterEngine:                 submitterEngine,
+		DistributionAccountService:      mDistAccService,
 		MaxInvitationSMSResendAttempts:  3,
 	}
 	serveOpts.AnchorPlatformAPIService, err = anchorplatform.NewAnchorPlatformAPIService(httpclient.DefaultClient(), serveOpts.AnchorPlatformBasePlatformURL, serveOpts.AnchorPlatformOutgoingJWTSecret)
@@ -214,6 +220,7 @@ func Test_serve(t *testing.T) {
 		Port:                                    8003,
 		Version:                                 "x.y.z",
 		SubmitterEngine:                         submitterEngine,
+		DistributionAccountService:              mDistAccService,
 		TenantAccountNativeAssetBootstrapAmount: tenant.MinTenantDistributionAccountAmount,
 		AdminAccount:                            "admin-account",
 		AdminApiKey:                             "admin-api-key",
@@ -279,7 +286,7 @@ func Test_serve(t *testing.T) {
 	t.Setenv("DISTRIBUTION_PUBLIC_KEY", "GBC2HVWFIFN7WJHFORVBCDKJORG6LWTW3O2QBHOURL3KHZPM4KMWTUSA")
 	t.Setenv("DISABLE_MFA", fmt.Sprintf("%t", serveOpts.DisableMFA))
 	t.Setenv("DISABLE_RECAPTCHA", fmt.Sprintf("%t", serveOpts.DisableMFA))
-	t.Setenv("DISTRIBUTION_SEED", distributionSeed)
+	t.Setenv("DISTRIBUTION_SEED", distributionAccPrivKey)
 	t.Setenv("BASE_URL", serveOpts.BaseURL)
 	t.Setenv("SDP_UI_BASE_URL", serveTenantOpts.SDPUIBaseURL)
 	t.Setenv("RECAPTCHA_SITE_KEY", serveOpts.ReCAPTCHASiteKey)

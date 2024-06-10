@@ -22,6 +22,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/scheduler"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/scheduler/jobs"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	serveadmin "github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/serve"
 )
@@ -572,6 +573,14 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			}
 			serveOpts.SubmitterEngine = submitterEngine
 			adminServeOpts.SubmitterEngine = submitterEngine
+
+			distributionAccountServiceOptions := services.DistributionAccountServiceOptions{HorizonClient: submitterEngine.HorizonClient}
+			distributionAccountService, err := di.NewDistributionAccountService(ctx, distributionAccountServiceOptions)
+			if err != nil {
+				log.Ctx(ctx).Fatalf("error creating distribution account service: %v", err)
+			}
+			serveOpts.DistributionAccountService = distributionAccountService
+			adminServeOpts.DistributionAccountService = distributionAccountService
 
 			// Validate the Event Broker Type and Scheduler Jobs
 			if eventBrokerOptions.EventBrokerType == events.NoneEventBrokerType && !serveOpts.EnableScheduler {

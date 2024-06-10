@@ -70,9 +70,7 @@ func (_m *MockDistributionAccountResolver) HostDistributionAccount() schema.Tran
 	if rf, ok := ret.Get(0).(func() schema.TransactionAccount); ok {
 		r0 = rf()
 	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(schema.TransactionAccount)
-		}
+		r0 = ret.Get(0).(schema.TransactionAccount)
 	}
 
 	return r0

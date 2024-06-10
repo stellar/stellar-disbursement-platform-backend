@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/support/log"
 	"golang.org/x/exp/maps"
 
@@ -16,18 +15,18 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
-	tssUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 )
 
 // DisbursementManagementService is a service for managing disbursements.
 type DisbursementManagementService struct {
-	Models             *data.Models
-	EventProducer      events.Producer
-	AuthManager        auth.AuthManager
-	HorizonClient      horizonclient.ClientInterface
-	CrashTrackerClient crashtracker.CrashTrackerClient
+	Models                     *data.Models
+	EventProducer              events.Producer
+	AuthManager                auth.AuthManager
+	CrashTrackerClient         crashtracker.CrashTrackerClient
+	DistributionAccountService DistributionAccountServiceInterface
 }
 
 type UserReference struct {
@@ -191,7 +190,7 @@ func (s *DisbursementManagementService) GetDisbursementReceiversWithCount(ctx co
 }
 
 // StartDisbursement starts a disbursement and all its payments and receivers wallets.
-func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, disbursementID string, user *auth.User, distributionPubKey string) error {
+func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, disbursementID string, user *auth.User, distributionAccount *schema.TransactionAccount) error {
 	opts := db.TransactionOptions{
 		DBConnectionPool: s.Models.DBConnectionPool,
 		AtomicFunctionWithPostCommit: func(dbTx db.DBTransaction) (postCommitFn db.PostCommitFunction, err error) {
@@ -230,21 +229,14 @@ func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, d
 			}
 
 			// 4. Check if there is enough balance from the distribution wallet for this disbursement along with any pending disbursements
-			rootAccount, err := s.HorizonClient.AccountDetail(
-				horizonclient.AccountRequest{AccountID: distributionPubKey})
+			availableBalance, err := s.DistributionAccountService.GetBalance(distributionAccount, *disbursement.Asset)
 			if err != nil {
-				err = tssUtils.NewHorizonErrorWrapper(err)
-				return nil, fmt.Errorf("cannot get details for root account from horizon client: %w", err)
-			}
-
-			var availableBalance float64
-			for _, b := range rootAccount.Balances {
-				if disbursement.Asset.EqualsHorizonAsset(b.Asset) {
-					availableBalance, err = strconv.ParseFloat(b.Balance, 64)
-					if err != nil {
-						return nil, fmt.Errorf("cannot convert Horizon distribution account balance %s into float: %w", b.Balance, err)
-					}
-				}
+				return nil, fmt.Errorf(
+					"getting balance for asset (%s,%s) on distribution account %s: %w",
+					disbursement.Asset.Code,
+					disbursement.Asset.Issuer,
+					distributionAccount.Address,
+					err)
 			}
 
 			disbursementAmount, err := strconv.ParseFloat(disbursement.TotalAmount, 64)
@@ -257,7 +249,7 @@ func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, d
 				)
 			}
 
-			var totalPendingAmount float64 = 0.0
+			totalPendingAmount := 0.0
 			incompletePayments, err := s.Models.Payment.GetAll(ctx, &data.QueryParams{
 				Filters: map[data.FilterKey]interface{}{
 					data.FilterKeyStatus: data.PaymentInProgressStatuses(),
@@ -287,7 +279,7 @@ func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, d
 			if (availableBalance - (disbursementAmount + totalPendingAmount)) < 0 {
 				err = InsufficientBalanceError{
 					DisbursementAsset:   *disbursement.Asset,
-					DistributionAddress: distributionPubKey,
+					DistributionAddress: distributionAccount.Address,
 					DisbursementID:      disbursementID,
 					AvailableBalance:    availableBalance,
 					DisbursementAmount:  disbursementAmount,
