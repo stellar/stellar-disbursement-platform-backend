@@ -333,7 +333,6 @@ func Test_TenantHandler_Post(t *testing.T) {
 		respBody, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
-		fmt.Println(respBody)
 		assert.Equal(t, expectedStatus, resp.StatusCode)
 		return respBody
 	}
