@@ -84,6 +84,8 @@ func (tv *TenantValidator) ValidateCreateTenantRequest(reqBody *TenantRequest) *
 		}
 	}
 
+	fmt.Println(tv.Errors)
+
 	if tv.HasErrors() {
 		return nil
 	}

@@ -129,7 +129,7 @@ func TestTenantValidator_ValidateCreateTenantRequest(t *testing.T) {
 	t.Run("validates the URLs successfully", func(t *testing.T) {
 		tv := NewTenantValidator()
 		reqBody := &TenantRequest{
-			Name:                    "aid org",
+			Name:                    "aid-org",
 			OwnerEmail:              "owner@email.org",
 			OwnerFirstName:          "Owner",
 			OwnerLastName:           "Owner",

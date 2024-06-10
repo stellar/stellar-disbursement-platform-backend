@@ -333,6 +333,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 		respBody, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
+		fmt.Println(respBody)
 		assert.Equal(t, expectedStatus, resp.StatusCode)
 		return respBody
 	}
@@ -404,7 +405,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 				"owner_first_name": "Owner",
 				"owner_last_name": "Owner",
 				"organization_name": "My Aid Org",
-				"distribution_account_type": %q",
+				"distribution_account_type": %q,
 				"base_url": "https://sdp-backend.stellar.org",
 				"sdp_ui_base_url": "https://sdp-ui.stellar.org",
 				"is_default": false
@@ -450,7 +451,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 				"owner_first_name": "Owner",
 				"owner_last_name": "Owner",
 				"organization_name": "My Aid Org 2",
-				"distribution_account_type": %q",
+				"distribution_account_type": %q,
 				"is_default": false
 			}
 		`, orgName, accountType)
@@ -496,7 +497,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 				"owner_first_name": "Owner",
 				"owner_last_name": "Owner",
 				"organization_name": "My Aid Org 3",
-				"distribution_account_type": %q",
+				"distribution_account_type": %q,
 				"base_url": %q,
 				"is_default": false
 			}
@@ -542,7 +543,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 				"owner_first_name": "Owner",
 				"owner_last_name": "Owner",
 				"organization_name": "My Aid Org 4",
-				"distribution_account_type": %q",
+				"distribution_account_type": %q,
 				"sdp_ui_base_url": %q,
 				"is_default": false
 			}
@@ -587,7 +588,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 				"owner_first_name": "Owner",
 				"owner_last_name": "Owner",
 				"organization_name": "My Aid Org",
-				"distribution_account_type": %q",
+				"distribution_account_type": %q,
 				"base_url": "https://backend.sdp.org",
 				"sdp_ui_base_url": "https://aid-org.sdp.org"
 			}
@@ -614,7 +615,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 				"organization_name": "My Aid Org",
 				"base_url": "https://sdp-backend.stellar.org",
 				"sdp_ui_base_url": "https://sdp-ui.stellar.org",
-				"distribution_account_type": %q",
+				"distribution_account_type": %q,
 				"is_default": false
 			}
 		`, orgName, accountType)
