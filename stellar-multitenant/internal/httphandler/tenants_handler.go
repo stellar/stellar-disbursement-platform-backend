@@ -106,8 +106,6 @@ func (h TenantsHandler) Post(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// TODO: in SDP-1167, send the accountType will be sent in the request body
-	accountType := schema.DistributionAccountStellarEnv
 	tnt, err := h.ProvisioningManager.ProvisionNewTenant(ctx, provisioning.ProvisionTenant{
 		Name:                    reqBody.Name,
 		UserFirstName:           reqBody.OwnerFirstName,
@@ -117,7 +115,7 @@ func (h TenantsHandler) Post(rw http.ResponseWriter, req *http.Request) {
 		NetworkType:             string(h.NetworkType),
 		UiBaseURL:               tntSDPUIBaseURL,
 		BaseURL:                 tntBaseURL,
-		DistributionAccountType: accountType,
+		DistributionAccountType: schema.AccountType(reqBody.DistributionAccountType),
 	})
 	if err != nil {
 		if errors.Is(err, tenant.ErrDuplicatedTenantName) {
