@@ -9,10 +9,9 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
-
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
