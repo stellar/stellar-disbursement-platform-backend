@@ -10,12 +10,14 @@ import (
 	"net/url"
 
 	"github.com/google/uuid"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
 )
 
 const (
 	pingPath     = "/ping"
 	transferPath = "/v1/transfers"
+	walletPath   = "/v1/wallets"
 )
 
 // ClientInterface defines the interface for interacting with the Circle API.
@@ -23,6 +25,7 @@ type ClientInterface interface {
 	Ping(ctx context.Context) (bool, error)
 	PostTransfer(ctx context.Context, transferRequest TransferRequest) (*Transfer, error)
 	GetTransferByID(ctx context.Context, id string) (*Transfer, error)
+	GetWalletByID(ctx context.Context, id string) (*Wallet, error)
 }
 
 // Client provides methods to interact with the Circle API.
@@ -42,7 +45,8 @@ func NewClient(env Environment, apiKey string) *Client {
 }
 
 // Ping checks that the service is running.
-// https://developers.circle.com/circle-mint/reference/ping.
+//
+// Circle API documentation: https://developers.circle.com/circle-mint/reference/ping.
 func (client *Client) Ping(ctx context.Context) (bool, error) {
 	u, err := url.JoinPath(client.BasePath, pingPath)
 	if err != nil {
@@ -74,7 +78,8 @@ func (client *Client) Ping(ctx context.Context) (bool, error) {
 }
 
 // PostTransfer creates a new transfer.
-// https://developers.circle.com/circle-mint/reference/createtransfer
+//
+// Circle API documentation: https://developers.circle.com/circle-mint/reference/createtransfer.
 func (client *Client) PostTransfer(ctx context.Context, transferReq TransferRequest) (*Transfer, error) {
 	err := transferReq.validate()
 	if err != nil {
@@ -109,7 +114,8 @@ func (client *Client) PostTransfer(ctx context.Context, transferReq TransferRequ
 }
 
 // GetTransferByID retrieves a transfer by its ID.
-// https://developers.circle.com/circle-mint/reference/gettransfer
+//
+// Circle API documentation: https://developers.circle.com/circle-mint/reference/gettransfer.
 func (client *Client) GetTransferByID(ctx context.Context, id string) (*Transfer, error) {
 	u, err := url.JoinPath(client.BasePath, transferPath, id)
 	if err != nil {
@@ -130,6 +136,32 @@ func (client *Client) GetTransferByID(ctx context.Context, id string) (*Transfer
 	}
 
 	return parseTransferResponse(resp)
+}
+
+// GetWalletByID retrieves a wallet by its ID.
+//
+// Circle API documentation: https://developers.circle.com/circle-mint/reference/getwallet.
+func (client *Client) GetWalletByID(ctx context.Context, id string) (*Wallet, error) {
+	url, err := url.JoinPath(client.BasePath, walletPath, id)
+	if err != nil {
+		return nil, fmt.Errorf("building path: %w", err)
+	}
+
+	resp, err := client.request(ctx, url, http.MethodGet, true, nil)
+	if err != nil {
+		return nil, fmt.Errorf("making request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		apiError, parseErr := parseAPIError(resp)
+		if parseErr != nil {
+			return nil, fmt.Errorf("parsing API error: %w", parseErr)
+		}
+		return nil, fmt.Errorf("API error: %w", apiError)
+	}
+
+	return parseWalletResponse(resp)
 }
 
 // request makes an HTTP request to the Circle API.
