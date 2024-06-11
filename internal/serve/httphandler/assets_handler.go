@@ -23,6 +23,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	tssUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
 const stellarNativeAssetCode = "XLM"
@@ -90,10 +91,17 @@ func (c AssetsHandler) CreateAsset(w http.ResponseWriter, r *http.Request) {
 			return nil, fmt.Errorf("inserting new asset: %w", insertErr)
 		}
 
-		assetToAdd := &txnbuild.CreditAsset{Code: assetCode, Issuer: assetIssuer}
-		trustlineErr := c.handleUpdateAssetTrustlineForDistributionAccount(ctx, assetToAdd, nil)
-		if trustlineErr != nil {
-			return nil, fmt.Errorf("adding trustline for the distribution account: %w", trustlineErr)
+		distributionAccount, getDistAccFromCtxErr := c.DistributionAccountResolver.DistributionAccountFromContext(ctx)
+		if getDistAccFromCtxErr != nil {
+			return nil, fmt.Errorf("resolving distribution account from context: %w", getDistAccFromCtxErr)
+		}
+
+		if distributionAccount.IsStellar() {
+			assetToAdd := &txnbuild.CreditAsset{Code: assetCode, Issuer: assetIssuer}
+			trustlineErr := c.handleUpdateAssetTrustlineForDistributionAccount(ctx, assetToAdd, nil, distributionAccount.Address)
+			if trustlineErr != nil {
+				return nil, fmt.Errorf("adding trustline for the distribution account: %w", trustlineErr)
+			}
 		}
 
 		return insertedAsset, nil
@@ -131,12 +139,19 @@ func (c AssetsHandler) DeleteAsset(w http.ResponseWriter, r *http.Request) {
 			return nil, fmt.Errorf("error performing soft delete on asset id %s: %w", assetID, deleteErr)
 		}
 
-		trustlineErr := c.handleUpdateAssetTrustlineForDistributionAccount(ctx, nil, &txnbuild.CreditAsset{
-			Code:   deletedAsset.Code,
-			Issuer: deletedAsset.Issuer,
-		})
-		if trustlineErr != nil {
-			return nil, fmt.Errorf("error removing trustline: %w", trustlineErr)
+		distributionAccount, getDistAccFromCtxErr := c.DistributionAccountResolver.DistributionAccountFromContext(ctx)
+		if getDistAccFromCtxErr != nil {
+			return nil, fmt.Errorf("resolving distribution account from context: %w", getDistAccFromCtxErr)
+		}
+
+		if distributionAccount.IsStellar() {
+			trustlineErr := c.handleUpdateAssetTrustlineForDistributionAccount(ctx, nil, &txnbuild.CreditAsset{
+				Code:   deletedAsset.Code,
+				Issuer: deletedAsset.Issuer,
+			}, distributionAccount.Address)
+			if trustlineErr != nil {
+				return nil, fmt.Errorf("error removing trustline: %w", trustlineErr)
+			}
 		}
 
 		return asset, nil
@@ -154,7 +169,8 @@ func (c AssetsHandler) DeleteAsset(w http.ResponseWriter, r *http.Request) {
 	httpjson.Render(w, asset, httpjson.JSON)
 }
 
-func (c AssetsHandler) handleUpdateAssetTrustlineForDistributionAccount(ctx context.Context, assetToAddTrustline *txnbuild.CreditAsset, assetToRemoveTrustline *txnbuild.CreditAsset) error {
+func (c AssetsHandler) handleUpdateAssetTrustlineForDistributionAccount(
+	ctx context.Context, assetToAddTrustline *txnbuild.CreditAsset, assetToRemoveTrustline *txnbuild.CreditAsset, distributionAccountPubKey string) error {
 	if assetToAddTrustline == nil && assetToRemoveTrustline == nil {
 		return fmt.Errorf("should provide at least one asset")
 	}
@@ -162,16 +178,6 @@ func (c AssetsHandler) handleUpdateAssetTrustlineForDistributionAccount(ctx cont
 	if assetToAddTrustline != nil && assetToRemoveTrustline != nil &&
 		*assetToAddTrustline == *assetToRemoveTrustline {
 		return fmt.Errorf("should provide different assets")
-	}
-
-	// TODO: move it to the beginning of the callers in SDP-1183
-	var distributionAccountPubKey string
-	if distributionAccount, err := c.DistributionAccountResolver.DistributionAccountFromContext(ctx); err != nil {
-		return fmt.Errorf("resolving distribution account from context: %w", err)
-	} else if !distributionAccount.IsStellar() {
-		return fmt.Errorf("expected distribution account to be a STELLAR account but got %q", distributionAccount.Type)
-	} else {
-		distributionAccountPubKey = distributionAccount.Address
 	}
 
 	acc, err := c.HorizonClient.AccountDetail(horizonclient.AccountRequest{
@@ -249,24 +255,24 @@ func (c AssetsHandler) handleUpdateAssetTrustlineForDistributionAccount(ctx cont
 		return nil
 	}
 
-	if err := c.submitChangeTrustTransaction(ctx, &acc, changeTrustOperations); err != nil {
-		return fmt.Errorf("submitting change trust transaction: %w", err)
+	distributionAccount, err := c.DistributionAccountResolver.DistributionAccountFromContext(ctx)
+	if err != nil {
+		return fmt.Errorf("resolving distribution account from context: %w", err)
+	}
+
+	if distributionAccount.IsStellar() {
+		if err = c.submitChangeTrustTransaction(ctx, &acc, changeTrustOperations, distributionAccount); err != nil {
+			return fmt.Errorf("submitting change trust transaction: %w", err)
+		}
 	}
 
 	return nil
 }
 
-func (c AssetsHandler) submitChangeTrustTransaction(ctx context.Context, acc *horizon.Account, changeTrustOperations []*txnbuild.ChangeTrust) error {
+func (c AssetsHandler) submitChangeTrustTransaction(
+	ctx context.Context, acc *horizon.Account, changeTrustOperations []*txnbuild.ChangeTrust, distributionAccount schema.TransactionAccount) error {
 	if len(changeTrustOperations) < 1 {
 		return fmt.Errorf("should have at least one change trust operation")
-	}
-
-	// TODO: move it to the beginning of the callers in SDP-1183
-	distributionAccount, err := c.DistributionAccountResolver.DistributionAccountFromContext(ctx)
-	if err != nil {
-		return fmt.Errorf("resolving distribution account from context: %w", err)
-	} else if !distributionAccount.IsStellar() {
-		return fmt.Errorf("expected distribution account to be a STELLAR account but got %q", distributionAccount.Type)
 	}
 
 	operations := make([]txnbuild.Operation, 0, len(changeTrustOperations))
