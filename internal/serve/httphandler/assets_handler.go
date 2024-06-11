@@ -170,7 +170,8 @@ func (c AssetsHandler) DeleteAsset(w http.ResponseWriter, r *http.Request) {
 }
 
 func (c AssetsHandler) handleUpdateAssetTrustlineForDistributionAccount(
-	ctx context.Context, assetToAddTrustline *txnbuild.CreditAsset, assetToRemoveTrustline *txnbuild.CreditAsset, distributionAccountPubKey string) error {
+	ctx context.Context, assetToAddTrustline *txnbuild.CreditAsset, assetToRemoveTrustline *txnbuild.CreditAsset, distributionAccountPubKey string,
+) error {
 	if assetToAddTrustline == nil && assetToRemoveTrustline == nil {
 		return fmt.Errorf("should provide at least one asset")
 	}
@@ -270,7 +271,8 @@ func (c AssetsHandler) handleUpdateAssetTrustlineForDistributionAccount(
 }
 
 func (c AssetsHandler) submitChangeTrustTransaction(
-	ctx context.Context, acc *horizon.Account, changeTrustOperations []*txnbuild.ChangeTrust, distributionAccount schema.TransactionAccount) error {
+	ctx context.Context, acc *horizon.Account, changeTrustOperations []*txnbuild.ChangeTrust, distributionAccount schema.TransactionAccount,
+) error {
 	if len(changeTrustOperations) < 1 {
 		return fmt.Errorf("should have at least one change trust operation")
 	}

@@ -13,6 +13,14 @@ const (
 	DistributionAccountCircleDBVault  AccountType = "DISTRIBUTION_ACCOUNT.CIRCLE.DB_VAULT"  // was "DB_VAULT_CIRCLE"
 )
 
+func DistributionAccountTypes() []AccountType {
+	return []AccountType{
+		DistributionAccountStellarEnv,
+		DistributionAccountStellarDBVault,
+		DistributionAccountCircleDBVault,
+	}
+}
+
 func (t AccountType) IsStellar() bool {
 	return t.Platform() == StellarPlatform
 }
