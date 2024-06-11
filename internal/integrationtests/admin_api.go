@@ -6,9 +6,10 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"net/http"
 	"net/url"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"

@@ -32,7 +32,7 @@ func TestTenantValidator_ValidateCreateTenantRequest(t *testing.T) {
 			"owner_first_name":          "owner_first_name is required",
 			"owner_last_name":           "owner_last_name is required",
 			"organization_name":         "organization_name is required",
-			"distribution_account_type": "distribution_account_type is required. DISTRIBUTION_ACCOUNT.STELLAR.ENV, DISTRIBUTION_ACCOUNT.STELLAR.DB_VAULT, DISTRIBUTION_ACCOUNT.CIRCLE.DB_VAULT",
+			"distribution_account_type": "distribution_account_type is required. valid values are: DISTRIBUTION_ACCOUNT.STELLAR.ENV, DISTRIBUTION_ACCOUNT.STELLAR.DB_VAULT, DISTRIBUTION_ACCOUNT.CIRCLE.DB_VAULT",
 		}, tv.Errors)
 
 		reqBody.Name = "aid-org"
@@ -44,7 +44,7 @@ func TestTenantValidator_ValidateCreateTenantRequest(t *testing.T) {
 			"owner_first_name":          "owner_first_name is required",
 			"owner_last_name":           "owner_last_name is required",
 			"organization_name":         "organization_name is required",
-			"distribution_account_type": "distribution_account_type is required",
+			"distribution_account_type": "distribution_account_type is required. valid values are: DISTRIBUTION_ACCOUNT.STELLAR.ENV, DISTRIBUTION_ACCOUNT.STELLAR.DB_VAULT, DISTRIBUTION_ACCOUNT.CIRCLE.DB_VAULT",
 		}, tv.Errors)
 	})
 
@@ -119,8 +119,8 @@ func TestTenantValidator_ValidateCreateTenantRequest(t *testing.T) {
 			"distribution_account_type": "invalid distribution account type. valid values are: DISTRIBUTION_ACCOUNT.STELLAR.ENV, DISTRIBUTION_ACCOUNT.STELLAR.DB_VAULT, DISTRIBUTION_ACCOUNT.CIRCLE.DB_VAULT",
 		}, tv.Errors)
 
-		for _, accountType := range []string{string(schema.DistributionAccountStellarEnv), string(schema.DistributionAccountStellarDBVault), string(schema.DistributionAccountCircleDBVault)} {
-			reqBody.DistributionAccountType = accountType
+		for _, accountType := range []schema.AccountType{schema.DistributionAccountStellarEnv, schema.DistributionAccountStellarDBVault, schema.DistributionAccountCircleDBVault} {
+			reqBody.DistributionAccountType = string(accountType)
 			tv.Errors = map[string]interface{}{}
 			tv.ValidateCreateTenantRequest(reqBody)
 			assert.False(t, tv.HasErrors())

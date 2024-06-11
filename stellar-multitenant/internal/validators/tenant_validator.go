@@ -62,7 +62,7 @@ func (tv *TenantValidator) ValidateCreateTenantRequest(reqBody *TenantRequest) *
 	tv.Check(reqBody.OwnerLastName != "", "owner_last_name", "owner_last_name is required")
 	tv.Check(reqBody.OrganizationName != "", "organization_name", "organization_name is required")
 
-	tv.Check(reqBody.DistributionAccountType != "", "distribution_account_type", "distribution_account_type is required")
+	tv.Check(reqBody.DistributionAccountType != "", "distribution_account_type", "distribution_account_type is required. valid values are: DISTRIBUTION_ACCOUNT.STELLAR.ENV, DISTRIBUTION_ACCOUNT.STELLAR.DB_VAULT, DISTRIBUTION_ACCOUNT.CIRCLE.DB_VAULT")
 	if reqBody.DistributionAccountType != "" {
 		switch schema.AccountType(reqBody.DistributionAccountType) {
 		case schema.DistributionAccountStellarEnv, schema.DistributionAccountStellarDBVault, schema.DistributionAccountCircleDBVault:
