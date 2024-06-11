@@ -122,7 +122,8 @@ for tenant in "${tenants[@]}"; do
                         "sdp_ui_base_url": "'"$sdpUIBaseURL"'",
                         "owner_email": "'"$ownerEmail"'",
                         "owner_first_name": "jane",
-                        "owner_last_name": "doe"
+                        "owner_last_name": "doe",
+                        "distribution_account_type": "DISTRIBUTION_ACCOUNT.STELLAR.DB_VAULT"
                 }')
 
         http_code=$(echo "$response" | tail -n1)

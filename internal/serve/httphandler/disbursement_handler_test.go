@@ -16,10 +16,6 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/stellar/go/clients/horizonclient"
-	"github.com/stellar/go/keypair"
-	"github.com/stellar/go/protocols/horizon"
-	"github.com/stellar/go/protocols/horizon/base"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -34,8 +30,9 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpresponse"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
+	svcMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/services/mocks"
 	sigMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing/mocks"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
@@ -1265,26 +1262,22 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 
 	authManagerMock := &auth.AuthManagerMock{}
 	mockEventProducer := events.MockProducer{}
-	hMock := &horizonclient.MockClient{}
+	mockDistAccSvc := svcMocks.NewMockDistributionAccountService(t)
 	asset := data.GetAssetFixture(t, ctx, dbConnectionPool, data.FixtureAssetUSDC)
 
-	hostDistAccPublicKey := keypair.MustRandom().Address()
 	defaultTenantDistAcc := "GDIVVKL6QYF6C6K3C5PZZBQ2NQDLN2OSLMVIEQRHS6DZE7WRL33ZDNXL"
-	distAccResolver, err := signing.NewDistributionAccountResolver(signing.DistributionAccountResolverOptions{
-		AdminDBConnectionPool:            dbConnectionPool,
-		HostDistributionAccountPublicKey: hostDistAccPublicKey,
-	})
-	require.NoError(t, err)
+	distAcc := schema.NewStellarEnvTransactionAccount(defaultTenantDistAcc)
+	mockDistAccResolver := sigMocks.NewMockDistributionAccountResolver(t)
 
 	handler := &DisbursementHandler{
 		Models:                      models,
 		AuthManager:                 authManagerMock,
-		DistributionAccountResolver: distAccResolver,
+		DistributionAccountResolver: mockDistAccResolver,
 		DisbursementManagementService: &services.DisbursementManagementService{
-			Models:        models,
-			AuthManager:   authManagerMock,
-			HorizonClient: hMock,
-			EventProducer: &mockEventProducer,
+			Models:                     models,
+			AuthManager:                authManagerMock,
+			EventProducer:              &mockEventProducer,
+			DistributionAccountService: mockDistAccSvc,
 		},
 	}
 
@@ -1343,20 +1336,13 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 			Return(user, nil).
 			Once()
 
-		mDistAccResolver := sigMocks.NewMockDistributionAccountResolver(t)
-		mDistAccResolver.
+		mockDistAccResolver.
 			On("DistributionAccountFromContext", mock.Anything).
-			Return(nil, errors.New("unexpected error")).
+			Return(schema.TransactionAccount{}, errors.New("unexpected error")).
 			Once()
 
-		h := &DisbursementHandler{
-			Models:                        handler.Models,
-			AuthManager:                   handler.AuthManager,
-			DistributionAccountResolver:   mDistAccResolver,
-			DisbursementManagementService: handler.DisbursementManagementService,
-		}
 		httpRouter := chi.NewRouter()
-		httpRouter.Patch("/disbursements/{id}/status", h.PatchDisbursementStatus)
+		httpRouter.Patch("/disbursements/{id}/status", handler.PatchDisbursementStatus)
 
 		err := json.NewEncoder(reqBody).Encode(PatchDisbursementStatusRequest{Status: "STARTED"})
 		require.NoError(t, err)
@@ -1374,6 +1360,11 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 		authManagerMock.
 			On("GetUser", mock.Anything, token).
 			Return(user, nil).
+			Once()
+
+		mockDistAccResolver.
+			On("DistributionAccountFromContext", mock.Anything).
+			Return(distAcc, nil).
 			Once()
 
 		err := json.NewEncoder(reqBody).Encode(PatchDisbursementStatusRequest{Status: "Started"})
@@ -1403,6 +1394,11 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 			Return(user, nil).
 			Once()
 
+		mockDistAccResolver.
+			On("DistributionAccountFromContext", mock.Anything).
+			Return(distAcc, nil).
+			Once()
+
 		err := json.NewEncoder(reqBody).Encode(PatchDisbursementStatusRequest{Status: "Started"})
 		require.NoError(t, err)
 
@@ -1417,20 +1413,6 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 	})
 
 	t.Run("disbursement can be started by approver who is not a creator", func(t *testing.T) {
-		hMock.On(
-			"AccountDetail", horizonclient.AccountRequest{AccountID: defaultTenantDistAcc},
-		).Return(horizon.Account{
-			Balances: []horizon.Balance{
-				{
-					Balance: "10000",
-					Asset: base.Asset{
-						Code:   asset.Code,
-						Issuer: asset.Issuer,
-					},
-				},
-			},
-		}, nil).Once()
-
 		data.EnableDisbursementApproval(t, ctx, handler.Models.Organizations)
 		defer data.DisableDisbursementApproval(t, ctx, handler.Models.Organizations)
 
@@ -1460,6 +1442,14 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 			Return(approverUser, nil).
 			Once()
 
+		mockDistAccResolver.
+			On("DistributionAccountFromContext", mock.Anything).
+			Return(distAcc, nil).
+			Once()
+
+		mockDistAccSvc.On("GetBalance", &distAcc, mock.AnythingOfType("data.Asset")).
+			Return(10000.0, nil).Once()
+
 		mockEventProducer.
 			On("WriteMessages", mock.Anything, mock.AnythingOfType("[]events.Message")).
 			Return(nil).
@@ -1479,24 +1469,18 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 	})
 
 	t.Run("disbursement started - then paused", func(t *testing.T) {
-		hMock.On(
-			"AccountDetail", horizonclient.AccountRequest{AccountID: defaultTenantDistAcc},
-		).Return(horizon.Account{
-			Balances: []horizon.Balance{
-				{
-					Balance: "10000",
-					Asset: base.Asset{
-						Code:   asset.Code,
-						Issuer: asset.Issuer,
-					},
-				},
-			},
-		}, nil).Once()
-
 		authManagerMock.
 			On("GetUser", mock.Anything, token).
 			Return(user, nil).
 			Twice()
+
+		mockDistAccResolver.
+			On("DistributionAccountFromContext", mock.Anything).
+			Return(distAcc, nil).
+			Once()
+
+		mockDistAccSvc.On("GetBalance", &distAcc, mock.AnythingOfType("data.Asset")).
+			Return(10000.0, nil).Once()
 
 		mockEventProducer.
 			On("WriteMessages", mock.Anything, mock.AnythingOfType("[]events.Message")).
@@ -1598,6 +1582,11 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 			Return(user, nil).
 			Once()
 
+		mockDistAccResolver.
+			On("DistributionAccountFromContext", mock.Anything).
+			Return(distAcc, nil).
+			Once()
+
 		id := "5e1f1c7f5b6c9c0001c1b1b1"
 		err := json.NewEncoder(reqBody).Encode(PatchDisbursementStatusRequest{Status: "STARTED"})
 		require.NoError(t, err)
@@ -1613,7 +1602,6 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 	})
 
 	authManagerMock.AssertExpectations(t)
-	hMock.AssertExpectations(t)
 	mockEventProducer.AssertExpectations(t)
 }
 

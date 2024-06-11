@@ -165,17 +165,17 @@ func Test_DistributionAccountResolverImpl_DistributionAccount(t *testing.T) {
 		tnt, err = m.UpdateTenantConfig(ctx, &tenant.TenantUpdate{
 			ID:                         tnt.ID,
 			DistributionAccountAddress: distributionPublicKey,
-			DistributionAccountType:    schema.DistributionAccountTypeDBVaultStellar,
-			DistributionAccountStatus:  schema.DistributionAccountStatusActive,
+			DistributionAccountType:    schema.DistributionAccountStellarDBVault,
+			DistributionAccountStatus:  schema.AccountStatusActive,
 		})
 		require.NoError(t, err)
 
 		distAccount, err := distAccResolver.DistributionAccount(ctx, tnt.ID)
 		assert.NoError(t, err)
-		assert.Equal(t, &schema.DistributionAccount{
+		assert.Equal(t, schema.TransactionAccount{
 			Address: distributionPublicKey,
-			Type:    schema.DistributionAccountTypeDBVaultStellar,
-			Status:  schema.DistributionAccountStatusActive,
+			Type:    schema.DistributionAccountStellarDBVault,
+			Status:  schema.AccountStatusActive,
 		}, distAccount)
 	})
 }
@@ -216,30 +216,30 @@ func Test_DistributionAccountResolverImpl_DistributionAccountFromContext(t *test
 			ID:                         "95e788b6-c80e-4975-9d12-141001fe6e44",
 			Name:                       "aid-org-1",
 			DistributionAccountAddress: &distributionPublicKey,
-			DistributionAccountType:    schema.DistributionAccountTypeEnvStellar,
-			DistributionAccountStatus:  schema.DistributionAccountStatusActive,
+			DistributionAccountType:    schema.DistributionAccountStellarEnv,
+			DistributionAccountStatus:  schema.AccountStatusActive,
 		}
 		ctxWithTenant := tenant.SaveTenantInContext(context.Background(), ctxTenant)
 
 		distAccount, err := distAccResolver.DistributionAccountFromContext(ctxWithTenant)
 		assert.NoError(t, err)
-		assert.Equal(t, &schema.DistributionAccount{
+		assert.Equal(t, schema.TransactionAccount{
 			Address: distributionPublicKey,
-			Type:    schema.DistributionAccountTypeEnvStellar,
-			Status:  schema.DistributionAccountStatusActive,
+			Type:    schema.DistributionAccountStellarEnv,
+			Status:  schema.AccountStatusActive,
 		}, distAccount)
 	})
 }
 
 func Test_DistributionAccountResolverImpl_HostDistributionAccount(t *testing.T) {
-	publicKeys := []string{
-		keypair.MustRandom().Address(),
-		keypair.MustRandom().Address(),
-		keypair.MustRandom().Address(),
+	hostAccounts := []schema.TransactionAccount{
+		schema.NewDefaultHostAccount(keypair.MustRandom().Address()),
+		schema.NewDefaultHostAccount(keypair.MustRandom().Address()),
+		schema.NewDefaultHostAccount(keypair.MustRandom().Address()),
 	}
 
-	for i, publicKey := range publicKeys {
-		distAccResolver := &DistributionAccountResolverImpl{hostDistributionAccountPubKey: publicKey}
-		assert.Equalf(t, publicKey, distAccResolver.HostDistributionAccount(), "assertion failed at index %d", i)
+	for i, hostAccount := range hostAccounts {
+		distAccResolver := &DistributionAccountResolverImpl{hostDistributionAccountPubKey: hostAccount.Address}
+		assert.Equalf(t, hostAccount, distAccResolver.HostDistributionAccount(), "assertion failed at index %d", i)
 	}
 }
