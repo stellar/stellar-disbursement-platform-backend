@@ -7,19 +7,21 @@ import (
 	"strings"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 var validTenantName *regexp.Regexp = regexp.MustCompile(`^[a-z-]+$`)
 
 type TenantRequest struct {
-	Name             string  `json:"name"`
-	OwnerEmail       string  `json:"owner_email"`
-	OwnerFirstName   string  `json:"owner_first_name"`
-	OwnerLastName    string  `json:"owner_last_name"`
-	OrganizationName string  `json:"organization_name"`
-	BaseURL          *string `json:"base_url"`
-	SDPUIBaseURL     *string `json:"sdp_ui_base_url"`
+	Name                    string  `json:"name"`
+	OwnerEmail              string  `json:"owner_email"`
+	OwnerFirstName          string  `json:"owner_first_name"`
+	OwnerLastName           string  `json:"owner_last_name"`
+	OrganizationName        string  `json:"organization_name"`
+	DistributionAccountType string  `json:"distribution_account_type"`
+	BaseURL                 *string `json:"base_url"`
+	SDPUIBaseURL            *string `json:"sdp_ui_base_url"`
 }
 
 type UpdateTenantRequest struct {
@@ -59,6 +61,16 @@ func (tv *TenantValidator) ValidateCreateTenantRequest(reqBody *TenantRequest) *
 	tv.Check(reqBody.OwnerFirstName != "", "owner_first_name", "owner_first_name is required")
 	tv.Check(reqBody.OwnerLastName != "", "owner_last_name", "owner_last_name is required")
 	tv.Check(reqBody.OrganizationName != "", "organization_name", "organization_name is required")
+
+	tv.Check(reqBody.DistributionAccountType != "", "distribution_account_type", "distribution_account_type is required. valid values are: DISTRIBUTION_ACCOUNT.STELLAR.ENV, DISTRIBUTION_ACCOUNT.STELLAR.DB_VAULT, DISTRIBUTION_ACCOUNT.CIRCLE.DB_VAULT")
+	if reqBody.DistributionAccountType != "" {
+		switch schema.AccountType(reqBody.DistributionAccountType) {
+		case schema.DistributionAccountStellarEnv, schema.DistributionAccountStellarDBVault, schema.DistributionAccountCircleDBVault:
+		default:
+			tv.Check(false,
+				"distribution_account_type", "invalid distribution account type. valid values are: DISTRIBUTION_ACCOUNT.STELLAR.ENV, DISTRIBUTION_ACCOUNT.STELLAR.DB_VAULT, DISTRIBUTION_ACCOUNT.CIRCLE.DB_VAULT")
+		}
+	}
 
 	var err error
 	if reqBody.BaseURL != nil {

@@ -5,17 +5,18 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/db/router"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
-	"golang.org/x/crypto/bcrypt"
-
 	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/support/log"
+	"golang.org/x/crypto/bcrypt"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/db/router"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httphandler"
 	tss "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 const (
@@ -308,13 +309,14 @@ func (it *IntegrationTestsService) StartIntegrationTests(ctx context.Context, op
 func (it *IntegrationTestsService) CreateTestData(ctx context.Context, opts IntegrationTestsOpts) error {
 	// 1. Create new tenant and add owner user
 	t, err := it.adminAPI.CreateTenant(ctx, CreateTenantRequest{
-		Name:             opts.TenantName,
-		OwnerEmail:       opts.UserEmail,
-		OwnerFirstName:   "John",
-		OwnerLastName:    "Doe",
-		OrganizationName: "Integration Tests Organization",
-		BaseURL:          "http://localhost:8000",
-		SDPUIBaseURL:     "http://localhost:3000",
+		Name:                    opts.TenantName,
+		OwnerEmail:              opts.UserEmail,
+		OwnerFirstName:          "John",
+		OwnerLastName:           "Doe",
+		OrganizationName:        "Integration Tests Organization",
+		DistributionAccountType: schema.DistributionAccountStellarEnv,
+		BaseURL:                 "http://localhost:8000",
+		SDPUIBaseURL:            "http://localhost:3000",
 	})
 	if err != nil {
 		return fmt.Errorf("creating tenant: %w", err)

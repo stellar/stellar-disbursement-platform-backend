@@ -384,7 +384,8 @@ func Test_TenantHandler_Post(t *testing.T) {
 					"owner_email": "invalid email",
 					"owner_first_name": "owner_first_name is required",
 					"owner_last_name": "owner_last_name is required",
-					"organization_name": "organization_name is required"
+					"organization_name": "organization_name is required",
+					"distribution_account_type": "distribution_account_type is required. valid values are: DISTRIBUTION_ACCOUNT.STELLAR.ENV, DISTRIBUTION_ACCOUNT.STELLAR.DB_VAULT, DISTRIBUTION_ACCOUNT.CIRCLE.DB_VAULT"
 				}
 			}
 		`
@@ -392,7 +393,6 @@ func Test_TenantHandler_Post(t *testing.T) {
 	})
 
 	t.Run("provisions a new tenant successfully", func(t *testing.T) {
-		// TODO: in SDP-1167, send the accountType in the request body
 		accountType := schema.DistributionAccountStellarEnv
 		createMocks(t, accountType, nil)
 
@@ -404,11 +404,12 @@ func Test_TenantHandler_Post(t *testing.T) {
 				"owner_first_name": "Owner",
 				"owner_last_name": "Owner",
 				"organization_name": "My Aid Org",
+				"distribution_account_type": %q,
 				"base_url": "https://sdp-backend.stellar.org",
 				"sdp_ui_base_url": "https://sdp-ui.stellar.org",
 				"is_default": false
 			}
-		`, orgName)
+		`, orgName, accountType)
 
 		respBody := makeRequest(t, reqBody, http.StatusCreated)
 
@@ -438,7 +439,6 @@ func Test_TenantHandler_Post(t *testing.T) {
 	})
 
 	t.Run("provisions a new tenant successfully - dynamically generates base URL and SDP UI base URL for tenant", func(t *testing.T) {
-		// TODO: in SDP-1167, send the accountType in the request body
 		accountType := schema.DistributionAccountStellarEnv
 		createMocks(t, accountType, nil)
 
@@ -450,9 +450,10 @@ func Test_TenantHandler_Post(t *testing.T) {
 				"owner_first_name": "Owner",
 				"owner_last_name": "Owner",
 				"organization_name": "My Aid Org 2",
+				"distribution_account_type": %q,
 				"is_default": false
 			}
-		`, orgName)
+		`, orgName, accountType)
 
 		respBody := makeRequest(t, reqBody, http.StatusCreated)
 
@@ -484,7 +485,6 @@ func Test_TenantHandler_Post(t *testing.T) {
 	})
 
 	t.Run("provisions a new tenant successfully - dynamically generates only SDP UI base URL", func(t *testing.T) {
-		// TODO: in SDP-1167, send the accountType in the request body
 		accountType := schema.DistributionAccountStellarEnv
 		createMocks(t, accountType, nil)
 
@@ -496,10 +496,11 @@ func Test_TenantHandler_Post(t *testing.T) {
 				"owner_first_name": "Owner",
 				"owner_last_name": "Owner",
 				"organization_name": "My Aid Org 3",
+				"distribution_account_type": %q,
 				"base_url": %q,
 				"is_default": false
 			}
-		`, orgName, handler.BaseURL)
+		`, orgName, accountType, handler.BaseURL)
 
 		respBody := makeRequest(t, reqBody, http.StatusCreated)
 
@@ -530,7 +531,6 @@ func Test_TenantHandler_Post(t *testing.T) {
 	})
 
 	t.Run("provisions a new tenant successfully - dynamically generates only backend base URL", func(t *testing.T) {
-		// TODO: in SDP-1167, send the accountType in the request body
 		accountType := schema.DistributionAccountStellarEnv
 		createMocks(t, accountType, nil)
 
@@ -542,10 +542,11 @@ func Test_TenantHandler_Post(t *testing.T) {
 				"owner_first_name": "Owner",
 				"owner_last_name": "Owner",
 				"organization_name": "My Aid Org 4",
+				"distribution_account_type": %q,
 				"sdp_ui_base_url": %q,
 				"is_default": false
 			}
-		`, orgName, handler.SDPUIBaseURL)
+		`, orgName, accountType, handler.SDPUIBaseURL)
 
 		respBody := makeRequest(t, reqBody, http.StatusCreated)
 
@@ -576,21 +577,21 @@ func Test_TenantHandler_Post(t *testing.T) {
 	})
 
 	t.Run("returns badRequest for duplicate tenant name", func(t *testing.T) {
-		// TODO: in SDP-1167, send the accountType in the request body
 		accountType := schema.DistributionAccountStellarEnv
 		createMocks(t, accountType, nil)
 
-		reqBody := `
+		reqBody := fmt.Sprintf(`
 			{
 				"name": "my-aid-org",
 				"owner_email": "owner@email.org",
 				"owner_first_name": "Owner",
 				"owner_last_name": "Owner",
 				"organization_name": "My Aid Org",
+				"distribution_account_type": %q,
 				"base_url": "https://backend.sdp.org",
 				"sdp_ui_base_url": "https://aid-org.sdp.org"
 			}
-		`
+		`, accountType)
 
 		// make first request to create tenant
 		_ = makeRequest(t, reqBody, http.StatusCreated)
@@ -613,9 +614,10 @@ func Test_TenantHandler_Post(t *testing.T) {
 				"organization_name": "My Aid Org",
 				"base_url": "https://sdp-backend.stellar.org",
 				"sdp_ui_base_url": "https://sdp-ui.stellar.org",
+				"distribution_account_type": %q,
 				"is_default": false
 			}
-		`, orgName)
+		`, orgName, accountType)
 
 		respBody := makeRequest(t, reqBody, http.StatusCreated)
 
