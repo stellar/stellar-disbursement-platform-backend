@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-// Transfer represents a transfer of funds from a Circle wallet to a blockchain address, from a blockchain address to a Circle wallet, or between two Circle wallets
+// Transfer represents a transfer of funds from a Circle Endpoint to another. A circle endpoint can be a wallet, card, wire, or blockchain address.
 type Transfer struct {
 	ID              string           `json:"id"`
 	Source          TransferEndpoint `json:"source"`
@@ -19,7 +19,7 @@ type Transfer struct {
 	CreateDate      time.Time        `json:"createDate"`
 }
 
-// TransferEndpointType represents the type of the source
+// TransferEndpointType represents the type of the source or destination of the transfer.
 type TransferEndpointType string
 
 const (
@@ -29,7 +29,7 @@ const (
 	TransferEndpointTypeWallet     TransferEndpointType = "wallet"
 )
 
-// TransferEndpoint represents the source or destination of the transfer
+// TransferEndpoint represents the source or destination of the transfer.
 type TransferEndpoint struct {
 	Type       TransferEndpointType `json:"type"`
 	ID         string               `json:"id,omitempty"`
@@ -38,18 +38,18 @@ type TransferEndpoint struct {
 	AddressTag string               `json:"addressTag,omitempty"`
 }
 
-// Money represents the amount transferred between source and destination
+// Money represents the amount transferred between source and destination.
 type Money struct {
 	Amount   string `json:"amount"`
 	Currency string `json:"currency"`
 }
 
-// TransferResponse represents the response from the Circle APIs
+// TransferResponse represents the response from the Circle APIs.
 type TransferResponse struct {
 	Data Transfer `json:"data"`
 }
 
-// TransferRequest represents the request to create a new transfer
+// TransferRequest represents the request to create a new transfer.
 type TransferRequest struct {
 	Source         TransferEndpoint `json:"source"`
 	Destination    TransferEndpoint `json:"destination"`

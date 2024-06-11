@@ -1,6 +1,6 @@
 package circle
 
-// Environment holds the possible environments for the Circle API
+// Environment holds the possible environments for the Circle API.
 type Environment string
 
 const (

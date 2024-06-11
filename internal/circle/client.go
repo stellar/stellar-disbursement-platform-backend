@@ -18,21 +18,21 @@ const (
 	transferPath = "/v1/transfers"
 )
 
-// ClientInterface defines the interface for interacting with the Circle API
+// ClientInterface defines the interface for interacting with the Circle API.
 type ClientInterface interface {
-	Ping() (bool, error)
-	PostTransfer(transfer Transfer) (*Transfer, error)
-	GetTransferByID(id string) (*Transfer, error)
+	Ping(ctx context.Context) (bool, error)
+	PostTransfer(ctx context.Context, transferRequest TransferRequest) (*Transfer, error)
+	GetTransferByID(ctx context.Context, id string) (*Transfer, error)
 }
 
-// Client provides methods to interact with the Circle API
+// Client provides methods to interact with the Circle API.
 type Client struct {
 	BasePath   string
 	APIKey     string
 	httpClient httpclient.HttpClientInterface
 }
 
-// NewClient creates a new instance of Client
+// NewClient creates a new instance of Circle Client.
 func NewClient(env Environment, apiKey string) *Client {
 	return &Client{
 		BasePath:   string(env),
@@ -41,8 +41,8 @@ func NewClient(env Environment, apiKey string) *Client {
 	}
 }
 
-// Ping checks that the service is running
-// https://developers.circle.com/circle-mint/reference/ping
+// Ping checks that the service is running.
+// https://developers.circle.com/circle-mint/reference/ping.
 func (client *Client) Ping(ctx context.Context) (bool, error) {
 	u, err := url.JoinPath(client.BasePath, pingPath)
 	if err != nil {
@@ -73,7 +73,8 @@ func (client *Client) Ping(ctx context.Context) (bool, error) {
 	return false, fmt.Errorf("unexpected response message: %s", pingResp.Message)
 }
 
-// PostTransfer creates a new transfer
+// PostTransfer creates a new transfer.
+// https://developers.circle.com/circle-mint/reference/createbusinesstransfer.
 func (client *Client) PostTransfer(ctx context.Context, transferReq TransferRequest) (*Transfer, error) {
 	err := transferReq.validate()
 	if err != nil {
@@ -97,13 +98,18 @@ func (client *Client) PostTransfer(ctx context.Context, transferReq TransferRequ
 	}
 
 	if resp.StatusCode != http.StatusCreated {
-		return nil, parseAPIError(resp)
+		apiError, parseErr := parseAPIError(resp)
+		if parseErr != nil {
+			return nil, fmt.Errorf("parsing API error: %w", parseErr)
+		}
+		return nil, fmt.Errorf("API error: %w", apiError)
 	}
 
 	return parseTransferResponse(resp)
 }
 
-// GetTransferByID retrieves a transfer by its ID
+// GetTransferByID retrieves a transfer by its ID.
+// https://developers.circle.com/circle-mint/reference/getbusinesstransfer
 func (client *Client) GetTransferByID(ctx context.Context, id string) (*Transfer, error) {
 	u, err := url.JoinPath(client.BasePath, transferPath, id)
 	if err != nil {
@@ -116,12 +122,17 @@ func (client *Client) GetTransferByID(ctx context.Context, id string) (*Transfer
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, parseAPIError(resp)
+		apiError, parseErr := parseAPIError(resp)
+		if parseErr != nil {
+			return nil, fmt.Errorf("parsing API error: %w", parseErr)
+		}
+		return nil, fmt.Errorf("API error: %w", apiError)
 	}
 
 	return parseTransferResponse(resp)
 }
 
+// request makes an HTTP request to the Circle API.
 func (client *Client) request(ctx context.Context, u string, method string, isAuthed bool, body io.Reader) (*http.Response, error) {
 	req, err := http.NewRequestWithContext(ctx, method, u, body)
 	if err != nil {
@@ -138,3 +149,5 @@ func (client *Client) request(ctx context.Context, u string, method string, isAu
 
 	return client.httpClient.Do(req)
 }
+
+var _ ClientInterface = (*Client)(nil)
