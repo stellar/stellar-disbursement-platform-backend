@@ -67,7 +67,8 @@ func (tv *TenantValidator) ValidateCreateTenantRequest(reqBody *TenantRequest) *
 		switch schema.AccountType(reqBody.DistributionAccountType) {
 		case schema.DistributionAccountStellarEnv, schema.DistributionAccountStellarDBVault, schema.DistributionAccountCircleDBVault:
 		default:
-			tv.Check(false, "distribution_account_type", "invalid distribution account type")
+			tv.Check(false,
+				"distribution_account_type", "invalid distribution account type. valid values are: DISTRIBUTION_ACCOUNT.STELLAR.ENV, DISTRIBUTION_ACCOUNT.STELLAR.DB_VAULT, DISTRIBUTION_ACCOUNT.CIRCLE.DB_VAULT")
 		}
 	}
 

@@ -314,7 +314,7 @@ func (it *IntegrationTestsService) CreateTestData(ctx context.Context, opts Inte
 		OwnerFirstName:          "John",
 		OwnerLastName:           "Doe",
 		OrganizationName:        "Integration Tests Organization",
-		DistributionAccountType: string(schema.DistributionAccountStellarEnv),
+		DistributionAccountType: schema.DistributionAccountStellarEnv,
 		BaseURL:                 "http://localhost:8000",
 		SDPUIBaseURL:            "http://localhost:3000",
 	})
