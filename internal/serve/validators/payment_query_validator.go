@@ -1,6 +1,7 @@
 package validators
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
@@ -60,7 +61,7 @@ func (qv *PaymentQueryValidator) validateAndGetPaymentStatus(status string) data
 	case data.DraftPaymentStatus, data.ReadyPaymentStatus, data.PendingPaymentStatus, data.PausedPaymentStatus, data.SuccessPaymentStatus, data.FailedPaymentStatus, data.CanceledPaymentStatus:
 		return s
 	default:
-		qv.Check(false, string(data.FilterKeyStatus), "invalid parameter. valid values are: DRAFT, READY, PENDING, PAUSED, SUCCESS, FAILED, CANCELLED")
+		qv.Check(false, string(data.FilterKeyStatus), fmt.Sprintf("invalid parameter. valid values are: %v", data.PaymentStatuses()))
 		return ""
 	}
 }
