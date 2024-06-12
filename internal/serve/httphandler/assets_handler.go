@@ -149,13 +149,11 @@ func (c AssetsHandler) DeleteAsset(w http.ResponseWriter, r *http.Request) {
 			return nil, fmt.Errorf("error performing soft delete on asset id %s: %w", assetID, deleteErr)
 		}
 
-		if distributionAccount.IsStellar() {
-			if trustlineErr := c.handleUpdateAssetTrustlineForDistributionAccount(ctx, nil, &txnbuild.CreditAsset{
-				Code:   deletedAsset.Code,
-				Issuer: deletedAsset.Issuer,
-			}, distributionAccount); trustlineErr != nil {
-				return nil, fmt.Errorf("error removing trustline: %w", trustlineErr)
-			}
+		if trustlineErr := c.handleUpdateAssetTrustlineForDistributionAccount(ctx, nil, &txnbuild.CreditAsset{
+			Code:   deletedAsset.Code,
+			Issuer: deletedAsset.Issuer,
+		}, distributionAccount); trustlineErr != nil {
+			return nil, fmt.Errorf("error removing trustline: %w", trustlineErr)
 		}
 
 		return asset, nil
