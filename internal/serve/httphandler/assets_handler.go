@@ -97,7 +97,7 @@ func (c AssetsHandler) CreateAsset(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if distributionAccount.IsStellar() {
-			if trustlineErr := c.handleUpdateAssetTrustlineForDistributionAccount(ctx, &txnbuild.CreditAsset{Code: assetCode, Issuer: assetIssuer}, nil, distributionAccount.Address); trustlineErr != nil {
+			if trustlineErr := c.handleUpdateAssetTrustlineForDistributionAccount(ctx, &txnbuild.CreditAsset{Code: assetCode, Issuer: assetIssuer}, nil, distributionAccount); trustlineErr != nil {
 				return nil, fmt.Errorf("adding trustline for the distribution account: %w", trustlineErr)
 			}
 		}
@@ -146,7 +146,7 @@ func (c AssetsHandler) DeleteAsset(w http.ResponseWriter, r *http.Request) {
 			if trustlineErr := c.handleUpdateAssetTrustlineForDistributionAccount(ctx, nil, &txnbuild.CreditAsset{
 				Code:   deletedAsset.Code,
 				Issuer: deletedAsset.Issuer,
-			}, distributionAccount.Address); trustlineErr != nil {
+			}, distributionAccount); trustlineErr != nil {
 				return nil, fmt.Errorf("error removing trustline: %w", trustlineErr)
 			}
 		}
@@ -167,7 +167,7 @@ func (c AssetsHandler) DeleteAsset(w http.ResponseWriter, r *http.Request) {
 }
 
 func (c AssetsHandler) handleUpdateAssetTrustlineForDistributionAccount(
-	ctx context.Context, assetToAddTrustline *txnbuild.CreditAsset, assetToRemoveTrustline *txnbuild.CreditAsset, distributionAccountPubKey string,
+	ctx context.Context, assetToAddTrustline *txnbuild.CreditAsset, assetToRemoveTrustline *txnbuild.CreditAsset, distributionAccount schema.TransactionAccount,
 ) error {
 	if assetToAddTrustline == nil && assetToRemoveTrustline == nil {
 		return fmt.Errorf("should provide at least one asset")
@@ -179,7 +179,7 @@ func (c AssetsHandler) handleUpdateAssetTrustlineForDistributionAccount(
 	}
 
 	acc, err := c.HorizonClient.AccountDetail(horizonclient.AccountRequest{
-		AccountID: distributionAccountPubKey,
+		AccountID: distributionAccount.Address,
 	})
 	if err != nil {
 		return fmt.Errorf("getting distribution account details: %w", err)
@@ -209,7 +209,7 @@ func (c AssetsHandler) handleUpdateAssetTrustlineForDistributionAccount(
 						Asset: *assetToRemoveTrustline,
 					},
 					Limit:         "0", // 0 means remove trustline
-					SourceAccount: distributionAccountPubKey,
+					SourceAccount: distributionAccount.Address,
 				})
 
 				break
@@ -242,7 +242,7 @@ func (c AssetsHandler) handleUpdateAssetTrustlineForDistributionAccount(
 					Asset: *assetToAddTrustline,
 				},
 				Limit:         "", // empty means no limit
-				SourceAccount: distributionAccountPubKey,
+				SourceAccount: distributionAccount.Address,
 			})
 		}
 	}
@@ -253,15 +253,8 @@ func (c AssetsHandler) handleUpdateAssetTrustlineForDistributionAccount(
 		return nil
 	}
 
-	distributionAccount, err := c.DistributionAccountResolver.DistributionAccountFromContext(ctx)
-	if err != nil {
-		return fmt.Errorf("resolving distribution account from context: %w", err)
-	}
-
-	if distributionAccount.IsStellar() {
-		if err = c.submitChangeTrustTransaction(ctx, &acc, changeTrustOperations, distributionAccount); err != nil {
-			return fmt.Errorf("submitting change trust transaction: %w", err)
-		}
+	if err = c.submitChangeTrustTransaction(ctx, &acc, changeTrustOperations, distributionAccount); err != nil {
+		return fmt.Errorf("submitting change trust transaction: %w", err)
 	}
 
 	return nil

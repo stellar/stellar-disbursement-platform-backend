@@ -741,7 +741,7 @@ func Test_AssetHandler_handleUpdateAssetTrustlineForDistributionAccount(t *testi
 	distributionKP := keypair.MustRandom()
 	distAccount := schema.NewDefaultStellarTransactionAccount(distributionKP.Address())
 	horizonClientMock := &horizonclient.MockClient{}
-	signatureService, sigRouter, distAccResolver := signing.NewMockSignatureService(t)
+	signatureService, sigRouter, _ := signing.NewMockSignatureService(t)
 	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
 
 	handler := &AssetsHandler{
@@ -767,12 +767,12 @@ func Test_AssetHandler_handleUpdateAssetTrustlineForDistributionAccount(t *testi
 	ctx := context.Background()
 
 	t.Run("returns error if no asset is provided", func(t *testing.T) {
-		err := handler.handleUpdateAssetTrustlineForDistributionAccount(ctx, nil, nil, "")
+		err := handler.handleUpdateAssetTrustlineForDistributionAccount(ctx, nil, nil, distAccount)
 		assert.EqualError(t, err, "should provide at least one asset")
 	})
 
 	t.Run("returns error if the assets are the same", func(t *testing.T) {
-		err := handler.handleUpdateAssetTrustlineForDistributionAccount(ctx, assetToRemoveTrustline, assetToRemoveTrustline, "")
+		err := handler.handleUpdateAssetTrustlineForDistributionAccount(ctx, assetToRemoveTrustline, assetToRemoveTrustline, distAccount)
 		assert.EqualError(t, err, "should provide different assets")
 	})
 
@@ -792,13 +792,9 @@ func Test_AssetHandler_handleUpdateAssetTrustlineForDistributionAccount(t *testi
 			}).
 			Once()
 
-		err := handler.handleUpdateAssetTrustlineForDistributionAccount(ctx, assetToAddTrustline, assetToRemoveTrustline, distributionKP.Address())
+		err := handler.handleUpdateAssetTrustlineForDistributionAccount(ctx, assetToAddTrustline, assetToRemoveTrustline, distAccount)
 		assert.EqualError(t, err, "getting distribution account details: horizon error: \"Error occurred\" - check horizon.Error.Problem for more information")
 	})
-
-	distAccResolver.
-		On("DistributionAccountFromContext", ctx).
-		Return(distAccount, nil)
 
 	t.Run("returns error if fails submitting change trust transaction", func(t *testing.T) {
 		tx, err := txnbuild.NewTransaction(
@@ -887,7 +883,7 @@ func Test_AssetHandler_handleUpdateAssetTrustlineForDistributionAccount(t *testi
 			}).
 			Once()
 
-		err = handler.handleUpdateAssetTrustlineForDistributionAccount(ctx, assetToAddTrustline, assetToRemoveTrustline, distributionKP.Address())
+		err = handler.handleUpdateAssetTrustlineForDistributionAccount(ctx, assetToAddTrustline, assetToRemoveTrustline, distAccount)
 		assert.EqualError(t, err, "submitting change trust transaction: submitting change trust transaction to network: horizon response error: StatusCode=0, Extras=transaction: tx_failed - operation codes: [ op_no_issuer ]")
 	})
 
@@ -966,7 +962,7 @@ func Test_AssetHandler_handleUpdateAssetTrustlineForDistributionAccount(t *testi
 			Return(horizon.Transaction{}, nil).
 			Once()
 
-		err = handler.handleUpdateAssetTrustlineForDistributionAccount(ctx, assetToAddTrustline, assetToRemoveTrustline, distributionKP.Address())
+		err = handler.handleUpdateAssetTrustlineForDistributionAccount(ctx, assetToAddTrustline, assetToRemoveTrustline, distAccount)
 		assert.NoError(t, err)
 	})
 
@@ -999,7 +995,7 @@ func Test_AssetHandler_handleUpdateAssetTrustlineForDistributionAccount(t *testi
 			}, nil).
 			Once()
 
-		err := handler.handleUpdateAssetTrustlineForDistributionAccount(ctx, assetToAddTrustline, assetToRemoveTrustline, distributionKP.Address())
+		err := handler.handleUpdateAssetTrustlineForDistributionAccount(ctx, assetToAddTrustline, assetToRemoveTrustline, distAccount)
 		assert.EqualError(t, err, errCouldNotRemoveTrustline.Error())
 	})
 
@@ -1026,7 +1022,7 @@ func Test_AssetHandler_handleUpdateAssetTrustlineForDistributionAccount(t *testi
 			}, nil).
 			Once()
 
-		err := handler.handleUpdateAssetTrustlineForDistributionAccount(ctx, nil, assetToRemoveTrustline, distributionKP.Address())
+		err := handler.handleUpdateAssetTrustlineForDistributionAccount(ctx, nil, assetToRemoveTrustline, distAccount)
 		assert.NoError(t, err)
 
 		entries := getEntries()
@@ -1063,7 +1059,7 @@ func Test_AssetHandler_handleUpdateAssetTrustlineForDistributionAccount(t *testi
 			}, nil).
 			Once()
 
-		err := handler.handleUpdateAssetTrustlineForDistributionAccount(ctx, assetToAddTrustline, nil, distributionKP.Address())
+		err := handler.handleUpdateAssetTrustlineForDistributionAccount(ctx, assetToAddTrustline, nil, distAccount)
 		assert.NoError(t, err)
 	})
 
@@ -1104,7 +1100,7 @@ func Test_AssetHandler_handleUpdateAssetTrustlineForDistributionAccount(t *testi
 		// add trustline
 		getEntries := log.DefaultLogger.StartTest(log.WarnLevel)
 
-		err := handler.handleUpdateAssetTrustlineForDistributionAccount(ctx, nativeAsset, nil, distributionKP.Address())
+		err := handler.handleUpdateAssetTrustlineForDistributionAccount(ctx, nativeAsset, nil, distAccount)
 		require.NoError(t, err)
 
 		entries := getEntries()
@@ -1114,7 +1110,7 @@ func Test_AssetHandler_handleUpdateAssetTrustlineForDistributionAccount(t *testi
 		// remove trustline
 		getEntries = log.DefaultLogger.StartTest(log.WarnLevel)
 
-		err = handler.handleUpdateAssetTrustlineForDistributionAccount(ctx, nil, nativeAsset, distributionKP.Address())
+		err = handler.handleUpdateAssetTrustlineForDistributionAccount(ctx, nil, nativeAsset, distAccount)
 		require.NoError(t, err)
 
 		entries = getEntries()
