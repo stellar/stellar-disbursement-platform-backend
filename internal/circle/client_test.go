@@ -17,13 +17,17 @@ import (
 
 func Test_NewClient(t *testing.T) {
 	t.Run("production environment", func(t *testing.T) {
-		cc := NewClient(Production, "test-key")
+		clientInterface := NewClient(Production, "test-key")
+		cc, ok := clientInterface.(*Client)
+		assert.True(t, ok)
 		assert.Equal(t, "https://api.circle.com", cc.BasePath)
 		assert.Equal(t, "test-key", cc.APIKey)
 	})
 
 	t.Run("sandbox environment", func(t *testing.T) {
-		cc := NewClient(Sandbox, "test-key")
+		clientInterface := NewClient(Sandbox, "test-key")
+		cc, ok := clientInterface.(*Client)
+		assert.True(t, ok)
 		assert.Equal(t, "https://api-sandbox.circle.com", cc.BasePath)
 		assert.Equal(t, "test-key", cc.APIKey)
 	})

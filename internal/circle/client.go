@@ -35,8 +35,13 @@ type Client struct {
 	httpClient httpclient.HttpClientInterface
 }
 
+// ClientFactory is a function that creates a ClientInterface.
+type ClientFactory func(env Environment, apiKey string) ClientInterface
+
+var _ ClientFactory = NewClient
+
 // NewClient creates a new instance of Circle Client.
-func NewClient(env Environment, apiKey string) *Client {
+func NewClient(env Environment, apiKey string) ClientInterface {
 	return &Client{
 		BasePath:   string(env),
 		APIKey:     apiKey,
