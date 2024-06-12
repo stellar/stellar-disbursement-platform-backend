@@ -17,6 +17,7 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/circle"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
@@ -69,6 +70,7 @@ type ServeOptions struct {
 	BaseURL                         string
 	ResetTokenExpirationHours       int
 	NetworkPassphrase               string
+	NetworkType                     utils.NetworkType
 	SubmitterEngine                 engine.SubmitterEngine
 	Sep10SigningPublicKey           string
 	Sep10SigningPrivateKey          string
@@ -127,6 +129,12 @@ func (opts *ServeOptions) SetupDependencies() error {
 	opts.PasswordValidator, err = authUtils.GetPasswordValidatorInstance()
 	if err != nil {
 		return fmt.Errorf("error initializing password validator: %w", err)
+	}
+
+	// Setup NetworkType
+	opts.NetworkType, err = utils.GetNetworkTypeFromNetworkPassphrase(opts.NetworkPassphrase)
+	if err != nil {
+		return fmt.Errorf("parsing network type: %w", err)
 	}
 
 	return nil
@@ -382,6 +390,13 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...)).
 				Get("/logo", profileHandler.GetOrganizationLogo)
 		})
+
+		balancesHandler := httphandler.BalancesHandler{
+			DistributionAccountResolver: o.SubmitterEngine.DistributionAccountResolver,
+			NetworkType:                 o.NetworkType,
+			CircleClientFactory:         circle.NewClient,
+		}
+		r.Get("/balances", balancesHandler.Get)
 	})
 
 	reCAPTCHAValidator := validators.NewGoogleReCAPTCHAValidator(o.ReCAPTCHASiteSecretKey, httpclient.DefaultClient())

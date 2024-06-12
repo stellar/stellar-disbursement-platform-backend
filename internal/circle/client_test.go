@@ -274,7 +274,16 @@ func Test_Client_GetWalletByID(t *testing.T) {
 
 		wallet, err := cc.GetWalletByID(ctx, "test-id")
 		assert.NoError(t, err)
-		assert.Equal(t, "test-id", wallet.WalletID)
+		wantWallet := &Wallet{
+			WalletID:    "test-id",
+			EntityID:    "2f47c999-9022-4939-acea-dc3afa9ccbaf",
+			Type:        "end_user_wallet",
+			Description: "Treasury Wallet",
+			Balances: []Balance{
+				{Amount: "4790.00", Currency: "USD"},
+			},
+		}
+		assert.Equal(t, wantWallet, wallet)
 	})
 }
 

@@ -21,6 +21,8 @@ const (
 )
 
 // ClientInterface defines the interface for interacting with the Circle API.
+//
+//go:generate mockery --name=ClientInterface --case=underscore --structname=MockClient
 type ClientInterface interface {
 	Ping(ctx context.Context) (bool, error)
 	PostTransfer(ctx context.Context, transferRequest TransferRequest) (*Transfer, error)

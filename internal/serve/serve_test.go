@@ -9,8 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
-
 	"github.com/go-chi/chi/v5"
 	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/network"
@@ -25,6 +23,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	monitorMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor/mocks"
@@ -415,7 +414,7 @@ func Test_handleHTTP_authenticatedEndpoints(t *testing.T) {
 	handlerMux := handleHTTP(serveOptions)
 
 	// Authenticated endpoints
-	authenticatedEndpoints := []struct { // TODO: body to requests
+	authenticatedEndpoints := []struct {
 		method string
 		path   string
 	}{
@@ -469,6 +468,8 @@ func Test_handleHTTP_authenticatedEndpoints(t *testing.T) {
 		{http.MethodGet, "/organization"},
 		{http.MethodPatch, "/organization"},
 		{http.MethodGet, "/organization/logo"},
+		// Balances
+		{http.MethodGet, "/balances"},
 	}
 
 	// Expect 401 as a response:
