@@ -97,9 +97,7 @@ func (c AssetsHandler) CreateAsset(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if distributionAccount.IsStellar() {
-			assetToAdd := &txnbuild.CreditAsset{Code: assetCode, Issuer: assetIssuer}
-			trustlineErr := c.handleUpdateAssetTrustlineForDistributionAccount(ctx, assetToAdd, nil, distributionAccount.Address)
-			if trustlineErr != nil {
+			if trustlineErr := c.handleUpdateAssetTrustlineForDistributionAccount(ctx, &txnbuild.CreditAsset{Code: assetCode, Issuer: assetIssuer}, nil, distributionAccount.Address); trustlineErr != nil {
 				return nil, fmt.Errorf("adding trustline for the distribution account: %w", trustlineErr)
 			}
 		}
@@ -145,11 +143,10 @@ func (c AssetsHandler) DeleteAsset(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if distributionAccount.IsStellar() {
-			trustlineErr := c.handleUpdateAssetTrustlineForDistributionAccount(ctx, nil, &txnbuild.CreditAsset{
+			if trustlineErr := c.handleUpdateAssetTrustlineForDistributionAccount(ctx, nil, &txnbuild.CreditAsset{
 				Code:   deletedAsset.Code,
 				Issuer: deletedAsset.Issuer,
-			}, distributionAccount.Address)
-			if trustlineErr != nil {
+			}, distributionAccount.Address); trustlineErr != nil {
 				return nil, fmt.Errorf("error removing trustline: %w", trustlineErr)
 			}
 		}
@@ -193,9 +190,9 @@ func (c AssetsHandler) handleUpdateAssetTrustlineForDistributionAccount(
 	if assetToRemoveTrustline != nil && strings.ToUpper(assetToRemoveTrustline.Code) != stellarNativeAssetCode {
 		for _, balance := range acc.Balances {
 			if balance.Asset.Code == assetToRemoveTrustline.Code && balance.Asset.Issuer == assetToRemoveTrustline.Issuer {
-				assetToRemoveTrustlineBalance, err := amount.ParseInt64(balance.Balance)
-				if err != nil {
-					return fmt.Errorf("converting asset to remove trustline balance to int64: %w", err)
+				assetToRemoveTrustlineBalance, parseBalErr := amount.ParseInt64(balance.Balance)
+				if parseBalErr != nil {
+					return fmt.Errorf("converting asset to remove trustline balance to int64: %w", parseBalErr)
 				}
 				if assetToRemoveTrustlineBalance > 0 {
 					log.Ctx(ctx).Warnf(

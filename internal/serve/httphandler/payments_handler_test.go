@@ -242,7 +242,7 @@ func Test_PaymentHandler_GetPayments_Errors(t *testing.T) {
 				"status": "invalid_status",
 			},
 			expectedStatusCode: http.StatusBadRequest,
-			expectedResponse:   `{"error":"request invalid", "extras":{"status":"invalid parameter. valid values are: DRAFT, READY, PENDING, PAUSED, SUCCESS, FAILED, CANCELLED"}}`,
+			expectedResponse:   fmt.Sprintf(`{"error":"request invalid", "extras":{"status":"invalid parameter. valid values are: %v"}}`, data.PaymentStatuses()),
 		},
 		{
 			name: "returns error when created_at_after is invalid",
