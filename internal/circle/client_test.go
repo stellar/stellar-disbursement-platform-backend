@@ -75,8 +75,8 @@ func Test_Client_Ping(t *testing.T) {
 func Test_Client_PostTransfer(t *testing.T) {
 	ctx := context.Background()
 	validTransferReq := TransferRequest{
-		Source:      TransferEndpoint{Type: TransferEndpointTypeWallet, ID: "source-id"},
-		Destination: TransferEndpoint{Type: TransferEndpointTypeBlockchain, Chain: "XLM", Address: "GBG2DFASN2E5ZZSOYH7SJ7HWBKR4M5LYQ5Q5ZVBWS3RI46GDSYTEA6YF", AddressTag: "txmemo2"},
+		Source:      TransferAccount{Type: TransferAccountTypeWallet, ID: "source-id"},
+		Destination: TransferAccount{Type: TransferAccountTypeBlockchain, Chain: "XLM", Address: "GBG2DFASN2E5ZZSOYH7SJ7HWBKR4M5LYQ5Q5ZVBWS3RI46GDSYTEA6YF", AddressTag: "txmemo2"},
 		Amount:      Money{Amount: "100.00", Currency: "USD"},
 	}
 

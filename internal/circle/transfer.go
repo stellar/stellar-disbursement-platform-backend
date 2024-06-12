@@ -10,32 +10,32 @@ import (
 
 // Transfer represents a transfer of funds from a Circle Endpoint to another. A circle endpoint can be a wallet, card, wire, or blockchain address.
 type Transfer struct {
-	ID              string           `json:"id"`
-	Source          TransferEndpoint `json:"source"`
-	Destination     TransferEndpoint `json:"destination"`
-	Amount          Money            `json:"amount"`
-	TransactionHash string           `json:"transactionHash,omitempty"`
-	Status          string           `json:"status"`
-	CreateDate      time.Time        `json:"createDate"`
+	ID              string          `json:"id"`
+	Source          TransferAccount `json:"source"`
+	Destination     TransferAccount `json:"destination"`
+	Amount          Money           `json:"amount"`
+	TransactionHash string          `json:"transactionHash,omitempty"`
+	Status          string          `json:"status"`
+	CreateDate      time.Time       `json:"createDate"`
 }
 
-// TransferEndpointType represents the type of the source or destination of the transfer.
-type TransferEndpointType string
+// TransferAccountType represents the type of the source or destination of the transfer.
+type TransferAccountType string
 
 const (
-	TransferEndpointTypeCard       TransferEndpointType = "card"
-	TransferEndpointTypeWire       TransferEndpointType = "wire"
-	TransferEndpointTypeBlockchain TransferEndpointType = "blockchain"
-	TransferEndpointTypeWallet     TransferEndpointType = "wallet"
+	TransferAccountTypeCard       TransferAccountType = "card"
+	TransferAccountTypeWire       TransferAccountType = "wire"
+	TransferAccountTypeBlockchain TransferAccountType = "blockchain"
+	TransferAccountTypeWallet     TransferAccountType = "wallet"
 )
 
-// TransferEndpoint represents the source or destination of the transfer.
-type TransferEndpoint struct {
-	Type       TransferEndpointType `json:"type"`
-	ID         string               `json:"id,omitempty"`
-	Chain      string               `json:"chain,omitempty"`
-	Address    string               `json:"address,omitempty"`
-	AddressTag string               `json:"addressTag,omitempty"`
+// TransferAccount represents the source or destination of the transfer.
+type TransferAccount struct {
+	Type       TransferAccountType `json:"type"`
+	ID         string              `json:"id,omitempty"`
+	Chain      string              `json:"chain,omitempty"`
+	Address    string              `json:"address,omitempty"`
+	AddressTag string              `json:"addressTag,omitempty"`
 }
 
 // Money represents the amount transferred between source and destination.
@@ -51,10 +51,10 @@ type TransferResponse struct {
 
 // TransferRequest represents the request to create a new transfer.
 type TransferRequest struct {
-	Source         TransferEndpoint `json:"source"`
-	Destination    TransferEndpoint `json:"destination"`
-	Amount         Money            `json:"amount"`
-	IdempotencyKey string           `json:"idempotencyKey"`
+	Source         TransferAccount `json:"source"`
+	Destination    TransferAccount `json:"destination"`
+	Amount         Money           `json:"amount"`
+	IdempotencyKey string          `json:"idempotencyKey"`
 }
 
 func (tr TransferRequest) validate() error {
@@ -62,7 +62,7 @@ func (tr TransferRequest) validate() error {
 		return fmt.Errorf("source type must be provided")
 	}
 
-	if tr.Source.Type != TransferEndpointTypeWallet {
+	if tr.Source.Type != TransferAccountTypeWallet {
 		return fmt.Errorf("source type must be wallet")
 	}
 
@@ -70,7 +70,7 @@ func (tr TransferRequest) validate() error {
 		return fmt.Errorf("source ID must be provided for wallet transfers")
 	}
 
-	if tr.Destination.Type != TransferEndpointTypeBlockchain {
+	if tr.Destination.Type != TransferAccountTypeBlockchain {
 		return fmt.Errorf("destination type must be blockchain")
 	}
 

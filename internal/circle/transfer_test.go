@@ -20,53 +20,53 @@ func Test_TransferRequest_validate(t *testing.T) {
 		},
 		{
 			name:    "source type is not wallet",
-			tr:      TransferRequest{Source: TransferEndpoint{Type: TransferEndpointTypeBlockchain}},
+			tr:      TransferRequest{Source: TransferAccount{Type: TransferAccountTypeBlockchain}},
 			wantErr: errors.New("source type must be wallet"),
 		},
 		{
 			name: "source ID is not provided",
 			tr: TransferRequest{
-				Source: TransferEndpoint{Type: TransferEndpointTypeWallet},
+				Source: TransferAccount{Type: TransferAccountTypeWallet},
 			},
 			wantErr: errors.New("source ID must be provided for wallet transfers"),
 		},
 		{
 			name: "destination type is not blockchain",
 			tr: TransferRequest{
-				Source:      TransferEndpoint{Type: TransferEndpointTypeWallet, ID: "1014442536"},
-				Destination: TransferEndpoint{Type: TransferEndpointTypeWallet},
+				Source:      TransferAccount{Type: TransferAccountTypeWallet, ID: "1014442536"},
+				Destination: TransferAccount{Type: TransferAccountTypeWallet},
 			},
 			wantErr: errors.New("destination type must be blockchain"),
 		},
 		{
 			name: "destination chain is not XLM",
 			tr: TransferRequest{
-				Source:      TransferEndpoint{Type: TransferEndpointTypeWallet, ID: "1014442536"},
-				Destination: TransferEndpoint{Type: TransferEndpointTypeBlockchain},
+				Source:      TransferAccount{Type: TransferAccountTypeWallet, ID: "1014442536"},
+				Destination: TransferAccount{Type: TransferAccountTypeBlockchain},
 			},
 			wantErr: errors.New("destination chain must be Stellar (XLM)"),
 		},
 		{
 			name: "destination address is not provided",
 			tr: TransferRequest{
-				Source:      TransferEndpoint{Type: TransferEndpointTypeWallet, ID: "1014442536"},
-				Destination: TransferEndpoint{Type: TransferEndpointTypeBlockchain, Chain: "XLM"},
+				Source:      TransferAccount{Type: TransferAccountTypeWallet, ID: "1014442536"},
+				Destination: TransferAccount{Type: TransferAccountTypeBlockchain, Chain: "XLM"},
 			},
 			wantErr: errors.New("destination address must be provided"),
 		},
 		{
 			name: "currency is not provided",
 			tr: TransferRequest{
-				Source:      TransferEndpoint{Type: TransferEndpointTypeWallet, ID: "1014442536"},
-				Destination: TransferEndpoint{Type: TransferEndpointTypeBlockchain, Chain: "XLM", Address: "GBG2DFASN2E5ZZSOYH7SJ7HWBKR4M5LYQ5Q5ZVBWS3RI46GDSYTEA6YF"},
+				Source:      TransferAccount{Type: TransferAccountTypeWallet, ID: "1014442536"},
+				Destination: TransferAccount{Type: TransferAccountTypeBlockchain, Chain: "XLM", Address: "GBG2DFASN2E5ZZSOYH7SJ7HWBKR4M5LYQ5Q5ZVBWS3RI46GDSYTEA6YF"},
 			},
 			wantErr: errors.New("currency must be provided"),
 		},
 		{
 			name: "amount is not a valid number",
 			tr: TransferRequest{
-				Source:      TransferEndpoint{Type: TransferEndpointTypeWallet, ID: "1014442536"},
-				Destination: TransferEndpoint{Type: TransferEndpointTypeBlockchain, Chain: "XLM", Address: "GBG2DFASN2E5ZZSOYH7SJ7HWBKR4M5LYQ5Q5ZVBWS3RI46GDSYTEA6YF"},
+				Source:      TransferAccount{Type: TransferAccountTypeWallet, ID: "1014442536"},
+				Destination: TransferAccount{Type: TransferAccountTypeBlockchain, Chain: "XLM", Address: "GBG2DFASN2E5ZZSOYH7SJ7HWBKR4M5LYQ5Q5ZVBWS3RI46GDSYTEA6YF"},
 				Amount:      Money{Amount: "invalid", Currency: "USD"},
 			},
 			wantErr: errors.New("amount must be a valid number"),
@@ -74,8 +74,8 @@ func Test_TransferRequest_validate(t *testing.T) {
 		{
 			name: "valid transfer request",
 			tr: TransferRequest{
-				Source:      TransferEndpoint{Type: TransferEndpointTypeWallet, ID: "1014442536"},
-				Destination: TransferEndpoint{Type: TransferEndpointTypeBlockchain, Chain: "XLM", Address: "GBG2DFASN2E5ZZSOYH7SJ7HWBKR4M5LYQ5Q5ZVBWS3RI46GDSYTEA6YF"},
+				Source:      TransferAccount{Type: TransferAccountTypeWallet, ID: "1014442536"},
+				Destination: TransferAccount{Type: TransferAccountTypeBlockchain, Chain: "XLM", Address: "GBG2DFASN2E5ZZSOYH7SJ7HWBKR4M5LYQ5Q5ZVBWS3RI46GDSYTEA6YF"},
 				Amount:      Money{Amount: "0.25", Currency: "USD"},
 			},
 			wantErr: nil,
