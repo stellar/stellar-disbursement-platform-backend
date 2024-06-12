@@ -62,8 +62,19 @@ func (c AssetsHandler) GetAssets(w http.ResponseWriter, r *http.Request) {
 
 // CreateAsset adds a new asset.
 func (c AssetsHandler) CreateAsset(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	distributionAccount, err := c.DistributionAccountResolver.DistributionAccountFromContext(ctx)
+	if err != nil {
+		httperror.InternalError(ctx, "Cannot resolve distribution account from context", fmt.Errorf("resolving distribution account from context: %w", err), nil).Render(w)
+		return
+	} else if !distributionAccount.IsStellar() {
+		httperror.BadRequest("Distribution account affiliated with tenant is a non-native Stellar account", fmt.Errorf("expected distribution account to be a STELLAR account but got %q", distributionAccount.Type), nil).Render(w)
+		return
+	}
+
 	var assetRequest AssetRequest
-	err := json.NewDecoder(r.Body).Decode(&assetRequest)
+	err = json.NewDecoder(r.Body).Decode(&assetRequest)
 	if err != nil {
 		httperror.BadRequest("invalid request body", err, nil).Render(w)
 		return
@@ -83,23 +94,14 @@ func (c AssetsHandler) CreateAsset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx := r.Context()
-
 	asset, err := db.RunInTransactionWithResult(ctx, c.Models.DBConnectionPool, nil, func(dbTx db.DBTransaction) (*data.Asset, error) {
 		insertedAsset, insertErr := c.Models.Assets.Insert(ctx, dbTx, assetCode, assetIssuer)
 		if insertErr != nil {
 			return nil, fmt.Errorf("inserting new asset: %w", insertErr)
 		}
 
-		distributionAccount, getDistAccFromCtxErr := c.DistributionAccountResolver.DistributionAccountFromContext(ctx)
-		if getDistAccFromCtxErr != nil {
-			return nil, fmt.Errorf("resolving distribution account from context: %w", getDistAccFromCtxErr)
-		}
-
-		if distributionAccount.IsStellar() {
-			if trustlineErr := c.handleUpdateAssetTrustlineForDistributionAccount(ctx, &txnbuild.CreditAsset{Code: assetCode, Issuer: assetIssuer}, nil, distributionAccount); trustlineErr != nil {
-				return nil, fmt.Errorf("adding trustline for the distribution account: %w", trustlineErr)
-			}
+		if trustlineErr := c.handleUpdateAssetTrustlineForDistributionAccount(ctx, &txnbuild.CreditAsset{Code: assetCode, Issuer: assetIssuer}, nil, distributionAccount); trustlineErr != nil {
+			return nil, fmt.Errorf("adding trustline for the distribution account: %w", trustlineErr)
 		}
 
 		return insertedAsset, nil
@@ -116,6 +118,16 @@ func (c AssetsHandler) CreateAsset(w http.ResponseWriter, r *http.Request) {
 // DeleteAsset marks an asset for soft delete.
 func (c AssetsHandler) DeleteAsset(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+
+	distributionAccount, err := c.DistributionAccountResolver.DistributionAccountFromContext(ctx)
+	if err != nil {
+		httperror.InternalError(ctx, "Cannot resolve distribution account from context", fmt.Errorf("resolving distribution account from context: %w", err), nil).Render(w)
+		return
+	} else if !distributionAccount.IsStellar() {
+		httperror.BadRequest("Distribution account affiliated with tenant is a non-native Stellar account", fmt.Errorf("expected distribution account to be a STELLAR account but got %q", distributionAccount.Type), nil).Render(w)
+		return
+	}
+
 	assetID := chi.URLParam(r, "id")
 
 	asset, err := c.Models.Assets.Get(ctx, assetID)
@@ -135,11 +147,6 @@ func (c AssetsHandler) DeleteAsset(w http.ResponseWriter, r *http.Request) {
 		deletedAsset, deleteErr := c.Models.Assets.SoftDelete(ctx, dbTx, assetID)
 		if deleteErr != nil {
 			return nil, fmt.Errorf("error performing soft delete on asset id %s: %w", assetID, deleteErr)
-		}
-
-		distributionAccount, getDistAccFromCtxErr := c.DistributionAccountResolver.DistributionAccountFromContext(ctx)
-		if getDistAccFromCtxErr != nil {
-			return nil, fmt.Errorf("resolving distribution account from context: %w", getDistAccFromCtxErr)
 		}
 
 		if distributionAccount.IsStellar() {
@@ -169,6 +176,12 @@ func (c AssetsHandler) DeleteAsset(w http.ResponseWriter, r *http.Request) {
 func (c AssetsHandler) handleUpdateAssetTrustlineForDistributionAccount(
 	ctx context.Context, assetToAddTrustline *txnbuild.CreditAsset, assetToRemoveTrustline *txnbuild.CreditAsset, distributionAccount schema.TransactionAccount,
 ) error {
+	// Non-native Stellar distribution accounts will not require asset trustlines to be managed on our end. This is
+	// technically unreachable from the endpoint entry points, but we will still check for this case here.
+	if !distributionAccount.IsStellar() {
+		return nil
+	}
+
 	if assetToAddTrustline == nil && assetToRemoveTrustline == nil {
 		return fmt.Errorf("should provide at least one asset")
 	}

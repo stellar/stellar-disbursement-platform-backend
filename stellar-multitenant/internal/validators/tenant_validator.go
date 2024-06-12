@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/url"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
@@ -87,12 +88,8 @@ func (tv *TenantValidator) ValidateCreateTenantRequest(reqBody *TenantRequest) *
 func (tv *TenantValidator) validateDistributionAccountType(distributionAccountType string) {
 	tv.Check(distributionAccountType != "", "distribution_account_type", fmt.Sprintf("distribution_account_type is required. valid values are: %v", schema.DistributionAccountTypes()))
 
-	if distributionAccountType != "" {
-		switch schema.AccountType(distributionAccountType) {
-		case schema.DistributionAccountStellarEnv, schema.DistributionAccountStellarDBVault, schema.DistributionAccountCircleDBVault:
-		default:
-			tv.Check(false, "distribution_account_type", fmt.Sprintf("invalid distribution_account_type. valid values are: %v", schema.DistributionAccountTypes()))
-		}
+	if distributionAccountType != "" && !slices.Contains(schema.DistributionAccountTypes(), schema.AccountType(distributionAccountType)) {
+		tv.Check(false, "distribution_account_type", fmt.Sprintf("invalid distribution_account_type. valid values are: %v", schema.DistributionAccountTypes()))
 	}
 }
 

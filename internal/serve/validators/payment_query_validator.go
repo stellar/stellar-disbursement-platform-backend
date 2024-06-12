@@ -2,6 +2,7 @@ package validators
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
@@ -57,11 +58,10 @@ func (qv *PaymentQueryValidator) ValidateAndGetPaymentFilters(filters map[data.F
 // validateAndGetPaymentStatus validates the status parameter and returns the corresponding PaymentStatus.
 func (qv *PaymentQueryValidator) validateAndGetPaymentStatus(status string) data.PaymentStatus {
 	s := data.PaymentStatus(strings.ToUpper(status))
-	switch s {
-	case data.DraftPaymentStatus, data.ReadyPaymentStatus, data.PendingPaymentStatus, data.PausedPaymentStatus, data.SuccessPaymentStatus, data.FailedPaymentStatus, data.CanceledPaymentStatus:
+	if slices.Contains(data.PaymentStatuses(), s) {
 		return s
-	default:
-		qv.Check(false, string(data.FilterKeyStatus), fmt.Sprintf("invalid parameter. valid values are: %v", data.PaymentStatuses()))
-		return ""
 	}
+
+	qv.Check(false, string(data.FilterKeyStatus), fmt.Sprintf("invalid parameter. valid values are: %v", data.PaymentStatuses()))
+	return ""
 }

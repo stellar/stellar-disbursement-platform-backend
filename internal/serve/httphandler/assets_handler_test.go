@@ -127,6 +127,34 @@ func Test_AssetHandler_CreateAsset(t *testing.T) {
 	issuer := "GBHC5ADV2XYITXCYC5F6X6BM2OYTYHV4ZU2JF6QWJORJQE2O7RKH2LAQ"
 	ctx := context.Background()
 
+	t.Run("failed to get distribution account", func(t *testing.T) {
+		distAccResolver.On("DistributionAccountFromContext", ctx).
+			Return(schema.TransactionAccount{}, errors.New("foobar")).Once()
+
+		rr := httptest.NewRecorder()
+		requestBody, _ := json.Marshal(AssetRequest{code, issuer})
+
+		req, _ := http.NewRequest(http.MethodPost, "/assets", strings.NewReader(string(requestBody)))
+		http.HandlerFunc(handler.CreateAsset).ServeHTTP(rr, req)
+
+		assert.Equal(t, http.StatusInternalServerError, rr.Result().StatusCode)
+		assert.Contains(t, rr.Body.String(), "Cannot resolve distribution account from context")
+	})
+
+	t.Run("cannot process request if distribution account is not a native-Stellar account", func(t *testing.T) {
+		distAccResolver.On("DistributionAccountFromContext", ctx).
+			Return(schema.TransactionAccount{Type: schema.DistributionAccountCircleDBVault}, nil).Once()
+
+		rr := httptest.NewRecorder()
+		requestBody, _ := json.Marshal(AssetRequest{code, issuer})
+
+		req, _ := http.NewRequest(http.MethodPost, "/assets", strings.NewReader(string(requestBody)))
+		http.HandlerFunc(handler.CreateAsset).ServeHTTP(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Result().StatusCode)
+		assert.Contains(t, rr.Body.String(), "Distribution account affiliated with tenant is a non-native Stellar account")
+	})
+
 	distAccResolver.
 		On("DistributionAccountFromContext", ctx).
 		Return(distAccount, nil)
@@ -548,6 +576,36 @@ func Test_AssetHandler_DeleteAsset(t *testing.T) {
 
 	r := chi.NewRouter()
 	r.Delete("/assets/{id}", handler.DeleteAsset)
+
+	t.Run("failed to get distribution account", func(t *testing.T) {
+		data.DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
+		asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "ABC", "GBHC5ADV2XYITXCYC5F6X6BM2OYTYHV4ZU2JF6QWJORJQE2O7RKH2LAQ")
+
+		distAccResolver.On("DistributionAccountFromContext", mock.AnythingOfType("*context.valueCtx")).
+			Return(schema.TransactionAccount{}, errors.New("foobar")).Once()
+
+		rr := httptest.NewRecorder()
+		req, _ := http.NewRequest(http.MethodDelete, fmt.Sprintf("/assets/%s", asset.ID), nil)
+		r.ServeHTTP(rr, req)
+
+		assert.Equal(t, http.StatusInternalServerError, rr.Result().StatusCode)
+		assert.Contains(t, rr.Body.String(), "Cannot resolve distribution account from context")
+	})
+
+	t.Run("cannot process request if distribution account is not a native-Stellar account", func(t *testing.T) {
+		data.DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
+		asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "ABC", "GBHC5ADV2XYITXCYC5F6X6BM2OYTYHV4ZU2JF6QWJORJQE2O7RKH2LAQ")
+
+		distAccResolver.On("DistributionAccountFromContext", mock.AnythingOfType("*context.valueCtx")).
+			Return(schema.TransactionAccount{Type: schema.DistributionAccountCircleDBVault}, nil).Once()
+
+		rr := httptest.NewRecorder()
+		req, _ := http.NewRequest(http.MethodDelete, fmt.Sprintf("/assets/%s", asset.ID), nil)
+		r.ServeHTTP(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Result().StatusCode)
+		assert.Contains(t, rr.Body.String(), "Distribution account affiliated with tenant is a non-native Stellar account")
+	})
 
 	distAccResolver.
 		On("DistributionAccountFromContext", mock.AnythingOfType("*context.valueCtx")).
