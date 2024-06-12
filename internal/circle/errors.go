@@ -31,14 +31,6 @@ func (e APIError) Error() string {
 // parseAPIError parses the error response from Circle APIs.
 // https://developers.circle.com/circle-mint/docs/circle-apis-api-errors.
 func parseAPIError(resp *http.Response) (*APIError, error) {
-	if resp.StatusCode == http.StatusUnauthorized {
-		return nil, fmt.Errorf("unauthorized to access the resource")
-	}
-
-	if resp.StatusCode == http.StatusForbidden {
-		return nil, fmt.Errorf("forbidden to access the resource")
-	}
-
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("reading error response body: %w", err)

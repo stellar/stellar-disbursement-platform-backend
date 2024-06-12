@@ -22,12 +22,12 @@ type testInterface interface {
 // NewHttpClientMock creates a new instance of HttpClientMock. It also registers a testing interface on the mock and a
 // cleanup function to assert the mocks expectations.
 func NewHttpClientMock(t testInterface) *HttpClientMock {
-	mock := &HttpClientMock{}
-	mock.Mock.Test(t)
+	m := &HttpClientMock{}
+	m.Mock.Test(t)
 
-	t.Cleanup(func() { mock.AssertExpectations(t) })
+	t.Cleanup(func() { m.AssertExpectations(t) })
 
-	return mock
+	return m
 }
 
 func (h *HttpClientMock) Do(req *http.Request) (*http.Response, error) {

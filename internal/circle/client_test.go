@@ -15,22 +15,24 @@ import (
 )
 
 func Test_NewClient(t *testing.T) {
-	cc := NewClient(Production, "test-key")
-	assert.Equal(t, "https://api.circle.com", cc.BasePath)
-	assert.Equal(t, "test-key", cc.APIKey)
+	t.Run("production environment", func(t *testing.T) {
+		cc := NewClient(Production, "test-key")
+		assert.Equal(t, "https://api.circle.com", cc.BasePath)
+		assert.Equal(t, "test-key", cc.APIKey)
+	})
+
+	t.Run("sandbox environment", func(t *testing.T) {
+		cc := NewClient(Sandbox, "test-key")
+		assert.Equal(t, "https://api-sandbox.circle.com", cc.BasePath)
+		assert.Equal(t, "test-key", cc.APIKey)
+	})
 }
 
 func Test_Client_Ping(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("ping error", func(t *testing.T) {
-		httpClientMock := httpclientMocks.NewHttpClientMock(t)
-		cc := &Client{
-			BasePath:   "http://localhost:8080",
-			APIKey:     "test-key",
-			httpClient: httpClientMock,
-		}
-
+		cc, httpClientMock := newClientWithMock(t)
 		testError := errors.New("test error")
 		httpClientMock.
 			On("Do", mock.Anything).
@@ -43,13 +45,7 @@ func Test_Client_Ping(t *testing.T) {
 	})
 
 	t.Run("ping successful", func(t *testing.T) {
-		httpClientMock := httpclientMocks.NewHttpClientMock(t)
-		cc := &Client{
-			BasePath:   "http://localhost:8080",
-			APIKey:     "test-key",
-			httpClient: httpClientMock,
-		}
-
+		cc, httpClientMock := newClientWithMock(t)
 		httpClientMock.
 			On("Do", mock.Anything).
 			Return(&http.Response{
@@ -81,13 +77,7 @@ func Test_Client_PostTransfer(t *testing.T) {
 	}
 
 	t.Run("post transfer error", func(t *testing.T) {
-		httpClientMock := httpclientMocks.NewHttpClientMock(t)
-		cc := &Client{
-			BasePath:   "http://localhost:8080",
-			APIKey:     "test-key",
-			httpClient: httpClientMock,
-		}
-
+		cc, httpClientMock := newClientWithMock(t)
 		testError := errors.New("test error")
 		httpClientMock.
 			On("Do", mock.Anything).
@@ -100,45 +90,31 @@ func Test_Client_PostTransfer(t *testing.T) {
 	})
 
 	t.Run("post transfer fails to validate request", func(t *testing.T) {
-		httpClientMock := httpclientMocks.NewHttpClientMock(t)
-		cc := &Client{
-			BasePath:   "http://localhost:8080",
-			APIKey:     "test-key",
-			httpClient: httpClientMock,
-		}
+		cc, _ := newClientWithMock(t)
 		transfer, err := cc.PostTransfer(ctx, TransferRequest{})
 		assert.EqualError(t, err, fmt.Errorf("validating transfer request: %w", errors.New("source type must be provided")).Error())
 		assert.Nil(t, transfer)
 	})
 
 	t.Run("post transfer fails auth", func(t *testing.T) {
-		httpClientMock := httpclientMocks.NewHttpClientMock(t)
-		cc := &Client{
-			BasePath:   "http://localhost:8080",
-			APIKey:     "test-key",
-			httpClient: httpClientMock,
-		}
+		unauthorizedResponse := `{"code": 401, "message": "Malformed key. Does it contain three parts?"}`
+		cc, httpClientMock := newClientWithMock(t)
 
 		httpClientMock.
 			On("Do", mock.Anything).
 			Return(&http.Response{
 				StatusCode: http.StatusUnauthorized,
+				Body:       io.NopCloser(bytes.NewBufferString(unauthorizedResponse)),
 			}, nil).
 			Once()
 
 		transfer, err := cc.PostTransfer(ctx, validTransferReq)
-		assert.EqualError(t, err, "parsing API error: unauthorized to access the resource")
+		assert.EqualError(t, err, "API error: APIError: Code=401, Message=Malformed key. Does it contain three parts?, Errors=[]")
 		assert.Nil(t, transfer)
 	})
 
 	t.Run("post transfer successful", func(t *testing.T) {
-		httpClientMock := httpclientMocks.NewHttpClientMock(t)
-		cc := &Client{
-			BasePath:   "http://localhost:8080",
-			APIKey:     "test-key",
-			httpClient: httpClientMock,
-		}
-
+		cc, httpClientMock := newClientWithMock(t)
 		httpClientMock.
 			On("Do", mock.Anything).
 			Return(&http.Response{
@@ -165,13 +141,7 @@ func Test_Client_PostTransfer(t *testing.T) {
 func Test_Client_GetTransferByID(t *testing.T) {
 	ctx := context.Background()
 	t.Run("get transfer by id error", func(t *testing.T) {
-		httpClientMock := httpclientMocks.NewHttpClientMock(t)
-		cc := &Client{
-			BasePath:   "http://localhost:8080",
-			APIKey:     "test-key",
-			httpClient: httpClientMock,
-		}
-
+		cc, httpClientMock := newClientWithMock(t)
 		testError := errors.New("test error")
 		httpClientMock.
 			On("Do", mock.Anything).
@@ -184,33 +154,23 @@ func Test_Client_GetTransferByID(t *testing.T) {
 	})
 
 	t.Run("get transfer by id fails auth", func(t *testing.T) {
-		httpClientMock := httpclientMocks.NewHttpClientMock(t)
-		cc := &Client{
-			BasePath:   "http://localhost:8080",
-			APIKey:     "test-key",
-			httpClient: httpClientMock,
-		}
-
+		unauthorizedResponse := `{"code": 401, "message": "Malformed key. Does it contain three parts?"}`
+		cc, httpClientMock := newClientWithMock(t)
 		httpClientMock.
 			On("Do", mock.Anything).
 			Return(&http.Response{
 				StatusCode: http.StatusUnauthorized,
+				Body:       io.NopCloser(bytes.NewBufferString(unauthorizedResponse)),
 			}, nil).
 			Once()
 
 		transfer, err := cc.GetTransferByID(ctx, "test-id")
-		assert.EqualError(t, err, "parsing API error: unauthorized to access the resource")
+		assert.EqualError(t, err, "API error: APIError: Code=401, Message=Malformed key. Does it contain three parts?, Errors=[]")
 		assert.Nil(t, transfer)
 	})
 
 	t.Run("get transfer by id successful", func(t *testing.T) {
-		httpClientMock := httpclientMocks.NewHttpClientMock(t)
-		cc := &Client{
-			BasePath:   "http://localhost:8080",
-			APIKey:     "test-key",
-			httpClient: httpClientMock,
-		}
-
+		cc, httpClientMock := newClientWithMock(t)
 		httpClientMock.
 			On("Do", mock.Anything).
 			Return(&http.Response{
@@ -231,4 +191,14 @@ func Test_Client_GetTransferByID(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, "test-id", transfer.ID)
 	})
+}
+
+func newClientWithMock(t *testing.T) (Client, *httpclientMocks.HttpClientMock) {
+	httpClientMock := httpclientMocks.NewHttpClientMock(t)
+
+	return Client{
+		BasePath:   "http://localhost:8080",
+		APIKey:     "test-key",
+		httpClient: httpClientMock,
+	}, httpClientMock
 }

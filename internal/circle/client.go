@@ -74,7 +74,7 @@ func (client *Client) Ping(ctx context.Context) (bool, error) {
 }
 
 // PostTransfer creates a new transfer.
-// https://developers.circle.com/circle-mint/reference/createbusinesstransfer.
+// https://developers.circle.com/circle-mint/reference/createtransfer
 func (client *Client) PostTransfer(ctx context.Context, transferReq TransferRequest) (*Transfer, error) {
 	err := transferReq.validate()
 	if err != nil {
@@ -109,7 +109,7 @@ func (client *Client) PostTransfer(ctx context.Context, transferReq TransferRequ
 }
 
 // GetTransferByID retrieves a transfer by its ID.
-// https://developers.circle.com/circle-mint/reference/getbusinesstransfer
+// https://developers.circle.com/circle-mint/reference/gettransfer
 func (client *Client) GetTransferByID(ctx context.Context, id string) (*Transfer, error) {
 	u, err := url.JoinPath(client.BasePath, transferPath, id)
 	if err != nil {
@@ -136,7 +136,7 @@ func (client *Client) GetTransferByID(ctx context.Context, id string) (*Transfer
 func (client *Client) request(ctx context.Context, u string, method string, isAuthed bool, body io.Reader) (*http.Response, error) {
 	req, err := http.NewRequestWithContext(ctx, method, u, body)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("creating request: %w", err)
 	}
 
 	if isAuthed {
