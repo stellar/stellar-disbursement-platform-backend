@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/joho/godotenv"
 	"github.com/sirupsen/logrus"
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/stellar-disbursement-platform-backend/cmd"
@@ -18,6 +19,10 @@ const Version = "2.0.0"
 var GitCommit string
 
 func main() {
+	if err := godotenv.Load(); err != nil {
+		log.Debug("No .env file found")
+	}
+
 	preConfigureLogger()
 
 	rootCmd := cmd.SetupCLI(Version, GitCommit)
