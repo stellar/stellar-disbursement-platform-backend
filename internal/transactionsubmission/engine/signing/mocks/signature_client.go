@@ -135,20 +135,6 @@ func (_m *MockSignatureClient) SignStellarTransaction(ctx context.Context, stell
 	return r0, r1
 }
 
-// Type provides a mock function with given fields:
-func (_m *MockSignatureClient) Type() string {
-	ret := _m.Called()
-
-	var r0 string
-	if rf, ok := ret.Get(0).(func() string); ok {
-		r0 = rf()
-	} else {
-		r0 = ret.Get(0).(string)
-	}
-
-	return r0
-}
-
 type mockConstructorTestingTNewMockSignatureClient interface {
 	mock.TestingT
 	Cleanup(func())
