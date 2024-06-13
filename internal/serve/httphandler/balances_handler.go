@@ -10,9 +10,7 @@ import (
 	"github.com/stellar/go/support/render/httpjson"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/circle"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/assets"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
@@ -35,7 +33,7 @@ type BalancesHandler struct {
 	CircleClientFactory         circle.ClientFactory
 }
 
-// GetAssets returns a list of assets.
+// Get returns the balances of the distribution account.
 func (h BalancesHandler) Get(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -58,7 +56,11 @@ func (h BalancesHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	circleSDK := h.CircleClientFactory(circle.Sandbox, circleAPIKey)
+	circleEnv := circle.Sandbox
+	if h.NetworkType == utils.PubnetNetworkType {
+		circleEnv = circle.Production
+	}
+	circleSDK := h.CircleClientFactory(circleEnv, circleAPIKey)
 	circleWallet, err := circleSDK.GetWalletByID(ctx, distAccount.Address)
 	if err != nil {
 		var circleApiErr *circle.APIError
@@ -83,17 +85,10 @@ func (h BalancesHandler) Get(w http.ResponseWriter, r *http.Request) {
 	httpjson.Render(w, response, httpjson.JSON)
 }
 
-var allowedCircleAssets = map[string]map[utils.NetworkType]data.Asset{
-	"USD": {
-		utils.PubnetNetworkType:  assets.USDCAssetPubnet,
-		utils.TestnetNetworkType: assets.USDCAssetTestnet,
-	},
-}
-
 func (h BalancesHandler) filterBalances(ctx context.Context, circleWallet *circle.Wallet) []Balance {
 	balances := []Balance{}
 	for _, balance := range circleWallet.Balances {
-		networkAssetMap, ok := allowedCircleAssets[balance.Currency]
+		networkAssetMap, ok := circle.AllowedAssetsMap[balance.Currency]
 		if !ok {
 			log.Ctx(ctx).Debugf("Ignoring balance for asset %s, as it's not supported by the SDP", balance.Currency)
 			continue
@@ -115,5 +110,5 @@ func (h BalancesHandler) filterBalances(ctx context.Context, circleWallet *circl
 }
 
 func mockFnGetCircleAPIKey(ctx context.Context) (string, error) {
-	return "SOME_API_KEY", nil
+	return "SAND_API_KEY:c57a34ffb46de9240da8353bcc394fbf:5b1ec227682031ce176a3970d85a785e", nil
 }
