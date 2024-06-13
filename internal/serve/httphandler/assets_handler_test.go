@@ -824,6 +824,12 @@ func Test_AssetHandler_handleUpdateAssetTrustlineForDistributionAccount(t *testi
 
 	ctx := context.Background()
 
+	t.Run("returns error if distribution account is not a native Stellar account", func(t *testing.T) {
+		err := handler.handleUpdateAssetTrustlineForDistributionAccount(
+			ctx, nil, nil, schema.TransactionAccount{Type: schema.DistributionAccountCircleDBVault})
+		assert.EqualError(t, err, "distribution account is not a native Stellar account")
+	})
+
 	t.Run("returns error if no asset is provided", func(t *testing.T) {
 		err := handler.handleUpdateAssetTrustlineForDistributionAccount(ctx, nil, nil, distAccount)
 		assert.EqualError(t, err, "should provide at least one asset")

@@ -177,7 +177,7 @@ func (c AssetsHandler) handleUpdateAssetTrustlineForDistributionAccount(
 	// Non-native Stellar distribution accounts will not require asset trustlines to be managed on our end. This is
 	// technically unreachable from the endpoint entry points, but we will still check for this case here.
 	if !distributionAccount.IsStellar() {
-		return nil
+		return fmt.Errorf("distribution account is not a native Stellar account")
 	}
 
 	if assetToAddTrustline == nil && assetToRemoveTrustline == nil {
