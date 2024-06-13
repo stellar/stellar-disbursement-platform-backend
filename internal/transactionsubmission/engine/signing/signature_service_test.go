@@ -3,6 +3,8 @@ package signing
 import (
 	"testing"
 
+	sdpUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+
 	"github.com/stellar/go/keypair"
 	"github.com/stellar/go/network"
 	"github.com/stretchr/testify/require"
@@ -12,7 +14,6 @@ import (
 	preconditionsMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
@@ -107,7 +108,7 @@ func Test_NewSignatureService(t *testing.T) {
 		encryptionPassphrase: chAccEncryptionPassphrase,
 		ledgerNumberTracker:  mLedgerNumberTracker,
 		chAccModel:           store.NewChannelAccountModel(dbConnectionPool),
-		encrypter:            &utils.DefaultPrivateKeyEncrypter{},
+		encrypter:            &sdpUtils.DefaultPrivateKeyEncrypter{},
 	}
 	wantDistAccountEnvSigner := &AccountEnvSignatureClient{
 		networkPassphrase:   network.TestNetworkPassphrase,
@@ -125,7 +126,7 @@ func Test_NewSignatureService(t *testing.T) {
 		networkPassphrase:    network.TestNetworkPassphrase,
 		encryptionPassphrase: distAccEncryptionPassphrase,
 		dbVault:              store.NewDBVaultModel(dbConnectionPool),
-		encrypter:            &utils.DefaultPrivateKeyEncrypter{},
+		encrypter:            &sdpUtils.DefaultPrivateKeyEncrypter{},
 	}
 	wantSigRouterStrategies := map[schema.AccountType]SignatureClient{
 		schema.HostStellarEnv:                    wantHostAccountEnvSigner,

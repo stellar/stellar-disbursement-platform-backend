@@ -5,6 +5,8 @@ import (
 	"reflect"
 	"testing"
 
+	sdpUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+
 	"github.com/stellar/go/keypair"
 	"github.com/stellar/go/network"
 	"github.com/stellar/go/txnbuild"
@@ -14,7 +16,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
 )
 
 func Test_DistributionAccountDBVaultSignatureClientOptions_Validate(t *testing.T) {
@@ -104,7 +105,7 @@ func Test_NewDistributionAccountDBVaultSignatureClient(t *testing.T) {
 				DBConnectionPool:     dbConnectionPool,
 				EncryptionPassphrase: "SCPGNK3MRMXKNWGZ4ET3JZ6RUJIN7FMHT4ASVXDG7YPBL4WKBQNEL63F",
 			},
-			wantEncrypterTypeName: reflect.TypeOf(&utils.DefaultPrivateKeyEncrypter{}).String(),
+			wantEncrypterTypeName: reflect.TypeOf(&sdpUtils.DefaultPrivateKeyEncrypter{}).String(),
 		},
 		{
 			name: "🎉 Successfully instantiates a new distribution account DB signature client with a custom encrypter",
@@ -112,9 +113,9 @@ func Test_NewDistributionAccountDBVaultSignatureClient(t *testing.T) {
 				NetworkPassphrase:    network.TestNetworkPassphrase,
 				DBConnectionPool:     dbConnectionPool,
 				EncryptionPassphrase: "SCPGNK3MRMXKNWGZ4ET3JZ6RUJIN7FMHT4ASVXDG7YPBL4WKBQNEL63F",
-				Encrypter:            &utils.PrivateKeyEncrypterMock{},
+				Encrypter:            &sdpUtils.PrivateKeyEncrypterMock{},
 			},
-			wantEncrypterTypeName: reflect.TypeOf(&utils.PrivateKeyEncrypterMock{}).String(),
+			wantEncrypterTypeName: reflect.TypeOf(&sdpUtils.PrivateKeyEncrypterMock{}).String(),
 		},
 	}
 
@@ -155,7 +156,7 @@ func Test_DistributionAccountDBVaultSignatureClient_getKPsForAccounts(t *testing
 	dbVaultStore := store.NewDBVaultModel(dbConnectionPool)
 
 	// create default encrypter
-	encrypter := &utils.DefaultPrivateKeyEncrypter{}
+	encrypter := &sdpUtils.DefaultPrivateKeyEncrypter{}
 	encrypterPass := keypair.MustRandom().Seed()
 
 	// create distribution accounts in the DB
@@ -248,7 +249,7 @@ func Test_DistributionAccountDBVaultSignatureClient_SignStellarTransaction(t *te
 
 	// create default encrypter
 	encrypterPass := keypair.MustRandom().Seed()
-	encrypter := &utils.DefaultPrivateKeyEncrypter{}
+	encrypter := &sdpUtils.DefaultPrivateKeyEncrypter{}
 
 	// create distribution accounts in the DB
 	distributionAccounts := store.CreateDBVaultFixturesEncryptedKPs(t, ctx, dbConnectionPool, encrypter, encrypterPass, 2)
@@ -343,7 +344,7 @@ func Test_DistributionAccountDBVaultSignatureClient_SignFeeBumpStellarTransactio
 
 	// create default encrypter
 	encrypterPass := keypair.MustRandom().Seed()
-	encrypter := &utils.DefaultPrivateKeyEncrypter{}
+	encrypter := &sdpUtils.DefaultPrivateKeyEncrypter{}
 
 	// create distribution accounts in the DB
 	distributionAccounts := store.CreateDBVaultFixturesEncryptedKPs(t, ctx, dbConnectionPool, encrypter, encrypterPass, 2)
@@ -354,7 +355,7 @@ func Test_DistributionAccountDBVaultSignatureClient_SignFeeBumpStellarTransactio
 		NetworkPassphrase:    network.TestNetworkPassphrase,
 		DBConnectionPool:     dbConnectionPool,
 		EncryptionPassphrase: encrypterPass,
-		Encrypter:            &utils.DefaultPrivateKeyEncrypter{},
+		Encrypter:            &sdpUtils.DefaultPrivateKeyEncrypter{},
 	})
 	require.NoError(t, err)
 
@@ -475,7 +476,7 @@ func Test_DistributionAccountDBVaultSignatureClient_BatchInsert(t *testing.T) {
 		},
 	}
 
-	defaultEncrypter := &utils.DefaultPrivateKeyEncrypter{}
+	defaultEncrypter := &sdpUtils.DefaultPrivateKeyEncrypter{}
 	encrypterPass := distributionKP.Seed()
 	sigClient, err := NewDistributionAccountDBVaultSignatureClient(DistributionAccountDBVaultSignatureClientOptions{
 		NetworkPassphrase:    network.TestNetworkPassphrase,
@@ -533,7 +534,7 @@ func Test_DistributionAccountDBVaultSignatureClient_Delete(t *testing.T) {
 
 	// create default encrypter
 	encrypterPass := keypair.MustRandom().Seed()
-	encrypter := &utils.DefaultPrivateKeyEncrypter{}
+	encrypter := &sdpUtils.DefaultPrivateKeyEncrypter{}
 
 	// at start: count=0
 	allDistAccounts := allDBVaultEntries(t, ctx, dbConnectionPool)

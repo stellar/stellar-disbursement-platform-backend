@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"testing"
 
+	sdpUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+
 	"github.com/stellar/go/keypair"
 	"github.com/stellar/go/network"
 	"github.com/stellar/go/txnbuild"
@@ -17,7 +19,6 @@ import (
 	preconditionsMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
@@ -43,7 +44,7 @@ func Test_NewSignerRouter(t *testing.T) {
 		DistAccEncryptionPassphrase: distAccEncryptionPassphrase,
 		DistributionPrivateKey:      distributionKP.Seed(),
 		HostPrivateKey:              hostKP.Seed(),
-		Encrypter:                   &utils.DefaultPrivateKeyEncrypter{},
+		Encrypter:                   &sdpUtils.DefaultPrivateKeyEncrypter{},
 	}
 
 	// Create valid SignerClients:
@@ -59,7 +60,7 @@ func Test_NewSignerRouter(t *testing.T) {
 		encryptionPassphrase: chAccEncryptionPassphrase,
 		ledgerNumberTracker:  mLedgerNumberTracker,
 		chAccModel:           store.NewChannelAccountModel(dbConnectionPool),
-		encrypter:            &utils.DefaultPrivateKeyEncrypter{},
+		encrypter:            &sdpUtils.DefaultPrivateKeyEncrypter{},
 	}
 	wantDistAccStelarEnvSigner := &AccountEnvSignatureClient{
 		networkPassphrase:   networkPassphrase,
@@ -71,7 +72,7 @@ func Test_NewSignerRouter(t *testing.T) {
 		networkPassphrase:    networkPassphrase,
 		encryptionPassphrase: distAccEncryptionPassphrase,
 		dbVault:              store.NewDBVaultModel(dbConnectionPool),
-		encrypter:            &utils.DefaultPrivateKeyEncrypter{},
+		encrypter:            &sdpUtils.DefaultPrivateKeyEncrypter{},
 	}
 
 	testCases := []struct {
@@ -232,7 +233,7 @@ func Test_SignerRouterImpl_RouteSigner(t *testing.T) {
 		DistAccEncryptionPassphrase: distAccEncryptionPassphrase,
 		DistributionPrivateKey:      distributionKP.Seed(),
 		HostPrivateKey:              hostKP.Seed(),
-		Encrypter:                   &utils.DefaultPrivateKeyEncrypter{},
+		Encrypter:                   &sdpUtils.DefaultPrivateKeyEncrypter{},
 	}
 
 	sigRouter, err := NewSignerRouter(validOptions)
@@ -642,7 +643,7 @@ func Test_SignerRouterImpl_BatchInsert(t *testing.T) {
 		DistAccEncryptionPassphrase: distAccEncryptionPassphrase,
 		DistributionPrivateKey:      distributionKP.Seed(),
 		HostPrivateKey:              hostKP.Seed(),
-		Encrypter:                   &utils.DefaultPrivateKeyEncrypter{},
+		Encrypter:                   &sdpUtils.DefaultPrivateKeyEncrypter{},
 	}
 
 	testCases := []struct {
@@ -759,7 +760,7 @@ func Test_SignerRouterImpl_Delete(t *testing.T) {
 		DistAccEncryptionPassphrase: distAccEncryptionPassphrase,
 		DistributionPrivateKey:      distributionKP.Seed(),
 		HostPrivateKey:              hostKP.Seed(),
-		Encrypter:                   &utils.DefaultPrivateKeyEncrypter{},
+		Encrypter:                   &sdpUtils.DefaultPrivateKeyEncrypter{},
 	}
 	sigRouter, err := NewSignerRouter(validOptions)
 	require.NoError(t, err)
@@ -920,7 +921,7 @@ func Test_SignerRouterImpl_SupportedAccountTypes(t *testing.T) {
 		DistAccEncryptionPassphrase: distAccEncryptionPassphrase,
 		DistributionPrivateKey:      distributionKP.Seed(),
 		HostPrivateKey:              hostKP.Seed(),
-		Encrypter:                   &utils.DefaultPrivateKeyEncrypter{},
+		Encrypter:                   &sdpUtils.DefaultPrivateKeyEncrypter{},
 	}
 
 	testCases := []struct {

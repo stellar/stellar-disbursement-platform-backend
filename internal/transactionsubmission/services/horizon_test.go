@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"testing"
 
+	sdpUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+
 	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/keypair"
 	"github.com/stellar/go/network"
@@ -27,7 +29,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	sigMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
@@ -55,7 +56,7 @@ func Test_CreateChannelAccountsOnChain(t *testing.T) {
 	testCases := []struct {
 		name                 string
 		numOfChanAccToCreate int
-		prepareMocksFn       func(horizonClientMock *horizonclient.MockClient, mLedgerNumberTracker *preconditionsMocks.MockLedgerNumberTracker, privateKeyEncrypterMock *utils.PrivateKeyEncrypterMock)
+		prepareMocksFn       func(horizonClientMock *horizonclient.MockClient, mLedgerNumberTracker *preconditionsMocks.MockLedgerNumberTracker, privateKeyEncrypterMock *sdpUtils.PrivateKeyEncrypterMock)
 		wantErrContains      string
 	}{
 		{
@@ -76,7 +77,7 @@ func Test_CreateChannelAccountsOnChain(t *testing.T) {
 		{
 			name:                 "returns error when HorizonClient fails getting AccountDetails",
 			numOfChanAccToCreate: 2,
-			prepareMocksFn: func(horizonClientMock *horizonclient.MockClient, _ *preconditionsMocks.MockLedgerNumberTracker, _ *utils.PrivateKeyEncrypterMock) {
+			prepareMocksFn: func(horizonClientMock *horizonclient.MockClient, _ *preconditionsMocks.MockLedgerNumberTracker, _ *sdpUtils.PrivateKeyEncrypterMock) {
 				horizonClientMock.
 					On("AccountDetail", horizonclient.AccountRequest{AccountID: hostAccount.Address}).
 					Return(horizon.Account{}, horizonclient.Error{
@@ -89,7 +90,7 @@ func Test_CreateChannelAccountsOnChain(t *testing.T) {
 		{
 			name:                 "returns error when fails to retrieve ledger bounds",
 			numOfChanAccToCreate: 2,
-			prepareMocksFn: func(horizonClientMock *horizonclient.MockClient, mLedgerNumberTracker *preconditionsMocks.MockLedgerNumberTracker, _ *utils.PrivateKeyEncrypterMock) {
+			prepareMocksFn: func(horizonClientMock *horizonclient.MockClient, mLedgerNumberTracker *preconditionsMocks.MockLedgerNumberTracker, _ *sdpUtils.PrivateKeyEncrypterMock) {
 				horizonClientMock.
 					On("AccountDetail", horizonclient.AccountRequest{AccountID: hostAccount.Address}).
 					Return(horizon.Account{
@@ -107,7 +108,7 @@ func Test_CreateChannelAccountsOnChain(t *testing.T) {
 		{
 			name:                 "returns error when fails encrypting private key",
 			numOfChanAccToCreate: 2,
-			prepareMocksFn: func(horizonClientMock *horizonclient.MockClient, mLedgerNumberTracker *preconditionsMocks.MockLedgerNumberTracker, privateKeyEncrypterMock *utils.PrivateKeyEncrypterMock) {
+			prepareMocksFn: func(horizonClientMock *horizonclient.MockClient, mLedgerNumberTracker *preconditionsMocks.MockLedgerNumberTracker, privateKeyEncrypterMock *sdpUtils.PrivateKeyEncrypterMock) {
 				horizonClientMock.
 					On("AccountDetail", horizonclient.AccountRequest{AccountID: hostAccount.Address}).
 					Return(horizon.Account{
@@ -128,7 +129,7 @@ func Test_CreateChannelAccountsOnChain(t *testing.T) {
 		{
 			name:                 "returns error when fails submitting transaction to horizon",
 			numOfChanAccToCreate: 2,
-			prepareMocksFn: func(horizonClientMock *horizonclient.MockClient, mLedgerNumberTracker *preconditionsMocks.MockLedgerNumberTracker, privateKeyEncrypterMock *utils.PrivateKeyEncrypterMock) {
+			prepareMocksFn: func(horizonClientMock *horizonclient.MockClient, mLedgerNumberTracker *preconditionsMocks.MockLedgerNumberTracker, privateKeyEncrypterMock *sdpUtils.PrivateKeyEncrypterMock) {
 				horizonClientMock.
 					On("AccountDetail", horizonclient.AccountRequest{AccountID: hostAccount.Address}).
 					Return(horizon.Account{
@@ -161,7 +162,7 @@ func Test_CreateChannelAccountsOnChain(t *testing.T) {
 		{
 			name:                 "🎉 successfully creates channel accounts on-chain (ENCRYPTED)",
 			numOfChanAccToCreate: 3,
-			prepareMocksFn: func(horizonClientMock *horizonclient.MockClient, mLedgerNumberTracker *preconditionsMocks.MockLedgerNumberTracker, privateKeyEncrypterMock *utils.PrivateKeyEncrypterMock) {
+			prepareMocksFn: func(horizonClientMock *horizonclient.MockClient, mLedgerNumberTracker *preconditionsMocks.MockLedgerNumberTracker, privateKeyEncrypterMock *sdpUtils.PrivateKeyEncrypterMock) {
 				horizonClientMock.
 					On("AccountDetail", horizonclient.AccountRequest{AccountID: hostAccount.Address}).
 					Return(horizon.Account{
@@ -195,7 +196,7 @@ func Test_CreateChannelAccountsOnChain(t *testing.T) {
 			// Prepare mocks
 			mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
 			horizonClientMock := &horizonclient.MockClient{}
-			privateKeyEncrypterMock := &utils.PrivateKeyEncrypterMock{}
+			privateKeyEncrypterMock := &sdpUtils.PrivateKeyEncrypterMock{}
 			mDistAccResolver := sigMocks.NewMockDistributionAccountResolver(t)
 			mDistAccResolver.
 				On("HostDistributionAccount").
@@ -396,7 +397,7 @@ func Test_DeleteChannelAccountOnChain(t *testing.T) {
 			// prepare mocks
 			mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
 			horizonClientMock := &horizonclient.MockClient{}
-			privateKeyEncrypterMock := &utils.PrivateKeyEncrypterMock{}
+			privateKeyEncrypterMock := &sdpUtils.PrivateKeyEncrypterMock{}
 			sigService, sigRouter, mDistAccResolver := signing.NewMockSignatureService(t)
 			mDistAccResolver.
 				On("HostDistributionAccount").

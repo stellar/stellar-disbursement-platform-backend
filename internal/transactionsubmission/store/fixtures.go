@@ -7,12 +7,13 @@ import (
 	"testing"
 	"time"
 
+	sdpUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+
 	"github.com/lib/pq"
 	"github.com/stellar/go/keypair"
 	"github.com/stretchr/testify/require"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
 )
 
 // CreateTransactionFixtures creates count number submitter transactions
@@ -122,7 +123,7 @@ func CreateChannelAccountFixturesEncrypted(
 	t *testing.T,
 	ctx context.Context,
 	dbConnectionPool db.DBConnectionPool,
-	encrypter utils.PrivateKeyEncrypter,
+	encrypter sdpUtils.PrivateKeyEncrypter,
 	encryptionPassphrase string,
 	count int,
 ) []*ChannelAccount {
@@ -152,7 +153,7 @@ func CreateChannelAccountFixturesEncryptedKPs(
 	t *testing.T,
 	ctx context.Context,
 	dbConnectionPool db.DBConnectionPool,
-	encrypter utils.PrivateKeyEncrypter,
+	encrypter sdpUtils.PrivateKeyEncrypter,
 	encryptionPassphrase string,
 	count int,
 ) []*keypair.Full {
@@ -185,7 +186,7 @@ func CreateDBVaultFixturesEncrypted(
 	t *testing.T,
 	ctx context.Context,
 	dbConnectionPool db.DBConnectionPool,
-	encrypter utils.PrivateKeyEncrypter,
+	encrypter sdpUtils.PrivateKeyEncrypter,
 	encryptionPassphrase string,
 	count int,
 ) []*DBVaultEntry {
@@ -223,7 +224,7 @@ func CreateDBVaultFixturesEncryptedKPs(
 	t *testing.T,
 	ctx context.Context,
 	dbConnectionPool db.DBConnectionPool,
-	encrypter utils.PrivateKeyEncrypter,
+	encrypter sdpUtils.PrivateKeyEncrypter,
 	encryptionPassphrase string,
 	count int,
 ) []*keypair.Full {

@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	sdpUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+
 	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/keypair"
 	"github.com/stellar/go/network"
@@ -29,7 +31,6 @@ import (
 	tssMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 	storeMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store/mocks"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
@@ -374,7 +375,7 @@ func Test_Manager_ProcessTransactions(t *testing.T) {
 	defer dbConnectionPool.Close()
 
 	// Signature service
-	encrypter := &utils.DefaultPrivateKeyEncrypter{}
+	encrypter := &sdpUtils.DefaultPrivateKeyEncrypter{}
 	chAccEncryptionPassphrase := keypair.MustRandom().Seed()
 	distAccEncryptionPassphrase := keypair.MustRandom().Seed()
 	distributionKP := keypair.MustRandom()

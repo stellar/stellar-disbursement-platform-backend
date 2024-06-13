@@ -6,6 +6,8 @@ import (
 	"reflect"
 	"testing"
 
+	sdpUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+
 	"github.com/stellar/go/keypair"
 	"github.com/stellar/go/network"
 	"github.com/stellar/go/txnbuild"
@@ -16,7 +18,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	preconditionsMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
 )
 
 func Test_ChannelAccountDBSignatureClientOptions_Validate(t *testing.T) {
@@ -119,7 +120,7 @@ func Test_NewChannelAccountDBSignatureClient(t *testing.T) {
 				EncryptionPassphrase: "SCPGNK3MRMXKNWGZ4ET3JZ6RUJIN7FMHT4ASVXDG7YPBL4WKBQNEL63F",
 				LedgerNumberTracker:  mLedgerNumberTracker,
 			},
-			wantEncrypterTypeName: reflect.TypeOf(&utils.DefaultPrivateKeyEncrypter{}).String(),
+			wantEncrypterTypeName: reflect.TypeOf(&sdpUtils.DefaultPrivateKeyEncrypter{}).String(),
 		},
 		{
 			name: "🎉 Successfully instantiates a new channel account DB signature client with a custom encrypter",
@@ -128,9 +129,9 @@ func Test_NewChannelAccountDBSignatureClient(t *testing.T) {
 				DBConnectionPool:     dbConnectionPool,
 				EncryptionPassphrase: "SCPGNK3MRMXKNWGZ4ET3JZ6RUJIN7FMHT4ASVXDG7YPBL4WKBQNEL63F",
 				LedgerNumberTracker:  mLedgerNumberTracker,
-				Encrypter:            &utils.PrivateKeyEncrypterMock{},
+				Encrypter:            &sdpUtils.PrivateKeyEncrypterMock{},
 			},
-			wantEncrypterTypeName: reflect.TypeOf(&utils.PrivateKeyEncrypterMock{}).String(),
+			wantEncrypterTypeName: reflect.TypeOf(&sdpUtils.PrivateKeyEncrypterMock{}).String(),
 		},
 	}
 
@@ -171,7 +172,7 @@ func Test_ChannelAccountDBSignatureClient_getKPsForAccounts(t *testing.T) {
 	chAccountStore := store.NewChannelAccountModel(dbConnectionPool)
 
 	// create default encrypter
-	encrypter := &utils.DefaultPrivateKeyEncrypter{}
+	encrypter := &sdpUtils.DefaultPrivateKeyEncrypter{}
 	encrypterPass := keypair.MustRandom().Seed()
 
 	// create channel accounts in the DB
@@ -264,7 +265,7 @@ func Test_ChannelAccountDBSignatureClient_SignStellarTransaction(t *testing.T) {
 
 	// create default encrypter
 	encrypterPass := keypair.MustRandom().Seed()
-	encrypter := &utils.DefaultPrivateKeyEncrypter{}
+	encrypter := &sdpUtils.DefaultPrivateKeyEncrypter{}
 
 	// create channel accounts in the DB
 	channelAccounts := store.CreateChannelAccountFixturesEncryptedKPs(t, ctx, dbConnectionPool, encrypter, encrypterPass, 2)
@@ -359,7 +360,7 @@ func Test_ChannelAccountDBSignatureClient_SignFeeBumpStellarTransaction(t *testi
 
 	// create default encrypter
 	encrypterPass := keypair.MustRandom().Seed()
-	encrypter := &utils.DefaultPrivateKeyEncrypter{}
+	encrypter := &sdpUtils.DefaultPrivateKeyEncrypter{}
 
 	// create channel accounts in the DB
 	channelAccounts := store.CreateChannelAccountFixturesEncryptedKPs(t, ctx, dbConnectionPool, encrypter, encrypterPass, 2)
@@ -369,7 +370,7 @@ func Test_ChannelAccountDBSignatureClient_SignFeeBumpStellarTransaction(t *testi
 		NetworkPassphrase:    network.TestNetworkPassphrase,
 		DBConnectionPool:     dbConnectionPool,
 		EncryptionPassphrase: encrypterPass,
-		Encrypter:            &utils.DefaultPrivateKeyEncrypter{},
+		Encrypter:            &sdpUtils.DefaultPrivateKeyEncrypter{},
 		LedgerNumberTracker:  preconditionsMocks.NewMockLedgerNumberTracker(t),
 	})
 	require.NoError(t, err)
@@ -485,7 +486,7 @@ func Test_ChannelAccountDBSignatureClient_BatchInsert(t *testing.T) {
 	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
 	mLedgerNumberTracker.On("GetLedgerNumber").Return(100, nil).Once()
 
-	defaultEncrypter := &utils.DefaultPrivateKeyEncrypter{}
+	defaultEncrypter := &sdpUtils.DefaultPrivateKeyEncrypter{}
 	encrypterPass := distributionKP.Seed()
 	sigClient, err := NewChannelAccountDBSignatureClient(ChannelAccountDBSignatureClientOptions{
 		NetworkPassphrase:    network.TestNetworkPassphrase,
@@ -548,7 +549,7 @@ func Test_ChannelAccountDBSignatureClient_Delete(t *testing.T) {
 
 	// create default encrypter
 	encrypterPass := keypair.MustRandom().Seed()
-	encrypter := &utils.DefaultPrivateKeyEncrypter{}
+	encrypter := &sdpUtils.DefaultPrivateKeyEncrypter{}
 
 	// current ledger number
 	currLedgerNumber := 0
