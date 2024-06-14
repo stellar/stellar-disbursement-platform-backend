@@ -9,18 +9,20 @@ import (
 	"strings"
 	"testing"
 
-	sigMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing/mocks"
 	"github.com/stretchr/testify/mock"
+
+	sigMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing/mocks"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/stellar/go/keypair"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/circle"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestCircleConfigHandler_Patch(t *testing.T) {
@@ -49,7 +51,7 @@ func TestCircleConfigHandler_Patch(t *testing.T) {
 	r.Patch(u, handler.Patch)
 
 	validPatchRequest := PatchCircleConfigRequest{
-		ApiKey:   utils.StringPtr("new_api_key"),
+		APIKey:   utils.StringPtr("new_api_key"),
 		WalletID: utils.StringPtr("new_wallet_id"),
 	}
 
@@ -109,9 +111,9 @@ func TestCircleConfigHandler_Patch(t *testing.T) {
 		require.NotNil(t, config)
 		assert.Equal(t, "new_wallet_id", *config.WalletID)
 
-		decryptedApiKey, err := encrypter.Decrypt(*config.EncryptedApiKey, encryptionPassphrase)
+		decryptedAPIKey, err := encrypter.Decrypt(*config.EncryptedAPIKey, encryptionPassphrase)
 		assert.NoError(t, err)
-		assert.Equal(t, "new_api_key", decryptedApiKey)
+		assert.Equal(t, "new_api_key", decryptedAPIKey)
 		assert.Equal(t, encryptionPublicKey, *config.EncrypterPublicKey)
 	})
 }

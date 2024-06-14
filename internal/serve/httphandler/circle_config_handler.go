@@ -11,6 +11,7 @@ import (
 	"github.com/stellar/go/keypair"
 
 	"github.com/stellar/go/support/render/httpjson"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/circle"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	sdpUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
@@ -26,12 +27,12 @@ type CircleConfigHandler struct {
 
 type PatchCircleConfigRequest struct {
 	WalletID *string `json:"wallet_id"`
-	ApiKey   *string `json:"api_key"`
+	APIKey   *string `json:"api_key"`
 }
 
 // validate validates the request.
 func (r PatchCircleConfigRequest) validate() error {
-	if r.WalletID == nil && r.ApiKey == nil {
+	if r.WalletID == nil && r.APIKey == nil {
 		return fmt.Errorf("wallet_id or api_key must be provided")
 	}
 	return nil
@@ -67,19 +68,19 @@ func (h CircleConfigHandler) Patch(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var clientConfigUpdate circle.ClientConfigUpdate
-	if patchRequest.ApiKey != nil {
+	if patchRequest.APIKey != nil {
 		kp, kpErr := keypair.ParseFull(h.EncryptionPassphrase)
 		if kpErr != nil {
 			httperror.InternalError(ctx, "Cannot parse the encryption keypair", kpErr, nil).Render(w)
 			return
 		}
 
-		encryptedApiKey, encryptErr := h.Encrypter.Encrypt(*patchRequest.ApiKey, kp.Seed())
+		encryptedAPIKey, encryptErr := h.Encrypter.Encrypt(*patchRequest.APIKey, kp.Seed())
 		if encryptErr != nil {
 			httperror.InternalError(ctx, "Cannot encrypt the API key", encryptErr, nil).Render(w)
 			return
 		}
-		clientConfigUpdate.EncryptedApiKey = &encryptedApiKey
+		clientConfigUpdate.EncryptedAPIKey = &encryptedAPIKey
 		encrypterPublicKey := kp.Address()
 		clientConfigUpdate.EncrypterPublicKey = &encrypterPublicKey
 	}

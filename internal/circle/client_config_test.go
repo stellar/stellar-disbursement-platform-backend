@@ -24,16 +24,16 @@ func Test_ClientConfigModel_Upsert_Update(t *testing.T) {
 	ccm := &ClientConfigModel{DBConnectionPool: dbConnectionPool}
 
 	walletID := "the_wallet_id"
-	encryptedApiKey := "the_encrypted_api_key"
+	encryptedAPIKey := "the_encrypted_api_key"
 	encrypterPublicKey := "the_encrypter_public_key"
 
 	updatedWalletID := "another_wallet_id"
-	updatedEncryptedApiKey := "another_encrypted_api_key"
+	updatedEncryptedAPIKey := "another_encrypted_api_key"
 	updatedEncrypterPublicKey := "another_encrypter_public_key"
 
 	outerErr = ccm.insert(ctx, dbConnectionPool, ClientConfigUpdate{
 		WalletID:           &walletID,
-		EncryptedApiKey:    &encryptedApiKey,
+		EncryptedAPIKey:    &encryptedAPIKey,
 		EncrypterPublicKey: &encrypterPublicKey,
 	})
 	require.NoError(t, outerErr)
@@ -45,12 +45,12 @@ func Test_ClientConfigModel_Upsert_Update(t *testing.T) {
 
 		// Verify the existing config
 		assert.Equal(t, walletID, *cc.WalletID)
-		assert.Equal(t, encryptedApiKey, *cc.EncryptedApiKey)
+		assert.Equal(t, encryptedAPIKey, *cc.EncryptedAPIKey)
 		assert.Equal(t, encrypterPublicKey, *cc.EncrypterPublicKey)
 
 		err = ccm.Upsert(ctx, ClientConfigUpdate{
 			WalletID:           &updatedWalletID,
-			EncryptedApiKey:    &updatedEncryptedApiKey,
+			EncryptedAPIKey:    &updatedEncryptedAPIKey,
 			EncrypterPublicKey: &updatedEncrypterPublicKey,
 		})
 		assert.NoError(t, err)
@@ -59,14 +59,14 @@ func Test_ClientConfigModel_Upsert_Update(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, cc)
 		assert.Equal(t, updatedWalletID, *cc.WalletID)
-		assert.Equal(t, updatedEncryptedApiKey, *cc.EncryptedApiKey)
+		assert.Equal(t, updatedEncryptedAPIKey, *cc.EncryptedAPIKey)
 		assert.Equal(t, updatedEncrypterPublicKey, *cc.EncrypterPublicKey)
 	})
 
 	t.Run("return error on validation failure", func(t *testing.T) {
 		err := ccm.Upsert(ctx, ClientConfigUpdate{
 			WalletID:           nil,
-			EncryptedApiKey:    nil,
+			EncryptedAPIKey:    nil,
 			EncrypterPublicKey: nil,
 		})
 		assert.Error(t, err)
@@ -86,13 +86,13 @@ func Test_ClientConfigModel_Upsert_Insert(t *testing.T) {
 	ccm := &ClientConfigModel{DBConnectionPool: dbConnectionPool}
 
 	walletID := "the_wallet_id"
-	encryptedApiKey := "the_encrypted_api_key"
+	encryptedAPIKey := "the_encrypted_api_key"
 	encrypterPublicKey := "the_encrypter_public_key"
 
 	t.Run("return error on validation failure for no values", func(t *testing.T) {
 		err := ccm.Upsert(ctx, ClientConfigUpdate{
 			WalletID:           nil,
-			EncryptedApiKey:    nil,
+			EncryptedAPIKey:    nil,
 			EncrypterPublicKey: nil,
 		})
 		assert.Error(t, err)
@@ -102,7 +102,7 @@ func Test_ClientConfigModel_Upsert_Insert(t *testing.T) {
 	t.Run("return error on validation failure for partial values", func(t *testing.T) {
 		err := ccm.Upsert(ctx, ClientConfigUpdate{
 			WalletID:           &walletID,
-			EncryptedApiKey:    nil,
+			EncryptedAPIKey:    nil,
 			EncrypterPublicKey: nil,
 		})
 		assert.Error(t, err)
@@ -117,7 +117,7 @@ func Test_ClientConfigModel_Upsert_Insert(t *testing.T) {
 
 		err = ccm.Upsert(ctx, ClientConfigUpdate{
 			WalletID:           &walletID,
-			EncryptedApiKey:    &encryptedApiKey,
+			EncryptedAPIKey:    &encryptedAPIKey,
 			EncrypterPublicKey: &encrypterPublicKey,
 		})
 		assert.NoError(t, err)
@@ -126,7 +126,7 @@ func Test_ClientConfigModel_Upsert_Insert(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, cc)
 		assert.Equal(t, walletID, *cc.WalletID)
-		assert.Equal(t, encryptedApiKey, *cc.EncryptedApiKey)
+		assert.Equal(t, encryptedAPIKey, *cc.EncryptedAPIKey)
 		assert.Equal(t, encrypterPublicKey, *cc.EncrypterPublicKey)
 	})
 }
@@ -143,7 +143,7 @@ func Test_ClientConfigModel_get(t *testing.T) {
 	ccm := &ClientConfigModel{DBConnectionPool: dbConnectionPool}
 
 	walletID := "the_wallet_id"
-	encryptedApiKey := "the_encrypted_api_key"
+	encryptedAPIKey := "the_encrypted_api_key"
 	encrypterPublicKey := "the_encrypter_public_key"
 
 	t.Run("retrieve existing config successfully", func(t *testing.T) {
@@ -153,7 +153,7 @@ func Test_ClientConfigModel_get(t *testing.T) {
 		// Insert a record to retrieve
 		insertErr := ccm.insert(ctx, tx, ClientConfigUpdate{
 			WalletID:           &walletID,
-			EncryptedApiKey:    &encryptedApiKey,
+			EncryptedAPIKey:    &encryptedAPIKey,
 			EncrypterPublicKey: &encrypterPublicKey,
 		})
 		require.NoError(t, insertErr)
@@ -162,7 +162,7 @@ func Test_ClientConfigModel_get(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, config)
 		assert.Equal(t, walletID, *config.WalletID)
-		assert.Equal(t, encryptedApiKey, *config.EncryptedApiKey)
+		assert.Equal(t, encryptedAPIKey, *config.EncryptedAPIKey)
 		assert.Equal(t, encrypterPublicKey, *config.EncrypterPublicKey)
 	})
 
@@ -189,17 +189,17 @@ func Test_ClientConfigModel_update(t *testing.T) {
 	ccm := &ClientConfigModel{DBConnectionPool: dbConnectionPool}
 
 	walletID := "the_wallet_id"
-	encryptedApiKey := "the_encrypted_api_key"
+	encryptedAPIKey := "the_encrypted_api_key"
 	encrypterPublicKey := "the_encrypter_public_key"
 
 	updatedWalletID := "another_wallet_id"
-	updatedEncryptedApiKey := "another_encrypted_api_key"
+	updatedEncryptedAPIKey := "another_encrypted_api_key"
 	updatedEncrypterPublicKey := "another_encrypter_public_key"
 
 	// Insert a record to update
 	insertErr := ccm.insert(ctx, dbConnectionPool, ClientConfigUpdate{
 		WalletID:           &walletID,
-		EncryptedApiKey:    &encryptedApiKey,
+		EncryptedAPIKey:    &encryptedAPIKey,
 		EncrypterPublicKey: &encrypterPublicKey,
 	})
 	require.NoError(t, insertErr)
@@ -223,7 +223,7 @@ func Test_ClientConfigModel_update(t *testing.T) {
 		cc, err := ccm.get(ctx, tx)
 		assert.NoError(t, err)
 		assert.Equal(t, updatedWalletID, *cc.WalletID)
-		assert.Equal(t, encryptedApiKey, *cc.EncryptedApiKey)
+		assert.Equal(t, encryptedAPIKey, *cc.EncryptedAPIKey)
 		assert.Equal(t, encrypterPublicKey, *cc.EncrypterPublicKey)
 	})
 
@@ -232,7 +232,7 @@ func Test_ClientConfigModel_update(t *testing.T) {
 		defer rollback(t, tx)
 
 		err := ccm.update(ctx, dbConnectionPool, ClientConfigUpdate{
-			EncryptedApiKey:    &updatedEncryptedApiKey,
+			EncryptedAPIKey:    &updatedEncryptedAPIKey,
 			EncrypterPublicKey: &updatedEncrypterPublicKey,
 		})
 		require.NoError(t, err)
@@ -240,7 +240,7 @@ func Test_ClientConfigModel_update(t *testing.T) {
 		cc, err := ccm.get(ctx, tx)
 		assert.NoError(t, err)
 		assert.Equal(t, walletID, *cc.WalletID)
-		assert.Equal(t, updatedEncryptedApiKey, *cc.EncryptedApiKey)
+		assert.Equal(t, updatedEncryptedAPIKey, *cc.EncryptedAPIKey)
 		assert.Equal(t, updatedEncrypterPublicKey, *cc.EncrypterPublicKey)
 	})
 
@@ -250,7 +250,7 @@ func Test_ClientConfigModel_update(t *testing.T) {
 
 		err := ccm.update(ctx, dbConnectionPool, ClientConfigUpdate{
 			WalletID:           &updatedWalletID,
-			EncryptedApiKey:    &updatedEncryptedApiKey,
+			EncryptedAPIKey:    &updatedEncryptedAPIKey,
 			EncrypterPublicKey: &updatedEncrypterPublicKey,
 		})
 		require.NoError(t, err)
@@ -258,7 +258,7 @@ func Test_ClientConfigModel_update(t *testing.T) {
 		cc, err := ccm.get(ctx, tx)
 		assert.NoError(t, err)
 		assert.Equal(t, updatedWalletID, *cc.WalletID)
-		assert.Equal(t, updatedEncryptedApiKey, *cc.EncryptedApiKey)
+		assert.Equal(t, updatedEncryptedAPIKey, *cc.EncryptedAPIKey)
 		assert.Equal(t, updatedEncrypterPublicKey, *cc.EncrypterPublicKey)
 	})
 }
@@ -275,7 +275,7 @@ func Test_ClientConfigModel_insert(t *testing.T) {
 	ccm := &ClientConfigModel{DBConnectionPool: dbConnectionPool}
 
 	walletID := "the_wallet_id"
-	encryptedApiKey := "the_encrypted_api_key"
+	encryptedAPIKey := "the_encrypted_api_key"
 	encrypterPublicKey := "the_encrypter_public_key"
 
 	t.Run("insert successfully", func(t *testing.T) {
@@ -284,7 +284,7 @@ func Test_ClientConfigModel_insert(t *testing.T) {
 
 		config := ClientConfigUpdate{
 			WalletID:           &walletID,
-			EncryptedApiKey:    &encryptedApiKey,
+			EncryptedAPIKey:    &encryptedAPIKey,
 			EncrypterPublicKey: &encrypterPublicKey,
 		}
 
@@ -294,7 +294,7 @@ func Test_ClientConfigModel_insert(t *testing.T) {
 		cc, err := ccm.get(ctx, tx)
 		assert.NoError(t, err)
 		assert.Equal(t, walletID, *cc.WalletID)
-		assert.Equal(t, encryptedApiKey, *cc.EncryptedApiKey)
+		assert.Equal(t, encryptedAPIKey, *cc.EncryptedAPIKey)
 		assert.Equal(t, encrypterPublicKey, *cc.EncrypterPublicKey)
 	})
 
@@ -304,7 +304,7 @@ func Test_ClientConfigModel_insert(t *testing.T) {
 
 		config := ClientConfigUpdate{
 			WalletID:           &walletID,
-			EncryptedApiKey:    nil,
+			EncryptedAPIKey:    nil,
 			EncrypterPublicKey: &encrypterPublicKey,
 		}
 
@@ -321,7 +321,7 @@ func Test_ClientConfigModel_insert(t *testing.T) {
 
 		config := ClientConfigUpdate{
 			WalletID:           nil,
-			EncryptedApiKey:    &encryptedApiKey,
+			EncryptedAPIKey:    &encryptedAPIKey,
 			EncrypterPublicKey: &encrypterPublicKey,
 		}
 
@@ -338,7 +338,7 @@ func Test_ClientConfigModel_insert(t *testing.T) {
 
 		config := ClientConfigUpdate{
 			WalletID:           &walletID,
-			EncryptedApiKey:    &encryptedApiKey,
+			EncryptedAPIKey:    &encryptedAPIKey,
 			EncrypterPublicKey: nil,
 		}
 
@@ -353,7 +353,7 @@ func Test_ClientConfigModel_insert(t *testing.T) {
 
 		config := ClientConfigUpdate{
 			WalletID:           &walletID,
-			EncryptedApiKey:    &encryptedApiKey,
+			EncryptedAPIKey:    &encryptedAPIKey,
 			EncrypterPublicKey: &encrypterPublicKey,
 		}
 
@@ -367,7 +367,7 @@ func Test_ClientConfigModel_insert(t *testing.T) {
 
 func Test_ClientConfigUpdate_Validate(t *testing.T) {
 	walletID := "wallet_id"
-	encryptedApiKey := "encrypted_api_key"
+	encryptedAPIKey := "encrypted_api_key"
 	encrypterPublicKey := "encrypter_public_key"
 
 	tests := []struct {
@@ -382,7 +382,7 @@ func Test_ClientConfigUpdate_Validate(t *testing.T) {
 		},
 		{
 			name:    "encrypted_api_key is provided without encrypter_public_key",
-			input:   ClientConfigUpdate{EncryptedApiKey: &encryptedApiKey},
+			input:   ClientConfigUpdate{EncryptedAPIKey: &encryptedAPIKey},
 			wantErr: errors.New("encrypter_public_key must be provided if encrypted_api_key is provided"),
 		},
 		{
@@ -391,7 +391,7 @@ func Test_ClientConfigUpdate_Validate(t *testing.T) {
 		},
 		{
 			name:  "both wallet_id and encrypted_api_key are provided with encrypter_public_key",
-			input: ClientConfigUpdate{WalletID: &walletID, EncryptedApiKey: &encryptedApiKey, EncrypterPublicKey: &encrypterPublicKey},
+			input: ClientConfigUpdate{WalletID: &walletID, EncryptedAPIKey: &encryptedAPIKey, EncrypterPublicKey: &encrypterPublicKey},
 		},
 	}
 

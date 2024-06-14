@@ -12,7 +12,7 @@ import (
 )
 
 type ClientConfig struct {
-	EncryptedApiKey    *string   `db:"encrypted_api_key"`
+	EncryptedAPIKey    *string   `db:"encrypted_api_key"`
 	WalletID           *string   `db:"wallet_id"`
 	EncrypterPublicKey *string   `db:"encrypter_public_key"`
 	UpdatedAt          time.Time `db:"updated_at"`
@@ -84,7 +84,7 @@ func (m *ClientConfigModel) insert(ctx context.Context, sqlExec db.SQLExecuter, 
 					INSERT INTO circle_client_config (encrypted_api_key, wallet_id, encrypter_public_key)
 					VALUES ($1, $2, $3)
 				`
-	_, err := sqlExec.ExecContext(ctx, q, config.EncryptedApiKey, config.WalletID, config.EncrypterPublicKey)
+	_, err := sqlExec.ExecContext(ctx, q, config.EncryptedAPIKey, config.WalletID, config.EncrypterPublicKey)
 	if err != nil {
 		return fmt.Errorf("inserting circle config: %w", err)
 	}
@@ -111,9 +111,9 @@ func (m *ClientConfigModel) update(ctx context.Context, sqlExec db.SQLExecuter, 
 		args = append(args, config.WalletID)
 	}
 
-	if config.EncryptedApiKey != nil {
+	if config.EncryptedAPIKey != nil {
 		fields = append(fields, "encrypted_api_key = ?", "encrypter_public_key = ?")
-		args = append(args, config.EncryptedApiKey, config.EncrypterPublicKey)
+		args = append(args, config.EncryptedAPIKey, config.EncrypterPublicKey)
 	}
 
 	query = m.DBConnectionPool.Rebind(fmt.Sprintf(query, strings.Join(fields, ", ")))
@@ -127,17 +127,17 @@ func (m *ClientConfigModel) update(ctx context.Context, sqlExec db.SQLExecuter, 
 }
 
 type ClientConfigUpdate struct {
-	EncryptedApiKey    *string `db:"encrypted_api_key"`
+	EncryptedAPIKey    *string `db:"encrypted_api_key"`
 	WalletID           *string `db:"wallet_id"`
 	EncrypterPublicKey *string `db:"encrypter_public_key"`
 }
 
 func (c ClientConfigUpdate) validate() error {
-	if c.WalletID == nil && c.EncryptedApiKey == nil {
+	if c.WalletID == nil && c.EncryptedAPIKey == nil {
 		return fmt.Errorf("wallet_id or encrypted_api_key must be provided")
 	}
 
-	if c.EncryptedApiKey != nil && c.EncrypterPublicKey == nil {
+	if c.EncryptedAPIKey != nil && c.EncrypterPublicKey == nil {
 		return fmt.Errorf("encrypter_public_key must be provided if encrypted_api_key is provided")
 	}
 
@@ -145,7 +145,7 @@ func (c ClientConfigUpdate) validate() error {
 }
 
 func (c ClientConfigUpdate) validateForInsert() error {
-	if c.WalletID == nil || c.EncryptedApiKey == nil || c.EncrypterPublicKey == nil {
+	if c.WalletID == nil || c.EncryptedAPIKey == nil || c.EncrypterPublicKey == nil {
 		return fmt.Errorf("wallet_id, encrypted_api_key, and encrypter_public_key must be provided")
 	}
 	return nil
