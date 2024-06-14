@@ -559,6 +559,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 
 			// Setup Distribution Account Resolver
 			distAccResolverOpts.AdminDBConnectionPool = adminDBConnectionPool
+			distAccResolverOpts.MTNDBConnectionPool = mtnDBConnectionPool
 			distAccResolver, err := di.NewDistributionAccountResolver(ctx, distAccResolverOpts)
 			if err != nil {
 				log.Ctx(ctx).Fatalf("error creating distribution account resolver: %v", err)

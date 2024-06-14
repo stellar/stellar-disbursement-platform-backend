@@ -141,6 +141,13 @@ func (c *ChannelAccountsCommand) Command(cmdService ChAccCmdServiceInterface) *c
 			}
 			distAccResolverOpts.AdminDBConnectionPool = adminDBConnectionPool
 
+			// Initializing the MTNDBConnectionPool
+			mtnDBConnectionPool, err := di.NewMtnDBConnectionPool(ctx, dbcpOptions)
+			if err != nil {
+				log.Ctx(ctx).Fatalf("error getting MTN DB connection pool: %v", err)
+			}
+			distAccResolverOpts.MTNDBConnectionPool = mtnDBConnectionPool
+
 			// Initializing the DistributionAccountResolver
 			distributionAccountResolver, err := di.NewDistributionAccountResolver(ctx, distAccResolverOpts)
 			if err != nil {

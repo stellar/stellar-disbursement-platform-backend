@@ -1027,6 +1027,7 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 	defaultTenantDistAcc := "GDIVVKL6QYF6C6K3C5PZZBQ2NQDLN2OSLMVIEQRHS6DZE7WRL33ZDNXL"
 	distAccResolver, err := signing.NewDistributionAccountResolver(signing.DistributionAccountResolverOptions{
 		AdminDBConnectionPool:            dbConnectionPool,
+		MTNDBConnectionPool:              dbConnectionPool,
 		HostDistributionAccountPublicKey: hostDistAccPublicKey,
 	})
 	require.NoError(t, err)

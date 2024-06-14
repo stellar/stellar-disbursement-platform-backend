@@ -11,9 +11,10 @@ const (
 
 // TransactionAccount represents an account that is used for transactions, either directly with the STellar network or with Circle.
 type TransactionAccount struct {
-	Address string        `json:"address" db:"address"`
-	Type    AccountType   `json:"type" db:"type"`
-	Status  AccountStatus `json:"status" db:"status"`
+	Address        string        `json:"address,omitempty"`
+	CircleWalletID string        `json:"circle_wallet_id,omitempty"`
+	Type           AccountType   `json:"type"`
+	Status         AccountStatus `json:"status"`
 }
 
 func (da TransactionAccount) IsStellar() bool {
@@ -34,6 +35,14 @@ func (da TransactionAccount) IsPendingUserActivation() bool {
 
 func (da TransactionAccount) String() string {
 	return fmt.Sprintf("TransactionAccount{Type: %s, Status: %s, Address: %s}", da.Type, da.Status, da.Address)
+}
+
+func NewDefaultCircleTransactionAccount(circleWalletID string) TransactionAccount {
+	return TransactionAccount{
+		CircleWalletID: circleWalletID,
+		Type:           DistributionAccountCircleDBVault,
+		Status:         AccountStatusActive,
+	}
 }
 
 func NewDefaultStellarTransactionAccount(stellarAddress string) TransactionAccount {

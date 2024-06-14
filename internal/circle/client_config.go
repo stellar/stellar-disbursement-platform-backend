@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
 type ClientConfig struct {
@@ -19,12 +20,23 @@ type ClientConfig struct {
 	CreatedAt          time.Time `db:"created_at"`
 }
 
+//go:generate mockery --name=ClientConfigModelInterface --case=underscore --structname=MockClientConfigModel
+type ClientConfigModelInterface interface {
+	Upsert(ctx context.Context, configUpdate ClientConfigUpdate) error
+	GetDecryptedAPIKey(ctx context.Context, passphrase string) (string, error)
+	Get(ctx context.Context) (*ClientConfig, error)
+}
+
 type ClientConfigModel struct {
 	DBConnectionPool db.DBConnectionPool
+	Encrypter        utils.PrivateKeyEncrypter
 }
 
 func NewClientConfigModel(dbConnectionPool db.DBConnectionPool) *ClientConfigModel {
-	return &ClientConfigModel{DBConnectionPool: dbConnectionPool}
+	return &ClientConfigModel{
+		DBConnectionPool: dbConnectionPool,
+		Encrypter:        &utils.DefaultPrivateKeyEncrypter{},
+	}
 }
 
 // Upsert insert or update the client configuration for Circle into the database.
@@ -54,6 +66,21 @@ func (m *ClientConfigModel) Upsert(ctx context.Context, configUpdate ClientConfi
 	}
 
 	return nil
+}
+
+// GetDecryptedAPIKey retrieves the decrypted API key from the database.
+func (m *ClientConfigModel) GetDecryptedAPIKey(ctx context.Context, passphrase string) (string, error) {
+	config, err := m.Get(ctx)
+	if err != nil {
+		return "", fmt.Errorf("getting circle config: %w", err)
+	}
+
+	apiKey, err := m.Encrypter.Decrypt(*config.EncryptedAPIKey, passphrase)
+	if err != nil {
+		return "", fmt.Errorf("decrypting circle API key: %w", err)
+	}
+
+	return apiKey, nil
 }
 
 // Get retrieves the circle client config from the database if it exists.
@@ -125,6 +152,8 @@ func (m *ClientConfigModel) update(ctx context.Context, sqlExec db.SQLExecuter, 
 
 	return nil
 }
+
+var _ ClientConfigModelInterface = &ClientConfigModel{}
 
 type ClientConfigUpdate struct {
 	EncryptedAPIKey    *string `db:"encrypted_api_key"`

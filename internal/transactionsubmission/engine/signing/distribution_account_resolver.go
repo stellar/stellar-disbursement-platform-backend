@@ -7,6 +7,7 @@ import (
 	"github.com/stellar/go/strkey"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/circle"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
@@ -25,11 +26,16 @@ type DistributionAccountResolver interface {
 type DistributionAccountResolverOptions struct {
 	AdminDBConnectionPool            db.DBConnectionPool
 	HostDistributionAccountPublicKey string
+	MTNDBConnectionPool              db.DBConnectionPool
 }
 
 func (c DistributionAccountResolverOptions) Validate() error {
 	if c.AdminDBConnectionPool == nil {
 		return fmt.Errorf("AdminDBConnectionPool cannot be nil")
+	}
+
+	if c.MTNDBConnectionPool == nil {
+		return fmt.Errorf("MTNDBConnectionPool cannot be nil")
 	}
 
 	if c.HostDistributionAccountPublicKey == "" {
@@ -50,6 +56,7 @@ func NewDistributionAccountResolver(config DistributionAccountResolverOptions) (
 	return &DistributionAccountResolverImpl{
 		tenantManager:                 tenant.NewManager(tenant.WithDatabase(config.AdminDBConnectionPool)),
 		hostDistributionAccountPubKey: config.HostDistributionAccountPublicKey,
+		circleConfigModel:             circle.NewClientConfigModel(config.MTNDBConnectionPool),
 	}, nil
 }
 
@@ -59,34 +66,56 @@ var _ DistributionAccountResolver = (*DistributionAccountResolverImpl)(nil)
 type DistributionAccountResolverImpl struct {
 	tenantManager                 tenant.ManagerInterface
 	hostDistributionAccountPubKey string
+	circleConfigModel             circle.ClientConfigModelInterface
 }
 
 // DistributionAccount returns the tenant's distribution account stored in the database.
 func (r *DistributionAccountResolverImpl) DistributionAccount(ctx context.Context, tenantID string) (schema.TransactionAccount, error) {
-	return r.getDistributionAccount(r.tenantManager.GetTenantByID(ctx, tenantID))
+	tnt, err := r.tenantManager.GetTenantByID(ctx, tenantID)
+	if err != nil {
+		return schema.TransactionAccount{}, fmt.Errorf("getting tenant: %w", err)
+	}
+	tenant.SaveTenantInContext(ctx, tnt)
+	return r.getDistributionAccount(ctx, tnt)
 }
 
 // DistributionAccountFromContext returns the tenant's distribution account from the tenant object stored in the context
 // provided.
 func (r *DistributionAccountResolverImpl) DistributionAccountFromContext(ctx context.Context) (schema.TransactionAccount, error) {
-	return r.getDistributionAccount(tenant.GetTenantFromContext(ctx))
-}
-
-// getDistributionAccount extracts the distribution account from the tenant if it exists.
-func (r *DistributionAccountResolverImpl) getDistributionAccount(tnt *tenant.Tenant, err error) (schema.TransactionAccount, error) {
+	tnt, err := tenant.GetTenantFromContext(ctx)
 	if err != nil {
 		return schema.TransactionAccount{}, fmt.Errorf("getting tenant: %w", err)
 	}
+	return r.getDistributionAccount(ctx, tnt)
+}
 
-	if tnt.DistributionAccountAddress == nil {
-		return schema.TransactionAccount{}, ErrDistributionAccountIsEmpty
+// getDistributionAccount extracts the distribution account from the tenant if it exists.
+func (r *DistributionAccountResolverImpl) getDistributionAccount(ctx context.Context, tnt *tenant.Tenant) (schema.TransactionAccount, error) {
+	if tnt.DistributionAccountType == schema.DistributionAccountCircleDBVault {
+		// 1. Circle Account
+		cc, circleErr := r.circleConfigModel.Get(ctx)
+		if circleErr != nil {
+			return schema.TransactionAccount{}, fmt.Errorf("getting circle client config: %w", circleErr)
+		}
+
+		return schema.TransactionAccount{
+			CircleWalletID: *cc.WalletID,
+			Type:           schema.DistributionAccountCircleDBVault,
+			Status:         schema.AccountStatusActive,
+		}, nil
+	} else {
+		// 2. Stellar Account
+		if tnt.DistributionAccountAddress == nil {
+			return schema.TransactionAccount{}, ErrDistributionAccountIsEmpty
+		}
+
+		return schema.TransactionAccount{
+			Address: *tnt.DistributionAccountAddress,
+			Type:    tnt.DistributionAccountType,
+			Status:  tnt.DistributionAccountStatus,
+		}, nil
+
 	}
-
-	return schema.TransactionAccount{
-		Address: *tnt.DistributionAccountAddress,
-		Type:    tnt.DistributionAccountType,
-		Status:  tnt.DistributionAccountStatus,
-	}, nil
 }
 
 // HostDistributionAccount returns the host distribution account from the database.

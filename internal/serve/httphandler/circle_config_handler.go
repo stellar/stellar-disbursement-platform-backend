@@ -19,7 +19,7 @@ import (
 type CircleConfigHandler struct {
 	Encrypter                   sdpUtils.PrivateKeyEncrypter
 	EncryptionPassphrase        string
-	CircleClientConfigModel     *circle.ClientConfigModel
+	CircleClientConfigModel     circle.ClientConfigModelInterface
 	DistributionAccountResolver signing.DistributionAccountResolver
 }
 
