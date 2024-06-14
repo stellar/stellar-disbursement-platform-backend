@@ -180,24 +180,37 @@ func (m *Manager) fundTenantDistributionAccount(ctx context.Context, distributio
 	return nil
 }
 
+// provisionDistributionAccount provisions a distribution account for the tenant if necessary, based on the accountType provided.
 func (m *Manager) provisionDistributionAccount(ctx context.Context, t *tenant.Tenant, accountType schema.AccountType) error {
-	distributionAccounts, err := m.SubmitterEngine.SignerRouter.BatchInsert(ctx, accountType, 1)
-	if err != nil {
-		if errors.Is(err, signing.ErrUnsupportedCommand) {
-			log.Ctx(ctx).Warnf("Account provisioning not needed for distribution account of type=%s: %v", accountType, err)
-		} else {
-			return fmt.Errorf("%w: provisioning distribution account: %w", ErrProvisionTenantDistributionAccountFailed, err)
-		}
-	}
+	switch accountType {
+	case schema.DistributionAccountCircleDBVault:
+		log.Ctx(ctx).Warnf("Circle account cannot be automatically provisioned, the tenant %s will need to provision it through the UI.", t.Name)
+		t.DistributionAccountType = accountType
+		t.DistributionAccountStatus = schema.AccountStatusPendingUserActivation
+		return nil
 
-	// Assigning the account key to the tenant so that it can be referenced if it needs to be deleted in the vault if any subsequent errors are encountered
-	if len(distributionAccounts) != 1 {
-		return fmt.Errorf("%w: expected single distribution account public key, got %d", ErrUpdateTenantFailed, len(distributionAccounts))
+	case schema.DistributionAccountStellarEnv, schema.DistributionAccountStellarDBVault:
+		distributionAccounts, err := m.SubmitterEngine.SignerRouter.BatchInsert(ctx, accountType, 1)
+		if err != nil {
+			if errors.Is(err, signing.ErrUnsupportedCommand) {
+				log.Ctx(ctx).Warnf("Account provisioning for distribution account of type=%s is NoOp: %v", accountType, err)
+			} else {
+				return fmt.Errorf("%w: provisioning distribution account: %w", ErrProvisionTenantDistributionAccountFailed, err)
+			}
+		}
+
+		// Assigning the account key to the tenant so that it can be referenced if it needs to be deleted in the vault if any subsequent errors are encountered
+		if len(distributionAccounts) != 1 {
+			return fmt.Errorf("%w: expected single distribution account public key, got %d", ErrUpdateTenantFailed, len(distributionAccounts))
+		}
+		t.DistributionAccountAddress = &distributionAccounts[0].Address
+		t.DistributionAccountType = accountType
+		log.Ctx(ctx).Infof("distribution account for tenant %s was set to %s", t.Name, *t.DistributionAccountAddress)
+		return nil
+
+	default:
+		return fmt.Errorf("%w: unsupported distribution account type %s", ErrProvisionTenantDistributionAccountFailed, accountType)
 	}
-	t.DistributionAccountAddress = &distributionAccounts[0].Address
-	t.DistributionAccountType = distributionAccounts[0].Type
-	log.Ctx(ctx).Infof("distribution account %s created for tenant %s", *t.DistributionAccountAddress, t.Name)
-	return nil
 }
 
 func (m *Manager) setupTenantData(ctx context.Context, tenantSchemaDSN string, pt *ProvisionTenant) error {
