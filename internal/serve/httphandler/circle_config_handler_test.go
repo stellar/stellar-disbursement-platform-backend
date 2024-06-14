@@ -3,7 +3,6 @@ package httphandler
 import (
 	"context"
 	"encoding/json"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -18,6 +17,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/circle"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/testutils"
 	sigMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
@@ -149,22 +149,12 @@ func TestCircleConfigHandler_Patch(t *testing.T) {
 			}
 
 			r := chi.NewRouter()
-			r.Patch("/organization/circle-config", handler.Patch)
+			url := "/organization/circle-config"
+			r.Patch(url, handler.Patch)
 
-			rr := request(t, r, http.MethodPatch, strings.NewReader(tc.requestBody))
+			rr := testutils.Request(t, r, url, http.MethodPatch, strings.NewReader(tc.requestBody))
 			assert.Equal(t, tc.statusCode, rr.Code)
 			tc.assertions(t, rr)
 		})
 	}
-}
-
-func request(t *testing.T, r *chi.Mux, httpMethod string, body io.Reader) *httptest.ResponseRecorder {
-	t.Helper()
-
-	req, err := http.NewRequest(httpMethod, "/organization/circle-config", body)
-	require.NoError(t, err)
-
-	rr := httptest.NewRecorder()
-	r.ServeHTTP(rr, req)
-	return rr
 }

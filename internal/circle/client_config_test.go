@@ -10,6 +10,7 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/testutils"
 )
 
 func Test_ClientConfigModel_Upsert_Update(t *testing.T) {
@@ -147,8 +148,7 @@ func Test_ClientConfigModel_get(t *testing.T) {
 	encrypterPublicKey := "the_encrypter_public_key"
 
 	t.Run("retrieve existing config successfully", func(t *testing.T) {
-		tx := beginTx(t, ctx, dbConnectionPool)
-		defer rollback(t, tx)
+		tx := testutils.BeginTxWithRollback(t, ctx, dbConnectionPool)
 
 		// Insert a record to retrieve
 		insertErr := ccm.insert(ctx, tx, ClientConfigUpdate{
@@ -167,8 +167,7 @@ func Test_ClientConfigModel_get(t *testing.T) {
 	})
 
 	t.Run("return nil if no config exists", func(t *testing.T) {
-		tx := beginTx(t, ctx, dbConnectionPool)
-		defer rollback(t, tx)
+		tx := testutils.BeginTxWithRollback(t, ctx, dbConnectionPool)
 
 		config, err := ccm.get(ctx, tx)
 		require.NoError(t, err)
@@ -212,8 +211,7 @@ func Test_ClientConfigModel_update(t *testing.T) {
 	})
 
 	t.Run("update wallet_id successfully", func(t *testing.T) {
-		tx := beginTx(t, ctx, dbConnectionPool)
-		defer rollback(t, tx)
+		tx := testutils.BeginTxWithRollback(t, ctx, dbConnectionPool)
 
 		config := ClientConfigUpdate{WalletID: &updatedWalletID}
 
@@ -228,8 +226,7 @@ func Test_ClientConfigModel_update(t *testing.T) {
 	})
 
 	t.Run("updates encrypted_api_key and encrypter_public_key successfully", func(t *testing.T) {
-		tx := beginTx(t, ctx, dbConnectionPool)
-		defer rollback(t, tx)
+		tx := testutils.BeginTxWithRollback(t, ctx, dbConnectionPool)
 
 		err := ccm.update(ctx, dbConnectionPool, ClientConfigUpdate{
 			EncryptedAPIKey:    &updatedEncryptedAPIKey,
@@ -245,8 +242,7 @@ func Test_ClientConfigModel_update(t *testing.T) {
 	})
 
 	t.Run("updates both wallet_id and encrypted_api_key with encrypter_public_key successfully", func(t *testing.T) {
-		tx := beginTx(t, ctx, dbConnectionPool)
-		defer rollback(t, tx)
+		tx := testutils.BeginTxWithRollback(t, ctx, dbConnectionPool)
 
 		err := ccm.update(ctx, dbConnectionPool, ClientConfigUpdate{
 			WalletID:           &updatedWalletID,
@@ -279,8 +275,7 @@ func Test_ClientConfigModel_insert(t *testing.T) {
 	encrypterPublicKey := "the_encrypter_public_key"
 
 	t.Run("insert successfully", func(t *testing.T) {
-		tx := beginTx(t, ctx, dbConnectionPool)
-		defer rollback(t, tx)
+		tx := testutils.BeginTxWithRollback(t, ctx, dbConnectionPool)
 
 		config := ClientConfigUpdate{
 			WalletID:           &walletID,
@@ -299,8 +294,7 @@ func Test_ClientConfigModel_insert(t *testing.T) {
 	})
 
 	t.Run("insert fails with missing encrypted_api_key", func(t *testing.T) {
-		tx := beginTx(t, ctx, dbConnectionPool)
-		defer rollback(t, tx)
+		tx := testutils.BeginTxWithRollback(t, ctx, dbConnectionPool)
 
 		config := ClientConfigUpdate{
 			WalletID:           &walletID,
@@ -316,8 +310,7 @@ func Test_ClientConfigModel_insert(t *testing.T) {
 	})
 
 	t.Run("insert fails with missing wallet_id", func(t *testing.T) {
-		tx := beginTx(t, ctx, dbConnectionPool)
-		defer rollback(t, tx)
+		tx := testutils.BeginTxWithRollback(t, ctx, dbConnectionPool)
 
 		config := ClientConfigUpdate{
 			WalletID:           nil,
@@ -333,8 +326,7 @@ func Test_ClientConfigModel_insert(t *testing.T) {
 	})
 
 	t.Run("insert fails with missing encrypter_public_key", func(t *testing.T) {
-		tx := beginTx(t, ctx, dbConnectionPool)
-		defer rollback(t, tx)
+		tx := testutils.BeginTxWithRollback(t, ctx, dbConnectionPool)
 
 		config := ClientConfigUpdate{
 			WalletID:           &walletID,
@@ -348,8 +340,7 @@ func Test_ClientConfigModel_insert(t *testing.T) {
 	})
 
 	t.Run("insert fails when inserting a second record", func(t *testing.T) {
-		tx := beginTx(t, ctx, dbConnectionPool)
-		defer rollback(t, tx)
+		tx := testutils.BeginTxWithRollback(t, ctx, dbConnectionPool)
 
 		config := ClientConfigUpdate{
 			WalletID:           &walletID,
@@ -405,20 +396,4 @@ func Test_ClientConfigUpdate_Validate(t *testing.T) {
 			}
 		})
 	}
-}
-
-func beginTx(t *testing.T, ctx context.Context, dbConnectionPool db.DBConnectionPool) db.DBTransaction {
-	t.Helper()
-
-	tx, err := dbConnectionPool.BeginTxx(ctx, nil)
-	require.NoError(t, err)
-
-	return tx
-}
-
-func rollback(t *testing.T, dbTx db.DBTransaction) {
-	t.Helper()
-
-	err := dbTx.Rollback()
-	require.NoError(t, err)
 }
