@@ -37,83 +37,125 @@ func TestCircleConfigHandler_Patch(t *testing.T) {
 
 	ccm := circle.ClientConfigModel{DBConnectionPool: dbConnectionPool}
 	encrypter := utils.DefaultPrivateKeyEncrypter{}
-	mDistributionAccountResolver := sigMocks.NewMockDistributionAccountResolver(t)
-	handler := CircleConfigHandler{
-		Encrypter:                   &encrypter,
-		EncryptionPassphrase:        encryptionPassphrase,
-		CircleClientConfigModel:     &ccm,
-		DistributionAccountResolver: mDistributionAccountResolver,
-	}
-	r := chi.NewRouter()
-	u := "/organization/circle-config"
-	r.Patch(u, handler.Patch)
 
 	validPatchRequest := PatchCircleConfigRequest{
 		APIKey:   utils.StringPtr("new_api_key"),
 		WalletID: utils.StringPtr("new_wallet_id"),
 	}
+	validRequestBody, err := json.Marshal(validPatchRequest)
+	require.NoError(t, err)
 
-	mCircleDistributionAccount := mDistributionAccountResolver.
-		On("DistributionAccountFromContext", mock.Anything).
-		Return(schema.TransactionAccount{Type: schema.DistributionAccountCircleDBVault}, nil)
+	invalidRequestBody, err := json.Marshal(PatchCircleConfigRequest{})
+	require.NoError(t, err)
 
-	t.Run("returns bad request for invalid request body", func(t *testing.T) {
-		mCircleDistributionAccount.Once()
+	testCases := []struct {
+		name           string
+		prepareMocksFn func(t *testing.T, mDistributionAccountResolver *sigMocks.MockDistributionAccountResolver)
+		requestBody    string
+		statusCode     int
+		assertions     func(t *testing.T, rr *httptest.ResponseRecorder)
+	}{
+		{
+			name: "returns bad request for invalid request body",
+			prepareMocksFn: func(t *testing.T, m *sigMocks.MockDistributionAccountResolver) {
+				t.Helper()
+				m.
+					On("DistributionAccountFromContext", mock.Anything).
+					Return(schema.TransactionAccount{Type: schema.DistributionAccountCircleDBVault}, nil).
+					Once()
+			},
+			requestBody: "invalid json",
+			statusCode:  http.StatusBadRequest,
+			assertions: func(t *testing.T, rr *httptest.ResponseRecorder) {
+				t.Helper()
 
-		rr := request(t, r, http.MethodPatch, strings.NewReader("invalid json"))
+				assert.JSONEq(t, `{"error": "Request body is not valid"}`, rr.Body.String())
+			},
+		},
+		{
+			name: "returns bad request for invalid patch request",
+			prepareMocksFn: func(t *testing.T, m *sigMocks.MockDistributionAccountResolver) {
+				t.Helper()
+				m.
+					On("DistributionAccountFromContext", mock.Anything).
+					Return(schema.TransactionAccount{Type: schema.DistributionAccountCircleDBVault}, nil).
+					Once()
+			},
+			requestBody: string(invalidRequestBody),
+			statusCode:  http.StatusBadRequest,
+			assertions: func(t *testing.T, rr *httptest.ResponseRecorder) {
+				t.Helper()
 
-		assert.Equal(t, http.StatusBadRequest, rr.Code)
-		assert.JSONEq(t, `{"error": "Request body is not valid"}`, rr.Body.String())
-	})
+				assert.JSONEq(t, `{"error":"Request body is not valid", "extras":{"validation_error":"wallet_id or api_key must be provided"}}`, rr.Body.String())
+			},
+		},
+		{
+			name: "returns bad request if distribution account type is not Circle",
+			prepareMocksFn: func(t *testing.T, m *sigMocks.MockDistributionAccountResolver) {
+				t.Helper()
+				m.
+					On("DistributionAccountFromContext", mock.Anything).
+					Return(schema.TransactionAccount{Type: schema.DistributionAccountStellarEnv}, nil).
+					Once()
+			},
+			requestBody: string(validRequestBody),
+			statusCode:  http.StatusBadRequest,
+			assertions: func(t *testing.T, rr *httptest.ResponseRecorder) {
+				t.Helper()
 
-	t.Run("returns bad request for invalid patch request", func(t *testing.T) {
-		mCircleDistributionAccount.Once()
+				assert.JSONEq(t, `{"error": "This endpoint is only available for tenants using CIRCLE"}`, rr.Body.String())
+			},
+		},
+		{
+			name: "updates Circle configuration successfully",
+			prepareMocksFn: func(t *testing.T, m *sigMocks.MockDistributionAccountResolver) {
+				t.Helper()
+				m.
+					On("DistributionAccountFromContext", mock.Anything).
+					Return(schema.TransactionAccount{Type: schema.DistributionAccountCircleDBVault}, nil).
+					Once()
+			},
+			requestBody: string(validRequestBody),
+			statusCode:  http.StatusOK,
+			assertions: func(t *testing.T, rr *httptest.ResponseRecorder) {
+				t.Helper()
 
-		invalidPatchRequest := PatchCircleConfigRequest{}
-		body, err := json.Marshal(invalidPatchRequest)
-		require.NoError(t, err)
+				// Check the updated config in the database
+				config, err := ccm.Get(context.Background())
+				require.NoError(t, err)
+				require.NotNil(t, config)
+				assert.Equal(t, "new_wallet_id", *config.WalletID)
 
-		rr := request(t, r, http.MethodPatch, strings.NewReader(string(body)))
+				decryptedAPIKey, err := encrypter.Decrypt(*config.EncryptedAPIKey, encryptionPassphrase)
+				assert.NoError(t, err)
+				assert.Equal(t, "new_api_key", decryptedAPIKey)
+				assert.Equal(t, encryptionPublicKey, *config.EncrypterPublicKey)
+			},
+		},
+	}
 
-		assert.Equal(t, http.StatusBadRequest, rr.Code)
-		assert.JSONEq(t, `{"error":"Request body is not valid", "extras":{"validation_error":"wallet_id or api_key must be provided"}}`, rr.Body.String())
-	})
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			mDistributionAccountResolver := sigMocks.NewMockDistributionAccountResolver(t)
+			handler := CircleConfigHandler{
+				Encrypter:                   &encrypter,
+				EncryptionPassphrase:        encryptionPassphrase,
+				CircleClientConfigModel:     &ccm,
+				DistributionAccountResolver: mDistributionAccountResolver,
+			}
 
-	t.Run("returns bad request if distribution account type is not Circle", func(t *testing.T) {
-		mDistributionAccountResolver.
-			On("DistributionAccountFromContext", mock.Anything).
-			Return(schema.TransactionAccount{Type: schema.DistributionAccountStellarEnv}, nil).
-			Once()
+			if tc.prepareMocksFn != nil {
+				tc.prepareMocksFn(t, mDistributionAccountResolver)
+			}
 
-		body, err := json.Marshal(validPatchRequest)
-		require.NoError(t, err)
+			r := chi.NewRouter()
+			r.Patch("/organization/circle-config", handler.Patch)
 
-		rr := request(t, r, http.MethodPatch, strings.NewReader(string(body)))
-
-		assert.Equal(t, http.StatusBadRequest, rr.Code)
-		assert.JSONEq(t, `{"error": "This endpoint is only available for tenants using CIRCLE"}`, rr.Body.String())
-	})
-
-	t.Run("updates Circle configuration successfully", func(t *testing.T) {
-		mCircleDistributionAccount.Once()
-
-		body, err := json.Marshal(validPatchRequest)
-		require.NoError(t, err)
-
-		rr := request(t, r, http.MethodPatch, strings.NewReader(string(body)))
-		assert.Equal(t, http.StatusOK, rr.Code)
-
-		// Check the updated config in the database
-		config, err := ccm.Get(context.Background())
-		require.NoError(t, err)
-		require.NotNil(t, config)
-		assert.Equal(t, "new_wallet_id", *config.WalletID)
-
-		decryptedAPIKey, err := encrypter.Decrypt(*config.EncryptedAPIKey, encryptionPassphrase)
-		assert.NoError(t, err)
-		assert.Equal(t, "new_api_key", decryptedAPIKey)
-		assert.Equal(t, encryptionPublicKey, *config.EncrypterPublicKey)
-	})
+			rr := request(t, r, http.MethodPatch, strings.NewReader(tc.requestBody))
+			assert.Equal(t, tc.statusCode, rr.Code)
+			tc.assertions(t, rr)
+		})
+	}
 }
 
 func request(t *testing.T, r *chi.Mux, httpMethod string, body io.Reader) *httptest.ResponseRecorder {
