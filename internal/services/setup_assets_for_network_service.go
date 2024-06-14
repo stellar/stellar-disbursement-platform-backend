@@ -12,21 +12,34 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/assets"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
-type AssetsNetworkMapType map[utils.NetworkType][]data.Asset
+type AssetsByNetworkMapType map[utils.NetworkType][]data.Asset
 
-var DefaultAssetsNetworkMap = AssetsNetworkMapType{
-	utils.PubnetNetworkType:  []data.Asset{assets.USDCAssetPubnet, assets.XLMAsset},
-	utils.TestnetNetworkType: []data.Asset{assets.USDCAssetTestnet, assets.XLMAsset},
+var DefaultAssetsNetworkMap = AssetsByNetworkMapType{
+	utils.PubnetNetworkType:  []data.Asset{assets.EURCAssetPubnet, assets.USDCAssetPubnet, assets.XLMAsset},
+	utils.TestnetNetworkType: []data.Asset{assets.EURCAssetTestnet, assets.USDCAssetTestnet, assets.XLMAsset},
+}
+
+var CircleAssetsNetworkMap = AssetsByNetworkMapType{
+	utils.PubnetNetworkType:  []data.Asset{assets.EURCAssetPubnet, assets.USDCAssetPubnet},
+	utils.TestnetNetworkType: []data.Asset{assets.EURCAssetTestnet, assets.USDCAssetTestnet},
+}
+
+type AssetsNetworkByPlatformMapType map[schema.Platform]AssetsByNetworkMapType
+
+var AssetsNetworkByPlatformMap = AssetsNetworkByPlatformMapType{
+	schema.StellarPlatform: DefaultAssetsNetworkMap,
+	schema.CirclePlatform:  CircleAssetsNetworkMap,
 }
 
 // SetupAssetsForProperNetwork updates and inserts assets for the given Network Passphrase (`network`). So it avoids the application having
 // same asset code with multiple issuers.
-func SetupAssetsForProperNetwork(ctx context.Context, dbConnectionPool db.DBConnectionPool, network utils.NetworkType, assetsNetworkMap AssetsNetworkMapType) error {
+func SetupAssetsForProperNetwork(ctx context.Context, dbConnectionPool db.DBConnectionPool, network utils.NetworkType, distAccPlatform schema.Platform) error {
 	log.Ctx(ctx).Infof("updating/inserting assets for the '%s' network", network)
 
-	assets, ok := assetsNetworkMap[network]
+	assets, ok := AssetsNetworkByPlatformMap[distAccPlatform][network]
 	if !ok {
 		return fmt.Errorf("invalid network provided")
 	}
