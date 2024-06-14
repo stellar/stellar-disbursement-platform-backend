@@ -83,3 +83,8 @@ func GetTypeName(v interface{}) string {
 
 	return fullTypeName
 }
+
+// StringPtr returns a pointer to a string
+func StringPtr(s string) *string {
+	return &s
+}

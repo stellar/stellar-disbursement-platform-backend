@@ -11,11 +11,15 @@ import (
 )
 
 func OpenWithoutMigrations(t *testing.T) *dbtest.DB {
+	t.Helper()
+
 	db := dbtest.Postgres(t)
 	return db
 }
 
 func openWithMigrations(t *testing.T, configs ...migrations.MigrationRouter) *dbtest.DB {
+	t.Helper()
+
 	db := OpenWithoutMigrations(t)
 
 	conn := db.Open()
@@ -34,6 +38,8 @@ func openWithMigrations(t *testing.T, configs ...migrations.MigrationRouter) *db
 }
 
 func Open(t *testing.T) *dbtest.DB {
+	t.Helper()
+
 	return openWithMigrations(t,
 		migrations.AdminMigrationRouter,
 		migrations.SDPMigrationRouter,
@@ -43,9 +49,13 @@ func Open(t *testing.T) *dbtest.DB {
 }
 
 func OpenWithAdminMigrationsOnly(t *testing.T) *dbtest.DB {
+	t.Helper()
+
 	return openWithMigrations(t, migrations.AdminMigrationRouter)
 }
 
 func OpenWithTSSMigrationsOnly(t *testing.T) *dbtest.DB {
+	t.Helper()
+
 	return openWithMigrations(t, migrations.TSSMigrationRouter)
 }

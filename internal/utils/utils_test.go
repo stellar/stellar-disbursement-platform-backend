@@ -242,3 +242,33 @@ func Test_GetTypeName(t *testing.T) {
 		})
 	}
 }
+
+func TestStringPtr(t *testing.T) {
+	t.Run("returns a pointer to the string", func(t *testing.T) {
+		s := "test string"
+		result := StringPtr(s)
+
+		assert.NotNil(t, result)
+		assert.Equal(t, s, *result)
+	})
+
+	t.Run("returns a pointer to an empty string", func(t *testing.T) {
+		s := ""
+		result := StringPtr(s)
+
+		assert.NotNil(t, result)
+		assert.Equal(t, s, *result)
+	})
+
+	t.Run("changing the original string does not affect the pointer", func(t *testing.T) {
+		s := "initial string"
+		result := StringPtr(s)
+
+		// Modify the original string
+		s = "modified string"
+
+		assert.NotNil(t, result)
+		assert.NotEqual(t, s, *result)
+		assert.Equal(t, "initial string", *result)
+	})
+}
