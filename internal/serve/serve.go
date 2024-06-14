@@ -87,6 +87,7 @@ type ServeOptions struct {
 	EnableScheduler                 bool
 	tenantManager                   tenant.ManagerInterface
 	DistributionAccountService      services.DistributionAccountServiceInterface
+	DistAccEncryptionPassphrase     string
 	EventProducer                   events.Producer
 	MaxInvitationSMSResendAttempts  int
 	SingleTenantMode                bool
@@ -389,6 +390,14 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 
 			r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...)).
 				Get("/logo", profileHandler.GetOrganizationLogo)
+
+			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole)).
+				Patch("/circle-config", httphandler.CircleConfigHandler{
+					Encrypter:                   &utils.DefaultPrivateKeyEncrypter{},
+					EncryptionPassphrase:        o.DistAccEncryptionPassphrase,
+					CircleClientConfigModel:     circle.NewClientConfigModel(o.MtnDBConnectionPool),
+					DistributionAccountResolver: o.SubmitterEngine.DistributionAccountResolver,
+				}.Patch)
 		})
 
 		balancesHandler := httphandler.BalancesHandler{

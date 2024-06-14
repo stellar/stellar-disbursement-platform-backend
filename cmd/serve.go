@@ -479,6 +479,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			serveOpts.MonitorService = monitorService
 			serveOpts.BaseURL = globalOptions.BaseURL
 			serveOpts.NetworkPassphrase = globalOptions.NetworkPassphrase
+			serveOpts.DistAccEncryptionPassphrase = txSubmitterOpts.SignatureServiceOptions.DistAccEncryptionPassphrase
 
 			// Inject metrics server dependencies
 			metricsServeOpts.MonitorService = monitorService

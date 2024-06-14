@@ -11,7 +11,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
 	sdpUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
@@ -19,7 +18,7 @@ type ChannelAccountDBSignatureClientOptions struct {
 	NetworkPassphrase    string
 	DBConnectionPool     db.DBConnectionPool
 	EncryptionPassphrase string
-	Encrypter            utils.PrivateKeyEncrypter
+	Encrypter            sdpUtils.PrivateKeyEncrypter
 	LedgerNumberTracker  preconditions.LedgerNumberTracker
 }
 
@@ -47,7 +46,7 @@ type ChannelAccountDBSignatureClient struct {
 	networkPassphrase    string
 	dbConnectionPool     db.DBConnectionPool
 	chAccModel           store.ChannelAccountStore
-	encrypter            utils.PrivateKeyEncrypter
+	encrypter            sdpUtils.PrivateKeyEncrypter
 	encryptionPassphrase string
 	ledgerNumberTracker  preconditions.LedgerNumberTracker
 }
@@ -60,7 +59,7 @@ func NewChannelAccountDBSignatureClient(opts ChannelAccountDBSignatureClientOpti
 
 	encrypter := opts.Encrypter
 	if encrypter == nil {
-		encrypter = &utils.DefaultPrivateKeyEncrypter{}
+		encrypter = &sdpUtils.DefaultPrivateKeyEncrypter{}
 	}
 
 	return &ChannelAccountDBSignatureClient{

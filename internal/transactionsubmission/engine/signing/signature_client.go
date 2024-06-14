@@ -4,11 +4,12 @@ import (
 	"context"
 	"fmt"
 
+	sdpUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+
 	"github.com/stellar/go/txnbuild"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
@@ -39,7 +40,7 @@ type SignatureClientOptions struct {
 	// *AccountDB:
 	DBConnectionPool    db.DBConnectionPool
 	LedgerNumberTracker preconditions.LedgerNumberTracker
-	Encrypter           utils.PrivateKeyEncrypter // (optional)
+	Encrypter           sdpUtils.PrivateKeyEncrypter // (optional)
 }
 
 func NewSignatureClient(accType schema.AccountType, opts SignatureClientOptions) (SignatureClient, error) {

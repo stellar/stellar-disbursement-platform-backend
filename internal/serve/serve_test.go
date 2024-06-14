@@ -468,6 +468,7 @@ func Test_handleHTTP_authenticatedEndpoints(t *testing.T) {
 		{http.MethodGet, "/organization"},
 		{http.MethodPatch, "/organization"},
 		{http.MethodGet, "/organization/logo"},
+		{http.MethodPatch, "/organization/circle-config"},
 		// Balances
 		{http.MethodGet, "/balances"},
 	}

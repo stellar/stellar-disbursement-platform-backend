@@ -3,9 +3,10 @@ package signing
 import (
 	"fmt"
 
+	sdpUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
 )
 
 type SignatureService struct {
@@ -50,7 +51,7 @@ type SignatureServiceOptions struct {
 	// *AccountDB:
 	DBConnectionPool    db.DBConnectionPool
 	LedgerNumberTracker preconditions.LedgerNumberTracker
-	Encrypter           utils.PrivateKeyEncrypter
+	Encrypter           sdpUtils.PrivateKeyEncrypter
 
 	// DistributionAccountResolver
 	DistributionAccountResolver

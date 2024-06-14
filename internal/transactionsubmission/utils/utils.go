@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
-	sdpUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
 // AcquireAdvisoryLock attempt to acquire an advisory lock on the provided lockKey, returns true if acquired, or false
@@ -19,21 +18,3 @@ func AcquireAdvisoryLock(ctx context.Context, dbConnectionPool db.DBConnectionPo
 	}
 	return tssAdvisoryLockAcquired, nil
 }
-
-type PrivateKeyEncrypter interface {
-	Encrypt(message string, passphrase string) (string, error)
-	Decrypt(message string, passphrase string) (string, error)
-}
-
-type DefaultPrivateKeyEncrypter struct{}
-
-func (e *DefaultPrivateKeyEncrypter) Encrypt(message, passphrase string) (string, error) {
-	return sdpUtils.Encrypt(message, passphrase)
-}
-
-func (e *DefaultPrivateKeyEncrypter) Decrypt(message, passphrase string) (string, error) {
-	return sdpUtils.Decrypt(message, passphrase)
-}
-
-// Making sure that DefaultPrivateKeyEncrypter implements PrivateKeyEncrypter
-var _ PrivateKeyEncrypter = (*DefaultPrivateKeyEncrypter)(nil)
