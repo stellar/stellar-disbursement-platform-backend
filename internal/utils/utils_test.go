@@ -272,3 +272,106 @@ func TestStringPtr(t *testing.T) {
 		assert.Equal(t, "initial string", *result)
 	})
 }
+
+func Test_Ternary(t *testing.T) {
+	testCases := []struct {
+		name       string
+		condition  bool
+		trueValue  any
+		falseValue any
+		expected   any
+	}{
+		{
+			name:       "Condition is true, should return trueValue",
+			condition:  true,
+			trueValue:  10,
+			falseValue: 20,
+			expected:   10,
+		},
+		{
+			name:       "Condition is false, should return falseValue",
+			condition:  false,
+			trueValue:  10,
+			falseValue: 20,
+			expected:   20,
+		},
+		{
+			name:       "Condition is true, should return trueValue (string)",
+			condition:  true,
+			trueValue:  "foo",
+			falseValue: "bar",
+			expected:   "foo",
+		},
+		{
+			name:       "Condition is false, should return falseValue (string)",
+			condition:  false,
+			trueValue:  "foo",
+			falseValue: "bar",
+			expected:   "bar",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			switch v := tc.trueValue.(type) {
+			case int:
+				result := Ternary(tc.condition, v, tc.falseValue.(int))
+				assert.Equal(t, tc.expected, result)
+			case string:
+				result := Ternary(tc.condition, v, tc.falseValue.(string))
+				assert.Equal(t, tc.expected, result)
+			default:
+				t.Fatalf("unsupported type: %T", v)
+			}
+		})
+	}
+}
+
+func Test_Coalesce(t *testing.T) {
+	testCases := []struct {
+		name         string
+		value        any
+		defaultValue any
+		expected     any
+	}{
+		{
+			name:         "Value is not empty, should return value",
+			value:        10,
+			defaultValue: 20,
+			expected:     10,
+		},
+		{
+			name:         "Value is empty, should return defaultValue",
+			value:        0,
+			defaultValue: 20,
+			expected:     20,
+		},
+		{
+			name:         "Value is not empty (string), should return value",
+			value:        "foo",
+			defaultValue: "bar",
+			expected:     "foo",
+		},
+		{
+			name:         "Value is empty (string), should return defaultValue",
+			value:        "",
+			defaultValue: "bar",
+			expected:     "bar",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			switch v := tc.value.(type) {
+			case int:
+				result := Coalesce(v, tc.defaultValue.(int))
+				assert.Equal(t, tc.expected, result)
+			case string:
+				result := Coalesce(v, tc.defaultValue.(string))
+				assert.Equal(t, tc.expected, result)
+			default:
+				t.Fatalf("unsupported type: %T", v)
+			}
+		})
+	}
+}

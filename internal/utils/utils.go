@@ -88,3 +88,19 @@ func GetTypeName(v interface{}) string {
 func StringPtr(s string) *string {
 	return &s
 }
+
+// Ternary is a generic function that returns one of two values based on a boolean condition.
+func Ternary[T any](condition bool, trueValue, falseValue T) T {
+	if condition {
+		return trueValue
+	}
+	return falseValue
+}
+
+// Coalesce is a generic function that returns the provided value if it is not nil; otherwise, it returns the default value.
+func Coalesce[T any](value T, defaultValue T) T {
+	if !IsEmpty(value) {
+		return value
+	}
+	return defaultValue
+}
