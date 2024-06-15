@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/assets"
+
 	"github.com/go-chi/chi/v5"
 	"github.com/stellar/go/network"
 	"github.com/stretchr/testify/assert"
@@ -427,12 +429,20 @@ func Test_StellarTomlHandler_ServeHTTP(t *testing.T) {
 			ORG_NAME="SDP Pubnet"
 
 			[[CURRENCIES]]
-			code = "USDC"
-			issuer = "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN"
+			code = %q
+			issuer = %q
 			is_asset_anchored = true
 			anchor_asset_type = "fiat"
 			status = "live"
-			desc = "USDC"
+			desc = %q
+
+			[[CURRENCIES]]
+			code = %q
+			issuer = %q
+			is_asset_anchored = true
+			anchor_asset_type = "fiat"
+			status = "live"
+			desc = %q
 
 			[[CURRENCIES]]
 			code = "native"
@@ -440,7 +450,9 @@ func Test_StellarTomlHandler_ServeHTTP(t *testing.T) {
 			is_asset_anchored = true
 			anchor_asset_type = "crypto"
 			desc = "XLM, the native token of the Stellar Network."
-		`, network.PublicNetworkPassphrase, horizonPubnetURL)
+		`, network.PublicNetworkPassphrase, horizonPubnetURL,
+			assets.EURCAssetCode, assets.EURCAssetIssuerPubnet, assets.EURCAssetCode,
+			assets.USDCAssetCode, assets.USDCAssetIssuerPubnet, assets.USDCAssetCode)
 		wantToml = strings.TrimSpace(wantToml)
 		wantToml = strings.ReplaceAll(wantToml, "\t", "")
 		assert.Equal(t, wantToml, rr.Body.String())

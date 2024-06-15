@@ -547,12 +547,15 @@ func Test_DatabaseCommand_db_setup_for_network(t *testing.T) {
 		actualAssets, aErr := models.Assets.GetAll(ctx)
 		require.NoError(t, aErr)
 
-		assert.Len(t, actualAssets, 2)
-		assert.Equal(t, "USDC", actualAssets[0].Code)
-		assert.NotEqual(t, testnetUSDCIssuer, actualAssets[0].Issuer)
-		assert.Equal(t, assets.USDCAssetIssuerPubnet, actualAssets[0].Issuer)
-		assert.Equal(t, "XLM", actualAssets[1].Code)
-		assert.Empty(t, actualAssets[1].Issuer)
+		assert.Len(t, actualAssets, 3)
+		assert.Equal(t, assets.EURCAssetCode, actualAssets[0].Code)
+		assert.NotEqual(t, assets.EURCAssetIssuerTestnet, actualAssets[0].Issuer)
+		assert.Equal(t, assets.EURCAssetIssuerPubnet, actualAssets[0].Issuer)
+		assert.Equal(t, assets.USDCAssetCode, actualAssets[1].Code)
+		assert.NotEqual(t, assets.USDCAssetIssuerTestnet, actualAssets[1].Issuer)
+		assert.Equal(t, assets.USDCAssetIssuerPubnet, actualAssets[1].Issuer)
+		assert.Equal(t, assets.XLMAssetCode, actualAssets[2].Code)
+		assert.Empty(t, actualAssets[2].Issuer)
 
 		// Validating wallets
 		wallets, wErr := models.Wallets.GetAll(ctx)
@@ -605,11 +608,15 @@ func Test_DatabaseCommand_db_setup_for_network(t *testing.T) {
 		actualAssets, err = models.Assets.GetAll(ctx)
 		require.NoError(t, err)
 
-		require.Len(t, actualAssets, 2)
-		require.Equal(t, assets.USDCAssetPubnet.Code, actualAssets[0].Code)
-		require.Equal(t, assets.USDCAssetPubnet.Issuer, actualAssets[0].Issuer)
-		require.Equal(t, assets.XLMAsset.Code, actualAssets[1].Code)
-		require.Empty(t, assets.XLMAsset.Issuer)
+		require.Len(t, actualAssets, 3)
+		assert.Equal(t, assets.EURCAssetCode, actualAssets[0].Code)
+		assert.NotEqual(t, assets.EURCAssetIssuerTestnet, actualAssets[0].Issuer)
+		assert.Equal(t, assets.EURCAssetIssuerPubnet, actualAssets[0].Issuer)
+		assert.Equal(t, assets.USDCAssetCode, actualAssets[1].Code)
+		assert.NotEqual(t, assets.USDCAssetIssuerTestnet, actualAssets[1].Issuer)
+		assert.Equal(t, assets.USDCAssetIssuerPubnet, actualAssets[1].Issuer)
+		assert.Equal(t, assets.XLMAssetCode, actualAssets[2].Code)
+		assert.Empty(t, actualAssets[2].Issuer)
 
 		// Validating wallets
 		wallets, err = models.Wallets.GetAll(ctx)
@@ -686,8 +693,8 @@ func Test_DatabaseCommand_db_setup_for_network(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Len(t, currentAssets, 1)
-		assert.Equal(t, "USDC", currentAssets[0].Code)
-		assert.Equal(t, testnetUSDCIssuer, currentAssets[0].Issuer)
+		assert.Equal(t, assets.USDCAssetCode, currentAssets[0].Code)
+		assert.NotEqual(t, assets.USDCAssetIssuerTestnet, currentAssets[0].Issuer)
 
 		// Validating wallets
 		wallets, err := models.Wallets.GetAll(ctx)
@@ -710,13 +717,15 @@ func Test_DatabaseCommand_db_setup_for_network(t *testing.T) {
 		actualAssets, err := models.Assets.GetAll(ctx)
 		require.NoError(t, err)
 
-		assert.Len(t, actualAssets, 2)
-		assert.Equal(t, "USDC", actualAssets[0].Code)
-		assert.NotEqual(t, testnetUSDCIssuer, actualAssets[0].Issuer)
-		assert.Equal(t, assets.USDCAssetIssuerPubnet, actualAssets[0].Issuer)
-		assert.Equal(t, "XLM", actualAssets[1].Code)
-		assert.Empty(t, actualAssets[1].Issuer)
-
+		assert.Len(t, actualAssets, 3)
+		assert.Equal(t, assets.EURCAssetCode, actualAssets[0].Code)
+		assert.NotEqual(t, assets.EURCAssetIssuerTestnet, actualAssets[0].Issuer)
+		assert.Equal(t, assets.EURCAssetIssuerPubnet, actualAssets[0].Issuer)
+		assert.Equal(t, assets.USDCAssetCode, actualAssets[1].Code)
+		assert.NotEqual(t, assets.USDCAssetIssuerTestnet, actualAssets[1].Issuer)
+		assert.Equal(t, assets.USDCAssetIssuerPubnet, actualAssets[1].Issuer)
+		assert.Equal(t, assets.XLMAssetCode, actualAssets[2].Code)
+		assert.Empty(t, actualAssets[2].Issuer)
 		// Validating wallets
 		wallets, err = models.Wallets.GetAll(ctx)
 		require.NoError(t, err)
