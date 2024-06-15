@@ -37,14 +37,6 @@ func (da TransactionAccount) String() string {
 	return fmt.Sprintf("TransactionAccount{Type: %s, Status: %s, Address: %s}", da.Type, da.Status, da.Address)
 }
 
-func NewDefaultCircleTransactionAccount(circleWalletID string) TransactionAccount {
-	return TransactionAccount{
-		CircleWalletID: circleWalletID,
-		Type:           DistributionAccountCircleDBVault,
-		Status:         AccountStatusActive,
-	}
-}
-
 func NewDefaultStellarTransactionAccount(stellarAddress string) TransactionAccount {
 	return TransactionAccount{
 		Address: stellarAddress,
