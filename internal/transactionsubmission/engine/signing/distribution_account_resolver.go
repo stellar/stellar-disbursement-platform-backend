@@ -98,10 +98,14 @@ func (r *DistributionAccountResolverImpl) getDistributionAccount(ctx context.Con
 			return schema.TransactionAccount{}, fmt.Errorf("getting circle client config: %w", circleErr)
 		}
 
+		var walletID string
+		if cc != nil && cc.WalletID != nil {
+			walletID = *cc.WalletID
+		}
 		return schema.TransactionAccount{
-			CircleWalletID: *cc.WalletID,
+			CircleWalletID: walletID,
 			Type:           schema.DistributionAccountCircleDBVault,
-			Status:         schema.AccountStatusActive,
+			Status:         tnt.DistributionAccountStatus,
 		}, nil
 	} else {
 		// 2. Stellar Account
