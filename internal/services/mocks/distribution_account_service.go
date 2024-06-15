@@ -3,8 +3,9 @@
 package mocks
 
 import (
-	data "github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	mock "github.com/stretchr/testify/mock"
+
+	data "github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 
 	schema "github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )

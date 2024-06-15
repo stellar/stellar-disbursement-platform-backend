@@ -5,8 +5,9 @@ package mocks
 import (
 	context "context"
 
-	schema "github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	mock "github.com/stretchr/testify/mock"
+
+	schema "github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 
 	txnbuild "github.com/stellar/go/txnbuild"
 )

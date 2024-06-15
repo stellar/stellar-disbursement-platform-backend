@@ -3,8 +3,9 @@ package tenant
 import (
 	"context"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stretchr/testify/mock"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
 )
 
 type TenantManagerMock struct {

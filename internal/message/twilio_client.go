@@ -5,9 +5,10 @@ import (
 	"strings"
 
 	"github.com/stellar/go/support/log"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/twilio/twilio-go"
 	twilioApi "github.com/twilio/twilio-go/rest/api/v2010"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
 type twilioApiInterface interface {

@@ -7,13 +7,15 @@ import (
 
 	"github.com/stretchr/testify/mock"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/scheduler/jobs"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stretchr/testify/require"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 )
 
 func TestScheduler(t *testing.T) {

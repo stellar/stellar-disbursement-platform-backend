@@ -5,10 +5,11 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 )
 
 type MockDataSourceRouter struct {

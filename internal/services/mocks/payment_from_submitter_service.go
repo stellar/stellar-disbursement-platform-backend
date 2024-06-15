@@ -3,9 +3,10 @@ package mocks
 import (
 	"context"
 
+	"github.com/stretchr/testify/mock"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
-	"github.com/stretchr/testify/mock"
 )
 
 type MockPaymentFromSubmitterService struct {

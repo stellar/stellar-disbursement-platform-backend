@@ -12,6 +12,7 @@ import (
 	"github.com/lib/pq"
 
 	"github.com/stellar/go/protocols/horizon/base"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 )
 
