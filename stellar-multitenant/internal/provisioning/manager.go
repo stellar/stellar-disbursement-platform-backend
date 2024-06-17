@@ -142,22 +142,23 @@ func (m *Manager) provisionTenant(ctx context.Context, pt *ProvisionTenant) (*te
 	}
 
 	tenantStatus := tenant.ProvisionedTenantStatus
-	updatedTenant, err := m.tenantManager.UpdateTenantConfig(
-		ctx,
-		&tenant.TenantUpdate{
-			ID:                         t.ID,
-			Status:                     &tenantStatus,
-			DistributionAccountAddress: *t.DistributionAccountAddress,
-			DistributionAccountType:    t.DistributionAccountType,
-			DistributionAccountStatus:  schema.AccountStatusActive,
-			SDPUIBaseURL:               &pt.UiBaseURL,
-			BaseURL:                    &pt.BaseURL,
-		})
+	tenantUpdate := &tenant.TenantUpdate{
+		ID:                        t.ID,
+		Status:                    &tenantStatus,
+		DistributionAccountType:   t.DistributionAccountType,
+		DistributionAccountStatus: t.DistributionAccountStatus,
+		SDPUIBaseURL:              &pt.UiBaseURL,
+		BaseURL:                   &pt.BaseURL,
+	}
+	if t.DistributionAccountType.IsStellar() {
+		tenantUpdate.DistributionAccountAddress = *t.DistributionAccountAddress
+	}
+	updatedTenant, err := m.tenantManager.UpdateTenantConfig(ctx, tenantUpdate)
 	if err != nil {
 		return t, fmt.Errorf("%w: updating tenant %s status to %s: %w", ErrUpdateTenantFailed, pt.Name, tenant.ProvisionedTenantStatus, err)
 	}
 
-	err = m.fundTenantDistributionAccount(ctx, *updatedTenant.DistributionAccountAddress)
+	err = m.fundTenantDistributionAccountIfNeeded(ctx, *updatedTenant)
 	if err != nil {
 		return t, fmt.Errorf("%w. funding tenant distribution account: %w", ErrUpdateTenantFailed, err)
 	}
@@ -165,19 +166,30 @@ func (m *Manager) provisionTenant(ctx context.Context, pt *ProvisionTenant) (*te
 	return updatedTenant, nil
 }
 
-func (m *Manager) fundTenantDistributionAccount(ctx context.Context, distributionAccount string) error {
+func (m *Manager) fundTenantDistributionAccountIfNeeded(ctx context.Context, tenant tenant.Tenant) error {
 	hostDistributionAccPubKey := m.SubmitterEngine.HostDistributionAccount()
-	if distributionAccount != hostDistributionAccPubKey.Address {
+
+	switch tenant.DistributionAccountType {
+	case schema.DistributionAccountStellarDBVault:
 		// Bootstrap tenant distribution account with native asset
-		log.Ctx(ctx).Infof("Creating and funding tenant distribution account %s with native asset", distributionAccount)
-		err := tssSvc.CreateAndFundAccount(ctx, m.SubmitterEngine, m.nativeAssetBootstrapAmount, hostDistributionAccPubKey.Address, distributionAccount)
+		log.Ctx(ctx).Infof("Creating and funding tenant distribution account %s with %d XLM", *tenant.DistributionAccountAddress, m.nativeAssetBootstrapAmount)
+		err := tssSvc.CreateAndFundAccount(ctx, m.SubmitterEngine, m.nativeAssetBootstrapAmount, hostDistributionAccPubKey.Address, *tenant.DistributionAccountAddress)
 		if err != nil {
 			return fmt.Errorf("bootstrapping tenant distribution account with native asset: %w", err)
 		}
-	} else {
-		log.Ctx(ctx).Info("host distribution account and tenant distribution account are the same, no need to initiate funding.")
+		return nil
+
+	case schema.DistributionAccountStellarEnv:
+		log.Ctx(ctx).Warnf("Tenant distribution account is configured to use accountType=%s, no need to initiate funding.", tenant.DistributionAccountType)
+		return nil
+
+	case schema.DistributionAccountCircleDBVault:
+		log.Ctx(ctx).Warnf("Tenant distribution account is configured to use accountType=%s, the tenant will need to complete the setup through the UI.", tenant.DistributionAccountType)
+		return nil
+
+	default:
+		return fmt.Errorf("unsupported distribution account type %s", tenant.DistributionAccountType)
 	}
-	return nil
 }
 
 // provisionDistributionAccount provisions a distribution account for the tenant if necessary, based on the accountType provided.
@@ -205,6 +217,7 @@ func (m *Manager) provisionDistributionAccount(ctx context.Context, t *tenant.Te
 		}
 		t.DistributionAccountAddress = &distributionAccounts[0].Address
 		t.DistributionAccountType = accountType
+		t.DistributionAccountStatus = schema.AccountStatusActive
 		log.Ctx(ctx).Infof("distribution account for tenant %s was set to %s", t.Name, *t.DistributionAccountAddress)
 		return nil
 

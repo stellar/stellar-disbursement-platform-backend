@@ -547,7 +547,7 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 			expectedErr: ErrUpdateTenantFailed,
 		},
 		{
-			name: "when fundTenantDistributionAccount fails, rollback and return an error",
+			name: "when fundTenantDistributionAccountIfNeeded fails, rollback and return an error",
 			mockTntManagerFn: func(tntManagerMock *tenant.TenantManagerMock, sigRouter *mocks.MockSignerRouter, mDistAccResolver *mocks.MockDistributionAccountResolver, mHorizonClient *horizonclient.MockClient) {
 				// Needed for AddTenant:
 				tntManagerMock.On("AddTenant", ctx, tenantName).Return(&tnt, nil).Once()
@@ -575,7 +575,7 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 				tStatus := tenant.ProvisionedTenantStatus
 				updatedTnt := tnt
 				updatedTnt.DistributionAccountAddress = &distAccAddress
-				updatedTnt.DistributionAccountType = schema.DistributionAccountStellarEnv
+				updatedTnt.DistributionAccountType = schema.DistributionAccountStellarDBVault
 				updatedTnt.DistributionAccountStatus = schema.AccountStatusActive
 				updatedTnt.Status = tStatus
 				tntManagerMock.
@@ -591,7 +591,7 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 					Return(&updatedTnt, nil).
 					Once()
 
-				// Needed for fundTenantDistributionAccount:
+				// Needed for fundTenantDistributionAccountIfNeeded:
 				hostAccountKP := keypair.MustRandom()
 				hostAccount := schema.NewDefaultHostAccount(hostAccountKP.Address())
 				mDistAccResolver.
@@ -637,7 +637,7 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 				tStatus := tenant.ProvisionedTenantStatus
 				updatedTnt := tnt
 				updatedTnt.DistributionAccountAddress = &distAccAddress
-				updatedTnt.DistributionAccountType = schema.DistributionAccountStellarEnv
+				updatedTnt.DistributionAccountType = schema.DistributionAccountStellarDBVault
 				updatedTnt.DistributionAccountStatus = schema.AccountStatusActive
 				updatedTnt.Status = tStatus
 				tntManagerMock.
@@ -653,7 +653,7 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 					Return(&updatedTnt, nil).
 					Once()
 
-				// Needed for fundTenantDistributionAccount:
+				// Needed for fundTenantDistributionAccountIfNeeded:
 				hostAccountKP := keypair.MustRandom()
 				hostAccount := schema.NewDefaultHostAccount(hostAccountKP.Address())
 				mDistAccResolver.
@@ -779,6 +779,7 @@ func Test_Manager_provisionDistributionAccount(t *testing.T) {
 				Name:                       "test",
 				DistributionAccountAddress: &distAccAddress,
 				DistributionAccountType:    schema.DistributionAccountStellarEnv,
+				DistributionAccountStatus:  schema.AccountStatusActive,
 			},
 		},
 		{
@@ -798,6 +799,7 @@ func Test_Manager_provisionDistributionAccount(t *testing.T) {
 				Name:                       "test",
 				DistributionAccountAddress: &distAccAddress,
 				DistributionAccountType:    schema.DistributionAccountStellarDBVault,
+				DistributionAccountStatus:  schema.AccountStatusActive,
 			},
 		},
 		{
