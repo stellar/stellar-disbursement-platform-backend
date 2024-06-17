@@ -34,10 +34,6 @@ func (c DistributionAccountResolverOptions) Validate() error {
 		return fmt.Errorf("AdminDBConnectionPool cannot be nil")
 	}
 
-	if c.MTNDBConnectionPool == nil {
-		return fmt.Errorf("MTNDBConnectionPool cannot be nil")
-	}
-
 	if c.HostDistributionAccountPublicKey == "" {
 		return fmt.Errorf("HostDistributionAccountPublicKey cannot be empty")
 	}

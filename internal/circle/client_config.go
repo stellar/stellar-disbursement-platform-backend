@@ -41,6 +41,9 @@ func NewClientConfigModel(dbConnectionPool db.DBConnectionPool) *ClientConfigMod
 
 // Upsert insert or update the client configuration for Circle into the database.
 func (m *ClientConfigModel) Upsert(ctx context.Context, configUpdate ClientConfigUpdate) error {
+	if m.DBConnectionPool == nil {
+		return fmt.Errorf("DBConnectionPool is nil")
+	}
 	err := db.RunInTransaction(ctx, m.DBConnectionPool, nil, func(tx db.DBTransaction) error {
 		existingConfig, err := m.get(ctx, tx)
 		if err != nil {
@@ -85,6 +88,9 @@ func (m *ClientConfigModel) GetDecryptedAPIKey(ctx context.Context, passphrase s
 
 // Get retrieves the circle client config from the database if it exists.
 func (m *ClientConfigModel) Get(ctx context.Context) (*ClientConfig, error) {
+	if m.DBConnectionPool == nil {
+		return nil, fmt.Errorf("DBConnectionPool is nil")
+	}
 	return m.get(ctx, m.DBConnectionPool)
 }
 

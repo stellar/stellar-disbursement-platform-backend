@@ -36,19 +36,9 @@ func Test_DistributionAccountResolverOptions_Validate(t *testing.T) {
 			wantErrContains: "AdminDBConnectionPool cannot be nil",
 		},
 		{
-			name: "return an error if MTNDBConnectionPool is nil",
-			config: DistributionAccountResolverOptions{
-				AdminDBConnectionPool:            dbConnectionPool,
-				MTNDBConnectionPool:              nil,
-				HostDistributionAccountPublicKey: keypair.MustRandom().Address(),
-			},
-			wantErrContains: "MTNDBConnectionPool cannot be nil",
-		},
-		{
 			name: "return an error if HostDistributionAccountPublicKey is empty",
 			config: DistributionAccountResolverOptions{
 				AdminDBConnectionPool:            dbConnectionPool,
-				MTNDBConnectionPool:              dbConnectionPool,
 				HostDistributionAccountPublicKey: "",
 			},
 			wantErrContains: "HostDistributionAccountPublicKey cannot be empty",
@@ -57,7 +47,6 @@ func Test_DistributionAccountResolverOptions_Validate(t *testing.T) {
 			name: "return an error if HostDistributionAccountPublicKey is not a valid ed25519 public key",
 			config: DistributionAccountResolverOptions{
 				AdminDBConnectionPool:            dbConnectionPool,
-				MTNDBConnectionPool:              dbConnectionPool,
 				HostDistributionAccountPublicKey: "not-a-valid-ed25519-public-key",
 			},
 			wantErrContains: "HostDistributionAccountPublicKey is not a valid ed25519 public key",
@@ -66,7 +55,6 @@ func Test_DistributionAccountResolverOptions_Validate(t *testing.T) {
 			name: "🎉 successfully validate the config",
 			config: DistributionAccountResolverOptions{
 				AdminDBConnectionPool:            dbConnectionPool,
-				MTNDBConnectionPool:              dbConnectionPool,
 				HostDistributionAccountPublicKey: keypair.MustRandom().Address(),
 			},
 		},

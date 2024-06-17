@@ -292,7 +292,6 @@ func Test_StellarTomlHandler_ServeHTTP(t *testing.T) {
 
 	distAccResolver, err := signing.NewDistributionAccountResolver(signing.DistributionAccountResolverOptions{
 		AdminDBConnectionPool:            dbConnectionPool,
-		MTNDBConnectionPool:              dbConnectionPool,
 		HostDistributionAccountPublicKey: "GCWFIKOB7FO6KTXUKZIPPPZ42UT2V7HVZD5STVROKVJVQU24FSP7OLZK",
 	})
 	require.NoError(t, err)
