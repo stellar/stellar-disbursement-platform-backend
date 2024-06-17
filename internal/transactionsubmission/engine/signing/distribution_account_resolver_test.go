@@ -5,12 +5,15 @@ import (
 	"testing"
 
 	"github.com/stellar/go/keypair"
-	"github.com/stellar/stellar-disbursement-platform-backend/db"
-	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
-	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/circle"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 func Test_DistributionAccountResolverOptions_Validate(t *testing.T) {
@@ -88,6 +91,7 @@ func Test_NewDistributionAccountResolver(t *testing.T) {
 			name: "return an error if config is invalid",
 			config: DistributionAccountResolverOptions{
 				AdminDBConnectionPool:            nil,
+				MTNDBConnectionPool:              nil,
 				HostDistributionAccountPublicKey: "",
 			},
 			wantErrContains: "validating config in NewDistributionAccountResolver: AdminDBConnectionPool cannot be nil",
@@ -96,11 +100,13 @@ func Test_NewDistributionAccountResolver(t *testing.T) {
 			name: "🎉 successfully create a new DistributionAccountResolver",
 			config: DistributionAccountResolverOptions{
 				AdminDBConnectionPool:            dbConnectionPool,
+				MTNDBConnectionPool:              dbConnectionPool,
 				HostDistributionAccountPublicKey: hostDistPublicKey,
 			},
 			wantResult: &DistributionAccountResolverImpl{
 				tenantManager:                 tenant.NewManager(tenant.WithDatabase(dbConnectionPool)),
 				hostDistributionAccountPubKey: hostDistPublicKey,
+				circleConfigModel:             circle.NewClientConfigModel(dbConnectionPool),
 			},
 		},
 	}
@@ -132,6 +138,7 @@ func Test_DistributionAccountResolverImpl_DistributionAccount(t *testing.T) {
 	hostDistributionAccountPubKey := keypair.MustRandom().Address()
 	distAccResolver, err := NewDistributionAccountResolver(DistributionAccountResolverOptions{
 		AdminDBConnectionPool:            dbConnectionPool,
+		MTNDBConnectionPool:              dbConnectionPool,
 		HostDistributionAccountPublicKey: hostDistributionAccountPubKey,
 	})
 	require.NoError(t, err)
@@ -190,6 +197,7 @@ func Test_DistributionAccountResolverImpl_DistributionAccountFromContext(t *test
 	hostDistributionAccountPubKey := keypair.MustRandom().Address()
 	distAccResolver, err := NewDistributionAccountResolver(DistributionAccountResolverOptions{
 		AdminDBConnectionPool:            dbConnectionPool,
+		MTNDBConnectionPool:              dbConnectionPool,
 		HostDistributionAccountPublicKey: hostDistributionAccountPubKey,
 	})
 	require.NoError(t, err)
@@ -210,7 +218,50 @@ func Test_DistributionAccountResolverImpl_DistributionAccountFromContext(t *test
 		assert.ErrorIs(t, err, ErrDistributionAccountIsEmpty)
 	})
 
-	t.Run("successfully return the distribution account from the tenant stored in the context", func(t *testing.T) {
+	t.Run("correctly returns the CIRCLE response after the initial setup, when there's no entry in the circleConfigModel", func(t *testing.T) {
+		tnt := &tenant.Tenant{
+			ID:                        "95e788b6-c80e-4975-9d12-141001fe6e44",
+			Name:                      "aid-org-1",
+			DistributionAccountType:   schema.DistributionAccountCircleDBVault,
+			DistributionAccountStatus: schema.AccountStatusPendingUserActivation,
+		}
+		ctxWithTenant := tenant.SaveTenantInContext(context.Background(), tnt)
+
+		distAccount, err := distAccResolver.DistributionAccountFromContext(ctxWithTenant)
+		assert.NoError(t, err)
+		assert.Equal(t, schema.TransactionAccount{
+			Type:   schema.DistributionAccountCircleDBVault,
+			Status: schema.AccountStatusPendingUserActivation,
+		}, distAccount)
+	})
+
+	t.Run("🎉 successfully returns the CIRCLE response after it's being fully configured", func(t *testing.T) {
+		tnt := &tenant.Tenant{
+			ID:                        "95e788b6-c80e-4975-9d12-141001fe6e44",
+			Name:                      "aid-org-1",
+			DistributionAccountType:   schema.DistributionAccountCircleDBVault,
+			DistributionAccountStatus: schema.AccountStatusActive,
+		}
+		ctxWithTenant := tenant.SaveTenantInContext(context.Background(), tnt)
+
+		circleConfigModel := circle.NewClientConfigModel(dbConnectionPool)
+		err := circleConfigModel.Upsert(context.Background(), circle.ClientConfigUpdate{
+			EncryptedAPIKey:    utils.StringPtr("encrypted-api-key"),
+			WalletID:           utils.StringPtr("wallet-id"),
+			EncrypterPublicKey: utils.StringPtr("encrypter-public-key"),
+		})
+		require.NoError(t, err)
+
+		distAccount, err := distAccResolver.DistributionAccountFromContext(ctxWithTenant)
+		assert.NoError(t, err)
+		assert.Equal(t, schema.TransactionAccount{
+			CircleWalletID: "wallet-id",
+			Type:           schema.DistributionAccountCircleDBVault,
+			Status:         schema.AccountStatusActive,
+		}, distAccount)
+	})
+
+	t.Run("🎉 successfully return the distribution account from the tenant stored in the context", func(t *testing.T) {
 		distributionPublicKey := keypair.MustRandom().Address()
 		ctxTenant := &tenant.Tenant{
 			ID:                         "95e788b6-c80e-4975-9d12-141001fe6e44",
