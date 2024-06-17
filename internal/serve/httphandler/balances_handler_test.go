@@ -103,6 +103,20 @@ func Test_BalancesHandler_Get(t *testing.T) {
 			}`,
 		},
 		{
+			name: "returns a 400 if account status is PENDING_USER_ACTIVATION",
+			prepareMocks: func(t *testing.T, mCircleClient *circleMocks.MockClient, mDistributionAccountResolver *sigMocks.MockDistributionAccountResolver, mCircleClientConfigModel *circleMocks.MockClientConfigModel) {
+				mDistributionAccountResolver.
+					On("DistributionAccountFromContext", mock.Anything).
+					Return(schema.TransactionAccount{
+						Type:   schema.DistributionAccountCircleDBVault,
+						Status: schema.AccountStatusPendingUserActivation,
+					}, nil).
+					Once()
+			},
+			expectedStatus:   http.StatusBadRequest,
+			expectedResponse: `{"error": "This organization is not configured to use CIRCLE"}`,
+		},
+		{
 			name: "returns a 500 if circle.GetWalletByID fails with an unexpected error",
 			prepareMocks: func(t *testing.T, mCircleClient *circleMocks.MockClient, mDistributionAccountResolver *sigMocks.MockDistributionAccountResolver, mCircleClientConfigModel *circleMocks.MockClientConfigModel) {
 				mDistributionAccountResolver.
