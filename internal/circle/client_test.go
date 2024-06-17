@@ -13,22 +13,23 @@ import (
 	"github.com/stretchr/testify/mock"
 
 	httpclientMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient/mocks"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
 func Test_NewClient(t *testing.T) {
 	t.Run("production environment", func(t *testing.T) {
-		clientInterface := NewClient(Production, "test-key")
+		clientInterface := NewClient(utils.PubnetNetworkType, "test-key")
 		cc, ok := clientInterface.(*Client)
 		assert.True(t, ok)
-		assert.Equal(t, "https://api.circle.com", cc.BasePath)
+		assert.Equal(t, string(Production), cc.BasePath)
 		assert.Equal(t, "test-key", cc.APIKey)
 	})
 
 	t.Run("sandbox environment", func(t *testing.T) {
-		clientInterface := NewClient(Sandbox, "test-key")
+		clientInterface := NewClient(utils.TestnetNetworkType, "test-key")
 		cc, ok := clientInterface.(*Client)
 		assert.True(t, ok)
-		assert.Equal(t, "https://api-sandbox.circle.com", cc.BasePath)
+		assert.Equal(t, string(Sandbox), cc.BasePath)
 		assert.Equal(t, "test-key", cc.APIKey)
 	})
 }

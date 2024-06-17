@@ -223,12 +223,7 @@ func Test_BalancesHandler_Get(t *testing.T) {
 			h := BalancesHandler{
 				DistributionAccountResolver: mDistributionAccountResolver,
 				NetworkType:                 tc.networkType,
-				CircleClientFactory: func(env circle.Environment, apiKey string) circle.ClientInterface {
-					if tc.networkType == utils.PubnetNetworkType {
-						assert.Equal(t, circle.Production, env)
-					} else {
-						assert.Equal(t, circle.Sandbox, env)
-					}
+				CircleClientFactory: func(networkType utils.NetworkType, apiKey string) circle.ClientInterface {
 					return mCircleClient
 				},
 				CircleClientConfigModel: mCircleClientConfigModel,

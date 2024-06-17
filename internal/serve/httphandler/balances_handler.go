@@ -51,18 +51,13 @@ func (h BalancesHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	circleEnv := circle.Sandbox
-	if h.NetworkType == utils.PubnetNetworkType {
-		circleEnv = circle.Production
-	}
-
 	apiKey, err := h.CircleClientConfigModel.GetDecryptedAPIKey(ctx, h.EncryptionPassphrase)
 	if err != nil {
 		httperror.InternalError(ctx, "Cannot retrieve Circle API key", err, nil).Render(w)
 		return
 	}
 
-	circleSDK := h.CircleClientFactory(circleEnv, apiKey)
+	circleSDK := h.CircleClientFactory(h.NetworkType, apiKey)
 	circleWallet, err := circleSDK.GetWalletByID(ctx, distAccount.CircleWalletID)
 	if err != nil {
 		var circleApiErr *circle.APIError
