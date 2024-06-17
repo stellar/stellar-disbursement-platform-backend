@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
 const (
@@ -38,14 +39,19 @@ type Client struct {
 }
 
 // ClientFactory is a function that creates a ClientInterface.
-type ClientFactory func(env Environment, apiKey string) ClientInterface
+type ClientFactory func(networkType utils.NetworkType, apiKey string) ClientInterface
 
 var _ ClientFactory = NewClient
 
 // NewClient creates a new instance of Circle Client.
-func NewClient(env Environment, apiKey string) ClientInterface {
+func NewClient(networkType utils.NetworkType, apiKey string) ClientInterface {
+	circleEnv := Sandbox
+	if networkType == utils.PubnetNetworkType {
+		circleEnv = Production
+	}
+
 	return &Client{
-		BasePath:   string(env),
+		BasePath:   string(circleEnv),
 		APIKey:     apiKey,
 		httpClient: httpclient.DefaultClient(),
 	}

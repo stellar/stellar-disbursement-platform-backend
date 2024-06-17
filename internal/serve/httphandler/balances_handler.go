@@ -31,6 +31,8 @@ type BalancesHandler struct {
 	DistributionAccountResolver signing.DistributionAccountResolver
 	NetworkType                 utils.NetworkType
 	CircleClientFactory         circle.ClientFactory
+	CircleClientConfigModel     circle.ClientConfigModelInterface
+	EncryptionPassphrase        string
 }
 
 // Get returns the balances of the distribution account.
@@ -49,26 +51,27 @@ func (h BalancesHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO: replace this mocked call after SDP-1170 is completed.
-	circleAPIKey, err := mockFnGetCircleAPIKey(ctx)
+	if distAccount.Status == schema.AccountStatusPendingUserActivation {
+		errResponseMsg := fmt.Sprintf("This organization is not configured to use %v", schema.CirclePlatform)
+		httperror.BadRequest(errResponseMsg, nil, nil).Render(w)
+		return
+	}
+
+	apiKey, err := h.CircleClientConfigModel.GetDecryptedAPIKey(ctx, h.EncryptionPassphrase)
 	if err != nil {
 		httperror.InternalError(ctx, "Cannot retrieve Circle API key", err, nil).Render(w)
 		return
 	}
 
-	circleEnv := circle.Sandbox
-	if h.NetworkType == utils.PubnetNetworkType {
-		circleEnv = circle.Production
-	}
-	circleSDK := h.CircleClientFactory(circleEnv, circleAPIKey)
-	circleWallet, err := circleSDK.GetWalletByID(ctx, distAccount.Address)
+	circleSDK := h.CircleClientFactory(h.NetworkType, apiKey)
+	circleWallet, err := circleSDK.GetWalletByID(ctx, distAccount.CircleWalletID)
 	if err != nil {
 		var circleApiErr *circle.APIError
 		var httpError *httperror.HTTPError
 		if errors.As(err, &circleApiErr) {
 			extras := map[string]interface{}{"circle_errors": circleApiErr.Errors}
 			msg := fmt.Sprintf("Cannot retrieve Circle wallet: %s", circleApiErr.Message)
-			httpError = httperror.NewHTTPError(circleApiErr.Code, msg, circleApiErr, extras)
+			httpError = httperror.BadRequest(msg, circleApiErr, extras)
 		} else {
 			httpError = httperror.InternalError(ctx, "Cannot retrieve Circle wallet", err, nil)
 		}
@@ -107,8 +110,4 @@ func (h BalancesHandler) filterBalances(ctx context.Context, circleWallet *circl
 		})
 	}
 	return balances
-}
-
-func mockFnGetCircleAPIKey(ctx context.Context) (string, error) {
-	return "SAND_API_KEY:c57a34ffb46de9240da8353bcc394fbf:5b1ec227682031ce176a3970d85a785e", nil
 }

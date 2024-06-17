@@ -404,6 +404,8 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			DistributionAccountResolver: o.SubmitterEngine.DistributionAccountResolver,
 			NetworkType:                 o.NetworkType,
 			CircleClientFactory:         circle.NewClient,
+			EncryptionPassphrase:        o.DistAccEncryptionPassphrase,
+			CircleClientConfigModel:     circle.NewClientConfigModel(o.MtnDBConnectionPool),
 		}
 		r.Get("/balances", balancesHandler.Get)
 	})
