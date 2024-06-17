@@ -142,24 +142,29 @@ func (m *Manager) provisionTenant(ctx context.Context, pt *ProvisionTenant) (*te
 	}
 
 	tenantStatus := tenant.ProvisionedTenantStatus
-	updatedTenant, err := m.tenantManager.UpdateTenantConfig(
-		ctx,
-		&tenant.TenantUpdate{
-			ID:                         t.ID,
-			Status:                     &tenantStatus,
-			DistributionAccountAddress: *t.DistributionAccountAddress,
-			DistributionAccountType:    t.DistributionAccountType,
-			DistributionAccountStatus:  schema.AccountStatusActive,
-			SDPUIBaseURL:               &pt.UiBaseURL,
-			BaseURL:                    &pt.BaseURL,
-		})
+	tenantUpdate := tenant.TenantUpdate{
+		ID:                        t.ID,
+		Status:                    &tenantStatus,
+		DistributionAccountType:   t.DistributionAccountType,
+		DistributionAccountStatus: t.DistributionAccountStatus,
+		SDPUIBaseURL:              &pt.UiBaseURL,
+		BaseURL:                   &pt.BaseURL,
+	}
+
+	if t.DistributionAccountType.IsStellar() {
+		tenantUpdate.DistributionAccountAddress = *t.DistributionAccountAddress
+	}
+
+	updatedTenant, err := m.tenantManager.UpdateTenantConfig(ctx, &tenantUpdate)
 	if err != nil {
 		return t, fmt.Errorf("%w: updating tenant %s status to %s: %w", ErrUpdateTenantFailed, pt.Name, tenant.ProvisionedTenantStatus, err)
 	}
 
-	err = m.fundTenantDistributionAccount(ctx, *updatedTenant.DistributionAccountAddress)
-	if err != nil {
-		return t, fmt.Errorf("%w. funding tenant distribution account: %w", ErrUpdateTenantFailed, err)
+	if updatedTenant.DistributionAccountType.IsStellar() {
+		err = m.fundTenantDistributionAccount(ctx, *updatedTenant.DistributionAccountAddress)
+		if err != nil {
+			return t, fmt.Errorf("%w. funding tenant distribution account: %w", ErrUpdateTenantFailed, err)
+		}
 	}
 
 	return updatedTenant, nil
@@ -181,6 +186,12 @@ func (m *Manager) fundTenantDistributionAccount(ctx context.Context, distributio
 }
 
 func (m *Manager) provisionDistributionAccount(ctx context.Context, t *tenant.Tenant, accountType schema.AccountType) error {
+
+	if accountType.IsCircle() {
+		t.DistributionAccountType = schema.DistributionAccountCircleDBVault
+		t.DistributionAccountStatus = schema.AccountStatusPendingUserActivation
+		return nil
+	}
 	distributionAccounts, err := m.SubmitterEngine.SignerRouter.BatchInsert(ctx, accountType, 1)
 	if err != nil {
 		if errors.Is(err, signing.ErrUnsupportedCommand) {
