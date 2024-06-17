@@ -152,7 +152,7 @@ func Test_AssetHandler_CreateAsset(t *testing.T) {
 		http.HandlerFunc(handler.CreateAsset).ServeHTTP(rr, req)
 
 		assert.Equal(t, http.StatusBadRequest, rr.Result().StatusCode)
-		assert.Contains(t, rr.Body.String(), "Distribution account affiliated with tenant is a non-native Stellar account")
+		assert.Contains(t, rr.Body.String(), "Distribution account affiliated with tenant is not a Stellar account")
 	})
 
 	distAccResolver.
@@ -604,7 +604,7 @@ func Test_AssetHandler_DeleteAsset(t *testing.T) {
 		r.ServeHTTP(rr, req)
 
 		assert.Equal(t, http.StatusBadRequest, rr.Result().StatusCode)
-		assert.Contains(t, rr.Body.String(), "Distribution account affiliated with tenant is a non-native Stellar account")
+		assert.Contains(t, rr.Body.String(), "Distribution account affiliated with tenant is not a Stellar account")
 	})
 
 	distAccResolver.
@@ -1412,7 +1412,7 @@ type assetTestMock struct {
 	Handler           AssetsHandler
 }
 
-func newAssetTestMock(t *testing.T, distAccount schema.TransactionAccount) *assetTestMock {
+func newAssetTestMock(t *testing.T) *assetTestMock {
 	t.Helper()
 
 	horizonClientMock := &horizonclient.MockClient{}
@@ -1489,7 +1489,7 @@ func Test_AssetHandler_submitChangeTrustTransaction_makeSurePreconditionsAreSetA
 	}
 
 	t.Run("makes sure a non-empty precondition is used if none is explicitly set", func(t *testing.T) {
-		mocks := newAssetTestMock(t, distAccount)
+		mocks := newAssetTestMock(t)
 		mocks.Handler.GetPreconditionsFn = nil
 
 		txParams := txParamsWithoutPreconditions
@@ -1518,7 +1518,7 @@ func Test_AssetHandler_submitChangeTrustTransaction_makeSurePreconditionsAreSetA
 	})
 
 	t.Run("makes sure a the precondition that was set is used", func(t *testing.T) {
-		mocks := newAssetTestMock(t, distAccount)
+		mocks := newAssetTestMock(t)
 		newPreconditions := txnbuild.Preconditions{TimeBounds: txnbuild.NewTimeout(int64(rand.Intn(999999999)))}
 		mocks.Handler.GetPreconditionsFn = func() txnbuild.Preconditions { return newPreconditions }
 
