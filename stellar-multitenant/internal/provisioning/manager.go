@@ -158,7 +158,7 @@ func (m *Manager) provisionTenant(ctx context.Context, pt *ProvisionTenant) (*te
 		return t, fmt.Errorf("%w: updating tenant %s status to %s: %w", ErrUpdateTenantFailed, pt.Name, tenant.ProvisionedTenantStatus, err)
 	}
 
-	err = m.fundTenantDistributionAccountIfNeeded(ctx, *updatedTenant)
+	err = m.fundTenantDistributionStellarAccountIfNeeded(ctx, *updatedTenant)
 	if err != nil {
 		return t, fmt.Errorf("%w. funding tenant distribution account: %w", ErrUpdateTenantFailed, err)
 	}
@@ -166,11 +166,10 @@ func (m *Manager) provisionTenant(ctx context.Context, pt *ProvisionTenant) (*te
 	return updatedTenant, nil
 }
 
-func (m *Manager) fundTenantDistributionAccountIfNeeded(ctx context.Context, tenant tenant.Tenant) error {
-	hostDistributionAccPubKey := m.SubmitterEngine.HostDistributionAccount()
-
+func (m *Manager) fundTenantDistributionStellarAccountIfNeeded(ctx context.Context, tenant tenant.Tenant) error {
 	switch tenant.DistributionAccountType {
 	case schema.DistributionAccountStellarDBVault:
+		hostDistributionAccPubKey := m.SubmitterEngine.HostDistributionAccount()
 		// Bootstrap tenant distribution account with native asset
 		log.Ctx(ctx).Infof("Creating and funding tenant distribution account %s with %d XLM", *tenant.DistributionAccountAddress, m.nativeAssetBootstrapAmount)
 		err := tssSvc.CreateAndFundAccount(ctx, m.SubmitterEngine, m.nativeAssetBootstrapAmount, hostDistributionAccPubKey.Address, *tenant.DistributionAccountAddress)
