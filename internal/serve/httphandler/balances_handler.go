@@ -51,6 +51,12 @@ func (h BalancesHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if distAccount.Status == schema.AccountStatusPendingUserActivation {
+		errResponseMsg := fmt.Sprintf("This organization is not configured to use %v", schema.CirclePlatform)
+		httperror.BadRequest(errResponseMsg, nil, nil).Render(w)
+		return
+	}
+
 	apiKey, err := h.CircleClientConfigModel.GetDecryptedAPIKey(ctx, h.EncryptionPassphrase)
 	if err != nil {
 		httperror.InternalError(ctx, "Cannot retrieve Circle API key", err, nil).Render(w)
