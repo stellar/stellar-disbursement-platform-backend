@@ -179,7 +179,7 @@ func Test_ConvertType(t *testing.T) {
 }
 
 func Test_GetTypeName(t *testing.T) {
-	type testStruct struct{}
+	type MyType struct{}
 
 	testCases := []struct {
 		name           string
@@ -228,13 +228,13 @@ func Test_GetTypeName(t *testing.T) {
 		},
 		{
 			name:           "Custom type",
-			instance:       testStruct{},
-			expectedResult: "testStruct",
+			instance:       MyType{},
+			expectedResult: "MyType",
 		},
 		{
 			name:           "Pointer to custom type",
-			instance:       new(testStruct),
-			expectedResult: "testStruct",
+			instance:       new(MyType),
+			expectedResult: "MyType",
 		},
 	}
 

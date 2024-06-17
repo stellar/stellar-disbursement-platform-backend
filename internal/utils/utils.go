@@ -44,8 +44,7 @@ func UnwrapInterfaceToPointer[T any](i interface{}) *T {
 // IsEmpty checks if a value is empty.
 func IsEmpty[T any](v T) bool {
 	valueType := reflect.TypeOf(v)
-	if valueType == nil {
-		// this happens when T is interface{} of any, and the value is nil
+	if valueType == nil { // this condition will be true when v is nil and valueType is either `any` or `interface{}`
 		return true
 	}
 

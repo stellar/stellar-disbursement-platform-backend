@@ -776,12 +776,12 @@ func Test_Manager_fundTenantDistributionStellarAccountIfNeeded(t *testing.T) {
 		{
 			name:              "❌ HOST account type.STELLAR.ENV is not supported",
 			accountType:       schema.HostStellarEnv,
-			wantErrorContains: fmt.Sprintf("unsupported distribution account type %s", schema.HostStellarEnv),
+			wantErrorContains: fmt.Sprintf("unsupported accountType=%s", schema.HostStellarEnv),
 		},
 		{
 			name:              "❌ CHANNEL_ACCOUNT account type.STELLAR.DB is not supported",
 			accountType:       schema.ChannelAccountStellarDB,
-			wantErrorContains: fmt.Sprintf("unsupported distribution account type %s", schema.ChannelAccountStellarDB),
+			wantErrorContains: fmt.Sprintf("unsupported accountType=%s", schema.ChannelAccountStellarDB),
 		},
 		{
 			name:            "🟢✍🏽 DISTRIBUTION_ACCOUNT.STELLAR.ENV is NO-OP and logs warnings accordingly",
@@ -835,7 +835,7 @@ func Test_Manager_fundTenantDistributionStellarAccountIfNeeded(t *testing.T) {
 		{
 			name:              "❌ INVALID account type will return an error",
 			accountType:       schema.AccountType("INVALID"),
-			wantErrorContains: "unsupported distribution account type INVALID",
+			wantErrorContains: "unsupported accountType=INVALID",
 		},
 	}
 
@@ -902,13 +902,13 @@ func Test_Manager_provisionDistributionAccount(t *testing.T) {
 			name:              "HOST.STELLAR.ENV is not supported",
 			accountType:       schema.HostStellarEnv,
 			wantTnt:           tenant.Tenant{ID: "foo-bar", Name: "test"},
-			wantErrorContains: fmt.Sprintf("%v: unsupported distribution account type %s", ErrProvisionTenantDistributionAccountFailed, schema.HostStellarEnv),
+			wantErrorContains: fmt.Sprintf("%v: unsupported accountType=%s", ErrProvisionTenantDistributionAccountFailed, schema.HostStellarEnv),
 		},
 		{
 			name:              "CHANNEL_ACCOUNT.STELLAR.DB is not supported",
 			accountType:       schema.ChannelAccountStellarDB,
 			wantTnt:           tenant.Tenant{ID: "foo-bar", Name: "test"},
-			wantErrorContains: fmt.Sprintf("%v: unsupported distribution account type %s", ErrProvisionTenantDistributionAccountFailed, schema.ChannelAccountStellarDB),
+			wantErrorContains: fmt.Sprintf("%v: unsupported accountType=%s", ErrProvisionTenantDistributionAccountFailed, schema.ChannelAccountStellarDB),
 		},
 		{
 			name:        "DISTRIBUTION_ACCOUNT.STELLAR.ENV is NO-OP and logs warnings accordingly",

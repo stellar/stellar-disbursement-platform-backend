@@ -166,6 +166,7 @@ func (m *Manager) provisionTenant(ctx context.Context, pt *ProvisionTenant) (*te
 	return updatedTenant, nil
 }
 
+// fundTenantDistributionStellarAccountIfNeeded funds the tenant distribution account with native asset if necessary, based on the accountType provided.
 func (m *Manager) fundTenantDistributionStellarAccountIfNeeded(ctx context.Context, tenant tenant.Tenant) error {
 	switch tenant.DistributionAccountType {
 	case schema.DistributionAccountStellarDBVault:
@@ -187,7 +188,7 @@ func (m *Manager) fundTenantDistributionStellarAccountIfNeeded(ctx context.Conte
 		return nil
 
 	default:
-		return fmt.Errorf("unsupported distribution account type %s", tenant.DistributionAccountType)
+		return fmt.Errorf("unsupported accountType=%s", tenant.DistributionAccountType)
 	}
 }
 
@@ -204,7 +205,7 @@ func (m *Manager) provisionDistributionAccount(ctx context.Context, t *tenant.Te
 		distributionAccounts, err := m.SubmitterEngine.SignerRouter.BatchInsert(ctx, accountType, 1)
 		if err != nil {
 			if errors.Is(err, signing.ErrUnsupportedCommand) {
-				log.Ctx(ctx).Warnf("Account provisioning for distribution account of type=%s is NoOp: %v", accountType, err)
+				log.Ctx(ctx).Warnf("Account provisioning for distribution account of type=%s is NO-OP: %v", accountType, err)
 			} else {
 				return fmt.Errorf("%w: provisioning distribution account: %w", ErrProvisionTenantDistributionAccountFailed, err)
 			}
@@ -221,7 +222,7 @@ func (m *Manager) provisionDistributionAccount(ctx context.Context, t *tenant.Te
 		return nil
 
 	default:
-		return fmt.Errorf("%w: unsupported distribution account type %s", ErrProvisionTenantDistributionAccountFailed, accountType)
+		return fmt.Errorf("%w: unsupported accountType=%s", ErrProvisionTenantDistributionAccountFailed, accountType)
 	}
 }
 
