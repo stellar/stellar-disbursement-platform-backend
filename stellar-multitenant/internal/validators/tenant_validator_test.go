@@ -1,6 +1,7 @@
 package validators
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -32,7 +33,7 @@ func TestTenantValidator_ValidateCreateTenantRequest(t *testing.T) {
 			"owner_first_name":          "owner_first_name is required",
 			"owner_last_name":           "owner_last_name is required",
 			"organization_name":         "organization_name is required",
-			"distribution_account_type": "distribution_account_type is required. valid values are: DISTRIBUTION_ACCOUNT.STELLAR.ENV, DISTRIBUTION_ACCOUNT.STELLAR.DB_VAULT, DISTRIBUTION_ACCOUNT.CIRCLE.DB_VAULT",
+			"distribution_account_type": fmt.Sprintf("distribution_account_type is required. valid values are: %v", schema.DistributionAccountTypes()),
 		}, tv.Errors)
 
 		reqBody.Name = "aid-org"
@@ -44,7 +45,7 @@ func TestTenantValidator_ValidateCreateTenantRequest(t *testing.T) {
 			"owner_first_name":          "owner_first_name is required",
 			"owner_last_name":           "owner_last_name is required",
 			"organization_name":         "organization_name is required",
-			"distribution_account_type": "distribution_account_type is required. valid values are: DISTRIBUTION_ACCOUNT.STELLAR.ENV, DISTRIBUTION_ACCOUNT.STELLAR.DB_VAULT, DISTRIBUTION_ACCOUNT.CIRCLE.DB_VAULT",
+			"distribution_account_type": fmt.Sprintf("distribution_account_type is required. valid values are: %v", schema.DistributionAccountTypes()),
 		}, tv.Errors)
 	})
 
@@ -116,7 +117,7 @@ func TestTenantValidator_ValidateCreateTenantRequest(t *testing.T) {
 		tv.ValidateCreateTenantRequest(reqBody)
 		assert.True(t, tv.HasErrors())
 		assert.Equal(t, map[string]interface{}{
-			"distribution_account_type": "invalid distribution account type. valid values are: DISTRIBUTION_ACCOUNT.STELLAR.ENV, DISTRIBUTION_ACCOUNT.STELLAR.DB_VAULT, DISTRIBUTION_ACCOUNT.CIRCLE.DB_VAULT",
+			"distribution_account_type": fmt.Sprintf("invalid distribution_account_type. valid values are: %v", schema.DistributionAccountTypes()),
 		}, tv.Errors)
 
 		for _, accountType := range []schema.AccountType{schema.DistributionAccountStellarEnv, schema.DistributionAccountStellarDBVault, schema.DistributionAccountCircleDBVault} {

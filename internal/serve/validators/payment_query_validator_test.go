@@ -1,11 +1,13 @@
 package validators
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 )
 
 func Test_PaymentQueryValidator_ValidateDisbursementFilters(t *testing.T) {
@@ -35,7 +37,7 @@ func Test_PaymentQueryValidator_ValidateDisbursementFilters(t *testing.T) {
 		validator.ValidateAndGetPaymentFilters(filters)
 
 		assert.Equal(t, 1, len(validator.Errors))
-		assert.Equal(t, "invalid parameter. valid values are: DRAFT, READY, PENDING, PAUSED, SUCCESS, FAILED, CANCELLED", validator.Errors["status"])
+		assert.Equal(t, fmt.Sprintf("invalid parameter. valid values are: %v", data.PaymentStatuses()), validator.Errors["status"])
 	})
 
 	t.Run("Invalid date", func(t *testing.T) {
@@ -84,6 +86,6 @@ func Test_PaymentQueryValidator_ValidateAndGetPaymentStatus(t *testing.T) {
 		actual := validator.validateAndGetPaymentStatus(invalidStatus)
 		assert.Empty(t, actual)
 		assert.Equal(t, 1, len(validator.Errors))
-		assert.Equal(t, "invalid parameter. valid values are: DRAFT, READY, PENDING, PAUSED, SUCCESS, FAILED, CANCELLED", validator.Errors["status"])
+		assert.Equal(t, fmt.Sprintf("invalid parameter. valid values are: %v", data.PaymentStatuses()), validator.Errors["status"])
 	})
 }
