@@ -101,6 +101,9 @@ func Test_IsEmpty(t *testing.T) {
 		// Interface:
 		{name: "Interface nil", isEmptyFn: func() bool { return IsEmpty[interface{}](nil) }, expected: true},
 		{name: "Interface non-nil", isEmptyFn: func() bool { return IsEmpty[interface{}](new(string)) }, expected: false},
+		// Any:
+		{name: "Any nil", isEmptyFn: func() bool { return IsEmpty[any](nil) }, expected: true},
+		{name: "Any non-nil", isEmptyFn: func() bool { return IsEmpty[any](new(string)) }, expected: false},
 		// Map:
 		{name: "Map nil", isEmptyFn: func() bool { return IsEmpty[map[string]string](nil) }, expected: true},
 		{name: "Map empty", isEmptyFn: func() bool { return IsEmpty[map[string]string](map[string]string{}) }, expected: false},
@@ -176,7 +179,7 @@ func Test_ConvertType(t *testing.T) {
 }
 
 func Test_GetTypeName(t *testing.T) {
-	type MyType struct{}
+	type testStruct struct{}
 
 	testCases := []struct {
 		name           string
@@ -225,13 +228,13 @@ func Test_GetTypeName(t *testing.T) {
 		},
 		{
 			name:           "Custom type",
-			instance:       MyType{},
-			expectedResult: "MyType",
+			instance:       testStruct{},
+			expectedResult: "testStruct",
 		},
 		{
 			name:           "Pointer to custom type",
-			instance:       new(MyType),
-			expectedResult: "MyType",
+			instance:       new(testStruct),
+			expectedResult: "testStruct",
 		},
 	}
 

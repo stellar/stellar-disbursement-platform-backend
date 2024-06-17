@@ -151,28 +151,40 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 		accountType       schema.AccountType
 	}{
 		{
-			name:              "Testnet with accountType=DISTRIBUTION_ACCOUNT.STELLAR.ENV",
+			name:              "[Testnet] accountType=DISTRIBUTION_ACCOUNT.STELLAR.ENV",
 			networkPassphrase: network.TestNetworkPassphrase,
-			tenantName:        "tenant-testnet-env",
+			tenantName:        "testnet-stellar-env",
 			accountType:       schema.DistributionAccountStellarEnv,
 		},
 		{
-			name:              "Testnet with accountType=DISTRIBUTION_ACCOUNT.STELLAR.DB_VAULT",
+			name:              "[Testnet] accountType=DISTRIBUTION_ACCOUNT.STELLAR.DB_VAULT",
 			networkPassphrase: network.TestNetworkPassphrase,
-			tenantName:        "tenant-testnet-dbvault",
+			tenantName:        "testnet-stellar-dbvault",
 			accountType:       schema.DistributionAccountStellarDBVault,
 		},
 		{
-			name:              "Pubnet with accountType=DISTRIBUTION_ACCOUNT.STELLAR.ENV",
+			name:              "[Testnet] accountType=DISTRIBUTION_ACCOUNT.CIRCLE.DB_VAULT",
+			networkPassphrase: network.TestNetworkPassphrase,
+			tenantName:        "testnet-circle-dbvault",
+			accountType:       schema.DistributionAccountCircleDBVault,
+		},
+		{
+			name:              "[Pubnet] accountType=DISTRIBUTION_ACCOUNT.STELLAR.ENV",
 			networkPassphrase: network.PublicNetworkPassphrase,
-			tenantName:        "tenant-pubnet-env",
+			tenantName:        "pubnet-stellar-env",
 			accountType:       schema.DistributionAccountStellarEnv,
 		},
 		{
-			name:              "Pubnet with accountType=DISTRIBUTION_ACCOUNT.STELLAR.DB_VAULT",
+			name:              "[Pubnet] accountType=DISTRIBUTION_ACCOUNT.STELLAR.DB_VAULT",
 			networkPassphrase: network.PublicNetworkPassphrase,
-			tenantName:        "tenant-pubnet-dbvault",
+			tenantName:        "pubnet-stellar-dbvault",
 			accountType:       schema.DistributionAccountStellarDBVault,
+		},
+		{
+			name:              "[Pubnet] accountType=DISTRIBUTION_ACCOUNT.CIRCLE.DB_VAULT",
+			networkPassphrase: network.PublicNetworkPassphrase,
+			tenantName:        "pubnet-circle-dbvault",
+			accountType:       schema.DistributionAccountCircleDBVault,
 		},
 	}
 
@@ -182,8 +194,6 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 
 			hostAccountKP := keypair.MustRandom()
 			hostAccount := schema.NewDefaultHostAccount(hostAccountKP.Address())
-			var distAccSigClient signing.SignatureClient
-			var err error
 			var wantDistAccAddress string
 
 			// STEP 1: create mocks:
@@ -203,18 +213,23 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 				schema.ChannelAccountStellarDB: chAccSigClient,
 			}
 
-			// STEP 2: create DistSigner
+			// STEP 2: create sigRouter
 			switch tc.accountType {
+			case schema.DistributionAccountCircleDBVault:
+				t.Log(tc.accountType)
+
 			case schema.DistributionAccountStellarEnv:
-				distAccSigClient, err = signing.NewSignatureClient(schema.DistributionAccountStellarEnv, signing.SignatureClientOptions{
+				distAccSigClient, err := signing.NewSignatureClient(schema.DistributionAccountStellarEnv, signing.SignatureClientOptions{
 					DistributionPrivateKey: hostAccountKP.Seed(),
 					NetworkPassphrase:      tc.networkPassphrase,
 				})
 				require.NoError(t, err)
 				wantDistAccAddress = hostAccountKP.Address()
 
+				signatureStrategies[tc.accountType] = distAccSigClient
+
 			case schema.DistributionAccountStellarDBVault:
-				distAccSigClient, err = signing.NewSignatureClient(schema.DistributionAccountStellarDBVault, signing.SignatureClientOptions{
+				distAccSigClient, err := signing.NewSignatureClient(schema.DistributionAccountStellarDBVault, signing.SignatureClientOptions{
 					DBConnectionPool:            dbConnectionPool,
 					DistAccEncryptionPassphrase: keypair.MustRandom().Seed(),
 					NetworkPassphrase:           tc.networkPassphrase,
@@ -252,11 +267,12 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 					}, nil).
 					Once()
 
+				signatureStrategies[tc.accountType] = distAccSigClient
+
 			default:
 				require.Failf(t, "invalid sigClientType=%s", string(tc.accountType))
 			}
 
-			signatureStrategies[tc.accountType] = distAccSigClient
 			sigRouter := signing.NewSignerRouterImpl(network.TestNetworkPassphrase, signatureStrategies)
 
 			// STEP 3: create Submitter Engine
@@ -299,13 +315,19 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 			// STEP 6: assert the result
 			assert.Equal(t, tc.tenantName, tnt.Name)
 			assert.Equal(t, tenant.ProvisionedTenantStatus, tnt.Status)
-			assert.Equal(t, wantDistAccAddress, *tnt.DistributionAccountAddress)
 			assert.Equal(t, sdpUIBaseURL, *tnt.SDPUIBaseURL)
 			assert.Equal(t, baseURL, *tnt.BaseURL)
-			if tc.accountType == schema.DistributionAccountStellarEnv {
+			switch tc.accountType {
+			case schema.DistributionAccountStellarEnv:
 				assert.Equal(t, hostAccountKP.Address(), *tnt.DistributionAccountAddress)
-			} else {
+				assert.Equal(t, wantDistAccAddress, *tnt.DistributionAccountAddress)
+			case schema.DistributionAccountStellarDBVault:
 				assert.NotEqual(t, hostAccountKP.Address(), *tnt.DistributionAccountAddress)
+				assert.Equal(t, wantDistAccAddress, *tnt.DistributionAccountAddress)
+			case schema.DistributionAccountCircleDBVault:
+				assert.Nil(t, tnt.DistributionAccountAddress)
+			default:
+				require.Failf(t, "invalid accountType=%s", string(tc.accountType))
 			}
 
 			// STEP 7: assert the mocks

@@ -43,7 +43,13 @@ func UnwrapInterfaceToPointer[T any](i interface{}) *T {
 
 // IsEmpty checks if a value is empty.
 func IsEmpty[T any](v T) bool {
-	return reflect.ValueOf(&v).Elem().IsZero()
+	valueType := reflect.TypeOf(v)
+	if valueType == nil {
+		// this happens when T is interface{} of any, and the value is nil
+		return true
+	}
+
+	return reflect.DeepEqual(v, reflect.Zero(valueType).Interface())
 }
 
 func MapSlice[T any, M any](a []T, f func(T) M) []M {
