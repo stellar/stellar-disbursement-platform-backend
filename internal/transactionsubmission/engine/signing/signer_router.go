@@ -11,7 +11,7 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
+	sdpUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
@@ -58,7 +58,7 @@ type SignatureRouterOptions struct {
 
 	// *.STELLAR.DB_VAULT:
 	DBConnectionPool db.DBConnectionPool
-	Encrypter        utils.PrivateKeyEncrypter // (optional)
+	Encrypter        sdpUtils.PrivateKeyEncrypter // (optional)
 }
 
 func NewSignerRouter(opts SignatureRouterOptions, accountTypes ...schema.AccountType) (SignerRouter, error) {

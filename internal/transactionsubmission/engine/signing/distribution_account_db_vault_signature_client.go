@@ -10,7 +10,6 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
 	sdpUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
@@ -18,7 +17,7 @@ type DistributionAccountDBVaultSignatureClientOptions struct {
 	NetworkPassphrase    string
 	DBConnectionPool     db.DBConnectionPool
 	EncryptionPassphrase string
-	Encrypter            utils.PrivateKeyEncrypter
+	Encrypter            sdpUtils.PrivateKeyEncrypter
 }
 
 func (opts *DistributionAccountDBVaultSignatureClientOptions) Validate() error {
@@ -40,7 +39,7 @@ func (opts *DistributionAccountDBVaultSignatureClientOptions) Validate() error {
 type DistributionAccountDBVaultSignatureClient struct {
 	networkPassphrase    string
 	dbVault              store.DBVault
-	encrypter            utils.PrivateKeyEncrypter
+	encrypter            sdpUtils.PrivateKeyEncrypter
 	encryptionPassphrase string
 }
 
@@ -52,7 +51,7 @@ func NewDistributionAccountDBVaultSignatureClient(opts DistributionAccountDBVaul
 
 	encrypter := opts.Encrypter
 	if encrypter == nil {
-		encrypter = &utils.DefaultPrivateKeyEncrypter{}
+		encrypter = &sdpUtils.DefaultPrivateKeyEncrypter{}
 	}
 
 	return &DistributionAccountDBVaultSignatureClient{

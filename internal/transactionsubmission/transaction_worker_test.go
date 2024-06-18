@@ -43,7 +43,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 	storeMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
-	sdpUtlis "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+	sdpUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
@@ -102,7 +102,7 @@ func getTransactionWorkerInstance(t *testing.T, dbConnectionPool db.DBConnection
 }
 
 var (
-	encrypter                 = &utils.DefaultPrivateKeyEncrypter{}
+	encrypter                 = &sdpUtils.DefaultPrivateKeyEncrypter{}
 	chAccEncryptionPassphrase = keypair.MustRandom().Seed()
 )
 
@@ -1716,7 +1716,7 @@ func Test_TransactionWorker_buildAndSignTransaction(t *testing.T) {
 
 			// mock horizon
 			mockHorizon := &horizonclient.MockClient{}
-			if !sdpUtlis.IsEmpty(tc.getAccountResponseObj) || !sdpUtlis.IsEmpty(tc.getAccountResponseError) {
+			if !sdpUtils.IsEmpty(tc.getAccountResponseObj) || !sdpUtils.IsEmpty(tc.getAccountResponseError) {
 				var hErr error
 				if tc.getAccountResponseError != nil {
 					hErr = tc.getAccountResponseError

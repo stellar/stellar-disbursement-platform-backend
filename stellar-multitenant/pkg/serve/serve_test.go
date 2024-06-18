@@ -182,7 +182,7 @@ func Test_handleHTTP_authenticatedAdminEndpoints(t *testing.T) {
 	handlerMux := handleHTTP(&serveOptions)
 
 	// Authenticated endpoints
-	authenticatedEndpoints := []struct { // TODO: body to requests
+	authenticatedEndpoints := []struct {
 		method string
 		path   string
 	}{

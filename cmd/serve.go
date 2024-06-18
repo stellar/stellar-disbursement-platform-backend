@@ -479,6 +479,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			serveOpts.MonitorService = monitorService
 			serveOpts.BaseURL = globalOptions.BaseURL
 			serveOpts.NetworkPassphrase = globalOptions.NetworkPassphrase
+			serveOpts.DistAccEncryptionPassphrase = txSubmitterOpts.SignatureServiceOptions.DistAccEncryptionPassphrase
 
 			// Inject metrics server dependencies
 			metricsServeOpts.MonitorService = monitorService
@@ -558,6 +559,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 
 			// Setup Distribution Account Resolver
 			distAccResolverOpts.AdminDBConnectionPool = adminDBConnectionPool
+			distAccResolverOpts.MTNDBConnectionPool = mtnDBConnectionPool
 			distAccResolver, err := di.NewDistributionAccountResolver(ctx, distAccResolverOpts)
 			if err != nil {
 				log.Ctx(ctx).Fatalf("error creating distribution account resolver: %v", err)

@@ -29,6 +29,7 @@ func Test_dependencyinjection_NewDistributionAccountResolver(t *testing.T) {
 		opts := signing.DistributionAccountResolverOptions{
 			AdminDBConnectionPool:            dbConnectionPool,
 			HostDistributionAccountPublicKey: hostDistAccPublicKey,
+			MTNDBConnectionPool:              dbConnectionPool,
 		}
 
 		gotDependency, err := NewDistributionAccountResolver(ctx, opts)

@@ -169,6 +169,7 @@ func Test_serve(t *testing.T) {
 		SubmitterEngine:                 submitterEngine,
 		DistributionAccountService:      mDistAccService,
 		MaxInvitationSMSResendAttempts:  3,
+		DistAccEncryptionPassphrase:     distributionAccPrivKey,
 	}
 	serveOpts.AnchorPlatformAPIService, err = anchorplatform.NewAnchorPlatformAPIService(httpclient.DefaultClient(), serveOpts.AnchorPlatformBasePlatformURL, serveOpts.AnchorPlatformOutgoingJWTSecret)
 	require.NoError(t, err)

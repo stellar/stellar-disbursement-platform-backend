@@ -300,7 +300,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 		distAccResolver.
 			On("HostDistributionAccount").
 			Return(hostAccount, nil).
-			Once()
+			Maybe()
 
 		messengerClientMock.
 			On("SendMessage", mock.AnythingOfType("message.Message")).
@@ -346,15 +346,16 @@ func Test_TenantHandler_Post(t *testing.T) {
 			"auth_user_mfa_codes",
 			"auth_user_password_reset",
 			"auth_users",
+			"circle_client_config",
 			"countries",
 			"disbursements",
-			"sdp_migrations",
 			"messages",
 			"organizations",
 			"payments",
 			"receiver_verifications",
 			"receiver_wallets",
 			"receivers",
+			"sdp_migrations",
 			"wallets",
 			"wallets_assets",
 		}
@@ -381,7 +382,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 	t.Run("returns BadRequest with invalid request body", func(t *testing.T) {
 		respBody := makeRequest(t, `{}`, http.StatusBadRequest)
 
-		expectedBody := `
+		expectedBody := fmt.Sprintf(`
 			{
 				"error": "invalid request body",
 				"extras": {
@@ -390,10 +391,10 @@ func Test_TenantHandler_Post(t *testing.T) {
 					"owner_first_name": "owner_first_name is required",
 					"owner_last_name": "owner_last_name is required",
 					"organization_name": "organization_name is required",
-					"distribution_account_type": "distribution_account_type is required. valid values are: DISTRIBUTION_ACCOUNT.STELLAR.ENV, DISTRIBUTION_ACCOUNT.STELLAR.DB_VAULT, DISTRIBUTION_ACCOUNT.CIRCLE.DB_VAULT"
+					"distribution_account_type": "distribution_account_type is required. valid values are: %v"
 				}
 			}
-		`
+		`, schema.DistributionAccountTypes())
 		assert.JSONEq(t, expectedBody, string(respBody))
 	})
 

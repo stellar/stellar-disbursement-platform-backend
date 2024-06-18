@@ -9,21 +9,27 @@ import (
 	"net/http"
 	"testing"
 
-	httpclientMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient/mocks"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+
+	httpclientMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient/mocks"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
 func Test_NewClient(t *testing.T) {
 	t.Run("production environment", func(t *testing.T) {
-		cc := NewClient(Production, "test-key")
-		assert.Equal(t, "https://api.circle.com", cc.BasePath)
+		clientInterface := NewClient(utils.PubnetNetworkType, "test-key")
+		cc, ok := clientInterface.(*Client)
+		assert.True(t, ok)
+		assert.Equal(t, string(Production), cc.BasePath)
 		assert.Equal(t, "test-key", cc.APIKey)
 	})
 
 	t.Run("sandbox environment", func(t *testing.T) {
-		cc := NewClient(Sandbox, "test-key")
-		assert.Equal(t, "https://api-sandbox.circle.com", cc.BasePath)
+		clientInterface := NewClient(utils.TestnetNetworkType, "test-key")
+		cc, ok := clientInterface.(*Client)
+		assert.True(t, ok)
+		assert.Equal(t, string(Sandbox), cc.BasePath)
 		assert.Equal(t, "test-key", cc.APIKey)
 	})
 }
@@ -190,6 +196,95 @@ func Test_Client_GetTransferByID(t *testing.T) {
 		transfer, err := cc.GetTransferByID(ctx, "test-id")
 		assert.NoError(t, err)
 		assert.Equal(t, "test-id", transfer.ID)
+	})
+}
+
+func Test_Client_GetWalletByID(t *testing.T) {
+	ctx := context.Background()
+	t.Run("get wallet by id error", func(t *testing.T) {
+		cc, httpClientMock := newClientWithMock(t)
+		testError := errors.New("test error")
+		httpClientMock.
+			On("Do", mock.Anything).
+			Run(func(args mock.Arguments) {
+				req, ok := args.Get(0).(*http.Request)
+				assert.True(t, ok)
+
+				assert.Equal(t, "http://localhost:8080/v1/wallets/test-id", req.URL.String())
+				assert.Equal(t, http.MethodGet, req.Method)
+				assert.Equal(t, "Bearer test-key", req.Header.Get("Authorization"))
+			}).
+			Return(nil, testError).
+			Once()
+
+		wallet, err := cc.GetWalletByID(ctx, "test-id")
+		assert.EqualError(t, err, fmt.Errorf("making request: %w", testError).Error())
+		assert.Nil(t, wallet)
+	})
+
+	t.Run("get wallet by id fails auth", func(t *testing.T) {
+		const unauthorizedResponse = `{
+			"code": 401,
+			"message": "Malformed key. Does it contain three parts?"
+		}`
+		cc, httpClientMock := newClientWithMock(t)
+		httpClientMock.
+			On("Do", mock.Anything).
+			Return(&http.Response{
+				StatusCode: http.StatusUnauthorized,
+				Body:       io.NopCloser(bytes.NewBufferString(unauthorizedResponse)),
+			}, nil).
+			Once()
+
+		transfer, err := cc.GetWalletByID(ctx, "test-id")
+		assert.EqualError(t, err, "API error: APIError: Code=401, Message=Malformed key. Does it contain three parts?, Errors=[]")
+		assert.Nil(t, transfer)
+	})
+
+	t.Run("get wallet by id successful", func(t *testing.T) {
+		const getWalletResponseJSON = `{
+			"data": {
+				"walletId": "test-id",
+				"entityId": "2f47c999-9022-4939-acea-dc3afa9ccbaf",
+				"type": "end_user_wallet",
+				"description": "Treasury Wallet",
+				"balances": [
+					{
+						"amount": "4790.00",
+						"currency": "USD"
+					}
+				]
+			}
+		}`
+		cc, httpClientMock := newClientWithMock(t)
+		httpClientMock.
+			On("Do", mock.Anything).
+			Return(&http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(bytes.NewBufferString(getWalletResponseJSON)),
+			}, nil).
+			Run(func(args mock.Arguments) {
+				req, ok := args.Get(0).(*http.Request)
+				assert.True(t, ok)
+
+				assert.Equal(t, "http://localhost:8080/v1/wallets/test-id", req.URL.String())
+				assert.Equal(t, http.MethodGet, req.Method)
+				assert.Equal(t, "Bearer test-key", req.Header.Get("Authorization"))
+			}).
+			Once()
+
+		wallet, err := cc.GetWalletByID(ctx, "test-id")
+		assert.NoError(t, err)
+		wantWallet := &Wallet{
+			WalletID:    "test-id",
+			EntityID:    "2f47c999-9022-4939-acea-dc3afa9ccbaf",
+			Type:        "end_user_wallet",
+			Description: "Treasury Wallet",
+			Balances: []Balance{
+				{Amount: "4790.00", Currency: "USD"},
+			},
+		}
+		assert.Equal(t, wantWallet, wallet)
 	})
 }
 
