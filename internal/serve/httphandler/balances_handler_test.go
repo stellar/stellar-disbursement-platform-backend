@@ -110,7 +110,7 @@ func Test_BalancesHandler_Get(t *testing.T) {
 					Once()
 			},
 			expectedStatus:   http.StatusBadRequest,
-			expectedResponse: `{"error": "This organization is not configured to use CIRCLE"}`,
+			expectedResponse: `{"error": "This organization's distribution account is in PENDING_USER_ACTIVATION state, please complete the CIRCLE activation process to access this endpoint."}`,
 		},
 		{
 			name:        "returns a 500 if circle.GetWalletByID fails with an unexpected error",

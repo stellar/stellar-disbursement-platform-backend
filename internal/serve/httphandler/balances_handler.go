@@ -50,7 +50,7 @@ func (h BalancesHandler) Get(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if distAccount.Status == schema.AccountStatusPendingUserActivation {
-		errResponseMsg := fmt.Sprintf("This organization is not configured to use %v", schema.CirclePlatform)
+		errResponseMsg := fmt.Sprintf("This organization's distribution account is in %s state, please complete the %s activation process to access this endpoint.", distAccount.Status, distAccount.Type.Platform())
 		httperror.BadRequest(errResponseMsg, nil, nil).Render(w)
 		return
 	}
