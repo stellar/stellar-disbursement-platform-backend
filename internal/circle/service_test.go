@@ -149,3 +149,111 @@ func Test_Service_getClient(t *testing.T) {
 	wantCircleClient := NewClient(networkType, apiKey)
 	assert.Equal(t, wantCircleClient, circleClient)
 }
+
+func Test_Service_allMethods(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+
+	pubKey := "GBFL6FHGHTOSNCAR3GE2MX53Y6BZ3QBCYSTBOCJBSFOWZ35EG2F6T4LG"
+	encryptionPassphrase := "SCW5I426WV3IDTLSTLQEHC6BMXWI2Z6C4DXAOC4ZA2EIHTAZQ6VD3JI6"
+	// apiKey := "api-key"
+	encryptedAPIKey := "72TARC5aoKJOEUIMTR9nlITP6+MbugQtS+2faBKSQbCrXic=" // <--- "api-key" encrypted with the encryptionPassphrase.
+	networkType := utils.TestnetNetworkType
+	clientConfigModel := NewClientConfigModel(dbConnectionPool)
+
+	// Add a client config to the database.
+	clientConfigModel.Upsert(ctx, ClientConfigUpdate{})
+	err = clientConfigModel.Upsert(ctx, ClientConfigUpdate{
+		WalletID:           utils.StringPtr("the_wallet_id"),
+		EncryptedAPIKey:    utils.StringPtr(encryptedAPIKey),
+		EncrypterPublicKey: utils.StringPtr(pubKey),
+	})
+	require.NoError(t, err)
+
+	// Method used to spin up a service with a mock client.
+	createService := func(t *testing.T, mCircleClient *MockClient) *Service {
+		svc, err := NewService(ServiceOptions{
+			ClientFactory: func(networkType utils.NetworkType, apiKey string) ClientInterface {
+				return mCircleClient
+			},
+			ClientConfigModel:    clientConfigModel,
+			NetworkType:          networkType,
+			EncryptionPassphrase: encryptionPassphrase,
+		})
+		require.NoError(t, err)
+		return svc
+	}
+
+	t.Run("Ping", func(t *testing.T) {
+		mCircleClient := NewMockClient(t)
+		mCircleClient.
+			On("Ping", ctx).
+			Return(true, nil).
+			Once()
+		svc := createService(t, mCircleClient)
+
+		res, err := svc.Ping(ctx)
+		assert.NoError(t, err)
+		assert.True(t, res)
+	})
+
+	t.Run("PostTransfer", func(t *testing.T) {
+		mCircleClient := NewMockClient(t)
+		transferRequest := TransferRequest{
+			Source: TransferAccount{
+				Type: TransferAccountTypeWallet,
+				ID:   "wallet-id",
+			},
+			Destination: TransferAccount{
+				Type:    TransferAccountTypeWallet,
+				Chain:   "XLM",
+				Address: pubKey,
+			},
+			Amount: Money{
+				Amount:   "123.45",
+				Currency: "USD",
+			},
+			IdempotencyKey: "idempotency-key",
+		}
+		mCircleClient.
+			On("PostTransfer", ctx, transferRequest).
+			Return(&Transfer{ID: "transfer-id"}, nil).
+			Once()
+		svc := createService(t, mCircleClient)
+
+		res, err := svc.PostTransfer(ctx, transferRequest)
+		assert.NoError(t, err)
+		assert.Equal(t, &Transfer{ID: "transfer-id"}, res)
+	})
+
+	t.Run("GetTransferByID", func(t *testing.T) {
+		mCircleClient := NewMockClient(t)
+		mCircleClient.
+			On("GetTransferByID", ctx, "transfer-id").
+			Return(&Transfer{ID: "transfer-id"}, nil).
+			Once()
+		svc := createService(t, mCircleClient)
+
+		res, err := svc.GetTransferByID(ctx, "transfer-id")
+		assert.NoError(t, err)
+		assert.Equal(t, &Transfer{ID: "transfer-id"}, res)
+	})
+
+	t.Run("GetWalletByID", func(t *testing.T) {
+		mCircleClient := NewMockClient(t)
+		mCircleClient.
+			On("GetWalletByID", ctx, "wallet-id").
+			Return(&Wallet{WalletID: "wallet-id"}, nil).
+			Once()
+		svc := createService(t, mCircleClient)
+
+		res, err := svc.GetWalletByID(ctx, "wallet-id")
+		assert.NoError(t, err)
+		assert.Equal(t, &Wallet{WalletID: "wallet-id"}, res)
+	})
+}
