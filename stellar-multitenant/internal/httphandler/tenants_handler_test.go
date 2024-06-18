@@ -300,7 +300,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 		distAccResolver.
 			On("HostDistributionAccount").
 			Return(hostAccount, nil).
-			Once()
+			Maybe()
 
 		messengerClientMock.
 			On("SendMessage", mock.AnythingOfType("message.Message")).

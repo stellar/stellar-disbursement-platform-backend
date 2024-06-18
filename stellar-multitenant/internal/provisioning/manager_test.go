@@ -11,6 +11,7 @@ import (
 	"github.com/stellar/go/keypair"
 	"github.com/stellar/go/network"
 	"github.com/stellar/go/protocols/horizon"
+	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/txnbuild"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -150,28 +151,40 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 		accountType       schema.AccountType
 	}{
 		{
-			name:              "Testnet with accountType=DISTRIBUTION_ACCOUNT.STELLAR.ENV",
+			name:              "[Testnet] accountType=DISTRIBUTION_ACCOUNT.STELLAR.ENV",
 			networkPassphrase: network.TestNetworkPassphrase,
-			tenantName:        "tenant-testnet-env",
+			tenantName:        "testnet-stellar-env",
 			accountType:       schema.DistributionAccountStellarEnv,
 		},
 		{
-			name:              "Testnet with accountType=DISTRIBUTION_ACCOUNT.STELLAR.DB_VAULT",
+			name:              "[Testnet] accountType=DISTRIBUTION_ACCOUNT.STELLAR.DB_VAULT",
 			networkPassphrase: network.TestNetworkPassphrase,
-			tenantName:        "tenant-testnet-dbvault",
+			tenantName:        "testnet-stellar-dbvault",
 			accountType:       schema.DistributionAccountStellarDBVault,
 		},
 		{
-			name:              "Pubnet with accountType=DISTRIBUTION_ACCOUNT.STELLAR.ENV",
+			name:              "[Testnet] accountType=DISTRIBUTION_ACCOUNT.CIRCLE.DB_VAULT",
+			networkPassphrase: network.TestNetworkPassphrase,
+			tenantName:        "testnet-circle-dbvault",
+			accountType:       schema.DistributionAccountCircleDBVault,
+		},
+		{
+			name:              "[Pubnet] accountType=DISTRIBUTION_ACCOUNT.STELLAR.ENV",
 			networkPassphrase: network.PublicNetworkPassphrase,
-			tenantName:        "tenant-pubnet-env",
+			tenantName:        "pubnet-stellar-env",
 			accountType:       schema.DistributionAccountStellarEnv,
 		},
 		{
-			name:              "Pubnet with accountType=DISTRIBUTION_ACCOUNT.STELLAR.DB_VAULT",
+			name:              "[Pubnet] accountType=DISTRIBUTION_ACCOUNT.STELLAR.DB_VAULT",
 			networkPassphrase: network.PublicNetworkPassphrase,
-			tenantName:        "tenant-pubnet-dbvault",
+			tenantName:        "pubnet-stellar-dbvault",
 			accountType:       schema.DistributionAccountStellarDBVault,
+		},
+		{
+			name:              "[Pubnet] accountType=DISTRIBUTION_ACCOUNT.CIRCLE.DB_VAULT",
+			networkPassphrase: network.PublicNetworkPassphrase,
+			tenantName:        "pubnet-circle-dbvault",
+			accountType:       schema.DistributionAccountCircleDBVault,
 		},
 	}
 
@@ -181,8 +194,6 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 
 			hostAccountKP := keypair.MustRandom()
 			hostAccount := schema.NewDefaultHostAccount(hostAccountKP.Address())
-			var distAccSigClient signing.SignatureClient
-			var err error
 			var wantDistAccAddress string
 
 			// STEP 1: create mocks:
@@ -202,18 +213,23 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 				schema.ChannelAccountStellarDB: chAccSigClient,
 			}
 
-			// STEP 2: create DistSigner
+			// STEP 2: create sigRouter
 			switch tc.accountType {
+			case schema.DistributionAccountCircleDBVault:
+				t.Log(tc.accountType)
+
 			case schema.DistributionAccountStellarEnv:
-				distAccSigClient, err = signing.NewSignatureClient(schema.DistributionAccountStellarEnv, signing.SignatureClientOptions{
+				distAccSigClient, err := signing.NewSignatureClient(schema.DistributionAccountStellarEnv, signing.SignatureClientOptions{
 					DistributionPrivateKey: hostAccountKP.Seed(),
 					NetworkPassphrase:      tc.networkPassphrase,
 				})
 				require.NoError(t, err)
 				wantDistAccAddress = hostAccountKP.Address()
 
+				signatureStrategies[tc.accountType] = distAccSigClient
+
 			case schema.DistributionAccountStellarDBVault:
-				distAccSigClient, err = signing.NewSignatureClient(schema.DistributionAccountStellarDBVault, signing.SignatureClientOptions{
+				distAccSigClient, err := signing.NewSignatureClient(schema.DistributionAccountStellarDBVault, signing.SignatureClientOptions{
 					DBConnectionPool:            dbConnectionPool,
 					DistAccEncryptionPassphrase: keypair.MustRandom().Seed(),
 					NetworkPassphrase:           tc.networkPassphrase,
@@ -222,7 +238,7 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 
 				tenantAccountKP := keypair.MustRandom()
 
-				// STEP 2.1 - Mock calls that are exclusively for DistributionAccountDBVaultSignatureClientType
+				// STEP 2.1 - Mock calls that are exclusively for DistributionAccountStellarDBVault
 				mHorizonClient.
 					On("AccountDetail", horizonclient.AccountRequest{AccountID: hostAccountKP.Address()}).
 					Return(horizon.Account{
@@ -251,11 +267,12 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 					}, nil).
 					Once()
 
+				signatureStrategies[tc.accountType] = distAccSigClient
+
 			default:
 				require.Failf(t, "invalid sigClientType=%s", string(tc.accountType))
 			}
 
-			signatureStrategies[tc.accountType] = distAccSigClient
 			sigRouter := signing.NewSignerRouterImpl(network.TestNetworkPassphrase, signatureStrategies)
 
 			// STEP 3: create Submitter Engine
@@ -298,13 +315,19 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 			// STEP 6: assert the result
 			assert.Equal(t, tc.tenantName, tnt.Name)
 			assert.Equal(t, tenant.ProvisionedTenantStatus, tnt.Status)
-			assert.Equal(t, wantDistAccAddress, *tnt.DistributionAccountAddress)
 			assert.Equal(t, sdpUIBaseURL, *tnt.SDPUIBaseURL)
 			assert.Equal(t, baseURL, *tnt.BaseURL)
-			if tc.accountType == schema.DistributionAccountStellarEnv {
+			switch tc.accountType {
+			case schema.DistributionAccountStellarEnv:
 				assert.Equal(t, hostAccountKP.Address(), *tnt.DistributionAccountAddress)
-			} else {
+				assert.Equal(t, wantDistAccAddress, *tnt.DistributionAccountAddress)
+			case schema.DistributionAccountStellarDBVault:
 				assert.NotEqual(t, hostAccountKP.Address(), *tnt.DistributionAccountAddress)
+				assert.Equal(t, wantDistAccAddress, *tnt.DistributionAccountAddress)
+			case schema.DistributionAccountCircleDBVault:
+				assert.Nil(t, tnt.DistributionAccountAddress)
+			default:
+				require.Failf(t, "invalid accountType=%s", string(tc.accountType))
 			}
 
 			// STEP 7: assert the mocks
@@ -547,7 +570,7 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 			expectedErr: ErrUpdateTenantFailed,
 		},
 		{
-			name: "when fundTenantDistributionAccount fails, rollback and return an error",
+			name: "when fundTenantDistributionStellarAccountIfNeeded fails, rollback and return an error",
 			mockTntManagerFn: func(tntManagerMock *tenant.TenantManagerMock, sigRouter *mocks.MockSignerRouter, mDistAccResolver *mocks.MockDistributionAccountResolver, mHorizonClient *horizonclient.MockClient) {
 				// Needed for AddTenant:
 				tntManagerMock.On("AddTenant", ctx, tenantName).Return(&tnt, nil).Once()
@@ -575,7 +598,7 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 				tStatus := tenant.ProvisionedTenantStatus
 				updatedTnt := tnt
 				updatedTnt.DistributionAccountAddress = &distAccAddress
-				updatedTnt.DistributionAccountType = schema.DistributionAccountStellarEnv
+				updatedTnt.DistributionAccountType = schema.DistributionAccountStellarDBVault
 				updatedTnt.DistributionAccountStatus = schema.AccountStatusActive
 				updatedTnt.Status = tStatus
 				tntManagerMock.
@@ -591,7 +614,7 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 					Return(&updatedTnt, nil).
 					Once()
 
-				// Needed for fundTenantDistributionAccount:
+				// Needed for fundTenantDistributionStellarAccountIfNeeded:
 				hostAccountKP := keypair.MustRandom()
 				hostAccount := schema.NewDefaultHostAccount(hostAccountKP.Address())
 				mDistAccResolver.
@@ -637,7 +660,7 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 				tStatus := tenant.ProvisionedTenantStatus
 				updatedTnt := tnt
 				updatedTnt.DistributionAccountAddress = &distAccAddress
-				updatedTnt.DistributionAccountType = schema.DistributionAccountStellarEnv
+				updatedTnt.DistributionAccountType = schema.DistributionAccountStellarDBVault
 				updatedTnt.DistributionAccountStatus = schema.AccountStatusActive
 				updatedTnt.Status = tStatus
 				tntManagerMock.
@@ -653,7 +676,7 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 					Return(&updatedTnt, nil).
 					Once()
 
-				// Needed for fundTenantDistributionAccount:
+				// Needed for fundTenantDistributionStellarAccountIfNeeded:
 				hostAccountKP := keypair.MustRandom()
 				hostAccount := schema.NewDefaultHostAccount(hostAccountKP.Address())
 				mDistAccResolver.
@@ -734,6 +757,230 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 
 			mHorizonClient.AssertExpectations(t)
 			tenantManagerMock.AssertExpectations(t)
+		})
+	}
+}
+
+func Test_Manager_fundTenantDistributionStellarAccountIfNeeded(t *testing.T) {
+	ctx := context.Background()
+	distAccAddress := keypair.MustRandom().Address()
+	hostAccount := schema.NewDefaultHostAccount(keypair.MustRandom().Address())
+
+	testCases := []struct {
+		name              string
+		accountType       schema.AccountType
+		prepareMocksFn    func(t *testing.T, mDistAccResolver *mocks.MockDistributionAccountResolver, mHorizonClient *horizonclient.MockClient, mSigRouter *mocks.MockSignerRouter)
+		wantLogContains   string
+		wantErrorContains string
+	}{
+		{
+			name:              "❌ HOST account type.STELLAR.ENV is not supported",
+			accountType:       schema.HostStellarEnv,
+			wantErrorContains: fmt.Sprintf("unsupported accountType=%s", schema.HostStellarEnv),
+		},
+		{
+			name:              "❌ CHANNEL_ACCOUNT account type.STELLAR.DB is not supported",
+			accountType:       schema.ChannelAccountStellarDB,
+			wantErrorContains: fmt.Sprintf("unsupported accountType=%s", schema.ChannelAccountStellarDB),
+		},
+		{
+			name:            "🟢✍🏽 DISTRIBUTION_ACCOUNT.STELLAR.ENV is NO-OP and logs warnings accordingly",
+			accountType:     schema.DistributionAccountStellarEnv,
+			wantLogContains: fmt.Sprintf("Tenant distribution account is configured to use accountType=%s, no need to initiate funding.", schema.DistributionAccountStellarEnv),
+		},
+		{
+			name:        "🟢✅ DISTRIBUTION_ACCOUNT.STELLAR.DB_VAULT gets inserted in DBVault",
+			accountType: schema.DistributionAccountStellarDBVault,
+			prepareMocksFn: func(t *testing.T, mDistAccResolver *mocks.MockDistributionAccountResolver, mHorizonClient *horizonclient.MockClient, mSigRouter *mocks.MockSignerRouter) {
+				mDistAccResolver.On("HostDistributionAccount").Return(hostAccount)
+
+				mHorizonClient.
+					On("AccountDetail", horizonclient.AccountRequest{AccountID: hostAccount.Address}).
+					Return(horizon.Account{
+						AccountID: hostAccount.Address,
+						Sequence:  1,
+					}, nil).
+					Once()
+				mSigRouter.
+					On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), hostAccount).
+					Return(&txnbuild.Transaction{}, nil).
+					Once()
+				mHorizonClient.
+					On("SubmitTransactionWithOptions", mock.AnythingOfType("*txnbuild.Transaction"), horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true}).
+					Return(horizon.Transaction{}, nil).
+					Once()
+				mHorizonClient.
+					On("AccountDetail", horizonclient.AccountRequest{AccountID: distAccAddress}).
+					Return(horizon.Account{AccountID: distAccAddress, Sequence: 1}, nil).
+					Once()
+			},
+		},
+		{
+			name:        "❌ DISTRIBUTION_ACCOUNT.STELLAR.DB_VAULT errors are handled accordingly",
+			accountType: schema.DistributionAccountStellarDBVault,
+			prepareMocksFn: func(t *testing.T, mDistAccResolver *mocks.MockDistributionAccountResolver, mHorizonClient *horizonclient.MockClient, mSigRouter *mocks.MockSignerRouter) {
+				mDistAccResolver.On("HostDistributionAccount").Return(hostAccount)
+
+				mHorizonClient.
+					On("AccountDetail", horizonclient.AccountRequest{AccountID: hostAccount.Address}).
+					Return(horizon.Account{}, errors.New("horizon error"))
+			},
+			wantErrorContains: "bootstrapping tenant distribution account with native asset",
+		},
+		{
+			name:            "🟢✍🏽 DISTRIBUTION_ACCOUNT.CIRCLE.DB_VAULT is NO-OP and logs warnings accordingly",
+			accountType:     schema.DistributionAccountCircleDBVault,
+			wantLogContains: fmt.Sprintf("Tenant distribution account is configured to use accountType=%s, the tenant will need to complete the setup through the UI.", schema.DistributionAccountCircleDBVault),
+		},
+		{
+			name:              "❌ INVALID account type will return an error",
+			accountType:       schema.AccountType("INVALID"),
+			wantErrorContains: "unsupported accountType=INVALID",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			m := Manager{}
+			tnt := tenant.Tenant{
+				ID:                         "foo-bar",
+				Name:                       "test",
+				DistributionAccountAddress: &distAccAddress,
+				DistributionAccountType:    tc.accountType,
+			}
+
+			getEntries := log.DefaultLogger.StartTest(log.WarnLevel)
+
+			if tc.prepareMocksFn != nil {
+				mHorizonClient := &horizonclient.MockClient{}
+				defer mHorizonClient.AssertExpectations(t)
+				mSigRouter := mocks.NewMockSignerRouter(t)
+				mDistAccResolver := mocks.NewMockDistributionAccountResolver(t)
+				tc.prepareMocksFn(t, mDistAccResolver, mHorizonClient, mSigRouter)
+
+				m.SubmitterEngine = engine.SubmitterEngine{
+					HorizonClient: mHorizonClient,
+					SignatureService: signing.SignatureService{
+						SignerRouter:                mSigRouter,
+						DistributionAccountResolver: mDistAccResolver,
+					},
+				}
+			}
+
+			err := m.fundTenantDistributionStellarAccountIfNeeded(ctx, tnt)
+			if tc.wantErrorContains != "" {
+				assert.ErrorContains(t, err, tc.wantErrorContains)
+			} else {
+				require.NoError(t, err)
+			}
+
+			entries := getEntries()
+			var aggregatedMessages []string
+			if tc.wantLogContains != "" {
+				for _, entry := range entries {
+					aggregatedMessages = append(aggregatedMessages, entry.Message)
+				}
+				assert.Contains(t, aggregatedMessages, tc.wantLogContains)
+			}
+		})
+	}
+}
+
+func Test_Manager_provisionDistributionAccount(t *testing.T) {
+	ctx := context.Background()
+	distAccAddress := keypair.MustRandom().Address()
+
+	testCases := []struct {
+		name              string
+		accountType       schema.AccountType
+		prepareMocksFn    func(t *testing.T, mSigRouter *mocks.MockSignerRouter)
+		wantErrorContains string
+		wantLogContains   string
+		wantTnt           tenant.Tenant
+	}{
+		{
+			name:              "HOST.STELLAR.ENV is not supported",
+			accountType:       schema.HostStellarEnv,
+			wantTnt:           tenant.Tenant{ID: "foo-bar", Name: "test"},
+			wantErrorContains: fmt.Sprintf("%v: unsupported accountType=%s", ErrProvisionTenantDistributionAccountFailed, schema.HostStellarEnv),
+		},
+		{
+			name:              "CHANNEL_ACCOUNT.STELLAR.DB is not supported",
+			accountType:       schema.ChannelAccountStellarDB,
+			wantTnt:           tenant.Tenant{ID: "foo-bar", Name: "test"},
+			wantErrorContains: fmt.Sprintf("%v: unsupported accountType=%s", ErrProvisionTenantDistributionAccountFailed, schema.ChannelAccountStellarDB),
+		},
+		{
+			name:        "DISTRIBUTION_ACCOUNT.STELLAR.ENV is NO-OP and logs warnings accordingly",
+			accountType: schema.DistributionAccountStellarEnv,
+			prepareMocksFn: func(t *testing.T, mSigRouter *mocks.MockSignerRouter) {
+				distAccount := schema.TransactionAccount{
+					Address: distAccAddress,
+					Type:    schema.DistributionAccountStellarEnv,
+				}
+				mSigRouter.On("BatchInsert", ctx, schema.DistributionAccountStellarEnv, 1).
+					Return([]schema.TransactionAccount{distAccount}, signing.ErrUnsupportedCommand).
+					Once()
+			},
+			wantTnt: tenant.Tenant{
+				ID:                         "foo-bar",
+				Name:                       "test",
+				DistributionAccountAddress: &distAccAddress,
+				DistributionAccountType:    schema.DistributionAccountStellarEnv,
+				DistributionAccountStatus:  schema.AccountStatusActive,
+			},
+		},
+		{
+			name:        "DISTRIBUTION_ACCOUNT.STELLAR.DB_VAULT gets inserted in DBVault",
+			accountType: schema.DistributionAccountStellarDBVault,
+			prepareMocksFn: func(t *testing.T, mSigRouter *mocks.MockSignerRouter) {
+				distAccount := schema.TransactionAccount{
+					Address: distAccAddress,
+					Type:    schema.DistributionAccountStellarDBVault,
+				}
+				mSigRouter.On("BatchInsert", ctx, schema.DistributionAccountStellarDBVault, 1).
+					Return([]schema.TransactionAccount{distAccount}, nil).
+					Once()
+			},
+			wantTnt: tenant.Tenant{
+				ID:                         "foo-bar",
+				Name:                       "test",
+				DistributionAccountAddress: &distAccAddress,
+				DistributionAccountType:    schema.DistributionAccountStellarDBVault,
+				DistributionAccountStatus:  schema.AccountStatusActive,
+			},
+		},
+		{
+			name:        "DISTRIBUTION_ACCOUNT.CIRCLE.DB_VAULT is NO-OP and logs warnings accordingly",
+			accountType: schema.DistributionAccountCircleDBVault,
+			wantTnt: tenant.Tenant{
+				ID:                        "foo-bar",
+				Name:                      "test",
+				DistributionAccountType:   schema.DistributionAccountCircleDBVault,
+				DistributionAccountStatus: schema.AccountStatusPendingUserActivation,
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			m := Manager{}
+			tnt := &tenant.Tenant{ID: "foo-bar", Name: "test"}
+
+			if tc.prepareMocksFn != nil {
+				mSigRouter := mocks.NewMockSignerRouter(t)
+				m.SubmitterEngine.SignatureService.SignerRouter = mSigRouter
+				tc.prepareMocksFn(t, mSigRouter)
+			}
+
+			err := m.provisionDistributionAccount(ctx, tnt, tc.accountType)
+			if tc.wantErrorContains != "" {
+				assert.ErrorContains(t, err, tc.wantErrorContains)
+			} else {
+				require.NoError(t, err)
+			}
+
+			assert.Equal(t, tc.wantTnt, *tnt)
 		})
 	}
 }

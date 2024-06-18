@@ -177,13 +177,10 @@ func (h ProfileHandler) PatchOrganizationProfile(rw http.ResponseWriter, req *ht
 	}
 	var nonEmptyChanges []string
 	for k, v := range requestDict {
-		if !utils.IsEmpty(v) {
-			value := v
-			if k == "Logo" {
-				value = "..."
-			}
-			nonEmptyChanges = append(nonEmptyChanges, fmt.Sprintf("%s='%v'", k, value))
+		if k == "Logo" {
+			v = "..."
 		}
+		nonEmptyChanges = append(nonEmptyChanges, fmt.Sprintf("%s='%v'", k, v))
 	}
 	sort.Strings(nonEmptyChanges)
 
