@@ -9,7 +9,6 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/stellar/go/keypair"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -34,19 +33,17 @@ func Test_BalancesHandler_Get(t *testing.T) {
 		},
 	}
 
-	encryptionPassphrase := keypair.MustRandom().Seed()
-
 	testCases := []struct {
 		name             string
 		networkType      utils.NetworkType
-		prepareMocks     func(t *testing.T, mCircleClient *circle.MockClient, mDistributionAccountResolver *sigMocks.MockDistributionAccountResolver, mCircleClientConfigModel *circle.MockClientConfigModel)
+		prepareMocks     func(t *testing.T, mCircleService *circle.MockService, mDistributionAccountResolver *sigMocks.MockDistributionAccountResolver)
 		expectedStatus   int
 		expectedResponse string
 	}{
 		{
 			name:        "returns a 500 error in DistributionAccountResolver",
 			networkType: utils.TestnetNetworkType,
-			prepareMocks: func(t *testing.T, mCircleClient *circle.MockClient, mDistributionAccountResolver *sigMocks.MockDistributionAccountResolver, mCircleClientConfigModel *circle.MockClientConfigModel) {
+			prepareMocks: func(t *testing.T, mCircleService *circle.MockService, mDistributionAccountResolver *sigMocks.MockDistributionAccountResolver) {
 				mDistributionAccountResolver.
 					On("DistributionAccountFromContext", mock.Anything).
 					Return(schema.TransactionAccount{}, errors.New("distribution account error")).
@@ -58,7 +55,7 @@ func Test_BalancesHandler_Get(t *testing.T) {
 		{
 			name:        "returns a 400 error if the distribution account is not Circle",
 			networkType: utils.TestnetNetworkType,
-			prepareMocks: func(t *testing.T, mCircleClient *circle.MockClient, mDistributionAccountResolver *sigMocks.MockDistributionAccountResolver, mCircleClientConfigModel *circle.MockClientConfigModel) {
+			prepareMocks: func(t *testing.T, mCircleService *circle.MockService, mDistributionAccountResolver *sigMocks.MockDistributionAccountResolver) {
 				mDistributionAccountResolver.
 					On("DistributionAccountFromContext", mock.Anything).
 					Return(schema.TransactionAccount{Type: schema.DistributionAccountStellarEnv}, nil).
@@ -70,7 +67,7 @@ func Test_BalancesHandler_Get(t *testing.T) {
 		{
 			name:        "propagate Circle API error if GetWalletByID fails",
 			networkType: utils.TestnetNetworkType,
-			prepareMocks: func(t *testing.T, mCircleClient *circle.MockClient, mDistributionAccountResolver *sigMocks.MockDistributionAccountResolver, mCircleClientConfigModel *circle.MockClientConfigModel) {
+			prepareMocks: func(t *testing.T, mCircleService *circle.MockService, mDistributionAccountResolver *sigMocks.MockDistributionAccountResolver) {
 				mDistributionAccountResolver.
 					On("DistributionAccountFromContext", mock.Anything).
 					Return(schema.TransactionAccount{
@@ -80,12 +77,7 @@ func Test_BalancesHandler_Get(t *testing.T) {
 					}, nil).
 					Once()
 
-				mCircleClientConfigModel.
-					On("GetDecryptedAPIKey", mock.Anything, encryptionPassphrase).
-					Return("api-key", nil).
-					Once()
-
-				mCircleClient.
+				mCircleService.
 					On("GetWalletByID", mock.Anything, "circle-wallet-id").
 					Return(nil, fmt.Errorf("wrapped error: %w", circleAPIError)).
 					Once()
@@ -107,7 +99,7 @@ func Test_BalancesHandler_Get(t *testing.T) {
 		{
 			name:        "returns a 400 if account status is PENDING_USER_ACTIVATION",
 			networkType: utils.TestnetNetworkType,
-			prepareMocks: func(t *testing.T, mCircleClient *circle.MockClient, mDistributionAccountResolver *sigMocks.MockDistributionAccountResolver, mCircleClientConfigModel *circle.MockClientConfigModel) {
+			prepareMocks: func(t *testing.T, mCircleService *circle.MockService, mDistributionAccountResolver *sigMocks.MockDistributionAccountResolver) {
 				mDistributionAccountResolver.
 					On("DistributionAccountFromContext", mock.Anything).
 					Return(schema.TransactionAccount{
@@ -122,7 +114,7 @@ func Test_BalancesHandler_Get(t *testing.T) {
 		{
 			name:        "returns a 500 if circle.GetWalletByID fails with an unexpected error",
 			networkType: utils.TestnetNetworkType,
-			prepareMocks: func(t *testing.T, mCircleClient *circle.MockClient, mDistributionAccountResolver *sigMocks.MockDistributionAccountResolver, mCircleClientConfigModel *circle.MockClientConfigModel) {
+			prepareMocks: func(t *testing.T, mCircleService *circle.MockService, mDistributionAccountResolver *sigMocks.MockDistributionAccountResolver) {
 				mDistributionAccountResolver.
 					On("DistributionAccountFromContext", mock.Anything).
 					Return(schema.TransactionAccount{
@@ -131,11 +123,7 @@ func Test_BalancesHandler_Get(t *testing.T) {
 						Status:         schema.AccountStatusActive,
 					}, nil).
 					Once()
-				mCircleClientConfigModel.
-					On("GetDecryptedAPIKey", mock.Anything, encryptionPassphrase).
-					Return("api-key", nil).
-					Once()
-				mCircleClient.
+				mCircleService.
 					On("GetWalletByID", mock.Anything, "circle-wallet-id").
 					Return(nil, errors.New("unexpected error")).
 					Once()
@@ -146,7 +134,7 @@ func Test_BalancesHandler_Get(t *testing.T) {
 		{
 			name:        "[Testnet] 🎉 successfully returns balances",
 			networkType: utils.TestnetNetworkType,
-			prepareMocks: func(t *testing.T, mCircleClient *circle.MockClient, mDistributionAccountResolver *sigMocks.MockDistributionAccountResolver, mCircleClientConfigModel *circle.MockClientConfigModel) {
+			prepareMocks: func(t *testing.T, mCircleService *circle.MockService, mDistributionAccountResolver *sigMocks.MockDistributionAccountResolver) {
 				mDistributionAccountResolver.
 					On("DistributionAccountFromContext", mock.Anything).
 					Return(schema.TransactionAccount{
@@ -155,11 +143,7 @@ func Test_BalancesHandler_Get(t *testing.T) {
 						Status:         schema.AccountStatusActive,
 					}, nil).
 					Once()
-				mCircleClientConfigModel.
-					On("GetDecryptedAPIKey", mock.Anything, encryptionPassphrase).
-					Return("api-key", nil).
-					Once()
-				mCircleClient.
+				mCircleService.
 					On("GetWalletByID", mock.Anything, "circle-wallet-id").
 					Return(&circle.Wallet{
 						WalletID:    "test-id",
@@ -189,7 +173,7 @@ func Test_BalancesHandler_Get(t *testing.T) {
 		{
 			name:        "[Pubnet] 🎉 successfully returns balances",
 			networkType: utils.PubnetNetworkType,
-			prepareMocks: func(t *testing.T, mCircleClient *circle.MockClient, mDistributionAccountResolver *sigMocks.MockDistributionAccountResolver, mCircleClientConfigModel *circle.MockClientConfigModel) {
+			prepareMocks: func(t *testing.T, mCircleService *circle.MockService, mDistributionAccountResolver *sigMocks.MockDistributionAccountResolver) {
 				mDistributionAccountResolver.
 					On("DistributionAccountFromContext", mock.Anything).
 					Return(schema.TransactionAccount{
@@ -198,11 +182,7 @@ func Test_BalancesHandler_Get(t *testing.T) {
 						Status:         schema.AccountStatusActive,
 					}, nil).
 					Once()
-				mCircleClientConfigModel.
-					On("GetDecryptedAPIKey", mock.Anything, encryptionPassphrase).
-					Return("api-key", nil).
-					Once()
-				mCircleClient.
+				mCircleService.
 					On("GetWalletByID", mock.Anything, "circle-wallet-id").
 					Return(&circle.Wallet{
 						WalletID:    "test-id",
@@ -233,25 +213,14 @@ func Test_BalancesHandler_Get(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			mCircleClientConfigModel := circle.NewMockClientConfigModel(t)
 			mDistributionAccountResolver := sigMocks.NewMockDistributionAccountResolver(t)
-			mCircleClient := circle.NewMockClient(t)
-			tc.prepareMocks(t, mCircleClient, mDistributionAccountResolver, mCircleClientConfigModel)
-
-			circleService, err := circle.NewService(circle.ServiceOptions{
-				ClientFactory: func(networkType utils.NetworkType, apiKey string) circle.ClientInterface {
-					return mCircleClient
-				},
-				ClientConfigModel:    mCircleClientConfigModel,
-				NetworkType:          tc.networkType,
-				EncryptionPassphrase: encryptionPassphrase,
-			})
-			require.NoError(t, err)
+			mCircleService := circle.NewMockService(t)
+			tc.prepareMocks(t, mCircleService, mDistributionAccountResolver)
 
 			h := BalancesHandler{
 				DistributionAccountResolver: mDistributionAccountResolver,
 				NetworkType:                 tc.networkType,
-				CircleService:               circleService,
+				CircleService:               mCircleService,
 			}
 
 			rr := httptest.NewRecorder()
