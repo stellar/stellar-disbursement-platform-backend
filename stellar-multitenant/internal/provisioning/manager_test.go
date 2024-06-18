@@ -351,7 +351,7 @@ func Test_Manager_ProvisionNewTenant(t *testing.T) {
 			tenant.AssertRegisteredUserFixture(t, ctx, tenantDBConnectionPool, userFirstName, userLastName, userEmail)
 
 			// STEP 8.4: assert the assets have been registered
-			assetsSlice, ok := services.DefaultAssetsNetworkMap[networkType]
+			assetsSlice, ok := services.AssetsNetworkByPlatformMap[tc.accountType.Platform()][networkType]
 			require.True(t, ok)
 			var assetsStrSlice []string
 			for _, asset := range assetsSlice {

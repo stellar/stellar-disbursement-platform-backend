@@ -16,6 +16,7 @@ import (
 	di "github.com/stellar/stellar-disbursement-platform-backend/internal/dependencyinjection"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	sdpUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 const DBConfigOptionFlagName = "database-url"
@@ -80,20 +81,36 @@ func (c *DatabaseCommand) setupForNetworkCmd(globalOptions *utils.GlobalOptionsT
 				log.Ctx(ctx).Fatal(err.Error())
 			}
 
-			tenantIDToDSNMap, err := getTenantIDToDSNMapping(ctx, c.adminDBConnectionPool)
+			dsnByTenantID, err := getTenantIDToDSNMapping(ctx, c.adminDBConnectionPool)
 			if err != nil {
 				log.Ctx(ctx).Fatalf("getting tenants schemas: %s", err.Error())
 			}
 
+			m := tenant.NewManager(tenant.WithDatabase(c.adminDBConnectionPool))
+			tenants, err := m.GetAllTenants(ctx, nil)
+			if err != nil {
+				log.Ctx(ctx).Fatalf("getting all tenants: %v", err)
+			}
+			tenantsByID := make(map[string]tenant.Tenant, len(tenants))
+			for _, tnt := range tenants {
+				tenantsByID[tnt.ID] = tnt
+			}
+
 			if opts.TenantID != "" {
-				if dsn, ok := tenantIDToDSNMap[opts.TenantID]; ok {
-					tenantIDToDSNMap = map[string]string{opts.TenantID: dsn}
+				if dsn, ok := dsnByTenantID[opts.TenantID]; ok {
+					dsnByTenantID = map[string]string{opts.TenantID: dsn}
 				} else {
 					log.Ctx(ctx).Fatalf("tenant ID %s does not exist", opts.TenantID)
 				}
 			}
 
-			for tenantID, dsn := range tenantIDToDSNMap {
+			for tenantID, dsn := range dsnByTenantID {
+				networkType, err := sdpUtils.GetNetworkTypeFromNetworkPassphrase(globalOptions.NetworkPassphrase)
+				if err != nil {
+					log.Ctx(ctx).Fatalf("error getting network type: %s", err.Error())
+				}
+				tnt := tenantsByID[tenantID]
+
 				log.Ctx(ctx).Infof("running for tenant ID %s", tenantID)
 				tenantDBConnectionPool, err := db.OpenDBConnectionPool(dsn)
 				if err != nil {
@@ -101,12 +118,7 @@ func (c *DatabaseCommand) setupForNetworkCmd(globalOptions *utils.GlobalOptionsT
 				}
 				defer tenantDBConnectionPool.Close()
 
-				networkType, err := sdpUtils.GetNetworkTypeFromNetworkPassphrase(globalOptions.NetworkPassphrase)
-				if err != nil {
-					log.Ctx(ctx).Fatalf("error getting network type: %s", err.Error())
-				}
-
-				if err := services.SetupAssetsForProperNetwork(ctx, tenantDBConnectionPool, networkType, services.DefaultAssetsNetworkMap); err != nil {
+				if err := services.SetupAssetsForProperNetwork(ctx, tenantDBConnectionPool, networkType, tnt.DistributionAccountType.Platform()); err != nil {
 					log.Ctx(ctx).Fatalf("error upserting assets for proper network: %s", err.Error())
 				}
 

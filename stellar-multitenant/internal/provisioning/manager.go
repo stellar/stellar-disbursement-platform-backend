@@ -233,7 +233,7 @@ func (m *Manager) setupTenantData(ctx context.Context, tenantSchemaDSN string, p
 	}
 	defer tenantSchemaConnectionPool.Close()
 
-	err = services.SetupAssetsForProperNetwork(ctx, tenantSchemaConnectionPool, utils.NetworkType(pt.NetworkType), services.DefaultAssetsNetworkMap)
+	err = services.SetupAssetsForProperNetwork(ctx, tenantSchemaConnectionPool, utils.NetworkType(pt.NetworkType), pt.DistributionAccountType.Platform())
 	if err != nil {
 		return fmt.Errorf("running setup assets for proper network: %w", err)
 	}

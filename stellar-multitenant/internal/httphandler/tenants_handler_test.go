@@ -369,7 +369,12 @@ func Test_TenantHandler_Post(t *testing.T) {
 		require.NoError(t, err)
 		defer tenantSchemaConnectionPool.Close()
 
-		tenant.AssertRegisteredAssetsFixture(t, ctx, tenantSchemaConnectionPool, []string{"USDC:GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5", "XLM:"})
+		tenant.AssertRegisteredAssetsFixture(t, ctx, tenantSchemaConnectionPool, []string{
+			fmt.Sprintf("%s:%s", assets.EURCAssetCode, assets.EURCAssetIssuerTestnet),
+			fmt.Sprintf("%s:%s", assets.USDCAssetCode, assets.USDCAssetIssuerTestnet),
+			fmt.Sprintf("%s:", assets.XLMAssetCode),
+		},
+		)
 		tenant.AssertRegisteredWalletsFixture(t, ctx, tenantSchemaConnectionPool, []string{"Demo Wallet", "Vibrant Assist"})
 		tenant.AssertRegisteredUserFixture(t, ctx, tenantSchemaConnectionPool, "Owner", "Owner", "owner@email.org")
 	}
