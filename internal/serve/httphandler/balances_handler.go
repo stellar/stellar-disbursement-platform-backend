@@ -29,10 +29,8 @@ type GetBalanceResponse struct {
 
 type BalancesHandler struct {
 	DistributionAccountResolver signing.DistributionAccountResolver
+	CircleService               circle.ServiceInterface
 	NetworkType                 utils.NetworkType
-	CircleClientFactory         circle.ClientFactory
-	CircleClientConfigModel     circle.ClientConfigModelInterface
-	EncryptionPassphrase        string
 }
 
 // Get returns the balances of the distribution account.
@@ -57,14 +55,7 @@ func (h BalancesHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	apiKey, err := h.CircleClientConfigModel.GetDecryptedAPIKey(ctx, h.EncryptionPassphrase)
-	if err != nil {
-		httperror.InternalError(ctx, "Cannot retrieve Circle API key", err, nil).Render(w)
-		return
-	}
-
-	circleSDK := h.CircleClientFactory(h.NetworkType, apiKey)
-	circleWallet, err := circleSDK.GetWalletByID(ctx, distAccount.CircleWalletID)
+	circleWallet, err := h.CircleService.GetWalletByID(ctx, distAccount.CircleWalletID)
 	if err != nil {
 		var circleApiErr *circle.APIError
 		var httpError *httperror.HTTPError

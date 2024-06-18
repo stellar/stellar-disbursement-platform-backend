@@ -19,6 +19,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
+	circleMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/circle/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	di "github.com/stellar/stellar-disbursement-platform-backend/internal/dependencyinjection"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
@@ -140,6 +141,10 @@ func Test_serve(t *testing.T) {
 	// mock metric service
 	mMonitorService := monitorMocks.NewMockMonitorService(t)
 
+	// mock circle service
+	mCircleService := circleMocks.NewMockService(t)
+	di.SetInstance(di.CircleServiceInstanceName, mCircleService)
+
 	serveOpts := serve.ServeOptions{
 		Environment:                     "test",
 		GitCommit:                       "1234567890abcdef",
@@ -170,6 +175,7 @@ func Test_serve(t *testing.T) {
 		DistributionAccountService:      mDistAccService,
 		MaxInvitationSMSResendAttempts:  3,
 		DistAccEncryptionPassphrase:     distributionAccPrivKey,
+		CircleService:                   mCircleService,
 	}
 	serveOpts.AnchorPlatformAPIService, err = anchorplatform.NewAnchorPlatformAPIService(httpclient.DefaultClient(), serveOpts.AnchorPlatformBasePlatformURL, serveOpts.AnchorPlatformOutgoingJWTSecret)
 	require.NoError(t, err)

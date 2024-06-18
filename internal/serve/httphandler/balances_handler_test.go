@@ -234,14 +234,18 @@ func Test_BalancesHandler_Get(t *testing.T) {
 			mCircleClient := circleMocks.NewMockClient(t)
 			tc.prepareMocks(t, mCircleClient, mDistributionAccountResolver, mCircleClientConfigModel)
 
+			circleService := circle.NewService(
+				func(networkType utils.NetworkType, apiKey string) circle.ClientInterface {
+					return mCircleClient
+				},
+				mCircleClientConfigModel,
+				tc.networkType,
+				encryptionPassphrase)
+
 			h := BalancesHandler{
 				DistributionAccountResolver: mDistributionAccountResolver,
 				NetworkType:                 tc.networkType,
-				CircleClientFactory: func(networkType utils.NetworkType, apiKey string) circle.ClientInterface {
-					return mCircleClient
-				},
-				CircleClientConfigModel: mCircleClientConfigModel,
-				EncryptionPassphrase:    encryptionPassphrase,
+				CircleService:               circleService,
 			}
 
 			rr := httptest.NewRecorder()

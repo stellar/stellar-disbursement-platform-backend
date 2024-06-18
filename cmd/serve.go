@@ -12,6 +12,7 @@ import (
 	cmdUtils "github.com/stellar/stellar-disbursement-platform-backend/cmd/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/circle"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	di "github.com/stellar/stellar-disbursement-platform-backend/internal/dependencyinjection"
@@ -583,6 +584,17 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			}
 			serveOpts.DistributionAccountService = distributionAccountService
 			adminServeOpts.DistributionAccountService = distributionAccountService
+
+			// Inject Circle Service dependencies
+			circleService, err := di.NewCircleService(
+				circle.NewClient,
+				circle.NewClientConfigModel(serveOpts.MtnDBConnectionPool),
+				serveOpts.NetworkType,
+				serveOpts.DistAccEncryptionPassphrase)
+			if err != nil {
+				log.Ctx(ctx).Fatalf("error creating Circle service: %v", err)
+			}
+			serveOpts.CircleService = circleService
 
 			// Validate the Event Broker Type and Scheduler Jobs
 			if eventBrokerOptions.EventBrokerType == events.NoneEventBrokerType && !serveOpts.EnableScheduler {

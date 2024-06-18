@@ -91,6 +91,7 @@ type ServeOptions struct {
 	EventProducer                   events.Producer
 	MaxInvitationSMSResendAttempts  int
 	SingleTenantMode                bool
+	CircleService                   circle.ServiceInterface
 }
 
 // SetupDependencies uses the serve options to setup the dependencies for the server.
@@ -402,10 +403,8 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 
 		balancesHandler := httphandler.BalancesHandler{
 			DistributionAccountResolver: o.SubmitterEngine.DistributionAccountResolver,
+			CircleService:               o.CircleService,
 			NetworkType:                 o.NetworkType,
-			CircleClientFactory:         circle.NewClient,
-			EncryptionPassphrase:        o.DistAccEncryptionPassphrase,
-			CircleClientConfigModel:     circle.NewClientConfigModel(o.MtnDBConnectionPool),
 		}
 		r.Get("/balances", balancesHandler.Get)
 	})
