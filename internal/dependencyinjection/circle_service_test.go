@@ -1,6 +1,7 @@
 package dependencyinjection
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stellar/go/keypair"
@@ -8,28 +9,25 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/circle"
-	circleMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/circle/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
 func Test_NewCircleService(t *testing.T) {
-	distAccountPrivateKey := keypair.MustRandom().Seed()
-	networkType := utils.TestnetNetworkType
-	mCircleClientConfigModel := circleMocks.NewMockClientConfigModel(t)
+	ctx := context.Background()
+	opts := circle.ServiceOptions{
+		ClientFactory:        circle.NewClient,
+		ClientConfigModel:    &circle.ClientConfigModel{},
+		NetworkType:          utils.TestnetNetworkType,
+		EncryptionPassphrase: keypair.MustRandom().Seed(),
+	}
 
 	t.Run("should create and return the same instance on the second call", func(t *testing.T) {
 		defer ClearInstancesTestHelper(t)
 
-		gotDependency, err := NewCircleService(circle.NewClient,
-			mCircleClientConfigModel,
-			networkType,
-			distAccountPrivateKey)
+		gotDependency, err := NewCircleService(ctx, opts)
 		require.NoError(t, err)
 
-		gotDependencyDuplicate, err := NewCircleService(circle.NewClient,
-			mCircleClientConfigModel,
-			networkType,
-			distAccountPrivateKey)
+		gotDependencyDuplicate, err := NewCircleService(ctx, opts)
 		require.NoError(t, err)
 
 		assert.Equal(t, &gotDependency, &gotDependencyDuplicate)
@@ -41,10 +39,7 @@ func Test_NewCircleService(t *testing.T) {
 		instanceName := CircleServiceInstanceName
 		SetInstance(instanceName, false)
 
-		gotDependency, err := NewCircleService(circle.NewClient,
-			mCircleClientConfigModel,
-			networkType,
-			distAccountPrivateKey)
+		gotDependency, err := NewCircleService(ctx, opts)
 		assert.Empty(t, gotDependency)
 		assert.EqualError(t, err, "trying to cast an existing circle service instance")
 	})

@@ -586,11 +586,12 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			adminServeOpts.DistributionAccountService = distributionAccountService
 
 			// Inject Circle Service dependencies
-			circleService, err := di.NewCircleService(
-				circle.NewClient,
-				circle.NewClientConfigModel(serveOpts.MtnDBConnectionPool),
-				serveOpts.NetworkType,
-				serveOpts.DistAccEncryptionPassphrase)
+			circleService, err := di.NewCircleService(ctx, circle.ServiceOptions{
+				ClientFactory:        circle.NewClient,
+				ClientConfigModel:    circle.NewClientConfigModel(serveOpts.MtnDBConnectionPool),
+				NetworkType:          serveOpts.NetworkType,
+				EncryptionPassphrase: serveOpts.DistAccEncryptionPassphrase,
+			})
 			if err != nil {
 				log.Ctx(ctx).Fatalf("error creating Circle service: %v", err)
 			}

@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/stellar/go/strkey"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
@@ -23,13 +25,46 @@ type ServiceInterface interface {
 
 var _ ServiceInterface = &Service{}
 
-func NewService(factory ClientFactory, configModel ClientConfigModelInterface, networkType utils.NetworkType, passphrase string) *Service {
-	return &Service{
-		ClientFactory:        factory,
-		ClientConfigModel:    configModel,
-		NetworkType:          networkType,
-		EncryptionPassphrase: passphrase,
+type ServiceOptions struct {
+	ClientFactory        ClientFactory
+	ClientConfigModel    ClientConfigModelInterface
+	NetworkType          utils.NetworkType
+	EncryptionPassphrase string
+}
+
+func (o ServiceOptions) Validate() error {
+	if o.ClientFactory == nil {
+		return fmt.Errorf("ClientFactory is required")
 	}
+
+	if o.ClientConfigModel == nil {
+		return fmt.Errorf("ClientConfigModel is required")
+	}
+
+	err := o.NetworkType.Validate()
+	if err != nil {
+		return fmt.Errorf("validating NetworkType: %w", err)
+	}
+
+	if !strkey.IsValidEd25519SecretSeed(o.EncryptionPassphrase) {
+		return fmt.Errorf("EncryptionPassphrase is invalid")
+	}
+
+	return nil
+}
+
+func NewService(opts ServiceOptions) (*Service, error) {
+	err := opts.Validate()
+	if err != nil {
+		return nil, fmt.Errorf("validating circle.Service options: %w", err)
+	}
+
+	return &Service{
+		ClientFactory:        opts.ClientFactory,
+		ClientConfigModel:    opts.ClientConfigModel,
+		NetworkType:          opts.NetworkType,
+		EncryptionPassphrase: opts.EncryptionPassphrase,
+	}, nil
 }
 
 func (s *Service) GetWalletByID(ctx context.Context, walletID string) (*Wallet, error) {

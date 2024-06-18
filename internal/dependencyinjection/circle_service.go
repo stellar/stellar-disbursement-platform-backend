@@ -1,16 +1,18 @@
 package dependencyinjection
 
 import (
+	"context"
 	"fmt"
 
+	"github.com/stellar/go/support/log"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/circle"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
 const CircleServiceInstanceName = "circle_service_instance"
 
 // NewCircleService creates a new circle service instance, or retrieves an instance that was previously created.
-func NewCircleService(circleClientFactory circle.ClientFactory, configModel circle.ClientConfigModelInterface, networkType utils.NetworkType, passphrase string) (circle.ServiceInterface, error) {
+func NewCircleService(ctx context.Context, opts circle.ServiceOptions) (circle.ServiceInterface, error) {
 	instanceName := CircleServiceInstanceName
 
 	// Already initialized
@@ -21,7 +23,12 @@ func NewCircleService(circleClientFactory circle.ClientFactory, configModel circ
 		return nil, fmt.Errorf("trying to cast an existing circle service instance")
 	}
 
-	newInstance := circle.NewService(circleClientFactory, configModel, networkType, passphrase)
+	log.Ctx(ctx).Info("⚙️ Setting up Circle Service")
+	newInstance, err := circle.NewService(opts)
+	if err != nil {
+		return nil, fmt.Errorf("creating a new circle service instance: %w", err)
+	}
+
 	SetInstance(instanceName, newInstance)
 
 	return newInstance, nil
