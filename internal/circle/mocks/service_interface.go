@@ -15,9 +15,39 @@ type MockService struct {
 	mock.Mock
 }
 
-// GetWalletByID provides a mock function with given fields: ctx, walletID
-func (_m *MockService) GetWalletByID(ctx context.Context, walletID string) (*circle.Wallet, error) {
-	ret := _m.Called(ctx, walletID)
+// GetTransferByID provides a mock function with given fields: ctx, id
+func (_m *MockService) GetTransferByID(ctx context.Context, id string) (*circle.Transfer, error) {
+	ret := _m.Called(ctx, id)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetTransferByID")
+	}
+
+	var r0 *circle.Transfer
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, string) (*circle.Transfer, error)); ok {
+		return rf(ctx, id)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, string) *circle.Transfer); ok {
+		r0 = rf(ctx, id)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*circle.Transfer)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = rf(ctx, id)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// GetWalletByID provides a mock function with given fields: ctx, id
+func (_m *MockService) GetWalletByID(ctx context.Context, id string) (*circle.Wallet, error) {
+	ret := _m.Called(ctx, id)
 
 	if len(ret) == 0 {
 		panic("no return value specified for GetWalletByID")
@@ -26,10 +56,10 @@ func (_m *MockService) GetWalletByID(ctx context.Context, walletID string) (*cir
 	var r0 *circle.Wallet
 	var r1 error
 	if rf, ok := ret.Get(0).(func(context.Context, string) (*circle.Wallet, error)); ok {
-		return rf(ctx, walletID)
+		return rf(ctx, id)
 	}
 	if rf, ok := ret.Get(0).(func(context.Context, string) *circle.Wallet); ok {
-		r0 = rf(ctx, walletID)
+		r0 = rf(ctx, id)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(*circle.Wallet)
@@ -37,7 +67,65 @@ func (_m *MockService) GetWalletByID(ctx context.Context, walletID string) (*cir
 	}
 
 	if rf, ok := ret.Get(1).(func(context.Context, string) error); ok {
-		r1 = rf(ctx, walletID)
+		r1 = rf(ctx, id)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// Ping provides a mock function with given fields: ctx
+func (_m *MockService) Ping(ctx context.Context) (bool, error) {
+	ret := _m.Called(ctx)
+
+	if len(ret) == 0 {
+		panic("no return value specified for Ping")
+	}
+
+	var r0 bool
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context) (bool, error)); ok {
+		return rf(ctx)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context) bool); ok {
+		r0 = rf(ctx)
+	} else {
+		r0 = ret.Get(0).(bool)
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context) error); ok {
+		r1 = rf(ctx)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// PostTransfer provides a mock function with given fields: ctx, transferRequest
+func (_m *MockService) PostTransfer(ctx context.Context, transferRequest circle.TransferRequest) (*circle.Transfer, error) {
+	ret := _m.Called(ctx, transferRequest)
+
+	if len(ret) == 0 {
+		panic("no return value specified for PostTransfer")
+	}
+
+	var r0 *circle.Transfer
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, circle.TransferRequest) (*circle.Transfer, error)); ok {
+		return rf(ctx, transferRequest)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, circle.TransferRequest) *circle.Transfer); ok {
+		r0 = rf(ctx, transferRequest)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*circle.Transfer)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, circle.TransferRequest) error); ok {
+		r1 = rf(ctx, transferRequest)
 	} else {
 		r1 = ret.Error(1)
 	}

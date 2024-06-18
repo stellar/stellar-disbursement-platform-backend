@@ -20,7 +20,7 @@ type Service struct {
 //
 //go:generate mockery --name=ServiceInterface --case=underscore --structname=MockService
 type ServiceInterface interface {
-	GetWalletByID(ctx context.Context, walletID string) (*Wallet, error)
+	ClientInterface
 }
 
 var _ ServiceInterface = &Service{}
@@ -67,18 +67,42 @@ func NewService(opts ServiceOptions) (*Service, error) {
 	}, nil
 }
 
-func (s *Service) GetWalletByID(ctx context.Context, walletID string) (*Wallet, error) {
-	client, err := s.getClient(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("cannot get Circle client: %w", err)
-	}
-	return client.GetWalletByID(ctx, walletID)
-}
-
 func (s *Service) getClient(ctx context.Context) (ClientInterface, error) {
 	apiKey, err := s.ClientConfigModel.GetDecryptedAPIKey(ctx, s.EncryptionPassphrase)
 	if err != nil {
 		return nil, fmt.Errorf("retrieving decrypted Circle API key: %w", err)
 	}
 	return s.ClientFactory(s.NetworkType, apiKey), nil
+}
+
+func (s *Service) Ping(ctx context.Context) (bool, error) {
+	client, err := s.getClient(ctx)
+	if err != nil {
+		return false, fmt.Errorf("cannot get Circle client: %w", err)
+	}
+	return client.Ping(ctx)
+}
+
+func (s *Service) PostTransfer(ctx context.Context, transferRequest TransferRequest) (*Transfer, error) {
+	client, err := s.getClient(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("cannot get Circle client: %w", err)
+	}
+	return client.PostTransfer(ctx, transferRequest)
+}
+
+func (s *Service) GetTransferByID(ctx context.Context, transferID string) (*Transfer, error) {
+	client, err := s.getClient(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("cannot get Circle client: %w", err)
+	}
+	return client.GetTransferByID(ctx, transferID)
+}
+
+func (s *Service) GetWalletByID(ctx context.Context, walletID string) (*Wallet, error) {
+	client, err := s.getClient(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("cannot get Circle client: %w", err)
+	}
+	return client.GetWalletByID(ctx, walletID)
 }
