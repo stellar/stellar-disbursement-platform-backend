@@ -15,22 +15,22 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
-type AssetsByNetworkMapType map[utils.NetworkType][]data.Asset
+type AssetsNetworkMapType map[utils.NetworkType][]data.Asset
 
-var DefaultAssetsNetworkMap = AssetsByNetworkMapType{
+var StellarAssetsNetworkMap = AssetsNetworkMapType{
 	utils.PubnetNetworkType:  []data.Asset{assets.EURCAssetPubnet, assets.USDCAssetPubnet, assets.XLMAsset},
 	utils.TestnetNetworkType: []data.Asset{assets.EURCAssetTestnet, assets.USDCAssetTestnet, assets.XLMAsset},
 }
 
-var CircleAssetsNetworkMap = AssetsByNetworkMapType{
+var CircleAssetsNetworkMap = AssetsNetworkMapType{
 	utils.PubnetNetworkType:  []data.Asset{assets.EURCAssetPubnet, assets.USDCAssetPubnet},
 	utils.TestnetNetworkType: []data.Asset{assets.EURCAssetTestnet, assets.USDCAssetTestnet},
 }
 
-type AssetsNetworkByPlatformMapType map[schema.Platform]AssetsByNetworkMapType
+type AssetsNetworkByPlatformMapType map[schema.Platform]AssetsNetworkMapType
 
 var AssetsNetworkByPlatformMap = AssetsNetworkByPlatformMapType{
-	schema.StellarPlatform: DefaultAssetsNetworkMap,
+	schema.StellarPlatform: StellarAssetsNetworkMap,
 	schema.CirclePlatform:  CircleAssetsNetworkMap,
 }
 
@@ -46,17 +46,12 @@ func SetupAssetsForProperNetwork(ctx context.Context, dbConnectionPool db.DBConn
 
 	var codes, issuers []string
 
-	separator := strings.Repeat("-", 20)
-	buf := new(strings.Builder)
-	buf.WriteString("assets' code that will be updated or inserted:\n\n")
 	for _, asset := range assets {
 		codes = append(codes, asset.Code)
 		issuers = append(issuers, asset.Issuer)
-
-		buf.WriteString(fmt.Sprintf("Code: %s\n%s\n\n", asset.Code, separator))
 	}
 
-	log.Ctx(ctx).Info(buf.String())
+	log.Ctx(ctx).Infof("Asset codes to be updated/inserted: %v", codes)
 	err := db.RunInTransaction(ctx, dbConnectionPool, nil, func(dbTx db.DBTransaction) error {
 		query := `
 			WITH assets_to_update_or_insert AS (
@@ -117,12 +112,11 @@ func SetupAssetsForProperNetwork(ctx context.Context, dbConnectionPool db.DBConn
 		return fmt.Errorf("error getting all available assets on database: %w", err)
 	}
 
-	buf.Reset()
-	buf.WriteString(fmt.Sprintf("Registered assets for network %s:\n\n", network))
+	buf := new(strings.Builder)
+	buf.WriteString(fmt.Sprintf("Updated list of assets for network %s:\n\n", network))
 	for _, asset := range allAssets {
-		buf.WriteString(fmt.Sprintf("Code: %s\nIssuer: %s\n%s\n\n", asset.Code, asset.Issuer, separator))
+		buf.WriteString(fmt.Sprintf("\t * %s - %s\n", asset.Code, asset.Issuer))
 	}
-
 	log.Ctx(ctx).Info(buf.String())
 
 	return nil

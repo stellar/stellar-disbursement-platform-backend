@@ -14,7 +14,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
-type tenantMigrationMetadata struct {
+type TenantMigrationDetails struct {
 	DSN                     string
 	DistributionAccountType schema.AccountType
 }
@@ -33,24 +33,24 @@ func executeMigrationsPerTenant(
 		log.Ctx(ctx).Fatal(err.Error())
 	}
 
-	tenantIDToDSNMap, err := getTenantIDToMetadataMapping(ctx, adminDBConnectionPool)
+	tntMigrationDetails, err := gatherTenantMigrationDetails(ctx, adminDBConnectionPool)
 	if err != nil {
 		return fmt.Errorf("getting tenants schemas: %w", err)
 	}
 
 	if opts.TenantID != "" {
-		if tntMetadata, ok := tenantIDToDSNMap[opts.TenantID]; ok {
-			tenantIDToDSNMap = map[string]tenantMigrationMetadata{
-				opts.TenantID: tntMetadata,
+		if migrationDetails, ok := tntMigrationDetails[opts.TenantID]; ok {
+			tntMigrationDetails = map[string]TenantMigrationDetails{
+				opts.TenantID: migrationDetails,
 			}
 		} else {
 			return fmt.Errorf("tenant ID %s does not exist", opts.TenantID)
 		}
 	}
 
-	for tenantID, tntMetadata := range tenantIDToDSNMap {
+	for tenantID, tntMigrationDetails := range tntMigrationDetails {
 		log.Ctx(ctx).Infof("Applying migrations on tenant ID %s", tenantID)
-		err = ExecuteMigrations(ctx, tntMetadata.DSN, dir, count, migrationRouter)
+		err = ExecuteMigrations(ctx, tntMigrationDetails.DSN, dir, count, migrationRouter)
 		if err != nil {
 			return fmt.Errorf("migrating database %s: %w", migrationDirectionStr(dir), err)
 		}
@@ -59,25 +59,25 @@ func executeMigrationsPerTenant(
 	return nil
 }
 
-// getTenantIDToMetadataMapping returns a map of tenant IDs to metadata that is required to perform the necessary DB migrations.
-func getTenantIDToMetadataMapping(ctx context.Context, adminDBConnectionPool db.DBConnectionPool) (map[string]tenantMigrationMetadata, error) {
+// gatherTenantMigrationDetails returns a map of tenant IDs to their respective migration details (database DSN and DistributionAccountType).
+func gatherTenantMigrationDetails(ctx context.Context, adminDBConnectionPool db.DBConnectionPool) (map[string]TenantMigrationDetails, error) {
 	m := tenant.NewManager(tenant.WithDatabase(adminDBConnectionPool))
 	tenants, err := m.GetAllTenants(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("getting all tenants: %w", err)
 	}
 
-	tenantsDSNMap := make(map[string]tenantMigrationMetadata, len(tenants))
+	migrationDetailsMap := make(map[string]TenantMigrationDetails, len(tenants))
 	for _, tnt := range tenants {
 		dsn, err := m.GetDSNForTenant(ctx, tnt.Name)
 		if err != nil {
 			return nil, fmt.Errorf("getting DSN for tenant %s: %w", tnt.Name, err)
 		}
-		tenantsDSNMap[tnt.ID] = tenantMigrationMetadata{
+		migrationDetailsMap[tnt.ID] = TenantMigrationDetails{
 			DSN:                     dsn,
 			DistributionAccountType: tnt.DistributionAccountType,
 		}
 	}
 
-	return tenantsDSNMap, nil
+	return migrationDetailsMap, nil
 }

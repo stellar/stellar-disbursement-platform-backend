@@ -64,12 +64,10 @@ func Test_SetupAssetsForProperNetwork(t *testing.T) {
 
 		expectedLogs := []string{
 			"updating/inserting assets for the 'testnet' network",
-			fmt.Sprintf("Code: %s", assets.EURCAssetCode),
-			fmt.Sprintf("Code: %s", assets.USDCAssetCode),
-			fmt.Sprintf("Code: %s", assets.XLMAssetCode),
-			fmt.Sprintf("Issuer: %s", assets.EURCAssetIssuerTestnet),
-			fmt.Sprintf("Issuer: %s", assets.USDCAssetIssuerTestnet),
-			"Issuer: ",
+			fmt.Sprintf("Asset codes to be updated/inserted: %v", []string{assets.EURCAssetCode, assets.USDCAssetCode, assets.XLMAssetCode}),
+			fmt.Sprintf("* %s - %s", assets.EURCAssetCode, assets.EURCAssetIssuerTestnet),
+			fmt.Sprintf("* %s - %s", assets.USDCAssetCode, assets.USDCAssetIssuerTestnet),
+			fmt.Sprintf("* %s - %s", assets.XLMAssetCode, ""),
 		}
 
 		logs := buf.String()
@@ -81,15 +79,15 @@ func Test_SetupAssetsForProperNetwork(t *testing.T) {
 	t.Run("updates and inserts assets", func(t *testing.T) {
 		data.DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
 
-		data.CreateAssetFixture(t, ctx, dbConnectionPool, assets.EURCAssetCode, assets.EURCAssetIssuerTestnet)
-
-		assert.NotEqual(t, assets.EURCAssetIssuerTestnet, assets.EURCAssetIssuerPubnet)
+		// Start with USDC:{randomIssuer}
+		randomIssuer := keypair.MustRandom().Address()
+		data.CreateAssetFixture(t, ctx, dbConnectionPool, assets.EURCAssetCode, randomIssuer)
 
 		allAssets, err := models.Assets.GetAll(ctx)
 		require.NoError(t, err)
 		assert.Len(t, allAssets, 1)
 		assert.Equal(t, assets.EURCAssetCode, allAssets[0].Code)
-		assert.Equal(t, assets.EURCAssetIssuerTestnet, allAssets[0].Issuer)
+		assert.Equal(t, randomIssuer, allAssets[0].Issuer)
 
 		buf := new(strings.Builder)
 		log.DefaultLogger.SetLevel(log.InfoLevel)
@@ -103,7 +101,7 @@ func Test_SetupAssetsForProperNetwork(t *testing.T) {
 
 		assert.Len(t, allAssets, 3)
 		assert.Equal(t, assets.EURCAssetCode, allAssets[0].Code)
-		assert.Equal(t, assets.EURCAssetIssuerTestnet, allAssets[0].Issuer)
+		assert.Equal(t, assets.EURCAssetIssuerTestnet, allAssets[0].Issuer) // <--- Issuer was updated
 		assert.Equal(t, assets.USDCAssetCode, allAssets[1].Code)
 		assert.Equal(t, assets.USDCAssetIssuerTestnet, allAssets[1].Issuer)
 		assert.Equal(t, assets.XLMAssetCode, allAssets[2].Code)
@@ -111,17 +109,13 @@ func Test_SetupAssetsForProperNetwork(t *testing.T) {
 
 		expectedLogs := []string{
 			"updating/inserting assets for the 'testnet' network",
-			fmt.Sprintf("Code: %s", assets.EURCAssetCode),
-			fmt.Sprintf("Code: %s", assets.USDCAssetCode),
-			fmt.Sprintf("Code: %s", assets.XLMAssetCode),
-			fmt.Sprintf("Issuer: %s", assets.EURCAssetIssuerTestnet),
-			fmt.Sprintf("Issuer: %s", assets.USDCAssetIssuerTestnet),
-			"Issuer: ",
+			fmt.Sprintf("Asset codes to be updated/inserted: %v", []string{assets.EURCAssetCode, assets.USDCAssetCode, assets.XLMAssetCode}),
+			fmt.Sprintf("* %s - %s", assets.EURCAssetCode, assets.EURCAssetIssuerTestnet),
+			fmt.Sprintf("* %s - %s", assets.USDCAssetCode, assets.USDCAssetIssuerTestnet),
+			fmt.Sprintf("* %s - %s", assets.XLMAssetCode, ""),
 		}
 
 		logs := buf.String()
-		fmt.Println(logs)
-		fmt.Println(expectedLogs)
 		for _, expectedLog := range expectedLogs {
 			assert.Contains(t, logs, expectedLog)
 		}
@@ -130,21 +124,16 @@ func Test_SetupAssetsForProperNetwork(t *testing.T) {
 	t.Run("doesn't change the asset when it's not in the assetsNetworkMap", func(t *testing.T) {
 		data.DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
 
-		data.CreateAssetFixture(t, ctx, dbConnectionPool, assets.EURCAssetCode, assets.EURCAssetIssuerPubnet)
-
+		// ARST should not get updated since it's not in the assetsNetworkMap
 		pubnetARSTIssuer := keypair.MustRandom().Address()
 		arstAssetCode := "ARST"
 		data.CreateAssetFixture(t, ctx, dbConnectionPool, arstAssetCode, pubnetARSTIssuer)
 
-		assert.NotEqual(t, assets.EURCAssetIssuerTestnet, assets.EURCAssetIssuerPubnet)
-
 		allAssets, err := models.Assets.GetAll(ctx)
 		require.NoError(t, err)
-		assert.Len(t, allAssets, 2)
+		assert.Len(t, allAssets, 1)
 		assert.Equal(t, arstAssetCode, allAssets[0].Code)
 		assert.Equal(t, pubnetARSTIssuer, allAssets[0].Issuer)
-		assert.Equal(t, assets.EURCAssetCode, allAssets[1].Code)
-		assert.Equal(t, assets.EURCAssetIssuerPubnet, allAssets[1].Issuer)
 
 		buf := new(strings.Builder)
 		log.DefaultLogger.SetLevel(log.InfoLevel)
@@ -167,14 +156,11 @@ func Test_SetupAssetsForProperNetwork(t *testing.T) {
 
 		expectedLogs := []string{
 			"updating/inserting assets for the 'pubnet' network",
-			fmt.Sprintf("Code: %s", arstAssetCode),
-			fmt.Sprintf("Code: %s", assets.EURCAssetCode),
-			fmt.Sprintf("Code: %s", assets.USDCAssetCode),
-			fmt.Sprintf("Code: %s", assets.XLMAssetCode),
-			fmt.Sprintf("Issuer: %s", pubnetARSTIssuer),
-			fmt.Sprintf("Issuer: %s", assets.EURCAssetIssuerPubnet),
-			fmt.Sprintf("Issuer: %s", assets.USDCAssetIssuerPubnet),
-			"Issuer: ",
+			fmt.Sprintf("Asset codes to be updated/inserted: %v", []string{assets.EURCAssetCode, assets.USDCAssetCode, assets.XLMAssetCode}),
+			fmt.Sprintf("* %s - %s", arstAssetCode, pubnetARSTIssuer),
+			fmt.Sprintf("* %s - %s", assets.EURCAssetCode, assets.EURCAssetIssuerPubnet),
+			fmt.Sprintf("* %s - %s", assets.USDCAssetCode, assets.USDCAssetIssuerPubnet),
+			fmt.Sprintf("* %s - %s", assets.XLMAssetCode, ""),
 		}
 
 		logs := buf.String()
@@ -207,10 +193,9 @@ func Test_SetupAssetsForProperNetwork(t *testing.T) {
 
 		expectedLogs := []string{
 			"updating/inserting assets for the 'pubnet' network",
-			fmt.Sprintf("Code: %s", assets.EURCAssetCode),
-			fmt.Sprintf("Code: %s", assets.USDCAssetCode),
-			fmt.Sprintf("Issuer: %s", assets.EURCAssetIssuerPubnet),
-			fmt.Sprintf("Issuer: %s", assets.USDCAssetIssuerPubnet),
+			fmt.Sprintf("Asset codes to be updated/inserted: %v", []string{assets.EURCAssetCode, assets.USDCAssetCode}),
+			fmt.Sprintf("* %s - %s", assets.EURCAssetCode, assets.EURCAssetIssuerPubnet),
+			fmt.Sprintf("* %s - %s", assets.USDCAssetCode, assets.USDCAssetIssuerPubnet),
 		}
 
 		logs := buf.String()

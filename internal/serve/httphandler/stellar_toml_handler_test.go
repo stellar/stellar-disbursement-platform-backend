@@ -8,8 +8,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/assets"
-
 	"github.com/go-chi/chi/v5"
 	"github.com/stellar/go/network"
 	"github.com/stretchr/testify/assert"
@@ -18,6 +16,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/assets"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	sigMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
@@ -450,7 +449,8 @@ func Test_StellarTomlHandler_ServeHTTP(t *testing.T) {
 			is_asset_anchored = true
 			anchor_asset_type = "crypto"
 			desc = "XLM, the native token of the Stellar Network."
-		`, network.PublicNetworkPassphrase, horizonPubnetURL,
+		`,
+			network.PublicNetworkPassphrase, horizonPubnetURL,
 			assets.EURCAssetCode, assets.EURCAssetIssuerPubnet, assets.EURCAssetCode,
 			assets.USDCAssetCode, assets.USDCAssetIssuerPubnet, assets.USDCAssetCode)
 		wantToml = strings.TrimSpace(wantToml)

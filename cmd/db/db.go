@@ -80,22 +80,22 @@ func (c *DatabaseCommand) setupForNetworkCmd(globalOptions *utils.GlobalOptionsT
 				log.Ctx(ctx).Fatal(err.Error())
 			}
 
-			tenantIDToDSNMap, err := getTenantIDToMetadataMapping(ctx, c.adminDBConnectionPool)
+			tenantsMigrationDetails, err := gatherTenantMigrationDetails(ctx, c.adminDBConnectionPool)
 			if err != nil {
 				log.Ctx(ctx).Fatalf("getting tenants schemas: %s", err.Error())
 			}
 
 			if opts.TenantID != "" {
-				if dsn, ok := tenantIDToDSNMap[opts.TenantID]; ok {
-					tenantIDToDSNMap = map[string]tenantMigrationMetadata{opts.TenantID: dsn}
+				if migrationDetails, ok := tenantsMigrationDetails[opts.TenantID]; ok {
+					tenantsMigrationDetails = map[string]TenantMigrationDetails{opts.TenantID: migrationDetails}
 				} else {
 					log.Ctx(ctx).Fatalf("tenant ID %s does not exist", opts.TenantID)
 				}
 			}
 
-			for tenantID, dsn := range tenantIDToDSNMap {
+			for tenantID, migrationDetails := range tenantsMigrationDetails {
 				log.Ctx(ctx).Infof("running for tenant ID %s", tenantID)
-				tenantDBConnectionPool, err := db.OpenDBConnectionPool(dsn.DSN)
+				tenantDBConnectionPool, err := db.OpenDBConnectionPool(migrationDetails.DSN)
 				if err != nil {
 					log.Ctx(ctx).Fatalf("error connection to the database: %s", err.Error())
 				}
@@ -106,7 +106,7 @@ func (c *DatabaseCommand) setupForNetworkCmd(globalOptions *utils.GlobalOptionsT
 					log.Ctx(ctx).Fatalf("error getting network type: %s", err.Error())
 				}
 
-				if err := services.SetupAssetsForProperNetwork(ctx, tenantDBConnectionPool, networkType, dsn.DistributionAccountType.Platform()); err != nil {
+				if err := services.SetupAssetsForProperNetwork(ctx, tenantDBConnectionPool, networkType, migrationDetails.DistributionAccountType.Platform()); err != nil {
 					log.Ctx(ctx).Fatalf("error upserting assets for proper network: %s", err.Error())
 				}
 

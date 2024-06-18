@@ -485,7 +485,7 @@ func Test_DatabaseCommand_db_setup_for_network(t *testing.T) {
 	require.NoError(t, outerErr)
 	defer tenant2SchemaConnectionPool.Close()
 
-	testnetUSDCIssuer := keypair.MustRandom().Address()
+	randomUSDCIssuer := keypair.MustRandom().Address()
 	clearTenantTables := func(t *testing.T, ctx context.Context, tenantSchemaConnectionPool db.DBConnectionPool) {
 		models, mErr := data.NewModels(tenantSchemaConnectionPool)
 		require.NoError(t, mErr)
@@ -494,14 +494,14 @@ func Test_DatabaseCommand_db_setup_for_network(t *testing.T) {
 		data.DeleteAllWalletFixtures(t, ctx, tenantSchemaConnectionPool)
 		data.DeleteAllAssetFixtures(t, ctx, tenantSchemaConnectionPool)
 
-		data.CreateAssetFixture(t, ctx, tenantSchemaConnectionPool, "USDC", testnetUSDCIssuer)
+		data.CreateAssetFixture(t, ctx, tenantSchemaConnectionPool, "USDC", randomUSDCIssuer)
 
 		assets, aErr := models.Assets.GetAll(ctx)
 		require.NoError(t, aErr)
 
 		assert.Len(t, assets, 1)
 		assert.Equal(t, "USDC", assets[0].Code)
-		assert.Equal(t, testnetUSDCIssuer, assets[0].Issuer)
+		assert.Equal(t, randomUSDCIssuer, assets[0].Issuer)
 
 		// Wallets
 		data.CreateWalletFixture(t, ctx, tenantSchemaConnectionPool, "Vibrant Assist", "https://vibrantapp.com", "api-dev.vibrantapp.com", "https://vibrantapp.com/sdp-dev")
@@ -549,10 +549,8 @@ func Test_DatabaseCommand_db_setup_for_network(t *testing.T) {
 
 		assert.Len(t, actualAssets, 3)
 		assert.Equal(t, assets.EURCAssetCode, actualAssets[0].Code)
-		assert.NotEqual(t, assets.EURCAssetIssuerTestnet, actualAssets[0].Issuer)
 		assert.Equal(t, assets.EURCAssetIssuerPubnet, actualAssets[0].Issuer)
 		assert.Equal(t, assets.USDCAssetCode, actualAssets[1].Code)
-		assert.NotEqual(t, assets.USDCAssetIssuerTestnet, actualAssets[1].Issuer)
 		assert.Equal(t, assets.USDCAssetIssuerPubnet, actualAssets[1].Issuer)
 		assert.Equal(t, assets.XLMAssetCode, actualAssets[2].Code)
 		assert.Empty(t, actualAssets[2].Issuer)
@@ -584,10 +582,9 @@ func Test_DatabaseCommand_db_setup_for_network(t *testing.T) {
 		expectedLogs := []string{
 			fmt.Sprintf("running for tenant ID %s", tnt1.ID),
 			"updating/inserting assets for the 'pubnet' network",
-			"Code: USDC",
-			fmt.Sprintf("Issuer: %s", assets.USDCAssetIssuerPubnet),
-			"Code: XLM",
-			"Issuer: ",
+			fmt.Sprintf("* %s - %s", assets.USDCAssetCode, assets.USDCAssetIssuerPubnet),
+			fmt.Sprintf("* %s - %s", assets.EURCAssetCode, assets.EURCAssetIssuerPubnet),
+			fmt.Sprintf("* %s - %s", assets.XLMAssetCode, ""),
 			"updating/inserting wallets for the 'pubnet' network",
 			"Name: Vibrant Assist",
 			"Homepage: https://vibrantapp.com/vibrant-assist",
@@ -610,10 +607,8 @@ func Test_DatabaseCommand_db_setup_for_network(t *testing.T) {
 
 		require.Len(t, actualAssets, 3)
 		assert.Equal(t, assets.EURCAssetCode, actualAssets[0].Code)
-		assert.NotEqual(t, assets.EURCAssetIssuerTestnet, actualAssets[0].Issuer)
 		assert.Equal(t, assets.EURCAssetIssuerPubnet, actualAssets[0].Issuer)
 		assert.Equal(t, assets.USDCAssetCode, actualAssets[1].Code)
-		assert.NotEqual(t, assets.USDCAssetIssuerTestnet, actualAssets[1].Issuer)
 		assert.Equal(t, assets.USDCAssetIssuerPubnet, actualAssets[1].Issuer)
 		assert.Equal(t, assets.XLMAssetCode, actualAssets[2].Code)
 		assert.Empty(t, actualAssets[2].Issuer)
@@ -648,10 +643,9 @@ func Test_DatabaseCommand_db_setup_for_network(t *testing.T) {
 		expectedLogs = []string{
 			fmt.Sprintf("running for tenant ID %s", tnt2.ID),
 			"updating/inserting assets for the 'pubnet' network",
-			"Code: USDC",
-			fmt.Sprintf("Issuer: %s", assets.USDCAssetIssuerPubnet),
-			"Code: XLM",
-			"Issuer: ",
+			fmt.Sprintf("* %s - %s", assets.USDCAssetCode, assets.USDCAssetIssuerPubnet),
+			fmt.Sprintf("* %s - %s", assets.EURCAssetCode, assets.EURCAssetIssuerPubnet),
+			fmt.Sprintf("* %s - %s", assets.XLMAssetCode, ""),
 			"updating/inserting wallets for the 'pubnet' network",
 			"Name: Vibrant Assist",
 			"Homepage: https://vibrantapp.com/vibrant-assist",
@@ -694,7 +688,7 @@ func Test_DatabaseCommand_db_setup_for_network(t *testing.T) {
 
 		assert.Len(t, currentAssets, 1)
 		assert.Equal(t, assets.USDCAssetCode, currentAssets[0].Code)
-		assert.NotEqual(t, assets.USDCAssetIssuerTestnet, currentAssets[0].Issuer)
+		assert.Equal(t, randomUSDCIssuer, currentAssets[0].Issuer)
 
 		// Validating wallets
 		wallets, err := models.Wallets.GetAll(ctx)
@@ -719,10 +713,8 @@ func Test_DatabaseCommand_db_setup_for_network(t *testing.T) {
 
 		assert.Len(t, actualAssets, 3)
 		assert.Equal(t, assets.EURCAssetCode, actualAssets[0].Code)
-		assert.NotEqual(t, assets.EURCAssetIssuerTestnet, actualAssets[0].Issuer)
 		assert.Equal(t, assets.EURCAssetIssuerPubnet, actualAssets[0].Issuer)
 		assert.Equal(t, assets.USDCAssetCode, actualAssets[1].Code)
-		assert.NotEqual(t, assets.USDCAssetIssuerTestnet, actualAssets[1].Issuer)
 		assert.Equal(t, assets.USDCAssetIssuerPubnet, actualAssets[1].Issuer)
 		assert.Equal(t, assets.XLMAssetCode, actualAssets[2].Code)
 		assert.Empty(t, actualAssets[2].Issuer)
@@ -752,10 +744,9 @@ func Test_DatabaseCommand_db_setup_for_network(t *testing.T) {
 		expectedLogs := []string{
 			fmt.Sprintf("running for tenant ID %s", tnt2.ID),
 			"updating/inserting assets for the 'pubnet' network",
-			"Code: USDC",
-			fmt.Sprintf("Issuer: %s", assets.USDCAssetPubnet.Issuer),
-			"Code: XLM",
-			"Issuer: ",
+			fmt.Sprintf("* %s - %s", assets.USDCAssetCode, assets.USDCAssetIssuerPubnet),
+			fmt.Sprintf("* %s - %s", assets.EURCAssetCode, assets.EURCAssetIssuerPubnet),
+			fmt.Sprintf("* %s - %s", assets.XLMAssetCode, ""),
 			"updating/inserting wallets for the 'pubnet' network",
 			"Name: Vibrant Assist",
 			"Homepage: https://vibrantapp.com/vibrant-assist",
