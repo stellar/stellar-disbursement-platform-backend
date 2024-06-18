@@ -161,13 +161,11 @@ func Test_Service_allMethods(t *testing.T) {
 
 	pubKey := "GBFL6FHGHTOSNCAR3GE2MX53Y6BZ3QBCYSTBOCJBSFOWZ35EG2F6T4LG"
 	encryptionPassphrase := "SCW5I426WV3IDTLSTLQEHC6BMXWI2Z6C4DXAOC4ZA2EIHTAZQ6VD3JI6"
-	// apiKey := "api-key"
 	encryptedAPIKey := "72TARC5aoKJOEUIMTR9nlITP6+MbugQtS+2faBKSQbCrXic=" // <--- "api-key" encrypted with the encryptionPassphrase.
 	networkType := utils.TestnetNetworkType
 	clientConfigModel := NewClientConfigModel(dbConnectionPool)
 
 	// Add a client config to the database.
-	clientConfigModel.Upsert(ctx, ClientConfigUpdate{})
 	err = clientConfigModel.Upsert(ctx, ClientConfigUpdate{
 		WalletID:           utils.StringPtr("the_wallet_id"),
 		EncryptedAPIKey:    utils.StringPtr(encryptedAPIKey),
