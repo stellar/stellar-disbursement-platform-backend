@@ -128,7 +128,6 @@ func Test_Service_getClient(t *testing.T) {
 	clientConfigModel := NewClientConfigModel(dbConnectionPool)
 
 	// Add a client config to the database.
-	clientConfigModel.Upsert(ctx, ClientConfigUpdate{})
 	err = clientConfigModel.Upsert(ctx, ClientConfigUpdate{
 		WalletID:           utils.StringPtr("the_wallet_id"),
 		EncryptedAPIKey:    utils.StringPtr(encryptedAPIKey),

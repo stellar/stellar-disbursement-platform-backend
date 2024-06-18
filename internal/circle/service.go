@@ -18,7 +18,7 @@ type Service struct {
 
 // ServiceInterface defines the interface for Circle related SDP operations.
 //
-//go:generate mockery --name=ServiceInterface --case=underscore --structname=MockService
+//go:generate mockery --name=ServiceInterface --case=underscore --structname=MockService --output=. --filename=service_mock.go --inpackage
 type ServiceInterface interface {
 	ClientInterface
 }

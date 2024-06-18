@@ -19,7 +19,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
-	circleMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/circle/mocks"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/circle"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	di "github.com/stellar/stellar-disbursement-platform-backend/internal/dependencyinjection"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
@@ -142,7 +142,7 @@ func Test_serve(t *testing.T) {
 	mMonitorService := monitorMocks.NewMockMonitorService(t)
 
 	// mock circle service
-	mCircleService := circleMocks.NewMockService(t)
+	mCircleService := circle.NewMockService(t)
 	di.SetInstance(di.CircleServiceInstanceName, mCircleService)
 
 	serveOpts := serve.ServeOptions{

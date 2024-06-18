@@ -20,7 +20,7 @@ type ClientConfig struct {
 	CreatedAt          time.Time `db:"created_at"`
 }
 
-//go:generate mockery --name=ClientConfigModelInterface --case=underscore --structname=MockClientConfigModel
+//go:generate mockery --name=ClientConfigModelInterface --case=underscore --structname=MockClientConfigModel --filename=client_config_mock.go --inpackage
 type ClientConfigModelInterface interface {
 	Upsert(ctx context.Context, configUpdate ClientConfigUpdate) error
 	GetDecryptedAPIKey(ctx context.Context, passphrase string) (string, error)
