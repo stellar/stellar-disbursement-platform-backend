@@ -264,7 +264,7 @@ func (t TenantsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		distAccBalances, getBalErr := t.DistributionAccountService.GetBalances(&tntDistributionAcc)
+		distAccBalances, getBalErr := t.DistributionAccountService.GetBalances(ctx, &tntDistributionAcc)
 		if getBalErr != nil {
 			httperror.InternalError(ctx, "Cannot get tenant distribution account balances", getBalErr, nil).Render(w)
 			return

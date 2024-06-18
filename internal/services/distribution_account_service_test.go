@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"testing"
@@ -18,6 +19,7 @@ import (
 )
 
 func Test_StellarNativeDistributionAccount_GetBalances(t *testing.T) {
+	ctx := context.Background()
 	accAddress := keypair.MustRandom().Address()
 	distAcc := schema.NewStellarEnvTransactionAccount(accAddress)
 
@@ -88,7 +90,7 @@ func Test_StellarNativeDistributionAccount_GetBalances(t *testing.T) {
 			}
 
 			tc.mockHorizonClientFn(&mHorizonClient)
-			balances, err := svc.GetBalances(&distAcc)
+			balances, err := svc.GetBalances(ctx, &distAcc)
 			if tc.expectedError != nil {
 				require.ErrorContains(t, err, tc.expectedError.Error())
 			} else {
@@ -102,6 +104,7 @@ func Test_StellarNativeDistributionAccount_GetBalances(t *testing.T) {
 }
 
 func Test_StellarNativeDistributionAccount_GetBalance(t *testing.T) {
+	ctx := context.Background()
 	accAddress := keypair.MustRandom().Address()
 	distAcc := schema.NewStellarEnvTransactionAccount(accAddress)
 
@@ -159,7 +162,7 @@ func Test_StellarNativeDistributionAccount_GetBalance(t *testing.T) {
 			}
 
 			mockSetup(&mHorizonClient)
-			balance, err := svc.GetBalance(&distAcc, tc.asset)
+			balance, err := svc.GetBalance(ctx, &distAcc, tc.asset)
 			if tc.expectedError != nil {
 				require.ErrorContains(t, err, tc.expectedError.Error())
 			} else {

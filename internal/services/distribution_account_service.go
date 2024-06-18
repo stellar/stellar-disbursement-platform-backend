@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 
@@ -13,8 +14,8 @@ import (
 
 //go:generate mockery --name=DistributionAccountServiceInterface --case=underscore --structname=MockDistributionAccountService --filename=distribution_account_service.go
 type DistributionAccountServiceInterface interface {
-	GetBalances(account *schema.TransactionAccount) (map[data.Asset]float64, error)
-	GetBalance(account *schema.TransactionAccount, asset data.Asset) (float64, error)
+	GetBalances(context context.Context, account *schema.TransactionAccount) (map[data.Asset]float64, error)
+	GetBalance(context context.Context, account *schema.TransactionAccount, asset data.Asset) (float64, error)
 }
 
 type DistributionAccountServiceOptions struct {
@@ -41,12 +42,12 @@ func NewDistributionAccountService(opts DistributionAccountServiceOptions) *Dist
 	}
 }
 
-func (s *DistributionAccountService) GetBalance(account *schema.TransactionAccount, asset data.Asset) (float64, error) {
-	return s.strategies[account.Type].GetBalance(account, asset)
+func (s *DistributionAccountService) GetBalance(ctx context.Context, account *schema.TransactionAccount, asset data.Asset) (float64, error) {
+	return s.strategies[account.Type].GetBalance(ctx, account, asset)
 }
 
-func (s *DistributionAccountService) GetBalances(account *schema.TransactionAccount) (map[data.Asset]float64, error) {
-	return s.strategies[account.Type].GetBalances(account)
+func (s *DistributionAccountService) GetBalances(ctx context.Context, account *schema.TransactionAccount) (map[data.Asset]float64, error) {
+	return s.strategies[account.Type].GetBalances(ctx, account)
 }
 
 var _ DistributionAccountServiceInterface = (*DistributionAccountService)(nil)
@@ -57,7 +58,7 @@ type StellarNativeDistributionAccountService struct {
 
 var _ DistributionAccountServiceInterface = (*StellarNativeDistributionAccountService)(nil)
 
-func (s *StellarNativeDistributionAccountService) GetBalances(account *schema.TransactionAccount) (map[data.Asset]float64, error) {
+func (s *StellarNativeDistributionAccountService) GetBalances(_ context.Context, account *schema.TransactionAccount) (map[data.Asset]float64, error) {
 	accountDetails, err := s.horizonClient.AccountDetail(horizonclient.AccountRequest{AccountID: account.Address})
 	if err != nil {
 		return nil, fmt.Errorf("getting details for account from Horizon: %w", err)
@@ -87,8 +88,8 @@ func (s *StellarNativeDistributionAccountService) GetBalances(account *schema.Tr
 	return balances, nil
 }
 
-func (s *StellarNativeDistributionAccountService) GetBalance(account *schema.TransactionAccount, asset data.Asset) (float64, error) {
-	accBalances, err := s.GetBalances(account)
+func (s *StellarNativeDistributionAccountService) GetBalance(ctx context.Context, account *schema.TransactionAccount, asset data.Asset) (float64, error) {
+	accBalances, err := s.GetBalances(ctx, account)
 	if err != nil {
 		return 0, fmt.Errorf("getting balances for distribution account: %w", err)
 	}
