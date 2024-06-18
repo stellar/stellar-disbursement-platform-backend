@@ -99,7 +99,6 @@ func (s PaymentToSubmitterService) sendPaymentsReadyToPay(
 				return fmt.Errorf("getting payments ready to be sent: %w", err)
 			}
 
-			var transactions []txSubStore.Transaction
 			var failedPayments []*data.Payment
 			var pendingPayments []*data.Payment
 
@@ -113,35 +112,13 @@ func (s PaymentToSubmitterService) sendPaymentsReadyToPay(
 					continue
 				}
 
-				// TODO: change TSS to use string amount [SDP-483]
-				var amount float64
-				amount, err = strconv.ParseFloat(payment.Amount, 64)
-				if err != nil {
-					return fmt.Errorf("parsing payment amount %s for payment ID %s: %w", payment.Amount, payment.ID, err)
-				}
-				transaction := txSubStore.Transaction{
-					ExternalID:  payment.ID,
-					AssetCode:   payment.Asset.Code,
-					AssetIssuer: payment.Asset.Issuer,
-					Amount:      amount,
-					Destination: payment.ReceiverWallet.StellarAddress,
-					TenantID:    tenantID,
-				}
-				transactions = append(transactions, transaction)
 				pendingPayments = append(pendingPayments, payment)
 			}
 
-			// 3. Persist data in Transactions table
-			insertedTransactions, err := s.tssModel.BulkInsert(ctx, tssDBTx, transactions)
+			// 3. Submit Payments to TSS by Persisting data in Transactions table
+			err = s.sendPaymentsToTSS(ctx, tssDBTx, tenantID, pendingPayments)
 			if err != nil {
-				return fmt.Errorf("inserting transactions: %w", err)
-			}
-			if len(insertedTransactions) > 0 {
-				insertedTxIDs := make([]string, 0, len(insertedTransactions))
-				for _, insertedTransaction := range insertedTransactions {
-					insertedTxIDs = append(insertedTxIDs, insertedTransaction.ID)
-				}
-				log.Ctx(ctx).Infof("Submitted %d transaction(s) to TSS=%+v", len(insertedTransactions), insertedTxIDs)
+				return fmt.Errorf("sending payments to TSS: %w", err)
 			}
 
 			// 4. Update payment statuses to `Pending`
@@ -177,6 +154,40 @@ func (s PaymentToSubmitterService) sendPaymentsReadyToPay(
 		return fmt.Errorf("sending payments ready-to-pay inside syncronized database transactions: %w", outerErr)
 	}
 
+	return nil
+}
+
+func (s PaymentToSubmitterService) sendPaymentsToTSS(ctx context.Context, tssDBTx db.DBTransaction, tenantID string, pendingPayments []*data.Payment) error {
+	var transactions []txSubStore.Transaction
+	for _, payment := range pendingPayments {
+		// TODO: change TSS to use string amount [SDP-483]
+		amount, err := strconv.ParseFloat(payment.Amount, 64)
+		if err != nil {
+			return fmt.Errorf("parsing payment amount %s for payment ID %s: %w", payment.Amount, payment.ID, err)
+		}
+
+		transaction := txSubStore.Transaction{
+			ExternalID:  payment.ID,
+			AssetCode:   payment.Asset.Code,
+			AssetIssuer: payment.Asset.Issuer,
+			Amount:      amount,
+			Destination: payment.ReceiverWallet.StellarAddress,
+			TenantID:    tenantID,
+		}
+		transactions = append(transactions, transaction)
+	}
+
+	insertedTransactions, err := s.tssModel.BulkInsert(ctx, tssDBTx, transactions)
+	if err != nil {
+		return fmt.Errorf("inserting transactions: %w", err)
+	}
+	if len(insertedTransactions) > 0 {
+		insertedTxIDs := make([]string, 0, len(insertedTransactions))
+		for _, insertedTransaction := range insertedTransactions {
+			insertedTxIDs = append(insertedTxIDs, insertedTransaction.ID)
+		}
+		log.Ctx(ctx).Infof("Submitted %d transaction(s) to TSS=%+v", len(insertedTransactions), insertedTxIDs)
+	}
 	return nil
 }
 
