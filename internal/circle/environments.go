@@ -19,4 +19,8 @@ var AllowedAssetsMap = map[string]map[utils.NetworkType]data.Asset{
 		utils.PubnetNetworkType:  assets.USDCAssetPubnet,
 		utils.TestnetNetworkType: assets.USDCAssetTestnet,
 	},
+	"EUR": {
+		utils.PubnetNetworkType:  assets.EURCAssetPubnet,
+		utils.TestnetNetworkType: assets.EURCAssetTestnet,
+	},
 }
