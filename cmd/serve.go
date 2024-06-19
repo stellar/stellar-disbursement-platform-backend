@@ -25,6 +25,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	serveadmin "github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/serve"
 )
 
@@ -576,6 +577,12 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			}
 			serveOpts.SubmitterEngine = submitterEngine
 			adminServeOpts.SubmitterEngine = submitterEngine
+
+			// Setup NetworkType
+			serveOpts.NetworkType, err = utils.GetNetworkTypeFromNetworkPassphrase(serveOpts.NetworkPassphrase)
+			if err != nil {
+				log.Ctx(ctx).Fatalf("error parsing network type: %v", err)
+			}
 
 			distributionAccountServiceOptions := services.DistributionAccountServiceOptions{HorizonClient: submitterEngine.HorizonClient}
 			distributionAccountService, err := di.NewDistributionAccountService(ctx, distributionAccountServiceOptions)

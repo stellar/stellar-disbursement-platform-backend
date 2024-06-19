@@ -133,12 +133,6 @@ func (opts *ServeOptions) SetupDependencies() error {
 		return fmt.Errorf("error initializing password validator: %w", err)
 	}
 
-	// Setup NetworkType
-	opts.NetworkType, err = utils.GetNetworkTypeFromNetworkPassphrase(opts.NetworkPassphrase)
-	if err != nil {
-		return fmt.Errorf("parsing network type: %w", err)
-	}
-
 	return nil
 }
 
