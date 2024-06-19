@@ -57,16 +57,7 @@ func (h BalancesHandler) Get(w http.ResponseWriter, r *http.Request) {
 
 	circleWallet, err := h.CircleService.GetWalletByID(ctx, distAccount.CircleWalletID)
 	if err != nil {
-		var circleApiErr *circle.APIError
-		var httpError *httperror.HTTPError
-		if errors.As(err, &circleApiErr) {
-			extras := map[string]interface{}{"circle_errors": circleApiErr.Errors}
-			msg := fmt.Sprintf("Cannot retrieve Circle wallet: %s", circleApiErr.Message)
-			httpError = httperror.BadRequest(msg, circleApiErr, extras)
-		} else {
-			httpError = httperror.InternalError(ctx, "Cannot retrieve Circle wallet", err, nil)
-		}
-		httpError.Render(w)
+		wrapCircleError(ctx, err).Render(w)
 		return
 	}
 
@@ -101,4 +92,18 @@ func (h BalancesHandler) filterBalances(ctx context.Context, circleWallet *circl
 		})
 	}
 	return balances
+}
+
+func wrapCircleError(ctx context.Context, err error) *httperror.HTTPError {
+	if err == nil {
+		return nil
+	}
+
+	var circleAPIErr *circle.APIError
+	if errors.As(err, &circleAPIErr) {
+		extras := map[string]interface{}{"circle_errors": circleAPIErr.Errors}
+		msg := fmt.Sprintf("Cannot complete Circle request: %s", circleAPIErr.Message)
+		return httperror.BadRequest(msg, circleAPIErr, extras)
+	}
+	return httperror.InternalError(ctx, "Cannot complete Circle request", err, nil)
 }

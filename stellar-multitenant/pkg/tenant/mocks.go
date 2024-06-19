@@ -3,8 +3,9 @@ package tenant
 import (
 	"context"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stretchr/testify/mock"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
 )
 
 type TenantManagerMock struct {
@@ -126,3 +127,17 @@ func (m *TenantManagerMock) UpdateTenantConfig(ctx context.Context, tu *TenantUp
 }
 
 var _ ManagerInterface = (*TenantManagerMock)(nil)
+
+type testInterface interface {
+	mock.TestingT
+	Cleanup(func())
+}
+
+func NewTenantManagerMock(t testInterface) *TenantManagerMock {
+	mock := &TenantManagerMock{}
+	mock.Mock.Test(t)
+
+	t.Cleanup(func() { mock.AssertExpectations(t) })
+
+	return mock
+}

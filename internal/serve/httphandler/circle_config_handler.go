@@ -1,6 +1,7 @@
 package httphandler
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -13,12 +14,14 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	sdpUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 // CircleConfigHandler implements a handler to configure the Circle API access.
 type CircleConfigHandler struct {
-	// TODO: Add Circle Service and call Ping method when an API key or walletID are present
-	// CircleService               circle.ServiceInterface
+	NetworkType                 sdpUtils.NetworkType
+	CircleFactory               circle.ClientFactory
+	TenantManager               tenant.ManagerInterface
 	Encrypter                   sdpUtils.PrivateKeyEncrypter
 	EncryptionPassphrase        string
 	CircleClientConfigModel     circle.ClientConfigModelInterface
@@ -67,6 +70,12 @@ func (h CircleConfigHandler) Patch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	validationErr := h.validateConfigWithCircle(ctx, patchRequest)
+	if validationErr != nil {
+		validationErr.Render(w)
+		return
+	}
+
 	var clientConfigUpdate circle.ClientConfigUpdate
 	if patchRequest.APIKey != nil {
 		kp, kpErr := keypair.ParseFull(h.EncryptionPassphrase)
@@ -95,5 +104,76 @@ func (h CircleConfigHandler) Patch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Update tenant status to active
+	_, err = h.TenantManager.UpdateTenantConfig(ctx, &tenant.TenantUpdate{
+		DistributionAccountStatus: schema.AccountStatusActive,
+	})
+	if err != nil {
+		httperror.InternalError(ctx, "Could not update the tenant status to ACTIVE", err, nil).Render(w)
+		return
+	}
+
 	httpjson.RenderStatus(w, http.StatusOK, map[string]string{"message": "Circle configuration updated"}, httpjson.JSON)
+}
+
+func (h CircleConfigHandler) validateConfigWithCircle(ctx context.Context, patchRequest PatchCircleConfigRequest) *httperror.HTTPError {
+	if err := patchRequest.validate(); err != nil {
+		return httperror.BadRequest("Request body is not valid", err, nil)
+	}
+
+	// Use the request values for walletID and apiKey, if they were provided.
+	var walletID, apiKey string
+	if patchRequest.APIKey != nil {
+		apiKey = *patchRequest.APIKey
+	}
+	if patchRequest.WalletID != nil {
+		walletID = *patchRequest.WalletID
+	}
+
+	// If walletID or apiKey are not provided, try to get them from the existing configuration.
+	if walletID == "" || apiKey == "" {
+		existingConfig, err := h.CircleClientConfigModel.Get(ctx)
+		if err != nil {
+			return httperror.InternalError(ctx, "Cannot retrieve the existing Circle configuration", err, nil)
+		}
+
+		if existingConfig == nil {
+			return httperror.BadRequest("You must provide both the Circle walletID and Circle APIKey during the first configuration", nil, nil)
+		}
+
+		if walletID == "" && existingConfig.WalletID != nil { // walletID is not provided but exists in the DB
+			walletID = *existingConfig.WalletID
+		}
+
+		if apiKey == "" && existingConfig.EncryptedAPIKey != nil { // apiKey is not provided but exists in the DB
+			apiKey, err = h.Encrypter.Decrypt(*existingConfig.EncryptedAPIKey, h.EncryptionPassphrase)
+			if err != nil {
+				return httperror.InternalError(ctx, "Cannot decrypt the API key", err, nil)
+			}
+		}
+	}
+
+	circleClient := h.CircleFactory(h.NetworkType, apiKey)
+
+	// validate incoming APIKey
+	if patchRequest.APIKey != nil {
+		ok, err := circleClient.Ping(ctx)
+		if err != nil {
+			return wrapCircleError(ctx, err)
+		}
+
+		if !ok {
+			return httperror.BadRequest("Failed to ping, please make sure that the provided API Key is correct.", nil, nil)
+		}
+	}
+
+	// validate incoming WalletID
+	if patchRequest.WalletID != nil {
+		_, err := circleClient.GetWalletByID(ctx, walletID)
+		if err != nil {
+			return wrapCircleError(ctx, err)
+		}
+	}
+
+	return nil
 }
