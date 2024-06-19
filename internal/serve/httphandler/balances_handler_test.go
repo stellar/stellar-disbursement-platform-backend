@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/circle"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/assets"
 	sigMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
@@ -84,7 +85,7 @@ func Test_BalancesHandler_Get(t *testing.T) {
 			},
 			expectedStatus: circleAPIError.Code,
 			expectedResponse: `{
-				"error": "Cannot retrieve Circle wallet: some circle error",
+				"error": "Cannot complete Circle request: some circle error",
 				"extras": {
 					"circle_errors": [
 						{
@@ -129,7 +130,7 @@ func Test_BalancesHandler_Get(t *testing.T) {
 					Once()
 			},
 			expectedStatus:   http.StatusInternalServerError,
-			expectedResponse: `{"error": "Cannot retrieve Circle wallet"}`,
+			expectedResponse: `{"error": "Cannot complete Circle request"}`,
 		},
 		{
 			name:        "[Testnet] 🎉 successfully returns balances",
@@ -312,6 +313,50 @@ func Test_BalancesHandler_filterBalances(t *testing.T) {
 			actualBalances := h.filterBalances(ctx, tc.circleWallet)
 
 			assert.Equal(t, tc.expectedBalances, actualBalances)
+		})
+	}
+}
+
+func Test_wrapCircleError(t *testing.T) {
+	circleAPIError := &circle.APIError{
+		Code:    400,
+		Message: "some circle error",
+		Errors: []circle.APIErrorDetail{
+			{
+				Error:    "some error",
+				Message:  "some message",
+				Location: "some location",
+			},
+		},
+	}
+
+	ctx := context.Background()
+	testCases := []struct {
+		name          string
+		err           error
+		wantHTTPError *httperror.HTTPError
+	}{
+		{
+			name:          "nil error",
+			err:           nil,
+			wantHTTPError: nil,
+		},
+		{
+			name:          "unexpected error",
+			err:           errors.New("unexpected error"),
+			wantHTTPError: httperror.InternalError(ctx, "Cannot complete Circle request", errors.New("unexpected error"), nil),
+		},
+		{
+			name:          "circle.APIError",
+			err:           circleAPIError,
+			wantHTTPError: httperror.BadRequest("Cannot complete Circle request: some circle error", circleAPIError, map[string]interface{}{"circle_errors": circleAPIError.Errors}),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actualHTTPError := wrapCircleError(ctx, tc.err)
+			assert.Equal(t, tc.wantHTTPError, actualHTTPError)
 		})
 	}
 }
