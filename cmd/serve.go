@@ -12,6 +12,7 @@ import (
 	cmdUtils "github.com/stellar/stellar-disbursement-platform-backend/cmd/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/circle"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	di "github.com/stellar/stellar-disbursement-platform-backend/internal/dependencyinjection"
@@ -24,6 +25,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	serveadmin "github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/serve"
 )
 
@@ -576,6 +578,12 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			serveOpts.SubmitterEngine = submitterEngine
 			adminServeOpts.SubmitterEngine = submitterEngine
 
+			// Setup NetworkType
+			serveOpts.NetworkType, err = utils.GetNetworkTypeFromNetworkPassphrase(serveOpts.NetworkPassphrase)
+			if err != nil {
+				log.Ctx(ctx).Fatalf("error parsing network type: %v", err)
+			}
+
 			distributionAccountServiceOptions := services.DistributionAccountServiceOptions{HorizonClient: submitterEngine.HorizonClient}
 			distributionAccountService, err := di.NewDistributionAccountService(ctx, distributionAccountServiceOptions)
 			if err != nil {
@@ -583,6 +591,18 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			}
 			serveOpts.DistributionAccountService = distributionAccountService
 			adminServeOpts.DistributionAccountService = distributionAccountService
+
+			// Inject Circle Service dependencies
+			circleService, err := di.NewCircleService(ctx, circle.ServiceOptions{
+				ClientFactory:        circle.NewClient,
+				ClientConfigModel:    circle.NewClientConfigModel(serveOpts.MtnDBConnectionPool),
+				NetworkType:          serveOpts.NetworkType,
+				EncryptionPassphrase: serveOpts.DistAccEncryptionPassphrase,
+			})
+			if err != nil {
+				log.Ctx(ctx).Fatalf("error creating Circle service: %v", err)
+			}
+			serveOpts.CircleService = circleService
 
 			// Validate the Event Broker Type and Scheduler Jobs
 			if eventBrokerOptions.EventBrokerType == events.NoneEventBrokerType && !serveOpts.EnableScheduler {

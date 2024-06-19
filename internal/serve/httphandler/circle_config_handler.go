@@ -17,6 +17,8 @@ import (
 
 // CircleConfigHandler implements a handler to configure the Circle API access.
 type CircleConfigHandler struct {
+	// TODO: Add Circle Service and call Ping method when an API key or walletID are present
+	// CircleService               circle.ServiceInterface
 	Encrypter                   sdpUtils.PrivateKeyEncrypter
 	EncryptionPassphrase        string
 	CircleClientConfigModel     circle.ClientConfigModelInterface
