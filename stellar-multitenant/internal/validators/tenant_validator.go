@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/url"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
@@ -62,15 +63,7 @@ func (tv *TenantValidator) ValidateCreateTenantRequest(reqBody *TenantRequest) *
 	tv.Check(reqBody.OwnerLastName != "", "owner_last_name", "owner_last_name is required")
 	tv.Check(reqBody.OrganizationName != "", "organization_name", "organization_name is required")
 
-	tv.Check(reqBody.DistributionAccountType != "", "distribution_account_type", "distribution_account_type is required. valid values are: DISTRIBUTION_ACCOUNT.STELLAR.ENV, DISTRIBUTION_ACCOUNT.STELLAR.DB_VAULT, DISTRIBUTION_ACCOUNT.CIRCLE.DB_VAULT")
-	if reqBody.DistributionAccountType != "" {
-		switch schema.AccountType(reqBody.DistributionAccountType) {
-		case schema.DistributionAccountStellarEnv, schema.DistributionAccountStellarDBVault, schema.DistributionAccountCircleDBVault:
-		default:
-			tv.Check(false,
-				"distribution_account_type", "invalid distribution account type. valid values are: DISTRIBUTION_ACCOUNT.STELLAR.ENV, DISTRIBUTION_ACCOUNT.STELLAR.DB_VAULT, DISTRIBUTION_ACCOUNT.CIRCLE.DB_VAULT")
-		}
-	}
+	tv.validateDistributionAccountType(reqBody.DistributionAccountType)
 
 	var err error
 	if reqBody.BaseURL != nil {
@@ -90,6 +83,14 @@ func (tv *TenantValidator) ValidateCreateTenantRequest(reqBody *TenantRequest) *
 	}
 
 	return reqBody
+}
+
+func (tv *TenantValidator) validateDistributionAccountType(distributionAccountType string) {
+	tv.Check(distributionAccountType != "", "distribution_account_type", fmt.Sprintf("distribution_account_type is required. valid values are: %v", schema.DistributionAccountTypes()))
+
+	if distributionAccountType != "" && !slices.Contains(schema.DistributionAccountTypes(), schema.AccountType(distributionAccountType)) {
+		tv.Check(false, "distribution_account_type", fmt.Sprintf("invalid distribution_account_type. valid values are: %v", schema.DistributionAccountTypes()))
+	}
 }
 
 func (tv *TenantValidator) ValidateUpdateTenantRequest(reqBody *UpdateTenantRequest) *UpdateTenantRequest {

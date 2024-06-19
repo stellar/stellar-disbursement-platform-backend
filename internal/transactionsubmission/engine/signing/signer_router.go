@@ -6,13 +6,12 @@ import (
 	"fmt"
 	"sort"
 
-	sdpUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
-
 	"github.com/stellar/go/txnbuild"
 	"golang.org/x/exp/maps"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions"
+	sdpUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
