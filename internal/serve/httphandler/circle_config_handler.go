@@ -68,6 +68,12 @@ func (h CircleConfigHandler) Patch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	validationErr := h.validateConfigWithCircle(ctx, patchRequest)
+	if validationErr != nil {
+		validationErr.Render(w)
+		return
+	}
+
 	var clientConfigUpdate circle.ClientConfigUpdate
 	if patchRequest.APIKey != nil {
 		kp, kpErr := keypair.ParseFull(h.EncryptionPassphrase)
