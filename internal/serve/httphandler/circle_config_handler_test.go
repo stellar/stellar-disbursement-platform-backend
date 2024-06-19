@@ -3,6 +3,7 @@ package httphandler
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -17,6 +18,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/circle"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/testutils"
 	sigMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
@@ -155,6 +157,180 @@ func TestCircleConfigHandler_Patch(t *testing.T) {
 			rr := testutils.Request(t, r, url, http.MethodPatch, strings.NewReader(tc.requestBody))
 			assert.Equal(t, tc.statusCode, rr.Code)
 			tc.assertions(t, rr)
+		})
+	}
+}
+
+func Test_CircleConfigHandler_validateConfigWithCircle(t *testing.T) {
+	ctx := context.Background()
+
+	encryptionPassphrase := "SCW5I426WV3IDTLSTLQEHC6BMXWI2Z6C4DXAOC4ZA2EIHTAZQ6VD3JI6"
+	networkType := utils.TestnetNetworkType
+	newAPIKey := "new-api-key"
+	newWalletID := "new-wallet-id"
+
+	testCases := []struct {
+		name           string
+		patchRequest   PatchCircleConfigRequest
+		prepareMocksFn func(t *testing.T, mEncrypter *utils.PrivateKeyEncrypterMock, mCircleClientConfigModel *circle.MockClientConfigModel, mCircleClient *circle.MockClient)
+		expectedError  *httperror.HTTPError
+	}{
+		{
+			name:          "returns error if request body is not valid",
+			patchRequest:  PatchCircleConfigRequest{},
+			expectedError: httperror.BadRequest("Request body is not valid", fmt.Errorf("wallet_id or api_key must be provided"), nil),
+		},
+		{
+			name:         "returns error if CircleClientConfigModel.Get returns error",
+			patchRequest: PatchCircleConfigRequest{APIKey: &newAPIKey, WalletID: nil},
+			prepareMocksFn: func(t *testing.T, mEncrypter *utils.PrivateKeyEncrypterMock, mCircleClientConfigModel *circle.MockClientConfigModel, mCircleClient *circle.MockClient) {
+				mCircleClientConfigModel.
+					On("Get", ctx).
+					Return(nil, fmt.Errorf("get error")).
+					Once()
+			},
+			expectedError: httperror.InternalError(ctx, "Cannot retrieve the existing Circle configuration", fmt.Errorf("get error"), nil),
+		},
+		{
+			name:         "returns error if CircleClientConfigModel.Get returns nil",
+			patchRequest: PatchCircleConfigRequest{APIKey: &newAPIKey, WalletID: nil},
+			prepareMocksFn: func(t *testing.T, mEncrypter *utils.PrivateKeyEncrypterMock, mCircleClientConfigModel *circle.MockClientConfigModel, mCircleClient *circle.MockClient) {
+				mCircleClientConfigModel.
+					On("Get", ctx).
+					Return(nil, nil).
+					Once()
+			},
+			expectedError: httperror.BadRequest("You must provide both the Circle walletID and Circle APIKey during the first configuration", nil, nil),
+		},
+		{
+			name:         "returns an error if the existing API Key cannot be decrypted",
+			patchRequest: PatchCircleConfigRequest{WalletID: &newWalletID},
+			prepareMocksFn: func(t *testing.T, mEncrypter *utils.PrivateKeyEncrypterMock, mCircleClientConfigModel *circle.MockClientConfigModel, mCircleClient *circle.MockClient) {
+				mCircleClientConfigModel.
+					On("Get", ctx).
+					Return(&circle.ClientConfig{EncryptedAPIKey: utils.StringPtr("encrypted-api-key")}, nil).
+					Once()
+				mEncrypter.
+					On("Decrypt", "encrypted-api-key", encryptionPassphrase).
+					Return("", fmt.Errorf("decrypt error")).
+					Once()
+			},
+			expectedError: httperror.InternalError(ctx, "Cannot decrypt the API key", fmt.Errorf("decrypt error"), nil),
+		},
+		{
+			name:         "returns an error if circleClient.Ping returns an error",
+			patchRequest: PatchCircleConfigRequest{APIKey: &newAPIKey, WalletID: &newWalletID},
+			prepareMocksFn: func(t *testing.T, mEncrypter *utils.PrivateKeyEncrypterMock, mCircleClientConfigModel *circle.MockClientConfigModel, mCircleClient *circle.MockClient) {
+				mCircleClient.
+					On("Ping", ctx).
+					Return(false, fmt.Errorf("ping error")).
+					Once()
+			},
+			expectedError: wrapCircleError(ctx, fmt.Errorf("ping error")),
+		},
+		{
+			name:         "returns an error if circleClient.Ping returns 'false'",
+			patchRequest: PatchCircleConfigRequest{APIKey: &newAPIKey, WalletID: &newWalletID},
+			prepareMocksFn: func(t *testing.T, mEncrypter *utils.PrivateKeyEncrypterMock, mCircleClientConfigModel *circle.MockClientConfigModel, mCircleClient *circle.MockClient) {
+				mCircleClient.
+					On("Ping", ctx).
+					Return(false, nil).
+					Once()
+			},
+			expectedError: httperror.BadRequest("Failed to ping, please make sure that the provided API Key is correct.", nil, nil),
+		},
+		{
+			name:         "returns an error if circleClient.GetWalletByID returns an error",
+			patchRequest: PatchCircleConfigRequest{APIKey: &newAPIKey, WalletID: &newWalletID},
+			prepareMocksFn: func(t *testing.T, mEncrypter *utils.PrivateKeyEncrypterMock, mCircleClientConfigModel *circle.MockClientConfigModel, mCircleClient *circle.MockClient) {
+				mCircleClient.
+					On("Ping", ctx).
+					Return(true, nil).
+					Once()
+				mCircleClient.
+					On("GetWalletByID", ctx, newWalletID).
+					Return(nil, fmt.Errorf("get wallet error")).
+					Once()
+			},
+			expectedError: wrapCircleError(ctx, fmt.Errorf("get wallet error")),
+		},
+		{
+			name:         "🎉 successfully validate for a new pair of apiKey and walletID",
+			patchRequest: PatchCircleConfigRequest{APIKey: &newAPIKey, WalletID: &newWalletID},
+			prepareMocksFn: func(t *testing.T, mEncrypter *utils.PrivateKeyEncrypterMock, mCircleClientConfigModel *circle.MockClientConfigModel, mCircleClient *circle.MockClient) {
+				mCircleClient.
+					On("Ping", ctx).
+					Return(true, nil).
+					Once()
+				mCircleClient.
+					On("GetWalletByID", ctx, newWalletID).
+					Return(&circle.Wallet{WalletID: newWalletID}, nil).
+					Once()
+			},
+			expectedError: nil,
+		},
+		{
+			name:         "🎉 successfully validate for a new apiKey",
+			patchRequest: PatchCircleConfigRequest{APIKey: &newAPIKey, WalletID: nil},
+			prepareMocksFn: func(t *testing.T, mEncrypter *utils.PrivateKeyEncrypterMock, mCircleClientConfigModel *circle.MockClientConfigModel, mCircleClient *circle.MockClient) {
+				mCircleClientConfigModel.
+					On("Get", ctx).
+					Return(&circle.ClientConfig{EncryptedAPIKey: utils.StringPtr("encrypted-api-key")}, nil).
+					Once()
+				mCircleClient.
+					On("Ping", ctx).
+					Return(true, nil).
+					Once()
+			},
+			expectedError: nil,
+		},
+		{
+			name:         "🎉 successfully validate for a new walletID",
+			patchRequest: PatchCircleConfigRequest{APIKey: nil, WalletID: &newWalletID},
+			prepareMocksFn: func(t *testing.T, mEncrypter *utils.PrivateKeyEncrypterMock, mCircleClientConfigModel *circle.MockClientConfigModel, mCircleClient *circle.MockClient) {
+				mCircleClientConfigModel.
+					On("Get", ctx).
+					Return(&circle.ClientConfig{EncryptedAPIKey: utils.StringPtr("encrypted-api-key")}, nil).
+					Once()
+				mEncrypter.
+					On("Decrypt", "encrypted-api-key", encryptionPassphrase).
+					Return("api-key", nil).
+					Once()
+				mCircleClient.
+					On("GetWalletByID", ctx, newWalletID).
+					Return(&circle.Wallet{WalletID: newWalletID}, nil).
+					Once()
+			},
+			expectedError: nil,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			handler := CircleConfigHandler{
+				EncryptionPassphrase: encryptionPassphrase,
+				NetworkType:          networkType,
+			}
+
+			if tc.prepareMocksFn != nil {
+				mEncrypter := utils.NewPrivateKeyEncrypterMock(t)
+				mCircleClientConfigModel := circle.NewMockClientConfigModel(t)
+				mCircleClient := circle.NewMockClient(t)
+				tc.prepareMocksFn(t, mEncrypter, mCircleClientConfigModel, mCircleClient)
+
+				handler.Encrypter = mEncrypter
+				handler.CircleClientConfigModel = mCircleClientConfigModel
+				handler.CircleFactory = func(networkType utils.NetworkType, apiKey string) circle.ClientInterface {
+					return mCircleClient
+				}
+			}
+
+			err := handler.validateConfigWithCircle(ctx, tc.patchRequest)
+			if tc.expectedError != nil {
+				assert.Equal(t, tc.expectedError, err)
+			} else {
+				assert.Nil(t, err, "expected no error")
+			}
 		})
 	}
 }

@@ -18,3 +18,17 @@ func (pke *PrivateKeyEncrypterMock) Decrypt(message, passphrase string) (string,
 
 // Making sure that PrivateKeyEncrypterMock implements PrivateKeyEncrypter
 var _ PrivateKeyEncrypter = (*PrivateKeyEncrypterMock)(nil)
+
+type testInterface interface {
+	mock.TestingT
+	Cleanup(func())
+}
+
+func NewPrivateKeyEncrypterMock(t testInterface) *PrivateKeyEncrypterMock {
+	mock := &PrivateKeyEncrypterMock{}
+	mock.Mock.Test(t)
+
+	t.Cleanup(func() { mock.AssertExpectations(t) })
+
+	return mock
+}
