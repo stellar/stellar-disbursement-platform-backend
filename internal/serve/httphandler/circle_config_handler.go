@@ -14,12 +14,14 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	sdpUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 // CircleConfigHandler implements a handler to configure the Circle API access.
 type CircleConfigHandler struct {
 	NetworkType                 sdpUtils.NetworkType
 	CircleFactory               circle.ClientFactory
+	TenantManager               tenant.ManagerInterface
 	Encrypter                   sdpUtils.PrivateKeyEncrypter
 	EncryptionPassphrase        string
 	CircleClientConfigModel     circle.ClientConfigModelInterface
@@ -99,6 +101,15 @@ func (h CircleConfigHandler) Patch(w http.ResponseWriter, r *http.Request) {
 	err = h.CircleClientConfigModel.Upsert(ctx, clientConfigUpdate)
 	if err != nil {
 		httperror.InternalError(ctx, "Cannot insert the Circle configuration", err, nil).Render(w)
+		return
+	}
+
+	// Update tenant status to active
+	_, err = h.TenantManager.UpdateTenantConfig(ctx, &tenant.TenantUpdate{
+		DistributionAccountStatus: schema.AccountStatusActive,
+	})
+	if err != nil {
+		httperror.InternalError(ctx, "Could not update the tenant status to ACTIVE", err, nil).Render(w)
 		return
 	}
 

@@ -23,6 +23,7 @@ import (
 	sigMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 func TestCircleConfigHandler_Patch(t *testing.T) {
@@ -51,14 +52,14 @@ func TestCircleConfigHandler_Patch(t *testing.T) {
 
 	testCases := []struct {
 		name           string
-		prepareMocksFn func(t *testing.T, mDistributionAccountResolver *sigMocks.MockDistributionAccountResolver, mCircleClient *circle.MockClient)
+		prepareMocksFn func(t *testing.T, mDistributionAccountResolver *sigMocks.MockDistributionAccountResolver, mCircleClient *circle.MockClient, mTenantManager *tenant.TenantManagerMock)
 		requestBody    string
 		statusCode     int
 		assertions     func(t *testing.T, rr *httptest.ResponseRecorder)
 	}{
 		{
 			name: "returns bad request if distribution account type is not Circle",
-			prepareMocksFn: func(t *testing.T, mDistAccResolver *sigMocks.MockDistributionAccountResolver, mCircleClient *circle.MockClient) {
+			prepareMocksFn: func(t *testing.T, mDistAccResolver *sigMocks.MockDistributionAccountResolver, mCircleClient *circle.MockClient, mTenantManager *tenant.TenantManagerMock) {
 				t.Helper()
 				mDistAccResolver.
 					On("DistributionAccountFromContext", mock.Anything).
@@ -75,7 +76,7 @@ func TestCircleConfigHandler_Patch(t *testing.T) {
 		},
 		{
 			name: "returns bad request for invalid request json body",
-			prepareMocksFn: func(t *testing.T, mDistAccResolver *sigMocks.MockDistributionAccountResolver, mCircleClient *circle.MockClient) {
+			prepareMocksFn: func(t *testing.T, mDistAccResolver *sigMocks.MockDistributionAccountResolver, mCircleClient *circle.MockClient, mTenantManager *tenant.TenantManagerMock) {
 				t.Helper()
 				mDistAccResolver.
 					On("DistributionAccountFromContext", mock.Anything).
@@ -92,7 +93,7 @@ func TestCircleConfigHandler_Patch(t *testing.T) {
 		},
 		{
 			name: "returns bad request for invalid patch request data",
-			prepareMocksFn: func(t *testing.T, mDistAccResolver *sigMocks.MockDistributionAccountResolver, mCircleClient *circle.MockClient) {
+			prepareMocksFn: func(t *testing.T, mDistAccResolver *sigMocks.MockDistributionAccountResolver, mCircleClient *circle.MockClient, mTenantManager *tenant.TenantManagerMock) {
 				t.Helper()
 				mDistAccResolver.
 					On("DistributionAccountFromContext", mock.Anything).
@@ -109,7 +110,7 @@ func TestCircleConfigHandler_Patch(t *testing.T) {
 		},
 		{
 			name: "returns an error if Circle client ping fails",
-			prepareMocksFn: func(t *testing.T, mDistAccResolver *sigMocks.MockDistributionAccountResolver, mCircleClient *circle.MockClient) {
+			prepareMocksFn: func(t *testing.T, mDistAccResolver *sigMocks.MockDistributionAccountResolver, mCircleClient *circle.MockClient, mTenantManager *tenant.TenantManagerMock) {
 				t.Helper()
 				mDistAccResolver.
 					On("DistributionAccountFromContext", mock.Anything).
@@ -131,7 +132,7 @@ func TestCircleConfigHandler_Patch(t *testing.T) {
 		},
 		{
 			name: "updates Circle configuration successfully",
-			prepareMocksFn: func(t *testing.T, mDistAccResolver *sigMocks.MockDistributionAccountResolver, mCircleClient *circle.MockClient) {
+			prepareMocksFn: func(t *testing.T, mDistAccResolver *sigMocks.MockDistributionAccountResolver, mCircleClient *circle.MockClient, mTenantManager *tenant.TenantManagerMock) {
 				t.Helper()
 				mDistAccResolver.
 					On("DistributionAccountFromContext", mock.Anything).
@@ -145,6 +146,11 @@ func TestCircleConfigHandler_Patch(t *testing.T) {
 				mCircleClient.
 					On("GetWalletByID", mock.Anything, "new_wallet_id").
 					Return(&circle.Wallet{WalletID: "new_wallet_id"}, nil).
+					Once()
+
+				mTenantManager.
+					On("UpdateTenantConfig", mock.Anything, &tenant.TenantUpdate{DistributionAccountStatus: schema.AccountStatusActive}).
+					Return(&tenant.Tenant{}, nil).
 					Once()
 			},
 			requestBody: string(validRequestBody),
@@ -177,12 +183,14 @@ func TestCircleConfigHandler_Patch(t *testing.T) {
 			if tc.prepareMocksFn != nil {
 				mDistributionAccountResolver := sigMocks.NewMockDistributionAccountResolver(t)
 				mCircleClient := circle.NewMockClient(t)
-				tc.prepareMocksFn(t, mDistributionAccountResolver, mCircleClient)
+				mTenantManager := tenant.NewTenantManagerMock(t)
+				tc.prepareMocksFn(t, mDistributionAccountResolver, mCircleClient, mTenantManager)
 
+				handler.DistributionAccountResolver = mDistributionAccountResolver
 				handler.CircleFactory = func(networkType utils.NetworkType, apiKey string) circle.ClientInterface {
 					return mCircleClient
 				}
-				handler.DistributionAccountResolver = mDistributionAccountResolver
+				handler.TenantManager = mTenantManager
 			}
 
 			r := chi.NewRouter()
