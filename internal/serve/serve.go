@@ -388,6 +388,9 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 
 			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole)).
 				Patch("/circle-config", httphandler.CircleConfigHandler{
+					NetworkType:                 o.NetworkType,
+					CircleFactory:               circle.NewClient,
+					TenantManager:               o.tenantManager,
 					Encrypter:                   &utils.DefaultPrivateKeyEncrypter{},
 					EncryptionPassphrase:        o.DistAccEncryptionPassphrase,
 					CircleClientConfigModel:     circle.NewClientConfigModel(o.MtnDBConnectionPool),
