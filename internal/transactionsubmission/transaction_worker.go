@@ -516,6 +516,7 @@ func (tw *TransactionWorker) buildAndSignTransaction(ctx context.Context, txJob 
 
 	horizonAccount, err := tw.engine.HorizonClient.AccountDetail(horizonclient.AccountRequest{AccountID: txJob.ChannelAccount.PublicKey})
 	if err != nil {
+		err = fmt.Errorf("getting account detail: %w", err)
 		return nil, utils.NewHorizonErrorWrapper(err)
 	}
 
