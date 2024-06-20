@@ -212,7 +212,7 @@ func Test_Service_allMethods(t *testing.T) {
 				Chain:   "XLM",
 				Address: pubKey,
 			},
-			Amount: Money{
+			Amount: Balance{
 				Amount:   "123.45",
 				Currency: "USD",
 			},

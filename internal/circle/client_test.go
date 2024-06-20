@@ -79,7 +79,7 @@ func Test_Client_PostTransfer(t *testing.T) {
 	validTransferReq := TransferRequest{
 		Source:      TransferAccount{Type: TransferAccountTypeWallet, ID: "source-id"},
 		Destination: TransferAccount{Type: TransferAccountTypeBlockchain, Chain: "XLM", Address: "GBG2DFASN2E5ZZSOYH7SJ7HWBKR4M5LYQ5Q5ZVBWS3RI46GDSYTEA6YF", AddressTag: "txmemo2"},
-		Amount:      Money{Amount: "100.00", Currency: "USD"},
+		Amount:      Balance{Amount: "100.00", Currency: "USD"},
 	}
 
 	t.Run("post transfer error", func(t *testing.T) {
@@ -280,7 +280,7 @@ func Test_Client_GetWalletByID(t *testing.T) {
 			EntityID:    "2f47c999-9022-4939-acea-dc3afa9ccbaf",
 			Type:        "end_user_wallet",
 			Description: "Treasury Wallet",
-			Balances: []Money{
+			Balances: []Balance{
 				{Amount: "4790.00", Currency: "USD"},
 			},
 		}

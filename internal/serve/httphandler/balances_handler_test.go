@@ -151,7 +151,7 @@ func Test_BalancesHandler_Get(t *testing.T) {
 						EntityID:    "2f47c999-9022-4939-acea-dc3afa9ccbaf",
 						Type:        "end_user_wallet",
 						Description: "Treasury Wallet",
-						Balances: []circle.Money{
+						Balances: []circle.Balance{
 							{Amount: "123.00", Currency: "USD"},
 						},
 					}, nil).
@@ -190,7 +190,7 @@ func Test_BalancesHandler_Get(t *testing.T) {
 						EntityID:    "2f47c999-9022-4939-acea-dc3afa9ccbaf",
 						Type:        "end_user_wallet",
 						Description: "Treasury Wallet",
-						Balances: []circle.Money{
+						Balances: []circle.Balance{
 							{Amount: "123.00", Currency: "USD"},
 						},
 					}, nil).
@@ -252,7 +252,7 @@ func Test_BalancesHandler_filterBalances(t *testing.T) {
 			name:        "[Pubnet] only supported assets are included",
 			networkType: utils.PubnetNetworkType,
 			circleWallet: &circle.Wallet{
-				Balances: []circle.Money{
+				Balances: []circle.Balance{
 					{Currency: "FOO", Amount: "100"},
 					{Currency: "USD", Amount: "200"},
 					{Currency: "BAR", Amount: "300"},
@@ -270,7 +270,7 @@ func Test_BalancesHandler_filterBalances(t *testing.T) {
 			name:        "[Testnet] only supported assets are included",
 			networkType: utils.TestnetNetworkType,
 			circleWallet: &circle.Wallet{
-				Balances: []circle.Money{
+				Balances: []circle.Balance{
 					{Currency: "FOO", Amount: "100"},
 					{Currency: "USD", Amount: "200"},
 					{Currency: "BAR", Amount: "300"},
@@ -288,7 +288,7 @@ func Test_BalancesHandler_filterBalances(t *testing.T) {
 			name:        "[Pubnet] none of the provided assets is supported",
 			networkType: utils.PubnetNetworkType,
 			circleWallet: &circle.Wallet{
-				Balances: []circle.Money{
+				Balances: []circle.Balance{
 					{Currency: "FOO", Amount: "100"},
 				},
 			},
@@ -298,7 +298,7 @@ func Test_BalancesHandler_filterBalances(t *testing.T) {
 			name:        "[Testnet] none of the provided assets is supported",
 			networkType: utils.TestnetNetworkType,
 			circleWallet: &circle.Wallet{
-				Balances: []circle.Money{
+				Balances: []circle.Balance{
 					{Currency: "FOO", Amount: "100"},
 				},
 			},
