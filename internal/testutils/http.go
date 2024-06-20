@@ -1,6 +1,7 @@
 package testutils
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -10,10 +11,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func Request(t *testing.T, r *chi.Mux, url, httpMethod string, body io.Reader) *httptest.ResponseRecorder {
+func Request(t *testing.T, ctx context.Context, r *chi.Mux, url, httpMethod string, body io.Reader) *httptest.ResponseRecorder {
 	t.Helper()
 
-	req, err := http.NewRequest(httpMethod, url, body)
+	req, err := http.NewRequestWithContext(ctx, httpMethod, url, body)
 	require.NoError(t, err)
 
 	rr := httptest.NewRecorder()
