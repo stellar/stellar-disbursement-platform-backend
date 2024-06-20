@@ -280,7 +280,7 @@ func Test_Client_GetWalletByID(t *testing.T) {
 			EntityID:    "2f47c999-9022-4939-acea-dc3afa9ccbaf",
 			Type:        "end_user_wallet",
 			Description: "Treasury Wallet",
-			Balances: []Balance{
+			Balances: []Money{
 				{Amount: "4790.00", Currency: "USD"},
 			},
 		}
