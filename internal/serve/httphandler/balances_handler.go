@@ -73,15 +73,9 @@ func (h BalancesHandler) Get(w http.ResponseWriter, r *http.Request) {
 func (h BalancesHandler) filterBalances(ctx context.Context, circleWallet *circle.Wallet) []Balance {
 	balances := []Balance{}
 	for _, balance := range circleWallet.Balances {
-		networkAssetMap, ok := circle.AllowedAssetsMap[balance.Currency]
-		if !ok {
-			log.Ctx(ctx).Debugf("Ignoring balance for asset %s, as it's not supported by the SDP", balance.Currency)
-			continue
-		}
-
-		asset, ok := networkAssetMap[h.NetworkType]
-		if !ok {
-			log.Ctx(ctx).Debugf("Ignoring balance for asset %s, as it's not supported by the SDP in the %v network", balance.Currency, h.NetworkType)
+		asset, err := circle.ParseStellarAsset(balance.Currency, h.NetworkType)
+		if err != nil {
+			log.Ctx(ctx).Debugf("Ignoring balance for asset %s, as it's not supported by the SDP: %v", balance.Currency, err)
 			continue
 		}
 

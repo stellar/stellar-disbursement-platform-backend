@@ -256,6 +256,7 @@ func Test_BalancesHandler_filterBalances(t *testing.T) {
 					{Currency: "FOO", Amount: "100"},
 					{Currency: "USD", Amount: "200"},
 					{Currency: "BAR", Amount: "300"},
+					{Currency: "EUR", Amount: "400"},
 				},
 			},
 			expectedBalances: []Balance{
@@ -263,6 +264,11 @@ func Test_BalancesHandler_filterBalances(t *testing.T) {
 					Amount:      "200",
 					AssetCode:   assets.USDCAssetPubnet.Code,
 					AssetIssuer: assets.USDCAssetPubnet.Issuer,
+				},
+				{
+					Amount:      "400",
+					AssetCode:   assets.EURCAssetPubnet.Code,
+					AssetIssuer: assets.EURCAssetPubnet.Issuer,
 				},
 			},
 		},
@@ -274,6 +280,7 @@ func Test_BalancesHandler_filterBalances(t *testing.T) {
 					{Currency: "FOO", Amount: "100"},
 					{Currency: "USD", Amount: "200"},
 					{Currency: "BAR", Amount: "300"},
+					{Currency: "EUR", Amount: "400"},
 				},
 			},
 			expectedBalances: []Balance{
@@ -281,6 +288,11 @@ func Test_BalancesHandler_filterBalances(t *testing.T) {
 					Amount:      "200",
 					AssetCode:   assets.USDCAssetTestnet.Code,
 					AssetIssuer: assets.USDCAssetTestnet.Issuer,
+				},
+				{
+					Amount:      "400",
+					AssetCode:   assets.EURCAssetTestnet.Code,
+					AssetIssuer: assets.EURCAssetTestnet.Issuer,
 				},
 			},
 		},
