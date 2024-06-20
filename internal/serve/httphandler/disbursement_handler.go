@@ -372,10 +372,6 @@ func (d DisbursementHandler) PatchDisbursementStatus(w http.ResponseWriter, r *h
 		if distributionAccount, err = d.DistributionAccountResolver.DistributionAccountFromContext(ctx); err != nil {
 			httperror.InternalError(ctx, "Cannot get distribution account", err, nil).Render(w)
 			return
-		} else if !distributionAccount.IsStellar() {
-			msg := fmt.Sprintf("expected distribution account to be a STELLAR account but got %q", distributionAccount.Type)
-			httperror.BadRequest(msg, err, nil).Render(w)
-			return
 		}
 
 		err = d.DisbursementManagementService.StartDisbursement(ctx, disbursementID, user, &distributionAccount)

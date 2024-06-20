@@ -8,6 +8,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 
 	"github.com/stellar/go/support/log"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 
@@ -52,6 +53,10 @@ func (d paymentFromSubmitterJob) Execute(ctx context.Context) error {
 	t, err := tenant.GetTenantFromContext(ctx)
 	if err != nil {
 		return fmt.Errorf("error getting tenant from context for %s: %w", paymentFromSubmitterJobName, err)
+	}
+	if t.DistributionAccountType.IsCircle() {
+		log.Ctx(ctx).Debugf("Skipping job %s for tenant %s as it uses a Circle Distribution account", d.GetName(), t.ID)
+		return nil
 	}
 	err = d.service.SyncBatchTransactions(ctx, paymentFromSubmitterBatchSize, t.ID)
 	if err != nil {

@@ -6,9 +6,11 @@ import (
 	"time"
 
 	"github.com/stellar/go/support/log"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 const (
@@ -44,6 +46,15 @@ func (j patchAnchorPlatformTransactionsCompletionJob) GetInterval() time.Duratio
 }
 
 func (j patchAnchorPlatformTransactionsCompletionJob) Execute(ctx context.Context) error {
+	t, tenantErr := tenant.GetTenantFromContext(ctx)
+	if tenantErr != nil {
+		return fmt.Errorf("getting tenant from context: %w", tenantErr)
+	}
+	if t.DistributionAccountType.IsCircle() {
+		log.Ctx(ctx).Debugf("Skipping job %s for tenant %s as it uses a Circle Distribution account", j.GetName(), t.ID)
+		return nil
+	}
+
 	if err := j.service.PatchAPTransactionsForPayments(ctx); err != nil {
 		err = fmt.Errorf("patching anchor platform transactions completion: %w", err)
 		log.Ctx(ctx).Error(err)

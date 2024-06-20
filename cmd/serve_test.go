@@ -33,6 +33,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	preconditionsMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	serveadmin "github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/serve"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
@@ -146,6 +147,10 @@ func Test_serve(t *testing.T) {
 	mCircleService := circle.NewMockService(t)
 	di.SetInstance(di.CircleServiceInstanceName, mCircleService)
 
+	// mock DistAccResolver
+	mDistAccResolver := mocks.NewMockDistributionAccountResolver(t)
+	di.SetInstance(di.DistributionAccountResolverInstanceName, mDistAccResolver)
+
 	serveOpts := serve.ServeOptions{
 		Environment:                     "test",
 		GitCommit:                       "1234567890abcdef",
@@ -178,6 +183,7 @@ func Test_serve(t *testing.T) {
 		MaxInvitationSMSResendAttempts:  3,
 		DistAccEncryptionPassphrase:     distributionAccPrivKey,
 		CircleService:                   mCircleService,
+		DistAccountResolver:             mDistAccResolver,
 	}
 	serveOpts.AnchorPlatformAPIService, err = anchorplatform.NewAnchorPlatformAPIService(httpclient.DefaultClient(), serveOpts.AnchorPlatformBasePlatformURL, serveOpts.AnchorPlatformOutgoingJWTSecret)
 	require.NoError(t, err)

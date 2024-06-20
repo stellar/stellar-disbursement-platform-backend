@@ -13,6 +13,7 @@ import (
 	"github.com/stellar/go/support/log"
 
 	"github.com/lib/pq"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
@@ -22,15 +23,17 @@ type Payment struct {
 	Amount               string `json:"amount" db:"amount"`
 	StellarTransactionID string `json:"stellar_transaction_id" db:"stellar_transaction_id"`
 	// TODO: evaluate if we will keep or remove StellarOperationID
-	StellarOperationID string               `json:"stellar_operation_id" db:"stellar_operation_id"`
-	Status             PaymentStatus        `json:"status" db:"status"`
-	StatusHistory      PaymentStatusHistory `json:"status_history,omitempty" db:"status_history"`
-	Disbursement       *Disbursement        `json:"disbursement,omitempty" db:"disbursement"`
-	Asset              Asset                `json:"asset"`
-	ReceiverWallet     *ReceiverWallet      `json:"receiver_wallet,omitempty" db:"receiver_wallet"`
-	CreatedAt          time.Time            `json:"created_at" db:"created_at"`
-	UpdatedAt          time.Time            `json:"updated_at" db:"updated_at"`
-	ExternalPaymentID  string               `json:"external_payment_id,omitempty" db:"external_payment_id"`
+	StellarOperationID   string               `json:"stellar_operation_id" db:"stellar_operation_id"`
+	Status               PaymentStatus        `json:"status" db:"status"`
+	StatusHistory        PaymentStatusHistory `json:"status_history,omitempty" db:"status_history"`
+	Disbursement         *Disbursement        `json:"disbursement,omitempty" db:"disbursement"`
+	Asset                Asset                `json:"asset"`
+	ReceiverWallet       *ReceiverWallet      `json:"receiver_wallet,omitempty" db:"receiver_wallet"`
+	CreatedAt            time.Time            `json:"created_at" db:"created_at"`
+	UpdatedAt            time.Time            `json:"updated_at" db:"updated_at"`
+	ExternalPaymentID    string               `json:"external_payment_id,omitempty" db:"external_payment_id"`
+	CircleTransferID     string               `json:"circle_transfer_id,omitempty" db:"circle_transfer_id"`
+	CircleIdempotencyKey string               `json:"circle_idempotency_key,omitempty" db:"circle_idempotency_key"`
 }
 
 type PaymentStatusHistoryEntry struct {
@@ -194,6 +197,8 @@ func (p *PaymentModel) Get(ctx context.Context, id string, sqlExec db.SQLExecute
 			p.created_at,
 			p.updated_at,
 			COALESCE(p.external_payment_id, '') as external_payment_id,
+			COALESCE(p.circle_transfer_id, '') as circle_transfer_id,
+			COALESCE(p.circle_idempotency_key, '') as circle_idempotency_key,
 			d.id as "disbursement.id",
 			d.name as "disbursement.name",
 			d.status as "disbursement.status",
@@ -320,6 +325,8 @@ func (p *PaymentModel) GetAll(ctx context.Context, queryParams *QueryParams, sql
 			p.created_at,
 			p.updated_at,
 			COALESCE(p.external_payment_id, '') as external_payment_id,
+			COALESCE(p.circle_transfer_id, '') as circle_transfer_id,
+			COALESCE(p.circle_idempotency_key, '') as circle_idempotency_key,
 			d.id as "disbursement.id",
 			d.name as "disbursement.name",
 			d.status as "disbursement.status",
@@ -757,6 +764,94 @@ func (p *PaymentModel) CancelPaymentsWithinPeriodDays(ctx context.Context, sqlEx
 	}
 	if numRowsAffected == 0 {
 		log.Ctx(ctx).Debug("No payments were canceled")
+	}
+
+	return nil
+}
+
+// SetCircleIdempotencyKeyIfNeeded sets or gets the Circle idempotency key for a payment. Only set the idempotency key if the payment is in "READY" status and the Circle idempotency key is not set.
+func (p *PaymentModel) SetCircleIdempotencyKeyIfNeeded(ctx context.Context, sqlExec db.SQLExecuter, paymentID string) (string, error) {
+	query := `
+		UPDATE payments 
+		SET circle_idempotency_key = COALESCE(circle_idempotency_key, public.uuid_generate_v4()::text) 
+		WHERE id = $1
+			AND status = 'READY'::payment_status
+			AND circle_transfer_id IS NULL
+		RETURNING circle_idempotency_key
+	`
+
+	var idempotencyKey string
+	err := sqlExec.GetContext(ctx, &idempotencyKey, query, paymentID)
+	if err != nil {
+		return "", fmt.Errorf("setting or getting Circle idempotency key for payment %s: %w", paymentID, err)
+	}
+
+	log.Ctx(ctx).Infof("Set payment %s Circle idempotency key to %s", paymentID, idempotencyKey)
+	return idempotencyKey, nil
+}
+
+// MarkAsFailed marks a payment as failed and updates its status history.
+func (p *PaymentModel) MarkAsFailed(ctx context.Context, sqlExec db.SQLExecuter, paymentID, errorMsg string) error {
+	query := `
+		UPDATE payments
+		SET status = $1,
+			status_history = array_append(status_history, create_payment_status_history(NOW(), $1, $2))
+		WHERE id = $3
+		    AND status = ANY($4)
+	`
+
+	result, err := sqlExec.ExecContext(ctx, query,
+		FailedPaymentStatus,
+		errorMsg,
+		paymentID,
+		pq.Array(FailedPaymentStatus.SourceStatuses()))
+	if err != nil {
+		return fmt.Errorf("error marking payment as failed: %w", err)
+	}
+
+	numRowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("error getting number of rows affected: %w", err)
+	}
+
+	if numRowsAffected == 0 {
+		return fmt.Errorf("payment %s was not marked as failed", paymentID)
+	}
+
+	return nil
+}
+
+// MarkCirclePaymentAsPending marks a payment as pending and updates its status history.
+func (p *PaymentModel) MarkCirclePaymentAsPending(ctx context.Context, sqlExec db.SQLExecuter, paymentID, circleTransferID string) error {
+	statusMsg := fmt.Sprintf("Payment with Transfer ID %s is pending in Circle", circleTransferID)
+	query := `
+		UPDATE payments
+		SET status = 'PENDING'::payment_status,
+			status_history = array_append(status_history, create_payment_status_history(NOW(), $1, $2)),
+			circle_transfer_id = $3,
+		    circle_idempotency_key = NULL
+		WHERE id = $4
+		 AND status = ANY($5)
+		 AND circle_transfer_id IS NULL
+	`
+
+	result, err := sqlExec.ExecContext(ctx, query,
+		PendingPaymentStatus,
+		statusMsg,
+		circleTransferID,
+		paymentID,
+		pq.Array(PendingPaymentStatus.SourceStatuses()))
+	if err != nil {
+		return fmt.Errorf("marking payment as pending: %w", err)
+	}
+
+	numRowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("error getting number of rows affected: %w", err)
+	}
+
+	if numRowsAffected == 0 {
+		return fmt.Errorf("payment %s was not marked as pending", paymentID)
 	}
 
 	return nil

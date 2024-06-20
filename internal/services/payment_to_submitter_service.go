@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/circle"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 
 	"github.com/stellar/go/support/log"
@@ -27,14 +29,20 @@ var _ PaymentToSubmitterServiceInterface = (*PaymentToSubmitterService)(nil)
 
 // PaymentToSubmitterService is a service that pushes SDP's ready-to-pay payments to the transaction submission service.
 type PaymentToSubmitterService struct {
-	sdpModels *data.Models
-	tssModel  *txSubStore.TransactionModel
+	sdpModels           *data.Models
+	tssModel            *txSubStore.TransactionModel
+	distAccountResolver signing.DistributionAccountResolver
+	circleService       circle.ServiceInterface
 }
 
-func NewPaymentToSubmitterService(models *data.Models, tssDBConnectionPool db.DBConnectionPool) *PaymentToSubmitterService {
+func NewPaymentToSubmitterService(models *data.Models, tssDBConnectionPool db.DBConnectionPool,
+	distAccountResolver signing.DistributionAccountResolver, circleService circle.ServiceInterface,
+) *PaymentToSubmitterService {
 	return &PaymentToSubmitterService{
-		sdpModels: models,
-		tssModel:  txSubStore.NewTransactionModel(tssDBConnectionPool),
+		sdpModels:           models,
+		tssModel:            txSubStore.NewTransactionModel(tssDBConnectionPool),
+		distAccountResolver: distAccountResolver,
+		circleService:       circleService,
 	}
 }
 
@@ -115,36 +123,23 @@ func (s PaymentToSubmitterService) sendPaymentsReadyToPay(
 				pendingPayments = append(pendingPayments, payment)
 			}
 
-			// 3. Submit Payments to TSS by Persisting data in Transactions table
-			err = s.sendPaymentsToTSS(ctx, tssDBTx, tenantID, pendingPayments)
-			if err != nil {
-				return fmt.Errorf("sending payments to TSS: %w", err)
-			}
-
-			// 4. Update payment statuses to `Pending`
-			if len(pendingPayments) > 0 {
-				numUpdated, err := s.sdpModels.Payment.UpdateStatuses(ctx, sdpDBTx, pendingPayments, data.PendingPaymentStatus)
-				if err != nil {
-					return fmt.Errorf("updating payment statuses to Pending: %w", err)
-				}
-				updatedPaymentIDs := make([]string, 0, len(pendingPayments))
-				for _, pendingPayment := range pendingPayments {
-					updatedPaymentIDs = append(updatedPaymentIDs, pendingPayment.ID)
-				}
-				log.Ctx(ctx).Infof("Updated %d payments to Pending=%+v", numUpdated, updatedPaymentIDs)
-			}
-
-			// 5. Update failed payments statuses to `Failed`
+			// 2. Update failed payments statuses to `Failed`. These payments won't even be attempted.
 			if len(failedPayments) != 0 {
-				numUpdated, err := s.sdpModels.Payment.UpdateStatuses(ctx, sdpDBTx, failedPayments, data.FailedPaymentStatus)
-				if err != nil {
-					return fmt.Errorf("updating payment statuses to Failed: %w", err)
+				numUpdated, updateErr := s.sdpModels.Payment.UpdateStatuses(ctx, sdpDBTx, failedPayments, data.FailedPaymentStatus)
+				if updateErr != nil {
+					return fmt.Errorf("updating payment statuses to Failed: %w", updateErr)
 				}
 				failedPaymentIDs := make([]string, 0, len(failedPayments))
 				for _, failedPayment := range failedPayments {
 					failedPaymentIDs = append(failedPaymentIDs, failedPayment.ID)
 				}
 				log.Ctx(ctx).Warnf("Updated %d payments to Failed=%+v", numUpdated, failedPaymentIDs)
+			}
+
+			// 3. Submit Payments to proper platform (TSS or Circle)
+			err = s.sendPaymentsToProperPlatform(ctx, sdpDBTx, tssDBTx, tenantID, pendingPayments)
+			if err != nil {
+				return fmt.Errorf("sending payments to target platform: %w", err)
 			}
 
 			return nil
@@ -157,7 +152,57 @@ func (s PaymentToSubmitterService) sendPaymentsReadyToPay(
 	return nil
 }
 
-func (s PaymentToSubmitterService) sendPaymentsToTSS(ctx context.Context, tssDBTx db.DBTransaction, tenantID string, pendingPayments []*data.Payment) error {
+func (s PaymentToSubmitterService) sendPaymentsToProperPlatform(ctx context.Context, sdpDBTx, tssDBTx db.DBTransaction, tenantID string, paymentsToSubmit []*data.Payment) error {
+	distAccount, err := s.distAccountResolver.DistributionAccountFromContext(ctx)
+	if err != nil {
+		return fmt.Errorf("getting distribution account: %w", err)
+	}
+
+	if distAccount.IsCircle() {
+		return s.sendPaymentsToCircle(ctx, sdpDBTx, distAccount.CircleWalletID, paymentsToSubmit)
+	} else {
+		return s.sendPaymentsToTSS(ctx, sdpDBTx, tssDBTx, tenantID, paymentsToSubmit)
+	}
+}
+
+func (s PaymentToSubmitterService) sendPaymentsToCircle(ctx context.Context, sdpDBTx db.DBTransaction, circleWalletID string, paymentsToSubmit []*data.Payment) error {
+	for _, payment := range paymentsToSubmit {
+
+		// 1. Persist the circle idempotency key if needed
+		idempotencyKey, err := s.sdpModels.Payment.SetCircleIdempotencyKeyIfNeeded(ctx, sdpDBTx, payment.ID)
+		if err != nil {
+			return fmt.Errorf("setting circle idempotency key: %w", err)
+		}
+
+		// 2. Submit the payment to Circle
+		transfer, err := s.circleService.SendPayment(ctx, circle.PaymentRequest{
+			SourceWalletID:            circleWalletID,
+			DestinationStellarAddress: payment.ReceiverWallet.StellarAddress,
+			Amount:                    payment.Amount,
+			StellarAssetCode:          payment.Asset.Code,
+			IdempotencyKey:            idempotencyKey,
+		})
+
+		if err != nil {
+			// 3. If the transfer fails, set the payment status to failed
+			// TODO:  If the transfer fails because of authentication error, set the account status to `PENDING_USER_ACTIVATION` - [SDP-1245]
+			paymentErr := s.sdpModels.Payment.MarkAsFailed(ctx, sdpDBTx, payment.ID, err.Error())
+			if paymentErr != nil {
+				return fmt.Errorf("marking payment as failed: %w", paymentErr)
+			}
+		} else {
+			// 4. If sending transfer request succeeds, update the payment status to pending and store the transfer id
+			err = s.sdpModels.Payment.MarkCirclePaymentAsPending(ctx, sdpDBTx, payment.ID, transfer.ID)
+			if err != nil {
+				return fmt.Errorf("marking payment as pending: %w", err)
+			}
+			log.Ctx(ctx).Infof("Submitted payment %s to Circle: %+v", payment.ID, transfer)
+		}
+	}
+	return nil
+}
+
+func (s PaymentToSubmitterService) sendPaymentsToTSS(ctx context.Context, sdpDBTx, tssDBTx db.DBTransaction, tenantID string, pendingPayments []*data.Payment) error {
 	var transactions []txSubStore.Transaction
 	for _, payment := range pendingPayments {
 		// TODO: change TSS to use string amount [SDP-483]
@@ -187,6 +232,18 @@ func (s PaymentToSubmitterService) sendPaymentsToTSS(ctx context.Context, tssDBT
 			insertedTxIDs = append(insertedTxIDs, insertedTransaction.ID)
 		}
 		log.Ctx(ctx).Infof("Submitted %d transaction(s) to TSS=%+v", len(insertedTransactions), insertedTxIDs)
+	}
+
+	if len(pendingPayments) > 0 {
+		numUpdated, updateErr := s.sdpModels.Payment.UpdateStatuses(ctx, sdpDBTx, pendingPayments, data.PendingPaymentStatus)
+		if updateErr != nil {
+			return fmt.Errorf("updating payment statuses to Pending: %w", updateErr)
+		}
+		updatedPaymentIDs := make([]string, 0, len(pendingPayments))
+		for _, pendingPayment := range pendingPayments {
+			updatedPaymentIDs = append(updatedPaymentIDs, pendingPayment.ID)
+		}
+		log.Ctx(ctx).Infof("Updated %d payments to Pending=%+v", numUpdated, updatedPaymentIDs)
 	}
 	return nil
 }

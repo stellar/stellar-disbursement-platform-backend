@@ -90,6 +90,10 @@ func (tr TransferRequest) validate() error {
 		return fmt.Errorf("amount must be provided")
 	}
 
+	if tr.IdempotencyKey == "" {
+		return fmt.Errorf("idempotency key must be provided")
+	}
+
 	if _, err := strconv.ParseFloat(tr.Amount.Amount, 64); err != nil {
 		return fmt.Errorf("amount must be a valid number")
 	}

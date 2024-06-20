@@ -4,6 +4,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -72,11 +73,21 @@ func Test_TransferRequest_validate(t *testing.T) {
 			wantErr: errors.New("amount must be a valid number"),
 		},
 		{
-			name: "valid transfer request",
+			name: "idempotency key is not provided",
 			tr: TransferRequest{
 				Source:      TransferAccount{Type: TransferAccountTypeWallet, ID: "1014442536"},
 				Destination: TransferAccount{Type: TransferAccountTypeBlockchain, Chain: "XLM", Address: "GBG2DFASN2E5ZZSOYH7SJ7HWBKR4M5LYQ5Q5ZVBWS3RI46GDSYTEA6YF"},
 				Amount:      Money{Amount: "0.25", Currency: "USD"},
+			},
+			wantErr: nil,
+		},
+		{
+			name: "valid transfer request",
+			tr: TransferRequest{
+				IdempotencyKey: uuid.NewString(),
+				Source:         TransferAccount{Type: TransferAccountTypeWallet, ID: "1014442536"},
+				Destination:    TransferAccount{Type: TransferAccountTypeBlockchain, Chain: "XLM", Address: "GBG2DFASN2E5ZZSOYH7SJ7HWBKR4M5LYQ5Q5ZVBWS3RI46GDSYTEA6YF"},
+				Amount:         Money{Amount: "0.25", Currency: "USD"},
 			},
 			wantErr: nil,
 		},

@@ -7,10 +7,12 @@ import (
 	"github.com/stellar/go/support/log"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/circle"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
@@ -19,6 +21,8 @@ type PaymentToSubmitterEventHandlerOptions struct {
 	AdminDBConnectionPool db.DBConnectionPool
 	MtnDBConnectionPool   db.DBConnectionPool
 	TSSDBConnectionPool   db.DBConnectionPool
+	DistAccountResolver   signing.DistributionAccountResolver
+	CircleService         circle.ServiceInterface
 }
 
 type PaymentToSubmitterEventHandler struct {
@@ -36,7 +40,7 @@ func NewPaymentToSubmitterEventHandler(options PaymentToSubmitterEventHandlerOpt
 		log.Fatalf("error getting models: %s", err.Error())
 	}
 
-	s := services.NewPaymentToSubmitterService(models, options.TSSDBConnectionPool)
+	s := services.NewPaymentToSubmitterService(models, options.TSSDBConnectionPool, options.DistAccountResolver, options.CircleService)
 
 	return &PaymentToSubmitterEventHandler{
 		tenantManager: tm,

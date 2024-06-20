@@ -5,6 +5,11 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/stellar/go/keypair"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/circle"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing/mocks"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 
 	"github.com/stretchr/testify/assert"
@@ -29,7 +34,6 @@ func Test_PaymentToSubmitterService_SendBatchPayments(t *testing.T) {
 	require.NoError(t, err)
 	tssModel := txSubStore.NewTransactionModel(models.DBConnectionPool)
 
-	service := NewPaymentToSubmitterService(models, dbConnectionPool)
 	ctx := context.Background()
 
 	// create fixtures
@@ -100,7 +104,19 @@ func Test_PaymentToSubmitterService_SendBatchPayments(t *testing.T) {
 	testTenant := tenant.Tenant{ID: "tenant-id", Name: "Test Name"}
 	ctx = tenant.SaveTenantInContext(ctx, &testTenant)
 
+	// Prepare DistAccount
+	distAccPubKey := keypair.MustRandom().Address()
+	distAccount := schema.NewDefaultStellarTransactionAccount(distAccPubKey)
+
 	t.Run("send payments", func(t *testing.T) {
+		mDistAccResolver := mocks.NewMockDistributionAccountResolver(t)
+		mDistAccResolver.
+			On("DistributionAccountFromContext", ctx).
+			Return(distAccount, nil).
+			Once()
+		mCircleService := circle.NewMockService(t)
+		service := NewPaymentToSubmitterService(models, dbConnectionPool, mDistAccResolver, mCircleService)
+
 		err = service.SendBatchPayments(ctx, batchSize)
 		require.NoError(t, err)
 
@@ -167,6 +183,14 @@ func Test_PaymentToSubmitterService_SendBatchPayments(t *testing.T) {
 			Status:         data.ReadyPaymentStatus,
 		})
 
+		mDistAccResolver := mocks.NewMockDistributionAccountResolver(t)
+		mDistAccResolver.
+			On("DistributionAccountFromContext", ctx).
+			Return(distAccount, nil).
+			Once()
+		mCircleService := circle.NewMockService(t)
+		service := NewPaymentToSubmitterService(models, dbConnectionPool, mDistAccResolver, mCircleService)
+
 		err = service.SendBatchPayments(ctx, batchSize)
 		require.NoError(t, err)
 
@@ -198,6 +222,8 @@ func Test_PaymentToSubmitterService_SendBatchPayments(t *testing.T) {
 }
 
 func Test_PaymentToSubmitterService_SendPaymentsReadyToPay(t *testing.T) {
+	ctx := context.Background()
+
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 
@@ -209,8 +235,17 @@ func Test_PaymentToSubmitterService_SendPaymentsReadyToPay(t *testing.T) {
 	require.NoError(t, err)
 	tssModel := txSubStore.NewTransactionModel(models.DBConnectionPool)
 
-	service := NewPaymentToSubmitterService(models, dbConnectionPool)
-	ctx := context.Background()
+	distAccPubKey := keypair.MustRandom().Address()
+	distAccount := schema.NewDefaultStellarTransactionAccount(distAccPubKey)
+	mDistAccountResolver := mocks.NewMockDistributionAccountResolver(t)
+	mDistAccountResolver.
+		On("DistributionAccountFromContext", ctx).
+		Return(distAccount, nil).
+		Maybe()
+
+	mCircleService := circle.NewMockService(t)
+
+	service := NewPaymentToSubmitterService(models, dbConnectionPool, mDistAccountResolver, mCircleService)
 
 	// create fixtures
 	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool,
@@ -553,7 +588,15 @@ func Test_PaymentToSubmitterService_RetryPayment(t *testing.T) {
 	require.NoError(t, err)
 	tssModel := txSubStore.NewTransactionModel(models.DBConnectionPool)
 
-	service := NewPaymentToSubmitterService(models, dbConnectionPool)
+	distAccPubKey := keypair.MustRandom().Address()
+	distAccount := schema.NewDefaultStellarTransactionAccount(distAccPubKey)
+	mDistAccountResolver := mocks.NewMockDistributionAccountResolver(t)
+	mDistAccountResolver.
+		On("DistributionAccountFromContext", ctx).
+		Return(distAccount, nil).
+		Maybe()
+	mCircleService := circle.NewMockService(t)
+	service := NewPaymentToSubmitterService(models, dbConnectionPool, mDistAccountResolver, mCircleService)
 
 	// clean test db
 	data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)

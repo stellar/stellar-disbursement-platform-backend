@@ -96,7 +96,13 @@ func (s *ServerService) GetSchedulerJobRegistrars(
 		}
 
 		sj = append(sj,
-			scheduler.WithPaymentToSubmitterJobOption(schedulerOptions.PaymentJobIntervalSeconds, models, tssDBConnectionPool),
+			scheduler.WithPaymentToSubmitterJobOption(jobs.PaymentToSubmitterJobOptions{
+				JobIntervalSeconds:  schedulerOptions.PaymentJobIntervalSeconds,
+				Models:              models,
+				TSSDBConnectionPool: tssDBConnectionPool,
+				DistAccountResolver: serveOpts.DistAccountResolver,
+				CircleService:       serveOpts.CircleService,
+			}),
 			scheduler.WithPaymentFromSubmitterJobOption(schedulerOptions.PaymentJobIntervalSeconds, models, tssDBConnectionPool),
 			scheduler.WithPatchAnchorPlatformTransactionsCompletionJobOption(schedulerOptions.PaymentJobIntervalSeconds, apAPIService, models),
 			scheduler.WithSendReceiverWalletsSMSInvitationJobOption(jobs.SendReceiverWalletsSMSInvitationJobOptions{
@@ -567,6 +573,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 				log.Ctx(ctx).Fatalf("error creating distribution account resolver: %v", err)
 			}
 			txSubmitterOpts.SignatureServiceOptions.DistributionAccountResolver = distAccResolver
+			serveOpts.DistAccountResolver = distAccResolver
 
 			// Setup the Submitter Engine
 			txSubmitterOpts.SignatureServiceOptions.DBConnectionPool = tssDBConnectionPool

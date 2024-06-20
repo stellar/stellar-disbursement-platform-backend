@@ -4,7 +4,10 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/google/uuid"
 	"github.com/stellar/go/strkey"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/assets"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
@@ -21,6 +24,51 @@ type Service struct {
 //go:generate mockery --name=ServiceInterface --case=underscore --structname=MockService --output=. --filename=service_mock.go --inpackage
 type ServiceInterface interface {
 	ClientInterface
+	SendPayment(ctx context.Context, paymentRequest PaymentRequest) (*Transfer, error)
+}
+
+type PaymentRequest struct {
+	SourceWalletID            string
+	DestinationStellarAddress string
+	Amount                    string
+	StellarAssetCode          string
+	IdempotencyKey            string
+}
+
+func (p PaymentRequest) getCircleAssetCode() (string, error) {
+	switch p.StellarAssetCode {
+	case assets.USDCAssetCode:
+
+		return "USD", nil
+	case assets.EURCAssetCode:
+		return "EUR", nil
+	default:
+		return "", fmt.Errorf("unsupported asset code: %s", p.StellarAssetCode)
+	}
+}
+
+func (p PaymentRequest) Validate() error {
+	if p.SourceWalletID == "" {
+		return fmt.Errorf("source wallet ID is required")
+	}
+
+	if !strkey.IsValidEd25519PublicKey(p.DestinationStellarAddress) {
+		return fmt.Errorf("destination stellar address is not a valid public key")
+	}
+
+	if err := utils.ValidateAmount(p.Amount); err != nil {
+		return fmt.Errorf("amount is not valid: %w", err)
+	}
+
+	if p.StellarAssetCode == "" {
+		return fmt.Errorf("stellar asset code is required")
+	}
+
+	if err := uuid.Validate(p.IdempotencyKey); err != nil {
+		return fmt.Errorf("idempotency key is not valid: %w", err)
+	}
+
+	return nil
 }
 
 var _ ServiceInterface = &Service{}
@@ -65,6 +113,34 @@ func NewService(opts ServiceOptions) (*Service, error) {
 		NetworkType:          opts.NetworkType,
 		EncryptionPassphrase: opts.EncryptionPassphrase,
 	}, nil
+}
+
+func (s *Service) SendPayment(ctx context.Context, paymentRequest PaymentRequest) (*Transfer, error) {
+	if err := paymentRequest.Validate(); err != nil {
+		return nil, fmt.Errorf("validating payment request: %w", err)
+	}
+
+	circleAssetCode, err := paymentRequest.getCircleAssetCode()
+	if err != nil {
+		return nil, fmt.Errorf("getting Circle asset code: %w", err)
+	}
+
+	return s.PostTransfer(ctx, TransferRequest{
+		IdempotencyKey: paymentRequest.IdempotencyKey,
+		Amount: Money{
+			Amount:   paymentRequest.Amount,
+			Currency: circleAssetCode,
+		},
+		Source: TransferAccount{
+			Type: TransferAccountTypeWallet,
+			ID:   paymentRequest.SourceWalletID,
+		},
+		Destination: TransferAccount{
+			Type:    TransferAccountTypeBlockchain,
+			Chain:   "XLM",
+			Address: paymentRequest.DestinationStellarAddress,
+		},
+	})
 }
 
 func (s *Service) getClient(ctx context.Context) (ClientInterface, error) {
