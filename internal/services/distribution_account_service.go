@@ -6,9 +6,12 @@ import (
 	"strconv"
 
 	"github.com/stellar/go/clients/horizonclient"
+	"github.com/stellar/go/support/log"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/circle"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/assets"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
@@ -108,4 +111,58 @@ func (s *StellarNativeDistributionAccountService) GetBalance(ctx context.Context
 	}
 
 	return 0, fmt.Errorf("balance for asset %s not found for distribution account", asset)
+}
+
+type CircleDistributionAccountService struct {
+	CircleService circle.ServiceInterface
+	NetworkType   utils.NetworkType
+}
+
+var _ DistributionAccountServiceInterface = (*CircleDistributionAccountService)(nil)
+
+func (s *CircleDistributionAccountService) GetBalances(ctx context.Context, account *schema.TransactionAccount) (map[data.Asset]float64, error) {
+	if !account.IsCircle() {
+		return nil, fmt.Errorf("distribution account is not a Circle account")
+	}
+	if account.Status == schema.AccountStatusPendingUserActivation {
+		return nil, fmt.Errorf("This organization's distribution account is in %s state, please complete the %s activation process to access this endpoint.", account.Status, account.Type.Platform())
+	}
+
+	wallet, err := s.CircleService.GetWalletByID(ctx, account.CircleWalletID)
+	if err != nil {
+		return nil, fmt.Errorf("getting wallet by ID: %w", err)
+	}
+
+	balances := make(map[data.Asset]float64)
+	for _, b := range wallet.Balances {
+		asset, err := circle.ParseStellarAsset(b.Currency, s.NetworkType)
+		if err != nil {
+			log.Ctx(ctx).Debugf("Ignoring balance for asset %s, as it's not supported by the SDP: %v", b.Currency, err)
+			continue
+		}
+
+		assetBal, err := strconv.ParseFloat(b.Amount, 64)
+		if err != nil {
+			return nil, fmt.Errorf("parsing balance to float: %w", err)
+		}
+
+		balances[asset] = assetBal
+	}
+
+	return balances, nil
+}
+
+func (s *CircleDistributionAccountService) GetBalance(ctx context.Context, account *schema.TransactionAccount, asset data.Asset) (float64, error) {
+	accBalances, err := s.GetBalances(ctx, account)
+	if err != nil {
+		return 0, fmt.Errorf("getting balances for distribution account: %w", err)
+	}
+
+	asset = data.Asset{Code: asset.Code, Issuer: asset.Issuer} // scrub the other fields
+	assetBalance, ok := accBalances[asset]
+	if !ok {
+		return 0, fmt.Errorf("balance for asset %v not found for distribution account", asset)
+	}
+
+	return assetBalance, nil
 }

@@ -8,6 +8,11 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
+var (
+	ErrUnsupportedCurrency           = errors.New("unsupported Circle currency code")
+	ErrUnsupportedCurrencyForNetwork = errors.New("unsupported Circle currency code for this network type")
+)
+
 // Balance represents the amount and currency of a balance or transfer.
 type Balance struct {
 	Amount   string `json:"amount"`
@@ -24,11 +29,6 @@ var AllowedAssetsMap = map[string]map[utils.NetworkType]data.Asset{
 		utils.TestnetNetworkType: assets.EURCAssetTestnet,
 	},
 }
-
-var (
-	ErrUnsupportedCurrency           = errors.New("unsupported Circle currency code")
-	ErrUnsupportedCurrencyForNetwork = errors.New("unsupported Circle currency code for this network type")
-)
 
 // ParseStellarAsset returns the Stellar asset for the given Circle currency code, or an error if the currency is not supported in the SDP.
 func ParseStellarAsset(circleCurrency string, networkType utils.NetworkType) (data.Asset, error) {

@@ -74,7 +74,7 @@ func Test_ParseStellarAsset(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			if !assert.ObjectsAreEqual(tc.allowedAssetsMap, AllowedAssetsMap) {
-				t.Skip("skipping ParseStellarAsset since we want to test things with a custom map")
+				return
 			}
 			asset, err := ParseStellarAsset(tc.circleCurrency, tc.networkType)
 
