@@ -17,11 +17,13 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/circle"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
@@ -420,10 +422,12 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 			Once()
 
 		// Setup dependent services
-		distAccSvcOpts := DistributionAccountServiceOptions{
+		distAccSvc, err := NewDistributionAccountService(DistributionAccountServiceOptions{
 			HorizonClient: hMock,
-		}
-		distAccSvc := NewDistributionAccountService(distAccSvcOpts)
+			CircleService: &circle.Service{},
+			NetworkType:   utils.TestnetNetworkType,
+		})
+		require.NoError(t, err)
 
 		// Create service
 		service := &DisbursementManagementService{
@@ -489,10 +493,12 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 			Once()
 
 		// Setup dependent services
-		distAccSvcOpts := DistributionAccountServiceOptions{
+		distAccSvc, err := NewDistributionAccountService(DistributionAccountServiceOptions{
 			HorizonClient: hMock,
-		}
-		distAccSvc := NewDistributionAccountService(distAccSvcOpts)
+			CircleService: &circle.Service{},
+			NetworkType:   utils.TestnetNetworkType,
+		})
+		require.NoError(t, err)
 
 		// Create service
 		service := &DisbursementManagementService{
@@ -604,10 +610,12 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 		}, nil).Once()
 
 		// Setup dependent services
-		distAccSvcOpts := DistributionAccountServiceOptions{
+		distAccSvc, err := NewDistributionAccountService(DistributionAccountServiceOptions{
 			HorizonClient: hMock,
-		}
-		distAccSvc := NewDistributionAccountService(distAccSvcOpts)
+			CircleService: &circle.Service{},
+			NetworkType:   utils.TestnetNetworkType,
+		})
+		require.NoError(t, err)
 
 		// Create service
 		service := &DisbursementManagementService{
@@ -713,10 +721,12 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 			Once()
 
 		// Setup dependent services
-		distAccSvcOpts := DistributionAccountServiceOptions{
+		distAccSvc, err := NewDistributionAccountService(DistributionAccountServiceOptions{
 			HorizonClient: hMock,
-		}
-		distAccSvc := NewDistributionAccountService(distAccSvcOpts)
+			CircleService: &circle.Service{},
+			NetworkType:   utils.TestnetNetworkType,
+		})
+		require.NoError(t, err)
 
 		// Create service
 		service := &DisbursementManagementService{
@@ -785,10 +795,12 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 			Once()
 
 		// Setup dependent services
-		distAccSvcOpts := DistributionAccountServiceOptions{
+		distAccSvc, err := NewDistributionAccountService(DistributionAccountServiceOptions{
 			HorizonClient: hMock,
-		}
-		distAccSvc := NewDistributionAccountService(distAccSvcOpts)
+			CircleService: &circle.Service{},
+			NetworkType:   utils.TestnetNetworkType,
+		})
+		require.NoError(t, err)
 
 		// Create service
 		service := &DisbursementManagementService{
@@ -848,10 +860,12 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 		hMock.On("AccountDetail", hAccRequest).Return(hAccResponse, nil).Once()
 
 		// Setup dependent services
-		distAccSvcOpts := DistributionAccountServiceOptions{
+		distAccSvc, err := NewDistributionAccountService(DistributionAccountServiceOptions{
 			HorizonClient: hMock,
-		}
-		distAccSvc := NewDistributionAccountService(distAccSvcOpts)
+			CircleService: &circle.Service{},
+			NetworkType:   utils.TestnetNetworkType,
+		})
+		require.NoError(t, err)
 
 		// Create service
 		service := &DisbursementManagementService{
@@ -910,10 +924,12 @@ func Test_DisbursementManagementService_StartDisbursement(t *testing.T) {
 		hMock.On("AccountDetail", hAccRequest).Return(hAccResponse, nil).Once()
 
 		// Setup dependent services
-		distAccSvcOpts := DistributionAccountServiceOptions{
+		distAccSvc, err := NewDistributionAccountService(DistributionAccountServiceOptions{
 			HorizonClient: hMock,
-		}
-		distAccSvc := NewDistributionAccountService(distAccSvcOpts)
+			CircleService: &circle.Service{},
+			NetworkType:   utils.TestnetNetworkType,
+		})
+		require.NoError(t, err)
 
 		// Create service
 		service := &DisbursementManagementService{
@@ -991,10 +1007,12 @@ func Test_DisbursementManagementService_PauseDisbursement(t *testing.T) {
 	hMock := &horizonclient.MockClient{}
 	distributionAccPubKey := "ABC"
 	distributionAcc := schema.NewDefaultStellarTransactionAccount(distributionAccPubKey)
-	distAccSvcOpts := DistributionAccountServiceOptions{
+	distAccSvc, err := NewDistributionAccountService(DistributionAccountServiceOptions{
 		HorizonClient: hMock,
-	}
-	distAccSvc := NewDistributionAccountService(distAccSvcOpts)
+		CircleService: &circle.Service{},
+		NetworkType:   utils.TestnetNetworkType,
+	})
+	require.NoError(t, err)
 
 	service := &DisbursementManagementService{
 		Models:                     models,

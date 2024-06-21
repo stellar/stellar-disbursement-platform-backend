@@ -23,26 +23,51 @@ type DistributionAccountServiceInterface interface {
 
 type DistributionAccountServiceOptions struct {
 	HorizonClient horizonclient.ClientInterface
+	CircleService circle.ServiceInterface
+	NetworkType   utils.NetworkType
+}
+
+func (opts DistributionAccountServiceOptions) Validate() error {
+	if opts.HorizonClient == nil {
+		return fmt.Errorf("Horizon client cannot be nil")
+	}
+
+	if opts.CircleService == nil {
+		return fmt.Errorf("Circle service cannot be nil")
+	}
+
+	err := opts.NetworkType.Validate()
+	if err != nil {
+		return fmt.Errorf("validating network type: %w", err)
+	}
+
+	return nil
 }
 
 type DistributionAccountService struct {
 	strategies map[schema.AccountType]DistributionAccountServiceInterface
 }
 
-func NewDistributionAccountService(opts DistributionAccountServiceOptions) *DistributionAccountService {
-	stellarNativeDistributionAccSvc := &StellarNativeDistributionAccountService{
+func NewDistributionAccountService(opts DistributionAccountServiceOptions) (*DistributionAccountService, error) {
+	if err := opts.Validate(); err != nil {
+		return nil, fmt.Errorf("validating options: %w", err)
+	}
+
+	stellarDistributionAccSvc := &StellarNativeDistributionAccountService{
 		horizonClient: opts.HorizonClient,
 	}
 
-	strategies := map[schema.AccountType]DistributionAccountServiceInterface{
-		schema.DistributionAccountStellarEnv:     stellarNativeDistributionAccSvc,
-		schema.DistributionAccountStellarDBVault: stellarNativeDistributionAccSvc,
-		// TODO [SDP-1232]: schema.DistributionAccountCircleDBVault: Add Circle distribution account service
+	circleDistributionAccSvc := &CircleDistributionAccountService{
+		CircleService: opts.CircleService,
+		NetworkType:   opts.NetworkType,
 	}
 
-	return &DistributionAccountService{
-		strategies: strategies,
+	strategies := map[schema.AccountType]DistributionAccountServiceInterface{
+		schema.DistributionAccountStellarEnv:     stellarDistributionAccSvc,
+		schema.DistributionAccountStellarDBVault: stellarDistributionAccSvc,
+		schema.DistributionAccountCircleDBVault:  circleDistributionAccSvc,
 	}
+	return &DistributionAccountService{strategies: strategies}, nil
 }
 
 func (s *DistributionAccountService) GetBalance(ctx context.Context, account *schema.TransactionAccount, asset data.Asset) (float64, error) {
@@ -61,6 +86,7 @@ type StellarNativeDistributionAccountService struct {
 
 var _ DistributionAccountServiceInterface = (*StellarNativeDistributionAccountService)(nil)
 
+// TODO: rename StellarNativeDistributionAccountService to StellarDistributionAccountService
 func (s *StellarNativeDistributionAccountService) GetBalances(_ context.Context, account *schema.TransactionAccount) (map[data.Asset]float64, error) {
 	accountDetails, err := s.horizonClient.AccountDetail(horizonclient.AccountRequest{AccountID: account.Address})
 	if err != nil {

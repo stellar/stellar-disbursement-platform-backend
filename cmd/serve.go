@@ -584,14 +584,6 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 				log.Ctx(ctx).Fatalf("error parsing network type: %v", err)
 			}
 
-			distributionAccountServiceOptions := services.DistributionAccountServiceOptions{HorizonClient: submitterEngine.HorizonClient}
-			distributionAccountService, err := di.NewDistributionAccountService(ctx, distributionAccountServiceOptions)
-			if err != nil {
-				log.Ctx(ctx).Fatalf("error creating distribution account service: %v", err)
-			}
-			serveOpts.DistributionAccountService = distributionAccountService
-			adminServeOpts.DistributionAccountService = distributionAccountService
-
 			// Inject Circle Service dependencies
 			circleService, err := di.NewCircleService(ctx, circle.ServiceOptions{
 				ClientFactory:        circle.NewClient,
@@ -603,6 +595,19 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 				log.Ctx(ctx).Fatalf("error creating Circle service: %v", err)
 			}
 			serveOpts.CircleService = circleService
+
+			// Setup Distribution Account Service
+			distributionAccountServiceOptions := services.DistributionAccountServiceOptions{
+				NetworkType:   serveOpts.NetworkType,
+				HorizonClient: submitterEngine.HorizonClient,
+				CircleService: circleService,
+			}
+			distributionAccountService, err := di.NewDistributionAccountService(ctx, distributionAccountServiceOptions)
+			if err != nil {
+				log.Ctx(ctx).Fatalf("error creating distribution account service: %v", err)
+			}
+			serveOpts.DistributionAccountService = distributionAccountService
+			adminServeOpts.DistributionAccountService = distributionAccountService
 
 			// Validate the Event Broker Type and Scheduler Jobs
 			if eventBrokerOptions.EventBrokerType == events.NoneEventBrokerType && !serveOpts.EnableScheduler {

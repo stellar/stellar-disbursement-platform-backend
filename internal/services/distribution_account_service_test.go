@@ -21,6 +21,55 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
+func Test_DistributionAccountServiceOptions_Validate(t *testing.T) {
+	testCases := []struct {
+		name          string
+		opts          DistributionAccountServiceOptions
+		expectedError string
+	}{
+		{
+			name:          "🔴returns error if Horizon client is nil",
+			opts:          DistributionAccountServiceOptions{},
+			expectedError: "Horizon client cannot be nil",
+		},
+		{
+			name: "🔴returns error if Circle service is nil",
+			opts: DistributionAccountServiceOptions{
+				HorizonClient: &horizonclient.Client{},
+			},
+			expectedError: "Circle service cannot be nil",
+		},
+		{
+			name: "🔴returns error if network type is invalid",
+			opts: DistributionAccountServiceOptions{
+				HorizonClient: &horizonclient.Client{},
+				CircleService: &circle.Service{},
+				NetworkType:   "foobar",
+			},
+			expectedError: `validating network type: invalid network type "foobar"`,
+		},
+		{
+			name: "🟢returns nil if all fields are valid",
+			opts: DistributionAccountServiceOptions{
+				HorizonClient: &horizonclient.Client{},
+				CircleService: &circle.Service{},
+				NetworkType:   utils.TestnetNetworkType,
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.opts.Validate()
+			if tc.expectedError != "" {
+				require.ErrorContains(t, err, tc.expectedError)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
 func Test_StellarNativeDistributionAccount_GetBalances(t *testing.T) {
 	ctx := context.Background()
 	accAddress := keypair.MustRandom().Address()
@@ -387,23 +436,47 @@ func Test_CircleDistributionAccountService_GetBalance(t *testing.T) {
 }
 
 func Test_NewDistributionAccountService(t *testing.T) {
-	mHorizonClient := horizonclient.MockClient{}
+	mHorizonClient := &horizonclient.MockClient{}
+	mCircleService := &circle.MockService{}
 	svcOpts := DistributionAccountServiceOptions{
-		HorizonClient: &mHorizonClient,
+		HorizonClient: mHorizonClient,
+		NetworkType:   utils.TestnetNetworkType,
+		CircleService: mCircleService,
 	}
-	svc := NewDistributionAccountService(svcOpts)
+	svc, err := NewDistributionAccountService(svcOpts)
+	require.NoError(t, err)
 
-	t.Run("maps the correct distribution account type to the correct service implementation", func(t *testing.T) {
-		targetSvc, ok := svc.strategies[schema.DistributionAccountStellarDBVault]
-		assert.True(t, ok)
-		assert.Equal(t, targetSvc, svc.strategies[schema.DistributionAccountStellarDBVault])
+	stellarDistributionAccSvc := &StellarNativeDistributionAccountService{
+		horizonClient: mHorizonClient,
+	}
+	circleDistributionAccSvc := &CircleDistributionAccountService{
+		CircleService: mCircleService,
+		NetworkType:   utils.TestnetNetworkType,
+	}
 
-		targetSvc, ok = svc.strategies[schema.DistributionAccountStellarEnv]
-		assert.True(t, ok)
-		assert.Equal(t, targetSvc, svc.strategies[schema.DistributionAccountStellarEnv])
+	testCases := []struct {
+		accountType schema.AccountType
+		expectedSvc DistributionAccountServiceInterface
+	}{
+		{
+			accountType: schema.DistributionAccountStellarEnv,
+			expectedSvc: stellarDistributionAccSvc,
+		},
+		{
+			accountType: schema.DistributionAccountStellarDBVault,
+			expectedSvc: stellarDistributionAccSvc,
+		},
+		{
+			accountType: schema.DistributionAccountCircleDBVault,
+			expectedSvc: circleDistributionAccSvc,
+		},
+	}
 
-		// TODO [SDP-1232]: Change this when Circle distribution account service is added
-		_, ok = svc.strategies[schema.DistributionAccountCircleDBVault]
-		assert.False(t, ok)
-	})
+	for _, tc := range testCases {
+		t.Run(string(tc.accountType), func(t *testing.T) {
+			actualSvc, ok := svc.strategies[tc.accountType]
+			assert.True(t, ok)
+			assert.Equal(t, tc.expectedSvc, actualSvc)
+		})
+	}
 }
