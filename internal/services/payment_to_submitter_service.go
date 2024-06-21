@@ -2,9 +2,11 @@ package services
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/circle"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
@@ -124,16 +126,8 @@ func (s PaymentToSubmitterService) sendPaymentsReadyToPay(
 			}
 
 			// 2. Update failed payments statuses to `Failed`. These payments won't even be attempted.
-			if len(failedPayments) != 0 {
-				numUpdated, updateErr := s.sdpModels.Payment.UpdateStatuses(ctx, sdpDBTx, failedPayments, data.FailedPaymentStatus)
-				if updateErr != nil {
-					return fmt.Errorf("updating payment statuses to Failed: %w", updateErr)
-				}
-				failedPaymentIDs := make([]string, 0, len(failedPayments))
-				for _, failedPayment := range failedPayments {
-					failedPaymentIDs = append(failedPaymentIDs, failedPayment.ID)
-				}
-				log.Ctx(ctx).Warnf("Updated %d payments to Failed=%+v", numUpdated, failedPaymentIDs)
+			if err = s.markPaymentsAsFailed(ctx, sdpDBTx, failedPayments); err != nil {
+				return fmt.Errorf("marking payments as failed: %w", err)
 			}
 
 			// 3. Submit Payments to proper platform (TSS or Circle)
@@ -152,7 +146,28 @@ func (s PaymentToSubmitterService) sendPaymentsReadyToPay(
 	return nil
 }
 
+func (s PaymentToSubmitterService) markPaymentsAsFailed(ctx context.Context, sdpDBTx db.DBTransaction, failedPayments []*data.Payment) error {
+	if len(failedPayments) == 0 {
+		return nil
+	}
+
+	numUpdated, updateErr := s.sdpModels.Payment.UpdateStatuses(ctx, sdpDBTx, failedPayments, data.FailedPaymentStatus)
+	if updateErr != nil {
+		return fmt.Errorf("updating payment statuses to Failed: %w", updateErr)
+	}
+	failedPaymentIDs := make([]string, 0, len(failedPayments))
+	for _, failedPayment := range failedPayments {
+		failedPaymentIDs = append(failedPaymentIDs, failedPayment.ID)
+	}
+	log.Ctx(ctx).Warnf("Updated %d payments to Failed=%+v", numUpdated, failedPaymentIDs)
+	return nil
+}
+
 func (s PaymentToSubmitterService) sendPaymentsToProperPlatform(ctx context.Context, sdpDBTx, tssDBTx db.DBTransaction, tenantID string, paymentsToSubmit []*data.Payment) error {
+	if len(paymentsToSubmit) == 0 {
+		return nil
+	}
+
 	distAccount, err := s.distAccountResolver.DistributionAccountFromContext(ctx)
 	if err != nil {
 		return fmt.Errorf("getting distribution account: %w", err)
@@ -168,10 +183,10 @@ func (s PaymentToSubmitterService) sendPaymentsToProperPlatform(ctx context.Cont
 func (s PaymentToSubmitterService) sendPaymentsToCircle(ctx context.Context, sdpDBTx db.DBTransaction, circleWalletID string, paymentsToSubmit []*data.Payment) error {
 	for _, payment := range paymentsToSubmit {
 
-		// 1. Persist the circle idempotency key if needed
-		idempotencyKey, err := s.sdpModels.Payment.SetCircleIdempotencyKeyIfNeeded(ctx, sdpDBTx, payment.ID)
+		// 1. Create a new circle transfer request
+		transferRequest, err := s.sdpModels.CircleTransferRequests.FindOrInsert(ctx, payment.ID)
 		if err != nil {
-			return fmt.Errorf("setting circle idempotency key: %w", err)
+			return fmt.Errorf("inserting circle transfer request: %w", err)
 		}
 
 		// 2. Submit the payment to Circle
@@ -180,25 +195,64 @@ func (s PaymentToSubmitterService) sendPaymentsToCircle(ctx context.Context, sdp
 			DestinationStellarAddress: payment.ReceiverWallet.StellarAddress,
 			Amount:                    payment.Amount,
 			StellarAssetCode:          payment.Asset.Code,
-			IdempotencyKey:            idempotencyKey,
+			IdempotencyKey:            transferRequest.ID,
 		})
 
 		if err != nil {
 			// 3. If the transfer fails, set the payment status to failed
 			// TODO:  If the transfer fails because of authentication error, set the account status to `PENDING_USER_ACTIVATION` - [SDP-1245]
-			paymentErr := s.sdpModels.Payment.MarkAsFailed(ctx, sdpDBTx, payment.ID, err.Error())
+			paymentErr := s.sdpModels.Payment.UpdateStatus(ctx, sdpDBTx, payment.ID, data.FailedPaymentStatus, utils.StringPtr(err.Error()))
 			if paymentErr != nil {
 				return fmt.Errorf("marking payment as failed: %w", paymentErr)
 			}
+			log.Ctx(ctx).Errorf("Failed to submit payment %s to Circle: %v", payment.ID, err)
 		} else {
-			// 4. If sending transfer request succeeds, update the payment status to pending and store the transfer id
-			err = s.sdpModels.Payment.MarkCirclePaymentAsPending(ctx, sdpDBTx, payment.ID, transfer.ID)
-			if err != nil {
-				return fmt.Errorf("marking payment as pending: %w", err)
+
+			// 4. Update the circle transfer request with the response from Circle
+			if err = s.updateCircleTransferRequest(ctx, sdpDBTx, circleWalletID, transfer, transferRequest); err != nil {
+				return fmt.Errorf("updating circle transfer request: %w", err)
 			}
+
+			// 5. Update the payment status based on the transfer status
+			if err = s.updatePaymentStatusForCircleTransfer(ctx, sdpDBTx, transfer, payment); err != nil {
+				return fmt.Errorf("updating payment status for Circle transfer: %w", err)
+			}
+
+			// TODO: SDP-1180 - Change this log to a debug log.
 			log.Ctx(ctx).Infof("Submitted payment %s to Circle: %+v", payment.ID, transfer)
 		}
 	}
+	return nil
+}
+
+func (s PaymentToSubmitterService) updateCircleTransferRequest(ctx context.Context, sdpDBTx db.DBTransaction, circleWalletID string, transfer *circle.Transfer, transferRequest *data.CircleTransferRequest) error {
+	bodyJson, marshalErr := json.Marshal(transfer)
+	if marshalErr != nil {
+		return fmt.Errorf("converting transfer body to json: %w", marshalErr)
+	}
+
+	if err := s.sdpModels.CircleTransferRequests.Update(ctx, sdpDBTx, transferRequest.ID, data.CircleTransferRequestUpdate{
+		CircleTransferID: transfer.ID,
+		ResponseBody:     bodyJson,
+		SourceWalletID:   circleWalletID,
+		CompletedAt:      time.Now(),
+	}); err != nil {
+		return fmt.Errorf("updating circle transfer request: %w", err)
+	}
+	return nil
+}
+
+func (s PaymentToSubmitterService) updatePaymentStatusForCircleTransfer(ctx context.Context, sdpDBTx db.DBTransaction, transfer *circle.Transfer, payment *data.Payment) error {
+	paymentStatus, err := transfer.Status.ToPaymentStatus()
+	if err != nil {
+		return fmt.Errorf("converting transfer status to SDP Payment status: %w", err)
+	}
+
+	statusMsg := fmt.Sprintf("Transfer %s is %s in Circle", transfer.ID, transfer.Status)
+	if updateErr := s.sdpModels.Payment.UpdateStatus(ctx, sdpDBTx, payment.ID, paymentStatus, &statusMsg); updateErr != nil {
+		return fmt.Errorf("marking payment as %s: %w", paymentStatus, updateErr)
+	}
+
 	return nil
 }
 

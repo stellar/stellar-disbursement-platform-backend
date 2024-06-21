@@ -172,6 +172,8 @@ func (s *ServerService) SetupConsumers(ctx context.Context, o SetupConsumersOpti
 			AdminDBConnectionPool: o.ServeOpts.AdminDBConnectionPool,
 			MtnDBConnectionPool:   o.ServeOpts.MtnDBConnectionPool,
 			TSSDBConnectionPool:   o.TSSDBConnectionPool,
+			DistAccountResolver:   o.ServeOpts.DistAccountResolver,
+			CircleService:         o.ServeOpts.CircleService,
 		}),
 	)
 	if err != nil {

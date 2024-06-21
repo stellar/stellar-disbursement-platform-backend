@@ -426,6 +426,7 @@ func (r *ReceiverModel) DeleteByPhoneNumber(ctx context.Context, dbConnectionPoo
 		queries := []QueryWithParams{
 			{"DELETE FROM messages WHERE receiver_id = $1", []interface{}{receiverID}},
 			{"DELETE FROM receiver_verifications WHERE receiver_id = $1", []interface{}{receiverID}},
+			{"DELETE FROM circle_transfer_requests WHERE payment_id IN (SELECT id FROM payments WHERE receiver_id = $1)", []interface{}{receiverID}},
 			{"DELETE FROM payments WHERE receiver_id = $1", []interface{}{receiverID}},
 			{"DELETE FROM receiver_wallets WHERE receiver_id = $1", []interface{}{receiverID}},
 			{"DELETE FROM receivers WHERE id = $1", []interface{}{receiverID}},

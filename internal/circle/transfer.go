@@ -6,18 +6,51 @@ import (
 	"net/http"
 	"strconv"
 	"time"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 )
 
 // Transfer represents a transfer of funds from a Circle Endpoint to another. A circle endpoint can be a wallet, card, wire, or blockchain address.
 type Transfer struct {
-	ID              string          `json:"id"`
-	Source          TransferAccount `json:"source"`
-	Destination     TransferAccount `json:"destination"`
-	Amount          Money           `json:"amount"`
-	TransactionHash string          `json:"transactionHash,omitempty"`
-	Status          string          `json:"status"`
-	CreateDate      time.Time       `json:"createDate"`
+	ID              string            `json:"id"`
+	Source          TransferAccount   `json:"source"`
+	Destination     TransferAccount   `json:"destination"`
+	Amount          Money             `json:"amount"`
+	TransactionHash string            `json:"transactionHash,omitempty"`
+	Status          TransferStatus    `json:"status"`
+	ErrorCode       TransferErrorCode `json:"errorCode,omitempty"`
+	CreateDate      time.Time         `json:"createDate"`
 }
+
+type TransferStatus string
+
+const (
+	TransferStatusPending  TransferStatus = "pending"
+	TransferStatusComplete TransferStatus = "complete"
+	TransferStatusFailed   TransferStatus = "failed"
+)
+
+func (s TransferStatus) ToPaymentStatus() (data.PaymentStatus, error) {
+	switch s {
+	case TransferStatusPending:
+		return data.PendingPaymentStatus, nil
+	case TransferStatusComplete:
+		return data.SuccessPaymentStatus, nil
+	case TransferStatusFailed:
+		return data.FailedPaymentStatus, nil
+	default:
+		return "", fmt.Errorf("unknown transfer status: %s", s)
+	}
+}
+
+type TransferErrorCode string
+
+const (
+	TransferErrorCodeInsufficientFunds TransferErrorCode = "insufficient_funds"
+	TransferErrorCodeBlockchainError   TransferErrorCode = "blockchain_error"
+	TransferErrorCodeTransferDenied    TransferErrorCode = "transfer_denied"
+	TransferErrorCodeTransferFailed    TransferErrorCode = "transfer_failed"
+)
 
 // TransferAccountType represents the type of the source or destination of the transfer.
 type TransferAccountType string
