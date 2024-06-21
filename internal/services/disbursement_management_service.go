@@ -233,7 +233,7 @@ func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, d
 			if distributionAccount.IsStellar() {
 				err = s.validateBalanceForDisbursement(ctx, dbTx, distributionAccount, disbursement)
 				if err != nil {
-					return nil, fmt.Errorf("error validating balance for disbursement with id %s: %w", disbursementID, err)
+					return nil, fmt.Errorf("validating balance for disbursement: %w", err)
 				}
 			}
 

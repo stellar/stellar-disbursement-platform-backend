@@ -36,22 +36,22 @@ func (m CircleTransferRequestModel) FindOrInsert(ctx context.Context, paymentID 
 	}
 
 	query := `
-    WITH existing_request AS (
-        SELECT * FROM circle_transfer_requests
-        WHERE payment_id = $1 AND completed_at IS NULL
-        ORDER BY created_at DESC
-        LIMIT 1
-    ),
-    insert_request AS (
-        INSERT INTO circle_transfer_requests (payment_id)
-        SELECT $1
-        WHERE NOT EXISTS (SELECT 1 FROM existing_request)
-        RETURNING *
-    )
-    SELECT * FROM existing_request
-    UNION ALL
-    SELECT * FROM insert_request
-    LIMIT 1
+		WITH existing_request AS (
+			SELECT * FROM circle_transfer_requests
+			WHERE payment_id = $1 AND completed_at IS NULL
+			ORDER BY created_at DESC
+			LIMIT 1
+		),
+		insert_request AS (
+			INSERT INTO circle_transfer_requests (payment_id)
+			SELECT $1
+			WHERE NOT EXISTS (SELECT 1 FROM existing_request)
+			RETURNING *
+		)
+		SELECT * FROM existing_request
+		UNION ALL
+		SELECT * FROM insert_request
+		LIMIT 1
     `
 
 	var circleTransferRequest CircleTransferRequest

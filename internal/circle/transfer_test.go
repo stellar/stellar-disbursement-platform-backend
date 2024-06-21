@@ -66,9 +66,10 @@ func Test_TransferRequest_validate(t *testing.T) {
 		{
 			name: "amount is not a valid number",
 			tr: TransferRequest{
-				Source:      TransferAccount{Type: TransferAccountTypeWallet, ID: "1014442536"},
-				Destination: TransferAccount{Type: TransferAccountTypeBlockchain, Chain: "XLM", Address: "GBG2DFASN2E5ZZSOYH7SJ7HWBKR4M5LYQ5Q5ZVBWS3RI46GDSYTEA6YF"},
-				Amount:      Money{Amount: "invalid", Currency: "USD"},
+				Source:         TransferAccount{Type: TransferAccountTypeWallet, ID: "1014442536"},
+				Destination:    TransferAccount{Type: TransferAccountTypeBlockchain, Chain: "XLM", Address: "GBG2DFASN2E5ZZSOYH7SJ7HWBKR4M5LYQ5Q5ZVBWS3RI46GDSYTEA6YF"},
+				Amount:         Money{Amount: "invalid", Currency: "USD"},
+				IdempotencyKey: uuid.NewString(),
 			},
 			wantErr: errors.New("amount must be a valid number"),
 		},
@@ -95,7 +96,7 @@ func Test_TransferRequest_validate(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := tt.tr.validate()
-			if err != nil {
+			if tt.wantErr != nil {
 				assert.EqualError(t, err, tt.wantErr.Error())
 			}
 		})
