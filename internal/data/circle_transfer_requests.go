@@ -35,24 +35,37 @@ func (m CircleTransferRequestModel) FindOrInsert(ctx context.Context, paymentID 
 		return nil, fmt.Errorf("paymentID is required")
 	}
 
+	return db.RunInTransactionWithResult(ctx, m.dbConnectionPool, nil, func(tx db.DBTransaction) (*CircleTransferRequest, error) {
+		// validate payment ID exists
+		var paymentIDExists bool
+		err := tx.GetContext(ctx, &paymentIDExists, "SELECT EXISTS(SELECT 1 FROM payments WHERE id = $1)", paymentID)
+		if err != nil || !paymentIDExists {
+			return nil, fmt.Errorf("payment ID %s is not valid: %w", paymentID, err)
+		}
+
+		circleTransferRequest, err := m.FindNotCompletedByPaymentID(ctx, m.dbConnectionPool, paymentID)
+		if err != nil {
+			return nil, fmt.Errorf("finding circle transfer request: %w", err)
+		}
+
+		if circleTransferRequest != nil {
+			return circleTransferRequest, nil
+		}
+
+		return m.Insert(ctx, paymentID)
+	})
+}
+
+func (m CircleTransferRequestModel) Insert(ctx context.Context, paymentID string) (*CircleTransferRequest, error) {
+	if paymentID == "" {
+		return nil, fmt.Errorf("paymentID is required")
+	}
+
 	query := `
-		WITH existing_request AS (
-			SELECT * FROM circle_transfer_requests
-			WHERE payment_id = $1 AND completed_at IS NULL
-			ORDER BY created_at DESC
-			LIMIT 1
-		),
-		insert_request AS (
-			INSERT INTO circle_transfer_requests (payment_id)
-			SELECT $1
-			WHERE NOT EXISTS (SELECT 1 FROM existing_request)
-			RETURNING *
-		)
-		SELECT * FROM existing_request
-		UNION ALL
-		SELECT * FROM insert_request
-		LIMIT 1
-    `
+	INSERT INTO circle_transfer_requests (payment_id)
+	VALUES ($1)
+	RETURNING *
+	`
 
 	var circleTransferRequest CircleTransferRequest
 	err := m.dbConnectionPool.GetContext(ctx, &circleTransferRequest, query, paymentID)
@@ -60,6 +73,32 @@ func (m CircleTransferRequestModel) FindOrInsert(ctx context.Context, paymentID 
 		return nil, fmt.Errorf("inserting circle transfer request: %w", err)
 	}
 	return &circleTransferRequest, nil
+}
+
+func (m CircleTransferRequestModel) FindNotCompletedByPaymentID(ctx context.Context, sqlExec db.SQLExecuter, paymentID string) (*CircleTransferRequest, error) {
+	if paymentID == "" {
+		return nil, fmt.Errorf("paymentID is required")
+	}
+
+	query := `
+		SELECT * FROM circle_transfer_requests
+		WHERE payment_id = $1 AND completed_at IS NULL
+		ORDER BY created_at DESC
+	`
+
+	var circleTransferRequests []CircleTransferRequest
+	err := sqlExec.SelectContext(ctx, &circleTransferRequests, query, paymentID)
+	if err != nil {
+		return nil, fmt.Errorf("finding circle transfer request: %w", err)
+	}
+
+	if len(circleTransferRequests) == 0 {
+		return nil, nil
+	} else if len(circleTransferRequests) > 1 {
+		return nil, fmt.Errorf("multiple incomplete transfer requests found for paymentID %s", paymentID)
+	}
+
+	return &circleTransferRequests[0], nil
 }
 
 func (m CircleTransferRequestModel) Update(ctx context.Context, sqlExec db.SQLExecuter, id string, update CircleTransferRequestUpdate) error {

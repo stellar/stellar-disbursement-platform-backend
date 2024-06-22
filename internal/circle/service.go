@@ -38,7 +38,6 @@ type PaymentRequest struct {
 func (p PaymentRequest) getCircleAssetCode() (string, error) {
 	switch p.StellarAssetCode {
 	case assets.USDCAssetCode:
-
 		return "USD", nil
 	case assets.EURCAssetCode:
 		return "EUR", nil

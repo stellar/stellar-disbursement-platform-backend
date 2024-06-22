@@ -217,15 +217,16 @@ func (s PaymentToSubmitterService) sendPaymentsToCircle(ctx context.Context, sdp
 			if err = s.updatePaymentStatusForCircleTransfer(ctx, sdpDBTx, transfer, payment); err != nil {
 				return fmt.Errorf("updating payment status for Circle transfer: %w", err)
 			}
-
-			// TODO: SDP-1180 - Change this log to a debug log.
-			log.Ctx(ctx).Infof("Submitted payment %s to Circle: %+v", payment.ID, transfer)
 		}
 	}
 	return nil
 }
 
 func (s PaymentToSubmitterService) updateCircleTransferRequest(ctx context.Context, sdpDBTx db.DBTransaction, circleWalletID string, transfer *circle.Transfer, transferRequest *data.CircleTransferRequest) error {
+	if transfer == nil {
+		return fmt.Errorf("transfer is nil")
+	}
+
 	bodyJson, marshalErr := json.Marshal(transfer)
 	if marshalErr != nil {
 		return fmt.Errorf("converting transfer body to json: %w", marshalErr)

@@ -6,6 +6,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 )
 
 func Test_TransferRequest_validate(t *testing.T) {
@@ -99,6 +101,54 @@ func Test_TransferRequest_validate(t *testing.T) {
 			if tt.wantErr != nil {
 				assert.EqualError(t, err, tt.wantErr.Error())
 			}
+		})
+	}
+}
+
+func TestTransferStatus_ToPaymentStatus(t *testing.T) {
+	tests := []struct {
+		name           string
+		transferStatus TransferStatus
+		expectedStatus data.PaymentStatus
+		expectedErr    string
+	}{
+		{
+			name:           "pending status",
+			transferStatus: TransferStatusPending,
+			expectedStatus: data.PendingPaymentStatus,
+			expectedErr:    "",
+		},
+		{
+			name:           "complete status",
+			transferStatus: TransferStatusComplete,
+			expectedStatus: data.SuccessPaymentStatus,
+			expectedErr:    "",
+		},
+		{
+			name:           "failed status",
+			transferStatus: TransferStatusFailed,
+			expectedStatus: data.FailedPaymentStatus,
+			expectedErr:    "",
+		},
+		{
+			name:           "unknown status",
+			transferStatus: "wrong-status",
+			expectedStatus: "",
+			expectedErr:    "unknown transfer status wrong-status",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			actualStatus, actualErr := tt.transferStatus.ToPaymentStatus()
+
+			if tt.expectedErr != "" {
+				assert.ErrorContains(t, actualErr, tt.expectedErr)
+			} else {
+				assert.NoError(t, actualErr)
+			}
+
+			assert.Equal(t, tt.expectedStatus, actualStatus)
 		})
 	}
 }

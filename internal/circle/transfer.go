@@ -39,7 +39,7 @@ func (s TransferStatus) ToPaymentStatus() (data.PaymentStatus, error) {
 	case TransferStatusFailed:
 		return data.FailedPaymentStatus, nil
 	default:
-		return "", fmt.Errorf("unknown transfer status: %s", s)
+		return "", fmt.Errorf("unknown transfer status %s", s)
 	}
 }
 
