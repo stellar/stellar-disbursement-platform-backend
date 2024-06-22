@@ -791,7 +791,7 @@ func Test_PaymentToSubmitterService_sendPaymentsToCircle(t *testing.T) {
 					DestinationStellarAddress: payment1.ReceiverWallet.StellarAddress,
 					Amount:                    payment1.Amount,
 					StellarAssetCode:          payment1.Asset.Code,
-					IdempotencyKey:            transferRequest.ID,
+					IdempotencyKey:            transferRequest.IdempotencyKey,
 				}).
 					Return(nil, fmt.Errorf("error posting transfer to Circle")).
 					Once()
@@ -820,7 +820,7 @@ func Test_PaymentToSubmitterService_sendPaymentsToCircle(t *testing.T) {
 		{
 			name:             "error updating payment status for completed request",
 			paymentsToSubmit: []*data.Payment{payment1},
-			wantErr:          fmt.Errorf("converting transfer status to SDP Payment status"),
+			wantErr:          fmt.Errorf("invalid input value for enum circle_transfer_status"),
 			fnSetup: func(t *testing.T, m *circle.MockService) {
 				t.Helper()
 
@@ -870,6 +870,7 @@ func Test_PaymentToSubmitterService_sendPaymentsToCircle(t *testing.T) {
 				require.NoError(t, assertErr)
 				assert.Equal(t, circleTransferID, *transferRequest.CircleTransferID)
 				assert.Equal(t, circleWalletID, *transferRequest.SourceWalletID)
+				assert.Equal(t, data.CircleTransferStatusPending, *transferRequest.Status)
 			},
 		},
 	}

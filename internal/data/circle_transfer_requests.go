@@ -9,18 +9,28 @@ import (
 )
 
 type CircleTransferRequest struct {
-	ID               string     `db:"id" json:"id"`
-	PaymentID        string     `db:"payment_id" json:"payment_id"`
-	CircleTransferID *string    `db:"circle_transfer_id,omitempty" json:"circle_transfer_id,omitempty"`
-	ResponseBody     []byte     `db:"response_body,omitempty" json:"response_body,omitempty"`
-	SourceWalletID   *string    `db:"source_wallet_id,omitempty" json:"source_wallet_id,omitempty"`
-	CreatedAt        time.Time  `db:"created_at" json:"created_at"`
-	UpdatedAt        time.Time  `db:"updated_at" json:"updated_at"`
-	CompletedAt      *time.Time `db:"completed_at,omitempty" json:"completed_at,omitempty"`
+	IdempotencyKey   string                `db:"idempotency_key"`
+	PaymentID        string                `db:"payment_id"`
+	CircleTransferID *string               `db:"circle_transfer_id,omitempty"`
+	Status           *CircleTransferStatus `db:"status"`
+	ResponseBody     []byte                `db:"response_body,omitempty"`
+	SourceWalletID   *string               `db:"source_wallet_id,omitempty"`
+	CreatedAt        time.Time             `db:"created_at"`
+	UpdatedAt        time.Time             `db:"updated_at"`
+	CompletedAt      *time.Time            `db:"completed_at,omitempty"`
 }
+
+type CircleTransferStatus string
+
+const (
+	CircleTransferStatusPending CircleTransferStatus = "pending"
+	CircleTransferStatusSuccess CircleTransferStatus = "success"
+	CircleTransferStatusFailed  CircleTransferStatus = "failed"
+)
 
 type CircleTransferRequestUpdate struct {
 	CircleTransferID string
+	Status           CircleTransferStatus
 	ResponseBody     []byte
 	SourceWalletID   string
 	CompletedAt      time.Time
@@ -101,18 +111,18 @@ func (m CircleTransferRequestModel) FindNotCompletedByPaymentID(ctx context.Cont
 	return &circleTransferRequests[0], nil
 }
 
-func (m CircleTransferRequestModel) Update(ctx context.Context, sqlExec db.SQLExecuter, id string, update CircleTransferRequestUpdate) error {
-	if id == "" {
-		return fmt.Errorf("id is required")
+func (m CircleTransferRequestModel) Update(ctx context.Context, sqlExec db.SQLExecuter, idempotencyKey string, update CircleTransferRequestUpdate) error {
+	if idempotencyKey == "" {
+		return fmt.Errorf("idempotencyKey is required")
 	}
 
 	query := `
 	UPDATE circle_transfer_requests
-	SET circle_transfer_id = $2, response_body = $3, source_wallet_id = $4, completed_at = $5
-	WHERE id = $1
+	SET circle_transfer_id = $2, status = $3, response_body = $4, source_wallet_id = $5, completed_at = $6
+	WHERE idempotency_key = $1
 	`
 
-	_, err := sqlExec.ExecContext(ctx, query, id, update.CircleTransferID, update.ResponseBody, update.SourceWalletID, update.CompletedAt)
+	_, err := sqlExec.ExecContext(ctx, query, idempotencyKey, update.CircleTransferID, update.Status, update.ResponseBody, update.SourceWalletID, update.CompletedAt)
 	if err != nil {
 		return fmt.Errorf("updating circle transfer request: %w", err)
 	}

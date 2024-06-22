@@ -195,7 +195,7 @@ func (s PaymentToSubmitterService) sendPaymentsToCircle(ctx context.Context, sdp
 			DestinationStellarAddress: payment.ReceiverWallet.StellarAddress,
 			Amount:                    payment.Amount,
 			StellarAssetCode:          payment.Asset.Code,
-			IdempotencyKey:            transferRequest.ID,
+			IdempotencyKey:            transferRequest.IdempotencyKey,
 		})
 
 		if err != nil {
@@ -232,8 +232,9 @@ func (s PaymentToSubmitterService) updateCircleTransferRequest(ctx context.Conte
 		return fmt.Errorf("converting transfer body to json: %w", marshalErr)
 	}
 
-	if err := s.sdpModels.CircleTransferRequests.Update(ctx, sdpDBTx, transferRequest.ID, data.CircleTransferRequestUpdate{
+	if err := s.sdpModels.CircleTransferRequests.Update(ctx, sdpDBTx, transferRequest.IdempotencyKey, data.CircleTransferRequestUpdate{
 		CircleTransferID: transfer.ID,
+		Status:           data.CircleTransferStatus(transfer.Status),
 		ResponseBody:     bodyJson,
 		SourceWalletID:   circleWalletID,
 		CompletedAt:      time.Now(),
