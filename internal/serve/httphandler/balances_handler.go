@@ -49,7 +49,7 @@ func (h BalancesHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if distAccount.Status == schema.AccountStatusPendingUserActivation {
+	if distAccount.Status != schema.AccountStatusActive {
 		errResponseMsg := fmt.Sprintf("This organization's distribution account is in %s state, please complete the %s activation process to access this endpoint.", distAccount.Status, distAccount.Type.Platform())
 		httperror.BadRequest(errResponseMsg, nil, nil).Render(w)
 		return

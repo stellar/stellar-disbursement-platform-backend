@@ -19,6 +19,7 @@ type Balance struct {
 	Currency string `json:"currency"`
 }
 
+// AllowedAssetsMap is a map of Circle currency codes to Stellar assets, for each network type.
 var AllowedAssetsMap = map[string]map[utils.NetworkType]data.Asset{
 	"USD": {
 		utils.PubnetNetworkType:  assets.USDCAssetPubnet,
@@ -30,11 +31,14 @@ var AllowedAssetsMap = map[string]map[utils.NetworkType]data.Asset{
 	},
 }
 
-// ParseStellarAsset returns the Stellar asset for the given Circle currency code, or an error if the currency is not supported in the SDP.
+// ParseStellarAsset returns the Stellar asset for the given Circle currency code, or an error if the currency is not
+// supported in the SDP.
 func ParseStellarAsset(circleCurrency string, networkType utils.NetworkType) (data.Asset, error) {
 	return ParseStellarAssetFromAllowlist(circleCurrency, networkType, AllowedAssetsMap)
 }
 
+// ParseStellarAssetFromAllowlist returns the Stellar asset for the given Circle currency code, or an error if the
+// currency is not supported in the SDP. This function allows for the use of a custom asset allowlist.
 func ParseStellarAssetFromAllowlist(circleCurrency string, networkType utils.NetworkType, allowedAssetsMap map[string]map[utils.NetworkType]data.Asset) (data.Asset, error) {
 	assetByNetworkType, ok := allowedAssetsMap[circleCurrency]
 	if !ok {

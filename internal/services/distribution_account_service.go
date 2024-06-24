@@ -53,7 +53,7 @@ func NewDistributionAccountService(opts DistributionAccountServiceOptions) (*Dis
 		return nil, fmt.Errorf("validating options: %w", err)
 	}
 
-	stellarDistributionAccSvc := &StellarNativeDistributionAccountService{
+	stellarDistributionAccSvc := &StellarDistributionAccountService{
 		horizonClient: opts.HorizonClient,
 	}
 
@@ -80,14 +80,13 @@ func (s *DistributionAccountService) GetBalances(ctx context.Context, account *s
 
 var _ DistributionAccountServiceInterface = (*DistributionAccountService)(nil)
 
-type StellarNativeDistributionAccountService struct {
+type StellarDistributionAccountService struct {
 	horizonClient horizonclient.ClientInterface
 }
 
-var _ DistributionAccountServiceInterface = (*StellarNativeDistributionAccountService)(nil)
+var _ DistributionAccountServiceInterface = (*StellarDistributionAccountService)(nil)
 
-// TODO: rename StellarNativeDistributionAccountService to StellarDistributionAccountService
-func (s *StellarNativeDistributionAccountService) GetBalances(_ context.Context, account *schema.TransactionAccount) (map[data.Asset]float64, error) {
+func (s *StellarDistributionAccountService) GetBalances(_ context.Context, account *schema.TransactionAccount) (map[data.Asset]float64, error) {
 	accountDetails, err := s.horizonClient.AccountDetail(horizonclient.AccountRequest{AccountID: account.Address})
 	if err != nil {
 		return nil, fmt.Errorf("getting details for account from Horizon: %w", err)
@@ -117,7 +116,7 @@ func (s *StellarNativeDistributionAccountService) GetBalances(_ context.Context,
 	return balances, nil
 }
 
-func (s *StellarNativeDistributionAccountService) GetBalance(ctx context.Context, account *schema.TransactionAccount, asset data.Asset) (float64, error) {
+func (s *StellarDistributionAccountService) GetBalance(ctx context.Context, account *schema.TransactionAccount, asset data.Asset) (float64, error) {
 	accBalances, err := s.GetBalances(ctx, account)
 	if err != nil {
 		return 0, fmt.Errorf("getting balances for distribution account: %w", err)

@@ -70,7 +70,7 @@ func Test_DistributionAccountServiceOptions_Validate(t *testing.T) {
 	}
 }
 
-func Test_StellarNativeDistributionAccount_GetBalances(t *testing.T) {
+func Test_StellarDistributionAccountService_GetBalances(t *testing.T) {
 	ctx := context.Background()
 	accAddress := keypair.MustRandom().Address()
 	distAcc := schema.NewStellarEnvTransactionAccount(accAddress)
@@ -137,7 +137,7 @@ func Test_StellarNativeDistributionAccount_GetBalances(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			mHorizonClient := horizonclient.MockClient{}
-			svc := StellarNativeDistributionAccountService{
+			svc := StellarDistributionAccountService{
 				horizonClient: &mHorizonClient,
 			}
 
@@ -155,7 +155,7 @@ func Test_StellarNativeDistributionAccount_GetBalances(t *testing.T) {
 	}
 }
 
-func Test_StellarNativeDistributionAccount_GetBalance(t *testing.T) {
+func Test_StellarDistributionAccountService_GetBalance(t *testing.T) {
 	ctx := context.Background()
 	accAddress := keypair.MustRandom().Address()
 	distAcc := schema.NewStellarEnvTransactionAccount(accAddress)
@@ -207,7 +207,7 @@ func Test_StellarNativeDistributionAccount_GetBalance(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			mHorizonClient := horizonclient.MockClient{}
-			svc := StellarNativeDistributionAccountService{
+			svc := StellarDistributionAccountService{
 				horizonClient: &mHorizonClient,
 			}
 
@@ -446,7 +446,7 @@ func Test_NewDistributionAccountService(t *testing.T) {
 	svc, err := NewDistributionAccountService(svcOpts)
 	require.NoError(t, err)
 
-	stellarDistributionAccSvc := &StellarNativeDistributionAccountService{
+	stellarDistributionAccSvc := &StellarDistributionAccountService{
 		horizonClient: mHorizonClient,
 	}
 	circleDistributionAccSvc := &CircleDistributionAccountService{
