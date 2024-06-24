@@ -229,12 +229,9 @@ func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, d
 			}
 
 			// 4. Check if there is enough balance from the distribution wallet for this disbursement along with any pending disbursements
-			// TODO: add balance checks for Circle. SDP-1232
-			if distributionAccount.IsStellar() {
-				err = s.validateBalanceForDisbursement(ctx, dbTx, distributionAccount, disbursement)
-				if err != nil {
-					return nil, fmt.Errorf("validating balance for disbursement: %w", err)
-				}
+			err = s.validateBalanceForDisbursement(ctx, dbTx, distributionAccount, disbursement)
+			if err != nil {
+				return nil, fmt.Errorf("validating balance for disbursement: %w", err)
 			}
 
 			// 5. Update all correct payment status to `ready`
@@ -322,7 +319,7 @@ func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, d
 }
 
 func (s *DisbursementManagementService) validateBalanceForDisbursement(ctx context.Context, dbTx db.DBTransaction, distributionAccount *schema.TransactionAccount, disbursement *data.Disbursement) error {
-	availableBalance, err := s.DistributionAccountService.GetBalance(distributionAccount, *disbursement.Asset)
+	availableBalance, err := s.DistributionAccountService.GetBalance(ctx, distributionAccount, *disbursement.Asset)
 	if err != nil {
 		return fmt.Errorf(
 			"getting balance for asset (%s,%s) on distribution account %s: %w",

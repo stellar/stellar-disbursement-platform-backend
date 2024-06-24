@@ -23,7 +23,10 @@ func NewDistributionAccountService(ctx context.Context, opts services.Distributi
 	}
 
 	log.Ctx(ctx).Info("⚙️ Setting up Distribution Account Service")
-	newInstance := services.NewDistributionAccountService(opts)
+	newInstance, err := services.NewDistributionAccountService(opts)
+	if err != nil {
+		return nil, fmt.Errorf("initializing new distribution account service: %w", err)
+	}
 	SetInstance(instanceName, newInstance)
 
 	return newInstance, nil

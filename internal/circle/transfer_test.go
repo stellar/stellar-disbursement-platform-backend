@@ -70,7 +70,7 @@ func Test_TransferRequest_validate(t *testing.T) {
 			tr: TransferRequest{
 				Source:         TransferAccount{Type: TransferAccountTypeWallet, ID: "1014442536"},
 				Destination:    TransferAccount{Type: TransferAccountTypeBlockchain, Chain: "XLM", Address: "GBG2DFASN2E5ZZSOYH7SJ7HWBKR4M5LYQ5Q5ZVBWS3RI46GDSYTEA6YF"},
-				Amount:         Money{Amount: "invalid", Currency: "USD"},
+				Amount:         Balance{Amount: "invalid", Currency: "USD"},
 				IdempotencyKey: uuid.NewString(),
 			},
 			wantErr: errors.New("amount must be a valid number"),
@@ -80,7 +80,7 @@ func Test_TransferRequest_validate(t *testing.T) {
 			tr: TransferRequest{
 				Source:      TransferAccount{Type: TransferAccountTypeWallet, ID: "1014442536"},
 				Destination: TransferAccount{Type: TransferAccountTypeBlockchain, Chain: "XLM", Address: "GBG2DFASN2E5ZZSOYH7SJ7HWBKR4M5LYQ5Q5ZVBWS3RI46GDSYTEA6YF"},
-				Amount:      Money{Amount: "0.25", Currency: "USD"},
+				Amount:      Balance{Amount: "0.25", Currency: "USD"},
 			},
 			wantErr: nil,
 		},
@@ -90,7 +90,7 @@ func Test_TransferRequest_validate(t *testing.T) {
 				IdempotencyKey: uuid.NewString(),
 				Source:         TransferAccount{Type: TransferAccountTypeWallet, ID: "1014442536"},
 				Destination:    TransferAccount{Type: TransferAccountTypeBlockchain, Chain: "XLM", Address: "GBG2DFASN2E5ZZSOYH7SJ7HWBKR4M5LYQ5Q5ZVBWS3RI46GDSYTEA6YF"},
-				Amount:         Money{Amount: "0.25", Currency: "USD"},
+				Amount:         Balance{Amount: "0.25", Currency: "USD"},
 			},
 			wantErr: nil,
 		},

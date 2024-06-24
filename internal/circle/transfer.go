@@ -15,7 +15,7 @@ type Transfer struct {
 	ID              string            `json:"id"`
 	Source          TransferAccount   `json:"source"`
 	Destination     TransferAccount   `json:"destination"`
-	Amount          Money             `json:"amount"`
+	Amount          Balance           `json:"amount"`
 	TransactionHash string            `json:"transactionHash,omitempty"`
 	Status          TransferStatus    `json:"status"`
 	ErrorCode       TransferErrorCode `json:"errorCode,omitempty"`
@@ -71,12 +71,6 @@ type TransferAccount struct {
 	AddressTag string              `json:"addressTag,omitempty"`
 }
 
-// Money represents the amount transferred between source and destination.
-type Money struct {
-	Amount   string `json:"amount"`
-	Currency string `json:"currency"`
-}
-
 // TransferResponse represents the response from the Circle APIs.
 type TransferResponse struct {
 	Data Transfer `json:"data"`
@@ -86,7 +80,7 @@ type TransferResponse struct {
 type TransferRequest struct {
 	Source         TransferAccount `json:"source"`
 	Destination    TransferAccount `json:"destination"`
-	Amount         Money           `json:"amount"`
+	Amount         Balance         `json:"amount"`
 	IdempotencyKey string          `json:"idempotencyKey"`
 }
 

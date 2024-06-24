@@ -830,7 +830,7 @@ func Test_PaymentToSubmitterService_sendPaymentsToCircle(t *testing.T) {
 					Return(&circle.Transfer{
 						ID:     circleTransferID,
 						Status: circle.TransferStatusPending,
-						Amount: circle.Money{
+						Amount: circle.Balance{
 							Amount:   payment1.Amount,
 							Currency: "USD",
 						},

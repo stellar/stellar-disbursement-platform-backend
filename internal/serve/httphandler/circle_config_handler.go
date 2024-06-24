@@ -45,6 +45,12 @@ func (r PatchCircleConfigRequest) validate() error {
 func (h CircleConfigHandler) Patch(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
+	tnt, err := tenant.GetTenantFromContext(ctx)
+	if err != nil {
+		httperror.InternalError(ctx, "Cannot retrieve the tenant from the context", err, nil).Render(w)
+		return
+	}
+
 	distAccount, err := h.DistributionAccountResolver.DistributionAccountFromContext(ctx)
 	if err != nil {
 		httperror.InternalError(ctx, "Cannot retrieve distribution account", err, nil).Render(w)
@@ -106,6 +112,7 @@ func (h CircleConfigHandler) Patch(w http.ResponseWriter, r *http.Request) {
 
 	// Update tenant status to active
 	_, err = h.TenantManager.UpdateTenantConfig(ctx, &tenant.TenantUpdate{
+		ID:                        tnt.ID,
 		DistributionAccountStatus: schema.AccountStatusActive,
 	})
 	if err != nil {

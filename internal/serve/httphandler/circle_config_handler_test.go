@@ -33,6 +33,10 @@ func TestCircleConfigHandler_Patch(t *testing.T) {
 	require.NoError(t, outerErr)
 	defer dbConnectionPool.Close()
 
+	// Creates a tenant and inserts it in the context
+	tnt := tenant.Tenant{ID: "test-tenant-id"}
+	ctx := tenant.SaveTenantInContext(context.Background(), &tnt)
+
 	kp := keypair.MustRandom()
 	encryptionPassphrase := kp.Seed()
 	encryptionPublicKey := kp.Address()
@@ -131,7 +135,7 @@ func TestCircleConfigHandler_Patch(t *testing.T) {
 			},
 		},
 		{
-			name: "updates Circle configuration successfully",
+			name: "🎉 successfully updates Circle configuration and the tenant DistributionAccountStatus",
 			prepareMocksFn: func(t *testing.T, mDistAccResolver *sigMocks.MockDistributionAccountResolver, mCircleClient *circle.MockClient, mTenantManager *tenant.TenantManagerMock) {
 				t.Helper()
 				mDistAccResolver.
@@ -149,7 +153,10 @@ func TestCircleConfigHandler_Patch(t *testing.T) {
 					Once()
 
 				mTenantManager.
-					On("UpdateTenantConfig", mock.Anything, &tenant.TenantUpdate{DistributionAccountStatus: schema.AccountStatusActive}).
+					On("UpdateTenantConfig", mock.Anything, &tenant.TenantUpdate{
+						ID:                        "test-tenant-id",
+						DistributionAccountStatus: schema.AccountStatusActive,
+					}).
 					Return(&tenant.Tenant{}, nil).
 					Once()
 			},
@@ -197,7 +204,7 @@ func TestCircleConfigHandler_Patch(t *testing.T) {
 			url := "/organization/circle-config"
 			r.Patch(url, handler.Patch)
 
-			rr := testutils.Request(t, r, url, http.MethodPatch, strings.NewReader(tc.requestBody))
+			rr := testutils.Request(t, ctx, r, url, http.MethodPatch, strings.NewReader(tc.requestBody))
 			assert.Equal(t, tc.statusCode, rr.Code)
 			tc.assertions(t, rr)
 		})

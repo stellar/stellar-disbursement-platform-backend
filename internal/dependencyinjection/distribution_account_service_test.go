@@ -8,7 +8,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/circle"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
 func Test_dependencyinjection_NewDistributionAccountService(t *testing.T) {
@@ -16,6 +18,8 @@ func Test_dependencyinjection_NewDistributionAccountService(t *testing.T) {
 	mockHorizonClient := &horizonclient.MockClient{}
 	svcOpts := services.DistributionAccountServiceOptions{
 		HorizonClient: mockHorizonClient,
+		CircleService: &circle.Service{},
+		NetworkType:   utils.TestnetNetworkType,
 	}
 
 	t.Run("should create and return the same instance on the second call", func(t *testing.T) {

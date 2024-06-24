@@ -110,7 +110,7 @@ func Test_BalancesHandler_Get(t *testing.T) {
 					Once()
 			},
 			expectedStatus:   http.StatusBadRequest,
-			expectedResponse: `{"error": "This organization is not configured to use CIRCLE"}`,
+			expectedResponse: `{"error": "This organization's distribution account is in PENDING_USER_ACTIVATION state, please complete the CIRCLE activation process to access this endpoint."}`,
 		},
 		{
 			name:        "returns a 500 if circle.GetWalletByID fails with an unexpected error",
@@ -256,6 +256,7 @@ func Test_BalancesHandler_filterBalances(t *testing.T) {
 					{Currency: "FOO", Amount: "100"},
 					{Currency: "USD", Amount: "200"},
 					{Currency: "BAR", Amount: "300"},
+					{Currency: "EUR", Amount: "400"},
 				},
 			},
 			expectedBalances: []Balance{
@@ -263,6 +264,11 @@ func Test_BalancesHandler_filterBalances(t *testing.T) {
 					Amount:      "200",
 					AssetCode:   assets.USDCAssetPubnet.Code,
 					AssetIssuer: assets.USDCAssetPubnet.Issuer,
+				},
+				{
+					Amount:      "400",
+					AssetCode:   assets.EURCAssetPubnet.Code,
+					AssetIssuer: assets.EURCAssetPubnet.Issuer,
 				},
 			},
 		},
@@ -274,6 +280,7 @@ func Test_BalancesHandler_filterBalances(t *testing.T) {
 					{Currency: "FOO", Amount: "100"},
 					{Currency: "USD", Amount: "200"},
 					{Currency: "BAR", Amount: "300"},
+					{Currency: "EUR", Amount: "400"},
 				},
 			},
 			expectedBalances: []Balance{
@@ -281,6 +288,11 @@ func Test_BalancesHandler_filterBalances(t *testing.T) {
 					Amount:      "200",
 					AssetCode:   assets.USDCAssetTestnet.Code,
 					AssetIssuer: assets.USDCAssetTestnet.Issuer,
+				},
+				{
+					Amount:      "400",
+					AssetCode:   assets.EURCAssetTestnet.Code,
+					AssetIssuer: assets.EURCAssetTestnet.Issuer,
 				},
 			},
 		},

@@ -82,7 +82,7 @@ func (s *Service) SendPayment(ctx context.Context, paymentRequest PaymentRequest
 
 	return s.PostTransfer(ctx, TransferRequest{
 		IdempotencyKey: paymentRequest.IdempotencyKey,
-		Amount: Money{
+		Amount: Balance{
 			Amount:   paymentRequest.Amount,
 			Currency: circleAssetCode,
 		},

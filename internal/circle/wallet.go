@@ -18,11 +18,6 @@ type Wallet struct {
 	Balances    []Balance `json:"balances"`
 }
 
-type Balance struct {
-	Amount   string `json:"amount"`
-	Currency string `json:"currency"`
-}
-
 // parseWalletResponse parses the response from the Circle API into a Wallet struct.
 func parseWalletResponse(resp *http.Response) (*Wallet, error) {
 	var walletResponse WalletResponse
