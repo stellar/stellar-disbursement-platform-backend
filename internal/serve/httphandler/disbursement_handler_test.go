@@ -1447,7 +1447,7 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 			Return(distAcc, nil).
 			Once()
 
-		mockDistAccSvc.On("GetBalance", &distAcc, mock.AnythingOfType("data.Asset")).
+		mockDistAccSvc.On("GetBalance", mock.Anything, &distAcc, mock.AnythingOfType("data.Asset")).
 			Return(10000.0, nil).Once()
 
 		mockEventProducer.
@@ -1479,7 +1479,7 @@ func Test_DisbursementHandler_PatchDisbursementStatus(t *testing.T) {
 			Return(distAcc, nil).
 			Once()
 
-		mockDistAccSvc.On("GetBalance", &distAcc, mock.AnythingOfType("data.Asset")).
+		mockDistAccSvc.On("GetBalance", mock.Anything, &distAcc, mock.AnythingOfType("data.Asset")).
 			Return(10000.0, nil).Once()
 
 		mockEventProducer.

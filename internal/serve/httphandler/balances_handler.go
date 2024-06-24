@@ -49,8 +49,8 @@ func (h BalancesHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if distAccount.Status == schema.AccountStatusPendingUserActivation {
-		errResponseMsg := fmt.Sprintf("This organization is not configured to use %v", schema.CirclePlatform)
+	if distAccount.Status != schema.AccountStatusActive {
+		errResponseMsg := fmt.Sprintf("This organization's distribution account is in %s state, please complete the %s activation process to access this endpoint.", distAccount.Status, distAccount.Type.Platform())
 		httperror.BadRequest(errResponseMsg, nil, nil).Render(w)
 		return
 	}
@@ -73,15 +73,9 @@ func (h BalancesHandler) Get(w http.ResponseWriter, r *http.Request) {
 func (h BalancesHandler) filterBalances(ctx context.Context, circleWallet *circle.Wallet) []Balance {
 	balances := []Balance{}
 	for _, balance := range circleWallet.Balances {
-		networkAssetMap, ok := circle.AllowedAssetsMap[balance.Currency]
-		if !ok {
-			log.Ctx(ctx).Debugf("Ignoring balance for asset %s, as it's not supported by the SDP", balance.Currency)
-			continue
-		}
-
-		asset, ok := networkAssetMap[h.NetworkType]
-		if !ok {
-			log.Ctx(ctx).Debugf("Ignoring balance for asset %s, as it's not supported by the SDP in the %v network", balance.Currency, h.NetworkType)
+		asset, err := circle.ParseStellarAsset(balance.Currency, h.NetworkType)
+		if err != nil {
+			log.Ctx(ctx).Debugf("Ignoring balance for asset %s, as it's not supported by the SDP: %v", balance.Currency, err)
 			continue
 		}
 

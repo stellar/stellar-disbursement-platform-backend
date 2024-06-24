@@ -110,7 +110,7 @@ func Test_BalancesHandler_Get(t *testing.T) {
 					Once()
 			},
 			expectedStatus:   http.StatusBadRequest,
-			expectedResponse: `{"error": "This organization is not configured to use CIRCLE"}`,
+			expectedResponse: `{"error": "This organization's distribution account is in PENDING_USER_ACTIVATION state, please complete the CIRCLE activation process to access this endpoint."}`,
 		},
 		{
 			name:        "returns a 500 if circle.GetWalletByID fails with an unexpected error",
@@ -151,7 +151,7 @@ func Test_BalancesHandler_Get(t *testing.T) {
 						EntityID:    "2f47c999-9022-4939-acea-dc3afa9ccbaf",
 						Type:        "end_user_wallet",
 						Description: "Treasury Wallet",
-						Balances: []circle.Money{
+						Balances: []circle.Balance{
 							{Amount: "123.00", Currency: "USD"},
 						},
 					}, nil).
@@ -190,7 +190,7 @@ func Test_BalancesHandler_Get(t *testing.T) {
 						EntityID:    "2f47c999-9022-4939-acea-dc3afa9ccbaf",
 						Type:        "end_user_wallet",
 						Description: "Treasury Wallet",
-						Balances: []circle.Money{
+						Balances: []circle.Balance{
 							{Amount: "123.00", Currency: "USD"},
 						},
 					}, nil).
@@ -252,10 +252,11 @@ func Test_BalancesHandler_filterBalances(t *testing.T) {
 			name:        "[Pubnet] only supported assets are included",
 			networkType: utils.PubnetNetworkType,
 			circleWallet: &circle.Wallet{
-				Balances: []circle.Money{
+				Balances: []circle.Balance{
 					{Currency: "FOO", Amount: "100"},
 					{Currency: "USD", Amount: "200"},
 					{Currency: "BAR", Amount: "300"},
+					{Currency: "EUR", Amount: "400"},
 				},
 			},
 			expectedBalances: []Balance{
@@ -264,16 +265,22 @@ func Test_BalancesHandler_filterBalances(t *testing.T) {
 					AssetCode:   assets.USDCAssetPubnet.Code,
 					AssetIssuer: assets.USDCAssetPubnet.Issuer,
 				},
+				{
+					Amount:      "400",
+					AssetCode:   assets.EURCAssetPubnet.Code,
+					AssetIssuer: assets.EURCAssetPubnet.Issuer,
+				},
 			},
 		},
 		{
 			name:        "[Testnet] only supported assets are included",
 			networkType: utils.TestnetNetworkType,
 			circleWallet: &circle.Wallet{
-				Balances: []circle.Money{
+				Balances: []circle.Balance{
 					{Currency: "FOO", Amount: "100"},
 					{Currency: "USD", Amount: "200"},
 					{Currency: "BAR", Amount: "300"},
+					{Currency: "EUR", Amount: "400"},
 				},
 			},
 			expectedBalances: []Balance{
@@ -282,13 +289,18 @@ func Test_BalancesHandler_filterBalances(t *testing.T) {
 					AssetCode:   assets.USDCAssetTestnet.Code,
 					AssetIssuer: assets.USDCAssetTestnet.Issuer,
 				},
+				{
+					Amount:      "400",
+					AssetCode:   assets.EURCAssetTestnet.Code,
+					AssetIssuer: assets.EURCAssetTestnet.Issuer,
+				},
 			},
 		},
 		{
 			name:        "[Pubnet] none of the provided assets is supported",
 			networkType: utils.PubnetNetworkType,
 			circleWallet: &circle.Wallet{
-				Balances: []circle.Money{
+				Balances: []circle.Balance{
 					{Currency: "FOO", Amount: "100"},
 				},
 			},
@@ -298,7 +310,7 @@ func Test_BalancesHandler_filterBalances(t *testing.T) {
 			name:        "[Testnet] none of the provided assets is supported",
 			networkType: utils.TestnetNetworkType,
 			circleWallet: &circle.Wallet{
-				Balances: []circle.Money{
+				Balances: []circle.Balance{
 					{Currency: "FOO", Amount: "100"},
 				},
 			},

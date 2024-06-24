@@ -11,11 +11,11 @@ type WalletResponse struct {
 }
 
 type Wallet struct {
-	WalletID    string  `json:"walletId"`
-	EntityID    string  `json:"entityId"`
-	Type        string  `json:"type"`
-	Description string  `json:"description"`
-	Balances    []Money `json:"balances"`
+	WalletID    string    `json:"walletId"`
+	EntityID    string    `json:"entityId"`
+	Type        string    `json:"type"`
+	Description string    `json:"description"`
+	Balances    []Balance `json:"balances"`
 }
 
 // parseWalletResponse parses the response from the Circle API into a Wallet struct.
