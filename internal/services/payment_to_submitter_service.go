@@ -37,14 +37,19 @@ type PaymentToSubmitterService struct {
 	circleService       circle.ServiceInterface
 }
 
-func NewPaymentToSubmitterService(models *data.Models, tssDBConnectionPool db.DBConnectionPool,
-	distAccountResolver signing.DistributionAccountResolver, circleService circle.ServiceInterface,
-) *PaymentToSubmitterService {
+type PaymentToSubmitterServiceOptions struct {
+	Models              *data.Models
+	TSSDBConnectionPool db.DBConnectionPool
+	DistAccountResolver signing.DistributionAccountResolver
+	CircleService       circle.ServiceInterface
+}
+
+func NewPaymentToSubmitterService(opts PaymentToSubmitterServiceOptions) *PaymentToSubmitterService {
 	return &PaymentToSubmitterService{
-		sdpModels:           models,
-		tssModel:            txSubStore.NewTransactionModel(tssDBConnectionPool),
-		distAccountResolver: distAccountResolver,
-		circleService:       circleService,
+		sdpModels:           opts.Models,
+		tssModel:            txSubStore.NewTransactionModel(opts.TSSDBConnectionPool),
+		distAccountResolver: opts.DistAccountResolver,
+		circleService:       opts.CircleService,
 	}
 }
 

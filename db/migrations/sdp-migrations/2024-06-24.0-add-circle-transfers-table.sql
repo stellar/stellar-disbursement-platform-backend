@@ -13,6 +13,8 @@ CREATE TABLE circle_transfer_requests (
     completed_at TIMESTAMPTZ
 );
 
+CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_payment_id ON circle_transfer_requests (payment_id) WHERE (status IS DISTINCT FROM 'failed');
+
 -- TRIGGER: updated_at
 CREATE TRIGGER refresh_circle_transfer_requests_updated_at BEFORE UPDATE ON circle_transfer_requests FOR EACH ROW EXECUTE PROCEDURE update_at_refresh();
 

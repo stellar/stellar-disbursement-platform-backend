@@ -105,7 +105,7 @@ func Test_TransferRequest_validate(t *testing.T) {
 	}
 }
 
-func TestTransferStatus_ToPaymentStatus(t *testing.T) {
+func Test_TransferStatus_ToPaymentStatus(t *testing.T) {
 	tests := []struct {
 		name           string
 		transferStatus TransferStatus
@@ -134,7 +134,7 @@ func TestTransferStatus_ToPaymentStatus(t *testing.T) {
 			name:           "unknown status",
 			transferStatus: "wrong-status",
 			expectedStatus: "",
-			expectedErr:    "unknown transfer status wrong-status",
+			expectedErr:    `unknown transfer status "wrong-status"`,
 		},
 	}
 

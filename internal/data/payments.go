@@ -766,7 +766,7 @@ func (p *PaymentModel) CancelPaymentsWithinPeriodDays(ctx context.Context, sqlEx
 // UpdateStatus updates the status of a payment.
 func (p *PaymentModel) UpdateStatus(ctx context.Context, sqlExec db.SQLExecuter, paymentID string, status PaymentStatus, statusMsg *string) error {
 	if paymentID == "" {
-		return fmt.Errorf("payment ID is required")
+		return fmt.Errorf("paymentID is required")
 	}
 
 	if err := status.Validate(); err != nil {
@@ -775,23 +775,20 @@ func (p *PaymentModel) UpdateStatus(ctx context.Context, sqlExec db.SQLExecuter,
 
 	query := `
 		UPDATE payments
-		SET status = $1::payment_status,
+		SET 
+			status = $1::payment_status,
 			status_history = array_append(status_history, create_payment_status_history(NOW(), $1, $2))
 		WHERE id = $3
 	`
 
-	result, err := sqlExec.ExecContext(ctx, query,
-		status,
-		statusMsg,
-		paymentID,
-	)
+	result, err := sqlExec.ExecContext(ctx, query, status, statusMsg, paymentID)
 	if err != nil {
 		return fmt.Errorf("marking payment as %s: %w", status, err)
 	}
 
 	numRowsAffected, err := result.RowsAffected()
 	if err != nil {
-		return fmt.Errorf("error getting number of rows affected: %w", err)
+		return fmt.Errorf("getting number of rows affected: %w", err)
 	}
 
 	if numRowsAffected == 0 {

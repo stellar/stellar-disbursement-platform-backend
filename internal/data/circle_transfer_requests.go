@@ -2,6 +2,8 @@ package data
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
@@ -45,17 +47,20 @@ func (m CircleTransferRequestModel) FindOrInsert(ctx context.Context, paymentID 
 		return nil, fmt.Errorf("paymentID is required")
 	}
 
-	return db.RunInTransactionWithResult(ctx, m.dbConnectionPool, nil, func(tx db.DBTransaction) (*CircleTransferRequest, error) {
+	return db.RunInTransactionWithResult(ctx, m.dbConnectionPool, nil, func(dbTx db.DBTransaction) (*CircleTransferRequest, error) {
 		// validate payment ID exists
 		var paymentIDExists bool
-		err := tx.GetContext(ctx, &paymentIDExists, "SELECT EXISTS(SELECT 1 FROM payments WHERE id = $1)", paymentID)
-		if err != nil || !paymentIDExists {
-			return nil, fmt.Errorf("payment ID %s is not valid: %w", paymentID, err)
+		err := dbTx.GetContext(ctx, &paymentIDExists, "SELECT EXISTS(SELECT 1 FROM payments WHERE id = $1)", paymentID)
+		if err != nil {
+			return nil, fmt.Errorf("getting payment by ID: %w", err)
+		}
+		if !paymentIDExists {
+			return nil, fmt.Errorf("payment with ID %s does not exist: %w", paymentID, ErrRecordNotFound)
 		}
 
 		circleTransferRequest, err := m.FindNotCompletedByPaymentID(ctx, m.dbConnectionPool, paymentID)
 		if err != nil {
-			return nil, fmt.Errorf("finding circle transfer request: %w", err)
+			return nil, fmt.Errorf("finding incomplete circle transfer by payment ID: %w", err)
 		}
 
 		if circleTransferRequest != nil {
@@ -72,9 +77,12 @@ func (m CircleTransferRequestModel) Insert(ctx context.Context, paymentID string
 	}
 
 	query := `
-	INSERT INTO circle_transfer_requests (payment_id)
-	VALUES ($1)
-	RETURNING *
+		INSERT INTO circle_transfer_requests
+			(payment_id)
+		VALUES
+			($1)
+		RETURNING
+			*
 	`
 
 	var circleTransferRequest CircleTransferRequest
@@ -91,24 +99,27 @@ func (m CircleTransferRequestModel) FindNotCompletedByPaymentID(ctx context.Cont
 	}
 
 	query := `
-		SELECT * FROM circle_transfer_requests
-		WHERE payment_id = $1 AND completed_at IS NULL
-		ORDER BY created_at DESC
+		SELECT
+			*
+		FROM
+			circle_transfer_requests
+		WHERE
+			payment_id = $1
+			AND completed_at IS NULL
+		ORDER BY
+			created_at DESC
 	`
 
-	var circleTransferRequests []CircleTransferRequest
-	err := sqlExec.SelectContext(ctx, &circleTransferRequests, query, paymentID)
+	var circleTransferRequest CircleTransferRequest
+	err := sqlExec.GetContext(ctx, &circleTransferRequest, query, paymentID)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
 		return nil, fmt.Errorf("finding circle transfer request: %w", err)
 	}
 
-	if len(circleTransferRequests) == 0 {
-		return nil, nil
-	} else if len(circleTransferRequests) > 1 {
-		return nil, fmt.Errorf("multiple incomplete transfer requests found for paymentID %s", paymentID)
-	}
-
-	return &circleTransferRequests[0], nil
+	return &circleTransferRequest, nil
 }
 
 func (m CircleTransferRequestModel) Update(ctx context.Context, sqlExec db.SQLExecuter, idempotencyKey string, update CircleTransferRequestUpdate) error {
@@ -117,14 +128,22 @@ func (m CircleTransferRequestModel) Update(ctx context.Context, sqlExec db.SQLEx
 	}
 
 	query := `
-	UPDATE circle_transfer_requests
-	SET circle_transfer_id = $2, status = $3, response_body = $4, source_wallet_id = $5, completed_at = $6
-	WHERE idempotency_key = $1
+		UPDATE
+			circle_transfer_requests
+		SET
+			circle_transfer_id = $2,
+			status = $3,
+			response_body = $4,
+			source_wallet_id = $5,
+			completed_at = $6
+		WHERE
+			idempotency_key = $1
 	`
 
 	_, err := sqlExec.ExecContext(ctx, query, idempotencyKey, update.CircleTransferID, update.Status, update.ResponseBody, update.SourceWalletID, update.CompletedAt)
 	if err != nil {
 		return fmt.Errorf("updating circle transfer request: %w", err)
 	}
+
 	return nil
 }

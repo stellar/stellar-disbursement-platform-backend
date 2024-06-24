@@ -35,13 +35,18 @@ type PaymentToSubmitterJobOptions struct {
 	CircleService       circle.ServiceInterface
 }
 
-func NewPaymentToSubmitterJob(options PaymentToSubmitterJobOptions) Job {
-	if options.JobIntervalSeconds < DefaultMinimumJobIntervalSeconds {
+func NewPaymentToSubmitterJob(opts PaymentToSubmitterJobOptions) Job {
+	if opts.JobIntervalSeconds < DefaultMinimumJobIntervalSeconds {
 		log.Fatalf("job interval is not set for %s. Instantiation failed", paymentToSubmitterJobName)
 	}
 	return &paymentToSubmitterJob{
-		paymentToSubmitterSvc: services.NewPaymentToSubmitterService(options.Models, options.TSSDBConnectionPool, options.DistAccountResolver, options.CircleService),
-		jobIntervalSeconds:    options.JobIntervalSeconds,
+		paymentToSubmitterSvc: services.NewPaymentToSubmitterService(services.PaymentToSubmitterServiceOptions{
+			Models:              opts.Models,
+			TSSDBConnectionPool: opts.TSSDBConnectionPool,
+			DistAccountResolver: opts.DistAccountResolver,
+			CircleService:       opts.CircleService,
+		}),
+		jobIntervalSeconds: opts.JobIntervalSeconds,
 	}
 }
 

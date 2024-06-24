@@ -46,16 +46,17 @@ func (j patchAnchorPlatformTransactionsCompletionJob) GetInterval() time.Duratio
 }
 
 func (j patchAnchorPlatformTransactionsCompletionJob) Execute(ctx context.Context) error {
-	t, tenantErr := tenant.GetTenantFromContext(ctx)
-	if tenantErr != nil {
-		return fmt.Errorf("getting tenant from context: %w", tenantErr)
+	t, err := tenant.GetTenantFromContext(ctx)
+	if err != nil {
+		return fmt.Errorf("getting tenant from context: %w", err)
 	}
 	if t.DistributionAccountType.IsCircle() {
 		log.Ctx(ctx).Debugf("Skipping job %s for tenant %s as it uses a Circle Distribution account", j.GetName(), t.ID)
 		return nil
 	}
 
-	if err := j.service.PatchAPTransactionsForPayments(ctx); err != nil {
+	err = j.service.PatchAPTransactionsForPayments(ctx)
+	if err != nil {
 		err = fmt.Errorf("patching anchor platform transactions completion: %w", err)
 		log.Ctx(ctx).Error(err)
 		return err

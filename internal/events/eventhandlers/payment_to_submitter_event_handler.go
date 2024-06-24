@@ -32,15 +32,20 @@ type PaymentToSubmitterEventHandler struct {
 
 var _ events.EventHandler = new(PaymentToSubmitterEventHandler)
 
-func NewPaymentToSubmitterEventHandler(options PaymentToSubmitterEventHandlerOptions) *PaymentToSubmitterEventHandler {
-	tm := tenant.NewManager(tenant.WithDatabase(options.AdminDBConnectionPool))
+func NewPaymentToSubmitterEventHandler(opts PaymentToSubmitterEventHandlerOptions) *PaymentToSubmitterEventHandler {
+	tm := tenant.NewManager(tenant.WithDatabase(opts.AdminDBConnectionPool))
 
-	models, err := data.NewModels(options.MtnDBConnectionPool)
+	models, err := data.NewModels(opts.MtnDBConnectionPool)
 	if err != nil {
 		log.Fatalf("error getting models: %s", err.Error())
 	}
 
-	s := services.NewPaymentToSubmitterService(models, options.TSSDBConnectionPool, options.DistAccountResolver, options.CircleService)
+	s := services.NewPaymentToSubmitterService(services.PaymentToSubmitterServiceOptions{
+		Models:              models,
+		TSSDBConnectionPool: opts.TSSDBConnectionPool,
+		DistAccountResolver: opts.DistAccountResolver,
+		CircleService:       opts.CircleService,
+	})
 
 	return &PaymentToSubmitterEventHandler{
 		tenantManager: tm,
