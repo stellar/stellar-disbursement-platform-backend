@@ -230,6 +230,7 @@ func (s PaymentToSubmitterService) sendPaymentsToCircle(ctx context.Context, sdp
 	return nil
 }
 
+// updateCircleTransferRequest updates the circle_transfer_request table with the response from Circle.
 func (s PaymentToSubmitterService) updateCircleTransferRequest(
 	ctx context.Context,
 	sdpDBTx db.DBTransaction,
@@ -266,6 +267,7 @@ func (s PaymentToSubmitterService) updateCircleTransferRequest(
 	return nil
 }
 
+// updatePaymentStatusForCircleTransfer updates the payment status based on the transfer status.
 func (s PaymentToSubmitterService) updatePaymentStatusForCircleTransfer(ctx context.Context, sdpDBTx db.DBTransaction, transfer *circle.Transfer, payment *data.Payment) error {
 	paymentStatus, err := transfer.Status.ToPaymentStatus()
 	if err != nil {

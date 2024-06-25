@@ -18,8 +18,8 @@ type PaymentRequest struct {
 	IdempotencyKey            string
 }
 
-// getCircleAssetCode converts the request's Stellar asset code to a Circle's asset code.
-func (p PaymentRequest) getCircleAssetCode() (string, error) {
+// GetCircleAssetCode converts the request's Stellar asset code to a Circle's asset code.
+func (p PaymentRequest) GetCircleAssetCode() (string, error) {
 	switch p.StellarAssetCode {
 	case assets.USDCAssetCode:
 		return "USD", nil

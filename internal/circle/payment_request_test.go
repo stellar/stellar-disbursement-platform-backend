@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func Test_PaymentRequest_getCircleAssetCode(t *testing.T) {
+func Test_PaymentRequest_GetCircleAssetCode(t *testing.T) {
 	tests := []struct {
 		name              string
 		stellarAssetCode  string
@@ -42,7 +42,7 @@ func Test_PaymentRequest_getCircleAssetCode(t *testing.T) {
 				StellarAssetCode: tt.stellarAssetCode,
 			}
 
-			actualAssetCode, actualErr := p.getCircleAssetCode()
+			actualAssetCode, actualErr := p.GetCircleAssetCode()
 
 			if tt.wantErr != "" {
 				assert.ErrorContains(t, actualErr, tt.wantErr)

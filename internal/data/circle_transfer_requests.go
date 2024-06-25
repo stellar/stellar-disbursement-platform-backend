@@ -27,7 +27,7 @@ type CircleTransferStatus string
 
 const (
 	CircleTransferStatusPending CircleTransferStatus = "pending"
-	CircleTransferStatusSuccess CircleTransferStatus = "success"
+	CircleTransferStatusSuccess CircleTransferStatus = "complete" // means success
 	CircleTransferStatusFailed  CircleTransferStatus = "failed"
 )
 

@@ -26,7 +26,7 @@ type TransferStatus string
 
 const (
 	TransferStatusPending  TransferStatus = "pending"
-	TransferStatusComplete TransferStatus = "complete"
+	TransferStatusComplete TransferStatus = "complete" // means success
 	TransferStatusFailed   TransferStatus = "failed"
 )
 

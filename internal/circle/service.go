@@ -75,7 +75,7 @@ func (s *Service) SendPayment(ctx context.Context, paymentRequest PaymentRequest
 		return nil, fmt.Errorf("validating payment request: %w", err)
 	}
 
-	circleAssetCode, err := paymentRequest.getCircleAssetCode()
+	circleAssetCode, err := paymentRequest.GetCircleAssetCode()
 	if err != nil {
 		return nil, fmt.Errorf("getting Circle asset code: %w", err)
 	}
