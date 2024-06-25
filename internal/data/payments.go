@@ -10,9 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/stellar/go/support/log"
-
 	"github.com/lib/pq"
+	"github.com/stellar/go/support/log"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
@@ -776,7 +775,8 @@ func (p *PaymentModel) UpdateStatus(
 		return fmt.Errorf("paymentID is required")
 	}
 
-	if err := status.Validate(); err != nil {
+	err := status.Validate()
+	if err != nil {
 		return fmt.Errorf("status is invalid: %w", err)
 	}
 
@@ -807,9 +807,8 @@ func (p *PaymentModel) UpdateStatus(
 	if err != nil {
 		return fmt.Errorf("getting number of rows affected: %w", err)
 	}
-
 	if numRowsAffected == 0 {
-		return fmt.Errorf("payment %s was not marked as %s", paymentID, status)
+		return fmt.Errorf("payment with ID %s was not found: %w", paymentID, ErrRecordNotFound)
 	}
 
 	return nil
