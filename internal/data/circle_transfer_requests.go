@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
@@ -30,12 +31,20 @@ const (
 	CircleTransferStatusFailed  CircleTransferStatus = "failed"
 )
 
+func CompletedCircleStatuses() []CircleTransferStatus {
+	return []CircleTransferStatus{CircleTransferStatusSuccess, CircleTransferStatusFailed}
+}
+
+func (s CircleTransferStatus) IsCompleted() bool {
+	return slices.Contains(CompletedCircleStatuses(), s)
+}
+
 type CircleTransferRequestUpdate struct {
 	CircleTransferID string
 	Status           CircleTransferStatus
 	ResponseBody     []byte
 	SourceWalletID   string
-	CompletedAt      time.Time
+	CompletedAt      *time.Time
 }
 
 type CircleTransferRequestModel struct {
@@ -48,7 +57,7 @@ func (m CircleTransferRequestModel) GetOrInsert(ctx context.Context, paymentID s
 	}
 
 	return db.RunInTransactionWithResult(ctx, m.dbConnectionPool, nil, func(dbTx db.DBTransaction) (*CircleTransferRequest, error) {
-		// validate payment ID exists
+		// validate that the payment ID exists
 		var paymentIDExists bool
 		err := dbTx.GetContext(ctx, &paymentIDExists, "SELECT EXISTS(SELECT 1 FROM payments WHERE id = $1)", paymentID)
 		if err != nil {

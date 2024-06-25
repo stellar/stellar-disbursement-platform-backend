@@ -246,12 +246,18 @@ func (s PaymentToSubmitterService) updateCircleTransferRequest(
 		return fmt.Errorf("converting transfer body to json: %w", err)
 	}
 
+	var completedAt *time.Time
+	circleStatus := data.CircleTransferStatus(transfer.Status)
+	if circleStatus.IsCompleted() {
+		completedAt = utils.TimePtr(time.Now())
+	}
+
 	_, err = s.sdpModels.CircleTransferRequests.Update(ctx, sdpDBTx, transferRequest.IdempotencyKey, data.CircleTransferRequestUpdate{
 		CircleTransferID: transfer.ID,
-		Status:           data.CircleTransferStatus(transfer.Status),
+		Status:           circleStatus,
 		ResponseBody:     jsonBody,
 		SourceWalletID:   circleWalletID,
-		CompletedAt:      time.Now(),
+		CompletedAt:      completedAt,
 	})
 	if err != nil {
 		return fmt.Errorf("updating circle transfer request: %w", err)
