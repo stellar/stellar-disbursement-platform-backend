@@ -1,6 +1,9 @@
 package schema
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 type AccountStatus string
 
@@ -21,9 +24,9 @@ func (da TransactionAccount) ID() string {
 	platform := da.Type.Platform()
 	switch platform {
 	case StellarPlatform:
-		return fmt.Sprintf("%s:%s", platform, da.Address)
+		return fmt.Sprintf("%s:%s", strings.ToLower(string(platform)), da.Address)
 	case CirclePlatform:
-		return fmt.Sprintf("%s:%s", platform, da.CircleWalletID)
+		return fmt.Sprintf("%s:%s", strings.ToLower(string(platform)), da.CircleWalletID)
 	default:
 		panic("unsupported type!")
 	}

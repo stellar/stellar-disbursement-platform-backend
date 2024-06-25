@@ -686,7 +686,7 @@ func Test_DisbursementManagementService_StartDisbursement_failure(t *testing.T) 
 		err = service.StartDisbursement(ctx, disbursementInsufficientBalance.ID, nil, &distributionAcc)
 		expectedErr := InsufficientBalanceError{
 			DisbursementAsset:   *usdt,
-			DistributionAddress: distributionAccPubKey,
+			DistributionAddress: distributionAcc.ID(),
 			DisbursementID:      disbursementInsufficientBalance.ID,
 			AvailableBalance:    11111.0,
 			DisbursementAmount:  22222.0,
@@ -696,7 +696,7 @@ func Test_DisbursementManagementService_StartDisbursement_failure(t *testing.T) 
 		require.EqualError(t, err, fmt.Sprintf("running atomic function in RunInTransactionWithPostCommit: validating balance for disbursement: %v", expectedErr))
 
 		// PendingTotal includes payments associated with 'readyDisbursement' that were moved from the draft to ready status
-		expectedErrStr := fmt.Sprintf("the disbursement %s failed due to an account balance (11111.00) that was insufficient to fulfill new amount (22222.00) along with the pending amount (1100.00). To complete this action, your distribution account (GAAHIL6ZW4QFNLCKALZ3YOIWPP4TXQ7B7J5IU7RLNVGQAV6GFDZHLDTA) needs to be recharged with at least 12211.00 USDT", disbursementInsufficientBalance.ID)
+		expectedErrStr := fmt.Sprintf("the disbursement %s failed due to an account balance (11111.00) that was insufficient to fulfill new amount (22222.00) along with the pending amount (1100.00). To complete this action, your distribution account (stellar:GAAHIL6ZW4QFNLCKALZ3YOIWPP4TXQ7B7J5IU7RLNVGQAV6GFDZHLDTA) needs to be recharged with at least 12211.00 USDT", disbursementInsufficientBalance.ID)
 		assert.Contains(t, buf.String(), expectedErrStr)
 	})
 
