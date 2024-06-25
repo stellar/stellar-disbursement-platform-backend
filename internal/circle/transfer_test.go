@@ -4,7 +4,10 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 )
 
 func Test_TransferRequest_validate(t *testing.T) {
@@ -65,14 +68,15 @@ func Test_TransferRequest_validate(t *testing.T) {
 		{
 			name: "amount is not a valid number",
 			tr: TransferRequest{
-				Source:      TransferAccount{Type: TransferAccountTypeWallet, ID: "1014442536"},
-				Destination: TransferAccount{Type: TransferAccountTypeBlockchain, Chain: "XLM", Address: "GBG2DFASN2E5ZZSOYH7SJ7HWBKR4M5LYQ5Q5ZVBWS3RI46GDSYTEA6YF"},
-				Amount:      Balance{Amount: "invalid", Currency: "USD"},
+				Source:         TransferAccount{Type: TransferAccountTypeWallet, ID: "1014442536"},
+				Destination:    TransferAccount{Type: TransferAccountTypeBlockchain, Chain: "XLM", Address: "GBG2DFASN2E5ZZSOYH7SJ7HWBKR4M5LYQ5Q5ZVBWS3RI46GDSYTEA6YF"},
+				Amount:         Balance{Amount: "invalid", Currency: "USD"},
+				IdempotencyKey: uuid.NewString(),
 			},
 			wantErr: errors.New("amount must be a valid number"),
 		},
 		{
-			name: "valid transfer request",
+			name: "idempotency key is not provided",
 			tr: TransferRequest{
 				Source:      TransferAccount{Type: TransferAccountTypeWallet, ID: "1014442536"},
 				Destination: TransferAccount{Type: TransferAccountTypeBlockchain, Chain: "XLM", Address: "GBG2DFASN2E5ZZSOYH7SJ7HWBKR4M5LYQ5Q5ZVBWS3RI46GDSYTEA6YF"},
@@ -80,13 +84,71 @@ func Test_TransferRequest_validate(t *testing.T) {
 			},
 			wantErr: nil,
 		},
+		{
+			name: "valid transfer request",
+			tr: TransferRequest{
+				IdempotencyKey: uuid.NewString(),
+				Source:         TransferAccount{Type: TransferAccountTypeWallet, ID: "1014442536"},
+				Destination:    TransferAccount{Type: TransferAccountTypeBlockchain, Chain: "XLM", Address: "GBG2DFASN2E5ZZSOYH7SJ7HWBKR4M5LYQ5Q5ZVBWS3RI46GDSYTEA6YF"},
+				Amount:         Balance{Amount: "0.25", Currency: "USD"},
+			},
+			wantErr: nil,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := tt.tr.validate()
-			if err != nil {
+			if tt.wantErr != nil {
 				assert.EqualError(t, err, tt.wantErr.Error())
 			}
+		})
+	}
+}
+
+func Test_TransferStatus_ToPaymentStatus(t *testing.T) {
+	tests := []struct {
+		name           string
+		transferStatus TransferStatus
+		expectedStatus data.PaymentStatus
+		expectedErr    string
+	}{
+		{
+			name:           "pending status",
+			transferStatus: TransferStatusPending,
+			expectedStatus: data.PendingPaymentStatus,
+			expectedErr:    "",
+		},
+		{
+			name:           "complete status",
+			transferStatus: TransferStatusComplete,
+			expectedStatus: data.SuccessPaymentStatus,
+			expectedErr:    "",
+		},
+		{
+			name:           "failed status",
+			transferStatus: TransferStatusFailed,
+			expectedStatus: data.FailedPaymentStatus,
+			expectedErr:    "",
+		},
+		{
+			name:           "unknown status",
+			transferStatus: "wrong-status",
+			expectedStatus: "",
+			expectedErr:    `unknown transfer status "wrong-status"`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			actualStatus, actualErr := tt.transferStatus.ToPaymentStatus()
+
+			if tt.expectedErr != "" {
+				assert.ErrorContains(t, actualErr, tt.expectedErr)
+			} else {
+				assert.NoError(t, actualErr)
+			}
+
+			assert.Equal(t, tt.expectedStatus, actualStatus)
 		})
 	}
 }

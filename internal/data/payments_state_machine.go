@@ -47,6 +47,7 @@ func PaymentStateMachineWithInitialState(initialState PaymentStatus) *StateMachi
 		{From: ReadyPaymentStatus.State(), To: PendingPaymentStatus.State()},   // payment gets submitted if user is ready
 		{From: ReadyPaymentStatus.State(), To: PausedPaymentStatus.State()},    // payment paused (when disbursement paused)
 		{From: ReadyPaymentStatus.State(), To: CanceledPaymentStatus.State()},  // automatic cancellation of ready payments
+		{From: ReadyPaymentStatus.State(), To: FailedPaymentStatus.State()},    // payment fails before it's submitted
 		{From: PausedPaymentStatus.State(), To: ReadyPaymentStatus.State()},    // payment resumed (when disbursement resumed)
 		{From: PendingPaymentStatus.State(), To: FailedPaymentStatus.State()},  // payment fails
 		{From: FailedPaymentStatus.State(), To: PendingPaymentStatus.State()},  // payment retried

@@ -16,14 +16,17 @@ type Service struct {
 	EncryptionPassphrase string
 }
 
+const StellarChainCode = "XLM"
+
 // ServiceInterface defines the interface for Circle related SDP operations.
 //
 //go:generate mockery --name=ServiceInterface --case=underscore --structname=MockService --output=. --filename=service_mock.go --inpackage
 type ServiceInterface interface {
 	ClientInterface
+	SendPayment(ctx context.Context, paymentRequest PaymentRequest) (*Transfer, error)
 }
 
-var _ ServiceInterface = &Service{}
+var _ ServiceInterface = (*Service)(nil)
 
 type ServiceOptions struct {
 	ClientFactory        ClientFactory
@@ -65,6 +68,34 @@ func NewService(opts ServiceOptions) (*Service, error) {
 		NetworkType:          opts.NetworkType,
 		EncryptionPassphrase: opts.EncryptionPassphrase,
 	}, nil
+}
+
+func (s *Service) SendPayment(ctx context.Context, paymentRequest PaymentRequest) (*Transfer, error) {
+	if err := paymentRequest.Validate(); err != nil {
+		return nil, fmt.Errorf("validating payment request: %w", err)
+	}
+
+	circleAssetCode, err := paymentRequest.GetCircleAssetCode()
+	if err != nil {
+		return nil, fmt.Errorf("getting Circle asset code: %w", err)
+	}
+
+	return s.PostTransfer(ctx, TransferRequest{
+		IdempotencyKey: paymentRequest.IdempotencyKey,
+		Amount: Balance{
+			Amount:   paymentRequest.Amount,
+			Currency: circleAssetCode,
+		},
+		Source: TransferAccount{
+			Type: TransferAccountTypeWallet,
+			ID:   paymentRequest.SourceWalletID,
+		},
+		Destination: TransferAccount{
+			Type:    TransferAccountTypeBlockchain,
+			Chain:   StellarChainCode,
+			Address: paymentRequest.DestinationStellarAddress,
+		},
+	})
 }
 
 func (s *Service) getClient(ctx context.Context) (ClientInterface, error) {

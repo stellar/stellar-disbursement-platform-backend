@@ -96,7 +96,13 @@ func (s *ServerService) GetSchedulerJobRegistrars(
 		}
 
 		sj = append(sj,
-			scheduler.WithPaymentToSubmitterJobOption(schedulerOptions.PaymentJobIntervalSeconds, models, tssDBConnectionPool),
+			scheduler.WithPaymentToSubmitterJobOption(jobs.PaymentToSubmitterJobOptions{
+				JobIntervalSeconds:  schedulerOptions.PaymentJobIntervalSeconds,
+				Models:              models,
+				TSSDBConnectionPool: tssDBConnectionPool,
+				DistAccountResolver: serveOpts.SubmitterEngine.DistributionAccountResolver,
+				CircleService:       serveOpts.CircleService,
+			}),
 			scheduler.WithPaymentFromSubmitterJobOption(schedulerOptions.PaymentJobIntervalSeconds, models, tssDBConnectionPool),
 			scheduler.WithPatchAnchorPlatformTransactionsCompletionJobOption(schedulerOptions.PaymentJobIntervalSeconds, apAPIService, models),
 			scheduler.WithSendReceiverWalletsSMSInvitationJobOption(jobs.SendReceiverWalletsSMSInvitationJobOptions{
@@ -166,6 +172,8 @@ func (s *ServerService) SetupConsumers(ctx context.Context, o SetupConsumersOpti
 			AdminDBConnectionPool: o.ServeOpts.AdminDBConnectionPool,
 			MtnDBConnectionPool:   o.ServeOpts.MtnDBConnectionPool,
 			TSSDBConnectionPool:   o.TSSDBConnectionPool,
+			DistAccountResolver:   o.ServeOpts.SubmitterEngine.DistributionAccountResolver,
+			CircleService:         o.ServeOpts.CircleService,
 		}),
 	)
 	if err != nil {

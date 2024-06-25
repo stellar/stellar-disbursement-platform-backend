@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/lib/pq"
 	"github.com/stellar/go/support/log"
 
-	"github.com/lib/pq"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
@@ -757,6 +757,58 @@ func (p *PaymentModel) CancelPaymentsWithinPeriodDays(ctx context.Context, sqlEx
 	}
 	if numRowsAffected == 0 {
 		log.Ctx(ctx).Debug("No payments were canceled")
+	}
+
+	return nil
+}
+
+// UpdateStatus updates the status of a payment.
+func (p *PaymentModel) UpdateStatus(
+	ctx context.Context,
+	sqlExec db.SQLExecuter,
+	paymentID string,
+	status PaymentStatus,
+	statusMsg *string,
+	stellarTransactionHash string,
+) error {
+	if paymentID == "" {
+		return fmt.Errorf("paymentID is required")
+	}
+
+	err := status.Validate()
+	if err != nil {
+		return fmt.Errorf("status is invalid: %w", err)
+	}
+
+	args := []interface{}{status, statusMsg, paymentID}
+	query := `
+		UPDATE
+			payments
+		SET 
+			status = $1::payment_status,
+			status_history = array_append(status_history, create_payment_status_history(NOW(), $1, $2))
+			%s
+		WHERE
+			id = $3
+	`
+	var optionalQuerySet string
+	if stellarTransactionHash != "" {
+		args = append(args, stellarTransactionHash)
+		optionalQuerySet = fmt.Sprintf(", stellar_transaction_id = $%d", len(args))
+	}
+	query = fmt.Sprintf(query, optionalQuerySet)
+
+	result, err := sqlExec.ExecContext(ctx, query, args...)
+	if err != nil {
+		return fmt.Errorf("marking payment as %s: %w", status, err)
+	}
+
+	numRowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("getting number of rows affected: %w", err)
+	}
+	if numRowsAffected == 0 {
+		return fmt.Errorf("payment with ID %s was not found: %w", paymentID, ErrRecordNotFound)
 	}
 
 	return nil
