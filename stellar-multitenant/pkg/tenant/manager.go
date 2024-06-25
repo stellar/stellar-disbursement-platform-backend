@@ -42,6 +42,7 @@ type ManagerInterface interface {
 	DropTenantSchema(ctx context.Context, tenantName string) error
 	UpdateTenantConfig(ctx context.Context, tu *TenantUpdate) (*Tenant, error)
 	SoftDeleteTenantByID(ctx context.Context, tenantID string) (*Tenant, error)
+	DeactivateTenantDistributionAccount(ctx context.Context, tenantID string) error
 }
 
 type Manager struct {
@@ -234,6 +235,27 @@ func (m *Manager) SoftDeleteTenantByID(ctx context.Context, tenantID string) (*T
 	}
 
 	return &t, nil
+}
+
+func (m *Manager) DeactivateTenantDistributionAccount(ctx context.Context, tenantID string) error {
+	updateQuery := `
+		UPDATE tenants t
+		SET
+			distribution_account_status = 'PENDING_USER_ACTIVATION'
+	`
+
+	queryParams := &QueryParams{
+		Filters: excludeInactiveTenantsFilters(),
+	}
+	queryParams.Filters[FilterKeyID] = tenantID
+
+	query, params := m.newManagerQuery(updateQuery, queryParams)
+	_, err := m.db.ExecContext(ctx, query, params...)
+	if err != nil {
+		return fmt.Errorf("deactivating distribution account for tenant %s: %w", tenantID, err)
+	}
+
+	return nil
 }
 
 func (m *Manager) CreateTenantSchema(ctx context.Context, tenantName string) error {
