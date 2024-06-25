@@ -5,11 +5,11 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
-
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/support/render/httpjson"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 	authUtils "github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/utils"
 )

@@ -13,6 +13,7 @@ import (
 	"github.com/lib/pq"
 	"github.com/stellar/go/strkey"
 	"github.com/stellar/go/xdr"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 )
 

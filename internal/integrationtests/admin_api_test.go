@@ -8,10 +8,11 @@ import (
 	"strings"
 	"testing"
 
-	httpclientMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient/mocks"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+
+	httpclientMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient/mocks"
 )
 
 func Test_AdminApiIntegrationTests_CreateTenant(t *testing.T) {

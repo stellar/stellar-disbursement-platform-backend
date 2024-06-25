@@ -3,8 +3,9 @@ package utils
 import (
 	"testing"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 )
 
 func Test_globalOptions_PopulateCrashTrackerOptions(t *testing.T) {
