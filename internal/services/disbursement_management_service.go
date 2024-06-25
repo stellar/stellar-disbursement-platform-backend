@@ -318,14 +318,19 @@ func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, d
 	return db.RunInTransactionWithPostCommit(ctx, &opts)
 }
 
-func (s *DisbursementManagementService) validateBalanceForDisbursement(ctx context.Context, dbTx db.DBTransaction, distributionAccount *schema.TransactionAccount, disbursement *data.Disbursement) error {
+func (s *DisbursementManagementService) validateBalanceForDisbursement(
+	ctx context.Context,
+	dbTx db.DBTransaction,
+	distributionAccount *schema.TransactionAccount,
+	disbursement *data.Disbursement,
+) error {
 	availableBalance, err := s.DistributionAccountService.GetBalance(ctx, distributionAccount, *disbursement.Asset)
 	if err != nil {
 		return fmt.Errorf(
-			"getting balance for asset (%s,%s) on distribution account %s: %w",
+			"getting balance for asset (%s,%s) on distribution account %v: %w",
 			disbursement.Asset.Code,
 			disbursement.Asset.Issuer,
-			distributionAccount.Address,
+			distributionAccount,
 			err)
 	}
 
