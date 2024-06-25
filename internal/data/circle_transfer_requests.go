@@ -42,7 +42,7 @@ type CircleTransferRequestModel struct {
 	dbConnectionPool db.DBConnectionPool
 }
 
-func (m CircleTransferRequestModel) FindOrInsert(ctx context.Context, paymentID string) (*CircleTransferRequest, error) {
+func (m CircleTransferRequestModel) GetOrInsert(ctx context.Context, paymentID string) (*CircleTransferRequest, error) {
 	if paymentID == "" {
 		return nil, fmt.Errorf("paymentID is required")
 	}
@@ -58,7 +58,7 @@ func (m CircleTransferRequestModel) FindOrInsert(ctx context.Context, paymentID 
 			return nil, fmt.Errorf("payment with ID %s does not exist: %w", paymentID, ErrRecordNotFound)
 		}
 
-		circleTransferRequest, err := m.FindNotCompletedByPaymentID(ctx, m.dbConnectionPool, paymentID)
+		circleTransferRequest, err := m.FindIncompleteByPaymentID(ctx, m.dbConnectionPool, paymentID)
 		if err != nil {
 			return nil, fmt.Errorf("finding incomplete circle transfer by payment ID: %w", err)
 		}
@@ -90,10 +90,11 @@ func (m CircleTransferRequestModel) Insert(ctx context.Context, paymentID string
 	if err != nil {
 		return nil, fmt.Errorf("inserting circle transfer request: %w", err)
 	}
+
 	return &circleTransferRequest, nil
 }
 
-func (m CircleTransferRequestModel) FindNotCompletedByPaymentID(ctx context.Context, sqlExec db.SQLExecuter, paymentID string) (*CircleTransferRequest, error) {
+func (m CircleTransferRequestModel) FindIncompleteByPaymentID(ctx context.Context, sqlExec db.SQLExecuter, paymentID string) (*CircleTransferRequest, error) {
 	if paymentID == "" {
 		return nil, fmt.Errorf("paymentID is required")
 	}
@@ -122,9 +123,9 @@ func (m CircleTransferRequestModel) FindNotCompletedByPaymentID(ctx context.Cont
 	return &circleTransferRequest, nil
 }
 
-func (m CircleTransferRequestModel) Update(ctx context.Context, sqlExec db.SQLExecuter, idempotencyKey string, update CircleTransferRequestUpdate) error {
+func (m CircleTransferRequestModel) Update(ctx context.Context, sqlExec db.SQLExecuter, idempotencyKey string, update CircleTransferRequestUpdate) (*CircleTransferRequest, error) {
 	if idempotencyKey == "" {
-		return fmt.Errorf("idempotencyKey is required")
+		return nil, fmt.Errorf("idempotencyKey is required")
 	}
 
 	query := `
@@ -138,12 +139,18 @@ func (m CircleTransferRequestModel) Update(ctx context.Context, sqlExec db.SQLEx
 			completed_at = $6
 		WHERE
 			idempotency_key = $1
+		RETURNING
+			*
 	`
 
-	_, err := sqlExec.ExecContext(ctx, query, idempotencyKey, update.CircleTransferID, update.Status, update.ResponseBody, update.SourceWalletID, update.CompletedAt)
+	var circleTransferRequest CircleTransferRequest
+	err := sqlExec.GetContext(ctx, &circleTransferRequest, query, idempotencyKey, update.CircleTransferID, update.Status, update.ResponseBody, update.SourceWalletID, update.CompletedAt)
 	if err != nil {
-		return fmt.Errorf("updating circle transfer request: %w", err)
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, fmt.Errorf("circle transfer request with idempotency key %s not found: %w", idempotencyKey, ErrRecordNotFound)
+		}
+		return nil, fmt.Errorf("updating circle transfer request: %w", err)
 	}
 
-	return nil
+	return &circleTransferRequest, nil
 }

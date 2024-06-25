@@ -100,7 +100,7 @@ func (s *ServerService) GetSchedulerJobRegistrars(
 				JobIntervalSeconds:  schedulerOptions.PaymentJobIntervalSeconds,
 				Models:              models,
 				TSSDBConnectionPool: tssDBConnectionPool,
-				DistAccountResolver: serveOpts.DistAccountResolver,
+				DistAccountResolver: serveOpts.SubmitterEngine.DistributionAccountResolver,
 				CircleService:       serveOpts.CircleService,
 			}),
 			scheduler.WithPaymentFromSubmitterJobOption(schedulerOptions.PaymentJobIntervalSeconds, models, tssDBConnectionPool),
@@ -172,7 +172,7 @@ func (s *ServerService) SetupConsumers(ctx context.Context, o SetupConsumersOpti
 			AdminDBConnectionPool: o.ServeOpts.AdminDBConnectionPool,
 			MtnDBConnectionPool:   o.ServeOpts.MtnDBConnectionPool,
 			TSSDBConnectionPool:   o.TSSDBConnectionPool,
-			DistAccountResolver:   o.ServeOpts.DistAccountResolver,
+			DistAccountResolver:   o.ServeOpts.SubmitterEngine.DistributionAccountResolver,
 			CircleService:         o.ServeOpts.CircleService,
 		}),
 	)
@@ -575,7 +575,6 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 				log.Ctx(ctx).Fatalf("error creating distribution account resolver: %v", err)
 			}
 			txSubmitterOpts.SignatureServiceOptions.DistributionAccountResolver = distAccResolver
-			serveOpts.DistAccountResolver = distAccResolver
 
 			// Setup the Submitter Engine
 			txSubmitterOpts.SignatureServiceOptions.DBConnectionPool = tssDBConnectionPool

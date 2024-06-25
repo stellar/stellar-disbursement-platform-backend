@@ -31,7 +31,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 	authUtils "github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/utils"
@@ -93,7 +92,6 @@ type ServeOptions struct {
 	MaxInvitationSMSResendAttempts  int
 	SingleTenantMode                bool
 	CircleService                   circle.ServiceInterface
-	DistAccountResolver             signing.DistributionAccountResolver
 }
 
 // SetupDependencies uses the serve options to setup the dependencies for the server.

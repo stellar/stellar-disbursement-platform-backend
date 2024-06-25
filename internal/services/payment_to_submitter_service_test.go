@@ -801,7 +801,7 @@ func Test_PaymentToSubmitterService_sendPaymentsToCircle(t *testing.T) {
 		{
 			name:             "error updating circle transfer request",
 			paymentsToSubmit: []*data.Payment{payment1},
-			wantErr:          fmt.Errorf("updating circle transfer request: transfer is nil"),
+			wantErr:          fmt.Errorf("updating circle transfer request: transfer cannot be nil"),
 			fnSetup: func(t *testing.T, m *circle.MockService) {
 				m.On("SendPayment", ctx, mock.AnythingOfType("circle.PaymentRequest")).
 					Return(nil, nil).

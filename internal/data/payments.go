@@ -764,7 +764,14 @@ func (p *PaymentModel) CancelPaymentsWithinPeriodDays(ctx context.Context, sqlEx
 }
 
 // UpdateStatus updates the status of a payment.
-func (p *PaymentModel) UpdateStatus(ctx context.Context, sqlExec db.SQLExecuter, paymentID string, status PaymentStatus, statusMsg *string) error {
+func (p *PaymentModel) UpdateStatus(
+	ctx context.Context,
+	sqlExec db.SQLExecuter,
+	paymentID string,
+	status PaymentStatus,
+	statusMsg *string,
+	stellarTransactionHash string,
+) error {
 	if paymentID == "" {
 		return fmt.Errorf("paymentID is required")
 	}
@@ -773,15 +780,25 @@ func (p *PaymentModel) UpdateStatus(ctx context.Context, sqlExec db.SQLExecuter,
 		return fmt.Errorf("status is invalid: %w", err)
 	}
 
+	args := []interface{}{status, statusMsg, paymentID}
 	query := `
-		UPDATE payments
+		UPDATE
+			payments
 		SET 
 			status = $1::payment_status,
 			status_history = array_append(status_history, create_payment_status_history(NOW(), $1, $2))
-		WHERE id = $3
+			%s
+		WHERE
+			id = $3
 	`
+	var optionalQuerySet string
+	if stellarTransactionHash != "" {
+		args = append(args, stellarTransactionHash)
+		optionalQuerySet = fmt.Sprintf(", stellar_transaction_id = $%d", len(args))
+	}
+	query = fmt.Sprintf(query, optionalQuerySet)
 
-	result, err := sqlExec.ExecContext(ctx, query, status, statusMsg, paymentID)
+	result, err := sqlExec.ExecContext(ctx, query, args...)
 	if err != nil {
 		return fmt.Errorf("marking payment as %s: %w", status, err)
 	}
