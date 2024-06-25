@@ -27,6 +27,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	serveadmin "github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/serve"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 type ServeCommand struct{}
@@ -590,6 +591,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 				ClientConfigModel:    circle.NewClientConfigModel(serveOpts.MtnDBConnectionPool),
 				NetworkType:          serveOpts.NetworkType,
 				EncryptionPassphrase: serveOpts.DistAccEncryptionPassphrase,
+				TenantManager:        tenant.NewManager(tenant.WithDatabase(serveOpts.AdminDBConnectionPool)),
 			})
 			if err != nil {
 				log.Ctx(ctx).Fatalf("error creating Circle service: %v", err)

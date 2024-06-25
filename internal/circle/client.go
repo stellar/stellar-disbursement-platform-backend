@@ -13,6 +13,7 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 const (
@@ -33,27 +34,29 @@ type ClientInterface interface {
 
 // Client provides methods to interact with the Circle API.
 type Client struct {
-	BasePath   string
-	APIKey     string
-	httpClient httpclient.HttpClientInterface
+	BasePath            string
+	APIKey              string
+	httpClient          httpclient.HttpClientInterface
+	tenantStatusUpdater TenantStatusUpdater
 }
 
 // ClientFactory is a function that creates a ClientInterface.
-type ClientFactory func(networkType utils.NetworkType, apiKey string) ClientInterface
+type ClientFactory func(networkType utils.NetworkType, apiKey string, tntManager tenant.ManagerInterface) ClientInterface
 
 var _ ClientFactory = NewClient
 
 // NewClient creates a new instance of Circle Client.
-func NewClient(networkType utils.NetworkType, apiKey string) ClientInterface {
+func NewClient(networkType utils.NetworkType, apiKey string, tntManager tenant.ManagerInterface) ClientInterface {
 	circleEnv := Sandbox
 	if networkType == utils.PubnetNetworkType {
 		circleEnv = Production
 	}
 
 	return &Client{
-		BasePath:   string(circleEnv),
-		APIKey:     apiKey,
-		httpClient: httpclient.DefaultClient(),
+		BasePath:            string(circleEnv),
+		APIKey:              apiKey,
+		httpClient:          httpclient.DefaultClient(),
+		tenantStatusUpdater: TenantStatusUpdater{tntManager: tntManager},
 	}
 }
 
@@ -116,7 +119,7 @@ func (client *Client) PostTransfer(ctx context.Context, transferReq TransferRequ
 	}
 
 	if resp.StatusCode != http.StatusCreated {
-		apiError, parseErr := parseAPIError(resp)
+		apiError, parseErr := client.tenantStatusUpdater.parseAPIError(ctx, resp)
 		if parseErr != nil {
 			return nil, fmt.Errorf("parsing API error: %w", parseErr)
 		}
@@ -141,7 +144,7 @@ func (client *Client) GetTransferByID(ctx context.Context, id string) (*Transfer
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		apiError, parseErr := parseAPIError(resp)
+		apiError, parseErr := client.tenantStatusUpdater.parseAPIError(ctx, resp)
 		if parseErr != nil {
 			return nil, fmt.Errorf("parsing API error: %w", parseErr)
 		}
@@ -167,7 +170,7 @@ func (client *Client) GetWalletByID(ctx context.Context, id string) (*Wallet, er
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		apiError, parseErr := parseAPIError(resp)
+		apiError, parseErr := client.tenantStatusUpdater.parseAPIError(ctx, resp)
 		if parseErr != nil {
 			return nil, fmt.Errorf("parsing API error: %w", parseErr)
 		}

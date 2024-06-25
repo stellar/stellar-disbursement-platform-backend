@@ -7,6 +7,7 @@ import (
 	"github.com/stellar/go/strkey"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 type Service struct {
@@ -14,6 +15,7 @@ type Service struct {
 	ClientConfigModel    ClientConfigModelInterface
 	NetworkType          utils.NetworkType
 	EncryptionPassphrase string
+	TenantManager        tenant.ManagerInterface
 }
 
 // ServiceInterface defines the interface for Circle related SDP operations.
@@ -30,6 +32,7 @@ type ServiceOptions struct {
 	ClientConfigModel    ClientConfigModelInterface
 	NetworkType          utils.NetworkType
 	EncryptionPassphrase string
+	TenantManager        tenant.ManagerInterface
 }
 
 func (o ServiceOptions) Validate() error {
@@ -64,6 +67,7 @@ func NewService(opts ServiceOptions) (*Service, error) {
 		ClientConfigModel:    opts.ClientConfigModel,
 		NetworkType:          opts.NetworkType,
 		EncryptionPassphrase: opts.EncryptionPassphrase,
+		TenantManager:        opts.TenantManager,
 	}, nil
 }
 
@@ -72,7 +76,7 @@ func (s *Service) getClient(ctx context.Context) (ClientInterface, error) {
 	if err != nil {
 		return nil, fmt.Errorf("retrieving decrypted Circle API key: %w", err)
 	}
-	return s.ClientFactory(s.NetworkType, apiKey), nil
+	return s.ClientFactory(s.NetworkType, apiKey, s.TenantManager), nil
 }
 
 func (s *Service) Ping(ctx context.Context) (bool, error) {
