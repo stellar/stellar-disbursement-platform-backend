@@ -8,9 +8,10 @@ import (
 	"github.com/stellar/go/keypair"
 	"github.com/stellar/go/network"
 	"github.com/stellar/go/txnbuild"
-	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
 func Test_AccountEnvOptions_String_doesntLeakPrivateKey(t *testing.T) {
