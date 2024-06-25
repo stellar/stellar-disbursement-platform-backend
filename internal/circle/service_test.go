@@ -10,10 +10,11 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 func Test_ServiceOptions_Validate(t *testing.T) {
-	var clientFactory ClientFactory = func(networkType utils.NetworkType, apiKey string) ClientInterface {
+	var clientFactory ClientFactory = func(networkType utils.NetworkType, apiKey string, tntManager tenant.ManagerInterface) ClientInterface {
 		return nil
 	}
 	circleClientConfigModel := &ClientConfigModel{}
@@ -83,7 +84,7 @@ func Test_NewService(t *testing.T) {
 	})
 
 	t.Run("🎉 successfully creates a new Service", func(t *testing.T) {
-		clientFactory := func(networkType utils.NetworkType, apiKey string) ClientInterface {
+		clientFactory := func(networkType utils.NetworkType, apiKey string, tntManager tenant.ManagerInterface) ClientInterface {
 			return nil
 		}
 		clientConfigModel := &ClientConfigModel{}
@@ -104,7 +105,11 @@ func Test_NewService(t *testing.T) {
 			NetworkType:          networkType,
 			EncryptionPassphrase: encryptionPassphrase,
 		}
-		assert.Equal(t, wantService.ClientFactory(networkType, "FOO BAR"), svc.ClientFactory(networkType, "FOO BAR"))
+
+		mockTntManager := &tenant.TenantManagerMock{}
+		assert.Equal(t,
+			wantService.ClientFactory(networkType, "FOO BAR", mockTntManager),
+			svc.ClientFactory(networkType, "FOO BAR", mockTntManager))
 		assert.Equal(t, wantService.ClientConfigModel, svc.ClientConfigModel)
 		assert.Equal(t, wantService.NetworkType, svc.NetworkType)
 		assert.Equal(t, wantService.EncryptionPassphrase, svc.EncryptionPassphrase)
@@ -146,7 +151,7 @@ func Test_Service_getClient(t *testing.T) {
 
 	circleClient, err := svc.getClient(ctx)
 	assert.NoError(t, err)
-	wantCircleClient := NewClient(networkType, apiKey)
+	wantCircleClient := NewClient(networkType, apiKey, &tenant.TenantManagerMock{})
 	assert.Equal(t, wantCircleClient, circleClient)
 }
 
@@ -176,7 +181,7 @@ func Test_Service_allMethods(t *testing.T) {
 	// Method used to spin up a service with a mock client.
 	createService := func(t *testing.T, mCircleClient *MockClient) *Service {
 		svc, err := NewService(ServiceOptions{
-			ClientFactory: func(networkType utils.NetworkType, apiKey string) ClientInterface {
+			ClientFactory: func(networkType utils.NetworkType, apiKey string, tntManager tenant.ManagerInterface) ClientInterface {
 				return mCircleClient
 			},
 			ClientConfigModel:    clientConfigModel,

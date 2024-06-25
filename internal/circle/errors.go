@@ -38,6 +38,8 @@ type TenantStatusUpdater struct {
 
 var invalidAPIKeyStatusCodes = []int{http.StatusUnauthorized, http.StatusForbidden}
 
+// parseAPIError parses the error response from Circle APIs.
+// https://developers.circle.com/circle-mint/docs/circle-apis-api-errors.
 func (u TenantStatusUpdater) parseAPIError(ctx context.Context, resp *http.Response) (*APIError, error) {
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -56,23 +58,6 @@ func (u TenantStatusUpdater) parseAPIError(ctx context.Context, resp *http.Respo
 			return nil, fmt.Errorf("deactivating tenant distribution account: %w", deactivateTntErr)
 		}
 	}
-
-	var apiErr APIError
-	if err = json.Unmarshal(body, &apiErr); err != nil {
-		return nil, fmt.Errorf("unmarshalling error response body: %w", err)
-	}
-
-	return &apiErr, nil
-}
-
-// parseAPIError parses the error response from Circle APIs.
-// https://developers.circle.com/circle-mint/docs/circle-apis-api-errors.
-func parseAPIError(resp *http.Response) (*APIError, error) {
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("reading error response body: %w", err)
-	}
-	defer resp.Body.Close()
 
 	var apiErr APIError
 	if err = json.Unmarshal(body, &apiErr); err != nil {
