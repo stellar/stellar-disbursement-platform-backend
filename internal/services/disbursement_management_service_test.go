@@ -24,6 +24,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/assets"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
@@ -1331,4 +1332,182 @@ func Test_DisbursementManagementService_PauseDisbursement(t *testing.T) {
 	})
 
 	hMock.AssertExpectations(t)
+}
+
+func Test_DisbursementManagementService_validateBalanceForDisbursement(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, outerErr)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+
+	// Create fixtures
+	models, outerErr := data.NewModels(dbConnectionPool)
+	require.NoError(t, outerErr)
+	asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
+	country := data.CreateCountryFixture(t, ctx, dbConnectionPool, "FRA", "France")
+	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "wallet1", "https://www.wallet.com", "www.wallet.com", "wallet1://")
+	receiverReady := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
+	rwReady := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiverReady.ID, wallet.ID, data.ReadyReceiversWalletStatus)
+	disbursementOld := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
+		Country: country,
+		Wallet:  wallet,
+		Status:  data.ReadyDisbursementStatus,
+		Asset:   asset,
+	})
+	_ = data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+		ReceiverWallet: rwReady,
+		Disbursement:   disbursementOld,
+		Asset:          *asset,
+		Amount:         "10",
+		Status:         data.PendingPaymentStatus,
+	})
+	disbursementNew := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
+		Country: country,
+		Wallet:  wallet,
+		Status:  data.ReadyDisbursementStatus,
+		Asset:   asset,
+	})
+	_ = data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+		ReceiverWallet: rwReady,
+		Disbursement:   disbursementNew,
+		Asset:          *asset,
+		Amount:         "90",
+		Status:         data.DraftPaymentStatus,
+	})
+	disbursementNew, err := models.Disbursements.GetWithStatistics(ctx, disbursementNew.ID)
+	require.NoError(t, err)
+
+	// Create distribution accounts
+	distributionAccPubKey := "GAAHIL6ZW4QFNLCKALZ3YOIWPP4TXQ7B7J5IU7RLNVGQAV6GFDZHLDTA"
+	stellarDistAccountEnv := schema.NewStellarEnvTransactionAccount(distributionAccPubKey)
+	stellarDistAccountDBVault := schema.NewDefaultStellarTransactionAccount(distributionAccPubKey)
+	circleDistAccountDBVault := schema.TransactionAccount{
+		CircleWalletID: "circle-wallet-id",
+		Type:           schema.DistributionAccountCircleDBVault,
+		Status:         schema.AccountStatusActive,
+	}
+
+	expectedInsufficientBalanceErr := func(account schema.TransactionAccount) InsufficientBalanceError {
+		return InsufficientBalanceError{
+			DisbursementAsset:   *asset,
+			DistributionAddress: account.ID(),
+			DisbursementID:      disbursementNew.ID,
+			AvailableBalance:    99.99,
+			DisbursementAmount:  90.00,
+			TotalPendingAmount:  10.00,
+		}
+	}
+
+	// test cases
+	testCases := []struct {
+		name                string
+		disbursementAccount schema.TransactionAccount
+		prepareMocksFn      func(mDistAccService *mocks.MockDistributionAccountService)
+		availableBalance    string
+		expectedErrContains string
+	}{
+		{
+			name:                "return an error when GetBalance fails",
+			disbursementAccount: stellarDistAccountEnv,
+			prepareMocksFn: func(mDistAccService *mocks.MockDistributionAccountService) {
+				mDistAccService.
+					On("GetBalance", ctx, &stellarDistAccountEnv, *asset).
+					Return(0.0, errors.New("GetBalance error")).
+					Once()
+			},
+			expectedErrContains: fmt.Sprintf("getting balance for asset (%s,%s) on distribution account %v: GetBalance error", asset.Code, asset.Issuer, stellarDistAccountEnv),
+		},
+		{
+			name:                "🔴[DISTRIBUTION_ACCOUNT.STELLAR.ENV] insufficient ballance for disbursement",
+			disbursementAccount: stellarDistAccountEnv,
+			prepareMocksFn: func(mDistAccService *mocks.MockDistributionAccountService) {
+				mDistAccService.
+					On("GetBalance", ctx, &stellarDistAccountEnv, *asset).
+					Return(99.99, nil).
+					Once()
+			},
+			expectedErrContains: expectedInsufficientBalanceErr(stellarDistAccountEnv).Error(),
+		},
+		{
+			name:                "🔴[DISTRIBUTION_ACCOUNT.STELLAR.DB_VAULT] insufficient ballance for disbursement",
+			disbursementAccount: stellarDistAccountDBVault,
+			prepareMocksFn: func(mDistAccService *mocks.MockDistributionAccountService) {
+				mDistAccService.
+					On("GetBalance", ctx, &stellarDistAccountDBVault, *asset).
+					Return(99.99, nil).
+					Once()
+			},
+			expectedErrContains: expectedInsufficientBalanceErr(stellarDistAccountDBVault).Error(),
+		},
+		{
+			name:                "🔴[DISTRIBUTION_ACCOUNT.CIRCLE_DB_VAULT] insufficient ballance for disbursement",
+			disbursementAccount: circleDistAccountDBVault,
+			prepareMocksFn: func(mDistAccService *mocks.MockDistributionAccountService) {
+				mDistAccService.
+					On("GetBalance", ctx, &circleDistAccountDBVault, *asset).
+					Return(99.99, nil).
+					Once()
+			},
+			expectedErrContains: expectedInsufficientBalanceErr(circleDistAccountDBVault).Error(),
+		},
+		{
+			name:                "🟢[DISTRIBUTION_ACCOUNT.STELLAR.ENV] successfully validate ballance for disbursement",
+			disbursementAccount: stellarDistAccountEnv,
+			prepareMocksFn: func(mDistAccService *mocks.MockDistributionAccountService) {
+				mDistAccService.
+					On("GetBalance", ctx, &stellarDistAccountEnv, *asset).
+					Return(100.00, nil).
+					Once()
+			},
+		},
+		{
+			name:                "🟢[DISTRIBUTION_ACCOUNT.STELLAR.DB_VAULT] successfully validate ballance for disbursement",
+			disbursementAccount: stellarDistAccountDBVault,
+			prepareMocksFn: func(mDistAccService *mocks.MockDistributionAccountService) {
+				mDistAccService.
+					On("GetBalance", ctx, &stellarDistAccountDBVault, *asset).
+					Return(100.00, nil).
+					Once()
+			},
+		},
+		{
+			name:                "🟢[DISTRIBUTION_ACCOUNT.CIRCLE_DB_VAULT] successfully validate ballance for disbursement",
+			disbursementAccount: circleDistAccountDBVault,
+			prepareMocksFn: func(mDistAccService *mocks.MockDistributionAccountService) {
+				mDistAccService.
+					On("GetBalance", ctx, &circleDistAccountDBVault, *asset).
+					Return(100.00, nil).
+					Once()
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			dbTx, err := dbConnectionPool.BeginTxx(ctx, nil)
+			require.NoError(t, err)
+			defer func() {
+				err = dbTx.Rollback()
+				require.NoError(t, err)
+			}()
+
+			mDistAccService := mocks.NewMockDistributionAccountService(t)
+			tc.prepareMocksFn(mDistAccService)
+			svc := &DisbursementManagementService{
+				Models:                     models,
+				DistributionAccountService: mDistAccService,
+			}
+
+			err = svc.validateBalanceForDisbursement(ctx, dbTx, &tc.disbursementAccount, disbursementNew)
+
+			if tc.expectedErrContains != "" {
+				require.ErrorContains(t, err, tc.expectedErrContains)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
 }

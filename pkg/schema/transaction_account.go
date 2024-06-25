@@ -17,6 +17,18 @@ type TransactionAccount struct {
 	Status         AccountStatus `json:"status"`
 }
 
+func (da TransactionAccount) ID() string {
+	platform := da.Type.Platform()
+	switch platform {
+	case StellarPlatform:
+		return fmt.Sprintf("%s:%s", platform, da.Address)
+	case CirclePlatform:
+		return fmt.Sprintf("%s:%s", platform, da.CircleWalletID)
+	default:
+		panic("unsupported type!")
+	}
+}
+
 func (da TransactionAccount) IsStellar() bool {
 	return da.Type.IsStellar()
 }

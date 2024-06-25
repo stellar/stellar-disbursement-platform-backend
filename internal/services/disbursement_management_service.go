@@ -374,7 +374,7 @@ func (s *DisbursementManagementService) validateBalanceForDisbursement(
 	if (availableBalance - (disbursementAmount + totalPendingAmount)) < 0 {
 		err = InsufficientBalanceError{
 			DisbursementAsset:   *disbursement.Asset,
-			DistributionAddress: distributionAccount.Address,
+			DistributionAddress: distributionAccount.ID(),
 			DisbursementID:      disbursement.ID,
 			AvailableBalance:    availableBalance,
 			DisbursementAmount:  disbursementAmount,
