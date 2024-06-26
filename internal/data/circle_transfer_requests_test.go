@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -258,4 +259,131 @@ func Test_CircleTransferRequestModel_GetOrInsert(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, 2, count) // <- new row inserted
 	})
+}
+
+func Test_buildCircleTransferRequestQuery(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	baseQuery := "SELECT * FROM circle_transfer_requests c"
+
+	testCases := []struct {
+		name           string
+		queryParams    QueryParams
+		expectedQuery  string
+		expectedParams []interface{}
+	}{
+		{
+			name:           "build query without params",
+			queryParams:    QueryParams{},
+			expectedQuery:  "SELECT * FROM circle_transfer_requests c",
+			expectedParams: []interface{}{},
+		},
+		{
+			name: "build query with status filter (value)",
+			queryParams: QueryParams{
+				Filters: map[FilterKey]interface{}{
+					FilterKeyStatus: "pending",
+				},
+			},
+			expectedQuery:  "SELECT * FROM circle_transfer_requests c WHERE 1=1 AND c.status = $1",
+			expectedParams: []interface{}{"pending"},
+		},
+		{
+			name: "build query with status filter (slice)",
+			queryParams: QueryParams{
+				Filters: map[FilterKey]interface{}{
+					FilterKeyStatus: []CircleTransferStatus{CircleTransferStatusSuccess, CircleTransferStatusFailed},
+				},
+			},
+			expectedQuery:  "SELECT * FROM circle_transfer_requests c WHERE 1=1 AND c.status = ANY($1)",
+			expectedParams: []interface{}{pq.Array([]CircleTransferStatus{CircleTransferStatusSuccess, CircleTransferStatusFailed})},
+		},
+		{
+			name: "build query with payment_id filter",
+			queryParams: QueryParams{
+				Filters: map[FilterKey]interface{}{
+					FilterKeyPaymentID: "test-payment-id",
+				},
+			},
+			expectedQuery:  "SELECT * FROM circle_transfer_requests c WHERE 1=1 AND c.payment_id = $1",
+			expectedParams: []interface{}{"test-payment-id"},
+		},
+		{
+			name: "build query with IsNull(completed_at) filter",
+			queryParams: QueryParams{
+				Filters: map[FilterKey]interface{}{
+					IsNull(FilterKeyCompletedAt): true,
+				},
+			},
+			expectedQuery:  "SELECT * FROM circle_transfer_requests c WHERE 1=1 AND c.completed_at IS NULL",
+			expectedParams: []interface{}{},
+		},
+		{
+			name: "build query with LowerThan(sync_attempts) filter",
+			queryParams: QueryParams{
+				Filters: map[FilterKey]interface{}{
+					LowerThan(FilterKeySyncAttempts): 7,
+				},
+			},
+			expectedQuery:  "SELECT * FROM circle_transfer_requests c WHERE 1=1 AND c.sync_attempts < $1",
+			expectedParams: []interface{}{7},
+		},
+		{
+			name: "build query with sort by",
+			queryParams: QueryParams{
+				SortBy:    "created_at",
+				SortOrder: "ASC",
+			},
+			expectedQuery:  "SELECT * FROM circle_transfer_requests c ORDER BY c.created_at ASC",
+			expectedParams: []interface{}{},
+		},
+		{
+			name: "build query with pagination",
+			queryParams: QueryParams{
+				Page:      1,
+				PageLimit: 20,
+			},
+			expectedQuery:  "SELECT * FROM circle_transfer_requests c LIMIT $1 OFFSET $2",
+			expectedParams: []interface{}{20, 0},
+		},
+		{
+			name: "build query with FOR UPDATE SKIP LOCKED",
+			queryParams: QueryParams{
+				ForUpdateSkipLocked: true,
+			},
+			expectedQuery:  "SELECT * FROM circle_transfer_requests c FOR UPDATE SKIP LOCKED",
+			expectedParams: []interface{}{},
+		},
+		{
+			name: "build query with all filters, and pagination, and FOR UPDATE SKIP LOCKED",
+			queryParams: QueryParams{
+				Page:      1,
+				PageLimit: 20,
+				SortBy:    "created_at",
+				SortOrder: "ASC",
+				Filters: map[FilterKey]interface{}{
+					FilterKeyStatus:                  "pending",
+					FilterKeyPaymentID:               "test-payment-id",
+					IsNull(FilterKeyCompletedAt):     true,
+					LowerThan(FilterKeySyncAttempts): 7,
+				},
+				ForUpdateSkipLocked: true,
+			},
+			expectedQuery:  "SELECT * FROM circle_transfer_requests c WHERE 1=1 AND c.status = $1 AND c.payment_id = $2 AND c.completed_at IS NULL AND c.sync_attempts < $3 ORDER BY c.created_at ASC LIMIT $4 OFFSET $5 FOR UPDATE SKIP LOCKED",
+			expectedParams: []interface{}{"pending", "test-payment-id", 7, 20, 0},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			query, params := buildCircleTransferRequestQuery(baseQuery, tc.queryParams, dbConnectionPool)
+
+			assert.Equal(t, tc.expectedQuery, query)
+			assert.Equal(t, tc.expectedParams, params)
+		})
+	}
 }

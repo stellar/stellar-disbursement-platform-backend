@@ -38,9 +38,7 @@ const (
 	FilterKeyCompletedAt     FilterKey = "completed_at"
 	FilterKeyCreatedAtAfter  FilterKey = "created_at_after"
 	FilterKeyCreatedAtBefore FilterKey = "created_at_before"
-
-	FilterKeySyncAttempts FilterKey = "sync_attempts"
-	// SELECT * FROM circle_transfer_requests WHERE status="pending" AND sync_attempts < max_sync_attempts ORDER BY last_sync_attempt_at ASC FOR UPDATE LIMIT BATCH_SIZE
+	FilterKeySyncAttempts    FilterKey = "sync_attempts"
 )
 
 func (fk FilterKey) Equals() string {
@@ -56,6 +54,7 @@ func IsNull(filterKey FilterKey) FilterKey {
 	return FilterKey(fmt.Sprintf("%s IS NULL", filterKey))
 }
 
+// LowerThan returns `{filterKey} < ?`.
 func LowerThan(filterKey FilterKey) FilterKey {
 	return FilterKey(fmt.Sprintf("%s < ?", filterKey))
 }

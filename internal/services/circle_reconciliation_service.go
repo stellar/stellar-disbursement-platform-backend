@@ -36,15 +36,15 @@ func NewCircleReconciliationService(models *data.Models, circleService circle.Se
 
 func (s *CircleReconciliationService) Reconcile(ctx context.Context) error {
 	// Step 1: Get the tenant from the context.
-	tnt, err := tenant.GetTenantFromContext(ctx)
-	if err != nil {
-		return fmt.Errorf("getting tenant from context: %w", err)
+	tnt, outerErr := tenant.GetTenantFromContext(ctx)
+	if outerErr != nil {
+		return fmt.Errorf("getting tenant from context: %w", outerErr)
 	}
 
 	// Step 2: check if the tenant distribution account is of type Circle, and if it is Active.
-	distAcc, err := s.DistAccountResolver.DistributionAccountFromContext(ctx)
-	if err != nil {
-		return fmt.Errorf("getting distribution account from context: %w", err)
+	distAcc, outerErr := s.DistAccountResolver.DistributionAccountFromContext(ctx)
+	if outerErr != nil {
+		return fmt.Errorf("getting distribution account from context: %w", outerErr)
 	}
 	if !distAcc.IsCircle() {
 		return nil
@@ -54,7 +54,7 @@ func (s *CircleReconciliationService) Reconcile(ctx context.Context) error {
 		return nil
 	}
 
-	err = db.RunInTransaction(ctx, s.Models.DBConnectionPool, nil, func(dbTx db.DBTransaction) error {
+	outerErr = db.RunInTransaction(ctx, s.Models.DBConnectionPool, nil, func(dbTx db.DBTransaction) error {
 		// Step 3: Get pending Circle transfer requests.
 		circleRequests, err := s.Models.CircleTransferRequests.GetPendingReconciliation(ctx, dbTx)
 		if err != nil {
@@ -124,8 +124,8 @@ func (s *CircleReconciliationService) Reconcile(ctx context.Context) error {
 
 		return nil
 	})
-	if err != nil {
-		return fmt.Errorf("running Circle reconciliation for tenant %q: %w", tnt.Name, err)
+	if outerErr != nil {
+		return fmt.Errorf("running Circle reconciliation for tenant %q: %w", tnt.Name, outerErr)
 	}
 
 	return nil

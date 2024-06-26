@@ -85,7 +85,7 @@ func (s *ServerService) GetSchedulerJobRegistrars(
 		scheduler.WithAPAuthEnforcementJob(apAPIService, serveOpts.MonitorService, serveOpts.CrashTrackerClient.Clone()),
 		scheduler.WithReadyPaymentsCancellationJobOption(models),
 		scheduler.WithCircleReconciliationJobOption(jobs.CircleReconciliationJobOptions{
-			JobIntervalSeconds:  10,
+			JobIntervalSeconds:  schedulerOptions.PaymentJobIntervalSeconds,
 			Models:              models,
 			DistAccountResolver: serveOpts.SubmitterEngine.DistributionAccountResolver,
 			CircleService:       serveOpts.CircleService,
