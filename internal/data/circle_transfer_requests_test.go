@@ -158,7 +158,7 @@ func Test_CircleTransferRequestModel_FindIncompleteByPaymentID(t *testing.T) {
 
 	t.Run("return nil if no circle transfer request is found", func(t *testing.T) {
 		circleEntry, err := m.FindIncompleteByPaymentID(ctx, dbConnectionPool, "payment-id")
-		require.NoError(t, err)
+		require.ErrorIs(t, err, ErrRecordNotFound)
 		require.Nil(t, circleEntry)
 	})
 
@@ -177,7 +177,7 @@ func Test_CircleTransferRequestModel_FindIncompleteByPaymentID(t *testing.T) {
 		require.NoError(t, err)
 
 		circleEntry, err = m.FindIncompleteByPaymentID(ctx, dbConnectionPool, paymentID)
-		require.NoError(t, err)
+		require.ErrorIs(t, err, ErrRecordNotFound)
 		require.Nil(t, circleEntry)
 	})
 

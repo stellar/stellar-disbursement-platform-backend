@@ -8,6 +8,8 @@ import (
 	"slices"
 	"time"
 
+	"github.com/lib/pq"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 )
 
@@ -70,7 +72,7 @@ func (m CircleTransferRequestModel) GetOrInsert(ctx context.Context, paymentID s
 		}
 
 		circleTransferRequest, err := m.FindIncompleteByPaymentID(ctx, m.dbConnectionPool, paymentID)
-		if err != nil {
+		if err != nil && !errors.Is(err, ErrRecordNotFound) {
 			return nil, fmt.Errorf("finding incomplete circle transfer by payment ID: %w", err)
 		}
 
@@ -110,28 +112,49 @@ func (m CircleTransferRequestModel) FindIncompleteByPaymentID(ctx context.Contex
 		return nil, fmt.Errorf("paymentID is required")
 	}
 
-	query := `
-		SELECT
-			*
-		FROM
-			circle_transfer_requests
-		WHERE
-			payment_id = $1
-			AND completed_at IS NULL
-		ORDER BY
-			created_at DESC
-	`
+	queryParams := QueryParams{
+		Filters: map[FilterKey]interface{}{
+			FilterKeyPaymentID:           paymentID,
+			IsNull(FilterKeyCompletedAt): true,
+		},
+		SortBy:    "created_at",
+		SortOrder: "DESC",
+	}
+	return m.Get(ctx, m.dbConnectionPool, queryParams)
+}
 
-	var circleTransferRequest CircleTransferRequest
-	err := sqlExec.GetContext(ctx, &circleTransferRequest, query, paymentID)
+const baseQuery = `
+	SELECT
+		*
+	FROM
+		circle_transfer_requests c
+`
+
+func (m CircleTransferRequestModel) GetAll(ctx context.Context, sqlExec db.SQLExecuter, queryParams QueryParams) ([]*CircleTransferRequest, error) {
+	query, params := buildCircleTransferRequestQuery(baseQuery, queryParams, sqlExec)
+
+	var circleTransferRequests []*CircleTransferRequest
+	err := sqlExec.SelectContext(ctx, &circleTransferRequests, query, params...)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, nil
-		}
-		return nil, fmt.Errorf("finding circle transfer request: %w", err)
+		return nil, fmt.Errorf("getting circle transfer requests: %w", err)
 	}
 
-	return &circleTransferRequest, nil
+	return circleTransferRequests, nil
+}
+
+func (m CircleTransferRequestModel) Get(ctx context.Context, sqlExec db.SQLExecuter, queryParams QueryParams) (*CircleTransferRequest, error) {
+	query, params := buildCircleTransferRequestQuery(baseQuery, queryParams, sqlExec)
+
+	var circleTransferRequests CircleTransferRequest
+	err := sqlExec.GetContext(ctx, &circleTransferRequests, query, params...)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrRecordNotFound
+		}
+		return nil, fmt.Errorf("getting circle transfer request: %w", err)
+	}
+
+	return &circleTransferRequests, nil
 }
 
 func (m CircleTransferRequestModel) Update(ctx context.Context, sqlExec db.SQLExecuter, idempotencyKey string, update CircleTransferRequestUpdate) (*CircleTransferRequest, error) {
@@ -164,4 +187,37 @@ func (m CircleTransferRequestModel) Update(ctx context.Context, sqlExec db.SQLEx
 	}
 
 	return &circleTransferRequest, nil
+}
+
+func buildCircleTransferRequestQuery(baseQuery string, queryParams QueryParams, sqlExec db.SQLExecuter) (string, []interface{}) {
+	qb := NewQueryBuilder(baseQuery)
+
+	if queryParams.Filters[FilterKeyStatus] != nil {
+		if statusSlice, ok := queryParams.Filters[FilterKeyStatus].([]CircleTransferStatus); ok {
+			if len(statusSlice) > 0 {
+				qb.AddCondition("c.status = ANY(?)", pq.Array(statusSlice))
+			}
+		} else {
+			qb.AddCondition("c.status = ?", queryParams.Filters[FilterKeyStatus])
+		}
+	}
+
+	if paymentID := queryParams.Filters[FilterKeyPaymentID]; paymentID != nil {
+		qb.AddCondition("c.payment_id = ?", paymentID)
+	}
+
+	if queryParams.Filters[IsNull(FilterKeyCompletedAt)] != nil {
+		qb.AddCondition("c." + string(IsNull(FilterKeyCompletedAt)))
+	}
+
+	if queryParams.SortBy != "" && queryParams.SortOrder != "" {
+		qb.AddSorting(queryParams.SortBy, queryParams.SortOrder, "c")
+	}
+
+	if queryParams.PageLimit > 0 && queryParams.Page > 0 {
+		qb.AddPagination(queryParams.Page, queryParams.PageLimit)
+	}
+
+	query, params := qb.Build()
+	return sqlExec.Rebind(query), params
 }
