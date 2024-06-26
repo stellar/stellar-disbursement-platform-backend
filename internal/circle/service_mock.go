@@ -119,10 +119,6 @@ func (_m *MockService) PostTransfer(ctx context.Context, transferRequest Transfe
 func (_m *MockService) SendPayment(ctx context.Context, paymentRequest PaymentRequest) (*Transfer, error) {
 	ret := _m.Called(ctx, paymentRequest)
 
-	if len(ret) == 0 {
-		panic("no return value specified for SendPayment")
-	}
-
 	var r0 *Transfer
 	var r1 error
 	if rf, ok := ret.Get(0).(func(context.Context, PaymentRequest) (*Transfer, error)); ok {
@@ -145,9 +141,7 @@ func (_m *MockService) SendPayment(ctx context.Context, paymentRequest PaymentRe
 	return r0, r1
 }
 
-// NewMockService creates a new instance of MockService. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
-// The first argument is typically a *testing.T value.
-func NewMockService(t interface {
+type mockConstructorTestingTNewMockService interface {
 	mock.TestingT
 	Cleanup(func())
 }
