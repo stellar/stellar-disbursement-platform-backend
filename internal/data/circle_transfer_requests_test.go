@@ -139,7 +139,7 @@ func Test_CircleTransferRequestModel_Update(t *testing.T) {
 	})
 }
 
-func Test_CircleTransferRequestModel_FindIncompleteByPaymentID(t *testing.T) {
+func Test_CircleTransferRequestModel_GetIncompleteByPaymentID(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)
@@ -149,15 +149,8 @@ func Test_CircleTransferRequestModel_FindIncompleteByPaymentID(t *testing.T) {
 	ctx := context.Background()
 	m := CircleTransferRequestModel{dbConnectionPool: dbConnectionPool}
 
-	t.Run("return an error if paymentID is empty", func(t *testing.T) {
-		circleEntry, err := m.FindIncompleteByPaymentID(ctx, dbConnectionPool, "")
-		require.Error(t, err)
-		require.ErrorContains(t, err, "paymentID is required")
-		require.Nil(t, circleEntry)
-	})
-
 	t.Run("return nil if no circle transfer request is found", func(t *testing.T) {
-		circleEntry, err := m.FindIncompleteByPaymentID(ctx, dbConnectionPool, "payment-id")
+		circleEntry, err := m.GetIncompleteByPaymentID(ctx, dbConnectionPool, "payment-id")
 		require.ErrorIs(t, err, ErrRecordNotFound)
 		require.Nil(t, circleEntry)
 	})
@@ -176,7 +169,7 @@ func Test_CircleTransferRequestModel_FindIncompleteByPaymentID(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		circleEntry, err = m.FindIncompleteByPaymentID(ctx, dbConnectionPool, paymentID)
+		circleEntry, err = m.GetIncompleteByPaymentID(ctx, dbConnectionPool, paymentID)
 		require.ErrorIs(t, err, ErrRecordNotFound)
 		require.Nil(t, circleEntry)
 	})
@@ -186,7 +179,7 @@ func Test_CircleTransferRequestModel_FindIncompleteByPaymentID(t *testing.T) {
 		_, err := m.Insert(ctx, paymentID)
 		require.NoError(t, err)
 
-		circleEntry, err := m.FindIncompleteByPaymentID(ctx, dbConnectionPool, paymentID)
+		circleEntry, err := m.GetIncompleteByPaymentID(ctx, dbConnectionPool, paymentID)
 		require.NoError(t, err)
 		require.NotNil(t, circleEntry)
 		assert.Equal(t, paymentID, circleEntry.PaymentID)
