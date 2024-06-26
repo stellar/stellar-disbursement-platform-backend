@@ -3,12 +3,13 @@ package data
 import "fmt"
 
 type QueryParams struct {
-	Query     string
-	Page      int
-	PageLimit int
-	SortBy    SortField
-	SortOrder SortOrder
-	Filters   map[FilterKey]interface{}
+	Query               string
+	Page                int
+	PageLimit           int
+	SortBy              SortField
+	SortOrder           SortOrder
+	Filters             map[FilterKey]interface{}
+	ForUpdateSkipLocked bool
 }
 
 type SortOrder string
@@ -37,9 +38,24 @@ const (
 	FilterKeyCompletedAt     FilterKey = "completed_at"
 	FilterKeyCreatedAtAfter  FilterKey = "created_at_after"
 	FilterKeyCreatedAtBefore FilterKey = "created_at_before"
+
+	FilterKeySyncAttempts FilterKey = "sync_attempts"
+	// SELECT * FROM circle_transfer_requests WHERE status="pending" AND sync_attempts < max_sync_attempts ORDER BY last_sync_attempt_at ASC FOR UPDATE LIMIT BATCH_SIZE
 )
+
+func (fk FilterKey) Equals() string {
+	return fmt.Sprintf("%s = ?", fk)
+}
+
+func (fk FilterKey) LowerThan() string {
+	return fmt.Sprintf("%s < ?", fk)
+}
 
 // IsNull returns `{filterKey} IS NULL`.
 func IsNull(filterKey FilterKey) FilterKey {
 	return FilterKey(fmt.Sprintf("%s IS NULL", filterKey))
+}
+
+func LowerThan(filterKey FilterKey) FilterKey {
+	return FilterKey(fmt.Sprintf("%s < ?", filterKey))
 }

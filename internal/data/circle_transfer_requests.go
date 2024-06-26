@@ -5,7 +5,9 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"reflect"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/lib/pq"
@@ -16,14 +18,14 @@ import (
 type CircleTransferRequest struct {
 	IdempotencyKey    string                `db:"idempotency_key"`
 	PaymentID         string                `db:"payment_id"`
-	CircleTransferID  *string               `db:"circle_transfer_id,omitempty"`
+	CircleTransferID  *string               `db:"circle_transfer_id"`
 	Status            *CircleTransferStatus `db:"status"`
-	ResponseBody      []byte                `db:"response_body,omitempty"`
-	SourceWalletID    *string               `db:"source_wallet_id,omitempty"`
+	ResponseBody      []byte                `db:"response_body"`
+	SourceWalletID    *string               `db:"source_wallet_id"`
 	CreatedAt         time.Time             `db:"created_at"`
 	UpdatedAt         time.Time             `db:"updated_at"`
-	CompletedAt       *time.Time            `db:"completed_at,omitempty"`
-	LastSyncAttemptAt *time.Time            `db:"last_sync_attempt_at,omitempty"`
+	CompletedAt       *time.Time            `db:"completed_at"`
+	LastSyncAttemptAt *time.Time            `db:"last_sync_attempt_at"`
 	SyncAttempts      int                   `db:"sync_attempts"`
 }
 
@@ -44,11 +46,35 @@ func (s CircleTransferStatus) IsCompleted() bool {
 }
 
 type CircleTransferRequestUpdate struct {
-	CircleTransferID string
-	Status           CircleTransferStatus
-	ResponseBody     []byte
-	SourceWalletID   string
-	CompletedAt      *time.Time
+	CircleTransferID  string               `db:"circle_transfer_id"`
+	Status            CircleTransferStatus `db:"status"`
+	ResponseBody      []byte               `db:"response_body"`
+	SourceWalletID    string               `db:"source_wallet_id"`
+	CompletedAt       *time.Time           `db:"completed_at"`
+	LastSyncAttemptAt *time.Time           `db:"last_sync_attempt_at"`
+	SyncAttempts      int                  `db:"sync_attempts"`
+}
+
+func (u CircleTransferRequestUpdate) BuildSetClause() (string, []interface{}) {
+	v := reflect.ValueOf(u)
+	t := reflect.TypeOf(u)
+
+	var setClauses []string
+	var params []interface{}
+
+	for i := 0; i < v.NumField(); i++ {
+		field := v.Field(i)
+		fieldType := t.Field(i)
+		dbTag := fieldType.Tag.Get("db")
+
+		// Check if the field is not zero-value
+		if !field.IsZero() {
+			setClauses = append(setClauses, fmt.Sprintf("%s = ?", dbTag))
+			params = append(params, field.Interface())
+		}
+	}
+
+	return strings.Join(setClauses, ", "), params
 }
 
 type CircleTransferRequestModel struct {
@@ -119,6 +145,26 @@ func (m CircleTransferRequestModel) GetIncompleteByPaymentID(ctx context.Context
 	return m.Get(ctx, m.dbConnectionPool, queryParams)
 }
 
+const (
+	maxSyncAttempts = 10
+	batchSize       = 10
+)
+
+func (m CircleTransferRequestModel) GetPendingReconciliation(ctx context.Context, sqlExec db.SQLExecuter) ([]*CircleTransferRequest, error) {
+	queryParams := QueryParams{
+		Filters: map[FilterKey]interface{}{
+			FilterKeyStatus:                  []CircleTransferStatus{CircleTransferStatusPending},
+			LowerThan(FilterKeySyncAttempts): maxSyncAttempts,
+		},
+		SortBy:              "last_sync_attempt_at",
+		SortOrder:           "ASC",
+		Page:                1,
+		PageLimit:           batchSize,
+		ForUpdateSkipLocked: true,
+	}
+	return m.GetAll(ctx, sqlExec, queryParams)
+}
+
 const baseQuery = `
 	SELECT
 		*
@@ -160,23 +206,26 @@ func (m CircleTransferRequestModel) Update(ctx context.Context, sqlExec db.SQLEx
 		return nil, fmt.Errorf("idempotencyKey is required")
 	}
 
-	query := `
+	setClause, params := update.BuildSetClause()
+	if setClause == "" {
+		return nil, fmt.Errorf("no fields to update")
+	}
+
+	query := fmt.Sprintf(`
 		UPDATE
 			circle_transfer_requests
 		SET
-			circle_transfer_id = $2,
-			status = $3,
-			response_body = $4,
-			source_wallet_id = $5,
-			completed_at = $6
+			%s
 		WHERE
-			idempotency_key = $1
+			idempotency_key = ?
 		RETURNING
 			*
-	`
+	`, setClause)
+	params = append(params, idempotencyKey)
+	query = sqlExec.Rebind(query)
 
 	var circleTransferRequest CircleTransferRequest
-	err := sqlExec.GetContext(ctx, &circleTransferRequest, query, idempotencyKey, update.CircleTransferID, update.Status, update.ResponseBody, update.SourceWalletID, update.CompletedAt)
+	err := sqlExec.GetContext(ctx, &circleTransferRequest, query, params...)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, fmt.Errorf("circle transfer request with idempotency key %s not found: %w", idempotencyKey, ErrRecordNotFound)
@@ -208,6 +257,10 @@ func buildCircleTransferRequestQuery(baseQuery string, queryParams QueryParams, 
 		qb.AddCondition("c." + string(IsNull(FilterKeyCompletedAt)))
 	}
 
+	if queryParams.Filters[LowerThan(FilterKeySyncAttempts)] != nil {
+		qb.AddCondition("c.sync_attempts < ?", queryParams.Filters[LowerThan(FilterKeySyncAttempts)])
+	}
+
 	if queryParams.SortBy != "" && queryParams.SortOrder != "" {
 		qb.AddSorting(queryParams.SortBy, queryParams.SortOrder, "c")
 	}
@@ -215,6 +268,8 @@ func buildCircleTransferRequestQuery(baseQuery string, queryParams QueryParams, 
 	if queryParams.PageLimit > 0 && queryParams.Page > 0 {
 		qb.AddPagination(queryParams.Page, queryParams.PageLimit)
 	}
+
+	qb.forUpdateSkipLocked = queryParams.ForUpdateSkipLocked
 
 	query, params := qb.Build()
 	return sqlExec.Rebind(query), params

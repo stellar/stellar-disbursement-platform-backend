@@ -6,12 +6,13 @@ import (
 
 // QueryBuilder is a helper struct for building SQL queries
 type QueryBuilder struct {
-	baseQuery        string
-	whereClause      string
-	whereParams      []interface{}
-	sortClause       string
-	paginationClause string
-	paginationParams []interface{}
+	baseQuery           string
+	whereClause         string
+	whereParams         []interface{}
+	sortClause          string
+	paginationClause    string
+	paginationParams    []interface{}
+	forUpdateSkipLocked bool
 }
 
 // NewQueryBuilder creates a new QueryBuilder
@@ -78,6 +79,9 @@ func (qb *QueryBuilder) Build() (string, []interface{}) {
 	if qb.paginationClause != "" {
 		query = fmt.Sprintf("%s %s", query, qb.paginationClause)
 		params = append(params, qb.paginationParams...)
+	}
+	if qb.forUpdateSkipLocked {
+		query = fmt.Sprintf("%s FOR UPDATE SKIP LOCKED", query)
 	}
 	return query, params
 }
