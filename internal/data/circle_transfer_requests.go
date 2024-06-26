@@ -12,15 +12,17 @@ import (
 )
 
 type CircleTransferRequest struct {
-	IdempotencyKey   string                `db:"idempotency_key"`
-	PaymentID        string                `db:"payment_id"`
-	CircleTransferID *string               `db:"circle_transfer_id,omitempty"`
-	Status           *CircleTransferStatus `db:"status"`
-	ResponseBody     []byte                `db:"response_body,omitempty"`
-	SourceWalletID   *string               `db:"source_wallet_id,omitempty"`
-	CreatedAt        time.Time             `db:"created_at"`
-	UpdatedAt        time.Time             `db:"updated_at"`
-	CompletedAt      *time.Time            `db:"completed_at,omitempty"`
+	IdempotencyKey    string                `db:"idempotency_key"`
+	PaymentID         string                `db:"payment_id"`
+	CircleTransferID  *string               `db:"circle_transfer_id,omitempty"`
+	Status            *CircleTransferStatus `db:"status"`
+	ResponseBody      []byte                `db:"response_body,omitempty"`
+	SourceWalletID    *string               `db:"source_wallet_id,omitempty"`
+	CreatedAt         time.Time             `db:"created_at"`
+	UpdatedAt         time.Time             `db:"updated_at"`
+	CompletedAt       *time.Time            `db:"completed_at,omitempty"`
+	LastSyncAttemptAt *time.Time            `db:"last_sync_attempt_at,omitempty"`
+	SyncAttempts      int                   `db:"sync_attempts"`
 }
 
 type CircleTransferStatus string
