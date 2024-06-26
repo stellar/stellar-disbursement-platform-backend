@@ -159,7 +159,7 @@ func (m *ClientConfigModel) update(ctx context.Context, sqlExec db.SQLExecuter, 
 	return nil
 }
 
-var _ ClientConfigModelInterface = &ClientConfigModel{}
+var _ ClientConfigModelInterface = (*ClientConfigModel)(nil)
 
 type ClientConfigUpdate struct {
 	EncryptedAPIKey    *string `db:"encrypted_api_key"`

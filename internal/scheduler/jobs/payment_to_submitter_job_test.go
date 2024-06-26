@@ -6,25 +6,25 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/mocks"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/mocks"
 )
 
 func Test_PaymentToSubmitterJob_GetInterval(t *testing.T) {
 	interval := 5
-	p := NewPaymentToSubmitterJob(interval, &data.Models{}, nil)
+	p := NewPaymentToSubmitterJob(PaymentToSubmitterJobOptions{JobIntervalSeconds: interval})
 	require.Equal(t, time.Duration(interval)*time.Second, p.GetInterval())
 }
 
 func Test_PaymentToSubmitterJob_GetName(t *testing.T) {
-	p := NewPaymentToSubmitterJob(5, &data.Models{}, nil)
+	p := NewPaymentToSubmitterJob(PaymentToSubmitterJobOptions{JobIntervalSeconds: 5})
 	require.Equal(t, paymentToSubmitterJobName, p.GetName())
 }
 
 func Test_PaymentToSubmitterJob_IsJobMultiTenant(t *testing.T) {
-	p := NewPaymentToSubmitterJob(5, &data.Models{}, nil)
+	p := NewPaymentToSubmitterJob(PaymentToSubmitterJobOptions{JobIntervalSeconds: 5})
 	require.Equal(t, true, p.IsJobMultiTenant())
 }
 

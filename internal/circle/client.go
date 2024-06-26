@@ -9,8 +9,6 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/google/uuid"
-
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
@@ -107,7 +105,6 @@ func (client *Client) PostTransfer(ctx context.Context, transferReq TransferRequ
 		return nil, fmt.Errorf("building path: %w", err)
 	}
 
-	transferReq.IdempotencyKey = uuid.NewString()
 	transferData, err := json.Marshal(transferReq)
 	if err != nil {
 		return nil, err

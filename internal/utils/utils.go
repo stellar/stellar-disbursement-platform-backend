@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"reflect"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -92,4 +93,8 @@ func GetTypeName(v interface{}) string {
 // StringPtr returns a pointer to a string
 func StringPtr(s string) *string {
 	return &s
+}
+
+func TimePtr(t time.Time) *time.Time {
+	return &t
 }

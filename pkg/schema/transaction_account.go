@@ -1,6 +1,9 @@
 package schema
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 type AccountStatus string
 
@@ -15,6 +18,18 @@ type TransactionAccount struct {
 	CircleWalletID string        `json:"circle_wallet_id,omitempty"`
 	Type           AccountType   `json:"type"`
 	Status         AccountStatus `json:"status"`
+}
+
+func (da TransactionAccount) ID() string {
+	platform := da.Type.Platform()
+	switch platform {
+	case StellarPlatform:
+		return fmt.Sprintf("%s:%s", strings.ToLower(string(platform)), da.Address)
+	case CirclePlatform:
+		return fmt.Sprintf("%s:%s", strings.ToLower(string(platform)), da.CircleWalletID)
+	default:
+		panic("unsupported type!")
+	}
 }
 
 func (da TransactionAccount) IsStellar() bool {

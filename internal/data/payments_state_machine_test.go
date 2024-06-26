@@ -41,7 +41,7 @@ func Test_PaymentStatus_SourceStatuses(t *testing.T) {
 		{
 			name:                   "Failure",
 			targetStatus:           FailedPaymentStatus,
-			expectedSourceStatuses: []PaymentStatus{PendingPaymentStatus},
+			expectedSourceStatuses: []PaymentStatus{ReadyPaymentStatus, PendingPaymentStatus},
 		},
 		{
 			name:                   "Canceled",

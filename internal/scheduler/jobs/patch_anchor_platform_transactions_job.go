@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/stellar/go/support/log"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
@@ -44,7 +45,8 @@ func (j patchAnchorPlatformTransactionsCompletionJob) GetInterval() time.Duratio
 }
 
 func (j patchAnchorPlatformTransactionsCompletionJob) Execute(ctx context.Context) error {
-	if err := j.service.PatchAPTransactionsForPayments(ctx); err != nil {
+	err := j.service.PatchAPTransactionsForPayments(ctx)
+	if err != nil {
 		err = fmt.Errorf("patching anchor platform transactions completion: %w", err)
 		log.Ctx(ctx).Error(err)
 		return err

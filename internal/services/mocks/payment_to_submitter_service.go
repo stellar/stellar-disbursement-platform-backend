@@ -3,9 +3,9 @@ package mocks
 import (
 	"context"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stretchr/testify/mock"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 )
 
 // MockPaymentToSubmitterService mocks PaymentToSubmitterService.
@@ -22,6 +22,3 @@ func (m *MockPaymentToSubmitterService) SendPaymentsReadyToPay(ctx context.Conte
 	args := m.Called(ctx, paymentsReadyToPay)
 	return args.Error(0)
 }
-
-// Making sure that ServerService implements ServerServiceInterface:
-var _ services.PaymentToSubmitterServiceInterface = (*MockPaymentToSubmitterService)(nil)
