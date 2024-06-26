@@ -30,9 +30,9 @@ var _ ServiceInterface = &Service{}
 type ServiceOptions struct {
 	ClientFactory        ClientFactory
 	ClientConfigModel    ClientConfigModelInterface
+	TenantManager        tenant.ManagerInterface
 	NetworkType          utils.NetworkType
 	EncryptionPassphrase string
-	TenantManager        tenant.ManagerInterface
 }
 
 func (o ServiceOptions) Validate() error {
@@ -42,6 +42,10 @@ func (o ServiceOptions) Validate() error {
 
 	if o.ClientConfigModel == nil {
 		return fmt.Errorf("ClientConfigModel is required")
+	}
+
+	if o.TenantManager == nil {
+		return fmt.Errorf("TenantManager is required")
 	}
 
 	err := o.NetworkType.Validate()

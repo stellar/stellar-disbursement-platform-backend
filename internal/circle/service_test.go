@@ -18,6 +18,7 @@ func Test_ServiceOptions_Validate(t *testing.T) {
 		return nil
 	}
 	circleClientConfigModel := &ClientConfigModel{}
+	mockTenantManager := &tenant.TenantManagerMock{}
 
 	testCases := []struct {
 		name                string
@@ -35,10 +36,16 @@ func Test_ServiceOptions_Validate(t *testing.T) {
 			expectedErrContains: "ClientConfigModel is required",
 		},
 		{
+			name:                "TenantManager validation fails",
+			opts:                ServiceOptions{ClientFactory: clientFactory, ClientConfigModel: circleClientConfigModel},
+			expectedErrContains: "TenantManager is required",
+		},
+		{
 			name: "NetworkType validation fails",
 			opts: ServiceOptions{
 				ClientFactory:     clientFactory,
 				ClientConfigModel: circleClientConfigModel,
+				TenantManager:     mockTenantManager,
 				NetworkType:       utils.NetworkType("FOOBAR"),
 			},
 			expectedErrContains: `validating NetworkType: invalid network type "FOOBAR"`,
@@ -48,6 +55,7 @@ func Test_ServiceOptions_Validate(t *testing.T) {
 			opts: ServiceOptions{
 				ClientFactory:        clientFactory,
 				ClientConfigModel:    circleClientConfigModel,
+				TenantManager:        mockTenantManager,
 				NetworkType:          utils.TestnetNetworkType,
 				EncryptionPassphrase: "FOO BAR",
 			},
@@ -58,6 +66,7 @@ func Test_ServiceOptions_Validate(t *testing.T) {
 			opts: ServiceOptions{
 				ClientFactory:        clientFactory,
 				ClientConfigModel:    circleClientConfigModel,
+				TenantManager:        mockTenantManager,
 				NetworkType:          utils.TestnetNetworkType,
 				EncryptionPassphrase: "SCW5I426WV3IDTLSTLQEHC6BMXWI2Z6C4DXAOC4ZA2EIHTAZQ6VD3JI6",
 			},
@@ -88,12 +97,14 @@ func Test_NewService(t *testing.T) {
 			return nil
 		}
 		clientConfigModel := &ClientConfigModel{}
+		mockTntManager := &tenant.TenantManagerMock{}
 		networkType := utils.TestnetNetworkType
 		encryptionPassphrase := "SCW5I426WV3IDTLSTLQEHC6BMXWI2Z6C4DXAOC4ZA2EIHTAZQ6VD3JI6"
 
 		svc, err := NewService(ServiceOptions{
 			ClientFactory:        clientFactory,
 			ClientConfigModel:    clientConfigModel,
+			TenantManager:        mockTntManager,
 			NetworkType:          networkType,
 			EncryptionPassphrase: encryptionPassphrase,
 		})
@@ -102,11 +113,11 @@ func Test_NewService(t *testing.T) {
 		wantService := &Service{
 			ClientFactory:        clientFactory,
 			ClientConfigModel:    clientConfigModel,
+			TenantManager:        mockTntManager,
 			NetworkType:          networkType,
 			EncryptionPassphrase: encryptionPassphrase,
 		}
 
-		mockTntManager := &tenant.TenantManagerMock{}
 		assert.Equal(t,
 			wantService.ClientFactory(networkType, "FOO BAR", mockTntManager),
 			svc.ClientFactory(networkType, "FOO BAR", mockTntManager))
@@ -131,6 +142,7 @@ func Test_Service_getClient(t *testing.T) {
 	encryptedAPIKey := "72TARC5aoKJOEUIMTR9nlITP6+MbugQtS+2faBKSQbCrXic=" // <--- "api-key" encrypted with the encryptionPassphrase.
 	networkType := utils.TestnetNetworkType
 	clientConfigModel := NewClientConfigModel(dbConnectionPool)
+	mockTntManager := &tenant.TenantManagerMock{}
 
 	// Add a client config to the database.
 	err = clientConfigModel.Upsert(ctx, ClientConfigUpdate{
@@ -144,6 +156,7 @@ func Test_Service_getClient(t *testing.T) {
 	svc, err := NewService(ServiceOptions{
 		ClientFactory:        NewClient,
 		ClientConfigModel:    clientConfigModel,
+		TenantManager:        mockTntManager,
 		NetworkType:          networkType,
 		EncryptionPassphrase: encryptionPassphrase,
 	})
@@ -169,6 +182,7 @@ func Test_Service_allMethods(t *testing.T) {
 	encryptedAPIKey := "72TARC5aoKJOEUIMTR9nlITP6+MbugQtS+2faBKSQbCrXic=" // <--- "api-key" encrypted with the encryptionPassphrase.
 	networkType := utils.TestnetNetworkType
 	clientConfigModel := NewClientConfigModel(dbConnectionPool)
+	mockTntManager := &tenant.TenantManagerMock{}
 
 	// Add a client config to the database.
 	err = clientConfigModel.Upsert(ctx, ClientConfigUpdate{
@@ -185,6 +199,7 @@ func Test_Service_allMethods(t *testing.T) {
 				return mCircleClient
 			},
 			ClientConfigModel:    clientConfigModel,
+			TenantManager:        mockTntManager,
 			NetworkType:          networkType,
 			EncryptionPassphrase: encryptionPassphrase,
 		})
