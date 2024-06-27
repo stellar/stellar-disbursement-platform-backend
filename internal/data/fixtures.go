@@ -363,6 +363,37 @@ func CreateReceiverVerificationFixture(t *testing.T, ctx context.Context, sqlExe
 	return &verification
 }
 
+func DeleteAllCircleTransferRequestsFixtures(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter) {
+	const query = "DELETE FROM circle_transfer_requests"
+	_, err := sqlExec.ExecContext(ctx, query)
+	require.NoError(t, err)
+}
+
+func CreateCircleTransferRequestFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, insert CircleTransferRequest) *CircleTransferRequest {
+	const query = `
+		INSERT INTO circle_transfer_requests
+			(payment_id, circle_transfer_id, status, source_wallet_id, completed_at, last_sync_attempt_at, sync_attempts)
+		VALUES
+			($1, $2, $3, $4, $5, $6, $7)
+		RETURNING
+			*
+	`
+
+	var circleTransferRequest CircleTransferRequest
+	err := sqlExec.GetContext(ctx, &circleTransferRequest, query,
+		insert.PaymentID,
+		insert.CircleTransferID,
+		insert.Status,
+		insert.SourceWalletID,
+		insert.CompletedAt,
+		insert.LastSyncAttemptAt,
+		insert.SyncAttempts,
+	)
+	require.NoError(t, err)
+
+	return &circleTransferRequest
+}
+
 func DeleteAllReceiverVerificationFixtures(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter) {
 	const query = "DELETE FROM receiver_verifications"
 	_, err := sqlExec.ExecContext(ctx, query)

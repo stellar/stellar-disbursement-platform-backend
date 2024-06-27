@@ -26,14 +26,6 @@ type CircleReconciliationService struct {
 	DistAccountResolver signing.DistributionAccountResolver
 }
 
-func NewCircleReconciliationService(models *data.Models, circleService circle.ServiceInterface, distAccountResolver signing.DistributionAccountResolver) CircleReconciliationServiceInterface {
-	return &CircleReconciliationService{
-		Models:              models,
-		CircleService:       circleService,
-		DistAccountResolver: distAccountResolver,
-	}
-}
-
 func (s *CircleReconciliationService) Reconcile(ctx context.Context) error {
 	// Step 1: Get the tenant from the context.
 	tnt, outerErr := tenant.GetTenantFromContext(ctx)
@@ -47,10 +39,11 @@ func (s *CircleReconciliationService) Reconcile(ctx context.Context) error {
 		return fmt.Errorf("getting distribution account from context: %w", outerErr)
 	}
 	if !distAcc.IsCircle() {
+		log.Ctx(ctx).Debugf("Distribution account for tenant %q is not of type %q, skipping reconciliation...", tnt.Name, schema.CirclePlatform)
 		return nil
 	}
 	if distAcc.Status != schema.AccountStatusActive {
-		log.Ctx(ctx).Infof("Distribution account for tenant %q is not %s, skipping reconciliation...", tnt.Name, schema.AccountStatusActive)
+		log.Ctx(ctx).Infof("Distribution account for tenant %q is not %q, skipping reconciliation...", tnt.Name, schema.AccountStatusActive)
 		return nil
 	}
 
@@ -61,7 +54,7 @@ func (s *CircleReconciliationService) Reconcile(ctx context.Context) error {
 			return fmt.Errorf("getting pending Circle transfer requests: %w", err)
 		}
 
-		log.Ctx(ctx).Debugf("Found %d pending Circle transfer requests in tenant %s", len(circleRequests), tnt.Name)
+		log.Ctx(ctx).Debugf("Found %d pending Circle transfer requests in tenant %q", len(circleRequests), tnt.Name)
 		if len(circleRequests) == 0 {
 			return nil
 		}
@@ -73,13 +66,12 @@ func (s *CircleReconciliationService) Reconcile(ctx context.Context) error {
 			if err != nil {
 				return fmt.Errorf("getting Circle transfer by ID %q: %w", *circleRequest.CircleTransferID, err)
 			}
-
 			jsonBody, err := json.Marshal(transfer)
 			if err != nil {
 				return fmt.Errorf("converting transfer body to json: %w", err)
 			}
 
-			// 4.2. update the circle transfer request entry in the DB
+			// 4.2. update the circle transfer request entry in the DB.
 			newStatus := data.CircleTransferStatus(transfer.Status)
 			if *circleRequest.Status == newStatus {
 				log.Ctx(ctx).Debugf("[tenant=%s] Circle transfer request %q is already in status %q, skipping reconciliation...", tnt.Name, circleRequest.IdempotencyKey, newStatus)
@@ -102,16 +94,19 @@ func (s *CircleReconciliationService) Reconcile(ctx context.Context) error {
 				return fmt.Errorf("updating Circle transfer request: %w", err)
 			}
 
-			// 4.3. update the payment status in the DB
+			// 4.3. update the payment status in the DB.
 			newPaymentStatus, err := transfer.Status.ToPaymentStatus()
 			if err != nil {
 				return fmt.Errorf("converting Circle transfer status to Payment status: %w", err)
 			}
 			var statusMsg string
-			if newStatus == data.CircleTransferStatusSuccess {
+			switch newStatus {
+			case data.CircleTransferStatusSuccess:
 				statusMsg = fmt.Sprintf("Circle transfer completed successfully with the Stellar transaction hash: %q", transfer.TransactionHash)
-			} else if newStatus == data.CircleTransferStatusFailed {
+			case data.CircleTransferStatusFailed:
 				statusMsg = fmt.Sprintf("Circle transfer failed with error: %q", transfer.ErrorCode)
+			default:
+				return fmt.Errorf("unexpected Circle transfer status: %q", newStatus)
 			}
 
 			err = s.Models.Payment.UpdateStatus(ctx, dbTx, circleRequest.PaymentID, newPaymentStatus, &statusMsg, transfer.TransactionHash)
@@ -119,7 +114,7 @@ func (s *CircleReconciliationService) Reconcile(ctx context.Context) error {
 				return fmt.Errorf("updating payment status: %w", err)
 			}
 
-			log.Ctx(ctx).Infof("[tenant=%s] Reconciled Circle transfer request %q with status %q", tnt.Name, circleRequest.IdempotencyKey, newStatus)
+			log.Ctx(ctx).Infof("[tenant=%s] Reconciled Circle transfer request %q with status %q", tnt.Name, *circleRequest.CircleTransferID, newStatus)
 		}
 
 		return nil
