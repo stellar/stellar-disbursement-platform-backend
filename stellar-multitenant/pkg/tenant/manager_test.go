@@ -620,11 +620,12 @@ func TestManager_DeactivateTenantDistributionAccount(t *testing.T) {
 	})
 
 	t.Run("returns error when tenant is deactivated", func(t *testing.T) {
-		tnt, err := m.UpdateTenantConfig(
+		tnt, err = m.UpdateTenantConfig(
 			ctx, &TenantUpdate{
 				ID:                      tnt.ID,
 				DistributionAccountType: schema.DistributionAccountCircleDBVault,
-				Status:                  pointerTo(DeactivatedTenantStatus)})
+				Status:                  pointerTo(DeactivatedTenantStatus),
+			})
 		require.NoError(t, err)
 
 		err = m.DeactivateTenantDistributionAccount(ctx, tnt.ID)
@@ -637,7 +638,8 @@ func TestManager_DeactivateTenantDistributionAccount(t *testing.T) {
 			ctx, &TenantUpdate{
 				ID:                      tnt.ID,
 				DistributionAccountType: schema.DistributionAccountCircleDBVault,
-				Status:                  pointerTo(ActivatedTenantStatus)})
+				Status:                  pointerTo(ActivatedTenantStatus),
+			})
 		require.NoError(t, err)
 		err = m.DeactivateTenantDistributionAccount(ctx, tnt.ID)
 		require.NoError(t, err)
