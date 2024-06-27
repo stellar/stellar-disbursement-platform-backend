@@ -116,7 +116,7 @@ func (m CircleTransferRequestModel) GetIncompleteByPaymentID(ctx context.Context
 			IsNull(FilterKeyCompletedAt): true,
 		},
 		SortBy:    "created_at",
-		SortOrder: "DESC",
+		SortOrder: SortOrderDESC,
 	}
 	return m.Get(ctx, m.dbConnectionPool, queryParams)
 }
@@ -133,7 +133,7 @@ func (m CircleTransferRequestModel) GetPendingReconciliation(ctx context.Context
 			LowerThan(FilterKeySyncAttempts): maxSyncAttempts,
 		},
 		SortBy:              "last_sync_attempt_at",
-		SortOrder:           "ASC",
+		SortOrder:           SortOrderASC,
 		Page:                1,
 		PageLimit:           batchSize,
 		ForUpdateSkipLocked: true,
@@ -149,7 +149,6 @@ const baseQuery = `
 `
 
 func (m CircleTransferRequestModel) GetAll(ctx context.Context, sqlExec db.SQLExecuter, queryParams QueryParams) ([]*CircleTransferRequest, error) {
-	// TODO: add tests
 	query, params := buildCircleTransferRequestQuery(baseQuery, queryParams, sqlExec)
 
 	var circleTransferRequests []*CircleTransferRequest
@@ -162,7 +161,6 @@ func (m CircleTransferRequestModel) GetAll(ctx context.Context, sqlExec db.SQLEx
 }
 
 func (m CircleTransferRequestModel) Get(ctx context.Context, sqlExec db.SQLExecuter, queryParams QueryParams) (*CircleTransferRequest, error) {
-	// TODO: add tests
 	query, params := buildCircleTransferRequestQuery(baseQuery, queryParams, sqlExec)
 
 	var circleTransferRequests CircleTransferRequest

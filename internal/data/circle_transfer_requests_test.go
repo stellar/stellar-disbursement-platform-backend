@@ -140,6 +140,151 @@ func Test_CircleTransferRequestModel_Update(t *testing.T) {
 	})
 }
 
+func Test_CircleTransferRequestModel_Get_and_GetAll(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, outerErr)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+	now := time.Now()
+	m := CircleTransferRequestModel{dbConnectionPool: dbConnectionPool}
+
+	circleEntry1, outerErr := m.Insert(ctx, "payment-id-1")
+	require.NoError(t, outerErr)
+	circleEntry1, outerErr = m.Update(ctx, dbConnectionPool, circleEntry1.IdempotencyKey, CircleTransferRequestUpdate{
+		CircleTransferID: "circle-transfer-id-1",
+		Status:           CircleTransferStatusSuccess,
+		SyncAttempts:     10,
+	})
+	require.NoError(t, outerErr)
+	circleEntry2, outerErr := m.Insert(ctx, "payment-id-2")
+	require.NoError(t, outerErr)
+	circleEntry2, outerErr = m.Update(ctx, dbConnectionPool, circleEntry2.IdempotencyKey, CircleTransferRequestUpdate{
+		CircleTransferID: "circle-transfer-id-2",
+		Status:           CircleTransferStatusFailed,
+		SyncAttempts:     1,
+		CompletedAt:      &now,
+	})
+	require.NoError(t, outerErr)
+
+	t.Run("Get", func(t *testing.T) {
+		testCases := []struct {
+			name                    string
+			queryParams             QueryParams
+			expectedCircleRequestID string
+			expectedErrContains     string
+		}{
+			{
+				name:                    "get by paymentID",
+				queryParams:             QueryParams{Filters: map[FilterKey]interface{}{FilterKeyPaymentID: "payment-id-1"}},
+				expectedCircleRequestID: circleEntry1.IdempotencyKey,
+			},
+			{
+				name:                    "get by status",
+				queryParams:             QueryParams{Filters: map[FilterKey]interface{}{FilterKeyStatus: CircleTransferStatusFailed}},
+				expectedCircleRequestID: circleEntry2.IdempotencyKey,
+			},
+			{
+				name:                    "get by completed_at IS NULL",
+				queryParams:             QueryParams{Filters: map[FilterKey]interface{}{IsNull(FilterKeyCompletedAt): true}},
+				expectedCircleRequestID: circleEntry1.IdempotencyKey,
+			},
+			{
+				name:                    "get by sync_attempts < 10",
+				queryParams:             QueryParams{Filters: map[FilterKey]interface{}{LowerThan(FilterKeySyncAttempts): 10}},
+				expectedCircleRequestID: circleEntry2.IdempotencyKey,
+			},
+			{
+				name:                "return an error if the record is not found",
+				queryParams:         QueryParams{Filters: map[FilterKey]interface{}{FilterKeyPaymentID: "payment-id-3"}},
+				expectedErrContains: ErrRecordNotFound.Error(),
+			},
+		}
+
+		for _, tc := range testCases {
+			t.Run(tc.name, func(t *testing.T) {
+				circleEntry, err := m.Get(ctx, dbConnectionPool, tc.queryParams)
+				if tc.expectedErrContains != "" {
+					require.Error(t, err)
+					require.ErrorContains(t, err, tc.expectedErrContains)
+					require.Nil(t, circleEntry)
+				} else {
+					require.NoError(t, err)
+					require.NotNil(t, circleEntry)
+					require.Equal(t, tc.expectedCircleRequestID, circleEntry.IdempotencyKey)
+				}
+			})
+		}
+	})
+
+	t.Run("GetAll", func(t *testing.T) {
+		testCases := []struct {
+			name                     string
+			queryParams              QueryParams
+			expectedCircleRequestIDs []string
+			expectedErrContains      string
+		}{
+			{
+				name:                     "get by paymentID",
+				queryParams:              QueryParams{Filters: map[FilterKey]interface{}{FilterKeyPaymentID: "payment-id-1"}},
+				expectedCircleRequestIDs: []string{circleEntry1.IdempotencyKey},
+			},
+			{
+				name:                     "get by status",
+				queryParams:              QueryParams{Filters: map[FilterKey]interface{}{FilterKeyStatus: CircleTransferStatusFailed}},
+				expectedCircleRequestIDs: []string{circleEntry2.IdempotencyKey},
+			},
+			{
+				name:                     "get by completed_at IS NULL",
+				queryParams:              QueryParams{Filters: map[FilterKey]interface{}{IsNull(FilterKeyCompletedAt): true}},
+				expectedCircleRequestIDs: []string{circleEntry1.IdempotencyKey},
+			},
+			{
+				name:                     "get by sync_attempts < 10",
+				queryParams:              QueryParams{Filters: map[FilterKey]interface{}{LowerThan(FilterKeySyncAttempts): 10}},
+				expectedCircleRequestIDs: []string{circleEntry2.IdempotencyKey},
+			},
+			{
+				name:                     "return empty if the record is not found",
+				queryParams:              QueryParams{Filters: map[FilterKey]interface{}{FilterKeyPaymentID: "payment-id-3"}},
+				expectedCircleRequestIDs: []string{},
+			},
+			{
+				name: "return an error if more than one record is not found",
+				queryParams: QueryParams{Filters: map[FilterKey]interface{}{FilterKeyStatus: []CircleTransferStatus{
+					CircleTransferStatusSuccess,
+					CircleTransferStatusFailed,
+				}}},
+				expectedCircleRequestIDs: []string{
+					circleEntry1.IdempotencyKey,
+					circleEntry2.IdempotencyKey,
+				},
+			},
+		}
+
+		for _, tc := range testCases {
+			t.Run(tc.name, func(t *testing.T) {
+				circleEntries, err := m.GetAll(ctx, dbConnectionPool, tc.queryParams)
+				if tc.expectedErrContains != "" {
+					require.Error(t, err)
+					require.ErrorContains(t, err, tc.expectedErrContains)
+					require.Nil(t, circleEntries)
+				} else {
+					require.NoError(t, err)
+					require.Len(t, circleEntries, len(tc.expectedCircleRequestIDs))
+					gotIDs := make([]string, len(circleEntries))
+					for i, circleEntry := range circleEntries {
+						gotIDs[i] = circleEntry.IdempotencyKey
+					}
+					require.ElementsMatch(t, tc.expectedCircleRequestIDs, gotIDs)
+				}
+			})
+		}
+	})
+}
+
 func Test_CircleTransferRequestModel_GetIncompleteByPaymentID(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
