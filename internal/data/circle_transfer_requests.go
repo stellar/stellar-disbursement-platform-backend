@@ -5,9 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"reflect"
 	"slices"
-	"strings"
 	"time"
 
 	"github.com/lib/pq"
@@ -53,28 +51,6 @@ type CircleTransferRequestUpdate struct {
 	CompletedAt       *time.Time           `db:"completed_at"`
 	LastSyncAttemptAt *time.Time           `db:"last_sync_attempt_at"`
 	SyncAttempts      int                  `db:"sync_attempts"`
-}
-
-func (u CircleTransferRequestUpdate) BuildSetClause() (string, []interface{}) {
-	v := reflect.ValueOf(u)
-	t := reflect.TypeOf(u)
-
-	var setClauses []string
-	var params []interface{}
-
-	for i := 0; i < v.NumField(); i++ {
-		field := v.Field(i)
-		fieldType := t.Field(i)
-		dbTag := fieldType.Tag.Get("db")
-
-		// Check if the field is not zero-value
-		if !field.IsZero() {
-			setClauses = append(setClauses, fmt.Sprintf("%s = ?", dbTag))
-			params = append(params, field.Interface())
-		}
-	}
-
-	return strings.Join(setClauses, ", "), params
 }
 
 type CircleTransferRequestModel struct {
@@ -206,7 +182,7 @@ func (m CircleTransferRequestModel) Update(ctx context.Context, sqlExec db.SQLEx
 		return nil, fmt.Errorf("idempotencyKey is required")
 	}
 
-	setClause, params := update.BuildSetClause()
+	setClause, params := BuildSetClause(update)
 	if setClause == "" {
 		return nil, fmt.Errorf("no fields to update")
 	}
