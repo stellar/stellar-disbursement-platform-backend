@@ -16,6 +16,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
+//go:generate mockery --name=CircleReconciliationServiceInterface --case=underscore --structname=MockCircleReconciliationService --filename=circle_reconciliation_service.go
 type CircleReconciliationServiceInterface interface {
 	Reconcile(ctx context.Context) error
 }
