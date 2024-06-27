@@ -593,6 +593,61 @@ func Test_Manager_SoftDeleteTenantByID(t *testing.T) {
 	})
 }
 
+func TestManager_DeactivateTenantDistributionAccount(t *testing.T) {
+	dbt := dbtest.OpenWithAdminMigrationsOnly(t)
+	defer dbt.Close()
+
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+
+	m := NewManager(WithDatabase(dbConnectionPool))
+	tnt, err := m.AddTenant(ctx, "myorg1")
+	require.NoError(t, err)
+
+	t.Run("returns error when tenant does not exist", func(t *testing.T) {
+		err := m.DeactivateTenantDistributionAccount(ctx, "invalid-tnt")
+		require.Error(t, err)
+		assert.ErrorIs(t, err, ErrTenantDoesNotExist)
+	})
+
+	t.Run("returns error when distribution account is not managed by Circle", func(t *testing.T) {
+		err := m.DeactivateTenantDistributionAccount(ctx, tnt.ID)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, ErrTenantDoesNotExist)
+	})
+
+	t.Run("returns error when tenant is deactivated", func(t *testing.T) {
+		tnt, err := m.UpdateTenantConfig(
+			ctx, &TenantUpdate{
+				ID:                      tnt.ID,
+				DistributionAccountType: schema.DistributionAccountCircleDBVault,
+				Status:                  pointerTo(DeactivatedTenantStatus)})
+		require.NoError(t, err)
+
+		err = m.DeactivateTenantDistributionAccount(ctx, tnt.ID)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, ErrTenantDoesNotExist)
+	})
+
+	t.Run("successfully deactivates tenant distribution account", func(t *testing.T) {
+		tnt, err := m.UpdateTenantConfig(
+			ctx, &TenantUpdate{
+				ID:                      tnt.ID,
+				DistributionAccountType: schema.DistributionAccountCircleDBVault,
+				Status:                  pointerTo(ActivatedTenantStatus)})
+		require.NoError(t, err)
+		err = m.DeactivateTenantDistributionAccount(ctx, tnt.ID)
+		require.NoError(t, err)
+
+		dbTnt, err := m.GetTenant(ctx, &QueryParams{Filters: map[FilterKey]interface{}{FilterKeyID: tnt.ID}})
+		require.NoError(t, err)
+		assert.Equal(t, schema.AccountStatusPendingUserActivation, dbTnt.DistributionAccountStatus)
+	})
+}
+
 func Test_Manager_DropTenantSchema(t *testing.T) {
 	dbt := dbtest.OpenWithAdminMigrationsOnly(t)
 	defer dbt.Close()

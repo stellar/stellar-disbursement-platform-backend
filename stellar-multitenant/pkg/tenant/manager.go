@@ -13,6 +13,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/router"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
 var (
@@ -237,6 +238,8 @@ func (m *Manager) SoftDeleteTenantByID(ctx context.Context, tenantID string) (*T
 	return &t, nil
 }
 
+// DeactivateTenantDistributionAccount sets a distribution account of status ACTIVE to PENDING_USER_ACTIVATION for the given tenant id,
+// and is only used in the case where the distribution account is of type CircleDBVault.
 func (m *Manager) DeactivateTenantDistributionAccount(ctx context.Context, tenantID string) error {
 	updateQuery := `
 		UPDATE tenants t
@@ -248,10 +251,17 @@ func (m *Manager) DeactivateTenantDistributionAccount(ctx context.Context, tenan
 		Filters: excludeInactiveTenantsFilters(),
 	}
 	queryParams.Filters[FilterKeyID] = tenantID
+	queryParams.Filters[FilterKeyDistributionAccountType] = schema.DistributionAccountCircleDBVault
+	queryParams.Filters[FilterKeyDistributionAccountStatus] = schema.AccountStatusActive
 
 	query, params := m.newManagerQuery(updateQuery, queryParams)
-	_, err := m.db.ExecContext(ctx, query, params...)
-	if err != nil {
+	query += " RETURNING *"
+
+	var t Tenant
+	if err := m.db.GetContext(ctx, &t, query, params...); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrTenantDoesNotExist
+		}
 		return fmt.Errorf("deactivating distribution account for tenant %s: %w", tenantID, err)
 	}
 
@@ -385,6 +395,14 @@ func (m *Manager) newManagerQuery(baseQuery string, queryParams *QueryParams) (s
 
 	if queryParams.Filters[FilterKeyIsDefault] != nil {
 		qb.AddCondition("t.is_default = ?", queryParams.Filters[FilterKeyIsDefault])
+	}
+
+	if queryParams.Filters[FilterKeyDistributionAccountType] != nil {
+		qb.AddCondition("t.distribution_account_type = ?", queryParams.Filters[FilterKeyDistributionAccountType])
+	}
+
+	if queryParams.Filters[FilterKeyDistributionAccountStatus] != nil {
+		qb.AddCondition("t.distribution_account_status = ?", queryParams.Filters[FilterKeyDistributionAccountStatus])
 	}
 
 	if queryParams.Filters[FilterKeyStatus] != nil {
