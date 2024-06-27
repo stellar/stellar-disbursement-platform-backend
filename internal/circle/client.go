@@ -44,7 +44,7 @@ type ClientFactory func(networkType utils.NetworkType, apiKey string, tntManager
 var _ ClientFactory = NewClient
 
 // NewClient creates a new instance of Circle Client.
-func NewClient(networkType utils.NetworkType, apiKey string, tntManager tenant.ManagerInterface) ClientInterface {
+func NewClient(networkType utils.NetworkType, apiKey string, tenantManager tenant.ManagerInterface) ClientInterface {
 	circleEnv := Sandbox
 	if networkType == utils.PubnetNetworkType {
 		circleEnv = Production
@@ -54,7 +54,7 @@ func NewClient(networkType utils.NetworkType, apiKey string, tntManager tenant.M
 		BasePath:            string(circleEnv),
 		APIKey:              apiKey,
 		httpClient:          httpclient.DefaultClient(),
-		tenantStatusUpdater: TenantStatusUpdater{tntManager: tntManager},
+		tenantStatusUpdater: TenantStatusUpdater{tenantManager: tenantManager},
 	}
 }
 

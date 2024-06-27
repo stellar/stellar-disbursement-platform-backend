@@ -33,7 +33,7 @@ func (e APIError) Error() string {
 }
 
 type TenantStatusUpdater struct {
-	tntManager tenant.ManagerInterface
+	tenantManager tenant.ManagerInterface
 }
 
 var invalidAPIKeyStatusCodes = []int{http.StatusUnauthorized, http.StatusForbidden}
@@ -53,7 +53,7 @@ func (u TenantStatusUpdater) parseAPIError(ctx context.Context, resp *http.Respo
 			return nil, fmt.Errorf("getting tenant from context: %w", getCtxTntErr)
 		}
 
-		deactivateTntErr := u.tntManager.DeactivateTenantDistributionAccount(ctx, tnt.ID)
+		deactivateTntErr := u.tenantManager.DeactivateTenantDistributionAccount(ctx, tnt.ID)
 		if deactivateTntErr != nil {
 			return nil, fmt.Errorf("deactivating tenant distribution account: %w", deactivateTntErr)
 		}
