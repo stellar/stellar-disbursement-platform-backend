@@ -84,6 +84,11 @@ func (s *ServerService) GetSchedulerJobRegistrars(
 	sj := []scheduler.SchedulerJobRegisterOption{
 		scheduler.WithAPAuthEnforcementJob(apAPIService, serveOpts.MonitorService, serveOpts.CrashTrackerClient.Clone()),
 		scheduler.WithReadyPaymentsCancellationJobOption(models),
+		scheduler.WithCircleReconciliationJobOption(jobs.CircleReconciliationJobOptions{
+			Models:              models,
+			DistAccountResolver: serveOpts.SubmitterEngine.DistributionAccountResolver,
+			CircleService:       serveOpts.CircleService,
+		}),
 	}
 
 	if serveOpts.EnableScheduler {

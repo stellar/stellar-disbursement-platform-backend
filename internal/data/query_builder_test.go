@@ -88,3 +88,56 @@ func Test_QueryBuilder(t *testing.T) {
 		assert.Equal(t, []interface{}{"Disbursement 1", 20, 20}, params)
 	})
 }
+
+func Test_BuildSetClause(t *testing.T) {
+	testCases := []struct {
+		name          string
+		input         interface{}
+		expectedQuery string
+		expectedArgs  []interface{}
+	}{
+		{
+			name:  "non-struct generates empty output",
+			input: "non-struct",
+		},
+		{
+			name:  "struct without the \"db\" tag generates empty output",
+			input: struct{ Name string }{Name: "John"},
+		},
+		{
+			name: "struct without \"db\" tag generates the expected output, only included non-empty fields",
+			input: struct {
+				Name     string `db:"name"`
+				LastName string `db:"last_name"`
+			}{Name: "John"},
+			expectedQuery: "name = ?",
+			expectedArgs:  []interface{}{"John"},
+		},
+		{
+			name: "struct without \"db\" tag generates the expected output, only included non-empty fields",
+			input: struct {
+				Name     string `db:"name"`
+				LastName string `db:"last_name"`
+			}{Name: "John"},
+			expectedQuery: "name = ?",
+			expectedArgs:  []interface{}{"John"},
+		},
+		{
+			name: "struct without \"db,qualifier\" tag generates the expected output, not including the qualifier",
+			input: struct {
+				Name     string `db:"name,qualifier"`
+				LastName string `db:"last_name,omitempty"`
+			}{Name: "John", LastName: "Doe"},
+			expectedQuery: "name = ?, last_name = ?",
+			expectedArgs:  []interface{}{"John", "Doe"},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			query, args := BuildSetClause(tc.input)
+			assert.Equal(t, tc.expectedQuery, query)
+			assert.Equal(t, tc.expectedArgs, args)
+		})
+	}
+}

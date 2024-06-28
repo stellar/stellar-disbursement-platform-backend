@@ -198,6 +198,13 @@ func WithPaymentToSubmitterJobOption(options jobs.PaymentToSubmitterJobOptions) 
 	}
 }
 
+func WithCircleReconciliationJobOption(options jobs.CircleReconciliationJobOptions) SchedulerJobRegisterOption {
+	return func(s *Scheduler) {
+		j := jobs.NewCircleReconciliationJob(options)
+		s.addJob(j)
+	}
+}
+
 func WithPaymentFromSubmitterJobOption(paymentJobInterval int, models *data.Models, tssDBConnectionPool db.DBConnectionPool) SchedulerJobRegisterOption {
 	return func(s *Scheduler) {
 		j := jobs.NewPaymentFromSubmitterJob(paymentJobInterval, models, tssDBConnectionPool)

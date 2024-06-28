@@ -264,7 +264,7 @@ func Test_PaymentToSubmitterService_SendPaymentsMethods(t *testing.T) {
 
 			// 👀 [CIRCLE] Validate: CircleTransferRequests
 			if tc.distributionAccount.IsCircle() {
-				circleTransferRequest, err := models.CircleTransferRequests.FindIncompleteByPaymentID(ctx, dbConnectionPool, paymentRegistered.ID)
+				circleTransferRequest, err := models.CircleTransferRequests.GetIncompleteByPaymentID(ctx, dbConnectionPool, paymentRegistered.ID)
 				require.NoError(t, err)
 
 				assert.Equal(t, paymentRegistered.ID, circleTransferRequest.PaymentID)
