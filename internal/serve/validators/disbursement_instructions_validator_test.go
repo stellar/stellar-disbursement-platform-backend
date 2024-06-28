@@ -3,8 +3,9 @@ package validators
 import (
 	"testing"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 )
 
 func Test_DisbursementInstructionsValidator_ValidateAndGetInstruction(t *testing.T) {

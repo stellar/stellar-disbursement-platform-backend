@@ -9,10 +9,11 @@ import (
 	"testing"
 
 	"github.com/spf13/cobra"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/integrationtests"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/integrationtests"
 )
 
 type mockIntegrationTests struct {

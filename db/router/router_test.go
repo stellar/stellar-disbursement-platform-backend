@@ -4,8 +4,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stretchr/testify/require"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 )
 
 func Test_GetDSNForAdmin(t *testing.T) {

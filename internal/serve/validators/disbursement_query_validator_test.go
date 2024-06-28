@@ -4,8 +4,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 )
 
 func Test_DisbursementQueryValidator_ValidateDisbursementFilters(t *testing.T) {

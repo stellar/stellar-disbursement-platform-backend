@@ -8,12 +8,13 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
-	httpclientMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient/mocks"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httphandler"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	httpclientMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient/mocks"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httphandler"
 )
 
 func Test_Login(t *testing.T) {

@@ -5,11 +5,12 @@ import (
 	"testing"
 
 	"github.com/spf13/cobra"
-	cmdUtils "github.com/stellar/stellar-disbursement-platform-backend/cmd/utils"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+
+	cmdUtils "github.com/stellar/stellar-disbursement-platform-backend/cmd/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 )
 
 type mockMessengerService struct {
