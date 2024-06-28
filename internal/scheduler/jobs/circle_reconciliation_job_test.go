@@ -9,27 +9,20 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/mocks"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
 func Test_circleReconciliationJob_GetInterval(t *testing.T) {
-	job := NewCircleReconciliationJob(CircleReconciliationJobOptions{
-		JobIntervalSeconds: 5,
-	})
-	require.Equal(t, 5*time.Second, job.GetInterval())
+	job := NewCircleReconciliationJob(CircleReconciliationJobOptions{})
+	require.Equal(t, circleReconciliationJobIntervalSeconds*time.Second, job.GetInterval())
 }
 
 func Test_circleReconciliationJob_GetName(t *testing.T) {
-	job := NewCircleReconciliationJob(CircleReconciliationJobOptions{
-		JobIntervalSeconds: 5,
-	})
-	require.Equal(t, utils.GetTypeName(circleReconciliationJob{}), job.GetName())
+	job := NewCircleReconciliationJob(CircleReconciliationJobOptions{})
+	require.Equal(t, circleReconciliationJobName, job.GetName())
 }
 
 func Test_circleReconciliationJob_IsJobMultiTenant(t *testing.T) {
-	job := NewCircleReconciliationJob(CircleReconciliationJobOptions{
-		JobIntervalSeconds: 5,
-	})
+	job := NewCircleReconciliationJob(CircleReconciliationJobOptions{})
 	require.Equal(t, true, job.IsJobMultiTenant())
 }
 

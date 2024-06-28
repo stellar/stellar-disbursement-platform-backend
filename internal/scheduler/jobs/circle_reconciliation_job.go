@@ -11,23 +11,22 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+)
+
+const (
+	circleReconciliationJobName            = "circle_reconciliation_job"
+	circleReconciliationJobIntervalSeconds = 30
 )
 
 type CircleReconciliationJobOptions struct {
-	JobIntervalSeconds  int
 	Models              *data.Models
 	DistAccountResolver signing.DistributionAccountResolver
 	CircleService       circle.ServiceInterface
 }
 
 func NewCircleReconciliationJob(opts CircleReconciliationJobOptions) Job {
-	if opts.JobIntervalSeconds < DefaultMinimumJobIntervalSeconds {
-		log.Fatalf("job interval is not set for %s. Instantiation failed", paymentToSubmitterJobName)
-	}
-
 	return &circleReconciliationJob{
-		jobIntervalSeconds: opts.JobIntervalSeconds,
+		jobIntervalSeconds: circleReconciliationJobIntervalSeconds,
 		reconciliationService: &services.CircleReconciliationService{
 			Models:              opts.Models,
 			DistAccountResolver: opts.DistAccountResolver,
@@ -55,7 +54,7 @@ func (j circleReconciliationJob) GetInterval() time.Duration {
 }
 
 func (j circleReconciliationJob) GetName() string {
-	return utils.GetTypeName(j)
+	return circleReconciliationJobName
 }
 
 func (j circleReconciliationJob) Execute(ctx context.Context) error {
