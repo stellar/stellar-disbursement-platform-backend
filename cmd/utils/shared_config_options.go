@@ -244,7 +244,7 @@ func BaseDistributionAccountSignatureClientConfigOptions(opts *signing.Signature
 	return []*config.ConfigOption{
 		{
 			Name:           "distribution-account-encryption-passphrase",
-			Usage:          "A Stellar-compliant ed25519 private key used to encrypt/decrypt the in-memory distribution accounts' private keys.",
+			Usage:          "A Stellar-compliant ed25519 private key used to encrypt and decrypt the private keys of tenants' distribution accounts.",
 			OptType:        types.String,
 			CustomSetValue: SetConfigOptionStellarPrivateKey,
 			ConfigKey:      &opts.DistAccEncryptionPassphrase,
