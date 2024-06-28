@@ -10,6 +10,7 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/circle"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 func Test_NewCircleService(t *testing.T) {
@@ -17,6 +18,7 @@ func Test_NewCircleService(t *testing.T) {
 	opts := circle.ServiceOptions{
 		ClientFactory:        circle.NewClient,
 		ClientConfigModel:    &circle.ClientConfigModel{},
+		TenantManager:        &tenant.TenantManagerMock{},
 		NetworkType:          utils.TestnetNetworkType,
 		EncryptionPassphrase: keypair.MustRandom().Seed(),
 	}

@@ -13,6 +13,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/router"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
 var (
@@ -42,6 +43,7 @@ type ManagerInterface interface {
 	DropTenantSchema(ctx context.Context, tenantName string) error
 	UpdateTenantConfig(ctx context.Context, tu *TenantUpdate) (*Tenant, error)
 	SoftDeleteTenantByID(ctx context.Context, tenantID string) (*Tenant, error)
+	DeactivateTenantDistributionAccount(ctx context.Context, tenantID string) error
 }
 
 type Manager struct {
@@ -236,6 +238,36 @@ func (m *Manager) SoftDeleteTenantByID(ctx context.Context, tenantID string) (*T
 	return &t, nil
 }
 
+// DeactivateTenantDistributionAccount sets a distribution account of status ACTIVE to PENDING_USER_ACTIVATION for the given tenant id,
+// and is only used in the case where the distribution account is of type CircleDBVault.
+func (m *Manager) DeactivateTenantDistributionAccount(ctx context.Context, tenantID string) error {
+	updateQuery := `
+		UPDATE tenants t
+		SET
+			distribution_account_status = 'PENDING_USER_ACTIVATION'
+	`
+
+	queryParams := &QueryParams{
+		Filters: excludeInactiveTenantsFilters(),
+	}
+	queryParams.Filters[FilterKeyID] = tenantID
+	queryParams.Filters[FilterKeyDistributionAccountType] = schema.DistributionAccountCircleDBVault
+	queryParams.Filters[FilterKeyDistributionAccountStatus] = schema.AccountStatusActive
+
+	query, params := m.newManagerQuery(updateQuery, queryParams)
+	query += " RETURNING *"
+
+	var t Tenant
+	if err := m.db.GetContext(ctx, &t, query, params...); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrTenantDoesNotExist
+		}
+		return fmt.Errorf("deactivating distribution account for tenant %s: %w", tenantID, err)
+	}
+
+	return nil
+}
+
 func (m *Manager) CreateTenantSchema(ctx context.Context, tenantName string) error {
 	schemaName := fmt.Sprintf("sdp_%s", tenantName)
 	_, err := m.db.ExecContext(ctx, fmt.Sprintf("CREATE SCHEMA %s", pq.QuoteIdentifier(schemaName)))
@@ -363,6 +395,14 @@ func (m *Manager) newManagerQuery(baseQuery string, queryParams *QueryParams) (s
 
 	if queryParams.Filters[FilterKeyIsDefault] != nil {
 		qb.AddCondition("t.is_default = ?", queryParams.Filters[FilterKeyIsDefault])
+	}
+
+	if queryParams.Filters[FilterKeyDistributionAccountType] != nil {
+		qb.AddCondition("t.distribution_account_type = ?", queryParams.Filters[FilterKeyDistributionAccountType])
+	}
+
+	if queryParams.Filters[FilterKeyDistributionAccountStatus] != nil {
+		qb.AddCondition("t.distribution_account_status = ?", queryParams.Filters[FilterKeyDistributionAccountStatus])
 	}
 
 	if queryParams.Filters[FilterKeyStatus] != nil {

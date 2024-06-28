@@ -1,10 +1,14 @@
 package circle
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 // APIError represents the error response from Circle APIs.
@@ -28,14 +32,32 @@ func (e APIError) Error() string {
 	return fmt.Sprintf("APIError: Code=%d, Message=%s, Errors=%v", e.Code, e.Message, e.Errors)
 }
 
+type TenantStatusUpdater struct {
+	tenantManager tenant.ManagerInterface
+}
+
+var invalidAPIKeyStatusCodes = []int{http.StatusUnauthorized, http.StatusForbidden}
+
 // parseAPIError parses the error response from Circle APIs.
 // https://developers.circle.com/circle-mint/docs/circle-apis-api-errors.
-func parseAPIError(resp *http.Response) (*APIError, error) {
+func (u TenantStatusUpdater) parseAPIError(ctx context.Context, resp *http.Response) (*APIError, error) {
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("reading error response body: %w", err)
 	}
 	defer resp.Body.Close()
+
+	if slices.Contains(invalidAPIKeyStatusCodes, resp.StatusCode) {
+		tnt, getCtxTntErr := tenant.GetTenantFromContext(ctx)
+		if getCtxTntErr != nil {
+			return nil, fmt.Errorf("getting tenant from context: %w", getCtxTntErr)
+		}
+
+		deactivateTntErr := u.tenantManager.DeactivateTenantDistributionAccount(ctx, tnt.ID)
+		if deactivateTntErr != nil {
+			return nil, fmt.Errorf("deactivating tenant distribution account: %w", deactivateTntErr)
+		}
+	}
 
 	var apiErr APIError
 	if err = json.Unmarshal(body, &apiErr); err != nil {
