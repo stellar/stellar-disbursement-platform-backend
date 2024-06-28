@@ -7,7 +7,7 @@
   - [Quick Setup and Deployment](#quick-setup-and-deployment)
     - [Docker](#docker)
     - [Clone the repository:](#clone-the-repository)
-    - [Update local dns](#update-local-dns)
+    - [Update local DNS](#update-local-dns)
     - [Automated Stellar Account Creation and .env Configuration](#automated-stellar-account-creation-and-env-configuration)
     - [Install Multi-tenant SDP Locally](#install-multi-tenant-sdp-locally)
     - [Login to the SDP and send a Disbursement](#login-to-the-sdp-and-send-a-disbursement)
@@ -66,7 +66,7 @@ scripts/make_env.sh
 
 The script will generate new keypairs with a USDC funded distribution account and create the .env file with the following configuration values. Example:
 
-```
+```bash
 # Generate a new keypair for SEP-10 signing
 SEP10_SIGNING_PUBLIC_KEY=GCRSCJEVHB5JFXNZH3KYQRHSKDX3ZRFMMPKDPNX7AL3JSXJSILTV7DEW
 SEP10_SIGNING_PRIVATE_KEY=SBEZHHWE2QPBIKNMVHPE5QD2JUUN2PLYNEHYQZZPQ7GYPYWULDTJ5RZU
@@ -79,7 +79,6 @@ DISTRIBUTION_SEED=SDDWY3N3DSTR6SNCZTECOW6PNUIPOHDTMLKVWDQUTHLRNIKMAUIT46M6
 CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE=SDDWY3N3DSTR6SNCZTECOW6PNUIPOHDTMLKVWDQUTHLRNIKMAUIT46M6
 
 # Distribution signer
-DISTRIBUTION_SIGNER_TYPE=DISTRIBUTION_ACCOUNT_ENV
 DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE=SDDWY3N3DSTR6SNCZTECOW6PNUIPOHDTMLKVWDQUTHLRNIKMAUIT46M6
 ```
 

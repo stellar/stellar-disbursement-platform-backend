@@ -43,7 +43,7 @@ sdp:
   ## @param sdp.kubeSecrets.data.ANCHOR_PLATFORM_OUTGOING_JWT_SECRET The JWT secret used to create a JWT token used to send requests to the anchor platform.
   ## @param sdp.kubeSecrets.data.DATABASE_URL URL of the database used by the SDP.
   ## @param sdp.kubeSecrets.data.DISTRIBUTION_SEED The private key of the Stellar account used to disburse funds. This is needed for the init container
-  ## @param sdp.kubeSecrets.data.DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE The private key used to encrypt the distribution accounts secrets in the database, mandatory when DISTRIBUTION_SIGNER_TYPE is set to DISTRIBUTION_ACCOUNT_DB.
+  ## @param sdp.kubeSecrets.data.DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE A Stellar-compliant ed25519 private key used to encrypt and decrypt the private keys of tenants’ distribution accounts.
   ## @param sdp.kubeSecrets.data.CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE The private key used to encrypt the channel account secrets in the database.
   ## @param sdp.kubeSecrets.data.ADMIN_ACCOUNT The ID of the admin account. To use, add to the request header as 'Authorization', formatted as Base64-encoded 'ADMIN_ACCOUNT:ADMIN_API_KEY'.",
   ## @param sdp.kubeSecrets.data.ADMIN_API_KEY The API key for the admin account. To use, add to the request header as 'Authorization', formatted as Base64-encoded 'ADMIN_ACCOUNT:ADMIN_API_KEY'.",
@@ -110,7 +110,7 @@ tss:
 
   ## @param tss.kubeSecrets.data.DATABASE_URL URL of the database used by the TSS.
   ## @param tss.kubeSecrets.data.DISTRIBUTION_SEED The private key of the Stellar account used to disburse funds.
-  ## @param tss.kubeSecrets.data.DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE The private key used to encrypt the distribution accounts secrets in the database, mandatory when DISTRIBUTION_SIGNER_TYPE is set to DISTRIBUTION_ACCOUNT_DB.
+  ## @param tss.kubeSecrets.data.DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE A Stellar-compliant ed25519 private key used to encrypt and decrypt the private keys of tenants’ distribution accounts.
   ## @param tss.kubeSecrets.data.CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE The private key used to encrypt the channel account secrets in the database.
   kubeSecrets:
     secretName: sdp-tss
