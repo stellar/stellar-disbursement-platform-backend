@@ -34,6 +34,12 @@ jobs:
   e2e-integration-test-circle:
     runs-on: ubuntu-latest
     environment: "Receiver Registration - E2E Integration Tests (Circle)"
+    env:
+      DISTRIBUTION_PUBLIC_KEY: ${{ vars.DISTRIBUTION_PUBLIC_KEY }}
+      DISTRIBUTION_SEED: ${{ vars.DISTRIBUTION_SEED }}
+      CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE: ${{ vars.DISTRIBUTION_SEED }}
+      SEP10_SIGNING_PUBLIC_KEY: ${{ vars.SEP10_SIGNING_PUBLIC_KEY }}
+      SEP10_SIGNING_PRIVATE_KEY: ${{ vars.SEP10_SIGNING_PRIVATE_KEY }}
     steps:
       - uses: actions/checkout@v4
       - id: circle
