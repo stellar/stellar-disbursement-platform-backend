@@ -33,6 +33,7 @@ type IntegrationTestsOpts struct {
 	TenantName                 string
 	UserEmail                  string
 	UserPassword               string
+	DistributionAccountType    string
 	DisbursedAssetCode         string
 	DisbursetAssetIssuer       string
 	WalletName                 string
@@ -314,7 +315,7 @@ func (it *IntegrationTestsService) CreateTestData(ctx context.Context, opts Inte
 		OwnerFirstName:          "John",
 		OwnerLastName:           "Doe",
 		OrganizationName:        "Integration Tests Organization",
-		DistributionAccountType: schema.DistributionAccountStellarEnv,
+		DistributionAccountType: schema.AccountType(opts.DistributionAccountType),
 		BaseURL:                 "http://localhost:8000",
 		SDPUIBaseURL:            "http://localhost:3000",
 	})

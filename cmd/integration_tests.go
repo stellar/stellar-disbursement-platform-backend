@@ -42,6 +42,13 @@ func (c *IntegrationTestsCommand) Command() *cobra.Command {
 			Required:    true,
 		},
 		{
+			Name:      "distribution-account-type",
+			Usage:     "The account type of the distribution account",
+			OptType:   types.String,
+			ConfigKey: &integrationTestsOpts.DistributionAccountType,
+			Required:  true,
+		},
+		{
 			Name:        "wallet-name",
 			Usage:       "Wallet name to be used in integration tests",
 			OptType:     types.String,

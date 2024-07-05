@@ -12,13 +12,13 @@ on:
   workflow_call: # allows this workflow to be called from another workflow
 
 env:
-  USER_EMAIL: "sdp_user@stellar.org"
+  USER_EMAIL: "sdp_user@stellar.org
   USER_PASSWORD: "mockPassword123!"
 
 jobs:
-  e2e-integration-test:
+  e2e-integration-test-stellar:
     runs-on: ubuntu-latest
-    environment: "Receiver Registration - E2E Integration Tests"
+    environment: "Receiver Registration - E2E Integration Tests (Stellar)"
     env:
       DISTRIBUTION_PUBLIC_KEY: ${{ vars.DISTRIBUTION_PUBLIC_KEY }}
       DISTRIBUTION_SEED: ${{ vars.DISTRIBUTION_SEED }}
@@ -26,42 +26,17 @@ jobs:
       SEP10_SIGNING_PUBLIC_KEY: ${{ vars.SEP10_SIGNING_PUBLIC_KEY }}
       SEP10_SIGNING_PRIVATE_KEY: ${{ vars.SEP10_SIGNING_PRIVATE_KEY }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Cleanup data
-        working-directory: internal/integrationtests
-        run: docker-compose -f docker-compose-e2e-tests.yml down -v
-
-      - name: Run Docker Compose for SDP, Anchor Platform and TSS
-        working-directory: internal/integrationtests
-        run: docker-compose -f docker-compose-e2e-tests.yml up --build -V -d
-
-      - name: Install curl
-        run: sudo apt-get update && sudo apt-get install -y curl
-
-      - name: Create integration test data
-        run: |
-          docker exec e2e-sdp-api bash -c "./stellar-disbursement-platform integration-tests create-data"
-
-      - name: Restart anchor platform
-        run: |
-          docker restart e2e-anchor-platform
-
-      - name: Wait for anchor platform localhost:8080/health
-        timeout-minutes: 5
-        run: |
-          until curl --output /dev/null --silent --head --fail http://localhost:8080/health; do
-            echo 'Waiting for anchor-platform to be up and running...'
-            sleep 15
-          done
-          echo 'Anchor-platform is up and running.'
-
-      - name: Start integration test command
-        run: |
-          docker exec e2e-sdp-api bash -c "./stellar-disbursement-platform integration-tests start"
-
-      - name: Docker logs
-        if: always()
-        working-directory: internal/integrationtests
-        run: docker-compose -f docker-compose-e2e-tests.yml logs && docker-compose -f docker-compose-e2e-tests.yml down
+      - uses: actions/checkout@v4
+      - id: stellar
+        uses: actions/e2e_integration_test@v1
+        with:
+          distribution_account_type: "DISTRIBUTION_ACCOUNT.STELLAR.DB_VAULT"
+  e2e-integration-test-circle:
+    runs-on: ubuntu-latest
+    environment: "Receiver Registration - E2E Integration Tests (Circle)"
+    steps:
+      - uses: actions/checkout@v4
+      - id: circle
+        uses: actions/e2e_integration_test@v1
+        with:
+          distribution_account_type: "DISTRIBUTION_ACCOUNT.CIRCLE.DB_VAULT"
