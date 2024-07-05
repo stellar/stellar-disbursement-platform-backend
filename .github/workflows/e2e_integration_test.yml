@@ -28,7 +28,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - id: stellar
-        uses: actions/e2e_integration_test@v1
+        uses: ./.github/actions/e2e_integration_test
         with:
           distribution_account_type: "DISTRIBUTION_ACCOUNT.STELLAR.DB_VAULT"
   e2e-integration-test-circle:
@@ -37,6 +37,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - id: circle
-        uses: actions/e2e_integration_test@v1
+        uses: ./.github/actions/e2e_integration_test
         with:
           distribution_account_type: "DISTRIBUTION_ACCOUNT.CIRCLE.DB_VAULT"
