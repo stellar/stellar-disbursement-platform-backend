@@ -12,7 +12,7 @@ on:
   workflow_call: # allows this workflow to be called from another workflow
 
 env:
-  USER_EMAIL: "sdp_user@stellar.org
+  USER_EMAIL: "sdp_user@stellar.org"
   USER_PASSWORD: "mockPassword123!"
 
 jobs:
