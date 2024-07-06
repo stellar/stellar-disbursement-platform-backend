@@ -25,6 +25,7 @@ jobs:
       CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE: ${{ vars.DISTRIBUTION_SEED }}
       SEP10_SIGNING_PUBLIC_KEY: ${{ vars.SEP10_SIGNING_PUBLIC_KEY }}
       SEP10_SIGNING_PRIVATE_KEY: ${{ vars.SEP10_SIGNING_PRIVATE_KEY }}
+      SECRET_SEP10_SIGNING_SEED: ${{ secrets.SEP10_SIGNING_PRIVATE_KEY }}
     steps:
       - uses: actions/checkout@v4
       - id: stellar
@@ -40,7 +41,6 @@ jobs:
       CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE: ${{ vars.DISTRIBUTION_SEED }}
       SEP10_SIGNING_PUBLIC_KEY: ${{ vars.SEP10_SIGNING_PUBLIC_KEY }}
       SEP10_SIGNING_PRIVATE_KEY: ${{ vars.SEP10_SIGNING_PRIVATE_KEY }}
-      SECRET_SEP10_SIGNING_SEED: ${{ vars.SEP10_SIGNING_PRIVATE_KEY }}
     steps:
       - uses: actions/checkout@v4
       - id: circle
