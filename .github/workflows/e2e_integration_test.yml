@@ -32,7 +32,7 @@ jobs:
       - id: stellar
         uses: ./.github/actions/e2e_integration_test
         with:
-          distribution_account_type: "DISTRIBUTION_ACCOUNT.STELLAR.DB_VAULT"
+          distribution_account_type: "DISTRIBUTION_ACCOUNT.STELLAR.STELLAR.ENV"
   e2e-integration-test-circle:
     runs-on: ubuntu-latest
     environment: "Receiver Registration - E2E Integration Tests (Circle)"
@@ -49,5 +49,5 @@ jobs:
       - id: circle
         uses: ./.github/actions/e2e_integration_test
         with:
-          distribution_account_type: "DISTRIBUTION_ACCOUNT.CIRCLE.DB_VAULT"
+          distribution_account_type: "DISTRIBUTION_ACCOUNT.CIRCLE.STELLAR.ENV"
 
