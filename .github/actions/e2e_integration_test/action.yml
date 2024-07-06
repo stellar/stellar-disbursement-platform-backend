@@ -27,7 +27,7 @@ runs:
 
     - name: Create integration test data
       run: |
-        docker exec e2e-sdp-api bash -c "./stellar-disbursement-platform integration-tests create-data"
+        docker exec e2e-sdp-api bash -c "./stellar-disbursement-platform --distribution-account-type "STELLAR.ENV" integration-tests create-data"
       env:
         DISTRIBUTION_ACCOUNT_TYPE: ${{ inputs.distribution_account_type }}
       shell: bash
