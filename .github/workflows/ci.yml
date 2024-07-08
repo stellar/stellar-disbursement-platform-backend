@@ -55,6 +55,9 @@ jobs:
             echo "✅ No deadcode found"
           fi
 
+      - name: Run ./goimports_check.sh
+        run: ./goimports_check.sh
+
   check-helm-readme:
     runs-on: ubuntu-latest
     steps:
