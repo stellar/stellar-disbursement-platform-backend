@@ -25,12 +25,11 @@ jobs:
       CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE: ${{ vars.DISTRIBUTION_SEED }}
       SEP10_SIGNING_PUBLIC_KEY: ${{ vars.SEP10_SIGNING_PUBLIC_KEY }}
       SEP10_SIGNING_PRIVATE_KEY: ${{ vars.SEP10_SIGNING_PRIVATE_KEY }}
+      DISTRIBUTION_ACCOUNT_TYPE: "DISTRIBUTION_ACCOUNT.STELLAR.DB_VAULT"
     steps:
       - uses: actions/checkout@v4
       - id: stellar
         uses: ./.github/actions/e2e_integration_test
-        with:
-          distribution_account_type: "DISTRIBUTION_ACCOUNT.STELLAR.DB_VAULT"
   e2e-integration-test-circle:
     runs-on: ubuntu-latest
     environment: "Receiver Registration - E2E Integration Tests (Circle)"
@@ -40,9 +39,8 @@ jobs:
       CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE: ${{ vars.DISTRIBUTION_SEED }}
       SEP10_SIGNING_PUBLIC_KEY: ${{ vars.SEP10_SIGNING_PUBLIC_KEY }}
       SEP10_SIGNING_PRIVATE_KEY: ${{ vars.SEP10_SIGNING_PRIVATE_KEY }}
+      DISTRIBUTION_ACCOUNT_TYPE: "DISTRIBUTION_ACCOUNT.CIRCLE.DB_VAULT"
     steps:
       - uses: actions/checkout@v4
       - id: circle
         uses: ./.github/actions/e2e_integration_test
-        with:
-          distribution_account_type: "DISTRIBUTION_ACCOUNT.CIRCLE.DB_VAULT"

@@ -1,10 +1,6 @@
 name: E2E integration test action
 description: Actions for E2E integration tests
 
-inputs:
-    distribution_account_type:
-        description: 'The distribution account type to use for the integration tests'
-        required: true
 runs:
   using: "composite"
   steps:
@@ -28,8 +24,6 @@ runs:
     - name: Create integration test data
       run: |
         docker exec e2e-sdp-api bash -c "./stellar-disbursement-platform integration-tests create-data"
-      env:
-        DISTRIBUTION_ACCOUNT_TYPE: ${{ inputs.distribution_account_type }}
       shell: bash
 
     - name: Restart anchor platform
