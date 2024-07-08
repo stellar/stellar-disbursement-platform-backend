@@ -56,8 +56,18 @@ jobs:
             echo "✅ No deadcode found"
           fi
 
-      - name: Run ./goimports_check.sh
-        run: ./goimports_check.sh
+      - name: Run `goimports`
+        run: |
+          # Find all .go files excluding paths containing 'mock' and run goimports
+          non_compliant_files=$(find . -type f -name "*.go" ! -path "*mock*" | xargs goimports -local "github.com/stellar/stellar-disbursement-platform-backend" -l)
+
+          if [ -n "$non_compliant_files" ]; then
+            echo "🚨 The following files are not compliant with goimports:"
+            echo "$non_compliant_files"
+            exit 1
+          else
+            echo "✅ All files are compliant with goimports."
+          fi
 
   check-helm-readme:
     runs-on: ubuntu-latest
