@@ -36,10 +36,11 @@ jobs:
       - name: Run ./gomod.sh
         run: ./gomod.sh
 
-      - name: Install github.com/nishanths/exhaustive@v0.12.0 and golang.org/x/tools/cmd/deadcode@v0.18.0
+      - name: Install nishanths/exhaustive@v0.12.0, deadcode@v0.18.0 and goimports@v0.22.0
         run: |
           go install github.com/nishanths/exhaustive/cmd/exhaustive@v0.12.0
           go install golang.org/x/tools/cmd/deadcode@v0.18.0
+          go install golang.org/x/tools/cmd/goimports@v0.22.0
 
       - name: Run `exhaustive`
         run: exhaustive -default-signifies-exhaustive ./...
