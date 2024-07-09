@@ -78,7 +78,6 @@ func Test_CircleTransferRequestModel_Update(t *testing.T) {
 	ctx := context.Background()
 	m := CircleTransferRequestModel{dbConnectionPool: dbConnectionPool}
 
-	// idempotencyKey := uuid.NewString()
 	updateRequest := CircleTransferRequestUpdate{
 		CircleTransferID: "circle-transfer-id",
 		Status:           CircleTransferStatusPending,

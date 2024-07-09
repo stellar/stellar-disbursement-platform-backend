@@ -44,7 +44,7 @@ func (s *CircleReconciliationService) Reconcile(ctx context.Context) error {
 		return nil
 	}
 	if distAcc.Status != schema.AccountStatusActive {
-		log.Ctx(ctx).Infof("Distribution account for tenant %q is not %q, skipping reconciliation...", tnt.Name, schema.AccountStatusActive)
+		log.Ctx(ctx).Debugf("Distribution account for tenant %q is not %q, skipping reconciliation...", tnt.Name, schema.AccountStatusActive)
 		return nil
 	}
 
