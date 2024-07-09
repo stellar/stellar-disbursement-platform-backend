@@ -62,61 +62,10 @@ func (s *CircleReconciliationService) Reconcile(ctx context.Context) error {
 
 		// Step 4: Reconcile the pending Circle transfer requests.
 		for _, circleRequest := range circleRequests {
-			// 4.1. get the Circle transfer by ID
-			transfer, err := s.CircleService.GetTransferByID(ctx, *circleRequest.CircleTransferID)
+			err = s.reconcileTransferRequest(ctx, dbTx, tnt, circleRequest)
 			if err != nil {
-				return fmt.Errorf("getting Circle transfer by ID %q: %w", *circleRequest.CircleTransferID, err)
+				return fmt.Errorf("reconciling Circle transfer request: %w", err)
 			}
-			jsonBody, err := json.Marshal(transfer)
-			if err != nil {
-				return fmt.Errorf("converting transfer body to json: %w", err)
-			}
-
-			// 4.2. update the circle transfer request entry in the DB.
-			newStatus := data.CircleTransferStatus(transfer.Status)
-			if *circleRequest.Status == newStatus {
-				// transfers that are in pending state in both Circle and our DB will get ignored when they reach this point.
-				log.Ctx(ctx).Debugf("[tenant=%s] Circle transfer request %q is already in status %q, skipping reconciliation...", tnt.Name, circleRequest.IdempotencyKey, newStatus)
-				continue
-			}
-
-			now := time.Now()
-			var completedAt *time.Time
-			if newStatus.IsCompleted() {
-				completedAt = &now
-			}
-			circleRequest, err = s.Models.CircleTransferRequests.Update(ctx, dbTx, circleRequest.IdempotencyKey, data.CircleTransferRequestUpdate{
-				Status:            newStatus,
-				CompletedAt:       completedAt,
-				LastSyncAttemptAt: &now,
-				SyncAttempts:      circleRequest.SyncAttempts + 1,
-				ResponseBody:      jsonBody,
-			})
-			if err != nil {
-				return fmt.Errorf("updating Circle transfer request: %w", err)
-			}
-
-			// 4.3. update the payment status in the DB.
-			newPaymentStatus, err := transfer.Status.ToPaymentStatus()
-			if err != nil {
-				return fmt.Errorf("converting Circle transfer status to Payment status: %w", err)
-			}
-			var statusMsg string
-			switch newStatus {
-			case data.CircleTransferStatusSuccess:
-				statusMsg = fmt.Sprintf("Circle transfer completed successfully with the Stellar transaction hash: %q", transfer.TransactionHash)
-			case data.CircleTransferStatusFailed:
-				statusMsg = fmt.Sprintf("Circle transfer failed with error: %q", transfer.ErrorCode)
-			default:
-				return fmt.Errorf("unexpected Circle transfer status: %q", newStatus)
-			}
-
-			err = s.Models.Payment.UpdateStatus(ctx, dbTx, circleRequest.PaymentID, newPaymentStatus, &statusMsg, transfer.TransactionHash)
-			if err != nil {
-				return fmt.Errorf("updating payment status: %w", err)
-			}
-
-			log.Ctx(ctx).Infof("[tenant=%s] Reconciled Circle transfer request %q with status %q", tnt.Name, *circleRequest.CircleTransferID, newStatus)
 		}
 
 		return nil
@@ -124,6 +73,68 @@ func (s *CircleReconciliationService) Reconcile(ctx context.Context) error {
 	if outerErr != nil {
 		return fmt.Errorf("running Circle reconciliation for tenant %q: %w", tnt.Name, outerErr)
 	}
+
+	return nil
+}
+
+// reconcileTransferRequest reconciles a Circle transfer request and updates the payment status in the DB. It returns an
+// error if the reconciliation fails.
+func (s *CircleReconciliationService) reconcileTransferRequest(ctx context.Context, dbTx db.DBTransaction, tnt *tenant.Tenant, circleRequest *data.CircleTransferRequest) error {
+	// 4.1. get the Circle transfer by ID
+	transfer, err := s.CircleService.GetTransferByID(ctx, *circleRequest.CircleTransferID)
+	if err != nil {
+		return fmt.Errorf("getting Circle transfer by ID %q: %w", *circleRequest.CircleTransferID, err)
+	}
+	jsonBody, err := json.Marshal(transfer)
+	if err != nil {
+		return fmt.Errorf("converting transfer body to json: %w", err)
+	}
+
+	// 4.2. update the circle transfer request entry in the DB.
+	newStatus := data.CircleTransferStatus(transfer.Status)
+	if *circleRequest.Status == newStatus {
+		// transfers that are in pending state in both Circle and our DB will get ignored when they reach this point.
+		log.Ctx(ctx).Debugf("[tenant=%s] Circle transfer request %q is already in status %q, skipping reconciliation...", tnt.Name, circleRequest.IdempotencyKey, newStatus)
+		return nil
+	}
+
+	now := time.Now()
+	var completedAt *time.Time
+	if newStatus.IsCompleted() {
+		completedAt = &now
+	}
+	circleRequest, err = s.Models.CircleTransferRequests.Update(ctx, dbTx, circleRequest.IdempotencyKey, data.CircleTransferRequestUpdate{
+		Status:            newStatus,
+		CompletedAt:       completedAt,
+		LastSyncAttemptAt: &now,
+		SyncAttempts:      circleRequest.SyncAttempts + 1,
+		ResponseBody:      jsonBody,
+	})
+	if err != nil {
+		return fmt.Errorf("updating Circle transfer request: %w", err)
+	}
+
+	// 4.3. update the payment status in the DB.
+	newPaymentStatus, err := transfer.Status.ToPaymentStatus()
+	if err != nil {
+		return fmt.Errorf("converting Circle transfer status to Payment status: %w", err)
+	}
+	var statusMsg string
+	switch newStatus {
+	case data.CircleTransferStatusSuccess:
+		statusMsg = fmt.Sprintf("Circle transfer completed successfully with the Stellar transaction hash: %q", transfer.TransactionHash)
+	case data.CircleTransferStatusFailed:
+		statusMsg = fmt.Sprintf("Circle transfer failed with error: %q", transfer.ErrorCode)
+	default:
+		return fmt.Errorf("unexpected Circle transfer status: %q", newStatus)
+	}
+
+	err = s.Models.Payment.UpdateStatus(ctx, dbTx, circleRequest.PaymentID, newPaymentStatus, &statusMsg, transfer.TransactionHash)
+	if err != nil {
+		return fmt.Errorf("updating payment status: %w", err)
+	}
+
+	log.Ctx(ctx).Infof("[tenant=%s] Reconciled Circle transfer request %q with status %q", tnt.Name, *circleRequest.CircleTransferID, newStatus)
 
 	return nil
 }
