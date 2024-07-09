@@ -13,14 +13,14 @@ require (
 	github.com/gocarina/gocsv v0.0.0-20230616125104-99d496ca653d
 	github.com/golang-jwt/jwt/v4 v4.5.0
 	github.com/google/uuid v1.6.0
-	github.com/gorilla/schema v1.2.0
+	github.com/gorilla/schema v1.4.1
 	github.com/jmoiron/sqlx v1.3.5
 	github.com/joho/godotenv v1.5.1
 	github.com/lib/pq v1.10.9
 	github.com/manifoldco/promptui v0.9.0
 	github.com/nyaruka/phonenumbers v1.1.8
 	github.com/prometheus/client_golang v1.17.0
-	github.com/rs/cors v1.10.1
+	github.com/rs/cors v1.11.0
 	github.com/rubenv/sql-migrate v1.5.2
 	github.com/segmentio/kafka-go v0.4.46
 	github.com/sirupsen/logrus v1.9.3
