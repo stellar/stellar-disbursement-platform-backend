@@ -141,7 +141,7 @@ func (m CircleTransferRequestModel) GetPendingReconciliation(ctx context.Context
 	return m.GetAll(ctx, sqlExec, queryParams)
 }
 
-const baseQuery = `
+const baseCircleQuery = `
 	SELECT
 		*
 	FROM
@@ -149,7 +149,7 @@ const baseQuery = `
 `
 
 func (m CircleTransferRequestModel) GetAll(ctx context.Context, sqlExec db.SQLExecuter, queryParams QueryParams) ([]*CircleTransferRequest, error) {
-	query, params := buildCircleTransferRequestQuery(baseQuery, queryParams, sqlExec)
+	query, params := buildCircleTransferRequestQuery(baseCircleQuery, queryParams, sqlExec)
 
 	var circleTransferRequests []*CircleTransferRequest
 	err := sqlExec.SelectContext(ctx, &circleTransferRequests, query, params...)
@@ -161,7 +161,7 @@ func (m CircleTransferRequestModel) GetAll(ctx context.Context, sqlExec db.SQLEx
 }
 
 func (m CircleTransferRequestModel) Get(ctx context.Context, sqlExec db.SQLExecuter, queryParams QueryParams) (*CircleTransferRequest, error) {
-	query, params := buildCircleTransferRequestQuery(baseQuery, queryParams, sqlExec)
+	query, params := buildCircleTransferRequestQuery(baseCircleQuery, queryParams, sqlExec)
 
 	var circleTransferRequests CircleTransferRequest
 	err := sqlExec.GetContext(ctx, &circleTransferRequests, query, params...)

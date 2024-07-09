@@ -139,6 +139,46 @@ func (p *PaymentUpdate) Validate() error {
 	return nil
 }
 
+const basePaymentQuery = `
+SELECT
+			p.id,
+			p.amount,
+			COALESCE(p.stellar_transaction_id, '') as stellar_transaction_id,
+			COALESCE(p.stellar_operation_id, '') as stellar_operation_id,
+			p.status,
+			p.status_history,
+			p.created_at,
+			p.updated_at,
+			COALESCE(p.external_payment_id, '') as external_payment_id,
+			d.id as "disbursement.id",
+			d.name as "disbursement.name",
+			d.status as "disbursement.status",
+			d.created_at as "disbursement.created_at",
+			d.updated_at as "disbursement.updated_at",
+			a.id as "asset.id",
+			a.code as "asset.code",
+			a.issuer as "asset.issuer",
+			rw.id as "receiver_wallet.id",
+			COALESCE(rw.stellar_address, '') as "receiver_wallet.stellar_address",
+			COALESCE(rw.stellar_memo, '') as "receiver_wallet.stellar_memo",
+			COALESCE(rw.stellar_memo_type, '') as "receiver_wallet.stellar_memo_type",
+			rw.status as "receiver_wallet.status",
+			rw.created_at as "receiver_wallet.created_at",
+			rw.updated_at as "receiver_wallet.updated_at",
+			rw.receiver_id as "receiver_wallet.receiver.id",
+			COALESCE(rw.anchor_platform_transaction_id, '') as "receiver_wallet.anchor_platform_transaction_id",
+			rw.anchor_platform_transaction_synced_at as "receiver_wallet.anchor_platform_transaction_synced_at",
+			w.id as "receiver_wallet.wallet.id",
+			w.name as "receiver_wallet.wallet.name",
+			w.enabled as "receiver_wallet.wallet.enabled"
+		FROM
+			payments p
+		JOIN disbursements d ON p.disbursement_id = d.id
+		JOIN assets a ON p.asset_id = a.id
+		JOIN wallets w on d.wallet_id = w.id
+		JOIN receiver_wallets rw on rw.receiver_id = p.receiver_id AND rw.wallet_id = w.id
+`
+
 func (p *PaymentModel) GetAllReadyToPatchCompletionAnchorTransactions(ctx context.Context, sqlExec db.SQLExecuter) ([]Payment, error) {
 	const query = `
 		SELECT
@@ -183,46 +223,7 @@ func (p *PaymentModel) GetAllReadyToPatchCompletionAnchorTransactions(ctx contex
 func (p *PaymentModel) Get(ctx context.Context, id string, sqlExec db.SQLExecuter) (*Payment, error) {
 	payment := Payment{}
 
-	query := `
-		SELECT
-			p.id,
-			p.amount,
-			COALESCE(p.stellar_transaction_id, '') as stellar_transaction_id,
-			COALESCE(p.stellar_operation_id, '') as stellar_operation_id,
-			p.status,
-			p.status_history,
-			p.created_at,
-			p.updated_at,
-			COALESCE(p.external_payment_id, '') as external_payment_id,
-			d.id as "disbursement.id",
-			d.name as "disbursement.name",
-			d.status as "disbursement.status",
-			d.created_at as "disbursement.created_at",
-			d.updated_at as "disbursement.updated_at",
-			a.id as "asset.id",
-			a.code as "asset.code",
-			a.issuer as "asset.issuer",
-			rw.id as "receiver_wallet.id",
-			COALESCE(rw.stellar_address, '') as "receiver_wallet.stellar_address",
-			COALESCE(rw.stellar_memo, '') as "receiver_wallet.stellar_memo",
-			COALESCE(rw.stellar_memo_type, '') as "receiver_wallet.stellar_memo_type",
-			rw.status as "receiver_wallet.status",
-			rw.created_at as "receiver_wallet.created_at",
-			rw.updated_at as "receiver_wallet.updated_at",
-			rw.receiver_id as "receiver_wallet.receiver.id",
-			COALESCE(rw.anchor_platform_transaction_id, '') as "receiver_wallet.anchor_platform_transaction_id",
-			rw.anchor_platform_transaction_synced_at as "receiver_wallet.anchor_platform_transaction_synced_at",
-			w.id as "receiver_wallet.wallet.id",
-			w.name as "receiver_wallet.wallet.name",
-			w.enabled as "receiver_wallet.wallet.enabled"
-		FROM
-			payments p
-		JOIN disbursements d ON p.disbursement_id = d.id
-		JOIN assets a ON p.asset_id = a.id
-		JOIN receiver_wallets rw ON rw.receiver_id = p.receiver_id AND rw.wallet_id = d.wallet_id
-		JOIN wallets w ON rw.wallet_id = w.id
-		WHERE p.id = $1
-		`
+	query := fmt.Sprintf(`%s WHERE p.id = $1`, basePaymentQuery)
 
 	err := sqlExec.GetContext(ctx, &payment, query, id)
 	if err != nil {
@@ -309,47 +310,7 @@ func (p *PaymentModel) Count(ctx context.Context, queryParams *QueryParams, sqlE
 func (p *PaymentModel) GetAll(ctx context.Context, queryParams *QueryParams, sqlExec db.SQLExecuter) ([]Payment, error) {
 	payments := []Payment{}
 
-	query := `
-		SELECT
-			p.id,
-			p.amount,
-			COALESCE(p.stellar_transaction_id, '') as stellar_transaction_id,
-			COALESCE(p.stellar_operation_id, '') as stellar_operation_id,
-			p.status,
-			p.status_history,
-			p.created_at,
-			p.updated_at,
-			COALESCE(p.external_payment_id, '') as external_payment_id,
-			d.id as "disbursement.id",
-			d.name as "disbursement.name",
-			d.status as "disbursement.status",
-			d.created_at as "disbursement.created_at",
-			d.updated_at as "disbursement.updated_at",
-			a.id as "asset.id",
-			a.code as "asset.code",
-			a.issuer as "asset.issuer",
-			rw.id as "receiver_wallet.id",
-			COALESCE(rw.stellar_address, '') as "receiver_wallet.stellar_address",
-			COALESCE(rw.stellar_memo, '') as "receiver_wallet.stellar_memo",
-			COALESCE(rw.stellar_memo_type, '') as "receiver_wallet.stellar_memo_type",
-			rw.status as "receiver_wallet.status",
-			rw.created_at as "receiver_wallet.created_at",
-			rw.updated_at as "receiver_wallet.updated_at",
-			rw.receiver_id as "receiver_wallet.receiver.id",
-			COALESCE(rw.anchor_platform_transaction_id, '') as "receiver_wallet.anchor_platform_transaction_id",
-			rw.anchor_platform_transaction_synced_at as "receiver_wallet.anchor_platform_transaction_synced_at",
-			w.id as "receiver_wallet.wallet.id",
-			w.name as "receiver_wallet.wallet.name",
-			w.enabled as "receiver_wallet.wallet.enabled"
-		FROM
-			payments p
-		JOIN disbursements d on p.disbursement_id = d.id
-		JOIN assets a on p.asset_id = a.id
-		JOIN wallets w on d.wallet_id = w.id
-		JOIN receiver_wallets rw on rw.receiver_id = p.receiver_id AND rw.wallet_id = w.id
-	`
-
-	query, params := newPaymentQuery(query, queryParams, true, sqlExec)
+	query, params := newPaymentQuery(basePaymentQuery, queryParams, true, sqlExec)
 
 	err := sqlExec.SelectContext(ctx, &payments, query, params...)
 	if err != nil {
