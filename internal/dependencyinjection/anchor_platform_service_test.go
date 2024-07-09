@@ -3,9 +3,10 @@ package dependencyinjection
 import (
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
-	"github.com/stretchr/testify/require"
 )
 
 func Test_NewAnchorPlatformAPIService(t *testing.T) {

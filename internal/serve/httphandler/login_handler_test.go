@@ -8,21 +8,20 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/go-chi/chi/v5"
+	"github.com/stellar/go/support/log"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/htmltemplate"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
-
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
-
-	"github.com/go-chi/chi/v5"
-	"github.com/stellar/go/support/log"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
-	"github.com/stretchr/testify/require"
 )
 
 func Test_LoginRequest_validate(t *testing.T) {

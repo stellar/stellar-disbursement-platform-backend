@@ -11,8 +11,8 @@ import (
 	"strings"
 
 	"github.com/gorilla/schema"
-
 	"github.com/stellar/go/support/log"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
