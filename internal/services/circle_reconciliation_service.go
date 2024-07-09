@@ -3,7 +3,9 @@ package services
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"net/http"
 	"time"
 
 	"github.com/stellar/go/support/log"
@@ -12,6 +14,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/circle"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
@@ -77,12 +80,32 @@ func (s *CircleReconciliationService) Reconcile(ctx context.Context) error {
 	return nil
 }
 
+func shouldIncrementSyncAttempts(err error) bool {
+	var cAPIErr *circle.APIError
+	if !errors.As(err, &cAPIErr) {
+		return false
+	}
+
+	return cAPIErr.StatusCode == http.StatusBadRequest
+}
+
 // reconcileTransferRequest reconciles a Circle transfer request and updates the payment status in the DB. It returns an
 // error if the reconciliation fails.
 func (s *CircleReconciliationService) reconcileTransferRequest(ctx context.Context, dbTx db.DBTransaction, tnt *tenant.Tenant, circleRequest *data.CircleTransferRequest) error {
 	// 4.1. get the Circle transfer by ID
 	transfer, err := s.CircleService.GetTransferByID(ctx, *circleRequest.CircleTransferID)
 	if err != nil {
+		if shouldIncrementSyncAttempts(err) {
+			// increment the sync attempts and update the last sync attempt time.
+			var updateErr error
+			circleRequest, updateErr = s.Models.CircleTransferRequests.Update(ctx, dbTx, circleRequest.IdempotencyKey, data.CircleTransferRequestUpdate{
+				LastSyncAttemptAt: utils.TimePtr(time.Now()),
+				SyncAttempts:      circleRequest.SyncAttempts + 1,
+			})
+			if updateErr != nil {
+				return fmt.Errorf("updating Circle transfer request sync attempts: %w", err)
+			}
+		}
 		return fmt.Errorf("getting Circle transfer by ID %q: %w", *circleRequest.CircleTransferID, err)
 	}
 	jsonBody, err := json.Marshal(transfer)

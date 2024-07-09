@@ -2,6 +2,8 @@ package services
 
 import (
 	"context"
+	"errors"
+	"net/http"
 	"testing"
 
 	"github.com/sirupsen/logrus"
@@ -293,4 +295,220 @@ func Test_NewCircleReconciliationService_Reconcile_success(t *testing.T) {
 	updatedCircleReq3, updatedPayment3 := getPaymentAndCircleRequestFromDB(p3WillFail.ID)
 	assert.Equal(t, data.CircleTransferStatusFailed, *updatedCircleReq3.Status)
 	assert.Equal(t, data.FailedPaymentStatus, updatedPayment3.Status)
+}
+
+func Test_shouldIncrementSyncAttempts(t *testing.T) {
+	testCases := []struct {
+		name     string
+		err      error
+		expected bool
+	}{
+		{
+			name:     "false when error is not a Circle API error",
+			err:      errors.New("test-error"),
+			expected: false,
+		},
+		{
+			name:     "false when error is a Circle API error but status code is not 400",
+			err:      &circle.APIError{StatusCode: http.StatusUnauthorized},
+			expected: false,
+		},
+		{
+			name:     "true when error is a Circle API error and status code is 400",
+			err:      &circle.APIError{StatusCode: http.StatusBadRequest},
+			expected: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, shouldIncrementSyncAttempts(tc.err))
+		})
+	}
+}
+
+func Test_NewCircleReconciliationService_reconcileTransferRequest(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	tnt := &tenant.Tenant{ID: "95e788b6-c80e-4975-9d12-141001fe6e44", Name: "test-tenant"}
+	ctx := tenant.SaveTenantInContext(context.Background(), tnt)
+
+	models, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+
+	asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, assets.EURCAssetCode, assets.EURCAssetTestnet.Issuer)
+	country := data.CreateCountryFixture(t, ctx, dbConnectionPool, "FRA", "France")
+	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "My Wallet", "https://www.wallet.com", "www.wallet.com", "wallet1://")
+
+	disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
+		Name:    "disbursement",
+		Status:  data.StartedDisbursementStatus,
+		Asset:   asset,
+		Wallet:  wallet,
+		Country: country,
+	})
+	receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
+	receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
+
+	// Create payments with Circle transfer requests
+	circlePendingStatus := data.CircleTransferStatusPending
+
+	payment := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+		ReceiverWallet: receiverWallet,
+		Disbursement:   disbursement,
+		Asset:          *asset,
+		Amount:         "100",
+		Status:         data.PendingPaymentStatus,
+	})
+	circleRequest := data.CreateCircleTransferRequestFixture(t, ctx, dbConnectionPool, data.CircleTransferRequest{
+		PaymentID:        payment.ID,
+		Status:           &circlePendingStatus,
+		CircleTransferID: utils.StringPtr("circle-transfer-id"),
+	})
+
+	testCases := []struct {
+		name                        string
+		setupMocksAndDBFn           func(t *testing.T, mCircleService *circle.MockService)
+		wantErrorContains           []string
+		shouldIncrementSyncAttempts bool
+		assertLogsFn                func(entries []logrus.Entry)
+	}{
+		{
+			name: "401 should be logged and an error should be returned",
+			setupMocksAndDBFn: func(t *testing.T, mCircleService *circle.MockService) {
+				mCircleService.
+					On("GetTransferByID", mock.Anything, "circle-transfer-id").
+					Return(nil, &circle.APIError{StatusCode: http.StatusUnauthorized}).
+					Once()
+			},
+			wantErrorContains: []string{"getting Circle transfer by ID", "APIError", "StatusCode=401"},
+		},
+		{
+			name: "403 should be logged and an error should be returned",
+			setupMocksAndDBFn: func(t *testing.T, mCircleService *circle.MockService) {
+				mCircleService.
+					On("GetTransferByID", mock.Anything, "circle-transfer-id").
+					Return(nil, &circle.APIError{StatusCode: http.StatusForbidden}).
+					Once()
+			},
+			wantErrorContains: []string{"getting Circle transfer by ID", "APIError", "StatusCode=403"},
+		},
+		{
+			name: "404 should be logged and an error should be returned",
+			setupMocksAndDBFn: func(t *testing.T, mCircleService *circle.MockService) {
+				mCircleService.
+					On("GetTransferByID", mock.Anything, "circle-transfer-id").
+					Return(nil, &circle.APIError{StatusCode: http.StatusNotFound}).
+					Once()
+			},
+			wantErrorContains: []string{"getting Circle transfer by ID", "APIError", "StatusCode=404"},
+		},
+		{
+			name: "429 should be logged and an error should be returned",
+			setupMocksAndDBFn: func(t *testing.T, mCircleService *circle.MockService) {
+				mCircleService.
+					On("GetTransferByID", mock.Anything, "circle-transfer-id").
+					Return(nil, &circle.APIError{StatusCode: http.StatusTooManyRequests}).
+					Once()
+			},
+			wantErrorContains: []string{"getting Circle transfer by ID", "APIError", "StatusCode=429"},
+		},
+		{
+			name: "5xx should be logged and an error should be returned",
+			setupMocksAndDBFn: func(t *testing.T, mCircleService *circle.MockService) {
+				mCircleService.
+					On("GetTransferByID", mock.Anything, "circle-transfer-id").
+					Return(nil, &circle.APIError{StatusCode: http.StatusInternalServerError}).
+					Once()
+			},
+			wantErrorContains: []string{"getting Circle transfer by ID", "APIError", "StatusCode=500"},
+		},
+		{
+			name: "non-API error should be logged and an error should be returned",
+			setupMocksAndDBFn: func(t *testing.T, mCircleService *circle.MockService) {
+				mCircleService.
+					On("GetTransferByID", mock.Anything, "circle-transfer-id").
+					Return(nil, errors.New("test-error")).
+					Once()
+			},
+			wantErrorContains: []string{"getting Circle transfer by ID", "test-error"},
+		},
+		{
+			name: "400 should increment the sync attempts and an error should be returned",
+			setupMocksAndDBFn: func(t *testing.T, mCircleService *circle.MockService) {
+				mCircleService.
+					On("GetTransferByID", mock.Anything, "circle-transfer-id").
+					Return(nil, &circle.APIError{StatusCode: http.StatusBadRequest}).
+					Once()
+			},
+			wantErrorContains:           []string{"getting Circle transfer by ID", "APIError", "StatusCode=400"},
+			shouldIncrementSyncAttempts: true,
+		},
+		{
+			name: "200 should increment the sync attempts and return nil",
+			setupMocksAndDBFn: func(t *testing.T, mCircleService *circle.MockService) {
+				mCircleService.
+					On("GetTransferByID", mock.Anything, "circle-transfer-id").
+					Return(&circle.Transfer{
+						ID:     *circleRequest.CircleTransferID,
+						Status: circle.TransferStatusComplete,
+					}, nil).
+					Once()
+			},
+			shouldIncrementSyncAttempts: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			dbTx, err := dbConnectionPool.BeginTxx(ctx, nil)
+			require.NoError(t, err)
+			defer func() {
+				err = dbTx.Rollback()
+				require.NoError(t, err)
+			}()
+
+			// prepare mocks
+			mCircleService := circle.NewMockService(t)
+			tc.setupMocksAndDBFn(t, mCircleService)
+			svc := CircleReconciliationService{
+				Models:        models,
+				CircleService: mCircleService,
+			}
+			err = svc.reconcileTransferRequest(ctx, dbTx, tnt, circleRequest)
+
+			// get the updated CircleRequestTransfer and Payment from the DB
+			circleReqFromDB, dbErr := models.CircleTransferRequests.Get(ctx, dbTx, data.QueryParams{
+				Filters: map[data.FilterKey]interface{}{
+					data.FilterKeyPaymentID: circleRequest.PaymentID,
+				},
+			})
+			require.NoError(t, dbErr)
+			paymentFromDB, dbErr := models.Payment.Get(ctx, circleRequest.PaymentID, dbTx)
+			require.NoError(t, dbErr)
+
+			if len(tc.wantErrorContains) != 0 {
+				require.Error(t, err)
+				for _, wantErrorContains := range tc.wantErrorContains {
+					assert.ErrorContains(t, err, wantErrorContains)
+				}
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, data.CircleTransferStatusSuccess, *circleReqFromDB.Status)
+				assert.Equal(t, data.SuccessPaymentStatus, paymentFromDB.Status)
+			}
+
+			if tc.shouldIncrementSyncAttempts {
+				assert.Equal(t, circleRequest.SyncAttempts+1, circleReqFromDB.SyncAttempts)
+				assert.NotNil(t, circleReqFromDB.LastSyncAttemptAt)
+			} else {
+				assert.Equal(t, circleRequest.SyncAttempts, circleReqFromDB.SyncAttempts)
+				assert.Nil(t, circleReqFromDB.LastSyncAttemptAt)
+			}
+		})
+	}
 }
