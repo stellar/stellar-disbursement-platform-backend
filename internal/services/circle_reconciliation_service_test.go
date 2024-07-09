@@ -297,6 +297,173 @@ func Test_NewCircleReconciliationService_Reconcile_success(t *testing.T) {
 	assert.Equal(t, data.FailedPaymentStatus, updatedPayment3.Status)
 }
 
+func Test_NewCircleReconciliationService_Reconcile_partialSuccess(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	tnt := &tenant.Tenant{ID: "95e788b6-c80e-4975-9d12-141001fe6e44", Name: "test-tenant"}
+	ctx := tenant.SaveTenantInContext(context.Background(), tnt)
+
+	models, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+
+	asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, assets.EURCAssetCode, assets.EURCAssetTestnet.Issuer)
+	country := data.CreateCountryFixture(t, ctx, dbConnectionPool, "FRA", "France")
+	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "My Wallet", "https://www.wallet.com", "www.wallet.com", "wallet1://")
+
+	// Create distribution accounts
+	circleDistAccountDBVault := schema.TransactionAccount{
+		CircleWalletID: "circle-wallet-id",
+		Type:           schema.DistributionAccountCircleDBVault,
+		Status:         schema.AccountStatusActive,
+	}
+
+	disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
+		Name:    "disbursement",
+		Status:  data.StartedDisbursementStatus,
+		Asset:   asset,
+		Wallet:  wallet,
+		Country: country,
+	})
+	receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
+	receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
+
+	// Create payments with Circle transfer requests
+	circlePendingStatus := data.CircleTransferStatusPending
+
+	p1WillThrowAnError := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+		ReceiverWallet: receiverWallet,
+		Disbursement:   disbursement,
+		Asset:          *asset,
+		Amount:         "100",
+		Status:         data.PendingPaymentStatus,
+	})
+	circleReq1WillThrowAnError := data.CreateCircleTransferRequestFixture(t, ctx, dbConnectionPool, data.CircleTransferRequest{
+		PaymentID:        p1WillThrowAnError.ID,
+		Status:           &circlePendingStatus,
+		CircleTransferID: utils.StringPtr("circle-transfer-id-1"),
+	})
+
+	p2StaysPending := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+		ReceiverWallet: receiverWallet,
+		Disbursement:   disbursement,
+		Asset:          *asset,
+		Amount:         "100",
+		Status:         data.PendingPaymentStatus,
+	})
+	circleReq2StaysPending := data.CreateCircleTransferRequestFixture(t, ctx, dbConnectionPool, data.CircleTransferRequest{
+		PaymentID:        p2StaysPending.ID,
+		Status:           &circlePendingStatus,
+		CircleTransferID: utils.StringPtr("circle-transfer-id-2"),
+	})
+
+	p3WillSucceed := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+		ReceiverWallet: receiverWallet,
+		Disbursement:   disbursement,
+		Asset:          *asset,
+		Amount:         "100",
+		Status:         data.PendingPaymentStatus,
+	})
+	circleReq3WillSucceed := data.CreateCircleTransferRequestFixture(t, ctx, dbConnectionPool, data.CircleTransferRequest{
+		PaymentID:        p3WillSucceed.ID,
+		Status:           &circlePendingStatus,
+		CircleTransferID: utils.StringPtr("circle-transfer-id-3"),
+	})
+
+	p4WillFail := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+		ReceiverWallet: receiverWallet,
+		Disbursement:   disbursement,
+		Asset:          *asset,
+		Amount:         "100",
+		Status:         data.PendingPaymentStatus,
+	})
+	circleReq4WillFail := data.CreateCircleTransferRequestFixture(t, ctx, dbConnectionPool, data.CircleTransferRequest{
+		PaymentID:        p4WillFail.ID,
+		Status:           &circlePendingStatus,
+		CircleTransferID: utils.StringPtr("circle-transfer-id-4"),
+	})
+
+	// prepare mocks
+	mDistAccountResolver := sigMocks.NewMockDistributionAccountResolver(t)
+	mDistAccountResolver.
+		On("DistributionAccountFromContext", mock.Anything).
+		Return(circleDistAccountDBVault, nil).
+		Once()
+	mCircleService := circle.NewMockService(t)
+	mCircleService.
+		On("GetTransferByID", mock.Anything, *circleReq1WillThrowAnError.CircleTransferID).
+		Return(nil, errors.New("something went wrong")).
+		Once().
+		On("GetTransferByID", mock.Anything, *circleReq2StaysPending.CircleTransferID).
+		Return(&circle.Transfer{
+			ID:     *circleReq2StaysPending.CircleTransferID,
+			Status: circle.TransferStatusPending,
+		}, nil).
+		Once().
+		On("GetTransferByID", mock.Anything, *circleReq3WillSucceed.CircleTransferID).
+		Return(&circle.Transfer{
+			ID:     *circleReq3WillSucceed.CircleTransferID,
+			Status: circle.TransferStatusComplete,
+		}, nil).
+		Once().
+		On("GetTransferByID", mock.Anything, *circleReq4WillFail.CircleTransferID).
+		Return(&circle.Transfer{
+			ID:     *circleReq4WillFail.CircleTransferID,
+			Status: circle.TransferStatusFailed,
+		}, nil).
+		Once()
+
+	// run test
+	getEntries := log.DefaultLogger.StartTest(logrus.DebugLevel)
+	svc := CircleReconciliationService{
+		Models:              models,
+		CircleService:       mCircleService,
+		DistAccountResolver: mDistAccountResolver,
+	}
+	err = svc.Reconcile(ctx)
+	assert.Error(t, err)
+	assert.EqualError(t, err, "attempted to reconcyle 4 circle requests but failed on 1 reconciliations: [reconciling Circle transfer request: getting Circle transfer by ID \"circle-transfer-id-1\": something went wrong]")
+
+	// assert logs
+	entries := getEntries()
+	var messages []string
+	for _, entry := range entries {
+		messages = append(messages, entry.Message)
+	}
+	assert.Contains(t, messages, `[tenant=test-tenant] Reconciled Circle transfer request "circle-transfer-id-3" with status "complete"`)
+	assert.Contains(t, messages, `[tenant=test-tenant] Reconciled Circle transfer request "circle-transfer-id-4" with status "failed"`)
+
+	// assert results
+	getPaymentAndCircleRequestFromDB := func(paymentID string) (*data.CircleTransferRequest, *data.Payment) {
+		updatedCircleRequest, err := models.CircleTransferRequests.Get(ctx, dbConnectionPool, data.QueryParams{Filters: map[data.FilterKey]interface{}{data.FilterKeyPaymentID: paymentID}})
+		require.NoError(t, err)
+
+		updatedPayment, err := models.Payment.Get(ctx, paymentID, dbConnectionPool)
+		require.NoError(t, err)
+
+		return updatedCircleRequest, updatedPayment
+	}
+	// p1WillThrowAnError
+	updatedCircleReq1, updatedPayment1 := getPaymentAndCircleRequestFromDB(p1WillThrowAnError.ID)
+	assert.Equal(t, data.CircleTransferStatusPending, *updatedCircleReq1.Status)
+	assert.Equal(t, data.PendingPaymentStatus, updatedPayment1.Status)
+	// p2StaysPending
+	updatedCircleReq2, updatedPayment2 := getPaymentAndCircleRequestFromDB(p2StaysPending.ID)
+	assert.Equal(t, data.CircleTransferStatusPending, *updatedCircleReq2.Status)
+	assert.Equal(t, data.PendingPaymentStatus, updatedPayment2.Status)
+	// p3WillSucceed
+	updatedCircleReq3, updatedPayment3 := getPaymentAndCircleRequestFromDB(p3WillSucceed.ID)
+	assert.Equal(t, data.CircleTransferStatusSuccess, *updatedCircleReq3.Status)
+	assert.Equal(t, data.SuccessPaymentStatus, updatedPayment3.Status)
+	// p4WillFail
+	updatedCircleReq4, updatedPayment4 := getPaymentAndCircleRequestFromDB(p4WillFail.ID)
+	assert.Equal(t, data.CircleTransferStatusFailed, *updatedCircleReq4.Status)
+	assert.Equal(t, data.FailedPaymentStatus, updatedPayment4.Status)
+}
+
 func Test_shouldIncrementSyncAttempts(t *testing.T) {
 	testCases := []struct {
 		name     string

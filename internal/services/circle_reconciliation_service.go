@@ -30,6 +30,10 @@ type CircleReconciliationService struct {
 	DistAccountResolver signing.DistributionAccountResolver
 }
 
+// Reconcile reconciles the pending Circle transfer requests for the tenant in the context. It fetches the rows from
+// circte_transfer_request where status is set to pending, and then fetches the transfer details from Circle API. It
+// updates the status of the transfer request in the DB based on the status of the transfer in Circle. If the transfer
+// reached a successful/failure status, it updates the payment status in the DB as well to reflect that.
 func (s *CircleReconciliationService) Reconcile(ctx context.Context) error {
 	// Step 1: Get the tenant from the context.
 	tnt, outerErr := tenant.GetTenantFromContext(ctx)
@@ -51,6 +55,8 @@ func (s *CircleReconciliationService) Reconcile(ctx context.Context) error {
 		return nil
 	}
 
+	var reconciliationErrors []error
+	var reconciliationCount int
 	outerErr = db.RunInTransaction(ctx, s.Models.DBConnectionPool, nil, func(dbTx db.DBTransaction) error {
 		// Step 3: Get pending Circle transfer requests.
 		circleRequests, err := s.Models.CircleTransferRequests.GetPendingReconciliation(ctx, dbTx)
@@ -64,10 +70,12 @@ func (s *CircleReconciliationService) Reconcile(ctx context.Context) error {
 		}
 
 		// Step 4: Reconcile the pending Circle transfer requests.
+		reconciliationCount = len(circleRequests)
 		for _, circleRequest := range circleRequests {
 			err = s.reconcileTransferRequest(ctx, dbTx, tnt, circleRequest)
 			if err != nil {
-				return fmt.Errorf("reconciling Circle transfer request: %w", err)
+				err = fmt.Errorf("reconciling Circle transfer request: %w", err)
+				reconciliationErrors = append(reconciliationErrors, err)
 			}
 		}
 
@@ -77,9 +85,15 @@ func (s *CircleReconciliationService) Reconcile(ctx context.Context) error {
 		return fmt.Errorf("running Circle reconciliation for tenant %q: %w", tnt.Name, outerErr)
 	}
 
+	if len(reconciliationErrors) > 0 {
+		return fmt.Errorf("attempted to reconcyle %d circle requests but failed on %d reconciliations: %v", reconciliationCount, len(reconciliationErrors), reconciliationErrors)
+	}
+
 	return nil
 }
 
+// shouldIncrementSyncAttempts returns true if the error is a bad request error from Circle API, which means that the
+// request should be retried.
 func shouldIncrementSyncAttempts(err error) bool {
 	var cAPIErr *circle.APIError
 	if !errors.As(err, &cAPIErr) {
@@ -103,7 +117,7 @@ func (s *CircleReconciliationService) reconcileTransferRequest(ctx context.Conte
 				SyncAttempts:      circleRequest.SyncAttempts + 1,
 			})
 			if updateErr != nil {
-				return fmt.Errorf("updating Circle transfer request sync attempts: %w", err)
+				return fmt.Errorf("updating Circle transfer request sync attempts: %w", updateErr)
 			}
 		}
 		return fmt.Errorf("getting Circle transfer by ID %q: %w", *circleRequest.CircleTransferID, err)
@@ -116,7 +130,7 @@ func (s *CircleReconciliationService) reconcileTransferRequest(ctx context.Conte
 	// 4.2. update the circle transfer request entry in the DB.
 	newStatus := data.CircleTransferStatus(transfer.Status)
 	if *circleRequest.Status == newStatus {
-		// transfers that are in pending state in both Circle and our DB will get ignored when they reach this point.
+		// this condition should be unrechable, but we're adding this log just in case...
 		log.Ctx(ctx).Debugf("[tenant=%s] Circle transfer request %q is already in status %q, skipping reconciliation...", tnt.Name, circleRequest.IdempotencyKey, newStatus)
 		return nil
 	}
