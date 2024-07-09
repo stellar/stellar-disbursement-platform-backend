@@ -28,7 +28,9 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpresponse"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
+	sigMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
@@ -44,12 +46,19 @@ func Test_PaymentsHandlerGet(t *testing.T) {
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
+	mDistributionAccountResolver := sigMocks.NewMockDistributionAccountResolver(t)
+
 	handler := &PaymentsHandler{
-		Models:           models,
-		DBConnectionPool: dbConnectionPool,
+		Models:                      models,
+		DBConnectionPool:            dbConnectionPool,
+		DistributionAccountResolver: mDistributionAccountResolver,
 	}
 
-	// setup
+	mDistributionAccountResolver.
+		On("DistributionAccountFromContext", mock.Anything).
+		Return(schema.TransactionAccount{Type: schema.DistributionAccountStellarEnv}, nil).
+		Maybe()
+
 	r := chi.NewRouter()
 	r.Get("/payments/{id}", handler.GetPayment)
 
@@ -180,6 +189,154 @@ func Test_PaymentsHandlerGet(t *testing.T) {
 	})
 }
 
+func Test_PaymentHandler_GetPayments_CirclePayments(t *testing.T) {
+	ctx := context.Background()
+
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+
+	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, outerErr)
+	defer dbConnectionPool.Close()
+
+	models, outerErr := data.NewModels(dbConnectionPool)
+	require.NoError(t, outerErr)
+
+	// Create fixtures
+	asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
+	country := data.CreateCountryFixture(t, ctx, dbConnectionPool, "FRA", "France")
+	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "wallet1", "https://www.wallet.com", "www.wallet.com", "wallet1://")
+	disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
+		Country: country,
+		Wallet:  wallet,
+		Status:  data.ReadyDisbursementStatus,
+		Asset:   asset,
+	})
+	receiverReady := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
+	rwReady := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiverReady.ID, wallet.ID, data.ReadyReceiversWalletStatus)
+	payment1 := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+		ReceiverWallet: rwReady,
+		Disbursement:   disbursement,
+		Asset:          *asset,
+		Amount:         "100",
+		Status:         data.DraftPaymentStatus,
+	})
+	payment2 := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+		ReceiverWallet: rwReady,
+		Disbursement:   disbursement,
+		Asset:          *asset,
+		Amount:         "200",
+		Status:         data.DraftPaymentStatus,
+	})
+	data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+		ReceiverWallet: rwReady,
+		Disbursement:   disbursement,
+		Asset:          *asset,
+		Amount:         "300",
+		Status:         data.DraftPaymentStatus,
+	})
+
+	data.CreateCircleTransferRequestFixture(t, ctx, dbConnectionPool, data.CircleTransferRequest{
+		IdempotencyKey:   "idempotency-key-1",
+		PaymentID:        payment1.ID,
+		CircleTransferID: utils.StringPtr("circle-transfer-id-1"),
+	})
+
+	data.CreateCircleTransferRequestFixture(t, ctx, dbConnectionPool, data.CircleTransferRequest{
+		IdempotencyKey:   "idempotency-key-2",
+		PaymentID:        payment2.ID,
+		CircleTransferID: utils.StringPtr("circle-transfer-id-2"),
+	})
+
+	testCases := []struct {
+		name          string
+		prepareMocks  func(t *testing.T, mDistributionAccountResolver *sigMocks.MockDistributionAccountResolver)
+		runAssertions func(t *testing.T, responseStatus int, response string)
+	}{
+		{
+			name: "returns error when distribution account resolver fails",
+			prepareMocks: func(t *testing.T, mDistributionAccountResolver *sigMocks.MockDistributionAccountResolver) {
+				t.Helper()
+
+				mDistributionAccountResolver.
+					On("DistributionAccountFromContext", mock.Anything).
+					Return(schema.TransactionAccount{}, errors.New("unexpected error")).
+					Once()
+			},
+			runAssertions: func(t *testing.T, responseStatus int, response string) {
+				t.Helper()
+
+				assert.Equal(t, http.StatusInternalServerError, responseStatus)
+				assert.JSONEq(t, `{"error":"Cannot retrieve payments"}`, string(response))
+			},
+		},
+		{
+			name: "successfully returns payments with circle transaction IDs",
+			prepareMocks: func(t *testing.T, mDistributionAccountResolver *sigMocks.MockDistributionAccountResolver) {
+				t.Helper()
+
+				mDistributionAccountResolver.
+					On("DistributionAccountFromContext", mock.Anything).
+					Return(schema.TransactionAccount{Type: schema.DistributionAccountCircleDBVault}, nil).
+					Maybe()
+			},
+			runAssertions: func(t *testing.T, responseStatus int, response string) {
+				t.Helper()
+
+				assert.Equal(t, http.StatusOK, responseStatus)
+
+				var actualResponse httpresponse.PaginatedResponse
+				err := json.Unmarshal([]byte(response), &actualResponse)
+				require.NoError(t, err)
+
+				assert.Equal(t, 3, actualResponse.Pagination.Total)
+
+				var payments []data.Payment
+				err = json.Unmarshal(actualResponse.Data, &payments)
+				require.NoError(t, err)
+
+				assert.Len(t, payments, 3)
+				for _, payment := range payments {
+					if payment.ID == payment1.ID {
+						assert.Equal(t, "circle-transfer-id-1", *payment.CircleTransferRequestID)
+					}
+					if payment.ID == payment2.ID {
+						assert.Equal(t, "circle-transfer-id-2", *payment.CircleTransferRequestID)
+					}
+					if payment.ID != payment1.ID && payment.ID != payment2.ID {
+						assert.Nil(t, payment.CircleTransferRequestID)
+					}
+				}
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			mDistributionAccountResolver := sigMocks.NewMockDistributionAccountResolver(t)
+
+			tc.prepareMocks(t, mDistributionAccountResolver)
+
+			h := &PaymentsHandler{
+				Models:                      models,
+				DBConnectionPool:            dbConnectionPool,
+				DistributionAccountResolver: mDistributionAccountResolver,
+			}
+
+			rr := httptest.NewRecorder()
+			req, err := http.NewRequest(http.MethodGet, "/payments", nil)
+			require.NoError(t, err)
+			http.HandlerFunc(h.GetPayments).ServeHTTP(rr, req)
+			resp := rr.Result()
+			defer resp.Body.Close()
+			respBody, err := io.ReadAll(resp.Body)
+			require.NoError(t, err)
+
+			tc.runAssertions(t, resp.StatusCode, string(respBody))
+		})
+	}
+}
+
 func Test_PaymentHandler_GetPayments_Errors(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
@@ -297,9 +454,16 @@ func Test_PaymentHandler_GetPayments_Success(t *testing.T) {
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
+	mDistributionAccountResolver := sigMocks.NewMockDistributionAccountResolver(t)
+	mDistributionAccountResolver.
+		On("DistributionAccountFromContext", mock.Anything).
+		Return(schema.TransactionAccount{Type: schema.DistributionAccountStellarEnv}, nil).
+		Maybe()
+
 	handler := &PaymentsHandler{
-		Models:           models,
-		DBConnectionPool: dbConnectionPool,
+		Models:                      models,
+		DBConnectionPool:            dbConnectionPool,
+		DistributionAccountResolver: mDistributionAccountResolver,
 	}
 
 	ts := httptest.NewServer(http.HandlerFunc(handler.GetPayments))
@@ -1190,10 +1354,19 @@ func Test_PaymentsHandler_getPaymentsWithCount(t *testing.T) {
 	ctx := context.Background()
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
+
+	mDistributionAccountResolver := sigMocks.NewMockDistributionAccountResolver(t)
+
 	handler := &PaymentsHandler{
-		Models:           models,
-		DBConnectionPool: dbConnectionPool,
+		Models:                      models,
+		DBConnectionPool:            dbConnectionPool,
+		DistributionAccountResolver: mDistributionAccountResolver,
 	}
+
+	mDistributionAccountResolver.
+		On("DistributionAccountFromContext", mock.Anything).
+		Return(schema.TransactionAccount{Type: schema.DistributionAccountStellarEnv}, nil).
+		Maybe()
 
 	t.Run("0 payments created", func(t *testing.T) {
 		response, err := handler.getPaymentsWithCount(ctx, &data.QueryParams{})

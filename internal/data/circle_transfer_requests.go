@@ -175,6 +175,48 @@ func (m CircleTransferRequestModel) Get(ctx context.Context, sqlExec db.SQLExecu
 	return &circleTransferRequests, nil
 }
 
+func (m CircleTransferRequestModel) GetCurrentTransfersForPaymentIDs(ctx context.Context, sqlExec db.SQLExecuter, paymentIDs []string) (map[string]*CircleTransferRequest, error) {
+	if len(paymentIDs) == 0 {
+		return nil, fmt.Errorf("paymentIDs is required")
+	}
+
+	query := `
+		SELECT DISTINCT ON (payment_id)
+			idempotency_key,
+			payment_id,
+			circle_transfer_id,
+			status,
+			response_body,
+			source_wallet_id,
+			created_at,
+			updated_at,
+			completed_at
+		FROM 
+			circle_transfer_requests
+		WHERE 
+			payment_id = ANY($1)
+		ORDER BY 
+			payment_id, created_at DESC;
+	`
+
+	var circleTransferRequests []*CircleTransferRequest
+	err := sqlExec.SelectContext(ctx, &circleTransferRequests, query, pq.Array(paymentIDs))
+	if err != nil {
+		return nil, fmt.Errorf("getting circle transfer requests: %w", err)
+	}
+
+	circleTransferRequestsMap := make(map[string]*CircleTransferRequest)
+	if len(circleTransferRequests) == 0 {
+		return circleTransferRequestsMap, nil
+	}
+
+	for _, circleTransferRequest := range circleTransferRequests {
+		circleTransferRequestsMap[circleTransferRequest.PaymentID] = circleTransferRequest
+	}
+
+	return circleTransferRequestsMap, nil
+}
+
 func (m CircleTransferRequestModel) Update(ctx context.Context, sqlExec db.SQLExecuter, idempotencyKey string, update CircleTransferRequestUpdate) (*CircleTransferRequest, error) {
 	if idempotencyKey == "" {
 		return nil, fmt.Errorf("idempotencyKey is required")
