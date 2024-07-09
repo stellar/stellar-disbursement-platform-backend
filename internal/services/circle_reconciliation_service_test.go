@@ -173,14 +173,6 @@ func Test_NewCircleReconciliationService_Reconcile_success(t *testing.T) {
 		Status:         schema.AccountStatusActive,
 	}
 
-	// database cleanup
-	defer data.DeleteAllDisbursementFixtures(t, ctx, dbConnectionPool)
-	defer data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
-	defer data.DeleteAllReceiverVerificationFixtures(t, ctx, dbConnectionPool)
-	defer data.DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
-	defer data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
-	defer data.DeleteAllCircleTransferRequestsFixtures(t, ctx, dbConnectionPool)
-
 	disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
 		Name:    "disbursement",
 		Status:  data.StartedDisbursementStatus,
@@ -192,6 +184,8 @@ func Test_NewCircleReconciliationService_Reconcile_success(t *testing.T) {
 	receiverWallet := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
 
 	// Create payments with Circle transfer requests
+	circlePendingStatus := data.CircleTransferStatusPending
+
 	p1StaysPending := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
 		ReceiverWallet: receiverWallet,
 		Disbursement:   disbursement,
@@ -199,7 +193,6 @@ func Test_NewCircleReconciliationService_Reconcile_success(t *testing.T) {
 		Amount:         "100",
 		Status:         data.PendingPaymentStatus,
 	})
-	circlePendingStatus := data.CircleTransferStatusPending
 	circleReq1StaysPending := data.CreateCircleTransferRequestFixture(t, ctx, dbConnectionPool, data.CircleTransferRequest{
 		PaymentID:        p1StaysPending.ID,
 		Status:           &circlePendingStatus,
@@ -279,7 +272,7 @@ func Test_NewCircleReconciliationService_Reconcile_success(t *testing.T) {
 	assert.Contains(t, messages, `[tenant=test-tenant] Reconciled Circle transfer request "circle-transfer-id-3" with status "failed"`)
 
 	// assert results
-	updatedCircleRequestAndPayment := func(paymentID string) (*data.CircleTransferRequest, *data.Payment) {
+	getPaymentAndCircleRequestFromDB := func(paymentID string) (*data.CircleTransferRequest, *data.Payment) {
 		updatedCircleRequest, err := models.CircleTransferRequests.Get(ctx, dbConnectionPool, data.QueryParams{Filters: map[data.FilterKey]interface{}{data.FilterKeyPaymentID: paymentID}})
 		require.NoError(t, err)
 
@@ -289,15 +282,15 @@ func Test_NewCircleReconciliationService_Reconcile_success(t *testing.T) {
 		return updatedCircleRequest, updatedPayment
 	}
 	// p1StaysPending
-	updatedCircleReq1, updatedPayment1 := updatedCircleRequestAndPayment(p1StaysPending.ID)
+	updatedCircleReq1, updatedPayment1 := getPaymentAndCircleRequestFromDB(p1StaysPending.ID)
 	assert.Equal(t, data.CircleTransferStatusPending, *updatedCircleReq1.Status)
 	assert.Equal(t, data.PendingPaymentStatus, updatedPayment1.Status)
 	// p2WillSucceed
-	updatedCircleReq2, updatedPayment2 := updatedCircleRequestAndPayment(p2WillSucceed.ID)
+	updatedCircleReq2, updatedPayment2 := getPaymentAndCircleRequestFromDB(p2WillSucceed.ID)
 	assert.Equal(t, data.CircleTransferStatusSuccess, *updatedCircleReq2.Status)
 	assert.Equal(t, data.SuccessPaymentStatus, updatedPayment2.Status)
 	// p3WillFail
-	updatedCircleReq3, updatedPayment3 := updatedCircleRequestAndPayment(p3WillFail.ID)
+	updatedCircleReq3, updatedPayment3 := getPaymentAndCircleRequestFromDB(p3WillFail.ID)
 	assert.Equal(t, data.CircleTransferStatusFailed, *updatedCircleReq3.Status)
 	assert.Equal(t, data.FailedPaymentStatus, updatedPayment3.Status)
 }

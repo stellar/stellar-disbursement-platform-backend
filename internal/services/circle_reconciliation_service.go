@@ -75,6 +75,7 @@ func (s *CircleReconciliationService) Reconcile(ctx context.Context) error {
 			// 4.2. update the circle transfer request entry in the DB.
 			newStatus := data.CircleTransferStatus(transfer.Status)
 			if *circleRequest.Status == newStatus {
+				// transfers that are in pending state in both Circle and our DB will get ignored when they reach this point.
 				log.Ctx(ctx).Debugf("[tenant=%s] Circle transfer request %q is already in status %q, skipping reconciliation...", tnt.Name, circleRequest.IdempotencyKey, newStatus)
 				continue
 			}
