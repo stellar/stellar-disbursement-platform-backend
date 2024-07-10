@@ -12,6 +12,7 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/testutils"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
@@ -78,7 +79,6 @@ func Test_CircleTransferRequestModel_Update(t *testing.T) {
 	ctx := context.Background()
 	m := CircleTransferRequestModel{dbConnectionPool: dbConnectionPool}
 
-	// idempotencyKey := uuid.NewString()
 	updateRequest := CircleTransferRequestUpdate{
 		CircleTransferID: "circle-transfer-id",
 		Status:           CircleTransferStatusPending,
@@ -529,6 +529,158 @@ func Test_buildCircleTransferRequestQuery(t *testing.T) {
 
 			assert.Equal(t, tc.expectedQuery, query)
 			assert.Equal(t, tc.expectedParams, params)
+		})
+	}
+}
+
+func Test_CircleTransferRequestModel_GetCurrentTransfersForPaymentIDs(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, outerErr)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+	m := CircleTransferRequestModel{dbConnectionPool: dbConnectionPool}
+
+	// Create fixtures
+	models, outerErr := NewModels(dbConnectionPool)
+	require.NoError(t, outerErr)
+	asset := CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
+	country := CreateCountryFixture(t, ctx, dbConnectionPool, "FRA", "France")
+	wallet := CreateWalletFixture(t, ctx, dbConnectionPool, "wallet1", "https://www.wallet.com", "www.wallet.com", "wallet1://")
+	disbursement := CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &Disbursement{
+		Country: country,
+		Wallet:  wallet,
+		Status:  ReadyDisbursementStatus,
+		Asset:   asset,
+	})
+	receiverReady := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
+	rwReady := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiverReady.ID, wallet.ID, ReadyReceiversWalletStatus)
+	payment1 := CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
+		ReceiverWallet: rwReady,
+		Disbursement:   disbursement,
+		Asset:          *asset,
+		Amount:         "100",
+		Status:         DraftPaymentStatus,
+	})
+	payment2 := CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
+		ReceiverWallet: rwReady,
+		Disbursement:   disbursement,
+		Asset:          *asset,
+		Amount:         "200",
+		Status:         DraftPaymentStatus,
+	})
+	payment3 := CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
+		ReceiverWallet: rwReady,
+		Disbursement:   disbursement,
+		Asset:          *asset,
+		Amount:         "300",
+		Status:         DraftPaymentStatus,
+	})
+
+	testCases := []struct {
+		name           string
+		paymentIDs     []string
+		initFn         func(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter)
+		expectedResult map[string]*CircleTransferRequest
+		expectedErr    string
+	}{
+		{
+			name:           "return an error if paymentIDs is empty",
+			paymentIDs:     []string{},
+			expectedResult: nil,
+			expectedErr:    "paymentIDs is required",
+		},
+		{
+			name:       "🎉 successfully finds circle current transfer request",
+			paymentIDs: []string{payment3.ID},
+			initFn: func(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter) {
+				// insert a transfer for payment 3
+				tr, err := m.Insert(ctx, payment3.ID)
+				require.NoError(t, err)
+
+				_, err = m.Update(ctx, dbConnectionPool, tr.IdempotencyKey, CircleTransferRequestUpdate{
+					CircleTransferID: "circle-transfer-id-3",
+					Status:           CircleTransferStatusFailed,
+				})
+				require.NoError(t, err)
+
+				// insert another transfer for payment 3
+				tr2, err := m.Insert(ctx, payment3.ID)
+				require.NoError(t, err)
+
+				_, err = m.Update(ctx, sqlExec, tr2.IdempotencyKey, CircleTransferRequestUpdate{
+					CircleTransferID: "circle-transfer-id-3-NEW",
+					Status:           CircleTransferStatusSuccess,
+				})
+				require.NoError(t, err)
+			},
+			expectedResult: map[string]*CircleTransferRequest{
+				payment3.ID: {
+					PaymentID:        payment3.ID,
+					CircleTransferID: utils.StringPtr("circle-transfer-id-3-NEW"),
+				},
+			},
+		},
+
+		{
+			name:       "🎉 successfully finds circle transfer requests for multiple payments",
+			paymentIDs: []string{payment1.ID, payment2.ID},
+			initFn: func(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter) {
+				transfer1, err := m.Insert(ctx, payment1.ID)
+				require.NoError(t, err)
+
+				_, err = m.Update(ctx, dbConnectionPool, transfer1.IdempotencyKey, CircleTransferRequestUpdate{
+					CircleTransferID: "circle-transfer-id-1",
+					Status:           CircleTransferStatusFailed,
+				})
+				require.NoError(t, err)
+
+				transfer2, err := m.Insert(ctx, payment2.ID)
+				require.NoError(t, err)
+
+				_, err = m.Update(ctx, dbConnectionPool, transfer2.IdempotencyKey, CircleTransferRequestUpdate{
+					CircleTransferID: "circle-transfer-id-2",
+					Status:           CircleTransferStatusPending,
+				})
+				require.NoError(t, err)
+			},
+			expectedResult: map[string]*CircleTransferRequest{
+				payment1.ID: {
+					PaymentID:        payment1.ID,
+					CircleTransferID: utils.StringPtr("circle-transfer-id-1"),
+				},
+				payment2.ID: {
+					PaymentID:        payment2.ID,
+					CircleTransferID: utils.StringPtr("circle-transfer-id-2"),
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			tx := testutils.BeginTxWithRollback(t, ctx, dbConnectionPool)
+
+			if tc.initFn != nil {
+				tc.initFn(t, ctx, tx)
+			}
+
+			result, err := m.GetCurrentTransfersForPaymentIDs(ctx, tx, tc.paymentIDs)
+			if tc.expectedErr != "" {
+				require.ErrorContains(t, err, tc.expectedErr)
+				require.Nil(t, result)
+			} else {
+				require.NoError(t, err)
+				require.NotNil(t, result)
+				assert.Equal(t, len(tc.expectedResult), len(result))
+				for expectedPaymentID, expectedResult := range tc.expectedResult {
+					assert.NotNil(t, result[expectedPaymentID])
+					assert.Equal(t, expectedResult.CircleTransferID, result[expectedPaymentID].CircleTransferID)
+					assert.Equal(t, expectedResult.PaymentID, result[expectedPaymentID].PaymentID)
+				}
+			}
 		})
 	}
 }

@@ -141,7 +141,7 @@ func (m CircleTransferRequestModel) GetPendingReconciliation(ctx context.Context
 	return m.GetAll(ctx, sqlExec, queryParams)
 }
 
-const baseQuery = `
+const baseCircleQuery = `
 	SELECT
 		*
 	FROM
@@ -149,7 +149,7 @@ const baseQuery = `
 `
 
 func (m CircleTransferRequestModel) GetAll(ctx context.Context, sqlExec db.SQLExecuter, queryParams QueryParams) ([]*CircleTransferRequest, error) {
-	query, params := buildCircleTransferRequestQuery(baseQuery, queryParams, sqlExec)
+	query, params := buildCircleTransferRequestQuery(baseCircleQuery, queryParams, sqlExec)
 
 	var circleTransferRequests []*CircleTransferRequest
 	err := sqlExec.SelectContext(ctx, &circleTransferRequests, query, params...)
@@ -161,7 +161,7 @@ func (m CircleTransferRequestModel) GetAll(ctx context.Context, sqlExec db.SQLEx
 }
 
 func (m CircleTransferRequestModel) Get(ctx context.Context, sqlExec db.SQLExecuter, queryParams QueryParams) (*CircleTransferRequest, error) {
-	query, params := buildCircleTransferRequestQuery(baseQuery, queryParams, sqlExec)
+	query, params := buildCircleTransferRequestQuery(baseCircleQuery, queryParams, sqlExec)
 
 	var circleTransferRequests CircleTransferRequest
 	err := sqlExec.GetContext(ctx, &circleTransferRequests, query, params...)
@@ -173,6 +173,40 @@ func (m CircleTransferRequestModel) Get(ctx context.Context, sqlExec db.SQLExecu
 	}
 
 	return &circleTransferRequests, nil
+}
+
+func (m CircleTransferRequestModel) GetCurrentTransfersForPaymentIDs(ctx context.Context, sqlExec db.SQLExecuter, paymentIDs []string) (map[string]*CircleTransferRequest, error) {
+	if len(paymentIDs) == 0 {
+		return nil, fmt.Errorf("paymentIDs is required")
+	}
+
+	query := `
+		SELECT DISTINCT ON (payment_id)
+			*
+		FROM 
+			circle_transfer_requests
+		WHERE 
+			payment_id = ANY($1)
+		ORDER BY 
+			payment_id, created_at DESC;
+	`
+
+	var circleTransferRequests []*CircleTransferRequest
+	err := sqlExec.SelectContext(ctx, &circleTransferRequests, query, pq.Array(paymentIDs))
+	if err != nil {
+		return nil, fmt.Errorf("getting circle transfer requests: %w", err)
+	}
+
+	circleTransferRequestsByPaymentID := make(map[string]*CircleTransferRequest)
+	if len(circleTransferRequests) == 0 {
+		return circleTransferRequestsByPaymentID, nil
+	}
+
+	for _, circleTransferRequest := range circleTransferRequests {
+		circleTransferRequestsByPaymentID[circleTransferRequest.PaymentID] = circleTransferRequest
+	}
+
+	return circleTransferRequestsByPaymentID, nil
 }
 
 func (m CircleTransferRequestModel) Update(ctx context.Context, sqlExec db.SQLExecuter, idempotencyKey string, update CircleTransferRequestUpdate) (*CircleTransferRequest, error) {

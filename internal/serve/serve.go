@@ -288,11 +288,12 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 
 		r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole, data.BusinessUserRole)).Route("/payments", func(r chi.Router) {
 			paymentsHandler := httphandler.PaymentsHandler{
-				Models:             o.Models,
-				DBConnectionPool:   o.MtnDBConnectionPool,
-				AuthManager:        o.authManager,
-				EventProducer:      o.EventProducer,
-				CrashTrackerClient: o.CrashTrackerClient,
+				Models:                      o.Models,
+				DBConnectionPool:            o.MtnDBConnectionPool,
+				AuthManager:                 o.authManager,
+				EventProducer:               o.EventProducer,
+				CrashTrackerClient:          o.CrashTrackerClient,
+				DistributionAccountResolver: o.SubmitterEngine.DistributionAccountResolver,
 			}
 			r.Get("/", paymentsHandler.GetPayments)
 			r.Get("/{id}", paymentsHandler.GetPayment)
