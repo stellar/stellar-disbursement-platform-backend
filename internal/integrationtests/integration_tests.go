@@ -278,31 +278,33 @@ func (it *IntegrationTestsService) StartIntegrationTests(ctx context.Context, op
 		return fmt.Errorf("error getting receivers: %w", err)
 	}
 
-	payment := receivers[0].Payment
-	q := `SELECT * FROM submitter_transactions WHERE external_id = $1`
-	var tx tss.Transaction
-	err = it.tssDbConnectionPool.GetContext(ctx, &tx, q, payment.ID)
-	if err != nil {
-		return fmt.Errorf("getting TSS transaction from database: %w", err)
-	}
-	log.Ctx(ctx).Infof("TSS transaction: %+v", tx)
+	if schema.AccountType(opts.DistributionAccountType).IsStellar() {
+		payment := receivers[0].Payment
+		q := `SELECT * FROM submitter_transactions WHERE external_id = $1`
+		var tx tss.Transaction
+		err = it.tssDbConnectionPool.GetContext(ctx, &tx, q, payment.ID)
+		if err != nil {
+			return fmt.Errorf("getting TSS transaction from database: %w", err)
+		}
+		log.Ctx(ctx).Infof("TSS transaction: %+v", tx)
 
-	log.Ctx(ctx).Info("Getting payment from disbursement receiver")
-	if payment.Status != data.SuccessPaymentStatus || payment.StellarTransactionID == "" {
-		return fmt.Errorf("payment was not processed successfully by TSS: %+v", payment)
-	}
+		log.Ctx(ctx).Info("Getting payment from disbursement receiver")
+		if payment.Status != data.SuccessPaymentStatus || payment.StellarTransactionID == "" {
+			return fmt.Errorf("payment was not processed successfully by TSS: %+v", payment)
+		}
 
-	log.Ctx(ctx).Info("Payment was successfully updated by the TSS")
-	log.Ctx(ctx).Info("Validating transaction on Horizon Network")
-	ph, err := getTransactionOnHorizon(it.horizonClient, payment.StellarTransactionID)
-	if err != nil {
-		return fmt.Errorf("error getting transaction on horizon network: %w", err)
+		log.Ctx(ctx).Info("Payment was successfully updated by the TSS")
+		log.Ctx(ctx).Info("Validating transaction on Horizon Network")
+		ph, getPaymentErr := getTransactionOnHorizon(it.horizonClient, payment.StellarTransactionID)
+		if getPaymentErr != nil {
+			return fmt.Errorf("error getting transaction on horizon network: %w", getPaymentErr)
+		}
+		err = validateStellarTransaction(ph, opts.ReceiverAccountPublicKey, opts.DisbursedAssetCode, opts.DisbursetAssetIssuer, receivers[0].Payment.Amount)
+		if err != nil {
+			return fmt.Errorf("error validating stellar transaction: %w", err)
+		}
+		log.Ctx(ctx).Info("Transaction validated")
 	}
-	err = validateStellarTransaction(ph, opts.ReceiverAccountPublicKey, opts.DisbursedAssetCode, opts.DisbursetAssetIssuer, receivers[0].Payment.Amount)
-	if err != nil {
-		return fmt.Errorf("error validating stellar transaction: %w", err)
-	}
-	log.Ctx(ctx).Info("Transaction validated")
 
 	log.Ctx(ctx).Info("🎉🎉🎉Finishing integration tests, the receiver was successfully funded 🎉🎉🎉")
 
