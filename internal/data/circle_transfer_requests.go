@@ -182,15 +182,7 @@ func (m CircleTransferRequestModel) GetCurrentTransfersForPaymentIDs(ctx context
 
 	query := `
 		SELECT DISTINCT ON (payment_id)
-			idempotency_key,
-			payment_id,
-			circle_transfer_id,
-			status,
-			response_body,
-			source_wallet_id,
-			created_at,
-			updated_at,
-			completed_at
+			*
 		FROM 
 			circle_transfer_requests
 		WHERE 
@@ -205,16 +197,16 @@ func (m CircleTransferRequestModel) GetCurrentTransfersForPaymentIDs(ctx context
 		return nil, fmt.Errorf("getting circle transfer requests: %w", err)
 	}
 
-	circleTransferRequestsMap := make(map[string]*CircleTransferRequest)
+	circleTransferRequestsByPaymentID := make(map[string]*CircleTransferRequest)
 	if len(circleTransferRequests) == 0 {
-		return circleTransferRequestsMap, nil
+		return circleTransferRequestsByPaymentID, nil
 	}
 
 	for _, circleTransferRequest := range circleTransferRequests {
-		circleTransferRequestsMap[circleTransferRequest.PaymentID] = circleTransferRequest
+		circleTransferRequestsByPaymentID[circleTransferRequest.PaymentID] = circleTransferRequest
 	}
 
-	return circleTransferRequestsMap, nil
+	return circleTransferRequestsByPaymentID, nil
 }
 
 func (m CircleTransferRequestModel) Update(ctx context.Context, sqlExec db.SQLExecuter, idempotencyKey string, update CircleTransferRequestUpdate) (*CircleTransferRequest, error) {

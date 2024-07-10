@@ -50,7 +50,7 @@ func (r *RetryPaymentsRequest) validate() *httperror.HTTPError {
 	return nil
 }
 
-func (p PaymentsHandler) decorateWithCircleTransactionInfo(ctx context.Context, payments []data.Payment) ([]data.Payment, error) {
+func (p PaymentsHandler) decorateWithCircleTransactionInfo(ctx context.Context, payments ...data.Payment) ([]data.Payment, error) {
 	if len(payments) == 0 {
 		return payments, nil
 	}
@@ -100,7 +100,7 @@ func (p PaymentsHandler) GetPayment(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	payments, err := p.decorateWithCircleTransactionInfo(r.Context(), []data.Payment{*payment})
+	payments, err := p.decorateWithCircleTransactionInfo(r.Context(), *payment)
 	if err != nil {
 		httperror.InternalError(r.Context(), "Cannot retrieve payment with circle info", err, nil).Render(w)
 		return
@@ -259,7 +259,7 @@ func (p PaymentsHandler) getPaymentsWithCount(ctx context.Context, queryParams *
 			}
 		}
 
-		payments, err := p.decorateWithCircleTransactionInfo(ctx, payments)
+		payments, err := p.decorateWithCircleTransactionInfo(ctx, payments...)
 		if err != nil {
 			return nil, fmt.Errorf("adding circle info to payments: %w", err)
 		}
