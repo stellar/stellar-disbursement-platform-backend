@@ -53,6 +53,8 @@ type IntegrationTestsOpts struct {
 	AdminServerBaseURL         string
 	AdminServerAccountId       string
 	AdminServerApiKey          string
+	CircleUSDCWalletID         string
+	CircleAPIKey               string
 }
 
 type IntegrationTestsService struct {
@@ -309,13 +311,14 @@ func (it *IntegrationTestsService) StartIntegrationTests(ctx context.Context, op
 
 func (it *IntegrationTestsService) CreateTestData(ctx context.Context, opts IntegrationTestsOpts) error {
 	// 1. Create new tenant and add owner user
+	distributionAccType := schema.AccountType(opts.DistributionAccountType)
 	t, err := it.adminAPI.CreateTenant(ctx, CreateTenantRequest{
 		Name:                    opts.TenantName,
 		OwnerEmail:              opts.UserEmail,
 		OwnerFirstName:          "John",
 		OwnerLastName:           "Doe",
 		OrganizationName:        "Integration Tests Organization",
-		DistributionAccountType: schema.AccountType(opts.DistributionAccountType),
+		DistributionAccountType: distributionAccType,
 		BaseURL:                 "http://localhost:8000",
 		SDPUIBaseURL:            "http://localhost:3000",
 	})
@@ -345,6 +348,27 @@ func (it *IntegrationTestsService) CreateTestData(ctx context.Context, opts Inte
 	_, err = it.models.Wallets.GetOrCreate(ctx, opts.WalletName, opts.WalletHomepage, opts.WalletDeepLink, opts.WalletSEP10Domain)
 	if err != nil {
 		return fmt.Errorf("error getting or creating test wallet: %w", err)
+	}
+
+	// 4. Provision Circle distribution account if needed
+	if distributionAccType.IsCircle() {
+		// 4.1. Create Circle configuration by calling endpoint
+		it.initServices(ctx, opts)
+		authToken, loginErr := it.serverAPI.Login(ctx)
+		if loginErr != nil {
+			return fmt.Errorf("error trying to login in server API: %w", loginErr)
+		}
+		log.Ctx(ctx).Info(authToken)
+
+		err = it.serverAPI.ConfigureCircleAccess(ctx,
+			authToken,
+			&httphandler.PatchCircleConfigRequest{
+				WalletID: &opts.CircleUSDCWalletID,
+				APIKey:   &opts.CircleAPIKey,
+			})
+		if err != nil {
+			return fmt.Errorf("error configuring Circle access: %w", err)
+		}
 	}
 
 	return nil

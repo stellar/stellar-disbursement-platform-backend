@@ -98,6 +98,20 @@ func (c *IntegrationTestsCommand) Command() *cobra.Command {
 			ConfigKey: &integrationTestsOpts.UserPassword,
 			Required:  true,
 		},
+		{
+			Name:      "circle-usdc-wallet-id",
+			Usage:     "The wallet id for a distribution account that is using Circle as the platform",
+			OptType:   types.String,
+			ConfigKey: &integrationTestsOpts.CircleUSDCWalletID,
+			Required:  false,
+		},
+		{
+			Name:      "circle-api-key",
+			Usage:     "The api key for a distribution account that is using Circle as the platform",
+			OptType:   types.String,
+			ConfigKey: &integrationTestsOpts.CircleAPIKey,
+			Required:  false,
+		},
 	}
 	integrationTestsCmd := &cobra.Command{
 		Use:   "integration-tests",

@@ -14,17 +14,16 @@ on:
 env:
   USER_EMAIL: "sdp_user@stellar.org"
   USER_PASSWORD: "mockPassword123!"
-
+  DISTRIBUTION_PUBLIC_KEY: ${{ vars.DISTRIBUTION_PUBLIC_KEY }}
+  DISTRIBUTION_SEED: ${{ vars.DISTRIBUTION_SEED }}
+  CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE: ${{ vars.DISTRIBUTION_SEED }}
+  SEP10_SIGNING_PUBLIC_KEY: ${{ vars.SEP10_SIGNING_PUBLIC_KEY }}
+  SEP10_SIGNING_PRIVATE_KEY: ${{ vars.SEP10_SIGNING_PRIVATE_KEY }}
 jobs:
   e2e-integration-test-stellar:
     runs-on: ubuntu-latest
     environment: "Receiver Registration - E2E Integration Tests (Stellar)"
     env:
-      DISTRIBUTION_PUBLIC_KEY: ${{ vars.DISTRIBUTION_PUBLIC_KEY }}
-      DISTRIBUTION_SEED: ${{ vars.DISTRIBUTION_SEED }}
-      CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE: ${{ vars.DISTRIBUTION_SEED }}
-      SEP10_SIGNING_PUBLIC_KEY: ${{ vars.SEP10_SIGNING_PUBLIC_KEY }}
-      SEP10_SIGNING_PRIVATE_KEY: ${{ vars.SEP10_SIGNING_PRIVATE_KEY }}
       DISTRIBUTION_ACCOUNT_TYPE: "DISTRIBUTION_ACCOUNT.STELLAR.DB_VAULT"
     steps:
       - uses: actions/checkout@v4
@@ -34,12 +33,9 @@ jobs:
     runs-on: ubuntu-latest
     environment: "Receiver Registration - E2E Integration Tests (Circle)"
     env:
-      DISTRIBUTION_PUBLIC_KEY: ${{ vars.DISTRIBUTION_PUBLIC_KEY }}
-      DISTRIBUTION_SEED: ${{ vars.DISTRIBUTION_SEED }}
-      CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE: ${{ vars.DISTRIBUTION_SEED }}
-      SEP10_SIGNING_PUBLIC_KEY: ${{ vars.SEP10_SIGNING_PUBLIC_KEY }}
-      SEP10_SIGNING_PRIVATE_KEY: ${{ vars.SEP10_SIGNING_PRIVATE_KEY }}
       DISTRIBUTION_ACCOUNT_TYPE: "DISTRIBUTION_ACCOUNT.CIRCLE.DB_VAULT"
+      CIRCLE_API_KEY: ${{ vars.CIRCLE_API_KEY }}
+      CIRCLE_USDC_WALLET_ID: ${{ vars.CIRCLE_USDC_WALLET_ID }}
     steps:
       - uses: actions/checkout@v4
       - id: circle
