@@ -28,7 +28,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - id: stellar
-        uses: ./.github/actions/e2e_integration_test
+        uses: ./.github/workflows/actions/e2e_integration_test
   e2e-integration-test-circle:
     runs-on: ubuntu-latest
     environment: "Receiver Registration - E2E Integration Tests (Circle)"
@@ -39,4 +39,4 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - id: circle
-        uses: ./.github/actions/e2e_integration_test
+        uses: ./.github/workflows/actions/e2e_integration_test

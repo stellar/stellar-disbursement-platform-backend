@@ -99,18 +99,11 @@ func (c *IntegrationTestsCommand) Command() *cobra.Command {
 			Required:  true,
 		},
 		{
-			Name:      "circle-usdc-wallet-id",
-			Usage:     "The wallet id for a distribution account that is using Circle as the platform",
+			Name:      "server-api-base-url",
+			Usage:     "The Base URL of the server API of the SDP.",
 			OptType:   types.String,
-			ConfigKey: &integrationTestsOpts.CircleUSDCWalletID,
-			Required:  false,
-		},
-		{
-			Name:      "circle-api-key",
-			Usage:     "The api key for a distribution account that is using Circle as the platform",
-			OptType:   types.String,
-			ConfigKey: &integrationTestsOpts.CircleAPIKey,
-			Required:  false,
+			ConfigKey: &integrationTestsOpts.ServerApiBaseURL,
+			Required:  true,
 		},
 	}
 	integrationTestsCmd := &cobra.Command{
@@ -196,13 +189,6 @@ func (c *IntegrationTestsCommand) StartIntegrationTestsCommand(integrationTestsO
 			Required:  true,
 		},
 		{
-			Name:      "server-api-base-url",
-			Usage:     "The Base URL of the server API of the SDP.",
-			OptType:   types.String,
-			ConfigKey: &integrationTestsOpts.ServerApiBaseURL,
-			Required:  true,
-		},
-		{
 			Name: "anchor-platform-base-sep-url",
 			Usage: "The Base URL of the sep server of the anchor platform. This is the base URL where the Anchor Platform " +
 				"exposes its public API that is meant to be reached by a client application, such as the stellar.toml file.",
@@ -269,6 +255,20 @@ func (c *IntegrationTestsCommand) CreateIntegrationTestsDataCommand(integrationT
 			ConfigKey:   &integrationTestsOpts.WalletDeepLink,
 			FlagDefault: "test_wallet://",
 			Required:    true,
+		},
+		{
+			Name:      "circle-usdc-wallet-id",
+			Usage:     "The wallet id for a distribution account that is using Circle as the platform",
+			OptType:   types.String,
+			ConfigKey: &integrationTestsOpts.CircleUSDCWalletID,
+			Required:  false,
+		},
+		{
+			Name:      "circle-api-key",
+			Usage:     "The api key for a distribution account that is using Circle as the platform",
+			OptType:   types.String,
+			ConfigKey: &integrationTestsOpts.CircleAPIKey,
+			Required:  false,
 		},
 	}
 

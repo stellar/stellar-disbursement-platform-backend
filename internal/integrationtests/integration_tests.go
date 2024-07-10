@@ -358,8 +358,9 @@ func (it *IntegrationTestsService) CreateTestData(ctx context.Context, opts Inte
 		if loginErr != nil {
 			return fmt.Errorf("error trying to login in server API: %w", loginErr)
 		}
-		log.Ctx(ctx).Info(authToken)
 
+		log.Ctx(ctx).Debug(opts.CircleUSDCWalletID)
+		log.Ctx(ctx).Debug(opts.CircleAPIKey)
 		err = it.serverAPI.ConfigureCircleAccess(ctx,
 			authToken,
 			&httphandler.PatchCircleConfigRequest{
