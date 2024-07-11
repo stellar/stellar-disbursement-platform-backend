@@ -24,7 +24,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: "Receiver Registration - E2E Integration Tests (Stellar)"
     env:
-      DISTRIBUTION_ACCOUNT_TYPE: "DISTRIBUTION_ACCOUNT.STELLAR.DB_VAULT"
+      DISTRIBUTION_ACCOUNT_TYPE: "DISTRIBUTION_ACCOUNT.STELLAR.ENV"
     steps:
       - uses: actions/checkout@v4
       - id: stellar
