@@ -318,36 +318,6 @@ func Test_NewCircleReconciliationService_Reconcile_partialSuccess(t *testing.T) 
 	assert.Equal(t, data.FailedPaymentStatus, updatedPayment4.Status)
 }
 
-func Test_shouldIncrementSyncAttempts(t *testing.T) {
-	testCases := []struct {
-		name     string
-		err      error
-		expected bool
-	}{
-		{
-			name:     "false when error is not a Circle API error",
-			err:      errors.New("test-error"),
-			expected: false,
-		},
-		{
-			name:     "false when error is a Circle API error but status code is not 400",
-			err:      &circle.APIError{StatusCode: http.StatusUnauthorized},
-			expected: false,
-		},
-		{
-			name:     "true when error is a Circle API error and status code is 400",
-			err:      &circle.APIError{StatusCode: http.StatusBadRequest},
-			expected: true,
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			assert.Equal(t, tc.expected, shouldIncrementSyncAttempts(tc.err))
-		})
-	}
-}
-
 func Test_NewCircleReconciliationService_reconcileTransferRequest(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
@@ -463,7 +433,7 @@ func Test_NewCircleReconciliationService_reconcileTransferRequest(t *testing.T) 
 			setupMocksAndDBFn: func(t *testing.T, mCircleService *circle.MockService) {
 				mCircleService.
 					On("GetTransferByID", mock.Anything, "circle-transfer-id").
-					Return(nil, &circle.APIError{StatusCode: http.StatusBadRequest}).
+					Return(nil, &circle.APIError{Message: "foo bar", StatusCode: http.StatusBadRequest}).
 					Once()
 			},
 			wantErrorContains:           []string{"getting Circle transfer by ID", "APIError", "StatusCode=400"},
@@ -526,9 +496,11 @@ func Test_NewCircleReconciliationService_reconcileTransferRequest(t *testing.T) 
 			if tc.shouldIncrementSyncAttempts {
 				assert.Equal(t, circleRequest.SyncAttempts+1, circleReqFromDB.SyncAttempts)
 				assert.NotNil(t, circleReqFromDB.LastSyncAttemptAt)
+				assert.NotNil(t, circleReqFromDB.ResponseBody)
 			} else {
 				assert.Equal(t, circleRequest.SyncAttempts, circleReqFromDB.SyncAttempts)
 				assert.Nil(t, circleReqFromDB.LastSyncAttemptAt)
+				assert.Nil(t, circleReqFromDB.ResponseBody)
 			}
 		})
 	}

@@ -14,7 +14,7 @@ type APIError struct {
 	Message string           `json:"message"`
 	Errors  []APIErrorDetail `json:"errors,omitempty"`
 	// StatusCode is the HTTP status code.
-	StatusCode int `json:"-"`
+	StatusCode int `json:"status_code,omitempty"`
 }
 
 // APIErrorDetail represents the detailed error information.

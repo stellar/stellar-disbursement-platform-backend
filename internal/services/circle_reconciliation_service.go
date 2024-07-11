@@ -92,29 +92,26 @@ func (s *CircleReconciliationService) Reconcile(ctx context.Context) error {
 	return nil
 }
 
-// shouldIncrementSyncAttempts returns true if the error is a bad request error from Circle API, which means that the
-// request should be retried.
-func shouldIncrementSyncAttempts(err error) bool {
-	var cAPIErr *circle.APIError
-	if !errors.As(err, &cAPIErr) {
-		return false
-	}
-
-	return cAPIErr.StatusCode == http.StatusBadRequest
-}
-
 // reconcileTransferRequest reconciles a Circle transfer request and updates the payment status in the DB. It returns an
 // error if the reconciliation fails.
 func (s *CircleReconciliationService) reconcileTransferRequest(ctx context.Context, dbTx db.DBTransaction, tnt *tenant.Tenant, circleRequest *data.CircleTransferRequest) error {
 	// 4.1. get the Circle transfer by ID
 	transfer, err := s.CircleService.GetTransferByID(ctx, *circleRequest.CircleTransferID)
 	if err != nil {
-		if shouldIncrementSyncAttempts(err) {
+		var cAPIErr *circle.APIError
+		if errors.As(err, &cAPIErr) && cAPIErr.StatusCode == http.StatusBadRequest {
+			// if the the Circle API returns a 400, increment the sync attempts and update the last sync
+			errJSONBody, marshalErr := json.Marshal(cAPIErr)
+			if marshalErr != nil {
+				log.Ctx(ctx).Errorf("marshalling Circle APIError: %v", marshalErr)
+			}
+
 			// increment the sync attempts and update the last sync attempt time.
 			var updateErr error
 			circleRequest, updateErr = s.Models.CircleTransferRequests.Update(ctx, dbTx, circleRequest.IdempotencyKey, data.CircleTransferRequestUpdate{
 				LastSyncAttemptAt: utils.TimePtr(time.Now()),
 				SyncAttempts:      circleRequest.SyncAttempts + 1,
+				ResponseBody:      errJSONBody,
 			})
 			if updateErr != nil {
 				return fmt.Errorf("updating Circle transfer request sync attempts: %w", updateErr)
