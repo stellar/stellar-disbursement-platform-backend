@@ -297,11 +297,11 @@ func (it *IntegrationTestsService) StartIntegrationTests(ctx context.Context, op
 		log.Ctx(ctx).Info("Validating transaction on Horizon Network")
 		ph, getPaymentErr := getTransactionOnHorizon(it.horizonClient, payment.StellarTransactionID)
 		if getPaymentErr != nil {
-			return fmt.Errorf("error getting transaction on horizon network: %w", getPaymentErr)
+			return fmt.Errorf("getting transaction on horizon network: %w", getPaymentErr)
 		}
 		err = validateStellarTransaction(ph, opts.ReceiverAccountPublicKey, opts.DisbursedAssetCode, opts.DisbursetAssetIssuer, receivers[0].Payment.Amount)
 		if err != nil {
-			return fmt.Errorf("error validating stellar transaction: %w", err)
+			return fmt.Errorf("validating stellar transaction: %w", err)
 		}
 		log.Ctx(ctx).Info("Transaction validated")
 	}
@@ -333,23 +333,23 @@ func (it *IntegrationTestsService) CreateTestData(ctx context.Context, opts Inte
 	// 2. Reset password for the user
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(opts.UserPassword), bcrypt.DefaultCost)
 	if err != nil {
-		return fmt.Errorf("error hashing owner user password: %w", err)
+		return fmt.Errorf("hashing owner user password: %w", err)
 	}
 	query := `UPDATE auth_users SET encrypted_password = $1 WHERE email = $2`
 	_, err = it.mtnDbConnectionPool.ExecContext(ctx, query, hashedPassword, opts.UserEmail)
 	if err != nil {
-		return fmt.Errorf("error updating owner user password: %w", err)
+		return fmt.Errorf("updating owner user password: %w", err)
 	}
 
 	// 3. Create test asset and wallet
 	_, err = it.models.Assets.GetOrCreate(ctx, opts.DisbursedAssetCode, opts.DisbursetAssetIssuer)
 	if err != nil {
-		return fmt.Errorf("error getting or creating test asset: %w", err)
+		return fmt.Errorf("getting or creating test asset: %w", err)
 	}
 
 	_, err = it.models.Wallets.GetOrCreate(ctx, opts.WalletName, opts.WalletHomepage, opts.WalletDeepLink, opts.WalletSEP10Domain)
 	if err != nil {
-		return fmt.Errorf("error getting or creating test wallet: %w", err)
+		return fmt.Errorf("getting or creating test wallet: %w", err)
 	}
 
 	// 4. Provision Circle distribution account if needed
@@ -358,11 +358,9 @@ func (it *IntegrationTestsService) CreateTestData(ctx context.Context, opts Inte
 		it.initServices(ctx, opts)
 		authToken, loginErr := it.serverAPI.Login(ctx)
 		if loginErr != nil {
-			return fmt.Errorf("error trying to login in server API: %w", loginErr)
+			return fmt.Errorf("trying to login in server API: %w", loginErr)
 		}
 
-		log.Ctx(ctx).Debug(opts.CircleUSDCWalletID)
-		log.Ctx(ctx).Debug(opts.CircleAPIKey)
 		err = it.serverAPI.ConfigureCircleAccess(ctx,
 			authToken,
 			&httphandler.PatchCircleConfigRequest{
@@ -370,7 +368,7 @@ func (it *IntegrationTestsService) CreateTestData(ctx context.Context, opts Inte
 				APIKey:   &opts.CircleAPIKey,
 			})
 		if err != nil {
-			return fmt.Errorf("error configuring Circle access: %w", err)
+			return fmt.Errorf("configuring Circle access: %w", err)
 		}
 	}
 

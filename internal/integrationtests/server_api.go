@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/stellar/go/support/log"
 	"io"
 	"io/fs"
 	"mime/multipart"
@@ -283,8 +282,6 @@ func (sa *ServerApiIntegrationTests) ConfigureCircleAccess(ctx context.Context, 
 	req.Header.Set("Authorization", "Bearer "+authToken.Token)
 	req.Header.Set("SDP-Tenant-Name", sa.TenantName)
 
-	log.Ctx(ctx).Debug(body.APIKey)
-	log.Ctx(ctx).Debug(body.WalletID)
 	resp, err := sa.HttpClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("error making request to server API patch CIRCLE CONFIG: %w", err)
