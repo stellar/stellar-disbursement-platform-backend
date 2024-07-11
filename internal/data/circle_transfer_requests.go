@@ -126,6 +126,8 @@ const (
 	batchSize       = 10
 )
 
+// GetPendingReconciliation returns the pending Circle transfer requests that are in `pending` status and have not
+// reached the maximum sync attempts.
 func (m CircleTransferRequestModel) GetPendingReconciliation(ctx context.Context, sqlExec db.SQLExecuter) ([]*CircleTransferRequest, error) {
 	queryParams := QueryParams{
 		Filters: map[FilterKey]interface{}{

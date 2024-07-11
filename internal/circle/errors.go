@@ -9,9 +9,12 @@ import (
 
 // APIError represents the error response from Circle APIs.
 type APIError struct {
+	// Code is the Circle API error code.
 	Code    int              `json:"code"`
 	Message string           `json:"message"`
 	Errors  []APIErrorDetail `json:"errors,omitempty"`
+	// StatusCode is the HTTP status code.
+	StatusCode int `json:"status_code,omitempty"`
 }
 
 // APIErrorDetail represents the detailed error information.
@@ -25,7 +28,7 @@ type APIErrorDetail struct {
 
 // Error implements the error interface for APIError.
 func (e APIError) Error() string {
-	return fmt.Sprintf("APIError: Code=%d, Message=%s, Errors=%v", e.Code, e.Message, e.Errors)
+	return fmt.Sprintf("APIError: Code=%d, Message=%s, Errors=%v, StatusCode=%d", e.Code, e.Message, e.Errors, e.StatusCode)
 }
 
 // parseAPIError parses the error response from Circle APIs.
@@ -41,6 +44,7 @@ func parseAPIError(resp *http.Response) (*APIError, error) {
 	if err = json.Unmarshal(body, &apiErr); err != nil {
 		return nil, fmt.Errorf("unmarshalling error response body: %w", err)
 	}
+	apiErr.StatusCode = resp.StatusCode
 
 	return &apiErr, nil
 }

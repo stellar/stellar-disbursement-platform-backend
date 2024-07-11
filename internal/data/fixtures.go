@@ -363,12 +363,6 @@ func CreateReceiverVerificationFixture(t *testing.T, ctx context.Context, sqlExe
 	return &verification
 }
 
-func DeleteAllCircleTransferRequestsFixtures(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter) {
-	const query = "DELETE FROM circle_transfer_requests"
-	_, err := sqlExec.ExecContext(ctx, query)
-	require.NoError(t, err)
-}
-
 func CreateCircleTransferRequestFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExecuter, insert CircleTransferRequest) *CircleTransferRequest {
 	const query = `
 		INSERT INTO circle_transfer_requests

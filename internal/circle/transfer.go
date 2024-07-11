@@ -132,7 +132,7 @@ func (tr TransferRequest) validate() error {
 func parseTransferResponse(resp *http.Response) (*Transfer, error) {
 	var transferResponse TransferResponse
 	if err := json.NewDecoder(resp.Body).Decode(&transferResponse); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("decoding transfer response: %w", err)
 	}
 
 	return &transferResponse.Data, nil
