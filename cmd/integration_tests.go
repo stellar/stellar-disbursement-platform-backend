@@ -42,6 +42,13 @@ func (c *IntegrationTestsCommand) Command() *cobra.Command {
 			Required:    true,
 		},
 		{
+			Name:      "distribution-account-type",
+			Usage:     "The account type of the distribution account",
+			OptType:   types.String,
+			ConfigKey: &integrationTestsOpts.DistributionAccountType,
+			Required:  true,
+		},
+		{
 			Name:        "wallet-name",
 			Usage:       "Wallet name to be used in integration tests",
 			OptType:     types.String,
@@ -89,6 +96,13 @@ func (c *IntegrationTestsCommand) Command() *cobra.Command {
 			Usage:     "Password from SDP authenticated user with all roles",
 			OptType:   types.String,
 			ConfigKey: &integrationTestsOpts.UserPassword,
+			Required:  true,
+		},
+		{
+			Name:      "server-api-base-url",
+			Usage:     "The Base URL of the server API of the SDP.",
+			OptType:   types.String,
+			ConfigKey: &integrationTestsOpts.ServerApiBaseURL,
 			Required:  true,
 		},
 	}
@@ -175,13 +189,6 @@ func (c *IntegrationTestsCommand) StartIntegrationTestsCommand(integrationTestsO
 			Required:  true,
 		},
 		{
-			Name:      "server-api-base-url",
-			Usage:     "The Base URL of the server API of the SDP.",
-			OptType:   types.String,
-			ConfigKey: &integrationTestsOpts.ServerApiBaseURL,
-			Required:  true,
-		},
-		{
 			Name: "anchor-platform-base-sep-url",
 			Usage: "The Base URL of the sep server of the anchor platform. This is the base URL where the Anchor Platform " +
 				"exposes its public API that is meant to be reached by a client application, such as the stellar.toml file.",
@@ -248,6 +255,20 @@ func (c *IntegrationTestsCommand) CreateIntegrationTestsDataCommand(integrationT
 			ConfigKey:   &integrationTestsOpts.WalletDeepLink,
 			FlagDefault: "test_wallet://",
 			Required:    true,
+		},
+		{
+			Name:      "circle-usdc-wallet-id",
+			Usage:     "The wallet id for a distribution account that is using Circle as the platform",
+			OptType:   types.String,
+			ConfigKey: &integrationTestsOpts.CircleUSDCWalletID,
+			Required:  false,
+		},
+		{
+			Name:      "circle-api-key",
+			Usage:     "The api key for a distribution account that is using Circle as the platform",
+			OptType:   types.String,
+			ConfigKey: &integrationTestsOpts.CircleAPIKey,
+			Required:  false,
 		},
 	}
 
