@@ -8,8 +8,6 @@ export DIVIDER="----------------------------------------"
 accountTypes=("DISTRIBUTION_ACCOUNT.STELLAR.ENV" "DISTRIBUTION_ACCOUNT.CIRCLE.DB_VAULT")
 for accountType in "${accountTypes[@]}"; do
   export DISTRIBUTION_ACCOUNT_TYPE=$accountType
-  echo $DIVIDER
-
   if [ $accountType="DISTRIBUTION_ACCOUNT.STELLAR.ENV" ]
   then
     platform="Stellar"
@@ -17,7 +15,8 @@ for accountType in "${accountTypes[@]}"; do
     platform="Circle"
   fi
 
-  echo "====> 👀Starting e2e setup and integration tests ($platform)"
+  echo "====> 👀Starting e2e setup and integration test ($platform)"
+  echo $DIVIDER
   echo "====> 👀Step 1: start preparation"
   docker container  ps -aq -f name='e2e' --format '{{.ID}}' | xargs docker stop | xargs docker rm -v &&
   docker volume ls -f name='e2e' --format '{{.Name}}' | xargs docker volume rm
@@ -34,7 +33,7 @@ for accountType in "${accountTypes[@]}"; do
   echo $DIVIDER
   echo "====> 👀Step 3: provision new tenant and populate new asset and test wallet on database"
   docker exec e2e-sdp-api bash -c "./stellar-disbursement-platform integration-tests create-data"
-  echo "====> ✅Step 3: finish creating integration test data"
+  echo "====> ✅Step 3: finish creating integration test data ($platform)"
 
   # Restart anchor platform container
   echo $DIVIDER
@@ -48,7 +47,7 @@ for accountType in "${accountTypes[@]}"; do
   echo $DIVIDER
   echo "====> 👀Step 5: run integration tests command"
   docker exec e2e-sdp-api bash -c "./stellar-disbursement-platform integration-tests start"
-  echo "====> ✅Step 5: finish running integration test data"
+  echo "====> ✅Step 5: finish running integration test data ($platform)"
 
   # Cleanup container and volumes
   echo $DIVIDER

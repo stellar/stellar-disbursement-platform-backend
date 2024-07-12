@@ -77,7 +77,7 @@ func NewIntegrationTestsService(opts IntegrationTestsOpts) (*IntegrationTestsSer
 	}
 	adminDbConnectionPool, err := db.OpenDBConnectionPool(adminDSN)
 	if err != nil {
-		return nil, fmt.Errorf("error connecting to the database: %w", err)
+		return nil, fmt.Errorf("connecting to the database: %w", err)
 	}
 	tm := tenant.NewManager(tenant.WithDatabase(adminDbConnectionPool))
 	tr := tenant.NewMultiTenantDataSourceRouter(tm)
@@ -95,7 +95,7 @@ func NewIntegrationTestsService(opts IntegrationTestsOpts) (*IntegrationTestsSer
 	}
 	tssDbConnectionPool, err := db.OpenDBConnectionPool(tssDSN)
 	if err != nil {
-		return nil, fmt.Errorf("error connecting to the tss database: %w", err)
+		return nil, fmt.Errorf("connecting to the tss database: %w", err)
 	}
 	it := &IntegrationTestsService{
 		models:                models,
@@ -157,7 +157,7 @@ func (it *IntegrationTestsService) StartIntegrationTests(ctx context.Context, op
 	log.Ctx(ctx).Info("Login user to get server API auth token")
 	authToken, err := it.serverAPI.Login(ctx)
 	if err != nil {
-		return fmt.Errorf("error trying to login in server API: %w", err)
+		return fmt.Errorf("trying to login in server API: %w", err)
 	}
 	log.Ctx(ctx).Info("User logged in")
 	log.Ctx(ctx).Info(authToken)
@@ -165,13 +165,13 @@ func (it *IntegrationTestsService) StartIntegrationTests(ctx context.Context, op
 	log.Ctx(ctx).Info("Getting test asset in database")
 	asset, err := it.models.Assets.GetByCodeAndIssuer(ctx, opts.DisbursedAssetCode, opts.DisbursetAssetIssuer)
 	if err != nil {
-		return fmt.Errorf("error getting test asset: %w", err)
+		return fmt.Errorf("getting test asset: %w", err)
 	}
 
 	log.Ctx(ctx).Info("Getting test wallet in database")
 	wallet, err := it.models.Wallets.GetByWalletName(ctx, opts.WalletName)
 	if err != nil {
-		return fmt.Errorf("error getting test wallet: %w", err)
+		return fmt.Errorf("getting test wallet: %w", err)
 	}
 
 	log.Ctx(ctx).Info("Creating disbursement using server API")
@@ -183,35 +183,35 @@ func (it *IntegrationTestsService) StartIntegrationTests(ctx context.Context, op
 		VerificationField: data.VerificationFieldDateOfBirth,
 	})
 	if err != nil {
-		return fmt.Errorf("error creating disbursement: %w", err)
+		return fmt.Errorf("creating disbursement: %w", err)
 	}
 	log.Ctx(ctx).Info("Disbursement created")
 
 	log.Ctx(ctx).Info("Processing disbursement CSV file using server API")
 	err = it.serverAPI.ProcessDisbursement(ctx, authToken, disbursement.ID)
 	if err != nil {
-		return fmt.Errorf("error processing disbursement: %w", err)
+		return fmt.Errorf("processing disbursement: %w", err)
 	}
 	log.Ctx(ctx).Info("CSV disbursement file processed")
 
 	log.Ctx(ctx).Info("Validating disbursement data after processing the disbursement file")
 	err = validateExpectationsAfterProcessDisbursement(ctx, disbursement.ID, it.models, it.mtnDbConnectionPool)
 	if err != nil {
-		return fmt.Errorf("error validating data after process disbursement: %w", err)
+		return fmt.Errorf("validating data after process disbursement: %w", err)
 	}
 	log.Ctx(ctx).Info("Disbursement data validated")
 
 	log.Ctx(ctx).Info("Starting disbursement using server API")
 	err = it.serverAPI.StartDisbursement(ctx, authToken, disbursement.ID, &httphandler.PatchDisbursementStatusRequest{Status: "STARTED"})
 	if err != nil {
-		return fmt.Errorf("error starting disbursement: %w", err)
+		return fmt.Errorf("starting disbursement: %w", err)
 	}
 	log.Ctx(ctx).Info("Disbursement started")
 
 	log.Ctx(ctx).Info("Validating disbursement data after starting disbursement using server API")
 	err = validateExpectationsAfterStartDisbursement(ctx, disbursement.ID, it.models, it.mtnDbConnectionPool)
 	if err != nil {
-		return fmt.Errorf("error validating data after process disbursement: %w", err)
+		return fmt.Errorf("validating data after process disbursement: %w", err)
 	}
 	log.Ctx(ctx).Info("Disbursement data validated")
 
@@ -219,34 +219,34 @@ func (it *IntegrationTestsService) StartIntegrationTests(ctx context.Context, op
 	log.Ctx(ctx).Info("Starting challenge transaction on anchor platform")
 	challengeTx, err := it.anchorPlatform.StartChallengeTransaction()
 	if err != nil {
-		return fmt.Errorf("error creating SEP10 challenge transaction: %w", err)
+		return fmt.Errorf("creating SEP10 challenge transaction: %w", err)
 	}
 	log.Ctx(ctx).Info("Challenge transaction created")
 
 	log.Ctx(ctx).Info("Signing challenge transaction with Sep10SigningKey")
 	signedTx, err := it.anchorPlatform.SignChallengeTransaction(challengeTx)
 	if err != nil {
-		return fmt.Errorf("error signing SEP10 challenge transaction: %w", err)
+		return fmt.Errorf("signing SEP10 challenge transaction: %w", err)
 	}
 	log.Ctx(ctx).Info("Challenge transaction signed")
 
 	log.Ctx(ctx).Info("Sending challenge transaction to anchor platform")
 	authSEP10Token, err := it.anchorPlatform.SendSignedChallengeTransaction(signedTx)
 	if err != nil {
-		return fmt.Errorf("error sending SEP10 challenge transaction: %w", err)
+		return fmt.Errorf("sending SEP10 challenge transaction: %w", err)
 	}
 	log.Ctx(ctx).Info("Received authSEP10Token")
 
 	log.Ctx(ctx).Info("Creating SEP24 deposit transaction on anchor platform")
 	authSEP24Token, _, err := it.anchorPlatform.CreateSep24DepositTransaction(authSEP10Token)
 	if err != nil {
-		return fmt.Errorf("error creating SEP24 deposit transaction: %w", err)
+		return fmt.Errorf("creating SEP24 deposit transaction: %w", err)
 	}
 	log.Ctx(ctx).Info("Received authSEP24Token")
 
 	disbursementData, err := readDisbursementCSV(opts.DisbursementCSVFilePath, opts.DisbursementCSVFileName)
 	if err != nil {
-		return fmt.Errorf("error reading disbursement CSV: %w", err)
+		return fmt.Errorf("reading disbursement CSV: %w", err)
 	}
 
 	log.Ctx(ctx).Info("Completing receiver registration using server API")
@@ -258,14 +258,14 @@ func (it *IntegrationTestsService) StartIntegrationTests(ctx context.Context, op
 		ReCAPTCHAToken:    opts.RecaptchaSiteKey,
 	})
 	if err != nil {
-		return fmt.Errorf("error registring receiver: %w", err)
+		return fmt.Errorf("registring receiver: %w", err)
 	}
 	log.Ctx(ctx).Info("Receiver OTP obtained")
 
 	log.Ctx(ctx).Info("Validating receiver data after completing registration")
 	err = validateExpectationsAfterReceiverRegistration(ctx, it.models, opts.ReceiverAccountPublicKey, opts.ReceiverAccountStellarMemo, opts.WalletSEP10Domain)
 	if err != nil {
-		return fmt.Errorf("error validating receiver after registration: %w", err)
+		return fmt.Errorf("validating receiver after registration: %w", err)
 	}
 	log.Ctx(ctx).Info("Receiver data validated")
 
@@ -275,7 +275,7 @@ func (it *IntegrationTestsService) StartIntegrationTests(ctx context.Context, op
 	log.Ctx(ctx).Info("Querying database to get disbursement receiver with payment data")
 	receivers, err := it.models.DisbursementReceivers.GetAll(ctx, it.mtnDbConnectionPool, &data.QueryParams{}, disbursement.ID)
 	if err != nil {
-		return fmt.Errorf("error getting receivers: %w", err)
+		return fmt.Errorf("getting receivers: %w", err)
 	}
 
 	if schema.AccountType(opts.DistributionAccountType).IsStellar() {
