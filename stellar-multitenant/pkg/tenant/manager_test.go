@@ -607,19 +607,16 @@ func TestManager_DeactivateTenantDistributionAccount(t *testing.T) {
 	tnt, err := m.AddTenant(ctx, "myorg1")
 	require.NoError(t, err)
 
-	t.Run("returns error when tenant does not exist", func(t *testing.T) {
-		err := m.DeactivateTenantDistributionAccount(ctx, "invalid-tnt")
-		require.Error(t, err)
-		assert.ErrorIs(t, err, ErrTenantDoesNotExist)
-	})
-
-	t.Run("returns error when distribution account is not managed by Circle", func(t *testing.T) {
+	t.Run("does not deactivate distribution account if not managed by Circle", func(t *testing.T) {
 		err := m.DeactivateTenantDistributionAccount(ctx, tnt.ID)
-		require.Error(t, err)
-		assert.ErrorIs(t, err, ErrTenantDoesNotExist)
+		require.NoError(t, err)
+
+		dbTnt, err := m.GetTenant(ctx, &QueryParams{Filters: map[FilterKey]interface{}{FilterKeyID: tnt.ID}})
+		require.NoError(t, err)
+		assert.NotEqual(t, schema.AccountStatusPendingUserActivation, dbTnt.DistributionAccountStatus)
 	})
 
-	t.Run("returns error when tenant is deactivated", func(t *testing.T) {
+	t.Run("does not deactivate distribution account if tenant is deactivated", func(t *testing.T) {
 		tnt, err = m.UpdateTenantConfig(
 			ctx, &TenantUpdate{
 				ID:                      tnt.ID,
@@ -628,9 +625,12 @@ func TestManager_DeactivateTenantDistributionAccount(t *testing.T) {
 			})
 		require.NoError(t, err)
 
-		err = m.DeactivateTenantDistributionAccount(ctx, tnt.ID)
-		require.Error(t, err)
-		assert.ErrorIs(t, err, ErrTenantDoesNotExist)
+		err := m.DeactivateTenantDistributionAccount(ctx, tnt.ID)
+		require.NoError(t, err)
+
+		dbTnt, err := m.GetTenant(ctx, &QueryParams{Filters: map[FilterKey]interface{}{FilterKeyID: tnt.ID}})
+		require.NoError(t, err)
+		assert.NotEqual(t, schema.AccountStatusPendingUserActivation, dbTnt.DistributionAccountStatus)
 	})
 
 	t.Run("successfully deactivates tenant distribution account", func(t *testing.T) {

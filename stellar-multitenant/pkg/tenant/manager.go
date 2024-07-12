@@ -13,7 +13,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/router"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
-	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
 var (
@@ -241,27 +240,16 @@ func (m *Manager) SoftDeleteTenantByID(ctx context.Context, tenantID string) (*T
 // DeactivateTenantDistributionAccount sets a distribution account of status ACTIVE to PENDING_USER_ACTIVATION for the given tenant id,
 // and is only used in the case where the distribution account is of type CircleDBVault.
 func (m *Manager) DeactivateTenantDistributionAccount(ctx context.Context, tenantID string) error {
-	updateQuery := `
+	q := `
 		UPDATE tenants t
 		SET
 			distribution_account_status = 'PENDING_USER_ACTIVATION'
+		WHERE id = $1
+		AND distribution_account_type = 'DISTRIBUTION_ACCOUNT.CIRCLE.DB_VAULT'
+		AND status = 'TENANT_ACTIVATED'
 	`
 
-	queryParams := &QueryParams{
-		Filters: excludeInactiveTenantsFilters(),
-	}
-	queryParams.Filters[FilterKeyID] = tenantID
-	queryParams.Filters[FilterKeyDistributionAccountType] = schema.DistributionAccountCircleDBVault
-	queryParams.Filters[FilterKeyDistributionAccountStatus] = schema.AccountStatusActive
-
-	query, params := m.newManagerQuery(updateQuery, queryParams)
-	query += " RETURNING *"
-
-	var t Tenant
-	if err := m.db.GetContext(ctx, &t, query, params...); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return ErrTenantDoesNotExist
-		}
+	if _, err := m.db.ExecContext(ctx, q, tenantID); err != nil {
 		return fmt.Errorf("deactivating distribution account for tenant %s: %w", tenantID, err)
 	}
 

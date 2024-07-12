@@ -314,9 +314,9 @@ func newClientWithMock(t *testing.T) (Client, *httpclientMocks.HttpClientMock, *
 	tntManagerMock := &tenant.TenantManagerMock{}
 
 	return Client{
-		BasePath:            "http://localhost:8080",
-		APIKey:              "test-key",
-		httpClient:          httpClientMock,
-		tenantStatusUpdater: TenantStatusUpdater{tntManagerMock},
+		BasePath:      "http://localhost:8080",
+		APIKey:        "test-key",
+		httpClient:    httpClientMock,
+		tenantManager: tntManagerMock,
 	}, httpClientMock, tntManagerMock
 }

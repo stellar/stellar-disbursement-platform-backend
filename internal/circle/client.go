@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"slices"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
@@ -19,6 +20,8 @@ const (
 	transferPath = "/v1/transfers"
 	walletPath   = "/v1/wallets"
 )
+
+var authErrorStatusCodes = []int{http.StatusUnauthorized, http.StatusForbidden}
 
 // ClientInterface defines the interface for interacting with the Circle API.
 //
@@ -32,10 +35,10 @@ type ClientInterface interface {
 
 // Client provides methods to interact with the Circle API.
 type Client struct {
-	BasePath            string
-	APIKey              string
-	httpClient          httpclient.HttpClientInterface
-	tenantStatusUpdater TenantStatusUpdater
+	BasePath      string
+	APIKey        string
+	httpClient    httpclient.HttpClientInterface
+	tenantManager tenant.ManagerInterface
 }
 
 // ClientFactory is a function that creates a ClientInterface.
@@ -51,10 +54,10 @@ func NewClient(networkType utils.NetworkType, apiKey string, tntManager tenant.M
 	}
 
 	return &Client{
-		BasePath:            string(circleEnv),
-		APIKey:              apiKey,
-		httpClient:          httpclient.DefaultClient(),
-		tenantStatusUpdater: TenantStatusUpdater{tntManager: tntManager},
+		BasePath:      string(circleEnv),
+		APIKey:        apiKey,
+		httpClient:    httpclient.DefaultClient(),
+		tenantManager: tntManager,
 	}
 }
 
@@ -116,11 +119,10 @@ func (client *Client) PostTransfer(ctx context.Context, transferReq TransferRequ
 	}
 
 	if resp.StatusCode != http.StatusCreated {
-		apiError, parseErr := client.tenantStatusUpdater.parseAPIError(ctx, resp)
-		if parseErr != nil {
-			return nil, fmt.Errorf("parsing API error: %w", parseErr)
+		handleErr := client.handleError(ctx, resp)
+		if handleErr != nil {
+			return nil, fmt.Errorf("handling response error: %w", handleErr)
 		}
-		return nil, fmt.Errorf("API error: %w", apiError)
 	}
 
 	return parseTransferResponse(resp)
@@ -141,11 +143,10 @@ func (client *Client) GetTransferByID(ctx context.Context, id string) (*Transfer
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		apiError, parseErr := client.tenantStatusUpdater.parseAPIError(ctx, resp)
-		if parseErr != nil {
-			return nil, fmt.Errorf("parsing API error: %w", parseErr)
+		handleErr := client.handleError(ctx, resp)
+		if handleErr != nil {
+			return nil, fmt.Errorf("handling response error: %w", handleErr)
 		}
-		return nil, fmt.Errorf("API error: %w", apiError)
 	}
 
 	return parseTransferResponse(resp)
@@ -167,11 +168,10 @@ func (client *Client) GetWalletByID(ctx context.Context, id string) (*Wallet, er
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		apiError, parseErr := client.tenantStatusUpdater.parseAPIError(ctx, resp)
-		if parseErr != nil {
-			return nil, fmt.Errorf("parsing API error: %w", parseErr)
+		handleErr := client.handleError(ctx, resp)
+		if handleErr != nil {
+			return nil, fmt.Errorf("handling response error: %w", handleErr)
 		}
-		return nil, fmt.Errorf("API error: %w", apiError)
 	}
 
 	return parseWalletResponse(resp)
@@ -193,6 +193,26 @@ func (client *Client) request(ctx context.Context, u string, method string, isAu
 	}
 
 	return client.httpClient.Do(req)
+}
+
+func (client *Client) handleError(ctx context.Context, resp *http.Response) error {
+	if slices.Contains(authErrorStatusCodes, resp.StatusCode) {
+		tnt, getCtxTntErr := tenant.GetTenantFromContext(ctx)
+		if getCtxTntErr != nil {
+			return fmt.Errorf("getting tenant from context: %w", getCtxTntErr)
+		}
+
+		deactivateTntErr := client.tenantManager.DeactivateTenantDistributionAccount(ctx, tnt.ID)
+		if deactivateTntErr != nil {
+			return fmt.Errorf("deactivating tenant distribution account: %w", deactivateTntErr)
+		}
+	}
+
+	apiError, err := parseAPIError(resp)
+	if err != nil {
+		return fmt.Errorf("parsing API error: %w", err)
+	}
+	return fmt.Errorf("API error: %w", apiError)
 }
 
 var _ ClientInterface = (*Client)(nil)
