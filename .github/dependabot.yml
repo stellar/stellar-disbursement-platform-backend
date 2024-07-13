@@ -29,9 +29,7 @@ updates:
         applies-to: version-updates
         patterns: [ "*" ]
   - package-ecosystem: "docker"
-    directories: 
-      - "/"
-      - "/v1_compatibility"
+    directory: "/"
     schedule:
       interval: "weekly"
       day: "sunday"
