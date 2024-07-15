@@ -14,15 +14,13 @@ type QueryParams struct {
 type FilterKey string
 
 const (
-	FilterKeyOutStatus                 FilterKey = "out_status"
-	FilterKeyDeleted                   FilterKey = "deleted"
-	FilterKeyStatus                    FilterKey = "status"
-	FilterKeyName                      FilterKey = "name"
-	FilterKeyID                        FilterKey = "id"
-	FilterKeyNameOrID                  FilterKey = "name_or_id"
-	FilterKeyIsDefault                 FilterKey = "is_default"
-	FilterKeyDistributionAccountType   FilterKey = "distribution_account_type"
-	FilterKeyDistributionAccountStatus FilterKey = "distribution_account_status"
+	FilterKeyOutStatus FilterKey = "out_status"
+	FilterKeyDeleted   FilterKey = "deleted"
+	FilterKeyStatus    FilterKey = "status"
+	FilterKeyName      FilterKey = "name"
+	FilterKeyID        FilterKey = "id"
+	FilterKeyNameOrID  FilterKey = "name_or_id"
+	FilterKeyIsDefault FilterKey = "is_default"
 )
 
 func excludeInactiveTenantsFilters() map[FilterKey]interface{} {
