@@ -1,7 +1,9 @@
 -- +migrate Up
 
 -- +migrate StatementBegin
-CREATE OR REPLACE FUNCTION import_tenant_data_from_v1_to_v2(tenant_name TEXT) RETURNS void AS $$
+-- This function migrates data from the public schema (V1 version) to the tenant's specific schema  (V2 version).
+-- It copies relevant data from the public schema to the tenant's schema, and then imports TSS data.
+CREATE OR REPLACE FUNCTION migrate_tenant_data_from_v1_to_v2(tenant_name TEXT) RETURNS void AS $$
 DECLARE
     schema_name TEXT := 'sdp_' || tenant_name;
 BEGIN
@@ -95,5 +97,7 @@ END;
 $$ LANGUAGE plpgsql;
 -- +migrate StatementEnd
 
+COMMENT ON FUNCTION migrate_tenant_data_from_v1_to_v2(TEXT) IS 'Migrate data from v1 to v2 for a given tenant';
+
 -- +migrate Down
-DROP FUNCTION import_tenant_data_from_v1_to_v2(TEXT);
+DROP FUNCTION migrate_tenant_data_from_v1_to_v2(TEXT);
