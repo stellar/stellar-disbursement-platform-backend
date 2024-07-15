@@ -106,7 +106,7 @@ func (s *Service) SendPayment(ctx context.Context, paymentRequest PaymentRequest
 	})
 }
 
-func (s *Service) getClient(ctx context.Context) (ClientInterface, error) {
+func (s *Service) getClientForTenantInContext(ctx context.Context) (ClientInterface, error) {
 	apiKey, err := s.ClientConfigModel.GetDecryptedAPIKey(ctx, s.EncryptionPassphrase)
 	if err != nil {
 		return nil, fmt.Errorf("retrieving decrypted Circle API key: %w", err)
@@ -115,7 +115,7 @@ func (s *Service) getClient(ctx context.Context) (ClientInterface, error) {
 }
 
 func (s *Service) Ping(ctx context.Context) (bool, error) {
-	client, err := s.getClient(ctx)
+	client, err := s.getClientForTenantInContext(ctx)
 	if err != nil {
 		return false, fmt.Errorf("cannot get Circle client: %w", err)
 	}
@@ -123,7 +123,7 @@ func (s *Service) Ping(ctx context.Context) (bool, error) {
 }
 
 func (s *Service) PostTransfer(ctx context.Context, transferRequest TransferRequest) (*Transfer, error) {
-	client, err := s.getClient(ctx)
+	client, err := s.getClientForTenantInContext(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("cannot get Circle client: %w", err)
 	}
@@ -131,7 +131,7 @@ func (s *Service) PostTransfer(ctx context.Context, transferRequest TransferRequ
 }
 
 func (s *Service) GetTransferByID(ctx context.Context, transferID string) (*Transfer, error) {
-	client, err := s.getClient(ctx)
+	client, err := s.getClientForTenantInContext(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("cannot get Circle client: %w", err)
 	}
@@ -139,7 +139,7 @@ func (s *Service) GetTransferByID(ctx context.Context, transferID string) (*Tran
 }
 
 func (s *Service) GetWalletByID(ctx context.Context, walletID string) (*Wallet, error) {
-	client, err := s.getClient(ctx)
+	client, err := s.getClientForTenantInContext(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("cannot get Circle client: %w", err)
 	}

@@ -121,7 +121,7 @@ func (client *Client) PostTransfer(ctx context.Context, transferReq TransferRequ
 	if resp.StatusCode != http.StatusCreated {
 		handleErr := client.handleError(ctx, resp)
 		if handleErr != nil {
-			return nil, fmt.Errorf("handling response error: %w", handleErr)
+			return nil, fmt.Errorf("handling API response error: %w", handleErr)
 		}
 	}
 
@@ -145,7 +145,7 @@ func (client *Client) GetTransferByID(ctx context.Context, id string) (*Transfer
 	if resp.StatusCode != http.StatusOK {
 		handleErr := client.handleError(ctx, resp)
 		if handleErr != nil {
-			return nil, fmt.Errorf("handling response error: %w", handleErr)
+			return nil, fmt.Errorf("handling API response error: %w", handleErr)
 		}
 	}
 
@@ -170,7 +170,7 @@ func (client *Client) GetWalletByID(ctx context.Context, id string) (*Wallet, er
 	if resp.StatusCode != http.StatusOK {
 		handleErr := client.handleError(ctx, resp)
 		if handleErr != nil {
-			return nil, fmt.Errorf("handling response error: %w", handleErr)
+			return nil, fmt.Errorf("handling API response error: %w", handleErr)
 		}
 	}
 
@@ -212,6 +212,7 @@ func (client *Client) handleError(ctx context.Context, resp *http.Response) erro
 	if err != nil {
 		return fmt.Errorf("parsing API error: %w", err)
 	}
+
 	return fmt.Errorf("API error: %w", apiError)
 }
 

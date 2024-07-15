@@ -159,7 +159,7 @@ func Test_Service_getClient(t *testing.T) {
 	})
 	assert.NoError(t, err)
 
-	circleClient, err := svc.getClient(ctx)
+	circleClient, err := svc.getClientForTenantInContext(ctx)
 	assert.NoError(t, err)
 	wantCircleClient := NewClient(networkType, apiKey, &tenant.TenantManagerMock{})
 	assert.Equal(t, wantCircleClient, circleClient)
