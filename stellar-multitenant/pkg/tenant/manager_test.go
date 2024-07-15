@@ -625,7 +625,7 @@ func TestManager_DeactivateTenantDistributionAccount(t *testing.T) {
 			})
 		require.NoError(t, err)
 
-		err := m.DeactivateTenantDistributionAccount(ctx, tnt.ID)
+		err = m.DeactivateTenantDistributionAccount(ctx, tnt.ID)
 		require.NoError(t, err)
 
 		dbTnt, err := m.GetTenant(ctx, &QueryParams{Filters: map[FilterKey]interface{}{FilterKeyID: tnt.ID}})
@@ -634,7 +634,7 @@ func TestManager_DeactivateTenantDistributionAccount(t *testing.T) {
 	})
 
 	t.Run("successfully deactivates tenant distribution account", func(t *testing.T) {
-		tnt, err := m.UpdateTenantConfig(
+		tnt, err = m.UpdateTenantConfig(
 			ctx, &TenantUpdate{
 				ID:                      tnt.ID,
 				DistributionAccountType: schema.DistributionAccountCircleDBVault,
