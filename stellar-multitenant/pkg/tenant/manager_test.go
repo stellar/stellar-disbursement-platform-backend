@@ -644,8 +644,8 @@ func TestManager_DeactivateTenantDistributionAccount(t *testing.T) {
 		err = m.DeactivateTenantDistributionAccount(ctx, tnt.ID)
 		require.NoError(t, err)
 
-		dbTnt, err := m.GetTenant(ctx, &QueryParams{Filters: map[FilterKey]interface{}{FilterKeyID: tnt.ID}})
-		require.NoError(t, err)
+		dbTnt, dbErr := m.GetTenant(ctx, &QueryParams{Filters: map[FilterKey]interface{}{FilterKeyID: tnt.ID}})
+		require.NoError(t, dbErr)
 		assert.Equal(t, schema.AccountStatusPendingUserActivation, dbTnt.DistributionAccountStatus)
 	})
 }
