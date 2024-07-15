@@ -363,31 +363,31 @@ func Test_Manager_GetTenantByIDOrName(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("gets tenant by ID successfully", func(t *testing.T) {
-		tntDB, err := m.GetTenantByIDOrName(ctx, tnt1.ID)
-		require.NoError(t, err)
+		tntDB, dbErr := m.GetTenantByIDOrName(ctx, tnt1.ID)
+		require.NoError(t, dbErr)
 		assert.Equal(t, tnt1, tntDB)
 	})
 
 	t.Run("gets tenant by name successfully", func(t *testing.T) {
-		tntDB, err := m.GetTenantByIDOrName(ctx, tnt2.Name)
-		require.NoError(t, err)
+		tntDB, dbErr := m.GetTenantByIDOrName(ctx, tnt2.Name)
+		require.NoError(t, dbErr)
 		assert.Equal(t, tnt2, tntDB)
 	})
 
 	t.Run("returns error when tenant is deactivated", func(t *testing.T) {
 		deactivateTenant(t, ctx, m, tnt2)
-		tntDB, err := m.GetTenantByIDOrName(ctx, tnt2.ID)
-		assert.ErrorIs(t, err, ErrTenantDoesNotExist)
+		tntDB, dbErr := m.GetTenantByIDOrName(ctx, tnt2.ID)
+		assert.ErrorIs(t, dbErr, ErrTenantDoesNotExist)
 		assert.Nil(t, tntDB)
 
-		tntDB, err = m.GetTenantByIDOrName(ctx, tnt2.Name)
-		assert.ErrorIs(t, err, ErrTenantDoesNotExist)
+		tntDB, dbErr = m.GetTenantByIDOrName(ctx, tnt2.Name)
+		assert.ErrorIs(t, dbErr, ErrTenantDoesNotExist)
 		assert.Nil(t, tntDB)
 	})
 
 	t.Run("returns error when tenant is not found", func(t *testing.T) {
-		tntDB, err := m.GetTenantByIDOrName(ctx, "unknown")
-		assert.ErrorIs(t, err, ErrTenantDoesNotExist)
+		tntDB, dbErr := m.GetTenantByIDOrName(ctx, "unknown")
+		assert.ErrorIs(t, dbErr, ErrTenantDoesNotExist)
 		assert.Nil(t, tntDB)
 	})
 }
@@ -425,8 +425,8 @@ func Test_Manager_GetDefault(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("returns error when there's no default tenant", func(t *testing.T) {
-		defaultTnt, err := m.GetDefault(ctx)
-		assert.EqualError(t, err, ErrTenantDoesNotExist.Error())
+		defaultTnt, dbErr := m.GetDefault(ctx)
+		assert.EqualError(t, dbErr, ErrTenantDoesNotExist.Error())
 		assert.Nil(t, defaultTnt)
 	})
 
@@ -434,8 +434,8 @@ func Test_Manager_GetDefault(t *testing.T) {
 	updateTenantIsDefault(t, ctx, dbConnectionPool, tnt2.ID, true)
 
 	t.Run("returns error when there's multiple default tenants", func(t *testing.T) {
-		defaultTnt, err := m.GetDefault(ctx)
-		assert.EqualError(t, err, ErrTooManyDefaultTenants.Error())
+		defaultTnt, dbErr := m.GetDefault(ctx)
+		assert.EqualError(t, dbErr, ErrTooManyDefaultTenants.Error())
 		assert.Nil(t, defaultTnt)
 	})
 
@@ -443,8 +443,8 @@ func Test_Manager_GetDefault(t *testing.T) {
 
 	t.Run("returns error when default tenant is inactive", func(t *testing.T) {
 		deactivateTenant(t, ctx, m, tnt2)
-		defaultTnt, err := m.GetDefault(ctx)
-		assert.EqualError(t, err, ErrTenantDoesNotExist.Error())
+		defaultTnt, dbErr := m.GetDefault(ctx)
+		assert.EqualError(t, dbErr, ErrTenantDoesNotExist.Error())
 		assert.Nil(t, defaultTnt)
 	})
 
@@ -452,8 +452,8 @@ func Test_Manager_GetDefault(t *testing.T) {
 	activateTenant(t, ctx, m, tnt2)
 
 	t.Run("gets the default tenant successfully", func(t *testing.T) {
-		tntDB, err := m.GetDefault(ctx)
-		require.NoError(t, err)
+		tntDB, dbErr := m.GetDefault(ctx)
+		require.NoError(t, dbErr)
 		assert.Equal(t, tnt2.ID, tntDB.ID)
 		assert.Equal(t, tnt2.Name, tntDB.Name)
 		assert.True(t, tntDB.IsDefault)
@@ -485,43 +485,43 @@ func Test_Manager_SetDefault(t *testing.T) {
 	updateTenantIsDefault(t, ctx, dbConnectionPool, tnt1.ID, true)
 
 	t.Run("ensures the default tenant is not changed when an error occurs", func(t *testing.T) {
-		tnt, err := db.RunInTransactionWithResult(ctx, dbConnectionPool, nil, func(dbTx db.DBTransaction) (*Tenant, error) {
+		tnt, dbErr := db.RunInTransactionWithResult(ctx, dbConnectionPool, nil, func(dbTx db.DBTransaction) (*Tenant, error) {
 			dTnt, innerErr := m.SetDefault(ctx, dbTx, "some-id")
 			return dTnt, innerErr
 		})
-		assert.ErrorIs(t, err, ErrTenantDoesNotExist)
+		assert.ErrorIs(t, dbErr, ErrTenantDoesNotExist)
 		assert.Nil(t, tnt)
 
-		tnt1DB, err := m.GetTenantByID(ctx, tnt1.ID)
-		require.NoError(t, err)
+		tnt1DB, dbErr := m.GetTenantByID(ctx, tnt1.ID)
+		require.NoError(t, dbErr)
 		assert.True(t, tnt1DB.IsDefault)
 	})
 
 	t.Run("returns error when attempting to set deactivated tenant to default", func(t *testing.T) {
-		tnt3, err := m.AddTenant(ctx, "myorg3")
-		require.NoError(t, err)
+		tnt3, dbErr := m.AddTenant(ctx, "myorg3")
+		require.NoError(t, dbErr)
 		deactivateTenant(t, ctx, m, tnt3)
 
-		tnt, err := m.SetDefault(ctx, dbConnectionPool, tnt3.Name)
-		assert.ErrorIs(t, err, ErrTenantDoesNotExist)
+		tnt, dbErr := m.SetDefault(ctx, dbConnectionPool, tnt3.Name)
+		assert.ErrorIs(t, dbErr, ErrTenantDoesNotExist)
 		assert.Nil(t, tnt)
 
-		tnt3DB, err := m.GetTenant(ctx, &QueryParams{
+		tnt3DB, dbErr := m.GetTenant(ctx, &QueryParams{
 			Filters: map[FilterKey]interface{}{FilterKeyID: tnt3.ID},
 		})
-		require.NoError(t, err)
+		require.NoError(t, dbErr)
 		assert.False(t, tnt3DB.IsDefault)
 	})
 
 	t.Run("updates default tenant", func(t *testing.T) {
-		tnt2DB, err := m.SetDefault(ctx, dbConnectionPool, tnt2.ID)
-		require.NoError(t, err)
+		tnt2DB, dbErr := m.SetDefault(ctx, dbConnectionPool, tnt2.ID)
+		require.NoError(t, dbErr)
 
 		assert.Equal(t, tnt2.ID, tnt2DB.ID)
 		assert.True(t, tnt2DB.IsDefault)
 
-		tnt1DB, err := m.GetTenantByID(ctx, tnt1.ID)
-		require.NoError(t, err)
+		tnt1DB, dbErr := m.GetTenantByID(ctx, tnt1.ID)
+		require.NoError(t, dbErr)
 		assert.Equal(t, tnt1.ID, tnt1DB.ID)
 		assert.False(t, tnt1DB.IsDefault)
 	})
@@ -542,7 +542,7 @@ func Test_Manager_DeleteTenantByName(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("deletes tenant successfully", func(t *testing.T) {
-		err := m.DeleteTenantByName(ctx, tnt.Name)
+		err = m.DeleteTenantByName(ctx, tnt.Name)
 		require.NoError(t, err)
 
 		_, err = m.GetTenantByName(ctx, tnt.Name)
@@ -550,7 +550,7 @@ func Test_Manager_DeleteTenantByName(t *testing.T) {
 	})
 
 	t.Run("returns error when tenant name is empty", func(t *testing.T) {
-		err := m.DeleteTenantByName(ctx, "")
+		err = m.DeleteTenantByName(ctx, "")
 		assert.ErrorIs(t, err, ErrEmptyTenantName)
 	})
 }
@@ -570,25 +570,25 @@ func Test_Manager_SoftDeleteTenantByID(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("returns error when tenant does not exist", func(t *testing.T) {
-		_, err := m.SoftDeleteTenantByID(ctx, "invalid-tnt")
+		_, err = m.SoftDeleteTenantByID(ctx, "invalid-tnt")
 		require.Error(t, err)
 		assert.ErrorIs(t, err, ErrTenantDoesNotExist)
 	})
 
 	t.Run("returns error when tenant is not deactivated", func(t *testing.T) {
-		_, err := m.SoftDeleteTenantByID(ctx, tnt.ID)
+		_, err = m.SoftDeleteTenantByID(ctx, tnt.ID)
 		require.Error(t, err)
 		assert.ErrorIs(t, err, ErrTenantDoesNotExist)
 	})
 
 	t.Run("successfully soft deletes tenant", func(t *testing.T) {
 		deactivateTenant(t, ctx, m, tnt)
-		dbTnt, err := m.SoftDeleteTenantByID(ctx, tnt.ID)
-		require.NoError(t, err)
+		dbTnt, dbErr := m.SoftDeleteTenantByID(ctx, tnt.ID)
+		require.NoError(t, dbErr)
 		require.NotNil(t, dbTnt.DeletedAt)
 
-		dbTnt, err = m.GetTenant(ctx, &QueryParams{Filters: map[FilterKey]interface{}{FilterKeyID: tnt.ID}})
-		require.NoError(t, err)
+		dbTnt, dbErr = m.GetTenant(ctx, &QueryParams{Filters: map[FilterKey]interface{}{FilterKeyID: tnt.ID}})
+		require.NoError(t, dbErr)
 		assert.NotNil(t, dbTnt.DeletedAt)
 	})
 }
@@ -608,11 +608,11 @@ func TestManager_DeactivateTenantDistributionAccount(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("does not deactivate distribution account if not managed by Circle", func(t *testing.T) {
-		err := m.DeactivateTenantDistributionAccount(ctx, tnt.ID)
+		err = m.DeactivateTenantDistributionAccount(ctx, tnt.ID)
 		require.NoError(t, err)
 
-		dbTnt, err := m.GetTenant(ctx, &QueryParams{Filters: map[FilterKey]interface{}{FilterKeyID: tnt.ID}})
-		require.NoError(t, err)
+		dbTnt, dbErr := m.GetTenant(ctx, &QueryParams{Filters: map[FilterKey]interface{}{FilterKeyID: tnt.ID}})
+		require.NoError(t, dbErr)
 		assert.NotEqual(t, schema.AccountStatusPendingUserActivation, dbTnt.DistributionAccountStatus)
 	})
 
@@ -628,8 +628,8 @@ func TestManager_DeactivateTenantDistributionAccount(t *testing.T) {
 		err = m.DeactivateTenantDistributionAccount(ctx, tnt.ID)
 		require.NoError(t, err)
 
-		dbTnt, err := m.GetTenant(ctx, &QueryParams{Filters: map[FilterKey]interface{}{FilterKeyID: tnt.ID}})
-		require.NoError(t, err)
+		dbTnt, dbErr := m.GetTenant(ctx, &QueryParams{Filters: map[FilterKey]interface{}{FilterKeyID: tnt.ID}})
+		require.NoError(t, dbErr)
 		assert.NotEqual(t, schema.AccountStatusPendingUserActivation, dbTnt.DistributionAccountStatus)
 	})
 
