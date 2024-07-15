@@ -385,14 +385,6 @@ func (m *Manager) newManagerQuery(baseQuery string, queryParams *QueryParams) (s
 		qb.AddCondition("t.is_default = ?", queryParams.Filters[FilterKeyIsDefault])
 	}
 
-	if queryParams.Filters[FilterKeyDistributionAccountType] != nil {
-		qb.AddCondition("t.distribution_account_type = ?", queryParams.Filters[FilterKeyDistributionAccountType])
-	}
-
-	if queryParams.Filters[FilterKeyDistributionAccountStatus] != nil {
-		qb.AddCondition("t.distribution_account_status = ?", queryParams.Filters[FilterKeyDistributionAccountStatus])
-	}
-
 	if queryParams.Filters[FilterKeyStatus] != nil {
 		if statusSlice, ok := queryParams.Filters[FilterKeyStatus].([]TenantStatus); ok && len(statusSlice) > 0 {
 			qb.AddCondition("t.status = ANY(?)", pq.Array(statusSlice))
