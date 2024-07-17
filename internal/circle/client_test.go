@@ -309,6 +309,62 @@ func Test_Client_GetWalletByID(t *testing.T) {
 	})
 }
 
+func Test_Client_handleError(t *testing.T) {
+	ctx := context.Background()
+	tnt := &tenant.Tenant{ID: "test-id"}
+	ctx = tenant.SaveTenantInContext(ctx, tnt)
+
+	cc, _, tntManagerMock := newClientWithMocks(t)
+
+	t.Run("deactivate tenant distribution account error", func(t *testing.T) {
+		testError := errors.New("foo")
+		tntManagerMock.
+			On("DeactivateTenantDistributionAccount", mock.Anything, tnt.ID).
+			Return(testError).Once()
+
+		err := cc.handleError(ctx, &http.Response{StatusCode: http.StatusUnauthorized})
+		assert.EqualError(t, err, fmt.Errorf("deactivating tenant distribution account: %w", testError).Error())
+	})
+
+	t.Run("deactivates tenant distribution account if Circle error response is unauthorized", func(t *testing.T) {
+		unauthorizedResponse := &http.Response{
+			StatusCode: http.StatusUnauthorized,
+			Body:       io.NopCloser(bytes.NewBufferString(`{"code": 401, "message": "Unauthorized"}`)),
+		}
+		tntManagerMock.
+			On("DeactivateTenantDistributionAccount", mock.Anything, tnt.ID).
+			Return(nil).Once()
+
+		err := cc.handleError(ctx, unauthorizedResponse)
+		assert.EqualError(t, fmt.Errorf("Circle API error: %w", errors.New("APIError: Code=401, Message=Unauthorized, Errors=[], StatusCode=401")), err.Error())
+	})
+
+	t.Run("deactivates tenant distribution account if Circle error response is forbidden", func(t *testing.T) {
+		unauthorizedResponse := &http.Response{
+			StatusCode: http.StatusForbidden,
+			Body:       io.NopCloser(bytes.NewBufferString(`{"code": 403, "message": "Forbidden"}`)),
+		}
+		tntManagerMock.
+			On("DeactivateTenantDistributionAccount", mock.Anything, tnt.ID).
+			Return(nil).Once()
+
+		err := cc.handleError(ctx, unauthorizedResponse)
+		assert.EqualError(t, fmt.Errorf("Circle API error: %w", errors.New("APIError: Code=403, Message=Forbidden, Errors=[], StatusCode=403")), err.Error())
+	})
+
+	t.Run("does not deactivate tenant distribution account if Circle error response is not unauthorized or forbidden", func(t *testing.T) {
+		unauthorizedResponse := &http.Response{
+			StatusCode: http.StatusBadRequest,
+			Body:       io.NopCloser(bytes.NewBufferString(`{"code": 400, "message": "Bad Request"}`)),
+		}
+
+		err := cc.handleError(ctx, unauthorizedResponse)
+		assert.EqualError(t, fmt.Errorf("Circle API error: %w", errors.New("APIError: Code=400, Message=Bad Request, Errors=[], StatusCode=400")), err.Error())
+	})
+
+	tntManagerMock.AssertExpectations(t)
+}
+
 func newClientWithMocks(t *testing.T) (Client, *httpclientMocks.HttpClientMock, *tenant.TenantManagerMock) {
 	httpClientMock := httpclientMocks.NewHttpClientMock(t)
 	tntManagerMock := tenant.NewTenantManagerMock(t)

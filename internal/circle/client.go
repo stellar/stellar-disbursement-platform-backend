@@ -213,7 +213,7 @@ func (client *Client) handleError(ctx context.Context, resp *http.Response) erro
 		return fmt.Errorf("parsing API error: %w", err)
 	}
 
-	return fmt.Errorf("API error: %w", apiError)
+	return fmt.Errorf("Circle API error: %w", apiError) //nolint:golint,unused
 }
 
 var _ ClientInterface = (*Client)(nil)
