@@ -83,3 +83,5 @@ require (
 replace github.com/gin-gonic/gin v1.8.1 => github.com/gin-gonic/gin v1.9.1
 
 replace gopkg.in/square/go-jose.v2 v2.4.1 => gopkg.in/go-jose/go-jose.v2 v2.6.3
+
+replace github.com/gofiber/fiber/v2 v2.52.2 => github.com/gofiber/fiber/v2 v2.52.5
