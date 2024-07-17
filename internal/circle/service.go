@@ -7,6 +7,7 @@ import (
 	"github.com/stellar/go/strkey"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 type Service struct {
@@ -14,6 +15,7 @@ type Service struct {
 	ClientConfigModel    ClientConfigModelInterface
 	NetworkType          utils.NetworkType
 	EncryptionPassphrase string
+	TenantManager        tenant.ManagerInterface
 }
 
 const StellarChainCode = "XLM"
@@ -31,6 +33,7 @@ var _ ServiceInterface = (*Service)(nil)
 type ServiceOptions struct {
 	ClientFactory        ClientFactory
 	ClientConfigModel    ClientConfigModelInterface
+	TenantManager        tenant.ManagerInterface
 	NetworkType          utils.NetworkType
 	EncryptionPassphrase string
 }
@@ -42,6 +45,10 @@ func (o ServiceOptions) Validate() error {
 
 	if o.ClientConfigModel == nil {
 		return fmt.Errorf("ClientConfigModel is required")
+	}
+
+	if o.TenantManager == nil {
+		return fmt.Errorf("TenantManager is required")
 	}
 
 	err := o.NetworkType.Validate()
@@ -67,6 +74,7 @@ func NewService(opts ServiceOptions) (*Service, error) {
 		ClientConfigModel:    opts.ClientConfigModel,
 		NetworkType:          opts.NetworkType,
 		EncryptionPassphrase: opts.EncryptionPassphrase,
+		TenantManager:        opts.TenantManager,
 	}, nil
 }
 
@@ -98,16 +106,16 @@ func (s *Service) SendPayment(ctx context.Context, paymentRequest PaymentRequest
 	})
 }
 
-func (s *Service) getClient(ctx context.Context) (ClientInterface, error) {
+func (s *Service) getClientForTenantInContext(ctx context.Context) (ClientInterface, error) {
 	apiKey, err := s.ClientConfigModel.GetDecryptedAPIKey(ctx, s.EncryptionPassphrase)
 	if err != nil {
 		return nil, fmt.Errorf("retrieving decrypted Circle API key: %w", err)
 	}
-	return s.ClientFactory(s.NetworkType, apiKey), nil
+	return s.ClientFactory(s.NetworkType, apiKey, s.TenantManager), nil
 }
 
 func (s *Service) Ping(ctx context.Context) (bool, error) {
-	client, err := s.getClient(ctx)
+	client, err := s.getClientForTenantInContext(ctx)
 	if err != nil {
 		return false, fmt.Errorf("cannot get Circle client: %w", err)
 	}
@@ -115,7 +123,7 @@ func (s *Service) Ping(ctx context.Context) (bool, error) {
 }
 
 func (s *Service) PostTransfer(ctx context.Context, transferRequest TransferRequest) (*Transfer, error) {
-	client, err := s.getClient(ctx)
+	client, err := s.getClientForTenantInContext(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("cannot get Circle client: %w", err)
 	}
@@ -123,7 +131,7 @@ func (s *Service) PostTransfer(ctx context.Context, transferRequest TransferRequ
 }
 
 func (s *Service) GetTransferByID(ctx context.Context, transferID string) (*Transfer, error) {
-	client, err := s.getClient(ctx)
+	client, err := s.getClientForTenantInContext(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("cannot get Circle client: %w", err)
 	}
@@ -131,7 +139,7 @@ func (s *Service) GetTransferByID(ctx context.Context, transferID string) (*Tran
 }
 
 func (s *Service) GetWalletByID(ctx context.Context, walletID string) (*Wallet, error) {
-	client, err := s.getClient(ctx)
+	client, err := s.getClientForTenantInContext(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("cannot get Circle client: %w", err)
 	}

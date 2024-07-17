@@ -15,11 +15,13 @@ import (
 
 	httpclientMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 func Test_NewClient(t *testing.T) {
+	mockTntManager := &tenant.TenantManagerMock{}
 	t.Run("production environment", func(t *testing.T) {
-		clientInterface := NewClient(utils.PubnetNetworkType, "test-key")
+		clientInterface := NewClient(utils.PubnetNetworkType, "test-key", mockTntManager)
 		cc, ok := clientInterface.(*Client)
 		assert.True(t, ok)
 		assert.Equal(t, string(Production), cc.BasePath)
@@ -27,7 +29,7 @@ func Test_NewClient(t *testing.T) {
 	})
 
 	t.Run("sandbox environment", func(t *testing.T) {
-		clientInterface := NewClient(utils.TestnetNetworkType, "test-key")
+		clientInterface := NewClient(utils.TestnetNetworkType, "test-key", mockTntManager)
 		cc, ok := clientInterface.(*Client)
 		assert.True(t, ok)
 		assert.Equal(t, string(Sandbox), cc.BasePath)
@@ -39,7 +41,7 @@ func Test_Client_Ping(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("ping error", func(t *testing.T) {
-		cc, httpClientMock := newClientWithMock(t)
+		cc, httpClientMock, _ := newClientWithMocks(t)
 		testError := errors.New("test error")
 		httpClientMock.
 			On("Do", mock.Anything).
@@ -52,7 +54,7 @@ func Test_Client_Ping(t *testing.T) {
 	})
 
 	t.Run("ping successful", func(t *testing.T) {
-		cc, httpClientMock := newClientWithMock(t)
+		cc, httpClientMock, _ := newClientWithMocks(t)
 		httpClientMock.
 			On("Do", mock.Anything).
 			Return(&http.Response{
@@ -85,7 +87,7 @@ func Test_Client_PostTransfer(t *testing.T) {
 	}
 
 	t.Run("post transfer error", func(t *testing.T) {
-		cc, httpClientMock := newClientWithMock(t)
+		cc, httpClientMock, _ := newClientWithMocks(t)
 		testError := errors.New("test error")
 		httpClientMock.
 			On("Do", mock.Anything).
@@ -98,7 +100,7 @@ func Test_Client_PostTransfer(t *testing.T) {
 	})
 
 	t.Run("post transfer fails to validate request", func(t *testing.T) {
-		cc, _ := newClientWithMock(t)
+		cc, _, _ := newClientWithMocks(t)
 		transfer, err := cc.PostTransfer(ctx, TransferRequest{})
 		assert.EqualError(t, err, fmt.Errorf("validating transfer request: %w", errors.New("source type must be provided")).Error())
 		assert.Nil(t, transfer)
@@ -106,7 +108,9 @@ func Test_Client_PostTransfer(t *testing.T) {
 
 	t.Run("post transfer fails auth", func(t *testing.T) {
 		unauthorizedResponse := `{"code": 401, "message": "Malformed key. Does it contain three parts?"}`
-		cc, httpClientMock := newClientWithMock(t)
+		cc, httpClientMock, tntManagerMock := newClientWithMocks(t)
+		tnt := &tenant.Tenant{ID: "test-id"}
+		ctx = tenant.SaveTenantInContext(ctx, tnt)
 
 		httpClientMock.
 			On("Do", mock.Anything).
@@ -115,14 +119,17 @@ func Test_Client_PostTransfer(t *testing.T) {
 				Body:       io.NopCloser(bytes.NewBufferString(unauthorizedResponse)),
 			}, nil).
 			Once()
+		tntManagerMock.
+			On("DeactivateTenantDistributionAccount", mock.Anything, tnt.ID).
+			Return(nil).Once()
 
 		transfer, err := cc.PostTransfer(ctx, validTransferReq)
-		assert.EqualError(t, err, "API error: APIError: Code=401, Message=Malformed key. Does it contain three parts?, Errors=[], StatusCode=401")
+		assert.EqualError(t, err, "handling API response error: Circle API error: APIError: Code=401, Message=Malformed key. Does it contain three parts?, Errors=[], StatusCode=401")
 		assert.Nil(t, transfer)
 	})
 
 	t.Run("post transfer successful", func(t *testing.T) {
-		cc, httpClientMock := newClientWithMock(t)
+		cc, httpClientMock, _ := newClientWithMocks(t)
 		httpClientMock.
 			On("Do", mock.Anything).
 			Return(&http.Response{
@@ -149,7 +156,7 @@ func Test_Client_PostTransfer(t *testing.T) {
 func Test_Client_GetTransferByID(t *testing.T) {
 	ctx := context.Background()
 	t.Run("get transfer by id error", func(t *testing.T) {
-		cc, httpClientMock := newClientWithMock(t)
+		cc, httpClientMock, _ := newClientWithMocks(t)
 		testError := errors.New("test error")
 		httpClientMock.
 			On("Do", mock.Anything).
@@ -163,7 +170,10 @@ func Test_Client_GetTransferByID(t *testing.T) {
 
 	t.Run("get transfer by id fails auth", func(t *testing.T) {
 		unauthorizedResponse := `{"code": 401, "message": "Malformed key. Does it contain three parts?"}`
-		cc, httpClientMock := newClientWithMock(t)
+		cc, httpClientMock, tntManagerMock := newClientWithMocks(t)
+		tnt := &tenant.Tenant{ID: "test-id"}
+		ctx = tenant.SaveTenantInContext(ctx, tnt)
+
 		httpClientMock.
 			On("Do", mock.Anything).
 			Return(&http.Response{
@@ -171,14 +181,17 @@ func Test_Client_GetTransferByID(t *testing.T) {
 				Body:       io.NopCloser(bytes.NewBufferString(unauthorizedResponse)),
 			}, nil).
 			Once()
+		tntManagerMock.
+			On("DeactivateTenantDistributionAccount", mock.Anything, tnt.ID).
+			Return(nil).Once()
 
 		transfer, err := cc.GetTransferByID(ctx, "test-id")
-		assert.EqualError(t, err, "API error: APIError: Code=401, Message=Malformed key. Does it contain three parts?, Errors=[], StatusCode=401")
+		assert.EqualError(t, err, "handling API response error: Circle API error: APIError: Code=401, Message=Malformed key. Does it contain three parts?, Errors=[], StatusCode=401")
 		assert.Nil(t, transfer)
 	})
 
 	t.Run("get transfer by id successful", func(t *testing.T) {
-		cc, httpClientMock := newClientWithMock(t)
+		cc, httpClientMock, _ := newClientWithMocks(t)
 		httpClientMock.
 			On("Do", mock.Anything).
 			Return(&http.Response{
@@ -204,7 +217,7 @@ func Test_Client_GetTransferByID(t *testing.T) {
 func Test_Client_GetWalletByID(t *testing.T) {
 	ctx := context.Background()
 	t.Run("get wallet by id error", func(t *testing.T) {
-		cc, httpClientMock := newClientWithMock(t)
+		cc, httpClientMock, _ := newClientWithMocks(t)
 		testError := errors.New("test error")
 		httpClientMock.
 			On("Do", mock.Anything).
@@ -229,7 +242,10 @@ func Test_Client_GetWalletByID(t *testing.T) {
 			"code": 401,
 			"message": "Malformed key. Does it contain three parts?"
 		}`
-		cc, httpClientMock := newClientWithMock(t)
+		cc, httpClientMock, tntManagerMock := newClientWithMocks(t)
+		tnt := &tenant.Tenant{ID: "test-id"}
+		ctx = tenant.SaveTenantInContext(ctx, tnt)
+
 		httpClientMock.
 			On("Do", mock.Anything).
 			Return(&http.Response{
@@ -237,9 +253,12 @@ func Test_Client_GetWalletByID(t *testing.T) {
 				Body:       io.NopCloser(bytes.NewBufferString(unauthorizedResponse)),
 			}, nil).
 			Once()
+		tntManagerMock.
+			On("DeactivateTenantDistributionAccount", mock.Anything, tnt.ID).
+			Return(nil).Once()
 
 		transfer, err := cc.GetWalletByID(ctx, "test-id")
-		assert.EqualError(t, err, "API error: APIError: Code=401, Message=Malformed key. Does it contain three parts?, Errors=[], StatusCode=401")
+		assert.EqualError(t, err, "handling API response error: Circle API error: APIError: Code=401, Message=Malformed key. Does it contain three parts?, Errors=[], StatusCode=401")
 		assert.Nil(t, transfer)
 	})
 
@@ -258,7 +277,7 @@ func Test_Client_GetWalletByID(t *testing.T) {
 				]
 			}
 		}`
-		cc, httpClientMock := newClientWithMock(t)
+		cc, httpClientMock, _ := newClientWithMocks(t)
 		httpClientMock.
 			On("Do", mock.Anything).
 			Return(&http.Response{
@@ -290,12 +309,70 @@ func Test_Client_GetWalletByID(t *testing.T) {
 	})
 }
 
-func newClientWithMock(t *testing.T) (Client, *httpclientMocks.HttpClientMock) {
+func Test_Client_handleError(t *testing.T) {
+	ctx := context.Background()
+	tnt := &tenant.Tenant{ID: "test-id"}
+	ctx = tenant.SaveTenantInContext(ctx, tnt)
+
+	cc, _, tntManagerMock := newClientWithMocks(t)
+
+	t.Run("deactivate tenant distribution account error", func(t *testing.T) {
+		testError := errors.New("foo")
+		tntManagerMock.
+			On("DeactivateTenantDistributionAccount", mock.Anything, tnt.ID).
+			Return(testError).Once()
+
+		err := cc.handleError(ctx, &http.Response{StatusCode: http.StatusUnauthorized})
+		assert.EqualError(t, err, fmt.Errorf("deactivating tenant distribution account: %w", testError).Error())
+	})
+
+	t.Run("deactivates tenant distribution account if Circle error response is unauthorized", func(t *testing.T) {
+		unauthorizedResponse := &http.Response{
+			StatusCode: http.StatusUnauthorized,
+			Body:       io.NopCloser(bytes.NewBufferString(`{"code": 401, "message": "Unauthorized"}`)),
+		}
+		tntManagerMock.
+			On("DeactivateTenantDistributionAccount", mock.Anything, tnt.ID).
+			Return(nil).Once()
+
+		err := cc.handleError(ctx, unauthorizedResponse)
+		assert.EqualError(t, fmt.Errorf("Circle API error: %w", errors.New("APIError: Code=401, Message=Unauthorized, Errors=[], StatusCode=401")), err.Error())
+	})
+
+	t.Run("deactivates tenant distribution account if Circle error response is forbidden", func(t *testing.T) {
+		unauthorizedResponse := &http.Response{
+			StatusCode: http.StatusForbidden,
+			Body:       io.NopCloser(bytes.NewBufferString(`{"code": 403, "message": "Forbidden"}`)),
+		}
+		tntManagerMock.
+			On("DeactivateTenantDistributionAccount", mock.Anything, tnt.ID).
+			Return(nil).Once()
+
+		err := cc.handleError(ctx, unauthorizedResponse)
+		assert.EqualError(t, fmt.Errorf("Circle API error: %w", errors.New("APIError: Code=403, Message=Forbidden, Errors=[], StatusCode=403")), err.Error())
+	})
+
+	t.Run("does not deactivate tenant distribution account if Circle error response is not unauthorized or forbidden", func(t *testing.T) {
+		unauthorizedResponse := &http.Response{
+			StatusCode: http.StatusBadRequest,
+			Body:       io.NopCloser(bytes.NewBufferString(`{"code": 400, "message": "Bad Request"}`)),
+		}
+
+		err := cc.handleError(ctx, unauthorizedResponse)
+		assert.EqualError(t, fmt.Errorf("Circle API error: %w", errors.New("APIError: Code=400, Message=Bad Request, Errors=[], StatusCode=400")), err.Error())
+	})
+
+	tntManagerMock.AssertExpectations(t)
+}
+
+func newClientWithMocks(t *testing.T) (Client, *httpclientMocks.HttpClientMock, *tenant.TenantManagerMock) {
 	httpClientMock := httpclientMocks.NewHttpClientMock(t)
+	tntManagerMock := tenant.NewTenantManagerMock(t)
 
 	return Client{
-		BasePath:   "http://localhost:8080",
-		APIKey:     "test-key",
-		httpClient: httpClientMock,
-	}, httpClientMock
+		BasePath:      "http://localhost:8080",
+		APIKey:        "test-key",
+		httpClient:    httpClientMock,
+		tenantManager: tntManagerMock,
+	}, httpClientMock, tntManagerMock
 }
