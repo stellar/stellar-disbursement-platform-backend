@@ -124,7 +124,7 @@ func Test_Client_PostTransfer(t *testing.T) {
 			Return(nil).Once()
 
 		transfer, err := cc.PostTransfer(ctx, validTransferReq)
-		assert.EqualError(t, err, "handling API response error: API error: APIError: Code=401, Message=Malformed key. Does it contain three parts?, Errors=[], StatusCode=401")
+		assert.EqualError(t, err, "handling API response error: Circle API error: APIError: Code=401, Message=Malformed key. Does it contain three parts?, Errors=[], StatusCode=401")
 		assert.Nil(t, transfer)
 	})
 
@@ -186,7 +186,7 @@ func Test_Client_GetTransferByID(t *testing.T) {
 			Return(nil).Once()
 
 		transfer, err := cc.GetTransferByID(ctx, "test-id")
-		assert.EqualError(t, err, "handling API response error: API error: APIError: Code=401, Message=Malformed key. Does it contain three parts?, Errors=[], StatusCode=401")
+		assert.EqualError(t, err, "handling API response error: Circle API error: APIError: Code=401, Message=Malformed key. Does it contain three parts?, Errors=[], StatusCode=401")
 		assert.Nil(t, transfer)
 	})
 
@@ -258,7 +258,7 @@ func Test_Client_GetWalletByID(t *testing.T) {
 			Return(nil).Once()
 
 		transfer, err := cc.GetWalletByID(ctx, "test-id")
-		assert.EqualError(t, err, "handling API response error: API error: APIError: Code=401, Message=Malformed key. Does it contain three parts?, Errors=[], StatusCode=401")
+		assert.EqualError(t, err, "handling API response error: Circle API error: APIError: Code=401, Message=Malformed key. Does it contain three parts?, Errors=[], StatusCode=401")
 		assert.Nil(t, transfer)
 	})
 
