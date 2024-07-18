@@ -10,13 +10,15 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 func Test_ServiceOptions_Validate(t *testing.T) {
-	var clientFactory ClientFactory = func(networkType utils.NetworkType, apiKey string) ClientInterface {
+	var clientFactory ClientFactory = func(networkType utils.NetworkType, apiKey string, tntManager tenant.ManagerInterface) ClientInterface {
 		return nil
 	}
 	circleClientConfigModel := &ClientConfigModel{}
+	mockTenantManager := &tenant.TenantManagerMock{}
 
 	testCases := []struct {
 		name                string
@@ -34,10 +36,16 @@ func Test_ServiceOptions_Validate(t *testing.T) {
 			expectedErrContains: "ClientConfigModel is required",
 		},
 		{
+			name:                "TenantManager validation fails",
+			opts:                ServiceOptions{ClientFactory: clientFactory, ClientConfigModel: circleClientConfigModel},
+			expectedErrContains: "TenantManager is required",
+		},
+		{
 			name: "NetworkType validation fails",
 			opts: ServiceOptions{
 				ClientFactory:     clientFactory,
 				ClientConfigModel: circleClientConfigModel,
+				TenantManager:     mockTenantManager,
 				NetworkType:       utils.NetworkType("FOOBAR"),
 			},
 			expectedErrContains: `validating NetworkType: invalid network type "FOOBAR"`,
@@ -47,6 +55,7 @@ func Test_ServiceOptions_Validate(t *testing.T) {
 			opts: ServiceOptions{
 				ClientFactory:        clientFactory,
 				ClientConfigModel:    circleClientConfigModel,
+				TenantManager:        mockTenantManager,
 				NetworkType:          utils.TestnetNetworkType,
 				EncryptionPassphrase: "FOO BAR",
 			},
@@ -57,6 +66,7 @@ func Test_ServiceOptions_Validate(t *testing.T) {
 			opts: ServiceOptions{
 				ClientFactory:        clientFactory,
 				ClientConfigModel:    circleClientConfigModel,
+				TenantManager:        mockTenantManager,
 				NetworkType:          utils.TestnetNetworkType,
 				EncryptionPassphrase: "SCW5I426WV3IDTLSTLQEHC6BMXWI2Z6C4DXAOC4ZA2EIHTAZQ6VD3JI6",
 			},
@@ -83,16 +93,18 @@ func Test_NewService(t *testing.T) {
 	})
 
 	t.Run("🎉 successfully creates a new Service", func(t *testing.T) {
-		clientFactory := func(networkType utils.NetworkType, apiKey string) ClientInterface {
+		clientFactory := func(networkType utils.NetworkType, apiKey string, tntManager tenant.ManagerInterface) ClientInterface {
 			return nil
 		}
 		clientConfigModel := &ClientConfigModel{}
+		mockTntManager := &tenant.TenantManagerMock{}
 		networkType := utils.TestnetNetworkType
 		encryptionPassphrase := "SCW5I426WV3IDTLSTLQEHC6BMXWI2Z6C4DXAOC4ZA2EIHTAZQ6VD3JI6"
 
 		svc, err := NewService(ServiceOptions{
 			ClientFactory:        clientFactory,
 			ClientConfigModel:    clientConfigModel,
+			TenantManager:        mockTntManager,
 			NetworkType:          networkType,
 			EncryptionPassphrase: encryptionPassphrase,
 		})
@@ -101,10 +113,11 @@ func Test_NewService(t *testing.T) {
 		wantService := &Service{
 			ClientFactory:        clientFactory,
 			ClientConfigModel:    clientConfigModel,
+			TenantManager:        mockTntManager,
 			NetworkType:          networkType,
 			EncryptionPassphrase: encryptionPassphrase,
 		}
-		assert.Equal(t, wantService.ClientFactory(networkType, "FOO BAR"), svc.ClientFactory(networkType, "FOO BAR"))
+		assert.Equal(t, wantService.ClientFactory(networkType, "FOO BAR", mockTntManager), svc.ClientFactory(networkType, "FOO BAR", mockTntManager))
 		assert.Equal(t, wantService.ClientConfigModel, svc.ClientConfigModel)
 		assert.Equal(t, wantService.NetworkType, svc.NetworkType)
 		assert.Equal(t, wantService.EncryptionPassphrase, svc.EncryptionPassphrase)
@@ -126,6 +139,7 @@ func Test_Service_getClient(t *testing.T) {
 	encryptedAPIKey := "72TARC5aoKJOEUIMTR9nlITP6+MbugQtS+2faBKSQbCrXic=" // <--- "api-key" encrypted with the encryptionPassphrase.
 	networkType := utils.TestnetNetworkType
 	clientConfigModel := NewClientConfigModel(dbConnectionPool)
+	mockTntManager := &tenant.TenantManagerMock{}
 
 	// Add a client config to the database.
 	err = clientConfigModel.Upsert(ctx, ClientConfigUpdate{
@@ -139,14 +153,15 @@ func Test_Service_getClient(t *testing.T) {
 	svc, err := NewService(ServiceOptions{
 		ClientFactory:        NewClient,
 		ClientConfigModel:    clientConfigModel,
+		TenantManager:        mockTntManager,
 		NetworkType:          networkType,
 		EncryptionPassphrase: encryptionPassphrase,
 	})
 	assert.NoError(t, err)
 
-	circleClient, err := svc.getClient(ctx)
+	circleClient, err := svc.getClientForTenantInContext(ctx)
 	assert.NoError(t, err)
-	wantCircleClient := NewClient(networkType, apiKey)
+	wantCircleClient := NewClient(networkType, apiKey, &tenant.TenantManagerMock{})
 	assert.Equal(t, wantCircleClient, circleClient)
 }
 
@@ -164,6 +179,7 @@ func Test_Service_allMethods(t *testing.T) {
 	encryptedAPIKey := "72TARC5aoKJOEUIMTR9nlITP6+MbugQtS+2faBKSQbCrXic=" // <--- "api-key" encrypted with the encryptionPassphrase.
 	networkType := utils.TestnetNetworkType
 	clientConfigModel := NewClientConfigModel(dbConnectionPool)
+	mockTntManager := &tenant.TenantManagerMock{}
 
 	// Add a client config to the database.
 	err = clientConfigModel.Upsert(ctx, ClientConfigUpdate{
@@ -176,10 +192,11 @@ func Test_Service_allMethods(t *testing.T) {
 	// Method used to spin up a service with a mock client.
 	createService := func(t *testing.T, mCircleClient *MockClient) *Service {
 		svc, err := NewService(ServiceOptions{
-			ClientFactory: func(networkType utils.NetworkType, apiKey string) ClientInterface {
+			ClientFactory: func(networkType utils.NetworkType, apiKey string, tntManager tenant.ManagerInterface) ClientInterface {
 				return mCircleClient
 			},
 			ClientConfigModel:    clientConfigModel,
+			TenantManager:        mockTntManager,
 			NetworkType:          networkType,
 			EncryptionPassphrase: encryptionPassphrase,
 		})
