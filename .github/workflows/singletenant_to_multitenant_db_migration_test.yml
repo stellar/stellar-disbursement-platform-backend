@@ -91,6 +91,27 @@ jobs:
         run: |
           docker exec e2e-sdp-v2-database bash -c "psql -d $DATABASE_URL -c \"SELECT admin.migrate_tenant_data_from_v1_to_v2('migrated-tenant');\""
 
+      - name: Verify Row Counts
+        run: |
+          submitter_public_count=$(docker exec e2e-sdp-v2-database bash -c "psql -d $DATABASE_URL -t -c 'SELECT COUNT(*) FROM public.submitter_transactions;'")
+          submitter_tss_count=$(docker exec e2e-sdp-v2-database bash -c "psql -d $DATABASE_URL -t -c 'SELECT COUNT(*) FROM tss.submitter_transactions;'")
+          receiver_public_count=$(docker exec e2e-sdp-v2-database bash -c "psql -d $DATABASE_URL -t -c 'SELECT COUNT(*) FROM public.receivers;'")
+          receiver_migrated_count=$(docker exec e2e-sdp-v2-database bash -c "psql -d $DATABASE_URL -t -c 'SELECT COUNT(*) FROM \"sdp_migrated-tenant\".receivers;'")
+
+          if [ "$submitter_public_count" -eq "$submitter_tss_count" ] && [ "$submitter_public_count" -gt 0 ]; then
+              echo "✅ submitter_transactions row counts match and are greater than zero."
+          else
+              echo "❌ submitter_transactions row counts do not match or are not greater than zero."
+              exit 1
+          fi
+
+          if [ "$receiver_public_count" -eq "$receiver_migrated_count" ] && [ "$receiver_public_count" -gt 0 ]; then
+              echo "✅ receivers row counts match and are greater than zero."
+          else
+              echo "❌ receivers row counts do not match or are not greater than zero."
+              exit 1
+          fi
+
       - name: Exclude Deprecated Tables
         run: |
           docker exec e2e-sdp-v2-database bash -c "psql -d $DATABASE_URL -c \"
@@ -116,14 +137,10 @@ jobs:
             COMMIT;
           \""
 
-      - name: Docker Logs and Cleanup
-        if: always()
-        run: |
-          docker-compose -f internal/integrationtests/docker/docker-compose-e2e-tests.yml logs
-          docker-compose -f internal/integrationtests/docker/docker-compose-e2e-tests.yml down -v
-
       - name: Docker logs
         if: always()
         working-directory: internal/integrationtests/docker
-        run: docker-compose -f docker-compose-e2e-tests.yml logs && docker-compose -f docker-compose-e2e-tests.yml down
+        run: |
+          docker-compose -f docker-compose-e2e-tests.yml logs
+          docker-compose -f docker-compose-e2e-tests.yml down -v
         shell: bash
