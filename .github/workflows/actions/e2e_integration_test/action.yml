@@ -8,12 +8,12 @@ runs:
       uses: actions/checkout@v4
 
     - name: Cleanup data
-      working-directory: internal/integrationtests
+      working-directory: internal/integrationtests/docker
       run: docker-compose -f docker-compose-e2e-tests.yml down -v
       shell: bash
 
     - name: Run Docker Compose for SDP, Anchor Platform and TSS
-      working-directory: internal/integrationtests
+      working-directory: internal/integrationtests/docker
       run: docker-compose -f docker-compose-e2e-tests.yml up --build -V -d
       shell: bash
 
@@ -47,6 +47,6 @@ runs:
 
     - name: Docker logs
       if: always()
-      working-directory: internal/integrationtests
+      working-directory: internal/integrationtests/docker
       run: docker-compose -f docker-compose-e2e-tests.yml logs && docker-compose -f docker-compose-e2e-tests.yml down
       shell: bash
