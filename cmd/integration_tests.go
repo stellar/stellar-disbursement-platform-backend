@@ -253,7 +253,7 @@ func (c *IntegrationTestsCommand) CreateIntegrationTestsDataCommand(integrationT
 			Usage:       "Wallet deeplink to be used in integration tests",
 			OptType:     types.String,
 			ConfigKey:   &integrationTestsOpts.WalletDeepLink,
-			FlagDefault: "test_wallet://",
+			FlagDefault: "test-wallet://sdp",
 			Required:    true,
 		},
 		{

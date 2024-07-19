@@ -206,7 +206,7 @@ func Test_WalletModelInsert(t *testing.T) {
 
 		name := "test_wallet"
 		homepage := "https://www.test_wallet.com"
-		deep_link_schema := "test_wallet://"
+		deep_link_schema := "test-wallet://sdp"
 		sep_10_client_domain := "www.test_wallet.com"
 		assets := []string{xlm.ID, usdc.ID}
 
@@ -256,7 +256,7 @@ func Test_WalletModelInsert(t *testing.T) {
 
 		name := "test_wallet"
 		homepage := "https://www.test_wallet.com"
-		deep_link_schema := "test_wallet://"
+		deep_link_schema := "test-wallet://sdp"
 		sep_10_client_domain := "www.test_wallet.com"
 		assets := []string{xlm.ID, xlm.ID, usdc.ID, usdc.ID}
 
@@ -305,7 +305,7 @@ func Test_WalletModelInsert(t *testing.T) {
 
 		name := "test_wallet"
 		homepage := "https://www.test_wallet.com"
-		deep_link_schema := "test_wallet://"
+		deep_link_schema := "test-wallet://sdp"
 		sep_10_client_domain := "www.test_wallet.com"
 		assets := []string{xlm.ID, usdc.ID}
 
@@ -405,7 +405,7 @@ func Test_WalletModelGetOrCreate(t *testing.T) {
 
 		name := "test_wallet"
 		homepage := "https://www.test_wallet.com"
-		deep_link_schema := "test_wallet://"
+		deep_link_schema := "test-wallet://sdp"
 		sep_10_client_domain := "www.test_wallet.com"
 
 		wallet, err := walletModel.GetOrCreate(ctx, name, homepage, deep_link_schema, sep_10_client_domain)
@@ -417,14 +417,14 @@ func Test_WalletModelGetOrCreate(t *testing.T) {
 		DeleteAllWalletFixtures(t, ctx, dbConnectionPool)
 		name := "test_wallet"
 		homepage := "https://www.test_wallet.com"
-		deep_link_schema := "test_wallet://"
+		deep_link_schema := "test-wallet://sdp"
 		sep_10_client_domain := "www.test_wallet.com"
 
 		wallet, err := walletModel.GetOrCreate(ctx, name, homepage, deep_link_schema, sep_10_client_domain)
 		require.NoError(t, err)
 		assert.Equal(t, "test_wallet", wallet.Name)
 		assert.Equal(t, "https://www.test_wallet.com", wallet.Homepage)
-		assert.Equal(t, "test_wallet://", wallet.DeepLinkSchema)
+		assert.Equal(t, "test-wallet://sdp", wallet.DeepLinkSchema)
 		assert.Equal(t, "www.test_wallet.com", wallet.SEP10ClientDomain)
 	})
 
@@ -434,11 +434,11 @@ func Test_WalletModelGetOrCreate(t *testing.T) {
 			"test_wallet",
 			"https://www.test_wallet.com",
 			"www.test_wallet.com",
-			"test_wallet://")
+			"test-wallet://sdp")
 
 		name := "test_wallet"
 		homepage := "https://www.test_wallet.com"
-		deep_link_schema := "test_wallet://"
+		deep_link_schema := "test-wallet://sdp"
 		sep_10_client_domain := "www.test_wallet.com"
 
 		wallet, err := walletModel.GetOrCreate(ctx, name, homepage, deep_link_schema, sep_10_client_domain)
