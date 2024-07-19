@@ -8,7 +8,7 @@ on:
       - "release/**"
       - "releases/**"
       - "hotfix/**"
-  # pull_request: # TODO: re-enable this trigger before merging the PR
+  pull_request:
   workflow_call: # allows this workflow to be called from another workflow
 
 jobs:
