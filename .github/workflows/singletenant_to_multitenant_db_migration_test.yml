@@ -9,7 +9,6 @@ on:
       - "releases/**"
       - "hotfix/**"
   pull_request:
-  workflow_call: # allows this workflow to be called from another workflow
 
 env:
   USER_EMAIL: "sdp_user@stellar.org"
