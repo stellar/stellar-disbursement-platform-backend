@@ -2,5 +2,5 @@ package integrationtests
 
 import "embed"
 
-//go:embed files/*
+//go:embed resources/*
 var DisbursementCSVFiles embed.FS

@@ -178,7 +178,7 @@ func Test_ProcessDisbursement(t *testing.T) {
 	sa := ServerApiIntegrationTests{
 		HttpClient:              &httpClientMock,
 		ServerApiBaseURL:        "http://mock_server.com/",
-		DisbursementCSVFilePath: "files",
+		DisbursementCSVFilePath: "resources",
 		DisbursementCSVFileName: "disbursement_integration_tests.csv",
 	}
 
