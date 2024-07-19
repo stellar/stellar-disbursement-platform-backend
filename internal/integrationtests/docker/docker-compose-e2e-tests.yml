@@ -16,7 +16,7 @@ services:
     container_name: e2e-sdp-api
     image: stellar/sdp-v2:latest
     build:
-      context: ../../
+      context: ../../../
       dockerfile: Dockerfile
     ports:
       - "8000:8000"
@@ -114,7 +114,7 @@ services:
     container_name: e2e-sdp-tss
     image: stellar/sdp-v2:latest
     build:
-      context: ../../
+      context: ../../../
       dockerfile: Dockerfile
     ports:
       - "9000:9000"
