@@ -19,24 +19,20 @@ env:
   CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE: ${{ vars.DISTRIBUTION_SEED }}
   SEP10_SIGNING_PUBLIC_KEY: ${{ vars.SEP10_SIGNING_PUBLIC_KEY }}
   SEP10_SIGNING_PRIVATE_KEY: ${{ vars.SEP10_SIGNING_PRIVATE_KEY }}
+  CIRCLE_API_KEY: ${{ vars.CIRCLE_API_KEY }}
+  CIRCLE_USDC_WALLET_ID: ${{ vars.CIRCLE_USDC_WALLET_ID }}
+
 jobs:
-  e2e-integration-test-stellar:
+  e2e-integration-test:
     runs-on: ubuntu-latest
-    environment: "Receiver Registration - E2E Integration Tests (Stellar)"
+    strategy:
+      matrix:
+        DISTRIBUTION_ACCOUNT_TYPE:
+          - "DISTRIBUTION_ACCOUNT.STELLAR.ENV"
+          - "DISTRIBUTION_ACCOUNT.CIRCLE.DB_VAULT"
     env:
-      DISTRIBUTION_ACCOUNT_TYPE: "DISTRIBUTION_ACCOUNT.STELLAR.ENV"
+      DISTRIBUTION_ACCOUNT_TYPE: ${{ matrix.DISTRIBUTION_ACCOUNT_TYPE }}
     steps:
       - uses: actions/checkout@v4
-      - id: stellar
-        uses: ./.github/workflows/actions/e2e_integration_test
-  e2e-integration-test-circle:
-    runs-on: ubuntu-latest
-    environment: "Receiver Registration - E2E Integration Tests (Circle)"
-    env:
-      DISTRIBUTION_ACCOUNT_TYPE: "DISTRIBUTION_ACCOUNT.CIRCLE.DB_VAULT"
-      CIRCLE_API_KEY: ${{ vars.CIRCLE_API_KEY }}
-      CIRCLE_USDC_WALLET_ID: ${{ vars.CIRCLE_USDC_WALLET_ID }}
-    steps:
-      - uses: actions/checkout@v4
-      - id: circle
+      - name: Run E2E Integration Test for ${{ matrix.DISTRIBUTION_ACCOUNT_TYPE }}
         uses: ./.github/workflows/actions/e2e_integration_test
