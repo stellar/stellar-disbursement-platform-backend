@@ -27,9 +27,15 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        DISTRIBUTION_ACCOUNT_TYPE:
-          - "DISTRIBUTION_ACCOUNT.STELLAR.ENV"
-          - "DISTRIBUTION_ACCOUNT.CIRCLE.DB_VAULT"
+        environment:
+          - "Receiver Registration - E2E Integration Tests (Stellar)"
+          - "Receiver Registration - E2E Integration Tests (Circle)"
+        include:
+          - environment: "Receiver Registration - E2E Integration Tests (Stellar)"
+            DISTRIBUTION_ACCOUNT_TYPE: "DISTRIBUTION_ACCOUNT.STELLAR.ENV"
+          - environment: "Receiver Registration - E2E Integration Tests (Circle)"
+            DISTRIBUTION_ACCOUNT_TYPE: "DISTRIBUTION_ACCOUNT.CIRCLE.DB_VAULT"
+    environment: ${{ matrix.environment }}
     env:
       DISTRIBUTION_ACCOUNT_TYPE: ${{ matrix.DISTRIBUTION_ACCOUNT_TYPE }}
     steps:
