@@ -68,13 +68,26 @@ jobs:
           docker restart e2e-anchor-platform
         shell: bash
 
-      - name: Wait for Anchor Platform localhost:8080/health
+      - name: Wait for Anchor Platform at both localhost:8080/health and localhost:8085/health
         run: |
-          until curl --output /dev/null --silent --head --fail http://localhost:8080/health; do
-            echo 'Waiting for anchor-platform to be up and running...'
-            sleep 15
-          done
-          echo 'anchor-platform:8080 is up and running.'
+          wait_for_server() {
+            local endpoint=$1
+            local max_wait_time=$2
+
+            SECONDS=0
+            while ! curl -s $endpoint > /dev/null; do
+              echo "Waiting for server at $endpoint to be up... $SECONDS seconds elapsed"
+              sleep 4
+              if [ $SECONDS -ge $max_wait_time ]; then
+                echo "Server at $endpoint is not up after $max_wait_time seconds."
+                exit 1
+              fi
+            done
+            echo "Server at $endpoint is up."
+          }
+
+          wait_for_server http://localhost:8080/health 120
+          wait_for_server http://localhost:8085/health 120
         shell: bash
 
       - name: Start integration test command
