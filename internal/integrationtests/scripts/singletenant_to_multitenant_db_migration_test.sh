@@ -3,7 +3,6 @@
 set -eu
 
 export DIVIDER="----------------------------------------"
-# prepare
 
 wait_for_server() {
   local endpoint=$1
