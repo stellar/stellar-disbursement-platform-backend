@@ -1,4 +1,4 @@
-name: E2E integration test
+name: Integration Tests
 
 on:
   push:
@@ -23,7 +23,7 @@ env:
   CIRCLE_USDC_WALLET_ID: ${{ vars.CIRCLE_USDC_WALLET_ID }}
 
 jobs:
-  e2e-integration-test:
+  e2e:
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -61,18 +61,18 @@ jobs:
           docker exec e2e-sdp-api bash -c "./stellar-disbursement-platform integration-tests create-data"
         shell: bash
 
-      - name: Restart anchor platform
+      - name: Restart Anchor Platform
         run: |
           docker restart e2e-anchor-platform
         shell: bash
 
-      - name: Wait for anchor platform localhost:8080/health
+      - name: Wait for Anchor Platform localhost:8080/health
         run: |
           until curl --output /dev/null --silent --head --fail http://localhost:8080/health; do
             echo 'Waiting for anchor-platform to be up and running...'
             sleep 15
           done
-          echo 'Anchor-platform is up and running.'
+          echo 'anchor-platform:8080 is up and running.'
         shell: bash
 
       - name: Start integration test command
