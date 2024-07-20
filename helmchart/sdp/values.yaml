@@ -196,10 +196,9 @@ sdp:
   ## @param sdp.kubeSecrets.data.RECAPTCHA_SITE_SECRET_KEY Secret key for Google reCAPTCHA service to verify user's non-robotic behavior.
   ## @param sdp.kubeSecrets.data.ANCHOR_PLATFORM_OUTGOING_JWT_SECRET The JWT secret used to create a JWT token used to send requests to the anchor platform.
   ## @param sdp.kubeSecrets.data.DATABASE_URL URL of the database used by the SDP.
-  ## @param sdp.kubeSecrets.data.DISTRIBUTION_SEED The private key of the Stellar account used to disburse funds. This is needed for the init container.
+  ## @param sdp.kubeSecrets.data.DISTRIBUTION_SEED The HOST's Stellar distribution account, used to create channel accounts. This is needed for the init container.
   ## @param sdp.kubeSecrets.data.CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE The private key used to encrypt the channel accounts secrets in the database.
-  ## @param sdp.kubeSecrets.data.DISTRIBUTION_SIGNER_TYPE The type of the signature client used for distribution accounts.
-  ## @param sdp.kubeSecrets.data.DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE The private key used to encrypt the distribution accounts secrets in the database, mandatory when DISTRIBUTION_SIGNER_TYPE is set to DISTRIBUTION_ACCOUNT_DB.
+  ## @param sdp.kubeSecrets.data.DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE A Stellar-compliant ed25519 private key used to encrypt and decrypt the private keys of tenants’ distribution accounts.
   ## @param sdp.kubeSecrets.data.SENTRY_DSN The DSN for the Sentry service. it must be set if CRASH_TRACKER_TYPE is set to "SENTRY".
   ## @param sdp.kubeSecrets.data.KAFKA_SASL_USERNAME The username for SASL authentication to the Kafka broker. Required if KAFKA_SECURITY_PROTOCOL is set to "SASL_SSL" or "SASL_PLAINTEXT".
   ## @param sdp.kubeSecrets.data.KAFKA_SASL_PASSWORD The password for SASL authentication to the Kafka broker. Required if KAFKA_SECURITY_PROTOCOL is set to "SASL_SSL" or "SASL_PLAINTEXT".
@@ -228,8 +227,7 @@ sdp:
       ANCHOR_PLATFORM_OUTGOING_JWT_SECRET: #required for mySdpToAnchorPlatformSecret
       DATABASE_URL: #required
       DISTRIBUTION_SEED: #required
-      DISTRIBUTION_SIGNER_TYPE: #optional
-      DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE: #required when DISTRIBUTION_SIGNER_TYPE=DISTRIBUTION_ACCOUNT_DB
+      DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE: #required
       CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE: #required
       KAFKA_SASL_USERNAME: #optional, depends on value of KAFKA_SECURITY_PROTOCOL
       KAFKA_SASL_PASSWORD: #optional, depends on value of KAFKA_SECURITY_PROTOCOL
@@ -482,10 +480,9 @@ tss:
   ## @param tss.kubeSecrets.create If true, the secret will be created. If false, it is assumed the secret already exists.
   ## @param tss.kubeSecrets.annotations Annotations to be added to the secret.
   ## @param tss.kubeSecrets.data.DATABASE_URL URL of the database used by the TSS.
-  ## @param tss.kubeSecrets.data.DISTRIBUTION_SEED The private key of the Stellar account used to disburse funds.
+  ## @param tss.kubeSecrets.data.DISTRIBUTION_SEED The HOST's Stellar distribution account, used to create channel accounts.
   ## @param tss.kubeSecrets.data.CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE The private key used to encrypt the channel accounts secrets in the database.
-  ## @param tss.kubeSecrets.data.DISTRIBUTION_SIGNER_TYPE The type of the signature client used for distribution accounts.
-  ## @param tss.kubeSecrets.data.DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE The private key used to encrypt the distribution accounts secrets in the database, mandatory when DISTRIBUTION_SIGNER_TYPE is set to DISTRIBUTION_ACCOUNT_DB.
+  ## @param tss.kubeSecrets.data.DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE A Stellar-compliant ed25519 private key used to encrypt and decrypt the private keys of tenants’ distribution accounts.
   ## @param tss.kubeSecrets.data.SENTRY_DSN The DSN for the Sentry service. it must be set if CRASH_TRACKER_TYPE is set to "SENTRY".
   ## @param tss.kubeSecrets.data.KAFKA_SASL_USERNAME The username for SASL authentication to the Kafka broker. Required if KAFKA_SECURITY_PROTOCOL is set to "SASL_SSL" or "SASL_PLAINTEXT".
   ## @param tss.kubeSecrets.data.KAFKA_SASL_PASSWORD The password for SASL authentication to the Kafka broker. Required if KAFKA_SECURITY_PROTOCOL is set to "SASL_SSL" or "SASL_PLAINTEXT".
@@ -499,8 +496,7 @@ tss:
       DATABASE_URL: #required
       DISTRIBUTION_SEED: #required
       CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE: #required
-      DISTRIBUTION_SIGNER_TYPE: #optional
-      DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE: #required when DISTRIBUTION_SIGNER_TYPE=DISTRIBUTION_ACCOUNT_DB
+      DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE: #required
       SENTRY_DSN: #optional
       KAFKA_SASL_USERNAME: #optional, depends on value of KAFKA_SECURITY_PROTOCOL
       KAFKA_SASL_PASSWORD: #optional, depends on value of KAFKA_SECURITY_PROTOCOL

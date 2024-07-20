@@ -101,6 +101,9 @@ func Test_IsEmpty(t *testing.T) {
 		// Interface:
 		{name: "Interface nil", isEmptyFn: func() bool { return IsEmpty[interface{}](nil) }, expected: true},
 		{name: "Interface non-nil", isEmptyFn: func() bool { return IsEmpty[interface{}](new(string)) }, expected: false},
+		// Any:
+		{name: "Any nil", isEmptyFn: func() bool { return IsEmpty[any](nil) }, expected: true},
+		{name: "Any non-nil", isEmptyFn: func() bool { return IsEmpty[any](new(string)) }, expected: false},
 		// Map:
 		{name: "Map nil", isEmptyFn: func() bool { return IsEmpty[map[string]string](nil) }, expected: true},
 		{name: "Map empty", isEmptyFn: func() bool { return IsEmpty[map[string]string](map[string]string{}) }, expected: false},
@@ -241,4 +244,34 @@ func Test_GetTypeName(t *testing.T) {
 			assert.Equal(t, tc.expectedResult, actualResult)
 		})
 	}
+}
+
+func TestStringPtr(t *testing.T) {
+	t.Run("returns a pointer to the string", func(t *testing.T) {
+		s := "test string"
+		result := StringPtr(s)
+
+		assert.NotNil(t, result)
+		assert.Equal(t, s, *result)
+	})
+
+	t.Run("returns a pointer to an empty string", func(t *testing.T) {
+		s := ""
+		result := StringPtr(s)
+
+		assert.NotNil(t, result)
+		assert.Equal(t, s, *result)
+	})
+
+	t.Run("changing the original string does not affect the pointer", func(t *testing.T) {
+		s := "initial string"
+		result := StringPtr(s)
+
+		// Modify the original string
+		s = "modified string"
+
+		assert.NotNil(t, result)
+		assert.NotEqual(t, s, *result)
+		assert.Equal(t, "initial string", *result)
+	})
 }

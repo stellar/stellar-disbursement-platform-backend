@@ -4,22 +4,25 @@ import (
 	"fmt"
 	"net/url"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 var validTenantName *regexp.Regexp = regexp.MustCompile(`^[a-z-]+$`)
 
 type TenantRequest struct {
-	Name             string  `json:"name"`
-	OwnerEmail       string  `json:"owner_email"`
-	OwnerFirstName   string  `json:"owner_first_name"`
-	OwnerLastName    string  `json:"owner_last_name"`
-	OrganizationName string  `json:"organization_name"`
-	BaseURL          *string `json:"base_url"`
-	SDPUIBaseURL     *string `json:"sdp_ui_base_url"`
+	Name                    string  `json:"name"`
+	OwnerEmail              string  `json:"owner_email"`
+	OwnerFirstName          string  `json:"owner_first_name"`
+	OwnerLastName           string  `json:"owner_last_name"`
+	OrganizationName        string  `json:"organization_name"`
+	DistributionAccountType string  `json:"distribution_account_type"`
+	BaseURL                 *string `json:"base_url"`
+	SDPUIBaseURL            *string `json:"sdp_ui_base_url"`
 }
 
 type UpdateTenantRequest struct {
@@ -60,6 +63,8 @@ func (tv *TenantValidator) ValidateCreateTenantRequest(reqBody *TenantRequest) *
 	tv.Check(reqBody.OwnerLastName != "", "owner_last_name", "owner_last_name is required")
 	tv.Check(reqBody.OrganizationName != "", "organization_name", "organization_name is required")
 
+	tv.validateDistributionAccountType(reqBody.DistributionAccountType)
+
 	var err error
 	if reqBody.BaseURL != nil {
 		if _, err = url.ParseRequestURI(*reqBody.BaseURL); err != nil {
@@ -78,6 +83,14 @@ func (tv *TenantValidator) ValidateCreateTenantRequest(reqBody *TenantRequest) *
 	}
 
 	return reqBody
+}
+
+func (tv *TenantValidator) validateDistributionAccountType(distributionAccountType string) {
+	tv.Check(distributionAccountType != "", "distribution_account_type", fmt.Sprintf("distribution_account_type is required. valid values are: %v", schema.DistributionAccountTypes()))
+
+	if distributionAccountType != "" && !slices.Contains(schema.DistributionAccountTypes(), schema.AccountType(distributionAccountType)) {
+		tv.Check(false, "distribution_account_type", fmt.Sprintf("invalid distribution_account_type. valid values are: %v", schema.DistributionAccountTypes()))
+	}
 }
 
 func (tv *TenantValidator) ValidateUpdateTenantRequest(reqBody *UpdateTenantRequest) *UpdateTenantRequest {

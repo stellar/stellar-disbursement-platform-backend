@@ -3,14 +3,17 @@ package services
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/support/log"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
 const advisoryLockID = int(2172398390434160)
@@ -66,7 +69,7 @@ func (s *ChannelAccountsService) validate() error {
 		return fmt.Errorf("validating submitter engine: %w", err)
 	}
 
-	if s.SubmitterEngine.HostAccountSigner == nil {
+	if !slices.Contains(s.SubmitterEngine.SignerRouter.SupportedAccountTypes(), schema.HostStellarEnv) {
 		return fmt.Errorf("signature engine's host signer cannot be nil")
 	}
 
@@ -203,7 +206,8 @@ func (s *ChannelAccountsService) deleteChannelAccount(ctx context.Context, publi
 		}
 
 		log.Ctx(ctx).Warnf("Account %s does not exist on the network", publicKey)
-		err = s.SignatureService.ChAccountSigner.Delete(ctx, publicKey)
+		chAccToDelete := schema.NewDefaultChannelAccount(publicKey)
+		err = s.SignatureService.SignerRouter.Delete(ctx, chAccToDelete)
 		if err != nil {
 			return fmt.Errorf("deleting %s from signature service: %w", publicKey, err)
 		}

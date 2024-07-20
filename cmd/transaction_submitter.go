@@ -204,7 +204,7 @@ func (c *TxSubmitterCommand) Command(submitterService TxSubmitterServiceInterfac
 				if err != nil {
 					log.Ctx(ctx).Fatalf("error creating Kafka Producer: %v", err)
 				}
-				defer kafkaProducer.Close()
+				defer kafkaProducer.Close(ctx)
 				tssOpts.EventProducer = kafkaProducer
 			} else {
 				log.Ctx(ctx).Warn("Event Broker Type is NONE. Using Noop producer for logging events")

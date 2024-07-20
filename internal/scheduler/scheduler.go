@@ -191,12 +191,16 @@ func WithReadyPaymentsCancellationJobOption(models *data.Models) SchedulerJobReg
 	}
 }
 
-func WithPaymentToSubmitterJobOption(jobIntervalSeconds int,
-	models *data.Models,
-	tssDBConnectionPool db.DBConnectionPool,
-) SchedulerJobRegisterOption {
+func WithPaymentToSubmitterJobOption(options jobs.PaymentToSubmitterJobOptions) SchedulerJobRegisterOption {
 	return func(s *Scheduler) {
-		j := jobs.NewPaymentToSubmitterJob(jobIntervalSeconds, models, tssDBConnectionPool)
+		j := jobs.NewPaymentToSubmitterJob(options)
+		s.addJob(j)
+	}
+}
+
+func WithCircleReconciliationJobOption(options jobs.CircleReconciliationJobOptions) SchedulerJobRegisterOption {
+	return func(s *Scheduler) {
+		j := jobs.NewCircleReconciliationJob(options)
 		s.addJob(j)
 	}
 }

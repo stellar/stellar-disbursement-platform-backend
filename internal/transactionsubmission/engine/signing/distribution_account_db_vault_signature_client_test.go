@@ -5,6 +5,8 @@ import (
 	"reflect"
 	"testing"
 
+	sdpUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+
 	"github.com/stellar/go/keypair"
 	"github.com/stellar/go/network"
 	"github.com/stellar/go/txnbuild"
@@ -14,10 +16,9 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
 )
 
-func Test_DistributionAccountDBSignatureClientOptions_Validate(t *testing.T) {
+func Test_DistributionAccountDBVaultSignatureClientOptions_Validate(t *testing.T) {
 	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
@@ -26,7 +27,7 @@ func Test_DistributionAccountDBSignatureClientOptions_Validate(t *testing.T) {
 
 	testCases := []struct {
 		name            string
-		opts            DistributionAccountDBSignatureClientOptions
+		opts            DistributionAccountDBVaultSignatureClientOptions
 		wantErrContains string
 	}{
 		{
@@ -35,14 +36,14 @@ func Test_DistributionAccountDBSignatureClientOptions_Validate(t *testing.T) {
 		},
 		{
 			name: "return an error if dbConnectionPool is nil",
-			opts: DistributionAccountDBSignatureClientOptions{
+			opts: DistributionAccountDBVaultSignatureClientOptions{
 				NetworkPassphrase: network.TestNetworkPassphrase,
 			},
 			wantErrContains: "database connection pool cannot be nil",
 		},
 		{
 			name: "return an error if encryption passphrase is empty",
-			opts: DistributionAccountDBSignatureClientOptions{
+			opts: DistributionAccountDBVaultSignatureClientOptions{
 				NetworkPassphrase: network.TestNetworkPassphrase,
 				DBConnectionPool:  dbConnectionPool,
 			},
@@ -50,7 +51,7 @@ func Test_DistributionAccountDBSignatureClientOptions_Validate(t *testing.T) {
 		},
 		{
 			name: "return an error if encryption passphrase is invalid",
-			opts: DistributionAccountDBSignatureClientOptions{
+			opts: DistributionAccountDBVaultSignatureClientOptions{
 				NetworkPassphrase:    network.TestNetworkPassphrase,
 				DBConnectionPool:     dbConnectionPool,
 				EncryptionPassphrase: "invalid",
@@ -59,7 +60,7 @@ func Test_DistributionAccountDBSignatureClientOptions_Validate(t *testing.T) {
 		},
 		{
 			name: "🎉 Successfully validates options",
-			opts: DistributionAccountDBSignatureClientOptions{
+			opts: DistributionAccountDBVaultSignatureClientOptions{
 				NetworkPassphrase:    network.TestNetworkPassphrase,
 				DBConnectionPool:     dbConnectionPool,
 				EncryptionPassphrase: "SCPGNK3MRMXKNWGZ4ET3JZ6RUJIN7FMHT4ASVXDG7YPBL4WKBQNEL63F",
@@ -80,7 +81,7 @@ func Test_DistributionAccountDBSignatureClientOptions_Validate(t *testing.T) {
 	}
 }
 
-func Test_NewDistributionAccountDBSignatureClient(t *testing.T) {
+func Test_NewDistributionAccountDBVaultSignatureClient(t *testing.T) {
 	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
@@ -89,7 +90,7 @@ func Test_NewDistributionAccountDBSignatureClient(t *testing.T) {
 
 	testCases := []struct {
 		name                  string
-		opts                  DistributionAccountDBSignatureClientOptions
+		opts                  DistributionAccountDBVaultSignatureClientOptions
 		wantEncrypterTypeName string
 		wantErrContains       string
 	}{
@@ -99,28 +100,28 @@ func Test_NewDistributionAccountDBSignatureClient(t *testing.T) {
 		},
 		{
 			name: "🎉 Successfully instantiates a new distribution account DB signature client with default encrypter",
-			opts: DistributionAccountDBSignatureClientOptions{
+			opts: DistributionAccountDBVaultSignatureClientOptions{
 				NetworkPassphrase:    network.TestNetworkPassphrase,
 				DBConnectionPool:     dbConnectionPool,
 				EncryptionPassphrase: "SCPGNK3MRMXKNWGZ4ET3JZ6RUJIN7FMHT4ASVXDG7YPBL4WKBQNEL63F",
 			},
-			wantEncrypterTypeName: reflect.TypeOf(&utils.DefaultPrivateKeyEncrypter{}).String(),
+			wantEncrypterTypeName: reflect.TypeOf(&sdpUtils.DefaultPrivateKeyEncrypter{}).String(),
 		},
 		{
 			name: "🎉 Successfully instantiates a new distribution account DB signature client with a custom encrypter",
-			opts: DistributionAccountDBSignatureClientOptions{
+			opts: DistributionAccountDBVaultSignatureClientOptions{
 				NetworkPassphrase:    network.TestNetworkPassphrase,
 				DBConnectionPool:     dbConnectionPool,
 				EncryptionPassphrase: "SCPGNK3MRMXKNWGZ4ET3JZ6RUJIN7FMHT4ASVXDG7YPBL4WKBQNEL63F",
-				Encrypter:            &utils.PrivateKeyEncrypterMock{},
+				Encrypter:            &sdpUtils.PrivateKeyEncrypterMock{},
 			},
-			wantEncrypterTypeName: reflect.TypeOf(&utils.PrivateKeyEncrypterMock{}).String(),
+			wantEncrypterTypeName: reflect.TypeOf(&sdpUtils.PrivateKeyEncrypterMock{}).String(),
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			sigClient, err := NewDistributionAccountDBSignatureClient(tc.opts)
+			sigClient, err := NewDistributionAccountDBVaultSignatureClient(tc.opts)
 			if tc.wantErrContains != "" {
 				require.Error(t, err)
 				assert.ErrorContains(t, err, tc.wantErrContains)
@@ -134,17 +135,17 @@ func Test_NewDistributionAccountDBSignatureClient(t *testing.T) {
 	}
 }
 
-func Test_DistributionAccountDBSignatureClientOptions_NetworkPassphrase(t *testing.T) {
+func Test_DistributionAccountDBVaultSignatureClientOptions_NetworkPassphrase(t *testing.T) {
 	// test with testnet passphrase
-	sigClient := &DistributionAccountDBSignatureClient{networkPassphrase: network.TestNetworkPassphrase}
+	sigClient := &DistributionAccountDBVaultSignatureClient{networkPassphrase: network.TestNetworkPassphrase}
 	assert.Equal(t, network.TestNetworkPassphrase, sigClient.NetworkPassphrase())
 
 	// test with public network passphrase, to make sure it's changing accordingly
-	sigClient = &DistributionAccountDBSignatureClient{networkPassphrase: network.PublicNetworkPassphrase}
+	sigClient = &DistributionAccountDBVaultSignatureClient{networkPassphrase: network.PublicNetworkPassphrase}
 	assert.Equal(t, network.PublicNetworkPassphrase, sigClient.NetworkPassphrase())
 }
 
-func Test_DistributionAccountDBSignatureClient_getKPsForAccounts(t *testing.T) {
+func Test_DistributionAccountDBVaultSignatureClient_getKPsForAccounts(t *testing.T) {
 	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
@@ -155,7 +156,7 @@ func Test_DistributionAccountDBSignatureClient_getKPsForAccounts(t *testing.T) {
 	dbVaultStore := store.NewDBVaultModel(dbConnectionPool)
 
 	// create default encrypter
-	encrypter := &utils.DefaultPrivateKeyEncrypter{}
+	encrypter := &sdpUtils.DefaultPrivateKeyEncrypter{}
 	encrypterPass := keypair.MustRandom().Seed()
 
 	// create distribution accounts in the DB
@@ -175,7 +176,7 @@ func Test_DistributionAccountDBSignatureClient_getKPsForAccounts(t *testing.T) {
 	require.NoError(t, err)
 
 	// create signature client
-	sigClient, err := NewDistributionAccountDBSignatureClient(DistributionAccountDBSignatureClientOptions{
+	sigClient, err := NewDistributionAccountDBVaultSignatureClient(DistributionAccountDBVaultSignatureClientOptions{
 		NetworkPassphrase:    network.TestNetworkPassphrase,
 		DBConnectionPool:     dbConnectionPool,
 		EncryptionPassphrase: encrypterPass,
@@ -237,7 +238,7 @@ func Test_DistributionAccountDBSignatureClient_getKPsForAccounts(t *testing.T) {
 	}
 }
 
-func Test_DistributionAccountDBSignatureClient_SignStellarTransaction(t *testing.T) {
+func Test_DistributionAccountDBVaultSignatureClient_SignStellarTransaction(t *testing.T) {
 	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
@@ -248,14 +249,14 @@ func Test_DistributionAccountDBSignatureClient_SignStellarTransaction(t *testing
 
 	// create default encrypter
 	encrypterPass := keypair.MustRandom().Seed()
-	encrypter := &utils.DefaultPrivateKeyEncrypter{}
+	encrypter := &sdpUtils.DefaultPrivateKeyEncrypter{}
 
 	// create distribution accounts in the DB
 	distributionAccounts := store.CreateDBVaultFixturesEncryptedKPs(t, ctx, dbConnectionPool, encrypter, encrypterPass, 2)
 	require.Len(t, distributionAccounts, 2)
 	distAccKP1, distAccKP2 := distributionAccounts[0], distributionAccounts[1]
 
-	sigClient, err := NewDistributionAccountDBSignatureClient(DistributionAccountDBSignatureClientOptions{
+	sigClient, err := NewDistributionAccountDBVaultSignatureClient(DistributionAccountDBVaultSignatureClientOptions{
 		NetworkPassphrase:    network.TestNetworkPassphrase,
 		DBConnectionPool:     dbConnectionPool,
 		EncryptionPassphrase: encrypterPass,
@@ -332,7 +333,7 @@ func Test_DistributionAccountDBSignatureClient_SignStellarTransaction(t *testing
 	}
 }
 
-func Test_DistributionAccountDBSignatureClient_SignFeeBumpStellarTransaction(t *testing.T) {
+func Test_DistributionAccountDBVaultSignatureClient_SignFeeBumpStellarTransaction(t *testing.T) {
 	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
@@ -343,18 +344,18 @@ func Test_DistributionAccountDBSignatureClient_SignFeeBumpStellarTransaction(t *
 
 	// create default encrypter
 	encrypterPass := keypair.MustRandom().Seed()
-	encrypter := &utils.DefaultPrivateKeyEncrypter{}
+	encrypter := &sdpUtils.DefaultPrivateKeyEncrypter{}
 
 	// create distribution accounts in the DB
 	distributionAccounts := store.CreateDBVaultFixturesEncryptedKPs(t, ctx, dbConnectionPool, encrypter, encrypterPass, 2)
 	require.Len(t, distributionAccounts, 2)
 	distAccKP1, distAccKP2 := distributionAccounts[0], distributionAccounts[1]
 
-	sigClient, err := NewDistributionAccountDBSignatureClient(DistributionAccountDBSignatureClientOptions{
+	sigClient, err := NewDistributionAccountDBVaultSignatureClient(DistributionAccountDBVaultSignatureClientOptions{
 		NetworkPassphrase:    network.TestNetworkPassphrase,
 		DBConnectionPool:     dbConnectionPool,
 		EncryptionPassphrase: encrypterPass,
-		Encrypter:            &utils.DefaultPrivateKeyEncrypter{},
+		Encrypter:            &sdpUtils.DefaultPrivateKeyEncrypter{},
 	})
 	require.NoError(t, err)
 
@@ -448,7 +449,7 @@ func allDBVaultEntries(t *testing.T, ctx context.Context, dbConnectionPool db.DB
 	return dbVaultEntries
 }
 
-func Test_DistributionAccountDBSignatureClient_BatchInsert(t *testing.T) {
+func Test_DistributionAccountDBVaultSignatureClient_BatchInsert(t *testing.T) {
 	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
@@ -475,9 +476,9 @@ func Test_DistributionAccountDBSignatureClient_BatchInsert(t *testing.T) {
 		},
 	}
 
-	defaultEncrypter := &utils.DefaultPrivateKeyEncrypter{}
+	defaultEncrypter := &sdpUtils.DefaultPrivateKeyEncrypter{}
 	encrypterPass := distributionKP.Seed()
-	sigClient, err := NewDistributionAccountDBSignatureClient(DistributionAccountDBSignatureClientOptions{
+	sigClient, err := NewDistributionAccountDBVaultSignatureClient(DistributionAccountDBVaultSignatureClientOptions{
 		NetworkPassphrase:    network.TestNetworkPassphrase,
 		DBConnectionPool:     dbConnectionPool,
 		EncryptionPassphrase: encrypterPass,
@@ -522,7 +523,7 @@ func Test_DistributionAccountDBSignatureClient_BatchInsert(t *testing.T) {
 	}
 }
 
-func Test_DistributionAccountDBSignatureClient_Delete(t *testing.T) {
+func Test_DistributionAccountDBVaultSignatureClient_Delete(t *testing.T) {
 	dbt := dbtest.OpenWithTSSMigrationsOnly(t)
 	defer dbt.Close()
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
@@ -533,7 +534,7 @@ func Test_DistributionAccountDBSignatureClient_Delete(t *testing.T) {
 
 	// create default encrypter
 	encrypterPass := keypair.MustRandom().Seed()
-	encrypter := &utils.DefaultPrivateKeyEncrypter{}
+	encrypter := &sdpUtils.DefaultPrivateKeyEncrypter{}
 
 	// at start: count=0
 	allDistAccounts := allDBVaultEntries(t, ctx, dbConnectionPool)
@@ -544,7 +545,7 @@ func Test_DistributionAccountDBSignatureClient_Delete(t *testing.T) {
 	allDistAccounts = allDBVaultEntries(t, ctx, dbConnectionPool)
 	require.Len(t, allDistAccounts, 2)
 
-	sigClient, err := NewDistributionAccountDBSignatureClient(DistributionAccountDBSignatureClientOptions{
+	sigClient, err := NewDistributionAccountDBVaultSignatureClient(DistributionAccountDBVaultSignatureClientOptions{
 		NetworkPassphrase:    network.TestNetworkPassphrase,
 		DBConnectionPool:     dbConnectionPool,
 		EncryptionPassphrase: encrypterPass,

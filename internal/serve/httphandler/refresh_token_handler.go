@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/stellar/go/support/render/httpjson"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"

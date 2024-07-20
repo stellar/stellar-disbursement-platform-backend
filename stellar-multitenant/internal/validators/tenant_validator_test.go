@@ -1,9 +1,12 @@
 package validators
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
 func TestTenantValidator_ValidateCreateTenantRequest(t *testing.T) {
@@ -25,11 +28,12 @@ func TestTenantValidator_ValidateCreateTenantRequest(t *testing.T) {
 		tv.ValidateCreateTenantRequest(reqBody)
 		assert.True(t, tv.HasErrors())
 		assert.Equal(t, map[string]interface{}{
-			"name":              "invalid tenant name. It should only contains lower case letters and dash (-)",
-			"owner_email":       "invalid email",
-			"owner_first_name":  "owner_first_name is required",
-			"owner_last_name":   "owner_last_name is required",
-			"organization_name": "organization_name is required",
+			"name":                      "invalid tenant name. It should only contains lower case letters and dash (-)",
+			"owner_email":               "invalid email",
+			"owner_first_name":          "owner_first_name is required",
+			"owner_last_name":           "owner_last_name is required",
+			"organization_name":         "organization_name is required",
+			"distribution_account_type": fmt.Sprintf("distribution_account_type is required. valid values are: %v", schema.DistributionAccountTypes()),
 		}, tv.Errors)
 
 		reqBody.Name = "aid-org"
@@ -37,23 +41,25 @@ func TestTenantValidator_ValidateCreateTenantRequest(t *testing.T) {
 		tv.ValidateCreateTenantRequest(reqBody)
 		assert.True(t, tv.HasErrors())
 		assert.Equal(t, map[string]interface{}{
-			"owner_email":       "invalid email",
-			"owner_first_name":  "owner_first_name is required",
-			"owner_last_name":   "owner_last_name is required",
-			"organization_name": "organization_name is required",
+			"owner_email":               "invalid email",
+			"owner_first_name":          "owner_first_name is required",
+			"owner_last_name":           "owner_last_name is required",
+			"organization_name":         "organization_name is required",
+			"distribution_account_type": fmt.Sprintf("distribution_account_type is required. valid values are: %v", schema.DistributionAccountTypes()),
 		}, tv.Errors)
 	})
 
 	t.Run("returns error when name is invalid", func(t *testing.T) {
 		tv := NewTenantValidator()
 		reqBody := &TenantRequest{
-			Name:             "aid org",
-			OwnerEmail:       "owner@email.org",
-			OwnerFirstName:   "Owner",
-			OwnerLastName:    "Owner",
-			OrganizationName: "Aid Org",
-			SDPUIBaseURL:     &sdpUIBaseURL,
-			BaseURL:          &baseURL,
+			Name:                    "aid org",
+			OwnerEmail:              "owner@email.org",
+			OwnerFirstName:          "Owner",
+			OwnerLastName:           "Owner",
+			OrganizationName:        "Aid Org",
+			DistributionAccountType: string(schema.DistributionAccountStellarEnv),
+			SDPUIBaseURL:            &sdpUIBaseURL,
+			BaseURL:                 &baseURL,
 		}
 
 		tv.ValidateCreateTenantRequest(reqBody)
@@ -66,13 +72,14 @@ func TestTenantValidator_ValidateCreateTenantRequest(t *testing.T) {
 	t.Run("returns error when owner info is invalid", func(t *testing.T) {
 		tv := NewTenantValidator()
 		reqBody := &TenantRequest{
-			Name:             "aid-org",
-			OwnerEmail:       "invalid",
-			OwnerFirstName:   "",
-			OwnerLastName:    "",
-			OrganizationName: "",
-			BaseURL:          &sdpUIBaseURL,
-			SDPUIBaseURL:     &baseURL,
+			Name:                    "aid-org",
+			OwnerEmail:              "invalid",
+			OwnerFirstName:          "",
+			OwnerLastName:           "",
+			OrganizationName:        "",
+			DistributionAccountType: string(schema.DistributionAccountStellarEnv),
+			BaseURL:                 &sdpUIBaseURL,
+			SDPUIBaseURL:            &baseURL,
 		}
 
 		tv.ValidateCreateTenantRequest(reqBody)
@@ -94,16 +101,45 @@ func TestTenantValidator_ValidateCreateTenantRequest(t *testing.T) {
 		assert.Equal(t, map[string]interface{}{}, tv.Errors)
 	})
 
+	t.Run("returns error when distribution account type is invalid", func(t *testing.T) {
+		tv := NewTenantValidator()
+		reqBody := &TenantRequest{
+			Name:                    "aid-org",
+			OwnerEmail:              "owner@email.org",
+			OwnerFirstName:          "Owner",
+			OwnerLastName:           "Owner",
+			OrganizationName:        "Aid Org",
+			DistributionAccountType: "foobar",
+			SDPUIBaseURL:            &sdpUIBaseURL,
+			BaseURL:                 &baseURL,
+		}
+
+		tv.ValidateCreateTenantRequest(reqBody)
+		assert.True(t, tv.HasErrors())
+		assert.Equal(t, map[string]interface{}{
+			"distribution_account_type": fmt.Sprintf("invalid distribution_account_type. valid values are: %v", schema.DistributionAccountTypes()),
+		}, tv.Errors)
+
+		for _, accountType := range []schema.AccountType{schema.DistributionAccountStellarEnv, schema.DistributionAccountStellarDBVault, schema.DistributionAccountCircleDBVault} {
+			reqBody.DistributionAccountType = string(accountType)
+			tv.Errors = map[string]interface{}{}
+			tv.ValidateCreateTenantRequest(reqBody)
+			assert.False(t, tv.HasErrors())
+			assert.Equal(t, map[string]interface{}{}, tv.Errors)
+		}
+	})
+
 	t.Run("validates the URLs successfully", func(t *testing.T) {
 		tv := NewTenantValidator()
 		reqBody := &TenantRequest{
-			Name:             "aid-org",
-			OwnerEmail:       "owner@email.org",
-			OwnerFirstName:   "Owner",
-			OwnerLastName:    "Owner",
-			OrganizationName: "Aid Org",
-			SDPUIBaseURL:     &invalidURL,
-			BaseURL:          &invalidURL,
+			Name:                    "aid-org",
+			OwnerEmail:              "owner@email.org",
+			OwnerFirstName:          "Owner",
+			OwnerLastName:           "Owner",
+			OrganizationName:        "Aid Org",
+			DistributionAccountType: string(schema.DistributionAccountStellarEnv),
+			SDPUIBaseURL:            &invalidURL,
+			BaseURL:                 &invalidURL,
 		}
 
 		tv.ValidateCreateTenantRequest(reqBody)
@@ -117,11 +153,12 @@ func TestTenantValidator_ValidateCreateTenantRequest(t *testing.T) {
 	t.Run("validates request successfully without URLs", func(t *testing.T) {
 		tv := NewTenantValidator()
 		reqBody := &TenantRequest{
-			Name:             "aid-org",
-			OwnerEmail:       "owner@email.org",
-			OwnerFirstName:   "Owner",
-			OwnerLastName:    "Owner",
-			OrganizationName: "Aid Org",
+			Name:                    "aid-org",
+			OwnerEmail:              "owner@email.org",
+			OwnerFirstName:          "Owner",
+			OwnerLastName:           "Owner",
+			OrganizationName:        "Aid Org",
+			DistributionAccountType: string(schema.DistributionAccountStellarEnv),
 		}
 
 		tv.ValidateCreateTenantRequest(reqBody)

@@ -17,6 +17,7 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/circle"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
@@ -69,6 +70,7 @@ type ServeOptions struct {
 	BaseURL                         string
 	ResetTokenExpirationHours       int
 	NetworkPassphrase               string
+	NetworkType                     utils.NetworkType
 	SubmitterEngine                 engine.SubmitterEngine
 	Sep10SigningPublicKey           string
 	Sep10SigningPrivateKey          string
@@ -84,10 +86,13 @@ type ServeOptions struct {
 	PasswordValidator               *authUtils.PasswordValidator
 	EnableScheduler                 bool
 	tenantManager                   tenant.ManagerInterface
+	DistributionAccountService      services.DistributionAccountServiceInterface
+	DistAccEncryptionPassphrase     string
 	EventProducer                   events.Producer
 	MaxInvitationSMSResendAttempts  int
 	SingleTenantMode                bool
 	UseExternalID                   bool
+	CircleService                   circle.ServiceInterface
 }
 
 // SetupDependencies uses the serve options to setup the dependencies for the server.
@@ -254,12 +259,13 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 				AuthManager:                 authManager,
 				MonitorService:              o.MonitorService,
 				DistributionAccountResolver: o.SubmitterEngine.DistributionAccountResolver,
-				DisbursementManagementService: services.NewDisbursementManagementService(
-					o.Models,
-					o.MtnDBConnectionPool,
-					authManager,
-					o.SubmitterEngine.HorizonClient,
-					o.EventProducer),
+				DisbursementManagementService: &services.DisbursementManagementService{
+					Models:                     o.Models,
+					AuthManager:                authManager,
+					EventProducer:              o.EventProducer,
+					CrashTrackerClient:         o.CrashTrackerClient,
+					DistributionAccountService: o.DistributionAccountService,
+				},
 			}
 			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole)).
 				Post("/", handler.PostDisbursement)
@@ -284,7 +290,14 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 		})
 
 		r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole, data.BusinessUserRole)).Route("/payments", func(r chi.Router) {
-			paymentsHandler := httphandler.PaymentsHandler{Models: o.Models, DBConnectionPool: o.MtnDBConnectionPool, AuthManager: o.authManager, EventProducer: o.EventProducer}
+			paymentsHandler := httphandler.PaymentsHandler{
+				Models:                      o.Models,
+				DBConnectionPool:            o.MtnDBConnectionPool,
+				AuthManager:                 o.authManager,
+				EventProducer:               o.EventProducer,
+				CrashTrackerClient:          o.CrashTrackerClient,
+				DistributionAccountResolver: o.SubmitterEngine.DistributionAccountResolver,
+			}
 			r.Get("/", paymentsHandler.GetPayments)
 			r.Get("/{id}", paymentsHandler.GetPayment)
 			r.Patch("/retry", paymentsHandler.RetryPayments)
@@ -306,7 +319,11 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole)).
 				Patch("/{id}", updateReceiverHandler.UpdateReceiver)
 
-			receiverWalletHandler := httphandler.ReceiverWalletsHandler{Models: o.Models, EventProducer: o.EventProducer}
+			receiverWalletHandler := httphandler.ReceiverWalletsHandler{
+				Models:             o.Models,
+				CrashTrackerClient: o.CrashTrackerClient,
+				EventProducer:      o.EventProducer,
+			}
 			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole)).
 				Patch("/wallets/{receiver_wallet_id}", receiverWalletHandler.RetryInvitation)
 		})
@@ -372,7 +389,25 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 
 			r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...)).
 				Get("/logo", profileHandler.GetOrganizationLogo)
+
+			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole)).
+				Patch("/circle-config", httphandler.CircleConfigHandler{
+					NetworkType:                 o.NetworkType,
+					CircleFactory:               circle.NewClient,
+					TenantManager:               o.tenantManager,
+					Encrypter:                   &utils.DefaultPrivateKeyEncrypter{},
+					EncryptionPassphrase:        o.DistAccEncryptionPassphrase,
+					CircleClientConfigModel:     circle.NewClientConfigModel(o.MtnDBConnectionPool),
+					DistributionAccountResolver: o.SubmitterEngine.DistributionAccountResolver,
+				}.Patch)
 		})
+
+		balancesHandler := httphandler.BalancesHandler{
+			DistributionAccountResolver: o.SubmitterEngine.DistributionAccountResolver,
+			CircleService:               o.CircleService,
+			NetworkType:                 o.NetworkType,
+		}
+		r.Get("/balances", balancesHandler.Get)
 	})
 
 	reCAPTCHAValidator := validators.NewGoogleReCAPTCHAValidator(o.ReCAPTCHASiteSecretKey, httpclient.DefaultClient())
@@ -411,9 +446,11 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 	// SEP-24 and miscellaneous endpoints that are tenant-unaware
 	mux.Group(func(r chi.Router) {
 		r.Get("/health", httphandler.HealthHandler{
-			ReleaseID: o.GitCommit,
-			ServiceID: ServiceID,
-			Version:   o.Version,
+			ReleaseID:        o.GitCommit,
+			ServiceID:        ServiceID,
+			Version:          o.Version,
+			DBConnectionPool: o.AdminDBConnectionPool,
+			Producer:         o.EventProducer,
 		}.ServeHTTP)
 
 		// START SEP-24 endpoints
@@ -443,6 +480,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 				ReCAPTCHAValidator:       reCAPTCHAValidator,
 				NetworkPassphrase:        o.NetworkPassphrase,
 				EventProducer:            o.EventProducer,
+				CrashTrackerClient:       o.CrashTrackerClient,
 			}.VerifyReceiverRegistration)
 		})
 

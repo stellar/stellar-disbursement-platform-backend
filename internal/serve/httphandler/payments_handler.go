@@ -13,6 +13,7 @@ import (
 	"github.com/stellar/go/support/render/httpjson"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
@@ -21,15 +22,18 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 )
 
 type PaymentsHandler struct {
-	Models           *data.Models
-	DBConnectionPool db.DBConnectionPool
-	AuthManager      auth.AuthManager
-	EventProducer    events.Producer
+	Models                      *data.Models
+	DBConnectionPool            db.DBConnectionPool
+	AuthManager                 auth.AuthManager
+	EventProducer               events.Producer
+	CrashTrackerClient          crashtracker.CrashTrackerClient
+	DistributionAccountResolver signing.DistributionAccountResolver
 }
 
 type RetryPaymentsRequest struct {
@@ -46,24 +50,63 @@ func (r *RetryPaymentsRequest) validate() *httperror.HTTPError {
 	return nil
 }
 
-func (p PaymentsHandler) GetPayment(w http.ResponseWriter, r *http.Request) {
-	payment_id := chi.URLParam(r, "id")
+func (p PaymentsHandler) decorateWithCircleTransactionInfo(ctx context.Context, payments ...data.Payment) ([]data.Payment, error) {
+	if len(payments) == 0 {
+		return payments, nil
+	}
 
-	payment, err := p.Models.Payment.Get(r.Context(), payment_id, p.DBConnectionPool)
+	distAccount, err := p.DistributionAccountResolver.DistributionAccountFromContext(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("resolving distribution account: %w", err)
+	}
+
+	if !distAccount.IsCircle() {
+		return payments, nil
+	}
+
+	paymentIDs := make([]string, len(payments))
+	for i, payment := range payments {
+		paymentIDs[i] = payment.ID
+	}
+
+	transfersByPaymentID, err := p.Models.CircleTransferRequests.GetCurrentTransfersForPaymentIDs(ctx, p.DBConnectionPool, paymentIDs)
+	if err != nil {
+		return nil, fmt.Errorf("getting circle transfers for payment IDs: %w", err)
+	}
+
+	for i, payment := range payments {
+		if transfer, ok := transfersByPaymentID[payment.ID]; ok {
+			payments[i].CircleTransferRequestID = transfer.CircleTransferID
+		}
+	}
+
+	return payments, nil
+}
+
+func (p PaymentsHandler) GetPayment(w http.ResponseWriter, r *http.Request) {
+	paymentID := chi.URLParam(r, "id")
+
+	payment, err := p.Models.Payment.Get(r.Context(), paymentID, p.DBConnectionPool)
 	if err != nil {
 		if errors.Is(data.ErrRecordNotFound, err) {
-			errorResponse := fmt.Sprintf("Cannot retrieve payment with ID: %s", payment_id)
+			errorResponse := fmt.Sprintf("Cannot retrieve payment with ID: %s", paymentID)
 			httperror.NotFound(errorResponse, err, nil).Render(w)
 			return
 		} else {
 			ctx := r.Context()
-			msg := fmt.Sprintf("Cannot retrieve payment with id %s", payment_id)
+			msg := fmt.Sprintf("Cannot retrieve payment with id %s", paymentID)
 			httperror.InternalError(ctx, msg, err, nil).Render(w)
 			return
 		}
 	}
 
-	httpjson.RenderStatus(w, http.StatusOK, payment, httpjson.JSON)
+	payments, err := p.decorateWithCircleTransactionInfo(r.Context(), *payment)
+	if err != nil {
+		httperror.InternalError(r.Context(), "Cannot retrieve payment with circle info", err, nil).Render(w)
+		return
+	}
+
+	httpjson.RenderStatus(w, http.StatusOK, payments[0], httpjson.JSON)
 }
 
 func (p PaymentsHandler) GetPayments(w http.ResponseWriter, r *http.Request) {
@@ -143,8 +186,18 @@ func (p PaymentsHandler) RetryPayments(rw http.ResponseWriter, req *http.Request
 			}
 
 			if len(payments) > 0 {
+				msg, err := p.buildPaymentsReadyEventMessage(ctx, payments)
+				if err != nil {
+					return nil, fmt.Errorf("building event message for payment retry: %w", err)
+				}
+
 				postCommitFn = func() error {
-					return p.producePaymentsReadyEvents(ctx, payments)
+					postErr := events.ProduceEvents(ctx, p.EventProducer, msg)
+					if postErr != nil {
+						p.CrashTrackerClient.LogAndReportErrors(ctx, postErr, "writing retry payment message on the event producer")
+					}
+
+					return nil
 				}
 			}
 
@@ -165,14 +218,15 @@ func (p PaymentsHandler) RetryPayments(rw http.ResponseWriter, req *http.Request
 	httpjson.RenderStatus(rw, http.StatusOK, map[string]string{"message": "Payments retried successfully"}, httpjson.JSON)
 }
 
-func (p PaymentsHandler) producePaymentsReadyEvents(ctx context.Context, payments []*data.Payment) error {
+func (p PaymentsHandler) buildPaymentsReadyEventMessage(ctx context.Context, payments []*data.Payment) (*events.Message, error) {
 	if len(payments) == 0 {
-		log.Ctx(ctx).Info("No payments to produce ready to pay event")
-		return nil
+		log.Ctx(ctx).Warnf("no payments to retry")
+		return nil, nil
 	}
-	msg, msgErr := events.NewMessage(ctx, events.PaymentReadyToPayTopic, "", events.PaymentReadyToPayRetryFailedPayment, nil)
-	if msgErr != nil {
-		return fmt.Errorf("creating a new message: %w", msgErr)
+
+	msg, err := events.NewMessage(ctx, events.PaymentReadyToPayTopic, "", events.PaymentReadyToPayRetryFailedPayment, nil)
+	if err != nil {
+		return nil, fmt.Errorf("creating a new message: %w", err)
 	}
 
 	paymentsReadyToPay := schemas.EventPaymentsReadyToPayData{TenantID: msg.TenantID}
@@ -182,15 +236,12 @@ func (p PaymentsHandler) producePaymentsReadyEvents(ctx context.Context, payment
 	msg.Data = paymentsReadyToPay
 	msg.Key = paymentsReadyToPay.TenantID
 
-	if p.EventProducer != nil {
-		err := p.EventProducer.WriteMessages(ctx, *msg)
-		if err != nil {
-			return fmt.Errorf("writing message %s on event producer: %w", msg, err)
-		}
-	} else {
-		log.Ctx(ctx).Errorf("event producer is nil, could not publish message %+v", msg)
+	err = msg.Validate()
+	if err != nil {
+		return nil, fmt.Errorf("validating message: %w", err)
 	}
-	return nil
+
+	return msg, nil
 }
 
 func (p PaymentsHandler) getPaymentsWithCount(ctx context.Context, queryParams *data.QueryParams) (*utils.ResultWithTotal, error) {
@@ -206,6 +257,11 @@ func (p PaymentsHandler) getPaymentsWithCount(ctx context.Context, queryParams *
 			if innerErr != nil {
 				return nil, fmt.Errorf("error querying payments: %w", innerErr)
 			}
+		}
+
+		payments, err := p.decorateWithCircleTransactionInfo(ctx, payments...)
+		if err != nil {
+			return nil, fmt.Errorf("adding circle info to payments: %w", err)
 		}
 
 		return utils.NewResultWithTotal(totalPayments, payments), nil

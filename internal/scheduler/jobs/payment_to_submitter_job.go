@@ -6,10 +6,12 @@ import (
 	"time"
 
 	"github.com/stellar/go/support/log"
-	"github.com/stellar/stellar-disbursement-platform-backend/db"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/circle"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 )
 
 const (
@@ -24,13 +26,26 @@ type paymentToSubmitterJob struct {
 	jobIntervalSeconds    int
 }
 
-func NewPaymentToSubmitterJob(jobIntervalSeconds int, models *data.Models, tssDBConnectionPool db.DBConnectionPool) Job {
-	if jobIntervalSeconds < DefaultMinimumJobIntervalSeconds {
+type PaymentToSubmitterJobOptions struct {
+	JobIntervalSeconds  int
+	Models              *data.Models
+	TSSDBConnectionPool db.DBConnectionPool
+	DistAccountResolver signing.DistributionAccountResolver
+	CircleService       circle.ServiceInterface
+}
+
+func NewPaymentToSubmitterJob(opts PaymentToSubmitterJobOptions) Job {
+	if opts.JobIntervalSeconds < DefaultMinimumJobIntervalSeconds {
 		log.Fatalf("job interval is not set for %s. Instantiation failed", paymentToSubmitterJobName)
 	}
 	return &paymentToSubmitterJob{
-		paymentToSubmitterSvc: services.NewPaymentToSubmitterService(models, tssDBConnectionPool),
-		jobIntervalSeconds:    jobIntervalSeconds,
+		paymentToSubmitterSvc: services.NewPaymentToSubmitterService(services.PaymentToSubmitterServiceOptions{
+			Models:              opts.Models,
+			TSSDBConnectionPool: opts.TSSDBConnectionPool,
+			DistAccountResolver: opts.DistAccountResolver,
+			CircleService:       opts.CircleService,
+		}),
+		jobIntervalSeconds: opts.JobIntervalSeconds,
 	}
 }
 

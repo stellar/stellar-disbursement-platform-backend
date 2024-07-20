@@ -64,7 +64,7 @@ func NewSendReceiverWalletsSMSInvitationEventHandler(options SendReceiverWallets
 }
 
 func (h *SendReceiverWalletsSMSInvitationEventHandler) Name() string {
-	return "SendReceiverWalletsSMSInvitationEventHandler"
+	return utils.GetTypeName(h)
 }
 
 func (h *SendReceiverWalletsSMSInvitationEventHandler) CanHandleMessage(ctx context.Context, message *events.Message) bool {

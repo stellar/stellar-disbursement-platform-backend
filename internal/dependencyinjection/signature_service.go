@@ -5,21 +5,16 @@ import (
 	"fmt"
 
 	"github.com/stellar/go/support/log"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 )
 
 const SignatureServiceInstanceName = "signature_service_instance"
 
-// buildSignatureServiceInstanceName returns the name of the signature service instance, based on the signature type
-// provided.
-func buildSignatureServiceInstanceName(sigType signing.SignatureClientType) string {
-	return fmt.Sprintf("%s-%s", SignatureServiceInstanceName, string(sigType))
-}
-
 // NewSignatureService creates a new signature service instance, or retrieves an instance that was already
 // created before.
 func NewSignatureService(ctx context.Context, opts signing.SignatureServiceOptions) (signing.SignatureService, error) {
-	instanceName := buildSignatureServiceInstanceName(opts.DistributionSignerType)
+	instanceName := SignatureServiceInstanceName
 
 	// Already initialized
 	if instance, ok := GetInstance(instanceName); ok {
@@ -31,7 +26,7 @@ func NewSignatureService(ctx context.Context, opts signing.SignatureServiceOptio
 
 	// TODO: in SDP-1077, implement a `NewDistributionAccountResolver` in the depencency injection and inject it into
 	// the SignatureServiceOptions before calling NewSignatureService.
-	log.Ctx(ctx).Infof("⚙️ Setting up Signature Service with distribution signer type: %v", opts.DistributionSignerType)
+	log.Ctx(ctx).Info("⚙️ Setting up Signature Service")
 	newInstance, err := signing.NewSignatureService(opts)
 	if err != nil {
 		return signing.SignatureService{}, fmt.Errorf("creating a new signature service instance: %w", err)

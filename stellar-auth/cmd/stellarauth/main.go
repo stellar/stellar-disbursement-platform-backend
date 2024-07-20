@@ -3,6 +3,7 @@ package main
 import (
 	"github.com/sirupsen/logrus"
 	"github.com/stellar/go/support/log"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/cli"
 )
 

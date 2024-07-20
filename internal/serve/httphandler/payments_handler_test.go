@@ -15,19 +15,24 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/stellar/go/support/log"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpresponse"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
+	sigMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func Test_PaymentsHandlerGet(t *testing.T) {
@@ -41,12 +46,19 @@ func Test_PaymentsHandlerGet(t *testing.T) {
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
+	mDistributionAccountResolver := sigMocks.NewMockDistributionAccountResolver(t)
+
 	handler := &PaymentsHandler{
-		Models:           models,
-		DBConnectionPool: dbConnectionPool,
+		Models:                      models,
+		DBConnectionPool:            dbConnectionPool,
+		DistributionAccountResolver: mDistributionAccountResolver,
 	}
 
-	// setup
+	mDistributionAccountResolver.
+		On("DistributionAccountFromContext", mock.Anything).
+		Return(schema.TransactionAccount{Type: schema.DistributionAccountStellarEnv}, nil).
+		Maybe()
+
 	r := chi.NewRouter()
 	r.Get("/payments/{id}", handler.GetPayment)
 
@@ -177,6 +189,154 @@ func Test_PaymentsHandlerGet(t *testing.T) {
 	})
 }
 
+func Test_PaymentHandler_GetPayments_CirclePayments(t *testing.T) {
+	ctx := context.Background()
+
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+
+	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, outerErr)
+	defer dbConnectionPool.Close()
+
+	models, outerErr := data.NewModels(dbConnectionPool)
+	require.NoError(t, outerErr)
+
+	// Create fixtures
+	asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
+	country := data.CreateCountryFixture(t, ctx, dbConnectionPool, "FRA", "France")
+	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "wallet1", "https://www.wallet.com", "www.wallet.com", "wallet1://")
+	disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
+		Country: country,
+		Wallet:  wallet,
+		Status:  data.ReadyDisbursementStatus,
+		Asset:   asset,
+	})
+	receiverReady := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
+	rwReady := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiverReady.ID, wallet.ID, data.ReadyReceiversWalletStatus)
+	payment1 := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+		ReceiverWallet: rwReady,
+		Disbursement:   disbursement,
+		Asset:          *asset,
+		Amount:         "100",
+		Status:         data.DraftPaymentStatus,
+	})
+	payment2 := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+		ReceiverWallet: rwReady,
+		Disbursement:   disbursement,
+		Asset:          *asset,
+		Amount:         "200",
+		Status:         data.DraftPaymentStatus,
+	})
+	data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+		ReceiverWallet: rwReady,
+		Disbursement:   disbursement,
+		Asset:          *asset,
+		Amount:         "300",
+		Status:         data.DraftPaymentStatus,
+	})
+
+	data.CreateCircleTransferRequestFixture(t, ctx, dbConnectionPool, data.CircleTransferRequest{
+		IdempotencyKey:   "idempotency-key-1",
+		PaymentID:        payment1.ID,
+		CircleTransferID: utils.StringPtr("circle-transfer-id-1"),
+	})
+
+	data.CreateCircleTransferRequestFixture(t, ctx, dbConnectionPool, data.CircleTransferRequest{
+		IdempotencyKey:   "idempotency-key-2",
+		PaymentID:        payment2.ID,
+		CircleTransferID: utils.StringPtr("circle-transfer-id-2"),
+	})
+
+	testCases := []struct {
+		name          string
+		prepareMocks  func(t *testing.T, mDistributionAccountResolver *sigMocks.MockDistributionAccountResolver)
+		runAssertions func(t *testing.T, responseStatus int, response string)
+	}{
+		{
+			name: "returns error when distribution account resolver fails",
+			prepareMocks: func(t *testing.T, mDistributionAccountResolver *sigMocks.MockDistributionAccountResolver) {
+				t.Helper()
+
+				mDistributionAccountResolver.
+					On("DistributionAccountFromContext", mock.Anything).
+					Return(schema.TransactionAccount{}, errors.New("unexpected error")).
+					Once()
+			},
+			runAssertions: func(t *testing.T, responseStatus int, response string) {
+				t.Helper()
+
+				assert.Equal(t, http.StatusInternalServerError, responseStatus)
+				assert.JSONEq(t, `{"error":"Cannot retrieve payments"}`, string(response))
+			},
+		},
+		{
+			name: "successfully returns payments with circle transaction IDs",
+			prepareMocks: func(t *testing.T, mDistributionAccountResolver *sigMocks.MockDistributionAccountResolver) {
+				t.Helper()
+
+				mDistributionAccountResolver.
+					On("DistributionAccountFromContext", mock.Anything).
+					Return(schema.TransactionAccount{Type: schema.DistributionAccountCircleDBVault}, nil).
+					Maybe()
+			},
+			runAssertions: func(t *testing.T, responseStatus int, response string) {
+				t.Helper()
+
+				assert.Equal(t, http.StatusOK, responseStatus)
+
+				var actualResponse httpresponse.PaginatedResponse
+				err := json.Unmarshal([]byte(response), &actualResponse)
+				require.NoError(t, err)
+
+				assert.Equal(t, 3, actualResponse.Pagination.Total)
+
+				var payments []data.Payment
+				err = json.Unmarshal(actualResponse.Data, &payments)
+				require.NoError(t, err)
+
+				assert.Len(t, payments, 3)
+				for _, payment := range payments {
+					if payment.ID == payment1.ID {
+						assert.Equal(t, "circle-transfer-id-1", *payment.CircleTransferRequestID)
+					}
+					if payment.ID == payment2.ID {
+						assert.Equal(t, "circle-transfer-id-2", *payment.CircleTransferRequestID)
+					}
+					if payment.ID != payment1.ID && payment.ID != payment2.ID {
+						assert.Nil(t, payment.CircleTransferRequestID)
+					}
+				}
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			mDistributionAccountResolver := sigMocks.NewMockDistributionAccountResolver(t)
+
+			tc.prepareMocks(t, mDistributionAccountResolver)
+
+			h := &PaymentsHandler{
+				Models:                      models,
+				DBConnectionPool:            dbConnectionPool,
+				DistributionAccountResolver: mDistributionAccountResolver,
+			}
+
+			rr := httptest.NewRecorder()
+			req, err := http.NewRequest(http.MethodGet, "/payments", nil)
+			require.NoError(t, err)
+			http.HandlerFunc(h.GetPayments).ServeHTTP(rr, req)
+			resp := rr.Result()
+			defer resp.Body.Close()
+			respBody, err := io.ReadAll(resp.Body)
+			require.NoError(t, err)
+
+			tc.runAssertions(t, resp.StatusCode, string(respBody))
+		})
+	}
+}
+
 func Test_PaymentHandler_GetPayments_Errors(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
@@ -240,7 +400,7 @@ func Test_PaymentHandler_GetPayments_Errors(t *testing.T) {
 				"status": "invalid_status",
 			},
 			expectedStatusCode: http.StatusBadRequest,
-			expectedResponse:   `{"error":"request invalid", "extras":{"status":"invalid parameter. valid values are: DRAFT, READY, PENDING, PAUSED, SUCCESS, FAILED, CANCELLED"}}`,
+			expectedResponse:   fmt.Sprintf(`{"error":"request invalid", "extras":{"status":"invalid parameter. valid values are: %v"}}`, data.PaymentStatuses()),
 		},
 		{
 			name: "returns error when created_at_after is invalid",
@@ -294,9 +454,16 @@ func Test_PaymentHandler_GetPayments_Success(t *testing.T) {
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
+	mDistributionAccountResolver := sigMocks.NewMockDistributionAccountResolver(t)
+	mDistributionAccountResolver.
+		On("DistributionAccountFromContext", mock.Anything).
+		Return(schema.TransactionAccount{Type: schema.DistributionAccountStellarEnv}, nil).
+		Maybe()
+
 	handler := &PaymentsHandler{
-		Models:           models,
-		DBConnectionPool: dbConnectionPool,
+		Models:                      models,
+		DBConnectionPool:            dbConnectionPool,
+		DistributionAccountResolver: mDistributionAccountResolver,
 	}
 
 	ts := httptest.NewServer(http.HandlerFunc(handler.GetPayments))
@@ -611,16 +778,6 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
-	authManagerMock := &auth.AuthManagerMock{}
-	eventProducerMock := events.MockProducer{}
-
-	handler := PaymentsHandler{
-		Models:           models,
-		DBConnectionPool: dbConnectionPool,
-		AuthManager:      authManagerMock,
-		EventProducer:    &eventProducerMock,
-	}
-
 	tnt := tenant.Tenant{ID: "tenant-id"}
 
 	ctx := context.Background()
@@ -650,6 +807,12 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 	})
 
 	t.Run("returns Unauthorized when no token in the context", func(t *testing.T) {
+		// Prepare the handler
+		handler := PaymentsHandler{
+			Models:           models,
+			DBConnectionPool: dbConnectionPool,
+		}
+
 		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, "/retry", strings.NewReader("{}"))
 		require.NoError(t, err)
 
@@ -672,10 +835,17 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, "/retry", strings.NewReader("{}"))
 		require.NoError(t, err)
 
+		// Prepare the handler and its mocks
+		authManagerMock := auth.NewAuthManagerMock(t)
 		authManagerMock.
 			On("GetUser", ctx, "mytoken").
 			Return(nil, errors.New("unexpected error")).
 			Once()
+		handler := PaymentsHandler{
+			Models:           models,
+			DBConnectionPool: dbConnectionPool,
+			AuthManager:      authManagerMock,
+		}
 
 		rw := httptest.NewRecorder()
 		http.HandlerFunc(handler.RetryPayments).ServeHTTP(rw, req)
@@ -697,12 +867,17 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, "/retry", payload)
 		require.NoError(t, err)
 
+		// Prepare the handler and its mocks
+		authManagerMock := auth.NewAuthManagerMock(t)
 		authManagerMock.
 			On("GetUser", ctx, "mytoken").
-			Return(&auth.User{
-				Email: "email@test.com",
-			}, nil).
+			Return(&auth.User{Email: "email@test.com"}, nil).
 			Once()
+		handler := PaymentsHandler{
+			Models:           models,
+			DBConnectionPool: dbConnectionPool,
+			AuthManager:      authManagerMock,
+		}
 
 		rw := httptest.NewRecorder()
 		http.HandlerFunc(handler.RetryPayments).ServeHTTP(rw, req)
@@ -724,12 +899,17 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, "/retry", payload)
 		require.NoError(t, err)
 
+		// Prepare the handler and its mocks
+		authManagerMock := auth.NewAuthManagerMock(t)
 		authManagerMock.
 			On("GetUser", ctx, "mytoken").
-			Return(&auth.User{
-				Email: "email@test.com",
-			}, nil).
+			Return(&auth.User{Email: "email@test.com"}, nil).
 			Once()
+		handler := PaymentsHandler{
+			Models:           models,
+			DBConnectionPool: dbConnectionPool,
+			AuthManager:      authManagerMock,
+		}
 
 		rw := httptest.NewRecorder()
 		http.HandlerFunc(handler.RetryPayments).ServeHTTP(rw, req)
@@ -791,23 +971,23 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 
 		payload := strings.NewReader(fmt.Sprintf(`
 			{
-				"payment_ids": [
-					%q,
-					%q,
-					%q,
-					%q
-				]
+				"payment_ids": [%q, %q, %q, %q]
 			}
 		`, payment1.ID, payment2.ID, payment3.ID, payment4.ID))
 		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, "/retry", payload)
 		require.NoError(t, err)
 
+		// Prepare the handler and its mocks
+		authManagerMock := auth.NewAuthManagerMock(t)
 		authManagerMock.
 			On("GetUser", ctx, "mytoken").
-			Return(&auth.User{
-				Email: "email@test.com",
-			}, nil).
+			Return(&auth.User{Email: "email@test.com"}, nil).
 			Once()
+		handler := PaymentsHandler{
+			Models:           models,
+			DBConnectionPool: dbConnectionPool,
+			AuthManager:      authManagerMock,
+		}
 
 		rw := httptest.NewRecorder()
 		http.HandlerFunc(handler.RetryPayments).ServeHTTP(rw, req)
@@ -881,22 +1061,19 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 
 		payload := strings.NewReader(fmt.Sprintf(`
 			{
-				"payment_ids": [
-					%q,
-					%q
-				]
+				"payment_ids": [%q, %q]
 			}
 		`, payment1.ID, payment2.ID))
 		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, "/retry", payload)
 		require.NoError(t, err)
 
+		// Prepare the handler and its mocks
+		authManagerMock := auth.NewAuthManagerMock(t)
 		authManagerMock.
 			On("GetUser", ctx, "mytoken").
-			Return(&auth.User{
-				Email: "email@test.com",
-			}, nil).
+			Return(&auth.User{Email: "email@test.com"}, nil).
 			Once()
-
+		eventProducerMock := events.NewMockProducer(t)
 		eventProducerMock.
 			On("WriteMessages", ctx, []events.Message{
 				{
@@ -907,18 +1084,20 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 					Data: schemas.EventPaymentsReadyToPayData{
 						TenantID: tnt.ID,
 						Payments: []schemas.PaymentReadyToPay{
-							{
-								ID: payment1.ID,
-							},
-							{
-								ID: payment2.ID,
-							},
+							{ID: payment1.ID},
+							{ID: payment2.ID},
 						},
 					},
 				},
 			}).
 			Return(nil).
 			Once()
+		handler := PaymentsHandler{
+			Models:           models,
+			DBConnectionPool: dbConnectionPool,
+			AuthManager:      authManagerMock,
+			EventProducer:    eventProducerMock,
+		}
 
 		rw := httptest.NewRecorder()
 		http.HandlerFunc(handler.RetryPayments).ServeHTTP(rw, req)
@@ -982,21 +1161,23 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 
 		payload := strings.NewReader(fmt.Sprintf(`
 			{
-				"payment_ids": [
-					%q,
-					%q
-				]
+				"payment_ids": [%q, %q]
 			}
 		`, payment1.ID, payment2.ID))
 		req, err := http.NewRequestWithContext(ctxWithoutTenant, http.MethodPatch, "/retry", payload)
 		require.NoError(t, err)
 
+		// Prepare the handler and its mocks
+		authManagerMock := auth.NewAuthManagerMock(t)
 		authManagerMock.
 			On("GetUser", ctxWithoutTenant, "mytoken").
-			Return(&auth.User{
-				Email: "email@test.com",
-			}, nil).
+			Return(&auth.User{Email: "email@test.com"}, nil).
 			Once()
+		handler := PaymentsHandler{
+			Models:           models,
+			DBConnectionPool: dbConnectionPool,
+			AuthManager:      authManagerMock,
+		}
 
 		rw := httptest.NewRecorder()
 		http.HandlerFunc(handler.RetryPayments).ServeHTTP(rw, req)
@@ -1011,7 +1192,7 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 		assert.JSONEq(t, `{"error": "An internal error occurred while processing this request."}`, string(respBody))
 	})
 
-	t.Run("returns error when EventProducer fails writing a message", func(t *testing.T) {
+	t.Run("logs to crashTracker when EventProducer fails to write a message", func(t *testing.T) {
 		data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
 
 		payment1 := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
@@ -1028,21 +1209,19 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 
 		payload := strings.NewReader(fmt.Sprintf(`
 			{
-				"payment_ids": [
-					%q
-				]
+				"payment_ids": [%q]
 			}
 		`, payment1.ID))
 		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, "/retry", payload)
 		require.NoError(t, err)
 
+		// Prepare the handler and its mocks
+		authManagerMock := auth.NewAuthManagerMock(t)
 		authManagerMock.
 			On("GetUser", ctx, "mytoken").
-			Return(&auth.User{
-				Email: "email@test.com",
-			}, nil).
+			Return(&auth.User{Email: "email@test.com"}, nil).
 			Once()
-
+		eventProducerMock := events.NewMockProducer(t)
 		eventProducerMock.
 			On("WriteMessages", ctx, []events.Message{
 				{
@@ -1053,15 +1232,24 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 					Data: schemas.EventPaymentsReadyToPayData{
 						TenantID: tnt.ID,
 						Payments: []schemas.PaymentReadyToPay{
-							{
-								ID: payment1.ID,
-							},
+							{ID: payment1.ID},
 						},
 					},
 				},
 			}).
 			Return(errors.New("unexpected error")).
 			Once()
+		crashTrackerMock := &crashtracker.MockCrashTrackerClient{}
+		crashTrackerMock.
+			On("LogAndReportErrors", mock.Anything, mock.Anything, "writing retry payment message on the event producer").
+			Once()
+		handler := PaymentsHandler{
+			Models:             models,
+			DBConnectionPool:   dbConnectionPool,
+			AuthManager:        authManagerMock,
+			EventProducer:      eventProducerMock,
+			CrashTrackerClient: crashTrackerMock,
+		}
 
 		rw := httptest.NewRecorder()
 		http.HandlerFunc(handler.RetryPayments).ServeHTTP(rw, req)
@@ -1072,8 +1260,8 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 		respBody, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
-		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
-		assert.JSONEq(t, `{"error":"An internal error occurred while processing this request."}`, string(respBody))
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.JSONEq(t, `{"message":"Payments retried successfully"}`, string(respBody))
 	})
 
 	t.Run("logs when couldn't write message because EventProducer is nil", func(t *testing.T) {
@@ -1103,23 +1291,25 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 
 		payload := strings.NewReader(fmt.Sprintf(`
 			{
-				"payment_ids": [
-					%q,
-					%q
-				]
+				"payment_ids": [%q, %q]
 			}
 		`, payment1.ID, payment2.ID))
 		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, "/retry", payload)
 		require.NoError(t, err)
 
+		// Prepare the handler and its mocks
+		authManagerMock := auth.NewAuthManagerMock(t)
 		authManagerMock.
 			On("GetUser", ctx, "mytoken").
-			Return(&auth.User{
-				Email: "email@test.com",
-			}, nil).
+			Return(&auth.User{Email: "email@test.com"}, nil).
 			Once()
+		handler := PaymentsHandler{
+			Models:           models,
+			DBConnectionPool: dbConnectionPool,
+			AuthManager:      authManagerMock,
+		}
 
-		getEntries := log.DefaultLogger.StartTest(log.ErrorLevel)
+		getEntries := log.DefaultLogger.StartTest(log.DebugLevel)
 
 		handler.EventProducer = nil
 		rw := httptest.NewRecorder()
@@ -1142,23 +1332,16 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 			Data: schemas.EventPaymentsReadyToPayData{
 				TenantID: tnt.ID,
 				Payments: []schemas.PaymentReadyToPay{
-					{
-						ID: payment1.ID,
-					},
-					{
-						ID: payment2.ID,
-					},
+					{ID: payment1.ID},
+					{ID: payment2.ID},
 				},
 			},
 		}
 
 		entries := getEntries()
 		require.Len(t, entries, 1)
-		assert.Contains(t, fmt.Sprintf("event producer is nil, could not publish message %s", msg), entries[0].Message)
+		assert.Contains(t, fmt.Sprintf("event producer is nil, could not publish messages %+v", []events.Message{msg}), entries[0].Message)
 	})
-
-	authManagerMock.AssertExpectations(t)
-	eventProducerMock.AssertExpectations(t)
 }
 
 func Test_PaymentsHandler_getPaymentsWithCount(t *testing.T) {
@@ -1171,10 +1354,19 @@ func Test_PaymentsHandler_getPaymentsWithCount(t *testing.T) {
 	ctx := context.Background()
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
+
+	mDistributionAccountResolver := sigMocks.NewMockDistributionAccountResolver(t)
+
 	handler := &PaymentsHandler{
-		Models:           models,
-		DBConnectionPool: dbConnectionPool,
+		Models:                      models,
+		DBConnectionPool:            dbConnectionPool,
+		DistributionAccountResolver: mDistributionAccountResolver,
 	}
+
+	mDistributionAccountResolver.
+		On("DistributionAccountFromContext", mock.Anything).
+		Return(schema.TransactionAccount{Type: schema.DistributionAccountStellarEnv}, nil).
+		Maybe()
 
 	t.Run("0 payments created", func(t *testing.T) {
 		response, err := handler.getPaymentsWithCount(ctx, &data.QueryParams{})

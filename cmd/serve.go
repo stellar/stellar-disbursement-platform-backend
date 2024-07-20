@@ -12,6 +12,7 @@ import (
 	cmdUtils "github.com/stellar/stellar-disbursement-platform-backend/cmd/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/circle"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	di "github.com/stellar/stellar-disbursement-platform-backend/internal/dependencyinjection"
@@ -22,8 +23,11 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/scheduler"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/scheduler/jobs"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	serveadmin "github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/serve"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 type ServeCommand struct{}
@@ -81,6 +85,11 @@ func (s *ServerService) GetSchedulerJobRegistrars(
 	sj := []scheduler.SchedulerJobRegisterOption{
 		scheduler.WithAPAuthEnforcementJob(apAPIService, serveOpts.MonitorService, serveOpts.CrashTrackerClient.Clone()),
 		scheduler.WithReadyPaymentsCancellationJobOption(models),
+		scheduler.WithCircleReconciliationJobOption(jobs.CircleReconciliationJobOptions{
+			Models:              models,
+			DistAccountResolver: serveOpts.SubmitterEngine.DistributionAccountResolver,
+			CircleService:       serveOpts.CircleService,
+		}),
 	}
 
 	if serveOpts.EnableScheduler {
@@ -93,7 +102,13 @@ func (s *ServerService) GetSchedulerJobRegistrars(
 		}
 
 		sj = append(sj,
-			scheduler.WithPaymentToSubmitterJobOption(schedulerOptions.PaymentJobIntervalSeconds, models, tssDBConnectionPool),
+			scheduler.WithPaymentToSubmitterJobOption(jobs.PaymentToSubmitterJobOptions{
+				JobIntervalSeconds:  schedulerOptions.PaymentJobIntervalSeconds,
+				Models:              models,
+				TSSDBConnectionPool: tssDBConnectionPool,
+				DistAccountResolver: serveOpts.SubmitterEngine.DistributionAccountResolver,
+				CircleService:       serveOpts.CircleService,
+			}),
 			scheduler.WithPaymentFromSubmitterJobOption(schedulerOptions.PaymentJobIntervalSeconds, models, tssDBConnectionPool),
 			scheduler.WithPatchAnchorPlatformTransactionsCompletionJobOption(schedulerOptions.PaymentJobIntervalSeconds, apAPIService, models),
 			scheduler.WithSendReceiverWalletsSMSInvitationJobOption(jobs.SendReceiverWalletsSMSInvitationJobOptions{
@@ -168,6 +183,8 @@ func (s *ServerService) SetupConsumers(ctx context.Context, o SetupConsumersOpti
 			AdminDBConnectionPool: o.ServeOpts.AdminDBConnectionPool,
 			MtnDBConnectionPool:   o.ServeOpts.MtnDBConnectionPool,
 			TSSDBConnectionPool:   o.TSSDBConnectionPool,
+			DistAccountResolver:   o.ServeOpts.SubmitterEngine.DistributionAccountResolver,
+			CircleService:         o.ServeOpts.CircleService,
 		}),
 	)
 	if err != nil {
@@ -491,6 +508,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			serveOpts.MonitorService = monitorService
 			serveOpts.BaseURL = globalOptions.BaseURL
 			serveOpts.NetworkPassphrase = globalOptions.NetworkPassphrase
+			serveOpts.DistAccEncryptionPassphrase = txSubmitterOpts.SignatureServiceOptions.DistAccEncryptionPassphrase
 
 			// Inject metrics server dependencies
 			metricsServeOpts.MonitorService = monitorService
@@ -570,6 +588,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 
 			// Setup Distribution Account Resolver
 			distAccResolverOpts.AdminDBConnectionPool = adminDBConnectionPool
+			distAccResolverOpts.MTNDBConnectionPool = mtnDBConnectionPool
 			distAccResolver, err := di.NewDistributionAccountResolver(ctx, distAccResolverOpts)
 			if err != nil {
 				log.Ctx(ctx).Fatalf("error creating distribution account resolver: %v", err)
@@ -586,6 +605,38 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			serveOpts.SubmitterEngine = submitterEngine
 			adminServeOpts.SubmitterEngine = submitterEngine
 
+			// Setup NetworkType
+			serveOpts.NetworkType, err = utils.GetNetworkTypeFromNetworkPassphrase(serveOpts.NetworkPassphrase)
+			if err != nil {
+				log.Ctx(ctx).Fatalf("error parsing network type: %v", err)
+			}
+
+			// Inject Circle Service dependencies
+			circleService, err := di.NewCircleService(ctx, circle.ServiceOptions{
+				ClientFactory:        circle.NewClient,
+				ClientConfigModel:    circle.NewClientConfigModel(serveOpts.MtnDBConnectionPool),
+				NetworkType:          serveOpts.NetworkType,
+				EncryptionPassphrase: serveOpts.DistAccEncryptionPassphrase,
+				TenantManager:        tenant.NewManager(tenant.WithDatabase(serveOpts.AdminDBConnectionPool)),
+			})
+			if err != nil {
+				log.Ctx(ctx).Fatalf("error creating Circle service: %v", err)
+			}
+			serveOpts.CircleService = circleService
+
+			// Setup Distribution Account Service
+			distributionAccountServiceOptions := services.DistributionAccountServiceOptions{
+				NetworkType:   serveOpts.NetworkType,
+				HorizonClient: submitterEngine.HorizonClient,
+				CircleService: circleService,
+			}
+			distributionAccountService, err := di.NewDistributionAccountService(ctx, distributionAccountServiceOptions)
+			if err != nil {
+				log.Ctx(ctx).Fatalf("error creating distribution account service: %v", err)
+			}
+			serveOpts.DistributionAccountService = distributionAccountService
+			adminServeOpts.DistributionAccountService = distributionAccountService
+
 			// Validate the Event Broker Type and Scheduler Jobs
 			if eventBrokerOptions.EventBrokerType == events.NoneEventBrokerType && !serveOpts.EnableScheduler {
 				log.Ctx(ctx).Fatalf("Both Event Brokers and Scheduler are disabled. Please enable one.")
@@ -600,7 +651,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 				if kafkaErr != nil {
 					log.Ctx(ctx).Fatalf("error creating Kafka Producer: %v", kafkaErr)
 				}
-				defer kafkaProducer.Close()
+				defer kafkaProducer.Close(ctx)
 				serveOpts.EventProducer = kafkaProducer
 
 				kafkaErr = serverService.SetupConsumers(ctx, SetupConsumersOptions{

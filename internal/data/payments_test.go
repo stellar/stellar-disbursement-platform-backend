@@ -7,11 +7,12 @@ import (
 
 	"github.com/lib/pq"
 	"github.com/stellar/go/support/log"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func Test_PaymentsModelGet(t *testing.T) {
@@ -1828,5 +1829,80 @@ func Test_PaymentModel_GetBatchForUpdate(t *testing.T) {
 		require.NoError(t, err)
 		_, err = dbTx2.ExecContext(ctx, "UPDATE payments SET status = 'FAILED' WHERE id = $1", paymentReady.ID)
 		assert.EqualError(t, err, "pq: canceling statement due to lock timeout")
+	})
+}
+
+func Test_PaymentModel_UpdateStatus(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, outerErr)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+
+	models, outerErr := NewModels(dbConnectionPool)
+	require.NoError(t, outerErr)
+
+	t.Run("return an error if paymentID is empty", func(t *testing.T) {
+		err := models.Payment.UpdateStatus(ctx, dbConnectionPool, "", SuccessPaymentStatus, nil, "")
+		assert.ErrorContains(t, err, "paymentID is required")
+	})
+
+	t.Run("return an error if status is invalid", func(t *testing.T) {
+		err := models.Payment.UpdateStatus(ctx, dbConnectionPool, "payment-id", PaymentStatus("INVALID"), nil, "")
+		assert.ErrorContains(t, err, "status is invalid")
+	})
+
+	t.Run("return an error if payment doesn't exist", func(t *testing.T) {
+		err := models.Payment.UpdateStatus(ctx, dbConnectionPool, "payment-id", SuccessPaymentStatus, nil, "")
+		assert.ErrorContains(t, err, "payment with ID payment-id was not found")
+		assert.ErrorIs(t, err, ErrRecordNotFound)
+	})
+
+	t.Run("🎉 successfully updates status", func(t *testing.T) {
+		// Create fixtures
+		models, err := NewModels(dbConnectionPool)
+		require.NoError(t, err)
+		asset := CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
+		country := CreateCountryFixture(t, ctx, dbConnectionPool, "FRA", "France")
+		wallet := CreateWalletFixture(t, ctx, dbConnectionPool, "wallet1", "https://www.wallet.com", "www.wallet.com", "wallet1://")
+		disbursement := CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &Disbursement{
+			Country: country,
+			Wallet:  wallet,
+			Status:  ReadyDisbursementStatus,
+			Asset:   asset,
+		})
+		receiverReady := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{})
+		rwReady := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiverReady.ID, wallet.ID, ReadyReceiversWalletStatus)
+		payment := CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &Payment{
+			ReceiverWallet: rwReady,
+			Disbursement:   disbursement,
+			Asset:          *asset,
+			Amount:         "100",
+			Status:         DraftPaymentStatus,
+		})
+
+		// 1. Update status WITHOUT Stellar trabnsaction ID
+		statusMsg := "transfer is in CIRCLE"
+		err = models.Payment.UpdateStatus(ctx, dbConnectionPool, payment.ID, PendingPaymentStatus, &statusMsg, "")
+		require.NoError(t, err)
+
+		paymentDB, err := models.Payment.Get(ctx, payment.ID, dbConnectionPool)
+		require.NoError(t, err)
+		assert.Equal(t, PendingPaymentStatus, paymentDB.Status)
+		assert.Equal(t, len(payment.StatusHistory)+1, len(paymentDB.StatusHistory), "a new status history should have been created")
+		assert.Empty(t, paymentDB.StellarTransactionID)
+
+		// 2. Update status WITH Stellar transaction ID
+		stellarTransactionID := "stellar-transaction-id"
+		err = models.Payment.UpdateStatus(ctx, dbConnectionPool, payment.ID, SuccessPaymentStatus, &statusMsg, stellarTransactionID)
+		require.NoError(t, err)
+
+		paymentDB, err = models.Payment.Get(ctx, payment.ID, dbConnectionPool)
+		require.NoError(t, err)
+		assert.Equal(t, SuccessPaymentStatus, paymentDB.Status)
+		assert.Equal(t, len(payment.StatusHistory)+2, len(paymentDB.StatusHistory), "a new status history should have been created")
+		assert.Equal(t, stellarTransactionID, paymentDB.StellarTransactionID)
 	})
 }

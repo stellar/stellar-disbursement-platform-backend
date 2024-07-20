@@ -11,15 +11,17 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/stellar/go/support/log"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
-	"github.com/stretchr/testify/require"
 )
 
 func Test_RetryInvitation(t *testing.T) {
@@ -32,22 +34,14 @@ func Test_RetryInvitation(t *testing.T) {
 
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
-	eventProducerMock := events.MockProducer{}
 	tnt := tenant.Tenant{ID: "tenant-id"}
-
-	handler := &ReceiverWalletsHandler{
-		Models:        models,
-		EventProducer: &eventProducerMock,
-	}
-
-	ctx := context.Background()
-
-	r := chi.NewRouter()
-	r.Patch("/receivers/wallets/{receiver_wallet_id}", handler.RetryInvitation)
-
-	ctx = tenant.SaveTenantInContext(ctx, &tnt)
+	ctx := tenant.SaveTenantInContext(context.Background(), &tnt)
 
 	t.Run("returns error when receiver wallet does not exist", func(t *testing.T) {
+		handler := ReceiverWalletsHandler{Models: models}
+		r := chi.NewRouter()
+		r.Patch("/receivers/wallets/{receiver_wallet_id}", handler.RetryInvitation)
+
 		route := "/receivers/wallets/invalid_id"
 		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, route, nil)
 		require.NoError(t, err)
@@ -61,6 +55,10 @@ func Test_RetryInvitation(t *testing.T) {
 	})
 
 	t.Run("returns error when tenant is not in the context", func(t *testing.T) {
+		handler := ReceiverWalletsHandler{Models: models}
+		r := chi.NewRouter()
+		r.Patch("/receivers/wallets/{receiver_wallet_id}", handler.RetryInvitation)
+
 		receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
 		wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "wallet", "https://www.wallet.com", "www.wallet.com", "wallet://")
 		rw := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.ReadyReceiversWalletStatus)
@@ -78,6 +76,14 @@ func Test_RetryInvitation(t *testing.T) {
 	})
 
 	t.Run("successfuly retry invitation", func(t *testing.T) {
+		eventProducerMock := events.NewMockProducer(t)
+		handler := ReceiverWalletsHandler{
+			Models:        models,
+			EventProducer: eventProducerMock,
+		}
+		r := chi.NewRouter()
+		r.Patch("/receivers/wallets/{receiver_wallet_id}", handler.RetryInvitation)
+
 		receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
 		wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "wallet", "https://www.wallet.com", "www.wallet.com", "wallet://")
 		rw := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.ReadyReceiversWalletStatus)
@@ -120,6 +126,17 @@ func Test_RetryInvitation(t *testing.T) {
 	})
 
 	t.Run("returns error when fails writing message on message broker", func(t *testing.T) {
+		crashTrackerMock := &crashtracker.MockCrashTrackerClient{}
+		defer crashTrackerMock.AssertExpectations(t)
+		eventProducerMock := events.NewMockProducer(t)
+		handler := ReceiverWalletsHandler{
+			Models:             models,
+			EventProducer:      eventProducerMock,
+			CrashTrackerClient: crashTrackerMock,
+		}
+		r := chi.NewRouter()
+		r.Patch("/receivers/wallets/{receiver_wallet_id}", handler.RetryInvitation)
+
 		receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
 		wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "wallet", "https://www.wallet.com", "www.wallet.com", "wallet://")
 		rw := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.ReadyReceiversWalletStatus)
@@ -141,6 +158,11 @@ func Test_RetryInvitation(t *testing.T) {
 			Return(errors.New("unexpected error")).
 			Once()
 
+		crashTrackerMock.
+			On("LogAndReportErrors", mock.Anything, mock.AnythingOfType("*fmt.wrapError"), "writing retry invitation message on the event producer").
+			Return().
+			Once()
+
 		route := fmt.Sprintf("/receivers/wallets/%s", rw.ID)
 		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, route, nil)
 		require.NoError(t, err)
@@ -149,19 +171,25 @@ func Test_RetryInvitation(t *testing.T) {
 		r.ServeHTTP(rr, req)
 
 		resp := rr.Result()
-		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
-		assert.JSONEq(t, `{"error":"An internal error occurred while processing this request."}`, rr.Body.String())
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		wantJson := fmt.Sprintf(`{
+			"id": %q,
+			"receiver_id": %q,
+			"wallet_id": %q,
+			"created_at": %q,
+			"invitation_sent_at": null
+		}`, rw.ID, receiver.ID, wallet.ID, rw.CreatedAt.Format(time.RFC3339Nano))
+		assert.JSONEq(t, wantJson, rr.Body.String())
 	})
 
 	t.Run("logs when couldn't write message because EventProducer is nil", func(t *testing.T) {
+		handler := ReceiverWalletsHandler{Models: models}
+		r := chi.NewRouter()
+		r.Patch("/receivers/wallets/{receiver_wallet_id}", handler.RetryInvitation)
+
 		receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
 		wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "wallet", "https://www.wallet.com", "www.wallet.com", "wallet://")
 		rw := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, data.ReadyReceiversWalletStatus)
-
-		handler := &ReceiverWalletsHandler{
-			Models:        models,
-			EventProducer: nil,
-		}
 
 		router := chi.NewRouter()
 		router.Patch("/receivers/wallets/{receiver_wallet_id}", handler.RetryInvitation)
@@ -200,6 +228,6 @@ func Test_RetryInvitation(t *testing.T) {
 
 		entries := getEntries()
 		require.Len(t, entries, 1)
-		assert.Equal(t, fmt.Sprintf("event producer is nil, could not publish message %s", msg), entries[0].Message)
+		assert.Equal(t, fmt.Sprintf("event producer is nil, could not publish messages %+v", []events.Message{msg}), entries[0].Message)
 	})
 }

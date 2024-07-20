@@ -5,8 +5,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 )
 
 func Test_QueryValidator_ParseQueryParameters(t *testing.T) {

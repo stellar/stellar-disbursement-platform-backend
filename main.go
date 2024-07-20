@@ -4,20 +4,26 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/joho/godotenv"
 	"github.com/sirupsen/logrus"
 	"github.com/stellar/go/support/log"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/cmd"
 )
 
 // Version is the official version of this application. Whenever it's changed
 // here, it also needs to be updated at the `helmchart/Chart.yaml#appVersion“.
-const Version = "2.0.0-rc1"
+const Version = "2.1.0-rc.1"
 
 // GitCommit is populated at build time by
 // go build -ldflags "-X main.GitCommit=$GIT_COMMIT"
 var GitCommit string
 
 func main() {
+	if err := godotenv.Load(); err != nil {
+		log.Debug("No .env file found")
+	}
+
 	preConfigureLogger()
 
 	rootCmd := cmd.SetupCLI(Version, GitCommit)

@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/stellar/go/support/log"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
@@ -44,7 +45,7 @@ func NewPaymentFromSubmitterEventHandler(options PaymentFromSubmitterEventHandle
 }
 
 func (h *PaymentFromSubmitterEventHandler) Name() string {
-	return "PaymentFromSubmitterEventHandler"
+	return utils.GetTypeName(h)
 }
 
 func (h *PaymentFromSubmitterEventHandler) CanHandleMessage(ctx context.Context, message *events.Message) bool {

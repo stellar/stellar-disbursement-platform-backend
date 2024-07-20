@@ -42,6 +42,7 @@ type ManagerInterface interface {
 	DropTenantSchema(ctx context.Context, tenantName string) error
 	UpdateTenantConfig(ctx context.Context, tu *TenantUpdate) (*Tenant, error)
 	SoftDeleteTenantByID(ctx context.Context, tenantID string) (*Tenant, error)
+	DeactivateTenantDistributionAccount(ctx context.Context, tenantID string) error
 }
 
 type Manager struct {
@@ -234,6 +235,25 @@ func (m *Manager) SoftDeleteTenantByID(ctx context.Context, tenantID string) (*T
 	}
 
 	return &t, nil
+}
+
+// DeactivateTenantDistributionAccount sets a distribution account of status ACTIVE to PENDING_USER_ACTIVATION for the given tenant id,
+// and is only used in the case where the distribution account is of type CircleDBVault.
+func (m *Manager) DeactivateTenantDistributionAccount(ctx context.Context, tenantID string) error {
+	q := `
+		UPDATE tenants t
+		SET
+			distribution_account_status = 'PENDING_USER_ACTIVATION'
+		WHERE id = $1
+		AND distribution_account_type = 'DISTRIBUTION_ACCOUNT.CIRCLE.DB_VAULT'
+		AND status = 'TENANT_ACTIVATED'
+	`
+
+	if _, err := m.db.ExecContext(ctx, q, tenantID); err != nil {
+		return fmt.Errorf("deactivating distribution account for tenant %s: %w", tenantID, err)
+	}
+
+	return nil
 }
 
 func (m *Manager) CreateTenantSchema(ctx context.Context, tenantName string) error {

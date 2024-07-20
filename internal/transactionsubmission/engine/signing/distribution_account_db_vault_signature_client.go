@@ -10,17 +10,17 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
+	sdpUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
-type DistributionAccountDBSignatureClientOptions struct {
+type DistributionAccountDBVaultSignatureClientOptions struct {
 	NetworkPassphrase    string
 	DBConnectionPool     db.DBConnectionPool
 	EncryptionPassphrase string
-	Encrypter            utils.PrivateKeyEncrypter
+	Encrypter            sdpUtils.PrivateKeyEncrypter
 }
 
-func (opts *DistributionAccountDBSignatureClientOptions) Validate() error {
+func (opts *DistributionAccountDBVaultSignatureClientOptions) Validate() error {
 	if opts.NetworkPassphrase == "" {
 		return fmt.Errorf("network passphrase cannot be empty")
 	}
@@ -36,25 +36,25 @@ func (opts *DistributionAccountDBSignatureClientOptions) Validate() error {
 	return nil
 }
 
-type DistributionAccountDBSignatureClient struct {
+type DistributionAccountDBVaultSignatureClient struct {
 	networkPassphrase    string
 	dbVault              store.DBVault
-	encrypter            utils.PrivateKeyEncrypter
+	encrypter            sdpUtils.PrivateKeyEncrypter
 	encryptionPassphrase string
 }
 
-// NewDistributionAccountDBSignatureClient returns a new instance of the DistributionAccountDB SignatureClient.
-func NewDistributionAccountDBSignatureClient(opts DistributionAccountDBSignatureClientOptions) (*DistributionAccountDBSignatureClient, error) {
+// NewDistributionAccountDBVaultSignatureClient returns a new instance of the DistributionAccountDB SignatureClient.
+func NewDistributionAccountDBVaultSignatureClient(opts DistributionAccountDBVaultSignatureClientOptions) (*DistributionAccountDBVaultSignatureClient, error) {
 	if err := opts.Validate(); err != nil {
 		return nil, fmt.Errorf("validating options: %w", err)
 	}
 
 	encrypter := opts.Encrypter
 	if encrypter == nil {
-		encrypter = &utils.DefaultPrivateKeyEncrypter{}
+		encrypter = &sdpUtils.DefaultPrivateKeyEncrypter{}
 	}
 
-	return &DistributionAccountDBSignatureClient{
+	return &DistributionAccountDBVaultSignatureClient{
 		networkPassphrase:    opts.NetworkPassphrase,
 		dbVault:              store.NewDBVaultModel(opts.DBConnectionPool),
 		encrypter:            encrypter,
@@ -62,9 +62,9 @@ func NewDistributionAccountDBSignatureClient(opts DistributionAccountDBSignature
 	}, nil
 }
 
-var _ SignatureClient = &DistributionAccountDBSignatureClient{}
+var _ SignatureClient = &DistributionAccountDBVaultSignatureClient{}
 
-func (c *DistributionAccountDBSignatureClient) getKPsForPublicKeys(ctx context.Context, publicKeys ...string) ([]*keypair.Full, error) {
+func (c *DistributionAccountDBVaultSignatureClient) getKPsForPublicKeys(ctx context.Context, publicKeys ...string) ([]*keypair.Full, error) {
 	if len(publicKeys) == 0 {
 		return nil, fmt.Errorf("no publicKeys provided")
 	}
@@ -102,43 +102,43 @@ func (c *DistributionAccountDBSignatureClient) getKPsForPublicKeys(ctx context.C
 	return kps, nil
 }
 
-func (c *DistributionAccountDBSignatureClient) SignStellarTransaction(ctx context.Context, stellarTx *txnbuild.Transaction, publicKeys ...string) (signedStellarTx *txnbuild.Transaction, err error) {
+func (c *DistributionAccountDBVaultSignatureClient) SignStellarTransaction(ctx context.Context, stellarTx *txnbuild.Transaction, publicKeys ...string) (signedStellarTx *txnbuild.Transaction, err error) {
 	if stellarTx == nil {
-		return nil, fmt.Errorf("stellarTx cannot be nil in %s", c.Type())
+		return nil, fmt.Errorf("stellarTx cannot be nil in %s", c.name())
 	}
 
 	kps, err := c.getKPsForPublicKeys(ctx, publicKeys...)
 	if err != nil {
-		return nil, fmt.Errorf("getting keypairs for publicKeys %v in %s: %w", publicKeys, c.Type(), err)
+		return nil, fmt.Errorf("getting keypairs for publicKeys %v in %s: %w", publicKeys, c.name(), err)
 	}
 
 	signedStellarTx, err = stellarTx.Sign(c.NetworkPassphrase(), kps...)
 	if err != nil {
-		return nil, fmt.Errorf("signing transaction in %s: %w", c.Type(), err)
+		return nil, fmt.Errorf("signing transaction in %s: %w", c.name(), err)
 	}
 
 	return signedStellarTx, nil
 }
 
-func (c *DistributionAccountDBSignatureClient) SignFeeBumpStellarTransaction(ctx context.Context, feeBumpStellarTx *txnbuild.FeeBumpTransaction, publicKeys ...string) (signedFeeBumpStellarTx *txnbuild.FeeBumpTransaction, err error) {
+func (c *DistributionAccountDBVaultSignatureClient) SignFeeBumpStellarTransaction(ctx context.Context, feeBumpStellarTx *txnbuild.FeeBumpTransaction, publicKeys ...string) (signedFeeBumpStellarTx *txnbuild.FeeBumpTransaction, err error) {
 	if feeBumpStellarTx == nil {
-		return nil, fmt.Errorf("stellarTx cannot be nil in %s", c.Type())
+		return nil, fmt.Errorf("stellarTx cannot be nil in %s", c.name())
 	}
 
 	kps, err := c.getKPsForPublicKeys(ctx, publicKeys...)
 	if err != nil {
-		return nil, fmt.Errorf("getting keypairs for publicKeys %v in %s: %w", publicKeys, c.Type(), err)
+		return nil, fmt.Errorf("getting keypairs for publicKeys %v in %s: %w", publicKeys, c.name(), err)
 	}
 
 	signedFeeBumpStellarTx, err = feeBumpStellarTx.Sign(c.NetworkPassphrase(), kps...)
 	if err != nil {
-		return nil, fmt.Errorf("signing transaction in %s: %w", c.Type(), err)
+		return nil, fmt.Errorf("signing transaction in %s: %w", c.name(), err)
 	}
 
 	return signedFeeBumpStellarTx, nil
 }
 
-func (c *DistributionAccountDBSignatureClient) BatchInsert(ctx context.Context, number int) (publicKeys []string, err error) {
+func (c *DistributionAccountDBVaultSignatureClient) BatchInsert(ctx context.Context, number int) (publicKeys []string, err error) {
 	if number < 1 {
 		return nil, fmt.Errorf("the number of publicKeys to insert needs to be greater than zero")
 	}
@@ -172,7 +172,7 @@ func (c *DistributionAccountDBSignatureClient) BatchInsert(ctx context.Context, 
 	return publicKeys, nil
 }
 
-func (c *DistributionAccountDBSignatureClient) Delete(ctx context.Context, publicKey string) error {
+func (c *DistributionAccountDBVaultSignatureClient) Delete(ctx context.Context, publicKey string) error {
 	err := c.dbVault.Delete(ctx, publicKey)
 	if err != nil {
 		return fmt.Errorf("deleting dbVaultEntry %q from database: %w", publicKey, err)
@@ -181,10 +181,10 @@ func (c *DistributionAccountDBSignatureClient) Delete(ctx context.Context, publi
 	return nil
 }
 
-func (c *DistributionAccountDBSignatureClient) Type() string {
-	return string(DistributionAccountDBSignatureClientType)
+func (c *DistributionAccountDBVaultSignatureClient) name() string {
+	return sdpUtils.GetTypeName(c)
 }
 
-func (c *DistributionAccountDBSignatureClient) NetworkPassphrase() string {
+func (c *DistributionAccountDBVaultSignatureClient) NetworkPassphrase() string {
 	return c.networkPassphrase
 }

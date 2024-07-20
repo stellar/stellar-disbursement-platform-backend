@@ -108,7 +108,7 @@ func (s StellarTomlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			httperror.InternalError(ctx, "Couldn't generate stellar.toml file for this instance", innerErr, nil).Render(w)
 			return
 		}
-		instanceAssets := services.DefaultAssetsNetworkMap[networkType]
+		instanceAssets := services.StellarAssetsNetworkMap[networkType]
 		stellarToml = s.buildGeneralInformation(ctx, r) + s.buildOrganizationDocumentation(s.InstanceName) + s.buildCurrencyInformation(instanceAssets)
 	} else {
 		// return a stellar.toml file for this tenant.

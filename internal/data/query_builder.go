@@ -2,16 +2,19 @@ package data
 
 import (
 	"fmt"
+	"reflect"
+	"strings"
 )
 
 // QueryBuilder is a helper struct for building SQL queries
 type QueryBuilder struct {
-	baseQuery        string
-	whereClause      string
-	whereParams      []interface{}
-	sortClause       string
-	paginationClause string
-	paginationParams []interface{}
+	baseQuery           string
+	whereClause         string
+	whereParams         []interface{}
+	sortClause          string
+	paginationClause    string
+	paginationParams    []interface{}
+	forUpdateSkipLocked bool
 }
 
 // NewQueryBuilder creates a new QueryBuilder
@@ -79,5 +82,49 @@ func (qb *QueryBuilder) Build() (string, []interface{}) {
 		query = fmt.Sprintf("%s %s", query, qb.paginationClause)
 		params = append(params, qb.paginationParams...)
 	}
+	if qb.forUpdateSkipLocked {
+		query = fmt.Sprintf("%s FOR UPDATE SKIP LOCKED", query)
+	}
 	return query, params
+}
+
+// BuildSetClause builds a SET clause for an UPDATE query based on the provided struct and its "db" tags. For instance,
+// given the following struct:
+//
+//	type User struct {
+//	    ID   int64  `db:"id"`
+//	    Name string `db:"name"`
+//	}
+//
+// The function will return the following string and slice when called with an instance of `User{ID: 1, Name: "John"}`:
+// "id = ?, name = ?", []interface{}{1, "John"}
+func BuildSetClause(u interface{}) (string, []interface{}) {
+	v := reflect.ValueOf(u)
+	t := reflect.TypeOf(u)
+
+	// Check if the provided argument is a struct
+	if t.Kind() != reflect.Struct {
+		return "", nil
+	}
+
+	var setClauses []string
+	var params []interface{}
+
+	for i := 0; i < v.NumField(); i++ {
+		field := v.Field(i)
+		fieldType := t.Field(i)
+		dbTag := fieldType.Tag.Get("db")
+		dbTag = strings.Split(dbTag, ",")[0]
+		if dbTag == "" {
+			continue
+		}
+
+		// Check if the field is not zero-value
+		if !field.IsZero() {
+			setClauses = append(setClauses, fmt.Sprintf("%s = ?", dbTag))
+			params = append(params, field.Interface())
+		}
+	}
+
+	return strings.Join(setClauses, ", "), params
 }

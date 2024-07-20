@@ -3,15 +3,13 @@ package signing
 import (
 	"context"
 	"fmt"
-	"strings"
+
+	sdpUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 
 	"github.com/stellar/go/txnbuild"
-	"golang.org/x/exp/maps"
-	"golang.org/x/exp/slices"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
@@ -24,71 +22,6 @@ type SignatureClient interface {
 	SignFeeBumpStellarTransaction(ctx context.Context, feeBumpStellarTx *txnbuild.FeeBumpTransaction, stellarAccounts ...string) (signedFeeBumpStellarTx *txnbuild.FeeBumpTransaction, err error)
 	BatchInsert(ctx context.Context, number int) (publicKeys []string, err error)
 	Delete(ctx context.Context, publicKey string) error
-	Type() string
-}
-
-type SignatureClientType string
-
-func (s SignatureClientType) DistributionAccountType() (schema.DistributionAccountType, error) {
-	switch strings.TrimSpace(strings.ToUpper(string(s))) {
-	case string(DistributionAccountEnvSignatureClientType):
-		return schema.DistributionAccountTypeEnvStellar, nil
-	case string(DistributionAccountDBSignatureClientType):
-		return schema.DistributionAccountTypeDBVaultStellar, nil
-	default:
-		return "", fmt.Errorf("invalid distribution account type %q", s)
-	}
-}
-
-const (
-	ChannelAccountDBSignatureClientType       SignatureClientType = "CHANNEL_ACCOUNT_DB"
-	DistributionAccountEnvSignatureClientType SignatureClientType = "DISTRIBUTION_ACCOUNT_ENV"
-	DistributionAccountDBSignatureClientType  SignatureClientType = "DISTRIBUTION_ACCOUNT_DB"
-	HostAccountEnvSignatureClientType         SignatureClientType = "HOST_ACCOUNT_ENV"
-)
-
-func AllSignatureClientTypes() []SignatureClientType {
-	return []SignatureClientType{ChannelAccountDBSignatureClientType, DistributionAccountEnvSignatureClientType, DistributionAccountDBSignatureClientType, HostAccountEnvSignatureClientType}
-}
-
-func ParseSignatureClientType(sigClientType string) (SignatureClientType, error) {
-	sigClientTypeStrUpper := strings.ToUpper(sigClientType)
-	scType := SignatureClientType(sigClientTypeStrUpper)
-
-	if slices.Contains(AllSignatureClientTypes(), scType) {
-		return scType, nil
-	}
-
-	return "", fmt.Errorf("invalid signature client type %q", sigClientTypeStrUpper)
-}
-
-func DistributionSignatureClientTypes() []SignatureClientType {
-	return maps.Keys(DistSigClientsDescription)
-}
-
-var DistSigClientsDescription = map[SignatureClientType]string{
-	DistributionAccountEnvSignatureClientType: "uses the the same distribution account for all tenants, as well as for the HOST, through the secret configured in DISTRIBUTION_SEED.",
-	DistributionAccountDBSignatureClientType:  "uses the one different distribution account private key per tenant, and stores them in the database, encrypted with the DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE.",
-}
-
-func DistSigClientsDescriptionStr() string {
-	var descriptions []string
-	for sigClientType, description := range DistSigClientsDescription {
-		descriptions = append(descriptions, fmt.Sprintf("%s: %s", sigClientType, description))
-	}
-
-	return strings.Join(descriptions, " ")
-}
-
-func ParseSignatureClientDistributionType(sigClientType string) (SignatureClientType, error) {
-	sigClientTypeStrUpper := strings.ToUpper(sigClientType)
-	scType := SignatureClientType(sigClientTypeStrUpper)
-
-	if slices.Contains(DistributionSignatureClientTypes(), scType) {
-		return scType, nil
-	}
-
-	return "", fmt.Errorf("invalid signature client distribution type %q", sigClientTypeStrUpper)
 }
 
 type SignatureClientOptions struct {
@@ -107,18 +40,19 @@ type SignatureClientOptions struct {
 	// *AccountDB:
 	DBConnectionPool    db.DBConnectionPool
 	LedgerNumberTracker preconditions.LedgerNumberTracker
-	Encrypter           utils.PrivateKeyEncrypter // (optional)
+	Encrypter           sdpUtils.PrivateKeyEncrypter // (optional)
 }
 
-func NewSignatureClient(sigType SignatureClientType, opts SignatureClientOptions) (SignatureClient, error) {
-	switch sigType {
-	case DistributionAccountEnvSignatureClientType, HostAccountEnvSignatureClientType:
-		return NewDistributionAccountEnvSignatureClient(DistributionAccountEnvOptions{
+func NewSignatureClient(accType schema.AccountType, opts SignatureClientOptions) (SignatureClient, error) {
+	switch accType {
+	case schema.HostStellarEnv, schema.DistributionAccountStellarEnv:
+		return NewAccountEnvSignatureClient(AccountEnvOptions{
 			NetworkPassphrase:      opts.NetworkPassphrase,
 			DistributionPrivateKey: opts.DistributionPrivateKey,
+			AccountType:            accType,
 		})
 
-	case ChannelAccountDBSignatureClientType:
+	case schema.ChannelAccountStellarDB:
 		return NewChannelAccountDBSignatureClient(ChannelAccountDBSignatureClientOptions{
 			NetworkPassphrase:    opts.NetworkPassphrase,
 			DBConnectionPool:     opts.DBConnectionPool,
@@ -127,8 +61,8 @@ func NewSignatureClient(sigType SignatureClientType, opts SignatureClientOptions
 			Encrypter:            opts.Encrypter,
 		})
 
-	case DistributionAccountDBSignatureClientType:
-		return NewDistributionAccountDBSignatureClient(DistributionAccountDBSignatureClientOptions{
+	case schema.DistributionAccountStellarDBVault:
+		return NewDistributionAccountDBVaultSignatureClient(DistributionAccountDBVaultSignatureClientOptions{
 			NetworkPassphrase:    opts.NetworkPassphrase,
 			DBConnectionPool:     opts.DBConnectionPool,
 			EncryptionPassphrase: opts.DistAccEncryptionPassphrase,
@@ -136,6 +70,6 @@ func NewSignatureClient(sigType SignatureClientType, opts SignatureClientOptions
 		})
 
 	default:
-		return nil, fmt.Errorf("invalid signature client type: %v", sigType)
+		return nil, fmt.Errorf("cannot find a Stellar signature client for accountType=%v", accType)
 	}
 }

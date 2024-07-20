@@ -1,8 +1,9 @@
 package signing
 
 import (
-	"fmt"
 	"testing"
+
+	sdpUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 
 	"github.com/stellar/go/keypair"
 	"github.com/stellar/go/network"
@@ -13,73 +14,73 @@ import (
 	preconditionsMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 func Test_SignatureService_Validate(t *testing.T) {
-	mSignerClient := mocks.NewMockSignatureClient(t)
-	mSignerClient.On("NetworkPassphrase").Return(network.TestNetworkPassphrase)
-	mSignerClientPubnet := mocks.NewMockSignatureClient(t)
-	mSignerClientPubnet.On("NetworkPassphrase").Return(network.PublicNetworkPassphrase)
-
 	testCases := []struct {
 		name            string
-		sigService      SignatureService
+		getSigServiceFn func(mSignerRouter *mocks.MockSignerRouter, mDistAccResolver *mocks.MockDistributionAccountResolver) SignatureService
 		wantErrContains string
 	}{
 		{
-			name:            "ChAccountSigner cannot be nil",
-			sigService:      SignatureService{},
-			wantErrContains: "channel account signer cannot be nil",
+			name: "signerRouter cannot be nil",
+			getSigServiceFn: func(_ *mocks.MockSignerRouter, _ *mocks.MockDistributionAccountResolver) SignatureService {
+				return SignatureService{}
+			},
+			wantErrContains: "signer router cannot be nil",
 		},
 		{
-			name: "DistAccountSigner cannot be nil",
-			sigService: SignatureService{
-				ChAccountSigner: mSignerClient,
+			name: "signerRouter cannot be empty",
+			getSigServiceFn: func(mSignerRouter *mocks.MockSignerRouter, _ *mocks.MockDistributionAccountResolver) SignatureService {
+				mSignerRouter.
+					On("SupportedAccountTypes").
+					Return([]schema.AccountType{}).
+					Once()
+				return SignatureService{
+					SignerRouter: mSignerRouter,
+				}
 			},
-			wantErrContains: "distribution account signer cannot be nil",
-		},
-		{
-			name: "HostAccountSigner cannot be nil",
-			sigService: SignatureService{
-				ChAccountSigner:   mSignerClient,
-				DistAccountSigner: mSignerClient,
-			},
-			wantErrContains: "host account signer cannot be nil",
-		},
-		{
-			name: "Network passphrases needs to be consistent",
-			sigService: SignatureService{
-				ChAccountSigner:   mSignerClient,
-				DistAccountSigner: mSignerClient,
-				HostAccountSigner: mSignerClientPubnet,
-			},
-			wantErrContains: "network passphrase of all signers should be the same",
+			wantErrContains: "signer router must support at least one account type",
 		},
 		{
 			name: "DistributionAccountResolver cannot be nil",
-			sigService: SignatureService{
-				ChAccountSigner:   mSignerClient,
-				DistAccountSigner: mSignerClient,
-				HostAccountSigner: mSignerClient,
+			getSigServiceFn: func(mSignerRouter *mocks.MockSignerRouter, _ *mocks.MockDistributionAccountResolver) SignatureService {
+				mSignerRouter.
+					On("SupportedAccountTypes").
+					Return([]schema.AccountType{schema.DistributionAccountStellarEnv}).
+					Once()
+				return SignatureService{
+					SignerRouter: mSignerRouter,
+				}
 			},
 			wantErrContains: "distribution account resolver cannot be nil",
 		},
 		{
 			name: "🎉 successfully validates object",
-			sigService: SignatureService{
-				ChAccountSigner:             mSignerClient,
-				DistAccountSigner:           mSignerClient,
-				HostAccountSigner:           mSignerClient,
-				DistributionAccountResolver: mocks.NewMockDistributionAccountResolver(t),
+			getSigServiceFn: func(mSignerRouter *mocks.MockSignerRouter, mDistAccResolver *mocks.MockDistributionAccountResolver) SignatureService {
+				mSignerRouter.
+					On("SupportedAccountTypes").
+					Return([]schema.AccountType{schema.DistributionAccountStellarEnv}).
+					Once()
+				return SignatureService{
+					SignerRouter:                mSignerRouter,
+					DistributionAccountResolver: mDistAccResolver,
+				}
 			},
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := tc.sigService.Validate()
+			// prepareMocks
+			mSignerRouter := mocks.NewMockSignerRouter(t)
+			mDistAccResolver := mocks.NewMockDistributionAccountResolver(t)
+
+			sigService := tc.getSigServiceFn(mSignerRouter, mDistAccResolver)
+
+			err := sigService.Validate()
 			if tc.wantErrContains == "" {
 				require.NoError(t, err)
 			} else {
@@ -107,19 +108,33 @@ func Test_NewSignatureService(t *testing.T) {
 		encryptionPassphrase: chAccEncryptionPassphrase,
 		ledgerNumberTracker:  mLedgerNumberTracker,
 		chAccModel:           store.NewChannelAccountModel(dbConnectionPool),
-		encrypter:            &utils.DefaultPrivateKeyEncrypter{},
+		encrypter:            &sdpUtils.DefaultPrivateKeyEncrypter{},
 	}
-	wantDistAccountEnvSigner := &DistributionAccountEnvSignatureClient{
+	wantDistAccountEnvSigner := &AccountEnvSignatureClient{
 		networkPassphrase:   network.TestNetworkPassphrase,
 		distributionAccount: distributionKP.Address(),
 		distributionKP:      distributionKP,
+		accountType:         schema.DistributionAccountStellarEnv,
 	}
-	wantDistAccountDBSigner := &DistributionAccountDBSignatureClient{
+	wantHostAccountEnvSigner := &AccountEnvSignatureClient{
+		networkPassphrase:   network.TestNetworkPassphrase,
+		distributionAccount: distributionKP.Address(),
+		distributionKP:      distributionKP,
+		accountType:         schema.HostStellarEnv,
+	}
+	wantDistAccountDBSigner := &DistributionAccountDBVaultSignatureClient{
 		networkPassphrase:    network.TestNetworkPassphrase,
 		encryptionPassphrase: distAccEncryptionPassphrase,
 		dbVault:              store.NewDBVaultModel(dbConnectionPool),
-		encrypter:            &utils.DefaultPrivateKeyEncrypter{},
+		encrypter:            &sdpUtils.DefaultPrivateKeyEncrypter{},
 	}
+	wantSigRouterStrategies := map[schema.AccountType]SignatureClient{
+		schema.HostStellarEnv:                    wantHostAccountEnvSigner,
+		schema.ChannelAccountStellarDB:           wantChAccountSigner,
+		schema.DistributionAccountStellarEnv:     wantDistAccountEnvSigner,
+		schema.DistributionAccountStellarDBVault: wantDistAccountDBSigner,
+	}
+
 	wantDistAccountResolver := &DistributionAccountResolverImpl{
 		tenantManager:                 tenant.NewManager(tenant.WithDatabase(dbConnectionPool)),
 		hostDistributionAccountPubKey: distributionKP.Address(),
@@ -132,80 +147,34 @@ func Test_NewSignatureService(t *testing.T) {
 		wantSigService  SignatureService
 	}{
 		{
-			name:            "returns an error if the distribution signer type is invalid",
-			opts:            SignatureServiceOptions{DistributionSignerType: SignatureClientType("invalid")},
-			wantErrContains: `invalid distribution signer type "invalid"`,
-		},
-		{
-			name: "returns an error if the distribution account resolver is nil",
-			opts: SignatureServiceOptions{
-				DistributionSignerType: DistributionAccountEnvSignatureClientType,
-			},
+			name:            "returns an error if the distribution account resolver is nil",
+			opts:            SignatureServiceOptions{},
 			wantErrContains: "distribution account resolver cannot be nil",
 		},
 		{
-			name: "returns an error if the options are invalid for the channel account signer",
+			name: "returns an error if the options are invalid for the NewSignerRouter method",
 			opts: SignatureServiceOptions{
-				DistributionSignerType:      DistributionAccountEnvSignatureClientType,
 				DistributionAccountResolver: wantDistAccountResolver,
 			},
-			wantErrContains: "creating a new channel account signature client:",
+			wantErrContains: "creating a new signer router",
 		},
 		{
-			name: "returns an error if the options are invalid for the distribution account signer (DISTRIBUTION_ACCOUNT_ENV)",
+			name: "🎉 successfully instantiate new signature service",
 			opts: SignatureServiceOptions{
-				DistributionSignerType:    DistributionAccountEnvSignatureClientType,
-				NetworkPassphrase:         network.TestNetworkPassphrase,
-				DBConnectionPool:          dbConnectionPool,
-				ChAccEncryptionPassphrase: chAccEncryptionPassphrase,
-				LedgerNumberTracker:       mLedgerNumberTracker,
-
-				DistributionAccountResolver: wantDistAccountResolver,
-			},
-			wantErrContains: fmt.Sprintf("creating a new distribution account signature client with type %v", DistributionAccountEnvSignatureClientType),
-		},
-		{
-			name: "🎉 successfully instantiate new signature service (DISTRIBUTION_ACCOUNT_ENV)",
-			opts: SignatureServiceOptions{
-				DistributionSignerType:    DistributionAccountEnvSignatureClientType,
-				NetworkPassphrase:         network.TestNetworkPassphrase,
-				DBConnectionPool:          dbConnectionPool,
-				ChAccEncryptionPassphrase: chAccEncryptionPassphrase,
-				LedgerNumberTracker:       mLedgerNumberTracker,
-
-				DistributionPrivateKey: distributionKP.Seed(),
-
-				DistributionAccountResolver: wantDistAccountResolver,
-			},
-
-			wantSigService: SignatureService{
-				ChAccountSigner:             wantChAccountSigner,
-				DistAccountSigner:           wantDistAccountEnvSigner,
-				HostAccountSigner:           wantDistAccountEnvSigner,
-				DistributionAccountResolver: wantDistAccountResolver,
-				networkPassphrase:           network.TestNetworkPassphrase,
-			},
-		},
-		{
-			name: "🎉 successfully instantiate new signature service (DISTRIBUTION_ACCOUNT_DB)",
-			opts: SignatureServiceOptions{
-				DistributionSignerType:    DistributionAccountDBSignatureClientType,
-				NetworkPassphrase:         network.TestNetworkPassphrase,
-				DBConnectionPool:          dbConnectionPool,
-				ChAccEncryptionPassphrase: chAccEncryptionPassphrase,
-				LedgerNumberTracker:       mLedgerNumberTracker,
-
+				NetworkPassphrase:           network.TestNetworkPassphrase,
+				DBConnectionPool:            dbConnectionPool,
+				ChAccEncryptionPassphrase:   chAccEncryptionPassphrase,
+				LedgerNumberTracker:         mLedgerNumberTracker,
 				DistAccEncryptionPassphrase: distAccEncryptionPassphrase,
-
-				DistributionPrivateKey: distributionKP.Seed(),
-
+				DistributionPrivateKey:      distributionKP.Seed(),
 				DistributionAccountResolver: wantDistAccountResolver,
 			},
 
 			wantSigService: SignatureService{
-				ChAccountSigner:             wantChAccountSigner,
-				DistAccountSigner:           wantDistAccountDBSigner,
-				HostAccountSigner:           wantDistAccountEnvSigner,
+				SignerRouter: &SignerRouterImpl{
+					strategies:        wantSigRouterStrategies,
+					networkPassphrase: network.TestNetworkPassphrase,
+				},
 				DistributionAccountResolver: wantDistAccountResolver,
 				networkPassphrase:           network.TestNetworkPassphrase,
 			},

@@ -3,16 +3,14 @@ package mocks
 import (
 	"context"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stretchr/testify/mock"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 )
 
 type MockPatchAnchorPlatformTransactionCompletionService struct {
 	mock.Mock
 }
-
-var _ services.PatchAnchorPlatformTransactionCompletionServiceInterface = new(MockPatchAnchorPlatformTransactionCompletionService)
 
 func (s *MockPatchAnchorPlatformTransactionCompletionService) PatchAPTransactionsForPayments(ctx context.Context) error {
 	args := s.Called(ctx)

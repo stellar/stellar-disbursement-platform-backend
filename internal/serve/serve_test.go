@@ -23,6 +23,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	monitorMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor/mocks"
@@ -205,18 +206,33 @@ func Test_handleHTTP_Health(t *testing.T) {
 		Route:  "/health",
 		Method: "GET",
 	}
-	mMonitorService.On("MonitorHttpRequestDuration", mock.AnythingOfType("time.Duration"), mLabels).Return(nil).Once()
+	mMonitorService.
+		On("MonitorHttpRequestDuration", mock.AnythingOfType("time.Duration"), mLabels).
+		Return(nil).
+		Once()
+
+	producerMock := events.NewMockProducer(t)
+	producerMock.
+		On("Ping", mock.Anything).
+		Return(nil).
+		Once()
+	producerMock.
+		On("BrokerType").
+		Return(events.KafkaEventBrokerType).
+		Once()
 
 	handlerMux := handleHTTP(ServeOptions{
-		EC256PrivateKey: privateKeyStr,
-		EC256PublicKey:  publicKeyStr,
-		Environment:     "test",
-		GitCommit:       "1234567890abcdef",
-		Models:          models,
-		MonitorService:  mMonitorService,
-		SEP24JWTSecret:  "jwt_secret_1234567890",
-		Version:         "x.y.z",
-		tenantManager:   tenant.NewManager(tenant.WithDatabase(dbConnectionPool)),
+		EC256PrivateKey:       privateKeyStr,
+		EC256PublicKey:        publicKeyStr,
+		Environment:           "test",
+		GitCommit:             "1234567890abcdef",
+		Models:                models,
+		MonitorService:        mMonitorService,
+		SEP24JWTSecret:        "jwt_secret_1234567890",
+		Version:               "x.y.z",
+		tenantManager:         tenant.NewManager(tenant.WithDatabase(dbConnectionPool)),
+		EventProducer:         producerMock,
+		AdminDBConnectionPool: dbConnectionPool,
 	})
 
 	req := httptest.NewRequest("GET", "/health", nil)
@@ -232,7 +248,11 @@ func Test_handleHTTP_Health(t *testing.T) {
 		"status": "pass",
 		"version": "x.y.z",
 		"service_id": "serve",
-		"release_id": "1234567890abcdef"
+		"release_id": "1234567890abcdef",
+		"services": {
+			"database": "pass",
+			"kafka": "pass"
+		}
 	}`
 	assert.JSONEq(t, wantBody, string(body))
 }
@@ -294,16 +314,27 @@ func getServeOptionsForTests(t *testing.T, dbConnectionPool db.DBConnectionPool)
 
 	mHorizonClient := &horizonclient.MockClient{}
 	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
-	sigService, _, _, _, distAccResolver := signing.NewMockSignatureService(t)
+	sigService, _, distAccResolver := signing.NewMockSignatureService(t)
 	submitterEngine := engine.SubmitterEngine{
 		HorizonClient:       mHorizonClient,
 		SignatureService:    sigService,
 		LedgerNumberTracker: mLedgerNumberTracker,
 		MaxBaseFee:          100 * txnbuild.MinBaseFee,
 	}
+	distAccount := schema.NewDefaultStellarTransactionAccount(distAccPublicKey)
 	distAccResolver.
 		On("DistributionAccountFromContext", mock.Anything).
-		Return(schema.NewDefaultStellarDistributionAccount(distAccPublicKey), nil).
+		Return(distAccount, nil).
+		Maybe()
+
+	producerMock := events.NewMockProducer(t)
+	producerMock.
+		On("Ping", mock.Anything).
+		Return(nil).
+		Maybe()
+	producerMock.
+		On("BrokerType").
+		Return(events.KafkaEventBrokerType).
 		Maybe()
 
 	serveOptions := ServeOptions{
@@ -324,6 +355,7 @@ func getServeOptionsForTests(t *testing.T, dbConnectionPool db.DBConnectionPool)
 		Version:                         "x.y.z",
 		NetworkPassphrase:               network.TestNetworkPassphrase,
 		SubmitterEngine:                 submitterEngine,
+		EventProducer:                   producerMock,
 	}
 	err = serveOptions.SetupDependencies()
 	require.NoError(t, err)
@@ -382,7 +414,7 @@ func Test_handleHTTP_authenticatedEndpoints(t *testing.T) {
 	handlerMux := handleHTTP(serveOptions)
 
 	// Authenticated endpoints
-	authenticatedEndpoints := []struct { // TODO: body to requests
+	authenticatedEndpoints := []struct {
 		method string
 		path   string
 	}{
@@ -436,6 +468,9 @@ func Test_handleHTTP_authenticatedEndpoints(t *testing.T) {
 		{http.MethodGet, "/organization"},
 		{http.MethodPatch, "/organization"},
 		{http.MethodGet, "/organization/logo"},
+		{http.MethodPatch, "/organization/circle-config"},
+		// Balances
+		{http.MethodGet, "/balances"},
 	}
 
 	// Expect 401 as a response:

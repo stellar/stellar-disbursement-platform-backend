@@ -244,27 +244,18 @@ func BaseDistributionAccountSignatureClientConfigOptions(opts *signing.Signature
 	return []*config.ConfigOption{
 		{
 			Name:           "distribution-account-encryption-passphrase",
-			Usage:          "A Stellar-compliant ed25519 private key used to encrypt/decrypt the in-memory distribution accounts' private keys. It's mandatory when the distribution-signer-type is set to DISTRIBUTION_ACCOUNT_DB.",
+			Usage:          "A Stellar-compliant ed25519 private key used to encrypt and decrypt the private keys of tenants' distribution accounts.",
 			OptType:        types.String,
 			CustomSetValue: SetConfigOptionStellarPrivateKey,
 			ConfigKey:      &opts.DistAccEncryptionPassphrase,
-			Required:       false,
-		},
-		{
-			Name:           "distribution-seed",
-			Usage:          "The private key of the HOST's Stellar distribution account, used to create channel accounts", // TODO: this will eventually be used for sponsoring tenant accounts.
-			OptType:        types.String,
-			CustomSetValue: SetConfigOptionStellarPrivateKey,
-			ConfigKey:      &opts.DistributionPrivateKey,
 			Required:       true,
 		},
 		{
-			Name:           "distribution-signer-type",
-			Usage:          fmt.Sprintf("The type of signer used to sign Stellar transactions for the tenants' distribution accounts. Options: %s", signing.DistSigClientsDescriptionStr()),
+			Name:           "distribution-seed",
+			Usage:          "The private key of the HOST's Stellar distribution account, used to create channel accounts",
 			OptType:        types.String,
-			CustomSetValue: SetConfigOptionDistributionSignerType,
-			ConfigKey:      &opts.DistributionSignerType,
-			FlagDefault:    string(signing.DistributionAccountDBSignatureClientType),
+			CustomSetValue: SetConfigOptionStellarPrivateKey,
+			ConfigKey:      &opts.DistributionPrivateKey,
 			Required:       true,
 		},
 	}

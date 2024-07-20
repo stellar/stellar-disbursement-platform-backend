@@ -38,8 +38,8 @@ func Test_ChannelAccountsCommand_CreateCommand(t *testing.T) {
 		"create", "2",
 		"--distribution-seed", distributionKP.Seed(),
 		"--distribution-public-key", distributionKP.Address(),
-		"--distribution-signer-type", "DISTRIBUTION_ACCOUNT_ENV",
 		"--channel-account-encryption-passphrase", keypair.MustRandom().Seed(),
+		"--distribution-account-encryption-passphrase", keypair.MustRandom().Seed(),
 		"--database-url", dbt.DSN,
 	})
 
@@ -103,7 +103,7 @@ func Test_ChannelAccountsCommand_VerifyCommand(t *testing.T) {
 		"verify",
 		"--distribution-seed", distributionKP.Seed(),
 		"--distribution-public-key", distributionKP.Address(),
-		"--distribution-signer-type", "DISTRIBUTION_ACCOUNT_ENV",
+		"--distribution-account-encryption-passphrase", keypair.MustRandom().Seed(),
 		"--channel-account-encryption-passphrase", keypair.MustRandom().Seed(),
 		"--database-url", dbt.DSN,
 	})
@@ -171,7 +171,7 @@ func Test_ChannelAccountsCommand_EnsureCommand(t *testing.T) {
 		"ensure", "2",
 		"--distribution-seed", distributionKP.Seed(),
 		"--distribution-public-key", distributionKP.Address(),
-		"--distribution-signer-type", "DISTRIBUTION_ACCOUNT_ENV",
+		"--distribution-account-encryption-passphrase", keypair.MustRandom().Seed(),
 		"--channel-account-encryption-passphrase", keypair.MustRandom().Seed(),
 		"--database-url", dbt.DSN,
 	})
@@ -237,7 +237,7 @@ func Test_ChannelAccountsCommand_DeleteCommand(t *testing.T) {
 		"delete",
 		"--distribution-seed", distributionKP.Seed(),
 		"--distribution-public-key", distributionKP.Address(),
-		"--distribution-signer-type", "DISTRIBUTION_ACCOUNT_ENV",
+		"--distribution-account-encryption-passphrase", keypair.MustRandom().Seed(),
 		"--channel-account-encryption-passphrase", keypair.MustRandom().Seed(),
 		"--channel-account-id", "acc-id",
 		"--database-url", dbt.DSN,
