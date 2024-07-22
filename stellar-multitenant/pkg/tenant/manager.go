@@ -246,7 +246,7 @@ func (m *Manager) DeactivateTenantDistributionAccount(ctx context.Context, tenan
 			distribution_account_status = 'PENDING_USER_ACTIVATION'
 		WHERE id = $1
 		AND distribution_account_type = 'DISTRIBUTION_ACCOUNT.CIRCLE.DB_VAULT'
-		AND status = 'TENANT_ACTIVATED'
+		AND status != 'TENANT_DEACTIVATED'
 	`
 
 	if _, err := m.db.ExecContext(ctx, q, tenantID); err != nil {
