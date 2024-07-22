@@ -619,9 +619,10 @@ func TestManager_DeactivateTenantDistributionAccount(t *testing.T) {
 	t.Run("does not deactivate distribution account if tenant is deactivated", func(t *testing.T) {
 		tnt, err = m.UpdateTenantConfig(
 			ctx, &TenantUpdate{
-				ID:                      tnt.ID,
-				DistributionAccountType: schema.DistributionAccountCircleDBVault,
-				Status:                  pointerTo(DeactivatedTenantStatus),
+				ID:                        tnt.ID,
+				DistributionAccountType:   schema.DistributionAccountCircleDBVault,
+				Status:                    pointerTo(DeactivatedTenantStatus),
+				DistributionAccountStatus: schema.AccountStatusActive,
 			})
 		require.NoError(t, err)
 
