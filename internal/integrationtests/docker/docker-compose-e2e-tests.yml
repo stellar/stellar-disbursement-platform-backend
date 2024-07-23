@@ -16,7 +16,7 @@ services:
     container_name: e2e-sdp-api
     image: stellar/sdp-v2:latest
     build:
-      context: ../../
+      context: ../../../
       dockerfile: Dockerfile
     ports:
       - "8000:8000"
@@ -65,7 +65,7 @@ services:
       DISBURSED_ASSET_ISSUER: GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5
       RECEIVER_ACCOUNT_PUBLIC_KEY: GCDYFAJSZPH3RCXL6NWMMOY54CXNUBYFTDCBW7GGG6VPBW3WSDKSB2NU
       RECEIVER_ACCOUNT_PRIVATE_KEY: SDSAVUWVNOFG2JEHKIWEUHAYIA6PLGEHLMHX2TMVKEQGZKOFQ7XXKDFE
-      DISBURSEMENT_CSV_FILE_PATH: files
+      DISBURSEMENT_CSV_FILE_PATH: resources
       DISBURSEMENT_CSV_FILE_NAME: disbursement_integration_tests.csv
       SERVER_API_BASE_URL: http://localhost:8000
       ADMIN_SERVER_BASE_URL: http://localhost:8003
@@ -114,7 +114,7 @@ services:
     container_name: e2e-sdp-tss
     image: stellar/sdp-v2:latest
     build:
-      context: ../../
+      context: ../../../
       dockerfile: Dockerfile
     ports:
       - "9000:9000"

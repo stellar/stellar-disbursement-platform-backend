@@ -132,7 +132,7 @@ func Test_IntegrationTestsCommand_CreateIntegrationTestsDataCommand(t *testing.T
 		DisbursetAssetIssuer: "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV",
 		WalletName:           "walletTest",
 		WalletHomepage:       "https://www.test_wallet.com",
-		WalletDeepLink:       "test_wallet://",
+		WalletDeepLink:       "test-wallet://sdp",
 	}
 
 	cmd := command.CreateIntegrationTestsDataCommand(integrationTestsOpts)
@@ -143,7 +143,7 @@ func Test_IntegrationTestsCommand_CreateIntegrationTestsDataCommand(t *testing.T
 	t.Setenv("DISBURSED_ASSET_ISSUER", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
 	t.Setenv("WALLET_NAME", "walletTest")
 	t.Setenv("WALLET_HOMEPAGE", "https://www.test_wallet.com")
-	t.Setenv("WALLET_DEEPLINK", "test_wallet://")
+	t.Setenv("WALLET_DEEPLINK", "test-wallet://sdp")
 
 	parentCmdMock.SetArgs([]string{
 		"create-data",
