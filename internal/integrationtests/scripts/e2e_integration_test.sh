@@ -34,7 +34,7 @@ for accountType in "${accountTypes[@]}"; do
   echo "====> 👀Starting e2e setup and integration test ($platform)"
   echo $DIVIDER
   echo "====> 👀Step 1: start preparation"
-  docker container  ps -aq -f name='e2e' --format '{{.ID}}' | xargs docker stop | xargs docker rm -v &&
+  docker container ps -aq -f name='e2e' --format '{{.ID}}' | xargs docker stop | xargs docker rm -v &&
   docker volume ls -f name='e2e' --format '{{.Name}}' | xargs docker volume rm
   echo "====> ✅Step 1: finish preparation"
 
@@ -69,7 +69,7 @@ for accountType in "${accountTypes[@]}"; do
   # Cleanup container and volumes
   echo $DIVIDER
   echo "====> 👀Step 6: cleaning up e2e containers and volumes"
-  docker container  ps -aq -f name='e2e' --format '{{.ID}}' | xargs docker stop | xargs docker rm -v &&
+  docker container ps -aq -f name='e2e' --format '{{.ID}}' | xargs docker stop | xargs docker rm -v &&
   docker volume ls -f name='e2e' --format '{{.Name}}' | xargs docker volume rm
   echo "====> ✅Step 6: finish cleaning up containers and volumes"
 done
