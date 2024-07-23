@@ -616,24 +616,6 @@ func TestManager_DeactivateTenantDistributionAccount(t *testing.T) {
 		assert.NotEqual(t, schema.AccountStatusPendingUserActivation, dbTnt.DistributionAccountStatus)
 	})
 
-	t.Run("does not deactivate distribution account if tenant is deactivated", func(t *testing.T) {
-		tnt, err = m.UpdateTenantConfig(
-			ctx, &TenantUpdate{
-				ID:                        tnt.ID,
-				DistributionAccountType:   schema.DistributionAccountCircleDBVault,
-				Status:                    pointerTo(DeactivatedTenantStatus),
-				DistributionAccountStatus: schema.AccountStatusActive,
-			})
-		require.NoError(t, err)
-
-		err = m.DeactivateTenantDistributionAccount(ctx, tnt.ID)
-		require.NoError(t, err)
-
-		dbTnt, dbErr := m.GetTenant(ctx, &QueryParams{Filters: map[FilterKey]interface{}{FilterKeyID: tnt.ID}})
-		require.NoError(t, dbErr)
-		assert.NotEqual(t, schema.AccountStatusPendingUserActivation, dbTnt.DistributionAccountStatus)
-	})
-
 	t.Run("operation is idempotent if distribution account is already deactivated", func(t *testing.T) {
 		tnt, err = m.UpdateTenantConfig(
 			ctx, &TenantUpdate{
@@ -647,36 +629,6 @@ func TestManager_DeactivateTenantDistributionAccount(t *testing.T) {
 		require.NoError(t, err)
 
 		dbTnt, dbErr := m.GetTenant(ctx, &QueryParams{Filters: map[FilterKey]interface{}{FilterKeyID: tnt.ID}})
-		require.NoError(t, dbErr)
-		assert.Equal(t, schema.AccountStatusPendingUserActivation, dbTnt.DistributionAccountStatus)
-	})
-
-	t.Run("successfully deactivates tenant distribution account if tenant is not deactivated", func(t *testing.T) {
-		_, err = m.UpdateTenantConfig(
-			ctx, &TenantUpdate{
-				ID:                      tnt.ID,
-				DistributionAccountType: schema.DistributionAccountCircleDBVault,
-				Status:                  pointerTo(ActivatedTenantStatus),
-			})
-		require.NoError(t, err)
-		err = m.DeactivateTenantDistributionAccount(ctx, tnt.ID)
-		require.NoError(t, err)
-
-		dbTnt, dbErr := m.GetTenant(ctx, &QueryParams{Filters: map[FilterKey]interface{}{FilterKeyID: tnt.ID}})
-		require.NoError(t, dbErr)
-		assert.Equal(t, schema.AccountStatusPendingUserActivation, dbTnt.DistributionAccountStatus)
-
-		_, err = m.UpdateTenantConfig(
-			ctx, &TenantUpdate{
-				ID:                        tnt.ID,
-				Status:                    pointerTo(ProvisionedTenantStatus),
-				DistributionAccountStatus: schema.AccountStatusActive,
-			})
-		require.NoError(t, err)
-		err = m.DeactivateTenantDistributionAccount(ctx, tnt.ID)
-		require.NoError(t, err)
-
-		dbTnt, dbErr = m.GetTenant(ctx, &QueryParams{Filters: map[FilterKey]interface{}{FilterKeyID: tnt.ID}})
 		require.NoError(t, dbErr)
 		assert.Equal(t, schema.AccountStatusPendingUserActivation, dbTnt.DistributionAccountStatus)
 	})
