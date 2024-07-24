@@ -185,7 +185,7 @@ func (p *PaymentModel) GetAllReadyToPatchCompletionAnchorTransactions(ctx contex
 		SELECT
 			p.id,
 			p.amount,
-			p.stellar_transaction_id,
+			COALESCE(p.stellar_transaction_id, '') as "stellar_transaction_id",
 			p.status,
 			p.status_history,
 			p.updated_at,
