@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 
 	httpclientMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
@@ -49,7 +50,7 @@ func Test_Client_Ping(t *testing.T) {
 			Once()
 
 		ok, err := cc.Ping(ctx)
-		assert.EqualError(t, err, fmt.Errorf("making request: %w", testError).Error())
+		assert.EqualError(t, err, fmt.Errorf("making request: submitting request to http://localhost:8080/ping: %w", testError).Error())
 		assert.False(t, ok)
 	})
 
@@ -95,7 +96,7 @@ func Test_Client_PostTransfer(t *testing.T) {
 			Once()
 
 		transfer, err := cc.PostTransfer(ctx, validTransferReq)
-		assert.EqualError(t, err, fmt.Errorf("making request: %w", testError).Error())
+		assert.EqualError(t, err, fmt.Errorf("making request: submitting request to http://localhost:8080/v1/transfers: %w", testError).Error())
 		assert.Nil(t, transfer)
 	})
 
@@ -164,7 +165,7 @@ func Test_Client_GetTransferByID(t *testing.T) {
 			Once()
 
 		transfer, err := cc.GetTransferByID(ctx, "test-id")
-		assert.EqualError(t, err, fmt.Errorf("making request: %w", testError).Error())
+		assert.EqualError(t, err, fmt.Errorf("making request: submitting request to http://localhost:8080/v1/transfers/test-id: %w", testError).Error())
 		assert.Nil(t, transfer)
 	})
 
@@ -233,7 +234,7 @@ func Test_Client_GetWalletByID(t *testing.T) {
 			Once()
 
 		wallet, err := cc.GetWalletByID(ctx, "test-id")
-		assert.EqualError(t, err, fmt.Errorf("making request: %w", testError).Error())
+		assert.EqualError(t, err, fmt.Errorf("making request: submitting request to http://localhost:8080/v1/wallets/test-id: %w", testError).Error())
 		assert.Nil(t, wallet)
 	})
 
@@ -373,6 +374,100 @@ func Test_Client_handleError(t *testing.T) {
 	})
 
 	tntManagerMock.AssertExpectations(t)
+}
+
+func Test_Client_request(t *testing.T) {
+	tests := []struct {
+		name               string
+		responses          []http.Response
+		expectedAttempts   int
+		expectedStatusCode int
+		expectedError      string
+	}{
+		{
+			name: "Success on first attempt",
+			responses: []http.Response{
+				{StatusCode: http.StatusOK},
+			},
+			expectedAttempts:   1,
+			expectedStatusCode: http.StatusOK,
+		},
+		{
+			name: "Success after rate limit",
+			responses: []http.Response{
+				{
+					StatusCode: http.StatusTooManyRequests,
+					Header:     http.Header{"Retry-After": []string{"1"}},
+				},
+				{StatusCode: http.StatusOK},
+			},
+			expectedAttempts:   2,
+			expectedStatusCode: http.StatusOK,
+		},
+		{
+			name: "Fail after max retries",
+			responses: []http.Response{
+				{
+					StatusCode: http.StatusTooManyRequests,
+					Header:     http.Header{"Retry-After": []string{"1"}},
+				},
+				{
+					StatusCode: http.StatusTooManyRequests,
+					Header:     http.Header{"Retry-After": []string{"1"}},
+				},
+				{
+					StatusCode: http.StatusTooManyRequests,
+					Header:     http.Header{"Retry-After": []string{"1"}},
+				},
+				{
+					StatusCode: http.StatusTooManyRequests,
+					Header:     http.Header{"Retry-After": []string{"1"}},
+				},
+			},
+			expectedAttempts: 4,
+			expectedError:    "rate limited, retry after: 1s",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			cc, httpClientMock, _ := newClientWithMocks(t)
+
+			ctx := context.Background()
+			u := "https://api-sandbox.circle.com/test"
+			method := http.MethodGet
+			isAuthed := true
+			body := []byte("test-body")
+
+			for _, resp := range tt.responses {
+				httpClientMock.
+					On("Do", mock.Anything).
+					Return(&resp, nil).Once()
+			}
+
+			resp, err := cc.request(ctx, u, method, isAuthed, body)
+
+			if tt.expectedError != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.expectedError)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tt.expectedStatusCode, resp.StatusCode)
+			}
+
+			httpClientMock.AssertNumberOfCalls(t, "Do", tt.expectedAttempts)
+
+			// Check if the request was properly formed
+			lastCall := httpClientMock.Calls[len(httpClientMock.Calls)-1]
+			lastReq := lastCall.Arguments[0].(*http.Request)
+			assert.Equal(t, method, lastReq.Method)
+			assert.Equal(t, u, lastReq.URL.String())
+			assert.Equal(t, "Bearer test-key", lastReq.Header.Get("Authorization"))
+			assert.Equal(t, "application/json", lastReq.Header.Get("Content-Type"))
+		})
+	}
 }
 
 func newClientWithMocks(t *testing.T) (Client, *httpclientMocks.HttpClientMock, *tenant.TenantManagerMock) {
