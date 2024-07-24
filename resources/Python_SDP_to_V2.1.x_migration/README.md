@@ -1,21 +1,21 @@
 # Migration Guide: SDP Aid (Python) to V2.1.x
-
-## MIGRATION PART 1/2: Migrating SDP Aid (Python) to SDP Single-tenant (v1.x)
-
-### MPreparation
+## Preparation
 
 1. **Backup Data**:
    - Backup your existing SDP Aid database to ensure data safety.
 
 2. **Wildcard TLS Certificates**:
-   If you want to take full advantage of multi-tenancy, you will need to acquire wildcard TLS certificates to facilitate tenant provisioning as the SDP relies on subdomains to differentiate between tenants. This will allow you to provision tenants without having to manually configure TLS certificates for each tenant. You can use a service like Let's Encrypt or Namecheap to acquire these certificates.
+   Multi-tenancy requires wildcard TLS certificates to facilitate tenant provisioning as the SDP relies on subdomains to differentiate between tenants. This will allow you to provision tenants without having to manually configure TLS certificates for each tenant. You can use a service like Let's Encrypt or Namecheap to acquire these certificates.
 
-   For example, if your base domain for running the SDP backend is sdp-prod.uni-cc.cloud, you can provision one tenant per organization. This results in subdomains such as:
-
-    - unhcr.sdp-prod.uni-cc.cloud for the tenant UNHCR
-    - unicef.sdp-prod.uni-cc.cloud for the tenant UNICEF
+   For example, if your base domain for running the SDP backend is sdp-prod.domain.cloud, you can provision one tenant per organization. This results in subdomains such as:
+    - tenantA.sdp-prod.domain.cloud for the tenant A
+    - tenantB.sdp-prod.domain.cloud for the tenant B
 
     Similarly, acquiring wildcard certificates for the dashboard service (front-end) would simplify accessing each tenant’s dashboard via their fully qualified name. However, this is not strictly necessary, as the dashboards include a field to specify the tenant when accessed through the base domain.
+
+
+## MIGRATION PART 1/2: Migrating SDP Aid (Python) to SDP Single-tenant (v1.x)
+
 
 ### Data Migration 
 
