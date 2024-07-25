@@ -4,11 +4,16 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"slices"
+	"strconv"
+	"time"
+
+	"github.com/avast/retry-go"
+	"github.com/stellar/go/support/log"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
@@ -113,7 +118,7 @@ func (client *Client) PostTransfer(ctx context.Context, transferReq TransferRequ
 		return nil, err
 	}
 
-	resp, err := client.request(ctx, u, http.MethodPost, true, bytes.NewBuffer(transferData))
+	resp, err := client.request(ctx, u, http.MethodPost, true, transferData)
 	if err != nil {
 		return nil, fmt.Errorf("making request: %w", err)
 	}
@@ -177,22 +182,86 @@ func (client *Client) GetWalletByID(ctx context.Context, id string) (*Wallet, er
 	return parseWalletResponse(resp)
 }
 
+type RetryableError struct {
+	err        error
+	retryAfter time.Duration
+}
+
+func (re RetryableError) Error() string {
+	retryableErr := fmt.Errorf("retryable error: %w", re.err)
+	return retryableErr.Error()
+}
+
 // request makes an HTTP request to the Circle API.
-func (client *Client) request(ctx context.Context, u string, method string, isAuthed bool, body io.Reader) (*http.Response, error) {
-	req, err := http.NewRequestWithContext(ctx, method, u, body)
+func (client *Client) request(ctx context.Context, u string, method string, isAuthed bool, bodyBytes []byte) (*http.Response, error) {
+	var resp *http.Response
+	err := retry.Do(
+		func() error {
+			bodyReader := bytes.NewReader(bodyBytes)
+			req, err := http.NewRequestWithContext(ctx, method, u, bodyReader)
+			if err != nil {
+				return fmt.Errorf("creating request: %w", err)
+			}
+
+			if isAuthed {
+				req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", client.APIKey))
+			}
+
+			if bodyReader != nil {
+				req.Header.Set("Content-Type", "application/json")
+			}
+
+			resp, err = client.httpClient.Do(req)
+			if err != nil {
+				return fmt.Errorf("submitting request to %s: %w", u, err)
+			}
+
+			if resp.StatusCode == http.StatusTooManyRequests {
+				retryAfter := parseRetryAfter(resp.Header.Get("Retry-After"))
+				log.Ctx(ctx).Warnf("CircleClient - Request to %s is rate limited, retry after: %s", u, retryAfter)
+				return RetryableError{
+					err:        fmt.Errorf("rate limited, retry after: %s", retryAfter),
+					retryAfter: retryAfter,
+				}
+			}
+			return nil
+		},
+		retry.DelayType(func(n uint, err error, config *retry.Config) time.Duration {
+			// if err is RetryableError, return retryAfter
+			var retryableErr RetryableError
+			ok := errors.As(err, &retryableErr)
+			if ok {
+				return retryableErr.retryAfter
+			}
+			// default is back-off delay
+			return retry.BackOffDelay(n, err, config)
+		}),
+		retry.Attempts(4),
+		retry.MaxDelay(time.Second*600),
+		retry.RetryIf(func(err error) bool {
+			return errors.As(err, &RetryableError{})
+		}),
+		retry.OnRetry(func(n uint, err error) {
+			log.Ctx(ctx).Warnf("CircleClient - Request to %s is rate limited, Retry number %d due to: %s", u, n, err)
+		}),
+		retry.LastErrorOnly(true),
+	)
 	if err != nil {
-		return nil, fmt.Errorf("creating request: %w", err)
+		return nil, err
 	}
 
-	if isAuthed {
-		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", client.APIKey))
-	}
+	return resp, nil
+}
 
-	if body != nil {
-		req.Header.Set("Content-Type", "application/json")
+func parseRetryAfter(retryAfter string) time.Duration {
+	if retryAfter == "" {
+		return 0
 	}
-
-	return client.httpClient.Do(req)
+	seconds, err := strconv.Atoi(retryAfter)
+	if err != nil {
+		return 0
+	}
+	return time.Duration(seconds) * time.Second
 }
 
 func (client *Client) handleError(ctx context.Context, resp *http.Response) error {
