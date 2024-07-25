@@ -362,6 +362,16 @@ func Test_Client_handleError(t *testing.T) {
 		assert.EqualError(t, fmt.Errorf("Circle API error: %w", errors.New("APIError: Code=400, Message=Bad Request, Errors=[], StatusCode=400")), err.Error())
 	})
 
+	t.Run("records error correctly when not proper json", func(t *testing.T) {
+		unauthorizedResponse := &http.Response{
+			StatusCode: http.StatusTooManyRequests,
+			Body:       io.NopCloser(bytes.NewBufferString(`error code: 1015`)),
+		}
+
+		err := cc.handleError(ctx, unauthorizedResponse)
+		assert.EqualError(t, fmt.Errorf("Circle API error: %w", errors.New("APIError: Code=0, Message=error code: 1015, Errors=[], StatusCode=429")), err.Error())
+	})
+
 	tntManagerMock.AssertExpectations(t)
 }
 

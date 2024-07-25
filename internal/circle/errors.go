@@ -42,7 +42,7 @@ func parseAPIError(resp *http.Response) (*APIError, error) {
 
 	var apiErr APIError
 	if err = json.Unmarshal(body, &apiErr); err != nil {
-		return nil, fmt.Errorf("unmarshalling error response body: %w", err)
+		apiErr.Message = string(body)
 	}
 	apiErr.StatusCode = resp.StatusCode
 
