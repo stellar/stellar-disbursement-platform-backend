@@ -102,12 +102,17 @@ func (s *ServerService) GetSchedulerJobRegistrars(
 		}
 
 		sj = append(sj,
-			scheduler.WithPaymentToSubmitterJobOption(jobs.PaymentToSubmitterJobOptions{
+			scheduler.WithCirclePaymentToSubmitterJobOption(jobs.CirclePaymentToSubmitterJobOptions{
+				JobIntervalSeconds:  schedulerOptions.PaymentJobIntervalSeconds,
+				Models:              models,
+				DistAccountResolver: serveOpts.SubmitterEngine.DistributionAccountResolver,
+				CircleService:       serveOpts.CircleService,
+			}),
+			scheduler.WithStellarPaymentToSubmitterJobOption(jobs.StellarPaymentToSubmitterJobOptions{
 				JobIntervalSeconds:  schedulerOptions.PaymentJobIntervalSeconds,
 				Models:              models,
 				TSSDBConnectionPool: tssDBConnectionPool,
 				DistAccountResolver: serveOpts.SubmitterEngine.DistributionAccountResolver,
-				CircleService:       serveOpts.CircleService,
 			}),
 			scheduler.WithPaymentFromSubmitterJobOption(schedulerOptions.PaymentJobIntervalSeconds, models, tssDBConnectionPool),
 			scheduler.WithPatchAnchorPlatformTransactionsCompletionJobOption(schedulerOptions.PaymentJobIntervalSeconds, apAPIService, models),

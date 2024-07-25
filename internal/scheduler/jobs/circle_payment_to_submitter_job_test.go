@@ -14,17 +14,17 @@ import (
 
 func Test_PaymentToSubmitterJob_GetInterval(t *testing.T) {
 	interval := 5
-	p := NewPaymentToSubmitterJob(PaymentToSubmitterJobOptions{JobIntervalSeconds: interval})
+	p := NewCirclePaymentToSubmitterJob(CirclePaymentToSubmitterJobOptions{JobIntervalSeconds: interval})
 	require.Equal(t, time.Duration(interval)*time.Second, p.GetInterval())
 }
 
 func Test_PaymentToSubmitterJob_GetName(t *testing.T) {
-	p := NewPaymentToSubmitterJob(PaymentToSubmitterJobOptions{JobIntervalSeconds: 5})
-	require.Equal(t, paymentToSubmitterJobName, p.GetName())
+	p := NewCirclePaymentToSubmitterJob(CirclePaymentToSubmitterJobOptions{JobIntervalSeconds: 5})
+	require.Equal(t, circlePaymentToSubmitterJobName, p.GetName())
 }
 
 func Test_PaymentToSubmitterJob_IsJobMultiTenant(t *testing.T) {
-	p := NewPaymentToSubmitterJob(PaymentToSubmitterJobOptions{JobIntervalSeconds: 5})
+	p := NewCirclePaymentToSubmitterJob(CirclePaymentToSubmitterJobOptions{JobIntervalSeconds: 5})
 	require.Equal(t, true, p.IsJobMultiTenant())
 }
 
@@ -53,16 +53,16 @@ func Test_PaymentToSubmitterJob_Execute(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mockPaymentToSubmitterService := &mocks.MockPaymentToSubmitterService{}
-			mockPaymentToSubmitterService.On("SendBatchPayments", mock.Anything, paymentToSubmitterBatchSize).
-				Return(tt.sendPayments(nil, paymentToSubmitterBatchSize))
+			mockPaymentToSubmitterService.On("SendBatchPayments", mock.Anything, circlePaymentToSubmitterBatchSize).
+				Return(tt.sendPayments(nil, circlePaymentToSubmitterBatchSize))
 
-			p := paymentToSubmitterJob{
+			p := circlePaymentToSubmitterJob{
 				paymentToSubmitterSvc: mockPaymentToSubmitterService,
 			}
 
 			err := p.Execute(context.Background())
 			if (err != nil) != tt.wantErr {
-				t.Errorf("paymentToSubmitterJob.Execute() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("circlePaymentToSubmitterJob.Execute() error = %v, wantErr %v", err, tt.wantErr)
 			}
 
 			mockPaymentToSubmitterService.AssertExpectations(t)
