@@ -68,7 +68,25 @@ func (h LoginHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	if !h.ReCAPTCHADisabled {
+	token, err := h.AuthManager.Authenticate(ctx, reqBody.Email, reqBody.Password)
+	if errors.Is(err, auth.ErrInvalidCredentials) {
+		httperror.Unauthorized("", err, map[string]interface{}{"details": "Incorrect email or password"}).Render(rw)
+		return
+	}
+	if err != nil {
+		log.Ctx(ctx).Errorf("error authenticating user with email %s: %s", utils.TruncateString(reqBody.Email, 3), err)
+		httperror.InternalError(ctx, "Cannot authenticate user credentials", err, nil).Render(rw)
+		return
+	}
+
+	roleCanBypassReCAPTCHA, err := validators.UserRoleCanBypassReCAPTCHA(ctx, h.AuthManager, token)
+	if err != nil {
+		log.Ctx(ctx).Errorf("error checking if user role in token can bypass ReCAPTCHA: %s", err)
+		httperror.InternalError(ctx, "", err, nil).Render(rw)
+		return
+	}
+
+	if !h.ReCAPTCHADisabled && !roleCanBypassReCAPTCHA {
 		// validating reCAPTCHA Token
 		isValid, err := h.ReCAPTCHAValidator.IsTokenValid(ctx, reqBody.ReCAPTCHAToken)
 		if err != nil {
@@ -81,17 +99,6 @@ func (h LoginHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 			httperror.BadRequest("reCAPTCHA token invalid", nil, nil).Render(rw)
 			return
 		}
-	}
-
-	token, err := h.AuthManager.Authenticate(ctx, reqBody.Email, reqBody.Password)
-	if errors.Is(err, auth.ErrInvalidCredentials) {
-		httperror.Unauthorized("", err, map[string]interface{}{"details": "Incorrect email or password"}).Render(rw)
-		return
-	}
-	if err != nil {
-		log.Ctx(ctx).Errorf("error authenticating user with email %s: %s", utils.TruncateString(reqBody.Email, 3), err)
-		httperror.InternalError(ctx, "Cannot authenticate user credentials", err, nil).Render(rw)
-		return
 	}
 
 	user, err := h.AuthManager.GetUser(ctx, token)

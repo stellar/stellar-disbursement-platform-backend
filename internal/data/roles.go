@@ -8,7 +8,7 @@ func (u UserRole) String() string {
 
 func (u UserRole) IsValid() bool {
 	switch u {
-	case OwnerUserRole, FinancialControllerUserRole, DeveloperUserRole, BusinessUserRole:
+	case OwnerUserRole, FinancialControllerUserRole, DeveloperUserRole, BusinessUserRole, APIOwnerUserRole:
 		return true
 	}
 	return false
@@ -24,6 +24,8 @@ const (
 	DeveloperUserRole UserRole = "developer"
 	// BusinessUserRole has read-only permissions - except for user management that they can't read any data.
 	BusinessUserRole UserRole = "business"
+	// APIOwnerUserRole has permissions to access to the same suite of APIs as OwnerUserRole, without needing to perform verification through reCAPTCHA.
+	APIOwnerUserRole UserRole = "api_owner"
 )
 
 // GetAllRoles returns all roles available
@@ -33,6 +35,7 @@ func GetAllRoles() []UserRole {
 		FinancialControllerUserRole,
 		DeveloperUserRole,
 		BusinessUserRole,
+		APIOwnerUserRole,
 	}
 }
 

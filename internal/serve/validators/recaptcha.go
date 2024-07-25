@@ -7,6 +7,9 @@ import (
 	"io"
 	"net/http"
 	"strings"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 )
 
 const (
@@ -84,4 +87,13 @@ func NewGoogleReCAPTCHAValidator(siteSecretKey string, httpClient HTTPClient) *G
 		VerifyTokenURL: verifyTokenURL,
 		HTTPClient:     httpClient,
 	}
+}
+
+func UserRoleCanBypassReCAPTCHA(ctx context.Context, authManager auth.AuthManager, token string) (bool, error) {
+	canBypass, err := authManager.AllRolesInTokenUser(ctx, token, []string{data.APIOwnerUserRole.String()})
+	if err != nil {
+		return false, fmt.Errorf("error getting roles from token: %w", err)
+	}
+
+	return canBypass, nil
 }

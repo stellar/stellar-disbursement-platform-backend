@@ -43,8 +43,32 @@ func (h MFAHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	deviceID := req.Header.Get(DeviceIDHeader)
+	if deviceID == "" {
+		httperror.BadRequest("Device-ID header is required", nil, nil).Render(rw)
+		return
+	}
+
+	token, err := h.AuthManager.AuthenticateMFA(ctx, deviceID, reqBody.MFACode, reqBody.RememberMe)
+	if err != nil {
+		if errors.Is(err, auth.ErrMFACodeInvalid) {
+			httperror.Unauthorized("", err, nil).Render(rw)
+			return
+		}
+		log.Ctx(ctx).Errorf("error authenticating user: %s", err.Error())
+		httperror.InternalError(ctx, "Cannot authenticate user", err, nil).Render(rw)
+		return
+	}
+
+	roleCanBypassReCAPTCHA, err := validators.UserRoleCanBypassReCAPTCHA(ctx, h.AuthManager, token)
+	if err != nil {
+		log.Ctx(ctx).Errorf("error checking if user role in token can bypass ReCAPTCHA: %s", err)
+		httperror.InternalError(ctx, "", err, nil).Render(rw)
+		return
+	}
+
 	// validating reCAPTCHA Token
-	if !h.ReCAPTCHADisabled {
+	if !h.ReCAPTCHADisabled && !roleCanBypassReCAPTCHA {
 		isValid, recaptchaErr := h.ReCAPTCHAValidator.IsTokenValid(ctx, reqBody.ReCAPTCHAToken)
 		if recaptchaErr != nil {
 			httperror.InternalError(ctx, "Cannot validate reCAPTCHA token", recaptchaErr, nil).Render(rw)
@@ -61,23 +85,6 @@ func (h MFAHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	if reqBody.MFACode == "" {
 		extras := map[string]interface{}{"mfa_code": "MFA Code is required"}
 		httperror.BadRequest("Request invalid", nil, extras).Render(rw)
-		return
-	}
-
-	deviceID := req.Header.Get(DeviceIDHeader)
-	if deviceID == "" {
-		httperror.BadRequest("Device-ID header is required", nil, nil).Render(rw)
-		return
-	}
-
-	token, err := h.AuthManager.AuthenticateMFA(ctx, deviceID, reqBody.MFACode, reqBody.RememberMe)
-	if err != nil {
-		if errors.Is(err, auth.ErrMFACodeInvalid) {
-			httperror.Unauthorized("", err, nil).Render(rw)
-			return
-		}
-		log.Ctx(ctx).Errorf("error authenticating user: %s", err.Error())
-		httperror.InternalError(ctx, "Cannot authenticate user", err, nil).Render(rw)
 		return
 	}
 
