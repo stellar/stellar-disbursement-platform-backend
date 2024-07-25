@@ -183,12 +183,13 @@ func (client *Client) GetWalletByID(ctx context.Context, id string) (*Wallet, er
 }
 
 type RetryableError struct {
-	err        string
+	err        error
 	retryAfter time.Duration
 }
 
-func (err RetryableError) Error() string {
-	return err.err
+func (re RetryableError) Error() string {
+	retryableErr := fmt.Errorf("retryable error: %w", re.err)
+	return retryableErr.Error()
 }
 
 // request makes an HTTP request to the Circle API.
@@ -219,7 +220,7 @@ func (client *Client) request(ctx context.Context, u string, method string, isAu
 				retryAfter := parseRetryAfter(resp.Header.Get("Retry-After"))
 				log.Ctx(ctx).Warnf("CircleClient - Request to %s is rate limited, retry after: %s", u, retryAfter)
 				return RetryableError{
-					err:        fmt.Sprintf("rate limited, retry after: %s", retryAfter),
+					err:        fmt.Errorf("rate limited, retry after: %s", retryAfter),
 					retryAfter: retryAfter,
 				}
 			}
