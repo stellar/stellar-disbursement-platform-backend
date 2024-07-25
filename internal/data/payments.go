@@ -195,7 +195,7 @@ func (p *PaymentModel) GetAllReadyToPatchCompletionAnchorTransactions(ctx contex
 			rw.id AS "receiver_wallet.id",
 			COALESCE(rw.stellar_memo, '') AS "receiver_wallet.stellar_memo",
 			COALESCE(rw.stellar_memo_type, '') AS "receiver_wallet.stellar_memo_type",
-			rw.anchor_platform_transaction_id AS "receiver_wallet.anchor_platform_transaction_id",
+			COALESCE(rw.anchor_platform_transaction_id, '') as "receiver_wallet.anchor_platform_transaction_id",
 			rw.anchor_platform_transaction_synced_at AS "receiver_wallet.anchor_platform_transaction_synced_at"
 		FROM
 			payments p
