@@ -78,7 +78,9 @@ func (s *DisbursementManagementService) AppendUserMetadata(ctx context.Context, 
 	for _, d := range disbursements {
 		for _, entry := range d.StatusHistory {
 			if entry.Status == data.DraftDisbursementStatus || entry.Status == data.StartedDisbursementStatus {
-				users[entry.UserID] = nil
+				if entry.UserID != "" {
+					users[entry.UserID] = nil
+				}
 
 				if entry.Status == data.StartedDisbursementStatus {
 					// Disbursements could have multiple "started" entries in its status history log from being paused and resumed, etc.
@@ -109,7 +111,10 @@ func (s *DisbursementManagementService) AppendUserMetadata(ctx context.Context, 
 			if entry.Status != data.DraftDisbursementStatus && entry.Status != data.StartedDisbursementStatus {
 				continue
 			}
-			userInfo := users[entry.UserID]
+			userInfo, ok := users[entry.UserID]
+			if !ok {
+				continue
+			}
 			userRef := UserReference{
 				ID:        entry.UserID,
 				FirstName: userInfo.FirstName,
