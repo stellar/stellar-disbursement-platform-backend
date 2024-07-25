@@ -1,4 +1,4 @@
-package paymentengines
+package paymentdispatchers
 
 import (
 	"context"
@@ -13,22 +13,22 @@ import (
 	txSubStore "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 )
 
-type StellarPaymentEngine struct {
+type StellarPaymentDispatcher struct {
 	sdpModels           *data.Models
 	tssModel            *txSubStore.TransactionModel
 	distAccountResolver signing.DistributionAccountResolver
 }
 
-func NewStellarPaymentEngine(sdpModels *data.Models, tssModel *txSubStore.TransactionModel, distAccountResolver signing.DistributionAccountResolver) *StellarPaymentEngine {
-	return &StellarPaymentEngine{
+func NewStellarPaymentDispatcher(sdpModels *data.Models, tssModel *txSubStore.TransactionModel, distAccountResolver signing.DistributionAccountResolver) *StellarPaymentDispatcher {
+	return &StellarPaymentDispatcher{
 		sdpModels:           sdpModels,
 		tssModel:            tssModel,
 		distAccountResolver: distAccountResolver,
 	}
 }
 
-func (s *StellarPaymentEngine) SubmitPayments(ctx context.Context, sdpDBTx db.DBTransaction, tenantID string, paymentsToSubmit []*data.Payment) error {
-	if len(paymentsToSubmit) == 0 {
+func (s *StellarPaymentDispatcher) DispatchPayments(ctx context.Context, sdpDBTx db.DBTransaction, tenantID string, paymentsToDispatch []*data.Payment) error {
+	if len(paymentsToDispatch) == 0 {
 		return nil
 	}
 
@@ -42,13 +42,13 @@ func (s *StellarPaymentEngine) SubmitPayments(ctx context.Context, sdpDBTx db.DB
 	}
 
 	return db.RunInTransaction(ctx, s.tssModel.DBConnectionPool, nil, func(tssDBTx db.DBTransaction) error {
-		return s.sendPaymentsToTSS(ctx, sdpDBTx, tssDBTx, tenantID, paymentsToSubmit)
+		return s.sendPaymentsToTSS(ctx, sdpDBTx, tssDBTx, tenantID, paymentsToDispatch)
 	})
 }
 
-var _ PaymentEngineInterface = (*StellarPaymentEngine)(nil)
+var _ PaymentDispatcherInterface = (*StellarPaymentDispatcher)(nil)
 
-func (s *StellarPaymentEngine) sendPaymentsToTSS(ctx context.Context, sdpDBTx, tssDBTx db.DBTransaction, tenantID string, pendingPayments []*data.Payment) error {
+func (s *StellarPaymentDispatcher) sendPaymentsToTSS(ctx context.Context, sdpDBTx, tssDBTx db.DBTransaction, tenantID string, pendingPayments []*data.Payment) error {
 	var transactions []txSubStore.Transaction
 	for _, payment := range pendingPayments {
 		// TODO: change TSS to use string amount [SDP-483]

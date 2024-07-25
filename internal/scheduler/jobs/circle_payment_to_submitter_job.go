@@ -10,7 +10,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/circle"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/paymentengines"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/paymentdispatchers"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 )
 
@@ -39,13 +39,13 @@ func NewCirclePaymentToSubmitterJob(opts CirclePaymentToSubmitterJobOptions) Job
 		log.Fatalf("job interval is not set for %s. Instantiation failed", circlePaymentToSubmitterJobName)
 	}
 
-	circlePaymentEngine := paymentengines.NewCirclePaymentEngine(opts.Models, opts.CircleService, opts.DistAccountResolver)
+	circlePaymentDispatcher := paymentdispatchers.NewCirclePaymentDispatcher(opts.Models, opts.CircleService, opts.DistAccountResolver)
 
 	return &circlePaymentToSubmitterJob{
 		paymentToSubmitterSvc: services.NewPaymentToSubmitterService(services.PaymentToSubmitterServiceOptions{
 			Models:              opts.Models,
 			DistAccountResolver: opts.DistAccountResolver,
-			PaymentEngine:       circlePaymentEngine,
+			PaymentDispatcher:   circlePaymentDispatcher,
 		}),
 		jobIntervalSeconds:  opts.JobIntervalSeconds,
 		distAccountResolver: opts.DistAccountResolver,
@@ -79,7 +79,7 @@ func (d circlePaymentToSubmitterJob) Execute(ctx context.Context) error {
 	}
 
 	if payErr := d.paymentToSubmitterSvc.SendBatchPayments(ctx, circlePaymentToSubmitterBatchSize); payErr != nil {
-		return fmt.Errorf("error executing circlePaymentToSubmitterJob: %w", payErr)
+		return fmt.Errorf("executing circlePaymentToSubmitterJob: %w", payErr)
 	}
 	return nil
 }

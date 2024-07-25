@@ -11,7 +11,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/circle"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/paymentengines"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/paymentdispatchers"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	txSubStore "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
@@ -32,20 +32,20 @@ type PaymentToSubmitterService struct {
 	tssModel            *txSubStore.TransactionModel
 	distAccountResolver signing.DistributionAccountResolver
 	circleService       circle.ServiceInterface
-	paymentEngine       paymentengines.PaymentEngineInterface
+	paymentDispatcher   paymentdispatchers.PaymentDispatcherInterface
 }
 
 type PaymentToSubmitterServiceOptions struct {
 	Models              *data.Models
 	DistAccountResolver signing.DistributionAccountResolver
-	PaymentEngine       paymentengines.PaymentEngineInterface
+	PaymentDispatcher   paymentdispatchers.PaymentDispatcherInterface
 }
 
 func NewPaymentToSubmitterService(opts PaymentToSubmitterServiceOptions) *PaymentToSubmitterService {
 	return &PaymentToSubmitterService{
 		sdpModels:           opts.Models,
 		distAccountResolver: opts.DistAccountResolver,
-		paymentEngine:       opts.PaymentEngine,
+		paymentDispatcher:   opts.PaymentDispatcher,
 	}
 }
 
@@ -131,7 +131,7 @@ func (s PaymentToSubmitterService) sendPaymentsReadyToPay(
 		}
 
 		// 3. Submit Payments to proper platform (TSS or Circle)
-		err = s.paymentEngine.SubmitPayments(ctx, sdpDBTx, tenantID, pendingPayments)
+		err = s.paymentDispatcher.DispatchPayments(ctx, sdpDBTx, tenantID, pendingPayments)
 		if err != nil {
 			return fmt.Errorf("sending payments to target platform: %w", err)
 		}

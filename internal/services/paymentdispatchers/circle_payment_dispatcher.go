@@ -1,4 +1,4 @@
-package paymentengines
+package paymentdispatchers
 
 import (
 	"context"
@@ -15,22 +15,22 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
-type CirclePaymentEngine struct {
+type CirclePaymentDispatcher struct {
 	sdpModels           *data.Models
 	circleService       circle.ServiceInterface
 	distAccountResolver signing.DistributionAccountResolver
 }
 
-func NewCirclePaymentEngine(sdpModels *data.Models, circleService circle.ServiceInterface, distAccountResolver signing.DistributionAccountResolver) *CirclePaymentEngine {
-	return &CirclePaymentEngine{
+func NewCirclePaymentDispatcher(sdpModels *data.Models, circleService circle.ServiceInterface, distAccountResolver signing.DistributionAccountResolver) *CirclePaymentDispatcher {
+	return &CirclePaymentDispatcher{
 		sdpModels:           sdpModels,
 		circleService:       circleService,
 		distAccountResolver: distAccountResolver,
 	}
 }
 
-func (c *CirclePaymentEngine) SubmitPayments(ctx context.Context, sdpDBTx db.DBTransaction, tenantID string, paymentsToSubmit []*data.Payment) error {
-	if len(paymentsToSubmit) == 0 {
+func (c *CirclePaymentDispatcher) DispatchPayments(ctx context.Context, sdpDBTx db.DBTransaction, tenantID string, paymentsToDispatch []*data.Payment) error {
+	if len(paymentsToDispatch) == 0 {
 		return nil
 	}
 
@@ -44,12 +44,12 @@ func (c *CirclePaymentEngine) SubmitPayments(ctx context.Context, sdpDBTx db.DBT
 	}
 
 	circleWalletID := distAccount.CircleWalletID
-	return c.sendPaymentsToCircle(ctx, sdpDBTx, circleWalletID, paymentsToSubmit)
+	return c.sendPaymentsToCircle(ctx, sdpDBTx, circleWalletID, paymentsToDispatch)
 }
 
-var _ PaymentEngineInterface = (*CirclePaymentEngine)(nil)
+var _ PaymentDispatcherInterface = (*CirclePaymentDispatcher)(nil)
 
-func (c *CirclePaymentEngine) sendPaymentsToCircle(ctx context.Context, sdpDBTx db.DBTransaction, circleWalletID string, paymentsToSubmit []*data.Payment) error {
+func (c *CirclePaymentDispatcher) sendPaymentsToCircle(ctx context.Context, sdpDBTx db.DBTransaction, circleWalletID string, paymentsToSubmit []*data.Payment) error {
 	for _, payment := range paymentsToSubmit {
 		// 1. Create a new circle transfer request
 		transferRequest, err := c.sdpModels.CircleTransferRequests.GetOrInsert(ctx, payment.ID)
@@ -90,7 +90,7 @@ func (c *CirclePaymentEngine) sendPaymentsToCircle(ctx context.Context, sdpDBTx 
 }
 
 // updateCircleTransferRequest updates the circle_transfer_request table with the response from Circle.
-func (c *CirclePaymentEngine) updateCircleTransferRequest(
+func (c *CirclePaymentDispatcher) updateCircleTransferRequest(
 	ctx context.Context,
 	sdpDBTx db.DBTransaction,
 	circleWalletID string,
@@ -127,7 +127,7 @@ func (c *CirclePaymentEngine) updateCircleTransferRequest(
 }
 
 // updatePaymentStatusForCircleTransfer updates the payment status based on the transfer status.
-func (c *CirclePaymentEngine) updatePaymentStatusForCircleTransfer(ctx context.Context, sdpDBTx db.DBTransaction, transfer *circle.Transfer, payment *data.Payment) error {
+func (c *CirclePaymentDispatcher) updatePaymentStatusForCircleTransfer(ctx context.Context, sdpDBTx db.DBTransaction, transfer *circle.Transfer, payment *data.Payment) error {
 	paymentStatus, err := transfer.Status.ToPaymentStatus()
 	if err != nil {
 		return fmt.Errorf("converting CIRCLE transfer status to SDP Payment status: %w", err)

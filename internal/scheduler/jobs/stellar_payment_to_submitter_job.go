@@ -10,7 +10,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/paymentengines"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/paymentdispatchers"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	txSubStore "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 )
@@ -40,7 +40,7 @@ func NewStellarPaymentToSubmitterJob(opts StellarPaymentToSubmitterJobOptions) J
 		log.Fatalf("job interval is not set for %s. Instantiation failed", stellarPaymentToSubmitterJobName)
 	}
 
-	stellarPaymentEngine := paymentengines.NewStellarPaymentEngine(
+	stellarPaymentDispatcher := paymentdispatchers.NewStellarPaymentDispatcher(
 		opts.Models,
 		txSubStore.NewTransactionModel(opts.TSSDBConnectionPool),
 		opts.DistAccountResolver)
@@ -49,7 +49,7 @@ func NewStellarPaymentToSubmitterJob(opts StellarPaymentToSubmitterJobOptions) J
 		paymentToSubmitterSvc: services.NewPaymentToSubmitterService(services.PaymentToSubmitterServiceOptions{
 			Models:              opts.Models,
 			DistAccountResolver: opts.DistAccountResolver,
-			PaymentEngine:       stellarPaymentEngine,
+			PaymentDispatcher:   stellarPaymentDispatcher,
 		}),
 		jobIntervalSeconds:  opts.JobIntervalSeconds,
 		distAccountResolver: opts.DistAccountResolver,
@@ -84,7 +84,7 @@ func (d stellarPaymentToSubmitterJob) Execute(ctx context.Context) error {
 	}
 
 	if payErr := d.paymentToSubmitterSvc.SendBatchPayments(ctx, stellarPaymentToSubmitterBatchSize); payErr != nil {
-		return fmt.Errorf("error executing paymentToSubmitterJob: %w", payErr)
+		return fmt.Errorf("executing paymentToSubmitterJob: %w", payErr)
 	}
 	return nil
 }
