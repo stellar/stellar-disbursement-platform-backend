@@ -206,6 +206,7 @@ func (p *PaymentModel) GetAllReadyToPatchCompletionAnchorTransactions(ctx contex
 		WHERE
 			p.status = ANY($1) -- ARRAY['SUCCESS', 'FAILURE']::payment_status[]
 			AND rw.status = $2 -- 'REGISTERED'::receiver_wallet_status
+			AND rw.anchor_platform_transaction_id IS NOT NULL
 			AND rw.anchor_platform_transaction_synced_at IS NULL
 		ORDER BY
 			p.created_at
