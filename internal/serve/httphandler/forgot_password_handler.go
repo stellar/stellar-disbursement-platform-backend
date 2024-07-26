@@ -59,6 +59,21 @@ func (h ForgotPasswordHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	if !h.ReCAPTCHADisabled {
+		// validating reCAPTCHA Token
+		isValid, recaptchaErr := h.ReCAPTCHAValidator.IsTokenValid(ctx, forgotPasswordRequest.ReCAPTCHAToken)
+		if recaptchaErr != nil {
+			httperror.InternalError(ctx, "Cannot validate reCAPTCHA token", recaptchaErr, nil).Render(w)
+			return
+		}
+
+		if !isValid {
+			log.Ctx(ctx).Errorf("reCAPTCHA token is invalid for request with email %s", utils.TruncateString(forgotPasswordRequest.Email, 3))
+			httperror.BadRequest("reCAPTCHA token invalid", nil, nil).Render(w)
+			return
+		}
+	}
+
 	// validate request
 	v := validators.NewValidator()
 
@@ -79,28 +94,6 @@ func (h ForgotPasswordHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 			log.Ctx(ctx).Errorf("error in forgot password handler, user has a valid token")
 		} else {
 			httperror.InternalError(ctx, "", err, nil).Render(w)
-			return
-		}
-	}
-
-	roleCanBypassReCAPTCHA, err := validators.UserRoleCanBypassReCAPTCHA(ctx, h.AuthManager, resetToken)
-	if err != nil {
-		log.Ctx(ctx).Errorf("error checking if user role in token can bypass ReCAPTCHA: %s", err)
-		httperror.InternalError(ctx, "", err, nil).Render(w)
-		return
-	}
-
-	if !h.ReCAPTCHADisabled && !roleCanBypassReCAPTCHA {
-		// validating reCAPTCHA Token
-		isValid, recaptchaErr := h.ReCAPTCHAValidator.IsTokenValid(ctx, forgotPasswordRequest.ReCAPTCHAToken)
-		if recaptchaErr != nil {
-			httperror.InternalError(ctx, "Cannot validate reCAPTCHA token", recaptchaErr, nil).Render(w)
-			return
-		}
-
-		if !isValid {
-			log.Ctx(ctx).Errorf("reCAPTCHA token is invalid for request with email %s", utils.TruncateString(forgotPasswordRequest.Email, 3))
-			httperror.BadRequest("reCAPTCHA token invalid", nil, nil).Render(w)
 			return
 		}
 	}

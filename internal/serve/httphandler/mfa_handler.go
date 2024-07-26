@@ -49,6 +49,8 @@ func (h MFAHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	log.Ctx(ctx).Info(deviceID, " ", reqBody.MFACode)
+
 	token, err := h.AuthManager.AuthenticateMFA(ctx, deviceID, reqBody.MFACode, reqBody.RememberMe)
 	if err != nil {
 		if errors.Is(err, auth.ErrMFACodeInvalid) {

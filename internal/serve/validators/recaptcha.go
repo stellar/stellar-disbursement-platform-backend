@@ -90,7 +90,7 @@ func NewGoogleReCAPTCHAValidator(siteSecretKey string, httpClient HTTPClient) *G
 }
 
 func UserRoleCanBypassReCAPTCHA(ctx context.Context, authManager auth.AuthManager, token string) (bool, error) {
-	canBypass, err := authManager.AllRolesInTokenUser(ctx, token, []string{data.APIOwnerUserRole.String()})
+	canBypass, err := authManager.AnyRolesInTokenUser(ctx, token, []string{data.APIOwnerUserRole.String()})
 	if err != nil {
 		return false, fmt.Errorf("error getting roles from token: %w", err)
 	}
