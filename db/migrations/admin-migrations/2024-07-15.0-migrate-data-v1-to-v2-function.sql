@@ -12,11 +12,13 @@ BEGIN
     --      auth_users: delete the owner created during tenant provisioning
     --      wallets, assets and wallets_assets: delete data created by the `setup-for-network` cmd if any.
     EXECUTE format('
+        DELETE FROM %I.auth_user_mfa_codes;
+        DELETE FROM %I.auth_user_password_reset;
         DELETE FROM %I.auth_users;
         DELETE FROM %I.wallets_assets;
         DELETE FROM %I.assets;
         DELETE FROM %I.wallets;
-    ', schema_name, schema_name, schema_name, schema_name);
+    ', schema_name, schema_name, schema_name, schema_name, schema_name, schema_name);
 
     -- Step 2: Insert new data into tenant's schema.
     EXECUTE format('

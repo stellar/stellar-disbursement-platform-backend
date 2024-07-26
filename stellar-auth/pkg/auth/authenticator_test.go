@@ -662,6 +662,17 @@ func Test_DefaultAuthenticator_GetUsers(t *testing.T) {
 		require.EqualError(t, err, "error querying user IDs: searching for 1 users, found 0 users")
 	})
 
+	t.Run("returns nil if called with an empty or nil slice", func(t *testing.T) {
+		userIDs := []string{}
+		users, err := authenticator.GetUsers(ctx, userIDs)
+		require.NoError(t, err)
+		assert.Empty(t, users)
+
+		users, err = authenticator.GetUsers(ctx, nil)
+		require.NoError(t, err)
+		assert.Empty(t, users)
+	})
+
 	t.Run("gets users for provided IDs successfully", func(t *testing.T) {
 		passwordEncrypterMock.
 			On("Encrypt", ctx, mock.AnythingOfType("string")).
