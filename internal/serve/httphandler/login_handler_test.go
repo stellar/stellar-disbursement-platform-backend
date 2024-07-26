@@ -24,6 +24,35 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 )
 
+func authenticateSetup(
+	authenticatorMock *auth.AuthenticatorMock,
+	roleManagerMock *auth.RoleManagerMock,
+	jwtManagerMock *auth.JWTManagerMock,
+	user *auth.User, password, userToken string) {
+	authenticatorMock.
+		On("ValidateCredentials", mock.Anything, user.Email, password).
+		Return(user, nil).
+		Once()
+	roleManagerMock.
+		On("GetUserRoles", mock.Anything, user).
+		Return(user.Roles, nil).
+		Once()
+	jwtManagerMock.
+		On("GenerateToken", mock.Anything, user, mock.AnythingOfType("time.Time")).
+		Return(userToken, nil).
+		Once()
+}
+
+func userRoleLookupSetup(roleManagerMock *auth.RoleManagerMock,
+	jwtManagerMock *auth.JWTManagerMock, user *auth.User, userCanBypassRole bool, userToken string) {
+	jwtManagerMock.On("ValidateToken", mock.Anything, userToken).
+		Return(true, nil).Once()
+	jwtManagerMock.On("GetUserFromToken", mock.Anything, userToken).
+		Return(user, nil).Once()
+	roleManagerMock.On("HasAnyRoles", mock.Anything, user, []string{data.APIOwnerUserRole.String()}).
+		Return(userCanBypassRole, nil).Once()
+}
+
 func Test_LoginRequest_validate(t *testing.T) {
 	lr := LoginRequest{
 		Email:          "",
@@ -144,11 +173,6 @@ func Test_LoginHandler(t *testing.T) {
 	})
 
 	t.Run("returns error when an unexpected error occurs validating the credentials", func(t *testing.T) {
-		reCAPTCHAValidator.
-			On("IsTokenValid", mock.Anything, "XyZ").
-			Return(true, nil).
-			Once()
-
 		authenticatorMock.
 			On("ValidateCredentials", mock.Anything, "testuser", "pass1234").
 			Return(nil, errors.New("unexpected error")).
@@ -190,11 +214,6 @@ func Test_LoginHandler(t *testing.T) {
 	})
 
 	t.Run("returns error when the credentials are incorrect", func(t *testing.T) {
-		reCAPTCHAValidator.
-			On("IsTokenValid", mock.Anything, "XyZ").
-			Return(true, nil).
-			Once()
-
 		authenticatorMock.
 			On("ValidateCredentials", mock.Anything, "testuser", "pass1234").
 			Return(nil, auth.ErrInvalidCredentials).
@@ -234,7 +253,27 @@ func Test_LoginHandler(t *testing.T) {
 		assert.JSONEq(t, wantsBody, string(respBody))
 	})
 
+	user := &auth.User{
+		ID:    "user-ID",
+		Email: "email",
+		Roles: []string{},
+	}
+	password := "pass1234"
+	userToken := "token123"
+
+	/*roleLookupSetup := func(userCanBypassRole bool, userToken string) {
+		jwtManagerMock.On("ValidateToken", mock.Anything, userToken).
+			Return(true, nil).Once()
+		jwtManagerMock.On("GetUserFromToken", mock.Anything, userToken).
+			Return(user, nil).Once()
+		roleManagerMock.On("HasAnyRoles", mock.Anything, user, []string{data.APIOwnerUserRole.String()}).
+			Return(userCanBypassRole, nil).Once()
+	}*/
+
 	t.Run("returns error when unable to validate recaptcha", func(t *testing.T) {
+		authenticateSetup(authenticatorMock, roleManagerMock, jwtManagerMock, user, password, userToken)
+		userRoleLookupSetup(roleManagerMock, jwtManagerMock, user, false, userToken)
+
 		reCAPTCHAValidator.
 			On("IsTokenValid", mock.Anything, "XyZ").
 			Return(false, errors.New("error requesting verify reCAPTCHA token")).
@@ -244,7 +283,7 @@ func Test_LoginHandler(t *testing.T) {
 
 		reqBody := `
 			{
-				"email": "testuser",
+				"email": "email",
 				"password": "pass1234",
 				"recaptcha_token": "XyZ"
 			}
@@ -272,6 +311,9 @@ func Test_LoginHandler(t *testing.T) {
 	})
 
 	t.Run("returns error when recaptcha token is invalid", func(t *testing.T) {
+		authenticateSetup(authenticatorMock, roleManagerMock, jwtManagerMock, user, password, userToken)
+		userRoleLookupSetup(roleManagerMock, jwtManagerMock, user, false, userToken)
+
 		reCAPTCHAValidator.
 			On("IsTokenValid", mock.Anything, "XyZ").
 			Return(false, nil).
@@ -281,7 +323,7 @@ func Test_LoginHandler(t *testing.T) {
 
 		reqBody := `
 			{
-				"email": "testuser",
+				"email": "email",
 				"password": "pass1234",
 				"recaptcha_token": "XyZ"
 			}
@@ -313,35 +355,16 @@ func Test_LoginHandler(t *testing.T) {
 		log.DefaultLogger.SetOutput(buf)
 		log.SetLevel(log.InfoLevel)
 
-		user := &auth.User{
-			ID:    "user-ID",
-			Email: "email",
-		}
-
-		authenticatorMock.
-			On("ValidateCredentials", mock.Anything, "testuser", "pass1234").
-			Return(user, nil).
-			Once()
-		roleManagerMock.
-			On("GetUserRoles", mock.Anything, user).
-			Return([]string{"role1"}, nil).
-			Once()
-		jwtManagerMock.
-			On("GenerateToken", mock.Anything, user, mock.AnythingOfType("time.Time")).
-			Return("token123", nil).
-			Once()
+		authenticateSetup(authenticatorMock, roleManagerMock, jwtManagerMock, user, password, userToken)
 		reCAPTCHAValidator.
 			On("IsTokenValid", mock.Anything, "XyZ").
 			Return(true, nil).
 			Once()
-		jwtManagerMock.
-			On("ValidateToken", mock.Anything, "token123").
-			Return(true, nil).
-			Once()
-		jwtManagerMock.
-			On("GetUserFromToken", mock.Anything, "token123").
-			Return(user, nil).
-			Once()
+		userRoleLookupSetup(roleManagerMock, jwtManagerMock, user, false, userToken)
+		jwtManagerMock.On("ValidateToken", mock.Anything, userToken).
+			Return(true, nil).Once()
+		jwtManagerMock.On("GetUserFromToken", mock.Anything, userToken).
+			Return(user, nil).Once()
 		authenticatorMock.
 			On("GetUser", mock.Anything, "user-ID").
 			Return(user, nil).
@@ -355,7 +378,7 @@ func Test_LoginHandler(t *testing.T) {
 
 		reqBody := `
 			{
-				"email": "testuser",
+				"email": "email",
 				"password": "pass1234",
 				"recaptcha_token": "XyZ"	
 			}
@@ -420,31 +443,28 @@ func Test_LoginHandlerr_ServeHTTP_MFA(t *testing.T) {
 		ID:    "userID",
 		Email: "testuser@mail.com",
 	}
-	authenticatorMock.
-		On("ValidateCredentials", mock.Anything, "testuser@mail.com", "pass1234").
-		Return(user, nil)
-	roleManagerMock.
-		On("GetUserRoles", mock.Anything, user).
-		Return([]string{"role1"}, nil)
+
+	userToken := "token123"
+	password := "pass1234"
+	authenticateSetup(authenticatorMock, roleManagerMock, jwtManagerMock, user, password, userToken)
 	jwtManagerMock.
-		On("GenerateToken", mock.Anything, user, mock.AnythingOfType("time.Time")).
-		Return("token123", nil)
-	jwtManagerMock.
-		On("ValidateToken", mock.Anything, "token123").
+		On("ValidateToken", mock.Anything, userToken).
 		Return(true, nil)
 	jwtManagerMock.
-		On("GetUserFromToken", mock.Anything, "token123").
+		On("GetUserFromToken", mock.Anything, userToken).
 		Return(user, nil)
 
 	deviceID := "safari-xyz"
 
 	t.Run("error getting user from token", func(t *testing.T) {
+		roleManagerMock.On("HasAnyRoles", mock.Anything, user, []string{data.APIOwnerUserRole.String()}).
+			Return(false, nil).Once()
 		authenticatorMock.
-			On("GetUser", mock.Anything, "userID").
+			On("GetUser", mock.Anything, user.ID).
 			Return(nil, errors.New("weird error happened")).
 			Once()
 
-		body := LoginRequest{Email: "testuser@mail.com", Password: "pass1234"}
+		body := LoginRequest{Email: user.Email, Password: password}
 		req := httptest.NewRequest(http.MethodPost, "/login", requestToJSON(t, &body))
 		rw := httptest.NewRecorder()
 
@@ -455,6 +475,12 @@ func Test_LoginHandlerr_ServeHTTP_MFA(t *testing.T) {
 	})
 
 	t.Run("error when deviceID header is empty", func(t *testing.T) {
+		roleManagerMock.
+			On("GetUserRoles", mock.Anything, user).
+			Return(user.Roles, nil).
+			Once()
+		roleManagerMock.On("HasAnyRoles", mock.Anything, user, []string{data.APIOwnerUserRole.String()}).
+			Return(false, nil).Once()
 		authenticatorMock.
 			On("GetUser", mock.Anything, "userID").
 			Return(user, nil).
@@ -471,6 +497,12 @@ func Test_LoginHandlerr_ServeHTTP_MFA(t *testing.T) {
 	})
 
 	t.Run("error validating MFA device", func(t *testing.T) {
+		roleManagerMock.
+			On("GetUserRoles", mock.Anything, user).
+			Return(user.Roles, nil).
+			Once()
+		roleManagerMock.On("HasAnyRoles", mock.Anything, user, []string{data.APIOwnerUserRole.String()}).
+			Return(false, nil).Once()
 		authenticatorMock.
 			On("GetUser", mock.Anything, "userID").
 			Return(user, nil).
@@ -492,6 +524,12 @@ func Test_LoginHandlerr_ServeHTTP_MFA(t *testing.T) {
 	})
 
 	t.Run("when device is remembered, return token", func(t *testing.T) {
+		roleManagerMock.
+			On("GetUserRoles", mock.Anything, user).
+			Return(user.Roles, nil).
+			Once()
+		roleManagerMock.On("HasAnyRoles", mock.Anything, user, []string{data.APIOwnerUserRole.String()}).
+			Return(false, nil).Once()
 		authenticatorMock.
 			On("GetUser", mock.Anything, "userID").
 			Return(user, nil).
@@ -513,6 +551,12 @@ func Test_LoginHandlerr_ServeHTTP_MFA(t *testing.T) {
 	})
 
 	t.Run("error generating MFA code", func(t *testing.T) {
+		roleManagerMock.
+			On("GetUserRoles", mock.Anything, user).
+			Return(user.Roles, nil).
+			Once()
+		roleManagerMock.On("HasAnyRoles", mock.Anything, user, []string{data.APIOwnerUserRole.String()}).
+			Return(false, nil).Once()
 		authenticatorMock.
 			On("GetUser", mock.Anything, "userID").
 			Return(user, nil).
@@ -538,6 +582,12 @@ func Test_LoginHandlerr_ServeHTTP_MFA(t *testing.T) {
 	})
 
 	t.Run("error when code returned is empty", func(t *testing.T) {
+		roleManagerMock.
+			On("GetUserRoles", mock.Anything, user).
+			Return(user.Roles, nil).
+			Once()
+		roleManagerMock.On("HasAnyRoles", mock.Anything, user, []string{data.APIOwnerUserRole.String()}).
+			Return(false, nil).Once()
 		authenticatorMock.
 			On("GetUser", mock.Anything, "userID").
 			Return(user, nil).
@@ -563,6 +613,12 @@ func Test_LoginHandlerr_ServeHTTP_MFA(t *testing.T) {
 	})
 
 	t.Run("error sending MFA message", func(t *testing.T) {
+		roleManagerMock.
+			On("GetUserRoles", mock.Anything, user).
+			Return(user.Roles, nil).
+			Once()
+		roleManagerMock.On("HasAnyRoles", mock.Anything, user, []string{data.APIOwnerUserRole.String()}).
+			Return(false, nil).Once()
 		authenticatorMock.
 			On("GetUser", mock.Anything, "userID").
 			Return(user, nil).
@@ -592,6 +648,12 @@ func Test_LoginHandlerr_ServeHTTP_MFA(t *testing.T) {
 	})
 
 	t.Run("🎉  Successful login", func(t *testing.T) {
+		roleManagerMock.
+			On("GetUserRoles", mock.Anything, user).
+			Return(user.Roles, nil).
+			Once()
+		roleManagerMock.On("HasAnyRoles", mock.Anything, user, []string{data.APIOwnerUserRole.String()}).
+			Return(false, nil).Once()
 		authenticatorMock.
 			On("GetUser", mock.Anything, "userID").
 			Return(user, nil).

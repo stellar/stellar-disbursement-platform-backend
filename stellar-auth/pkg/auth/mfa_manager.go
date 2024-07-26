@@ -197,6 +197,7 @@ func (m *defaultMFAManager) getByDeviceAndCode(ctx context.Context, deviceID, co
 	`
 	var mc mfaCode
 	err := m.dbConnectionPool.GetContext(ctx, &mc, query, deviceID, code)
+	log.Ctx(ctx).Info(deviceID, code)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrMFANoCodeForUserDevice

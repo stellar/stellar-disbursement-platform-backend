@@ -49,7 +49,11 @@ func (h MFAHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	log.Ctx(ctx).Info(deviceID, " ", reqBody.MFACode)
+	if reqBody.MFACode == "" {
+		extras := map[string]interface{}{"mfa_code": "MFA Code is required"}
+		httperror.BadRequest("Request invalid", nil, extras).Render(rw)
+		return
+	}
 
 	token, err := h.AuthManager.AuthenticateMFA(ctx, deviceID, reqBody.MFACode, reqBody.RememberMe)
 	if err != nil {
@@ -82,12 +86,6 @@ func (h MFAHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 			httperror.BadRequest("reCAPTCHA token invalid", nil, nil).Render(rw)
 			return
 		}
-	}
-
-	if reqBody.MFACode == "" {
-		extras := map[string]interface{}{"mfa_code": "MFA Code is required"}
-		httperror.BadRequest("Request invalid", nil, extras).Render(rw)
-		return
 	}
 
 	userID, err := h.AuthManager.GetUserID(ctx, token)
