@@ -69,7 +69,6 @@ func (c *CirclePaymentDispatcher) sendPaymentsToCircle(ctx context.Context, sdpD
 		if err != nil {
 			// 3. If the transfer fails, set the payment status to failed
 			log.Ctx(ctx).Errorf("Failed to submit payment %s to Circle: %v", payment.ID, err)
-			// TODO: [SDP-1245] if the transfer fails because of authentication error, set the account status to `PENDING_USER_ACTIVATION`
 			err = c.sdpModels.Payment.UpdateStatus(ctx, sdpDBTx, payment.ID, data.FailedPaymentStatus, utils.StringPtr(err.Error()), "")
 			if err != nil {
 				return fmt.Errorf("marking payment as failed: %w", err)

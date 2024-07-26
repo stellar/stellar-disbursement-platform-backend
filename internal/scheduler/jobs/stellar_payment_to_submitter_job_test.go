@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
@@ -34,21 +35,21 @@ func Test_StellarPaymentToSubmitterJob_Execute(t *testing.T) {
 	tests := []struct {
 		name         string
 		sendPayments func(ctx context.Context, batchSize int) error
-		wantErr      bool
+		wantErr      error
 	}{
 		{
 			name: "SendBatchPayments success",
 			sendPayments: func(ctx context.Context, batchSize int) error {
 				return nil
 			},
-			wantErr: false,
+			wantErr: nil,
 		},
 		{
 			name: "SendBatchPayments returns error",
 			sendPayments: func(ctx context.Context, batchSize int) error {
 				return fmt.Errorf("error")
 			},
-			wantErr: true,
+			wantErr: fmt.Errorf("error"),
 		},
 	}
 
@@ -69,8 +70,11 @@ func Test_StellarPaymentToSubmitterJob_Execute(t *testing.T) {
 			}
 
 			err := p.Execute(context.Background())
-			if (err != nil) != tt.wantErr {
-				t.Errorf("stellarPaymentToSubmitterJob.Execute() error = %v, wantErr %v", err, tt.wantErr)
+			if tt.wantErr != nil {
+				assert.NotNil(t, err)
+				assert.ErrorContains(t, err, tt.wantErr.Error())
+			} else {
+				assert.NoError(t, err)
 			}
 
 			mockPaymentToSubmitterService.AssertExpectations(t)

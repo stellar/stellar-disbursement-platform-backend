@@ -116,7 +116,7 @@ func Test_CirclePaymentDispatcher_DispatchPayments(t *testing.T) {
 			},
 		},
 		{
-			name:               "success posting tranfer to Circle",
+			name:               "success posting transfer to Circle",
 			paymentsToDispatch: []*data.Payment{payment1},
 			wantErr:            nil,
 			fnSetup: func(t *testing.T, m *circle.MockService) {
