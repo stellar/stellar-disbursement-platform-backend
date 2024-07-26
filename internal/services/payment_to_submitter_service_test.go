@@ -19,6 +19,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/assets"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/paymentdispatchers"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing/mocks"
 	txSubStore "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
@@ -210,12 +211,20 @@ func Test_PaymentToSubmitterService_SendPaymentsMethods(t *testing.T) {
 					Once()
 			}
 
+			var paymentDispatcher paymentdispatchers.PaymentDispatcherInterface
+			if tc.distributionAccount.IsStellar() {
+				paymentDispatcher = paymentdispatchers.NewStellarPaymentDispatcher(models, tssModel, mDistAccResolver)
+			} else {
+				paymentDispatcher = paymentdispatchers.NewCirclePaymentDispatcher(models, mCircleService, mDistAccResolver)
+			}
+
 			// 🚧 Send Payments to the right platform, through the specified method
 			svc := PaymentToSubmitterService{
 				sdpModels:           models,
 				tssModel:            tssModel,
 				distAccountResolver: mDistAccResolver,
 				circleService:       mCircleService,
+				paymentDispatcher:   paymentDispatcher,
 			}
 			// Different method, depending on the tc.methodOption value
 			switch tc.methodOption {
@@ -453,12 +462,12 @@ func Test_PaymentToSubmitterService_RetryPayment(t *testing.T) {
 		On("DistributionAccountFromContext", ctx).
 		Return(distAccount, nil).
 		Maybe()
-	mCircleService := circle.NewMockService(t)
+
+	paymentDispatcher := paymentdispatchers.NewStellarPaymentDispatcher(models, tssModel, mDistAccountResolver)
 	service := NewPaymentToSubmitterService(PaymentToSubmitterServiceOptions{
 		Models:              models,
-		TSSDBConnectionPool: dbConnectionPool,
 		DistAccountResolver: mDistAccountResolver,
-		CircleService:       mCircleService,
+		PaymentDispatcher:   paymentDispatcher,
 	})
 
 	// clean test db
@@ -642,175 +651,4 @@ func Test_PaymentToSubmitterService_markPaymentsAsFailed(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, data.FailedPaymentStatus, payment2.Status)
 	})
-}
-
-func Test_PaymentToSubmitterService_sendPaymentsToCircle(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
-
-	ctx := context.Background()
-
-	models, err := data.NewModels(dbConnectionPool)
-	require.NoError(t, err)
-
-	circleWalletID := "22322112"
-	circleTransferID := uuid.NewString()
-
-	// Disbursement
-	disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{})
-
-	// Receivers
-	receiver1 := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
-
-	// Receiver Wallets
-	rw1Registered := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver1.ID, disbursement.Wallet.ID, data.RegisteredReceiversWalletStatus)
-
-	// Payments
-	payment1 := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
-		ReceiverWallet: rw1Registered,
-		Disbursement:   disbursement,
-		Asset:          *disbursement.Asset,
-		Amount:         "100",
-		Status:         data.ReadyPaymentStatus,
-	})
-
-	tests := []struct {
-		name             string
-		paymentsToSubmit []*data.Payment
-		wantErr          error
-		fnSetup          func(*testing.T, *circle.MockService)
-		fnAsserts        func(*testing.T, db.SQLExecuter)
-	}{
-		{
-			name: "failure validating payment ready for sending",
-			paymentsToSubmit: []*data.Payment{
-				{ID: "123"},
-			},
-			wantErr: fmt.Errorf("payment with ID 123 does not exist"),
-		},
-		{
-			name:             "payment marked as failed when posting circle transfer fails",
-			paymentsToSubmit: []*data.Payment{payment1},
-			wantErr:          nil,
-			fnSetup: func(t *testing.T, m *circle.MockService) {
-				transferRequest, setupErr := models.CircleTransferRequests.Insert(ctx, payment1.ID)
-				require.NoError(t, setupErr)
-
-				m.On("SendPayment", ctx, circle.PaymentRequest{
-					SourceWalletID:            circleWalletID,
-					DestinationStellarAddress: payment1.ReceiverWallet.StellarAddress,
-					Amount:                    payment1.Amount,
-					StellarAssetCode:          payment1.Asset.Code,
-					IdempotencyKey:            transferRequest.IdempotencyKey,
-				}).
-					Return(nil, fmt.Errorf("error posting transfer to Circle")).
-					Once()
-			},
-			fnAsserts: func(t *testing.T, sqlExecuter db.SQLExecuter) {
-				// Payment should be marked as failed
-				payment, assertErr := models.Payment.Get(ctx, payment1.ID, sqlExecuter)
-				require.NoError(t, assertErr)
-				assert.Equal(t, data.FailedPaymentStatus, payment.Status)
-			},
-		},
-		{
-			name:             "error updating circle transfer request",
-			paymentsToSubmit: []*data.Payment{payment1},
-			wantErr:          fmt.Errorf("updating circle transfer request: transfer cannot be nil"),
-			fnSetup: func(t *testing.T, m *circle.MockService) {
-				m.On("SendPayment", ctx, mock.AnythingOfType("circle.PaymentRequest")).
-					Return(nil, nil).
-					Once()
-			},
-		},
-		{
-			name:             "error updating payment status for completed request",
-			paymentsToSubmit: []*data.Payment{payment1},
-			wantErr:          fmt.Errorf("invalid input value for enum circle_transfer_status"),
-			fnSetup: func(t *testing.T, m *circle.MockService) {
-				m.On("SendPayment", ctx, mock.AnythingOfType("circle.PaymentRequest")).
-					Return(&circle.Transfer{
-						ID:     "transfer_id",
-						Status: "wrong-status",
-					}, nil).
-					Once()
-			},
-		},
-		{
-			name:             "success posting tranfer to Circle",
-			paymentsToSubmit: []*data.Payment{payment1},
-			wantErr:          nil,
-			fnSetup: func(t *testing.T, m *circle.MockService) {
-				m.On("SendPayment", ctx, mock.AnythingOfType("circle.PaymentRequest")).
-					Return(&circle.Transfer{
-						ID:     circleTransferID,
-						Status: circle.TransferStatusPending,
-						Amount: circle.Balance{
-							Amount:   payment1.Amount,
-							Currency: "USD",
-						},
-					}, nil).
-					Once()
-			},
-			fnAsserts: func(t *testing.T, sqlExecuter db.SQLExecuter) {
-				// Payment should be marked as pending
-				payment, assertErr := models.Payment.Get(ctx, payment1.ID, sqlExecuter)
-				require.NoError(t, assertErr)
-				assert.Equal(t, data.PendingPaymentStatus, payment.Status)
-
-				// Transfer request is still not updated for the main connection pool
-				var transferRequest data.CircleTransferRequest
-				assertErr = dbConnectionPool.GetContext(ctx, &transferRequest, "SELECT * FROM circle_transfer_requests WHERE payment_id = $1", payment1.ID)
-				require.NoError(t, assertErr)
-				assert.Nil(t, transferRequest.CircleTransferID)
-				assert.Nil(t, transferRequest.SourceWalletID)
-
-				// Transfer request is updated for the transaction
-				assertErr = sqlExecuter.GetContext(ctx, &transferRequest, "SELECT * FROM circle_transfer_requests WHERE payment_id = $1", payment1.ID)
-				require.NoError(t, assertErr)
-				assert.Equal(t, circleTransferID, *transferRequest.CircleTransferID)
-				assert.Equal(t, circleWalletID, *transferRequest.SourceWalletID)
-				assert.Equal(t, data.CircleTransferStatusPending, *transferRequest.Status)
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			dbtx, runErr := dbConnectionPool.BeginTxx(ctx, nil)
-			require.NoError(t, runErr)
-
-			// Teardown
-			defer func() {
-				err = dbtx.Rollback()
-				require.NoError(t, err)
-
-				_, err = dbConnectionPool.ExecContext(ctx, "DELETE FROM circle_transfer_requests")
-				require.NoError(t, err)
-			}()
-
-			mCircleService := circle.NewMockService(t)
-			service := &PaymentToSubmitterService{
-				sdpModels:     models,
-				circleService: mCircleService,
-			}
-
-			if tt.fnSetup != nil {
-				tt.fnSetup(t, mCircleService)
-			}
-			runErr = service.sendPaymentsToCircle(ctx, dbtx, circleWalletID, tt.paymentsToSubmit)
-			if tt.wantErr != nil {
-				assert.ErrorContains(t, runErr, tt.wantErr.Error())
-			} else {
-				assert.NoError(t, runErr)
-			}
-
-			if tt.fnAsserts != nil {
-				tt.fnAsserts(t, dbtx)
-			}
-		})
-	}
 }

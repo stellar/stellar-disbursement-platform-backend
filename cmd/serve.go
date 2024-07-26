@@ -179,10 +179,15 @@ func (s *ServerService) SetupConsumers(ctx context.Context, o SetupConsumersOpti
 		kafkaConfig,
 		events.PaymentReadyToPayTopic,
 		o.EventBrokerOptions.ConsumerGroupID,
-		eventhandlers.NewPaymentToSubmitterEventHandler(eventhandlers.PaymentToSubmitterEventHandlerOptions{
+		eventhandlers.NewStellarPaymentToSubmitterEventHandler(eventhandlers.StellarPaymentToSubmitterEventHandlerOptions{
 			AdminDBConnectionPool: o.ServeOpts.AdminDBConnectionPool,
 			MtnDBConnectionPool:   o.ServeOpts.MtnDBConnectionPool,
 			TSSDBConnectionPool:   o.TSSDBConnectionPool,
+			DistAccountResolver:   o.ServeOpts.SubmitterEngine.DistributionAccountResolver,
+		}),
+		eventhandlers.NewCirclePaymentToSubmitterEventHandler(eventhandlers.CirclePaymentToSubmitterEventHandlerOptions{
+			AdminDBConnectionPool: o.ServeOpts.AdminDBConnectionPool,
+			MtnDBConnectionPool:   o.ServeOpts.MtnDBConnectionPool,
 			DistAccountResolver:   o.ServeOpts.SubmitterEngine.DistributionAccountResolver,
 			CircleService:         o.ServeOpts.CircleService,
 		}),

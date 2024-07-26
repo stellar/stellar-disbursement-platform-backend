@@ -10,6 +10,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/mocks"
+	sigMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing/mocks"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
 func Test_PaymentToSubmitterJob_GetInterval(t *testing.T) {
@@ -23,12 +25,12 @@ func Test_PaymentToSubmitterJob_GetName(t *testing.T) {
 	require.Equal(t, circlePaymentToSubmitterJobName, p.GetName())
 }
 
-func Test_PaymentToSubmitterJob_IsJobMultiTenant(t *testing.T) {
+func Test_CirclePaymentToSubmitterJob_IsJobMultiTenant(t *testing.T) {
 	p := NewCirclePaymentToSubmitterJob(CirclePaymentToSubmitterJobOptions{JobIntervalSeconds: 5})
 	require.Equal(t, true, p.IsJobMultiTenant())
 }
 
-func Test_PaymentToSubmitterJob_Execute(t *testing.T) {
+func Test_CirclePaymentToSubmitterJob_Execute(t *testing.T) {
 	tests := []struct {
 		name         string
 		sendPayments func(ctx context.Context, batchSize int) error
@@ -52,12 +54,18 @@ func Test_PaymentToSubmitterJob_Execute(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockPaymentToSubmitterService := &mocks.MockPaymentToSubmitterService{}
-			mockPaymentToSubmitterService.On("SendBatchPayments", mock.Anything, circlePaymentToSubmitterBatchSize).
+			mockCirclePaymentToSubmitterService := &mocks.MockPaymentToSubmitterService{}
+			mockCirclePaymentToSubmitterService.On("SendBatchPayments", mock.Anything, circlePaymentToSubmitterBatchSize).
 				Return(tt.sendPayments(nil, circlePaymentToSubmitterBatchSize))
+			mDistAccResolver := sigMocks.NewMockDistributionAccountResolver(t)
+			mDistAccResolver.
+				On("DistributionAccountFromContext", mock.Anything).
+				Return(schema.TransactionAccount{Type: schema.DistributionAccountCircleDBVault}, nil).
+				Maybe()
 
 			p := circlePaymentToSubmitterJob{
-				paymentToSubmitterSvc: mockPaymentToSubmitterService,
+				paymentToSubmitterSvc: mockCirclePaymentToSubmitterService,
+				distAccountResolver:   mDistAccResolver,
 			}
 
 			err := p.Execute(context.Background())
@@ -65,7 +73,7 @@ func Test_PaymentToSubmitterJob_Execute(t *testing.T) {
 				t.Errorf("circlePaymentToSubmitterJob.Execute() error = %v, wantErr %v", err, tt.wantErr)
 			}
 
-			mockPaymentToSubmitterService.AssertExpectations(t)
+			mockCirclePaymentToSubmitterService.AssertExpectations(t)
 		})
 	}
 }
