@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -1406,6 +1408,41 @@ func Test_AuthManager_GetUsersByID(t *testing.T) {
 		users, err := authManager.GetUsersByID(ctx, userIDs)
 		require.NoError(t, err)
 		assert.Equal(t, expectedUsers, users)
+	})
+
+	authenticatorMock.AssertExpectations(t)
+}
+
+func Test_AuthManager_GetUserByEmail(t *testing.T) {
+	authenticatorMock := &AuthenticatorMock{}
+	authManager := NewAuthManager(
+		WithCustomAuthenticatorOption(authenticatorMock),
+	)
+
+	ctx := context.Background()
+
+	t.Run("returns error when authenticator fails to find user by email", func(t *testing.T) {
+		email := "invalid-email@email.com"
+
+		authenticatorMock.On("GetUserByEmail", ctx, email).Return(nil, ErrUserNotFound).Once()
+		_, err := authManager.GetUserByEmail(ctx, email)
+
+		require.EqualError(t, err, "getting user with email: user not found")
+	})
+
+	t.Run("gets user by email successfully", func(t *testing.T) {
+		email := "valid-email@email.com"
+
+		expectedUser := &User{
+			ID:    "user-id",
+			Email: email,
+			Roles: []string{data.OwnerUserRole.String()},
+		}
+		authenticatorMock.On("GetUserByEmail", ctx, email).Return(expectedUser, nil).Once()
+		user, err := authManager.GetUserByEmail(ctx, email)
+
+		require.NoError(t, err)
+		require.Equal(t, expectedUser, user)
 	})
 
 	authenticatorMock.AssertExpectations(t)

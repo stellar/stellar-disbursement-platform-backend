@@ -320,7 +320,7 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 		require.NoError(t, err)
 
 		authenticatorMock.
-			On("ForgotPassword", req.Context(), "valid@email.com").
+			On("ForgotPassword", req.Context(), email).
 			Return("", errors.New("unexpected error")).
 			Once()
 		authenticatorMock.
