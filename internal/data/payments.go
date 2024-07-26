@@ -167,7 +167,7 @@ SELECT
 	rw.created_at as "receiver_wallet.created_at",
 	rw.updated_at as "receiver_wallet.updated_at",
 	rw.receiver_id as "receiver_wallet.receiver.id",
-	COALESCE(rw.anchor_platform_transaction_id, '') as "receiver_wallet.anchor_platform_transaction_id",
+	COALESCE(rw.anchor_platform_transaction_id, '') AS "receiver_wallet.anchor_platform_transaction_id",
 	rw.anchor_platform_transaction_synced_at as "receiver_wallet.anchor_platform_transaction_synced_at",
 	w.id as "receiver_wallet.wallet.id",
 	w.name as "receiver_wallet.wallet.name",
@@ -195,7 +195,7 @@ func (p *PaymentModel) GetAllReadyToPatchCompletionAnchorTransactions(ctx contex
 			rw.id AS "receiver_wallet.id",
 			COALESCE(rw.stellar_memo, '') AS "receiver_wallet.stellar_memo",
 			COALESCE(rw.stellar_memo_type, '') AS "receiver_wallet.stellar_memo_type",
-			rw.anchor_platform_transaction_id AS "receiver_wallet.anchor_platform_transaction_id",
+			COALESCE(rw.anchor_platform_transaction_id, '') AS "receiver_wallet.anchor_platform_transaction_id",
 			rw.anchor_platform_transaction_synced_at AS "receiver_wallet.anchor_platform_transaction_synced_at"
 		FROM
 			payments p
@@ -206,6 +206,7 @@ func (p *PaymentModel) GetAllReadyToPatchCompletionAnchorTransactions(ctx contex
 		WHERE
 			p.status = ANY($1) -- ARRAY['SUCCESS', 'FAILURE']::payment_status[]
 			AND rw.status = $2 -- 'REGISTERED'::receiver_wallet_status
+			AND rw.anchor_platform_transaction_id IS NOT NULL
 			AND rw.anchor_platform_transaction_synced_at IS NULL
 		ORDER BY
 			p.created_at
