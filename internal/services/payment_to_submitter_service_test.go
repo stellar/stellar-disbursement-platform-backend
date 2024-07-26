@@ -214,8 +214,10 @@ func Test_PaymentToSubmitterService_SendPaymentsMethods(t *testing.T) {
 			var paymentDispatcher paymentdispatchers.PaymentDispatcherInterface
 			if tc.distributionAccount.IsStellar() {
 				paymentDispatcher = paymentdispatchers.NewStellarPaymentDispatcher(models, tssModel, mDistAccResolver)
-			} else {
+			} else if tc.distributionAccount.IsCircle() {
 				paymentDispatcher = paymentdispatchers.NewCirclePaymentDispatcher(models, mCircleService, mDistAccResolver)
+			} else {
+				t.Fatalf("unknown distribution account type: %s", tc.distributionAccount.Type)
 			}
 
 			// 🚧 Send Payments to the right platform, through the specified method

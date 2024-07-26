@@ -87,7 +87,7 @@ func Test_CirclePaymentToSubmitterEventHandler_Handle(t *testing.T) {
 		assert.ErrorContains(t, handleErr, "sending payments ready to pay")
 	})
 
-	t.Run("successfully sends payments ready to pay to TSS", func(t *testing.T) {
+	t.Run("successfully sends payments ready to pay to Circle", func(t *testing.T) {
 		tenant.DeleteAllTenantsFixture(t, ctx, dbConnectionPool)
 
 		tnt, err := tenantManager.AddTenant(ctx, "myorg1")
