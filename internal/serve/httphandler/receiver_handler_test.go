@@ -1632,6 +1632,7 @@ func Test_ReceiverHandler_GetReceiverVerificatioTypes(t *testing.T) {
 	defer resp.Body.Close()
 	expectedBody := `[
 		"DATE_OF_BIRTH",
+		"YEAR_MONTH",
 		"PIN",
 		"NATIONAL_ID_NUMBER"
 	]`

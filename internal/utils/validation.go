@@ -119,6 +119,27 @@ func ValidateDateOfBirthVerification(dob string) error {
 	return nil
 }
 
+// ValidateYearMonthVerification will validate the year/month field for receiver verification.
+func ValidateYearMonthVerification(yearMonth string) error {
+	// make sure year/month is not empty
+	if yearMonth == "" {
+		return fmt.Errorf("year/month cannot be empty")
+	}
+
+	// make sure year/month with format 2006-01
+	ym, err := time.Parse("2006-01", yearMonth)
+	if err != nil {
+		return fmt.Errorf("invalid year/month format. Correct format: 1990-12")
+	}
+
+	// check if year/month is in the past
+	if ym.After(time.Now()) {
+		return fmt.Errorf("year/month cannot be in the future")
+	}
+
+	return nil
+}
+
 // ValidatePinVerification will validate the pin field for receiver verification.
 func ValidatePinVerification(pin string) error {
 	if len(pin) < VerificationFieldPinMinLength || len(pin) > VerificationFieldPinMaxLength {
