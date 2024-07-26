@@ -28,7 +28,8 @@ func authenticateSetup(
 	authenticatorMock *auth.AuthenticatorMock,
 	roleManagerMock *auth.RoleManagerMock,
 	jwtManagerMock *auth.JWTManagerMock,
-	user *auth.User, password, userToken string) {
+	user *auth.User, password, userToken string,
+) {
 	authenticatorMock.
 		On("ValidateCredentials", mock.Anything, user.Email, password).
 		Return(user, nil).
@@ -44,7 +45,8 @@ func authenticateSetup(
 }
 
 func userRoleLookupSetup(roleManagerMock *auth.RoleManagerMock,
-	jwtManagerMock *auth.JWTManagerMock, user *auth.User, userCanBypassRole bool, userToken string) {
+	jwtManagerMock *auth.JWTManagerMock, user *auth.User, userCanBypassRole bool, userToken string,
+) {
 	jwtManagerMock.On("ValidateToken", mock.Anything, userToken).
 		Return(true, nil).Once()
 	jwtManagerMock.On("GetUserFromToken", mock.Anything, userToken).
@@ -260,15 +262,6 @@ func Test_LoginHandler(t *testing.T) {
 	}
 	password := "pass1234"
 	userToken := "token123"
-
-	/*roleLookupSetup := func(userCanBypassRole bool, userToken string) {
-		jwtManagerMock.On("ValidateToken", mock.Anything, userToken).
-			Return(true, nil).Once()
-		jwtManagerMock.On("GetUserFromToken", mock.Anything, userToken).
-			Return(user, nil).Once()
-		roleManagerMock.On("HasAnyRoles", mock.Anything, user, []string{data.APIOwnerUserRole.String()}).
-			Return(userCanBypassRole, nil).Once()
-	}*/
 
 	t.Run("returns error when unable to validate recaptcha", func(t *testing.T) {
 		authenticateSetup(authenticatorMock, roleManagerMock, jwtManagerMock, user, password, userToken)

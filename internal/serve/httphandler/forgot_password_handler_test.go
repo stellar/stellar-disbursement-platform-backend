@@ -57,6 +57,12 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 		SDPUIBaseURL: &uiBaseURL,
 	}
 	ctx := tenant.SaveTenantInContext(context.Background(), &tnt)
+	email := "valid@email.com"
+	user := &auth.User{
+		ID:    "userID",
+		Email: email,
+		Roles: []string{data.OwnerUserRole.String()},
+	}
 
 	t.Run("Should return http status 200 on a valid request", func(t *testing.T) {
 		requestBody := `
@@ -70,8 +76,12 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 		require.NoError(t, err)
 
 		authenticatorMock.
-			On("ForgotPassword", req.Context(), "valid@email.com").
+			On("ForgotPassword", req.Context(), email).
 			Return("resetToken", nil).
+			Once()
+		authenticatorMock.
+			On("GetUserByEmail", mock.Anything, email).
+			Return(user, nil).
 			Once()
 		reCAPTCHAValidatorMock.
 			On("IsTokenValid", mock.Anything, "validToken").
@@ -89,7 +99,7 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 		require.NoError(t, err)
 
 		msg := message.Message{
-			ToEmail: "valid@email.com",
+			ToEmail: email,
 			Title:   forgotPasswordMessageTitle,
 			Message: content,
 		}
@@ -124,6 +134,10 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 			On("ForgotPassword", req.Context(), "valid@email.com").
 			Return("resetToken", nil).
 			Once()
+		authenticatorMock.
+			On("GetUserByEmail", mock.Anything, email).
+			Return(user, nil).
+			Once()
 		reCAPTCHAValidatorMock.
 			On("IsTokenValid", mock.Anything, "validToken").
 			Return(true, nil).
@@ -156,6 +170,14 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 			On("ForgotPassword", req.Context(), "not_found@email.com").
 			Return("", auth.ErrUserNotFound).
 			Once()
+		authenticatorMock.
+			On("GetUserByEmail", mock.Anything, "not_found@email.com").
+			Return(&auth.User{
+				ID:    "userID",
+				Email: "not_found@email.com",
+				Roles: []string{data.OwnerUserRole.String()},
+			}, nil).
+			Once()
 		reCAPTCHAValidatorMock.
 			On("IsTokenValid", mock.Anything, "validToken").
 			Return(true, nil).
@@ -183,6 +205,10 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 			On("ForgotPassword", req.Context(), "valid@email.com").
 			Return("", auth.ErrUserHasValidToken).
 			Once()
+		authenticatorMock.
+			On("GetUserByEmail", mock.Anything, email).
+			Return(user, nil).
+			Once()
 		reCAPTCHAValidatorMock.
 			On("IsTokenValid", mock.Anything, "validToken").
 			Return(true, nil).
@@ -204,11 +230,6 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 		rr := httptest.NewRecorder()
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(requestBody))
 		require.NoError(t, err)
-
-		reCAPTCHAValidatorMock.
-			On("IsTokenValid", mock.Anything, "validToken").
-			Return(true, nil).
-			Once()
 
 		http.HandlerFunc(handler.ServeHTTP).ServeHTTP(rr, req)
 
@@ -242,6 +263,10 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 		authenticatorMock.
 			On("ForgotPassword", req.Context(), "valid@email.com").
 			Return("resetToken", nil).
+			Once()
+		authenticatorMock.
+			On("GetUserByEmail", mock.Anything, email).
+			Return(user, nil).
 			Once()
 		reCAPTCHAValidatorMock.
 			On("IsTokenValid", mock.Anything, "validToken").
@@ -298,6 +323,10 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 			On("ForgotPassword", req.Context(), "valid@email.com").
 			Return("", errors.New("unexpected error")).
 			Once()
+		authenticatorMock.
+			On("GetUserByEmail", mock.Anything, email).
+			Return(user, nil).
+			Once()
 		reCAPTCHAValidatorMock.
 			On("IsTokenValid", mock.Anything, "validToken").
 			Return(true, nil).
@@ -329,6 +358,10 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(requestBody))
 		require.NoError(t, err)
 
+		authenticatorMock.
+			On("GetUserByEmail", mock.Anything, email).
+			Return(user, nil).
+			Once()
 		reCAPTCHAValidatorMock.
 			On("IsTokenValid", req.Context(), "validToken").
 			Return(false, errors.New("error requesting verify reCAPTCHA token")).
@@ -360,6 +393,10 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(requestBody))
 		require.NoError(t, err)
 
+		authenticatorMock.
+			On("GetUserByEmail", mock.Anything, email).
+			Return(user, nil).
+			Once()
 		reCAPTCHAValidatorMock.
 			On("IsTokenValid", mock.Anything, "invalidToken").
 			Return(false, nil).

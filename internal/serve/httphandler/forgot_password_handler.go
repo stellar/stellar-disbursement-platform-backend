@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"slices"
 
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/support/render/httpjson"
@@ -59,7 +60,28 @@ func (h ForgotPasswordHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if !h.ReCAPTCHADisabled {
+	// validate request
+	v := validators.NewValidator()
+
+	v.Check(forgotPasswordRequest.Email != "", "email", "email is required")
+
+	if v.HasErrors() {
+		httperror.BadRequest("request invalid", err, v.Errors).Render(w)
+		return
+	}
+
+	user, err := h.AuthManager.GetUserByEmail(ctx, forgotPasswordRequest.Email)
+	if err != nil {
+		if errors.Is(err, auth.ErrUserNotFound) {
+			log.Ctx(ctx).Errorf("error in forgot password handler, email not found: %s", forgotPasswordRequest.Email)
+		} else {
+			httperror.InternalError(ctx, "getting user by email", err, nil).Render(w)
+			return
+		}
+	}
+	canBypassReCAPTCHA := slices.Contains(user.Roles, data.APIOwnerUserRole.String())
+
+	if !h.ReCAPTCHADisabled && !canBypassReCAPTCHA {
 		// validating reCAPTCHA Token
 		isValid, recaptchaErr := h.ReCAPTCHAValidator.IsTokenValid(ctx, forgotPasswordRequest.ReCAPTCHAToken)
 		if recaptchaErr != nil {
@@ -72,16 +94,6 @@ func (h ForgotPasswordHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 			httperror.BadRequest("reCAPTCHA token invalid", nil, nil).Render(w)
 			return
 		}
-	}
-
-	// validate request
-	v := validators.NewValidator()
-
-	v.Check(forgotPasswordRequest.Email != "", "email", "email is required")
-
-	if v.HasErrors() {
-		httperror.BadRequest("request invalid", err, v.Errors).Render(w)
-		return
 	}
 
 	resetToken, err := h.AuthManager.ForgotPassword(ctx, forgotPasswordRequest.Email)
