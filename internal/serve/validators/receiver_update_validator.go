@@ -8,6 +8,7 @@ import (
 
 type UpdateReceiverRequest struct {
 	DateOfBirth string `json:"date_of_birth"`
+	YearMonth   string `json:"year_month"`
 	Pin         string `json:"pin"`
 	NationalID  string `json:"national_id"`
 	Email       string `json:"email"`

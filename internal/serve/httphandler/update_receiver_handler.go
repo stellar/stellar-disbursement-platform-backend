@@ -23,29 +23,27 @@ type UpdateReceiverHandler struct {
 
 func createVerificationInsert(updateReceiverInfo *validators.UpdateReceiverRequest, receiverID string) []data.ReceiverVerificationInsert {
 	receiverVerifications := []data.ReceiverVerificationInsert{}
-
-	if updateReceiverInfo.DateOfBirth != "" {
-		receiverVerifications = append(receiverVerifications, data.ReceiverVerificationInsert{
-			ReceiverID:        receiverID,
-			VerificationField: data.VerificationFieldDateOfBirth,
-			VerificationValue: updateReceiverInfo.DateOfBirth,
-		})
+	appendNewVerificationValue := func(verificationField data.VerificationField, verificationValue string) {
+		if verificationValue != "" {
+			receiverVerifications = append(receiverVerifications, data.ReceiverVerificationInsert{
+				ReceiverID:        receiverID,
+				VerificationField: verificationField,
+				VerificationValue: verificationValue,
+			})
+		}
 	}
 
-	if updateReceiverInfo.Pin != "" {
-		receiverVerifications = append(receiverVerifications, data.ReceiverVerificationInsert{
-			ReceiverID:        receiverID,
-			VerificationField: data.VerificationFieldPin,
-			VerificationValue: updateReceiverInfo.Pin,
-		})
-	}
-
-	if updateReceiverInfo.NationalID != "" {
-		receiverVerifications = append(receiverVerifications, data.ReceiverVerificationInsert{
-			ReceiverID:        receiverID,
-			VerificationField: data.VerificationFieldNationalID,
-			VerificationValue: updateReceiverInfo.NationalID,
-		})
+	for _, verificationField := range data.GetAllVerificationFields() {
+		switch verificationField {
+		case data.VerificationFieldDateOfBirth:
+			appendNewVerificationValue(verificationField, updateReceiverInfo.DateOfBirth)
+		case data.VerificationFieldYearMonth:
+			appendNewVerificationValue(verificationField, updateReceiverInfo.YearMonth)
+		case data.VerificationFieldPin:
+			appendNewVerificationValue(verificationField, updateReceiverInfo.Pin)
+		case data.VerificationFieldNationalID:
+			appendNewVerificationValue(verificationField, updateReceiverInfo.NationalID)
+		}
 	}
 
 	return receiverVerifications

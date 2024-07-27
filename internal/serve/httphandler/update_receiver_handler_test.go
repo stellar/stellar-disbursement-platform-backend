@@ -30,6 +30,12 @@ func Test_UpdateReceiverHandler_createVerificationInsert(t *testing.T) {
 		VerificationValue: "1999-01-01",
 	}
 
+	verificationYearMonth := data.ReceiverVerificationInsert{
+		ReceiverID:        receiverID,
+		VerificationField: data.VerificationFieldYearMonth,
+		VerificationValue: "1999-01",
+	}
+
 	verificationPIN := data.ReceiverVerificationInsert{
 		ReceiverID:        receiverID,
 		VerificationField: data.VerificationFieldPin,
@@ -56,6 +62,11 @@ func Test_UpdateReceiverHandler_createVerificationInsert(t *testing.T) {
 			name:                  "insert receiver verification date of birth",
 			updateReceiverRequest: validators.UpdateReceiverRequest{DateOfBirth: "1999-01-01"},
 			want:                  []data.ReceiverVerificationInsert{verificationDOB},
+		},
+		{
+			name:                  "insert receiver verification year month",
+			updateReceiverRequest: validators.UpdateReceiverRequest{YearMonth: "1999-01"},
+			want:                  []data.ReceiverVerificationInsert{verificationYearMonth},
 		},
 		{
 			name:                  "insert receiver verification pin",
