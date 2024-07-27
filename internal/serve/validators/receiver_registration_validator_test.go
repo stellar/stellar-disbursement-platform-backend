@@ -66,7 +66,7 @@ func Test_ReceiverRegistrationValidator_ValidateReceiver(t *testing.T) {
 		validator.ValidateReceiver(&receiverInfo)
 
 		assert.Equal(t, 1, len(validator.Errors))
-		assert.Equal(t, "invalid parameter. valid values are: DATE_OF_BIRTH, PIN, NATIONAL_ID_NUMBER", validator.Errors["verification_type"])
+		assert.Equal(t, "invalid parameter. valid values are: [DATE_OF_BIRTH YEAR_MONTH PIN NATIONAL_ID_NUMBER]", validator.Errors["verification_type"])
 	})
 
 	t.Run("Invalid date of birth", func(t *testing.T) {
@@ -169,6 +169,6 @@ func Test_ReceiverRegistrationValidator_ValidateAndGetVerificationType(t *testin
 		actual := validator.validateAndGetVerificationType(invalidStatus)
 		assert.Empty(t, actual)
 		assert.Equal(t, 1, len(validator.Errors))
-		assert.Equal(t, "invalid parameter. valid values are: DATE_OF_BIRTH, PIN, NATIONAL_ID_NUMBER", validator.Errors["verification_type"])
+		assert.Equal(t, "invalid parameter. valid values are: [DATE_OF_BIRTH YEAR_MONTH PIN NATIONAL_ID_NUMBER]", validator.Errors["verification_type"])
 	})
 }

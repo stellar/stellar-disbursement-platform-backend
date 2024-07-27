@@ -164,7 +164,7 @@ func Test_DisbursementHandler_PostDisbursement(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		want := `{"error":"Verification field invalid", "extras": {"verification_field": "invalid parameter. valid values are: DATE_OF_BIRTH, PIN, NATIONAL_ID_NUMBER"}}`
+		want := `{"error":"Verification field invalid", "extras": {"verification_field": "invalid parameter. valid values are: [DATE_OF_BIRTH YEAR_MONTH PIN NATIONAL_ID_NUMBER]"}}`
 
 		assertPOSTResponse(t, ctx, handler, method, url, string(requestBody), want, http.StatusBadRequest)
 	})

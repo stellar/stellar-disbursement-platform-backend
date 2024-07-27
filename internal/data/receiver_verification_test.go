@@ -158,12 +158,19 @@ func Test_ReceiverVerificationModel_GetReceiverVerificationByReceiverId(t *testi
 
 		verification2 := CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, ReceiverVerificationInsert{
 			ReceiverID:        receiver.ID,
-			VerificationField: VerificationFieldPin,
-			VerificationValue: "1234",
+			VerificationField: VerificationFieldYearMonth,
+			VerificationValue: "1990-01",
 		})
 		verification2.UpdatedAt = earlierTime
 
 		verification3 := CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, ReceiverVerificationInsert{
+			ReceiverID:        receiver.ID,
+			VerificationField: VerificationFieldPin,
+			VerificationValue: "1234",
+		})
+		verification3.UpdatedAt = earlierTime
+
+		verification4 := CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, ReceiverVerificationInsert{
 			ReceiverID:        receiver.ID,
 			VerificationField: VerificationFieldNationalID,
 			VerificationValue: "5678",
@@ -177,9 +184,9 @@ func Test_ReceiverVerificationModel_GetReceiverVerificationByReceiverId(t *testi
 			ReceiverVerification{
 				ReceiverID:        receiver.ID,
 				VerificationField: VerificationFieldNationalID,
-				HashedValue:       verification3.HashedValue,
-				CreatedAt:         verification3.CreatedAt,
-				UpdatedAt:         verification3.UpdatedAt,
+				HashedValue:       verification4.HashedValue,
+				CreatedAt:         verification4.CreatedAt,
+				UpdatedAt:         verification4.UpdatedAt,
 			}, *actualVerification)
 	})
 }

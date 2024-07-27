@@ -1,6 +1,8 @@
 package validators
 
 import (
+	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
@@ -57,11 +59,9 @@ func (rv *ReceiverRegistrationValidator) ValidateReceiver(receiverInfo *data.Rec
 func (rv *ReceiverRegistrationValidator) validateAndGetVerificationType(verificationType string) data.VerificationField {
 	vt := data.VerificationField(strings.ToUpper(verificationType))
 
-	switch vt {
-	case data.VerificationFieldDateOfBirth, data.VerificationFieldPin, data.VerificationFieldNationalID:
-		return vt
-	default:
-		rv.Check(false, "verification_type", "invalid parameter. valid values are: DATE_OF_BIRTH, PIN, NATIONAL_ID_NUMBER")
+	if !slices.Contains(data.GetAllVerificationFields(), vt) {
+		rv.Check(false, "verification_type", fmt.Sprintf("invalid parameter. valid values are: %v", data.GetAllVerificationFields()))
 		return ""
 	}
+	return vt
 }
