@@ -66,7 +66,7 @@ func (h MFAHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	roleCanBypassReCAPTCHA, err := validators.UserRoleCanBypassReCAPTCHA(ctx, h.AuthManager, token)
+	roleCanBypassReCAPTCHA, err := validators.TokenUserRoleCanBypassReCAPTCHA(ctx, h.AuthManager, token)
 	if err != nil {
 		log.Ctx(ctx).Errorf("error checking if user role in token can bypass ReCAPTCHA: %s", err)
 		httperror.InternalError(ctx, "", err, nil).Render(rw)

@@ -51,7 +51,7 @@ func userRoleLookupSetup(roleManagerMock *auth.RoleManagerMock,
 		Return(true, nil).Once()
 	jwtManagerMock.On("GetUserFromToken", mock.Anything, userToken).
 		Return(user, nil).Once()
-	roleManagerMock.On("HasAnyRoles", mock.Anything, user, []string{data.APIOwnerUserRole.String()}).
+	roleManagerMock.On("HasAnyRoles", mock.Anything, user, []string{data.APIUserRole.String()}).
 		Return(userCanBypassRole, nil).Once()
 }
 
@@ -439,7 +439,6 @@ func Test_LoginHandlerr_ServeHTTP_MFA(t *testing.T) {
 
 	userToken := "token123"
 	password := "pass1234"
-	authenticateSetup(authenticatorMock, roleManagerMock, jwtManagerMock, user, password, userToken)
 	jwtManagerMock.
 		On("ValidateToken", mock.Anything, userToken).
 		Return(true, nil)
@@ -450,7 +449,8 @@ func Test_LoginHandlerr_ServeHTTP_MFA(t *testing.T) {
 	deviceID := "safari-xyz"
 
 	t.Run("error getting user from token", func(t *testing.T) {
-		roleManagerMock.On("HasAnyRoles", mock.Anything, user, []string{data.APIOwnerUserRole.String()}).
+		authenticateSetup(authenticatorMock, roleManagerMock, jwtManagerMock, user, password, userToken)
+		roleManagerMock.On("HasAnyRoles", mock.Anything, user, []string{data.APIUserRole.String()}).
 			Return(false, nil).Once()
 		authenticatorMock.
 			On("GetUser", mock.Anything, user.ID).
@@ -468,18 +468,19 @@ func Test_LoginHandlerr_ServeHTTP_MFA(t *testing.T) {
 	})
 
 	t.Run("error when deviceID header is empty", func(t *testing.T) {
+		authenticateSetup(authenticatorMock, roleManagerMock, jwtManagerMock, user, password, userToken)
 		roleManagerMock.
 			On("GetUserRoles", mock.Anything, user).
 			Return(user.Roles, nil).
 			Once()
-		roleManagerMock.On("HasAnyRoles", mock.Anything, user, []string{data.APIOwnerUserRole.String()}).
+		roleManagerMock.On("HasAnyRoles", mock.Anything, user, []string{data.APIUserRole.String()}).
 			Return(false, nil).Once()
 		authenticatorMock.
-			On("GetUser", mock.Anything, "userID").
+			On("GetUser", mock.Anything, user.ID).
 			Return(user, nil).
 			Once()
 
-		body := LoginRequest{Email: "testuser@mail.com", Password: "pass1234"}
+		body := LoginRequest{Email: user.Email, Password: password}
 		req := httptest.NewRequest(http.MethodPost, "/login", requestToJSON(t, &body))
 		rw := httptest.NewRecorder()
 
@@ -490,11 +491,12 @@ func Test_LoginHandlerr_ServeHTTP_MFA(t *testing.T) {
 	})
 
 	t.Run("error validating MFA device", func(t *testing.T) {
+		authenticateSetup(authenticatorMock, roleManagerMock, jwtManagerMock, user, password, userToken)
 		roleManagerMock.
 			On("GetUserRoles", mock.Anything, user).
 			Return(user.Roles, nil).
 			Once()
-		roleManagerMock.On("HasAnyRoles", mock.Anything, user, []string{data.APIOwnerUserRole.String()}).
+		roleManagerMock.On("HasAnyRoles", mock.Anything, user, []string{data.APIUserRole.String()}).
 			Return(false, nil).Once()
 		authenticatorMock.
 			On("GetUser", mock.Anything, "userID").
@@ -517,11 +519,12 @@ func Test_LoginHandlerr_ServeHTTP_MFA(t *testing.T) {
 	})
 
 	t.Run("when device is remembered, return token", func(t *testing.T) {
+		authenticateSetup(authenticatorMock, roleManagerMock, jwtManagerMock, user, password, userToken)
 		roleManagerMock.
 			On("GetUserRoles", mock.Anything, user).
 			Return(user.Roles, nil).
 			Once()
-		roleManagerMock.On("HasAnyRoles", mock.Anything, user, []string{data.APIOwnerUserRole.String()}).
+		roleManagerMock.On("HasAnyRoles", mock.Anything, user, []string{data.APIUserRole.String()}).
 			Return(false, nil).Once()
 		authenticatorMock.
 			On("GetUser", mock.Anything, "userID").
@@ -544,11 +547,12 @@ func Test_LoginHandlerr_ServeHTTP_MFA(t *testing.T) {
 	})
 
 	t.Run("error generating MFA code", func(t *testing.T) {
+		authenticateSetup(authenticatorMock, roleManagerMock, jwtManagerMock, user, password, userToken)
 		roleManagerMock.
 			On("GetUserRoles", mock.Anything, user).
 			Return(user.Roles, nil).
 			Once()
-		roleManagerMock.On("HasAnyRoles", mock.Anything, user, []string{data.APIOwnerUserRole.String()}).
+		roleManagerMock.On("HasAnyRoles", mock.Anything, user, []string{data.APIUserRole.String()}).
 			Return(false, nil).Once()
 		authenticatorMock.
 			On("GetUser", mock.Anything, "userID").
@@ -575,11 +579,12 @@ func Test_LoginHandlerr_ServeHTTP_MFA(t *testing.T) {
 	})
 
 	t.Run("error when code returned is empty", func(t *testing.T) {
+		authenticateSetup(authenticatorMock, roleManagerMock, jwtManagerMock, user, password, userToken)
 		roleManagerMock.
 			On("GetUserRoles", mock.Anything, user).
 			Return(user.Roles, nil).
 			Once()
-		roleManagerMock.On("HasAnyRoles", mock.Anything, user, []string{data.APIOwnerUserRole.String()}).
+		roleManagerMock.On("HasAnyRoles", mock.Anything, user, []string{data.APIUserRole.String()}).
 			Return(false, nil).Once()
 		authenticatorMock.
 			On("GetUser", mock.Anything, "userID").
@@ -606,11 +611,12 @@ func Test_LoginHandlerr_ServeHTTP_MFA(t *testing.T) {
 	})
 
 	t.Run("error sending MFA message", func(t *testing.T) {
+		authenticateSetup(authenticatorMock, roleManagerMock, jwtManagerMock, user, password, userToken)
 		roleManagerMock.
 			On("GetUserRoles", mock.Anything, user).
 			Return(user.Roles, nil).
 			Once()
-		roleManagerMock.On("HasAnyRoles", mock.Anything, user, []string{data.APIOwnerUserRole.String()}).
+		roleManagerMock.On("HasAnyRoles", mock.Anything, user, []string{data.APIUserRole.String()}).
 			Return(false, nil).Once()
 		authenticatorMock.
 			On("GetUser", mock.Anything, "userID").
@@ -641,11 +647,12 @@ func Test_LoginHandlerr_ServeHTTP_MFA(t *testing.T) {
 	})
 
 	t.Run("🎉  Successful login", func(t *testing.T) {
+		authenticateSetup(authenticatorMock, roleManagerMock, jwtManagerMock, user, password, userToken)
 		roleManagerMock.
 			On("GetUserRoles", mock.Anything, user).
 			Return(user.Roles, nil).
 			Once()
-		roleManagerMock.On("HasAnyRoles", mock.Anything, user, []string{data.APIOwnerUserRole.String()}).
+		roleManagerMock.On("HasAnyRoles", mock.Anything, user, []string{data.APIUserRole.String()}).
 			Return(false, nil).Once()
 		authenticatorMock.
 			On("GetUser", mock.Anything, "userID").

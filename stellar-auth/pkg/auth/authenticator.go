@@ -66,6 +66,7 @@ func (a *defaultAuthenticator) ValidateCredentials(ctx context.Context, email, p
 			u.id,
 			u.first_name,
 			u.last_name,
+			u.encrypted_password
 		FROM
 			auth_users u
 		WHERE
@@ -540,7 +541,7 @@ func (a *defaultAuthenticator) GetUserByEmail(ctx context.Context, email string)
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrUserNotFound
 		}
-		return nil, fmt.Errorf("error querying user email %s: %w", email, err)
+		return nil, fmt.Errorf("querying user email %s: %w", email, err)
 	}
 
 	return &User{

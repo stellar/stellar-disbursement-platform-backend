@@ -79,7 +79,7 @@ func (h ForgotPasswordHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 			return
 		}
 	}
-	canBypassReCAPTCHA := slices.Contains(user.Roles, data.APIOwnerUserRole.String())
+	canBypassReCAPTCHA := slices.Contains(user.Roles, data.APIUserRole.String())
 
 	if !h.ReCAPTCHADisabled && !canBypassReCAPTCHA {
 		// validating reCAPTCHA Token

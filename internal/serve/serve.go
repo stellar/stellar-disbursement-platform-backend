@@ -234,7 +234,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			r.Get("/{id}", statisticsHandler.GetStatisticsByDisbursement)
 		})
 
-		r.With(middleware.AnyRoleMiddleware(authManager, data.APIOwnerUserRole, data.OwnerUserRole)).Route("/users", func(r chi.Router) {
+		r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole)).Route("/users", func(r chi.Router) {
 			userHandler := httphandler.UserHandler{
 				AuthManager:        authManager,
 				CrashTrackerClient: o.CrashTrackerClient,
@@ -264,29 +264,29 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 					DistributionAccountService: o.DistributionAccountService,
 				},
 			}
-			r.With(middleware.AnyRoleMiddleware(authManager, data.APIOwnerUserRole, data.OwnerUserRole, data.FinancialControllerUserRole)).
+			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole)).
 				Post("/", handler.PostDisbursement)
 
-			r.With(middleware.AnyRoleMiddleware(authManager, data.APIOwnerUserRole, data.OwnerUserRole, data.FinancialControllerUserRole)).
+			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole)).
 				Post("/{id}/instructions", handler.PostDisbursementInstructions)
 
-			r.With(middleware.AnyRoleMiddleware(authManager, data.APIOwnerUserRole, data.OwnerUserRole, data.FinancialControllerUserRole)).
+			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole)).
 				Get("/{id}/instructions", handler.GetDisbursementInstructions)
 
-			r.With(middleware.AnyRoleMiddleware(authManager, data.APIOwnerUserRole, data.OwnerUserRole, data.FinancialControllerUserRole, data.BusinessUserRole)).
+			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole, data.BusinessUserRole)).
 				Get("/", handler.GetDisbursements)
 
-			r.With(middleware.AnyRoleMiddleware(authManager, data.APIOwnerUserRole, data.OwnerUserRole, data.FinancialControllerUserRole, data.BusinessUserRole)).
+			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole, data.BusinessUserRole)).
 				Get("/{id}", handler.GetDisbursement)
 
-			r.With(middleware.AnyRoleMiddleware(authManager, data.APIOwnerUserRole, data.OwnerUserRole, data.FinancialControllerUserRole, data.BusinessUserRole)).
+			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole, data.BusinessUserRole)).
 				Get("/{id}/receivers", handler.GetDisbursementReceivers)
 
-			r.With(middleware.AnyRoleMiddleware(authManager, data.APIOwnerUserRole, data.OwnerUserRole, data.FinancialControllerUserRole)).
+			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole)).
 				Patch("/{id}/status", handler.PatchDisbursementStatus)
 		})
 
-		r.With(middleware.AnyRoleMiddleware(authManager, data.APIOwnerUserRole, data.OwnerUserRole, data.FinancialControllerUserRole, data.BusinessUserRole)).Route("/payments", func(r chi.Router) {
+		r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole, data.BusinessUserRole)).Route("/payments", func(r chi.Router) {
 			paymentsHandler := httphandler.PaymentsHandler{
 				Models:                      o.Models,
 				DBConnectionPool:            o.MtnDBConnectionPool,
@@ -298,22 +298,22 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			r.Get("/", paymentsHandler.GetPayments)
 			r.Get("/{id}", paymentsHandler.GetPayment)
 			r.Patch("/retry", paymentsHandler.RetryPayments)
-			r.With(middleware.AnyRoleMiddleware(authManager, data.APIOwnerUserRole, data.OwnerUserRole, data.FinancialControllerUserRole)).
+			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole)).
 				Patch("/{id}/status", paymentsHandler.PatchPaymentStatus)
 		})
 
 		r.Route("/receivers", func(r chi.Router) {
 			receiversHandler := httphandler.ReceiverHandler{Models: o.Models, DBConnectionPool: o.MtnDBConnectionPool}
-			r.With(middleware.AnyRoleMiddleware(authManager, data.APIOwnerUserRole, data.OwnerUserRole, data.FinancialControllerUserRole, data.BusinessUserRole)).
+			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole, data.BusinessUserRole)).
 				Get("/", receiversHandler.GetReceivers)
-			r.With(middleware.AnyRoleMiddleware(authManager, data.APIOwnerUserRole, data.OwnerUserRole, data.FinancialControllerUserRole, data.BusinessUserRole)).
+			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole, data.BusinessUserRole)).
 				Get("/{id}", receiversHandler.GetReceiver)
 
 			r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...)).
 				Get("/verification-types", receiversHandler.GetReceiverVerificationTypes)
 
 			updateReceiverHandler := httphandler.UpdateReceiverHandler{Models: o.Models, DBConnectionPool: o.MtnDBConnectionPool}
-			r.With(middleware.AnyRoleMiddleware(authManager, data.APIOwnerUserRole, data.OwnerUserRole, data.FinancialControllerUserRole)).
+			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole)).
 				Patch("/{id}", updateReceiverHandler.UpdateReceiver)
 
 			receiverWalletHandler := httphandler.ReceiverWalletsHandler{
@@ -321,7 +321,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 				CrashTrackerClient: o.CrashTrackerClient,
 				EventProducer:      o.EventProducer,
 			}
-			r.With(middleware.AnyRoleMiddleware(authManager, data.APIOwnerUserRole, data.OwnerUserRole, data.FinancialControllerUserRole)).
+			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole)).
 				Patch("/wallets/{receiver_wallet_id}", receiverWalletHandler.RetryInvitation)
 		})
 
@@ -338,11 +338,11 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...)).
 				Get("/", assetsHandler.GetAssets)
 
-			r.With(middleware.AnyRoleMiddleware(authManager, data.APIOwnerUserRole, data.OwnerUserRole, data.FinancialControllerUserRole, data.DeveloperUserRole)).
+			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole, data.DeveloperUserRole)).
 				Post("/", assetsHandler.CreateAsset)
 
 			r.Route("/{id}", func(r chi.Router) {
-				r.With(middleware.AnyRoleMiddleware(authManager, data.APIOwnerUserRole, data.OwnerUserRole, data.FinancialControllerUserRole, data.DeveloperUserRole)).Delete("/", assetsHandler.DeleteAsset)
+				r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole, data.DeveloperUserRole)).Delete("/", assetsHandler.DeleteAsset)
 			})
 		})
 
@@ -353,7 +353,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 				Post("/", walletsHandler.PostWallets)
 			r.With(middleware.AnyRoleMiddleware(authManager, data.DeveloperUserRole)).
 				Delete("/{id}", walletsHandler.DeleteWallet)
-			r.With(middleware.AnyRoleMiddleware(authManager, data.APIOwnerUserRole, data.OwnerUserRole)).
+			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole)).
 				Patch("/{id}", walletsHandler.PatchWallets)
 		})
 
@@ -378,7 +378,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 		})
 
 		r.Route("/organization", func(r chi.Router) {
-			r.With(middleware.AnyRoleMiddleware(authManager, data.APIOwnerUserRole, data.OwnerUserRole, data.FinancialControllerUserRole)).
+			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole)).
 				Patch("/", profileHandler.PatchOrganizationProfile)
 
 			r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...)).
@@ -387,7 +387,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...)).
 				Get("/logo", profileHandler.GetOrganizationLogo)
 
-			r.With(middleware.AnyRoleMiddleware(authManager, data.APIOwnerUserRole, data.OwnerUserRole)).
+			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole)).
 				Patch("/circle-config", httphandler.CircleConfigHandler{
 					NetworkType:                 o.NetworkType,
 					CircleFactory:               circle.NewClient,

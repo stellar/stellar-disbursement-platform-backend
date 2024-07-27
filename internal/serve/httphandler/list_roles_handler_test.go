@@ -28,5 +28,5 @@ func Test_ListRoles(t *testing.T) {
 	respBody, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 
-	assert.JSONEq(t, `{"roles": ["owner", "financial_controller",  "developer", "business"]}`, string(respBody))
+	assert.JSONEq(t, `{"roles": ["owner", "financial_controller",  "developer", "business", "api"]}`, string(respBody))
 }

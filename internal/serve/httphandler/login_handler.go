@@ -79,7 +79,7 @@ func (h LoginHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	roleCanBypassReCAPTCHA, err := validators.UserRoleCanBypassReCAPTCHA(ctx, h.AuthManager, token)
+	roleCanBypassReCAPTCHA, err := validators.TokenUserRoleCanBypassReCAPTCHA(ctx, h.AuthManager, token)
 	if err != nil {
 		log.Ctx(ctx).Errorf("error checking if user role in token can bypass ReCAPTCHA: %s", err)
 		httperror.InternalError(ctx, "", err, nil).Render(rw)
@@ -88,9 +88,9 @@ func (h LoginHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 
 	if !h.ReCAPTCHADisabled && !roleCanBypassReCAPTCHA {
 		// validating reCAPTCHA Token
-		isValid, err := h.ReCAPTCHAValidator.IsTokenValid(ctx, reqBody.ReCAPTCHAToken)
-		if err != nil {
-			httperror.Unauthorized("Cannot validate reCAPTCHA token", err, nil).Render(rw)
+		isValid, recaptchaErr := h.ReCAPTCHAValidator.IsTokenValid(ctx, reqBody.ReCAPTCHAToken)
+		if recaptchaErr != nil {
+			httperror.Unauthorized("Cannot validate reCAPTCHA token", recaptchaErr, nil).Render(rw)
 			return
 		}
 

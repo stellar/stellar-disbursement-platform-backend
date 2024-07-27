@@ -3,6 +3,7 @@ package httphandler
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -501,14 +502,22 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 		respBody, err = io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
-		wantsBody = `
+		var expectedRolesStr string
+		for i, role := range data.GetAllRoles() {
+			expectedRolesStr += role.String()
+			if i != len(data.GetAllRoles())-1 {
+				expectedRolesStr += " "
+			}
+		}
+
+		wantsBody = fmt.Sprintf(`
 			{
 				"error": "Request invalid",
 				"extras": {
-					"roles": "unexpected value for roles[0]=role1. Expect one of these values: [owner financial_controller developer business]"
+					"roles": "unexpected value for roles[0]=role1. Expect one of these values: [%s]"
 				}
 			}
-		`
+		`, expectedRolesStr)
 
 		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 		assert.JSONEq(t, wantsBody, string(respBody))
@@ -1085,14 +1094,22 @@ func Test_UserHandler_UpdateUserRoles(t *testing.T) {
 		respBody, err = io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
-		wantsBody = `
+		var expectedRolesStr string
+		for i, role := range data.GetAllRoles() {
+			expectedRolesStr += role.String()
+			if i != len(data.GetAllRoles())-1 {
+				expectedRolesStr += " "
+			}
+		}
+
+		wantsBody = fmt.Sprintf(`
 			{
 				"error": "Request invalid",
 				"extras": {
-					"roles": "unexpected value for roles[0]=role1. Expect one of these values: [owner financial_controller developer business]"
+					"roles": "unexpected value for roles[0]=role1. Expect one of these values: [%s]"
 				}
 			}
-		`
+		`, expectedRolesStr)
 
 		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 		assert.JSONEq(t, wantsBody, string(respBody))
