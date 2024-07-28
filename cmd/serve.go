@@ -175,7 +175,9 @@ func (s *ServerService) SetupConsumers(ctx context.Context, o SetupConsumersOpti
 		return fmt.Errorf("creating Payment Completed Kafka Consumer: %w", err)
 	}
 
-	paymentReadyToPayConsumer, err := events.NewKafkaConsumer(
+	// Both Stellar and Cicle have a readyToPayConsumer that reads from the `PaymentsReadyToPayTopic`.
+	// We separate them to avoid the noisy neighbor problem.
+	stellarPaymentReadyToPayConsumer, err := events.NewKafkaConsumer(
 		kafkaConfig,
 		events.PaymentReadyToPayTopic,
 		o.EventBrokerOptions.ConsumerGroupID,
@@ -185,6 +187,15 @@ func (s *ServerService) SetupConsumers(ctx context.Context, o SetupConsumersOpti
 			TSSDBConnectionPool:   o.TSSDBConnectionPool,
 			DistAccountResolver:   o.ServeOpts.SubmitterEngine.DistributionAccountResolver,
 		}),
+	)
+	if err != nil {
+		return fmt.Errorf("creating Payment Ready to Pay Kafka Consumer: %w", err)
+	}
+
+	circlePaymentReadyToPayConsumer, err := events.NewKafkaConsumer(
+		kafkaConfig,
+		events.PaymentReadyToPayTopic,
+		o.EventBrokerOptions.ConsumerGroupID,
 		eventhandlers.NewCirclePaymentToSubmitterEventHandler(eventhandlers.CirclePaymentToSubmitterEventHandlerOptions{
 			AdminDBConnectionPool: o.ServeOpts.AdminDBConnectionPool,
 			MtnDBConnectionPool:   o.ServeOpts.MtnDBConnectionPool,
@@ -203,7 +214,8 @@ func (s *ServerService) SetupConsumers(ctx context.Context, o SetupConsumersOpti
 
 	go events.NewEventConsumer(smsInvitationConsumer, producer, o.ServeOpts.CrashTrackerClient.Clone()).Consume(ctx)
 	go events.NewEventConsumer(paymentCompletedConsumer, producer, o.ServeOpts.CrashTrackerClient.Clone()).Consume(ctx)
-	go events.NewEventConsumer(paymentReadyToPayConsumer, producer, o.ServeOpts.CrashTrackerClient.Clone()).Consume(ctx)
+	go events.NewEventConsumer(stellarPaymentReadyToPayConsumer, producer, o.ServeOpts.CrashTrackerClient.Clone()).Consume(ctx)
+	go events.NewEventConsumer(circlePaymentReadyToPayConsumer, producer, o.ServeOpts.CrashTrackerClient.Clone()).Consume(ctx)
 
 	return nil
 }
