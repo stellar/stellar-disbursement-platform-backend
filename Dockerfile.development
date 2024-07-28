@@ -1,5 +1,5 @@
 # Stage 1: Build the Go application
-FROM golang:1.22.1-bullseye AS build
+FROM golang:1.22.5-bullseye AS build
 ARG GIT_COMMIT
 
 WORKDIR /src/stellar-disbursement-platform
@@ -9,7 +9,7 @@ COPY . ./
 RUN go build -o /bin/stellar-disbursement-platform -ldflags "-X main.GitCommit=$GIT_COMMIT" .
 
 # Stage 2: Setup the development environment with Delve for debugging
-FROM golang:1.22.1-bullseye AS development
+FROM golang:1.22.5-bullseye AS development
 
 # set workdir according to repo structure so remote debug source code is in sync
 WORKDIR /app/github.com/stellar/stellar-disbursement-platform
