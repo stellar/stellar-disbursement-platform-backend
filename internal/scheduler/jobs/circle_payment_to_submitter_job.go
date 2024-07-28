@@ -75,7 +75,8 @@ func (d circlePaymentToSubmitterJob) Execute(ctx context.Context) error {
 	}
 
 	if !distAccount.Type.IsCircle() {
-		return fmt.Errorf("distribution account is not a Stellar account. Skipping for current tenant")
+		log.Ctx(ctx).Debug("distribution account is not a Circle account. Skipping for current tenant")
+		return nil
 	}
 
 	if payErr := d.paymentToSubmitterSvc.SendBatchPayments(ctx, circlePaymentToSubmitterBatchSize); payErr != nil {

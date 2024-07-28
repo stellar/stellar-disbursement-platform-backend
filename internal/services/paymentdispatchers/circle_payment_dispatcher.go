@@ -13,6 +13,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
 type CirclePaymentDispatcher struct {
@@ -45,6 +46,10 @@ func (c *CirclePaymentDispatcher) DispatchPayments(ctx context.Context, sdpDBTx 
 
 	circleWalletID := distAccount.CircleWalletID
 	return c.sendPaymentsToCircle(ctx, sdpDBTx, circleWalletID, paymentsToDispatch)
+}
+
+func (c *CirclePaymentDispatcher) SupportedPlatform() schema.Platform {
+	return schema.CirclePlatform
 }
 
 var _ PaymentDispatcherInterface = (*CirclePaymentDispatcher)(nil)

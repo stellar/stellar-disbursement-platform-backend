@@ -11,6 +11,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	txSubStore "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 )
 
 type StellarPaymentDispatcher struct {
@@ -44,6 +45,10 @@ func (s *StellarPaymentDispatcher) DispatchPayments(ctx context.Context, sdpDBTx
 	return db.RunInTransaction(ctx, s.tssModel.DBConnectionPool, nil, func(tssDBTx db.DBTransaction) error {
 		return s.sendPaymentsToTSS(ctx, sdpDBTx, tssDBTx, tenantID, paymentsToDispatch)
 	})
+}
+
+func (s *StellarPaymentDispatcher) SupportedPlatform() schema.Platform {
+	return schema.StellarPlatform
 }
 
 var _ PaymentDispatcherInterface = (*StellarPaymentDispatcher)(nil)

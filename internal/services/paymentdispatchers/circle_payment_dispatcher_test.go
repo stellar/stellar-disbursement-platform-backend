@@ -197,3 +197,8 @@ func Test_CirclePaymentDispatcher_DispatchPayments(t *testing.T) {
 		})
 	}
 }
+
+func Test_CirclePaymentDispatcher_SupportedPlatform(t *testing.T) {
+	dispatcher := CirclePaymentDispatcher{}
+	assert.Equal(t, schema.CirclePlatform, dispatcher.SupportedPlatform())
+}

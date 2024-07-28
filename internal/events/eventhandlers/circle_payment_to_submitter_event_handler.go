@@ -83,7 +83,8 @@ func (h *CirclePaymentToSubmitterEventHandler) Handle(ctx context.Context, messa
 	}
 
 	if !distAccount.Type.IsCircle() {
-		return fmt.Errorf("distribution account is not a Circle account. Skipping for tenant %s", message.TenantID)
+		log.Ctx(ctx).Debugf("distribution account is not a Circle account. Skipping for tenant %s", message.TenantID)
+		return nil
 	}
 
 	if sendErr := h.service.SendPaymentsReadyToPay(ctx, paymentsReadyToPay); sendErr != nil {

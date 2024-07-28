@@ -146,3 +146,8 @@ func Test_StellarPaymentDispatcher_DispatchPayments(t *testing.T) {
 		})
 	}
 }
+
+func Test_StellarPaymentDispatcher_SupportedPlatform(t *testing.T) {
+	dispatcher := StellarPaymentDispatcher{}
+	assert.Equal(t, schema.StellarPlatform, dispatcher.SupportedPlatform())
+}

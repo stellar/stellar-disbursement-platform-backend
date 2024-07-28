@@ -57,7 +57,7 @@ func (s PaymentToSubmitterService) SendPaymentsReadyToPay(ctx context.Context, p
 	}
 
 	err := s.sendPaymentsReadyToPay(ctx, paymentsReadyToPay.TenantID, func(sdpDBTx db.DBTransaction) ([]*data.Payment, error) {
-		log.Ctx(ctx).Infof("Registering %d payments into the TSS, paymentIDs=%v", len(paymentIDs), paymentIDs)
+		log.Ctx(ctx).Infof("Registering %d payments to %s Dispatcher, paymentIDs=%v", len(paymentIDs), s.paymentDispatcher.SupportedPlatform(), paymentIDs)
 
 		payments, innerErr := s.sdpModels.Payment.GetReadyByID(ctx, sdpDBTx, paymentIDs...)
 		if len(payments) != len(paymentIDs) {
