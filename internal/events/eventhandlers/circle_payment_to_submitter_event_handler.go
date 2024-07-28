@@ -61,7 +61,7 @@ func (h *CirclePaymentToSubmitterEventHandler) Name() string {
 }
 
 func (h *CirclePaymentToSubmitterEventHandler) CanHandleMessage(ctx context.Context, message *events.Message) bool {
-	return message.Topic == events.PaymentReadyToPayTopic
+	return message.Topic == events.CirclePaymentReadyToPayTopic
 }
 
 func (h *CirclePaymentToSubmitterEventHandler) Handle(ctx context.Context, message *events.Message) error {

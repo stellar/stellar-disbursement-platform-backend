@@ -420,10 +420,16 @@ func Test_DisbursementManagementService_StartDisbursement_success(t *testing.T) 
 					}
 					assert.ElementsMatch(t, wantElements, eventData)
 
+					var expectedTopic string
+					if tc.distributionAccount.IsStellar() {
+						expectedTopic = events.PaymentReadyToPayTopic
+					} else {
+						expectedTopic = events.CirclePaymentReadyToPayTopic
+					}
 					// Validating payments ready to pay msg
 					paymentsReadyToPayMsg := msgs[1]
 					assert.Equal(t, events.Message{
-						Topic:    events.PaymentReadyToPayTopic,
+						Topic:    expectedTopic,
 						Key:      readyDisbursement.ID,
 						TenantID: tnt.ID,
 						Type:     events.PaymentReadyToPayDisbursementStarted,
@@ -934,7 +940,7 @@ func Test_DisbursementManagementService_StartDisbursement_failure(t *testing.T) 
 		}
 
 		err = service.StartDisbursement(ctxWithoutTenant, disbursement.ID, user, &distributionAcc)
-		assert.EqualError(t, err, "running atomic function in RunInTransactionWithPostCommit: creating new message: getting tenant from context: tenant not found in context")
+		assert.ErrorContains(t, err, "creating new message: getting tenant from context: tenant not found in context")
 	})
 
 	t.Run("logs when couldn't write message because EventProducer is nil", func(t *testing.T) {

@@ -194,7 +194,7 @@ func (s *ServerService) SetupConsumers(ctx context.Context, o SetupConsumersOpti
 
 	circlePaymentReadyToPayConsumer, err := events.NewKafkaConsumer(
 		kafkaConfig,
-		events.PaymentReadyToPayTopic,
+		events.CirclePaymentReadyToPayTopic,
 		o.EventBrokerOptions.ConsumerGroupID,
 		eventhandlers.NewCirclePaymentToSubmitterEventHandler(eventhandlers.CirclePaymentToSubmitterEventHandlerOptions{
 			AdminDBConnectionPool: o.ServeOpts.AdminDBConnectionPool,
