@@ -18,6 +18,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
 func Test_UpdateReceiverHandler_createVerificationInsert(t *testing.T) {
@@ -150,19 +151,31 @@ func Test_UpdateReceiverHandler(t *testing.T) {
 				{
 					"error": "request invalid",
 					"extras": {
-					  "pin": "invalid pin format"
+					  "pin": "invalid pin length. Cannot have less than 4 or more than 8 characters in pin"
 					}
 				  }
 				`,
 			},
 			{
-				name:    "invalid national ID",
+				name:    "invalid national ID - empty",
 				request: validators.UpdateReceiverRequest{NationalID: "   "},
 				want: `
 				{
 					"error": "request invalid",
 					"extras": {
-					  "national_id": "invalid national ID format"
+					  "national_id": "national id cannot be empty"
+					}
+				  }
+				`,
+			},
+			{
+				name:    "invalid national ID - too long",
+				request: validators.UpdateReceiverRequest{NationalID: fmt.Sprintf("%0*d", utils.VerificationFieldMaxIdLength+1, 0)},
+				want: `
+				{
+					"error": "request invalid",
+					"extras": {
+					  "national_id": "invalid national id. Cannot have more than 50 characters in national id"
 					}
 				  }
 				`,
@@ -213,6 +226,22 @@ func Test_UpdateReceiverHandler(t *testing.T) {
 		}
 	})
 
+	t.Run("receiver not found", func(t *testing.T) {
+		request := validators.UpdateReceiverRequest{DateOfBirth: "1999-01-01"}
+
+		route := fmt.Sprintf("/receivers/%s", "invalid_receiver_id")
+		reqBody, err := json.Marshal(request)
+		require.NoError(t, err)
+		req, err := http.NewRequest("PATCH", route, strings.NewReader(string(reqBody)))
+		require.NoError(t, err)
+
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+
+		resp := rr.Result()
+		assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+	})
+
 	t.Run("update date of birth value", func(t *testing.T) {
 		data.CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, data.ReceiverVerificationInsert{
 			ReceiverID:        receiver.ID,
@@ -261,10 +290,10 @@ func Test_UpdateReceiverHandler(t *testing.T) {
 		data.CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, data.ReceiverVerificationInsert{
 			ReceiverID:        receiver.ID,
 			VerificationField: data.VerificationFieldPin,
-			VerificationValue: "890",
+			VerificationValue: "8901",
 		})
 
-		request := validators.UpdateReceiverRequest{Pin: "123"}
+		request := validators.UpdateReceiverRequest{Pin: "1234"}
 
 		route := fmt.Sprintf("/receivers/%s", receiver.ID)
 		reqBody, err := json.Marshal(request)
@@ -292,8 +321,8 @@ func Test_UpdateReceiverHandler(t *testing.T) {
 		err = dbConnectionPool.GetContext(ctx, &newReceiverVerification, query, receiver.ID, data.VerificationFieldPin)
 		require.NoError(t, err)
 
-		assert.True(t, data.CompareVerificationValue(newReceiverVerification.HashedValue, "123"))
-		assert.False(t, data.CompareVerificationValue(newReceiverVerification.HashedValue, "890"))
+		assert.True(t, data.CompareVerificationValue(newReceiverVerification.HashedValue, "1234"))
+		assert.False(t, data.CompareVerificationValue(newReceiverVerification.HashedValue, "8901"))
 
 		receiverDB, err := models.Receiver.Get(ctx, dbConnectionPool, receiver.ID)
 		require.NoError(t, err)
@@ -357,7 +386,7 @@ func Test_UpdateReceiverHandler(t *testing.T) {
 		data.CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, data.ReceiverVerificationInsert{
 			ReceiverID:        receiver.ID,
 			VerificationField: data.VerificationFieldPin,
-			VerificationValue: "890",
+			VerificationValue: "8901",
 		})
 
 		data.CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, data.ReceiverVerificationInsert{
@@ -368,7 +397,7 @@ func Test_UpdateReceiverHandler(t *testing.T) {
 
 		request := validators.UpdateReceiverRequest{
 			DateOfBirth: "1999-01-01",
-			Pin:         "123",
+			Pin:         "1234",
 			NationalID:  "NEWID123",
 		}
 
@@ -406,8 +435,8 @@ func Test_UpdateReceiverHandler(t *testing.T) {
 			},
 			{
 				verificationField:    data.VerificationFieldPin,
-				newVerificationValue: "123",
-				oldVerificationValue: "890",
+				newVerificationValue: "1234",
+				oldVerificationValue: "8901",
 			},
 			{
 				verificationField:    data.VerificationFieldNationalID,
@@ -436,12 +465,12 @@ func Test_UpdateReceiverHandler(t *testing.T) {
 		data.CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, data.ReceiverVerificationInsert{
 			ReceiverID:        receiver.ID,
 			VerificationField: data.VerificationFieldPin,
-			VerificationValue: "890",
+			VerificationValue: "8901",
 		})
 
 		request := validators.UpdateReceiverRequest{
 			DateOfBirth: "1999-01-01",
-			Pin:         "123",
+			Pin:         "1234",
 			NationalID:  "NEWID123",
 		}
 
@@ -479,7 +508,7 @@ func Test_UpdateReceiverHandler(t *testing.T) {
 			},
 			{
 				verificationField:    data.VerificationFieldPin,
-				newVerificationValue: "123",
+				newVerificationValue: "1234",
 				oldVerificationValue: "",
 			},
 			{

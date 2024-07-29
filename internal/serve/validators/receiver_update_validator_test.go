@@ -38,7 +38,7 @@ func Test_UpdateReceiverValidator_ValidateReceiver(t *testing.T) {
 		validator.ValidateReceiver(&receiverInfo)
 
 		assert.Equal(t, 1, len(validator.Errors))
-		assert.Equal(t, "invalid pin format", validator.Errors["pin"])
+		assert.Equal(t, "invalid pin length. Cannot have less than 4 or more than 8 characters in pin", validator.Errors["pin"])
 	})
 
 	t.Run("Invalid national ID", func(t *testing.T) {
@@ -50,7 +50,7 @@ func Test_UpdateReceiverValidator_ValidateReceiver(t *testing.T) {
 		validator.ValidateReceiver(&receiverInfo)
 
 		assert.Equal(t, 1, len(validator.Errors))
-		assert.Equal(t, "invalid national ID format", validator.Errors["national_id"])
+		assert.Equal(t, "national id cannot be empty", validator.Errors["national_id"])
 	})
 
 	t.Run("invalid email", func(t *testing.T) {
@@ -90,7 +90,7 @@ func Test_UpdateReceiverValidator_ValidateReceiver(t *testing.T) {
 
 		receiverInfo := UpdateReceiverRequest{
 			DateOfBirth: "1999-01-01",
-			Pin:         "123   ",
+			Pin:         "1234   ",
 			NationalID:  "   12345CODE",
 			Email:       "receiver@email.com",
 			ExternalID:  "externalID",
@@ -99,7 +99,7 @@ func Test_UpdateReceiverValidator_ValidateReceiver(t *testing.T) {
 
 		assert.Equal(t, 0, len(validator.Errors))
 		assert.Equal(t, "1999-01-01", receiverInfo.DateOfBirth)
-		assert.Equal(t, "123", receiverInfo.Pin)
+		assert.Equal(t, "1234", receiverInfo.Pin)
 		assert.Equal(t, "12345CODE", receiverInfo.NationalID)
 	})
 }

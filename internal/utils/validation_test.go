@@ -3,6 +3,7 @@ package utils
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -136,6 +137,67 @@ func Test_ValidateOTP(t *testing.T) {
 		t.Run(tc.otp, func(t *testing.T) {
 			gotError := ValidateOTP(tc.otp)
 			assert.Equalf(t, tc.wantErr, gotError, "ValidateOTP(%q) should be %v, but got %v", tc.otp, tc.wantErr, gotError)
+		})
+	}
+}
+
+func Test_ValidateDateOfBirthVerification(t *testing.T) {
+	tests := []struct {
+		name          string
+		dob           string
+		expectedError error
+	}{
+		{"valid DOB", "1990-01-30", nil},
+		{"invalid DOB - empty DOB", "", fmt.Errorf("date of birth cannot be empty")},
+		{"invalid DOB - invalid format", "30-01-1990", fmt.Errorf("invalid date of birth format. Correct format: 1990-01-30")},
+		{"invalid DOB - future date", time.Now().AddDate(1, 0, 0).Format("2006-01-02"), fmt.Errorf("date of birth cannot be in the future")},
+		{"invalid DOB - invalid day", "1990-01-32", fmt.Errorf("invalid date of birth format. Correct format: 1990-01-30")},
+		{"invalid DOB - invalid month", "1990-13-01", fmt.Errorf("invalid date of birth format. Correct format: 1990-01-30")},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateDateOfBirthVerification(tt.dob)
+			assert.Equal(t, tt.expectedError, err)
+		})
+	}
+}
+
+func Test_ValidatePinVerification(t *testing.T) {
+	tests := []struct {
+		name          string
+		pin           string
+		expectedError error
+	}{
+		{"valid PIN", "1234", nil},
+		{"invalid PIN - too short", "123", fmt.Errorf("invalid pin length. Cannot have less than %d or more than %d characters in pin", VerificationFieldPinMinLength, VerificationFieldPinMaxLength)},
+		{"invalid PIN - too long", "12345678901", fmt.Errorf("invalid pin length. Cannot have less than %d or more than %d characters in pin", VerificationFieldPinMinLength, VerificationFieldPinMaxLength)},
+		{"invalid PIN - empty", "", fmt.Errorf("invalid pin length. Cannot have less than %d or more than %d characters in pin", VerificationFieldPinMinLength, VerificationFieldPinMaxLength)},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidatePinVerification(tt.pin)
+			assert.Equal(t, tt.expectedError, err)
+		})
+	}
+}
+
+func Test_ValidateNationalIDVerification(t *testing.T) {
+	tests := []struct {
+		name          string
+		nationalID    string
+		expectedError error
+	}{
+		{"valid National ID", "1234567890", nil},
+		{"invalid National ID - empty", "", fmt.Errorf("national id cannot be empty")},
+		{"invalid National ID - too long", fmt.Sprintf("%0*d", VerificationFieldMaxIdLength+1, 0), fmt.Errorf("invalid national id. Cannot have more than %d characters in national id", VerificationFieldMaxIdLength)},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateNationalIDVerification(tt.nationalID)
+			assert.Equal(t, tt.expectedError, err)
 		})
 	}
 }

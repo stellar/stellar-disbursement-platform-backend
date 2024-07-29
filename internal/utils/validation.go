@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"regexp"
 	"strconv"
+	"time"
 
 	"github.com/asaskevich/govalidator"
 	"github.com/nyaruka/phonenumbers"
@@ -15,6 +16,13 @@ var (
 	rxOTP                     = regexp.MustCompile(`^\d{6}$`)
 	ErrInvalidE164PhoneNumber = fmt.Errorf("the provided phone number is not a valid E.164 number")
 	ErrEmptyPhoneNumber       = fmt.Errorf("phone number cannot be empty")
+)
+
+const (
+	VerificationFieldPinMinLength = 4
+	VerificationFieldPinMaxLength = 8
+
+	VerificationFieldMaxIdLength = 50
 )
 
 // https://github.com/firebase/firebase-admin-go/blob/cef91acd46f2fc5d0b3408d8154a0005db5bdb0b/auth/user_mgt.go#L449-L457
@@ -86,6 +94,48 @@ func ValidateOTP(otp string) error {
 
 	if !rxOTP.MatchString(otp) {
 		return fmt.Errorf("the provided OTP is not a valid 6 digits value")
+	}
+
+	return nil
+}
+
+// ValidateDateOfBirthVerification will validate the date of birth field for receiver verification.
+func ValidateDateOfBirthVerification(dob string) error {
+	// make sure date of birth is not empty
+	if dob == "" {
+		return fmt.Errorf("date of birth cannot be empty")
+	}
+	// make sure date of birth with format 2006-01-02
+	dateOfBrith, err := time.Parse("2006-01-02", dob)
+	if err != nil {
+		return fmt.Errorf("invalid date of birth format. Correct format: 1990-01-30")
+	}
+
+	// check if date of birth is in the past
+	if dateOfBrith.After(time.Now()) {
+		return fmt.Errorf("date of birth cannot be in the future")
+	}
+
+	return nil
+}
+
+// ValidatePinVerification will validate the pin field for receiver verification.
+func ValidatePinVerification(pin string) error {
+	if len(pin) < VerificationFieldPinMinLength || len(pin) > VerificationFieldPinMaxLength {
+		return fmt.Errorf("invalid pin length. Cannot have less than %d or more than %d characters in pin", VerificationFieldPinMinLength, VerificationFieldPinMaxLength)
+	}
+
+	return nil
+}
+
+// ValidateNationalIDVerification will validate the national id field for receiver verification.
+func ValidateNationalIDVerification(nationalID string) error {
+	if nationalID == "" {
+		return fmt.Errorf("national id cannot be empty")
+	}
+
+	if len(nationalID) > VerificationFieldMaxIdLength {
+		return fmt.Errorf("invalid national id. Cannot have more than %d characters in national id", VerificationFieldMaxIdLength)
 	}
 
 	return nil

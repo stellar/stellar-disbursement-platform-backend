@@ -81,7 +81,7 @@ func Test_ReceiverRegistrationValidator_ValidateReceiver(t *testing.T) {
 		validator.ValidateReceiver(&receiverInfo)
 
 		assert.Equal(t, 1, len(validator.Errors))
-		assert.Equal(t, "invalid date of birth format. Correct format: 1990-01-01", validator.Errors["verification"])
+		assert.Equal(t, "invalid date of birth format. Correct format: 1990-01-30", validator.Errors["verification"])
 	})
 
 	t.Run("Invalid pin", func(t *testing.T) {
@@ -96,7 +96,7 @@ func Test_ReceiverRegistrationValidator_ValidateReceiver(t *testing.T) {
 		validator.ValidateReceiver(&receiverInfo)
 
 		assert.Equal(t, 1, len(validator.Errors))
-		assert.Equal(t, "invalid pin. Cannot have less than 4 or more than 8 characters in pin", validator.Errors["verification"])
+		assert.Equal(t, "invalid pin length. Cannot have less than 4 or more than 8 characters in pin", validator.Errors["verification"])
 	})
 
 	t.Run("Invalid national ID number", func(t *testing.T) {

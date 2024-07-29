@@ -865,7 +865,7 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 				{"+380445555555", "123456789", "100.5", "1990/01/01"},
 			},
 			expectedStatus:  http.StatusBadRequest,
-			expectedMessage: "invalid date of birth format. Correct format: 1990-01-01",
+			expectedMessage: "invalid date of birth format. Correct format: 1990-01-30",
 		},
 		{
 			name:           "invalid phone number",
@@ -891,7 +891,7 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 			expectedMessage: "could not parse file",
 		},
 		{
-			name:            "disbursement not in draft/ready starte",
+			name:            "disbursement not in draft/ready status",
 			disbursementID:  startedDisbursement.ID,
 			expectedStatus:  http.StatusBadRequest,
 			expectedMessage: "disbursement is not in draft or ready status",
