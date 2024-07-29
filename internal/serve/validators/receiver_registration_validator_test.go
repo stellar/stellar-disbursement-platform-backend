@@ -116,7 +116,7 @@ func Test_ReceiverRegistrationValidator_ValidateReceiver(t *testing.T) {
 			expectedErrorKey: "verification",
 		},
 		{
-			name: "[DATE_OF_BIRTH] valid receiver values",
+			name: "🎉 successfully validates receiver values [DATE_OF_BIRTH]",
 			receiverInfo: data.ReceiverRegistrationRequest{
 				PhoneNumber:       "+380445555555  ",
 				OTP:               "  123456  ",
@@ -132,7 +132,7 @@ func Test_ReceiverRegistrationValidator_ValidateReceiver(t *testing.T) {
 			},
 		},
 		{
-			name: "[YEAR_MONTH] valid receiver values",
+			name: "🎉 successfully validates receiver values [YEAR_MONTH]",
 			receiverInfo: data.ReceiverRegistrationRequest{
 				PhoneNumber:       "+380445555555  ",
 				OTP:               "  123456  ",
@@ -148,7 +148,7 @@ func Test_ReceiverRegistrationValidator_ValidateReceiver(t *testing.T) {
 			},
 		},
 		{
-			name: "[PIN] valid receiver values",
+			name: "🎉 successfully validates receiver values [PIN]",
 			receiverInfo: data.ReceiverRegistrationRequest{
 				PhoneNumber:       "+380445555555  ",
 				OTP:               "  123456  ",
@@ -164,7 +164,7 @@ func Test_ReceiverRegistrationValidator_ValidateReceiver(t *testing.T) {
 			},
 		},
 		{
-			name: "[NATIONAL_ID_NUMBER] valid receiver values",
+			name: "🎉 successfully validates receiver values [NATIONAL_ID_NUMBER]",
 			receiverInfo: data.ReceiverRegistrationRequest{
 				PhoneNumber:       "+380445555555  ",
 				OTP:               "  123456  ",
