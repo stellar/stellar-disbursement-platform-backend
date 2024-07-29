@@ -61,13 +61,13 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 		SDPUIBaseURL: &uiBaseURL,
 	}
 	ctx := tenant.SaveTenantInContext(context.Background(), &tnt)
-	email := "valid@email.com"
+	const email = "valid@email.com"
 	defaultUserRoles := []string{data.OwnerUserRole.String()}
 	user := &auth.User{
 		ID:    "userID",
 		Email: email,
 	}
-	reCAPTCHAToken := "validToken"
+	const reCAPTCHAToken = "validToken"
 	defaultReqBody := fmt.Sprintf(`
 				{ 
 					"email": "%s",
@@ -160,7 +160,7 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 			Once()
 		userByEmailSetup(user, defaultUserRoles)
 		reCAPTCHAValidatorMock.
-			On("IsTokenValid", mock.Anything, "validToken").
+			On("IsTokenValid", mock.Anything, reCAPTCHAToken).
 			Return(true, nil).
 			Once()
 
