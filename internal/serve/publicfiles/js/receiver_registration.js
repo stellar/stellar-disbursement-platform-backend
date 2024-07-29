@@ -164,7 +164,7 @@ async function submitPhoneNumber(event) {
         verificationFieldInput.type = "date";
       }
       else if(verificationField === "YEAR_MONTH") {
-        verificationFieldTitle.textContent = "Year/Month";
+        verificationFieldTitle.textContent = "Date of birth (Year/Month)";
         verificationFieldInput.name = "year_month";
         verificationFieldInput.type = "month";
       }
