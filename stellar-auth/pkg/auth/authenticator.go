@@ -52,12 +52,11 @@ type defaultAuthenticator struct {
 }
 
 type authUser struct {
-	ID                string         `db:"id"`
-	FirstName         string         `db:"first_name"`
-	LastName          string         `db:"last_name"`
-	Email             string         `db:"email"`
-	EncryptedPassword string         `db:"encrypted_password"`
-	Roles             pq.StringArray `db:"roles"`
+	ID                string `db:"id"`
+	FirstName         string `db:"first_name"`
+	LastName          string `db:"last_name"`
+	Email             string `db:"email"`
+	EncryptedPassword string `db:"encrypted_password"`
 }
 
 func (a *defaultAuthenticator) ValidateCredentials(ctx context.Context, email, password string) (*User, error) {
@@ -528,7 +527,7 @@ func (a *defaultAuthenticator) GetUserByEmail(ctx context.Context, email string)
 	const query = `
 		SELECT
 			id,
-			roles
+			email
 		FROM
 			auth_users
 		WHERE
@@ -547,7 +546,6 @@ func (a *defaultAuthenticator) GetUserByEmail(ctx context.Context, email string)
 	return &User{
 		ID:    u.ID,
 		Email: email,
-		Roles: u.Roles,
 	}, nil
 }
 

@@ -1070,6 +1070,5 @@ func Test_DefaultAuthenticator_GetUserByEmail(t *testing.T) {
 
 		assert.Equal(t, randUser.ID, u.ID)
 		assert.Equal(t, randUser.Email, u.Email)
-		assert.Equal(t, randUser.Roles, u.Roles)
 	})
 }

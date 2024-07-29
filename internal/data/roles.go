@@ -25,7 +25,7 @@ const (
 	// BusinessUserRole has read-only permissions - except for user management that they can't read any data.
 	BusinessUserRole UserRole = "business"
 
-	// APIUserRole removes the need for the user to be verified through reCAPTCHA.
+	// APIUserRole removes the need for the user to be verified through reCAPTCHA for endpoints that require it.
 	// This role must be paired with one or more of the above permission-based roles to be valid.
 	APIUserRole UserRole = "api"
 )

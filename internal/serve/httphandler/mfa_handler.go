@@ -3,6 +3,7 @@ package httphandler
 import (
 	"errors"
 	"net/http"
+	"slices"
 
 	"github.com/stellar/go/support/http/httpdecode"
 	"github.com/stellar/go/support/log"
@@ -66,15 +67,16 @@ func (h MFAHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	roleCanBypassReCAPTCHA, err := validators.TokenUserRoleCanBypassReCAPTCHA(ctx, h.AuthManager, token)
+	user, err := h.AuthManager.GetUser(ctx, token)
 	if err != nil {
-		log.Ctx(ctx).Errorf("error checking if user role in token can bypass ReCAPTCHA: %s", err)
-		httperror.InternalError(ctx, "", err, nil).Render(rw)
+		httperror.InternalError(ctx, "Cannot get user ID", err, nil).Render(rw)
 		return
 	}
 
+	userRoleCanBypassReCAPTCHA := slices.Contains(user.Roles, data.APIUserRole.String())
+
 	// validating reCAPTCHA Token
-	if !h.ReCAPTCHADisabled && !roleCanBypassReCAPTCHA {
+	if !h.ReCAPTCHADisabled && !userRoleCanBypassReCAPTCHA {
 		isValid, recaptchaErr := h.ReCAPTCHAValidator.IsTokenValid(ctx, reqBody.ReCAPTCHAToken)
 		if recaptchaErr != nil {
 			httperror.InternalError(ctx, "Cannot validate reCAPTCHA token", recaptchaErr, nil).Render(rw)
@@ -88,11 +90,6 @@ func (h MFAHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	userID, err := h.AuthManager.GetUserID(ctx, token)
-	if err != nil {
-		httperror.InternalError(ctx, "Cannot get user ID", err, nil).Render(rw)
-		return
-	}
-	log.Ctx(ctx).Infof("[UserLogin] - Logged in user with account ID %s", userID)
+	log.Ctx(ctx).Infof("[UserLogin] - Logged in user with account ID %s", user.ID)
 	httpjson.RenderStatus(rw, http.StatusOK, MFAResponse{Token: token}, httpjson.JSON)
 }

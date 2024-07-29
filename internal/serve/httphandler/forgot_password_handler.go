@@ -73,15 +73,17 @@ func (h ForgotPasswordHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 	user, err := h.AuthManager.GetUserByEmail(ctx, forgotPasswordRequest.Email)
 	if err != nil {
 		if errors.Is(err, auth.ErrUserNotFound) {
-			log.Ctx(ctx).Errorf("error in forgot password handler, email not found: %s", forgotPasswordRequest.Email)
+			// If we don't find the user by email, we just return an ok response
+			// to prevent malicious client from searching accounts in the system
+			log.Ctx(ctx).Errorf("email in request not found: %s", forgotPasswordRequest.Email)
 		} else {
 			httperror.InternalError(ctx, "getting user by email", err, nil).Render(w)
 			return
 		}
 	}
-	canBypassReCAPTCHA := slices.Contains(user.Roles, data.APIUserRole.String())
+	userRoleCanBypassReCAPTCHA := slices.Contains(user.Roles, data.APIUserRole.String())
 
-	if !h.ReCAPTCHADisabled && !canBypassReCAPTCHA {
+	if !h.ReCAPTCHADisabled && !userRoleCanBypassReCAPTCHA {
 		// validating reCAPTCHA Token
 		isValid, recaptchaErr := h.ReCAPTCHAValidator.IsTokenValid(ctx, forgotPasswordRequest.ReCAPTCHAToken)
 		if recaptchaErr != nil {
@@ -97,7 +99,7 @@ func (h ForgotPasswordHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 	}
 
 	resetToken, err := h.AuthManager.ForgotPassword(ctx, forgotPasswordRequest.Email)
-	// if we don't find the user by email, we just return an ok response
+	// If we don't find the user by email, we just return an ok response
 	// to prevent malicious client from searching accounts in the system
 	if err != nil {
 		if errors.Is(err, auth.ErrUserNotFound) {

@@ -502,14 +502,6 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 		respBody, err = io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
-		var expectedRolesStr string
-		for i, role := range data.GetAllRoles() {
-			expectedRolesStr += role.String()
-			if i != len(data.GetAllRoles())-1 {
-				expectedRolesStr += " "
-			}
-		}
-
 		wantsBody = fmt.Sprintf(`
 			{
 				"error": "Request invalid",
@@ -517,7 +509,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 					"roles": "unexpected value for roles[0]=role1. Expect one of these values: [%s]"
 				}
 			}
-		`, expectedRolesStr)
+		`, enumerateRolesInString())
 
 		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 		assert.JSONEq(t, wantsBody, string(respBody))
@@ -1094,14 +1086,6 @@ func Test_UserHandler_UpdateUserRoles(t *testing.T) {
 		respBody, err = io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
-		var expectedRolesStr string
-		for i, role := range data.GetAllRoles() {
-			expectedRolesStr += role.String()
-			if i != len(data.GetAllRoles())-1 {
-				expectedRolesStr += " "
-			}
-		}
-
 		wantsBody = fmt.Sprintf(`
 			{
 				"error": "Request invalid",
@@ -1109,7 +1093,7 @@ func Test_UserHandler_UpdateUserRoles(t *testing.T) {
 					"roles": "unexpected value for roles[0]=role1. Expect one of these values: [%s]"
 				}
 			}
-		`, expectedRolesStr)
+		`, enumerateRolesInString())
 
 		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 		assert.JSONEq(t, wantsBody, string(respBody))
@@ -1720,4 +1704,16 @@ func Test_UserHandler_GetAllUsers(t *testing.T) {
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.JSONEq(t, wantsBody, string(respBody))
 	})
+}
+
+func enumerateRolesInString() string {
+	var rolesStr string
+	for i, role := range data.GetAllRoles() {
+		rolesStr += role.String()
+		if i != len(data.GetAllRoles())-1 {
+			rolesStr += " "
+		}
+	}
+
+	return rolesStr
 }

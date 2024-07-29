@@ -328,6 +328,12 @@ func (am *defaultAuthManager) GetUserByEmail(ctx context.Context, email string) 
 		return nil, fmt.Errorf("getting user with email: %w", err)
 	}
 
+	roles, err := am.roleManager.GetUserRoles(ctx, user)
+	if err != nil {
+		return nil, fmt.Errorf("getting user ID %s roles: %w", user.ID, err)
+	}
+	user.Roles = roles
+
 	return user, nil
 }
 

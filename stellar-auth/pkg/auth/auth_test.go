@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -1415,8 +1416,10 @@ func Test_AuthManager_GetUsersByID(t *testing.T) {
 
 func Test_AuthManager_GetUserByEmail(t *testing.T) {
 	authenticatorMock := &AuthenticatorMock{}
+	roleManagerMock := &RoleManagerMock{}
 	authManager := NewAuthManager(
 		WithCustomAuthenticatorOption(authenticatorMock),
+		WithCustomRoleManagerOption(roleManagerMock),
 	)
 
 	ctx := context.Background()
@@ -1430,22 +1433,39 @@ func Test_AuthManager_GetUserByEmail(t *testing.T) {
 		require.EqualError(t, err, "getting user with email: user not found")
 	})
 
+	t.Run("returns error when role manager fails to get user roles", func(t *testing.T) {
+		email := "valid-email@email.com"
+
+		expectedUser := &User{
+			ID:    "user-id",
+			Email: email,
+		}
+		authenticatorMock.On("GetUserByEmail", ctx, email).Return(expectedUser, nil).Once()
+		roleManagerMock.On("GetUserRoles", ctx, expectedUser).Return(nil, errUnexpectedError).Once()
+		_, err := authManager.GetUserByEmail(ctx, email)
+
+		require.EqualError(t, err, fmt.Sprintf("getting user ID %s roles: %s", expectedUser.ID, errUnexpectedError.Error()))
+	})
+
 	t.Run("gets user by email successfully", func(t *testing.T) {
 		email := "valid-email@email.com"
 
 		expectedUser := &User{
 			ID:    "user-id",
 			Email: email,
-			Roles: []string{data.OwnerUserRole.String()},
 		}
+		expectedRoles := []string{data.OwnerUserRole.String()}
 		authenticatorMock.On("GetUserByEmail", ctx, email).Return(expectedUser, nil).Once()
+		roleManagerMock.On("GetUserRoles", ctx, expectedUser).Return(expectedRoles, nil).Once()
 		user, err := authManager.GetUserByEmail(ctx, email)
 
 		require.NoError(t, err)
+		expectedUser.Roles = expectedRoles
 		require.Equal(t, expectedUser, user)
 	})
 
 	authenticatorMock.AssertExpectations(t)
+	roleManagerMock.AssertExpectations(t)
 }
 
 func Test_AuthManager_GetUserID(t *testing.T) {
