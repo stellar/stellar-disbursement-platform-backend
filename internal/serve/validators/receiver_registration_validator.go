@@ -43,6 +43,8 @@ func (rv *ReceiverRegistrationValidator) ValidateReceiver(receiverInfo *data.Rec
 	switch vt {
 	case data.VerificationFieldDateOfBirth:
 		rv.CheckError(utils.ValidateDateOfBirthVerification(verification), "verification", "")
+	case data.VerificationFieldYearMonth:
+		rv.CheckError(utils.ValidateYearMonthVerification(verification), "verification", "")
 	case data.VerificationFieldPin:
 		rv.CheckError(utils.ValidatePinVerification(verification), "verification", "")
 	case data.VerificationFieldNationalID:

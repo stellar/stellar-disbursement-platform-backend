@@ -80,6 +80,18 @@ func Test_ReceiverRegistrationValidator_ValidateReceiver(t *testing.T) {
 			expectedErrorKey: "verification",
 		},
 		{
+			name: "error if verification[YEAR_MONTH] is invalid",
+			receiverInfo: data.ReceiverRegistrationRequest{
+				PhoneNumber:       "+380445555555",
+				OTP:               "123456",
+				VerificationValue: "90/12",
+				VerificationType:  data.VerificationFieldYearMonth,
+			},
+			expectedErrorLen: 1,
+			expectedErrorMsg: "invalid year/month format. Correct format: 1990-12",
+			expectedErrorKey: "verification",
+		},
+		{
 			name: "error if verification[PIN] is invalid",
 			receiverInfo: data.ReceiverRegistrationRequest{
 				PhoneNumber:       "+380445555555",
@@ -117,6 +129,22 @@ func Test_ReceiverRegistrationValidator_ValidateReceiver(t *testing.T) {
 				OTP:               "123456",
 				VerificationValue: "1990-01-01",
 				VerificationType:  data.VerificationFieldDateOfBirth,
+			},
+		},
+		{
+			name: "[YEAR_MONTH] valid receiver values",
+			receiverInfo: data.ReceiverRegistrationRequest{
+				PhoneNumber:       "+380445555555  ",
+				OTP:               "  123456  ",
+				VerificationValue: "1990-12  ",
+				VerificationType:  "year_month",
+			},
+			expectedErrorLen: 0,
+			expectedReceiver: data.ReceiverRegistrationRequest{
+				PhoneNumber:       "+380445555555",
+				OTP:               "123456",
+				VerificationValue: "1990-12",
+				VerificationType:  data.VerificationFieldYearMonth,
 			},
 		},
 		{
