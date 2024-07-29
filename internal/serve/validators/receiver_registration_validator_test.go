@@ -205,6 +205,7 @@ func Test_ReceiverRegistrationValidator_ValidateAndGetVerificationType(t *testin
 		validator := NewReceiverRegistrationValidator()
 		validField := []data.VerificationField{
 			data.VerificationFieldDateOfBirth,
+			data.VerificationFieldYearMonth,
 			data.VerificationFieldPin,
 			data.VerificationFieldNationalID,
 		}

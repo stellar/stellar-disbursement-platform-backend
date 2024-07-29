@@ -12,6 +12,7 @@ func Test_DisbursementRequestValidator_ValidateAndGetVerificationType(t *testing
 	t.Run("Valid verification type", func(t *testing.T) {
 		validField := []data.VerificationField{
 			data.VerificationFieldDateOfBirth,
+			data.VerificationFieldYearMonth,
 			data.VerificationFieldPin,
 			data.VerificationFieldNationalID,
 		}

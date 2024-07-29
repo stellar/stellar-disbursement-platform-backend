@@ -156,6 +156,18 @@ func Test_UpdateReceiverHandler(t *testing.T) {
 				`,
 			},
 			{
+				name:    "invalid year/month",
+				request: validators.UpdateReceiverRequest{YearMonth: "invalid"},
+				want: `
+				{
+					"error": "request invalid",
+					"extras": {
+					  "year_month": "invalid year/month format. Correct format: 1990-12"
+					}
+				  }
+				`,
+			},
+			{
 				name:    "invalid pin",
 				request: validators.UpdateReceiverRequest{Pin: "    "},
 				want: `
@@ -297,6 +309,50 @@ func Test_UpdateReceiverHandler(t *testing.T) {
 		assert.Equal(t, "externalID", receiverDB.ExternalID)
 	})
 
+	t.Run("update year/month value", func(t *testing.T) {
+		data.CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, data.ReceiverVerificationInsert{
+			ReceiverID:        receiver.ID,
+			VerificationField: data.VerificationFieldYearMonth,
+			VerificationValue: "2000-01",
+		})
+
+		request := validators.UpdateReceiverRequest{YearMonth: "1999-01"}
+
+		route := fmt.Sprintf("/receivers/%s", receiver.ID)
+		reqBody, err := json.Marshal(request)
+		require.NoError(t, err)
+		req, err := http.NewRequest("PATCH", route, strings.NewReader(string(reqBody)))
+		require.NoError(t, err)
+
+		rr := httptest.NewRecorder()
+		r.ServeHTTP(rr, req)
+
+		resp := rr.Result()
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+		query := `
+			SELECT
+				hashed_value
+			FROM
+				receiver_verifications
+			WHERE
+				receiver_id = $1 AND
+				verification_field = $2
+		`
+
+		newReceiverVerification := data.ReceiverVerification{}
+		err = dbConnectionPool.GetContext(ctx, &newReceiverVerification, query, receiver.ID, data.VerificationFieldYearMonth)
+		require.NoError(t, err)
+
+		assert.True(t, data.CompareVerificationValue(newReceiverVerification.HashedValue, "1999-01"))
+		assert.False(t, data.CompareVerificationValue(newReceiverVerification.HashedValue, "2000-01"))
+
+		receiverDB, err := models.Receiver.Get(ctx, dbConnectionPool, receiver.ID)
+		require.NoError(t, err)
+		assert.Equal(t, "receiver@email.com", *receiverDB.Email)
+		assert.Equal(t, "externalID", receiverDB.ExternalID)
+	})
+
 	t.Run("update pin value", func(t *testing.T) {
 		data.CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, data.ReceiverVerificationInsert{
 			ReceiverID:        receiver.ID,
@@ -319,12 +375,12 @@ func Test_UpdateReceiverHandler(t *testing.T) {
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 
 		query := `
-			SELECT 
+			SELECT
 				hashed_value
-			FROM 
+			FROM
 				receiver_verifications
-			WHERE 
-				receiver_id = $1 AND 
+			WHERE
+				receiver_id = $1 AND
 				verification_field = $2
 		`
 
@@ -363,12 +419,12 @@ func Test_UpdateReceiverHandler(t *testing.T) {
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 
 		query := `
-			SELECT 
+			SELECT
 				hashed_value
-			FROM 
+			FROM
 				receiver_verifications
-			WHERE 
-				receiver_id = $1 AND 
+			WHERE
+				receiver_id = $1 AND
 				verification_field = $2
 		`
 
@@ -396,6 +452,12 @@ func Test_UpdateReceiverHandler(t *testing.T) {
 
 		data.CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, data.ReceiverVerificationInsert{
 			ReceiverID:        receiver.ID,
+			VerificationField: data.VerificationFieldYearMonth,
+			VerificationValue: "2000-01",
+		})
+
+		data.CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, data.ReceiverVerificationInsert{
+			ReceiverID:        receiver.ID,
 			VerificationField: data.VerificationFieldPin,
 			VerificationValue: "8901",
 		})
@@ -408,6 +470,7 @@ func Test_UpdateReceiverHandler(t *testing.T) {
 
 		request := validators.UpdateReceiverRequest{
 			DateOfBirth: "1999-01-01",
+			YearMonth:   "1999-01",
 			Pin:         "1234",
 			NationalID:  "NEWID123",
 		}
@@ -445,6 +508,11 @@ func Test_UpdateReceiverHandler(t *testing.T) {
 				oldVerificationValue: "2000-01-01",
 			},
 			{
+				verificationField:    data.VerificationFieldYearMonth,
+				newVerificationValue: "1999-01",
+				oldVerificationValue: "2000-01",
+			},
+			{
 				verificationField:    data.VerificationFieldPin,
 				newVerificationValue: "1234",
 				oldVerificationValue: "8901",
@@ -473,14 +541,9 @@ func Test_UpdateReceiverHandler(t *testing.T) {
 	t.Run("updates and inserts receiver verifications values", func(t *testing.T) {
 		data.DeleteAllReceiverVerificationFixtures(t, ctx, dbConnectionPool)
 
-		data.CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, data.ReceiverVerificationInsert{
-			ReceiverID:        receiver.ID,
-			VerificationField: data.VerificationFieldPin,
-			VerificationValue: "8901",
-		})
-
 		request := validators.UpdateReceiverRequest{
 			DateOfBirth: "1999-01-01",
+			YearMonth:   "1999-01",
 			Pin:         "1234",
 			NationalID:  "NEWID123",
 		}
@@ -518,6 +581,11 @@ func Test_UpdateReceiverHandler(t *testing.T) {
 				oldVerificationValue: "2000-01-01",
 			},
 			{
+				verificationField:    data.VerificationFieldYearMonth,
+				newVerificationValue: "1999-01",
+				oldVerificationValue: "",
+			},
+			{
 				verificationField:    data.VerificationFieldPin,
 				newVerificationValue: "1234",
 				oldVerificationValue: "",
@@ -532,6 +600,7 @@ func Test_UpdateReceiverHandler(t *testing.T) {
 			newReceiverVerification := data.ReceiverVerification{}
 			err = dbConnectionPool.GetContext(ctx, &newReceiverVerification, query, receiver.ID, v.verificationField)
 			require.NoError(t, err)
+			t.Logf("newReceiverVerification: %+v", newReceiverVerification)
 
 			assert.True(t, data.CompareVerificationValue(newReceiverVerification.HashedValue, v.newVerificationValue))
 
