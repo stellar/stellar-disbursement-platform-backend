@@ -175,8 +175,8 @@ func (s *ServerService) SetupConsumers(ctx context.Context, o SetupConsumersOpti
 		return fmt.Errorf("creating Payment Completed Kafka Consumer: %w", err)
 	}
 
-	// Both Stellar and Cicle have a readyToPayConsumer that reads from the `PaymentsReadyToPayTopic`.
-	// We separate them to avoid the noisy neighbor problem.
+	// Stellar and Circle have their dedicated paymentReadyToPay consumer that reads from their dedicated topics.
+	// This is to avoid the noisy neighbor problem where slow circle payments can block stellar payments and vice versa.
 	stellarPaymentReadyToPayConsumer, err := events.NewKafkaConsumer(
 		kafkaConfig,
 		events.PaymentReadyToPayTopic,

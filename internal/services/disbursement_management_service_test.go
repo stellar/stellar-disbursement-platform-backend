@@ -421,11 +421,13 @@ func Test_DisbursementManagementService_StartDisbursement_success(t *testing.T) 
 					assert.ElementsMatch(t, wantElements, eventData)
 
 					var expectedTopic string
-					if tc.distributionAccount.IsStellar() {
-						expectedTopic = events.PaymentReadyToPayTopic
-					} else {
+					switch tc.distributionAccount.Type.Platform() {
+					case schema.CirclePlatform:
 						expectedTopic = events.CirclePaymentReadyToPayTopic
+					case schema.StellarPlatform:
+						expectedTopic = events.PaymentReadyToPayTopic
 					}
+
 					// Validating payments ready to pay msg
 					paymentsReadyToPayMsg := msgs[1]
 					assert.Equal(t, events.Message{
