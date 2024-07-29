@@ -287,21 +287,13 @@ func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, d
 				return nil, fmt.Errorf("getting ready payments for disbursement with id %s: %w", disbursementID, err)
 			}
 
-			if len(payments) != 0 {
-				paymentsReadyToPayMsg, msgErr := events.NewMessage(ctx, events.PaymentReadyToPayTopic, disbursementID, events.PaymentReadyToPayDisbursementStarted, nil)
-				if msgErr != nil {
-					return nil, fmt.Errorf("creating new message: %w", msgErr)
-				}
+			paymentMsgs, err := preparePaymentMessages(ctx, disbursementID, payments, distributionAccount)
+			if err != nil {
+				return nil, fmt.Errorf("preparing payment messages: %w", err)
+			}
 
-				paymentsReadyToPay := schemas.EventPaymentsReadyToPayData{TenantID: paymentsReadyToPayMsg.TenantID}
-				for _, payment := range payments {
-					paymentsReadyToPay.Payments = append(paymentsReadyToPay.Payments, schemas.PaymentReadyToPay{ID: payment.ID})
-				}
-				paymentsReadyToPayMsg.Data = paymentsReadyToPay
-
-				msgs = append(msgs, paymentsReadyToPayMsg)
-			} else {
-				log.Ctx(ctx).Infof("no payments ready to pay for disbursement ID %s", disbursementID)
+			if len(paymentMsgs) > 0 {
+				msgs = append(msgs, paymentMsgs...)
 			}
 
 			log.Ctx(ctx).Infof("Producing %d messages to be published for disbursement ID %s", len(msgs), disbursementID)
@@ -423,4 +415,38 @@ func (s *DisbursementManagementService) PauseDisbursement(ctx context.Context, d
 
 		return nil
 	})
+}
+
+// preparePaymentMessages prepares the messages to be sent to the event producer for the payments that are ready to pay.
+func preparePaymentMessages(ctx context.Context, disbursementID string, payments []*data.Payment, distributionAccount *schema.TransactionAccount) ([]*events.Message, error) {
+	// Resolve target topic based on the distribution account type.
+	var targetTopic string
+	switch distributionAccount.Type.Platform() {
+	case schema.StellarPlatform:
+		targetTopic = events.PaymentReadyToPayTopic
+	case schema.CirclePlatform:
+		targetTopic = events.CirclePaymentReadyToPayTopic
+	default:
+		return nil, fmt.Errorf("unsupported platform: %s", distributionAccount.Type.Platform())
+	}
+
+	// Prepare the messages to be sent to the event producer.
+	msgs := make([]*events.Message, 0)
+	if len(payments) != 0 {
+		paymentsReadyToPayMsg, msgErr := events.NewMessage(ctx, targetTopic, disbursementID, events.PaymentReadyToPayDisbursementStarted, nil)
+		if msgErr != nil {
+			return nil, fmt.Errorf("creating new message: %w", msgErr)
+		}
+
+		paymentsReadyToPay := schemas.EventPaymentsReadyToPayData{TenantID: paymentsReadyToPayMsg.TenantID}
+		for _, payment := range payments {
+			paymentsReadyToPay.Payments = append(paymentsReadyToPay.Payments, schemas.PaymentReadyToPay{ID: payment.ID})
+		}
+		paymentsReadyToPayMsg.Data = paymentsReadyToPay
+
+		msgs = append(msgs, paymentsReadyToPayMsg)
+	} else {
+		log.Ctx(ctx).Infof("no payments ready to pay for disbursement ID %s", disbursementID)
+	}
+	return msgs, nil
 }
