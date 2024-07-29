@@ -1,6 +1,7 @@
 package httphandler
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 
@@ -72,6 +73,16 @@ func (h UpdateReceiverHandler) UpdateReceiver(rw http.ResponseWriter, req *http.
 	}
 
 	receiverID := chi.URLParam(req, "id")
+	_, err = h.Models.Receiver.Get(ctx, h.DBConnectionPool, receiverID)
+	if err != nil {
+		if errors.Is(err, data.ErrRecordNotFound) {
+			httperror.NotFound("Receiver not found", err, nil).Render(rw)
+		} else {
+			httperror.InternalError(ctx, "Cannot retrieve receiver", err, nil).Render(rw)
+		}
+		return
+	}
+
 	receiverVerifications := createVerificationInsert(&reqBody, receiverID)
 	receiver, err := db.RunInTransactionWithResult(ctx, h.DBConnectionPool, nil, func(dbTx db.DBTransaction) (response *data.Receiver, innerErr error) {
 		for _, rv := range receiverVerifications {

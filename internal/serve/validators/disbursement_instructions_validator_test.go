@@ -44,16 +44,16 @@ func Test_DisbursementInstructionsValidator_ValidateAndGetInstruction(t *testing
 			},
 		},
 		{
-			name:              "empty phone, id, amount and birthday",
+			name:              "empty phone, id, amount and date of birth",
 			actual:            &data.DisbursementInstruction{},
 			lineNumber:        2,
 			verificationField: data.VerificationFieldDateOfBirth,
 			hasErrors:         true,
 			expectedErrors: map[string]interface{}{
-				"line 2 - amount":   "invalid amount. Amount must be a positive number",
-				"line 2 - birthday": "invalid date of birth format. Correct format: 1990-01-01",
-				"line 2 - id":       "id cannot be empty",
-				"line 2 - phone":    "phone cannot be empty",
+				"line 2 - amount":        "invalid amount. Amount must be a positive number",
+				"line 2 - date of birth": "date of birth cannot be empty",
+				"line 2 - id":            "id cannot be empty",
+				"line 2 - phone":         "phone cannot be empty",
 			},
 		},
 		{
@@ -102,7 +102,7 @@ func Test_DisbursementInstructionsValidator_ValidateAndGetInstruction(t *testing
 			},
 		},
 		{
-			name: "invalid birthday format",
+			name: "invalid date of birth format",
 			actual: &data.DisbursementInstruction{
 				Phone:             "+380445555555",
 				ID:                "123456789",
@@ -113,7 +113,7 @@ func Test_DisbursementInstructionsValidator_ValidateAndGetInstruction(t *testing
 			verificationField: data.VerificationFieldDateOfBirth,
 			hasErrors:         true,
 			expectedErrors: map[string]interface{}{
-				"line 3 - birthday": "invalid date of birth format. Correct format: 1990-01-01",
+				"line 3 - date of birth": "invalid date of birth format. Correct format: 1990-01-30",
 			},
 		},
 		{
@@ -128,7 +128,7 @@ func Test_DisbursementInstructionsValidator_ValidateAndGetInstruction(t *testing
 			verificationField: data.VerificationFieldDateOfBirth,
 			hasErrors:         true,
 			expectedErrors: map[string]interface{}{
-				"line 3 - birthday": "date of birth cannot be in the future",
+				"line 3 - date of birth": "date of birth cannot be in the future",
 			},
 		},
 		{
@@ -155,7 +155,7 @@ func Test_DisbursementInstructionsValidator_ValidateAndGetInstruction(t *testing
 			verificationField: data.VerificationFieldPin,
 			hasErrors:         true,
 			expectedErrors: map[string]interface{}{
-				"line 3 - pin": "invalid pin. Cannot have less than 4 or more than 8 characters in pin",
+				"line 3 - pin": "invalid pin length. Cannot have less than 4 or more than 8 characters in pin",
 			},
 		},
 		{
@@ -170,7 +170,7 @@ func Test_DisbursementInstructionsValidator_ValidateAndGetInstruction(t *testing
 			verificationField: data.VerificationFieldPin,
 			hasErrors:         true,
 			expectedErrors: map[string]interface{}{
-				"line 3 - pin": "invalid pin. Cannot have less than 4 or more than 8 characters in pin",
+				"line 3 - pin": "invalid pin length. Cannot have less than 4 or more than 8 characters in pin",
 			},
 		},
 		{
