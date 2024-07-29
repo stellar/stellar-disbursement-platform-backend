@@ -30,7 +30,7 @@ func (rv *ReceiverRegistrationValidator) ValidateReceiver(receiverInfo *data.Rec
 
 	// validate phone field
 	rv.CheckError(utils.ValidatePhoneNumber(phone), "phone_number", "invalid phone format. Correct format: +380445555555")
-	rv.Check(strings.TrimSpace(phone) != "", "phone_number", "phone cannot be empty")
+	rv.Check(phone != "", "phone_number", "phone cannot be empty")
 
 	// validate otp field
 	rv.CheckError(utils.ValidateOTP(otp), "otp", "invalid otp format. Needs to be a 6 digit value")
