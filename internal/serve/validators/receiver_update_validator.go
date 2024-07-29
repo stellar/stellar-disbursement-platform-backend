@@ -2,7 +2,6 @@ package validators
 
 import (
 	"strings"
-	"time"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
@@ -40,18 +39,15 @@ func (ur *UpdateReceiverValidator) ValidateReceiver(updateReceiverRequest *Updat
 	externalID := strings.TrimSpace(updateReceiverRequest.ExternalID)
 
 	if dateOfBirth != "" {
-		_, err := time.Parse("2006-01-02", updateReceiverRequest.DateOfBirth)
-		ur.CheckError(err, "date_of_birth", "invalid date of birth format. Correct format: 1990-01-30")
+		ur.CheckError(utils.ValidateDateOfBirthVerification(dateOfBirth), "date_of_birth", "")
 	}
 
 	if updateReceiverRequest.Pin != "" {
-		// TODO: add new validation to PIN type.
-		ur.Check(pin != "", "pin", "invalid pin format")
+		ur.CheckError(utils.ValidatePinVerification(pin), "pin", "")
 	}
 
 	if updateReceiverRequest.NationalID != "" {
-		// TODO: add new validation to NationalID type.
-		ur.Check(nationalID != "", "national_id", "invalid national ID format")
+		ur.CheckError(utils.ValidateNationalIDVerification(nationalID), "national_id", "")
 	}
 
 	if updateReceiverRequest.Email != "" {
