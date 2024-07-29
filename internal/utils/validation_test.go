@@ -163,6 +163,27 @@ func Test_ValidateDateOfBirthVerification(t *testing.T) {
 	}
 }
 
+func Test_ValidateYearMonthVerification(t *testing.T) {
+	tests := []struct {
+		name          string
+		yearMonth     string
+		expectedError error
+	}{
+		{"valid yearMonth", "1990-12", nil},
+		{"invalid yearMonth - yearMonth DOB", "", fmt.Errorf("year/month cannot be empty")},
+		{"invalid yearMonth - invalid format", "01-1990", fmt.Errorf("invalid year/month format. Correct format: 1990-12")},
+		{"invalid yearMonth - future date", time.Now().AddDate(1, 0, 0).Format("2006-01"), fmt.Errorf("year/month cannot be in the future")},
+		{"invalid yearMonth - invalid month", "1990-13", fmt.Errorf("invalid year/month format. Correct format: 1990-12")},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateYearMonthVerification(tt.yearMonth)
+			assert.Equal(t, tt.expectedError, err)
+		})
+	}
+}
+
 func Test_ValidatePinVerification(t *testing.T) {
 	tests := []struct {
 		name          string

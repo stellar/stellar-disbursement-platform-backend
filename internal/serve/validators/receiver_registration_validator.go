@@ -1,6 +1,8 @@
 package validators
 
 import (
+	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
@@ -28,7 +30,7 @@ func (rv *ReceiverRegistrationValidator) ValidateReceiver(receiverInfo *data.Rec
 
 	// validate phone field
 	rv.CheckError(utils.ValidatePhoneNumber(phone), "phone_number", "invalid phone format. Correct format: +380445555555")
-	rv.Check(strings.TrimSpace(phone) != "", "phone_number", "phone cannot be empty")
+	rv.Check(phone != "", "phone_number", "phone cannot be empty")
 
 	// validate otp field
 	rv.CheckError(utils.ValidateOTP(otp), "otp", "invalid otp format. Needs to be a 6 digit value")
@@ -41,6 +43,8 @@ func (rv *ReceiverRegistrationValidator) ValidateReceiver(receiverInfo *data.Rec
 	switch vt {
 	case data.VerificationFieldDateOfBirth:
 		rv.CheckError(utils.ValidateDateOfBirthVerification(verification), "verification", "")
+	case data.VerificationFieldYearMonth:
+		rv.CheckError(utils.ValidateYearMonthVerification(verification), "verification", "")
 	case data.VerificationFieldPin:
 		rv.CheckError(utils.ValidatePinVerification(verification), "verification", "")
 	case data.VerificationFieldNationalID:
@@ -57,11 +61,9 @@ func (rv *ReceiverRegistrationValidator) ValidateReceiver(receiverInfo *data.Rec
 func (rv *ReceiverRegistrationValidator) validateAndGetVerificationType(verificationType string) data.VerificationField {
 	vt := data.VerificationField(strings.ToUpper(verificationType))
 
-	switch vt {
-	case data.VerificationFieldDateOfBirth, data.VerificationFieldPin, data.VerificationFieldNationalID:
-		return vt
-	default:
-		rv.Check(false, "verification_type", "invalid parameter. valid values are: DATE_OF_BIRTH, PIN, NATIONAL_ID_NUMBER")
+	if !slices.Contains(data.GetAllVerificationFields(), vt) {
+		rv.Check(false, "verification_type", fmt.Sprintf("invalid parameter. valid values are: %v", data.GetAllVerificationFields()))
 		return ""
 	}
+	return vt
 }

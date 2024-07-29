@@ -237,7 +237,17 @@ func Test_VerifyReceiverRegistrationHandler_processReceiverVerificationPII(t *te
 			wantErrContains: "DATE_OF_BIRTH not found for receiver with phone number +38...333",
 		},
 		{
-			name:     "returns an error if the receiver does not have any receiverVerification row with the given verification type",
+			name:     "returns an error if the receiver does not have any receiverVerification row with the given verification type (YEAR_MONTH)",
+			receiver: *receiver,
+			registrationRequest: data.ReceiverRegistrationRequest{
+				PhoneNumber:       receiver.PhoneNumber,
+				VerificationType:  data.VerificationFieldYearMonth,
+				VerificationValue: "1999-12",
+			},
+			wantErrContains: "YEAR_MONTH not found for receiver with phone number +38...555",
+		},
+		{
+			name:     "returns an error if the receiver does not have any receiverVerification row with the given verification type (NATIONAL_ID_NUMBER)",
 			receiver: *receiver,
 			registrationRequest: data.ReceiverRegistrationRequest{
 				PhoneNumber:       receiver.PhoneNumber,

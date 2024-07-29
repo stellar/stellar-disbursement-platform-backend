@@ -8,6 +8,7 @@ import (
 
 type UpdateReceiverRequest struct {
 	DateOfBirth string `json:"date_of_birth"`
+	YearMonth   string `json:"year_month"`
 	Pin         string `json:"pin"`
 	NationalID  string `json:"national_id"`
 	Email       string `json:"email"`
@@ -33,6 +34,7 @@ func (ur *UpdateReceiverValidator) ValidateReceiver(updateReceiverRequest *Updat
 	}
 
 	dateOfBirth := strings.TrimSpace(updateReceiverRequest.DateOfBirth)
+	yearMonth := strings.TrimSpace(updateReceiverRequest.YearMonth)
 	pin := strings.TrimSpace(updateReceiverRequest.Pin)
 	nationalID := strings.TrimSpace(updateReceiverRequest.NationalID)
 	email := strings.TrimSpace(updateReceiverRequest.Email)
@@ -40,6 +42,10 @@ func (ur *UpdateReceiverValidator) ValidateReceiver(updateReceiverRequest *Updat
 
 	if dateOfBirth != "" {
 		ur.CheckError(utils.ValidateDateOfBirthVerification(dateOfBirth), "date_of_birth", "")
+	}
+
+	if yearMonth != "" {
+		ur.CheckError(utils.ValidateYearMonthVerification(yearMonth), "year_month", "")
 	}
 
 	if updateReceiverRequest.Pin != "" {
@@ -59,6 +65,7 @@ func (ur *UpdateReceiverValidator) ValidateReceiver(updateReceiverRequest *Updat
 	}
 
 	updateReceiverRequest.DateOfBirth = dateOfBirth
+	updateReceiverRequest.YearMonth = yearMonth
 	updateReceiverRequest.Pin = pin
 	updateReceiverRequest.NationalID = nationalID
 	updateReceiverRequest.Email = email

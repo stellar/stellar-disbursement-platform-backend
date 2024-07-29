@@ -42,6 +42,8 @@ func (iv *DisbursementInstructionsValidator) ValidateInstruction(instruction *da
 	switch iv.verificationField {
 	case data.VerificationFieldDateOfBirth:
 		iv.CheckError(utils.ValidateDateOfBirthVerification(verification), fmt.Sprintf("line %d - date of birth", lineNumber), "")
+	case data.VerificationFieldYearMonth:
+		iv.CheckError(utils.ValidateYearMonthVerification(verification), fmt.Sprintf("line %d - year/month", lineNumber), "")
 	case data.VerificationFieldPin:
 		iv.CheckError(utils.ValidatePinVerification(verification), fmt.Sprintf("line %d - pin", lineNumber), "")
 	case data.VerificationFieldNationalID:
