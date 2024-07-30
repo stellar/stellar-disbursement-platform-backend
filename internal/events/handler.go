@@ -13,6 +13,7 @@ const (
 	ReceiverWalletNewInvitationTopic = "events.receiver-wallets.new_invitation"
 	PaymentCompletedTopic            = "events.payment.payment_completed"
 	PaymentReadyToPayTopic           = "events.payment.ready_to_pay"
+	CirclePaymentReadyToPayTopic     = "events.payment.circle_ready_to_pay"
 )
 
 // Type Names

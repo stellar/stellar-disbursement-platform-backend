@@ -102,12 +102,17 @@ func (s *ServerService) GetSchedulerJobRegistrars(
 		}
 
 		sj = append(sj,
-			scheduler.WithPaymentToSubmitterJobOption(jobs.PaymentToSubmitterJobOptions{
+			scheduler.WithCirclePaymentToSubmitterJobOption(jobs.CirclePaymentToSubmitterJobOptions{
+				JobIntervalSeconds:  schedulerOptions.PaymentJobIntervalSeconds,
+				Models:              models,
+				DistAccountResolver: serveOpts.SubmitterEngine.DistributionAccountResolver,
+				CircleService:       serveOpts.CircleService,
+			}),
+			scheduler.WithStellarPaymentToSubmitterJobOption(jobs.StellarPaymentToSubmitterJobOptions{
 				JobIntervalSeconds:  schedulerOptions.PaymentJobIntervalSeconds,
 				Models:              models,
 				TSSDBConnectionPool: tssDBConnectionPool,
 				DistAccountResolver: serveOpts.SubmitterEngine.DistributionAccountResolver,
-				CircleService:       serveOpts.CircleService,
 			}),
 			scheduler.WithPaymentFromSubmitterJobOption(schedulerOptions.PaymentJobIntervalSeconds, models, tssDBConnectionPool),
 			scheduler.WithPatchAnchorPlatformTransactionsCompletionJobOption(schedulerOptions.PaymentJobIntervalSeconds, apAPIService, models),
@@ -170,14 +175,30 @@ func (s *ServerService) SetupConsumers(ctx context.Context, o SetupConsumersOpti
 		return fmt.Errorf("creating Payment Completed Kafka Consumer: %w", err)
 	}
 
-	paymentReadyToPayConsumer, err := events.NewKafkaConsumer(
+	// Stellar and Circle have their dedicated paymentReadyToPay consumer that reads from their dedicated topics.
+	// This is to avoid the noisy neighbor problem where slow circle payments can block stellar payments and vice versa.
+	stellarPaymentReadyToPayConsumer, err := events.NewKafkaConsumer(
 		kafkaConfig,
 		events.PaymentReadyToPayTopic,
 		o.EventBrokerOptions.ConsumerGroupID,
-		eventhandlers.NewPaymentToSubmitterEventHandler(eventhandlers.PaymentToSubmitterEventHandlerOptions{
+		eventhandlers.NewStellarPaymentToSubmitterEventHandler(eventhandlers.StellarPaymentToSubmitterEventHandlerOptions{
 			AdminDBConnectionPool: o.ServeOpts.AdminDBConnectionPool,
 			MtnDBConnectionPool:   o.ServeOpts.MtnDBConnectionPool,
 			TSSDBConnectionPool:   o.TSSDBConnectionPool,
+			DistAccountResolver:   o.ServeOpts.SubmitterEngine.DistributionAccountResolver,
+		}),
+	)
+	if err != nil {
+		return fmt.Errorf("creating Payment Ready to Pay Kafka Consumer: %w", err)
+	}
+
+	circlePaymentReadyToPayConsumer, err := events.NewKafkaConsumer(
+		kafkaConfig,
+		events.CirclePaymentReadyToPayTopic,
+		o.EventBrokerOptions.ConsumerGroupID,
+		eventhandlers.NewCirclePaymentToSubmitterEventHandler(eventhandlers.CirclePaymentToSubmitterEventHandlerOptions{
+			AdminDBConnectionPool: o.ServeOpts.AdminDBConnectionPool,
+			MtnDBConnectionPool:   o.ServeOpts.MtnDBConnectionPool,
 			DistAccountResolver:   o.ServeOpts.SubmitterEngine.DistributionAccountResolver,
 			CircleService:         o.ServeOpts.CircleService,
 		}),
@@ -193,7 +214,8 @@ func (s *ServerService) SetupConsumers(ctx context.Context, o SetupConsumersOpti
 
 	go events.NewEventConsumer(smsInvitationConsumer, producer, o.ServeOpts.CrashTrackerClient.Clone()).Consume(ctx)
 	go events.NewEventConsumer(paymentCompletedConsumer, producer, o.ServeOpts.CrashTrackerClient.Clone()).Consume(ctx)
-	go events.NewEventConsumer(paymentReadyToPayConsumer, producer, o.ServeOpts.CrashTrackerClient.Clone()).Consume(ctx)
+	go events.NewEventConsumer(stellarPaymentReadyToPayConsumer, producer, o.ServeOpts.CrashTrackerClient.Clone()).Consume(ctx)
+	go events.NewEventConsumer(circlePaymentReadyToPayConsumer, producer, o.ServeOpts.CrashTrackerClient.Clone()).Consume(ctx)
 
 	return nil
 }

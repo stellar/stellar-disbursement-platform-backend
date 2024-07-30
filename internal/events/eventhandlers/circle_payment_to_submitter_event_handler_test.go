@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
@@ -14,10 +14,12 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	servicesMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/services/mocks"
+	sigMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing/mocks"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
-func Test_PaymentToSubmitterEventHandler_Handle(t *testing.T) {
+func Test_CirclePaymentToSubmitterEventHandler_Handle(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 
@@ -28,10 +30,16 @@ func Test_PaymentToSubmitterEventHandler_Handle(t *testing.T) {
 	tenantManager := tenant.NewManager(tenant.WithDatabase(dbConnectionPool))
 
 	service := servicesMocks.MockPaymentToSubmitterService{}
+	mDistAccResolver := sigMocks.NewMockDistributionAccountResolver(t)
+	mDistAccResolver.
+		On("DistributionAccountFromContext", mock.Anything).
+		Return(schema.TransactionAccount{Type: schema.DistributionAccountCircleDBVault}, nil).
+		Maybe()
 
-	handler := PaymentToSubmitterEventHandler{
-		tenantManager: tenantManager,
-		service:       &service,
+	handler := CirclePaymentToSubmitterEventHandler{
+		tenantManager:       tenantManager,
+		service:             &service,
+		distAccountResolver: mDistAccResolver,
 	}
 
 	ctx := context.Background()
@@ -79,7 +87,7 @@ func Test_PaymentToSubmitterEventHandler_Handle(t *testing.T) {
 		assert.ErrorContains(t, handleErr, "sending payments ready to pay")
 	})
 
-	t.Run("successfully sends payments ready to pay to TSS", func(t *testing.T) {
+	t.Run("successfully sends payments ready to pay to Circle", func(t *testing.T) {
 		tenant.DeleteAllTenantsFixture(t, ctx, dbConnectionPool)
 
 		tnt, err := tenantManager.AddTenant(ctx, "myorg1")

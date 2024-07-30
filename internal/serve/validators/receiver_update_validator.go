@@ -2,13 +2,13 @@ package validators
 
 import (
 	"strings"
-	"time"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
 type UpdateReceiverRequest struct {
 	DateOfBirth string `json:"date_of_birth"`
+	YearMonth   string `json:"year_month"`
 	Pin         string `json:"pin"`
 	NationalID  string `json:"national_id"`
 	Email       string `json:"email"`
@@ -34,24 +34,26 @@ func (ur *UpdateReceiverValidator) ValidateReceiver(updateReceiverRequest *Updat
 	}
 
 	dateOfBirth := strings.TrimSpace(updateReceiverRequest.DateOfBirth)
+	yearMonth := strings.TrimSpace(updateReceiverRequest.YearMonth)
 	pin := strings.TrimSpace(updateReceiverRequest.Pin)
 	nationalID := strings.TrimSpace(updateReceiverRequest.NationalID)
 	email := strings.TrimSpace(updateReceiverRequest.Email)
 	externalID := strings.TrimSpace(updateReceiverRequest.ExternalID)
 
 	if dateOfBirth != "" {
-		_, err := time.Parse("2006-01-02", updateReceiverRequest.DateOfBirth)
-		ur.CheckError(err, "date_of_birth", "invalid date of birth format. Correct format: 1990-01-30")
+		ur.CheckError(utils.ValidateDateOfBirthVerification(dateOfBirth), "date_of_birth", "")
+	}
+
+	if yearMonth != "" {
+		ur.CheckError(utils.ValidateYearMonthVerification(yearMonth), "year_month", "")
 	}
 
 	if updateReceiverRequest.Pin != "" {
-		// TODO: add new validation to PIN type.
-		ur.Check(pin != "", "pin", "invalid pin format")
+		ur.CheckError(utils.ValidatePinVerification(pin), "pin", "")
 	}
 
 	if updateReceiverRequest.NationalID != "" {
-		// TODO: add new validation to NationalID type.
-		ur.Check(nationalID != "", "national_id", "invalid national ID format")
+		ur.CheckError(utils.ValidateNationalIDVerification(nationalID), "national_id", "")
 	}
 
 	if updateReceiverRequest.Email != "" {
@@ -63,6 +65,7 @@ func (ur *UpdateReceiverValidator) ValidateReceiver(updateReceiverRequest *Updat
 	}
 
 	updateReceiverRequest.DateOfBirth = dateOfBirth
+	updateReceiverRequest.YearMonth = yearMonth
 	updateReceiverRequest.Pin = pin
 	updateReceiverRequest.NationalID = nationalID
 	updateReceiverRequest.Email = email

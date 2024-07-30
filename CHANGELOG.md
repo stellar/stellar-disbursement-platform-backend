@@ -8,14 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 None
 
-## [2.1.0-rc.1](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/2.1.0-rc.1) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/2.0.0...2.1.0-rc.1))
+## [2.1.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/2.1.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/2.0.0...2.1.0))
 
-Release of the Stellar Disbursement Platform v2.0.0. This release introduces
+Release of the Stellar Disbursement Platform v2.1.0. This release introduces
 the option to set different distribution account signers per tenant, as well
 as Circle support, so the tenant can choose to run their payments through the
 Circle API rather than directly on the Stellar network.
 
-This version is only compatible with the [stellar/stellar-disbursement-platform-frontend] version `2.1.0-rc.1`.
+This version is only compatible with the [stellar/stellar-disbursement-platform-frontend] version `2.1.0`.
 
 ### Changed
 
@@ -27,6 +27,7 @@ This version is only compatible with the [stellar/stellar-disbursement-platform-
 
 ### Added
 
+- Add a new verification type called `YEAR_MONTH` [#369](https://github.com/stellar/stellar-disbursement-platform-backend/pull/369)
 - Add the ability to use different signature types per tenant, allowing for more flexibility in the signature service. [#289](https://github.com/stellar/stellar-disbursement-platform-backend/pull/289)
 - Add support to provision tenants with `accountType=DISTRIBUTION_ACCOUNT.CIRCLE.DB_VAULT` [#330](https://github.com/stellar/stellar-disbursement-platform-backend/pull/330)
 - Circle SDK integration for the backend. [#321](https://github.com/stellar/stellar-disbursement-platform-backend/pull/321)
@@ -37,15 +38,35 @@ This version is only compatible with the [stellar/stellar-disbursement-platform-
 - Implement the `GET /balances` endpoint that returns the Circle balance when the tenant is using Circle [#325](https://github.com/stellar/stellar-disbursement-platform-backend/pull/325), [#329](https://github.com/stellar/stellar-disbursement-platform-backend/pull/329)
 - Implement the `PATCH /organization/circle-config` endpoint that allows Circle configuration to be updated for Circle-using tenants [#326](https://github.com/stellar/stellar-disbursement-platform-backend/pull/326), [#332](https://github.com/stellar/stellar-disbursement-platform-backend/pull/332), [#334](https://github.com/stellar/stellar-disbursement-platform-backend/pull/334)
 - Send Stellar payments through Circle when the tenant uses a CIRCLE distribution account [#333](https://github.com/stellar/stellar-disbursement-platform-backend/pull/333)
-- Implement Circle reconciliation through polling [#339](https://github.com/stellar/stellar-disbursement-platform-backend/pull/339)
+- Implement Circle reconciliation through polling [#339](https://github.com/stellar/stellar-disbursement-platform-backend/pull/339), [#347](https://github.com/stellar/stellar-disbursement-platform-backend/pull/347)
+- Add Circle transfer ID to GET /payments endpoints [#346](https://github.com/stellar/stellar-disbursement-platform-backend/pull/346)
+- Add function to migrate data from a single-tenant to a multi-tenant instance [#351](https://github.com/stellar/stellar-disbursement-platform-backend/pull/351)
+- Invalidate Circle Distribution Account Status upon receiving auth error [#350](https://github.com/stellar/stellar-disbursement-platform-backend/pull/350), [359](https://github.com/stellar/stellar-disbursement-platform-backend/pull/359)
+- Add retry for circle 429 requests [#362](https://github.com/stellar/stellar-disbursement-platform-backend/pull/362)
+- Separate Stellar and Circle payment jobs [#366](https://github.com/stellar/stellar-disbursement-platform-backend/pull/366), [#374](https://github.com/stellar/stellar-disbursement-platform-backend/pull/374)
+- Misc
+  - Reformat the imports using goimports and enforce it through a GH Action [#337](https://github.com/stellar/stellar-disbursement-platform-backend/pull/337)
+  - Added dependabot extra features [#349](https://github.com/stellar/stellar-disbursement-platform-backend/pull/349)
+  - Add CI for e2e integration test for Circle [#342](https://github.com/stellar/stellar-disbursement-platform-backend/pull/342), [#357](https://github.com/stellar/stellar-disbursement-platform-backend/pull/357)
+  - Add CI to validate single-tenant to multi-tenant migration [#356](https://github.com/stellar/stellar-disbursement-platform-backend/pull/356)
 
 ### Fixed
 
-- Fix SDP helm chart defaults and minimal-values [#323](https://github.com/stellar/stellar-disbursement-platform-backend/pull/323)
+- Fix SDP helm charts [#323](https://github.com/stellar/stellar-disbursement-platform-backend/pull/323), [#375](https://github.com/stellar/stellar-disbursement-platform-backend/pull/375)
+- Fix CF 429 response and anchor patch transaction job for circle accounts [#361](https://github.com/stellar/stellar-disbursement-platform-backend/pull/361)
+- Select the correct error object used in a crash-reporter alert [#365](https://github.com/stellar/stellar-disbursement-platform-backend/pull/365)
+- Fixes post python migration [#367](https://github.com/stellar/stellar-disbursement-platform-backend/pull/367)
+- Make `PATCH /receivers/:id` validation consistent [#371](https://github.com/stellar/stellar-disbursement-platform-backend/pull/371)
+
+### Security
+
+- Security patch for gorilla/schema and rs/cors [#345](https://github.com/stellar/stellar-disbursement-platform-backend/pull/345)
+- Bump versions of getsentry/sentry-go and gofiber/fiber [#352](https://github.com/stellar/stellar-disbursement-platform-backend/pull/352)
 
 ### Deprecated
 
 - Deprecated the use of `DISTRIBUTION_SIGNER_TYPE`, since this information is now provided when provisioning a tenant [#319](https://github.com/stellar/stellar-disbursement-platform-backend/pull/319).
+- Remove Freedom Wallet from the list of pubnet wallets [#372](https://github.com/stellar/stellar-disbursement-platform-backend/pull/372)
 
 ## [2.0.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/2.0.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/1.1.7...2.0.0))
 

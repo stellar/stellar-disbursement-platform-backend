@@ -1,6 +1,7 @@
 package validators
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -38,4 +39,48 @@ func Test_addError(t *testing.T) {
 	assert.Equal(t, len(validator.Errors), 2)
 	assert.Equal(t, validator.Errors["key"], "error message")
 	assert.Equal(t, validator.Errors["key2"], "error message 2")
+}
+
+func Test_Validator_CheckError(t *testing.T) {
+	testCases := []struct {
+		name           string
+		err            error
+		key            string
+		message        string
+		expectedErrors map[string]interface{}
+	}{
+		{
+			name:    "error is not nil and message is not empty",
+			err:     fmt.Errorf("error message"),
+			key:     "key",
+			message: "real error message",
+			expectedErrors: map[string]interface{}{
+				"key": "real error message",
+			},
+		},
+		{
+			name:    "error is not nil and message is empty",
+			err:     fmt.Errorf("error message"),
+			key:     "key",
+			message: "",
+			expectedErrors: map[string]interface{}{
+				"key": "error message",
+			},
+		},
+		{
+			name:           "error is nil",
+			err:            nil,
+			key:            "key",
+			message:        "real error message",
+			expectedErrors: map[string]interface{}{},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			validator := NewValidator()
+			validator.CheckError(tc.err, tc.key, tc.message)
+			assert.Equal(t, tc.expectedErrors, validator.Errors)
+		})
+	}
 }

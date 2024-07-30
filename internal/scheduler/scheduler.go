@@ -200,9 +200,16 @@ func WithReadyPaymentsCancellationJobOption(models *data.Models) SchedulerJobReg
 	}
 }
 
-func WithPaymentToSubmitterJobOption(options jobs.PaymentToSubmitterJobOptions) SchedulerJobRegisterOption {
+func WithCirclePaymentToSubmitterJobOption(options jobs.CirclePaymentToSubmitterJobOptions) SchedulerJobRegisterOption {
 	return func(s *Scheduler) {
-		j := jobs.NewPaymentToSubmitterJob(options)
+		j := jobs.NewCirclePaymentToSubmitterJob(options)
+		s.addJob(j)
+	}
+}
+
+func WithStellarPaymentToSubmitterJobOption(options jobs.StellarPaymentToSubmitterJobOptions) SchedulerJobRegisterOption {
+	return func(s *Scheduler) {
+		j := jobs.NewStellarPaymentToSubmitterJob(options)
 		s.addJob(j)
 	}
 }

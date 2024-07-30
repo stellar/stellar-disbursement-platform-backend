@@ -12,6 +12,7 @@ func Test_DisbursementRequestValidator_ValidateAndGetVerificationType(t *testing
 	t.Run("Valid verification type", func(t *testing.T) {
 		validField := []data.VerificationField{
 			data.VerificationFieldDateOfBirth,
+			data.VerificationFieldYearMonth,
 			data.VerificationFieldPin,
 			data.VerificationFieldNationalID,
 		}
@@ -28,6 +29,6 @@ func Test_DisbursementRequestValidator_ValidateAndGetVerificationType(t *testing
 		actual := validator.ValidateAndGetVerificationType()
 		assert.Empty(t, actual)
 		assert.Equal(t, 1, len(validator.Errors))
-		assert.Equal(t, "invalid parameter. valid values are: DATE_OF_BIRTH, PIN, NATIONAL_ID_NUMBER", validator.Errors["verification_field"])
+		assert.Equal(t, "invalid parameter. valid values are: [DATE_OF_BIRTH YEAR_MONTH PIN NATIONAL_ID_NUMBER]", validator.Errors["verification_field"])
 	})
 }
