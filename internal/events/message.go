@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
@@ -53,6 +54,20 @@ func NewMessage(ctx context.Context, topic, key, messageType string, data any) (
 		Type:     messageType,
 		Data:     data,
 	}, nil
+}
+
+// NewPaymentReadyToPayMessage returns a new message for the `PaymentReadyToPayTopic` topic or `CirclePaymentReadyToPayTopic` topic.
+func NewPaymentReadyToPayMessage(ctx context.Context, platform schema.Platform, key, messageType string) (*Message, error) {
+	var targetTopic string
+	switch platform {
+	case schema.StellarPlatform:
+		targetTopic = PaymentReadyToPayTopic
+	case schema.CirclePlatform:
+		targetTopic = CirclePaymentReadyToPayTopic
+	default:
+		return nil, fmt.Errorf("unsupported platform: %s", platform)
+	}
+	return NewMessage(ctx, targetTopic, key, messageType, nil)
 }
 
 func NewHandlerError(hError error, handlerName string) HandlerError {

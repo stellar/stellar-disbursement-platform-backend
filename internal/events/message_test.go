@@ -1,10 +1,14 @@
 package events
 
 import (
+	"context"
 	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 func Test_Message_Validate(t *testing.T) {
@@ -63,5 +67,33 @@ func Test_Message_RecordError(t *testing.T) {
 		assert.Equal(t, "test-error-2", m.Errors[1].ErrorMessage)
 		assert.NotZero(t, m.Errors[1].FailedAt)
 		assert.Equal(t, "test-handler-2", m.Errors[1].HandlerName)
+	})
+}
+
+func Test_NewPaymentReadyToPayMessage(t *testing.T) {
+	tenantID := "test-tenant"
+	key := "test-key"
+	messageType := "test-type"
+
+	ctxWithTenant := tenant.SaveTenantInContext(context.Background(), &tenant.Tenant{ID: tenantID})
+
+	t.Run("unsupported platform", func(t *testing.T) {
+		_, err := NewPaymentReadyToPayMessage(ctxWithTenant, "unsupported-platform", key, messageType)
+		assert.EqualError(t, err, "unsupported platform: unsupported-platform")
+	})
+
+	t.Run("stellar platform", func(t *testing.T) {
+		m, err := NewPaymentReadyToPayMessage(ctxWithTenant, schema.StellarPlatform, key, messageType)
+		assert.NoError(t, err)
+		assert.Equal(t, PaymentReadyToPayTopic, m.Topic)
+		assert.Equal(t, tenantID, m.TenantID)
+	})
+
+	t.Run("circle platform", func(t *testing.T) {
+		m, err := NewPaymentReadyToPayMessage(ctxWithTenant, schema.CirclePlatform, key, messageType)
+		assert.NoError(t, err)
+		assert.Equal(t, CirclePaymentReadyToPayTopic, m.Topic)
+		assert.Equal(t, key, m.Key)
+		assert.Equal(t, tenantID, m.TenantID)
 	})
 }
