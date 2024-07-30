@@ -471,12 +471,13 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			sep24HeaderTokenAuthenticationMiddleware := anchorplatform.SEP24HeaderTokenAuthenticateMiddleware(o.sep24JWTManager, o.NetworkPassphrase, o.tenantManager, o.SingleTenantMode)
 			r.With(sep24HeaderTokenAuthenticationMiddleware).Post("/otp", httphandler.ReceiverSendOTPHandler{Models: o.Models, SMSMessengerClient: o.SMSMessengerClient, ReCAPTCHAValidator: reCAPTCHAValidator}.ServeHTTP)
 			r.With(sep24HeaderTokenAuthenticationMiddleware).Post("/verification", httphandler.VerifyReceiverRegistrationHandler{
-				AnchorPlatformAPIService: o.AnchorPlatformAPIService,
-				Models:                   o.Models,
-				ReCAPTCHAValidator:       reCAPTCHAValidator,
-				NetworkPassphrase:        o.NetworkPassphrase,
-				EventProducer:            o.EventProducer,
-				CrashTrackerClient:       o.CrashTrackerClient,
+				AnchorPlatformAPIService:    o.AnchorPlatformAPIService,
+				Models:                      o.Models,
+				ReCAPTCHAValidator:          reCAPTCHAValidator,
+				NetworkPassphrase:           o.NetworkPassphrase,
+				EventProducer:               o.EventProducer,
+				CrashTrackerClient:          o.CrashTrackerClient,
+				DistributionAccountResolver: o.SubmitterEngine.DistributionAccountResolver,
 			}.VerifyReceiverRegistration)
 		})
 

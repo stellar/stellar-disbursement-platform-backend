@@ -419,21 +419,10 @@ func (s *DisbursementManagementService) PauseDisbursement(ctx context.Context, d
 
 // preparePaymentMessages prepares the messages to be sent to the event producer for the payments that are ready to pay.
 func preparePaymentMessages(ctx context.Context, disbursementID string, payments []*data.Payment, distributionAccount *schema.TransactionAccount) ([]*events.Message, error) {
-	// Resolve target topic based on the distribution account type.
-	var targetTopic string
-	switch distributionAccount.Type.Platform() {
-	case schema.StellarPlatform:
-		targetTopic = events.PaymentReadyToPayTopic
-	case schema.CirclePlatform:
-		targetTopic = events.CirclePaymentReadyToPayTopic
-	default:
-		return nil, fmt.Errorf("unsupported platform: %s", distributionAccount.Type.Platform())
-	}
-
 	// Prepare the messages to be sent to the event producer.
 	msgs := make([]*events.Message, 0)
 	if len(payments) != 0 {
-		paymentsReadyToPayMsg, msgErr := events.NewMessage(ctx, targetTopic, disbursementID, events.PaymentReadyToPayDisbursementStarted, nil)
+		paymentsReadyToPayMsg, msgErr := events.NewPaymentReadyToPayMessage(ctx, distributionAccount.Type.Platform(), disbursementID, events.PaymentReadyToPayDisbursementStarted)
 		if msgErr != nil {
 			return nil, fmt.Errorf("creating new message: %w", msgErr)
 		}
