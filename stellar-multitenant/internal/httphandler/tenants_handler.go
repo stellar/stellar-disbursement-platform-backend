@@ -96,13 +96,13 @@ func (h TenantsHandler) Post(rw http.ResponseWriter, req *http.Request) {
 	// sending the invitation message
 	tntSDPUIBaseURL, err := h.generateTenantURL(reqBody.SDPUIBaseURL, h.SDPUIBaseURL, reqBody.Name)
 	if err != nil {
-		httperror.InternalError(ctx, "Could not generate SDP UI URL", err, nil).Render(rw)
+		httperror.InternalError(ctx, fmt.Sprintf("Could not generate SDP UI URL: %v", err), err, nil).Render(rw)
 		return
 	}
 
 	tntBaseURL, err := h.generateTenantURL(reqBody.BaseURL, h.BaseURL, reqBody.Name)
 	if err != nil {
-		httperror.InternalError(ctx, "Could not generate URL", err, nil).Render(rw)
+		httperror.InternalError(ctx, fmt.Sprintf("Could not generate URL: %v", err), err, nil).Render(rw)
 		return
 	}
 
@@ -122,7 +122,7 @@ func (h TenantsHandler) Post(rw http.ResponseWriter, req *http.Request) {
 			httperror.BadRequest("Tenant name already exists", err, nil).Render(rw)
 			return
 		}
-		httperror.InternalError(ctx, "Could not provision a new tenant", err, nil).Render(rw)
+		httperror.InternalError(ctx, fmt.Sprintf("Could not provision a new tenant: %v", err), err, nil).Render(rw)
 		return
 	}
 
