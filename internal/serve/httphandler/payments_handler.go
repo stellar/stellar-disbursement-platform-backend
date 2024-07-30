@@ -224,7 +224,12 @@ func (p PaymentsHandler) buildPaymentsReadyEventMessage(ctx context.Context, pay
 		return nil, nil
 	}
 
-	msg, err := events.NewMessage(ctx, events.PaymentReadyToPayTopic, "", events.PaymentReadyToPayRetryFailedPayment, nil)
+	distAccount, err := p.DistributionAccountResolver.DistributionAccountFromContext(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("resolving distribution account: %w", err)
+	}
+
+	msg, err := events.NewPaymentReadyToPayMessage(ctx, distAccount.Type.Platform(), "", events.PaymentReadyToPayRetryFailedPayment)
 	if err != nil {
 		return nil, fmt.Errorf("creating a new message: %w", err)
 	}

@@ -19,6 +19,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
@@ -44,12 +45,13 @@ const (
 )
 
 type VerifyReceiverRegistrationHandler struct {
-	AnchorPlatformAPIService anchorplatform.AnchorPlatformAPIServiceInterface
-	Models                   *data.Models
-	ReCAPTCHAValidator       validators.ReCAPTCHAValidator
-	NetworkPassphrase        string
-	EventProducer            events.Producer
-	CrashTrackerClient       crashtracker.CrashTrackerClient
+	AnchorPlatformAPIService    anchorplatform.AnchorPlatformAPIServiceInterface
+	Models                      *data.Models
+	ReCAPTCHAValidator          validators.ReCAPTCHAValidator
+	NetworkPassphrase           string
+	EventProducer               events.Producer
+	CrashTrackerClient          crashtracker.CrashTrackerClient
+	DistributionAccountResolver signing.DistributionAccountResolver
 }
 
 // validate validates the request [header, body, body.reCAPTCHA_token], and returns the decoded payload, or an http error.
@@ -348,7 +350,12 @@ func (v VerifyReceiverRegistrationHandler) buildPaymentsReadyToPayEventMessage(c
 		return nil, nil
 	}
 
-	msg, err := events.NewMessage(ctx, events.PaymentReadyToPayTopic, rw.ID, events.PaymentReadyToPayReceiverVerificationCompleted, nil)
+	distAccount, err := v.DistributionAccountResolver.DistributionAccountFromContext(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("resolving distribution account: %w", err)
+	}
+
+	msg, err := events.NewPaymentReadyToPayMessage(ctx, distAccount.Type.Platform(), rw.ID, events.PaymentReadyToPayReceiverVerificationCompleted)
 	if err != nil {
 		return nil, fmt.Errorf("creating new message: %w", err)
 	}

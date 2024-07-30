@@ -1,8 +1,9 @@
 package validators
 
 import (
+	"fmt"
+	"slices"
 	"strings"
-	"time"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 
@@ -29,7 +30,7 @@ func (rv *ReceiverRegistrationValidator) ValidateReceiver(receiverInfo *data.Rec
 
 	// validate phone field
 	rv.CheckError(utils.ValidatePhoneNumber(phone), "phone_number", "invalid phone format. Correct format: +380445555555")
-	rv.Check(strings.TrimSpace(phone) != "", "phone_number", "phone cannot be empty")
+	rv.Check(phone != "", "phone_number", "phone cannot be empty")
 
 	// validate otp field
 	rv.CheckError(utils.ValidateOTP(otp), "otp", "invalid otp format. Needs to be a 6 digit value")
@@ -41,20 +42,13 @@ func (rv *ReceiverRegistrationValidator) ValidateReceiver(receiverInfo *data.Rec
 	// validate verification fields
 	switch vt {
 	case data.VerificationFieldDateOfBirth:
-		// date of birth with format 2006-01-02
-		dob, err := time.Parse("2006-01-02", verification)
-		rv.CheckError(err, "verification", "invalid date of birth format. Correct format: 1990-01-01")
-
-		// check if date of birth is in the past
-		rv.Check(dob.Before(time.Now()), "verification", "date of birth cannot be in the future")
+		rv.CheckError(utils.ValidateDateOfBirthVerification(verification), "verification", "")
+	case data.VerificationFieldYearMonth:
+		rv.CheckError(utils.ValidateYearMonthVerification(verification), "verification", "")
 	case data.VerificationFieldPin:
-		if len(verification) < VERIFICATION_FIELD_PIN_MIN_LENGTH || len(verification) > VERIFICATION_FIELD_PIN_MAX_LENGTH {
-			rv.addError("verification", "invalid pin. Cannot have less than 4 or more than 8 characters in pin")
-		}
+		rv.CheckError(utils.ValidatePinVerification(verification), "verification", "")
 	case data.VerificationFieldNationalID:
-		if len(verification) > VERIFICATION_FIELD_MAX_ID_LENGTH {
-			rv.addError("verification", "invalid national id. Cannot have more than 50 characters in national id")
-		}
+		rv.CheckError(utils.ValidateNationalIDVerification(verification), "verification", "")
 	}
 
 	receiverInfo.PhoneNumber = phone
@@ -67,11 +61,9 @@ func (rv *ReceiverRegistrationValidator) ValidateReceiver(receiverInfo *data.Rec
 func (rv *ReceiverRegistrationValidator) validateAndGetVerificationType(verificationType string) data.VerificationField {
 	vt := data.VerificationField(strings.ToUpper(verificationType))
 
-	switch vt {
-	case data.VerificationFieldDateOfBirth, data.VerificationFieldPin, data.VerificationFieldNationalID:
-		return vt
-	default:
-		rv.Check(false, "verification_type", "invalid parameter. valid values are: DATE_OF_BIRTH, PIN, NATIONAL_ID_NUMBER")
+	if !slices.Contains(data.GetAllVerificationFields(), vt) {
+		rv.Check(false, "verification_type", fmt.Sprintf("invalid parameter. valid values are: %v", data.GetAllVerificationFields()))
 		return ""
 	}
+	return vt
 }

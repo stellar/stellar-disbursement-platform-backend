@@ -1,6 +1,11 @@
 package validators
 
-import "github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+import (
+	"fmt"
+	"slices"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+)
 
 type DisbursementRequestValidator struct {
 	verificationField data.VerificationField
@@ -16,11 +21,9 @@ func NewDisbursementRequestValidator(verificationField data.VerificationField) *
 
 // ValidateAndGetVerificationType validates if the verification type field is a valid value.
 func (dv *DisbursementRequestValidator) ValidateAndGetVerificationType() data.VerificationField {
-	switch dv.verificationField {
-	case data.VerificationFieldDateOfBirth, data.VerificationFieldPin, data.VerificationFieldNationalID:
-		return dv.verificationField
-	default:
-		dv.Check(false, "verification_field", "invalid parameter. valid values are: DATE_OF_BIRTH, PIN, NATIONAL_ID_NUMBER")
+	if !slices.Contains(data.GetAllVerificationFields(), dv.verificationField) {
+		dv.Check(false, "verification_field", fmt.Sprintf("invalid parameter. valid values are: %v", data.GetAllVerificationFields()))
 		return ""
 	}
+	return dv.verificationField
 }

@@ -16,7 +16,7 @@ metadata:
 data:
   # if {{ include "isPubnet" . }} is true, then the network is set to PUBNET, else it's all TESTNET
   {{- if eq (include "isPubnet" .) "true" }}
-  STELLAR_NETWORK_NETWORK: "PUBNET"
+  STELLAR_NETWORK_NETWORK: "PUBLIC"
   STELLAR_NETWORK_NETWORK_PASSPHRASE: "Public Global Stellar Network ; September 2015"
   STELLAR_NETWORK_HORIZON_URL: "https://horizon.stellar.org"
   {{- else }}

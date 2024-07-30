@@ -163,6 +163,11 @@ async function submitPhoneNumber(event) {
         verificationFieldInput.name = "date_of_birth";
         verificationFieldInput.type = "date";
       }
+      else if(verificationField === "YEAR_MONTH") {
+        verificationFieldTitle.textContent = "Date of birth (Year/Month)";
+        verificationFieldInput.name = "year_month";
+        verificationFieldInput.type = "month";
+      }
       else if(verificationField === "NATIONAL_ID_NUMBER") {
         verificationFieldTitle.textContent = "National ID number";
         verificationFieldInput.name = "national_id_number";

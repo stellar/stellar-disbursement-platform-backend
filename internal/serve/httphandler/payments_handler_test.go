@@ -1092,11 +1092,17 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 			}).
 			Return(nil).
 			Once()
+		distAccountResolverMock := sigMocks.NewMockDistributionAccountResolver(t)
+		distAccountResolverMock.
+			On("DistributionAccountFromContext", mock.Anything).
+			Return(schema.TransactionAccount{Type: schema.DistributionAccountStellarEnv}, nil).
+			Once()
 		handler := PaymentsHandler{
-			Models:           models,
-			DBConnectionPool: dbConnectionPool,
-			AuthManager:      authManagerMock,
-			EventProducer:    eventProducerMock,
+			Models:                      models,
+			DBConnectionPool:            dbConnectionPool,
+			AuthManager:                 authManagerMock,
+			EventProducer:               eventProducerMock,
+			DistributionAccountResolver: distAccountResolverMock,
 		}
 
 		rw := httptest.NewRecorder()
@@ -1132,6 +1138,80 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 		assert.Len(t, payment2DB.StatusHistory, 2)
 		assert.Equal(t, data.ReadyPaymentStatus, payment2DB.StatusHistory[1].Status)
 		assert.Equal(t, "User email@test.com has requested to retry the payment - Previous Stellar Transaction ID: stellar-transaction-id-2", payment2DB.StatusHistory[1].StatusMessage)
+	})
+
+	t.Run("successfully retries failed circle payment", func(t *testing.T) {
+		data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
+
+		failedPayment := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+			Amount:               "1",
+			StellarTransactionID: "stellar-transaction-id-1",
+			StellarOperationID:   "operation-id-1",
+			Status:               data.FailedPaymentStatus,
+			Disbursement:         disbursement,
+			ReceiverWallet:       receiverWallet,
+			Asset:                *asset,
+		})
+
+		ctx = context.WithValue(ctx, middleware.TokenContextKey, "mytoken")
+
+		payload := strings.NewReader(fmt.Sprintf(`{ "payment_ids": [%q] } `, failedPayment.ID))
+		req, err := http.NewRequestWithContext(ctx, http.MethodPatch, "/retry", payload)
+		require.NoError(t, err)
+
+		// Prepare the handler and its mocks
+		authManagerMock := auth.NewAuthManagerMock(t)
+		authManagerMock.
+			On("GetUser", ctx, "mytoken").
+			Return(&auth.User{Email: "email@test.com"}, nil).
+			Once()
+		eventProducerMock := events.NewMockProducer(t)
+		eventProducerMock.
+			On("WriteMessages", ctx, []events.Message{
+				{
+					Topic:    events.CirclePaymentReadyToPayTopic,
+					Key:      tnt.ID,
+					TenantID: tnt.ID,
+					Type:     events.PaymentReadyToPayRetryFailedPayment,
+					Data: schemas.EventPaymentsReadyToPayData{
+						TenantID: tnt.ID,
+						Payments: []schemas.PaymentReadyToPay{
+							{ID: failedPayment.ID},
+						},
+					},
+				},
+			}).
+			Return(nil).
+			Once()
+		distAccountResolverMock := sigMocks.NewMockDistributionAccountResolver(t)
+		distAccountResolverMock.
+			On("DistributionAccountFromContext", mock.Anything).
+			Return(schema.TransactionAccount{Type: schema.DistributionAccountCircleDBVault}, nil).
+			Once()
+		handler := PaymentsHandler{
+			Models:                      models,
+			DBConnectionPool:            dbConnectionPool,
+			AuthManager:                 authManagerMock,
+			EventProducer:               eventProducerMock,
+			DistributionAccountResolver: distAccountResolverMock,
+		}
+
+		rw := httptest.NewRecorder()
+		http.HandlerFunc(handler.RetryPayments).ServeHTTP(rw, req)
+
+		resp := rw.Result()
+		defer resp.Body.Close()
+
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.JSONEq(t, `{"message": "Payments retried successfully"}`, string(respBody))
+
+		previouslyFailedPayment, err := models.Payment.Get(ctx, failedPayment.ID, dbConnectionPool)
+		require.NoError(t, err)
+
+		assert.Equal(t, data.ReadyPaymentStatus, previouslyFailedPayment.Status)
 	})
 
 	t.Run("returns error when tenant is not in the context", func(t *testing.T) {
@@ -1173,10 +1253,16 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 			On("GetUser", ctxWithoutTenant, "mytoken").
 			Return(&auth.User{Email: "email@test.com"}, nil).
 			Once()
+		distAccountResolverMock := sigMocks.NewMockDistributionAccountResolver(t)
+		distAccountResolverMock.
+			On("DistributionAccountFromContext", mock.Anything).
+			Return(schema.TransactionAccount{Type: schema.DistributionAccountStellarEnv}, nil).
+			Once()
 		handler := PaymentsHandler{
-			Models:           models,
-			DBConnectionPool: dbConnectionPool,
-			AuthManager:      authManagerMock,
+			Models:                      models,
+			DBConnectionPool:            dbConnectionPool,
+			AuthManager:                 authManagerMock,
+			DistributionAccountResolver: distAccountResolverMock,
 		}
 
 		rw := httptest.NewRecorder()
@@ -1243,12 +1329,18 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 		crashTrackerMock.
 			On("LogAndReportErrors", mock.Anything, mock.Anything, "writing retry payment message on the event producer").
 			Once()
+		distAccountResolverMock := sigMocks.NewMockDistributionAccountResolver(t)
+		distAccountResolverMock.
+			On("DistributionAccountFromContext", mock.Anything).
+			Return(schema.TransactionAccount{Type: schema.DistributionAccountStellarEnv}, nil).
+			Once()
 		handler := PaymentsHandler{
-			Models:             models,
-			DBConnectionPool:   dbConnectionPool,
-			AuthManager:        authManagerMock,
-			EventProducer:      eventProducerMock,
-			CrashTrackerClient: crashTrackerMock,
+			Models:                      models,
+			DBConnectionPool:            dbConnectionPool,
+			AuthManager:                 authManagerMock,
+			EventProducer:               eventProducerMock,
+			CrashTrackerClient:          crashTrackerMock,
+			DistributionAccountResolver: distAccountResolverMock,
 		}
 
 		rw := httptest.NewRecorder()
@@ -1303,10 +1395,16 @@ func Test_PaymentHandler_RetryPayments(t *testing.T) {
 			On("GetUser", ctx, "mytoken").
 			Return(&auth.User{Email: "email@test.com"}, nil).
 			Once()
+		distAccountResolverMock := sigMocks.NewMockDistributionAccountResolver(t)
+		distAccountResolverMock.
+			On("DistributionAccountFromContext", mock.Anything).
+			Return(schema.TransactionAccount{Type: schema.DistributionAccountStellarEnv}, nil).
+			Once()
 		handler := PaymentsHandler{
-			Models:           models,
-			DBConnectionPool: dbConnectionPool,
-			AuthManager:      authManagerMock,
+			Models:                      models,
+			DBConnectionPool:            dbConnectionPool,
+			AuthManager:                 authManagerMock,
+			DistributionAccountResolver: distAccountResolverMock,
 		}
 
 		getEntries := log.DefaultLogger.StartTest(log.DebugLevel)
