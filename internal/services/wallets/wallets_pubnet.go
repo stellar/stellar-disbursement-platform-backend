@@ -24,15 +24,6 @@ var PubnetWallets = []data.Wallet{
 			assets.USDCAssetPubnet,
 		},
 	},
-	{
-		Name:              "Freedom Wallet",
-		Homepage:          "https://freedom-public-uat.bpventures.us",
-		DeepLinkSchema:    "https://freedom-public-uat.bpventures.us/disbursement/create",
-		SEP10ClientDomain: "freedom-public-uat.bpventures.us",
-		Assets: []data.Asset{
-			assets.USDCAssetPubnet,
-		},
-	},
 	// {
 	// 	Name:              "Beans App",
 	// 	Homepage:          "https://www.beansapp.com/disbursements",
