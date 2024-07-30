@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/lib/pq"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/utils"
 )
@@ -480,6 +481,10 @@ func (a *defaultAuthenticator) GetUser(ctx context.Context, userID string) (*Use
 
 // GetUsers retrieves the respective users from a list of user IDs.
 func (a *defaultAuthenticator) GetUsers(ctx context.Context, userIDs []string) ([]*User, error) {
+	if len(userIDs) == 0 {
+		return nil, nil
+	}
+
 	const query = `
 		SELECT
 			id,

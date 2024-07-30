@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -25,9 +26,11 @@ import (
 type Scheduler struct {
 	jobs               map[string]jobs.Job
 	cancel             context.CancelFunc
-	jobQueue           chan jobs.Job
 	crashTrackerClient crashtracker.CrashTrackerClient
 	tenantManager      tenant.ManagerInterface
+	jobQueue           chan jobs.Job
+	// enqueuedJobs is used to keep track of enqueued jobs to avoid enqueuing the same job multiple times in case it takes longer to execute than its interval.
+	enqueuedJobs sync.Map
 }
 
 type SchedulerOptions struct {
@@ -101,7 +104,7 @@ func (s *Scheduler) start(ctx context.Context) {
 	// 1. We start all the workers that will process jobs from the job queue.
 	for i := 1; i <= SchedulerWorkerCount; i++ {
 		// start a new worker passing a CrashTrackerClient clone to report errors when the job is executed
-		go worker(ctx, i, s.crashTrackerClient.Clone(), s.tenantManager, s.jobQueue)
+		go worker(ctx, i, s.crashTrackerClient.Clone(), s.tenantManager, s)
 	}
 
 	// 2. Enqueue jobs to jobQueue.
@@ -112,8 +115,13 @@ func (s *Scheduler) start(ctx context.Context) {
 			for {
 				select {
 				case <-ticker.C:
-					log.Ctx(ctx).Debugf("Enqueuing job: %s", job.GetName())
-					s.jobQueue <- job
+					jobName := job.GetName()
+					if _, alreadyEnqueued := s.enqueuedJobs.LoadOrStore(jobName, true); !alreadyEnqueued {
+						log.Ctx(ctx).Debugf("Enqueuing job: %s", jobName)
+						s.jobQueue <- job
+					} else {
+						log.Ctx(ctx).Debugf("Skipping job %s, already in queue", jobName)
+					}
 				case <-ctx.Done():
 					ticker.Stop()
 					return
@@ -130,7 +138,7 @@ func (s *Scheduler) stop() {
 }
 
 // worker is a goroutine that processes jobs from the job queue.
-func worker(ctx context.Context, workerID int, crashTrackerClient crashtracker.CrashTrackerClient, tenantManager tenant.ManagerInterface, jobQueue <-chan jobs.Job) {
+func worker(ctx context.Context, workerID int, crashTrackerClient crashtracker.CrashTrackerClient, tenantManager tenant.ManagerInterface, scheduler *Scheduler) {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Ctx(ctx).Errorf("Worker %d encountered a panic while processing a job: %v", workerID, r)
@@ -138,8 +146,9 @@ func worker(ctx context.Context, workerID int, crashTrackerClient crashtracker.C
 	}()
 	for {
 		select {
-		case job := <-jobQueue:
+		case job := <-scheduler.jobQueue:
 			executeJob(ctx, job, workerID, crashTrackerClient, tenantManager)
+			scheduler.enqueuedJobs.Delete(job.GetName()) // Remove job from tracking after execution
 		case <-ctx.Done():
 			log.Ctx(ctx).Infof("Worker %d stopping...", workerID)
 			return
@@ -159,8 +168,8 @@ func executeJob(ctx context.Context, job jobs.Job, workerID int, crashTrackerCli
 		}
 		for _, t := range tenants {
 			log.Ctx(ctx).Debugf("Processing job %s for tenant %s on worker %d", job.GetName(), t.ID, workerID)
-			tenantCtx := tenant.SaveTenantInContext(context.Background(), &t)
-			if jobErr := job.Execute(tenantCtx); jobErr != nil {
+			tenantCtx := tenant.SaveTenantInContext(ctx, &t)
+			if err = job.Execute(tenantCtx); err != nil {
 				msg := fmt.Sprintf("error processing job %s for tenant %s on worker %d", job.GetName(), t.ID, workerID)
 				crashTrackerClient.LogAndReportErrors(tenantCtx, err, msg)
 			}
@@ -191,12 +200,23 @@ func WithReadyPaymentsCancellationJobOption(models *data.Models) SchedulerJobReg
 	}
 }
 
-func WithPaymentToSubmitterJobOption(jobIntervalSeconds int,
-	models *data.Models,
-	tssDBConnectionPool db.DBConnectionPool,
-) SchedulerJobRegisterOption {
+func WithCirclePaymentToSubmitterJobOption(options jobs.CirclePaymentToSubmitterJobOptions) SchedulerJobRegisterOption {
 	return func(s *Scheduler) {
-		j := jobs.NewPaymentToSubmitterJob(jobIntervalSeconds, models, tssDBConnectionPool)
+		j := jobs.NewCirclePaymentToSubmitterJob(options)
+		s.addJob(j)
+	}
+}
+
+func WithStellarPaymentToSubmitterJobOption(options jobs.StellarPaymentToSubmitterJobOptions) SchedulerJobRegisterOption {
+	return func(s *Scheduler) {
+		j := jobs.NewStellarPaymentToSubmitterJob(options)
+		s.addJob(j)
+	}
+}
+
+func WithCircleReconciliationJobOption(options jobs.CircleReconciliationJobOptions) SchedulerJobRegisterOption {
+	return func(s *Scheduler) {
+		j := jobs.NewCircleReconciliationJob(options)
 		s.addJob(j)
 	}
 }

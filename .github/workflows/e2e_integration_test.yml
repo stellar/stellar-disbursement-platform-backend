@@ -1,4 +1,4 @@
-name: E2E integration test
+name: Integration Tests
 
 on:
   push:
@@ -14,54 +14,89 @@ on:
 env:
   USER_EMAIL: "sdp_user@stellar.org"
   USER_PASSWORD: "mockPassword123!"
+  DISTRIBUTION_PUBLIC_KEY: ${{ vars.DISTRIBUTION_PUBLIC_KEY }}
+  DISTRIBUTION_SEED: ${{ vars.DISTRIBUTION_SEED }}
+  CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE: ${{ vars.DISTRIBUTION_SEED }}
+  SEP10_SIGNING_PUBLIC_KEY: ${{ vars.SEP10_SIGNING_PUBLIC_KEY }}
+  SEP10_SIGNING_PRIVATE_KEY: ${{ vars.SEP10_SIGNING_PRIVATE_KEY }}
+  CIRCLE_API_KEY: ${{ vars.CIRCLE_API_KEY }}
+  CIRCLE_USDC_WALLET_ID: ${{ vars.CIRCLE_USDC_WALLET_ID }}
 
 jobs:
-  e2e-integration-test:
+  e2e:
     runs-on: ubuntu-latest
-    environment: "Receiver Registration - E2E Integration Tests"
+    strategy:
+      matrix:
+        platform:
+          - "Stellar"
+          - "Circle"
+        include:
+          - platform: "Stellar"
+            environment: "Receiver Registration - E2E Integration Tests (Stellar)"
+            DISTRIBUTION_ACCOUNT_TYPE: "DISTRIBUTION_ACCOUNT.STELLAR.ENV"
+          - platform: "Circle"
+            environment: "Receiver Registration - E2E Integration Tests (Circle)"
+            DISTRIBUTION_ACCOUNT_TYPE: "DISTRIBUTION_ACCOUNT.CIRCLE.DB_VAULT"
+    environment: ${{ matrix.environment }}
     env:
-      DISTRIBUTION_PUBLIC_KEY: ${{ vars.DISTRIBUTION_PUBLIC_KEY }}
-      DISTRIBUTION_SEED: ${{ vars.DISTRIBUTION_SEED }}
-      CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE: ${{ vars.DISTRIBUTION_SEED }}
-      SEP10_SIGNING_PUBLIC_KEY: ${{ vars.SEP10_SIGNING_PUBLIC_KEY }}
-      SEP10_SIGNING_PRIVATE_KEY: ${{ vars.SEP10_SIGNING_PRIVATE_KEY }}
+      DISTRIBUTION_ACCOUNT_TYPE: ${{ matrix.DISTRIBUTION_ACCOUNT_TYPE }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Cleanup data
-        working-directory: internal/integrationtests
+        working-directory: internal/integrationtests/docker
         run: docker-compose -f docker-compose-e2e-tests.yml down -v
+        shell: bash
 
       - name: Run Docker Compose for SDP, Anchor Platform and TSS
-        working-directory: internal/integrationtests
+        working-directory: internal/integrationtests/docker
         run: docker-compose -f docker-compose-e2e-tests.yml up --build -V -d
+        shell: bash
 
       - name: Install curl
         run: sudo apt-get update && sudo apt-get install -y curl
+        shell: bash
 
       - name: Create integration test data
         run: |
           docker exec e2e-sdp-api bash -c "./stellar-disbursement-platform integration-tests create-data"
+        shell: bash
 
-      - name: Restart anchor platform
+      - name: Restart Anchor Platform
         run: |
           docker restart e2e-anchor-platform
+        shell: bash
 
-      - name: Wait for anchor platform localhost:8080/health
-        timeout-minutes: 5
+      - name: Wait for Anchor Platform at both localhost:8080/health and localhost:8085/health
         run: |
-          until curl --output /dev/null --silent --head --fail http://localhost:8080/health; do
-            echo 'Waiting for anchor-platform to be up and running...'
-            sleep 15
-          done
-          echo 'Anchor-platform is up and running.'
+          wait_for_server() {
+            local endpoint=$1
+            local max_wait_time=$2
+
+            SECONDS=0
+            while ! curl -s $endpoint > /dev/null; do
+              echo "Waiting for server at $endpoint to be up... $SECONDS seconds elapsed"
+              sleep 4
+              if [ $SECONDS -ge $max_wait_time ]; then
+                echo "Server at $endpoint is not up after $max_wait_time seconds."
+                exit 1
+              fi
+            done
+            echo "Server at $endpoint is up."
+          }
+
+          wait_for_server http://localhost:8080/health 120
+          wait_for_server http://localhost:8085/health 120
+        shell: bash
 
       - name: Start integration test command
         run: |
           docker exec e2e-sdp-api bash -c "./stellar-disbursement-platform integration-tests start"
+        shell: bash
 
       - name: Docker logs
         if: always()
-        working-directory: internal/integrationtests
+        working-directory: internal/integrationtests/docker
         run: docker-compose -f docker-compose-e2e-tests.yml logs && docker-compose -f docker-compose-e2e-tests.yml down
+        shell: bash

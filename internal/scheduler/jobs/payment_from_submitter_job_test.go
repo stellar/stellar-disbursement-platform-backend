@@ -6,12 +6,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/mocks"
-	"github.com/stretchr/testify/mock"
-	"github.com/stretchr/testify/require"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
 func Test_PaymentFromSubmitterJob_GetInterval(t *testing.T) {
@@ -55,7 +56,11 @@ func Test_PaymentFromSubmitterJob_Execute(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.Background()
-			tenantInfo := &tenant.Tenant{ID: "95e788b6-c80e-4975-9d12-141001fe6e44", Name: "aid-org-1"}
+			tenantInfo := &tenant.Tenant{
+				ID:                      "95e788b6-c80e-4975-9d12-141001fe6e44",
+				Name:                    "aid-org-1",
+				DistributionAccountType: schema.DistributionAccountStellarEnv,
+			}
 			ctx = tenant.SaveTenantInContext(ctx, tenantInfo)
 
 			mockPaymentFromSubmitterService := &mocks.MockPaymentFromSubmitterService{}

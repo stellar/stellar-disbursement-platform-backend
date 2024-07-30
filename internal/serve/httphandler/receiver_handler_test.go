@@ -11,13 +11,14 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func Test_ReceiverHandlerGet(t *testing.T) {
@@ -1631,6 +1632,7 @@ func Test_ReceiverHandler_GetReceiverVerificatioTypes(t *testing.T) {
 	defer resp.Body.Close()
 	expectedBody := `[
 		"DATE_OF_BIRTH",
+		"YEAR_MONTH",
 		"PIN",
 		"NATIONAL_ID_NUMBER"
 	]`

@@ -19,6 +19,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/circle"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	di "github.com/stellar/stellar-disbursement-platform-backend/internal/dependencyinjection"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
@@ -28,9 +29,11 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/scheduler"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
+	svcMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/services/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	preconditionsMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	serveadmin "github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/serve"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
@@ -107,7 +110,8 @@ func Test_serve(t *testing.T) {
 	dbt.Close()
 
 	cmdUtils.ClearTestEnvironment(t)
-	distributionSeed := "SBHQEYSACD5DOK5I656NKLAMOHC6VT64ATOWWM2VJ3URGDGMVGNPG4ON"
+	distributionAccKP := keypair.MustRandom()
+	distributionAccPrivKey := distributionAccKP.Seed()
 
 	// Populate dependency injection:
 	di.SetInstance(di.TSSDBConnectionPoolInstanceName, dbConnectionPool)
@@ -120,7 +124,7 @@ func Test_serve(t *testing.T) {
 	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
 	di.SetInstance(di.LedgerNumberTrackerInstanceName, mLedgerNumberTracker)
 
-	sigService, _, _, _, _ := signing.NewMockSignatureService(t)
+	sigService, _, _ := signing.NewMockSignatureService(t)
 
 	submitterEngine := engine.SubmitterEngine{
 		HorizonClient:       mHorizonClient,
@@ -130,10 +134,17 @@ func Test_serve(t *testing.T) {
 	}
 	di.SetInstance(di.TxSubmitterEngineInstanceName, submitterEngine)
 
+	mDistAccService := svcMocks.NewMockDistributionAccountService(t)
+	di.SetInstance(di.DistributionAccountServiceInstanceName, mDistAccService)
+
 	ctx := context.Background()
 
 	// mock metric service
 	mMonitorService := monitorMocks.NewMockMonitorService(t)
+
+	// mock circle service
+	mCircleService := circle.NewMockService(t)
+	di.SetInstance(di.CircleServiceInstanceName, mCircleService)
 
 	serveOpts := serve.ServeOptions{
 		Environment:                     "test",
@@ -151,6 +162,7 @@ func Test_serve(t *testing.T) {
 		BaseURL:                         "https://sdp-backend.stellar.org",
 		ResetTokenExpirationHours:       24,
 		NetworkPassphrase:               network.TestNetworkPassphrase,
+		NetworkType:                     utils.TestnetNetworkType,
 		Sep10SigningPublicKey:           "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
 		Sep10SigningPrivateKey:          "SBUSPEKAZKLZSWHRSJ2HWDZUK6I3IVDUWA7JJZSGBLZ2WZIUJI7FPNB5",
 		AnchorPlatformBaseSepURL:        "localhost:8080",
@@ -162,7 +174,10 @@ func Test_serve(t *testing.T) {
 		DisableReCAPTCHA:                false,
 		EnableScheduler:                 false,
 		SubmitterEngine:                 submitterEngine,
+		DistributionAccountService:      mDistAccService,
 		MaxInvitationSMSResendAttempts:  3,
+		DistAccEncryptionPassphrase:     distributionAccPrivKey,
+		CircleService:                   mCircleService,
 	}
 	serveOpts.AnchorPlatformAPIService, err = anchorplatform.NewAnchorPlatformAPIService(httpclient.DefaultClient(), serveOpts.AnchorPlatformBasePlatformURL, serveOpts.AnchorPlatformOutgoingJWTSecret)
 	require.NoError(t, err)
@@ -214,6 +229,7 @@ func Test_serve(t *testing.T) {
 		Port:                                    8003,
 		Version:                                 "x.y.z",
 		SubmitterEngine:                         submitterEngine,
+		DistributionAccountService:              mDistAccService,
 		TenantAccountNativeAssetBootstrapAmount: tenant.MinTenantDistributionAccountAmount,
 		AdminAccount:                            "admin-account",
 		AdminApiKey:                             "admin-api-key",
@@ -279,7 +295,8 @@ func Test_serve(t *testing.T) {
 	t.Setenv("DISTRIBUTION_PUBLIC_KEY", "GBC2HVWFIFN7WJHFORVBCDKJORG6LWTW3O2QBHOURL3KHZPM4KMWTUSA")
 	t.Setenv("DISABLE_MFA", fmt.Sprintf("%t", serveOpts.DisableMFA))
 	t.Setenv("DISABLE_RECAPTCHA", fmt.Sprintf("%t", serveOpts.DisableMFA))
-	t.Setenv("DISTRIBUTION_SEED", distributionSeed)
+	t.Setenv("DISTRIBUTION_SEED", distributionAccPrivKey)
+	t.Setenv("DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE", distributionAccPrivKey)
 	t.Setenv("BASE_URL", serveOpts.BaseURL)
 	t.Setenv("SDP_UI_BASE_URL", serveTenantOpts.SDPUIBaseURL)
 	t.Setenv("RECAPTCHA_SITE_KEY", serveOpts.ReCAPTCHASiteKey)

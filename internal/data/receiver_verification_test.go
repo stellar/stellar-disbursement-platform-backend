@@ -6,10 +6,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/db"
-	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 )
 
 func Test_ReceiverVerificationModel_GetByReceiverIDsAndVerificationField(t *testing.T) {
@@ -86,10 +87,15 @@ func Test_ReceiverVerificationModel_GetAllByReceiverId(t *testing.T) {
 		})
 		verification2 := CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, ReceiverVerificationInsert{
 			ReceiverID:        receiver.ID,
+			VerificationField: VerificationFieldYearMonth,
+			VerificationValue: "1990-01",
+		})
+		verification3 := CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, ReceiverVerificationInsert{
+			ReceiverID:        receiver.ID,
 			VerificationField: VerificationFieldPin,
 			VerificationValue: "1234",
 		})
-		verification3 := CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, ReceiverVerificationInsert{
+		verification4 := CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, ReceiverVerificationInsert{
 			ReceiverID:        receiver.ID,
 			VerificationField: VerificationFieldNationalID,
 			VerificationValue: "5678",
@@ -98,7 +104,7 @@ func Test_ReceiverVerificationModel_GetAllByReceiverId(t *testing.T) {
 		receiverVerificationModel := ReceiverVerificationModel{}
 		actualVerifications, err := receiverVerificationModel.GetAllByReceiverId(ctx, dbConnectionPool, receiver.ID)
 		require.NoError(t, err)
-		assert.Len(t, actualVerifications, 3)
+		assert.Len(t, actualVerifications, 4)
 
 		assert.Equal(t, []ReceiverVerification{
 			{
@@ -110,17 +116,24 @@ func Test_ReceiverVerificationModel_GetAllByReceiverId(t *testing.T) {
 			},
 			{
 				ReceiverID:        receiver.ID,
-				VerificationField: VerificationFieldPin,
+				VerificationField: VerificationFieldYearMonth,
 				HashedValue:       verification2.HashedValue,
 				CreatedAt:         verification2.CreatedAt,
 				UpdatedAt:         verification2.UpdatedAt,
 			},
 			{
 				ReceiverID:        receiver.ID,
-				VerificationField: VerificationFieldNationalID,
+				VerificationField: VerificationFieldPin,
 				HashedValue:       verification3.HashedValue,
 				CreatedAt:         verification3.CreatedAt,
 				UpdatedAt:         verification3.UpdatedAt,
+			},
+			{
+				ReceiverID:        receiver.ID,
+				VerificationField: VerificationFieldNationalID,
+				HashedValue:       verification4.HashedValue,
+				CreatedAt:         verification4.CreatedAt,
+				UpdatedAt:         verification4.UpdatedAt,
 			},
 		}, actualVerifications)
 	})
@@ -157,12 +170,19 @@ func Test_ReceiverVerificationModel_GetReceiverVerificationByReceiverId(t *testi
 
 		verification2 := CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, ReceiverVerificationInsert{
 			ReceiverID:        receiver.ID,
-			VerificationField: VerificationFieldPin,
-			VerificationValue: "1234",
+			VerificationField: VerificationFieldYearMonth,
+			VerificationValue: "1990-01",
 		})
 		verification2.UpdatedAt = earlierTime
 
 		verification3 := CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, ReceiverVerificationInsert{
+			ReceiverID:        receiver.ID,
+			VerificationField: VerificationFieldPin,
+			VerificationValue: "1234",
+		})
+		verification3.UpdatedAt = earlierTime
+
+		verification4 := CreateReceiverVerificationFixture(t, ctx, dbConnectionPool, ReceiverVerificationInsert{
 			ReceiverID:        receiver.ID,
 			VerificationField: VerificationFieldNationalID,
 			VerificationValue: "5678",
@@ -176,9 +196,9 @@ func Test_ReceiverVerificationModel_GetReceiverVerificationByReceiverId(t *testi
 			ReceiverVerification{
 				ReceiverID:        receiver.ID,
 				VerificationField: VerificationFieldNationalID,
-				HashedValue:       verification3.HashedValue,
-				CreatedAt:         verification3.CreatedAt,
-				UpdatedAt:         verification3.UpdatedAt,
+				HashedValue:       verification4.HashedValue,
+				CreatedAt:         verification4.CreatedAt,
+				UpdatedAt:         verification4.UpdatedAt,
 			}, *actualVerification)
 	})
 }

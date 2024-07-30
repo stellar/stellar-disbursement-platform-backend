@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/support/log"
 	"golang.org/x/exp/maps"
 
@@ -16,18 +15,18 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
-	tssUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 )
 
 // DisbursementManagementService is a service for managing disbursements.
 type DisbursementManagementService struct {
-	Models             *data.Models
-	EventProducer      events.Producer
-	AuthManager        auth.AuthManager
-	HorizonClient      horizonclient.ClientInterface
-	CrashTrackerClient crashtracker.CrashTrackerClient
+	Models                     *data.Models
+	EventProducer              events.Producer
+	AuthManager                auth.AuthManager
+	CrashTrackerClient         crashtracker.CrashTrackerClient
+	DistributionAccountService DistributionAccountServiceInterface
 }
 
 type UserReference struct {
@@ -79,7 +78,9 @@ func (s *DisbursementManagementService) AppendUserMetadata(ctx context.Context, 
 	for _, d := range disbursements {
 		for _, entry := range d.StatusHistory {
 			if entry.Status == data.DraftDisbursementStatus || entry.Status == data.StartedDisbursementStatus {
-				users[entry.UserID] = nil
+				if entry.UserID != "" {
+					users[entry.UserID] = nil
+				}
 
 				if entry.Status == data.StartedDisbursementStatus {
 					// Disbursements could have multiple "started" entries in its status history log from being paused and resumed, etc.
@@ -110,7 +111,10 @@ func (s *DisbursementManagementService) AppendUserMetadata(ctx context.Context, 
 			if entry.Status != data.DraftDisbursementStatus && entry.Status != data.StartedDisbursementStatus {
 				continue
 			}
-			userInfo := users[entry.UserID]
+			userInfo, ok := users[entry.UserID]
+			if !ok {
+				continue
+			}
 			userRef := UserReference{
 				ID:        entry.UserID,
 				FirstName: userInfo.FirstName,
@@ -191,7 +195,7 @@ func (s *DisbursementManagementService) GetDisbursementReceiversWithCount(ctx co
 }
 
 // StartDisbursement starts a disbursement and all its payments and receivers wallets.
-func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, disbursementID string, user *auth.User, distributionPubKey string) error {
+func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, disbursementID string, user *auth.User, distributionAccount *schema.TransactionAccount) error {
 	opts := db.TransactionOptions{
 		DBConnectionPool: s.Models.DBConnectionPool,
 		AtomicFunctionWithPostCommit: func(dbTx db.DBTransaction) (postCommitFn db.PostCommitFunction, err error) {
@@ -230,71 +234,9 @@ func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, d
 			}
 
 			// 4. Check if there is enough balance from the distribution wallet for this disbursement along with any pending disbursements
-			rootAccount, err := s.HorizonClient.AccountDetail(
-				horizonclient.AccountRequest{AccountID: distributionPubKey})
+			err = s.validateBalanceForDisbursement(ctx, dbTx, distributionAccount, disbursement)
 			if err != nil {
-				err = tssUtils.NewHorizonErrorWrapper(err)
-				return nil, fmt.Errorf("cannot get details for root account from horizon client: %w", err)
-			}
-
-			var availableBalance float64
-			for _, b := range rootAccount.Balances {
-				if disbursement.Asset.EqualsHorizonAsset(b.Asset) {
-					availableBalance, err = strconv.ParseFloat(b.Balance, 64)
-					if err != nil {
-						return nil, fmt.Errorf("cannot convert Horizon distribution account balance %s into float: %w", b.Balance, err)
-					}
-				}
-			}
-
-			disbursementAmount, err := strconv.ParseFloat(disbursement.TotalAmount, 64)
-			if err != nil {
-				return nil, fmt.Errorf(
-					"cannot convert total amount %s for disbursement id %s into float: %w",
-					disbursement.TotalAmount,
-					disbursementID,
-					err,
-				)
-			}
-
-			var totalPendingAmount float64 = 0.0
-			incompletePayments, err := s.Models.Payment.GetAll(ctx, &data.QueryParams{
-				Filters: map[data.FilterKey]interface{}{
-					data.FilterKeyStatus: data.PaymentInProgressStatuses(),
-				},
-			}, dbTx)
-			if err != nil {
-				return nil, fmt.Errorf("cannot retrieve incomplete payments: %w", err)
-			}
-
-			for _, ip := range incompletePayments {
-				if ip.Disbursement.ID == disbursementID || !ip.Asset.Equals(*disbursement.Asset) {
-					continue
-				}
-
-				paymentAmount, parsePaymentAmountErr := strconv.ParseFloat(ip.Amount, 64)
-				if parsePaymentAmountErr != nil {
-					return nil, fmt.Errorf(
-						"cannot convert amount %s for paymment id %s into float: %w",
-						ip.Amount,
-						ip.ID,
-						err,
-					)
-				}
-				totalPendingAmount += paymentAmount
-			}
-
-			if (availableBalance - (disbursementAmount + totalPendingAmount)) < 0 {
-				err = InsufficientBalanceError{
-					DisbursementAsset:   *disbursement.Asset,
-					DistributionAddress: distributionPubKey,
-					DisbursementID:      disbursementID,
-					AvailableBalance:    availableBalance,
-					DisbursementAmount:  disbursementAmount,
-					TotalPendingAmount:  totalPendingAmount,
-				}
-				log.Ctx(ctx).Error(err)
-				return nil, err
+				return nil, fmt.Errorf("validating balance for disbursement: %w", err)
 			}
 
 			// 5. Update all correct payment status to `ready`
@@ -345,21 +287,13 @@ func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, d
 				return nil, fmt.Errorf("getting ready payments for disbursement with id %s: %w", disbursementID, err)
 			}
 
-			if len(payments) != 0 {
-				paymentsReadyToPayMsg, msgErr := events.NewMessage(ctx, events.PaymentReadyToPayTopic, disbursementID, events.PaymentReadyToPayDisbursementStarted, nil)
-				if msgErr != nil {
-					return nil, fmt.Errorf("creating new message: %w", msgErr)
-				}
+			paymentMsgs, err := preparePaymentMessages(ctx, disbursementID, payments, distributionAccount)
+			if err != nil {
+				return nil, fmt.Errorf("preparing payment messages: %w", err)
+			}
 
-				paymentsReadyToPay := schemas.EventPaymentsReadyToPayData{TenantID: paymentsReadyToPayMsg.TenantID}
-				for _, payment := range payments {
-					paymentsReadyToPay.Payments = append(paymentsReadyToPay.Payments, schemas.PaymentReadyToPay{ID: payment.ID})
-				}
-				paymentsReadyToPayMsg.Data = paymentsReadyToPay
-
-				msgs = append(msgs, paymentsReadyToPayMsg)
-			} else {
-				log.Ctx(ctx).Infof("no payments ready to pay for disbursement ID %s", disbursementID)
+			if len(paymentMsgs) > 0 {
+				msgs = append(msgs, paymentMsgs...)
 			}
 
 			log.Ctx(ctx).Infof("Producing %d messages to be published for disbursement ID %s", len(msgs), disbursementID)
@@ -379,6 +313,74 @@ func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, d
 	}
 
 	return db.RunInTransactionWithPostCommit(ctx, &opts)
+}
+
+func (s *DisbursementManagementService) validateBalanceForDisbursement(
+	ctx context.Context,
+	dbTx db.DBTransaction,
+	distributionAccount *schema.TransactionAccount,
+	disbursement *data.Disbursement,
+) error {
+	availableBalance, err := s.DistributionAccountService.GetBalance(ctx, distributionAccount, *disbursement.Asset)
+	if err != nil {
+		return fmt.Errorf(
+			"getting balance for asset (%s,%s) on distribution account %v: %w",
+			disbursement.Asset.Code,
+			disbursement.Asset.Issuer,
+			distributionAccount,
+			err)
+	}
+
+	disbursementAmount, err := strconv.ParseFloat(disbursement.TotalAmount, 64)
+	if err != nil {
+		return fmt.Errorf(
+			"cannot convert total amount %s for disbursement id %s into float: %w",
+			disbursement.TotalAmount,
+			disbursement.ID,
+			err,
+		)
+	}
+
+	totalPendingAmount := 0.0
+	incompletePayments, err := s.Models.Payment.GetAll(ctx, &data.QueryParams{
+		Filters: map[data.FilterKey]interface{}{
+			data.FilterKeyStatus: data.PaymentInProgressStatuses(),
+		},
+	}, dbTx)
+	if err != nil {
+		return fmt.Errorf("cannot retrieve incomplete payments: %w", err)
+	}
+
+	for _, ip := range incompletePayments {
+		if ip.Disbursement.ID == disbursement.ID || !ip.Asset.Equals(*disbursement.Asset) {
+			continue
+		}
+
+		paymentAmount, parsePaymentAmountErr := strconv.ParseFloat(ip.Amount, 64)
+		if parsePaymentAmountErr != nil {
+			return fmt.Errorf(
+				"cannot convert amount %s for paymment id %s into float: %w",
+				ip.Amount,
+				ip.ID,
+				err,
+			)
+		}
+		totalPendingAmount += paymentAmount
+	}
+
+	if (availableBalance - (disbursementAmount + totalPendingAmount)) < 0 {
+		err = InsufficientBalanceError{
+			DisbursementAsset:   *disbursement.Asset,
+			DistributionAddress: distributionAccount.ID(),
+			DisbursementID:      disbursement.ID,
+			AvailableBalance:    availableBalance,
+			DisbursementAmount:  disbursementAmount,
+			TotalPendingAmount:  totalPendingAmount,
+		}
+		log.Ctx(ctx).Error(err)
+		return err
+	}
+	return err
 }
 
 // PauseDisbursement pauses a disbursement and all its payments.
@@ -413,4 +415,27 @@ func (s *DisbursementManagementService) PauseDisbursement(ctx context.Context, d
 
 		return nil
 	})
+}
+
+// preparePaymentMessages prepares the messages to be sent to the event producer for the payments that are ready to pay.
+func preparePaymentMessages(ctx context.Context, disbursementID string, payments []*data.Payment, distributionAccount *schema.TransactionAccount) ([]*events.Message, error) {
+	// Prepare the messages to be sent to the event producer.
+	msgs := make([]*events.Message, 0)
+	if len(payments) != 0 {
+		paymentsReadyToPayMsg, msgErr := events.NewPaymentReadyToPayMessage(ctx, distributionAccount.Type.Platform(), disbursementID, events.PaymentReadyToPayDisbursementStarted)
+		if msgErr != nil {
+			return nil, fmt.Errorf("creating new message: %w", msgErr)
+		}
+
+		paymentsReadyToPay := schemas.EventPaymentsReadyToPayData{TenantID: paymentsReadyToPayMsg.TenantID}
+		for _, payment := range payments {
+			paymentsReadyToPay.Payments = append(paymentsReadyToPay.Payments, schemas.PaymentReadyToPay{ID: payment.ID})
+		}
+		paymentsReadyToPayMsg.Data = paymentsReadyToPay
+
+		msgs = append(msgs, paymentsReadyToPayMsg)
+	} else {
+		log.Ctx(ctx).Infof("no payments ready to pay for disbursement ID %s", disbursementID)
+	}
+	return msgs, nil
 }

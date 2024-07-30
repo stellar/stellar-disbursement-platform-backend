@@ -14,6 +14,22 @@ type HttpClientMock struct {
 	mock.Mock
 }
 
+type testInterface interface {
+	mock.TestingT
+	Cleanup(func())
+}
+
+// NewHttpClientMock creates a new instance of HttpClientMock. It also registers a testing interface on the mock and a
+// cleanup function to assert the mocks expectations.
+func NewHttpClientMock(t testInterface) *HttpClientMock {
+	m := &HttpClientMock{}
+	m.Mock.Test(t)
+
+	t.Cleanup(func() { m.AssertExpectations(t) })
+
+	return m
+}
+
 func (h *HttpClientMock) Do(req *http.Request) (*http.Response, error) {
 	args := h.Called(req)
 	if args.Get(0) == nil {

@@ -15,8 +15,6 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/stellar/go/clients/horizonclient"
 	"github.com/stellar/go/keypair"
-	"github.com/stellar/go/protocols/horizon"
-	"github.com/stellar/go/protocols/horizon/base"
 	"github.com/stellar/go/txnbuild"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -27,6 +25,8 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/assets"
+	coreSvcMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/services/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine"
 	preconditionsMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/preconditions/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
@@ -40,7 +40,6 @@ import (
 func Test_TenantHandler_Get(t *testing.T) {
 	dbt := dbtest.OpenWithAdminMigrationsOnly(t)
 	defer dbt.Close()
-
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
@@ -141,11 +140,11 @@ func Test_TenantHandler_Get(t *testing.T) {
 			]
 		`,
 			tnt1.ID, tnt1.Name, tnt1.CreatedAt.Format(time.RFC3339Nano), tnt1.UpdatedAt.Format(time.RFC3339Nano),
-			*tnt1.DistributionAccountAddress, schema.DistributionAccountTypeDBVaultStellar, schema.DistributionAccountStatusActive,
+			*tnt1.DistributionAccountAddress, schema.DistributionAccountStellarDBVault, schema.AccountStatusActive,
 			tnt2.ID, tnt2.Name, tnt2.CreatedAt.Format(time.RFC3339Nano), tnt2.UpdatedAt.Format(time.RFC3339Nano),
-			*tnt2.DistributionAccountAddress, schema.DistributionAccountTypeDBVaultStellar, schema.DistributionAccountStatusActive,
+			*tnt2.DistributionAccountAddress, schema.DistributionAccountStellarDBVault, schema.AccountStatusActive,
 			deactivatedTnt.ID, deactivatedTnt.Name, deactivatedTnt.CreatedAt.Format(time.RFC3339Nano), deactivatedTnt.UpdatedAt.Format(time.RFC3339Nano),
-			*deactivatedTnt.DistributionAccountAddress, schema.DistributionAccountTypeDBVaultStellar, schema.DistributionAccountStatusActive,
+			*deactivatedTnt.DistributionAccountAddress, schema.DistributionAccountStellarDBVault, schema.AccountStatusActive,
 		)
 		assert.JSONEq(t, expectedRespBody, string(respBody))
 	})
@@ -181,7 +180,7 @@ func Test_TenantHandler_Get(t *testing.T) {
 				"distribution_account_status": %q
 			}
 		`, tnt1.ID, tnt1.Name, tnt1.CreatedAt.Format(time.RFC3339Nano), tnt1.UpdatedAt.Format(time.RFC3339Nano),
-			*tnt1.DistributionAccountAddress, schema.DistributionAccountTypeDBVaultStellar, schema.DistributionAccountStatusActive,
+			*tnt1.DistributionAccountAddress, schema.DistributionAccountStellarDBVault, schema.AccountStatusActive,
 		)
 		assert.JSONEq(t, expectedRespBody, string(respBody))
 	})
@@ -217,7 +216,7 @@ func Test_TenantHandler_Get(t *testing.T) {
 				"distribution_account_status": %q
 			}
 		`, tnt2.ID, tnt2.Name, tnt2.CreatedAt.Format(time.RFC3339Nano), tnt2.UpdatedAt.Format(time.RFC3339Nano),
-			*tnt2.DistributionAccountAddress, schema.DistributionAccountTypeDBVaultStellar, schema.DistributionAccountStatusActive,
+			*tnt2.DistributionAccountAddress, schema.DistributionAccountStellarDBVault, schema.AccountStatusActive,
 		)
 		assert.JSONEq(t, expectedRespBody, string(respBody))
 	})
@@ -246,7 +245,6 @@ func Test_TenantHandler_Get(t *testing.T) {
 func Test_TenantHandler_Post(t *testing.T) {
 	dbt := dbtest.OpenWithAdminMigrationsOnly(t)
 	defer dbt.Close()
-
 	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, outerErr)
 	defer dbConnectionPool.Close()
@@ -258,9 +256,9 @@ func Test_TenantHandler_Post(t *testing.T) {
 
 	mHorizonClient := &horizonclient.MockClient{}
 	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
-	sigService, _, distAccSigClient, _, distAccResolver := signing.NewMockSignatureService(t)
+	sigService, sigRouter, distAccResolver := signing.NewMockSignatureService(t)
 
-	distAcc := keypair.MustRandom().Address()
+	distAccAddress := keypair.MustRandom().Address()
 
 	submitterEngine := engine.SubmitterEngine{
 		HorizonClient:       mHorizonClient,
@@ -287,19 +285,22 @@ func Test_TenantHandler_Post(t *testing.T) {
 		SDPUIBaseURL:        "https://sdp-ui.stellar.org",
 	}
 
-	createMocks := func(t *testing.T, msgClientErr error) {
-		distAccSigClient.
-			On("BatchInsert", ctx, 1).
-			Return([]string{distAcc}, nil).
-			Once().
-			On("Type").
-			Return(string(signing.DistributionAccountEnvSignatureClientType)).
+	createMocks := func(t *testing.T, accountType schema.AccountType, msgClientErr error) {
+		distAccToReturn := schema.TransactionAccount{
+			Address: distAccAddress,
+			Type:    accountType,
+			Status:  schema.AccountStatusActive,
+		}
+		sigRouter.
+			On("BatchInsert", ctx, accountType, 1).
+			Return([]schema.TransactionAccount{distAccToReturn}, nil).
 			Once()
 
+		hostAccount := schema.NewDefaultHostAccount(distAccAddress)
 		distAccResolver.
 			On("HostDistributionAccount").
-			Return(distAcc, nil).
-			Once()
+			Return(hostAccount, nil).
+			Maybe()
 
 		messengerClientMock.
 			On("SendMessage", mock.AnythingOfType("message.Message")).
@@ -345,15 +346,17 @@ func Test_TenantHandler_Post(t *testing.T) {
 			"auth_user_mfa_codes",
 			"auth_user_password_reset",
 			"auth_users",
+			"circle_client_config",
+			"circle_transfer_requests",
 			"countries",
 			"disbursements",
-			"sdp_migrations",
 			"messages",
 			"organizations",
 			"payments",
 			"receiver_verifications",
 			"receiver_wallets",
 			"receivers",
+			"sdp_migrations",
 			"wallets",
 			"wallets_assets",
 		}
@@ -367,7 +370,12 @@ func Test_TenantHandler_Post(t *testing.T) {
 		require.NoError(t, err)
 		defer tenantSchemaConnectionPool.Close()
 
-		tenant.AssertRegisteredAssetsFixture(t, ctx, tenantSchemaConnectionPool, []string{"USDC:GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5", "XLM:"})
+		tenant.AssertRegisteredAssetsFixture(t, ctx, tenantSchemaConnectionPool, []string{
+			fmt.Sprintf("%s:%s", assets.EURCAssetCode, assets.EURCAssetIssuerTestnet),
+			fmt.Sprintf("%s:%s", assets.USDCAssetCode, assets.USDCAssetIssuerTestnet),
+			fmt.Sprintf("%s:", assets.XLMAssetCode),
+		},
+		)
 		tenant.AssertRegisteredWalletsFixture(t, ctx, tenantSchemaConnectionPool, []string{"Demo Wallet", "Vibrant Assist"})
 		tenant.AssertRegisteredUserFixture(t, ctx, tenantSchemaConnectionPool, "Owner", "Owner", "owner@email.org")
 	}
@@ -375,7 +383,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 	t.Run("returns BadRequest with invalid request body", func(t *testing.T) {
 		respBody := makeRequest(t, `{}`, http.StatusBadRequest)
 
-		expectedBody := `
+		expectedBody := fmt.Sprintf(`
 			{
 				"error": "invalid request body",
 				"extras": {
@@ -383,15 +391,17 @@ func Test_TenantHandler_Post(t *testing.T) {
 					"owner_email": "invalid email",
 					"owner_first_name": "owner_first_name is required",
 					"owner_last_name": "owner_last_name is required",
-					"organization_name": "organization_name is required"
+					"organization_name": "organization_name is required",
+					"distribution_account_type": "distribution_account_type is required. valid values are: %v"
 				}
 			}
-		`
+		`, schema.DistributionAccountTypes())
 		assert.JSONEq(t, expectedBody, string(respBody))
 	})
 
 	t.Run("provisions a new tenant successfully", func(t *testing.T) {
-		createMocks(t, nil)
+		accountType := schema.DistributionAccountStellarEnv
+		createMocks(t, accountType, nil)
 
 		orgName := "aid-org"
 		reqBody := fmt.Sprintf(`
@@ -401,11 +411,12 @@ func Test_TenantHandler_Post(t *testing.T) {
 				"owner_first_name": "Owner",
 				"owner_last_name": "Owner",
 				"organization_name": "My Aid Org",
+				"distribution_account_type": %q,
 				"base_url": "https://sdp-backend.stellar.org",
 				"sdp_ui_base_url": "https://sdp-ui.stellar.org",
 				"is_default": false
 			}
-		`, orgName)
+		`, orgName, accountType)
 
 		respBody := makeRequest(t, reqBody, http.StatusCreated)
 
@@ -428,14 +439,15 @@ func Test_TenantHandler_Post(t *testing.T) {
 				"distribution_account_status": %q
 			}
 		`, tnt.ID, orgName, tnt.CreatedAt.Format(time.RFC3339Nano), tnt.UpdatedAt.Format(time.RFC3339Nano),
-			distAcc, schema.DistributionAccountTypeEnvStellar, schema.DistributionAccountStatusActive)
+			distAccAddress, accountType, schema.AccountStatusActive)
 		assert.JSONEq(t, expectedRespBody, string(respBody))
 
 		assertMigrations(orgName)
 	})
 
 	t.Run("provisions a new tenant successfully - dynamically generates base URL and SDP UI base URL for tenant", func(t *testing.T) {
-		createMocks(t, nil)
+		accountType := schema.DistributionAccountStellarEnv
+		createMocks(t, accountType, nil)
 
 		orgName := "aid-org-two"
 		reqBody := fmt.Sprintf(`
@@ -445,9 +457,10 @@ func Test_TenantHandler_Post(t *testing.T) {
 				"owner_first_name": "Owner",
 				"owner_last_name": "Owner",
 				"organization_name": "My Aid Org 2",
+				"distribution_account_type": %q,
 				"is_default": false
 			}
-		`, orgName)
+		`, orgName, accountType)
 
 		respBody := makeRequest(t, reqBody, http.StatusCreated)
 
@@ -472,14 +485,15 @@ func Test_TenantHandler_Post(t *testing.T) {
 				"distribution_account_status": %q
 			}
 		`, tnt.ID, orgName, generatedURL, generatedUIURL, tnt.CreatedAt.Format(time.RFC3339Nano), tnt.UpdatedAt.Format(time.RFC3339Nano),
-			distAcc, schema.DistributionAccountTypeEnvStellar, schema.DistributionAccountStatusActive)
+			distAccAddress, accountType, schema.AccountStatusActive)
 		assert.JSONEq(t, expectedRespBody, string(respBody))
 
 		assertMigrations(orgName)
 	})
 
 	t.Run("provisions a new tenant successfully - dynamically generates only SDP UI base URL", func(t *testing.T) {
-		createMocks(t, nil)
+		accountType := schema.DistributionAccountStellarEnv
+		createMocks(t, accountType, nil)
 
 		orgName := "aid-org-three"
 		reqBody := fmt.Sprintf(`
@@ -489,10 +503,11 @@ func Test_TenantHandler_Post(t *testing.T) {
 				"owner_first_name": "Owner",
 				"owner_last_name": "Owner",
 				"organization_name": "My Aid Org 3",
+				"distribution_account_type": %q,
 				"base_url": %q,
 				"is_default": false
 			}
-		`, orgName, handler.BaseURL)
+		`, orgName, accountType, handler.BaseURL)
 
 		respBody := makeRequest(t, reqBody, http.StatusCreated)
 
@@ -516,14 +531,15 @@ func Test_TenantHandler_Post(t *testing.T) {
 				"distribution_account_status": %q
 			}
 		`, tnt.ID, orgName, handler.BaseURL, generatedUIURL, tnt.CreatedAt.Format(time.RFC3339Nano), tnt.UpdatedAt.Format(time.RFC3339Nano),
-			distAcc, schema.DistributionAccountTypeEnvStellar, schema.DistributionAccountStatusActive)
+			distAccAddress, accountType, schema.AccountStatusActive)
 		assert.JSONEq(t, expectedRespBody, string(respBody))
 
 		assertMigrations(orgName)
 	})
 
 	t.Run("provisions a new tenant successfully - dynamically generates only backend base URL", func(t *testing.T) {
-		createMocks(t, nil)
+		accountType := schema.DistributionAccountStellarEnv
+		createMocks(t, accountType, nil)
 
 		orgName := "aid-org-four"
 		reqBody := fmt.Sprintf(`
@@ -533,10 +549,11 @@ func Test_TenantHandler_Post(t *testing.T) {
 				"owner_first_name": "Owner",
 				"owner_last_name": "Owner",
 				"organization_name": "My Aid Org 4",
+				"distribution_account_type": %q,
 				"sdp_ui_base_url": %q,
 				"is_default": false
 			}
-		`, orgName, handler.SDPUIBaseURL)
+		`, orgName, accountType, handler.SDPUIBaseURL)
 
 		respBody := makeRequest(t, reqBody, http.StatusCreated)
 
@@ -560,26 +577,28 @@ func Test_TenantHandler_Post(t *testing.T) {
 				"distribution_account_status": %q
 			}
 		`, tnt.ID, orgName, generatedURL, handler.SDPUIBaseURL, tnt.CreatedAt.Format(time.RFC3339Nano), tnt.UpdatedAt.Format(time.RFC3339Nano),
-			distAcc, schema.DistributionAccountTypeEnvStellar, schema.DistributionAccountStatusActive)
+			distAccAddress, accountType, schema.AccountStatusActive)
 		assert.JSONEq(t, expectedRespBody, string(respBody))
 
 		assertMigrations(orgName)
 	})
 
 	t.Run("returns badRequest for duplicate tenant name", func(t *testing.T) {
-		createMocks(t, nil)
+		accountType := schema.DistributionAccountStellarEnv
+		createMocks(t, accountType, nil)
 
-		reqBody := `
+		reqBody := fmt.Sprintf(`
 			{
 				"name": "my-aid-org",
 				"owner_email": "owner@email.org",
 				"owner_first_name": "Owner",
 				"owner_last_name": "Owner",
 				"organization_name": "My Aid Org",
+				"distribution_account_type": %q,
 				"base_url": "https://backend.sdp.org",
 				"sdp_ui_base_url": "https://aid-org.sdp.org"
 			}
-		`
+		`, accountType)
 
 		// make first request to create tenant
 		_ = makeRequest(t, reqBody, http.StatusCreated)
@@ -589,7 +608,8 @@ func Test_TenantHandler_Post(t *testing.T) {
 	})
 
 	t.Run("logs and reports error when failing to send invitation message", func(t *testing.T) {
-		createMocks(t, errors.New("foobar"))
+		accountType := schema.DistributionAccountStellarEnv
+		createMocks(t, accountType, errors.New("foobar"))
 
 		orgName := "aid-org-five"
 		reqBody := fmt.Sprintf(`
@@ -601,9 +621,10 @@ func Test_TenantHandler_Post(t *testing.T) {
 				"organization_name": "My Aid Org",
 				"base_url": "https://sdp-backend.stellar.org",
 				"sdp_ui_base_url": "https://sdp-ui.stellar.org",
+				"distribution_account_type": %q,
 				"is_default": false
 			}
-		`, orgName)
+		`, orgName, accountType)
 
 		respBody := makeRequest(t, reqBody, http.StatusCreated)
 
@@ -626,17 +647,13 @@ func Test_TenantHandler_Post(t *testing.T) {
 				"distribution_account_status": %q
 			}
 		`, tnt.ID, orgName, tnt.CreatedAt.Format(time.RFC3339Nano), tnt.UpdatedAt.Format(time.RFC3339Nano),
-			distAcc, schema.DistributionAccountTypeEnvStellar, schema.DistributionAccountStatusActive)
+			distAccAddress, schema.DistributionAccountStellarEnv, schema.AccountStatusActive)
 		assert.JSONEq(t, expectedRespBody, string(respBody))
 
 		assertMigrations(orgName)
 	})
 
 	messengerClientMock.AssertExpectations(t)
-	distAccSigClient.AssertExpectations(t)
-	distAccResolver.AssertExpectations(t)
-	messengerClientMock.AssertExpectations(t)
-	crashTrackerMock.AssertExpectations(t)
 }
 
 func Test_TenantHandler_Patch_error(t *testing.T) {
@@ -1063,19 +1080,25 @@ func Test_TenantHandler_Delete(t *testing.T) {
 
 	tenantManagerMock := tenant.TenantManagerMock{}
 	horizonClientMock := horizonclient.MockClient{}
-	_, _, _, _, distAccResolver := signing.NewMockSignatureService(t)
+
+	_, _, distAccResolver := signing.NewMockSignatureService(t)
+	hostAccount := schema.NewDefaultHostAccount(keypair.MustRandom().Address())
+	distAccSvc := coreSvcMocks.NewMockDistributionAccountService(t)
 
 	handler := TenantsHandler{
 		Manager:                     &tenantManagerMock,
 		NetworkType:                 utils.TestnetNetworkType,
 		HorizonClient:               &horizonClientMock,
 		DistributionAccountResolver: distAccResolver,
+		DistributionAccountService:  distAccSvc,
 	}
 
 	r := chi.NewRouter()
 	r.Delete("/tenants/{id}", handler.Delete)
 	tntID := "tntID"
-	tntDistributionAcc := keypair.MustRandom().Address()
+	tntDistributionAccAddress := keypair.MustRandom().Address()
+	tntDistributionAcc := schema.NewDefaultStellarTransactionAccount(tntDistributionAccAddress)
+
 	deletedAt := time.Now()
 
 	testCases := []struct {
@@ -1139,47 +1162,44 @@ func Test_TenantHandler_Delete(t *testing.T) {
 				tntManagerMock.On("GetTenant", mock.Anything, &tenant.QueryParams{
 					Filters: map[tenant.FilterKey]interface{}{tenant.FilterKeyID: tntID},
 				}).
-					Return(&tenant.Tenant{ID: tntID, Status: tenant.DeactivatedTenantStatus, DistributionAccountAddress: &tntDistributionAcc}, nil).
+					Return(&tenant.Tenant{ID: tntID, Status: tenant.DeactivatedTenantStatus, DistributionAccountAddress: &tntDistributionAccAddress}, nil).
 					Once()
-				distAccResolver.On("HostDistributionAccount").Return("host-dist-account").Once()
-				horizonClientMock.On("AccountDetail", horizonclient.AccountRequest{AccountID: tntDistributionAcc}).
-					Return(horizon.Account{}, errors.New("foobar")).
-					Once()
+				distAccResolver.On("HostDistributionAccount").Return(hostAccount).Once()
+				distAccResolver.On("DistributionAccount", mock.Anything, tntID).Return(tntDistributionAcc, nil).Once()
+				distAccSvc.On("GetBalances", mock.Anything, &tntDistributionAcc).Return(nil, errors.New("foobar")).Once()
 			},
 			expectedStatus: http.StatusInternalServerError,
 		},
 		{
-			name: "tenant distribution account still has non-zero non-native balance",
+			name: "tenant distribution account still has non-zero non-native asset balance",
 			id:   tntID,
 			mockTntManagerFn: func(tntManagerMock *tenant.TenantManagerMock, _ *horizonclient.MockClient) {
 				tntManagerMock.On("GetTenant", mock.Anything, &tenant.QueryParams{
 					Filters: map[tenant.FilterKey]interface{}{tenant.FilterKeyID: tntID},
-				}).Return(&tenant.Tenant{ID: tntID, Status: tenant.DeactivatedTenantStatus, DistributionAccountAddress: &tntDistributionAcc}, nil).
+				}).Return(&tenant.Tenant{ID: tntID, Status: tenant.DeactivatedTenantStatus, DistributionAccountAddress: &tntDistributionAccAddress}, nil).
 					Once()
-				distAccResolver.On("HostDistributionAccount").Return("host-dist-account").Once()
-				horizonClientMock.On("AccountDetail", horizonclient.AccountRequest{AccountID: tntDistributionAcc}).
-					Return(horizon.Account{
-						Balances: []horizon.Balance{
-							{Asset: base.Asset{Type: "credit_alphanum4"}, Balance: "100.0000000"},
-						},
+				distAccResolver.On("HostDistributionAccount").Return(hostAccount).Once()
+				distAccResolver.On("DistributionAccount", mock.Anything, tntID).Return(tntDistributionAcc, nil).Once()
+				distAccSvc.On("GetBalances", mock.Anything, &tntDistributionAcc).
+					Return(map[data.Asset]float64{
+						{Code: assets.USDCAssetCode, Issuer: assets.USDCAssetIssuerTestnet}: 100.0,
 					}, nil).Once()
 			},
 			expectedStatus: http.StatusBadRequest,
 		},
 		{
-			name: "tenant distribution account still has native balance above the minimum threshold",
+			name: "tenant distribution account still has native asset balance above the minimum threshold",
 			id:   tntID,
 			mockTntManagerFn: func(tntManagerMock *tenant.TenantManagerMock, _ *horizonclient.MockClient) {
 				tntManagerMock.On("GetTenant", mock.Anything, &tenant.QueryParams{
 					Filters: map[tenant.FilterKey]interface{}{tenant.FilterKeyID: tntID},
-				}).Return(&tenant.Tenant{ID: tntID, Status: tenant.DeactivatedTenantStatus, DistributionAccountAddress: &tntDistributionAcc}, nil).
+				}).Return(&tenant.Tenant{ID: tntID, Status: tenant.DeactivatedTenantStatus, DistributionAccountAddress: &tntDistributionAccAddress}, nil).
 					Once()
-				distAccResolver.On("HostDistributionAccount").Return("host-dist-account").Once()
-				horizonClientMock.On("AccountDetail", horizonclient.AccountRequest{AccountID: tntDistributionAcc}).
-					Return(horizon.Account{
-						Balances: []horizon.Balance{
-							{Asset: base.Asset{Type: "native"}, Balance: "120.0000000"},
-						},
+				distAccResolver.On("HostDistributionAccount").Return(hostAccount).Once()
+				distAccResolver.On("DistributionAccount", mock.Anything, tntID).Return(tntDistributionAcc, nil).Once()
+				distAccSvc.On("GetBalances", mock.Anything, &tntDistributionAcc).
+					Return(map[data.Asset]float64{
+						{Code: "XLM", Issuer: ""}: 120.0,
 					}, nil).Once()
 			},
 			expectedStatus: http.StatusBadRequest,
@@ -1191,12 +1211,12 @@ func Test_TenantHandler_Delete(t *testing.T) {
 				tntManagerMock.On("GetTenant", mock.Anything, &tenant.QueryParams{
 					Filters: map[tenant.FilterKey]interface{}{tenant.FilterKeyID: tntID},
 				}).
-					Return(&tenant.Tenant{ID: tntID, Status: tenant.DeactivatedTenantStatus, DistributionAccountAddress: &tntDistributionAcc}, nil).
+					Return(&tenant.Tenant{ID: tntID, Status: tenant.DeactivatedTenantStatus, DistributionAccountAddress: &tntDistributionAccAddress}, nil).
 					Once()
-				distAccResolver.On("HostDistributionAccount").Return("host-dist-account").Once()
-				horizonClientMock.On("AccountDetail", horizonclient.AccountRequest{AccountID: tntDistributionAcc}).
-					Return(horizon.Account{Balances: make([]horizon.Balance, 0)}, nil).
-					Once()
+				distAccResolver.On("HostDistributionAccount").Return(hostAccount).Once()
+				distAccResolver.On("DistributionAccount", mock.Anything, tntID).Return(tntDistributionAcc, nil).Once()
+				distAccSvc.On("GetBalances", mock.Anything, &tntDistributionAcc).
+					Return(map[data.Asset]float64{}, nil).Once()
 				tntManagerMock.On("SoftDeleteTenantByID", mock.Anything, tntID).
 					Return(nil, errors.New("foobar")).
 					Once()
@@ -1210,14 +1230,15 @@ func Test_TenantHandler_Delete(t *testing.T) {
 				tntManagerMock.On("GetTenant", mock.Anything, &tenant.QueryParams{
 					Filters: map[tenant.FilterKey]interface{}{tenant.FilterKeyID: tntID},
 				}).
-					Return(&tenant.Tenant{ID: tntID, Status: tenant.DeactivatedTenantStatus, DistributionAccountAddress: &tntDistributionAcc}, nil).
+					Return(&tenant.Tenant{ID: tntID, Status: tenant.DeactivatedTenantStatus, DistributionAccountAddress: &tntDistributionAccAddress}, nil).
 					Once()
-				distAccResolver.On("HostDistributionAccount").Return(tntDistributionAcc).Once()
+				hAcc := schema.NewDefaultHostAccount(tntDistributionAccAddress)
+				distAccResolver.On("HostDistributionAccount").Return(hAcc).Once()
 				tntManagerMock.On("SoftDeleteTenantByID", mock.Anything, tntID).
 					Return(&tenant.Tenant{
 						ID:                         tntID,
 						Status:                     tenant.DeactivatedTenantStatus,
-						DistributionAccountAddress: &tntDistributionAcc,
+						DistributionAccountAddress: &tntDistributionAccAddress,
 						DeletedAt:                  &deletedAt,
 					}, nil).
 					Once()
@@ -1231,17 +1252,17 @@ func Test_TenantHandler_Delete(t *testing.T) {
 				tntManagerMock.On("GetTenant", mock.Anything, &tenant.QueryParams{
 					Filters: map[tenant.FilterKey]interface{}{tenant.FilterKeyID: tntID},
 				}).
-					Return(&tenant.Tenant{ID: tntID, Status: tenant.DeactivatedTenantStatus, DistributionAccountAddress: &tntDistributionAcc}, nil).
+					Return(&tenant.Tenant{ID: tntID, Status: tenant.DeactivatedTenantStatus, DistributionAccountAddress: &tntDistributionAccAddress}, nil).
 					Once()
-				distAccResolver.On("HostDistributionAccount").Return("host-dist-account").Once()
-				horizonClientMock.On("AccountDetail", horizonclient.AccountRequest{AccountID: tntDistributionAcc}).
-					Return(horizon.Account{Balances: make([]horizon.Balance, 0)}, nil).
-					Once()
+				distAccResolver.On("HostDistributionAccount").Return(hostAccount).Once()
+				distAccResolver.On("DistributionAccount", mock.Anything, tntID).Return(tntDistributionAcc, nil).Once()
+				distAccSvc.On("GetBalances", mock.Anything, &tntDistributionAcc).
+					Return(map[data.Asset]float64{}, nil).Once()
 				tntManagerMock.On("SoftDeleteTenantByID", mock.Anything, tntID).
 					Return(&tenant.Tenant{
 						ID:                         tntID,
 						Status:                     tenant.DeactivatedTenantStatus,
-						DistributionAccountAddress: &tntDistributionAcc,
+						DistributionAccountAddress: &tntDistributionAccAddress,
 						DeletedAt:                  &deletedAt,
 					}, nil).
 					Once()

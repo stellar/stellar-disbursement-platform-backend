@@ -1,0 +1,145 @@
+name: Single-tenant to Multi-tenant
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+      - "release/**"
+      - "releases/**"
+      - "hotfix/**"
+  pull_request:
+
+env:
+  USER_EMAIL: "sdp_user@stellar.org"
+  USER_PASSWORD: "mockPassword123!"
+  DATABASE_URL: "postgres://postgres@db:5432/e2e-sdp?sslmode=disable"
+  DISTRIBUTION_ACCOUNT_TYPE: "DISTRIBUTION_ACCOUNT.STELLAR.ENV"
+  DISTRIBUTION_PUBLIC_KEY: ${{ vars.DISTRIBUTION_PUBLIC_KEY }}
+  DISTRIBUTION_SEED: ${{ vars.DISTRIBUTION_SEED }}
+  CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE: ${{ vars.DISTRIBUTION_SEED }}
+  SEP10_SIGNING_PUBLIC_KEY: ${{ vars.SEP10_SIGNING_PUBLIC_KEY }}
+  SEP10_SIGNING_PRIVATE_KEY: ${{ vars.SEP10_SIGNING_PRIVATE_KEY }}
+
+jobs:
+  db-migration:
+    runs-on: ubuntu-latest
+    environment: "Receiver Registration - E2E Integration Tests (Stellar)"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Cleanup data
+        working-directory: internal/integrationtests/docker
+        run: docker-compose -f docker-compose-e2e-tests.yml down -v
+        shell: bash
+
+      - name: Run Docker Compose for SDP, Anchor Platform and TSS
+        working-directory: internal/integrationtests/docker
+        run: docker-compose -f docker-compose-e2e-tests.yml up --build -V -d
+        shell: bash
+
+      - name: Install curl
+        run: sudo apt-get update && sudo apt-get install -y curl
+        shell: bash
+
+      - name: Copy DB Dump to Container and Restore
+        run: |
+          docker cp internal/integrationtests/resources/single_tenant_dump.sql e2e-sdp-v2-database:/tmp/single_tenant_dump.sql
+          docker exec e2e-sdp-v2-database bash -c "psql -d $DATABASE_URL -f /tmp/single_tenant_dump.sql"
+
+      - name: Provision New Tenant
+        run: |
+          adminAccount="SDP-admin"
+          adminApiKey="api_key_1234567890"
+          encodedCredentials=$(echo -n "$adminAccount:$adminApiKey" | base64)
+          AuthHeader="Authorization: Basic $encodedCredentials"
+          tenant="migrated-tenant"
+          baseURL="http://$tenant.stellar.local:8000"
+          sdpUIBaseURL="http://$tenant.stellar.local:3000"
+          ownerEmail="init_owner@$tenant.local"
+          AdminTenantURL="http://localhost:8003/tenants"
+          response=$(curl -s -w "\n%{http_code}" -X POST $AdminTenantURL \
+            -H "Content-Type: application/json" \
+            -H "$AuthHeader" \
+            -d '{
+              "name": "'"$tenant"'",
+              "organization_name": "'"$tenant"'",
+              "base_url": "'"$baseURL"'",
+              "sdp_ui_base_url": "'"$sdpUIBaseURL"'",
+              "owner_email": "'"$ownerEmail"'",
+              "owner_first_name": "jane",
+              "owner_last_name": "doe",
+              "distribution_account_type": "DISTRIBUTION_ACCOUNT.STELLAR.DB_VAULT"
+            }')
+
+          http_code=$(echo "$response" | tail -n1)
+          response_body=$(echo "$response" | sed '$d')
+
+          if [[ "$http_code" -ge 200 && "$http_code" -lt 300 ]]; then
+              echo "✅ Tenant $tenant created successfully."
+              echo "🔗 You can now reset the password for the owner $ownerEmail on $sdpUIBaseURL/forgot-password"
+              echo "Response body: $response_body"
+          else
+              echo "❌ Failed to create tenant $tenant. HTTP status code: $http_code"
+              echo "Server response: $response_body"
+              exit 1
+          fi
+
+      - name: Run Migration
+        run: |
+          docker exec e2e-sdp-v2-database bash -c "psql -d $DATABASE_URL -c \"SELECT admin.migrate_tenant_data_from_v1_to_v2('migrated-tenant');\""
+
+      - name: Verify Row Counts
+        run: |
+          submitter_public_count=$(docker exec e2e-sdp-v2-database bash -c "psql -d $DATABASE_URL -t -c 'SELECT COUNT(*) FROM public.submitter_transactions;'")
+          submitter_tss_count=$(docker exec e2e-sdp-v2-database bash -c "psql -d $DATABASE_URL -t -c 'SELECT COUNT(*) FROM tss.submitter_transactions;'")
+          receiver_public_count=$(docker exec e2e-sdp-v2-database bash -c "psql -d $DATABASE_URL -t -c 'SELECT COUNT(*) FROM public.receivers;'")
+          receiver_migrated_count=$(docker exec e2e-sdp-v2-database bash -c "psql -d $DATABASE_URL -t -c 'SELECT COUNT(*) FROM \"sdp_migrated-tenant\".receivers;'")
+
+          if [ "$submitter_public_count" -eq "$submitter_tss_count" ] && [ "$submitter_public_count" -gt 0 ]; then
+              echo "✅ submitter_transactions row counts match and are greater than zero."
+          else
+              echo "❌ submitter_transactions row counts do not match or are not greater than zero."
+              exit 1
+          fi
+
+          if [ "$receiver_public_count" -eq "$receiver_migrated_count" ] && [ "$receiver_public_count" -gt 0 ]; then
+              echo "✅ receivers row counts match and are greater than zero."
+          else
+              echo "❌ receivers row counts do not match or are not greater than zero."
+              exit 1
+          fi
+
+      - name: Exclude Deprecated Tables
+        run: |
+          docker exec e2e-sdp-v2-database bash -c "psql -d $DATABASE_URL -c \"
+            BEGIN TRANSACTION;
+              DROP TABLE public.messages CASCADE;
+              DROP TABLE public.payments CASCADE;
+              DROP TABLE public.disbursements CASCADE;
+              DROP TABLE public.receiver_verifications CASCADE;
+              DROP TABLE public.receiver_wallets CASCADE;
+              DROP TABLE public.auth_user_password_reset CASCADE;
+              DROP TABLE public.auth_user_mfa_codes CASCADE;
+              DROP TABLE public.receivers CASCADE;
+              DROP TABLE public.auth_users CASCADE;
+              DROP TABLE public.wallets_assets CASCADE;
+              DROP TABLE public.assets CASCADE;
+              DROP TABLE public.wallets CASCADE;
+              DROP TABLE public.organizations CASCADE;
+              DROP TABLE public.gorp_migrations CASCADE;
+              DROP TABLE public.auth_migrations CASCADE;
+              DROP TABLE public.countries CASCADE;
+              DROP TABLE public.submitter_transactions CASCADE;
+              DROP TABLE public.channel_accounts CASCADE;
+            COMMIT;
+          \""
+
+      - name: Docker logs
+        if: always()
+        working-directory: internal/integrationtests/docker
+        run: |
+          docker-compose -f docker-compose-e2e-tests.yml logs
+          docker-compose -f docker-compose-e2e-tests.yml down -v
+        shell: bash

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"reflect"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -43,7 +44,12 @@ func UnwrapInterfaceToPointer[T any](i interface{}) *T {
 
 // IsEmpty checks if a value is empty.
 func IsEmpty[T any](v T) bool {
-	return reflect.ValueOf(&v).Elem().IsZero()
+	valueType := reflect.TypeOf(v)
+	if valueType == nil { // this condition will be true when v is nil and valueType is either `any` or `interface{}`
+		return true
+	}
+
+	return reflect.DeepEqual(v, reflect.Zero(valueType).Interface())
 }
 
 func MapSlice[T any, M any](a []T, f func(T) M) []M {
@@ -82,4 +88,13 @@ func GetTypeName(v interface{}) string {
 	}
 
 	return fullTypeName
+}
+
+// StringPtr returns a pointer to a string
+func StringPtr(s string) *string {
+	return &s
+}
+
+func TimePtr(t time.Time) *time.Time {
+	return &t
 }

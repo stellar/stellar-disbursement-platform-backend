@@ -37,22 +37,22 @@ func Test_logErrorResponses(t *testing.T) {
 
 func Test_readDisbursementCSV(t *testing.T) {
 	t.Run("error trying read csv file", func(t *testing.T) {
-		filePath := path.Join("files", "invalid_file.csv")
+		filePath := path.Join("resources", "invalid_file.csv")
 		expectedError := fmt.Sprintf("error reading csv file: open %s: file does not exist", filePath)
 
-		data, err := readDisbursementCSV("files", "invalid_file.csv")
+		data, err := readDisbursementCSV("resources", "invalid_file.csv")
 		require.EqualError(t, err, expectedError)
 		assert.Empty(t, data)
 	})
 
 	t.Run("error opening empty csv file", func(t *testing.T) {
-		data, err := readDisbursementCSV("files", "empty_csv_file.csv")
+		data, err := readDisbursementCSV("resources", "empty_csv_file.csv")
 		require.EqualError(t, err, "error parsing csv file: empty csv file given")
 		assert.Empty(t, data)
 	})
 
 	t.Run("reading csv file", func(t *testing.T) {
-		data, err := readDisbursementCSV("files", "disbursement_integration_tests.csv")
+		data, err := readDisbursementCSV("resources", "disbursement_integration_tests.csv")
 		require.NoError(t, err)
 		assert.Equal(t, data[0].Amount, "0.1")
 		assert.Equal(t, data[0].Phone, "+12025550191")

@@ -48,7 +48,6 @@ services:
       ADMIN_PORT: "8003"
       INSTANCE_NAME: "SDP Testnet on Docker"
       TENANT_XLM_BOOTSTRAP_AMOUNT: 5
-      DISTRIBUTION_SIGNER_TYPE: ${DISTRIBUTION_SIGNER_TYPE:-DISTRIBUTION_ACCOUNT_ENV}
       SINGLE_TENANT_MODE: "false"
 
       # scheduler options
@@ -215,10 +214,12 @@ services:
         kafka-topics.sh --create --if-not-exists --topic events.receiver-wallets.new_invitation --bootstrap-server kafka:9092
         kafka-topics.sh --create --if-not-exists --topic events.payment.payment_completed --bootstrap-server kafka:9092
         kafka-topics.sh --create --if-not-exists --topic events.payment.ready_to_pay --bootstrap-server kafka:9092
+        kafka-topics.sh --create --if-not-exists --topic events.payment.circle_ready_to_pay --bootstrap-server kafka:9092
       
         kafka-topics.sh --create --if-not-exists --topic events.receiver-wallets.new_invitation.dlq --bootstrap-server kafka:9092
         kafka-topics.sh --create --if-not-exists --topic events.payment.payment_completed.dlq --bootstrap-server kafka:9092
         kafka-topics.sh --create --if-not-exists --topic events.payment.ready_to_pay.dlq --bootstrap-server kafka:9092
+        kafka-topics.sh --create --if-not-exists --topic events.payment.circle_ready_to_pay.dlq --bootstrap-server kafka:9092
       "
   demo-wallet:
     build:

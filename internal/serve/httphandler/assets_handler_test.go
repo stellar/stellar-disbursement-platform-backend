@@ -99,7 +99,6 @@ func Test_AssetsHandlerGetAssets(t *testing.T) {
 func Test_AssetHandler_CreateAsset(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
-
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
@@ -108,8 +107,9 @@ func Test_AssetHandler_CreateAsset(t *testing.T) {
 	require.NoError(t, err)
 
 	distributionKP := keypair.MustRandom()
+	distAccount := schema.NewDefaultStellarTransactionAccount(distributionKP.Address())
 	horizonClientMock := &horizonclient.MockClient{}
-	signatureService, _, distAccSigClient, _, distAccResolver := signing.NewMockSignatureService(t)
+	signatureService, sigRouter, distAccResolver := signing.NewMockSignatureService(t)
 	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
 
 	handler := &AssetsHandler{
@@ -127,9 +127,37 @@ func Test_AssetHandler_CreateAsset(t *testing.T) {
 	issuer := "GBHC5ADV2XYITXCYC5F6X6BM2OYTYHV4ZU2JF6QWJORJQE2O7RKH2LAQ"
 	ctx := context.Background()
 
+	t.Run("failed to get distribution account", func(t *testing.T) {
+		distAccResolver.On("DistributionAccountFromContext", ctx).
+			Return(schema.TransactionAccount{}, errors.New("foobar")).Once()
+
+		rr := httptest.NewRecorder()
+		requestBody, _ := json.Marshal(AssetRequest{code, issuer})
+
+		req, _ := http.NewRequest(http.MethodPost, "/assets", strings.NewReader(string(requestBody)))
+		http.HandlerFunc(handler.CreateAsset).ServeHTTP(rr, req)
+
+		assert.Equal(t, http.StatusInternalServerError, rr.Result().StatusCode)
+		assert.Contains(t, rr.Body.String(), "Cannot resolve distribution account from context")
+	})
+
+	t.Run("cannot process request if distribution account is not a native-Stellar account", func(t *testing.T) {
+		distAccResolver.On("DistributionAccountFromContext", ctx).
+			Return(schema.TransactionAccount{Type: schema.DistributionAccountCircleDBVault}, nil).Once()
+
+		rr := httptest.NewRecorder()
+		requestBody, _ := json.Marshal(AssetRequest{code, issuer})
+
+		req, _ := http.NewRequest(http.MethodPost, "/assets", strings.NewReader(string(requestBody)))
+		http.HandlerFunc(handler.CreateAsset).ServeHTTP(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Result().StatusCode)
+		assert.Contains(t, rr.Body.String(), "Distribution account affiliated with tenant is not a Stellar account")
+	})
+
 	distAccResolver.
 		On("DistributionAccountFromContext", ctx).
-		Return(schema.NewDefaultStellarDistributionAccount(distributionKP.Address()), nil)
+		Return(distAccount, nil)
 
 	t.Run("successfully create an asset", func(t *testing.T) {
 		getEntries := log.DefaultLogger.StartTest(log.InfoLevel)
@@ -162,8 +190,8 @@ func Test_AssetHandler_CreateAsset(t *testing.T) {
 		signedTx, err := tx.Sign(network.TestNetworkPassphrase, distributionKP)
 		require.NoError(t, err)
 
-		distAccSigClient.
-			On("SignStellarTransaction", mock.Anything, tx, distributionKP.Address()).
+		sigRouter.
+			On("SignStellarTransaction", mock.Anything, tx, distAccount).
 			Return(signedTx, nil).
 			Once()
 
@@ -348,8 +376,8 @@ func Test_AssetHandler_CreateAsset(t *testing.T) {
 		signedTx, err := tx.Sign(network.TestNetworkPassphrase, distributionKP)
 		require.NoError(t, err)
 
-		distAccSigClient.
-			On("SignStellarTransaction", mock.Anything, tx, distributionKP.Address()).
+		sigRouter.
+			On("SignStellarTransaction", mock.Anything, tx, distAccount).
 			Return(signedTx, nil).
 			Twice()
 
@@ -423,8 +451,8 @@ func Test_AssetHandler_CreateAsset(t *testing.T) {
 		signedTx, err := tx.Sign(network.TestNetworkPassphrase, distributionKP)
 		require.NoError(t, err)
 
-		distAccSigClient.
-			On("SignStellarTransaction", mock.Anything, tx, distributionKP.Address()).
+		sigRouter.
+			On("SignStellarTransaction", mock.Anything, tx, distAccount).
 			Return(signedTx, nil).
 			Once()
 
@@ -530,8 +558,9 @@ func Test_AssetHandler_DeleteAsset(t *testing.T) {
 	require.NoError(t, err)
 
 	distributionKP := keypair.MustRandom()
+	distAccount := schema.NewDefaultStellarTransactionAccount(distributionKP.Address())
 	horizonClientMock := &horizonclient.MockClient{}
-	signatureService, _, distAccSigClient, _, distAccResolver := signing.NewMockSignatureService(t)
+	signatureService, sigRouter, distAccResolver := signing.NewMockSignatureService(t)
 	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
 
 	handler := &AssetsHandler{
@@ -548,9 +577,39 @@ func Test_AssetHandler_DeleteAsset(t *testing.T) {
 	r := chi.NewRouter()
 	r.Delete("/assets/{id}", handler.DeleteAsset)
 
+	t.Run("failed to get distribution account", func(t *testing.T) {
+		data.DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
+		asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "ABC", "GBHC5ADV2XYITXCYC5F6X6BM2OYTYHV4ZU2JF6QWJORJQE2O7RKH2LAQ")
+
+		distAccResolver.On("DistributionAccountFromContext", mock.AnythingOfType("*context.valueCtx")).
+			Return(schema.TransactionAccount{}, errors.New("foobar")).Once()
+
+		rr := httptest.NewRecorder()
+		req, _ := http.NewRequest(http.MethodDelete, fmt.Sprintf("/assets/%s", asset.ID), nil)
+		r.ServeHTTP(rr, req)
+
+		assert.Equal(t, http.StatusInternalServerError, rr.Result().StatusCode)
+		assert.Contains(t, rr.Body.String(), "Cannot resolve distribution account from context")
+	})
+
+	t.Run("cannot process request if distribution account is not a native-Stellar account", func(t *testing.T) {
+		data.DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
+		asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "ABC", "GBHC5ADV2XYITXCYC5F6X6BM2OYTYHV4ZU2JF6QWJORJQE2O7RKH2LAQ")
+
+		distAccResolver.On("DistributionAccountFromContext", mock.AnythingOfType("*context.valueCtx")).
+			Return(schema.TransactionAccount{Type: schema.DistributionAccountCircleDBVault}, nil).Once()
+
+		rr := httptest.NewRecorder()
+		req, _ := http.NewRequest(http.MethodDelete, fmt.Sprintf("/assets/%s", asset.ID), nil)
+		r.ServeHTTP(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Result().StatusCode)
+		assert.Contains(t, rr.Body.String(), "Distribution account affiliated with tenant is not a Stellar account")
+	})
+
 	distAccResolver.
 		On("DistributionAccountFromContext", mock.AnythingOfType("*context.valueCtx")).
-		Return(schema.NewDefaultStellarDistributionAccount(distributionKP.Address()), nil)
+		Return(distAccount, nil)
 
 	t.Run("successfully delete an asset and remove the trustline", func(t *testing.T) {
 		data.DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
@@ -586,8 +645,8 @@ func Test_AssetHandler_DeleteAsset(t *testing.T) {
 		signedTx, err := tx.Sign(network.TestNetworkPassphrase, distributionKP)
 		require.NoError(t, err)
 
-		distAccSigClient.
-			On("SignStellarTransaction", mock.Anything, tx, distributionKP.Address()).
+		sigRouter.
+			On("SignStellarTransaction", mock.Anything, tx, distAccount).
 			Return(signedTx, nil).
 			Once()
 
@@ -738,8 +797,9 @@ func Test_AssetHandler_DeleteAsset(t *testing.T) {
 
 func Test_AssetHandler_handleUpdateAssetTrustlineForDistributionAccount(t *testing.T) {
 	distributionKP := keypair.MustRandom()
+	distAccount := schema.NewDefaultStellarTransactionAccount(distributionKP.Address())
 	horizonClientMock := &horizonclient.MockClient{}
-	signatureService, _, distAccSigClient, _, distAccResolver := signing.NewMockSignatureService(t)
+	signatureService, sigRouter, _ := signing.NewMockSignatureService(t)
 	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
 
 	handler := &AssetsHandler{
@@ -764,28 +824,21 @@ func Test_AssetHandler_handleUpdateAssetTrustlineForDistributionAccount(t *testi
 
 	ctx := context.Background()
 
+	t.Run("returns error if distribution account is not a native Stellar account", func(t *testing.T) {
+		err := handler.handleUpdateAssetTrustlineForDistributionAccount(
+			ctx, nil, nil, schema.TransactionAccount{Type: schema.DistributionAccountCircleDBVault})
+		assert.EqualError(t, err, "distribution account is not a native Stellar account")
+	})
+
 	t.Run("returns error if no asset is provided", func(t *testing.T) {
-		err := handler.handleUpdateAssetTrustlineForDistributionAccount(ctx, nil, nil)
+		err := handler.handleUpdateAssetTrustlineForDistributionAccount(ctx, nil, nil, distAccount)
 		assert.EqualError(t, err, "should provide at least one asset")
 	})
 
 	t.Run("returns error if the assets are the same", func(t *testing.T) {
-		err := handler.handleUpdateAssetTrustlineForDistributionAccount(ctx, assetToRemoveTrustline, assetToRemoveTrustline)
+		err := handler.handleUpdateAssetTrustlineForDistributionAccount(ctx, assetToRemoveTrustline, assetToRemoveTrustline, distAccount)
 		assert.EqualError(t, err, "should provide different assets")
 	})
-
-	t.Run("returns error if fails getting distribution account from the resolver", func(t *testing.T) {
-		distAccResolver.
-			On("DistributionAccountFromContext", ctx).
-			Return(nil, errors.New("resolver error")).
-			Once()
-		err := handler.handleUpdateAssetTrustlineForDistributionAccount(ctx, assetToAddTrustline, assetToRemoveTrustline)
-		require.EqualError(t, err, "resolving distribution account from context: resolver error")
-	})
-
-	distAccResolver.
-		On("DistributionAccountFromContext", ctx).
-		Return(schema.NewDefaultStellarDistributionAccount(distributionKP.Address()), nil)
 
 	t.Run("returns error if fails getting distribution account details", func(t *testing.T) {
 		horizonClientMock.
@@ -803,7 +856,7 @@ func Test_AssetHandler_handleUpdateAssetTrustlineForDistributionAccount(t *testi
 			}).
 			Once()
 
-		err := handler.handleUpdateAssetTrustlineForDistributionAccount(ctx, assetToAddTrustline, assetToRemoveTrustline)
+		err := handler.handleUpdateAssetTrustlineForDistributionAccount(ctx, assetToAddTrustline, assetToRemoveTrustline, distAccount)
 		assert.EqualError(t, err, "getting distribution account details: horizon error: \"Error occurred\" - check horizon.Error.Problem for more information")
 	})
 
@@ -846,8 +899,8 @@ func Test_AssetHandler_handleUpdateAssetTrustlineForDistributionAccount(t *testi
 		signedTx, err := tx.Sign(network.TestNetworkPassphrase, distributionKP)
 		require.NoError(t, err)
 
-		distAccSigClient.
-			On("SignStellarTransaction", ctx, tx, distributionKP.Address()).
+		sigRouter.
+			On("SignStellarTransaction", ctx, tx, distAccount).
 			Return(signedTx, nil).
 			Once()
 
@@ -894,7 +947,7 @@ func Test_AssetHandler_handleUpdateAssetTrustlineForDistributionAccount(t *testi
 			}).
 			Once()
 
-		err = handler.handleUpdateAssetTrustlineForDistributionAccount(ctx, assetToAddTrustline, assetToRemoveTrustline)
+		err = handler.handleUpdateAssetTrustlineForDistributionAccount(ctx, assetToAddTrustline, assetToRemoveTrustline, distAccount)
 		assert.EqualError(t, err, "submitting change trust transaction: submitting change trust transaction to network: horizon response error: StatusCode=0, Extras=transaction: tx_failed - operation codes: [ op_no_issuer ]")
 	})
 
@@ -937,8 +990,8 @@ func Test_AssetHandler_handleUpdateAssetTrustlineForDistributionAccount(t *testi
 		signedTx, err := tx.Sign(network.TestNetworkPassphrase, distributionKP)
 		require.NoError(t, err)
 
-		distAccSigClient.
-			On("SignStellarTransaction", ctx, tx, distributionKP.Address()).
+		sigRouter.
+			On("SignStellarTransaction", ctx, tx, distAccount).
 			Return(signedTx, nil).
 			Once()
 
@@ -973,7 +1026,7 @@ func Test_AssetHandler_handleUpdateAssetTrustlineForDistributionAccount(t *testi
 			Return(horizon.Transaction{}, nil).
 			Once()
 
-		err = handler.handleUpdateAssetTrustlineForDistributionAccount(ctx, assetToAddTrustline, assetToRemoveTrustline)
+		err = handler.handleUpdateAssetTrustlineForDistributionAccount(ctx, assetToAddTrustline, assetToRemoveTrustline, distAccount)
 		assert.NoError(t, err)
 	})
 
@@ -1006,7 +1059,7 @@ func Test_AssetHandler_handleUpdateAssetTrustlineForDistributionAccount(t *testi
 			}, nil).
 			Once()
 
-		err := handler.handleUpdateAssetTrustlineForDistributionAccount(ctx, assetToAddTrustline, assetToRemoveTrustline)
+		err := handler.handleUpdateAssetTrustlineForDistributionAccount(ctx, assetToAddTrustline, assetToRemoveTrustline, distAccount)
 		assert.EqualError(t, err, errCouldNotRemoveTrustline.Error())
 	})
 
@@ -1033,7 +1086,7 @@ func Test_AssetHandler_handleUpdateAssetTrustlineForDistributionAccount(t *testi
 			}, nil).
 			Once()
 
-		err := handler.handleUpdateAssetTrustlineForDistributionAccount(ctx, nil, assetToRemoveTrustline)
+		err := handler.handleUpdateAssetTrustlineForDistributionAccount(ctx, nil, assetToRemoveTrustline, distAccount)
 		assert.NoError(t, err)
 
 		entries := getEntries()
@@ -1070,7 +1123,7 @@ func Test_AssetHandler_handleUpdateAssetTrustlineForDistributionAccount(t *testi
 			}, nil).
 			Once()
 
-		err := handler.handleUpdateAssetTrustlineForDistributionAccount(ctx, assetToAddTrustline, nil)
+		err := handler.handleUpdateAssetTrustlineForDistributionAccount(ctx, assetToAddTrustline, nil, distAccount)
 		assert.NoError(t, err)
 	})
 
@@ -1111,7 +1164,7 @@ func Test_AssetHandler_handleUpdateAssetTrustlineForDistributionAccount(t *testi
 		// add trustline
 		getEntries := log.DefaultLogger.StartTest(log.WarnLevel)
 
-		err := handler.handleUpdateAssetTrustlineForDistributionAccount(ctx, nativeAsset, nil)
+		err := handler.handleUpdateAssetTrustlineForDistributionAccount(ctx, nativeAsset, nil, distAccount)
 		require.NoError(t, err)
 
 		entries := getEntries()
@@ -1121,7 +1174,7 @@ func Test_AssetHandler_handleUpdateAssetTrustlineForDistributionAccount(t *testi
 		// remove trustline
 		getEntries = log.DefaultLogger.StartTest(log.WarnLevel)
 
-		err = handler.handleUpdateAssetTrustlineForDistributionAccount(ctx, nil, nativeAsset)
+		err = handler.handleUpdateAssetTrustlineForDistributionAccount(ctx, nil, nativeAsset, distAccount)
 		require.NoError(t, err)
 
 		entries = getEntries()
@@ -1134,8 +1187,9 @@ func Test_AssetHandler_handleUpdateAssetTrustlineForDistributionAccount(t *testi
 
 func Test_AssetHandler_submitChangeTrustTransaction(t *testing.T) {
 	distributionKP := keypair.MustRandom()
+	distAccount := schema.NewDefaultStellarTransactionAccount(distributionKP.Address())
 	horizonClientMock := &horizonclient.MockClient{}
-	signatureService, _, distAccSigClient, _, distAccResolver := signing.NewMockSignatureService(t)
+	signatureService, sigRouter, _ := signing.NewMockSignatureService(t)
 	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
 
 	handler := &AssetsHandler{
@@ -1177,22 +1231,9 @@ func Test_AssetHandler_submitChangeTrustTransaction(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("returns error if no change trust operations is passed", func(t *testing.T) {
-		err := handler.submitChangeTrustTransaction(ctx, acc, []*txnbuild.ChangeTrust{})
+		err := handler.submitChangeTrustTransaction(ctx, acc, []*txnbuild.ChangeTrust{}, distAccount)
 		assert.EqualError(t, err, "should have at least one change trust operation")
 	})
-
-	t.Run("returns error if fails getting distribution account from the resolver", func(t *testing.T) {
-		distAccResolver.
-			On("DistributionAccountFromContext", ctx).
-			Return(nil, errors.New("resolver error")).
-			Once()
-		err := handler.submitChangeTrustTransaction(ctx, acc, []*txnbuild.ChangeTrust{{}})
-		require.EqualError(t, err, "resolving distribution account from context: resolver error")
-	})
-
-	distAccResolver.
-		On("DistributionAccountFromContext", ctx).
-		Return(schema.NewDefaultStellarDistributionAccount(distributionKP.Address()), nil)
 
 	t.Run("returns error when fails signing transaction", func(t *testing.T) {
 		tx, err := txnbuild.NewTransaction(
@@ -1220,8 +1261,8 @@ func Test_AssetHandler_submitChangeTrustTransaction(t *testing.T) {
 		)
 		require.NoError(t, err)
 
-		distAccSigClient.
-			On("SignStellarTransaction", ctx, tx, distributionKP.Address()).
+		sigRouter.
+			On("SignStellarTransaction", ctx, tx, distAccount).
 			Return(nil, errors.New("unexpected error")).
 			Once()
 
@@ -1236,7 +1277,7 @@ func Test_AssetHandler_submitChangeTrustTransaction(t *testing.T) {
 				Limit:         "",
 				SourceAccount: distributionKP.Address(),
 			},
-		})
+		}, distAccount)
 		assert.EqualError(t, err, "signing change trust transaction: unexpected error")
 	})
 
@@ -1269,8 +1310,8 @@ func Test_AssetHandler_submitChangeTrustTransaction(t *testing.T) {
 		signedTx, err := tx.Sign(network.TestNetworkPassphrase, distributionKP)
 		require.NoError(t, err)
 
-		distAccSigClient.
-			On("SignStellarTransaction", ctx, tx, distributionKP.Address()).
+		sigRouter.
+			On("SignStellarTransaction", ctx, tx, distAccount).
 			Return(signedTx, nil).
 			Once()
 
@@ -1303,7 +1344,7 @@ func Test_AssetHandler_submitChangeTrustTransaction(t *testing.T) {
 				Limit:         "",
 				SourceAccount: distributionKP.Address(),
 			},
-		})
+		}, distAccount)
 		assert.EqualError(t, err, "submitting change trust transaction to network: horizon response error: StatusCode=400, Extras=transaction: tx_failed - operation codes: [ op_no_issuer ]")
 	})
 
@@ -1336,8 +1377,8 @@ func Test_AssetHandler_submitChangeTrustTransaction(t *testing.T) {
 		signedTx, err := tx.Sign(network.TestNetworkPassphrase, distributionKP)
 		require.NoError(t, err)
 
-		distAccSigClient.
-			On("SignStellarTransaction", ctx, tx, distributionKP.Address()).
+		sigRouter.
+			On("SignStellarTransaction", ctx, tx, distAccount).
 			Return(signedTx, nil).
 			Once()
 
@@ -1357,7 +1398,7 @@ func Test_AssetHandler_submitChangeTrustTransaction(t *testing.T) {
 				Limit:         "",
 				SourceAccount: distributionKP.Address(),
 			},
-		})
+		}, distAccount)
 		assert.NoError(t, err)
 	})
 
@@ -1366,25 +1407,21 @@ func Test_AssetHandler_submitChangeTrustTransaction(t *testing.T) {
 
 type assetTestMock struct {
 	SignatureService  signing.SignatureService
-	DistAccSigClient  *sigMocks.MockSignatureClient
+	SignatureRouter   *sigMocks.MockSignerRouter
 	HorizonClientMock *horizonclient.MockClient
 	Handler           AssetsHandler
 }
 
-func newAssetTestMock(t *testing.T, distributionAccountAddress string) *assetTestMock {
+func newAssetTestMock(t *testing.T) *assetTestMock {
 	t.Helper()
 
 	horizonClientMock := &horizonclient.MockClient{}
-	signatureService, _, distAccSigClient, _, distAccResolver := signing.NewMockSignatureService(t)
-	distAccResolver.
-		On("DistributionAccountFromContext", mock.Anything).
-		Return(schema.NewDefaultStellarDistributionAccount(distributionAccountAddress), nil)
-
+	signatureService, sigRouter, _ := signing.NewMockSignatureService(t)
 	mLedgerNumberTracker := preconditionsMocks.NewMockLedgerNumberTracker(t)
 
 	return &assetTestMock{
 		SignatureService:  signatureService,
-		DistAccSigClient:  distAccSigClient,
+		SignatureRouter:   sigRouter,
 		HorizonClientMock: horizonClientMock,
 		Handler: AssetsHandler{
 			SubmitterEngine: engine.SubmitterEngine{
@@ -1400,9 +1437,10 @@ func newAssetTestMock(t *testing.T, distributionAccountAddress string) *assetTes
 func Test_AssetHandler_submitChangeTrustTransaction_makeSurePreconditionsAreSetAsExpected(t *testing.T) {
 	ctx := context.Background()
 	distributionKP := keypair.MustRandom()
+	distAccount := schema.NewDefaultStellarTransactionAccount(distributionKP.Address())
 
 	// matchPreconditionsTimeboundsFn is a function meant to be used with mock.MatchedBy to check that the preconditions are set as expected.
-	assertExpectedPreconditionsWithTimeboundsTolerance := func(expectedTx *txnbuild.Transaction, actualTxIndex int) func(args mock.Arguments) {
+	assertExpectedPreconditionsWithTimeboundsTolerance := func(t *testing.T, expectedTx *txnbuild.Transaction, actualTxIndex int) func(args mock.Arguments) {
 		return func(args mock.Arguments) {
 			actualTx, ok := args.Get(int(actualTxIndex)).(*txnbuild.Transaction)
 			require.True(t, ok)
@@ -1451,7 +1489,7 @@ func Test_AssetHandler_submitChangeTrustTransaction_makeSurePreconditionsAreSetA
 	}
 
 	t.Run("makes sure a non-empty precondition is used if none is explicitly set", func(t *testing.T) {
-		mocks := newAssetTestMock(t, distributionKP.Address())
+		mocks := newAssetTestMock(t)
 		mocks.Handler.GetPreconditionsFn = nil
 
 		txParams := txParamsWithoutPreconditions
@@ -1462,25 +1500,25 @@ func Test_AssetHandler_submitChangeTrustTransaction_makeSurePreconditionsAreSetA
 		signedTx, err := tx.Sign(network.TestNetworkPassphrase, distributionKP)
 		require.NoError(t, err)
 
-		mocks.DistAccSigClient.
-			On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), distributionKP.Address()).
-			Run(assertExpectedPreconditionsWithTimeboundsTolerance(signedTx, 1)).
+		mocks.SignatureRouter.
+			On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), distAccount).
+			Run(assertExpectedPreconditionsWithTimeboundsTolerance(t, signedTx, 1)).
 			Return(signedTx, nil).
 			Once()
 
 		mocks.HorizonClientMock.
 			On("SubmitTransactionWithOptions", mock.AnythingOfType("*txnbuild.Transaction"), horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true}).
-			Run(assertExpectedPreconditionsWithTimeboundsTolerance(signedTx, 0)).
+			Run(assertExpectedPreconditionsWithTimeboundsTolerance(t, signedTx, 0)).
 			Return(horizon.Transaction{}, nil).
 			Once()
 		defer mocks.HorizonClientMock.AssertExpectations(t)
 
-		err = mocks.Handler.submitChangeTrustTransaction(ctx, acc, []*txnbuild.ChangeTrust{changeTrustOp})
+		err = mocks.Handler.submitChangeTrustTransaction(ctx, acc, []*txnbuild.ChangeTrust{changeTrustOp}, distAccount)
 		assert.NoError(t, err)
 	})
 
 	t.Run("makes sure a the precondition that was set is used", func(t *testing.T) {
-		mocks := newAssetTestMock(t, distributionKP.Address())
+		mocks := newAssetTestMock(t)
 		newPreconditions := txnbuild.Preconditions{TimeBounds: txnbuild.NewTimeout(int64(rand.Intn(999999999)))}
 		mocks.Handler.GetPreconditionsFn = func() txnbuild.Preconditions { return newPreconditions }
 
@@ -1492,20 +1530,20 @@ func Test_AssetHandler_submitChangeTrustTransaction_makeSurePreconditionsAreSetA
 		signedTx, err := tx.Sign(network.TestNetworkPassphrase, distributionKP)
 		require.NoError(t, err)
 
-		mocks.DistAccSigClient.
-			On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), distributionKP.Address()).
-			Run(assertExpectedPreconditionsWithTimeboundsTolerance(signedTx, 1)).
+		mocks.SignatureRouter.
+			On("SignStellarTransaction", ctx, mock.AnythingOfType("*txnbuild.Transaction"), distAccount).
+			Run(assertExpectedPreconditionsWithTimeboundsTolerance(t, signedTx, 1)).
 			Return(signedTx, nil).
 			Once()
 
 		mocks.HorizonClientMock.
 			On("SubmitTransactionWithOptions", mock.AnythingOfType("*txnbuild.Transaction"), horizonclient.SubmitTxOpts{SkipMemoRequiredCheck: true}).
 			Return(horizon.Transaction{}, nil).
-			Run(assertExpectedPreconditionsWithTimeboundsTolerance(signedTx, 0)).
+			Run(assertExpectedPreconditionsWithTimeboundsTolerance(t, signedTx, 0)).
 			Once()
 		defer mocks.HorizonClientMock.AssertExpectations(t)
 
-		err = mocks.Handler.submitChangeTrustTransaction(ctx, acc, []*txnbuild.ChangeTrust{changeTrustOp})
+		err = mocks.Handler.submitChangeTrustTransaction(ctx, acc, []*txnbuild.ChangeTrust{changeTrustOp}, distAccount)
 		assert.NoError(t, err)
 	})
 }

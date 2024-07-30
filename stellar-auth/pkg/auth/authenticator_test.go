@@ -8,11 +8,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/db"
-	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 )
 
 var errUnexpectedError = errors.New("unexpected error")
@@ -659,6 +660,17 @@ func Test_DefaultAuthenticator_GetUsers(t *testing.T) {
 		userIDs := []string{"invalid-id"}
 		_, err := authenticator.GetUsers(ctx, userIDs)
 		require.EqualError(t, err, "error querying user IDs: searching for 1 users, found 0 users")
+	})
+
+	t.Run("returns nil if called with an empty or nil slice", func(t *testing.T) {
+		userIDs := []string{}
+		users, err := authenticator.GetUsers(ctx, userIDs)
+		require.NoError(t, err)
+		assert.Empty(t, users)
+
+		users, err = authenticator.GetUsers(ctx, nil)
+		require.NoError(t, err)
+		assert.Empty(t, users)
 	})
 
 	t.Run("gets users for provided IDs successfully", func(t *testing.T) {

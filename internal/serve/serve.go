@@ -17,6 +17,7 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/circle"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
@@ -69,6 +70,7 @@ type ServeOptions struct {
 	BaseURL                         string
 	ResetTokenExpirationHours       int
 	NetworkPassphrase               string
+	NetworkType                     utils.NetworkType
 	SubmitterEngine                 engine.SubmitterEngine
 	Sep10SigningPublicKey           string
 	Sep10SigningPrivateKey          string
@@ -84,9 +86,12 @@ type ServeOptions struct {
 	PasswordValidator               *authUtils.PasswordValidator
 	EnableScheduler                 bool
 	tenantManager                   tenant.ManagerInterface
+	DistributionAccountService      services.DistributionAccountServiceInterface
+	DistAccEncryptionPassphrase     string
 	EventProducer                   events.Producer
 	MaxInvitationSMSResendAttempts  int
 	SingleTenantMode                bool
+	CircleService                   circle.ServiceInterface
 }
 
 // SetupDependencies uses the serve options to setup the dependencies for the server.
@@ -252,11 +257,11 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 				MonitorService:              o.MonitorService,
 				DistributionAccountResolver: o.SubmitterEngine.DistributionAccountResolver,
 				DisbursementManagementService: &services.DisbursementManagementService{
-					Models:             o.Models,
-					AuthManager:        authManager,
-					HorizonClient:      o.SubmitterEngine.HorizonClient,
-					EventProducer:      o.EventProducer,
-					CrashTrackerClient: o.CrashTrackerClient,
+					Models:                     o.Models,
+					AuthManager:                authManager,
+					EventProducer:              o.EventProducer,
+					CrashTrackerClient:         o.CrashTrackerClient,
+					DistributionAccountService: o.DistributionAccountService,
 				},
 			}
 			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole)).
@@ -283,11 +288,12 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 
 		r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole, data.BusinessUserRole)).Route("/payments", func(r chi.Router) {
 			paymentsHandler := httphandler.PaymentsHandler{
-				Models:             o.Models,
-				DBConnectionPool:   o.MtnDBConnectionPool,
-				AuthManager:        o.authManager,
-				EventProducer:      o.EventProducer,
-				CrashTrackerClient: o.CrashTrackerClient,
+				Models:                      o.Models,
+				DBConnectionPool:            o.MtnDBConnectionPool,
+				AuthManager:                 o.authManager,
+				EventProducer:               o.EventProducer,
+				CrashTrackerClient:          o.CrashTrackerClient,
+				DistributionAccountResolver: o.SubmitterEngine.DistributionAccountResolver,
 			}
 			r.Get("/", paymentsHandler.GetPayments)
 			r.Get("/{id}", paymentsHandler.GetPayment)
@@ -380,7 +386,25 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 
 			r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...)).
 				Get("/logo", profileHandler.GetOrganizationLogo)
+
+			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole)).
+				Patch("/circle-config", httphandler.CircleConfigHandler{
+					NetworkType:                 o.NetworkType,
+					CircleFactory:               circle.NewClient,
+					TenantManager:               o.tenantManager,
+					Encrypter:                   &utils.DefaultPrivateKeyEncrypter{},
+					EncryptionPassphrase:        o.DistAccEncryptionPassphrase,
+					CircleClientConfigModel:     circle.NewClientConfigModel(o.MtnDBConnectionPool),
+					DistributionAccountResolver: o.SubmitterEngine.DistributionAccountResolver,
+				}.Patch)
 		})
+
+		balancesHandler := httphandler.BalancesHandler{
+			DistributionAccountResolver: o.SubmitterEngine.DistributionAccountResolver,
+			CircleService:               o.CircleService,
+			NetworkType:                 o.NetworkType,
+		}
+		r.Get("/balances", balancesHandler.Get)
 	})
 
 	reCAPTCHAValidator := validators.NewGoogleReCAPTCHAValidator(o.ReCAPTCHASiteSecretKey, httpclient.DefaultClient())
@@ -447,12 +471,13 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			sep24HeaderTokenAuthenticationMiddleware := anchorplatform.SEP24HeaderTokenAuthenticateMiddleware(o.sep24JWTManager, o.NetworkPassphrase, o.tenantManager, o.SingleTenantMode)
 			r.With(sep24HeaderTokenAuthenticationMiddleware).Post("/otp", httphandler.ReceiverSendOTPHandler{Models: o.Models, SMSMessengerClient: o.SMSMessengerClient, ReCAPTCHAValidator: reCAPTCHAValidator}.ServeHTTP)
 			r.With(sep24HeaderTokenAuthenticationMiddleware).Post("/verification", httphandler.VerifyReceiverRegistrationHandler{
-				AnchorPlatformAPIService: o.AnchorPlatformAPIService,
-				Models:                   o.Models,
-				ReCAPTCHAValidator:       reCAPTCHAValidator,
-				NetworkPassphrase:        o.NetworkPassphrase,
-				EventProducer:            o.EventProducer,
-				CrashTrackerClient:       o.CrashTrackerClient,
+				AnchorPlatformAPIService:    o.AnchorPlatformAPIService,
+				Models:                      o.Models,
+				ReCAPTCHAValidator:          reCAPTCHAValidator,
+				NetworkPassphrase:           o.NetworkPassphrase,
+				EventProducer:               o.EventProducer,
+				CrashTrackerClient:          o.CrashTrackerClient,
+				DistributionAccountResolver: o.SubmitterEngine.DistributionAccountResolver,
 			}.VerifyReceiverRegistration)
 		})
 

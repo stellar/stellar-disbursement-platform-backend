@@ -3,9 +3,10 @@ package dependencyinjection
 import (
 	"testing"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 )
 
 func Test_NewEmailClient(t *testing.T) {

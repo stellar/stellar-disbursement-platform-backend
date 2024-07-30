@@ -21,6 +21,7 @@ import (
 const (
 	loginURL        = "login"
 	disbursementURL = "disbursements"
+	organizationURL = "organization"
 	registrationURL = "wallet-registration"
 )
 
@@ -30,6 +31,7 @@ type ServerApiIntegrationTestsInterface interface {
 	ProcessDisbursement(ctx context.Context, authToken *ServerApiAuthToken, disbursementID string) error
 	StartDisbursement(ctx context.Context, authToken *ServerApiAuthToken, disbursementID string, body *httphandler.PatchDisbursementStatusRequest) error
 	ReceiverRegistration(ctx context.Context, authSEP24Token *AnchorPlatformAuthSEP24Token, body *data.ReceiverRegistrationRequest) error
+	ConfigureCircleAccess(ctx context.Context, authToken *ServerApiAuthToken, body *httphandler.PatchCircleConfigRequest) error
 }
 
 type ServerApiIntegrationTests struct {
@@ -255,6 +257,39 @@ func (sa *ServerApiIntegrationTests) ReceiverRegistration(ctx context.Context, a
 	if resp.StatusCode/100 != 2 {
 		logErrorResponses(ctx, resp.Body)
 		return fmt.Errorf("error trying to complete receiver registration on the server API")
+	}
+
+	return nil
+}
+
+func (sa *ServerApiIntegrationTests) ConfigureCircleAccess(ctx context.Context, authToken *ServerApiAuthToken, body *httphandler.PatchCircleConfigRequest) error {
+	reqURL, err := url.JoinPath(sa.ServerApiBaseURL, organizationURL, "circle-config")
+	if err != nil {
+		return fmt.Errorf("error creating url: %w", err)
+	}
+
+	reqBody, err := json.Marshal(body)
+	if err != nil {
+		return fmt.Errorf("error creating json post body: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPatch, reqURL, strings.NewReader(string(reqBody)))
+	if err != nil {
+		return fmt.Errorf("error creating new request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+authToken.Token)
+	req.Header.Set("SDP-Tenant-Name", sa.TenantName)
+
+	resp, err := sa.HttpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("error making request to server API patch CIRCLE CONFIG: %w", err)
+	}
+
+	if resp.StatusCode/100 != 2 {
+		logErrorResponses(ctx, resp.Body)
+		return fmt.Errorf("error trying to configure Circle access on the server API")
 	}
 
 	return nil

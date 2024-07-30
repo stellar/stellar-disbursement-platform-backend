@@ -12,6 +12,7 @@ import (
 
 	"github.com/lib/pq"
 	"github.com/stellar/go/support/log"
+
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 )
 
@@ -55,6 +56,7 @@ type VerificationField string
 
 const (
 	VerificationFieldDateOfBirth VerificationField = "DATE_OF_BIRTH"
+	VerificationFieldYearMonth   VerificationField = "YEAR_MONTH"
 	VerificationFieldPin         VerificationField = "PIN"
 	VerificationFieldNationalID  VerificationField = "NATIONAL_ID_NUMBER"
 )
@@ -63,6 +65,7 @@ const (
 func GetAllVerificationFields() []VerificationField {
 	return []VerificationField{
 		VerificationFieldDateOfBirth,
+		VerificationFieldYearMonth,
 		VerificationFieldPin,
 		VerificationFieldNationalID,
 	}

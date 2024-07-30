@@ -2,385 +2,289 @@ package services
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"testing"
+	"time"
 
-	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
-
+	"github.com/google/uuid"
+	"github.com/stellar/go/keypair"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/circle"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/assets"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/services/paymentdispatchers"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing/mocks"
 	txSubStore "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/store"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
+	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
-func Test_PaymentToSubmitterService_SendBatchPayments(t *testing.T) {
+func Test_PaymentToSubmitterService_SendPaymentsMethods(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
-
 	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
 	require.NoError(t, err)
 	defer dbConnectionPool.Close()
-
-	models, err := data.NewModels(dbConnectionPool)
-	require.NoError(t, err)
-	tssModel := txSubStore.NewTransactionModel(models.DBConnectionPool)
-
-	service := NewPaymentToSubmitterService(models, dbConnectionPool)
-	ctx := context.Background()
-
-	// create fixtures
-	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool,
-		"My Wallet",
-		"https://www.wallet.com",
-		"www.wallet.com",
-		"wallet1://")
-	asset := data.CreateAssetFixture(t, ctx, dbConnectionPool,
-		"USDC",
-		"GDUCE34WW5Z34GMCEPURYANUCUP47J6NORJLKC6GJNMDLN4ZI4PMI2MG")
-	country := data.CreateCountryFixture(t, ctx, dbConnectionPool,
-		"FRA",
-		"France")
-
-	// create disbursements
-	startedDisbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-		Name:    "ready disbursement",
-		Status:  data.StartedDisbursementStatus,
-		Asset:   asset,
-		Wallet:  wallet,
-		Country: country,
-	})
-
-	// create disbursement receivers
-	receiver1 := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
-	receiver2 := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
-	receiver3 := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
-	receiver4 := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
-
-	rw1 := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver1.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
-	rw2 := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver2.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
-	rw3 := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver3.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
-	rwReady := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver4.ID, wallet.ID, data.ReadyReceiversWalletStatus)
-
-	payment1 := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
-		ReceiverWallet: rw1,
-		Disbursement:   startedDisbursement,
-		Asset:          *asset,
-		Amount:         "100",
-		Status:         data.ReadyPaymentStatus,
-	})
-	payment2 := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
-		ReceiverWallet: rw2,
-		Disbursement:   startedDisbursement,
-		Asset:          *asset,
-		Amount:         "200",
-		Status:         data.ReadyPaymentStatus,
-	})
-	payment3 := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
-		ReceiverWallet: rw3,
-		Disbursement:   startedDisbursement,
-		Asset:          *asset,
-		Amount:         "300",
-		Status:         data.ReadyPaymentStatus,
-	})
-	payment4 := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
-		ReceiverWallet: rwReady,
-		Disbursement:   startedDisbursement,
-		Asset:          *asset,
-		Amount:         "400",
-		Status:         data.ReadyPaymentStatus,
-	})
-
-	batchSize := 4
 
 	// add tenant to context
 	testTenant := tenant.Tenant{ID: "tenant-id", Name: "Test Name"}
-	ctx = tenant.SaveTenantInContext(ctx, &testTenant)
+	ctx := tenant.SaveTenantInContext(context.Background(), &testTenant)
 
-	t.Run("send payments", func(t *testing.T) {
-		err = service.SendBatchPayments(ctx, batchSize)
-		require.NoError(t, err)
-
-		// payments that can be sent
-		var payment *data.Payment
-		for _, p := range []*data.Payment{payment1, payment2, payment3} {
-			payment, err = models.Payment.Get(ctx, p.ID, dbConnectionPool)
-			require.NoError(t, err)
-			require.Equal(t, data.PendingPaymentStatus, payment.Status)
-		}
-
-		// payments that can't be sent (rw status is not REGISTERED)
-		payment, err = models.Payment.Get(ctx, payment4.ID, dbConnectionPool)
-		require.NoError(t, err)
-		require.Equal(t, data.ReadyPaymentStatus, payment.Status)
-
-		// validate transactions
-		var transactions []*txSubStore.Transaction
-		transactions, err = tssModel.GetAllByPaymentIDs(ctx, []string{payment1.ID, payment2.ID, payment3.ID, payment4.ID})
-		require.NoError(t, err)
-		require.Len(t, transactions, 3)
-
-		expectedPayments := map[string]*data.Payment{
-			payment1.ID: payment1,
-			payment2.ID: payment2,
-			payment3.ID: payment3,
-		}
-
-		for _, tx := range transactions {
-			assert.Equal(t, txSubStore.TransactionStatusPending, tx.Status)
-			assert.Equal(t, expectedPayments[tx.ExternalID].Asset.Code, tx.AssetCode)
-			assert.Equal(t, expectedPayments[tx.ExternalID].Asset.Issuer, tx.AssetIssuer)
-			assert.Equal(t, expectedPayments[tx.ExternalID].Amount, strconv.FormatFloat(tx.Amount, 'f', 7, 32))
-			assert.Equal(t, expectedPayments[tx.ExternalID].ReceiverWallet.StellarAddress, tx.Destination)
-			assert.Equal(t, expectedPayments[tx.ExternalID].ID, tx.ExternalID)
-			assert.Equal(t, testTenant.ID, tx.TenantID)
-		}
-	})
-
-	t.Run("send payments with native asset", func(t *testing.T) {
-		nativeAsset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "XLM", "")
-
-		startedDisbursementNA := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-			Name:    "started disbursement Native Asset",
-			Status:  data.StartedDisbursementStatus,
-			Asset:   nativeAsset,
-			Wallet:  wallet,
-			Country: country,
-		})
-
-		paymentNA1 := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
-			ReceiverWallet: rw1,
-			Disbursement:   startedDisbursementNA,
-			Asset:          *nativeAsset,
-			Amount:         "100",
-			Status:         data.ReadyPaymentStatus,
-		})
-
-		paymentNA2 := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
-			ReceiverWallet: rw2,
-			Disbursement:   startedDisbursementNA,
-			Asset:          *nativeAsset,
-			Amount:         "100",
-			Status:         data.ReadyPaymentStatus,
-		})
-
-		err = service.SendBatchPayments(ctx, batchSize)
-		require.NoError(t, err)
-
-		for _, p := range []*data.Payment{paymentNA1, paymentNA2} {
-			payment, err := models.Payment.Get(ctx, p.ID, dbConnectionPool)
-			require.NoError(t, err)
-			assert.Equal(t, data.PendingPaymentStatus, payment.Status)
-		}
-
-		transactions, err := tssModel.GetAllByPaymentIDs(ctx, []string{paymentNA1.ID, paymentNA2.ID})
-		require.NoError(t, err)
-		require.Len(t, transactions, 2)
-
-		expectedPayments := map[string]*data.Payment{
-			paymentNA1.ID: paymentNA1,
-			paymentNA2.ID: paymentNA2,
-		}
-
-		for _, tx := range transactions {
-			assert.Equal(t, txSubStore.TransactionStatusPending, tx.Status)
-			assert.Equal(t, expectedPayments[tx.ExternalID].Asset.Code, tx.AssetCode)
-			assert.Empty(t, tx.AssetIssuer)
-			assert.Equal(t, expectedPayments[tx.ExternalID].Amount, strconv.FormatFloat(tx.Amount, 'f', 7, 32))
-			assert.Equal(t, expectedPayments[tx.ExternalID].ReceiverWallet.StellarAddress, tx.Destination)
-			assert.Equal(t, expectedPayments[tx.ExternalID].ID, tx.ExternalID)
-			assert.Equal(t, testTenant.ID, tx.TenantID)
-		}
-	})
-}
-
-func Test_PaymentToSubmitterService_SendPaymentsReadyToPay(t *testing.T) {
-	dbt := dbtest.Open(t)
-	defer dbt.Close()
-
-	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
-	require.NoError(t, err)
-	defer dbConnectionPool.Close()
+	eurcAsset := data.CreateAssetFixture(t, ctx, dbConnectionPool, assets.EURCAssetCode, assets.EURCAssetTestnet.Issuer)
+	nativeAsset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "XLM", "")
+	country := data.CreateCountryFixture(t, ctx, dbConnectionPool, "FRA", "France")
+	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "My Wallet", "https://www.wallet.com", "www.wallet.com", "wallet1://")
 
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 	tssModel := txSubStore.NewTransactionModel(models.DBConnectionPool)
 
-	service := NewPaymentToSubmitterService(models, dbConnectionPool)
-	ctx := context.Background()
+	// Create distribution accounts
+	distributionAccPubKey := "GAAHIL6ZW4QFNLCKALZ3YOIWPP4TXQ7B7J5IU7RLNVGQAV6GFDZHLDTA"
+	stellarDistAccountEnv := schema.NewStellarEnvTransactionAccount(distributionAccPubKey)
+	stellarDistAccountDBVault := schema.NewDefaultStellarTransactionAccount(distributionAccPubKey)
+	circleDistAccountDBVault := schema.TransactionAccount{
+		CircleWalletID: "circle-wallet-id",
+		Type:           schema.DistributionAccountCircleDBVault,
+		Status:         schema.AccountStatusActive,
+	}
 
-	// create fixtures
-	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool,
-		"My Wallet",
-		"https://www.wallet.com",
-		"www.wallet.com",
-		"wallet1://")
-	asset := data.CreateAssetFixture(t, ctx, dbConnectionPool,
-		"USDC",
-		"GDUCE34WW5Z34GMCEPURYANUCUP47J6NORJLKC6GJNMDLN4ZI4PMI2MG")
-	country := data.CreateCountryFixture(t, ctx, dbConnectionPool,
-		"FRA",
-		"France")
+	type methodOption string
+	const (
+		SendPaymentsReadyToPay methodOption = "SendPaymentsReadyToPay"
+		SendBatchPayments      methodOption = "SendBatchPayments"
+	)
 
-	// create disbursements
-	startedDisbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-		Name:    "ready disbursement",
-		Status:  data.StartedDisbursementStatus,
-		Asset:   asset,
-		Wallet:  wallet,
-		Country: country,
-	})
+	testCases := []struct {
+		distributionAccount schema.TransactionAccount
+		asset               *data.Asset
+		methodOption        methodOption
+	}{
+		{
+			distributionAccount: stellarDistAccountEnv,
+			asset:               eurcAsset,
+			methodOption:        SendBatchPayments,
+		},
+		{
+			distributionAccount: stellarDistAccountEnv,
+			asset:               nativeAsset,
+			methodOption:        SendBatchPayments,
+		},
+		{
+			distributionAccount: stellarDistAccountDBVault,
+			asset:               eurcAsset,
+			methodOption:        SendBatchPayments,
+		},
+		{
+			distributionAccount: stellarDistAccountDBVault,
+			asset:               nativeAsset,
+			methodOption:        SendBatchPayments,
+		},
+		{
+			distributionAccount: circleDistAccountDBVault,
+			asset:               eurcAsset,
+			methodOption:        SendBatchPayments,
+		},
+		{
+			distributionAccount: stellarDistAccountEnv,
+			asset:               eurcAsset,
+			methodOption:        SendPaymentsReadyToPay,
+		},
+		{
+			distributionAccount: stellarDistAccountEnv,
+			asset:               nativeAsset,
+			methodOption:        SendPaymentsReadyToPay,
+		},
+		{
+			distributionAccount: stellarDistAccountDBVault,
+			asset:               eurcAsset,
+			methodOption:        SendPaymentsReadyToPay,
+		},
+		{
+			distributionAccount: stellarDistAccountDBVault,
+			asset:               nativeAsset,
+			methodOption:        SendPaymentsReadyToPay,
+		},
+		{
+			distributionAccount: circleDistAccountDBVault,
+			asset:               eurcAsset,
+			methodOption:        SendPaymentsReadyToPay,
+		},
+	}
 
-	// create disbursement receivers
-	receiver1 := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
-	receiver2 := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
-	receiver3 := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
-	receiver4 := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
+	for _, tc := range testCases {
+		t.Run(fmt.Sprintf("%s:[%s]%s", tc.methodOption, tc.distributionAccount.Type, tc.asset.Code), func(t *testing.T) {
+			// database cleanup
+			defer data.DeleteAllDisbursementFixtures(t, ctx, dbConnectionPool)
+			defer data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
+			defer data.DeleteAllReceiverVerificationFixtures(t, ctx, dbConnectionPool)
+			defer data.DeleteAllReceiverWalletsFixtures(t, ctx, dbConnectionPool)
+			defer data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
 
-	rw1 := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver1.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
-	rw2 := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver2.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
-	rw3 := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver3.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
-	rwReady := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver4.ID, wallet.ID, data.ReadyReceiversWalletStatus)
+			startedDisbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
+				Name:    "ready disbursement",
+				Status:  data.StartedDisbursementStatus,
+				Asset:   tc.asset,
+				Wallet:  wallet,
+				Country: country,
+			})
 
-	payment1 := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
-		ReceiverWallet: rw1,
-		Disbursement:   startedDisbursement,
-		Asset:          *asset,
-		Amount:         "100",
-		Status:         data.ReadyPaymentStatus,
-	})
-	payment2 := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
-		ReceiverWallet: rw2,
-		Disbursement:   startedDisbursement,
-		Asset:          *asset,
-		Amount:         "200",
-		Status:         data.ReadyPaymentStatus,
-	})
-	payment3 := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
-		ReceiverWallet: rw3,
-		Disbursement:   startedDisbursement,
-		Asset:          *asset,
-		Amount:         "300",
-		Status:         data.ReadyPaymentStatus,
-	})
-	payment4 := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
-		ReceiverWallet: rwReady,
-		Disbursement:   startedDisbursement,
-		Asset:          *asset,
-		Amount:         "400",
-		Status:         data.ReadyPaymentStatus,
-	})
+			receiverReady := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
+			rwReady := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiverReady.ID, wallet.ID, data.ReadyReceiversWalletStatus)
+			paymentReady := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+				ReceiverWallet: rwReady,
+				Disbursement:   startedDisbursement,
+				Asset:          *tc.asset,
+				Amount:         "100",
+				Status:         data.ReadyPaymentStatus,
+			})
 
-	t.Run("send payments", func(t *testing.T) {
-		tenantID := "tenant-id"
-		paymentsReadyToPay := schemas.EventPaymentsReadyToPayData{TenantID: tenantID}
-		for _, p := range []*data.Payment{payment1, payment2, payment3, payment4} {
-			paymentsReadyToPay.Payments = append(paymentsReadyToPay.Payments, schemas.PaymentReadyToPay{ID: p.ID})
-		}
+			receiverRegistered := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
+			rwRegistered := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiverRegistered.ID, wallet.ID, data.RegisteredReceiversWalletStatus)
+			paymentRegistered := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+				ReceiverWallet: rwRegistered,
+				Disbursement:   startedDisbursement,
+				Asset:          *tc.asset,
+				Amount:         "100",
+				Status:         data.ReadyPaymentStatus,
+			})
 
-		err = service.SendPaymentsReadyToPay(ctx, paymentsReadyToPay)
-		require.NoError(t, err)
+			// Universal mocks:
+			mDistAccResolver := mocks.NewMockDistributionAccountResolver(t)
+			mDistAccResolver.
+				On("DistributionAccountFromContext", ctx).
+				Return(tc.distributionAccount, nil).
+				Once()
+			mCircleService := circle.NewMockService(t)
+			if tc.distributionAccount.IsCircle() {
+				wantPaymentReques := circle.PaymentRequest{
+					SourceWalletID:            tc.distributionAccount.CircleWalletID,
+					DestinationStellarAddress: rwRegistered.StellarAddress,
+					Amount:                    paymentRegistered.Amount,
+					StellarAssetCode:          paymentRegistered.Asset.Code,
+				}
+				var circleAssetCode string
+				circleAssetCode, err = wantPaymentReques.GetCircleAssetCode()
+				require.NoError(t, err)
+				createDate := time.Now()
 
-		// payments that can be sent
-		var payment *data.Payment
-		for _, p := range []*data.Payment{payment1, payment2, payment3} {
-			payment, err = models.Payment.Get(ctx, p.ID, dbConnectionPool)
+				mCircleService.
+					On("SendPayment", ctx, mock.Anything).
+					Run(func(args mock.Arguments) {
+						gotPayment, ok := args.Get(1).(circle.PaymentRequest)
+						require.True(t, ok)
+
+						// Validate payment
+						assert.Equal(t, wantPaymentReques.SourceWalletID, gotPayment.SourceWalletID)
+						assert.Equal(t, wantPaymentReques.DestinationStellarAddress, gotPayment.DestinationStellarAddress)
+						assert.Equal(t, wantPaymentReques.Amount, gotPayment.Amount)
+						assert.Equal(t, wantPaymentReques.StellarAssetCode, gotPayment.StellarAssetCode)
+						assert.NoError(t, uuid.Validate(gotPayment.IdempotencyKey), "Idempotency key should be a valid UUID")
+						wantPaymentReques.IdempotencyKey = gotPayment.IdempotencyKey
+					}).
+					Return(&circle.Transfer{
+						ID: "62955621-2cf7-4b1f-9f8b-34294ae52938",
+						Source: circle.TransferAccount{
+							ID:   tc.distributionAccount.CircleWalletID,
+							Type: circle.TransferAccountTypeWallet,
+						},
+						Destination: circle.TransferAccount{
+							Address: rwRegistered.StellarAddress,
+							Type:    circle.TransferAccountTypeBlockchain,
+							Chain:   circle.StellarChainCode,
+						},
+						Amount: circle.Balance{
+							Amount:   paymentRegistered.Amount,
+							Currency: circleAssetCode,
+						},
+						TransactionHash: "f7397c3b61f224401952219061fd3b1ac8c7c7d7e472d14926da7fc35fa9246e",
+						Status:          circle.TransferStatusPending,
+						CreateDate:      createDate,
+					}, nil).
+					Once()
+			}
+
+			var paymentDispatcher paymentdispatchers.PaymentDispatcherInterface
+			if tc.distributionAccount.IsStellar() {
+				paymentDispatcher = paymentdispatchers.NewStellarPaymentDispatcher(models, tssModel, mDistAccResolver)
+			} else if tc.distributionAccount.IsCircle() {
+				paymentDispatcher = paymentdispatchers.NewCirclePaymentDispatcher(models, mCircleService, mDistAccResolver)
+			} else {
+				t.Fatalf("unknown distribution account type: %s", tc.distributionAccount.Type)
+			}
+
+			// 🚧 Send Payments to the right platform, through the specified method
+			svc := PaymentToSubmitterService{
+				sdpModels:           models,
+				tssModel:            tssModel,
+				distAccountResolver: mDistAccResolver,
+				circleService:       mCircleService,
+				paymentDispatcher:   paymentDispatcher,
+			}
+			// Different method, depending on the tc.methodOption value
+			switch tc.methodOption {
+			case SendBatchPayments:
+				err = svc.SendBatchPayments(ctx, 2)
+			case SendPaymentsReadyToPay:
+				paymentsReadyToPay := schemas.EventPaymentsReadyToPayData{TenantID: testTenant.ID}
+				for _, p := range []*data.Payment{paymentReady, paymentRegistered} {
+					paymentsReadyToPay.Payments = append(paymentsReadyToPay.Payments, schemas.PaymentReadyToPay{ID: p.ID})
+				}
+				err = svc.SendPaymentsReadyToPay(ctx, paymentsReadyToPay)
+			default:
+				t.Fatalf("unknown method option: %s", tc.methodOption)
+			}
 			require.NoError(t, err)
-			require.Equal(t, data.PendingPaymentStatus, payment.Status)
-		}
 
-		// payments that can't be sent (rw status is not REGISTERED)
-		payment, err = models.Payment.Get(ctx, payment4.ID, dbConnectionPool)
-		require.NoError(t, err)
-		require.Equal(t, data.ReadyPaymentStatus, payment.Status)
-
-		// validate transactions
-		var transactions []*txSubStore.Transaction
-		transactions, err = tssModel.GetAllByPaymentIDs(ctx, []string{payment1.ID, payment2.ID, payment3.ID, payment4.ID})
-		require.NoError(t, err)
-		require.Len(t, transactions, 3)
-
-		expectedPayments := map[string]*data.Payment{
-			payment1.ID: payment1,
-			payment2.ID: payment2,
-			payment3.ID: payment3,
-		}
-
-		for _, tx := range transactions {
-			assert.Equal(t, txSubStore.TransactionStatusPending, tx.Status)
-			assert.Equal(t, expectedPayments[tx.ExternalID].Asset.Code, tx.AssetCode)
-			assert.Equal(t, expectedPayments[tx.ExternalID].Asset.Issuer, tx.AssetIssuer)
-			assert.Equal(t, expectedPayments[tx.ExternalID].Amount, strconv.FormatFloat(tx.Amount, 'f', 7, 32))
-			assert.Equal(t, expectedPayments[tx.ExternalID].ReceiverWallet.StellarAddress, tx.Destination)
-			assert.Equal(t, expectedPayments[tx.ExternalID].ID, tx.ExternalID)
-			assert.Equal(t, tenantID, tx.TenantID)
-		}
-	})
-
-	t.Run("send payments with native asset", func(t *testing.T) {
-		nativeAsset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "XLM", "")
-
-		startedDisbursementNA := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
-			Name:    "started disbursement Native Asset",
-			Status:  data.StartedDisbursementStatus,
-			Asset:   nativeAsset,
-			Wallet:  wallet,
-			Country: country,
-		})
-
-		paymentNA1 := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
-			ReceiverWallet: rw1,
-			Disbursement:   startedDisbursementNA,
-			Asset:          *nativeAsset,
-			Amount:         "100",
-			Status:         data.ReadyPaymentStatus,
-		})
-
-		paymentNA2 := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
-			ReceiverWallet: rw2,
-			Disbursement:   startedDisbursementNA,
-			Asset:          *nativeAsset,
-			Amount:         "100",
-			Status:         data.ReadyPaymentStatus,
-		})
-
-		tenantID := "tenant-id"
-		paymentsReadyToPay := schemas.EventPaymentsReadyToPayData{TenantID: tenantID}
-		for _, p := range []*data.Payment{paymentNA1, paymentNA2} {
-			paymentsReadyToPay.Payments = append(paymentsReadyToPay.Payments, schemas.PaymentReadyToPay{ID: p.ID})
-		}
-
-		err = service.SendPaymentsReadyToPay(ctx, paymentsReadyToPay)
-		require.NoError(t, err)
-
-		for _, p := range []*data.Payment{paymentNA1, paymentNA2} {
-			payment, err := models.Payment.Get(ctx, p.ID, dbConnectionPool)
+			// 👀 Validate: paymentRegistered (should be sent)
+			paymentRegistered, err = models.Payment.Get(ctx, paymentRegistered.ID, dbConnectionPool)
 			require.NoError(t, err)
-			assert.Equal(t, data.PendingPaymentStatus, payment.Status)
-		}
+			assert.Equal(t, data.PendingPaymentStatus, paymentRegistered.Status)
 
-		transactions, err := tssModel.GetAllByPaymentIDs(ctx, []string{paymentNA1.ID, paymentNA2.ID})
-		require.NoError(t, err)
-		require.Len(t, transactions, 2)
+			// 👀 Validate: paymentReady (should not be sent)
+			paymentReady, err = models.Payment.Get(ctx, paymentReady.ID, dbConnectionPool)
+			require.NoError(t, err)
+			require.Equal(t, data.ReadyPaymentStatus, paymentReady.Status)
 
-		expectedPayments := map[string]*data.Payment{
-			paymentNA1.ID: paymentNA1,
-			paymentNA2.ID: paymentNA2,
-		}
+			// 👀 [STELLAR] Validate: TSS submitter_transactions table
+			if tc.distributionAccount.IsStellar() {
+				transactions, err := tssModel.GetAllByPaymentIDs(ctx, []string{paymentRegistered.ID, paymentReady.ID})
+				require.NoError(t, err)
+				require.Len(t, transactions, 1)
 
-		for _, tx := range transactions {
-			assert.Equal(t, txSubStore.TransactionStatusPending, tx.Status)
-			assert.Equal(t, expectedPayments[tx.ExternalID].Asset.Code, tx.AssetCode)
-			assert.Empty(t, tx.AssetIssuer)
-			assert.Equal(t, expectedPayments[tx.ExternalID].Amount, strconv.FormatFloat(tx.Amount, 'f', 7, 32))
-			assert.Equal(t, expectedPayments[tx.ExternalID].ReceiverWallet.StellarAddress, tx.Destination)
-			assert.Equal(t, expectedPayments[tx.ExternalID].ID, tx.ExternalID)
-			assert.Equal(t, tenantID, tx.TenantID)
-		}
-	})
+				expectedPayments := map[string]*data.Payment{
+					paymentRegistered.ID: paymentRegistered,
+				}
+				for _, tx := range transactions {
+					assert.Equal(t, txSubStore.TransactionStatusPending, tx.Status)
+					assert.Equal(t, expectedPayments[tx.ExternalID].Asset.Code, tx.AssetCode)
+					assert.Equal(t, expectedPayments[tx.ExternalID].Asset.Issuer, tx.AssetIssuer)
+					assert.Equal(t, expectedPayments[tx.ExternalID].Amount, strconv.FormatFloat(tx.Amount, 'f', 7, 32))
+					assert.Equal(t, expectedPayments[tx.ExternalID].ReceiverWallet.StellarAddress, tx.Destination)
+					assert.Equal(t, expectedPayments[tx.ExternalID].ID, tx.ExternalID)
+					assert.Equal(t, testTenant.ID, tx.TenantID)
+				}
+			}
+
+			// 👀 [CIRCLE] Validate: CircleTransferRequests
+			if tc.distributionAccount.IsCircle() {
+				circleTransferRequest, err := models.CircleTransferRequests.GetIncompleteByPaymentID(ctx, dbConnectionPool, paymentRegistered.ID)
+				require.NoError(t, err)
+
+				assert.Equal(t, paymentRegistered.ID, circleTransferRequest.PaymentID)
+				assert.Equal(t, data.CircleTransferStatusPending, *circleTransferRequest.Status)
+				assert.Equal(t, "62955621-2cf7-4b1f-9f8b-34294ae52938", *circleTransferRequest.CircleTransferID)
+				assert.Equal(t, tc.distributionAccount.CircleWalletID, *circleTransferRequest.SourceWalletID)
+			}
+		})
+	}
 }
 
 func Test_PaymentToSubmitterService_ValidatePaymentReadyForSending(t *testing.T) {
@@ -553,7 +457,20 @@ func Test_PaymentToSubmitterService_RetryPayment(t *testing.T) {
 	require.NoError(t, err)
 	tssModel := txSubStore.NewTransactionModel(models.DBConnectionPool)
 
-	service := NewPaymentToSubmitterService(models, dbConnectionPool)
+	distAccPubKey := keypair.MustRandom().Address()
+	distAccount := schema.NewDefaultStellarTransactionAccount(distAccPubKey)
+	mDistAccountResolver := mocks.NewMockDistributionAccountResolver(t)
+	mDistAccountResolver.
+		On("DistributionAccountFromContext", ctx).
+		Return(distAccount, nil).
+		Maybe()
+
+	paymentDispatcher := paymentdispatchers.NewStellarPaymentDispatcher(models, tssModel, mDistAccountResolver)
+	service := NewPaymentToSubmitterService(PaymentToSubmitterServiceOptions{
+		Models:              models,
+		DistAccountResolver: mDistAccountResolver,
+		PaymentDispatcher:   paymentDispatcher,
+	})
 
 	// clean test db
 	data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
@@ -660,4 +577,80 @@ func Test_PaymentToSubmitterService_RetryPayment(t *testing.T) {
 	assert.Equal(t, tenantID, transaction1.TenantID)
 	assert.Equal(t, txSubStore.TransactionStatusPending, transaction2.Status)
 	assert.Equal(t, tenantID, transaction2.TenantID)
+}
+
+func Test_PaymentToSubmitterService_markPaymentsAsFailed(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+
+	// Create fixtures
+	models, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+	asset := data.CreateAssetFixture(t, ctx, dbConnectionPool, "USDC", "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVV")
+	country := data.CreateCountryFixture(t, ctx, dbConnectionPool, "FRA", "France")
+	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "wallet1", "https://www.wallet.com", "www.wallet.com", "wallet1://")
+	disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
+		Country: country,
+		Wallet:  wallet,
+		Status:  data.ReadyDisbursementStatus,
+		Asset:   asset,
+	})
+	receiverReady := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{})
+	rwReady := data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiverReady.ID, wallet.ID, data.ReadyReceiversWalletStatus)
+	payment1 := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+		ReceiverWallet: rwReady,
+		Disbursement:   disbursement,
+		Asset:          *asset,
+		Amount:         "100",
+		Status:         data.PendingPaymentStatus,
+	})
+	payment2 := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+		ReceiverWallet: rwReady,
+		Disbursement:   disbursement,
+		Asset:          *asset,
+		Amount:         "100",
+		Status:         data.PendingPaymentStatus,
+	})
+
+	svc := PaymentToSubmitterService{sdpModels: models}
+
+	t.Run("return nil if the list of payments is empty", func(t *testing.T) {
+		dbTx, err := dbConnectionPool.BeginTxx(ctx, nil)
+		require.NoError(t, err)
+		defer func() {
+			err = dbTx.Rollback()
+			require.NoError(t, err)
+		}()
+
+		innerErr := svc.markPaymentsAsFailed(ctx, dbTx, nil)
+		require.NoError(t, innerErr)
+
+		innerErr = svc.markPaymentsAsFailed(ctx, dbTx, []*data.Payment{})
+		require.NoError(t, innerErr)
+	})
+
+	t.Run("🎉 successfully mark payments as failed", func(t *testing.T) {
+		dbTx, err := dbConnectionPool.BeginTxx(ctx, nil)
+		require.NoError(t, err)
+		defer func() {
+			err = dbTx.Rollback()
+			require.NoError(t, err)
+		}()
+
+		innerErr := svc.markPaymentsAsFailed(ctx, dbTx, []*data.Payment{payment1, payment2})
+		require.NoError(t, innerErr)
+
+		payment1, err = models.Payment.Get(ctx, payment1.ID, dbTx)
+		require.NoError(t, err)
+		assert.Equal(t, data.FailedPaymentStatus, payment1.Status)
+
+		payment2, err = models.Payment.Get(ctx, payment2.ID, dbTx)
+		require.NoError(t, err)
+		assert.Equal(t, data.FailedPaymentStatus, payment2.Status)
+	})
 }

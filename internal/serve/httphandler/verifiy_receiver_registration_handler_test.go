@@ -29,6 +29,8 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
+	sigMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing/mocks"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
@@ -237,7 +239,17 @@ func Test_VerifyReceiverRegistrationHandler_processReceiverVerificationPII(t *te
 			wantErrContains: "DATE_OF_BIRTH not found for receiver with phone number +38...333",
 		},
 		{
-			name:     "returns an error if the receiver does not have any receiverVerification row with the given verification type",
+			name:     "returns an error if the receiver does not have any receiverVerification row with the given verification type (YEAR_MONTH)",
+			receiver: *receiver,
+			registrationRequest: data.ReceiverRegistrationRequest{
+				PhoneNumber:       receiver.PhoneNumber,
+				VerificationType:  data.VerificationFieldYearMonth,
+				VerificationValue: "1999-12",
+			},
+			wantErrContains: "YEAR_MONTH not found for receiver with phone number +38...555",
+		},
+		{
+			name:     "returns an error if the receiver does not have any receiverVerification row with the given verification type (NATIONAL_ID_NUMBER)",
 			receiver: *receiver,
 			registrationRequest: data.ReceiverRegistrationRequest{
 				PhoneNumber:       receiver.PhoneNumber,
@@ -557,7 +569,6 @@ func Test_VerifyReceiverRegistrationHandler_buildPaymentsReadyToPayEventMessage(
 
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
-	handler := VerifyReceiverRegistrationHandler{Models: models}
 
 	data.DeleteAllFixtures(t, ctx, dbConnectionPool)
 
@@ -570,6 +581,10 @@ func Test_VerifyReceiverRegistrationHandler_buildPaymentsReadyToPayEventMessage(
 	t.Run("doesn't return error when there's no payment", func(t *testing.T) {
 		defer data.DeleteAllDisbursementFixtures(t, ctx, dbConnectionPool)
 		defer data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
+
+		handler := VerifyReceiverRegistrationHandler{
+			Models: models,
+		}
 
 		pausedDisbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
 			Wallet:  wallet,
@@ -601,6 +616,15 @@ func Test_VerifyReceiverRegistrationHandler_buildPaymentsReadyToPayEventMessage(
 		defer data.DeleteAllDisbursementFixtures(t, ctx, dbConnectionPool)
 		defer data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
 		ctxWithoutTenant := context.Background()
+		distAccountResolverMock := sigMocks.NewMockDistributionAccountResolver(t)
+		distAccountResolverMock.
+			On("DistributionAccountFromContext", mock.Anything).
+			Return(schema.TransactionAccount{Type: schema.DistributionAccountStellarEnv}, nil).
+			Once()
+		handler := VerifyReceiverRegistrationHandler{
+			Models:                      models,
+			DistributionAccountResolver: distAccountResolverMock,
+		}
 
 		disbursement := data.CreateDisbursementFixture(t, ctxWithoutTenant, dbConnectionPool, models.Disbursements, &data.Disbursement{
 			Wallet:  wallet,
@@ -622,9 +646,19 @@ func Test_VerifyReceiverRegistrationHandler_buildPaymentsReadyToPayEventMessage(
 		assert.Nil(t, msg)
 	})
 
-	t.Run("🎉 successfully builds the message", func(t *testing.T) {
+	t.Run("🎉 successfully builds the message for stellar payment", func(t *testing.T) {
 		defer data.DeleteAllDisbursementFixtures(t, ctx, dbConnectionPool)
 		defer data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
+
+		distAccountResolverMock := sigMocks.NewMockDistributionAccountResolver(t)
+		distAccountResolverMock.
+			On("DistributionAccountFromContext", mock.Anything).
+			Return(schema.TransactionAccount{Type: schema.DistributionAccountStellarEnv}, nil).
+			Once()
+		handler := VerifyReceiverRegistrationHandler{
+			Models:                      models,
+			DistributionAccountResolver: distAccountResolverMock,
+		}
 
 		disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
 			Wallet:  wallet,
@@ -643,6 +677,55 @@ func Test_VerifyReceiverRegistrationHandler_buildPaymentsReadyToPayEventMessage(
 
 		expectedMessage := events.Message{
 			Topic:    events.PaymentReadyToPayTopic,
+			Key:      rw.ID,
+			TenantID: tnt.ID,
+			Type:     events.PaymentReadyToPayReceiverVerificationCompleted,
+			Data: schemas.EventPaymentsReadyToPayData{
+				TenantID: tnt.ID,
+				Payments: []schemas.PaymentReadyToPay{
+					{
+						ID: payment.ID,
+					},
+				},
+			},
+		}
+
+		msg, err := handler.buildPaymentsReadyToPayEventMessage(ctx, dbConnectionPool, rw)
+		assert.NoError(t, err)
+		assert.Equal(t, expectedMessage, *msg)
+	})
+
+	t.Run("🎉 successfully builds the message for circle payment", func(t *testing.T) {
+		defer data.DeleteAllDisbursementFixtures(t, ctx, dbConnectionPool)
+		defer data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
+
+		distAccountResolverMock := sigMocks.NewMockDistributionAccountResolver(t)
+		distAccountResolverMock.
+			On("DistributionAccountFromContext", mock.Anything).
+			Return(schema.TransactionAccount{Type: schema.DistributionAccountCircleDBVault}, nil).
+			Once()
+		handler := VerifyReceiverRegistrationHandler{
+			Models:                      models,
+			DistributionAccountResolver: distAccountResolverMock,
+		}
+
+		disbursement := data.CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &data.Disbursement{
+			Wallet:  wallet,
+			Asset:   asset,
+			Country: country,
+			Status:  data.StartedDisbursementStatus,
+		})
+
+		payment := data.CreatePaymentFixture(t, ctx, dbConnectionPool, models.Payment, &data.Payment{
+			Amount:         "100",
+			Status:         data.ReadyPaymentStatus,
+			Disbursement:   disbursement,
+			Asset:          *asset,
+			ReceiverWallet: rw,
+		})
+
+		expectedMessage := events.Message{
+			Topic:    events.CirclePaymentReadyToPayTopic,
 			Key:      rw.ID,
 			TenantID: tnt.ID,
 			Type:     events.PaymentReadyToPayReceiverVerificationCompleted,
@@ -1271,6 +1354,13 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 				mockCrashTracker := &crashtracker.MockCrashTrackerClient{}
 				defer mockCrashTracker.AssertExpectations(t)
 				mockEventProducer := events.NewMockProducer(t)
+
+				distAccountResolverMock := sigMocks.NewMockDistributionAccountResolver(t)
+				distAccountResolverMock.
+					On("DistributionAccountFromContext", mock.Anything).
+					Return(schema.TransactionAccount{Type: schema.DistributionAccountStellarEnv}, nil).
+					Maybe()
+
 				if tc.produccesEventSuccessfully {
 					mockEventProducer.
 						On("WriteMessages", mock.Anything, []events.Message{
@@ -1300,11 +1390,12 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 
 				// create handler
 				handler := &VerifyReceiverRegistrationHandler{
-					Models:                   models,
-					ReCAPTCHAValidator:       reCAPTCHAValidator,
-					AnchorPlatformAPIService: mockAnchorPlatformService,
-					EventProducer:            mockEventProducer,
-					CrashTrackerClient:       mockCrashTracker,
+					Models:                      models,
+					ReCAPTCHAValidator:          reCAPTCHAValidator,
+					AnchorPlatformAPIService:    mockAnchorPlatformService,
+					EventProducer:               mockEventProducer,
+					CrashTrackerClient:          mockCrashTracker,
+					DistributionAccountResolver: distAccountResolverMock,
 				}
 
 				// setup router and execute request

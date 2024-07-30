@@ -8,7 +8,67 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 None
 
-## [2.0.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/2.0.0)
+## [2.1.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/2.1.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/2.0.0...2.1.0))
+
+Release of the Stellar Disbursement Platform v2.1.0. This release introduces
+the option to set different distribution account signers per tenant, as well
+as Circle support, so the tenant can choose to run their payments through the
+Circle API rather than directly on the Stellar network.
+
+This version is only compatible with the [stellar/stellar-disbursement-platform-frontend] version `2.1.0`.
+
+### Changed
+
+- Update the name of the account types used for Distribution Accounts to be more descriptive. [#285](https://github.com/stellar/stellar-disbursement-platform-backend/pull/285), [#311](https://github.com/stellar/stellar-disbursement-platform-backend/pull/311)
+- When provisioning a tenant, indicate the Distribution account signer type [#319](https://github.com/stellar/stellar-disbursement-platform-backend/pull/319)
+- The DistributionAccountResolver now surfaces the tenant's CircleWalletID for Circle-using tenants [#328](https://github.com/stellar/stellar-disbursement-platform-backend/pull/328)
+- Disable asset management calls when the tenant is using Circle [#322](https://github.com/stellar/stellar-disbursement-platform-backend/pull/322)
+- Bump version of [github.com/stellar/go](https://github.com/stellar/go) to become compatible with Protocol 21.
+
+### Added
+
+- Add a new verification type called `YEAR_MONTH` [#369](https://github.com/stellar/stellar-disbursement-platform-backend/pull/369)
+- Add the ability to use different signature types per tenant, allowing for more flexibility in the signature service. [#289](https://github.com/stellar/stellar-disbursement-platform-backend/pull/289)
+- Add support to provision tenants with `accountType=DISTRIBUTION_ACCOUNT.CIRCLE.DB_VAULT` [#330](https://github.com/stellar/stellar-disbursement-platform-backend/pull/330)
+- Circle SDK integration for the backend. [#321](https://github.com/stellar/stellar-disbursement-platform-backend/pull/321)
+- Implement CircleService on top of the CircleClient, in order to automatically route the calls through the correct tenant based on the tenant value saved in the context [#331](https://github.com/stellar/stellar-disbursement-platform-backend/pull/331)
+- Add support for Circle-using tenants when validating the tenant available balance upon disbursement start [#309](https://github.com/stellar/stellar-disbursement-platform-backend/pull/309), [#336](https://github.com/stellar/stellar-disbursement-platform-backend/pull/336)
+- Implement [joho/godotenv](https://github.com/joho/godotenv) loader [#324](https://github.com/stellar/stellar-disbursement-platform-backend/pull/324)
+- Add support for Circle-using tenants to the `db setup-for-network` CLI command [#327](https://github.com/stellar/stellar-disbursement-platform-backend/pull/327)
+- Implement the `GET /balances` endpoint that returns the Circle balance when the tenant is using Circle [#325](https://github.com/stellar/stellar-disbursement-platform-backend/pull/325), [#329](https://github.com/stellar/stellar-disbursement-platform-backend/pull/329)
+- Implement the `PATCH /organization/circle-config` endpoint that allows Circle configuration to be updated for Circle-using tenants [#326](https://github.com/stellar/stellar-disbursement-platform-backend/pull/326), [#332](https://github.com/stellar/stellar-disbursement-platform-backend/pull/332), [#334](https://github.com/stellar/stellar-disbursement-platform-backend/pull/334)
+- Send Stellar payments through Circle when the tenant uses a CIRCLE distribution account [#333](https://github.com/stellar/stellar-disbursement-platform-backend/pull/333)
+- Implement Circle reconciliation through polling [#339](https://github.com/stellar/stellar-disbursement-platform-backend/pull/339), [#347](https://github.com/stellar/stellar-disbursement-platform-backend/pull/347)
+- Add Circle transfer ID to GET /payments endpoints [#346](https://github.com/stellar/stellar-disbursement-platform-backend/pull/346)
+- Add function to migrate data from a single-tenant to a multi-tenant instance [#351](https://github.com/stellar/stellar-disbursement-platform-backend/pull/351)
+- Invalidate Circle Distribution Account Status upon receiving auth error [#350](https://github.com/stellar/stellar-disbursement-platform-backend/pull/350), [359](https://github.com/stellar/stellar-disbursement-platform-backend/pull/359)
+- Add retry for circle 429 requests [#362](https://github.com/stellar/stellar-disbursement-platform-backend/pull/362)
+- Separate Stellar and Circle payment jobs [#366](https://github.com/stellar/stellar-disbursement-platform-backend/pull/366), [#374](https://github.com/stellar/stellar-disbursement-platform-backend/pull/374)
+- Misc
+  - Reformat the imports using goimports and enforce it through a GH Action [#337](https://github.com/stellar/stellar-disbursement-platform-backend/pull/337)
+  - Added dependabot extra features [#349](https://github.com/stellar/stellar-disbursement-platform-backend/pull/349)
+  - Add CI for e2e integration test for Circle [#342](https://github.com/stellar/stellar-disbursement-platform-backend/pull/342), [#357](https://github.com/stellar/stellar-disbursement-platform-backend/pull/357)
+  - Add CI to validate single-tenant to multi-tenant migration [#356](https://github.com/stellar/stellar-disbursement-platform-backend/pull/356)
+
+### Fixed
+
+- Fix SDP helm charts [#323](https://github.com/stellar/stellar-disbursement-platform-backend/pull/323), [#375](https://github.com/stellar/stellar-disbursement-platform-backend/pull/375)
+- Fix CF 429 response and anchor patch transaction job for circle accounts [#361](https://github.com/stellar/stellar-disbursement-platform-backend/pull/361)
+- Select the correct error object used in a crash-reporter alert [#365](https://github.com/stellar/stellar-disbursement-platform-backend/pull/365)
+- Fixes post python migration [#367](https://github.com/stellar/stellar-disbursement-platform-backend/pull/367)
+- Make `PATCH /receivers/:id` validation consistent [#371](https://github.com/stellar/stellar-disbursement-platform-backend/pull/371)
+
+### Security
+
+- Security patch for gorilla/schema and rs/cors [#345](https://github.com/stellar/stellar-disbursement-platform-backend/pull/345)
+- Bump versions of getsentry/sentry-go and gofiber/fiber [#352](https://github.com/stellar/stellar-disbursement-platform-backend/pull/352)
+
+### Deprecated
+
+- Deprecated the use of `DISTRIBUTION_SIGNER_TYPE`, since this information is now provided when provisioning a tenant [#319](https://github.com/stellar/stellar-disbursement-platform-backend/pull/319).
+- Remove Freedom Wallet from the list of pubnet wallets [#372](https://github.com/stellar/stellar-disbursement-platform-backend/pull/372)
+
+## [2.0.0](https://github.com/stellar/stellar-disbursement-platform-backend/releases/tag/2.0.0) ([diff](https://github.com/stellar/stellar-disbursement-platform-backend/compare/1.1.7...2.0.0))
 
 Release of the Stellar Disbursement Platform v2.0.0. This
 release introduces multi-tenancy support, allowing multiple tenants
@@ -16,9 +76,10 @@ release introduces multi-tenancy support, allowing multiple tenants
 
 Each organization has its own set of users, receivers, disbursements, etc.
 
-This version is only compatible with the [stellar/stellar-disbursement-platform-frontend] version 2.x.x.
+This version is only compatible with the [stellar/stellar-disbursement-platform-frontend] version `2.0.0`.
 
 ### Changed
+
 - Support multi-tenant CLI
   - Make `add-user` CLI support multi-tenancy [#228](https://github.com/stellar/stellar-disbursement-platform-backend/pull/228)
   - Change migrations CLI to run for all tenants [#89](https://github.com/stellar/stellar-disbursement-platform-backend/pull/89)
@@ -27,10 +88,11 @@ This version is only compatible with the [stellar/stellar-disbursement-platform-
 - Tag log entries with tenant metadata [#192](https://github.com/stellar/stellar-disbursement-platform-backend/pull/192)
 - Use `DistributionAccountResolver` instead of passing around distribution public key [#212](https://github.com/stellar/stellar-disbursement-platform-backend/pull/212)
 - Make provision new tenant an atomic operation [#233](https://github.com/stellar/stellar-disbursement-platform-backend/pull/233)
-- Make `ready_payments_cancellation` job multi-tenant [#223] (https://github.com/stellar/stellar-disbursement-platform-backend/pull/223)
+- Make `ready_payments_cancellation` job multi-tenant [#223](https://github.com/stellar/stellar-disbursement-platform-backend/pull/223)
 
 
 ### Added
+
 - Tenant Provisioning & Onboarding [#84](https://github.com/stellar/stellar-disbursement-platform-backend/pull/84)
 - Tenant Authentication Middleware [#92](https://github.com/stellar/stellar-disbursement-platform-backend/pull/92)
 - Multi-tenancy connection pool & data source manager [#86](https://github.com/stellar/stellar-disbursement-platform-backend/pull/86)
@@ -50,8 +112,7 @@ This version is only compatible with the [stellar/stellar-disbursement-platform-
 - Patch incoming TSS events to Anchor platform [#134](https://github.com/stellar/stellar-disbursement-platform-backend/pull/134)
 - Update DB structure so that TSS resources can be shared by multiple SDP tenants
   - Move all TSS related tables to TSS schema [#141](https://github.com/stellar/stellar-disbursement-platform-backend/pull/141)
-  - Create TSS schema and migrations CLI command [#136](https://github.com/
-    stellar/stellar-disbursement-platform-backend/pull/136)
+  - Create TSS schema and migrations CLI command [#136](https://github.com/stellar/stellar-disbursement-platform-backend/pull/136)
   - Refactor migrations commands to support TSS migrations [#123](https://github.com/stellar/stellar-disbursement-platform-backend/pull/123)
 - Add host distribution account awareness [#172](https://github.com/stellar/stellar-disbursement-platform-backend/pull/172)
 - Wire distribution account to tenant admin table during user provisioning [#198](https://github.com/stellar/stellar-disbursement-platform-backend/pull/198)
@@ -59,7 +120,7 @@ This version is only compatible with the [stellar/stellar-disbursement-platform-
 - Kafka message broker support
   - Migrate SMS invitation to use message broker from scheduled jobs [#133](https://github.com/stellar/stellar-disbursement-platform-backend/pull/133)
   - Publish receiver wallet invitation events at disbursement start [#182](https://github.com/stellar/stellar-disbursement-platform-backend/pull/182)
-  - Produce payment events to sync back to SDP [#149] (https://github.com/stellar/stellar-disbursement-platform-backend/pull/149)
+  - Produce payment events to sync back to SDP [#149](https://github.com/stellar/stellar-disbursement-platform-backend/pull/149)
   - Produce payment events from SDP to TSS [#159](https://github.com/stellar/stellar-disbursement-platform-backend/pull/159)
 - Implement `DistributionAccountDBSignatureClient` [#197](https://github.com/stellar/stellar-disbursement-platform-backend/pull/197)
 - Create tenant distribution account during provisioning [#224](https://github.com/stellar/stellar-disbursement-platform-backend/pull/224)
@@ -68,6 +129,7 @@ This version is only compatible with the [stellar/stellar-disbursement-platform-
 - Add script to migrate SDP v1.1.6 to V2.x.x [#267](https://github.com/stellar/stellar-disbursement-platform-backend/pull/267)
 
 ### Security
+
 - Admin API authentication/authorization [#201](https://github.com/stellar/stellar-disbursement-platform-backend/pull/201)
 - Enable security protocols for Kafka
   - SASL auth [#162](https://github.com/stellar/stellar-disbursement-platform-backend/pull/162)

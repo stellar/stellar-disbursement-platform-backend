@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/lib/pq"
 	"github.com/stellar/go/support/log"
 
-	"github.com/lib/pq"
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
@@ -22,15 +22,16 @@ type Payment struct {
 	Amount               string `json:"amount" db:"amount"`
 	StellarTransactionID string `json:"stellar_transaction_id" db:"stellar_transaction_id"`
 	// TODO: evaluate if we will keep or remove StellarOperationID
-	StellarOperationID string               `json:"stellar_operation_id" db:"stellar_operation_id"`
-	Status             PaymentStatus        `json:"status" db:"status"`
-	StatusHistory      PaymentStatusHistory `json:"status_history,omitempty" db:"status_history"`
-	Disbursement       *Disbursement        `json:"disbursement,omitempty" db:"disbursement"`
-	Asset              Asset                `json:"asset"`
-	ReceiverWallet     *ReceiverWallet      `json:"receiver_wallet,omitempty" db:"receiver_wallet"`
-	CreatedAt          time.Time            `json:"created_at" db:"created_at"`
-	UpdatedAt          time.Time            `json:"updated_at" db:"updated_at"`
-	ExternalPaymentID  string               `json:"external_payment_id,omitempty" db:"external_payment_id"`
+	StellarOperationID      string               `json:"stellar_operation_id" db:"stellar_operation_id"`
+	Status                  PaymentStatus        `json:"status" db:"status"`
+	StatusHistory           PaymentStatusHistory `json:"status_history,omitempty" db:"status_history"`
+	Disbursement            *Disbursement        `json:"disbursement,omitempty" db:"disbursement"`
+	Asset                   Asset                `json:"asset"`
+	ReceiverWallet          *ReceiverWallet      `json:"receiver_wallet,omitempty" db:"receiver_wallet"`
+	CreatedAt               time.Time            `json:"created_at" db:"created_at"`
+	UpdatedAt               time.Time            `json:"updated_at" db:"updated_at"`
+	ExternalPaymentID       string               `json:"external_payment_id,omitempty" db:"external_payment_id"`
+	CircleTransferRequestID *string              `json:"circle_transfer_request_id,omitempty"`
 }
 
 type PaymentStatusHistoryEntry struct {
@@ -139,12 +140,52 @@ func (p *PaymentUpdate) Validate() error {
 	return nil
 }
 
+const basePaymentQuery = `
+SELECT
+	p.id,
+	p.amount,
+	COALESCE(p.stellar_transaction_id, '') as stellar_transaction_id,
+	COALESCE(p.stellar_operation_id, '') as stellar_operation_id,
+	p.status,
+	p.status_history,
+	p.created_at,
+	p.updated_at,
+	COALESCE(p.external_payment_id, '') as external_payment_id,
+	d.id as "disbursement.id",
+	d.name as "disbursement.name",
+	d.status as "disbursement.status",
+	d.created_at as "disbursement.created_at",
+	d.updated_at as "disbursement.updated_at",
+	a.id as "asset.id",
+	a.code as "asset.code",
+	a.issuer as "asset.issuer",
+	rw.id as "receiver_wallet.id",
+	COALESCE(rw.stellar_address, '') as "receiver_wallet.stellar_address",
+	COALESCE(rw.stellar_memo, '') as "receiver_wallet.stellar_memo",
+	COALESCE(rw.stellar_memo_type, '') as "receiver_wallet.stellar_memo_type",
+	rw.status as "receiver_wallet.status",
+	rw.created_at as "receiver_wallet.created_at",
+	rw.updated_at as "receiver_wallet.updated_at",
+	rw.receiver_id as "receiver_wallet.receiver.id",
+	COALESCE(rw.anchor_platform_transaction_id, '') AS "receiver_wallet.anchor_platform_transaction_id",
+	rw.anchor_platform_transaction_synced_at as "receiver_wallet.anchor_platform_transaction_synced_at",
+	w.id as "receiver_wallet.wallet.id",
+	w.name as "receiver_wallet.wallet.name",
+	w.enabled as "receiver_wallet.wallet.enabled"
+FROM
+	payments p
+JOIN disbursements d ON p.disbursement_id = d.id
+JOIN assets a ON p.asset_id = a.id
+JOIN wallets w on d.wallet_id = w.id
+JOIN receiver_wallets rw on rw.receiver_id = p.receiver_id AND rw.wallet_id = w.id
+`
+
 func (p *PaymentModel) GetAllReadyToPatchCompletionAnchorTransactions(ctx context.Context, sqlExec db.SQLExecuter) ([]Payment, error) {
 	const query = `
 		SELECT
 			p.id,
 			p.amount,
-			p.stellar_transaction_id,
+			COALESCE(p.stellar_transaction_id, '') as "stellar_transaction_id",
 			p.status,
 			p.status_history,
 			p.updated_at,
@@ -154,7 +195,7 @@ func (p *PaymentModel) GetAllReadyToPatchCompletionAnchorTransactions(ctx contex
 			rw.id AS "receiver_wallet.id",
 			COALESCE(rw.stellar_memo, '') AS "receiver_wallet.stellar_memo",
 			COALESCE(rw.stellar_memo_type, '') AS "receiver_wallet.stellar_memo_type",
-			rw.anchor_platform_transaction_id AS "receiver_wallet.anchor_platform_transaction_id",
+			COALESCE(rw.anchor_platform_transaction_id, '') AS "receiver_wallet.anchor_platform_transaction_id",
 			rw.anchor_platform_transaction_synced_at AS "receiver_wallet.anchor_platform_transaction_synced_at"
 		FROM
 			payments p
@@ -165,6 +206,7 @@ func (p *PaymentModel) GetAllReadyToPatchCompletionAnchorTransactions(ctx contex
 		WHERE
 			p.status = ANY($1) -- ARRAY['SUCCESS', 'FAILURE']::payment_status[]
 			AND rw.status = $2 -- 'REGISTERED'::receiver_wallet_status
+			AND rw.anchor_platform_transaction_id IS NOT NULL
 			AND rw.anchor_platform_transaction_synced_at IS NULL
 		ORDER BY
 			p.created_at
@@ -183,46 +225,7 @@ func (p *PaymentModel) GetAllReadyToPatchCompletionAnchorTransactions(ctx contex
 func (p *PaymentModel) Get(ctx context.Context, id string, sqlExec db.SQLExecuter) (*Payment, error) {
 	payment := Payment{}
 
-	query := `
-		SELECT
-			p.id,
-			p.amount,
-			COALESCE(p.stellar_transaction_id, '') as stellar_transaction_id,
-			COALESCE(p.stellar_operation_id, '') as stellar_operation_id,
-			p.status,
-			p.status_history,
-			p.created_at,
-			p.updated_at,
-			COALESCE(p.external_payment_id, '') as external_payment_id,
-			d.id as "disbursement.id",
-			d.name as "disbursement.name",
-			d.status as "disbursement.status",
-			d.created_at as "disbursement.created_at",
-			d.updated_at as "disbursement.updated_at",
-			a.id as "asset.id",
-			a.code as "asset.code",
-			a.issuer as "asset.issuer",
-			rw.id as "receiver_wallet.id",
-			COALESCE(rw.stellar_address, '') as "receiver_wallet.stellar_address",
-			COALESCE(rw.stellar_memo, '') as "receiver_wallet.stellar_memo",
-			COALESCE(rw.stellar_memo_type, '') as "receiver_wallet.stellar_memo_type",
-			rw.status as "receiver_wallet.status",
-			rw.created_at as "receiver_wallet.created_at",
-			rw.updated_at as "receiver_wallet.updated_at",
-			rw.receiver_id as "receiver_wallet.receiver.id",
-			COALESCE(rw.anchor_platform_transaction_id, '') as "receiver_wallet.anchor_platform_transaction_id",
-			rw.anchor_platform_transaction_synced_at as "receiver_wallet.anchor_platform_transaction_synced_at",
-			w.id as "receiver_wallet.wallet.id",
-			w.name as "receiver_wallet.wallet.name",
-			w.enabled as "receiver_wallet.wallet.enabled"
-		FROM
-			payments p
-		JOIN disbursements d ON p.disbursement_id = d.id
-		JOIN assets a ON p.asset_id = a.id
-		JOIN receiver_wallets rw ON rw.receiver_id = p.receiver_id AND rw.wallet_id = d.wallet_id
-		JOIN wallets w ON rw.wallet_id = w.id
-		WHERE p.id = $1
-		`
+	query := fmt.Sprintf(`%s WHERE p.id = $1`, basePaymentQuery)
 
 	err := sqlExec.GetContext(ctx, &payment, query, id)
 	if err != nil {
@@ -309,47 +312,7 @@ func (p *PaymentModel) Count(ctx context.Context, queryParams *QueryParams, sqlE
 func (p *PaymentModel) GetAll(ctx context.Context, queryParams *QueryParams, sqlExec db.SQLExecuter) ([]Payment, error) {
 	payments := []Payment{}
 
-	query := `
-		SELECT
-			p.id,
-			p.amount,
-			COALESCE(p.stellar_transaction_id, '') as stellar_transaction_id,
-			COALESCE(p.stellar_operation_id, '') as stellar_operation_id,
-			p.status,
-			p.status_history,
-			p.created_at,
-			p.updated_at,
-			COALESCE(p.external_payment_id, '') as external_payment_id,
-			d.id as "disbursement.id",
-			d.name as "disbursement.name",
-			d.status as "disbursement.status",
-			d.created_at as "disbursement.created_at",
-			d.updated_at as "disbursement.updated_at",
-			a.id as "asset.id",
-			a.code as "asset.code",
-			a.issuer as "asset.issuer",
-			rw.id as "receiver_wallet.id",
-			COALESCE(rw.stellar_address, '') as "receiver_wallet.stellar_address",
-			COALESCE(rw.stellar_memo, '') as "receiver_wallet.stellar_memo",
-			COALESCE(rw.stellar_memo_type, '') as "receiver_wallet.stellar_memo_type",
-			rw.status as "receiver_wallet.status",
-			rw.created_at as "receiver_wallet.created_at",
-			rw.updated_at as "receiver_wallet.updated_at",
-			rw.receiver_id as "receiver_wallet.receiver.id",
-			COALESCE(rw.anchor_platform_transaction_id, '') as "receiver_wallet.anchor_platform_transaction_id",
-			rw.anchor_platform_transaction_synced_at as "receiver_wallet.anchor_platform_transaction_synced_at",
-			w.id as "receiver_wallet.wallet.id",
-			w.name as "receiver_wallet.wallet.name",
-			w.enabled as "receiver_wallet.wallet.enabled"
-		FROM
-			payments p
-		JOIN disbursements d on p.disbursement_id = d.id
-		JOIN assets a on p.asset_id = a.id
-		JOIN wallets w on d.wallet_id = w.id
-		JOIN receiver_wallets rw on rw.receiver_id = p.receiver_id AND rw.wallet_id = w.id
-	`
-
-	query, params := newPaymentQuery(query, queryParams, true, sqlExec)
+	query, params := newPaymentQuery(basePaymentQuery, queryParams, true, sqlExec)
 
 	err := sqlExec.SelectContext(ctx, &payments, query, params...)
 	if err != nil {
@@ -757,6 +720,58 @@ func (p *PaymentModel) CancelPaymentsWithinPeriodDays(ctx context.Context, sqlEx
 	}
 	if numRowsAffected == 0 {
 		log.Ctx(ctx).Debug("No payments were canceled")
+	}
+
+	return nil
+}
+
+// UpdateStatus updates the status of a payment.
+func (p *PaymentModel) UpdateStatus(
+	ctx context.Context,
+	sqlExec db.SQLExecuter,
+	paymentID string,
+	status PaymentStatus,
+	statusMsg *string,
+	stellarTransactionHash string,
+) error {
+	if paymentID == "" {
+		return fmt.Errorf("paymentID is required")
+	}
+
+	err := status.Validate()
+	if err != nil {
+		return fmt.Errorf("status is invalid: %w", err)
+	}
+
+	args := []interface{}{status, statusMsg, paymentID}
+	query := `
+		UPDATE
+			payments
+		SET 
+			status = $1::payment_status,
+			status_history = array_append(status_history, create_payment_status_history(NOW(), $1, $2))
+			%s
+		WHERE
+			id = $3
+	`
+	var optionalQuerySet string
+	if stellarTransactionHash != "" {
+		args = append(args, stellarTransactionHash)
+		optionalQuerySet = fmt.Sprintf(", stellar_transaction_id = $%d", len(args))
+	}
+	query = fmt.Sprintf(query, optionalQuerySet)
+
+	result, err := sqlExec.ExecContext(ctx, query, args...)
+	if err != nil {
+		return fmt.Errorf("marking payment as %s: %w", status, err)
+	}
+
+	numRowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("getting number of rows affected: %w", err)
+	}
+	if numRowsAffected == 0 {
+		return fmt.Errorf("payment with ID %s was not found: %w", paymentID, ErrRecordNotFound)
 	}
 
 	return nil

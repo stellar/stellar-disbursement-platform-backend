@@ -11,6 +11,7 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
+	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
@@ -26,14 +27,14 @@ type AdminApiIntegrationTestsInterface interface {
 }
 
 type CreateTenantRequest struct {
-	Name                string `json:"name"`
-	OwnerEmail          string `json:"owner_email"`
-	OwnerFirstName      string `json:"owner_first_name"`
-	OwnerLastName       string `json:"owner_last_name"`
-	OrganizationName    string `json:"organization_name"`
-	BaseURL             string `json:"base_url"`
-	SDPUIBaseURL        string `json:"sdp_ui_base_url"`
-	DistributionAccount string `json:"distribution_account"`
+	Name                    string             `json:"name"`
+	OwnerEmail              string             `json:"owner_email"`
+	OwnerFirstName          string             `json:"owner_first_name"`
+	OwnerLastName           string             `json:"owner_last_name"`
+	OrganizationName        string             `json:"organization_name"`
+	DistributionAccountType schema.AccountType `json:"distribution_account_type"`
+	BaseURL                 string             `json:"base_url"`
+	SDPUIBaseURL            string             `json:"sdp_ui_base_url"`
 }
 
 func (aa AdminApiIntegrationTests) CreateTenant(ctx context.Context, body CreateTenantRequest) (*tenant.Tenant, error) {

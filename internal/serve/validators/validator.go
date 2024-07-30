@@ -20,6 +20,9 @@ func (v *Validator) Check(ok bool, key, message string) {
 
 // CheckError is a convenience method for checking if an error is nil
 func (v *Validator) CheckError(err error, key, message string) {
+	if err != nil && message == "" {
+		message = err.Error()
+	}
 	v.Check(err == nil, key, message)
 }
 
