@@ -19,6 +19,7 @@ type MFAManager interface {
 	GenerateMFACode(ctx context.Context, deviceID, userID string) (string, error)
 	ValidateMFACode(ctx context.Context, deviceID, code string) (string, error)
 	RememberDevice(ctx context.Context, deviceID, code string) error
+	GetAuthUserID(ctx context.Context, deviceID string) (string, error)
 }
 
 // defaultMFAManager
@@ -35,6 +36,7 @@ const (
 var (
 	ErrMFACodeInvalid         = errors.New("MFA code is invalid")
 	ErrMFANoCodeForUserDevice = errors.New("no MFA code for user and device")
+	ErrMFADeviceNotFound      = errors.New("MFA device not found")
 )
 
 type mfaCode struct {
@@ -145,6 +147,31 @@ func (m *defaultMFAManager) ForgetDevice(ctx context.Context, deviceID, userID s
 		return fmt.Errorf("error expiring device for device ID %s and user ID %s: %w", deviceID, userID, err)
 	}
 	return nil
+}
+
+func (m *defaultMFAManager) GetAuthUserID(ctx context.Context, deviceID string) (string, error) {
+	if deviceID == "" {
+		return "", fmt.Errorf("device ID is required")
+	}
+
+	const query = `
+		SELECT 
+			auth_user_id
+		FROM 
+			auth_user_mfa_codes 
+		WHERE 
+			device_id = $1
+	`
+	var userID string
+	err := m.dbConnectionPool.GetContext(ctx, &userID, query, deviceID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", ErrMFADeviceNotFound
+		}
+		return "", fmt.Errorf("error fetching user ID for device ID %s: %w", deviceID, err)
+	}
+
+	return userID, nil
 }
 
 // getByDeviceAndUser gets the MFA code for the user and device.

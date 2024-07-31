@@ -50,6 +50,37 @@ func (h MFAHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	user, err := h.AuthManager.GetUserByMFA(ctx, deviceID)
+	if err != nil {
+		if errors.Is(err, auth.ErrMFADeviceNotFound) {
+			// If we don't find the user by device id, we just return an ok response
+			// to prevent malicious client from searching for the device in the system
+			log.Ctx(ctx).Errorf("Device id in request not found: %s", deviceID)
+		}
+		httperror.InternalError(ctx, "Cannot get user by MFA", err, nil).Render(rw)
+		return
+	}
+
+	userRoleCanBypassReCAPTCHA := false
+	if user != nil {
+		userRoleCanBypassReCAPTCHA = slices.Contains(user.Roles, data.APIUserRole.String())
+	}
+
+	// validating reCAPTCHA Token
+	if !h.ReCAPTCHADisabled && !userRoleCanBypassReCAPTCHA {
+		isValid, recaptchaErr := h.ReCAPTCHAValidator.IsTokenValid(ctx, reqBody.ReCAPTCHAToken)
+		if recaptchaErr != nil {
+			httperror.InternalError(ctx, "Cannot validate reCAPTCHA token", recaptchaErr, nil).Render(rw)
+			return
+		}
+
+		if !isValid {
+			log.Ctx(ctx).Errorf("reCAPTCHA token is invalid for request with email")
+			httperror.BadRequest("reCAPTCHA token invalid", nil, nil).Render(rw)
+			return
+		}
+	}
+
 	if reqBody.MFACode == "" {
 		extras := map[string]interface{}{"mfa_code": "MFA Code is required"}
 		httperror.BadRequest("Request invalid", nil, extras).Render(rw)
@@ -65,29 +96,6 @@ func (h MFAHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		log.Ctx(ctx).Errorf("error authenticating user: %s", err.Error())
 		httperror.InternalError(ctx, "Cannot authenticate user", err, nil).Render(rw)
 		return
-	}
-
-	user, err := h.AuthManager.GetUser(ctx, token)
-	if err != nil {
-		httperror.InternalError(ctx, "Cannot get user ID", err, nil).Render(rw)
-		return
-	}
-
-	userRoleCanBypassReCAPTCHA := slices.Contains(user.Roles, data.APIUserRole.String())
-
-	// validating reCAPTCHA Token
-	if !h.ReCAPTCHADisabled && !userRoleCanBypassReCAPTCHA {
-		isValid, recaptchaErr := h.ReCAPTCHAValidator.IsTokenValid(ctx, reqBody.ReCAPTCHAToken)
-		if recaptchaErr != nil {
-			httperror.InternalError(ctx, "Cannot validate reCAPTCHA token", recaptchaErr, nil).Render(rw)
-			return
-		}
-
-		if !isValid {
-			log.Ctx(ctx).Errorf("reCAPTCHA token is invalid for request with email")
-			httperror.BadRequest("reCAPTCHA token invalid", nil, nil).Render(rw)
-			return
-		}
 	}
 
 	log.Ctx(ctx).Infof("[UserLogin] - Logged in user with account ID %s", user.ID)
