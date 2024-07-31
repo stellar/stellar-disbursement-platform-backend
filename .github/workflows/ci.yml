@@ -46,6 +46,7 @@ jobs:
         run: exhaustive -default-signifies-exhaustive ./...
 
       - name: Run `deadcode`
+        #if : ${{ github.event_name != 'pull_request' }}
         run: |
           output=$(deadcode -test ./...)
           if [[ -n "$output" ]]; then
