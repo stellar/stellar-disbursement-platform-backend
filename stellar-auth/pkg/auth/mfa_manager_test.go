@@ -334,6 +334,39 @@ func Test_defaultMFAManager_ForgetDevice(t *testing.T) {
 	})
 }
 
+func Test_defaultMFAManager_GetAuthUserID(t *testing.T) {
+	ctx := context.Background()
+
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, outerErr)
+	defer dbConnectionPool.Close()
+
+	randUser := CreateRandomAuthUserFixture(t, ctx, dbConnectionPool, NewDefaultPasswordEncrypter(), false)
+	testDeviceID := "testDeviceID"
+
+	m := newDefaultMFAManager(withMFADatabaseConnectionPool(dbConnectionPool))
+
+	_, err := m.GenerateMFACode(ctx, testDeviceID, randUser.ID)
+	require.NoError(t, err)
+
+	t.Run("returns error when device ID not found", func(t *testing.T) {
+		defer cleanup(t, ctx, dbConnectionPool)
+
+		_, err = m.GetAuthUserID(ctx, "invalidDeviceID")
+		require.ErrorContains(t, err, "MFA device not found")
+	})
+
+	t.Run("returns auth user ID when device ID is found", func(t *testing.T) {
+		defer cleanup(t, ctx, dbConnectionPool)
+
+		userID, err := m.GetAuthUserID(ctx, testDeviceID)
+		require.NoError(t, err)
+		assert.Equal(t, randUser.ID, userID)
+	})
+}
+
 func Test_defaultMFAManager_getByDeviceAndCode(t *testing.T) {
 	ctx := context.Background()
 

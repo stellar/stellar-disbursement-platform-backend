@@ -50,6 +50,12 @@ func (h MFAHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	if reqBody.MFACode == "" {
+		extras := map[string]interface{}{"mfa_code": "MFA Code is required"}
+		httperror.BadRequest("Request invalid", nil, extras).Render(rw)
+		return
+	}
+
 	user, err := h.AuthManager.GetUserByMFA(ctx, deviceID)
 	if err != nil {
 		if errors.Is(err, auth.ErrMFADeviceNotFound) {
@@ -81,19 +87,13 @@ func (h MFAHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	if reqBody.MFACode == "" {
-		extras := map[string]interface{}{"mfa_code": "MFA Code is required"}
-		httperror.BadRequest("Request invalid", nil, extras).Render(rw)
-		return
-	}
-
 	token, err := h.AuthManager.AuthenticateMFA(ctx, deviceID, reqBody.MFACode, reqBody.RememberMe)
 	if err != nil {
 		if errors.Is(err, auth.ErrMFACodeInvalid) {
 			httperror.Unauthorized("", err, nil).Render(rw)
 			return
 		}
-		log.Ctx(ctx).Errorf("error authenticating user: %s", err.Error())
+		log.Ctx(ctx).Errorf("authenticating user: %s", err.Error())
 		httperror.InternalError(ctx, "Cannot authenticate user", err, nil).Render(rw)
 		return
 	}

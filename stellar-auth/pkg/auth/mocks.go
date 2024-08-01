@@ -203,6 +203,11 @@ func (m *MFAManagerMock) RememberDevice(ctx context.Context, deviceID, code stri
 	return args.Error(0)
 }
 
+func (m *MFAManagerMock) GetAuthUserID(ctx context.Context, deviceID string) (string, error) {
+	args := m.Called(ctx, deviceID)
+	return args.Get(0).(string), args.Error(1)
+}
+
 var _ MFAManager = (*MFAManagerMock)(nil)
 
 // AuthManager
@@ -340,6 +345,14 @@ func (am *AuthManagerMock) GenerateMFACode(ctx context.Context, userID, deviceID
 func (am *AuthManagerMock) AuthenticateMFA(ctx context.Context, deviceID, code string, rememberMe bool) (string, error) {
 	args := am.Called(ctx, deviceID, code, rememberMe)
 	return args.Get(0).(string), args.Error(1)
+}
+
+func (am *AuthManagerMock) GetUserByMFA(ctx context.Context, userID string) (*User, error) {
+	args := am.Called(ctx, userID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*User), args.Error(1)
 }
 
 var _ AuthManager = (*AuthManagerMock)(nil)

@@ -341,7 +341,7 @@ func (am *defaultAuthManager) GetUserByEmail(ctx context.Context, email string) 
 func (am *defaultAuthManager) GetUserByMFA(ctx context.Context, deviceID string) (*User, error) {
 	userID, err := am.mfaManager.GetAuthUserID(ctx, deviceID)
 	if err != nil {
-		return nil, fmt.Errorf("getting user with MFA device ID: %w", err)
+		return nil, fmt.Errorf("getting user with MFA device ID %s: %w", deviceID, err)
 	}
 
 	user, err := am.authenticator.GetUser(ctx, userID)

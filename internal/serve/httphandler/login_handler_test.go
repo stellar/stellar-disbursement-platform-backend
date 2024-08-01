@@ -106,10 +106,16 @@ func Test_LoginHandler(t *testing.T) {
 	const url = "/login"
 	const email = "testuser@email.com"
 	const password = "pass1234"
-	const reCAPTCHAToken = "XyZ"
+	const defaultReCAPTCHAToken = "XyZ"
 	defaultUserRoles := []string{data.OwnerUserRole.String()}
 	defaultReqBody := fmt.Sprintf(
-		`{"email": "%s", "password": "%s", "recaptcha_token": "%s"}`, email, password, reCAPTCHAToken)
+		`{"email": "%s", "password": "%s", "recaptcha_token": "%s"}`, email, password, defaultReCAPTCHAToken)
+	user := &auth.User{
+		ID:    "user-ID",
+		Email: email,
+		Roles: []string{},
+	}
+	const defaultUserToken = "token123"
 
 	t.Run("returns error when body is invalid", func(t *testing.T) {
 		r.Post(url, handler.ServeHTTP)
@@ -183,6 +189,11 @@ func Test_LoginHandler(t *testing.T) {
 	})
 
 	t.Run("returns error when an unexpected error occurs validating the credentials", func(t *testing.T) {
+		UserByEmailSetup(authenticatorMock, roleManagerMock, user, defaultUserRoles)
+		reCAPTCHAValidator.
+			On("IsTokenValid", mock.Anything, defaultReCAPTCHAToken).
+			Return(true, nil).
+			Once()
 		authenticatorMock.
 			On("ValidateCredentials", mock.Anything, email, password).
 			Return(nil, errors.New("unexpected error")).
@@ -216,6 +227,11 @@ func Test_LoginHandler(t *testing.T) {
 	})
 
 	t.Run("returns error when the credentials are incorrect", func(t *testing.T) {
+		UserByEmailSetup(authenticatorMock, roleManagerMock, user, defaultUserRoles)
+		reCAPTCHAValidator.
+			On("IsTokenValid", mock.Anything, defaultReCAPTCHAToken).
+			Return(true, nil).
+			Once()
 		authenticatorMock.
 			On("ValidateCredentials", mock.Anything, email, password).
 			Return(nil, auth.ErrInvalidCredentials).
@@ -247,18 +263,10 @@ func Test_LoginHandler(t *testing.T) {
 		assert.JSONEq(t, wantsBody, string(respBody))
 	})
 
-	user := &auth.User{
-		ID:    "user-ID",
-		Email: email,
-		Roles: []string{},
-	}
-	userToken := "token123"
-
 	t.Run("returns error when unable to validate recaptcha", func(t *testing.T) {
-		authenticateSetup(authenticatorMock, roleManagerMock, jwtManagerMock, user, password, userToken)
-		userRoleLookupSetup(jwtManagerMock, authenticatorMock, roleManagerMock, user, defaultUserRoles, userToken)
+		UserByEmailSetup(authenticatorMock, roleManagerMock, user, defaultUserRoles)
 		reCAPTCHAValidator.
-			On("IsTokenValid", mock.Anything, "XyZ").
+			On("IsTokenValid", mock.Anything, defaultReCAPTCHAToken).
 			Return(false, errors.New("error requesting verify reCAPTCHA token")).
 			Once()
 
@@ -286,8 +294,7 @@ func Test_LoginHandler(t *testing.T) {
 	})
 
 	t.Run("returns error when recaptcha token is invalid", func(t *testing.T) {
-		authenticateSetup(authenticatorMock, roleManagerMock, jwtManagerMock, user, password, userToken)
-		userRoleLookupSetup(jwtManagerMock, authenticatorMock, roleManagerMock, user, defaultUserRoles, userToken)
+		UserByEmailSetup(authenticatorMock, roleManagerMock, user, defaultUserRoles)
 		reCAPTCHAValidator.
 			On("IsTokenValid", mock.Anything, "XyZ").
 			Return(false, nil).
@@ -322,13 +329,12 @@ func Test_LoginHandler(t *testing.T) {
 		log.SetLevel(log.InfoLevel)
 
 		usersRoles := make([][]string, 2)
-		// role cannot bypass reCAPTCHA
+		// user roles cannot bypass reCAPTCHA
 		usersRoles[0] = defaultUserRoles
-		// role can bypass reCAPTCHA
+		// user roles can bypass reCAPTCHA
 		usersRoles[1] = []string{data.OwnerUserRole.String(), data.APIUserRole.String()}
 		for _, userRoles := range usersRoles {
-			authenticateSetup(authenticatorMock, roleManagerMock, jwtManagerMock, user, password, userToken)
-			userRoleLookupSetup(jwtManagerMock, authenticatorMock, roleManagerMock, user, userRoles, userToken)
+			UserByEmailSetup(authenticatorMock, roleManagerMock, user, userRoles)
 			reqBody := `
 				{
 					"email": "testuser@email.com",
@@ -336,11 +342,12 @@ func Test_LoginHandler(t *testing.T) {
 				}`
 			if !slices.Contains(userRoles, data.APIUserRole.String()) {
 				reCAPTCHAValidator.
-					On("IsTokenValid", mock.Anything, "XyZ").
+					On("IsTokenValid", mock.Anything, defaultReCAPTCHAToken).
 					Return(true, nil).
 					Once()
 				reqBody = defaultReqBody
 			}
+			authenticateSetup(authenticatorMock, roleManagerMock, jwtManagerMock, user, password, defaultUserToken)
 
 			r.Post(url, handler.ServeHTTP)
 
@@ -410,34 +417,9 @@ func Test_LoginHandlerr_ServeHTTP_MFA(t *testing.T) {
 	const mfaCode = "123123"
 	defaultUserRoles := []string{data.OwnerUserRole.String()}
 
-	t.Run("error getting user from token", func(t *testing.T) {
-		authenticateSetup(authenticatorMock, roleManagerMock, jwtManagerMock, user, password, userToken)
-		jwtManagerMock.
-			On("ValidateToken", mock.Anything, userToken).
-			Return(true, nil).
-			Once()
-		jwtManagerMock.
-			On("GetUserFromToken", mock.Anything, userToken).
-			Return(user, nil).
-			Once()
-		authenticatorMock.
-			On("GetUser", mock.Anything, user.ID).
-			Return(nil, errors.New("weird error happened")).
-			Once()
-
-		body := LoginRequest{Email: user.Email, Password: password}
-		req := httptest.NewRequest(http.MethodPost, "/login", requestToJSON(t, &body))
-		rw := httptest.NewRecorder()
-
-		loginHandler.ServeHTTP(rw, req)
-
-		require.Equal(t, http.StatusInternalServerError, rw.Code)
-		require.Contains(t, rw.Body.String(), "An internal error occurred while processing this request")
-	})
-
 	t.Run("error when deviceID header is empty", func(t *testing.T) {
+		UserByEmailSetup(authenticatorMock, roleManagerMock, user, defaultUserRoles)
 		authenticateSetup(authenticatorMock, roleManagerMock, jwtManagerMock, user, password, userToken)
-		userRoleLookupSetup(jwtManagerMock, authenticatorMock, roleManagerMock, user, defaultUserRoles, userToken)
 
 		body := LoginRequest{Email: user.Email, Password: password}
 		req := httptest.NewRequest(http.MethodPost, "/login", requestToJSON(t, &body))
@@ -450,8 +432,8 @@ func Test_LoginHandlerr_ServeHTTP_MFA(t *testing.T) {
 	})
 
 	t.Run("error validating MFA device", func(t *testing.T) {
+		UserByEmailSetup(authenticatorMock, roleManagerMock, user, defaultUserRoles)
 		authenticateSetup(authenticatorMock, roleManagerMock, jwtManagerMock, user, password, userToken)
-		userRoleLookupSetup(jwtManagerMock, authenticatorMock, roleManagerMock, user, defaultUserRoles, userToken)
 		mfaManagerMock.
 			On("MFADeviceRemembered", mock.Anything, deviceID, user.ID).
 			Return(false, errors.New("weird error happened")).
@@ -469,8 +451,8 @@ func Test_LoginHandlerr_ServeHTTP_MFA(t *testing.T) {
 	})
 
 	t.Run("when device is remembered, return token", func(t *testing.T) {
+		UserByEmailSetup(authenticatorMock, roleManagerMock, user, defaultUserRoles)
 		authenticateSetup(authenticatorMock, roleManagerMock, jwtManagerMock, user, password, userToken)
-		userRoleLookupSetup(jwtManagerMock, authenticatorMock, roleManagerMock, user, defaultUserRoles, userToken)
 		mfaManagerMock.
 			On("MFADeviceRemembered", mock.Anything, deviceID, user.ID).
 			Return(true, nil).
@@ -488,8 +470,8 @@ func Test_LoginHandlerr_ServeHTTP_MFA(t *testing.T) {
 	})
 
 	t.Run("error generating MFA code", func(t *testing.T) {
+		UserByEmailSetup(authenticatorMock, roleManagerMock, user, defaultUserRoles)
 		authenticateSetup(authenticatorMock, roleManagerMock, jwtManagerMock, user, password, userToken)
-		userRoleLookupSetup(jwtManagerMock, authenticatorMock, roleManagerMock, user, defaultUserRoles, userToken)
 		mfaManagerMock.
 			On("MFADeviceRemembered", mock.Anything, deviceID, user.ID).
 			Return(false, nil).
@@ -511,8 +493,8 @@ func Test_LoginHandlerr_ServeHTTP_MFA(t *testing.T) {
 	})
 
 	t.Run("error when code returned is empty", func(t *testing.T) {
+		UserByEmailSetup(authenticatorMock, roleManagerMock, user, defaultUserRoles)
 		authenticateSetup(authenticatorMock, roleManagerMock, jwtManagerMock, user, password, userToken)
-		userRoleLookupSetup(jwtManagerMock, authenticatorMock, roleManagerMock, user, []string{data.OwnerUserRole.String()}, userToken)
 		mfaManagerMock.
 			On("MFADeviceRemembered", mock.Anything, deviceID, user.ID).
 			Return(false, nil).
@@ -534,8 +516,8 @@ func Test_LoginHandlerr_ServeHTTP_MFA(t *testing.T) {
 	})
 
 	t.Run("error sending MFA message", func(t *testing.T) {
+		UserByEmailSetup(authenticatorMock, roleManagerMock, user, defaultUserRoles)
 		authenticateSetup(authenticatorMock, roleManagerMock, jwtManagerMock, user, password, userToken)
-		userRoleLookupSetup(jwtManagerMock, authenticatorMock, roleManagerMock, user, []string{data.OwnerUserRole.String()}, userToken)
 		mfaManagerMock.
 			On("MFADeviceRemembered", mock.Anything, deviceID, user.ID).
 			Return(false, nil).
@@ -561,8 +543,8 @@ func Test_LoginHandlerr_ServeHTTP_MFA(t *testing.T) {
 	})
 
 	t.Run("🎉  Successful login", func(t *testing.T) {
+		UserByEmailSetup(authenticatorMock, roleManagerMock, user, defaultUserRoles)
 		authenticateSetup(authenticatorMock, roleManagerMock, jwtManagerMock, user, password, userToken)
-		userRoleLookupSetup(jwtManagerMock, authenticatorMock, roleManagerMock, user, []string{data.APIUserRole.String()}, userToken)
 		mfaManagerMock.
 			On("MFADeviceRemembered", mock.Anything, deviceID, user.ID).
 			Return(false, nil).
