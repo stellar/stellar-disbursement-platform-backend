@@ -348,19 +348,15 @@ func Test_defaultMFAManager_GetAuthUserID(t *testing.T) {
 
 	m := newDefaultMFAManager(withMFADatabaseConnectionPool(dbConnectionPool))
 
-	_, err := m.GenerateMFACode(ctx, testDeviceID, randUser.ID)
+	_, err := m.generateAndUpdateMFACode(ctx, testDeviceID, randUser.ID)
 	require.NoError(t, err)
 
 	t.Run("returns error when device ID not found", func(t *testing.T) {
-		defer cleanup(t, ctx, dbConnectionPool)
-
 		_, err = m.GetAuthUserID(ctx, "invalidDeviceID")
 		require.ErrorContains(t, err, "MFA device not found")
 	})
 
 	t.Run("returns auth user ID when device ID is found", func(t *testing.T) {
-		defer cleanup(t, ctx, dbConnectionPool)
-
 		userID, err := m.GetAuthUserID(ctx, testDeviceID)
 		require.NoError(t, err)
 		assert.Equal(t, randUser.ID, userID)

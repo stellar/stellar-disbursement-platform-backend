@@ -99,9 +99,6 @@ func (upr UpdateRolesRequest) validate() *httperror.HTTPError {
 }
 
 func validateRoles(validator *validators.Validator, roles []data.UserRole) {
-	// NOTE: in the MVP, users should have only one role.
-	validator.Check(len(roles) == 1, "roles", "the number of roles required is exactly one")
-
 	// Validating the role of the request is a valid value
 	if _, ok := validator.Errors["roles"]; !ok {
 		role := roles[0]

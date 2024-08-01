@@ -1041,36 +1041,6 @@ func Test_UserHandler_UpdateUserRoles(t *testing.T) {
 		body := `
 			{
 				"user_id": "user-id",
-				"roles": ["role1", "role2"]
-			}
-		`
-		req, err = http.NewRequestWithContext(ctx, http.MethodPatch, url, strings.NewReader(body))
-		require.NoError(t, err)
-
-		w = httptest.NewRecorder()
-
-		r.ServeHTTP(w, req)
-
-		resp = w.Result()
-
-		respBody, err = io.ReadAll(resp.Body)
-		require.NoError(t, err)
-
-		wantsBody = `
-			{
-				"error": "Request invalid",
-				"extras": {
-					"roles": "the number of roles required is exactly one"
-				}
-			}
-		`
-
-		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
-		assert.JSONEq(t, wantsBody, string(respBody))
-
-		body = `
-			{
-				"user_id": "user-id",
 				"roles": ["role1"]
 			}
 		`
@@ -1239,13 +1209,15 @@ func Test_UserHandler_UpdateUserRoles(t *testing.T) {
 
 	t.Run("updates the user activation correctly", func(t *testing.T) {
 		token := "mytoken"
+		authenticatedUser := &auth.User{ID: "authenticated-user-id"}
 
+		// Update user with one role
 		jwtManagerMock.
 			On("ValidateToken", mock.Anything, token).
 			Return(true, nil).
 			Twice().
 			On("GetUserFromToken", mock.Anything, token).
-			Return(&auth.User{ID: "authenticated-user-id"}, nil).
+			Return(authenticatedUser, nil).
 			Once()
 
 		roleManagerMock.
@@ -1271,6 +1243,42 @@ func Test_UserHandler_UpdateUserRoles(t *testing.T) {
 		resp := w.Result()
 
 		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.JSONEq(t, `{"message": "user roles were updated successfully"}`, string(respBody))
+
+		// Update user with two roles
+		jwtManagerMock.
+			On("ValidateToken", mock.Anything, token).
+			Return(true, nil).
+			Twice().
+			On("GetUserFromToken", mock.Anything, token).
+			Return(authenticatedUser, nil).
+			Once()
+
+		roleManagerMock.
+			On("UpdateRoles", mock.Anything, &auth.User{ID: "user-id"}, []string{data.DeveloperUserRole.String(), data.APIUserRole.String()}).
+			Return(nil).
+			Once()
+
+		reqBody = `
+			{
+				"user_id": "user-id",	
+				"roles": ["developer", "api"]
+			}
+		`
+
+		req, err = http.NewRequestWithContext(ctx, http.MethodPatch, url, strings.NewReader(reqBody))
+		require.NoError(t, err)
+
+		w = httptest.NewRecorder()
+
+		r.ServeHTTP(w, req)
+
+		resp = w.Result()
+
+		respBody, err = io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
