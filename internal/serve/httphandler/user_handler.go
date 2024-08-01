@@ -99,6 +99,7 @@ func (upr UpdateRolesRequest) validate() *httperror.HTTPError {
 }
 
 func validateRoles(validator *validators.Validator, roles []data.UserRole) {
+	validator.Check(len(roles) >= 1, "roles", "the number of roles required is greater than or equal to 1")
 	// Validating the role of the request is a valid value
 	if _, ok := validator.Errors["roles"]; !ok {
 		role := roles[0]

@@ -334,7 +334,12 @@ func Test_LoginHandler(t *testing.T) {
 		// user roles can bypass reCAPTCHA
 		usersRoles[1] = []string{data.OwnerUserRole.String(), data.APIUserRole.String()}
 		for _, userRoles := range usersRoles {
-			UserByEmailSetup(authenticatorMock, roleManagerMock, user, userRoles)
+			targetUser := &auth.User{
+				ID:    "user-ID",
+				Email: email,
+				Roles: userRoles,
+			}
+			UserByEmailSetup(authenticatorMock, roleManagerMock, targetUser, userRoles)
 			reqBody := `
 				{
 					"email": "testuser@email.com",
@@ -347,7 +352,7 @@ func Test_LoginHandler(t *testing.T) {
 					Once()
 				reqBody = defaultReqBody
 			}
-			authenticateSetup(authenticatorMock, roleManagerMock, jwtManagerMock, user, password, defaultUserToken)
+			authenticateSetup(authenticatorMock, roleManagerMock, jwtManagerMock, targetUser, password, defaultUserToken)
 
 			r.Post(url, handler.ServeHTTP)
 

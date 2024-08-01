@@ -352,26 +352,11 @@ func Test_CreateUserRequest_validate(t *testing.T) {
 		"email":     "email is required",
 		"fist_name": "fist_name is required",
 		"last_name": "last_name is required",
-		"roles":     "the number of roles required is exactly one",
+		"roles":     "the number of roles required is greater than or equal to 1",
 	}
 	expectedErr := httperror.BadRequest("Request invalid", nil, extras)
 
 	err := cur.validate()
-	assert.Equal(t, expectedErr, err)
-
-	cur = CreateUserRequest{
-		FirstName: "First",
-		LastName:  "Last",
-		Email:     "email@email.com",
-		Roles:     []data.UserRole{data.BusinessUserRole, data.DeveloperUserRole},
-	}
-
-	extras = map[string]interface{}{
-		"roles": "the number of roles required is exactly one",
-	}
-	expectedErr = httperror.BadRequest("Request invalid", nil, extras)
-
-	err = cur.validate()
 	assert.Equal(t, expectedErr, err)
 
 	cur = CreateUserRequest{
@@ -442,7 +427,7 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 					"email": "email is required",
 					"fist_name": "fist_name is required",
 					"last_name": "last_name is required",
-					"roles": "the number of roles required is exactly one"
+					"roles": "the number of roles required is greater than or equal to 1"
 				}
 			}
 		`
@@ -451,38 +436,6 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 		assert.JSONEq(t, wantsBody, string(respBody))
 
 		body := `
-			{
-				"first_name": "First",
-				"last_name": "Last",
-				"email": "email@email.com",
-				"roles": ["role1", "role2"]
-			}
-		`
-		req, err = http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(body))
-		require.NoError(t, err)
-
-		w = httptest.NewRecorder()
-
-		r.ServeHTTP(w, req)
-
-		resp = w.Result()
-
-		respBody, err = io.ReadAll(resp.Body)
-		require.NoError(t, err)
-
-		wantsBody = `
-			{
-				"error": "Request invalid",
-				"extras": {
-					"roles": "the number of roles required is exactly one"
-				}
-			}
-		`
-
-		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
-		assert.JSONEq(t, wantsBody, string(respBody))
-
-		body = `
 			{
 				"first_name": "First",
 				"last_name": "Last",
@@ -506,10 +459,10 @@ func Test_UserHandler_CreateUser(t *testing.T) {
 			{
 				"error": "Request invalid",
 				"extras": {
-					"roles": "unexpected value for roles[0]=role1. Expect one of these values: [%s]"
+					"roles": "unexpected value for roles[0]=role1. Expect one of these values: %s"
 				}
 			}
-		`, enumerateRolesInString())
+		`, data.GetAllRoles())
 
 		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 		assert.JSONEq(t, wantsBody, string(respBody))
@@ -950,24 +903,11 @@ func Test_UpdateRolesRequest_validate(t *testing.T) {
 
 	extras := map[string]interface{}{
 		"user_id": "user_id is required",
-		"roles":   "the number of roles required is exactly one",
+		"roles":   "the number of roles required is greater than or equal to 1",
 	}
 	expectedErr := httperror.BadRequest("Request invalid", nil, extras)
 
 	err := upr.validate()
-	assert.Equal(t, expectedErr, err)
-
-	upr = UpdateRolesRequest{
-		UserID: "user_id",
-		Roles:  []data.UserRole{data.BusinessUserRole, data.DeveloperUserRole},
-	}
-
-	extras = map[string]interface{}{
-		"roles": "the number of roles required is exactly one",
-	}
-	expectedErr = httperror.BadRequest("Request invalid", nil, extras)
-
-	err = upr.validate()
 	assert.Equal(t, expectedErr, err)
 
 	upr = UpdateRolesRequest{
@@ -1030,7 +970,7 @@ func Test_UserHandler_UpdateUserRoles(t *testing.T) {
 				"error": "Request invalid",
 				"extras": {
 					"user_id": "user_id is required",
-					"roles": "the number of roles required is exactly one"
+					"roles": "the number of roles required is greater than or equal to 1"
 				}
 			}
 		`
@@ -1060,10 +1000,10 @@ func Test_UserHandler_UpdateUserRoles(t *testing.T) {
 			{
 				"error": "Request invalid",
 				"extras": {
-					"roles": "unexpected value for roles[0]=role1. Expect one of these values: [%s]"
+					"roles": "unexpected value for roles[0]=role1. Expect one of these values: %s"
 				}
 			}
-		`, enumerateRolesInString())
+		`, data.GetAllRoles())
 
 		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 		assert.JSONEq(t, wantsBody, string(respBody))
@@ -1284,6 +1224,9 @@ func Test_UserHandler_UpdateUserRoles(t *testing.T) {
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.JSONEq(t, `{"message": "user roles were updated successfully"}`, string(respBody))
 	})
+
+	jwtManagerMock.AssertExpectations(t)
+	roleManagerMock.AssertExpectations(t)
 }
 
 func Test_UserHandler_GetAllUsers(t *testing.T) {
@@ -1712,16 +1655,4 @@ func Test_UserHandler_GetAllUsers(t *testing.T) {
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.JSONEq(t, wantsBody, string(respBody))
 	})
-}
-
-func enumerateRolesInString() string {
-	var rolesStr string
-	for i, role := range data.GetAllRoles() {
-		rolesStr += role.String()
-		if i != len(data.GetAllRoles())-1 {
-			rolesStr += " "
-		}
-	}
-
-	return rolesStr
 }

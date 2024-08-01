@@ -92,16 +92,21 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 		// role can bypass reCAPTCHA
 		usersRoles[1] = []string{data.OwnerUserRole.String(), data.APIUserRole.String()}
 		for _, userRoles := range usersRoles {
+			targetUser := &auth.User{
+				ID:    "user-ID",
+				Email: email,
+				Roles: userRoles,
+			}
 			requestBody := fmt.Sprintf(`
 				{ 
 					"email": "%s"
-				}`, user.Email)
+				}`, targetUser.Email)
 
 			authenticatorMock.
 				On("ForgotPassword", mock.Anything, email).
 				Return("resetToken", nil).
 				Once()
-			UserByEmailSetup(authenticatorMock, roleManagerMock, user, userRoles)
+			UserByEmailSetup(authenticatorMock, roleManagerMock, targetUser, userRoles)
 			if !slices.Contains(userRoles, data.APIUserRole.String()) {
 				requestBody = defaultReqBody
 				reCAPTCHAValidatorMock.

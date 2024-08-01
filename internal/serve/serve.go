@@ -228,7 +228,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 		r.Use(middleware.AuthenticateMiddleware(authManager, o.tenantManager))
 		r.Use(middleware.EnsureTenantMiddleware)
 
-		r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...)).Route("/statistics", func(r chi.Router) {
+		r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllBusinessRoles()...)).Route("/statistics", func(r chi.Router) {
 			statisticsHandler := httphandler.StatisticsHandler{DBConnectionPool: o.MtnDBConnectionPool}
 			r.Get("/", statisticsHandler.GetStatistics)
 			r.Get("/{id}", statisticsHandler.GetStatisticsByDisbursement)
@@ -309,7 +309,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole, data.BusinessUserRole)).
 				Get("/{id}", receiversHandler.GetReceiver)
 
-			r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...)).
+			r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllBusinessRoles()...)).
 				Get("/verification-types", receiversHandler.GetReceiverVerificationTypes)
 
 			updateReceiverHandler := httphandler.UpdateReceiverHandler{Models: o.Models, DBConnectionPool: o.MtnDBConnectionPool}
@@ -325,7 +325,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 				Patch("/wallets/{receiver_wallet_id}", receiverWalletHandler.RetryInvitation)
 		})
 
-		r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...)).Route("/countries", func(r chi.Router) {
+		r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllBusinessRoles()...)).Route("/countries", func(r chi.Router) {
 			r.Get("/", httphandler.CountriesHandler{Models: o.Models}.GetCountries)
 		})
 
@@ -335,7 +335,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 				SubmitterEngine: o.SubmitterEngine,
 			}
 
-			r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...)).
+			r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllBusinessRoles()...)).
 				Get("/", assetsHandler.GetAssets)
 
 			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole, data.DeveloperUserRole)).
@@ -346,7 +346,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			})
 		})
 
-		r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...)).Route("/wallets", func(r chi.Router) {
+		r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllBusinessRoles()...)).Route("/wallets", func(r chi.Router) {
 			walletsHandler := httphandler.WalletsHandler{Models: o.Models}
 			r.Get("/", walletsHandler.GetWallets)
 			r.With(middleware.AnyRoleMiddleware(authManager, data.DeveloperUserRole)).
@@ -367,13 +367,13 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			PublicFilesFS:               publicfiles.PublicFiles,
 		}
 		r.Route("/profile", func(r chi.Router) {
-			r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...)).
+			r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllBusinessRoles()...)).
 				Get("/", profileHandler.GetProfile)
 
-			r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...)).
+			r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllBusinessRoles()...)).
 				Patch("/", profileHandler.PatchUserProfile)
 
-			r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...)).
+			r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllBusinessRoles()...)).
 				Patch("/reset-password", profileHandler.PatchUserPassword)
 		})
 
@@ -381,10 +381,10 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole, data.FinancialControllerUserRole)).
 				Patch("/", profileHandler.PatchOrganizationProfile)
 
-			r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...)).
+			r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllBusinessRoles()...)).
 				Get("/", profileHandler.GetOrganizationInfo)
 
-			r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllRoles()...)).
+			r.With(middleware.AnyRoleMiddleware(authManager, data.GetAllBusinessRoles()...)).
 				Get("/logo", profileHandler.GetOrganizationLogo)
 
 			r.With(middleware.AnyRoleMiddleware(authManager, data.OwnerUserRole)).

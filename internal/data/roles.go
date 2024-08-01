@@ -30,6 +30,16 @@ const (
 	APIUserRole UserRole = "api"
 )
 
+// GetAllBusinessRoles returns all business roles that control endpoint permission
+func GetAllBusinessRoles() []UserRole {
+	return []UserRole{
+		OwnerUserRole,
+		FinancialControllerUserRole,
+		DeveloperUserRole,
+		BusinessUserRole,
+	}
+}
+
 // GetAllRoles returns all roles available
 func GetAllRoles() []UserRole {
 	return []UserRole{
