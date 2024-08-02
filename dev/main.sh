@@ -34,11 +34,11 @@ fi
 
 # prepare
 echo $DIVIDER
-echo "====> 👀 start calling docker-compose -p sdp-multi-tenant down"
+echo "====> 👀 start calling docker compose -p sdp-multi-tenant down"
 docker ps -aq | xargs docker stop | xargs docker rm
-#docker-compose -p sdp-multi-tenant down
-docker-compose down
-echo "====> ✅ finish calling docker-compose down"
+#docker compose -p sdp-multi-tenant down
+docker compose down
+echo "====> ✅ finish calling docker compose down"
 
 # Run docker compose
 echo $DIVIDER
@@ -67,11 +67,11 @@ fi
 echo $DIVIDER
 echo "====> 👀calling docker compose up"
 export GIT_COMMIT="debug"
-docker-compose -p sdp-multi-tenant up -d --build
+docker compose -p sdp-multi-tenant up -d --build
 
 # Run docker compose
 echo $DIVIDER
-echo "====> ✅finish calling docker-compose up"
+echo "====> ✅finish calling docker compose up"
 
 
 # Initialize tenants
@@ -144,7 +144,7 @@ echo "====> ✅Step 3: finished initialization of tenants"
 echo $DIVIDER
 # Initialize test_users
 echo "====> Step 4: initialize test users..."
-docker-compose -p sdp-multi-tenant exec sdp-api ./dev/scripts/add_test_users.sh
+docker compose -p sdp-multi-tenant exec sdp-api ./dev/scripts/add_test_users.sh
 echo $DIVIDER
 
 echo "🎉🎉🎉🎉 SUCCESS! 🎉🎉🎉🎉"
