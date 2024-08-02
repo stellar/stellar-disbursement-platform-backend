@@ -81,8 +81,7 @@ func Test_MFAHandler_ServeHTTP(t *testing.T) {
 			Once()
 	}
 
-	validateMFASetup := func(deviceID, mfaCode string, rememberMe bool) {
-		userRoleLookupSetup(jwtManagerMock, authenticatorMock, roleManagerMock, user, defaultUserRoles, userToken)
+	validateMFASetup := func(deviceID, mfaCode string, user *auth.User, userRoles []string, rememberMe bool) {
 		mfaManagerMock.
 			On("ValidateMFACode", mock.Anything, deviceID, mfaCode).
 			Return(user.ID, nil).
@@ -93,6 +92,14 @@ func Test_MFAHandler_ServeHTTP(t *testing.T) {
 				Return(nil).
 				Once()
 		}
+		authenticatorMock.
+			On("GetUser", mock.Anything, user.ID).
+			Return(user, nil).
+			Once()
+		roleManagerMock.
+			On("GetUserRoles", mock.Anything, user).
+			Return(userRoles, nil).
+			Once()
 		jwtManagerMock.
 			On("GenerateToken", mock.Anything, user, mock.AnythingOfType("time.Time")).
 			Return(userToken, nil).
@@ -131,6 +138,69 @@ func Test_MFAHandler_ServeHTTP(t *testing.T) {
 
 		require.Equal(t, http.StatusBadRequest, rw.Code)
 		require.Contains(t, rw.Body.String(), "MFA Code is required")
+	})
+
+	t.Run("Test handler with unexpected error when getting auth user ID", func(t *testing.T) {
+		body := MFARequest{MFACode: mfaCode, ReCAPTCHAToken: reCAPTCHAToken}
+		mfaManagerMock.
+			On("GetAuthUserID", mock.Anything, deviceID).
+			Return("", errors.New("unexpected error")).
+			Once()
+
+		req := httptest.NewRequest(http.MethodPost, mfaEndpoint, requestToJSON(t, &body))
+		req.Header.Set(DeviceIDHeader, deviceID)
+		rw := httptest.NewRecorder()
+
+		mfaHandler.ServeHTTP(rw, req)
+
+		require.Equal(t, http.StatusInternalServerError, rw.Code)
+		require.Contains(t, rw.Body.String(), "Cannot get user by MFA")
+	})
+
+	t.Run("Test handler with unexpected error when getting user", func(t *testing.T) {
+		body := MFARequest{MFACode: mfaCode, ReCAPTCHAToken: reCAPTCHAToken}
+		mfaManagerMock.
+			On("GetAuthUserID", mock.Anything, deviceID).
+			Return(user.ID, nil).
+			Once()
+		authenticatorMock.
+			On("GetUser", mock.Anything, user.ID).
+			Return(nil, errors.New("unexpected error")).
+			Once()
+
+		req := httptest.NewRequest(http.MethodPost, mfaEndpoint, requestToJSON(t, &body))
+		req.Header.Set(DeviceIDHeader, deviceID)
+		rw := httptest.NewRecorder()
+
+		mfaHandler.ServeHTTP(rw, req)
+
+		require.Equal(t, http.StatusInternalServerError, rw.Code)
+		require.Contains(t, rw.Body.String(), "Cannot get user by MFA")
+	})
+
+	t.Run("Test handler with unexpected error when getting user roles", func(t *testing.T) {
+		body := MFARequest{MFACode: mfaCode, ReCAPTCHAToken: reCAPTCHAToken}
+		mfaManagerMock.
+			On("GetAuthUserID", mock.Anything, deviceID).
+			Return(user.ID, nil).
+			Once()
+		authenticatorMock.
+			On("GetUser", mock.Anything, user.ID).
+			Return(user, nil).
+			Once()
+		roleManagerMock.
+			On("GetUserRoles", mock.Anything, user).
+			Return(nil, errors.New("unexpected error")).
+			Once()
+
+		req := httptest.NewRequest(http.MethodPost, mfaEndpoint, requestToJSON(t, &body))
+		req.Header.Set(DeviceIDHeader, deviceID)
+		rw := httptest.NewRecorder()
+
+		mfaHandler.ServeHTTP(rw, req)
+
+		require.Equal(t, http.StatusInternalServerError, rw.Code)
+		require.Contains(t, rw.Body.String(), "Cannot get user by MFA")
 	})
 
 	t.Run("Test handler with unexpected reCAPTCHA error", func(t *testing.T) {
@@ -247,7 +317,7 @@ func Test_MFAHandler_ServeHTTP(t *testing.T) {
 		body := MFARequest{MFACode: mfaCode, ReCAPTCHAToken: reCAPTCHAToken, RememberMe: true}
 		userRolesWithAPIAccess := []string{data.OwnerUserRole.String(), data.APIUserRole.String()}
 		getUserSetup(deviceID, user, userRolesWithAPIAccess)
-		validateMFASetup(deviceID, mfaCode, body.RememberMe)
+		validateMFASetup(deviceID, mfaCode, user, defaultUserRoles, body.RememberMe)
 
 		req := httptest.NewRequest(http.MethodPost, mfaEndpoint, requestToJSON(t, &body))
 		req.Header.Set(DeviceIDHeader, deviceID)
@@ -273,9 +343,12 @@ func Test_MFAHandler_ServeHTTP(t *testing.T) {
 		// role can bypass reCAPTCHA
 		usersRoles[1] = []string{data.OwnerUserRole.String(), data.APIUserRole.String()}
 		for _, userRoles := range usersRoles {
+			targetUser := &auth.User{
+				ID:    "userID",
+				Roles: userRoles,
+			}
 			body := MFARequest{MFACode: mfaCode, RememberMe: true}
-			getUserSetup(deviceID, user, userRoles)
-			validateMFASetup(deviceID, mfaCode, body.RememberMe)
+			getUserSetup(deviceID, targetUser, userRoles)
 			if !slices.Contains(userRoles, data.APIUserRole.String()) {
 				body.ReCAPTCHAToken = reCAPTCHAToken
 				reCAPTCHAValidatorMock.
@@ -283,6 +356,7 @@ func Test_MFAHandler_ServeHTTP(t *testing.T) {
 					Return(true, nil).
 					Once()
 			}
+			validateMFASetup(deviceID, mfaCode, targetUser, userRoles, body.RememberMe)
 
 			req := httptest.NewRequest(http.MethodPost, mfaEndpoint, requestToJSON(t, &body))
 			req.Header.Set(DeviceIDHeader, deviceID)
@@ -299,6 +373,8 @@ func Test_MFAHandler_ServeHTTP(t *testing.T) {
 	})
 
 	authenticatorMock.AssertExpectations(t)
+	reCAPTCHAValidatorMock.AssertExpectations(t)
+	jwtManagerMock.AssertExpectations(t)
 	reCAPTCHAValidatorMock.AssertExpectations(t)
 }
 

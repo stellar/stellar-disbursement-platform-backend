@@ -46,17 +46,6 @@ func authenticateSetup(
 		Once()
 }
 
-func userRoleLookupSetup(
-	jwtManagerMock *auth.JWTManagerMock, authenticatorMock *auth.AuthenticatorMock, roleManagerMock *auth.RoleManagerMock,
-	user *auth.User, userRoles []string, userToken string,
-) {
-	jwtManagerMock.On("ValidateToken", mock.Anything, userToken).
-		Return(true, nil).Once()
-	jwtManagerMock.On("GetUserFromToken", mock.Anything, userToken).Return(user, nil).Once()
-	authenticatorMock.On("GetUser", mock.Anything, user.ID).Return(user, nil).Once()
-	roleManagerMock.On("GetUserRoles", mock.Anything, user).Return(userRoles, nil).Once()
-}
-
 func Test_LoginRequest_validate(t *testing.T) {
 	lr := LoginRequest{
 		Email:          "",
@@ -186,6 +175,68 @@ func Test_LoginHandler(t *testing.T) {
 		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 		assert.JSONEq(t, wantsBody, string(respBody))
 		assert.Contains(t, buf.String(), "decoding the request body")
+	})
+
+	t.Run("returns error when an unexpected error occurs getting user by email", func(t *testing.T) {
+		authenticatorMock.
+			On("GetUserByEmail", mock.Anything, user.Email).
+			Return(nil, errors.New("unexpected error")).
+			Once()
+
+		r.Post(url, handler.ServeHTTP)
+
+		req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(defaultReqBody))
+		require.NoError(t, err)
+
+		w := httptest.NewRecorder()
+
+		r.ServeHTTP(w, req)
+
+		resp := w.Result()
+
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		wantsBody := `
+			{
+				"error": "Getting user by email"
+			}
+		`
+		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+		assert.JSONEq(t, wantsBody, string(respBody))
+	})
+
+	t.Run("returns error when an unexpected error occurs getting user roles", func(t *testing.T) {
+		authenticatorMock.
+			On("GetUserByEmail", mock.Anything, user.Email).
+			Return(user, nil).
+			Once()
+		roleManagerMock.
+			On("GetUserRoles", mock.Anything, user).
+			Return(nil, errors.New("unexpected error")).
+			Once()
+
+		r.Post(url, handler.ServeHTTP)
+
+		req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(defaultReqBody))
+		require.NoError(t, err)
+
+		w := httptest.NewRecorder()
+
+		r.ServeHTTP(w, req)
+
+		resp := w.Result()
+
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		wantsBody := `
+			{
+				"error": "Getting user by email"
+			}
+		`
+		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+		assert.JSONEq(t, wantsBody, string(respBody))
 	})
 
 	t.Run("returns error when an unexpected error occurs validating the credentials", func(t *testing.T) {

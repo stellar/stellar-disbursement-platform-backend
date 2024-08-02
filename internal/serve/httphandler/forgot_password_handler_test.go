@@ -402,6 +402,60 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 		assert.JSONEq(t, wantsBody, string(respBody))
 	})
 
+	t.Run("returns error when an unexpected error occurs getting user roles", func(t *testing.T) {
+		requestBody := `
+		{ 
+			"email": "valid@email.com"
+		}`
+
+		authenticatorMock.
+			On("GetUserByEmail", mock.Anything, user.Email).
+			Return(user, nil).
+			Once()
+		roleManagerMock.
+			On("GetUserRoles", mock.Anything, user).
+			Return(nil, errors.New("unexpected error")).
+			Once()
+
+		rr := httptest.NewRecorder()
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(requestBody))
+		require.NoError(t, err)
+
+		http.HandlerFunc(handler.ServeHTTP).ServeHTTP(rr, req)
+
+		resp := rr.Result()
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+		assert.JSONEq(t, `{"error": "Getting user by email"}`, string(respBody))
+	})
+
+	t.Run("returns error when an unexpected error occurs getting user by email", func(t *testing.T) {
+		requestBody := `
+		{ 
+			"email": "valid@email.com"
+		}`
+
+		authenticatorMock.
+			On("GetUserByEmail", mock.Anything, user.Email).
+			Return(nil, errors.New("unexpected error")).
+			Once()
+
+		rr := httptest.NewRecorder()
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(requestBody))
+		require.NoError(t, err)
+
+		http.HandlerFunc(handler.ServeHTTP).ServeHTTP(rr, req)
+
+		resp := rr.Result()
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+		assert.JSONEq(t, `{"error": "Getting user by email"}`, string(respBody))
+	})
+
 	t.Run("returns Unauthorized when tenant is not in the context", func(t *testing.T) {
 		ctxWithoutTenant := context.Background()
 
