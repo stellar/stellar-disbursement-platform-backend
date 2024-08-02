@@ -126,6 +126,28 @@ func Test_VerifyReceiverRegistrationHandler_validate(t *testing.T) {
 				ReCAPTCHAToken:    "token",
 			},
 		},
+		{
+			name:               "🎉 successfully parses the body with external_id if the SEP24 token, recaptcha token and request body are all valid",
+			contextSep24Claims: sep24JWTClaims,
+			requestBody: `{
+				"phone_number": "+380445555555",
+				"otp": "123456",
+				"verification": "1990-01-01",
+				"verification_type": "date_of_birth",
+				"external_id": "user-external-id",
+				"reCAPTCHA_token": "token"
+			}`,
+			isRecaptchaValidFnResponse: []interface{}{true, nil},
+			wantSep24Claims:            sep24JWTClaims,
+			wantResult: data.ReceiverRegistrationRequest{
+				PhoneNumber:       "+380445555555",
+				OTP:               "123456",
+				VerificationValue: "1990-01-01",
+				VerificationType:  data.VerificationFieldDateOfBirth,
+				ExternalID:        "user-external-id",
+				ReCAPTCHAToken:    "token",
+			},
+		},
 	}
 
 	models, err := data.NewModels(dbConnectionPool)
@@ -332,6 +354,96 @@ func Test_VerifyReceiverRegistrationHandler_processReceiverVerificationPII(t *te
 	}
 }
 
+func Test_VerifyReceiverRegistrationHandler_processReceiverCustomerID_and_MobileNumber(t *testing.T) {
+	ctx := context.Background()
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+
+	// Open the connection pool and ensure it is closed at the end of the test.
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close() // This defer should be right after checking the error.
+
+	// Begin transaction and ensure it is either rolled back or committed.
+	dbTx, err := dbConnectionPool.BeginTxx(ctx, nil)
+	require.NoError(t, err)
+	defer func() {
+		require.NoError(t, dbTx.Rollback())
+	}()
+
+	models, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+
+	// Setting up mocks for services used in the handler.
+	mockAnchorPlatformService := anchorplatform.AnchorPlatformAPIServiceMock{}
+	reCAPTCHAValidator := &validators.ReCAPTCHAValidatorMock{}
+	handler := &VerifyReceiverRegistrationHandler{
+		Models:                   models,
+		AnchorPlatformAPIService: &mockAnchorPlatformService,
+		ReCAPTCHAValidator:       reCAPTCHAValidator,
+	}
+
+	// Create a receiver fixture and ensure its cleanup.
+	receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{PhoneNumber: "+380443333333"})
+	defer data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool) // No need to defer twice as previously coded.
+
+	// Hash the phone number and proceed to registration.
+	hashedReceiverPhoneNumber, err := data.HashVerificationValue(receiver.PhoneNumber)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Registration request including a hash of the mobile number and a customer ID.
+	registrationRequest := data.ReceiverRegistrationRequest{
+		MobileNumberHash: hashedReceiverPhoneNumber,
+		CustomerID:       receiver.ExternalID,
+	}
+
+	// Execute the method under test.
+	err = handler.processReceiverVerificationPII(ctx, dbTx, *receiver, registrationRequest)
+	require.NoError(t, err)
+}
+
+func Test_VerifyReceiverRegistrationHandler_FailsWithInvalidMobileNumberHash(t *testing.T) {
+	ctx := context.Background()
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+	dbTx, err := dbConnectionPool.BeginTxx(ctx, nil)
+	require.NoError(t, err)
+	defer func() {
+		require.NoError(t, dbTx.Rollback())
+	}()
+
+	models, err := data.NewModels(dbConnectionPool)
+	require.NoError(t, err)
+
+	mockAnchorPlatformService := anchorplatform.AnchorPlatformAPIServiceMock{}
+	reCAPTCHAValidator := &validators.ReCAPTCHAValidatorMock{}
+	handler := &VerifyReceiverRegistrationHandler{
+		Models:                   models,
+		AnchorPlatformAPIService: &mockAnchorPlatformService,
+		ReCAPTCHAValidator:       reCAPTCHAValidator,
+	}
+
+	receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{PhoneNumber: "+380443333333"})
+	hashedReceiverPhoneNumber, err := data.HashVerificationValue("badmobilenumber")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer data.DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
+
+	registrationRequest := data.ReceiverRegistrationRequest{
+		MobileNumberHash: hashedReceiverPhoneNumber,
+		CustomerID:       receiver.ExternalID,
+	}
+
+	err = handler.processReceiverVerificationPII(ctx, dbTx, *receiver, registrationRequest)
+	require.Error(t, err)
+}
+
 func Test_VerifyReceiverRegistrationHandler_processReceiverWalletOTP(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
@@ -483,7 +595,7 @@ func Test_VerifyReceiverRegistrationHandler_processAnchorPlatformID(t *testing.T
 	require.NoError(t, err)
 	handler := &VerifyReceiverRegistrationHandler{Models: models}
 
-	// creeate fixtures
+	// create fixtures
 	const phoneNumber = "+380445555555"
 	defer data.DeleteAllFixtures(t, ctx, dbConnectionPool)
 	wallet := data.CreateWalletFixture(t, ctx, dbConnectionPool, "testWallet", "https://home.page", "home.page", "wallet123://")

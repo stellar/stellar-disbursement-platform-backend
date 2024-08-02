@@ -142,6 +142,7 @@ func Test_SendReceiverWalletsSMSInvitationJob_Execute(t *testing.T) {
 			stellarSecretKey,
 			maxInvitationSMSResendAttempts,
 			crashTrackerClientMock,
+			true,
 		)
 		require.NoError(t, err)
 
@@ -205,6 +206,7 @@ func Test_SendReceiverWalletsSMSInvitationJob_Execute(t *testing.T) {
 			OrganizationName: "MyCustomAid",
 			AssetCode:        asset1.Code,
 			AssetIssuer:      asset1.Issuer,
+			ExternalID:       receiver1.ExternalID,
 		}
 		deepLink1, err := walletDeepLink1.GetSignedRegistrationLink(stellarSecretKey)
 		require.NoError(t, err)
@@ -216,6 +218,7 @@ func Test_SendReceiverWalletsSMSInvitationJob_Execute(t *testing.T) {
 			OrganizationName: "MyCustomAid",
 			AssetCode:        asset2.Code,
 			AssetIssuer:      asset2.Issuer,
+			ExternalID:       receiver2.ExternalID,
 		}
 		deepLink2, err := walletDeepLink2.GetSignedRegistrationLink(stellarSecretKey)
 		require.NoError(t, err)

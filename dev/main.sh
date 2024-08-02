@@ -74,6 +74,7 @@ echo $DIVIDER
 echo "====> ✅finish calling docker compose up"
 
 
+
 # Initialize tenants
 echo $DIVIDER
 echo "====> 👀Step 3: initialize tenants... (😴 10s sleep)"

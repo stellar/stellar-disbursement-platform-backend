@@ -286,6 +286,7 @@ func (a *AssetModel) GetAssetsPerReceiverWallet(ctx context.Context, receiverWal
 			r.id AS "receiver_wallet.receiver.id",
 			r.phone_number AS "receiver_wallet.receiver.phone_number",
 			r.email AS "receiver_wallet.receiver.email",
+			r.external_id AS "receiver_wallet.receiver.external_id",
 			a.id AS "asset.id",
 			a.code AS "asset.code",
 			a.issuer AS "asset.issuer",
