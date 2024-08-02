@@ -1424,22 +1424,22 @@ func Test_AuthManager_GetUserByEmail(t *testing.T) {
 
 	ctx := context.Background()
 
-	t.Run("returns error when authenticator fails to find user by email", func(t *testing.T) {
-		email := "invalid-email@email.com"
+	email := "valid-email@email.com"
+	expectedUser := &User{
+		ID:    "user-id",
+		Email: email,
+	}
 
-		authenticatorMock.On("GetUserByEmail", ctx, email).Return(nil, ErrUserNotFound).Once()
-		_, err := authManager.GetUserByEmail(ctx, email)
+	t.Run("returns error when authenticator fails to find user by email", func(t *testing.T) {
+		invalidEmail := "invalid-email@email.com"
+
+		authenticatorMock.On("GetUserByEmail", ctx, invalidEmail).Return(nil, ErrUserNotFound).Once()
+		_, err := authManager.GetUserByEmail(ctx, invalidEmail)
 
 		require.EqualError(t, err, "getting user with email: user not found")
 	})
 
 	t.Run("returns error when role manager fails to get user roles", func(t *testing.T) {
-		email := "valid-email@email.com"
-
-		expectedUser := &User{
-			ID:    "user-id",
-			Email: email,
-		}
 		authenticatorMock.On("GetUserByEmail", ctx, email).Return(expectedUser, nil).Once()
 		roleManagerMock.On("GetUserRoles", ctx, expectedUser).Return(nil, errUnexpectedError).Once()
 		_, err := authManager.GetUserByEmail(ctx, email)
@@ -1448,11 +1448,6 @@ func Test_AuthManager_GetUserByEmail(t *testing.T) {
 	})
 
 	t.Run("gets user by email successfully", func(t *testing.T) {
-		email := "valid-email@email.com"
-		expectedUser := &User{
-			ID:    "user-id",
-			Email: email,
-		}
 		expectedRoles := []string{data.OwnerUserRole.String()}
 		authenticatorMock.On("GetUserByEmail", ctx, email).Return(expectedUser, nil).Once()
 		roleManagerMock.On("GetUserRoles", ctx, expectedUser).Return(expectedRoles, nil).Once()
@@ -1480,6 +1475,11 @@ func Test_AuthManager_GetUserByMFA(t *testing.T) {
 	ctx := context.Background()
 	deviceID := "device-ABC"
 
+	expectedUser := &User{
+		ID:    "user-id",
+		Email: "valid-email@email.com",
+	}
+
 	t.Run("returns error when MFA manager fails to find device by ID", func(t *testing.T) {
 		invalidDeviceID := "invalid-device"
 
@@ -1490,10 +1490,6 @@ func Test_AuthManager_GetUserByMFA(t *testing.T) {
 	})
 
 	t.Run("returns error when authenticator fails to find user", func(t *testing.T) {
-		expectedUser := &User{
-			ID:    "user-id",
-			Email: "valid-email@email.com",
-		}
 		mfaManagerMock.On("GetAuthUserID", ctx, deviceID).Return(expectedUser.ID, nil).Once()
 		authenticatorMock.On("GetUser", ctx, expectedUser.ID).Return(nil, ErrUserNotFound).Once()
 		_, err := authManager.GetUserByMFA(ctx, deviceID)
@@ -1502,12 +1498,6 @@ func Test_AuthManager_GetUserByMFA(t *testing.T) {
 	})
 
 	t.Run("returns error when role manager fails to get user roles", func(t *testing.T) {
-		email := "valid-email@email.com"
-
-		expectedUser := &User{
-			ID:    "user-id",
-			Email: email,
-		}
 		mfaManagerMock.On("GetAuthUserID", ctx, deviceID).Return(expectedUser.ID, nil).Once()
 		authenticatorMock.On("GetUser", ctx, expectedUser.ID).Return(expectedUser, nil).Once()
 		roleManagerMock.On("GetUserRoles", ctx, expectedUser).Return(nil, errUnexpectedError).Once()
@@ -1517,10 +1507,6 @@ func Test_AuthManager_GetUserByMFA(t *testing.T) {
 	})
 
 	t.Run("gets user by MFA successfully", func(t *testing.T) {
-		expectedUser := &User{
-			ID:    "user-id",
-			Email: "valid-email@email.com",
-		}
 		expectedRoles := []string{data.OwnerUserRole.String()}
 		mfaManagerMock.On("GetAuthUserID", ctx, deviceID).Return(expectedUser.ID, nil).Once()
 		authenticatorMock.On("GetUser", ctx, expectedUser.ID).Return(expectedUser, nil).Once()
