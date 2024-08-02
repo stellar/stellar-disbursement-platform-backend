@@ -33,7 +33,7 @@ echo "====> ✅Step 1: finish preparation"
 # Run docker compose
 echo $DIVIDER
 echo "====> 👀Step 2: build sdp-api, anchor-platform and tss"
-docker-compose -f ../docker/docker-compose-e2e-tests.yml up --build -d
+docker compose -f ../docker/docker-compose-e2e-tests.yml up --build -d
 wait_for_server "http://localhost:8000/health" 20
 echo "====> ✅Step 2: finishing build"
 

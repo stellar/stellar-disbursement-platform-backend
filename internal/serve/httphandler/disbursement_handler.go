@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -203,7 +204,7 @@ func (d DisbursementHandler) PostDisbursementInstructions(w http.ResponseWriter,
 	}
 
 	// check if disbursement is in draft, ready status
-	if disbursement.Status != data.DraftDisbursementStatus && disbursement.Status != data.ReadyDisbursementStatus {
+	if !slices.Contains([]data.DisbursementStatus{data.DraftDisbursementStatus, data.ReadyDisbursementStatus}, disbursement.Status) {
 		httperror.BadRequest("disbursement is not in draft or ready status", nil, nil).Render(w)
 		return
 	}
