@@ -294,7 +294,7 @@ func Test_LoginHandler(t *testing.T) {
 			Return(user, nil).
 			Once()
 		reCAPTCHAValidator.
-			On("IsTokenValid", mock.Anything, "XyZ").
+			On("IsTokenValid", mock.Anything, defaultReCAPTCHAToken).
 			Return(false, nil).
 			Once()
 
@@ -330,7 +330,6 @@ func Test_LoginHandler(t *testing.T) {
 			{data.OwnerUserRole.String()},                            // API roles cannot bypass reCAPTCHA
 			{data.OwnerUserRole.String(), data.APIUserRole.String()}, // API roles can bypass reCAPTCHA
 		}
-		usersRoles[1] = []string{data.OwnerUserRole.String(), data.APIUserRole.String()}
 		for _, userRoles := range usersRoles {
 			targetUser := &auth.User{
 				ID:    "user-ID",

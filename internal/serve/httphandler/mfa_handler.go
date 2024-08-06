@@ -60,6 +60,7 @@ func (h MFAHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 
 	user, err := h.AuthManager.GetUserByDeviceID(ctx, strings.TrimSpace(deviceID))
 	if err != nil {
+		// If device ID cannot be found, we will default to user requiring to validate reCAPTCHA
 		if errors.Is(err, auth.ErrMFADeviceIDNotFound) {
 			// If we don't find the user by device id, we just return an ok response
 			// to prevent malicious client from searching for the device in the system

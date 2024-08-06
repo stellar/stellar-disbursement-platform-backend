@@ -72,6 +72,7 @@ func (h LoginHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 
 	user, err := h.AuthManager.GetUserByEmail(ctx, strings.TrimSpace(reqBody.Email))
 	if err != nil {
+		// If user cannot be found, we will default to user requiring to validate reCAPTCHA
 		if errors.Is(err, auth.ErrUserNotFound) {
 			// If we don't find the user by email, we just return an ok response
 			// to prevent malicious client from searching accounts in the system
