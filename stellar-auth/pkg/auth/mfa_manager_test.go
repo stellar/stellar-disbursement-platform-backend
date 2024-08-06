@@ -334,7 +334,7 @@ func Test_defaultMFAManager_ForgetDevice(t *testing.T) {
 	})
 }
 
-func Test_defaultMFAManager_GetAuthUserID(t *testing.T) {
+func Test_defaultMFAManager_GetUserID(t *testing.T) {
 	ctx := context.Background()
 
 	dbt := dbtest.Open(t)
@@ -352,12 +352,12 @@ func Test_defaultMFAManager_GetAuthUserID(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("returns error when device ID not found", func(t *testing.T) {
-		_, err = m.GetAuthUserID(ctx, "invalidDeviceID")
-		require.ErrorContains(t, err, "MFA device not found")
+		_, err = m.GetUserID(ctx, "invalidDeviceID")
+		require.ErrorContains(t, err, "MFA device ID not found")
 	})
 
 	t.Run("returns auth user ID when device ID is found", func(t *testing.T) {
-		userID, err := m.GetAuthUserID(ctx, testDeviceID)
+		userID, err := m.GetUserID(ctx, testDeviceID)
 		require.NoError(t, err)
 		assert.Equal(t, randUser.ID, userID)
 	})

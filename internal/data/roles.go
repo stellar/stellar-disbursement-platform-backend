@@ -1,5 +1,9 @@
 package data
 
+import (
+	"slices"
+)
+
 type UserRole string
 
 func (u UserRole) String() string {
@@ -7,11 +11,7 @@ func (u UserRole) String() string {
 }
 
 func (u UserRole) IsValid() bool {
-	switch u {
-	case OwnerUserRole, FinancialControllerUserRole, DeveloperUserRole, BusinessUserRole, APIUserRole:
-		return true
-	}
-	return false
+	return slices.Contains(GetAllRoles(), u)
 }
 
 // Roles description reference: https://stellarfoundation.slack.com/archives/C04C9MLM9UZ/p1681238994830149

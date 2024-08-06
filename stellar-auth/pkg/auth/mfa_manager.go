@@ -19,7 +19,7 @@ type MFAManager interface {
 	GenerateMFACode(ctx context.Context, deviceID, userID string) (string, error)
 	ValidateMFACode(ctx context.Context, deviceID, code string) (string, error)
 	RememberDevice(ctx context.Context, deviceID, code string) error
-	GetAuthUserID(ctx context.Context, deviceID string) (string, error)
+	GetUserID(ctx context.Context, deviceID string) (string, error)
 }
 
 // defaultMFAManager
@@ -36,7 +36,7 @@ const (
 var (
 	ErrMFACodeInvalid         = errors.New("MFA code is invalid")
 	ErrMFANoCodeForUserDevice = errors.New("no MFA code for user and device")
-	ErrMFADeviceNotFound      = errors.New("MFA device not found")
+	ErrMFADeviceIDNotFound    = errors.New("MFA device ID not found")
 )
 
 type mfaCode struct {
@@ -149,7 +149,7 @@ func (m *defaultMFAManager) ForgetDevice(ctx context.Context, deviceID, userID s
 	return nil
 }
 
-func (m *defaultMFAManager) GetAuthUserID(ctx context.Context, deviceID string) (string, error) {
+func (m *defaultMFAManager) GetUserID(ctx context.Context, deviceID string) (string, error) {
 	if deviceID == "" {
 		return "", fmt.Errorf("device ID is required")
 	}
@@ -166,9 +166,9 @@ func (m *defaultMFAManager) GetAuthUserID(ctx context.Context, deviceID string) 
 	err := m.dbConnectionPool.GetContext(ctx, &userID, query, deviceID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return "", ErrMFADeviceNotFound
+			return "", ErrMFADeviceIDNotFound
 		}
-		return "", fmt.Errorf("error fetching user ID for device ID %s: %w", deviceID, err)
+		return "", fmt.Errorf("fetching user ID for device ID %s: %w", deviceID, err)
 	}
 
 	return userID, nil

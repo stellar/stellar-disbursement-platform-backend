@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"slices"
+	"strings"
 
 	"github.com/stellar/go/support/http/httpdecode"
 	"github.com/stellar/go/support/log"
@@ -12,6 +13,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 )
 
@@ -56,15 +58,13 @@ func (h MFAHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	user, err := h.AuthManager.GetUserByMFA(ctx, deviceID)
+	user, err := h.AuthManager.GetUserByDeviceID(ctx, strings.TrimSpace(deviceID))
 	if err != nil {
-		if errors.Is(err, auth.ErrMFADeviceNotFound) {
+		if errors.Is(err, auth.ErrMFADeviceIDNotFound) {
 			// If we don't find the user by device id, we just return an ok response
 			// to prevent malicious client from searching for the device in the system
-			log.Ctx(ctx).Errorf("Device id in request not found: %s", deviceID)
+			log.Ctx(ctx).Errorf("Device id in request not found: %s", utils.TruncateString(deviceID, 3))
 		}
-		httperror.InternalError(ctx, "Cannot get user by MFA", err, nil).Render(rw)
-		return
 	}
 
 	userRoleCanBypassReCAPTCHA := false

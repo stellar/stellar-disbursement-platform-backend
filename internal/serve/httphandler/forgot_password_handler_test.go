@@ -26,17 +26,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
-func UserByEmailSetup(authenticatorMock *auth.AuthenticatorMock, roleManagerMock *auth.RoleManagerMock, user *auth.User, userRoles []string) {
-	authenticatorMock.
-		On("GetUserByEmail", mock.Anything, user.Email).
-		Return(user, nil).
-		Once()
-	roleManagerMock.
-		On("GetUserRoles", mock.Anything, user).
-		Return(userRoles, nil).
-		Once()
-}
-
 func Test_ForgotPasswordHandler(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
@@ -73,10 +62,10 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 	}
 	ctx := tenant.SaveTenantInContext(context.Background(), &tnt)
 	const email = "valid@email.com"
-	defaultUserRoles := []string{data.OwnerUserRole.String()}
 	user := &auth.User{
 		ID:    "userID",
 		Email: email,
+		Roles: []string{data.OwnerUserRole.String()},
 	}
 	const reCAPTCHAToken = "validToken"
 	defaultReqBody := fmt.Sprintf(`
@@ -86,11 +75,10 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 				}`, user.Email, reCAPTCHAToken)
 
 	t.Run("Should return http status 200 on a valid request", func(t *testing.T) {
-		usersRoles := make([][]string, 2)
-		// role cannot bypass reCAPTCHA
-		usersRoles[0] = []string{data.OwnerUserRole.String()}
-		// role can bypass reCAPTCHA
-		usersRoles[1] = []string{data.OwnerUserRole.String(), data.APIUserRole.String()}
+		usersRoles := [][]string{
+			{data.OwnerUserRole.String()},                            // API roles cannot bypass reCAPTCHA
+			{data.OwnerUserRole.String(), data.APIUserRole.String()}, // API roles can bypass reCAPTCHA
+		}
 		for _, userRoles := range usersRoles {
 			targetUser := &auth.User{
 				ID:    "user-ID",
@@ -106,8 +94,11 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 				On("ForgotPassword", mock.Anything, email).
 				Return("resetToken", nil).
 				Once()
-			UserByEmailSetup(authenticatorMock, roleManagerMock, targetUser, userRoles)
-			if !slices.Contains(userRoles, data.APIUserRole.String()) {
+			authenticatorMock.
+				On("GetUserByEmail", mock.Anything, targetUser.Email).
+				Return(targetUser, nil).
+				Once()
+			if !slices.Contains(userRoles, data.APIUserRole.String()) { // <-------- bypasses recaptcha when APIUserRole is present.
 				requestBody = defaultReqBody
 				reCAPTCHAValidatorMock.
 					On("IsTokenValid", mock.Anything, reCAPTCHAToken).
@@ -161,10 +152,12 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 		require.NoError(t, err)
 
 		authenticatorMock.
-			On("ForgotPassword", req.Context(), "valid@email.com").
+			On("GetUserByEmail", mock.Anything, user.Email).
+			Return(user, nil).
+			Once().
+			On("ForgotPassword", mock.Anything, email).
 			Return("resetToken", nil).
 			Once()
-		UserByEmailSetup(authenticatorMock, roleManagerMock, user, defaultUserRoles)
 		reCAPTCHAValidatorMock.
 			On("IsTokenValid", mock.Anything, reCAPTCHAToken).
 			Return(true, nil).
@@ -182,36 +175,31 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
 	})
 
-	t.Run("Should return an http status ok even if the email is not found", func(t *testing.T) {
-		requestBody := `
+	t.Run("Should return http status 400 when user for email cannot be found and request contains empty reCAPTCHA token", func(t *testing.T) {
+		invalidEmail := "not_found@email.com"
+		requestBody := fmt.Sprintf(`
 		{ 
-			"email": "not_found@email.com" ,
-			"recaptcha_token": "validToken"
-		}`
+			"email": "%s"
+		}`, invalidEmail)
 
 		rr := httptest.NewRecorder()
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(requestBody))
 		require.NoError(t, err)
 
-		invalidUser := &auth.User{
-			ID:    "userID",
-			Email: "not_found@email.com",
-		}
 		authenticatorMock.
-			On("ForgotPassword", req.Context(), invalidUser.Email).
-			Return("", auth.ErrUserNotFound).
+			On("GetUserByEmail", mock.Anything, invalidEmail).
+			Return(nil, errors.New("unexpected error")).
 			Once()
-		UserByEmailSetup(authenticatorMock, roleManagerMock, invalidUser, defaultUserRoles)
 		reCAPTCHAValidatorMock.
-			On("IsTokenValid", mock.Anything, reCAPTCHAToken).
-			Return(true, nil).
+			On("IsTokenValid", mock.Anything, "").
+			Return(false, nil).
 			Once()
 
 		http.HandlerFunc(handler.ServeHTTP).ServeHTTP(rr, req)
 
 		resp := rr.Result()
 
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 	})
 
 	t.Run("Should return an http status ok even if the user has a valid token", func(t *testing.T) {
@@ -220,10 +208,12 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 		require.NoError(t, err)
 
 		authenticatorMock.
+			On("GetUserByEmail", mock.Anything, user.Email).
+			Return(user, nil).
+			Once().
 			On("ForgotPassword", req.Context(), user.Email).
 			Return("", auth.ErrUserHasValidToken).
 			Once()
-		UserByEmailSetup(authenticatorMock, roleManagerMock, user, defaultUserRoles)
 		reCAPTCHAValidatorMock.
 			On("IsTokenValid", mock.Anything, reCAPTCHAToken).
 			Return(true, nil).
@@ -270,10 +260,12 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 		require.NoError(t, err)
 
 		authenticatorMock.
+			On("GetUserByEmail", mock.Anything, user.Email).
+			Return(user, nil).
+			Once().
 			On("ForgotPassword", req.Context(), user.Email).
 			Return("resetToken", nil).
 			Once()
-		UserByEmailSetup(authenticatorMock, roleManagerMock, user, defaultUserRoles)
 		reCAPTCHAValidatorMock.
 			On("IsTokenValid", mock.Anything, reCAPTCHAToken).
 			Return(true, nil).
@@ -320,10 +312,12 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 		require.NoError(t, err)
 
 		authenticatorMock.
+			On("GetUserByEmail", mock.Anything, user.Email).
+			Return(user, nil).
+			Once().
 			On("ForgotPassword", req.Context(), user.Email).
 			Return("", errors.New("unexpected error")).
 			Once()
-		UserByEmailSetup(authenticatorMock, roleManagerMock, user, defaultUserRoles)
 		reCAPTCHAValidatorMock.
 			On("IsTokenValid", mock.Anything, reCAPTCHAToken).
 			Return(true, nil).
@@ -349,7 +343,10 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(defaultReqBody))
 		require.NoError(t, err)
 
-		UserByEmailSetup(authenticatorMock, roleManagerMock, user, defaultUserRoles)
+		authenticatorMock.
+			On("GetUserByEmail", mock.Anything, user.Email).
+			Return(user, nil).
+			Once()
 		reCAPTCHAValidatorMock.
 			On("IsTokenValid", req.Context(), reCAPTCHAToken).
 			Return(false, errors.New("error requesting verify reCAPTCHA token")).
@@ -381,7 +378,10 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(requestBody))
 		require.NoError(t, err)
 
-		UserByEmailSetup(authenticatorMock, roleManagerMock, user, defaultUserRoles)
+		authenticatorMock.
+			On("GetUserByEmail", mock.Anything, user.Email).
+			Return(user, nil).
+			Once()
 		reCAPTCHAValidatorMock.
 			On("IsTokenValid", mock.Anything, "invalidToken").
 			Return(false, nil).
@@ -402,7 +402,7 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 		assert.JSONEq(t, wantsBody, string(respBody))
 	})
 
-	t.Run("returns error when an unexpected error occurs getting user roles", func(t *testing.T) {
+	t.Run("Should return http status 400 when attempting to validate reCAPTCHA token after failing to find user by email", func(t *testing.T) {
 		requestBody := `
 		{ 
 			"email": "valid@email.com"
@@ -410,11 +410,11 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 
 		authenticatorMock.
 			On("GetUserByEmail", mock.Anything, user.Email).
-			Return(user, nil).
-			Once()
-		roleManagerMock.
-			On("GetUserRoles", mock.Anything, user).
 			Return(nil, errors.New("unexpected error")).
+			Once()
+		reCAPTCHAValidatorMock.
+			On("IsTokenValid", mock.Anything, "").
+			Return(false, nil).
 			Once()
 
 		rr := httptest.NewRecorder()
@@ -427,33 +427,8 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 		respBody, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
-		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
-		assert.JSONEq(t, `{"error": "Getting user by email"}`, string(respBody))
-	})
-
-	t.Run("returns error when an unexpected error occurs getting user by email", func(t *testing.T) {
-		requestBody := `
-		{ 
-			"email": "valid@email.com"
-		}`
-
-		authenticatorMock.
-			On("GetUserByEmail", mock.Anything, user.Email).
-			Return(nil, errors.New("unexpected error")).
-			Once()
-
-		rr := httptest.NewRecorder()
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(requestBody))
-		require.NoError(t, err)
-
-		http.HandlerFunc(handler.ServeHTTP).ServeHTTP(rr, req)
-
-		resp := rr.Result()
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-
-		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
-		assert.JSONEq(t, `{"error": "Getting user by email"}`, string(respBody))
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+		assert.JSONEq(t, `{"error": "reCAPTCHA token invalid"}`, string(respBody))
 	})
 
 	t.Run("returns Unauthorized when tenant is not in the context", func(t *testing.T) {

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"slices"
+	"strings"
 
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/support/render/httpjson"
@@ -72,13 +73,11 @@ func (h ForgotPasswordHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 
 	user, err := h.AuthManager.GetUserByEmail(ctx, forgotPasswordRequest.Email)
 	if err != nil {
+		// If user cannot be found, we will default to user requiring to validate reCAPTCHA.
 		if errors.Is(err, auth.ErrUserNotFound) {
 			// If we don't find the user by email, we just return an ok response
 			// to prevent malicious client from searching accounts in the system
-			log.Ctx(ctx).Errorf("Email in request not found: %s", forgotPasswordRequest.Email)
-		} else {
-			httperror.InternalError(ctx, "Getting user by email", err, nil).Render(w)
-			return
+			log.Ctx(ctx).Errorf("Email in request not found: %s", utils.TruncateString(forgotPasswordRequest.Email, 3))
 		}
 	}
 
@@ -102,14 +101,14 @@ func (h ForgotPasswordHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 		}
 	}
 
-	resetToken, err := h.AuthManager.ForgotPassword(ctx, forgotPasswordRequest.Email)
+	resetToken, err := h.AuthManager.ForgotPassword(ctx, strings.TrimSpace(forgotPasswordRequest.Email))
 	// If we don't find the user by email, we just return an ok response
 	// to prevent malicious client from searching accounts in the system
 	if err != nil {
 		if errors.Is(err, auth.ErrUserNotFound) {
-			log.Ctx(ctx).Errorf("Email not found in forgot password handler: %s", forgotPasswordRequest.Email)
+			log.Ctx(ctx).Errorf("Email not found in forgot password handler: %s", utils.TruncateString(forgotPasswordRequest.Email, 3))
 		} else if errors.Is(err, auth.ErrUserHasValidToken) {
-			log.Ctx(ctx).Errorf("User has a valid token in forgot password handler")
+			log.Ctx(ctx).Errorf("User currently has a token associated with it that was generated within a 20 minutes expiry window")
 		} else {
 			httperror.InternalError(ctx, "", err, nil).Render(w)
 			return

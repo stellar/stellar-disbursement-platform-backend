@@ -23,7 +23,7 @@ type AuthManager interface {
 	GetUser(ctx context.Context, tokenString string) (*User, error)
 	GetUsersByID(ctx context.Context, userIDs []string) ([]*User, error)
 	GetUserByEmail(ctx context.Context, userID string) (*User, error)
-	GetUserByMFA(ctx context.Context, deviceID string) (*User, error)
+	GetUserByDeviceID(ctx context.Context, deviceID string) (*User, error)
 	GetUserID(ctx context.Context, tokenString string) (string, error)
 	GetTenantID(ctx context.Context, tokenString string) (string, error)
 	GetAllUsers(ctx context.Context, tokenString string) ([]User, error)
@@ -46,13 +46,6 @@ func (am *defaultAuthManager) Authenticate(ctx context.Context, email, pass stri
 }
 
 func (am *defaultAuthManager) generateToken(ctx context.Context, user *User) (string, error) {
-	roles, err := am.roleManager.GetUserRoles(ctx, user)
-	if err != nil {
-		return "", fmt.Errorf("error getting user roles: %w", err)
-	}
-
-	user.Roles = roles
-
 	expiresAt := time.Now().Add(am.expirationTimeInMinutes)
 
 	tokenString, err := am.jwtManager.GenerateToken(ctx, user, expiresAt)
@@ -329,17 +322,11 @@ func (am *defaultAuthManager) GetUserByEmail(ctx context.Context, email string) 
 		return nil, fmt.Errorf("getting user with email: %w", err)
 	}
 
-	roles, err := am.roleManager.GetUserRoles(ctx, user)
-	if err != nil {
-		return nil, fmt.Errorf("getting user ID %s roles: %w", user.ID, err)
-	}
-	user.Roles = roles
-
 	return user, nil
 }
 
-func (am *defaultAuthManager) GetUserByMFA(ctx context.Context, deviceID string) (*User, error) {
-	userID, err := am.mfaManager.GetAuthUserID(ctx, deviceID)
+func (am *defaultAuthManager) GetUserByDeviceID(ctx context.Context, deviceID string) (*User, error) {
+	userID, err := am.mfaManager.GetUserID(ctx, deviceID)
 	if err != nil {
 		return nil, fmt.Errorf("getting user with MFA device ID %s: %w", deviceID, err)
 	}
@@ -348,12 +335,6 @@ func (am *defaultAuthManager) GetUserByMFA(ctx context.Context, deviceID string)
 	if err != nil {
 		return nil, fmt.Errorf("getting user ID %s: %w", userID, err)
 	}
-
-	roles, err := am.roleManager.GetUserRoles(ctx, user)
-	if err != nil {
-		return nil, fmt.Errorf("getting user ID %s roles: %w", user.ID, err)
-	}
-	user.Roles = roles
 
 	return user, nil
 }

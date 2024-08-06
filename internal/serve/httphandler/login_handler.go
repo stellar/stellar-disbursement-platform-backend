@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"slices"
+	"strings"
 
 	"github.com/stellar/go/support/http/httpdecode"
 	"github.com/stellar/go/support/log"
@@ -69,15 +70,12 @@ func (h LoginHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	user, err := h.AuthManager.GetUserByEmail(ctx, reqBody.Email)
+	user, err := h.AuthManager.GetUserByEmail(ctx, strings.TrimSpace(reqBody.Email))
 	if err != nil {
 		if errors.Is(err, auth.ErrUserNotFound) {
 			// If we don't find the user by email, we just return an ok response
 			// to prevent malicious client from searching accounts in the system
-			log.Ctx(ctx).Errorf("Email in request not found: %s", reqBody.Email)
-		} else {
-			httperror.InternalError(ctx, "Getting user by email", err, nil).Render(rw)
-			return
+			log.Ctx(ctx).Errorf("Email in request not found: %s", utils.TruncateString(reqBody.Email, 3))
 		}
 	}
 
