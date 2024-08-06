@@ -66,7 +66,7 @@ func (a *defaultAuthenticator) ValidateCredentials(ctx context.Context, email, p
 			u.id,
 			u.first_name,
 			u.last_name,
-			u.encrypted_password
+			u.encrypted_password,
 			u.roles
 		FROM
 			auth_users u

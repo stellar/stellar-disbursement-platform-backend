@@ -41,30 +41,6 @@ func Test_AuthManager_Authenticate(t *testing.T) {
 		assert.Empty(t, token)
 	})
 
-	t.Run("returns error when get user roles fails", func(t *testing.T) {
-		email, password := "email@email.com", "pass123"
-
-		expectedUser := &User{
-			ID:    "user-id",
-			Email: "email@email.com",
-		}
-
-		authenticatorMock.
-			On("ValidateCredentials", ctx, email, password).
-			Return(expectedUser, nil).
-			Once()
-
-		roleManagerMock.
-			On("GetUserRoles", ctx, expectedUser).
-			Return(nil, errUnexpectedError).
-			Once()
-
-		token, err := authManager.Authenticate(ctx, email, password)
-
-		assert.EqualError(t, err, "error getting user roles: unexpected error")
-		assert.Empty(t, token)
-	})
-
 	t.Run("returns error when generate token fails", func(t *testing.T) {
 		email, password := "email@email.com", "pass123"
 
@@ -76,11 +52,6 @@ func Test_AuthManager_Authenticate(t *testing.T) {
 		authenticatorMock.
 			On("ValidateCredentials", ctx, email, password).
 			Return(expectedUser, nil).
-			Once()
-
-		roleManagerMock.
-			On("GetUserRoles", ctx, expectedUser).
-			Return([]string{"role1"}, nil).
 			Once()
 
 		jwtManagerMock.
@@ -97,14 +68,8 @@ func Test_AuthManager_Authenticate(t *testing.T) {
 	t.Run("returns the user JWT token successfully", func(t *testing.T) {
 		email, password := "email@email.com", "pass123"
 
-		user := &User{
-			ID:    "user-id",
-			Email: "email@email.com",
-		}
-
 		roles := []string{"role1"}
-
-		expectedUser := &User{
+		user := &User{
 			ID:    "user-id",
 			Email: "email@email.com",
 			Roles: roles,
@@ -115,14 +80,9 @@ func Test_AuthManager_Authenticate(t *testing.T) {
 			Return(user, nil).
 			Once()
 
-		roleManagerMock.
-			On("GetUserRoles", ctx, user).
-			Return(roles, nil).
-			Once()
-
 		expectedToken := "mytoken"
 		jwtManagerMock.
-			On("GenerateToken", ctx, expectedUser, mock.AnythingOfType("time.Time")).
+			On("GenerateToken", ctx, user, mock.AnythingOfType("time.Time")).
 			Return(expectedToken, nil).
 			Once()
 
@@ -1286,40 +1246,6 @@ func Test_AuthManager_GetUser(t *testing.T) {
 		assert.Nil(t, user)
 	})
 
-	t.Run("returns error when get user roles fails", func(t *testing.T) {
-		token := "mytoken"
-
-		u := &User{
-			ID:        "user-id",
-			FirstName: "First",
-			LastName:  "Last",
-			Email:     "email@email.com",
-		}
-
-		jwtManagerMock.
-			On("ValidateToken", ctx, token).
-			Return(true, nil).
-			Once().
-			On("GetUserFromToken", ctx, token).
-			Return(u, nil).
-			Once()
-
-		authenticatorMock.
-			On("GetUser", ctx, u.ID).
-			Return(u, nil).
-			Once()
-
-		roleManagerMock.
-			On("GetUserRoles", ctx, u).
-			Return(nil, errUnexpectedError).
-			Once()
-
-		user, err := authManager.GetUser(ctx, token)
-
-		assert.EqualError(t, err, "getting user ID user-id roles: unexpected error")
-		assert.Nil(t, user)
-	})
-
 	t.Run("gets user successfully", func(t *testing.T) {
 		token := "mytoken"
 
@@ -1423,13 +1349,6 @@ func Test_AuthManager_GetUserByEmail(t *testing.T) {
 	)
 
 	ctx := context.Background()
-
-	email := "valid-email@email.com"
-	expectedUser := &User{
-		ID:    "user-id",
-		Email: email,
-	}
-
 	t.Run("returns error when authenticator fails to find user by email", func(t *testing.T) {
 		invalidEmail := "invalid-email@email.com"
 
@@ -1439,18 +1358,14 @@ func Test_AuthManager_GetUserByEmail(t *testing.T) {
 		require.EqualError(t, err, "getting user with email: user not found")
 	})
 
-	t.Run("returns error when role manager fails to get user roles", func(t *testing.T) {
-		authenticatorMock.On("GetUserByEmail", ctx, email).Return(expectedUser, nil).Once()
-		roleManagerMock.On("GetUserRoles", ctx, expectedUser).Return(nil, errUnexpectedError).Once()
-		_, err := authManager.GetUserByEmail(ctx, email)
-
-		require.EqualError(t, err, fmt.Sprintf("getting user ID %s roles: %s", expectedUser.ID, errUnexpectedError.Error()))
-	})
-
 	t.Run("gets user by email successfully", func(t *testing.T) {
-		expectedRoles := []string{data.OwnerUserRole.String()}
+		email := "valid-email@email.com"
+		expectedUser := &User{
+			ID:    "user-id",
+			Email: email,
+			Roles: []string{data.OwnerUserRole.String()},
+		}
 		authenticatorMock.On("GetUserByEmail", ctx, email).Return(expectedUser, nil).Once()
-		roleManagerMock.On("GetUserRoles", ctx, expectedUser).Return(expectedRoles, nil).Once()
 		user, err := authManager.GetUserByEmail(ctx, email)
 
 		require.NoError(t, err)
