@@ -91,7 +91,7 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 				}`, targetUser.Email)
 
 			authenticatorMock.
-				On("ForgotPassword", mock.Anything, email).
+				On("ForgotPassword", mock.Anything, targetUser.Email).
 				Return("resetToken", nil).
 				Once()
 			authenticatorMock.
@@ -155,7 +155,7 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 			On("GetUserByEmail", mock.Anything, user.Email).
 			Return(user, nil).
 			Once().
-			On("ForgotPassword", mock.Anything, email).
+			On("ForgotPassword", mock.Anything, user.Email).
 			Return("resetToken", nil).
 			Once()
 		reCAPTCHAValidatorMock.
