@@ -93,13 +93,12 @@ func Test_LoginHandler(t *testing.T) {
 	const email = "testuser@email.com"
 	const password = "pass1234"
 	const defaultReCAPTCHAToken = "XyZ"
-	defaultUserRoles := []string{data.OwnerUserRole.String()}
 	defaultReqBody := fmt.Sprintf(
 		`{"email": "%s", "password": "%s", "recaptcha_token": "%s"}`, email, password, defaultReCAPTCHAToken)
 	user := &auth.User{
 		ID:    "user-ID",
 		Email: email,
-		Roles: defaultUserRoles,
+		Roles: []string{data.OwnerUserRole.String()},
 	}
 	const defaultUserToken = "token123"
 
