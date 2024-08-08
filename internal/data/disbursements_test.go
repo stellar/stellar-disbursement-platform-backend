@@ -12,7 +12,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 )
 
-func Test_DisbursementModelInsert(t *testing.T) {
+func Test_DisbursementModel_Insert(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 
@@ -77,7 +77,7 @@ func Test_DisbursementModelInsert(t *testing.T) {
 	})
 }
 
-func Test_DisbursementModelCount(t *testing.T) {
+func Test_DisbursementModel_Count(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 
@@ -142,7 +142,7 @@ func Test_DisbursementModelCount(t *testing.T) {
 	})
 }
 
-func Test_DisbursementModelGet(t *testing.T) {
+func Test_DisbursementModel_Get(t *testing.T) {
 	dbt := dbtest.Open(t)
 	defer dbt.Close()
 
@@ -395,6 +395,13 @@ func Test_DisbursementModelGetAll(t *testing.T) {
 			ReceiverWallet: receiverWallet,
 			Disbursement:   expectedDisbursement,
 			Asset:          *asset,
+			Amount:         "90",
+			Status:         ReadyPaymentStatus,
+		})
+		CreatePaymentFixture(t, ctx, dbConnectionPool, &paymentModel, &Payment{
+			ReceiverWallet: receiverWallet,
+			Disbursement:   expectedDisbursement,
+			Asset:          *asset,
 			Amount:         "020.50",
 			Status:         FailedPaymentStatus,
 		})
@@ -407,14 +414,15 @@ func Test_DisbursementModelGetAll(t *testing.T) {
 		})
 
 		expectedStats := &DisbursementStats{}
-		expectedStats.TotalPayments = 4
+		expectedStats.TotalPayments = 5
 		expectedStats.SuccessfulPayments = 1
 		expectedStats.FailedPayments = 1
 		expectedStats.CanceledPayments = 1
+		expectedStats.DraftPayments = 1
 		expectedStats.RemainingPayments = 1
-		expectedStats.TotalAmount = "291.05"
+		expectedStats.TotalAmount = "381.05"
 		expectedStats.AmountDisbursed = "100.00"
-		expectedStats.AverageAmount = "72.76"
+		expectedStats.AverageAmount = "76.21"
 
 		expectedDisbursement.DisbursementStats = expectedStats
 
