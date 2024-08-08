@@ -3,6 +3,8 @@ package httphandler
 import (
 	"errors"
 	"net/http"
+	"slices"
+	"strings"
 
 	"github.com/stellar/go/support/http/httpdecode"
 	"github.com/stellar/go/support/log"
@@ -11,6 +13,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 )
 
@@ -43,8 +46,35 @@ func (h MFAHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	deviceID := req.Header.Get(DeviceIDHeader)
+	if deviceID == "" {
+		httperror.BadRequest("Device-ID header is required", nil, nil).Render(rw)
+		return
+	}
+
+	if reqBody.MFACode == "" {
+		extras := map[string]interface{}{"mfa_code": "MFA Code is required"}
+		httperror.BadRequest("Request invalid", nil, extras).Render(rw)
+		return
+	}
+
+	user, err := h.AuthManager.GetUserByDeviceID(ctx, strings.TrimSpace(deviceID))
+	if err != nil {
+		// If device ID cannot be found, we will default to user requiring to validate reCAPTCHA
+		if errors.Is(err, auth.ErrMFADeviceIDNotFound) {
+			// If we don't find the user by device id, we just return an ok response
+			// to prevent malicious client from searching for the device in the system
+			log.Ctx(ctx).Errorf("Device id in request not found: %s", utils.TruncateString(deviceID, 3))
+		}
+	}
+
+	userRoleCanBypassReCAPTCHA := false
+	if user != nil {
+		userRoleCanBypassReCAPTCHA = slices.Contains(user.Roles, data.APIUserRole.String())
+	}
+
 	// validating reCAPTCHA Token
-	if !h.ReCAPTCHADisabled {
+	if !h.ReCAPTCHADisabled && !userRoleCanBypassReCAPTCHA {
 		isValid, recaptchaErr := h.ReCAPTCHAValidator.IsTokenValid(ctx, reqBody.ReCAPTCHAToken)
 		if recaptchaErr != nil {
 			httperror.InternalError(ctx, "Cannot validate reCAPTCHA token", recaptchaErr, nil).Render(rw)
@@ -58,34 +88,17 @@ func (h MFAHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	if reqBody.MFACode == "" {
-		extras := map[string]interface{}{"mfa_code": "MFA Code is required"}
-		httperror.BadRequest("Request invalid", nil, extras).Render(rw)
-		return
-	}
-
-	deviceID := req.Header.Get(DeviceIDHeader)
-	if deviceID == "" {
-		httperror.BadRequest("Device-ID header is required", nil, nil).Render(rw)
-		return
-	}
-
 	token, err := h.AuthManager.AuthenticateMFA(ctx, deviceID, reqBody.MFACode, reqBody.RememberMe)
 	if err != nil {
 		if errors.Is(err, auth.ErrMFACodeInvalid) {
 			httperror.Unauthorized("", err, nil).Render(rw)
 			return
 		}
-		log.Ctx(ctx).Errorf("error authenticating user: %s", err.Error())
+		log.Ctx(ctx).Errorf("authenticating user: %s", err.Error())
 		httperror.InternalError(ctx, "Cannot authenticate user", err, nil).Render(rw)
 		return
 	}
 
-	userID, err := h.AuthManager.GetUserID(ctx, token)
-	if err != nil {
-		httperror.InternalError(ctx, "Cannot get user ID", err, nil).Render(rw)
-		return
-	}
-	log.Ctx(ctx).Infof("[UserLogin] - Logged in user with account ID %s", userID)
+	log.Ctx(ctx).Infof("[UserLogin] - Logged in user with account ID %s", user.ID)
 	httpjson.RenderStatus(rw, http.StatusOK, MFAResponse{Token: token}, httpjson.JSON)
 }

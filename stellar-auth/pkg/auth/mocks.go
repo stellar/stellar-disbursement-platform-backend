@@ -134,6 +134,14 @@ func (am *AuthenticatorMock) GetUsers(ctx context.Context, userIDs []string) ([]
 	return args.Get(0).([]*User), args.Error(1)
 }
 
+func (am *AuthenticatorMock) GetUserByEmail(ctx context.Context, email string) (*User, error) {
+	args := am.Called(ctx, email)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*User), args.Error(1)
+}
+
 var _ Authenticator = (*AuthenticatorMock)(nil)
 
 type RoleManagerMock struct {
@@ -193,6 +201,11 @@ func (m *MFAManagerMock) ValidateMFACode(ctx context.Context, deviceID, code str
 func (m *MFAManagerMock) RememberDevice(ctx context.Context, deviceID, code string) error {
 	args := m.Called(ctx, deviceID, code)
 	return args.Error(0)
+}
+
+func (m *MFAManagerMock) GetUserID(ctx context.Context, deviceID string) (string, error) {
+	args := m.Called(ctx, deviceID)
+	return args.Get(0).(string), args.Error(1)
 }
 
 var _ MFAManager = (*MFAManagerMock)(nil)
@@ -268,6 +281,14 @@ func (am *AuthManagerMock) GetUsersByID(ctx context.Context, tokenString []strin
 	return args.Get(0).([]*User), args.Error(1)
 }
 
+func (am *AuthManagerMock) GetUserByEmail(ctx context.Context, email string) (*User, error) {
+	args := am.Called(ctx, email)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*User), args.Error(1)
+}
+
 func (am *AuthManagerMock) GetUserID(ctx context.Context, userID string) (string, error) {
 	args := am.Called(ctx, userID)
 	return args.Get(0).(string), args.Error(1)
@@ -324,6 +345,14 @@ func (am *AuthManagerMock) GenerateMFACode(ctx context.Context, userID, deviceID
 func (am *AuthManagerMock) AuthenticateMFA(ctx context.Context, deviceID, code string, rememberMe bool) (string, error) {
 	args := am.Called(ctx, deviceID, code, rememberMe)
 	return args.Get(0).(string), args.Error(1)
+}
+
+func (am *AuthManagerMock) GetUserByDeviceID(ctx context.Context, userID string) (*User, error) {
+	args := am.Called(ctx, userID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*User), args.Error(1)
 }
 
 var _ AuthManager = (*AuthManagerMock)(nil)

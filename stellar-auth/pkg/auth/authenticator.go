@@ -42,6 +42,7 @@ type Authenticator interface {
 	GetAllUsers(ctx context.Context) ([]User, error)
 	GetUser(ctx context.Context, userID string) (*User, error)
 	GetUsers(ctx context.Context, userIDs []string) ([]*User, error)
+	GetUserByEmail(ctx context.Context, email string) (*User, error)
 }
 
 type defaultAuthenticator struct {
@@ -51,11 +52,12 @@ type defaultAuthenticator struct {
 }
 
 type authUser struct {
-	ID                string `db:"id"`
-	FirstName         string `db:"first_name"`
-	LastName          string `db:"last_name"`
-	Email             string `db:"email"`
-	EncryptedPassword string `db:"encrypted_password"`
+	ID                string         `db:"id"`
+	FirstName         string         `db:"first_name"`
+	LastName          string         `db:"last_name"`
+	Email             string         `db:"email"`
+	EncryptedPassword string         `db:"encrypted_password"`
+	Roles             pq.StringArray `db:"roles"`
 }
 
 func (a *defaultAuthenticator) ValidateCredentials(ctx context.Context, email, password string) (*User, error) {
@@ -64,7 +66,8 @@ func (a *defaultAuthenticator) ValidateCredentials(ctx context.Context, email, p
 			u.id,
 			u.first_name,
 			u.last_name,
-			u.encrypted_password
+			u.encrypted_password,
+			u.roles
 		FROM
 			auth_users u
 		WHERE
@@ -94,6 +97,7 @@ func (a *defaultAuthenticator) ValidateCredentials(ctx context.Context, email, p
 		Email:     email,
 		FirstName: au.FirstName,
 		LastName:  au.LastName,
+		Roles:     au.Roles,
 	}, nil
 }
 
@@ -520,6 +524,34 @@ func (a *defaultAuthenticator) GetUsers(ctx context.Context, userIDs []string) (
 	}
 
 	return users, nil
+}
+
+func (a *defaultAuthenticator) GetUserByEmail(ctx context.Context, email string) (*User, error) {
+	const query = `
+		SELECT
+			id,
+			email,
+			roles
+		FROM
+			auth_users
+		WHERE
+			email = $1 AND is_active = true
+	`
+
+	var u authUser
+	err := a.dbConnectionPool.GetContext(ctx, &u, query, email)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrUserNotFound
+		}
+		return nil, fmt.Errorf("querying user email %s: %w", email, err)
+	}
+
+	return &User{
+		ID:    u.ID,
+		Email: email,
+		Roles: u.Roles,
+	}, nil
 }
 
 type defaultAuthenticatorOption func(a *defaultAuthenticator)

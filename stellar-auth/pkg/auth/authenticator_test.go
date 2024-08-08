@@ -1039,3 +1039,37 @@ func Test_DefaultAuthenticator_UpdatePassword(t *testing.T) {
 		assert.Equal(t, newEncryptedPassword, u.EncryptedPassword)
 	})
 }
+
+func Test_DefaultAuthenticator_GetUserByEmail(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+	dbConnectionPool, err := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, err)
+	defer dbConnectionPool.Close()
+
+	passwordEncrypterMock := &PasswordEncrypterMock{}
+	authenticator := newDefaultAuthenticator(withAuthenticatorDatabaseConnectionPool(dbConnectionPool))
+
+	ctx := context.Background()
+
+	t.Run("returns error when user is not found for email", func(t *testing.T) {
+		user, err := authenticator.GetUserByEmail(ctx, "invalid-email@email.com")
+		assert.ErrorIs(t, err, ErrUserNotFound)
+		assert.Nil(t, user)
+	})
+
+	t.Run("returns user by email successfully", func(t *testing.T) {
+		passwordEncrypterMock.
+			On("Encrypt", ctx, mock.AnythingOfType("string")).
+			Return("encryptedPassword", nil)
+
+		randUser := CreateRandomAuthUserFixture(t, ctx, dbConnectionPool, passwordEncrypterMock, false, "role1")
+
+		u, err := authenticator.GetUserByEmail(ctx, randUser.Email)
+		require.NoError(t, err)
+
+		assert.Equal(t, randUser.ID, u.ID)
+		assert.Equal(t, randUser.Email, u.Email)
+		assert.Equal(t, randUser.Roles, u.Roles)
+	})
+}

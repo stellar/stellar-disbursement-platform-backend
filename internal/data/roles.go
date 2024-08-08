@@ -1,5 +1,9 @@
 package data
 
+import (
+	"slices"
+)
+
 type UserRole string
 
 func (u UserRole) String() string {
@@ -7,11 +11,7 @@ func (u UserRole) String() string {
 }
 
 func (u UserRole) IsValid() bool {
-	switch u {
-	case OwnerUserRole, FinancialControllerUserRole, DeveloperUserRole, BusinessUserRole:
-		return true
-	}
-	return false
+	return slices.Contains(GetAllRoles(), u)
 }
 
 // Roles description reference: https://stellarfoundation.slack.com/archives/C04C9MLM9UZ/p1681238994830149
@@ -24,7 +24,21 @@ const (
 	DeveloperUserRole UserRole = "developer"
 	// BusinessUserRole has read-only permissions - except for user management that they can't read any data.
 	BusinessUserRole UserRole = "business"
+
+	// APIUserRole removes the need for the user to be verified through reCAPTCHA for endpoints that require it.
+	// This role must be paired with one or more of the above permission-based roles to be valid.
+	APIUserRole UserRole = "api"
 )
+
+// GetAllBusinessRoles returns all business roles that control endpoint permission
+func GetAllBusinessRoles() []UserRole {
+	return []UserRole{
+		OwnerUserRole,
+		FinancialControllerUserRole,
+		DeveloperUserRole,
+		BusinessUserRole,
+	}
+}
 
 // GetAllRoles returns all roles available
 func GetAllRoles() []UserRole {
@@ -33,6 +47,7 @@ func GetAllRoles() []UserRole {
 		FinancialControllerUserRole,
 		DeveloperUserRole,
 		BusinessUserRole,
+		APIUserRole,
 	}
 }
 

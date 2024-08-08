@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"slices"
+	"strings"
 
 	"github.com/stellar/go/support/log"
 	"github.com/stellar/go/support/render/httpjson"
@@ -55,11 +57,36 @@ func (h ForgotPasswordHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 	var forgotPasswordRequest ForgotPasswordRequest
 	err = json.NewDecoder(r.Body).Decode(&forgotPasswordRequest)
 	if err != nil {
-		httperror.BadRequest("invalid request body", err, nil).Render(w)
+		httperror.BadRequest("Invalid request body", err, nil).Render(w)
 		return
 	}
 
-	if !h.ReCAPTCHADisabled {
+	// validate request
+	v := validators.NewValidator()
+
+	v.Check(forgotPasswordRequest.Email != "", "email", "email is required")
+
+	if v.HasErrors() {
+		httperror.BadRequest("Request invalid", err, v.Errors).Render(w)
+		return
+	}
+
+	user, err := h.AuthManager.GetUserByEmail(ctx, strings.TrimSpace(forgotPasswordRequest.Email))
+	if err != nil {
+		// If user cannot be found, we will default to user requiring to validate reCAPTCHA
+		if errors.Is(err, auth.ErrUserNotFound) {
+			// If we don't find the user by email, we just return an ok response
+			// to prevent malicious client from searching accounts in the system
+			log.Ctx(ctx).Errorf("Email in request not found: %s", utils.TruncateString(forgotPasswordRequest.Email, 3))
+		}
+	}
+
+	userRoleCanBypassReCAPTCHA := false
+	if user != nil {
+		userRoleCanBypassReCAPTCHA = slices.Contains(user.Roles, data.APIUserRole.String())
+	}
+
+	if !h.ReCAPTCHADisabled && !userRoleCanBypassReCAPTCHA {
 		// validating reCAPTCHA Token
 		isValid, recaptchaErr := h.ReCAPTCHAValidator.IsTokenValid(ctx, forgotPasswordRequest.ReCAPTCHAToken)
 		if recaptchaErr != nil {
@@ -74,24 +101,14 @@ func (h ForgotPasswordHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 		}
 	}
 
-	// validate request
-	v := validators.NewValidator()
-
-	v.Check(forgotPasswordRequest.Email != "", "email", "email is required")
-
-	if v.HasErrors() {
-		httperror.BadRequest("request invalid", err, v.Errors).Render(w)
-		return
-	}
-
-	resetToken, err := h.AuthManager.ForgotPassword(ctx, forgotPasswordRequest.Email)
-	// if we don't find the user by email, we just return an ok response
+	resetToken, err := h.AuthManager.ForgotPassword(ctx, strings.TrimSpace(forgotPasswordRequest.Email))
+	// If we don't find the user by email, we just return an ok response
 	// to prevent malicious client from searching accounts in the system
 	if err != nil {
 		if errors.Is(err, auth.ErrUserNotFound) {
-			log.Ctx(ctx).Errorf("error in forgot password handler, email not found: %s", forgotPasswordRequest.Email)
+			log.Ctx(ctx).Errorf("Email not found in forgot password handler: %s", utils.TruncateString(forgotPasswordRequest.Email, 3))
 		} else if errors.Is(err, auth.ErrUserHasValidToken) {
-			log.Ctx(ctx).Errorf("error in forgot password handler, user has a valid token")
+			log.Ctx(ctx).Errorf("User currently has a token associated with it that was generated within a 20 minutes expiry window")
 		} else {
 			httperror.InternalError(ctx, "", err, nil).Render(w)
 			return
@@ -101,14 +118,14 @@ func (h ForgotPasswordHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 	if err == nil {
 		organization, err := h.Models.Organizations.Get(ctx)
 		if err != nil {
-			err = fmt.Errorf("error getting organization data: %w", err)
+			err = fmt.Errorf("getting organization data: %w", err)
 			httperror.InternalError(ctx, "", err, nil).Render(w)
 			return
 		}
 
 		resetPasswordLink, err := url.JoinPath(*tnt.SDPUIBaseURL, "reset-password")
 		if err != nil {
-			err = fmt.Errorf("error getting reset password link: %w", err)
+			err = fmt.Errorf("getting reset password link: %w", err)
 			log.Ctx(ctx).Error(err)
 			httperror.InternalError(ctx, "", err, nil).Render(w)
 			return
@@ -121,7 +138,7 @@ func (h ForgotPasswordHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 		}
 		messageContent, err := htmltemplate.ExecuteHTMLTemplateForForgotPasswordMessage(forgotPasswordData)
 		if err != nil {
-			err = fmt.Errorf("error executing forgot password message template: %w", err)
+			err = fmt.Errorf("executing forgot password message template: %w", err)
 			httperror.InternalError(ctx, "", err, nil).Render(w)
 			return
 		}
@@ -133,7 +150,7 @@ func (h ForgotPasswordHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 		}
 		err = h.MessengerClient.SendMessage(msg)
 		if err != nil {
-			err = fmt.Errorf("error sending forgot password email for email %s: %w", forgotPasswordRequest.Email, err)
+			err = fmt.Errorf("sending forgot password email for email %s: %w", forgotPasswordRequest.Email, err)
 			httperror.InternalError(ctx, "", err, nil).Render(w)
 			return
 		}

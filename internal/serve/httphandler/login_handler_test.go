@@ -2,9 +2,11 @@ package httphandler
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 
@@ -23,6 +25,23 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
 )
+
+func authenticateSetup(
+	t *testing.T,
+	authenticatorMock *auth.AuthenticatorMock,
+	jwtManagerMock *auth.JWTManagerMock,
+	user *auth.User, password, userToken string,
+) {
+	t.Helper()
+	authenticatorMock.
+		On("ValidateCredentials", mock.Anything, user.Email, password).
+		Return(user, nil).
+		Once()
+	jwtManagerMock.
+		On("GenerateToken", mock.Anything, user, mock.AnythingOfType("time.Time")).
+		Return(userToken, nil).
+		Once()
+}
 
 func Test_LoginRequest_validate(t *testing.T) {
 	lr := LoginRequest{
@@ -71,6 +90,17 @@ func Test_LoginHandler(t *testing.T) {
 	}
 
 	const url = "/login"
+	const email = "testuser@email.com"
+	const password = "pass1234"
+	const defaultReCAPTCHAToken = "XyZ"
+	defaultReqBody := fmt.Sprintf(
+		`{"email": "%s", "password": "%s", "recaptcha_token": "%s"}`, email, password, defaultReCAPTCHAToken)
+	user := &auth.User{
+		ID:    "user-ID",
+		Email: email,
+		Roles: []string{data.OwnerUserRole.String()},
+	}
+	const defaultUserToken = "token123"
 
 	t.Run("returns error when body is invalid", func(t *testing.T) {
 		r.Post(url, handler.ServeHTTP)
@@ -144,30 +174,25 @@ func Test_LoginHandler(t *testing.T) {
 	})
 
 	t.Run("returns error when an unexpected error occurs validating the credentials", func(t *testing.T) {
+		authenticatorMock.
+			On("GetUserByEmail", mock.Anything, user.Email).
+			Return(user, nil).
+			Once()
 		reCAPTCHAValidator.
-			On("IsTokenValid", mock.Anything, "XyZ").
+			On("IsTokenValid", mock.Anything, defaultReCAPTCHAToken).
 			Return(true, nil).
 			Once()
-
 		authenticatorMock.
-			On("ValidateCredentials", mock.Anything, "testuser", "pass1234").
+			On("ValidateCredentials", mock.Anything, email, password).
 			Return(nil, errors.New("unexpected error")).
 			Once()
 
 		r.Post(url, handler.ServeHTTP)
 
-		reqBody := `
-			{
-				"email": "testuser",
-				"password": "pass1234",
-				"recaptcha_token": "XyZ"
-			}
-		`
-
 		buf := new(strings.Builder)
 		log.DefaultLogger.SetOutput(buf)
 
-		req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(reqBody))
+		req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(defaultReqBody))
 		require.NoError(t, err)
 
 		w := httptest.NewRecorder()
@@ -190,27 +215,22 @@ func Test_LoginHandler(t *testing.T) {
 	})
 
 	t.Run("returns error when the credentials are incorrect", func(t *testing.T) {
+		authenticatorMock.
+			On("GetUserByEmail", mock.Anything, user.Email).
+			Return(user, nil).
+			Once()
 		reCAPTCHAValidator.
-			On("IsTokenValid", mock.Anything, "XyZ").
+			On("IsTokenValid", mock.Anything, defaultReCAPTCHAToken).
 			Return(true, nil).
 			Once()
-
 		authenticatorMock.
-			On("ValidateCredentials", mock.Anything, "testuser", "pass1234").
+			On("ValidateCredentials", mock.Anything, email, password).
 			Return(nil, auth.ErrInvalidCredentials).
 			Once()
 
 		r.Post(url, handler.ServeHTTP)
 
-		reqBody := `
-			{
-				"email": "testuser",
-				"password": "pass1234",
-				"recaptcha_token": "XyZ"
-			}
-		`
-
-		req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(reqBody))
+		req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(defaultReqBody))
 		require.NoError(t, err)
 
 		w := httptest.NewRecorder()
@@ -235,22 +255,18 @@ func Test_LoginHandler(t *testing.T) {
 	})
 
 	t.Run("returns error when unable to validate recaptcha", func(t *testing.T) {
+		authenticatorMock.
+			On("GetUserByEmail", mock.Anything, user.Email).
+			Return(user, nil).
+			Once()
 		reCAPTCHAValidator.
-			On("IsTokenValid", mock.Anything, "XyZ").
+			On("IsTokenValid", mock.Anything, defaultReCAPTCHAToken).
 			Return(false, errors.New("error requesting verify reCAPTCHA token")).
 			Once()
 
 		r.Post(url, handler.ServeHTTP)
 
-		reqBody := `
-			{
-				"email": "testuser",
-				"password": "pass1234",
-				"recaptcha_token": "XyZ"
-			}
-		`
-
-		req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(reqBody))
+		req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(defaultReqBody))
 		require.NoError(t, err)
 
 		w := httptest.NewRecorder()
@@ -272,22 +288,18 @@ func Test_LoginHandler(t *testing.T) {
 	})
 
 	t.Run("returns error when recaptcha token is invalid", func(t *testing.T) {
+		authenticatorMock.
+			On("GetUserByEmail", mock.Anything, user.Email).
+			Return(user, nil).
+			Once()
 		reCAPTCHAValidator.
-			On("IsTokenValid", mock.Anything, "XyZ").
+			On("IsTokenValid", mock.Anything, defaultReCAPTCHAToken).
 			Return(false, nil).
 			Once()
 
 		r.Post(url, handler.ServeHTTP)
 
-		reqBody := `
-			{
-				"email": "testuser",
-				"password": "pass1234",
-				"recaptcha_token": "XyZ"
-			}
-		`
-
-		req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(reqBody))
+		req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(defaultReqBody))
 		require.NoError(t, err)
 
 		w := httptest.NewRecorder()
@@ -313,71 +325,54 @@ func Test_LoginHandler(t *testing.T) {
 		log.DefaultLogger.SetOutput(buf)
 		log.SetLevel(log.InfoLevel)
 
-		user := &auth.User{
-			ID:    "user-ID",
-			Email: "email",
+		usersRoles := [][]string{
+			{data.OwnerUserRole.String()},                            // API roles cannot bypass reCAPTCHA
+			{data.OwnerUserRole.String(), data.APIUserRole.String()}, // API roles can bypass reCAPTCHA
 		}
-
-		authenticatorMock.
-			On("ValidateCredentials", mock.Anything, "testuser", "pass1234").
-			Return(user, nil).
-			Once()
-		roleManagerMock.
-			On("GetUserRoles", mock.Anything, user).
-			Return([]string{"role1"}, nil).
-			Once()
-		jwtManagerMock.
-			On("GenerateToken", mock.Anything, user, mock.AnythingOfType("time.Time")).
-			Return("token123", nil).
-			Once()
-		reCAPTCHAValidator.
-			On("IsTokenValid", mock.Anything, "XyZ").
-			Return(true, nil).
-			Once()
-		jwtManagerMock.
-			On("ValidateToken", mock.Anything, "token123").
-			Return(true, nil).
-			Once()
-		jwtManagerMock.
-			On("GetUserFromToken", mock.Anything, "token123").
-			Return(user, nil).
-			Once()
-		authenticatorMock.
-			On("GetUser", mock.Anything, "user-ID").
-			Return(user, nil).
-			Once()
-		roleManagerMock.
-			On("GetUserRoles", mock.Anything, user).
-			Return([]string{"role1"}, nil).
-			Once()
-
-		r.Post(url, handler.ServeHTTP)
-
-		reqBody := `
-			{
-				"email": "testuser",
-				"password": "pass1234",
-				"recaptcha_token": "XyZ"	
+		for _, userRoles := range usersRoles {
+			targetUser := &auth.User{
+				ID:    "user-ID",
+				Email: email,
+				Roles: userRoles,
 			}
-		`
+			authenticatorMock.
+				On("GetUserByEmail", mock.Anything, user.Email).
+				Return(targetUser, nil).
+				Once()
+			reqBody := `
+				{
+					"email": "testuser@email.com",
+					"password": "pass1234"
+				}`
+			if !slices.Contains(userRoles, data.APIUserRole.String()) { // <-------- bypasses recaptcha when APIUserRole is present.
+				reCAPTCHAValidator.
+					On("IsTokenValid", mock.Anything, defaultReCAPTCHAToken).
+					Return(true, nil).
+					Once()
+				reqBody = defaultReqBody
+			}
+			authenticateSetup(t, authenticatorMock, jwtManagerMock, targetUser, password, defaultUserToken)
 
-		req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(reqBody))
-		require.NoError(t, err)
+			r.Post(url, handler.ServeHTTP)
 
-		w := httptest.NewRecorder()
+			req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(reqBody))
+			require.NoError(t, err)
 
-		r.ServeHTTP(w, req)
+			w := httptest.NewRecorder()
 
-		resp := w.Result()
+			r.ServeHTTP(w, req)
 
-		respBody, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
+			resp := w.Result()
 
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
-		assert.JSONEq(t, `{"token": "token123"}`, string(respBody))
+			respBody, err := io.ReadAll(resp.Body)
+			require.NoError(t, err)
 
-		// validate logs
-		require.Contains(t, buf.String(), "[UserLogin] - Logged in user with account ID user-ID")
+			assert.Equal(t, http.StatusOK, resp.StatusCode)
+			assert.JSONEq(t, `{"token": "token123"}`, string(respBody))
+
+			// validate logs
+			require.Contains(t, buf.String(), "[UserLogin] - Logged in user with account ID user-ID")
+		}
 	})
 
 	authenticatorMock.AssertExpectations(t)
@@ -420,47 +415,19 @@ func Test_LoginHandlerr_ServeHTTP_MFA(t *testing.T) {
 		ID:    "userID",
 		Email: "testuser@mail.com",
 	}
-	authenticatorMock.
-		On("ValidateCredentials", mock.Anything, "testuser@mail.com", "pass1234").
-		Return(user, nil)
-	roleManagerMock.
-		On("GetUserRoles", mock.Anything, user).
-		Return([]string{"role1"}, nil)
-	jwtManagerMock.
-		On("GenerateToken", mock.Anything, user, mock.AnythingOfType("time.Time")).
-		Return("token123", nil)
-	jwtManagerMock.
-		On("ValidateToken", mock.Anything, "token123").
-		Return(true, nil)
-	jwtManagerMock.
-		On("GetUserFromToken", mock.Anything, "token123").
-		Return(user, nil)
-
-	deviceID := "safari-xyz"
-
-	t.Run("error getting user from token", func(t *testing.T) {
-		authenticatorMock.
-			On("GetUser", mock.Anything, "userID").
-			Return(nil, errors.New("weird error happened")).
-			Once()
-
-		body := LoginRequest{Email: "testuser@mail.com", Password: "pass1234"}
-		req := httptest.NewRequest(http.MethodPost, "/login", requestToJSON(t, &body))
-		rw := httptest.NewRecorder()
-
-		loginHandler.ServeHTTP(rw, req)
-
-		require.Equal(t, http.StatusInternalServerError, rw.Code)
-		require.Contains(t, rw.Body.String(), "An internal error occurred while processing this request")
-	})
+	const userToken = "token123"
+	const password = "pass1234"
+	const deviceID = "safari-xyz"
+	const mfaCode = "123123"
 
 	t.Run("error when deviceID header is empty", func(t *testing.T) {
 		authenticatorMock.
-			On("GetUser", mock.Anything, "userID").
+			On("GetUserByEmail", mock.Anything, user.Email).
 			Return(user, nil).
 			Once()
+		authenticateSetup(t, authenticatorMock, jwtManagerMock, user, password, userToken)
 
-		body := LoginRequest{Email: "testuser@mail.com", Password: "pass1234"}
+		body := LoginRequest{Email: user.Email, Password: password}
 		req := httptest.NewRequest(http.MethodPost, "/login", requestToJSON(t, &body))
 		rw := httptest.NewRecorder()
 
@@ -472,15 +439,16 @@ func Test_LoginHandlerr_ServeHTTP_MFA(t *testing.T) {
 
 	t.Run("error validating MFA device", func(t *testing.T) {
 		authenticatorMock.
-			On("GetUser", mock.Anything, "userID").
+			On("GetUserByEmail", mock.Anything, user.Email).
 			Return(user, nil).
 			Once()
+		authenticateSetup(t, authenticatorMock, jwtManagerMock, user, password, userToken)
 		mfaManagerMock.
-			On("MFADeviceRemembered", mock.Anything, deviceID, "userID").
+			On("MFADeviceRemembered", mock.Anything, deviceID, user.ID).
 			Return(false, errors.New("weird error happened")).
 			Once()
 
-		body := LoginRequest{Email: "testuser@mail.com", Password: "pass1234"}
+		body := LoginRequest{Email: user.Email, Password: password}
 		req := httptest.NewRequest(http.MethodPost, "/login", requestToJSON(t, &body))
 		req.Header.Set(DeviceIDHeader, deviceID)
 		rw := httptest.NewRecorder()
@@ -493,15 +461,16 @@ func Test_LoginHandlerr_ServeHTTP_MFA(t *testing.T) {
 
 	t.Run("when device is remembered, return token", func(t *testing.T) {
 		authenticatorMock.
-			On("GetUser", mock.Anything, "userID").
+			On("GetUserByEmail", mock.Anything, user.Email).
 			Return(user, nil).
 			Once()
+		authenticateSetup(t, authenticatorMock, jwtManagerMock, user, password, userToken)
 		mfaManagerMock.
-			On("MFADeviceRemembered", mock.Anything, deviceID, "userID").
+			On("MFADeviceRemembered", mock.Anything, deviceID, user.ID).
 			Return(true, nil).
 			Once()
 
-		body := LoginRequest{Email: "testuser@mail.com", Password: "pass1234"}
+		body := LoginRequest{Email: user.Email, Password: password}
 		req := httptest.NewRequest(http.MethodPost, "/login", requestToJSON(t, &body))
 		req.Header.Set(DeviceIDHeader, deviceID)
 		rw := httptest.NewRecorder()
@@ -509,24 +478,25 @@ func Test_LoginHandlerr_ServeHTTP_MFA(t *testing.T) {
 		loginHandler.ServeHTTP(rw, req)
 
 		require.Equal(t, http.StatusOK, rw.Code)
-		require.JSONEq(t, `{"token": "token123"}`, rw.Body.String())
+		require.JSONEq(t, fmt.Sprintf(`{"token": "%s"}`, userToken), rw.Body.String())
 	})
 
 	t.Run("error generating MFA code", func(t *testing.T) {
 		authenticatorMock.
-			On("GetUser", mock.Anything, "userID").
+			On("GetUserByEmail", mock.Anything, user.Email).
 			Return(user, nil).
 			Once()
+		authenticateSetup(t, authenticatorMock, jwtManagerMock, user, password, userToken)
 		mfaManagerMock.
-			On("MFADeviceRemembered", mock.Anything, deviceID, "userID").
+			On("MFADeviceRemembered", mock.Anything, deviceID, user.ID).
 			Return(false, nil).
 			Once()
 		mfaManagerMock.
-			On("GenerateMFACode", mock.Anything, deviceID, "userID").
+			On("GenerateMFACode", mock.Anything, deviceID, user.ID).
 			Return("", errors.New("some weird error")).
 			Once()
 
-		body := LoginRequest{Email: "testuser@mail.com", Password: "pass1234"}
+		body := LoginRequest{Email: user.Email, Password: password}
 		req := httptest.NewRequest(http.MethodPost, "/login", requestToJSON(t, &body))
 		req.Header.Set(DeviceIDHeader, deviceID)
 		rw := httptest.NewRecorder()
@@ -539,19 +509,20 @@ func Test_LoginHandlerr_ServeHTTP_MFA(t *testing.T) {
 
 	t.Run("error when code returned is empty", func(t *testing.T) {
 		authenticatorMock.
-			On("GetUser", mock.Anything, "userID").
+			On("GetUserByEmail", mock.Anything, user.Email).
 			Return(user, nil).
 			Once()
+		authenticateSetup(t, authenticatorMock, jwtManagerMock, user, password, userToken)
 		mfaManagerMock.
-			On("MFADeviceRemembered", mock.Anything, deviceID, "userID").
+			On("MFADeviceRemembered", mock.Anything, deviceID, user.ID).
 			Return(false, nil).
 			Once()
 		mfaManagerMock.
-			On("GenerateMFACode", mock.Anything, deviceID, "userID").
+			On("GenerateMFACode", mock.Anything, deviceID, user.ID).
 			Return("", nil).
 			Once()
 
-		body := LoginRequest{Email: "testuser@mail.com", Password: "pass1234"}
+		body := LoginRequest{Email: user.Email, Password: password}
 		req := httptest.NewRequest(http.MethodPost, "/login", requestToJSON(t, &body))
 		req.Header.Set(DeviceIDHeader, deviceID)
 		rw := httptest.NewRecorder()
@@ -564,23 +535,24 @@ func Test_LoginHandlerr_ServeHTTP_MFA(t *testing.T) {
 
 	t.Run("error sending MFA message", func(t *testing.T) {
 		authenticatorMock.
-			On("GetUser", mock.Anything, "userID").
+			On("GetUserByEmail", mock.Anything, user.Email).
 			Return(user, nil).
 			Once()
+		authenticateSetup(t, authenticatorMock, jwtManagerMock, user, password, userToken)
 		mfaManagerMock.
-			On("MFADeviceRemembered", mock.Anything, deviceID, "userID").
+			On("MFADeviceRemembered", mock.Anything, deviceID, user.ID).
 			Return(false, nil).
 			Once()
 		mfaManagerMock.
-			On("GenerateMFACode", mock.Anything, deviceID, "userID").
-			Return("123123", nil).
+			On("GenerateMFACode", mock.Anything, deviceID, user.ID).
+			Return(mfaCode, nil).
 			Once()
 		messengerClientMock.
 			On("SendMessage", mock.Anything).
 			Return(errors.New("weird error sending message")).
 			Once()
 
-		body := LoginRequest{Email: "testuser@mail.com", Password: "pass1234"}
+		body := LoginRequest{Email: user.Email, Password: password}
 		req := httptest.NewRequest(http.MethodPost, "/login", requestToJSON(t, &body))
 		req.Header.Set(DeviceIDHeader, deviceID)
 		rw := httptest.NewRecorder()
@@ -593,26 +565,27 @@ func Test_LoginHandlerr_ServeHTTP_MFA(t *testing.T) {
 
 	t.Run("🎉  Successful login", func(t *testing.T) {
 		authenticatorMock.
-			On("GetUser", mock.Anything, "userID").
+			On("GetUserByEmail", mock.Anything, user.Email).
 			Return(user, nil).
 			Once()
+		authenticateSetup(t, authenticatorMock, jwtManagerMock, user, password, userToken)
 		mfaManagerMock.
-			On("MFADeviceRemembered", mock.Anything, deviceID, "userID").
+			On("MFADeviceRemembered", mock.Anything, deviceID, user.ID).
 			Return(false, nil).
 			Once()
 		mfaManagerMock.
-			On("GenerateMFACode", mock.Anything, deviceID, "userID").
-			Return("123123", nil).
+			On("GenerateMFACode", mock.Anything, deviceID, user.ID).
+			Return(mfaCode, nil).
 			Once()
 
 		content, err := htmltemplate.ExecuteHTMLTemplateForMFAMessage(htmltemplate.MFAMessageTemplate{
 			OrganizationName: "MyCustomAid",
-			MFACode:          "123123",
+			MFACode:          mfaCode,
 		})
 		require.NoError(t, err)
 
 		msg := message.Message{
-			ToEmail: "testuser@mail.com",
+			ToEmail: user.Email,
 			Title:   mfaMessageTitle,
 			Message: content,
 		}
@@ -621,7 +594,7 @@ func Test_LoginHandlerr_ServeHTTP_MFA(t *testing.T) {
 			Return(nil).
 			Once()
 
-		body := LoginRequest{Email: "testuser@mail.com", Password: "pass1234"}
+		body := LoginRequest{Email: user.Email, Password: password}
 		req := httptest.NewRequest(http.MethodPost, "/login", requestToJSON(t, &body))
 		req.Header.Set(DeviceIDHeader, deviceID)
 		rw := httptest.NewRecorder()
