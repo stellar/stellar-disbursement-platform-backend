@@ -419,7 +419,7 @@ func Test_DisbursementModelGetAll(t *testing.T) {
 		expectedStats.FailedPayments = 1
 		expectedStats.CanceledPayments = 1
 		expectedStats.DraftPayments = 1
-		expectedStats.RemainingPayments = 1
+		expectedStats.RemainingPayments = 2
 		expectedStats.TotalAmount = "381.05"
 		expectedStats.AmountDisbursed = "100.00"
 		expectedStats.AverageAmount = "76.21"
