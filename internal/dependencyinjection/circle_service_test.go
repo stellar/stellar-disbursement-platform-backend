@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/circle"
+	monitorMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
@@ -21,6 +22,7 @@ func Test_NewCircleService(t *testing.T) {
 		TenantManager:        &tenant.TenantManagerMock{},
 		NetworkType:          utils.TestnetNetworkType,
 		EncryptionPassphrase: keypair.MustRandom().Seed(),
+		MonitorService:       monitorMocks.NewMockMonitorService(t),
 	}
 
 	t.Run("should create and return the same instance on the second call", func(t *testing.T) {

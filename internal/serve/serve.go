@@ -396,6 +396,7 @@ func handleHTTP(o ServeOptions) *chi.Mux {
 					EncryptionPassphrase:        o.DistAccEncryptionPassphrase,
 					CircleClientConfigModel:     circle.NewClientConfigModel(o.MtnDBConnectionPool),
 					DistributionAccountResolver: o.SubmitterEngine.DistributionAccountResolver,
+					MonitorService:              o.MonitorService,
 				}.Patch)
 		})
 

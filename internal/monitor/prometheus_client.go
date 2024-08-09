@@ -1,11 +1,11 @@
 package monitor
 
 import (
-	"fmt"
 	"net/http"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/stellar/go/support/log"
 )
@@ -14,7 +14,7 @@ type prometheusClient struct {
 	httpHandler http.Handler
 }
 
-func (prometheusClient) GetMetricType() MetricType {
+func (p *prometheusClient) GetMetricType() MetricType {
 	return MetricTypePrometheus
 }
 
@@ -63,21 +63,16 @@ func (p *prometheusClient) MonitorHistogram(value float64, tag MetricTag, labels
 	histogram.With(labels).Observe(value)
 }
 
-func NewPrometheusClient() (*prometheusClient, error) {
+func newPrometheusClient() (*prometheusClient, error) {
 	// register Prometheus metrics
 	metricsRegistry := prometheus.NewRegistry()
 
-	var metricTag MetricTag
-	for _, tag := range metricTag.ListAll() {
-		if summaryVecMetric, ok := SummaryVecMetrics[tag]; ok {
-			metricsRegistry.MustRegister(summaryVecMetric)
-		} else if counterMetric, ok := CounterMetrics[tag]; ok {
-			metricsRegistry.MustRegister(counterMetric)
-		} else if counterVecMetric, ok := CounterVecMetrics[tag]; ok {
-			metricsRegistry.MustRegister(counterVecMetric)
-		} else {
-			return nil, fmt.Errorf("metric not registered in prometheus metrics: %s", tag)
-		}
+	// register default Prometheus metrics
+	metricsRegistry.MustRegister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
+	metricsRegistry.MustRegister(collectors.NewGoCollector())
+
+	for _, metric := range PrometheusMetrics() {
+		metricsRegistry.MustRegister(metric)
 	}
 
 	return &prometheusClient{httpHandler: promhttp.HandlerFor(metricsRegistry, promhttp.HandlerOpts{})}, nil

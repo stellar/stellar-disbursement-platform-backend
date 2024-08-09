@@ -20,6 +20,7 @@
       - [Ensure Docker Containers are Running:](#ensure-docker-containers-are-running)
       - [Using VS Code:](#using-vs-code)
       - [Using IntelliJ GoLang:](#using-intellij-golang)
+    - [Monitoring the SDP](#monitoring-the-sdp)
   - [Troubleshooting](#troubleshooting)
       - [Sample Tenant Management Postman collection](#sample-tenant-management-postman-collection)
       - [Distribution account out of funds](#distribution-account-out-of-funds)
@@ -285,6 +286,32 @@ Make sure the Docker containers are up and running by executing the `main.sh` sc
      - **Local Path:** /${workspaceFolder}/stellar-disbursement-platform-backend
 
 The debugger should now attach to the running Docker container, and you should be able to hit breakpoints and debug your code.
+
+### Monitoring the SDP
+
+The SDP supports monitoring via Prometheus and Grafana. 
+
+#### Start Prometheus and Grafana containers 
+
+The containers can be started by running the following command from the `dev` directory:
+
+```sh
+docker compose -p sdp-multi-tenant -f docker-compose-monitoring.yml up -d
+```
+
+This will start the following services:
+* `prometheus`: Prometheus service running on port `9090`.
+* `grafana`: Grafana service running on port `3002`. 
+
+#### Load the SDP Grafana Dashboard
+
+1. Access the Grafana dashboard by opening a browser and going to [http://localhost:3002](http://localhost:3002).
+2. Log in with the default credentials:
+   - Username: `admin`
+   - Password: `admin`
+3. Click on the `+` icon on the left sidebar and select `Import Dashboard`.
+4. Copy the contents of the [dashboard.json](../resources/grafana/dashboard.json) file and paste it into the `Import via dashboard JSON model` text box.
+
 
 ## Troubleshooting
 

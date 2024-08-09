@@ -15,6 +15,7 @@ import (
 	"github.com/avast/retry-go"
 	"github.com/stellar/go/support/log"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httpclient"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
@@ -40,29 +41,31 @@ type ClientInterface interface {
 
 // Client provides methods to interact with the Circle API.
 type Client struct {
-	BasePath      string
-	APIKey        string
-	httpClient    httpclient.HttpClientInterface
-	tenantManager tenant.ManagerInterface
+	BasePath       string
+	APIKey         string
+	httpClient     httpclient.HttpClientInterface
+	tenantManager  tenant.ManagerInterface
+	monitorService monitor.MonitorServiceInterface
 }
 
 // ClientFactory is a function that creates a ClientInterface.
-type ClientFactory func(networkType utils.NetworkType, apiKey string, tntManager tenant.ManagerInterface) ClientInterface
+type ClientFactory func(networkType utils.NetworkType, apiKey string, tntManager tenant.ManagerInterface, monitorSvc monitor.MonitorServiceInterface) ClientInterface
 
 var _ ClientFactory = NewClient
 
 // NewClient creates a new instance of Circle Client.
-func NewClient(networkType utils.NetworkType, apiKey string, tntManager tenant.ManagerInterface) ClientInterface {
+func NewClient(networkType utils.NetworkType, apiKey string, tntManager tenant.ManagerInterface, monitorSvc monitor.MonitorServiceInterface) ClientInterface {
 	circleEnv := Sandbox
 	if networkType == utils.PubnetNetworkType {
 		circleEnv = Production
 	}
 
 	return &Client{
-		BasePath:      string(circleEnv),
-		APIKey:        apiKey,
-		httpClient:    httpclient.DefaultClient(),
-		tenantManager: tntManager,
+		BasePath:       string(circleEnv),
+		APIKey:         apiKey,
+		httpClient:     httpclient.DefaultClient(),
+		tenantManager:  tntManager,
+		monitorService: monitorSvc,
 	}
 }
 
@@ -75,7 +78,7 @@ func (client *Client) Ping(ctx context.Context) (bool, error) {
 		return false, fmt.Errorf("building path: %w", err)
 	}
 
-	resp, err := client.request(ctx, u, http.MethodGet, false, nil)
+	resp, err := client.request(ctx, pingPath, u, http.MethodGet, false, nil)
 	if err != nil {
 		return false, fmt.Errorf("making request: %w", err)
 	}
@@ -118,7 +121,7 @@ func (client *Client) PostTransfer(ctx context.Context, transferReq TransferRequ
 		return nil, err
 	}
 
-	resp, err := client.request(ctx, u, http.MethodPost, true, transferData)
+	resp, err := client.request(ctx, transferPath, u, http.MethodPost, true, transferData)
 	if err != nil {
 		return nil, fmt.Errorf("making request: %w", err)
 	}
@@ -142,7 +145,7 @@ func (client *Client) GetTransferByID(ctx context.Context, id string) (*Transfer
 		return nil, fmt.Errorf("building path: %w", err)
 	}
 
-	resp, err := client.request(ctx, u, http.MethodGet, true, nil)
+	resp, err := client.request(ctx, transferPath, u, http.MethodGet, true, nil)
 	if err != nil {
 		return nil, fmt.Errorf("making request: %w", err)
 	}
@@ -166,7 +169,7 @@ func (client *Client) GetWalletByID(ctx context.Context, id string) (*Wallet, er
 		return nil, fmt.Errorf("building path: %w", err)
 	}
 
-	resp, err := client.request(ctx, url, http.MethodGet, true, nil)
+	resp, err := client.request(ctx, walletPath, url, http.MethodGet, true, nil)
 	if err != nil {
 		return nil, fmt.Errorf("making request: %w", err)
 	}
@@ -193,10 +196,11 @@ func (re RetryableError) Error() string {
 }
 
 // request makes an HTTP request to the Circle API.
-func (client *Client) request(ctx context.Context, u string, method string, isAuthed bool, bodyBytes []byte) (*http.Response, error) {
+func (client *Client) request(ctx context.Context, path, u, method string, isAuthed bool, bodyBytes []byte) (*http.Response, error) {
 	var resp *http.Response
 	err := retry.Do(
 		func() error {
+			startTime := time.Now()
 			bodyReader := bytes.NewReader(bodyBytes)
 			req, err := http.NewRequestWithContext(ctx, method, u, bodyReader)
 			if err != nil {
@@ -212,6 +216,8 @@ func (client *Client) request(ctx context.Context, u string, method string, isAu
 			}
 
 			resp, err = client.httpClient.Do(req)
+			client.recordCircleAPIMetrics(ctx, method, path, startTime, resp, err)
+
 			if err != nil {
 				return fmt.Errorf("submitting request to %s: %w", u, err)
 			}
@@ -264,6 +270,33 @@ func parseRetryAfter(retryAfter string) time.Duration {
 	return time.Duration(seconds) * time.Second
 }
 
+func (client *Client) recordCircleAPIMetrics(ctx context.Context, method, endpoint string, startTime time.Time, resp *http.Response, reqErr error) {
+	t, err := tenant.GetTenantFromContext(ctx)
+	if err != nil {
+		log.Ctx(ctx).Errorf("getting tenant from context: %v", err)
+		return
+	}
+
+	duration := time.Since(startTime)
+	status, statusCode := monitor.ParseHTTPResponseStatus(resp, reqErr)
+
+	labels := monitor.CircleLabels{
+		Method:     method,
+		Endpoint:   endpoint,
+		Status:     status,
+		StatusCode: statusCode,
+		TenantName: t.Name,
+	}.ToMap()
+
+	if monitorErr := client.monitorService.MonitorHistogram(duration.Seconds(), monitor.CircleAPIRequestDurationTag, labels); monitorErr != nil {
+		log.Ctx(ctx).Errorf("monitoring histogram: %v", err)
+	}
+
+	if monitorErr := client.monitorService.MonitorCounters(monitor.CircleAPIRequestsTotalTag, labels); monitorErr != nil {
+		log.Ctx(ctx).Errorf("monitoring counter: %v", err)
+	}
+}
+
 func (client *Client) handleError(ctx context.Context, resp *http.Response) error {
 	if slices.Contains(authErrorStatusCodes, resp.StatusCode) {
 		tnt, getCtxTntErr := tenant.GetTenantFromContext(ctx)
@@ -282,7 +315,7 @@ func (client *Client) handleError(ctx context.Context, resp *http.Response) erro
 		return fmt.Errorf("parsing API error: %w", err)
 	}
 
-	return fmt.Errorf("Circle API error: %w", apiError) //nolint:golint,unused
+	return fmt.Errorf("circle API error: %w", apiError) //nolint:golint,unused
 }
 
 var _ ClientInterface = (*Client)(nil)

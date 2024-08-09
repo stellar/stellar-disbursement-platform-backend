@@ -10,6 +10,7 @@ import (
 	"github.com/stellar/go/support/render/httpjson"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/circle"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	sdpUtils "github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
@@ -26,6 +27,7 @@ type CircleConfigHandler struct {
 	EncryptionPassphrase        string
 	CircleClientConfigModel     circle.ClientConfigModelInterface
 	DistributionAccountResolver signing.DistributionAccountResolver
+	MonitorService              monitor.MonitorServiceInterface
 }
 
 type PatchCircleConfigRequest struct {
@@ -160,7 +162,7 @@ func (h CircleConfigHandler) validateConfigWithCircle(ctx context.Context, patch
 		}
 	}
 
-	circleClient := h.CircleFactory(h.NetworkType, apiKey, h.TenantManager)
+	circleClient := h.CircleFactory(h.NetworkType, apiKey, h.TenantManager, h.MonitorService)
 
 	// validate incoming APIKey
 	if patchRequest.APIKey != nil {

@@ -51,12 +51,12 @@ services:
       SINGLE_TENANT_MODE: "false"
 
       # scheduler options
-      #ENABLE_SCHEDULER: "false" # set to disabled to use kafka for this.
-      #SCHEDULER_RECEIVER_INVITATION_JOB_SECONDS: "10"
-      #SCHEDULER_PAYMENT_JOB_SECONDS: "10"
+      ENABLE_SCHEDULER: "true" # set to disabled to use kafka for this.
+      SCHEDULER_RECEIVER_INVITATION_JOB_SECONDS: "10"
+      SCHEDULER_PAYMENT_JOB_SECONDS: "10"
 
       # Kafka Configuration - only used if ENABLE_SCHEDULER is set to "false"
-      EVENT_BROKER_TYPE: "KAFKA"
+      EVENT_BROKER_TYPE: "NONE"
       BROKER_URLS: "kafka:9092"
       CONSUMER_GROUP_ID: "group-id"
       KAFKA_SECURITY_PROTOCOL: "PLAINTEXT"
@@ -118,7 +118,7 @@ services:
       DATA_DATABASE: postgres
       DATA_FLYWAY_ENABLED: "true"
       DATA_DDL_AUTO: update
-      METRICS_ENABLED: "false"  # Metrics would be available at port 8082
+      METRICS_ENABLED: "true"  # Metrics would be available at port 8082
       METRICS_EXTRAS_ENABLED: "false"
       SEP10_ENABLED: "true"
       SEP10_HOME_DOMAINS: "localhost:8000, *.stellar.local:8000" # Comma separated list of home domains
