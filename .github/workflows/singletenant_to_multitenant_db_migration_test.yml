@@ -9,6 +9,10 @@ on:
       - "releases/**"
       - "hotfix/**"
   pull_request:
+    branches-ignore:
+      - main
+      - develop
+      - tmp-develop
 
 env:
   USER_EMAIL: "sdp_user@stellar.org"
