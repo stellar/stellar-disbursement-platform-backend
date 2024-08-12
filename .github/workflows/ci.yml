@@ -11,14 +11,16 @@ on:
       - "hotfix/**"
       - "erica/sdp-**"
   pull_request:
-    branches-ignore:
-      - main
-      - develop
-      - tmp-develop
   workflow_call: # allows this workflow to be called from another workflow
 
 jobs:
   check:
+    if: ${{ (
+      (github.event_name == 'pull_request') &&
+      !((startsWith(github.head_ref, 'release/')) ||
+      (startsWith(github.head_ref, 'releases/')) ||
+      (startsWith(github.head_ref, 'hotfix/'))
+      )) }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -74,6 +76,12 @@ jobs:
           fi
 
   check-helm-readme:
+    if: ${{ (
+      (github.event_name == 'pull_request') &&
+      !((startsWith(github.head_ref, 'release/')) ||
+      (startsWith(github.head_ref, 'releases/')) ||
+      (startsWith(github.head_ref, 'hotfix/'))
+      )) }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -102,6 +110,12 @@ jobs:
           fi
 
   build:
+    if: ${{ (
+      (github.event_name == 'pull_request') &&
+      !((startsWith(github.head_ref, 'release/')) ||
+      (startsWith(github.head_ref, 'releases/')) ||
+      (startsWith(github.head_ref, 'hotfix/'))
+      )) }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -118,6 +132,12 @@ jobs:
         run: go build ./...
 
   test:
+    if: ${{ (
+      (github.event_name == 'pull_request') &&
+      !((startsWith(github.head_ref, 'release/')) ||
+      (startsWith(github.head_ref, 'releases/')) ||
+      (startsWith(github.head_ref, 'hotfix/'))
+      )) }}
     runs-on: ubuntu-latest
     services:
       postgres:

@@ -11,14 +11,16 @@ on:
       - "hotfix/**"
       - "erica/sdp-**"
   pull_request:
-    branches-ignore:
-      - main
-      - develop
-      - tmp-develop
   workflow_call: # allows this workflow to be called from another workflow
 
 jobs:
   anchor-integration:
+    if: ${{ (
+      (github.event_name == 'pull_request') &&
+      !((startsWith(github.head_ref, 'release/')) ||
+      (startsWith(github.head_ref, 'releases/')) ||
+      (startsWith(github.head_ref, 'hotfix/'))
+      )) }}
     runs-on: ubuntu-latest
     environment: "Anchor Integration Tests"
     env:

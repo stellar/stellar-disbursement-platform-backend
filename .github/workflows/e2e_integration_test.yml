@@ -11,12 +11,6 @@ on:
       - "hotfix/**"
       - "erica/sdp-**"
   pull_request:
-    # branches-ignore:
-    # this will only fix the issue of push path filters -> any of the below branches
-    # but will suppress triggers for any other paths to the following branches
-    # - main
-    # - develop
-    # - tmp-develop
   workflow_call: # allows this workflow to be called from another workflow
 
 env:
