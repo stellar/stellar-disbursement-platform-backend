@@ -36,7 +36,9 @@ env:
 
 jobs:
   e2e:
-    if: ${{ ! startsWith( github.head_ref, 'erica/sdp-1288') }}
+    if: ${{ (!startsWith( github.head_ref, 'release/')) ||
+      (!startsWith( github.head_ref, 'releases/')) ||
+      (!startsWith( github.head_ref, 'hotfix/')) }}
     runs-on: ubuntu-latest
     strategy:
       max-parallel: 1
