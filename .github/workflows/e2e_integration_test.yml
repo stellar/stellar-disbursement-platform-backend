@@ -34,10 +34,10 @@ jobs:
   e2e:
     if: ${{ (
       (github.event_name == 'pull_request') &&
-      (startsWith(github.head_ref, 'release/')) ||
+      !((startsWith(github.head_ref, 'release/')) ||
       (startsWith(github.head_ref, 'releases/')) ||
       (startsWith(github.head_ref, 'hotfix/'))
-      ) }}
+      )) }}
     runs-on: ubuntu-latest
     strategy:
       max-parallel: 1
