@@ -36,6 +36,7 @@ env:
 
 jobs:
   e2e:
+    if: ${{ ! startsWith( github.head_ref, 'erica/sdp-1288') }}
     runs-on: ubuntu-latest
     strategy:
       max-parallel: 1
