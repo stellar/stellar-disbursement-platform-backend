@@ -5,22 +5,10 @@ on:
     branches:
       - main
       - develop
-      - tmp-develop
       - "release/**"
       - "releases/**"
       - "hotfix/**"
-      - "erica/sdp-**"
   pull_request:
-    from-branches-ignore:
-      - "release/**"
-      - "releases/**"
-      - "hotfix/**"
-      # - "erica/sdp-**"
-      # this will only fix the issue of push path filters -> any of the below branches
-      # but will suppress triggers for any other paths to the following branches
-      # - main
-      # - develop
-      # - tmp-develop
   workflow_call: # allows this workflow to be called from another workflow
 
 env:
@@ -36,6 +24,11 @@ env:
 
 jobs:
   e2e:
+    if: ${{ (!((startsWith(github.head_ref, 'release/')) ||
+      (startsWith(github.head_ref, 'releases/')) ||
+      (startsWith(github.head_ref, 'hotfix/'))) &&
+      (github.event_name == 'pull_request')) ||
+      (github.event_name == 'push') }}
     runs-on: ubuntu-latest
     strategy:
       max-parallel: 1

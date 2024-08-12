@@ -5,16 +5,10 @@ on:
     branches:
       - main
       - develop
-      - tmp-develop
       - "release/**"
       - "releases/**"
       - "hotfix/**"
   pull_request:
-    branches-ignore:
-      - main
-      - develop
-      - tmp-develop
-
 env:
   USER_EMAIL: "sdp_user@stellar.org"
   USER_PASSWORD: "mockPassword123!"
@@ -28,6 +22,11 @@ env:
 
 jobs:
   db-migration:
+    if: ${{ (!((startsWith(github.head_ref, 'release/')) ||
+      (startsWith(github.head_ref, 'releases/')) ||
+      (startsWith(github.head_ref, 'hotfix/'))) &&
+      (github.event_name == 'pull_request')) ||
+      (github.event_name == 'push') }}
     runs-on: ubuntu-latest
     environment: "Receiver Registration - E2E Integration Tests (Stellar)"
     steps:
