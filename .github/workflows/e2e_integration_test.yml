@@ -15,7 +15,7 @@ on:
       - "release/**"
       - "releases/**"
       - "hotfix/**"
-      # - "erica/sdp-**"
+      - "erica/sdp-**"
       # this will only fix the issue of push path filters -> any of the below branches
       # but will suppress triggers for any other paths to the following branches
       # - main
