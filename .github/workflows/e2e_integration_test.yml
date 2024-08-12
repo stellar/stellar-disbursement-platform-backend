@@ -11,7 +11,7 @@ on:
       - "hotfix/**"
       - "erica/sdp-**"
   pull_request:
-    from-branches-ignore:
+    branches-ignore:
       - "release/**"
       - "releases/**"
       - "hotfix/**"
