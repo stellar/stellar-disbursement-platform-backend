@@ -9,6 +9,10 @@ on:
       - "releases/**"
       - "hotfix/**"
   pull_request:
+    branches-ignore:
+      - main
+      - develop
+      - tmp-develop
   workflow_call: # allows this workflow to be called from another workflow
 
 env:
