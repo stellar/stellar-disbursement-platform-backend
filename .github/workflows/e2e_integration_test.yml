@@ -9,7 +9,6 @@ on:
       - "release/**"
       - "releases/**"
       - "hotfix/**"
-      - "erica/sdp-**"
   pull_request:
   workflow_call: # allows this workflow to be called from another workflow
 
