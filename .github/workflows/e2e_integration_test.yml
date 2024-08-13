@@ -27,10 +27,10 @@ env:
 jobs:
   e2e:
     if: ${{ (
-      (github.event_name == 'pull_request') &&
       !((startsWith(github.head_ref, 'release/')) ||
       (startsWith(github.head_ref, 'releases/')) ||
-      (startsWith(github.head_ref, 'hotfix/'))
+      (startsWith(github.head_ref, 'hotfix/')) &&
+      (github.event_name == 'pull_request')
       ) }}
     runs-on: ubuntu-latest
     strategy:
