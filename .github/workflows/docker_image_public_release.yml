@@ -9,6 +9,7 @@ on:
   push:
     branches:
       - develop
+      - tmp-develop
 jobs:
   tests:
     uses: ./.github/workflows/ci.yml # execute the callable ci.yml

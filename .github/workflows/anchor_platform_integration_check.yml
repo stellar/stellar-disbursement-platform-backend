@@ -9,18 +9,16 @@ on:
       - "release/**"
       - "releases/**"
       - "hotfix/**"
-      - "erica/sdp-**"
   pull_request:
   workflow_call: # allows this workflow to be called from another workflow
 
 jobs:
   anchor-integration:
-    if: ${{ (
-      (github.event_name == 'pull_request') &&
+    if: ${{
       !((startsWith(github.head_ref, 'release/')) ||
       (startsWith(github.head_ref, 'releases/')) ||
-      (startsWith(github.head_ref, 'hotfix/'))
-      )) }}
+      (startsWith(github.head_ref, 'hotfix/'))) &&
+      (github.event_name == 'pull_request') }}
     runs-on: ubuntu-latest
     environment: "Anchor Integration Tests"
     env:

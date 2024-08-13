@@ -28,12 +28,11 @@ env:
 
 jobs:
   db-migration:
-    if: ${{ (
-      (github.event_name == 'pull_request') &&
+    if: ${{
       !((startsWith(github.head_ref, 'release/')) ||
       (startsWith(github.head_ref, 'releases/')) ||
-      (startsWith(github.head_ref, 'hotfix/')) ||
-      ) }}
+      (startsWith(github.head_ref, 'hotfix/'))) &&
+      (github.event_name == 'pull_request') }}
     runs-on: ubuntu-latest
     environment: "Receiver Registration - E2E Integration Tests (Stellar)"
     steps:
