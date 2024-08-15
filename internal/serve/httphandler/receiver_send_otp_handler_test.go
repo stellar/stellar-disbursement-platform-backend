@@ -23,6 +23,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/message/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 )
 
@@ -53,12 +54,12 @@ func Test_ReceiverSendOTPHandler_ServeHTTP(t *testing.T) {
 	_ = data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver1.ID, wallet1.ID, data.RegisteredReceiversWalletStatus)
 	_ = data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver2.ID, wallet1.ID, data.RegisteredReceiversWalletStatus)
 
-	mockMessenger := message.MessengerClientMock{}
+	mockMessageDispatcher := mocks.NewMockMessageDispatcher(t)
 	reCAPTCHAValidator := &validators.ReCAPTCHAValidatorMock{}
 
 	r.Post("/wallet-registration/otp", ReceiverSendOTPHandler{
 		Models:             models,
-		SMSMessengerClient: &mockMessenger,
+		MessageDispatcher:  mockMessageDispatcher,
 		ReCAPTCHAValidator: reCAPTCHAValidator,
 	}.ServeHTTP)
 
@@ -168,7 +169,7 @@ func Test_ReceiverSendOTPHandler_ServeHTTP(t *testing.T) {
 		}
 		req = req.WithContext(context.WithValue(req.Context(), anchorplatform.SEP24ClaimsContextKey, validClaims))
 
-		mockMessenger.On("SendMessage", mock.AnythingOfType("message.Message")).
+		mockMessageDispatcher.On("SendMessage", mock.AnythingOfType("message.Message"), message.MessageChannelSMS).
 			Return(nil).
 			Once().
 			Run(func(args mock.Arguments) {
@@ -212,7 +213,7 @@ func Test_ReceiverSendOTPHandler_ServeHTTP(t *testing.T) {
 		err = models.Organizations.Update(ctx, &data.OrganizationUpdate{OTPMessageTemplate: &customOTPMessage})
 		require.NoError(t, err)
 
-		mockMessenger.On("SendMessage", mock.AnythingOfType("message.Message")).
+		mockMessageDispatcher.On("SendMessage", mock.AnythingOfType("message.Message"), message.MessageChannelSMS).
 			Return(nil).
 			Once().
 			Run(func(args mock.Arguments) {
@@ -251,7 +252,7 @@ func Test_ReceiverSendOTPHandler_ServeHTTP(t *testing.T) {
 		}
 		req = req.WithContext(context.WithValue(req.Context(), anchorplatform.SEP24ClaimsContextKey, validClaims))
 
-		mockMessenger.On("SendMessage", mock.AnythingOfType("message.Message")).
+		mockMessageDispatcher.On("SendMessage", mock.AnythingOfType("message.Message"), message.MessageChannelSMS).
 			Return(errors.New("error sending message")).
 			Once()
 
@@ -376,6 +377,6 @@ func Test_ReceiverSendOTPHandler_ServeHTTP(t *testing.T) {
 		assert.JSONEq(t, wantsBody, string(respBody))
 	})
 
-	mockMessenger.AssertExpectations(t)
+	mockMessageDispatcher.AssertExpectations(t)
 	reCAPTCHAValidator.AssertExpectations(t)
 }

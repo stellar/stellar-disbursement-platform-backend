@@ -190,11 +190,18 @@ func Test_serve(t *testing.T) {
 	require.NoError(t, err)
 	serveOpts.CrashTrackerClient = crashTrackerClient
 
-	messengerClient, err := di.NewEmailClient(di.EmailClientOptions{EmailType: message.MessengerTypeDryRun})
+	emailOpts := di.EmailClientOptions{EmailType: message.MessengerTypeDryRun}
+	messengerClient, err := di.NewEmailClient(emailOpts)
 	require.NoError(t, err)
 	serveOpts.EmailMessengerClient = messengerClient
 
-	serveOpts.SMSMessengerClient, err = di.NewSMSClient(di.SMSClientOptions{SMSType: message.MessengerTypeDryRun})
+	smsOpts := di.SMSClientOptions{SMSType: message.MessengerTypeDryRun}
+
+	messageDispatcherOpts := di.MessageDispatcherOpts{
+		EmailOpts: &emailOpts,
+		SMSOpts:   &smsOpts,
+	}
+	serveOpts.MessageDispatcher, err = di.NewMessageDispatcher(messageDispatcherOpts)
 	require.NoError(t, err)
 
 	kafkaConfig := events.KafkaConfig{

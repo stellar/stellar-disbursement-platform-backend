@@ -19,7 +19,7 @@ const (
 
 type SendReceiverWalletsSMSInvitationJobOptions struct {
 	Models                         *data.Models
-	MessengerClient                message.MessengerClient
+	MessageDispatcher              message.MessageDispatcherInterface
 	MaxInvitationSMSResendAttempts int64
 	Sep10SigningPrivateKey         string
 	CrashTrackerClient             crashtracker.CrashTrackerClient
@@ -59,7 +59,7 @@ func NewSendReceiverWalletsSMSInvitationJob(options SendReceiverWalletsSMSInvita
 	}
 	s, err := services.NewSendReceiverWalletInviteService(
 		options.Models,
-		options.MessengerClient,
+		options.MessageDispatcher,
 		options.Sep10SigningPrivateKey,
 		options.MaxInvitationSMSResendAttempts,
 		options.CrashTrackerClient,

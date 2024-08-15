@@ -18,6 +18,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/message/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
@@ -63,11 +64,14 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 	ctx := tenant.SaveTenantInContext(context.Background(), tenantInfo)
 
 	stellarSecretKey := "SBUSPEKAZKLZSWHRSJ2HWDZUK6I3IVDUWA7JJZSGBLZ2WZIUJI7FPNB5"
-	messengerClientMock := &message.MessengerClientMock{}
-	messengerClientMock.
+	messageClientMock := message.NewMessengerClientMock(t)
+	messageClientMock.
 		On("MessengerType").
-		Return(message.MessengerTypeTwilioSMS).
-		Maybe()
+		Return(message.MessengerTypeTwilioSMS)
+	messageDispatcherMock := mocks.NewMockMessageDispatcher(t)
+	messageDispatcherMock.
+		On("GetClient", message.MessageChannelSMS).
+		Return(messageClientMock, nil)
 
 	mockCrashTrackerClient := &crashtracker.MockCrashTrackerClient{}
 
@@ -101,11 +105,11 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 
 	t.Run("returns error when service has wrong setup", func(t *testing.T) {
 		_, err := NewSendReceiverWalletInviteService(models, nil, stellarSecretKey, 3, mockCrashTrackerClient)
-		assert.EqualError(t, err, "invalid service setup: messenger client can't be nil")
+		assert.EqualError(t, err, "invalid service setup: messenger dispatcher can't be nil")
 	})
 
 	t.Run("inserts the failed sent message", func(t *testing.T) {
-		s, err := NewSendReceiverWalletInviteService(models, messengerClientMock, stellarSecretKey, 3, mockCrashTrackerClient)
+		s, err := NewSendReceiverWalletInviteService(models, messageDispatcherMock, stellarSecretKey, 3, mockCrashTrackerClient)
 		require.NoError(t, err)
 
 		data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
@@ -156,17 +160,17 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 		contentWallet2 := fmt.Sprintf("You have a payment waiting for you from the MyCustomAid. Click %s to register.", deepLink2)
 
 		mockErr := errors.New("unexpected error")
-		messengerClientMock.
+		messageDispatcherMock.
 			On("SendMessage", message.Message{
 				ToPhoneNumber: receiver1.PhoneNumber,
 				Message:       contentWallet1,
-			}).
+			}, message.MessageChannelSMS).
 			Return(errors.New("unexpected error")).
 			Once().
 			On("SendMessage", message.Message{
 				ToPhoneNumber: receiver2.PhoneNumber,
 				Message:       contentWallet2,
-			}).
+			}, message.MessageChannelSMS).
 			Return(nil).
 			Once()
 
@@ -245,7 +249,7 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 	})
 
 	t.Run("send invite successfully", func(t *testing.T) {
-		s, err := NewSendReceiverWalletInviteService(models, messengerClientMock, stellarSecretKey, 3, mockCrashTrackerClient)
+		s, err := NewSendReceiverWalletInviteService(models, messageDispatcherMock, stellarSecretKey, 3, mockCrashTrackerClient)
 		require.NoError(t, err)
 
 		data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
@@ -295,17 +299,17 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 		require.NoError(t, err)
 		contentWallet2 := fmt.Sprintf("You have a payment waiting for you from the MyCustomAid. Click %s to register.", deepLink2)
 
-		messengerClientMock.
+		messageDispatcherMock.
 			On("SendMessage", message.Message{
 				ToPhoneNumber: receiver1.PhoneNumber,
 				Message:       contentWallet1,
-			}).
+			}, message.MessageChannelSMS).
 			Return(nil).
 			Once().
 			On("SendMessage", message.Message{
 				ToPhoneNumber: receiver2.PhoneNumber,
 				Message:       contentWallet2,
-			}).
+			}, message.MessageChannelSMS).
 			Return(nil).
 			Once()
 
@@ -376,7 +380,7 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 	})
 
 	t.Run("send invite successfully with custom invite message", func(t *testing.T) {
-		s, err := NewSendReceiverWalletInviteService(models, messengerClientMock, stellarSecretKey, 3, mockCrashTrackerClient)
+		s, err := NewSendReceiverWalletInviteService(models, messageDispatcherMock, stellarSecretKey, 3, mockCrashTrackerClient)
 		require.NoError(t, err)
 
 		data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
@@ -430,17 +434,17 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 		require.NoError(t, err)
 		contentWallet2 := fmt.Sprintf("%s %s", customInvitationMessage, deepLink2)
 
-		messengerClientMock.
+		messageDispatcherMock.
 			On("SendMessage", message.Message{
 				ToPhoneNumber: receiver1.PhoneNumber,
 				Message:       contentWallet1,
-			}).
+			}, message.MessageChannelSMS).
 			Return(nil).
 			Once().
 			On("SendMessage", message.Message{
 				ToPhoneNumber: receiver2.PhoneNumber,
 				Message:       contentWallet2,
-			}).
+			}, message.MessageChannelSMS).
 			Return(nil).
 			Once()
 
@@ -511,7 +515,7 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 	})
 
 	t.Run("doesn't resend the invitation SMS when organization's SMS Resend Interval is nil and the invitation was already sent", func(t *testing.T) {
-		s, err := NewSendReceiverWalletInviteService(models, messengerClientMock, stellarSecretKey, 3, mockCrashTrackerClient)
+		s, err := NewSendReceiverWalletInviteService(models, messageDispatcherMock, stellarSecretKey, 3, mockCrashTrackerClient)
 		require.NoError(t, err)
 
 		data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
@@ -556,7 +560,7 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 	})
 
 	t.Run("doesn't resend the invitation SMS when receiver reached the maximum number of resend attempts", func(t *testing.T) {
-		s, err := NewSendReceiverWalletInviteService(models, messengerClientMock, stellarSecretKey, 3, mockCrashTrackerClient)
+		s, err := NewSendReceiverWalletInviteService(models, messageDispatcherMock, stellarSecretKey, 3, mockCrashTrackerClient)
 		require.NoError(t, err)
 
 		data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
@@ -636,7 +640,7 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 	})
 
 	t.Run("doesn't resend invitation SMS when receiver is not in the resend period", func(t *testing.T) {
-		s, err := NewSendReceiverWalletInviteService(models, messengerClientMock, stellarSecretKey, 3, mockCrashTrackerClient)
+		s, err := NewSendReceiverWalletInviteService(models, messageDispatcherMock, stellarSecretKey, 3, mockCrashTrackerClient)
 		require.NoError(t, err)
 
 		data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
@@ -683,7 +687,7 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 	})
 
 	t.Run("successfully resend the invitation SMS", func(t *testing.T) {
-		s, err := NewSendReceiverWalletInviteService(models, messengerClientMock, stellarSecretKey, 3, mockCrashTrackerClient)
+		s, err := NewSendReceiverWalletInviteService(models, messageDispatcherMock, stellarSecretKey, 3, mockCrashTrackerClient)
 		require.NoError(t, err)
 
 		data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
@@ -723,11 +727,11 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 		require.NoError(t, err)
 		contentWallet1 := fmt.Sprintf("You have a payment waiting for you from the MyCustomAid. Click %s to register.", deepLink1)
 
-		messengerClientMock.
+		messageDispatcherMock.
 			On("SendMessage", message.Message{
 				ToPhoneNumber: receiver1.PhoneNumber,
 				Message:       contentWallet1,
-			}).
+			}, message.MessageChannelSMS).
 			Return(nil).
 			Once()
 
@@ -791,7 +795,7 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 			SMSRegistrationMessageTemplate: "SMS Registration Message template test disbursement 4:",
 		})
 
-		s, err := NewSendReceiverWalletInviteService(models, messengerClientMock, stellarSecretKey, 3, mockCrashTrackerClient)
+		s, err := NewSendReceiverWalletInviteService(models, messageDispatcherMock, stellarSecretKey, 3, mockCrashTrackerClient)
 		require.NoError(t, err)
 
 		data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
@@ -841,17 +845,17 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 		require.NoError(t, err)
 		contentDisbursement4 := fmt.Sprintf("%s %s", disbursement4.SMSRegistrationMessageTemplate, deepLink2)
 
-		messengerClientMock.
+		messageDispatcherMock.
 			On("SendMessage", message.Message{
 				ToPhoneNumber: receiver1.PhoneNumber,
 				Message:       contentDisbursement3,
-			}).
+			}, message.MessageChannelSMS).
 			Return(nil).
 			Once().
 			On("SendMessage", message.Message{
 				ToPhoneNumber: receiver2.PhoneNumber,
 				Message:       contentDisbursement4,
-			}).
+			}, message.MessageChannelSMS).
 			Return(nil).
 			Once()
 
@@ -930,7 +934,7 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 			SMSRegistrationMessageTemplate: "SMS Registration Message template test disbursement:",
 		})
 
-		s, err := NewSendReceiverWalletInviteService(models, messengerClientMock, stellarSecretKey, 3, mockCrashTrackerClient)
+		s, err := NewSendReceiverWalletInviteService(models, messageDispatcherMock, stellarSecretKey, 3, mockCrashTrackerClient)
 		require.NoError(t, err)
 
 		data.DeleteAllPaymentsFixtures(t, ctx, dbConnectionPool)
@@ -970,11 +974,11 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 		require.NoError(t, err)
 		contentDisbursement := fmt.Sprintf("%s %s", disbursement.SMSRegistrationMessageTemplate, deepLink1)
 
-		messengerClientMock.
+		messageDispatcherMock.
 			On("SendMessage", message.Message{
 				ToPhoneNumber: receiver1.PhoneNumber,
 				Message:       contentDisbursement,
-			}).
+			}, message.MessageChannelSMS).
 			Return(nil).
 			Once()
 
@@ -1021,7 +1025,7 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 		assert.Nil(t, msg.AssetID)
 	})
 
-	messengerClientMock.AssertExpectations(t)
+	messageDispatcherMock.AssertExpectations(t)
 }
 
 func Test_SendReceiverWalletInviteService_shouldSendInvitationSMS(t *testing.T) {

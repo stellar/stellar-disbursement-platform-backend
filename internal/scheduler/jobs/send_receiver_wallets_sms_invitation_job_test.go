@@ -18,6 +18,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/message/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/services"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
@@ -35,6 +36,9 @@ func Test_NewSendReceiverWalletsSMSInvitationJob(t *testing.T) {
 
 	messageDryRunClient, err := message.NewDryRunClient()
 	require.NoError(t, err)
+	dryRunDispatcher := message.NewMessageDispatcher()
+	dryRunDispatcher.RegisterClient(message.MessageChannelSMS, messageDryRunClient)
+	dryRunDispatcher.RegisterClient(message.MessageChannelEmail, messageDryRunClient)
 
 	t.Run("exits with status 1 when Messenger Client is missing config", func(t *testing.T) {
 		if os.Getenv("TEST_FATAL") == "1" {
@@ -65,7 +69,7 @@ func Test_NewSendReceiverWalletsSMSInvitationJob(t *testing.T) {
 		if os.Getenv("TEST_FATAL") == "1" {
 			o := SendReceiverWalletsSMSInvitationJobOptions{
 				Models:                         models,
-				MessengerClient:                messageDryRunClient,
+				MessageDispatcher:              dryRunDispatcher,
 				MaxInvitationSMSResendAttempts: 3,
 			}
 
@@ -90,7 +94,7 @@ func Test_NewSendReceiverWalletsSMSInvitationJob(t *testing.T) {
 	t.Run("returns a job instance successfully", func(t *testing.T) {
 		o := SendReceiverWalletsSMSInvitationJobOptions{
 			Models:                         models,
-			MessengerClient:                messageDryRunClient,
+			MessageDispatcher:              dryRunDispatcher,
 			MaxInvitationSMSResendAttempts: 3,
 			JobIntervalSeconds:             DefaultMinimumJobIntervalSeconds,
 		}
@@ -133,12 +137,14 @@ func Test_SendReceiverWalletsSMSInvitationJob_Execute(t *testing.T) {
 	var maxInvitationSMSResendAttempts int64 = 3
 
 	t.Run("executes the service successfully", func(t *testing.T) {
-		messengerClientMock := &message.MessengerClientMock{}
+		messageDispatcherMock := mocks.NewMockMessageDispatcher(t)
+		messengerClientMock := message.NewMessengerClientMock(t)
+
 		crashTrackerClientMock := &crashtracker.MockCrashTrackerClient{}
 
 		s, err := services.NewSendReceiverWalletInviteService(
 			models,
-			messengerClientMock,
+			messageDispatcherMock,
 			stellarSecretKey,
 			maxInvitationSMSResendAttempts,
 			crashTrackerClientMock,
@@ -222,22 +228,26 @@ func Test_SendReceiverWalletsSMSInvitationJob_Execute(t *testing.T) {
 		contentWallet2 := fmt.Sprintf("You have a payment waiting for you from the MyCustomAid. Click %s to register.", deepLink2)
 
 		mockErr := errors.New("unexpected error")
-		messengerClientMock.
+		messageDispatcherMock.
+			On("GetClient", message.MessageChannelSMS).
+			Return(messengerClientMock, nil).
+			Twice().
 			On("SendMessage", message.Message{
 				ToPhoneNumber: receiver1.PhoneNumber,
 				Message:       contentWallet1,
-			}).
+			}, message.MessageChannelSMS).
 			Return(mockErr).
 			Once().
 			On("SendMessage", message.Message{
 				ToPhoneNumber: receiver2.PhoneNumber,
 				Message:       contentWallet2,
-			}).
+			}, message.MessageChannelSMS).
 			Return(nil).
-			Once().
+			Once()
+		messengerClientMock.
 			On("MessengerType").
-			Return(message.MessengerTypeTwilioSMS)
-
+			Return(message.MessengerTypeTwilioSMS).
+			Twice()
 		mockMsg := fmt.Sprintf(
 			"error sending message to receiver ID %s for receiver wallet ID %s using messenger type %s",
 			receiver1.ID, rec1RW.ID, message.MessengerTypeTwilioSMS,

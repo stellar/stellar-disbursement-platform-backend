@@ -25,7 +25,7 @@ const OTPMessageDisclaimer = " If you did not request this code, please ignore. 
 
 type ReceiverSendOTPHandler struct {
 	Models             *data.Models
-	SMSMessengerClient message.MessengerClient
+	MessageDispatcher  message.MessageDispatcherInterface
 	ReCAPTCHAValidator validators.ReCAPTCHAValidator
 }
 
@@ -151,13 +151,14 @@ func (h ReceiverSendOTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request
 			return
 		}
 
-		smsMessage := message.Message{
+		msg := message.Message{
 			ToPhoneNumber: receiverSendOTPRequest.PhoneNumber,
 			Message:       builder.String(),
 		}
 
+		// TODO: SDP-1296 - support multiple channels for OTP
 		log.Ctx(ctx).Infof("sending OTP message to phone number: %s", truncatedPhoneNumber)
-		err = h.SMSMessengerClient.SendMessage(smsMessage)
+		err = h.MessageDispatcher.SendMessage(msg, message.MessageChannelSMS)
 		if err != nil {
 			httperror.InternalError(ctx, "Cannot send OTP message", err, nil).Render(w)
 			return
