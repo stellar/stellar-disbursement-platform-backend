@@ -63,7 +63,7 @@ helm delete sdp
 These parameters are shared by all charts.
 
 | Name                                                   | Description                                                                                                                         | Value       |
-|--------------------------------------------------------| ----------------------------------------------------------------------------------------------------------------------------------- |-------------|
+| ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- | ----------- |
 | `global.isPubnet`                                      | Determines if the network is public. Set this to true for public networks.                                                          | `false`     |
 | `global.replicaCount`                                  | Number of replicas for the application.                                                                                             | `1`         |
 | `global.resources`                                     | Resource limits and requests for the application pods.                                                                              | `{}`        |
