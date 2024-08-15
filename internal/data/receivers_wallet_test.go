@@ -893,6 +893,7 @@ func Test_ReceiverWallet_GetAllPendingRegistration(t *testing.T) {
 					ID:          receiver.ID,
 					PhoneNumber: receiver.PhoneNumber,
 					Email:       receiver.Email,
+					ExternalID:  receiver.ExternalID,
 				},
 				Wallet: Wallet{
 					ID:   wallet3.ID,
@@ -905,6 +906,7 @@ func Test_ReceiverWallet_GetAllPendingRegistration(t *testing.T) {
 					ID:          receiver.ID,
 					PhoneNumber: receiver.PhoneNumber,
 					Email:       receiver.Email,
+					ExternalID:  receiver.ExternalID,
 				},
 				Wallet: Wallet{
 					ID:   wallet4.ID,
@@ -1014,6 +1016,7 @@ func Test_ReceiverWallet_GetAllPendingRegistrationByReceiverWalletIDs(t *testing
 					ID:          receiver.ID,
 					PhoneNumber: receiver.PhoneNumber,
 					Email:       receiver.Email,
+					ExternalID:  receiver.ExternalID,
 				},
 				Wallet: Wallet{
 					ID:   wallet3.ID,
@@ -1026,6 +1029,7 @@ func Test_ReceiverWallet_GetAllPendingRegistrationByReceiverWalletIDs(t *testing
 					ID:          receiver.ID,
 					PhoneNumber: receiver.PhoneNumber,
 					Email:       receiver.Email,
+					ExternalID:  receiver.ExternalID,
 				},
 				Wallet: Wallet{
 					ID:   wallet4.ID,
@@ -1097,6 +1101,7 @@ func Test_ReceiverWallet_GetAllPendingRegistrationByReceiverWalletIDs(t *testing
 					ID:          receiver.ID,
 					PhoneNumber: receiver.PhoneNumber,
 					Email:       receiver.Email,
+					ExternalID:  receiver.ExternalID,
 				},
 				Wallet: Wallet{
 					ID:   wallet1.ID,
@@ -1109,6 +1114,7 @@ func Test_ReceiverWallet_GetAllPendingRegistrationByReceiverWalletIDs(t *testing
 					ID:          receiver.ID,
 					PhoneNumber: receiver.PhoneNumber,
 					Email:       receiver.Email,
+					ExternalID:  receiver.ExternalID,
 				},
 				Wallet: Wallet{
 					ID:   wallet2.ID,
@@ -1199,6 +1205,7 @@ func Test_ReceiverWallet_GetAllPendingRegistrationByDisbursementID(t *testing.T)
 					ID:          receiver3.ID,
 					PhoneNumber: receiver3.PhoneNumber,
 					Email:       receiver3.Email,
+					ExternalID:  receiver3.ExternalID,
 				},
 				Wallet: Wallet{
 					ID:   wallet.ID,
@@ -1211,6 +1218,7 @@ func Test_ReceiverWallet_GetAllPendingRegistrationByDisbursementID(t *testing.T)
 					ID:          receiver4.ID,
 					PhoneNumber: receiver4.PhoneNumber,
 					Email:       receiver4.Email,
+					ExternalID:  receiver4.ExternalID,
 				},
 				Wallet: Wallet{
 					ID:   wallet.ID,

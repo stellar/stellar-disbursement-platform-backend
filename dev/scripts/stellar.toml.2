@@ -1,0 +1,24 @@
+ACCOUNTS=["GDFSZFORVKOAGHJVLE7OJTM44KR2NYICFIYZ7HUES3ULUYQVD4PX5B6O", "GAH74OK3PJ76LJQ5DH5QMWUL3UJ5D2JCNLQ7LXHUQHXLEBXER2DWYOB4"]
+SIGNING_KEY="GAH74OK3PJ76LJQ5DH5QMWUL3UJ5D2JCNLQ7LXHUQHXLEBXER2DWYOB4"
+NETWORK_PASSPHRASE="Test SDF Network ; September 2015"
+HORIZON_URL="https://horizon-testnet.stellar.org"
+WEB_AUTH_ENDPOINT="http://localhost:8080/auth"
+TRANSFER_SERVER_SEP0024="http://localhost:8080/sep24"
+
+[DOCUMENTATION]
+ORG_NAME="redcorp"
+
+[[CURRENCIES]]
+code = "USDC"
+issuer = "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"
+is_asset_anchored = true
+anchor_asset_type = "fiat"
+status = "live"
+desc = "USDC"
+
+[[CURRENCIES]]
+code = "native"
+status = "live"
+is_asset_anchored = true
+anchor_asset_type = "crypto"
+desc = "XLM, the native token of the Stellar Network."

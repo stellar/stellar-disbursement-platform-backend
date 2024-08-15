@@ -17,6 +17,7 @@ type ReceiverRegistrationHandler struct {
 	Models              *data.Models
 	ReceiverWalletModel *data.ReceiverWalletModel
 	ReCAPTCHASiteKey    string
+	UseExternalID	    bool
 }
 
 type ReceiverRegistrationData struct {

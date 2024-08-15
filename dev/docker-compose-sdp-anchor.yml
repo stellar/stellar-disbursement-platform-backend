@@ -81,7 +81,6 @@ services:
       RECAPTCHA_SITE_SECRET_KEY: 6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ4WifJWe
       ANCHOR_PLATFORM_OUTGOING_JWT_SECRET: mySdpToAnchorPlatformSecret
     entrypoint: "./dev/scripts/debug_entrypoint.sh"
-
   db-anchor-platform:
     container_name: anchor-platform-postgres-db-mtn
     image: postgres:14-alpine

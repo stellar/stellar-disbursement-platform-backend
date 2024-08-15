@@ -116,6 +116,24 @@ func (v VerifyReceiverRegistrationHandler) processReceiverVerificationPII(
 	now := time.Now()
 	truncatedPhoneNumber := utils.TruncateString(receiver.PhoneNumber, 3)
 
+	// STEP 1: if customer-id exists in sep24 claims, use it to look up receiver by externalID
+	// receiver's phone number will be compared to hashed mobile_number
+	if receiverRegistrationRequest.CustomerID != "" {
+		receiverByExternalID, err := v.Models.Receiver.GetByExternalID(ctx, dbTx, receiver.ExternalID)
+		if err != nil {
+			log.Ctx(ctx).Errorf("Error retrieving receiver by external ID: %v", err)
+			return &ErrorInformationNotFound{cause: err}
+		}
+		fmt.Println(receiverByExternalID.PhoneNumber)
+
+		if data.CompareVerificationValue(receiverRegistrationRequest.MobileNumberHash, receiverByExternalID.PhoneNumber) {
+			return nil
+		} else {
+			err = fmt.Errorf("phone number validation failed for customer-id %s", receiverRegistrationRequest.CustomerID)
+			return &ErrorInformationNotFound{cause: err}
+		}
+	}
+
 	// STEP 1: find the receiverVerification entry that matches the pair [receiverID, verificationType]
 	receiverVerifications, err := v.Models.ReceiverVerification.GetByReceiverIDsAndVerificationField(ctx, dbTx, []string{receiver.ID}, receiverRegistrationRequest.VerificationType)
 	if err != nil {
@@ -145,7 +163,7 @@ func (v VerifyReceiverRegistrationHandler) processReceiverVerificationPII(
 		receiverVerification.FailedAt = &now
 		receiverVerification.ConfirmedAt = nil
 
-		// this update is done using the DBConnectionPool and not dbTx because we don't want to roolback these changes after returning the error
+		// this update is done using the DBConnectionPool and not dbTx because we don't want to rollback these changes after returning the error
 		updateErr := v.Models.ReceiverVerification.UpdateReceiverVerification(ctx, *receiverVerification, v.Models.DBConnectionPool)
 		if updateErr != nil {
 			err = fmt.Errorf("%s: %w", baseErrMsg, updateErr)
