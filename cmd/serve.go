@@ -118,7 +118,7 @@ func (s *ServerService) GetSchedulerJobRegistrars(
 			scheduler.WithPatchAnchorPlatformTransactionsCompletionJobOption(schedulerOptions.PaymentJobIntervalSeconds, apAPIService, models),
 			scheduler.WithSendReceiverWalletsSMSInvitationJobOption(jobs.SendReceiverWalletsSMSInvitationJobOptions{
 				Models:                         models,
-				MessengerClient:                serveOpts.SMSMessengerClient,
+				MessageDispatcher:              serveOpts.MessageDispatcher,
 				MaxInvitationSMSResendAttempts: int64(serveOpts.MaxInvitationSMSResendAttempts),
 				Sep10SigningPrivateKey:         serveOpts.Sep10SigningPrivateKey,
 				CrashTrackerClient:             serveOpts.CrashTrackerClient.Clone(),
@@ -147,7 +147,7 @@ func (s *ServerService) SetupConsumers(ctx context.Context, o SetupConsumersOpti
 			MtnDBConnectionPool:            o.ServeOpts.MtnDBConnectionPool,
 			AdminDBConnectionPool:          o.ServeOpts.AdminDBConnectionPool,
 			AnchorPlatformBaseSepURL:       o.ServeOpts.AnchorPlatformBasePlatformURL,
-			MessengerClient:                o.ServeOpts.SMSMessengerClient,
+			MessageDispatcher:              o.ServeOpts.MessageDispatcher,
 			MaxInvitationSMSResendAttempts: int64(o.ServeOpts.MaxInvitationSMSResendAttempts),
 			Sep10SigningPrivateKey:         o.ServeOpts.Sep10SigningPrivateKey,
 		}),
@@ -582,10 +582,14 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 			serveOpts.EmailMessengerClient = emailMessengerClient
 			adminServeOpts.EmailMessengerClient = emailMessengerClient
 
-			// Setup the SMS client
-			serveOpts.SMSMessengerClient, err = di.NewSMSClient(smsOpts)
+			// Setup the Message Dispatcher
+			messageDispatcherOpts := di.MessageDispatcherOpts{
+				EmailOpts: &emailOpts,
+				SMSOpts:   &smsOpts,
+			}
+			serveOpts.MessageDispatcher, err = di.NewMessageDispatcher(ctx, messageDispatcherOpts)
 			if err != nil {
-				log.Ctx(ctx).Fatalf("error creating SMS client: %s", err.Error())
+				log.Ctx(ctx).Fatalf("error creating message dispatcher: %s", err.Error())
 			}
 
 			// Setup the AP Auth enforcer

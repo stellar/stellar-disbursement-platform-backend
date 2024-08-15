@@ -27,7 +27,7 @@ type SendReceiverWalletInviteServiceInterface interface {
 }
 
 type SendReceiverWalletInviteService struct {
-	messengerClient                message.MessengerClient
+	messageDispatcher              message.MessageDispatcherInterface
 	Models                         *data.Models
 	maxInvitationSMSResendAttempts int64
 	sep10SigningPrivateKey         string
@@ -37,8 +37,8 @@ type SendReceiverWalletInviteService struct {
 var _ SendReceiverWalletInviteServiceInterface = new(SendReceiverWalletInviteService)
 
 func (s SendReceiverWalletInviteService) validate() error {
-	if s.messengerClient == nil {
-		return fmt.Errorf("messenger client can't be nil")
+	if s.messageDispatcher == nil {
+		return fmt.Errorf("messenger dispatcher can't be nil")
 	}
 
 	return nil
@@ -139,7 +139,7 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context, receive
 
 			msgTemplate, err = template.New("").Parse(*disbursementSMSRegistrationMessageTemplate)
 			if err != nil {
-				return fmt.Errorf("error parsing disbursement SMS registration message template: %w", err)
+				return fmt.Errorf("parsing disbursement SMS registration message template: %w", err)
 			}
 		}
 
@@ -152,7 +152,7 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context, receive
 			RegistrationLink: template.HTML(registrationLink),
 		})
 		if err != nil {
-			return fmt.Errorf("error executing registration message template: %w", err)
+			return fmt.Errorf("executing registration message template: %w", err)
 		}
 
 		msg := message.Message{
@@ -162,7 +162,15 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context, receive
 
 		assetID := rwa.Asset.ID
 		receiverWalletID := rwa.ReceiverWallet.ID
-		messageType := s.messengerClient.MessengerType()
+
+		// TODO: SDP-1316 - Update send and auto-retry invitation scheduler job to work with both SMS and email
+		messageChannel := message.MessageChannelSMS
+		messageClient, err := s.messageDispatcher.GetClient(messageChannel)
+		if err != nil {
+			return fmt.Errorf("getting message client: %w", err)
+		}
+
+		messageType := messageClient.MessengerType()
 		msgToInsert := &data.MessageInsert{
 			Type:             messageType,
 			AssetID:          &assetID,
@@ -174,7 +182,7 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context, receive
 
 		// We assume that the message will be sent at first
 		msgToInsert.Status = data.SuccessMessageStatus
-		if err := s.messengerClient.SendMessage(msg); err != nil {
+		if err := s.messageDispatcher.SendMessage(msg, messageChannel); err != nil {
 			msg := fmt.Sprintf(
 				"error sending message to receiver ID %s for receiver wallet ID %s using messenger type %s",
 				rwa.ReceiverWallet.Receiver.ID, rwa.ReceiverWallet.ID, messageType,
@@ -284,9 +292,9 @@ func (s SendReceiverWalletInviteService) shouldSendInvitationSMS(ctx context.Con
 	return true
 }
 
-func NewSendReceiverWalletInviteService(models *data.Models, messengerClient message.MessengerClient, sep10SigningPrivateKey string, maxInvitationSMSResendAttempts int64, crashTrackerClient crashtracker.CrashTrackerClient) (*SendReceiverWalletInviteService, error) {
+func NewSendReceiverWalletInviteService(models *data.Models, messageDispatcher message.MessageDispatcherInterface, sep10SigningPrivateKey string, maxInvitationSMSResendAttempts int64, crashTrackerClient crashtracker.CrashTrackerClient) (*SendReceiverWalletInviteService, error) {
 	s := &SendReceiverWalletInviteService{
-		messengerClient:                messengerClient,
+		messageDispatcher:              messageDispatcher,
 		Models:                         models,
 		maxInvitationSMSResendAttempts: maxInvitationSMSResendAttempts,
 		sep10SigningPrivateKey:         sep10SigningPrivateKey,

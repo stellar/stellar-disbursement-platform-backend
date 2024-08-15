@@ -21,7 +21,7 @@ type SendReceiverWalletsSMSInvitationEventHandlerOptions struct {
 	AdminDBConnectionPool          db.DBConnectionPool
 	MtnDBConnectionPool            db.DBConnectionPool
 	AnchorPlatformBaseSepURL       string
-	MessengerClient                message.MessengerClient
+	MessageDispatcher              message.MessageDispatcherInterface
 	MaxInvitationSMSResendAttempts int64
 	Sep10SigningPrivateKey         string
 	CrashTrackerClient             crashtracker.CrashTrackerClient
@@ -45,7 +45,7 @@ func NewSendReceiverWalletsSMSInvitationEventHandler(options SendReceiverWallets
 
 	s, err := services.NewSendReceiverWalletInviteService(
 		models,
-		options.MessengerClient,
+		options.MessageDispatcher,
 		options.Sep10SigningPrivateKey,
 		options.MaxInvitationSMSResendAttempts,
 		options.CrashTrackerClient,
