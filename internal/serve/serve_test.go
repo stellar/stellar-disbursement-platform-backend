@@ -25,7 +25,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/message/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	monitorMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/monitor/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/middleware"
@@ -305,7 +304,7 @@ func getServeOptionsForTests(t *testing.T, dbConnectionPool db.DBConnectionPool)
 	messengerClientMock := message.MessengerClientMock{}
 	messengerClientMock.On("SendMessage", mock.Anything).Return(nil)
 
-	messageDispatcherMock := mocks.NewMockMessageDispatcher(t)
+	messageDispatcherMock := message.NewMockMessageDispatcher(t)
 	messageDispatcherMock.
 		On("SendMessage", mock.Anything, mock.Anything).
 		Return(nil).

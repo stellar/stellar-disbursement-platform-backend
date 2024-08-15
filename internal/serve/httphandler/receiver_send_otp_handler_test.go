@@ -23,7 +23,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/anchorplatform"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/message/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 )
 
@@ -54,7 +53,7 @@ func Test_ReceiverSendOTPHandler_ServeHTTP(t *testing.T) {
 	_ = data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver1.ID, wallet1.ID, data.RegisteredReceiversWalletStatus)
 	_ = data.CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver2.ID, wallet1.ID, data.RegisteredReceiversWalletStatus)
 
-	mockMessageDispatcher := mocks.NewMockMessageDispatcher(t)
+	mockMessageDispatcher := message.NewMockMessageDispatcher(t)
 	reCAPTCHAValidator := &validators.ReCAPTCHAValidatorMock{}
 
 	r.Post("/wallet-registration/otp", ReceiverSendOTPHandler{

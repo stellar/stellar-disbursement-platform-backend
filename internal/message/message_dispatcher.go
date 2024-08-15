@@ -14,7 +14,7 @@ const (
 	MessageChannelSMS   MessageChannel = "SMS"
 )
 
-//go:generate mockery --name MessageDispatcherInterface --case=underscore --structname=MockMessageDispatcher
+//go:generate mockery --name MessageDispatcherInterface --case=underscore --structname=MockMessageDispatcher --inpackage
 type MessageDispatcherInterface interface {
 	RegisterClient(ctx context.Context, channel MessageChannel, client MessengerClient)
 	SendMessage(message Message, channel MessageChannel) error
@@ -48,7 +48,7 @@ func (d *MessageDispatcher) SendMessage(message Message, channel MessageChannel)
 func (d *MessageDispatcher) GetClient(channel MessageChannel) (MessengerClient, error) {
 	client, ok := d.clients[channel]
 	if !ok {
-		return nil, fmt.Errorf("no client registered for channel: %s", channel)
+		return nil, fmt.Errorf("no client registered for channel %q", channel)
 	}
 
 	return client, nil

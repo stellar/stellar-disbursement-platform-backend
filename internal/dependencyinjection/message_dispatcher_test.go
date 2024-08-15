@@ -48,7 +48,7 @@ func Test_NewMessageDispatcher(t *testing.T) {
 		assert.NotNil(t, emailClient)
 
 		smsClient, err := dispatcher.GetClient(message.MessageChannelSMS)
-		assert.EqualError(t, err, "no client registered for channel: SMS")
+		assert.EqualError(t, err, "no client registered for channel \"SMS\"")
 		assert.Nil(t, smsClient)
 	})
 
@@ -69,7 +69,7 @@ func Test_NewMessageDispatcher(t *testing.T) {
 		assert.NotNil(t, smsClient)
 
 		emailClient, err := dispatcher.GetClient(message.MessageChannelEmail)
-		assert.EqualError(t, err, "no client registered for channel: EMAIL")
+		assert.EqualError(t, err, "no client registered for channel \"EMAIL\"")
 		assert.Nil(t, emailClient)
 	})
 

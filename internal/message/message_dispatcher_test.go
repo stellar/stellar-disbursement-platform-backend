@@ -50,7 +50,7 @@ func Test_MessageDispatcher_GetClient(t *testing.T) {
 			name:        "Non-existing client",
 			channel:     MessageChannelSMS,
 			expected:    nil,
-			expectedErr: errors.New("no client registered for channel: SMS"),
+			expectedErr: errors.New("no client registered for channel \"SMS\""),
 		},
 	}
 
@@ -91,7 +91,7 @@ func Test_MessageDispatcher_SendMessage(t *testing.T) {
 			name:        "Client not found",
 			channel:     MessageChannelSMS,
 			setupMock:   func(clientMock *MessengerClientMock) {},
-			expectedErr: errors.New("getting client for channel: no client registered for channel: SMS"),
+			expectedErr: errors.New("getting client for channel: no client registered for channel \"SMS\""),
 		},
 		{
 			name:    "Client error",

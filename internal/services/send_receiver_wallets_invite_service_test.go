@@ -18,7 +18,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/message/mocks"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
@@ -68,7 +67,7 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 	messageClientMock.
 		On("MessengerType").
 		Return(message.MessengerTypeTwilioSMS)
-	messageDispatcherMock := mocks.NewMockMessageDispatcher(t)
+	messageDispatcherMock := message.NewMockMessageDispatcher(t)
 	messageDispatcherMock.
 		On("GetClient", message.MessageChannelSMS).
 		Return(messageClientMock, nil)
