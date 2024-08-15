@@ -32,6 +32,7 @@ data:
   CONSUMER_GROUP_ID: {{ .Values.global.eventBroker.consumerGroupId | quote }}
   {{- if eq .Values.global.eventBroker.type "KAFKA" }}
   KAFKA_SECURITY_PROTOCOL: {{ .Values.global.eventBroker.kafka.securityProtocol | quote }}
+  SINGLE_TENANT_MODE: {{ .Values.global.singleTenantMode | quote }}
   {{- end }}
   {{- tpl (toYaml .Values.sdp.configMap.data | nindent 2) . }}
 {{- end }}

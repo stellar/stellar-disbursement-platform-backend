@@ -63,7 +63,7 @@ helm delete sdp
 These parameters are shared by all charts.
 
 | Name                                                   | Description                                                                                                                         | Value       |
-| ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- | ----------- |
+|--------------------------------------------------------| ----------------------------------------------------------------------------------------------------------------------------------- |-------------|
 | `global.isPubnet`                                      | Determines if the network is public. Set this to true for public networks.                                                          | `false`     |
 | `global.replicaCount`                                  | Number of replicas for the application.                                                                                             | `1`         |
 | `global.resources`                                     | Resource limits and requests for the application pods.                                                                              | `{}`        |
@@ -85,6 +85,7 @@ These parameters are shared by all charts.
 | `global.eventBroker.consumerGroupId`                   | The consumer group ID for the event broker.                                                                                         | `nil`       |
 | `global.eventBroker.kafka`                             | Configuration related to the Kafka event broker.                                                                                    |             |
 | `global.eventBroker.kafka.securityProtocol`            | The security protocol to be used for the Kafka broker. Options: "PLAINTEXT", "SASL_SSL", "SASL_PLAINTEXT", "SSL".                   | `nil`       |
+| `global.singleTenantMode`                              | Determines if the SDP service is running in single-tenant mode.                                                                     | `false`     |
 
 ### Stellar Disbursement Platform (SDP) parameters
 

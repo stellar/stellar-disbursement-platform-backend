@@ -23,10 +23,11 @@ data:
       {{- end }}
       {{- if eq (include "isPubnet" .) "true" }}
       HORIZON_URL: "https://horizon.stellar.org",
-      STELLAR_EXPERT_URL: "https://stellar.expert/explorer/pubnet"
+      STELLAR_EXPERT_URL: "https://stellar.expert/explorer/pubnet",
       {{- else }}
       HORIZON_URL: "https://horizon-testnet.stellar.org",
-      STELLAR_EXPERT_URL: "https://stellar.expert/explorer/testnet"
+      STELLAR_EXPERT_URL: "https://stellar.expert/explorer/testnet",
       {{- end }}
+      SINGLE_TENANT_MODE: {{ .Values.global.singleTenantMode }}
     };
 {{- end }}
