@@ -85,6 +85,7 @@ These parameters are shared by all charts.
 | `global.eventBroker.consumerGroupId`                   | The consumer group ID for the event broker.                                                                                         | `nil`       |
 | `global.eventBroker.kafka`                             | Configuration related to the Kafka event broker.                                                                                    |             |
 | `global.eventBroker.kafka.securityProtocol`            | The security protocol to be used for the Kafka broker. Options: "PLAINTEXT", "SASL_SSL", "SASL_PLAINTEXT", "SSL".                   | `nil`       |
+| `global.singleTenantMode`                              | Determines if the SDP service is running in single-tenant mode.                                                                     | `false`     |
 
 ### Stellar Disbursement Platform (SDP) parameters
 

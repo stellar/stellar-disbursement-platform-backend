@@ -77,6 +77,9 @@ global:
     kafka:
       securityProtocol: #required
 
+  ## @param global.singleTenantMode Determines if the SDP service is running in single-tenant mode.
+  singleTenantMode: false
+
 # =========================== START sdp ===========================
 ## @section Stellar Disbursement Platform (SDP) parameters
 ## @descriptionStart
