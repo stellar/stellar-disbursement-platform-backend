@@ -1,6 +1,7 @@
 package dependencyinjection
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -10,6 +11,7 @@ import (
 )
 
 func Test_NewMessageDispatcher(t *testing.T) {
+	ctx := context.Background()
 	t.Run("should return the same instance when called twice", func(t *testing.T) {
 		defer ClearInstancesTestHelper(t)
 
@@ -22,9 +24,9 @@ func Test_NewMessageDispatcher(t *testing.T) {
 			},
 		}
 
-		dispatcher1, err := NewMessageDispatcher(opts)
+		dispatcher1, err := NewMessageDispatcher(ctx, opts)
 		require.NoError(t, err)
-		dispatcher2, err := NewMessageDispatcher(opts)
+		dispatcher2, err := NewMessageDispatcher(ctx, opts)
 		require.NoError(t, err)
 		assert.Equal(t, dispatcher1, dispatcher2)
 	})
@@ -38,7 +40,7 @@ func Test_NewMessageDispatcher(t *testing.T) {
 			},
 		}
 
-		dispatcher, err := NewMessageDispatcher(opts)
+		dispatcher, err := NewMessageDispatcher(ctx, opts)
 		require.NoError(t, err)
 
 		emailClient, err := dispatcher.GetClient(message.MessageChannelEmail)
@@ -59,7 +61,7 @@ func Test_NewMessageDispatcher(t *testing.T) {
 			},
 		}
 
-		dispatcher, err := NewMessageDispatcher(opts)
+		dispatcher, err := NewMessageDispatcher(ctx, opts)
 		require.NoError(t, err)
 
 		smsClient, err := dispatcher.GetClient(message.MessageChannelSMS)
@@ -67,7 +69,7 @@ func Test_NewMessageDispatcher(t *testing.T) {
 		assert.NotNil(t, smsClient)
 
 		emailClient, err := dispatcher.GetClient(message.MessageChannelEmail)
-		assert.EqualError(t, err, "no client registered for channel: Email")
+		assert.EqualError(t, err, "no client registered for channel: EMAIL")
 		assert.Nil(t, emailClient)
 	})
 
@@ -80,7 +82,7 @@ func Test_NewMessageDispatcher(t *testing.T) {
 			},
 		}
 
-		dispatcher, err := NewMessageDispatcher(opts)
+		dispatcher, err := NewMessageDispatcher(ctx, opts)
 		assert.ErrorContains(t, err, `trying to create a Email client with a non-supported Email type: "invalid-type"`)
 		assert.Nil(t, dispatcher)
 	})
@@ -94,7 +96,7 @@ func Test_NewMessageDispatcher(t *testing.T) {
 			},
 		}
 
-		dispatcher, err := NewMessageDispatcher(opts)
+		dispatcher, err := NewMessageDispatcher(ctx, opts)
 		assert.ErrorContains(t, err, `trying to create a SMS client with a non-supported SMS type: "invalid-type"`)
 		assert.Nil(t, dispatcher)
 	})
@@ -107,7 +109,7 @@ func Test_NewMessageDispatcher(t *testing.T) {
 
 		opts := MessageDispatcherOpts{}
 
-		gotDispatcher, err := NewMessageDispatcher(opts)
+		gotDispatcher, err := NewMessageDispatcher(ctx, opts)
 		assert.Nil(t, gotDispatcher)
 		assert.EqualError(t, err, "trying to cast pre-existing MessageDispatcher for dependency injection")
 	})

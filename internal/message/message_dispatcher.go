@@ -1,6 +1,11 @@
 package message
 
-import "fmt"
+import (
+	"context"
+	"fmt"
+
+	"github.com/stellar/go/support/log"
+)
 
 type MessageChannel string
 
@@ -11,7 +16,7 @@ const (
 
 //go:generate mockery --name MessageDispatcherInterface --case=underscore --structname=MockMessageDispatcher
 type MessageDispatcherInterface interface {
-	RegisterClient(channel MessageChannel, client MessengerClient)
+	RegisterClient(ctx context.Context, channel MessageChannel, client MessengerClient)
 	SendMessage(message Message, channel MessageChannel) error
 	GetClient(channel MessageChannel) (MessengerClient, error)
 }
@@ -26,7 +31,8 @@ func NewMessageDispatcher() *MessageDispatcher {
 	}
 }
 
-func (d *MessageDispatcher) RegisterClient(channel MessageChannel, client MessengerClient) {
+func (d *MessageDispatcher) RegisterClient(ctx context.Context, channel MessageChannel, client MessengerClient) {
+	log.Ctx(ctx).Infof("📡 [MessageDispatcher] Registering client %s for channel %s", client.MessengerType(), channel)
 	d.clients[channel] = client
 }
 

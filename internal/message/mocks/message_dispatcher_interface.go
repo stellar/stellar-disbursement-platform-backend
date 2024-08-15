@@ -3,6 +3,8 @@
 package mocks
 
 import (
+	context "context"
+
 	message "github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	mock "github.com/stretchr/testify/mock"
 )
@@ -42,9 +44,9 @@ func (_m *MockMessageDispatcher) GetClient(channel message.MessageChannel) (mess
 	return r0, r1
 }
 
-// RegisterClient provides a mock function with given fields: channel, client
-func (_m *MockMessageDispatcher) RegisterClient(channel message.MessageChannel, client message.MessengerClient) {
-	_m.Called(channel, client)
+// RegisterClient provides a mock function with given fields: ctx, channel, client
+func (_m *MockMessageDispatcher) RegisterClient(ctx context.Context, channel message.MessageChannel, client message.MessengerClient) {
+	_m.Called(ctx, channel, client)
 }
 
 // SendMessage provides a mock function with given fields: _a0, channel

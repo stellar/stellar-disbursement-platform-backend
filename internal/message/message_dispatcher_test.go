@@ -1,6 +1,7 @@
 package message
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -14,19 +15,24 @@ func Test_NewMessageDispatcher(t *testing.T) {
 }
 
 func Test_MessageDispatcher_RegisterClient(t *testing.T) {
+	ctx := context.Background()
+
 	dispatcher := NewMessageDispatcher()
 	client := NewMessengerClientMock(t)
+	client.On("MessengerType").Return(MessengerTypeDryRun).Once()
 
-	dispatcher.RegisterClient(MessageChannelEmail, client)
+	dispatcher.RegisterClient(ctx, MessageChannelEmail, client)
 
 	assert.Len(t, dispatcher.clients, 1)
 	assert.Equal(t, client, dispatcher.clients[MessageChannelEmail])
 }
 
 func Test_MessageDispatcher_GetClient(t *testing.T) {
+	ctx := context.Background()
 	dispatcher := NewMessageDispatcher()
 	emailClient := NewMessengerClientMock(t)
-	dispatcher.RegisterClient(MessageChannelEmail, emailClient)
+	emailClient.On("MessengerType").Return(MessengerTypeDryRun).Once()
+	dispatcher.RegisterClient(ctx, MessageChannelEmail, emailClient)
 
 	tests := []struct {
 		name        string
@@ -62,6 +68,8 @@ func Test_MessageDispatcher_GetClient(t *testing.T) {
 }
 
 func Test_MessageDispatcher_SendMessage(t *testing.T) {
+	ctx := context.Background()
+
 	dispatcher := NewMessageDispatcher()
 	message := Message{}
 
@@ -98,7 +106,8 @@ func Test_MessageDispatcher_SendMessage(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			client := NewMessengerClientMock(t)
-			dispatcher.RegisterClient(MessageChannelEmail, client)
+			client.On("MessengerType").Return(MessengerTypeDryRun).Once()
+			dispatcher.RegisterClient(ctx, MessageChannelEmail, client)
 
 			tt.setupMock(client)
 

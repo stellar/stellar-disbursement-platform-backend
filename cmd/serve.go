@@ -587,7 +587,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 				EmailOpts: &emailOpts,
 				SMSOpts:   &smsOpts,
 			}
-			serveOpts.MessageDispatcher, err = di.NewMessageDispatcher(messageDispatcherOpts)
+			serveOpts.MessageDispatcher, err = di.NewMessageDispatcher(ctx, messageDispatcherOpts)
 			if err != nil {
 				log.Ctx(ctx).Fatalf("error creating message dispatcher: %s", err.Error())
 			}

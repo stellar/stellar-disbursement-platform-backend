@@ -201,7 +201,7 @@ func Test_serve(t *testing.T) {
 		EmailOpts: &emailOpts,
 		SMSOpts:   &smsOpts,
 	}
-	serveOpts.MessageDispatcher, err = di.NewMessageDispatcher(messageDispatcherOpts)
+	serveOpts.MessageDispatcher, err = di.NewMessageDispatcher(ctx, messageDispatcherOpts)
 	require.NoError(t, err)
 
 	kafkaConfig := events.KafkaConfig{

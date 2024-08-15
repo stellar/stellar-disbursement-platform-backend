@@ -1,6 +1,7 @@
 package dependencyinjection
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
@@ -13,7 +14,7 @@ type MessageDispatcherOpts struct {
 	SMSOpts   *SMSClientOptions
 }
 
-func NewMessageDispatcher(opts MessageDispatcherOpts) (*message.MessageDispatcher, error) {
+func NewMessageDispatcher(ctx context.Context, opts MessageDispatcherOpts) (*message.MessageDispatcher, error) {
 	if instance, ok := GetInstance(MessageDispatcherInstanceName); ok {
 		if dispatcherInstance, ok := instance.(*message.MessageDispatcher); ok {
 			return dispatcherInstance, nil
@@ -28,7 +29,7 @@ func NewMessageDispatcher(opts MessageDispatcherOpts) (*message.MessageDispatche
 		if err != nil {
 			return nil, fmt.Errorf("creating email client: %w", err)
 		}
-		dispatcher.RegisterClient(message.MessageChannelEmail, emailClient)
+		dispatcher.RegisterClient(ctx, message.MessageChannelEmail, emailClient)
 	}
 
 	if opts.SMSOpts != nil {
@@ -36,7 +37,7 @@ func NewMessageDispatcher(opts MessageDispatcherOpts) (*message.MessageDispatche
 		if err != nil {
 			return nil, fmt.Errorf("creating SMS client: %w", err)
 		}
-		dispatcher.RegisterClient(message.MessageChannelSMS, smsClient)
+		dispatcher.RegisterClient(ctx, message.MessageChannelSMS, smsClient)
 	}
 
 	SetInstance(MessageDispatcherInstanceName, dispatcher)

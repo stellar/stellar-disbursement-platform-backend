@@ -34,11 +34,13 @@ func Test_NewSendReceiverWalletsSMSInvitationJob(t *testing.T) {
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
 
+	ctx := context.Background()
+
 	messageDryRunClient, err := message.NewDryRunClient()
 	require.NoError(t, err)
 	dryRunDispatcher := message.NewMessageDispatcher()
-	dryRunDispatcher.RegisterClient(message.MessageChannelSMS, messageDryRunClient)
-	dryRunDispatcher.RegisterClient(message.MessageChannelEmail, messageDryRunClient)
+	dryRunDispatcher.RegisterClient(ctx, message.MessageChannelSMS, messageDryRunClient)
+	dryRunDispatcher.RegisterClient(ctx, message.MessageChannelEmail, messageDryRunClient)
 
 	t.Run("exits with status 1 when Messenger Client is missing config", func(t *testing.T) {
 		if os.Getenv("TEST_FATAL") == "1" {
