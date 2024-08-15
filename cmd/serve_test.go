@@ -191,9 +191,9 @@ func Test_serve(t *testing.T) {
 	serveOpts.CrashTrackerClient = crashTrackerClient
 
 	emailOpts := di.EmailClientOptions{EmailType: message.MessengerTypeDryRun}
-	messengerClient, err := di.NewEmailClient(emailOpts)
+	emailClient, err := di.NewEmailClient(emailOpts)
 	require.NoError(t, err)
-	serveOpts.EmailMessengerClient = messengerClient
+	serveOpts.EmailMessengerClient = emailClient
 
 	smsOpts := di.SMSClientOptions{SMSType: message.MessengerTypeDryRun}
 
@@ -227,7 +227,7 @@ func Test_serve(t *testing.T) {
 
 	serveTenantOpts := serveadmin.ServeOptions{
 		Environment:                             "test",
-		EmailMessengerClient:                    messengerClient,
+		EmailMessengerClient:                    emailClient,
 		AdminDBConnectionPool:                   dbConnectionPool,
 		MTNDBConnectionPool:                     dbConnectionPool,
 		CrashTrackerClient:                      crashTrackerClient,
