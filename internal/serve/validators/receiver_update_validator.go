@@ -57,7 +57,9 @@ func (ur *UpdateReceiverValidator) ValidateReceiver(updateReceiverRequest *Updat
 	}
 
 	if updateReceiverRequest.Email != "" {
-		ur.Check(utils.ValidateEmail(email) == nil, "email", "invalid email format")
+		var err error
+		email, err = utils.SanitizeAndValidateEmail(email)
+		ur.Check(err == nil, "email", "invalid email format")
 	}
 
 	if updateReceiverRequest.ExternalID != "" {

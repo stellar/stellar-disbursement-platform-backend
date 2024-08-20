@@ -23,9 +23,13 @@ type User struct {
 func (u *User) Validate() error {
 	if u.Email == "" {
 		return fmt.Errorf("email is required")
-	} else if err := utils.ValidateEmail(u.Email); err != nil {
+	}
+
+	sanitizedEmail, err := utils.SanitizeAndValidateEmail(u.Email)
+	if err != nil {
 		return fmt.Errorf("email is invalid: %w", err)
 	}
+	u.Email = sanitizedEmail
 
 	if u.FirstName == "" {
 		return fmt.Errorf("first name is required")

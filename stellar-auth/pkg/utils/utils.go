@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/big"
 	"regexp"
+	"strings"
 )
 
 const (
@@ -31,6 +32,12 @@ func StringWithCharset(length int, charset string) (string, error) {
 // RxEmail is a regex used to validate e-mail addresses, according with the reference https://www.alexedwards.net/blog/validation-snippets-for-go#email-validation.
 // It's free to use under the [MIT License](https://opensource.org/licenses/MIT)
 var rxEmail = regexp.MustCompile("^[a-zA-Z0-9.!#$%&'*+\\/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$")
+
+func SanitizeAndValidateEmail(email string) (string, error) {
+	email = strings.ToLower(strings.TrimSpace(email))
+
+	return email, ValidateEmail(email)
+}
 
 func ValidateEmail(email string) error {
 	if email == "" {

@@ -348,9 +348,11 @@ func (r *ReceiverModel) Update(ctx context.Context, sqlExec db.SQLExecuter, ID s
 	args := []interface{}{}
 	fields := []string{}
 	if receiverUpdate.Email != "" {
-		if err := utils.ValidateEmail(receiverUpdate.Email); err != nil {
+		sanitizedEmail, err := utils.SanitizeAndValidateEmail(receiverUpdate.Email)
+		if err != nil {
 			return fmt.Errorf("error validating email: %w", err)
 		}
+		receiverUpdate.Email = sanitizedEmail
 
 		fields = append(fields, "email = ?")
 		args = append(args, receiverUpdate.Email)

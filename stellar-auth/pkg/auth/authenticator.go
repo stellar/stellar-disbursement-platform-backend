@@ -68,7 +68,7 @@ func (a *defaultAuthenticator) ValidateCredentials(ctx context.Context, email, p
 		FROM
 			auth_users u
 		WHERE
-			email = $1 AND is_active = true
+			LOWER(email) = $1 AND is_active = true
 	`
 
 	au := authUser{}
@@ -128,7 +128,7 @@ func (a *defaultAuthenticator) CreateUser(ctx context.Context, user *User, passw
 		INSERT INTO auth_users
 			(email, encrypted_password, first_name, last_name, roles, is_owner)
 		VALUES
-			($1, $2, $3, $4, $5, $6)
+			(LOWER($1), $2, $3, $4, $5, $6)
 		RETURNING id
 	`
 
@@ -173,12 +173,13 @@ func (a *defaultAuthenticator) UpdateUser(ctx context.Context, ID, firstName, la
 	}
 
 	if email != "" {
-		if err := utils.ValidateEmail(email); err != nil {
+		sanitizedEmail, err := utils.SanitizeAndValidateEmail(email)
+		if err != nil {
 			return fmt.Errorf("error validating email: %w", err)
 		}
 
 		fields = append(fields, "email = ?")
-		args = append(args, email)
+		args = append(args, sanitizedEmail)
 	}
 
 	if password != "" {
@@ -266,7 +267,7 @@ func (a *defaultAuthenticator) ForgotPassword(ctx context.Context, email string)
 			SELECT 1
 			FROM auth_user_password_reset ar
 			INNER JOIN auth_users au ON ar.auth_user_id = au.id
-			WHERE au.email = $1
+			WHERE LOWER(au.email) = $1
 			AND ar.is_valid = true
 			AND (ar.created_at + INTERVAL '20 minutes') > now()
 		)
@@ -283,7 +284,7 @@ func (a *defaultAuthenticator) ForgotPassword(ctx context.Context, email string)
 
 	q := `
 		WITH auth_user_reset_token_info AS (
-			SELECT id, $2 as reset_token FROM auth_users WHERE email = $1
+			SELECT id, $2 as reset_token FROM auth_users WHERE LOWER(email) = $1
 		)
 		INSERT INTO
 			auth_user_password_reset (auth_user_id, token)
@@ -412,7 +413,7 @@ func (a *defaultAuthenticator) GetAllUsers(ctx context.Context) ([]User, error) 
 			id,
 			first_name,
 			last_name,
-			email,
+			LOWER(email),
 			roles,
 			is_owner,
 			is_active
@@ -455,7 +456,7 @@ func (a *defaultAuthenticator) GetUser(ctx context.Context, userID string) (*Use
 		SELECT
 			first_name,
 			last_name,
-			email
+			LOWER(email)
 		FROM
 			auth_users
 		WHERE

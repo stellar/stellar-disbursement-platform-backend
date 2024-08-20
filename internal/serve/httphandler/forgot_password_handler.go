@@ -76,6 +76,8 @@ func (h ForgotPasswordHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 
 	// validate request
 	v := validators.NewValidator()
+	/*forgotPasswordRequest.Email, err = utils.SanitizeAndValidateEmail(forgotPasswordRequest.Email)
+	v.CheckError(err, "email", "email is invalid")*/
 
 	v.Check(forgotPasswordRequest.Email != "", "email", "email is required")
 

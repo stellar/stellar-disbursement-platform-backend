@@ -96,8 +96,8 @@ func NewAWSSESClient(accessKeyID, secretAccessKey, region, senderID string) (*aw
 		return nil, fmt.Errorf("aws region is empty")
 	}
 
-	senderID = strings.TrimSpace(senderID)
-	if err := utils.ValidateEmail(senderID); err != nil {
+	senderID, err := utils.SanitizeAndValidateEmail(senderID)
+	if err != nil {
 		return nil, fmt.Errorf("aws SES (email) senderID is invalid: %w", err)
 	}
 

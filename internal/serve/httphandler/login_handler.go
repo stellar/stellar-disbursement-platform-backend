@@ -26,9 +26,12 @@ type LoginRequest struct {
 	ReCAPTCHAToken string `json:"recaptcha_token"`
 }
 
-func (r LoginRequest) validate() *httperror.HTTPError {
+func (r *LoginRequest) validate() *httperror.HTTPError {
 	validator := validators.NewValidator()
 
+	/*var err error
+	r.Email, err = utils.SanitizeAndValidateEmail(r.Email)
+	validator.CheckError(err, "email", "email is invalid")*/
 	validator.Check(r.Email != "", "email", "email is required")
 	validator.Check(r.Password != "", "password", "password is required")
 
@@ -52,7 +55,7 @@ type LoginHandler struct {
 	MFADisabled        bool
 }
 
-func (h LoginHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
+func (h *LoginHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 
 	var reqBody LoginRequest
