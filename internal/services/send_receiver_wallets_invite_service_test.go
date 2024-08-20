@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/stellar/go/support/log"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
@@ -160,16 +161,16 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 
 		mockErr := errors.New("unexpected error")
 		messageDispatcherMock.
-			On("SendMessage", message.Message{
+			On("SendMessage", mock.Anything, message.Message{
 				ToPhoneNumber: receiver1.PhoneNumber,
 				Message:       contentWallet1,
-			}, message.MessageChannelSMS).
+			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
 			Return(errors.New("unexpected error")).
 			Once().
-			On("SendMessage", message.Message{
+			On("SendMessage", mock.Anything, message.Message{
 				ToPhoneNumber: receiver2.PhoneNumber,
 				Message:       contentWallet2,
-			}, message.MessageChannelSMS).
+			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
 			Return(nil).
 			Once()
 
@@ -299,16 +300,16 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 		contentWallet2 := fmt.Sprintf("You have a payment waiting for you from the MyCustomAid. Click %s to register.", deepLink2)
 
 		messageDispatcherMock.
-			On("SendMessage", message.Message{
+			On("SendMessage", mock.Anything, message.Message{
 				ToPhoneNumber: receiver1.PhoneNumber,
 				Message:       contentWallet1,
-			}, message.MessageChannelSMS).
+			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
 			Return(nil).
 			Once().
-			On("SendMessage", message.Message{
+			On("SendMessage", mock.Anything, message.Message{
 				ToPhoneNumber: receiver2.PhoneNumber,
 				Message:       contentWallet2,
-			}, message.MessageChannelSMS).
+			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
 			Return(nil).
 			Once()
 
@@ -434,16 +435,16 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 		contentWallet2 := fmt.Sprintf("%s %s", customInvitationMessage, deepLink2)
 
 		messageDispatcherMock.
-			On("SendMessage", message.Message{
+			On("SendMessage", mock.Anything, message.Message{
 				ToPhoneNumber: receiver1.PhoneNumber,
 				Message:       contentWallet1,
-			}, message.MessageChannelSMS).
+			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
 			Return(nil).
 			Once().
-			On("SendMessage", message.Message{
+			On("SendMessage", mock.Anything, message.Message{
 				ToPhoneNumber: receiver2.PhoneNumber,
 				Message:       contentWallet2,
-			}, message.MessageChannelSMS).
+			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
 			Return(nil).
 			Once()
 
@@ -727,10 +728,10 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 		contentWallet1 := fmt.Sprintf("You have a payment waiting for you from the MyCustomAid. Click %s to register.", deepLink1)
 
 		messageDispatcherMock.
-			On("SendMessage", message.Message{
+			On("SendMessage", mock.Anything, message.Message{
 				ToPhoneNumber: receiver1.PhoneNumber,
 				Message:       contentWallet1,
-			}, message.MessageChannelSMS).
+			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
 			Return(nil).
 			Once()
 
@@ -845,16 +846,16 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 		contentDisbursement4 := fmt.Sprintf("%s %s", disbursement4.SMSRegistrationMessageTemplate, deepLink2)
 
 		messageDispatcherMock.
-			On("SendMessage", message.Message{
+			On("SendMessage", mock.Anything, message.Message{
 				ToPhoneNumber: receiver1.PhoneNumber,
 				Message:       contentDisbursement3,
-			}, message.MessageChannelSMS).
+			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
 			Return(nil).
 			Once().
-			On("SendMessage", message.Message{
+			On("SendMessage", mock.Anything, message.Message{
 				ToPhoneNumber: receiver2.PhoneNumber,
 				Message:       contentDisbursement4,
-			}, message.MessageChannelSMS).
+			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
 			Return(nil).
 			Once()
 
@@ -974,10 +975,10 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 		contentDisbursement := fmt.Sprintf("%s %s", disbursement.SMSRegistrationMessageTemplate, deepLink1)
 
 		messageDispatcherMock.
-			On("SendMessage", message.Message{
+			On("SendMessage", mock.Anything, message.Message{
 				ToPhoneNumber: receiver1.PhoneNumber,
 				Message:       contentDisbursement,
-			}, message.MessageChannelSMS).
+			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
 			Return(nil).
 			Once()
 

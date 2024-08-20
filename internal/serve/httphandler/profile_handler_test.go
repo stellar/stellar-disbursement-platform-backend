@@ -1135,7 +1135,8 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 				"is_approval_required": false,
 				"privacy_policy_link": null,
 				"sms_resend_interval": 0,
-				"payment_cancellation_period_days": 0
+				"payment_cancellation_period_days": 0,
+				"message_channel_priority": ["SMS", "EMAIL"]
 			}
 		`, newDistAccountJSON(t, defaultTenantDistAcc), defaultTenantDistAcc)
 
@@ -1173,7 +1174,8 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 				"sms_registration_message_template": "My custom receiver wallet registration invite. MyOrg 👋",
 				"sms_resend_interval": 0,
 				"payment_cancellation_period_days": 0,
-				"privacy_policy_link": null
+				"privacy_policy_link": null,
+				"message_channel_priority": ["SMS", "EMAIL"]
 			}
 		`, newDistAccountJSON(t, defaultTenantDistAcc), defaultTenantDistAcc)
 
@@ -1208,7 +1210,8 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 				"otp_message_template": "Here's your OTP Code to complete your registration. MyOrg 👋",
 				"sms_resend_interval": 0,
 				"payment_cancellation_period_days": 0,
-				"privacy_policy_link": null
+				"privacy_policy_link": null,
+				"message_channel_priority": ["SMS", "EMAIL"]
 			}
 		`, newDistAccountJSON(t, defaultTenantDistAcc), defaultTenantDistAcc)
 
@@ -1247,7 +1250,8 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 				"is_approval_required":false,
 				"sms_resend_interval": 2,
 				"payment_cancellation_period_days": 0,
-				"privacy_policy_link": null
+				"privacy_policy_link": null,
+				"message_channel_priority": ["SMS", "EMAIL"]
 			}
 		`, newDistAccountJSON(t, defaultTenantDistAcc), defaultTenantDistAcc)
 
@@ -1286,7 +1290,8 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 				"is_approval_required":false,
 				"sms_resend_interval": 0,
 				"payment_cancellation_period_days": 5,
-				"privacy_policy_link": null
+				"privacy_policy_link": null,
+				"message_channel_priority": ["SMS", "EMAIL"]
 			}
 		`, newDistAccountJSON(t, defaultTenantDistAcc), defaultTenantDistAcc)
 
@@ -1325,7 +1330,8 @@ func Test_ProfileHandler_GetOrganizationInfo(t *testing.T) {
 				"is_approval_required":false,
 				"sms_resend_interval": 0,
 				"payment_cancellation_period_days": 0,
-				"privacy_policy_link": "https://example.com/privacy-policy"
+				"privacy_policy_link": "https://example.com/privacy-policy",
+				"message_channel_priority": ["SMS", "EMAIL"]
 			}
 		`, newDistAccountJSON(t, defaultTenantDistAcc), defaultTenantDistAcc)
 

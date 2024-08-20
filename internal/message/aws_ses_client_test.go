@@ -57,7 +57,7 @@ func Test_NewAWSSESClient(t *testing.T) {
 func Test_AWSSES_SendMessage_messageIsInvalid(t *testing.T) {
 	var mAWS MessengerClient = &awsSESClient{}
 	err := mAWS.SendMessage(Message{})
-	require.EqualError(t, err, "validating message to send an email through AWS: invalid message: email cannot be empty")
+	require.EqualError(t, err, "validating message to send an email through AWS: invalid e-mail: invalid email format: email cannot be empty")
 }
 
 func Test_AWSSES_SendMessage_errorIsHandledCorrectly(t *testing.T) {

@@ -168,11 +168,15 @@ func Test_ReceiverSendOTPHandler_ServeHTTP(t *testing.T) {
 		}
 		req = req.WithContext(context.WithValue(req.Context(), anchorplatform.SEP24ClaimsContextKey, validClaims))
 
-		mockMessageDispatcher.On("SendMessage", mock.AnythingOfType("message.Message"), message.MessageChannelSMS).
+		mockMessageDispatcher.
+			On("SendMessage",
+				mock.Anything,
+				mock.AnythingOfType("message.Message"),
+				[]message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
 			Return(nil).
 			Once().
 			Run(func(args mock.Arguments) {
-				msg := args.Get(0).(message.Message)
+				msg := args.Get(1).(message.Message)
 				assert.Contains(t, msg.Message, "is your MyCustomAid phone verification code.")
 				assert.Regexp(t, regexp.MustCompile(`^\d{6}\s.+$`), msg.Message)
 			})
@@ -212,11 +216,15 @@ func Test_ReceiverSendOTPHandler_ServeHTTP(t *testing.T) {
 		err = models.Organizations.Update(ctx, &data.OrganizationUpdate{OTPMessageTemplate: &customOTPMessage})
 		require.NoError(t, err)
 
-		mockMessageDispatcher.On("SendMessage", mock.AnythingOfType("message.Message"), message.MessageChannelSMS).
+		mockMessageDispatcher.
+			On("SendMessage",
+				mock.Anything,
+				mock.AnythingOfType("message.Message"),
+				[]message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
 			Return(nil).
 			Once().
 			Run(func(args mock.Arguments) {
-				msg := args.Get(0).(message.Message)
+				msg := args.Get(1).(message.Message)
 				assert.Contains(t, msg.Message, customOTPMessage)
 				assert.Regexp(t, regexp.MustCompile(`^\d{6}\s.+$`), msg.Message)
 			})
@@ -251,7 +259,11 @@ func Test_ReceiverSendOTPHandler_ServeHTTP(t *testing.T) {
 		}
 		req = req.WithContext(context.WithValue(req.Context(), anchorplatform.SEP24ClaimsContextKey, validClaims))
 
-		mockMessageDispatcher.On("SendMessage", mock.AnythingOfType("message.Message"), message.MessageChannelSMS).
+		mockMessageDispatcher.
+			On("SendMessage",
+				mock.Anything,
+				mock.AnythingOfType("message.Message"),
+				[]message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
 			Return(errors.New("error sending message")).
 			Once()
 

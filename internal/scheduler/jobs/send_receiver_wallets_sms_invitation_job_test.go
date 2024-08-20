@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
@@ -233,16 +234,16 @@ func Test_SendReceiverWalletsSMSInvitationJob_Execute(t *testing.T) {
 			On("GetClient", message.MessageChannelSMS).
 			Return(messengerClientMock, nil).
 			Twice().
-			On("SendMessage", message.Message{
+			On("SendMessage", mock.Anything, message.Message{
 				ToPhoneNumber: receiver1.PhoneNumber,
 				Message:       contentWallet1,
-			}, message.MessageChannelSMS).
+			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
 			Return(mockErr).
 			Once().
-			On("SendMessage", message.Message{
+			On("SendMessage", mock.Anything, message.Message{
 				ToPhoneNumber: receiver2.PhoneNumber,
 				Message:       contentWallet2,
-			}, message.MessageChannelSMS).
+			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
 			Return(nil).
 			Once()
 		messengerClientMock.

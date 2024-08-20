@@ -48,17 +48,17 @@ func (_m *MockMessageDispatcher) RegisterClient(ctx context.Context, channel Mes
 	_m.Called(ctx, channel, client)
 }
 
-// SendMessage provides a mock function with given fields: message, channel
-func (_m *MockMessageDispatcher) SendMessage(message Message, channel MessageChannel) error {
-	ret := _m.Called(message, channel)
+// SendMessage provides a mock function with given fields: ctx, message, channelPriority
+func (_m *MockMessageDispatcher) SendMessage(ctx context.Context, message Message, channelPriority []MessageChannel) error {
+	ret := _m.Called(ctx, message, channelPriority)
 
 	if len(ret) == 0 {
 		panic("no return value specified for SendMessage")
 	}
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(Message, MessageChannel) error); ok {
-		r0 = rf(message, channel)
+	if rf, ok := ret.Get(0).(func(context.Context, Message, []MessageChannel) error); ok {
+		r0 = rf(ctx, message, channelPriority)
 	} else {
 		r0 = ret.Error(0)
 	}

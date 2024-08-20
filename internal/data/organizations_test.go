@@ -14,6 +14,7 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 )
 
 func Test_Organizations_DatabaseTriggers(t *testing.T) {
@@ -75,6 +76,7 @@ func Test_Organizations_Get(t *testing.T) {
 		assert.NotEmpty(t, gotOrganization.UpdatedAt)
 		assert.False(t, gotOrganization.IsApprovalRequired)
 		assert.Nil(t, gotOrganization.PrivacyPolicyLink)
+		assert.Equal(t, MessageChannelPriority{"SMS", "EMAIL"}, gotOrganization.MessageChannelPriority)
 	})
 }
 
@@ -194,27 +196,18 @@ func Test_Organizations_Update(t *testing.T) {
 
 	ctx := context.Background()
 
-	resetOrganizationInfo := func(t *testing.T, ctx context.Context) {
-		const q = `
-			UPDATE
-				organizations
-			SET
-				name = 'MyCustomAid', logo = NULL, timezone_utc_offset = '+00:00',
-				sms_registration_message_template = DEFAULT, otp_message_template = DEFAULT`
-		_, err := dbConnectionPool.ExecContext(ctx, q)
-		require.NoError(t, err)
-	}
-
 	organizationModel := &OrganizationModel{dbConnectionPool: dbConnectionPool}
 
 	t.Run("returns error with invalid OrganizationUpdate", func(t *testing.T) {
+		defer resetOrganizationInfo(t, ctx, dbConnectionPool)
+
 		ou := &OrganizationUpdate{}
 		err := organizationModel.Update(ctx, ou)
 		assert.EqualError(t, err, "invalid organization update: name, timezone UTC offset, approval workflow flag, SMS Resend Interval, SMS invite template, OTP message template, privacy policy link or logo is required")
 	})
 
 	t.Run("updates only organization's name successfully", func(t *testing.T) {
-		resetOrganizationInfo(t, ctx)
+		defer resetOrganizationInfo(t, ctx, dbConnectionPool)
 
 		o, err := organizationModel.Get(ctx)
 		require.NoError(t, err)
@@ -237,7 +230,7 @@ func Test_Organizations_Update(t *testing.T) {
 	})
 
 	t.Run("updates only organization's timezone UTC offset successfully", func(t *testing.T) {
-		resetOrganizationInfo(t, ctx)
+		defer resetOrganizationInfo(t, ctx, dbConnectionPool)
 
 		o, err := organizationModel.Get(ctx)
 		require.NoError(t, err)
@@ -260,7 +253,7 @@ func Test_Organizations_Update(t *testing.T) {
 	})
 
 	t.Run("updates only organization's logo successfully", func(t *testing.T) {
-		resetOrganizationInfo(t, ctx)
+		defer resetOrganizationInfo(t, ctx, dbConnectionPool)
 
 		o, err := organizationModel.Get(ctx)
 		require.NoError(t, err)
@@ -286,7 +279,7 @@ func Test_Organizations_Update(t *testing.T) {
 	})
 
 	t.Run("updates only organization's is_approval_required successfully", func(t *testing.T) {
-		resetOrganizationInfo(t, ctx)
+		defer resetOrganizationInfo(t, ctx, dbConnectionPool)
 
 		o, err := organizationModel.Get(ctx)
 		require.NoError(t, err)
@@ -304,7 +297,7 @@ func Test_Organizations_Update(t *testing.T) {
 	})
 
 	t.Run("updates organization's name, timezone UTC offset and logo successfully", func(t *testing.T) {
-		resetOrganizationInfo(t, ctx)
+		defer resetOrganizationInfo(t, ctx, dbConnectionPool)
 
 		o, err := organizationModel.Get(ctx)
 		require.NoError(t, err)
@@ -332,7 +325,7 @@ func Test_Organizations_Update(t *testing.T) {
 	})
 
 	t.Run("updates the organization's SMSRegistrationMessageTemplate", func(t *testing.T) {
-		resetOrganizationInfo(t, ctx)
+		defer resetOrganizationInfo(t, ctx, dbConnectionPool)
 
 		defaultMessage := "You have a payment waiting for you from the {{.OrganizationName}}. Click {{.RegistrationLink}} to register."
 		o, err := organizationModel.Get(ctx)
@@ -369,7 +362,7 @@ func Test_Organizations_Update(t *testing.T) {
 	})
 
 	t.Run("updates the organization's OTPMessageTemplate", func(t *testing.T) {
-		resetOrganizationInfo(t, ctx)
+		defer resetOrganizationInfo(t, ctx, dbConnectionPool)
 
 		defaultMessage := "{{.OTP}} is your {{.OrganizationName}} phone verification code."
 		o, err := organizationModel.Get(ctx)
@@ -406,7 +399,7 @@ func Test_Organizations_Update(t *testing.T) {
 	})
 
 	t.Run("updates the organization's SMSResendInterval", func(t *testing.T) {
-		resetOrganizationInfo(t, ctx)
+		defer resetOrganizationInfo(t, ctx, dbConnectionPool)
 
 		o, err := organizationModel.Get(ctx)
 		require.NoError(t, err)
@@ -431,7 +424,7 @@ func Test_Organizations_Update(t *testing.T) {
 	})
 
 	t.Run("updates the organization's PaymentCancellationPeriod", func(t *testing.T) {
-		resetOrganizationInfo(t, ctx)
+		defer resetOrganizationInfo(t, ctx, dbConnectionPool)
 
 		o, err := organizationModel.Get(ctx)
 		require.NoError(t, err)
@@ -456,7 +449,7 @@ func Test_Organizations_Update(t *testing.T) {
 	})
 
 	t.Run("updates the organization's PrivacyPolicyLink", func(t *testing.T) {
-		resetOrganizationInfo(t, ctx)
+		defer resetOrganizationInfo(t, ctx, dbConnectionPool)
 
 		o, err := organizationModel.Get(ctx)
 		require.NoError(t, err)
@@ -479,4 +472,65 @@ func Test_Organizations_Update(t *testing.T) {
 		require.NoError(t, err)
 		assert.Nil(t, o.PrivacyPolicyLink)
 	})
+}
+
+func TestOrganizationModel_UpdateMessageChannelPriority(t *testing.T) {
+	dbt := dbtest.Open(t)
+	defer dbt.Close()
+
+	dbConnectionPool, outerErr := db.OpenDBConnectionPool(dbt.DSN)
+	require.NoError(t, outerErr)
+	defer dbConnectionPool.Close()
+
+	ctx := context.Background()
+	organizationModel := &OrganizationModel{dbConnectionPool: dbConnectionPool}
+
+	t.Run("succeeds when all channels are included", func(t *testing.T) {
+		defer resetOrganizationInfo(t, ctx, dbConnectionPool)
+
+		_, err := dbConnectionPool.ExecContext(ctx, "UPDATE organizations SET message_channel_priority = '{\"SMS\", \"EMAIL\"}'")
+		require.NoError(t, err)
+
+		// Verify the update
+		org, err := organizationModel.Get(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, MessageChannelPriority{message.MessageChannelSMS, message.MessageChannelEmail}, org.MessageChannelPriority)
+	})
+
+	t.Run("fails when not all channels are included", func(t *testing.T) {
+		defer resetOrganizationInfo(t, ctx, dbConnectionPool)
+
+		_, err := dbConnectionPool.ExecContext(ctx, "UPDATE organizations SET message_channel_priority = '{\"SMS\"}'")
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "message_channel_priority must include all possible message_channel values")
+	})
+
+	t.Run("fails when duplicate channels are included", func(t *testing.T) {
+		defer resetOrganizationInfo(t, ctx, dbConnectionPool)
+
+		_, err := dbConnectionPool.ExecContext(ctx, "UPDATE organizations SET message_channel_priority = '{\"SMS\", \"EMAIL\", \"SMS\"}'")
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "message_channel_priority must not contain duplicate values: {SMS}")
+	})
+
+	t.Run("fails when invalid channel is included", func(t *testing.T) {
+		defer resetOrganizationInfo(t, ctx, dbConnectionPool)
+
+		_, err := dbConnectionPool.ExecContext(ctx, "UPDATE organizations SET message_channel_priority = '{\"SMS\", \"EMAIL\", \"WHATSAPP\"}'")
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "invalid input value for enum message_channel: \"WHATSAPP\"")
+	})
+}
+
+func resetOrganizationInfo(t *testing.T, ctx context.Context, dbConnectionPool db.DBConnectionPool) {
+	t.Helper()
+
+	const q = `
+			UPDATE
+				organizations
+			SET
+				name = 'MyCustomAid', logo = NULL, timezone_utc_offset = '+00:00',
+				sms_registration_message_template = DEFAULT, otp_message_template = DEFAULT, message_channel_priority = '{"SMS", "EMAIL"}'`
+	_, err := dbConnectionPool.ExecContext(ctx, q)
+	require.NoError(t, err)
 }
