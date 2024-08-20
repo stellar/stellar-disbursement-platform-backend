@@ -158,7 +158,7 @@ func (h ReceiverSendOTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request
 
 		// TODO: SDP-1296 - support multiple channels for OTP
 		log.Ctx(ctx).Infof("sending OTP message to phone number: %s", truncatedPhoneNumber)
-		err = h.MessageDispatcher.SendMessage(msg, message.MessageChannelSMS)
+		err = h.MessageDispatcher.SendMessage(ctx, msg, organization.MessageChannelPriority)
 		if err != nil {
 			httperror.InternalError(ctx, "Cannot send OTP message", err, nil).Render(w)
 			return

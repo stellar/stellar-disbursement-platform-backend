@@ -15,7 +15,7 @@ type Message struct {
 }
 
 // ValidateFor validates if the message object is valid for the given messengerType.
-func (s *Message) ValidateFor(messengerType MessengerType) error {
+func (s Message) ValidateFor(messengerType MessengerType) error {
 	if messengerType.IsSMS() {
 		if err := utils.ValidatePhoneNumber(s.ToPhoneNumber); err != nil {
 			return fmt.Errorf("invalid message: %w", err)
@@ -23,12 +23,8 @@ func (s *Message) ValidateFor(messengerType MessengerType) error {
 	}
 
 	if messengerType.IsEmail() {
-		if err := utils.ValidateEmail(s.ToEmail); err != nil {
-			return fmt.Errorf("invalid message: %w", err)
-		}
-
-		if strings.Trim(s.Title, " ") == "" {
-			return fmt.Errorf("title is empty")
+		if err := s.IsValidForEmail(); err != nil {
+			return fmt.Errorf("invalid e-mail: %w", err)
 		}
 	}
 
@@ -37,4 +33,37 @@ func (s *Message) ValidateFor(messengerType MessengerType) error {
 	}
 
 	return nil
+}
+
+func (s Message) IsValidForEmail() error {
+	if err := utils.ValidateEmail(s.ToEmail); err != nil {
+		return fmt.Errorf("invalid email format: %w", err)
+	}
+
+	if strings.TrimSpace(s.Title) == "" {
+		return fmt.Errorf("title is empty")
+	}
+	return nil
+}
+
+func (s Message) SupportedChannels() []MessageChannel {
+	var supportedChannels []MessageChannel
+
+	if utils.ValidatePhoneNumber(s.ToPhoneNumber) == nil {
+		supportedChannels = append(supportedChannels, MessageChannelSMS)
+	}
+
+	if err := s.IsValidForEmail(); err == nil {
+		supportedChannels = append(supportedChannels, MessageChannelEmail)
+	}
+
+	return supportedChannels
+}
+
+func (s Message) String() string {
+	return fmt.Sprintf("Message{ToPhoneNumber: %s, ToEmail: %s, Message: %s, Title: %s}",
+		utils.TruncateString(s.ToPhoneNumber, 3),
+		utils.TruncateString(s.ToEmail, 3),
+		utils.TruncateString(s.Message, 3),
+		utils.TruncateString(s.Title, 3))
 }

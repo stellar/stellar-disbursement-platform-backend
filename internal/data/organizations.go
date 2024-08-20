@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"database/sql/driver"
 	"errors"
 	"fmt"
 	"image"
@@ -20,6 +21,7 @@ import (
 	_ "image/png"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 )
 
 const (
@@ -42,12 +44,13 @@ type Organization struct {
 	// When the {{.OTP}} is not found in the message, it's added at the beginning of the message.
 	// Example:
 	//	{{.OTP}} OTPMessageTemplate
-	OTPMessageTemplate string    `json:"otp_message_template" db:"otp_message_template"`
-	PrivacyPolicyLink  *string   `json:"privacy_policy_link" db:"privacy_policy_link"`
-	Logo               []byte    `db:"logo"`
-	IsApprovalRequired bool      `json:"is_approval_required" db:"is_approval_required"`
-	CreatedAt          time.Time `json:"created_at" db:"created_at"`
-	UpdatedAt          time.Time `json:"updated_at" db:"updated_at"`
+	OTPMessageTemplate     string                 `json:"otp_message_template" db:"otp_message_template"`
+	PrivacyPolicyLink      *string                `json:"privacy_policy_link" db:"privacy_policy_link"`
+	Logo                   []byte                 `db:"logo"`
+	IsApprovalRequired     bool                   `json:"is_approval_required" db:"is_approval_required"`
+	MessageChannelPriority MessageChannelPriority `json:"message_channel_priority" db:"message_channel_priority"`
+	CreatedAt              time.Time              `json:"created_at" db:"created_at"`
+	UpdatedAt              time.Time              `json:"updated_at" db:"updated_at"`
 }
 
 type OrganizationUpdate struct {
@@ -252,3 +255,52 @@ func (om *OrganizationModel) Update(ctx context.Context, ou *OrganizationUpdate)
 
 	return nil
 }
+
+type MessageChannelPriority []message.MessageChannel
+
+var DefaultMessageChannelPriority = MessageChannelPriority{
+	message.MessageChannelSMS,
+	message.MessageChannelEmail,
+}
+
+func (mcp *MessageChannelPriority) Scan(src interface{}) error {
+	if src == nil {
+		*mcp = nil
+		return nil
+	}
+
+	byteValue, ok := src.([]byte)
+	if !ok {
+		return fmt.Errorf("unexpected type for MessageChannelPriority %T", src)
+	}
+
+	// Convert []byte to string and remove the curly braces. E.g. `{SMS,EMAIL}`
+	strValue := strings.Trim(string(byteValue), "{}")
+
+	// Split the string into individual channel values. E.g. `SMS,EMAIL` -> ["SMS", "EMAIL"]
+	channels := strings.Split(strValue, ",")
+
+	*mcp = make(MessageChannelPriority, len(channels))
+	for i, ch := range channels {
+		(*mcp)[i] = message.MessageChannel(strings.TrimSpace(ch))
+	}
+
+	return nil
+}
+
+var _ sql.Scanner = (*MessageChannelPriority)(nil)
+
+func (mcp MessageChannelPriority) Value() (driver.Value, error) {
+	if len(mcp) == 0 {
+		return "{}", nil
+	}
+
+	channels := make([]string, len(mcp))
+	for i, ch := range mcp {
+		channels[i] = string(ch)
+	}
+
+	return "{" + strings.Join(channels, ",") + "}", nil
+}
+
+var _ driver.Valuer = MessageChannelPriority{}

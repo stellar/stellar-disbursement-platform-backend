@@ -182,7 +182,7 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context, receive
 
 		// We assume that the message will be sent at first
 		msgToInsert.Status = data.SuccessMessageStatus
-		if err := s.messageDispatcher.SendMessage(msg, messageChannel); err != nil {
+		if err := s.messageDispatcher.SendMessage(ctx, msg, organization.MessageChannelPriority); err != nil {
 			msg := fmt.Sprintf(
 				"error sending message to receiver ID %s for receiver wallet ID %s using messenger type %s",
 				rwa.ReceiverWallet.Receiver.ID, rwa.ReceiverWallet.ID, messageType,
