@@ -488,7 +488,7 @@ func TestOrganizationModel_UpdateMessageChannelPriority(t *testing.T) {
 	t.Run("succeeds when all channels are included", func(t *testing.T) {
 		defer resetOrganizationInfo(t, ctx, dbConnectionPool)
 
-		_, err := dbConnectionPool.ExecContext(ctx, "UPDATE organizations SET message_channel_priority = '{\"SMS\", \"EMAIL\"}'")
+		_, err := dbConnectionPool.ExecContext(ctx, "UPDATE organizations SET message_channel_priority = $1", DefaultMessageChannelPriority)
 		require.NoError(t, err)
 
 		// Verify the update
@@ -500,7 +500,7 @@ func TestOrganizationModel_UpdateMessageChannelPriority(t *testing.T) {
 	t.Run("fails when not all channels are included", func(t *testing.T) {
 		defer resetOrganizationInfo(t, ctx, dbConnectionPool)
 
-		_, err := dbConnectionPool.ExecContext(ctx, "UPDATE organizations SET message_channel_priority = '{\"SMS\"}'")
+		_, err := dbConnectionPool.ExecContext(ctx, "UPDATE organizations SET message_channel_priority = $1", MessageChannelPriority{"SMS"})
 		require.Error(t, err)
 		assert.ErrorContains(t, err, "message_channel_priority must include all possible message_channel values")
 	})
@@ -508,7 +508,7 @@ func TestOrganizationModel_UpdateMessageChannelPriority(t *testing.T) {
 	t.Run("fails when duplicate channels are included", func(t *testing.T) {
 		defer resetOrganizationInfo(t, ctx, dbConnectionPool)
 
-		_, err := dbConnectionPool.ExecContext(ctx, "UPDATE organizations SET message_channel_priority = '{\"SMS\", \"EMAIL\", \"SMS\"}'")
+		_, err := dbConnectionPool.ExecContext(ctx, "UPDATE organizations SET message_channel_priority = $1", MessageChannelPriority{"SMS", "EMAIL", "SMS"})
 		require.Error(t, err)
 		assert.ErrorContains(t, err, "message_channel_priority must not contain duplicate values: {SMS}")
 	})
@@ -516,7 +516,7 @@ func TestOrganizationModel_UpdateMessageChannelPriority(t *testing.T) {
 	t.Run("fails when invalid channel is included", func(t *testing.T) {
 		defer resetOrganizationInfo(t, ctx, dbConnectionPool)
 
-		_, err := dbConnectionPool.ExecContext(ctx, "UPDATE organizations SET message_channel_priority = '{\"SMS\", \"EMAIL\", \"WHATSAPP\"}'")
+		_, err := dbConnectionPool.ExecContext(ctx, "UPDATE organizations SET message_channel_priority = $1", MessageChannelPriority{"SMS", "WHATSAPP"})
 		require.Error(t, err)
 		assert.ErrorContains(t, err, "invalid input value for enum message_channel: \"WHATSAPP\"")
 	})

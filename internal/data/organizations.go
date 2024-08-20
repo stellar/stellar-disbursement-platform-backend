@@ -258,6 +258,11 @@ func (om *OrganizationModel) Update(ctx context.Context, ou *OrganizationUpdate)
 
 type MessageChannelPriority []message.MessageChannel
 
+var DefaultMessageChannelPriority = MessageChannelPriority{
+	message.MessageChannelSMS,
+	message.MessageChannelEmail,
+}
+
 func (mcp *MessageChannelPriority) Scan(src interface{}) error {
 	if src == nil {
 		*mcp = nil
@@ -283,6 +288,8 @@ func (mcp *MessageChannelPriority) Scan(src interface{}) error {
 	return nil
 }
 
+var _ sql.Scanner = (*MessageChannelPriority)(nil)
+
 func (mcp MessageChannelPriority) Value() (driver.Value, error) {
 	if len(mcp) == 0 {
 		return "{}", nil
@@ -295,3 +302,5 @@ func (mcp MessageChannelPriority) Value() (driver.Value, error) {
 
 	return "{" + strings.Join(channels, ",") + "}", nil
 }
+
+var _ driver.Valuer = MessageChannelPriority{}
