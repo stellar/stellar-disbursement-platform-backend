@@ -367,6 +367,7 @@ func (h ProfileHandler) GetOrganizationInfo(rw http.ResponseWriter, req *http.Re
 		"sms_resend_interval":              0,
 		"payment_cancellation_period_days": 0,
 		"privacy_policy_link":              org.PrivacyPolicyLink,
+		"message_channel_priority":         org.MessageChannelPriority,
 	}
 
 	if org.SMSRegistrationMessageTemplate != data.DefaultSMSRegistrationMessageTemplate {

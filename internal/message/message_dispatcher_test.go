@@ -3,6 +3,7 @@ package message
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -68,50 +69,152 @@ func Test_MessageDispatcher_GetClient(t *testing.T) {
 }
 
 func Test_MessageDispatcher_SendMessage(t *testing.T) {
-	ctx := context.Background()
+	emailMessage := Message{
+		Title:   "Test Title",
+		ToEmail: "mymail@stellar.org",
+		Message: "Test Message",
+	}
 
-	dispatcher := NewMessageDispatcher()
-	message := Message{}
+	smsMessage := Message{
+		ToPhoneNumber: "+14152111111",
+		Message:       "Test Message",
+	}
+
+	multiChannelMessage := Message{
+		Title:         "Test Title",
+		ToEmail:       "mymail@stellar.org",
+		ToPhoneNumber: "+14152111111",
+		Message:       "Test Message",
+	}
+
+	emptyMessage := Message{}
 
 	tests := []struct {
-		name        string
-		channel     MessageChannel
-		setupMock   func(*MessengerClientMock)
-		expectedErr error
+		name              string
+		message           Message
+		channelPriority   []MessageChannel
+		supportedChannels []MessageChannel
+		setupMock         func(emailClientMock *MessengerClientMock, smsClientMock *MessengerClientMock)
+		expectedErr       error
 	}{
 		{
-			name:    "Successful send",
-			channel: MessageChannelEmail,
-			setupMock: func(clientMock *MessengerClientMock) {
-				clientMock.On("SendMessage", message).Return(nil)
+			name:              "fail when no supported channels",
+			message:           emptyMessage,
+			channelPriority:   []MessageChannel{MessageChannelEmail, MessageChannelSMS},
+			supportedChannels: []MessageChannel{},
+			setupMock:         func(emailClientMock *MessengerClientMock, smsClientMock *MessengerClientMock) {},
+			expectedErr:       fmt.Errorf("no valid channel found for message %s", emptyMessage),
+		},
+		{
+			name:              "fail when message with wrong format",
+			message:           emailMessage,
+			channelPriority:   []MessageChannel{MessageChannelSMS},
+			supportedChannels: []MessageChannel{MessageChannelSMS},
+			setupMock: func(emailClientMock *MessengerClientMock, smsClientMock *MessengerClientMock) {
+				smsClientMock.AssertNotCalled(t, "SendMessage", emailMessage)
+				emailClientMock.AssertNotCalled(t, "SendMessage", emailMessage)
+			},
+			expectedErr: fmt.Errorf("unable to send message %s using any of the supported channels [%v]", emailMessage, map[MessageChannel]bool{MessageChannelEmail: true}),
+		},
+		{
+			name:              "successful when single supported channel (e-mail)",
+			message:           emailMessage,
+			channelPriority:   []MessageChannel{MessageChannelEmail, MessageChannelSMS},
+			supportedChannels: []MessageChannel{MessageChannelEmail},
+			setupMock: func(emailClientMock *MessengerClientMock, smsClientMock *MessengerClientMock) {
+				emailClientMock.
+					On("SendMessage", emailMessage).
+					Return(nil).
+					Once()
+
+				smsClientMock.AssertNotCalled(t, "SendMessage", emailMessage)
 			},
 			expectedErr: nil,
 		},
 		{
-			name:        "Client not found",
-			channel:     MessageChannelSMS,
-			setupMock:   func(clientMock *MessengerClientMock) {},
-			expectedErr: errors.New("getting client for channel: no client registered for channel \"SMS\""),
+			name:              "successful when single supported channel (sms)",
+			message:           smsMessage,
+			channelPriority:   []MessageChannel{MessageChannelEmail, MessageChannelSMS},
+			supportedChannels: []MessageChannel{MessageChannelSMS},
+			setupMock: func(emailClientMock *MessengerClientMock, smsClientMock *MessengerClientMock) {
+				smsClientMock.
+					On("SendMessage", smsMessage).
+					Return(nil).
+					Once()
+
+				emailClientMock.AssertNotCalled(t, "SendMessage", smsMessage)
+			},
+			expectedErr: nil,
 		},
 		{
-			name:    "Client error",
-			channel: MessageChannelEmail,
-			setupMock: func(clientMock *MessengerClientMock) {
-				clientMock.On("SendMessage", message).Return(errors.New("send error"))
+			name:              "successful when multiple supported channels",
+			message:           multiChannelMessage,
+			channelPriority:   []MessageChannel{MessageChannelSMS, MessageChannelEmail},
+			supportedChannels: []MessageChannel{MessageChannelEmail, MessageChannelSMS},
+			setupMock: func(emailClientMock *MessengerClientMock, smsClientMock *MessengerClientMock) {
+				smsClientMock.
+					On("SendMessage", multiChannelMessage).
+					Return(nil).
+					Once()
+
+				emailClientMock.AssertNotCalled(t, "SendMessage", multiChannelMessage)
 			},
-			expectedErr: errors.New("send error"),
+			expectedErr: nil,
+		},
+		{
+			name:              "successful when first channel fails (sms) but second succeeds (e-mail)",
+			message:           multiChannelMessage,
+			channelPriority:   []MessageChannel{MessageChannelSMS, MessageChannelEmail},
+			supportedChannels: []MessageChannel{MessageChannelSMS, MessageChannelEmail},
+			setupMock: func(emailClientMock *MessengerClientMock, smsClientMock *MessengerClientMock) {
+				smsClientMock.
+					On("SendMessage", multiChannelMessage).
+					Return(errors.New("send error")).
+					Once()
+
+				emailClientMock.
+					On("SendMessage", multiChannelMessage).
+					Return(nil).
+					Once()
+			},
+			expectedErr: nil,
+		},
+		{
+			name:              "fail when all channels fail",
+			message:           multiChannelMessage,
+			channelPriority:   []MessageChannel{MessageChannelSMS, MessageChannelEmail},
+			supportedChannels: []MessageChannel{MessageChannelSMS, MessageChannelEmail},
+			setupMock: func(emailClientMock *MessengerClientMock, smsClientMock *MessengerClientMock) {
+				emailClientMock.
+					On("SendMessage", multiChannelMessage).
+					Return(errors.New("send error")).
+					Once()
+
+				smsClientMock.
+					On("SendMessage", multiChannelMessage).
+					Return(errors.New("send error")).
+					Once()
+			},
+			expectedErr: fmt.Errorf("unable to send message %s using any of the supported channels [%v]", multiChannelMessage, map[MessageChannel]bool{MessageChannelEmail: true, MessageChannelSMS: true}),
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			client := NewMessengerClientMock(t)
-			client.On("MessengerType").Return(MessengerTypeDryRun).Once()
-			dispatcher.RegisterClient(ctx, MessageChannelEmail, client)
+			ctx := context.Background()
+			dispatcher := NewMessageDispatcher()
 
-			tt.setupMock(client)
+			emailClient := NewMessengerClientMock(t)
+			emailClient.On("MessengerType").Return(MessengerTypeDryRun).Once()
+			dispatcher.RegisterClient(ctx, MessageChannelEmail, emailClient)
 
-			err := dispatcher.SendMessage(message, tt.channel)
+			smsClient := NewMessengerClientMock(t)
+			smsClient.On("MessengerType").Return(MessengerTypeDryRun).Once()
+			dispatcher.RegisterClient(ctx, MessageChannelSMS, smsClient)
+
+			tt.setupMock(emailClient, smsClient)
+
+			err := dispatcher.SendMessage(ctx, tt.message, tt.channelPriority)
 			if tt.expectedErr != nil {
 				assert.EqualError(t, err, tt.expectedErr.Error())
 			} else {
