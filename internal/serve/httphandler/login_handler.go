@@ -26,7 +26,7 @@ type LoginRequest struct {
 	ReCAPTCHAToken string `json:"recaptcha_token"`
 }
 
-func (r *LoginRequest) validate() *httperror.HTTPError {
+func (r LoginRequest) validate() *httperror.HTTPError {
 	validator := validators.NewValidator()
 
 	/*var err error
@@ -55,7 +55,7 @@ type LoginHandler struct {
 	MFADisabled        bool
 }
 
-func (h *LoginHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
+func (h LoginHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 
 	var reqBody LoginRequest

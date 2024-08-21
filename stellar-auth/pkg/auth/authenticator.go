@@ -413,7 +413,7 @@ func (a *defaultAuthenticator) GetAllUsers(ctx context.Context) ([]User, error) 
 			id,
 			first_name,
 			last_name,
-			LOWER(email),
+			LOWER(email) as email,
 			roles,
 			is_owner,
 			is_active
@@ -456,7 +456,7 @@ func (a *defaultAuthenticator) GetUser(ctx context.Context, userID string) (*Use
 		SELECT
 			first_name,
 			last_name,
-			LOWER(email)
+			LOWER(email) as email
 		FROM
 			auth_users
 		WHERE
