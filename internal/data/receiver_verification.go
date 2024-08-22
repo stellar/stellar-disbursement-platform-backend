@@ -13,17 +13,19 @@ import (
 	"golang.org/x/crypto/bcrypt"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 )
 
 type ReceiverVerification struct {
-	ReceiverID        string            `json:"receiver_id" db:"receiver_id"`
-	VerificationField VerificationField `json:"verification_field" db:"verification_field"`
-	HashedValue       string            `json:"hashed_value" db:"hashed_value"`
-	Attempts          int               `json:"attempts" db:"attempts"`
-	CreatedAt         time.Time         `json:"created_at" db:"created_at"`
-	UpdatedAt         time.Time         `json:"updated_at" db:"updated_at"`
-	ConfirmedAt       *time.Time        `json:"confirmed_at" db:"confirmed_at"`
-	FailedAt          *time.Time        `json:"failed_at" db:"failed_at"`
+	ReceiverID          string                  `json:"receiver_id" db:"receiver_id"`
+	VerificationField   VerificationField       `json:"verification_field" db:"verification_field"`
+	HashedValue         string                  `json:"hashed_value" db:"hashed_value"`
+	Attempts            int                     `json:"attempts" db:"attempts"`
+	CreatedAt           time.Time               `json:"created_at" db:"created_at"`
+	UpdatedAt           time.Time               `json:"updated_at" db:"updated_at"`
+	ConfirmedAt         *time.Time              `json:"confirmed_at" db:"confirmed_at"`
+	FailedAt            *time.Time              `json:"failed_at" db:"failed_at"`
+	VerificationChannel *message.MessageChannel `json:"verification_channel" db:"verification_channel"`
 }
 
 type ReceiverVerificationModel struct {
@@ -207,29 +209,68 @@ func (m *ReceiverVerificationModel) UpsertVerificationValue(ctx context.Context,
 	return nil
 }
 
+type ReceiverVerificationUpdate struct {
+	ReceiverID          string                 `db:"receiver_id"`
+	VerificationField   VerificationField      `db:"verification_field"`
+	VerificationChannel message.MessageChannel `db:"verification_channel"`
+	Attempts            *int                   `db:"attempts"`
+	ConfirmedAt         *time.Time             `db:"confirmed_at"`
+	FailedAt            *time.Time             `db:"failed_at"`
+}
+
+func (rvu ReceiverVerificationUpdate) Validate() error {
+	if strings.TrimSpace(rvu.ReceiverID) == "" {
+		return fmt.Errorf("receiver id is required")
+	}
+	if rvu.VerificationField == "" {
+		return fmt.Errorf("verification field is required")
+	}
+	if rvu.VerificationChannel == "" {
+		return fmt.Errorf("verification channel is required")
+	}
+	return nil
+}
+
 // UpdateReceiverVerification updates the attempts, confirmed_at, and failed_at values of a receiver verification.
-func (m *ReceiverVerificationModel) UpdateReceiverVerification(ctx context.Context, receiverVerification ReceiverVerification, sqlExec db.SQLExecuter) error {
+func (m *ReceiverVerificationModel) UpdateReceiverVerification(ctx context.Context, update ReceiverVerificationUpdate, sqlExec db.SQLExecuter) error {
+	if err := update.Validate(); err != nil {
+		return fmt.Errorf("validating receiver verification update: %w", err)
+	}
+
+	fields := []string{}
+	args := []interface{}{}
+
+	if update.Attempts != nil {
+		fields = append(fields, "attempts = ?")
+		args = append(args, update.Attempts)
+	}
+
+	if update.ConfirmedAt != nil {
+		fields = append(fields, "confirmed_at = ?")
+		args = append(args, update.ConfirmedAt)
+	}
+
+	if update.FailedAt != nil {
+		fields = append(fields, "failed_at = ?")
+		args = append(args, update.FailedAt)
+	}
+
 	query := `
 		UPDATE 
 			receiver_verifications
 		SET 
-			attempts = $1,
-			confirmed_at = $2,
-			failed_at = $3
-		WHERE 
-			receiver_id = $4 AND verification_field = $5
+			%s,
+			verification_channel = ?
+		WHERE
+			receiver_id = ? AND
+			verification_field = ?
 	`
 
-	_, err := sqlExec.ExecContext(ctx,
-		query,
-		receiverVerification.Attempts,
-		receiverVerification.ConfirmedAt,
-		receiverVerification.FailedAt,
-		receiverVerification.ReceiverID,
-		receiverVerification.VerificationField,
-	)
+	args = append(args, update.VerificationChannel, update.ReceiverID, update.VerificationField)
+	query = sqlExec.Rebind(fmt.Sprintf(query, strings.Join(fields, ", ")))
+	_, err := sqlExec.ExecContext(ctx, query, args...)
 	if err != nil {
-		return fmt.Errorf("error updating receiver verification: %w", err)
+		return fmt.Errorf("updating receiver verification: %w", err)
 	}
 
 	return nil

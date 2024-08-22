@@ -11,6 +11,8 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
 func Test_ReceiverVerificationModel_GetByReceiverIDsAndVerificationField(t *testing.T) {
@@ -328,12 +330,11 @@ func Test_ReceiverVerificationModel_UpsertVerificationValue(t *testing.T) {
 
 		// Receiver confirmed the verification value
 		now := time.Now()
-		err = receiverVerificationModel.UpdateReceiverVerification(ctx, ReceiverVerification{
-			ReceiverID:        receiver.ID,
-			VerificationField: VerificationFieldNationalID,
-			Attempts:          0,
-			ConfirmedAt:       &now,
-			FailedAt:          nil,
+		err = receiverVerificationModel.UpdateReceiverVerification(ctx, ReceiverVerificationUpdate{
+			ReceiverID:          receiver.ID,
+			VerificationField:   VerificationFieldNationalID,
+			ConfirmedAt:         &now,
+			VerificationChannel: message.MessageChannelSMS,
 		}, dbConnectionPool)
 		require.NoError(t, err)
 
@@ -379,11 +380,16 @@ func Test_ReceiverVerificationModel_UpdateReceiverVerification(t *testing.T) {
 	assert.Equal(t, 0, verification.Attempts)
 
 	date := time.Date(2023, 1, 10, 23, 40, 20, 1000, time.UTC)
-	verification.Attempts = 5
-	verification.ConfirmedAt = &date
-	verification.FailedAt = &date
+	verificationUpdate := ReceiverVerificationUpdate{
+		ReceiverID:          receiver.ID,
+		VerificationField:   VerificationFieldDateOfBirth,
+		Attempts:            utils.IntPtr(5),
+		ConfirmedAt:         &date,
+		FailedAt:            &date,
+		VerificationChannel: message.MessageChannelSMS,
+	}
 
-	err = receiverVerificationModel.UpdateReceiverVerification(ctx, *verification, dbConnectionPool)
+	err = receiverVerificationModel.UpdateReceiverVerification(ctx, verificationUpdate, dbConnectionPool)
 	require.NoError(t, err)
 
 	// validate if the receiver verification has been updated
@@ -391,7 +397,8 @@ func Test_ReceiverVerificationModel_UpdateReceiverVerification(t *testing.T) {
 		SELECT
 			rv.attempts,
 			rv.confirmed_at,
-			rv.failed_at
+			rv.failed_at,
+			rv.verification_channel
 		FROM
 			receiver_verifications rv
 		WHERE
@@ -404,6 +411,56 @@ func Test_ReceiverVerificationModel_UpdateReceiverVerification(t *testing.T) {
 	assert.Equal(t, &date, receiverVerificationUpdated.ConfirmedAt)
 	assert.Equal(t, &date, receiverVerificationUpdated.FailedAt)
 	assert.Equal(t, 5, receiverVerificationUpdated.Attempts)
+	assert.Equal(t, message.MessageChannelSMS, *receiverVerificationUpdated.VerificationChannel)
+}
+
+func Test_ReceiverVerificationUpdate_Validate(t *testing.T) {
+	tests := []struct {
+		name    string
+		update  ReceiverVerificationUpdate
+		wantErr error
+	}{
+		{
+			name: "valid update",
+			update: ReceiverVerificationUpdate{
+				ReceiverID:          "receiver-id",
+				VerificationField:   VerificationFieldDateOfBirth,
+				VerificationChannel: message.MessageChannelSMS,
+			},
+			wantErr: nil,
+		},
+		{
+			name:    "invalid update with empty receiver id",
+			update:  ReceiverVerificationUpdate{},
+			wantErr: fmt.Errorf("receiver id is required"),
+		},
+		{
+			name: "invalid update with empty verification field",
+			update: ReceiverVerificationUpdate{
+				ReceiverID: "receiver-id",
+			},
+			wantErr: fmt.Errorf("verification field is required"),
+		},
+		{
+			name: "invalid update with empty verification channel",
+			update: ReceiverVerificationUpdate{
+				ReceiverID:        "receiver-id",
+				VerificationField: VerificationFieldDateOfBirth,
+			},
+			wantErr: fmt.Errorf("verification channel is required"),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.update.Validate()
+			if tt.wantErr != nil {
+				assert.EqualError(t, err, tt.wantErr.Error())
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
 }
 
 func Test_ReceiverVerificationModel_CheckTotalAttempts(t *testing.T) {
