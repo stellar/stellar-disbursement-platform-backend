@@ -1133,11 +1133,12 @@ func Test_ReceiversModel_Update(t *testing.T) {
 	t.Run("returns error when email is invalid", func(t *testing.T) {
 		resetReceiver(t, ctx, dbConnectionPool, receiver.ID)
 
+		const invalidEmail = "invalid-email"
 		err = receiverModel.Update(ctx, dbConnectionPool, receiver.ID, ReceiverUpdate{
-			Email:      "invalid",
+			Email:      invalidEmail,
 			ExternalId: "",
 		})
-		assert.EqualError(t, err, `error validating email: the provided email is not valid`)
+		assert.EqualError(t, err, fmt.Sprintf(`error validating email: the provided email %q is not valid`, invalidEmail))
 	})
 
 	t.Run("updates email name successfully", func(t *testing.T) {
