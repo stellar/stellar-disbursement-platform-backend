@@ -33,7 +33,7 @@ func (r *LoginRequest) validate() *httperror.HTTPError {
 	sanitizedEmail, err := authUtils.SanitizeAndValidateEmail(r.Email)
 	if err != nil {
 		if errors.Is(err, authUtils.ErrEmptyEmail) {
-			validator.Check(true, "email", "email is required")
+			validator.Check(false, "email", "email is required")
 		} else {
 			validator.CheckError(err, "email", "email is invalid")
 		}

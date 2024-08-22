@@ -51,7 +51,7 @@ func Test_NewAWSSESClient(t *testing.T) {
 	// [email] type needs a valid email as a sender ID:
 	gotAWSSESClient, err = NewAWSSESClient("accessKeyID", "secretAccessKey", "region", "invalid-email")
 	require.Nil(t, gotAWSSESClient)
-	require.EqualError(t, err, "aws SES (email) senderID is invalid: the provided email is not valid")
+	require.EqualError(t, err, fmt.Sprintf("aws SES (email) senderID is invalid: the provided email %q is not valid", "invalid-email"))
 
 	// [email] all fields are present 🎉
 	gotAWSSESClient, err = NewAWSSESClient("accessKeyID", "secretAccessKey", "region", "fOO@test.com  ")

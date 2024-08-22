@@ -57,7 +57,7 @@ func Test_message_Validate(t *testing.T) {
 			name:          "Email types need a valid email address",
 			messengerType: MessengerTypeAWSEmail,
 			message:       Message{ToEmail: "invalid-email"},
-			wantErr:       fmt.Errorf("invalid e-mail: invalid email format: the provided email is not valid"),
+			wantErr:       fmt.Errorf("invalid e-mail: invalid email format: the provided email %q is not valid", "invalid-email"),
 		},
 		{
 			name:          "Email types need a title",

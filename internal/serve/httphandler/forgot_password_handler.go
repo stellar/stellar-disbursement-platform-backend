@@ -80,7 +80,7 @@ func (h ForgotPasswordHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 	forgotPasswordRequest.Email, err = authUtils.SanitizeAndValidateEmail(forgotPasswordRequest.Email)
 	if err != nil {
 		if errors.Is(err, authUtils.ErrEmptyEmail) {
-			v.Check(true, "email", "email is required")
+			v.Check(false, "email", "email is required")
 		} else {
 			v.CheckError(err, "email", "email is invalid")
 		}

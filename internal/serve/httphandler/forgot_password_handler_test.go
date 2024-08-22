@@ -218,7 +218,7 @@ func Test_ForgotPasswordHandler(t *testing.T) {
 
 		expectedBody := `
 			{
-				"error":"request invalid",
+				"error":"Request invalid",
 				"extras": {
 					"email":"email is required"
 				}

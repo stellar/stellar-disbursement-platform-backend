@@ -2,6 +2,7 @@ package httphandler
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -63,15 +64,15 @@ func Test_LoginRequest_validate(t *testing.T) {
 	err = lr.validate()
 	assert.Equal(t, expectedErr, err)
 
-	tlr := LoginRequest{
+	lr = LoginRequest{
 		Email:          " EMAIL@EMAIL.com ",
 		Password:       "p@ssword",
 		ReCAPTCHAToken: "XyZ",
 	}
 
-	err = tlr.validate()
+	err = lr.validate()
 	assert.Nil(t, err)
-	assert.Equal(t, sanitizedEmail, tlr.Email)
+	assert.Equal(t, sanitizedEmail, lr.Email)
 }
 
 func Test_LoginHandler(t *testing.T) {
@@ -95,6 +96,7 @@ func Test_LoginHandler(t *testing.T) {
 	}
 
 	const url = "/login"
+	const validEmail = "testuser@email.com"
 
 	t.Run("returns error when body is invalid", func(t *testing.T) {
 		r.Post(url, handler.ServeHTTP)
@@ -139,6 +141,7 @@ func Test_LoginHandler(t *testing.T) {
 			{
 				"error": "Request invalid",
 				"extras": {
+					"email": "email is invalid",
 					"password": "password is required"
 				}
 			}
@@ -168,25 +171,25 @@ func Test_LoginHandler(t *testing.T) {
 	})
 
 	t.Run("returns error when an unexpected error occurs validating the credentials", func(t *testing.T) {
+		reqBody := fmt.Sprintf(`
+			{
+				"email": "%s",
+				"password": "pass1234",
+				"recaptcha_token": "XyZ"
+			}
+		`, validEmail)
+
 		reCAPTCHAValidator.
 			On("IsTokenValid", mock.Anything, "XyZ").
 			Return(true, nil).
 			Once()
 
 		authenticatorMock.
-			On("ValidateCredentials", mock.Anything, "testuser", "pass1234").
+			On("ValidateCredentials", mock.Anything, validEmail, "pass1234").
 			Return(nil, errors.New("unexpected error")).
 			Once()
 
 		r.Post(url, handler.ServeHTTP)
-
-		reqBody := `
-			{
-				"email": "testuser",
-				"password": "pass1234",
-				"recaptcha_token": "XyZ"
-			}
-		`
 
 		buf := new(strings.Builder)
 		log.DefaultLogger.SetOutput(buf)
@@ -214,25 +217,26 @@ func Test_LoginHandler(t *testing.T) {
 	})
 
 	t.Run("returns error when the credentials are incorrect", func(t *testing.T) {
+		randomEmail := "random-user@email.com"
+		reqBody := fmt.Sprintf(`
+			{
+				"email": "%s",
+				"password": "pass1234",
+				"recaptcha_token": "XyZ"
+			}
+		`, randomEmail)
+
 		reCAPTCHAValidator.
 			On("IsTokenValid", mock.Anything, "XyZ").
 			Return(true, nil).
 			Once()
 
 		authenticatorMock.
-			On("ValidateCredentials", mock.Anything, "testuser", "pass1234").
+			On("ValidateCredentials", mock.Anything, randomEmail, "pass1234").
 			Return(nil, auth.ErrInvalidCredentials).
 			Once()
 
 		r.Post(url, handler.ServeHTTP)
-
-		reqBody := `
-			{
-				"email": "testuser",
-				"password": "pass1234",
-				"recaptcha_token": "XyZ"
-			}
-		`
 
 		req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(reqBody))
 		require.NoError(t, err)
@@ -259,20 +263,20 @@ func Test_LoginHandler(t *testing.T) {
 	})
 
 	t.Run("returns error when unable to validate recaptcha", func(t *testing.T) {
+		reqBody := fmt.Sprintf(`
+			{
+				"email": "%s",
+				"password": "pass1234",
+				"recaptcha_token": "XyZ"
+			}
+		`, validEmail)
+
 		reCAPTCHAValidator.
 			On("IsTokenValid", mock.Anything, "XyZ").
 			Return(false, errors.New("error requesting verify reCAPTCHA token")).
 			Once()
 
 		r.Post(url, handler.ServeHTTP)
-
-		reqBody := `
-			{
-				"email": "testuser",
-				"password": "pass1234",
-				"recaptcha_token": "XyZ"
-			}
-		`
 
 		req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(reqBody))
 		require.NoError(t, err)
@@ -296,20 +300,20 @@ func Test_LoginHandler(t *testing.T) {
 	})
 
 	t.Run("returns error when recaptcha token is invalid", func(t *testing.T) {
+		reqBody := fmt.Sprintf(`
+			{
+				"email": "%s",
+				"password": "pass1234",
+				"recaptcha_token": "XyZ"
+			}
+		`, validEmail)
+
 		reCAPTCHAValidator.
 			On("IsTokenValid", mock.Anything, "XyZ").
 			Return(false, nil).
 			Once()
 
 		r.Post(url, handler.ServeHTTP)
-
-		reqBody := `
-			{
-				"email": "testuser",
-				"password": "pass1234",
-				"recaptcha_token": "XyZ"
-			}
-		`
 
 		req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(reqBody))
 		require.NoError(t, err)
@@ -339,11 +343,19 @@ func Test_LoginHandler(t *testing.T) {
 
 		user := &auth.User{
 			ID:    "user-ID",
-			Email: "email",
+			Email: "email@email.com",
 		}
 
+		reqBody := fmt.Sprintf(`
+			{
+				"email": "%s",
+				"password": "pass1234",
+				"recaptcha_token": "XyZ"	
+			}
+		`, user.Email)
+
 		authenticatorMock.
-			On("ValidateCredentials", mock.Anything, "testuser", "pass1234").
+			On("ValidateCredentials", mock.Anything, user.Email, "pass1234").
 			Return(user, nil).
 			Once()
 		roleManagerMock.
@@ -367,7 +379,7 @@ func Test_LoginHandler(t *testing.T) {
 			Return(user, nil).
 			Once()
 		authenticatorMock.
-			On("GetUser", mock.Anything, "user-ID").
+			On("GetUser", mock.Anything, user.ID).
 			Return(user, nil).
 			Once()
 		roleManagerMock.
@@ -376,14 +388,6 @@ func Test_LoginHandler(t *testing.T) {
 			Once()
 
 		r.Post(url, handler.ServeHTTP)
-
-		reqBody := `
-			{
-				"email": "testuser",
-				"password": "pass1234",
-				"recaptcha_token": "XyZ"	
-			}
-		`
 
 		req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(reqBody))
 		require.NoError(t, err)
