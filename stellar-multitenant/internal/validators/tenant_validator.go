@@ -9,6 +9,7 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
+	authUtils "github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
@@ -64,7 +65,7 @@ func (tv *TenantValidator) ValidateCreateTenantRequest(reqBody *TenantRequest) *
 
 	tv.validateDistributionAccountType(reqBody.DistributionAccountType)
 
-	sanitizedEmail, err := utils.SanitizeAndValidateEmail(reqBody.OwnerEmail)
+	sanitizedEmail, err := authUtils.SanitizeAndValidateEmail(reqBody.OwnerEmail)
 	if err != nil {
 		tv.addError("owner_email", "invalid email")
 	}

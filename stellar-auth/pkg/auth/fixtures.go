@@ -74,7 +74,7 @@ func CreateRandomAuthUserFixture(t *testing.T, ctx context.Context, sqlExec db.S
 	`
 
 	user := &RandomAuthUser{
-		Email:             email,
+		Email:             strings.ToLower(email),
 		FirstName:         firstName,
 		LastName:          lastName,
 		Password:          password,
@@ -85,8 +85,6 @@ func CreateRandomAuthUserFixture(t *testing.T, ctx context.Context, sqlExec db.S
 	}
 	err = sqlExec.QueryRowxContext(ctx, query, email, encryptedPassword, isAdmin, pq.Array(roles), firstName, lastName).Scan(&user.ID, &user.CreatedAt)
 	require.NoError(t, err)
-	// this will help us avoid having to cast to lowercase everytime in tests
-	user.Email = strings.ToLower(user.Email)
 
 	return user
 }

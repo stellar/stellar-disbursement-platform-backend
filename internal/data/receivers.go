@@ -12,7 +12,7 @@ import (
 	"github.com/lib/pq"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+	authUtils "github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/utils"
 )
 
 type Receiver struct {
@@ -348,7 +348,7 @@ func (r *ReceiverModel) Update(ctx context.Context, sqlExec db.SQLExecuter, ID s
 	args := []interface{}{}
 	fields := []string{}
 	if receiverUpdate.Email != "" {
-		sanitizedEmail, err := utils.SanitizeAndValidateEmail(receiverUpdate.Email)
+		sanitizedEmail, err := authUtils.SanitizeAndValidateEmail(receiverUpdate.Email)
 		if err != nil {
 			return fmt.Errorf("error validating email: %w", err)
 		}

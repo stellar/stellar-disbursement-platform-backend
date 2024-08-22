@@ -212,7 +212,7 @@ func (h ProfileHandler) PatchUserProfile(rw http.ResponseWriter, req *http.Reque
 	}
 
 	if reqBody.Email != "" {
-		sanitizedEmail, err := utils.SanitizeAndValidateEmail(reqBody.Email)
+		sanitizedEmail, err := authUtils.SanitizeAndValidateEmail(reqBody.Email)
 		if err != nil {
 			httperror.BadRequest("", nil, map[string]interface{}{
 				"email": "invalid email provided",

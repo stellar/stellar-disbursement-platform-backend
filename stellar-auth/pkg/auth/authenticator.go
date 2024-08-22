@@ -14,6 +14,7 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/utils"
+	authUtils "github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/utils"
 )
 
 var (
@@ -173,7 +174,7 @@ func (a *defaultAuthenticator) UpdateUser(ctx context.Context, ID, firstName, la
 	}
 
 	if email != "" {
-		sanitizedEmail, err := utils.SanitizeAndValidateEmail(email)
+		sanitizedEmail, err := authUtils.SanitizeAndValidateEmail(email)
 		if err != nil {
 			return fmt.Errorf("error validating email: %w", err)
 		}

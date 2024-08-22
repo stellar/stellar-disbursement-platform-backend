@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"regexp"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/asaskevich/govalidator"
@@ -17,7 +16,6 @@ var (
 	rxOTP                     = regexp.MustCompile(`^\d{6}$`)
 	ErrInvalidE164PhoneNumber = fmt.Errorf("the provided phone number is not a valid E.164 number")
 	ErrEmptyPhoneNumber       = fmt.Errorf("phone number cannot be empty")
-	ErrEmptyEmail             = fmt.Errorf("email cannot be empty")
 )
 
 const (
@@ -67,18 +65,9 @@ func ValidateAmount(amount string) error {
 // It's free to use under the [MIT Licence](https://opensource.org/licenses/MIT).
 var rxEmail = regexp.MustCompile("^[a-zA-Z0-9.!#$%&'*+\\/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$")
 
-func SanitizeAndValidateEmail(email string) (string, error) {
-	email = SanitizeEmail(email)
-	return email, ValidateEmail(email)
-}
-
-func SanitizeEmail(email string) string {
-	return strings.ToLower(strings.TrimSpace(email))
-}
-
 func ValidateEmail(email string) error {
 	if email == "" {
-		return ErrEmptyEmail
+		return fmt.Errorf("email cannot be empty")
 	}
 
 	if !rxEmail.MatchString(email) {

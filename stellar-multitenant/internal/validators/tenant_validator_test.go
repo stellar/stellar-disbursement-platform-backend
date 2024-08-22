@@ -154,7 +154,7 @@ func TestTenantValidator_ValidateCreateTenantRequest(t *testing.T) {
 		tv := NewTenantValidator()
 		reqBody := &TenantRequest{
 			Name:                    "aid-org",
-			OwnerEmail:              "owner@email.org",
+			OwnerEmail:              "   OWNER@email.org   ",
 			OwnerFirstName:          "Owner",
 			OwnerLastName:           "Owner",
 			OrganizationName:        "Aid Org",
@@ -162,6 +162,7 @@ func TestTenantValidator_ValidateCreateTenantRequest(t *testing.T) {
 		}
 
 		tv.ValidateCreateTenantRequest(reqBody)
+		assert.Equal(t, "owner@email.org", reqBody.OwnerEmail)
 		assert.False(t, tv.HasErrors())
 		assert.Equal(t, map[string]interface{}{}, tv.Errors)
 	})

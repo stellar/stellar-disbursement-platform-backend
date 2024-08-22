@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+	authUtils "github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/utils"
 )
 
 type UpdateReceiverRequest struct {
@@ -58,7 +59,7 @@ func (ur *UpdateReceiverValidator) ValidateReceiver(updateReceiverRequest *Updat
 
 	if updateReceiverRequest.Email != "" {
 		var err error
-		email, err = utils.SanitizeAndValidateEmail(email)
+		email, err = authUtils.SanitizeAndValidateEmail(email)
 		ur.CheckError(err, "email", "invalid email format")
 	}
 

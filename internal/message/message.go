@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
+	authUtils "github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/utils"
 )
 
 type Message struct {
@@ -36,7 +37,7 @@ func (s *Message) ValidateFor(messengerType MessengerType) error {
 }
 
 func (s *Message) IsValidForEmail() error {
-	sanitizedEmail, err := utils.SanitizeAndValidateEmail(s.ToEmail)
+	sanitizedEmail, err := authUtils.SanitizeAndValidateEmail(s.ToEmail)
 	if err != nil {
 		return fmt.Errorf("invalid email format: %w", err)
 	}

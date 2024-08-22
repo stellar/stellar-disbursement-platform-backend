@@ -16,6 +16,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
+	authUtils "github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/utils"
 )
 
 const mfaMessageTitle = "Verification code to access your account"
@@ -29,9 +30,9 @@ type LoginRequest struct {
 func (r *LoginRequest) validate() *httperror.HTTPError {
 	validator := validators.NewValidator()
 
-	sanitizedEmail, err := utils.SanitizeAndValidateEmail(r.Email)
+	sanitizedEmail, err := authUtils.SanitizeAndValidateEmail(r.Email)
 	if err != nil {
-		if errors.Is(err, utils.ErrEmptyEmail) {
+		if errors.Is(err, authUtils.ErrEmptyEmail) {
 			validator.Check(true, "email", "email is required")
 		} else {
 			validator.CheckError(err, "email", "email is invalid")

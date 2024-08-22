@@ -8,9 +8,7 @@ import (
 	"strings"
 )
 
-var (
-	ErrEmptyEmail = fmt.Errorf("email cannot be empty")
-)
+var ErrEmptyEmail = fmt.Errorf("email cannot be empty")
 
 const (
 	// Default charset to be used with StringWithCharset function

@@ -17,6 +17,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/auth"
+	authUtils "github.com/stellar/stellar-disbursement-platform-backend/stellar-auth/pkg/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
 
@@ -76,9 +77,9 @@ func (h ForgotPasswordHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 
 	// validate request
 	v := validators.NewValidator()
-	forgotPasswordRequest.Email, err = utils.SanitizeAndValidateEmail(forgotPasswordRequest.Email)
+	forgotPasswordRequest.Email, err = authUtils.SanitizeAndValidateEmail(forgotPasswordRequest.Email)
 	if err != nil {
-		if errors.Is(err, utils.ErrEmptyEmail) {
+		if errors.Is(err, authUtils.ErrEmptyEmail) {
 			v.Check(true, "email", "email is required")
 		} else {
 			v.CheckError(err, "email", "email is invalid")
