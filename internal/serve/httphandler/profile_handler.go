@@ -105,7 +105,7 @@ func (h ProfileHandler) PatchOrganizationProfile(rw http.ResponseWriter, req *ht
 
 	// limiting the amount of memory allocated in the server to handle the request
 	if err := req.ParseMultipartForm(h.MaxMemoryAllocation); err != nil {
-		err = fmt.Errorf("error parsing multipart form: %w", err)
+		err = fmt.Errorf("parsing multipart form: %w", err)
 		log.Ctx(ctx).Error(err)
 		httperror.BadRequest("could not parse multipart form data", err, map[string]interface{}{
 			"details": "request too large. Max size 2MB.",
@@ -115,7 +115,7 @@ func (h ProfileHandler) PatchOrganizationProfile(rw http.ResponseWriter, req *ht
 
 	multipartFile, _, err := req.FormFile("logo")
 	if err != nil && !errors.Is(err, http.ErrMissingFile) {
-		err = fmt.Errorf("error parsing logo file: %w", err)
+		err = fmt.Errorf("parsing logo file: %w", err)
 		log.Ctx(ctx).Error(err)
 		httperror.BadRequest("could not parse request logo", err, nil).Render(rw)
 		return
@@ -145,7 +145,7 @@ func (h ProfileHandler) PatchOrganizationProfile(rw http.ResponseWriter, req *ht
 	var reqBody PatchOrganizationProfileRequest
 	d := req.FormValue("data")
 	if err = json.Unmarshal([]byte(d), &reqBody); err != nil {
-		err = fmt.Errorf("error decoding data: %w", err)
+		err = fmt.Errorf("decoding data: %w", err)
 		log.Ctx(ctx).Error(err)
 		httperror.BadRequest("", err, nil).Render(rw)
 		return
@@ -219,6 +219,7 @@ func (h ProfileHandler) PatchUserProfile(rw http.ResponseWriter, req *http.Reque
 			}).Render(rw)
 			return
 		}
+
 		reqBody.Email = sanitizedEmail
 		log.Ctx(ctx).Warnf("[PatchUserProfile] - Will update email for userID %s to %s", user.ID, utils.TruncateString(reqBody.Email, 3))
 	}

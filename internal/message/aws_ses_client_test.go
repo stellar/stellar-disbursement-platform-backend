@@ -43,15 +43,21 @@ func Test_NewAWSSESClient(t *testing.T) {
 	require.Nil(t, gotAWSSESClient)
 	require.EqualError(t, err, "aws region is empty")
 
+	// [email] type needs a non-empty email as a sender ID:
+	gotAWSSESClient, err = NewAWSSESClient("accessKeyID", "secretAccessKey", "region", "")
+	require.Nil(t, gotAWSSESClient)
+	require.EqualError(t, err, "aws SES (email) senderID is invalid: email cannot be empty")
+
 	// [email] type needs a valid email as a sender ID:
 	gotAWSSESClient, err = NewAWSSESClient("accessKeyID", "secretAccessKey", "region", "invalid-email")
 	require.Nil(t, gotAWSSESClient)
 	require.EqualError(t, err, "aws SES (email) senderID is invalid: the provided email is not valid")
 
 	// [email] all fields are present 🎉
-	gotAWSSESClient, err = NewAWSSESClient("accessKeyID", "secretAccessKey", "region", "foo@test.com")
+	gotAWSSESClient, err = NewAWSSESClient("accessKeyID", "secretAccessKey", "region", "fOO@test.com  ")
 	require.NoError(t, err)
 	require.NotNil(t, gotAWSSESClient)
+	require.Equal(t, "foo@test.com", gotAWSSESClient.senderID)
 }
 
 func Test_AWSSES_SendMessage_messageIsInvalid(t *testing.T) {

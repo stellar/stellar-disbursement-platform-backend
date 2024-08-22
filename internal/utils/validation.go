@@ -17,6 +17,7 @@ var (
 	rxOTP                     = regexp.MustCompile(`^\d{6}$`)
 	ErrInvalidE164PhoneNumber = fmt.Errorf("the provided phone number is not a valid E.164 number")
 	ErrEmptyPhoneNumber       = fmt.Errorf("phone number cannot be empty")
+	ErrEmptyEmail             = fmt.Errorf("email cannot be empty")
 )
 
 const (
@@ -67,14 +68,17 @@ func ValidateAmount(amount string) error {
 var rxEmail = regexp.MustCompile("^[a-zA-Z0-9.!#$%&'*+\\/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$")
 
 func SanitizeAndValidateEmail(email string) (string, error) {
-	email = strings.ToLower(strings.TrimSpace(email))
-
+	email = SanitizeEmail(email)
 	return email, ValidateEmail(email)
+}
+
+func SanitizeEmail(email string) string {
+	return strings.ToLower(strings.TrimSpace(email))
 }
 
 func ValidateEmail(email string) error {
 	if email == "" {
-		return fmt.Errorf("email cannot be empty")
+		return ErrEmptyEmail
 	}
 
 	if !rxEmail.MatchString(email) {

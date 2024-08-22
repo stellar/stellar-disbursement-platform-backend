@@ -38,7 +38,21 @@ func Test_LoginRequest_validate(t *testing.T) {
 	assert.Equal(t, expectedErr, err)
 
 	lr = LoginRequest{
-		Email:          "email@email.com",
+		Email:          "invalid",
+		Password:       "",
+		ReCAPTCHAToken: "",
+	}
+
+	extras = map[string]interface{}{"email": "email is invalid", "password": "password is required"}
+	expectedErr = httperror.BadRequest("Request invalid", nil, extras)
+
+	err = lr.validate()
+	assert.Equal(t, expectedErr, err)
+
+	const sanitizedEmail = "email@email.com"
+
+	lr = LoginRequest{
+		Email:          sanitizedEmail,
 		Password:       "",
 		ReCAPTCHAToken: "XyZ",
 	}
@@ -48,6 +62,16 @@ func Test_LoginRequest_validate(t *testing.T) {
 
 	err = lr.validate()
 	assert.Equal(t, expectedErr, err)
+
+	tlr := LoginRequest{
+		Email:          " EMAIL@EMAIL.com ",
+		Password:       "p@ssword",
+		ReCAPTCHAToken: "XyZ",
+	}
+
+	err = tlr.validate()
+	assert.Nil(t, err)
+	assert.Equal(t, sanitizedEmail, tlr.Email)
 }
 
 func Test_LoginHandler(t *testing.T) {

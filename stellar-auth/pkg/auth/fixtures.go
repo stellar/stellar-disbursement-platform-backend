@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"fmt"
 	"math/big"
+	"strings"
 	"testing"
 	"time"
 
@@ -67,7 +68,7 @@ func CreateRandomAuthUserFixture(t *testing.T, ctx context.Context, sqlExec db.S
 		INSERT INTO auth_users
 			(email, encrypted_password, is_owner, roles, first_name, last_name)
 		VALUES
-			($1, $2, $3, $4, $5, $6)
+			(LOWER($1), $2, $3, $4, $5, $6)
 		RETURNING
 			id, created_at
 	`
@@ -84,6 +85,8 @@ func CreateRandomAuthUserFixture(t *testing.T, ctx context.Context, sqlExec db.S
 	}
 	err = sqlExec.QueryRowxContext(ctx, query, email, encryptedPassword, isAdmin, pq.Array(roles), firstName, lastName).Scan(&user.ID, &user.CreatedAt)
 	require.NoError(t, err)
+	// this will help us avoid having to cast to lowercase everytime in tests
+	user.Email = strings.ToLower(user.Email)
 
 	return user
 }

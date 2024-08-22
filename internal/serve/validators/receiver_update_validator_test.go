@@ -92,7 +92,7 @@ func Test_UpdateReceiverValidator_ValidateReceiver(t *testing.T) {
 			DateOfBirth: "1999-01-01",
 			Pin:         "1234   ",
 			NationalID:  "   12345CODE",
-			Email:       "receiver@email.com",
+			Email:       "   RECEIVER@email.com   ",
 			ExternalID:  "externalID",
 		}
 		validator.ValidateReceiver(&receiverInfo)
@@ -101,5 +101,6 @@ func Test_UpdateReceiverValidator_ValidateReceiver(t *testing.T) {
 		assert.Equal(t, "1999-01-01", receiverInfo.DateOfBirth)
 		assert.Equal(t, "1234", receiverInfo.Pin)
 		assert.Equal(t, "12345CODE", receiverInfo.NationalID)
+		assert.Equal(t, "receiver@email.com", receiverInfo.Email)
 	})
 }

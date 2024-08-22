@@ -26,12 +26,19 @@ type LoginRequest struct {
 	ReCAPTCHAToken string `json:"recaptcha_token"`
 }
 
-func (r LoginRequest) validate() *httperror.HTTPError {
+func (r *LoginRequest) validate() *httperror.HTTPError {
 	validator := validators.NewValidator()
 
-	/*var err error
-	r.Email, err = utils.SanitizeAndValidateEmail(r.Email)
-	validator.CheckError(err, "email", "email is invalid")*/
+	sanitizedEmail, err := utils.SanitizeAndValidateEmail(r.Email)
+	if err != nil {
+		if errors.Is(err, utils.ErrEmptyEmail) {
+			validator.Check(true, "email", "email is required")
+		} else {
+			validator.CheckError(err, "email", "email is invalid")
+		}
+	} else {
+		r.Email = sanitizedEmail
+	}
 	validator.Check(r.Email != "", "email", "email is required")
 	validator.Check(r.Password != "", "password", "password is required")
 
@@ -66,7 +73,7 @@ func (h LoginHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	if err := reqBody.validate(); err != nil {
+	if err := (&reqBody).validate(); err != nil {
 		err.Render(rw)
 		return
 	}

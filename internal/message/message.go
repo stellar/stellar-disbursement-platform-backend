@@ -38,11 +38,11 @@ func (s *Message) ValidateFor(messengerType MessengerType) error {
 func (s *Message) IsValidForEmail() error {
 	sanitizedEmail, err := utils.SanitizeAndValidateEmail(s.ToEmail)
 	if err != nil {
-		return fmt.Errorf("invalid message: %w", err)
+		return fmt.Errorf("invalid email format: %w", err)
 	}
 	s.ToEmail = sanitizedEmail
 
-	if strings.Trim(s.Title, " ") == "" {
+	if strings.TrimSpace(s.Title) == "" {
 		return fmt.Errorf("title is empty")
 	}
 

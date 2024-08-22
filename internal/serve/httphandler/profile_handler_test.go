@@ -582,7 +582,7 @@ func Test_ProfileHandler_PatchUserProfile(t *testing.T) {
 			reqBody: `{
 				"first_name": "First",
 				"last_name": "Last",
-				"email": "email@email.com"
+				"email": "EMAIL@email.com"
 			}`,
 			mockAuthManagerFn: func(authManagerMock *auth.AuthManagerMock) {
 				authManagerMock.

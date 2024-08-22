@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -21,12 +22,11 @@ type User struct {
 }
 
 func (u *User) Validate() error {
-	if u.Email == "" {
-		return fmt.Errorf("email is required")
-	}
-
 	sanitizedEmail, err := utils.SanitizeAndValidateEmail(u.Email)
 	if err != nil {
+		if errors.Is(err, utils.ErrEmptyEmail) {
+			return fmt.Errorf("email is required")
+		}
 		return fmt.Errorf("email is invalid: %w", err)
 	}
 	u.Email = sanitizedEmail
