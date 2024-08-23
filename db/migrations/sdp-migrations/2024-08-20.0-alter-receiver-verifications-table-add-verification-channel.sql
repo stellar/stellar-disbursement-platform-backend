@@ -4,7 +4,7 @@ ALTER TABLE receiver_verifications
 
 UPDATE receiver_verifications rv
     SET verification_channel = 'SMS'::message_channel
-    WHERE rv.verification_channel IS NULL;
+    WHERE rv.verification_channel IS NULL AND confirmed_at IS NOT NULL;
 
 -- +migrate Down
 
