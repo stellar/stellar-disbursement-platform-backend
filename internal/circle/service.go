@@ -6,6 +6,7 @@ import (
 
 	"github.com/stellar/go/strkey"
 
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
@@ -16,6 +17,7 @@ type Service struct {
 	NetworkType          utils.NetworkType
 	EncryptionPassphrase string
 	TenantManager        tenant.ManagerInterface
+	MonitorService       monitor.MonitorServiceInterface
 }
 
 const StellarChainCode = "XLM"
@@ -36,6 +38,7 @@ type ServiceOptions struct {
 	TenantManager        tenant.ManagerInterface
 	NetworkType          utils.NetworkType
 	EncryptionPassphrase string
+	MonitorService       monitor.MonitorServiceInterface
 }
 
 func (o ServiceOptions) Validate() error {
@@ -49,6 +52,10 @@ func (o ServiceOptions) Validate() error {
 
 	if o.TenantManager == nil {
 		return fmt.Errorf("TenantManager is required")
+	}
+
+	if o.MonitorService == nil {
+		return fmt.Errorf("MonitorService is required")
 	}
 
 	err := o.NetworkType.Validate()
@@ -75,6 +82,7 @@ func NewService(opts ServiceOptions) (*Service, error) {
 		NetworkType:          opts.NetworkType,
 		EncryptionPassphrase: opts.EncryptionPassphrase,
 		TenantManager:        opts.TenantManager,
+		MonitorService:       opts.MonitorService,
 	}, nil
 }
 
@@ -111,7 +119,12 @@ func (s *Service) getClientForTenantInContext(ctx context.Context) (ClientInterf
 	if err != nil {
 		return nil, fmt.Errorf("retrieving decrypted Circle API key: %w", err)
 	}
-	return s.ClientFactory(s.NetworkType, apiKey, s.TenantManager), nil
+	return s.ClientFactory(ClientOptions{
+		APIKey:         apiKey,
+		NetworkType:    s.NetworkType,
+		TenantManager:  s.TenantManager,
+		MonitorService: s.MonitorService,
+	}), nil
 }
 
 func (s *Service) Ping(ctx context.Context) (bool, error) {

@@ -185,7 +185,7 @@ func Test_PrometheusClient_MonitorCounters(t *testing.T) {
 		assert.NotEmpty(t, data)
 		body := string(data)
 
-		metric := `sdp_bussiness_disbursements_counter{asset="USDC",country="UKR",wallet="Mock Wallet"} 1`
+		metric := `sdp_business_disbursements_counter{asset="USDC",country="UKR",wallet="Mock Wallet"} 1`
 
 		assert.Contains(t, body, metric)
 

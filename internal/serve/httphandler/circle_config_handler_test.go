@@ -194,7 +194,7 @@ func TestCircleConfigHandler_Patch(t *testing.T) {
 				tc.prepareMocksFn(t, mDistributionAccountResolver, mCircleClient, mTenantManager)
 
 				handler.DistributionAccountResolver = mDistributionAccountResolver
-				handler.CircleFactory = func(networkType utils.NetworkType, apiKey string, tntManager tenant.ManagerInterface) circle.ClientInterface {
+				handler.CircleFactory = func(clientOpts circle.ClientOptions) circle.ClientInterface {
 					return mCircleClient
 				}
 				handler.TenantManager = mTenantManager
@@ -366,7 +366,7 @@ func Test_CircleConfigHandler_validateConfigWithCircle(t *testing.T) {
 
 				handler.Encrypter = mEncrypter
 				handler.CircleClientConfigModel = mCircleClientConfigModel
-				handler.CircleFactory = func(networkType utils.NetworkType, apiKey string, tntManager tenant.ManagerInterface) circle.ClientInterface {
+				handler.CircleFactory = func(clientOpts circle.ClientOptions) circle.ClientInterface {
 					return mCircleClient
 				}
 			}

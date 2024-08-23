@@ -631,6 +631,7 @@ func (c *ServeCommand) Command(serverService ServerServiceInterface, monitorServ
 				NetworkType:          serveOpts.NetworkType,
 				EncryptionPassphrase: serveOpts.DistAccEncryptionPassphrase,
 				TenantManager:        tenant.NewManager(tenant.WithDatabase(serveOpts.AdminDBConnectionPool)),
+				MonitorService:       serveOpts.MonitorService,
 			})
 			if err != nil {
 				log.Ctx(ctx).Fatalf("error creating Circle service: %v", err)
