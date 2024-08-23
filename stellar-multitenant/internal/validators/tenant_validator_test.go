@@ -29,7 +29,7 @@ func TestTenantValidator_ValidateCreateTenantRequest(t *testing.T) {
 		assert.True(t, tv.HasErrors())
 		assert.Equal(t, map[string]interface{}{
 			"name":                      "invalid tenant name. It should only contains lower case letters and dash (-)",
-			"owner_email":               "invalid email",
+			"owner_email":               "owner_email is required",
 			"owner_first_name":          "owner_first_name is required",
 			"owner_last_name":           "owner_last_name is required",
 			"organization_name":         "organization_name is required",
@@ -41,7 +41,7 @@ func TestTenantValidator_ValidateCreateTenantRequest(t *testing.T) {
 		tv.ValidateCreateTenantRequest(reqBody)
 		assert.True(t, tv.HasErrors())
 		assert.Equal(t, map[string]interface{}{
-			"owner_email":               "invalid email",
+			"owner_email":               "owner_email is required",
 			"owner_first_name":          "owner_first_name is required",
 			"owner_last_name":           "owner_last_name is required",
 			"organization_name":         "organization_name is required",
@@ -85,7 +85,7 @@ func TestTenantValidator_ValidateCreateTenantRequest(t *testing.T) {
 		tv.ValidateCreateTenantRequest(reqBody)
 		assert.True(t, tv.HasErrors())
 		assert.Equal(t, map[string]interface{}{
-			"owner_email":       "invalid email",
+			"owner_email":       "owner_email is invalid",
 			"owner_first_name":  "owner_first_name is required",
 			"owner_last_name":   "owner_last_name is required",
 			"organization_name": "organization_name is required",

@@ -532,7 +532,7 @@ func Test_ProfileHandler_PatchUserProfile(t *testing.T) {
 			},
 			wantStatusCode: http.StatusBadRequest,
 			wantRespBody: `{
-				"error": "The request was invalid in some way.", 
+				"error": "Request invalid", 
 				"extras": {
 					"email": "invalid email provided"
 				}
@@ -550,9 +550,9 @@ func Test_ProfileHandler_PatchUserProfile(t *testing.T) {
 			},
 			wantStatusCode: http.StatusBadRequest,
 			wantRespBody: `{
-				"error": "The request was invalid in some way.",
+				"error": "Request invalid",
 				"extras": {
-					"details":"provide at least first_name, last_name or email."
+					"details":"provide at least first_name, last_name or email"
 				}
 			}`,
 		},

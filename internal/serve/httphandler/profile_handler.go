@@ -211,23 +211,22 @@ func (h ProfileHandler) PatchUserProfile(rw http.ResponseWriter, req *http.Reque
 		return
 	}
 
+	validator := validators.NewValidator()
+
 	if reqBody.Email != "" {
 		sanitizedEmail, err := authUtils.SanitizeAndValidateEmail(reqBody.Email)
-		if err != nil {
-			httperror.BadRequest("", nil, map[string]interface{}{
-				"email": "invalid email provided",
-			}).Render(rw)
-			return
+		if err != nil && !errors.Is(err, authUtils.ErrEmptyEmail) {
+			validator.CheckError(err, "email", "invalid email provided")
 		}
 
 		reqBody.Email = sanitizedEmail
 		log.Ctx(ctx).Warnf("[PatchUserProfile] - Will update email for userID %s to %s", user.ID, utils.TruncateString(reqBody.Email, 3))
 	}
 
-	if utils.IsEmpty(reqBody) {
-		httperror.BadRequest("", nil, map[string]interface{}{
-			"details": "provide at least first_name, last_name or email.",
-		}).Render(rw)
+	validator.Check(!utils.IsEmpty(reqBody), "details", "provide at least first_name, last_name or email")
+
+	if validator.HasErrors() {
+		httperror.BadRequest("Request invalid", nil, validator.Errors).Render(rw)
 		return
 	}
 

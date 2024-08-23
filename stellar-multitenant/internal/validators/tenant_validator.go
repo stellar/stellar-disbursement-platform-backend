@@ -1,6 +1,7 @@
 package validators
 
 import (
+	"errors"
 	"fmt"
 	"net/url"
 	"regexp"
@@ -67,7 +68,11 @@ func (tv *TenantValidator) ValidateCreateTenantRequest(reqBody *TenantRequest) *
 
 	sanitizedEmail, err := authUtils.SanitizeAndValidateEmail(reqBody.OwnerEmail)
 	if err != nil {
-		tv.addError("owner_email", "invalid email")
+		if errors.Is(err, authUtils.ErrEmptyEmail) {
+			tv.addError("owner_email", "owner_email is required")
+		} else {
+			tv.addError("owner_email", "owner_email is invalid")
+		}
 	}
 	reqBody.OwnerEmail = sanitizedEmail
 
