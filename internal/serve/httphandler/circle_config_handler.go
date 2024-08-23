@@ -162,7 +162,12 @@ func (h CircleConfigHandler) validateConfigWithCircle(ctx context.Context, patch
 		}
 	}
 
-	circleClient := h.CircleFactory(h.NetworkType, apiKey, h.TenantManager, h.MonitorService)
+	circleClient := h.CircleFactory(circle.ClientOptions{
+		NetworkType:    h.NetworkType,
+		APIKey:         apiKey,
+		TenantManager:  h.TenantManager,
+		MonitorService: h.MonitorService,
+	})
 
 	// validate incoming APIKey
 	if patchRequest.APIKey != nil {

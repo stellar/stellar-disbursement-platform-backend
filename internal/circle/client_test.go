@@ -26,7 +26,12 @@ func Test_NewClient(t *testing.T) {
 	mockTntManager := &tenant.TenantManagerMock{}
 	mMonitorService := monitorMocks.NewMockMonitorService(t)
 	t.Run("production environment", func(t *testing.T) {
-		clientInterface := NewClient(utils.PubnetNetworkType, "test-key", mockTntManager, mMonitorService)
+		clientInterface := NewClient(ClientOptions{
+			NetworkType:    utils.PubnetNetworkType,
+			APIKey:         "test-key",
+			TenantManager:  mockTntManager,
+			MonitorService: mMonitorService,
+		})
 		cc, ok := clientInterface.(*Client)
 		assert.True(t, ok)
 		assert.Equal(t, string(Production), cc.BasePath)
@@ -34,7 +39,12 @@ func Test_NewClient(t *testing.T) {
 	})
 
 	t.Run("sandbox environment", func(t *testing.T) {
-		clientInterface := NewClient(utils.TestnetNetworkType, "test-key", mockTntManager, mMonitorService)
+		clientInterface := NewClient(ClientOptions{
+			NetworkType:    utils.TestnetNetworkType,
+			APIKey:         "test-key",
+			TenantManager:  mockTntManager,
+			MonitorService: mMonitorService,
+		})
 		cc, ok := clientInterface.(*Client)
 		assert.True(t, ok)
 		assert.Equal(t, string(Sandbox), cc.BasePath)

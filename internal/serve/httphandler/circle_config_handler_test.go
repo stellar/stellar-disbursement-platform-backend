@@ -18,7 +18,6 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/circle"
-	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/testutils"
 	sigMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing/mocks"
@@ -195,7 +194,7 @@ func TestCircleConfigHandler_Patch(t *testing.T) {
 				tc.prepareMocksFn(t, mDistributionAccountResolver, mCircleClient, mTenantManager)
 
 				handler.DistributionAccountResolver = mDistributionAccountResolver
-				handler.CircleFactory = func(networkType utils.NetworkType, apiKey string, tntManager tenant.ManagerInterface, monitorSvc monitor.MonitorServiceInterface) circle.ClientInterface {
+				handler.CircleFactory = func(clientOpts circle.ClientOptions) circle.ClientInterface {
 					return mCircleClient
 				}
 				handler.TenantManager = mTenantManager
@@ -367,7 +366,7 @@ func Test_CircleConfigHandler_validateConfigWithCircle(t *testing.T) {
 
 				handler.Encrypter = mEncrypter
 				handler.CircleClientConfigModel = mCircleClientConfigModel
-				handler.CircleFactory = func(networkType utils.NetworkType, apiKey string, tntManager tenant.ManagerInterface, monitorSvc monitor.MonitorServiceInterface) circle.ClientInterface {
+				handler.CircleFactory = func(clientOpts circle.ClientOptions) circle.ClientInterface {
 					return mCircleClient
 				}
 			}

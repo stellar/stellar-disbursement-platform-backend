@@ -49,23 +49,30 @@ type Client struct {
 }
 
 // ClientFactory is a function that creates a ClientInterface.
-type ClientFactory func(networkType utils.NetworkType, apiKey string, tntManager tenant.ManagerInterface, monitorSvc monitor.MonitorServiceInterface) ClientInterface
+type ClientFactory func(opts ClientOptions) ClientInterface
 
 var _ ClientFactory = NewClient
 
+type ClientOptions struct {
+	NetworkType    utils.NetworkType
+	APIKey         string
+	TenantManager  tenant.ManagerInterface
+	MonitorService monitor.MonitorServiceInterface
+}
+
 // NewClient creates a new instance of Circle Client.
-func NewClient(networkType utils.NetworkType, apiKey string, tntManager tenant.ManagerInterface, monitorSvc monitor.MonitorServiceInterface) ClientInterface {
+func NewClient(opts ClientOptions) ClientInterface {
 	circleEnv := Sandbox
-	if networkType == utils.PubnetNetworkType {
+	if opts.NetworkType == utils.PubnetNetworkType {
 		circleEnv = Production
 	}
 
 	return &Client{
 		BasePath:       string(circleEnv),
-		APIKey:         apiKey,
+		APIKey:         opts.APIKey,
 		httpClient:     httpclient.DefaultClient(),
-		tenantManager:  tntManager,
-		monitorService: monitorSvc,
+		tenantManager:  opts.TenantManager,
+		monitorService: opts.MonitorService,
 	}
 }
 
@@ -315,7 +322,7 @@ func (client *Client) handleError(ctx context.Context, resp *http.Response) erro
 		return fmt.Errorf("parsing API error: %w", err)
 	}
 
-	return fmt.Errorf("circle API error: %w", apiError) //nolint:golint,unused
+	return fmt.Errorf("circle API error: %w", apiError)
 }
 
 var _ ClientInterface = (*Client)(nil)

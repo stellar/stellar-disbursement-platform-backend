@@ -119,7 +119,12 @@ func (s *Service) getClientForTenantInContext(ctx context.Context) (ClientInterf
 	if err != nil {
 		return nil, fmt.Errorf("retrieving decrypted Circle API key: %w", err)
 	}
-	return s.ClientFactory(s.NetworkType, apiKey, s.TenantManager, s.MonitorService), nil
+	return s.ClientFactory(ClientOptions{
+		APIKey:         apiKey,
+		NetworkType:    s.NetworkType,
+		TenantManager:  s.TenantManager,
+		MonitorService: s.MonitorService,
+	}), nil
 }
 
 func (s *Service) Ping(ctx context.Context) (bool, error) {
