@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/stellar/go/support/log"
@@ -17,6 +18,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
@@ -138,15 +140,28 @@ func (v VerifyReceiverRegistrationHandler) processReceiverVerificationPII(
 	}
 
 	// STEP 3: check if the payload verification value matches the one saved in the database
+	rvu := data.ReceiverVerificationUpdate{
+		ReceiverID:        receiverVerification.ReceiverID,
+		VerificationField: receiverVerification.VerificationField,
+	}
+
+	if strings.TrimSpace(receiverRegistrationRequest.PhoneNumber) != "" {
+		rvu.VerificationChannel = message.MessageChannelSMS
+	} else if strings.TrimSpace(receiverRegistrationRequest.Email) != "" {
+		rvu.VerificationChannel = message.MessageChannelEmail
+	} else {
+		err = fmt.Errorf("no valid verification channel found resolved for receiver")
+		return &ErrorInformationNotFound{cause: err}
+	}
+
 	if !data.CompareVerificationValue(receiverVerification.HashedValue, receiverRegistrationRequest.VerificationValue) {
 		baseErrMsg := fmt.Sprintf("%s value does not match for user with phone number %s", receiverRegistrationRequest.VerificationType, truncatedPhoneNumber)
 		// update the receiver verification with the confirmation that the value was checked
-		receiverVerification.Attempts = receiverVerification.Attempts + 1
-		receiverVerification.FailedAt = &now
-		receiverVerification.ConfirmedAt = nil
+		rvu.Attempts = utils.IntPtr(receiverVerification.Attempts + 1)
+		rvu.FailedAt = &now
 
-		// this update is done using the DBConnectionPool and not dbTx because we don't want to roolback these changes after returning the error
-		updateErr := v.Models.ReceiverVerification.UpdateReceiverVerification(ctx, *receiverVerification, v.Models.DBConnectionPool)
+		// this update is done using the DBConnectionPool and not dbTx because we don't want to rollback these changes after returning the error
+		updateErr := v.Models.ReceiverVerification.UpdateReceiverVerification(ctx, rvu, v.Models.DBConnectionPool)
 		if updateErr != nil {
 			err = fmt.Errorf("%s: %w", baseErrMsg, updateErr)
 		} else {
@@ -158,8 +173,9 @@ func (v VerifyReceiverRegistrationHandler) processReceiverVerificationPII(
 
 	// STEP 4: update the receiver verification row with the confirmation that the value was successfully validated
 	if receiverVerification.ConfirmedAt == nil {
-		receiverVerification.ConfirmedAt = &now
-		err = v.Models.ReceiverVerification.UpdateReceiverVerification(ctx, *receiverVerification, dbTx)
+		rvu.ConfirmedAt = &now
+
+		err = v.Models.ReceiverVerification.UpdateReceiverVerification(ctx, rvu, dbTx)
 		if err != nil {
 			return fmt.Errorf("updating successfully verified user: %w", err)
 		}

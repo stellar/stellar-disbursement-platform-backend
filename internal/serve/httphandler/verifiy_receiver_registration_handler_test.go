@@ -27,9 +27,11 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/events/schemas"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/httperror"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve/validators"
 	sigMocks "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing/mocks"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/pkg/schema"
 	"github.com/stellar/stellar-disbursement-platform-backend/stellar-multitenant/pkg/tenant"
 )
@@ -207,7 +209,12 @@ func Test_VerifyReceiverRegistrationHandler_processReceiverVerificationPII(t *te
 		VerificationValue: "1990-01-01",
 	})
 	receiverVerificationExceededAttempts.Attempts = data.MaxAttemptsAllowed
-	err = models.ReceiverVerification.UpdateReceiverVerification(ctx, *receiverVerificationExceededAttempts, dbConnectionPool)
+	err = models.ReceiverVerification.UpdateReceiverVerification(ctx, data.ReceiverVerificationUpdate{
+		ReceiverID:          receiverWithExceededAttempts.ID,
+		VerificationField:   data.VerificationFieldDateOfBirth,
+		Attempts:            utils.IntPtr(data.MaxAttemptsAllowed),
+		VerificationChannel: message.MessageChannelSMS,
+	}, dbConnectionPool)
 	require.NoError(t, err)
 
 	// receiver with receiver_verification row:
@@ -902,7 +909,12 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 			VerificationValue: "1990-01-01",
 		})
 		receiverVerificationExceededAttempts.Attempts = data.MaxAttemptsAllowed
-		err = models.ReceiverVerification.UpdateReceiverVerification(ctx, *receiverVerificationExceededAttempts, dbConnectionPool)
+		err = models.ReceiverVerification.UpdateReceiverVerification(ctx, data.ReceiverVerificationUpdate{
+			ReceiverID:          receiverWithExceededAttempts.ID,
+			VerificationField:   data.VerificationFieldDateOfBirth,
+			Attempts:            utils.IntPtr(data.MaxAttemptsAllowed),
+			VerificationChannel: message.MessageChannelSMS,
+		}, dbConnectionPool)
 		require.NoError(t, err)
 
 		// set the logger to a buffer so we can check the error message
