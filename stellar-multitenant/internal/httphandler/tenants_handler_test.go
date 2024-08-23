@@ -388,7 +388,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 				"error": "invalid request body",
 				"extras": {
 					"name": "invalid tenant name. It should only contains lower case letters and dash (-)",
-					"owner_email": "invalid email",
+					"owner_email": "owner_email is required",
 					"owner_first_name": "owner_first_name is required",
 					"owner_last_name": "owner_last_name is required",
 					"organization_name": "organization_name is required",
