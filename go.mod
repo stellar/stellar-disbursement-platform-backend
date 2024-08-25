@@ -9,7 +9,7 @@ require (
 	github.com/getsentry/sentry-go v0.28.1
 	github.com/go-chi/chi v4.1.2+incompatible
 	github.com/go-chi/chi/v5 v5.1.0
-	github.com/go-chi/httprate v0.12.1
+	github.com/go-chi/httprate v0.14.0
 	github.com/gocarina/gocsv v0.0.0-20230616125104-99d496ca653d
 	github.com/golang-jwt/jwt/v4 v4.5.0
 	github.com/google/uuid v1.6.0
@@ -19,7 +19,7 @@ require (
 	github.com/lib/pq v1.10.9
 	github.com/manifoldco/promptui v0.9.0
 	github.com/nyaruka/phonenumbers v1.4.0
-	github.com/prometheus/client_golang v1.20.0
+	github.com/prometheus/client_golang v1.20.2
 	github.com/rs/cors v1.11.0
 	github.com/rubenv/sql-migrate v1.7.0
 	github.com/segmentio/kafka-go v0.4.47
