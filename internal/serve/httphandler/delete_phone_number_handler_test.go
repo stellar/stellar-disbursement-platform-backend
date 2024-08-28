@@ -14,6 +14,7 @@ import (
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
 func Test_DeletePhoneNumberHandler(t *testing.T) {
@@ -26,7 +27,7 @@ func Test_DeletePhoneNumberHandler(t *testing.T) {
 	ctx := context.Background()
 	models, err := data.NewModels(dbConnectionPool)
 	require.NoError(t, err)
-	receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{PhoneNumber: "+14152222222"})
+	receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{PhoneNumber: utils.StringPtr("+14152222222")})
 
 	t.Run("return 404 if network passphrase is not testnet", func(t *testing.T) {
 		h := DeletePhoneNumberHandler{NetworkPassphrase: network.PublicNetworkPassphrase, Models: models}
@@ -34,7 +35,7 @@ func Test_DeletePhoneNumberHandler(t *testing.T) {
 		r.Delete("/wallet-registration/phone-number/{phone_number}", h.ServeHTTP)
 
 		// test
-		req, err := http.NewRequest("DELETE", "/wallet-registration/phone-number/"+receiver.PhoneNumber, nil)
+		req, err := http.NewRequest("DELETE", "/wallet-registration/phone-number/"+*receiver.PhoneNumber, nil)
 		require.NoError(t, err)
 		rr := httptest.NewRecorder()
 		r.ServeHTTP(rr, req)
@@ -90,7 +91,7 @@ func Test_DeletePhoneNumberHandler(t *testing.T) {
 		r.Delete("/wallet-registration/phone-number/{phone_number}", h.ServeHTTP)
 
 		// test
-		req, err := http.NewRequest("DELETE", "/wallet-registration/phone-number/"+receiver.PhoneNumber, nil)
+		req, err := http.NewRequest("DELETE", "/wallet-registration/phone-number/"+*receiver.PhoneNumber, nil)
 		require.NoError(t, err)
 		rr := httptest.NewRecorder()
 		r.ServeHTTP(rr, req)

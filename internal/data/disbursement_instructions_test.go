@@ -10,6 +10,7 @@ import (
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/db/dbtest"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
 )
 
 func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
@@ -36,14 +37,14 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 	di := NewDisbursementInstructionModel(dbConnectionPool)
 
 	instruction1 := DisbursementInstruction{
-		Phone:             "+380-12-345-671",
+		Phone:             utils.StringPtr("+380-12-345-671"),
 		Amount:            "100.01",
 		ID:                "123456781",
 		VerificationValue: "1990-01-01",
 	}
 
 	instruction2 := DisbursementInstruction{
-		Phone:             "+380-12-345-672",
+		Phone:             utils.StringPtr("+380-12-345-672"),
 		Amount:            "100.02",
 		ID:                "123456782",
 		VerificationValue: "1990-01-02",
@@ -51,14 +52,14 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 
 	externalPaymentID := "abc123"
 	instruction3 := DisbursementInstruction{
-		Phone:             "+380-12-345-673",
+		Phone:             utils.StringPtr("+380-12-345-673"),
 		Amount:            "100.03",
 		ID:                "123456783",
 		VerificationValue: "1990-01-03",
 		ExternalPaymentId: &externalPaymentID,
 	}
 	instructions := []*DisbursementInstruction{&instruction1, &instruction2, &instruction3}
-	expectedPhoneNumbers := []string{instruction1.Phone, instruction2.Phone, instruction3.Phone}
+	expectedPhoneNumbers := []string{*instruction1.Phone, *instruction2.Phone, *instruction3.Phone}
 	expectedExternalIDs := []string{instruction1.ID, instruction2.ID, instruction3.ID}
 	expectedPayments := []string{instruction1.Amount, instruction2.Amount, instruction3.Amount}
 	expectedExternalPaymentIDs := []string{*instruction3.ExternalPaymentId}
@@ -70,11 +71,18 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 	}
 
 	t.Run("success", func(t *testing.T) {
-		err := di.ProcessAll(ctx, "user-id", instructions, disbursement, disbursementUpdate, MaxInstructionsPerDisbursement)
+		err := di.ProcessAll(ctx, DisbursementInstructionsOpts{
+			UserID:                  "user-id",
+			Instructions:            instructions,
+			Disbursement:            disbursement,
+			DisbursementUpdate:      disbursementUpdate,
+			ReceiverContactType:     ReceiverContactTypeSMS,
+			MaxNumberOfInstructions: MaxInstructionsPerDisbursement,
+		})
 		require.NoError(t, err)
 
 		// Verify Receivers
-		receivers, err := di.receiverModel.GetByPhoneNumbers(ctx, dbConnectionPool, []string{instruction1.Phone, instruction2.Phone, instruction3.Phone})
+		receivers, err := di.receiverModel.GetByPhoneNumbers(ctx, dbConnectionPool, []string{*instruction1.Phone, *instruction2.Phone, *instruction3.Phone})
 		require.NoError(t, err)
 		assertEqualReceivers(t, expectedPhoneNumbers, expectedExternalIDs, receivers)
 
@@ -115,15 +123,29 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 		DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
 
 		// process instructions for the first time
-		err := di.ProcessAll(ctx, "user-id", instructions, disbursement, disbursementUpdate, MaxInstructionsPerDisbursement)
+		err := di.ProcessAll(ctx, DisbursementInstructionsOpts{
+			UserID:                  "user-id",
+			Instructions:            instructions,
+			Disbursement:            disbursement,
+			DisbursementUpdate:      disbursementUpdate,
+			ReceiverContactType:     ReceiverContactTypeSMS,
+			MaxNumberOfInstructions: MaxInstructionsPerDisbursement,
+		})
 		require.NoError(t, err)
 
 		instruction1.VerificationValue = "1990-01-04"
-		err = di.ProcessAll(ctx, "user-id", instructions, disbursement, disbursementUpdate, MaxInstructionsPerDisbursement)
+		err = di.ProcessAll(ctx, DisbursementInstructionsOpts{
+			UserID:                  "user-id",
+			Instructions:            instructions,
+			Disbursement:            disbursement,
+			DisbursementUpdate:      disbursementUpdate,
+			ReceiverContactType:     ReceiverContactTypeSMS,
+			MaxNumberOfInstructions: MaxInstructionsPerDisbursement,
+		})
 		require.NoError(t, err)
 
 		// Verify Receivers
-		receivers, err := di.receiverModel.GetByPhoneNumbers(ctx, dbConnectionPool, []string{instruction1.Phone, instruction2.Phone, instruction3.Phone})
+		receivers, err := di.receiverModel.GetByPhoneNumbers(ctx, dbConnectionPool, []string{*instruction1.Phone, *instruction2.Phone, *instruction3.Phone})
 		require.NoError(t, err)
 		assertEqualReceivers(t, expectedPhoneNumbers, expectedExternalIDs, receivers)
 
@@ -151,27 +173,27 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 		})
 
 		newInstruction1 := DisbursementInstruction{
-			Phone:             "+380-12-345-674",
+			Phone:             utils.StringPtr("+380-12-345-674"),
 			Amount:            "100.04",
 			ID:                "123456784",
 			VerificationValue: "1990-01-04",
 		}
 
 		newInstruction2 := DisbursementInstruction{
-			Phone:             "+380-12-345-675",
+			Phone:             utils.StringPtr("+380-12-345-675"),
 			Amount:            "100.05",
 			ID:                "123456785",
 			VerificationValue: "1990-01-05",
 		}
 
 		newInstruction3 := DisbursementInstruction{
-			Phone:             "+380-12-345-676",
+			Phone:             utils.StringPtr("+380-12-345-676"),
 			Amount:            "100.06",
 			ID:                "123456786",
 			VerificationValue: "1990-01-06",
 		}
 		newInstructions := []*DisbursementInstruction{&newInstruction1, &newInstruction2, &newInstruction3}
-		newExpectedPhoneNumbers := []string{newInstruction1.Phone, newInstruction2.Phone, newInstruction3.Phone}
+		newExpectedPhoneNumbers := []string{*newInstruction1.Phone, *newInstruction2.Phone, *newInstruction3.Phone}
 		newExpectedExternalIDs := []string{newInstruction1.ID, newInstruction2.ID, newInstruction3.ID}
 
 		readyDisbursementUpdate := &DisbursementUpdate{
@@ -180,10 +202,17 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 			FileContent: CreateInstructionsFixture(t, newInstructions),
 		}
 
-		err := di.ProcessAll(ctx, "user-id", newInstructions, readyDisbursement, readyDisbursementUpdate, MaxInstructionsPerDisbursement)
+		err := di.ProcessAll(ctx, DisbursementInstructionsOpts{
+			UserID:                  "user-id",
+			Instructions:            newInstructions,
+			Disbursement:            readyDisbursement,
+			DisbursementUpdate:      readyDisbursementUpdate,
+			ReceiverContactType:     ReceiverContactTypeSMS,
+			MaxNumberOfInstructions: MaxInstructionsPerDisbursement,
+		})
 		require.NoError(t, err)
 
-		receivers, err := di.receiverModel.GetByPhoneNumbers(ctx, dbConnectionPool, []string{newInstruction1.Phone, newInstruction2.Phone, newInstruction3.Phone})
+		receivers, err := di.receiverModel.GetByPhoneNumbers(ctx, dbConnectionPool, []string{*newInstruction1.Phone, *newInstruction2.Phone, *newInstruction3.Phone})
 		require.NoError(t, err)
 		assertEqualReceivers(t, newExpectedPhoneNumbers, newExpectedExternalIDs, receivers)
 
@@ -217,7 +246,14 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 			assert.NotNil(t, receiverWallet.InvitationSentAt)
 		}
 
-		err = di.ProcessAll(ctx, "user-id", newInstructions, readyDisbursement, readyDisbursementUpdate, MaxInstructionsPerDisbursement)
+		err = di.ProcessAll(ctx, DisbursementInstructionsOpts{
+			UserID:                  "user-id",
+			Instructions:            newInstructions,
+			Disbursement:            readyDisbursement,
+			DisbursementUpdate:      readyDisbursementUpdate,
+			ReceiverContactType:     ReceiverContactTypeSMS,
+			MaxNumberOfInstructions: MaxInstructionsPerDisbursement,
+		})
 		require.NoError(t, err)
 
 		// Verify ReceiverWallets
@@ -237,7 +273,13 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 	})
 
 	t.Run("failure - Too many instructions", func(t *testing.T) {
-		err := di.ProcessAll(ctx, "user-id", instructions, disbursement, disbursementUpdate, 2)
+		err := di.ProcessAll(ctx, DisbursementInstructionsOpts{
+			UserID:                  "user-id",
+			Instructions:            instructions,
+			Disbursement:            disbursement,
+			DisbursementUpdate:      disbursementUpdate,
+			MaxNumberOfInstructions: 2,
+		})
 		require.EqualError(t, err, "maximum number of instructions exceeded")
 	})
 
@@ -248,7 +290,7 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 		DeleteAllReceiversFixtures(t, ctx, dbConnectionPool)
 
 		instruction4 := DisbursementInstruction{
-			Phone:             "+380-12-345-674",
+			Phone:             utils.StringPtr("+380-12-345-674"),
 			Amount:            "100.04",
 			ID:                "123456784",
 			VerificationValue: "1990-01-04",
@@ -256,7 +298,7 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 		}
 
 		instruction5 := DisbursementInstruction{
-			Phone:             "+380-12-345-675",
+			Phone:             utils.StringPtr("+380-12-345-675"),
 			Amount:            "100.05",
 			ID:                "123456785",
 			VerificationValue: "1990-01-05",
@@ -264,7 +306,7 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 		}
 
 		instruction6 := DisbursementInstruction{
-			Phone:             "+380-12-345-676",
+			Phone:             utils.StringPtr("+380-12-345-676"),
 			Amount:            "100.06",
 			ID:                "123456786",
 			VerificationValue: "1990-01-06",
@@ -272,24 +314,38 @@ func Test_DisbursementInstructionModel_ProcessAll(t *testing.T) {
 		}
 
 		// process instructions for the first time
-		err := di.ProcessAll(ctx, "user-id", instructions, disbursement, disbursementUpdate, MaxInstructionsPerDisbursement)
+		err := di.ProcessAll(ctx, DisbursementInstructionsOpts{
+			UserID:                  "user-id",
+			Instructions:            instructions,
+			Disbursement:            disbursement,
+			DisbursementUpdate:      disbursementUpdate,
+			ReceiverContactType:     ReceiverContactTypeSMS,
+			MaxNumberOfInstructions: MaxInstructionsPerDisbursement,
+		})
 		require.NoError(t, err)
 
-		receivers, err := di.receiverModel.GetByPhoneNumbers(ctx, dbConnectionPool, []string{instruction1.Phone, instruction2.Phone, instruction3.Phone, instruction4.Phone, instruction5.Phone, instruction6.Phone})
+		receivers, err := di.receiverModel.GetByPhoneNumbers(ctx, dbConnectionPool, []string{*instruction1.Phone, *instruction2.Phone, *instruction3.Phone, *instruction4.Phone, *instruction5.Phone, *instruction6.Phone})
 		require.NoError(t, err)
 		receiversMap := make(map[string]*Receiver)
 		for _, receiver := range receivers {
-			receiversMap[receiver.PhoneNumber] = receiver
+			receiversMap[*receiver.PhoneNumber] = receiver
 		}
 
 		// confirm a verification
-		ConfirmVerificationForRecipient(t, ctx, dbConnectionPool, receiversMap[instruction3.Phone].ID)
+		ConfirmVerificationForRecipient(t, ctx, dbConnectionPool, receiversMap[*instruction3.Phone].ID)
 
 		// process instructions with mismatched verification values
 		instruction3.VerificationValue = "1990-01-07"
-		err = di.ProcessAll(ctx, "user-id", instructions, disbursement, disbursementUpdate, MaxInstructionsPerDisbursement)
+		err = di.ProcessAll(ctx, DisbursementInstructionsOpts{
+			UserID:                  "user-id",
+			Instructions:            instructions,
+			Disbursement:            disbursement,
+			DisbursementUpdate:      disbursementUpdate,
+			ReceiverContactType:     ReceiverContactTypeSMS,
+			MaxNumberOfInstructions: MaxInstructionsPerDisbursement,
+		})
 		require.Error(t, err)
-		assert.EqualError(t, err, "running atomic function in RunInTransactionWithResult: receiver verification mismatch: receiver verification for +380-12-345-673 doesn't match. Check line 3 on CSV file - Internal ID 123456783")
+		assert.EqualError(t, err, "running atomic function in RunInTransactionWithResult: processing receiver verifications: receiver verification mismatch: receiver verification for +380-12-345-673 doesn't match. Check instruction with ID 123456783")
 	})
 }
 
@@ -297,7 +353,8 @@ func assertEqualReceivers(t *testing.T, expectedPhones, expectedExternalIDs []st
 	assert.Len(t, actualReceivers, len(expectedPhones))
 
 	for _, actual := range actualReceivers {
-		assert.Contains(t, expectedPhones, actual.PhoneNumber)
+		assert.NotNil(t, actual.PhoneNumber)
+		assert.Contains(t, expectedPhones, *actual.PhoneNumber)
 		assert.Contains(t, expectedExternalIDs, actual.ExternalID)
 	}
 }
@@ -307,11 +364,11 @@ func assertEqualVerifications(t *testing.T, expectedInstructions []*Disbursement
 
 	instructionsMap := make(map[string]*DisbursementInstruction)
 	for _, instruction := range expectedInstructions {
-		instructionsMap[instruction.Phone] = instruction
+		instructionsMap[*instruction.Phone] = instruction
 	}
 	phonesByReceiverId := make(map[string]string)
 	for _, receiver := range receivers {
-		phonesByReceiverId[receiver.ID] = receiver.PhoneNumber
+		phonesByReceiverId[receiver.ID] = *receiver.PhoneNumber
 	}
 
 	for _, actual := range actualVerifications {

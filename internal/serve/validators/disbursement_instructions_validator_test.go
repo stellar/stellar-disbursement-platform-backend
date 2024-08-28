@@ -18,7 +18,7 @@ func Test_DisbursementInstructionsValidator_ValidateAndGetInstruction(t *testing
 		expectedErrors    map[string]interface{}
 	}{
 		{
-			name: "error if phone number is empty",
+			name: "error if phone number and email are empty",
 			instruction: &data.DisbursementInstruction{
 				ID:                "123456789",
 				Amount:            "100.5",
@@ -28,7 +28,7 @@ func Test_DisbursementInstructionsValidator_ValidateAndGetInstruction(t *testing
 			verificationField: data.VerificationFieldDateOfBirth,
 			hasErrors:         true,
 			expectedErrors: map[string]interface{}{
-				"line 2 - phone": "phone cannot be empty",
+				"line 2 - contact": "phone or email must be provided",
 			},
 		},
 		{
@@ -41,17 +41,13 @@ func Test_DisbursementInstructionsValidator_ValidateAndGetInstruction(t *testing
 				"line 2 - amount":        "invalid amount. Amount must be a positive number",
 				"line 2 - date of birth": "date of birth cannot be empty",
 				"line 2 - id":            "id cannot be empty",
-				"line 2 - phone":         "phone cannot be empty",
+				"line 2 - contact":       "phone or email must be provided",
 			},
 		},
 		{
 			name: "error if phone number format is invalid",
-			instruction: &data.DisbursementInstruction{
-				Phone:             "+123-12-345-678",
-				ID:                "123456789",
-				Amount:            "100.5",
-				VerificationValue: "1990-01-01",
-			},
+			instruction: data.NewDisbursementInstruction("123456789", "100.5", "1990-01-01").
+				WithPhone("+123-12-345-678"),
 			lineNumber:        2,
 			verificationField: data.VerificationFieldDateOfBirth,
 			hasErrors:         true,
@@ -61,12 +57,8 @@ func Test_DisbursementInstructionsValidator_ValidateAndGetInstruction(t *testing
 		},
 		{
 			name: "error if amount format is invalid",
-			instruction: &data.DisbursementInstruction{
-				Phone:             "+380445555555",
-				ID:                "123456789",
-				Amount:            "100.5USDC",
-				VerificationValue: "1990-01-01",
-			},
+			instruction: data.NewDisbursementInstruction("123456789", "100.5USDC", "1990-01-01").
+				WithPhone("+380445555555"),
 			lineNumber:        3,
 			verificationField: data.VerificationFieldDateOfBirth,
 			hasErrors:         true,
@@ -75,13 +67,20 @@ func Test_DisbursementInstructionsValidator_ValidateAndGetInstruction(t *testing
 			},
 		},
 		{
-			name: "error if amount is not positive",
-			instruction: &data.DisbursementInstruction{
-				Phone:             "+380445555555",
-				ID:                "123456789",
-				Amount:            "-100.5",
-				VerificationValue: "1990-01-01",
+			name: "error if email is not valid",
+			instruction: data.NewDisbursementInstruction("123456789", "100.5", "1990-01-01").
+				WithEmail("invalidemail"),
+			lineNumber:        3,
+			verificationField: data.VerificationFieldDateOfBirth,
+			hasErrors:         true,
+			expectedErrors: map[string]interface{}{
+				"line 3 - email": "invalid email format",
 			},
+		},
+		{
+			name: "error if amount is not positive",
+			instruction: data.NewDisbursementInstruction("123456789", "-100.5", "1990-01-01").
+				WithPhone("+380445555555"),
 			lineNumber:        3,
 			verificationField: data.VerificationFieldDateOfBirth,
 			hasErrors:         true,
@@ -91,12 +90,8 @@ func Test_DisbursementInstructionsValidator_ValidateAndGetInstruction(t *testing
 		},
 		{
 			name: "error if DoB format is invalid",
-			instruction: &data.DisbursementInstruction{
-				Phone:             "+380445555555",
-				ID:                "123456789",
-				Amount:            "100.5",
-				VerificationValue: "1990/01/01",
-			},
+			instruction: data.NewDisbursementInstruction("123456789", "100.5", "1990/01/01").
+				WithPhone("+380445555555"),
 			lineNumber:        3,
 			verificationField: data.VerificationFieldDateOfBirth,
 			hasErrors:         true,
@@ -106,12 +101,8 @@ func Test_DisbursementInstructionsValidator_ValidateAndGetInstruction(t *testing
 		},
 		{
 			name: "error if DoB in the future",
-			instruction: &data.DisbursementInstruction{
-				Phone:             "+380445555555",
-				ID:                "123456789",
-				Amount:            "100.5",
-				VerificationValue: "2090-01-01",
-			},
+			instruction: data.NewDisbursementInstruction("123456789", "100.5", "2090-01-01").
+				WithPhone("+380445555555"),
 			lineNumber:        3,
 			verificationField: data.VerificationFieldDateOfBirth,
 			hasErrors:         true,
@@ -121,12 +112,8 @@ func Test_DisbursementInstructionsValidator_ValidateAndGetInstruction(t *testing
 		},
 		{
 			name: "error if year month format is invalid",
-			instruction: &data.DisbursementInstruction{
-				Phone:             "+380445555555",
-				ID:                "123456789",
-				Amount:            "100.5",
-				VerificationValue: "1990/01",
-			},
+			instruction: data.NewDisbursementInstruction("123456789", "100.5", "1990/01").
+				WithPhone("+380445555555"),
 			lineNumber:        3,
 			verificationField: data.VerificationFieldYearMonth,
 			hasErrors:         true,
@@ -136,12 +123,8 @@ func Test_DisbursementInstructionsValidator_ValidateAndGetInstruction(t *testing
 		},
 		{
 			name: "error if year month in the future",
-			instruction: &data.DisbursementInstruction{
-				Phone:             "+380445555555",
-				ID:                "123456789",
-				Amount:            "100.5",
-				VerificationValue: "2090-01",
-			},
+			instruction: data.NewDisbursementInstruction("123456789", "100.5", "2090-01").
+				WithPhone("+380445555555"),
 			lineNumber:        3,
 			verificationField: data.VerificationFieldYearMonth,
 			hasErrors:         true,
@@ -151,12 +134,8 @@ func Test_DisbursementInstructionsValidator_ValidateAndGetInstruction(t *testing
 		},
 		{
 			name: "error if PIN is invalid - less than 4 characters",
-			instruction: &data.DisbursementInstruction{
-				Phone:             "+380445555555",
-				ID:                "123456789",
-				Amount:            "100.5",
-				VerificationValue: "123",
-			},
+			instruction: data.NewDisbursementInstruction("123456789", "100.5", "123").
+				WithPhone("+380445555555"),
 			lineNumber:        3,
 			verificationField: data.VerificationFieldPin,
 			hasErrors:         true,
@@ -166,12 +145,8 @@ func Test_DisbursementInstructionsValidator_ValidateAndGetInstruction(t *testing
 		},
 		{
 			name: "error if PIN is invalid - more than 8 characters",
-			instruction: &data.DisbursementInstruction{
-				Phone:             "+380445555555",
-				ID:                "123456789",
-				Amount:            "100.5",
-				VerificationValue: "123456789",
-			},
+			instruction: data.NewDisbursementInstruction("123456789", "100.5", "123456789").
+				WithPhone("+380445555555"),
 			lineNumber:        3,
 			verificationField: data.VerificationFieldPin,
 			hasErrors:         true,
@@ -181,12 +156,8 @@ func Test_DisbursementInstructionsValidator_ValidateAndGetInstruction(t *testing
 		},
 		{
 			name: "error if NATIONAL_ID_NUMBER is invalid - more than 50 characters",
-			instruction: &data.DisbursementInstruction{
-				Phone:             "+380445555555",
-				ID:                "123456789",
-				Amount:            "100.5",
-				VerificationValue: "6UZMB56FWTKV4U0PJ21TBR6VOQVYSGIMZG2HW2S0L7EK5K83W78",
-			},
+			instruction: data.NewDisbursementInstruction("123456789", "100.5", "6UZMB56FWTKV4U0PJ21TBR6VOQVYSGIMZG2HW2S0L7EK5K83W78").
+				WithPhone("+380445555555"),
 			lineNumber:        3,
 			verificationField: data.VerificationFieldNationalID,
 			hasErrors:         true,
@@ -197,48 +168,49 @@ func Test_DisbursementInstructionsValidator_ValidateAndGetInstruction(t *testing
 		// VALID CASES
 		{
 			name: "🎉 successfully validates instructions (DATE_OF_BIRTH)",
-			instruction: &data.DisbursementInstruction{
-				Phone:             "+380445555555",
-				ID:                "123456789",
-				Amount:            "100.5",
-				VerificationValue: "1990-01-01",
-			},
+			instruction: data.NewDisbursementInstruction("123456789", "100.5", "1990-01-01").
+				WithPhone("+380445555555"),
 			lineNumber:        1,
 			verificationField: data.VerificationFieldDateOfBirth,
 			hasErrors:         false,
 		},
 		{
 			name: "🎉 successfully validates instructions (YEAR_MONTH)",
-			instruction: &data.DisbursementInstruction{
-				Phone:             "+380445555555",
-				ID:                "123456789",
-				Amount:            "100.5",
-				VerificationValue: "1990-01",
-			},
+			instruction: data.NewDisbursementInstruction("123456789", "100.5", "1990-01").
+				WithPhone("+380445555555"),
 			lineNumber:        1,
 			verificationField: data.VerificationFieldYearMonth,
 			hasErrors:         false,
 		},
 		{
 			name: "🎉 successfully validates instructions (NATIONAL_ID_NUMBER)",
-			instruction: &data.DisbursementInstruction{
-				Phone:             "+380445555555",
-				ID:                "123456789",
-				Amount:            "100.5",
-				VerificationValue: "ABCD123",
-			},
+			instruction: data.NewDisbursementInstruction("123456789", "100.5", "ABCD123").
+				WithPhone("+380445555555"),
 			lineNumber:        3,
 			verificationField: data.VerificationFieldNationalID,
 			hasErrors:         false,
 		},
 		{
 			name: "🎉 successfully validates instructions (PIN)",
-			instruction: &data.DisbursementInstruction{
-				Phone:             "+380445555555",
-				ID:                "123456789",
-				Amount:            "100.5",
-				VerificationValue: "1234",
-			},
+			instruction: data.NewDisbursementInstruction("123456789", "100.5", "1234").
+				WithPhone("+380445555555"),
+			lineNumber:        3,
+			verificationField: data.VerificationFieldPin,
+			hasErrors:         false,
+		},
+		{
+			name: "🎉 successfully validates instructions (Email)",
+			instruction: data.NewDisbursementInstruction("123456789", "100.5", "1234").
+				WithEmail("myemail@stellar.org"),
+			lineNumber:        3,
+			verificationField: data.VerificationFieldPin,
+			hasErrors:         false,
+		},
+		{
+			name: "🎉 successfully validates instructions (Email And Phone)",
+			instruction: data.NewDisbursementInstruction("123456789", "100.5", "1234").
+				WithEmail("myemail@stellar.org").
+				WithPhone("+380445555555"),
 			lineNumber:        3,
 			verificationField: data.VerificationFieldPin,
 			hasErrors:         false,
@@ -269,36 +241,26 @@ func Test_DisbursementInstructionsValidator_SanitizeInstruction(t *testing.T) {
 	}{
 		{
 			name: "Sanitized instruction",
-			actual: &data.DisbursementInstruction{
-				Phone:             "  +380445555555  ",
-				ID:                "  123456789  ",
-				Amount:            "  100.5  ",
-				VerificationValue: "  1990-01-01  ",
-			},
-			expectedInstruction: &data.DisbursementInstruction{
-				Phone:             "+380445555555",
-				ID:                "123456789",
-				Amount:            "100.5",
-				VerificationValue: "1990-01-01",
-				ExternalPaymentId: nil,
-			},
+			actual: data.NewDisbursementInstruction("  123456789  ", "  100.5  ", "  1990-01-01  ").
+				WithPhone("  +380445555555  "),
+			expectedInstruction: data.NewDisbursementInstruction("123456789", "100.5", "1990-01-01").
+				WithPhone("+380445555555"),
 		},
 		{
 			name: "Sanitized instruction with external payment id",
-			actual: &data.DisbursementInstruction{
-				Phone:             "  +380445555555  ",
-				ID:                "  123456789  ",
-				Amount:            "  100.5  ",
-				VerificationValue: "  1990-01-01  ",
-				ExternalPaymentId: &externalPaymentIDWithSpaces,
-			},
-			expectedInstruction: &data.DisbursementInstruction{
-				Phone:             "+380445555555",
-				ID:                "123456789",
-				Amount:            "100.5",
-				VerificationValue: "1990-01-01",
-				ExternalPaymentId: &externalPaymentID,
-			},
+			actual: data.NewDisbursementInstruction("  123456789  ", "  100.5  ", "  1990-01-01  ").
+				WithPhone("  +380445555555  ").
+				WithExternalPaymentID(externalPaymentIDWithSpaces),
+			expectedInstruction: data.NewDisbursementInstruction("123456789", "100.5", "1990-01-01").
+				WithPhone("+380445555555").
+				WithExternalPaymentID(externalPaymentID),
+		},
+		{
+			name: "Sanitized instruction with email",
+			actual: data.NewDisbursementInstruction("  123456789  ", "  100.5  ", "  1990-01-01  ").
+				WithEmail("   MyEmail@stellar.org  "),
+			expectedInstruction: data.NewDisbursementInstruction("123456789", "100.5", "1990-01-01").
+				WithEmail("myemail@stellar.org"),
 		},
 	}
 

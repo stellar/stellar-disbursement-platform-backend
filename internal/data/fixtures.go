@@ -295,8 +295,8 @@ func CreateReceiverFixture(t *testing.T, ctx context.Context, sqlExec db.SQLExec
 		r.Email = &email
 	}
 
-	if r.PhoneNumber == "" {
-		r.PhoneNumber = "+141555" + randomSuffix
+	if r.PhoneNumber == nil {
+		r.PhoneNumber = utils.StringPtr("+141555" + randomSuffix)
 	}
 
 	if r.ExternalID == "" {
@@ -592,7 +592,7 @@ func CreateInstructionsFixture(t *testing.T, instructions []*DisbursementInstruc
 
 	// write instructions
 	for _, instruction := range instructions {
-		record := []string{instruction.Phone, instruction.ID, instruction.Amount, instruction.VerificationValue}
+		record := []string{*instruction.Phone, instruction.ID, instruction.Amount, instruction.VerificationValue}
 		err := writer.Write(record)
 		require.NoError(t, err)
 	}

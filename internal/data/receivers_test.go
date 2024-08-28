@@ -463,7 +463,7 @@ func Test_ReceiversModelGetAll(t *testing.T) {
 	receiver1Email := "receiver1@mock.com"
 	receiver1 := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{
 		Email:       &receiver1Email,
-		PhoneNumber: "+99991111",
+		PhoneNumber: utils.StringPtr("+99991111"),
 		ExternalID:  "external-id-1",
 		CreatedAt:   &date,
 		UpdatedAt:   &date,
@@ -473,7 +473,7 @@ func Test_ReceiversModelGetAll(t *testing.T) {
 	receiver2Email := "receiver2@mock.com"
 	receiver2 := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{
 		Email:       &receiver2Email,
-		PhoneNumber: "+99992222",
+		PhoneNumber: utils.StringPtr("+99992222"),
 		ExternalID:  "external-id-2",
 		CreatedAt:   &date,
 		UpdatedAt:   &date,
@@ -856,7 +856,7 @@ func Test_ReceiversModel_GetAll_makeSureReceiversWithMultipleWalletsWillReturnAS
 	receiver1Email := "receiver1@mock.com"
 	receiver := CreateReceiverFixture(t, ctx, dbConnectionPool, &Receiver{
 		Email:       &receiver1Email,
-		PhoneNumber: "+99991111",
+		PhoneNumber: utils.StringPtr("+99991111"),
 		ExternalID:  "external-id-1",
 	})
 
@@ -995,7 +995,7 @@ func Test_DeleteByPhoneNumber(t *testing.T) {
 	}) // This payment will be deleted along with the remaining receiverX-related data
 
 	// 4. Delete receiverX
-	err = models.Receiver.DeleteByPhoneNumber(ctx, dbConnectionPool, receiverX.PhoneNumber)
+	err = models.Receiver.DeleteByPhoneNumber(ctx, dbConnectionPool, *receiverX.PhoneNumber)
 	require.NoError(t, err)
 
 	type testCase struct {
@@ -1123,21 +1123,18 @@ func Test_ReceiversModel_Update(t *testing.T) {
 	t.Run("returns error when no value is provided", func(t *testing.T) {
 		resetReceiver(t, ctx, dbConnectionPool, receiver.ID)
 
-		err = receiverModel.Update(ctx, dbConnectionPool, receiver.ID, ReceiverUpdate{
-			Email:      "",
-			ExternalId: "",
-		})
-		assert.EqualError(t, err, "provide at least one of these values: Email or ExternalID")
+		err = receiverModel.Update(ctx, dbConnectionPool, receiver.ID, ReceiverUpdate{})
+		assert.EqualError(t, err, "validating receiver update: no values provided to update receiver")
 	})
 
 	t.Run("returns error when email is invalid", func(t *testing.T) {
 		resetReceiver(t, ctx, dbConnectionPool, receiver.ID)
 
 		err = receiverModel.Update(ctx, dbConnectionPool, receiver.ID, ReceiverUpdate{
-			Email:      "invalid",
-			ExternalId: "",
+			Email:      utils.StringPtr("invalid"),
+			ExternalId: utils.StringPtr(""),
 		})
-		assert.EqualError(t, err, `error validating email: the provided email is not valid`)
+		assert.EqualError(t, err, `validating receiver update: validating email: the provided email is not valid`)
 	})
 
 	t.Run("updates email name successfully", func(t *testing.T) {
@@ -1149,8 +1146,7 @@ func Test_ReceiversModel_Update(t *testing.T) {
 		assert.Equal(t, externalID, receiver.ExternalID)
 
 		err = receiverModel.Update(ctx, dbConnectionPool, receiver.ID, ReceiverUpdate{
-			Email:      "updated_email@email.com",
-			ExternalId: "",
+			Email: utils.StringPtr("updated_email@email.com"),
 		})
 		require.NoError(t, err)
 
@@ -1170,8 +1166,8 @@ func Test_ReceiversModel_Update(t *testing.T) {
 		assert.Equal(t, externalID, receiver.ExternalID)
 
 		err := receiverModel.Update(ctx, dbConnectionPool, receiver.ID, ReceiverUpdate{
-			Email:      "updated_email@email.com",
-			ExternalId: "newExternalID",
+			Email:      utils.StringPtr("updated_email@email.com"),
+			ExternalId: utils.StringPtr("newExternalID"),
 		})
 		require.NoError(t, err)
 

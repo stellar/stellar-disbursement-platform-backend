@@ -156,8 +156,13 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context, receive
 		}
 
 		msg := message.Message{
-			ToPhoneNumber: rwa.ReceiverWallet.Receiver.PhoneNumber,
-			Message:       content.String(),
+			Message: content.String(),
+		}
+		if rwa.ReceiverWallet.Receiver.PhoneNumber != nil {
+			msg.ToPhoneNumber = *rwa.ReceiverWallet.Receiver.PhoneNumber
+		}
+		if rwa.ReceiverWallet.Receiver.Email != nil {
+			msg.ToEmail = *rwa.ReceiverWallet.Receiver.Email
 		}
 
 		assetID := rwa.Asset.ID
@@ -183,12 +188,12 @@ func (s SendReceiverWalletInviteService) SendInvite(ctx context.Context, receive
 		// We assume that the message will be sent at first
 		msgToInsert.Status = data.SuccessMessageStatus
 		if err := s.messageDispatcher.SendMessage(ctx, msg, organization.MessageChannelPriority); err != nil {
-			msg := fmt.Sprintf(
+			errMsg := fmt.Sprintf(
 				"error sending message to receiver ID %s for receiver wallet ID %s using messenger type %s",
 				rwa.ReceiverWallet.Receiver.ID, rwa.ReceiverWallet.ID, messageType,
 			)
 			// call crash tracker client to log and report error
-			s.crashTrackerClient.LogAndReportErrors(ctx, err, msg)
+			s.crashTrackerClient.LogAndReportErrors(ctx, err, errMsg)
 			msgToInsert.Status = data.FailureMessageStatus
 		}
 
@@ -243,7 +248,17 @@ func (s SendReceiverWalletInviteService) resolveReceiverWalletsPendingRegistrati
 // Interval and the maximum number of SMS resend attempts.
 
 func (s SendReceiverWalletInviteService) shouldSendInvitationSMS(ctx context.Context, organization *data.Organization, rwa *data.ReceiverWalletAsset) bool {
-	truncatedPhoneNumber := utils.TruncateString(rwa.ReceiverWallet.Receiver.PhoneNumber, 3)
+	receiver := rwa.ReceiverWallet.Receiver
+
+	// TODO: SDP-1316 - add support for other contact information in this method.
+	var phoneNumber string
+	if receiver.PhoneNumber == nil {
+		return false
+	} else {
+		phoneNumber = *receiver.PhoneNumber
+	}
+
+	truncatedReceiverContact := utils.TruncateString(phoneNumber, 3)
 
 	// We've never sent a Invitation SMS
 	if rwa.ReceiverWallet.InvitationSentAt == nil {
@@ -254,7 +269,7 @@ func (s SendReceiverWalletInviteService) shouldSendInvitationSMS(ctx context.Con
 	if organization.SMSResendInterval == nil && rwa.ReceiverWallet.InvitationSentAt != nil {
 		log.Ctx(ctx).Debugf(
 			"the invitation message was not automatically resent to the receiver %s with phone number %s because the organization's SMS Resend Interval is nil",
-			rwa.ReceiverWallet.Receiver.ID, truncatedPhoneNumber)
+			receiver.ID, truncatedReceiverContact)
 		return false
 	}
 
@@ -264,8 +279,8 @@ func (s SendReceiverWalletInviteService) shouldSendInvitationSMS(ctx context.Con
 		if rwa.ReceiverWallet.ReceiverWalletStats.TotalInvitationSMSResentAttempts >= s.maxInvitationSMSResendAttempts {
 			log.Ctx(ctx).Debugf(
 				"the invitation message was not resent to the receiver because the maximum number of SMS resend attempts has been reached: Phone Number: %s - Receiver ID %s - Wallet ID %s - Total Invitation SMS resent %d - Maximum attempts %d",
-				truncatedPhoneNumber,
-				rwa.ReceiverWallet.Receiver.ID,
+				truncatedReceiverContact,
+				receiver.ID,
 				rwa.WalletID,
 				rwa.ReceiverWallet.ReceiverWalletStats.TotalInvitationSMSResentAttempts,
 				s.maxInvitationSMSResendAttempts,
@@ -279,8 +294,8 @@ func (s SendReceiverWalletInviteService) shouldSendInvitationSMS(ctx context.Con
 		if !rwa.ReceiverWallet.InvitationSentAt.Before(resendPeriod) {
 			log.Ctx(ctx).Debugf(
 				"the invitation message was not automatically resent to the receiver because the receiver is not in the resend period: Phone Number: %s - Receiver ID %s - Wallet ID %s - Last Invitation Sent At %s - SMS Resend Interval %d day(s)",
-				truncatedPhoneNumber,
-				rwa.ReceiverWallet.Receiver.ID,
+				truncatedReceiverContact,
+				receiver.ID,
 				rwa.WalletID,
 				rwa.ReceiverWallet.InvitationSentAt.Format(time.RFC1123),
 				*organization.SMSResendInterval,

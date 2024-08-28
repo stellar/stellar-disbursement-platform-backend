@@ -116,8 +116,8 @@ func Test_UpdateReceiverHandler(t *testing.T) {
 
 	ctx := context.Background()
 	receiver := data.CreateReceiverFixture(t, ctx, dbConnectionPool, &data.Receiver{
-		PhoneNumber: "+380445555555",
-		Email:       &[]string{"receiver@email.com"}[0],
+		PhoneNumber: utils.StringPtr("+380445555555"),
+		Email:       utils.StringPtr("receiver@email.com"),
 		ExternalID:  "externalID",
 	})
 

@@ -3,12 +3,14 @@ package httphandler
 import (
 	"bytes"
 	"context"
+	"encoding/csv"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -217,12 +219,19 @@ func (d DisbursementHandler) PostDisbursementInstructions(w http.ResponseWriter,
 	}
 	defer file.Close()
 
-	// TeeReader is used to read multiple times from the same reader (file)
-	// We read once to process the instructions, and then again to persist the file to the database
 	var buf bytes.Buffer
-	reader := io.TeeReader(file, &buf)
+	if _, err = io.Copy(&buf, file); err != nil {
+		httperror.BadRequest("could not read file", err, nil).Render(w)
+		return
+	}
 
-	instructions, v := parseInstructionsFromCSV(ctx, reader, disbursement.VerificationField)
+	contactType, err := resolveReceiverContactType(bytes.NewReader(buf.Bytes()))
+	if err != nil {
+		httperror.BadRequest("could not determine contact information type", err, nil).Render(w)
+		return
+	}
+
+	instructions, v := parseInstructionsFromCSV(ctx, bytes.NewReader(buf.Bytes()), disbursement.VerificationField)
 	if v != nil && v.HasErrors() {
 		httperror.BadRequest("could not parse csv file", err, v.Errors).Render(w)
 		return
@@ -247,7 +256,14 @@ func (d DisbursementHandler) PostDisbursementInstructions(w http.ResponseWriter,
 		return
 	}
 
-	if err = d.Models.DisbursementInstructions.ProcessAll(ctx, user.ID, instructions, disbursement, disbursementUpdate, data.MaxInstructionsPerDisbursement); err != nil {
+	if err = d.Models.DisbursementInstructions.ProcessAll(ctx, data.DisbursementInstructionsOpts{
+		UserID:                  user.ID,
+		Instructions:            instructions,
+		ReceiverContactType:     contactType,
+		Disbursement:            disbursement,
+		DisbursementUpdate:      disbursementUpdate,
+		MaxNumberOfInstructions: data.MaxInstructionsPerDisbursement,
+	}); err != nil {
 		switch {
 		case errors.Is(err, data.ErrMaxInstructionsExceeded):
 			httperror.BadRequest(fmt.Sprintf("number of instructions exceeds maximum of : %d", data.MaxInstructionsPerDisbursement), err, nil).Render(w)
@@ -438,11 +454,12 @@ func (d DisbursementHandler) GetDisbursementInstructions(w http.ResponseWriter, 
 	}
 }
 
-func parseInstructionsFromCSV(ctx context.Context, file io.Reader, verificationField data.VerificationField) ([]*data.DisbursementInstruction, *validators.DisbursementInstructionsValidator) {
+// parseInstructionsFromCSV parses the CSV file and returns a list of DisbursementInstructions
+func parseInstructionsFromCSV(ctx context.Context, reader io.Reader, verificationField data.VerificationField) ([]*data.DisbursementInstruction, *validators.DisbursementInstructionsValidator) {
 	validator := validators.NewDisbursementInstructionsValidator(verificationField)
 
 	instructions := []*data.DisbursementInstruction{}
-	if err := gocsv.Unmarshal(file, &instructions); err != nil {
+	if err := gocsv.Unmarshal(reader, &instructions); err != nil {
 		log.Ctx(ctx).Errorf("error parsing csv file: %s", err.Error())
 		validator.Errors["file"] = "could not parse file"
 		return nil, validator
@@ -463,4 +480,39 @@ func parseInstructionsFromCSV(ctx context.Context, file io.Reader, verificationF
 	}
 
 	return sanitizedInstructions, nil
+}
+
+// resolveReceiverContactType determines the type of contact information in the CSV file
+func resolveReceiverContactType(file io.Reader) (data.ReceiverContactType, error) {
+	csvReader := csv.NewReader(file)
+	headers, err := csvReader.Read()
+	if err != nil {
+		return "", fmt.Errorf("reading csv headers: %w", err)
+	}
+
+	hasPhone := false
+	hasEmail := false
+	for _, header := range headers {
+		switch strings.ToLower(strings.TrimSpace(header)) {
+		case "phone":
+			hasPhone = true
+		case "email":
+			hasEmail = true
+		}
+		if hasPhone && hasEmail {
+			return "", fmt.Errorf("csv file must contain either a phone or email column, not both")
+		}
+	}
+
+	if !hasPhone && !hasEmail {
+		return "", fmt.Errorf("csv file must contain at least one of the following columns: phone, email")
+	}
+
+	if hasPhone {
+		return data.ReceiverContactTypeSMS, nil
+	}
+	if hasEmail {
+		return data.ReceiverContactTypeEmail, nil
+	}
+	return "", fmt.Errorf("csv file must contain either a phone or email column")
 }

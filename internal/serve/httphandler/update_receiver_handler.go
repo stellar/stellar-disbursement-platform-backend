@@ -97,13 +97,17 @@ func (h UpdateReceiverHandler) UpdateReceiver(rw http.ResponseWriter, req *http.
 			}
 		}
 
-		receiverUpdate := data.ReceiverUpdate{
-			Email:      reqBody.Email,
-			ExternalId: reqBody.ExternalID,
+		receiverUpdate := data.ReceiverUpdate{}
+		if reqBody.Email != "" {
+			receiverUpdate.Email = &reqBody.Email
 		}
-		if receiverUpdate.Email != "" || receiverUpdate.ExternalId != "" {
+		if reqBody.ExternalID != "" {
+			receiverUpdate.ExternalId = &reqBody.ExternalID
+		}
+
+		if !receiverUpdate.IsEmpty() {
 			if innerErr = h.Models.Receiver.Update(ctx, dbTx, receiverID, receiverUpdate); innerErr != nil {
-				return nil, fmt.Errorf("error updating receiver with ID %s: %w", receiverID, innerErr)
+				return nil, fmt.Errorf("updating receiver with ID %s: %w", receiverID, innerErr)
 			}
 		}
 

@@ -603,7 +603,7 @@ func Test_ReceiverWallet_UpdateOTPByReceiverPhoneNumberAndWalletHomePage(t *test
 
 		testingOTP := "123456"
 
-		rowsUpdated, err := receiverWalletModel.UpdateOTPByReceiverPhoneNumberAndWalletDomain(ctx, receiver1.PhoneNumber, wallet1.SEP10ClientDomain, testingOTP)
+		rowsUpdated, err := receiverWalletModel.UpdateOTPByReceiverPhoneNumberAndWalletDomain(ctx, *receiver1.PhoneNumber, wallet1.SEP10ClientDomain, testingOTP)
 		require.NoError(t, err)
 		assert.Equal(t, 1, rowsUpdated)
 	})
@@ -629,7 +629,7 @@ func Test_ReceiverWallet_UpdateOTPByReceiverPhoneNumberAndWalletHomePage(t *test
 		_, err := dbConnectionPool.ExecContext(ctx, q, rw1.ID)
 		require.NoError(t, err)
 
-		rowsUpdated, err := receiverWalletModel.UpdateOTPByReceiverPhoneNumberAndWalletDomain(ctx, receiver2.PhoneNumber, wallet1.SEP10ClientDomain, testingOTP)
+		rowsUpdated, err := receiverWalletModel.UpdateOTPByReceiverPhoneNumberAndWalletDomain(ctx, *receiver2.PhoneNumber, wallet1.SEP10ClientDomain, testingOTP)
 		require.NoError(t, err)
 		assert.Equal(t, 1, rowsUpdated)
 
@@ -656,7 +656,7 @@ func Test_ReceiverWallet_UpdateOTPByReceiverPhoneNumberAndWalletHomePage(t *test
 		_, err := dbConnectionPool.ExecContext(ctx, q)
 		require.NoError(t, err)
 
-		rowsUpdated, err := receiverWalletModel.UpdateOTPByReceiverPhoneNumberAndWalletDomain(ctx, receiver1.PhoneNumber, wallet1.SEP10ClientDomain, testingOTP)
+		rowsUpdated, err := receiverWalletModel.UpdateOTPByReceiverPhoneNumberAndWalletDomain(ctx, *receiver1.PhoneNumber, wallet1.SEP10ClientDomain, testingOTP)
 		require.NoError(t, err)
 		assert.Equal(t, 0, rowsUpdated)
 	})
@@ -1246,7 +1246,7 @@ func Test_GetByStellarAccountAndMemo(t *testing.T) {
 	})
 
 	receiverWallet := CreateReceiverWalletFixture(t, ctx, dbConnectionPool, receiver.ID, wallet.ID, DraftReceiversWalletStatus)
-	results, err := receiverWalletModel.UpdateOTPByReceiverPhoneNumberAndWalletDomain(ctx, receiver.PhoneNumber, wallet.SEP10ClientDomain, "123456")
+	results, err := receiverWalletModel.UpdateOTPByReceiverPhoneNumberAndWalletDomain(ctx, *receiver.PhoneNumber, wallet.SEP10ClientDomain, "123456")
 	require.NoError(t, err)
 	require.Equal(t, 1, results)
 

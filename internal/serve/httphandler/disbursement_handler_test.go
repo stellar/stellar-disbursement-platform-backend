@@ -909,7 +909,7 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 				{},
 			},
 			expectedStatus:  http.StatusBadRequest,
-			expectedMessage: "could not parse file",
+			expectedMessage: "could not determine contact information type",
 		},
 		{
 			name:           "no instructions found in file",
@@ -1158,7 +1158,7 @@ func Test_DisbursementHandler_GetDisbursementReceivers(t *testing.T) {
 	expectedDisbursementReceivers := []data.DisbursementReceiver{
 		{
 			ID:             receiver3.ID,
-			PhoneNumber:    receiver3.PhoneNumber,
+			PhoneNumber:    *receiver3.PhoneNumber,
 			Email:          *receiver3.Email,
 			ExternalID:     receiver3.ExternalID,
 			ReceiverWallet: receiverWallet3,
@@ -1168,7 +1168,7 @@ func Test_DisbursementHandler_GetDisbursementReceivers(t *testing.T) {
 		},
 		{
 			ID:             receiver2.ID,
-			PhoneNumber:    receiver2.PhoneNumber,
+			PhoneNumber:    *receiver2.PhoneNumber,
 			Email:          *receiver2.Email,
 			ExternalID:     receiver2.ExternalID,
 			ReceiverWallet: receiverWallet2,
@@ -1178,7 +1178,7 @@ func Test_DisbursementHandler_GetDisbursementReceivers(t *testing.T) {
 		},
 		{
 			ID:             receiver1.ID,
-			PhoneNumber:    receiver1.PhoneNumber,
+			PhoneNumber:    *receiver1.PhoneNumber,
 			Email:          *receiver1.Email,
 			ExternalID:     receiver1.ExternalID,
 			ReceiverWallet: receiverWallet1,
@@ -1652,9 +1652,9 @@ func Test_DisbursementHandler_GetDisbursementInstructions(t *testing.T) {
 
 	t.Run("disbursement has instructions", func(t *testing.T) {
 		disbursementFileContent := data.CreateInstructionsFixture(t, []*data.DisbursementInstruction{
-			{Phone: "1234567890", ID: "1", Amount: "123.12", VerificationValue: "1995-02-20"},
-			{Phone: "0987654321", ID: "2", Amount: "321", VerificationValue: "1974-07-19"},
-			{Phone: "0987654321", ID: "3", Amount: "321", VerificationValue: "1974-07-19"},
+			data.NewDisbursementInstruction("1", "123.12", "1995-02-20").WithPhone("1234567890"),
+			data.NewDisbursementInstruction("2", "321", "1974-07-19").WithPhone("0987654321"),
+			data.NewDisbursementInstruction("3", "321", "1974-07-19").WithPhone("0987654321"),
 		})
 
 		err := models.Disbursements.Update(ctx, &data.DisbursementUpdate{

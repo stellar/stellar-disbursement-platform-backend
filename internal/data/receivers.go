@@ -17,12 +17,41 @@ import (
 
 type Receiver struct {
 	ID          string     `json:"id" db:"id"`
-	Email       *string    `json:"email,omitempty" db:"email"`
-	PhoneNumber string     `json:"phone_number,omitempty" db:"phone_number"`
 	ExternalID  string     `json:"external_id,omitempty" db:"external_id"`
 	CreatedAt   *time.Time `json:"created_at,omitempty" db:"created_at"`
 	UpdatedAt   *time.Time `json:"updated_at,omitempty" db:"updated_at"`
+	Email       *string    `json:"email,omitempty" db:"email"`
+	PhoneNumber *string    `json:"phone_number,omitempty" db:"phone_number"`
 	ReceiverStats
+}
+
+type ReceiverContactType string
+
+const (
+	ReceiverContactTypeEmail ReceiverContactType = "EMAIL"
+	ReceiverContactTypeSMS   ReceiverContactType = "PHONE_NUMBER"
+)
+
+func (r Receiver) ContactByType(contactType ReceiverContactType) (string, error) {
+	if contactType == "" {
+		return "", fmt.Errorf("contact type is empty")
+	}
+
+	switch contactType {
+	case ReceiverContactTypeEmail:
+		if r.Email != nil {
+			return *r.Email, nil
+		} else {
+			return "", fmt.Errorf("receiver does not have an email")
+		}
+	case ReceiverContactTypeSMS:
+		if r.PhoneNumber != nil {
+			return *r.PhoneNumber, nil
+		} else {
+			return "", fmt.Errorf("receiver does not have a phone number")
+		}
+	}
+	return "", fmt.Errorf("receiver does not have a contact of type %s", contactType)
 }
 
 type ReceiverRegistrationRequest struct {
@@ -61,13 +90,39 @@ var (
 type ReceiverModel struct{}
 
 type ReceiverInsert struct {
-	PhoneNumber string  `db:"phone_number"`
+	PhoneNumber *string `db:"phone_number"`
+	Email       *string `db:"email"`
 	ExternalId  *string `db:"external_id"`
 }
 
 type ReceiverUpdate struct {
-	Email      string `db:"email"`
-	ExternalId string `db:"external_id"`
+	PhoneNumber *string `db:"phone_number"`
+	Email       *string `db:"email"`
+	ExternalId  *string `db:"external_id"`
+}
+
+func (ru ReceiverUpdate) IsEmpty() bool {
+	return ru.Email == nil && ru.ExternalId == nil && ru.PhoneNumber == nil
+}
+
+func (ru ReceiverUpdate) Validate() error {
+	if ru.IsEmpty() {
+		return fmt.Errorf("no values provided to update receiver")
+	}
+
+	if ru.Email != nil {
+		if err := utils.ValidateEmail(*ru.Email); err != nil {
+			return fmt.Errorf("validating email: %w", err)
+		}
+	}
+
+	if ru.PhoneNumber != nil {
+		if err := utils.ValidatePhoneNumber(*ru.PhoneNumber); err != nil {
+			return fmt.Errorf("validating phone number: %w", err)
+		}
+	}
+
+	return nil
 }
 
 type ReceivedAmounts []Amount
@@ -238,7 +293,7 @@ func (r *ReceiverModel) GetAll(ctx context.Context, sqlExec db.SQLExecuter, quer
 			distinct(r.id),
 			r.external_id,
 			COALESCE(r.email, '') as email,
-			r.phone_number,
+			COALESCE(r.phone_number, '') as phone_number,
 			r.created_at,
 			r.updated_at,
 			COALESCE(total_payments, 0) as total_payments,
@@ -320,10 +375,12 @@ func (r *ReceiverModel) Insert(ctx context.Context, sqlExec db.SQLExecuter, inse
 	query := `
 		INSERT INTO receivers (
 			phone_number,
+		    email,
 			external_id
 		) VALUES (
 			$1,
-			$2
+			$2,
+		    $3
 		) RETURNING
 			id,
 			phone_number,
@@ -333,9 +390,9 @@ func (r *ReceiverModel) Insert(ctx context.Context, sqlExec db.SQLExecuter, inse
 		`
 
 	var receiver Receiver
-	err := sqlExec.GetContext(ctx, &receiver, query, insert.PhoneNumber, insert.ExternalId)
+	err := sqlExec.GetContext(ctx, &receiver, query, insert.PhoneNumber, insert.Email, insert.ExternalId)
 	if err != nil {
-		return nil, fmt.Errorf("error inserting receiver: %w", err)
+		return nil, fmt.Errorf("inserting receiver: %w", err)
 	}
 
 	return &receiver, nil
@@ -343,24 +400,29 @@ func (r *ReceiverModel) Insert(ctx context.Context, sqlExec db.SQLExecuter, inse
 
 // Update updates the receiver Email and/or External ID.
 func (r *ReceiverModel) Update(ctx context.Context, sqlExec db.SQLExecuter, ID string, receiverUpdate ReceiverUpdate) error {
-	if receiverUpdate.Email == "" && receiverUpdate.ExternalId == "" {
-		return fmt.Errorf("provide at least one of these values: Email or ExternalID")
+	if err := receiverUpdate.Validate(); err != nil {
+		return fmt.Errorf("validating receiver update: %w", err)
 	}
 
 	args := []interface{}{}
 	fields := []string{}
-	if receiverUpdate.Email != "" {
-		if err := utils.ValidateEmail(receiverUpdate.Email); err != nil {
-			return fmt.Errorf("error validating email: %w", err)
-		}
 
-		fields = append(fields, "email = ?")
-		args = append(args, receiverUpdate.Email)
+	if receiverUpdate.PhoneNumber != nil {
+		phoneNumber := *receiverUpdate.PhoneNumber
+		fields = append(fields, "phone_number = ?")
+		args = append(args, phoneNumber)
 	}
 
-	if receiverUpdate.ExternalId != "" {
+	if receiverUpdate.Email != nil {
+		email := *receiverUpdate.Email
+		fields = append(fields, "email = ?")
+		args = append(args, email)
+	}
+
+	if receiverUpdate.ExternalId != nil {
+		externalID := *receiverUpdate.ExternalId
 		fields = append(fields, "external_id = ?")
-		args = append(args, receiverUpdate.ExternalId)
+		args = append(args, externalID)
 	}
 
 	args = append(args, ID)
@@ -378,7 +440,7 @@ func (r *ReceiverModel) Update(ctx context.Context, sqlExec db.SQLExecuter, ID s
 
 	_, err := sqlExec.ExecContext(ctx, query, args...)
 	if err != nil {
-		return fmt.Errorf("error updating receiver: %w", err)
+		return fmt.Errorf("updating receiver: %w", err)
 	}
 
 	return nil
@@ -401,6 +463,32 @@ func (r *ReceiverModel) GetByPhoneNumbers(ctx context.Context, sqlExec db.SQLExe
 	err := sqlExec.SelectContext(ctx, &receivers, query, pq.Array(ids))
 	if err != nil {
 		return nil, fmt.Errorf("error fetching receiver ids by phone numbers: %w", err)
+	}
+	return receivers, nil
+}
+
+// GetByContacts search for receivers by phone numbers and email
+func (r *ReceiverModel) GetByContacts(ctx context.Context, sqlExec db.SQLExecuter, contacts []string) ([]*Receiver, error) {
+	receivers := []*Receiver{}
+
+	if len(contacts) == 0 {
+		return receivers, nil
+	}
+
+	query := `
+	SELECT
+		r.id,
+		r.phone_number,
+		r.email,
+		r.external_id,
+		r.created_at,
+		r.updated_at
+	FROM receivers r
+	WHERE r.phone_number = ANY($1) OR r.email = ANY($2)
+	`
+	err := sqlExec.SelectContext(ctx, &receivers, query, pq.Array(contacts), pq.Array(contacts))
+	if err != nil {
+		return nil, fmt.Errorf("fetching receivers by phone numbers or email: %w", err)
 	}
 	return receivers, nil
 }

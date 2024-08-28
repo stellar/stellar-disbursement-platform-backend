@@ -162,13 +162,15 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 		mockErr := errors.New("unexpected error")
 		messageDispatcherMock.
 			On("SendMessage", mock.Anything, message.Message{
-				ToPhoneNumber: receiver1.PhoneNumber,
+				ToPhoneNumber: *receiver1.PhoneNumber,
+				ToEmail:       *receiver1.Email,
 				Message:       contentWallet1,
 			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
 			Return(errors.New("unexpected error")).
 			Once().
 			On("SendMessage", mock.Anything, message.Message{
-				ToPhoneNumber: receiver2.PhoneNumber,
+				ToPhoneNumber: *receiver2.PhoneNumber,
+				ToEmail:       *receiver2.Email,
 				Message:       contentWallet2,
 			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
 			Return(nil).
@@ -301,13 +303,15 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 
 		messageDispatcherMock.
 			On("SendMessage", mock.Anything, message.Message{
-				ToPhoneNumber: receiver1.PhoneNumber,
+				ToPhoneNumber: *receiver1.PhoneNumber,
+				ToEmail:       *receiver1.Email,
 				Message:       contentWallet1,
 			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
 			Return(nil).
 			Once().
 			On("SendMessage", mock.Anything, message.Message{
-				ToPhoneNumber: receiver2.PhoneNumber,
+				ToPhoneNumber: *receiver2.PhoneNumber,
+				ToEmail:       *receiver2.Email,
 				Message:       contentWallet2,
 			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
 			Return(nil).
@@ -436,13 +440,15 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 
 		messageDispatcherMock.
 			On("SendMessage", mock.Anything, message.Message{
-				ToPhoneNumber: receiver1.PhoneNumber,
+				ToPhoneNumber: *receiver1.PhoneNumber,
+				ToEmail:       *receiver1.Email,
 				Message:       contentWallet1,
 			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
 			Return(nil).
 			Once().
 			On("SendMessage", mock.Anything, message.Message{
-				ToPhoneNumber: receiver2.PhoneNumber,
+				ToPhoneNumber: *receiver2.PhoneNumber,
+				ToEmail:       *receiver2.Email,
 				Message:       contentWallet2,
 			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
 			Return(nil).
@@ -729,7 +735,8 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 
 		messageDispatcherMock.
 			On("SendMessage", mock.Anything, message.Message{
-				ToPhoneNumber: receiver1.PhoneNumber,
+				ToPhoneNumber: *receiver1.PhoneNumber,
+				ToEmail:       *receiver1.Email,
 				Message:       contentWallet1,
 			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
 			Return(nil).
@@ -847,13 +854,15 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 
 		messageDispatcherMock.
 			On("SendMessage", mock.Anything, message.Message{
-				ToPhoneNumber: receiver1.PhoneNumber,
+				ToPhoneNumber: *receiver1.PhoneNumber,
+				ToEmail:       *receiver1.Email,
 				Message:       contentDisbursement3,
 			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
 			Return(nil).
 			Once().
 			On("SendMessage", mock.Anything, message.Message{
-				ToPhoneNumber: receiver2.PhoneNumber,
+				ToPhoneNumber: *receiver2.PhoneNumber,
+				ToEmail:       *receiver2.Email,
 				Message:       contentDisbursement4,
 			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
 			Return(nil).
@@ -976,7 +985,8 @@ func Test_SendReceiverWalletInviteService(t *testing.T) {
 
 		messageDispatcherMock.
 			On("SendMessage", mock.Anything, message.Message{
-				ToPhoneNumber: receiver1.PhoneNumber,
+				ToPhoneNumber: *receiver1.PhoneNumber,
+				ToEmail:       *receiver1.Email,
 				Message:       contentDisbursement,
 			}, []message.MessageChannel{message.MessageChannelSMS, message.MessageChannelEmail}).
 			Return(nil).
@@ -1038,6 +1048,9 @@ func Test_SendReceiverWalletInviteService_shouldSendInvitationSMS(t *testing.T) 
 		rwa := data.ReceiverWalletAsset{
 			ReceiverWallet: data.ReceiverWallet{
 				InvitationSentAt: nil,
+				Receiver: data.Receiver{
+					PhoneNumber: utils.StringPtr("+380443973607"),
+				},
 			},
 		}
 		got := s.shouldSendInvitationSMS(ctx, &org, &rwa)
@@ -1065,7 +1078,7 @@ func Test_SendReceiverWalletInviteService_shouldSendInvitationSMS(t *testing.T) 
 				InvitationSentAt: &invitationSentAt,
 				Receiver: data.Receiver{
 					ID:          "receiver-ID",
-					PhoneNumber: "+123456789",
+					PhoneNumber: utils.StringPtr("+123456789"),
 				},
 				ReceiverWalletStats: data.ReceiverWalletStats{
 					TotalInvitationSMSResentAttempts: maxInvitationSMSResendAttempts,
@@ -1097,7 +1110,7 @@ func Test_SendReceiverWalletInviteService_shouldSendInvitationSMS(t *testing.T) 
 				InvitationSentAt: &invitationSentAt,
 				Receiver: data.Receiver{
 					ID:          "receiver-ID",
-					PhoneNumber: "+123456789",
+					PhoneNumber: utils.StringPtr("+123456789"),
 				},
 				ReceiverWalletStats: data.ReceiverWalletStats{
 					TotalInvitationSMSResentAttempts: 1,
@@ -1135,6 +1148,9 @@ func Test_SendReceiverWalletInviteService_shouldSendInvitationSMS(t *testing.T) 
 				ReceiverWalletStats: data.ReceiverWalletStats{
 					TotalInvitationSMSResentAttempts: 0,
 				},
+				Receiver: data.Receiver{
+					PhoneNumber: utils.StringPtr("+380443973607"),
+				},
 			},
 		}
 		got := s.shouldSendInvitationSMS(ctx, &org, &rwa)
@@ -1147,6 +1163,9 @@ func Test_SendReceiverWalletInviteService_shouldSendInvitationSMS(t *testing.T) 
 				InvitationSentAt: &invitationSentAt,
 				ReceiverWalletStats: data.ReceiverWalletStats{
 					TotalInvitationSMSResentAttempts: 1,
+				},
+				Receiver: data.Receiver{
+					PhoneNumber: utils.StringPtr("+380443973607"),
 				},
 			},
 		}
@@ -1161,6 +1180,9 @@ func Test_SendReceiverWalletInviteService_shouldSendInvitationSMS(t *testing.T) 
 				ReceiverWalletStats: data.ReceiverWalletStats{
 					TotalInvitationSMSResentAttempts: 2,
 				},
+				Receiver: data.Receiver{
+					PhoneNumber: utils.StringPtr("+380443973607"),
+				},
 			},
 		}
 		got = s.shouldSendInvitationSMS(ctx, &org, &rwa)
@@ -1173,6 +1195,9 @@ func Test_SendReceiverWalletInviteService_shouldSendInvitationSMS(t *testing.T) 
 				InvitationSentAt: &invitationSentAt,
 				ReceiverWalletStats: data.ReceiverWalletStats{
 					TotalInvitationSMSResentAttempts: 3,
+				},
+				Receiver: data.Receiver{
+					PhoneNumber: utils.StringPtr("+380443973607"),
 				},
 			},
 		}

@@ -46,8 +46,8 @@ func (m DisbursementReceiverModel) GetAll(ctx context.Context, sqlExec db.SQLExe
 	baseQuery := `
 		SELECT
 			r.id,
-			r.phone_number,
 			r.external_id,
+			COALESCE(r.phone_number, '') as phone_number,
 			COALESCE(r.email, '') as email,
 			r.created_at,
 			r.updated_at,
