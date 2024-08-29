@@ -9,6 +9,76 @@ const WalletRegistration = {
   contactInfoErrorEl: null,
   privacyPolicyLink: "",
   contactMethod: "",
+  
+  getContactSectionEl() {
+    if (this.contactMethod === ContactMethods.PHONE_NUMBER) {
+      return document.querySelector("[data-section='phoneNumber']");
+    } else if (this.contactMethod === ContactMethods.EMAIL) {
+      return document.querySelector("[data-section='emailAddress']");
+    }
+  },
+
+  getContactSectionRecaptchaEl() {
+    const contactSectionEl = this.getContactSectionEl();
+    if (this.contactMethod === ContactMethods.PHONE_NUMBER) {
+      return contactSectionEl.querySelector("#g-recaptcha-response-1");
+    } else if (this.contactMethod === ContactMethods.EMAIL) {
+      return contactSectionEl.querySelector("#g-recaptcha-response-2");
+    }
+  },
+
+  getContactValue() {
+    if (this.contactMethod === ContactMethods.PHONE_NUMBER) {
+      return WalletRegistration.intlTelInput.getNumber().trim();
+    } else if (this.contactMethod === ContactMethods.EMAIL) {
+      return document.querySelector("#email_address").value.trim();
+    }
+  },
+
+  validateContactValue() {
+    const contactValue = this.getContactValue();
+    const errorNotificationEl = this.contactInfoErrorEl;
+
+    if (contactValue === "") {
+      toggleErrorNotification(
+        errorNotificationEl,
+        "Error",
+        "Contact information is required",
+        true
+      );
+      return -1;
+    }
+
+    if (this.contactMethod === ContactMethods.PHONE_NUMBER) {
+      if (!WalletRegistration.intlTelInput.isPossibleNumber()) {
+        toggleErrorNotification(
+          errorNotificationEl,
+          "Error",
+          "Entered phone number is not valid",
+          true
+        );
+        return -1;
+      }
+    } else if (this.contactMethod === ContactMethods.EMAIL) {
+      const isValidEmail = (email) => {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        return emailRegex.test(email);
+      };
+
+      if (!isValidEmail(contactValue)) {
+        toggleErrorNotification(
+          errorNotificationEl,
+          "Error",
+          "Entered email is not valid",
+          true
+        );
+        return -1;
+      }
+    }
+
+    toggleErrorNotification(errorNotificationEl, "", "", false);
+    return 0;
+  }
 };
 
 function getJwtToken() {
@@ -56,18 +126,13 @@ function selectOtpMethod(event) {
   selectOtpMethodSection.style.display = "none";
 
   if (selectedMethod === "phone") {
-    const phoneNumberSectionEl = document.querySelector(
-      "[data-section='phoneNumber']"
-    );
-    phoneNumberSectionEl.style.display = "flex";
     WalletRegistration.contactMethod = ContactMethods.PHONE_NUMBER;
+    WalletRegistration.intlTelInput = phoneNumberInit();
   } else if (selectedMethod === "email") {
-    const emailSectionEl = document.querySelector(
-      "[data-section='emailAddress']"
-    );
-    emailSectionEl.style.display = "flex";
     WalletRegistration.contactMethod = ContactMethods.EMAIL;
   }
+
+  WalletRegistration.getContactSectionEl().style.display = "flex";
 }
 
 function toggleNotification(type, { parentEl, title, message, isVisible }) {
@@ -144,7 +209,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
   form.addEventListener("submit", function (event) {
     event.preventDefault();
-    alert("Email form submitted");
+    alert("Click submit with email: ", WalletRegistration.getContactValue());
   //   const emailAddressEl = document.querySelector("#email_address");
   //   const emailAddressSectionEl = document.querySelector(
   //     "[data-section='emailAddress']"
@@ -489,7 +554,6 @@ function phoneNumberInit() {
 // Init
 window.onload = async () => {
   WalletRegistration.jwtToken = getJwtToken();
-  WalletRegistration.intlTelInput = phoneNumberInit();
   WalletRegistration.contactInfoErrorEl = document.querySelector(
     "[data-section-error='contactInfo']"
   );
