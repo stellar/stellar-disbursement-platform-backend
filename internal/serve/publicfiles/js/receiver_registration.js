@@ -29,6 +29,39 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 });
 
+document.addEventListener("DOMContentLoaded", function () {
+  const otpMethodForm = document.getElementById("selectOtpMethodForm");
+
+  otpMethodForm.addEventListener("submit", function (event) {
+    selectOtpMethod(event);
+  });
+});
+
+function selectOtpMethod(event) {
+  event.preventDefault();
+
+  const selectedMethod = document.querySelector(
+    'input[name="otp_method"]:checked'
+  ).value;
+
+  const selectOtpMethodSection = document.querySelector(
+    "[data-section='selectOtpMethod']"
+  );
+  selectOtpMethodSection.style.display = "none";
+
+  if (selectedMethod === "phone") {
+    const phoneNumberSectionEl = document.querySelector(
+      "[data-section='phoneNumber']"
+    );
+    phoneNumberSectionEl.style.display = "flex";
+  } else if (selectedMethod === "email") {
+    const emailSectionEl = document.querySelector(
+      "[data-section='emailAddress']"
+    );
+    emailSectionEl.style.display = "flex";
+  }
+}
+
 function toggleNotification(type, { parentEl, title, message, isVisible }) {
   const titleEl = parentEl.querySelector(`[data-section-${type}-title]`);
   const messageEl = parentEl.querySelector(`[data-section-${type}-message`);
@@ -97,16 +130,50 @@ function enableButtons(buttons) {
   }, 1000);
 }
 
+// email submitted listener
+document.addEventListener("DOMContentLoaded", function () {
+  const form = document.getElementById("submitEmailForm");
+
+  form.addEventListener("submit", function (event) {
+    event.preventDefault();
+    alert("Email form submitted");
+  //   const emailAddressEl = document.querySelector("#email_address");
+  //   const emailAddressSectionEl = document.querySelector(
+  //     "[data-section='emailAddress']"
+  //   );
+
+  //   const validateEmail = (email) => {
+  //     if (
+  //       email &&
+  //       !WalletRegistration.intlTelInput.isPossibleNumber()
+  //     ) {
+  //       toggleErrorNotification(
+  //         errorNotificationEl,
+  //         "Error",
+  //         "Entered email is not valid",
+  //         true
+  //       );
+  //       return -1;
+  //     }
+
+  //     return 0
+  //   };
+
+  //   submitContactForm(event, emailAddressEl, emailAddressSectionEl, validateEmail);
+  });
+});
+
+// phone number submitted listener
 document.addEventListener("DOMContentLoaded", function () {
   const form = document.getElementById("submitPhoneNumberForm");
 
   form.addEventListener("submit", function (event) {
-    submitPhoneNumber(event);
+    event.preventDefault();
+    submitPhoneNumber();
   });
 });
 
-async function submitPhoneNumber(event) {
-  event.preventDefault();
+async function submitPhoneNumber() {
   const phoneNumberEl = document.querySelector("#phone_number");
   const phoneNumberSectionEl = document.querySelector(
     "[data-section='phoneNumber']"
@@ -114,7 +181,7 @@ async function submitPhoneNumber(event) {
   const passcodeSectionEl = document.querySelector("[data-section='passcode']");
   const errorNotificationEl = WalletRegistration.phoneNumberErrorEl;
   const reCAPTCHATokenEl = phoneNumberSectionEl.querySelector(
-    "#g-recaptcha-response"
+    "#g-recaptcha-response-1"
   );
   const buttonEls = phoneNumberSectionEl.querySelectorAll("[data-button]");
   const verificationFieldTitle = document.querySelector("label[for='verification']");
@@ -217,7 +284,7 @@ async function submitOtp(event) {
   const buttonEls = passcodeSectionEl.querySelectorAll("[data-button]");
 
   const reCAPTCHATokenEl = passcodeSectionEl.querySelector(
-    "#g-recaptcha-response-1"
+    "#g-recaptcha-response-2"
   );
   if (!reCAPTCHATokenEl || !reCAPTCHATokenEl.value) {
     toggleErrorNotification(
@@ -303,7 +370,7 @@ async function resendSms() {
   );
   const buttonEls = passcodeSectionEl.querySelectorAll("[data-button]");
   const reCAPTCHATokenEl = passcodeSectionEl.querySelector(
-    "#g-recaptcha-response-1"
+    "#g-recaptcha-response-2"
   );
 
   if (!reCAPTCHATokenEl || !reCAPTCHATokenEl.value) {

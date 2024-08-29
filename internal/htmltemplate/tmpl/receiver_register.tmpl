@@ -25,8 +25,70 @@
   </head>
   <body>
     <div class="WalletRegistration">
+      <!-- Select OTP method page -->
+      <section data-section="selectOtpMethod" style="display: flex">
+        <div class="WalletRegistration__MainContent">
+          <h2>Select Verification Method</h2>
+
+          <p>Please choose how you would like to receive your verification code.</p>
+          <p>⚠️ Attention, it needs to match the form of contact where you received your invitation to receive this payment.</p>
+
+          <form id="selectOtpMethodForm">
+            <div class="Form__item">
+              <label>
+                <input type="radio" name="otp_method" value="phone" checked />
+                Phone Number
+              </label>
+              <label>
+                <input type="radio" name="otp_method" value="email" />
+                Email
+              </label>
+            </div>
+
+            <div class="Form__buttons">
+              <button data-button type="submit" class="Button--primary">
+                Continue
+              </button>
+            </div>
+          </form>
+        </div>
+      </section>
+
+      <!-- Enter email address page -->
+      <section data-section="emailAddress" style="display: none">
+        <div class="WalletRegistration__MainContent">
+          <h2>Enter your email address to get verified</h2>
+
+          <p>
+            Enter your email address below. If you are pre-approved, you will
+            receive a one-time passcode.
+          </p>
+
+          <form id="submitEmailForm">
+            <div class="Form__item">
+              <label for="email_address">Email address</label>
+              <input
+                type="email"
+                autocomplete="email"
+                id="email_address"
+                name="email_address"
+                required
+              />
+            </div>
+
+            <div class="g-recaptcha" data-sitekey="{{.ReCAPTCHASiteKey}}"></div>
+
+            <div class="Form__buttons">
+              <button data-button type="submit" class="Button--primary">
+                Submit
+              </button>
+            </div>
+          </form>
+        </div>
+      </section>
+
       <!-- Enter phone number page -->
-      <section data-section="phoneNumber" style="display: flex">
+      <section data-section="phoneNumber" style="display: none">
         <div class="WalletRegistration__MainContent">
           <h2>Enter your phone number to get verified</h2>
 
