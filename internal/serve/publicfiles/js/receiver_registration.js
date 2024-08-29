@@ -1,8 +1,14 @@
+const ContactMethods = Object.freeze({
+  PHONE_NUMBER: Symbol("phone"),
+  EMAIL: Symbol("email")
+});
+
 const WalletRegistration = {
   jwtToken: "",
   intlTelInput: null,
   contactInfoErrorEl: null,
   privacyPolicyLink: "",
+  contactMethod: "",
 };
 
 function getJwtToken() {
@@ -54,11 +60,13 @@ function selectOtpMethod(event) {
       "[data-section='phoneNumber']"
     );
     phoneNumberSectionEl.style.display = "flex";
+    WalletRegistration.contactMethod = ContactMethods.PHONE_NUMBER;
   } else if (selectedMethod === "email") {
     const emailSectionEl = document.querySelector(
       "[data-section='emailAddress']"
     );
     emailSectionEl.style.display = "flex";
+    WalletRegistration.contactMethod = ContactMethods.EMAIL;
   }
 }
 
