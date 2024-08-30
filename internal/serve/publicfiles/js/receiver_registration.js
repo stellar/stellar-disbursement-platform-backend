@@ -1,6 +1,6 @@
 const ContactMethods = Object.freeze({
-  PHONE_NUMBER: Symbol("phone"),
-  EMAIL: Symbol("email")
+  PHONE_NUMBER: "phone_number",
+  EMAIL: "email",
 });
 
 const WalletRegistration = {
@@ -160,30 +160,32 @@ function toggleSuccessNotification(parentEl, title, message, isVisible) {
   toggleNotification("success", { parentEl, title, message, isVisible });
 }
 
-async function sendOtp(phoneNumber, reCAPTCHAToken, onSuccess, onError) {
-  if (phoneNumber && reCAPTCHAToken) {
-    try {
-      const response = await fetch("/wallet-registration/otp", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${WalletRegistration.jwtToken}`,
-        },
-        body: JSON.stringify({
-          phone_number: phoneNumber,
-          recaptcha_token: reCAPTCHAToken,
-        }),
-      });
+async function sendOtp(contactMethod, contactValue, reCAPTCHAToken, onSuccess, onError) {
+  if (!contactMethod || !contactValue || !reCAPTCHAToken) {
+    return;
+  }
 
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || "Something went wrong, please try again later.");
-      }
+  try {
+    const response = await fetch("/wallet-registration/otp", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${WalletRegistration.jwtToken}`,
+      },
+      body: JSON.stringify({
+        [contactMethod]: contactValue,
+        recaptcha_token: reCAPTCHAToken,
+      }),
+    });
 
-      onSuccess(data.verification_field);;
-    } catch (error) {
-      onError(error);
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.error || "Something went wrong, please try again later.");
     }
+
+    onSuccess(data.verification_field);;
+  } catch (error) {
+    onError(error);
   }
 }
 
@@ -282,7 +284,6 @@ async function submitPhoneNumber() {
   const verificationFieldInput = document.querySelector("#verification");
 
   if (
-    reCAPTCHATokenEl &&
     sectionEl &&
     passcodeSectionEl &&
     errorNotificationEl
@@ -325,8 +326,9 @@ async function submitPhoneNumber() {
       enableButtons(buttonEls);
     }
 
-    const phoneNumber = WalletRegistration.intlTelInput.getNumber();
-    sendOtp(phoneNumber, reCAPTCHAToken, showNextPage, showErrorMessage);
+    const contactMethod = WalletRegistration.contactMethod;
+    const contactValue = WalletRegistration.getContactValue();
+    sendOtp(contactMethod, contactValue, reCAPTCHAToken, showNextPage, showErrorMessage);
   }
 }
 
@@ -427,7 +429,8 @@ document.addEventListener("DOMContentLoaded", function () {
   const button = document.getElementById("resendOtpButton");
 
   button.addEventListener("click", function (event) {
-    resendOtp(event);
+    event.preventDefault();
+    resendOtp();
   });
 });
 
@@ -443,8 +446,9 @@ async function resendOtp() {
   const reCAPTCHATokenEl = passcodeSectionEl.querySelector(
     "#g-recaptcha-response-2"
   );
+  const reCAPTCHAToken = reCAPTCHATokenEl.value;
 
-  if (!reCAPTCHATokenEl || !reCAPTCHATokenEl.value) {
+  if (!reCAPTCHATokenEl || !reCAPTCHAToken) {
     toggleErrorNotification(
       errorNotificationEl,
       "Error",
@@ -457,15 +461,11 @@ async function resendOtp() {
   if (
     (passcodeSectionEl,
     errorNotificationEl,
-    WalletRegistration.intlTelInput,
-    reCAPTCHATokenEl)
+    WalletRegistration.intlTelInput)
   ) {
     disableButtons(buttonEls);
     toggleErrorNotification(errorNotificationEl, "", "", false);
     toggleSuccessNotification(successNotificationEl, "", "", false);
-
-    const phoneNumber = WalletRegistration.intlTelInput.getNumber();
-    const reCAPTCHAToken = reCAPTCHATokenEl.value;
 
     function showErrorMessage(error) {
       toggleErrorNotification(errorNotificationEl, "Error", error, true);
@@ -482,7 +482,9 @@ async function resendOtp() {
       enableButtons(buttonEls);
     }
 
-    sendOtp(phoneNumber, reCAPTCHAToken, showSuccessMessage, showErrorMessage);
+    const contactMethod = WalletRegistration.contactMethod;
+    const contactValue = WalletRegistration.getContactValue();
+    sendOtp(contactMethod, contactValue, reCAPTCHAToken, showSuccessMessage, showErrorMessage);
     grecaptcha.reset(1);
   }
 }
