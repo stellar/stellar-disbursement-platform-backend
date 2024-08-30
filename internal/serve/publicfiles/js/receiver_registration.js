@@ -23,7 +23,7 @@ const WalletRegistration = {
     if (this.contactMethod === ContactMethods.PHONE_NUMBER) {
       return contactSectionEl.querySelector("#g-recaptcha-response-1");
     } else if (this.contactMethod === ContactMethods.EMAIL) {
-      return contactSectionEl.querySelector("#g-recaptcha-response-2");
+      return contactSectionEl.querySelector("#g-recaptcha-response");
     }
   },
 
@@ -259,19 +259,10 @@ document.addEventListener("DOMContentLoaded", function () {
 });
 
 async function submitPhoneNumber() {
-  const phoneNumberSectionEl = document.querySelector(
-    "[data-section='phoneNumber']"
-  );
-  const passcodeSectionEl = document.querySelector("[data-section='passcode']");
   const errorNotificationEl = WalletRegistration.contactInfoErrorEl;
-  const reCAPTCHATokenEl = phoneNumberSectionEl.querySelector(
-    "#g-recaptcha-response-1"
-  );
-  const buttonEls = phoneNumberSectionEl.querySelectorAll("[data-button]");
-  const verificationFieldTitle = document.querySelector("label[for='verification']");
-  const verificationFieldInput = document.querySelector("#verification");
-
-  if (!reCAPTCHATokenEl || !reCAPTCHATokenEl.value) {
+  const reCAPTCHATokenEl = WalletRegistration.getContactSectionRecaptchaEl();
+  const reCAPTCHAToken = reCAPTCHATokenEl.value;
+  if (!reCAPTCHATokenEl || !reCAPTCHAToken) {
     toggleErrorNotification(
       errorNotificationEl,
       "Error",
@@ -282,28 +273,23 @@ async function submitPhoneNumber() {
   }
 
   toggleErrorNotification(errorNotificationEl, "", "", false);
+  
+  const passcodeSectionEl = document.querySelector("[data-section='passcode']");
+  
+  const sectionEl = WalletRegistration.getContactSectionEl();
+  const buttonEls = sectionEl.querySelectorAll("[data-button]");
+  const verificationFieldTitle = document.querySelector("label[for='verification']");
+  const verificationFieldInput = document.querySelector("#verification");
 
   if (
-    WalletRegistration.intlTelInput &&
     reCAPTCHATokenEl &&
-    phoneNumberSectionEl &&
+    sectionEl &&
     passcodeSectionEl &&
     errorNotificationEl
   ) {
     disableButtons(buttonEls);
-    const phoneNumber = WalletRegistration.intlTelInput.getNumber();
-    const reCAPTCHAToken = reCAPTCHATokenEl.value;
 
-    if (
-      phoneNumber &&
-      !WalletRegistration.intlTelInput.isPossibleNumber()
-    ) {
-      toggleErrorNotification(
-        errorNotificationEl,
-        "Error",
-        "Entered phone number is not valid",
-        true
-      );
+    if (WalletRegistration.validateContactValue() === -1) {
       return;
     }
 
@@ -328,7 +314,7 @@ async function submitPhoneNumber() {
         verificationFieldInput.name = "pin";
       }
 
-      phoneNumberSectionEl.style.display = "none";
+      sectionEl.style.display = "none";
       reCAPTCHATokenEl.style.display = "none";
       passcodeSectionEl.style.display = "flex";
       enableButtons(buttonEls);
@@ -339,6 +325,7 @@ async function submitPhoneNumber() {
       enableButtons(buttonEls);
     }
 
+    const phoneNumber = WalletRegistration.intlTelInput.getNumber();
     sendOtp(phoneNumber, reCAPTCHAToken, showNextPage, showErrorMessage);
   }
 }
