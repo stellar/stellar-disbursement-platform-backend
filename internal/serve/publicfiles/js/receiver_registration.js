@@ -9,7 +9,7 @@ const WalletRegistration = {
   contactInfoErrorEl: null,
   privacyPolicyLink: "",
   contactMethod: "",
-  
+
   getContactSectionEl() {
     if (this.contactMethod === ContactMethods.PHONE_NUMBER) {
       return document.querySelector("[data-section='phoneNumber']");
@@ -205,62 +205,23 @@ function enableButtons(buttons) {
   }, 1000);
 }
 
-// email submitted listener
 document.addEventListener("DOMContentLoaded", function () {
-  const form = document.getElementById("submitEmailForm");
-
-  form.addEventListener("submit", function (event) {
+  // email submitted listener
+  const submitEmailForm = document.getElementById("submitEmailForm");
+  submitEmailForm.addEventListener("submit", function (event) {
     event.preventDefault();
-    alert("Click submit with email: ", WalletRegistration.getContactValue());
-  //   const emailAddressEl = document.querySelector("#email_address");
-  //   const emailAddressSectionEl = document.querySelector(
-  //     "[data-section='emailAddress']"
-  //   );
+    submitContactInfo();
+  });
 
-  //   const validateEmail = (email) => {
-  //     if (
-  //       email &&
-  //       !WalletRegistration.intlTelInput.isPossibleNumber()
-  //     ) {
-  //       toggleErrorNotification(
-  //         errorNotificationEl,
-  //         "Error",
-  //         "Entered email is not valid",
-  //         true
-  //       );
-  //       return -1;
-  //     }
-
-  //     return 0
-  //   };
-
-  //   submitContactForm(event, emailAddressEl, emailAddressSectionEl, validateEmail);
+  // phone number submitted listener
+  const submitPhoneForm = document.getElementById("submitPhoneNumberForm");
+  submitPhoneForm.addEventListener("submit", function (event) {
+    event.preventDefault();
+    submitContactInfo();
   });
 });
 
-// async function submitEmail() {
-//   const emailAddressEl = document.querySelector("#email_address");
-//   const emailAddressSectionEl = document.querySelector(
-//     "[data-section='emailAddress']"
-//   );
-//   const passcodeSectionEl = document.querySelector("[data-section='passcode']");
-//   const errorNotificationEl = WalletRegistration.contactInfoErrorEl;
-//   const reCAPTCHATokenEl = emailAddressSectionEl.querySelector(
-//     "#g-recaptcha-response"
-//   );
-// }
-
-// phone number submitted listener
-document.addEventListener("DOMContentLoaded", function () {
-  const form = document.getElementById("submitPhoneNumberForm");
-
-  form.addEventListener("submit", function (event) {
-    event.preventDefault();
-    submitPhoneNumber();
-  });
-});
-
-async function submitPhoneNumber() {
+async function submitContactInfo() {
   const errorNotificationEl = WalletRegistration.contactInfoErrorEl;
   const reCAPTCHATokenEl = WalletRegistration.getContactSectionRecaptchaEl();
   const reCAPTCHAToken = reCAPTCHATokenEl.value;
@@ -275,19 +236,15 @@ async function submitPhoneNumber() {
   }
 
   toggleErrorNotification(errorNotificationEl, "", "", false);
-  
+
   const passcodeSectionEl = document.querySelector("[data-section='passcode']");
-  
+
   const sectionEl = WalletRegistration.getContactSectionEl();
   const buttonEls = sectionEl.querySelectorAll("[data-button]");
   const verificationFieldTitle = document.querySelector("label[for='verification']");
   const verificationFieldInput = document.querySelector("#verification");
 
-  if (
-    sectionEl &&
-    passcodeSectionEl &&
-    errorNotificationEl
-  ) {
+  if (sectionEl && passcodeSectionEl && errorNotificationEl) {
     disableButtons(buttonEls);
 
     if (WalletRegistration.validateContactValue() === -1) {
@@ -343,23 +300,20 @@ document.addEventListener("DOMContentLoaded", function () {
 async function submitOtp(event) {
   event.preventDefault();
 
-  const passcodeSectionEl = document.querySelector("[data-section='passcode']");
   const errorNotificationEl = document.querySelector(
     "[data-section-error='passcode']"
   );
   const successNotificationEl = document.querySelector(
     "[data-section-success='passcode']"
   );
-  const otpEl = document.getElementById("otp");
-  const verificationEl = document.getElementById("verification");
-  const verificationField = verificationEl.getAttribute("name");
 
+  const passcodeSectionEl = document.querySelector("[data-section='passcode']");
   const buttonEls = passcodeSectionEl.querySelectorAll("[data-button]");
-
   const reCAPTCHATokenEl = passcodeSectionEl.querySelector(
     "#g-recaptcha-response-2"
   );
-  if (!reCAPTCHATokenEl || !reCAPTCHATokenEl.value) {
+  const reCAPTCHAToken = reCAPTCHATokenEl.value;
+  if (!reCAPTCHATokenEl || !reCAPTCHAToken) {
     toggleErrorNotification(
       errorNotificationEl,
       "Error",
@@ -369,9 +323,15 @@ async function submitOtp(event) {
     return;
   }
 
+  const contactMethod = WalletRegistration.contactMethod;
+  const contactValue = WalletRegistration.getContactValue();
+  const otpEl = document.getElementById("otp");
+  const otp = otpEl.value;
+  const verificationEl = document.getElementById("verification");
+  const verificationField = verificationEl.getAttribute("name");
   if (
-    WalletRegistration.intlTelInput &&
-    otpEl &&
+    contactValue &&
+    otp &&
     verificationEl &&
     passcodeSectionEl &&
     errorNotificationEl
@@ -379,11 +339,9 @@ async function submitOtp(event) {
     toggleErrorNotification(errorNotificationEl, "", "", false);
     toggleSuccessNotification(successNotificationEl, "", "", false);
 
-    const phoneNumber = WalletRegistration.intlTelInput.getNumber();
-    const otp = otpEl.value;
     const verification = verificationEl.value;
 
-    if (phoneNumber && otp && verification) {
+    if (contactValue && otp && verification) {
       try {
         disableButtons(buttonEls);
 
@@ -394,11 +352,11 @@ async function submitOtp(event) {
             Authorization: `Bearer ${WalletRegistration.jwtToken}`,
           },
           body: JSON.stringify({
-            phone_number: phoneNumber,
-            otp: otp,
-            verification: verification,
+            [contactMethod]: contactValue,
+            otp,
+            verification,
             verification_type: verificationField,
-            recaptcha_token: reCAPTCHATokenEl.value,
+            recaptcha_token: reCAPTCHAToken,
           }),
         });
 
@@ -458,11 +416,8 @@ async function resendOtp() {
     return;
   }
 
-  if (
-    (passcodeSectionEl,
-    errorNotificationEl,
-    WalletRegistration.intlTelInput)
-  ) {
+  const contactValue = WalletRegistration.getContactValue();
+  if (passcodeSectionEl && errorNotificationEl && contactValue) {
     disableButtons(buttonEls);
     toggleErrorNotification(errorNotificationEl, "", "", false);
     toggleSuccessNotification(successNotificationEl, "", "", false);
@@ -483,7 +438,6 @@ async function resendOtp() {
     }
 
     const contactMethod = WalletRegistration.contactMethod;
-    const contactValue = WalletRegistration.getContactValue();
     sendOtp(contactMethod, contactValue, reCAPTCHAToken, showSuccessMessage, showErrorMessage);
     grecaptcha.reset(1);
   }
