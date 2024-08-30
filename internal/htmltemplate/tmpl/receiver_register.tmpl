@@ -36,7 +36,7 @@
           <form id="selectOtpMethodForm">
             <div class="Form__item">
               <label>
-                <input type="radio" name="otp_method" value="phoneNumber" checked />
+                <input type="radio" name="otp_method" value="phoneNumber" />
                 Phone Number
               </label>
               <label>
@@ -72,6 +72,7 @@
                 autocomplete="email"
                 id="email_address"
                 name="email_address"
+                placeholder="example@email.com"
                 required
               />
             </div>
@@ -146,7 +147,7 @@
             </em>
           </p>
 
-          <form id="submitOtpForm">
+          <form id="submitVerificationForm">
             <div class="Form__item">
               <label for="otp">Passcode</label>
               <input
