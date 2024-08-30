@@ -171,3 +171,5 @@ func (h ReceiverSendOTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request
 	}
 	httpjson.RenderStatus(w, http.StatusOK, response, httpjson.JSON)
 }
+
+// FIXME: WHY IS ONE FIELD CALLED `verification_field` AND THE OTHER `verification_type`?
