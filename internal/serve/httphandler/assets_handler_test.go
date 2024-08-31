@@ -1441,16 +1441,22 @@ func Test_AssetHandler_submitChangeTrustTransaction_makeSurePreconditionsAreSetA
 
 	// matchPreconditionsTimeboundsFn is a function meant to be used with mock.MatchedBy to check that the preconditions are set as expected.
 	assertExpectedPreconditionsWithTimeboundsTolerance := func(t *testing.T, expectedTx *txnbuild.Transaction, actualTxIndex int) func(args mock.Arguments) {
+		creationTime := time.Now()
 		return func(args mock.Arguments) {
-			actualTx, ok := args.Get(int(actualTxIndex)).(*txnbuild.Transaction)
+			actualTx, ok := args.Get(actualTxIndex).(*txnbuild.Transaction)
 			require.True(t, ok)
 
 			expectedPreconditions := expectedTx.ToXDR().Preconditions()
-			expectedTime := time.Unix(int64(expectedPreconditions.TimeBounds.MaxTime), 0).UTC()
 			actualPreconditions := actualTx.ToXDR().Preconditions()
-			actualTime := time.Unix(int64(actualPreconditions.TimeBounds.MaxTime), 0).UTC()
-			require.WithinDuration(t, expectedTime, actualTime, 5*time.Second)
+
 			require.Equal(t, expectedPreconditions.TimeBounds.MinTime, actualPreconditions.TimeBounds.MinTime)
+
+			expectedMaxTime := time.Unix(int64(expectedPreconditions.TimeBounds.MaxTime), 0).UTC()
+			actualMaxTime := time.Unix(int64(actualPreconditions.TimeBounds.MaxTime), 0).UTC()
+			timeSinceCreation := time.Since(creationTime)
+
+			expectedAdjustedMaxTime := expectedMaxTime.Add(timeSinceCreation)
+			require.WithinDuration(t, expectedAdjustedMaxTime, actualMaxTime, 5*time.Second)
 		}
 	}
 
