@@ -9,7 +9,7 @@ require (
 	github.com/getsentry/sentry-go v0.28.1
 	github.com/go-chi/chi v4.1.2+incompatible
 	github.com/go-chi/chi/v5 v5.1.0
-	github.com/go-chi/httprate v0.14.0
+	github.com/go-chi/httprate v0.14.1
 	github.com/gocarina/gocsv v0.0.0-20230616125104-99d496ca653d
 	github.com/golang-jwt/jwt/v4 v4.5.0
 	github.com/google/uuid v1.6.0
@@ -20,7 +20,7 @@ require (
 	github.com/manifoldco/promptui v0.9.0
 	github.com/nyaruka/phonenumbers v1.4.0
 	github.com/prometheus/client_golang v1.20.2
-	github.com/rs/cors v1.11.0
+	github.com/rs/cors v1.11.1
 	github.com/rubenv/sql-migrate v1.7.0
 	github.com/segmentio/kafka-go v0.4.47
 	github.com/sirupsen/logrus v1.9.3
@@ -28,7 +28,7 @@ require (
 	github.com/spf13/viper v1.19.0
 	github.com/stellar/go v0.0.0-20240617183518-100dc4fa6043
 	github.com/stretchr/testify v1.9.0
-	github.com/twilio/twilio-go v1.22.3
+	github.com/twilio/twilio-go v1.22.4
 	golang.org/x/crypto v0.26.0
 	golang.org/x/exp v0.0.0-20240525044651-4c93da0ed11d
 )
