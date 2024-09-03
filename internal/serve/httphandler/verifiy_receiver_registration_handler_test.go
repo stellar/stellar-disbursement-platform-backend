@@ -102,7 +102,7 @@ func Test_VerifyReceiverRegistrationHandler_validate(t *testing.T) {
 				"phone_number": "+380445555555",
 				"otp": "",
 				"verification": "1990-01-01",
-				"verification_type": "date_of_birth",
+				"verification_field": "date_of_birth",
 				"reCAPTCHA_token": "token"
 			}`,
 			isRecaptchaValidFnResponse: []interface{}{true, nil},
@@ -115,7 +115,7 @@ func Test_VerifyReceiverRegistrationHandler_validate(t *testing.T) {
 				"phone_number": "+380445555555",
 				"otp": "123456",
 				"verification": "1990-01-01",
-				"verification_type": "date_of_birth",
+				"verification_field": "date_of_birth",
 				"reCAPTCHA_token": "token"
 			}`,
 			isRecaptchaValidFnResponse: []interface{}{true, nil},
@@ -124,7 +124,7 @@ func Test_VerifyReceiverRegistrationHandler_validate(t *testing.T) {
 				PhoneNumber:       "+380445555555",
 				OTP:               "123456",
 				VerificationValue: "1990-01-01",
-				VerificationType:  data.VerificationFieldDateOfBirth,
+				VerificationField: data.VerificationFieldDateOfBirth,
 				ReCAPTCHAToken:    "token",
 			},
 		},
@@ -240,7 +240,7 @@ func Test_VerifyReceiverRegistrationHandler_processReceiverVerificationPII(t *te
 			receiver: *receiverMissingReceiverVerification,
 			registrationRequest: data.ReceiverRegistrationRequest{
 				PhoneNumber:       receiverMissingReceiverVerification.PhoneNumber,
-				VerificationType:  data.VerificationFieldDateOfBirth,
+				VerificationField: data.VerificationFieldDateOfBirth,
 				VerificationValue: "1990-01-01",
 			},
 			wantErrContains: "DATE_OF_BIRTH not found for receiver with phone number +38...333",
@@ -250,7 +250,7 @@ func Test_VerifyReceiverRegistrationHandler_processReceiverVerificationPII(t *te
 			receiver: *receiver,
 			registrationRequest: data.ReceiverRegistrationRequest{
 				PhoneNumber:       receiver.PhoneNumber,
-				VerificationType:  data.VerificationFieldYearMonth,
+				VerificationField: data.VerificationFieldYearMonth,
 				VerificationValue: "1999-12",
 			},
 			wantErrContains: "YEAR_MONTH not found for receiver with phone number +38...555",
@@ -260,7 +260,7 @@ func Test_VerifyReceiverRegistrationHandler_processReceiverVerificationPII(t *te
 			receiver: *receiver,
 			registrationRequest: data.ReceiverRegistrationRequest{
 				PhoneNumber:       receiver.PhoneNumber,
-				VerificationType:  data.VerificationFieldNationalID,
+				VerificationField: data.VerificationFieldNationalID,
 				VerificationValue: "123456",
 			},
 			wantErrContains: "NATIONAL_ID_NUMBER not found for receiver with phone number +38...555",
@@ -270,7 +270,7 @@ func Test_VerifyReceiverRegistrationHandler_processReceiverVerificationPII(t *te
 			receiver: *receiverWithExceededAttempts,
 			registrationRequest: data.ReceiverRegistrationRequest{
 				PhoneNumber:       receiverWithExceededAttempts.PhoneNumber,
-				VerificationType:  data.VerificationFieldDateOfBirth,
+				VerificationField: data.VerificationFieldDateOfBirth,
 				VerificationValue: "1990-01-01",
 			},
 			wantErrContains: "the number of attempts to confirm the verification value exceededs the max attempts",
@@ -280,7 +280,7 @@ func Test_VerifyReceiverRegistrationHandler_processReceiverVerificationPII(t *te
 			receiver: *receiver,
 			registrationRequest: data.ReceiverRegistrationRequest{
 				PhoneNumber:       receiver.PhoneNumber,
-				VerificationType:  data.VerificationFieldDateOfBirth,
+				VerificationField: data.VerificationFieldDateOfBirth,
 				VerificationValue: "1990-11-11", // <--- different from the DB one (1990-01-01)
 			},
 			shouldAssertAttemptsCount: true,
@@ -291,7 +291,7 @@ func Test_VerifyReceiverRegistrationHandler_processReceiverVerificationPII(t *te
 			receiver: *receiver,
 			registrationRequest: data.ReceiverRegistrationRequest{
 				PhoneNumber:       receiver.PhoneNumber,
-				VerificationType:  data.VerificationFieldDateOfBirth,
+				VerificationField: data.VerificationFieldDateOfBirth,
 				VerificationValue: "1990-01-01",
 			},
 			shouldAssertAttemptsCount: true,
@@ -310,7 +310,7 @@ func Test_VerifyReceiverRegistrationHandler_processReceiverVerificationPII(t *te
 			var receiverVerifications []*data.ReceiverVerification
 			var receiverVerificationInitial *data.ReceiverVerification
 			if tc.shouldAssertAttemptsCount {
-				receiverVerifications, err = models.ReceiverVerification.GetByReceiverIDsAndVerificationField(ctx, dbTx, []string{tc.receiver.ID}, tc.registrationRequest.VerificationType)
+				receiverVerifications, err = models.ReceiverVerification.GetByReceiverIDsAndVerificationField(ctx, dbTx, []string{tc.receiver.ID}, tc.registrationRequest.VerificationField)
 				require.NoError(t, err)
 				require.Len(t, receiverVerifications, 1)
 				receiverVerificationInitial = receiverVerifications[0]
@@ -319,7 +319,7 @@ func Test_VerifyReceiverRegistrationHandler_processReceiverVerificationPII(t *te
 			err = handler.processReceiverVerificationPII(ctx, dbTx, tc.receiver, tc.registrationRequest)
 
 			if tc.wantErrContains == "" {
-				receiverVerifications, err = models.ReceiverVerification.GetByReceiverIDsAndVerificationField(ctx, dbTx, []string{tc.receiver.ID}, tc.registrationRequest.VerificationType)
+				receiverVerifications, err = models.ReceiverVerification.GetByReceiverIDsAndVerificationField(ctx, dbTx, []string{tc.receiver.ID}, tc.registrationRequest.VerificationField)
 				require.NoError(t, err)
 				require.Len(t, receiverVerifications, 1)
 				receiverVerification := receiverVerifications[0]
@@ -328,7 +328,7 @@ func Test_VerifyReceiverRegistrationHandler_processReceiverVerificationPII(t *te
 			} else {
 				require.ErrorContains(t, err, tc.wantErrContains)
 				if tc.shouldAssertAttemptsCount {
-					receiverVerifications, err = models.ReceiverVerification.GetByReceiverIDsAndVerificationField(ctx, dbTx, []string{tc.receiver.ID}, tc.registrationRequest.VerificationType)
+					receiverVerifications, err = models.ReceiverVerification.GetByReceiverIDsAndVerificationField(ctx, dbTx, []string{tc.receiver.ID}, tc.registrationRequest.VerificationField)
 					require.NoError(t, err)
 					require.Len(t, receiverVerifications, 1)
 					receiverVerification := receiverVerifications[0]
@@ -779,7 +779,7 @@ func Test_VerifyReceiverRegistrationHandler_VerifyReceiverRegistration(t *testin
 		PhoneNumber:       phoneNumber,
 		OTP:               "123456",
 		VerificationValue: "1990-01-01",
-		VerificationType:  "date_of_birth",
+		VerificationField: "date_of_birth",
 		ReCAPTCHAToken:    "token",
 	}
 	reqBody, err := json.Marshal(receiverRegistrationRequest)

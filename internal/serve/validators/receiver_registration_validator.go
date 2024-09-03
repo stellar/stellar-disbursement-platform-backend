@@ -26,7 +26,7 @@ func (rv *ReceiverRegistrationValidator) ValidateReceiver(receiverInfo *data.Rec
 	phone := strings.TrimSpace(receiverInfo.PhoneNumber)
 	otp := strings.TrimSpace(receiverInfo.OTP)
 	verification := strings.TrimSpace(receiverInfo.VerificationValue)
-	verificationType := strings.TrimSpace(string(receiverInfo.VerificationType))
+	verificationField := strings.TrimSpace(string(receiverInfo.VerificationField))
 
 	// validate phone field
 	rv.CheckError(utils.ValidatePhoneNumber(phone), "phone_number", "invalid phone format. Correct format: +380445555555")
@@ -36,11 +36,11 @@ func (rv *ReceiverRegistrationValidator) ValidateReceiver(receiverInfo *data.Rec
 	rv.CheckError(utils.ValidateOTP(otp), "otp", "invalid otp format. Needs to be a 6 digit value")
 
 	// validate verification type field
-	rv.Check(verificationType != "", "verification_type", "verification type cannot be empty")
-	vt := rv.validateAndGetVerificationType(verificationType)
+	rv.Check(verificationField != "", "verification_field", "verification type cannot be empty")
+	vf := rv.validateAndGetVerificationType(verificationField)
 
 	// validate verification fields
-	switch vt {
+	switch vf {
 	case data.VerificationFieldDateOfBirth:
 		rv.CheckError(utils.ValidateDateOfBirthVerification(verification), "verification", "")
 	case data.VerificationFieldYearMonth:
@@ -54,7 +54,7 @@ func (rv *ReceiverRegistrationValidator) ValidateReceiver(receiverInfo *data.Rec
 	receiverInfo.PhoneNumber = phone
 	receiverInfo.OTP = otp
 	receiverInfo.VerificationValue = verification
-	receiverInfo.VerificationType = vt
+	receiverInfo.VerificationField = vf
 }
 
 // validateAndGetVerificationType validates if the verification type field is a valid value.
@@ -62,7 +62,7 @@ func (rv *ReceiverRegistrationValidator) validateAndGetVerificationType(verifica
 	vt := data.VerificationField(strings.ToUpper(verificationType))
 
 	if !slices.Contains(data.GetAllVerificationFields(), vt) {
-		rv.Check(false, "verification_type", fmt.Sprintf("invalid parameter. valid values are: %v", data.GetAllVerificationFields()))
+		rv.Check(false, "verification_field", fmt.Sprintf("invalid parameter. valid values are: %v", data.GetAllVerificationFields()))
 		return ""
 	}
 	return vt

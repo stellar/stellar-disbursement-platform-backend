@@ -304,7 +304,7 @@ async function handleVerificationInfoSubmitted() {
         [contactMethod]: contactValue,
         otp: otp,
         recaptcha_token: reCAPTCHAToken,
-        verification_type: WalletRegistration.verificationField,
+        verification_field: WalletRegistration.verificationField,
         verification: verificationFieldValue,
       }),
     });

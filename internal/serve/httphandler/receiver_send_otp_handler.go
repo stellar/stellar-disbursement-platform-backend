@@ -44,7 +44,6 @@ type ReceiverSendOTPResponseBody struct {
 	VerificationField data.VerificationField `json:"verification_field"`
 }
 
-// FIXME! /wallet-registration/otp returns a JSON with the field named `verification_field` but /wallet-registration/verification expects the field to be named `verification_type`. This inconsistency should be fixed.
 func (h ReceiverSendOTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 

@@ -31,7 +31,7 @@ type ReceiverRegistrationRequest struct {
 	PhoneNumber       string            `json:"phone_number"`
 	OTP               string            `json:"otp"`
 	VerificationValue string            `json:"verification"`
-	VerificationType  VerificationField `json:"verification_type"`
+	VerificationField VerificationField `json:"verification_field"`
 	ReCAPTCHAToken    string            `json:"recaptcha_token"`
 }
 

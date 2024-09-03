@@ -254,7 +254,7 @@ func (it *IntegrationTestsService) StartIntegrationTests(ctx context.Context, op
 		OTP:               data.TestnetAlwaysValidOTP,
 		PhoneNumber:       disbursementData[0].Phone,
 		VerificationValue: disbursementData[0].VerificationValue,
-		VerificationType:  disbursement.VerificationField,
+		VerificationField: disbursement.VerificationField,
 		ReCAPTCHAToken:    opts.RecaptchaSiteKey,
 	})
 	if err != nil {
