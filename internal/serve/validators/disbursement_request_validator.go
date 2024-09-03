@@ -8,11 +8,11 @@ import (
 )
 
 type DisbursementRequestValidator struct {
-	verificationField data.VerificationField
+	verificationField data.VerificationType
 	*Validator
 }
 
-func NewDisbursementRequestValidator(verificationField data.VerificationField) *DisbursementRequestValidator {
+func NewDisbursementRequestValidator(verificationField data.VerificationType) *DisbursementRequestValidator {
 	return &DisbursementRequestValidator{
 		verificationField: verificationField,
 		Validator:         NewValidator(),
@@ -20,9 +20,9 @@ func NewDisbursementRequestValidator(verificationField data.VerificationField) *
 }
 
 // ValidateAndGetVerificationType validates if the verification type field is a valid value.
-func (dv *DisbursementRequestValidator) ValidateAndGetVerificationType() data.VerificationField {
-	if !slices.Contains(data.GetAllVerificationFields(), dv.verificationField) {
-		dv.Check(false, "verification_field", fmt.Sprintf("invalid parameter. valid values are: %v", data.GetAllVerificationFields()))
+func (dv *DisbursementRequestValidator) ValidateAndGetVerificationType() data.VerificationType {
+	if !slices.Contains(data.GetAllVerificationTypes(), dv.verificationField) {
+		dv.Check(false, "verification_field", fmt.Sprintf("invalid parameter. valid values are: %v", data.GetAllVerificationTypes()))
 		return ""
 	}
 	return dv.verificationField

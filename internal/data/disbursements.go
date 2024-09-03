@@ -23,7 +23,7 @@ type Disbursement struct {
 	Wallet                         *Wallet                   `json:"wallet,omitempty" db:"wallet"`
 	Asset                          *Asset                    `json:"asset,omitempty" db:"asset"`
 	Status                         DisbursementStatus        `json:"status" db:"status"`
-	VerificationField              VerificationField         `json:"verification_field,omitempty" db:"verification_field"`
+	VerificationField              VerificationType          `json:"verification_field,omitempty" db:"verification_field"`
 	StatusHistory                  DisbursementStatusHistory `json:"status_history,omitempty" db:"status_history"`
 	SMSRegistrationMessageTemplate string                    `json:"sms_registration_message_template" db:"sms_registration_message_template"`
 	FileName                       string                    `json:"file_name,omitempty" db:"file_name"`
@@ -50,25 +50,6 @@ type DisbursementUpdate struct {
 	ID          string
 	FileName    string
 	FileContent []byte
-}
-
-type VerificationField string
-
-const (
-	VerificationFieldDateOfBirth VerificationField = "DATE_OF_BIRTH"
-	VerificationFieldYearMonth   VerificationField = "YEAR_MONTH"
-	VerificationFieldPin         VerificationField = "PIN"
-	VerificationFieldNationalID  VerificationField = "NATIONAL_ID_NUMBER"
-)
-
-// GetAllVerificationFields returns all verification fields
-func GetAllVerificationFields() []VerificationField {
-	return []VerificationField{
-		VerificationFieldDateOfBirth,
-		VerificationFieldYearMonth,
-		VerificationFieldPin,
-		VerificationFieldNationalID,
-	}
 }
 
 type DisbursementStatusHistoryEntry struct {

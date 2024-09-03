@@ -180,7 +180,7 @@ func (it *IntegrationTestsService) StartIntegrationTests(ctx context.Context, op
 		CountryCode:       "USA",
 		WalletID:          wallet.ID,
 		AssetID:           asset.ID,
-		VerificationField: data.VerificationFieldDateOfBirth,
+		VerificationField: data.VerificationTypeDateOfBirth,
 	})
 	if err != nil {
 		return fmt.Errorf("creating disbursement: %w", err)

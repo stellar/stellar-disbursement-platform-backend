@@ -41,13 +41,13 @@ func (rv *ReceiverRegistrationValidator) ValidateReceiver(receiverInfo *data.Rec
 
 	// validate verification fields
 	switch vf {
-	case data.VerificationFieldDateOfBirth:
+	case data.VerificationTypeDateOfBirth:
 		rv.CheckError(utils.ValidateDateOfBirthVerification(verification), "verification", "")
-	case data.VerificationFieldYearMonth:
+	case data.VerificationTypeYearMonth:
 		rv.CheckError(utils.ValidateYearMonthVerification(verification), "verification", "")
-	case data.VerificationFieldPin:
+	case data.VerificationTypePin:
 		rv.CheckError(utils.ValidatePinVerification(verification), "verification", "")
-	case data.VerificationFieldNationalID:
+	case data.VerificationTypeNationalID:
 		rv.CheckError(utils.ValidateNationalIDVerification(verification), "verification", "")
 	}
 
@@ -58,11 +58,11 @@ func (rv *ReceiverRegistrationValidator) ValidateReceiver(receiverInfo *data.Rec
 }
 
 // validateAndGetVerificationType validates if the verification type field is a valid value.
-func (rv *ReceiverRegistrationValidator) validateAndGetVerificationType(verificationType string) data.VerificationField {
-	vt := data.VerificationField(strings.ToUpper(verificationType))
+func (rv *ReceiverRegistrationValidator) validateAndGetVerificationType(verificationType string) data.VerificationType {
+	vt := data.VerificationType(strings.ToUpper(verificationType))
 
-	if !slices.Contains(data.GetAllVerificationFields(), vt) {
-		rv.Check(false, "verification_field", fmt.Sprintf("invalid parameter. valid values are: %v", data.GetAllVerificationFields()))
+	if !slices.Contains(data.GetAllVerificationTypes(), vt) {
+		rv.Check(false, "verification_field", fmt.Sprintf("invalid parameter. valid values are: %v", data.GetAllVerificationTypes()))
 		return ""
 	}
 	return vt

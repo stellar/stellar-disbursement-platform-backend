@@ -25,7 +25,7 @@ func Test_ReceiverRegistrationValidator_ValidateReceiver(t *testing.T) {
 				PhoneNumber:       "invalid",
 				OTP:               "123456",
 				VerificationValue: "1990-01-01",
-				VerificationField: data.VerificationFieldDateOfBirth,
+				VerificationField: data.VerificationTypeDateOfBirth,
 			},
 			expectedErrorLen: 1,
 			expectedErrorMsg: "invalid phone format. Correct format: +380445555555",
@@ -37,7 +37,7 @@ func Test_ReceiverRegistrationValidator_ValidateReceiver(t *testing.T) {
 				PhoneNumber:       "",
 				OTP:               "123456",
 				VerificationValue: "1990-01-01",
-				VerificationField: data.VerificationFieldDateOfBirth,
+				VerificationField: data.VerificationTypeDateOfBirth,
 			},
 			expectedErrorLen: 1,
 			expectedErrorMsg: "phone cannot be empty",
@@ -49,7 +49,7 @@ func Test_ReceiverRegistrationValidator_ValidateReceiver(t *testing.T) {
 				PhoneNumber:       "+380445555555",
 				OTP:               "12mock",
 				VerificationValue: "1990-01-01",
-				VerificationField: data.VerificationFieldDateOfBirth,
+				VerificationField: data.VerificationTypeDateOfBirth,
 			},
 			expectedErrorLen: 1,
 			expectedErrorMsg: "invalid otp format. Needs to be a 6 digit value",
@@ -73,7 +73,7 @@ func Test_ReceiverRegistrationValidator_ValidateReceiver(t *testing.T) {
 				PhoneNumber:       "+380445555555",
 				OTP:               "123456",
 				VerificationValue: "90/01/01",
-				VerificationField: data.VerificationFieldDateOfBirth,
+				VerificationField: data.VerificationTypeDateOfBirth,
 			},
 			expectedErrorLen: 1,
 			expectedErrorMsg: "invalid date of birth format. Correct format: 1990-01-30",
@@ -85,7 +85,7 @@ func Test_ReceiverRegistrationValidator_ValidateReceiver(t *testing.T) {
 				PhoneNumber:       "+380445555555",
 				OTP:               "123456",
 				VerificationValue: "90/12",
-				VerificationField: data.VerificationFieldYearMonth,
+				VerificationField: data.VerificationTypeYearMonth,
 			},
 			expectedErrorLen: 1,
 			expectedErrorMsg: "invalid year/month format. Correct format: 1990-12",
@@ -97,7 +97,7 @@ func Test_ReceiverRegistrationValidator_ValidateReceiver(t *testing.T) {
 				PhoneNumber:       "+380445555555",
 				OTP:               "123456",
 				VerificationValue: "ABCDE1234",
-				VerificationField: data.VerificationFieldPin,
+				VerificationField: data.VerificationTypePin,
 			},
 			expectedErrorLen: 1,
 			expectedErrorMsg: "invalid pin length. Cannot have less than 4 or more than 8 characters in pin",
@@ -109,7 +109,7 @@ func Test_ReceiverRegistrationValidator_ValidateReceiver(t *testing.T) {
 				PhoneNumber:       "+380445555555",
 				OTP:               "123456",
 				VerificationValue: "6UZMB56FWTKV4U0PJ21TBR6VOQVYSGIMZG2HW2S0L7EK5K83W78XXXXX",
-				VerificationField: data.VerificationFieldNationalID,
+				VerificationField: data.VerificationTypeNationalID,
 			},
 			expectedErrorLen: 1,
 			expectedErrorMsg: "invalid national id. Cannot have more than 50 characters in national id",
@@ -128,7 +128,7 @@ func Test_ReceiverRegistrationValidator_ValidateReceiver(t *testing.T) {
 				PhoneNumber:       "+380445555555",
 				OTP:               "123456",
 				VerificationValue: "1990-01-01",
-				VerificationField: data.VerificationFieldDateOfBirth,
+				VerificationField: data.VerificationTypeDateOfBirth,
 			},
 		},
 		{
@@ -144,7 +144,7 @@ func Test_ReceiverRegistrationValidator_ValidateReceiver(t *testing.T) {
 				PhoneNumber:       "+380445555555",
 				OTP:               "123456",
 				VerificationValue: "1990-12",
-				VerificationField: data.VerificationFieldYearMonth,
+				VerificationField: data.VerificationTypeYearMonth,
 			},
 		},
 		{
@@ -160,7 +160,7 @@ func Test_ReceiverRegistrationValidator_ValidateReceiver(t *testing.T) {
 				PhoneNumber:       "+380445555555",
 				OTP:               "123456",
 				VerificationValue: "1234",
-				VerificationField: data.VerificationFieldPin,
+				VerificationField: data.VerificationTypePin,
 			},
 		},
 		{
@@ -176,7 +176,7 @@ func Test_ReceiverRegistrationValidator_ValidateReceiver(t *testing.T) {
 				PhoneNumber:       "+380445555555",
 				OTP:               "123456",
 				VerificationValue: "NATIONALIDNUMBER123",
-				VerificationField: data.VerificationFieldNationalID,
+				VerificationField: data.VerificationTypeNationalID,
 			},
 		},
 	}
@@ -203,11 +203,11 @@ func Test_ReceiverRegistrationValidator_ValidateReceiver(t *testing.T) {
 func Test_ReceiverRegistrationValidator_ValidateAndGetVerificationType(t *testing.T) {
 	t.Run("Valid verification type", func(t *testing.T) {
 		validator := NewReceiverRegistrationValidator()
-		validField := []data.VerificationField{
-			data.VerificationFieldDateOfBirth,
-			data.VerificationFieldYearMonth,
-			data.VerificationFieldPin,
-			data.VerificationFieldNationalID,
+		validField := []data.VerificationType{
+			data.VerificationTypeDateOfBirth,
+			data.VerificationTypeYearMonth,
+			data.VerificationTypePin,
+			data.VerificationTypeNationalID,
 		}
 		for _, field := range validField {
 			assert.Equal(t, field, validator.validateAndGetVerificationType(string(field)))
