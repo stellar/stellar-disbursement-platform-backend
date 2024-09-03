@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"fmt"
 	"math/big"
+	"strings"
 )
 
 const (
@@ -37,4 +38,9 @@ func TruncateString(str string, borderSizeToKeep int) string {
 		return str
 	}
 	return str[:borderSizeToKeep] + "..." + str[len(str)-borderSizeToKeep:]
+}
+
+// TrimAndLower trims and lowercases a string.
+func TrimAndLower(str string) string {
+	return strings.TrimSpace(strings.ToLower(str))
 }
