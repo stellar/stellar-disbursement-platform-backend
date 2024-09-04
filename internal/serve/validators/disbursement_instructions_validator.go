@@ -22,11 +22,11 @@ func NewDisbursementInstructionsValidator(verificationField data.VerificationFie
 
 func (iv *DisbursementInstructionsValidator) ValidateInstruction(instruction *data.DisbursementInstruction, lineNumber int) {
 	var phone, email string
-	if instruction.Phone != nil {
-		phone = strings.TrimSpace(*instruction.Phone)
+	if instruction.Phone != "" {
+		phone = strings.TrimSpace(instruction.Phone)
 	}
-	if instruction.Email != nil {
-		email = strings.TrimSpace(*instruction.Email)
+	if instruction.Email != "" {
+		email = strings.TrimSpace(instruction.Email)
 	}
 
 	id := strings.TrimSpace(instruction.ID)
@@ -67,19 +67,16 @@ func (iv *DisbursementInstructionsValidator) ValidateInstruction(instruction *da
 
 func (iv *DisbursementInstructionsValidator) SanitizeInstruction(instruction *data.DisbursementInstruction) *data.DisbursementInstruction {
 	var sanitizedInstruction data.DisbursementInstruction
-	if instruction.Phone != nil {
-		sanitizedPhoneNumber := strings.ToLower(strings.TrimSpace(*instruction.Phone))
-		sanitizedInstruction.Phone = &sanitizedPhoneNumber
+	if instruction.Phone != "" {
+		sanitizedInstruction.Phone = strings.ToLower(strings.TrimSpace(instruction.Phone))
 	}
 
-	if instruction.Email != nil {
-		sanitizedEmail := strings.ToLower(strings.TrimSpace(*instruction.Email))
-		sanitizedInstruction.Email = &sanitizedEmail
+	if instruction.Email != "" {
+		sanitizedInstruction.Email = strings.ToLower(strings.TrimSpace(instruction.Email))
 	}
 
-	if instruction.ExternalPaymentId != nil {
-		externalPaymentId := strings.TrimSpace(*instruction.ExternalPaymentId)
-		sanitizedInstruction.ExternalPaymentId = &externalPaymentId
+	if instruction.ExternalPaymentId != "" {
+		sanitizedInstruction.ExternalPaymentId = strings.TrimSpace(instruction.ExternalPaymentId)
 	}
 
 	sanitizedInstruction.ID = strings.TrimSpace(instruction.ID)

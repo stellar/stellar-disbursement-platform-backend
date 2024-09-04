@@ -10,46 +10,23 @@ import (
 )
 
 type DisbursementInstruction struct {
-	Phone             *string `csv:"phone"`
-	Email             *string `csv:"email"`
-	ID                string  `csv:"id"`
-	Amount            string  `csv:"amount"`
-	VerificationValue string  `csv:"verification"`
-	ExternalPaymentId *string `csv:"paymentID"`
-}
-
-func NewDisbursementInstruction(id, amount, verificationValue string) *DisbursementInstruction {
-	return &DisbursementInstruction{
-		ID:                id,
-		Amount:            amount,
-		VerificationValue: verificationValue,
-	}
-}
-
-func (di *DisbursementInstruction) WithPhone(phone string) *DisbursementInstruction {
-	di.Phone = utils.StringPtr(phone)
-	return di
-}
-
-func (di *DisbursementInstruction) WithEmail(email string) *DisbursementInstruction {
-	di.Email = utils.StringPtr(email)
-	return di
-}
-
-func (di *DisbursementInstruction) WithExternalPaymentID(externalPaymentID string) *DisbursementInstruction {
-	di.ExternalPaymentId = utils.StringPtr(externalPaymentID)
-	return di
+	Phone             string `csv:"phone"`
+	Email             string `csv:"email"`
+	ID                string `csv:"id"`
+	Amount            string `csv:"amount"`
+	VerificationValue string `csv:"verification"`
+	ExternalPaymentId string `csv:"paymentID"`
 }
 
 func (di *DisbursementInstruction) Contact() (string, error) {
-	if di.Phone != nil && di.Email != nil {
+	if di.Phone != "" && di.Email != "" {
 		return "", errors.New("phone and email are both provided")
 	}
-	if di.Phone != nil {
-		return *di.Phone, nil
+	if di.Phone != "" {
+		return di.Phone, nil
 	}
-	if di.Email != nil {
-		return *di.Email, nil
+	if di.Email != "" {
+		return di.Email, nil
 	}
 	return "", errors.New("phone and email are empty")
 }
@@ -219,10 +196,15 @@ func (di DisbursementInstructionModel) createReceiverFromInstructionIfNeeded(ctx
 
 	_, exists := existingReceiversByContactMap[contact]
 	if !exists {
-		receiverInsert := ReceiverInsert{
-			Email:       instruction.Email,
-			PhoneNumber: instruction.Phone,
-			ExternalId:  &instruction.ID,
+		var receiverInsert ReceiverInsert
+		if instruction.Phone != "" {
+			receiverInsert.PhoneNumber = &instruction.Phone
+		}
+		if instruction.Email != "" {
+			receiverInsert.Email = &instruction.Email
+		}
+		if instruction.ID != "" {
+			receiverInsert.ExternalId = &instruction.ID
 		}
 		_, insertErr := di.receiverModel.Insert(ctx, dbTx, receiverInsert)
 		if insertErr != nil {
@@ -342,12 +324,14 @@ func (di DisbursementInstructionModel) createPayments(ctx context.Context, dbTx 
 			return fmt.Errorf("receiver not found for instruction with ID %s", instruction.ID)
 		}
 		payment := PaymentInsert{
-			ReceiverID:        receiver.ID,
-			DisbursementID:    disbursement.ID,
-			Amount:            instruction.Amount,
-			AssetID:           disbursement.Asset.ID,
-			ReceiverWalletID:  receiverIDToReceiverWalletIDMap[receiver.ID],
-			ExternalPaymentID: instruction.ExternalPaymentId,
+			ReceiverID:       receiver.ID,
+			DisbursementID:   disbursement.ID,
+			Amount:           instruction.Amount,
+			AssetID:          disbursement.Asset.ID,
+			ReceiverWalletID: receiverIDToReceiverWalletIDMap[receiver.ID],
+		}
+		if instruction.ExternalPaymentId != "" {
+			payment.ExternalPaymentID = &instruction.ExternalPaymentId
 		}
 		payments = append(payments, payment)
 	}

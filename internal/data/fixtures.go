@@ -592,7 +592,7 @@ func CreateInstructionsFixture(t *testing.T, instructions []*DisbursementInstruc
 
 	// write instructions
 	for _, instruction := range instructions {
-		record := []string{*instruction.Phone, instruction.ID, instruction.Amount, instruction.VerificationValue}
+		record := []string{instruction.Phone, instruction.ID, instruction.Amount, instruction.VerificationValue}
 		err := writer.Write(record)
 		require.NoError(t, err)
 	}

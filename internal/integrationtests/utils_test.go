@@ -56,7 +56,7 @@ func Test_readDisbursementCSV(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "0.1", data[0].Amount)
 		assert.NotNil(t, data[0].Phone)
-		assert.Equal(t, "+12025550191", *data[0].Phone)
+		assert.Equal(t, "+12025550191", data[0].Phone)
 		assert.Equal(t, "1", data[0].ID)
 		assert.Equal(t, "1999-03-30", data[0].VerificationValue)
 	})

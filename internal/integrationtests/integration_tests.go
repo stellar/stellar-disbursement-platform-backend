@@ -252,7 +252,7 @@ func (it *IntegrationTestsService) StartIntegrationTests(ctx context.Context, op
 	log.Ctx(ctx).Info("Completing receiver registration using server API")
 	err = it.serverAPI.ReceiverRegistration(ctx, authSEP24Token, &data.ReceiverRegistrationRequest{
 		OTP:               data.TestnetAlwaysValidOTP,
-		PhoneNumber:       *disbursementData[0].Phone,
+		PhoneNumber:       disbursementData[0].Phone,
 		VerificationValue: disbursementData[0].VerificationValue,
 		VerificationType:  disbursement.VerificationField,
 		ReCAPTCHAToken:    opts.RecaptchaSiteKey,

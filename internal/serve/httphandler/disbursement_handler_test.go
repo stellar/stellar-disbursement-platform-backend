@@ -1670,9 +1670,9 @@ func Test_DisbursementHandler_GetDisbursementInstructions(t *testing.T) {
 
 	t.Run("disbursement has instructions", func(t *testing.T) {
 		disbursementFileContent := data.CreateInstructionsFixture(t, []*data.DisbursementInstruction{
-			data.NewDisbursementInstruction("1", "123.12", "1995-02-20").WithPhone("1234567890"),
-			data.NewDisbursementInstruction("2", "321", "1974-07-19").WithPhone("0987654321"),
-			data.NewDisbursementInstruction("3", "321", "1974-07-19").WithPhone("0987654321"),
+			{Phone: "1234567890", ID: "1", Amount: "123.12", VerificationValue: "1995-02-20"},
+			{Phone: "0987654321", ID: "2", Amount: "321", VerificationValue: "1974-07-19"},
+			{Phone: "0987654321", ID: "3", Amount: "321", VerificationValue: "1974-07-19"},
 		})
 
 		err := models.Disbursements.Update(ctx, &data.DisbursementUpdate{
