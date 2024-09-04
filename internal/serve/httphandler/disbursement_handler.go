@@ -227,7 +227,8 @@ func (d DisbursementHandler) PostDisbursementInstructions(w http.ResponseWriter,
 
 	contactType, err := resolveReceiverContactType(bytes.NewReader(buf.Bytes()))
 	if err != nil {
-		httperror.BadRequest("could not determine contact information type", err, nil).Render(w)
+		errMsg := fmt.Sprintf("could not determine contact information type: %s", err)
+		httperror.BadRequest(errMsg, err, nil).Render(w)
 		return
 	}
 

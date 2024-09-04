@@ -921,6 +921,24 @@ func Test_DisbursementHandler_PostDisbursementInstructions(t *testing.T) {
 			expectedMessage: "no valid instructions found",
 		},
 		{
+			name:           "instructions invalid - attempting to upload phone and email",
+			disbursementID: draftDisbursement.ID,
+			csvRecords: [][]string{
+				{"phone", "email", "id", "amount", "date-of-birth"},
+			},
+			expectedStatus:  http.StatusBadRequest,
+			expectedMessage: "csv file must contain either a phone or email column, not both",
+		},
+		{
+			name:           "instructions invalid - no phone or email",
+			disbursementID: draftDisbursement.ID,
+			csvRecords: [][]string{
+				{"id", "amount", "date-of-birth"},
+			},
+			expectedStatus:  http.StatusBadRequest,
+			expectedMessage: "csv file must contain at least one of the following columns [phone, email]",
+		},
+		{
 			name:            "max instructions exceeded",
 			disbursementID:  draftDisbursement.ID,
 			csvRecords:      maxCSVRecords,
